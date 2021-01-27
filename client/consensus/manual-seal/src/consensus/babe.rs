@@ -38,6 +38,7 @@ use sp_keystore::SyncCryptoStorePtr;
 use sp_api::{ProvideRuntimeApi, TransactionFor};
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
 use sp_consensus::BlockImportParams;
+use sp_consensus_slots::Slot;
 use sp_consensus_babe::{
 	BabeApi, inherents::BabeInherentData, ConsensusLog, BABE_ENGINE_ID, AuthorityId,
 	digests::{PreDigest, SecondaryPlainPreDigest, NextEpochDescriptor}, BabeAuthorityWeight,
@@ -100,7 +101,7 @@ impl<B, C> BabeConsensusDataProvider<B, C>
 		})
 	}
 
-	fn epoch(&self, parent: &B::Header, slot_number: u64) -> Result<Epoch, Error> {
+	fn epoch(&self, parent: &B::Header, slot_number: Slot) -> Result<Epoch, Error> {
 		let epoch_changes = self.epoch_changes.lock();
 		let epoch_descriptor = epoch_changes
 			.epoch_descriptor_for_child_of(
@@ -139,7 +140,11 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 		let epoch = self.epoch(parent, slot_number)?;
 
 		// this is a dev node environment, we should always be able to claim a slot.
-		let logs =  if let Some((predigest, _)) = authorship::claim_slot(slot_number, &epoch, &self.keystore) {
+		let logs =  if let Some((predigest, _)) = authorship::claim_slot(
+			slot_number,
+			&epoch,
+			&self.keystore,
+		) {
 			vec![
 				<DigestItemFor<B> as CompatibleDigestItem>::babe_pre_digest(predigest),
 			]
@@ -147,7 +152,7 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 			// well we couldn't claim a slot because this is an existing chain and we're not in the authorities.
 			// we need to tell BabeBlockImport that the epoch has changed, and we put ourselves in the authorities.
 			let predigest = PreDigest::SecondaryPlain(SecondaryPlainPreDigest {
-				slot_number,
+				slot: slot_number,
 				authority_index: 0_u32,
 			});
 
@@ -223,8 +228,8 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 					ViableEpochDescriptor::Signaled(
 						identifier,
 						EpochHeader {
-							start_slot: slot_number,
-							end_slot: slot_number * self.config.epoch_length,
+							start_slot: slot_number.into(),
+							end_slot: Slot(slot_number * self.config.epoch_length),
 						},
 					)
 				},
@@ -263,9 +268,9 @@ impl SlotTimestampProvider {
 		// otherwise we'd be producing blocks for older slots.
 		let duration = if info.best_number != Zero::zero() {
 			let header = client.header(BlockId::Hash(info.best_hash))?.unwrap();
-			let slot_number = find_pre_digest::<B>(&header).unwrap().slot_number();
+			let slot_number = find_pre_digest::<B>(&header).unwrap().slot();
 			// add the slot duration so there's no collision of slots
-			(slot_number * slot_duration) + slot_duration
+			(*slot_number * slot_duration) + slot_duration
 		} else {
 			// this is the first block, use the correct time.
 			let now = SystemTime::now();

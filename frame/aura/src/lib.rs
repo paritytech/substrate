@@ -242,7 +242,7 @@ impl<T: Config> ProvideInherent for Module<T> {
 
 		let timestamp_based_slot = timestamp / Self::slot_duration();
 
-		let seal_slot = data.aura_inherent_data()?.saturated_into();
+		let seal_slot = data.aura_inherent_data()?.0.saturated_into();
 
 		if timestamp_based_slot == seal_slot {
 			Ok(())

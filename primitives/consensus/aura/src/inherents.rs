@@ -26,7 +26,7 @@ use sp_inherents::{InherentDataProviders, ProvideInherentData};
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"auraslot";
 
 /// The type of the Aura inherent.
-pub type InherentType = u64;
+pub type InherentType = sp_consensus_slots::Slot;
 
 /// Auxiliary trait to extract Aura inherent data.
 pub trait AuraInherentData {

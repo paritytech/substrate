@@ -43,11 +43,11 @@ use prometheus_endpoint::Registry;
 use codec::{Encode, Decode, Codec};
 
 use sp_consensus::{
-	self, BlockImport, Environment, Proposer, CanAuthorWith, ForkChoiceStrategy, BlockImportParams,
-	BlockOrigin, Error as ConsensusError, SelectChain, SlotData, BlockCheckParams, ImportResult
-};
-use sp_consensus::import_queue::{
-	Verifier, BasicQueue, DefaultImportQueue, BoxJustificationImport,
+	BlockImport, Environment, Proposer, CanAuthorWith, ForkChoiceStrategy, BlockImportParams,
+	BlockOrigin, Error as ConsensusError, SelectChain, SlotData, BlockCheckParams, ImportResult,
+	import_queue::{
+		Verifier, BasicQueue, DefaultImportQueue, BoxJustificationImport,
+	},
 };
 use sc_client_api::{backend::AuxStore, BlockOf};
 use sp_blockchain::{
@@ -57,10 +57,7 @@ use sp_blockchain::{
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sp_core::crypto::Public;
 use sp_application_crypto::{AppKey, AppPublic};
-use sp_runtime::{
-	generic::{BlockId, OpaqueDigestItemId},
-	traits::NumberFor, Justification,
-};
+use sp_runtime::{generic::{BlockId, OpaqueDigestItemId}, traits::NumberFor, Justification};
 use sp_runtime::traits::{Block as BlockT, Header, DigestItemFor, Zero, Member};
 use sp_api::ProvideRuntimeApi;
 use sp_core::crypto::Pair;
@@ -75,6 +72,7 @@ use sc_consensus_slots::{
 	CheckedHeader, SlotInfo, SlotCompatible, StorageChanges, check_equivocation,
 	BackoffAuthoringBlocksStrategy,
 };
+use sp_consensus_slots::Slot;
 
 use sp_api::ApiExt;
 
@@ -106,10 +104,10 @@ pub fn slot_duration<A, B, C>(client: &C) -> CResult<SlotDuration> where
 }
 
 /// Get slot author for given block along with authorities.
-fn slot_author<P: Pair>(slot_num: u64, authorities: &[AuthorityId<P>]) -> Option<&AuthorityId<P>> {
+fn slot_author<P: Pair>(slot_num: Slot, authorities: &[AuthorityId<P>]) -> Option<&AuthorityId<P>> {
 	if authorities.is_empty() { return None }
 
-	let idx = slot_num % (authorities.len() as u64);
+	let idx = slot_num.0 % (authorities.len() as u64);
 	assert!(
 		idx <= usize::max_value() as u64,
 		"It is impossible to have a vector with length beyond the address space; qed",
@@ -239,7 +237,7 @@ where
 	fn epoch_data(
 		&self,
 		header: &B::Header,
-		_slot_number: u64,
+		_slot_number: Slot,
 	) -> Result<Self::EpochData, sp_consensus::Error> {
 		authorities(self.client.as_ref(), &BlockId::Hash(header.hash()))
 	}
@@ -251,7 +249,7 @@ where
 	fn claim_slot(
 		&self,
 		_header: &B::Header,
-		slot_number: u64,
+		slot_number: Slot,
 		epoch_data: &Self::EpochData,
 	) -> Option<Self::Claim> {
 		let expected_author = slot_author::<P>(slot_number, epoch_data);
@@ -269,7 +267,7 @@ where
 
 	fn pre_digest_data(
 		&self,
-		slot_number: u64,
+		slot_number: Slot,
 		_claim: &Self::Claim,
 	) -> Vec<sp_runtime::DigestItem<B::Hash>> {
 		vec![
@@ -323,7 +321,7 @@ where
 		self.force_authoring
 	}
 
-	fn should_backoff(&self, slot_number: u64, chain_head: &B::Header) -> bool {
+	fn should_backoff(&self, slot_number: Slot, chain_head: &B::Header) -> bool {
 		if let Some(ref strategy) = self.backoff_authoring_blocks {
 			if let Ok(chain_head_slot) = find_pre_digest::<B, P>(chain_head) {
 				return strategy.should_backoff(
@@ -363,9 +361,10 @@ where
 		if let Some(slot_lenience) =
 			sc_consensus_slots::slot_lenience_exponential(parent_slot, slot_info)
 		{
-			debug!(target: "aura",
+			debug!(
+				target: "aura",
 				"No block for {} slots. Applying linear lenience of {}s",
-				slot_info.number.saturating_sub(parent_slot + 1),
+				slot_info.number.saturating_sub(parent_slot.0 + 1),
 				slot_lenience.as_secs(),
 			);
 
@@ -401,7 +400,7 @@ enum Error<B: BlockT> {
 	DataProvider(String),
 	Runtime(String),
 	#[display(fmt = "Slot number must increase: parent slot: {}, this slot: {}", _0, _1)]
-	SlotNumberMustIncrease(u64, u64),
+	SlotNumberMustIncrease(Slot, Slot),
 	#[display(fmt = "Parent ({}) of {} unavailable. Cannot import", _0, _1)]
 	ParentUnavailable(B::Hash, B::Hash),
 }
@@ -412,16 +411,16 @@ impl<B: BlockT> std::convert::From<Error<B>> for String {
 	}
 }
 
-fn find_pre_digest<B: BlockT, P: Pair>(header: &B::Header) -> Result<u64, Error<B>>
+fn find_pre_digest<B: BlockT, P: Pair>(header: &B::Header) -> Result<Slot, Error<B>>
 	where DigestItemFor<B>: CompatibleDigestItem<P>,
 		P::Signature: Decode,
 		P::Public: Encode + Decode + PartialEq + Clone,
 {
 	if header.number().is_zero() {
-		return Ok(0);
+		return Ok(Slot(0));
 	}
 
-	let mut pre_digest: Option<u64> = None;
+	let mut pre_digest: Option<Slot> = None;
 	for log in header.digest().logs() {
 		trace!(target: "aura", "Checking log {:?}", log);
 		match (log.as_aura_pre_digest(), pre_digest.is_some()) {
@@ -440,11 +439,11 @@ fn find_pre_digest<B: BlockT, P: Pair>(header: &B::Header) -> Result<u64, Error<
 //
 fn check_header<C, B: BlockT, P: Pair>(
 	client: &C,
-	slot_now: u64,
+	slot_now: Slot,
 	mut header: B::Header,
 	hash: B::Hash,
 	authorities: &[AuthorityId<P>],
-) -> Result<CheckedHeader<B::Header, (u64, DigestItemFor<B>)>, Error<B>> where
+) -> Result<CheckedHeader<B::Header, (Slot, DigestItemFor<B>)>, Error<B>> where
 	DigestItemFor<B>: CompatibleDigestItem<P>,
 	P::Signature: Decode,
 	C: sc_client_api::backend::AuxStore,
@@ -608,7 +607,7 @@ impl<B: BlockT, C, P, CAW> Verifier<B> for AuraVerifier<C, P, CAW> where
 		// headers
 		let checked_header = check_header::<C, B, P>(
 			&self.client,
-			slot_now + 1,
+			Slot(slot_now.0 + 1),
 			header,
 			hash,
 			&authorities[..],
@@ -1113,13 +1112,13 @@ mod tests {
 			Default::default(),
 			Default::default()
 		);
-		assert!(worker.claim_slot(&head, 0, &authorities).is_none());
-		assert!(worker.claim_slot(&head, 1, &authorities).is_none());
-		assert!(worker.claim_slot(&head, 2, &authorities).is_none());
-		assert!(worker.claim_slot(&head, 3, &authorities).is_some());
-		assert!(worker.claim_slot(&head, 4, &authorities).is_none());
-		assert!(worker.claim_slot(&head, 5, &authorities).is_none());
-		assert!(worker.claim_slot(&head, 6, &authorities).is_none());
-		assert!(worker.claim_slot(&head, 7, &authorities).is_some());
+		assert!(worker.claim_slot(&head, 0.into(), &authorities).is_none());
+		assert!(worker.claim_slot(&head, 1.into(), &authorities).is_none());
+		assert!(worker.claim_slot(&head, 2.into(), &authorities).is_none());
+		assert!(worker.claim_slot(&head, 3.into(), &authorities).is_some());
+		assert!(worker.claim_slot(&head, 4.into(), &authorities).is_none());
+		assert!(worker.claim_slot(&head, 5.into(), &authorities).is_none());
+		assert!(worker.claim_slot(&head, 6.into(), &authorities).is_none());
+		assert!(worker.claim_slot(&head, 7.into(), &authorities).is_some());
 	}
 }

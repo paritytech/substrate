@@ -124,7 +124,13 @@ impl<B, C, SC> BabeApi for BabeRpcHandler<B, C, SC>
 				.map_err(|err| {
 					Error::StringError(format!("{:?}", err))
 				})?;
-			let epoch = epoch_data(&shared_epoch, &client, &babe_config, epoch_start, &select_chain)?;
+			let epoch = epoch_data(
+				&shared_epoch,
+				&client,
+				&babe_config,
+				epoch_start.0,
+				&select_chain,
+			)?;
 			let (epoch_start, epoch_end) = (epoch.start_slot(), epoch.end_slot());
 
 			let mut claims: HashMap<AuthorityId, EpochAuthorship> = HashMap::new();
@@ -142,9 +148,9 @@ impl<B, C, SC> BabeApi for BabeRpcHandler<B, C, SC>
 					.collect::<Vec<_>>()
 			};
 
-			for slot_number in epoch_start..epoch_end {
+			for slot_number in epoch_start.0..epoch_end.0 {
 				if let Some((claim, key)) =
-					authorship::claim_slot_using_keys(slot_number, &epoch, &keystore, &keys)
+					authorship::claim_slot_using_keys(slot_number.into(), &epoch, &keystore, &keys)
 				{
 					match claim {
 						PreDigest::Primary { .. } => {
@@ -154,7 +160,7 @@ impl<B, C, SC> BabeApi for BabeRpcHandler<B, C, SC>
 							claims.entry(key).or_default().secondary.push(slot_number);
 						}
 						PreDigest::SecondaryVRF { .. } => {
-							claims.entry(key).or_default().secondary_vrf.push(slot_number);
+							claims.entry(key).or_default().secondary_vrf.push(slot_number.into());
 						},
 					};
 				}
@@ -215,7 +221,7 @@ fn epoch_data<B, C, SC>(
 		descendent_query(&**client),
 		&parent.hash(),
 		parent.number().clone(),
-		slot_number,
+		slot_number.into(),
 		|slot| Epoch::genesis(&babe_config, slot),
 	)
 		.map_err(|e| Error::Consensus(ConsensusError::ChainLookup(format!("{:?}", e))))?

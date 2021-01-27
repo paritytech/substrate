@@ -151,7 +151,7 @@ mod test {
 	#[test]
 	fn load_decode_from_v0_epoch_changes() {
 		let epoch = EpochV0 {
-			start_slot: 0,
+			start_slot: 0.into(),
 			authorities: vec![],
 			randomness: [0; 32],
 			epoch_index: 1,
@@ -195,8 +195,8 @@ mod test {
 				.map(|(_, _, epoch)| epoch.clone())
 				.collect::<Vec<_>>() ==
 				vec![PersistedEpochHeader::Regular(EpochHeader {
-					start_slot: 0,
-					end_slot: 100,
+					start_slot: 0.into(),
+					end_slot: 100.into(),
 				})],
 		); // PersistedEpochHeader does not implement Debug, so we use assert! directly.
 

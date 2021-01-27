@@ -575,7 +575,7 @@ mod tests {
 					descendent_query(&*service.client()),
 					&parent_hash,
 					parent_number,
-					slot_num,
+					slot_num.into(),
 				).unwrap().unwrap();
 
 				let mut digest = Digest::<H256>::default();
@@ -585,7 +585,7 @@ mod tests {
 				let babe_pre_digest = loop {
 					inherent_data.replace_data(sp_timestamp::INHERENT_IDENTIFIER, &(slot_num * SLOT_DURATION));
 					if let Some(babe_pre_digest) = sc_consensus_babe::test_helpers::claim_slot(
-						slot_num,
+						slot_num.into(),
 						&parent_header,
 						&*service.client(),
 						keystore.clone(),

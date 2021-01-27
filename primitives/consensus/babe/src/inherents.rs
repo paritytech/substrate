@@ -31,7 +31,7 @@ use sp_std::result::Result;
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"babeslot";
 
 /// The type of the BABE inherent.
-pub type InherentType = u64;
+pub type InherentType = sp_consensus_slots::Slot;
 /// Auxiliary trait to extract BABE inherent data.
 pub trait BabeInherentData {
 	/// Get BABE inherent data.

@@ -36,7 +36,7 @@
 //!
 
 use frame_support::{debug, traits::KeyOwnerProofSystem};
-use sp_consensus_babe::{EquivocationProof, SlotNumber};
+use sp_consensus_babe::{EquivocationProof, Slot};
 use sp_runtime::transaction_validity::{
 	InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
 	TransactionValidityError, ValidTransaction,
@@ -63,7 +63,7 @@ pub trait HandleEquivocation<T: Config> {
 	) -> Result<(), OffenceError>;
 
 	/// Returns true if all of the offenders at the given time slot have already been reported.
-	fn is_known_offence(offenders: &[T::KeyOwnerIdentification], time_slot: &SlotNumber) -> bool;
+	fn is_known_offence(offenders: &[T::KeyOwnerIdentification], time_slot: &Slot) -> bool;
 
 	/// Create and dispatch an equivocation report extrinsic.
 	fn submit_unsigned_equivocation_report(
@@ -83,7 +83,7 @@ impl<T: Config> HandleEquivocation<T> for () {
 		Ok(())
 	}
 
-	fn is_known_offence(_offenders: &[T::KeyOwnerIdentification], _time_slot: &SlotNumber) -> bool {
+	fn is_known_offence(_offenders: &[T::KeyOwnerIdentification], _time_slot: &Slot) -> bool {
 		true
 	}
 
@@ -136,7 +136,7 @@ where
 		R::report_offence(reporters, offence)
 	}
 
-	fn is_known_offence(offenders: &[T::KeyOwnerIdentification], time_slot: &SlotNumber) -> bool {
+	fn is_known_offence(offenders: &[T::KeyOwnerIdentification], time_slot: &Slot) -> bool {
 		R::is_known_offence(offenders, time_slot)
 	}
 
@@ -187,7 +187,7 @@ impl<T: Config> frame_support::unsigned::ValidateUnsigned for Module<T> {
 				// Only one equivocation report for the same offender at the same slot.
 				.and_provides((
 					equivocation_proof.offender.clone(),
-					equivocation_proof.slot_number,
+					*equivocation_proof.slot,
 				))
 				// We don't propagate this. This can never be included on a remote node.
 				.propagate(false)
@@ -212,7 +212,7 @@ impl<T: Config> frame_support::unsigned::ValidateUnsigned for Module<T> {
 			// and if so then we can discard the report.
 			let is_known_offence = T::HandleEquivocation::is_known_offence(
 				&[offender],
-				&equivocation_proof.slot_number,
+				&equivocation_proof.slot,
 			);
 
 			if is_known_offence {
@@ -230,8 +230,8 @@ impl<T: Config> frame_support::unsigned::ValidateUnsigned for Module<T> {
 ///
 /// When a validator released two or more blocks at the same slot.
 pub struct BabeEquivocationOffence<FullIdentification> {
-	/// A babe slot number in which this incident happened.
-	pub slot: SlotNumber,
+	/// A babe slot in which this incident happened.
+	pub slot: Slot,
 	/// The session index in which the incident happened.
 	pub session_index: SessionIndex,
 	/// The size of the validator set at the time of the offence.
@@ -244,7 +244,7 @@ impl<FullIdentification: Clone> Offence<FullIdentification>
 	for BabeEquivocationOffence<FullIdentification>
 {
 	const ID: Kind = *b"babe:equivocatio";
-	type TimeSlot = SlotNumber;
+	type TimeSlot = Slot;
 
 	fn offenders(&self) -> Vec<FullIdentification> {
 		vec![self.offender.clone()]

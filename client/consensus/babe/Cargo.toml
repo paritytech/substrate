@@ -35,6 +35,7 @@ sp-api = { version = "2.0.0", path = "../../../primitives/api" }
 sp-block-builder = { version = "2.0.0", path = "../../../primitives/block-builder" }
 sp-blockchain = { version = "2.0.0", path = "../../../primitives/blockchain" }
 sp-consensus = { version = "0.8.0", path = "../../../primitives/consensus/common" }
+sp-consensus-slots = { version = "0.8.0", path = "../../../primitives/consensus/slots" }
 sp-consensus-vrf = { version = "0.8.0", path = "../../../primitives/consensus/vrf" }
 sc-consensus-uncles = { version = "0.8.0", path = "../uncles" }
 sc-consensus-slots = { version = "0.8.0", path = "../slots" }
