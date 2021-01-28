@@ -50,7 +50,6 @@ where
 	}
 	<CodeStorage<T>>::mutate(&code_hash, |existing| {
 		match existing {
-
 			Some(module) => increment_64(&mut module.refcount),
 			None => {
 				*existing = Some(prefab_module);
