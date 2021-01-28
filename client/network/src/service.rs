@@ -844,8 +844,10 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// Variation of `request` which can connect to peers when necessary.
 	///
 	/// In some cases we do request data, without prior notification. For those cases this function
-	/// exists, it has no guarantees on connection staying alive, so you might still want to pass
+	/// exists. It has no guarantees on connection staying alive, so you might still want to pass
 	/// false to the `connect` parameter and ensure liveness of connections via peer sets.
+	/// Connecting to a peer can take up to several seconds, if a peer exposes multiple
+	/// addresses, but is only reachable by some of them, for example.
 	///
 	/// Apart from exposing whether or not we want to connect, in case of a disconnected peer, this
 	/// function also takes a sender for sending the response back, instead of returning the
