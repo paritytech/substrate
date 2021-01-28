@@ -399,6 +399,7 @@ impl<E: codec::Encode> IsFatalError for MakeFatalError<E> {
 }
 
 /// A pallet that provides or verifies an inherent extrinsic.
+///
 /// The pallet may provide the inherent, verify an inherent, or both provide and verify.
 pub trait ProvideInherent {
 	/// The call type of the pallet.
@@ -413,14 +414,14 @@ pub trait ProvideInherent {
 
 	/// Determines whether this inherent is required in this block.
 	///
-	/// Ok(None) indicates that this inherent is not required in this block. The default
+	/// - `Ok(None)` indicates that this inherent is not required in this block. The default
 	/// implementation returns this.
 	///
-	/// Ok(Some(e)) indicates that this inherent is required in this block. The
+	/// - `Ok(Some(e))` indicates that this inherent is required in this block. The
 	/// `impl_outer_inherent!`, will call this function from its `check_extrinsics`.
 	/// If the inherent is not present, it will return `e`.
 	///
-	/// Err(_) indicates that this function failed and further operations should be aborted.
+	/// - `Err(_)` indicates that this function failed and further operations should be aborted.
 	///
 	/// CAUTION: This check has a bug when used in pallets that also provide unsigned transactions.
 	/// See https://github.com/paritytech/substrate/issues/6243 for details.
@@ -430,7 +431,7 @@ pub trait ProvideInherent {
 	/// omitted by using the default implementation.
 	///
 	/// When checking an inherent, the first parameter represents the inherent that is actually
-	/// included in the block by its author. whereas the second parameter represents the inherent
+	/// included in the block by its author. Whereas the second parameter represents the inherent
 	/// data that the verifying node calculates.
 	fn check_inherent(_: &Self::Call, _: &InherentData) -> Result<(), Self::Error> {
 		Ok(())
