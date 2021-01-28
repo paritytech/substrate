@@ -514,7 +514,7 @@ mod tests {
 		let chain_spec = crate::chain_spec::tests::integration_test_config_with_single_authority();
 
 		// For the block factory
-		let mut slot_num = 1u64;
+		let mut slot = 1u64;
 
 		// For the extrinsics factory
 		let bob = Arc::new(AccountKeyring::Bob.pair());
@@ -575,7 +575,7 @@ mod tests {
 					descendent_query(&*service.client()),
 					&parent_hash,
 					parent_number,
-					slot_num,
+					slot.into(),
 				).unwrap().unwrap();
 
 				let mut digest = Digest::<H256>::default();
@@ -583,9 +583,9 @@ mod tests {
 				// even though there's only one authority some slots might be empty,
 				// so we must keep trying the next slots until we can claim one.
 				let babe_pre_digest = loop {
-					inherent_data.replace_data(sp_timestamp::INHERENT_IDENTIFIER, &(slot_num * SLOT_DURATION));
+					inherent_data.replace_data(sp_timestamp::INHERENT_IDENTIFIER, &(slot * SLOT_DURATION));
 					if let Some(babe_pre_digest) = sc_consensus_babe::test_helpers::claim_slot(
-						slot_num,
+						slot.into(),
 						&parent_header,
 						&*service.client(),
 						keystore.clone(),
@@ -594,7 +594,7 @@ mod tests {
 						break babe_pre_digest;
 					}
 
-					slot_num += 1;
+					slot += 1;
 				};
 
 				digest.push(<DigestItem as CompatibleDigestItem>::babe_pre_digest(babe_pre_digest));
@@ -625,7 +625,7 @@ mod tests {
 				let item = <DigestItem as CompatibleDigestItem>::babe_seal(
 					signature,
 				);
-				slot_num += 1;
+				slot += 1;
 
 				let mut params = BlockImportParams::new(BlockOrigin::File, new_header);
 				params.post_digests.push(item);
