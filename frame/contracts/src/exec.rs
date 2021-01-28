@@ -225,7 +225,7 @@ pub trait Executable<T: Config>: Sized {
 
 	/// The storage that is occupied by the instrumented executable and its pristine source.
 	///
-	/// The returned size if already devided by the number of users who share the code.
+	/// The returned size if already divided by the number of users who share the code.
 	fn occupied_storage(&self) -> u32;
 }
 
