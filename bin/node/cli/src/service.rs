@@ -109,8 +109,10 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		let shared_voter_state = grandpa::SharedVoterState::empty();
 		let rpc_setup = shared_voter_state.clone();
 
-		let finality_proof_provider =
-			grandpa::FinalityProofProvider::new_for_service(backend.clone(), client.clone());
+		let finality_proof_provider = grandpa::FinalityProofProvider::new_for_service(
+			backend.clone(),
+			Some(shared_authority_set.clone()),
+		);
 
 		let babe_config = babe_link.config().clone();
 		let shared_epoch_changes = babe_link.epoch_changes().clone();
@@ -193,6 +195,11 @@ pub fn new_full_base(
 	let shared_voter_state = rpc_setup;
 
 	config.network.extra_sets.push(grandpa::grandpa_peers_set_config());
+
+	#[cfg(feature = "cli")]
+	config.network.request_response_protocols.push(sc_finality_grandpa_warp_sync::request_response_config_for_chain(
+		&config, task_manager.spawn_handle(), backend.clone(),
+	));
 
 	let (network, network_status_sinks, system_rpc_tx, network_starter) =
 		sc_service::build_network(sc_service::BuildNetworkParams {

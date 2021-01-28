@@ -1047,7 +1047,7 @@ mod tests {
 	use sp_core::H256;
 	use sp_runtime::{
 		testing::Header, BuildStorage, DispatchResult,
-		traits::{BlakeTwo256, IdentityLookup, Block as BlockT},
+		traits::{BlakeTwo256, IdentityLookup},
 	};
 	use crate as elections_phragmen;
 

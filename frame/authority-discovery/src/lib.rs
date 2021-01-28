@@ -115,6 +115,7 @@ impl<T: Config> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 
 #[cfg(test)]
 mod tests {
+	use crate as pallet_authority_discovery;
 	use super::*;
 	use sp_authority_discovery::AuthorityPair;
 	use sp_application_crypto::Pair;
@@ -124,12 +125,23 @@ mod tests {
 		testing::{Header, UintAuthorityId}, traits::{ConvertInto, IdentityLookup, OpaqueKeys},
 		Perbill, KeyTypeId,
 	};
-	use frame_support::{impl_outer_origin, parameter_types};
+	use frame_support::parameter_types;
 
-	type AuthorityDiscovery = Module<Test>;
+	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+	type Block = frame_system::mocking::MockBlock<Test>;
 
-	#[derive(Clone, Eq, PartialEq)]
-	pub struct Test;
+	frame_support::construct_runtime!(
+		pub enum Test where
+			Block = Block,
+			NodeBlock = Block,
+			UncheckedExtrinsic = UncheckedExtrinsic,
+		{
+			System: frame_system::{Module, Call, Config, Storage, Event<T>},
+			Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
+			AuthorityDiscovery: pallet_authority_discovery::{Module, Call, Config},
+		}
+	);
+
 	impl Config for Test {}
 
 	parameter_types! {
@@ -141,7 +153,7 @@ mod tests {
 		type Keys = UintAuthorityId;
 		type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
 		type SessionHandler = TestSessionHandler;
-		type Event = ();
+		type Event = Event;
 		type ValidatorId = AuthorityId;
 		type ValidatorIdOf = ConvertInto;
 		type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
@@ -173,25 +185,21 @@ mod tests {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = BlockNumber;
-		type Call = ();
+		type Call = Call;
 		type Hash = H256;
 		type Hashing = ::sp_runtime::traits::BlakeTwo256;
 		type AccountId = AuthorityId;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = ();
+		type Event = Event;
 		type BlockHashCount = BlockHashCount;
 		type Version = ();
-		type PalletInfo = ();
+		type PalletInfo = PalletInfo;
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
-	}
-
-	impl_outer_origin! {
-		pub enum Origin for Test where system = frame_system {}
 	}
 
 	pub struct TestSessionHandler;
@@ -247,7 +255,7 @@ mod tests {
 			.build_storage::<Test>()
 			.unwrap();
 
-		GenesisConfig {
+		pallet_authority_discovery::GenesisConfig {
 			keys: vec![],
 		}
 		.assimilate_storage::<Test>(&mut t)
