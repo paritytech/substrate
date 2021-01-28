@@ -933,6 +933,16 @@ fn genesis_funding_works() {
 #[test]
 fn subbunty_add_subbounty_works() {
 	new_test_ext().execute_with(|| {
+		// TestProcedure
+		// 1, Create bounty & move to active state with enough bounty fund & master-curator.
+		// 2, Master-curator adds subbounty Subbounty-1, test for error like RequireCurator
+		//    ,InsufficientProposersBalance, InsufficientBountyBalance with invalid arguments.
+		// 3, Master-curator adds subbounty Subbounty-1, moves to "Approved" state &
+		//    test for the event SubBountyApproved.
+		// 4, Test for DB state of `Bounties` & `SubBounties`.
+		// 5, Observe fund transaction moment between Bounty, Subbounty,
+		//    Curator, Subcurator & beneficiary.
+		// ===Pre-steps :: Make the bounty or parent bounty===
 		System::set_block_number(1);
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
 
@@ -979,49 +989,52 @@ fn subbunty_add_subbounty_works() {
 		assert_eq!(Balances::free_balance(&4), 8);
 		assert_eq!(Balances::reserved_balance(&4), 2);
 
+		// ===Pre-steps :: Add subbounty===
+		// Acc-4 is the master curator & make sure enough deposit
+		// Call from invalid origin & check for error "RequireCurator"
 		assert_noop!(
 			Bounties::add_subbounty(Origin::signed(0), 0, 50, b"12345-p1".to_vec()),
 			Error::<Test>::RequireCurator,
 		);
 
+		// Call from master curator origin, with insufficient
+		// balance & check for error "InsufficientProposersBalance"
 		assert_noop!(
 			Bounties::add_subbounty(Origin::signed(4), 0, 50, b"12345-p1".to_vec()),
 			Error::<Test>::InsufficientProposersBalance,
 		);
 
-		println!("FB-{:#?}/RB-{:#?}",
-			Balances::free_balance(&4),
-			Balances::reserved_balance(&4),
-		);
-
+		// Update the master curator
 		Balances::make_free_balance_be(&4, 101);
 
-		println!("FB-{:#?}/RB-{:#?}",
-			Balances::free_balance(&4),
-			Balances::reserved_balance(&4),
-		);
+		// master curator deposit is reserved for parent bounty.
+		assert_eq!(Balances::free_balance(4), 101);
+		assert_eq!(Balances::reserved_balance(4), 2);
 
+		// master curator fee is reserved on parent bounty account.
+		assert_eq!(Balances::free_balance(Bounties::bounty_account_id(0)), 46);
+		assert_eq!(Balances::reserved_balance(Bounties::bounty_account_id(0)), 4);
+
+		// Add subbounty value is equal or greater than parent bounty value,
+		// & check for error InsufficientBountyBalance.
 		assert_noop!(
 			Bounties::add_subbounty(Origin::signed(4), 0, 50, b"12345-p1".to_vec()),
 			Error::<Test>::InsufficientBountyBalance,
 		);
 
-		println!("FB-{:#?}/RB-{:#?}",
-			Balances::free_balance(&4),
-			Balances::reserved_balance(&4),
-		);
-
+		// Add subbounty with valid value, which can be funded by parent bounty.
 		assert_ok!(
 			Bounties::add_subbounty(Origin::signed(4), 0, 10, b"12345-p1".to_vec())
 		);
 
+		// Check for the event SubBountyApproved
 		assert_eq!(last_event(), RawEvent::SubBountyApproved(0,1));
 
-		println!("FB-{:#?}/RB-{:#?}",
-			Balances::free_balance(&4),
-			Balances::reserved_balance(&4),
-		);
+		assert_eq!(Balances::free_balance(4), 13);
+		assert_eq!(Balances::reserved_balance(4), 90);
 
+		// DB Status
+		// Check the parent bounty status.
 		assert_eq!(Bounties::bounties(0).unwrap(), Bounty {
 			proposer: 0,
 			value: 50,
@@ -1038,6 +1051,7 @@ fn subbunty_add_subbounty_works() {
 			].to_vec(),
 		});
 
+		// Check the subbounty status.
 		assert_eq!(Bounties::subbounties(0,1).unwrap(), SubBounty {
 			proposer: 4,
 			value: 10,
@@ -1047,11 +1061,13 @@ fn subbunty_add_subbounty_works() {
 			status: BountyStatus::Approved,
 		});
 
+		// Check the subbounty description status.
 		assert_eq!(
 			Bounties::subbounty_descriptions(0,1).unwrap(),
 			b"12345-p1".to_vec(),
 		);
 
+		// Check the subbounty approval status.
 		assert_eq!(Bounties::subbounty_approvals(),
 			[(0,1)].to_vec()
 		);
@@ -1062,6 +1078,13 @@ fn subbunty_add_subbounty_works() {
 #[test]
 fn subbunty_assign_subcurator_works() {
 	new_test_ext().execute_with(|| {
+// TestProcedure
+		// 1, Create bounty & move to active state with enough bounty fund & master-curator.
+		// 2, Master-curator adds subbounty Subbounty-1, test for error like RequireCurator
+		//    with invalid arguments.
+		// 3, Master-curator adds subbounty Subbounty-1, moves to "Active" state.
+		// 4, Test for DB state of `SubBounties`.
+		// ===Pre-steps :: Make the bounty or parent bounty===
 		System::set_block_number(1);
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
 
@@ -1080,6 +1103,8 @@ fn subbunty_assign_subcurator_works() {
 
 		Balances::make_free_balance_be(&4, 101);
 
+		// ===Pre-steps :: Add subbounty===
+		// Acc-4 is the master curator & make sure enough deposit
 		assert_ok!(
 			Bounties::add_subbounty(Origin::signed(4), 0, 10, b"12345-p1".to_vec())
 		);
@@ -1093,7 +1118,7 @@ fn subbunty_assign_subcurator_works() {
 		<Treasury as OnInitialize<u64>>::on_initialize(6);
 
 		assert_ok!(
-			Bounties::propose_subcurator(Origin::signed(4),0,1,4,2)
+			Bounties::propose_subcurator(Origin::signed(4), 0, 1, 4, 2)
 		);
 
 		assert_eq!(Bounties::subbounties(0,1).unwrap(), SubBounty {
@@ -1131,18 +1156,25 @@ fn subbunty_assign_subcurator_works() {
 				},
 			}
 		);
-
 		// no deposit for subcurator who is also curator of parnet bounty
 		assert_eq!(Balances::free_balance(4), 101);
 		assert_eq!(Balances::reserved_balance(4), 2);
-
 	});
 }
 
 #[test]
 fn subbunty_cfg_max_subbounty_count_works() {
 	new_test_ext().execute_with(|| {
-
+		// TestProcedure
+		// 1, Create bounty & move to active state with enough bounty fund & master-curator.
+		// 2, Test runtime is configured to take 3 subbounties.
+		// 3, Master-curator adds 3 subbounty Subbounty-1,2 & 3 & test for error
+		//    like SubBountyMaxOverflow.
+		// 4, Move active subbounty, to "Active" state by assigning & accepting
+		//    subcurator.
+		// 4, Test for DB state of `SubBounties`.
+		// 5, Observe fund transaction moment between Bounty, Subbounty,
+		//    Curator, Subcurator.
 		// ===Pre-steps :: Make the bounty or parent bounty===
 		System::set_block_number(1);
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
@@ -1317,17 +1349,14 @@ fn subbunty_cfg_max_subbounty_count_works() {
 		assert_ok!(
 			Bounties::accept_subcurator(Origin::signed(7),0,3)
 		);
-
 		assert_eq!(Bounties::subbounties(0,3).unwrap().status,
 			BountyStatus::Active {
 				curator: 7,
 				update_due: 26,
 			},
 		);
-
 		assert_eq!(Balances::free_balance(7), 9);
 		assert_eq!(Balances::reserved_balance(7), 1);
-
 	});
 }
 
@@ -3367,7 +3396,7 @@ fn subbunty_extend_subbounty_from_extend_bounty_expiry_works() {
 		assert_eq!(Balances::reserved_balance(Bounties::bounty_account_id(0)), 4);
 
 		// ===Pre-steps :: Add subbounty===
-		// Acc-4 is the master curator & make sure enough
+		// Acc-4 is the master curator & make sure enough deposit
 		assert_eq!(Balances::free_balance(4), 199);
 		assert_eq!(Balances::reserved_balance(4), 2);
 
