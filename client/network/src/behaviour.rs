@@ -248,8 +248,9 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 		protocol: &str,
 		request: Vec<u8>,
 		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
+		connect: bool,
 	) {
-		self.request_responses.send_request(target, protocol, request, pending_response)
+		self.request_responses.send_request(target, protocol, request, pending_response, connect)
 	}
 
 	/// Returns a shared reference to the user protocol.
@@ -317,7 +318,7 @@ Behaviour<B, H> {
 				}
 
 				self.request_responses.send_request(
-					&target, &self.block_request_protocol_name, buf, pending_response,
+					&target, &self.block_request_protocol_name, buf, pending_response, false,
 				);
 			},
 			CustomMessageOutcome::NotificationStreamOpened { remote, protocol, roles, notifications_sink } => {

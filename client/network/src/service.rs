@@ -829,12 +829,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		request: Vec<u8>
 	) -> Result<Vec<u8>, RequestFailure> {
 		let (tx, rx) = oneshot::channel();
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::Request {
-			target,
-			protocol: protocol.into(),
-			request,
-			pending_response: tx
-		});
+
+		self.send_request(target, protocol, request, tx, false);
 
 		match rx.await {
 			Ok(v) => v,
@@ -843,6 +839,32 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			// closed, and we legitimately report this situation as a "ConnectionClosed".
 			Err(_) => Err(RequestFailure::Network(OutboundFailure::ConnectionClosed)),
 		}
+	}
+
+	/// Variation of `request` which can connect to peers when necessary.
+	///
+	/// In some cases we do request data, without prior notification. For those cases this function
+	/// exists, it has no guarantees on connection staying alive, so you might still want to pass
+	/// false to the `connect` parameter and ensure liveness of connections via peer sets.
+	///
+	/// Apart from exposing whether or not we want to connect, in case of a disconnected peer, this
+	/// function also takes a sender for sending the response back, instead of returning the
+	/// response directly.
+	pub fn send_request(
+		&self,
+		target: PeerId,
+		protocol: impl Into<Cow<'static, str>>,
+		request: Vec<u8>,
+		tx: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
+		connect: bool,
+		) {
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::Request {
+			target,
+			protocol: protocol.into(),
+			request,
+			pending_response: tx,
+			connect,
+		});
 	}
 
 	/// You may call this when new transactons are imported by the transaction pool.
@@ -1262,6 +1284,8 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 		protocol: Cow<'static, str>,
 		request: Vec<u8>,
 		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
+		/// Connect to peer, if disconnected.
+		connect: bool,
 	},
 	DisconnectPeer(PeerId, Cow<'static, str>),
 	NewBestBlockImported(B::Hash, NumberFor<B>),
@@ -1385,8 +1409,8 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					this.network_service.user_protocol_mut().set_sync_fork_request(peer_ids, &hash, number),
 				ServiceToWorkerMsg::EventStream(sender) =>
 					this.event_streams.push(sender),
-				ServiceToWorkerMsg::Request { target, protocol, request, pending_response } => {
-					this.network_service.send_request(&target, &protocol, request, pending_response);
+				ServiceToWorkerMsg::Request { target, protocol, request, pending_response, connect } => {
+					this.network_service.send_request(&target, &protocol, request, pending_response, connect);
 				},
 				ServiceToWorkerMsg::DisconnectPeer(who, protocol_name) =>
 					this.network_service.user_protocol_mut().disconnect_peer(&who, &protocol_name),

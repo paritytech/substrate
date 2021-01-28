@@ -269,17 +269,18 @@ impl RequestResponsesBehaviour {
 
 	/// Initiates sending a request.
 	///
-	/// An error is returned if we are not connected to the target peer or if the protocol doesn't
-	/// match one that has been registered.
+	/// An error is returned if we are not connected to the target peer and `connect` is false. An
+	/// error is also returned if the protocol doesn't match one that has been registered.
 	pub fn send_request(
 		&mut self,
 		target: &PeerId,
 		protocol_name: &str,
 		request: Vec<u8>,
 		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
+		connect: bool,
 	) {
 		if let Some((protocol, _)) = self.protocols.get_mut(protocol_name) {
-			if protocol.is_connected(target) {
+			if protocol.is_connected(target) || connect {
 				let request_id = protocol.send_request(target, request);
 				let prev_req_id = self.pending_requests.insert(
 					(protocol_name.to_string().into(), request_id).into(),
