@@ -39,7 +39,7 @@ pub trait CompatibleDigestItem<P: Pair>: Sized {
 	fn as_aura_seal(&self) -> Option<Signature<P>>;
 
 	/// Construct a digest item which contains the slot number
-	fn aura_pre_digest(slot_num: Slot) -> Self;
+	fn aura_pre_digest(slot: Slot) -> Self;
 
 	/// If this item is an AuRa pre-digest, return the slot number
 	fn as_aura_pre_digest(&self) -> Option<Slot>;
@@ -58,8 +58,8 @@ impl<P, Hash> CompatibleDigestItem<P> for DigestItem<Hash> where
 		self.try_to(OpaqueDigestItemId::Seal(&AURA_ENGINE_ID))
 	}
 
-	fn aura_pre_digest(slot_num: Slot) -> Self {
-		DigestItem::PreRuntime(AURA_ENGINE_ID, slot_num.encode())
+	fn aura_pre_digest(slot: Slot) -> Self {
+		DigestItem::PreRuntime(AURA_ENGINE_ID, slot.encode())
 	}
 
 	fn as_aura_pre_digest(&self) -> Option<Slot> {

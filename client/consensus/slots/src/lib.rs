@@ -171,7 +171,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	///
 	/// An example strategy that back offs if the finalized head is lagging too much behind the tip
 	/// is implemented by [`BackoffAuthoringOnFinalizedHeadLagging`].
-	fn should_backoff(&self, _slot_number: Slot, _chain_head: &B::Header) -> bool {
+	fn should_backoff(&self, _slot: Slot, _chain_head: &B::Header) -> bool {
 		false
 	}
 
@@ -209,7 +209,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	where
 		<Self::Proposer as Proposer<B>>::Proposal: Unpin + Send + 'static,
 	{
-		let (timestamp, slot_number) = (slot_info.timestamp, slot_info.number);
+		let (timestamp, slot) = (slot_info.timestamp, slot_info.slot);
 
 		let slot_remaining_duration = self.slot_remaining_duration(&slot_info);
 		let proposing_remaining_duration = self.proposing_remaining_duration(&chain_head, &slot_info);
@@ -219,7 +219,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				debug!(
 					target: self.logging_target(),
 					"Skipping proposal slot {} since there's no time left to propose",
-					slot_number,
+					slot,
 				);
 
 				return Box::pin(future::ready(None));
@@ -228,7 +228,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			None => Box::new(future::pending()) as Box<_>,
 		};
 
-		let epoch_data = match self.epoch_data(&chain_head, slot_number) {
+		let epoch_data = match self.epoch_data(&chain_head, slot) {
 			Ok(epoch_data) => epoch_data,
 			Err(err) => {
 				warn!("Unable to fetch epoch data at block {:?}: {:?}", chain_head.hash(), err);
@@ -243,7 +243,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			}
 		};
 
-		self.notify_slot(&chain_head, slot_number, &epoch_data);
+		self.notify_slot(&chain_head, slot, &epoch_data);
 
 		let authorities_len = self.authorities_len(&epoch_data);
 
@@ -261,43 +261,43 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			return Box::pin(future::ready(None));
 		}
 
-		let claim = match self.claim_slot(&chain_head, slot_number, &epoch_data) {
+		let claim = match self.claim_slot(&chain_head, slot, &epoch_data) {
 			None => return Box::pin(future::ready(None)),
 			Some(claim) => claim,
 		};
 
-		if self.should_backoff(slot_number, &chain_head) {
+		if self.should_backoff(slot, &chain_head) {
 			return Box::pin(future::ready(None));
 		}
 
 		debug!(
 			target: self.logging_target(),
 			"Starting authorship at slot {}; timestamp = {}",
-			slot_number,
+			slot,
 			timestamp,
 		);
 
 		telemetry!(
 			CONSENSUS_DEBUG;
 			"slots.starting_authorship";
-			"slot_num" => slot_number.0,
+			"slot_num" => slot.0,
 			"timestamp" => timestamp,
 		);
 
 		let awaiting_proposer = self.proposer(&chain_head).map_err(move |err| {
-			warn!("Unable to author block in slot {:?}: {:?}", slot_number, err);
+			warn!("Unable to author block in slot {:?}: {:?}", slot, err);
 
 			telemetry!(
 				CONSENSUS_WARN;
 				"slots.unable_authoring_block";
-				"slot" => slot_number.0,
+				"slot" => slot.0,
 				"err" => ?err
 			);
 
 			err
 		});
 
-		let logs = self.pre_digest_data(slot_number, &claim);
+		let logs = self.pre_digest_data(slot, &claim);
 
 		// deadline our production to approx. the end of the slot
 		let proposing = awaiting_proposer.and_then(move |proposer| proposer.propose(
@@ -313,14 +313,14 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			futures::future::select(proposing, proposing_remaining).map(move |v| match v {
 				Either::Left((b, _)) => b.map(|b| (b, claim)),
 				Either::Right(_) => {
-					info!("⌛️ Discarding proposal for slot {}; block production took too long", slot_number);
+					info!("⌛️ Discarding proposal for slot {}; block production took too long", slot);
 					// If the node was compiled with debug, tell the user to use release optimizations.
 					#[cfg(build_type="debug")]
 					info!("👉 Recompile your node in `--release` mode to mitigate this problem.");
 					telemetry!(
 						CONSENSUS_INFO;
 						"slots.discarding_proposal_took_too_long";
-						"slot" => slot_number.0,
+						"slot" => slot.0,
 					);
 
 					Err(sp_consensus::Error::ClientImport("Timeout in the Slots proposer".into()))
@@ -437,12 +437,12 @@ where
 				return Either::Right(future::ready(Ok(())));
 			}
 
-			let slot_num = slot_info.number;
+			let slot = slot_info.slot;
 			let chain_head = match client.best_chain() {
 				Ok(x) => x,
 				Err(e) => {
 					warn!(target: "slots", "Unable to author block in slot {}. \
-					no best block header: {:?}", slot_num, e);
+					no best block header: {:?}", slot, e);
 					return Either::Right(future::ready(Ok(())));
 				}
 			};
@@ -452,7 +452,7 @@ where
 					target: "slots",
 					"Unable to author block in slot {},. `can_author_with` returned: {} \
 					Probably a node update is required!",
-					slot_num,
+					slot,
 					err,
 				);
 				Either::Right(future::ready(Ok(())))
@@ -580,7 +580,7 @@ pub fn slot_lenience_exponential(parent_slot: Slot, slot_info: &SlotInfo) -> Opt
 	// exponential back-off.
 	// in normal cases we only attempt to issue blocks up to the end of the slot.
 	// when the chain has been stalled for a few slots, we give more lenience.
-	let skipped_slots = slot_info.number.saturating_sub(parent_slot.0 + 1);
+	let skipped_slots = slot_info.slot.saturating_sub(parent_slot.0 + 1);
 
 	if skipped_slots == 0 {
 		None
@@ -606,7 +606,7 @@ pub fn slot_lenience_linear(parent_slot: Slot, slot_info: &SlotInfo) -> Option<D
 	// linear back-off.
 	// in normal cases we only attempt to issue blocks up to the end of the slot.
 	// when the chain has been stalled for a few slots, we give more lenience.
-	let skipped_slots = slot_info.number.saturating_sub(parent_slot.0 + 1);
+	let skipped_slots = slot_info.slot.saturating_sub(parent_slot.0 + 1);
 
 	if skipped_slots == 0 {
 		None
@@ -723,9 +723,9 @@ mod test {
 
 	const SLOT_DURATION: Duration = Duration::from_millis(6000);
 
-	fn slot(n: u64) -> super::slots::SlotInfo {
+	fn slot(slot: u64) -> super::slots::SlotInfo {
 		super::slots::SlotInfo {
-			number: n.into(),
+			slot: slot.into(),
 			duration: SLOT_DURATION.as_millis() as u64,
 			timestamp: Default::default(),
 			inherent_data: Default::default(),

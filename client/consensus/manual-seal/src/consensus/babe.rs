@@ -101,14 +101,14 @@ impl<B, C> BabeConsensusDataProvider<B, C>
 		})
 	}
 
-	fn epoch(&self, parent: &B::Header, slot_number: Slot) -> Result<Epoch, Error> {
+	fn epoch(&self, parent: &B::Header, slot: Slot) -> Result<Epoch, Error> {
 		let epoch_changes = self.epoch_changes.lock();
 		let epoch_descriptor = epoch_changes
 			.epoch_descriptor_for_child_of(
 				descendent_query(&*self.client),
 				&parent.hash(),
 				parent.number().clone(),
-				slot_number,
+				slot,
 			)
 			.map_err(|e| Error::StringError(format!("failed to fetch epoch_descriptor: {}", e)))?
 			.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet)?;
@@ -136,12 +136,12 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 	type Transaction = TransactionFor<C, B>;
 
 	fn create_digest(&self, parent: &B::Header, inherents: &InherentData) -> Result<DigestFor<B>, Error> {
-		let slot_number = inherents.babe_inherent_data()?;
-		let epoch = self.epoch(parent, slot_number)?;
+		let slot = inherents.babe_inherent_data()?;
+		let epoch = self.epoch(parent, slot)?;
 
 		// this is a dev node environment, we should always be able to claim a slot.
 		let logs =  if let Some((predigest, _)) = authorship::claim_slot(
-			slot_number,
+			slot,
 			&epoch,
 			&self.keystore,
 		) {
@@ -152,7 +152,7 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 			// well we couldn't claim a slot because this is an existing chain and we're not in the authorities.
 			// we need to tell BabeBlockImport that the epoch has changed, and we put ourselves in the authorities.
 			let predigest = PreDigest::SecondaryPlain(SecondaryPlainPreDigest {
-				slot: slot_number,
+				slot,
 				authority_index: 0_u32,
 			});
 
@@ -162,7 +162,7 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 					descendent_query(&*self.client),
 					&parent.hash(),
 					parent.number().clone(),
-					slot_number,
+					slot,
 				)
 				.map_err(|e| Error::StringError(format!("failed to fetch epoch_descriptor: {}", e)))?
 				.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet)?;
@@ -199,21 +199,21 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 		params: &mut BlockImportParams<B, Self::Transaction>,
 		inherents: &InherentData
 	) -> Result<(), Error> {
-		let slot_number = inherents.babe_inherent_data()?;
+		let slot = inherents.babe_inherent_data()?;
 		let epoch_changes = self.epoch_changes.lock();
 		let mut epoch_descriptor = epoch_changes
 			.epoch_descriptor_for_child_of(
 				descendent_query(&*self.client),
 				&parent.hash(),
 				parent.number().clone(),
-				slot_number,
+				slot,
 			)
 			.map_err(|e| Error::StringError(format!("failed to fetch epoch_descriptor: {}", e)))?
 			.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet)?;
 		// drop the lock
 		drop(epoch_changes);
 		// a quick check to see if we're in the authorities
-		let epoch = self.epoch(parent, slot_number)?;
+		let epoch = self.epoch(parent, slot)?;
 		let (authority, _) = self.authorities.first().expect("authorities is non-emptyp; qed");
 		let has_authority = epoch.authorities.iter()
 			.find(|(id, _)| *id == *authority)
@@ -221,15 +221,15 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 
 		if !has_authority {
 			log::info!(target: "manual-seal", "authority not found");
-			let slot_number = inherents.timestamp_inherent_data()? / self.config.slot_duration;
+			let slot = inherents.timestamp_inherent_data()? / self.config.slot_duration;
 			// manually hard code epoch descriptor
 			epoch_descriptor = match epoch_descriptor {
 				ViableEpochDescriptor::Signaled(identifier, _header) => {
 					ViableEpochDescriptor::Signaled(
 						identifier,
 						EpochHeader {
-							start_slot: slot_number.into(),
-							end_slot: Slot(slot_number * self.config.epoch_length),
+							start_slot: slot.into(),
+							end_slot: Slot(slot * self.config.epoch_length),
 						},
 					)
 				},
@@ -268,9 +268,9 @@ impl SlotTimestampProvider {
 		// otherwise we'd be producing blocks for older slots.
 		let duration = if info.best_number != Zero::zero() {
 			let header = client.header(BlockId::Hash(info.best_hash))?.unwrap();
-			let slot_number = find_pre_digest::<B>(&header).unwrap().slot();
+			let slot = find_pre_digest::<B>(&header).unwrap().slot();
 			// add the slot duration so there's no collision of slots
-			(*slot_number * slot_duration) + slot_duration
+			(*slot * slot_duration) + slot_duration
 		} else {
 			// this is the first block, use the correct time.
 			let now = SystemTime::now();

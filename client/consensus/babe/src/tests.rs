@@ -566,13 +566,13 @@ fn can_author_block() {
 // Propose and import a new BABE block on top of the given parent.
 fn propose_and_import_block<Transaction>(
 	parent: &TestHeader,
-	slot_number: Option<Slot>,
+	slot: Option<Slot>,
 	proposer_factory: &mut DummyFactory,
 	block_import: &mut BoxBlockImport<TestBlock, Transaction>,
 ) -> sp_core::H256 {
 	let mut proposer = futures::executor::block_on(proposer_factory.init(parent)).unwrap();
 
-	let slot_number = slot_number.unwrap_or_else(|| {
+	let slot = slot.unwrap_or_else(|| {
 		let parent_pre_digest = find_pre_digest::<TestBlock>(parent).unwrap();
 		Slot(parent_pre_digest.slot().0 + 1)
 	});
@@ -582,7 +582,7 @@ fn propose_and_import_block<Transaction>(
 			Item::babe_pre_digest(
 				PreDigest::SecondaryPlain(SecondaryPlainPreDigest {
 					authority_index: 0,
-					slot: slot_number,
+					slot,
 				}),
 			),
 		],
@@ -596,7 +596,7 @@ fn propose_and_import_block<Transaction>(
 		descendent_query(&*proposer_factory.client),
 		&parent_hash,
 		*parent.number(),
-		slot_number,
+		slot,
 	).unwrap().unwrap();
 
 	let seal = {

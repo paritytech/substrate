@@ -92,11 +92,11 @@ pub type BabeBlockWeight = u32;
 /// Make a VRF transcript from given randomness, slot number and epoch.
 pub fn make_transcript(
 	randomness: &Randomness,
-	slot_number: Slot,
+	slot: Slot,
 	epoch: u64,
 ) -> Transcript {
 	let mut transcript = Transcript::new(&BABE_ENGINE_ID);
-	transcript.append_u64(b"slot number", *slot_number);
+	transcript.append_u64(b"slot number", *slot);
 	transcript.append_u64(b"current epoch", epoch);
 	transcript.append_message(b"chain randomness", &randomness[..]);
 	transcript
@@ -106,13 +106,13 @@ pub fn make_transcript(
 #[cfg(feature = "std")]
 pub fn make_transcript_data(
 	randomness: &Randomness,
-	slot_number: Slot,
+	slot: Slot,
 	epoch: u64,
 ) -> VRFTranscriptData {
 	VRFTranscriptData {
 		label: &BABE_ENGINE_ID,
 		items: vec![
-			("slot number", VRFTranscriptValue::U64(*slot_number)),
+			("slot number", VRFTranscriptValue::U64(*slot)),
 			("current epoch", VRFTranscriptValue::U64(epoch)),
 			("chain randomness", VRFTranscriptValue::Bytes(randomness.to_vec())),
 		]

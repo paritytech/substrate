@@ -684,7 +684,7 @@ impl<T: Config> Module<T> {
 		key_owner_proof: T::KeyOwnerProof,
 	) -> DispatchResultWithPostInfo {
 		let offender = equivocation_proof.offender.clone();
-		let slot_number = equivocation_proof.slot;
+		let slot = equivocation_proof.slot;
 
 		// validate the equivocation proof
 		if !sp_consensus_babe::check_equivocation_proof(equivocation_proof) {
@@ -694,7 +694,7 @@ impl<T: Config> Module<T> {
 		let validator_set_count = key_owner_proof.validator_count();
 		let session_index = key_owner_proof.session();
 
-		let epoch_index = (slot_number.saturating_sub(*GenesisSlot::get()) / T::EpochDuration::get())
+		let epoch_index = (slot.saturating_sub(*GenesisSlot::get()) / T::EpochDuration::get())
 			.saturated_into::<u32>();
 
 		// check that the slot number is consistent with the session index
@@ -709,7 +709,7 @@ impl<T: Config> Module<T> {
 			.ok_or(Error::<T>::InvalidKeyOwnershipProof)?;
 
 		let offence = BabeEquivocationOffence {
-			slot: slot_number,
+			slot,
 			validator_set_count,
 			offender,
 			session_index,

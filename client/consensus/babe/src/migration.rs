@@ -41,7 +41,7 @@ pub struct EpochV0 {
 
 impl EpochT for EpochV0 {
 	type NextEpochDescriptor = NextEpochDescriptor;
-	type SlotNumber = Slot;
+	type Slot = Slot;
 
 	fn increment(
 		&self,

@@ -294,14 +294,14 @@ pub fn start_era(era_index: EraIndex) {
 
 pub fn make_primary_pre_digest(
 	authority_index: sp_consensus_babe::AuthorityIndex,
-	slot_number: sp_consensus_babe::Slot,
+	slot: sp_consensus_babe::Slot,
 	vrf_output: VRFOutput,
 	vrf_proof: VRFProof,
 ) -> Digest {
 	let digest_data = sp_consensus_babe::digests::PreDigest::Primary(
 		sp_consensus_babe::digests::PrimaryPreDigest {
 			authority_index,
-			slot: slot_number,
+			slot,
 			vrf_output,
 			vrf_proof,
 		}
@@ -312,12 +312,12 @@ pub fn make_primary_pre_digest(
 
 pub fn make_secondary_plain_pre_digest(
 	authority_index: sp_consensus_babe::AuthorityIndex,
-	slot_number: sp_consensus_babe::Slot,
+	slot: sp_consensus_babe::Slot,
 ) -> Digest {
 	let digest_data = sp_consensus_babe::digests::PreDigest::SecondaryPlain(
 		sp_consensus_babe::digests::SecondaryPlainPreDigest {
 			authority_index,
-			slot: slot_number,
+			slot,
 		}
 	);
 	let log = DigestItem::PreRuntime(sp_consensus_babe::BABE_ENGINE_ID, digest_data.encode());
@@ -326,14 +326,14 @@ pub fn make_secondary_plain_pre_digest(
 
 pub fn make_secondary_vrf_pre_digest(
 	authority_index: sp_consensus_babe::AuthorityIndex,
-	slot_number: sp_consensus_babe::Slot,
+	slot: sp_consensus_babe::Slot,
 	vrf_output: VRFOutput,
 	vrf_proof: VRFProof,
 ) -> Digest {
 	let digest_data = sp_consensus_babe::digests::PreDigest::SecondaryVRF(
 		sp_consensus_babe::digests::SecondaryVRFPreDigest {
 			authority_index,
-			slot: slot_number,
+			slot,
 			vrf_output,
 			vrf_proof,
 		}
@@ -343,11 +343,11 @@ pub fn make_secondary_vrf_pre_digest(
 }
 
 pub fn make_vrf_output(
-	slot_number: Slot,
+	slot: Slot,
 	pair: &sp_consensus_babe::AuthorityPair
 ) -> (VRFOutput, VRFProof, [u8; 32]) {
 	let pair = sp_core::sr25519::Pair::from_ref(pair).as_ref();
-	let transcript = sp_consensus_babe::make_transcript(&Babe::randomness(), slot_number, 0);
+	let transcript = sp_consensus_babe::make_transcript(&Babe::randomness(), slot, 0);
 	let vrf_inout = pair.vrf_sign(transcript);
 	let vrf_randomness: sp_consensus_vrf::schnorrkel::Randomness = vrf_inout.0
 		.make_bytes::<[u8; 32]>(&sp_consensus_babe::BABE_VRF_INOUT_CONTEXT);
@@ -435,7 +435,7 @@ pub fn new_test_ext_raw_authorities(authorities: Vec<AuthorityId>) -> sp_io::Tes
 pub fn generate_equivocation_proof(
 	offender_authority_index: u32,
 	offender_authority_pair: &AuthorityPair,
-	slot_number: Slot,
+	slot: Slot,
 ) -> sp_consensus_babe::EquivocationProof<Header> {
 	use sp_consensus_babe::digests::CompatibleDigestItem;
 
@@ -444,7 +444,7 @@ pub fn generate_equivocation_proof(
 
 	let make_header = || {
 		let parent_hash = System::parent_hash();
-		let pre_digest = make_secondary_plain_pre_digest(offender_authority_index, slot_number);
+		let pre_digest = make_secondary_plain_pre_digest(offender_authority_index, slot);
 		System::initialize(&current_block, &parent_hash, &pre_digest, InitKind::Full);
 		System::set_block_number(current_block);
 		Timestamp::set_timestamp(current_block);
@@ -472,7 +472,7 @@ pub fn generate_equivocation_proof(
 	go_to_block(current_block, current_slot.0);
 
 	sp_consensus_babe::EquivocationProof {
-		slot: slot_number,
+		slot,
 		offender: offender_authority_pair.public(),
 		first_header: h1,
 		second_header: h2,

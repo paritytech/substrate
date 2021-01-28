@@ -104,10 +104,10 @@ pub fn slot_duration<A, B, C>(client: &C) -> CResult<SlotDuration> where
 }
 
 /// Get slot author for given block along with authorities.
-fn slot_author<P: Pair>(slot_num: Slot, authorities: &[AuthorityId<P>]) -> Option<&AuthorityId<P>> {
+fn slot_author<P: Pair>(slot: Slot, authorities: &[AuthorityId<P>]) -> Option<&AuthorityId<P>> {
 	if authorities.is_empty() { return None }
 
-	let idx = slot_num.0 % (authorities.len() as u64);
+	let idx = slot.0 % (authorities.len() as u64);
 	assert!(
 		idx <= usize::max_value() as u64,
 		"It is impossible to have a vector with length beyond the address space; qed",
@@ -237,7 +237,7 @@ where
 	fn epoch_data(
 		&self,
 		header: &B::Header,
-		_slot_number: Slot,
+		_slot: Slot,
 	) -> Result<Self::EpochData, sp_consensus::Error> {
 		authorities(self.client.as_ref(), &BlockId::Hash(header.hash()))
 	}
@@ -249,10 +249,10 @@ where
 	fn claim_slot(
 		&self,
 		_header: &B::Header,
-		slot_number: Slot,
+		slot: Slot,
 		epoch_data: &Self::EpochData,
 	) -> Option<Self::Claim> {
-		let expected_author = slot_author::<P>(slot_number, epoch_data);
+		let expected_author = slot_author::<P>(slot, epoch_data);
 		expected_author.and_then(|p| {
 			if SyncCryptoStore::has_keys(
 				 &*self.keystore,
@@ -267,11 +267,11 @@ where
 
 	fn pre_digest_data(
 		&self,
-		slot_number: Slot,
+		slot: Slot,
 		_claim: &Self::Claim,
 	) -> Vec<sp_runtime::DigestItem<B::Hash>> {
 		vec![
-			<DigestItemFor<B> as CompatibleDigestItem<P>>::aura_pre_digest(slot_number),
+			<DigestItemFor<B> as CompatibleDigestItem<P>>::aura_pre_digest(slot),
 		]
 	}
 
@@ -321,14 +321,14 @@ where
 		self.force_authoring
 	}
 
-	fn should_backoff(&self, slot_number: Slot, chain_head: &B::Header) -> bool {
+	fn should_backoff(&self, slot: Slot, chain_head: &B::Header) -> bool {
 		if let Some(ref strategy) = self.backoff_authoring_blocks {
 			if let Ok(chain_head_slot) = find_pre_digest::<B, P>(chain_head) {
 				return strategy.should_backoff(
 					*chain_head.number(),
 					chain_head_slot,
 					self.client.info().finalized_number,
-					slot_number,
+					slot,
 					self.logging_target(),
 				);
 			}
@@ -364,7 +364,7 @@ where
 			debug!(
 				target: "aura",
 				"No block for {} slots. Applying linear lenience of {}s",
-				slot_info.number.saturating_sub(parent_slot.0 + 1),
+				slot_info.slot.saturating_sub(parent_slot.0 + 1),
 				slot_lenience.as_secs(),
 			);
 
@@ -400,7 +400,7 @@ enum Error<B: BlockT> {
 	DataProvider(String),
 	Runtime(String),
 	#[display(fmt = "Slot number must increase: parent slot: {}, this slot: {}", _0, _1)]
-	SlotNumberMustIncrease(Slot, Slot),
+	SlotMustIncrease(Slot, Slot),
 	#[display(fmt = "Parent ({}) of {} unavailable. Cannot import", _0, _1)]
 	ParentUnavailable(B::Hash, B::Hash),
 }
@@ -458,15 +458,15 @@ fn check_header<C, B: BlockT, P: Pair>(
 		aura_err(Error::HeaderBadSeal(hash))
 	})?;
 
-	let slot_num = find_pre_digest::<B, _>(&header)?;
+	let slot = find_pre_digest::<B, _>(&header)?;
 
-	if slot_num > slot_now {
+	if slot > slot_now {
 		header.digest_mut().push(seal);
-		Ok(CheckedHeader::Deferred(header, slot_num))
+		Ok(CheckedHeader::Deferred(header, slot))
 	} else {
 		// check the signature is valid under the expected authority and
 		// chain state.
-		let expected_author = match slot_author::<P>(slot_num, &authorities) {
+		let expected_author = match slot_author::<P>(slot, &authorities) {
 			None => return Err(Error::SlotAuthorNotFound),
 			Some(author) => author,
 		};
@@ -477,19 +477,19 @@ fn check_header<C, B: BlockT, P: Pair>(
 			if let Some(equivocation_proof) = check_equivocation(
 				client,
 				slot_now,
-				slot_num,
+				slot,
 				&header,
 				expected_author,
 			).map_err(Error::Client)? {
 				info!(
 					"Slot author is equivocating at slot {} with headers {:?} and {:?}",
-					slot_num,
+					slot,
 					equivocation_proof.first_header.hash(),
 					equivocation_proof.second_header.hash(),
 				);
 			}
 
-			Ok(CheckedHeader::Checked(header, (slot_num, seal)))
+			Ok(CheckedHeader::Checked(header, (slot, seal)))
 		} else {
 			Err(Error::BadSignature(hash))
 		}
@@ -613,12 +613,12 @@ impl<B: BlockT, C, P, CAW> Verifier<B> for AuraVerifier<C, P, CAW> where
 			&authorities[..],
 		).map_err(|e| e.to_string())?;
 		match checked_header {
-			CheckedHeader::Checked(pre_header, (slot_num, seal)) => {
+			CheckedHeader::Checked(pre_header, (slot, seal)) => {
 				// if the body is passed through, we need to use the runtime
 				// to check that the internally-set timestamp in the inherents
 				// actually matches the slot set in the seal.
 				if let Some(inner_body) = body.take() {
-					inherent_data.aura_replace_inherent_data(slot_num);
+					inherent_data.aura_replace_inherent_data(slot);
 					let block = B::new(pre_header.clone(), inner_body);
 
 					// skip the inherents verification if the runtime API is old.
@@ -802,7 +802,7 @@ impl<Block: BlockT, C, I, P> BlockImport<Block> for AuraBlockImport<Block, C, I,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		let hash = block.post_hash();
-		let slot_number = find_pre_digest::<Block, P>(&block.header)
+		let slot = find_pre_digest::<Block, P>(&block.header)
 			.expect("valid Aura headers must contain a predigest; \
 					 header has been already verified; qed");
 
@@ -818,10 +818,10 @@ impl<Block: BlockT, C, I, P> BlockImport<Block> for AuraBlockImport<Block, C, I,
 					parent header has already been verified; qed");
 
 		// make sure that slot number is strictly increasing
-		if slot_number <= parent_slot {
+		if slot <= parent_slot {
 			return Err(
 				ConsensusError::ClientImport(aura_err(
-					Error::<Block>::SlotNumberMustIncrease(parent_slot, slot_number)
+					Error::<Block>::SlotMustIncrease(parent_slot, slot)
 				).into())
 			);
 		}

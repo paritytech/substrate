@@ -87,8 +87,8 @@ impl ProvideInherentData for InherentDataProvider {
 		use sp_timestamp::TimestampInherentData;
 
 		let timestamp = inherent_data.timestamp_inherent_data()?;
-		let slot_num = timestamp / self.slot_duration;
-		inherent_data.put_data(INHERENT_IDENTIFIER, &slot_num)
+		let slot = timestamp / self.slot_duration;
+		inherent_data.put_data(INHERENT_IDENTIFIER, &slot)
 	}
 
 	fn error_to_string(&self, error: &[u8]) -> Option<String> {

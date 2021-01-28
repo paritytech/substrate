@@ -151,8 +151,8 @@ impl<T: Config> FindAuthor<u32> for Module<T> {
 	{
 		for (id, mut data) in digests.into_iter() {
 			if id == AURA_ENGINE_ID {
-				if let Ok(slot_num) = u64::decode(&mut data) {
-					let author_index = slot_num % Self::authorities().len() as u64;
+				if let Ok(slot) = u64::decode(&mut data) {
+					let author_index = slot % Self::authorities().len() as u64;
 					return Some(author_index as u32)
 				}
 			}

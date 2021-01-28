@@ -48,7 +48,7 @@ pub fn time_until_next(now: Duration, slot_duration: u64) -> Duration {
 /// Information about a slot.
 pub struct SlotInfo {
 	/// The slot number.
-	pub number: Slot,
+	pub slot: Slot,
 	/// Current timestamp.
 	pub timestamp: u64,
 	/// The instant at which the slot ends.
@@ -114,7 +114,7 @@ impl<SC: SlotCompatible> Stream for Slots<SC> {
 				Err(err) => return Poll::Ready(Some(Err(sp_consensus::Error::InherentData(err)))),
 			};
 			let result = self.timestamp_extractor.extract_timestamp_and_slot(&inherent_data);
-			let (timestamp, slot_num, offset) = match result {
+			let (timestamp, slot, offset) = match result {
 				Ok(v) => v,
 				Err(err) => return Poll::Ready(Some(Err(err))),
 			};
@@ -125,11 +125,11 @@ impl<SC: SlotCompatible> Stream for Slots<SC> {
 			self.inner_delay = Some(Delay::new(ends_in));
 
 			// never yield the same slot twice.
-			if slot_num > self.last_slot {
-				self.last_slot = slot_num;
+			if slot > self.last_slot {
+				self.last_slot = slot;
 
 				break Poll::Ready(Some(Ok(SlotInfo {
-					number: slot_num,
+					slot,
 					duration: self.slot_duration,
 					timestamp,
 					ends_at,
