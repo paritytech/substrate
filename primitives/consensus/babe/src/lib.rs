@@ -357,7 +357,7 @@ pub struct Epoch {
 	/// The starting slot of the epoch.
 	pub start_slot: Slot,
 	/// The duration of this epoch.
-	pub duration: Slot,
+	pub duration: u64,
 	/// The authorities and their weights.
 	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 	/// Randomness for this epoch.

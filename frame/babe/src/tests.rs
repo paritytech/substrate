@@ -202,7 +202,7 @@ fn authority_index() {
 #[test]
 fn can_predict_next_epoch_change() {
 	new_test_ext(1).execute_with(|| {
-		assert_eq!(<Test as Config>::EpochDuration::get().0, 3);
+		assert_eq!(<Test as Config>::EpochDuration::get(), 3);
 		// this sets the genesis slot to 6;
 		go_to_block(1, 6);
 		assert_eq!(Babe::genesis_slot().0, 6);
@@ -223,7 +223,7 @@ fn can_predict_next_epoch_change() {
 #[test]
 fn can_enact_next_config() {
 	new_test_ext(1).execute_with(|| {
-		assert_eq!(<Test as Config>::EpochDuration::get().0, 3);
+		assert_eq!(<Test as Config>::EpochDuration::get(), 3);
 		// this sets the genesis slot to 6;
 		go_to_block(1, 6);
 		assert_eq!(Babe::genesis_slot().0, 6);

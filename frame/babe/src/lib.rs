@@ -66,7 +66,7 @@ pub trait Config: pallet_timestamp::Config {
 	/// The amount of time, in slots, that each epoch should last.
 	/// NOTE: Currently it is not possible to change the epoch duration after
 	/// the chain has started. Attempting to do so will brick block production.
-	type EpochDuration: Get<Slot>;
+	type EpochDuration: Get<u64>;
 
 	/// The expected average block time at which BABE should be creating
 	/// blocks. Since BABE is probabilistic it is not trivial to figure out
@@ -241,7 +241,7 @@ decl_module! {
 		/// NOTE: Currently it is not possible to change the epoch duration
 		/// after the chain has started. Attempting to do so will brick block
 		/// production.
-		const EpochDuration: u64 = *T::EpochDuration::get();
+		const EpochDuration: u64 = T::EpochDuration::get();
 
 		/// The expected average block time at which BABE should be creating
 		/// blocks. Since BABE is probabilistic it is not trivial to figure out
@@ -403,7 +403,7 @@ impl<T: Config> Module<T> {
 		// so we don't rotate the epoch.
 		now != One::one() && {
 			let diff = CurrentSlot::get().saturating_sub(*Self::current_epoch_start());
-			diff >= *T::EpochDuration::get()
+			diff >= T::EpochDuration::get()
 		}
 	}
 
@@ -422,7 +422,7 @@ impl<T: Config> Module<T> {
 	// WEIGHT NOTE: This function is tied to the weight of `EstimateNextSessionRotation`. If you update
 	// this function, you must also update the corresponding weight.
 	pub fn next_expected_epoch_change(now: T::BlockNumber) -> Option<T::BlockNumber> {
-		let next_slot = Self::current_epoch_start().saturating_add(*T::EpochDuration::get());
+		let next_slot = Self::current_epoch_start().saturating_add(T::EpochDuration::get());
 		next_slot
 			.checked_sub(*CurrentSlot::get())
 			.map(|slots_remaining| {
@@ -532,7 +532,7 @@ impl<T: Config> Module<T> {
 							 if u64 is not enough we should crash for safety; qed.";
 
 		let epoch_start = epoch_index
-			.checked_mul(*T::EpochDuration::get())
+			.checked_mul(T::EpochDuration::get())
 			.expect(PROOF);
 
 		Slot(epoch_start.checked_add(*GenesisSlot::get()).expect(PROOF))
@@ -694,7 +694,7 @@ impl<T: Config> Module<T> {
 		let validator_set_count = key_owner_proof.validator_count();
 		let session_index = key_owner_proof.session();
 
-		let epoch_index = (slot_number.saturating_sub(*GenesisSlot::get()) / *T::EpochDuration::get())
+		let epoch_index = (slot_number.saturating_sub(*GenesisSlot::get()) / T::EpochDuration::get())
 			.saturated_into::<u32>();
 
 		// check that the slot number is consistent with the session index
