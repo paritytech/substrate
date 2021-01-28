@@ -120,7 +120,8 @@ impl DiscoveryConfig {
 		self
 	}
 
-	/// Should the discovery behaviour randomly walk the DHT and generate ?
+	/// Whether the discovery behaviour should periodically perform a random
+	/// walk on the DHT to discover peers.
 	pub fn with_dht_random_walk(&mut self, value: bool) -> &mut Self {
 		self.dht_random_walk = value;
 		self
