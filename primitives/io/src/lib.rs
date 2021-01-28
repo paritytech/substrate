@@ -1411,6 +1411,7 @@ pub type SubstrateHostFunctions = (
 	crate::trie::HostFunctions,
 	offchain_index::HostFunctions,
 	runtime_tasks::HostFunctions,
+	validation::HostFunctions,
 );
 
 #[cfg(test)]
