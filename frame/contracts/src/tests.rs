@@ -143,9 +143,10 @@ impl Default for TestExtension {
 	}
 }
 
-impl ChainExtension for TestExtension {
-	fn call<E: Ext>(func_id: u32, env: Environment<E, InitState>) -> ExtensionResult<RetVal>
+impl ChainExtension<Test> for TestExtension {
+	fn call<E>(func_id: u32, env: Environment<E, InitState>) -> ExtensionResult<RetVal>
 	where
+		E: Ext<T = Test>,
 		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
 	{
 		match func_id {
