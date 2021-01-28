@@ -186,7 +186,7 @@ pub enum ExportedFunction {
 
 /// A trait that represents something that can be executed.
 ///
-/// In the productive case this would be represented by a wasm module. This trait exists in
+/// In the on-chain environment this would be represented by a wasm module. This trait exists in
 /// order to be able to mock the wasm logic for testing.
 pub trait Executable<T: Config>: Sized {
 	/// Load the executable from storage.
@@ -195,8 +195,8 @@ pub trait Executable<T: Config>: Sized {
 	/// Load the module from storage without re-instrumenting it.
 	///
 	/// A code module is re-instrumented on-load when it was originally instrumented with
-	/// an older schedule. This skips this step for purposed where the code storage is
-	/// queried for other purposes than execution.
+	/// an older schedule. This skips this step for cases where the code storage is
+	/// queried for purposes other than execution.
 	fn from_storage_noinstr(code_hash: CodeHash<T>) -> Result<Self, DispatchError>;
 
 	/// Put the executable into storage. If it already exists there the refcount is incremented.
@@ -220,7 +220,7 @@ pub trait Executable<T: Config>: Sized {
 		gas_meter: &mut GasMeter<T>,
 	) -> ExecResult;
 
-	/// The code hash of executable.
+	/// The code hash of the executable.
 	fn code_hash(&self) -> &CodeHash<T>;
 
 	/// The storage that is occupied by the instrumented executable and its pristine source.
