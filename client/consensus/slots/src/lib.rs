@@ -280,7 +280,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		telemetry!(
 			CONSENSUS_DEBUG;
 			"slots.starting_authorship";
-			"slot_num" => slot.0,
+			"slot_num" => *slot,
 			"timestamp" => timestamp,
 		);
 
@@ -290,7 +290,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			telemetry!(
 				CONSENSUS_WARN;
 				"slots.unable_authoring_block";
-				"slot" => slot.0,
+				"slot" => *slot,
 				"err" => ?err
 			);
 
@@ -320,7 +320,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 					telemetry!(
 						CONSENSUS_INFO;
 						"slots.discarding_proposal_took_too_long";
-						"slot" => slot.0,
+						"slot" => *slot,
 					);
 
 					Err(sp_consensus::Error::ClientImport("Timeout in the Slots proposer".into()))
@@ -580,7 +580,7 @@ pub fn slot_lenience_exponential(parent_slot: Slot, slot_info: &SlotInfo) -> Opt
 	// exponential back-off.
 	// in normal cases we only attempt to issue blocks up to the end of the slot.
 	// when the chain has been stalled for a few slots, we give more lenience.
-	let skipped_slots = slot_info.slot.saturating_sub(parent_slot.0 + 1);
+	let skipped_slots = *slot_info.slot.saturating_sub(parent_slot + 1);
 
 	if skipped_slots == 0 {
 		None
@@ -606,7 +606,7 @@ pub fn slot_lenience_linear(parent_slot: Slot, slot_info: &SlotInfo) -> Option<D
 	// linear back-off.
 	// in normal cases we only attempt to issue blocks up to the end of the slot.
 	// when the chain has been stalled for a few slots, we give more lenience.
-	let skipped_slots = slot_info.slot.saturating_sub(parent_slot.0 + 1);
+	let skipped_slots = *slot_info.slot.saturating_sub(parent_slot + 1);
 
 	if skipped_slots == 0 {
 		None

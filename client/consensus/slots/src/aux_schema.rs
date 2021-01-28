@@ -63,7 +63,7 @@ pub fn check_equivocation<C, H, P>(
 		P: Clone + Encode + Decode + PartialEq,
 {
 	// We don't check equivocations for old headers out of our capacity.
-	if slot_now.saturating_sub(*slot) > MAX_SLOT_CAPACITY {
+	if slot_now.saturating_sub(*slot) > Slot::from(MAX_SLOT_CAPACITY) {
 		return Ok(None);
 	}
 
@@ -111,9 +111,9 @@ pub fn check_equivocation<C, H, P>(
 
 	if *slot_now - *first_saved_slot >= PRUNING_BOUND {
 		let prefix = SLOT_HEADER_MAP_KEY.to_vec();
-		new_first_saved_slot = Slot(slot_now.saturating_sub(MAX_SLOT_CAPACITY));
+		new_first_saved_slot = slot_now.saturating_sub(MAX_SLOT_CAPACITY);
 
-		for s in first_saved_slot.0..new_first_saved_slot.0 {
+		for s in u64::from(first_saved_slot)..new_first_saved_slot.into() {
 			let mut p = prefix.clone();
 			s.using_encoded(|s| p.extend(s));
 			keys_to_delete.push(p);

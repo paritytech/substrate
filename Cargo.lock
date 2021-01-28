@@ -8276,6 +8276,7 @@ name = "sp-consensus-slots"
 version = "0.8.1"
 dependencies = [
  "parity-scale-codec",
+ "sp-arithmetic",
  "sp-runtime",
 ]
 

@@ -158,7 +158,7 @@ impl EpochT for Epoch {
 	) -> Epoch {
 		Epoch {
 			epoch_index: self.epoch_index + 1,
-			start_slot: Slot(*self.start_slot + self.duration),
+			start_slot: self.start_slot + self.duration,
 			duration: self.duration,
 			authorities: descriptor.authorities,
 			randomness: descriptor.randomness,
@@ -171,7 +171,7 @@ impl EpochT for Epoch {
 	}
 
 	fn end_slot(&self) -> Slot {
-		Slot(*self.start_slot + self.duration)
+		self.start_slot + self.duration
 	}
 }
 
@@ -721,7 +721,7 @@ where
 			debug!(
 				target: "babe",
 				"No block for {} slots. Applying exponential lenience of {}s",
-				slot_info.slot.saturating_sub(parent_slot.0 + 1),
+				slot_info.slot.saturating_sub(parent_slot + 1),
 				slot_lenience.as_secs(),
 			);
 
@@ -1026,7 +1026,7 @@ where
 		let v_params = verification::VerificationParams {
 			header: header.clone(),
 			pre_digest: Some(pre_digest),
-			slot_now: Slot(slot_now.0 + 1),
+			slot_now: slot_now + 1,
 			epoch: viable_epoch.as_ref(),
 		};
 

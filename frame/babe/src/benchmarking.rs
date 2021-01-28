@@ -91,7 +91,7 @@ mod tests {
 			let equivocation_proof = generate_equivocation_proof(
 				offending_authority_index,
 				offending_authority_pair,
-				Slot(CurrentSlot::get().0 + 1),
+				CurrentSlot::get() + 1,
 			);
 
 			println!("equivocation_proof: {:?}", equivocation_proof);

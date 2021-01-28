@@ -402,8 +402,8 @@ impl<T: Config> Module<T> {
 		// the same randomness and validator set as signalled in the genesis,
 		// so we don't rotate the epoch.
 		now != One::one() && {
-			let diff = CurrentSlot::get().saturating_sub(*Self::current_epoch_start());
-			diff >= T::EpochDuration::get()
+			let diff = CurrentSlot::get().saturating_sub(Self::current_epoch_start());
+			*diff >= T::EpochDuration::get()
 		}
 	}
 
@@ -535,7 +535,7 @@ impl<T: Config> Module<T> {
 			.checked_mul(T::EpochDuration::get())
 			.expect(PROOF);
 
-		Slot(epoch_start.checked_add(*GenesisSlot::get()).expect(PROOF))
+		epoch_start.checked_add(*GenesisSlot::get()).expect(PROOF).into()
 	}
 
 	fn deposit_consensus<U: Encode>(new: U) {
@@ -585,7 +585,7 @@ impl<T: Config> Module<T> {
 			// we need to adjust internal storage accordingly.
 			if *GenesisSlot::get() == 0 {
 				GenesisSlot::put(digest.slot());
-				debug_assert_ne!(GenesisSlot::get().0, 0);
+				debug_assert_ne!(*GenesisSlot::get(), 0);
 
 				// deposit a log because this is the first block in epoch #0
 				// we use the same values as genesis because we haven't collected any
@@ -602,8 +602,8 @@ impl<T: Config> Module<T> {
 			let current_slot = digest.slot();
 
 			// how many slots were skipped between current and last block
-			let lateness = current_slot.saturating_sub(CurrentSlot::get().0 + 1);
-			let lateness = T::BlockNumber::from(lateness as u32);
+			let lateness = current_slot.saturating_sub(CurrentSlot::get() + 1);
+			let lateness = T::BlockNumber::from(*lateness as u32);
 
 			Lateness::<T>::put(lateness);
 			CurrentSlot::put(current_slot);
@@ -694,7 +694,7 @@ impl<T: Config> Module<T> {
 		let validator_set_count = key_owner_proof.validator_count();
 		let session_index = key_owner_proof.session();
 
-		let epoch_index = (slot.saturating_sub(*GenesisSlot::get()) / T::EpochDuration::get())
+		let epoch_index = (*slot.saturating_sub(GenesisSlot::get()) / T::EpochDuration::get())
 			.saturated_into::<u32>();
 
 		// check that the slot number is consistent with the session index

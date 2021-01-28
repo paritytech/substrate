@@ -574,7 +574,7 @@ fn propose_and_import_block<Transaction>(
 
 	let slot = slot.unwrap_or_else(|| {
 		let parent_pre_digest = find_pre_digest::<TestBlock>(parent).unwrap();
-		Slot(parent_pre_digest.slot().0 + 1)
+		parent_pre_digest.slot() + 1
 	});
 
 	let pre_digest = sp_runtime::generic::Digest {

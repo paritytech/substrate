@@ -128,7 +128,7 @@ impl<B, C, SC> BabeApi for BabeRpcHandler<B, C, SC>
 				&shared_epoch,
 				&client,
 				&babe_config,
-				epoch_start.0,
+				*epoch_start,
 				&select_chain,
 			)?;
 			let (epoch_start, epoch_end) = (epoch.start_slot(), epoch.end_slot());
@@ -148,7 +148,7 @@ impl<B, C, SC> BabeApi for BabeRpcHandler<B, C, SC>
 					.collect::<Vec<_>>()
 			};
 
-			for slot in epoch_start.0..epoch_end.0 {
+			for slot in *epoch_start..*epoch_end {
 				if let Some((claim, key)) =
 					authorship::claim_slot_using_keys(slot.into(), &epoch, &keystore, &keys)
 				{

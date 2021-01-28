@@ -107,7 +107,7 @@ pub fn slot_duration<A, B, C>(client: &C) -> CResult<SlotDuration> where
 fn slot_author<P: Pair>(slot: Slot, authorities: &[AuthorityId<P>]) -> Option<&AuthorityId<P>> {
 	if authorities.is_empty() { return None }
 
-	let idx = slot.0 % (authorities.len() as u64);
+	let idx = *slot % (authorities.len() as u64);
 	assert!(
 		idx <= usize::max_value() as u64,
 		"It is impossible to have a vector with length beyond the address space; qed",
@@ -364,7 +364,7 @@ where
 			debug!(
 				target: "aura",
 				"No block for {} slots. Applying linear lenience of {}s",
-				slot_info.slot.saturating_sub(parent_slot.0 + 1),
+				slot_info.slot.saturating_sub(parent_slot + 1),
 				slot_lenience.as_secs(),
 			);
 
@@ -417,7 +417,7 @@ fn find_pre_digest<B: BlockT, P: Pair>(header: &B::Header) -> Result<Slot, Error
 		P::Public: Encode + Decode + PartialEq + Clone,
 {
 	if header.number().is_zero() {
-		return Ok(Slot(0));
+		return Ok(0.into());
 	}
 
 	let mut pre_digest: Option<Slot> = None;
@@ -607,7 +607,7 @@ impl<B: BlockT, C, P, CAW> Verifier<B> for AuraVerifier<C, P, CAW> where
 		// headers
 		let checked_header = check_header::<C, B, P>(
 			&self.client,
-			Slot(slot_now.0 + 1),
+			slot_now + 1,
 			header,
 			hash,
 			&authorities[..],

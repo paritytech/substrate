@@ -255,14 +255,14 @@ pub fn go_to_block(n: u64, s: u64) {
 		System::parent_hash()
 	};
 
-	let pre_digest = make_secondary_plain_pre_digest(0, Slot(s));
+	let pre_digest = make_secondary_plain_pre_digest(0, s.into());
 
 	System::initialize(&n, &parent_hash, &pre_digest, InitKind::Full);
 	System::set_block_number(n);
 	Timestamp::set_timestamp(n);
 
 	if s > 1 {
-		CurrentSlot::put(Slot(s));
+		CurrentSlot::put(Slot::from(s));
 	}
 
 	System::on_initialize(n);
@@ -272,7 +272,7 @@ pub fn go_to_block(n: u64, s: u64) {
 
 /// Slots will grow accordingly to blocks
 pub fn progress_to_block(n: u64) {
-	let mut slot = Babe::current_slot().0 + 1;
+	let mut slot = u64::from(Babe::current_slot()) + 1;
 	for i in System::block_number() + 1 ..= n {
 		go_to_block(i, slot);
 		slot += 1;
@@ -469,7 +469,7 @@ pub fn generate_equivocation_proof(
 	seal_header(&mut h2);
 
 	// restore previous runtime state
-	go_to_block(current_block, current_slot.0);
+	go_to_block(current_block, *current_slot);
 
 	sp_consensus_babe::EquivocationProof {
 		slot,

@@ -229,7 +229,7 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 						identifier,
 						EpochHeader {
 							start_slot: slot.into(),
-							end_slot: Slot(slot * self.config.epoch_length),
+							end_slot: (slot * self.config.epoch_length).into(),
 						},
 					)
 				},

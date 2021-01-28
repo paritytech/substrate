@@ -76,7 +76,7 @@ impl<SC> Slots<SC> {
 		timestamp_extractor: SC,
 	) -> Self {
 		Slots {
-			last_slot: Slot(0),
+			last_slot: 0.into(),
 			slot_duration,
 			inner_delay: None,
 			inherent_data_providers,

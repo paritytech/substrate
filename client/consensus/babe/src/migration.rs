@@ -49,7 +49,7 @@ impl EpochT for EpochV0 {
 	) -> EpochV0 {
 		EpochV0 {
 			epoch_index: self.epoch_index + 1,
-			start_slot: Slot(*self.start_slot + self.duration),
+			start_slot: self.start_slot + self.duration,
 			duration: self.duration,
 			authorities: descriptor.authorities,
 			randomness: descriptor.randomness,
@@ -61,7 +61,7 @@ impl EpochT for EpochV0 {
 	}
 
 	fn end_slot(&self) -> Slot {
-		Slot(self.start_slot.0 + self.duration)
+		self.start_slot + self.duration
 	}
 }
 
