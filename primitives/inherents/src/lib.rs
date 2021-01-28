@@ -398,7 +398,8 @@ impl<E: codec::Encode> IsFatalError for MakeFatalError<E> {
 	}
 }
 
-/// A pallet that provides an inherent and may, optionally, verify it.
+/// A pallet that provides or verifies an inherent extrinsic.
+/// The pallet may provide the inherent, verify an inherent, or both provide and verify.
 pub trait ProvideInherent {
 	/// The call type of the pallet.
 	type Call;
