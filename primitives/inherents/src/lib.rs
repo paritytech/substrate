@@ -412,9 +412,14 @@ pub trait ProvideInherent {
 	fn create_inherent(data: &InherentData) -> Option<Self::Call>;
 
 	/// Determines whether this inherent is required in this block.
-	/// Ok(None) indicates that this inherent is not required in this block. The default implementation returns this.
-	/// Ok(Some(e)) indicates that this inherent is required in this block, and a call to `check_inherent`
-	/// should return `e` when the inherent is not present.
+	///
+	/// Ok(None) indicates that this inherent is not required in this block. The default
+	/// implementation returns this.
+	///
+	/// Ok(Some(e)) indicates that this inherent is required in this block. The
+	/// `impl_outer_inherent!`, will call this function from its `check_extrinsics`.
+	/// If the inherent is not present, it will return `e`.
+	///
 	/// Err(_) indicates that this function failed and further operations should be aborted.
 	fn is_inherent_required(_: &InherentData) -> Result<Option<Self::Error>, Self::Error> { Ok(None) }
 
