@@ -213,11 +213,8 @@ impl Configuration {
 			return None;
 		}
 
-		match self.telemetry_endpoints.as_ref() {
-			// Don't initialise telemetry if `telemetry_endpoints` == Some([])
-			Some(endpoints) if !endpoints.is_empty() => Some(endpoints),
-			_ => None,
-		}
+		// Don't initialise telemetry if `telemetry_endpoints` == Some([])
+		self.telemetry_endpoints.as_ref().filter(|x| !x.is_empty())
 	}
 
 	/// Returns the network protocol id from the chain spec, or the default.

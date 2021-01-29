@@ -308,11 +308,7 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 {
 	let keystore_container = KeystoreContainer::new(&config.keystore)?;
 
-	let telemetry_span = if config.telemetry_endpoints.is_some() {
-		Some(TelemetrySpan::new())
-	} else {
-		None
-	};
+	let telemetry_span = config.telemetry_endpoints.as_ref().map(|_| TelemetrySpan::new());
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
 		TaskManager::new(config.task_executor.clone(), registry, telemetry_span.clone())?
@@ -383,11 +379,7 @@ pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 	TExecDisp: NativeExecutionDispatch + 'static,
 {
 	let keystore_container = KeystoreContainer::new(&config.keystore)?;
-	let telemetry_span = if config.telemetry_endpoints.is_some() {
-		Some(TelemetrySpan::new())
-	} else {
-		None
-	};
+	let telemetry_span = config.telemetry_endpoints.as_ref().map(|_| TelemetrySpan::new());
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
 		TaskManager::new(config.task_executor.clone(), registry, telemetry_span.clone())?
