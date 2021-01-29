@@ -59,7 +59,7 @@
 //!
 //! ### Dispatchable functions
 //!
-//! * `instantiate` - Deploys a new contract from the supplied wasm binary, optionally transferring
+//! * `instantiate_with_code` - Deploys a new contract from the supplied wasm binary, optionally transferring
 //! some balance. This instantiates a new smart contract account and calls its contract deploy
 //! handler to initialize the contract.
 //! * `instantiate` - The same as `instantiate_with_code` but instead of uploading new code an
@@ -566,7 +566,7 @@ decl_module! {
 		/// * `gas_limit`: The gas limit enforced when executing the constructor.
 		/// * `code`: The contract code to deploy in raw bytes.
 		/// * `data`: The input data to pass to the contract constructor.
-		/// * `salt`: Used for the address deriviation. See [`Self::contract_address`].
+		/// * `salt`: Used for the address derivation. See [`Self::contract_address`].
 		///
 		/// Instantiation is executed as follows:
 		///
@@ -574,7 +574,7 @@ decl_module! {
 		/// - If the `code_hash` already exists on the chain the underlying `code` will be shared.
 		/// - The destination address is computed based on the sender, code_hash and the salt.
 		/// - The smart-contract account is created at the computed address.
-		/// - The `endowment` is transfered to the new account.
+		/// - The `endowment` is transferred to the new account.
 		/// - The `deploy` function is executed in the context of the newly-created account.
 		#[weight =
 			T::WeightInfo::instantiate_with_code(
