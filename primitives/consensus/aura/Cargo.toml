@@ -20,6 +20,7 @@ sp-api = { version = "2.0.0", default-features = false, path = "../../api" }
 sp-runtime = { version = "2.0.0", default-features = false, path = "../../runtime" }
 sp-inherents = { version = "2.0.0", default-features = false, path = "../../inherents" }
 sp-timestamp = { version = "2.0.0", default-features = false, path = "../../timestamp" }
+sp-consensus-slots = { version = "0.8.1", default-features = false, path = "../slots" }
 
 [features]
 default = ["std"]
