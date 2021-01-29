@@ -1340,14 +1340,19 @@ impl<B: BlockT> ChainSync<B> {
 				Ok(Validation::Failure { disconnect }) => {
 					debug!(
 						target: "sync",
-						"Block announcement validation of block {} from {} failed",
+						"Block announcement validation of block {:?} from {} failed",
 						hash,
 						who,
 					);
 					PreValidateBlockAnnounce::Failure { who, disconnect }
 				}
 				Err(e) => {
-					error!(target: "sync", "💔 Block announcement validation errored: {}", e);
+					error!(
+						target: "sync",
+						"💔 Block announcement validation of block {:?} errored: {}",
+						hash,
+						e,
+					);
 					PreValidateBlockAnnounce::Error { who }
 				}
 			}
