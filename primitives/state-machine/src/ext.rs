@@ -201,12 +201,10 @@ where
 		let _guard = guard();
 		let result = self.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
 			self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL));
-		trace!(
-			target: "state",
-			method = "Get",
-			ext_id = self.id,
-			key = %HexDisplay::from(&key),
-			result = ?result.as_ref().map(HexDisplay::from),
+		trace!(target: "state", "{:04x}: Get {}={:?}",
+			self.id,
+			HexDisplay::from(&key),
+			result.as_ref().map(HexDisplay::from)
 		);
 		result
 	}
@@ -218,12 +216,10 @@ where
 			.map(|x| x.map(|x| H::hash(x)))
 			.unwrap_or_else(|| self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL));
 
-		trace!(
-			target: "state",
-			method = "Hash",
-			ext_id = self.id,
-			key = %HexDisplay::from(&key),
-			result = ?result,
+		trace!(target: "state", "{:04x}: Hash {}={:?}",
+			self.id,
+			HexDisplay::from(&key),
+			result,
 		);
 		result.map(|r| r.encode())
 	}
@@ -242,13 +238,11 @@ where
 					.expect(EXT_NOT_ALLOWED_TO_FAIL)
 			);
 
-		trace!(
-			target: "state",
-			method = "GetChild",
-			ext_id = self.id,
-			child_key = %HexDisplay::from(&child_info.storage_key()),
-			key = %HexDisplay::from(&key),
-			result = ?result.as_ref().map(HexDisplay::from),
+		trace!(target: "state", "{:04x}: GetChild({}) {}={:?}",
+			self.id,
+			HexDisplay::from(&child_info.storage_key()),
+			HexDisplay::from(&key),
+			result.as_ref().map(HexDisplay::from)
 		);
 
 		result
@@ -268,13 +262,11 @@ where
 					.expect(EXT_NOT_ALLOWED_TO_FAIL)
 			);
 
-		trace!(
-			target: "state",
-			method = "ChildHash",
-			ext_id = self.id,
-			child_key = %HexDisplay::from(&child_info.storage_key()),
-			key = %HexDisplay::from(&key),
-			?result,
+		trace!(target: "state", "{:04x}: ChildHash({}) {}={:?}",
+			self.id,
+			HexDisplay::from(&child_info.storage_key()),
+			HexDisplay::from(&key),
+			result,
 		);
 
 		result.map(|r| r.encode())
@@ -287,12 +279,10 @@ where
 			_ => self.backend.exists_storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL),
 		};
 
-		trace!(
-			target: "state",
-			method = "Exists",
-			ext_id = self.id,
-			key = %HexDisplay::from(&key),
-			?result,
+		trace!(target: "state", "{:04x}: Exists {}={:?}",
+			self.id,
+			HexDisplay::from(&key),
+			result,
 		);
 
 		result
@@ -312,13 +302,11 @@ where
 				.expect(EXT_NOT_ALLOWED_TO_FAIL),
 		};
 
-		trace!(
-			target: "state",
-			method = "ChildExists",
-			ext_id = self.id,
-			child_key = %HexDisplay::from(&child_info.storage_key()),
-			key = %HexDisplay::from(&key),
-			?result,
+		trace!(target: "state", "{:04x}: ChildExists({}) {}={:?}",
+			self.id,
+			HexDisplay::from(&child_info.storage_key()),
+			HexDisplay::from(&key),
+			result,
 		);
 		result
 	}
@@ -366,12 +354,10 @@ where
 	}
 
 	fn place_storage(&mut self, key: StorageKey, value: Option<StorageValue>) {
-		trace!(
-			target: "state",
-			method = "Put",
-			ext_id = self.id,
-			key = %HexDisplay::from(&key),
-			value = ?value.as_ref().map(HexDisplay::from),
+		trace!(target: "state", "{:04x}: Put {}={:?}",
+			self.id,
+			HexDisplay::from(&key),
+			value.as_ref().map(HexDisplay::from)
 		);
 		let _guard = guard();
 		if is_child_storage_key(&key) {
@@ -389,13 +375,11 @@ where
 		key: StorageKey,
 		value: Option<StorageValue>,
 	) {
-		trace!(
-			target: "state",
-			method = "PutChild",
-			ext_id = self.id,
-			child_key = %HexDisplay::from(&child_info.storage_key()),
-			key = %HexDisplay::from(&key),
-			value = ?value.as_ref().map(HexDisplay::from),
+		trace!(target: "state", "{:04x}: PutChild({}) {}={:?}",
+			self.id,
+			HexDisplay::from(&child_info.storage_key()),
+			HexDisplay::from(&key),
+			value.as_ref().map(HexDisplay::from)
 		);
 		let _guard = guard();
 
@@ -408,11 +392,9 @@ where
 		child_info: &ChildInfo,
 		limit: Option<u32>,
 	) -> bool {
-		trace!(
-			target: "state",
-			method = "KillChild",
-			ext_id = self.id,
-			child_key = %HexDisplay::from(&child_info.storage_key()),
+		trace!(target: "state", "{:04x}: KillChild({})",
+			self.id,
+			HexDisplay::from(&child_info.storage_key()),
 		);
 		let _guard = guard();
 		self.mark_dirty();
@@ -446,11 +428,9 @@ where
 	}
 
 	fn clear_prefix(&mut self, prefix: &[u8]) {
-		trace!(
-			target: "state",
-			method = "ClearPrefix",
-			ext_id = self.id,
-			prefix = %HexDisplay::from(&prefix),
+		trace!(target: "state", "{:04x}: ClearPrefix {}",
+			self.id,
+			HexDisplay::from(&prefix),
 		);
 		let _guard = guard();
 
@@ -471,12 +451,10 @@ where
 		child_info: &ChildInfo,
 		prefix: &[u8],
 	) {
-		trace!(
-			target: "state",
-			method = "ClearChildPrefix",
-			ext_id = self.id,
-			child_key = %HexDisplay::from(&child_info.storage_key()),
-			prefix = %HexDisplay::from(&prefix),
+		trace!(target: "state", "{:04x}: ClearChildPrefix({}) {}",
+			self.id,
+			HexDisplay::from(&child_info.storage_key()),
+			HexDisplay::from(&prefix),
 		);
 		let _guard = guard();
 
@@ -492,12 +470,10 @@ where
 		key: Vec<u8>,
 		value: Vec<u8>,
 	) {
-		trace!(
-			target: "state",
-			method = "Append",
-			ext_id = self.id,
-			key = %HexDisplay::from(&key),
-			value = %HexDisplay::from(&value),
+		trace!(target: "state", "{:04x}: Append {}={}",
+			self.id,
+			HexDisplay::from(&key),
+			HexDisplay::from(&value),
 		);
 
 		let _guard = guard();
@@ -514,24 +490,15 @@ where
 	fn storage_root(&mut self) -> Vec<u8> {
 		let _guard = guard();
 		if let Some(ref root) = self.storage_transaction_cache.transaction_storage_root {
-			trace!(
-				target: "state",
-				method = "Root",
-				ext_id = self.id,
-				root = %HexDisplay::from(&root.as_ref()),
-				cached = true,
+			trace!(target: "state", "{:04x}: Root(cached) {}",
+				self.id,
+				HexDisplay::from(&root.as_ref()),
 			);
 			return root.encode();
 		}
 
 		let root = self.overlay.storage_root(self.backend, self.storage_transaction_cache);
-		trace!(
-			target: "state",
-			method = "Root",
-			ext_id = self.id,
-			root = %HexDisplay::from(&root.as_ref()),
-			cached = false,
-		);
+		trace!(target: "state", "{:04x}: Root {}", self.id, HexDisplay::from(&root.as_ref()));
 		root.encode()
 	}
 
@@ -549,13 +516,10 @@ where
 				.unwrap_or_else(
 					|| empty_child_trie_root::<Layout<H>>()
 				);
-			trace!(
-				target: "state",
-				method = "ChildRoot",
-				ext_id = self.id,
-				storage_key = %HexDisplay::from(&storage_key),
-				root = %HexDisplay::from(&root.as_ref()),
-				cached = true,
+			trace!(target: "state", "{:04x}: ChildRoot({})(cached) {}",
+				self.id,
+				HexDisplay::from(&storage_key),
+				HexDisplay::from(&root.as_ref()),
 			);
 			root.encode()
 		} else {
@@ -579,13 +543,10 @@ where
 					self.overlay.set_storage(prefixed_storage_key.into_inner(), Some(root.clone()));
 				}
 
-				trace!(
-					target: "state",
-					method = "ChildRoot",
-					ext_id = self.id,
-					storage_key = %HexDisplay::from(&storage_key.as_ref()),
-					root = %HexDisplay::from(&root.as_ref()),
-					cached = true,
+				trace!(target: "state", "{:04x}: ChildRoot({}) {}",
+					self.id,
+					HexDisplay::from(&storage_key.as_ref()),
+					HexDisplay::from(&root.as_ref()),
 				);
 				root
 			} else {
@@ -596,12 +557,10 @@ where
 					.unwrap_or_else(
 						|| empty_child_trie_root::<Layout<H>>()
 					);
-				trace!(
-					target: "state",
-					method = "ChildRoot",
-					ext_id = self.id,
-					storage_key = %HexDisplay::from(&storage_key.as_ref()),
-					root = %HexDisplay::from(&root.as_ref()),
+				trace!(target: "state", "{:04x}: ChildRoot({})(no_change) {}",
+					self.id,
+					HexDisplay::from(&storage_key.as_ref()),
+					HexDisplay::from(&root.as_ref()),
 				);
 				root.encode()
 			}
@@ -630,12 +589,10 @@ where
 			self.storage_transaction_cache,
 		);
 
-		trace!(
-			target: "state",
-			method = "ChangesRoot",
-			ext_id = self.id,
-			parent_hash = %HexDisplay::from(&parent_hash),
-			?root,
+		trace!(target: "state", "{:04x}: ChangesRoot({}) {:?}",
+			self.id,
+			HexDisplay::from(&parent_hash),
+			root,
 		);
 
 		root.map(|r| r.map(|o| o.encode()))

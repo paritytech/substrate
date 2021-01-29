@@ -86,13 +86,7 @@ pub enum EcdsaVerifyError {
 pub trait Storage {
 	/// Returns the data for `key` in the storage or `None` if the key can not be found.
 	fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
-		let res = self.storage(key).map(|s| s.to_vec());
-		sp_tracing::debug!(
-			key = %HexDisplay::from(&key),
-			res = ?res.as_ref().map(HexDisplay::from),
-			"get"
-		);
-		res
+		self.storage(key).map(|s| s.to_vec())
 	}
 
 	/// Get `key` from storage, placing the value into `value_out` and return the number of
@@ -101,50 +95,33 @@ pub trait Storage {
 	/// If `value_out` length is smaller than the returned length, only `value_out` length bytes
 	/// are copied into `value_out`.
 	fn read(&self, key: &[u8], value_out: &mut [u8], value_offset: u32) -> Option<u32> {
-		let res = self.storage(key).map(|value| {
+		self.storage(key).map(|value| {
 			let value_offset = value_offset as usize;
 			let data = &value[value_offset.min(value.len())..];
 			let written = std::cmp::min(data.len(), value_out.len());
 			value_out[..written].copy_from_slice(&data[..written]);
 			data.len() as u32
-		});
-		sp_tracing::debug!(
-			key = %HexDisplay::from(&key),
-			?value_out,
-			value_offset,
-			?res,
-			"read"
-		);
-		res
+		})
 	}
 
 	/// Set `key` to `value` in the storage.
 	fn set(&mut self, key: &[u8], value: &[u8]) {
 		self.set_storage(key.to_vec(), value.to_vec());
-		sp_tracing::debug!(
-			key = %HexDisplay::from(&key),
-			res = %HexDisplay::from(&value),
-			"set"
-		);
 	}
 
 	/// Clear the storage of the given `key` and its value.
 	fn clear(&mut self, key: &[u8]) {
-		self.clear_storage(key);
-		sp_tracing::debug!(key = %HexDisplay::from(&key), "clear");
+		self.clear_storage(key)
 	}
 
 	/// Check whether the given `key` exists in storage.
 	fn exists(&self, key: &[u8]) -> bool {
-		let res = self.exists_storage(key);
-		sp_tracing::debug!(key = %HexDisplay::from(&key), res, "exists");
-		res
+		self.exists_storage(key)
 	}
 
 	/// Clear the storage of each key-value pair where the key starts with the given `prefix`.
 	fn clear_prefix(&mut self, prefix: &[u8]) {
-		Externalities::clear_prefix(*self, prefix);
-		sp_tracing::debug!(prefix = %HexDisplay::from(&prefix), "clear_prefix");
+		Externalities::clear_prefix(*self, prefix)
 	}
 
 	/// Append the encoded `value` to the storage item at `key`.
@@ -156,7 +133,6 @@ pub trait Storage {
 	/// If the storage item does not support [`EncodeAppend`](codec::EncodeAppend) or
 	/// something else fails at appending, the storage item will be set to `[value]`.
 	fn append(&mut self, key: &[u8], value: Vec<u8>) {
-		sp_tracing::debug!(key = %HexDisplay::from(&key), value = %HexDisplay::from(&value), "append");
 		self.storage_append(key.to_vec(), value);
 	}
 
@@ -166,9 +142,7 @@ pub trait Storage {
 	///
 	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
 	fn root(&mut self) -> Vec<u8> {
-		let res = self.storage_root();
-		sp_tracing::debug!(res = %HexDisplay::from(&res), "root");
-		res
+		self.storage_root()
 	}
 
 	/// "Commit" all existing operations and get the resulting storage change root.
@@ -179,17 +153,13 @@ pub trait Storage {
 	/// Returns `Some(Vec<u8>)` which holds the SCALE encoded hash or `None` when
 	/// changes trie is disabled.
 	fn changes_root(&mut self, parent_hash: &[u8]) -> Option<Vec<u8>> {
-		let res = self.storage_changes_root(parent_hash)
-			.expect("Invalid `parent_hash` given to `changes_root`.");
-		sp_tracing::debug!(?parent_hash, res = ?res.as_ref().map(HexDisplay::from), "changes_root");
-		res
+		self.storage_changes_root(parent_hash)
+			.expect("Invalid `parent_hash` given to `changes_root`.")
 	}
 
 	/// Get the next key in storage after the given one in lexicographic order.
 	fn next_key(&mut self, key: &[u8]) -> Option<Vec<u8>> {
-		let res = self.next_storage_key(&key);
-		sp_tracing::debug!(key = %HexDisplay::from(&key), res = ?res.as_ref().map(HexDisplay::from), "next_key");
-		res
+		self.next_storage_key(&key)
 	}
 
 	/// Start a new nested transaction.
@@ -206,7 +176,6 @@ pub trait Storage {
 	/// abstractions.
 	fn start_transaction(&mut self) {
 		self.storage_start_transaction();
-		sp_tracing::debug!("start_transaction");
 	}
 
 	/// Rollback the last transaction started by `start_transaction`.
@@ -219,7 +188,6 @@ pub trait Storage {
 	fn rollback_transaction(&mut self) {
 		self.storage_rollback_transaction()
 			.expect("No open transaction that can be rolled back.");
-		sp_tracing::debug!("rollback_transaction");
 	}
 
 	/// Commit the last transaction started by `start_transaction`.
@@ -232,7 +200,6 @@ pub trait Storage {
 	fn commit_transaction(&mut self) {
 		self.storage_commit_transaction()
 			.expect("No open transaction that can be committed.");
-		sp_tracing::debug!("commit_transaction");
 	}
 }
 
