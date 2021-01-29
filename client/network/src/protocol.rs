@@ -656,7 +656,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 					"Couldn't decode packet sent by {}: {:?}: {}",
 					who,
 					data,
-					err.what(),
+					err,
 				);
 				self.peerset_handle.report_peer(who, rep::BAD_MESSAGE);
 				return CustomMessageOutcome::None;
@@ -1737,7 +1737,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 										"Couldn't decode handshake sent by {}: {:?}: {} & {}",
 										peer_id,
 										received_handshake,
-										err.what(),
+										err,
 										err2,
 									);
 									self.peerset_handle.report_peer(peer_id, rep::BAD_MESSAGE);

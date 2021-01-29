@@ -127,7 +127,7 @@ mod encoding {
 	}
 
 	impl<H: traits::Hash, L: FullLeaf> codec::Encode for DataOrHash<H, L> {
-		fn encode_to<T: codec::Output>(&self, dest: &mut T) {
+		fn encode_to<T: codec::Output + ?Sized>(&self, dest: &mut T) {
 			match self {
 				Self::Data(l) => l.using_encoded(
 					|data| Either::<&[u8], &H::Output>::Left(data).encode_to(dest), false

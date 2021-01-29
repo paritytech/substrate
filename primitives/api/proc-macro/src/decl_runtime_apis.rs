@@ -194,7 +194,7 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 			<R as #crate_::DecodeLimit>::decode_with_depth_limit(
 				#crate_::MAX_EXTRINSIC_DEPTH,
 				&mut &#crate_::Encode::encode(input)[..],
-			).map_err(|e| format!("{} {}", error_desc, e.what()))
+			).map_err(|e| format!("{} {}", error_desc, e))
 		}
 	));
 
