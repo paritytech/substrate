@@ -348,7 +348,7 @@ fn decl_outer_dispatch<'a>(
 		.map(|module_declaration| {
 			let module = &module_declaration.module;
 			let name = &module_declaration.name;
-			let index = module_declaration.index.to_string();
+			let index = module_declaration.index;
 			quote!(#[codec(index = #index)] #module::#name)
 		});
 
@@ -381,14 +381,14 @@ fn decl_outer_origin<'a>(
 				);
 				return Err(syn::Error::new(module_declaration.name.span(), msg));
 			}
-			let index = module_declaration.index.to_string();
+			let index = module_declaration.index;
 			let tokens = quote!(#[codec(index = #index)] #module #instance #generics,);
 			modules_tokens.extend(tokens);
 		}
 	}
 
 	let system_name = &system_module.module;
-	let system_index = system_module.index.to_string();
+	let system_index = system_module.index;
 
 	Ok(quote!(
 		#scrate::impl_outer_origin! {
@@ -422,7 +422,7 @@ fn decl_outer_event<'a>(
 				return Err(syn::Error::new(module_declaration.name.span(), msg));
 			}
 
-			let index = module_declaration.index.to_string();
+			let index = module_declaration.index;
 			let tokens = quote!(#[codec(index = #index)] #module #instance #generics,);
 			modules_tokens.extend(tokens);
 		}

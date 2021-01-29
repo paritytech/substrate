@@ -55,7 +55,6 @@ use sc_telemetry::{
 	telemetry,
 	ConnectionMessage,
 	TelemetryConnectionNotifier,
-	TelemetrySpan,
 	SUBSTRATE_INFO,
 };
 use sp_transaction_pool::MaintainedTransactionPool;
@@ -184,7 +183,6 @@ type TFullParts<TBl, TRtApi, TExecDisp> = (
 	Arc<TFullBackend<TBl>>,
 	KeystoreContainer,
 	TaskManager,
-	Option<TelemetrySpan>,
 );
 
 type TLightParts<TBl, TRtApi, TExecDisp> = (
@@ -193,7 +191,6 @@ type TLightParts<TBl, TRtApi, TExecDisp> = (
 	KeystoreContainer,
 	TaskManager,
 	Arc<OnDemand<TBl>>,
-	Option<TelemetrySpan>,
 );
 
 /// Light client backend type with a specific hash type.
@@ -308,10 +305,9 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 {
 	let keystore_container = KeystoreContainer::new(&config.keystore)?;
 
-	let telemetry_span = config.telemetry_endpoints.as_ref().map(|_| TelemetrySpan::new());
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
-		TaskManager::new(config.task_executor.clone(), registry, telemetry_span.clone())?
+		TaskManager::new(config.task_executor.clone(), registry, config.telemetry_span.clone())?
 	};
 
 	let executor = NativeExecutor::<TExecDisp>::new(
@@ -367,7 +363,6 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 		backend,
 		keystore_container,
 		task_manager,
-		telemetry_span,
 	))
 }
 
@@ -379,10 +374,9 @@ pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 	TExecDisp: NativeExecutionDispatch + 'static,
 {
 	let keystore_container = KeystoreContainer::new(&config.keystore)?;
-	let telemetry_span = config.telemetry_endpoints.as_ref().map(|_| TelemetrySpan::new());
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
-		TaskManager::new(config.task_executor.clone(), registry, telemetry_span.clone())?
+		TaskManager::new(config.task_executor.clone(), registry, config.telemetry_span.clone())?
 	};
 
 	let executor = NativeExecutor::<TExecDisp>::new(
@@ -421,7 +415,7 @@ pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 		config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 	)?);
 
-	Ok((client, backend, keystore_container, task_manager, on_demand, telemetry_span))
+	Ok((client, backend, keystore_container, task_manager, on_demand))
 }
 
 /// Create an instance of db-backed client.
@@ -473,8 +467,6 @@ pub fn new_client<E, Block, RA>(
 pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	/// The service configuration.
 	pub config: Configuration,
-	/// Telemetry span, if any.
-	pub telemetry_span: Option<TelemetrySpan>,
 	/// A shared client returned by `new_full_parts`/`new_light_parts`.
 	pub client: Arc<TCl>,
 	/// A shared backend returned by `new_full_parts`/`new_light_parts`.
@@ -567,7 +559,6 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 	let SpawnTasksParams {
 		mut config,
 		task_manager,
-		telemetry_span,
 		client,
 		on_demand,
 		backend,
@@ -588,13 +579,11 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default(),
 	)?;
 
-	let telemetry_connection_notifier = telemetry_span
-		.and_then(|span| init_telemetry(
-			&mut config,
-			span,
-			network.clone(),
-			client.clone(),
-		));
+	let telemetry_connection_notifier = init_telemetry(
+		&mut config,
+		network.clone(),
+		client.clone(),
+	);
 
 	info!("📦 Highest known block at #{}", chain_info.best_number);
 
@@ -692,11 +681,11 @@ async fn transaction_notifications<TBl, TExPool>(
 
 fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 	config: &mut Configuration,
-	telemetry_span: TelemetrySpan,
 	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
 	client: Arc<TCl>,
 ) -> Option<TelemetryConnectionNotifier> {
-	let endpoints = config.telemetry_endpoints()?.clone();
+	let telemetry_span = config.telemetry_span.clone()?;
+	let endpoints = config.telemetry_endpoints.clone()?;
 	let genesis_hash = client.block_hash(Zero::zero()).ok().flatten().unwrap_or_default();
 	let connection_message = ConnectionMessage {
 		name: config.network.node_name.to_owned(),

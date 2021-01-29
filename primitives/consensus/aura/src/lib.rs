@@ -71,10 +71,10 @@ pub type AuthorityIndex = u32;
 #[derive(Decode, Encode)]
 pub enum ConsensusLog<AuthorityId: Codec> {
 	/// The authorities have changed.
-	#[codec(index = "1")]
+	#[codec(index = 1)]
 	AuthoritiesChange(Vec<AuthorityId>),
 	/// Disable the authority with given index.
-	#[codec(index = "2")]
+	#[codec(index = 2)]
 	OnDisabled(AuthorityIndex),
 }
 
