@@ -1,31 +1,32 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate. If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! This module provides a means for executing contracts
 //! represented in wasm.
 
-use crate::{CodeHash, Schedule, Config};
-use crate::wasm::env_def::FunctionImplProvider;
-use crate::exec::Ext;
-use crate::gas::GasMeter;
-
+use crate::{
+	CodeHash, Schedule, Config,
+	wasm::env_def::FunctionImplProvider,
+	exec::Ext,
+	gas::GasMeter,
+};
 use sp_std::prelude::*;
 use sp_core::crypto::UncheckedFrom;
 use codec::{Encode, Decode};
-use sp_sandbox;
 
 #[macro_use]
 mod env_def;
@@ -33,14 +34,13 @@ mod code_cache;
 mod prepare;
 mod runtime;
 
-use self::runtime::Runtime;
 use self::code_cache::load as load_code;
 use pallet_contracts_primitives::ExecResult;
 
 pub use self::code_cache::save as save_code;
 #[cfg(feature = "runtime-benchmarks")]
 pub use self::code_cache::save_raw as save_code_raw;
-pub use self::runtime::ReturnCode;
+pub use self::runtime::{ReturnCode, Runtime, RuntimeToken};
 
 /// A prepared wasm module ready for execution.
 #[derive(Clone, Encode, Decode)]
@@ -172,7 +172,7 @@ mod tests {
 	use sp_core::H256;
 	use hex_literal::hex;
 	use sp_runtime::DispatchError;
-	use frame_support::weights::Weight;
+	use frame_support::{dispatch::DispatchResult, weights::Weight};
 	use assert_matches::assert_matches;
 	use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags, ExecError, ErrorOrigin};
 
@@ -228,8 +228,9 @@ mod tests {
 		fn get_storage(&self, key: &StorageKey) -> Option<Vec<u8>> {
 			self.storage.get(key).cloned()
 		}
-		fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) {
+		fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) -> DispatchResult {
 			*self.storage.entry(key).or_insert(Vec::new()) = value.unwrap_or(Vec::new());
+			Ok(())
 		}
 		fn instantiate(
 			&mut self,
@@ -362,7 +363,7 @@ mod tests {
 		fn get_storage(&self, key: &[u8; 32]) -> Option<Vec<u8>> {
 			(**self).get_storage(key)
 		}
-		fn set_storage(&mut self, key: [u8; 32], value: Option<Vec<u8>>) {
+		fn set_storage(&mut self, key: [u8; 32], value: Option<Vec<u8>>) -> DispatchResult {
 			(**self).set_storage(key, value)
 		}
 		fn instantiate(
@@ -1537,7 +1538,7 @@ mod tests {
 				&mut gas_meter
 			),
 			Err(ExecError {
-				error: Error::<Test>::ContractTrapped.into(),
+				error: Error::<Test>::TooManyTopics.into(),
 				origin: ErrorOrigin::Caller,
 			})
 		);
@@ -1582,7 +1583,7 @@ mod tests {
 				&mut gas_meter
 			),
 			Err(ExecError {
-				error: Error::<Test>::ContractTrapped.into(),
+				error: Error::<Test>::DuplicateTopics.into(),
 				origin: ErrorOrigin::Caller,
 			})
 		);

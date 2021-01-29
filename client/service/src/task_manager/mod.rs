@@ -1,15 +1,20 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Substrate service tasks management module.
 
@@ -29,6 +34,7 @@ use prometheus_endpoint::{
 use sp_utils::mpsc::{TracingUnboundedSender, TracingUnboundedReceiver, tracing_unbounded};
 use tracing_futures::Instrument;
 use crate::{config::{TaskExecutor, TaskType, JoinFuture}, Error};
+use sc_telemetry::TelemetrySpan;
 
 mod prometheus_future;
 #[cfg(test)]
@@ -41,6 +47,7 @@ pub struct SpawnTaskHandle {
 	executor: TaskExecutor,
 	metrics: Option<Metrics>,
 	task_notifier: TracingUnboundedSender<JoinFuture>,
+	telemetry_span: Option<TelemetrySpan>,
 }
 
 impl SpawnTaskHandle {
@@ -84,7 +91,10 @@ impl SpawnTaskHandle {
 			metrics.tasks_ended.with_label_values(&[name, "finished"]).inc_by(0);
 		}
 
+		let telemetry_span = self.telemetry_span.clone();
 		let future = async move {
+			let _telemetry_entered = telemetry_span.as_ref().map(|x| x.enter());
+
 			if let Some(metrics) = metrics {
 				// Add some wrappers around `task`.
 				let task = {
@@ -223,14 +233,17 @@ pub struct TaskManager {
 	/// terminates and gracefully shutdown. Also ends the parent `future()` if a child's essential
 	/// task fails.
 	children: Vec<TaskManager>,
+	/// A telemetry handle used to enter the telemetry span when a task is spawned.
+	telemetry_span: Option<TelemetrySpan>,
 }
 
 impl TaskManager {
- 	/// If a Prometheus registry is passed, it will be used to report statistics about the
- 	/// service tasks.
+	/// If a Prometheus registry is passed, it will be used to report statistics about the
+	/// service tasks.
 	pub(super) fn new(
 		executor: TaskExecutor,
-		prometheus_registry: Option<&Registry>
+		prometheus_registry: Option<&Registry>,
+		telemetry_span: Option<TelemetrySpan>,
 	) -> Result<Self, PrometheusError> {
 		let (signal, on_exit) = exit_future::signal();
 
@@ -259,6 +272,7 @@ impl TaskManager {
 			task_notifier,
 			completion_future,
 			children: Vec::new(),
+			telemetry_span,
 		})
 	}
 
@@ -269,6 +283,7 @@ impl TaskManager {
 			executor: self.executor.clone(),
 			metrics: self.metrics.clone(),
 			task_notifier: self.task_notifier.clone(),
+			telemetry_span: self.telemetry_span.clone(),
 		}
 	}
 

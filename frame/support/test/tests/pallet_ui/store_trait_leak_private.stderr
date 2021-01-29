@@ -1,0 +1,8 @@
+error[E0446]: private type `_GeneratedPrefixForStorageFoo<T>` in public interface
+  --> $DIR/store_trait_leak_private.rs:11:37
+   |
+11 |     #[pallet::generate_store(pub trait Store)]
+   |                                        ^^^^^ can't leak private type
+...
+20 |     #[pallet::storage]
+   |               ------- `_GeneratedPrefixForStorageFoo<T>` declared as private

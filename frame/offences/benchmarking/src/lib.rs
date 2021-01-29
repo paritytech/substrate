@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -31,7 +31,7 @@ use frame_support::traits::{Currency, OnInitialize};
 use sp_runtime::{Perbill, traits::{Convert, StaticLookup, Saturating, UniqueSaturatedInto}};
 use sp_staking::offence::{ReportOffence, Offence, OffenceDetails};
 
-use pallet_balances::{Config as BalancesConfig};
+use pallet_balances::Config as BalancesConfig;
 use pallet_babe::BabeEquivocationOffence;
 use pallet_grandpa::{GrandpaEquivocationOffence, GrandpaTimeSlot};
 use pallet_im_online::{Config as ImOnlineConfig, Module as ImOnline, UnresponsivenessOffence};
@@ -109,6 +109,7 @@ fn create_offender<T: Config>(n: u32, nominators: u32) -> Result<Offender<T>, &'
 
 	let validator_prefs = ValidatorPrefs {
 		commission: Perbill::from_percent(50),
+		.. Default::default()
 	};
 	Staking::<T>::validate(RawOrigin::Signed(controller.clone()).into(), validator_prefs)?;
 
@@ -203,8 +204,6 @@ fn check_events<T: Config, I: Iterator<Item = <T as SystemConfig>::Event>>(expec
 }
 
 benchmarks! {
-	_ { }
-
 	report_offence_im_online {
 		let r in 1 .. MAX_REPORTERS;
 		// we skip 1 offender, because in such case there is no slashing
@@ -332,7 +331,7 @@ benchmarks! {
 		let keys =  ImOnline::<T>::keys();
 
 		let offence = BabeEquivocationOffence {
-			slot: 0,
+			slot: 0u64.into(),
 			session_index: 0,
 			validator_set_count: keys.len() as u32,
 			offender: T::convert(offenders.pop().unwrap()),

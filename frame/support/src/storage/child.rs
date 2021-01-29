@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -241,5 +241,23 @@ pub fn root(
 		ChildType::ParentKeyId => sp_io::default_child_storage::root(
 			child_info.storage_key(),
 		),
+	}
+}
+
+/// Return the length in bytes of the value without reading it. `None` if it does not exist.
+pub fn len(
+	child_info: &ChildInfo,
+	key: &[u8],
+) -> Option<u32> {
+	match child_info.child_type() {
+		ChildType::ParentKeyId => {
+			let mut buffer = [0; 0];
+			sp_io::default_child_storage::read(
+				child_info.storage_key(),
+				key,
+				&mut buffer,
+				0,
+			)
+		}
 	}
 }

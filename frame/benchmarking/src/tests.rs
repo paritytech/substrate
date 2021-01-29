@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,7 +24,8 @@ use sp_std::prelude::*;
 use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::{H256, Header}};
 use frame_support::{
 	dispatch::DispatchResult,
-	decl_module, decl_storage, impl_outer_origin, assert_ok, assert_err, ensure
+	decl_module, decl_storage, impl_outer_origin, assert_ok, assert_err, ensure,
+	parameter_types, pallet_prelude::Get,
 };
 use frame_system::{RawOrigin, ensure_signed, ensure_none};
 
@@ -67,6 +68,8 @@ pub trait Config: frame_system::Config + OtherConfig
 	where Self::OtherEvent: Into<<Self as Config>::Event>
 {
 	type Event;
+	type LowerBound: Get<u32>;
+	type UpperBound: Get<u32>;
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -94,10 +97,18 @@ impl frame_system::Config for Test {
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
+	type SS58Prefix = ();
+}
+
+parameter_types!{
+	pub const LowerBound: u32 = 1;
+	pub const UpperBound: u32 = 100;
 }
 
 impl Config for Test {
 	type Event = ();
+	type LowerBound = LowerBound;
+	type UpperBound = UpperBound;
 }
 
 impl OtherConfig for Test {
@@ -111,13 +122,8 @@ fn new_test_ext() -> sp_io::TestExternalities {
 benchmarks!{
 	where_clause { where <T as OtherConfig>::OtherEvent: Into<<T as Config>::Event> }
 
-	_ {
-		// Define a common range for `b`.
-		let b in 1 .. 1000 => ();
-	}
-
 	set_value {
-		let b in ...;
+		let b in 1 .. 1000;
 		let caller = account::<T::AccountId>("caller", 0, 0);
 	}: _ (RawOrigin::Signed(caller), b.into())
 	verify {
@@ -125,7 +131,7 @@ benchmarks!{
 	}
 
 	other_name {
-		let b in ...;
+		let b in 1 .. 1000;
 	}: dummy (RawOrigin::None, b.into())
 
 	sort_vector {
@@ -141,7 +147,7 @@ benchmarks!{
 	}
 
 	bad_origin {
-		let b in ...;
+		let b in 1 .. 1000;
 		let caller = account::<T::AccountId>("caller", 0, 0);
 	}: dummy (RawOrigin::Signed(caller), b.into())
 
@@ -159,6 +165,10 @@ benchmarks!{
 	no_components {
 		let caller = account::<T::AccountId>("caller", 0, 0);
 	}: set_value(RawOrigin::Signed(caller), 0)
+
+	variable_components {
+		let b in ( T::LowerBound::get() ) .. T::UpperBound::get();
+	}: dummy (RawOrigin::None, b.into())
 }
 
 #[test]
@@ -252,5 +262,6 @@ fn benchmarks_generate_unit_tests() {
 		assert_err!(test_benchmark_bad_origin::<Test>(), "Bad origin");
 		assert_err!(test_benchmark_bad_verify::<Test>(), "You forgot to sort!");
 		assert_ok!(test_benchmark_no_components::<Test>());
+		assert_ok!(test_benchmark_variable_components::<Test>());
 	});
 }

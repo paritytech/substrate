@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,7 +29,7 @@ use frame_support::weights::{Weight, DispatchClass, constants, PerDispatchClass,
 use sp_runtime::{RuntimeDebug, Perbill};
 
 /// Block length limit configuration.
-#[derive(RuntimeDebug, Clone)]
+#[derive(RuntimeDebug, Clone, codec::Encode, codec::Decode)]
 pub struct BlockLength {
 	/// Maximal total length in bytes for each extrinsic class.
 	///

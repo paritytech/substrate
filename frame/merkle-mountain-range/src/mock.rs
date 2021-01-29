@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,12 +16,12 @@
 // limitations under the License.
 
 use crate::*;
-use crate::primitives::{LeafDataProvider, Compact};
 
 use codec::{Encode, Decode};
 use frame_support::{
 	impl_outer_origin, parameter_types,
 };
+use pallet_mmr_primitives::{LeafDataProvider, Compact};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -63,6 +63,7 @@ impl frame_system::Config for Test {
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
+	type SS58Prefix = ();
 }
 
 impl Config for Test {
