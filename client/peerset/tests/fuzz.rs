@@ -20,7 +20,7 @@ use futures::prelude::*;
 use libp2p::PeerId;
 use rand::distributions::{Distribution, Uniform, WeightedIndex};
 use rand::seq::IteratorRandom;
-use sc_peerset::{IncomingIndex, Message, Peerset, PeersetConfig, ReputationChange, SetConfig, SetId};
+use sc_peerset::{DropReason, IncomingIndex, Message, Peerset, PeersetConfig, ReputationChange, SetConfig, SetId};
 use std::{collections::HashMap, collections::HashSet, pin::Pin, task::Poll};
 
 #[test]
@@ -130,7 +130,7 @@ fn test_once() {
 				3 => {
 					if let Some(id) = connected_nodes.iter().choose(&mut rng).cloned() {
 						connected_nodes.remove(&id);
-						peerset.dropped(SetId::from(0), id);
+						peerset.dropped(SetId::from(0), id, DropReason::Unknown);
 					}
 				}
 
