@@ -29,12 +29,18 @@ pub type InherentType = sp_consensus_slots::Slot;
 pub trait AuraInherentData {
 	/// Get aura inherent data.
 	fn aura_inherent_data(&self) ->Result<InherentType, Error>;
+	/// Replace aura inherent data.
+	fn aura_replace_inherent_data(&mut self, new: InherentType);
 }
 
 impl AuraInherentData for InherentData {
 	fn aura_inherent_data(&self) ->Result<InherentType, Error> {
 		self.get_data(&INHERENT_IDENTIFIER)
 			.and_then(|r| r.ok_or_else(|| "Aura inherent data not found".into()))
+	}
+
+	fn aura_replace_inherent_data(&mut self, new: InherentType) {
+		self.replace_data(INHERENT_IDENTIFIER, &new);
 	}
 }
 

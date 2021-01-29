@@ -20,8 +20,8 @@
 //!
 //! This is used instead of `futures_timer::Interval` because it was unreliable.
 
-use super::{SlotCompatible, Slot, InherentDataProviderExt};
-use sp_consensus::Error;
+use super::{Slot, InherentDataProviderExt};
+use sp_consensus::{Error, SelectChain};
 use futures::{prelude::*, task::Context, task::Poll};
 use sp_inherents::{InherentData, CreateInherentDataProviders, InherentDataProvider};
 use sp_runtime::{traits::{Block as BlockT, Header as HeaderT}, generic::BlockId};

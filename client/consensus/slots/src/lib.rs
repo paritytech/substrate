@@ -42,7 +42,7 @@ use sp_api::{ProvideRuntimeApi, ApiRef};
 use sp_arithmetic::traits::BaseArithmetic;
 use sp_consensus::{BlockImport, Proposer, SyncOracle, SelectChain, CanAuthorWith, SlotData, RecordProof};
 use sp_consensus_slots::Slot;
-use sp_inherents::{InherentData, InherentDataProviders, CreateInherentDataProviders};
+use sp_inherents::{InherentData, InherentDataProvider, CreateInherentDataProviders};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header, HashFor, NumberFor}
@@ -226,7 +226,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			None => Box::new(future::pending()) as Box<_>,
 		};
 
-		let epoch_data = match self.epoch_data(&chain_head, slot) {
+		let epoch_data = match self.epoch_data(&slot_info.chain_head, slot) {
 			Ok(epoch_data) => epoch_data,
 			Err(err) => {
 				warn!(
@@ -246,7 +246,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			}
 		};
 
-		self.notify_slot(&chain_head, slot, &epoch_data);
+		self.notify_slot(&slot_info.chain_head, slot, &epoch_data);
 
 		let authorities_len = self.authorities_len(&epoch_data);
 
@@ -264,12 +264,12 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			return Box::pin(future::ready(None));
 		}
 
-		let claim = match self.claim_slot(&chain_head, slot, &epoch_data) {
+		let claim = match self.claim_slot(&slot_info.chain_head, slot, &epoch_data) {
 			None => return Box::pin(future::ready(None)),
 			Some(claim) => claim,
 		};
 
-		if self.should_backoff(slot, &chain_head) {
+		if self.should_backoff(slot, &slot_info.chain_head) {
 			return Box::pin(future::ready(None));
 		}
 
@@ -429,7 +429,7 @@ where
 	P: sp_inherents::InherentDataProvider,
 {
 	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), sp_inherents::Error> {
-		self.provide_inherent_data(inherent_data)
+		self.wrapped.provide_inherent_data(inherent_data)
 	}
 
 	fn try_handle_error(
@@ -455,7 +455,7 @@ impl<P> InherentDataProviderExt for SlotsInherentDataProviders<P> {
 ///
 /// Every time a new slot is triggered, `worker.on_slot` is called and the future it returns is
 /// polled until completion, unless we are major syncing.
-pub async fn start_slot_worker<B, C, W, T, SO, SC, CAW, IDP>(
+pub async fn start_slot_worker<B, C, W, T, SO, CAW, IDP>(
 	slot_duration: SlotDuration<T>,
 	client: C,
 	mut worker: W,
@@ -497,7 +497,7 @@ where
 					target: "slots",
 					"Unable to author block in slot {},. `can_author_with` returned: {} \
 					Probably a node update is required!",
-					slot,
+					slot_info.slot,
 					err,
 				);
 				Either::Right(future::ready(Ok(())))

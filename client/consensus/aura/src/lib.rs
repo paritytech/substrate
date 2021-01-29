@@ -31,7 +31,7 @@
 //! NOTE: Aura itself is designed to be generic over the crypto used.
 #![forbid(missing_docs, unsafe_code)]
 use std::{
-	sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash, fmt::Debug, pin::Pin,
+	sync::Arc, marker::PhantomData, hash::Hash, fmt::Debug, pin::Pin,
 	collections::HashMap, convert::{TryFrom, TryInto},
 };
 
@@ -44,7 +44,7 @@ use codec::{Encode, Decode, Codec};
 
 use sp_consensus::{
 	BlockImport, Environment, Proposer, CanAuthorWith, ForkChoiceStrategy, BlockImportParams,
-	BlockOrigin, Error as ConsensusError, SelectChain, SlotData, BlockCheckParams, ImportResult,
+	BlockOrigin, Error as ConsensusError, SelectChain, BlockCheckParams, ImportResult,
 	import_queue::{
 		Verifier, BasicQueue, DefaultImportQueue, BoxJustificationImport,
 	},
@@ -62,15 +62,12 @@ use sp_runtime::traits::{Block as BlockT, Header, DigestItemFor, Zero, Member};
 use sp_api::ProvideRuntimeApi;
 use sp_core::crypto::Pair;
 use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
-use sp_inherents::{InherentData, CreateInherentDataProviders};
-use sp_timestamp::{
-	TimestampInherentData, InherentType as TimestampInherent, InherentError as TIError
-};
-use sc_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_INFO};
+use sp_inherents::{CreateInherentDataProviders, InherentDataProvider as _};
+use sc_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG};
 
 use sc_consensus_slots::{
 	CheckedHeader, SlotInfo, StorageChanges, check_equivocation,
-	BackoffAuthoringBlocksStrategy, InherentDataProviderExt, Slot,
+	BackoffAuthoringBlocksStrategy, InherentDataProviderExt,
 };
 use sp_consensus_slots::Slot;
 
@@ -148,8 +145,9 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, BS, Error, IDP>(
 	SO: SyncOracle + Send + Sync + Clone,
 	CAW: CanAuthorWith<B> + Send,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
-	IDP: CreateInherentDataProviders<B, ()>,
-	IDP::InherentDataProviders: InherentDataProviderExt,
+	IDP: CreateInherentDataProviders<B, ()> + Send,
+	IDP::InherentDataProviders: InherentDataProviderExt + Send,
+	IDP::Error: Into<sp_consensus::Error>,
 {
 	let worker = AuraWorker {
 		client,
@@ -330,12 +328,11 @@ where
 
 	fn proposing_remaining_duration(
 		&self,
-		head: &B::Header,
 		slot_info: &SlotInfo<B>,
 	) -> Option<std::time::Duration> {
 		let slot_remaining = self.slot_remaining_duration(slot_info);
 
-		let parent_slot = match find_pre_digest::<B, P>(head) {
+		let parent_slot = match find_pre_digest::<B, P>(&slot_info.chain_head) {
 			Err(_) => return Some(slot_remaining),
 			Ok(d) => d,
 		};
@@ -376,17 +373,15 @@ enum Error<B: BlockT> {
 	SlotAuthorNotFound,
 	#[display(fmt = "Bad signature on {:?}", _0)]
 	BadSignature(B::Hash),
-	#[display(fmt = "Rejecting block too far in future")]
-	TooFarInFuture,
 	Client(sp_blockchain::Error),
-	DataProvider(String),
-	Runtime(String),
 	#[display(fmt = "Slot number must increase: parent slot: {}, this slot: {}", _0, _1)]
 	SlotMustIncrease(Slot, Slot),
 	#[display(fmt = "Parent ({}) of {} unavailable. Cannot import", _0, _1)]
 	ParentUnavailable(B::Hash, B::Hash),
 	#[display(fmt = "Unknown inherent error for identifier: {}", "String::from_utf8_lossy(_0)")]
 	UnknownInherentError(sp_inherents::InherentIdentifier),
+	#[display(fmt = "Inherent error: {}", _0)]
+	Inherent(Box<dyn std::error::Error + Send + Sync>),
 }
 
 impl<B: BlockT> std::convert::From<Error<B>> for String {
@@ -413,7 +408,7 @@ fn find_pre_digest<B: BlockT, P: Pair>(header: &B::Header) -> Result<Slot, Error
 			(s, false) => pre_digest = s,
 		}
 	}
-	pre_digest.ok_or_else(|| aura_err(Error::NoDigestFound)).map(Slot)
+	pre_digest.ok_or_else(|| aura_err(Error::NoDigestFound))
 }
 
 /// check a header has been signed by the right key. If the slot is too far in the future, an error will be returned.
@@ -496,15 +491,15 @@ impl<C, P, CAW, IDP> AuraVerifier<C, P, CAW, IDP> where
 		&self,
 		block: B,
 		block_id: BlockId<B>,
-		slot: Slot,
-		timestamp_now: u64,
+		inherent_data: sp_inherents::InherentData,
+		inherent_data_providers: IDP::InherentDataProviders,
 	) -> Result<(), Error<B>> where
 		C: ProvideRuntimeApi<B>, C::Api: BlockBuilderApi<B, Error = sp_blockchain::Error>,
 		CAW: CanAuthorWith<B>,
-		IDP: CreateInherentDataProviders<B, Slot>,
+		IDP: CreateInherentDataProviders<B, ()>,
+		IDP::InherentDataProviders: InherentDataProviderExt + Send,
+		IDP::Error: Into<sp_consensus::Error>,
 	{
-		const MAX_TIMESTAMP_DRIFT_SECS: u64 = 60;
-
 		if let Err(e) = self.can_author_with.can_author_with(&block_id) {
 			debug!(
 				target: "aura",
@@ -515,13 +510,6 @@ impl<C, P, CAW, IDP> AuraVerifier<C, P, CAW, IDP> where
 			return Ok(())
 		}
 
-		let inherent_data_providers = self.inherent_data_providers.create_inherent_data_providers(
-			parent_hash,
-			slot_num,
-		)?;
-
-		let inherent_data = inherent_data_providers.create_inherent_data()?;
-
 		let inherent_res = self.client.runtime_api().check_inherents(
 			&block_id,
 			block,
@@ -529,15 +517,15 @@ impl<C, P, CAW, IDP> AuraVerifier<C, P, CAW, IDP> where
 		).map_err(Error::Client)?;
 
 		if !inherent_res.ok() {
-			inherent_res
-				.into_errors()
-				.try_for_each(|(i, e)| match inherent_data_providers.try_handle_error(i, e) {
-					Some(fut) => fut.await.map_err(Into::into),
-					None => Error::UnknownInherentError(i),
-				})
-		} else {
-			Ok(())
+			for (i, e) in inherent_res.into_errors() {
+				match inherent_data_providers.try_handle_error(&i, &e) {
+					Some(fut) => fut.await.map_err(Error::Inherent)?,
+					None => return Err(Error::UnknownInherentError(i)),
+				}
+			}
 		}
+
+		Ok(())
 	}
 }
 
@@ -555,7 +543,9 @@ impl<B: BlockT, C, P, CAW, IDP> Verifier<B> for AuraVerifier<C, P, CAW, IDP> whe
 	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + 'static,
 	P::Signature: Encode + Decode,
 	CAW: CanAuthorWith<B> + Send + Sync + 'static,
-	IDP: CreateInherentDataProviders<B, Slot> + Send + Sync,
+	IDP: CreateInherentDataProviders<B, ()> + Send + Sync,
+	IDP::InherentDataProviders: InherentDataProviderExt + Send + Sync,
+	IDP::Error: Into<sp_consensus::Error>,
 {
 	async fn verify(
 		&mut self,
@@ -568,6 +558,16 @@ impl<B: BlockT, C, P, CAW, IDP> Verifier<B> for AuraVerifier<C, P, CAW, IDP> whe
 		let parent_hash = *header.parent_hash();
 		let authorities = authorities(self.client.as_ref(), &BlockId::Hash(parent_hash))
 			.map_err(|e| format!("Could not fetch authorities at {:?}: {:?}", parent_hash, e))?;
+
+		let inherent_data_providers = self.inherent_data_providers.create_inherent_data_providers(
+			&BlockId::hash(parent_hash),
+			(),
+		).map_err(|e| Error::<B>::Client(sp_blockchain::Error::Consensus(e.into())))?;
+
+		let mut inherent_data = inherent_data_providers.create_inherent_data()
+			.map_err(|e| Error::<B>::Inherent(Box::new(e)))?;
+
+		let slot_now = inherent_data_providers.slot();
 
 		// we add one to allow for some small drift.
 		// FIXME #1019 in the future, alter this queue to allow deferring of
@@ -585,8 +585,9 @@ impl<B: BlockT, C, P, CAW, IDP> Verifier<B> for AuraVerifier<C, P, CAW, IDP> whe
 				// to check that the internally-set timestamp in the inherents
 				// actually matches the slot set in the seal.
 				if let Some(inner_body) = body.take() {
-					inherent_data.aura_replace_inherent_data(slot);
 					let block = B::new(pre_header.clone(), inner_body);
+
+					inherent_data.aura_replace_inherent_data(slot);
 
 					// skip the inherents verification if the runtime API is old.
 					if self.client
@@ -600,8 +601,8 @@ impl<B: BlockT, C, P, CAW, IDP> Verifier<B> for AuraVerifier<C, P, CAW, IDP> whe
 						self.check_inherents(
 							block.clone(),
 							BlockId::Hash(parent_hash),
-							slot_num,
-							timestamp_now,
+							inherent_data,
+							inherent_data_providers,
 						).await.map_err(|e| e.to_string())?;
 					}
 
@@ -699,21 +700,6 @@ fn authorities<A, B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<A>, Consensus
 		.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet.into())
 }
 
-/// Register the aura inherent data provider, if not registered already.
-fn register_aura_inherent_data_provider(
-	inherent_data_providers: &InherentDataProviders,
-	slot_duration: u64,
-) -> Result<(), sp_consensus::Error> {
-	if !inherent_data_providers.has_provider(&INHERENT_IDENTIFIER) {
-		inherent_data_providers
-			.register_provider(InherentDataProvider::new(slot_duration))
-			.map_err(Into::into)
-			.map_err(sp_consensus::Error::InherentData)
-	} else {
-		Ok(())
-	}
-}
-
 /// A block-import handler for Aura.
 pub struct AuraBlockImport<Block: BlockT, C, I: BlockImport<Block>, P> {
 	inner: I,
@@ -799,7 +785,6 @@ impl<Block: BlockT, C, I, P> BlockImport<Block> for AuraBlockImport<Block, C, I,
 
 /// Start an import queue for the Aura consensus algorithm.
 pub fn import_queue<B, I, C, P, S, CAW, IDP>(
-	slot_duration: SlotDuration,
 	block_import: I,
 	justification_import: Option<BoxJustificationImport<B>>,
 	client: Arc<C>,
@@ -818,9 +803,10 @@ pub fn import_queue<B, I, C, P, S, CAW, IDP>(
 	P::Signature: Encode + Decode,
 	S: sp_core::traits::SpawnNamed,
 	CAW: CanAuthorWith<B> + Send + Sync + 'static,
-	IDP: CreateInherentDataProviders<B, Slot> + Sync + Send + 'static,
+	IDP: CreateInherentDataProviders<B, ()> + Sync + Send + 'static,
+	IDP::InherentDataProviders: InherentDataProviderExt + Send + Sync,
+	IDP::Error: Into<sp_consensus::Error>,
 {
-	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
 	initialize_authorities_cache(&*client)?;
 
 	let verifier = AuraVerifier {
@@ -924,10 +910,6 @@ mod tests {
 				PeersClient::Full(client, _) => {
 					let slot_duration = slot_duration(&*client).expect("slot duration available");
 					let inherent_data_providers = InherentDataProviders::new();
-					register_aura_inherent_data_provider(
-						&inherent_data_providers,
-						slot_duration.get()
-					).expect("Registers aura inherent data provider");
 
 					assert_eq!(slot_duration.get(), SLOT_DURATION);
 					AuraVerifier {
@@ -995,9 +977,6 @@ mod tests {
 			let slot_duration = slot_duration(&*client).expect("slot duration available");
 
 			let inherent_data_providers = InherentDataProviders::new();
-			register_aura_inherent_data_provider(
-				&inherent_data_providers, slot_duration.get()
-			).expect("Registers aura inherent data provider");
 
 			aura_futures.push(start_aura::<_, _, _, _, _, AuthorityPair, _, _, _, _>(
 				slot_duration,
