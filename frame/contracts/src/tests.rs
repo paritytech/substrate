@@ -1796,7 +1796,7 @@ fn cannot_self_destruct_in_constructor() {
 					vec![],
 					vec![],
 				),
-				Error::<Test>::NewContractNotFunded,
+				Error::<Test>::NotCallable,
 			);
 		});
 }

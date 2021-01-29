@@ -377,19 +377,18 @@ where
 					gas_meter,
 				).map_err(|e| ExecError { error: e.error, origin: ErrorOrigin::Callee })?;
 
+				// We need to re-fetch the contract because changes are written to storage
+				// eagerly during execution.
+				let contract = <ContractInfoOf<T>>::get(&dest)
+					.and_then(|contract| contract.get_alive())
+					.ok_or(Error::<T>::NotCallable)?;
 
 				// Collect the rent for the first block to prevent the creation of very large
 				// contracts that never intended to pay for even one block.
 				// This also makes sure that it is above the subsistence threshold
 				// in order to keep up the guarantuee that we always leave a tombstone behind
 				// with the exception of a contract that called `seal_terminate`.
-				<ContractInfoOf<T>>::get(&dest)
-					.and_then(|contract| contract.get_alive())
-					.map(|contract|
-						Rent::<T, E>::charge(&dest, contract, executable.occupied_storage())
-					)
-					.transpose()?
-					.flatten()
+				Rent::<T, E>::charge(&dest, contract, executable.occupied_storage())?
 					.ok_or(Error::<T>::NewContractNotFunded)?;
 
 				// Deposit an instantiation event.
@@ -1418,7 +1417,7 @@ mod tests {
 						vec![],
 						&[],
 					),
-					Err(Error::<Test>::NewContractNotFunded.into())
+					Err(Error::<Test>::NotCallable.into())
 				);
 
 				assert_eq!(
