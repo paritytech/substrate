@@ -20,7 +20,7 @@ use crate::{
 	ExHashT,
 	chain::Client,
 	config::{self, ProtocolId, TransactionPool, TransactionImportFuture, TransactionImport},
-	error,
+	error, GRANDPA_ENGINE_ID,
 	request_responses::RequestFailure,
 	utils::{interval, LruHashSet},
 };
@@ -760,7 +760,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 					// For compatibility we assume that the incoming Justifications is an
 					// `EncodedJustification`, as before, and that it can only be for GRANDPA.
 					let justification: EncodedJustification = block_data.justification;
-					let justifications = vec![(sp_finality_grandpa::GRANDPA_ENGINE_ID, justification)];
+					let justifications = vec![(GRANDPA_ENGINE_ID, justification)];
 					Some(Justifications(justifications))
 				} else if block_data.is_empty_justification {
 					Some(Justifications(Vec::new()))

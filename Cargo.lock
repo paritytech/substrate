@@ -7141,7 +7141,6 @@ dependencies = [
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
- "sp-finality-grandpa",
  "sp-keyring",
  "sp-runtime",
  "sp-test-primitives",
