@@ -1403,7 +1403,8 @@ impl<B: BlockT> ChainSync<B> {
 				);
 			},
 			Entry::Occupied(mut entry) => {
-				if entry.get_mut().saturating_sub(1) == 0 {
+				entry.get_mut() = entry.get().saturating_sub(1);
+				if entry.get() == 0 {
 					entry.remove();
 				}
 			}
