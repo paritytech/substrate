@@ -125,14 +125,14 @@ pub enum ConsensusLog {
 	/// The epoch has changed. This provides information about the _next_
 	/// epoch - information about the _current_ epoch (i.e. the one we've just
 	/// entered) should already be available earlier in the chain.
-	#[codec(index = "1")]
+	#[codec(index = 1)]
 	NextEpochData(NextEpochDescriptor),
 	/// Disable the authority with given index.
-	#[codec(index = "2")]
+	#[codec(index = 2)]
 	OnDisabled(AuthorityIndex),
 	/// The epoch has changed, and the epoch after the current one will
 	/// enact different epoch configurations.
-	#[codec(index = "3")]
+	#[codec(index = 3)]
 	NextConfigData(NextConfigDescriptor),
 }
 
