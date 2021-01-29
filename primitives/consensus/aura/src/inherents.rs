@@ -23,7 +23,7 @@ use sp_inherents::{InherentIdentifier, InherentData, Error};
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"auraslot";
 
 /// The type of the Aura inherent.
-pub type InherentType = u64;
+pub type InherentType = sp_consensus_slots::Slot;
 
 /// Auxiliary trait to extract Aura inherent data.
 pub trait AuraInherentData {
@@ -41,14 +41,14 @@ impl AuraInherentData for InherentData {
 /// Provides the slot duration inherent data for `Aura`.
 #[cfg(feature = "std")]
 pub struct InherentDataProvider {
-	slot_num: u64,
+	slot: InherentType,
 }
 
 #[cfg(feature = "std")]
 impl InherentDataProvider {
-	pub fn new(slot_num: u64) -> Self {
+	pub fn new(slot: InherentType) -> Self {
 		Self {
-			slot_num,
+			slot,
 		}
 	}
 }
@@ -59,7 +59,7 @@ impl sp_inherents::InherentDataProvider for InherentDataProvider {
 		&self,
 		inherent_data: &mut InherentData,
 	) ->Result<(), Error> {
-		inherent_data.put_data(INHERENT_IDENTIFIER, &self.slot_num)
+		inherent_data.put_data(INHERENT_IDENTIFIER, &self.slot)
 	}
 
 	fn try_handle_error(

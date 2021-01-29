@@ -22,10 +22,10 @@
 use codec::{Decode, Encode};
 
 /// Unit type wrapper that represents a slot.
-#[derive(Debug, Encode, Decode, PartialEq, Eq, PartialOrd, Clone, Copy)]
-pub struct Slot(pub u64);
+#[derive(Debug, Encode, Decode, Eq, Clone, Copy, Default, Ord)]
+pub struct Slot(u64);
 
-impl Deref for Slot {
+impl core::ops::Deref for Slot {
 	type Target = u64;
 
 	fn deref(&self) -> &u64 {
@@ -33,9 +33,62 @@ impl Deref for Slot {
 	}
 }
 
-impl fmt::Display for Slot {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl core::ops::Add for Slot {
+	type Output = Self;
+
+	fn add(self, other: Self) -> Self {
+		Self(self.0 + other.0)
+	}
+}
+
+impl core::ops::Add<u64> for Slot {
+	type Output = Self;
+
+	fn add(self, other: u64) -> Self {
+		Self(self.0 + other)
+	}
+}
+
+impl<T: Into<u64> + Copy> core::cmp::PartialEq<T> for Slot {
+	fn eq(&self, eq: &T) -> bool {
+		self.0 == (*eq).into()
+	}
+}
+
+impl<T: Into<u64> + Copy> core::cmp::PartialOrd<T> for Slot {
+	fn partial_cmp(&self, other: &T) -> Option<core::cmp::Ordering> {
+		self.0.partial_cmp(&(*other).into())
+	}
+}
+
+impl Slot {
+	/// Saturating addition.
+	pub fn saturating_add<T: Into<u64>>(self, rhs: T) -> Self {
+		Self(self.0.saturating_add(rhs.into()))
+	}
+
+	/// Saturating subtraction.
+	pub fn saturating_sub<T: Into<u64>>(self, rhs: T) -> Self {
+		Self(self.0.saturating_sub(rhs.into()))
+	}
+}
+
+#[cfg(feature = "std")]
+impl std::fmt::Display for Slot {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "{}", self.0)
+	}
+}
+
+impl From<u64> for Slot {
+	fn from(slot: u64) -> Slot {
+		Slot(slot)
+	}
+}
+
+impl From<Slot> for u64 {
+	fn from(slot: Slot) -> u64 {
+		slot.0
 	}
 }
 

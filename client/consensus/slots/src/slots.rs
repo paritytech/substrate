@@ -20,8 +20,8 @@
 //!
 //! This is used instead of `futures_timer::Interval` because it was unreliable.
 
-use super::InherentDataProviderExt;
-use sp_consensus::{Error, SelectChain};
+use super::{SlotCompatible, Slot, InherentDataProviderExt};
+use sp_consensus::Error;
 use futures::{prelude::*, task::Context, task::Poll};
 use sp_inherents::{InherentData, CreateInherentDataProviders, InherentDataProvider};
 use sp_runtime::{traits::{Block as BlockT, Header as HeaderT}, generic::BlockId};
@@ -49,7 +49,7 @@ pub fn time_until_next(now: Duration, slot_duration: u64) -> Duration {
 /// Information about a slot.
 pub struct SlotInfo<B: BlockT> {
 	/// The slot number.
-	pub number: crate::Slot,
+	pub slot: Slot,
 	/// Current timestamp.
 	pub timestamp: Duration,
 	/// The instant at which the slot ends.
@@ -64,7 +64,7 @@ pub struct SlotInfo<B: BlockT> {
 
 /// A stream that returns every time there is a new slot.
 pub(crate) struct Slots<Block, C, IDP> {
-	last_slot: crate::Slot,
+	last_slot: Slot,
 	slot_duration: u64,
 	inner_delay: Option<Delay>,
 	inherent_data_providers: IDP,
@@ -80,7 +80,7 @@ impl<Block, C, IDP> Slots<Block, C, IDP> {
 		client: C,
 	) -> Self {
 		Slots {
-			last_slot: crate::Slot(0),
+			last_slot: 0.into(),
 			slot_duration,
 			inner_delay: None,
 			inherent_data_providers,
@@ -143,7 +143,7 @@ IDP::Error: Into<Error>,
 			};
 
 			let timestamp = inherent_data_providers.timestamp();
-			let slot_num = inherent_data_providers.slot();
+			let slot = inherent_data_providers.slot();
 			let inherent_data = match inherent_data_providers.create_inherent_data() {
 				Ok(d) => d,
 				Err(err) => return Poll::Ready(Some(Err(err.into()))),
@@ -155,11 +155,11 @@ IDP::Error: Into<Error>,
 			self.inner_delay = Some(Delay::new(ends_in));
 
 			// never yield the same slot twice.
-			if slot_num > self.last_slot {
-				self.last_slot = slot_num;
+			if slot > self.last_slot {
+				self.last_slot = slot;
 
 				break Poll::Ready(Some(Ok(SlotInfo {
-					number: slot_num,
+					slot,
 					duration: self.slot_duration,
 					timestamp,
 					ends_at,
