@@ -57,6 +57,7 @@ use sc_client_api::{
 	UsageInfo, MemoryInfo, IoInfo, MemorySize,
 	backend::{NewBlockState, PrunableStateChangesTrieStorage, ProvideChtRoots},
 	leaves::{LeafSet, FinalizationDisplaced}, cht,
+	utils::is_descendent_of,
 };
 use sp_blockchain::{
 	Result as ClientResult, Error as ClientError,
@@ -1407,7 +1408,7 @@ impl<Block: BlockT> Backend<Block> {
 
 		self.storage.db.commit(transaction)?;
 
-		// Apply all in-memory state shanges.
+		// Apply all in-memory state changes.
 		// Code beyond this point can't fail.
 
 		if let Some((
@@ -1677,9 +1678,12 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		let number = *header.number();
 
 		// Check if block is finalized first
-		// WIP(JON): is this really the correct way to check if a block is final?
-		if number > self.blockchain.info().finalized_number {
-			return Err(ClientError::BadJustification("WIP: block not finalized".into()));
+		let is_descendent_of = is_descendent_of(&self.blockchain, None);
+		let last_finalized = self.blockchain.last_finalized()?;
+		if !is_descendent_of(&hash, &last_finalized)? {
+			return Err(ClientError::BadJustification(
+				"Can't append Justification to unfinalized block".into(),
+			));
 		}
 
 		// Read and merge Justification
@@ -1692,7 +1696,6 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 					.find(|stored| stored.0 == justification.0)
 					.is_some()
 				{
-					// WIP(JON): Maybe create new error type for this
 					return Err(ClientError::BadJustification("Duplicate".into()));
 				}
 				stored_justifications.0.push(justification);

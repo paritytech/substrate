@@ -317,7 +317,6 @@ impl<Block: BlockT> Blockchain<Block> {
 				.find(|stored| stored.0 == justification.0)
 				.is_some()
 			{
-				// WIP(JON): Maybe create new error type for this
 				return Err(sp_blockchain::Error::BadJustification("Duplicate".into()));
 			}
 			stored_justifications.0.push(justification);
