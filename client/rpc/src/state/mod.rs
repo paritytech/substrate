@@ -25,7 +25,6 @@ mod state_light;
 mod tests;
 
 use std::sync::Arc;
-use futures::{FutureExt, TryFutureExt};
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId, manager::SubscriptionManager};
 use rpc::{Result as RpcResult, futures::{Future, future::result}};
 

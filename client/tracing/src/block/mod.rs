@@ -32,9 +32,9 @@ use sp_runtime::{
 use sp_rpc::tracing::{BlockTrace, Span, Event, Values};
 use sp_tracing::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
 
-use tracing_core::span::{Attributes, Record, Id};
-use tracing_core::{Level};
-use std::time::{Instant};
+use tracing_core::{Level, span::{Attributes, Record, Id}};
+use wasm_timer::Instant;
+
 
 // Default to only runtime and state related traces
 const DEFAULT_TARGETS: &'static str = "pallet,frame,sp_io::storage=debug";
