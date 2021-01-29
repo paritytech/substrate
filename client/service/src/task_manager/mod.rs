@@ -91,10 +91,7 @@ impl SpawnTaskHandle {
 			metrics.tasks_ended.with_label_values(&[name, "finished"]).inc_by(0);
 		}
 
-		let telemetry_span = self.telemetry_span.clone();
 		let future = async move {
-			let _telemetry_entered = telemetry_span.as_ref().map(|x| x.enter());
-
 			if let Some(metrics) = metrics {
 				// Add some wrappers around `task`.
 				let task = {
@@ -127,7 +124,11 @@ impl SpawnTaskHandle {
 			}
 		};
 
-		let join_handle = self.executor.spawn(Box::pin(future.in_current_span()), task_type);
+		let join_handle = {
+			let _span = self.telemetry_span.as_ref().map(|s| s.enter());
+			self.executor.spawn(Box::pin(future.in_current_span()), task_type)
+		};
+
 		let mut task_notifier = self.task_notifier.clone();
 		self.executor.spawn(
 			Box::pin(async move {

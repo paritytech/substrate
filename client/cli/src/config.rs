@@ -33,7 +33,7 @@ use sc_service::config::{
 	TaskExecutor, TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
 };
 use sc_service::{ChainSpec, TracingReceiver, KeepBlocks, TransactionStorageMode};
-use sc_telemetry::TelemetryHandle;
+use sc_telemetry::{TelemetryHandle, TelemetrySpan};
 use sc_tracing::logging::LoggerBuilder;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -488,6 +488,13 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		let max_runtime_instances = self.max_runtime_instances()?.unwrap_or(8);
 		let is_validator = role.is_network_authority();
 		let (keystore_remote, keystore) = self.keystore_config(&config_dir)?;
+		let telemetry_endpoints = telemetry_handle
+			.as_ref()
+			.and_then(|_| self.telemetry_endpoints(&chain_spec).transpose())
+			.transpose()?
+			// Don't initialise telemetry if `telemetry_endpoints` == Some([])
+			.filter(|x| !x.is_empty());
+		let telemetry_span = telemetry_endpoints.as_ref().map(|_| TelemetrySpan::new());
 
 		let unsafe_pruning = self
 			.import_params()
@@ -526,7 +533,8 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			rpc_ws_max_connections: self.rpc_ws_max_connections()?,
 			rpc_cors: self.rpc_cors(is_dev)?,
 			prometheus_config: self.prometheus_config(DCV::prometheus_listen_port())?,
-			telemetry_endpoints: self.telemetry_endpoints(&chain_spec)?,
+			telemetry_endpoints,
+			telemetry_span,
 			telemetry_external_transport: self.telemetry_external_transport()?,
 			default_heap_pages: self.default_heap_pages()?,
 			offchain_worker: self.offchain_worker(&role)?,

@@ -88,6 +88,11 @@ impl TelemetrySpan {
 	pub fn new() -> Self {
 		Self(tracing::info_span!(TELEMETRY_LOG_SPAN))
 	}
+
+	/// Return a clone of the underlying `tracing::Span` instance.
+	pub fn span(&self) -> tracing::Span {
+		self.0.clone()
+	}
 }
 
 /// Message sent when the connection (re-)establishes.

@@ -24,7 +24,7 @@ use sc_service::{
 	GenericChainSpec, RuntimeGenesis,
 	KeepBlocks, TransactionStorageMode,
 };
-use sc_telemetry::TelemetryHandle;
+use sc_telemetry::{TelemetryHandle, TelemetrySpan};
 use sc_tracing::logging::LoggerBuilder;
 use wasm_bindgen::prelude::*;
 use futures::{
@@ -72,6 +72,7 @@ where
 		allow_private_ipv4: true,
 		enable_mdns: false,
 	};
+	let telemetry_span = telemetry_handle.as_ref().map(|_| TelemetrySpan::new());
 
 	let config = Configuration {
 		network,
@@ -83,6 +84,7 @@ where
 		}).into(),
 		telemetry_external_transport: Some(transport),
 		telemetry_handle,
+		telemetry_span,
 		role: Role::Light,
 		database: {
 			info!("Opening Indexed DB database '{}'...", name);
