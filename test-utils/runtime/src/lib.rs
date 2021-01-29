@@ -61,7 +61,7 @@ use sp_inherents::{CheckInherentsResult, InherentData};
 use cfg_if::cfg_if;
 
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
-pub use sp_consensus_babe::{AuthorityId, SlotNumber, AllowedSlots};
+pub use sp_consensus_babe::{AuthorityId, Slot, AllowedSlots};
 
 pub type AuraId = sp_consensus_aura::sr25519::AuthorityId;
 
@@ -739,7 +739,7 @@ cfg_if! {
 					}
 				}
 
-				fn current_epoch_start() -> sp_consensus_babe::SlotNumber {
+				fn current_epoch_start() -> Slot {
 					<pallet_babe::Module<Runtime>>::current_epoch_start()
 				}
 
@@ -761,7 +761,7 @@ cfg_if! {
 				}
 
 				fn generate_key_ownership_proof(
-					_slot_number: sp_consensus_babe::SlotNumber,
+					_slot: sp_consensus_babe::Slot,
 					_authority_id: sp_consensus_babe::AuthorityId,
 				) -> Option<sp_consensus_babe::OpaqueKeyOwnershipProof> {
 					None
@@ -998,7 +998,7 @@ cfg_if! {
 					}
 				}
 
-				fn current_epoch_start() -> sp_consensus_babe::SlotNumber {
+				fn current_epoch_start() -> Slot {
 					<pallet_babe::Module<Runtime>>::current_epoch_start()
 				}
 
@@ -1020,7 +1020,7 @@ cfg_if! {
 				}
 
 				fn generate_key_ownership_proof(
-					_slot_number: sp_consensus_babe::SlotNumber,
+					_slot: sp_consensus_babe::Slot,
 					_authority_id: sp_consensus_babe::AuthorityId,
 				) -> Option<sp_consensus_babe::OpaqueKeyOwnershipProof> {
 					None

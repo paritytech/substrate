@@ -151,8 +151,8 @@ impl<T: Config> FindAuthor<u32> for Module<T> {
 	{
 		for (id, mut data) in digests.into_iter() {
 			if id == AURA_ENGINE_ID {
-				if let Ok(slot_num) = u64::decode(&mut data) {
-					let author_index = slot_num % Self::authorities().len() as u64;
+				if let Ok(slot) = u64::decode(&mut data) {
+					let author_index = slot % Self::authorities().len() as u64;
 					return Some(author_index as u32)
 				}
 			}
@@ -242,7 +242,7 @@ impl<T: Config> ProvideInherent for Module<T> {
 
 		let timestamp_based_slot = timestamp / Self::slot_duration();
 
-		let seal_slot = data.aura_inherent_data()?.saturated_into();
+		let seal_slot = u64::from(data.aura_inherent_data()?).saturated_into();
 
 		if timestamp_based_slot == seal_slot {
 			Ok(())
