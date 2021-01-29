@@ -124,19 +124,11 @@ impl SpawnTaskHandle {
 			}
 		};
 
-		let future: BoxFuture<()> = if let Some(telemetry_span) = self.telemetry_span.clone() {
-			// This will preserve the telemetry span and by extension all of its 
-			// parents as they are linked together upon creation.
-			// Used by [`sc_telemetry::layer::TelemetryLayer`].
-			Box::pin(future.instrument(telemetry_span.span()))
-		} else {
-			// This will preserve the current span (if any) and by extension all 
-			// of its parents as they are linked together upon creation.
-			// Used by [`sc_tracing::logging::prefix_logs_with`].
-			Box::pin(future.in_current_span())
+		let join_handle = {
+			let _span = self.telemetry_span.as_ref().map(|s| s.enter());
+			self.executor.spawn(Box::pin(future.in_current_span()), task_type)
 		};
 
-		let join_handle = self.executor.spawn(future, task_type);
 		let mut task_notifier = self.task_notifier.clone();
 		self.executor.spawn(
 			Box::pin(async move {
