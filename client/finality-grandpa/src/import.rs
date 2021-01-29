@@ -619,14 +619,19 @@ where
 		enacts_change: bool,
 		initial_sync: bool,
 	) -> Result<(), ConsensusError> {
+		if justification.0.iter().filter(|j| j.0 == GRANDPA_ENGINE_ID).count() > 1 {
+			return Err(ConsensusError::ClientImport(
+				"Received multiple GRANDPA Justifications for the same block.".into(),
+			));
+		}
+
 		let grandpa_justification =
-			// WIP(JON): insert check for >1 grandpa justifications?
 			match justification.0.into_iter().find(|j| j.0 == GRANDPA_ENGINE_ID) {
 				Some((_, grandpa_justification)) => grandpa_justification,
 				None => {
 					return Err(ConsensusError::ClientImport(
-						"WIP(JON): expected a grandpa justification.".into(),
-					))
+						"GRANDPA can only import GRANDPA Justifications.".into(),
+					));
 				}
 			};
 
