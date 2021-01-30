@@ -831,6 +831,21 @@ decl_module! {
 		{
 			let signer = ensure_signed(origin)?;
 
+			// TODO :: Have to recheck
+			// Governance design choice, which is more appropriate for the context ?
+			//
+			// * add_subbounty() :: right now origin must me signed
+			// & should be master curator. and state of subbounty
+			// is moved to `Approved` state.
+			//
+			// But logic can be refactored, similar to parent bounty sequence flow...
+			//
+			// * propose_subbounty() :: origin may be signed, bond deposit is
+			// applicable & state of subbonty is moved to `Proposed` state.
+			//
+			// * approve_subbounty() :: origin is signed & should be master-curator,
+			// & move the state of subounty to `Approved`.
+
 			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T>::InvalidIndex)?;
 				match bounty.status {
