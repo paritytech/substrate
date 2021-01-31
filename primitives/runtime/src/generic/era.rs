@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -107,13 +107,13 @@ impl Era {
 }
 
 impl Encode for Era {
-	fn encode_to<T: Output>(&self, output: &mut T) {
+	fn encode_to<T: Output + ?Sized>(&self, output: &mut T) {
 		match self {
 			Era::Immortal => output.push_byte(0),
 			Era::Mortal(period, phase) => {
 				let quantize_factor = (*period as u64 >> 12).max(1);
 				let encoded = (period.trailing_zeros() - 1).max(1).min(15) as u16 | ((phase / quantize_factor) << 4) as u16;
-				output.push(&encoded);
+				encoded.encode_to(output);
 			}
 		}
 	}

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,7 +26,7 @@
 //! ```
 //! For debug infomation, such as the informant, run without the `--headless`
 //! flag and open a browser to the url that `wasm-pack test` outputs.
-//! For more infomation see https://rustwasm.github.io/docs/wasm-pack/.
+//! For more infomation see <https://rustwasm.github.io/docs/wasm-pack/>.
 
 use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 use wasm_bindgen_futures::JsFuture;

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -152,28 +152,27 @@ mod tests {
 	};
 
 	use sp_runtime::testing::UintAuthorityId;
+	use frame_support::BasicExternalities;
 
 	type Historical = Module<Test>;
 
 	pub fn new_test_ext() -> sp_io::TestExternalities {
-		let mut ext = frame_system::GenesisConfig::default()
+		let mut t = frame_system::GenesisConfig::default()
 			.build_storage::<Test>()
 			.expect("Failed to create test externalities.");
 
-		crate::GenesisConfig::<Test> {
-			keys: NEXT_VALIDATORS.with(|l| {
-				l.borrow()
-					.iter()
-					.cloned()
-					.map(|i| (i, i, UintAuthorityId(i).into()))
-					.collect()
-			}),
-		}
-		.assimilate_storage(&mut ext)
-		.unwrap();
+		let keys: Vec<_> = NEXT_VALIDATORS.with(|l|
+			l.borrow().iter().cloned().map(|i| (i, i, UintAuthorityId(i).into())).collect()
+		);
+		BasicExternalities::execute_with_storage(&mut t, || {
+			for (ref k, ..) in &keys {
+				frame_system::Module::<Test>::inc_providers(k);
+			}
+		});
 
+		crate::GenesisConfig::<Test>{ keys }.assimilate_storage(&mut t).unwrap();
 
-		let mut ext = sp_io::TestExternalities::new(ext);
+		let mut ext = sp_io::TestExternalities::new(t);
 
 		let (offchain, offchain_state) = TestOffchainExt::with_offchain_db(ext.offchain_db());
 
@@ -189,12 +188,12 @@ mod tests {
 	#[test]
 	fn encode_decode_roundtrip() {
 		use codec::{Decode, Encode};
-		use super::super::super::Config as SessionTrait;
-		use super::super::Config as HistoricalTrait;
+		use super::super::super::Config as SessionConfig;
+		use super::super::Config as HistoricalConfig;
 
 		let sample = (
-				22u32 as <Test as SessionTrait>::ValidatorId,
-				7_777_777 as <Test as HistoricalTrait>::FullIdentification);
+				22u32 as <Test as SessionConfig>::ValidatorId,
+				7_777_777 as <Test as HistoricalConfig>::FullIdentification);
 
 		let encoded = sample.encode();
 		let decoded = Decode::decode(&mut encoded.as_slice()).expect("Must decode");

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -25,7 +25,7 @@ use parking_lot::RwLockWriteGuard;
 use sp_blockchain::{BlockStatus, well_known_cache_keys};
 use sc_client_api::{backend::Backend, utils::is_descendent_of};
 use sp_utils::mpsc::TracingUnboundedSender;
-use sp_api::{TransactionFor};
+use sp_api::TransactionFor;
 
 use sp_consensus::{
 	BlockImport, Error as ConsensusError,
@@ -182,7 +182,7 @@ impl<'a, Block: 'a + BlockT> Drop for PendingSetChanges<'a, Block> {
 	}
 }
 
-fn find_scheduled_change<B: BlockT>(header: &B::Header)
+pub(crate) fn find_scheduled_change<B: BlockT>(header: &B::Header)
 	-> Option<ScheduledChange<NumberFor<B>>>
 {
 	let id = OpaqueDigestItemId::Consensus(&GRANDPA_ENGINE_ID);
@@ -197,7 +197,7 @@ fn find_scheduled_change<B: BlockT>(header: &B::Header)
 	header.digest().convert_first(|l| l.try_to(id).and_then(filter_log))
 }
 
-fn find_forced_change<B: BlockT>(header: &B::Header)
+pub(crate) fn find_forced_change<B: BlockT>(header: &B::Header)
 	-> Option<(NumberFor<B>, ScheduledChange<NumberFor<B>>)>
 {
 	let id = OpaqueDigestItemId::Consensus(&GRANDPA_ENGINE_ID);

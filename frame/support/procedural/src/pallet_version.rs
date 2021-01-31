@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,7 +27,7 @@ use frame_support_procedural_tools::generate_crate_access_2018;
 /// The version is parsed into the requested destination type.
 fn get_version<T: FromStr>(version_env: &str) -> std::result::Result<T, ()> {
 	let version = env::var(version_env)
-		.expect(&format!("`{}` is always set by cargo; qed", version_env));
+		.unwrap_or_else(|_| panic!("`{}` is always set by cargo; qed", version_env));
 
 	T::from_str(&version).map_err(drop)
 }
@@ -52,7 +52,7 @@ pub fn crate_to_pallet_version(input: proc_macro::TokenStream) -> Result<TokenSt
 	let patch_version = get_version::<u8>("CARGO_PKG_VERSION_PATCH")
 		.map_err(|_| create_error("Patch version needs to fit into `u8`"))?;
 
-	let crate_ = generate_crate_access_2018()?;
+	let crate_ = generate_crate_access_2018("frame-support")?;
 
 	Ok(quote::quote! {
 		#crate_::traits::PalletVersion {

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -29,7 +29,6 @@ use sc_executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use sp_externalities::Extensions;
 use sp_core::{
 	NativeOrEncoded, NeverNativeValue, traits::{CodeExecutor, SpawnNamed, RuntimeCode},
-	offchain::storage::OffchainOverlayedChanges,
 };
 use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
 use sc_client_api::{backend, call_executor::CallExecutor};
@@ -127,11 +126,6 @@ where
 		extensions: Option<Extensions>,
 	) -> sp_blockchain::Result<Vec<u8>> {
 		let mut changes = OverlayedChanges::default();
-		let mut offchain_changes = if self.client_config.offchain_indexing_api {
-			OffchainOverlayedChanges::enabled()
-		} else {
-			OffchainOverlayedChanges::disabled()
-		};
 		let changes_trie = backend::changes_tries_state_at_block(
 			id, self.backend.changes_trie_storage()
 		)?;
@@ -145,7 +139,6 @@ where
 			&state,
 			changes_trie,
 			&mut changes,
-			&mut offchain_changes,
 			&self.executor,
 			method,
 			call_data,
@@ -176,7 +169,6 @@ where
 		method: &str,
 		call_data: &[u8],
 		changes: &RefCell<OverlayedChanges>,
-		offchain_changes: &RefCell<OffchainOverlayedChanges>,
 		storage_transaction_cache: Option<&RefCell<
 			StorageTransactionCache<Block, B::State>
 		>>,
@@ -201,7 +193,6 @@ where
 		let mut state = self.backend.state_at(*at)?;
 
 		let changes = &mut *changes.borrow_mut();
-		let offchain_changes = &mut *offchain_changes.borrow_mut();
 
 		match recorder {
 			Some(recorder) => {
@@ -226,7 +217,6 @@ where
 					&backend,
 					changes_trie_state,
 					changes,
-					offchain_changes,
 					&self.executor,
 					method,
 					call_data,
@@ -248,7 +238,6 @@ where
 					&state,
 					changes_trie_state,
 					changes,
-					offchain_changes,
 					&self.executor,
 					method,
 					call_data,
@@ -263,7 +252,6 @@ where
 
 	fn runtime_version(&self, id: &BlockId<Block>) -> sp_blockchain::Result<RuntimeVersion> {
 		let mut overlay = OverlayedChanges::default();
-		let mut offchain_overlay = OffchainOverlayedChanges::default();
 		let changes_trie_state = backend::changes_tries_state_at_block(
 			id,
 			self.backend.changes_trie_storage(),
@@ -272,7 +260,6 @@ where
 		let mut cache = StorageTransactionCache::<Block, B::State>::default();
 		let mut ext = Ext::new(
 			&mut overlay,
-			&mut offchain_overlay,
 			&mut cache,
 			&state,
 			changes_trie_state,

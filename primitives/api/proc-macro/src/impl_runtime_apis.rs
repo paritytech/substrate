@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -86,7 +86,7 @@ fn generate_impl_call(
 					&#input,
 				) {
 					Ok(res) => res,
-					Err(e) => panic!("Bad input data provided to {}: {}", #fn_name_str, e.what()),
+					Err(e) => panic!("Bad input data provided to {}: {}", #fn_name_str, e),
 				};
 
 			#[allow(deprecated)]
@@ -208,7 +208,6 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 			commit_on_success: std::cell::RefCell<bool>,
 			initialized_block: std::cell::RefCell<Option<#crate_::BlockId<Block>>>,
 			changes: std::cell::RefCell<#crate_::OverlayedChanges>,
-			offchain_changes: std::cell::RefCell<#crate_::OffchainOverlayedChanges>,
 			storage_transaction_cache: std::cell::RefCell<
 				#crate_::StorageTransactionCache<Block, C::StateBackend>
 			>,
@@ -334,7 +333,6 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 					commit_on_success: true.into(),
 					initialized_block: None.into(),
 					changes: Default::default(),
-					offchain_changes: Default::default(),
 					recorder: Default::default(),
 					storage_transaction_cache: Default::default(),
 				}.into()
@@ -353,7 +351,6 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 					&C,
 					&Self,
 					&std::cell::RefCell<#crate_::OverlayedChanges>,
-					&std::cell::RefCell<#crate_::OffchainOverlayedChanges>,
 					&std::cell::RefCell<#crate_::StorageTransactionCache<Block, C::StateBackend>>,
 					&std::cell::RefCell<Option<#crate_::BlockId<Block>>>,
 					&Option<#crate_::ProofRecorder<Block>>,
@@ -370,7 +367,6 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 					&self.call,
 					self,
 					&self.changes,
-					&self.offchain_changes,
 					&self.storage_transaction_cache,
 					&self.initialized_block,
 					&self.recorder,
@@ -406,7 +402,7 @@ fn extend_with_runtime_decl_path(mut trait_: Path) -> Path {
 			.segments
 			.last()
 			.as_ref()
-			.expect("Config path should always contain at least one item; qed")
+			.expect("Trait path should always contain at least one item; qed")
 			.ident;
 
 		generate_runtime_mod_name_for_trait(trait_name)
@@ -527,7 +523,6 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 							call_runtime_at,
 							core_api,
 							changes,
-							offchain_changes,
 							storage_transaction_cache,
 							initialized_block,
 							recorder
@@ -538,7 +533,6 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 								at,
 								params_encoded,
 								changes,
-								offchain_changes,
 								storage_transaction_cache,
 								initialized_block,
 								params.map(|p| {

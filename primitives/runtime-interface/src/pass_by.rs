@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -238,7 +238,7 @@ impl<T: codec::Codec> PassByImpl<T> for Codec<T> {
 		let (ptr, len) = unpack_ptr_and_len(arg);
 		let vec = context.read_memory(Pointer::new(ptr), len)?;
 		T::decode(&mut &vec[..])
-			.map_err(|e| format!("Could not decode value from wasm: {}", e.what()))
+			.map_err(|e| format!("Could not decode value from wasm: {}", e))
 	}
 }
 
