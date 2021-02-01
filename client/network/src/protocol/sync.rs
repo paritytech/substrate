@@ -400,7 +400,18 @@ enum PreValidateBlockAnnounce<H> {
 		/// The announcement.
 		announce: BlockAnnounce<H>,
 	},
+	/// The announcement validation returned an error.
+	///
+	/// An error means that *this* node failed to validate it because some internal error happened.
+	/// If the block announcement was invalid, [`Self::Failure`] is the correct variant to express
+	/// this.
+	Error {
+		who: PeerId,
+	},
 	/// The block announcement should be skipped.
+	///
+	/// This should *only* be returned when there wasn't a slot registered
+	/// for this block announcement validation.
 	Skip,
 }
 
@@ -1223,6 +1234,11 @@ impl<B: BlockT> ChainSync<B> {
 	/// is capped.
 	///
 	/// Returns [`HasSlotForBlockAnnounceValidation`] to inform about the result.
+	///
+	/// # Note
+	///
+	/// It is *required* to call [`Self::peer_block_announce_validation_finished`] when the
+	/// validation is finished to clear the slot.
 	fn has_slot_for_block_announce_validation(&mut self, peer: &PeerId) -> HasSlotForBlockAnnounceValidation {
 		if self.block_announce_validation.len() >= MAX_CONCURRENT_BLOCK_ANNOUNCE_VALIDATIONS {
 			return HasSlotForBlockAnnounceValidation::TotalMaximumSlotsReached
@@ -1324,15 +1340,20 @@ impl<B: BlockT> ChainSync<B> {
 				Ok(Validation::Failure { disconnect }) => {
 					debug!(
 						target: "sync",
-						"Block announcement validation of block {} from {} failed",
+						"Block announcement validation of block {:?} from {} failed",
 						hash,
 						who,
 					);
 					PreValidateBlockAnnounce::Failure { who, disconnect }
 				}
 				Err(e) => {
-					error!(target: "sync", "💔 Block announcement validation errored: {}", e);
-					PreValidateBlockAnnounce::Skip
+					error!(
+						target: "sync",
+						"💔 Block announcement validation of block {:?} errored: {}",
+						hash,
+						e,
+					);
+					PreValidateBlockAnnounce::Error { who }
 				}
 			}
 		}.boxed());
@@ -1352,14 +1373,27 @@ impl<B: BlockT> ChainSync<B> {
 		cx: &mut std::task::Context,
 	) -> Poll<PollBlockAnnounceValidation<B::Header>> {
 		match self.block_announce_validation.poll_next_unpin(cx) {
-			Poll::Ready(Some(res)) => Poll::Ready(self.finish_block_announce_validation(res)),
+			Poll::Ready(Some(res)) => {
+				self.peer_block_announce_validation_finished(&res);
+				Poll::Ready(self.finish_block_announce_validation(res))
+			},
 			_ => Poll::Pending,
 		}
 	}
 
-	/// Should be called when a block announce validation was finished, to update the stats
-	/// of the given peer.
-	fn peer_block_announce_validation_finished(&mut self, peer: &PeerId) {
+	/// Should be called when a block announce validation is finished, to update the slots
+	/// of the peer that send the block announce.
+	fn peer_block_announce_validation_finished(
+		&mut self,
+		res: &PreValidateBlockAnnounce<B::Header>,
+	) {
+		let peer = match res {
+			PreValidateBlockAnnounce::Failure { who, .. } |
+			PreValidateBlockAnnounce::Process { who, .. } |
+			PreValidateBlockAnnounce::Error { who } => who,
+			PreValidateBlockAnnounce::Skip => return,
+		};
+
 		match self.block_announce_validation_per_peer_stats.entry(peer.clone()) {
 			Entry::Vacant(_) => {
 				error!(
@@ -1369,7 +1403,8 @@ impl<B: BlockT> ChainSync<B> {
 				);
 			},
 			Entry::Occupied(mut entry) => {
-				if entry.get_mut().saturating_sub(1) == 0 {
+				*entry.get_mut() = entry.get().saturating_sub(1);
+				if *entry.get() == 0 {
 					entry.remove();
 				}
 			}
@@ -1389,14 +1424,13 @@ impl<B: BlockT> ChainSync<B> {
 
 		let (announce, is_best, who) = match pre_validation_result {
 			PreValidateBlockAnnounce::Failure { who, disconnect } => {
-				self.peer_block_announce_validation_finished(&who);
 				return PollBlockAnnounceValidation::Failure { who, disconnect }
 			},
 			PreValidateBlockAnnounce::Process { announce, is_new_best, who } => {
-				self.peer_block_announce_validation_finished(&who);
 				(announce, is_new_best, who)
 			},
-			PreValidateBlockAnnounce::Skip => return PollBlockAnnounceValidation::Skip,
+			PreValidateBlockAnnounce::Error { .. } | PreValidateBlockAnnounce::Skip =>
+				return PollBlockAnnounceValidation::Skip,
 		};
 
 		let number = *announce.header.number();
