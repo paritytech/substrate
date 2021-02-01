@@ -20,7 +20,7 @@
 #![recursion_limit="128"]
 
 use codec::{Decode, Encode};
-use sp_runtime::{generic, traits::{BlakeTwo256, Block as _, Verify}, BuildStorage};
+use sp_runtime::{generic, traits::{BlakeTwo256, Verify}, BuildStorage};
 use frame_support::{
 	traits::{PALLET_VERSION_STORAGE_KEY_POSTFIX, PalletVersion, OnRuntimeUpgrade, GetPalletVersion},
 	crate_to_pallet_version, weights::Weight,

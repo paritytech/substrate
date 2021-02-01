@@ -369,6 +369,11 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<request_responses::Even
 					peer, protocol, duration, result,
 				});
 			},
+			request_responses::Event::ReputationChanges { peer, changes } => {
+				for change in changes {
+					self.substrate.report_peer(peer, change);
+				}
+			}
 		}
 	}
 }
