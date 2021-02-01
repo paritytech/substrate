@@ -204,16 +204,25 @@ impl<Block, Client> BlockExecutor<Block, Client>
 			return Err(format!("Error executing block: {:?}", e));
 		}
 		drop(dispatch);
-		let spans = Arc::try_unwrap(spans)
-			.map_err(|_| "Unable to unwrap spans".to_string())?;
+
+
+		let mut spans: Vec<Span> = Arc::try_unwrap(spans)
+			.map_err(|_| "Unable to unwrap spans".to_string())?
+			.lock()
+			.drain()
+			.map(|(_, s)| s.into())
+			.into_iter()
+			// First filter out any spans that were never entered
+			.filter(|s: &Span| !s.entered.is_empty())
+			// Patch wasm identifiers
+			.filter_map(|s| patch_and_filter(s, targets))
+			.collect();
+		spans.sort_by(|a, b| a.entered[0].cmp(&b.entered[0]));
+
+
 		let events = Arc::try_unwrap(events)
 			.map_err(|_| "Unable to unwrap spans".to_string())?;
-		let spans: Vec<Span> = spans.into_inner().into_iter().map(|(_, s)| s.into()).collect();
-		// First filter out any spans that never entered
-		let spans: Vec<Span> = spans.into_iter().filter(|s| !s.entered.is_empty()).collect();
-		// Patch wasm identifiers
-		let mut spans: Vec<Span> = spans.into_iter().filter_map(|s| patch_and_filter(s, targets)).collect();
-		spans.sort_by(|a, b| a.entered[0].cmp(&b.entered[0]));
+
 		let block_traces = BlockTrace {
 			block_hash: id.to_string(),
 			parent_hash: parent_id.to_string(),
