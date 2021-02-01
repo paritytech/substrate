@@ -44,16 +44,16 @@ struct BlockSubscriber {
 	targets: Vec<(String, Level)>,
 	next_id: AtomicU64,
 	current_span: CurrentSpan,
-	spans: Arc<Mutex<HashMap<Id, Span>>>,
-	events: Arc<Mutex<Vec<Event>>>,
+	spans: Mutex<HashMap<Id, Span>>,
+	events: Mutex<Vec<Event>>,
 	timestamp: Instant,
 }
 
 impl BlockSubscriber {
 	fn new(
 		targets: &str,
-		spans: Arc<Mutex<HashMap<Id, Span>>>,
-		events: Arc<Mutex<Vec<Event>>>,
+		spans: Mutex<HashMap<Id, Span>>,
+		events: Mutex<Vec<Event>>,
 	) -> Self {
 		let next_id = AtomicU64::new(1);
 		let mut targets: Vec<_> = targets
@@ -188,9 +188,9 @@ impl<Block, Client> BlockExecutor<Block, Client>
 		let block = Block::new(header, extrinsics);
 
 		let targets = if let Some(t) = &self.targets { t } else { DEFAULT_TARGETS };
-		let spans = Arc::new(Mutex::new(HashMap::new()));
-		let events = Arc::new(Mutex::new(Vec::new()));
-		let sub = BlockSubscriber::new(targets, spans.clone(), events.clone());
+		let spans = Mutex::new(HashMap::new());
+		let events = Mutex::new(Vec::new());
+		let sub = BlockSubscriber::new(targets, spans, events);
 		let dispatch = Dispatch::new(sub);
 
 		if let Err(e) = dispatcher::with_default(&dispatch, || {
@@ -203,11 +203,9 @@ impl<Block, Client> BlockExecutor<Block, Client>
 		}) {
 			return Err(format!("Error executing block: {:?}", e));
 		}
-		drop(dispatch);
-
-
-		let mut spans: Vec<Span> = Arc::try_unwrap(spans)
-			.map_err(|_| "Unable to unwrap spans".to_string())?
+		let sub = dispatch.downcast_ref::<BlockSubscriber>()
+			.ok_or("Cannot downcast Dispatch to BlockSubscriber after tracing block")?;
+		let mut spans: Vec<Span> = sub.spans
 			.lock()
 			.drain()
 			.map(|(_, s)| s.into())
@@ -219,16 +217,14 @@ impl<Block, Client> BlockExecutor<Block, Client>
 			.collect();
 		spans.sort_by(|a, b| a.entered[0].cmp(&b.entered[0]));
 
-
-		let events = Arc::try_unwrap(events)
-			.map_err(|_| "Unable to unwrap spans".to_string())?;
+		let events = sub.events.lock().drain(..).map(|s| s.into()).collect();
 
 		let block_traces = BlockTrace {
 			block_hash: id.to_string(),
 			parent_hash: parent_id.to_string(),
 			tracing_targets: targets.to_string(),
 			spans,
-			events: events.into_inner().into_iter().map(|s| s.into()).collect(),
+			events,
 		};
 		Ok(block_traces)
 	}
