@@ -71,17 +71,10 @@ fn migrate_1_to_2<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> sp_b
 /// Migration from version2 to version3:
 /// - The format of the stored Justification changed to support multiple Justifications.
 fn migrate_2_to_3<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> sp_blockchain::Result<()> {
-	println!("JON: migrate_jon()");
-
 	let db_path = db_path.to_str()
 		.ok_or_else(|| sp_blockchain::Error::Backend("Invalid database path".into()))?;
 	let db_cfg = DatabaseConfig::with_columns(V2_NUM_COLUMNS);
 	let db = Database::open(&db_cfg, db_path).map_err(db_err)?;
-
-	println!("{}", &db_path);
-	dbg!(&db.num_columns());
-	dbg!(&db.num_keys(columns::JUSTIFICATION));
-	dbg!(&db.get_statistics());
 
 	// Get all the keys we need to update
 	let keys: Vec<_> = db.iter(columns::JUSTIFICATION).map(|entry| entry.0).collect();
