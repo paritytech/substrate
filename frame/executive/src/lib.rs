@@ -205,6 +205,40 @@ where
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
 {
+	/// Execute all `OnRuntimeUpgrade` of this runtime, and return the aggregate weight.
+	pub fn do_on_runtime_upgrade() -> frame_support::weights::Weight {
+		let mut weight = 0;
+		weight = weight.saturating_add(
+			<frame_system::Module::<System> as OnRuntimeUpgrade>::on_runtime_upgrade()
+		);
+		weight = weight.saturating_add(COnRuntimeUpgrade::on_runtime_upgrade());
+		weight = weight.saturating_add(<AllModules as OnRuntimeUpgrade>::on_runtime_upgrade());
+
+		weight
+	}
+
+	/// Execute all `OnRuntimeUpgrade` of this runtime, including the pre and post migration checks.
+	///
+	/// This should only be used for testing.
+	#[cfg(feature = "std")]
+	pub fn dry_run_runime_upgrade() -> frame_support::weights::Weight {
+		<
+			(frame_system::Module::<System>, COnRuntimeUpgrade, AllModules)
+			as
+			OnRuntimeUpgrade
+		>::pre_migration().expect("pre-migration hook failed.");
+
+		let weight = Self::do_on_runtime_upgrade();
+
+		<
+			(frame_system::Module::<System>, COnRuntimeUpgrade, AllModules)
+			as
+			OnRuntimeUpgrade
+		>::post_migration().expect("post-migration hook failed.");
+
+		weight
+	}
+
 	/// Start the execution of a particular block.
 	pub fn initialize_block(header: &System::Header) {
 		sp_io::init_tracing();
@@ -234,10 +268,7 @@ where
 	) {
 		let mut weight = 0;
 		if Self::runtime_upgraded() {
-			// System is not part of `AllModules`, so we need to call this manually.
-			weight = weight.saturating_add(<frame_system::Module::<System> as OnRuntimeUpgrade>::on_runtime_upgrade());
-			weight = weight.saturating_add(COnRuntimeUpgrade::on_runtime_upgrade());
-			weight = weight.saturating_add(<AllModules as OnRuntimeUpgrade>::on_runtime_upgrade());
+			weight = weight.saturating_add(Self::do_on_runtime_upgrade());
 		}
 		<frame_system::Module<System>>::initialize(
 			block_number,

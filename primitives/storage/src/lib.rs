@@ -35,6 +35,12 @@ pub struct StorageKey(
 	pub Vec<u8>,
 );
 
+impl AsRef<[u8]> for StorageKey {
+	fn as_ref(&self) -> &[u8] {
+		self.0.as_ref()
+	}
+}
+
 /// Storage key with read/write tracking information.
 #[derive(PartialEq, Eq, RuntimeDebug, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Hash, PartialOrd, Ord))]

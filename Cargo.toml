@@ -185,6 +185,8 @@ members = [
 	"utils/fork-tree",
 	"utils/frame/benchmarking-cli",
 	"utils/frame/frame-utilities-cli",
+	"utils/frame/runtime-upgrade-dryrun/remote-externalities",
+	"utils/frame/runtime-upgrade-dryrun/cli",
 	"utils/frame/rpc/support",
 	"utils/frame/rpc/system",
 	"utils/prometheus",

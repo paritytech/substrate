@@ -1511,6 +1511,20 @@ impl OnRuntimeUpgrade for Tuple {
 		for_tuples!( #( weight = weight.saturating_add(Tuple::on_runtime_upgrade()); )* );
 		weight
 	}
+
+	#[cfg(feature = "std")]
+	fn pre_migration() -> Result<(), &'static str> {
+		let mut result = Ok(());
+		for_tuples!( #( result = result.and(Tuple::pre_migration()); )* );
+		result
+	}
+
+	#[cfg(feature = "std")]
+	fn post_migration() -> Result<(), &'static str> {
+		let mut result = Ok(());
+		for_tuples!( #( result = result.and(Tuple::post_migration()); )* );
+		result
+	}
 }
 
 /// Off-chain computation trait.

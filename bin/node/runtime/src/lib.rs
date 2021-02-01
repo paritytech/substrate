@@ -1079,6 +1079,14 @@ pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Call, SignedExt
 /// Executive: handles dispatch to the various modules.
 pub type Executive = frame_executive::Executive<Runtime, Block, frame_system::ChainContext<Runtime>, Runtime, AllModules>;
 
+sp_api::decl_runtime_apis! {
+	/// Runtime api for benchmarking a FRAME runtime.
+	pub trait DryRunRuntimeUpgrade {
+		/// Dispatch the given benchmark.
+		fn dry_run_runime_upgrade() -> Weight;
+	}
+}
+
 impl_runtime_apis! {
 	impl sp_api::Core<Block> for Runtime {
 		fn version() -> RuntimeVersion {
@@ -1285,15 +1293,22 @@ impl_runtime_apis! {
 		}
 	}
 
+	#[cfg(feature = "std")]
+	impl crate::DryRunRuntimeUpgrade<Block> for Runtime {
+		fn dry_run_runime_upgrade() -> Weight {
+			Executive::dry_run_runime_upgrade()
+		}
+	}
+
 	#[cfg(feature = "runtime-benchmarks")]
 	impl frame_benchmarking::Benchmark<Block> for Runtime {
 		fn dispatch_benchmark(
 			config: frame_benchmarking::BenchmarkConfig
 		) -> Result<Vec<frame_benchmarking::BenchmarkBatch>, sp_runtime::RuntimeString> {
 			use frame_benchmarking::{Benchmarking, BenchmarkBatch, add_benchmark, TrackedStorageKey};
-			// Trying to add benchmarks directly to the Session Pallet caused cyclic dependency issues.
-			// To get around that, we separated the Session benchmarks into its own crate, which is why
-			// we need these two lines below.
+			// Trying to add benchmarks directly to the Session Pallet caused cyclic dependency
+			// issues. To get around that, we separated the Session benchmarks into its own crate,
+			// which is why we need these two lines below.
 			use pallet_session_benchmarking::Module as SessionBench;
 			use pallet_offences_benchmarking::Module as OffencesBench;
 			use frame_system_benchmarking::Module as SystemBench;
