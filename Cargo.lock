@@ -8610,6 +8610,7 @@ dependencies = [
  "sp-panic-handler",
  "sp-runtime",
  "sp-std",
+ "sp-tracing",
  "sp-trie",
  "thiserror",
  "trie-db",

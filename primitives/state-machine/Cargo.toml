@@ -29,6 +29,7 @@ rand = { version = "0.7.2", optional = true }
 sp-externalities = { version = "0.8.0", path = "../externalities", default-features = false }
 smallvec = "1.4.1"
 sp-std = { version = "2.0.0", default-features = false, path = "../std" }
+sp-tracing = { version = "2.0.0", default-features = false, path = "../tracing" }
 
 [dev-dependencies]
 hex-literal = "0.3.1"
