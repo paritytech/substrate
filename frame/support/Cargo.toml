@@ -25,7 +25,7 @@ sp-core = { version = "2.0.0", default-features = false, path = "../../primitive
 sp-arithmetic = { version = "2.0.0", default-features = false, path = "../../primitives/arithmetic" }
 sp-inherents = { version = "2.0.0", default-features = false, path = "../../primitives/inherents" }
 frame-support-procedural = { version = "2.0.1", default-features = false, path = "./procedural" }
-paste = "0.1.6"
+paste = "1.0"
 once_cell = { version = "1", default-features = false, optional = true }
 sp-state-machine = { version = "0.8.0", optional = true, path = "../../primitives/state-machine" }
 bitflags = "1.2"
