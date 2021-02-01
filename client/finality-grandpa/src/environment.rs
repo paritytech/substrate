@@ -35,7 +35,7 @@ use finality_grandpa::{
 	voter, voter_set::VoterSet,
 };
 use sp_blockchain::HeaderMetadata;
-use sp_runtime::generic::BlockId;
+use sp_runtime::{Justifications, generic::BlockId};
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, Zero,
 };
@@ -1289,9 +1289,10 @@ where
 
 		// ideally some handle to a synchronization oracle would be used
 		// to avoid unconditionally notifying.
-		let justification = justification.map(|j| (GRANDPA_ENGINE_ID, j.clone()));
+		let justifications = justification
+			.map(|j| Justifications::from((GRANDPA_ENGINE_ID, j.clone())));
 		client
-			.apply_finality(import_op, BlockId::Hash(hash), justification, true)
+			.apply_finality(import_op, BlockId::Hash(hash), justifications, true)
 			.map_err(|e| {
 				warn!(target: "afg", "Error applying finality to block {:?}: {:?}", (hash, number), e);
 				e

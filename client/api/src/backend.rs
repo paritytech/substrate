@@ -227,7 +227,7 @@ pub trait Finalizer<Block: BlockT, B: Backend<Block>> {
 		&self,
 		operation: &mut ClientImportOperation<Block, B>,
 		id: BlockId<Block>,
-		justification: Option<Justification>,
+		justifications: Option<Justifications>,
 		notify: bool,
 	) -> sp_blockchain::Result<()>;
 
@@ -247,7 +247,7 @@ pub trait Finalizer<Block: BlockT, B: Backend<Block>> {
 	fn finalize_block(
 		&self,
 		id: BlockId<Block>,
-		justification: Option<Justification>,
+		justifications: Option<Justifications>,
 		notify: bool,
 	) -> sp_blockchain::Result<()>;
 }

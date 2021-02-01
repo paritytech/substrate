@@ -62,7 +62,7 @@ use sp_core::H256;
 use sc_network::config::ProtocolConfig;
 use sp_runtime::generic::{BlockId, OpaqueDigestItemId};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use sp_runtime::{Justification, Justifications};
+use sp_runtime::Justifications;
 use substrate_test_runtime_client::{self, AccountKeyring};
 use sc_service::client::Client;
 pub use sc_network::config::EmptyTransactionPool;
@@ -207,12 +207,12 @@ impl PeersClient {
 	pub fn finalize_block(
 		&self,
 		id: BlockId<Block>,
-		justification: Option<Justification>,
+		justifications: Option<Justifications>,
 		notify: bool
 	) -> ClientResult<()> {
 		match *self {
-			PeersClient::Full(ref client, ref _backend) => client.finalize_block(id, justification, notify),
-			PeersClient::Light(ref client, ref _backend) => client.finalize_block(id, justification, notify),
+			PeersClient::Full(ref client, ref _backend) => client.finalize_block(id, justifications, notify),
+			PeersClient::Light(ref client, ref _backend) => client.finalize_block(id, justifications, notify),
 		}
 	}
 }
@@ -1021,11 +1021,9 @@ impl JustificationImport<Block> for ForceFinalized {
 		&mut self,
 		hash: H256,
 		_number: NumberFor<Block>,
-		justification: Justifications,
+		justifications: Justifications,
 	) -> Result<(), Self::Error> {
-		// WIP(JON): Just finalize with the first Justification. TODO is to append the other ones as well
-		let justification = justification.0.first().cloned();
-		self.0.finalize_block(BlockId::Hash(hash), justification, true)
+		self.0.finalize_block(BlockId::Hash(hash), Some(justifications), true)
 			.map_err(|_| ConsensusError::InvalidJustification.into())
 	}
 }

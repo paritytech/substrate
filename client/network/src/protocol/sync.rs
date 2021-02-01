@@ -2365,7 +2365,7 @@ mod test {
 		);
 
 		let finalized_block = blocks[MAX_BLOCKS_TO_LOOK_BACKWARDS as usize * 2 - 1].clone();
-		let just = (ID, Vec::new());
+		let just = Justifications::from((ID, Vec::new()));
 		client.finalize_block(BlockId::Hash(finalized_block.hash()), Some(just)).unwrap();
 		sync.update_chain_info(&info.best_hash, info.best_number);
 

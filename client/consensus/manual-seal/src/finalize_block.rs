@@ -20,7 +20,7 @@
 
 use crate::rpc;
 use sp_runtime::{
-	Justification,
+	Justification, Justifications,
 	traits::Block as BlockT,
 	generic::BlockId,
 };
@@ -58,7 +58,9 @@ pub async fn finalize_block<B, F, CB>(params: FinalizeBlockParams<B, F, CB>)
 		..
 	} = params;
 
-	match finalizer.finalize_block(BlockId::Hash(hash), justification, true) {
+	let justifications = justification.map(Justifications::from);
+
+	match finalizer.finalize_block(BlockId::Hash(hash), justifications, true) {
 		Err(e) => {
 			log::warn!("Failed to finalize block {:?}", e);
 			rpc::send_result(&mut sender, Err(e.into()))
