@@ -173,7 +173,7 @@ pub struct Bounty<AccountId, Balance, BlockNumber> {
 	/// The status of this bounty.
 	status: BountyStatus<AccountId, BlockNumber>,
 	/// Subbounties counter
-	subbountycount: BountyIndex,
+	subbounty_count: BountyIndex,
 	/// Sorted list of active Subbounties
 	activesubbounty: Vec<BountyIndex>,
 }
