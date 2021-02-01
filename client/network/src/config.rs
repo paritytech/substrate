@@ -111,6 +111,14 @@ pub struct Params<B: BlockT, H: ExHashT> {
 	/// [`block_request_handler::BlockRequestHandler::new`] allowing both outgoing and incoming
 	/// requests.
 	pub block_request_protocol_config: RequestResponseConfig,
+
+	/// Request response configuration for the light client request protocol.
+	///
+	/// Can be constructed either via [`light_client_requests::generate_protocol_config`] allowing
+	/// outgoing but not incoming requests, or constructed via
+	/// [`light_client_requests::handler::LightClientRequestHandler::new`] allowing both outgoing
+	/// and incoming requests.
+	pub light_client_request_protocol_config: RequestResponseConfig,
 }
 
 /// Role of the local node.
