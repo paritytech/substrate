@@ -772,7 +772,7 @@ fn deduct_blocks() {
 					.occupied_storage()
 					.into();
 
-			// The instantation deducted the rent for one block immediatly
+			// The instantiation deducted the rent for one block immediately
 			let rent0 = <Test as Config>::RentFraction::get()
 				// (base_deposit(8) + bytes in storage(4) + size of code) * byte_price
 				// + 1 storage item (10_000) - free_balance
@@ -1134,7 +1134,7 @@ fn default_rent_allowance_on_instantiate() {
 				.occupied_storage()
 				.into();
 
-			// The instantation deducted the rent for one block immediatly
+			// The instantiation deducted the rent for one block immediately
 			let first_rent = <Test as Config>::RentFraction::get()
 				// (base_deposit(8) + code_len) * byte_price - free_balance
 				.mul_ceil((8 + code_len) * 10_000 - 30_000)
@@ -2559,7 +2559,7 @@ fn deletion_queue_full() {
 fn not_deployed_if_endowment_too_low_for_first_rent() {
 	let (wasm, code_hash) = compile_module::<Test>("set_rent").unwrap();
 
-	// The instantation deducted the rent for one block immediatly
+	// The instantiation deducted the rent for one block immediately
 	let first_rent = <Test as Config>::RentFraction::get()
 		// base_deposit + deploy_set_storage (4 bytes in 1 item) - free_balance
 		.mul_ceil(80_000u32 + 40_000 + 10_000 - 30_000)
@@ -2604,7 +2604,7 @@ fn surcharge_reward_is_capped() {
 		let balance = Balances::free_balance(&ALICE);
 		let reward = <Test as Config>::SurchargeReward::get();
 
-		// some rent should have payed due to instantation
+		// some rent should have payed due to instantiation
 		assert_ne!(contract.rent_payed, 0);
 
 		// the reward should be parameterized sufficiently high to make this test useful
