@@ -69,7 +69,7 @@ features = ["identify", "kad", "mdns", "mplex", "noise", "ping", "request-respon
 [dev-dependencies]
 assert_matches = "1.3"
 libp2p = { version = "0.34.0", default-features = false }
-quickcheck = "0.9.0"
+quickcheck = "1.0.3"
 rand = "0.7.2"
 sp-keyring = { version = "2.0.0", path = "../../primitives/keyring" }
 sp-test-primitives = { version = "2.0.0", path = "../../primitives/test-primitives" }
