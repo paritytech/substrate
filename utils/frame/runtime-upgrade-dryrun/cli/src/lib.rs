@@ -17,6 +17,11 @@
 
 use std::fmt::Debug;
 use sc_service::Configuration;
+use sp_api::{ProvideRuntimeApi, BlockId};
+use sp_blockchain::{HeaderBackend, HeaderMetadata, Error as BlockChainError};
+use sp_runtime::traits::{Block as BlockT, Header as _};
+use std::sync::Arc;
+use runtime_upgrade_dryrun_api::runtime_decl_for_DryRunRuntimeUpgrade::DryRunRuntimeUpgrade;
 
 #[derive(Debug, structopt::StructOpt)]
 pub struct DruRunCmd {
@@ -25,26 +30,12 @@ pub struct DruRunCmd {
 }
 
 impl DruRunCmd {
-	pub async fn run(&self, config: Configuration) {
+	pub async fn run<B, C>(&self, client: Arc<C>) where
+		B: BlockT,
+		C: ProvideRuntimeApi<B> + HeaderBackend<B> + HeaderMetadata<B, Error=BlockChainError> + 'static,
+		C::Api: DryRunRuntimeUpgrade<B>
+	{
 		let ext = remote_externalities::Builder::default().build().await;
-		let executor = NativeExecutor::<ExecDispatch>::new(
-			wasm_method,
-			self.heap_pages,
-			2, // The runtime instances cache size.
-		);
-		let backend = state
-
-		let mut changes = Default::default();
-		let weight = sp_state_machine::StateMachine::<_, _, _, _>::new(
-			state,
-			None,
-			changes,
-			executor,
-			"DryRunRuntimeUpgrade_dryrun_runtime_upgrade",
-			vec![],
-			Extensions::default(),
-			&sp_state_machine::backend::BackendRuntimeCode::new(&state).runtime_code()?,
-			sp_core::testing::TaskExecutor::new(),
-		)
+		client.runtime_api().dry_run_runtime_upgrade();
 	}
 }
