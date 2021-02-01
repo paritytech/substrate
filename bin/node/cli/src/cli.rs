@@ -76,4 +76,7 @@ pub enum Subcommand {
 
 	/// Revert the chain to a previous state.
 	Revert(sc_cli::RevertCmd),
+
+	/// Do the dry-run
+	DryRun(runtime_upgrade_dryrun_cli::DruRunCmd),
 }

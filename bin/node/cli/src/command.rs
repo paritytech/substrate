@@ -149,5 +149,9 @@ pub fn run() -> Result<()> {
 				Ok((cmd.run(client, backend), task_manager))
 			})
 		},
+		Some(Subcommand::DryRun(_cmd)) => {
+			let runner = cli.create_runner(_cmd)?;
+			runner.sync_run(|config| cmd.run(config))
+		}
 	}
 }
