@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2015-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -149,7 +149,7 @@ pub fn encode_compact<'a, L, I>(
 	where
 		L: TrieConfiguration,
 		I: IntoIterator<Item = &'a [u8]> + 'a,
-{	
+{
 	let mut child_tries = Vec::new();
 	let partial_db = proof.into_memory_db();
 	let mut compact_proof = {
