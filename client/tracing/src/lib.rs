@@ -598,6 +598,7 @@ mod tests {
 		while spans.lock().is_empty() {
 			thread::sleep(Duration::from_millis(1));
 		}
+
 		let span2 = spans.lock().remove(0);
 		let event1 = events.lock().remove(0);
 		drop(_guard1);
