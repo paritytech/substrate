@@ -196,6 +196,25 @@ impl From<(Cow<'static, str>, RequestId)> for ProtocolRequestId {
 	}
 }
 
+/// When sending a request, what to do on a disconnected recipient.
+pub enum IfDisconnected {
+	/// Try to connect to the peer.
+    TryConnect,
+	/// Just fail if the destination is not yet connected.
+    ImmediateError,
+}
+
+/// Convenience functions for `IfDisconnectedBehaviour`.
+impl IfDisconnected {
+	/// Shall we connect to a disconnected peer?
+	pub fn should_connect(self) -> bool {
+		match self {
+			Self::TryConnect => true,
+			Self::ImmediateError => false,
+		}
+	}
+}
+
 /// Implementation of `NetworkBehaviour` that provides support for request-response protocols.
 pub struct RequestResponsesBehaviour {
 	/// The multiple sub-protocols, by name.
@@ -277,10 +296,10 @@ impl RequestResponsesBehaviour {
 		protocol_name: &str,
 		request: Vec<u8>,
 		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
-		connect: bool,
+		connect: IfDisconnected,
 	) {
 		if let Some((protocol, _)) = self.protocols.get_mut(protocol_name) {
-			if protocol.is_connected(target) || connect {
+			if protocol.is_connected(target) || connect.should_connect() {
 				let request_id = protocol.send_request(target, request);
 				let prev_req_id = self.pending_requests.insert(
 					(protocol_name.to_string().into(), request_id).into(),
@@ -950,7 +969,7 @@ mod tests {
 							protocol_name,
 							b"this is a request".to_vec(),
 							sender,
-							false,
+							IfDisconnected::ImmediateError,
 						);
 						assert!(response_receiver.is_none());
 						response_receiver = Some(receiver);
@@ -1039,7 +1058,7 @@ mod tests {
 							protocol_name,
 							b"this is a request".to_vec(),
 							sender,
-							false,
+							IfDisconnected::ImmediateError,
 						);
 						assert!(response_receiver.is_none());
 						response_receiver = Some(receiver);
@@ -1182,14 +1201,14 @@ mod tests {
 								protocol_name_1,
 								b"this is a request".to_vec(),
 								sender_1,
-								false,
+								IfDisconnected::ImmediateError,
 							);
 							swarm_1.send_request(
 								&peer_id,
 								protocol_name_2,
 								b"this is a request".to_vec(),
 								sender_2,
-								false,
+								IfDisconnected::ImmediateError,
 							);
 							assert!(response_receivers.is_none());
 							response_receivers = Some((receiver_1, receiver_2));

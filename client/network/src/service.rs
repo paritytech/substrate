@@ -98,7 +98,7 @@ use std::{
 	task::Poll,
 };
 
-pub use behaviour::{ResponseFailure, InboundFailure, RequestFailure, OutboundFailure};
+pub use behaviour::{ResponseFailure, InboundFailure, RequestFailure, OutboundFailure, IfDisconnected};
 
 mod metrics;
 mod out_events;
@@ -812,9 +812,10 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// notifications should remain the default ways of communicating information. For example, a
 	/// peer can announce something through a notification, after which the recipient can obtain
 	/// more information by performing a request.
-	/// As such, this function is meant to be called only with peers we are already connected to.
-	/// Calling this method with a `target` we are not connected to will *not* attempt to connect
-	/// to said peer.
+	/// As such, call this function with `IfDisconnected::ImmediateError` for `connect`. This way you
+	/// will get an error immediately for disconnected peers, instead of waiting a potentially very
+	/// long connection attempt, which would suggest that something is wrong anway, as you are
+	/// supposed to be connected because of the notification protocol.
 	///
 	/// No limit or throttling of concurrent outbound requests per peer and protocol are enforced.
 	/// Such restrictions, if desired, need to be enforced at the call site(s).
@@ -826,11 +827,12 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		&self,
 		target: PeerId,
 		protocol: impl Into<Cow<'static, str>>,
-		request: Vec<u8>
+		request: Vec<u8>,
+		connect: IfDisconnected,
 	) -> Result<Vec<u8>, RequestFailure> {
 		let (tx, rx) = oneshot::channel();
 
-		self.send_request(target, protocol, request, tx, false);
+		self.send_request(target, protocol, request, tx, connect);
 
 		match rx.await {
 			Ok(v) => v,
@@ -841,24 +843,22 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		}
 	}
 
-	/// Variation of `request` which can connect to peers when necessary.
+	/// Variation of `request` which takes a sender for sending responses back.
 	///
-	/// In some cases we do request data, without prior notification. For those cases this function
-	/// exists. It has no guarantees on connection staying alive, so you might still want to pass
-	/// false to the `connect` parameter and ensure liveness of connections via peer sets.
-	/// Connecting to a peer can take up to several seconds, if a peer exposes multiple
-	/// addresses, but is only reachable by some of them, for example.
+	/// Instead of blocking and waiting for a reply, this function returns immediately, sending
+	/// responses via the passed in sender. This alternative API exists to make it easier to
+	/// integrate with message passing APIs.
 	///
-	/// Apart from exposing whether or not we want to connect, in case of a disconnected peer, this
-	/// function also takes a sender for sending the response back, instead of returning the
-	/// response directly.
+	/// Keep in mind that the connected receiver might receive a `Canceled` event in case of a
+	/// closing connection, this is expected behaviour. In `request` you would get a
+	/// `RequestFailure::Network(OutboundFailure::ConnectionClosed` in that case.
 	pub fn send_request(
 		&self,
 		target: PeerId,
 		protocol: impl Into<Cow<'static, str>>,
 		request: Vec<u8>,
 		tx: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
-		connect: bool,
+		connect: IfDisconnected,
 		) {
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::Request {
 			target,
@@ -1286,8 +1286,7 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 		protocol: Cow<'static, str>,
 		request: Vec<u8>,
 		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
-		/// Connect to peer, if disconnected.
-		connect: bool,
+		connect: IfDisconnected,
 	},
 	DisconnectPeer(PeerId, Cow<'static, str>),
 	NewBestBlockImported(B::Hash, NumberFor<B>),

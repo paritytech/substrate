@@ -45,6 +45,7 @@ use std::{
 
 pub use crate::request_responses::{
 	ResponseFailure, InboundFailure, RequestFailure, OutboundFailure, RequestId,
+	IfDisconnected
 };
 
 /// General behaviour of the network. Combines all protocols together.
@@ -248,7 +249,7 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 		protocol: &str,
 		request: Vec<u8>,
 		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
-		connect: bool,
+		connect: IfDisconnected,
 	) {
 		self.request_responses.send_request(target, protocol, request, pending_response, connect)
 	}
@@ -318,7 +319,7 @@ Behaviour<B, H> {
 				}
 
 				self.request_responses.send_request(
-					&target, &self.block_request_protocol_name, buf, pending_response, false,
+					&target, &self.block_request_protocol_name, buf, pending_response, IfDisconnected::ImmediateError,
 				);
 			},
 			CustomMessageOutcome::NotificationStreamOpened { remote, protocol, roles, notifications_sink } => {
