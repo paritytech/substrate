@@ -415,7 +415,7 @@ pub enum ApiError {
 		#[source]
 		error: codec::Error,
 	},
-	#[error("Application specific error")]
+	#[error(transparent)]
 	Application(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 

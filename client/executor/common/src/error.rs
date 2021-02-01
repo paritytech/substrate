@@ -37,8 +37,8 @@ pub enum Error {
 	#[error(transparent)]
 	Wasmi(#[from] wasmi::Error),
 
-	#[error("API Error: {0}")]
-	ApiError(String),
+	#[error("Error calling api function: {0}")]
+	ApiError(Box<dyn std::error::Error + Send + Sync>),
 
 	#[error("Method not found: '{0}'")]
 	MethodNotFound(String),

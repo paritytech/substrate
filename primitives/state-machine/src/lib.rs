@@ -392,7 +392,7 @@ mod execution {
 			bool,
 		) where
 			R: Decode + Encode + PartialEq,
-			NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
+			NC: FnOnce() -> result::Result<R, Box<dyn std::error::Error + Send + Sync>> + UnwindSafe,
 		{
 			let mut cache = StorageTransactionCache::default();
 
@@ -449,7 +449,7 @@ mod execution {
 		) -> CallResult<R, Exec::Error>
 			where
 				R: Decode + Encode + PartialEq,
-				NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
+				NC: FnOnce() -> result::Result<R, Box<dyn std::error::Error + Send + Sync>> + UnwindSafe,
 				Handler: FnOnce(
 					CallResult<R, Exec::Error>,
 					CallResult<R, Exec::Error>,
@@ -485,7 +485,7 @@ mod execution {
 		) -> CallResult<R, Exec::Error>
 			where
 				R: Decode + Encode + PartialEq,
-				NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
+				NC: FnOnce() -> result::Result<R, Box<dyn std::error::Error + Send + Sync>> + UnwindSafe,
 		{
 			self.overlay.start_transaction();
 			let (result, was_native) = self.execute_aux(
@@ -522,7 +522,7 @@ mod execution {
 		) -> Result<NativeOrEncoded<R>, Box<dyn Error>>
 			where
 				R: Decode + Encode + PartialEq,
-				NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
+				NC: FnOnce() -> result::Result<R, Box<dyn std::error::Error + Send + Sync>> + UnwindSafe,
 				Handler: FnOnce(
 					CallResult<R, Exec::Error>,
 					CallResult<R, Exec::Error>,
@@ -891,7 +891,7 @@ mod tests {
 
 		fn call<
 			R: Encode + Decode + PartialEq,
-			NC: FnOnce() -> result::Result<R, String>,
+			NC: FnOnce() -> result::Result<R, Box<dyn std::error::Error + Send + Sync>> + UnwindSafe,
 		>(
 			&self,
 			ext: &mut dyn Externalities,

@@ -61,17 +61,12 @@ impl Parse for RuntimeApiImpls {
 	}
 }
 
-/// Implement the `ApiExt` trait, `ApiErrorExt` trait and the `Core` runtime api.
+/// Implement the `ApiExt` trait and the `Core` runtime api.
 fn implement_common_api_traits(
-	error_type: Option<Type>,
 	block_type: TypePath,
 	self_ty: Type,
 ) -> Result<TokenStream> {
 	let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
-
-	let error_type = error_type
-		.map(|e| quote!(#e))
-		.unwrap_or_else(|| quote!( #crate_::ApiError ) );
 
 	Ok(quote!(
 		impl #crate_::ApiExt<#block_type> for #self_ty {
@@ -87,7 +82,7 @@ fn implement_common_api_traits(
 			fn has_api<A: #crate_::RuntimeApiInfo + ?Sized>(
 				&self,
 				_: &#crate_::BlockId<#block_type>,
-			) -> std::result::Result<bool, #error_type> where Self: Sized {
+			) -> std::result::Result<bool, #crate_::ApiError> where Self: Sized {
 				Ok(true)
 			}
 
@@ -95,7 +90,7 @@ fn implement_common_api_traits(
 				&self,
 				_: &#crate_::BlockId<#block_type>,
 				pred: P,
-			) -> std::result::Result<bool, #error_type> where Self: Sized {
+			) -> std::result::Result<bool, #crate_::ApiError> where Self: Sized {
 				Ok(pred(A::VERSION))
 			}
 
@@ -130,7 +125,7 @@ fn implement_common_api_traits(
 				_: #crate_::ExecutionContext,
 				_: Option<()>,
 				_: Vec<u8>,
-			) -> std::result::Result<#crate_::NativeOrEncoded<#crate_::RuntimeVersion>, #error_type> {
+			) -> std::result::Result<#crate_::NativeOrEncoded<#crate_::RuntimeVersion>, #crate_::ApiError> {
 				unimplemented!("Not required for testing!")
 			}
 
@@ -140,7 +135,7 @@ fn implement_common_api_traits(
 				_: #crate_::ExecutionContext,
 				_: Option<#block_type>,
 				_: Vec<u8>,
-			) -> std::result::Result<#crate_::NativeOrEncoded<()>, #error_type> {
+			) -> std::result::Result<#crate_::NativeOrEncoded<()>, #crate_::ApiError> {
 				unimplemented!("Not required for testing!")
 			}
 
@@ -150,7 +145,7 @@ fn implement_common_api_traits(
 				_: #crate_::ExecutionContext,
 				_: Option<&<#block_type as #crate_::BlockT>::Header>,
 				_: Vec<u8>,
-			) -> std::result::Result<#crate_::NativeOrEncoded<()>, #error_type> {
+			) -> std::result::Result<#crate_::NativeOrEncoded<()>, #crate_::ApiError> {
 				unimplemented!("Not required for testing!")
 			}
 		}
@@ -290,7 +285,7 @@ impl<'a> Fold for FoldRuntimeApiImpl<'a> {
 
 				// Generate the correct return type.
 				input.sig.output = parse_quote!(
-					-> std::result::Result<#crate_::NativeOrEncoded<#ret_type>, Self::Error>
+					-> std::result::Result<#crate_::NativeOrEncoded<#ret_type>, #crate_::ApiError>
 				);
 			}
 
@@ -467,7 +462,7 @@ fn mock_impl_runtime_apis_impl_inner(api_impls: &[ItemImpl]) -> Result<TokenStre
 	let hidden_includes = generate_hidden_includes(HIDDEN_INCLUDES_ID);
 	let GeneratedRuntimeApiImpls { impls, error_type, block_type, self_ty } =
 		generate_runtime_api_impls(api_impls)?;
-	let api_traits = implement_common_api_traits(error_type, block_type, self_ty)?;
+	let api_traits = implement_common_api_traits(block_type, self_ty)?;
 
 	Ok(quote!(
 		#hidden_includes
