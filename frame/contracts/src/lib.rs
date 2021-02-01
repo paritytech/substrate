@@ -762,6 +762,20 @@ decl_event! {
 		/// Contract has been evicted and is now in tombstone state. \[contract\]
 		Evicted(AccountId),
 
+		/// Contract has been terminated without leaving a tombstone.
+		/// \[contract, beneficiary\]
+		///
+		/// # Params
+		///
+		/// - `contract`: The contract that was terminated.
+		/// - `beneficiary`: The account that received the contracts remaining balance.
+		///
+		/// # Note
+		///
+		/// The only way for a contract to be removed without a tombstone and emitting
+		/// this event is by calling `seal_terminate`.
+		Terminated(AccountId, AccountId),
+
 		/// Restoration of a contract has been successful.
 		/// \[restorer, dest, code_hash, rent_allowance\]
 		///
