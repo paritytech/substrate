@@ -1292,56 +1292,7 @@ pub trait RuntimeTasks {
 			runtime_spawn.join(handle)
 		}).expect("`RuntimeTasks::join`: called outside of externalities context")
 	}
-}
-
-use sp_std::boxed::Box;
-
-
-#[runtime_interface]
-pub trait Validation {
-	/// TODO
-	fn validation_code(&mut self) -> Vec<u8> {
-		use sp_externalities::ExternalitiesExt;
-		let extension = self.extension::<ValidationExt>()
-			.expect("Validation extension missing, this should only be call in a validation context.");
-		extension.validation_code()
-	}
-}
-
-#[cfg(feature = "std")]
-sp_externalities::decl_extension! {
-	///  executor extension.
-	pub struct ValidationExt(Box<dyn Validation>);
-}
-
-#[cfg(feature = "std")]
-impl ValidationExt {
-	/// New instance of task executor extension.
-	pub fn new(validation_ext: impl Validation) -> Self {
-		Self(Box::new(validation_ext))
-	}
-}
-
-/// Base methods to implement validation extension.
-pub trait Validation: Send + 'static {
-	/// Get the validation code currently running.
-	/// This can be use to check validity or to complete
-	/// proofs.
-	fn validation_code(&self) -> Vec<u8>;
-}
-
-impl Validation for &'static [u8] {
-	fn validation_code(&self) -> Vec<u8> {
-		self.to_vec()
-	}
-}
-
-#[cfg(feature = "std")]
-impl<V: Validation + Send + Sync> Validation for std::sync::Arc<V> {
-	fn validation_code(&self) -> Vec<u8> {
-		self.deref().validation_code()
-	}
-}
+ }
 
 /// Allocator used by Substrate when executing the Wasm runtime.
 #[cfg(not(feature = "std"))]
@@ -1411,7 +1362,6 @@ pub type SubstrateHostFunctions = (
 	crate::trie::HostFunctions,
 	offchain_index::HostFunctions,
 	runtime_tasks::HostFunctions,
-	validation::HostFunctions,
 );
 
 #[cfg(test)]
