@@ -101,6 +101,10 @@ pub struct Configuration {
 	/// This is a handle to a `TelemetryWorker` instance. It is used to initialize the telemetry for
 	/// a substrate node.
 	pub telemetry_handle: Option<sc_telemetry::TelemetryHandle>,
+	/// Telemetry span.
+	///
+	/// This span is entered for every background task spawned using the TaskManager.
+	pub telemetry_span: Option<sc_telemetry::TelemetrySpan>,
 	/// The default number of 64KB pages to allocate for Wasm execution
 	pub default_heap_pages: Option<u64>,
 	/// Should offchain workers be executed.
@@ -205,19 +209,6 @@ impl Configuration {
 	/// Returns the prometheus metrics registry, if available.
 	pub fn prometheus_registry(&self) -> Option<&Registry> {
 		self.prometheus_config.as_ref().map(|config| &config.registry)
-	}
-
-	/// Returns the telemetry endpoints if any and if the telemetry handle exists.
-	pub(crate) fn telemetry_endpoints(&self) -> Option<&TelemetryEndpoints> {
-		if self.telemetry_handle.is_none() {
-			return None;
-		}
-
-		match self.telemetry_endpoints.as_ref() {
-			// Don't initialise telemetry if `telemetry_endpoints` == Some([])
-			Some(endpoints) if !endpoints.is_empty() => Some(endpoints),
-			_ => None,
-		}
 	}
 
 	/// Returns the network protocol id from the chain spec, or the default.
