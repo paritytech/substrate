@@ -204,7 +204,7 @@ pub enum IfDisconnected {
     ImmediateError,
 }
 
-/// Convenience functions for `IfDisconnectedBehaviour`.
+/// Convenience functions for `IfDisconnected`.
 impl IfDisconnected {
 	/// Shall we connect to a disconnected peer?
 	pub fn should_connect(self) -> bool {
