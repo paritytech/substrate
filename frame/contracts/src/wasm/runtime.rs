@@ -1155,8 +1155,16 @@ define_env!(Env, <E: Ext>,
 	// the caller contract and restore the destination contract and set the specified `rent_allowance`.
 	// All caller's funds are transfered to the destination.
 	//
+	// The tombstone hash is derived as `hash(code_hash, storage_root_hash)`. In order to match
+	// this hash to its own hash the restorer must make its storage equal to the one of the
+	// evicted destination contract. In order to allow for additional storage items in the
+	// restoring contract a delta can be specified to this function. All keys specified as
+	// delta are disregarded when calculating the storage root hash.
+	//
 	// If there is no tombstone at the destination address, the hashes don't match or this contract
-	// instance is already present on the contract call stack, a trap is generated.
+	// instance is already present on the contract call stack, a trap is generated. Additionally,
+	// if the code hash was also evicted this function will trap. Before a restoration can be
+	// performed the code hash must be redeployed using `instantiate_with_code`.
 	//
 	// Otherwise, the destination contract is restored. This function is diverging and stops execution
 	// even on success.
@@ -1174,6 +1182,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// - Tombstone hashes do not match
 	// - Calling cantract is live i.e is already on the call stack.
+	// - The supplied code_hash does not exist on-chain.
 	seal_restore_to(
 		ctx,
 		dest_ptr: u32,
