@@ -1678,7 +1678,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		// Check if block is finalized first
 		let is_descendent_of = is_descendent_of(&self.blockchain, None);
 		let last_finalized = self.blockchain.last_finalized()?;
-		if !is_descendent_of(&hash, &last_finalized)? {
+		if hash != last_finalized && !is_descendent_of(&hash, &last_finalized)? {
 			return Err(ClientError::BadJustification(
 				"Can't append Justification to unfinalized block".into(),
 			));
