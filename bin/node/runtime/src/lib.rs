@@ -1079,14 +1079,6 @@ pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Call, SignedExt
 /// Executive: handles dispatch to the various modules.
 pub type Executive = frame_executive::Executive<Runtime, Block, frame_system::ChainContext<Runtime>, Runtime, AllModules>;
 
-sp_api::decl_runtime_apis! {
-	/// Runtime api for benchmarking a FRAME runtime.
-	pub trait DryRunRuntimeUpgrade {
-		/// Dispatch the given benchmark.
-		fn dry_run_runime_upgrade() -> Weight;
-	}
-}
-
 impl_runtime_apis! {
 	impl sp_api::Core<Block> for Runtime {
 		fn version() -> RuntimeVersion {

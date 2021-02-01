@@ -4181,6 +4181,7 @@ dependencies = [
  "pallet-utility",
  "pallet-vesting",
  "parity-scale-codec",
+ "runtime-upgrade-dryrun-cli",
  "serde",
  "sp-api",
  "sp-authority-discovery",
@@ -6563,12 +6564,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "runtime-upgrade-dryrun-api"
+version = "0.1.0"
+dependencies = [
+ "sp-api",
+]
+
+[[package]]
 name = "runtime-upgrade-dryrun-cli"
 version = "2.0.0"
 dependencies = [
  "remote-externalities",
+ "runtime-upgrade-dryrun-api",
  "sc-cli",
  "sc-service",
+ "sp-api",
+ "sp-blockchain",
+ "sp-runtime",
  "sp-state-machine",
  "structopt",
 ]
