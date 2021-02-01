@@ -760,13 +760,12 @@ decl_event! {
 		Instantiated(AccountId, AccountId),
 
 		/// Contract has been evicted and is now in tombstone state.
-		/// \[contract, tombstone\]
+		/// \[contract\]
 		///
 		/// # Params
 		///
 		/// - `contract`: `AccountId`: The account ID of the evicted contract.
-		/// - `tombstone`: `bool`: True if the evicted contract left behind a tombstone.
-		Evicted(AccountId, bool),
+		Evicted(AccountId),
 
 		/// Restoration for a contract has been successful.
 		/// \[donor, dest, code_hash, rent_allowance\]

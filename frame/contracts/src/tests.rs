@@ -1300,7 +1300,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 				EventRecord {
 					phase: Phase::Initialization,
 					event: MetaEvent::contracts(
-						RawEvent::Evicted(addr_bob.clone(), true)
+						RawEvent::Evicted(addr_bob.clone())
 					),
 					topics: vec![],
 				},
@@ -1385,7 +1385,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 						pretty_assertions::assert_eq!(System::events(), vec![
 							EventRecord {
 								phase: Phase::Initialization,
-								event: MetaEvent::contracts(RawEvent::Evicted(addr_bob, true)),
+								event: MetaEvent::contracts(RawEvent::Evicted(addr_bob)),
 								topics: vec![],
 							},
 							EventRecord {
