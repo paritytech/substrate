@@ -38,6 +38,13 @@ use sp_io::hashing::{
 use pallet_contracts_primitives::{ExecResult, ExecReturnValue, ReturnFlags, ExecError};
 
 /// Every error that can be returned to a contract when it calls any of the host functions.
+///
+/// # Note
+///
+/// This enum can be extended in the future: New codes can be added but existing codes
+/// will not be changed or removed. This means that any contract **must not** exhaustively
+/// match return codes. Instead, contracts should prepare for unknown variants and deal with
+/// those errors gracefuly in order to be forward compatible.
 #[repr(u32)]
 pub enum ReturnCode {
 	/// API call successful.
