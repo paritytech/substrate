@@ -78,8 +78,6 @@ mod tests;
 mod benchmarking;
 pub mod weights;
 
-use sp_std::if_std;
-
 use sp_std::{
 	prelude::*,
 };
@@ -155,8 +153,6 @@ pub struct SubBounty<AccountId, Balance, BlockNumber> {
 	fee: Balance,
 	/// The deposit of curator.
 	curator_deposit: Balance,
-	/// The amount held on deposit (reserved) for making this proposal.
-	bond: Balance,
 	/// The status of this bounty.
 	status: BountyStatus<AccountId, BlockNumber>,
 }
@@ -831,21 +827,6 @@ decl_module! {
 		{
 			let signer = ensure_signed(origin)?;
 
-			// TODO :: Have to recheck
-			// Governance design choice, which is more appropriate for the context ?
-			//
-			// * add_subbounty() :: right now origin must me signed
-			// & should be master curator. and state of subbounty
-			// is moved to `Approved` state.
-			//
-			// But logic can be refactored, similar to parent bounty sequence flow...
-			//
-			// * propose_subbounty() :: origin may be signed, bond deposit is
-			// applicable & state of subbonty is moved to `Proposed` state.
-			//
-			// * approve_subbounty() :: origin is signed & should be master-curator,
-			// & move the state of subounty to `Approved`.
-
 			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T>::InvalidIndex)?;
 				match bounty.status {
@@ -866,22 +847,13 @@ decl_module! {
 							T::MaxSubBountyCount::get() as u32,
 							Error::<T>::SubBountyMaxOverflow,
 						);
-						// reserve deposit for new subbounty
-						let bond = T::BountyDepositBase::get()
-							+ T::DataDepositPerByte::get() * (description.len() as u32).into();
-						let balance = T::Currency::free_balance(&signer);
-						ensure!(bond < balance, Error::<T>::InsufficientProposersBalance);
 
 						// Makesure Parent bounty have enough balance to fund Subbounty
 						let bounty_account = Self::bounty_account_id(bounty_id);
 						let balance = T::Currency::free_balance(&bounty_account);
-						if_std! {
-							println!("Bounty balance-{:#?}", balance);
-						}
 						ensure!(value <= balance, Error::<T>::InsufficientBountyBalance);
 
-						// Reserve the fund for subbounty from proposer & bounty account
-						let _ = T::Currency::reserve(&signer, bond);
+						// Reserve the fund for subbounty from bounty account
 						let _ = T::Currency::reserve(&bounty_account, value);
 
 						// Increment the subbounty tracking count
@@ -1513,15 +1485,11 @@ impl<T: Config> Module<T> {
 		value: BalanceOf<T>,
 	) -> DispatchResult {
 
-		let bond = T::BountyDepositBase::get()
-			+ T::DataDepositPerByte::get() * (description.len() as u32).into();
-
 		let subbounty = SubBounty {
 			proposer: proposer.clone(),
 			value,
 			fee: 0u32.into(),
 			curator_deposit: 0u32.into(),
-			bond,
 			status: BountyStatus::Approved,
 		};
 
@@ -1544,12 +1512,7 @@ impl<T: Config> Module<T> {
 
 			match &subbounty.status {
 				BountyStatus::Proposed |
-				BountyStatus::Approved => {
-					// Slash the proposer.
-					let value = subbounty.bond;
-					let imbalance = T::Currency::slash_reserved(&subbounty.proposer, value).0;
-					T::OnSlash::on_unbalanced(imbalance);
-				},
+				BountyStatus::Approved |
 				BountyStatus::Funded |
 				BountyStatus::CuratorProposed { .. } => {
 					// Nothing extra to do besides the removal of the bounty below.
@@ -1661,9 +1624,9 @@ impl<T: Config> pallet_treasury::SpendFunds<T> for Module<T> {
 					{
 						if let Some(subbounty) = maybe_subbounty
 						{
+							// Move the state of Subbounty to funded & trigger
+							// the event.
 							subbounty.status = BountyStatus::Funded;
-							// return the proposer deposit.
-							let _ = T::Currency::unreserve(&subbounty.proposer, subbounty.bond);
 							Self::deposit_event(RawEvent::SubBountyFunded(*bounty_id,*subbounty_id));
 							false
 						} else {
