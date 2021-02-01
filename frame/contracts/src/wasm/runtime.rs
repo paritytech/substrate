@@ -935,6 +935,16 @@ define_env!(Env, <E: Ext>,
 		Err(TrapReason::Termination)
 	},
 
+	// Stores the input passed by the caller into the supplied buffer.
+	//
+	// The value is stored to linear memory at the address pointed to by `out_ptr`.
+	// `out_len_ptr` must point to a u32 value that describes the available space at
+	// `out_ptr`. This call overwrites it with the size of the value. If the available
+	// space at `out_ptr` is less than the size of the value a trap is triggered.
+	//
+	// # Note
+	//
+	// This function can only be called once. Calling it multiple times will trigger a trap.
 	seal_input(ctx, buf_ptr: u32, buf_len_ptr: u32) => {
 		ctx.charge_gas(RuntimeToken::InputBase)?;
 		if let Some(input) = ctx.input_data.take() {
