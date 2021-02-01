@@ -671,7 +671,7 @@ where
 	fn deposit_event(&mut self, topics: Vec<T::Hash>, data: Vec<u8>) {
 		deposit_event::<Self::T>(
 			topics,
-			RawEvent::ContractExecution(self.ctx.self_account.clone(), data)
+			RawEvent::ContractEmitted(self.ctx.self_account.clone(), data)
 		);
 	}
 

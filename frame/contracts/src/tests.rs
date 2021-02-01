@@ -512,7 +512,7 @@ fn instantiate_and_call_and_deposit_event() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: MetaEvent::contracts(
-						RawEvent::ContractExecution(addr.clone(), vec![1, 2, 3, 4])
+						RawEvent::ContractEmitted(addr.clone(), vec![1, 2, 3, 4])
 					),
 					topics: vec![],
 				},
