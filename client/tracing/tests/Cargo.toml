@@ -13,8 +13,4 @@ ansi_term = "0.12.1"
 log = { version = "0.4.14" }
 regex = "1.4.3"
 tracing = "0.1.22"
-tracing-core = "0.1.17"
-tracing-log = "0.1.1"
-tracing-subscriber = "0.2.15"
-sp-tracing = { version = "2.0.0", path = "../../../primitives/tracing" }
 sc-tracing = { version = "2.0.1", path = "../" }

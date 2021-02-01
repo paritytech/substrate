@@ -9639,11 +9639,7 @@ dependencies = [
  "log",
  "regex",
  "sc-tracing",
- "sp-tracing",
  "tracing",
- "tracing-core",
- "tracing-log",
- "tracing-subscriber",
 ]
 
 [[package]]
