@@ -23,6 +23,7 @@ mod error;
 mod node_header;
 mod node_codec;
 mod storage_proof;
+mod trie_codec;
 mod trie_stream;
 
 use sp_std::{boxed::Box, marker::PhantomData, vec::Vec, borrow::Borrow};
@@ -39,12 +40,16 @@ pub use storage_proof::StorageProof;
 /// Various re-exports from the `trie-db` crate.
 pub use trie_db::{
 	Trie, TrieMut, DBValue, Recorder, CError, Query, TrieLayout, TrieConfiguration, nibble_ops, TrieDBIterator,
+	LazyFetcher,
 };
 /// Various re-exports from the `memory-db` crate.
 pub use memory_db::KeyFunction;
 pub use memory_db::prefixed_key;
 /// Various re-exports from the `hash-db` crate.
 pub use hash_db::{HashDB as HashDBT, EMPTY_PREFIX};
+/// Trie codec reexport, mainly child trie support
+/// for trie compact proof.
+pub use trie_codec::{decode_compact};
 
 #[derive(Default)]
 /// substrate trie layout
