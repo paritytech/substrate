@@ -36,7 +36,7 @@ pub use error::Error;
 pub use trie_stream::TrieStream;
 /// The Substrate format implementation of `NodeCodec`.
 pub use node_codec::NodeCodec;
-pub use storage_proof::StorageProof;
+pub use storage_proof::{StorageProof, CompactProof};
 /// Various re-exports from the `trie-db` crate.
 pub use trie_db::{
 	Trie, TrieMut, DBValue, Recorder, CError, Query, TrieLayout, TrieConfiguration, nibble_ops, TrieDBIterator,
@@ -49,7 +49,7 @@ pub use memory_db::prefixed_key;
 pub use hash_db::{HashDB as HashDBT, EMPTY_PREFIX};
 /// Trie codec reexport, mainly child trie support
 /// for trie compact proof.
-pub use trie_codec::{decode_compact};
+pub use trie_codec::{decode_compact, encode_compact};
 
 #[derive(Default)]
 /// substrate trie layout

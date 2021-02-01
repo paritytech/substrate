@@ -31,6 +31,12 @@ pub struct StorageProof {
 	trie_nodes: Vec<Vec<u8>>,
 }
 
+/// Storage proof in compact form.
+#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+pub struct CompactProof {
+	pub encoded_nodes: Vec<Vec<u8>>,
+}
+
 impl StorageProof {
 	/// Constructs a storage proof from a subset of encoded trie nodes in a storage backend.
 	pub fn new(trie_nodes: Vec<Vec<u8>>) -> Self {
@@ -74,6 +80,13 @@ impl StorageProof {
 			.collect();
 
 		Self { trie_nodes }
+	}
+}
+
+impl CompactProof {
+	/// Return an iterator on the compact encoded nodes.
+	pub fn iter_compact_encoded_nodes(&self) -> impl Iterator<Item = &[u8]> {
+		self.encoded_nodes.iter().map(Vec::as_slice)
 	}
 }
 

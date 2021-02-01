@@ -21,7 +21,9 @@
 //! it to substrate specific layout and child trie system.
 
 use crate::{EMPTY_PREFIX, HashDBT, LazyFetcher,
-	TrieHash, TrieError, TrieConfiguration};
+	TrieHash, TrieError, TrieConfiguration, CompactProof, StorageProof};
+use sp_std::boxed::Box;
+use sp_std::vec::Vec;
 
 type VerifyError<L> = crate::VerifyError<TrieHash<L>, Box<TrieError<L>>>;
 
@@ -103,7 +105,7 @@ pub fn decode_compact<'a, L, DB, I, F, K>(
 					// require access to data in the proof.
 					Some(Err(error)) => match *error {
 						trie_db::TrieError::IncompleteDatabase(..) => (),
-						e => panic!("{:?}", e),
+						e => return Err(VerifyError::<L>::DecodeError(Box::new(e))),
 					},
 					_ => break,
 				}
@@ -137,4 +139,67 @@ pub fn decode_compact<'a, L, DB, I, F, K>(
 	}
 
 	Ok(top_root)
+}
+
+pub fn encode_compact<'a, L, I>(
+	proof: StorageProof,
+	root: TrieHash<L>,
+	to_skip: I,
+) -> Result<CompactProof, Box<TrieError<L>>>
+	where
+		L: TrieConfiguration,
+		I: IntoIterator<Item = &'a [u8]> + 'a,
+{	
+	let mut child_tries = Vec::new();
+	let partial_db = proof.into_memory_db();
+	let mut compact_proof = {
+		let trie = crate::TrieDB::<L>::new(&partial_db, &root)?;
+
+		use trie_db::Trie;
+		let mut iter = trie.iter()?;
+
+		let childtrie_roots = sp_core::storage::well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX;
+		if iter.seek(childtrie_roots).is_ok() {
+			loop {
+				match iter.next() {
+					Some(Ok((key, value))) if key.starts_with(childtrie_roots) => {
+						let mut root = TrieHash::<L>::default();
+						if root.as_mut().len() != value.as_slice().len() {
+							return Err(Box::new(trie_db::TrieError::InvalidStateRoot(Default::default())));
+						}
+						root.as_mut().copy_from_slice(value.as_ref());
+						child_tries.push(root);
+					},
+					// allow incomplete database error: we only
+					// require access to data in the proof.
+					Some(Err(error)) => match *error {
+						trie_db::TrieError::IncompleteDatabase(..) => (),
+						e => return Err(Box::new(e)),
+					},
+					_ => break,
+				}
+			}
+		}
+
+		trie_db::encode_compact_skip_conditional_with_key::<L, _>(
+			&trie,
+			trie_db::compact_conditions::skip_given_ordered_keys(to_skip),
+			false, // We do not escape empty value.
+		)?
+	};
+
+	for child_root in child_tries {
+		if !HashDBT::<L::Hash, _>::contains(&partial_db, &child_root, EMPTY_PREFIX) {
+			// child proof are allowed to be missing (unused root can be included
+			// due to trie structure modification).
+			continue;
+		}
+
+		let trie = crate::TrieDB::<L>::new(&partial_db, &child_root)?;
+		let child_proof = trie_db::encode_compact::<L>(&trie)?;
+
+		compact_proof.extend(child_proof);
+	}
+
+	Ok(CompactProof { encoded_nodes: compact_proof })
 }
