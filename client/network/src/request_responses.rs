@@ -288,8 +288,9 @@ impl RequestResponsesBehaviour {
 
 	/// Initiates sending a request.
 	///
-	/// An error is returned if we are not connected to the target peer and `connect` is false. An
-	/// error is also returned if the protocol doesn't match one that has been registered.
+	/// If there is no established connection to the target peer, the behavior is determined by the choice of `connect`.
+	///
+	/// An error is returned if the protocol doesn't match one that has been registered.
 	pub fn send_request(
 		&mut self,
 		target: &PeerId,
