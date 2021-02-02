@@ -756,39 +756,57 @@ decl_event! {
 		<T as frame_system::Config>::AccountId,
 		<T as frame_system::Config>::Hash
 	{
-		/// Contract deployed by address at the specified address. \[owner, contract\]
+		/// Contract deployed by address at the specified address. \[deployer, contract\]
 		Instantiated(AccountId, AccountId),
 
-		/// Contract has been evicted and is now in tombstone state.
-		/// \[contract, tombstone\]
-		///
-		/// # Params
-		///
-		/// - `contract`: `AccountId`: The account ID of the evicted contract.
-		/// - `tombstone`: `bool`: True if the evicted contract left behind a tombstone.
-		Evicted(AccountId, bool),
+		/// Contract has been evicted and is now in tombstone state. \[contract\]
+		Evicted(AccountId),
 
-		/// Restoration for a contract has been successful.
-		/// \[donor, dest, code_hash, rent_allowance\]
+		/// Contract has been terminated without leaving a tombstone.
+		/// \[contract, beneficiary\]
 		///
 		/// # Params
 		///
-		/// - `donor`: `AccountId`: Account ID of the restoring contract
-		/// - `dest`: `AccountId`: Account ID of the restored contract
-		/// - `code_hash`: `Hash`: Code hash of the restored contract
-		/// - `rent_allowance: `Balance`: Rent allowance of the restored contract
+		/// - `contract`: The contract that was terminated.
+		/// - `beneficiary`: The account that received the contracts remaining balance.
+		///
+		/// # Note
+		///
+		/// The only way for a contract to be removed without a tombstone and emitting
+		/// this event is by calling `seal_terminate`.
+		Terminated(AccountId, AccountId),
+
+		/// Restoration of a contract has been successful.
+		/// \[restorer, dest, code_hash, rent_allowance\]
+		///
+		/// # Params
+		///
+		/// - `restorer`: Account ID of the restoring contract.
+		/// - `dest`: Account ID of the restored contract.
+		/// - `code_hash`: Code hash of the restored contract.
+		/// - `rent_allowance`: Rent allowance of the restored contract.
 		Restored(AccountId, AccountId, Hash, Balance),
 
-		/// Code with the specified hash has been stored.
-		/// \[code_hash\]
+		/// Code with the specified hash has been stored. \[code_hash\]
 		CodeStored(Hash),
 
-		/// Triggered when the current \[schedule\] is updated.
+		/// Triggered when the current schedule is updated.
+		/// \[version\]
+		///
+		/// # Params
+		///
+		/// - `version`: The version of the newly set schedule.
 		ScheduleUpdated(u32),
 
-		/// An event deposited upon execution of a contract from the account.
-		/// \[account, data\]
-		ContractExecution(AccountId, Vec<u8>),
+		/// A custom event emitted by the contract.
+		/// \[contract, data\]
+		///
+		/// # Params
+		///
+		/// - `contract`: The contract that emitted the event.
+		/// - `data`: Data supplied by the contract. Metadata generated during contract
+		///           compilation is needed to decode it.
+		ContractEmitted(AccountId, Vec<u8>),
 	}
 }
 
