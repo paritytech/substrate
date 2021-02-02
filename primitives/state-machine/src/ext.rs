@@ -33,7 +33,7 @@ use sp_externalities::{
 use codec::{Decode, Encode, EncodeAppend};
 
 use sp_std::{fmt, any::{Any, TypeId}, vec::Vec, vec, boxed::Box};
-use crate::{warn, trace, log_error};
+use crate::{warn, log_error};
 #[cfg(feature = "std")]
 use crate::changes_trie::State as ChangesTrieState;
 use crate::StorageTransactionCache;
