@@ -36,10 +36,14 @@ pub struct NetworkParams {
 	#[structopt(long = "reserved-nodes", value_name = "ADDR")]
 	pub reserved_nodes: Vec<MultiaddrWithPeerId>,
 
-	/// Whether to only allow connections to/from reserved nodes.
+	/// Whether to only synchronize the chain with reserved nodes.
 	///
-	/// If you are a validator your node might still connect to other validator
-	/// nodes regardless of whether they are defined as reserved nodes.
+	/// Also disables automatic peer discovery.
+	///
+	/// TCP connections might still be established with non-reserved nodes.
+	/// In particular, if you are a validator your node might still connect to other
+	/// validator nodes and collator nodes regardless of whether they are defined as
+	/// reserved nodes.
 	#[structopt(long = "reserved-only")]
 	pub reserved_only: bool,
 
@@ -173,6 +177,7 @@ impl NetworkParams {
 				wasm_external_transport: None,
 			},
 			max_parallel_downloads: self.max_parallel_downloads,
+			enable_dht_random_walk: !self.reserved_only,
 			allow_non_globals_in_dht,
 			kademlia_disjoint_query_paths: self.kademlia_disjoint_query_paths,
 			yamux_window_size: None,
