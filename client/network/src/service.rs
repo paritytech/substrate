@@ -814,7 +814,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// more information by performing a request.
 	/// As such, call this function with `IfDisconnected::ImmediateError` for `connect`. This way you
 	/// will get an error immediately for disconnected peers, instead of waiting for a potentially very
-	/// long connection attempt, which would suggest that something is wrong anway, as you are
+	/// long connection attempt, which would suggest that something is wrong anyway, as you are
 	/// supposed to be connected because of the notification protocol.
 	///
 	/// No limit or throttling of concurrent outbound requests per peer and protocol are enforced.
