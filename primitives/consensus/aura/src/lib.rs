@@ -61,6 +61,8 @@ pub mod ed25519 {
 	pub type AuthorityId = app_ed25519::Public;
 }
 
+pub use sp_consensus_slots::Slot;
+
 /// The `ConsensusEngineId` of AuRa.
 pub const AURA_ENGINE_ID: ConsensusEngineId = [b'a', b'u', b'r', b'a'];
 

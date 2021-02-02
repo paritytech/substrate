@@ -25,7 +25,7 @@ use sp_runtime::{
 	traits::IdentityLookup,
 	testing::{Header, UintAuthorityId},
 };
-use frame_support::parameter_types;
+use frame_support::{parameter_types, traits::GenesisBuild};
 use sp_io;
 use sp_core::H256;
 
