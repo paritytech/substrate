@@ -19,13 +19,11 @@
 
 #![cfg(test)]
 
+use crate as tips;
 use super::*;
 use std::cell::RefCell;
-use frame_support::{
-	assert_noop, assert_ok, impl_outer_origin, parameter_types, weights::Weight,
-	impl_outer_event, traits::{Contains}
-};
-use sp_runtime::{Permill};
+use frame_support::{assert_noop, assert_ok, parameter_types, weights::Weight, traits::Contains};
+use sp_runtime::Permill;
 use sp_core::H256;
 use sp_runtime::{
 	Perbill, ModuleId,
@@ -33,26 +31,22 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup, BadOrigin},
 };
 
-impl_outer_origin! {
-	pub enum Origin for Test where system = frame_system {}
-}
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
 
-mod tips {
-	// Re-export needed for `impl_outer_event!`.
-	pub use crate::*;
-}
-
-impl_outer_event! {
-	pub enum Event for Test {
-		system<T>,
-		pallet_balances<T>,
-		pallet_treasury<T>,
-		tips<T>,
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
+		Treasury: pallet_treasury::{Module, Call, Storage, Config, Event<T>},
+		TipsModTestInst: tips::{Module, Call, Storage, Event<T>},
 	}
-}
+);
 
-#[derive(Clone, Eq, PartialEq)]
-pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const MaximumBlockWeight: Weight = 1024;
@@ -67,7 +61,7 @@ impl frame_system::Config for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = ();
+	type Call = Call;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u128; // u64 is not enough to hold bytes used to generate bounty account
@@ -76,7 +70,7 @@ impl frame_system::Config for Test {
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
-	type PalletInfo = ();
+	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
@@ -159,10 +153,6 @@ impl Config for Test {
 	type Event = Event;
 	type WeightInfo = ();
 }
-type System = frame_system::Module<Test>;
-type Balances = pallet_balances::Module<Test>;
-type Treasury = pallet_treasury::Module<Test>;
-type TipsModTestInst = Module<Test>;
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();

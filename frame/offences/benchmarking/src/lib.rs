@@ -31,7 +31,7 @@ use frame_support::traits::{Currency, OnInitialize};
 use sp_runtime::{Perbill, traits::{Convert, StaticLookup, Saturating, UniqueSaturatedInto}};
 use sp_staking::offence::{ReportOffence, Offence, OffenceDetails};
 
-use pallet_balances::{Config as BalancesConfig};
+use pallet_balances::Config as BalancesConfig;
 use pallet_babe::BabeEquivocationOffence;
 use pallet_grandpa::{GrandpaEquivocationOffence, GrandpaTimeSlot};
 use pallet_im_online::{Config as ImOnlineConfig, Module as ImOnline, UnresponsivenessOffence};
@@ -331,7 +331,7 @@ benchmarks! {
 		let keys =  ImOnline::<T>::keys();
 
 		let offence = BabeEquivocationOffence {
-			slot: 0,
+			slot: 0u64.into(),
 			session_index: 0,
 			validator_set_count: keys.len() as u32,
 			offender: T::convert(offenders.pop().unwrap()),

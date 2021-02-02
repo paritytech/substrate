@@ -38,7 +38,7 @@ use crate::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
 	},
 	on_demand_layer::AlwaysBadChecker,
-	light_client_handler,
+	light_client_requests,
 	protocol::{
 		self,
 		NotifsHandlerError,
@@ -82,6 +82,7 @@ use sp_runtime::traits::{Block as BlockT, NumberFor};
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use std::{
 	borrow::Cow,
+	cmp,
 	collections::{HashMap, HashSet},
 	convert::TryFrom as _,
 	fs,
@@ -253,11 +254,10 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				params.network_config.client_version,
 				params.network_config.node_name
 			);
-			let light_client_handler = {
-				let config = light_client_handler::Config::new(&params.protocol_id);
-				light_client_handler::LightClientHandler::new(
-					config,
-					params.chain,
+
+			let light_client_request_sender = {
+				light_client_requests::sender::LightClientRequestSender::new(
+					&params.protocol_id,
 					checker,
 					peerset_handle.clone(),
 				)
@@ -310,8 +310,13 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 						.map(|cfg| usize::try_from(cfg.max_notification_size).unwrap_or(usize::max_value()));
 
 					// A "default" max is added to cover all the other protocols: ping, identify,
-					// kademlia.
-					let default_max = 1024 * 1024;
+					// kademlia, block announces, and transactions.
+					let default_max = cmp::max(
+						1024 * 1024,
+						usize::try_from(protocol::BLOCK_ANNOUNCES_TRANSACTIONS_SUBSTREAM_SIZE)
+							.unwrap_or(usize::max_value())
+					);
+
 					iter::once(default_max)
 						.chain(requests_max).chain(responses_max).chain(notifs_max)
 						.max().expect("iterator known to always yield at least one element; qed")
@@ -333,9 +338,10 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 					params.role,
 					user_agent,
 					local_public,
-					light_client_handler,
+					light_client_request_sender,
 					discovery_config,
 					params.block_request_protocol_config,
+					params.light_client_request_protocol_config,
 					params.network_config.request_response_protocols,
 				);
 
@@ -1280,7 +1286,7 @@ pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT> {
 	/// Messages from the [`NetworkService`] that must be processed.
 	from_service: TracingUnboundedReceiver<ServiceToWorkerMsg<B, H>>,
 	/// Receiver for queries from the light client that must be processed.
-	light_client_rqs: Option<TracingUnboundedReceiver<light_client_handler::Request<B>>>,
+	light_client_rqs: Option<TracingUnboundedReceiver<light_client_requests::sender::Request<B>>>,
 	/// Senders for events that happen on the network.
 	event_streams: out_events::OutChannels,
 	/// Prometheus network metrics.
@@ -1306,10 +1312,14 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 		// Check for new incoming light client requests.
 		if let Some(light_client_rqs) = this.light_client_rqs.as_mut() {
 			while let Poll::Ready(Some(rq)) = light_client_rqs.poll_next_unpin(cx) {
-				// This can error if there are too many queued requests already.
-				if this.network_service.light_client_request(rq).is_err() {
-					log::warn!("Couldn't start light client request: too many pending requests");
+				let result = this.network_service.light_client_request(rq);
+				match result {
+					Ok(()) => {},
+					Err(light_client_requests::sender::SendRequestError::TooManyRequests) => {
+						log::warn!("Couldn't start light client request: too many pending requests");
+					}
 				}
+
 				if let Some(metrics) = this.metrics.as_ref() {
 					metrics.issued_light_requests.inc();
 				}
@@ -1602,11 +1612,11 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						let reason = match cause {
 							Some(ConnectionError::IO(_)) => "transport-error",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::B(EitherError::A(
-								PingFailure::Timeout)))))))) => "ping-timeout",
+								EitherError::B(EitherError::A(
+								PingFailure::Timeout))))))) => "ping-timeout",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::A(
-								NotifsHandlerError::SyncNotificationsClogged))))))) => "sync-notifications-clogged",
+								EitherError::A(
+								NotifsHandlerError::SyncNotificationsClogged)))))) => "sync-notifications-clogged",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(_))) => "protocol-error",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::KeepAliveTimeout)) => "keep-alive-timeout",
 							None => "actively-closed",

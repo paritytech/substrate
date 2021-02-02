@@ -15,7 +15,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 parity-wasm = "0.41.0"
-codec = { package = "parity-scale-codec", version = "1.3.6" }
+codec = { package = "parity-scale-codec", version = "2.0.0" }
 wasmi = "0.6.2"
 sp-core = { version = "2.0.0", path = "../../../primitives/core" }
 sp-wasm-interface = { version = "2.0.0", path = "../../../primitives/wasm-interface" }

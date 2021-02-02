@@ -28,13 +28,7 @@ use sp_keystore::{
 	SyncCryptoStore,
 	vrf::make_transcript as transcript_from_data,
 };
-use sp_consensus_babe::{
-	AuthorityPair,
-	SlotNumber,
-	AllowedSlots,
-	make_transcript,
-	make_transcript_data,
-};
+use sp_consensus_babe::{AuthorityPair, Slot, AllowedSlots, make_transcript, make_transcript_data};
 use sc_consensus_slots::BackoffAuthoringOnFinalizedHeadLagging;
 use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 use sp_consensus::{
@@ -87,7 +81,7 @@ struct DummyProposer {
 	factory: DummyFactory,
 	parent_hash: Hash,
 	parent_number: u64,
-	parent_slot: SlotNumber,
+	parent_slot: Slot,
 }
 
 impl Environment<TestBlock> for DummyFactory {
@@ -101,7 +95,7 @@ impl Environment<TestBlock> for DummyFactory {
 
 		let parent_slot = crate::find_pre_digest::<TestBlock>(parent_header)
 			.expect("parent header has a pre-digest")
-			.slot_number();
+			.slot();
 
 		future::ready(Ok(DummyProposer {
 			factory: self.clone(),
@@ -137,7 +131,7 @@ impl DummyProposer {
 
 		let this_slot = crate::find_pre_digest::<TestBlock>(block.header())
 			.expect("baked block has valid pre-digest")
-			.slot_number();
+			.slot();
 
 		// figure out if we should add a consensus digest, since the test runtime
 		// doesn't.
@@ -529,7 +523,7 @@ fn can_author_block() {
 
 	let mut i = 0;
 	let epoch = Epoch {
-		start_slot: 0,
+		start_slot: 0.into(),
 		authorities: vec![(public.into(), 1)],
 		randomness: [0; 32],
 		epoch_index: 1,
@@ -550,7 +544,7 @@ fn can_author_block() {
 	};
 
 	// with secondary slots enabled it should never be empty
-	match claim_slot(i, &epoch, &keystore) {
+	match claim_slot(i.into(), &epoch, &keystore) {
 		None => i += 1,
 		Some(s) => debug!(target: "babe", "Authored block {:?}", s.0),
 	}
@@ -559,7 +553,7 @@ fn can_author_block() {
 	// of times.
 	config.allowed_slots = AllowedSlots::PrimarySlots;
 	loop {
-		match claim_slot(i, &epoch, &keystore) {
+		match claim_slot(i.into(), &epoch, &keystore) {
 			None => i += 1,
 			Some(s) => {
 				debug!(target: "babe", "Authored block {:?}", s.0);
@@ -572,15 +566,15 @@ fn can_author_block() {
 // Propose and import a new BABE block on top of the given parent.
 fn propose_and_import_block<Transaction>(
 	parent: &TestHeader,
-	slot_number: Option<SlotNumber>,
+	slot: Option<Slot>,
 	proposer_factory: &mut DummyFactory,
 	block_import: &mut BoxBlockImport<TestBlock, Transaction>,
 ) -> sp_core::H256 {
 	let mut proposer = futures::executor::block_on(proposer_factory.init(parent)).unwrap();
 
-	let slot_number = slot_number.unwrap_or_else(|| {
+	let slot = slot.unwrap_or_else(|| {
 		let parent_pre_digest = find_pre_digest::<TestBlock>(parent).unwrap();
-		parent_pre_digest.slot_number() + 1
+		parent_pre_digest.slot() + 1
 	});
 
 	let pre_digest = sp_runtime::generic::Digest {
@@ -588,7 +582,7 @@ fn propose_and_import_block<Transaction>(
 			Item::babe_pre_digest(
 				PreDigest::SecondaryPlain(SecondaryPlainPreDigest {
 					authority_index: 0,
-					slot_number,
+					slot,
 				}),
 			),
 		],
@@ -602,7 +596,7 @@ fn propose_and_import_block<Transaction>(
 		descendent_query(&*proposer_factory.client),
 		&parent_hash,
 		*parent.number(),
-		slot_number,
+		slot,
 	).unwrap().unwrap();
 
 	let seal = {
@@ -660,19 +654,19 @@ fn importing_block_one_sets_genesis_epoch() {
 
 	let block_hash = propose_and_import_block(
 		&genesis_header,
-		Some(999),
+		Some(999.into()),
 		&mut proposer_factory,
 		&mut block_import,
 	);
 
-	let genesis_epoch = Epoch::genesis(&data.link.config, 999);
+	let genesis_epoch = Epoch::genesis(&data.link.config, 999.into());
 
 	let epoch_changes = data.link.epoch_changes.lock();
 	let epoch_for_second_block = epoch_changes.epoch_data_for_child_of(
 		descendent_query(&*client),
 		&block_hash,
 		1,
-		1000,
+		1000.into(),
 		|slot| Epoch::genesis(&data.link.config, slot),
 	).unwrap().unwrap();
 
@@ -809,7 +803,7 @@ fn verify_slots_are_strictly_increasing() {
 	// we should have no issue importing this block
 	let b1 = propose_and_import_block(
 		&genesis_header,
-		Some(999),
+		Some(999.into()),
 		&mut proposer_factory,
 		&mut block_import,
 	);
@@ -820,7 +814,7 @@ fn verify_slots_are_strictly_increasing() {
 	// we will panic due to the `PanickingBlockImport` defined above.
 	propose_and_import_block(
 		&b1,
-		Some(999),
+		Some(999.into()),
 		&mut proposer_factory,
 		&mut block_import,
 	);
@@ -836,7 +830,7 @@ fn babe_transcript_generation_match() {
 		.expect("Generates authority pair");
 
 	let epoch = Epoch {
-		start_slot: 0,
+		start_slot: 0.into(),
 		authorities: vec![(public.into(), 1)],
 		randomness: [0; 32],
 		epoch_index: 1,
@@ -847,8 +841,8 @@ fn babe_transcript_generation_match() {
 		},
 	};
 
-	let orig_transcript = make_transcript(&epoch.randomness.clone(), 1, epoch.epoch_index);
-	let new_transcript = make_transcript_data(&epoch.randomness, 1, epoch.epoch_index);
+	let orig_transcript = make_transcript(&epoch.randomness.clone(), 1.into(), epoch.epoch_index);
+	let new_transcript = make_transcript_data(&epoch.randomness, 1.into(), epoch.epoch_index);
 
 	let test = |t: merlin::Transcript| -> [u8; 16] {
 		let mut b = [0u8; 16];

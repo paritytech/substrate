@@ -24,8 +24,8 @@ use sc_service::{
 	GenericChainSpec, RuntimeGenesis,
 	KeepBlocks, TransactionStorageMode,
 };
-use sc_telemetry::TelemetryHandle;
-use sc_tracing::logging::GlobalLoggerBuilder;
+use sc_telemetry::{TelemetryHandle, TelemetrySpan};
+use sc_tracing::logging::LoggerBuilder;
 use wasm_bindgen::prelude::*;
 use futures::{
 	prelude::*, channel::{oneshot, mpsc}, compat::*, future::{ready, ok, select}
@@ -41,7 +41,7 @@ pub fn init_logging_and_telemetry(
 	pattern: &str,
 ) -> Result<sc_telemetry::TelemetryWorker, sc_tracing::logging::Error> {
 	let transport = ExtTransport::new(ffi::websocket_transport());
-	let mut logger = GlobalLoggerBuilder::new(pattern);
+	let mut logger = LoggerBuilder::new(pattern);
 	logger.with_transport(transport);
 	logger.init()
 }
@@ -72,6 +72,7 @@ where
 		allow_private_ipv4: true,
 		enable_mdns: false,
 	};
+	let telemetry_span = telemetry_handle.as_ref().map(|_| TelemetrySpan::new());
 
 	let config = Configuration {
 		network,
@@ -83,6 +84,7 @@ where
 		}).into(),
 		telemetry_external_transport: Some(transport),
 		telemetry_handle,
+		telemetry_span,
 		role: Role::Light,
 		database: {
 			info!("Opening Indexed DB database '{}'...", name);

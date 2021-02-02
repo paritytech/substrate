@@ -32,7 +32,7 @@ thiserror = { version = "1.0.21", optional = true }
 ambassador = "0.2.1"
 
 [dev-dependencies]
-codec = { package = "parity-scale-codec", default-features = false, version = "1.3.6" }
+codec = { package = "parity-scale-codec", default-features = false, version = "2.0.0" }
 
 [features]
 default = ["std", "abort-future"]

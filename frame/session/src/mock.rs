@@ -19,7 +19,7 @@
 
 use super::*;
 use std::cell::RefCell;
-use frame_support::{impl_outer_origin, parameter_types, BasicExternalities};
+use frame_support::{parameter_types, BasicExternalities};
 use sp_core::{crypto::key_types::DUMMY, H256};
 use sp_runtime::{
 	Perbill, impl_opaque_keys,
@@ -27,6 +27,9 @@ use sp_runtime::{
 	testing::{Header, UintAuthorityId},
 };
 use sp_staking::SessionIndex;
+use crate as pallet_session;
+#[cfg(feature = "historical")]
+use crate::historical as pallet_session_historical;
 
 impl_opaque_keys! {
 	pub struct MockSessionKeys {
@@ -65,9 +68,33 @@ impl OpaqueKeys for PreUpgradeMockSessionKeys {
 	}
 }
 
-impl_outer_origin! {
-	pub enum Origin for Test where system = frame_system {}
-}
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
+
+#[cfg(feature = "historical")]
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
+		Historical: pallet_session_historical::{Module},
+	}
+);
+
+#[cfg(not(feature = "historical"))]
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
+	}
+);
 
 thread_local! {
 	pub static VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![1, 2, 3]);
@@ -189,12 +216,9 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		// An additional identity that we use.
 		frame_system::Module::<Test>::inc_providers(&69);
 	});
-	GenesisConfig::<Test> { keys }.assimilate_storage(&mut t).unwrap();
+	pallet_session::GenesisConfig::<Test> { keys }.assimilate_storage(&mut t).unwrap();
 	sp_io::TestExternalities::new(t)
 }
-
-#[derive(Clone, Eq, PartialEq)]
-pub struct Test;
 
 parameter_types! {
 	pub const MinimumPeriod: u64 = 5;
@@ -211,16 +235,16 @@ impl frame_system::Config for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = ();
+	type Call = Call;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = ();
+	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
-	type PalletInfo = ();
+	type PalletInfo = PalletInfo;
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
@@ -249,7 +273,7 @@ impl Config for Test {
 	type ValidatorId = u64;
 	type ValidatorIdOf = ConvertInto;
 	type Keys = MockSessionKeys;
-	type Event = ();
+	type Event = Event;
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 	type NextSessionRotation = ();
 	type WeightInfo = ();
@@ -260,6 +284,3 @@ impl crate::historical::Config for Test {
 	type FullIdentification = u64;
 	type FullIdentificationOf = sp_runtime::traits::ConvertInto;
 }
-
-pub type System = frame_system::Module<Test>;
-pub type Session = Module<Test>;
