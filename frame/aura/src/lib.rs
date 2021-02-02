@@ -60,6 +60,7 @@ use sp_consensus_aura::{
 
 mod mock;
 mod tests;
+pub mod migrations;
 
 pub use pallet::*;
 
@@ -79,7 +80,22 @@ pub mod pallet {
 	pub struct Pallet<T>(sp_std::marker::PhantomData<T>);
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_initialize(_: T::BlockNumber) -> Weight {
+			if let Some(new_slot) = Self::current_slot_from_digests() {
+				let current_slot = CurrentSlot::<T>::get();
+
+				assert!(current_slot < new_slot, "Slot must increase");
+				CurrentSlot::<T>::put(new_slot);
+
+				// TODO [#3398] Generate offence report for all authorities that skipped their slots.
+
+				T::DbWeight::get().reads_writes(2, 1)
+			} else {
+				T::DbWeight::get().reads(1)
+			}
+		}
+	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {}
@@ -89,10 +105,12 @@ pub mod pallet {
 	#[pallet::getter(fn authorities)]
 	pub(super) type Authorities<T: Config> = StorageValue<_, Vec<T::AuthorityId>, ValueQuery>;
 
-	/// The last timestamp we have been notified of.
+	/// The current slot of this block.
+	///
+	/// This will be set in `on_initialize`.
 	#[pallet::storage]
-	#[pallet::getter(fn last_timestamp)]
-	pub(super) type LastTimestamp<T: Config> = StorageValue<_, T::Moment, ValueQuery>;
+	#[pallet::getter(fn current_slot)]
+	pub(super) type CurrentSlot<T: Config> = StorageValue<_, Slot, ValueQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -130,6 +148,19 @@ impl<T: Config> Pallet<T> {
 			assert!(<Authorities<T>>::get().is_empty(), "Authorities are already initialized!");
 			<Authorities<T>>::put(authorities);
 		}
+	}
+
+	/// Get the current slot from the pre-runtime digests.
+	fn current_slot_from_digests() -> Option<Slot> {
+		let digest = frame_system::Pallet::<T>::digest();
+		let pre_runtime_digests = digest.logs.iter().filter_map(|d| d.as_pre_runtime());
+		for (id, mut data) in pre_runtime_digests {
+			if id == AURA_ENGINE_ID {
+				return Slot::decode(&mut data).ok();
+			}
+		}
+
+		None
 	}
 
 	/// Determine the Aura slot-duration based on the Timestamp module configuration.
@@ -224,22 +255,13 @@ impl<T: Config> IsMember<T::AuthorityId> for Pallet<T> {
 
 impl<T: Config> OnTimestampSet<T::Moment> for Pallet<T> {
 	fn on_timestamp_set(moment: T::Moment) {
-		let last = Self::last_timestamp();
-		LastTimestamp::<T>::put(moment);
-
-		if last.is_zero() {
-			return;
-		}
-
 		let slot_duration = Self::slot_duration();
 		assert!(!slot_duration.is_zero(), "Aura slot duration cannot be zero.");
 
-		let last_slot = last / slot_duration;
-		let cur_slot = moment / slot_duration;
+		let timestamp_slot = moment / slot_duration;
+		let timestamp_slot = Slot::from(timestamp_slot.saturated_into::<u64>());
 
-		assert!(last_slot < cur_slot, "Only one block may be authored per slot.");
-
-		// TODO [#3398] Generate offence report for all authorities that skipped their slots.
+		assert!(CurrentSlot::<T>::get() == timestamp_slot, "Timestamp slot must match `CurrentSlot`");
 	}
 }
 
