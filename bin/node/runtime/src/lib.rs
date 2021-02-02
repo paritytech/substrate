@@ -1083,11 +1083,8 @@ pub type Executive = frame_executive::Executive<
 	frame_system::ChainContext<Runtime>,
 	Runtime,
 	AllModules,
-	(Upgrade),
+	(),
 >;
-
-struct Upgrade;
-impl OnRuntimeUpgrade for Upgrade {}
 
 impl_runtime_apis! {
 	impl sp_api::Core<Block> for Runtime {
@@ -1295,20 +1292,22 @@ impl_runtime_apis! {
 		}
 	}
 
-	#[cfg(feature = "std")]
-	impl crate::DryRunRuntimeUpgrade<Block> for Runtime {
-		fn dry_run_runime_upgrade(confg: &config) -> Weight {
+	// TODO: make everything feature gated.
+	impl runtime_upgrade_dryrun_api::DryRunRuntimeUpgrade<Block> for Runtime {
+		fn dry_run_runime_upgrade() -> Weight {
 			// \migration_bot pallet:staking state:polkadot
-			match config.pallet {
-				"System" => {
-					<Pallet as OnRuntimeUpgrade>::pre_migration();
-					<Pallet as OnRuntimeUpgrade>::on_runtime_upgrade();
-					<Pallet as OnRuntimeUpgrade>::post_migration();
-				},
-				"All" => {
-					Executive::dry_run_runime_upgrade()
-				}
-			}
+			// pseudo code:
+			// match config.pallet {
+			// 	"System" => {
+			// 		<Pallet as OnRuntimeUpgrade>::pre_migration();
+			// 		<Pallet as OnRuntimeUpgrade>::on_runtime_upgrade();
+			// 		<Pallet as OnRuntimeUpgrade>::post_migration();
+			// 	},
+			// 	"All" => {
+			// 		Executive::dry_run_runime_upgrade()
+			// 	}
+			// }
+			0
 		}
 	}
 

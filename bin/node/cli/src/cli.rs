@@ -47,6 +47,8 @@ pub enum Subcommand {
 	#[structopt(name = "benchmark", about = "Benchmark runtime pallets.")]
 	Benchmark(frame_benchmarking_cli::BenchmarkCmd),
 
+	DryRun(runtime_upgrade_dryrun_cli::DryRunCmd),
+
 	/// Verify a signature for a message, provided on STDIN, with a given (public or secret) key.
 	Verify(VerifyCmd),
 
@@ -76,7 +78,4 @@ pub enum Subcommand {
 
 	/// Revert the chain to a previous state.
 	Revert(sc_cli::RevertCmd),
-
-	/// Do the dry-run
-	DryRun(runtime_upgrade_dryrun_cli::DruRunCmd),
 }

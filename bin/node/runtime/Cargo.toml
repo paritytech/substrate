@@ -19,8 +19,6 @@ serde = { version = "1.0.102", optional = true }
 static_assertions = "1.1.0"
 hex-literal = { version = "0.3.1", optional = true }
 
-runtime-upgrade-dryrun-cli = { version = "2.0.0", optional = true, path = "../../../utils/frame/runtime-upgrade-dryrun/cli" }
-
 # primitives
 sp-authority-discovery = { version = "2.0.0", default-features = false, path = "../../../primitives/authority-discovery" }
 sp-consensus-babe = { version = "0.8.0", default-features = false, path = "../../../primitives/consensus/babe" }
@@ -85,6 +83,8 @@ pallet-transaction-payment = { version = "2.0.0", default-features = false, path
 pallet-transaction-payment-rpc-runtime-api = { version = "2.0.0", default-features = false, path = "../../../frame/transaction-payment/rpc/runtime-api/" }
 pallet-vesting = { version = "2.0.0", default-features = false, path = "../../../frame/vesting" }
 
+runtime-upgrade-dryrun-api = { default-features = false, path = "../../../utils/frame/runtime-upgrade-dryrun/api" }
+
 [build-dependencies]
 substrate-wasm-builder = { version = "3.0.0", path = "../../../utils/wasm-builder" }
 
@@ -95,7 +95,6 @@ sp-io = { version = "2.0.0", path = "../../../primitives/io" }
 default = ["std"]
 with-tracing = [ "frame-executive/with-tracing" ]
 std = [
-	"runtime-upgrade-dryrun-cli",
 	"sp-authority-discovery/std",
 	"pallet-assets/std",
 	"pallet-authority-discovery/std",
@@ -154,6 +153,7 @@ std = [
 	"pallet-society/std",
 	"pallet-recovery/std",
 	"pallet-vesting/std",
+	"runtime-upgrade-dryrun-api/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking",

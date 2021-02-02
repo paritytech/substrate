@@ -132,6 +132,7 @@ node-inspect = { version = "0.8.0", optional = true, path = "../inspect" }
 frame-benchmarking-cli = { version = "2.0.0", optional = true, path = "../../../utils/frame/benchmarking-cli" }
 substrate-build-script-utils = { version = "2.0.0", optional = true, path = "../../../utils/build-script-utils" }
 substrate-frame-cli = { version = "2.0.0", optional = true, path = "../../../utils/frame/frame-utilities-cli" }
+runtime-upgrade-dryrun-cli = { version = "2.0.0", optional = true, path = "../../../utils/frame/runtime-upgrade-dryrun/cli" }
 
 [build-dependencies.sc-cli]
 version = "0.8.0"
@@ -161,4 +162,7 @@ cli = [
 runtime-benchmarks = [
 	"node-runtime/runtime-benchmarks",
 	"frame-benchmarking-cli",
+]
+runtime-dryrun = [
+	"runtime-upgrade-dryrun-cli",
 ]
