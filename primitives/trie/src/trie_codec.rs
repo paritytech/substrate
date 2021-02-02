@@ -117,21 +117,24 @@ pub fn decode_compact<'a, L, DB, I, F, K>(
 		return Err(VerifyError::<L>::IncompleteProof);
 	}
 
+	let mut previous_extracted_child_trie = None;
 	for child_root in child_tries.into_iter() {
-		if !HashDBT::<L::Hash, _>::contains(db, &child_root, EMPTY_PREFIX) {
-			// child proof are allowed to be missing (unused root can be included
-			// due to trie structure modification).
-			continue;
+		if previous_extracted_child_trie == None {
+			let (top_root, _) = trie_db::decode_compact_from_iter::<L, _, _, _>(
+				db,
+				&mut nodes_iter,
+			).map_err(verify_error::<L>)?;
+			previous_extracted_child_trie = Some(top_root);
 		}
-
-		let (top_root, _nb_used) = trie_db::decode_compact_from_iter::<L, _, _, _>(
-			db,
-			&mut nodes_iter,
-		).map_err(verify_error::<L>)?;
-
-		if child_root != top_root {
-			return Err(VerifyError::<L>::RootMismatch(child_root));
+	
+		// we allow skipping child root by only
+		// decoding next on match. 	
+		if Some(child_root) == previous_extracted_child_trie {
+			previous_extracted_child_trie = None;
 		}
+	}
+	if let Some(child_root) = previous_extracted_child_trie {
+		return Err(VerifyError::<L>::RootMismatch(child_root));
 	}
 
 	if nodes_iter.next().is_some() {

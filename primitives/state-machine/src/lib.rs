@@ -1434,12 +1434,36 @@ mod tests {
 
 	#[test]
 	fn prove_read_and_proof_check_works() {
+		fn test_compact(remote_proof: StorageProof, remote_root: &sp_core::H256) -> StorageProof {
+			type Layout = sp_trie::Layout<BlakeTwo256>;
+			let compact_remote_proof = sp_trie::encode_compact::<Layout, _>(
+				remote_proof,
+				remote_root.clone(),
+				std::iter::empty(),
+			).unwrap();
+			let mut db = sp_trie::MemoryDB::<BlakeTwo256>::new(&[]);
+			sp_trie::decode_compact::<Layout, _, _, _, std::iter::Empty<_>>(
+				&mut db,
+				compact_remote_proof.iter_compact_encoded_nodes(),
+				(),
+				None,
+				Some(remote_root),
+			).unwrap();
+			StorageProof::new(db.drain().into_iter().filter_map(|kv|
+				if (kv.1).1 > 0 {
+					Some((kv.1).0)
+				} else {
+					None
+				}
+			).collect())
+		}
 		let child_info = ChildInfo::new_default(b"sub1");
 		let child_info = &child_info;
 		// fetch read proof from 'remote' full node
 		let remote_backend = trie_backend::tests::test_trie();
-		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
+		let remote_root = remote_backend.storage_root(std::iter::empty()).0;
 		let remote_proof = prove_read(remote_backend, &[b"value2"]).unwrap();
+		let remote_proof = test_compact(remote_proof, &remote_root);
  		// check proof locally
 		let local_result1 = read_proof_check::<BlakeTwo256, _>(
 			remote_root,
@@ -1459,12 +1483,13 @@ mod tests {
 		assert_eq!(local_result2, false);
 		// on child trie
 		let remote_backend = trie_backend::tests::test_trie();
-		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
+		let remote_root = remote_backend.storage_root(std::iter::empty()).0;
 		let remote_proof = prove_child_read(
 			remote_backend,
 			child_info,
 			&[b"value3"],
 		).unwrap();
+		let remote_proof = test_compact(remote_proof, &remote_root);
 		let local_result1 = read_child_proof_check::<BlakeTwo256, _>(
 			remote_root,
 			remote_proof.clone(),

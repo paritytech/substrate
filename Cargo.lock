@@ -2143,7 +2143,7 @@ dependencies = [
 [[package]]
 name = "hash-db"
 version = "0.15.2"
-source = "git+https://github.com/cheme/trie?branch=skip_compact_values_alt#ccb001e53234adb85b0c00b031bbc56151018d43"
+source = "git+https://github.com/cheme/trie?branch=skip_compact_values_alt#8b8c6481c3360678b734b0f08a5360216bb53039"
 
 [[package]]
 name = "hash256-std-hasher"
@@ -9755,7 +9755,7 @@ dependencies = [
 [[package]]
 name = "trie-db"
 version = "0.22.3"
-source = "git+https://github.com/cheme/trie?branch=skip_compact_values_alt#ccb001e53234adb85b0c00b031bbc56151018d43"
+source = "git+https://github.com/cheme/trie?branch=skip_compact_values_alt#8b8c6481c3360678b734b0f08a5360216bb53039"
 dependencies = [
  "hash-db",
  "hashbrown",
