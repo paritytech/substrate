@@ -61,6 +61,7 @@ pub struct Behaviour<B: BlockT, H: ExHashT> {
 	peer_info: peer_info::PeerInfoBehaviour,
 	/// Discovers nodes of the network.
 	discovery: DiscoveryBehaviour,
+	/// Bitswap server for blockchain data.
 	bitswap: Toggle<Bitswap<B>>,
 	/// Generic request-reponse protocols.
 	request_responses: request_responses::RequestResponsesBehaviour,

@@ -391,7 +391,7 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 		&self,
 		_hash: &Block::Hash,
 	) -> sp_blockchain::Result<Option<<Block as BlockT>::Extrinsic>> {
-		unimplemented!()
+		unimplemented!("Not supported by the in-mem backend.")
 	}
 }
 
