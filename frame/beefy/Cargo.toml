@@ -13,9 +13,16 @@ beefy-primitives = { path = "../primitives", default-features = false }
 
 frame-support = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "master" }
 frame-system = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "master" }
+
 sp-runtime = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "master" }
 sp-std = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "master" }
+
 pallet-session = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "master" }
+
+[dev-dependencies]
+sp-core = { git = "https://github.com/paritytech/substrate.git", branch = "master" }
+sp-io = { git = "https://github.com/paritytech/substrate.git", branch = "master" }
+sp-staking = { git = "https://github.com/paritytech/substrate.git", branch = "master" }
 
 [features]
 default = ["std"]

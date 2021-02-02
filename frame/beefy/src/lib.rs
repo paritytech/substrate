@@ -27,6 +27,12 @@ use sp_runtime::{
 };
 use sp_std::prelude::*;
 
+#[cfg(test)]
+mod mock;
+
+#[cfg(test)]
+mod tests;
+
 pub trait Config: frame_system::Config {
 	/// The identifier type for an authority.
 	type AuthorityId: Member + Parameter + RuntimeAppPublic + Default;
