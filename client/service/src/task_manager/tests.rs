@@ -369,7 +369,8 @@ fn telemetry_span_is_forwarded_to_task() {
 	let mut runtime = tokio::runtime::Runtime::new().unwrap();
 	let handle = runtime.handle().clone();
 	let task_executor = TaskExecutor::from(move |fut, _| handle.spawn(fut).map(|_| ()));
-	let task_manager = TaskManager::new(task_executor, None, Some(telemetry_span.clone())).unwrap();
+	let task_manager = TaskManager::new(task_executor, None, None, Some(telemetry_span.clone()))
+		.unwrap();
 
 	let (sender, receiver) = futures::channel::oneshot::channel();
 	let spawn_handle = task_manager.spawn_handle();
