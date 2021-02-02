@@ -15,7 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Debug;
+use std::{fmt::Debug, str::FromStr};
+use remote_externalities::TestExternalities;
 use sc_service::Configuration;
 use sp_api::{ProvideRuntimeApi, BlockId};
 use sp_blockchain::{HeaderBackend, HeaderMetadata, Error as BlockChainError};
@@ -30,18 +31,44 @@ use sp_externalities::Extensions;
 use sc_service::{NativeExecutionDispatch};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 
+#[derive(Debug)]
+pub enum Error {
+
+}
+
+impl ToString for Error {
+	fn to_string(&self) -> String {
+		"..".to_string()
+	}
+}
+
 #[derive(Debug, structopt::StructOpt)]
 pub struct DryRunCmd {
 	#[structopt(short, long)]
-	pub pallet: String,
+	pub target: Target,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub shared_params: sc_cli::SharedParams,
+
+	// #[structopt(short, long)]
+	// pub state: State,
 }
 
-enum Target {
+#[derive(Debug)]
+pub enum Target {
 	All,
 	Pallet(String),
 }
 
-enum State {
+impl FromStr for Target {
+	type Err = Error;
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		Ok(if s.to_lowercase() == "All" { Target::All } else { Target::Pallet(s.to_string()) })
+	}
+}
+
+pub enum State {
 	Snapshot(String),
 	// -----^^ File path
 	Live(String),
@@ -57,7 +84,7 @@ impl DryRunCmd {
 	pub async fn run<B, ExecDispatch>(
 		&self,
 		config: Configuration,
-	) -> Result<(), ()>
+	) -> sc_cli::Result<()>
 	where
 		B: BlockT,
 		// BA: Backend<B>,
@@ -66,6 +93,8 @@ impl DryRunCmd {
 		// 	+ HeaderMetadata<B, Error = BlockChainError>
 		// 	+ 'static,
 		// C::Api: DryRunRuntimeUpgrade<B>,
+		//    ^^ In case you want to use test-runner or generally the client abstraction, you'd want
+		//    something like this.
 		ExecDispatch: NativeExecutionDispatch + 'static,
 	{
 		let spec = config.chain_spec;
@@ -74,10 +103,12 @@ impl DryRunCmd {
 		let mut changes = Default::default();
 		let cache_size = Some(1024usize);
 		let heap_pages = Some(1024);
-		let ext = remote_externalities::Builder::new().build().await;
-		let executor = NativeExecutor::<ExecDispatch>::new(wasm_method, heap_pages, 2);
 
-		let mut extensions = Extensions::default();
+		let ext = remote_externalities::Builder::new()
+			.cache_mode(remote_externalities::CacheMode::UseElseCreate)
+			.cache_name(remote_externalities::CacheName::Forced("test_cache".into()))
+			.build().await;
+		let executor = NativeExecutor::<ExecDispatch>::new(wasm_method, heap_pages, 2);
 
 		let result = StateMachine::<_, _, NumberFor<B>, _>::new(
 			&ext.backend,
@@ -99,11 +130,11 @@ impl DryRunCmd {
 
 impl CliConfiguration for DryRunCmd {
 	fn shared_params(&self) -> &sc_cli::SharedParams {
-		&self.shared_params()
+		&self.shared_params
 	}
 
 	fn chain_id(&self, _is_dev: bool) -> sc_cli::Result<String> {
-		Ok(match self.shared_params().chain {
+		Ok(match self.shared_params.chain {
 			Some(ref chain) => chain.clone(),
 			None => "dev".into(),
 		})
