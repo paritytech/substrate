@@ -24,6 +24,7 @@ sp-tracing = { version = "2.0.0", default-features = false, path = "../../primit
 sp-core = { version = "2.0.0", default-features = false, path = "../../primitives/core" }
 sp-arithmetic = { version = "2.0.0", default-features = false, path = "../../primitives/arithmetic" }
 sp-inherents = { version = "2.0.0", default-features = false, path = "../../primitives/inherents" }
+sp-staking = { version = "2.0.0", default-features = false, path = "../../primitives/staking" }
 frame-support-procedural = { version = "2.0.1", default-features = false, path = "./procedural" }
 paste = "0.1.6"
 once_cell = { version = "1", default-features = false, optional = true }
@@ -52,6 +53,7 @@ std = [
 	"sp-arithmetic/std",
 	"frame-metadata/std",
 	"sp-inherents/std",
+	"sp-staking/std",
 	"sp-state-machine",
 	"frame-support-procedural/std",
 ]

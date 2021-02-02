@@ -28,8 +28,6 @@ use sp_api::ProvideRuntimeApi;
 
 use sp_core::RuntimeDebug;
 use sp_core::crypto::KeyTypeId;
-use sp_runtime::traits::Convert;
-use sp_runtime::{RuntimeAppPublic, BoundToRuntimeAppPublic};
 use sp_staking::SessionIndex;
 use sp_std::vec::Vec;
 
@@ -108,75 +106,6 @@ impl GetValidatorCount for MembershipProof {
 	}
 }
 
-/// A trait for online node inspection in a session.
-///
-/// This trait is used to decouple the pallet-session dependency from im-online
-/// module so that the user of im-online & offences modules can pass any list of
-/// validators that are considered to be online in each session, particularly useful
-/// for the Substrate-based projects having their own staking implementation
-/// instead of using pallet-staking directly.
-pub trait ValidatorSet<AccountId> {
-	/// Type for representing validator id in a session.
-	///
-	/// This could be `frame_support::Parameter`, but such import is not allowed in primitives.
-	type ValidatorId: codec::FullCodec + Clone + Eq + sp_std::fmt::Debug;
-	/// A type for converting `AccountId` to `ValidatorId`.
-	type ValidatorIdOf: Convert<AccountId, Option<Self::ValidatorId>>;
-
-	/// Returns current session index.
-	fn session_index() -> SessionIndex;
-
-	/// Returns all the validators ought to be online in a session.
-	///
-	/// The returned validators are all expected to be running an authority node.
-	fn validators() -> Vec<Self::ValidatorId>;
-}
-
-/// `ValidatorSet` combined with identification type for pallet-session-historical module.
-pub trait ValidatorSetWithIdentification<AccountId>: ValidatorSet<AccountId> {
-	/// Full identification of `ValidatorId`.
-	type Identification: codec::FullCodec + Clone + Eq + sp_std::fmt::Debug;
-	/// A type for converting `ValidatorId` to `Identification`.
-	type IdentificationOf: Convert<Self::ValidatorId, Option<Self::Identification>>;
-}
-
-/// A session handler for specific key type.
-pub trait OneSessionHandler<ValidatorId>: BoundToRuntimeAppPublic {
-	/// The key type expected.
-	type Key: Decode + Default + RuntimeAppPublic;
-
-	/// The given validator set will be used for the genesis session.
-	/// It is guaranteed that the given validator set will also be used
-	/// for the second session, therefore the first call to `on_new_session`
-	/// should provide the same validator set.
-	fn on_genesis_session<'a, I: 'a>(validators: I)
-		where I: Iterator<Item=(&'a ValidatorId, Self::Key)>, ValidatorId: 'a;
-
-	/// Session set has changed; act appropriately. Note that this can be called
-	/// before initialization of your module.
-	///
-	/// `changed` is true when at least one of the session keys
-	/// or the underlying economic identities/distribution behind one the
-	/// session keys has changed, false otherwise.
-	///
-	/// The `validators` are the validators of the incoming session, and `queued_validators`
-	/// will follow.
-	fn on_new_session<'a, I: 'a>(
-		changed: bool,
-		validators: I,
-		queued_validators: I,
-	) where I: Iterator<Item=(&'a ValidatorId, Self::Key)>, ValidatorId: 'a;
-
-
-	/// A notification for end of the session.
-	///
-	/// Note it is triggered before any `SessionManager::end_session` handlers,
-	/// so we can still affect the validator set.
-	fn on_before_session_ending() {}
-
-	/// A validator got disabled. Act accordingly until a new session begins.
-	fn on_disabled(_validator_index: usize);
-}
 
 /// Generate the initial session keys with the given seeds, at the given block and store them in
 /// the client's keystore.

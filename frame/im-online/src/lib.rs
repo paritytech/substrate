@@ -92,10 +92,9 @@ use sp_staking::{
 	SessionIndex,
 	offence::{ReportOffence, Offence, Kind},
 };
-use sp_session::{ValidatorSet, ValidatorSetWithIdentification};
 use frame_support::{
 	decl_module, decl_event, decl_storage, Parameter, debug, decl_error,
-	traits::Get,
+	traits::{Get, ValidatorSet, ValidatorSetWithIdentification, OneSessionHandler},
 };
 use frame_system::ensure_none;
 use frame_system::offchain::{
@@ -255,10 +254,6 @@ pub trait Config: SendTransactionTypes<Call<Self>> + frame_system::Config {
 	type SessionDuration: Get<Self::BlockNumber>;
 
 	/// A type for retrieving the validators supposed to be online in a session.
-	///
-	/// This is used for decoupling the pallet-session dependency since the user of this
-	/// module might have their own definition for the set of expected online validators
-	/// in a session.
 	type ValidatorSet: ValidatorSetWithIdentification<Self::AccountId>;
 
 	/// A type that gives us the ability to submit unresponsiveness offence reports.
@@ -483,7 +478,7 @@ impl<T: Config> Module<T> {
 		}
 
 		let session_index = T::ValidatorSet::session_index();
-		let validators_len = T::ValidatorSet::validators().len() as u32;
+		let validators_len = Keys::<T>::decode_len().unwrap_or_default() as u32;
 
 		Ok(Self::local_authority_keys()
 			.map(move |(authority_index, key)|
@@ -636,7 +631,7 @@ impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
 	type Public = T::AuthorityId;
 }
 
-impl<T: Config> sp_session::OneSessionHandler<T::AccountId> for Module<T> {
+impl<T: Config> OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = T::AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)

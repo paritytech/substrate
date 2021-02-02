@@ -25,7 +25,7 @@ use codec::{Decode, Encode};
 use frame_support::{
 	decl_error, decl_module, decl_storage,
 	dispatch::DispatchResultWithPostInfo,
-	traits::{FindAuthor, Get, KeyOwnerProofSystem, Randomness as RandomnessT},
+	traits::{FindAuthor, Get, KeyOwnerProofSystem, OneSessionHandler, Randomness as RandomnessT},
 	weights::{Pays, Weight},
 	Parameter,
 };
@@ -36,7 +36,7 @@ use sp_runtime::{
 	traits::{Hash, IsMember, One, SaturatedConversion, Saturating},
 	ConsensusEngineId, KeyTypeId,
 };
-use sp_session::{GetSessionNumber, GetValidatorCount, OneSessionHandler};
+use sp_session::{GetSessionNumber, GetValidatorCount};
 use sp_std::{prelude::*, result};
 use sp_timestamp::OnTimestampSet;
 

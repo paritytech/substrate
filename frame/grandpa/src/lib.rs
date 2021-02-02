@@ -41,7 +41,7 @@ use fg_primitives::{
 };
 use frame_support::{
 	decl_error, decl_event, decl_module, decl_storage, dispatch::DispatchResultWithPostInfo,
-	storage, traits::KeyOwnerProofSystem, weights::{Pays, Weight}, Parameter,
+	storage, traits::{OneSessionHandler, KeyOwnerProofSystem}, weights::{Pays, Weight}, Parameter,
 };
 use frame_system::{ensure_none, ensure_root, ensure_signed};
 use sp_runtime::{
@@ -49,7 +49,7 @@ use sp_runtime::{
 	traits::Zero,
 	DispatchResult, KeyTypeId,
 };
-use sp_session::{GetSessionNumber, GetValidatorCount, OneSessionHandler};
+use sp_session::{GetSessionNumber, GetValidatorCount};
 use sp_staking::SessionIndex;
 
 mod equivocation;

@@ -26,7 +26,7 @@ use sp_std::vec;
 
 use frame_system::{RawOrigin, Module as System, Config as SystemConfig};
 use frame_benchmarking::{benchmarks, account};
-use frame_support::traits::{Currency, OnInitialize};
+use frame_support::traits::{Currency, OnInitialize, ValidatorSet, ValidatorSetWithIdentification};
 
 use sp_runtime::{Perbill, traits::{Convert, StaticLookup, Saturating, UniqueSaturatedInto}};
 use sp_staking::offence::{ReportOffence, Offence, OffenceDetails};
@@ -192,11 +192,11 @@ fn make_offenders_im_online<T: Config>(num_offenders: u32, num_nominators: u32) 
 
 	let id_tuples = offenders.iter()
 		.map(|offender| <
-				<T as ImOnlineConfig>::ValidatorSet as sp_session::ValidatorSet<T::AccountId>
+				<T as ImOnlineConfig>::ValidatorSet as ValidatorSet<T::AccountId>
 			>::ValidatorIdOf::convert(offender.controller.clone())
 			.expect("failed to get validator id from account id"))
 		.map(|validator_id| <
-				<T as ImOnlineConfig>::ValidatorSet as sp_session::ValidatorSetWithIdentification<T::AccountId>
+				<T as ImOnlineConfig>::ValidatorSet as ValidatorSetWithIdentification<T::AccountId>
 			>::IdentificationOf::convert(validator_id.clone())
 			.map(|full_id| (validator_id, full_id))
 			.expect("failed to convert validator id to full identification"))

@@ -123,6 +123,7 @@ use frame_support::{
 	ensure, decl_module, decl_event, decl_storage, decl_error, ConsensusEngineId, Parameter,
 	traits::{
 		Get, FindAuthor, ValidatorRegistration, EstimateNextSessionRotation, EstimateNextNewSession,
+		OneSessionHandler, ValidatorSet,
 	},
 	dispatch::{self, DispatchResult, DispatchError},
 	weights::Weight,
@@ -259,7 +260,7 @@ pub trait SessionHandler<ValidatorId> {
 #[impl_trait_for_tuples::impl_for_tuples(1, 30)]
 #[tuple_types_no_default_trait_bound]
 impl<AId> SessionHandler<AId> for Tuple {
-	for_tuples!( where #( Tuple: sp_session::OneSessionHandler<AId> )* );
+	for_tuples!( where #( Tuple: OneSessionHandler<AId> )* );
 
 	for_tuples!(
 		const KEY_TYPE_IDS: &'static [KeyTypeId] = &[ #( <Tuple::Key as RuntimeAppPublic>::ID ),* ];
@@ -796,7 +797,7 @@ impl<T: Config> Module<T> {
 	}
 }
 
-impl<T: Config> sp_session::ValidatorSet<T::AccountId> for Module<T> {
+impl<T: Config> ValidatorSet<T::AccountId> for Module<T> {
 	type ValidatorId = T::ValidatorId;
 	type ValidatorIdOf = T::ValidatorIdOf;
 
