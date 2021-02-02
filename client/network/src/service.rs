@@ -832,7 +832,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	) -> Result<Vec<u8>, RequestFailure> {
 		let (tx, rx) = oneshot::channel();
 
-		self.detached_request(target, protocol, request, tx, connect);
+		self.start_request(target, protocol, request, tx, connect);
 
 		match rx.await {
 			Ok(v) => v,
@@ -852,7 +852,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// Keep in mind that the connected receiver might receive a `Canceled` event in case of a
 	/// closing connection. This is expected behaviour. With `request` you would get a
 	/// `RequestFailure::Network(OutboundFailure::ConnectionClosed)` in that case.
-	pub fn detached_request(
+	pub fn start_request(
 		&self,
 		target: PeerId,
 		protocol: impl Into<Cow<'static, str>>,
