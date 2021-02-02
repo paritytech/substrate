@@ -843,7 +843,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		}
 	}
 
-	/// Variation of `request` which takes a sender for sending responses back.
+	/// Variation of `request` which starts a request whose response is delivered on a provided channel.
 	///
 	/// Instead of blocking and waiting for a reply, this function returns immediately, sending
 	/// responses via the passed in sender. This alternative API exists to make it easier to
