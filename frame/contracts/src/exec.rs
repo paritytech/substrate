@@ -612,6 +612,7 @@ where
 		if let Some(ContractInfo::Alive(info)) = ContractInfoOf::<T>::take(&self_id) {
 			Storage::<T>::queue_trie_for_deletion(&info)?;
 			E::remove_user(info.code_hash);
+			Contracts::<T>::deposit_event(RawEvent::Terminated(self_id, beneficiary.clone()));
 			Ok(())
 		} else {
 			panic!(
@@ -701,7 +702,7 @@ where
 	fn deposit_event(&mut self, topics: Vec<T::Hash>, data: Vec<u8>) {
 		deposit_event::<Self::T>(
 			topics,
-			RawEvent::ContractExecution(self.ctx.self_account.clone(), data)
+			RawEvent::ContractEmitted(self.ctx.self_account.clone(), data)
 		);
 	}
 

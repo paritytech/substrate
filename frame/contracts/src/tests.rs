@@ -514,7 +514,7 @@ fn instantiate_and_call_and_deposit_event() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: MetaEvent::contracts(
-						RawEvent::ContractExecution(addr.clone(), vec![1, 2, 3, 4])
+						RawEvent::ContractEmitted(addr.clone(), vec![1, 2, 3, 4])
 					),
 					topics: vec![],
 				},
@@ -1413,7 +1413,7 @@ fn restoration(
 						assert_eq!(System::events(), vec![
 							EventRecord {
 								phase: Phase::Initialization,
-								event: MetaEvent::contracts(RawEvent::Evicted(addr_bob, true)),
+								event: MetaEvent::contracts(RawEvent::Evicted(addr_bob)),
 								topics: vec![],
 							},
 							EventRecord {
@@ -1680,6 +1680,7 @@ fn self_destruct_works() {
 		.build()
 		.execute_with(|| {
 			let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+			let _ = Balances::deposit_creating(&DJANGO, 1_000_000);
 
 			// Instantiate the BOB contract.
 			assert_ok!(Contracts::instantiate_with_code(
@@ -1698,6 +1699,9 @@ fn self_destruct_works() {
 				Some(ContractInfo::Alive(_))
 			);
 
+			// Drop all previous events
+			initialize_block(2);
+
 			// Call BOB without input data which triggers termination.
 			assert_matches!(
 				Contracts::call(
@@ -1710,13 +1714,41 @@ fn self_destruct_works() {
 				Ok(_)
 			);
 
+			pretty_assertions::assert_eq!(System::events(), vec![
+				EventRecord {
+					phase: Phase::Initialization,
+					event: MetaEvent::system(
+						frame_system::Event::KilledAccount(addr.clone())
+					),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: MetaEvent::balances(
+						pallet_balances::RawEvent::Transfer(addr.clone(), DJANGO, 92_758)
+					),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: MetaEvent::contracts(RawEvent::CodeRemoved(code_hash)),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: MetaEvent::contracts(
+						RawEvent::Terminated(addr.clone(), DJANGO)
+					),
+					topics: vec![],
+				},
+			]);
+
 			// Check that account is gone
 			assert!(ContractInfoOf::<Test>::get(&addr).is_none());
 
 			// check that the beneficiary (django) got remaining balance
 			// some rent was deducted before termination
-			assert!(Balances::free_balance(DJANGO) > 0);
-			assert!(Balances::free_balance(DJANGO) <= 100_000);
+			assert_eq!(Balances::free_balance(DJANGO), 1_092_758);
 		});
 }
 

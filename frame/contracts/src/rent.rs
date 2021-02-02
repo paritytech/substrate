@@ -262,7 +262,7 @@ where
 				let tombstone_info = ContractInfo::Tombstone(tombstone);
 				<ContractInfoOf<T>>::insert(account, &tombstone_info);
 				code.store_decremented();
-				<Module<T>>::deposit_event(RawEvent::Evicted(account.clone(), true));
+				<Module<T>>::deposit_event(RawEvent::Evicted(account.clone()));
 				Ok(None)
 			}
 			(Verdict::Evict { amount: _ }, None) => {
