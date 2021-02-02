@@ -859,7 +859,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		request: Vec<u8>,
 		tx: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
 		connect: IfDisconnected,
-		) {
+	) {
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::Request {
 			target,
 			protocol: protocol.into(),
