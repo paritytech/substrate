@@ -952,10 +952,10 @@ define_env!(Env, <E: Ext>,
 	// # Note
 	//
 	// This function can only be called once. Calling it multiple times will trigger a trap.
-	seal_input(ctx, buf_ptr: u32, buf_len_ptr: u32) => {
+	seal_input(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		ctx.charge_gas(RuntimeToken::InputBase)?;
 		if let Some(input) = ctx.input_data.take() {
-			ctx.write_sandbox_output(buf_ptr, buf_len_ptr, &input, false, |len| {
+			ctx.write_sandbox_output(out_ptr, out_len_ptr, &input, false, |len| {
 				Some(RuntimeToken::InputCopyOut(len))
 			})?;
 			Ok(())
@@ -1161,27 +1161,23 @@ define_env!(Env, <E: Ext>,
 	// restoring contract a delta can be specified to this function. All keys specified as
 	// delta are disregarded when calculating the storage root hash.
 	//
-	// If there is no tombstone at the destination address, the hashes don't match or this contract
-	// instance is already present on the contract call stack, a trap is generated. Additionally,
-	// if the code hash was also evicted this function will trap. Before a restoration can be
-	// performed the code hash must be redeployed using `instantiate_with_code`.
+	// On success, the destination contract is restored. This function is diverging and
+	// stops execution even on success.
 	//
-	// Otherwise, the destination contract is restored. This function is diverging and stops execution
-	// even on success.
-	//
-	// `dest_ptr`, `dest_len` - the pointer and the length of a buffer that encodes `T::AccountId`
-	// with the address of the to be restored contract.
-	// `code_hash_ptr`, `code_hash_len` - the pointer and the length of a buffer that encodes
-	// a code hash of the to be restored contract.
-	// `rent_allowance_ptr`, `rent_allowance_len` - the pointer and the length of a buffer that
-	// encodes the rent allowance that must be set in the case of successful restoration.
-	// `delta_ptr` is the pointer to the start of a buffer that has `delta_count` storage keys
-	// laid out sequentially.
+	// - `dest_ptr`, `dest_len` - the pointer and the length of a buffer that encodes `T::AccountId`
+	//    with the address of the to be restored contract.
+	// - `code_hash_ptr`, `code_hash_len` - the pointer and the length of a buffer that encodes
+	//    a code hash of the to be restored contract.
+	// - `rent_allowance_ptr`, `rent_allowance_len` - the pointer and the length of a buffer that
+	//    encodes the rent allowance that must be set in the case of successful restoration.
+	// - `delta_ptr` is the pointer to the start of a buffer that has `delta_count` storage keys
+	//    laid out sequentially.
 	//
 	// # Traps
 	//
-	// - Tombstone hashes do not match
-	// - Calling cantract is live i.e is already on the call stack.
+	// - There is no tombstone at the destination address.
+	// - Tombstone hashes do not match.
+	// - The calling contract is already present on the call stack.
 	// - The supplied code_hash does not exist on-chain.
 	seal_restore_to(
 		ctx,
