@@ -44,7 +44,8 @@
 //!
 //! ## Usage
 //!
-//! The default Substrate node template declares the [`Executive`](./struct.Executive.html) type in its library.
+//! The default Substrate node template declares the [`Executive`](./struct.Executive.html) type in
+//! its library.
 //!
 //! ### Example
 //!
@@ -220,8 +221,7 @@ where
 	/// Execute all `OnRuntimeUpgrade` of this runtime, including the pre and post migration checks.
 	///
 	/// This should only be used for testing.
-	#[cfg(feature = "std")]
-	pub fn dry_run_runime_upgrade() -> frame_support::weights::Weight {
+	pub fn dry_run_runtime_upgrade() -> frame_support::weights::Weight {
 		<
 			(frame_system::Module::<System>, COnRuntimeUpgrade, AllModules)
 			as

@@ -1493,12 +1493,10 @@ pub trait OnRuntimeUpgrade {
 		0
 	}
 
-	#[cfg(feature = "std")]
 	fn pre_migration() -> Result<(), &'static str> {
 		Ok(())
 	}
 
-	#[cfg(feature = "std")]
 	fn post_migration() -> Result<(), &'static str> {
 		Ok(())
 	}
@@ -1512,14 +1510,12 @@ impl OnRuntimeUpgrade for Tuple {
 		weight
 	}
 
-	#[cfg(feature = "std")]
 	fn pre_migration() -> Result<(), &'static str> {
 		let mut result = Ok(());
 		for_tuples!( #( result = result.and(Tuple::pre_migration()); )* );
 		result
 	}
 
-	#[cfg(feature = "std")]
 	fn post_migration() -> Result<(), &'static str> {
 		let mut result = Ok(());
 		for_tuples!( #( result = result.and(Tuple::post_migration()); )* );
