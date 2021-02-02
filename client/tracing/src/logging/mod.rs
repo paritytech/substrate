@@ -38,7 +38,7 @@ use tracing_subscriber::{
 		format, FormatEvent, FormatFields, Formatter, Layer as FmtLayer, MakeWriter,
 		SubscriberBuilder,
 	},
-	layer::{self, SubscriberExt},
+	layer::{self, SubscriberExt}, filter::LevelFilter,
 	registry::LookupSpan,
 	EnvFilter, FmtSubscriber, Layer, Registry,
 };
@@ -139,12 +139,12 @@ where
 	let max_level_hint = Layer::<FmtSubscriber>::max_level_hint(&env_filter);
 
 	let max_level = match max_level_hint {
-		Some(tracing_subscriber::filter::LevelFilter::INFO) | None => log::LevelFilter::Info,
-		Some(tracing_subscriber::filter::LevelFilter::TRACE) => log::LevelFilter::Trace,
-		Some(tracing_subscriber::filter::LevelFilter::WARN) => log::LevelFilter::Warn,
-		Some(tracing_subscriber::filter::LevelFilter::ERROR) => log::LevelFilter::Error,
-		Some(tracing_subscriber::filter::LevelFilter::DEBUG) => log::LevelFilter::Debug,
-		Some(tracing_subscriber::filter::LevelFilter::OFF) => log::LevelFilter::Off,
+		Some(LevelFilter::INFO) | None => log::LevelFilter::Info,
+		Some(LevelFilter::TRACE) => log::LevelFilter::Trace,
+		Some(LevelFilter::WARN) => log::LevelFilter::Warn,
+		Some(LevelFilter::ERROR) => log::LevelFilter::Error,
+		Some(LevelFilter::DEBUG) => log::LevelFilter::Debug,
+		Some(LevelFilter::OFF) => log::LevelFilter::Off,
 	};
 
 	tracing_log::LogTracer::builder()

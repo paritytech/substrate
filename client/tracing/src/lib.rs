@@ -561,7 +561,18 @@ mod tests {
 	fn test_parent_id_with_threads() {
 		use std::{sync::mpsc, thread};
 
-		if std::env::var("RUN_TEST_PARENT_ID_WITH_THREADS").is_ok() {
+		if std::env::var("RUN_TEST_PARENT_ID_WITH_THREADS").is_err() {
+			let executable = std::env::current_exe().unwrap();
+			let mut command = std::process::Command::new(executable);
+
+			let res = command
+				.env("RUN_TEST_PARENT_ID_WITH_THREADS", "1")
+				.args(&["--nocapture", "test_parent_id_with_threads"])
+				.output()
+				.unwrap()
+				.status;
+			assert!(res.success());
+		} else {
 			let (sub, spans, events) = setup_subscriber();
 			let _sub_guard = tracing::subscriber::set_global_default(sub);
 			let span1 = tracing::info_span!(target: "test_target", "test_span1");
@@ -618,17 +629,6 @@ mod tests {
 
 			let event3 = events.lock().remove(0);
 			assert!(event3.parent_id.is_none());
-		} else {
-			let executable = std::env::current_exe().unwrap();
-			let mut command = std::process::Command::new(executable);
-
-			let res = command
-				.env("RUN_TEST_PARENT_ID_WITH_THREADS", "1")
-				.args(&["--nocapture", "test_parent_id_with_threads"])
-				.output()
-				.unwrap()
-				.status;
-			assert!(res.success());
 		}
 	}
 }
