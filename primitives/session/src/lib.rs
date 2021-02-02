@@ -106,7 +106,6 @@ impl GetValidatorCount for MembershipProof {
 	}
 }
 
-
 /// Generate the initial session keys with the given seeds, at the given block and store them in
 /// the client's keystore.
 #[cfg(feature = "std")]
