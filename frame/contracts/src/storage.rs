@@ -164,7 +164,7 @@ where
 		account: &AccountIdOf<T>,
 		trie_id: TrieId,
 		ch: CodeHash<T>,
-	) -> Result<AliveContractInfo<T>, &'static str> {
+	) -> DispatchResult {
 		<ContractInfoOf<T>>::try_mutate(account, |existing| {
 			if existing.is_some() {
 				return Err(Error::<T>::DuplicateContract.into());
@@ -185,9 +185,9 @@ where
 				last_write: None,
 			};
 
-			*existing = Some(contract.clone().into());
+			*existing = Some(contract.into());
 
-			Ok(contract)
+			Ok(())
 		})
 	}
 
