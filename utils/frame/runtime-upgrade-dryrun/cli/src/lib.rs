@@ -56,14 +56,14 @@ impl DryRunCmd {
 	{
 		// Option1: Use remote ext, it uses RPC, or a cache file, get state, call runtime api
 		// somehow in that context (unclear how to do, but should be possible).
-		// let ext = remote_externalities::Builder::default()
-		// 	// .cache("polkadot.bin")
-		// 	// .at("polkadot.wss")
-		// 	.build()
-		// 	.await;
-		// ext.execute_with(|| {
-		// 	client.runtime_api().dry_run_runtime_upgrade(config);
-		// });
+		let mut ext = remote_externalities::Builder::default()
+			// .cache("polkadot.bin")
+			// .at("polkadot.wss")
+			.build()
+			.await;
+		ext.execute_with(|| {
+			client.runtime_api().dry_run_runtime_upgrade(todo!());
+		});
 
 		// Option2: use test runner, seems like an overkill as it scrapes the whole DB, but we use
 		// only the "state" part of it, anyhow.
