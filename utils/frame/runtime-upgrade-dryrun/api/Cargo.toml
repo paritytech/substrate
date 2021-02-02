@@ -7,4 +7,10 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-sp-api = { version = "2.0.1", path = "../../../../primitives/api" }
+sp-api = { version = "2.0.1", path = "../../../../primitives/api", default-features = false }
+
+[features]
+default = [ "std" ]
+std = [
+	"sp-api/std",
+]

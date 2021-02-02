@@ -21,10 +21,12 @@ use sp_api::{ProvideRuntimeApi, BlockId};
 use sp_blockchain::{HeaderBackend, HeaderMetadata, Error as BlockChainError};
 use sp_runtime::traits::{Block as BlockT, Header as _};
 use std::sync::Arc;
-use runtime_upgrade_dryrun_api::runtime_decl_for_DryRunRuntimeUpgrade::DryRunRuntimeUpgrade;
+use runtime_upgrade_dryrun_api::DryRunRuntimeUpgrade;
+use sc_cli::CliConfiguration;
+use sc_client_api::Backend;
 
 #[derive(Debug, structopt::StructOpt)]
-pub struct DruRunCmd {
+pub struct DryRunCmd {
 	#[structopt(short, long)]
 	pub pallet: String,
 }
@@ -41,27 +43,42 @@ enum State {
 	// -^^ https URL.
 }
 
-struct DryRunConfig {
+pub struct DryRunConfig {
 	target: Target,
 	state: State,
 }
 
-impl DruRunCmd {
-	pub async fn run<B, BB, C>(&self, client: Arc<C>, backend: BB, config: DryRunConfig) where
+impl DryRunCmd {
+	pub async fn run<B, BB, C>(&self, client: Arc<C>, backend: BB, config: Configuration) where
 		B: BlockT,
 		C: ProvideRuntimeApi<B> + HeaderBackend<B> + HeaderMetadata<B, Error=BlockChainError> + 'static,
-		C::Api: DryRunRuntimeUpgrade<B>
+		C::Api: DryRunRuntimeUpgrade<B>,
 	{
-		// substrate-test-runner
-		// client.runtime_api().dry_run_runtime_upgrade(config);
+		// Option1: Use remote ext, it uses RPC, or a cache file, get state, call runtime api
+		// somehow in that context (unclear how to do, but should be possible).
+		// let ext = remote_externalities::Builder::default()
+		// 	// .cache("polkadot.bin")
+		// 	// .at("polkadot.wss")
+		// 	.build()
+		// 	.await;
+		// ext.execute_with(|| {
+		// 	client.runtime_api().dry_run_runtime_upgrade(config);
+		// });
 
-		let ext = remote_externalities::Builder::default()
-			.cache("polkadot.bin")
-			// .at("polkadot.wss")
-			.build()
-			.await;
-		ext::execute_with(|| {
-			client.runtime_api().dry_run_runtime_upgrade(config);
-		});
+		// Option2: use test runner, seems like an overkill as it scrapes the whole DB, but we use
+		// only the "state" part of it, anyhow.
+	}
+}
+
+impl CliConfiguration for DryRunCmd {
+	fn shared_params(&self) -> &sc_cli::SharedParams {
+		&self.shared_params()
+	}
+
+	fn chain_id(&self, _is_dev: bool) -> sc_cli::Result<String> {
+		Ok(match self.shared_params().chain {
+			Some(ref chain) => chain.clone(),
+			None => "dev".into(),
+		})
 	}
 }
