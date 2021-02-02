@@ -98,7 +98,7 @@ use std::{
 	task::Poll,
 };
 
-pub use behaviour::{ResponseFailure, InboundFailure, RequestFailure, OutboundFailure};
+pub use behaviour::{ResponseFailure, InboundFailure, RequestFailure, OutboundFailure, IfDisconnected};
 
 mod metrics;
 mod out_events;
@@ -812,9 +812,10 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// notifications should remain the default ways of communicating information. For example, a
 	/// peer can announce something through a notification, after which the recipient can obtain
 	/// more information by performing a request.
-	/// As such, this function is meant to be called only with peers we are already connected to.
-	/// Calling this method with a `target` we are not connected to will *not* attempt to connect
-	/// to said peer.
+	/// As such, call this function with `IfDisconnected::ImmediateError` for `connect`. This way you
+	/// will get an error immediately for disconnected peers, instead of waiting for a potentially very
+	/// long connection attempt, which would suggest that something is wrong anyway, as you are
+	/// supposed to be connected because of the notification protocol.
 	///
 	/// No limit or throttling of concurrent outbound requests per peer and protocol are enforced.
 	/// Such restrictions, if desired, need to be enforced at the call site(s).
@@ -826,15 +827,12 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		&self,
 		target: PeerId,
 		protocol: impl Into<Cow<'static, str>>,
-		request: Vec<u8>
+		request: Vec<u8>,
+		connect: IfDisconnected,
 	) -> Result<Vec<u8>, RequestFailure> {
 		let (tx, rx) = oneshot::channel();
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::Request {
-			target,
-			protocol: protocol.into(),
-			request,
-			pending_response: tx
-		});
+
+		self.start_request(target, protocol, request, tx, connect);
 
 		match rx.await {
 			Ok(v) => v,
@@ -843,6 +841,32 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			// closed, and we legitimately report this situation as a "ConnectionClosed".
 			Err(_) => Err(RequestFailure::Network(OutboundFailure::ConnectionClosed)),
 		}
+	}
+
+	/// Variation of `request` which starts a request whose response is delivered on a provided channel.
+	///
+	/// Instead of blocking and waiting for a reply, this function returns immediately, sending
+	/// responses via the passed in sender. This alternative API exists to make it easier to
+	/// integrate with message passing APIs.
+	///
+	/// Keep in mind that the connected receiver might receive a `Canceled` event in case of a
+	/// closing connection. This is expected behaviour. With `request` you would get a
+	/// `RequestFailure::Network(OutboundFailure::ConnectionClosed)` in that case.
+	pub fn start_request(
+		&self,
+		target: PeerId,
+		protocol: impl Into<Cow<'static, str>>,
+		request: Vec<u8>,
+		tx: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
+		connect: IfDisconnected,
+	) {
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::Request {
+			target,
+			protocol: protocol.into(),
+			request,
+			pending_response: tx,
+			connect,
+		});
 	}
 
 	/// You may call this when new transactons are imported by the transaction pool.
@@ -1262,6 +1286,7 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 		protocol: Cow<'static, str>,
 		request: Vec<u8>,
 		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
+		connect: IfDisconnected,
 	},
 	DisconnectPeer(PeerId, Cow<'static, str>),
 	NewBestBlockImported(B::Hash, NumberFor<B>),
@@ -1385,8 +1410,8 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					this.network_service.user_protocol_mut().set_sync_fork_request(peer_ids, &hash, number),
 				ServiceToWorkerMsg::EventStream(sender) =>
 					this.event_streams.push(sender),
-				ServiceToWorkerMsg::Request { target, protocol, request, pending_response } => {
-					this.network_service.send_request(&target, &protocol, request, pending_response);
+				ServiceToWorkerMsg::Request { target, protocol, request, pending_response, connect } => {
+					this.network_service.send_request(&target, &protocol, request, pending_response, connect);
 				},
 				ServiceToWorkerMsg::DisconnectPeer(who, protocol_name) =>
 					this.network_service.user_protocol_mut().disconnect_peer(&who, &protocol_name),
