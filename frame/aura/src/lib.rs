@@ -46,7 +46,7 @@
 
 use sp_std::{result, prelude::*};
 use codec::{Encode, Decode};
-use frame_support::{Parameter, traits::{Get, FindAuthor}, ConsensusEngineId};
+use frame_support::{Parameter, traits::{Get, FindAuthor, OneSessionHandler}, ConsensusEngineId};
 use sp_runtime::{
 	RuntimeAppPublic,
 	traits::{SaturatedConversion, Saturating, Zero, Member, IsMember}, generic::DigestItem,
@@ -144,7 +144,7 @@ impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Pallet<T> {
 	type Public = T::AuthorityId;
 }
 
-impl<T: Config> pallet_session::OneSessionHandler<T::AccountId> for Pallet<T> {
+impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 	type Key = T::AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)
