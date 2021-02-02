@@ -564,7 +564,7 @@ mod tests {
 		if std::env::var("RUN_TEST_PARENT_ID_WITH_THREADS").is_ok() {
 			let (sub, spans, events) = setup_subscriber();
 			let _sub_guard = tracing::subscriber::set_global_default(sub);
-			let span1 = tracing::info_span!(target: "test_target", "test_span5");
+			let span1 = tracing::info_span!(target: "test_target", "test_span1");
 			let _guard1 = span1.enter();
 
 			let (tx, rx) = mpsc::channel();
