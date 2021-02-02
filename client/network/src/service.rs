@@ -850,7 +850,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// integrate with message passing APIs.
 	///
 	/// Keep in mind that the connected receiver might receive a `Canceled` event in case of a
-	/// closing connection, this is expected behaviour. In `request` you would get a
+	/// closing connection. This is expected behaviour. With `request` you would get a
 	/// `RequestFailure::Network(OutboundFailure::ConnectionClosed` in that case.
 	pub fn detached_request(
 		&self,
