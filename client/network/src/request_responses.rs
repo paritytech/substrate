@@ -510,7 +510,6 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 							return Poll::Ready(NetworkBehaviourAction::DialAddress { address })
 						}
 						NetworkBehaviourAction::DialPeer { peer_id, condition } => {
-							log::error!("The request-response isn't supposed to start dialing peers");
 							return Poll::Ready(NetworkBehaviourAction::DialPeer {
 								peer_id,
 								condition,
