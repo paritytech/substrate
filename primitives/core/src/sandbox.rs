@@ -31,12 +31,12 @@ pub struct HostError;
 pub enum ExternEntity {
 	/// Function that is specified by an index in a default table of
 	/// a module that creates the sandbox.
-	#[codec(index = "1")]
+	#[codec(index = 1)]
 	Function(u32),
 
 	/// Linear memory that is specified by some identifier returned by sandbox
 	/// module upon creation new sandboxed memory.
-	#[codec(index = "2")]
+	#[codec(index = 2)]
 	Memory(u32),
 }
 

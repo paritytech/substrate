@@ -713,7 +713,7 @@ mod tests {
 		pub enum TestEventSystemRenamed for TestRuntime2 {
 			system_renamed,
 			event_module<T>,
-			#[codec(index = "5")] event_module2<T>,
+			#[codec(index = 5)] event_module2<T>,
 			event_module3,
 		}
 	}
