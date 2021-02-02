@@ -162,7 +162,7 @@ impl<
 		iterator
 	}
 
-	fn translate<O: Decode, F: Fn(K, O) -> Option<V>>(f: F) {
+	fn translate<O: Decode, F: FnMut(K, O) -> Option<V>>(mut f: F) {
 		let prefix = G::prefix_hash();
 		let mut previous_key = prefix.clone();
 		while let Some(next) = sp_io::storage::next_key(&previous_key)
