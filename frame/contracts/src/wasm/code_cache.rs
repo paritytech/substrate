@@ -43,7 +43,8 @@ where
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>
 {
 	let code_hash = sp_std::mem::take(&mut prefab_module.code_hash);
-	// code_hash is only `Some` if the contract was instantiated from a new code
+
+	// original_code is only `Some` if the contract was instantiated from a new code
 	// but `None` if it was loaded from storage.
 	if let Some(code) = prefab_module.original_code.take() {
 		<PristineCode<T>>::insert(&code_hash, code);
@@ -146,7 +147,7 @@ where
 	Contracts::<T>::deposit_event(RawEvent::CodeRemoved(code_hash))
 }
 
-/// Increment the refcount panicing if it should ever overflow (which will not happen).
+/// Increment the refcount panicking if it should ever overflow (which will not happen).
 ///
 /// We try hard to be infallible here because otherwise more storage transactions would be
 /// necessary to account for failures in storing code for an already instantiated contract.

@@ -69,7 +69,7 @@ pub struct PrefabWasmModule<T: Config> {
 	/// We cache this value here in order to avoid the need to pull the pristine code
 	/// from storage when we only need its length for rent calculations.
 	original_code_len: u32,
-	/// The uninstrumented, prestine version of the code.
+	/// The uninstrumented, pristine version of the code.
 	///
 	/// It is not stored because the pristine code has its own storage item. The value
 	/// is only `Some` when this module was created from an `original_code` and `None` if
