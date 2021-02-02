@@ -512,7 +512,7 @@ fn instantiate_and_call_and_deposit_event() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: MetaEvent::contracts(
-						RawEvent::ContractExecution(addr.clone(), vec![1, 2, 3, 4])
+						RawEvent::ContractEmitted(addr.clone(), vec![1, 2, 3, 4])
 					),
 					topics: vec![],
 				},
@@ -1300,7 +1300,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 				EventRecord {
 					phase: Phase::Initialization,
 					event: MetaEvent::contracts(
-						RawEvent::Evicted(addr_bob.clone(), true)
+						RawEvent::Evicted(addr_bob.clone())
 					),
 					topics: vec![],
 				},
@@ -1385,7 +1385,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 						pretty_assertions::assert_eq!(System::events(), vec![
 							EventRecord {
 								phase: Phase::Initialization,
-								event: MetaEvent::contracts(RawEvent::Evicted(addr_bob, true)),
+								event: MetaEvent::contracts(RawEvent::Evicted(addr_bob)),
 								topics: vec![],
 							},
 							EventRecord {
@@ -1633,6 +1633,7 @@ fn self_destruct_works() {
 		.build()
 		.execute_with(|| {
 			let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+			let _ = Balances::deposit_creating(&DJANGO, 1_000_000);
 			assert_ok!(Contracts::put_code(Origin::signed(ALICE), wasm));
 
 			// Instantiate the BOB contract.
@@ -1652,6 +1653,9 @@ fn self_destruct_works() {
 				Some(ContractInfo::Alive(_))
 			);
 
+			// Drop all previous events
+			initialize_block(2);
+
 			// Call BOB without input data which triggers termination.
 			assert_matches!(
 				Contracts::call(
@@ -1664,11 +1668,35 @@ fn self_destruct_works() {
 				Ok(_)
 			);
 
+			pretty_assertions::assert_eq!(System::events(), vec![
+				EventRecord {
+					phase: Phase::Initialization,
+					event: MetaEvent::system(
+						frame_system::Event::KilledAccount(addr.clone())
+					),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: MetaEvent::balances(
+						pallet_balances::RawEvent::Transfer(addr.clone(), DJANGO, 100_000)
+					),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: MetaEvent::contracts(
+						RawEvent::Terminated(addr.clone(), DJANGO)
+					),
+					topics: vec![],
+				},
+			]);
+
 			// Check that account is gone
 			assert!(ContractInfoOf::<Test>::get(&addr).is_none());
 
 			// check that the beneficiary (django) got remaining balance
-			assert_eq!(Balances::free_balance(DJANGO), 100_000);
+			assert_eq!(Balances::free_balance(DJANGO), 1_100_000);
 		});
 }
 
