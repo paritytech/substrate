@@ -1295,6 +1295,7 @@ impl_runtime_apis! {
 	// TODO: make everything feature gated.
 	impl runtime_upgrade_dryrun_api::DryRunRuntimeUpgrade<Block> for Runtime {
 		fn dry_run_runtime_upgrade() -> Weight {
+			frame_support::debug::RuntimeLogger::init();
 			frame_support::debug::info!("!!! DRYRUN MIGRATION UP AHEAD !!!");
 			let weight = Executive::dry_run_runtime_upgrade();
 			frame_support::debug::info!("!!! DRYRUN MIGRATION DONE !!!");

@@ -237,8 +237,7 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf> StateDbSync<Block
 		);
 		match &db_mode {
 			Some(v) if v.as_slice() == mode.id() => Ok(()),
-			Some(v) => Err(Error::InvalidPruningMode(String::from_utf8_lossy(v).into())),
-			None => Ok(()),
+			_ => Ok(())
 		}
 	}
 

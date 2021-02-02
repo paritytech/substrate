@@ -101,20 +101,25 @@
 //! }
 //!```
 
-use std::{
-	fs,
-	path::{Path, PathBuf},
-};
+use std::{fs, path::{Path, PathBuf}};
 use std::fmt::{Debug, Formatter, Result as FmtResult};
 use log::*;
 use sp_core::{hashing::twox_128};
 pub use sp_io::TestExternalities;
 use sp_core::storage::{StorageKey, StorageData};
-use jsonrpsee_http_client::{HttpClient, HttpConfig};
-use jsonrpsee_types::jsonrpc::{Params, to_value as to_json_value};
+
+// use jsonrpsee_http_client::{HttpClient, HttpConfig};
+// use jsonrpsee_types::jsonrpc::{Params, to_value as to_json_value};
+
+use jsonrpsee::common::{Params, from_value, to_value};
 
 // TODO: this should ideally not be hardcoded.
 type Hash = sp_core::H256;
+// TODO: ideally we want to use latest jsonrpsee, but that will need tokio 1.0 and substrate is waay
+// behind.
+type Client = jsonrpsee::Client;
+
+
 type KeyPair = (StorageKey, StorageData);
 
 const LOG_TARGET: &'static str = "remote-ext";
@@ -141,7 +146,6 @@ impl Debug for HexSlice<'_> {
 		Ok(())
 	}
 }
-
 /// Extension trait for hex display.
 pub trait HexDisplayExt {
 	fn hex_display(&self) -> HexSlice<'_>;
@@ -180,7 +184,7 @@ pub struct Builder {
 	module_filter: Vec<String>,
 	cache_config: CacheMode,
 	cache_name_config: CacheName,
-	client: Option<HttpClient>,
+	client: Option<Client>,
 	chain: String,
 }
 
@@ -207,21 +211,21 @@ impl Builder {
 			.request("chain_getFinalizedHead", Params::None)
 			.await
 			.expect("get chain finalized head request failed");
-		jsonrpsee_types::jsonrpc::from_value(json_value).unwrap()
+		from_value(json_value).unwrap()
 	}
 
 	/// Relay the request to `state_getPairs` rpc endpoint.
 	///
 	/// Note that this is an unsafe RPC.
 	async fn rpc_get_pairs(&self, prefix: StorageKey, at: Hash) -> Vec<KeyPair> {
-		let serialized_prefix = to_json_value(prefix).expect("StorageKey serialization infallible");
-		let at = to_json_value(at).expect("Block hash serialization infallible");
+		let serialized_prefix = to_value(prefix).expect("StorageKey serialization infallible");
+		let at = to_value(at).expect("Block hash serialization infallible");
 		let json_value = self
 			.rpc_client()
 			.request("state_getPairs", Params::Array(vec![serialized_prefix, at]))
 			.await
 			.expect("Storage state_getPairs failed");
-		jsonrpsee_types::jsonrpc::from_value(json_value).unwrap()
+		from_value(json_value).unwrap()
 	}
 
 	/// Get the chain name.
@@ -231,10 +235,10 @@ impl Builder {
 			.request("system_chain", Params::None)
 			.await
 			.expect("system_chain failed");
-		jsonrpsee_types::jsonrpc::from_value(json_value).unwrap()
+		from_value(json_value).unwrap()
 	}
 
-	fn rpc_client(&self) -> &HttpClient {
+	fn rpc_client(&self) -> &Client {
 		self.client.as_ref().expect("Client initialized after `build`; qed")
 	}
 }
@@ -252,7 +256,7 @@ impl Builder {
 	}
 
 	/// Directory at which to create the cache. Not configurable for now.
-	// TODO
+	// TODO: make this configurable? probably.
 	fn cache_dir() -> &'static str {
 		"."
 	}
@@ -274,9 +278,8 @@ impl Builder {
 	fn try_scrape_cached(&self) -> Result<Vec<KeyPair>, &'static str> {
 		info!(
 			target: LOG_TARGET,
-			"scraping keypairs from cache {:?} @ {:?}",
+			"scraping keypairs from cache {:?}",
 			self.cache_path(),
-			self.final_at()
 		);
 		let path = self.cache_path();
 		fs::read(path)
@@ -328,13 +331,10 @@ impl Builder {
 	}
 
 	async fn init_remote_client(&mut self) {
-		self.client = Some(
-			HttpClient::new(
-				self.uri.clone(),
-				HttpConfig { max_request_body_size: u32::max_value() },
-			)
-			.unwrap(),
-		);
+		let transport_client =
+			jsonrpsee::transport::http::HttpTransportClient::new(&self.uri);
+		self.client = Some(jsonrpsee::raw::RawClient::new(transport_client).into());
+
 		self.at = match self.at {
 			Some(at) => Some(at),
 			None => Some(self.rpc_get_head().await),

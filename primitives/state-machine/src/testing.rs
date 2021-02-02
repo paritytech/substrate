@@ -48,13 +48,13 @@ pub struct TestExternalities<H: Hasher, N: ChangesTrieBlockNumber = u64>
 where
 	H::Out: codec::Codec + Ord,
 {
-	overlay: OverlayedChanges,
-	offchain_db: TestPersistentOffchainDB,
-	storage_transaction_cache:
+	pub overlay: OverlayedChanges,
+	pub offchain_db: TestPersistentOffchainDB,
+	pub storage_transaction_cache:
 		StorageTransactionCache<<InMemoryBackend<H> as Backend<H>>::Transaction, H, N>,
 	pub backend: InMemoryBackend<H>,
-	changes_trie_config: Option<ChangesTrieConfiguration>,
-	changes_trie_storage: ChangesTrieInMemoryStorage<H, N>,
+	pub changes_trie_config: Option<ChangesTrieConfiguration>,
+	pub changes_trie_storage: ChangesTrieInMemoryStorage<H, N>,
 	pub extensions: Extensions,
 }
 
