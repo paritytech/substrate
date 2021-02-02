@@ -29,13 +29,39 @@ pub struct DruRunCmd {
 	pub pallet: String,
 }
 
+enum Target {
+	All,
+	Pallet(String),
+}
+
+enum State {
+	Snapshot(String),
+	// -----^^ File path
+	Live(String),
+	// -^^ https URL.
+}
+
+struct DryRunConfig {
+	target: Target,
+	state: State,
+}
+
 impl DruRunCmd {
-	pub async fn run<B, C>(&self, client: Arc<C>) where
+	pub async fn run<B, BB, C>(&self, client: Arc<C>, backend: BB, config: DryRunConfig) where
 		B: BlockT,
 		C: ProvideRuntimeApi<B> + HeaderBackend<B> + HeaderMetadata<B, Error=BlockChainError> + 'static,
 		C::Api: DryRunRuntimeUpgrade<B>
 	{
-		let ext = remote_externalities::Builder::default().build().await;
-		client.runtime_api().dry_run_runtime_upgrade();
+		// substrate-test-runner
+		// client.runtime_api().dry_run_runtime_upgrade(config);
+
+		let ext = remote_externalities::Builder::default()
+			.cache("polkadot.bin")
+			// .at("polkadot.wss")
+			.build()
+			.await;
+		ext::execute_with(|| {
+			client.runtime_api().dry_run_runtime_upgrade(config);
+		});
 	}
 }

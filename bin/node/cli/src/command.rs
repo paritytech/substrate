@@ -149,12 +149,12 @@ pub fn run() -> Result<()> {
 				Ok((cmd.run(client, backend), task_manager))
 			})
 		},
-		// Some(Subcommand::DryRun(_cmd)) => {
-		// 	let runner = cli.create_runner(_cmd)?;
-		// 	runner.sync_run(|config| {
-		// 		let PartialComponents { client, _backend, ..} = new_partial(&config)?;
-		// 		cmd.run(client);
-		// 	})
-		// }
+		Some(Subcommand::DryRun(_cmd)) => {
+			let runner = cli.create_runner(_cmd)?;
+			runner.sync_run(|config| {
+				let PartialComponents { client, backend, ..} = new_partial(&config)?;
+				cmd.run(client, backend);
+			})
+		}
 	}
 }

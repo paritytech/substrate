@@ -1077,7 +1077,17 @@ pub type SignedPayload = generic::SignedPayload<Call, SignedExtra>;
 /// Extrinsic type that has already been checked.
 pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Call, SignedExtra>;
 /// Executive: handles dispatch to the various modules.
-pub type Executive = frame_executive::Executive<Runtime, Block, frame_system::ChainContext<Runtime>, Runtime, AllModules>;
+pub type Executive = frame_executive::Executive<
+	Runtime,
+	Block,
+	frame_system::ChainContext<Runtime>,
+	Runtime,
+	AllModules,
+	(Upgrade),
+>;
+
+struct Upgrade;
+impl OnRuntimeUpgrade for Upgrade {}
 
 impl_runtime_apis! {
 	impl sp_api::Core<Block> for Runtime {
@@ -1287,8 +1297,18 @@ impl_runtime_apis! {
 
 	#[cfg(feature = "std")]
 	impl crate::DryRunRuntimeUpgrade<Block> for Runtime {
-		fn dry_run_runime_upgrade() -> Weight {
-			Executive::dry_run_runime_upgrade()
+		fn dry_run_runime_upgrade(confg: &config) -> Weight {
+			// \migration_bot pallet:staking state:polkadot
+			match config.pallet {
+				"System" => {
+					<Pallet as OnRuntimeUpgrade>::pre_migration();
+					<Pallet as OnRuntimeUpgrade>::on_runtime_upgrade();
+					<Pallet as OnRuntimeUpgrade>::post_migration();
+				},
+				"All" => {
+					Executive::dry_run_runime_upgrade()
+				}
+			}
 		}
 	}
 
