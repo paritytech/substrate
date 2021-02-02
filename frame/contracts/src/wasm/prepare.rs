@@ -407,6 +407,55 @@ fn get_memory_limits<T: Config>(module: Option<&MemoryType>, schedule: &Schedule
 	}
 }
 
+fn check_and_instrument<C: ImportSatisfyCheck, T: Config>(
+	original_code: &[u8],
+	schedule: &Schedule<T>,
+) -> Result<(Vec<u8>, (u32, u32)), &'static str> {
+	let contract_module = ContractModule::new(&original_code, schedule)?;
+	contract_module.scan_exports()?;
+	contract_module.ensure_no_internal_memory()?;
+	contract_module.ensure_table_size_limit(schedule.limits.table_size)?;
+	contract_module.ensure_global_variable_limit(schedule.limits.globals)?;
+	contract_module.ensure_no_floating_types()?;
+	contract_module.ensure_parameter_limit(schedule.limits.parameters)?;
+	contract_module.ensure_br_table_size_limit(schedule.limits.br_table_size)?;
+
+	// We disallow importing `gas` function here since it is treated as implementation detail.
+	let disallowed_imports = [b"gas".as_ref()];
+	let memory_limits = get_memory_limits(
+		contract_module.scan_imports::<C>(&disallowed_imports)?,
+		schedule
+	)?;
+
+	let code = contract_module
+		.inject_gas_metering()?
+		.inject_stack_height_metering()?
+		.into_wasm_code()?;
+
+	Ok((code, memory_limits))
+}
+
+fn do_preparation<C: ImportSatisfyCheck, T: Config>(
+	original_code: Vec<u8>,
+	schedule: &Schedule<T>,
+) -> Result<PrefabWasmModule<T>, &'static str> {
+	let (code, (initial, maximum)) = check_and_instrument::<C, T>(
+		original_code.as_ref(),
+		schedule,
+	)?;
+	Ok(PrefabWasmModule {
+		schedule_version: schedule.version,
+		initial,
+		maximum,
+		_reserved: None,
+		code,
+		original_code_len: original_code.len() as u32,
+		refcount: 1,
+		code_hash: T::Hashing::hash(&original_code),
+		original_code: Some(original_code),
+	})
+}
+
 /// Loads the given module given in `original_code`, performs some checks on it and
 /// does some preprocessing.
 ///
@@ -425,43 +474,17 @@ pub fn prepare_contract<T: Config>(
 	do_preparation::<super::runtime::Env, T>(original_code, schedule)
 }
 
-fn do_preparation<C: ImportSatisfyCheck, T: Config>(
+/// The same as [`prepare_contract`] but without constructing a new [`PrefabWasmModule`]
+///
+/// # Note
+///
+/// Use this when an existing contract should be re-instrumented with a newer schedule version.
+pub fn reinstrument_contract<T: Config>(
 	original_code: Vec<u8>,
 	schedule: &Schedule<T>,
-) -> Result<PrefabWasmModule<T>, &'static str> {
-	let mut contract_module = ContractModule::new(&original_code, schedule)?;
-	contract_module.scan_exports()?;
-	contract_module.ensure_no_internal_memory()?;
-	contract_module.ensure_table_size_limit(schedule.limits.table_size)?;
-	contract_module.ensure_global_variable_limit(schedule.limits.globals)?;
-	contract_module.ensure_no_floating_types()?;
-	contract_module.ensure_parameter_limit(schedule.limits.parameters)?;
-	contract_module.ensure_br_table_size_limit(schedule.limits.br_table_size)?;
-
-	// We disallow importing `gas` function here since it is treated as implementation detail.
-	let disallowed_imports = [b"gas".as_ref()];
-	let memory_limits = get_memory_limits(
-		contract_module.scan_imports::<C>(&disallowed_imports)?,
-		schedule
-	)?;
-
-	contract_module = contract_module
-		.inject_gas_metering()?
-		.inject_stack_height_metering()?;
-
-	Ok(PrefabWasmModule {
-		schedule_version: schedule.version,
-		initial: memory_limits.0,
-		maximum: memory_limits.1,
-		_reserved: None,
-		code: contract_module.into_wasm_code()?,
-		original_code_len: original_code.len() as u32,
-		refcount: 1,
-		code_hash: T::Hashing::hash(&original_code),
-		original_code: Some(original_code),
-	})
+) -> Result<Vec<u8>, &'static str> {
+	Ok(check_and_instrument::<super::runtime::Env, T>(&original_code, schedule)?.0)
 }
-
 
 /// Alternate (possibly unsafe) preparation functions used only for benchmarking.
 ///

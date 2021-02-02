@@ -130,7 +130,8 @@ where
 			// We need to re-instrument the code with the latest schedule here.
 			let original_code = <PristineCode<T>>::get(code_hash)
 				.ok_or_else(|| Error::<T>::CodeNotFound)?;
-			prefab_module = prepare::prepare_contract::<T>(original_code, schedule)?;
+			prefab_module.code = prepare::reinstrument_contract::<T>(original_code, schedule)?;
+			prefab_module.schedule_version = schedule.version;
 			<CodeStorage<T>>::insert(&code_hash, &prefab_module);
 		}
 	}
