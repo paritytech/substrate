@@ -456,11 +456,22 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 		_: &mut impl PollParameters,
 	) -> Poll<NetworkBehaviourAction<TEv, BehaviourOut<B>>> {
 		use light_client_requests::sender::OutEvent;
-		while let Poll::Ready(Some(event)) = self.light_client_request_sender.poll_next_unpin(cx) {
+		while let Poll::Ready(Some(event)) =
+			self.light_client_request_sender.poll_next_unpin(cx)
+		{
 			match event {
-				OutEvent::SendRequest { target, request, pending_response, protocol_name } => {
-					self.request_responses.send_request(&target, &protocol_name, request, pending_response, IfDisconnected::ImmediateError)
-				}
+				OutEvent::SendRequest {
+					target,
+					request,
+					pending_response,
+					protocol_name,
+				} => self.request_responses.send_request(
+					&target,
+					&protocol_name,
+					request,
+					pending_response,
+					IfDisconnected::ImmediateError,
+				),
 			}
 		}
 
