@@ -1294,7 +1294,12 @@ impl_runtime_apis! {
 
 	// TODO: make everything feature gated.
 	impl runtime_upgrade_dryrun_api::DryRunRuntimeUpgrade<Block> for Runtime {
-		fn dry_run_runime_upgrade() -> Weight {
+		fn dry_run_runtime_upgrade() -> Weight {
+			frame_support::debug::info!("!!! DRYRUN MIGRATION UP AHEAD !!!");
+			let weight = Executive::dry_run_runtime_upgrade();
+			frame_support::debug::info!("!!! DRYRUN MIGRATION DONE !!!");
+			weight
+
 			// \migration_bot pallet:staking state:polkadot
 			// pseudo code:
 			// match config.pallet {
@@ -1304,10 +1309,9 @@ impl_runtime_apis! {
 			// 		<Pallet as OnRuntimeUpgrade>::post_migration();
 			// 	},
 			// 	"All" => {
-			// 		Executive::dry_run_runime_upgrade()
+			// 		Executive::dry_run_runtime_upgrade()
 			// 	}
 			// }
-			0
 		}
 	}
 

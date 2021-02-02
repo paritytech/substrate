@@ -19,11 +19,16 @@ use std::fmt::Debug;
 use sc_service::Configuration;
 use sp_api::{ProvideRuntimeApi, BlockId};
 use sp_blockchain::{HeaderBackend, HeaderMetadata, Error as BlockChainError};
-use sp_runtime::traits::{Block as BlockT, Header as _};
 use std::sync::Arc;
 use runtime_upgrade_dryrun_api::DryRunRuntimeUpgrade;
-use sc_cli::CliConfiguration;
+use sc_cli::{SharedParams, CliConfiguration, ExecutionStrategy};
+use sc_executor::WasmExecutionMethod;
 use sc_client_api::Backend;
+use sc_executor::NativeExecutor;
+use sp_state_machine::StateMachine;
+use sp_externalities::Extensions;
+use sc_service::{NativeExecutionDispatch};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 
 #[derive(Debug, structopt::StructOpt)]
 pub struct DryRunCmd {
@@ -49,24 +54,46 @@ pub struct DryRunConfig {
 }
 
 impl DryRunCmd {
-	pub async fn run<B, BB, C>(&self, client: Arc<C>, backend: BB, config: Configuration) where
+	pub async fn run<B, ExecDispatch>(
+		&self,
+		config: Configuration,
+	) -> Result<(), ()>
+	where
 		B: BlockT,
-		C: ProvideRuntimeApi<B> + HeaderBackend<B> + HeaderMetadata<B, Error=BlockChainError> + 'static,
-		C::Api: DryRunRuntimeUpgrade<B>,
+		// BA: Backend<B>,
+		// C: ProvideRuntimeApi<B>
+		// 	+ HeaderBackend<B>
+		// 	+ HeaderMetadata<B, Error = BlockChainError>
+		// 	+ 'static,
+		// C::Api: DryRunRuntimeUpgrade<B>,
+		ExecDispatch: NativeExecutionDispatch + 'static,
 	{
-		// Option1: Use remote ext, it uses RPC, or a cache file, get state, call runtime api
-		// somehow in that context (unclear how to do, but should be possible).
-		// let ext = remote_externalities::Builder::default()
-		// 	// .cache("polkadot.bin")
-		// 	// .at("polkadot.wss")
-		// 	.build()
-		// 	.await;
-		// ext.execute_with(|| {
-		// 	client.runtime_api().dry_run_runtime_upgrade(config);
-		// });
+		let spec = config.chain_spec;
+		let wasm_method = WasmExecutionMethod::Compiled;
+		let strategy = ExecutionStrategy::Native;
+		let mut changes = Default::default();
+		let cache_size = Some(1024usize);
+		let heap_pages = Some(1024);
+		let ext = remote_externalities::Builder::new().build().await;
+		let executor = NativeExecutor::<ExecDispatch>::new(wasm_method, heap_pages, 2);
 
-		// Option2: use test runner, seems like an overkill as it scrapes the whole DB, but we use
-		// only the "state" part of it, anyhow.
+		let mut extensions = Extensions::default();
+
+		let result = StateMachine::<_, _, NumberFor<B>, _>::new(
+			&ext.backend,
+			None,
+			&mut changes,
+			&executor,
+			"DryRunRuntimeUpgrade_dry_run_runtime_upgrade",
+			&[],
+			ext.extensions,
+			&sp_state_machine::backend::BackendRuntimeCode::new(&ext.backend).runtime_code().unwrap(),
+			sp_core::testing::TaskExecutor::new(),
+		)
+		.execute(strategy.into())
+		.unwrap();
+
+		return Ok(());
 	}
 }
 
