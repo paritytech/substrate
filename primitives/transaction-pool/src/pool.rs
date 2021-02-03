@@ -127,10 +127,24 @@ pub enum TransactionStatus<Hash, BlockHash> {
 }
 
 /// The stream of transaction events.
-pub type TransactionStatusStream<Hash, BlockHash> = dyn Stream<Item=TransactionStatus<Hash, BlockHash>> + Send + Unpin;
+pub type TransactionStatusStream<Hash, BlockHash> =
+	dyn Stream<Item = TransactionStatus<Hash, BlockHash>> + Send + Unpin;
 
 /// The import notification event stream.
-pub type ImportNotificationStream<H> = futures::channel::mpsc::Receiver<H>;
+pub type ImportNotificationStream<Hash> =
+	futures::channel::mpsc::Receiver<ImportNotification<Hash>>;
+
+/// The import notification that is sent when a transaction is imported into the pool.
+pub struct ImportNotification<Hash> {
+	/// Transaction hash (unique)
+	pub hash: Hash,
+	/// Transaction priority (higher = better)
+	pub priority: TransactionPriority,
+	/// Should that transaction be propagated.
+	pub propagate: bool,
+	/// Source of that transaction.
+	pub source: TransactionSource,
+}
 
 /// Transaction hash type for a pool.
 pub type TxHash<P> = <P as TransactionPool>::Hash;

@@ -34,15 +34,13 @@ use sp_runtime::{
 	traits::{self, SaturatedConversion},
 	transaction_validity::{TransactionTag as Tag, ValidTransaction, TransactionSource},
 };
-use sp_transaction_pool::{error, PoolStatus};
+use sp_transaction_pool::{error, ImportNotification, ImportNotificationStream, PoolStatus};
 use wasm_timer::Instant;
 use futures::channel::mpsc::{channel, Sender};
 use retain_mut::RetainMut;
 
 use crate::base_pool::PruneStatus;
-use crate::pool::{
-	EventStream, Options, ChainApi, BlockHash, ExtrinsicHash, ExtrinsicFor, TransactionFor,
-};
+use crate::pool::{BlockHash, ChainApi, ExtrinsicFor, ExtrinsicHash, Options, TransactionFor};
 
 /// Pre-validated transaction. Validated pool only accepts transactions wrapped in this enum.
 #[derive(Debug)]
@@ -95,11 +93,8 @@ pub struct ValidatedPool<B: ChainApi> {
 	api: Arc<B>,
 	options: Options,
 	listener: RwLock<Listener<ExtrinsicHash<B>, B>>,
-	pool: RwLock<base::BasePool<
-		ExtrinsicHash<B>,
-		ExtrinsicFor<B>,
-	>>,
-	import_notification_sinks: Mutex<Vec<Sender<ExtrinsicHash<B>>>>,
+	pool: RwLock<base::BasePool<ExtrinsicHash<B>, ExtrinsicFor<B>>>,
+	import_notification_sinks: Mutex<Vec<Sender<ImportNotification<ExtrinsicHash<B>>>>>,
 	rotator: PoolRotator<ExtrinsicHash<B>>,
 }
 
@@ -183,12 +178,20 @@ impl<B: ChainApi> ValidatedPool<B> {
 	fn submit_one(&self, tx: ValidatedTransactionFor<B>) -> Result<ExtrinsicHash<B>, B::Error> {
 		match tx {
 			ValidatedTransaction::Valid(tx) => {
+				let (priority, propagate, source) = (tx.priority, tx.propagate, tx.source);
 				let imported = self.pool.write().import(tx)?;
 
 				if let base::Imported::Ready { ref hash, .. } = imported {
 					self.import_notification_sinks.lock()
 						.retain_mut(|sink| {
-							match sink.try_send(hash.clone()) {
+							let notification = ImportNotification {
+								hash: hash.clone(),
+								priority,
+								propagate,
+								source,
+							};
+
+							match sink.try_send(notification) {
 								Ok(()) => true,
 								Err(e) => {
 									if e.is_full() {
@@ -541,7 +544,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 	///
 	/// Consumers of this stream should use the `ready` method to actually get the
 	/// pending transactions in the right order.
-	pub fn import_notification_stream(&self) -> EventStream<ExtrinsicHash<B>> {
+	pub fn import_notification_stream(&self) -> ImportNotificationStream<ExtrinsicHash<B>> {
 		const CHANNEL_BUFFER_SIZE: usize = 1024;
 
 		let (sink, stream) = channel(CHANNEL_BUFFER_SIZE);

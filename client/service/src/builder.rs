@@ -668,8 +668,11 @@ async fn transaction_notifications<TBl, TExPool>(
 	// transaction notifications
 	transaction_pool
 		.import_notification_stream()
-		.for_each(move |hash| {
-			network.propagate_transaction(hash);
+		.for_each(move |notification| {
+			if notification.propagate {
+				network.propagate_transaction(notification.hash);
+			}
+
 			let status = transaction_pool.status();
 			telemetry!(SUBSTRATE_INFO; "txpool.import";
 				"ready" => status.ready,
