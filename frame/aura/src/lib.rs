@@ -113,7 +113,6 @@ pub mod pallet {
 		}
 	}
 
-
 	#[pallet::inherent]
 	impl<T: Config> ProvideInherent for Pallet<T> {
 		type Call = pallet_timestamp::Call<T>;
