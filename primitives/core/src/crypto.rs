@@ -285,7 +285,8 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 	/// Return the ss58-check string for this key.
 	#[cfg(feature = "std")]
 	fn to_ss58check_with_version(&self, version: Ss58AddressFormat) -> String {
-		let ident: u16 = version.into();
+		// We mask out the upper two bits of the ident - SS58 Prefix currently only supports 14-bits
+		let ident: u16 = u16::from(version) & 0b00111111_11111111;
 		let mut v = match ident {
 			0..=63 => vec![ident as u8],
 			64..=16_383 => {
@@ -296,7 +297,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 				let second = ((ident >> 8) as u8) | ((ident & 0b00000000_00000011) as u8) << 6;
 				vec![first | 0b01000000, second]
 			}
-			_ => unreachable!("Ss58AddressFormat only allows identifiers up to 16_383; qed"),
+			_ => unreachable!("masked out the upper two bits; qed"),
 		};
 		v.extend(self.as_ref());
 		let r = ss58hash(&v);
