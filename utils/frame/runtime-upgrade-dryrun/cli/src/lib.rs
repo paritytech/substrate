@@ -106,7 +106,7 @@ impl DryRunCmd {
 
 		let ext = remote_externalities::Builder::new()
 			.cache_mode(remote_externalities::CacheMode::UseElseCreate)
-			.cache_name(remote_externalities::CacheName::Forced("test_cache".into()))
+			.cache_name(remote_externalities::CacheName::Forced("Kusama,0xdd772d86d5cfd2be9a11dd504866c7878ee071aefe02ff7db3d749f98bf890b8,.bin".into()))
 			.build().await;
 		let executor = NativeExecutor::<ExecDispatch>::new(wasm_method, heap_pages, 2);
 
