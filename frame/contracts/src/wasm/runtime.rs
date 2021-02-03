@@ -38,6 +38,13 @@ use sp_io::hashing::{
 use pallet_contracts_primitives::{ExecResult, ExecReturnValue, ReturnFlags, ExecError};
 
 /// Every error that can be returned to a contract when it calls any of the host functions.
+///
+/// # Note
+///
+/// This enum can be extended in the future: New codes can be added but existing codes
+/// will not be changed or removed. This means that any contract **must not** exhaustively
+/// match return codes. Instead, contracts should prepare for unknown variants and deal with
+/// those errors gracefuly in order to be forward compatible.
 #[repr(u32)]
 pub enum ReturnCode {
 	/// API call successful.
@@ -935,10 +942,20 @@ define_env!(Env, <E: Ext>,
 		Err(TrapReason::Termination)
 	},
 
-	seal_input(ctx, buf_ptr: u32, buf_len_ptr: u32) => {
+	// Stores the input passed by the caller into the supplied buffer.
+	//
+	// The value is stored to linear memory at the address pointed to by `out_ptr`.
+	// `out_len_ptr` must point to a u32 value that describes the available space at
+	// `out_ptr`. This call overwrites it with the size of the value. If the available
+	// space at `out_ptr` is less than the size of the value a trap is triggered.
+	//
+	// # Note
+	//
+	// This function can only be called once. Calling it multiple times will trigger a trap.
+	seal_input(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		ctx.charge_gas(RuntimeToken::InputBase)?;
 		if let Some(input) = ctx.input_data.take() {
-			ctx.write_sandbox_output(buf_ptr, buf_len_ptr, &input, false, |len| {
+			ctx.write_sandbox_output(out_ptr, out_len_ptr, &input, false, |len| {
 				Some(RuntimeToken::InputCopyOut(len))
 			})?;
 			Ok(())
@@ -1138,25 +1155,30 @@ define_env!(Env, <E: Ext>,
 	// the caller contract and restore the destination contract and set the specified `rent_allowance`.
 	// All caller's funds are transfered to the destination.
 	//
-	// If there is no tombstone at the destination address, the hashes don't match or this contract
-	// instance is already present on the contract call stack, a trap is generated.
+	// The tombstone hash is derived as `hash(code_hash, storage_root_hash)`. In order to match
+	// this hash to its own hash the restorer must make its storage equal to the one of the
+	// evicted destination contract. In order to allow for additional storage items in the
+	// restoring contract a delta can be specified to this function. All keys specified as
+	// delta are disregarded when calculating the storage root hash.
 	//
-	// Otherwise, the destination contract is restored. This function is diverging and stops execution
-	// even on success.
+	// On success, the destination contract is restored. This function is diverging and
+	// stops execution even on success.
 	//
-	// `dest_ptr`, `dest_len` - the pointer and the length of a buffer that encodes `T::AccountId`
-	// with the address of the to be restored contract.
-	// `code_hash_ptr`, `code_hash_len` - the pointer and the length of a buffer that encodes
-	// a code hash of the to be restored contract.
-	// `rent_allowance_ptr`, `rent_allowance_len` - the pointer and the length of a buffer that
-	// encodes the rent allowance that must be set in the case of successful restoration.
-	// `delta_ptr` is the pointer to the start of a buffer that has `delta_count` storage keys
-	// laid out sequentially.
+	// - `dest_ptr`, `dest_len` - the pointer and the length of a buffer that encodes `T::AccountId`
+	//    with the address of the to be restored contract.
+	// - `code_hash_ptr`, `code_hash_len` - the pointer and the length of a buffer that encodes
+	//    a code hash of the to be restored contract.
+	// - `rent_allowance_ptr`, `rent_allowance_len` - the pointer and the length of a buffer that
+	//    encodes the rent allowance that must be set in the case of successful restoration.
+	// - `delta_ptr` is the pointer to the start of a buffer that has `delta_count` storage keys
+	//    laid out sequentially.
 	//
 	// # Traps
 	//
-	// - Tombstone hashes do not match
-	// - Calling cantract is live i.e is already on the call stack.
+	// - There is no tombstone at the destination address.
+	// - Tombstone hashes do not match.
+	// - The calling contract is already present on the call stack.
+	// - The supplied code_hash does not exist on-chain.
 	seal_restore_to(
 		ctx,
 		dest_ptr: u32,

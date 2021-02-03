@@ -470,8 +470,11 @@ fn decl_all_modules<'a>(
 
 	quote!(
 		#types
-		type AllModules = ( #all_modules );
-		type AllModulesWithSystem = ( #all_modules_with_system );
+		/// All pallets included in the runtime as a nested tuple of types.
+		/// Excludes the System pallet.
+		pub type AllModules = ( #all_modules );
+		/// All pallets included in the runtime as a nested tuple of types.
+		pub type AllModulesWithSystem = ( #all_modules_with_system );
 	)
 }
 
