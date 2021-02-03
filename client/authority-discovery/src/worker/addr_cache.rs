@@ -122,7 +122,7 @@ mod tests {
 
 	impl Arbitrary for TestAuthorityId {
 		fn arbitrary(g: &mut Gen) -> Self {
-			let seed = [0..32].iter().map(|_| u8::arbitrary(g)).collect::<Vec<_>>();
+			let seed = (0..32).map(|_| u8::arbitrary(g)).collect::<Vec<_>>();
 			TestAuthorityId(AuthorityPair::from_seed_slice(&seed).unwrap().public())
 		}
 	}
@@ -132,7 +132,7 @@ mod tests {
 
 	impl Arbitrary for TestMultiaddr {
 		fn arbitrary(g: &mut Gen) -> Self {
-			let seed = [0..32].iter().map(|_| u8::arbitrary(g)).collect::<Vec<_>>();
+			let seed = (0..32).map(|_| u8::arbitrary(g)).collect::<Vec<_>>();
 			let peer_id = PeerId::from_multihash(
 				Multihash::wrap(multihash::Code::Sha2_256.into(), &seed).unwrap()
 			).unwrap();
