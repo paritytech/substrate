@@ -112,6 +112,36 @@ pub mod pallet {
 			Pallet::<T>::initialize_authorities(&self.authorities);
 		}
 	}
+
+
+	#[pallet::inherent]
+	impl<T: Config> ProvideInherent for Pallet<T> {
+		type Call = pallet_timestamp::Call<T>;
+		type Error = MakeFatalError<sp_inherents::Error>;
+		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
+
+		fn create_inherent(_: &InherentData) -> Option<Self::Call> {
+			None
+		}
+
+		/// Verify the validity of the inherent using the timestamp.
+		fn check_inherent(call: &Self::Call, data: &InherentData) -> result::Result<(), Self::Error> {
+			let timestamp = match call {
+				pallet_timestamp::Call::set(ref timestamp) => timestamp.clone(),
+				_ => return Ok(()),
+			};
+
+			let timestamp_based_slot = timestamp / Self::slot_duration();
+
+			let seal_slot = u64::from(data.aura_inherent_data()?).saturated_into();
+
+			if timestamp_based_slot == seal_slot {
+				Ok(())
+			} else {
+				Err(sp_inherents::Error::from("timestamp set in block doesn't match slot in seal").into())
+			}
+		}
+	}
 }
 
 impl<T: Config> Pallet<T> {
@@ -240,33 +270,5 @@ impl<T: Config> OnTimestampSet<T::Moment> for Pallet<T> {
 		assert!(last_slot < cur_slot, "Only one block may be authored per slot.");
 
 		// TODO [#3398] Generate offence report for all authorities that skipped their slots.
-	}
-}
-
-impl<T: Config> ProvideInherent for Pallet<T> {
-	type Call = pallet_timestamp::Call<T>;
-	type Error = MakeFatalError<sp_inherents::Error>;
-	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
-
-	fn create_inherent(_: &InherentData) -> Option<Self::Call> {
-		None
-	}
-
-	/// Verify the validity of the inherent using the timestamp.
-	fn check_inherent(call: &Self::Call, data: &InherentData) -> result::Result<(), Self::Error> {
-		let timestamp = match call {
-			pallet_timestamp::Call::set(ref timestamp) => timestamp.clone(),
-			_ => return Ok(()),
-		};
-
-		let timestamp_based_slot = timestamp / Self::slot_duration();
-
-		let seal_slot = u64::from(data.aura_inherent_data()?).saturated_into();
-
-		if timestamp_based_slot == seal_slot {
-			Ok(())
-		} else {
-			Err(sp_inherents::Error::from("timestamp set in block doesn't match slot in seal").into())
-		}
 	}
 }
