@@ -198,12 +198,7 @@ where
 	}
 
 	fn set_offchain_local_storage(&mut self, key: &[u8], value: Option<&[u8]>) {
-		// TODO use overlay and a special storage for it
-		use sp_core::offchain::LOCAL_STORAGE_PREFIX;
-		match value {
-			Some(value) => self.offchain_overlay.set(LOCAL_STORAGE_PREFIX, key, value, true),
-			None => self.offchain_overlay.remove(LOCAL_STORAGE_PREFIX, key, true),
-		}
+		self.overlay.set_local_offchain_storage(key, value)
 	}
 
 	fn storage(&self, key: &[u8]) -> Option<StorageValue> {

@@ -772,8 +772,14 @@ impl TransactionPoolExt {
 pub enum OffchainOverlayedChange {
 	/// Remove the data associated with the key
 	Remove,
+	/// Remove the data associated with the key, with
+	/// local blockchain storage.
+	RemoveLocal,
 	/// Overwrite the value of an associated key
 	SetValue(Vec<u8>),
+	/// Overwrite the value of an associated key, with local
+	/// blockchain storage.
+	SetLocalValue(Vec<u8>),
 }
 
 #[cfg(test)]

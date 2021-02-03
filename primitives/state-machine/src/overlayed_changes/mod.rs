@@ -662,10 +662,20 @@ impl OverlayedChanges {
 	pub fn set_offchain_storage(&mut self, key: &[u8], value: Option<&[u8]>) {
 		use sp_core::offchain::STORAGE_PREFIX;
 		match value {
-			Some(value) => self.offchain.set(STORAGE_PREFIX, key, value),
-			None => self.offchain.remove(STORAGE_PREFIX, key),
+			Some(value) => self.offchain.set(STORAGE_PREFIX, key, value, false),
+			None => self.offchain.remove(STORAGE_PREFIX, key, false),
 		}
 	}
+
+	/// Write a key value pair to the offchain storage overlay.
+	pub fn set_local_offchain_storage(&mut self, key: &[u8], value: Option<&[u8]>) {
+		use sp_core::offchain::LOCAL_STORAGE_PREFIX;
+		match value {
+			Some(value) => self.offchain.set(LOCAL_STORAGE_PREFIX, key, value, true),
+			None => self.offchain.remove(LOCAL_STORAGE_PREFIX, key, true),
+		}
+	}
+
 }
 
 #[cfg(feature = "std")]

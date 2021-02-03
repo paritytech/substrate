@@ -51,19 +51,27 @@ impl OffchainOverlayedChanges {
 	}
 
 	/// Remove a key and its associated value from the offchain database.
-	pub fn remove(&mut self, prefix: &[u8], key: &[u8]) {
+	pub fn remove(&mut self, prefix: &[u8], key: &[u8], is_local: bool) {
 		let _ = self.0.set(
 			(prefix.to_vec(), key.to_vec()),
-			OffchainOverlayedChange::Remove,
+			if is_local {
+				OffchainOverlayedChange::RemoveLocal
+			} else {
+				OffchainOverlayedChange::Remove
+			},
 			None,
 		);
 	}
 
 	/// Set the value associated with a key under a prefix to the value provided.
-	pub fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
+	pub fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8], is_local: bool) {
 		let _ = self.0.set(
 			(prefix.to_vec(), key.to_vec()),
-			OffchainOverlayedChange::SetValue(value.to_vec()),
+			if is_local {
+				OffchainOverlayedChange::SetLocalValue(value.to_vec())
+			} else {
+				OffchainOverlayedChange::SetValue(value.to_vec())
+			},
 			None,
 		);
 	}

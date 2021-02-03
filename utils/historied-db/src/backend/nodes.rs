@@ -311,7 +311,7 @@ impl<V, S, D, M, B, NI> Encode for Head<V, S, D, M, B, NI>
 		self.inner.data.size_hint() + 12
 	}
 
-	fn encode_to<T: codec::Output>(&self, dest: &mut T) {
+	fn encode_to<T: codec::Output + ?Sized>(&self, dest: &mut T) {
 		self.inner.data.encode_to(dest);
 		HeadCodec {
 			start_node_index: self.start_node_index,
