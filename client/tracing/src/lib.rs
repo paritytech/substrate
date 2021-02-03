@@ -330,6 +330,8 @@ impl<S: Subscriber> Layer<S> for ProfilingLayer {
 		};
 
 		if let Some(mut span_datum) = span_datum {
+			// If `span_datum` is `None` we don't exit (we'd be exiting the parent span)
+			self.current_span.exit();
 			span_datum.overall_time += end_time - span_datum.start_time;
 			if span_datum.name == WASM_TRACE_IDENTIFIER {
 				span_datum.values.bool_values.insert("wasm".to_owned(), true);
