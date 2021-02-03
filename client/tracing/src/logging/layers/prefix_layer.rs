@@ -33,9 +33,18 @@ where
 	S: Subscriber + for<'a> LookupSpan<'a>,
 {
 	fn new_span(&self, attrs: &Attributes<'_>, id: &Id, ctx: Context<'_, S>) {
-		let span = ctx
-			.span(id)
-			.expect("new_span has been called for this span; qed");
+		let span = match ctx.span(id) {
+			Some(span) => span,
+			None => {
+				// this shouldn't happen!
+				debug_assert!(
+					false,
+					"newly created span with ID {:?} did not exist in the registry; this is a bug!",
+					id
+				);
+				return;
+			}
+		};
 
 		if span.name() != PREFIX_LOG_SPAN {
 			return;
