@@ -18,14 +18,16 @@
 
 use codec::Encode;
 
-use beefy_primitives::{AuthorityIndex, ConsensusLog, BEEFY_ENGINE_ID};
-use frame_support::{decl_module, decl_storage, Parameter};
+use frame_support::{decl_module, decl_storage, traits::OneSessionHandler, Parameter};
+
 use sp_runtime::{
 	generic::DigestItem,
 	traits::{IsMember, Member},
 	RuntimeAppPublic,
 };
 use sp_std::prelude::*;
+
+use beefy_primitives::{AuthorityIndex, ConsensusLog, BEEFY_ENGINE_ID};
 
 #[cfg(test)]
 mod mock;
@@ -91,7 +93,7 @@ impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
 	type Public = T::AuthorityId;
 }
 
-impl<T: Config> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
+impl<T: Config> OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = T::AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)
