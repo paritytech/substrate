@@ -263,11 +263,11 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 		};
 		let ver = identifier.try_into().map_err(|_: ()| PublicError::UnknownVersion)?;
 
-		if d[len + prefix..len + prefix + 2] != ss58hash(&d[0..len + 1]).as_bytes()[0..2] {
+		if d[len + prefix..len + prefix + 2] != ss58hash(&d[0..len + prefix]).as_bytes()[0..2] {
 			// Invalid checksum.
 			return Err(PublicError::InvalidChecksum);
 		}
-		res.as_mut().copy_from_slice(&d[1..len + 1]);
+		res.as_mut().copy_from_slice(&d[prefix..len + prefix]);
 		Ok((res, ver))
 	}
 	/// Some if the string is a properly encoded SS58Check address, optionally with
@@ -430,14 +430,15 @@ macro_rules! ss58_address_format {
 				match x {
 					$($number => Ok(Ss58AddressFormat::$identifier)),*,
 					_ => {
-						#[cfg(feature = "std")]
+/*						#[cfg(feature = "std")]
 						match Ss58AddressFormat::default() {
 							Ss58AddressFormat::Custom(n) if n == x => Ok(Ss58AddressFormat::Custom(n)),
 							_ => Err(()),
 						}
 
 						#[cfg(not(feature = "std"))]
-						Err(())
+						Err(())*/
+						Ok(Ss58AddressFormat::Custom(x))
 					},
 				}
 			}
