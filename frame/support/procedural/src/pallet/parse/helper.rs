@@ -98,8 +98,7 @@ impl MutItemAttrs for syn::Item {
 			Self::Type(item) => Some(item.attrs.as_mut()),
 			Self::Union(item) => Some(item.attrs.as_mut()),
 			Self::Use(item) => Some(item.attrs.as_mut()),
-			Self::Verbatim(_) => None,
-			Self::__Nonexhaustive => None,
+			_ => None,
 		}
 	}
 }
@@ -112,8 +111,7 @@ impl MutItemAttrs for syn::TraitItem {
 			Self::Method(item) => Some(item.attrs.as_mut()),
 			Self::Type(item) => Some(item.attrs.as_mut()),
 			Self::Macro(item) => Some(item.attrs.as_mut()),
-			Self::Verbatim(_) => None,
-			Self::__Nonexhaustive => None,
+			_ => None,
 		}
 	}
 }
