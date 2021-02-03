@@ -179,6 +179,7 @@ impl Config for Runtime {
 	type AuthorityId = UintAuthorityId;
 	type Event = ();
 	type ReportUnresponsiveness = OffenceHandler;
+	type ValidatorSet = Historical;
 	type SessionDuration = Period;
 	type UnsignedPriority = UnsignedPriority;
 	type WeightInfo = ();
@@ -195,6 +196,7 @@ impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runt
 pub type ImOnline = Module<Runtime>;
 pub type System = frame_system::Module<Runtime>;
 pub type Session = pallet_session::Module<Runtime>;
+pub type Historical = pallet_session::historical::Module<Runtime>;
 
 pub fn advance_session() {
 	let now = System::block_number().max(1);

@@ -249,7 +249,6 @@ mod behaviour;
 mod chain;
 mod peer_info;
 mod discovery;
-mod light_client_handler;
 mod on_demand_layer;
 mod protocol;
 mod request_responses;
@@ -259,6 +258,8 @@ mod transport;
 mod utils;
 
 pub mod block_request_handler;
+pub mod bitswap;
+pub mod light_client_requests;
 pub mod config;
 pub mod error;
 pub mod gossip;
@@ -269,7 +270,7 @@ pub use libp2p::{multiaddr, Multiaddr, PeerId};
 pub use protocol::{event::{DhtEvent, Event, ObservedRole}, sync::SyncState, PeerInfo};
 pub use service::{
 	NetworkService, NetworkWorker, RequestFailure, OutboundFailure, NotificationSender,
-	NotificationSenderReady,
+	NotificationSenderReady, IfDisconnected,
 };
 
 pub use sc_peerset::ReputationChange;

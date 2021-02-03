@@ -440,12 +440,11 @@ mod tests {
 		}
 	}
 
-	type TestSubscriber = tracing_subscriber::layer::Layered<
-		ProfilingLayer,
-		tracing_subscriber::fmt::Subscriber
-	>;
-
-	fn setup_subscriber() -> (TestSubscriber, Arc<Mutex<Vec<SpanDatum>>>, Arc<Mutex<Vec<TraceEvent>>>) {
+	fn setup_subscriber() -> (
+		impl tracing::Subscriber + Send + Sync,
+		Arc<Mutex<Vec<SpanDatum>>>,
+		Arc<Mutex<Vec<TraceEvent>>>
+	) {
 		let spans = Arc::new(Mutex::new(Vec::new()));
 		let events = Arc::new(Mutex::new(Vec::new()));
 		let handler = TestTraceHandler {
@@ -456,7 +455,7 @@ mod tests {
 			Box::new(handler),
 			"test_target",
 		);
-		let subscriber = tracing_subscriber::fmt().finish().with(layer);
+		let subscriber = tracing_subscriber::fmt().with_writer(std::io::sink).finish().with(layer);
 		(subscriber, spans, events)
 	}
 
@@ -560,64 +559,76 @@ mod tests {
 
 	#[test]
 	fn test_parent_id_with_threads() {
-		use std::sync::mpsc;
-		use std::thread;
+		use std::{sync::mpsc, thread};
 
-		let (sub, spans, events) = setup_subscriber();
-		let _sub_guard = tracing::subscriber::set_global_default(sub);
-		let span1 = tracing::info_span!(target: "test_target", "test_span1");
-		let _guard1 = span1.enter();
+		if std::env::var("RUN_TEST_PARENT_ID_WITH_THREADS").is_err() {
+			let executable = std::env::current_exe().unwrap();
+			let mut command = std::process::Command::new(executable);
 
-		let (tx, rx) = mpsc::channel();
-		let handle = thread::spawn(move || {
-			let span2 = tracing::info_span!(target: "test_target", "test_span2");
-			let _guard2 = span2.enter();
-			// emit event
-			tracing::event!(target: "test_target", tracing::Level::INFO, "test_event1");
-			for msg in rx.recv() {
-				if msg == false {
-					break;
+			let res = command
+				.env("RUN_TEST_PARENT_ID_WITH_THREADS", "1")
+				.args(&["--nocapture", "test_parent_id_with_threads"])
+				.output()
+				.unwrap()
+				.status;
+			assert!(res.success());
+		} else {
+			let (sub, spans, events) = setup_subscriber();
+			let _sub_guard = tracing::subscriber::set_global_default(sub);
+			let span1 = tracing::info_span!(target: "test_target", "test_span1");
+			let _guard1 = span1.enter();
+
+			let (tx, rx) = mpsc::channel();
+			let handle = thread::spawn(move || {
+				let span2 = tracing::info_span!(target: "test_target", "test_span2");
+				let _guard2 = span2.enter();
+				// emit event
+				tracing::event!(target: "test_target", tracing::Level::INFO, "test_event1");
+				for msg in rx.recv() {
+					if msg == false {
+						break;
+					}
 				}
+				// gard2 and span2 dropped / exited
+			});
+
+			// wait for Event to be dispatched and stored
+			while events.lock().is_empty() {
+				thread::sleep(Duration::from_millis(1));
 			}
-			// gard2 and span2 dropped / exited
-		});
 
-		// wait for Event to be dispatched and stored
-		while events.lock().is_empty() {
-			thread::sleep(Duration::from_millis(1));
+			// emit new event (will be second item in Vec) while span2 still active in other thread
+			tracing::event!(target: "test_target", tracing::Level::INFO, "test_event2");
+
+			// stop thread and drop span
+			let _ = tx.send(false);
+			let _ = handle.join();
+
+			// wait for Span to be dispatched and stored
+			while spans.lock().is_empty() {
+				thread::sleep(Duration::from_millis(1));
+			}
+			let span2 = spans.lock().remove(0);
+			let event1 = events.lock().remove(0);
+			drop(_guard1);
+			drop(span1);
+
+			// emit event with no parent
+			tracing::event!(target: "test_target", tracing::Level::INFO, "test_event3");
+
+			let span1 = spans.lock().remove(0);
+			let event2 = events.lock().remove(0);
+
+			assert_eq!(event1.values.string_values.get("message").unwrap(), "test_event1");
+			assert_eq!(event2.values.string_values.get("message").unwrap(), "test_event2");
+			assert!(span1.parent_id.is_none());
+			assert!(span2.parent_id.is_none());
+			assert_eq!(span2.id, event1.parent_id.unwrap());
+			assert_eq!(span1.id, event2.parent_id.unwrap());
+			assert_ne!(span2.id, span1.id);
+
+			let event3 = events.lock().remove(0);
+			assert!(event3.parent_id.is_none());
 		}
-
-		// emit new event (will be second item in Vec) while span2 still active in other thread
-		tracing::event!(target: "test_target", tracing::Level::INFO, "test_event2");
-
-		// stop thread and drop span
-		let _ = tx.send(false);
-		let _ = handle.join();
-
-		// wait for Span to be dispatched and stored
-		while spans.lock().is_empty() {
-			thread::sleep(Duration::from_millis(1));
-		}
-		let span2 = spans.lock().remove(0);
-		let event1 = events.lock().remove(0);
-		drop(_guard1);
-		drop(span1);
-
-		// emit event with no parent
-		tracing::event!(target: "test_target", tracing::Level::INFO, "test_event3");
-
-		let span1 = spans.lock().remove(0);
-		let event2 = events.lock().remove(0);
-
-		assert_eq!(event1.values.string_values.get("message").unwrap(), "test_event1");
-		assert_eq!(event2.values.string_values.get("message").unwrap(), "test_event2");
-		assert!(span1.parent_id.is_none());
-		assert!(span2.parent_id.is_none());
-		assert_eq!(span2.id, event1.parent_id.unwrap());
-		assert_eq!(span1.id, event2.parent_id.unwrap());
-		assert_ne!(span2.id, span1.id);
-
-		let event3 = events.lock().remove(0);
-		assert!(event3.parent_id.is_none());
 	}
 }
