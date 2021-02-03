@@ -420,6 +420,8 @@ pub struct NetworkConfiguration {
 	/// Require iterative Kademlia DHT queries to use disjoint paths for increased resiliency in
 	/// the presence of potentially adversarial nodes.
 	pub kademlia_disjoint_query_paths: bool,
+	/// Enable serving block data over IPFS bitswap.
+	pub ipfs_server: bool,
 
 	/// Size of Yamux receive window of all substreams. `None` for the default (256kiB).
 	/// Any value less than 256kiB is invalid.
@@ -472,6 +474,7 @@ impl NetworkConfiguration {
 			allow_non_globals_in_dht: false,
 			kademlia_disjoint_query_paths: false,
 			yamux_window_size: None,
+			ipfs_server: false,
 		}
 	}
 

@@ -19,7 +19,6 @@ codec = { package = "parity-scale-codec", version = "2.0.0", default-features = 
 sp-core = { version = "2.0.0", default-features = false, path = "../../primitives/core" }
 sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
 serde = { version = "1.0.101", optional = true }
-pallet-session = { version = "2.0.0", default-features = false, path = "../session" }
 sp-io = { version = "2.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-staking = { version = "2.0.0", default-features = false, path = "../../primitives/staking" }
@@ -28,8 +27,11 @@ frame-system = { version = "2.0.0", default-features = false, path = "../system"
 
 frame-benchmarking = { version = "2.0.0", default-features = false, path = "../benchmarking", optional = true }
 
+[dev-dependencies]
+pallet-session = { version = "2.0.0", path = "../session" }
+
 [features]
-default = ["std", "pallet-session/historical"]
+default = ["std"]
 std = [
 	"sp-application-crypto/std",
 	"pallet-authorship/std",
@@ -37,7 +39,6 @@ std = [
 	"sp-core/std",
 	"sp-std/std",
 	"serde",
-	"pallet-session/std",
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-staking/std",
