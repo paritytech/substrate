@@ -600,7 +600,7 @@ mod tests {
 						break;
 					}
 				}
-				// gard2 and span2 dropped / exited
+				// guard2 and span2 dropped / exited
 			});
 
 			// wait for Event to be dispatched and stored
