@@ -675,8 +675,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 				// Notification silently discarded, as documented.
 				log::debug!(
 					target: "sub-libp2p",
-					"Attempted to send notification on missing or closed substream: {:?}",
-					protocol,
+					"Attempted to send notification on missing or closed substream: {}, {:?}",
+					target, protocol,
 				);
 				return;
 			}
