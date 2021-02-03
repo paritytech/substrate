@@ -10,11 +10,12 @@ edition = "2018"
 # jsonrpsee-ws-client = { git = "https://github.com/paritytech/jsonrpsee", rev =
 # "4025c0f67298ab7216214feac4e2c29ca9b24710" }
 
-jsonrpsee = "0.1.0"
+# jsonrpsee = "0.1.0"
 
-# jsonrpc-core-client = { version = "17.0.0", features = ["http"] }
-# sc-rpc-api = { path = "../../../../client/rpc-api" }
-# sc-rpc = { path = "../../../../client/rpc" }
+jsonrpc-core-client = { version = "15.1.0", features = ["http"] }
+sc-rpc-api = { path = "../../../../client/rpc-api" }
+sc-rpc = { path = "../../../../client/rpc" }
+futures = "0.1.29"
 
 hex-literal = "0.3.1"
 env_logger = "0.8.2"
@@ -25,8 +26,7 @@ sp-io = { path = "../../../../primitives/io" }
 sp-core = { path = "../../../../primitives/core" }
 
 [dev-dependencies]
-tokio = { version = "0.2.21", features = [ "signal", "rt-core", "rt-threaded", "blocking" ] }
-# tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
 
 [features]
 remote-test = []

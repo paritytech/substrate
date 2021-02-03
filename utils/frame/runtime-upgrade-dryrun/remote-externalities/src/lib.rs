@@ -101,25 +101,21 @@
 //! }
 //!```
 
-use std::{fs, path::{Path, PathBuf}};
+use std::{fs, path::{Path, PathBuf}, unimplemented};
 use std::fmt::{Debug, Formatter, Result as FmtResult};
 use log::*;
 use sp_core::{hashing::twox_128};
 pub use sp_io::TestExternalities;
 use sp_core::storage::{StorageKey, StorageData};
+use futures::future::Future;
 
 // use jsonrpsee_http_client::{HttpClient, HttpConfig};
 // use jsonrpsee_types::jsonrpc::{Params, to_value as to_json_value};
 
-use jsonrpsee::common::{Params, from_value, to_value};
+// use jsonrpsee::common::{Params, from_value, to_value};
 
 // TODO: this should ideally not be hardcoded.
 type Hash = sp_core::H256;
-// TODO: ideally we want to use latest jsonrpsee, but that will need tokio 1.0 and substrate is waay
-// behind.
-type Client = jsonrpsee::Client;
-
-
 type KeyPair = (StorageKey, StorageData);
 
 const LOG_TARGET: &'static str = "remote-ext";
@@ -184,7 +180,7 @@ pub struct Builder {
 	module_filter: Vec<String>,
 	cache_config: CacheMode,
 	cache_name_config: CacheName,
-	client: Option<Client>,
+	client: Option<()>,
 	chain: String,
 }
 
@@ -206,40 +202,29 @@ impl Default for Builder {
 // RPC methods
 impl Builder {
 	async fn rpc_get_head(&self) -> Hash {
-		let json_value = self
-			.rpc_client()
-			.request("chain_getFinalizedHead", Params::None)
-			.await
-			.expect("get chain finalized head request failed");
-		from_value(json_value).unwrap()
+		let client: sc_rpc_api::chain::ChainClient<u32, Hash, (), ()> =
+			jsonrpc_core_client::transports::http::connect(&self.uri).wait().unwrap();
+		client.finalized_head().wait().unwrap()
 	}
 
 	/// Relay the request to `state_getPairs` rpc endpoint.
 	///
 	/// Note that this is an unsafe RPC.
 	async fn rpc_get_pairs(&self, prefix: StorageKey, at: Hash) -> Vec<KeyPair> {
-		let serialized_prefix = to_value(prefix).expect("StorageKey serialization infallible");
-		let at = to_value(at).expect("Block hash serialization infallible");
-		let json_value = self
-			.rpc_client()
-			.request("state_getPairs", Params::Array(vec![serialized_prefix, at]))
-			.await
-			.expect("Storage state_getPairs failed");
-		from_value(json_value).unwrap()
+		let client: sc_rpc_api::state::StateClient<Hash> =
+			jsonrpc_core_client::transports::http::connect(&self.uri).wait().unwrap();
+		client.storage_pairs(prefix, Some(at)).wait().unwrap()
 	}
 
 	/// Get the chain name.
 	async fn chain_name(&self) -> String {
-		let json_value = self
-			.rpc_client()
-			.request("system_chain", Params::None)
-			.await
-			.expect("system_chain failed");
-		from_value(json_value).unwrap()
+		let client: sc_rpc_api::system::SystemClient<Hash, u32> =
+			jsonrpc_core_client::transports::http::connect(&self.uri).wait().unwrap();
+		client.system_chain().wait().unwrap()
 	}
 
-	fn rpc_client(&self) -> &Client {
-		self.client.as_ref().expect("Client initialized after `build`; qed")
+	fn rpc_client(&self) -> &() {
+		unimplemented!();
 	}
 }
 
@@ -331,10 +316,6 @@ impl Builder {
 	}
 
 	async fn init_remote_client(&mut self) {
-		let transport_client =
-			jsonrpsee::transport::http::HttpTransportClient::new(&self.uri);
-		self.client = Some(jsonrpsee::raw::RawClient::new(transport_client).into());
-
 		self.at = match self.at {
 			Some(at) => Some(at),
 			None => Some(self.rpc_get_head().await),
