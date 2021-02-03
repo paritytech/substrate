@@ -107,7 +107,7 @@ impl<E: fmt::Debug> fmt::Debug for Error<E> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
 			Error::Db(e) => e.fmt(f),
-			Error::Decoding(e) => write!(f, "Error decoding sliceable value: {}", e.what()),
+			Error::Decoding(e) => write!(f, "Error decoding sliceable value: {}", e),
 			Error::InvalidBlock => write!(f, "Trying to canonicalize invalid block"),
 			Error::InvalidBlockNumber => write!(f, "Trying to insert block with invalid number"),
 			Error::InvalidParent => write!(f, "Trying to insert block with unknown parent"),

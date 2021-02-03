@@ -15,7 +15,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 log = "0.4"
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
-codec = { package = "parity-scale-codec", version = "1.3.6", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 frame-metadata = { version = "12.0.0", default-features = false, path = "../metadata" }
 sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "2.0.0", default-features = false, path = "../../primitives/io" }
@@ -24,6 +24,7 @@ sp-tracing = { version = "2.0.0", default-features = false, path = "../../primit
 sp-core = { version = "2.0.0", default-features = false, path = "../../primitives/core" }
 sp-arithmetic = { version = "2.0.0", default-features = false, path = "../../primitives/arithmetic" }
 sp-inherents = { version = "2.0.0", default-features = false, path = "../../primitives/inherents" }
+sp-staking = { version = "2.0.0", default-features = false, path = "../../primitives/staking" }
 frame-support-procedural = { version = "2.0.1", default-features = false, path = "./procedural" }
 paste = "0.1.6"
 once_cell = { version = "1", default-features = false, optional = true }
@@ -35,7 +36,7 @@ smallvec = "1.4.1"
 [dev-dependencies]
 pretty_assertions = "0.6.1"
 frame-system = { version = "2.0.0", path = "../system" }
-parity-util-mem = { version = "0.8.0", default-features = false, features = ["primitive-types"] }
+parity-util-mem = { version = "0.9.0", default-features = false, features = ["primitive-types"] }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 sp-api = { version = "2.0.0", default-features = false, path = "../../primitives/api" }
 
@@ -52,6 +53,7 @@ std = [
 	"sp-arithmetic/std",
 	"frame-metadata/std",
 	"sp-inherents/std",
+	"sp-staking/std",
 	"sp-state-machine",
 	"frame-support-procedural/std",
 ]

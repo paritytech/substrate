@@ -27,9 +27,9 @@
 //!
 //! ```rust
 //! #[derive(sp_debug_derive::RuntimeDebug)]
-//!	struct MyStruct;
+//! struct MyStruct;
 //!
-//!	assert_eq!(format!("{:?}", MyStruct), "MyStruct");
+//! assert_eq!(format!("{:?}", MyStruct), "MyStruct");
 //! ```
 
 mod impls;
