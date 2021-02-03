@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,7 +26,7 @@ use sp_inherents::{InherentDataProviders, ProvideInherentData};
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"auraslot";
 
 /// The type of the Aura inherent.
-pub type InherentType = u64;
+pub type InherentType = sp_consensus_slots::Slot;
 
 /// Auxiliary trait to extract Aura inherent data.
 pub trait AuraInherentData {
@@ -48,6 +48,7 @@ impl AuraInherentData for InherentData {
 }
 
 /// Provides the slot duration inherent data for `Aura`.
+// TODO: Remove in the future. https://github.com/paritytech/substrate/issues/8029
 #[cfg(feature = "std")]
 pub struct InherentDataProvider {
 	slot_duration: u64,
@@ -87,8 +88,8 @@ impl ProvideInherentData for InherentDataProvider {
 		use sp_timestamp::TimestampInherentData;
 
 		let timestamp = inherent_data.timestamp_inherent_data()?;
-		let slot_num = timestamp / self.slot_duration;
-		inherent_data.put_data(INHERENT_IDENTIFIER, &slot_num)
+		let slot = timestamp / self.slot_duration;
+		inherent_data.put_data(INHERENT_IDENTIFIER, &slot)
 	}
 
 	fn error_to_string(&self, error: &[u8]) -> Option<String> {

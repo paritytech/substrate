@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,7 +27,7 @@ fn handle_err<T>(result: std::io::Result<T>) -> T {
 	match result {
 		Ok(r) => r,
 		Err(e) =>  {
-			panic!("Critical database eror: {:?}", e);
+			panic!("Critical database error: {:?}", e);
 		}
 	}
 }

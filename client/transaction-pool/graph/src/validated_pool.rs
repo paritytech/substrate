@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -286,7 +286,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 	/// Transactions that are missing from the pool are not submitted.
 	pub fn resubmit(&self, mut updated_transactions: HashMap<ExtrinsicHash<B>, ValidatedTransactionFor<B>>) {
 		#[derive(Debug, Clone, Copy, PartialEq)]
-		enum Status { Future, Ready, Failed, Dropped };
+		enum Status { Future, Ready, Failed, Dropped }
 
 		let (mut initial_statuses, final_statuses) = {
 			let mut pool = self.pool.write();

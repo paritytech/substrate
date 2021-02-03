@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -208,4 +208,9 @@ fn test_tracing() {
 
 	let inner = subscriber.0.lock().unwrap();
 	assert!(inner.spans.contains("return_input_version_1"));
+}
+
+#[test]
+fn test_return_input_as_tuple() {
+	call_wasm_method::<HostFunctions>(&wasm_binary_unwrap()[..], "test_return_input_as_tuple");
 }

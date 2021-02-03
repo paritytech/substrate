@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -401,7 +401,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			storage: &'a dyn ChangesTrieStorage<HashFor<Block>, NumberFor<Block>>,
 			min: NumberFor<Block>,
 			required_roots_proofs: Mutex<BTreeMap<NumberFor<Block>, Block::Hash>>,
-		};
+		}
 
 		impl<'a, Block: BlockT> ChangesTrieRootsStorage<HashFor<Block>, NumberFor<Block>> for
 			AccessedRootsRecorder<'a, Block>
@@ -1306,7 +1306,7 @@ impl<B, E, Block, RA> BlockBuilderProvider<B, Block, Self> for Client<B, E, Bloc
 	}
 }
 
-impl<B, E, Block, RA>  ExecutorProvider<Block> for Client<B, E, Block, RA> where
+impl<B, E, Block, RA> ExecutorProvider<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block>,
 	E: CallExecutor<Block>,
 	Block: BlockT,
@@ -1654,7 +1654,6 @@ impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
 			params.function,
 			&params.arguments,
 			params.overlayed_changes,
-			params.offchain_changes,
 			Some(params.storage_transaction_cache),
 			params.initialize_block,
 			manager,
@@ -1901,8 +1900,7 @@ impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 		self.body(id)
 	}
 
-	fn block(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<SignedBlock<Block>>>
-	{
+	fn block(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<SignedBlock<Block>>> {
 		Ok(match (self.header(id)?, self.body(id)?, self.justification(id)?) {
 			(Some(header), Some(extrinsics), justification) =>
 				Some(SignedBlock { block: Block::new(header, extrinsics), justification }),
@@ -1911,26 +1909,7 @@ impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 	}
 
 	fn block_status(&self, id: &BlockId<Block>) -> sp_blockchain::Result<BlockStatus> {
-		// this can probably be implemented more efficiently
-		if let BlockId::Hash(ref h) = id {
-			if self.importing_block.read().as_ref().map_or(false, |importing| h == importing) {
-				return Ok(BlockStatus::Queued);
-			}
-		}
-		let hash_and_number = match id.clone() {
-			BlockId::Hash(hash) => self.backend.blockchain().number(hash)?.map(|n| (hash, n)),
-			BlockId::Number(n) => self.backend.blockchain().hash(n)?.map(|hash| (hash, n)),
-		};
-		match hash_and_number {
-			Some((hash, number)) => {
-				if self.backend.have_state_at(&hash, number) {
-					Ok(BlockStatus::InChainWithState)
-				} else {
-					Ok(BlockStatus::InChainPruned)
-				}
-			}
-			None => Ok(BlockStatus::Unknown),
-		}
+		Client::block_status(self, id)
 	}
 
 	fn justification(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justification>> {
@@ -1939,6 +1918,14 @@ impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 
 	fn block_hash(&self, number: NumberFor<Block>) -> sp_blockchain::Result<Option<Block::Hash>> {
 		self.backend.blockchain().hash(number)
+	}
+
+	fn extrinsic(&self, hash: &Block::Hash) -> sp_blockchain::Result<Option<Block::Extrinsic>> {
+		self.backend.blockchain().extrinsic(hash)
+	}
+
+	fn have_extrinsic(&self, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
+		self.backend.blockchain().have_extrinsic(hash)
 	}
 }
 

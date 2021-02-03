@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use frame_support::sp_runtime::generic;
-use frame_support::sp_runtime::traits::{BlakeTwo256, Block as _, Verify};
+use frame_support::sp_runtime::traits::{BlakeTwo256, Verify};
 use frame_support::codec::{Encode, Decode};
 use sp_core::{H256, sr25519};
 use serde::{Serialize, Deserialize};

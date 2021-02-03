@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -214,6 +214,17 @@ pub trait Backend<Block: BlockT>: HeaderBackend<Block> + HeaderMetadata<Block, E
 		);
 
 		Ok(None)
+	}
+
+	/// Get single extrinsic by hash.
+	fn extrinsic(
+		&self,
+		hash: &Block::Hash,
+	) -> Result<Option<<Block as BlockT>::Extrinsic>>;
+
+	/// Check if extrinsic exists.
+	fn have_extrinsic(&self, hash: &Block::Hash) -> Result<bool> {
+		Ok(self.extrinsic(hash)?.is_some())
 	}
 }
 

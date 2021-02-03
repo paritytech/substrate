@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -80,7 +80,7 @@ impl InMemOffchainStorage {
 	/// Remove a key and its associated value from the offchain database.
 	pub fn remove(&mut self, prefix: &[u8], key: &[u8]) {
 		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
-		let _ = self.storage.remove(&key);
+		self.storage.remove(&key);
 	}
 }
 
