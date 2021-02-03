@@ -337,7 +337,7 @@ pub trait Config: frame_system::Config {
 	type WeightInfo: WeightInfo;
 
 	/// Type that allows the runtime authors to add new host functions for a contract to call.
-	type ChainExtension: chain_extension::ChainExtension;
+	type ChainExtension: chain_extension::ChainExtension<Self>;
 
 	/// The maximum number of tries that can be queued for deletion.
 	type DeletionQueueDepth: Get<u32>;
