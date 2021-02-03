@@ -77,7 +77,7 @@ use sp_runtime::{
 	traits::{
 		self, CheckEqual, AtLeast32Bit, Zero, Lookup, LookupError,
 		SimpleBitOps, Hash, Member, MaybeDisplay, BadOrigin,
-		MaybeSerialize, MaybeSerializeDeserialize, MaybeMallocSizeOf, StaticLookup, One, Bounded,
+		MaybeSerializeDeserialize, MaybeMallocSizeOf, StaticLookup, One, Bounded,
 		Dispatchable, AtLeast32BitUnsigned, Saturating, StoredMapError,
 	},
 	offchain::storage_lock::BlockNumberProvider,
