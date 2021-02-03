@@ -430,17 +430,7 @@ macro_rules! ss58_address_format {
 			fn try_from(x: u16) -> Result<Ss58AddressFormat, ()> {
 				match x {
 					$($number => Ok(Ss58AddressFormat::$identifier)),*,
-					_ => {
-/*						#[cfg(feature = "std")]
-						match Ss58AddressFormat::default() {
-							Ss58AddressFormat::Custom(n) if n == x => Ok(Ss58AddressFormat::Custom(n)),
-							_ => Err(()),
-						}
-
-						#[cfg(not(feature = "std"))]
-						Err(())*/
-						Ok(Ss58AddressFormat::Custom(x))
-					},
+					_ => Ok(Ss58AddressFormat::Custom(x)),
 				}
 			}
 		}
