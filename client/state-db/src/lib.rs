@@ -24,12 +24,12 @@
 //! Canonicalization window tracks a tree of blocks identified by header hash. The in-memory
 //! overlay allows to get any node that was inserted in any of the blocks within the window.
 //! The tree is journaled to the backing database and rebuilt on startup.
-//! Canonicalization function selects one root from the top of the tree and discards all other roots and
-//! their subtrees.
+//! Canonicalization function selects one root from the top of the tree and discards all other roots
+//! and their subtrees.
 //!
 //! # Pruning.
-//! See `RefWindow` for pruning algorithm details. `StateDb` prunes on each canonicalization until pruning
-//! constraints are satisfied.
+//! See `RefWindow` for pruning algorithm details. `StateDb` prunes on each canonicalization until
+//! pruning constraints are satisfied.
 
 mod noncanonical;
 mod pruning;
@@ -237,8 +237,7 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf> StateDbSync<Block
 		);
 		match &db_mode {
 			Some(v) if v.as_slice() == mode.id() => Ok(()),
-			Some(v) => Err(Error::InvalidPruningMode(String::from_utf8_lossy(v).into())),
-			None => Ok(()),
+			_ => Ok(()),
 		}
 	}
 

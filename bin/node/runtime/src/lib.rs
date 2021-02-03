@@ -1078,7 +1078,14 @@ pub type SignedPayload = generic::SignedPayload<Call, SignedExtra>;
 /// Extrinsic type that has already been checked.
 pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Call, SignedExtra>;
 /// Executive: handles dispatch to the various modules.
-pub type Executive = frame_executive::Executive<Runtime, Block, frame_system::ChainContext<Runtime>, Runtime, AllModules>;
+pub type Executive = frame_executive::Executive<
+	Runtime,
+	Block,
+	frame_system::ChainContext<Runtime>,
+	Runtime,
+	AllModules,
+	(),
+>;
 
 /// MMR helper types.
 mod mmr {
@@ -1323,15 +1330,39 @@ impl_runtime_apis! {
 		}
 	}
 
+	// TODO: make everything feature gated.
+	impl dry_run_runtime_upgrade_api::DryRunRuntimeUpgrade<Block> for Runtime {
+		fn dry_run_runtime_upgrade() -> Weight {
+			frame_support::debug::RuntimeLogger::init();
+			frame_support::debug::info!("!!! DRYRUN MIGRATION UP AHEAD !!!");
+			let weight = Executive::dry_run_runtime_upgrade();
+			frame_support::debug::info!("!!! DRYRUN MIGRATION DONE !!!");
+			weight
+
+			// \migration_bot pallet:staking state:polkadot
+			// pseudo code:
+			// match config.pallet {
+			// 	"System" => {
+			// 		<Pallet as OnRuntimeUpgrade>::pre_migration();
+			// 		<Pallet as OnRuntimeUpgrade>::on_runtime_upgrade();
+			// 		<Pallet as OnRuntimeUpgrade>::post_migration();
+			// 	},
+			// 	"All" => {
+			// 		Executive::dry_run_runtime_upgrade()
+			// 	}
+			// }
+		}
+	}
+
 	#[cfg(feature = "runtime-benchmarks")]
 	impl frame_benchmarking::Benchmark<Block> for Runtime {
 		fn dispatch_benchmark(
 			config: frame_benchmarking::BenchmarkConfig
 		) -> Result<Vec<frame_benchmarking::BenchmarkBatch>, sp_runtime::RuntimeString> {
 			use frame_benchmarking::{Benchmarking, BenchmarkBatch, add_benchmark, TrackedStorageKey};
-			// Trying to add benchmarks directly to the Session Pallet caused cyclic dependency issues.
-			// To get around that, we separated the Session benchmarks into its own crate, which is why
-			// we need these two lines below.
+			// Trying to add benchmarks directly to the Session Pallet caused cyclic dependency
+			// issues. To get around that, we separated the Session benchmarks into its own crate,
+			// which is why we need these two lines below.
 			use pallet_session_benchmarking::Module as SessionBench;
 			use pallet_offences_benchmarking::Module as OffencesBench;
 			use frame_system_benchmarking::Module as SystemBench;

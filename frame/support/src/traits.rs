@@ -1552,7 +1552,25 @@ pub trait OnRuntimeUpgrade {
 	/// block local data are not accessible.
 	///
 	/// Return the non-negotiable weight consumed for runtime upgrade.
-	fn on_runtime_upgrade() -> crate::weights::Weight { 0 }
+	fn on_runtime_upgrade() -> crate::weights::Weight {
+		0
+	}
+
+	/// Execute some pre-checks prior to a runtime upgrade.
+	///
+	/// These hooks are never meant to be executed on-chain, instead only be used by 3rd party tools
+	/// for testing.
+	fn pre_migration() -> Result<(), &'static str> {
+		Ok(())
+	}
+
+	/// Execute some post-checks prior to a runtime upgrade.
+	///
+	/// These hooks are never meant to be executed on-chain, instead only be used by 3rd party tools
+	/// for testing.
+	fn post_migration() -> Result<(), &'static str> {
+		Ok(())
+	}
 }
 
 #[impl_for_tuples(30)]
@@ -1561,6 +1579,18 @@ impl OnRuntimeUpgrade for Tuple {
 		let mut weight = 0;
 		for_tuples!( #( weight = weight.saturating_add(Tuple::on_runtime_upgrade()); )* );
 		weight
+	}
+
+	fn pre_migration() -> Result<(), &'static str> {
+		let mut result = Ok(());
+		for_tuples!( #( result = result.and(Tuple::pre_migration()); )* );
+		result
+	}
+
+	fn post_migration() -> Result<(), &'static str> {
+		let mut result = Ok(());
+		for_tuples!( #( result = result.and(Tuple::post_migration()); )* );
+		result
 	}
 }
 
