@@ -18,6 +18,7 @@
 
 use crate::{
 	config::{ProtocolId, Role},
+	bitswap::Bitswap,
 	discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryOut},
 	protocol::{message::Roles, CustomMessageOutcome, NotificationsSink, Protocol},
 	peer_info, request_responses, light_client_requests,
@@ -30,7 +31,9 @@ use libp2p::NetworkBehaviour;
 use libp2p::core::{Multiaddr, PeerId, PublicKey};
 use libp2p::identify::IdentifyInfo;
 use libp2p::kad::record;
-use libp2p::swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters};
+use libp2p::swarm::{
+	NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters, toggle::Toggle
+};
 use log::debug;
 use prost::Message;
 use sp_consensus::{BlockOrigin, import_queue::{IncomingBlock, Origin}};
@@ -59,6 +62,8 @@ pub struct Behaviour<B: BlockT, H: ExHashT> {
 	peer_info: peer_info::PeerInfoBehaviour,
 	/// Discovers nodes of the network.
 	discovery: DiscoveryBehaviour,
+	/// Bitswap server for blockchain data.
+	bitswap: Toggle<Bitswap<B>>,
 	/// Generic request-reponse protocols.
 	request_responses: request_responses::RequestResponsesBehaviour,
 
@@ -181,6 +186,7 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 		light_client_request_sender: light_client_requests::sender::LightClientRequestSender<B>,
 		disco_config: DiscoveryConfig,
 		block_request_protocol_config: request_responses::ProtocolConfig,
+		bitswap: Option<Bitswap<B>>,
 		light_client_request_protocol_config: request_responses::ProtocolConfig,
 		// All remaining request protocol configs.
 		mut request_response_protocols: Vec<request_responses::ProtocolConfig>,
@@ -195,6 +201,7 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 			substrate,
 			peer_info: peer_info::PeerInfoBehaviour::new(user_agent, local_public_key),
 			discovery: disco_config.finish(),
+			bitswap: bitswap.into(),
 			request_responses:
 				request_responses::RequestResponsesBehaviour::new(request_response_protocols.into_iter())?,
 			light_client_request_sender,
@@ -296,6 +303,13 @@ fn reported_roles_to_observed_role(local_role: &Role, remote: &PeerId, roles: Ro
 		ObservedRole::Full
 	} else {
 		ObservedRole::Light
+	}
+}
+
+impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<void::Void> for
+Behaviour<B, H> {
+	fn inject_event(&mut self, event: void::Void) {
+		void::unreachable(event)
 	}
 }
 

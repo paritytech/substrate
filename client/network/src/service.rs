@@ -50,6 +50,7 @@ use crate::{
 		sync::SyncState,
 	},
 	transport, ReputationChange,
+	bitswap::Bitswap,
 };
 use futures::{channel::oneshot, prelude::*};
 use libp2p::{PeerId, multiaddr, Multiaddr};
@@ -248,6 +249,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
 
 		// Build the swarm.
+		let client = params.chain.clone();
 		let (mut swarm, bandwidth): (Swarm<B, H>, _) = {
 			let user_agent = format!(
 				"{} ({})",
@@ -334,6 +336,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			};
 
 			let behaviour = {
+				let bitswap = if params.network_config.ipfs_server { Some(Bitswap::new(client)) } else { None };
 				let result = Behaviour::new(
 					protocol,
 					params.role,
@@ -342,6 +345,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 					light_client_request_sender,
 					discovery_config,
 					params.block_request_protocol_config,
+					bitswap,
 					params.light_client_request_protocol_config,
 					params.network_config.request_response_protocols,
 				);
@@ -1638,11 +1642,11 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						let reason = match cause {
 							Some(ConnectionError::IO(_)) => "transport-error",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::B(EitherError::A(
-								PingFailure::Timeout))))))) => "ping-timeout",
+								EitherError::A(EitherError::B(EitherError::A(
+								PingFailure::Timeout)))))))) => "ping-timeout",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(
-								NotifsHandlerError::SyncNotificationsClogged)))))) => "sync-notifications-clogged",
+								EitherError::A(EitherError::A(
+								NotifsHandlerError::SyncNotificationsClogged))))))) => "sync-notifications-clogged",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(_))) => "protocol-error",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::KeepAliveTimeout)) => "keep-alive-timeout",
 							None => "actively-closed",
