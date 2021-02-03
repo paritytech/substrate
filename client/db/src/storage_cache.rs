@@ -1473,7 +1473,7 @@ mod qc {
 	impl Arbitrary for Action {
 		fn arbitrary(gen: &mut quickcheck::Gen) -> Self {
 			let path = u8::arbitrary(gen);
-			let buf = [0..32].iter().map(|_| u8::arbitrary(gen)).collect::<Vec<_>>();
+			let buf = (0..32).map(|_| u8::arbitrary(gen)).collect::<Vec<_>>();
 
 			match path {
 				0..=175 => {
