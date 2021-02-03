@@ -88,7 +88,7 @@ pub trait ChainExtension {
 	///
 	/// # Return
 	///
-	/// In case of `Err` the contract execution is immediatly suspended and the passed error
+	/// In case of `Err` the contract execution is immediately suspended and the passed error
 	/// is returned to the caller. Otherwise the value of [`RetVal`] determines the exit
 	/// behaviour.
 	fn call<E: Ext>(func_id: u32, env: Environment<E, InitState>) -> Result<RetVal>
