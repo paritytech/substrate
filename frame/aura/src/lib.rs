@@ -34,17 +34,10 @@
 //!
 //! - [Timestamp](../pallet_timestamp/index.html): The Timestamp module is used in Aura to track
 //! consensus rounds (via `slots`).
-//!
-//! ## References
-//!
-//! If you're interested in hacking on this module, it is useful to understand the interaction with
-//! `substrate/primitives/inherents/src/lib.rs` and, specifically, the required implementation of
-//! [`ProvideInherent`](../sp_inherents/trait.ProvideInherent.html) and
-//! [`ProvideInherentData`](../sp_inherents/trait.ProvideInherentData.html) to create and check inherents.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::{result, prelude::*};
+use sp_std::prelude::*;
 use codec::{Encode, Decode};
 use frame_support::{Parameter, traits::{Get, FindAuthor}, ConsensusEngineId};
 use sp_runtime::{
@@ -52,11 +45,7 @@ use sp_runtime::{
 	traits::{SaturatedConversion, Saturating, Zero, Member, IsMember}, generic::DigestItem,
 };
 use sp_timestamp::OnTimestampSet;
-use sp_inherents::{InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
-use sp_consensus_aura::{
-	AURA_ENGINE_ID, ConsensusLog, AuthorityIndex, Slot,
-	inherents::{INHERENT_IDENTIFIER, AuraInherentData},
-};
+use sp_consensus_aura::{AURA_ENGINE_ID, ConsensusLog, AuthorityIndex, Slot};
 
 mod mock;
 mod tests;
