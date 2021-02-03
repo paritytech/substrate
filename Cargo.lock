@@ -4399,7 +4399,6 @@ dependencies = [
  "sp-application-crypto",
  "sp-consensus-aura",
  "sp-core",
- "sp-inherents",
  "sp-io",
  "sp-runtime",
  "sp-std",
