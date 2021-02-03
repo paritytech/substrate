@@ -143,9 +143,10 @@ impl Default for TestExtension {
 	}
 }
 
-impl ChainExtension for TestExtension {
-	fn call<E: Ext>(func_id: u32, env: Environment<E, InitState>) -> ExtensionResult<RetVal>
+impl ChainExtension<Test> for TestExtension {
+	fn call<E>(func_id: u32, env: Environment<E, InitState>) -> ExtensionResult<RetVal>
 	where
+		E: Ext<T = Test>,
 		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
 	{
 		match func_id {
@@ -512,7 +513,7 @@ fn instantiate_and_call_and_deposit_event() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: MetaEvent::contracts(
-						RawEvent::ContractExecution(addr.clone(), vec![1, 2, 3, 4])
+						RawEvent::ContractEmitted(addr.clone(), vec![1, 2, 3, 4])
 					),
 					topics: vec![],
 				},
@@ -549,7 +550,7 @@ fn deposit_event_max_value_limit() {
 			));
 			let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 
-			// The instantation deducted the rent for one block immediatly
+			// The instantiation deducted the rent for one block immediately
 			let first_rent = <Test as Config>::RentFraction::get()
 				// base_deposit - free_balance
 				.mul_ceil(80_000 - 30_000)
@@ -812,7 +813,7 @@ fn deduct_blocks() {
 			let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 			ContractInfoOf::<Test>::get(&addr).unwrap().get_alive().unwrap();
 
-			// The instantation deducted the rent for one block immediatly
+			// The instantiation deducted the rent for one block immediately
 			let rent0 = <Test as Config>::RentFraction::get()
 				// base_deposit + deploy_set_storage (4 bytes in 1 item) - free_balance
 				.mul_ceil(80_000 + 40_000 + 10_000 - 30_000)
@@ -1173,7 +1174,7 @@ fn default_rent_allowance_on_instantiate() {
 			));
 			let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 
-			// The instantation deducted the rent for one block immediatly
+			// The instantiation deducted the rent for one block immediately
 			let first_rent = <Test as Config>::RentFraction::get()
 				// base_deposit - free_balance
 				.mul_ceil(80_000 - 30_000)
@@ -1300,7 +1301,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 				EventRecord {
 					phase: Phase::Initialization,
 					event: MetaEvent::contracts(
-						RawEvent::Evicted(addr_bob.clone(), true)
+						RawEvent::Evicted(addr_bob.clone())
 					),
 					topics: vec![],
 				},
@@ -1385,7 +1386,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 						pretty_assertions::assert_eq!(System::events(), vec![
 							EventRecord {
 								phase: Phase::Initialization,
-								event: MetaEvent::contracts(RawEvent::Evicted(addr_bob, true)),
+								event: MetaEvent::contracts(RawEvent::Evicted(addr_bob)),
 								topics: vec![],
 							},
 							EventRecord {
@@ -1633,6 +1634,7 @@ fn self_destruct_works() {
 		.build()
 		.execute_with(|| {
 			let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+			let _ = Balances::deposit_creating(&DJANGO, 1_000_000);
 			assert_ok!(Contracts::put_code(Origin::signed(ALICE), wasm));
 
 			// Instantiate the BOB contract.
@@ -1652,6 +1654,9 @@ fn self_destruct_works() {
 				Some(ContractInfo::Alive(_))
 			);
 
+			// Drop all previous events
+			initialize_block(2);
+
 			// Call BOB without input data which triggers termination.
 			assert_matches!(
 				Contracts::call(
@@ -1664,11 +1669,35 @@ fn self_destruct_works() {
 				Ok(_)
 			);
 
+			pretty_assertions::assert_eq!(System::events(), vec![
+				EventRecord {
+					phase: Phase::Initialization,
+					event: MetaEvent::system(
+						frame_system::Event::KilledAccount(addr.clone())
+					),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: MetaEvent::balances(
+						pallet_balances::RawEvent::Transfer(addr.clone(), DJANGO, 100_000)
+					),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: MetaEvent::contracts(
+						RawEvent::Terminated(addr.clone(), DJANGO)
+					),
+					topics: vec![],
+				},
+			]);
+
 			// Check that account is gone
 			assert!(ContractInfoOf::<Test>::get(&addr).is_none());
 
 			// check that the beneficiary (django) got remaining balance
-			assert_eq!(Balances::free_balance(DJANGO), 100_000);
+			assert_eq!(Balances::free_balance(DJANGO), 1_100_000);
 		});
 }
 
@@ -2501,7 +2530,7 @@ fn deletion_queue_full() {
 fn not_deployed_if_endowment_too_low_for_first_rent() {
 	let (wasm, code_hash) = compile_module::<Test>("set_rent").unwrap();
 
-	// The instantation deducted the rent for one block immediatly
+	// The instantiation deducted the rent for one block immediately
 	let first_rent = <Test as Config>::RentFraction::get()
 		// base_deposit + deploy_set_storage (4 bytes in 1 item) - free_balance
 		.mul_ceil(80_000u32 + 40_000 + 10_000 - 30_000)
@@ -2546,7 +2575,7 @@ fn surcharge_reward_is_capped() {
 		let balance = Balances::free_balance(&ALICE);
 		let reward = <Test as Config>::SurchargeReward::get();
 
-		// some rent should have payed due to instantation
+		// some rent should have payed due to instantiation
 		assert_ne!(contract.rent_payed, 0);
 
 		// the reward should be parameterized sufficiently high to make this test useful

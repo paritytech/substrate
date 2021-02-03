@@ -897,3 +897,41 @@ fn block_announce_data_is_propagated() {
 		net.block_until_idle();
 	}
 }
+
+#[test]
+fn continue_to_sync_after_some_block_announcement_verifications_failed() {
+	struct TestBlockAnnounceValidator;
+
+	impl BlockAnnounceValidator<Block> for TestBlockAnnounceValidator {
+		fn validate(
+			&mut self,
+			header: &Header,
+			_: &[u8],
+		) -> Pin<Box<dyn Future<Output = Result<Validation, Box<dyn std::error::Error + Send>>> + Send>> {
+			let number = *header.number();
+			async move {
+				if number < 100 {
+					Err(Box::<dyn std::error::Error + Send + Sync>::from(String::from("error")) as Box<_>)
+				} else {
+					Ok(Validation::Success { is_new_best: false })
+				}
+			}.boxed()
+		}
+	}
+
+	sp_tracing::try_init_simple();
+	let mut net = TestNet::new(1);
+
+	net.add_full_peer_with_config(FullPeerConfig {
+		block_announce_validator: Some(Box::new(TestBlockAnnounceValidator)),
+		..Default::default()
+	});
+
+	net.block_until_connected();
+	net.block_until_idle();
+
+	let block_hash = net.peer(0).push_blocks(500, true);
+
+	net.block_until_sync();
+	assert!(net.peer(1).has_block(&block_hash));
+}
