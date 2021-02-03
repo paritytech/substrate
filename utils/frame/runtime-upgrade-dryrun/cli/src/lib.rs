@@ -16,13 +16,11 @@
 // limitations under the License.
 
 use std::{fmt::Debug, str::FromStr};
-use remote_externalities::TestExternalities;
 use sc_service::Configuration;
-use sp_api::{ProvideRuntimeApi, BlockId};
-use sp_blockchain::{HeaderBackend, HeaderMetadata, Error as BlockChainError};
+use sp_api::BlockId;
 use std::sync::Arc;
 use runtime_upgrade_dryrun_api::DryRunRuntimeUpgrade;
-use sc_cli::{SharedParams, CliConfiguration, ExecutionStrategy};
+use sc_cli::{CliConfiguration, ExecutionStrategy};
 use sc_executor::{WasmExecutionMethod, NativeExecutor};
 use sp_state_machine::StateMachine;
 use sc_service::NativeExecutionDispatch;
