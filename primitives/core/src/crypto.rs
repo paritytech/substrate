@@ -239,13 +239,31 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 		let mut res = Self::default();
 		let len = res.as_mut().len();
 		let d = s.from_base58().map_err(|_| PublicError::BadBase58)?; // failure here would be invalid encoding.
-		if d.len() != len + 3 {
-			// Invalid length.
+		let prefix = if d.len() == len + 3 && d[0] < 64 {
+			1
+		} else if d.len() == len + 4 && d[0] >= 64 && d[0] < 128 {
+			2
+		} else {
+			// Invalid length/prefix combination.
 			return Err(PublicError::BadLength);
-		}
-		let ver = d[0].try_into().map_err(|_: ()| PublicError::UnknownVersion)?;
+		};
+		let identifier: u16 = match d[0] {
+			x @ 0..64 => x as u16,
+			// weird bit manipulation owing to the combination of LE encoding and missing two bits
+			// from the left.
+			// d[0] d[1] are: 01aaaaaa bbcccccc
+			// they make the LE-encoded 16-bit value: aaaaaabb 00cccccc
+			// so the lower byte is formed of aaaaaabb and the higher byte is 00cccccc
+			x @ 64..128 => {
+				let lower = ((x & 0b00111111) << 2) | (d[1] >> 6);
+				let upper = d[1] & 0b00111111;
+				(lower as u16) | ((upper as u16) << 8)
+			}
+			_ => Err(PublicError::UnknownVersion)?,
+		};
+		let ver = identifier.try_into().map_err(|_: ()| PublicError::UnknownVersion)?;
 
-		if d[len + 1..len + 3] != ss58hash(&d[0..len + 1]).as_bytes()[0..2] {
+		if d[len + prefix..len + prefix + 2] != ss58hash(&d[0..len + 1]).as_bytes()[0..2] {
 			// Invalid checksum.
 			return Err(PublicError::InvalidChecksum);
 		}
@@ -267,7 +285,19 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 	/// Return the ss58-check string for this key.
 	#[cfg(feature = "std")]
 	fn to_ss58check_with_version(&self, version: Ss58AddressFormat) -> String {
-		let mut v = vec![version.into()];
+		let ident: u16 = version.into();
+		let mut v = match idenfitier {
+			0..64 => vec![version as u8],
+			64..16_384 => {
+				// upper six bits of the lower byte(!)
+				let first = ((ident & 0b00000000_11111100) as u8) >> 2;
+				// lower two bits of the lower byte in the high pos,
+				// lower bits of the upper byte in the low pos
+				let second = ((ident >> 8) as u8) | ((ident & 0b00000000_00000011) as u8) << 6;
+				vec![first | 0b01000000, second]
+			}
+			_ => unreachable!("Ss58AddressFormat only allows identifiers up to 16_383; qed"),
+		};
 		v.extend(self.as_ref());
 		let r = ss58hash(&v);
 		v.extend(&r.as_bytes()[0..2]);
@@ -321,8 +351,8 @@ macro_rules! ss58_address_format {
 		#[derive(Copy, Clone, PartialEq, Eq, crate::RuntimeDebug)]
 		pub enum Ss58AddressFormat {
 			$(#[doc = $desc] $identifier),*,
-			/// Use a manually provided numeric value.
-			Custom(u8),
+			/// Use a manually provided numeric value as a standard identifier
+			Custom(u16),
 		}
 
 		#[cfg(feature = "std")]
@@ -363,11 +393,15 @@ macro_rules! ss58_address_format {
 			}
 		}
 
-		impl From<Ss58AddressFormat> for u8 {
-			fn from(x: Ss58AddressFormat) -> u8 {
-				match x {
-					$(Ss58AddressFormat::$identifier => $number),*,
-					Ss58AddressFormat::Custom(n) => n,
+		impl TryFrom<Ss58AddressFormat> for u8 {
+			type Error = ();
+
+			fn try_from(x: Ss58AddressFormat) -> Result<u8, ()> {
+				let v: u16 = x.into();
+				if v < 256 {
+					Ok(v as u8)
+				} else {
+					Err(())
 				}
 			}
 		}
@@ -376,12 +410,29 @@ macro_rules! ss58_address_format {
 			type Error = ();
 
 			fn try_from(x: u8) -> Result<Ss58AddressFormat, ()> {
+				Ss58AddressFormat::try_from(x as u16)
+			}
+		}
+
+		impl From<Ss58AddressFormat> for u16 {
+			fn from(x: Ss58AddressFormat) -> u16 {
+				match x {
+					$(Ss58AddressFormat::$identifier => $number),*,
+					Ss58AddressFormat::Custom(n) => n,
+				}
+			}
+		}
+
+		impl TryFrom<u16> for Ss58AddressFormat {
+			type Error = ();
+
+			fn try_from(x: u16) -> Result<Ss58AddressFormat, ()> {
 				match x {
 					$($number => Ok(Ss58AddressFormat::$identifier)),*,
 					_ => {
 						#[cfg(feature = "std")]
 						match Ss58AddressFormat::default() {
-							Ss58AddressFormat::Custom(n) if n == x => Ok(Ss58AddressFormat::Custom(x)),
+							y @ Ss58AddressFormat::Custom(n) if n == x => Ok(y),
 							_ => Err(()),
 						}
 
@@ -444,12 +495,12 @@ macro_rules! ss58_address_format {
 ss58_address_format!(
 	PolkadotAccount =>
 		(0, "polkadot", "Polkadot Relay-chain, standard account (*25519).")
-	Reserved1 =>
-		(1, "reserved1", "Reserved for future use (1).")
+	BareSr25519 =>
+		(1, "sr25519", "Bare 32-bit Schnorr/Ristretto 25519 (S/R 25519) key.")
 	KusamaAccount =>
 		(2, "kusama", "Kusama Relay-chain, standard account (*25519).")
-	Reserved3 =>
-		(3, "reserved3", "Reserved for future use (3).")
+	BareEd25519 =>
+		(3, "ed25519", "Bare 32-bit Edwards Ed25519 key.")
 	KatalChainAccount =>
 		(4, "katalchain", "Katal Chain, standard account (*25519).")
 	PlasmAccount =>
@@ -501,7 +552,7 @@ ss58_address_format!(
 	SubsocialAccount =>
 		(28, "subsocial", "Subsocial network, standard account (*25519).")
 	DhiwayAccount =>
-		(29, "cord", "Dhiway CORD network, standard account (*25519).")	
+		(29, "cord", "Dhiway CORD network, standard account (*25519).")
 	PhalaAccount =>
 		(30, "phala", "Phala Network, standard account (*25519).")
 	LitentryAccount =>
@@ -522,8 +573,8 @@ ss58_address_format!(
 		(41, "poli", "Polimec Chain mainnet, standard account (*25519).")
 	SubstrateAccount =>
 		(42, "substrate", "Any Substrate network, standard account (*25519).")
-	Reserved43 =>
-		(43, "reserved43", "Reserved for future use (43).")
+	BareSecp256k1 =>
+		(43, "secp256k1", "Bare ECDSA SECP256k1 key.")
 	ChainXAccount =>
 		(44, "chainx", "ChainX mainnet, standard account (*25519).")
 	UniartsAccount =>
@@ -532,7 +583,6 @@ ss58_address_format!(
 		(46, "reserved46", "Reserved for future use (46).")
 	Reserved47 =>
 		(47, "reserved47", "Reserved for future use (47).")
-	// Note: 48 and above are reserved.
 );
 
 /// Set the default "version" (actually, this is a bit of a misnomer and the version byte is

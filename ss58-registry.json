@@ -436,7 +436,7 @@
 		{
 			"prefix": 48,
 			"network": "reserved48",
-			"displayName": "All prefixes 48 and higher are reserved and cannot be allocated.",
+			"displayName": "All prefixes 48 and higher must be encoded using two bytes (secondary prefixes).",
 			"symbols": null,
 			"decimals": null,
 			"standardAccount": null,
