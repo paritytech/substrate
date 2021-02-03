@@ -1620,11 +1620,11 @@ dependencies = [
 [[package]]
 name = "frame-metadata"
 version = "12.0.0"
-source = "git+https://github.com/paritytech/frame-metadata?branch=aj-chameleon#b1008c8f6032eb2ed27a590b28ac39356b7b480f"
+source = "git+https://github.com/paritytech/frame-metadata?branch=aj-scale-info-decode-feature#0ec6a4c32b96ecc6f9137d92b51c48dac78a9ec1"
 dependencies = [
  "cfg-if 1.0.0",
- "parity-scale-codec 1.3.6",
- "scale-info 0.4.1",
+ "parity-scale-codec 2.0.0",
+ "scale-info",
 ]
 
 [[package]]
@@ -1653,7 +1653,7 @@ dependencies = [
  "parity-util-mem",
  "paste 0.1.18",
  "pretty_assertions",
- "scale-info 0.5.0",
+ "scale-info",
  "serde",
  "smallvec 1.5.0",
  "sp-api",
@@ -1727,7 +1727,7 @@ dependencies = [
  "frame-support",
  "impl-trait-for-tuples 0.2.0",
  "parity-scale-codec 1.3.6",
- "scale-info 0.5.0",
+ "scale-info",
  "serde",
  "sp-core",
  "sp-externalities",
@@ -4013,7 +4013,7 @@ dependencies = [
  "pallet-utility",
  "pallet-vesting",
  "parity-scale-codec 1.3.6",
- "scale-info 0.5.0",
+ "scale-info",
  "serde",
  "sp-api",
  "sp-authority-discovery",
@@ -4092,7 +4092,7 @@ dependencies = [
  "pallet-transaction-payment",
  "pallet-transaction-payment-rpc-runtime-api",
  "parity-scale-codec 1.3.6",
- "scale-info 0.5.0",
+ "scale-info",
  "serde",
  "sp-api",
  "sp-block-builder",
@@ -4436,7 +4436,7 @@ dependencies = [
  "frame-system",
  "pallet-transaction-payment",
  "parity-scale-codec 1.3.6",
- "scale-info 0.5.0",
+ "scale-info",
  "serde",
  "sp-core",
  "sp-io",
@@ -4623,7 +4623,7 @@ dependencies = [
  "frame-system",
  "pallet-balances",
  "parity-scale-codec 1.3.6",
- "scale-info 0.5.0",
+ "scale-info",
  "serde",
  "sp-core",
  "sp-io",
@@ -5109,7 +5109,7 @@ dependencies = [
  "frame-system",
  "impl-trait-for-tuples 0.2.0",
  "parity-scale-codec 1.3.6",
- "scale-info 0.5.0",
+ "scale-info",
  "serde",
  "sp-core",
  "sp-inherents",
@@ -5145,7 +5145,7 @@ dependencies = [
  "frame-system",
  "pallet-balances",
  "parity-scale-codec 1.3.6",
- "scale-info 0.5.0",
+ "scale-info",
  "serde",
  "serde_json",
  "smallvec 1.5.0",
@@ -7736,41 +7736,21 @@ dependencies = [
 
 [[package]]
 name = "scale-info"
-version = "0.4.1"
-source = "git+https://github.com/paritytech/scale-info#8b7bd5e372abd6dd83efdecb727522e7c5b0e712"
-dependencies = [
- "cfg-if 1.0.0",
- "derive_more",
- "parity-scale-codec 1.3.6",
- "scale-info-derive 0.2.1",
-]
-
-[[package]]
-name = "scale-info"
 version = "0.5.0"
-source = "git+https://github.com/paritytech/scale-info?branch=aj-decode-feature#dd2befe7e801f34b913975e33463f4341dbcf56a"
+source = "git+https://github.com/paritytech/scale-info?branch=aj-substrate#71cf6e5259ea02898add4710a3917eb7a4ad79a4"
 dependencies = [
  "cfg-if 1.0.0",
  "derive_more",
  "parity-scale-codec 2.0.0",
- "scale-info-derive 0.3.0",
-]
-
-[[package]]
-name = "scale-info-derive"
-version = "0.2.1"
-source = "git+https://github.com/paritytech/scale-info#8b7bd5e372abd6dd83efdecb727522e7c5b0e712"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
+ "scale-info-derive",
 ]
 
 [[package]]
 name = "scale-info-derive"
 version = "0.3.0"
-source = "git+https://github.com/paritytech/scale-info?branch=aj-decode-feature#dd2befe7e801f34b913975e33463f4341dbcf56a"
+source = "git+https://github.com/paritytech/scale-info?branch=aj-substrate#71cf6e5259ea02898add4710a3917eb7a4ad79a4"
 dependencies = [
+ "proc-macro-crate",
  "proc-macro2",
  "quote",
  "syn",
@@ -8237,7 +8217,7 @@ dependencies = [
  "parity-scale-codec 1.3.6",
  "primitive-types",
  "rand 0.7.3",
- "scale-info 0.5.0",
+ "scale-info",
  "serde",
  "serde_json",
  "sp-debug-derive",
@@ -8429,7 +8409,7 @@ dependencies = [
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "regex",
- "scale-info 0.5.0",
+ "scale-info",
  "schnorrkel",
  "secrecy",
  "serde",
@@ -8641,7 +8621,7 @@ dependencies = [
  "parity-util-mem",
  "paste 0.1.18",
  "rand 0.7.3",
- "scale-info 0.5.0",
+ "scale-info",
  "serde",
  "serde_json",
  "sp-application-crypto",
