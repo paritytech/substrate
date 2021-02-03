@@ -35,7 +35,7 @@ pub struct TelemetryLayer(Mutex<mpsc::Sender<(Id, u8, String)>>);
 impl TelemetryLayer {
 	/// Create a new [`TelemetryLayer`] and [`TelemetryWorker`].
 	///
-	/// If not provided, the `buffer_size` will be 16 by default.
+	/// The `buffer_size` defaults to 16.
 	///
 	/// The [`ExtTransport`] is used in WASM contexts where we need some binding between the
 	/// networking provided by the operating system or environment and libp2p.

@@ -17,6 +17,7 @@ frame-benchmarking = { version = "2.0.0", default-features = false, path = "../b
 frame-support = { version = "2.0.0", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0", default-features = false, path = "../system" }
 mmr-lib = { package = "ckb-merkle-mountain-range", default-features = false, version = "0.3.1" }
+pallet-mmr-primitives = { version = "2.0.0", default-features = false, path = "./primitives" }
 serde = { version = "1.0.101", optional = true }
 sp-core = { version = "2.0.0", default-features = false, path = "../../primitives/core" }
 sp-io = { version = "2.0.0", default-features = false, path = "../../primitives/io" }
@@ -35,6 +36,7 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 	"mmr-lib/std",
+	"pallet-mmr-primitives/std",
 	"serde",
 	"sp-core/std",
 	"sp-io/std",

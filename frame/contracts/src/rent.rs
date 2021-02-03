@@ -261,7 +261,7 @@ where
 				);
 				let tombstone_info = ContractInfo::Tombstone(tombstone);
 				<ContractInfoOf<T>>::insert(account, &tombstone_info);
-				<Module<T>>::deposit_event(RawEvent::Evicted(account.clone(), true));
+				<Module<T>>::deposit_event(RawEvent::Evicted(account.clone()));
 				Ok(Some(tombstone_info))
 			}
 			Verdict::Charge { amount } => {

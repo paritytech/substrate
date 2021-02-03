@@ -396,19 +396,27 @@ impl<T: Config> ProvideInherent for Module<T> {
 
 #[cfg(test)]
 mod tests {
+	use crate as pallet_authorship;
 	use super::*;
 	use sp_core::H256;
 	use sp_runtime::{
 		traits::{BlakeTwo256, IdentityLookup}, testing::Header, generic::DigestItem,
 	};
-	use frame_support::{parameter_types, impl_outer_origin, ConsensusEngineId};
+	use frame_support::{parameter_types, ConsensusEngineId};
 
-	impl_outer_origin!{
-		pub enum Origin for Test where system = frame_system {}
-	}
+	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+	type Block = frame_system::mocking::MockBlock<Test>;
 
-	#[derive(Clone, Eq, PartialEq)]
-	pub struct Test;
+	frame_support::construct_runtime!(
+		pub enum Test where
+			Block = Block,
+			NodeBlock = Block,
+			UncheckedExtrinsic = UncheckedExtrinsic,
+		{
+			System: frame_system::{Module, Call, Config, Storage, Event<T>},
+			Authorship: pallet_authorship::{Module, Call, Storage, Inherent},
+		}
+	);
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
@@ -424,16 +432,16 @@ mod tests {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
-		type Call = ();
+		type Call = Call;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = ();
+		type Event = Event;
 		type BlockHashCount = BlockHashCount;
 		type Version = ();
-		type PalletInfo = ();
+		type PalletInfo = PalletInfo;
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
@@ -451,9 +459,6 @@ mod tests {
 		type FilterUncle = SealVerify<VerifyBlock>;
 		type EventHandler = ();
 	}
-
-	type System = frame_system::Module<Test>;
-	type Authorship = Module<Test>;
 
 	const TEST_ID: ConsensusEngineId = [1, 2, 3, 4];
 
