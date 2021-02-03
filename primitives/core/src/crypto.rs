@@ -248,14 +248,14 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 			return Err(PublicError::BadLength);
 		};
 		let identifier: u16 = match d[0] {
-			x @ 0..64 => x as u16,
+			0..=63 => d[0] as u16,
 			// weird bit manipulation owing to the combination of LE encoding and missing two bits
 			// from the left.
 			// d[0] d[1] are: 01aaaaaa bbcccccc
 			// they make the LE-encoded 16-bit value: aaaaaabb 00cccccc
 			// so the lower byte is formed of aaaaaabb and the higher byte is 00cccccc
-			x @ 64..128 => {
-				let lower = ((x & 0b00111111) << 2) | (d[1] >> 6);
+			64..=127 => {
+				let lower = ((d[0] & 0b00111111) << 2) | (d[1] >> 6);
 				let upper = d[1] & 0b00111111;
 				(lower as u16) | ((upper as u16) << 8)
 			}
@@ -286,9 +286,9 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 	#[cfg(feature = "std")]
 	fn to_ss58check_with_version(&self, version: Ss58AddressFormat) -> String {
 		let ident: u16 = version.into();
-		let mut v = match idenfitier {
-			0..64 => vec![version as u8],
-			64..16_384 => {
+		let mut v = match ident {
+			0..=63 => vec![ident as u8],
+			64..=16_383 => {
 				// upper six bits of the lower byte(!)
 				let first = ((ident & 0b00000000_11111100) as u8) >> 2;
 				// lower two bits of the lower byte in the high pos,
@@ -432,7 +432,7 @@ macro_rules! ss58_address_format {
 					_ => {
 						#[cfg(feature = "std")]
 						match Ss58AddressFormat::default() {
-							y @ Ss58AddressFormat::Custom(n) if n == x => Ok(y),
+							Ss58AddressFormat::Custom(n) if n == x => Ok(Ss58AddressFormat::Custom(n)),
 							_ => Err(()),
 						}
 
@@ -454,7 +454,7 @@ macro_rules! ss58_address_format {
 			fn try_from(x: &'a str) -> Result<Ss58AddressFormat, Self::Error> {
 				match x {
 					$($name => Ok(Ss58AddressFormat::$identifier)),*,
-					a => a.parse::<u8>().map(Ss58AddressFormat::Custom).map_err(|_| ParseError),
+					a => a.parse::<u16>().map(Ss58AddressFormat::Custom).map_err(|_| ParseError),
 				}
 			}
 		}
