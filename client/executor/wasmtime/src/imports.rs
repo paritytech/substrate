@@ -157,7 +157,7 @@ fn resolve_func_import(
 			)));
 		}
 	};
-	if !signature_matches(&func_ty, &wasmtime_func_sig(*host_func)) {
+	if &func_ty != &wasmtime_func_sig(*host_func) {
 		return Err(WasmError::Other(format!(
 			"signature mismatch for: {}:{}",
 			import_ty.module(),
@@ -166,11 +166,6 @@ fn resolve_func_import(
 	}
 
 	Ok(HostFuncHandler::new(*host_func).into_extern(store))
-}
-
-/// Returns `true` if `lhs` and `rhs` represent the same signature.
-fn signature_matches(lhs: &wasmtime::FuncType, rhs: &wasmtime::FuncType) -> bool {
-	lhs.params() == rhs.params() && lhs.results() == rhs.results()
 }
 
 /// This structure implements `Callable` and acts as a bridge between wasmtime and
@@ -277,22 +272,17 @@ impl MissingHostFuncHandler {
 }
 
 fn wasmtime_func_sig(func: &dyn Function) -> wasmtime::FuncType {
-	let params = func
-		.signature()
+	let signature = func.signature();
+	let params = signature
 		.args
 		.iter()
 		.cloned()
-		.map(into_wasmtime_val_type)
-		.collect::<Vec<_>>()
-		.into_boxed_slice();
-	let results = func
-		.signature()
+		.map(into_wasmtime_val_type);
+	let results = signature
 		.return_value
 		.iter()
 		.cloned()
-		.map(into_wasmtime_val_type)
-		.collect::<Vec<_>>()
-		.into_boxed_slice();
+		.map(into_wasmtime_val_type);
 	wasmtime::FuncType::new(params, results)
 }
 
