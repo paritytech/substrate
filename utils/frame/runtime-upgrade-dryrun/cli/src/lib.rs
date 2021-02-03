@@ -23,18 +23,13 @@ use sp_blockchain::{HeaderBackend, HeaderMetadata, Error as BlockChainError};
 use std::sync::Arc;
 use runtime_upgrade_dryrun_api::DryRunRuntimeUpgrade;
 use sc_cli::{SharedParams, CliConfiguration, ExecutionStrategy};
-use sc_executor::WasmExecutionMethod;
-use sc_client_api::Backend;
-use sc_executor::NativeExecutor;
+use sc_executor::{WasmExecutionMethod, NativeExecutor};
 use sp_state_machine::StateMachine;
-use sp_externalities::Extensions;
-use sc_service::{NativeExecutionDispatch};
+use sc_service::NativeExecutionDispatch;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 
 #[derive(Debug)]
-pub enum Error {
-
-}
+pub enum Error {}
 
 impl ToString for Error {
 	fn to_string(&self) -> String {
@@ -81,35 +76,46 @@ pub struct DryRunConfig {
 }
 
 impl DryRunCmd {
-	pub async fn run<B, ExecDispatch>(
+	pub async fn run<B, BA, ExecDispatch>(
 		&self,
 		config: Configuration,
+		backend: Arc<BA>,
 	) -> sc_cli::Result<()>
 	where
 		B: BlockT,
-		// BA: Backend<B>,
-		// C: ProvideRuntimeApi<B>
-		// 	+ HeaderBackend<B>
-		// 	+ HeaderMetadata<B, Error = BlockChainError>
-		// 	+ 'static,
-		// C::Api: DryRunRuntimeUpgrade<B>,
-		//    ^^ In case you want to use test-runner or generally the client abstraction, you'd want
-		//    something like this.
+		BA: sc_client_api::Backend<B>,
 		ExecDispatch: NativeExecutionDispatch + 'static,
+		/* C: ProvideRuntimeApi<B>
+		 * 	+ HeaderBackend<B>
+		 * 	+ HeaderMetadata<B, Error = BlockChainError>
+		 * 	+ 'static,
+		 * C::Api: DryRunRuntimeUpgrade<B>,
+		 *    ^^ In case you want to use test-runner or generally the client abstraction, you'd
+		 * want    something like this. */
 	{
 		let spec = config.chain_spec;
-		let wasm_method = WasmExecutionMethod::Compiled;
+		let genesis_storage = spec.build_storage()?;
+		let code = sp_core::storage::StorageData(genesis_storage.top.get(sp_core::storage::well_known_keys::CODE).unwrap().to_vec());
+		let code_key = sp_core::storage::StorageKey(sp_core::storage::well_known_keys::CODE.to_vec());
+		let wasm_method = WasmExecutionMethod::Interpreted;
 		let strategy = ExecutionStrategy::Native;
 		let mut changes = Default::default();
 		let cache_size = Some(1024usize);
 		let heap_pages = Some(1024);
+		let executor = NativeExecutor::<ExecDispatch>::new(wasm_method, heap_pages, 2);
 
 		let ext = remote_externalities::Builder::new()
 			.cache_mode(remote_externalities::CacheMode::UseElseCreate)
-			.cache_name(remote_externalities::CacheName::Forced("Kusama,0xdd772d86d5cfd2be9a11dd504866c7878ee071aefe02ff7db3d749f98bf890b8,.bin".into()))
-			.build().await;
-		let executor = NativeExecutor::<ExecDispatch>::new(wasm_method, heap_pages, 2);
+			.cache_name(remote_externalities::CacheName::Forced(
+				"Kusama,0xdd772d86d5cfd2be9a11dd504866c7878ee071aefe02ff7db3d749f98bf890b8,.bin"
+					.into(),
+			))
+			.inject(&[(code_key, code)])
+			.build()
+			.await;
 
+		// replace :CODE:
+		let real_state = backend.state_at(BlockId::Number(1u32.into()));
 		let result = StateMachine::<_, _, NumberFor<B>, _>::new(
 			&ext.backend,
 			None,

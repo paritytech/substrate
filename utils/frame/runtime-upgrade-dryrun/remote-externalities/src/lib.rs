@@ -270,6 +270,10 @@ impl Builder {
 		fs::read(path)
 			.map_err(|_| "failed to read cache")
 			.and_then(|b| bincode::deserialize(&b[..]).map_err(|_| "failed to decode cache"))
+			.map(|mut kps: Vec<_>| {
+				kps.extend(self.inject.clone());
+				kps
+			})
 	}
 
 	/// Get the final `at` that shall be used.
