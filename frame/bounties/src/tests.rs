@@ -18,6 +18,7 @@
 //! bounties pallet tests.
 
 #![cfg(test)]
+
 use crate as pallet_bounties;
 use super::*;
 use std::cell::RefCell;
