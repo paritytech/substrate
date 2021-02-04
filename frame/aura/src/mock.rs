@@ -21,12 +21,8 @@
 
 use crate as pallet_aura;
 use sp_consensus_aura::ed25519::AuthorityId;
-use sp_runtime::{
-	traits::IdentityLookup,
-	testing::{Header, UintAuthorityId},
-};
-use frame_support::parameter_types;
-use sp_io;
+use sp_runtime::{traits::IdentityLookup, testing::{Header, UintAuthorityId}};
+use frame_support::{parameter_types, traits::GenesisBuild};
 use sp_core::H256;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -40,7 +36,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
 		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
-		Aura: pallet_aura::{Module, Call, Storage, Config<T>, Inherent},
+		Aura: pallet_aura::{Module, Call, Storage, Config<T>},
 	}
 );
 

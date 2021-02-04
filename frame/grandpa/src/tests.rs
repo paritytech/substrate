@@ -25,11 +25,10 @@ use codec::{Decode, Encode};
 use fg_primitives::ScheduledChange;
 use frame_support::{
 	assert_err, assert_ok,
-	traits::{Currency, OnFinalize},
+	traits::{Currency, OnFinalize, OneSessionHandler},
 	weights::{GetDispatchInfo, Pays},
 };
 use frame_system::{EventRecord, Phase};
-use pallet_session::OneSessionHandler;
 use sp_core::H256;
 use sp_keyring::Ed25519Keyring;
 use sp_runtime::testing::Digest;

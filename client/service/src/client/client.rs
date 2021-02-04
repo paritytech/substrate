@@ -1919,6 +1919,14 @@ impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 	fn block_hash(&self, number: NumberFor<Block>) -> sp_blockchain::Result<Option<Block::Hash>> {
 		self.backend.blockchain().hash(number)
 	}
+
+	fn extrinsic(&self, hash: &Block::Hash) -> sp_blockchain::Result<Option<Block::Extrinsic>> {
+		self.backend.blockchain().extrinsic(hash)
+	}
+
+	fn have_extrinsic(&self, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
+		self.backend.blockchain().have_extrinsic(hash)
+	}
 }
 
 impl<B, E, Block, RA> backend::AuxStore for Client<B, E, Block, RA>
