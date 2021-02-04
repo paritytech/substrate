@@ -207,8 +207,10 @@ mod ordered {
 	use codec::Codec;
 	use std::sync::Arc;
 	use parking_lot::RwLock;
-	use radix_tree::{Derivative, RadixConf, Children, NodeConf, Node,
-		Children256, Radix256Conf, Value};
+	use radix_tree::{Derivative, Value, TreeConf, Node,
+		radix::{RadixConf, impls::Radix256Conf},
+		children::{Children, Children256},
+	};
 
 	use core::fmt::Debug;
 
@@ -219,8 +221,10 @@ mod ordered {
 		Node256LazyHashBackend,
 		Children256,
 		Radix256Conf,
-		radix_tree::backend::LazyExt<
-			radix_tree::backend::ArcBackend<radix_tree::backend::TransactionBackend<WrapColumnDb<H>>>
+		radix_tree::backends::LazyBackend<
+			radix_tree::backends::ArcBackend<
+				radix_tree::backends::TransactionBackend<WrapColumnDb<H>>
+			>
 		>,
 		H,
 		{ H: Debug + PartialEq + Clone}
@@ -247,7 +251,7 @@ mod ordered {
 		}
 	}
 
-	impl<H: Clone> radix_tree::backend::ReadBackend for WrapColumnDb<H> {
+	impl<H: Clone> radix_tree::backends::ReadBackend for WrapColumnDb<H> {
 		fn read(&self, k: &[u8]) -> Option<Vec<u8>> {
 			let prefix = &self.prefix;
 			subcollection_prefixed_key!(prefix, k);
@@ -276,8 +280,8 @@ mod ordered {
 				let len = self.trees.read().len();
 				if len <= index {
 					self.trees.write().push(radix_tree::Tree::from_backend(
-						radix_tree::backend::ArcBackend::new(
-							radix_tree::backend::TransactionBackend::new(
+						radix_tree::backends::ArcBackend::new(
+							radix_tree::backends::TransactionBackend::new(
 								WrapColumnDb {
 									inner: self.inner.clone(),
 									col: len as u32,

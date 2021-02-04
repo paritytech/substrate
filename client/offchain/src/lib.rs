@@ -350,7 +350,7 @@ mod tests {
 				.enable_offchain_indexing_api()
 				.build_with_backend();
 		let mut client = Arc::new(client);
-		let offchain_db = backend.offchain_storage().unwrap();
+		let offchain_db = backend.offchain_persistent_storage().unwrap();
 
 		let key = &b"hello"[..];
 		let value = &b"world"[..];

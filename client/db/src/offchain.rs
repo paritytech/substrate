@@ -466,13 +466,7 @@ impl sp_core::offchain::OffchainStorage for BlockChainLocalAt {
 	}
 
 	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
-		// TODO consider using a type to wrap this prefix key onstruction.
-		let key: Vec<u8> = prefix
-			.iter()
-			.chain(std::iter::once(&b'/'))
-			.chain(key)
-			.cloned()
-			.collect();
+		let key: Vec<u8> = concatenate_prefix_and_key(prefix, key);
 		self.db.get(columns::OFFCHAIN, &key)
 			.and_then(|v| {
 				let init_nodes = ContextHead {
@@ -537,12 +531,7 @@ impl BlockChainLocalAt {
 		if self.at_write.is_none() && is_new {
 			return Err(ModifyError::NoWriteState);
 		}
-		let key: Vec<u8> = prefix
-			.iter()
-			.chain(std::iter::once(&b'/'))
-			.chain(item_key)
-			.cloned()
-			.collect();
+		let key: Vec<u8> = concatenate_prefix_and_key(prefix, item_key);
 		let key_lock = if lock_assert {
 			let mut locks = self.locks.lock();
 			Some(locks.entry(key.clone()).or_default().clone())

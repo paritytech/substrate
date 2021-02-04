@@ -76,7 +76,7 @@ use hash_db::Prefix;
 use sp_trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};
 use sp_database::{Transaction, RadixTreeDatabase};
 use sp_core::{Hasher, ChangesTrieConfiguration};
-use sp_core::offchain::storage::{OffchainOverlayedChange, OffchainOverlayedChanges};
+use sp_core::offchain::OffchainOverlayedChange;
 use sp_core::storage::{well_known_keys, ChildInfo};
 use sp_arithmetic::traits::Saturating;
 use sp_runtime::{generic::{DigestItem, BlockId}, Justification, Storage};
@@ -1010,7 +1010,7 @@ impl<Block: BlockT> BlockImportOperation<Block> {
 			(historied_db, block_nodes, branch_nodes)
 		});
 		let mut journal_keys = journals.as_ref().map(|_| Vec::new());
-		for ((prefix, key), value_operation) in self.offchain_storage_updates.drain() {
+		for ((prefix, key), value_operation) in self.offchain_storage_updates.drain(..) {
 			let key = crate::offchain::concatenate_prefix_and_key(&prefix, &key);
 			match value_operation {
 				OffchainOverlayedChange::SetValue(val) =>
@@ -1409,7 +1409,7 @@ impl<Block: BlockT> Backend<Block> {
 		let blockchain = BlockchainDb::new(db.clone(), config.transaction_storage.clone())?;
 		let meta = blockchain.meta.clone();
 		let map_e = |e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from_state_db(e);
-		let historied_pruning_window = match &config.pruning {
+		let historied_pruning_window = match &config.state_pruning {
 			PruningMode::Constrained(constraint) => constraint.max_blocks.map(|nb| nb.into()),
 			_ => None,
 		};
@@ -2039,7 +2039,8 @@ impl<Block: BlockT> Backend<Block> {
 
 	fn historied_pruning(&self, hash: &Block::Hash, number: NumberFor<Block>)
 		-> ClientResult<()> {
-		let do_finalize = &number > &self.historied_next_finalizable.read().as_ref().unwrap_or(&0.into());
+		let do_finalize = &number > &self.historied_next_finalizable.read().as_ref()
+			.unwrap_or(&0u16.into());
 		if !do_finalize {
 			return Ok(())
 		}
@@ -2535,7 +2536,7 @@ pub(crate) mod tests {
 	use sp_runtime::testing::{Header, Block as RawBlock, ExtrinsicWrapper};
 	use sp_runtime::traits::{Hash, BlakeTwo256};
 	use sp_runtime::generic::DigestItem;
-	use sp_state_machine::{TrieMut, TrieDBMut};
+	use sp_state_machine::{TrieMut, TrieDBMut, OffchainOverlayedChanges};
 	use sp_blockchain::{lowest_common_ancestor, tree_route};
 
 	pub(crate) type Block = RawBlock<ExtrinsicWrapper<u64>>;
@@ -2572,6 +2573,7 @@ pub(crate) mod tests {
 		parent_hash: H256,
 		changes: Option<Vec<(Vec<u8>, Vec<u8>)>>,
 		offchain: Option<OffchainOverlayedChanges>,
+		extrinsics_root: H256,
 		body: Vec<ExtrinsicWrapper<u64>>,
 	) -> H256 {
 		use sp_runtime::testing::Digest;
@@ -2602,7 +2604,7 @@ pub(crate) mod tests {
 		op.set_block_data(header, Some(body), None, NewBlockState::Best).unwrap();
 		op.update_changes_trie((changes_trie_update, ChangesTrieCacheAction::Clear)).unwrap();
 		if let Some(offchain) = offchain {
-			op.update_offchain_storage(offchain).unwrap();
+			op.update_offchain_storage(offchain.into_iter().collect()).unwrap();
 		}
 		backend.commit_operation(op).unwrap();
 
@@ -3203,7 +3205,6 @@ pub(crate) mod tests {
 	}
 
 	#[test]
-<<<<<<< HEAD
 	fn offchain_backends_indexing() {
 		use sp_core::offchain::{BlockChainOffchainStorage, OffchainStorage};
 
@@ -3214,25 +3215,25 @@ pub(crate) mod tests {
 		let offchain_local_storage = offchain_local_storage.at(block0).unwrap();
 		assert_eq!(offchain_local_storage.get(b"prefix1", b"key1"), None);
 
-		let mut ooc = OffchainOverlayedChanges::enabled();
+		let mut ooc = OffchainOverlayedChanges::default();
 		ooc.set(b"prefix1", b"key1", b"value1", true);
-		let block1 = insert_block(&backend, 1, block0, None, Some(ooc), Default::default());
+		let block1 = insert_block(&backend, 1, block0, None, Some(ooc), Default::default(), Default::default());
 		let offchain_local_storage = backend.offchain_local_storage().unwrap();
 		assert_eq!(offchain_local_storage.at(block0).unwrap().get(b"prefix1", b"key1"), None);
 		let offchain_local_storage = offchain_local_storage.at(block1).unwrap();
 		assert_eq!(offchain_local_storage.get(b"prefix1", b"key1"), Some(b"value1".to_vec()));
 
-		let mut ooc = OffchainOverlayedChanges::enabled();
+		let mut ooc = OffchainOverlayedChanges::default();
 		ooc.set(b"prefix1", b"key1", vec![4u8; 20_000].as_slice(), true);
-		let block2 = insert_block(&backend, 2, block1, None, Some(ooc), Default::default());
+		let block2 = insert_block(&backend, 2, block1, None, Some(ooc), Default::default(), Default::default());
 		let offchain_local_storage = backend.offchain_local_storage().unwrap();
 		assert_eq!(offchain_local_storage.at(block1).unwrap().get(b"prefix1", b"key1"), Some(b"value1".to_vec()));
 		let offchain_local_storage = offchain_local_storage.at(block2).unwrap();
 		assert_eq!(offchain_local_storage.get(b"prefix1", b"key1").map(|v| v.len()), Some(20_000));
 
-		let mut ooc = OffchainOverlayedChanges::enabled();
+		let mut ooc = OffchainOverlayedChanges::default();
 		ooc.remove(b"prefix1", b"key1", true);
-		let block3 = insert_block(&backend, 3, block2, None, Some(ooc), Default::default());
+		let block3 = insert_block(&backend, 3, block2, None, Some(ooc), Default::default(), Default::default());
 		let offchain_local_storage = backend.offchain_local_storage().unwrap();
 		assert_eq!(offchain_local_storage.at(block0).unwrap().get(b"prefix1", b"key1"), None);
 		assert_eq!(offchain_local_storage.at(block1).unwrap().get(b"prefix1", b"key1"), Some(b"value1".to_vec()));
@@ -3240,9 +3241,9 @@ pub(crate) mod tests {
 		let offchain_local_storage = offchain_local_storage.at(block3).unwrap();
 		assert_eq!(offchain_local_storage.get(b"prefix1", b"key1").map(|v| v.len()), None);
 
-		let mut ooc = OffchainOverlayedChanges::enabled();
+		let mut ooc = OffchainOverlayedChanges::default();
 		ooc.remove(b"prefix1", b"key1", true);
-		let block1_b = insert_block(&backend, 1, block0, None, Some(ooc), [1; 32].into());
+		let block1_b = insert_block(&backend, 1, block0, None, Some(ooc), [1; 32].into(), Default::default());
 		let offchain_local_storage = backend.offchain_local_storage().unwrap();
 		assert_eq!(offchain_local_storage.at(block0).unwrap().get(b"prefix1", b"key1"), None);
 		assert_eq!(offchain_local_storage.at(block1).unwrap().get(b"prefix1", b"key1"), Some(b"value1".to_vec()));
@@ -3256,19 +3257,19 @@ pub(crate) mod tests {
 
 		let backend = Backend::<Block>::new_test(10, 10);
 
-		let block0 = insert_block(&backend, 0, Default::default(), None, None, Default::default());
+		let block0 = insert_block(&backend, 0, Default::default(), None, None, Default::default(), Default::default());
 		let offchain_local = backend.offchain_local_storage().unwrap();
 		let mut offchain_local_storage = offchain_local.at(block0).unwrap();
 		assert!(offchain_local_storage.can_update());
 		offchain_local_storage.set(b"prefix1", b"key1", b"test");
 		assert_eq!(offchain_local_storage.get(b"prefix1", b"key1"), Some(b"test".to_vec()));
 
-		let block1 = insert_block(&backend, 1, block0, None, None, Default::default());
+		let block1 = insert_block(&backend, 1, block0, None, None, Default::default(), Default::default());
 		let mut offchain_local_storage = offchain_local.at(block1).unwrap();
 		offchain_local_storage.set(b"prefix1", b"key2", b"test2");
 		assert_eq!(offchain_local_storage.get(b"prefix1", b"key2"), Some(b"test2".to_vec()));
 
-		let _block2 = insert_block(&backend, 2, block1, None, None, Default::default());
+		let _block2 = insert_block(&backend, 2, block1, None, None, Default::default(), Default::default());
 		// can insert in the past if there is no following change
 		let mut offchain_local_storage = offchain_local.at(block1).unwrap();
 		assert!(offchain_local_storage.can_update());
@@ -3296,7 +3297,7 @@ pub(crate) mod tests {
 			let mut blocks = Vec::new();
 			let mut prev_hash = Default::default();
 			for i in 0 .. 5 {
-				let hash = insert_block(&backend, i, prev_hash, None, Default::default(), vec![i.into()]);
+				let hash = insert_block(&backend, i, prev_hash, None, Default::default(), Default::default(), vec![i.into()]);
 				blocks.push(hash);
 				prev_hash = hash;
 			}

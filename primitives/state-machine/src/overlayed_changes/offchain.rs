@@ -101,30 +101,30 @@ mod test {
 	#[test]
 	fn test_drain() {
 		let mut ooc = OffchainOverlayedChanges::default();
-		ooc.set(STORAGE_PREFIX, b"kkk", b"vvv");
+		ooc.set(STORAGE_PREFIX, b"kkk", b"vvv", false);
 		let drained = ooc.drain().count();
 		assert_eq!(drained, 1);
 		let leftover = ooc.iter().count();
 		assert_eq!(leftover, 0);
 
-		ooc.set(STORAGE_PREFIX, b"a", b"v");
-		ooc.set(STORAGE_PREFIX, b"b", b"v");
-		ooc.set(STORAGE_PREFIX, b"c", b"v");
-		ooc.set(STORAGE_PREFIX, b"d", b"v");
-		ooc.set(STORAGE_PREFIX, b"e", b"v");
+		ooc.set(STORAGE_PREFIX, b"a", b"v", false);
+		ooc.set(STORAGE_PREFIX, b"b", b"v", false);
+		ooc.set(STORAGE_PREFIX, b"c", b"v", false);
+		ooc.set(STORAGE_PREFIX, b"d", b"v", false);
+		ooc.set(STORAGE_PREFIX, b"e", b"v", false);
 		assert_eq!(ooc.iter().count(), 5);
 	}
 
 	#[test]
 	fn test_accumulated_set_remove_set() {
 		let mut ooc = OffchainOverlayedChanges::default();
-		ooc.set(STORAGE_PREFIX, b"ppp", b"qqq");
-		ooc.remove(STORAGE_PREFIX, b"ppp");
+		ooc.set(STORAGE_PREFIX, b"ppp", b"qqq", false);
+		ooc.remove(STORAGE_PREFIX, b"ppp", false);
 		// keys are equiv, so it will overwrite the value and the overlay will contain
 		// one item
 		assert_eq!(ooc.iter().count(), 1);
 
-		ooc.set(STORAGE_PREFIX, b"ppp", b"rrr");
+		ooc.set(STORAGE_PREFIX, b"ppp", b"rrr", false);
 		let mut iter = ooc.into_iter();
 		assert_eq!(
 			iter.next(),
