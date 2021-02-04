@@ -604,7 +604,7 @@ impl Peerset {
 	///
 	/// Must only be called after the PSM has either generated a `Connect` message with this
 	/// `PeerId`, or accepted an incoming connection with this `PeerId`.
-	pub fn dropped(&mut self, set_id: SetId, peer_id: PeerId) {
+	pub fn dropped(&mut self, set_id: SetId, peer_id: PeerId, reason: DropReason) {
 		// We want reputations to be up-to-date before adjusting them.
 		self.update_time();
 
@@ -618,6 +618,10 @@ impl Peerset {
 			}
 			peersstate::Peer::NotConnected(_) | peersstate::Peer::Unknown(_) =>
 				error!(target: "peerset", "Received dropped() for non-connected node"),
+		}
+
+		if let DropReason::Refused = reason {
+			self.on_remove_from_peers_set(set_id, peer_id);
 		}
 
 		self.alloc_slots();
@@ -702,6 +706,17 @@ impl Stream for Peerset {
 			}
 		}
 	}
+}
+
+/// Reason for calling [`Peerset::dropped`].
+pub enum DropReason {
+	/// Substream or connection has been closed for an unknown reason.
+	Unknown,
+	/// Substream or connection has been explicitly refused by the target. In other words, the
+	/// peer doesn't actually belong to this set.
+	///
+	/// This has the side effect of calling [`PeersetHandle::remove_from_peers_set`].
+	Refused,
 }
 
 #[cfg(test)]
