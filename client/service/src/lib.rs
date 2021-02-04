@@ -81,7 +81,7 @@ pub use task_manager::SpawnTaskHandle;
 pub use task_manager::TaskManager;
 pub use sp_consensus::import_queue::ImportQueue;
 pub use self::client::{LocalCallExecutor, ClientConfig};
-use sc_client_api::{blockchain::HeaderBackend, BlockchainEvents};
+use sc_client_api::{blockchain::HeaderBackend, BlockchainEvents, BlockImportNotification};
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 
@@ -233,16 +233,25 @@ async fn build_network_future<
 					None => return,
 				};
 
-				if announce_imported_blocks {
-					network.service().announce_block(notification.hash, None);
+				match notification {
+					BlockImportNotification::PreImport(hash) => {
+						if announce_imported_blocks {
+							network.service().announce_block(hash, None);
+						}
+					},
+					BlockImportNotification::Imported(n) => {
+						if announce_imported_blocks {
+							network.service().announce_block(n.hash, None);
+						}
+						if n.is_new_best {
+							network.service().new_best_block_imported(
+								n.hash,
+								n.header.number().clone(),
+							);
+						}
+					}
 				}
 
-				if notification.is_new_best {
-					network.service().new_best_block_imported(
-						notification.hash,
-						notification.header.number().clone(),
-					);
-				}
 			}
 
 			// List of blocks that the client has finalized.
