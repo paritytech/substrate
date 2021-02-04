@@ -26,6 +26,7 @@ use std::{
 	panic::{UnwindSafe, AssertUnwindSafe},
 	result,
 	sync::{Arc, atomic::{AtomicU64, Ordering}, mpsc},
+	path::PathBuf,
 };
 
 use sp_version::{NativeVersion, RuntimeVersion};
@@ -102,6 +103,9 @@ pub struct WasmExecutor {
 	cache: Arc<RuntimeCache>,
 	/// The size of the instances cache.
 	max_runtime_instances: usize,
+	/// The path to a directory which the executor can leverage for a file cache, e.g. put there
+	/// compiled artifacts.
+	cache_path: Option<PathBuf>,
 }
 
 impl WasmExecutor {
@@ -118,13 +122,15 @@ impl WasmExecutor {
 		default_heap_pages: Option<u64>,
 		host_functions: Vec<&'static dyn Function>,
 		max_runtime_instances: usize,
+		cache_path: Option<PathBuf>,
 	) -> Self {
 		WasmExecutor {
 			method,
 			default_heap_pages: default_heap_pages.unwrap_or(DEFAULT_HEAP_PAGES),
 			host_functions: Arc::new(host_functions),
-			cache: Arc::new(RuntimeCache::new(max_runtime_instances)),
+			cache: Arc::new(RuntimeCache::new(max_runtime_instances, cache_path.clone())),
 			max_runtime_instances,
+			cache_path,
 		}
 	}
 
@@ -210,6 +216,7 @@ impl sp_core::traits::CallInWasm for WasmExecutor {
 				&wasm_code,
 				self.host_functions.to_vec(),
 				allow_missing_host_functions,
+				self.cache_path.as_deref(),
 			)
 				.map_err(|e| format!("Failed to create module: {:?}", e))?;
 
@@ -267,6 +274,7 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 			default_heap_pages,
 			host_functions,
 			max_runtime_instances,
+			None,
 		);
 
 		NativeExecutor {
