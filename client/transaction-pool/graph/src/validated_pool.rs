@@ -90,9 +90,25 @@ pub type ValidatedTransactionFor<B> = ValidatedTransaction<
 	<B as ChainApi>::Error,
 >;
 
+/// A closure that returns true if the local node can author blocks.
+pub struct CanAuthor(Box<dyn Fn() -> bool + Send + Sync + 'static>);
+
+impl From<bool> for CanAuthor {
+	fn from(can_author: bool) -> Self {
+		CanAuthor(Box::new(move || can_author))
+	}
+}
+
+impl From<Box<dyn Fn() -> bool + Send + Sync + 'static>> for CanAuthor {
+	fn from(can_author: Box<dyn Fn() -> bool + Send + Sync + 'static>) -> Self {
+		CanAuthor(can_author)
+	}
+}
+
 /// Pool that deals with validated transactions.
 pub struct ValidatedPool<B: ChainApi> {
 	api: Arc<B>,
+	can_author: CanAuthor,
 	options: Options,
 	listener: RwLock<Listener<ExtrinsicHash<B>, B>>,
 	pool: RwLock<base::BasePool<
@@ -116,9 +132,10 @@ where
 
 impl<B: ChainApi> ValidatedPool<B> {
 	/// Create a new transaction pool.
-	pub fn new(options: Options, api: Arc<B>) -> Self {
+	pub fn new(options: Options, can_author: CanAuthor, api: Arc<B>) -> Self {
 		let base_pool = base::BasePool::new(options.reject_future_transactions);
 		ValidatedPool {
+			can_author,
 			options,
 			listener: Default::default(),
 			api,
@@ -183,6 +200,10 @@ impl<B: ChainApi> ValidatedPool<B> {
 	fn submit_one(&self, tx: ValidatedTransactionFor<B>) -> Result<ExtrinsicHash<B>, B::Error> {
 		match tx {
 			ValidatedTransaction::Valid(tx) => {
+				if !tx.propagate && !(self.can_author.0)() {
+					return Err(error::Error::Unactionable.into());
+				}
+
 				let imported = self.pool.write().import(tx)?;
 
 				if let base::Imported::Ready { ref hash, .. } = imported {
