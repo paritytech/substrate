@@ -497,43 +497,58 @@ mod tests {
 		) -> Self::ValidationFuture {
 			let hash = self.hash_and_length(&uxt).0;
 			let block_number = self.block_id_to_number(at).unwrap().unwrap();
-			let nonce = uxt.transfer().nonce;
 
-			// This is used to control the test flow.
-			if nonce > 0 {
-				let opt = self.delay.lock().take();
-				if let Some(delay) = opt {
-					if delay.recv().is_err() {
-						println!("Error waiting for delay!");
+			let res = match uxt {
+				Extrinsic::Transfer { transfer, .. } => {
+					let nonce = transfer.nonce;
+
+					// This is used to control the test flow.
+					if nonce > 0 {
+						let opt = self.delay.lock().take();
+						if let Some(delay) = opt {
+							if delay.recv().is_err() {
+								println!("Error waiting for delay!");
+							}
+						}
 					}
-				}
-			}
 
-			if self.invalidate.lock().contains(&hash) {
-				return futures::future::ready(Ok(InvalidTransaction::Custom(0).into()));
-			}
+					if self.invalidate.lock().contains(&hash) {
+						InvalidTransaction::Custom(0).into()
+					} else if nonce < block_number {
+						InvalidTransaction::Stale.into()
+					} else {
+						let mut transaction = ValidTransaction {
+							priority: 4,
+							requires: if nonce > block_number { vec![vec![nonce as u8 - 1]] } else { vec![] },
+							provides: if nonce == INVALID_NONCE { vec![] } else { vec![vec![nonce as u8]] },
+							longevity: 3,
+							propagate: true,
+						};
 
-			futures::future::ready(if nonce < block_number {
-				Ok(InvalidTransaction::Stale.into())
-			} else {
-				let mut transaction = ValidTransaction {
-					priority: 4,
-					requires: if nonce > block_number { vec![vec![nonce as u8 - 1]] } else { vec![] },
-					provides: if nonce == INVALID_NONCE { vec![] } else { vec![vec![nonce as u8]] },
-					longevity: 3,
-					propagate: true,
-				};
+						if self.clear_requirements.lock().contains(&hash) {
+							transaction.requires.clear();
+						}
 
-				if self.clear_requirements.lock().contains(&hash) {
-					transaction.requires.clear();
-				}
+						if self.add_requirements.lock().contains(&hash) {
+							transaction.requires.push(vec![128]);
+						}
 
-				if self.add_requirements.lock().contains(&hash) {
-					transaction.requires.push(vec![128]);
-				}
+						Ok(transaction)
+					}
+				},
+				Extrinsic::IncludeData(_) => {
+					Ok(ValidTransaction {
+						priority: 9001,
+						requires: vec![],
+						provides: vec![vec![42]],
+						longevity: 9001,
+						propagate: false,
+					})
+				},
+				_ => unimplemented!(),
+			};
 
-				Ok(Ok(transaction))
-			})
+			futures::future::ready(Ok(res))
 		}
 
 		/// Returns a block number given the block id.
@@ -618,6 +633,26 @@ mod tests {
 
 		// then
 		assert_matches!(res.unwrap_err(), error::Error::TemporarilyBanned);
+	}
+
+	#[test]
+	fn should_reject_unactionable_transactions() {
+		// given
+		let pool = Pool::new(
+			Default::default(),
+			// the node does not author blocks
+			false.into(),
+			TestApi::default().into(),
+		);
+
+		// after validation `IncludeData` will be set to non-propagable
+		let uxt = Extrinsic::IncludeData(vec![42]);
+
+		// when
+		let res = block_on(pool.submit_one(&BlockId::Number(0), SOURCE, uxt));
+
+		// then
+		assert_matches!(res.unwrap_err(), error::Error::Unactionable);
 	}
 
 	#[test]
