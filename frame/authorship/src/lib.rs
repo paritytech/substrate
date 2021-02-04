@@ -276,8 +276,7 @@ impl<T: Config> Module<T> {
 		uncle: &T::Header,
 		existing_uncles: I,
 		accumulator: &mut <T::FilterUncle as FilterUncle<T::Header, T::AccountId>>::Accumulator,
-	) -> Result<Option<T::AccountId>, dispatch::DispatchError>
-	{
+	) -> Result<Option<T::AccountId>, dispatch::DispatchError> {
 		let now = <frame_system::Module<T>>::block_number();
 
 		let (minimum_height, maximum_height) = {
