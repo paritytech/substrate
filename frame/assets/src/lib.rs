@@ -950,6 +950,9 @@ pub mod pallet {
 		MetadataSet(T::AssetId, Vec<u8>, Vec<u8>, u8),
 	}
 
+	#[deprecated(note = "use `Event` instead")]
+	pub type RawEvent<T> = Event<T>;
+
 	#[pallet::error]
 	pub enum Error<T> {
 		/// Transfer amount should be non-zero.
