@@ -77,7 +77,7 @@ use sc_client_api::{
 	client::{
 		ImportNotifications, FinalityNotification, FinalityNotifications, BlockImportNotification,
 		ClientInfo, BlockchainEvents, BlockBackend, ProvideUncles, BadBlocks, ForkBlocks,
-		BlockOf,
+		BlockOf, ImportedBlockInfo,
 	},
 	execution_extensions::ExecutionExtensions,
 	notifications::{StorageNotifications, StorageEventStream},
@@ -1043,13 +1043,13 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				);
 		}
 
-		let notification = BlockImportNotification::<Block> {
+		let notification = BlockImportNotification::<Block>::Imported(ImportedBlockInfo {
 			hash: notify_import.hash,
 			origin: notify_import.origin,
 			header: notify_import.header,
 			is_new_best: notify_import.is_new_best,
 			tree_route: notify_import.tree_route.map(Arc::new),
-		};
+		});
 
 		self.import_notification_sinks.lock()
 			.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
@@ -1057,6 +1057,18 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok(())
 	}
 
+	fn notify_pre_imported(
+		&self,
+		block_hash: Block::Hash,
+	) -> sp_blockchain::Result<()> {
+
+		let notification = BlockImportNotification::PreImport(block_hash);
+
+		self.import_notification_sinks.lock()
+			.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
+
+		Ok(())
+	}
 	/// Attempts to revert the chain by `n` blocks guaranteeing that no block is
 	/// reverted past the last finalized block. Returns the number of blocks
 	/// that were successfully reverted.
@@ -1698,6 +1710,15 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for &Client<B, E, Block, 
 	) -> Result<ImportResult, Self::Error> {
 		let span = tracing::span!(tracing::Level::DEBUG, "import_block");
 		let _enter = span.enter();
+
+		// Pre-announce the block since it's checked and validated.
+		// This removes the latency of having to broadcast the block
+		// to connected peers.
+		self.notify_pre_imported(import_block.header.hash())
+			.map_err(|e| {
+				warn!("Block pre-import error:\n{:?}", e);
+				ConsensusError::ClientPreImport(e.to_string())
+			})?;
 
 		if let Some(res) = self.prepare_block_storage_changes(&mut import_block).map_err(|e| {
 			warn!("Block prepare storage changes error:\n{:?}", e);
