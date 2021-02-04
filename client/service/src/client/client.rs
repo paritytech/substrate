@@ -1128,7 +1128,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	}
 
 	/// Gets the uncles of the block with `target_hash` going back `max_generation` ancestors.
-	pub fn uncles(&self, target_hash: Block::Hash, max_generation: NumberFor<Block>) -> sp_blockchain::Result<Vec<Block::Hash>> {
+	pub fn uncles(
+		&self,
+		target_hash: Block::Hash,
+		max_generation: NumberFor<Block>,
+	) -> sp_blockchain::Result<Vec<Block::Hash>> {
 		let load_header = |id: Block::Hash| -> sp_blockchain::Result<Block::Header> {
 			match self.backend.blockchain().header(BlockId::Hash(id))? {
 				Some(hdr) => Ok(hdr),
@@ -1137,7 +1141,9 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		};
 
 		let genesis_hash = self.backend.blockchain().info().genesis_hash;
-		if genesis_hash == target_hash { return Ok(Vec::new()); }
+		if genesis_hash == target_hash {
+			return Ok(Vec::new());
+		}
 
 		let mut current_hash = target_hash;
 		let mut current = load_header(current_hash)?;
@@ -1145,11 +1151,15 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let mut ancestor = load_header(ancestor_hash)?;
 		let mut uncles = Vec::new();
 
-		for _generation in 0u32..UniqueSaturatedInto::<u32>::unique_saturated_into(max_generation) {
+		for _ in 0u32.into()..max_generation {
 			let children = self.backend.blockchain().children(ancestor_hash)?;
 			uncles.extend(children.into_iter().filter(|h| h != &current_hash));
 			current_hash = ancestor_hash;
-			if genesis_hash == current_hash { break; }
+
+			if genesis_hash == current_hash {
+				break;
+			}
+
 			current = ancestor;
 			ancestor_hash = *current.parent_hash();
 			ancestor = load_header(ancestor_hash)?;

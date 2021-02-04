@@ -6925,13 +6925,10 @@ dependencies = [
 name = "sc-consensus-uncles"
 version = "0.8.1"
 dependencies = [
- "log",
  "sc-client-api",
  "sp-authorship",
- "sp-consensus",
- "sp-core",
- "sp-inherents",
  "sp-runtime",
+ "thiserror",
 ]
 
 [[package]]
