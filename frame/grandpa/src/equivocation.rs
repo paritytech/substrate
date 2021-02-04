@@ -190,7 +190,7 @@ pub struct GrandpaTimeSlot {
 impl<T: Config> frame_support::unsigned::ValidateUnsigned for Module<T> {
 	type Call = Call<T>;
 	fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-		if let Call::report_equivocation_unsigned(equivocation_proof, _) = call {
+		if let Call::report_equivocation_unsigned(equivocation_proof, key_owner_proof) = call {
 			// discard equivocation report not coming from the local node
 			match source {
 				TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ }
@@ -204,10 +204,8 @@ impl<T: Config> frame_support::unsigned::ValidateUnsigned for Module<T> {
 				}
 			}
 
-			if let Call::report_equivocation_unsigned(equivocation_proof, key_owner_proof) = call {
-				// check report staleness
-				is_known_offence::<T>(equivocation_proof, key_owner_proof)?;
-			}
+			// check report staleness
+			is_known_offence::<T>(equivocation_proof, key_owner_proof)?;
 
 			ValidTransaction::with_tag_prefix("GrandpaEquivocation")
 				// We assign the maximum priority for any equivocation report.
