@@ -60,7 +60,7 @@ pub enum Error {
 	#[error("Transaction couldn't enter the pool because of the limit")]
 	ImmediatelyDropped,
 
-	#[error("Transaction cannot be propagated and local node does not author blocks")]
+	#[error("Transaction cannot be propagated and the local node does not author blocks")]
 	Unactionable,
 
 	#[from(ignore)]
