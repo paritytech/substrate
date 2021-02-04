@@ -231,6 +231,12 @@ pub trait Executable<T: Config>: Sized {
 	/// The storage that is occupied by the instrumented executable and its pristine source.
 	///
 	/// The returned size is already divided by the number of users who share the code.
+	///
+	/// # Note
+	///
+	/// This works with the current in-memory value of refcount. When calling any contract
+	/// without refetching this from storage the result can be inaccurate as it might be
+	/// working with a stale value. Usually this inaccuracy is tolerable.
 	fn occupied_storage(&self) -> u32;
 }
 

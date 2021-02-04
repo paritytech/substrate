@@ -38,6 +38,15 @@ use pallet_contracts_primitives::ExecResult;
 pub use self::runtime::{ReturnCode, Runtime, RuntimeToken};
 
 /// A prepared wasm module ready for execution.
+///
+/// # Note
+///
+/// This data structure is mostly immutable once created and stored. The exceptions that
+/// can be changed by calling a contract are `refcount`, `schedule_version` and `code`.
+/// `refcount` can change when a contract instantiates a new contract or self terminates.
+/// `schedule_version` and `code` when a contract with an outdated instrumention is called.
+/// Therefore one must be careful when holding any in-memory representation of this type while
+/// calling into a contract as those fields can get out of date.
 #[derive(Clone, Encode, Decode)]
 pub struct PrefabWasmModule<T: Config> {
 	/// Version of the schedule with which the code was instrumented.
