@@ -361,10 +361,11 @@ fn log_something() {
 		let _sub_guard = tracing::subscriber::set_global_default(subscriber);
 
         let mut runtime = tokio::runtime::Runtime::new().unwrap();
-		let prefix_span = tracing::info_span!("prefix");
-		let telemetry_span = TelemetrySpan::new();
 
+		let prefix_span = tracing::info_span!("prefix");
         let _enter_prefix_span = prefix_span.enter();
+
+		let telemetry_span = TelemetrySpan::new();
         let _enter_telemetry_span = telemetry_span.enter();
 
         let handle = runtime.handle().clone();
@@ -374,7 +375,7 @@ fn log_something() {
         let (sender, receiver) = futures::channel::oneshot::channel();
 
         task_manager.spawn_handle().spawn(
-            "test",
+            "log-something",
             async move {
                 log::info!("boo!");
                 sender.send(()).unwrap();
