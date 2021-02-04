@@ -355,43 +355,45 @@ fn setup_subscriber() -> (
 /// in a separate process to avoid interfering with the other tests.
 #[test]
 fn subprocess_telemetry_span_is_forwarded_to_task() {
-	if env::var("ENABLE_LOGGING").is_ok() {
-		let (subscriber, spans_found) = setup_subscriber();
-		tracing_log::LogTracer::init().unwrap();
-		let _sub_guard = tracing::subscriber::set_global_default(subscriber);
-
-		let mut runtime = tokio::runtime::Runtime::new().unwrap();
-
-		let prefix_span = tracing::info_span!("prefix");
-		let _enter_prefix_span = prefix_span.enter();
-
-		let telemetry_span = TelemetrySpan::new();
-		let _enter_telemetry_span = telemetry_span.enter();
-
-		let handle = runtime.handle().clone();
-		let task_executor = TaskExecutor::from(move |fut, _| handle.spawn(fut).map(|_| ()));
-		let task_manager = new_task_manager(task_executor);
-
-		let (sender, receiver) = futures::channel::oneshot::channel();
-
-		task_manager.spawn_handle().spawn(
-			"log-something",
-			async move {
-				log::info!("boo!");
-				sender.send(()).unwrap();
-			}
-			.boxed(),
-		);
-
-		runtime.block_on(receiver).unwrap();
-		runtime.block_on(task_manager.clean_shutdown());
-
-		let spans = spans_found.lock().take().unwrap();
-		assert_eq!(2, spans.len());
-
-		assert_eq!(spans[0], prefix_span.id().unwrap());
-		assert_eq!(spans[1], telemetry_span.span().id().unwrap());
+	if env::var("ENABLE_LOGGING").is_err() {
+		return;
 	}
+
+	let (subscriber, spans_found) = setup_subscriber();
+	tracing_log::LogTracer::init().unwrap();
+	let _sub_guard = tracing::subscriber::set_global_default(subscriber);
+
+	let mut runtime = tokio::runtime::Runtime::new().unwrap();
+
+	let prefix_span = tracing::info_span!("prefix");
+	let _enter_prefix_span = prefix_span.enter();
+
+	let telemetry_span = TelemetrySpan::new();
+	let _enter_telemetry_span = telemetry_span.enter();
+
+	let handle = runtime.handle().clone();
+	let task_executor = TaskExecutor::from(move |fut, _| handle.spawn(fut).map(|_| ()));
+	let task_manager = new_task_manager(task_executor);
+
+	let (sender, receiver) = futures::channel::oneshot::channel();
+
+	task_manager.spawn_handle().spawn(
+		"log-something",
+		async move {
+			log::info!("boo!");
+			sender.send(()).unwrap();
+		}
+		.boxed(),
+	);
+
+	runtime.block_on(receiver).unwrap();
+	runtime.block_on(task_manager.clean_shutdown());
+
+	let spans = spans_found.lock().take().unwrap();
+	assert_eq!(2, spans.len());
+
+	assert_eq!(spans[0], prefix_span.id().unwrap());
+	assert_eq!(spans[1], telemetry_span.span().id().unwrap());
 }
 
 #[test]
