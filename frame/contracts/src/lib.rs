@@ -667,7 +667,7 @@ where
 	/// This function is similar to `Self::call`, but doesn't perform any address lookups and better
 	/// suitable for calling directly from Rust.
 	///
-	/// It returns the exection result and the amount of used weight.
+	/// It returns the execution result and the amount of used weight.
 	pub fn bare_call(
 		origin: T::AccountId,
 		dest: T::AccountId,
@@ -711,9 +711,9 @@ where
 
 	/// Determine the address of a contract,
 	///
-	/// This is the address generation function used by contract instantation. Its result
+	/// This is the address generation function used by contract instantiation. Its result
 	/// is only dependend on its inputs. It can therefore be used to reliably predict the
-	/// address of a contract. This is akin to the formular of eth's CRATE2 opcode. There
+	/// address of a contract. This is akin to the formular of eth's CREATE2 opcode. There
 	/// is no CREATE equivalent because CREATE2 is strictly more powerful.
 	///
 	/// Formula: `hash(deploying_address ++ code_hash ++ salt)`
