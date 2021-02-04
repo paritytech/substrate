@@ -35,7 +35,7 @@ sp-trie = { version = "2.0.0", path = "../../primitives/trie" }
 sp-consensus = { version = "0.8.0", path = "../../primitives/consensus/common" }
 sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
 sp-database = { version = "2.0.0", path = "../../primitives/database" }
-parity-db = { version = "0.2.0", git = "https://github.com/paritytech/parity-db ", branch = "ben-fix-salted-shorter-keys", optional = true }
+parity-db = { version = "0.2.1", optional = true }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.8.0", path = "../../utils/prometheus" }
 
 [dev-dependencies]

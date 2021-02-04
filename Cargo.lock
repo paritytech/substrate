@@ -5329,8 +5329,9 @@ dependencies = [
 
 [[package]]
 name = "parity-db"
-version = "0.2.0"
-source = "git+https://github.com/paritytech/parity-db?branch=ben-fix-salted-shorter-keys#edf917db0e0b024385c3088dcbe0a03bf02a84ea"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "96946eb28951c64e29fa9b370c0726e8d380b7a56254f8b4ac34b49f66fa21d9"
 dependencies = [
  "blake2-rfc",
  "crc32fast",
