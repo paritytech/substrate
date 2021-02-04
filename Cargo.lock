@@ -2105,7 +2105,7 @@ dependencies = [
  "http 0.2.1",
  "indexmap",
  "slab",
- "tokio 0.2.25",
+ "tokio 0.2.23",
  "tokio-util",
  "tracing",
  "tracing-futures",
@@ -2346,7 +2346,7 @@ dependencies = [
  "itoa",
  "pin-project 1.0.2",
  "socket2",
- "tokio 0.2.25",
+ "tokio 0.2.23",
  "tower-service",
  "tracing",
  "want 0.3.0",
@@ -2365,7 +2365,7 @@ dependencies = [
  "log",
  "rustls 0.18.1",
  "rustls-native-certs",
- "tokio 0.2.25",
+ "tokio 0.2.23",
  "tokio-rustls",
  "webpki",
 ]
@@ -3499,9 +3499,9 @@ dependencies = [
 
 [[package]]
 name = "mio"
-version = "0.6.23"
+version = "0.6.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4afd66f5b91bf2a3bc13fad0e21caedac168ca4c707504e75585648ae80e4cc4"
+checksum = "fce347092656428bc8eaf6201042cb551b8d67855af7374542a92a0fbfcac430"
 dependencies = [
  "cfg-if 0.1.10",
  "fuchsia-zircon",
@@ -3510,7 +3510,7 @@ dependencies = [
  "kernel32-sys",
  "libc",
  "log",
- "miow 0.2.2",
+ "miow 0.2.1",
  "net2",
  "slab",
  "winapi 0.2.8",
@@ -3553,9 +3553,9 @@ dependencies = [
 
 [[package]]
 name = "miow"
-version = "0.2.2"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ebd808424166322d4a38da87083bfddd3ac4c131334ed55856112eb06d46944d"
+checksum = "8c1f2f3b1cf331de6896aabf6e9d55dca90356cc9960cca7eaaf408a355ae919"
 dependencies = [
  "kernel32-sys",
  "net2",
@@ -3665,9 +3665,9 @@ dependencies = [
 
 [[package]]
 name = "net2"
-version = "0.2.37"
+version = "0.2.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "391630d12b68002ae1e25e8f974306474966550ad82dac6886fb8910c19568ae"
+checksum = "3ebc3ec692ed7c9a255596c67808dee269f64655d8baf7b4f0638e51ba1d6853"
 dependencies = [
  "cfg-if 0.1.10",
  "libc",
@@ -6535,7 +6535,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tiny-bip39",
- "tokio 0.2.25",
+ "tokio 0.2.23",
 ]
 
 [[package]]
@@ -6791,7 +6791,7 @@ dependencies = [
  "substrate-test-runtime-client",
  "substrate-test-runtime-transaction-pool",
  "tempfile",
- "tokio 0.2.25",
+ "tokio 0.2.23",
 ]
 
 [[package]]
@@ -6986,7 +6986,7 @@ dependencies = [
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "tempfile",
- "tokio 0.2.25",
+ "tokio 0.2.23",
 ]
 
 [[package]]
@@ -7230,7 +7230,7 @@ dependencies = [
  "sp-utils",
  "substrate-test-runtime-client",
  "threadpool",
- "tokio 0.2.25",
+ "tokio 0.2.23",
 ]
 
 [[package]]
@@ -7413,11 +7413,9 @@ dependencies = [
  "substrate-test-runtime-client",
  "tempfile",
  "thiserror",
- "tokio 0.2.25",
+ "tokio 0.2.23",
  "tracing",
  "tracing-futures",
- "tracing-log",
- "tracing-subscriber",
  "wasm-timer",
 ]
 
@@ -8924,7 +8922,7 @@ dependencies = [
  "sc-rpc-api",
  "serde",
  "sp-storage",
- "tokio 0.2.25",
+ "tokio 0.2.23",
 ]
 
 [[package]]
@@ -8962,7 +8960,7 @@ dependencies = [
  "hyper 0.13.9",
  "log",
  "prometheus",
- "tokio 0.2.25",
+ "tokio 0.2.23",
 ]
 
 [[package]]
@@ -9077,7 +9075,7 @@ dependencies = [
  "futures 0.3.9",
  "sc-service",
  "substrate-test-utils-derive",
- "tokio 0.2.25",
+ "tokio 0.2.23",
  "trybuild",
 ]
 
@@ -9096,7 +9094,7 @@ version = "0.1.0"
 dependencies = [
  "sc-service",
  "substrate-test-utils",
- "tokio 0.2.25",
+ "tokio 0.2.23",
 ]
 
 [[package]]
@@ -9325,9 +9323,9 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "0.2.25"
+version = "0.2.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6703a273949a90131b290be1fe7b039d0fc884aa1935860dfcbe056f28cd8092"
+checksum = "a6d7ad61edd59bfcc7e80dababf0f4aed2e6d5e0ba1659356ae889752dfc12ff"
 dependencies = [
  "bytes 0.5.6",
  "fnv",
@@ -9461,7 +9459,7 @@ checksum = "e12831b255bcfa39dc0436b01e19fea231a37db570686c06ee72c423479f889a"
 dependencies = [
  "futures-core",
  "rustls 0.18.1",
- "tokio 0.2.25",
+ "tokio 0.2.23",
  "webpki",
 ]
 
@@ -9571,7 +9569,7 @@ dependencies = [
  "futures-sink",
  "log",
  "pin-project-lite 0.1.11",
- "tokio 0.2.25",
+ "tokio 0.2.23",
 ]
 
 [[package]]
