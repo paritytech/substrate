@@ -16,11 +16,10 @@
 // limitations under the License.
 
 use crate::*;
+use crate as example_offchain_worker;
 use std::sync::Arc;
-use codec::{Encode, Decode};
-use frame_support::{
-	assert_ok, impl_outer_origin, parameter_types,
-};
+use codec::Decode;
+use frame_support::{assert_ok, parameter_types};
 use sp_core::{
 	H256,
 	offchain::{OffchainExt, TransactionPoolExt, testing},
@@ -40,15 +39,20 @@ use sp_runtime::{
 	},
 };
 
-impl_outer_origin! {
-	pub enum Origin for Test where system = frame_system {}
-}
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
 
-// For testing the module, we construct most of a mock runtime. This means
-// first constructing a configuration type (`Test`) which `impl`s each of the
-// configuration traits of modules we want to use.
-#[derive(Clone, Eq, PartialEq, Encode, Decode)]
-pub struct Test;
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		Example: example_offchain_worker::{Module, Call, Storage, Event<T>, ValidateUnsigned},
+	}
+);
+
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
@@ -60,7 +64,7 @@ impl frame_system::Config for Test {
 	type BlockLength = ();
 	type DbWeight = ();
 	type Origin = Origin;
-	type Call = ();
+	type Call = Call;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -68,10 +72,10 @@ impl frame_system::Config for Test {
 	type AccountId = sp_core::sr25519::Public;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = ();
+	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
-	type PalletInfo = ();
+	type PalletInfo = PalletInfo;
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
@@ -114,15 +118,13 @@ parameter_types! {
 }
 
 impl Config for Test {
-	type Event = ();
+	type Event = Event;
 	type AuthorityId = crypto::TestAuthId;
 	type Call = Call<Test>;
 	type GracePeriod = GracePeriod;
 	type UnsignedInterval = UnsignedInterval;
 	type UnsignedPriority = UnsignedPriority;
 }
-
-type Example = Module<Test>;
 
 #[test]
 fn it_aggregates_the_price() {
