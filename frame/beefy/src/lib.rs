@@ -1,4 +1,4 @@
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,7 +18,7 @@
 
 use codec::Encode;
 
-use frame_support::{decl_module, decl_storage, traits::OneSessionHandler, Parameter};
+use frame_support::{traits::OneSessionHandler, Parameter};
 
 use sp_runtime::{
 	generic::DigestItem,
@@ -35,37 +35,73 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-pub trait Config: frame_system::Config {
-	/// The identifier type for an authority.
-	type AuthorityId: Member + Parameter + RuntimeAppPublic + Default;
-}
+pub use pallet::*;
 
-decl_storage! {
-	trait Store for Module<T: Config> as Beefy {
-		/// The current list of authorities.
-		pub Authorities get(fn authorities): Vec<T::AuthorityId>;
-		/// The current validator set id.
-		pub ValidatorSetId get(fn validator_set_id): beefy_primitives::ValidatorSetId;
-		/// Authorities scheduled for the next session.
-		pub NextAuthorities get(fn next_authorities): Vec<T::AuthorityId>;
+#[frame_support::pallet]
+pub mod pallet {
+	use super::*;
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
+
+	#[pallet::config]
+	pub trait Config: frame_system::Config {
+		/// Authority identifier type
+		type AuthorityId: Member + Parameter + RuntimeAppPublic + Default + MaybeSerializeDeserialize;
 	}
-	add_extra_genesis {
-		config(authorities): Vec<T::AuthorityId>;
-		build(|config| Module::<T>::initialize_authorities(&config.authorities))
+
+	#[pallet::pallet]
+	pub struct Pallet<T>(PhantomData<T>);
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {}
+
+	/// The current authorities set
+	#[pallet::storage]
+	#[pallet::getter(fn authorities)]
+	pub(super) type Authorities<T: Config> = StorageValue<_, Vec<T::AuthorityId>, ValueQuery>;
+
+	/// The current validator set id
+	#[pallet::storage]
+	#[pallet::getter(fn validator_set_id)]
+	pub(super) type ValidatorSetId<T: Config> = StorageValue<_, beefy_primitives::ValidatorSetId, ValueQuery>;
+
+	/// Authorities set scheduled to be used with the next session
+	#[pallet::storage]
+	#[pallet::getter(fn next_authorities)]
+	pub(super) type NextAuthorities<T: Config> = StorageValue<_, Vec<T::AuthorityId>, ValueQuery>;
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config> {
+		pub authorities: Vec<T::AuthorityId>,
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config> Default for GenesisConfig<T> {
+		fn default() -> Self {
+			Self {
+				authorities: Vec::new(),
+			}
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+		fn build(&self) {
+			Pallet::<T>::initialize_authorities(&self.authorities);
+		}
 	}
 }
 
-decl_module! {
-	pub struct Module<T: Config> for enum Call where origin: T::Origin { }
-}
-
-impl<T: Config> Module<T> {
+impl<T: Config> Pallet<T> {
 	fn change_authorities(new: Vec<T::AuthorityId>, queued: Vec<T::AuthorityId>) {
-		// As in GRANDPA, we don't trigger validator set change if the set actually
-		// remains the same.
+		// As in GRANDPA, we trigger a validator set change only if the the validator
+		// set has actually changed.
 		if new != Self::authorities() {
 			<Authorities<T>>::put(&new);
-			<ValidatorSetId>::put(Self::validator_set_id() + 1);
+			<ValidatorSetId<T>>::put(Self::validator_set_id() + 1);
 			let log: DigestItem<T::Hash> =
 				DigestItem::Consensus(BEEFY_ENGINE_ID, ConsensusLog::AuthoritiesChange(new).encode());
 			<frame_system::Module<T>>::deposit_log(log);
@@ -75,17 +111,19 @@ impl<T: Config> Module<T> {
 	}
 
 	fn initialize_authorities(authorities: &[T::AuthorityId]) {
-		if !authorities.is_empty() {
-			assert!(
-				<Authorities<T>>::get().is_empty(),
-				"Authorities are already initialized!"
-			);
-			<Authorities<T>>::put(authorities);
-			<ValidatorSetId>::put(0);
-			// for consistency we initialize the next validator set as well.
-			// Note it's an assumption in the `pallet_session` as well.
-			<NextAuthorities<T>>::put(authorities);
+		if authorities.is_empty() {
+			return;
 		}
+
+		assert!(
+			<Authorities<T>>::get().is_empty(),
+			"Authorities are already initialized!"
+		);
+
+		<Authorities<T>>::put(authorities);
+		<ValidatorSetId<T>>::put(0);
+		// Like `pallet_session`, initialize the next validator set as well.
+		<NextAuthorities<T>>::put(authorities);
 	}
 }
 
