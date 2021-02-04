@@ -307,6 +307,7 @@ pub fn prove_warp_sync<Block: BlockT, B: BlockchainBackend<Block>>(
 
 	let at_limit = max_fragment_limit.map(|limit| result.len() >= limit).unwrap_or(false);
 
+	// add last finalized block if reached and not already included.
 	if !at_limit && result.last().as_ref().map(|head| head.header.number()) != Some(&end_number) {
 		let header = blockchain.expect_header(end)?;
 		if let Some(justification) = blockchain.justification(BlockId::Number(end_number.clone()))? {
