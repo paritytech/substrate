@@ -63,7 +63,7 @@ use sp_std::{
 pub use frame_system::Config as SysConfig;
 pub use pallet_contracts_primitives::ReturnFlags;
 pub use sp_core::crypto::UncheckedFrom;
-pub use crate::exec::Ext;
+pub use crate::{Config, exec::Ext};
 pub use state::Init as InitState;
 
 /// Result that returns a [`DispatchError`] on error.
@@ -74,7 +74,7 @@ pub type Result<T> = sp_std::result::Result<T, DispatchError>;
 /// In order to create a custom chain extension this trait must be implemented and supplied
 /// to the pallet contracts configuration trait as the associated type of the same name.
 /// Consult the [module documentation](self) for a general explanation of chain extensions.
-pub trait ChainExtension {
+pub trait ChainExtension<C: Config> {
 	/// Call the chain extension logic.
 	///
 	/// This is the only function that needs to be implemented in order to write a
@@ -88,11 +88,12 @@ pub trait ChainExtension {
 	///
 	/// # Return
 	///
-	/// In case of `Err` the contract execution is immediatly suspended and the passed error
+	/// In case of `Err` the contract execution is immediately suspended and the passed error
 	/// is returned to the caller. Otherwise the value of [`RetVal`] determines the exit
 	/// behaviour.
-	fn call<E: Ext>(func_id: u32, env: Environment<E, InitState>) -> Result<RetVal>
+	fn call<E>(func_id: u32, env: Environment<E, InitState>) -> Result<RetVal>
 	where
+		E: Ext<T = C>,
 		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>;
 
 	/// Determines whether chain extensions are enabled for this chain.
@@ -108,9 +109,10 @@ pub trait ChainExtension {
 }
 
 /// Implementation that indicates that no chain extension is available.
-impl ChainExtension for () {
-	fn call<E: Ext>(_func_id: u32, mut _env: Environment<E, InitState>) -> Result<RetVal>
+impl<C: Config> ChainExtension<C> for () {
+	fn call<E>(_func_id: u32, mut _env: Environment<E, InitState>) -> Result<RetVal>
 	where
+		E: Ext<T = C>,
 		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
 	{
 		// Never called since [`Self::enabled()`] is set to `false`. Because we want to

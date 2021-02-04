@@ -18,7 +18,7 @@
 //! [`crate::request_responses::RequestResponsesBehaviour`].
 
 use codec::Decode;
-use sc_network::config::{ProtocolId, IncomingRequest, RequestResponseConfig};
+use sc_network::config::{IncomingRequest, OutgoingResponse, ProtocolId, RequestResponseConfig};
 use sc_client_api::Backend;
 use sp_runtime::traits::NumberFor;
 use futures::channel::{mpsc, oneshot};
@@ -113,7 +113,7 @@ impl<TBlock: BlockT, TBackend: Backend<TBlock>> GrandpaWarpSyncRequestHandler<TB
 	fn handle_request(
 		&self,
 		payload: Vec<u8>,
-		pending_response: oneshot::Sender<Vec<u8>>
+		pending_response: oneshot::Sender<OutgoingResponse>
 	) -> Result<(), HandleRequestError>
 		where NumberFor<TBlock>: sc_finality_grandpa::BlockNumberOps,
 	{
@@ -124,8 +124,10 @@ impl<TBlock: BlockT, TBackend: Backend<TBlock>> GrandpaWarpSyncRequestHandler<TB
 			self.backend.blockchain(), request.begin, Some(WARP_SYNC_FRAGMENTS_LIMIT), Some(&mut cache)
 		)?;
 
-		pending_response.send(response)
-			.map_err(|_| HandleRequestError::SendResponse)
+		pending_response.send(OutgoingResponse {
+			result: Ok(response),
+			reputation_changes: Vec::new(),
+		}).map_err(|_| HandleRequestError::SendResponse)
 	}
 
 	/// Run [`GrandpaWarpSyncRequestHandler`].

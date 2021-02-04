@@ -370,7 +370,7 @@ pub(super) struct NeighborPacket<N> {
 /// A versioned neighbor packet.
 #[derive(Debug, Encode, Decode)]
 pub(super) enum VersionedNeighborPacket<N> {
-	#[codec(index = "1")]
+	#[codec(index = 1)]
 	V1(NeighborPacket<N>),
 }
 
@@ -1415,7 +1415,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 				}
 				Err(e) => {
 					message_name = None;
-					debug!(target: "afg", "Error decoding message: {}", e.what());
+					debug!(target: "afg", "Error decoding message: {}", e);
 					telemetry!(CONSENSUS_DEBUG; "afg.err_decoding_msg"; "" => "");
 
 					let len = std::cmp::min(i32::max_value() as usize, data.len()) as i32;
