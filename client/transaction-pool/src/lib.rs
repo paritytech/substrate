@@ -184,13 +184,13 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 	/// revalidation type.
 	pub fn with_revalidation_type(
 		options: sc_transaction_graph::Options,
-		can_author: txpool::CanAuthor,
+		is_validator: txpool::IsValidator,
 		pool_api: Arc<PoolApi>,
 		prometheus: Option<&PrometheusRegistry>,
 		revalidation_type: RevalidationType,
 		spawner: impl SpawnNamed,
 	) -> Self {
-		let pool = Arc::new(sc_transaction_graph::Pool::new(options, can_author, pool_api.clone()));
+		let pool = Arc::new(sc_transaction_graph::Pool::new(options, is_validator, pool_api.clone()));
 		let (revalidation_queue, background_task) = match revalidation_type {
 			RevalidationType::Light => (revalidation::RevalidationQueue::new(pool_api.clone(), pool.clone()), None),
 			RevalidationType::Full => {
@@ -365,14 +365,14 @@ where
 	/// Create new basic transaction pool for a full node with the provided api.
 	pub fn new_full(
 		options: sc_transaction_graph::Options,
-		can_author: txpool::CanAuthor,
+		is_validator: txpool::IsValidator,
 		prometheus: Option<&PrometheusRegistry>,
 		spawner: impl SpawnNamed,
 		client: Arc<Client>,
 	) -> Arc<Self> {
 		let pool_api = Arc::new(FullChainApi::new(client.clone(), prometheus));
 		let pool = Arc::new(Self::with_revalidation_type(
-			options, can_author, pool_api, prometheus, RevalidationType::Full, spawner
+			options, is_validator, pool_api, prometheus, RevalidationType::Full, spawner
 		));
 
 		// make transaction pool available for off-chain runtime calls.

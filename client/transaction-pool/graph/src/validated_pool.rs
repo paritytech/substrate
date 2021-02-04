@@ -90,25 +90,25 @@ pub type ValidatedTransactionFor<B> = ValidatedTransaction<
 	<B as ChainApi>::Error,
 >;
 
-/// A closure that returns true if the local node can author blocks.
-pub struct CanAuthor(Box<dyn Fn() -> bool + Send + Sync>);
+/// A closure that returns true if the local node is a validator that can author blocks.
+pub struct IsValidator(Box<dyn Fn() -> bool + Send + Sync>);
 
-impl From<bool> for CanAuthor {
-	fn from(can_author: bool) -> Self {
-		CanAuthor(Box::new(move || can_author))
+impl From<bool> for IsValidator {
+	fn from(is_validator: bool) -> Self {
+		IsValidator(Box::new(move || is_validator))
 	}
 }
 
-impl From<Box<dyn Fn() -> bool + Send + Sync>> for CanAuthor {
-	fn from(can_author: Box<dyn Fn() -> bool + Send + Sync>) -> Self {
-		CanAuthor(can_author)
+impl From<Box<dyn Fn() -> bool + Send + Sync>> for IsValidator {
+	fn from(is_validator: Box<dyn Fn() -> bool + Send + Sync>) -> Self {
+		IsValidator(is_validator)
 	}
 }
 
 /// Pool that deals with validated transactions.
 pub struct ValidatedPool<B: ChainApi> {
 	api: Arc<B>,
-	can_author: CanAuthor,
+	is_validator: IsValidator,
 	options: Options,
 	listener: RwLock<Listener<ExtrinsicHash<B>, B>>,
 	pool: RwLock<base::BasePool<
@@ -132,10 +132,10 @@ where
 
 impl<B: ChainApi> ValidatedPool<B> {
 	/// Create a new transaction pool.
-	pub fn new(options: Options, can_author: CanAuthor, api: Arc<B>) -> Self {
+	pub fn new(options: Options, is_validator: IsValidator, api: Arc<B>) -> Self {
 		let base_pool = base::BasePool::new(options.reject_future_transactions);
 		ValidatedPool {
-			can_author,
+			is_validator,
 			options,
 			listener: Default::default(),
 			api,
@@ -200,7 +200,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 	fn submit_one(&self, tx: ValidatedTransactionFor<B>) -> Result<ExtrinsicHash<B>, B::Error> {
 		match tx {
 			ValidatedTransaction::Valid(tx) => {
-				if !tx.propagate && !(self.can_author.0)() {
+				if !tx.propagate && !(self.is_validator.0)() {
 					return Err(error::Error::Unactionable.into());
 				}
 

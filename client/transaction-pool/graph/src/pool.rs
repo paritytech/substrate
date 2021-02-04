@@ -36,7 +36,7 @@ use wasm_timer::Instant;
 use futures::channel::mpsc::Receiver;
 
 use crate::validated_pool::ValidatedPool;
-pub use crate::validated_pool::{CanAuthor, ValidatedTransaction};
+pub use crate::validated_pool::{IsValidator, ValidatedTransaction};
 
 /// Modification notification event stream type;
 pub type EventStream<H> = Receiver<H>;
@@ -150,9 +150,9 @@ where
 
 impl<B: ChainApi> Pool<B> {
 	/// Create a new transaction pool.
-	pub fn new(options: Options, can_author: CanAuthor, api: Arc<B>) -> Self {
+	pub fn new(options: Options, is_validator: IsValidator, api: Arc<B>) -> Self {
 		Pool {
-			validated_pool: Arc::new(ValidatedPool::new(options, can_author, api)),
+			validated_pool: Arc::new(ValidatedPool::new(options, is_validator, api)),
 		}
 	}
 
