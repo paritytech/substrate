@@ -266,9 +266,6 @@ decl_storage! {
 		pub SubBountyDescriptions get(fn subbounty_descriptions):
 			double_map hasher(twox_64_concat) BountyIndex,
 			hasher(twox_64_concat) BountyIndex => Option<Vec<u8>>;
-
-		/// SubBounty indices that have been approved but not yet funded.
-		pub SubBountyApprovals get(fn subbounty_approvals): Vec<(BountyIndex, BountyIndex)>;
 	}
 }
 
@@ -292,8 +289,8 @@ decl_event!(
 		BountyCanceled(BountyIndex),
 		/// A bounty expiry is extended. \[index\]
 		BountyExtended(BountyIndex),
-		/// A subbounty is approved. \[index, subbounty index\]
-		SubBountyApproved(BountyIndex, BountyIndex),
+		/// A subbounty is added. \[index, subbounty index\]
+		SubBountyAdded(BountyIndex, BountyIndex),
 		/// A subbounty is awarded to a beneficiary. \[index, subbounty index, beneficiary\]
 		SubBountyAwarded(BountyIndex, BountyIndex, AccountId),
 		/// A Subbounty is claimed by beneficiary. \[index, subbounty index, payout, beneficiary\]
@@ -302,8 +299,6 @@ decl_event!(
 		SubBountyRejected(BountyIndex, BountyIndex, Balance),
 		/// A Subbounty is cancelled. \[index, subbounty index,\]
 		SubBountyCanceled(BountyIndex, BountyIndex),
-		/// A subbounty proposal is funded. \[index, subbounty index\]
-		SubBountyFunded(BountyIndex, BountyIndex),
 		/// A subbounty proposal is funded and became active. \[index, subbounty index\]
 		SubBountyBecameActive(BountyIndex, BountyIndex),
 		/// A Subbounty expiry is extended. \[index, subbounty index,\]
@@ -904,8 +899,6 @@ decl_module! {
 							description,
 							value
 						);
-						// Add the subbounty id to the approved list for processing.
-						SubBountyApprovals::append((bounty_id, bounty.subbounty_count));
 					},
 					_ => return Err(Error::<T>::UnexpectedStatus.into()),
 				}
@@ -1471,7 +1464,7 @@ impl<T: Config> Module<T> {
 
 		SubBounties::<T>::insert(bounty_id, subbounty_id, &subbounty);
 		SubBountyDescriptions::insert(bounty_id, subbounty_id, description);
-		Self::deposit_event(RawEvent::SubBountyApproved(bounty_id, subbounty_id));
+		Self::deposit_event(RawEvent::SubBountyAdded(bounty_id, subbounty_id));
 		Ok(())
 	}
 
