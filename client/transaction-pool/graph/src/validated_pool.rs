@@ -91,7 +91,7 @@ pub type ValidatedTransactionFor<B> = ValidatedTransaction<
 >;
 
 /// A closure that returns true if the local node can author blocks.
-pub struct CanAuthor(Box<dyn Fn() -> bool + Send + Sync + 'static>);
+pub struct CanAuthor(Box<dyn Fn() -> bool + Send + Sync>);
 
 impl From<bool> for CanAuthor {
 	fn from(can_author: bool) -> Self {
@@ -99,8 +99,8 @@ impl From<bool> for CanAuthor {
 	}
 }
 
-impl From<Box<dyn Fn() -> bool + Send + Sync + 'static>> for CanAuthor {
-	fn from(can_author: Box<dyn Fn() -> bool + Send + Sync + 'static>) -> Self {
+impl From<Box<dyn Fn() -> bool + Send + Sync>> for CanAuthor {
+	fn from(can_author: Box<dyn Fn() -> bool + Send + Sync>) -> Self {
 		CanAuthor(can_author)
 	}
 }
