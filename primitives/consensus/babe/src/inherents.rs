@@ -18,10 +18,6 @@
 //! Inherents for BABE
 
 use sp_inherents::{Error, InherentData, InherentIdentifier};
-#[cfg(feature = "std")]
-use sp_inherents::{InherentDataProviders, InherentDataProvider};
-#[cfg(feature = "std")]
-use sp_timestamp::TimestampInherentData;
 
 #[cfg(feature = "std")]
 use codec::Decode;
@@ -54,39 +50,34 @@ impl BabeInherentData for InherentData {
 /// Provides the slot duration inherent data for BABE.
 #[cfg(feature = "std")]
 pub struct InherentDataProvider {
-	slot_duration: u64,
+	slot: InherentType,
 }
 
 #[cfg(feature = "std")]
 impl InherentDataProvider {
-	/// Constructs `Self`
-	pub fn new(slot_duration: u64) -> Self {
-		Self { slot_duration }
+	/// Create new inherent data provider from the given `slot`.
+	pub fn new(slot: InherentType) -> Self {
+		Self { slot }
 	}
 }
 
 #[cfg(feature = "std")]
-impl InherentDataProvider for InherentDataProvider {
-	fn on_register(&self, providers: &InherentDataProviders) -> Result<(), Error> {
-		if !providers.has_provider(&sp_timestamp::INHERENT_IDENTIFIER) {
-			// Add the timestamp inherent data provider, as we require it.
-			providers.register_provider(sp_timestamp::InherentDataProvider)
-		} else {
-			Ok(())
-		}
-	}
-
-	fn inherent_identifier(&self) -> &'static InherentIdentifier {
-		&INHERENT_IDENTIFIER
-	}
-
+impl sp_inherents::InherentDataProvider for InherentDataProvider {
 	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), Error> {
-		let timestamp = inherent_data.timestamp_inherent_data()?;
-		let slot = timestamp / self.slot_duration;
-		inherent_data.put_data(INHERENT_IDENTIFIER, &slot)
+		inherent_data.put_data(INHERENT_IDENTIFIER, &self.slot)
 	}
 
-	fn error_to_string(&self, error: &[u8]) -> Option<String> {
-		Error::decode(&mut &error[..]).map(|e| e.into_string()).ok()
+	fn try_handle_error(
+		&self,
+		identifier: &InherentIdentifier,
+		error: &[u8],
+	) -> sp_inherents::TryHandleErrorResult {
+		if identifier != &INHERENT_IDENTIFIER {
+			return None;
+		}
+
+		let error = Error::decode(&mut &error[..]).ok()?;
+
+		Some(Box::pin(async move { Err(Box::from(format!("{:?}", error))) }))
 	}
 }

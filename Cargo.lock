@@ -8275,7 +8275,6 @@ dependencies = [
  "sp-keystore",
  "sp-runtime",
  "sp-std",
- "sp-timestamp",
 ]
 
 [[package]]
