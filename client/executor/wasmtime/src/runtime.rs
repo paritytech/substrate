@@ -33,6 +33,8 @@ use sp_allocator::FreeingBumpHeapAllocator;
 use sp_runtime_interface::unpack_ptr_and_len;
 use sp_wasm_interface::{Function, Pointer, WordSize, Value};
 use wasmtime::{Config, Engine, Store};
+use std::mem::drop;
+use crate::timing;
 
 /// A `WasmModule` implementation using wasmtime to compile the runtime module to machine code
 /// and execute the compiled code.
@@ -46,17 +48,17 @@ pub struct WasmtimeRuntime {
 
 impl WasmModule for WasmtimeRuntime {
 	fn new_instance(&self) -> Result<Box<dyn WasmInstance>> {
-		let store = Store::new(&self.engine);
+		let store = timing("store", || Store::new(&self.engine));
 
 		// Scan all imports, find the matching host functions, and create stubs that adapt arguments
 		// and results.
-		let imports = resolve_imports(
+		let imports = timing("resolve_imports", || resolve_imports(
 			&store,
 			self.module_wrapper.module(),
 			&self.host_functions,
 			self.heap_pages,
 			self.allow_missing_func_imports,
-		)?;
+		))?;
 
 		let instance_wrapper =
 			InstanceWrapper::new(&store, &self.module_wrapper, &imports, self.heap_pages)?;
@@ -96,14 +98,15 @@ impl WasmInstance for WasmtimeInstance {
 		let entrypoint = self.instance_wrapper.resolve_entrypoint(method)?;
 		let allocator = FreeingBumpHeapAllocator::new(self.heap_base);
 
+		timing("data segments", ||
 		self.module_wrapper
 			.data_segments_snapshot()
 			.apply(|offset, contents| {
 				self.instance_wrapper
 					.write_memory_from(Pointer::new(offset), contents)
-			})?;
+			}))?;
 
-		self.globals_snapshot.apply(&*self.instance_wrapper)?;
+		timing("globals snapshot", || self.globals_snapshot.apply(&*self.instance_wrapper))?;
 
 		perform_call(
 			data,
@@ -131,7 +134,7 @@ pub fn create_runtime(
 	let mut config = Config::new();
 	config.cranelift_opt_level(wasmtime::OptLevel::SpeedAndSize);
 
-	let engine = Engine::new(&config);
+	let engine = timing("engine new", || Engine::new(&config));
 
 	let module_wrapper = ModuleWrapper::new(&engine, code)
 		.map_err(|e| WasmError::Other(format!("cannot create module: {}", e)))?;
@@ -151,11 +154,11 @@ fn perform_call(
 	entrypoint: EntryPoint,
 	mut allocator: FreeingBumpHeapAllocator,
 ) -> Result<Vec<u8>> {
-	let (data_ptr, data_len) = inject_input_data(&instance_wrapper, &mut allocator, data)?;
+	let (data_ptr, data_len) = timing("inject input", || inject_input_data(&instance_wrapper, &mut allocator, data))?;
 
 	let host_state = HostState::new(allocator, instance_wrapper.clone());
 	let ret = state_holder::with_initialized_state(&host_state, || -> Result<_> {
-		Ok(unpack_ptr_and_len(entrypoint.call(data_ptr, data_len)?))
+		Ok(unpack_ptr_and_len(timing("call", || entrypoint.call(data_ptr, data_len))?))
 	});
 	let (output_ptr, output_len) = ret?;
 	let output = extract_output_data(&instance_wrapper, output_ptr, output_len)?;

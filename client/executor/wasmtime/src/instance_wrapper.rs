@@ -31,10 +31,13 @@ use sc_executor_common::{
 use sp_wasm_interface::{Pointer, WordSize, Value};
 use wasmtime::{Engine, Instance, Module, Memory, Table, Val, Func, Extern, Global, Store};
 use parity_wasm::elements;
+use std::mem::drop;
+use crate::{timing, TimingGuard};
 
 mod globals_snapshot;
 
 pub use globals_snapshot::GlobalsSnapshot;
+
 
 pub struct ModuleWrapper {
 	module: Module,
@@ -43,20 +46,34 @@ pub struct ModuleWrapper {
 
 impl ModuleWrapper {
 	pub fn new(engine: &Engine, code: &[u8]) -> Result<Self> {
+		let deser = TimingGuard::new("deserialize");
 		let mut raw_module: elements::Module = elements::deserialize_buffer(code)
 			.map_err(|e| Error::from(format!("cannot decode module: {}", e)))?;
+		drop(deser);
+
+		let instrument_guard = TimingGuard::new("instrument");
 		pwasm_utils::export_mutable_globals(&mut raw_module, "exported_internal_global");
+		drop(instrument_guard);
+
+		let serialize = TimingGuard::new("serialize");
 		let instrumented_code = elements::serialize(raw_module)
 			.map_err(|e| Error::from(format!("cannot encode module: {}", e)))?;
+		drop(serialize);
 
+		let module_guard = TimingGuard::new("module");
 		let module = Module::new(engine, &instrumented_code)
 			.map_err(|e| Error::from(format!("cannot create module: {}", e)))?;
+		drop(module_guard);
 
+		let module_info_guard = TimingGuard::new("module_info_guard");
 		let module_info = WasmModuleInfo::new(code)
 			.ok_or_else(|| Error::from("cannot deserialize module".to_string()))?;
+		drop(module_info_guard);
 
+		let snapshot_guard = TimingGuard::new("snapshot");
 		let data_segments_snapshot = DataSegmentsSnapshot::take(&module_info)
 			.map_err(|e| Error::from(format!("cannot take data segments snapshot: {}", e)))?;
+		drop(snapshot_guard);
 
 		Ok(Self {
 			module,
@@ -113,7 +130,7 @@ impl EntryPoint {
 				])
 			},
 		})
-			.map(|results| 
+			.map(|results|
 				// the signature is checked to have i64 return type
 				results[0].unwrap_i64() as u64
 			)
@@ -197,7 +214,7 @@ fn extern_func(extern_: &Extern) -> Option<&Func> {
 impl InstanceWrapper {
 	/// Create a new instance wrapper from the given wasm module.
 	pub fn new(store: &Store, module_wrapper: &ModuleWrapper, imports: &Imports, heap_pages: u32) -> Result<Self> {
-		let instance = Instance::new(store, &module_wrapper.module, &imports.externs)
+		let instance = timing("instance new", ||Instance::new(store, &module_wrapper.module, &imports.externs))
 			.map_err(|e| Error::from(format!("cannot instantiate: {}", e)))?;
 
 		let memory = match imports.memory_import_index {

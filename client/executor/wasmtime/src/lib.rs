@@ -26,3 +26,30 @@ mod instance_wrapper;
 mod util;
 
 pub use runtime::create_runtime;
+
+use std::time::Instant;
+
+pub struct TimingGuard {
+	start: Instant,
+	tag: &'static str,
+}
+
+impl TimingGuard {
+	pub fn new(tag: &'static str) -> Self {
+		Self {
+			start: Instant::now(),
+			tag,
+		}
+	}
+}
+
+impl Drop for TimingGuard {
+	fn drop(&mut self) {
+		println!("wasm: {} {}ms", self.tag, self.start.elapsed().as_millis());
+	}
+}
+
+pub fn timing<R, F: FnOnce() -> R>(tag: &'static str, f: F) -> R {
+	let guard = TimingGuard::new(tag);
+	f()
+}
