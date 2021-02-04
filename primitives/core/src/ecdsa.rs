@@ -554,6 +554,7 @@ mod test {
 	use hex_literal::hex;
 	use crate::crypto::{DEV_PHRASE, set_default_ss58_version};
 	use serde_json;
+	use crate::crypto::PublicError;
 
 	#[test]
 	fn default_phrase_should_be_used() {
@@ -674,6 +675,16 @@ mod test {
 		println!("Correct: {}", s);
 		let cmp = Public::from_ss58check(&s).unwrap();
 		assert_eq!(cmp, public);
+	}
+
+	#[test]
+	fn ss58check_format_check_works() {
+		use crate::crypto::Ss58AddressFormat;
+		let pair = Pair::from_seed(b"12345678901234567890123456789012");
+		let public = pair.public();
+		let format = Ss58AddressFormat::Reserved46;
+		let s = public.to_ss58check_with_version(format);
+		assert_eq!(Public::from_ss58check_with_version(&s), Err(PublicError::FormatNotAllowed));
 	}
 
 	#[test]

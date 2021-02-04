@@ -210,7 +210,7 @@ pub enum PublicError {
 	BadBase58,
 	/// Bad length.
 	BadLength,
-	/// Unknown version.
+	/// Unknown identifier for the encoding.
 	UnknownVersion,
 	/// Invalid checksum.
 	InvalidChecksum,
@@ -218,11 +218,18 @@ pub enum PublicError {
 	InvalidFormat,
 	/// Invalid derivation path.
 	InvalidPath,
+	/// Disallowed SS58 Address Format for this datatype.
+	FormatNotAllowed,
 }
 
 /// Key that can be encoded to/from SS58.
 #[cfg(feature = "full_crypto")]
 pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
+	// A format filterer, can be used on
+	fn format_is_allowed(f: Ss58AddressFormat) -> bool {
+		!matches!(f, Ss58AddressFormat::Reserved46 | Ss58AddressFormat::Reserved47)
+	}
+
 	/// Some if the string is a properly encoded SS58Check address.
 	#[cfg(feature = "std")]
 	fn from_ss58check(s: &str) -> Result<Self, PublicError> {
@@ -233,43 +240,46 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 				_ => Err(PublicError::UnknownVersion),
 			})
 	}
+
 	/// Some if the string is a properly encoded SS58Check address.
 	#[cfg(feature = "std")]
 	fn from_ss58check_with_version(s: &str) -> Result<(Self, Ss58AddressFormat), PublicError> {
+		const CHECKSUM_LEN: usize = 2;
 		let mut res = Self::default();
-		let len = res.as_mut().len();
-		let d = s.from_base58().map_err(|_| PublicError::BadBase58)?; // failure here would be invalid encoding.
-		let prefix = if d.len() == len + 3 && d[0] < 64 {
-			1
-		} else if d.len() == len + 4 && d[0] >= 64 && d[0] < 128 {
-			2
-		} else {
-			// Invalid length/prefix combination.
-			return Err(PublicError::BadLength);
-		};
-		let identifier: u16 = match d[0] {
-			0..=63 => d[0] as u16,
-			// weird bit manipulation owing to the combination of LE encoding and missing two bits
-			// from the left.
-			// d[0] d[1] are: 01aaaaaa bbcccccc
-			// they make the LE-encoded 16-bit value: aaaaaabb 00cccccc
-			// so the lower byte is formed of aaaaaabb and the higher byte is 00cccccc
+
+		// Must decode to our type.
+		let body_len = res.as_mut().len();
+
+		let data = s.from_base58().map_err(|_| PublicError::BadBase58)?;
+		if data.len() < 2 { return Err(PublicError::BadLength); }
+		let (prefix_len, ident) = match data[0] {
+			0..=63 => (1, data[0] as u16),
 			64..=127 => {
-				let lower = ((d[0] & 0b00111111) << 2) | (d[1] >> 6);
-				let upper = d[1] & 0b00111111;
-				(lower as u16) | ((upper as u16) << 8)
+				// weird bit manipulation owing to the combination of LE encoding and missing two bits
+				// from the left.
+				// d[0] d[1] are: 01aaaaaa bbcccccc
+				// they make the LE-encoded 16-bit value: aaaaaabb 00cccccc
+				// so the lower byte is formed of aaaaaabb and the higher byte is 00cccccc
+				let lower = ((data[0] & 0b00111111) << 2) | (data[1] >> 6);
+				let upper = data[1] & 0b00111111;
+				(2, (lower as u16) | ((upper as u16) << 8))
 			}
 			_ => Err(PublicError::UnknownVersion)?,
 		};
-		let ver = identifier.try_into().map_err(|_: ()| PublicError::UnknownVersion)?;
+		if data.len() != prefix_len + body_len + CHECKSUM_LEN { return Err(PublicError::BadLength) }
+		let format = ident.try_into().map_err(|_: ()| PublicError::UnknownVersion)?;
+		if !Self::format_is_allowed(format) { return Err(PublicError::FormatNotAllowed) }
 
-		if d[len + prefix..len + prefix + 2] != ss58hash(&d[0..len + prefix]).as_bytes()[0..2] {
+		let hash = ss58hash(&data[0..body_len + prefix_len]);
+		let checksum = &hash.as_bytes()[0..CHECKSUM_LEN];
+		if data[body_len + prefix_len..body_len + prefix_len + CHECKSUM_LEN] != *checksum {
 			// Invalid checksum.
 			return Err(PublicError::InvalidChecksum);
 		}
-		res.as_mut().copy_from_slice(&d[prefix..len + prefix]);
-		Ok((res, ver))
+		res.as_mut().copy_from_slice(&data[prefix_len..body_len + prefix_len]);
+		Ok((res, format))
 	}
+
 	/// Some if the string is a properly encoded SS58Check address, optionally with
 	/// a derivation path following.
 	#[cfg(feature = "std")]
