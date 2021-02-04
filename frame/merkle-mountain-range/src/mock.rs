@@ -19,9 +19,7 @@ use crate::*;
 use crate as pallet_mmr;
 
 use codec::{Encode, Decode};
-use frame_support::{
-	impl_outer_origin, parameter_types,
-};
+use frame_support::parameter_types;
 use pallet_mmr_primitives::{LeafDataProvider, Compact};
 use sp_core::H256;
 use sp_runtime::{
@@ -43,7 +41,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		MMR: pallet_mmr::{Module, Call, Storage, Event<T>},
+		MMR: pallet_mmr::{Module, Call, Storage},
 	}
 );
 
