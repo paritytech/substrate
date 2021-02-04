@@ -1330,7 +1330,7 @@ decl_module! {
 				now,
 				election_status,
 				Self::queued_score(),
-				offchain_election::get_solution::<T>().map(offchain_election::ensure_solution_is_recent),
+				offchain_election::get_solution::<T>().map(offchain_election::ensure_solution_is_recent).map(|_| "[call-data]"),
 			);
 			match Self::era_election_status() {
 				ElectionStatus::Open(opened) if opened == now => {
