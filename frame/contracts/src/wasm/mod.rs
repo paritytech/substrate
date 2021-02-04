@@ -217,10 +217,9 @@ where
 	}
 
 	fn occupied_storage(&self) -> u32 {
-		use sp_std::mem::size_of;
-		let len = self.original_code_len
-			.saturating_add(self.code.len() as u32)
-			.saturating_add(size_of::<PrefabWasmModule<T>>() as u32);
+		// We disregard the size of the struct itself as the size is completely
+		// dominated by the code size.
+		let len = self.original_code_len.saturating_add(self.code.len() as u32);
 		len.checked_div(self.refcount as u32).unwrap_or(len)
 	}
 }
