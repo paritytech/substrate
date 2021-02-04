@@ -228,7 +228,8 @@ pub enum PublicError {
 /// for information on the codec.
 #[cfg(feature = "full_crypto")]
 pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
-	// A format filterer, can be used on
+	/// A format filterer, can be used to ensure that `from_ss58check` family only decode for
+	/// allowed identifiers. By default just refuses the two reserved identifiers.
 	fn format_is_allowed(f: Ss58AddressFormat) -> bool {
 		!matches!(f, Ss58AddressFormat::Reserved46 | Ss58AddressFormat::Reserved47)
 	}
