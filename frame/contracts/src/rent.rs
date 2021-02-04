@@ -231,6 +231,12 @@ where
 	/// Enacts the given verdict and returns the updated `ContractInfo`.
 	///
 	/// `alive_contract_info` should be from the same address as `account`.
+	///
+	/// # Note
+	///
+	/// if `evictable_code` is `None` an `Evict` verdict will not be enacted. This is for
+	/// when calling this function during a `call` where access to the soon to be evicted
+	/// contract should be denied but storage should be left unmodified.
 	fn enact_verdict(
 		account: &T::AccountId,
 		alive_contract_info: AliveContractInfo<T>,
