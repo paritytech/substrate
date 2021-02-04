@@ -31,23 +31,16 @@ use crate::{
 use crate::request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig};
 use futures::{channel::mpsc,  prelude::*};
 use prost::Message;
-use sc_client_api::{
-	StorageProof,
-	light
-};
 use sc_peerset::ReputationChange;
 use sp_core::{
 	storage::{ChildInfo, ChildType,StorageKey, PrefixedStorageKey},
 	hexdisplay::HexDisplay,
 };
 use sp_runtime::{
-	traits::{Block, Zero},
+	traits::Block,
 	generic::BlockId,
 };
-use std::{
-	collections::{BTreeMap},
-	sync::Arc,
-};
+use std::sync::Arc;
 use log::debug;
 
 const LOG_TARGET: &str = "light-client-request-handler";
