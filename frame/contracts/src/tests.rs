@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use crate::{
-	BalanceOf, ContractInfo, ContractInfoOf, GenesisConfig, Module,
+	BalanceOf, ContractInfo, ContractInfoOf, Module,
 	RawAliveContractInfo, RawEvent, Config, Schedule, gas::Gas,
 	Error, ConfigCache, RuntimeReturnCode, storage::Storage,
 	chain_extension::{
@@ -34,8 +34,8 @@ use sp_runtime::{
 };
 use sp_io::hashing::blake2_256;
 use frame_support::{
-	assert_ok, assert_err, assert_err_ignore_postinfo, impl_outer_dispatch, impl_outer_event,
-	impl_outer_origin, parameter_types, StorageMap, assert_storage_noop,
+	assert_ok, assert_err, assert_err_ignore_postinfo,
+	parameter_types, StorageMap, assert_storage_noop,
 	traits::{Currency, ReservableCurrency, OnInitialize},
 	weights::{Weight, PostDispatchInfo, DispatchClass, constants::WEIGHT_PER_SECOND},
 	dispatch::DispatchErrorWithPostInfo,
@@ -43,32 +43,24 @@ use frame_support::{
 };
 use frame_system::{self as system, EventRecord, Phase};
 
-mod contracts {
-	// Re-export contents of the root. This basically
-	// needs to give a name for the current crate.
-	// This hack is required for `impl_outer_event!`.
-	pub use super::super::*;
-	pub use frame_support::impl_outer_event;
-}
+use crate as pallet_contracts;
 
-use pallet_balances as balances;
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
 
-impl_outer_event! {
-	pub enum MetaEvent for Test {
-		system<T>,
-		balances<T>,
-		contracts<T>,
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
+		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
+		Randomness: pallet_randomness_collective_flip::{Module, Call, Storage},
+		Contracts: pallet_contracts::{Module, Call, Config<T>, Storage, Event<T>},
 	}
-}
-impl_outer_origin! {
-	pub enum Origin for Test where system = frame_system { }
-}
-impl_outer_dispatch! {
-	pub enum Call for Test where origin: Origin {
-		balances::Balances,
-		contracts::Contracts,
-	}
-}
+);
 
 #[macro_use]
 pub mod test_utils {
@@ -189,8 +181,6 @@ impl ChainExtension<Test> for TestExtension {
 	}
 }
 
-#[derive(Clone, Eq, PartialEq, Debug)]
-pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
@@ -211,10 +201,10 @@ impl frame_system::Config for Test {
 	type AccountId = AccountId32;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = MetaEvent;
+	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
-	type PalletInfo = ();
+	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
@@ -224,7 +214,7 @@ impl frame_system::Config for Test {
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type Balance = u64;
-	type Event = MetaEvent;
+	type Event = Event;
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
@@ -267,7 +257,7 @@ impl Config for Test {
 	type Time = Timestamp;
 	type Randomness = Randomness;
 	type Currency = Balances;
-	type Event = MetaEvent;
+	type Event = Event;
 	type RentPayment = ();
 	type SignedClaimHandicap = SignedClaimHandicap;
 	type TombstoneDeposit = TombstoneDeposit;
@@ -284,12 +274,6 @@ impl Config for Test {
 	type DeletionQueueDepth = DeletionQueueDepth;
 	type DeletionWeightLimit = DeletionWeightLimit;
 }
-
-type Balances = pallet_balances::Module<Test>;
-type Timestamp = pallet_timestamp::Module<Test>;
-type Contracts = Module<Test>;
-type System = frame_system::Module<Test>;
-type Randomness = pallet_randomness_collective_flip::Module<Test>;
 
 pub const ALICE: AccountId32 = AccountId32::new([1u8; 32]);
 pub const BOB: AccountId32 = AccountId32::new([2u8; 32]);
@@ -322,7 +306,7 @@ impl ExtBuilder {
 		pallet_balances::GenesisConfig::<Test> {
 			balances: vec![],
 		}.assimilate_storage(&mut t).unwrap();
-		GenesisConfig {
+		pallet_contracts::GenesisConfig {
 			current_schedule: Schedule::<Test> {
 				enable_println: true,
 				..Default::default()
@@ -476,50 +460,50 @@ fn instantiate_and_call_and_deposit_event() {
 			pretty_assertions::assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: MetaEvent::system(frame_system::Event::NewAccount(ALICE.clone())),
+					event: Event::frame_system(frame_system::Event::NewAccount(ALICE.clone())),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: MetaEvent::balances(
+					event: Event::pallet_balances(
 						pallet_balances::RawEvent::Endowed(ALICE, 1_000_000)
 					),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: MetaEvent::contracts(RawEvent::CodeStored(code_hash.into())),
+					event: Event::pallet_contracts(RawEvent::CodeStored(code_hash.into())),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: MetaEvent::system(frame_system::Event::NewAccount(addr.clone())),
+					event: Event::frame_system(frame_system::Event::NewAccount(addr.clone())),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: MetaEvent::balances(
+					event: Event::pallet_balances(
 						pallet_balances::RawEvent::Endowed(addr.clone(), subsistence * 3)
 					),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: MetaEvent::balances(
+					event: Event::pallet_balances(
 						pallet_balances::RawEvent::Transfer(ALICE, addr.clone(), subsistence * 3)
 					),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: MetaEvent::contracts(
+					event: Event::pallet_contracts(
 						RawEvent::ContractEmitted(addr.clone(), vec![1, 2, 3, 4])
 					),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: MetaEvent::contracts(RawEvent::Instantiated(ALICE, addr.clone())),
+					event: Event::pallet_contracts(RawEvent::Instantiated(ALICE, addr.clone())),
 					topics: vec![],
 				}
 			]);
@@ -654,19 +638,19 @@ fn test_set_rent_code_and_hash() {
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: MetaEvent::system(frame_system::Event::NewAccount(ALICE)),
+					event: Event::frame_system(frame_system::Event::NewAccount(ALICE)),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(
+					event: Event::pallet_balances(pallet_balances::RawEvent::Endowed(
 						ALICE, 1_000_000
 					)),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: MetaEvent::contracts(RawEvent::CodeStored(code_hash.into())),
+					event: Event::pallet_contracts(RawEvent::CodeStored(code_hash.into())),
 					topics: vec![],
 				},
 			]);
@@ -1236,22 +1220,22 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: MetaEvent::system(frame_system::Event::NewAccount(ALICE)),
+					event: Event::frame_system(frame_system::Event::NewAccount(ALICE)),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(ALICE, 1_000_000)),
+					event: Event::pallet_balances(pallet_balances::RawEvent::Endowed(ALICE, 1_000_000)),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: MetaEvent::contracts(RawEvent::CodeStored(restoration_code_hash.into())),
+					event: Event::pallet_contracts(RawEvent::CodeStored(restoration_code_hash.into())),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: MetaEvent::contracts(RawEvent::CodeStored(set_rent_code_hash.into())),
+					event: Event::pallet_contracts(RawEvent::CodeStored(set_rent_code_hash.into())),
 					topics: vec![],
 				},
 			]);
@@ -1300,7 +1284,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: MetaEvent::contracts(
+					event: Event::pallet_contracts(
 						RawEvent::Evicted(addr_bob.clone())
 					),
 					topics: vec![],
@@ -1386,39 +1370,39 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 						pretty_assertions::assert_eq!(System::events(), vec![
 							EventRecord {
 								phase: Phase::Initialization,
-								event: MetaEvent::contracts(RawEvent::Evicted(addr_bob)),
+								event: Event::pallet_contracts(RawEvent::Evicted(addr_bob)),
 								topics: vec![],
 							},
 							EventRecord {
 								phase: Phase::Initialization,
-								event: MetaEvent::system(frame_system::Event::NewAccount(CHARLIE)),
+								event: Event::frame_system(frame_system::Event::NewAccount(CHARLIE)),
 								topics: vec![],
 							},
 							EventRecord {
 								phase: Phase::Initialization,
-								event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(CHARLIE, 1_000_000)),
+								event: Event::pallet_balances(pallet_balances::RawEvent::Endowed(CHARLIE, 1_000_000)),
 								topics: vec![],
 							},
 							EventRecord {
 								phase: Phase::Initialization,
-								event: MetaEvent::system(frame_system::Event::NewAccount(addr_django.clone())),
+								event: Event::frame_system(frame_system::Event::NewAccount(addr_django.clone())),
 								topics: vec![],
 							},
 							EventRecord {
 								phase: Phase::Initialization,
-								event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(addr_django.clone(), 30_000)),
+								event: Event::pallet_balances(pallet_balances::RawEvent::Endowed(addr_django.clone(), 30_000)),
 								topics: vec![],
 							},
 							EventRecord {
 								phase: Phase::Initialization,
-								event: MetaEvent::balances(
+								event: Event::pallet_balances(
 									pallet_balances::RawEvent::Transfer(CHARLIE, addr_django.clone(), 30_000)
 								),
 								topics: vec![],
 							},
 							EventRecord {
 								phase: Phase::Initialization,
-								event: MetaEvent::contracts(RawEvent::Instantiated(CHARLIE, addr_django.clone())),
+								event: Event::pallet_contracts(RawEvent::Instantiated(CHARLIE, addr_django.clone())),
 								topics: vec![],
 							},
 						]);
@@ -1441,12 +1425,12 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 				assert_eq!(System::events(), vec![
 					EventRecord {
 						phase: Phase::Initialization,
-						event: MetaEvent::system(system::Event::KilledAccount(addr_django.clone())),
+						event: Event::frame_system(system::Event::KilledAccount(addr_django.clone())),
 						topics: vec![],
 					},
 					EventRecord {
 						phase: Phase::Initialization,
-						event: MetaEvent::contracts(
+						event: Event::pallet_contracts(
 							RawEvent::Restored(addr_django, addr_bob, bob_contract.code_hash, 50)
 						),
 						topics: vec![],
@@ -1672,21 +1656,21 @@ fn self_destruct_works() {
 			pretty_assertions::assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: MetaEvent::system(
+					event: Event::frame_system(
 						frame_system::Event::KilledAccount(addr.clone())
 					),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: MetaEvent::balances(
+					event: Event::pallet_balances(
 						pallet_balances::RawEvent::Transfer(addr.clone(), DJANGO, 100_000)
 					),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: MetaEvent::contracts(
+					event: Event::pallet_contracts(
 						RawEvent::Terminated(addr.clone(), DJANGO)
 					),
 					topics: vec![],

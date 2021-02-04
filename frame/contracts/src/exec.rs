@@ -725,7 +725,7 @@ mod tests {
 		RawEvent, Vm, ReturnFlags, ExecError, ErrorOrigin, AccountIdOf,
 	};
 	use crate::{
-		gas::GasMeter, tests::{ExtBuilder, Test, MetaEvent},
+		gas::GasMeter, tests::{ExtBuilder, Test, Event as MetaEvent},
 		exec::ExecReturnValue, CodeHash, ConfigCache,
 		gas::Gas,
 		storage::Storage,
@@ -743,7 +743,7 @@ mod tests {
 		<frame_system::Module<Test>>::events()
 			.into_iter()
 			.filter_map(|meta| match meta.event {
-				MetaEvent::contracts(contract_event) => Some(contract_event),
+				MetaEvent::pallet_contracts(contract_event) => Some(contract_event),
 				_ => None,
 			})
 			.collect()
