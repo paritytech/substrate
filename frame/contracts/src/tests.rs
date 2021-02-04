@@ -514,6 +514,11 @@ fn instantiate_and_call_and_deposit_event() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
+					event: MetaEvent::contracts(RawEvent::CodeStored(code_hash.into())),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
 					event: MetaEvent::contracts(
 						RawEvent::ContractEmitted(addr.clone(), vec![1, 2, 3, 4])
 					),
@@ -522,11 +527,6 @@ fn instantiate_and_call_and_deposit_event() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: MetaEvent::contracts(RawEvent::Instantiated(ALICE, addr.clone())),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: MetaEvent::contracts(RawEvent::CodeStored(code_hash.into())),
 					topics: vec![],
 				},
 			]);
@@ -1243,12 +1243,12 @@ fn restoration(
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: MetaEvent::contracts(RawEvent::Instantiated(ALICE, addr_bob.clone())),
+					event: MetaEvent::contracts(RawEvent::CodeStored(set_rent_code_hash.into())),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: MetaEvent::contracts(RawEvent::CodeStored(set_rent_code_hash.into())),
+					event: MetaEvent::contracts(RawEvent::Instantiated(ALICE, addr_bob.clone())),
 					topics: vec![],
 				},
 			];
@@ -1446,14 +1446,15 @@ fn restoration(
 							},
 							EventRecord {
 								phase: Phase::Initialization,
-								event: MetaEvent::contracts(RawEvent::Instantiated(CHARLIE, addr_django.clone())),
+								event: MetaEvent::contracts(RawEvent::CodeStored(restoration_code_hash)),
 								topics: vec![],
 							},
 							EventRecord {
 								phase: Phase::Initialization,
-								event: MetaEvent::contracts(RawEvent::CodeStored(restoration_code_hash)),
+								event: MetaEvent::contracts(RawEvent::Instantiated(CHARLIE, addr_django.clone())),
 								topics: vec![],
 							},
+
 						]);
 					},
 					(false, false, true) => {

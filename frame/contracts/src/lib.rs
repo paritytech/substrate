@@ -598,9 +598,8 @@ decl_module! {
 			let mut gas_meter = GasMeter::new(gas_limit);
 			let result = Self::execute_wasm(origin, &mut gas_meter, |ctx, gas_meter| {
 				let executable = PrefabWasmModule::from_code(code, &schedule)?;
-				let result = ctx.instantiate(endowment, gas_meter, &executable, data, &salt)
+				let result = ctx.instantiate(endowment, gas_meter, executable, data, &salt)
 					.map(|(_address, output)| output)?;
-				executable.store();
 				Ok(result)
 			});
 			gas_meter.into_dispatch_result(
@@ -630,9 +629,8 @@ decl_module! {
 			let mut gas_meter = GasMeter::new(gas_limit);
 			let result = Self::execute_wasm(origin, &mut gas_meter, |ctx, gas_meter| {
 				let executable = PrefabWasmModule::from_storage(code_hash, &ctx.config.schedule)?;
-				let result = ctx.instantiate(endowment, gas_meter, &executable, data, &salt)
+				let result = ctx.instantiate(endowment, gas_meter, executable, data, &salt)
 					.map(|(_address, output)| output)?;
-				executable.store();
 				Ok(result)
 			});
 			gas_meter.into_dispatch_result(
@@ -741,8 +739,7 @@ where
 	#[cfg(feature = "runtime-benchmarks")]
 	pub fn store_code_raw(code: Vec<u8>) -> DispatchResult {
 		let schedule = <Module<T>>::current_schedule();
-		let executable = PrefabWasmModule::from_code_unchecked(code, &schedule)?;
-		executable.store();
+		PrefabWasmModule::store_code_unchecked(code, &schedule)?;
 		Ok(())
 	}
 

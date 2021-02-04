@@ -199,11 +199,8 @@ pub trait Executable<T: Config>: Sized {
 	/// queried for purposes other than execution.
 	fn from_storage_noinstr(code_hash: CodeHash<T>) -> Result<Self, DispatchError>;
 
-	/// Put the executable into storage. If it already exists there the refcount is incremented.
-	fn store(self);
-
 	/// Decrements the refcount by one and deletes the code if it drops to zero.
-	fn store_decremented(self);
+	fn drop_from_storage(self);
 
 	/// Increment the refcount by one. Fails if the code does not exist on-chain.
 	fn add_user(code_hash: CodeHash<T>) -> DispatchResult;
@@ -212,8 +209,16 @@ pub trait Executable<T: Config>: Sized {
 	fn remove_user(code_hash: CodeHash<T>);
 
 	/// Execute the specified exported function and return the result.
+	///
+	/// When the specified function is `Constructor` the executable is stored and its
+	/// refcount incremented.
+	///
+	/// # Note
+	///
+	/// This functions expects to be executed in a storage transaction that rolls back
+	/// all of its emitted storage changes.
 	fn execute<E: Ext<T = T>>(
-		&self,
+		self,
 		ext: E,
 		function: &ExportedFunction,
 		input_data: Vec<u8>,
@@ -333,7 +338,7 @@ where
 		&mut self,
 		endowment: BalanceOf<T>,
 		gas_meter: &mut GasMeter<T>,
-		executable: &E,
+		executable: E,
 		input_data: Vec<u8>,
 		salt: &[u8],
 	) -> Result<(T::AccountId, ExecReturnValue), ExecError> {
@@ -370,6 +375,12 @@ where
 					nested,
 				)?;
 
+				// Cache the value before calling into the constructor because that
+				// consumes the value. If the constructor creates additional contracts using
+				// the same code hash we still charge the "1 block rent" as if they weren't
+				// spawned. This is OK as overcharging is always safe.
+				let occupied_storage = executable.occupied_storage();
+
 				let output = executable.execute(
 					nested.new_call_context(caller.clone(), endowment),
 					&ExportedFunction::Constructor,
@@ -388,7 +399,7 @@ where
 				// This also makes sure that it is above the subsistence threshold
 				// in order to keep up the guarantuee that we always leave a tombstone behind
 				// with the exception of a contract that called `seal_terminate`.
-				Rent::<T, E>::charge(&dest, contract, executable.occupied_storage())?
+				Rent::<T, E>::charge(&dest, contract, occupied_storage)?
 					.ok_or(Error::<T>::NewContractNotFunded)?;
 
 				// Deposit an instantiation event.
@@ -570,8 +581,7 @@ where
 		salt: &[u8],
 	) -> Result<(AccountIdOf<T>, ExecReturnValue), ExecError> {
 		let executable = E::from_storage(code_hash, &self.ctx.config.schedule)?;
-		let result = self.ctx.instantiate(endowment, gas_meter, &executable, input_data, salt)?;
-		executable.store();
+		let result = self.ctx.instantiate(endowment, gas_meter, executable, input_data, salt)?;
 		Ok(result)
 	}
 
@@ -833,9 +843,7 @@ mod tests {
 			})
 		}
 
-		fn store(self) {}
-
-		fn store_decremented(self) {}
+		fn drop_from_storage(self) {}
 
 		fn add_user(_code_hash: CodeHash<Test>) -> DispatchResult {
 			Ok(())
@@ -844,7 +852,7 @@ mod tests {
 		fn remove_user(_code_hash: CodeHash<Test>) {}
 
 		fn execute<E: Ext<T = Test>>(
-			&self,
+			self,
 			mut ext: E,
 			_function: &ExportedFunction,
 			input_data: Vec<u8>,
@@ -1083,7 +1091,7 @@ mod tests {
 			let result = ctx.instantiate(
 				cfg.subsistence_threshold() * 3,
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
-				&MockExecutable::from_storage(input_data_ch, &cfg.schedule).unwrap(),
+				MockExecutable::from_storage(input_data_ch, &cfg.schedule).unwrap(),
 				vec![1, 2, 3, 4],
 				&[],
 			);
@@ -1238,7 +1246,7 @@ mod tests {
 				ctx.instantiate(
 					0, // <- zero endowment
 					&mut GasMeter::<Test>::new(GAS_LIMIT),
-					&MockExecutable::from_storage(dummy_ch, &cfg.schedule).unwrap(),
+					MockExecutable::from_storage(dummy_ch, &cfg.schedule).unwrap(),
 					vec![],
 					&[],
 				),
@@ -1262,7 +1270,7 @@ mod tests {
 				ctx.instantiate(
 					100,
 					&mut GasMeter::<Test>::new(GAS_LIMIT),
-					&MockExecutable::from_storage(dummy_ch, &cfg.schedule).unwrap(),
+					MockExecutable::from_storage(dummy_ch, &cfg.schedule).unwrap(),
 					vec![],
 					&[],
 				),
@@ -1293,7 +1301,7 @@ mod tests {
 				ctx.instantiate(
 					100,
 					&mut GasMeter::<Test>::new(GAS_LIMIT),
-					&MockExecutable::from_storage(dummy_ch, &cfg.schedule).unwrap(),
+					MockExecutable::from_storage(dummy_ch, &cfg.schedule).unwrap(),
 					vec![],
 					&[],
 				),
@@ -1414,7 +1422,7 @@ mod tests {
 					ctx.instantiate(
 						100,
 						&mut GasMeter::<Test>::new(GAS_LIMIT),
-						&MockExecutable::from_storage(terminate_ch, &cfg.schedule).unwrap(),
+						MockExecutable::from_storage(terminate_ch, &cfg.schedule).unwrap(),
 						vec![],
 						&[],
 					),
@@ -1446,7 +1454,7 @@ mod tests {
 			let result = ctx.instantiate(
 				cfg.subsistence_threshold() * 5,
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
-				&MockExecutable::from_storage(rent_allowance_ch, &cfg.schedule).unwrap(),
+				MockExecutable::from_storage(rent_allowance_ch, &cfg.schedule).unwrap(),
 				vec![],
 				&[],
 			);

@@ -106,18 +106,21 @@ where
 		prepare::prepare_contract(original_code, schedule).map_err(Into::into)
 	}
 
-	/// Create the module without checking nor instrumenting the passed code.
+	/// Create and store the module without checking nor instrumenting the passed code.
 	///
 	/// # Note
 	///
-	/// This is useful for benchmarking where we don't want instrumentation to skwe
+	/// This is useful for benchmarking where we don't want instrumentation to skew
 	/// our results.
 	#[cfg(feature = "runtime-benchmarks")]
-	pub fn from_code_unchecked(
+	pub fn store_code_unchecked(
 		original_code: Vec<u8>,
 		schedule: &Schedule<T>
-	) -> Result<Self, DispatchError> {
-		prepare::benchmarking::prepare_contract(original_code, schedule).map_err(Into::into)
+	) -> DispatchResult {
+		let executable = prepare::benchmarking::prepare_contract(original_code, schedule)
+			.map_err::<DispatchError, _>(Into::into)?;
+		code_cache::store(executable);
+		Ok(())
 	}
 
 	/// Return the refcount of the module.
@@ -142,11 +145,7 @@ where
 		code_cache::load(code_hash, None)
 	}
 
-	fn store(self) {
-		code_cache::store(self)
-	}
-
-	fn store_decremented(self) {
+	fn drop_from_storage(self) {
 		code_cache::store_decremented(self);
 	}
 
@@ -159,7 +158,7 @@ where
 	}
 
 	fn execute<E: Ext<T = T>>(
-		&self,
+		self,
 		mut ext: E,
 		function: &ExportedFunction,
 		input_data: Vec<u8>,
@@ -190,10 +189,17 @@ where
 			gas_meter,
 		);
 
+		// We store before executing so that the code hash is available in the constructor.
+		let code = self.code.clone();
+		if let &ExportedFunction::Constructor = function {
+			code_cache::store(self)
+		}
+
 		// Instantiate the instance from the instrumented module code and invoke the contract
 		// entrypoint.
-		let result = sp_sandbox::Instance::new(&self.code, &imports, &mut runtime)
+		let result = sp_sandbox::Instance::new(&code, &imports, &mut runtime)
 			.and_then(|mut instance| instance.invoke(function.identifier(), &[], &mut runtime));
+
 		runtime.to_execution_result(result)
 	}
 
