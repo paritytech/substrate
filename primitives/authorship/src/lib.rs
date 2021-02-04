@@ -23,7 +23,7 @@ use sp_std::{result::Result, prelude::*};
 
 use codec::{Encode, Decode};
 use sp_inherents::{Error, InherentIdentifier, InherentData, IsFatalError};
-use sp_runtime::{RuntimeString, traits::Block as BlockT};
+use sp_runtime::{RuntimeString, traits::Header as HeaderT};
 
 /// The identifier for the `uncles` inherent.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"uncles00";
@@ -44,33 +44,33 @@ impl IsFatalError for InherentError {
 }
 
 /// Auxiliary trait to extract uncles inherent data.
-pub trait UnclesInherentData<B: BlockT> {
+pub trait UnclesInherentData<H> {
 	/// Get uncles.
-	fn uncles(&self) -> Result<Vec<B::Header>, Error>;
+	fn uncles(&self) -> Result<Vec<H>, Error>;
 }
 
-impl<B: BlockT> UnclesInherentData<B> for InherentData {
-	fn uncles(&self) -> Result<Vec<B::Header>, Error> {
+impl<H: HeaderT> UnclesInherentData<H> for InherentData {
+	fn uncles(&self) -> Result<Vec<H>, Error> {
 		Ok(self.get_data(&INHERENT_IDENTIFIER)?.unwrap_or_default())
 	}
 }
 
 /// Provider for inherent data.
 #[cfg(feature = "std")]
-pub struct InherentDataProvider<B: BlockT> {
-	uncles: Vec<B::Header>
+pub struct InherentDataProvider<H> {
+	uncles: Vec<H>,
 }
 
 #[cfg(feature = "std")]
-impl<B: BlockT> InherentDataProvider<B> {
+impl<H> InherentDataProvider<H> {
 	/// Create a new inherent data provider with the given `uncles`.
-	pub fn new(uncles: Vec<B::Header>) -> Self {
+	pub fn new(uncles: Vec<H>) -> Self {
 		InherentDataProvider { uncles }
 	}
 }
 
 #[cfg(feature = "std")]
-impl<B: BlockT> sp_inherents::InherentDataProvider for InherentDataProvider<B> {
+impl<H: HeaderT> sp_inherents::InherentDataProvider for InherentDataProvider<H> {
 	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), Error> {
 		inherent_data.put_data(INHERENT_IDENTIFIER, &self.uncles)
 	}
