@@ -1874,11 +1874,15 @@ pub mod pallet_prelude {
 ///
 /// ## Upgrade guidelines:
 ///
-/// 1. export metadata of the pallet for later checks
-/// 2. generate the template upgrade for the pallet provided by decl_storage with environment
-/// 	variable `PRINT_PALLET_UPGRADE`: `PRINT_PALLET_UPGRADE=1 cargo check -p my_pallet`
-/// 	This template can be used as information it contains all information for storages, genesis
-/// 	config and genesis build.
+/// 1. Export the metadata of the pallet for later checks
+///     - run your node with the pallet active
+///     - query the metadata using the `state_getMetadata` RPC and curl, or use
+///       `subsee -p <PALLET_NAME> > meta.json`
+/// 2. generate the template upgrade for the pallet provided by decl_storage
+///     with environment variable `PRINT_PALLET_UPGRADE`:
+///     `PRINT_PALLET_UPGRADE=1 cargo check -p my_pallet` This template can be
+///     used as information it contains all information for storages, genesis
+///     config and genesis build.
 /// 3. reorganize pallet to have trait `Config`, `decl_*` macros, `ValidateUnsigned`,
 /// 	`ProvideInherent`, `Origin` all together in one file. Suggested order:
 /// 	* Config,
@@ -1925,7 +1929,7 @@ pub mod pallet_prelude {
 /// 	impl<T: Config> Pallet<T> {
 /// 	}
 /// 	```
-/// 	and write inside all the call in decl_module with a few changes in the signature:
+/// 	and write inside all the calls in decl_module with a few changes in the signature:
 /// 	- origin must now be written completely, e.g. `origin: OriginFor<T>`
 /// 	- result type must be `DispatchResultWithPostInfo`, you need to write it and also you might
 /// 	need to put `Ok(().into())` at the end or the function.
