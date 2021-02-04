@@ -23,6 +23,6 @@ futures = "0.3.8"
 log = "0.4.11"
 derive_more = "0.99.11"
 codec = { package = "parity-scale-codec", version = "2.0.0" }
-prost = "0.6.1"
+prost = "0.7"
 num-traits = "0.2.14"
 parking_lot = "0.11.1"
