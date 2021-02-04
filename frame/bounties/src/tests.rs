@@ -140,7 +140,7 @@ impl Config for Test {
 	type WeightInfo = ();
 }
 
-type TreasuryEvent = pallet_treasury::Error::<Test, pallet_treasury::DefaultInstance>;
+type TreasuryError = pallet_treasury::Error::<Test, pallet_treasury::DefaultInstance>;
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
@@ -201,7 +201,7 @@ fn spend_proposal_fails_when_proposer_poor() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			Treasury::propose_spend(Origin::signed(2), 100, 3),
-			TreasuryEvent::InsufficientProposersBalance,
+			TreasuryError::InsufficientProposersBalance,
 		);
 	});
 }
@@ -254,7 +254,7 @@ fn reject_already_rejected_spend_proposal_fails() {
 
 		assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 		assert_ok!(Treasury::reject_proposal(Origin::root(), 0));
-		assert_noop!(Treasury::reject_proposal(Origin::root(), 0), TreasuryEvent::InvalidIndex);
+		assert_noop!(Treasury::reject_proposal(Origin::root(), 0), TreasuryError::InvalidIndex);
 	});
 }
 
@@ -269,7 +269,7 @@ fn reject_non_existent_spend_proposal_fails() {
 #[test]
 fn accept_non_existent_spend_proposal_fails() {
 	new_test_ext().execute_with(|| {
-		assert_noop!(Treasury::approve_proposal(Origin::root(), 0), TreasuryEvent::InvalidIndex);
+		assert_noop!(Treasury::approve_proposal(Origin::root(), 0), TreasuryError::InvalidIndex);
 	});
 }
 
@@ -280,7 +280,7 @@ fn accept_already_rejected_spend_proposal_fails() {
 
 		assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 		assert_ok!(Treasury::reject_proposal(Origin::root(), 0));
-		assert_noop!(Treasury::approve_proposal(Origin::root(), 0), TreasuryEvent::InvalidIndex);
+		assert_noop!(Treasury::approve_proposal(Origin::root(), 0), TreasuryError::InvalidIndex);
 	});
 }
 
