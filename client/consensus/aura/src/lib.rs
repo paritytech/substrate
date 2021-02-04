@@ -880,7 +880,7 @@ mod tests {
 	use sc_network::config::ProtocolConfig;
 	use parking_lot::Mutex;
 	use sp_keyring::sr25519::Keyring;
-	use sc_client_api::BlockchainEvents;
+	use sc_client_api::{BlockchainEvents, BlockImportNotification};
 	use sp_consensus_aura::sr25519::AuthorityPair;
 	use sc_consensus_slots::{SimpleSlotWorker, BackoffAuthoringOnFinalizedHeadLagging};
 	use std::task::Poll;
@@ -1020,7 +1020,14 @@ mod tests {
 			let environ = DummyFactory(client.clone());
 			import_notifications.push(
 				client.import_notification_stream()
-					.take_while(|n| future::ready(!(n.origin != BlockOrigin::Own && n.header.number() < &5)))
+					.take_while(|n| {
+						match n {
+							BlockImportNotification::Imported(n) => {
+								return future::ready(!(n.origin != BlockOrigin::Own && n.header.number() < &5))
+							},
+							_ => future::ready(false),
+						}
+					  })
 					.for_each(move |_| future::ready(()))
 			);
 

@@ -39,7 +39,7 @@ use sc_network_test::*;
 use sc_network_test::{Block as TestBlock, PeersClient};
 use sc_network::config::ProtocolConfig;
 use sp_runtime::{generic::DigestItem, traits::{Block as BlockT, DigestFor}};
-use sc_client_api::{BlockchainEvents, backend::TransactionFor};
+use sc_client_api::{BlockImportNotification, BlockchainEvents, backend::TransactionFor};
 use log::debug;
 use std::{time::Duration, cell::RefCell, task::Poll};
 use rand::RngCore;
@@ -404,7 +404,12 @@ fn run_one_test(
 			// run each future until we get one of our own blocks with number higher than 5
 			// that was produced locally.
 			client.import_notification_stream()
-				.take_while(move |n| future::ready(n.header.number() < &5 || {
+				.take_while(move |n| {
+					let n = match n {
+						BlockImportNotification::Imported(n) => n,
+						_ => return future::ready(false),
+					};
+					future::ready(n.header.number() < &5 || {
 					if n.origin == BlockOrigin::Own {
 						got_own = true;
 					} else {
@@ -414,7 +419,8 @@ fn run_one_test(
 					// continue until we have at least one block of our own
 					// and one of another peer.
 					!(got_own && got_other)
-				}))
+					  })
+				})
 				.for_each(|_| future::ready(()) )
 		);
 

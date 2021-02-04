@@ -28,9 +28,7 @@ use substrate_test_runtime_client::{
 	AccountKeyring, Sr25519Keyring, TestClientBuilder, ClientBlockImportExt,
 	BlockBuilderExt, DefaultTestClientBuilderExt, TestClientBuilderExt, ClientExt,
 };
-use sc_client_api::{
-	StorageProvider, BlockBackend, in_mem, BlockchainEvents,
-};
+use sc_client_api::{BlockBackend, BlockImportNotification, BlockchainEvents, StorageProvider, in_mem};
 use sc_client_db::{
 	Backend, DatabaseSettings, DatabaseSettingsSrc, PruningMode, KeepBlocks, TransactionStorageMode
 };
@@ -1849,6 +1847,9 @@ fn reorg_triggers_a_notification_even_for_sources_that_should_not_trigger_notifi
 	let notification = notification_stream.next().unwrap();
 
 	// We should have a tree route of the re-org
-	let tree_route = notification.tree_route.unwrap();
+	let tree_route = match notification {
+		BlockImportNotification::Imported(n) => n.tree_route,
+		_ => None,
+	}.unwrap();
 	assert_eq!(tree_route.enacted()[0].hash, b1.hash());
 }

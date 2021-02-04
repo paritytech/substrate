@@ -552,7 +552,7 @@ mod tests {
 	use crate::{CatchUp, CompactCommit};
 	use substrate_test_runtime_client::runtime::{Block, Hash, Header};
 	use sp_consensus::BlockOrigin;
-	use sc_client_api::BlockImportNotification;
+	use sc_client_api::{BlockImportNotification, ImportedBlockInfo};
 	use futures::future::Either;
 	use futures_timer::Delay;
 	use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
@@ -584,13 +584,13 @@ mod tests {
 			let number = header.number().clone();
 
 			self.known_blocks.lock().insert(hash, number);
-			self.sender.unbounded_send(BlockImportNotification {
+			self.sender.unbounded_send(BlockImportNotification::Imported(ImportedBlockInfo {
 				hash,
 				origin: BlockOrigin::File,
 				header,
 				is_new_best: false,
 				tree_route: None,
-			}).unwrap();
+			})).unwrap();
 		}
 	}
 

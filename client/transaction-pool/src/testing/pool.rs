@@ -989,7 +989,10 @@ fn import_notification_to_pool_maintain_works() {
 
 	// Get the notification of the block import and maintain the pool with it,
 	// Now, the pool should not contain any transactions.
-	let evt = import_stream.next().expect("Importing a block leads to an event");
+	let evt = match import_stream.next().expect("Importing a block leads to an event") {
+		BlockImportNotification::Imported(n) => n,
+		_ => return,
+	};
 	block_on(pool.maintain(evt.try_into().expect("Imported as new best block")));
 	assert_eq!(pool.status().ready, 0);
 }

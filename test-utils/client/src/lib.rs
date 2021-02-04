@@ -23,7 +23,7 @@ pub mod client_ext;
 
 pub use sc_client_api::{
 	execution_extensions::{ExecutionStrategies, ExecutionExtensions},
-	ForkBlocks, BadBlocks,
+	ForkBlocks, BadBlocks, BlockImportNotification,
 };
 pub use sc_client_db::{Backend, self};
 pub use sp_consensus;
@@ -395,6 +395,10 @@ where
 
 		Box::pin(async move {
 			while let Some(notification) = import_notification_stream.next().await {
+				let notification = match notification {
+					BlockImportNotification::Imported(n) => n,
+					_ => return,
+				};
 				if notification.is_new_best {
 					blocks.insert(notification.hash);
 					if blocks.len() == count {
