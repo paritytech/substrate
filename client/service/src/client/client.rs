@@ -1716,7 +1716,7 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for &Client<B, E, Block, 
 		// to connected peers.
 		self.notify_pre_imported(import_block.header.hash())
 			.map_err(|e| {
-				warn!("Block pre-import error:\n{:?}", e);
+				warn!("Block pre-import announcement error:\n{:?}", e);
 				ConsensusError::ClientPreImport(e.to_string())
 			})?;
 
