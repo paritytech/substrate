@@ -204,6 +204,11 @@ impl<T: Config> frame_support::unsigned::ValidateUnsigned for Module<T> {
 				}
 			}
 
+			if let Call::report_equivocation_unsigned(equivocation_proof, key_owner_proof) = call {
+				// check report staleness
+				is_known_offence::<T>(equivocation_proof, key_owner_proof)?;
+			}
+
 			ValidTransaction::with_tag_prefix("GrandpaEquivocation")
 				// We assign the maximum priority for any equivocation report.
 				.priority(TransactionPriority::max_value())
@@ -223,33 +228,39 @@ impl<T: Config> frame_support::unsigned::ValidateUnsigned for Module<T> {
 
 	fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
 		if let Call::report_equivocation_unsigned(equivocation_proof, key_owner_proof) = call {
-			// check the membership proof to extract the offender's id
-			let key = (
-				sp_finality_grandpa::KEY_TYPE,
-				equivocation_proof.offender().clone(),
-			);
-
-			let offender = T::KeyOwnerProofSystem::check_proof(key, key_owner_proof.clone())
-				.ok_or(InvalidTransaction::BadProof)?;
-
-			// check if the offence has already been reported,
-			// and if so then we can discard the report.
-			let time_slot =
-				<T::HandleEquivocation as HandleEquivocation<T>>::Offence::new_time_slot(
-					equivocation_proof.set_id(),
-					equivocation_proof.round(),
-				);
-
-			let is_known_offence = T::HandleEquivocation::is_known_offence(&[offender], &time_slot);
-
-			if is_known_offence {
-				Err(InvalidTransaction::Stale.into())
-			} else {
-				Ok(())
-			}
+			is_known_offence::<T>(equivocation_proof, key_owner_proof)
 		} else {
 			Err(InvalidTransaction::Call.into())
 		}
+	}
+}
+
+fn is_known_offence<T: Config>(
+	equivocation_proof: &EquivocationProof<T::Hash, T::BlockNumber>,
+	key_owner_proof: &T::KeyOwnerProof,
+) -> Result<(), TransactionValidityError> {
+	// check the membership proof to extract the offender's id
+	let key = (
+		sp_finality_grandpa::KEY_TYPE,
+		equivocation_proof.offender().clone(),
+	);
+
+	let offender = T::KeyOwnerProofSystem::check_proof(key, key_owner_proof.clone())
+		.ok_or(InvalidTransaction::BadProof)?;
+
+	// check if the offence has already been reported,
+	// and if so then we can discard the report.
+	let time_slot = <T::HandleEquivocation as HandleEquivocation<T>>::Offence::new_time_slot(
+		equivocation_proof.set_id(),
+		equivocation_proof.round(),
+	);
+
+	let is_known_offence = T::HandleEquivocation::is_known_offence(&[offender], &time_slot);
+
+	if is_known_offence {
+		Err(InvalidTransaction::Stale.into())
+	} else {
+		Ok(())
 	}
 }
 
