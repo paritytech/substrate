@@ -25,7 +25,7 @@ use codec::{Decode, Encode};
 use frame_support::{
 	decl_error, decl_module, decl_storage,
 	dispatch::DispatchResultWithPostInfo,
-	traits::{FindAuthor, Get, KeyOwnerProofSystem, Randomness as RandomnessT},
+	traits::{FindAuthor, Get, KeyOwnerProofSystem, OneSessionHandler, Randomness as RandomnessT},
 	weights::{Pays, Weight},
 	Parameter,
 };
@@ -769,7 +769,7 @@ impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
 	type Public = AuthorityId;
 }
 
-impl<T: Config> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
+impl<T: Config> OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)
