@@ -6742,6 +6742,7 @@ dependencies = [
 name = "sc-consensus-babe"
 version = "0.8.1"
 dependencies = [
+ "async-trait",
  "derive_more",
  "fork-tree",
  "futures 0.3.12",

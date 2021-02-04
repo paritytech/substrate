@@ -472,7 +472,7 @@ where
 	T: SlotData + Clone,
 	CAW: CanAuthorWith<B> + Send,
 	IDP: CreateInherentDataProviders<B, ()> + Send,
-	IDP::Error: Into<sp_consensus::Error>,
+	sp_consensus::Error: From<IDP::Error>,
 	IDP::InherentDataProviders: InherentDataProviderExt + Send,
 {
 	let SlotDuration(slot_duration) = slot_duration;
