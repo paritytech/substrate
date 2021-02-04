@@ -355,7 +355,7 @@ fn setup_subscriber() -> (
 /// in a separate process to avoid interfering with the other tests.
 #[test]
 fn subprocess_telemetry_span_is_forwarded_to_task() {
-	if env::var("ENABLE_LOGGING").is_err() {
+	if env::var("SUBPROCESS_TEST").is_err() {
 		return;
 	}
 
@@ -400,7 +400,7 @@ fn subprocess_telemetry_span_is_forwarded_to_task() {
 fn telemetry_span_is_forwarded_to_task() {
 	let executable = env::current_exe().unwrap();
 	let output = std::process::Command::new(executable)
-		.env("ENABLE_LOGGING", "1")
+		.env("SUBPROCESS_TEST", "1")
 		.args(&["--nocapture", "subprocess_telemetry_span_is_forwarded_to_task"])
 		.output()
 		.unwrap();
