@@ -142,7 +142,9 @@ benchmarks! {
 		let target_lookup = T::Lookup::unlookup(target.clone());
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), caller_lookup, target_lookup, amount)
 	verify {
-		assert_last_event::<T>(Event::ForceTransferred(Default::default(), caller, target, amount).into());
+		assert_last_event::<T>(
+			Event::ForceTransferred(Default::default(), caller, target, amount).into()
+		);
 	}
 
 	freeze {
