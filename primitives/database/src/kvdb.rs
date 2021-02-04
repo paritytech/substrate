@@ -17,7 +17,7 @@
 
 /// A wrapper around `kvdb::Database` that implements `sp_database::Database` trait
 
-use ::kvdb::{DBTransaction, KeyValueDB};
+use kvdb::{DBTransaction, KeyValueDB};
 
 use crate::{Database, Change, ColumnId, Transaction, error};
 
