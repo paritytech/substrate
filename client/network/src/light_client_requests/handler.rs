@@ -159,6 +159,7 @@ impl<B: Block> LightClientRequestHandler<B> {
 		request: &schema::v1::light::RemoteCallRequest,
 	) -> Result<schema::v1::light::Response, HandleRequestError> {
 		log::trace!(
+			target: LOG_TARGET,
 			"Remote call request from {} ({} at {:?}).",
 			peer, request.method, request.block,
 		);
@@ -172,10 +173,11 @@ impl<B: Block> LightClientRequestHandler<B> {
 			Ok((_, proof)) => proof,
 			Err(e) => {
 				log::trace!(
+					target: LOG_TARGET,
 					"remote call request from {} ({} at {:?}) failed with: {}",
 					peer, request.method, request.block, e,
 				);
-				StorageProof::empty()
+				return Err(HandleRequestError::NotFulfillable);
 			}
 		};
 
@@ -193,11 +195,12 @@ impl<B: Block> LightClientRequestHandler<B> {
 		request: &schema::v1::light::RemoteReadRequest,
 	) -> Result<schema::v1::light::Response, HandleRequestError> {
 		if request.keys.is_empty() {
-			log::debug!("Invalid remote read request sent by {}.", peer);
+			log::debug!(target: LOG_TARGET, "Invalid remote read request sent by {}.", peer);
 			return Err(HandleRequestError::BadRequest("Remote read request without keys."))
 		}
 
 		log::trace!(
+			target: LOG_TARGET,
 			"Remote read request from {} ({} at {:?}).",
 			peer, fmt_keys(request.keys.first(), request.keys.last()), request.block,
 		);
@@ -211,10 +214,11 @@ impl<B: Block> LightClientRequestHandler<B> {
 			Ok(proof) => proof,
 			Err(error) => {
 				log::trace!(
+					target: LOG_TARGET,
 					"remote read request from {} ({} at {:?}) failed with: {}",
 					peer, fmt_keys(request.keys.first(), request.keys.last()), request.block, error,
 				);
-				StorageProof::empty()
+				return Err(HandleRequestError::NotFulfillable);
 			}
 		};
 
@@ -232,11 +236,12 @@ impl<B: Block> LightClientRequestHandler<B> {
 		request: &schema::v1::light::RemoteReadChildRequest,
 	) -> Result<schema::v1::light::Response, HandleRequestError> {
 		if request.keys.is_empty() {
-			log::debug!("Invalid remote child read request sent by {}.", peer);
+			log::debug!(target: LOG_TARGET, "Invalid remote child read request sent by {}.", peer);
 			return Err(HandleRequestError::BadRequest("Remove read child request without keys."))
 		}
 
 		log::trace!(
+			target: LOG_TARGET,
 			"Remote read child request from {} ({} {} at {:?}).",
 			peer,
 			HexDisplay::from(&request.storage_key),
@@ -259,6 +264,7 @@ impl<B: Block> LightClientRequestHandler<B> {
 			Ok(proof) => proof,
 			Err(error) => {
 				log::trace!(
+					target: LOG_TARGET,
 					"remote read child request from {} ({} {} at {:?}) failed with: {}",
 					peer,
 					HexDisplay::from(&request.storage_key),
@@ -266,7 +272,7 @@ impl<B: Block> LightClientRequestHandler<B> {
 					request.block,
 					error,
 				);
-				StorageProof::empty()
+				return Err(HandleRequestError::NotFulfillable);
 			}
 		};
 
@@ -283,17 +289,18 @@ impl<B: Block> LightClientRequestHandler<B> {
 		peer: &PeerId,
 		request: &schema::v1::light::RemoteHeaderRequest,
 	) -> Result<schema::v1::light::Response, HandleRequestError> {
-		log::trace!("Remote header proof request from {} ({:?}).", peer, request.block);
+		log::trace!(target: LOG_TARGET, "Remote header proof request from {} ({:?}).", peer, request.block);
 
 		let block = Decode::decode(&mut request.block.as_ref())?;
 		let (header, proof) = match self.client.header_proof(&BlockId::Number(block)) {
 			Ok((header, proof)) => (header.encode(), proof),
 			Err(error) => {
 				log::trace!(
+					target: LOG_TARGET,
 					"Remote header proof request from {} ({:?}) failed with: {}.",
 					peer, request.block, error
 				);
-				(Default::default(), StorageProof::empty())
+				return Err(HandleRequestError::NotFulfillable);
 			}
 		};
 
@@ -311,6 +318,7 @@ impl<B: Block> LightClientRequestHandler<B> {
 		request: &schema::v1::light::RemoteChangesRequest,
 	) -> Result<schema::v1::light::Response, HandleRequestError> {
 		log::trace!(
+			target: LOG_TARGET,
 			"Remote changes proof request from {} for key {} ({:?}..{:?}).",
 			peer,
 			if !request.storage_key.is_empty() {
@@ -337,6 +345,7 @@ impl<B: Block> LightClientRequestHandler<B> {
 			Ok(proof) => proof,
 			Err(error) => {
 				log::trace!(
+					target: LOG_TARGET,
 					"Remote changes proof request from {} for key {} ({:?}..{:?}) failed with: {}.",
 					peer,
 					format!("{} : {}", HexDisplay::from(&request.storage_key), HexDisplay::from(&key.0)),
@@ -345,12 +354,7 @@ impl<B: Block> LightClientRequestHandler<B> {
 					error,
 				);
 
-				light::ChangesProof::<B::Header> {
-					max_block: Zero::zero(),
-					proof: Vec::new(),
-					roots: BTreeMap::new(),
-					roots_proof: StorageProof::empty(),
-				}
+				return Err(HandleRequestError::NotFulfillable);
 			}
 		};
 
@@ -381,6 +385,9 @@ enum HandleRequestError {
 	/// A bad request has been received.
 	#[display(fmt = "bad request: {}", _0)]
 	BadRequest(&'static str),
+	/// Received request concerns blocks that aren't available, or a similar client-side problem.
+	#[display(fmt = "Request cannot be fulfilled")]
+	NotFulfillable,
 	/// Encoding or decoding of some data failed.
 	#[display(fmt = "codec error: {}", _0)]
 	Codec(codec::Error),

@@ -1528,6 +1528,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					}
 					{
 						let mut peers_notifications_sinks = this.peers_notifications_sinks.lock();
+						println!("peers_notifications_sinks.insert({:?}, {:?})", remote, protocol);
 						peers_notifications_sinks.insert((remote.clone(), protocol.clone()), notifications_sink);
 					}
 					this.event_streams.send(Event::NotificationStreamOpened {
@@ -1540,6 +1541,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					remote, protocol, notifications_sink
 				})) => {
 					let mut peers_notifications_sinks = this.peers_notifications_sinks.lock();
+					println!("peers_notifications_sinks.replace({:?}, {:?})", remote, protocol);
 					if let Some(s) = peers_notifications_sinks.get_mut(&(remote, protocol)) {
 						*s = notifications_sink;
 					} else {
@@ -1581,6 +1583,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					});
 					{
 						let mut peers_notifications_sinks = this.peers_notifications_sinks.lock();
+						println!("peers_notifications_sinks.remove({:?}, {:?})", remote, protocol);
 						peers_notifications_sinks.remove(&(remote.clone(), protocol));
 					}
 				},
