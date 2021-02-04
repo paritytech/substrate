@@ -656,9 +656,9 @@ mod tests {
 
 		// then
 		let mut it = futures::executor::block_on_stream(stream);
-		assert_eq!(it.next(), Some(hash0));
-		assert_eq!(it.next(), Some(hash1));
-		assert_eq!(it.next(), None);
+		assert_eq!(it.next().map(|n| n.hash), Some(hash0));
+		assert_eq!(it.next().map(|n| n.hash), Some(hash1));
+		assert!(it.next().is_none());
 	}
 
 	#[test]
