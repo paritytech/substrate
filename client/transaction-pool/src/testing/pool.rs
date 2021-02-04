@@ -771,6 +771,8 @@ fn resubmit_tx_of_fork_that_is_not_part_of_retracted() {
 		let event = block_event_with_retracted(header, d0, &*pool.api);
 		block_on(pool.maintain(event));
 		assert_eq!(pool.status().ready, 2);
+		// the tx from the retracted block should have source `InBlock`
+		assert!(pool.ready().any(|t| t.source == TransactionSource::InBlock));
 	}
 }
 
@@ -866,6 +868,7 @@ fn resubmit_from_retracted_fork() {
 	let ready = pool.ready().map(|t| t.data.encode()).collect::<BTreeSet<_>>();
 	let expected_ready = vec![tx3, tx4, tx5].iter().map(Encode::encode).collect::<BTreeSet<_>>();
 	assert_eq!(expected_ready, ready);
+	assert!(pool.ready().all(|t| t.source == TransactionSource::External));
 
 	let event = block_event_with_retracted(f1_header, f0, &*pool.api);
 	block_on(pool.maintain(event));
@@ -874,6 +877,9 @@ fn resubmit_from_retracted_fork() {
 	let ready = pool.ready().map(|t| t.data.encode()).collect::<BTreeSet<_>>();
 	let expected_ready = vec![tx0, tx1, tx2].iter().map(Encode::encode).collect::<BTreeSet<_>>();
 	assert_eq!(expected_ready, ready);
+
+	// txs resubmited from retracted blocks should have source `InBlock`
+	assert!(pool.ready().all(|t| t.source == TransactionSource::InBlock));
 }
 
 #[test]
