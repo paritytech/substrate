@@ -22,7 +22,7 @@ use ansi_term::Colour;
 use futures::prelude::*;
 use log::{info, trace, warn};
 use parity_util_mem::MallocSizeOf;
-use sc_client_api::{BlockchainEvents, UsageProvider};
+use sc_client_api::{BlockImportNotification, BlockchainEvents, UsageProvider};
 use sc_network::NetworkStatus;
 use sp_blockchain::HeaderMetadata;
 use sp_runtime::traits::{Block as BlockT, Header};
@@ -122,6 +122,10 @@ where
 	let max_blocks_to_track = 100;
 
 	client.import_notification_stream().for_each(move |n| {
+		let n = match n {
+			BlockImportNotification::Imported(n) => n,
+			_ => return future::ready(()),
+		};
 		// detect and log reorganizations.
 		if let Some((ref last_num, ref last_hash)) = last_best {
 			if n.header.parent_hash() != last_hash && n.is_new_best  {

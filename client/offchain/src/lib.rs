@@ -48,6 +48,7 @@ use log::{debug, warn};
 use sc_network::{ExHashT, NetworkService, NetworkStateInfo, PeerId};
 use sp_core::{offchain::{self, OffchainStorage}, ExecutionContext, traits::SpawnNamed};
 use sp_runtime::{generic::BlockId, traits::{self, Header}};
+use sc_client_api::BlockImportNotification;
 use futures::{prelude::*, future::ready};
 
 mod api;
@@ -212,6 +213,10 @@ pub async fn notification_future<Client, Storage, Block, Spawner>(
 		Spawner: SpawnNamed
 {
 	client.import_notification_stream().for_each(move |n| {
+		let n = match n {
+			BlockImportNotification::Imported(n) => n,
+			_ => return ready(()),
+		};
 		if n.is_new_best {
 			spawner.spawn(
 				"offchain-on-block",

@@ -32,7 +32,7 @@ use rpc::{
 	futures::{stream, Future, Sink, Stream},
 };
 
-use sc_client_api::{BlockchainEvents, light::{Fetcher, RemoteBlockchain}};
+use sc_client_api::{BlockImportNotification, BlockchainEvents, light::{Fetcher, RemoteBlockchain}};
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId, manager::SubscriptionManager};
 use sp_rpc::{number::NumberOrHex, list::ListOrValue};
 use sp_runtime::{
@@ -115,8 +115,13 @@ trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 			subscriber,
 			|| self.client().info().best_hash,
 			|| self.client().import_notification_stream()
-				.map(|notification| Ok::<_, ()>(notification.header))
-				.compat(),
+				.filter_map(|notification| {
+					match notification {
+						BlockImportNotification::Imported(n) => future::ready(Some(Ok::<_, ()>(n.header))),
+						_ => future::ready(None),
+					}
+				})
+				.compat()
 		)
 	}
 
@@ -141,8 +146,12 @@ trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 			subscriber,
 			|| self.client().info().best_hash,
 			|| self.client().import_notification_stream()
-				.filter(|notification| future::ready(notification.is_new_best))
-				.map(|notification| Ok::<_, ()>(notification.header))
+				.filter_map(|notification| {
+					match notification {
+						BlockImportNotification::Imported(n) if n.is_new_best => future::ready(Some(Ok::<_, ()>(n.header))),
+						_ => future::ready(None),
+					}
+				})
 				.compat(),
 		)
 	}
