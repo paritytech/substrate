@@ -1326,9 +1326,11 @@ decl_module! {
 
 			log!(
 				trace,
-				"Running OCW at {:?}, election status = {:?}",
+				"Running OCW at {:?}, election status = {:?}, queued score = {:?}, has OCW solution, {:?}",
 				now,
 				election_status,
+				Self::queued_score(),
+				offchain_election::get_solution::<T>().map(offchain_election::ensure_solution_is_recent),
 			);
 			match Self::era_election_status() {
 				ElectionStatus::Open(opened) if opened == now => {
