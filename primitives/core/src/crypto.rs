@@ -528,8 +528,8 @@ ss58_address_format!(
 		(44, "chainx", "ChainX mainnet, standard account (*25519).")
 	UniartsAccount =>
 		(45, "uniarts", "UniArts Chain mainnet, standard account (*25519).")
-	Reserved46 =>
-		(46, "reserved46", "Reserved for future use (46).")
+	AventusAccount =>
+		(46, "aventus", "Aventus Chain mainnet, standard account (*25519).")
 	Reserved47 =>
 		(47, "reserved47", "Reserved for future use (47).")
 	// Note: 48 and above are reserved.
