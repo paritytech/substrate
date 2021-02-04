@@ -579,7 +579,7 @@ mod tests {
 	}
 
 	fn pool() -> Pool<TestApi> {
-		Pool::new(Default::default(), TestApi::default().into())
+		Pool::new(Default::default(), true.into(), TestApi::default().into())
 	}
 
 	#[test]
@@ -722,11 +722,14 @@ mod tests {
 			count: 100,
 			total_bytes: 200,
 		};
-		let pool = Pool::new(Options {
+
+		let options = Options {
 			ready: limit.clone(),
 			future: limit.clone(),
 			..Default::default()
-		}, TestApi::default().into());
+		};
+
+		let pool = Pool::new(options, true.into(), TestApi::default().into());
 
 		let hash1 = block_on(pool.submit_one(&BlockId::Number(0), SOURCE, uxt(Transfer {
 			from: AccountId::from_h256(H256::from_low_u64_be(1)),
@@ -757,11 +760,14 @@ mod tests {
 			count: 100,
 			total_bytes: 10,
 		};
-		let pool = Pool::new(Options {
+
+		let options = Options {
 			ready: limit.clone(),
 			future: limit.clone(),
 			..Default::default()
-		}, TestApi::default().into());
+		};
+
+		let pool = Pool::new(options, true.into(), TestApi::default().into());
 
 		// when
 		block_on(pool.submit_one(&BlockId::Number(0), SOURCE, uxt(Transfer {
@@ -939,11 +945,13 @@ mod tests {
 				count: 1,
 				total_bytes: 1000,
 			};
-			let pool = Pool::new(Options {
+			let options = Options {
 				ready: limit.clone(),
 				future: limit.clone(),
 				..Default::default()
-			}, TestApi::default().into());
+			};
+
+			let pool = Pool::new(options, true.into(), TestApi::default().into());
 
 			let xt = uxt(Transfer {
 				from: AccountId::from_h256(H256::from_low_u64_be(1)),
@@ -977,7 +985,7 @@ mod tests {
 			let (tx, rx) = std::sync::mpsc::sync_channel(1);
 			let mut api = TestApi::default();
 			api.delay = Arc::new(Mutex::new(rx.into()));
-			let pool = Arc::new(Pool::new(Default::default(), api.into()));
+			let pool = Arc::new(Pool::new(Default::default(), true.into(), api.into()));
 
 			// when
 			let xt = uxt(Transfer {
