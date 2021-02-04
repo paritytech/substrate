@@ -354,7 +354,7 @@ fn setup_subscriber() -> (
 /// test that the telemetry span and the prefix span are forwarded correctly. This needs to be done
 /// in a separate process to avoid interfering with the other tests.
 #[test]
-fn log_something() {
+fn subprocess_telemetry_span_is_forwarded_to_task() {
 	if env::var("ENABLE_LOGGING").is_ok() {
 		let (subscriber, spans_found) = setup_subscriber();
 		tracing_log::LogTracer::init().unwrap();
@@ -399,7 +399,7 @@ fn telemetry_span_is_forwarded_to_task() {
 	let executable = env::current_exe().unwrap();
 	let output = std::process::Command::new(executable)
 		.env("ENABLE_LOGGING", "1")
-		.args(&["--nocapture", "log_something"])
+		.args(&["--nocapture", "subprocess_telemetry_span_is_forwarded_to_task"])
 		.output()
 		.unwrap();
 	println!("{}", String::from_utf8(output.stdout).unwrap());
