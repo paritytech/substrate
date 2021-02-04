@@ -659,9 +659,10 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 
 						if let Err(e) = pool.resubmit_at(
 							&id,
-							// These transactions are coming from retracted blocks, we should
-							// simply consider them external.
-							TransactionSource::External,
+							// These transactions are coming from retracted blocks, we consider them
+							// as `InBlock` since the given source block must have been previously
+							// imported and validated.
+							TransactionSource::InBlock,
 							resubmit_transactions,
 						).await {
 							log::debug!(
