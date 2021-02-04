@@ -87,7 +87,7 @@ async fn run_background_task_blocking(duration: Duration, _keep_alive: impl Any)
 }
 
 fn new_task_manager(task_executor: TaskExecutor) -> TaskManager {
-	TaskManager::new(task_executor, None, None).unwrap()
+	TaskManager::new(task_executor, None).unwrap()
 }
 
 #[test]
@@ -360,37 +360,35 @@ fn log_something() {
 		tracing_log::LogTracer::init().unwrap();
 		let _sub_guard = tracing::subscriber::set_global_default(subscriber);
 
+        let mut runtime = tokio::runtime::Runtime::new().unwrap();
+		let prefix_span = tracing::info_span!("prefix");
 		let telemetry_span = TelemetrySpan::new();
-		let span = tracing::info_span!("test");
-		let _enter = span.enter();
 
-		let mut runtime = tokio::runtime::Runtime::new().unwrap();
-		let handle = runtime.handle().clone();
-		let task_executor = TaskExecutor::from(move |fut, _| handle.spawn(fut).map(|_| ()));
-		let task_manager =
-			TaskManager::new(task_executor, None, Some(telemetry_span.clone())).unwrap();
+        let _enter_prefix_span = prefix_span.enter();
+        let _enter_telemetry_span = telemetry_span.enter();
 
-		let (sender, receiver) = futures::channel::oneshot::channel();
+        let handle = runtime.handle().clone();
+        let task_executor = TaskExecutor::from(move |fut, _| handle.spawn(fut).map(|_| ()));
+        let task_manager = new_task_manager(task_executor);
 
-		let span = span.clone();
-		task_manager.spawn_handle().spawn(
-			"test",
-			async move {
-				log::info!("boo!");
-				sender.send(()).unwrap();
-			}
-			.boxed(),
-		);
+        let (sender, receiver) = futures::channel::oneshot::channel();
 
-		drop(_enter);
-		runtime.block_on(receiver).unwrap();
-		runtime.block_on(task_manager.clean_shutdown());
-		drop(runtime);
+        task_manager.spawn_handle().spawn(
+            "test",
+            async move {
+                log::info!("boo!");
+                sender.send(()).unwrap();
+            }
+            .boxed(),
+        );
 
-		let spans: Vec<Id> = spans_found.lock().take().unwrap();
+        runtime.block_on(receiver).unwrap();
+        runtime.block_on(task_manager.clean_shutdown());
+
+		let spans = spans_found.lock().take().unwrap();
 		assert_eq!(2, spans.len());
 
-		assert_eq!(spans[0], span.id().unwrap());
+		assert_eq!(spans[0], prefix_span.id().unwrap());
 		assert_eq!(spans[1], telemetry_span.span().id().unwrap());
 	}
 }
