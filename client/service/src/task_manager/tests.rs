@@ -360,31 +360,31 @@ fn log_something() {
 		tracing_log::LogTracer::init().unwrap();
 		let _sub_guard = tracing::subscriber::set_global_default(subscriber);
 
-        let mut runtime = tokio::runtime::Runtime::new().unwrap();
+		let mut runtime = tokio::runtime::Runtime::new().unwrap();
 
 		let prefix_span = tracing::info_span!("prefix");
-        let _enter_prefix_span = prefix_span.enter();
+		let _enter_prefix_span = prefix_span.enter();
 
 		let telemetry_span = TelemetrySpan::new();
-        let _enter_telemetry_span = telemetry_span.enter();
+		let _enter_telemetry_span = telemetry_span.enter();
 
-        let handle = runtime.handle().clone();
-        let task_executor = TaskExecutor::from(move |fut, _| handle.spawn(fut).map(|_| ()));
-        let task_manager = new_task_manager(task_executor);
+		let handle = runtime.handle().clone();
+		let task_executor = TaskExecutor::from(move |fut, _| handle.spawn(fut).map(|_| ()));
+		let task_manager = new_task_manager(task_executor);
 
-        let (sender, receiver) = futures::channel::oneshot::channel();
+		let (sender, receiver) = futures::channel::oneshot::channel();
 
-        task_manager.spawn_handle().spawn(
-            "log-something",
-            async move {
-                log::info!("boo!");
-                sender.send(()).unwrap();
-            }
-            .boxed(),
-        );
+		task_manager.spawn_handle().spawn(
+			"log-something",
+			async move {
+				log::info!("boo!");
+				sender.send(()).unwrap();
+			}
+			.boxed(),
+		);
 
-        runtime.block_on(receiver).unwrap();
-        runtime.block_on(task_manager.clean_shutdown());
+		runtime.block_on(receiver).unwrap();
+		runtime.block_on(task_manager.clean_shutdown());
 
 		let spans = spans_found.lock().take().unwrap();
 		assert_eq!(2, spans.len());
