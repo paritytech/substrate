@@ -268,7 +268,6 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 		telemetry_endpoints: None,
 		telemetry_external_transport: None,
 		telemetry_handle: None,
-		telemetry_span: None,
 		default_heap_pages: None,
 		offchain_worker: Default::default(),
 		force_authoring: false,
