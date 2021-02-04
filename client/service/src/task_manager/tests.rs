@@ -349,10 +349,10 @@ fn setup_subscriber() -> (
 	(subscriber, spans_found)
 }
 
-/// This is not an actual test, it is used by the `dash_in_target_name_works` test.
+/// This is not an actual test, it is used by the `telemetry_span_is_forwarded_to_task` test.
 /// The given test will call the test executable and only execute this one test that
-/// only prints `EXPECTED_LOG_MESSAGE` through logging while using a target
-/// name that contains a dash. This ensures that target names with dashes work.
+/// test that the telemetry span and the prefix span are forwarded correctly. This needs to be done
+/// in a separate process to avoid interfering with the other tests.
 #[test]
 fn log_something() {
 	if env::var("ENABLE_LOGGING").is_ok() {
