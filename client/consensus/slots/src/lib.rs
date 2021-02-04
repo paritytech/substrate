@@ -424,6 +424,16 @@ pub struct SlotsInherentDataProviders<P> {
 	wrapped: P,
 }
 
+impl<P> SlotsInherentDataProviders<P> {
+	pub fn new(timestamp: Duration, slot: Slot, wrapped: P) -> Self {
+		Self {
+			timestamp,
+			slot,
+			wrapped,
+		}
+	}
+}
+
 impl<P> sp_inherents::InherentDataProvider for SlotsInherentDataProviders<P>
 where
 	P: sp_inherents::InherentDataProvider,

@@ -25,10 +25,9 @@ use sc_consensus_babe;
 use node_primitives::Block;
 use node_runtime::RuntimeApi;
 use sc_service::{
-	config::{Configuration}, error::{Error as ServiceError},
+	config::Configuration, error::Error as ServiceError,
 	RpcHandlers, TaskManager,
 };
-use sp_inherents::InherentDataProviders;
 use sc_network::{Event, NetworkService};
 use sp_runtime::traits::Block as BlockT;
 use futures::prelude::*;
@@ -84,15 +83,37 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		client.clone(),
 	)?;
 
-	let inherent_data_providers = sp_inherents::InherentDataProviders::new();
-
+	let client_clone = client.clone();
+	let slot_duration = babe_link.config().slot_duration();
 	let import_queue = sc_consensus_babe::import_queue(
 		babe_link.clone(),
 		block_import.clone(),
 		Some(Box::new(justification_import)),
 		client.clone(),
 		select_chain.clone(),
-		inherent_data_providers.clone(),
+		move |at, ()| {
+			let uncles = sc_consensus_uncles::create_uncles_inherent_data_provider(
+				&*client_clone,
+				at,
+			)?;
+
+			let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
+
+			let slot =
+				sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_duration(
+					timestamp.timestamp(),
+					slot_duration,
+				);
+
+			let current_timestamp = timestamp.timestamp();
+			let current_slot = slot.slot();
+
+			Ok(sc_consensus_slots::SlotsInherentDataProviders::new(
+				current_timestamp,
+				current_slot,
+				(uncles, timestamp, slot),
+			))
+		},
 		&task_manager.spawn_handle(),
 		config.prometheus_registry(),
 		sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone()),
@@ -157,7 +178,6 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		select_chain,
 		import_queue,
 		transaction_pool,
-		inherent_data_providers,
 		other: (rpc_extensions_builder, import_setup, rpc_setup),
 	})
 }

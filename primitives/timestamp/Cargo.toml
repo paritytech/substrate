@@ -21,7 +21,6 @@ sp-inherents = { version = "2.0.0", default-features = false, path = "../inheren
 impl-trait-for-tuples = "0.2.0"
 wasm-timer = { version = "0.2", optional = true }
 thiserror = { version = "1.0.21", optional = true }
-futures = { version = "0.3.12", optional = true }
 log = { version = "0.4.8", optional = true }
 futures-timer = { version = "3.0.2", optional = true }
 
@@ -35,7 +34,6 @@ std = [
 	"sp-inherents/std",
 	"wasm-timer",
 	"thiserror",
-	"futures",
 	"log",
 	"futures-timer",
 ]

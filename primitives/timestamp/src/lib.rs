@@ -78,10 +78,51 @@ impl TimestampInherentData for InherentData {
 	}
 }
 
+/// The current timestamp using the system time.
+///
+/// This timestamp is the time since the UNIX epoch.
+#[cfg(feature = "std")]
+fn current_timestamp() -> std::time::Duration {
+	use wasm_timer::SystemTime;
+
+	let now = SystemTime::now();
+	now.duration_since(SystemTime::UNIX_EPOCH)
+		.expect("Current time is always after unix epoch; qed")
+}
+
 /// Provide duration since unix epoch in millisecond for timestamp inherent.
 #[cfg(feature = "std")]
 pub struct InherentDataProvider {
 	max_drift: std::time::Duration,
+	timestamp: std::time::Duration,
+}
+
+#[cfg(feature = "std")]
+impl InherentDataProvider {
+	/// Create `Self` while using the system time to get the timestamp.
+	pub fn from_system_time() -> Self {
+		Self {
+			max_drift: std::time::Duration::from_secs(60),
+			timestamp: current_timestamp(),
+		}
+	}
+
+	/// With the given maximum drift.
+	///
+	/// By default the maximum drift is 60 seconds.
+	///
+	/// The maximum drift is used when checking the inherents of a runtime. If the current timestamp
+	/// plus the maximum drift is smaller than the timestamp in the block, the block will be rejected
+	/// as being too far in the future.
+	pub fn with_max_drift(mut self, max_drift: std::time::Duration) -> Self {
+		self.max_drift = max_drift;
+		self
+	}
+
+	/// Returns the timestamp of this inherent data provider.
+	pub fn timestamp(&self) -> std::time::Duration {
+		self.timestamp
+	}
 }
 
 #[cfg(feature = "std")]
@@ -90,44 +131,32 @@ impl sp_inherents::InherentDataProvider for InherentDataProvider {
 		&self,
 		inherent_data: &mut InherentData,
 	) -> Result<(), sp_inherents::Error> {
-		use wasm_timer::SystemTime;
-
-		let now = SystemTime::now();
-		now.duration_since(SystemTime::UNIX_EPOCH)
-			.map_err(|_| {
-				"Current time is before unix epoch".into()
-			}).and_then(|d| {
-				let duration: InherentType = d.as_millis() as u64;
-				inherent_data.put_data(INHERENT_IDENTIFIER, &duration)
-			})
+		let duration: InherentType = self.timestamp.as_millis() as u64;
+		inherent_data.put_data(INHERENT_IDENTIFIER, &duration)
 	}
 
 	fn try_handle_error(
 		&self,
 		identifier: &InherentIdentifier,
 		error: &[u8],
-	) -> Option<std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), Box<dyn std::error::Error + Send + Sync>>> + Send>>> {
+	) -> sp_inherents::TryHandleErrorResult {
 		if *identifier != INHERENT_IDENTIFIER {
 			return None
 		}
 
-		use futures::FutureExt;
-
 		match InherentError::try_from(&INHERENT_IDENTIFIER, error) {
 			Some(InherentError::ValidAtTimestamp(valid)) => {
 				let max_drift = self.max_drift;
+				let timestamp = self.timestamp;
 				let fut = async move {
-					use wasm_timer::SystemTime;
-
-					let timestamp_now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();
 					let valid = std::time::Duration::from_millis(valid);
 					// halt import until timestamp is valid.
 					// reject when too far ahead.
-					if valid > timestamp_now + max_drift {
-						return Err(Box::<dyn std::error::Error + Send + Sync>::from(String::from("Too far in future")))
+					if valid > timestamp + max_drift {
+						return Err(Box::from(String::from("Too far in future")))
 					}
 
-					let diff = valid.checked_sub(timestamp_now).unwrap_or_default();
+					let diff = valid.checked_sub(timestamp).unwrap_or_default();
 					log::info!(
 						target: "timestamp",
 						"halting for block {} milliseconds in the future",
@@ -138,13 +167,10 @@ impl sp_inherents::InherentDataProvider for InherentDataProvider {
 
 					Ok(())
 				};
-				Some(fut.boxed())
+				Some(Box::pin(fut))
 			},
 			Some(InherentError::Other(o)) => {
-				let fut = async move {
-					Err(Box::from(String::from(o)) as Box<_>)
-				};
-				Some(fut.boxed())
+				Some(Box::pin(async move { Err(Box::from(String::from(o))) }))
 			},
 			None => None
 		}

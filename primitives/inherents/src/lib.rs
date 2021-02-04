@@ -260,6 +260,7 @@ impl PartialEq for CheckInherentsResult {
 	}
 }
 
+#[cfg(feature = "std")]
 pub trait CreateInherentDataProviders<Block: BlockT, ExtraArgs> {
 	type InherentDataProviders: InherentDataProvider;
 	type Error: std::error::Error + Send + Sync;
@@ -271,6 +272,7 @@ pub trait CreateInherentDataProviders<Block: BlockT, ExtraArgs> {
 	) -> Result<Self::InherentDataProviders, Self::Error>;
 }
 
+#[cfg(feature = "std")]
 impl<F, Block, IDP, Error, ExtraArgs> CreateInherentDataProviders<Block, ExtraArgs> for F
 where
 	Block: BlockT,
@@ -325,6 +327,7 @@ pub trait InherentDataProvider {
 	) -> TryHandleErrorResult;
 }
 
+#[cfg(feature = "std")]
 #[impl_trait_for_tuples::impl_for_tuples(10)]
 impl InherentDataProvider for Tuple {
 	for_tuples!( where #( Tuple: Send + Send )* );

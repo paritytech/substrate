@@ -3862,6 +3862,7 @@ dependencies = [
  "sc-consensus-babe",
  "sc-consensus-epochs",
  "sc-consensus-slots",
+ "sc-consensus-uncles",
  "sc-finality-grandpa",
  "sc-finality-grandpa-warp-sync",
  "sc-keystore",
@@ -8741,7 +8742,6 @@ dependencies = [
 name = "sp-timestamp"
 version = "2.0.1"
 dependencies = [
- "futures 0.3.12",
  "futures-timer 3.0.2",
  "impl-trait-for-tuples 0.2.0",
  "log",

@@ -40,8 +40,8 @@ use sp_runtime::{
 	Justification, BuildStorage,
 	generic::{BlockId, SignedBlock, DigestItem},
 	traits::{
-		Block as BlockT, Header as HeaderT, Zero, NumberFor,
-		HashFor, SaturatedConversion, One, DigestFor, UniqueSaturatedInto,
+		Block as BlockT, Header as HeaderT, Zero, NumberFor, HashFor, SaturatedConversion, One,
+		DigestFor,
 	},
 };
 use sp_state_machine::{
@@ -1151,7 +1151,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let mut ancestor = load_header(ancestor_hash)?;
 		let mut uncles = Vec::new();
 
-		for _ in 0u32.into()..max_generation {
+		let mut generation: NumberFor<Block> = Zero::zero();
+		while generation < max_generation {
 			let children = self.backend.blockchain().children(ancestor_hash)?;
 			uncles.extend(children.into_iter().filter(|h| h != &current_hash));
 			current_hash = ancestor_hash;
@@ -1163,6 +1164,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			current = ancestor;
 			ancestor_hash = *current.parent_hash();
 			ancestor = load_header(ancestor_hash)?;
+			generation += One::one();
 		}
 		trace!("Collected {} uncles", uncles.len());
 		Ok(uncles)

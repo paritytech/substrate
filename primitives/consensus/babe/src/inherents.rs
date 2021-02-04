@@ -59,6 +59,21 @@ impl InherentDataProvider {
 	pub fn new(slot: InherentType) -> Self {
 		Self { slot }
 	}
+
+	/// Creates the inherent data provider by calculating the slot from the given
+	/// `timestamp` and `duration`.
+	pub fn from_timestamp_and_duration(timestamp: std::time::Duration, duration: u64) -> Self {
+		let slot = InherentType::from(timestamp.as_millis() as u64 / duration);
+
+		Self {
+			slot,
+		}
+	}
+
+	/// Returns the `slot` of this inherent data provider.
+	pub fn slot(&self) -> InherentType {
+		self.slot
+	}
 }
 
 #[cfg(feature = "std")]

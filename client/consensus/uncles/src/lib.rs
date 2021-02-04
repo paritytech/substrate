@@ -34,7 +34,7 @@ const MAX_UNCLE_GENERATIONS: u32 = 8;
 pub fn create_uncles_inherent_data_provider<B, C>(
 	client: &C,
 	at: &BlockId<B>,
-) -> Result<sp_authorship::InherentDataProvider<B>, C::Error> where
+) -> Result<sp_authorship::InherentDataProvider<B::Header>, C::Error> where
 	B: BlockT,
 	C: ProvideUncles<B> + BlockIdTo<B, Error = sc_client_api::blockchain::Error>,
 {
