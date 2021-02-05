@@ -164,8 +164,13 @@ struct VoteMessage<Hash, Number, Id, Signature> {
 	signature: Signature,
 }
 
+enum BeefyId<Id> {
+	Validator(Id),
+	None,
+}
+
 struct BeefyWorker<Block: BlockT, Id, Signature, FinalityNotifications> {
-	local_id: Id,
+	local_id: BeefyId<Id>,
 	key_store: SyncCryptoStorePtr,
 	min_interval: u32,
 	rounds: Rounds<MmrRootHash, NumberFor<Block>, Id, Signature>,
@@ -182,7 +187,7 @@ where
 {
 	#[allow(clippy::too_many_arguments)]
 	fn new(
-		local_id: Id,
+		local_id: BeefyId<Id>,
 		key_store: SyncCryptoStorePtr,
 		authorities: Vec<Id>,
 		finality_notifications: FinalityNotifications,
@@ -216,6 +221,11 @@ where
 		use sp_runtime::traits::Saturating;
 		use sp_runtime::SaturatedConversion;
 
+		// we only vote as a validator
+		if let BeefyId::None = self.local_id {
+			return false;
+		}
+
 		let diff = self.best_finalized_block.saturating_sub(self.best_block_voted_on);
 		let diff = diff.saturated_into::<u32>();
 		let next_power_of_two = (diff / 2).next_power_of_two();
@@ -237,6 +247,13 @@ where
 		debug!(target: "beefy", "Finality notification: {:?}", notification);
 
 		if self.should_vote_on(*notification.header.number()) {
+			let local_id = if let BeefyId::Validator(id) = &self.local_id {
+				id
+			} else {
+				warn!(target: "beefy", "🥩 Missing validator id - can't vote for: {:?}", notification.header.hash());
+				return;
+			};
+
 			let mmr_root = if let Some(hash) = find_mmr_root_digest::<Block, Id>(&notification.header) {
 				hash
 			} else {
@@ -255,7 +272,7 @@ where
 			let signature = match SyncCryptoStore::sign_with(
 				&*self.key_store,
 				KEY_TYPE,
-				&self.local_id.to_public_crypto_pair(),
+				&local_id.to_public_crypto_pair(),
 				&commitment.encode(),
 			)
 			.map_err(|_| ())
@@ -272,7 +289,7 @@ where
 
 			let message = VoteMessage {
 				commitment,
-				id: self.local_id.clone(),
+				id: local_id.clone(),
 				signature,
 			};
 
@@ -397,11 +414,11 @@ pub async fn start_beefy_gadget<Block, Pair, Backend, Client, Network, SyncOracl
 	{
 		Some(id) => {
 			info!(target: "beefy", "🥩 Starting BEEFY worker with local id: {:?}", id);
-			id.clone()
+			BeefyId::Validator(id.clone())
 		}
 		None => {
-			info!(target: "beefy", "🥩 No local id found, not starting BEEFY worker.");
-			return futures::future::pending().await;
+			info!(target: "beefy", "🥩 No local id found, BEEFY worker will be gossip only.");
+			BeefyId::None
 		}
 	};
 
@@ -409,7 +426,7 @@ pub async fn start_beefy_gadget<Block, Pair, Backend, Client, Network, SyncOracl
 	let best_block_voted_on = Zero::zero();
 
 	let worker = BeefyWorker::<_, Pair::Public, Pair::Signature, _>::new(
-		local_id.clone(),
+		local_id,
 		key_store,
 		authorities,
 		client.finality_notification_stream(),
