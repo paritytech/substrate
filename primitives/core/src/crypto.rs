@@ -532,6 +532,8 @@ ss58_address_format!(
 		(46, "reserved46", "Reserved for future use (46).")
 	Reserved47 =>
 		(47, "reserved47", "Reserved for future use (47).")
+	HydraDXAccount =>
+		(63, "hydradx", "HydraDX standard account (*25519).")
 	// Note: 48 and above are reserved.
 );
 
