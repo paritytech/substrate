@@ -416,13 +416,13 @@
 			"website": "https://uniarts.me"
 		},
 		{
-			decimals: [18],
-			displayName: 'AvN Mainnet',
-			network: 'aventus',
-			prefix: 46,
-			standardAccount: '*25519',
-			symbols: ['AVT'],
-			website: 'https://aventus.io'
+			"decimals": [18],
+			"displayName": "AvN Mainnet",
+			"network": "aventus",
+			"prefix": 46,
+			"standardAccount": "*25519",
+			"symbols": ["AVT"],
+			"website": "https://aventus.io"
 		}, 
 		{
 			"prefix": 47,
