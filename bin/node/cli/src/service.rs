@@ -91,12 +91,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		Some(Box::new(justification_import)),
 		client.clone(),
 		select_chain.clone(),
-		move |at, ()| {
-			let uncles = sc_consensus_uncles::create_uncles_inherent_data_provider(
-				&*client_clone,
-				at,
-			)?;
-
+		move |at: &sp_runtime::generic::BlockId<Block>, ()| {
 			let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
 
 			let slot =
@@ -111,7 +106,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 			Ok(sc_consensus_slots::SlotsInherentDataProviders::new(
 				current_timestamp,
 				current_slot,
-				(uncles, timestamp, slot),
+				(timestamp, slot),
 			))
 		},
 		&task_manager.spawn_handle(),
@@ -184,7 +179,6 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 
 pub struct NewFullBase {
 	pub task_manager: TaskManager,
-	pub inherent_data_providers: InherentDataProviders,
 	pub client: Arc<FullClient>,
 	pub network: Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
 	pub network_status_sinks: sc_service::NetworkStatusSinks<Block>,
@@ -207,7 +201,6 @@ pub fn new_full_base(
 		keystore_container,
 		select_chain,
 		transaction_pool,
-		inherent_data_providers,
 		other: (rpc_extensions_builder, import_setup, rpc_setup),
 	} = new_partial(&config)?;
 
@@ -277,6 +270,8 @@ pub fn new_full_base(
 		let can_author_with =
 			sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone());
 
+		let client_clone = client.clone();
+		let slot_duration = babe_link.config().slot_duration();
 		let babe_config = sc_consensus_babe::BabeParams {
 			keystore: keystore_container.sync_keystore(),
 			client: client.clone(),
@@ -284,7 +279,29 @@ pub fn new_full_base(
 			env: proposer,
 			block_import,
 			sync_oracle: network.clone(),
-			inherent_data_providers: inherent_data_providers.clone(),
+			inherent_data_providers: move |at: &sp_runtime::generic::BlockId<Block>, ()| {
+			let uncles = sc_consensus_uncles::create_uncles_inherent_data_provider(
+				&*client_clone,
+				at,
+			)?;
+
+			let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
+
+			let slot =
+				sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_duration(
+					timestamp.timestamp(),
+					slot_duration,
+				);
+
+			let current_timestamp = timestamp.timestamp();
+			let current_slot = slot.slot();
+
+			Ok(sc_consensus_slots::SlotsInherentDataProviders::new(
+				current_timestamp,
+				current_slot,
+				(uncles, timestamp, slot),
+			))
+		},
 			force_authoring,
 			backoff_authoring_blocks,
 			babe_link,
@@ -362,7 +379,6 @@ pub fn new_full_base(
 	network_starter.start_network();
 	Ok(NewFullBase {
 		task_manager,
-		inherent_data_providers,
 		client,
 		network,
 		network_status_sinks,
@@ -411,15 +427,32 @@ pub fn new_light_base(mut config: Configuration) -> Result<(
 		client.clone(),
 	)?;
 
-	let inherent_data_providers = sp_inherents::InherentDataProviders::new();
-
+	let client_clone = client.clone();
+	let slot_duration = babe_link.config().slot_duration();
 	let import_queue = sc_consensus_babe::import_queue(
 		babe_link,
 		babe_block_import,
 		Some(Box::new(justification_import)),
 		client.clone(),
 		select_chain.clone(),
-		inherent_data_providers.clone(),
+		move |at: &sp_runtime::generic::BlockId<Block>, ()| {
+			let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
+
+			let slot =
+				sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_duration(
+					timestamp.timestamp(),
+					slot_duration,
+				);
+
+			let current_timestamp = timestamp.timestamp();
+			let current_slot = slot.slot();
+
+			Ok(sc_consensus_slots::SlotsInherentDataProviders::new(
+				current_timestamp,
+				current_slot,
+				(uncles, timestamp, slot),
+			))
+		},
 		&task_manager.spawn_handle(),
 		config.prometheus_registry(),
 		sp_consensus::NeverCanAuthor,

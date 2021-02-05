@@ -427,7 +427,6 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, BS, Error, IDP>(BabeParams {
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
 	IDP: CreateInherentDataProviders<B, ()> + Send + Sync + 'static,
 	IDP::InherentDataProviders: InherentDataProviderExt + Send,
-	sp_consensus::Error: From<IDP::Error>,
 {
 	let config = babe_link.config;
 	let slot_notification_sinks = Arc::new(Mutex::new(Vec::new()));
@@ -958,7 +957,6 @@ where
 	CAW: CanAuthorWith<Block> + Send + Sync,
 	CIDP: CreateInherentDataProviders<Block, ()> + Send + Sync,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send + Sync,
-	sp_consensus::Error: From<CIDP::Error>,
 {
 	async fn verify(
 		&mut self,
@@ -1489,7 +1487,6 @@ where
 	CAW: CanAuthorWith<Block> + Send + Sync + 'static,
 	CIDP: CreateInherentDataProviders<Block, ()> + Send + Sync + 'static,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send + Sync,
-	sp_consensus::Error: From<CIDP::Error>,
 {
 	let verifier = BabeVerifier {
 		client,

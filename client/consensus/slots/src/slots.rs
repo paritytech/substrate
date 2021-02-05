@@ -96,7 +96,6 @@ where
 	C: SelectChain<Block>,
 	IDP: CreateInherentDataProviders<Block, ()>,
 	IDP::InherentDataProviders: crate::InherentDataProviderExt,
-IDP::Error: Into<Error>,
 {
 	type Item = Result<SlotInfo<Block>, Error>;
 

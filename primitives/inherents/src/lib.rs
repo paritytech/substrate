@@ -263,31 +263,28 @@ impl PartialEq for CheckInherentsResult {
 #[cfg(feature = "std")]
 pub trait CreateInherentDataProviders<Block: BlockT, ExtraArgs> {
 	type InherentDataProviders: InherentDataProvider;
-	type Error: std::error::Error + Send + Sync;
 
 	fn create_inherent_data_providers(
 		&self,
 		at: &BlockId<Block>,
 		extra_args: ExtraArgs,
-	) -> Result<Self::InherentDataProviders, Self::Error>;
+	) -> Result<Self::InherentDataProviders, Box<dyn std::error::Error + Send + Sync>>;
 }
 
 #[cfg(feature = "std")]
-impl<F, Block, IDP, Error, ExtraArgs> CreateInherentDataProviders<Block, ExtraArgs> for F
+impl<F, Block, IDP, ExtraArgs> CreateInherentDataProviders<Block, ExtraArgs> for F
 where
 	Block: BlockT,
-	F: Fn(&BlockId<Block>, ExtraArgs) -> Result<IDP, Error>,
-	Error: Send + Sync + std::error::Error,
+	F: Fn(&BlockId<Block>, ExtraArgs) -> Result<IDP, Box<dyn std::error::Error + Send + Sync>>,
 	IDP: InherentDataProvider,
 {
-	type Error = Error;
 	type InherentDataProviders = IDP;
 
 	fn create_inherent_data_providers(
 		&self,
 		at: &BlockId<Block>,
 		extra_args: ExtraArgs,
-	) -> Result<Self::InherentDataProviders, Self::Error> {
+	) -> Result<Self::InherentDataProviders, Box<dyn std::error::Error + Send + Sync>> {
 		(*self)(at, extra_args)
 	}
 }
