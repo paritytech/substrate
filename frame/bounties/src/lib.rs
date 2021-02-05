@@ -336,7 +336,7 @@ decl_error! {
 		/// Subbounty active
 		SubBountyActive,
 		/// Max Number of subbounty threahold crossed MaxSubBountyCount
-		SubBountyMaxOverflow,
+		TooManySubBounties,
 	}
 }
 
@@ -469,8 +469,7 @@ decl_module! {
 		/// - O(1).
 		/// # </weight>
 		#[weight = <T as Config>::WeightInfo::unassign_curator()]
-		fn unassign_curator(origin, #[compact] bounty_id: BountyIndex)
-		{
+		fn unassign_curator(origin, #[compact] bounty_id: BountyIndex) {
 			let maybe_sender = ensure_signed(origin.clone())
 				.map(Some)
 				.or_else(|_| T::RejectOrigin::ensure_origin(origin).map(|_| None))?;
@@ -825,69 +824,75 @@ decl_module! {
 		{
 			let signer = ensure_signed(origin)?;
 
-			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
-				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T>::InvalidIndex)?;
-				match bounty.status {
-					BountyStatus::Active {
-						ref curator,
-						..
-					} => {
-						ensure!(signer == *curator, Error::<T>::RequireCurator);
-						// Verify the arguments
-						ensure!(description.len() <=
-							T::MaximumReasonLength::get() as usize,
-							Error::<T>::ReasonTooBig,
-						);
-						ensure!(value >= T::BountyValueMinimum::get(),
-							Error::<T>::InvalidValue,
-						);
-						ensure!((bounty.active_subbounty.len() as u32) <
-							T::MaxSubBountyCount::get() as u32,
-							Error::<T>::SubBountyMaxOverflow,
-						);
+			Bounties::<T>::try_mutate_exists(
+				bounty_id,
+				|maybe_bounty| -> DispatchResult {
+					let mut bounty = maybe_bounty
+						.as_mut()
+						.ok_or(Error::<T>::InvalidIndex)?;
 
-						// Makesure Parent bounty have enough balance to fund Subbounty
+					match bounty.status {
+						BountyStatus::Active {
+							ref curator,
+							..
+						} => {
+							ensure!(signer == *curator, Error::<T>::RequireCurator);
+							// Verify the arguments
+							ensure!(description.len() <=
+								T::MaximumReasonLength::get() as usize,
+								Error::<T>::ReasonTooBig,
+							);
+							ensure!(value >= T::BountyValueMinimum::get(),
+								Error::<T>::InvalidValue,
+							);
+							ensure!((bounty.active_subbounty.len() as u32) <
+								T::MaxSubBountyCount::get() as u32,
+								Error::<T>::TooManySubBounties,
+							);
 
-						// Adding first subbounty, update the state of subbounty
-						// free balance tracking.
-						if bounty.subbounty_count == 0 {
-							let bounty_account = Self::bounty_account_id(bounty_id);
-							let balance = T::Currency::free_balance(&bounty_account);
-							// reserve the fund for master curator fee
-							bounty.subbounty_free_balance = balance.saturating_sub(bounty.fee);
-						}
+							// Makesure Parent bounty have enough balance to fund Subbounty
 
-						let tst_new_free_balance = bounty.subbounty_free_balance.saturating_sub(value);
+							// Adding first subbounty, update the state of subbounty
+							// free balance tracking.
+							if bounty.subbounty_count == 0 {
+								let bounty_account = Self::bounty_account_id(bounty_id);
+								let balance = T::Currency::free_balance(&bounty_account);
+								// reserve the fund for master curator fee
+								bounty.subbounty_free_balance = balance.saturating_sub(bounty.fee);
+							}
 
-						ensure!(tst_new_free_balance > Zero::zero(), Error::<T>::InsufficientBountyBalance);
+							let tst_new_free_balance = bounty.subbounty_free_balance.saturating_sub(value);
 
-						// Increment the subbounty tracking count
-						// And i
-						bounty.subbounty_count += 1;
-						match bounty.active_subbounty.binary_search_by_key(
-							&bounty.subbounty_count,
-							|x| *x,
-						) {
-							Ok(_) => {
-								//This should not occur
-							},
-							Err(i) => bounty.active_subbounty.insert(i, bounty.subbounty_count),
-						}
+							ensure!(tst_new_free_balance > Zero::zero(), Error::<T>::InsufficientBountyBalance);
 
-						let _ = Self::create_subbounty(
-							bounty_id,
-							bounty.subbounty_count,
-							description,
-							value
-						);
+							// Increment the subbounty tracking count
+							// And i
+							bounty.subbounty_count += 1;
+							match bounty.active_subbounty.binary_search_by_key(
+								&bounty.subbounty_count,
+								|x| *x,
+							) {
+								Ok(_) => {
+									//This should not occur
+								},
+								Err(i) => bounty.active_subbounty.insert(i, bounty.subbounty_count),
+							}
 
-						// subbounty addition OK, update the subbounty free balance.
-						bounty.subbounty_free_balance = tst_new_free_balance;
-					},
-					_ => return Err(Error::<T>::UnexpectedStatus.into()),
+							let _ = Self::create_subbounty(
+								bounty_id,
+								bounty.subbounty_count,
+								description,
+								value
+							);
+
+							// subbounty addition OK, update the subbounty free balance.
+							bounty.subbounty_free_balance = tst_new_free_balance;
+						},
+						_ => return Err(Error::<T>::UnexpectedStatus.into()),
+					}
+					Ok(())
 				}
-				Ok(())
-			})?;
+			)?;
 		}
 
 		/// Propose subcurator for funded subbounty.
@@ -1307,7 +1312,7 @@ decl_module! {
 					// Remove the subbounty description
 					SubBountyDescriptions::remove(bounty_id, subbounty_id);
 					// Remove the subbounty from bounty active subbouty list
-					Bounties::<T>::try_mutate_exists(bounty_id,
+					Bounties::<T>::mutate_exists(bounty_id,
 						|maybe_bounty| -> DispatchResult
 						{
 							// Remove the subbounty index from parent bounty
