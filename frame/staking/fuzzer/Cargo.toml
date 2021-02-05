@@ -28,6 +28,7 @@ sp-io ={ version = "2.0.0", path = "../../../primitives/io" }
 sp-core = { version = "2.0.0", path = "../../../primitives/core" }
 sp-npos-elections = { version = "2.0.0", path = "../../../primitives/npos-elections" }
 sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
+serde = "1.0.101"
 
 [[bin]]
 name = "submit_solution"
