@@ -20,9 +20,6 @@
 #![cfg(test)]
 
 use sp_runtime::traits::IdentityLookup;
-use frame_support::{
-	dispatch::{Dispatchable, DispatchInfo, PostDispatchInfo},
-};
 
 type AccountId = u64;
 type AccountIndex = u32;
