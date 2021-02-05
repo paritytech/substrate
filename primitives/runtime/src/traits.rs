@@ -232,9 +232,9 @@ impl<T> Lookup for IdentityLookup<T> {
 pub struct AccountIdLookup<AccountId, AccountIndex>(PhantomData<(AccountId, AccountIndex)>);
 impl<AccountId, AccountIndex> StaticLookup for AccountIdLookup<AccountId, AccountIndex>
 where
-	AccountId: Codec + Clone + PartialEq + Debug + scale_info::TypeInfo + 'static,
-	AccountIndex: Codec + Clone + PartialEq + Debug + scale_info::TypeInfo + 'static,
-	crate::MultiAddress<AccountId, AccountIndex>: Codec,
+	AccountId: Codec + Clone + PartialEq + Debug,
+	AccountIndex: Codec + Clone + PartialEq + Debug,
+	crate::MultiAddress<AccountId, AccountIndex>: Codec + scale_info::TypeInfo + 'static,
 {
 	type Source = crate::MultiAddress<AccountId, AccountIndex>;
 	type Target = AccountId;
