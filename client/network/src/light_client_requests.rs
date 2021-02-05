@@ -51,7 +51,7 @@ pub fn generate_protocol_config(protocol_id: &ProtocolId) -> ProtocolConfig {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::request_responses::IncomingRequest;
+	use crate::request_responses::{IncomingRequest, RequestFailure};
 	use crate::config::ProtocolId;
 
 	use assert_matches::assert_matches;
@@ -207,7 +207,7 @@ mod tests {
 			pending_response: tx,
 		})).unwrap();
 		pool.spawner().spawn_obj(async move {
-			pending_response.send(Ok(rx.await.unwrap().result.unwrap())).unwrap();
+			pending_response.send(rx.await.unwrap().result.map_err(|()| RequestFailure::Refused)).unwrap();
 		}.boxed().into()).unwrap();
 
 		pool.spawner().spawn_obj(sender.for_each(|_| future::ready(())).boxed().into()).unwrap();
