@@ -93,7 +93,7 @@ use sp_runtime::{Permill, RuntimeDebug, DispatchResult, traits::{
 	Zero, StaticLookup, AccountIdConversion, Saturating, BadOrigin
 }};
 
-use frame_support::{dispatch::{DispatchError, DispatchResultWithPostInfo}};
+use frame_support::dispatch::{DispatchError, DispatchResultWithPostInfo};
 
 use frame_support::traits::{EnsureOrigin};
 
