@@ -932,7 +932,7 @@ decl_module! {
 					.ok_or(Error::<T>::InvalidIndex)?;
 
 				// Ensure sure caller is curator
-				ensure!( signer == master_curator, Error::<T>::RequireCurator);
+				ensure!(signer == master_curator, Error::<T>::RequireCurator);
 
 				// Ensure subbounty is in expected state
 				match subbounty.status {
