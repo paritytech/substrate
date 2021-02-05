@@ -923,7 +923,8 @@ decl_module! {
 			let ( master_curator, _) = Self::ensure_bounty_active(bounty_id)?;
 
 			// Mutate the Subbounty instance
-			SubBounties::<T>::try_mutate_exists(bounty_id,
+			SubBounties::<T>::try_mutate_exists(
+			        bounty_id,
 				subbounty_id,
 				|maybe_subbounty| -> DispatchResult {
 
