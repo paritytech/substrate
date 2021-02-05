@@ -432,6 +432,24 @@
 			"decimals": null,
 			"standardAccount": null,
 			"website": null
+		},
+		{
+			"prefix": 48,
+			"network": "reserved48",
+			"displayName": "All prefixes 48 and higher are reserved and cannot be allocated.",
+			"symbols": null,
+			"decimals": null,
+			"standardAccount": null,
+			"website": null
+		},
+		{
+			"prefix": 66,
+			"network": "crust",
+			"displayName": "Crust Network",
+			"symbols": ["CRU"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://crust.network"
 		}
 	]
 }
