@@ -423,7 +423,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, BS, Error, IDP>(BabeParams {
 		+ Sync + 'static,
 	Error: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
 	SO: SyncOracle + Send + Sync + Clone + 'static,
-	CAW: CanAuthorWith<B> + Send + 'static,
+	CAW: CanAuthorWith<B> + Send + Sync + 'static,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
 	IDP: CreateInherentDataProviders<B, ()> + Send + Sync + 'static,
 	IDP::InherentDataProviders: InherentDataProviderExt + Send,
@@ -982,6 +982,7 @@ where
 		let inherent_data_providers = self
 			.inherent_data_providers
 			.create_inherent_data_providers(&BlockId::Hash(parent_hash), ())
+			.await
 			.map_err(|e| Error::<Block>::Client(sp_consensus::Error::from(e).into()))?;
 
 		let slot_now = inherent_data_providers.slot();

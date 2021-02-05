@@ -486,40 +486,40 @@ where
 {
 	let SlotDuration(slot_duration) = slot_duration;
 
-	// rather than use a timer interval, we schedule our waits ourselves
-	Slots::new(
+	let mut slots = Slots::new(
 		slot_duration.slot_duration(),
 		inherent_data_provider,
 		client,
-	).inspect_err(|e| debug!(target: "slots", "Error while polling for next slot: {:?}", e))
-		.try_for_each(move |slot_info| {
-			// only propose when we are not syncing.
-			if sync_oracle.is_major_syncing() {
-				debug!(target: "slots", "Skipping proposal slot due to sync.");
-				return Either::Right(future::ready(Ok(())));
-			}
+	);
 
-			if let Err(err) = can_author_with
-				.can_author_with(&BlockId::Hash(slot_info.chain_head.hash()))
-			{
-				warn!(
-					target: "slots",
-					"Unable to author block in slot {},. `can_author_with` returned: {} \
-					Probably a node update is required!",
-					slot_info.slot,
-					err,
-				);
-				Either::Right(future::ready(Ok(())))
-			} else {
-				Either::Left(
-					worker.on_slot(slot_info).then(|_| future::ready(Ok(())))
-				)
+	loop {
+		let slot_info = match slots.next_slot().await {
+			Ok(r) => r,
+			Err(e) => {
+				warn!(target: "slots", "Error while polling for next slot: {:?}", e);
+				return;
 			}
-		}).then(|res| async move {
-			if let Err(err) = res {
-				warn!(target: "slots", "Slots stream terminated with an error: {:?}", err);
-			}
-		}).await
+		};
+
+		if sync_oracle.is_major_syncing() {
+			debug!(target: "slots", "Skipping proposal slot due to sync.");
+			continue;
+		}
+
+		if let Err(err) = can_author_with
+			.can_author_with(&BlockId::Hash(slot_info.chain_head.hash()))
+		{
+			warn!(
+				target: "slots",
+				"Unable to author block in slot {},. `can_author_with` returned: {} \
+				Probably a node update is required!",
+				slot_info.slot,
+				err,
+			);
+		} else {
+			let _ = worker.on_slot(slot_info).await;
+		}
+	}
 }
 
 /// A header which has been checked

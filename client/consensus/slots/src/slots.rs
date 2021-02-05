@@ -90,32 +90,26 @@ impl<Block, C, IDP> Slots<Block, C, IDP> {
 	}
 }
 
-impl<Block, C, IDP> Stream for Slots<Block, C, IDP>
+impl<Block, C, IDP> Slots<Block, C, IDP>
 where
 	Block: BlockT,
 	C: SelectChain<Block>,
 	IDP: CreateInherentDataProviders<Block, ()>,
 	IDP::InherentDataProviders: crate::InherentDataProviderExt,
 {
-	type Item = Result<SlotInfo<Block>, Error>;
-
-	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+	pub async fn next_slot(&mut self) -> Result<SlotInfo<Block>, Error> {
 		loop {
-			let slot_duration = self.slot_duration;
 			self.inner_delay = match self.inner_delay.take() {
 				None => {
 					// schedule wait.
-					let wait_dur = time_until_next(duration_now(), slot_duration);
+					let wait_dur = time_until_next(duration_now(), self.slot_duration);
 					Some(Delay::new(wait_dur))
 				}
 				Some(d) => Some(d),
 			};
 
 			if let Some(ref mut inner_delay) = self.inner_delay {
-				match Future::poll(Pin::new(inner_delay), cx) {
-					Poll::Pending => return Poll::Pending,
-					Poll::Ready(()) => {}
-				}
+				inner_delay.await;
 			}
 
 			// timeout has fired.
@@ -134,22 +128,16 @@ where
 				}
 			};
 
-			let inherent_data_providers = match self.inherent_data_providers
+			let inherent_data_providers = self.inherent_data_providers
 				.create_inherent_data_providers(&BlockId::Hash(chain_head.hash()), ())
-			{
-				Ok(id) => id,
-				Err(err) => return Poll::Ready(Some(Err(err.into()))),
-			};
+				.await?;
 
 			let timestamp = inherent_data_providers.timestamp();
 			let slot = inherent_data_providers.slot();
-			let inherent_data = match inherent_data_providers.create_inherent_data() {
-				Ok(d) => d,
-				Err(err) => return Poll::Ready(Some(Err(err.into()))),
-			};
+			let inherent_data = inherent_data_providers.create_inherent_data()?;
 
 			// reschedule delay for next slot.
-			let ends_in = time_until_next(timestamp, slot_duration);
+			let ends_in = time_until_next(timestamp, self.slot_duration);
 			let ends_at = Instant::now() + ends_in;
 			self.inner_delay = Some(Delay::new(ends_in));
 
@@ -157,14 +145,14 @@ where
 			if slot > self.last_slot {
 				self.last_slot = slot;
 
-				break Poll::Ready(Some(Ok(SlotInfo {
+				break Ok(SlotInfo {
 					slot,
 					duration: self.slot_duration,
 					timestamp,
 					ends_at,
 					inherent_data,
 					chain_head,
-				})))
+				})
 			}
 		}
 	}

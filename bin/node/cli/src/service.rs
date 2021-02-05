@@ -91,7 +91,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		Some(Box::new(justification_import)),
 		client.clone(),
 		select_chain.clone(),
-		move |at: &sp_runtime::generic::BlockId<Block>, ()| {
+		move |at: &sp_runtime::generic::BlockId<Block>, ()| async move {
 			let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
 
 			let slot =
@@ -280,28 +280,32 @@ pub fn new_full_base(
 			block_import,
 			sync_oracle: network.clone(),
 			inherent_data_providers: move |at: &sp_runtime::generic::BlockId<Block>, ()| {
-			let uncles = sc_consensus_uncles::create_uncles_inherent_data_provider(
-				&*client_clone,
-				at,
-			)?;
+				let client_clone = client_clone.clone();
+				let at = *at;
+				async move {
+					let uncles = sc_consensus_uncles::create_uncles_inherent_data_provider(
+						&*client_clone,
+						&at,
+					)?;
 
-			let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
+					let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
 
-			let slot =
-				sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_duration(
-					timestamp.timestamp(),
-					slot_duration,
-				);
+					let slot =
+						sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_duration(
+							timestamp.timestamp(),
+							slot_duration,
+						);
 
-			let current_timestamp = timestamp.timestamp();
-			let current_slot = slot.slot();
+					let current_timestamp = timestamp.timestamp();
+					let current_slot = slot.slot();
 
-			Ok(sc_consensus_slots::SlotsInherentDataProviders::new(
-				current_timestamp,
-				current_slot,
-				(uncles, timestamp, slot),
-			))
-		},
+					Ok(sc_consensus_slots::SlotsInherentDataProviders::new(
+						current_timestamp,
+						current_slot,
+						(uncles, timestamp, slot),
+					))
+				}
+			},
 			force_authoring,
 			backoff_authoring_blocks,
 			babe_link,
@@ -435,7 +439,7 @@ pub fn new_light_base(mut config: Configuration) -> Result<(
 		Some(Box::new(justification_import)),
 		client.clone(),
 		select_chain.clone(),
-		move |at: &sp_runtime::generic::BlockId<Block>, ()| {
+		move |at: &sp_runtime::generic::BlockId<Block>, ()| async move {
 			let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
 
 			let slot =
@@ -450,7 +454,7 @@ pub fn new_light_base(mut config: Configuration) -> Result<(
 			Ok(sc_consensus_slots::SlotsInherentDataProviders::new(
 				current_timestamp,
 				current_slot,
-				(uncles, timestamp, slot),
+				(timestamp, slot),
 			))
 		},
 		&task_manager.spawn_handle(),

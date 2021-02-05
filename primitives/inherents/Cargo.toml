@@ -22,6 +22,7 @@ sp-runtime = { version = "2.0.0", path = "../runtime", optional = true }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 thiserror = { version = "1.0.21", optional = true }
 impl-trait-for-tuples = "0.2.0"
+async-trait = { version = "0.1.30", optional = true }
 
 [features]
 default = [ "std" ]
@@ -32,4 +33,5 @@ std = [
 	"sp-core/std",
 	"thiserror",
 	"sp-runtime",
+	"async-trait",
 ]

@@ -261,10 +261,11 @@ impl PartialEq for CheckInherentsResult {
 }
 
 #[cfg(feature = "std")]
+#[async_trait::async_trait]
 pub trait CreateInherentDataProviders<Block: BlockT, ExtraArgs> {
 	type InherentDataProviders: InherentDataProvider;
 
-	fn create_inherent_data_providers(
+	async fn create_inherent_data_providers(
 		&self,
 		at: &BlockId<Block>,
 		extra_args: ExtraArgs,
@@ -272,22 +273,26 @@ pub trait CreateInherentDataProviders<Block: BlockT, ExtraArgs> {
 }
 
 #[cfg(feature = "std")]
-impl<F, Block, IDP, ExtraArgs> CreateInherentDataProviders<Block, ExtraArgs> for F
+#[async_trait::async_trait]
+impl<F, Block, IDP, ExtraArgs, Fut> CreateInherentDataProviders<Block, ExtraArgs> for F
 where
 	Block: BlockT,
-	F: Fn(&BlockId<Block>, ExtraArgs) -> Result<IDP, Box<dyn std::error::Error + Send + Sync>>,
-	IDP: InherentDataProvider,
+	F: Fn(&BlockId<Block>, ExtraArgs) -> Fut + Sync + Send,
+	Fut: std::future::Future<Output = Result<IDP, Box<dyn std::error::Error + Send + Sync>>> + Send + 'static,
+	IDP: InherentDataProvider + 'static,
+	ExtraArgs: Send + 'static,
 {
 	type InherentDataProviders = IDP;
 
-	fn create_inherent_data_providers(
+	async fn create_inherent_data_providers(
 		&self,
 		at: &BlockId<Block>,
 		extra_args: ExtraArgs,
 	) -> Result<Self::InherentDataProviders, Box<dyn std::error::Error + Send + Sync>> {
-		(*self)(at, extra_args)
+		(*self)(at, extra_args).await
 	}
 }
+
 
 /// Result of [`InherentDataProvider::try_handle_error`].
 #[cfg(feature = "std")]
