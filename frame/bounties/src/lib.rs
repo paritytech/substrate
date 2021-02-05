@@ -1434,7 +1434,7 @@ impl<T: Config> Module<T> {
 	) -> Result<(T::AccountId, T::BlockNumber), DispatchError> {
 		let bounty = Self::bounties(&bounty_id).ok_or(Error::<T>::InvalidIndex)?;
 		if let BountyStatus::Active { curator, update_due } = bounty.status {
-			Ok((curator.clone(),update_due.clone()))
+			Ok((curator, update_due))
 		} else {
 			Err(Error::<T>::UnexpectedStatus.into())
 		}
