@@ -676,7 +676,16 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 		Babe::report_equivocation_unsigned(Origin::none(), equivocation_proof, key_owner_proof)
 			.unwrap();
 
-		// the report should now be considered stale and the transaction is invalid
+		// the report should now be considered stale and the transaction is invalid.
+		// the check for staleness should be done on both `validate_unsigned` and on `pre_dispatch`
+		assert_err!(
+			<Babe as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
+				TransactionSource::Local,
+				&inner,
+			),
+			InvalidTransaction::Stale,
+		);
+
 		assert_err!(
 			<Babe as sp_runtime::traits::ValidateUnsigned>::pre_dispatch(&inner),
 			InvalidTransaction::Stale,

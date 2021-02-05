@@ -22,39 +22,29 @@
 use super::*;
 
 use frame_support::{
-	assert_ok, assert_noop, impl_outer_origin, parameter_types, impl_outer_dispatch,
-	impl_outer_event, RuntimeDebug, dispatch::DispatchError, traits::Filter,
+	assert_ok, assert_noop, parameter_types, RuntimeDebug, dispatch::DispatchError, traits::Filter,
 };
 use codec::{Encode, Decode};
 use sp_core::H256;
 use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 use crate as proxy;
 
-impl_outer_origin! {
-	pub enum Origin for Test where system = frame_system {}
-}
-impl_outer_event! {
-	pub enum TestEvent for Test {
-		system<T>,
-		pallet_balances<T>,
-		proxy<T>,
-		pallet_utility,
-	}
-}
-impl_outer_dispatch! {
-	pub enum Call for Test where origin: Origin {
-		frame_system::System,
-		pallet_balances::Balances,
-		proxy::Proxy,
-		pallet_utility::Utility,
-	}
-}
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
 
-// For testing the pallet, we construct most of a mock runtime. This means
-// first constructing a configuration type (`Test`) which `impl`s each of the
-// configuration traits of pallets we want to use.
-#[derive(Clone, Eq, PartialEq)]
-pub struct Test;
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
+		Proxy: proxy::{Module, Call, Storage, Event<T>},
+		Utility: pallet_utility::{Module, Call, Event},
+	}
+);
+
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
@@ -74,10 +64,10 @@ impl frame_system::Config for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = TestEvent;
+	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
-	type PalletInfo = ();
+	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
@@ -90,14 +80,14 @@ parameter_types! {
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type Balance = u64;
-	type Event = TestEvent;
+	type Event = Event;
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
 	type WeightInfo = ();
 }
 impl pallet_utility::Config for Test {
-	type Event = TestEvent;
+	type Event = Event;
 	type Call = Call;
 	type WeightInfo = ();
 }
@@ -140,7 +130,7 @@ impl Filter<Call> for BaseFilter {
 	}
 }
 impl Config for Test {
-	type Event = TestEvent;
+	type Event = Event;
 	type Call = Call;
 	type Currency = Balances;
 	type ProxyType = ProxyType;
@@ -153,11 +143,6 @@ impl Config for Test {
 	type AnnouncementDepositBase = AnnouncementDepositBase;
 	type AnnouncementDepositFactor = AnnouncementDepositFactor;
 }
-
-type System = frame_system::Module<Test>;
-type Balances = pallet_balances::Module<Test>;
-type Utility = pallet_utility::Module<Test>;
-type Proxy = Module<Test>;
 
 use frame_system::Call as SystemCall;
 use pallet_balances::Call as BalancesCall;
@@ -177,19 +162,19 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	ext
 }
 
-fn last_event() -> TestEvent {
+fn last_event() -> Event {
 	system::Module::<Test>::events().pop().expect("Event expected").event
 }
 
-fn expect_event<E: Into<TestEvent>>(e: E) {
+fn expect_event<E: Into<Event>>(e: E) {
 	assert_eq!(last_event(), e.into());
 }
 
-fn last_events(n: usize) -> Vec<TestEvent> {
+fn last_events(n: usize) -> Vec<Event> {
 	system::Module::<Test>::events().into_iter().rev().take(n).rev().map(|e| e.event).collect()
 }
 
-fn expect_events(e: Vec<TestEvent>) {
+fn expect_events(e: Vec<Event>) {
 	assert_eq!(last_events(e.len()), e);
 }
 
