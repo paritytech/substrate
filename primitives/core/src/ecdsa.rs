@@ -715,11 +715,6 @@ mod test {
 			let default_format = Ss58AddressFormat::default();
 			// set current ss58 version is custom "200" `Ss58AddressFormat::Custom(200)`
 
-			let pair = Pair::from_seed(b"12345678901234567890123456789012");
-			let public = pair.public();
-			let s = public.to_ss58check_with_version(Ss58AddressFormat::Custom(200));
-			println!("{}", s);
-
 			set_default_ss58_version(Ss58AddressFormat::Custom(200));
 			// custom addr encoded by version 200
 			let addr = "4pbsSkWcBaYoFHrKJZp5fDVUKbqSYD9dhZZGvpp3vQ5ysVs5ybV";

@@ -408,19 +408,6 @@ macro_rules! ss58_address_format {
 			}
 		}
 
-		impl TryFrom<Ss58AddressFormat> for u8 {
-			type Error = ();
-
-			fn try_from(x: Ss58AddressFormat) -> Result<u8, ()> {
-				let v: u16 = x.into();
-				if v < 256 {
-					Ok(v as u8)
-				} else {
-					Err(())
-				}
-			}
-		}
-
 		impl TryFrom<u8> for Ss58AddressFormat {
 			type Error = ();
 
