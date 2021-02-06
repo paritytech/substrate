@@ -178,7 +178,7 @@ where
 					deduct_block:
 						// We want to charge rent for the first block in advance. Therefore we
 						// treat the contract as if it was created in the last block and then
-						// charge rent for it during instantiation.
+						// charge rent for it during instantation.
 						<frame_system::Module<T>>::block_number().saturating_sub(1u32.into()),
 					rent_allowance: <BalanceOf<T>>::max_value(),
 					rent_payed: <BalanceOf<T>>::zero(),

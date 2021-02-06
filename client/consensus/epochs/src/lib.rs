@@ -78,13 +78,13 @@ pub trait Epoch {
 	/// Descriptor for the next epoch.
 	type NextEpochDescriptor;
 	/// Type of the slot number.
-	type Slot: Ord + Copy;
+	type SlotNumber: Ord + Copy;
 
 	/// The starting slot of the epoch.
-	fn start_slot(&self) -> Self::Slot;
+	fn start_slot(&self) -> Self::SlotNumber;
 	/// Produce the "end slot" of the epoch. This is NOT inclusive to the epoch,
 	/// i.e. the slots covered by the epoch are `self.start_slot() .. self.end_slot()`.
-	fn end_slot(&self) -> Self::Slot;
+	fn end_slot(&self) -> Self::SlotNumber;
 	/// Increment the epoch data, using the next epoch descriptor.
 	fn increment(&self, descriptor: Self::NextEpochDescriptor) -> Self;
 }
@@ -102,10 +102,10 @@ impl<'a, E: Epoch> From<&'a E> for EpochHeader<E> {
 #[derive(Eq, PartialEq, Encode, Decode, Debug)]
 pub struct EpochHeader<E: Epoch> {
 	/// The starting slot of the epoch.
-	pub start_slot: E::Slot,
+	pub start_slot: E::SlotNumber,
 	/// The end slot of the epoch. This is NOT inclusive to the epoch,
 	/// i.e. the slots covered by the epoch are `self.start_slot() .. self.end_slot()`.
-	pub end_slot: E::Slot,
+	pub end_slot: E::SlotNumber,
 }
 
 impl<E: Epoch> Clone for EpochHeader<E> {
@@ -215,14 +215,14 @@ impl<E, ERef> ViableEpoch<E, ERef> where
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum ViableEpochDescriptor<Hash, Number, E: Epoch> {
 	/// The epoch is an unimported genesis, with given start slot number.
-	UnimportedGenesis(E::Slot),
+	UnimportedGenesis(E::SlotNumber),
 	/// The epoch is signaled and has been imported, with given identifier and header.
 	Signaled(EpochIdentifier<Hash, Number>, EpochHeader<E>)
 }
 
 impl<Hash, Number, E: Epoch> ViableEpochDescriptor<Hash, Number, E> {
 	/// Start slot of the descriptor.
-	pub fn start_slot(&self) -> E::Slot {
+	pub fn start_slot(&self) -> E::SlotNumber {
 		match self {
 			Self::UnimportedGenesis(start_slot) => *start_slot,
 			Self::Signaled(_, header) => header.start_slot,
@@ -339,7 +339,7 @@ impl<Hash, Number, E: Epoch> EpochChanges<Hash, Number, E> where
 
 	/// Map the epoch changes from one storing data to a different one.
 	pub fn map<B, F>(self, mut f: F) -> EpochChanges<Hash, Number, B> where
-		B: Epoch<Slot=E::Slot>,
+		B: Epoch<SlotNumber=E::SlotNumber>,
 		F: FnMut(&Hash, &Number, E) -> B,
 	{
 		EpochChanges {
@@ -394,7 +394,7 @@ impl<Hash, Number, E: Epoch> EpochChanges<Hash, Number, E> where
 		descendent_of_builder: D,
 		hash: &Hash,
 		number: Number,
-		slot: E::Slot,
+		slot: E::SlotNumber,
 	) -> Result<(), fork_tree::Error<D::Error>> {
 		let is_descendent_of = descendent_of_builder
 			.build_is_descendent_of(None);
@@ -445,11 +445,11 @@ impl<Hash, Number, E: Epoch> EpochChanges<Hash, Number, E> where
 		descriptor: &ViableEpochDescriptor<Hash, Number, E>,
 		make_genesis: G,
 	) -> Option<ViableEpoch<E, &E>> where
-		G: FnOnce(E::Slot) -> E
+		G: FnOnce(E::SlotNumber) -> E
 	{
 		match descriptor {
-			ViableEpochDescriptor::UnimportedGenesis(slot) => {
-				Some(ViableEpoch::UnimportedGenesis(make_genesis(*slot)))
+			ViableEpochDescriptor::UnimportedGenesis(slot_number) => {
+				Some(ViableEpoch::UnimportedGenesis(make_genesis(*slot_number)))
 			},
 			ViableEpochDescriptor::Signaled(identifier, _) => {
 				self.epoch(&identifier).map(ViableEpoch::Signaled)
@@ -479,11 +479,11 @@ impl<Hash, Number, E: Epoch> EpochChanges<Hash, Number, E> where
 		descriptor: &ViableEpochDescriptor<Hash, Number, E>,
 		make_genesis: G,
 	) -> Option<ViableEpoch<E, &mut E>> where
-		G: FnOnce(E::Slot) -> E
+		G: FnOnce(E::SlotNumber) -> E
 	{
 		match descriptor {
-			ViableEpochDescriptor::UnimportedGenesis(slot) => {
-				Some(ViableEpoch::UnimportedGenesis(make_genesis(*slot)))
+			ViableEpochDescriptor::UnimportedGenesis(slot_number) => {
+				Some(ViableEpoch::UnimportedGenesis(make_genesis(*slot_number)))
 			},
 			ViableEpochDescriptor::Signaled(identifier, _) => {
 				self.epoch_mut(&identifier).map(ViableEpoch::Signaled)
@@ -500,12 +500,12 @@ impl<Hash, Number, E: Epoch> EpochChanges<Hash, Number, E> where
 		descriptor: &ViableEpochDescriptor<Hash, Number, E>,
 		make_genesis: G
 	) -> Option<E> where
-		G: FnOnce(E::Slot) -> E,
+		G: FnOnce(E::SlotNumber) -> E,
 		E: Clone,
 	{
 		match descriptor {
-			ViableEpochDescriptor::UnimportedGenesis(slot) => {
-				Some(make_genesis(*slot))
+			ViableEpochDescriptor::UnimportedGenesis(slot_number) => {
+				Some(make_genesis(*slot_number))
 			},
 			ViableEpochDescriptor::Signaled(identifier, _) => {
 				self.epoch(&identifier).cloned()
@@ -523,17 +523,17 @@ impl<Hash, Number, E: Epoch> EpochChanges<Hash, Number, E> where
 		descendent_of_builder: D,
 		parent_hash: &Hash,
 		parent_number: Number,
-		slot: E::Slot,
+		slot_number: E::SlotNumber,
 		make_genesis: G,
 	) -> Result<Option<E>, fork_tree::Error<D::Error>> where
-		G: FnOnce(E::Slot) -> E,
+		G: FnOnce(E::SlotNumber) -> E,
 		E: Clone,
 	{
 		let descriptor = self.epoch_descriptor_for_child_of(
 			descendent_of_builder,
 			parent_hash,
 			parent_number,
-			slot
+			slot_number
 		)?;
 
 		Ok(descriptor.and_then(|des| self.epoch_data(&des, make_genesis)))
@@ -548,7 +548,7 @@ impl<Hash, Number, E: Epoch> EpochChanges<Hash, Number, E> where
 		descendent_of_builder: D,
 		parent_hash: &Hash,
 		parent_number: Number,
-		slot: E::Slot,
+		slot_number: E::SlotNumber,
 	) -> Result<Option<ViableEpochDescriptor<Hash, Number, E>>, fork_tree::Error<D::Error>> {
 		// find_node_where will give you the node in the fork-tree which is an ancestor
 		// of the `parent_hash` by default. if the last epoch was signalled at the parent_hash,
@@ -561,7 +561,7 @@ impl<Hash, Number, E: Epoch> EpochChanges<Hash, Number, E> where
 
 		if parent_number == Zero::zero() {
 			// need to insert the genesis epoch.
-			return Ok(Some(ViableEpochDescriptor::UnimportedGenesis(slot)))
+			return Ok(Some(ViableEpochDescriptor::UnimportedGenesis(slot_number)))
 		}
 
 		// We want to find the deepest node in the tree which is an ancestor
@@ -571,9 +571,9 @@ impl<Hash, Number, E: Epoch> EpochChanges<Hash, Number, E> where
 		// we need.
 		let predicate = |epoch: &PersistedEpochHeader<E>| match *epoch {
 			PersistedEpochHeader::Genesis(ref epoch_0, _) =>
-				epoch_0.start_slot <= slot,
+				epoch_0.start_slot <= slot_number,
 			PersistedEpochHeader::Regular(ref epoch_n) =>
-				epoch_n.start_slot <= slot,
+				epoch_n.start_slot <= slot_number,
 		};
 
 		self.inner.find_node_where(
@@ -588,7 +588,7 @@ impl<Hash, Number, E: Epoch> EpochChanges<Hash, Number, E> where
 					// and here we figure out which of the internal epochs
 					// of a genesis node to use based on their start slot.
 					PersistedEpochHeader::Genesis(ref epoch_0, ref epoch_1) =>
-						if epoch_1.start_slot <= slot {
+						if epoch_1.start_slot <= slot_number {
 							(EpochIdentifierPosition::Genesis1, epoch_1.clone())
 						} else {
 							(EpochIdentifierPosition::Genesis0, epoch_0.clone())
@@ -695,17 +695,17 @@ mod tests {
 	}
 
 	type Hash = [u8; 1];
-	type Slot = u64;
+	type SlotNumber = u64;
 
 	#[derive(Debug, Clone, Eq, PartialEq)]
 	struct Epoch {
-		start_slot: Slot,
-		duration: Slot,
+		start_slot: SlotNumber,
+		duration: SlotNumber,
 	}
 
 	impl EpochT for Epoch {
 		type NextEpochDescriptor = ();
-		type Slot = Slot;
+		type SlotNumber = SlotNumber;
 
 		fn increment(&self, _: ()) -> Self {
 			Epoch {
@@ -714,11 +714,11 @@ mod tests {
 			}
 		}
 
-		fn end_slot(&self) -> Slot {
+		fn end_slot(&self) -> SlotNumber {
 			self.start_slot + self.duration
 		}
 
-		fn start_slot(&self) -> Slot {
+		fn start_slot(&self) -> SlotNumber {
 			self.start_slot
 		}
 	}
@@ -748,8 +748,8 @@ mod tests {
 		).unwrap().unwrap();
 
 		match genesis_epoch {
-			ViableEpochDescriptor::UnimportedGenesis(slot) => {
-				assert_eq!(slot, 10101u64);
+			ViableEpochDescriptor::UnimportedGenesis(slot_number) => {
+				assert_eq!(slot_number, 10101u64);
 			},
 			_ => panic!("should be unimported genesis"),
 		};
@@ -762,8 +762,8 @@ mod tests {
 		).unwrap().unwrap();
 
 		match genesis_epoch_2 {
-			ViableEpochDescriptor::UnimportedGenesis(slot) => {
-				assert_eq!(slot, 10102u64);
+			ViableEpochDescriptor::UnimportedGenesis(slot_number) => {
+				assert_eq!(slot_number, 10102u64);
 			},
 			_ => panic!("should be unimported genesis"),
 		};

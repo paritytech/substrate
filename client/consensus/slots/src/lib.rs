@@ -41,7 +41,6 @@ use parking_lot::Mutex;
 use sp_api::{ProvideRuntimeApi, ApiRef};
 use sp_arithmetic::traits::BaseArithmetic;
 use sp_consensus::{BlockImport, Proposer, SyncOracle, SelectChain, CanAuthorWith, SlotData, RecordProof};
-use sp_consensus_slots::Slot;
 use sp_inherents::{InherentData, InherentDataProviders};
 use sp_runtime::{
 	generic::BlockId,
@@ -116,7 +115,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	fn epoch_data(
 		&self,
 		header: &B::Header,
-		slot: Slot,
+		slot_number: u64,
 	) -> Result<Self::EpochData, sp_consensus::Error>;
 
 	/// Returns the number of authorities given the epoch data.
@@ -127,7 +126,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	fn claim_slot(
 		&self,
 		header: &B::Header,
-		slot: Slot,
+		slot_number: u64,
 		epoch_data: &Self::EpochData,
 	) -> Option<Self::Claim>;
 
@@ -136,14 +135,14 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	fn notify_slot(
 		&self,
 		_header: &B::Header,
-		_slot: Slot,
+		_slot_number: u64,
 		_epoch_data: &Self::EpochData,
 	) {}
 
 	/// Return the pre digest data to include in a block authored with the given claim.
 	fn pre_digest_data(
 		&self,
-		slot: Slot,
+		slot_number: u64,
 		claim: &Self::Claim,
 	) -> Vec<sp_runtime::DigestItem<B::Hash>>;
 
@@ -171,7 +170,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	///
 	/// An example strategy that back offs if the finalized head is lagging too much behind the tip
 	/// is implemented by [`BackoffAuthoringOnFinalizedHeadLagging`].
-	fn should_backoff(&self, _slot: Slot, _chain_head: &B::Header) -> bool {
+	fn should_backoff(&self, _slot_number: u64, _chain_head: &B::Header) -> bool {
 		false
 	}
 
@@ -209,7 +208,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	where
 		<Self::Proposer as Proposer<B>>::Proposal: Unpin + Send + 'static,
 	{
-		let (timestamp, slot) = (slot_info.timestamp, slot_info.slot);
+		let (timestamp, slot_number) = (slot_info.timestamp, slot_info.number);
 
 		let slot_remaining_duration = self.slot_remaining_duration(&slot_info);
 		let proposing_remaining_duration = self.proposing_remaining_duration(&chain_head, &slot_info);
@@ -219,7 +218,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				debug!(
 					target: self.logging_target(),
 					"Skipping proposal slot {} since there's no time left to propose",
-					slot,
+					slot_number,
 				);
 
 				return Box::pin(future::ready(None));
@@ -228,7 +227,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			None => Box::new(future::pending()) as Box<_>,
 		};
 
-		let epoch_data = match self.epoch_data(&chain_head, slot) {
+		let epoch_data = match self.epoch_data(&chain_head, slot_number) {
 			Ok(epoch_data) => epoch_data,
 			Err(err) => {
 				warn!("Unable to fetch epoch data at block {:?}: {:?}", chain_head.hash(), err);
@@ -243,7 +242,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			}
 		};
 
-		self.notify_slot(&chain_head, slot, &epoch_data);
+		self.notify_slot(&chain_head, slot_number, &epoch_data);
 
 		let authorities_len = self.authorities_len(&epoch_data);
 
@@ -261,43 +260,38 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			return Box::pin(future::ready(None));
 		}
 
-		let claim = match self.claim_slot(&chain_head, slot, &epoch_data) {
+		let claim = match self.claim_slot(&chain_head, slot_number, &epoch_data) {
 			None => return Box::pin(future::ready(None)),
 			Some(claim) => claim,
 		};
 
-		if self.should_backoff(slot, &chain_head) {
+		if self.should_backoff(slot_number, &chain_head) {
 			return Box::pin(future::ready(None));
 		}
 
 		debug!(
 			target: self.logging_target(),
 			"Starting authorship at slot {}; timestamp = {}",
-			slot,
+			slot_number,
 			timestamp,
 		);
 
-		telemetry!(
-			CONSENSUS_DEBUG;
-			"slots.starting_authorship";
-			"slot_num" => *slot,
+		telemetry!(CONSENSUS_DEBUG; "slots.starting_authorship";
+			"slot_num" => slot_number,
 			"timestamp" => timestamp,
 		);
 
 		let awaiting_proposer = self.proposer(&chain_head).map_err(move |err| {
-			warn!("Unable to author block in slot {:?}: {:?}", slot, err);
+			warn!("Unable to author block in slot {:?}: {:?}", slot_number, err);
 
-			telemetry!(
-				CONSENSUS_WARN;
-				"slots.unable_authoring_block";
-				"slot" => *slot,
-				"err" => ?err
+			telemetry!(CONSENSUS_WARN; "slots.unable_authoring_block";
+				"slot" => slot_number, "err" => ?err
 			);
 
 			err
 		});
 
-		let logs = self.pre_digest_data(slot, &claim);
+		let logs = self.pre_digest_data(slot_number, &claim);
 
 		// deadline our production to approx. the end of the slot
 		let proposing = awaiting_proposer.and_then(move |proposer| proposer.propose(
@@ -313,14 +307,12 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			futures::future::select(proposing, proposing_remaining).map(move |v| match v {
 				Either::Left((b, _)) => b.map(|b| (b, claim)),
 				Either::Right(_) => {
-					info!("⌛️ Discarding proposal for slot {}; block production took too long", slot);
+					info!("⌛️ Discarding proposal for slot {}; block production took too long", slot_number);
 					// If the node was compiled with debug, tell the user to use release optimizations.
 					#[cfg(build_type="debug")]
 					info!("👉 Recompile your node in `--release` mode to mitigate this problem.");
-					telemetry!(
-						CONSENSUS_INFO;
-						"slots.discarding_proposal_took_too_long";
-						"slot" => *slot,
+					telemetry!(CONSENSUS_INFO; "slots.discarding_proposal_took_too_long";
+						"slot" => slot_number,
 					);
 
 					Err(sp_consensus::Error::ClientImport("Timeout in the Slots proposer".into()))
@@ -396,7 +388,7 @@ pub trait SlotCompatible {
 	fn extract_timestamp_and_slot(
 		&self,
 		inherent: &InherentData,
-	) -> Result<(u64, Slot, std::time::Duration), sp_consensus::Error>;
+	) -> Result<(u64, u64, std::time::Duration), sp_consensus::Error>;
 }
 
 /// Start a new slot worker.
@@ -437,12 +429,12 @@ where
 				return Either::Right(future::ready(Ok(())));
 			}
 
-			let slot = slot_info.slot;
+			let slot_num = slot_info.number;
 			let chain_head = match client.best_chain() {
 				Ok(x) => x,
 				Err(e) => {
 					warn!(target: "slots", "Unable to author block in slot {}. \
-					no best block header: {:?}", slot, e);
+					no best block header: {:?}", slot_num, e);
 					return Either::Right(future::ready(Ok(())));
 				}
 			};
@@ -452,7 +444,7 @@ where
 					target: "slots",
 					"Unable to author block in slot {},. `can_author_with` returned: {} \
 					Probably a node update is required!",
-					slot,
+					slot_num,
 					err,
 				);
 				Either::Right(future::ready(Ok(())))
@@ -473,13 +465,15 @@ where
 pub enum CheckedHeader<H, S> {
 	/// A header which has slot in the future. this is the full header (not stripped)
 	/// and the slot in which it should be processed.
-	Deferred(H, Slot),
+	Deferred(H, u64),
 	/// A header which is fully checked, including signature. This is the pre-header
 	/// accompanied by the seal components.
 	///
 	/// Includes the digest item that encoded the seal.
 	Checked(H, S),
 }
+
+
 
 #[derive(Debug, thiserror::Error)]
 #[allow(missing_docs)]
@@ -567,7 +561,7 @@ impl<T: Clone + Send + Sync + 'static> SlotDuration<T> {
 /// to parent. If the number of skipped slots is greated than 0 this method will apply
 /// an exponential backoff of at most `2^7 * slot_duration`, if no slots were skipped
 /// this method will return `None.`
-pub fn slot_lenience_exponential(parent_slot: Slot, slot_info: &SlotInfo) -> Option<Duration> {
+pub fn slot_lenience_exponential(parent_slot: u64, slot_info: &SlotInfo) -> Option<Duration> {
 	// never give more than 2^this times the lenience.
 	const BACKOFF_CAP: u64 = 7;
 
@@ -580,7 +574,7 @@ pub fn slot_lenience_exponential(parent_slot: Slot, slot_info: &SlotInfo) -> Opt
 	// exponential back-off.
 	// in normal cases we only attempt to issue blocks up to the end of the slot.
 	// when the chain has been stalled for a few slots, we give more lenience.
-	let skipped_slots = *slot_info.slot.saturating_sub(parent_slot + 1);
+	let skipped_slots = slot_info.number.saturating_sub(parent_slot + 1);
 
 	if skipped_slots == 0 {
 		None
@@ -596,7 +590,7 @@ pub fn slot_lenience_exponential(parent_slot: Slot, slot_info: &SlotInfo) -> Opt
 /// to parent. If the number of skipped slots is greated than 0 this method will apply
 /// a linear backoff of at most `20 * slot_duration`, if no slots were skipped
 /// this method will return `None.`
-pub fn slot_lenience_linear(parent_slot: Slot, slot_info: &SlotInfo) -> Option<Duration> {
+pub fn slot_lenience_linear(parent_slot: u64, slot_info: &SlotInfo) -> Option<Duration> {
 	// never give more than 20 times more lenience.
 	const BACKOFF_CAP: u64 = 20;
 
@@ -606,7 +600,7 @@ pub fn slot_lenience_linear(parent_slot: Slot, slot_info: &SlotInfo) -> Option<D
 	// linear back-off.
 	// in normal cases we only attempt to issue blocks up to the end of the slot.
 	// when the chain has been stalled for a few slots, we give more lenience.
-	let skipped_slots = *slot_info.slot.saturating_sub(parent_slot + 1);
+	let skipped_slots = slot_info.number.saturating_sub(parent_slot + 1);
 
 	if skipped_slots == 0 {
 		None
@@ -622,9 +616,9 @@ pub trait BackoffAuthoringBlocksStrategy<N> {
 	fn should_backoff(
 		&self,
 		chain_head_number: N,
-		chain_head_slot: Slot,
+		chain_head_slot: u64,
 		finalized_number: N,
-		slow_now: Slot,
+		slow_now: u64,
 		logging_target: &str,
 	) -> bool;
 }
@@ -669,9 +663,9 @@ where
 	fn should_backoff(
 		&self,
 		chain_head_number: N,
-		chain_head_slot: Slot,
+		chain_head_slot: u64,
 		finalized_number: N,
-		slot_now: Slot,
+		slot_now: u64,
 		logging_target: &str,
 	) -> bool {
 		// This should not happen, but we want to keep the previous behaviour if it does.
@@ -689,7 +683,7 @@ where
 
 		// If interval is nonzero we backoff if the current slot isn't far enough ahead of the chain
 		// head.
-		if *slot_now <= *chain_head_slot + interval {
+		if slot_now <= chain_head_slot + interval {
 			info!(
 				target: logging_target,
 				"Backing off claiming new slot for block authorship: finality is lagging.",
@@ -705,9 +699,9 @@ impl<N> BackoffAuthoringBlocksStrategy<N> for () {
 	fn should_backoff(
 		&self,
 		_chain_head_number: N,
-		_chain_head_slot: Slot,
+		_chain_head_slot: u64,
 		_finalized_number: N,
-		_slot_now: Slot,
+		_slot_now: u64,
 		_logging_target: &str,
 	) -> bool {
 		false
@@ -723,9 +717,9 @@ mod test {
 
 	const SLOT_DURATION: Duration = Duration::from_millis(6000);
 
-	fn slot(slot: u64) -> super::slots::SlotInfo {
+	fn slot(n: u64) -> super::slots::SlotInfo {
 		super::slots::SlotInfo {
-			slot: slot.into(),
+			number: n,
 			duration: SLOT_DURATION.as_millis() as u64,
 			timestamp: Default::default(),
 			inherent_data: Default::default(),
@@ -736,20 +730,20 @@ mod test {
 	#[test]
 	fn linear_slot_lenience() {
 		// if no slots are skipped there should be no lenience
-		assert_eq!(super::slot_lenience_linear(1.into(), &slot(2)), None);
+		assert_eq!(super::slot_lenience_linear(1, &slot(2)), None);
 
 		// otherwise the lenience is incremented linearly with
 		// the number of skipped slots.
 		for n in 3..=22 {
 			assert_eq!(
-				super::slot_lenience_linear(1.into(), &slot(n)),
+				super::slot_lenience_linear(1, &slot(n)),
 				Some(SLOT_DURATION * (n - 2) as u32),
 			);
 		}
 
 		// but we cap it to a maximum of 20 slots
 		assert_eq!(
-			super::slot_lenience_linear(1.into(), &slot(23)),
+			super::slot_lenience_linear(1, &slot(23)),
 			Some(SLOT_DURATION * 20),
 		);
 	}
@@ -757,24 +751,24 @@ mod test {
 	#[test]
 	fn exponential_slot_lenience() {
 		// if no slots are skipped there should be no lenience
-		assert_eq!(super::slot_lenience_exponential(1.into(), &slot(2)), None);
+		assert_eq!(super::slot_lenience_exponential(1, &slot(2)), None);
 
 		// otherwise the lenience is incremented exponentially every two slots
 		for n in 3..=17 {
 			assert_eq!(
-				super::slot_lenience_exponential(1.into(), &slot(n)),
+				super::slot_lenience_exponential(1, &slot(n)),
 				Some(SLOT_DURATION * 2u32.pow((n / 2 - 1) as u32)),
 			);
 		}
 
 		// but we cap it to a maximum of 14 slots
 		assert_eq!(
-			super::slot_lenience_exponential(1.into(), &slot(18)),
+			super::slot_lenience_exponential(1, &slot(18)),
 			Some(SLOT_DURATION * 2u32.pow(7)),
 		);
 
 		assert_eq!(
-			super::slot_lenience_exponential(1.into(), &slot(19)),
+			super::slot_lenience_exponential(1, &slot(19)),
 			Some(SLOT_DURATION * 2u32.pow(7)),
 		);
 	}
@@ -814,7 +808,7 @@ mod test {
 		let slot_now = 2;
 
 		let should_backoff: Vec<bool> = (slot_now..1000)
-			.map(|s| strategy.should_backoff(head_number, head_slot.into(), finalized_number, s.into(), "slots"))
+			.map(|s| strategy.should_backoff(head_number, head_slot, finalized_number, s, "slots"))
 			.collect();
 
 		// Should always be false, since the head isn't advancing
@@ -839,9 +833,9 @@ mod test {
 			.map(move |s| {
 				let b = strategy.should_backoff(
 					head_number,
-					head_slot.into(),
+					head_slot,
 					finalized_number,
-					s.into(),
+					s,
 					"slots",
 				);
 				// Chain is still advancing (by someone else)
@@ -878,7 +872,7 @@ mod test {
 		let max_interval = strategy.max_interval;
 
 		let should_backoff: Vec<bool> = (slot_now..200)
-			.map(|s| strategy.should_backoff(head_number, head_slot.into(), finalized_number, s.into(), "slots"))
+			.map(|s| strategy.should_backoff(head_number, head_slot, finalized_number, s, "slots"))
 			.collect();
 
 		// Should backoff (true) until we are `max_interval` number of slots ahead of the chain
@@ -906,9 +900,9 @@ mod test {
 			<dyn BackoffAuthoringBlocksStrategy<NumberFor<Block>>>::should_backoff(
 				&param,
 				head_state.head_number,
-				head_state.head_slot.into(),
+				head_state.head_slot,
 				finalized_number,
-				head_state.slot_now.into(),
+				head_state.slot_now,
 				"slots",
 			)
 		};
@@ -978,9 +972,9 @@ mod test {
 			<dyn BackoffAuthoringBlocksStrategy<NumberFor<Block>>>::should_backoff(
 				&param,
 				head_state.head_number,
-				head_state.head_slot.into(),
+				head_state.head_slot,
 				finalized_number,
-				head_state.slot_now.into(),
+				head_state.slot_now,
 				"slots",
 			)
 		};
@@ -1042,9 +1036,9 @@ mod test {
 			<dyn BackoffAuthoringBlocksStrategy<NumberFor<Block>>>::should_backoff(
 				&param,
 				head_state.head_number,
-				head_state.head_slot.into(),
+				head_state.head_slot,
 				finalized_number,
-				head_state.slot_now.into(),
+				head_state.slot_now,
 				"slots",
 			)
 		};

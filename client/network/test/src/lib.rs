@@ -30,7 +30,6 @@ use std::{
 use libp2p::build_multiaddr;
 use log::trace;
 use sc_network::block_request_handler::{self, BlockRequestHandler};
-use sc_network::light_client_requests::{self, handler::LightClientRequestHandler};
 use sp_blockchain::{
 	HeaderBackend, Result as ClientResult,
 	well_known_cache_keys::{self, Id as CacheKeyId},
@@ -727,13 +726,7 @@ pub trait TestNetFactory: Sized {
 		let protocol_id = ProtocolId::from("test-protocol-name");
 
 		let block_request_protocol_config = {
-			let (handler, protocol_config) = BlockRequestHandler::new(&protocol_id, client.clone());
-			self.spawn_task(handler.run().boxed());
-			protocol_config
-		};
-
-		let light_client_request_protocol_config = {
-			let (handler, protocol_config) = LightClientRequestHandler::new(&protocol_id, client.clone());
+			let (handler, protocol_config) = BlockRequestHandler::new(protocol_id.clone(), client.clone());
 			self.spawn_task(handler.run().boxed());
 			protocol_config
 		};
@@ -751,7 +744,6 @@ pub trait TestNetFactory: Sized {
 				.unwrap_or_else(|| Box::new(DefaultBlockAnnounceValidator)),
 			metrics_registry: None,
 			block_request_protocol_config,
-			light_client_request_protocol_config,
 		}).unwrap();
 
 		trace!(target: "test_network", "Peer identifier: {}", network.service().local_peer_id());
@@ -821,12 +813,10 @@ pub trait TestNetFactory: Sized {
 
 		let protocol_id = ProtocolId::from("test-protocol-name");
 
+		// Add block request handler.
 		let block_request_protocol_config = block_request_handler::generate_protocol_config(
-			&protocol_id,
+			protocol_id.clone(),
 		);
-
-		let light_client_request_protocol_config =
-			light_client_requests::generate_protocol_config(&protocol_id);
 
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: Role::Light,
@@ -840,7 +830,6 @@ pub trait TestNetFactory: Sized {
 			block_announce_validator: Box::new(DefaultBlockAnnounceValidator),
 			metrics_registry: None,
 			block_request_protocol_config,
-			light_client_request_protocol_config,
 		}).unwrap();
 
 		self.mut_peers(|peers| {

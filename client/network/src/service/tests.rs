@@ -18,7 +18,6 @@
 
 use crate::{config, Event, NetworkService, NetworkWorker};
 use crate::block_request_handler::BlockRequestHandler;
-use crate::light_client_requests::handler::LightClientRequestHandler;
 
 use libp2p::PeerId;
 use futures::prelude::*;
@@ -97,16 +96,7 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 
 	let block_request_protocol_config = {
 		let (handler, protocol_config) = BlockRequestHandler::new(
-			&protocol_id,
-			client.clone(),
-		);
-		async_std::task::spawn(handler.run().boxed());
-		protocol_config
-	};
-
-	let light_client_request_protocol_config = {
-		let (handler, protocol_config) = LightClientRequestHandler::new(
-			&protocol_id,
+			protocol_id.clone(),
 			client.clone(),
 		);
 		async_std::task::spawn(handler.run().boxed());
@@ -127,7 +117,6 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 		),
 		metrics_registry: None,
 		block_request_protocol_config,
-		light_client_request_protocol_config,
 	})
 	.unwrap();
 

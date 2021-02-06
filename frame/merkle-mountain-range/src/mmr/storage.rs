@@ -57,7 +57,7 @@ impl<StorageType, T, I, L> Default for Storage<StorageType, T, I, L> {
 impl<T, I, L> mmr_lib::MMRStore<NodeOf<T, I, L>> for Storage<OffchainStorage, T, I, L> where
 	T: Config<I>,
 	I: Instance,
-	L: primitives::FullLeaf + codec::Decode,
+	L: primitives::FullLeaf,
 {
 	fn get_elem(&self, pos: u64) -> mmr_lib::Result<Option<NodeOf<T, I, L>>> {
 		let key = Module::<T, I>::offchain_key(pos);

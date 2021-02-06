@@ -338,9 +338,9 @@ macro_rules! implement_per_thing {
 			fn encode_as(&self) -> &Self::As {
 				&self.0
 			}
-			fn decode_from(x: Self::As) -> Result<Self, codec::Error> {
+			fn decode_from(x: Self::As) -> Self {
 				// Saturates if `x` is more than `$max` internally.
-				Ok(Self::from_parts(x))
+				Self::from_parts(x)
 			}
 		}
 

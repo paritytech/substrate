@@ -249,6 +249,7 @@ mod behaviour;
 mod chain;
 mod peer_info;
 mod discovery;
+mod light_client_handler;
 mod on_demand_layer;
 mod protocol;
 mod request_responses;
@@ -258,7 +259,6 @@ mod transport;
 mod utils;
 
 pub mod block_request_handler;
-pub mod light_client_requests;
 pub mod config;
 pub mod error;
 pub mod gossip;

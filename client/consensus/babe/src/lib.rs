@@ -66,8 +66,10 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 pub use sp_consensus_babe::{
-	BabeApi, ConsensusLog, BABE_ENGINE_ID, BabeEpochConfiguration, BabeGenesisConfiguration,
-	AuthorityId, AuthorityPair, AuthoritySignature, BabeAuthorityWeight, VRF_OUTPUT_LENGTH,
+	BabeApi, ConsensusLog, BABE_ENGINE_ID, SlotNumber,
+	BabeEpochConfiguration, BabeGenesisConfiguration,
+	AuthorityId, AuthorityPair, AuthoritySignature,
+	BabeAuthorityWeight, VRF_OUTPUT_LENGTH,
 	digests::{
 		CompatibleDigestItem, NextEpochDescriptor, NextConfigDescriptor, PreDigest,
 		PrimaryPreDigest, SecondaryPlainPreDigest,
@@ -78,7 +80,8 @@ use std::{
 	collections::HashMap, sync::Arc, u64, pin::Pin, time::{Instant, Duration},
 	any::Any, borrow::Cow, convert::TryInto,
 };
-use sp_consensus::{ImportResult, CanAuthorWith, import_queue::BoxJustificationImport};
+use sp_consensus::{ImportResult, CanAuthorWith};
+use sp_consensus::import_queue::BoxJustificationImport;
 use sp_core::crypto::Public;
 use sp_application_crypto::AppKey;
 use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
@@ -91,14 +94,16 @@ use parking_lot::Mutex;
 use sp_inherents::{InherentDataProviders, InherentData};
 use sc_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG};
 use sp_consensus::{
-	BlockImport, Environment, Proposer, BlockCheckParams,
+	self, BlockImport, Environment, Proposer, BlockCheckParams,
 	ForkChoiceStrategy, BlockImportParams, BlockOrigin, Error as ConsensusError,
-	SelectChain, SlotData, import_queue::{Verifier, BasicQueue, DefaultImportQueue, CacheKeyId},
+	SelectChain, SlotData,
 };
 use sp_consensus_babe::inherents::BabeInherentData;
 use sp_timestamp::{TimestampInherentData, InherentType as TimestampInherent};
+use sp_consensus::import_queue::{Verifier, BasicQueue, DefaultImportQueue, CacheKeyId};
 use sc_client_api::{
-	backend::AuxStore, BlockchainEvents, ProvideUncles,
+	backend::AuxStore,
+	BlockchainEvents, ProvideUncles,
 };
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use futures::channel::mpsc::{channel, Sender, Receiver};
@@ -109,7 +114,7 @@ use log::{debug, info, log, trace, warn};
 use prometheus_endpoint::Registry;
 use sc_consensus_slots::{
 	SlotInfo, SlotCompatible, StorageChanges, CheckedHeader, check_equivocation,
-	BackoffAuthoringBlocksStrategy
+	BackoffAuthoringBlocksStrategy,
 };
 use sc_consensus_epochs::{
 	descendent_query, SharedEpochChanges, EpochChangesFor, Epoch as EpochT, ViableEpochDescriptor,
@@ -121,7 +126,6 @@ use sp_blockchain::{
 use schnorrkel::SignatureError;
 use codec::{Encode, Decode};
 use sp_api::ApiExt;
-use sp_consensus_slots::Slot;
 
 mod verification;
 mod migration;
@@ -137,9 +141,9 @@ pub struct Epoch {
 	/// The epoch index.
 	pub epoch_index: u64,
 	/// The starting slot of the epoch.
-	pub start_slot: Slot,
+	pub start_slot: SlotNumber,
 	/// The duration of this epoch.
-	pub duration: u64,
+	pub duration: SlotNumber,
 	/// The authorities and their weights.
 	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 	/// Randomness for this epoch.
@@ -150,7 +154,7 @@ pub struct Epoch {
 
 impl EpochT for Epoch {
 	type NextEpochDescriptor = (NextEpochDescriptor, BabeEpochConfiguration);
-	type Slot = Slot;
+	type SlotNumber = SlotNumber;
 
 	fn increment(
 		&self,
@@ -166,11 +170,11 @@ impl EpochT for Epoch {
 		}
 	}
 
-	fn start_slot(&self) -> Slot {
+	fn start_slot(&self) -> SlotNumber {
 		self.start_slot
 	}
 
-	fn end_slot(&self) -> Slot {
+	fn end_slot(&self) -> SlotNumber {
 		self.start_slot + self.duration
 	}
 }
@@ -180,11 +184,11 @@ impl Epoch {
 	/// the first block, so that has to be provided.
 	pub fn genesis(
 		genesis_config: &BabeGenesisConfiguration,
-		slot: Slot,
+		slot_number: SlotNumber
 	) -> Epoch {
 		Epoch {
 			epoch_index: 0,
-			start_slot: slot,
+			start_slot: slot_number,
 			duration: genesis_config.epoch_length,
 			authorities: genesis_config.genesis_authorities.clone(),
 			randomness: genesis_config.randomness,
@@ -225,7 +229,7 @@ pub enum Error<B: BlockT> {
 	ParentUnavailable(B::Hash, B::Hash),
 	/// Slot number must increase
 	#[display(fmt = "Slot number must increase: parent slot: {}, this slot: {}", _0, _1)]
-	SlotMustIncrease(Slot, Slot),
+	SlotNumberMustIncrease(u64, u64),
 	/// Header has a bad seal
 	#[display(fmt = "Header {:?} has a bad seal", _0)]
 	HeaderBadSeal(B::Hash),
@@ -258,7 +262,7 @@ pub enum Error<B: BlockT> {
 	FetchParentHeader(sp_blockchain::Error),
 	/// Expected epoch change to happen.
 	#[display(fmt = "Expected epoch change to happen at {:?}, s{}", _0, _1)]
-	ExpectedEpochChange(B::Hash, Slot),
+	ExpectedEpochChange(B::Hash, u64),
 	/// Unexpected config change.
 	#[display(fmt = "Unexpected config change")]
 	UnexpectedConfigChange,
@@ -467,7 +471,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, BS, Error>(BabeParams {
 #[must_use]
 pub struct BabeWorker<B: BlockT> {
 	inner: Pin<Box<dyn futures::Future<Output=()> + Send + 'static>>,
-	slot_notification_sinks: SlotNotificationSinks<B>,
+	slot_notification_sinks: Arc<Mutex<Vec<Sender<(u64, ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>)>>>>,
 }
 
 impl<B: BlockT> BabeWorker<B> {
@@ -475,7 +479,7 @@ impl<B: BlockT> BabeWorker<B> {
 	/// epoch descriptor.
 	pub fn slot_notification_stream(
 		&self
-	) -> Receiver<(Slot, ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>)> {
+	) -> Receiver<(u64, ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>)> {
 		const CHANNEL_BUFFER_SIZE: usize = 1024;
 
 		let (sink, stream) = channel(CHANNEL_BUFFER_SIZE);
@@ -496,9 +500,7 @@ impl<B: BlockT> futures::Future for BabeWorker<B> {
 }
 
 /// Slot notification sinks.
-type SlotNotificationSinks<B> = Arc<
-	Mutex<Vec<Sender<(Slot, ViableEpochDescriptor<<B as BlockT>::Hash, NumberFor<B>, Epoch>)>>>
->;
+type SlotNotificationSinks<B> = Arc<Mutex<Vec<Sender<(u64, ViableEpochDescriptor<<B as BlockT>::Hash, NumberFor<B>, Epoch>)>>>>;
 
 struct BabeSlotWorker<B: BlockT, C, E, I, SO, BS> {
 	client: Arc<C>,
@@ -549,13 +551,13 @@ where
 	fn epoch_data(
 		&self,
 		parent: &B::Header,
-		slot: Slot,
+		slot_number: u64,
 	) -> Result<Self::EpochData, ConsensusError> {
 		self.epoch_changes.lock().epoch_descriptor_for_child_of(
 			descendent_query(&*self.client),
 			&parent.hash(),
 			parent.number().clone(),
-			slot,
+			slot_number,
 		)
 			.map_err(|e| ConsensusError::ChainLookup(format!("{:?}", e)))?
 			.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)
@@ -570,12 +572,12 @@ where
 	fn claim_slot(
 		&self,
 		_parent_header: &B::Header,
-		slot: Slot,
+		slot_number: SlotNumber,
 		epoch_descriptor: &ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
 	) -> Option<Self::Claim> {
-		debug!(target: "babe", "Attempting to claim slot {}", slot);
+		debug!(target: "babe", "Attempting to claim slot {}", slot_number);
 		let s = authorship::claim_slot(
-			slot,
+			slot_number,
 			self.epoch_changes.lock().viable_epoch(
 				&epoch_descriptor,
 				|slot| Epoch::genesis(&self.config, slot)
@@ -584,7 +586,7 @@ where
 		);
 
 		if s.is_some() {
-			debug!(target: "babe", "Claimed slot {}", slot);
+			debug!(target: "babe", "Claimed slot {}", slot_number);
 		}
 
 		s
@@ -593,12 +595,12 @@ where
 	fn notify_slot(
 		&self,
 		_parent_header: &B::Header,
-		slot: Slot,
+		slot_number: SlotNumber,
 		epoch_descriptor: &ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
 	) {
 		self.slot_notification_sinks.lock()
 			.retain_mut(|sink| {
-				match sink.try_send((slot, epoch_descriptor.clone())) {
+				match sink.try_send((slot_number, epoch_descriptor.clone())) {
 					Ok(()) => true,
 					Err(e) => {
 						if e.is_full() {
@@ -614,7 +616,7 @@ where
 
 	fn pre_digest_data(
 		&self,
-		_slot: Slot,
+		_slot_number: u64,
 		claim: &Self::Claim,
 	) -> Vec<sp_runtime::DigestItem<B::Hash>> {
 		vec![
@@ -671,16 +673,16 @@ where
 		self.force_authoring
 	}
 
-	fn should_backoff(&self, slot: Slot, chain_head: &B::Header) -> bool {
+	fn should_backoff(&self, slot_number: u64, chain_head: &B::Header) -> bool {
 		if let Some(ref strategy) = self.backoff_authoring_blocks {
 			if let Ok(chain_head_slot) = find_pre_digest::<B>(chain_head)
-				.map(|digest| digest.slot())
+				.map(|digest| digest.slot_number())
 			{
 				return strategy.should_backoff(
 					*chain_head.number(),
 					chain_head_slot,
 					self.client.info().finalized_number,
-					slot,
+					slot_number,
 					self.logging_target(),
 				);
 			}
@@ -712,7 +714,7 @@ where
 
 		let parent_slot = match find_pre_digest::<B>(parent_head) {
 			Err(_) => return Some(slot_remaining),
-			Ok(d) => d.slot(),
+			Ok(d) => d.slot_number(),
 		};
 
 		if let Some(slot_lenience) =
@@ -721,7 +723,7 @@ where
 			debug!(
 				target: "babe",
 				"No block for {} slots. Applying exponential lenience of {}s",
-				slot_info.slot.saturating_sub(parent_slot + 1),
+				slot_info.number.saturating_sub(parent_slot + 1),
 				slot_lenience.as_secs(),
 			);
 
@@ -739,7 +741,7 @@ pub fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error
 	// dummy one to not break any invariants in the rest of the code
 	if header.number().is_zero() {
 		return Ok(PreDigest::SecondaryPlain(SecondaryPlainPreDigest {
-			slot: 0.into(),
+			slot_number: 0,
 			authority_index: 0,
 		}));
 	}
@@ -801,7 +803,7 @@ impl SlotCompatible for TimeSource {
 	fn extract_timestamp_and_slot(
 		&self,
 		data: &InherentData,
-	) -> Result<(TimestampInherent, Slot, std::time::Duration), sp_consensus::Error> {
+	) -> Result<(TimestampInherent, u64, std::time::Duration), sp_consensus::Error> {
 		trace!(target: "babe", "extract timestamp");
 		data.timestamp_inherent_data()
 			.and_then(|t| data.babe_inherent_data().map(|a| (t, a)))
@@ -886,8 +888,8 @@ where
 
 	fn check_and_report_equivocation(
 		&self,
-		slot_now: Slot,
-		slot: Slot,
+		slot_now: SlotNumber,
+		slot: SlotNumber,
 		header: &Block::Header,
 		author: &AuthorityId,
 		origin: &BlockOrigin,
@@ -1012,7 +1014,7 @@ where
 			descendent_query(&*self.client),
 			&parent_hash,
 			parent_header_metadata.number,
-			pre_digest.slot(),
+			pre_digest.slot_number(),
 		)
 			.map_err(|e| Error::<Block>::ForkTree(Box::new(e)))?
 			.ok_or_else(|| Error::<Block>::FetchEpoch(parent_hash))?;
@@ -1034,14 +1036,14 @@ where
 			CheckedHeader::Checked(pre_header, verified_info) => {
 				let babe_pre_digest = verified_info.pre_digest.as_babe_pre_digest()
 					.expect("check_header always returns a pre-digest digest item; qed");
-				let slot = babe_pre_digest.slot();
+				let slot_number = babe_pre_digest.slot_number();
 
 				// the header is valid but let's check if there was something else already
 				// proposed at the same slot by the given author. if there was, we will
 				// report the equivocation to the runtime.
 				if let Err(err) = self.check_and_report_equivocation(
 					slot_now,
-					slot,
+					slot_number,
 					&header,
 					&verified_info.author,
 					&origin,
@@ -1053,7 +1055,7 @@ where
 				// to check that the internally-set timestamp in the inherents
 				// actually matches the slot set in the seal.
 				if let Some(inner_body) = body.take() {
-					inherent_data.babe_replace_inherent_data(slot);
+					inherent_data.babe_replace_inherent_data(slot_number);
 					let block = Block::new(pre_header.clone(), inner_body);
 
 					self.check_inherents(
@@ -1183,7 +1185,7 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 		let pre_digest = find_pre_digest::<Block>(&block.header)
 			.expect("valid babe headers must contain a predigest; \
 					 header has been already verified; qed");
-		let slot = pre_digest.slot();
+		let slot_number = pre_digest.slot_number();
 
 		let parent_hash = *block.header.parent_hash();
 		let parent_header = self.client.header(BlockId::Hash(parent_hash))
@@ -1193,15 +1195,15 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 			).into()))?;
 
 		let parent_slot = find_pre_digest::<Block>(&parent_header)
-			.map(|d| d.slot())
+			.map(|d| d.slot_number())
 			.expect("parent is non-genesis; valid BABE headers contain a pre-digest; \
 					header has already been verified; qed");
 
 		// make sure that slot number is strictly increasing
-		if slot <= parent_slot {
+		if slot_number <= parent_slot {
 			return Err(
 				ConsensusError::ClientImport(babe_err(
-					Error::<Block>::SlotMustIncrease(parent_slot, slot)
+					Error::<Block>::SlotNumberMustIncrease(parent_slot, slot_number)
 				).into())
 			);
 		}
@@ -1254,7 +1256,7 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 			(true, false, _) => {
 				return Err(
 					ConsensusError::ClientImport(
-						babe_err(Error::<Block>::ExpectedEpochChange(hash, slot)).into(),
+						babe_err(Error::<Block>::ExpectedEpochChange(hash, slot_number)).into(),
 					)
 				)
 			},
@@ -1299,7 +1301,7 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 				"👶 New epoch {} launching at block {} (block slot {} >= start slot {}).",
 				viable_epoch.as_ref().epoch_index,
 				hash,
-				slot,
+				slot_number,
 				viable_epoch.as_ref().start_slot,
 			);
 
@@ -1424,7 +1426,7 @@ fn prune_finalized<Block, Client>(
 		find_pre_digest::<Block>(&finalized_header)
 			.expect("finalized header must be valid; \
 					 valid blocks have a pre-digest; qed")
-			.slot()
+			.slot_number()
 	};
 
 	epoch_changes.prune_finalized(
@@ -1531,7 +1533,7 @@ pub mod test_helpers {
 	/// Try to claim the given slot and return a `BabePreDigest` if
 	/// successful.
 	pub fn claim_slot<B, C>(
-		slot: Slot,
+		slot_number: u64,
 		parent: &B::Header,
 		client: &C,
 		keystore: SyncCryptoStorePtr,
@@ -1549,12 +1551,12 @@ pub mod test_helpers {
 			descendent_query(client),
 			&parent.hash(),
 			parent.number().clone(),
-			slot,
+			slot_number,
 			|slot| Epoch::genesis(&link.config, slot),
 		).unwrap().unwrap();
 
 		authorship::claim_slot(
-			slot,
+			slot_number,
 			&epoch,
 			&keystore,
 		).map(|(digest, _)| digest)

@@ -86,7 +86,7 @@ fn generate_impl_call(
 					&#input,
 				) {
 					Ok(res) => res,
-					Err(e) => panic!("Bad input data provided to {}: {}", #fn_name_str, e),
+					Err(e) => panic!("Bad input data provided to {}: {}", #fn_name_str, e.what()),
 				};
 
 			#[allow(deprecated)]
