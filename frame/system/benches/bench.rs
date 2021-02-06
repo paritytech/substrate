@@ -41,8 +41,8 @@ mod module {
 	);
 }
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
-type Block = frame_system::mocking::MockBlock<Test>;
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
+type Block = frame_system::mocking::MockBlock<Runtime>;
 
 frame_support::construct_runtime!(
 	pub enum Runtime where
@@ -51,7 +51,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Module: module::{Module, Call, Event<T>},
+		Module: module::{Module, Call, Event},
 	}
 );
 
