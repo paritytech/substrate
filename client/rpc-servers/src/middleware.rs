@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -32,36 +32,41 @@ use futures::{future::Either, Future};
 /// Metrics for RPC middleware
 #[derive(Debug, Clone)]
 pub struct RpcMetrics {
-	rpc_calls: CounterVec<U64>,
+	rpc_calls: Option<CounterVec<U64>>,
 }
 
 impl RpcMetrics {
 	/// Create an instance of metrics
 	pub fn new(metrics_registry: Option<&Registry>) -> Result<Self, PrometheusError> {
-		metrics_registry.and_then(|r| {
-			Some(RpcMetrics {
-				rpc_calls: register(CounterVec::new(
-					Opts::new(
-						"rpc_calls_total",
-						"Number of rpc calls received",
-					),
-					&["protocol"]
-				).ok()?, r).ok()?,
-			})
-		}).ok_or(PrometheusError::Msg("Cannot register metric".to_string()))
+		Ok(Self {
+			rpc_calls: metrics_registry.map(|r|
+				register(
+					CounterVec::new(
+						Opts::new(
+							"rpc_calls_total",
+							"Number of rpc calls received",
+						),
+						&["protocol"]
+					)?,
+					r,
+				)
+			).transpose()?,
+		})
 	}
 }
 
 /// Middleware for RPC calls
 pub struct RpcMiddleware {
-	metrics: Option<RpcMetrics>,
+	metrics: RpcMetrics,
 	transport_label: String,
 }
 
 impl RpcMiddleware {
-	/// Create an instance of middleware with provided metrics
-	/// transport_label is used as a label for Prometheus collector
-	pub fn new(metrics: Option<RpcMetrics>, transport_label: &str) -> Self {
+	/// Create an instance of middleware.
+	///
+	/// - `metrics`: Will be used to report statistics.
+	/// - `transport_label`: The label that is used when reporting the statistics.
+	pub fn new(metrics: RpcMetrics, transport_label: &str) -> Self {
 		RpcMiddleware {
 			metrics,
 			transport_label: String::from(transport_label),
@@ -78,8 +83,8 @@ impl<M: Metadata> RequestMiddleware<M> for RpcMiddleware {
 		F: Fn(Request, M) -> X + Send + Sync,
 		X: Future<Item = Option<Response>, Error = ()> + Send + 'static,
 	{
-		if let Some(ref metrics) = self.metrics {
-			metrics.rpc_calls.with_label_values(&[self.transport_label.as_str()]).inc();
+		if let Some(ref rpc_calls) = self.metrics.rpc_calls {
+			rpc_calls.with_label_values(&[self.transport_label.as_str()]).inc();
 		}
 
 		Either::B(next(request, meta))

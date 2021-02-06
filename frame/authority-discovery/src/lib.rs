@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,23 +17,25 @@
 
 //! # Authority discovery module.
 //!
-//! This module is used by the `client/authority-discovery` to retrieve the
-//! current set of authorities.
+//! This module is used by the `client/authority-discovery` and by polkadot's parachain logic
+//! to retrieve the current and the next set of authorities.
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::{collections::btree_set::BTreeSet, prelude::*};
-use frame_support::{decl_module, decl_storage};
+use sp_std::prelude::*;
+use frame_support::{decl_module, decl_storage, traits::OneSessionHandler};
 use sp_authority_discovery::AuthorityId;
 
 /// The module's config trait.
-pub trait Trait: frame_system::Trait + pallet_session::Trait {}
+pub trait Config: frame_system::Config + pallet_session::Config {}
 
 decl_storage! {
-	trait Store for Module<T: Trait> as AuthorityDiscovery {
-		/// Keys of the current and next authority set.
+	trait Store for Module<T: Config> as AuthorityDiscovery {
+		/// Keys of the current authority set.
 		Keys get(fn keys): Vec<AuthorityId>;
+		/// Keys of the next authority set.
+		NextKeys get(fn next_keys): Vec<AuthorityId>;
 	}
 	add_extra_genesis {
 		config(keys): Vec<AuthorityId>;
@@ -42,29 +44,48 @@ decl_storage! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 	}
 }
 
-impl<T: Trait> Module<T> {
-	/// Retrieve authority identifiers of the current and next authority set.
+impl<T: Config> Module<T> {
+	/// Retrieve authority identifiers of the current and next authority set
+	/// sorted and deduplicated.
 	pub fn authorities() -> Vec<AuthorityId> {
+		let mut keys = Keys::get();
+		let next = NextKeys::get();
+
+		keys.extend(next);
+		keys.sort();
+		keys.dedup();
+
+		keys
+	}
+
+	/// Retrieve authority identifiers of the current authority set in the original order.
+	pub fn current_authorities() -> Vec<AuthorityId> {
 		Keys::get()
+	}
+
+	/// Retrieve authority identifiers of the next authority set in the original order.
+	pub fn next_authorities() -> Vec<AuthorityId> {
+		NextKeys::get()
 	}
 
 	fn initialize_keys(keys: &[AuthorityId]) {
 		if !keys.is_empty() {
 			assert!(Keys::get().is_empty(), "Keys are already initialized!");
 			Keys::put(keys);
+			NextKeys::put(keys);
 		}
 	}
 }
 
-impl<T: Trait> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
+impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
 	type Public = AuthorityId;
 }
 
-impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
+impl<T: Config> OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(authorities: I)
@@ -80,8 +101,10 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 	{
 		// Remember who the authorities are for the new and next session.
 		if changed {
-			let keys = validators.chain(queued_validators).map(|x| x.1).collect::<BTreeSet<_>>();
-			Keys::put(keys.into_iter().collect::<Vec<_>>());
+			let keys = validators.map(|x| x.1);
+			Keys::put(keys.collect::<Vec<_>>());
+			let next_keys = queued_validators.map(|x| x.1);
+			NextKeys::put(next_keys.collect::<Vec<_>>());
 		}
 	}
 
@@ -92,8 +115,9 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 
 #[cfg(test)]
 mod tests {
+	use crate as pallet_authority_discovery;
 	use super::*;
-	use sp_authority_discovery::{AuthorityPair};
+	use sp_authority_discovery::AuthorityPair;
 	use sp_application_crypto::Pair;
 	use sp_core::{crypto::key_types, H256};
 	use sp_io::TestExternalities;
@@ -101,24 +125,35 @@ mod tests {
 		testing::{Header, UintAuthorityId}, traits::{ConvertInto, IdentityLookup, OpaqueKeys},
 		Perbill, KeyTypeId,
 	};
-	use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
+	use frame_support::parameter_types;
 
-	type AuthorityDiscovery = Module<Test>;
+	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+	type Block = frame_system::mocking::MockBlock<Test>;
 
-	#[derive(Clone, Eq, PartialEq)]
-	pub struct Test;
-	impl Trait for Test {}
+	frame_support::construct_runtime!(
+		pub enum Test where
+			Block = Block,
+			NodeBlock = Block,
+			UncheckedExtrinsic = UncheckedExtrinsic,
+		{
+			System: frame_system::{Module, Call, Config, Storage, Event<T>},
+			Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
+			AuthorityDiscovery: pallet_authority_discovery::{Module, Call, Config},
+		}
+	);
+
+	impl Config for Test {}
 
 	parameter_types! {
 		pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
 	}
 
-	impl pallet_session::Trait for Test {
+	impl pallet_session::Config for Test {
 		type SessionManager = ();
 		type Keys = UintAuthorityId;
 		type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
 		type SessionHandler = TestSessionHandler;
-		type Event = ();
+		type Event = Event;
 		type ValidatorId = AuthorityId;
 		type ValidatorIdOf = ConvertInto;
 		type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
@@ -126,7 +161,7 @@ mod tests {
 		type WeightInfo = ();
 	}
 
-	impl pallet_session::historical::Trait for Test {
+	impl pallet_session::historical::Config for Test {
 		type FullIdentification = ();
 		type FullIdentificationOf = ();
 	}
@@ -138,41 +173,33 @@ mod tests {
 		pub const Offset: BlockNumber = 0;
 		pub const UncleGenerations: u64 = 0;
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: Weight = 1024;
-		pub const MaximumBlockLength: u32 = 2 * 1024;
-		pub const AvailableBlockRatio: Perbill = Perbill::one();
+		pub BlockWeights: frame_system::limits::BlockWeights =
+			frame_system::limits::BlockWeights::simple_max(1024);
 	}
 
-	impl frame_system::Trait for Test {
+	impl frame_system::Config for Test {
 		type BaseCallFilter = ();
+		type BlockWeights = ();
+		type BlockLength = ();
+		type DbWeight = ();
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = BlockNumber;
-		type Call = ();
+		type Call = Call;
 		type Hash = H256;
 		type Hashing = ::sp_runtime::traits::BlakeTwo256;
 		type AccountId = AuthorityId;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = ();
+		type Event = Event;
 		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type DbWeight = ();
-		type BlockExecutionWeight = ();
-		type ExtrinsicBaseWeight = ();
-		type MaximumExtrinsicWeight = MaximumBlockWeight;
-		type AvailableBlockRatio = AvailableBlockRatio;
-		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();
-		type PalletInfo = ();
+		type PalletInfo = PalletInfo;
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
-	}
-
-	impl_outer_origin! {
-		pub enum Origin for Test where system = frame_system {}
+		type SS58Prefix = ();
 	}
 
 	pub struct TestSessionHandler;
@@ -228,7 +255,7 @@ mod tests {
 			.build_storage::<Test>()
 			.unwrap();
 
-		GenesisConfig {
+		pallet_authority_discovery::GenesisConfig {
 			keys: vec![],
 		}
 		.assimilate_storage::<Test>(&mut t)
@@ -238,7 +265,7 @@ mod tests {
 		let mut externalities = TestExternalities::new(t);
 
 		externalities.execute_with(|| {
-			use pallet_session::OneSessionHandler;
+			use frame_support::traits::OneSessionHandler;
 
 			AuthorityDiscovery::on_genesis_session(
 				first_authorities.iter().map(|id| (id, id.clone()))
@@ -254,8 +281,7 @@ mod tests {
 				second_authorities_and_account_ids.clone().into_iter(),
 				third_authorities_and_account_ids.clone().into_iter(),
 			);
-			let mut authorities_returned = AuthorityDiscovery::authorities();
-			authorities_returned.sort();
+			let authorities_returned = AuthorityDiscovery::authorities();
 			assert_eq!(
 				first_authorities,
 				authorities_returned,

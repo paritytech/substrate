@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,7 +18,7 @@
 
 //! On-demand requests service.
 
-use crate::light_client_handler;
+use crate::light_client_requests;
 
 use futures::{channel::oneshot, prelude::*};
 use parking_lot::Mutex;
@@ -45,10 +45,21 @@ pub struct OnDemand<B: BlockT> {
 	/// Note that a better alternative would be to use a MPMC queue here, and add a `poll` method
 	/// from the `OnDemand`. However there exists no popular implementation of MPMC channels in
 	/// asynchronous Rust at the moment
-	requests_queue: Mutex<Option<TracingUnboundedReceiver<light_client_handler::Request<B>>>>,
+	requests_queue: Mutex<Option<TracingUnboundedReceiver<light_client_requests::sender::Request<B>>>>,
 
 	/// Sending side of `requests_queue`.
-	requests_send: TracingUnboundedSender<light_client_handler::Request<B>>,
+	requests_send: TracingUnboundedSender<light_client_requests::sender::Request<B>>,
+}
+
+
+#[derive(Debug, thiserror::Error)]
+#[error("AlwaysBadChecker")]
+struct ErrorAlwaysBadChecker;
+
+impl Into<ClientError> for ErrorAlwaysBadChecker {
+	fn into(self) -> ClientError {
+		ClientError::Application(Box::new(self))
+	}
 }
 
 /// Dummy implementation of `FetchChecker` that always assumes that responses are bad.
@@ -65,7 +76,7 @@ impl<Block: BlockT> FetchChecker<Block> for AlwaysBadChecker {
 		_remote_header: Option<Block::Header>,
 		_remote_proof: StorageProof,
 	) -> Result<Block::Header, ClientError> {
-		Err(ClientError::Msg("AlwaysBadChecker".into()))
+		Err(ErrorAlwaysBadChecker.into())
 	}
 
 	fn check_read_proof(
@@ -73,7 +84,7 @@ impl<Block: BlockT> FetchChecker<Block> for AlwaysBadChecker {
 		_request: &RemoteReadRequest<Block::Header>,
 		_remote_proof: StorageProof,
 	) -> Result<HashMap<Vec<u8>,Option<Vec<u8>>>, ClientError> {
-		Err(ClientError::Msg("AlwaysBadChecker".into()))
+		Err(ErrorAlwaysBadChecker.into())
 	}
 
 	fn check_read_child_proof(
@@ -81,7 +92,7 @@ impl<Block: BlockT> FetchChecker<Block> for AlwaysBadChecker {
 		_request: &RemoteReadChildRequest<Block::Header>,
 		_remote_proof: StorageProof,
 	) -> Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError> {
-		Err(ClientError::Msg("AlwaysBadChecker".into()))
+		Err(ErrorAlwaysBadChecker.into())
 	}
 
 	fn check_execution_proof(
@@ -89,7 +100,7 @@ impl<Block: BlockT> FetchChecker<Block> for AlwaysBadChecker {
 		_request: &RemoteCallRequest<Block::Header>,
 		_remote_proof: StorageProof,
 	) -> Result<Vec<u8>, ClientError> {
-		Err(ClientError::Msg("AlwaysBadChecker".into()))
+		Err(ErrorAlwaysBadChecker.into())
 	}
 
 	fn check_changes_proof(
@@ -97,7 +108,7 @@ impl<Block: BlockT> FetchChecker<Block> for AlwaysBadChecker {
 		_request: &RemoteChangesRequest<Block::Header>,
 		_remote_proof: ChangesProof<Block::Header>
 	) -> Result<Vec<(NumberFor<Block>, u32)>, ClientError> {
-		Err(ClientError::Msg("AlwaysBadChecker".into()))
+		Err(ErrorAlwaysBadChecker.into())
 	}
 
 	fn check_body_proof(
@@ -105,7 +116,7 @@ impl<Block: BlockT> FetchChecker<Block> for AlwaysBadChecker {
 		_request: &RemoteBodyRequest<Block::Header>,
 		_body: Vec<Block::Extrinsic>
 	) -> Result<Vec<Block::Extrinsic>, ClientError> {
-		Err(ClientError::Msg("AlwaysBadChecker".into()))
+		Err(ErrorAlwaysBadChecker.into())
 	}
 }
 
@@ -138,7 +149,7 @@ where
 	/// If this function returns `None`, that means that the receiver has already been extracted in
 	/// the past, and therefore that something already handles the requests.
 	pub(crate) fn extract_receiver(&self)
-		-> Option<TracingUnboundedReceiver<light_client_handler::Request<B>>>
+		-> Option<TracingUnboundedReceiver<light_client_requests::sender::Request<B>>>
 	{
 		self.requests_queue.lock().take()
 	}
@@ -159,7 +170,7 @@ where
 		let (sender, receiver) = oneshot::channel();
 		let _ = self
 			.requests_send
-			.unbounded_send(light_client_handler::Request::Header { request, sender });
+			.unbounded_send(light_client_requests::sender::Request::Header { request, sender });
 		RemoteResponse { receiver }
 	}
 
@@ -167,7 +178,7 @@ where
 		let (sender, receiver) = oneshot::channel();
 		let _ = self
 			.requests_send
-			.unbounded_send(light_client_handler::Request::Read { request, sender });
+			.unbounded_send(light_client_requests::sender::Request::Read { request, sender });
 		RemoteResponse { receiver }
 	}
 
@@ -178,7 +189,7 @@ where
 		let (sender, receiver) = oneshot::channel();
 		let _ = self
 			.requests_send
-			.unbounded_send(light_client_handler::Request::ReadChild { request, sender });
+			.unbounded_send(light_client_requests::sender::Request::ReadChild { request, sender });
 		RemoteResponse { receiver }
 	}
 
@@ -186,7 +197,7 @@ where
 		let (sender, receiver) = oneshot::channel();
 		let _ = self
 			.requests_send
-			.unbounded_send(light_client_handler::Request::Call { request, sender });
+			.unbounded_send(light_client_requests::sender::Request::Call { request, sender });
 		RemoteResponse { receiver }
 	}
 
@@ -197,7 +208,7 @@ where
 		let (sender, receiver) = oneshot::channel();
 		let _ = self
 			.requests_send
-			.unbounded_send(light_client_handler::Request::Changes { request, sender });
+			.unbounded_send(light_client_requests::sender::Request::Changes { request, sender });
 		RemoteResponse { receiver }
 	}
 
@@ -205,7 +216,7 @@ where
 		let (sender, receiver) = oneshot::channel();
 		let _ = self
 			.requests_send
-			.unbounded_send(light_client_handler::Request::Body { request, sender });
+			.unbounded_send(light_client_requests::sender::Request::Body { request, sender });
 		RemoteResponse { receiver }
 	}
 }

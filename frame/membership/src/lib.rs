@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -30,9 +30,9 @@ use frame_support::{
 };
 use frame_system::ensure_signed;
 
-pub trait Trait<I=DefaultInstance>: frame_system::Trait {
+pub trait Config<I=DefaultInstance>: frame_system::Config {
 	/// The overarching event type.
-	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// Required origin for adding a member (though can always be Root).
 	type AddOrigin: EnsureOrigin<Self::Origin>;
@@ -59,7 +59,7 @@ pub trait Trait<I=DefaultInstance>: frame_system::Trait {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Membership {
+	trait Store for Module<T: Config<I>, I: Instance=DefaultInstance> as Membership {
 		/// The current membership, stored as an ordered Vec.
 		Members get(fn members): Vec<T::AccountId>;
 
@@ -80,8 +80,8 @@ decl_storage! {
 
 decl_event!(
 	pub enum Event<T, I=DefaultInstance> where
-		<T as frame_system::Trait>::AccountId,
-		<T as Trait<I>>::Event,
+		<T as frame_system::Config>::AccountId,
+		<T as Config<I>>::Event,
 	{
 		/// The given member was added; see the transaction for who.
 		MemberAdded,
@@ -100,7 +100,7 @@ decl_event!(
 
 decl_error! {
 	/// Error for the nicks module.
-	pub enum Error for Module<T: Trait<I>, I: Instance> {
+	pub enum Error for Module<T: Config<I>, I: Instance> {
 		/// Already a member.
 		AlreadyMember,
 		/// Not a member.
@@ -109,7 +109,7 @@ decl_error! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait<I>, I: Instance=DefaultInstance>
+	pub struct Module<T: Config<I>, I: Instance=DefaultInstance>
 		for enum Call
 		where origin: T::Origin
 	{
@@ -253,7 +253,7 @@ decl_module! {
 	}
 }
 
-impl<T: Trait<I>, I: Instance> Module<T, I> {
+impl<T: Config<I>, I: Instance> Module<T, I> {
 	fn rejig_prime(members: &[T::AccountId]) {
 		if let Some(prime) = Prime::<T, I>::get() {
 			match members.binary_search(&prime) {
@@ -264,7 +264,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	}
 }
 
-impl<T: Trait<I>, I: Instance> Contains<T::AccountId> for Module<T, I> {
+impl<T: Config<I>, I: Instance> Contains<T::AccountId> for Module<T, I> {
 	fn sorted_members() -> Vec<T::AccountId> {
 		Self::members()
 	}
@@ -277,54 +277,57 @@ impl<T: Trait<I>, I: Instance> Contains<T::AccountId> for Module<T, I> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate as pallet_membership;
 
-	use std::cell::RefCell;
-	use frame_support::{
-		assert_ok, assert_noop, impl_outer_origin, parameter_types, weights::Weight,
-		ord_parameter_types
-	};
+	use frame_support::{assert_ok, assert_noop, parameter_types, ord_parameter_types};
 	use sp_core::H256;
-	use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup, BadOrigin}, testing::Header};
+	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup, BadOrigin}, testing::Header};
 	use frame_system::EnsureSignedBy;
 
-	impl_outer_origin! {
-		pub enum Origin for Test where system = frame_system {}
-	}
+	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+	type Block = frame_system::mocking::MockBlock<Test>;
 
-	#[derive(Clone, Eq, PartialEq)]
-	pub struct Test;
+	frame_support::construct_runtime!(
+		pub enum Test where
+			Block = Block,
+			NodeBlock = Block,
+			UncheckedExtrinsic = UncheckedExtrinsic,
+		{
+			System: frame_system::{Module, Call, Config, Storage, Event<T>},
+			Membership: pallet_membership::{Module, Call, Storage, Config<T>, Event<T>},
+		}
+	);
+
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: Weight = 1024;
-		pub const MaximumBlockLength: u32 = 2 * 1024;
-		pub const AvailableBlockRatio: Perbill = Perbill::one();
+		pub BlockWeights: frame_system::limits::BlockWeights =
+			frame_system::limits::BlockWeights::simple_max(1024);
+		pub static Members: Vec<u64> = vec![];
+		pub static Prime: Option<u64> = None;
 	}
-	impl frame_system::Trait for Test {
+	impl frame_system::Config for Test {
 		type BaseCallFilter = ();
+		type BlockWeights = ();
+		type BlockLength = ();
+		type DbWeight = ();
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
-		type Call = ();
+		type Call = Call;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = ();
+		type Event = Event;
 		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type DbWeight = ();
-		type BlockExecutionWeight = ();
-		type ExtrinsicBaseWeight = ();
-		type MaximumExtrinsicWeight = MaximumBlockWeight;
-		type MaximumBlockLength = MaximumBlockLength;
-		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
-		type PalletInfo = ();
+		type PalletInfo = PalletInfo;
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
+		type SS58Prefix = ();
 	}
 	ord_parameter_types! {
 		pub const One: u64 = 1;
@@ -332,11 +335,6 @@ mod tests {
 		pub const Three: u64 = 3;
 		pub const Four: u64 = 4;
 		pub const Five: u64 = 5;
-	}
-
-	thread_local! {
-		static MEMBERS: RefCell<Vec<u64>> = RefCell::new(vec![]);
-		static PRIME: RefCell<Option<u64>> = RefCell::new(None);
 	}
 
 	pub struct TestChangeMembers;
@@ -363,8 +361,8 @@ mod tests {
 		}
 	}
 
-	impl Trait for Test {
-		type Event = ();
+	impl Config for Test {
+		type Event = Event;
 		type AddOrigin = EnsureSignedBy<One, u64>;
 		type RemoveOrigin = EnsureSignedBy<Two, u64>;
 		type SwapOrigin = EnsureSignedBy<Three, u64>;
@@ -374,12 +372,10 @@ mod tests {
 		type MembershipChanged = TestChangeMembers;
 	}
 
-	type Membership = Module<Test>;
-
 	fn new_test_ext() -> sp_io::TestExternalities {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
-		GenesisConfig::<Test>{
+		pallet_membership::GenesisConfig::<Test>{
 			members: vec![10, 20, 30],
 			.. Default::default()
 		}.assimilate_storage(&mut t).unwrap();

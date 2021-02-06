@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,6 +21,7 @@ use super::*;
 use crate::Module as Staking;
 use testing_utils::*;
 
+use sp_npos_elections::CompactSolution;
 use sp_runtime::traits::One;
 use frame_system::RawOrigin;
 pub use frame_benchmarking::{benchmarks, account, whitelisted_caller, whitelist_account};
@@ -31,7 +32,7 @@ const MAX_SLASHES: u32 = 1000;
 
 // Add slashing spans to a user account. Not relevant for actual use, only to benchmark
 // read and write operations.
-fn add_slashing_spans<T: Trait>(who: &T::AccountId, spans: u32) {
+fn add_slashing_spans<T: Config>(who: &T::AccountId, spans: u32) {
 	if spans == 0 { return }
 
 	// For the first slashing span, we initialize
@@ -45,20 +46,24 @@ fn add_slashing_spans<T: Trait>(who: &T::AccountId, spans: u32) {
 	SlashingSpans::<T>::insert(who, slashing_spans);
 }
 
-// This function generates one validator being nominated by n nominators, and returns the validator
-// stash account and the nominators' stash and controller. It also starts an era and creates pending payouts.
-pub fn create_validator_with_nominators<T: Trait>(
+// This function clears all existing validators and nominators from the set, and generates one new
+// validator being nominated by n nominators, and returns the validator stash account and the
+// nominators' stash and controller. It also starts an era and creates pending payouts.
+pub fn create_validator_with_nominators<T: Config>(
 	n: u32,
 	upper_bound: u32,
 	dead: bool,
 	destination: RewardDestination<T::AccountId>
 ) -> Result<(T::AccountId, Vec<(T::AccountId, T::AccountId)>), &'static str> {
+	// Clean up any existing state.
+	clear_validators_and_nominators::<T>();
 	let mut points_total = 0;
 	let mut points_individual = Vec::new();
 
 	let (v_stash, v_controller) = create_stash_controller::<T>(0, 100, destination.clone())?;
 	let validator_prefs = ValidatorPrefs {
 		commission: Perbill::from_percent(50),
+		.. Default::default()
 	};
 	Staking::<T>::validate(RawOrigin::Signed(v_controller).into(), validator_prefs)?;
 	let stash_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(v_stash.clone());
@@ -101,7 +106,7 @@ pub fn create_validator_with_nominators<T: Trait>(
 	// Create reward pool
 	let total_payout = T::Currency::minimum_balance()
 		.saturating_mul(upper_bound.into())
-		.saturating_mul(1000.into());
+		.saturating_mul(1000u32.into());
 	<ErasValidatorReward<T>>::insert(current_era, total_payout);
 
 	Ok((v_stash, nominators))
@@ -110,14 +115,12 @@ pub fn create_validator_with_nominators<T: Trait>(
 const USER_SEED: u32 = 999666;
 
 benchmarks! {
-	_{}
-
 	bond {
 		let stash = create_funded_user::<T>("stash", USER_SEED, 100);
 		let controller = create_funded_user::<T>("controller", USER_SEED, 100);
 		let controller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(controller.clone());
 		let reward_destination = RewardDestination::Staked;
-		let amount = T::Currency::minimum_balance() * 10.into();
+		let amount = T::Currency::minimum_balance() * 10u32.into();
 		whitelist_account!(stash);
 	}: _(RawOrigin::Signed(stash.clone()), controller_lookup, amount, reward_destination)
 	verify {
@@ -127,7 +130,7 @@ benchmarks! {
 
 	bond_extra {
 		let (stash, controller) = create_stash_controller::<T>(USER_SEED, 100, Default::default())?;
-		let max_additional = T::Currency::minimum_balance() * 10.into();
+		let max_additional = T::Currency::minimum_balance() * 10u32.into();
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created before")?;
 		let original_bonded: BalanceOf<T> = ledger.active;
 		whitelist_account!(stash);
@@ -140,7 +143,7 @@ benchmarks! {
 
 	unbond {
 		let (_, controller) = create_stash_controller::<T>(USER_SEED, 100, Default::default())?;
-		let amount = T::Currency::minimum_balance() * 10.into();
+		let amount = T::Currency::minimum_balance() * 10u32.into();
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created before")?;
 		let original_bonded: BalanceOf<T> = ledger.active;
 		whitelist_account!(controller);
@@ -157,7 +160,7 @@ benchmarks! {
 		let s in 0 .. MAX_SPANS;
 		let (stash, controller) = create_stash_controller::<T>(0, 100, Default::default())?;
 		add_slashing_spans::<T>(&stash, s);
-		let amount = T::Currency::minimum_balance() * 5.into(); // Half of total
+		let amount = T::Currency::minimum_balance() * 5u32.into(); // Half of total
 		Staking::<T>::unbond(RawOrigin::Signed(controller.clone()).into(), amount)?;
 		CurrentEra::put(EraIndex::max_value());
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created before")?;
@@ -176,7 +179,7 @@ benchmarks! {
 		let s in 0 .. MAX_SPANS;
 		let (stash, controller) = create_stash_controller::<T>(0, 100, Default::default())?;
 		add_slashing_spans::<T>(&stash, s);
-		let amount = T::Currency::minimum_balance() * 10.into();
+		let amount = T::Currency::minimum_balance() * 10u32.into();
 		Staking::<T>::unbond(RawOrigin::Signed(controller.clone()).into(), amount)?;
 		CurrentEra::put(EraIndex::max_value());
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created before")?;
@@ -194,6 +197,61 @@ benchmarks! {
 	}: _(RawOrigin::Signed(controller), prefs)
 	verify {
 		assert!(Validators::<T>::contains_key(stash));
+	}
+
+	kick {
+		// scenario: we want to kick `k` nominators from nominating us (we are a validator).
+		// we'll assume that `k` is under 128 for the purposes of determining the slope.
+		// each nominator should have `MAX_NOMINATIONS` validators nominated, and our validator
+		// should be somewhere in there.
+		let k in 1 .. 128;
+
+		// these are the other validators; there are `MAX_NOMINATIONS - 1` of them, so there are a
+		// total of `MAX_NOMINATIONS` validators in the system.
+		let rest_of_validators = create_validators::<T>(MAX_NOMINATIONS as u32 - 1, 100)?;
+
+		// this is the validator that will be kicking.
+		let (stash, controller) = create_stash_controller::<T>(MAX_NOMINATIONS as u32 - 1, 100, Default::default())?;
+		let stash_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(stash.clone());
+
+		// they start validating.
+		Staking::<T>::validate(RawOrigin::Signed(controller.clone()).into(), Default::default())?;
+
+		// we now create the nominators. there will be `k` of them; each will nominate all
+		// validators. we will then kick each of the `k` nominators from the main validator.
+		let mut nominator_stashes = Vec::with_capacity(k as usize);
+		for i in 0 .. k {
+			// create a nominator stash.
+			let (n_stash, n_controller) = create_stash_controller::<T>(MAX_NOMINATIONS as u32 + i, 100, Default::default())?;
+
+			// bake the nominations; we first clone them from the rest of the validators.
+			let mut nominations = rest_of_validators.clone();
+			// then insert "our" validator somewhere in there (we vary it) to avoid accidental
+			// optimisations/pessimisations.
+			nominations.insert(i as usize % (nominations.len() + 1), stash_lookup.clone());
+			// then we nominate.
+			Staking::<T>::nominate(RawOrigin::Signed(n_controller.clone()).into(), nominations)?;
+
+			nominator_stashes.push(n_stash);
+		}
+
+		// all nominators now should be nominating our validator...
+		for n in nominator_stashes.iter() {
+			assert!(Nominators::<T>::get(n).unwrap().targets.contains(&stash));
+		}
+
+		// we need the unlookuped version of the nominator stash for the kick.
+		let kicks = nominator_stashes.iter()
+			.map(|n| T::Lookup::unlookup(n.clone()))
+			.collect::<Vec<_>>();
+
+		whitelist_account!(controller);
+	}: _(RawOrigin::Signed(controller), kicks)
+	verify {
+		// all nominators now should *not* be nominating our validator...
+		for n in nominator_stashes.iter() {
+			assert!(!Nominators::<T>::get(n).unwrap().targets.contains(&stash));
+		}
 	}
 
 	// Worst case scenario, MAX_NOMINATIONS
@@ -286,8 +344,6 @@ benchmarks! {
 
 	payout_stakers_dead_controller {
 		let n in 1 .. T::MaxNominatorRewardedPerValidator::get() as u32;
-		// Clean up existing validators
-		Validators::<T>::remove_all();
 		let (validator, nominators) = create_validator_with_nominators::<T>(
 			n,
 			T::MaxNominatorRewardedPerValidator::get() as u32,
@@ -321,8 +377,6 @@ benchmarks! {
 
 	payout_stakers_alive_staked {
 		let n in 1 .. T::MaxNominatorRewardedPerValidator::get() as u32;
-		// Clean up existing validators
-		Validators::<T>::remove_all();
 		let (validator, nominators) = create_validator_with_nominators::<T>(
 			n,
 			T::MaxNominatorRewardedPerValidator::get() as u32,
@@ -362,7 +416,7 @@ benchmarks! {
 		let (_, controller) = create_stash_controller::<T>(USER_SEED, 100, Default::default())?;
 		let mut staking_ledger = Ledger::<T>::get(controller.clone()).unwrap();
 		let unlock_chunk = UnlockChunk::<BalanceOf<T>> {
-			value: 1.into(),
+			value: 1u32.into(),
 			era: EraIndex::zero(),
 		};
 		for _ in 0 .. l {
@@ -400,7 +454,7 @@ benchmarks! {
 		let s in 1 .. MAX_SPANS;
 		let (stash, controller) = create_stash_controller::<T>(0, 100, Default::default())?;
 		add_slashing_spans::<T>(&stash, s);
-		T::Currency::make_free_balance_be(&stash, 0.into());
+		T::Currency::make_free_balance_be(&stash, T::Currency::minimum_balance());
 		whitelist_account!(controller);
 	}: _(RawOrigin::Signed(controller), stash.clone(), s)
 	verify {
@@ -447,7 +501,7 @@ benchmarks! {
 		ErasRewardPoints::<T>::insert(current_era, reward);
 
 		// Create reward pool
-		let total_payout = T::Currency::minimum_balance() * 1000.into();
+		let total_payout = T::Currency::minimum_balance() * 1000u32.into();
 		<ErasValidatorReward<T>>::insert(current_era, total_payout);
 
 		let caller: T::AccountId = whitelisted_caller();
@@ -463,14 +517,14 @@ benchmarks! {
 		let (stash, controller) = create_stash_controller::<T>(0, 100, Default::default())?;
 		let mut staking_ledger = Ledger::<T>::get(controller.clone()).unwrap();
 		let unlock_chunk = UnlockChunk::<BalanceOf<T>> {
-			value: 1.into(),
+			value: 1u32.into(),
 			era: EraIndex::zero(),
 		};
 		for _ in 0 .. l {
 			staking_ledger.unlocking.push(unlock_chunk.clone())
 		}
 		Ledger::<T>::insert(controller, staking_ledger);
-		let slash_amount = T::Currency::minimum_balance() * 10.into();
+		let slash_amount = T::Currency::minimum_balance() * 10u32.into();
 		let balance_before = T::Currency::free_balance(&stash);
 	}: {
 		crate::slashing::do_slash::<T>(
@@ -522,7 +576,12 @@ benchmarks! {
 			compact,
 			score,
 			size
-		) = offchain_election::prepare_submission::<T>(assignments, winners, false, T::MaximumBlockWeight::get()).unwrap();
+		) = offchain_election::prepare_submission::<T>(
+			assignments,
+			winners,
+			false,
+			T::BlockWeights::get().max_block,
+		).unwrap();
 
 		assert_eq!(
 			winners.len(), compact.unique_targets().len(),
@@ -590,7 +649,12 @@ benchmarks! {
 			compact,
 			score,
 			size
-		) = offchain_election::prepare_submission::<T>(assignments, winners, false, T::MaximumBlockWeight::get()).unwrap();
+		) = offchain_election::prepare_submission::<T>(
+			assignments,
+			winners,
+			false,
+			T::BlockWeights::get().max_block,
+		).unwrap();
 
 		assert_eq!(
 			winners.len(), compact.unique_targets().len(),
@@ -708,7 +772,7 @@ mod tests {
 
 	#[test]
 	fn create_validators_with_nominators_for_era_works() {
-		ExtBuilder::default().has_stakers(false).build().execute_with(|| {
+		ExtBuilder::default().has_stakers(true).build().execute_with(|| {
 			let v = 10;
 			let n = 100;
 
@@ -725,12 +789,12 @@ mod tests {
 
 	#[test]
 	fn create_validator_with_nominators_works() {
-		ExtBuilder::default().has_stakers(false).build().execute_with(|| {
+		ExtBuilder::default().has_stakers(true).build().execute_with(|| {
 			let n = 10;
 
 			let (validator_stash, nominators) = create_validator_with_nominators::<Test>(
 				n,
-				<Test as Trait>::MaxNominatorRewardedPerValidator::get() as u32,
+				<Test as Config>::MaxNominatorRewardedPerValidator::get() as u32,
 				false,
 				RewardDestination::Staked,
 			).unwrap();
@@ -749,12 +813,12 @@ mod tests {
 
 	#[test]
 	fn add_slashing_spans_works() {
-		ExtBuilder::default().has_stakers(false).build().execute_with(|| {
+		ExtBuilder::default().has_stakers(true).build().execute_with(|| {
 			let n = 10;
 
 			let (validator_stash, _nominators) = create_validator_with_nominators::<Test>(
 				n,
-				<Test as Trait>::MaxNominatorRewardedPerValidator::get() as u32,
+				<Test as Config>::MaxNominatorRewardedPerValidator::get() as u32,
 				false,
 				RewardDestination::Staked,
 			).unwrap();
@@ -780,7 +844,7 @@ mod tests {
 
 	#[test]
 	fn test_payout_all() {
-		ExtBuilder::default().has_stakers(false).build().execute_with(|| {
+		ExtBuilder::default().has_stakers(true).build().execute_with(|| {
 			let v = 10;
 			let n = 100;
 
@@ -799,13 +863,14 @@ mod tests {
 
 	#[test]
 	fn test_benchmarks() {
-		ExtBuilder::default().has_stakers(false).build().execute_with(|| {
+		ExtBuilder::default().has_stakers(true).build().execute_with(|| {
 			assert_ok!(test_benchmark_bond::<Test>());
 			assert_ok!(test_benchmark_bond_extra::<Test>());
 			assert_ok!(test_benchmark_unbond::<Test>());
 			assert_ok!(test_benchmark_withdraw_unbonded_update::<Test>());
 			assert_ok!(test_benchmark_withdraw_unbonded_kill::<Test>());
 			assert_ok!(test_benchmark_validate::<Test>());
+			assert_ok!(test_benchmark_kick::<Test>());
 			assert_ok!(test_benchmark_nominate::<Test>());
 			assert_ok!(test_benchmark_chill::<Test>());
 			assert_ok!(test_benchmark_set_payee::<Test>());

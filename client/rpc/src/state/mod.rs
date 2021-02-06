@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -28,7 +28,7 @@ use std::sync::Arc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId, manager::SubscriptionManager};
 use rpc::{Result as RpcResult, futures::{Future, future::result}};
 
-use sc_rpc_api::state::ReadProof;
+use sc_rpc_api::{DenyUnsafe, state::ReadProof};
 use sc_client_api::light::{RemoteBlockchain, Fetcher};
 use sp_core::{Bytes, storage::{StorageKey, PrefixedStorageKey, StorageData, StorageChangeSet}};
 use sp_version::RuntimeVersion;
@@ -171,6 +171,7 @@ pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 pub fn new_full<BE, Block: BlockT, Client>(
 	client: Arc<Client>,
 	subscriptions: SubscriptionManager,
+	deny_unsafe: DenyUnsafe,
 ) -> (State<Block, Client>, ChildState<Block, Client>)
 	where
 		Block: BlockT + 'static,
@@ -185,7 +186,7 @@ pub fn new_full<BE, Block: BlockT, Client>(
 		self::state_full::FullState::new(client.clone(), subscriptions.clone())
 	);
 	let backend = Box::new(self::state_full::FullState::new(client, subscriptions));
-	(State { backend }, ChildState { backend: child_backend })
+	(State { backend, deny_unsafe }, ChildState { backend: child_backend })
 }
 
 /// Create new state API that works on light node.
@@ -194,6 +195,7 @@ pub fn new_light<BE, Block: BlockT, Client, F: Fetcher<Block>>(
 	subscriptions: SubscriptionManager,
 	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 	fetcher: Arc<F>,
+	deny_unsafe: DenyUnsafe,
 ) -> (State<Block, Client>, ChildState<Block, Client>)
 	where
 		Block: BlockT + 'static,
@@ -217,12 +219,14 @@ pub fn new_light<BE, Block: BlockT, Client, F: Fetcher<Block>>(
 			remote_blockchain,
 			fetcher,
 	));
-	(State { backend }, ChildState { backend: child_backend })
+	(State { backend, deny_unsafe }, ChildState { backend: child_backend })
 }
 
 /// State API with subscriptions support.
 pub struct State<Block, Client> {
 	backend: Box<dyn StateBackend<Block, Client>>,
+	/// Whether to deny unsafe calls
+	deny_unsafe: DenyUnsafe,
 }
 
 impl<Block, Client> StateApi<Block::Hash> for State<Block, Client>
@@ -249,6 +253,10 @@ impl<Block, Client> StateApi<Block::Hash> for State<Block, Client>
 		key_prefix: StorageKey,
 		block: Option<Block::Hash>,
 	) -> FutureResult<Vec<(StorageKey, StorageData)>> {
+		if let Err(err) = self.deny_unsafe.check_if_safe() {
+			return Box::new(result(Err(err.into())))
+		}
+
 		self.backend.storage_pairs(block, key_prefix)
 	}
 
@@ -292,6 +300,10 @@ impl<Block, Client> StateApi<Block::Hash> for State<Block, Client>
 		from: Block::Hash,
 		to: Option<Block::Hash>
 	) -> FutureResult<Vec<StorageChangeSet<Block::Hash>>> {
+		if let Err(err) = self.deny_unsafe.check_if_safe() {
+			return Box::new(result(Err(err.into())))
+		}
+
 		self.backend.query_storage(from, to, keys)
 	}
 

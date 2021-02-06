@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -153,6 +153,25 @@ impl From<BadOrigin> for &'static str {
 	}
 }
 
+/// Error that can be returned by our impl of `StoredMap`.
+#[derive(Encode, Decode, RuntimeDebug)]
+pub enum StoredMapError {
+	/// Attempt to create map value when it is a consumer and there are no providers in place.
+	NoProviders,
+	/// Attempt to anull/remove value when it is the last provider and there is still at
+	/// least one consumer left.
+	ConsumerRemaining,
+}
+
+impl From<StoredMapError> for &'static str {
+	fn from(e: StoredMapError) -> &'static str {
+		match e {
+			StoredMapError::NoProviders => "No providers",
+			StoredMapError::ConsumerRemaining => "Consumer remaining",
+		}
+	}
+}
+
 /// An error that indicates that a lookup failed.
 #[derive(Encode, Decode, RuntimeDebug)]
 pub struct LookupError;
@@ -207,6 +226,44 @@ impl<T> Lookup for IdentityLookup<T> {
 	type Source = T;
 	type Target = T;
 	fn lookup(&self, x: T) -> Result<T, LookupError> { Ok(x) }
+}
+
+/// A lookup implementation returning the `AccountId` from a `MultiAddress`.
+pub struct AccountIdLookup<AccountId, AccountIndex>(PhantomData<(AccountId, AccountIndex)>);
+impl<AccountId, AccountIndex> StaticLookup for AccountIdLookup<AccountId, AccountIndex>
+where
+	AccountId: Codec + Clone + PartialEq + Debug,
+	AccountIndex: Codec + Clone + PartialEq + Debug,
+	crate::MultiAddress<AccountId, AccountIndex>: Codec,
+{
+	type Source = crate::MultiAddress<AccountId, AccountIndex>;
+	type Target = AccountId;
+	fn lookup(x: Self::Source) -> Result<Self::Target, LookupError> {
+		match x {
+			crate::MultiAddress::Id(i) => Ok(i),
+			_ => Err(LookupError),
+		}
+	}
+	fn unlookup(x: Self::Target) -> Self::Source {
+		crate::MultiAddress::Id(x)
+	}
+}
+
+/// Perform a StaticLookup where there are multiple lookup sources of the same type.
+impl<A, B> StaticLookup for (A, B)
+where
+	A: StaticLookup,
+	B: StaticLookup<Source = A::Source, Target = A::Target>,
+{
+	type Source = A::Source;
+	type Target = A::Target;
+
+	fn lookup(x: Self::Source) -> Result<Self::Target, LookupError> {
+		A::lookup(x.clone()).or_else(|_| B::lookup(x))
+	}
+	fn unlookup(x: Self::Target) -> Self::Source {
+		A::unlookup(x)
+	}
 }
 
 /// Extensible conversion trait. Generic over both source and destination types.
@@ -655,7 +712,7 @@ pub trait Dispatchable {
 	/// identifier for the caller. The origin can be empty in the case of an inherent extrinsic.
 	type Origin;
 	/// ...
-	type Trait;
+	type Config;
 	/// An opaque set of information attached to the transaction. This could be constructed anywhere
 	/// down the line in a runtime. The current Substrate runtime uses a struct with the same name
 	/// to represent the dispatch class and weight.
@@ -674,7 +731,7 @@ pub type PostDispatchInfoOf<T> = <T as Dispatchable>::PostInfo;
 
 impl Dispatchable for () {
 	type Origin = ();
-	type Trait = ();
+	type Config = ();
 	type Info = ();
 	type PostInfo = ();
 	fn dispatch(self, _origin: Self::Origin) -> crate::DispatchResultWithInfo<Self::PostInfo> {

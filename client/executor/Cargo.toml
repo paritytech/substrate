@@ -1,6 +1,6 @@
 [package]
 name = "sc-executor"
-version = "0.8.0"
+version = "0.8.1"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
@@ -15,9 +15,10 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 derive_more = "0.99.2"
-codec = { package = "parity-scale-codec", version = "1.3.4" }
+codec = { package = "parity-scale-codec", version = "2.0.0" }
 sp-io = { version = "2.0.0", path = "../../primitives/io" }
 sp-core = { version = "2.0.0", path = "../../primitives/core" }
+sp-tasks = { version = "2.0.0", path = "../../primitives/tasks" }
 sp-trie = { version = "2.0.0", path = "../../primitives/trie" }
 sp-serializer = { version = "2.0.0", path = "../../primitives/serializer" }
 sp-version = { version = "2.0.0", path = "../../primitives/version" }
@@ -32,7 +33,7 @@ sp-externalities = { version = "0.8.0", path = "../../primitives/externalities" 
 sc-executor-common = { version = "0.8.0", path = "common" }
 sc-executor-wasmi = { version = "0.8.0", path = "wasmi" }
 sc-executor-wasmtime = { version = "0.8.0", path = "wasmtime", optional = true }
-parking_lot = "0.10.0"
+parking_lot = "0.11.1"
 log = "0.4.8"
 libsecp256k1 = "0.3.4"
 
@@ -43,12 +44,12 @@ hex-literal = "0.3.1"
 sc-runtime-test = { version = "2.0.0", path = "runtime-test" }
 substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime" }
 sp-state-machine = { version = "0.8.0", path = "../../primitives/state-machine" }
-test-case = "0.3.3"
 sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
 sp-tracing = { version = "2.0.0", path = "../../primitives/tracing" }
 sc-tracing = { version = "2.0.0", path = "../tracing" }
-tracing = "0.1.19"
-tracing-subscriber = "0.2.10"
+tracing = "0.1.22"
+tracing-subscriber = "0.2.15"
+paste = "1.0"
 
 [features]
 default = [ "std" ]

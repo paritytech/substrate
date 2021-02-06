@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,7 +26,7 @@ use std::sync::Arc;
 use std::any::Any;
 
 use crate::Error;
-use crate::import_queue::{Verifier, CacheKeyId};
+use crate::import_queue::CacheKeyId;
 
 /// Block import result.
 #[derive(Debug, PartialEq, Eq)]
@@ -54,8 +54,6 @@ pub struct ImportedAux {
 	pub needs_justification: bool,
 	/// Received a bad justification.
 	pub bad_justification: bool,
-	/// Request a finality proof for the given block.
-	pub needs_finality_proof: bool,
 	/// Whether the block that was imported is the new best block.
 	pub is_new_best: bool,
 }
@@ -63,7 +61,7 @@ pub struct ImportedAux {
 impl ImportResult {
 	/// Returns default value for `ImportResult::Imported` with
 	/// `clear_justification_requests`, `needs_justification`,
-	/// `bad_justification` and `needs_finality_proof` set to false.
+	/// `bad_justification` set to false.
 	pub fn imported(is_new_best: bool) -> ImportResult {
 		let mut aux = ImportedAux::default();
 		aux.is_new_best = is_new_best;
@@ -344,22 +342,4 @@ pub trait JustificationImport<B: BlockT> {
 		number: NumberFor<B>,
 		justification: Justification,
 	) -> Result<(), Self::Error>;
-}
-
-/// Finality proof import trait.
-pub trait FinalityProofImport<B: BlockT> {
-	type Error: std::error::Error + Send + 'static;
-
-	/// Called by the import queue when it is started. Returns a list of finality proofs to request
-	/// from the network.
-	fn on_start(&mut self) -> Vec<(B::Hash, NumberFor<B>)> { Vec::new() }
-
-	/// Import a Block justification and finalize the given block. Returns finalized block or error.
-	fn import_finality_proof(
-		&mut self,
-		hash: B::Hash,
-		number: NumberFor<B>,
-		finality_proof: Vec<u8>,
-		verifier: &mut dyn Verifier<B>,
-	) -> Result<(B::Hash, NumberFor<B>), Self::Error>;
 }

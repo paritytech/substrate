@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -102,7 +102,7 @@ pub enum ConsensusLog<N: Codec> {
 	/// This should be a pure function: i.e. as long as the runtime can interpret
 	/// the digest type it should return the same result regardless of the current
 	/// state.
-	#[codec(index = "1")]
+	#[codec(index = 1)]
 	ScheduledChange(ScheduledChange<N>),
 	/// Force an authority set change.
 	///
@@ -118,18 +118,18 @@ pub enum ConsensusLog<N: Codec> {
 	/// This should be a pure function: i.e. as long as the runtime can interpret
 	/// the digest type it should return the same result regardless of the current
 	/// state.
-	#[codec(index = "2")]
+	#[codec(index = 2)]
 	ForcedChange(N, ScheduledChange<N>),
 	/// Note that the authority with given index is disabled until the next change.
-	#[codec(index = "3")]
+	#[codec(index = 3)]
 	OnDisabled(AuthorityIndex),
 	/// A signal to pause the current authority set after the given delay.
 	/// After finalizing the block at _delay_ the authorities should stop voting.
-	#[codec(index = "4")]
+	#[codec(index = 4)]
 	Pause(N),
 	/// A signal to resume the current authority set after the given delay.
 	/// After authoring the block at _delay_ the authorities should resume voting.
-	#[codec(index = "5")]
+	#[codec(index = 5)]
 	Resume(N),
 }
 
@@ -250,6 +250,14 @@ impl<H, N> Equivocation<H, N> {
 		match self {
 			Equivocation::Prevote(ref equivocation) => &equivocation.identity,
 			Equivocation::Precommit(ref equivocation) => &equivocation.identity,
+		}
+	}
+
+	/// Returns the round number when the equivocation happened.
+	pub fn round_number(&self) -> RoundNumber {
+		match self {
+			Equivocation::Prevote(ref equivocation) => equivocation.round_number,
+			Equivocation::Precommit(ref equivocation) => equivocation.round_number,
 		}
 	}
 }

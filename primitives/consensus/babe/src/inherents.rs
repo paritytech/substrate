@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -31,7 +31,7 @@ use sp_std::result::Result;
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"babeslot";
 
 /// The type of the BABE inherent.
-pub type InherentType = u64;
+pub type InherentType = sp_consensus_slots::Slot;
 /// Auxiliary trait to extract BABE inherent data.
 pub trait BabeInherentData {
 	/// Get BABE inherent data.
@@ -82,8 +82,8 @@ impl ProvideInherentData for InherentDataProvider {
 
 	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), Error> {
 		let timestamp = inherent_data.timestamp_inherent_data()?;
-		let slot_number = timestamp / self.slot_duration;
-		inherent_data.put_data(INHERENT_IDENTIFIER, &slot_number)
+		let slot = timestamp / self.slot_duration;
+		inherent_data.put_data(INHERENT_IDENTIFIER, &slot)
 	}
 
 	fn error_to_string(&self, error: &[u8]) -> Option<String> {

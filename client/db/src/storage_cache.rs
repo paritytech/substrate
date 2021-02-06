@@ -1,20 +1,24 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Global cache state.
+//! Global state cache. Maintains recently queried/committed state values
+//! Tracks changes over the span of a few recent blocks and handles forks
+//! by tracking/removing cache entries for conflicting changes.
 
 use std::collections::{VecDeque, HashSet, HashMap};
 use std::sync::Arc;
@@ -341,12 +345,27 @@ impl<B: BlockT> CacheChanges<B> {
 		);
 		let cache = &mut *cache;
 		// Filter out committing block if any.
-		let enacted: Vec<_> = enacted
+		let mut enacted: Vec<_> = enacted
 			.iter()
 			.filter(|h| commit_hash.as_ref().map_or(true, |p| *h != p))
 			.cloned()
 			.collect();
-		cache.sync(&enacted, retracted);
+
+		let mut retracted = std::borrow::Cow::Borrowed(retracted);
+		if let Some(commit_hash) = &commit_hash {
+			if let Some(m) = cache.modifications.iter_mut().find(|m| &m.hash == commit_hash) {
+				if m.is_canon != is_best {
+					// Same block comitted twice with different state changes.
+					// Treat it as reenacted/retracted.
+					if is_best {
+						enacted.push(commit_hash.clone());
+					} else {
+						retracted.to_mut().push(commit_hash.clone());
+					}
+				}
+			}
+		}
+		cache.sync(&enacted, &retracted);
 		// Propagate cache only if committing on top of the latest canonical state
 		// blocks are ordered by number and only one block with a given number is marked as canonical
 		// (contributed to canonical state cache)
@@ -584,12 +603,12 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 		self.state.exists_child_storage(child_info, key)
 	}
 
-	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
+	fn apply_to_child_keys_while<F: FnMut(&[u8]) -> bool>(
 		&self,
 		child_info: &ChildInfo,
 		f: F,
 	) {
-		self.state.for_keys_in_child_storage(child_info, f)
+		self.state.apply_to_child_keys_while(child_info, f)
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -766,12 +785,12 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Syncin
 		self.caching_state().exists_child_storage(child_info, key)
 	}
 
-	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
+	fn apply_to_child_keys_while<F: FnMut(&[u8]) -> bool>(
 		&self,
 		child_info: &ChildInfo,
 		f: F,
 	) {
-		self.caching_state().for_keys_in_child_storage(child_info, f)
+		self.caching_state().apply_to_child_keys_while(child_info, f)
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -1314,6 +1333,71 @@ mod tests {
 		);
 		assert_eq!(s.storage(&key).unwrap(), None);
 	}
+
+	#[test]
+	fn same_block_no_changes() {
+		sp_tracing::try_init_simple();
+
+		let root_parent = H256::random();
+		let key = H256::random()[..].to_vec();
+		let h1 = H256::random();
+		let h2 = H256::random();
+
+		let shared = new_shared_cache::<Block>(256*1024, (0,1));
+
+		let mut s = CachingState::new(
+			InMemoryBackend::<BlakeTwo256>::default(),
+			shared.clone(),
+			Some(root_parent),
+		);
+		s.cache.sync_cache(
+			&[],
+			&[],
+			vec![(key.clone(), Some(vec![1]))],
+			vec![],
+			Some(h1),
+			Some(1),
+			true,
+		);
+		assert_eq!(shared.lock().lru_storage.get(&key).unwrap(), &Some(vec![1]));
+
+		let mut s = CachingState::new(
+			InMemoryBackend::<BlakeTwo256>::default(),
+			shared.clone(),
+			Some(h1),
+		);
+
+		// commit as non-best
+		s.cache.sync_cache(
+			&[],
+			&[],
+			vec![(key.clone(), Some(vec![2]))],
+			vec![],
+			Some(h2),
+			Some(2),
+			false,
+		);
+
+		assert_eq!(shared.lock().lru_storage.get(&key).unwrap(), &Some(vec![1]));
+
+		let mut s = CachingState::new(
+			InMemoryBackend::<BlakeTwo256>::default(),
+			shared.clone(),
+			Some(h1),
+		);
+
+		// commit again as best with no changes
+		s.cache.sync_cache(
+			&[],
+			&[],
+			vec![],
+			vec![],
+			Some(h2),
+			Some(2),
+			true,
+		);
+		assert_eq!(s.storage(&key).unwrap(), None);
+	}
 }
 
 #[cfg(test)]
@@ -1387,50 +1471,46 @@ mod qc {
 	}
 
 	impl Arbitrary for Action {
-		fn arbitrary<G: quickcheck::Gen>(gen: &mut G) -> Self {
-			let path = gen.next_u32() as u8;
-			let mut buf = [0u8; 32];
+		fn arbitrary(gen: &mut quickcheck::Gen) -> Self {
+			let path = u8::arbitrary(gen);
+			let buf = (0..32).map(|_| u8::arbitrary(gen)).collect::<Vec<_>>();
 
 			match path {
 				0..=175 => {
-					gen.fill_bytes(&mut buf[..]);
 					Action::Next {
-						hash: H256::from(&buf),
+						hash: H256::from_slice(&buf[..]),
 						changes: {
 							let mut set = Vec::new();
-							for _ in 0..gen.next_u32()/(64*256*256*256) {
-								set.push((vec![gen.next_u32() as u8], Some(vec![gen.next_u32() as u8])));
+							for _ in 0..<u32>::arbitrary(gen)/(64*256*256*256) {
+								set.push((vec![u8::arbitrary(gen)], Some(vec![u8::arbitrary(gen)])));
 							}
 							set
 						}
 					}
 				},
 				176..=220 => {
-					gen.fill_bytes(&mut buf[..]);
 					Action::Fork {
-						hash: H256::from(&buf),
-						depth: ((gen.next_u32() as u8) / 32) as usize,
+						hash: H256::from_slice(&buf[..]),
+						depth: ((u8::arbitrary(gen)) / 32) as usize,
 						changes: {
 							let mut set = Vec::new();
-							for _ in 0..gen.next_u32()/(64*256*256*256) {
-								set.push((vec![gen.next_u32() as u8], Some(vec![gen.next_u32() as u8])));
+							for _ in 0..<u32>::arbitrary(gen)/(64*256*256*256) {
+								set.push((vec![u8::arbitrary(gen)], Some(vec![u8::arbitrary(gen)])));
 							}
 							set
 						}
 					}
 				},
 				221..=240 => {
-					gen.fill_bytes(&mut buf[..]);
 					Action::ReorgWithImport {
-						hash: H256::from(&buf),
-						depth: ((gen.next_u32() as u8) / 32) as usize, // 0-7
+						hash: H256::from_slice(&buf[..]),
+						depth: ((u8::arbitrary(gen)) / 32) as usize, // 0-7
 					}
 				},
 				_ => {
-					gen.fill_bytes(&mut buf[..]);
 					Action::FinalizationReorg {
-						fork_depth: ((gen.next_u32() as u8) / 32) as usize, // 0-7
-						depth: ((gen.next_u32() as u8) / 64) as usize, // 0-3
+						fork_depth: ((u8::arbitrary(gen)) / 32) as usize, // 0-7
+						depth: ((u8::arbitrary(gen)) / 64) as usize, // 0-3
 					}
 				},
 			}

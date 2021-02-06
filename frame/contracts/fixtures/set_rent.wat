@@ -26,7 +26,7 @@
 	(func $call_2
 		(call $assert
 			(i32.eq
-				(call $seal_transfer (i32.const 68) (i32.const 8) (i32.const 76) (i32.const 8))
+				(call $seal_transfer (i32.const 136) (i32.const 32) (i32.const 100) (i32.const 8))
 				(i32.const 0)
 			)
 		)
@@ -47,10 +47,11 @@
 	;; Dispatch the call according to input size
 	(func (export "call")
 		(local $input_size i32)
-		(i32.store (i32.const 64) (i32.const 64))
-		(call $seal_input (i32.const 1024) (i32.const 64))
+		;; 4 byte i32 for br_table followed by 32 byte destination for transfer
+		(i32.store (i32.const 128) (i32.const 36))
+		(call $seal_input (i32.const 132) (i32.const 128))
 		(set_local $input_size
-			(i32.load (i32.const 64))
+			(i32.load (i32.const 132))
 		)
 		(block $IF_ELSE
 			(block $IF_2
@@ -81,25 +82,24 @@
 			(i32.const 0)
 			(i32.const 4)
 		)
+		(i32.store (i32.const 128) (i32.const 64))
 		(call $seal_input
-			(i32.const 0)
-			(i32.const 64)
+			(i32.const 132)
+			(i32.const 128)
 		)
 		(call $seal_set_rent_allowance
-			(i32.const 0)
-			(i32.load (i32.const 64))
+			(i32.const 132)
+			(i32.load (i32.const 128))
 		)
 	)
 
 	;; Encoding of 10 in balance
 	(data (i32.const 0) "\28")
 
-	;; Size of the buffer at address 0
-	(data (i32.const 64) "\40")
-
-	;; encoding of Charlies's account id
-	(data (i32.const 68) "\03")
-
 	;; encoding of 50 balance
-	(data (i32.const 76) "\32")
+	(data (i32.const 100) "\32")
+
+	;; [128, 132) size of seal input buffer
+
+	;; [132, inf) output buffer for seal input
 )

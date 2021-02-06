@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -345,8 +345,7 @@ impl<'a, B: BlockT> Matcher<'a, B> {
 mod tests {
 	use crate::protocol::sync::PeerSync;
 	use sp_blockchain::Error as ClientError;
-	use quickcheck::{Arbitrary, Gen, QuickCheck, StdThreadGen};
-	use rand::Rng;
+	use quickcheck::{Arbitrary, Gen, QuickCheck};
 	use std::collections::{HashMap, HashSet};
 	use super::*;
 	use sp_test_primitives::{Block, BlockNumber, Hash};
@@ -373,7 +372,7 @@ mod tests {
 			}
 		}
 
-		QuickCheck::with_gen(StdThreadGen::new(19))
+		QuickCheck::new()
 			.quickcheck(property as fn(ArbitraryPeers))
 	}
 
@@ -425,7 +424,7 @@ mod tests {
 			previously_active == requests.pending_requests.iter().cloned().collect::<HashSet<_>>()
 		}
 
-		QuickCheck::with_gen(StdThreadGen::new(19))
+		QuickCheck::new()
 			.quickcheck(property as fn(ArbitraryPeers) -> bool)
 	}
 
@@ -457,7 +456,7 @@ mod tests {
 			}
 		}
 
-		QuickCheck::with_gen(StdThreadGen::new(19))
+		QuickCheck::new()
 			.quickcheck(property as fn(ArbitraryPeers))
 	}
 
@@ -527,14 +526,13 @@ mod tests {
 	struct ArbitraryPeerSyncState(PeerSyncState<Block>);
 
 	impl Arbitrary for ArbitraryPeerSyncState {
-		fn arbitrary<G: Gen>(g: &mut G) -> Self {
-			let s = match g.gen::<u8>() % 5 {
+		fn arbitrary(g: &mut Gen) -> Self {
+			let s = match u8::arbitrary(g) % 4 {
 				0 => PeerSyncState::Available,
 				// TODO: 1 => PeerSyncState::AncestorSearch(g.gen(), AncestorSearchState<B>),
-				1 => PeerSyncState::DownloadingNew(g.gen::<BlockNumber>()),
+				1 => PeerSyncState::DownloadingNew(BlockNumber::arbitrary(g)),
 				2 => PeerSyncState::DownloadingStale(Hash::random()),
-				3 => PeerSyncState::DownloadingJustification(Hash::random()),
-				_ => PeerSyncState::DownloadingFinalityProof(Hash::random())
+				_ => PeerSyncState::DownloadingJustification(Hash::random()),
 			};
 			ArbitraryPeerSyncState(s)
 		}
@@ -544,13 +542,13 @@ mod tests {
 	struct ArbitraryPeerSync(PeerSync<Block>);
 
 	impl Arbitrary for ArbitraryPeerSync {
-		fn arbitrary<G: Gen>(g: &mut G) -> Self {
+		fn arbitrary(g: &mut Gen) -> Self {
 			let ps = PeerSync {
-				common_number: g.gen(),
+				peer_id: PeerId::random(),
+				common_number: u64::arbitrary(g),
 				best_hash: Hash::random(),
-				best_number: g.gen(),
+				best_number: u64::arbitrary(g),
 				state: ArbitraryPeerSyncState::arbitrary(g).0,
-				recently_announced: Default::default()
 			};
 			ArbitraryPeerSync(ps)
 		}
@@ -560,13 +558,13 @@ mod tests {
 	struct ArbitraryPeers(HashMap<PeerId, PeerSync<Block>>);
 
 	impl Arbitrary for ArbitraryPeers {
-		fn arbitrary<G: Gen>(g: &mut G) -> Self {
+		fn arbitrary(g: &mut Gen) -> Self {
 			let mut peers = HashMap::with_capacity(g.size());
 			for _ in 0 .. g.size() {
-				peers.insert(PeerId::random(), ArbitraryPeerSync::arbitrary(g).0);
+				let ps = ArbitraryPeerSync::arbitrary(g).0;
+				peers.insert(ps.peer_id.clone(), ps);
 			}
 			ArbitraryPeers(peers)
 		}
 	}
-
 }

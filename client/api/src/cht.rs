@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -22,7 +22,7 @@
 //! One is generated for every `SIZE` blocks, allowing us to discard those blocks in
 //! favor of the trie root. When the "ancient" blocks need to be accessed, we simply
 //! request an inclusion proof of a specific block number against the trie with the
-//! root has. A correct proof implies that the claimed block is identical to the one
+//! root hash. A correct proof implies that the claimed block is identical to the one
 //! we discarded.
 
 use hash_db;
@@ -122,7 +122,7 @@ pub fn build_proof<Header, Hasher, BlocksI, HashesI>(
 	prove_read_on_trie_backend(
 		trie_storage,
 		blocks.into_iter().map(|number| encode_cht_key(number)),
-	).map_err(ClientError::Execution)
+	).map_err(ClientError::from_state)
 }
 
 /// Check CHT-based header proof.
@@ -150,7 +150,7 @@ pub fn check_proof<Header, Hasher>(
 			.map(|mut map| map
 				.remove(local_cht_key)
 				.expect("checked proof of local_cht_key; qed"))
-			.map_err(|e| ClientError::from(e)),
+			.map_err(ClientError::from_state),
 	)
 }
 
@@ -174,7 +174,7 @@ pub fn check_proof_on_proving_backend<Header, Hasher>(
 			read_proof_check_on_proving_backend::<Hasher>(
 				proving_backend,
 				local_cht_key,
-			).map_err(|e| ClientError::from(e)),
+			).map_err(ClientError::from_state),
 	)
 }
 

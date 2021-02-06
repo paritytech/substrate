@@ -1,0 +1,13 @@
+error[E0658]: non-inline modules in proc macro input are unstable
+ --> $DIR/mod_not_inlined.rs:2:1
+  |
+2 | mod foo;
+  | ^^^^^^^^
+  |
+  = note: see issue #54727 <https://github.com/rust-lang/rust/issues/54727> for more information
+
+error: Invalid pallet definition, expected mod to be inlined.
+ --> $DIR/mod_not_inlined.rs:2:1
+  |
+2 | mod foo;
+  | ^^^

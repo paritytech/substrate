@@ -43,10 +43,7 @@
 /primitives/consensus/pow/ @sorpaas
 
 # Contracts
-/frame/contracts/ @pepyakin
-
-# EVM
-/frame/evm/ @sorpaas
+/frame/contracts/ @athei
 
 # NPoS and election
 /frame/staking/ @kianenigma

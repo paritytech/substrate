@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -33,11 +33,11 @@ pub struct GenesisConfigFieldDef {
 pub struct GenesisConfigDef {
 	pub is_generic: bool,
 	pub fields: Vec<GenesisConfigFieldDef>,
-	/// For example: `<T: Trait<I>, I: Instance=DefaultInstance>`.
+	/// For example: `<T: Config<I>, I: Instance=DefaultInstance>`.
 	pub genesis_struct_decl: TokenStream,
 	/// For example: `<T, I>`.
 	pub genesis_struct: TokenStream,
-	/// For example: `<T: Trait<I>, I: Instance>`.
+	/// For example: `<T: Config<I>, I: Instance>`.
 	pub genesis_impl: TokenStream,
 	/// The where clause to use to constrain generics if genesis config is generic.
 	pub genesis_where_clause: Option<syn::WhereClause>,

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -25,7 +25,7 @@ use parking_lot::RwLockWriteGuard;
 use sp_blockchain::{BlockStatus, well_known_cache_keys};
 use sc_client_api::{backend::Backend, utils::is_descendent_of};
 use sp_utils::mpsc::TracingUnboundedSender;
-use sp_api::{TransactionFor};
+use sp_api::TransactionFor;
 
 use sp_consensus::{
 	BlockImport, Error as ConsensusError,
@@ -41,7 +41,6 @@ use sp_runtime::traits::{
 
 use crate::{Error, CommandOrError, NewAuthoritySet, VoterCommand};
 use crate::authorities::{AuthoritySet, SharedAuthoritySet, DelayKind, PendingChange};
-use crate::consensus_changes::SharedConsensusChanges;
 use crate::environment::finalize_block;
 use crate::justification::GrandpaJustification;
 use crate::notification::GrandpaJustificationSender;
@@ -61,7 +60,6 @@ pub struct GrandpaBlockImport<Backend, Block: BlockT, Client, SC> {
 	select_chain: SC,
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	send_voter_commands: TracingUnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
-	consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 	authority_set_hard_forks: HashMap<Block::Hash, PendingChange<Block::Hash, NumberFor<Block>>>,
 	justification_sender: GrandpaJustificationSender<Block>,
 	_phantom: PhantomData<Backend>,
@@ -76,7 +74,6 @@ impl<Backend, Block: BlockT, Client, SC: Clone> Clone for
 			select_chain: self.select_chain.clone(),
 			authority_set: self.authority_set.clone(),
 			send_voter_commands: self.send_voter_commands.clone(),
-			consensus_changes: self.consensus_changes.clone(),
 			authority_set_hard_forks: self.authority_set_hard_forks.clone(),
 			justification_sender: self.justification_sender.clone(),
 			_phantom: PhantomData,
@@ -185,7 +182,7 @@ impl<'a, Block: 'a + BlockT> Drop for PendingSetChanges<'a, Block> {
 	}
 }
 
-fn find_scheduled_change<B: BlockT>(header: &B::Header)
+pub(crate) fn find_scheduled_change<B: BlockT>(header: &B::Header)
 	-> Option<ScheduledChange<NumberFor<B>>>
 {
 	let id = OpaqueDigestItemId::Consensus(&GRANDPA_ENGINE_ID);
@@ -200,7 +197,7 @@ fn find_scheduled_change<B: BlockT>(header: &B::Header)
 	header.digest().convert_first(|l| l.try_to(id).and_then(filter_log))
 }
 
-fn find_forced_change<B: BlockT>(header: &B::Header)
+pub(crate) fn find_forced_change<B: BlockT>(header: &B::Header)
 	-> Option<(NumberFor<B>, ScheduledChange<NumberFor<B>>)>
 {
 	let id = OpaqueDigestItemId::Consensus(&GRANDPA_ENGINE_ID);
@@ -439,7 +436,6 @@ impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
 
 		// we don't want to finalize on `inner.import_block`
 		let mut justification = block.justification.take();
-		let enacts_consensus_change = !new_cache.is_empty();
 		let import_result = (&*self.inner).import_block(block, new_cache);
 
 		let mut imported_aux = {
@@ -517,7 +513,7 @@ impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
 				);
 
 				import_res.unwrap_or_else(|err| {
-					if needs_justification || enacts_consensus_change {
+					if needs_justification {
 						debug!(target: "afg", "Imported block #{} that enacts authority set change with \
 							invalid justification: {:?}, requesting justification from peers.", number, err);
 						imported_aux.bad_justification = true;
@@ -534,12 +530,6 @@ impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
 					);
 
 					imported_aux.needs_justification = true;
-				}
-
-				// we have imported block with consensus data changes, but without justification
-				// => remember to create justification when next block will be finalized
-				if enacts_consensus_change {
-					self.consensus_changes.lock().note_change((number, hash));
 				}
 			}
 		}
@@ -561,7 +551,6 @@ impl<Backend, Block: BlockT, Client, SC> GrandpaBlockImport<Backend, Block, Clie
 		select_chain: SC,
 		authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 		send_voter_commands: TracingUnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
-		consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 		authority_set_hard_forks: Vec<(SetId, PendingChange<Block::Hash, NumberFor<Block>>)>,
 		justification_sender: GrandpaJustificationSender<Block>,
 	) -> GrandpaBlockImport<Backend, Block, Client, SC> {
@@ -605,7 +594,6 @@ impl<Backend, Block: BlockT, Client, SC> GrandpaBlockImport<Backend, Block, Clie
 			select_chain,
 			authority_set,
 			send_voter_commands,
-			consensus_changes,
 			authority_set_hard_forks,
 			justification_sender,
 			_phantom: PhantomData,
@@ -646,7 +634,6 @@ where
 		let result = finalize_block(
 			self.inner.clone(),
 			&self.authority_set,
-			&self.consensus_changes,
 			None,
 			hash,
 			number,

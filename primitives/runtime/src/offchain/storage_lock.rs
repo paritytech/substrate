@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! # Off-chain Storage Lock
 //!
@@ -438,11 +439,11 @@ pub trait BlockNumberProvider {
 	///
 	/// In case of using crate `sp_runtime` without the crate `frame`
 	/// system, it is already implemented for
-	/// `frame_system::Module<T: Trait>` as:
+	/// `frame_system::Module<T: Config>` as:
 	///
 	/// ```ignore
 	/// fn current_block_number() -> Self {
-	///     frame_system::Module<Trait>::block_number()
+	///     frame_system::Module<Config>::block_number()
 	/// }
 	/// ```
 	/// .
@@ -452,7 +453,7 @@ pub trait BlockNumberProvider {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_core::offchain::{testing, OffchainExt, OffchainStorage};
+	use sp_core::offchain::{testing, OffchainExt};
 	use sp_io::TestExternalities;
 
 	const VAL_1: u32 = 0u32;
@@ -485,7 +486,7 @@ mod tests {
 			}
 		});
 		// lock must have been cleared at this point
-		assert_eq!(state.read().persistent_storage.get(b"", b"lock_1"), None);
+		assert_eq!(state.read().persistent_storage.get(b"lock_1"), None);
 	}
 
 	#[test]
@@ -508,7 +509,7 @@ mod tests {
 			guard.forget();
 		});
 		// lock must have been cleared at this point
-		let opt = state.read().persistent_storage.get(b"", b"lock_2");
+		let opt = state.read().persistent_storage.get(b"lock_2");
 		assert!(opt.is_some());
 	}
 
@@ -540,7 +541,7 @@ mod tests {
 		});
 
 		// lock must have been cleared at this point
-		let opt = state.read().persistent_storage.get(b"", b"lock_3");
+		let opt = state.read().persistent_storage.get(b"lock_3");
 		assert!(opt.is_some());
 	}
 
@@ -587,7 +588,7 @@ mod tests {
 		});
 
 		// lock must have been cleared at this point
-		let opt = state.read().persistent_storage.get(b"", b"lock_4");
+		let opt = state.read().persistent_storage.get(b"lock_4");
 		assert_eq!(opt.unwrap(), vec![132_u8, 3u8, 0, 0, 0, 0, 0, 0]); // 132 + 256 * 3 = 900
 	}
 }

@@ -1,18 +1,20 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use std::{
 	str::FromStr,
@@ -185,9 +187,9 @@ impl<Storage: OffchainStorage> OffchainExt for Api<Storage> {
 
 	fn set_authorized_nodes(&mut self, nodes: Vec<OpaquePeerId>, authorized_only: bool) {
 		let peer_ids: HashSet<PeerId> = nodes.into_iter()
-			.filter_map(|node| PeerId::from_bytes(node.0).ok())
+			.filter_map(|node| PeerId::from_bytes(&node.0).ok())
 			.collect();
-		
+
 		self.network_provider.set_authorized_peers(peer_ids);
 		self.network_provider.set_authorized_only(authorized_only);
 	}
@@ -211,7 +213,7 @@ impl NetworkState {
 
 impl From<NetworkState> for OpaqueNetworkState {
 	fn from(state: NetworkState) -> OpaqueNetworkState {
-		let enc = Encode::encode(&state.peer_id.into_bytes());
+		let enc = Encode::encode(&state.peer_id.to_bytes());
 		let peer_id = OpaquePeerId::new(enc);
 
 		let external_addresses: Vec<OpaqueMultiaddr> = state
@@ -237,7 +239,7 @@ impl TryFrom<OpaqueNetworkState> for NetworkState {
 		let inner_vec = state.peer_id.0;
 
 		let bytes: Vec<u8> = Decode::decode(&mut &inner_vec[..]).map_err(|_| ())?;
-		let peer_id = PeerId::from_bytes(bytes).map_err(|_| ())?;
+		let peer_id = PeerId::from_bytes(&bytes).map_err(|_| ())?;
 
 		let external_addresses: Result<Vec<Multiaddr>, Self::Error> = state.external_addresses
 			.iter()

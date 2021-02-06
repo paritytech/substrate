@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -77,27 +77,25 @@ fn verify<Pair>(sig_data: Vec<u8>, message: Vec<u8>, uri: &str) -> error::Result
 {
 	let mut signature = Pair::Signature::default();
 	if sig_data.len() != signature.as_ref().len() {
-		return Err(error::Error::Other(format!(
-			"signature has an invalid length. read {} bytes, expected {} bytes",
-			sig_data.len(),
-			signature.as_ref().len(),
-		)));
+		return Err(
+			error::Error::SignatureInvalidLength {
+				read: sig_data.len(),
+				expected: signature.as_ref().len(),
+			}
+		);
 	}
 	signature.as_mut().copy_from_slice(&sig_data);
 
 	let pubkey = if let Ok(pubkey_vec) = hex::decode(uri) {
 		Pair::Public::from_slice(pubkey_vec.as_slice())
 	} else {
-		Pair::Public::from_string(uri)
-			.map_err(|_| {
-				error::Error::Other(format!("Invalid URI; expecting either a secret URI or a public URI."))
-			})?
+		Pair::Public::from_string(uri)?
 	};
 
 	if Pair::verify(&signature, &message, &pubkey) {
 		println!("Signature verifies correctly.");
 	} else {
-		return Err(error::Error::Other("Signature invalid.".into()))
+		return Err(error::Error::SignatureInvalid)
 	}
 
 	Ok(())

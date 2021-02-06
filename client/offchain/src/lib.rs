@@ -1,18 +1,20 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Substrate offchain workers.
 //!
@@ -58,7 +60,7 @@ pub use sp_offchain::{OffchainWorkerApi, STORAGE_PREFIX};
 pub trait NetworkProvider: NetworkStateInfo {
 	/// Set the authorized peers.
 	fn set_authorized_peers(&self, peers: HashSet<PeerId>);
-	
+
 	/// Set the authorized only flag.
 	fn set_authorized_only(&self, reserved_only: bool);
 }
@@ -236,9 +238,15 @@ mod tests {
 	use super::*;
 	use std::sync::Arc;
 	use sc_network::{Multiaddr, PeerId};
-	use substrate_test_runtime_client::{TestClient, runtime::Block};
+	use substrate_test_runtime_client::{
+		TestClient, runtime::Block, TestClientBuilderExt,
+		DefaultTestClientBuilderExt, ClientBlockImportExt,
+	};
 	use sc_transaction_pool::{BasicPool, FullChainApi};
 	use sp_transaction_pool::{TransactionPool, InPoolTransaction};
+	use sp_consensus::BlockOrigin;
+	use sc_client_api::Backend as _;
+	use sc_block_builder::BlockBuilderProvider as _;
 
 	struct TestNetwork();
 
@@ -287,6 +295,7 @@ mod tests {
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let pool = TestPool(BasicPool::new_full(
 			Default::default(),
+			true.into(),
 			None,
 			spawner,
 			client.clone(),
@@ -304,5 +313,42 @@ mod tests {
 		// then
 		assert_eq!(pool.0.status().ready, 1);
 		assert_eq!(pool.0.ready().next().unwrap().is_propagable(), false);
+	}
+
+	#[test]
+	fn offchain_index_set_and_clear_works() {
+		sp_tracing::try_init_simple();
+
+		let (client, backend) =
+			substrate_test_runtime_client::TestClientBuilder::new()
+				.enable_offchain_indexing_api()
+				.build_with_backend();
+		let mut client = Arc::new(client);
+		let offchain_db = backend.offchain_storage().unwrap();
+
+		let key = &b"hello"[..];
+		let value = &b"world"[..];
+		let mut block_builder = client.new_block(Default::default()).unwrap();
+		block_builder.push(
+			substrate_test_runtime_client::runtime::Extrinsic::OffchainIndexSet(
+				key.to_vec(),
+				value.to_vec(),
+			),
+		).unwrap();
+
+		let block = block_builder.build().unwrap().block;
+		client.import(BlockOrigin::Own, block).unwrap();
+
+		assert_eq!(value, &offchain_db.get(sp_offchain::STORAGE_PREFIX, &key).unwrap());
+
+		let mut block_builder = client.new_block(Default::default()).unwrap();
+		block_builder.push(
+			substrate_test_runtime_client::runtime::Extrinsic::OffchainIndexClear(key.to_vec()),
+		).unwrap();
+
+		let block = block_builder.build().unwrap().block;
+		client.import(BlockOrigin::Own, block).unwrap();
+
+		assert!(offchain_db.get(sp_offchain::STORAGE_PREFIX, &key).is_none());
 	}
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -20,10 +20,11 @@
 
 pub mod v1 {
 	include!(concat!(env!("OUT_DIR"), "/api.v1.rs"));
-	pub mod finality {
-		include!(concat!(env!("OUT_DIR"), "/api.v1.finality.rs"));
-	}
 	pub mod light {
 		include!(concat!(env!("OUT_DIR"), "/api.v1.light.rs"));
 	}
+}
+
+pub mod bitswap {
+	include!(concat!(env!("OUT_DIR"), "/bitswap.message.rs"));
 }

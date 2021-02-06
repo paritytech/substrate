@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -56,6 +56,7 @@ impl<T: Codec> Hashable for T {
 
 /// Hasher to use to hash keys to insert to storage.
 pub trait StorageHasher: 'static {
+	const METADATA: frame_metadata::StorageHasher;
 	type Output: AsRef<[u8]>;
 	fn hash(x: &[u8]) -> Self::Output;
 }
@@ -73,6 +74,7 @@ pub trait ReversibleStorageHasher: StorageHasher {
 /// Store the key directly.
 pub struct Identity;
 impl StorageHasher for Identity {
+	const METADATA: frame_metadata::StorageHasher = frame_metadata::StorageHasher::Identity;
 	type Output = Vec<u8>;
 	fn hash(x: &[u8]) -> Vec<u8> {
 		x.to_vec()
@@ -87,6 +89,7 @@ impl ReversibleStorageHasher for Identity {
 /// Hash storage keys with `concat(twox64(key), key)`
 pub struct Twox64Concat;
 impl StorageHasher for Twox64Concat {
+	const METADATA: frame_metadata::StorageHasher = frame_metadata::StorageHasher::Twox64Concat;
 	type Output = Vec<u8>;
 	fn hash(x: &[u8]) -> Vec<u8> {
 		twox_64(x)
@@ -109,6 +112,7 @@ impl ReversibleStorageHasher for Twox64Concat {
 /// Hash storage keys with `concat(blake2_128(key), key)`
 pub struct Blake2_128Concat;
 impl StorageHasher for Blake2_128Concat {
+	const METADATA: frame_metadata::StorageHasher = frame_metadata::StorageHasher::Blake2_128Concat;
 	type Output = Vec<u8>;
 	fn hash(x: &[u8]) -> Vec<u8> {
 		blake2_128(x)
@@ -131,6 +135,7 @@ impl ReversibleStorageHasher for Blake2_128Concat {
 /// Hash storage keys with blake2 128
 pub struct Blake2_128;
 impl StorageHasher for Blake2_128 {
+	const METADATA: frame_metadata::StorageHasher = frame_metadata::StorageHasher::Blake2_128;
 	type Output = [u8; 16];
 	fn hash(x: &[u8]) -> [u8; 16] {
 		blake2_128(x)
@@ -140,6 +145,7 @@ impl StorageHasher for Blake2_128 {
 /// Hash storage keys with blake2 256
 pub struct Blake2_256;
 impl StorageHasher for Blake2_256 {
+	const METADATA: frame_metadata::StorageHasher = frame_metadata::StorageHasher::Blake2_256;
 	type Output = [u8; 32];
 	fn hash(x: &[u8]) -> [u8; 32] {
 		blake2_256(x)
@@ -149,6 +155,7 @@ impl StorageHasher for Blake2_256 {
 /// Hash storage keys with twox 128
 pub struct Twox128;
 impl StorageHasher for Twox128 {
+	const METADATA: frame_metadata::StorageHasher = frame_metadata::StorageHasher::Twox128;
 	type Output = [u8; 16];
 	fn hash(x: &[u8]) -> [u8; 16] {
 		twox_128(x)
@@ -158,6 +165,7 @@ impl StorageHasher for Twox128 {
 /// Hash storage keys with twox 256
 pub struct Twox256;
 impl StorageHasher for Twox256 {
+	const METADATA: frame_metadata::StorageHasher = frame_metadata::StorageHasher::Twox256;
 	type Output = [u8; 32];
 	fn hash(x: &[u8]) -> [u8; 32] {
 		twox_256(x)

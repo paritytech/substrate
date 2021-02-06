@@ -11,7 +11,7 @@ repository = "https://github.com/paritytech/substrate/"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "1.3.4", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 
 pallet-aura = { version = "2.0.0", default-features = false, path = "../../../frame/aura" }
 pallet-balances = { version = "2.0.0", default-features = false, path = "../../../frame/balances" }
@@ -48,7 +48,7 @@ hex-literal = { version = "0.3.1", optional = true }
 template = { version = "2.0.0", default-features = false, path = "../pallets/template", package = "pallet-template" }
 
 [build-dependencies]
-wasm-builder-runner = { version = "2.0.0", package = "substrate-wasm-builder-runner", path = "../../../utils/wasm-builder-runner" }
+substrate-wasm-builder = { version = "3.0.0", path = "../../../utils/wasm-builder" }
 
 [features]
 default = ["std"]

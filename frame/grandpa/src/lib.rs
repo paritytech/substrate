@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -41,7 +41,7 @@ use fg_primitives::{
 };
 use frame_support::{
 	decl_error, decl_event, decl_module, decl_storage, dispatch::DispatchResultWithPostInfo,
-	storage, traits::KeyOwnerProofSystem, weights::{Pays, Weight}, Parameter,
+	storage, traits::{OneSessionHandler, KeyOwnerProofSystem}, weights::{Pays, Weight}, Parameter,
 };
 use frame_system::{ensure_none, ensure_root, ensure_signed};
 use sp_runtime::{
@@ -67,9 +67,9 @@ pub use equivocation::{
 	HandleEquivocation,
 };
 
-pub trait Trait: frame_system::Trait {
+pub trait Config: frame_system::Config {
 	/// The event type of this module.
-	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event> + Into<<Self as frame_system::Config>::Event>;
 
 	/// The function call.
 	type Call: From<Call<Self>>;
@@ -188,7 +188,7 @@ decl_event! {
 }
 
 decl_error! {
-	pub enum Error for Module<T: Trait> {
+	pub enum Error for Module<T: Config> {
 		/// Attempt to signal GRANDPA pause when the authority set isn't live
 		/// (either paused or already pending pause).
 		PauseFailed,
@@ -209,7 +209,7 @@ decl_error! {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as GrandpaFinality {
+	trait Store for Module<T: Config> as GrandpaFinality {
 		/// State of the current authority set.
 		State get(fn state): StoredState<T::BlockNumber> = StoredState::Live;
 
@@ -241,7 +241,7 @@ decl_storage! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
 		fn deposit_event() = default;
@@ -372,7 +372,7 @@ decl_module! {
 	}
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 	/// Get the current set of authorities, along with their respective weights.
 	pub fn grandpa_authorities() -> AuthorityList {
 		storage::unhashed::get_or_default::<VersionedAuthorityList>(GRANDPA_AUTHORITIES_KEY).into()
@@ -446,7 +446,7 @@ impl<T: Trait> Module<T> {
 
 				// only allow the next forced change when twice the window has passed since
 				// this one.
-				<NextForced<T>>::put(scheduled_at + in_blocks * 2.into());
+				<NextForced<T>>::put(scheduled_at + in_blocks * 2u32.into());
 			}
 
 			<PendingChange<T>>::put(StoredPendingChange {
@@ -583,12 +583,12 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
+impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
 	type Public = AuthorityId;
 }
 
-impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T>
-	where T: pallet_session::Trait
+impl<T: Config> OneSessionHandler<T::AccountId> for Module<T>
+	where T: pallet_session::Config
 {
 	type Key = AuthorityId;
 

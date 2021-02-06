@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -355,7 +355,7 @@ pub fn new_light() -> (
 		executor,
 		Box::new(sp_core::testing::TaskExecutor::new()),
 		Default::default(),
-	);
+	).expect("Creates LocalCallExecutor");
 	let call_executor = LightExecutor::new(
 		backend.clone(),
 		local_call_executor,

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -74,7 +74,8 @@ macro_rules! impl_outer_inherent {
 
 			fn check_extrinsics(&self, block: &$block) -> $crate::inherent::CheckInherentsResult {
 				use $crate::inherent::{ProvideInherent, IsFatalError};
-				use $crate::dispatch::IsSubType;
+				use $crate::traits::IsSubType;
+				use $crate::sp_runtime::traits::Block as _;
 
 				let mut result = $crate::inherent::CheckInherentsResult::new();
 				for xt in block.extrinsics() {
@@ -141,7 +142,7 @@ macro_rules! impl_outer_inherent {
 mod tests {
 	use super::*;
 	use sp_runtime::{traits, testing::{Header, self}};
-	use crate::dispatch::IsSubType;
+	use crate::traits::IsSubType;
 
 	#[derive(codec::Encode, codec::Decode, Clone, PartialEq, Eq, Debug, serde::Serialize)]
 	enum Call {
@@ -217,6 +218,10 @@ mod tests {
 		fn create_inherent(_: &InherentData) -> Option<Self::Call> {
 			Some(CallTest2::Something)
 		}
+
+		fn is_inherent_required(_: &InherentData) -> Result<Option<Self::Error>, Self::Error> { 
+			Ok(Some(().into()))
+		}
 	}
 
 	type Block = testing::Block<Extrinsic>;
@@ -259,14 +264,30 @@ mod tests {
 	fn check_inherents_works() {
 		let block = Block::new(
 			Header::new_from_number(1),
-			vec![Extrinsic { function: Call::Test(CallTest::Something) }],
+			vec![
+				Extrinsic { function: Call::Test2(CallTest2::Something) },
+				Extrinsic { function: Call::Test(CallTest::Something) },
+			],
 		);
 
 		assert!(InherentData::new().check_extrinsics(&block).ok());
 
 		let block = Block::new(
 			Header::new_from_number(1),
-			vec![Extrinsic { function: Call::Test(CallTest::SomethingElse) }],
+			vec![
+				Extrinsic { function: Call::Test2(CallTest2::Something) },
+				Extrinsic { function: Call::Test(CallTest::SomethingElse) },
+			],
+		);
+
+		assert!(InherentData::new().check_extrinsics(&block).fatal_error());
+	}
+
+	#[test]
+	fn required_inherents_enforced() {
+		let block = Block::new(
+			Header::new_from_number(1),
+			vec![Extrinsic { function: Call::Test(CallTest::Something) }],
 		);
 
 		assert!(InherentData::new().check_extrinsics(&block).fatal_error());

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -30,7 +30,7 @@ pub struct Vote {
 }
 
 impl Encode for Vote {
-	fn encode_to<T: Output>(&self, output: &mut T) {
+	fn encode_to<T: Output + ?Sized>(&self, output: &mut T) {
 		output.push_byte(u8::from(self.conviction) | if self.aye { 0b1000_0000 } else { 0 });
 	}
 }

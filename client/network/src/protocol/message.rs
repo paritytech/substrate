@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -25,7 +25,6 @@ pub use self::generic::{
 	BlockAnnounce, RemoteCallRequest, RemoteReadRequest,
 	RemoteHeaderRequest, RemoteHeaderResponse,
 	RemoteChangesRequest, RemoteChangesResponse,
-	FinalityProofRequest, FinalityProofResponse,
 	FromBlock, RemoteReadChildRequest, Roles,
 };
 use sc_client_api::StorageProof;
@@ -96,7 +95,7 @@ impl BlockAttributes {
 }
 
 impl Encode for BlockAttributes {
-	fn encode_to<T: Output>(&self, dest: &mut T) {
+	fn encode_to<T: Output + ?Sized>(&self, dest: &mut T) {
 		dest.push_byte(self.bits())
 	}
 }
@@ -199,7 +198,7 @@ pub mod generic {
 	}
 
 	impl codec::Encode for Roles {
-		fn encode_to<T: codec::Output>(&self, dest: &mut T) {
+		fn encode_to<T: codec::Output + ?Sized>(&self, dest: &mut T) {
 			dest.push_byte(self.bits())
 		}
 	}
@@ -216,7 +215,7 @@ pub mod generic {
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 	pub struct ConsensusMessage {
 		/// Identifies consensus engine.
-		pub engine_id: ConsensusEngineId,
+		pub protocol: ConsensusEngineId,
 		/// Message payload.
 		pub data: Vec<u8>,
 	}
@@ -280,38 +279,11 @@ pub mod generic {
 		RemoteChangesResponse(RemoteChangesResponse<Number, Hash>),
 		/// Remote child storage read request.
 		RemoteReadChildRequest(RemoteReadChildRequest<Hash>),
-		/// Finality proof request.
-		FinalityProofRequest(FinalityProofRequest<Hash>),
-		/// Finality proof response.
-		FinalityProofResponse(FinalityProofResponse<Hash>),
 		/// Batch of consensus protocol messages.
+		// NOTE: index is incremented by 2 due to finality proof related
+		// messages that were removed.
+		#[codec(index = 17)]
 		ConsensusBatch(Vec<ConsensusMessage>),
-	}
-
-	impl<Header, Hash, Number, Extrinsic> Message<Header, Hash, Number, Extrinsic> {
-		/// Message id useful for logging.
-		pub fn id(&self) -> &'static str {
-			match self {
-				Message::Status(_) => "Status",
-				Message::BlockRequest(_) => "BlockRequest",
-				Message::BlockResponse(_) => "BlockResponse",
-				Message::BlockAnnounce(_) => "BlockAnnounce",
-				Message::Transactions(_) => "Transactions",
-				Message::Consensus(_) => "Consensus",
-				Message::RemoteCallRequest(_) => "RemoteCallRequest",
-				Message::RemoteCallResponse(_) => "RemoteCallResponse",
-				Message::RemoteReadRequest(_) => "RemoteReadRequest",
-				Message::RemoteReadResponse(_) => "RemoteReadResponse",
-				Message::RemoteHeaderRequest(_) => "RemoteHeaderRequest",
-				Message::RemoteHeaderResponse(_) => "RemoteHeaderResponse",
-				Message::RemoteChangesRequest(_) => "RemoteChangesRequest",
-				Message::RemoteChangesResponse(_) => "RemoteChangesResponse",
-				Message::RemoteReadChildRequest(_) => "RemoteReadChildRequest",
-				Message::FinalityProofRequest(_) => "FinalityProofRequest",
-				Message::FinalityProofResponse(_) => "FinalityProofResponse",
-				Message::ConsensusBatch(_) => "ConsensusBatch",
-			}
-		}
 	}
 
 	/// Status sent on connection.
@@ -430,7 +402,7 @@ pub mod generic {
 	// This assumes that the packet contains nothing but the announcement message.
 	// TODO: Get rid of it once protocol v4 is common.
 	impl<H: Encode> Encode for BlockAnnounce<H> {
-		fn encode_to<T: Output>(&self, dest: &mut T) {
+		fn encode_to<T: Output + ?Sized>(&self, dest: &mut T) {
 			self.header.encode_to(dest);
 			if let Some(state) = &self.state {
 				state.encode_to(dest);
@@ -545,27 +517,5 @@ pub mod generic {
 		pub roots: Vec<(N, H)>,
 		/// Missing changes tries roots proof.
 		pub roots_proof: StorageProof,
-	}
-
-	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
-	/// Finality proof request.
-	pub struct FinalityProofRequest<H> {
-		/// Unique request id.
-		pub id: RequestId,
-		/// Hash of the block to request proof for.
-		pub block: H,
-		/// Additional data blob (that both requester and provider understood) required for proving finality.
-		pub request: Vec<u8>,
-	}
-
-	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
-	/// Finality proof response.
-	pub struct FinalityProofResponse<H> {
-		/// Id of a request this response was made for.
-		pub id: RequestId,
-		/// Hash of the block (the same as in the FinalityProofRequest).
-		pub block: H,
-		/// Finality proof (if available).
-		pub proof: Option<Vec<u8>>,
 	}
 }

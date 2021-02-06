@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -34,7 +34,7 @@ use sp_authorship::{INHERENT_IDENTIFIER, UnclesInherentData, InherentError};
 
 const MAX_UNCLES: usize = 10;
 
-pub trait Trait: frame_system::Trait {
+pub trait Config: frame_system::Config {
 	/// Find the author of a block.
 	type FindAuthor: FindAuthor<Self::AccountId>;
 	/// The number of blocks back we should accept uncles.
@@ -152,7 +152,7 @@ enum UncleEntryItem<BlockNumber, Hash, Author> {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Authorship {
+	trait Store for Module<T: Config> as Authorship {
 		/// Uncles
 		Uncles: Vec<UncleEntryItem<T::BlockNumber, T::Hash, T::AccountId>>;
 		/// Author of current block.
@@ -164,7 +164,7 @@ decl_storage! {
 
 decl_error! {
 	/// Error for the authorship module.
-	pub enum Error for Module<T: Trait> {
+	pub enum Error for Module<T: Config> {
 		/// The uncle parent not in the chain.
 		InvalidUncleParent,
 		/// Uncles already set in the block.
@@ -183,7 +183,7 @@ decl_error! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
 		fn on_initialize(now: T::BlockNumber) -> Weight {
@@ -223,7 +223,7 @@ decl_module! {
 	}
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 	/// Fetch the author of the block.
 	///
 	/// This is safe to invoke in `on_initialize` implementations, as well
@@ -337,7 +337,7 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> ProvideInherent for Module<T> {
+impl<T: Config> ProvideInherent for Module<T> {
 	type Call = Call<T>;
 	type Error = InherentError;
 	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
@@ -396,68 +396,69 @@ impl<T: Trait> ProvideInherent for Module<T> {
 
 #[cfg(test)]
 mod tests {
+	use crate as pallet_authorship;
 	use super::*;
 	use sp_core::H256;
 	use sp_runtime::{
-		traits::{BlakeTwo256, IdentityLookup}, testing::Header, generic::DigestItem, Perbill,
+		traits::{BlakeTwo256, IdentityLookup}, testing::Header, generic::DigestItem,
 	};
-	use frame_support::{parameter_types, impl_outer_origin, ConsensusEngineId, weights::Weight};
+	use frame_support::{parameter_types, ConsensusEngineId};
 
-	impl_outer_origin!{
-		pub enum Origin for Test where system = frame_system {}
-	}
+	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+	type Block = frame_system::mocking::MockBlock<Test>;
 
-	#[derive(Clone, Eq, PartialEq)]
-	pub struct Test;
+	frame_support::construct_runtime!(
+		pub enum Test where
+			Block = Block,
+			NodeBlock = Block,
+			UncheckedExtrinsic = UncheckedExtrinsic,
+		{
+			System: frame_system::{Module, Call, Config, Storage, Event<T>},
+			Authorship: pallet_authorship::{Module, Call, Storage, Inherent},
+		}
+	);
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: Weight = 1024;
-		pub const MaximumBlockLength: u32 = 2 * 1024;
-		pub const AvailableBlockRatio: Perbill = Perbill::one();
+		pub BlockWeights: frame_system::limits::BlockWeights =
+			frame_system::limits::BlockWeights::simple_max(1024);
 	}
 
-	impl frame_system::Trait for Test {
+	impl frame_system::Config for Test {
 		type BaseCallFilter = ();
+		type BlockWeights = ();
+		type BlockLength = ();
+		type DbWeight = ();
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
-		type Call = ();
+		type Call = Call;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = ();
+		type Event = Event;
 		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type DbWeight = ();
-		type BlockExecutionWeight = ();
-		type ExtrinsicBaseWeight = ();
-		type MaximumExtrinsicWeight = MaximumBlockWeight;
-		type AvailableBlockRatio = AvailableBlockRatio;
-		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();
-		type PalletInfo = ();
+		type PalletInfo = PalletInfo;
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
+		type SS58Prefix = ();
 	}
 
 	parameter_types! {
 		pub const UncleGenerations: u64 = 5;
 	}
 
-	impl Trait for Test {
+	impl Config for Test {
 		type FindAuthor = AuthorGiven;
 		type UncleGenerations = UncleGenerations;
 		type FilterUncle = SealVerify<VerifyBlock>;
 		type EventHandler = ();
 	}
-
-	type System = frame_system::Module<Test>;
-	type Authorship = Module<Test>;
 
 	const TEST_ID: ConsensusEngineId = [1, 2, 3, 4];
 
@@ -587,7 +588,6 @@ mod tests {
 				&number,
 				&hash,
 				&Default::default(),
-				&Default::default(),
 				Default::default()
 			);
 
@@ -685,7 +685,6 @@ mod tests {
 			header.digest_mut().pop(); // pop the seal off.
 			System::initialize(
 				&1,
-				&Default::default(),
 				&Default::default(),
 				header.digest(),
 				Default::default(),

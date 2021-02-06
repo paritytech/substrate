@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -87,15 +87,12 @@ impl DataSegmentsSnapshot {
 				let init_expr = match segment.offset() {
 					Some(offset) => offset.code(),
 					// Return if the segment is passive
-					None => return Err(Error::from("Shared memory is not supported".to_string())),
+					None => return Err(Error::SharedMemUnsupported),
 				};
 
 				// [op, End]
 				if init_expr.len() != 2 {
-					return Err(Error::from(
-						"initializer expression can have only up to 2 expressions in wasm 1.0"
-							.to_string(),
-					));
+					return Err(Error::InitializerHasTooManyExpressions);
 				}
 				let offset = match &init_expr[0] {
 					Instruction::I32Const(v) => *v as u32,
@@ -106,15 +103,10 @@ impl DataSegmentsSnapshot {
 						// At the moment of writing the Substrate Runtime Interface does not provide
 						// any globals. There is nothing that prevents us from supporting this
 						// if/when we gain those.
-						return Err(Error::from(
-							"Imported globals are not supported yet".to_string(),
-						));
+						return Err(Error::ImportedGlobalsUnsupported);
 					}
 					insn => {
-						return Err(Error::from(format!(
-							"{:?} is not supported as initializer expression in wasm 1.0",
-							insn
-						)))
+						return Err(Error::InvalidInitializerExpression(format!("{:?}", insn)))
 					}
 				};
 

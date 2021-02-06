@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -68,9 +68,9 @@ pub struct BenchmarkCmd {
 	#[structopt(long)]
 	pub header: Option<std::path::PathBuf>,
 
-	/// Output the trait definition to a Rust file.
+	/// Path to Handlebars template file used for outputting benchmark results. (Optional)
 	#[structopt(long)]
-	pub trait_def: bool,
+	pub template: Option<std::path::PathBuf>,
 
 	/// Set the heap pages while running benchmarks.
 	#[structopt(long)]
@@ -83,18 +83,6 @@ pub struct BenchmarkCmd {
 	/// Display and run extra benchmarks that would otherwise not be needed for weight construction.
 	#[structopt(long)]
 	pub extra: bool,
-
-	/// Output files using spaces instead of tabs.
-	#[structopt(long)]
-	pub spaces: bool,
-
-	/// Output benchmarks file using this struct name.
-	#[structopt(long, default_value = "WeightInfo")]
-	pub r#struct: String,
-
-	/// Output benchmarks file using this trait name.
-	#[structopt(long, default_value = "WeightInfo")]
-	pub r#trait: String,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]

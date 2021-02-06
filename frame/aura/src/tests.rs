@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,7 +24,7 @@ use crate::mock::{Aura, new_test_ext};
 #[test]
 fn initial_values() {
 	new_test_ext(vec![0, 1, 2, 3]).execute_with(|| {
-		assert_eq!(Aura::last(), 0u64);
+		assert_eq!(Aura::current_slot(), 0u64);
 		assert_eq!(Aura::authorities().len(), 4);
 	});
 }

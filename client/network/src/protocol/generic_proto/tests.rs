@@ -1,18 +1,20 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 #![cfg(test)]
 
@@ -23,7 +25,6 @@ use libp2p::{PeerId, Multiaddr, Transport};
 use libp2p::core::{
 	connection::{ConnectionId, ListenerId},
 	ConnectedPoint,
-	muxing,
 	transport::MemoryTransport,
 	upgrade
 };
@@ -46,7 +47,6 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 
 	for index in 0 .. 2 {
 		let keypair = keypairs[index].clone();
-		let local_peer_id = keypair.public().into_peer_id();
 
 		let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
 			.into_authentic(&keypair)
@@ -55,32 +55,34 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 		let transport = MemoryTransport
 			.upgrade(upgrade::Version::V1)
 			.authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
-			.multiplex(yamux::Config::default())
-			.map(|(peer, muxer), _| (peer, muxing::StreamMuxerBox::new(muxer)))
+			.multiplex(yamux::YamuxConfig::default())
 			.timeout(Duration::from_secs(20))
-			.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
 			.boxed();
 
 		let (peerset, _) = sc_peerset::Peerset::from_config(sc_peerset::PeersetConfig {
-			in_peers: 25,
-			out_peers: 25,
-			bootnodes: if index == 0 {
-				keypairs
-					.iter()
-					.skip(1)
-					.map(|keypair| keypair.public().into_peer_id())
-					.collect()
-			} else {
-				vec![]
-			},
-			reserved_only: false,
-			priority_groups: Vec::new(),
+			sets: vec![
+				sc_peerset::SetConfig {
+					in_peers: 25,
+					out_peers: 25,
+					bootnodes: if index == 0 {
+						keypairs
+							.iter()
+							.skip(1)
+							.map(|keypair| keypair.public().into_peer_id())
+							.collect()
+					} else {
+						vec![]
+					},
+					reserved_nodes: Default::default(),
+					reserved_only: false,
+				}
+			],
 		});
 
 		let behaviour = CustomProtoWithAddr {
 			inner: GenericProto::new(
-				local_peer_id, "test", &[1], vec![], peerset,
-				iter::once(("/foo".into(), Vec::new()))
+				"test", &[1], vec![], peerset,
+				iter::once(("/foo".into(), Vec::new(), 1024 * 1024))
 			),
 			addrs: addrs
 				.iter()
@@ -246,7 +248,10 @@ fn reconnect_after_disconnect() {
 						ServiceState::NotConnected => {
 							service1_state = ServiceState::FirstConnec;
 							if service2_state == ServiceState::FirstConnec {
-								service1.disconnect_peer(Swarm::local_peer_id(&service2));
+								service1.disconnect_peer(
+									Swarm::local_peer_id(&service2),
+									sc_peerset::SetId::from(0)
+								);
 							}
 						},
 						ServiceState::Disconnected => service1_state = ServiceState::ConnectedAgain,
@@ -265,7 +270,10 @@ fn reconnect_after_disconnect() {
 						ServiceState::NotConnected => {
 							service2_state = ServiceState::FirstConnec;
 							if service1_state == ServiceState::FirstConnec {
-								service1.disconnect_peer(Swarm::local_peer_id(&service2));
+								service1.disconnect_peer(
+									Swarm::local_peer_id(&service2),
+									sc_peerset::SetId::from(0)
+								);
 							}
 						},
 						ServiceState::Disconnected => service2_state = ServiceState::ConnectedAgain,

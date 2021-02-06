@@ -1,15 +1,20 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Substrate service tasks management module.
 
@@ -19,7 +24,7 @@ use log::{debug, error};
 use futures::{
 	Future, FutureExt, StreamExt,
 	future::{select, Either, BoxFuture, join_all, try_join_all, pending},
-	sink::SinkExt,
+	sink::SinkExt, task::{Context, Poll},
 };
 use prometheus_endpoint::{
 	exponential_buckets, register,
@@ -27,11 +32,44 @@ use prometheus_endpoint::{
 	CounterVec, HistogramOpts, HistogramVec, Opts, Registry, U64
 };
 use sp_utils::mpsc::{TracingUnboundedSender, TracingUnboundedReceiver, tracing_unbounded};
+use tracing_futures::Instrument;
 use crate::{config::{TaskExecutor, TaskType, JoinFuture}, Error};
+use sc_telemetry::TelemetrySpan;
 
 mod prometheus_future;
 #[cfg(test)]
 mod tests;
+
+/// A wrapper around a `[Option<TelemetrySpan>]` and a [`Future`].
+///
+/// The telemetry in Substrate uses a span to identify the telemetry context. The span "infrastructure"
+/// is provided by the tracing-crate. Now it is possible to have your own spans as well. To support
+/// this with the [`TaskManager`] we have this wrapper. This wrapper enters the telemetry span every
+/// time the future is polled and polls the inner future. So, the inner future can still have its
+/// own span attached and we get our telemetry span ;)
+struct WithTelemetrySpan<T> {
+	span: Option<TelemetrySpan>,
+	inner: T,
+}
+
+impl<T> WithTelemetrySpan<T> {
+	fn new(span: Option<TelemetrySpan>, inner: T) -> Self {
+		Self {
+			span,
+			inner,
+		}
+	}
+}
+
+impl<T: Future<Output = ()> + Unpin> Future for WithTelemetrySpan<T> {
+	type Output = ();
+
+	fn poll(mut self: Pin<&mut Self>, ctx: &mut Context) -> Poll<Self::Output> {
+		let span = self.span.clone();
+		let _enter = span.as_ref().map(|s| s.enter());
+		Pin::new(&mut self.inner).poll(ctx)
+	}
+}
 
 /// An handle for spawning tasks in the service.
 #[derive(Clone)]
@@ -40,6 +78,7 @@ pub struct SpawnTaskHandle {
 	executor: TaskExecutor,
 	metrics: Option<Metrics>,
 	task_notifier: TracingUnboundedSender<JoinFuture>,
+	telemetry_span: Option<TelemetrySpan>,
 }
 
 impl SpawnTaskHandle {
@@ -116,7 +155,12 @@ impl SpawnTaskHandle {
 			}
 		};
 
-		let join_handle = self.executor.spawn(Box::pin(future), task_type);
+		let future = future.in_current_span().boxed();
+		let join_handle = self.executor.spawn(
+			WithTelemetrySpan::new(self.telemetry_span.clone(), future).boxed(),
+			task_type,
+		);
+
 		let mut task_notifier = self.task_notifier.clone();
 		self.executor.spawn(
 			Box::pin(async move {
@@ -222,14 +266,17 @@ pub struct TaskManager {
 	/// terminates and gracefully shutdown. Also ends the parent `future()` if a child's essential
 	/// task fails.
 	children: Vec<TaskManager>,
+	/// A `TelemetrySpan` used to enter the telemetry span when a task is spawned.
+	telemetry_span: Option<TelemetrySpan>,
 }
 
 impl TaskManager {
- 	/// If a Prometheus registry is passed, it will be used to report statistics about the
- 	/// service tasks.
+	/// If a Prometheus registry is passed, it will be used to report statistics about the
+	/// service tasks.
 	pub(super) fn new(
 		executor: TaskExecutor,
-		prometheus_registry: Option<&Registry>
+		prometheus_registry: Option<&Registry>,
+		telemetry_span: Option<TelemetrySpan>,
 	) -> Result<Self, PrometheusError> {
 		let (signal, on_exit) = exit_future::signal();
 
@@ -258,6 +305,7 @@ impl TaskManager {
 			task_notifier,
 			completion_future,
 			children: Vec::new(),
+			telemetry_span,
 		})
 	}
 
@@ -268,6 +316,7 @@ impl TaskManager {
 			executor: self.executor.clone(),
 			metrics: self.metrics.clone(),
 			task_notifier: self.task_notifier.clone(),
+			telemetry_span: self.telemetry_span.clone(),
 		}
 	}
 

@@ -1,18 +1,20 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Execution extensions for runtime calls.
 //!
@@ -136,31 +138,9 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 		*self.transaction_pool.write() = Some(Arc::downgrade(&pool) as _);
 	}
 
-	/// Create `ExecutionManager` and `Extensions` for given offchain call.
-	///
 	/// Based on the execution context and capabilities it produces
-	/// the right manager and extensions object to support desired set of APIs.
-	pub fn manager_and_extensions<E: std::fmt::Debug, R: codec::Codec>(
-		&self,
-		at: &BlockId<Block>,
-		context: ExecutionContext,
-	) -> (
-		ExecutionManager<DefaultHandler<R, E>>,
-		Extensions,
-	) {
-		let manager = match context {
-			ExecutionContext::BlockConstruction =>
-				self.strategies.block_construction.get_manager(),
-			ExecutionContext::Syncing =>
-				self.strategies.syncing.get_manager(),
-			ExecutionContext::Importing =>
-				self.strategies.importing.get_manager(),
-			ExecutionContext::OffchainCall(Some((_, capabilities))) if capabilities.has_all() =>
-				self.strategies.offchain_worker.get_manager(),
-			ExecutionContext::OffchainCall(_) =>
-				self.strategies.other.get_manager(),
-		};
-
+	/// the extensions object to support desired set of APIs.
+	pub fn extensions(&self, at: &BlockId<Block>, context: ExecutionContext) -> Extensions {
 		let capabilities = context.capabilities();
 
 		let mut extensions = self.extensions_factory.read().extensions_for(capabilities);
@@ -190,7 +170,35 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 			);
 		}
 
-		(manager, extensions)
+		extensions
+	}
+
+	/// Create `ExecutionManager` and `Extensions` for given offchain call.
+	///
+	/// Based on the execution context and capabilities it produces
+	/// the right manager and extensions object to support desired set of APIs.
+	pub fn manager_and_extensions<E: std::fmt::Debug, R: codec::Codec>(
+		&self,
+		at: &BlockId<Block>,
+		context: ExecutionContext,
+	) -> (
+		ExecutionManager<DefaultHandler<R, E>>,
+		Extensions,
+	) {
+		let manager = match context {
+			ExecutionContext::BlockConstruction =>
+				self.strategies.block_construction.get_manager(),
+			ExecutionContext::Syncing =>
+				self.strategies.syncing.get_manager(),
+			ExecutionContext::Importing =>
+				self.strategies.importing.get_manager(),
+			ExecutionContext::OffchainCall(Some((_, capabilities))) if capabilities.has_all() =>
+				self.strategies.offchain_worker.get_manager(),
+			ExecutionContext::OffchainCall(_) =>
+				self.strategies.other.get_manager(),
+		};
+
+		(manager, self.extensions(at, context))
 	}
 }
 
@@ -205,7 +213,7 @@ impl<Block: traits::Block> offchain::TransactionPool for TransactionPoolAdapter<
 		let xt = match Block::Extrinsic::decode(&mut &*data) {
 			Ok(xt) => xt,
 			Err(e) => {
-				log::warn!("Unable to decode extrinsic: {:?}: {}", data, e.what());
+				log::warn!("Unable to decode extrinsic: {:?}: {}", data, e);
 				return Err(());
 			},
 		};

@@ -1,32 +1,32 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate. If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! This module takes care of loading, checking and preprocessing of a
 //! wasm module before execution. It also extracts some essential information
 //! from a module.
 
-use crate::wasm::env_def::ImportSatisfyCheck;
-use crate::wasm::PrefabWasmModule;
-use crate::{Schedule, Trait};
-
+use crate::{
+	Schedule, Config,
+	chain_extension::ChainExtension,
+	wasm::{PrefabWasmModule, env_def::ImportSatisfyCheck},
+};
 use parity_wasm::elements::{self, Internal, External, MemoryType, Type, ValueType};
-use pwasm_utils;
-use pwasm_utils::rules;
+use sp_runtime::traits::Hash;
 use sp_std::prelude::*;
-use sp_runtime::traits::{SaturatedConversion};
 
 /// Currently, all imported functions must be located inside this module. We might support
 /// additional modules for versioning later.
@@ -36,13 +36,13 @@ pub const IMPORT_MODULE_FN: &str = "seal0";
 /// compiler toolchains might not support specifying other modules than "env" for memory imports.
 pub const IMPORT_MODULE_MEMORY: &str = "env";
 
-struct ContractModule<'a, T: Trait> {
+struct ContractModule<'a, T: Config> {
 	/// A deserialized module. The module is valid (this is Guaranteed by `new` method).
 	module: elements::Module,
 	schedule: &'a Schedule<T>,
 }
 
-impl<'a, T: Trait> ContractModule<'a, T> {
+impl<'a, T: Config> ContractModule<'a, T> {
 	/// Creates a new instance of `ContractModule`.
 	///
 	/// Returns `Err` if the `original_code` couldn't be decoded or
@@ -101,6 +101,33 @@ impl<'a, T: Trait> ContractModule<'a, T> {
 		Ok(())
 	}
 
+	/// Ensure that any `br_table` instruction adheres to its immediate value limit.
+	fn ensure_br_table_size_limit(&self, limit: u32) -> Result<(), &'static str> {
+		let code_section = if let Some(type_section) = self.module.code_section() {
+			type_section
+		} else {
+			return Ok(());
+		};
+		for instr in code_section.bodies().iter().flat_map(|body| body.code().elements()) {
+			use parity_wasm::elements::Instruction::BrTable;
+			if let BrTable(table) = instr {
+				if table.table.len() > limit as usize {
+					return Err("BrTable's immediate value is too big.")
+				}
+			}
+		}
+		Ok(())
+	}
+
+	fn ensure_global_variable_limit(&self, limit: u32) -> Result<(), &'static str> {
+		if let Some(global_section) = self.module.global_section() {
+			if global_section.entries().len() > limit as usize {
+				return Err("module declares too many globals")
+			}
+		}
+		Ok(())
+	}
+
 	/// Ensures that no floating point types are in use.
 	fn ensure_no_floating_types(&self) -> Result<(), &'static str> {
 		if let Some(global_section) = self.module.global_section() {
@@ -145,15 +172,25 @@ impl<'a, T: Trait> ContractModule<'a, T> {
 		Ok(())
 	}
 
-	fn inject_gas_metering(self) -> Result<Self, &'static str> {
-		let gas_rules =
-			rules::Set::new(
-				self.schedule.instruction_weights.regular.clone().saturated_into(),
-				Default::default(),
-			)
-			.with_grow_cost(self.schedule.instruction_weights.grow_mem.clone().saturated_into())
-			.with_forbidden_floats();
+	/// Ensure that no function exists that has more parameters than allowed.
+	fn ensure_parameter_limit(&self, limit: u32) -> Result<(), &'static str> {
+		let type_section = if let Some(type_section) = self.module.type_section() {
+			type_section
+		} else {
+			return Ok(());
+		};
 
+		for Type::Function(func) in type_section.types() {
+			if func.params().len() > limit as usize {
+				return Err("Use of a function type with too many parameters.");
+			}
+		}
+
+		Ok(())
+	}
+
+	fn inject_gas_metering(self) -> Result<Self, &'static str> {
+		let gas_rules = self.schedule.rules(&self.module);
 		let contract_module = pwasm_utils::inject_gas_counter(
 			self.module,
 			&gas_rules,
@@ -167,7 +204,8 @@ impl<'a, T: Trait> ContractModule<'a, T> {
 
 	fn inject_stack_height_metering(self) -> Result<Self, &'static str> {
 		let contract_module =
-			pwasm_utils::stack_height::inject_limiter(self.module, self.schedule.max_stack_height)
+			pwasm_utils::stack_height
+				::inject_limiter(self.module, self.schedule.limits.stack_height)
 				.map_err(|_| "stack height instrumentation failed")?;
 		Ok(ContractModule {
 			module: contract_module,
@@ -318,6 +356,12 @@ impl<'a, T: Trait> ContractModule<'a, T> {
 				return Err("module imports `seal_println` but debug features disabled");
 			}
 
+			if !T::ChainExtension::enabled() &&
+				import.field().as_bytes() == b"seal_call_chain_extension"
+			{
+				return Err("module uses chain extensions but chain extensions are disabled");
+			}
+
 			if import_fn_banlist.iter().any(|f| import.field().as_bytes() == *f)
 				|| !C::can_satisfy(import.field().as_bytes(), func_ty)
 			{
@@ -333,7 +377,7 @@ impl<'a, T: Trait> ContractModule<'a, T> {
 	}
 }
 
-fn get_memory_limits<T: Trait>(module: Option<&MemoryType>, schedule: &Schedule<T>)
+fn get_memory_limits<T: Config>(module: Option<&MemoryType>, schedule: &Schedule<T>)
 	-> Result<(u32, u32), &'static str>
 {
 	if let Some(memory_type) = module {
@@ -345,7 +389,7 @@ fn get_memory_limits<T: Trait>(module: Option<&MemoryType>, schedule: &Schedule<
 					"Requested initial number of pages should not exceed the requested maximum",
 				);
 			}
-			(_, Some(maximum)) if maximum > schedule.max_memory_pages => {
+			(_, Some(maximum)) if maximum > schedule.limits.memory_pages => {
 				return Err("Maximum number of pages should not exceed the configured maximum.");
 			}
 			(initial, Some(maximum)) => Ok((initial, maximum)),
@@ -363,6 +407,55 @@ fn get_memory_limits<T: Trait>(module: Option<&MemoryType>, schedule: &Schedule<
 	}
 }
 
+fn check_and_instrument<C: ImportSatisfyCheck, T: Config>(
+	original_code: &[u8],
+	schedule: &Schedule<T>,
+) -> Result<(Vec<u8>, (u32, u32)), &'static str> {
+	let contract_module = ContractModule::new(&original_code, schedule)?;
+	contract_module.scan_exports()?;
+	contract_module.ensure_no_internal_memory()?;
+	contract_module.ensure_table_size_limit(schedule.limits.table_size)?;
+	contract_module.ensure_global_variable_limit(schedule.limits.globals)?;
+	contract_module.ensure_no_floating_types()?;
+	contract_module.ensure_parameter_limit(schedule.limits.parameters)?;
+	contract_module.ensure_br_table_size_limit(schedule.limits.br_table_size)?;
+
+	// We disallow importing `gas` function here since it is treated as implementation detail.
+	let disallowed_imports = [b"gas".as_ref()];
+	let memory_limits = get_memory_limits(
+		contract_module.scan_imports::<C>(&disallowed_imports)?,
+		schedule
+	)?;
+
+	let code = contract_module
+		.inject_gas_metering()?
+		.inject_stack_height_metering()?
+		.into_wasm_code()?;
+
+	Ok((code, memory_limits))
+}
+
+fn do_preparation<C: ImportSatisfyCheck, T: Config>(
+	original_code: Vec<u8>,
+	schedule: &Schedule<T>,
+) -> Result<PrefabWasmModule<T>, &'static str> {
+	let (code, (initial, maximum)) = check_and_instrument::<C, T>(
+		original_code.as_ref(),
+		schedule,
+	)?;
+	Ok(PrefabWasmModule {
+		schedule_version: schedule.version,
+		initial,
+		maximum,
+		_reserved: None,
+		code,
+		original_code_len: original_code.len() as u32,
+		refcount: 1,
+		code_hash: T::Hashing::hash(&original_code),
+		original_code: Some(original_code),
+	})
+}
+
 /// Loads the given module given in `original_code`, performs some checks on it and
 /// does some preprocessing.
 ///
@@ -374,34 +467,23 @@ fn get_memory_limits<T: Trait>(module: Option<&MemoryType>, schedule: &Schedule<
 /// - all imported functions from the external environment matches defined by `env` module,
 ///
 /// The preprocessing includes injecting code for gas metering and metering the height of stack.
-pub fn prepare_contract<C: ImportSatisfyCheck, T: Trait>(
-	original_code: &[u8],
+pub fn prepare_contract<T: Config>(
+	original_code: Vec<u8>,
 	schedule: &Schedule<T>,
-) -> Result<PrefabWasmModule, &'static str> {
-	let mut contract_module = ContractModule::new(original_code, schedule)?;
-	contract_module.scan_exports()?;
-	contract_module.ensure_no_internal_memory()?;
-	contract_module.ensure_table_size_limit(schedule.max_table_size)?;
-	contract_module.ensure_no_floating_types()?;
+) -> Result<PrefabWasmModule<T>, &'static str> {
+	do_preparation::<super::runtime::Env, T>(original_code, schedule)
+}
 
-	// We disallow importing `gas` function here since it is treated as implementation detail.
-	let disallowed_imports = [b"gas".as_ref()];
-	let memory_limits = get_memory_limits(
-		contract_module.scan_imports::<C>(&disallowed_imports)?,
-		schedule
-	)?;
-
-	contract_module = contract_module
-		.inject_gas_metering()?
-		.inject_stack_height_metering()?;
-
-	Ok(PrefabWasmModule {
-		schedule_version: schedule.version,
-		initial: memory_limits.0,
-		maximum: memory_limits.1,
-		_reserved: None,
-		code: contract_module.into_wasm_code()?,
-	})
+/// The same as [`prepare_contract`] but without constructing a new [`PrefabWasmModule`]
+///
+/// # Note
+///
+/// Use this when an existing contract should be re-instrumented with a newer schedule version.
+pub fn reinstrument_contract<T: Config>(
+	original_code: Vec<u8>,
+	schedule: &Schedule<T>,
+) -> Result<Vec<u8>, &'static str> {
+	Ok(check_and_instrument::<super::runtime::Env, T>(&original_code, schedule)?.0)
 }
 
 /// Alternate (possibly unsafe) preparation functions used only for benchmarking.
@@ -412,9 +494,7 @@ pub fn prepare_contract<C: ImportSatisfyCheck, T: Trait>(
 /// in production code.
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking {
-	use super::{
-		Trait, ContractModule, PrefabWasmModule, ImportSatisfyCheck, Schedule, get_memory_limits
-	};
+	use super::*;
 	use parity_wasm::elements::FunctionType;
 
 	impl ImportSatisfyCheck for () {
@@ -424,10 +504,10 @@ pub mod benchmarking {
 	}
 
 	/// Prepare function that neither checks nor instruments the passed in code.
-	pub fn prepare_contract<T: Trait>(original_code: &[u8], schedule: &Schedule<T>)
-		-> Result<PrefabWasmModule, &'static str>
+	pub fn prepare_contract<T: Config>(original_code: Vec<u8>, schedule: &Schedule<T>)
+		-> Result<PrefabWasmModule<T>, &'static str>
 	{
-		let contract_module = ContractModule::new(original_code, schedule)?;
+		let contract_module = ContractModule::new(&original_code, schedule)?;
 		let memory_limits = get_memory_limits(contract_module.scan_imports::<()>(&[])?, schedule)?;
 		Ok(PrefabWasmModule {
 			schedule_version: schedule.version,
@@ -435,6 +515,10 @@ pub mod benchmarking {
 			maximum: memory_limits.1,
 			_reserved: None,
 			code: contract_module.into_wasm_code()?,
+			original_code_len: original_code.len() as u32,
+			refcount: 1,
+			code_hash: T::Hashing::hash(&original_code),
+			original_code: Some(original_code),
 		})
 	}
 }
@@ -442,36 +526,52 @@ pub mod benchmarking {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::exec::Ext;
+	use crate::{exec::Ext, Limits};
 	use std::fmt;
 	use assert_matches::assert_matches;
 
-	impl fmt::Debug for PrefabWasmModule {
+	impl fmt::Debug for PrefabWasmModule<crate::tests::Test> {
 		fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 			write!(f, "PreparedContract {{ .. }}")
 		}
 	}
 
-	// Define test environment for tests. We need ImportSatisfyCheck
-	// implementation from it. So actual implementations doesn't matter.
-	define_env!(TestEnv, <E: Ext>,
-		panic(_ctx) => { unreachable!(); },
+	/// Using unreachable statements triggers unreachable warnings in the generated code
+	#[allow(unreachable_code)]
+	mod env {
+		use super::*;
 
-		// gas is an implementation defined function and a contract can't import it.
-		gas(_ctx, _amount: u32) => { unreachable!(); },
+		// Define test environment for tests. We need ImportSatisfyCheck
+		// implementation from it. So actual implementations doesn't matter.
+		define_env!(Test, <E: Ext>,
+			panic(_ctx) => { unreachable!(); },
 
-		nop(_ctx, _unused: u64) => { unreachable!(); },
+			// gas is an implementation defined function and a contract can't import it.
+			gas(_ctx, _amount: u32) => { unreachable!(); },
 
-		seal_println(_ctx, _ptr: u32, _len: u32) => { unreachable!(); },
-	);
+			nop(_ctx, _unused: u64) => { unreachable!(); },
+
+			seal_println(_ctx, _ptr: u32, _len: u32) => { unreachable!(); },
+		);
+	}
 
 	macro_rules! prepare_test {
 		($name:ident, $wat:expr, $($expected:tt)*) => {
 			#[test]
 			fn $name() {
 				let wasm = wat::parse_str($wat).unwrap();
-				let schedule = Schedule::default();
-				let r = prepare_contract::<TestEnv, crate::tests::Test>(wasm.as_ref(), &schedule);
+				let schedule = Schedule {
+					limits: Limits {
+						globals: 3,
+						parameters: 3,
+						memory_pages: 16,
+						table_size: 3,
+						br_table_size: 3,
+						.. Default::default()
+					},
+					.. Default::default()
+				};
+				let r = do_preparation::<env::Test, crate::tests::Test>(wasm, &schedule);
 				assert_matches!(r, $($expected)*);
 			}
 		};
@@ -493,14 +593,66 @@ mod tests {
 		Err("gas instrumentation failed")
 	);
 
-	mod memories {
+	mod functions {
 		use super::*;
 
-		// Tests below assumes that maximum page number is configured to a certain number.
-		#[test]
-		fn assume_memory_size() {
-			assert_eq!(<Schedule<crate::tests::Test>>::default().max_memory_pages, 16);
-		}
+		prepare_test!(param_number_valid,
+			r#"
+			(module
+				(func (export "call"))
+				(func (export "deploy"))
+				(func (param i32 i32 i32))
+			)
+			"#,
+			Ok(_)
+		);
+
+		prepare_test!(param_number_invalid,
+			r#"
+			(module
+				(func (export "call"))
+				(func (export "deploy"))
+				(func (param i32 i32 i32 i32))
+				(func (param i32))
+			)
+			"#,
+			Err("Use of a function type with too many parameters.")
+		);
+	}
+
+	mod globals {
+		use super::*;
+
+		prepare_test!(global_number_valid,
+			r#"
+			(module
+				(global i64 (i64.const 0))
+				(global i64 (i64.const 0))
+				(global i64 (i64.const 0))
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
+			Ok(_)
+		);
+
+		prepare_test!(global_number_too_high,
+			r#"
+			(module
+				(global i64 (i64.const 0))
+				(global i64 (i64.const 0))
+				(global i64 (i64.const 0))
+				(global i64 (i64.const 0))
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
+			Err("module declares too many globals")
+		);
+	}
+
+	mod memories {
+		use super::*;
 
 		prepare_test!(memory_with_one_page,
 			r#"
@@ -559,6 +711,18 @@ mod tests {
 			)
 			"#,
 			Err("Maximum number of pages should be always declared.")
+		);
+
+		prepare_test!(requested_maximum_valid,
+			r#"
+			(module
+				(import "env" "memory" (memory 1 16))
+
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
+			Ok(_)
 		);
 
 		prepare_test!(requested_maximum_exceeds_configured_maximum,
@@ -625,12 +789,6 @@ mod tests {
 	mod tables {
 		use super::*;
 
-		// Tests below assumes that maximum table size is configured to a certain number.
-		#[test]
-		fn assume_table_size() {
-			assert_eq!(<Schedule<crate::tests::Test>>::default().max_table_size, 16384);
-		}
-
 		prepare_test!(no_tables,
 			r#"
 			(module
@@ -644,7 +802,7 @@ mod tests {
 		prepare_test!(table_valid_size,
 			r#"
 			(module
-				(table 10000 funcref)
+				(table 3 funcref)
 
 				(func (export "call"))
 				(func (export "deploy"))
@@ -656,12 +814,39 @@ mod tests {
 		prepare_test!(table_too_big,
 			r#"
 			(module
-				(table 20000 funcref)
+				(table 4 funcref)
 
 				(func (export "call"))
 				(func (export "deploy"))
 			)"#,
 			Err("table exceeds maximum size allowed")
+		);
+
+		prepare_test!(br_table_valid_size,
+			r#"
+			(module
+				(func (export "call"))
+				(func (export "deploy"))
+				(func
+					i32.const 0
+					br_table 0 0 0 0
+				)
+			)
+			"#,
+			Ok(_)
+		);
+
+		prepare_test!(br_table_too_big,
+			r#"
+			(module
+				(func (export "call"))
+				(func (export "deploy"))
+				(func
+					i32.const 0
+					br_table 0 0 0 0 0
+				)
+			)"#,
+			Err("BrTable's immediate value is too big.")
 		);
 	}
 
@@ -797,7 +982,7 @@ mod tests {
 			).unwrap();
 			let mut schedule = Schedule::default();
 			schedule.enable_println = true;
-			let r = prepare_contract::<TestEnv, crate::tests::Test>(wasm.as_ref(), &schedule);
+			let r = do_preparation::<env::Test, crate::tests::Test>(wasm, &schedule);
 			assert_matches!(r, Ok(_));
 		}
 	}
