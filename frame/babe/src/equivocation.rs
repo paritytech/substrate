@@ -167,7 +167,7 @@ where
 impl<T: Config> frame_support::unsigned::ValidateUnsigned for Module<T> {
 	type Call = Call<T>;
 	fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-		if let Call::report_equivocation_unsigned(equivocation_proof, _) = call {
+		if let Call::report_equivocation_unsigned(equivocation_proof, key_owner_proof) = call {
 			// discard equivocation report not coming from the local node
 			match source {
 				TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ }
@@ -180,6 +180,9 @@ impl<T: Config> frame_support::unsigned::ValidateUnsigned for Module<T> {
 					return InvalidTransaction::Call.into();
 				}
 			}
+
+			// check report staleness
+			is_known_offence::<T>(equivocation_proof, key_owner_proof)?;
 
 			ValidTransaction::with_tag_prefix("BabeEquivocation")
 				// We assign the maximum priority for any equivocation report.
@@ -199,30 +202,32 @@ impl<T: Config> frame_support::unsigned::ValidateUnsigned for Module<T> {
 
 	fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
 		if let Call::report_equivocation_unsigned(equivocation_proof, key_owner_proof) = call {
-			// check the membership proof to extract the offender's id
-			let key = (
-				sp_consensus_babe::KEY_TYPE,
-				equivocation_proof.offender.clone(),
-			);
-
-			let offender = T::KeyOwnerProofSystem::check_proof(key, key_owner_proof.clone())
-				.ok_or(InvalidTransaction::BadProof)?;
-
-			// check if the offence has already been reported,
-			// and if so then we can discard the report.
-			let is_known_offence = T::HandleEquivocation::is_known_offence(
-				&[offender],
-				&equivocation_proof.slot,
-			);
-
-			if is_known_offence {
-				Err(InvalidTransaction::Stale.into())
-			} else {
-				Ok(())
-			}
+			is_known_offence::<T>(equivocation_proof, key_owner_proof)
 		} else {
 			Err(InvalidTransaction::Call.into())
 		}
+	}
+}
+
+fn is_known_offence<T: Config>(
+	equivocation_proof: &EquivocationProof<T::Header>,
+	key_owner_proof: &T::KeyOwnerProof,
+) -> Result<(), TransactionValidityError> {
+	// check the membership proof to extract the offender's id
+	let key = (
+		sp_consensus_babe::KEY_TYPE,
+		equivocation_proof.offender.clone(),
+	);
+
+	let offender = T::KeyOwnerProofSystem::check_proof(key, key_owner_proof.clone())
+		.ok_or(InvalidTransaction::BadProof)?;
+
+	// check if the offence has already been reported,
+	// and if so then we can discard the report.
+	if T::HandleEquivocation::is_known_offence(&[offender], &equivocation_proof.slot) {
+		Err(InvalidTransaction::Stale.into())
+	} else {
+		Ok(())
 	}
 }
 

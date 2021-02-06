@@ -577,7 +577,8 @@ impl<T: Config> Module<T> {
 //
 // Note that a signed extension can also indicate that a particular data must be present in the
 // _signing payload_ of a transaction by providing an implementation for the `additional_signed`
-// method. This example will not cover this type of extension. See `CheckRuntime` in FRAME System
+// method. This example will not cover this type of extension. See `CheckSpecVersion` in 
+// [FRAME System](https://github.com/paritytech/substrate/tree/master/frame/system#signed-extensions)
 // for an example.
 //
 // Using the extension, you can add some hooks to the life cycle of each transaction. Note that by
