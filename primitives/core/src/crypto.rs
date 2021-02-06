@@ -264,7 +264,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 				// d[0] d[1] are: 01aaaaaa bbcccccc
 				// they make the LE-encoded 16-bit value: aaaaaabb 00cccccc
 				// so the lower byte is formed of aaaaaabb and the higher byte is 00cccccc
-				let lower = ((data[0] & 0b00111111) << 2) | (data[1] >> 6);
+				let lower = (data[0] << 2) | (data[1] >> 6);
 				let upper = data[1] & 0b00111111;
 				(2, (lower as u16) | ((upper as u16) << 8))
 			}
