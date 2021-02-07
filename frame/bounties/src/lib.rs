@@ -290,14 +290,8 @@ decl_event!(
 		SubBountyAwarded(BountyIndex, BountyIndex, AccountId),
 		/// A Subbounty is claimed by beneficiary. \[index, subbounty index, payout, beneficiary\]
 		SubBountyClaimed(BountyIndex, BountyIndex, Balance, AccountId),
-		/// A Subbounty proposal was rejected; funds were slashed. \[index, subbounty index, bond\]
-		SubBountyRejected(BountyIndex, BountyIndex, Balance),
 		/// A Subbounty is cancelled. \[index, subbounty index,\]
 		SubBountyCanceled(BountyIndex, BountyIndex),
-		/// A subbounty proposal is funded and became active. \[index, subbounty index\]
-		SubBountyBecameActive(BountyIndex, BountyIndex),
-		/// A Subbounty expiry is extended. \[index, subbounty index,\]
-		SubBountyExtended(BountyIndex, BountyIndex),
 	}
 );
 
