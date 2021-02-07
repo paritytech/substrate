@@ -91,6 +91,102 @@ fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
 	assert_eq!(event, &system_event);
 }
 
+fn setup_subbounty<T: Config>(u: u32, d: u32) -> (
+	T::AccountId,
+	T::AccountId,
+	T::AccountId,
+	BalanceOf<T>,
+	BalanceOf<T>,
+	BalanceOf<T>,
+	BalanceOf<T>,
+	Vec<u8>,
+) {
+	let (caller, curator, fee, value, reason) = setup_bounty::<T>(u, d);
+	let subcurator = account("subcurator", u, SEED);
+	let _ = T::Currency::make_free_balance_be(&subcurator, fee / 2u32.into());
+	// let subbounty_value = (value - fee) / 4u32.into();
+	let subbounty_value = 2u32.into();
+	let subbounty_fee = subbounty_value / 2u32.into();
+	(caller, curator, subcurator, fee, value, subbounty_fee, subbounty_value, reason)
+}
+
+fn create_subbounty_bounty<T: Config>() -> Result<(
+	BountyIndex,
+	T::AccountId,
+	T::AccountId,
+	BalanceOf<T>,
+	BalanceOf<T>,
+	Vec<u8>,
+), &'static str> {
+	let (
+		caller,
+		curator,
+		subcurator,
+		fee,
+		value,
+		subbounty_fee,
+		subbounty_value,
+		reason
+	) = setup_subbounty::<T>(0, MAX_BYTES);
+	let curator_lookup = T::Lookup::unlookup(curator.clone());
+	Bounties::<T>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason.clone())?;
+	let bounty_id = BountyCount::get() - 1;
+	Bounties::<T>::approve_bounty(RawOrigin::Root.into(), bounty_id)?;
+	Treasury::<T>::on_initialize(T::BlockNumber::zero());
+	Bounties::<T>::propose_curator(RawOrigin::Root.into(), bounty_id, curator_lookup.clone(), fee)?;
+	Bounties::<T>::accept_curator(RawOrigin::Signed(curator.clone()).into(), bounty_id)?;
+	Ok((
+		bounty_id,
+		curator,
+		subcurator,
+		subbounty_fee,
+		subbounty_value,
+		reason
+	))
+}
+
+fn create_subbounty<T: Config>() -> Result<(
+	BountyIndex,
+	BountyIndex,
+	T::AccountId,
+	T::AccountId,
+), &'static str> {
+	let (
+		bounty_id,
+		curator,
+		subcurator,
+		subbounty_fee,
+		subbounty_value,
+		reason
+	) = create_subbounty_bounty::<T>()?;
+	let subcurator_lookup = T::Lookup::unlookup(subcurator.clone());
+	Bounties::<T>::add_subbounty(
+		RawOrigin::Signed(curator.clone()).into(),
+		bounty_id,
+		subbounty_value,
+		reason,
+	)?;
+	let subbounty_id = BountyCount::get() - 1;
+	Bounties::<T>::propose_subcurator(
+		RawOrigin::Signed(curator.clone()).into(),
+		bounty_id,
+		subbounty_id,
+		subcurator_lookup.clone(),
+		subbounty_fee,
+	)?;
+	Bounties::<T>::accept_subcurator(
+		RawOrigin::Signed(subcurator.clone()).into(),
+		bounty_id,
+		subbounty_id,
+	)?;
+	Ok((
+		bounty_id,
+		subbounty_id,
+		curator,
+		subcurator,
+	))
+}
+
 const MAX_BYTES: u32 = 16384;
 
 benchmarks! {
@@ -218,6 +314,170 @@ benchmarks! {
 		ensure!(missed_any == false, "Missed some");
 		assert_last_event::<T>(RawEvent::BountyBecameActive(b - 1).into())
 	}
+
+	add_subbounty {
+		setup_pot_account::<T>();
+		let (
+			bounty_id,
+			curator,
+			_subcurator,
+			_subbounty_fee,
+			subbounty_value,
+			description,
+		) = create_subbounty_bounty::<T>()?;
+	}: _(RawOrigin::Signed(curator), bounty_id, subbounty_value, description)
+
+	propose_subcurator {
+		setup_pot_account::<T>();
+		let (
+			bounty_id,
+			curator,
+			subcurator,
+			subbounty_fee,
+			subbounty_value,
+			description,
+		) = create_subbounty_bounty::<T>()?;
+
+		let subcurator_lookup = T::Lookup::unlookup(subcurator.clone());
+		Bounties::<T>::add_subbounty(
+			RawOrigin::Signed(curator.clone()).into(),
+			bounty_id,
+			subbounty_value,
+			description,
+		)?;
+		let subbounty_id = BountyCount::get() - 1;
+	}: _(RawOrigin::Signed(curator), bounty_id, subbounty_id, subcurator_lookup, subbounty_fee)
+
+	unassign_subcurator {
+		setup_pot_account::<T>();
+		let (
+			bounty_id,
+			subbounty_id,
+			curator,
+			subcurator,
+		) = create_subbounty::<T>()?;
+		Bounties::<T>::on_initialize(T::BlockNumber::zero());
+		frame_system::Module::<T>::set_block_number(T::BountyUpdatePeriod::get() + 1u32.into());
+		let caller = whitelisted_caller();
+	}: _(RawOrigin::Signed(caller), bounty_id, subbounty_id)
+
+	accept_subcurator {
+		setup_pot_account::<T>();
+		let (
+			bounty_id,
+			curator,
+			subcurator,
+			subbounty_fee,
+			subbounty_value,
+			description,
+		) = create_subbounty_bounty::<T>()?;
+
+		let subcurator_lookup = T::Lookup::unlookup(subcurator.clone());
+
+		Bounties::<T>::add_subbounty(
+			RawOrigin::Signed(curator.clone()).into(),
+			bounty_id,
+			subbounty_value,
+			description,
+		)?;
+
+		let subbounty_id = BountyCount::get() - 1;
+
+		Bounties::<T>::propose_subcurator(
+			RawOrigin::Signed(curator.clone()).into(),
+			bounty_id,
+			subbounty_id,
+			subcurator_lookup.clone(),
+			subbounty_fee,
+		)?;
+	}: _(RawOrigin::Signed(subcurator), bounty_id, subbounty_id)
+
+	award_subbounty {
+		setup_pot_account::<T>();
+		let (
+			bounty_id,
+			subbounty_id,
+			curator,
+			subcurator,
+		) = create_subbounty::<T>()?;
+		let beneficiary = T::Lookup::unlookup(account("beneficiary", 0, SEED));
+	}: _(RawOrigin::Signed(subcurator), bounty_id, subbounty_id, beneficiary)
+
+	claim_subbounty {
+		setup_pot_account::<T>();
+		let (
+			bounty_id,
+			subbounty_id,
+			curator,
+			subcurator,
+		) = create_subbounty::<T>()?;
+
+		let beneficiary_account: T::AccountId = account("beneficiary", 0, SEED);
+		let beneficiary = T::Lookup::unlookup(beneficiary_account.clone());
+
+		Bounties::<T>::award_subbounty(
+			RawOrigin::Signed(subcurator.clone()).into(),
+			bounty_id,
+			subbounty_id,
+			beneficiary
+		)?;
+
+		frame_system::Module::<T>::set_block_number(T::BountyDepositPayoutDelay::get());
+		ensure!(
+			T::Currency::free_balance(&beneficiary_account).is_zero(),
+			"Beneficiary already has balance"
+		);
+	}: _(RawOrigin::Signed(curator), bounty_id, subbounty_id)
+	verify {
+		ensure!(
+			!T::Currency::free_balance(&beneficiary_account).is_zero(),
+			"Beneficiary didn't get paid"
+		);
+	}
+
+	close_subbounty_proposed {
+		setup_pot_account::<T>();
+		let (
+			bounty_id,
+			curator,
+			subcurator,
+			subbounty_fee,
+			subbounty_value,
+			reason
+		) = create_subbounty_bounty::<T>()?;
+		let subcurator_lookup = T::Lookup::unlookup(subcurator.clone());
+		Bounties::<T>::add_subbounty(
+			RawOrigin::Signed(curator.clone()).into(),
+			bounty_id,
+			subbounty_value,
+			reason,
+		)?;
+		let subbounty_id = BountyCount::get() - 1;
+		Bounties::<T>::propose_subcurator(
+			RawOrigin::Signed(curator.clone()).into(),
+			bounty_id,
+			subbounty_id,
+			subcurator_lookup.clone(),
+			subbounty_fee,
+		)?;
+	}: close_subbounty(RawOrigin::Signed(curator), bounty_id, subbounty_id)
+
+	close_subbounty_active {
+		setup_pot_account::<T>();
+		let (
+			bounty_id,
+			subbounty_id,
+			curator,
+			subcurator,
+		) = create_subbounty::<T>()?;
+
+		Bounties::<T>::on_initialize(T::BlockNumber::zero());
+
+	}: close_subbounty(RawOrigin::Root, bounty_id, subbounty_id)
+	verify {
+		assert_last_event::<T>(RawEvent::SubBountyCanceled(bounty_id, subbounty_id).into())
+	}
+
 }
 
 #[cfg(test)]
@@ -240,6 +500,14 @@ mod tests {
 			assert_ok!(test_benchmark_close_bounty_active::<Test>());
 			assert_ok!(test_benchmark_extend_bounty_expiry::<Test>());
 			assert_ok!(test_benchmark_spend_funds::<Test>());
+			assert_ok!(test_benchmark_add_subbounty::<Test>());
+			assert_ok!(test_benchmark_propose_subcurator::<Test>());
+			assert_ok!(test_benchmark_accept_subcurator::<Test>());
+			assert_ok!(test_benchmark_unassign_subcurator::<Test>());
+			assert_ok!(test_benchmark_award_subbounty::<Test>());
+			assert_ok!(test_benchmark_claim_subbounty::<Test>());
+			assert_ok!(test_benchmark_close_subbounty_proposed::<Test>());
+			assert_ok!(test_benchmark_close_subbounty_active::<Test>());
 		});
 	}
 }
