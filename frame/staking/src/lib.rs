@@ -1389,7 +1389,7 @@ decl_module! {
 					log!(info, "initial OCW output at {:?} = {:?}", now, initial_output);
 				},
 				ElectionStatus::Open(opened) if now > opened => {
-					if Self::queued_score().is_none() {
+					if !QueuedScore::exists() {
 						// If the election window is open, and we don't have a queued solution,
 						// constantly try to challenge it by either resubmitting a saved solution,
 						// or mining a new one (just in the case that the previous was skipped).
