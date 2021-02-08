@@ -416,13 +416,12 @@
 			"website": "https://uniarts.me"
 		},
 		{
-			"decimals": [18],
-			"displayName": "AvN Mainnet",
-			"network": "aventus",
-			"prefix": 46,
-			"standardAccount": "*25519",
-			"symbols": ["AVT"],
-			"website": "https://aventus.io"
+			"network": "reserved46",
+			"displayName": "This prefix is reserved.",
+			"symbols": null,
+			"decimals": null,
+			"standardAccount": null,
+			"website": null
 		}, 
 		{
 			"prefix": 47,
@@ -441,6 +440,15 @@
 			"decimals": null,
 			"standardAccount": null,
 			"website": null
+		},
+		{
+			"decimals": [18],
+			"displayName": "AvN Mainnet",
+			"network": "aventus",
+			"prefix": 50,
+			"standardAccount": "*25519",
+			"symbols": ["AVT"],
+			"website": "https://aventus.io"
 		}
 	]
 }
