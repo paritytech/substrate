@@ -19,7 +19,7 @@
 
 use crate::{
 	AliveContractInfo, BalanceOf, ContractInfo, ContractInfoOf, Module, RawEvent,
-	TombstoneContractInfo, Config, CodeHash, ConfigCache, Error,
+	TombstoneContractInfo, Config, CodeHash, Error,
 	storage::Storage, wasm::PrefabWasmModule, exec::Executable,
 };
 use sp_std::prelude::*;
@@ -125,7 +125,7 @@ where
 		free_balance: &BalanceOf<T>,
 		contract: &AliveContractInfo<T>,
 	) -> Option<BalanceOf<T>> {
-		let subsistence_threshold = ConfigCache::<T>::subsistence_threshold_uncached();
+		let subsistence_threshold = Module::<T>::subsistence_threshold();
 		// Reserved balance contributes towards the subsistence threshold to stay consistent
 		// with the existential deposit where the reserved balance is also counted.
 		if *total_balance < subsistence_threshold {

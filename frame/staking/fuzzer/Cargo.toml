@@ -28,6 +28,12 @@ sp-io ={ version = "2.0.0", path = "../../../primitives/io" }
 sp-core = { version = "2.0.0", path = "../../../primitives/core" }
 sp-npos-elections = { version = "2.0.0", path = "../../../primitives/npos-elections" }
 sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
+serde = "1.0.101"
+
+[features]
+# Note feature std is required so that impl_opaque_keys derive serde.
+default = ["std"]
+std = []
 
 [[bin]]
 name = "submit_solution"

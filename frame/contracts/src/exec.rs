@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use crate::{
-	CodeHash, ConfigCache, Event, RawEvent, Config, Module as Contracts,
+	CodeHash, Event, RawEvent, Config, Module as Contracts,
 	TrieId, BalanceOf, ContractInfo, gas::GasMeter, rent::Rent, storage::{self, Storage},
 	Error, ContractInfoOf, Schedule,
 };
@@ -28,7 +28,7 @@ use sp_std::{
 use sp_runtime::traits::{Bounded, Zero, Convert, Saturating};
 use frame_support::{
 	dispatch::{DispatchResult, DispatchError},
-	traits::{ExistenceRequirement, Currency, Time, Randomness},
+	traits::{ExistenceRequirement, Currency, Time, Randomness, Get},
 	weights::Weight,
 	ensure, StorageMap,
 };
@@ -245,7 +245,7 @@ pub struct ExecutionContext<'a, T: Config + 'a, E> {
 	pub self_account: T::AccountId,
 	pub self_trie_id: Option<TrieId>,
 	pub depth: usize,
-	pub config: &'a ConfigCache<T>,
+	pub schedule: &'a Schedule<T>,
 	pub timestamp: MomentOf<T>,
 	pub block_number: T::BlockNumber,
 	_phantom: PhantomData<E>,
@@ -261,13 +261,13 @@ where
 	///
 	/// The specified `origin` address will be used as `sender` for. The `origin` must be a regular
 	/// account (not a contract).
-	pub fn top_level(origin: T::AccountId, cfg: &'a ConfigCache<T>) -> Self {
+	pub fn top_level(origin: T::AccountId, schedule: &'a Schedule<T>) -> Self {
 		ExecutionContext {
 			caller: None,
 			self_trie_id: None,
 			self_account: origin,
 			depth: 0,
-			config: &cfg,
+			schedule,
 			timestamp: T::Time::now(),
 			block_number: <frame_system::Module<T>>::block_number(),
 			_phantom: Default::default(),
@@ -282,7 +282,7 @@ where
 			self_trie_id: Some(trie_id),
 			self_account: dest,
 			depth: self.depth + 1,
-			config: self.config,
+			schedule: self.schedule,
 			timestamp: self.timestamp.clone(),
 			block_number: self.block_number.clone(),
 			_phantom: Default::default(),
@@ -297,7 +297,7 @@ where
 		gas_meter: &mut GasMeter<T>,
 		input_data: Vec<u8>,
 	) -> ExecResult {
-		if self.depth == self.config.max_depth as usize {
+		if self.depth == T::MaxDepth::get() as usize {
 			Err(Error::<T>::MaxCallDepthReached)?
 		}
 
@@ -305,7 +305,7 @@ where
 			.and_then(|contract| contract.get_alive())
 			.ok_or(Error::<T>::NotCallable)?;
 
-		let executable = E::from_storage(contract.code_hash, &self.config.schedule)?;
+		let executable = E::from_storage(contract.code_hash, &self.schedule)?;
 
 		// This charges the rent and denies access to a contract that is in need of
 		// eviction by returning `None`. We cannot evict eagerly here because those
@@ -320,13 +320,12 @@ where
 
 		self.with_nested_context(dest.clone(), contract.trie_id.clone(), |nested| {
 			if value > BalanceOf::<T>::zero() {
-				transfer(
+				transfer::<T>(
 					TransferCause::Call,
 					transactor_kind,
 					&caller,
 					&dest,
 					value,
-					nested,
 				)?
 			}
 
@@ -348,7 +347,7 @@ where
 		input_data: Vec<u8>,
 		salt: &[u8],
 	) -> Result<(T::AccountId, ExecReturnValue), ExecError> {
-		if self.depth == self.config.max_depth as usize {
+		if self.depth == T::MaxDepth::get() as usize {
 			Err(Error::<T>::MaxCallDepthReached)?
 		}
 
@@ -372,13 +371,12 @@ where
 
 				// Send funds unconditionally here. If the `endowment` is below existential_deposit
 				// then error will be returned here.
-				transfer(
+				transfer::<T>(
 					TransferCause::Instantiate,
 					transactor_kind,
 					&caller,
 					&dest,
 					endowment,
-					nested,
 				)?;
 
 				// Cache the value before calling into the constructor because that
@@ -489,17 +487,15 @@ enum TransferCause {
 /// is specified as `Terminate`. Otherwise, any transfer that would bring the sender below the
 /// subsistence threshold (for contracts) or the existential deposit (for plain accounts)
 /// results in an error.
-fn transfer<'a, T: Config, E>(
+fn transfer<T: Config>(
 	cause: TransferCause,
 	origin: TransactorKind,
 	transactor: &T::AccountId,
 	dest: &T::AccountId,
 	value: BalanceOf<T>,
-	ctx: &mut ExecutionContext<'a, T, E>,
 ) -> DispatchResult
 where
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-	E: Executable<T>,
 {
 	use self::TransferCause::*;
 	use self::TransactorKind::*;
@@ -511,7 +507,7 @@ where
 		(_, Contract) => {
 			ensure!(
 				T::Currency::total_balance(transactor).saturating_sub(value) >=
-					ctx.config.subsistence_threshold(),
+					Contracts::<T>::subsistence_threshold(),
 				Error::<T>::BelowSubsistenceThreshold,
 			);
 			ExistenceRequirement::KeepAlive
@@ -586,7 +582,7 @@ where
 		input_data: Vec<u8>,
 		salt: &[u8],
 	) -> Result<(AccountIdOf<T>, ExecReturnValue), ExecError> {
-		let executable = E::from_storage(code_hash, &self.ctx.config.schedule)?;
+		let executable = E::from_storage(code_hash, &self.ctx.schedule)?;
 		let result = self.ctx.instantiate(endowment, gas_meter, executable, input_data, salt)?;
 		Ok(result)
 	}
@@ -596,13 +592,12 @@ where
 		to: &T::AccountId,
 		value: BalanceOf<T>,
 	) -> DispatchResult {
-		transfer(
+		transfer::<T>(
 			TransferCause::Call,
 			TransactorKind::Contract,
 			&self.ctx.self_account.clone(),
 			to,
 			value,
-			self.ctx,
 		)
 	}
 
@@ -617,13 +612,12 @@ where
 				return Err(Error::<T>::ReentranceDenied.into());
 			}
 		}
-		transfer(
+		transfer::<T>(
 			TransferCause::Terminate,
 			TransactorKind::Contract,
 			&self_id,
 			beneficiary,
 			value,
-			self.ctx,
 		)?;
 		if let Some(ContractInfo::Alive(info)) = ContractInfoOf::<T>::take(&self_id) {
 			Storage::<T>::queue_trie_for_deletion(&info)?;
@@ -708,11 +702,11 @@ where
 	}
 
 	fn minimum_balance(&self) -> BalanceOf<T> {
-		self.ctx.config.existential_deposit
+		T::Currency::minimum_balance()
 	}
 
 	fn tombstone_deposit(&self) -> BalanceOf<T> {
-		self.ctx.config.tombstone_deposit
+		T::TombstoneDeposit::get()
 	}
 
 	fn deposit_event(&mut self, topics: Vec<T::Hash>, data: Vec<u8>) {
@@ -741,7 +735,7 @@ where
 	fn block_number(&self) -> T::BlockNumber { self.block_number }
 
 	fn max_value_size(&self) -> u32 {
-		self.ctx.config.max_value_size
+		T::MaxValueSize::get()
 	}
 
 	fn get_weight_price(&self, weight: Weight) -> BalanceOf<Self::T> {
@@ -749,7 +743,7 @@ where
 	}
 
 	fn schedule(&self) -> &Schedule<Self::T> {
-		&self.ctx.config.schedule
+		&self.ctx.schedule
 	}
 }
 
@@ -898,8 +892,8 @@ mod tests {
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
-			let cfg = ConfigCache::preload();
-			let mut ctx = MockContext::top_level(ALICE, &cfg);
+			let schedule = Contracts::current_schedule();
+			let mut ctx = MockContext::top_level(ALICE, &schedule);
 			place_contract(&BOB, exec_ch);
 
 			assert_matches!(
@@ -919,18 +913,15 @@ mod tests {
 		let dest = BOB;
 
 		ExtBuilder::default().build().execute_with(|| {
-			let cfg = ConfigCache::preload();
-			let mut ctx = MockContext::top_level(origin.clone(), &cfg);
 			set_balance(&origin, 100);
 			set_balance(&dest, 0);
 
-			super::transfer(
+			super::transfer::<Test>(
 				super::TransferCause::Call,
 				super::TransactorKind::PlainAccount,
 				&origin,
 				&dest,
 				55,
-				&mut ctx,
 			).unwrap();
 
 			assert_eq!(get_balance(&origin), 45);
@@ -950,8 +941,8 @@ mod tests {
 		);
 
 		ExtBuilder::default().build().execute_with(|| {
-			let cfg = ConfigCache::preload();
-			let mut ctx = MockContext::top_level(origin.clone(), &cfg);
+			let schedule = Contracts::current_schedule();
+			let mut ctx = MockContext::top_level(origin.clone(), &schedule);
 			place_contract(&BOB, return_ch);
 			set_balance(&origin, 100);
 			let balance = get_balance(&dest);
@@ -979,17 +970,14 @@ mod tests {
 		let dest = BOB;
 
 		ExtBuilder::default().build().execute_with(|| {
-			let cfg = ConfigCache::preload();
-			let mut ctx = MockContext::top_level(origin.clone(), &cfg);
 			set_balance(&origin, 0);
 
-			let result = super::transfer(
+			let result = super::transfer::<Test>(
 				super::TransferCause::Call,
 				super::TransactorKind::PlainAccount,
 				&origin,
 				&dest,
 				100,
-				&mut ctx,
 			);
 
 			assert_eq!(
@@ -1012,8 +1000,8 @@ mod tests {
 		);
 
 		ExtBuilder::default().build().execute_with(|| {
-			let cfg = ConfigCache::preload();
-			let mut ctx = MockContext::top_level(origin, &cfg);
+			let schedule = Contracts::current_schedule();
+			let mut ctx = MockContext::top_level(origin, &schedule);
 			place_contract(&BOB, return_ch);
 
 			let result = ctx.call(
@@ -1040,8 +1028,8 @@ mod tests {
 		);
 
 		ExtBuilder::default().build().execute_with(|| {
-			let cfg = ConfigCache::preload();
-			let mut ctx = MockContext::top_level(origin, &cfg);
+			let schedule = Contracts::current_schedule();
+			let mut ctx = MockContext::top_level(origin, &schedule);
 			place_contract(&BOB, return_ch);
 
 			let result = ctx.call(
@@ -1066,8 +1054,8 @@ mod tests {
 
 		// This one tests passing the input data into a contract via call.
 		ExtBuilder::default().build().execute_with(|| {
-			let cfg = ConfigCache::preload();
-			let mut ctx = MockContext::top_level(ALICE, &cfg);
+			let schedule = Contracts::current_schedule();
+			let mut ctx = MockContext::top_level(ALICE, &schedule);
 			place_contract(&BOB, input_data_ch);
 
 			let result = ctx.call(
@@ -1089,15 +1077,16 @@ mod tests {
 
 		// This one tests passing the input data into a contract via instantiate.
 		ExtBuilder::default().build().execute_with(|| {
-			let cfg = ConfigCache::preload();
-			let mut ctx = MockContext::top_level(ALICE, &cfg);
+			let schedule = Contracts::current_schedule();
+			let subsistence = Contracts::<Test>::subsistence_threshold();
+			let mut ctx = MockContext::top_level(ALICE, &schedule);
 
-			set_balance(&ALICE, cfg.subsistence_threshold() * 10);
+			set_balance(&ALICE, subsistence * 10);
 
 			let result = ctx.instantiate(
-				cfg.subsistence_threshold() * 3,
+				subsistence * 3,
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
-				MockExecutable::from_storage(input_data_ch, &cfg.schedule).unwrap(),
+				MockExecutable::from_storage(input_data_ch, &schedule).unwrap(),
 				vec![1, 2, 3, 4],
 				&[],
 			);
@@ -1137,8 +1126,8 @@ mod tests {
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
-			let cfg = ConfigCache::preload();
-			let mut ctx = MockContext::top_level(ALICE, &cfg);
+			let schedule = Contracts::current_schedule();
+			let mut ctx = MockContext::top_level(ALICE, &schedule);
 			set_balance(&BOB, 1);
 			place_contract(&BOB, recurse_ch);
 
@@ -1185,9 +1174,8 @@ mod tests {
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
-			let cfg = ConfigCache::preload();
-
-			let mut ctx = MockContext::top_level(origin.clone(), &cfg);
+			let schedule = Contracts::current_schedule();
+			let mut ctx = MockContext::top_level(origin.clone(), &schedule);
 			place_contract(&dest, bob_ch);
 			place_contract(&CHARLIE, charlie_ch);
 
@@ -1224,8 +1212,8 @@ mod tests {
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
-			let cfg = ConfigCache::preload();
-			let mut ctx = MockContext::top_level(ALICE, &cfg);
+			let schedule = Contracts::current_schedule();
+			let mut ctx = MockContext::top_level(ALICE, &schedule);
 			place_contract(&BOB, bob_ch);
 			place_contract(&CHARLIE, charlie_ch);
 
@@ -1245,14 +1233,14 @@ mod tests {
 		let dummy_ch = MockLoader::insert(|_| exec_success());
 
 		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
-			let cfg = ConfigCache::preload();
-			let mut ctx = MockContext::top_level(ALICE, &cfg);
+			let schedule = Contracts::current_schedule();
+			let mut ctx = MockContext::top_level(ALICE, &schedule);
 
 			assert_matches!(
 				ctx.instantiate(
 					0, // <- zero endowment
 					&mut GasMeter::<Test>::new(GAS_LIMIT),
-					MockExecutable::from_storage(dummy_ch, &cfg.schedule).unwrap(),
+					MockExecutable::from_storage(dummy_ch, &schedule).unwrap(),
 					vec![],
 					&[],
 				),
@@ -1268,15 +1256,15 @@ mod tests {
 		);
 
 		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
-			let cfg = ConfigCache::preload();
-			let mut ctx = MockContext::top_level(ALICE, &cfg);
+			let schedule = Contracts::current_schedule();
+			let mut ctx = MockContext::top_level(ALICE, &schedule);
 			set_balance(&ALICE, 1000);
 
 			let instantiated_contract_address = assert_matches!(
 				ctx.instantiate(
 					100,
 					&mut GasMeter::<Test>::new(GAS_LIMIT),
-					MockExecutable::from_storage(dummy_ch, &cfg.schedule).unwrap(),
+					MockExecutable::from_storage(dummy_ch, &schedule).unwrap(),
 					vec![],
 					&[],
 				),
@@ -1299,15 +1287,15 @@ mod tests {
 		);
 
 		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
-			let cfg = ConfigCache::preload();
-			let mut ctx = MockContext::top_level(ALICE, &cfg);
+			let schedule = Contracts::current_schedule();
+			let mut ctx = MockContext::top_level(ALICE, &schedule);
 			set_balance(&ALICE, 1000);
 
 			let instantiated_contract_address = assert_matches!(
 				ctx.instantiate(
 					100,
 					&mut GasMeter::<Test>::new(GAS_LIMIT),
-					MockExecutable::from_storage(dummy_ch, &cfg.schedule).unwrap(),
+					MockExecutable::from_storage(dummy_ch, &schedule).unwrap(),
 					vec![],
 					&[],
 				),
@@ -1331,7 +1319,7 @@ mod tests {
 				// Instantiate a contract and save it's address in `instantiated_contract_address`.
 				let (address, output) = ctx.ext.instantiate(
 					dummy_ch,
-					ConfigCache::<Test>::subsistence_threshold_uncached() * 3,
+					Contracts::<Test>::subsistence_threshold() * 3,
 					ctx.gas_meter,
 					vec![],
 					&[48, 49, 50],
@@ -1343,9 +1331,9 @@ mod tests {
 		});
 
 		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
-			let cfg = ConfigCache::preload();
-			let mut ctx = MockContext::top_level(ALICE, &cfg);
-			set_balance(&ALICE, cfg.subsistence_threshold() * 100);
+			let schedule = Contracts::current_schedule();
+			let mut ctx = MockContext::top_level(ALICE, &schedule);
+			set_balance(&ALICE, Contracts::<Test>::subsistence_threshold() * 100);
 			place_contract(&BOB, instantiator_ch);
 
 			assert_matches!(
@@ -1392,8 +1380,8 @@ mod tests {
 		});
 
 		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
-			let cfg = ConfigCache::preload();
-			let mut ctx = MockContext::top_level(ALICE, &cfg);
+			let schedule = Contracts::current_schedule();
+			let mut ctx = MockContext::top_level(ALICE, &schedule);
 			set_balance(&ALICE, 1000);
 			set_balance(&BOB, 100);
 			place_contract(&BOB, instantiator_ch);
@@ -1420,15 +1408,15 @@ mod tests {
 			.existential_deposit(15)
 			.build()
 			.execute_with(|| {
-				let cfg = ConfigCache::preload();
-				let mut ctx = MockContext::top_level(ALICE, &cfg);
+				let schedule = Contracts::current_schedule();
+				let mut ctx = MockContext::top_level(ALICE, &schedule);
 				set_balance(&ALICE, 1000);
 
 				assert_eq!(
 					ctx.instantiate(
 						100,
 						&mut GasMeter::<Test>::new(GAS_LIMIT),
-						MockExecutable::from_storage(terminate_ch, &cfg.schedule).unwrap(),
+						MockExecutable::from_storage(terminate_ch, &schedule).unwrap(),
 						vec![],
 						&[],
 					),
@@ -1445,7 +1433,8 @@ mod tests {
 	#[test]
 	fn rent_allowance() {
 		let rent_allowance_ch = MockLoader::insert(|ctx| {
-			let allowance = ConfigCache::<Test>::subsistence_threshold_uncached() * 3;
+			let subsistence = Contracts::<Test>::subsistence_threshold();
+			let allowance = subsistence * 3;
 			assert_eq!(ctx.ext.rent_allowance(), <BalanceOf<Test>>::max_value());
 			ctx.ext.set_rent_allowance(allowance);
 			assert_eq!(ctx.ext.rent_allowance(), allowance);
@@ -1453,14 +1442,15 @@ mod tests {
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
-			let cfg = ConfigCache::preload();
-			let mut ctx = MockContext::top_level(ALICE, &cfg);
-			set_balance(&ALICE, cfg.subsistence_threshold() * 10);
+			let subsistence = Contracts::<Test>::subsistence_threshold();
+			let schedule = Contracts::current_schedule();
+			let mut ctx = MockContext::top_level(ALICE, &schedule);
+			set_balance(&ALICE, subsistence * 10);
 
 			let result = ctx.instantiate(
-				cfg.subsistence_threshold() * 5,
+				subsistence * 5,
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
-				MockExecutable::from_storage(rent_allowance_ch, &cfg.schedule).unwrap(),
+				MockExecutable::from_storage(rent_allowance_ch, &schedule).unwrap(),
 				vec![],
 				&[],
 			);
