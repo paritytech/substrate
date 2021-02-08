@@ -443,6 +443,15 @@
 			"website": null
 		},
 		{
+			"prefix": 64,
+			"network": "cennznet",
+			"displayName": "CENNZnet",
+			"symbols": ["CENNZ", "CPAY"],
+			"decimals": [4, 4],
+			"standardAccount": "*25519",
+			"website": "https://cennz.net"
+		},
+		{
 			"prefix": 65,
 			"network": "aventus",
 			"displayName": "AvN Mainnet",

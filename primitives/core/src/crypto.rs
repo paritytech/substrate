@@ -578,6 +578,8 @@ ss58_address_format!(
 		(46, "reserved46", "Reserved for future use (46).")
 	Reserved47 =>
 		(47, "reserved47", "Reserved for future use (47).")
+	CennznetAccount =>
+		(64, "cennznet", "CENNZnet mainnet, standard account (*25519).")
 	AventusAccount =>
 		(65, "aventus", "Aventus Chain mainnet, standard account (*25519).")
 	CrustAccount =>
