@@ -152,8 +152,9 @@ pub(crate) fn submit_solution<T: Config>(call: Call<T>) -> Result<(), OffchainEl
 		.map_err(|_| OffchainElectionError::PoolSubmissionFailed)
 }
 
-/// Ensure that the given solution call belongs to the current era. Returns `Ok(call)` if so to be
-/// used with `Result::and`.
+/// Ensure that the given solution call belongs to the current era. 
+///
+/// Returns `Ok(call)` if it belongs to the current era.
 pub(crate) fn ensure_solution_is_recent<T: Config>(
 	call: Call<T>,
 ) -> Result<Call<T>, OffchainElectionError> {
