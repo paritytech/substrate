@@ -1817,6 +1817,10 @@ struct NetworkLink<'a, B: BlockT, H: ExHashT> {
 }
 
 impl<'a, B: BlockT, H: ExHashT> Link<B> for NetworkLink<'a, B, H> {
+	fn block_verified(&mut self, header: B::Header) {
+		self.protocol.user_protocol_mut().on_block_verified(header);
+	}
+
 	fn blocks_processed(
 		&mut self,
 		imported: usize,

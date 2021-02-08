@@ -78,12 +78,17 @@ impl<B: BlockT> Clone for BufferedLinkSender<B> {
 
 /// Internal buffered message.
 enum BlockImportWorkerMsg<B: BlockT> {
+	BlockVerified(B::Header),
 	BlocksProcessed(usize, usize, Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>),
 	JustificationImported(Origin, B::Hash, NumberFor<B>, bool),
 	RequestJustification(B::Hash, NumberFor<B>),
 }
 
 impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
+	fn block_verified(&mut self, header: B::Header) {
+		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::BlockVerified(header));
+	}
+
 	fn blocks_processed(
 		&mut self,
 		imported: usize,
@@ -132,6 +137,8 @@ impl<B: BlockT> BufferedLinkReceiver<B> {
 			};
 
 			match msg {
+				BlockImportWorkerMsg::BlockVerified(header) =>
+					link.block_verified(header),
 				BlockImportWorkerMsg::BlocksProcessed(imported, count, results) =>
 					link.blocks_processed(imported, count, results),
 				BlockImportWorkerMsg::JustificationImported(who, hash, number, success) =>

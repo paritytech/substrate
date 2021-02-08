@@ -1287,6 +1287,13 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		self.sync.set_sync_fork_request(peers, hash, number)
 	}
 
+	/// A block has been checked and verified against consensus checks
+	/// This is called before the block is executed to trigger announcing
+	/// this block to other peers to skip the cost of the the block execution latency
+	pub fn on_block_verified(&mut self, header: B::Header) {
+		self.announce_block(header.hash(), None);
+	}
+
 	/// A batch of blocks have been processed, with or without errors.
 	/// Call this when a batch of blocks have been processed by the importqueue, with or without
 	/// errors.

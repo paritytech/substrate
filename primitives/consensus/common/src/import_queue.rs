@@ -121,6 +121,9 @@ pub trait ImportQueue<B: BlockT>: Send {
 /// Hooks that the verification queue can use to influence the synchronization
 /// algorithm.
 pub trait Link<B: BlockT>: Send {
+	/// Block is verified and passed consensus checks
+	fn block_verified(&mut self, _header: B::Header) {}
+
 	/// Batch of blocks imported, with or without error.
 	fn blocks_processed(
 		&mut self,
@@ -165,16 +168,18 @@ pub enum BlockImportError {
 /// Single block import function.
 pub fn import_single_block<B: BlockT, V: Verifier<B>, Transaction>(
 	import_handle: &mut dyn BlockImport<B, Transaction = Transaction, Error = ConsensusError>,
+	result_sender: buffered_link::BufferedLinkSender<B>,
 	block_origin: BlockOrigin,
 	block: IncomingBlock<B>,
 	verifier: &mut V,
 ) -> Result<BlockImportResult<NumberFor<B>>, BlockImportError> {
-	import_single_block_metered(import_handle, block_origin, block, verifier, None)
+	import_single_block_metered(import_handle, result_sender, block_origin, block, verifier, None)
 }
 
 /// Single block import function with metering.
 pub(crate) fn import_single_block_metered<B: BlockT, V: Verifier<B>, Transaction>(
 	import_handle: &mut dyn BlockImport<B, Transaction = Transaction, Error = ConsensusError>,
+	mut result_sender: buffered_link::BufferedLinkSender<B>,
 	block_origin: BlockOrigin,
 	block: IncomingBlock<B>,
 	verifier: &mut V,
@@ -238,7 +243,7 @@ pub(crate) fn import_single_block_metered<B: BlockT, V: Verifier<B>, Transaction
 	}
 
 	let started = wasm_timer::Instant::now();
-	let (mut import_block, maybe_keys) = verifier.verify(block_origin, header, justification, block.body)
+	let (mut import_block, maybe_keys) = verifier.verify(block_origin, header.clone(), justification, block.body)
 		.map_err(|msg| {
 			if let Some(ref peer) = peer {
 				trace!(target: "sync", "Verifying {}({}) from {} failed: {}", number, hash, peer, msg);
@@ -250,6 +255,8 @@ pub(crate) fn import_single_block_metered<B: BlockT, V: Verifier<B>, Transaction
 			}
 			BlockImportError::VerificationFailed(peer.clone(), msg)
 		})?;
+
+	result_sender.block_verified(header);
 
 	if let Some(metrics) = metrics.as_ref() {
 		metrics.report_verification(true, started.elapsed());

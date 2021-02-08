@@ -169,6 +169,7 @@ async fn block_import_process<B: BlockT, Transaction: Send>(
 
 		let res = import_many_blocks(
 			&mut block_import,
+			result_sender.clone(),
 			origin,
 			blocks,
 			&mut verifier,
@@ -306,6 +307,7 @@ struct ImportManyBlocksResult<B: BlockT> {
 /// This will yield after each imported block once, to ensure that other futures can be called as well.
 async fn import_many_blocks<B: BlockT, V: Verifier<B>, Transaction>(
 	import_handle: &mut BoxBlockImport<B, Transaction>,
+	result_sender: BufferedLinkSender<B>,
 	blocks_origin: BlockOrigin,
 	blocks: Vec<IncomingBlock<B>>,
 	verifier: &mut V,
@@ -349,6 +351,7 @@ async fn import_many_blocks<B: BlockT, V: Verifier<B>, Transaction>(
 			// The actual import.
 			import_single_block_metered(
 				import_handle,
+				result_sender.clone(),
 				blocks_origin.clone(),
 				block,
 				verifier,
