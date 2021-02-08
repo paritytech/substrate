@@ -427,7 +427,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				in_peers: 0,
 				out_peers: 0,
 				bootnodes: Vec::new(),
-				reserved_nodes: Vec::new(),
+				reserved_nodes: HashSet::new(),
 				reserved_only: true,
 			});
 
