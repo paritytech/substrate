@@ -345,7 +345,7 @@ macro_rules! log {
 	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
 		frame_support::debug::$level!(
 			target: crate::LOG_TARGET,
-			$patter $(, $values)*
+			concat!("💸 ", $patter $(, $values)*)
 		)
 	};
 }
@@ -1345,14 +1345,14 @@ decl_module! {
 									ElectionStatus::<T::BlockNumber>::Open(now)
 								);
 								add_weight(0, 1, 0);
-								log!(info, "💸 Election window is Open({:?}). Snapshot created", now);
+								log!(info, "Election window is Open({:?}). Snapshot created", now);
 							} else {
-								log!(warn, "💸 Failed to create snapshot at {:?}.", now);
+								log!(warn, "Failed to create snapshot at {:?}.", now);
 							}
 						}
 					}
 				} else {
-					log!(warn, "💸 Estimating next session change failed.");
+					log!(warn, "Estimating next session change failed.");
 				}
 				add_weight(0, 0, T::NextNewSession::weight(now))
 			}
@@ -1376,9 +1376,13 @@ decl_module! {
 
 			log!(
 				trace,
-				"Running OCW at {:?}, election status = {:?}",
+				"ocw at {:?}, election status = {:?}, queued_score = {:?}, offchain solution size: {}",
 				now,
 				election_status,
+				Self::queued_score(),
+				offchain_election::get_solution::<T>()
+					.map(offchain_election::ensure_solution_is_recent)
+					.map(|s| s.len()),
 			);
 			match Self::era_election_status() {
 				ElectionStatus::Open(opened) if opened == now => {
@@ -2326,7 +2330,7 @@ impl<T: Config> Module<T> {
 		{
 			log!(
 				warn,
-				"💸 Snapshot size too big [{} <> {}][{} <> {}].",
+				"Snapshot size too big [{} <> {}][{} <> {}].",
 				num_validators,
 				MAX_VALIDATORS,
 				num_nominators,
@@ -2646,7 +2650,7 @@ impl<T: Config> Module<T> {
 			validator_at,
 		).map_err(|e| {
 			// log the error since it is not propagated into the runtime error.
-			log!(warn, "💸 un-compacting solution failed due to {:?}", e);
+			log!(warn, "un-compacting solution failed due to {:?}", e);
 			Error::<T>::OffchainElectionBogusCompact
 		})?;
 
@@ -2661,7 +2665,7 @@ impl<T: Config> Module<T> {
 				// all of the indices must map to either a validator or a nominator. If this is ever
 				// not the case, then the locking system of staking is most likely faulty, or we
 				// have bigger problems.
-				log!(error, "💸 detected an error in the staking locking and snapshot.");
+				log!(error, "detected an error in the staking locking and snapshot.");
 				// abort.
 				return Err(Error::<T>::OffchainElectionBogusNominator.into());
 			}
@@ -2721,7 +2725,8 @@ impl<T: Config> Module<T> {
 		let exposures = Self::collect_exposure(supports);
 		log!(
 			info,
-			"💸 A better solution (with compute {:?} and score {:?}) has been validated and stored on chain.",
+			"A better solution (with compute {:?} and score {:?}) has been validated and stored \
+			 on chain.",
 			compute,
 			submitted_score,
 		);
@@ -2921,7 +2926,7 @@ impl<T: Config> Module<T> {
 
 			log!(
 				info,
-				"💸 new validator set of size {:?} has been elected via {:?} for era {:?}",
+				"new validator set of size {:?} has been elected via {:?} for era {:?}",
 				elected_stashes.len(),
 				compute,
 				current_era,
@@ -2977,7 +2982,7 @@ impl<T: Config> Module<T> {
 			.map_err(|_|
 				log!(
 					error,
-					"💸 on-chain phragmen is failing due to a problem in the result. This must be a bug."
+					"on-chain phragmen is failing due to a problem in the result. This must be a bug."
 				)
 			)
 			.ok()?;
@@ -3045,7 +3050,7 @@ impl<T: Config> Module<T> {
 			// If we don't have enough candidates, nothing to do.
 			log!(
 				warn,
-				"💸 Chain does not have enough staking candidates to operate. Era {:?}.",
+				"Chain does not have enough staking candidates to operate. Era {:?}.",
 				Self::current_era()
 			);
 			None
@@ -3502,13 +3507,13 @@ impl<T: Config> frame_support::unsigned::ValidateUnsigned for Module<T> {
 				let invalid = to_invalid(error_with_post_info);
 				log!(
 					debug,
-					"💸 validate unsigned pre dispatch checks failed due to error #{:?}.",
+					"validate unsigned pre dispatch checks failed due to error #{:?}.",
 					invalid,
 				);
 				return invalid.into();
 			}
 
-			log!(debug, "💸 validateUnsigned succeeded for a solution at era {}.", era);
+			log!(debug, "validateUnsigned succeeded for a solution at era {}.", era);
 
 			ValidTransaction::with_tag_prefix("StakingOffchain")
 				// The higher the score[0], the better a solution is.

@@ -60,8 +60,6 @@ pub enum OffchainElectionError {
 	Unreachable,
 	/// Submission to the transaction pool failed.
 	PoolSubmissionFailed,
-	/// No solution is stored in the offchain DB.
-	SolutionUnavailable,
 	/// The stored solution belongs to an old era and cannot be used.
 	SolutionOld,
 }
@@ -208,7 +206,7 @@ pub(crate) fn compute_offchain_election<T: Config>() -> Result<Call<T>, Offchain
 
 	crate::log!(
 		info,
-		"💸 prepared a seq-phragmen solution with {} balancing iterations and score {:?}",
+		"prepared a seq-phragmen solution with {} balancing iterations and score {:?}",
 		iters,
 		score,
 	);
@@ -361,7 +359,7 @@ where
 				if compact.remove_voter(index) {
 					crate::log!(
 						trace,
-						"💸 removed a voter at index {} with stake {:?} from compact to reduce the size",
+						"removed a voter at index {} with stake {:?} from compact to reduce the size",
 						index,
 						_stake,
 					);
@@ -375,7 +373,7 @@ where
 
 			crate::log!(
 					warn,
-					"💸 {} nominators out of {} had to be removed from compact solution due to size limits.",
+					"{} nominators out of {} had to be removed from compact solution due to size limits.",
 					removed,
 					compact.voter_count() + removed,
 				);
@@ -385,7 +383,7 @@ where
 			// nada, return as-is
 			crate::log!(
 				info,
-				"💸 Compact solution did not get trimmed due to block weight limits.",
+				"Compact solution did not get trimmed due to block weight limits.",
 			);
 			Ok(compact)
 		}
@@ -467,7 +465,7 @@ pub fn prepare_submission<T: Config>(
 	let maximum_allowed_voters =
 		maximum_compact_len::<T::WeightInfo>(winners.len() as u32, size, maximum_weight);
 
-	crate::log!(debug, "💸 Maximum weight = {:?} // current weight = {:?} // maximum voters = {:?} // current votes = {:?}",
+	crate::log!(debug, "Maximum weight = {:?} // current weight = {:?} // maximum voters = {:?} // current votes = {:?}",
 		maximum_weight,
 		T::WeightInfo::submit_solution_better(
 				size.validators.into(),
