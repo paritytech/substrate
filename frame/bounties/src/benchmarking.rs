@@ -444,7 +444,12 @@ benchmarks! {
 
 	}: close_subbounty(RawOrigin::Root, bm_setup.bounty_id, bm_setup.subbounty_id)
 	verify {
-		assert_last_event::<T>(RawEvent::SubBountyCanceled(bm_setup.bounty_id, bm_setup.subbounty_id).into())
+		assert_last_event::<T>(
+			RawEvent::SubBountyCanceled(
+				bm_setup.bounty_id,
+				bm_setup.subbounty_id,
+			).into()
+		)
 	}
 }
 

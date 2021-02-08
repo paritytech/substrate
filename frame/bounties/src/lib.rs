@@ -1151,16 +1151,6 @@ decl_module! {
 							}
 						},
 						SubBountyStatus::PendingPayout { ref subcurator, .. } => {
-							// TODO :: Have to recheck
-							// The implementation is followed from
-							// "unassign_curator()".
-							// The subbounty is in pending payout state,
-							// only Root or Master curator origin can unassign.
-							// By doing so, they are claiming the subcurator
-							// is acting maliciously, so We slash the subcurator.
-							// But since subbounty in pending payout state,
-							// and task is completed to slash the subcurator
-							// deposit ?
 							ensure!(
 								maybe_sender.map_or(
 									true,
