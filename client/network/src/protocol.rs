@@ -424,12 +424,11 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			// The `reserved_nodes` of this set are later kept in sync with the peers we connect
 			// to through set 0.
 			sets.push(sc_peerset::SetConfig {
-				in_peers: network_config.default_peers_set.in_peers,
-				out_peers: network_config.default_peers_set.out_peers,
+				in_peers: 0,
+				out_peers: 0,
 				bootnodes: Vec::new(),
-				reserved_nodes: default_sets_reserved,
-				reserved_only: network_config.default_peers_set.non_reserved_mode
-					== config::NonReservedPeerMode::Deny,
+				reserved_nodes: Vec::new(),
+				reserved_only: true,
 			});
 
 			for set_cfg in &network_config.extra_sets {
