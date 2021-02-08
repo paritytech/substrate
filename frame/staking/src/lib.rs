@@ -345,7 +345,7 @@ macro_rules! log {
 	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
 		frame_support::debug::$level!(
 			target: crate::LOG_TARGET,
-			concat!("💸 ", $patter $(, $values)*)
+			concat!("💸 ", $patter) $(, $values)*
 		)
 	};
 }
@@ -1376,13 +1376,15 @@ decl_module! {
 
 			log!(
 				trace,
-				"ocw at {:?}, election status = {:?}, queued_score = {:?}, offchain solution size: {}",
+				"ocw at {:?}, election status = {:?}, queued_score = {:?}, offchain solution: {:?}",
 				now,
 				election_status,
 				Self::queued_score(),
 				offchain_election::get_solution::<T>()
-					.map(offchain_election::ensure_solution_is_recent)
-					.map(|s| s.len()),
+					.map(|call| (
+						offchain_election::ensure_solution_is_recent(call.clone()).is_ok(),
+						call.encode().len(),
+					))
 			);
 			match Self::era_election_status() {
 				ElectionStatus::Open(opened) if opened == now => {
