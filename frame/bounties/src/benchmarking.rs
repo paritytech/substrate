@@ -109,7 +109,7 @@ struct BmSubbountyCfg<T: Config> {
 	fee: BalanceOf<T>,
 	/// The (total) amount that should be paid if the subbounty is rewarded.
 	subbounty_value: BalanceOf<T>,
-	/// The curator fee. Included in value.
+	/// The subcurator fee. Included in value.
 	subbounty_fee: BalanceOf<T>,
 	/// Bounty description.
 	reason: Vec<u8>,
