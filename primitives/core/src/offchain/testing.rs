@@ -27,7 +27,8 @@ use std::{
 use crate::OpaquePeerId;
 use crate::offchain::{
 	self,
-	storage::{InMemOffchainStorage, OffchainOverlayedChange, OffchainOverlayedChanges},
+	OffchainOverlayedChange,
+	storage::InMemOffchainStorage,
 	HttpError,
 	HttpRequestId as RequestId,
 	HttpRequestStatus as RequestStatus,
@@ -80,9 +81,12 @@ impl TestPersistentOffchainDB {
 	}
 
 	/// Apply a set of off-chain changes directly to the test backend
-	pub fn apply_offchain_changes(&mut self, changes: &mut OffchainOverlayedChanges) {
+	pub fn apply_offchain_changes(
+		&mut self,
+		changes: impl Iterator<Item = ((Vec<u8>, Vec<u8>), OffchainOverlayedChange)>,
+	) {
 		let mut me = self.persistent.write();
-		for ((_prefix, key), value_operation) in changes.drain() {
+		for ((_prefix, key), value_operation) in changes {
 			match value_operation {
 				OffchainOverlayedChange::SetValue(val) => me.set(Self::PREFIX, key.as_slice(), val.as_slice()),
 				OffchainOverlayedChange::Remove => me.remove(Self::PREFIX, key.as_slice()),

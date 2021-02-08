@@ -58,7 +58,6 @@ impl ChainInfo for NodeTemplateChainInfo {
         Self::SelectChain,
     >;
     type SignedExtras = SignedExtra;
-    type Event = node_runtime::Event;
 
     fn load_spec() -> Result<Box<dyn sc_service::ChainSpec>, String> {
         Ok(Box::new(development_config()))
@@ -138,7 +137,7 @@ impl ChainInfo for NodeTemplateChainInfo {
         ))
     }
 
-    fn dispatch_with_root(call: <Self::Runtime as frame_system::Config>::Call, node: &Node<Self>) {
+    fn dispatch_with_root(call: <Self::Runtime as frame_system::Config>::Call, node: &mut Node<Self>) {
         let alice = MultiSigner::from(Alice.public()).into_account();
         let call = pallet_sudo::Call::sudo(Box::new(call)); // :D
         node.submit_extrinsic(call, alice);
@@ -153,7 +152,7 @@ mod tests {
 
     #[test]
     fn runtime_upgrade() {
-        let node = Node::<NodeTemplateChainInfo>::new().unwrap();
+        let mut node = Node::<NodeTemplateChainInfo>::new().unwrap();
 
         // first perform runtime upgrade
         let wasm = include_bytes!("./runtime.wasm");
@@ -166,7 +165,7 @@ mod tests {
             .into_iter()
             .filter(|event| {
                 match event.event {
-                    Event::frame_system(frame_system::RawEvent::CodeUpdated) => true,
+                    Event::frame_system(frame_system::Event::CodeUpdated) => true,
                     _ => false,
                 }
             })
@@ -181,9 +180,9 @@ mod tests {
         );
 
         // pallet balances assertions
-        transfer_keep_alive(&node, alice.clone(), bob.clone());
-        set_balance(&node, alice.clone());
-        force_transfer(&node, alice, bob);
+        transfer_keep_alive(&mut node, alice.clone(), bob.clone());
+        set_balance(&mut node, alice.clone());
+        force_transfer(&mut node, alice, bob);
 
     }
 }

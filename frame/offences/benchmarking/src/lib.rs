@@ -26,12 +26,12 @@ use sp_std::vec;
 
 use frame_system::{RawOrigin, Module as System, Config as SystemConfig};
 use frame_benchmarking::{benchmarks, account};
-use frame_support::traits::{Currency, OnInitialize};
+use frame_support::traits::{Currency, OnInitialize, ValidatorSet, ValidatorSetWithIdentification};
 
 use sp_runtime::{Perbill, traits::{Convert, StaticLookup, Saturating, UniqueSaturatedInto}};
 use sp_staking::offence::{ReportOffence, Offence, OffenceDetails};
 
-use pallet_balances::{Config as BalancesConfig};
+use pallet_balances::Config as BalancesConfig;
 use pallet_babe::BabeEquivocationOffence;
 use pallet_grandpa::{GrandpaEquivocationOffence, GrandpaTimeSlot};
 use pallet_im_online::{Config as ImOnlineConfig, Module as ImOnline, UnresponsivenessOffence};
@@ -109,6 +109,7 @@ fn create_offender<T: Config>(n: u32, nominators: u32) -> Result<Offender<T>, &'
 
 	let validator_prefs = ValidatorPrefs {
 		commission: Perbill::from_percent(50),
+		.. Default::default()
 	};
 	Staking::<T>::validate(RawOrigin::Signed(controller.clone()).into(), validator_prefs)?;
 
@@ -175,6 +176,34 @@ fn make_offenders<T: Config>(num_offenders: u32, num_nominators: u32) -> Result<
 	Ok((id_tuples, offenders))
 }
 
+fn make_offenders_im_online<T: Config>(num_offenders: u32, num_nominators: u32) -> Result<
+	(Vec<pallet_im_online::IdentificationTuple<T>>, Vec<Offender<T>>),
+	&'static str
+> {
+	Staking::<T>::new_session(0);
+
+	let mut offenders = vec![];
+	for i in 0 .. num_offenders {
+		let offender = create_offender::<T>(i + 1, num_nominators)?;
+		offenders.push(offender);
+	}
+
+	Staking::<T>::start_session(0);
+
+	let id_tuples = offenders.iter()
+		.map(|offender| <
+				<T as ImOnlineConfig>::ValidatorSet as ValidatorSet<T::AccountId>
+			>::ValidatorIdOf::convert(offender.controller.clone())
+			.expect("failed to get validator id from account id"))
+		.map(|validator_id| <
+				<T as ImOnlineConfig>::ValidatorSet as ValidatorSetWithIdentification<T::AccountId>
+			>::IdentificationOf::convert(validator_id.clone())
+			.map(|full_id| (validator_id, full_id))
+			.expect("failed to convert validator id to full identification"))
+		.collect::<Vec<pallet_im_online::IdentificationTuple<T>>>();
+	Ok((id_tuples, offenders))
+}
+
 #[cfg(test)]
 fn check_events<T: Config, I: Iterator<Item = <T as SystemConfig>::Event>>(expected: I) {
 	let events = System::<T>::events() .into_iter()
@@ -219,7 +248,7 @@ benchmarks! {
 		// make sure reporters actually get rewarded
 		Staking::<T>::set_slash_reward_fraction(Perbill::one());
 
-		let (offenders, raw_offenders) = make_offenders::<T>(o, n)?;
+		let (offenders, raw_offenders) = make_offenders_im_online::<T>(o, n)?;
 		let keys =  ImOnline::<T>::keys();
 		let validator_set_count = keys.len() as u32;
 
@@ -330,7 +359,7 @@ benchmarks! {
 		let keys =  ImOnline::<T>::keys();
 
 		let offence = BabeEquivocationOffence {
-			slot: 0,
+			slot: 0u64.into(),
 			session_index: 0,
 			validator_set_count: keys.len() as u32,
 			offender: T::convert(offenders.pop().unwrap()),

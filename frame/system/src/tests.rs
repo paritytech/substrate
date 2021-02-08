@@ -18,8 +18,11 @@
 use crate::*;
 use mock::{*, Origin};
 use sp_core::H256;
-use sp_runtime::{DispatchError, traits::{Header, BlakeTwo256}};
-use frame_support::weights::WithPostDispatchInfo;
+use sp_runtime::{DispatchError, DispatchErrorWithPostInfo, traits::{Header, BlakeTwo256}};
+use frame_support::{
+	weights::WithPostDispatchInfo,
+	dispatch::PostDispatchInfo,
+};
 
 #[test]
 fn origin_works() {
@@ -68,7 +71,7 @@ fn deposit_event_should_work() {
 			vec![
 				EventRecord {
 					phase: Phase::Finalization,
-					event: SysEvent::CodeUpdated,
+					event: SysEvent::CodeUpdated.into(),
 					topics: vec![],
 				}
 			]
@@ -96,17 +99,17 @@ fn deposit_event_should_work() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: SysEvent::NewAccount(32),
+					event: SysEvent::NewAccount(32).into(),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: SysEvent::KilledAccount(42),
+					event: SysEvent::KilledAccount(42).into(),
 					topics: vec![]
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: SysEvent::ExtrinsicSuccess(Default::default()),
+					event: SysEvent::ExtrinsicSuccess(Default::default()).into(),
 					topics: vec![]
 				},
 				EventRecord {
@@ -114,12 +117,12 @@ fn deposit_event_should_work() {
 					event: SysEvent::ExtrinsicFailed(
 						DispatchError::BadOrigin.into(),
 						Default::default()
-					),
+					).into(),
 					topics: vec![]
 				},
 				EventRecord {
 					phase: Phase::Finalization,
-					event: SysEvent::NewAccount(3),
+					event: SysEvent::NewAccount(3).into(),
 					topics: vec![]
 				},
 			]
@@ -170,7 +173,7 @@ fn deposit_event_uses_actual_weight() {
 							weight: 300,
 							.. Default::default()
 						},
-					),
+					).into(),
 					topics: vec![]
 				},
 				EventRecord {
@@ -180,7 +183,7 @@ fn deposit_event_uses_actual_weight() {
 							weight: 1000,
 							.. Default::default()
 						},
-					),
+					).into(),
 					topics: vec![]
 				},
 				EventRecord {
@@ -190,7 +193,7 @@ fn deposit_event_uses_actual_weight() {
 							weight: 1000,
 							.. Default::default()
 						},
-					),
+					).into(),
 					topics: vec![]
 				},
 				EventRecord {
@@ -201,7 +204,7 @@ fn deposit_event_uses_actual_weight() {
 							weight: 999,
 							.. Default::default()
 						},
-					),
+					).into(),
 					topics: vec![]
 				},
 			]
@@ -229,9 +232,9 @@ fn deposit_event_topics() {
 		];
 
 		// We deposit a few events with different sets of topics.
-		System::deposit_event_indexed(&topics[0..3], SysEvent::NewAccount(1));
-		System::deposit_event_indexed(&topics[0..1], SysEvent::NewAccount(2));
-		System::deposit_event_indexed(&topics[1..2], SysEvent::NewAccount(3));
+		System::deposit_event_indexed(&topics[0..3], SysEvent::NewAccount(1).into());
+		System::deposit_event_indexed(&topics[0..1], SysEvent::NewAccount(2).into());
+		System::deposit_event_indexed(&topics[1..2], SysEvent::NewAccount(3).into());
 
 		System::finalize();
 
@@ -241,17 +244,17 @@ fn deposit_event_topics() {
 			vec![
 				EventRecord {
 					phase: Phase::Finalization,
-					event: SysEvent::NewAccount(1),
+					event: SysEvent::NewAccount(1).into(),
 					topics: topics[0..3].to_vec(),
 				},
 				EventRecord {
 					phase: Phase::Finalization,
-					event: SysEvent::NewAccount(2),
+					event: SysEvent::NewAccount(2).into(),
 					topics: topics[0..1].to_vec(),
 				},
 				EventRecord {
 					phase: Phase::Finalization,
-					event: SysEvent::NewAccount(3),
+					event: SysEvent::NewAccount(3).into(),
 					topics: topics[1..2].to_vec(),
 				}
 			]
@@ -329,7 +332,7 @@ fn set_code_checks_works() {
 		("test", 1, 2, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
 		("test", 1, 1, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
 		("test2", 1, 1, Err(Error::<Test>::InvalidSpecName)),
-		("test", 2, 1, Ok(())),
+		("test", 2, 1, Ok(PostDispatchInfo::default())),
 		("test", 0, 1, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
 		("test", 1, 0, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
 	];
@@ -351,7 +354,7 @@ fn set_code_checks_works() {
 				vec![1, 2, 3, 4],
 			);
 
-			assert_eq!(expected.map_err(DispatchError::from), res);
+			assert_eq!(expected.map_err(DispatchErrorWithPostInfo::from), res);
 		});
 	}
 }
@@ -372,7 +375,7 @@ fn set_code_with_real_wasm_blob() {
 			System::events(),
 			vec![EventRecord {
 				phase: Phase::Initialization,
-				event: SysEvent::CodeUpdated,
+				event: SysEvent::CodeUpdated.into(),
 				topics: vec![],
 			}],
 		);

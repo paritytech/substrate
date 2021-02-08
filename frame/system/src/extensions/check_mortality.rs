@@ -17,7 +17,6 @@
 
 use codec::{Encode, Decode};
 use crate::{Config, Module, BlockHash};
-use frame_support::StorageMap;
 use sp_runtime::{
 	generic::Era,
 	traits::{SignedExtension, DispatchInfoOf, SaturatedConversion},
@@ -111,7 +110,7 @@ mod tests {
 			let normal = DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: Pays::Yes };
 			let len = 0_usize;
 			let ext = (
-				crate::CheckWeight::<Test>::default(),
+				crate::CheckWeight::<Test>::new(),
 				CheckMortality::<Test>::from(Era::mortal(16, 256)),
 			);
 			System::set_block_number(17);

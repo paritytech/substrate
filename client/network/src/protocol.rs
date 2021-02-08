@@ -72,14 +72,23 @@ const TICK_TIMEOUT: time::Duration = time::Duration::from_millis(1100);
 /// Interval at which we propagate transactions;
 const PROPAGATE_TIMEOUT: time::Duration = time::Duration::from_millis(2900);
 
-/// Maximim number of known block hashes to keep for a peer.
+/// Maximum number of known block hashes to keep for a peer.
 const MAX_KNOWN_BLOCKS: usize = 1024; // ~32kb per peer + LruHashSet overhead
-/// Maximim number of known transaction hashes to keep for a peer.
+/// Maximum number of known transaction hashes to keep for a peer.
 ///
 /// This should be approx. 2 blocks full of transactions for the network to function properly.
 const MAX_KNOWN_TRANSACTIONS: usize = 10240; // ~300kb per peer + overhead.
 
-/// Maximim number of transaction validation request we keep at any moment.
+/// Maximum allowed size for a block announce.
+const MAX_BLOCK_ANNOUNCE_SIZE: u64 = 1024 * 1024;
+/// Maximum allowed size for a transactions notification.
+const MAX_TRANSACTIONS_SIZE: u64 = 16 * 1024 * 1024;
+
+/// Maximum size used for notifications in the block announce and transaction protocols.
+// Must be equal to `max(MAX_BLOCK_ANNOUNCE_SIZE, MAX_TRANSACTIONS_SIZE)`.
+pub(crate) const BLOCK_ANNOUNCES_TRANSACTIONS_SUBSTREAM_SIZE: u64 = 16 * 1024 * 1024;
+
+/// Maximum number of transaction validation request we keep at any moment.
 const MAX_PENDING_TRANSACTIONS: usize = 8192;
 
 /// Current protocol version.
@@ -230,6 +239,8 @@ pub struct Protocol<B: BlockT, H: ExHashT> {
 	metrics: Option<Metrics>,
 	/// The `PeerId`'s of all boot nodes.
 	boot_node_ids: HashSet<PeerId>,
+	/// A cache for the data that was associated to a block announcement.
+	block_announce_data_cache: lru::LruCache<B::Hash, Vec<u8>>,
 }
 
 /// Peer information
@@ -475,18 +486,26 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				best_hash,
 				genesis_hash,
 			).encode();
+
 			GenericProto::new(
 				protocol_id.clone(),
 				versions,
 				build_status_message::<B>(&config, best_number, best_hash, genesis_hash),
 				peerset,
-				iter::once((block_announces_protocol, block_announces_handshake))
-					.chain(iter::once((transactions_protocol, vec![])))
-					.chain(network_config.extra_sets.iter()
-						.map(|s| (s.notifications_protocol.clone(), handshake_message.clone()))
-					),
+				iter::once((block_announces_protocol, block_announces_handshake, MAX_BLOCK_ANNOUNCE_SIZE))
+					.chain(iter::once((transactions_protocol, vec![], MAX_TRANSACTIONS_SIZE)))
+					.chain(network_config.extra_sets.iter().map(|s| (
+						s.notifications_protocol.clone(),
+						handshake_message.clone(),
+						s.max_notification_size
+					))),
 			)
 		};
+
+		let block_announce_data_cache = lru::LruCache::new(
+			network_config.default_peers_set.in_peers as usize
+				+ network_config.default_peers_set.out_peers as usize,
+		);
 
 		let protocol = Protocol {
 			tick_timeout: Box::pin(interval(TICK_TIMEOUT)),
@@ -511,6 +530,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				None
 			},
 			boot_node_ids,
+			block_announce_data_cache,
 		};
 
 		Ok((protocol, peerset_handle, known_addresses))
@@ -636,7 +656,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 					"Couldn't decode packet sent by {}: {:?}: {}",
 					who,
 					data,
-					err.what(),
+					err,
 				);
 				self.peerset_handle.report_peer(who, rep::BAD_MESSAGE);
 				return CustomMessageOutcome::None;
@@ -1066,7 +1086,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	///
 	/// In chain-based consensus, we often need to make sure non-best forks are
 	/// at least temporarily synced.
-	pub fn announce_block(&mut self, hash: B::Hash, data: Vec<u8>) {
+	pub fn announce_block(&mut self, hash: B::Hash, data: Option<Vec<u8>>) {
 		let header = match self.chain.header(BlockId::Hash(hash)) {
 			Ok(Some(header)) => header,
 			Ok(None) => {
@@ -1086,6 +1106,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 		let is_best = self.chain.info().best_hash == hash;
 		debug!(target: "sync", "Reannouncing block {:?} is_best: {}", hash, is_best);
+
+		let data = data.or_else(|| self.block_announce_data_cache.get(&hash).cloned()).unwrap_or_default();
 
 		for (who, ref mut peer) in self.peers.iter_mut() {
 			let inserted = peer.known_blocks.insert(hash);
@@ -1157,8 +1179,16 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		validation_result: sync::PollBlockAnnounceValidation<B::Header>,
 	) -> CustomMessageOutcome<B> {
 		let (header, is_best, who) = match validation_result {
-			sync::PollBlockAnnounceValidation::Nothing { is_best, who, header } => {
+			sync::PollBlockAnnounceValidation::Skip =>
+				return CustomMessageOutcome::None,
+			sync::PollBlockAnnounceValidation::Nothing { is_best, who, announce } => {
 				self.update_peer_info(&who);
+
+				if let Some(data) = announce.data {
+					if !data.is_empty() {
+						self.block_announce_data_cache.put(announce.header.hash(), data);
+					}
+				}
 
 				// `on_block_announce` returns `OnBlockAnnounce::ImportHeader`
 				// when we have all data required to import the block
@@ -1167,14 +1197,21 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				// AND
 				// 2) parent block is already imported and not pruned.
 				if is_best {
-					return CustomMessageOutcome::PeerNewBest(who, *header.number())
+					return CustomMessageOutcome::PeerNewBest(who, *announce.header.number())
 				} else {
 					return CustomMessageOutcome::None
 				}
 			}
-			sync::PollBlockAnnounceValidation::ImportHeader { header, is_best, who } => {
+			sync::PollBlockAnnounceValidation::ImportHeader { announce, is_best, who } => {
 				self.update_peer_info(&who);
-				(header, is_best, who)
+
+				if let Some(data) = announce.data {
+					if !data.is_empty() {
+						self.block_announce_data_cache.put(announce.header.hash(), data);
+					}
+				}
+
+				(announce.header, is_best, who)
 			}
 			sync::PollBlockAnnounceValidation::Failure { who, disconnect } => {
 				if disconnect {
@@ -1700,7 +1737,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 										"Couldn't decode handshake sent by {}: {:?}: {} & {}",
 										peer_id,
 										received_handshake,
-										err.what(),
+										err,
 										err2,
 									);
 									self.peerset_handle.report_peer(peer_id, rep::BAD_MESSAGE);
