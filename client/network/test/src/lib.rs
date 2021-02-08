@@ -961,10 +961,6 @@ pub trait TestNetFactory: Sized {
 
 				// We poll `imported_blocks_stream`.
 				while let Poll::Ready(Some(notification)) = peer.imported_blocks_stream.as_mut().poll_next(cx) {
-					let notification = match notification {
-						BlockImportNotification::Imported(n) => n,
-						_ => continue,
-					};
 					peer.network.service().announce_block(notification.hash, None);
 				}
 

@@ -405,10 +405,6 @@ fn run_one_test(
 			// that was produced locally.
 			client.import_notification_stream()
 				.take_while(move |n| {
-					let n = match n {
-						BlockImportNotification::Imported(n) => n,
-						_ => return future::ready(false),
-					};
 					future::ready(n.header.number() < &5 || {
 					if n.origin == BlockOrigin::Own {
 						got_own = true;

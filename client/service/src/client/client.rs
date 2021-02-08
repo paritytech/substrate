@@ -77,7 +77,7 @@ use sc_client_api::{
 	client::{
 		ImportNotifications, FinalityNotification, FinalityNotifications, BlockImportNotification,
 		ClientInfo, BlockchainEvents, BlockBackend, ProvideUncles, BadBlocks, ForkBlocks,
-		BlockOf, ImportedBlockInfo,
+		BlockOf,
 	},
 	execution_extensions::ExecutionExtensions,
 	notifications::{StorageNotifications, StorageEventStream},
@@ -1043,13 +1043,13 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				);
 		}
 
-		let notification = BlockImportNotification::<Block>::Imported(ImportedBlockInfo {
+		let notification = BlockImportNotification {
 			hash: notify_import.hash,
 			origin: notify_import.origin,
 			header: notify_import.header,
 			is_new_best: notify_import.is_new_best,
 			tree_route: notify_import.tree_route.map(Arc::new),
-		});
+		};
 
 		self.import_notification_sinks.lock()
 			.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());

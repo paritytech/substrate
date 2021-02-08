@@ -258,10 +258,6 @@ impl<Block, BStatus, BSyncRequester, I, M> Stream for UntilImported<Block, BStat
 			match StreamExt::poll_next_unpin(&mut this.import_notifications, cx) {
 				Poll::Ready(None) => return Poll::Ready(None),
 				Poll::Ready(Some(notification)) => {
-					let notification = match notification {
-						BlockImportNotification::Imported(n) => n,
-						_ => continue,
-					};
 					// new block imported. queue up all messages tied to that hash.
 					if let Some((_, _, messages)) = this.pending.remove(&notification.hash) {
 						let canon_number = *notification.header.number();
@@ -584,13 +580,13 @@ mod tests {
 			let number = header.number().clone();
 
 			self.known_blocks.lock().insert(hash, number);
-			self.sender.unbounded_send(BlockImportNotification::Imported(ImportedBlockInfo {
+			self.sender.unbounded_send(BlockImportNotification {
 				hash,
 				origin: BlockOrigin::File,
 				header,
 				is_new_best: false,
 				tree_route: None,
-			})).unwrap();
+			}).unwrap();
 		}
 	}
 

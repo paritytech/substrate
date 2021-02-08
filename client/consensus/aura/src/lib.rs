@@ -1020,14 +1020,7 @@ mod tests {
 			let environ = DummyFactory(client.clone());
 			import_notifications.push(
 				client.import_notification_stream()
-					.take_while(|n| {
-						match n {
-							BlockImportNotification::Imported(n) => {
-								return future::ready(!(n.origin != BlockOrigin::Own && n.header.number() < &5))
-							},
-							_ => future::ready(false),
-						}
-					  })
+					.take_while(|n| future::ready(!(n.origin != BlockOrigin::Own && n.header.number() < &5)))
 					.for_each(move |_| future::ready(()))
 			);
 

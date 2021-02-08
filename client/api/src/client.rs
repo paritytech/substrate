@@ -241,7 +241,7 @@ impl fmt::Display for UsageInfo {
 
 /// Summary of an imported block
 #[derive(Clone, Debug)]
-pub struct ImportedBlockInfo<Block: BlockT> {
+pub struct BlockImportNotification<Block: BlockT> {
 	/// Imported block header hash.
 	pub hash: Block::Hash,
 	/// Imported block origin.
@@ -256,16 +256,6 @@ pub struct ImportedBlockInfo<Block: BlockT> {
 	pub tree_route: Option<Arc<sp_blockchain::TreeRoute<Block>>>,
 }
 
-/// A notification about pre-imported and import blocks
-#[derive(Clone, Debug)]
-pub enum BlockImportNotification<Block: BlockT> {
-	/// A pre-imported block is one that has been
-	/// checked and verified
-	PreImport(Block::Hash),
-	/// An imported block
-	Imported(ImportedBlockInfo<Block>)
-}
-
 /// Summary of a finalized block.
 #[derive(Clone, Debug)]
 pub struct FinalityNotification<Block: BlockT> {
@@ -275,10 +265,10 @@ pub struct FinalityNotification<Block: BlockT> {
 	pub header: Block::Header,
 }
 
-impl<B: BlockT> TryFrom<ImportedBlockInfo<B>> for sp_transaction_pool::ChainEvent<B> {
+impl<B: BlockT> TryFrom<BlockImportNotification<B>> for sp_transaction_pool::ChainEvent<B> {
 	type Error = ();
 
-	fn try_from(n: ImportedBlockInfo<B>) -> Result<Self, ()> {
+	fn try_from(n: BlockImportNotification<B>) -> Result<Self, ()> {
 		if n.is_new_best {
 			Ok(Self::NewBestBlock {
 				hash: n.hash,

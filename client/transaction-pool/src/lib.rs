@@ -48,7 +48,6 @@ use sp_transaction_pool::{
 	TransactionStatusStreamFor, MaintainedTransactionPool, PoolFuture, ChainEvent,
 	TransactionSource,
 };
-use sc_client_api::BlockImportNotification;
 use sc_transaction_graph::{ChainApi, ExtrinsicHash};
 use wasm_timer::Instant;
 
@@ -720,12 +719,7 @@ pub async fn notification_future<Client, Pool, Block>(
 		Pool: MaintainedTransactionPool<Block=Block>,
 {
 	let import_stream = client.import_notification_stream()
-		.filter_map(|n| {
-			match n {
-				BlockImportNotification::Imported(b) => ready(b.try_into().ok()),
-				_ => ready(None),
-			}
-		})
+		.filter_map(|n| ready(n.try_into().ok()))
 		.fuse();
 	let finality_stream = client.finality_notification_stream()
 		.map(Into::into)

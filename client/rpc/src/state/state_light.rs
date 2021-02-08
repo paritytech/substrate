@@ -44,7 +44,6 @@ use sc_rpc_api::state::ReadProof;
 use sp_blockchain::{Error as ClientError, HeaderBackend};
 use sc_client_api::{
 	BlockchainEvents,
-	BlockImportNotification,
 	light::{
 		RemoteCallRequest, RemoteReadRequest, RemoteReadChildRequest,
 		RemoteBlockchain, Fetcher, future_header,
@@ -325,12 +324,7 @@ impl<Block, F, Client> StateBackend<Block, Client> for LightState<Block, F, Clie
 				storage_subscriptions.clone(),
 				self.client
 					.import_notification_stream()
-					.filter_map(|notification| {
-						match notification {
-							BlockImportNotification::Imported(n) => ready(Some(Ok::<_, ()>(n.hash))),
-							_ => ready(None),
-						}
-					})
+					.map(|notification| Ok::<_, ()>(notification.hash))
 					.compat(),
 				display_error(storage(
 					&*remote_blockchain,
@@ -441,12 +435,7 @@ impl<Block, F, Client> StateBackend<Block, Client> for LightState<Block, F, Clie
 				version_subscriptions,
 				self.client
 					.import_notification_stream()
-					.filter_map(|notification| {
-						match notification {
-							BlockImportNotification::Imported(n) => ready(Some(Ok::<_, ()>(n.hash))),
-							_ => ready(None),
-						}
-					})
+					.map(|notification| Ok::<_, ()>(notification.hash))
 					.compat(),
 				display_error(runtime_version(
 					&*remote_blockchain,

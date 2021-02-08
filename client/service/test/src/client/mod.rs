@@ -1847,9 +1847,6 @@ fn reorg_triggers_a_notification_even_for_sources_that_should_not_trigger_notifi
 	let notification = notification_stream.next().unwrap();
 
 	// We should have a tree route of the re-org
-	let tree_route = match notification {
-		BlockImportNotification::Imported(n) => n.tree_route,
-		_ => None,
-	}.unwrap();
+	let tree_route = notification.tree_route.unwrap();
 	assert_eq!(tree_route.enacted()[0].hash, b1.hash());
 }
