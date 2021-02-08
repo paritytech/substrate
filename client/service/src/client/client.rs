@@ -1714,11 +1714,17 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for &Client<B, E, Block, 
 		// Pre-announce the block since it's checked and validated.
 		// This removes the latency of having to broadcast the block
 		// to connected peers.
-		self.notify_pre_imported(import_block.header.hash())
-			.map_err(|e| {
-				warn!("Block pre-import announcement error:\n{:?}", e);
-				ConsensusError::ClientPreImport(e.to_string())
-			})?;
+		let make_notification = match import_block.origin {
+			BlockOrigin::NetworkBroadcast |  BlockOrigin::ConsensusBroadcast => true,
+			BlockOrigin::Genesis | BlockOrigin::NetworkInitialSync | BlockOrigin::Own | BlockOrigin::File => false,
+		};
+		if make_notification {
+			self.notify_pre_imported(import_block.header)
+				.map_err(|e| {
+					warn!("Block pre-import announcement error:\n{:?}", e);
+					ConsensusError::ClientPreImport(e.to_string())
+				})?;
+		}
 
 		if let Some(res) = self.prepare_block_storage_changes(&mut import_block).map_err(|e| {
 			warn!("Block prepare storage changes error:\n{:?}", e);
