@@ -1082,11 +1082,15 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		self.transaction_pool.on_broadcasted(propagated_to);
 	}
 
+	pub fn announce_preimport_block(&mut self, header: B::Header) {
+		self.broadcast_header(header, false, None);
+	}
+
 	/// Make sure an important block is propagated to peers.
 	///
 	/// In chain-based consensus, we often need to make sure non-best forks are
 	/// at least temporarily synced.
-	pub fn announce_block(&mut self, hash: B::Hash, data: Option<Vec<u8>>) {
+	pub fn announce_imported_block(&mut self, hash: B::Hash, data: Option<Vec<u8>>) {
 		let header = match self.chain.header(BlockId::Hash(hash)) {
 			Ok(Some(header)) => header,
 			Ok(None) => {
@@ -1105,14 +1109,18 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		}
 
 		let is_best = self.chain.info().best_hash == hash;
-		debug!(target: "sync", "Reannouncing block {:?} is_best: {}", hash, is_best);
 
-		let data = data.or_else(|| self.block_announce_data_cache.get(&hash).cloned()).unwrap_or_default();
+		self.broadcast_header(header, is_best, data);
+	}
+
+	pub fn broadcast_header(&mut self, header: B::Header, is_best: bool, data: Option<Vec<u8>>) {
+		debug!(target: "sync", "Reannouncing block {:?} is_best: {}", header.hash(), is_best);
+		let data = data.or_else(|| self.block_announce_data_cache.get(&header.hash()).cloned()).unwrap_or_default();
 
 		for (who, ref mut peer) in self.peers.iter_mut() {
-			let inserted = peer.known_blocks.insert(hash);
+			let inserted = peer.known_blocks.insert(header.hash());
 			if inserted {
-				trace!(target: "sync", "Announcing block {:?} to {}", hash, who);
+				trace!(target: "sync", "Announcing block {:?} to {}", header.hash(), who);
 				let message = message::BlockAnnounce {
 					header: header.clone(),
 					state: if is_best {
@@ -1291,7 +1299,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	/// This is called before the block is executed to trigger announcing
 	/// this block to other peers to skip the cost of the the block execution latency
 	pub fn on_block_verified(&mut self, header: B::Header) {
-		self.announce_block(header.hash(), None);
+		self.sync.on_block_verified(header.clone());
+		self.announce_preimport_block(header);
 	}
 
 	/// A batch of blocks have been processed, with or without errors.

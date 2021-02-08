@@ -1381,7 +1381,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 
 			match msg {
 				ServiceToWorkerMsg::AnnounceBlock(hash, data) =>
-					this.network_service.user_protocol_mut().announce_block(hash, data),
+					this.network_service.user_protocol_mut().announce_imported_block(hash, data),
 				ServiceToWorkerMsg::RequestJustification(hash, number) =>
 					this.network_service.user_protocol_mut().request_justification(&hash, number),
 				ServiceToWorkerMsg::PropagateTransaction(hash) =>
