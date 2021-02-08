@@ -7,8 +7,7 @@ publish = false
 
 [dependencies]
 sp-keyring = { version = "2.0.0", path = "../../../primitives/keyring" }
-# substrate-test-runner = { git = "https://github.com/paritytech/substrate-test-runner", branch = "substrate" }
-substrate-test-runner = { path = "../../../../substrate-test-runner" }
+ substrate-test-runner = { git = "https://github.com/paritytech/substrate-test-runner", branch = "substrate" }
 num-traits = { version = "0.2.14" }
 sp-runtime = { version = "2.0.0", default-features = false, path = "../../../primitives/runtime" }
 frame-support = { version = "2.0.0", default-features = false, path = "../../../frame/support" }
