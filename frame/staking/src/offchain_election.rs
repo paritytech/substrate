@@ -150,8 +150,9 @@ pub(crate) fn submit_solution<T: Config>(call: Call<T>) -> Result<(), OffchainEl
 		.map_err(|_| OffchainElectionError::PoolSubmissionFailed)
 }
 
-/// Ensure that the given solution call belongs to the current era. Returns `Ok(call)` if so to be
-/// used with `Result::and`.
+/// Ensure that the given solution call belongs to the current era. 
+///
+/// Returns `Ok(call)` if it belongs to the current era.
 pub(crate) fn ensure_solution_is_recent<T: Config>(
 	call: Call<T>,
 ) -> Result<Call<T>, OffchainElectionError> {
@@ -172,7 +173,8 @@ pub(crate) fn compute_and_save<T: Config>() -> Result<Call<T>, OffchainElectionE
 /// Restore an old solution if exist, else compute a new one and save it, finally submit it.
 pub(crate) fn restore_or_compute_then_submit<T: Config>() -> Result<(), OffchainElectionError> {
 	let call = get_solution::<T>()
-		.ok_or(OffchainElectionError::SolutionUnavailable)
+		.map(Ok)
+		.transpose()
 		.and_then(ensure_solution_is_recent)
 		.or_else(|_| compute_and_save::<T>())?;
 	submit_solution::<T>(call)
