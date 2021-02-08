@@ -19,7 +19,7 @@
 
 #![cfg(test)]
 
-use super::{Call, *};
+use super::{Call, Event, *};
 use crate::mock::*;
 use codec::{Decode, Encode};
 use fg_primitives::ScheduledChange;
@@ -775,6 +775,15 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 			.unwrap();
 
 		// the report should now be considered stale and the transaction is invalid
+		// the check for staleness should be done on both `validate_unsigned` and on `pre_dispatch`
+		assert_err!(
+			<Grandpa as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
+				TransactionSource::Local,
+				&call,
+			),
+			InvalidTransaction::Stale,
+		);
+
 		assert_err!(
 			<Grandpa as sp_runtime::traits::ValidateUnsigned>::pre_dispatch(&call),
 			InvalidTransaction::Stale,
