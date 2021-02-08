@@ -1697,7 +1697,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 
 							if self.on_sync_peer_connected(peer_id.clone(), handshake).is_ok() {
 								// Set 1 is kept in sync with the connected peers of set 0.
-								self.peerset_handle.add_to_peers_set(
+								self.peerset_handle.add_reserved_peer(
 									HARDCODED_PEERSETS_TX,
 									peer_id.clone()
 								);
@@ -1721,7 +1721,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 								Ok(handshake) => {
 									if self.on_sync_peer_connected(peer_id.clone(), handshake).is_ok() {
 										// Set 1 is kept in sync with the connected peers of set 0.
-										self.peerset_handle.add_to_peers_set(
+										self.peerset_handle.add_reserved_peer(
 											HARDCODED_PEERSETS_TX,
 											peer_id.clone()
 										);
