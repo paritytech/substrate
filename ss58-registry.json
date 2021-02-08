@@ -416,6 +416,7 @@
 			"website": "https://uniarts.me"
 		},
 		{
+			"prefix": 46,
 			"network": "reserved46",
 			"displayName": "This prefix is reserved.",
 			"symbols": null,
