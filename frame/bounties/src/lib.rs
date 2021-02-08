@@ -39,38 +39,59 @@
 //! ### Terminology
 //!
 //! Bounty:
-//! - **Bounty spending proposal:** A proposal to reward a predefined body of work upon completion
-//!   by the Treasury.
+//! - **Bounty spending proposal:** A proposal to reward a predefined body of
+//!   work upon completion by the Treasury.
+//! - **SubBounty:** A large chunk of bounty proposal can be subdivided into
+//!   small chunks as independent subbounties, for parallel execution,
+//!   minimise the workload on council governance & tracking spended funds.
 //! - **Proposer:** An account proposing a bounty spending.
-//! - **Curator:** An account managing the bounty and assigning a payout address receiving the
-//!   reward for the completion of work.
-//! - **Deposit:** The amount held on deposit for placing a bounty proposal plus the amount held on
-//!   deposit per byte within the bounty description.
-//! - **Curator deposit:** The payment from a candidate willing to curate an approved bounty. The
-//!   deposit is returned when/if the bounty is completed.
-//! - **Bounty value:** The total amount that should be paid to the Payout Address if the bounty is
-//!   rewarded.
-//! - **Payout address:** The account to which the total or part of the bounty is assigned to.
-//! - **Payout Delay:** The delay period for which a bounty beneficiary needs to wait before
-//!   claiming.
-//! - **Curator fee:** The reserved upfront payment for a curator for work related to the bounty.
+//! - **Curator or Master Curator or Sub Curator:** An account managing the
+//!   bounty or subbounty and assigning a payout address receiving the reward
+//!   for the completion of work.
+//! - **Deposit:** The amount held on deposit for placing a bounty proposal
+//!   plus the amount held on deposit per byte within the bounty description.
+//! - **Curator deposit:** The payment from a candidate willing to curate
+//!   an approved bounty. The deposit is returned when/if the bounty is completed.
+//! - **Bounty value:** The total amount that should be paid to the
+//!   Payout Address if the bounty is rewarded.
+//! - **Payout address:** The account to which the total or part of the
+//!   bounty is assigned to.
+//! - **Payout Delay:** The delay period for which a bounty beneficiary
+//!   needs to wait before claiming.
+//! - **Curator fee:** The reserved upfront payment for a curator for
+//!   work related to the bounty.
 //!
 //! ## Interface
 //!
 //! ### Dispatchable Functions
 //!
 //! Bounty protocol:
-//! - `propose_bounty` - Propose a specific treasury amount to be earmarked for a predefined set of
-//!   tasks and stake the required deposit.
-//! - `approve_bounty` - Accept a specific treasury amount to be earmarked for a predefined body of
-//!   work.
+//! - `propose_bounty` - Propose a specific treasury amount to be earmarked for a predefined
+//!    set of tasks and stake the required deposit.
+//! - `approve_bounty` - Accept a specific treasury amount to be earmarked for
+//!    a predefined body of work.
 //! - `propose_curator` - Assign an account to a bounty as candidate curator.
-//! - `accept_curator` - Accept a bounty assignment from the Council, setting a curator deposit.
-//! - `extend_bounty_expiry` - Extend the expiry block number of the bounty and stay active.
+//! - `accept_curator` - Accept a bounty assignment from the Council, setting a
+//!    curator deposit.
+//! - `extend_bounty_expiry` - Extend the expiry block number of the bounty and
+//!    stay active.
 //! - `award_bounty` - Close and pay out the specified amount for the completed work.
 //! - `claim_bounty` - Claim a specific bounty amount from the Payout Address.
 //! - `unassign_curator` - Unassign an accepted curator from a specific earmark.
-//! - `close_bounty` - Cancel the earmark for a specific treasury amount and close the bounty.
+//! - `close_bounty` - Cancel the earmark for a specific treasury amount
+//!    and close the bounty.
+//! - `add_subbounty` - Master curator may break or deligate the execution of
+//!    bounty, by adding new subbounty, with amount which can be deducted
+//!    from parent bounty.
+//! - `propose_subcurator` - Master curator may assign an account to a
+//!    subbouty as candidate subcurator.
+//! - `accept_subcurator` - Accept a subbounty assignment from the Master curator,
+//!    setting a subcurator deposit.
+//! - `unassign_subcurator` - Unassign an accepted subcurator from a specific earmark.
+//! - `award_subbounty` - Close and specify the subbouty payout benefiiary address.
+//! - `claim_subbounty` - Claim a payout amount & subcurator fee for specific subbounty.
+//! - `close_subbounty` - Cancel the earmark for a specific treasury amount
+//!    and close the bounty.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -560,6 +581,9 @@ decl_module! {
 
 		/// Award bounty to a beneficiary account. The beneficiary will be able to claim the funds after a delay.
 		///
+		/// Call may gets failed if Subbounties are active, Ensure to close
+		/// subbounty explicitly.
+		///
 		/// The dispatch origin for this call must be the curator of this bounty.
 		///
 		/// - `bounty_id`: Bounty ID to award.
@@ -657,6 +681,9 @@ decl_module! {
 
 		/// Cancel a proposed or active bounty. All the funds will be sent to treasury and
 		/// the curator deposit will be unreserved if possible.
+		///
+		/// Call may gets failed if Subbounties are active, Ensure to close
+		/// subbounty explicitly.
 		///
 		/// Only `T::RejectOrigin` is able to cancel a bounty.
 		///
@@ -761,18 +788,16 @@ decl_module! {
 
 		/// Add a new subbounty.
 		///
-		/// The dispatch origin for this call must be curator.
-		/// Bounty must me in "active" state.
+		/// The dispatch origin for this call must be master curator.
+		/// parent bounty must me in "active" state.
 		///
-		/// Subbouty gets added successfully & fund gets reserved, if bounty has enough fund.
-		/// else call get failed.
+		/// Subbouty gets added successfully & fund gets transfered from
+		/// parent bounty to subbounty account, if parent bounty has
+		/// enough fund. else call get failed.
 		///
-		/// Upperbount to maximum number of subbounties that can be added is
-		/// managed via runtime trait config 'MaxActiveSubBountyCount'.
-		///
-		/// Payment: `TipReportDepositBase` will be reserved from the origin account, as well as
-		/// `DataDepositPerByte` for each byte in `reason`. It will be unreserved upon approval,
-		/// or slashed when rejected.
+		/// Upperbount to maximum active number of subbounties that
+		/// can be added are managed via runtime trait config
+		/// 'MaxActiveSubBountyCount'.
 		///
 		/// if call is success, state of subbounty is moved to "Approved" state.
 		/// And later moved to "Funded" state as part of "spend_fund()" callback.
@@ -871,10 +896,6 @@ decl_module! {
 		/// Parent bounty must be in active state,
 		/// for this subbounty call to work.
 		///
-		/// Proposed subcurator may be "master curator",
-		/// and subcurator fee & curator deposit
-		/// may be Zero in this case.
-		///
 		/// Subbounty must be in "Funded" state, for
 		/// processing the call. and state of subbounty is
 		/// moved to CuratorProposed on successful call
@@ -949,8 +970,9 @@ decl_module! {
 		///
 		/// A deposit will be reserved from subcurator and
 		/// refund upon successful payout or cancellation.
-		/// In case if "master curator" is "subcurator",
-		/// curator deposit is Zero or ignored.
+		///
+		/// Fee for subcurator is deducted from curator
+		/// fee of parent bounty.
 		///
 		/// The dispatch origin for this call must be
 		/// the subcurator of this subbounty.
@@ -984,22 +1006,23 @@ decl_module! {
 					.ok_or(Error::<T>::InvalidIndex)?;
 
 				// Ensure subbounty is in expected state
-				match subbounty.status {
-					SubBountyStatus::SubCuratorProposed { ref subcurator } => {
-						ensure!(signer == *subcurator, Error::<T>::RequireSubCurator);
+				if let SubBountyStatus::SubCuratorProposed { ref subcurator } =
+					subbounty.status
+				{
+					ensure!(signer == *subcurator, Error::<T>::RequireSubCurator);
 
-						// Reserve subcurator deposit
-						let deposit = T::BountyCuratorDeposit::get() * subbounty.fee;
-						T::Currency::reserve(subcurator, deposit)?;
-						subbounty.curator_deposit = deposit;
+					// Reserve subcurator deposit
+					let deposit = T::BountyCuratorDeposit::get() * subbounty.fee;
+					T::Currency::reserve(subcurator, deposit)?;
+					subbounty.curator_deposit = deposit;
 
-						subbounty.status = SubBountyStatus::Active {
-							subcurator: subcurator.clone(),
-						};
-					},
-					_ => return Err(Error::<T>::UnexpectedStatus.into()),
-				};
-				Ok(())
+					subbounty.status = SubBountyStatus::Active {
+						subcurator: subcurator.clone(),
+					};
+					Ok(())
+				} else {
+					Err(Error::<T>::UnexpectedStatus.into())
+				}
 			})?;
 		}
 
@@ -1012,22 +1035,24 @@ decl_module! {
 		/// for this subbounty call to work.
 		///
 		/// If this function is called by the `RejectOrigin`, we assume that
-		/// the curator is malicious or inactive. As a result,
-		/// we will slash the curator when possible.
+		/// the subcurator is malicious or inactive. As a result,
+		/// subcurator deposit may be slashed.
 		///
 		/// If the origin is the subcurator, we take this as a sign they are
 		/// unable to do their job and they willingly give up.
-		/// We could slash them, but for now we allow them to recover their
-		/// deposit and exit without issue. (We may want to change this
-		/// if it is abused.)
+		/// We could slash the deposit, but for now we allow them to
+		/// unreserve their deposit and exit without issue.
+		/// (We may want to change this if it is abused.)
 		///
 		/// Finally, the origin can be anyone if and only if the subcurator
-		/// is "inactive". This allows anyone in the community to call out
+		/// is "inactive". Expiry update due of parent bounty is
+		/// used to estimate mature or inactive state of subcurator.
+		/// This allows anyone in the community to call out
 		/// that a subcurator is not doing their due diligence, and
 		/// we should pick a new subcurator. In this case the subcurator
-		/// should also be slashed.
+		/// deposit is slashed.
 		///
-		/// State of subbounty is moved to Funded state
+		/// State of subbounty is moved to Added state
 		/// on successful call completion.
 		///
 		/// - `bounty_id`: ID pair Bounty ID.
@@ -1127,14 +1152,19 @@ decl_module! {
 						},
 						SubBountyStatus::PendingPayout { ref subcurator, .. } => {
 							// TODO :: Have to recheck
+							// The implementation is followed from
+							// "unassign_curator()".
 							// The subbounty is in pending payout state,
 							// only Root or Master curator origin can unassign.
 							// By doing so, they are claiming the subcurator
 							// is acting maliciously, so We slash the subcurator.
+							// But since subbounty in pending payout state,
+							// and task is completed to slash the subcurator
+							// deposit ?
 							ensure!(
 								maybe_sender.map_or(
 									true,
-									|sender| sender == master_curator
+									|sender| sender == master_curator,
 								),
 								BadOrigin,
 							);
@@ -1190,31 +1220,34 @@ decl_module! {
 						.ok_or(Error::<T>::InvalidIndex)?;
 
 					// Ensure Subbounty is in active state
-					match &subbounty.status {
-						SubBountyStatus::Active {
-							subcurator,
-							..
-						} => {
-							// Only Subcurator can award the subbounty.
-							ensure!(
-								signer == *subcurator,
-								Error::<T>::RequireSubCurator,
-							);
-						},
-						_ => return Err(Error::<T>::UnexpectedStatus.into()),
+					if let SubBountyStatus::Active { ref subcurator } =
+						subbounty.status
+					{
+						ensure!(
+							signer == *subcurator,
+							Error::<T>::RequireSubCurator,
+						);
+						// Move the subbounty state to Pending payout.
+						subbounty.status = SubBountyStatus::PendingPayout {
+							subcurator: signer,
+							beneficiary: beneficiary.clone(),
+							unlock_at: system::Module::<T>::block_number() +
+								T::BountyDepositPayoutDelay::get(),
+						};
+						Ok(())
+					} else {
+						Err(Error::<T>::UnexpectedStatus.into())
 					}
-					// Move the subbounty state to Pending payout.
-					subbounty.status = SubBountyStatus::PendingPayout {
-						subcurator: signer,
-						beneficiary: beneficiary.clone(),
-						unlock_at: system::Module::<T>::block_number() +
-							T::BountyDepositPayoutDelay::get(),
-					};
-					Ok(())
 				}
 			)?;
 			// Trigger the event SubBountyAwarded
-			Self::deposit_event(Event::<T>::SubBountyAwarded(bounty_id, subbounty_id, beneficiary));
+			Self::deposit_event(
+				Event::<T>::SubBountyAwarded(
+					bounty_id,
+					subbounty_id,
+					beneficiary
+				)
+			);
 		}
 
 		/// Claim the payout from an awarded subbounty after payout delay.
@@ -1225,7 +1258,7 @@ decl_module! {
 		/// No need for parent bounty must be in active state.
 		///
 		/// Beneficiary is paid out with with agreed bounty value.
-		/// SubCurator fee is paid & bond deposit is unreserved.
+		/// SubCurator fee is paid & curator deposit is unreserved.
 		///
 		/// Subbounty must be in PendingPayout state, for
 		/// processing the call. and instance of subbounty is
@@ -1332,12 +1365,12 @@ decl_module! {
 			)?;
 		}
 
-		/// Cancel a proposed or active subbounty. All the reserved funds
-		/// gets unreserved to parent bounty account. the curator deposit
-		/// will be unreserved if possible.
+		/// Cancel a proposed or active subbounty.
+		/// Subbounty account funds are transferred to parent bounty account.
+		/// the subcurator deposit may be unreserved if possible.
 		///
 		/// The dispatch origin for this call must be
-		/// either `T::RejectOrigin` or master curator of this subbounty.
+		/// either master curator of this subbounty or `T::RejectOrigin`.
 		///
 		/// If state of subbounty is `Active`,
 		/// subcurator deposit is unreserved.
