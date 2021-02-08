@@ -35,14 +35,14 @@ sp-trie = { version = "2.0.0", path = "../../primitives/trie" }
 sp-consensus = { version = "0.8.0", path = "../../primitives/consensus/common" }
 sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
 sp-database = { version = "2.0.0", path = "../../primitives/database" }
-parity-db = { version = "0.1.2", optional = true }
+parity-db = { version = "0.2.2", optional = true }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.8.0", path = "../../utils/prometheus" }
 
 [dev-dependencies]
 sp-keyring = { version = "2.0.0", path = "../../primitives/keyring" }
 sp-tracing = { version = "2.0.0", path = "../../primitives/tracing" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
-quickcheck = "0.9"
+quickcheck = "1.0.3"
 kvdb-rocksdb = "0.11.0"
 tempfile = "3"
 

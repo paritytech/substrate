@@ -18,7 +18,7 @@
 //! Environment definition of the wasm smart-contract runtime.
 
 use crate::{
-	HostFnWeights, Schedule, Config, CodeHash, BalanceOf, Error,
+	HostFnWeights, Config, CodeHash, BalanceOf, Error,
 	exec::{Ext, StorageKey, TopicOf},
 	gas::{Gas, GasMeter, Token, GasMeterResult, ChargedAmount},
 	wasm::env_def::ConvertibleToWasm,
@@ -300,7 +300,6 @@ fn has_duplicates<T: PartialEq + AsRef<[u8]>>(items: &mut Vec<T>) -> bool {
 pub struct Runtime<'a, E: Ext + 'a> {
 	ext: &'a mut E,
 	input_data: Option<Vec<u8>>,
-	schedule: &'a Schedule<E::T>,
 	memory: sp_sandbox::Memory,
 	gas_meter: &'a mut GasMeter<E::T>,
 	trap_reason: Option<TrapReason>,
@@ -315,14 +314,12 @@ where
 	pub fn new(
 		ext: &'a mut E,
 		input_data: Vec<u8>,
-		schedule: &'a Schedule<E::T>,
 		memory: sp_sandbox::Memory,
 		gas_meter: &'a mut GasMeter<E::T>,
 	) -> Self {
 		Runtime {
 			ext,
 			input_data: Some(input_data),
-			schedule,
 			memory,
 			gas_meter,
 			trap_reason: None,
@@ -411,7 +408,7 @@ where
 	where
 		Tok: Token<E::T, Metadata=HostFnWeights<E::T>>,
 	{
-		match self.gas_meter.charge(&self.schedule.host_fn_weights, token) {
+		match self.gas_meter.charge(&self.ext.schedule().host_fn_weights, token) {
 			GasMeterResult::Proceed(amount) => Ok(amount),
 			GasMeterResult::OutOfGas => Err(Error::<E::T>::OutOfGas.into())
 		}
@@ -425,7 +422,7 @@ where
 	pub fn read_sandbox_memory(&self, ptr: u32, len: u32)
 	-> Result<Vec<u8>, DispatchError>
 	{
-		ensure!(len <= self.schedule.limits.max_memory_size(), Error::<E::T>::OutOfBounds);
+		ensure!(len <= self.ext.schedule().limits.max_memory_size(), Error::<E::T>::OutOfBounds);
 		let mut buf = vec![0u8; len as usize];
 		self.memory.get(ptr, buf.as_mut_slice())
 			.map_err(|_| Error::<E::T>::OutOfBounds)?;
@@ -889,7 +886,7 @@ define_env!(Env, <E: Ext>,
 			match nested_meter {
 				Some(nested_meter) => {
 					ext.instantiate(
-						&code_hash,
+						code_hash,
 						value,
 						nested_meter,
 						input_data,
@@ -1094,7 +1091,7 @@ define_env!(Env, <E: Ext>,
 	// The data is encoded as T::Hash.
 	seal_random(ctx, subject_ptr: u32, subject_len: u32, out_ptr: u32, out_len_ptr: u32) => {
 		ctx.charge_gas(RuntimeToken::Random)?;
-		if subject_len > ctx.schedule.limits.subject_len {
+		if subject_len > ctx.ext.schedule().limits.subject_len {
 			Err(Error::<E::T>::RandomSubjectTooLong)?;
 		}
 		let subject_buf = ctx.read_sandbox_memory(subject_ptr, subject_len)?;
@@ -1205,7 +1202,7 @@ define_env!(Env, <E: Ext>,
 			// allocator can handle.
 			ensure!(
 				delta_count
-					.saturating_mul(KEY_SIZE as u32) <= ctx.schedule.limits.max_memory_size(),
+					.saturating_mul(KEY_SIZE as u32) <= ctx.ext.schedule().limits.max_memory_size(),
 				Error::<E::T>::OutOfBounds,
 			);
 			let mut delta = vec![[0; KEY_SIZE]; delta_count as usize];
@@ -1253,7 +1250,7 @@ define_env!(Env, <E: Ext>,
 		};
 
 		// If there are more than `event_topics`, then trap.
-		if topics.len() > ctx.schedule.limits.event_topics as usize {
+		if topics.len() > ctx.ext.schedule().limits.event_topics as usize {
 			Err(Error::<E::T>::TooManyTopics)?;
 		}
 
