@@ -548,7 +548,7 @@ mod tests {
 	use crate::{CatchUp, CompactCommit};
 	use substrate_test_runtime_client::runtime::{Block, Hash, Header};
 	use sp_consensus::BlockOrigin;
-	use sc_client_api::{BlockImportNotification, ImportedBlockInfo};
+	use sc_client_api::BlockImportNotification;
 	use futures::future::Either;
 	use futures_timer::Delay;
 	use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};

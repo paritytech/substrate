@@ -28,7 +28,7 @@ use substrate_test_runtime_client::{
 	AccountKeyring, Sr25519Keyring, TestClientBuilder, ClientBlockImportExt,
 	BlockBuilderExt, DefaultTestClientBuilderExt, TestClientBuilderExt, ClientExt,
 };
-use sc_client_api::{BlockBackend, BlockImportNotification, BlockchainEvents, StorageProvider, in_mem};
+use sc_client_api::{BlockBackend, BlockchainEvents, StorageProvider, in_mem};
 use sc_client_db::{
 	Backend, DatabaseSettings, DatabaseSettingsSrc, PruningMode, KeepBlocks, TransactionStorageMode
 };

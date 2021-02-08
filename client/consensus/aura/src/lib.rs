@@ -880,7 +880,7 @@ mod tests {
 	use sc_network::config::ProtocolConfig;
 	use parking_lot::Mutex;
 	use sp_keyring::sr25519::Keyring;
-	use sc_client_api::{BlockchainEvents, BlockImportNotification};
+	use sc_client_api::BlockchainEvents;
 	use sp_consensus_aura::sr25519::AuthorityPair;
 	use sc_consensus_slots::{SimpleSlotWorker, BackoffAuthoringOnFinalizedHeadLagging};
 	use std::task::Poll;
