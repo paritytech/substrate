@@ -443,12 +443,12 @@
 			"website": null
 		},
 		{
-			"decimals": [18],
-			"displayName": "AvN Mainnet",
-			"network": "aventus",
 			"prefix": 50,
-			"standardAccount": "*25519",
+			"network": "aventus",
+			"displayName": "AvN Mainnet",
 			"symbols": ["AVT"],
+			"decimals": [18],
+			"standardAccount": "*25519",
 			"website": "https://aventus.io"
 		}
 	]
