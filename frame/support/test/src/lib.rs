@@ -42,7 +42,7 @@ frame_support::decl_module! {
 	pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {}
 }
 
-/// A PalletInfo implementation which just panics
+/// A PalletInfo implementation which just panics.
 pub struct PanicPalletInfo;
 
 impl frame_support::traits::PalletInfo for PanicPalletInfo{
