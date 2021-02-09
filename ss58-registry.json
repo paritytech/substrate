@@ -432,6 +432,15 @@
 			"decimals": null,
 			"standardAccount": null,
 			"website": null
+		},
+		{
+			"prefix": 66,
+			"network": "crust",
+			"displayName": "Crust Network",
+			"symbols": ["CRU"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://crust.network"
 		}
 	]
 }
