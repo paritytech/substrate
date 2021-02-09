@@ -1402,8 +1402,8 @@ decl_module! {
 		}
 
 		fn integrity_test() {
-			// Ensure the size of both ValidatorIndex and NominatorIndex. They both need to be well
-			// below usize.
+			// Ensure the size of both ValidatorIndex and NominatorIndex. They both need to be less or
+			// equal to usize.
 			assert!(size_of::<ValidatorIndexOf<T>>() <= size_of::<usize>());
 			assert!(size_of::<ValidatorIndexOf<T>>() <= size_of::<u32>());
 			assert!(size_of::<NominatorIndexOf<T>>() <= size_of::<usize>());
