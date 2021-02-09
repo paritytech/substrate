@@ -2409,7 +2409,7 @@ mod tests {
 	use crate::weights::{DispatchInfo, DispatchClass, Pays, RuntimeDbWeight};
 	use crate::traits::{
 		CallMetadata, GetCallMetadata, GetCallName, OnInitialize, OnFinalize, OnRuntimeUpgrade,
-		IntegrityTest, Get,
+		IntegrityTest, Get, PalletInfo,
 	};
 
 	pub trait Config: system::Config + Sized where Self::AccountId: From<u32> { }
@@ -2568,7 +2568,7 @@ mod tests {
 		type Call = OuterCall;
 		type BaseCallFilter = ();
 		type BlockNumber = u32;
-		type PalletInfo = ();
+		type PalletInfo = crate::traits::PanicPalletInfo;
 		type DbWeight = ();
 	}
 

@@ -1464,6 +1464,20 @@ impl PalletInfo for () {
 	fn name<P: 'static>() -> Option<&'static str> { Some("test") }
 }
 
+/// A PalletInfo implementation which just panics
+#[cfg(test)]
+pub struct PanicPalletInfo;
+
+#[cfg(test)]
+impl PalletInfo for PanicPalletInfo{
+	fn index<P: 'static>() -> Option<usize> {
+		unimplemented!("PanicPalletInfo mustn't be triggered by tests");
+	}
+	fn name<P: 'static>() -> Option<&'static str> {
+		unimplemented!("PanicPalletInfo mustn't be triggered by tests");
+	}
+}
+
 /// The function and pallet name of the Call.
 #[derive(Clone, Eq, PartialEq, Default, RuntimeDebug)]
 pub struct CallMetadata {

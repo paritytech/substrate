@@ -625,7 +625,7 @@ mod tests {
 	impl Config for Test {
 		type BlockNumber = u32;
 		type Origin = u32;
-		type PalletInfo = ();
+		type PalletInfo = crate::traits::PanicPalletInfo;
 		type DbWeight = ();
 	}
 

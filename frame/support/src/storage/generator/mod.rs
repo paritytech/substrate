@@ -52,7 +52,7 @@ mod tests {
 	impl Config for Runtime {
 		type Origin = u32;
 		type BlockNumber = u32;
-		type PalletInfo = ();
+		type PalletInfo = crate::traits::PanicPalletInfo;
 		type DbWeight = ();
 	}
 
