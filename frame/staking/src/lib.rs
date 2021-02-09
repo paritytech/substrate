@@ -333,7 +333,7 @@ use sp_npos_elections::{
 };
 pub use weights::WeightInfo;
 
-/// The default solution type used in substrate-node with 24 maximum winners. A runtime can customize this to their needs.
+/// The default solution type used in substrate-node with 24 maximum votes per voter. A runtime can customize this to their needs.
 pub mod default_solution {
 	use super::*;
 	pub use sp_npos_elections::CompactSolution;
