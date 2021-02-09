@@ -317,6 +317,15 @@
 			"website": null
 		},
 		{
+			"prefix": 34,
+			"network": "ares",
+			"displayName": "Ares Protocol",
+			"symbols": ["ARES"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://www.aresprotocol.com/"
+		},
+		{
 			"prefix": 35,
 			"network": "vln",
 			"displayName": "Valiu Liquidity Network",
