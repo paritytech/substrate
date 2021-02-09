@@ -96,10 +96,10 @@ mod benchmarking;
 pub mod weights;
 
 use sp_std::{result, cmp};
-use sp_inherents::{ProvideInherent, InherentData, InherentIdentifier};
+use sp_inherents::InherentData;
 #[cfg(feature = "std")]
 use frame_support::debug;
-use frame_support::traits::{Time, UnixTime, Get};
+use frame_support::traits::{Time, UnixTime};
 use sp_runtime::{
 	RuntimeString,
 	traits::{
@@ -208,6 +208,42 @@ pub mod pallet {
 			Ok(().into())
 		}
 	}
+
+	#[pallet::inherent]
+	impl<T: Config> ProvideInherent for Pallet<T> {
+		type Call = Call<T>;
+		type Error = InherentError;
+		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
+
+		fn create_inherent(data: &InherentData) -> Option<Self::Call> {
+			let data: T::Moment = extract_inherent_data(data)
+				.expect("Gets and decodes timestamp inherent data")
+				.saturated_into();
+
+			let next_time = cmp::max(data, Self::now() + T::MinimumPeriod::get());
+			Some(Call::set(next_time.into()))
+		}
+
+		fn check_inherent(call: &Self::Call, data: &InherentData) -> result::Result<(), Self::Error> {
+			const MAX_TIMESTAMP_DRIFT_MILLIS: u64 = 30 * 1000;
+
+			let t: u64 = match call {
+				Call::set(ref t) => t.clone().saturated_into::<u64>(),
+				_ => return Ok(()),
+			};
+
+			let data = extract_inherent_data(data).map_err(|e| InherentError::Other(e))?;
+
+			let minimum = (Self::now() + T::MinimumPeriod::get()).saturated_into::<u64>();
+			if t > data + MAX_TIMESTAMP_DRIFT_MILLIS {
+				Err(InherentError::Other("Timestamp too far in future to accept".into()))
+			} else if t < minimum {
+				Err(InherentError::ValidAtTimestamp(minimum))
+			} else {
+				Ok(())
+			}
+		}
+	}
 }
 
 impl<T: Config> Pallet<T> {
@@ -230,41 +266,6 @@ fn extract_inherent_data(data: &InherentData) -> Result<InherentType, RuntimeStr
 	data.get_data::<InherentType>(&INHERENT_IDENTIFIER)
 		.map_err(|_| RuntimeString::from("Invalid timestamp inherent data encoding."))?
 		.ok_or_else(|| "Timestamp inherent data is not provided.".into())
-}
-
-impl<T: Config> ProvideInherent for Pallet<T> {
-	type Call = Call<T>;
-	type Error = InherentError;
-	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
-
-	fn create_inherent(data: &InherentData) -> Option<Self::Call> {
-		let data: T::Moment = extract_inherent_data(data)
-			.expect("Gets and decodes timestamp inherent data")
-			.saturated_into();
-
-		let next_time = cmp::max(data, Self::now() + T::MinimumPeriod::get());
-		Some(Call::set(next_time.into()))
-	}
-
-	fn check_inherent(call: &Self::Call, data: &InherentData) -> result::Result<(), Self::Error> {
-		const MAX_TIMESTAMP_DRIFT_MILLIS: u64 = 30 * 1000;
-
-		let t: u64 = match call {
-			Call::set(ref t) => t.clone().saturated_into::<u64>(),
-			_ => return Ok(()),
-		};
-
-		let data = extract_inherent_data(data).map_err(|e| InherentError::Other(e))?;
-
-		let minimum = (Self::now() + T::MinimumPeriod::get()).saturated_into::<u64>();
-		if t > data + MAX_TIMESTAMP_DRIFT_MILLIS {
-			Err(InherentError::Other("Timestamp too far in future to accept".into()))
-		} else if t < minimum {
-			Err(InherentError::ValidAtTimestamp(minimum))
-		} else {
-			Ok(())
-		}
-	}
 }
 
 impl<T: Config> Time for Pallet<T> {
