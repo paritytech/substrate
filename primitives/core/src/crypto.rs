@@ -580,6 +580,8 @@ ss58_address_format!(
 		(47, "reserved47", "Reserved for future use (47).")
 	CrustAccount =>
 		(66, "crust", "Crust Network, standard account (*25519).")
+	HedgewareAccount =>
+		(77, "hedgeware", "Hedgeware Network, standard account (*25519).")
 	// Note: 48 and above are reserved.
 );
 
