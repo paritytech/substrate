@@ -18,4 +18,4 @@ targets = ["x86_64-unknown-linux-gnu"]
 sp-core = { version = "2.0.0", path = "../core" }
 sp-runtime = { version = "2.0.0", path = "../runtime" }
 lazy_static = "1.4.0"
-strum = { version = "0.16.0", features = ["derive"] }
+strum = { version = "0.20.0", features = ["derive"] }
