@@ -281,15 +281,6 @@
 			"website": null
 		},
 		{
-			"prefix": 34,
-			"network": "hedgeware",
-			"displayName": "Hedgeware",
-			"symbols": ["HEDG"],
-			"decimals": [18],
-			"standardAccount": "*25519",
-			"website": "https://edgewa.re"
-		},
-		{
 			"prefix": 35,
 			"network": "vln",
 			"displayName": "Valiu Liquidity Network",
@@ -414,6 +405,15 @@
 			"decimals": null,
 			"standardAccount": null,
 			"website": null
+		},
+		{
+			"prefix": 77,
+			"network": "hedgeware",
+			"displayName": "Hedgeware",
+			"symbols": ["HEDG"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://edgewa.re"
 		}
 	]
 }
