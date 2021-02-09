@@ -2562,13 +2562,32 @@ mod tests {
 		}
 	}
 
+	impl PalletInfo for TraitImpl {
+		fn index<P: 'static>() -> Option<usize> {
+			let type_id = sp_std::any::TypeId::of::<P>();
+			if type_id == sp_std::any::TypeId::of::<Test>() {
+				return Some(0)
+			}
+
+			None
+		}
+		fn name<P: 'static>() -> Option<&'static str> {
+			let type_id = sp_std::any::TypeId::of::<P>();
+			if type_id == sp_std::any::TypeId::of::<Test>() {
+				return Some("Test")
+			}
+
+			None
+		}
+	}
+
 	impl system::Config for TraitImpl {
 		type Origin = OuterOrigin;
 		type AccountId = u32;
 		type Call = OuterCall;
 		type BaseCallFilter = ();
 		type BlockNumber = u32;
-		type PalletInfo = crate::traits::PanicPalletInfo;
+		type PalletInfo = Self;
 		type DbWeight = ();
 	}
 
