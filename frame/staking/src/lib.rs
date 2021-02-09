@@ -2276,7 +2276,7 @@ decl_module! {
 	}
 }
 
-impl<T: Config> Module<T>  {
+impl<T: Config> Module<T> {
 	/// The total balance that can be slashed from a stash account as of right now.
 	pub fn slashable_balance_of(stash: &T::AccountId) -> BalanceOf<T> {
 		// Weight note: consider making the stake accessible through stash.
