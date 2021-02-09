@@ -571,7 +571,7 @@ macro_rules! assert_ok {
 pub use serde::{Serialize, Deserialize};
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
 	use super::*;
 	use codec::{Codec, EncodeLike};
 	use frame_metadata::{
@@ -580,6 +580,18 @@ mod tests {
 	};
 	use sp_std::{marker::PhantomData, result};
 	use sp_io::TestExternalities;
+
+	/// A PalletInfo implementation which just panics.
+	pub struct PanicPalletInfo;
+
+	impl crate::traits::PalletInfo for PanicPalletInfo {
+		fn index<P: 'static>() -> Option<usize> {
+			unimplemented!("PanicPalletInfo mustn't be triggered by tests");
+		}
+		fn name<P: 'static>() -> Option<&'static str> {
+			unimplemented!("PanicPalletInfo mustn't be triggered by tests");
+		}
+	}
 
 	pub trait Config: 'static {
 		type BlockNumber: Codec + EncodeLike + Default;
@@ -625,7 +637,7 @@ mod tests {
 	impl Config for Test {
 		type BlockNumber = u32;
 		type Origin = u32;
-		type PalletInfo = ();
+		type PalletInfo = PanicPalletInfo;
 		type DbWeight = ();
 	}
 
