@@ -22,8 +22,7 @@
 use super::*;
 
 use frame_support::{
-	assert_ok, assert_noop, impl_outer_origin, parameter_types, impl_outer_dispatch, impl_outer_event,
-	assert_err_ignore_postinfo,
+	assert_ok, assert_noop, parameter_types, assert_err_ignore_postinfo,
 	weights::{Weight, Pays},
 	dispatch::{DispatchError, DispatchErrorWithPostInfo, Dispatchable},
 	traits::Filter,
@@ -67,30 +66,22 @@ pub mod example {
 	}
 }
 
-impl_outer_origin! {
-	pub enum Origin for Test where system = frame_system {}
-}
-impl_outer_event! {
-	pub enum TestEvent for Test {
-		frame_system<T>,
-		pallet_balances<T>,
-		utility,
-	}
-}
-impl_outer_dispatch! {
-	pub enum Call for Test where origin: Origin {
-		frame_system::System,
-		pallet_balances::Balances,
-		utility::Utility,
-		example::Example,
-	}
-}
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
 
-// For testing the pallet, we construct most of a mock runtime. This means
-// first constructing a configuration type (`Test`) which `impl`s each of the
-// configuration traits of pallets we want to use.
-#[derive(Clone, Eq, PartialEq)]
-pub struct Test;
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
+		Utility: utility::{Module, Call, Event},
+		Example: example::{Module, Call},
+	}
+);
+
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
@@ -110,10 +101,10 @@ impl frame_system::Config for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = TestEvent;
+	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
-	type PalletInfo = ();
+	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
@@ -127,7 +118,7 @@ impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type Balance = u64;
 	type DustRemoval = ();
-	type Event = TestEvent;
+	type Event = Event;
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
 	type WeightInfo = ();
@@ -144,7 +135,8 @@ pub struct TestBaseCallFilter;
 impl Filter<Call> for TestBaseCallFilter {
 	fn filter(c: &Call) -> bool {
 		match *c {
-			Call::Balances(_) => true,
+			// Transfer works. Use `transfer_keep_alive` for a call that doesn't pass the filter.
+			Call::Balances(pallet_balances::Call::transfer(..)) => true,
 			Call::Utility(_) => true,
 			// For benchmarking, this acts as a noop call
 			Call::System(frame_system::Call::remark(..)) => true,
@@ -155,14 +147,10 @@ impl Filter<Call> for TestBaseCallFilter {
 	}
 }
 impl Config for Test {
-	type Event = TestEvent;
+	type Event = Event;
 	type Call = Call;
 	type WeightInfo = ();
 }
-type System = frame_system::Module<Test>;
-type Balances = pallet_balances::Module<Test>;
-type Example = example::Module<Test>;
-type Utility = Module<Test>;
 
 type ExampleCall = example::Call<Test>;
 type UtilityCall = crate::Call<Test>;
@@ -181,11 +169,11 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	ext
 }
 
-fn last_event() -> TestEvent {
+fn last_event() -> Event {
 	frame_system::Module::<Test>::events().pop().map(|e| e.event).expect("Event expected")
 }
 
-fn expect_event<E: Into<TestEvent>>(e: E) {
+fn expect_event<E: Into<Event>>(e: E) {
 	assert_eq!(last_event(), e.into());
 }
 
@@ -275,7 +263,7 @@ fn as_derivative_filters() {
 		assert_err_ignore_postinfo!(Utility::as_derivative(
 			Origin::signed(1),
 			1,
-			Box::new(Call::System(frame_system::Call::suicide())),
+			Box::new(Call::Balances(pallet_balances::Call::transfer_keep_alive(2, 1))),
 		), DispatchError::BadOrigin);
 	});
 }
@@ -320,10 +308,10 @@ fn batch_with_signed_filters() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(
 			Utility::batch(Origin::signed(1), vec![
-				Call::System(frame_system::Call::suicide())
+				Call::Balances(pallet_balances::Call::transfer_keep_alive(2, 1))
 			]),
 		);
-		expect_event(Event::BatchInterrupted(0, DispatchError::BadOrigin));
+		expect_event(utility::Event::BatchInterrupted(0, DispatchError::BadOrigin));
 	});
 }
 
@@ -397,7 +385,7 @@ fn batch_handles_weight_refund() {
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(1));
 		assert_ok!(result);
-		expect_event(Event::BatchInterrupted(1, DispatchError::Other("")));
+		expect_event(utility::Event::BatchInterrupted(1, DispatchError::Other("")));
 		// No weight is refunded
 		assert_eq!(extract_actual_weight(&result, &info), info.weight);
 
@@ -410,7 +398,7 @@ fn batch_handles_weight_refund() {
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(1));
 		assert_ok!(result);
-		expect_event(Event::BatchInterrupted(1, DispatchError::Other("")));
+		expect_event(utility::Event::BatchInterrupted(1, DispatchError::Other("")));
 		assert_eq!(extract_actual_weight(&result, &info), info.weight - diff * batch_len);
 
 		// Partial batch completion
@@ -421,7 +409,7 @@ fn batch_handles_weight_refund() {
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(1));
 		assert_ok!(result);
-		expect_event(Event::BatchInterrupted(1, DispatchError::Other("")));
+		expect_event(utility::Event::BatchInterrupted(1, DispatchError::Other("")));
 		assert_eq!(
 			extract_actual_weight(&result, &info),
 			// Real weight is 2 calls at end_weight

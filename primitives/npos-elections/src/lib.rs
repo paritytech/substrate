@@ -21,8 +21,8 @@
 //! - [`phragmms()`]: Implements a hybrid approach inspired by Phragmén which is executed faster but
 //!   it can achieve a constant factor approximation of the maximin problem, similar to that of the
 //!   MMS algorithm.
-//! - [`balance`]: Implements the star balancing algorithm. This iterative process can push
-//!   a solution toward being more `balances`, which in turn can increase its score.
+//! - [`balance`]: Implements the star balancing algorithm. This iterative process can push a
+//!   solution toward being more `balances`, which in turn can increase its score.
 //!
 //! ### Terminology
 //!
@@ -57,12 +57,11 @@
 //!
 //! // the combination of the two makes the election result.
 //! let election_result = ElectionResult { winners, assignments };
-//!
 //! ```
 //!
 //! The `Assignment` field of the election result is voter-major, i.e. it is from the perspective of
 //! the voter. The struct that represents the opposite is called a `Support`. This struct is usually
-//! accessed in a map-like manner, i.e. keyed vy voters, therefor it is stored as a mapping called
+//! accessed in a map-like manner, i.e. keyed by voters, therefor it is stored as a mapping called
 //! `SupportMap`.
 //!
 //! Moreover, the support is built from absolute backing values, not ratios like the example above.
@@ -74,18 +73,25 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::{
-	prelude::*, collections::btree_map::BTreeMap, fmt::Debug, cmp::Ordering, rc::Rc, cell::RefCell,
-};
 use sp_arithmetic::{
-	PerThing, Rational128, ThresholdOrd, InnerOf, Normalizable,
-	traits::{Zero, Bounded},
+	traits::{Bounded, UniqueSaturatedInto, Zero},
+	Normalizable, PerThing, Rational128, ThresholdOrd,
 };
+use sp_std::{
+	cell::RefCell,
+	cmp::Ordering,
+	collections::btree_map::BTreeMap,
+	convert::{TryFrom, TryInto},
+	fmt::Debug,
+	ops::Mul,
+	prelude::*,
+	rc::Rc,
+};
+use sp_core::RuntimeDebug;
 
+use codec::{Decode, Encode};
 #[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
-#[cfg(feature = "std")]
-use codec::{Encode, Decode};
+use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 mod mock;
@@ -125,22 +131,106 @@ impl<T> __OrInvalidIndex<T> for Option<T> {
 	}
 }
 
+/// A common interface for all compact solutions.
+///
+/// See [`sp-npos-elections-compact`] for more info.
+pub trait CompactSolution: Sized {
+	/// The maximum number of votes that are allowed.
+	const LIMIT: usize;
+
+	/// The voter type. Needs to be an index (convert to usize).
+	type Voter: UniqueSaturatedInto<usize> + TryInto<usize> + TryFrom<usize> + Debug + Copy + Clone;
+
+	/// The target type. Needs to be an index (convert to usize).
+	type Target: UniqueSaturatedInto<usize> + TryInto<usize> + TryFrom<usize> + Debug + Copy + Clone;
+
+	/// The weight/accuracy type of each vote.
+	type Accuracy: PerThing128;
+
+	/// Build self from a `assignments: Vec<Assignment<A, Self::Accuracy>>`.
+	fn from_assignment<FV, FT, A>(
+		assignments: Vec<Assignment<A, Self::Accuracy>>,
+		voter_index: FV,
+		target_index: FT,
+	) -> Result<Self, Error>
+	where
+		A: IdentifierT,
+		for<'r> FV: Fn(&'r A) -> Option<Self::Voter>,
+		for<'r> FT: Fn(&'r A) -> Option<Self::Target>;
+
+	/// Convert self into a `Vec<Assignment<A, Self::Accuracy>>`
+	fn into_assignment<A: IdentifierT>(
+		self,
+		voter_at: impl Fn(Self::Voter) -> Option<A>,
+		target_at: impl Fn(Self::Target) -> Option<A>,
+	) -> Result<Vec<Assignment<A, Self::Accuracy>>, Error>;
+
+	/// Get the length of all the voters that this type is encoding.
+	///
+	/// This is basically the same as the number of assignments, or number of active voters.
+	fn voter_count(&self) -> usize;
+
+	/// Get the total count of edges.
+	///
+	/// This is effectively in the range of {[`Self::voter_count`], [`Self::voter_count`] *
+	/// [`Self::LIMIT`]}.
+	fn edge_count(&self) -> usize;
+
+	/// Get the number of unique targets in the whole struct.
+	///
+	/// Once presented with a list of winners, this set and the set of winners must be
+	/// equal.
+	fn unique_targets(&self) -> Vec<Self::Target>;
+
+	/// Get the average edge count.
+	fn average_edge_count(&self) -> usize {
+		self.edge_count()
+			.checked_div(self.voter_count())
+			.unwrap_or(0)
+	}
+
+	/// Remove a certain voter.
+	///
+	/// This will only search until the first instance of `to_remove`, and return true. If
+	/// no instance is found (no-op), then it returns false.
+	///
+	/// In other words, if this return true, exactly **one** element must have been removed from
+	/// `self.len()`.
+	fn remove_voter(&mut self, to_remove: Self::Voter) -> bool;
+
+	/// Compute the score of this compact solution type.
+	fn score<A, FS>(
+		self,
+		winners: &[A],
+		stake_of: FS,
+		voter_at: impl Fn(Self::Voter) -> Option<A>,
+		target_at: impl Fn(Self::Target) -> Option<A>,
+	) -> Result<ElectionScore, Error>
+	where
+		for<'r> FS: Fn(&'r A) -> VoteWeight,
+		A: IdentifierT,
+	{
+		let ratio = self.into_assignment(voter_at, target_at)?;
+		let staked = helpers::assignment_ratio_to_staked_normalized(ratio, stake_of)?;
+		let supports = to_supports(winners, &staked)?;
+		Ok(supports.evaluate())
+	}
+}
+
 // re-export the compact solution type.
 pub use sp_npos_elections_compact::generate_solution_type;
-
-/// A trait to limit the number of votes per voter. The generated compact type will implement this.
-pub trait VotingLimit {
-	const LIMIT: usize;
-}
 
 /// an aggregator trait for a generic type of a voter/target identifier. This usually maps to
 /// substrate's account id.
 pub trait IdentifierT: Clone + Eq + Default + Ord + Debug + codec::Codec {}
-
 impl<T: Clone + Eq + Default + Ord + Debug + codec::Codec> IdentifierT for T {}
 
+/// Aggregator trait for a PerThing that can be multiplied by u128 (ExtendedBalance).
+pub trait PerThing128: PerThing + Mul<ExtendedBalance, Output = ExtendedBalance> {}
+impl<T: PerThing + Mul<ExtendedBalance, Output = ExtendedBalance>> PerThing128 for T {}
+
 /// The errors that might occur in the this crate and compact.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Eq, PartialEq, RuntimeDebug)]
 pub enum Error {
 	/// While going from compact to staked, the stake of all the edges has gone above the total and
 	/// the last stake cannot be assigned.
@@ -151,6 +241,8 @@ pub enum Error {
 	CompactInvalidIndex,
 	/// An error occurred in some arithmetic operation.
 	ArithmeticError(&'static str),
+	/// The data provided to create support map was invalid.
+	InvalidSupportEdge,
 }
 
 /// A type which is used in the API of this crate as a numeric weight of a vote, most often the
@@ -160,7 +252,8 @@ pub type VoteWeight = u64;
 /// A type in which performing operations on vote weights are safe.
 pub type ExtendedBalance = u128;
 
-/// The score of an assignment. This can be computed from the support map via [`evaluate_support`].
+/// The score of an assignment. This can be computed from the support map via
+/// [`EvaluateSupport::evaluate`].
 pub type ElectionScore = [ExtendedBalance; 3];
 
 /// A winner, with their respective approval stake.
@@ -170,7 +263,7 @@ pub type WithApprovalOf<A> = (A, ExtendedBalance);
 pub type CandidatePtr<A> = Rc<RefCell<Candidate<A>>>;
 
 /// A candidate entity for the election.
-#[derive(Debug, Clone, Default)]
+#[derive(RuntimeDebug, Clone, Default)]
 pub struct Candidate<AccountId> {
 	/// Identifier.
 	who: AccountId,
@@ -238,14 +331,14 @@ impl<AccountId: IdentifierT> Voter<AccountId> {
 	/// Note that this might create _un-normalized_ assignments, due to accuracy loss of `P`. Call
 	/// site might compensate by calling `normalize()` on the returned `Assignment` as a
 	/// post-precessing.
-	pub fn into_assignment<P: PerThing>(self) -> Option<Assignment<AccountId, P>>
-	where
-		ExtendedBalance: From<InnerOf<P>>,
-	{
+	pub fn into_assignment<P: PerThing>(self) -> Option<Assignment<AccountId, P>> {
 		let who = self.who;
 		let budget = self.budget;
-		let distribution = self.edges.into_iter().filter_map(|e| {
-			let per_thing = P::from_rational_approximation(e.weight, budget);
+		let distribution = self
+			.edges
+			.into_iter()
+			.filter_map(|e| {
+				let per_thing = P::from_rational_approximation(e.weight, budget);
 			// trim zero edges.
 			if per_thing.is_zero() { None } else { Some((e.who, per_thing)) }
 		}).collect::<Vec<_>>();
@@ -311,7 +404,7 @@ impl<AccountId: IdentifierT> Voter<AccountId> {
 }
 
 /// Final result of the election.
-#[derive(Debug)]
+#[derive(RuntimeDebug)]
 pub struct ElectionResult<AccountId, P: PerThing> {
 	/// Just winners zipped with their approval stake. Note that the approval stake is merely the
 	/// sub of their received stake and could be used for very basic sorting and approval voting.
@@ -322,7 +415,7 @@ pub struct ElectionResult<AccountId, P: PerThing> {
 }
 
 /// A voter's stake assignment among a set of targets, represented as ratios.
-#[derive(Debug, Clone, Default)]
+#[derive(RuntimeDebug, Clone, Default)]
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Encode, Decode))]
 pub struct Assignment<AccountId, P: PerThing> {
 	/// Voter's identifier.
@@ -331,24 +424,20 @@ pub struct Assignment<AccountId, P: PerThing> {
 	pub distribution: Vec<(AccountId, P)>,
 }
 
-impl<AccountId: IdentifierT, P: PerThing> Assignment<AccountId, P>
-where
-	ExtendedBalance: From<InnerOf<P>>,
-{
+impl<AccountId: IdentifierT, P: PerThing128> Assignment<AccountId, P> {
 	/// Convert from a ratio assignment into one with absolute values aka. [`StakedAssignment`].
 	///
-	/// It needs `stake` which is the total budget of the voter. If `fill` is set to true, it
-	/// _tries_ to ensure that all the potential rounding errors are compensated and the
-	/// distribution's sum is exactly equal to the total budget, by adding or subtracting the
-	/// remainder from the last distribution.
+	/// It needs `stake` which is the total budget of the voter.
+	///
+	/// Note that this might create _un-normalized_ assignments, due to accuracy loss of `P`. Call
+	/// site might compensate by calling `try_normalize()` on the returned `StakedAssignment` as a
+	/// post-precessing.
 	///
 	/// If an edge ratio is [`Bounded::min_value()`], it is dropped. This edge can never mean
 	/// anything useful.
-	pub fn into_staked(self, stake: ExtendedBalance) -> StakedAssignment<AccountId>
-	where
-		P: sp_std::ops::Mul<ExtendedBalance, Output = ExtendedBalance>,
-	{
-		let distribution = self.distribution
+	pub fn into_staked(self, stake: ExtendedBalance) -> StakedAssignment<AccountId> {
+		let distribution = self
+			.distribution
 			.into_iter()
 			.filter_map(|(target, p)| {
 				// if this ratio is zero, then skip it.
@@ -396,7 +485,7 @@ where
 
 /// A voter's stake assignment among a set of targets, represented as absolute values in the scale
 /// of [`ExtendedBalance`].
-#[derive(Debug, Clone, Default)]
+#[derive(RuntimeDebug, Clone, Default)]
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Encode, Decode))]
 pub struct StakedAssignment<AccountId> {
 	/// Voter's identifier
@@ -408,11 +497,8 @@ pub struct StakedAssignment<AccountId> {
 impl<AccountId> StakedAssignment<AccountId> {
 	/// Converts self into the normal [`Assignment`] type.
 	///
-	/// If `fill` is set to true, it _tries_ to ensure that all the potential rounding errors are
-	/// compensated and the distribution's sum is exactly equal to 100%, by adding or subtracting
-	/// the remainder from the last distribution.
-	///
-	/// NOTE: it is quite critical that this attempt always works. The data type returned here will
+	/// NOTE: This will always round down, and thus the results might be less than a full 100% `P`.
+	/// Use a normalization post-processing to fix this. The data type returned here will
 	/// potentially get used to create a compact type; a compact type requires sum of ratios to be
 	/// less than 100% upon un-compacting.
 	///
@@ -420,7 +506,6 @@ impl<AccountId> StakedAssignment<AccountId> {
 	/// can never be re-created and does not mean anything useful anymore.
 	pub fn into_assignment<P: PerThing>(self) -> Assignment<AccountId, P>
 	where
-		ExtendedBalance: From<InnerOf<P>>,
 		AccountId: IdentifierT,
 	{
 		let stake = self.total();
@@ -479,8 +564,8 @@ impl<AccountId> StakedAssignment<AccountId> {
 ///
 /// This, at the current version, resembles the `Exposure` defined in the Staking pallet, yet they
 /// do not necessarily have to be the same.
-#[derive(Default, Debug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Eq, PartialEq))]
+#[derive(Default, RuntimeDebug, Encode, Decode, Clone, Eq, PartialEq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct Support<AccountId> {
 	/// Total support.
 	pub total: ExtendedBalance,
@@ -488,51 +573,43 @@ pub struct Support<AccountId> {
 	pub voters: Vec<(AccountId, ExtendedBalance)>,
 }
 
-/// A linkage from a candidate and its [`Support`].
+/// A target-major representation of the the election outcome.
+///
+/// Essentially a flat variant of [`SupportMap`].
+///
+/// The main advantage of this is that it is encodable.
+pub type Supports<A> = Vec<(A, Support<A>)>;
+
+/// Linkage from a winner to their [`Support`].
+///
+/// This is more helpful than a normal [`Supports`] as it allows faster error checking.
 pub type SupportMap<A> = BTreeMap<A, Support<A>>;
 
-/// Build the support map from the given election result. It maps a flat structure like
+/// Helper trait to convert from a support map to a flat support vector.
+pub trait FlattenSupportMap<A> {
+	/// Flatten the support.
+	fn flatten(self) -> Supports<A>;
+}
+
+impl<A> FlattenSupportMap<A> for SupportMap<A> {
+	fn flatten(self) -> Supports<A> {
+		self.into_iter().collect::<Vec<_>>()
+	}
+}
+
+/// Build the support map from the winners and assignments.
 ///
-/// ```nocompile
-/// assignments: vec![
-///     voter1, vec![(candidate1, w11), (candidate2, w12)],
-///     voter2, vec![(candidate1, w21), (candidate2, w22)]
-/// ]
-/// ```
-///
-/// into a mapping of candidates and their respective support:
-///
-/// ```nocompile
-///  SupportMap {
-///     candidate1: Support {
-///         own:0,
-///         total: w11 + w21,
-///         others: vec![(candidate1, w11), (candidate2, w21)]
-///     },
-///     candidate2: Support {
-///         own:0,
-///         total: w12 + w22,
-///         others: vec![(candidate1, w12), (candidate2, w22)]
-///     },
-/// }
-/// ```
-///
-/// The second returned flag indicates the number of edges who didn't corresponded to an actual
-/// winner from the given winner set. A value in this place larger than 0 indicates a potentially
-/// faulty assignment.
-///
-/// `O(E)` where `E` is the total number of edges.
-pub fn build_support_map<AccountId>(
-	winners: &[AccountId],
-	assignments: &[StakedAssignment<AccountId>],
-) -> Result<SupportMap<AccountId>, AccountId> where
-	AccountId: IdentifierT,
-{
+/// The list of winners is basically a redundancy for error checking only; It ensures that all the
+/// targets pointed to by the [`Assignment`] are present in the `winners`.
+pub fn to_support_map<A: IdentifierT>(
+	winners: &[A],
+	assignments: &[StakedAssignment<A>],
+) -> Result<SupportMap<A>, Error> {
 	// Initialize the support of each candidate.
-	let mut supports = <SupportMap<AccountId>>::new();
-	winners
-		.iter()
-		.for_each(|e| { supports.insert(e.clone(), Default::default()); });
+	let mut supports = <SupportMap<A>>::new();
+	winners.iter().for_each(|e| {
+		supports.insert(e.clone(), Default::default());
+	});
 
 	// build support struct.
 	for StakedAssignment { who, distribution } in assignments.iter() {
@@ -541,37 +618,83 @@ pub fn build_support_map<AccountId>(
 				support.total = support.total.saturating_add(*weight_extended);
 				support.voters.push((who.clone(), *weight_extended));
 			} else {
-				return Err(c.clone())
+				return Err(Error::InvalidSupportEdge)
 			}
 		}
 	}
 	Ok(supports)
 }
 
-/// Evaluate a support map. The returned tuple contains:
+/// Same as [`to_support_map`] except it calls `FlattenSupportMap` on top of the result to return a
+/// flat vector.
 ///
-/// - Minimum support. This value must be **maximized**.
-/// - Sum of all supports. This value must be **maximized**.
-/// - Sum of all supports squared. This value must be **minimized**.
+/// Similar to [`to_support_map`], `winners` is used for error checking.
+pub fn to_supports<A: IdentifierT>(
+	winners: &[A],
+	assignments: &[StakedAssignment<A>],
+) -> Result<Supports<A>, Error> {
+	to_support_map(winners, assignments).map(FlattenSupportMap::flatten)
+}
+
+/// Extension trait for evaluating a support map or vector.
+pub trait EvaluateSupport<K> {
+	/// Evaluate a support map. The returned tuple contains:
+	///
+	/// - Minimum support. This value must be **maximized**.
+	/// - Sum of all supports. This value must be **maximized**.
+	/// - Sum of all supports squared. This value must be **minimized**.
+	fn evaluate(self) -> ElectionScore;
+}
+
+/// A common wrapper trait for both (&A, &B) and &(A, B).
 ///
-/// `O(E)` where `E` is the total number of edges.
-pub fn evaluate_support<AccountId>(
-	support: &SupportMap<AccountId>,
-) -> ElectionScore {
-	let mut min_support = ExtendedBalance::max_value();
-	let mut sum: ExtendedBalance = Zero::zero();
-	// NOTE: The third element might saturate but fine for now since this will run on-chain and need
-	// to be fast.
-	let mut sum_squared: ExtendedBalance = Zero::zero();
-	for (_, support) in support.iter() {
-		sum = sum.saturating_add(support.total);
-		let squared = support.total.saturating_mul(support.total);
-		sum_squared = sum_squared.saturating_add(squared);
-		if support.total < min_support {
-			min_support = support.total;
-		}
+/// This allows us to implemented something for both `Vec<_>` and `BTreeMap<_>`, such as
+/// [`EvaluateSupport`].
+pub trait TupleRef<K, V> {
+	fn extract(&self) -> (&K, &V);
+}
+
+impl<K, V> TupleRef<K, V> for &(K, V) {
+	fn extract(&self) -> (&K, &V) {
+		(&self.0, &self.1)
 	}
-	[min_support, sum, sum_squared]
+}
+
+impl<K, V> TupleRef<K, V> for (K, V) {
+	fn extract(&self) -> (&K, &V) {
+		(&self.0, &self.1)
+	}
+}
+
+impl<K, V> TupleRef<K, V> for (&K, &V) {
+	fn extract(&self) -> (&K, &V) {
+		(self.0, self.1)
+	}
+}
+
+impl<A, C, I> EvaluateSupport<A> for C
+where
+	C: IntoIterator<Item = I>,
+	I: TupleRef<A, Support<A>>,
+	A: IdentifierT,
+{
+	fn evaluate(self) -> ElectionScore {
+		let mut min_support = ExtendedBalance::max_value();
+		let mut sum: ExtendedBalance = Zero::zero();
+		// NOTE: The third element might saturate but fine for now since this will run on-chain and
+		// need to be fast.
+		let mut sum_squared: ExtendedBalance = Zero::zero();
+		for item in self {
+			let (_, support) = item.extract();
+			sum = sum.saturating_add(support.total);
+			let squared = support.total.saturating_mul(support.total);
+			sum_squared = sum_squared.saturating_add(squared);
+			if support.total < min_support {
+				min_support = support.total;
+			}
+		}
+		[min_support, sum, sum_squared]
+	}
 }
 
 /// Compares two sets of election scores based on desirability and returns true if `this` is better
@@ -581,15 +704,13 @@ pub fn evaluate_support<AccountId>(
 /// greater or less than `that`.
 ///
 /// Note that the third component should be minimized.
-pub fn is_score_better<P: PerThing>(this: ElectionScore, that: ElectionScore, epsilon: P) -> bool
-	where ExtendedBalance: From<sp_arithmetic::InnerOf<P>>
-{
+pub fn is_score_better<P: PerThing>(this: ElectionScore, that: ElectionScore, epsilon: P) -> bool {
 	match this
 		.iter()
-		.enumerate()
-		.map(|(i, e)| (
-			e.ge(&that[i]),
-			e.tcmp(&that[i], epsilon.mul_ceil(that[i])),
+		.zip(that.iter())
+		.map(|(thi, tha)| (
+			thi.ge(&tha),
+			thi.tcmp(&tha, epsilon.mul_ceil(*tha)),
 		))
 		.collect::<Vec<(bool, Ordering)>>()
 		.as_slice()

@@ -115,6 +115,11 @@ pub trait Database<H: Clone>: Send + Sync {
 	/// `key` is not currently in the database.
 	fn get(&self, col: ColumnId, key: &[u8]) -> Option<Vec<u8>>;
 
+	/// Check if the value exists in the database without retrieving it.
+	fn contains(&self, col: ColumnId, key: &[u8]) -> bool {
+		self.get(col, key).is_some()
+	}
+
 	/// Call `f` with the value previously stored against `key`.
 	///
 	/// This may be faster than `get` since it doesn't allocate.

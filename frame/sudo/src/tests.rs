@@ -19,7 +19,8 @@
 
 use super::*;
 use mock::{
-	Sudo, SudoCall, Origin, Call, Test, new_test_ext, LoggerCall, Logger, System, TestEvent,
+	Sudo, SudoCall, Origin, Call, Test, new_test_ext, LoggerCall, Logger, System,
+	Event as TestEvent,
 };
 use frame_support::{assert_ok, assert_noop};
 

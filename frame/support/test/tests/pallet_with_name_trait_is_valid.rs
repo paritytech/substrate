@@ -88,7 +88,6 @@ mod tests {
 	use crate as pallet_test;
 
 	use frame_support::parameter_types;
-	use sp_runtime::traits::Block;
 
 	type SignedExtra = (
 		frame_system::CheckEra<Runtime>,
@@ -136,7 +135,7 @@ mod tests {
 		type BlockWeights = ();
 		type BlockLength = ();
 		type Version = ();
-		type PalletInfo = ();
+		type PalletInfo = PalletInfo;
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();

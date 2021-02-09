@@ -18,114 +18,163 @@
 //! This module provides a means for executing contracts
 //! represented in wasm.
 
-use crate::{CodeHash, Schedule, Config};
-use crate::wasm::env_def::FunctionImplProvider;
-use crate::exec::Ext;
-use crate::gas::GasMeter;
-
-use sp_std::prelude::*;
-use sp_core::crypto::UncheckedFrom;
-use codec::{Encode, Decode};
-use sp_sandbox;
-
 #[macro_use]
 mod env_def;
 mod code_cache;
 mod prepare;
 mod runtime;
 
-use self::code_cache::load as load_code;
+use crate::{
+	CodeHash, Schedule, Config,
+	wasm::env_def::FunctionImplProvider,
+	exec::{Ext, Executable, ExportedFunction},
+	gas::GasMeter,
+};
+use sp_std::prelude::*;
+use sp_core::crypto::UncheckedFrom;
+use codec::{Encode, Decode};
+use frame_support::dispatch::{DispatchError, DispatchResult};
 use pallet_contracts_primitives::ExecResult;
-
-pub use self::code_cache::save as save_code;
-#[cfg(feature = "runtime-benchmarks")]
-pub use self::code_cache::save_raw as save_code_raw;
 pub use self::runtime::{ReturnCode, Runtime, RuntimeToken};
 
 /// A prepared wasm module ready for execution.
+///
+/// # Note
+///
+/// This data structure is mostly immutable once created and stored. The exceptions that
+/// can be changed by calling a contract are `refcount`, `schedule_version` and `code`.
+/// `refcount` can change when a contract instantiates a new contract or self terminates.
+/// `schedule_version` and `code` when a contract with an outdated instrumention is called.
+/// Therefore one must be careful when holding any in-memory representation of this type while
+/// calling into a contract as those fields can get out of date.
 #[derive(Clone, Encode, Decode)]
-pub struct PrefabWasmModule {
+pub struct PrefabWasmModule<T: Config> {
 	/// Version of the schedule with which the code was instrumented.
 	#[codec(compact)]
 	schedule_version: u32,
+	/// Initial memory size of a contract's sandbox.
 	#[codec(compact)]
 	initial: u32,
+	/// The maximum memory size of a contract's sandbox.
 	#[codec(compact)]
 	maximum: u32,
+	/// The number of alive contracts that use this as their contract code.
+	///
+	/// If this number drops to zero this module is removed from storage.
+	#[codec(compact)]
+	refcount: u64,
 	/// This field is reserved for future evolution of format.
 	///
-	/// Basically, for now this field will be serialized as `None`. In the future
-	/// we would be able to extend this structure with.
+	/// For now this field is serialized as `None`. In the future we are able to change the
+	/// type parameter to a new struct that contains the fields that we want to add.
+	/// That new struct would also contain a reserved field for its future extensions.
+	/// This works because in SCALE `None` is encoded independently from the type parameter
+	/// of the option.
 	_reserved: Option<()>,
 	/// Code instrumented with the latest schedule.
 	code: Vec<u8>,
+	/// The size of the uninstrumented code.
+	///
+	/// We cache this value here in order to avoid the need to pull the pristine code
+	/// from storage when we only need its length for rent calculations.
+	original_code_len: u32,
+	/// The uninstrumented, pristine version of the code.
+	///
+	/// It is not stored because the pristine code has its own storage item. The value
+	/// is only `Some` when this module was created from an `original_code` and `None` if
+	/// it was loaded from storage.
+	#[codec(skip)]
+	original_code: Option<Vec<u8>>,
+	/// The code hash of the stored code which is defined as the hash over the `original_code`.
+	///
+	/// As the map key there is no need to store the hash in the value, too. It is set manually
+	/// when loading the module from storage.
+	#[codec(skip)]
+	code_hash: CodeHash<T>,
 }
 
-/// Wasm executable loaded by `WasmLoader` and executed by `WasmVm`.
-pub struct WasmExecutable {
-	entrypoint_name: &'static str,
-	prefab_module: PrefabWasmModule,
-}
-
-/// Loader which fetches `WasmExecutable` from the code cache.
-pub struct WasmLoader<'a, T: Config> {
-	schedule: &'a Schedule<T>,
-}
-
-impl<'a, T: Config> WasmLoader<'a, T> where T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]> {
-	pub fn new(schedule: &'a Schedule<T>) -> Self {
-		WasmLoader { schedule }
+impl ExportedFunction {
+	/// The wasm export name for the function.
+	fn identifier(&self) -> &str {
+		match self {
+			Self::Constructor => "deploy",
+			Self::Call => "call",
+		}
 	}
 }
 
-impl<'a, T: Config> crate::exec::Loader<T> for WasmLoader<'a, T>
+impl<T: Config> PrefabWasmModule<T>
 where
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>
 {
-	type Executable = WasmExecutable;
-
-	fn load_init(&self, code_hash: &CodeHash<T>) -> Result<WasmExecutable, &'static str> {
-		let prefab_module = load_code::<T>(code_hash, self.schedule)?;
-		Ok(WasmExecutable {
-			entrypoint_name: "deploy",
-			prefab_module,
-		})
+	/// Create the module by checking and instrumenting `original_code`.
+	pub fn from_code(
+		original_code: Vec<u8>,
+		schedule: &Schedule<T>
+	) -> Result<Self, DispatchError> {
+		prepare::prepare_contract(original_code, schedule).map_err(Into::into)
 	}
-	fn load_main(&self, code_hash: &CodeHash<T>) -> Result<WasmExecutable, &'static str> {
-		let prefab_module = load_code::<T>(code_hash, self.schedule)?;
-		Ok(WasmExecutable {
-			entrypoint_name: "call",
-			prefab_module,
-		})
+
+	/// Create and store the module without checking nor instrumenting the passed code.
+	///
+	/// # Note
+	///
+	/// This is useful for benchmarking where we don't want instrumentation to skew
+	/// our results.
+	#[cfg(feature = "runtime-benchmarks")]
+	pub fn store_code_unchecked(
+		original_code: Vec<u8>,
+		schedule: &Schedule<T>
+	) -> DispatchResult {
+		let executable = prepare::benchmarking::prepare_contract(original_code, schedule)
+			.map_err::<DispatchError, _>(Into::into)?;
+		code_cache::store(executable);
+		Ok(())
+	}
+
+	/// Return the refcount of the module.
+	#[cfg(test)]
+	pub fn refcount(&self) -> u64 {
+		self.refcount
 	}
 }
 
-/// Implementation of `Vm` that takes `WasmExecutable` and executes it.
-pub struct WasmVm<'a, T: Config> where T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]> {
-	schedule: &'a Schedule<T>,
-}
-
-impl<'a, T: Config> WasmVm<'a, T> where T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]> {
-	pub fn new(schedule: &'a Schedule<T>) -> Self {
-		WasmVm { schedule }
-	}
-}
-
-impl<'a, T: Config> crate::exec::Vm<T> for WasmVm<'a, T>
+impl<T: Config> Executable<T> for PrefabWasmModule<T>
 where
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>
 {
-	type Executable = WasmExecutable;
+	fn from_storage(
+		code_hash: CodeHash<T>,
+		schedule: &Schedule<T>
+	) -> Result<Self, DispatchError> {
+		code_cache::load(code_hash, Some(schedule))
+	}
+
+	fn from_storage_noinstr(code_hash: CodeHash<T>) -> Result<Self, DispatchError> {
+		code_cache::load(code_hash, None)
+	}
+
+	fn drop_from_storage(self) {
+		code_cache::store_decremented(self);
+	}
+
+	fn add_user(code_hash: CodeHash<T>) -> DispatchResult {
+		code_cache::increment_refcount::<T>(code_hash)
+	}
+
+	fn remove_user(code_hash: CodeHash<T>) {
+		code_cache::decrement_refcount::<T>(code_hash)
+	}
 
 	fn execute<E: Ext<T = T>>(
-		&self,
-		exec: &WasmExecutable,
+		self,
 		mut ext: E,
+		function: &ExportedFunction,
 		input_data: Vec<u8>,
 		gas_meter: &mut GasMeter<E::T>,
 	) -> ExecResult {
 		let memory =
-			sp_sandbox::Memory::new(exec.prefab_module.initial, Some(exec.prefab_module.maximum))
+			sp_sandbox::Memory::new(self.initial, Some(self.maximum))
 				.unwrap_or_else(|_| {
 				// unlike `.expect`, explicit panic preserves the source location.
 				// Needed as we can't use `RUST_BACKTRACE` in here.
@@ -145,16 +194,33 @@ where
 		let mut runtime = Runtime::new(
 			&mut ext,
 			input_data,
-			&self.schedule,
 			memory,
 			gas_meter,
 		);
 
+		// We store before executing so that the code hash is available in the constructor.
+		let code = self.code.clone();
+		if let &ExportedFunction::Constructor = function {
+			code_cache::store(self)
+		}
+
 		// Instantiate the instance from the instrumented module code and invoke the contract
 		// entrypoint.
-		let result = sp_sandbox::Instance::new(&exec.prefab_module.code, &imports, &mut runtime)
-			.and_then(|mut instance| instance.invoke(exec.entrypoint_name, &[], &mut runtime));
+		let result = sp_sandbox::Instance::new(&code, &imports, &mut runtime)
+			.and_then(|mut instance| instance.invoke(function.identifier(), &[], &mut runtime));
+
 		runtime.to_execution_result(result)
+	}
+
+	fn code_hash(&self) -> &CodeHash<T> {
+		&self.code_hash
+	}
+
+	fn occupied_storage(&self) -> u32 {
+		// We disregard the size of the struct itself as the size is completely
+		// dominated by the code size.
+		let len = self.original_code_len.saturating_add(self.code.len() as u32);
+		len.checked_div(self.refcount as u32).unwrap_or(len)
 	}
 }
 
@@ -163,16 +229,15 @@ mod tests {
 	use super::*;
 	use crate::{
 		CodeHash, BalanceOf, Error, Module as Contracts,
-		exec::{Ext, StorageKey, AccountIdOf},
+		exec::{Ext, StorageKey, AccountIdOf, Executable},
 		gas::{Gas, GasMeter},
 		tests::{Test, Call, ALICE, BOB},
-		wasm::prepare::prepare_contract,
 	};
 	use std::collections::HashMap;
 	use sp_core::H256;
 	use hex_literal::hex;
 	use sp_runtime::DispatchError;
-	use frame_support::weights::Weight;
+	use frame_support::{dispatch::DispatchResult, weights::Weight};
 	use assert_matches::assert_matches;
 	use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags, ExecError, ErrorOrigin};
 
@@ -220,6 +285,7 @@ mod tests {
 		restores: Vec<RestoreEntry>,
 		// (topics, data)
 		events: Vec<(Vec<H256>, Vec<u8>)>,
+		schedule: Schedule<Test>,
 	}
 
 	impl Ext for MockExt {
@@ -228,12 +294,13 @@ mod tests {
 		fn get_storage(&self, key: &StorageKey) -> Option<Vec<u8>> {
 			self.storage.get(key).cloned()
 		}
-		fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) {
+		fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) -> DispatchResult {
 			*self.storage.entry(key).or_insert(Vec::new()) = value.unwrap_or(Vec::new());
+			Ok(())
 		}
 		fn instantiate(
 			&mut self,
-			code_hash: &CodeHash<Test>,
+			code_hash: CodeHash<Test>,
 			endowment: u64,
 			gas_meter: &mut GasMeter<Test>,
 			data: Vec<u8>,
@@ -247,7 +314,7 @@ mod tests {
 				salt: salt.to_vec(),
 			});
 			Ok((
-				Contracts::<Test>::contract_address(&ALICE, code_hash, salt),
+				Contracts::<Test>::contract_address(&ALICE, &code_hash, salt),
 				ExecReturnValue {
 					flags: ReturnFlags::empty(),
 					data: Vec::new(),
@@ -354,6 +421,10 @@ mod tests {
 		fn get_weight_price(&self, weight: Weight) -> BalanceOf<Self::T> {
 			BalanceOf::<Self::T>::from(1312_u32).saturating_mul(weight.into())
 		}
+
+		fn schedule(&self) -> &Schedule<Self::T> {
+			&self.schedule
+		}
 	}
 
 	impl Ext for &mut MockExt {
@@ -362,12 +433,12 @@ mod tests {
 		fn get_storage(&self, key: &[u8; 32]) -> Option<Vec<u8>> {
 			(**self).get_storage(key)
 		}
-		fn set_storage(&mut self, key: [u8; 32], value: Option<Vec<u8>>) {
+		fn set_storage(&mut self, key: [u8; 32], value: Option<Vec<u8>>) -> DispatchResult {
 			(**self).set_storage(key, value)
 		}
 		fn instantiate(
 			&mut self,
-			code: &CodeHash<Test>,
+			code: CodeHash<Test>,
 			value: u64,
 			gas_meter: &mut GasMeter<Test>,
 			input_data: Vec<u8>,
@@ -453,6 +524,9 @@ mod tests {
 		fn get_weight_price(&self, weight: Weight) -> BalanceOf<Self::T> {
 			(**self).get_weight_price(weight)
 		}
+		fn schedule(&self) -> &Schedule<Self::T> {
+			(**self).schedule()
+		}
 	}
 
 	fn execute<E: Ext>(
@@ -465,23 +539,10 @@ mod tests {
 		<E::T as frame_system::Config>::AccountId:
 			UncheckedFrom<<E::T as frame_system::Config>::Hash> + AsRef<[u8]>
 	{
-		use crate::exec::Vm;
-
 		let wasm = wat::parse_str(wat).unwrap();
 		let schedule = crate::Schedule::default();
-		let prefab_module =
-			prepare_contract::<super::runtime::Env, E::T>(&wasm, &schedule).unwrap();
-
-		let exec = WasmExecutable {
-			// Use a "call" convention.
-			entrypoint_name: "call",
-			prefab_module,
-		};
-
-		let cfg = Default::default();
-		let vm = WasmVm::new(&cfg);
-
-		vm.execute(&exec, ext, input_data, gas_meter)
+		let executable = PrefabWasmModule::<E::T>::from_code(wasm, &schedule).unwrap();
+		executable.execute(ext, &ExportedFunction::Call, input_data, gas_meter)
 	}
 
 	const CODE_TRANSFER: &str = r#"

@@ -365,6 +365,30 @@ fn staking_should_work() {
 }
 
 #[test]
+fn blocking_and_kicking_works() {
+	ExtBuilder::default()
+		.minimum_validator_count(1)
+		.validator_count(4)
+		.nominate(true)
+		.num_validators(3)
+		.build()
+		.execute_with(|| {
+			// block validator 10/11
+			assert_ok!(Staking::validate(Origin::signed(10), ValidatorPrefs { blocked: true, .. Default::default() }));
+			// attempt to nominate from 100/101...
+			assert_ok!(Staking::nominate(Origin::signed(100), vec![11]));
+			// should have worked since we're already nominated them
+			assert_eq!(Nominators::<Test>::get(&101).unwrap().targets, vec![11]);
+			// kick the nominator
+			assert_ok!(Staking::kick(Origin::signed(10), vec![101]));
+			// should have been kicked now
+			assert!(Nominators::<Test>::get(&101).unwrap().targets.is_empty());
+			// attempt to nominate from 100/101...
+			assert_noop!(Staking::nominate(Origin::signed(100), vec![11]), Error::<Test>::BadTarget);
+		});
+}
+
+#[test]
 fn less_than_needed_candidates_works() {
 	ExtBuilder::default()
 		.minimum_validator_count(1)
@@ -403,7 +427,7 @@ fn no_candidate_emergency_condition() {
 		.execute_with(|| {
 			// initial validators
 			assert_eq_uvec!(validator_controllers(), vec![10, 20, 30, 40]);
-			let prefs = ValidatorPrefs { commission: Perbill::one() };
+			let prefs = ValidatorPrefs { commission: Perbill::one(), .. Default::default() };
 			<Staking as crate::Store>::Validators::insert(11, prefs.clone());
 
 			// set the minimum validator count.
@@ -971,6 +995,7 @@ fn validator_payment_prefs_work() {
 		let commission = Perbill::from_percent(40);
 		<Validators<Test>>::insert(&11, ValidatorPrefs {
 			commission: commission.clone(),
+			.. Default::default()
 		});
 
 		// Reward controller so staked ratio doesn't change.
@@ -1540,7 +1565,7 @@ fn on_free_balance_zero_stash_removes_validator() {
 		// Reduce free_balance of stash to 0
 		let _ = Balances::slash(&11, Balance::max_value());
 		// Check total balance of stash
-		assert_eq!(Balances::total_balance(&11), 0);
+		assert_eq!(Balances::total_balance(&11), 10);
 
 		// Reap the stash
 		assert_ok!(Staking::reap_stash(Origin::none(), 11, 0));
@@ -1596,7 +1621,7 @@ fn on_free_balance_zero_stash_removes_nominator() {
 		// Reduce free_balance of stash to 0
 		let _ = Balances::slash(&11, Balance::max_value());
 		// Check total balance of stash
-		assert_eq!(Balances::total_balance(&11), 0);
+		assert_eq!(Balances::total_balance(&11), 10);
 
 		// Reap the stash
 		assert_ok!(Staking::reap_stash(Origin::none(), 11, 0));
@@ -2454,8 +2479,8 @@ fn garbage_collection_after_slashing() {
 		// validator and nominator slash in era are garbage-collected by era change,
 		// so we don't test those here.
 
-		assert_eq!(Balances::free_balance(11), 0);
-		assert_eq!(Balances::total_balance(&11), 0);
+		assert_eq!(Balances::free_balance(11), 2);
+		assert_eq!(Balances::total_balance(&11), 2);
 
 		let slashing_spans = <Staking as crate::Store>::SlashingSpans::get(&11).unwrap();
 		assert_eq!(slashing_spans.iter().count(), 2);
@@ -3156,7 +3181,7 @@ mod offchain_election {
 					.into_iter()
 					.map(|r| r.event)
 					.filter_map(|e| {
-						if let MetaEvent::staking(inner) = e {
+						if let mock::Event::staking(inner) = e {
 							Some(inner)
 						} else {
 							None
@@ -3241,7 +3266,7 @@ mod offchain_election {
 						.into_iter()
 						.map(|r| r.event)
 						.filter_map(|e| {
-							if let MetaEvent::staking(inner) = e {
+							if let mock::Event::staking(inner) = e {
 								Some(inner)
 							} else {
 								None
@@ -3260,7 +3285,7 @@ mod offchain_election {
 						.into_iter()
 						.map(|r| r.event)
 						.filter_map(|e| {
-							if let MetaEvent::staking(inner) = e {
+							if let mock::Event::staking(inner) = e {
 								Some(inner)
 							} else {
 								None
@@ -3297,7 +3322,7 @@ mod offchain_election {
 						.into_iter()
 						.map(|r| r.event)
 						.filter_map(|e| {
-							if let MetaEvent::staking(inner) = e {
+							if let mock::Event::staking(inner) = e {
 								Some(inner)
 							} else {
 								None
@@ -3433,6 +3458,7 @@ mod offchain_election {
 			let call = extrinsic.call;
 			let inner = match call {
 				mock::Call::Staking(inner) => inner,
+				_ => unreachable!(),
 			};
 
 			assert_eq!(
@@ -3476,6 +3502,7 @@ mod offchain_election {
 			let call = extrinsic.call;
 			let inner = match call {
 				mock::Call::Staking(inner) => inner,
+				_ => unreachable!(),
 			};
 
 			assert_eq!(
@@ -3523,6 +3550,7 @@ mod offchain_election {
 			let call = extrinsic.call;
 			let inner = match call {
 				mock::Call::Staking(inner) => inner,
+				_ => unreachable!(),
 			};
 
 			// pass this call to ValidateUnsigned

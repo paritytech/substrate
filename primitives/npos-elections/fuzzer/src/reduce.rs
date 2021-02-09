@@ -34,8 +34,8 @@ use honggfuzz::fuzz;
 
 mod common;
 use common::to_range;
-use sp_npos_elections::{StakedAssignment, ExtendedBalance, build_support_map, reduce};
-use rand::{self, Rng, SeedableRng, RngCore};
+use sp_npos_elections::{reduce, to_support_map, ExtendedBalance, StakedAssignment};
+use rand::{self, Rng, RngCore, SeedableRng};
 
 type Balance = u128;
 type AccountId = u64;
@@ -109,9 +109,8 @@ fn assert_assignments_equal(
 	ass1: &Vec<StakedAssignment<AccountId>>,
 	ass2: &Vec<StakedAssignment<AccountId>>,
 ) {
-
-	let support_1 = build_support_map::<AccountId>(winners, ass1).unwrap();
-	let support_2 = build_support_map::<AccountId>(winners, ass2).unwrap();
+	let support_1 = to_support_map::<AccountId>(winners, ass1).unwrap();
+	let support_2 = to_support_map::<AccountId>(winners, ass2).unwrap();
 
 	for (who, support) in support_1.iter() {
 		assert_eq!(support.total, support_2.get(who).unwrap().total);

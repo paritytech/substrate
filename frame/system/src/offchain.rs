@@ -63,7 +63,7 @@ use sp_std::convert::{TryInto, TryFrom};
 use sp_std::prelude::{Box, Vec};
 use sp_runtime::app_crypto::RuntimeAppPublic;
 use sp_runtime::traits::{Extrinsic as ExtrinsicT, IdentifyAccount, One};
-use frame_support::{debug, storage::StorageMap, RuntimeDebug};
+use frame_support::{debug, RuntimeDebug};
 
 /// Marker struct used to flag using all supported keys to sign a payload.
 pub struct ForAll {}
@@ -637,7 +637,7 @@ pub trait SignedPayload<T: SigningTypes>: Encode {
 mod tests {
 	use super::*;
 	use codec::Decode;
-	use crate::mock::{Test as TestRuntime, Call};
+	use crate::mock::{Test as TestRuntime, Call, CALL};
 	use sp_core::offchain::{testing, TransactionPoolExt};
 	use sp_runtime::testing::{UintAuthorityId, TestSignature, TestXt};
 
@@ -708,7 +708,7 @@ mod tests {
 						public: account.public.clone()
 					},
 					|_payload, _signature| {
-						Call
+						CALL.clone()
 					}
 				);
 
@@ -749,7 +749,7 @@ mod tests {
 						public: account.public.clone()
 					},
 					|_payload, _signature| {
-						Call
+						CALL.clone()
 					}
 				);
 
@@ -787,7 +787,7 @@ mod tests {
 						public: account.public.clone()
 					},
 					|_payload, _signature| {
-						Call
+						CALL.clone()
 					}
 				);
 
@@ -827,7 +827,7 @@ mod tests {
 						public: account.public.clone()
 					},
 					|_payload, _signature| {
-						Call
+						CALL.clone()
 					}
 				);
 

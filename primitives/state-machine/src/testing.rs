@@ -33,10 +33,7 @@ use crate::{
 use codec::{Decode, Encode};
 use hash_db::Hasher;
 use sp_core::{
-	offchain::{
-		testing::TestPersistentOffchainDB,
-		storage::OffchainOverlayedChanges
-	},
+	offchain::testing::TestPersistentOffchainDB,
 	storage::{
 		well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES, is_child_storage_key},
 		Storage,
@@ -52,7 +49,6 @@ where
 	H::Out: codec::Codec + Ord,
 {
 	overlay: OverlayedChanges,
-	offchain_overlay: OffchainOverlayedChanges,
 	offchain_db: TestPersistentOffchainDB,
 	storage_transaction_cache: StorageTransactionCache<
 		<InMemoryBackend<H> as Backend<H>>::Transaction, H, N
@@ -71,7 +67,6 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 	pub fn ext(&mut self) -> Ext<H, N, InMemoryBackend<H>> {
 		Ext::new(
 			&mut self.overlay,
-			&mut self.offchain_overlay,
 			&mut self.storage_transaction_cache,
 			&self.backend,
 			match self.changes_trie_config.clone() {
@@ -109,8 +104,6 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 		storage.top.insert(HEAP_PAGES.to_vec(), 8u64.encode());
 		storage.top.insert(CODE.to_vec(), code.to_vec());
 
-		let offchain_overlay = OffchainOverlayedChanges::enabled();
-
 		let mut extensions = Extensions::default();
 		extensions.register(TaskExecutorExt::new(TaskExecutor::new()));
 
@@ -118,7 +111,6 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 
 		TestExternalities {
 			overlay,
-			offchain_overlay,
 			offchain_db,
 			changes_trie_config,
 			extensions,
@@ -128,9 +120,14 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 		}
 	}
 
+	/// Returns the overlayed changes.
+	pub fn overlayed_changes(&self) -> &OverlayedChanges {
+		&self.overlay
+	}
+
 	/// Move offchain changes from overlay to the persistent store.
 	pub fn persist_offchain_overlay(&mut self) {
-		self.offchain_db.apply_offchain_changes(&mut self.offchain_overlay);
+		self.offchain_db.apply_offchain_changes(self.overlay.offchain_drain_committed());
 	}
 
 	/// A shared reference type around the offchain worker storage.

@@ -333,7 +333,7 @@ impl Parse for ModulePart {
 
 impl ModulePart {
 	pub fn format_names(names: &[&'static str]) -> String {
-		let res: Vec<_> = names.into_iter().map(|s| format!("`{}`", s)).collect();
+		let res: Vec<_> = names.iter().map(|s| format!("`{}`", s)).collect();
 		res.join(", ")
 	}
 

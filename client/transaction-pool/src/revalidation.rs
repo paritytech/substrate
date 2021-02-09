@@ -370,7 +370,7 @@ mod tests {
 
 	fn setup() -> (Arc<TestApi>, Pool<TestApi>) {
 		let test_api = Arc::new(TestApi::empty());
-		let pool = Pool::new(Default::default(), test_api.clone());
+		let pool = Pool::new(Default::default(), true.into(), test_api.clone());
 		(test_api, pool)
 	}
 
