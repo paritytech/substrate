@@ -434,15 +434,6 @@
 			"website": null
 		},
 		{
-			"prefix": 251,
-			"network": "test-social-network",
-			"displayName": "Test Social Network",
-			"symbols": ["TNET"],
-			"decimals": [18],
-			"standardAccount": "*25519",
-			"website": "https://test.social.network"
-		},
-		{
 			"prefix": 252,
 			"network": "social-network",
 			"displayName": "Social Network",
