@@ -1388,8 +1388,9 @@ pub mod pallet_prelude {
 /// ### Macro expansion
 ///
 /// For each storage item the macro generates a struct named
-/// `_GeneratedPrefixForStorage$NameOfStorage`, implements `StorageInstance` on it using the 
-/// pallet and storage name. It then uses it as the first generic of the aliased type.
+/// `_GeneratedPrefixForStorage$NameOfStorage`, and implements [`StorageInstance`](traits::StorageInstance)
+/// on it using the pallet and storage name. It then uses it as the first generic of the aliased
+/// type.
 ///
 ///
 /// The macro implements the function `storage_metadata` on `Pallet` implementing the metadata for
@@ -1873,11 +1874,15 @@ pub mod pallet_prelude {
 ///
 /// ## Upgrade guidelines:
 ///
-/// 1. export metadata of the pallet for later checks
-/// 2. generate the template upgrade for the pallet provided by decl_storage with environment
-/// 	variable `PRINT_PALLET_UPGRADE`: `PRINT_PALLET_UPGRADE=1 cargo check -p my_pallet`
-/// 	This template can be used as information it contains all information for storages, genesis
-/// 	config and genesis build.
+/// 1. Export the metadata of the pallet for later checks
+///     - run your node with the pallet active
+///     - query the metadata using the `state_getMetadata` RPC and curl, or use
+///       `subsee -p <PALLET_NAME> > meta.json`
+/// 2. generate the template upgrade for the pallet provided by decl_storage
+///     with environment variable `PRINT_PALLET_UPGRADE`:
+///     `PRINT_PALLET_UPGRADE=1 cargo check -p my_pallet` This template can be
+///     used as information it contains all information for storages, genesis
+///     config and genesis build.
 /// 3. reorganize pallet to have trait `Config`, `decl_*` macros, `ValidateUnsigned`,
 /// 	`ProvideInherent`, `Origin` all together in one file. Suggested order:
 /// 	* Config,
@@ -1909,7 +1914,8 @@ pub mod pallet_prelude {
 /// 	```
 /// 5. **migrate Config**: move trait into the module with
 /// 	* all const in decl_module to `#[pallet::constant]`
-/// 6. **migrate decl_module**: write:
+/// 	* add bound `IsType<<Self as frame_system::Config>::Event>` to `type Event`
+/// 7. **migrate decl_module**: write:
 /// 	```ignore
 /// 	#[pallet::hooks]
 /// 	impl<T: Config> Hooks for Pallet<T> {
@@ -1923,7 +1929,7 @@ pub mod pallet_prelude {
 /// 	impl<T: Config> Pallet<T> {
 /// 	}
 /// 	```
-/// 	and write inside all the call in decl_module with a few changes in the signature:
+/// 	and write inside all the calls in decl_module with a few changes in the signature:
 /// 	- origin must now be written completely, e.g. `origin: OriginFor<T>`
 /// 	- result type must be `DispatchResultWithPostInfo`, you need to write it and also you might
 /// 	need to put `Ok(().into())` at the end or the function.
@@ -1996,8 +2002,9 @@ pub mod pallet_prelude {
 ///
 /// ## Checking upgrade guidelines:
 ///
-/// * compare metadata. This checks for:
-/// 	* call, names, signature, doc
+/// * compare metadata. Use [subsee](https://github.com/ascjones/subsee) to fetch the metadata
+/// and do a diff of the resulting json before and after migration. This checks for:
+/// 	* call, names, signature, docs
 /// 	* event names, docs
 /// 	* error names, docs
 /// 	* storage names, hasher, prefixes, default value

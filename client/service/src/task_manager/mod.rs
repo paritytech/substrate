@@ -24,7 +24,7 @@ use log::{debug, error};
 use futures::{
 	Future, FutureExt, StreamExt,
 	future::{select, Either, BoxFuture, join_all, try_join_all, pending},
-	sink::SinkExt,
+	sink::SinkExt, task::{Context, Poll},
 };
 use prometheus_endpoint::{
 	exponential_buckets, register,
@@ -39,6 +39,37 @@ use sc_telemetry::TelemetrySpan;
 mod prometheus_future;
 #[cfg(test)]
 mod tests;
+
+/// A wrapper around a `[Option<TelemetrySpan>]` and a [`Future`].
+///
+/// The telemetry in Substrate uses a span to identify the telemetry context. The span "infrastructure"
+/// is provided by the tracing-crate. Now it is possible to have your own spans as well. To support
+/// this with the [`TaskManager`] we have this wrapper. This wrapper enters the telemetry span every
+/// time the future is polled and polls the inner future. So, the inner future can still have its
+/// own span attached and we get our telemetry span ;)
+struct WithTelemetrySpan<T> {
+	span: Option<TelemetrySpan>,
+	inner: T,
+}
+
+impl<T> WithTelemetrySpan<T> {
+	fn new(span: Option<TelemetrySpan>, inner: T) -> Self {
+		Self {
+			span,
+			inner,
+		}
+	}
+}
+
+impl<T: Future<Output = ()> + Unpin> Future for WithTelemetrySpan<T> {
+	type Output = ();
+
+	fn poll(mut self: Pin<&mut Self>, ctx: &mut Context) -> Poll<Self::Output> {
+		let span = self.span.clone();
+		let _enter = span.as_ref().map(|s| s.enter());
+		Pin::new(&mut self.inner).poll(ctx)
+	}
+}
 
 /// An handle for spawning tasks in the service.
 #[derive(Clone)]
@@ -91,10 +122,7 @@ impl SpawnTaskHandle {
 			metrics.tasks_ended.with_label_values(&[name, "finished"]).inc_by(0);
 		}
 
-		let telemetry_span = self.telemetry_span.clone();
 		let future = async move {
-			let _telemetry_entered = telemetry_span.as_ref().map(|x| x.enter());
-
 			if let Some(metrics) = metrics {
 				// Add some wrappers around `task`.
 				let task = {
@@ -127,7 +155,12 @@ impl SpawnTaskHandle {
 			}
 		};
 
-		let join_handle = self.executor.spawn(Box::pin(future.in_current_span()), task_type);
+		let future = future.in_current_span().boxed();
+		let join_handle = self.executor.spawn(
+			WithTelemetrySpan::new(self.telemetry_span.clone(), future).boxed(),
+			task_type,
+		);
+
 		let mut task_notifier = self.task_notifier.clone();
 		self.executor.spawn(
 			Box::pin(async move {
@@ -233,7 +266,7 @@ pub struct TaskManager {
 	/// terminates and gracefully shutdown. Also ends the parent `future()` if a child's essential
 	/// task fails.
 	children: Vec<TaskManager>,
-	/// A telemetry handle used to enter the telemetry span when a task is spawned.
+	/// A `TelemetrySpan` used to enter the telemetry span when a task is spawned.
 	telemetry_span: Option<TelemetrySpan>,
 }
 

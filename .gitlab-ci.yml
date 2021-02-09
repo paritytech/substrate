@@ -653,6 +653,41 @@ trigger-simnet:
     branch:                        master
     strategy:                      depend
 
+.validator-deploy:                 &validator-deploy
+  stage:                           deploy
+  rules:
+    # this job runs only on nightly pipeline with the mentioned variable, against `master` branch
+    - if: $CI_COMMIT_REF_NAME == "master" && $CI_PIPELINE_SOURCE == "schedule" && $PIPELINE == "nightly"
+  needs:
+    # script will fail if there is no artifacts/substrate/VERSION
+    - job:                         publish-docker-substrate
+      artifacts:                   true
+  image:                           parity/azure-ansible:v2
+  allow_failure:                   true
+  interruptible:                   true
+  tags:
+    - linux-docker
+
+validator 1 4:
+  <<:                              *validator-deploy
+  script:
+    - ./.maintain/flamingfir-deploy.sh flamingfir-validator1
+
+validator 2 4:
+  <<:                              *validator-deploy
+  script:
+    - ./.maintain/flamingfir-deploy.sh flamingfir-validator2
+
+validator 3 4:
+  <<:                              *validator-deploy
+  script:
+    - ./.maintain/flamingfir-deploy.sh flamingfir-validator3
+
+validator 4 4:
+  <<:                              *validator-deploy
+  script:
+    - ./.maintain/flamingfir-deploy.sh flamingfir-validator4
+
 #### stage:                        .post
 
 check-labels:
