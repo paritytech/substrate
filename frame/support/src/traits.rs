@@ -1464,7 +1464,7 @@ impl PalletInfo for () {
 	fn name<P: 'static>() -> Option<&'static str> { Some("test") }
 }
 
-/// A PalletInfo implementation which just panics
+/// A PalletInfo implementation which just panics.
 #[cfg(test)]
 pub struct PanicPalletInfo;
 
