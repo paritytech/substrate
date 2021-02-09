@@ -337,7 +337,7 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 			let node_config = node_config(
 				self.nodes,
 				&self.chain_spec,
-				Role::Authority { sentry_nodes: Vec::new() },
+				Role::Authority,
 				task_executor.clone(),
 				Some(key),
 				self.base_port,
