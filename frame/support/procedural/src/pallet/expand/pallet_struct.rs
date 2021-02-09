@@ -46,7 +46,7 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 	if let Some(field) = pallet_item.fields.iter_mut().next() {
 		if field.ty == syn::parse_quote!(_) {
 			field.ty = syn::parse_quote!(
-				#frame_support::pallet_prelude::PhantomData<(#type_use_gen)>
+				#frame_support::sp_std::marker::PhantomData<(#type_use_gen)>
 			);
 		}
 	}

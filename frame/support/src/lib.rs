@@ -1129,7 +1129,7 @@ pub mod pallet_prelude {
 /// Item must be defined as followed:
 /// ```ignore
 /// #[pallet::pallet]
-/// pub struct Pallet<T>(PhantomData<T>);
+/// pub struct Pallet<T>(_);
 /// ```
 /// I.e. a regular struct definition named `Pallet`, with generic T and no where clause.
 ///
@@ -1138,7 +1138,7 @@ pub mod pallet_prelude {
 /// ```ignore
 /// #[pallet::pallet]
 /// #[pallet::generate_store(pub(super) trait Store)]
-/// pub struct Pallet<T>(PhantomData<T>);
+/// pub struct Pallet<T>(_);
 /// ```
 /// More precisely the store trait contains an associated type for each storage. It is implemented
 /// for `Pallet` allowing to access the storage from pallet struct.
@@ -1157,6 +1157,7 @@ pub mod pallet_prelude {
 /// 	frame_support::RuntimeDebugNoBound,
 /// )]
 /// ```
+/// and replace the type `_` by `PhantomData<T>`.
 ///
 /// It implements on pallet:
 /// * [`traits::GetPalletVersion`]
@@ -1590,7 +1591,7 @@ pub mod pallet_prelude {
 /// 	// Define the pallet struct placeholder, various pallet function are implemented on it.
 /// 	#[pallet::pallet]
 /// 	#[pallet::generate_store(pub(super) trait Store)]
-/// 	pub struct Pallet<T>(PhantomData<T>);
+/// 	pub struct Pallet<T>(_);
 ///
 /// 	// Implement the pallet hooks.
 /// 	#[pallet::hooks]
@@ -1908,7 +1909,7 @@ pub mod pallet_prelude {
 /// 		#[pallet::generate_store($visibility_of_trait_store trait Store)]
 /// 		// NOTE: if the visibility of trait store is private but you want to make it available
 /// 		// in super, then use `pub(super)` or `pub(crate)` to make it available in crate.
-/// 		pub struct Pallet<T>(PhantomData<T>);
+/// 		pub struct Pallet<T>(_);
 /// 		// pub struct Pallet<T, I = ()>(PhantomData<T>); // for instantiable pallet
 /// 	}
 /// 	```
