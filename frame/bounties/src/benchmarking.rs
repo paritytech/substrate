@@ -119,8 +119,7 @@ fn setup_subbounty<T: Config>(u: u32, d: u32) -> BenchmarkSubBountyConfig::<T> {
 	let (caller, curator, fee, value, reason) = setup_bounty::<T>(u, d);
 	let subcurator = account("subcurator", u, SEED);
 	let _ = T::Currency::make_free_balance_be(&subcurator, fee / 2u32.into());
-	// let subbounty_value = (value - fee) / 4u32.into();
-	let subbounty_value = 2u32.into();
+	let subbounty_value = (value - fee) / 4u32.into();
 	let subbounty_fee = subbounty_value / 2u32.into();
 
 	BenchmarkSubBountyConfig::<T> {
