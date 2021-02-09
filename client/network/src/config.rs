@@ -23,7 +23,11 @@
 
 pub use crate::chain::Client;
 pub use crate::on_demand_layer::{AlwaysBadChecker, OnDemand};
-pub use crate::request_responses::{IncomingRequest, ProtocolConfig as RequestResponseConfig};
+pub use crate::request_responses::{
+	IncomingRequest,
+	OutgoingResponse,
+	ProtocolConfig as RequestResponseConfig,
+};
 pub use libp2p::{identity, core::PublicKey, wasm_ext::ExtTransport, build_multiaddr};
 
 // Note: this re-export shouldn't be part of the public API of the crate and will be removed in
@@ -107,6 +111,14 @@ pub struct Params<B: BlockT, H: ExHashT> {
 	/// [`block_request_handler::BlockRequestHandler::new`] allowing both outgoing and incoming
 	/// requests.
 	pub block_request_protocol_config: RequestResponseConfig,
+
+	/// Request response configuration for the light client request protocol.
+	///
+	/// Can be constructed either via [`light_client_requests::generate_protocol_config`] allowing
+	/// outgoing but not incoming requests, or constructed via
+	/// [`light_client_requests::handler::LightClientRequestHandler::new`] allowing both outgoing
+	/// and incoming requests.
+	pub light_client_request_protocol_config: RequestResponseConfig,
 }
 
 /// Role of the local node.
@@ -396,11 +408,41 @@ pub struct NetworkConfiguration {
 	pub transport: TransportConfig,
 	/// Maximum number of peers to ask the same blocks in parallel.
 	pub max_parallel_downloads: u32,
+
+	/// True if Kademlia random discovery should be enabled.
+	///
+	/// If true, the node will automatically randomly walk the DHT in order to find new peers.
+	pub enable_dht_random_walk: bool,
+
 	/// Should we insert non-global addresses into the DHT?
 	pub allow_non_globals_in_dht: bool,
-	/// Require iterative Kademlia DHT queries to use disjoint paths for increased resiliency in the
-	/// presence of potentially adversarial nodes.
+
+	/// Require iterative Kademlia DHT queries to use disjoint paths for increased resiliency in
+	/// the presence of potentially adversarial nodes.
 	pub kademlia_disjoint_query_paths: bool,
+	/// Enable serving block data over IPFS bitswap.
+	pub ipfs_server: bool,
+
+	/// Size of Yamux receive window of all substreams. `None` for the default (256kiB).
+	/// Any value less than 256kiB is invalid.
+	///
+	/// # Context
+	///
+	/// By design, notifications substreams on top of Yamux connections only allow up to `N` bytes
+	/// to be transferred at a time, where `N` is the Yamux receive window size configurable here.
+	/// This means, in practice, that every `N` bytes must be acknowledged by the receiver before
+	/// the sender can send more data. The maximum bandwidth of each notifications substream is
+	/// therefore `N / round_trip_time`.
+	///
+	/// It is recommended to leave this to `None`, and use a request-response protocol instead if
+	/// a large amount of data must be transferred. The reason why the value is configurable is
+	/// that some Substrate users mis-use notification protocols to send large amounts of data.
+	/// As such, this option isn't designed to stay and will likely get removed in the future.
+	///
+	/// Note that configuring a value here isn't a modification of the Yamux protocol, but rather
+	/// a modification of the way the implementation works. Different nodes with different
+	/// configured values remain compatible with each other.
+	pub yamux_window_size: Option<u32>,
 }
 
 impl NetworkConfiguration {
@@ -428,8 +470,11 @@ impl NetworkConfiguration {
 				wasm_external_transport: None,
 			},
 			max_parallel_downloads: 5,
+			enable_dht_random_walk: true,
 			allow_non_globals_in_dht: false,
 			kademlia_disjoint_query_paths: false,
+			yamux_window_size: None,
+			ipfs_server: false,
 		}
 	}
 
@@ -506,6 +551,8 @@ pub struct NonDefaultSetConfig {
 	/// > **Note**: This field isn't present for the default set, as this is handled internally
 	/// >           by the networking code.
 	pub notifications_protocol: Cow<'static, str>,
+	/// Maximum allowed size of single notifications.
+	pub max_notification_size: u64,
 	/// Base configuration.
 	pub set_config: SetConfig,
 }

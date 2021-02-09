@@ -23,7 +23,7 @@ use frame_support::{
 	dispatch::UnfilteredDispatchable,
 	storage::unhashed,
 };
-use sp_runtime::{traits::Block as _, DispatchError};
+use sp_runtime::DispatchError;
 use sp_io::{TestExternalities, hashing::{twox_64, twox_128, blake2_128}};
 
 #[frame_support::pallet]

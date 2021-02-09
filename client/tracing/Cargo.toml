@@ -14,7 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 ansi_term = "0.12.1"
-tracing-log = "0.1.1"
+atty = "0.2.13"
 erased-serde = "0.3.9"
 lazy_static = "1.4.0"
 log = { version = "0.4.8" }
@@ -24,9 +24,15 @@ regex = "1.4.2"
 rustc-hash = "1.1.0"
 serde = "1.0.101"
 serde_json = "1.0.41"
-slog = { version = "2.5.2", features = ["nested-values"] }
+thiserror = "1.0.21"
 tracing = "0.1.22"
 tracing-core = "0.1.17"
+tracing-log = "0.1.1"
 tracing-subscriber = "0.2.15"
 sp-tracing = { version = "2.0.0", path = "../../primitives/tracing" }
 sc-telemetry = { version = "2.0.0", path = "../telemetry" }
+sc-tracing-proc-macro = { version = "2.0.0", path = "./proc-macro" }
+
+[target.'cfg(target_os = "unknown")'.dependencies]
+wasm-bindgen = "0.2.67"
+web-sys = { version = "0.3.44", features = ["console"] }

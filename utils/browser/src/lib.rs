@@ -24,6 +24,8 @@ use sc_service::{
 	GenericChainSpec, RuntimeGenesis,
 	KeepBlocks, TransactionStorageMode,
 };
+use sc_telemetry::{TelemetryHandle, TelemetrySpan};
+use sc_tracing::logging::LoggerBuilder;
 use wasm_bindgen::prelude::*;
 use futures::{
 	prelude::*, channel::{oneshot, mpsc}, compat::*, future::{ready, ok, select}
@@ -33,20 +35,31 @@ use sc_chain_spec::Extension;
 use libp2p_wasm_ext::{ExtTransport, ffi};
 
 pub use console_error_panic_hook::set_once as set_console_error_panic_hook;
-pub use console_log::init_with_level as init_console_log;
+
+/// Initialize the logger and return a `TelemetryWorker` and a wasm `ExtTransport`.
+pub fn init_logging_and_telemetry(
+	pattern: &str,
+) -> Result<sc_telemetry::TelemetryWorker, sc_tracing::logging::Error> {
+	let transport = ExtTransport::new(ffi::websocket_transport());
+	let mut logger = LoggerBuilder::new(pattern);
+	logger.with_transport(transport);
+	logger.init()
+}
 
 /// Create a service configuration from a chain spec.
 ///
 /// This configuration contains good defaults for a browser light client.
-pub async fn browser_configuration<G, E>(chain_spec: GenericChainSpec<G, E>)
-	-> Result<Configuration, Box<dyn std::error::Error>>
+pub async fn browser_configuration<G, E>(
+	chain_spec: GenericChainSpec<G, E>,
+	telemetry_handle: Option<TelemetryHandle>,
+) -> Result<Configuration, Box<dyn std::error::Error>>
 where
 	G: RuntimeGenesis + 'static,
 	E: Extension + 'static + Send + Sync,
 {
 	let name = chain_spec.name().to_string();
-
 	let transport = ExtTransport::new(ffi::websocket_transport());
+
 	let mut network = NetworkConfiguration::new(
 		format!("{} (Browser)", name),
 		"unknown",
@@ -59,6 +72,7 @@ where
 		allow_private_ipv4: true,
 		enable_mdns: false,
 	};
+	let telemetry_span = telemetry_handle.as_ref().map(|_| TelemetrySpan::new());
 
 	let config = Configuration {
 		network,
@@ -69,6 +83,8 @@ where
 			async {}
 		}).into(),
 		telemetry_external_transport: Some(transport),
+		telemetry_handle,
+		telemetry_span,
 		role: Role::Light,
 		database: {
 			info!("Opening Indexed DB database '{}'...", name);

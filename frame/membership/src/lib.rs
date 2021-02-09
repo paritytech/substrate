@@ -277,21 +277,27 @@ impl<T: Config<I>, I: Instance> Contains<T::AccountId> for Module<T, I> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate as pallet_membership;
 
-	use frame_support::{
-		assert_ok, assert_noop, impl_outer_origin, parameter_types,
-		ord_parameter_types
-	};
+	use frame_support::{assert_ok, assert_noop, parameter_types, ord_parameter_types};
 	use sp_core::H256;
 	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup, BadOrigin}, testing::Header};
 	use frame_system::EnsureSignedBy;
 
-	impl_outer_origin! {
-		pub enum Origin for Test where system = frame_system {}
-	}
+	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+	type Block = frame_system::mocking::MockBlock<Test>;
 
-	#[derive(Clone, Eq, PartialEq)]
-	pub struct Test;
+	frame_support::construct_runtime!(
+		pub enum Test where
+			Block = Block,
+			NodeBlock = Block,
+			UncheckedExtrinsic = UncheckedExtrinsic,
+		{
+			System: frame_system::{Module, Call, Config, Storage, Event<T>},
+			Membership: pallet_membership::{Module, Call, Storage, Config<T>, Event<T>},
+		}
+	);
+
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
 		pub BlockWeights: frame_system::limits::BlockWeights =
@@ -308,15 +314,15 @@ mod tests {
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
-		type Call = ();
+		type Call = Call;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = ();
+		type Event = Event;
 		type BlockHashCount = BlockHashCount;
 		type Version = ();
-		type PalletInfo = ();
+		type PalletInfo = PalletInfo;
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
@@ -356,7 +362,7 @@ mod tests {
 	}
 
 	impl Config for Test {
-		type Event = ();
+		type Event = Event;
 		type AddOrigin = EnsureSignedBy<One, u64>;
 		type RemoveOrigin = EnsureSignedBy<Two, u64>;
 		type SwapOrigin = EnsureSignedBy<Three, u64>;
@@ -366,12 +372,10 @@ mod tests {
 		type MembershipChanged = TestChangeMembers;
 	}
 
-	type Membership = Module<Test>;
-
 	fn new_test_ext() -> sp_io::TestExternalities {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
-		GenesisConfig::<Test>{
+		pallet_membership::GenesisConfig::<Test>{
 			members: vec![10, 20, 30],
 			.. Default::default()
 		}.assimilate_storage(&mut t).unwrap();

@@ -15,8 +15,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use sp_runtime::traits::Block as _;
-
 mod pallet_old {
 	use frame_support::{
 		decl_storage, decl_error, decl_event, decl_module, weights::Weight, traits::Get, Parameter

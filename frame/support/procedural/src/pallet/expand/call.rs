@@ -27,7 +27,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 	let type_impl_gen = &def.type_impl_generics(def.call.attr_span);
 	let type_decl_bounded_gen = &def.type_decl_bounded_generics(def.call.attr_span);
 	let type_use_gen = &def.type_use_generics(def.call.attr_span);
-	let call_ident = syn::Ident::new("Call", def.call.attr_span.clone());
+	let call_ident = syn::Ident::new("Call", def.call.attr_span);
 	let pallet_ident = &def.pallet_struct.pallet;
 	let where_clause = &def.call.where_clause;
 
