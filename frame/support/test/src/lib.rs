@@ -45,7 +45,7 @@ frame_support::decl_module! {
 /// A PalletInfo implementation which just panics.
 pub struct PanicPalletInfo;
 
-impl frame_support::traits::PalletInfo for PanicPalletInfo{
+impl frame_support::traits::PalletInfo for PanicPalletInfo {
 	fn index<P: 'static>() -> Option<usize> {
 		unimplemented!("PanicPalletInfo mustn't be triggered by tests");
 	}

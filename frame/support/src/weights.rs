@@ -841,7 +841,7 @@ mod tests {
 		type BlockNumber = u32;
 		type Balance = u32;
 		type DbWeight = DbWeight;
-		type PalletInfo = crate::traits::PanicPalletInfo;
+		type PalletInfo = crate::tests::PanicPalletInfo;
 	}
 
 	decl_module! {
