@@ -194,13 +194,17 @@ impl<P, Client> AuthorApi<TxHash<P>, BlockHash<P>> for Author<P, Client>
 			let best_block_hash = self.client.info().best_hash;
 			let dxt = TransactionFor::<P>::decode(&mut &xt[..])
 				.map_err(error::Error::from)?;
+			let hash = self.pool.hash_of(&dxt);
 			Ok(
 				self.pool
 					.submit_and_watch(&generic::BlockId::hash(best_block_hash), TX_SOURCE, dxt)
-					.map_err(|e| e.into_pool_error()
-						.map(error::Error::from)
-						.unwrap_or_else(|e| error::Error::Verification(Box::new(e)).into())
-					)
+					.map_err(move |e| {
+						log::debug!("Submitting tx hash {:?} resulted in error: {}", hash, e);
+
+						e.into_pool_error()
+							.map(error::Error::from)
+							.unwrap_or_else(|e| error::Error::Verification(Box::new(e)).into())
+					})
 			)
 		};
 
