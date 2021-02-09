@@ -32,7 +32,7 @@ use crate::{
 	wasm::{prepare, PrefabWasmModule}, Module as Contracts, RawEvent,
 };
 use sp_core::crypto::UncheckedFrom;
-use frame_support::{StorageMap, dispatch::{DispatchError, DispatchResult}};
+use frame_support::{StorageMap, dispatch::DispatchError};
 
 /// Put the instrumented module in storage.
 ///
@@ -77,14 +77,14 @@ where
 }
 
 /// Increment the refcount of a code in-storage by one.
-pub fn increment_refcount<T: Config>(code_hash: CodeHash<T>) -> DispatchResult
+pub fn increment_refcount<T: Config>(code_hash: CodeHash<T>) -> Result<u32, DispatchError>
 where
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>
 {
 	<CodeStorage<T>>::mutate(code_hash, |existing| {
 		if let Some(module) = existing {
 			increment_64(&mut module.refcount);
-			Ok(())
+			Ok(module.original_code_len)
 		} else {
 			Err(Error::<T>::CodeNotFound.into())
 		}
@@ -92,19 +92,23 @@ where
 }
 
 /// Decrement the refcount of a code in-storage by one and remove the code when it drops to zero.
-pub fn decrement_refcount<T: Config>(code_hash: CodeHash<T>)
+pub fn decrement_refcount<T: Config>(code_hash: CodeHash<T>) -> u32
 where
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>
 {
 	<CodeStorage<T>>::mutate_exists(code_hash, |existing| {
 		if let Some(module) = existing {
+			let code_len = module.original_code_len;
 			module.refcount = module.refcount.saturating_sub(1);
 			if module.refcount == 0 {
 				*existing = None;
 				finish_removal::<T>(code_hash);
 			}
+			code_len
+		} else {
+			0
 		}
-	});
+	})
 }
 
 /// Load code with the given code hash.

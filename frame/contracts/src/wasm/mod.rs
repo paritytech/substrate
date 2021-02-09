@@ -33,7 +33,7 @@ use crate::{
 use sp_std::prelude::*;
 use sp_core::crypto::UncheckedFrom;
 use codec::{Encode, Decode};
-use frame_support::dispatch::{DispatchError, DispatchResult};
+use frame_support::dispatch::DispatchError;
 use pallet_contracts_primitives::ExecResult;
 pub use self::runtime::{ReturnCode, Runtime, RuntimeToken};
 
@@ -125,7 +125,7 @@ where
 	pub fn store_code_unchecked(
 		original_code: Vec<u8>,
 		schedule: &Schedule<T>
-	) -> DispatchResult {
+	) -> Result<(), DispatchError> {
 		let executable = prepare::benchmarking::prepare_contract(original_code, schedule)
 			.map_err::<DispatchError, _>(Into::into)?;
 		code_cache::store(executable);
@@ -158,11 +158,11 @@ where
 		code_cache::store_decremented(self);
 	}
 
-	fn add_user(code_hash: CodeHash<T>) -> DispatchResult {
+	fn add_user(code_hash: CodeHash<T>) -> Result<u32, DispatchError> {
 		code_cache::increment_refcount::<T>(code_hash)
 	}
 
-	fn remove_user(code_hash: CodeHash<T>) {
+	fn remove_user(code_hash: CodeHash<T>) -> u32 {
 		code_cache::decrement_refcount::<T>(code_hash)
 	}
 
@@ -221,6 +221,10 @@ where
 		// dominated by the code size.
 		let len = self.original_code_len.saturating_add(self.code.len() as u32);
 		len.checked_div(self.refcount as u32).unwrap_or(len)
+	}
+
+	fn pristine_size(&self) -> u32 {
+		self.original_code_len
 	}
 }
 
@@ -305,7 +309,7 @@ mod tests {
 			gas_meter: &mut GasMeter<Test>,
 			data: Vec<u8>,
 			salt: &[u8],
-		) -> Result<(AccountIdOf<Self::T>, ExecReturnValue), ExecError> {
+		) -> Result<(AccountIdOf<Self::T>, ExecReturnValue, u32), ExecError> {
 			self.instantiates.push(InstantiateEntry {
 				code_hash: code_hash.clone(),
 				endowment,
@@ -319,6 +323,7 @@ mod tests {
 					flags: ReturnFlags::empty(),
 					data: Vec::new(),
 				},
+				0,
 			))
 		}
 		fn transfer(
@@ -339,7 +344,7 @@ mod tests {
 			value: u64,
 			_gas_meter: &mut GasMeter<Test>,
 			data: Vec<u8>,
-		) -> ExecResult {
+		) -> Result<(ExecReturnValue, u32), ExecError> {
 			self.transfers.push(TransferEntry {
 				to: to.clone(),
 				value,
@@ -347,16 +352,16 @@ mod tests {
 			});
 			// Assume for now that it was just a plain transfer.
 			// TODO: Add tests for different call outcomes.
-			Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Vec::new() })
+			Ok((ExecReturnValue { flags: ReturnFlags::empty(), data: Vec::new() }, 0))
 		}
 		fn terminate(
 			&mut self,
 			beneficiary: &AccountIdOf<Self::T>,
-		) -> Result<(), DispatchError> {
+		) -> Result<u32, DispatchError> {
 			self.terminations.push(TerminationEntry {
 				beneficiary: beneficiary.clone(),
 			});
-			Ok(())
+			Ok(0)
 		}
 		fn restore_to(
 			&mut self,
@@ -364,14 +369,14 @@ mod tests {
 			code_hash: H256,
 			rent_allowance: u64,
 			delta: Vec<StorageKey>,
-		) -> Result<(), DispatchError> {
+		) -> Result<(u32, u32), DispatchError> {
 			self.restores.push(RestoreEntry {
 				dest,
 				code_hash,
 				rent_allowance,
 				delta,
 			});
-			Ok(())
+			Ok((0, 0))
 		}
 		fn caller(&self) -> &AccountIdOf<Self::T> {
 			&ALICE
@@ -443,7 +448,7 @@ mod tests {
 			gas_meter: &mut GasMeter<Test>,
 			input_data: Vec<u8>,
 			salt: &[u8],
-		) -> Result<(AccountIdOf<Self::T>, ExecReturnValue), ExecError> {
+		) -> Result<(AccountIdOf<Self::T>, ExecReturnValue, u32), ExecError> {
 			(**self).instantiate(code, value, gas_meter, input_data, salt)
 		}
 		fn transfer(
@@ -456,7 +461,7 @@ mod tests {
 		fn terminate(
 			&mut self,
 			beneficiary: &AccountIdOf<Self::T>,
-		) -> Result<(), DispatchError> {
+		) -> Result<u32, DispatchError> {
 			(**self).terminate(beneficiary)
 		}
 		fn call(
@@ -465,7 +470,7 @@ mod tests {
 			value: u64,
 			gas_meter: &mut GasMeter<Test>,
 			input_data: Vec<u8>,
-		) -> ExecResult {
+		) -> Result<(ExecReturnValue, u32), ExecError> {
 			(**self).call(to, value, gas_meter, input_data)
 		}
 		fn restore_to(
@@ -474,7 +479,7 @@ mod tests {
 			code_hash: H256,
 			rent_allowance: u64,
 			delta: Vec<StorageKey>,
-		) -> Result<(), DispatchError> {
+		) -> Result<(u32, u32), DispatchError> {
 			(**self).restore_to(
 				dest,
 				code_hash,

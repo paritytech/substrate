@@ -325,13 +325,14 @@ where
 	pub fn try_eviction(
 		account: &T::AccountId,
 		handicap: T::BlockNumber,
-	) -> Result<Option<BalanceOf<T>>, DispatchError> {
+	) -> Result<(Option<BalanceOf<T>>, u32), DispatchError> {
 		let contract = <ContractInfoOf<T>>::get(account);
 		let contract = match contract {
-			None | Some(ContractInfo::Tombstone(_)) => return Ok(None),
+			None | Some(ContractInfo::Tombstone(_)) => return Ok((None, 0)),
 			Some(ContractInfo::Alive(contract)) => contract,
 		};
 		let module = PrefabWasmModule::<T>::from_storage_noinstr(contract.code_hash)?;
+		let code_len = module.pristine_size();
 		let current_block_number = <frame_system::Module<T>>::block_number();
 		let verdict = Self::consider_case(
 			account,
@@ -353,9 +354,9 @@ where
 				Self::enact_verdict(
 					account, contract, current_block_number, verdict, Some(module),
 				)?;
-				Ok(Some(rent_payed))
+				Ok((Some(rent_payed), code_len))
 			}
-			_ => Ok(None),
+			_ => Ok((None, code_len)),
 		}
 	}
 
@@ -437,6 +438,8 @@ where
 
 	/// Restores the destination account using the origin as prototype.
 	///
+	/// Returns `(caller_code_len, tombstone_code_len)` which are the pristine code sizes.
+	///
 	/// The restoration will be performed iff:
 	/// - the supplied code_hash does still exist on-chain
 	/// - origin exists and is alive,
@@ -453,7 +456,7 @@ where
 		code_hash: CodeHash<T>,
 		rent_allowance: BalanceOf<T>,
 		delta: Vec<crate::exec::StorageKey>,
-	) -> Result<(), DispatchError> {
+	) -> Result<(u32, u32), DispatchError> {
 		let mut origin_contract = <ContractInfoOf<T>>::get(&origin)
 			.and_then(|c| c.get_alive())
 			.ok_or(Error::<T>::InvalidSourceContract)?;
@@ -477,7 +480,7 @@ where
 		};
 
 		// Fails if the code hash does not exist on chain
-		E::add_user(code_hash)?;
+		let caller_code_len = E::add_user(code_hash)?;
 
 		// We are allowed to eagerly modify storage even though the function can
 		// fail later due to tombstones not matching. This is because the restoration
@@ -507,7 +510,7 @@ where
 		origin_contract.storage_size -= bytes_taken;
 
 		<ContractInfoOf<T>>::remove(&origin);
-		E::remove_user(origin_contract.code_hash);
+		let tombstone_code_len = E::remove_user(origin_contract.code_hash);
 		<ContractInfoOf<T>>::insert(&dest, ContractInfo::Alive(AliveContractInfo::<T> {
 			trie_id: origin_contract.trie_id,
 			storage_size: origin_contract.storage_size,
@@ -523,6 +526,6 @@ where
 		T::Currency::make_free_balance_be(&origin, <BalanceOf<T>>::zero());
 		T::Currency::deposit_creating(&dest, origin_free_balance);
 
-		Ok(())
+		Ok((caller_code_len, tombstone_code_len))
 	}
 }

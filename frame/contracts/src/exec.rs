@@ -72,6 +72,7 @@ pub trait Ext {
 
 	/// Instantiate a contract from the given code.
 	///
+	/// Returns the original code size of the called contract.
 	/// The newly created account will be associated with `code`. `value` specifies the amount of value
 	/// transferred from this to the newly created account (also known as endowment).
 	fn instantiate(
@@ -81,7 +82,7 @@ pub trait Ext {
 		gas_meter: &mut GasMeter<Self::T>,
 		input_data: Vec<u8>,
 		salt: &[u8],
-	) -> Result<(AccountIdOf<Self::T>, ExecReturnValue), ExecError>;
+	) -> Result<(AccountIdOf<Self::T>, ExecReturnValue, u32), ExecError>;
 
 	/// Transfer some amount of funds into the specified account.
 	fn transfer(
@@ -92,6 +93,7 @@ pub trait Ext {
 
 	/// Transfer all funds to `beneficiary` and delete the contract.
 	///
+	/// Returns the original code size of the terminated contract.
 	/// Since this function removes the self contract eagerly, if succeeded, no further actions should
 	/// be performed on this `Ext` instance.
 	///
@@ -100,18 +102,22 @@ pub trait Ext {
 	fn terminate(
 		&mut self,
 		beneficiary: &AccountIdOf<Self::T>,
-	) -> DispatchResult;
+	) -> Result<u32, DispatchError>;
 
 	/// Call (possibly transferring some amount of funds) into the specified account.
+	///
+	/// Returns the original code size of the called contract.
 	fn call(
 		&mut self,
 		to: &AccountIdOf<Self::T>,
 		value: BalanceOf<Self::T>,
 		gas_meter: &mut GasMeter<Self::T>,
 		input_data: Vec<u8>,
-	) -> ExecResult;
+	) -> Result<(ExecReturnValue, u32), ExecError>;
 
 	/// Restores the given destination contract sacrificing the current one.
+	///
+	/// Returns `(caller_code_len, tombstone_code_len)` which are the pristine code sizes.
 	///
 	/// Since this function removes the self contract eagerly, if succeeded, no further actions should
 	/// be performed on this `Ext` instance.
@@ -124,7 +130,7 @@ pub trait Ext {
 		code_hash: CodeHash<Self::T>,
 		rent_allowance: BalanceOf<Self::T>,
 		delta: Vec<StorageKey>,
-	) -> DispatchResult;
+	) -> Result<(u32, u32), DispatchError>;
 
 	/// Returns a reference to the account id of the caller.
 	fn caller(&self) -> &AccountIdOf<Self::T>;
@@ -203,10 +209,14 @@ pub trait Executable<T: Config>: Sized {
 	fn drop_from_storage(self);
 
 	/// Increment the refcount by one. Fails if the code does not exist on-chain.
-	fn add_user(code_hash: CodeHash<T>) -> DispatchResult;
+	///
+	/// Returns the size of the original code.
+	fn add_user(code_hash: CodeHash<T>) -> Result<u32, DispatchError>;
 
 	/// Decrement the refcount by one and remove the code when it drops to zero.
-	fn remove_user(code_hash: CodeHash<T>);
+	///
+	/// Returns the size of the original code.
+	fn remove_user(code_hash: CodeHash<T>) -> u32;
 
 	/// Execute the specified exported function and return the result.
 	///
@@ -238,6 +248,9 @@ pub trait Executable<T: Config>: Sized {
 	/// without refetching this from storage the result can be inaccurate as it might be
 	/// working with a stale value. Usually this inaccuracy is tolerable.
 	fn occupied_storage(&self) -> u32;
+
+	/// The size of the pristine source this executable was generated from.
+	fn pristine_size(&self) -> u32;
 }
 
 pub struct ExecutionContext<'a, T: Config + 'a, E> {
@@ -296,7 +309,7 @@ where
 		value: BalanceOf<T>,
 		gas_meter: &mut GasMeter<T>,
 		input_data: Vec<u8>,
-	) -> ExecResult {
+	) -> Result<(ExecReturnValue, u32), ExecError> {
 		if self.depth == T::MaxDepth::get() as usize {
 			Err(Error::<T>::MaxCallDepthReached)?
 		}
@@ -306,6 +319,7 @@ where
 			.ok_or(Error::<T>::NotCallable)?;
 
 		let executable = E::from_storage(contract.code_hash, &self.schedule)?;
+		let code_len = executable.pristine_size();
 
 		// This charges the rent and denies access to a contract that is in need of
 		// eviction by returning `None`. We cannot evict eagerly here because those
@@ -318,7 +332,7 @@ where
 		let transactor_kind = self.transactor_kind();
 		let caller = self.self_account.clone();
 
-		self.with_nested_context(dest.clone(), contract.trie_id.clone(), |nested| {
+		let result = self.with_nested_context(dest.clone(), contract.trie_id.clone(), |nested| {
 			if value > BalanceOf::<T>::zero() {
 				transfer::<T>(
 					TransferCause::Call,
@@ -336,7 +350,8 @@ where
 				gas_meter,
 			).map_err(|e| ExecError { error: e.error, origin: ErrorOrigin::Callee })?;
 			Ok(output)
-		})
+		})?;
+		Ok((result, code_len))
 	}
 
 	pub fn instantiate(
@@ -581,10 +596,11 @@ where
 		gas_meter: &mut GasMeter<T>,
 		input_data: Vec<u8>,
 		salt: &[u8],
-	) -> Result<(AccountIdOf<T>, ExecReturnValue), ExecError> {
+	) -> Result<(AccountIdOf<T>, ExecReturnValue, u32), ExecError> {
 		let executable = E::from_storage(code_hash, &self.ctx.schedule)?;
+		let code_len = executable.pristine_size();
 		let result = self.ctx.instantiate(endowment, gas_meter, executable, input_data, salt)?;
-		Ok(result)
+		Ok((result.0, result.1, code_len))
 	}
 
 	fn transfer(
@@ -604,7 +620,7 @@ where
 	fn terminate(
 		&mut self,
 		beneficiary: &AccountIdOf<Self::T>,
-	) -> DispatchResult {
+	) -> Result<u32, DispatchError> {
 		let self_id = self.ctx.self_account.clone();
 		let value = T::Currency::free_balance(&self_id);
 		if let Some(caller_ctx) = self.ctx.caller {
@@ -621,9 +637,9 @@ where
 		)?;
 		if let Some(ContractInfo::Alive(info)) = ContractInfoOf::<T>::take(&self_id) {
 			Storage::<T>::queue_trie_for_deletion(&info)?;
-			E::remove_user(info.code_hash);
+			let code_len = E::remove_user(info.code_hash);
 			Contracts::<T>::deposit_event(RawEvent::Terminated(self_id, beneficiary.clone()));
-			Ok(())
+			Ok(code_len)
 		} else {
 			panic!(
 				"this function is only invoked by in the context of a contract;\
@@ -639,7 +655,7 @@ where
 		value: BalanceOf<T>,
 		gas_meter: &mut GasMeter<T>,
 		input_data: Vec<u8>,
-	) -> ExecResult {
+	) -> Result<(ExecReturnValue, u32), ExecError> {
 		self.ctx.call(to.clone(), value, gas_meter, input_data)
 	}
 
@@ -649,7 +665,7 @@ where
 		code_hash: CodeHash<Self::T>,
 		rent_allowance: BalanceOf<Self::T>,
 		delta: Vec<StorageKey>,
-	) -> DispatchResult {
+	) -> Result<(u32, u32), DispatchError> {
 		if let Some(caller_ctx) = self.ctx.caller {
 			if caller_ctx.is_live(&self.ctx.self_account) {
 				return Err(Error::<T>::ReentranceDenied.into());
@@ -845,11 +861,11 @@ mod tests {
 
 		fn drop_from_storage(self) {}
 
-		fn add_user(_code_hash: CodeHash<Test>) -> DispatchResult {
-			Ok(())
+		fn add_user(_code_hash: CodeHash<Test>) -> Result<u32, DispatchError> {
+			Ok(0)
 		}
 
-		fn remove_user(_code_hash: CodeHash<Test>) {}
+		fn remove_user(_code_hash: CodeHash<Test>) -> u32 { 0 }
 
 		fn execute<E: Ext<T = Test>>(
 			self,
@@ -870,6 +886,10 @@ mod tests {
 		}
 
 		fn occupied_storage(&self) -> u32 {
+			0
+		}
+
+		fn pristine_size(&self) -> u32 {
 			0
 		}
 	}
@@ -954,7 +974,7 @@ mod tests {
 				vec![],
 			).unwrap();
 
-			assert!(!output.is_success());
+			assert!(!output.0.is_success());
 			assert_eq!(get_balance(&origin), 100);
 
 			// the rent is still charged
@@ -1012,8 +1032,8 @@ mod tests {
 			);
 
 			let output = result.unwrap();
-			assert!(output.is_success());
-			assert_eq!(output.data, vec![1, 2, 3, 4]);
+			assert!(output.0.is_success());
+			assert_eq!(output.0.data, vec![1, 2, 3, 4]);
 		});
 	}
 
@@ -1040,8 +1060,8 @@ mod tests {
 			);
 
 			let output = result.unwrap();
-			assert!(!output.is_success());
-			assert_eq!(output.data, vec![1, 2, 3, 4]);
+			assert!(!output.0.is_success());
+			assert_eq!(output.0.data, vec![1, 2, 3, 4]);
 		});
 	}
 
@@ -1317,7 +1337,7 @@ mod tests {
 			let instantiated_contract_address = Rc::clone(&instantiated_contract_address);
 			move |ctx| {
 				// Instantiate a contract and save it's address in `instantiated_contract_address`.
-				let (address, output) = ctx.ext.instantiate(
+				let (address, output, _) = ctx.ext.instantiate(
 					dummy_ch,
 					Contracts::<Test>::subsistence_threshold() * 3,
 					ctx.gas_meter,

@@ -154,6 +154,20 @@ impl<T: Config> GasMeter<T> {
 		}
 	}
 
+	/// Adjust a previously charged amount down to its actual amount.
+	///
+	/// This is when a maximum a priori amount was charged and then should be partially
+	/// refunded to match the actual amount.
+	pub fn adjust_gas<Tok: Token<T>>(
+		&mut self,
+		charged_amount: ChargedAmount,
+		metadata: &Tok::Metadata,
+		token: Tok,
+	) {
+		let adjustment = charged_amount.0.saturating_sub(token.calculate_amount(metadata));
+		self.gas_left = self.gas_left.saturating_add(adjustment).min(self.gas_limit);
+	}
+
 	/// Refund previously charged gas back to the gas meter.
 	///
 	/// This can be used if a gas worst case estimation must be charged before

@@ -250,6 +250,7 @@ parameter_types! {
 	pub const MaxValueSize: u32 = 16_384;
 	pub const DeletionQueueDepth: u32 = 1024;
 	pub const DeletionWeightLimit: Weight = 500_000_000_000;
+	pub const MaxCodeSize: u32 = 1 * 1024;
 }
 
 parameter_types! {
@@ -282,6 +283,7 @@ impl Config for Test {
 	type ChainExtension = TestExtension;
 	type DeletionQueueDepth = DeletionQueueDepth;
 	type DeletionWeightLimit = DeletionWeightLimit;
+	type MaxCodeSize = MaxCodeSize;
 }
 
 pub const ALICE: AccountId32 = AccountId32::new([1u8; 32]);
@@ -350,7 +352,9 @@ where
 fn calling_plain_account_fails() {
 	ExtBuilder::default().build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 100_000_000);
-		let base_cost = <<Test as crate::Config>::WeightInfo as crate::WeightInfo>::call();
+		let base_cost = <<Test as Config>::WeightInfo as crate::WeightInfo>::call(
+			<Test as Config>::MaxCodeSize::get() / 1024
+		);
 
 		assert_eq!(
 			Contracts::call(Origin::signed(ALICE), BOB, 0, GAS_LIMIT, Vec::new()),
