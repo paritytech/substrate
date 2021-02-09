@@ -14,7 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 sc-chain-spec-derive = { version = "2.0.0", path = "./derive" }
-impl-trait-for-tuples = "0.2.0"
+impl-trait-for-tuples = "0.2.1"
 sc-network = { version = "0.8.0", path = "../network" }
 sp-core = { version = "2.0.0", path = "../../primitives/core" }
 serde = { version = "1.0.101", features = ["derive"] }

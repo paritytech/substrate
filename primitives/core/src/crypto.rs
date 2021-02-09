@@ -554,6 +554,8 @@ ss58_address_format!(
 		(32, "robonomics", "Any Robonomics network standard account (*25519).")
 	DataHighwayAccount =>
 		(33, "datahighway", "DataHighway mainnet, standard account (*25519).")
+	AresAccount =>
+		(34, "ares", "Ares Protocol, standard account (*25519).")
 	ValiuAccount =>
 		(35, "vln", "Valiu Liquidity Network mainnet, standard account (*25519).")
 	CentrifugeAccount =>
@@ -578,6 +580,8 @@ ss58_address_format!(
 		(47, "reserved47", "Reserved for future use (47).")
 	HydraDXAccount =>
 		(63, "hydradx", "HydraDX standard account (*25519).")
+	CrustAccount =>
+		(66, "crust", "Crust Network, standard account (*25519).")
 );
 
 /// Set the default "version" (actually, this is a bit of a misnomer and the version byte is
