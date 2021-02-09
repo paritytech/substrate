@@ -92,7 +92,7 @@ fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
 }
 
 #[derive(Clone)]
-struct BmSubbountyCfg<T: Config> {
+struct BenchmarkSubBountyConfig<T: Config> {
 	/// Bounty ID.
 	bounty_id: BountyIndex,
 	/// SubBounty ID.
@@ -115,7 +115,7 @@ struct BmSubbountyCfg<T: Config> {
 	reason: Vec<u8>,
 }
 
-fn setup_subbounty<T: Config>(u: u32, d: u32) -> BmSubbountyCfg::<T> {
+fn setup_subbounty<T: Config>(u: u32, d: u32) -> BenchmarkSubBountyConfig::<T> {
 	let (caller, curator, fee, value, reason) = setup_bounty::<T>(u, d);
 	let subcurator = account("subcurator", u, SEED);
 	let _ = T::Currency::make_free_balance_be(&subcurator, fee / 2u32.into());
@@ -123,7 +123,7 @@ fn setup_subbounty<T: Config>(u: u32, d: u32) -> BmSubbountyCfg::<T> {
 	let subbounty_value = 2u32.into();
 	let subbounty_fee = subbounty_value / 2u32.into();
 
-	BmSubbountyCfg::<T> {
+	BenchmarkSubBountyConfig::<T> {
 		bounty_id: 0,
 		subbounty_id: 0,
 		caller: caller,
@@ -138,7 +138,7 @@ fn setup_subbounty<T: Config>(u: u32, d: u32) -> BmSubbountyCfg::<T> {
 }
 
 fn create_subbounty_bounty<T: Config>() -> Result<
-	BmSubbountyCfg::<T>,
+	BenchmarkSubBountyConfig::<T>,
 	&'static str
 > {
 	let mut bm_setup = setup_subbounty::<T>(0, MAX_BYTES);
@@ -169,7 +169,7 @@ fn create_subbounty_bounty<T: Config>() -> Result<
 }
 
 fn create_subbounty<T: Config>() -> Result<
-	BmSubbountyCfg::<T>,
+	BenchmarkSubBountyConfig::<T>,
 	&'static str
 > {
 	let mut bm_setup = create_subbounty_bounty::<T>()?;

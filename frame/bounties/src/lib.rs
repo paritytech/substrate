@@ -107,7 +107,7 @@ use frame_support::{decl_module, decl_storage, decl_event, ensure, decl_error};
 
 use frame_support::traits::{
 	Currency, Get, Imbalance, OnUnbalanced, ExistenceRequirement::{AllowDeath},
-	ReservableCurrency, WithdrawReasons,
+	ReservableCurrency,
 };
 
 use sp_runtime::{Permill, RuntimeDebug, DispatchResult, traits::{
@@ -219,8 +219,6 @@ pub enum BountyStatus<AccountId, BlockNumber> {
 /// A Subbounty proposal.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct SubBounty<AccountId, Balance, BlockNumber> {
-	/// The (total) amount that should be paid if the sub-bounty is rewarded.
-	value: Balance,
 	/// The subcurator fee. Included in value.
 	fee: Balance,
 	/// The deposit of subcurator.
@@ -839,25 +837,10 @@ decl_module! {
 							Error::<T>::TooManySubBounties,
 						);
 
-						// Makesure Parent bounty have enough balance to fund Subbounty
+						// Read parent bounty account info
 						let bounty_account = Self::bounty_account_id(bounty_id);
-						let balance = T::Currency::free_balance(&bounty_account);
 
-						// minimum balance expected on bounty account
-						// ensure master curator fee is considered in calculation
-						let expect_balance = value.saturating_add(bounty.fee);
-						let expect_free_balance = balance.checked_sub(&expect_balance)
-							.ok_or(Error::<T>::InsufficientBountyBalance)?;
-
-						T::Currency::ensure_can_withdraw(
-							&bounty_account,
-							expect_balance,
-							WithdrawReasons::TRANSFER,
-							expect_free_balance,
-						).map_err(|_| Error::<T>::InsufficientBountyBalance)?;
-
-						// Use bounty counter to generate
-						// subbounty id
+						// Create subbounty ID.
 						let subbounty_id = Self::bounty_count();
 
 						// Increment the active subbounty count.
@@ -867,19 +850,18 @@ decl_module! {
 
 						// Transfer fund from parent bounty to subbounty.
 						let subbounty_account = Self::bounty_account_id(subbounty_id);
-						let _ = T::Currency::transfer(
+						T::Currency::transfer(
 							&bounty_account,
 							&subbounty_account,
 							value,
 							AllowDeath
-						); // should not fail
+						).map_err(|_| Error::<T>::InsufficientBountyBalance)?;
 
 						// Create subbounty instance
 						Self::create_subbounty(
 							bounty_id,
 							subbounty_id,
 							description,
-							value
 						);
 						Ok(())
 					} else {
@@ -933,11 +915,13 @@ decl_module! {
 					// Ensure subbounty is in expected state
 					ensure!(
 						subbounty.status == SubBountyStatus::Added,
-						Error::<T>::UnexpectedStatus
+						Error::<T>::UnexpectedStatus,
 					);
 
 					// Ensure subcurator fee is less than subbounty value.
-					ensure!(fee < subbounty.value, Error::<T>::InvalidFee);
+					let subbounty_account = Self::bounty_account_id(subbounty_id);
+					let subbounty_value = T::Currency::free_balance(&subbounty_account);
+					ensure!(fee < subbounty_value, Error::<T>::InvalidFee);
 
 					// Update the master curator fee balance.
 					Bounties::<T>::mutate_exists(
@@ -945,10 +929,13 @@ decl_module! {
 						|maybe_bounty| -> DispatchResult {
 							if let Some(bounty) = maybe_bounty.as_mut() {
 								// Ensure subcurator fee is less than
-								// master curator fee balance
-								ensure!(fee < bounty.fee, Error::<T>::InvalidFee);
-								// Reduce the master curator fee balance.
-								bounty.fee = bounty.fee.saturating_sub(fee);
+								// master curator fee &
+								// reduce the master curator fee
+								// by subcurator fee.
+								bounty.fee = bounty
+									.fee
+									.checked_sub(&fee)
+									.ok_or(Error::<T>::InvalidFee)?;
 							}
 							Ok(())
 						}
@@ -1470,11 +1457,9 @@ impl<T: Config> Module<T> {
 		bounty_id: BountyIndex,
 		subbounty_id: BountyIndex,
 		description: Vec<u8>,
-		value: BalanceOf<T>,
 	) {
 
 		let subbounty = SubBounty {
-			value,
 			fee: 0u32.into(),
 			curator_deposit: 0u32.into(),
 			status: SubBountyStatus::Added,

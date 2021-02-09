@@ -1025,7 +1025,6 @@ fn subbunty_add_subbounty_works() {
 
 		// Check the subbounty status.
 		assert_eq!(Bounties::subbounties(0,1).unwrap(), SubBounty {
-			value: 10,
 			fee: 0,
 			curator_deposit: 0,
 			status: SubBountyStatus::Added,
@@ -1097,7 +1096,6 @@ fn subbunty_assign_subcurator_works() {
 		);
 
 		assert_eq!(Bounties::subbounties(0,1).unwrap(), SubBounty {
-			value: 10,
 			fee: 2,
 			curator_deposit: 0,
 			status: SubBountyStatus::SubCuratorProposed {
@@ -1119,7 +1117,6 @@ fn subbunty_assign_subcurator_works() {
 		);
 
 		assert_eq!(Bounties::subbounties(0,1).unwrap(), SubBounty {
-				value: 10,
 				fee: 2,
 				curator_deposit: 1,
 				status: SubBountyStatus::Active {
