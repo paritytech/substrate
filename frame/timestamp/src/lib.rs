@@ -152,7 +152,7 @@ pub mod pallet {
 
 	/// Did the timestamp get updated in this block?
 	#[pallet::storage]
-	pub(crate) type DidUpdate<T: Config> = StorageValue<_, bool, ValueQuery>;
+	pub(super) type DidUpdate<T: Config> = StorageValue<_, bool, ValueQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -192,7 +192,7 @@ pub mod pallet {
 			T::WeightInfo::set(),
 			DispatchClass::Mandatory
 		))]
-		pub(crate) fn set(origin: OriginFor<T>, #[pallet::compact] now: T::Moment) -> DispatchResultWithPostInfo {
+		pub(super) fn set(origin: OriginFor<T>, #[pallet::compact] now: T::Moment) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
 			assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
 			let prev = Self::now();
