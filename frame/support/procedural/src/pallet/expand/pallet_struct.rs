@@ -22,7 +22,7 @@ use crate::pallet::Def;
 /// * Implement OnGenesis on Pallet
 /// * Implement ModuleErrorMetadata on Pallet
 /// * declare Module type alias for construct_runtime
-/// * replace first field type of `struct Pallet` with `PhantomData` if it is `_`
+/// * replace the first field type of `struct Pallet` with `PhantomData` if it is `_`
 pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 	let frame_support = &def.frame_support;
 	let frame_system = &def.frame_system;
@@ -42,7 +42,7 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 		}
 	};
 
-	// If first field type is `_` then we replace with `PhantomData`
+	// If the first field type is `_` then we replace with `PhantomData`
 	if let Some(field) = pallet_item.fields.iter_mut().next() {
 		if field.ty == syn::parse_quote!(_) {
 			field.ty = syn::parse_quote!(
