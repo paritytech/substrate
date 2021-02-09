@@ -443,6 +443,15 @@
 			"website": null
 		},
 		{
+			"prefix": 65,
+			"network": "aventus",
+			"displayName": "AvN Mainnet",
+			"symbols": ["AVT"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://aventus.io"
+		},
+		{
 			"prefix": 66,
 			"network": "crust",
 			"displayName": "Crust Network",
