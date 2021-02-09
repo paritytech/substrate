@@ -122,7 +122,7 @@ mod until_imported;
 mod voting_rule;
 
 pub use authorities::{SharedAuthoritySet, AuthoritySet};
-pub use finality_proof::{FinalityProofFragment, FinalityProofProvider, StorageAndProofProvider};
+pub use finality_proof::{FinalityProof, FinalityProofProvider, FinalityProofError};
 pub use notification::{GrandpaJustificationSender, GrandpaJustificationStream};
 pub use import::GrandpaBlockImport;
 pub use justification::GrandpaJustification;
@@ -130,6 +130,7 @@ pub use voting_rule::{
 	BeforeBestBlockBy, ThreeQuartersOfTheUnfinalizedChain, VotingRule, VotingRulesBuilder
 };
 pub use finality_grandpa::voter::report;
+pub use finality_proof::{prove_warp_sync, WarpSyncFragmentCache};
 
 use aux_schema::PersistentData;
 use environment::{Environment, VoterSetState};
@@ -675,10 +676,10 @@ pub fn grandpa_peers_set_config() -> sc_network::config::NonDefaultSetConfig {
 		// Notifications reach ~256kiB in size at the time of writing on Kusama and Polkadot.
 		max_notification_size: 1024 * 1024,
 		set_config: sc_network::config::SetConfig {
-			in_peers: 25,
-			out_peers: 25,
+			in_peers: 0,
+			out_peers: 0,
 			reserved_nodes: Vec::new(),
-			non_reserved_mode: sc_network::config::NonReservedPeerMode::Accept,
+			non_reserved_mode: sc_network::config::NonReservedPeerMode::Deny,
 		},
 	}
 }

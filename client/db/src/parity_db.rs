@@ -37,6 +37,7 @@ pub fn open<H: Clone>(path: &std::path::Path, db_type: DatabaseType)
 	-> parity_db::Result<std::sync::Arc<dyn Database<H>>>
 {
 	let mut config = parity_db::Options::with_columns(path, NUM_COLUMNS as u8);
+	config.sync = true; // Flush each commit
 	if db_type == DatabaseType::Full {
 		let mut state_col = &mut config.columns[columns::STATE as usize];
 		state_col.ref_counted = true;

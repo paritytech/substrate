@@ -22,12 +22,35 @@ use crate::{
 		storage::{Storage, OffchainStorage, RuntimeStorage},
 		utils::NodesUtils,
 	},
-	primitives,
+	primitives::{self, Error},
 };
-use frame_support::{debug, RuntimeDebug};
-use sp_std::fmt;
 #[cfg(not(feature = "std"))]
-use sp_std::{vec, prelude::Vec};
+use sp_std::vec;
+
+/// Stateless verification of the leaf proof.
+pub fn verify_leaf_proof<H, L>(
+	root: H::Output,
+	leaf: Node<H, L>,
+	proof: primitives::Proof<H::Output>,
+) -> Result<bool, Error> where
+	H: sp_runtime::traits::Hash,
+	L: primitives::FullLeaf,
+{
+	let size = NodesUtils::new(proof.leaf_count).size();
+	let leaf_position = mmr_lib::leaf_index_to_pos(proof.leaf_index);
+
+	let p = mmr_lib::MerkleProof::<
+		Node<H, L>,
+		Hasher<H, L>,
+	>::new(
+		size,
+		proof.items.into_iter().map(Node::Hash).collect(),
+	);
+	p.verify(
+		Node::Hash(root),
+		vec![(leaf_position, leaf)],
+	).map_err(|e| Error::Verify.log_debug(e))
+}
 
 /// A wrapper around a MMR library to expose limited functionality.
 ///
@@ -123,7 +146,7 @@ impl<T, I, L> Mmr<RuntimeStorage, T, I, L> where
 impl<T, I, L> Mmr<OffchainStorage, T, I, L> where
 	T: Config<I>,
 	I: Instance,
-	L: primitives::FullLeaf,
+	L: primitives::FullLeaf + codec::Decode,
 {
 	/// Generate a proof for given leaf index.
 	///
@@ -149,38 +172,5 @@ impl<T, I, L> Mmr<OffchainStorage, T, I, L> where
 			})
 			.map(|p| (leaf, p))
 	}
-}
-
-/// Merkle Mountain Range operation error.
-#[derive(RuntimeDebug)]
-#[cfg_attr(test, derive(PartialEq, Eq))]
-pub enum Error {
-	/// Error while pushing new node.
-	Push,
-	/// Error getting the new root.
-	GetRoot,
-	/// Error commiting changes.
-	Commit,
-	/// Error during proof generation.
-	GenerateProof,
-	/// Proof verification error.
-	Verify,
-	/// Leaf not found in the storage.
-	LeafNotFound,
-}
-
-impl Error {
-	/// Consume given error `e` with `self` and generate a native log entry with error details.
-	pub(crate) fn log_error(self, e: impl fmt::Debug) -> Self {
-		debug::native::error!("[{:?}] MMR error: {:?}", self, e);
-		self
-	}
-
-	/// Consume given error `e` with `self` and generate a native log entry with error details.
-	pub(crate) fn log_debug(self, e: impl fmt::Debug) -> Self {
-		debug::native::debug!("[{:?}] MMR error: {:?}", self, e);
-		self
-	}
-
 }
 

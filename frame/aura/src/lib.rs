@@ -34,62 +34,94 @@
 //!
 //! - [Timestamp](../pallet_timestamp/index.html): The Timestamp module is used in Aura to track
 //! consensus rounds (via `slots`).
-//!
-//! ## References
-//!
-//! If you're interested in hacking on this module, it is useful to understand the interaction with
-//! `substrate/primitives/inherents/src/lib.rs` and, specifically, the required implementation of
-//! [`ProvideInherent`](../sp_inherents/trait.ProvideInherent.html) and
-//! [`ProvideInherentData`](../sp_inherents/trait.ProvideInherentData.html) to create and check inherents.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use pallet_timestamp;
-
-use sp_std::{result, prelude::*};
+use sp_std::prelude::*;
 use codec::{Encode, Decode};
-use frame_support::{
-	decl_storage, decl_module, Parameter, traits::{Get, FindAuthor},
-	ConsensusEngineId,
-};
+use frame_support::{Parameter, traits::{Get, FindAuthor, OneSessionHandler}, ConsensusEngineId};
 use sp_runtime::{
 	RuntimeAppPublic,
 	traits::{SaturatedConversion, Saturating, Zero, Member, IsMember}, generic::DigestItem,
 };
 use sp_timestamp::OnTimestampSet;
-use sp_inherents::{InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
-use sp_consensus_aura::{
-	AURA_ENGINE_ID, ConsensusLog, AuthorityIndex,
-	inherents::{INHERENT_IDENTIFIER, AuraInherentData},
-};
+use sp_consensus_aura::{AURA_ENGINE_ID, ConsensusLog, AuthorityIndex, Slot};
 
 mod mock;
 mod tests;
+pub mod migrations;
 
-pub trait Config: pallet_timestamp::Config {
-	/// The identifier type for an authority.
-	type AuthorityId: Member + Parameter + RuntimeAppPublic + Default;
-}
+pub use pallet::*;
 
-decl_storage! {
-	trait Store for Module<T: Config> as Aura {
-		/// The last timestamp.
-		LastTimestamp get(fn last): T::Moment;
+#[frame_support::pallet]
+pub mod pallet {
+	use super::*;
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 
-		/// The current authorities
-		pub Authorities get(fn authorities): Vec<T::AuthorityId>;
+	#[pallet::config]
+	pub trait Config: pallet_timestamp::Config + frame_system::Config {
+		/// The identifier type for an authority.
+		type AuthorityId: Member + Parameter + RuntimeAppPublic + Default + MaybeSerializeDeserialize;
 	}
-	add_extra_genesis {
-		config(authorities): Vec<T::AuthorityId>;
-		build(|config| Module::<T>::initialize_authorities(&config.authorities))
+
+	#[pallet::pallet]
+	pub struct Pallet<T>(sp_std::marker::PhantomData<T>);
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_initialize(_: T::BlockNumber) -> Weight {
+			if let Some(new_slot) = Self::current_slot_from_digests() {
+				let current_slot = CurrentSlot::<T>::get();
+
+				assert!(current_slot < new_slot, "Slot must increase");
+				CurrentSlot::<T>::put(new_slot);
+
+				// TODO [#3398] Generate offence report for all authorities that skipped their slots.
+
+				T::DbWeight::get().reads_writes(2, 1)
+			} else {
+				T::DbWeight::get().reads(1)
+			}
+		}
+	}
+
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {}
+
+	/// The current authority set.
+	#[pallet::storage]
+	#[pallet::getter(fn authorities)]
+	pub(super) type Authorities<T: Config> = StorageValue<_, Vec<T::AuthorityId>, ValueQuery>;
+
+	/// The current slot of this block.
+	///
+	/// This will be set in `on_initialize`.
+	#[pallet::storage]
+	#[pallet::getter(fn current_slot)]
+	pub(super) type CurrentSlot<T: Config> = StorageValue<_, Slot, ValueQuery>;
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config> {
+		pub authorities: Vec<T::AuthorityId>,
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config> Default for GenesisConfig<T> {
+		fn default() -> Self {
+			Self { authorities: Vec::new() }
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+		fn build(&self) {
+			Pallet::<T>::initialize_authorities(&self.authorities);
+		}
 	}
 }
 
-decl_module! {
-	pub struct Module<T: Config> for enum Call where origin: T::Origin { }
-}
-
-impl<T: Config> Module<T> {
+impl<T: Config> Pallet<T> {
 	fn change_authorities(new: Vec<T::AuthorityId>) {
 		<Authorities<T>>::put(&new);
 
@@ -106,13 +138,33 @@ impl<T: Config> Module<T> {
 			<Authorities<T>>::put(authorities);
 		}
 	}
+
+	/// Get the current slot from the pre-runtime digests.
+	fn current_slot_from_digests() -> Option<Slot> {
+		let digest = frame_system::Pallet::<T>::digest();
+		let pre_runtime_digests = digest.logs.iter().filter_map(|d| d.as_pre_runtime());
+		for (id, mut data) in pre_runtime_digests {
+			if id == AURA_ENGINE_ID {
+				return Slot::decode(&mut data).ok();
+			}
+		}
+
+		None
+	}
+
+	/// Determine the Aura slot-duration based on the Timestamp module configuration.
+	pub fn slot_duration() -> T::Moment {
+		// we double the minimum block-period so each author can always propose within
+		// the majority of its slot.
+		<T as pallet_timestamp::Config>::MinimumPeriod::get().saturating_mul(2u32.into())
+	}
 }
 
-impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
+impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Pallet<T> {
 	type Public = T::AuthorityId;
 }
 
-impl<T: Config> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
+impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 	type Key = T::AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)
@@ -128,7 +180,7 @@ impl<T: Config> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 		// instant changes
 		if changed {
 			let next_authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
-			let last_authorities = <Module<T>>::authorities();
+			let last_authorities = Self::authorities();
 			if next_authorities != last_authorities {
 				Self::change_authorities(next_authorities);
 			}
@@ -145,16 +197,15 @@ impl<T: Config> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 	}
 }
 
-impl<T: Config> FindAuthor<u32> for Module<T> {
+impl<T: Config> FindAuthor<u32> for Pallet<T> {
 	fn find_author<'a, I>(digests: I) -> Option<u32> where
 		I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>
 	{
 		for (id, mut data) in digests.into_iter() {
 			if id == AURA_ENGINE_ID {
-				if let Ok(slot_num) = u64::decode(&mut data) {
-					let author_index = slot_num % Self::authorities().len() as u64;
-					return Some(author_index as u32)
-				}
+				let slot = Slot::decode(&mut data).ok()?;
+				let author_index = *slot % Self::authorities().len() as u64;
+				return Some(author_index as u32)
 			}
 		}
 
@@ -162,7 +213,7 @@ impl<T: Config> FindAuthor<u32> for Module<T> {
 	}
 }
 
-/// We can not implement `FindAuthor` twice, because the compiler does not know if 
+/// We can not implement `FindAuthor` twice, because the compiler does not know if
 /// `u32 == T::AuthorityId` and thus, prevents us to implement the trait twice.
 #[doc(hidden)]
 pub struct FindAccountFromAuthorIndex<T, Inner>(sp_std::marker::PhantomData<(T, Inner)>);
@@ -175,15 +226,15 @@ impl<T: Config, Inner: FindAuthor<u32>> FindAuthor<T::AuthorityId>
 	{
 		let i = Inner::find_author(digests)?;
 
-		let validators = <Module<T>>::authorities();
+		let validators = <Pallet<T>>::authorities();
 		validators.get(i as usize).map(|k| k.clone())
 	}
 }
 
 /// Find the authority ID of the Aura authority who authored the current block.
-pub type AuraAuthorId<T> = FindAccountFromAuthorIndex<T, Module<T>>;
+pub type AuraAuthorId<T> = FindAccountFromAuthorIndex<T, Pallet<T>>;
 
-impl<T: Config> IsMember<T::AuthorityId> for Module<T> {
+impl<T: Config> IsMember<T::AuthorityId> for Pallet<T> {
 	fn is_member(authority_id: &T::AuthorityId) -> bool {
 		Self::authorities()
 			.iter()
@@ -191,63 +242,14 @@ impl<T: Config> IsMember<T::AuthorityId> for Module<T> {
 	}
 }
 
-impl<T: Config> Module<T> {
-	/// Determine the Aura slot-duration based on the Timestamp module configuration.
-	pub fn slot_duration() -> T::Moment {
-		// we double the minimum block-period so each author can always propose within
-		// the majority of its slot.
-		<T as pallet_timestamp::Config>::MinimumPeriod::get().saturating_mul(2u32.into())
-	}
-
-	fn on_timestamp_set(now: T::Moment, slot_duration: T::Moment) {
-		let last = Self::last();
-		<Self as Store>::LastTimestamp::put(now);
-
-		if last.is_zero() {
-			return;
-		}
-
+impl<T: Config> OnTimestampSet<T::Moment> for Pallet<T> {
+	fn on_timestamp_set(moment: T::Moment) {
+		let slot_duration = Self::slot_duration();
 		assert!(!slot_duration.is_zero(), "Aura slot duration cannot be zero.");
 
-		let last_slot = last / slot_duration;
-		let cur_slot = now / slot_duration;
+		let timestamp_slot = moment / slot_duration;
+		let timestamp_slot = Slot::from(timestamp_slot.saturated_into::<u64>());
 
-		assert!(last_slot < cur_slot, "Only one block may be authored per slot.");
-
-		// TODO [#3398] Generate offence report for all authorities that skipped their slots.
-	}
-}
-
-impl<T: Config> OnTimestampSet<T::Moment> for Module<T> {
-	fn on_timestamp_set(moment: T::Moment) {
-		Self::on_timestamp_set(moment, Self::slot_duration())
-	}
-}
-
-impl<T: Config> ProvideInherent for Module<T> {
-	type Call = pallet_timestamp::Call<T>;
-	type Error = MakeFatalError<sp_inherents::Error>;
-	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
-
-	fn create_inherent(_: &InherentData) -> Option<Self::Call> {
-		None
-	}
-
-	/// Verify the validity of the inherent using the timestamp.
-	fn check_inherent(call: &Self::Call, data: &InherentData) -> result::Result<(), Self::Error> {
-		let timestamp = match call {
-			pallet_timestamp::Call::set(ref timestamp) => timestamp.clone(),
-			_ => return Ok(()),
-		};
-
-		let timestamp_based_slot = timestamp / Self::slot_duration();
-
-		let seal_slot = data.aura_inherent_data()?.saturated_into();
-
-		if timestamp_based_slot == seal_slot {
-			Ok(())
-		} else {
-			Err(sp_inherents::Error::from("timestamp set in block doesn't match slot in seal").into())
-		}
+		assert!(CurrentSlot::<T>::get() == timestamp_slot, "Timestamp slot must match `CurrentSlot`");
 	}
 }

@@ -72,14 +72,23 @@ const TICK_TIMEOUT: time::Duration = time::Duration::from_millis(1100);
 /// Interval at which we propagate transactions;
 const PROPAGATE_TIMEOUT: time::Duration = time::Duration::from_millis(2900);
 
-/// Maximim number of known block hashes to keep for a peer.
+/// Maximum number of known block hashes to keep for a peer.
 const MAX_KNOWN_BLOCKS: usize = 1024; // ~32kb per peer + LruHashSet overhead
-/// Maximim number of known transaction hashes to keep for a peer.
+/// Maximum number of known transaction hashes to keep for a peer.
 ///
 /// This should be approx. 2 blocks full of transactions for the network to function properly.
 const MAX_KNOWN_TRANSACTIONS: usize = 10240; // ~300kb per peer + overhead.
 
-/// Maximim number of transaction validation request we keep at any moment.
+/// Maximum allowed size for a block announce.
+const MAX_BLOCK_ANNOUNCE_SIZE: u64 = 1024 * 1024;
+/// Maximum allowed size for a transactions notification.
+const MAX_TRANSACTIONS_SIZE: u64 = 16 * 1024 * 1024;
+
+/// Maximum size used for notifications in the block announce and transaction protocols.
+// Must be equal to `max(MAX_BLOCK_ANNOUNCE_SIZE, MAX_TRANSACTIONS_SIZE)`.
+pub(crate) const BLOCK_ANNOUNCES_TRANSACTIONS_SUBSTREAM_SIZE: u64 = 16 * 1024 * 1024;
+
+/// Maximum number of transaction validation request we keep at any moment.
 const MAX_PENDING_TRANSACTIONS: usize = 8192;
 
 /// Current protocol version.
@@ -415,12 +424,11 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			// The `reserved_nodes` of this set are later kept in sync with the peers we connect
 			// to through set 0.
 			sets.push(sc_peerset::SetConfig {
-				in_peers: network_config.default_peers_set.in_peers,
-				out_peers: network_config.default_peers_set.out_peers,
+				in_peers: 0,
+				out_peers: 0,
 				bootnodes: Vec::new(),
-				reserved_nodes: default_sets_reserved,
-				reserved_only: network_config.default_peers_set.non_reserved_mode
-					== config::NonReservedPeerMode::Deny,
+				reserved_nodes: HashSet::new(),
+				reserved_only: true,
 			});
 
 			for set_cfg in &network_config.extra_sets {
@@ -483,8 +491,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				versions,
 				build_status_message::<B>(&config, best_number, best_hash, genesis_hash),
 				peerset,
-				iter::once((block_announces_protocol, block_announces_handshake, 1024 * 1024))
-					.chain(iter::once((transactions_protocol, vec![], 1024 * 1024)))
+				iter::once((block_announces_protocol, block_announces_handshake, MAX_BLOCK_ANNOUNCE_SIZE))
+					.chain(iter::once((transactions_protocol, vec![], MAX_TRANSACTIONS_SIZE)))
 					.chain(network_config.extra_sets.iter().map(|s| (
 						s.notifications_protocol.clone(),
 						handshake_message.clone(),
@@ -647,7 +655,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 					"Couldn't decode packet sent by {}: {:?}: {}",
 					who,
 					data,
-					err.what(),
+					err,
 				);
 				self.peerset_handle.report_peer(who, rep::BAD_MESSAGE);
 				return CustomMessageOutcome::None;
@@ -1689,7 +1697,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 
 							if self.on_sync_peer_connected(peer_id.clone(), handshake).is_ok() {
 								// Set 1 is kept in sync with the connected peers of set 0.
-								self.peerset_handle.add_to_peers_set(
+								self.peerset_handle.add_reserved_peer(
 									HARDCODED_PEERSETS_TX,
 									peer_id.clone()
 								);
@@ -1713,7 +1721,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 								Ok(handshake) => {
 									if self.on_sync_peer_connected(peer_id.clone(), handshake).is_ok() {
 										// Set 1 is kept in sync with the connected peers of set 0.
-										self.peerset_handle.add_to_peers_set(
+										self.peerset_handle.add_reserved_peer(
 											HARDCODED_PEERSETS_TX,
 											peer_id.clone()
 										);
@@ -1728,7 +1736,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 										"Couldn't decode handshake sent by {}: {:?}: {} & {}",
 										peer_id,
 										received_handshake,
-										err.what(),
+										err,
 										err2,
 									);
 									self.peerset_handle.report_peer(peer_id, rep::BAD_MESSAGE);
