@@ -67,6 +67,13 @@ version = "0.34.0"
 default-features = false
 features = ["identify", "kad", "mdns", "mplex", "noise", "ping", "request-response", "tcp-async-io", "websocket", "yamux"]
 
+[target.'cfg(not(target_os = "unknown"))'.dependencies.libp2p]
+version = "0.34.0"
+default-features = false
+# Non WASM has DNS support
+features = ["identify", "kad", "mdns", "dns", "mplex", "noise", "ping", "request-response", "tcp-async-io", "websocket", "yamux"]
+
+
 [dev-dependencies]
 assert_matches = "1.3"
 libp2p = { version = "0.34.0", default-features = false }
