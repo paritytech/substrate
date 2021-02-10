@@ -689,8 +689,11 @@ where
 
 			match self.select_chain.finality_target(block, None) {
 				Ok(Some(best_hash)) => {
-					let best_header = self.client.header(BlockId::Hash(best_hash)).ok()?
-					.expect("Header known to exist after `finality_target` call; qed");
+					let best_header = self
+						.client
+						.header(BlockId::Hash(best_hash))
+						.ok()?
+						.expect("Header known to exist after `finality_target` call; qed");
 
 					// check if our vote is currently being limited due to a pending change
 					let limit = limit.filter(|limit| limit < best_header.number());
@@ -712,8 +715,11 @@ where
 								break;
 							}
 
-							target_header = self.client.header(BlockId::Hash(*target_header.parent_hash())).ok()?
-							.expect("Header known to exist after `finality_target` call; qed");
+							target_header = self
+								.client
+								.header(BlockId::Hash(*target_header.parent_hash()))
+								.ok()?
+								.expect("Header known to exist after `finality_target` call; qed");
 						}
 
 						Some((base_header, best_header, target_header))
@@ -721,7 +727,7 @@ where
 						// otherwise just use the given best as the target
 						Some((base_header, best_header.clone(), best_header))
 					}
-				},
+				}
 				Ok(None) => {
 					debug!(target: "afg", "Encountered error finding best chain containing {:?}: couldn't find target block", block);
 					None
@@ -746,17 +752,20 @@ where
 			// round base (i.e. last finalized), otherwise the value
 			// returned by the given voting rule is ignored and the original
 			// target is used instead.
-			let rule_fut = self.voting_rule
-				.restrict_vote(self.client.clone(), &base_header, &best_header, &target_header);
+			let rule_fut = self.voting_rule.restrict_vote(
+				self.client.clone(),
+				&base_header,
+				&best_header,
+				&target_header,
+			);
 
 			Box::pin(async move {
-				Ok(
-					rule_fut
+				Ok(rule_fut
 					.await
 					.filter(|(_, restricted_number)| {
 						// we can only restrict votes within the interval [base, target]
-						restricted_number >= base_header.number() &&
-							restricted_number < target_header.number()
+						restricted_number >= base_header.number()
+							&& restricted_number < target_header.number()
 					})
 					.or_else(|| Some((target_header.hash(), *target_header.number()))))
 			})
