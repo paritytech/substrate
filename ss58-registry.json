@@ -317,6 +317,15 @@
 			"website": null
 		},
 		{
+			"prefix": 34,
+			"network": "ares",
+			"displayName": "Ares Protocol",
+			"symbols": ["ARES"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://www.aresprotocol.com/"
+		},
+		{
 			"prefix": 35,
 			"network": "vln",
 			"displayName": "Valiu Liquidity Network",
@@ -433,6 +442,24 @@
 			"standardAccount": null,
 			"website": null
 		},
+    {
+			"prefix": 65,
+			"network": "aventus",
+			"displayName": "AvN Mainnet",
+			"symbols": ["AVT"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://aventus.io"
+		},
+		{
+			"prefix": 66,
+			"network": "crust",
+			"displayName": "Crust Network",
+			"symbols": ["CRU"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://crust.network"
+		},
 		{
 			"prefix": 252,
 			"network": "social-network",
@@ -441,6 +468,6 @@
 			"decimals": [18],
 			"standardAccount": "*25519",
 			"website": "https://social.network"
-		}
+    }
 	]
 }

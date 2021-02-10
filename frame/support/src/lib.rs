@@ -571,7 +571,7 @@ macro_rules! assert_ok {
 pub use serde::{Serialize, Deserialize};
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
 	use super::*;
 	use codec::{Codec, EncodeLike};
 	use frame_metadata::{
@@ -580,6 +580,18 @@ mod tests {
 	};
 	use sp_std::{marker::PhantomData, result};
 	use sp_io::TestExternalities;
+
+	/// A PalletInfo implementation which just panics.
+	pub struct PanicPalletInfo;
+
+	impl crate::traits::PalletInfo for PanicPalletInfo {
+		fn index<P: 'static>() -> Option<usize> {
+			unimplemented!("PanicPalletInfo mustn't be triggered by tests");
+		}
+		fn name<P: 'static>() -> Option<&'static str> {
+			unimplemented!("PanicPalletInfo mustn't be triggered by tests");
+		}
+	}
 
 	pub trait Config: 'static {
 		type BlockNumber: Codec + EncodeLike + Default;
@@ -625,7 +637,7 @@ mod tests {
 	impl Config for Test {
 		type BlockNumber = u32;
 		type Origin = u32;
-		type PalletInfo = ();
+		type PalletInfo = PanicPalletInfo;
 		type DbWeight = ();
 	}
 
@@ -1129,7 +1141,7 @@ pub mod pallet_prelude {
 /// Item must be defined as followed:
 /// ```ignore
 /// #[pallet::pallet]
-/// pub struct Pallet<T>(PhantomData<T>);
+/// pub struct Pallet<T>(_);
 /// ```
 /// I.e. a regular struct definition named `Pallet`, with generic T and no where clause.
 ///
@@ -1138,7 +1150,7 @@ pub mod pallet_prelude {
 /// ```ignore
 /// #[pallet::pallet]
 /// #[pallet::generate_store(pub(super) trait Store)]
-/// pub struct Pallet<T>(PhantomData<T>);
+/// pub struct Pallet<T>(_);
 /// ```
 /// More precisely the store trait contains an associated type for each storage. It is implemented
 /// for `Pallet` allowing to access the storage from pallet struct.
@@ -1157,6 +1169,7 @@ pub mod pallet_prelude {
 /// 	frame_support::RuntimeDebugNoBound,
 /// )]
 /// ```
+/// and replace the type `_` by `PhantomData<T>`.
 ///
 /// It implements on pallet:
 /// * [`traits::GetPalletVersion`]
@@ -1590,7 +1603,7 @@ pub mod pallet_prelude {
 /// 	// Define the pallet struct placeholder, various pallet function are implemented on it.
 /// 	#[pallet::pallet]
 /// 	#[pallet::generate_store(pub(super) trait Store)]
-/// 	pub struct Pallet<T>(PhantomData<T>);
+/// 	pub struct Pallet<T>(_);
 ///
 /// 	// Implement the pallet hooks.
 /// 	#[pallet::hooks]
@@ -1908,7 +1921,7 @@ pub mod pallet_prelude {
 /// 		#[pallet::generate_store($visibility_of_trait_store trait Store)]
 /// 		// NOTE: if the visibility of trait store is private but you want to make it available
 /// 		// in super, then use `pub(super)` or `pub(crate)` to make it available in crate.
-/// 		pub struct Pallet<T>(PhantomData<T>);
+/// 		pub struct Pallet<T>(_);
 /// 		// pub struct Pallet<T, I = ()>(PhantomData<T>); // for instantiable pallet
 /// 	}
 /// 	```

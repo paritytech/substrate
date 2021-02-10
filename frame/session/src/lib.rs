@@ -258,10 +258,8 @@ pub trait SessionHandler<ValidatorId> {
 }
 
 #[impl_trait_for_tuples::impl_for_tuples(1, 30)]
-#[tuple_types_no_default_trait_bound]
+#[tuple_types_custom_trait_bound(OneSessionHandler<AId>)]
 impl<AId> SessionHandler<AId> for Tuple {
-	for_tuples!( where #( Tuple: OneSessionHandler<AId> )* );
-
 	for_tuples!(
 		const KEY_TYPE_IDS: &'static [KeyTypeId] = &[ #( <Tuple::Key as RuntimeAppPublic>::ID ),* ];
 	);
