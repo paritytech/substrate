@@ -62,11 +62,11 @@ impl<B: BlockT> Verifier<B> for ManualSealVerifier {
 		&mut self,
 		origin: BlockOrigin,
 		header: B::Header,
-		justification: Option<Justifications>,
+		justifications: Option<Justifications>,
 		body: Option<Vec<B::Extrinsic>>,
 	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		let mut import_params = BlockImportParams::new(origin, header);
-		import_params.justification = justification;
+		import_params.justifications = justifications;
 		import_params.body = body;
 		import_params.finalized = false;
 		import_params.fork_choice = Some(ForkChoiceStrategy::LongestChain);

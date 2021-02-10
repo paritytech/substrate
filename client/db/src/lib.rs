@@ -364,7 +364,7 @@ pub(crate) mod columns {
 
 struct PendingBlock<Block: BlockT> {
 	header: Block::Header,
-	justification: Option<Justifications>,
+	justifications: Option<Justifications>,
 	body: Option<Vec<Block::Extrinsic>>,
 	leaf_state: NewBlockState,
 }
@@ -713,7 +713,7 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 		&mut self,
 		header: Block::Header,
 		body: Option<Vec<Block::Extrinsic>>,
-		justification: Option<Justifications>,
+		justifications: Option<Justifications>,
 		leaf_state: NewBlockState,
 	) -> ClientResult<()> {
 		assert!(self.pending_block.is_none(), "Only one block per operation is allowed");
@@ -723,7 +723,7 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 		self.pending_block = Some(PendingBlock {
 			header,
 			body,
-			justification,
+			justifications,
 			leaf_state,
 		});
 		Ok(())
@@ -808,9 +808,9 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 	fn mark_finalized(
 		&mut self,
 		block: BlockId<Block>,
-		justification: Option<Justifications>,
+		justifications: Option<Justifications>,
 	) -> ClientResult<()> {
-		self.finalized_blocks.push((block, justification));
+		self.finalized_blocks.push((block, justifications));
 		Ok(())
 	}
 
@@ -1108,7 +1108,7 @@ impl<Block: BlockT> Backend<Block> {
 		hash: &Block::Hash,
 		header: &Block::Header,
 		last_finalized: Option<Block::Hash>,
-		justification: Option<Justifications>,
+		justifications: Option<Justifications>,
 		changes_trie_cache_ops: &mut Option<DbChangesTrieStorageTransaction<Block>>,
 		finalization_displaced: &mut Option<FinalizationDisplaced<Block::Hash, NumberFor<Block>>>,
 	) -> ClientResult<(Block::Hash, <Block::Header as HeaderT>::Number, bool, bool)> {
@@ -1125,11 +1125,11 @@ impl<Block: BlockT> Backend<Block> {
 			finalization_displaced,
 		)?;
 
-		if let Some(justification) = justification {
+		if let Some(justifications) = justifications {
 			transaction.set_from_vec(
 				columns::JUSTIFICATION,
 				&utils::number_and_hash_to_lookup_key(number, hash)?,
-				justification.encode(),
+				justifications.encode(),
 			);
 		}
 		Ok((*hash, number, false, true))
@@ -1238,7 +1238,7 @@ impl<Block: BlockT> Backend<Block> {
 					},
 				}
 			}
-			if let Some(justification) = pending_block.justification {
+			if let Some(justification) = pending_block.justifications {
 				transaction.set_from_vec(columns::JUSTIFICATION, &lookup_key, justification.encode());
 			}
 
@@ -1642,7 +1642,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	fn finalize_block(
 		&self,
 		block: BlockId<Block>,
-		justification: Option<Justifications>,
+		justifications: Option<Justifications>,
 	) -> ClientResult<()> {
 		let mut transaction = Transaction::new();
 		let hash = self.blockchain.expect_block_hash_from_id(&block)?;
@@ -1655,7 +1655,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			&hash,
 			&header,
 			None,
-			justification,
+			justifications,
 			&mut changes_trie_cache_ops,
 			&mut displaced,
 		)?;

@@ -108,7 +108,7 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 		&mut self,
 		origin: BlockOrigin,
 		header: B::Header,
-		justification: Option<Justifications>,
+		justifications: Option<Justifications>,
 		body: Option<Vec<B::Extrinsic>>
 	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		let maybe_keys = header.digest()
@@ -119,7 +119,7 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 		let mut import = BlockImportParams::new(origin, header);
 		import.body = body;
 		import.finalized = self.finalized;
-		import.justification = justification;
+		import.justifications = justifications;
 		import.fork_choice = Some(self.fork_choice.clone());
 
 		Ok((import, maybe_keys))
@@ -576,11 +576,11 @@ impl<B: BlockT> Verifier<B> for VerifierAdapter<B> {
 		&mut self,
 		origin: BlockOrigin,
 		header: B::Header,
-		justification: Option<Justifications>,
+		justifications: Option<Justifications>,
 		body: Option<Vec<B::Extrinsic>>
 	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		let hash = header.hash();
-		self.verifier.lock().verify(origin, header, justification, body).map_err(|e| {
+		self.verifier.lock().verify(origin, header, justifications, body).map_err(|e| {
 			self.failed_verifications.lock().insert(hash, e.clone());
 			e
 		})

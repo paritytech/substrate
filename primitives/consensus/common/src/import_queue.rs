@@ -90,7 +90,7 @@ pub trait Verifier<B: BlockT>: Send + Sync {
 		&mut self,
 		origin: BlockOrigin,
 		header: B::Header,
-		justification: Option<Justifications>,
+		justifications: Option<Justifications>,
 		body: Option<Vec<B::Extrinsic>>,
 	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String>;
 }
@@ -108,7 +108,7 @@ pub trait ImportQueue<B: BlockT>: Send {
 		who: Origin,
 		hash: B::Hash,
 		number: NumberFor<B>,
-		justification: Justifications
+		justifications: Justifications
 	);
 	/// Polls for actions to perform on the network.
 	///

@@ -164,7 +164,7 @@ impl<Block: BlockT> Blockchain<Block> {
 		&self,
 		hash: Block::Hash,
 		header: <Block as BlockT>::Header,
-		justification: Option<Justifications>,
+		justifications: Option<Justifications>,
 		body: Option<Vec<<Block as BlockT>::Extrinsic>>,
 		new_state: NewBlockState,
 	) -> sp_blockchain::Result<()> {
@@ -176,7 +176,7 @@ impl<Block: BlockT> Blockchain<Block> {
 		{
 			let mut storage = self.storage.write();
 			storage.leaves.import(hash.clone(), number.clone(), header.parent_hash().clone());
-			storage.blocks.insert(hash.clone(), StoredBlock::new(header, body, justification));
+			storage.blocks.insert(hash.clone(), StoredBlock::new(header, body, justifications));
 
 			if let NewBlockState::Final = new_state {
 				storage.finalized_hash = hash;
@@ -272,7 +272,7 @@ impl<Block: BlockT> Blockchain<Block> {
 		Ok(())
 	}
 
-	fn finalize_header(&self, id: BlockId<Block>, justification: Option<Justifications>) -> sp_blockchain::Result<()> {
+	fn finalize_header(&self, id: BlockId<Block>, justifications: Option<Justifications>) -> sp_blockchain::Result<()> {
 		let hash = match self.header(id)? {
 			Some(h) => h.hash(),
 			None => return Err(sp_blockchain::Error::UnknownBlock(format!("{}", id))),
@@ -281,15 +281,15 @@ impl<Block: BlockT> Blockchain<Block> {
 		let mut storage = self.storage.write();
 		storage.finalized_hash = hash;
 
-		if justification.is_some() {
+		if justifications.is_some() {
 			let block = storage.blocks.get_mut(&hash)
 				.expect("hash was fetched from a block in the db; qed");
 
-			let block_justification = match block {
+			let block_justifications = match block {
 				StoredBlock::Header(_, ref mut j) | StoredBlock::Full(_, ref mut j) => j
 			};
 
-			*block_justification = justification;
+			*block_justifications = justifications;
 		}
 
 		Ok(())
@@ -534,12 +534,12 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 		&mut self,
 		header: <Block as BlockT>::Header,
 		body: Option<Vec<<Block as BlockT>::Extrinsic>>,
-		justification: Option<Justifications>,
+		justifications: Option<Justifications>,
 		state: NewBlockState,
 	) -> sp_blockchain::Result<()> {
 		assert!(self.pending_block.is_none(), "Only one block per operation is allowed");
 		self.pending_block = Some(PendingBlock {
-			block: StoredBlock::new(header, body, justification),
+			block: StoredBlock::new(header, body, justifications),
 			state,
 		});
 		Ok(())
@@ -602,9 +602,9 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 	fn mark_finalized(
 		&mut self,
 		block: BlockId<Block>,
-		justification: Option<Justifications>,
+		justifications: Option<Justifications>,
 	) -> sp_blockchain::Result<()> {
-		self.finalized_blocks.push((block, justification));
+		self.finalized_blocks.push((block, justifications));
 		Ok(())
 	}
 
@@ -720,9 +720,9 @@ impl<Block: BlockT> backend::Backend<Block> for Backend<Block> where Block::Hash
 	fn finalize_block(
 		&self,
 		block: BlockId<Block>,
-		justification: Option<Justifications>,
+		justifications: Option<Justifications>,
 	) -> sp_blockchain::Result<()> {
-		self.blockchain.finalize_header(block, justification)
+		self.blockchain.finalize_header(block, justifications)
 	}
 
 	fn append_justification(

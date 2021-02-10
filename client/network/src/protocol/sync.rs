@@ -425,7 +425,7 @@ pub enum OnBlockJustification<B: BlockT> {
 		peer: PeerId,
 		hash: B::Hash,
 		number: NumberFor<B>,
-		justification: Justifications
+		justifications: Justifications
 	}
 }
 
@@ -1040,7 +1040,7 @@ impl<B: BlockT> ChainSync<B> {
 			};
 
 			if let Some((peer, hash, number, j)) = self.extra_justifications.on_response(who, justification) {
-				return Ok(OnBlockJustification::Import { peer, hash, number, justification: j })
+				return Ok(OnBlockJustification::Import { peer, hash, number, justifications: j })
 			}
 		}
 

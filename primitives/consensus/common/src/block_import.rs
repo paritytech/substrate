@@ -129,7 +129,7 @@ pub struct BlockImportParams<Block: BlockT, Transaction> {
 	/// post-runtime digests are pushed back on after.
 	pub header: Block::Header,
 	/// Justification provided for this block from the outside.
-	pub justification: Option<Justifications>,
+	pub justifications: Option<Justifications>,
 	/// Digest items that have been added after the runtime for external
 	/// work, like a consensus signature.
 	pub post_digests: Vec<DigestItemFor<Block>>,
@@ -174,7 +174,7 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 	) -> Self {
 		Self {
 			origin, header,
-			justification: None,
+			justifications: None,
 			post_digests: Vec::new(),
 			body: None,
 			storage_changes: None,
@@ -214,7 +214,7 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 		BlockImportParams {
 			origin: self.origin,
 			header: self.header,
-			justification: self.justification,
+			justifications: self.justifications,
 			post_digests: self.post_digests,
 			body: self.body,
 			storage_changes: None,
@@ -340,6 +340,6 @@ pub trait JustificationImport<B: BlockT> {
 		&mut self,
 		hash: B::Hash,
 		number: NumberFor<B>,
-		justification: Justifications,
+		justifications: Justifications,
 	) -> Result<(), Self::Error>;
 }

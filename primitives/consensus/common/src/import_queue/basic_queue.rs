@@ -117,10 +117,10 @@ impl<B: BlockT, Transaction: Send> ImportQueue<B> for BasicQueue<B, Transaction>
 		who: Origin,
 		hash: B::Hash,
 		number: NumberFor<B>,
-		justification: Justifications,
+		justifications: Justifications,
 	) {
 		let res = self.justification_sender.unbounded_send(
-			worker_messages::ImportJustification(who, hash, number, justification),
+			worker_messages::ImportJustification(who, hash, number, justifications),
 		);
 
 		if res.is_err() {
@@ -265,11 +265,11 @@ impl<B: BlockT> BlockImportWorker<B> {
 		who: Origin,
 		hash: B::Hash,
 		number: NumberFor<B>,
-		justification: Justifications
+		justifications: Justifications
 	) {
 		let started = wasm_timer::Instant::now();
 		let success = self.justification_import.as_mut().map(|justification_import| {
-			justification_import.import_justification(hash, number, justification)
+			justification_import.import_justification(hash, number, justifications)
 				.map_err(|e| {
 					debug!(
 						target: "sync",

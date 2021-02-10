@@ -148,7 +148,7 @@ pub trait BlockImportOperation<Block: BlockT> {
 		&mut self,
 		header: Block::Header,
 		body: Option<Vec<Block::Extrinsic>>,
-		justification: Option<Justifications>,
+		justifications: Option<Justifications>,
 		state: NewBlockState,
 	) -> sp_blockchain::Result<()>;
 
@@ -195,7 +195,7 @@ pub trait BlockImportOperation<Block: BlockT> {
 	fn mark_finalized(
 		&mut self,
 		id: BlockId<Block>,
-		justification: Option<Justifications>,
+		justifications: Option<Justifications>,
 	) -> sp_blockchain::Result<()>;
 
 	/// Mark a block as new head. If both block import and set head are specified, set head
@@ -428,7 +428,7 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	fn finalize_block(
 		&self,
 		block: BlockId<Block>,
-		justification: Option<Justifications>,
+		justifications: Option<Justifications>,
 	) -> sp_blockchain::Result<()>;
 
 	/// Append justification to the block with the given Id.

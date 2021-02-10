@@ -112,5 +112,5 @@ pub struct SignedBlock<Block> {
 	/// Full block.
 	pub block: Block,
 	/// Block justification.
-	pub justification: Option<Justifications>,
+	pub justifications: Option<Justifications>,
 }

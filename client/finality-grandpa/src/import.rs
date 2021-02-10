@@ -128,14 +128,14 @@ impl<BE, Block: BlockT, Client, SC> JustificationImport<Block>
 		&mut self,
 		hash: Block::Hash,
 		number: NumberFor<Block>,
-		justification: Justifications,
+		justifications: Justifications,
 	) -> Result<(), Self::Error> {
 		// this justification was requested by the sync service, therefore we
 		// are not sure if it should enact a change or not. it could have been a
 		// request made as part of initial sync but that means the justification
 		// wasn't part of the block and was requested asynchronously, probably
 		// makes sense to log in that case.
-		GrandpaBlockImport::import_justification(self, hash, number, justification, false, false)
+		GrandpaBlockImport::import_justification(self, hash, number, justifications, false, false)
 	}
 }
 
@@ -435,7 +435,7 @@ impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
 		let pending_changes = self.make_authorities_changes(&mut block, hash, initial_sync)?;
 
 		// we don't want to finalize on `inner.import_block`
-		let mut justification = block.justification.take();
+		let mut justifications = block.justifications.take();
 		let import_result = (&*self.inner).import_block(block, new_cache);
 
 		let mut imported_aux = {
@@ -497,17 +497,17 @@ impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
 				// need to apply first, drop any justification that might have been provided with
 				// the block to make sure we request them from `sync` which will ensure they'll be
 				// applied in-order.
-				justification.take();
+				justifications.take();
 			},
 			_ => {},
 		}
 
-		match justification {
-			Some(justification) => {
+		match justifications {
+			Some(justifications) => {
 				let import_res = self.import_justification(
 					hash,
 					number,
-					justification,
+					justifications,
 					needs_justification,
 					initial_sync,
 				);
@@ -615,18 +615,18 @@ where
 		&mut self,
 		hash: Block::Hash,
 		number: NumberFor<Block>,
-		justification: Justifications,
+		justifications: Justifications,
 		enacts_change: bool,
 		initial_sync: bool,
 	) -> Result<(), ConsensusError> {
-		if justification.0.iter().filter(|j| j.0 == GRANDPA_ENGINE_ID).count() > 1 {
+		if justifications.0.iter().filter(|j| j.0 == GRANDPA_ENGINE_ID).count() > 1 {
 			return Err(ConsensusError::ClientImport(
 				"Received multiple GRANDPA Justifications for the same block.".into(),
 			));
 		}
 
 		let grandpa_justification =
-			match justification.0.into_iter().find(|j| j.0 == GRANDPA_ENGINE_ID) {
+			match justifications.0.into_iter().find(|j| j.0 == GRANDPA_ENGINE_ID) {
 				Some((_, grandpa_justification)) => grandpa_justification,
 				None => {
 					return Err(ConsensusError::ClientImport(
