@@ -772,7 +772,7 @@ fn deposit_event<T: Config>(
 mod tests {
 	use super::*;
 	use crate::{
-		gas::GasMeter, tests::{ExtBuilder, Test, MetaEvent},
+		gas::GasMeter, tests::{ExtBuilder, Test, Event as MetaEvent},
 		gas::Gas,
 		storage::Storage,
 		tests::{
@@ -797,7 +797,7 @@ mod tests {
 		<frame_system::Module<Test>>::events()
 			.into_iter()
 			.filter_map(|meta| match meta.event {
-				MetaEvent::contracts(contract_event) => Some(contract_event),
+				MetaEvent::pallet_contracts(contract_event) => Some(contract_event),
 				_ => None,
 			})
 			.collect()
