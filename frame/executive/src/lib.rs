@@ -186,25 +186,23 @@ where
 }
 
 impl<
-	System: frame_system::Config,
-	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
-	Context: Default,
-	UnsignedValidator,
-	AllModules:
-		OnRuntimeUpgrade +
-		OnInitialize<System::BlockNumber> +
-		OnFinalize<System::BlockNumber> +
-		OffchainWorker<System::BlockNumber>,
-	COnRuntimeUpgrade: OnRuntimeUpgrade,
-> Executive<System, Block, Context, UnsignedValidator, AllModules, COnRuntimeUpgrade>
+		System: frame_system::Config,
+		Block: traits::Block<Header = System::Header, Hash = System::Hash>,
+		Context: Default,
+		UnsignedValidator,
+		AllModules: OnRuntimeUpgrade
+			+ OnInitialize<System::BlockNumber>
+			+ OnFinalize<System::BlockNumber>
+			+ OffchainWorker<System::BlockNumber>,
+		COnRuntimeUpgrade: OnRuntimeUpgrade,
+	> Executive<System, Block, Context, UnsignedValidator, AllModules, COnRuntimeUpgrade>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
-	CheckedOf<Block::Extrinsic, Context>:
-		Applyable +
-		GetDispatchInfo,
-	CallOf<Block::Extrinsic, Context>: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>,
+	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
+	CallOf<Block::Extrinsic, Context>:
+		Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
-	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
+	UnsignedValidator: ValidateUnsigned<Call = CallOf<Block::Extrinsic, Context>>,
 {
 	/// Execute all `OnRuntimeUpgrade` of this runtime, and return the aggregate weight.
 	pub fn do_on_runtime_upgrade() -> frame_support::weights::Weight {
@@ -221,12 +219,13 @@ where
 	/// Execute all `OnRuntimeUpgrade` of this runtime, including the pre and post migration checks.
 	///
 	/// This should only be used for testing.
+	#[cfg(feature = "runtime-upgrade-dry-run")]
 	pub fn dry_run_runtime_upgrade() -> frame_support::weights::Weight {
 		<
 			(frame_system::Module::<System>, COnRuntimeUpgrade, AllModules)
 			as
 			OnRuntimeUpgrade
-		>::pre_migration().expect("pre-migration hook failed.");
+		>::pre_upgrade().expect("pre_upgrade hook failed.");
 
 		let weight = Self::do_on_runtime_upgrade();
 
@@ -234,7 +233,7 @@ where
 			(frame_system::Module::<System>, COnRuntimeUpgrade, AllModules)
 			as
 			OnRuntimeUpgrade
-		>::post_migration().expect("post-migration hook failed.");
+		>::post_upgrade().expect("post_upgrade hook failed.");
 
 		weight
 	}

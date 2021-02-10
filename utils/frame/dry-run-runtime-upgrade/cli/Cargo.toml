@@ -1,13 +1,21 @@
 [package]
 name = "dry-run-runtime-upgrade-cli"
-version = "2.0.0"
-authors = ["kianenigma <kian.peymani@gmail.com>"]
+version = "2.0.1"
+authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
+license = "Apache-2.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+description = "Cli command for dry-running a runtime upgrade"
+readme = "README.md"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+log = "0.4.8"
+parity-scale-codec = { version = "2.0.0" }
+
 sc-service = { version = "0.8.0", default-features = false, path = "../../../../client/service" }
 sc-cli = { version = "0.8.0", path = "../../../../client/cli" }
 sc-executor = { path = "../../../../client/executor" }
@@ -19,6 +27,6 @@ sp-blockchain = { version = "2.0.1", path = "../../../../primitives/blockchain" 
 sp-runtime = { version = "2.0.1", path = "../../../../primitives/runtime" }
 sp-externalities = { path = "../../../../primitives/externalities" }
 sp-core = { path = "../../../../primitives/core" }
+frame-dry-run-runtime-upgrade = { path = "../../../../frame/dry-run-runtime-upgrade" }
 
-dry-run-runtime-upgrade-api = { path = "../api" }
 remote-externalities = { path = "../remote-externalities" }

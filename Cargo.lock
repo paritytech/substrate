@@ -1354,17 +1354,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
 
 [[package]]
-name = "dry-run-runtime-upgrade-api"
-version = "0.1.0"
-dependencies = [
- "sp-api",
-]
-
-[[package]]
 name = "dry-run-runtime-upgrade-cli"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
- "dry-run-runtime-upgrade-api",
+ "frame-dry-run-runtime-upgrade",
+ "log",
+ "parity-scale-codec",
  "remote-externalities",
  "sc-cli",
  "sc-client-api",
@@ -1715,6 +1710,16 @@ dependencies = [
  "sp-runtime",
  "sp-state-machine",
  "structopt",
+]
+
+[[package]]
+name = "frame-dry-run-runtime-upgrade"
+version = "2.0.1"
+dependencies = [
+ "frame-support",
+ "parity-scale-codec",
+ "sp-api",
+ "sp-std",
 ]
 
 [[package]]
@@ -4095,8 +4100,8 @@ dependencies = [
 name = "node-runtime"
 version = "2.0.1"
 dependencies = [
- "dry-run-runtime-upgrade-api",
  "frame-benchmarking",
+ "frame-dry-run-runtime-upgrade",
  "frame-executive",
  "frame-support",
  "frame-system",
@@ -6387,7 +6392,7 @@ dependencies = [
 
 [[package]]
 name = "remote-externalities"
-version = "0.1.0"
+version = "2.0.1"
 dependencies = [
  "async-std",
  "bincode",

@@ -339,7 +339,6 @@ impl Builder {
 
 	async fn init_remote_client(&mut self) {
 		self.as_online_mut().at = Some(self.rpc_get_head().await);
-		// TODO: set the at.
 		self.chain = self.chain_name().await;
 	}
 

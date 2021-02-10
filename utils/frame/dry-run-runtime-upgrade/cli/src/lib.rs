@@ -15,6 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use parity_scale_codec::{Decode, Encode};
 use std::{fmt::Debug, str::FromStr};
 use sc_service::Configuration;
 use sc_cli::{CliConfiguration, ExecutionStrategy};
@@ -23,9 +24,10 @@ use sp_state_machine::StateMachine;
 use sc_service::NativeExecutionDispatch;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use sp_core::storage::{StorageData, StorageKey, well_known_keys};
+use frame_dry_run_runtime_upgrade::Target;
 
 #[derive(Debug, structopt::StructOpt)]
-pub struct DryRunCmd {
+pub struct DryRunRuntimeUpgradeCmd {
 	/// The shared parameters
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -35,30 +37,12 @@ pub struct DryRunCmd {
 	#[structopt(short, long, default_value = "All")]
 	pub target: Target,
 
-	/// The state to use to run the migration. It should be a ":" separated string, where the
-	/// prefix is either `live` or `snap`, and the postfix is either the HTTP uri or the file path,
-	/// respectively.
-	#[structopt(short, long, default_value = "live:http://localhost:9933")]
+	/// The state to use to run the migration. Should be a valid FILE or HTTP URI.
+	#[structopt(short, long, default_value = "http://localhost:9933")]
 	pub state: State,
 }
 
-/// Possible targets for dryrun runtime upgrade.
-#[derive(Debug)]
-pub enum Target {
-	/// All pallets.
-	All,
-	/// A single pallet.
-	Pallet(String),
-}
-
-impl FromStr for Target {
-	type Err = &'static str;
-	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		Ok(if s.to_lowercase() == "All" { Target::All } else { Target::Pallet(s.to_string()) })
-	}
-}
-
-/// The state to use for a migration dryrun.
+/// The state to use for a migration dry-run.
 #[derive(Debug)]
 pub enum State {
 	/// A snapshot. Inner value is file path.
@@ -71,21 +55,21 @@ pub enum State {
 impl FromStr for State {
 	type Err = &'static str;
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		let splitted = s.splitn(2, ":").collect::<Vec<_>>();
-		if splitted.len() != 2 {
-			return Err("invalid format. Must be [state_type]:[state_value].");
-		}
-		let state_type = splitted[0];
-		let value = splitted[1];
-		match state_type {
-			"live" => Ok(State::Live(value.to_string())),
-			"snap" => Ok(State::Snap(value.to_string())),
-			_ => Err("Invalid state type."),
+		match s.get(..7) {
+			// could use Url crate as well, but lets keep it simple for now.
+			Some("http://") => Ok(State::Live(s.to_string())),
+			Some("file://") => s
+				.split("//")
+				.collect::<Vec<_>>()
+				.get(1)
+				.map(|s| State::Snap(s.to_string()))
+				.ok_or("invalid file URI"),
+			_ => Err("invalid format. Must be a valid HTTP or File URI"),
 		}
 	}
 }
 
-impl DryRunCmd {
+impl DryRunRuntimeUpgradeCmd {
 	pub async fn run<B, ExecDispatch>(&self, config: Configuration) -> sc_cli::Result<()>
 	where
 		B: BlockT,
@@ -106,13 +90,13 @@ impl DryRunCmd {
 
 		let ext = remote_externalities::Builder::new().inject(&[(code_key, code)]).build().await;
 
-		let raw_result = StateMachine::<_, _, NumberFor<B>, _>::new(
+		let consumed_weight = StateMachine::<_, _, NumberFor<B>, _>::new(
 			&ext.backend,
 			None,
 			&mut changes,
 			&executor,
 			"DryRunRuntimeUpgrade_dry_run_runtime_upgrade",
-			&[],
+			&self.target.encode(),
 			ext.extensions,
 			&sp_state_machine::backend::BackendRuntimeCode::new(&ext.backend)
 				.runtime_code()
@@ -122,11 +106,17 @@ impl DryRunCmd {
 		.execute(strategy.into())
 		.unwrap();
 
+		let weight = <u64 as Decode>::decode(&mut &*consumed_weight).unwrap();
+		log::info!(
+			"dry-run-runtime-upgraded executed without errors. Consumed weight = {}",
+			weight,
+		);
+
 		Ok(())
 	}
 }
 
-impl CliConfiguration for DryRunCmd {
+impl CliConfiguration for DryRunRuntimeUpgradeCmd {
 	fn shared_params(&self) -> &sc_cli::SharedParams {
 		&self.shared_params
 	}

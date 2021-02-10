@@ -47,8 +47,10 @@ pub enum Subcommand {
 	#[structopt(name = "benchmark", about = "Benchmark runtime pallets.")]
 	Benchmark(frame_benchmarking_cli::BenchmarkCmd),
 
-	/// DryRun all of the runtime upgrade hooks in the current runtime upon a configurable state.
-	DryRunRuntimeUpgrade(dry_run_runtime_upgrade_cli::DryRunCmd),
+	/// Dry-run all of the runtime upgrade hooks in the current runtime upon a configurable state.
+	///
+	/// The state is independent of the current chain and can be fetched remotely.
+	DryRunRuntimeUpgrade(dry_run_runtime_upgrade_cli::DryRunRuntimeUpgradeCmd),
 
 	/// Verify a signature for a message, provided on STDIN, with a given (public or secret) key.
 	Verify(VerifyCmd),

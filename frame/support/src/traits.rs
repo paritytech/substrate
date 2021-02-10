@@ -1560,7 +1560,8 @@ pub trait OnRuntimeUpgrade {
 	///
 	/// These hooks are never meant to be executed on-chain, instead only be used by 3rd party tools
 	/// for testing.
-	fn pre_migration() -> Result<(), &'static str> {
+	#[cfg(feature = "runtime-upgrade-dry-run")]
+	fn pre_upgrade() -> Result<(), &'static str> {
 		Ok(())
 	}
 
@@ -1568,7 +1569,8 @@ pub trait OnRuntimeUpgrade {
 	///
 	/// These hooks are never meant to be executed on-chain, instead only be used by 3rd party tools
 	/// for testing.
-	fn post_migration() -> Result<(), &'static str> {
+	#[cfg(feature = "runtime-upgrade-dry-run")]
+	fn post_upgrade() -> Result<(), &'static str> {
 		Ok(())
 	}
 }
@@ -1581,15 +1583,17 @@ impl OnRuntimeUpgrade for Tuple {
 		weight
 	}
 
-	fn pre_migration() -> Result<(), &'static str> {
+	#[cfg(feature = "runtime-upgrade-dry-run")]
+	fn pre_upgrade() -> Result<(), &'static str> {
 		let mut result = Ok(());
-		for_tuples!( #( result = result.and(Tuple::pre_migration()); )* );
+		for_tuples!( #( result = result.and(Tuple::pre_upgrade()); )* );
 		result
 	}
 
-	fn post_migration() -> Result<(), &'static str> {
+	#[cfg(feature = "runtime-upgrade-dry-run")]
+	fn post_upgrade() -> Result<(), &'static str> {
 		let mut result = Ok(());
-		for_tuples!( #( result = result.and(Tuple::post_migration()); )* );
+		for_tuples!( #( result = result.and(Tuple::post_upgrade()); )* );
 		result
 	}
 }

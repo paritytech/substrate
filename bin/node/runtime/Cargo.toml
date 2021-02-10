@@ -83,9 +83,7 @@ pallet-transaction-payment = { version = "2.0.0", default-features = false, path
 pallet-transaction-payment-rpc-runtime-api = { version = "2.0.0", default-features = false, path = "../../../frame/transaction-payment/rpc/runtime-api/" }
 pallet-vesting = { version = "2.0.0", default-features = false, path = "../../../frame/vesting" }
 
-dry-run-runtime-upgrade-api = { default-features = false, path = "../../../utils/frame/dry-run-runtime-upgrade/api" }
-# TODO: probably best to put this in some primitive pallet, among with types that need to be passed
-# back and forth.
+frame-dry-run-runtime-upgrade = { default-features = false, path = "../../../frame/dry-run-runtime-upgrade" }
 
 [build-dependencies]
 substrate-wasm-builder = { version = "3.0.0", path = "../../../utils/wasm-builder" }
@@ -155,7 +153,7 @@ std = [
 	"pallet-society/std",
 	"pallet-recovery/std",
 	"pallet-vesting/std",
-	"dry-run-runtime-upgrade-api/std",
+	"frame-dry-run-runtime-upgrade/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking",
