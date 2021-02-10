@@ -32,7 +32,8 @@ use sc_client_api::blockchain::HeaderBackend;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header, NumberFor, One, Zero};
 
-type VotingRuleResult<Block> =
+/// A future returned by a `VotingRule` to restrict a given vote, if any restriction is necessary.
+pub type VotingRuleResult<Block> =
 	Pin<Box<dyn Future<Output = Option<(<Block as BlockT>::Hash, NumberFor<Block>)>> + Send + Sync>>;
 
 /// A trait for custom voting rules in GRANDPA.
