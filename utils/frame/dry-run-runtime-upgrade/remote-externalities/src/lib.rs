@@ -166,7 +166,8 @@ pub enum Mode {
 /// A cache config must be present.
 #[derive(Clone)]
 pub struct OfflineConfig {
-	cache: CacheConfig,
+	/// The configuration of the cache file to use. It must be present.
+	pub cache: CacheConfig,
 }
 
 /// Configuration of the online execution.
@@ -174,10 +175,14 @@ pub struct OfflineConfig {
 /// A cache config may be present and will be written to in that case.
 #[derive(Clone)]
 pub struct OnlineConfig {
-	uri: String,
-	at: Option<Hash>,
-	cache: Option<CacheConfig>,
-	modules: Vec<String>,
+	/// The HTTP uri to use.
+	pub uri: String,
+	/// The block number at which to connect. Will be latest finalized head if not provided.
+	pub at: Option<Hash>,
+	/// An optional cache file to WRITE to, not for reading. Not cached if set to `None`.
+	pub cache: Option<CacheConfig>,
+	/// The modules to scrape. If empty, entire chain state will be scraped.
+	pub modules: Vec<String>,
 }
 
 impl Default for OnlineConfig {
@@ -194,8 +199,12 @@ impl Default for OnlineConfig {
 /// Configuration of the cache.
 #[derive(Clone)]
 pub struct CacheConfig {
-	name: String,
-	directory: String,
+	// TODO: I could mix these two into one filed, but I think separate is better bc one can be
+	// configurable while one not.
+	/// File name.
+	pub name: String,
+	/// Base directory.
+	pub directory: String,
 }
 
 impl Default for CacheConfig {
@@ -355,6 +364,11 @@ impl Builder {
 			}
 		};
 
+		info!(
+			target: LOG_TARGET,
+			"extending externalities with {} manually injected keys",
+			self.inject.len()
+		);
 		base_kv.extend(self.inject.clone());
 		base_kv
 	}
@@ -389,7 +403,6 @@ impl Builder {
 		info!(target: LOG_TARGET, "injecting a total of {} keys", kv.len());
 		for (k, v) in kv {
 			let (k, v) = (k.0, v.0);
-			trace!(target: LOG_TARGET, "injecting {:?} -> {:?}", k.hex_display(), v.hex_display());
 			ext.insert(k, v);
 		}
 		ext

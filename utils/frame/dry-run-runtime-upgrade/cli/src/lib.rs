@@ -88,7 +88,20 @@ impl DryRunRuntimeUpgradeCmd {
 		let heap_pages = Some(1024);
 		let executor = NativeExecutor::<ExecDispatch>::new(wasm_method, heap_pages, 2);
 
-		let ext = remote_externalities::Builder::new().inject(&[(code_key, code)]).build().await;
+		let ext = {
+			use remote_externalities::{Builder, Mode, CacheConfig, OfflineConfig, OnlineConfig};
+			let builder = match &self.state {
+				State::Snap(file_path) => Builder::new().mode(Mode::Offline(OfflineConfig {
+					cache: CacheConfig { name: file_path.into(), ..Default::default() },
+				})),
+				State::Live(http_uri) => Builder::new().mode(Mode::Online(OnlineConfig {
+					uri: http_uri.into(),
+					..Default::default()
+				})),
+			};
+
+			builder.inject(&[(code_key, code)]).build().await
+		};
 
 		let consumed_weight = StateMachine::<_, _, NumberFor<B>, _>::new(
 			&ext.backend,
@@ -105,6 +118,7 @@ impl DryRunRuntimeUpgradeCmd {
 		)
 		.execute(strategy.into())
 		.unwrap();
+		// TODO: if MethodNotFound, then it must be wrong feature.
 
 		let weight = <u64 as Decode>::decode(&mut &*consumed_weight).unwrap();
 		log::info!(

@@ -19,11 +19,11 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::Encode;
+use codec::{Decode, Encode};
 use sp_std::prelude::*;
 
 /// Possible targets for dry-run runtime upgrade.
-#[derive(Debug, Encode)]
+#[derive(Debug, Encode, Decode)]
 pub enum Target {
 	/// All pallets.
 	All,
@@ -35,7 +35,11 @@ pub enum Target {
 impl sp_std::str::FromStr for Target {
 	type Err = &'static str;
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		Ok(if s.to_lowercase() == "All" { Target::All } else { Target::Pallet(s.encode()) })
+		Ok(if s.to_lowercase() == "All" {
+			Target::All
+		} else {
+			Target::Pallet(s.as_bytes().to_vec())
+		})
 	}
 }
 

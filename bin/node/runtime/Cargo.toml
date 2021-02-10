@@ -43,6 +43,7 @@ frame-support = { version = "2.0.0", default-features = false, path = "../../../
 frame-system = { version = "2.0.0", default-features = false, path = "../../../frame/system" }
 frame-system-benchmarking = { version = "2.0.0", default-features = false, path = "../../../frame/system/benchmarking", optional = true }
 frame-system-rpc-runtime-api = { version = "2.0.0", default-features = false, path = "../../../frame/system/rpc/runtime-api/" }
+frame-dry-run-runtime-upgrade = { default-features = false, path = "../../../frame/dry-run-runtime-upgrade", optional = true }
 pallet-assets = { version = "2.0.0", default-features = false, path = "../../../frame/assets" }
 pallet-authority-discovery = { version = "2.0.0", default-features = false, path = "../../../frame/authority-discovery" }
 pallet-authorship = { version = "2.0.0", default-features = false, path = "../../../frame/authorship" }
@@ -82,8 +83,6 @@ pallet-utility = { version = "2.0.0", default-features = false, path = "../../..
 pallet-transaction-payment = { version = "2.0.0", default-features = false, path = "../../../frame/transaction-payment" }
 pallet-transaction-payment-rpc-runtime-api = { version = "2.0.0", default-features = false, path = "../../../frame/transaction-payment/rpc/runtime-api/" }
 pallet-vesting = { version = "2.0.0", default-features = false, path = "../../../frame/vesting" }
-
-frame-dry-run-runtime-upgrade = { default-features = false, path = "../../../frame/dry-run-runtime-upgrade" }
 
 [build-dependencies]
 substrate-wasm-builder = { version = "3.0.0", path = "../../../utils/wasm-builder" }
@@ -188,4 +187,8 @@ runtime-benchmarks = [
 	"pallet-session-benchmarking",
 	"frame-system-benchmarking",
 	"hex-literal",
+]
+runtime-upgrade-dry-run = [
+	"frame-executive/runtime-upgrade-dry-run",
+	"frame-dry-run-runtime-upgrade",
 ]

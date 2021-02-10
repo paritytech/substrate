@@ -163,4 +163,7 @@ runtime-benchmarks = [
 	"node-runtime/runtime-benchmarks",
 	"frame-benchmarking-cli",
 ]
-runtime-upgrade-dry-run = []
+runtime-upgrade-dry-run = [
+	"node-runtime/runtime-upgrade-dry-run",
+	"dry-run-runtime-upgrade-cli",
+]

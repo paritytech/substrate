@@ -47,4 +47,6 @@ std = [
 	"sp-tracing/std",
 	"sp-std/std",
 ]
-runtime-upgrade-dry-run = []
+runtime-upgrade-dry-run = [
+	"frame-support/runtime-upgrade-dry-run"
+]

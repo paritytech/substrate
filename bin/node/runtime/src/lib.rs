@@ -1332,27 +1332,23 @@ impl_runtime_apis! {
 
 	#[cfg(feature = "runtime-upgrade-dry-run")]
 	impl frame_dry_run_runtime_upgrade::DryRunRuntimeUpgrade<Block> for Runtime {
-		fn dry_run_runtime_upgrade(pallet: &str) -> Weight {
+		fn dry_run_runtime_upgrade(target: frame_dry_run_runtime_upgrade::Target) -> Weight {
 			frame_support::debug::RuntimeLogger::init();
-
 			frame_support::debug::info!("!!! DRYRUN MIGRATION UP AHEAD !!!");
-			let weight = Executive::dry_run_runtime_upgrade();
-			frame_support::debug::info!("!!! DRYRUN MIGRATION DONE !!!");
+
+			let weight = match target {
+				frame_dry_run_runtime_upgrade::Target::All => {
+					frame_support::debug::info!("Dru-running all on-runtime-upgrades.");
+					Executive::dry_run_runtime_upgrade()
+				},
+				frame_dry_run_runtime_upgrade::Target::Pallet(name) => {
+					let name = sp_std::str::from_utf8(&name).unwrap();
+					frame_support::debug::info!("Dru-running on-runtime-upgrade of {}", name);
+					todo!();
+				}
+			};
 
 			weight
-
-			// \migration_bot pallet:staking state:polkadot
-			// pseudo code:
-			// match config.pallet {
-			// 	"System" => {
-			// 		<Pallet as OnRuntimeUpgrade>::pre_upgrade();
-			// 		<Pallet as OnRuntimeUpgrade>::on_runtime_upgrade();
-			// 		<Pallet as OnRuntimeUpgrade>::post_upgrade();
-			// 	},
-			// 	"All" => {
-			// 		Executive::dry_run_runtime_upgrade()
-			// 	}
-			// }
 		}
 	}
 
