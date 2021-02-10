@@ -39,7 +39,7 @@ sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
 sp-api = { version = "2.0.0", path = "../../primitives/api" }
 
 [dev-dependencies]
-quickcheck = "0.9.0"
+quickcheck = "1.0.3"
 sp-tracing = { version = "2.0.0", path = "../../primitives/tracing" }
 sc-peerset = { version = "2.0.0", path = "../peerset" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client"}

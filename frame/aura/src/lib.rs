@@ -34,17 +34,10 @@
 //!
 //! - [Timestamp](../pallet_timestamp/index.html): The Timestamp module is used in Aura to track
 //! consensus rounds (via `slots`).
-//!
-//! ## References
-//!
-//! If you're interested in hacking on this module, it is useful to understand the interaction with
-//! `substrate/primitives/inherents/src/lib.rs` and, specifically, the required implementation of
-//! [`ProvideInherent`](../sp_inherents/trait.ProvideInherent.html) and
-//! [`ProvideInherentData`](../sp_inherents/trait.ProvideInherentData.html) to create and check inherents.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::{result, prelude::*};
+use sp_std::prelude::*;
 use codec::{Encode, Decode};
 use frame_support::{Parameter, traits::{Get, FindAuthor, OneSessionHandler}, ConsensusEngineId};
 use sp_runtime::{
@@ -52,14 +45,11 @@ use sp_runtime::{
 	traits::{SaturatedConversion, Saturating, Zero, Member, IsMember}, generic::DigestItem,
 };
 use sp_timestamp::OnTimestampSet;
-use sp_inherents::{InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
-use sp_consensus_aura::{
-	AURA_ENGINE_ID, ConsensusLog, AuthorityIndex, Slot,
-	inherents::{INHERENT_IDENTIFIER, AuraInherentData},
-};
+use sp_consensus_aura::{AURA_ENGINE_ID, ConsensusLog, AuthorityIndex, Slot};
 
 mod mock;
 mod tests;
+pub mod migrations;
 
 pub use pallet::*;
 
@@ -79,7 +69,22 @@ pub mod pallet {
 	pub struct Pallet<T>(sp_std::marker::PhantomData<T>);
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_initialize(_: T::BlockNumber) -> Weight {
+			if let Some(new_slot) = Self::current_slot_from_digests() {
+				let current_slot = CurrentSlot::<T>::get();
+
+				assert!(current_slot < new_slot, "Slot must increase");
+				CurrentSlot::<T>::put(new_slot);
+
+				// TODO [#3398] Generate offence report for all authorities that skipped their slots.
+
+				T::DbWeight::get().reads_writes(2, 1)
+			} else {
+				T::DbWeight::get().reads(1)
+			}
+		}
+	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {}
@@ -89,10 +94,12 @@ pub mod pallet {
 	#[pallet::getter(fn authorities)]
 	pub(super) type Authorities<T: Config> = StorageValue<_, Vec<T::AuthorityId>, ValueQuery>;
 
-	/// The last timestamp we have been notified of.
+	/// The current slot of this block.
+	///
+	/// This will be set in `on_initialize`.
 	#[pallet::storage]
-	#[pallet::getter(fn last_timestamp)]
-	pub(super) type LastTimestamp<T: Config> = StorageValue<_, T::Moment, ValueQuery>;
+	#[pallet::getter(fn current_slot)]
+	pub(super) type CurrentSlot<T: Config> = StorageValue<_, Slot, ValueQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -130,6 +137,19 @@ impl<T: Config> Pallet<T> {
 			assert!(<Authorities<T>>::get().is_empty(), "Authorities are already initialized!");
 			<Authorities<T>>::put(authorities);
 		}
+	}
+
+	/// Get the current slot from the pre-runtime digests.
+	fn current_slot_from_digests() -> Option<Slot> {
+		let digest = frame_system::Pallet::<T>::digest();
+		let pre_runtime_digests = digest.logs.iter().filter_map(|d| d.as_pre_runtime());
+		for (id, mut data) in pre_runtime_digests {
+			if id == AURA_ENGINE_ID {
+				return Slot::decode(&mut data).ok();
+			}
+		}
+
+		None
 	}
 
 	/// Determine the Aura slot-duration based on the Timestamp module configuration.
@@ -224,49 +244,12 @@ impl<T: Config> IsMember<T::AuthorityId> for Pallet<T> {
 
 impl<T: Config> OnTimestampSet<T::Moment> for Pallet<T> {
 	fn on_timestamp_set(moment: T::Moment) {
-		let last = Self::last_timestamp();
-		LastTimestamp::<T>::put(moment);
-
-		if last.is_zero() {
-			return;
-		}
-
 		let slot_duration = Self::slot_duration();
 		assert!(!slot_duration.is_zero(), "Aura slot duration cannot be zero.");
 
-		let last_slot = last / slot_duration;
-		let cur_slot = moment / slot_duration;
+		let timestamp_slot = moment / slot_duration;
+		let timestamp_slot = Slot::from(timestamp_slot.saturated_into::<u64>());
 
-		assert!(last_slot < cur_slot, "Only one block may be authored per slot.");
-
-		// TODO [#3398] Generate offence report for all authorities that skipped their slots.
-	}
-}
-
-impl<T: Config> ProvideInherent for Pallet<T> {
-	type Call = pallet_timestamp::Call<T>;
-	type Error = MakeFatalError<sp_inherents::Error>;
-	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
-
-	fn create_inherent(_: &InherentData) -> Option<Self::Call> {
-		None
-	}
-
-	/// Verify the validity of the inherent using the timestamp.
-	fn check_inherent(call: &Self::Call, data: &InherentData) -> result::Result<(), Self::Error> {
-		let timestamp = match call {
-			pallet_timestamp::Call::set(ref timestamp) => timestamp.clone(),
-			_ => return Ok(()),
-		};
-
-		let timestamp_based_slot = timestamp / Self::slot_duration();
-
-		let seal_slot = u64::from(data.aura_inherent_data()?).saturated_into();
-
-		if timestamp_based_slot == seal_slot {
-			Ok(())
-		} else {
-			Err(sp_inherents::Error::from("timestamp set in block doesn't match slot in seal").into())
-		}
+		assert!(CurrentSlot::<T>::get() == timestamp_slot, "Timestamp slot must match `CurrentSlot`");
 	}
 }
