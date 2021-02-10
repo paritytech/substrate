@@ -866,7 +866,7 @@ fn test_bad_justification() {
 	let block = || {
 		let block = block.clone();
 		let mut import = BlockImportParams::new(BlockOrigin::File, block.header);
-		import.justifications = Some(Justifications(Vec::new()));
+		import.justifications = Some(Justifications::from((GRANDPA_ENGINE_ID, Vec::new())));
 		import.body = Some(block.extrinsics);
 		import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
