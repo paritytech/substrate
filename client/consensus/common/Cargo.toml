@@ -1,6 +1,6 @@
 [package]
 name = "sc-consensus"
-version = "0.8.1"
+version = "0.9.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
@@ -13,7 +13,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sc-client-api = { version = "2.0.0", path = "../../api" }
-sp-blockchain = { version = "2.0.0", path = "../../../primitives/blockchain" }
-sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
-sp-consensus = { version = "0.8.0", path = "../../../primitives/consensus/common" }
+sc-client-api = { version = "3.0.0", path = "../../api" }
+sp-blockchain = { version = "3.0.0", path = "../../../primitives/blockchain" }
+sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
+sp-consensus = { version = "0.9.0", path = "../../../primitives/consensus/common" }
