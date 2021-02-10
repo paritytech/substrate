@@ -1590,8 +1590,7 @@ dependencies = [
 [[package]]
 name = "finality-grandpa"
 version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2cd795898c348a8ec9edc66ec9e014031c764d4c88cc26d09b492cd93eb41339"
+source = "git+https://github.com/paritytech/finality-grandpa.git?branch=andre/async-prevote-construction#399b13f244a973091badf0abd4ee0c56a6daeb4a"
 dependencies = [
  "either",
  "futures 0.3.12",
@@ -7089,6 +7088,7 @@ version = "0.8.1"
 dependencies = [
  "assert_matches",
  "derive_more",
+ "dyn-clone",
  "finality-grandpa",
  "fork-tree",
  "futures 0.3.12",
