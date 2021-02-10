@@ -350,6 +350,11 @@ impl OpaqueLeaf {
 	pub fn from_encoded_leaf(encoded_leaf: Vec<u8>) -> Self {
 		OpaqueLeaf(encoded_leaf)
 	}
+
+	/// Attempt to decode the leaf into expected concrete type.
+	pub fn try_decode<T: codec::Decode>(&self) -> Option<T> {
+		codec::Decode::decode(&mut &*self.0).ok()
+	}
 }
 
 impl FullLeaf for OpaqueLeaf {

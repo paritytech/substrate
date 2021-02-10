@@ -101,16 +101,14 @@ impl<C, B> Mmr<C, B> {
 	}
 }
 
-impl<C, Block, Leaf, MmrHash> MmrApi<<Block as BlockT>::Hash,> for Mmr<C, (Block, Leaf, MmrHash)>
+impl<C, Block, MmrHash> MmrApi<<Block as BlockT>::Hash,> for Mmr<C, (Block, MmrHash)>
 where
 	Block: BlockT,
 	C: Send + Sync + 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
 	C::Api: MmrRuntimeApi<
 		Block,
-		Leaf,
 		MmrHash,
 	>,
-	Leaf: Codec + Send + Sync + 'static,
 	MmrHash: Codec + Send + Sync + 'static,
 {
 	fn generate_proof(
