@@ -1,7 +1,6 @@
 #![cfg(unix)]
 
 use assert_cmd::cargo::cargo_bin;
-use futures::prelude::*;
 use nix::sys::signal::{kill, Signal::SIGINT};
 use nix::unistd::Pid;
 use std::convert::TryInto;
