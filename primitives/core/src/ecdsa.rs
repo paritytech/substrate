@@ -698,7 +698,7 @@ mod test {
 		assert_eq!(k, public);
 		assert_eq!(f, format);
 
-		let format = Ss58AddressFormat::Custom(64);
+		let format = Ss58AddressFormat::Custom(16_383);
 		let s = public.to_ss58check_with_version(format);
 		let (k, f) = Public::from_ss58check_with_version(&s).unwrap();
 		assert_eq!(k, public);
