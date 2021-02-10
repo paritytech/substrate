@@ -1,6 +1,6 @@
 [package]
 name = "sp-timestamp"
-version = "2.0.1"
+version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -13,11 +13,11 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-api = { version = "2.0.0", default-features = false, path = "../api" }
-sp-std = { version = "2.0.0", default-features = false, path = "../std" }
-sp-runtime = { version = "2.0.0", default-features = false, path = "../runtime" }
+sp-api = { version = "3.0.0", default-features = false, path = "../api" }
+sp-std = { version = "3.0.0", default-features = false, path = "../std" }
+sp-runtime = { version = "3.0.0", default-features = false, path = "../runtime" }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-sp-inherents = { version = "2.0.0", default-features = false, path = "../inherents" }
+sp-inherents = { version = "3.0.0", default-features = false, path = "../inherents" }
 impl-trait-for-tuples = "0.2.1"
 wasm-timer = { version = "0.2", optional = true }
 
