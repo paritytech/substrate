@@ -22,6 +22,28 @@
 use codec::{Decode, Encode};
 use sp_std::prelude::*;
 
+#[doc(hidden)]
+pub use frame_support as _support;
+
+/// Helper macro to generate the match expression needed to match pallet name to their
+/// `on_runtime_upgrade()` implementation.
+#[macro_export]
+macro_rules! match_pallet_on_runtime_upgrade {
+	($name:ident, $($pallet:ty),* $(,)*) => {
+		match $name {
+			$(
+				stringify!($pallet) => {
+					<$pallet as $crate::_support::traits::OnRuntimeUpgrade>::pre_upgrade().unwrap();
+					let weight = <$pallet as $crate::_support::traits::OnRuntimeUpgrade>::on_runtime_upgrade();
+					<$pallet as $crate::_support::traits::OnRuntimeUpgrade>::post_upgrade().unwrap();
+					weight
+				},
+			)*
+			_ => panic!("Unknown pallet name provided"),
+		}
+	};
+}
+
 /// Possible targets for dry-run runtime upgrade.
 #[derive(Debug, Encode, Decode)]
 pub enum Target {
@@ -35,7 +57,7 @@ pub enum Target {
 impl sp_std::str::FromStr for Target {
 	type Err = &'static str;
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		Ok(if s.to_lowercase() == "All" {
+		Ok(if s.to_lowercase() == "all" {
 			Target::All
 		} else {
 			Target::Pallet(s.as_bytes().to_vec())
