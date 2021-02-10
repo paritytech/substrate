@@ -580,6 +580,8 @@ ss58_address_format!(
 		(47, "reserved47", "Reserved for future use (47).")
 	HydraDXAccount =>
 		(63, "hydradx", "HydraDX standard account (*25519).")
+	AventusAccount =>
+		(65, "aventus", "Aventus Chain mainnet, standard account (*25519).")
 	CrustAccount =>
 		(66, "crust", "Crust Network, standard account (*25519).")
 );
