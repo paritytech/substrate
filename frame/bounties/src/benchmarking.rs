@@ -136,11 +136,11 @@ fn setup_subbounty<T: Config>(u: u32, d: u32) -> BenchmarkSubBountyConfig::<T> {
 	}
 }
 
-fn create_subbounty_bounty<T: Config>() -> Result<
+fn create_subbounty_bounty<T: Config>(u: u32, d: u32) -> Result<
 	BenchmarkSubBountyConfig::<T>,
 	&'static str
 > {
-	let mut bm_setup = setup_subbounty::<T>(0, MAX_BYTES);
+	let mut bm_setup = setup_subbounty::<T>(u, d);
 	let curator_lookup = T::Lookup::unlookup(bm_setup.curator.clone());
 	Bounties::<T>::propose_bounty(
 		RawOrigin::Signed(bm_setup.caller.clone()).into(),
@@ -167,11 +167,11 @@ fn create_subbounty_bounty<T: Config>() -> Result<
 	Ok(bm_setup)
 }
 
-fn create_subbounty<T: Config>() -> Result<
+fn create_subbounty<T: Config>(u: u32, d: u32) -> Result<
 	BenchmarkSubBountyConfig::<T>,
 	&'static str
 > {
-	let mut bm_setup = create_subbounty_bounty::<T>()?;
+	let mut bm_setup = create_subbounty_bounty::<T>(u, d)?;
 
 	let subcurator_lookup = T::Lookup::unlookup(
 		bm_setup.subcurator.clone()
@@ -332,13 +332,17 @@ benchmarks! {
 	}
 
 	add_subbounty {
+		let d in 0 .. MAX_BYTES;
 		setup_pot_account::<T>();
-		let bm_setup = create_subbounty_bounty::<T>()?;
+
+		let bm_setup = create_subbounty_bounty::<T>(0, d)?;
+
 	}: _(RawOrigin::Signed(bm_setup.curator), bm_setup.bounty_id, bm_setup.subbounty_value, bm_setup.reason)
 
 	propose_subcurator {
 		setup_pot_account::<T>();
-		let mut bm_setup = create_subbounty_bounty::<T>()?;
+
+		let mut bm_setup = create_subbounty_bounty::<T>(0, MAX_BYTES)?;
 
 		let subcurator_lookup = T::Lookup::unlookup(bm_setup.subcurator.clone());
 		Bounties::<T>::add_subbounty(
@@ -352,7 +356,8 @@ benchmarks! {
 
 	unassign_subcurator {
 		setup_pot_account::<T>();
-		let bm_setup = create_subbounty::<T>()?;
+
+		let bm_setup = create_subbounty::<T>(0, MAX_BYTES)?;
 		Bounties::<T>::on_initialize(T::BlockNumber::zero());
 		frame_system::Module::<T>::set_block_number(T::BountyUpdatePeriod::get() + 1u32.into());
 		let caller = whitelisted_caller();
@@ -360,7 +365,8 @@ benchmarks! {
 
 	accept_subcurator {
 		setup_pot_account::<T>();
-		let mut bm_setup = create_subbounty_bounty::<T>()?;
+
+		let mut bm_setup = create_subbounty_bounty::<T>(0, MAX_BYTES)?;
 
 		let subcurator_lookup = T::Lookup::unlookup(bm_setup.subcurator.clone());
 
@@ -384,13 +390,14 @@ benchmarks! {
 
 	award_subbounty {
 		setup_pot_account::<T>();
-		let bm_setup = create_subbounty::<T>()?;
+		let bm_setup = create_subbounty::<T>(0, MAX_BYTES)?;
 		let beneficiary = T::Lookup::unlookup(account("beneficiary", 0, SEED));
 	}: _(RawOrigin::Signed(bm_setup.subcurator), bm_setup.bounty_id, bm_setup.subbounty_id, beneficiary)
 
 	claim_subbounty {
 		setup_pot_account::<T>();
-		let bm_setup = create_subbounty::<T>()?;
+
+		let bm_setup = create_subbounty::<T>(0, MAX_BYTES)?;
 
 		let beneficiary_account: T::AccountId = account("beneficiary", 0, SEED);
 		let beneficiary = T::Lookup::unlookup(beneficiary_account.clone());
@@ -415,33 +422,14 @@ benchmarks! {
 		);
 	}
 
-	close_subbounty_proposed {
+	close_subbounty {
 		setup_pot_account::<T>();
-		let mut bm_setup = create_subbounty_bounty::<T>()?;
-		let subcurator_lookup = T::Lookup::unlookup(bm_setup.subcurator.clone());
-		Bounties::<T>::add_subbounty(
-			RawOrigin::Signed(bm_setup.curator.clone()).into(),
-			bm_setup.bounty_id,
-			bm_setup.subbounty_value,
-			bm_setup.reason.clone(),
-		)?;
-		bm_setup.subbounty_id = BountyCount::get() - 1;
-		Bounties::<T>::propose_subcurator(
-			RawOrigin::Signed(bm_setup.curator.clone()).into(),
-			bm_setup.bounty_id,
-			bm_setup.subbounty_id,
-			subcurator_lookup,
-			bm_setup.subbounty_fee,
-		)?;
-	}: close_subbounty(RawOrigin::Signed(bm_setup.curator), bm_setup.bounty_id, bm_setup.subbounty_id)
 
-	close_subbounty_active {
-		setup_pot_account::<T>();
-		let bm_setup = create_subbounty::<T>()?;
+		let bm_setup = create_subbounty::<T>(0, MAX_BYTES)?;
 
 		Bounties::<T>::on_initialize(T::BlockNumber::zero());
 
-	}: close_subbounty(RawOrigin::Root, bm_setup.bounty_id, bm_setup.subbounty_id)
+	}: _(RawOrigin::Root, bm_setup.bounty_id, bm_setup.subbounty_id)
 	verify {
 		assert_last_event::<T>(
 			RawEvent::SubBountyCanceled(
@@ -478,8 +466,7 @@ mod tests {
 			assert_ok!(test_benchmark_unassign_subcurator::<Test>());
 			assert_ok!(test_benchmark_award_subbounty::<Test>());
 			assert_ok!(test_benchmark_claim_subbounty::<Test>());
-			assert_ok!(test_benchmark_close_subbounty_proposed::<Test>());
-			assert_ok!(test_benchmark_close_subbounty_active::<Test>());
+			assert_ok!(test_benchmark_close_subbounty::<Test>());
 		});
 	}
 }

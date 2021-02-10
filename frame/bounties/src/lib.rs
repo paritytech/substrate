@@ -803,7 +803,7 @@ decl_module! {
 		/// - `bounty_id`: Bounty ID for which subbounty to be added.
 		/// - `value`: Value for executing the proposal.
 		/// - `description`: Text description for the subbounty.
-		#[weight = 10_000]
+		#[weight = <T as Config>::WeightInfo::add_subbounty(description.len() as u32)]
 		fn add_subbounty(
 			origin,
 			#[compact] bounty_id: BountyIndex,
@@ -887,7 +887,7 @@ decl_module! {
 		/// - `subbounty_id`: ID pair SubBounty ID to cancel.
 		/// - `subcurator`: Address of subcurator.
 		/// - `fee`: payment fee to subcurator for execution.
-		#[weight = 10_000]
+		#[weight = <T as Config>::WeightInfo::propose_subcurator()]
 		fn propose_subcurator(origin, #[compact] bounty_id: BountyIndex,
 			#[compact] subbounty_id: BountyIndex,
 			subcurator: <T::Lookup as StaticLookup>::Source,
@@ -974,7 +974,7 @@ decl_module! {
 		///
 		/// - `bounty_id`: ID pair Bounty ID.
 		/// - `subbounty_id`: ID pair SubBounty ID to cancel.
-		#[weight = 10_000]
+		#[weight = <T as Config>::WeightInfo::accept_subcurator()]
 		fn accept_subcurator(origin,
 			#[compact] bounty_id: BountyIndex,
 			#[compact] subbounty_id: BountyIndex,
@@ -1044,7 +1044,7 @@ decl_module! {
 		///
 		/// - `bounty_id`: ID pair Bounty ID.
 		/// - `subbounty_id`: ID pair SubBounty ID to cancel.
-		#[weight = 10_000]
+		#[weight = <T as Config>::WeightInfo::unassign_subcurator()]
 		fn unassign_subcurator(
 			origin,
 			#[compact] bounty_id: BountyIndex,
@@ -1175,7 +1175,7 @@ decl_module! {
 		/// - `bounty_id`: ID pair Bounty ID.
 		/// - `subbounty_id`: ID pair SubBounty ID to cancel.
 		/// - `beneficiary`: Beneficiary account.
-		#[weight = 10_000]
+		#[weight = <T as Config>::WeightInfo::award_subbounty()]
 		fn award_subbounty(origin,
 			#[compact] bounty_id: BountyIndex,
 			#[compact] subbounty_id: BountyIndex,
@@ -1243,7 +1243,7 @@ decl_module! {
 		///
 		/// - `bounty_id`: ID pair Bounty ID.
 		/// - `subbounty_id`: ID pair SubBounty ID to cancel.
-		#[weight = 10_000]
+		#[weight = <T as Config>::WeightInfo::claim_subbounty()]
 		fn claim_subbounty(origin,
 			#[compact] bounty_id: BountyIndex,
 			#[compact] subbounty_id: BountyIndex,
@@ -1363,7 +1363,7 @@ decl_module! {
 		///
 		/// - `bounty_id`: ID pair Bounty ID.
 		/// - `subbounty_id`: ID pair SubBounty ID to cancel.
-		#[weight = 10_000]
+		#[weight = <T as Config>::WeightInfo::close_subbounty()]
 		fn close_subbounty(origin,
 			#[compact] bounty_id: BountyIndex,
 			#[compact] subbounty_id: BountyIndex,
@@ -1383,7 +1383,7 @@ decl_module! {
 			// Call the internal implementation.
 			Self::impl_close_subbounty(bounty_id, subbounty_id)?;
 
-			Ok(Some(<T as Config>::WeightInfo::close_bounty_active()).into())
+			Ok(Some(<T as Config>::WeightInfo::close_subbounty()).into())
 		}
 	}
 }
