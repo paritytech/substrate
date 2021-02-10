@@ -1654,7 +1654,6 @@ impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
 			params.function,
 			&params.arguments,
 			params.overlayed_changes,
-			params.offchain_changes,
 			Some(params.storage_transaction_cache),
 			params.initialize_block,
 			manager,
@@ -1919,6 +1918,14 @@ impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 
 	fn block_hash(&self, number: NumberFor<Block>) -> sp_blockchain::Result<Option<Block::Hash>> {
 		self.backend.blockchain().hash(number)
+	}
+
+	fn extrinsic(&self, hash: &Block::Hash) -> sp_blockchain::Result<Option<Block::Extrinsic>> {
+		self.backend.blockchain().extrinsic(hash)
+	}
+
+	fn have_extrinsic(&self, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
+		self.backend.blockchain().have_extrinsic(hash)
 	}
 }
 

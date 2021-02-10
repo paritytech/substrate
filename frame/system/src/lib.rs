@@ -77,7 +77,7 @@ use sp_runtime::{
 	traits::{
 		self, CheckEqual, AtLeast32Bit, Zero, Lookup, LookupError,
 		SimpleBitOps, Hash, Member, MaybeDisplay, BadOrigin,
-		MaybeSerialize, MaybeSerializeDeserialize, MaybeMallocSizeOf, StaticLookup, One, Bounded,
+		MaybeSerializeDeserialize, MaybeMallocSizeOf, StaticLookup, One, Bounded,
 		Dispatchable, AtLeast32BitUnsigned, Saturating, StoredMapError,
 	},
 	offchain::storage_lock::BlockNumberProvider,
@@ -112,6 +112,8 @@ mod extensions;
 pub mod weights;
 #[cfg(test)]
 mod tests;
+#[cfg(feature = "std")]
+pub mod mocking;
 
 
 pub use extensions::{
@@ -172,7 +174,7 @@ pub mod pallet {
 		/// Account index (aka nonce) type. This stores the number of previous transactions associated
 		/// with a sender account.
 		type Index:
-			Parameter + Member + MaybeSerialize + Debug + Default + MaybeDisplay + AtLeast32Bit
+			Parameter + Member + MaybeSerializeDeserialize + Debug + Default + MaybeDisplay + AtLeast32Bit
 			+ Copy;
 
 		/// The block number type used by the runtime.
@@ -255,7 +257,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {

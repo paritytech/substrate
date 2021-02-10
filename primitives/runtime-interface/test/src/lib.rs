@@ -44,6 +44,7 @@ fn call_wasm_method_with_result<HF: HostFunctionsT>(
 		Some(8),
 		host_functions,
 		8,
+		None,
 	);
 	executor.call_in_wasm(
 		binary,

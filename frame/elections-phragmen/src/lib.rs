@@ -1047,7 +1047,7 @@ mod tests {
 	use sp_core::H256;
 	use sp_runtime::{
 		testing::Header, BuildStorage, DispatchResult,
-		traits::{BlakeTwo256, IdentityLookup, Block as BlockT},
+		traits::{BlakeTwo256, IdentityLookup},
 	};
 	use crate as elections_phragmen;
 
@@ -1074,7 +1074,7 @@ mod tests {
 		type Event = Event;
 		type BlockHashCount = BlockHashCount;
 		type Version = ();
-		type PalletInfo = ();
+		type PalletInfo = PalletInfo;
 		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
 		type OnKilledAccount = ();

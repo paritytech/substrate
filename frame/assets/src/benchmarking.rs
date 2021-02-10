@@ -21,6 +21,7 @@ use super::*;
 use sp_runtime::traits::Bounded;
 use frame_system::RawOrigin as SystemOrigin;
 use frame_benchmarking::{benchmarks, account, whitelisted_caller};
+use frame_support::traits::Get;
 
 use crate::Module as Assets;
 
@@ -79,7 +80,7 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), caller_lookup, 1, 1u32.into())
 	verify {
-		assert_last_event::<T>(RawEvent::Created(Default::default(), caller.clone(), caller).into());
+		assert_last_event::<T>(Event::Created(Default::default(), caller.clone(), caller).into());
 	}
 
 	force_create {
@@ -87,7 +88,7 @@ benchmarks! {
 		let caller_lookup = T::Lookup::unlookup(caller.clone());
 	}: _(SystemOrigin::Root, Default::default(), caller_lookup, 1, 1u32.into())
 	verify {
-		assert_last_event::<T>(RawEvent::ForceCreated(Default::default(), caller).into());
+		assert_last_event::<T>(Event::ForceCreated(Default::default(), caller).into());
 	}
 
 	destroy {
@@ -96,7 +97,7 @@ benchmarks! {
 		add_zombies::<T>(caller.clone(), z);
 	}: _(SystemOrigin::Signed(caller), Default::default(), 10_000)
 	verify {
-		assert_last_event::<T>(RawEvent::Destroyed(Default::default()).into());
+		assert_last_event::<T>(Event::Destroyed(Default::default()).into());
 	}
 
 	force_destroy {
@@ -105,7 +106,7 @@ benchmarks! {
 		add_zombies::<T>(caller.clone(), z);
 	}: _(SystemOrigin::Root, Default::default(), 10_000)
 	verify {
-		assert_last_event::<T>(RawEvent::Destroyed(Default::default()).into());
+		assert_last_event::<T>(Event::Destroyed(Default::default()).into());
 	}
 
 	mint {
@@ -113,7 +114,7 @@ benchmarks! {
 		let amount = T::Balance::from(100u32);
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), caller_lookup, amount)
 	verify {
-		assert_last_event::<T>(RawEvent::Issued(Default::default(), caller, amount).into());
+		assert_last_event::<T>(Event::Issued(Default::default(), caller, amount).into());
 	}
 
 	burn {
@@ -121,7 +122,7 @@ benchmarks! {
 		let (caller, caller_lookup) = create_default_minted_asset::<T>(10, amount);
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), caller_lookup, amount)
 	verify {
-		assert_last_event::<T>(RawEvent::Burned(Default::default(), caller, amount).into());
+		assert_last_event::<T>(Event::Burned(Default::default(), caller, amount).into());
 	}
 
 	transfer {
@@ -131,7 +132,7 @@ benchmarks! {
 		let target_lookup = T::Lookup::unlookup(target.clone());
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), target_lookup, amount)
 	verify {
-		assert_last_event::<T>(RawEvent::Transferred(Default::default(), caller, target, amount).into());
+		assert_last_event::<T>(Event::Transferred(Default::default(), caller, target, amount).into());
 	}
 
 	force_transfer {
@@ -141,14 +142,16 @@ benchmarks! {
 		let target_lookup = T::Lookup::unlookup(target.clone());
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), caller_lookup, target_lookup, amount)
 	verify {
-		assert_last_event::<T>(RawEvent::ForceTransferred(Default::default(), caller, target, amount).into());
+		assert_last_event::<T>(
+			Event::ForceTransferred(Default::default(), caller, target, amount).into()
+		);
 	}
 
 	freeze {
 		let (caller, caller_lookup) = create_default_minted_asset::<T>(10, 100u32.into());
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), caller_lookup)
 	verify {
-		assert_last_event::<T>(RawEvent::Frozen(Default::default(), caller).into());
+		assert_last_event::<T>(Event::Frozen(Default::default(), caller).into());
 	}
 
 	thaw {
@@ -160,14 +163,14 @@ benchmarks! {
 		)?;
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), caller_lookup)
 	verify {
-		assert_last_event::<T>(RawEvent::Thawed(Default::default(), caller).into());
+		assert_last_event::<T>(Event::Thawed(Default::default(), caller).into());
 	}
 
 	freeze_asset {
 		let (caller, caller_lookup) = create_default_minted_asset::<T>(10, 100u32.into());
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default())
 	verify {
-		assert_last_event::<T>(RawEvent::AssetFrozen(Default::default()).into());
+		assert_last_event::<T>(Event::AssetFrozen(Default::default()).into());
 	}
 
 	thaw_asset {
@@ -178,7 +181,7 @@ benchmarks! {
 		)?;
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default())
 	verify {
-		assert_last_event::<T>(RawEvent::AssetThawed(Default::default()).into());
+		assert_last_event::<T>(Event::AssetThawed(Default::default()).into());
 	}
 
 	transfer_ownership {
@@ -187,7 +190,7 @@ benchmarks! {
 		let target_lookup = T::Lookup::unlookup(target.clone());
 	}: _(SystemOrigin::Signed(caller), Default::default(), target_lookup)
 	verify {
-		assert_last_event::<T>(RawEvent::OwnerChanged(Default::default(), target).into());
+		assert_last_event::<T>(Event::OwnerChanged(Default::default(), target).into());
 	}
 
 	set_team {
@@ -197,7 +200,7 @@ benchmarks! {
 		let target2 = T::Lookup::unlookup(account("target", 2, SEED));
 	}: _(SystemOrigin::Signed(caller), Default::default(), target0.clone(), target1.clone(), target2.clone())
 	verify {
-		assert_last_event::<T>(RawEvent::TeamChanged(
+		assert_last_event::<T>(Event::TeamChanged(
 			Default::default(),
 			account("target", 0, SEED),
 			account("target", 1, SEED),
@@ -211,7 +214,7 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 	}: _(SystemOrigin::Signed(caller), Default::default(), max_zombies)
 	verify {
-		assert_last_event::<T>(RawEvent::MaxZombiesChanged(Default::default(), max_zombies).into());
+		assert_last_event::<T>(Event::MaxZombiesChanged(Default::default(), max_zombies).into());
 	}
 
 	set_metadata {
@@ -226,7 +229,7 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 	}: _(SystemOrigin::Signed(caller), Default::default(), name.clone(), symbol.clone(), decimals)
 	verify {
-		assert_last_event::<T>(RawEvent::MetadataSet(Default::default(), name, symbol, decimals).into());
+		assert_last_event::<T>(Event::MetadataSet(Default::default(), name, symbol, decimals).into());
 	}
 }
 

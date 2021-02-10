@@ -469,7 +469,7 @@ impl GenericProto {
 				timer: _
 			} => {
 				debug!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
-				self.peerset.dropped(set_id, peer_id.clone());
+				self.peerset.dropped(set_id, peer_id.clone(), sc_peerset::DropReason::Unknown);
 				let backoff_until = Some(if let Some(ban) = ban {
 					cmp::max(timer_deadline, Instant::now() + ban)
 				} else {
@@ -486,7 +486,7 @@ impl GenericProto {
 			// If relevant, the external API is instantly notified.
 			PeerState::Enabled { mut connections } => {
 				debug!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
-				self.peerset.dropped(set_id, peer_id.clone());
+				self.peerset.dropped(set_id, peer_id.clone(), sc_peerset::DropReason::Unknown);
 
 				if connections.iter().any(|(_, s)| matches!(s, ConnectionState::Open(_))) {
 					debug!(target: "sub-libp2p", "External API <= Closed({}, {:?})", peer_id, set_id);
@@ -942,7 +942,7 @@ impl GenericProto {
 				_ => {
 					debug!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})",
 						incoming.peer_id, incoming.set_id);
-					self.peerset.dropped(incoming.set_id, incoming.peer_id);
+					self.peerset.dropped(incoming.set_id, incoming.peer_id, sc_peerset::DropReason::Unknown);
 				},
 			}
 			return
@@ -1184,7 +1184,7 @@ impl NetworkBehaviour for GenericProto {
 
 					if connections.is_empty() {
 						debug!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
-						self.peerset.dropped(set_id, peer_id.clone());
+						self.peerset.dropped(set_id, peer_id.clone(), sc_peerset::DropReason::Unknown);
 						*entry.get_mut() = PeerState::Backoff { timer, timer_deadline };
 
 					} else {
@@ -1324,7 +1324,7 @@ impl NetworkBehaviour for GenericProto {
 
 					if connections.is_empty() {
 						debug!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
-						self.peerset.dropped(set_id, peer_id.clone());
+						self.peerset.dropped(set_id, peer_id.clone(), sc_peerset::DropReason::Unknown);
 						let ban_dur = Uniform::new(5, 10).sample(&mut rand::thread_rng());
 
 						let delay_id = self.next_delay_id;
@@ -1345,7 +1345,7 @@ impl NetworkBehaviour for GenericProto {
 						matches!(s, ConnectionState::Opening | ConnectionState::Open(_)))
 					{
 						debug!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
-						self.peerset.dropped(set_id, peer_id.clone());
+						self.peerset.dropped(set_id, peer_id.clone(), sc_peerset::DropReason::Unknown);
 
 						*entry.get_mut() = PeerState::Disabled {
 							connections,
@@ -1396,7 +1396,7 @@ impl NetworkBehaviour for GenericProto {
 					st @ PeerState::Requested |
 					st @ PeerState::PendingRequest { .. } => {
 						debug!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
-						self.peerset.dropped(set_id, peer_id.clone());
+						self.peerset.dropped(set_id, peer_id.clone(), sc_peerset::DropReason::Unknown);
 
 						let now = Instant::now();
 						let ban_duration = match st {
@@ -1682,7 +1682,7 @@ impl NetworkBehaviour for GenericProto {
 							// List of open connections wasn't empty before but now it is.
 							if !connections.iter().any(|(_, s)| matches!(s, ConnectionState::Opening)) {
 								debug!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", source, set_id);
-								self.peerset.dropped(set_id, source.clone());
+								self.peerset.dropped(set_id, source.clone(), sc_peerset::DropReason::Refused);
 								*entry.into_mut() = PeerState::Disabled {
 									connections, backoff_until: None
 								};
@@ -1846,7 +1846,7 @@ impl NetworkBehaviour for GenericProto {
 							matches!(s, ConnectionState::Opening | ConnectionState::Open(_)))
 						{
 							debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", source);
-							self.peerset.dropped(set_id, source.clone());
+							self.peerset.dropped(set_id, source.clone(), sc_peerset::DropReason::Refused);
 
 							*entry.into_mut() = PeerState::Disabled {
 								connections,

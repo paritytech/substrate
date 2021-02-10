@@ -965,7 +965,7 @@ mod tests {
 	use hex_literal::hex;
 	use sp_core::H256;
 	use sp_runtime::{
-		traits::{BlakeTwo256, IdentityLookup, Block as BlockT}, testing::Header,
+		traits::{BlakeTwo256, IdentityLookup}, testing::Header,
 		BuildStorage,
 	};
 	use crate as collective;
@@ -995,7 +995,7 @@ mod tests {
 		type Event = Event;
 		type BlockHashCount = BlockHashCount;
 		type Version = ();
-		type PalletInfo = ();
+		type PalletInfo = PalletInfo;
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();

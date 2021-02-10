@@ -194,7 +194,7 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 			<R as #crate_::DecodeLimit>::decode_with_depth_limit(
 				#crate_::MAX_EXTRINSIC_DEPTH,
 				&mut &#crate_::Encode::encode(input)[..],
-			).map_err(|e| format!("{} {}", error_desc, e.what()))
+			).map_err(|e| format!("{} {}", error_desc, e))
 		}
 	));
 
@@ -409,7 +409,6 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 				at: &#crate_::BlockId<Block>,
 				args: Vec<u8>,
 				changes: &std::cell::RefCell<#crate_::OverlayedChanges>,
-				offchain_changes: &std::cell::RefCell<#crate_::OffchainOverlayedChanges>,
 				storage_transaction_cache: &std::cell::RefCell<
 					#crate_::StorageTransactionCache<Block, T::StateBackend>
 				>,
@@ -439,7 +438,6 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 							native_call: None,
 							arguments: args,
 							overlayed_changes: changes,
-							offchain_changes,
 							storage_transaction_cache,
 							initialize_block,
 							context,
@@ -460,7 +458,6 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 					native_call,
 					arguments: args,
 					overlayed_changes: changes,
-					offchain_changes,
 					storage_transaction_cache,
 					initialize_block,
 					context,

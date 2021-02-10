@@ -18,7 +18,7 @@
 #![recursion_limit="128"]
 
 use codec::{Codec, EncodeLike, Encode, Decode};
-use sp_runtime::{generic, BuildStorage, traits::{BlakeTwo256, Block as _, Verify}};
+use sp_runtime::{generic, BuildStorage, traits::{BlakeTwo256, Verify}};
 use frame_support::{
 	Parameter, traits::Get, parameter_types,
 	metadata::{
@@ -253,7 +253,7 @@ impl system::Config for Runtime {
 	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
 	type Event = Event;
-	type PalletInfo = ();
+	type PalletInfo = PalletInfo;
 	type Call = Call;
 	type DbWeight = ();
 }
