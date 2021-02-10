@@ -167,7 +167,7 @@ pub mod pallet {
 		/// - 1 storage deletion (codec `O(1)`).
 		/// # </weight>
 		fn on_finalize(_n: BlockNumberFor<T>) {
-			assert!(<Self as Store>::DidUpdate::take(), "Timestamp must be updated once in the block");
+			assert!(DidUpdate::<T>::take(), "Timestamp must be updated once in the block");
 		}
 	}
 
@@ -194,14 +194,14 @@ pub mod pallet {
 		))]
 		pub(super) fn set(origin: OriginFor<T>, #[pallet::compact] now: T::Moment) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
-			assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
+			assert!(!DidUpdate::<T>::exists(), "Timestamp must be updated only once in the block");
 			let prev = Self::now();
 			assert!(
 				prev.is_zero() || now >= prev + T::MinimumPeriod::get(),
 				"Timestamp must increment by at least <MinimumPeriod> between sequential blocks"
 			);
-			<Self as Store>::Now::put(now);
-			<Self as Store>::DidUpdate::put(true);
+			Now::<T>::put(now);
+			DidUpdate::<T>::put(true);
 
 			<T::OnTimestampSet as OnTimestampSet<_>>::on_timestamp_set(now);
 
@@ -258,7 +258,7 @@ impl<T: Config> Pallet<T> {
 	/// Set the timestamp to something in particular. Only used for tests.
 	#[cfg(feature = "std")]
 	pub fn set_timestamp(now: T::Moment) {
-		<Self as Store>::Now::put(now);
+		Now::<T>::put(now);
 	}
 }
 
