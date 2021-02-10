@@ -333,7 +333,7 @@ use sp_npos_elections::{
 };
 pub use weights::WeightInfo;
 
-/// The default solution type used in substrate-node with 24 maximum winners. A runtime can customize this to their needs.
+/// The default solution type used in substrate-node with 24 maximum votes per voter. A runtime can customize this to their needs.
 pub mod default_solution {
 	use super::*;
 	pub use sp_npos_elections::CompactSolution;
@@ -1402,8 +1402,8 @@ decl_module! {
 		}
 
 		fn integrity_test() {
-			// Ensure the size of both ValidatorIndex and NominatorIndex. They both need to be well
-			// below usize.
+			// Ensure the size of both ValidatorIndex and NominatorIndex. They both need to be less or
+			// equal to usize.
 			assert!(size_of::<ValidatorIndexOf<T>>() <= size_of::<usize>());
 			assert!(size_of::<ValidatorIndexOf<T>>() <= size_of::<u32>());
 			assert!(size_of::<NominatorIndexOf<T>>() <= size_of::<usize>());
@@ -2276,7 +2276,7 @@ decl_module! {
 	}
 }
 
-impl<T: Config> Module<T>  {
+impl<T: Config> Module<T> {
 	/// The total balance that can be slashed from a stash account as of right now.
 	pub fn slashable_balance_of(stash: &T::AccountId) -> BalanceOf<T> {
 		// Weight note: consider making the stake accessible through stash.
