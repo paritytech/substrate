@@ -18,7 +18,7 @@ sc-client-api = { version = "3.0.0", path = "../api" }
 sp-api = { version = "3.0.0", path = "../../primitives/api" }
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 futures = { version = "0.3.1", features = ["compat"] }
-jsonrpc-pubsub = "15.1.0"
+jsonrpc-pubsub = "17.0.0"
 log = "0.4.8"
 sp-core = { version = "3.0.0", path = "../../primitives/core" }
 rpc = { package = "jsonrpc-core", version = "15.1.0" }
