@@ -1307,7 +1307,7 @@ pub mod pallet_prelude {
 /// ```ignore
 /// #[pallet::event]
 /// #[pallet::metadata($SomeType = "$Metadata", $SomeOtherType = "$Metadata", ..)] // Optional
-/// #[pallet::generate_deposit($visbility fn deposit_event)] // Optional
+/// #[pallet::generate_deposit($visibility fn deposit_event)] // Optional
 /// pub enum Event<$some_generic> $optional_where_clause {
 /// 	/// Some doc
 /// 	$SomeName($SomeType, $YetanotherType, ...),
@@ -1338,7 +1338,7 @@ pub mod pallet_prelude {
 /// ```
 /// will write in event variant metadata `"SpecialU32"` and `"T::AccountId"`.
 ///
-/// The attribute `#[pallet::generate_deposit($visbility fn deposit_event)]` generate a helper
+/// The attribute `#[pallet::generate_deposit($visibility fn deposit_event)]` generate a helper
 /// function on `Pallet` to deposit event.
 ///
 /// NOTE: For instantiable pallet, event must be generic over T and I.
@@ -2006,10 +2006,10 @@ pub mod pallet_prelude {
 /// 	implementation.
 ///
 /// 10. **migrate origin**: move the origin to the pallet module under `#[pallet::origin]`
-/// 11. **migrate validate_unsigned**: move the ValidateUnsigned implementation to the pallet
+/// 11. **migrate validate_unsigned**: move the `ValidateUnsigned` implementation to the pallet
 /// 	module under `#[pallet::validate_unsigned]`
-/// 12. **migrate provide_inherent**: move the ValidateUnsigned implementation to the pallet
-/// 	module under `#[pallet::provide_inherent]`
+/// 12. **migrate provide_inherent**: move the `ProvideInherent` implementation to the pallet
+/// 	module under `#[pallet::inherent]`
 /// 13. rename the usage of `Module` to `Pallet` inside the crate.
 /// 14. migration is done, now double check migration with the checking migration guidelines.
 ///
