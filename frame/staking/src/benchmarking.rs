@@ -226,7 +226,8 @@ benchmarks! {
 		let mut nominator_stashes = Vec::with_capacity(k as usize);
 		for i in 0 .. k {
 			// create a nominator stash.
-			let (n_stash, n_controller) = create_stash_controller::<T>(T::CompactSolution::LIMIT as u32 + i, 100, Default::default())?;
+			let (n_stash, n_controller) =
+				create_stash_controller::<T>(T::CompactSolution::LIMIT as u32 + i, 100, Default::default())?;
 
 			// bake the nominations; we first clone them from the rest of the validators.
 			let mut nominations = rest_of_validators.clone();
@@ -442,7 +443,11 @@ benchmarks! {
 		CurrentEra::put(e);
 		for i in 0 .. e {
 			<ErasStakers<T>>::insert(i, T::AccountId::default(), Exposure::<T::AccountId, BalanceOf<T>>::default());
-			<ErasStakersClipped<T>>::insert(i, T::AccountId::default(), Exposure::<T::AccountId, BalanceOf<T>>::default());
+			<ErasStakersClipped<T>>::insert(
+				i,
+				T::AccountId::default(),
+				Exposure::<T::AccountId, BalanceOf<T>>::default(),
+			);
 			<ErasValidatorPrefs<T>>::insert(i, T::AccountId::default(), ValidatorPrefs::default());
 			<ErasValidatorReward<T>>::insert(i, BalanceOf::<T>::one());
 			<ErasRewardPoints<T>>::insert(i, EraRewardPoints::<T::AccountId>::default());
