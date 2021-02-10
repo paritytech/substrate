@@ -1,0 +1,5 @@
+error: Invalid pallet::pallet, expected 1 unnamed field: `(_)`
+  --> $DIR/pallet_struct_wrong_field.rs:10:22
+   |
+10 |     pub struct Pallet<T>();
+   |                         ^^

@@ -1786,7 +1786,7 @@ pub mod pallet_prelude {
 ///
 /// 	#[pallet::pallet]
 /// 	#[pallet::generate_store(pub(super) trait Store)]
-/// 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
+/// 	pub struct Pallet<T, I = ()>(_);
 ///
 /// 	#[pallet::hooks]
 /// 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
@@ -1922,7 +1922,7 @@ pub mod pallet_prelude {
 /// 		// NOTE: if the visibility of trait store is private but you want to make it available
 /// 		// in super, then use `pub(super)` or `pub(crate)` to make it available in crate.
 /// 		pub struct Pallet<T>(_);
-/// 		// pub struct Pallet<T, I = ()>(PhantomData<T>); // for instantiable pallet
+/// 		// pub struct Pallet<T, I = ()>(_); // for instantiable pallet
 /// 	}
 /// 	```
 /// 5. **migrate Config**: move trait into the module with

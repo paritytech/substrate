@@ -7,16 +7,9 @@ mod pallet {
 	pub trait Config: frame_system::Config {}
 
 	#[pallet::pallet]
-	pub struct Pallet<T>(_);
-
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
-
-	#[pallet::call]
-	impl<T: Config> Pallet<T> {}
-
-	#[pallet::storage]
-	type Foo<T> = u8;
+	pub struct Pallet<T> {
+		some: T,
+	}
 }
 
 fn main() {

@@ -97,6 +97,11 @@ impl PalletStructDef {
 			return Err(syn::Error::new(item.generics.where_clause.span(), msg));
 		}
 
+		if item.fields != syn::FieldsUnnamed::into(syn::parse_quote!((_))) {
+			let msg = "Invalid pallet::pallet, expected 1 unnamed field: `(_)`";
+			return Err(syn::Error::new(item.fields.span(), msg));
+		}
+
 		let mut instances = vec![];
 		instances.push(helper::check_type_def_gen_no_bounds(&item.generics, item.ident.span())?);
 

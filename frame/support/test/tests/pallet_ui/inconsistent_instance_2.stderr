@@ -13,7 +13,7 @@ error: Invalid generic declaration, trait is defined without instance but generi
 error: Invalid generic declaration, trait is defined without instance but generic use some
   --> $DIR/inconsistent_instance_2.rs:10:20
    |
-10 |     pub struct Pallet<T, I = ()>(core::marker::PhantomData<(T, I)>);
+10 |     pub struct Pallet<T, I = ()>(_);
    |                       ^
 
 error: Invalid generic declaration, trait is defined without instance but generic use some

@@ -110,7 +110,7 @@ mod pallet4 {
 	}
 
 	#[pallet::pallet]
-	pub struct Pallet<T, I=()>(PhantomData<(T, I)>);
+	pub struct Pallet<T, I=()>(_);
 
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {

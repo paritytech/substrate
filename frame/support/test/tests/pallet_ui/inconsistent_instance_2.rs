@@ -7,7 +7,7 @@ mod pallet {
 	pub trait Config: frame_system::Config {}
 
 	#[pallet::pallet]
-	pub struct Pallet<T, I = ()>(core::marker::PhantomData<(T, I)>);
+	pub struct Pallet<T, I = ()>(_);
 
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {}
