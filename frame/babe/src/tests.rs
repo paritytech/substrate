@@ -611,8 +611,8 @@ fn report_equivocation_invalid_equivocation_proof() {
 #[test]
 fn report_equivocation_validate_unsigned_prevents_duplicates() {
 	use sp_runtime::transaction_validity::{
-		InvalidTransaction, TransactionLongevity, TransactionPriority, TransactionSource,
-		TransactionValidity, ValidTransaction,
+		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
+		ValidTransaction,
 	};
 
 	let (pairs, mut ext) = new_test_ext_with_pairs(3);
@@ -664,7 +664,7 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 				priority: TransactionPriority::max_value(),
 				requires: vec![],
 				provides: vec![("BabeEquivocation", tx_tag).encode()],
-				longevity: TransactionLongevity::max_value(),
+				longevity: ReportLongevity::get(),
 				propagate: false,
 			})
 		);
