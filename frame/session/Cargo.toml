@@ -1,6 +1,6 @@
 [package]
 name = "pallet-session"
-version = "2.0.1"
+version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -15,20 +15,20 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 serde = { version = "1.0.101", optional = true }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-sp-core = { version = "2.0.0", default-features = false, path = "../../primitives/core" }
-sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
-sp-io = { version = "2.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-session = { version = "2.0.0", default-features = false, path = "../../primitives/session" }
-sp-staking = { version = "2.0.0", default-features = false, path = "../../primitives/staking" }
-frame-support = { version = "2.0.0", default-features = false, path = "../support" }
-frame-system = { version = "2.0.0", default-features = false, path = "../system" }
-pallet-timestamp = { version = "2.0.0", default-features = false, path = "../timestamp" }
-sp-trie = { version = "2.0.0", optional = true, default-features = false, path = "../../primitives/trie" }
+sp-core = { version = "3.0.0", default-features = false, path = "../../primitives/core" }
+sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
+sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-session = { version = "3.0.0", default-features = false, path = "../../primitives/session" }
+sp-staking = { version = "3.0.0", default-features = false, path = "../../primitives/staking" }
+frame-support = { version = "3.0.0", default-features = false, path = "../support" }
+frame-system = { version = "3.0.0", default-features = false, path = "../system" }
+pallet-timestamp = { version = "3.0.0", default-features = false, path = "../timestamp" }
+sp-trie = { version = "3.0.0", optional = true, default-features = false, path = "../../primitives/trie" }
 impl-trait-for-tuples = "0.2.1"
 
 [dev-dependencies]
-sp-application-crypto = { version = "2.0.0", path = "../../primitives/application-crypto" }
+sp-application-crypto = { version = "3.0.0", path = "../../primitives/application-crypto" }
 lazy_static = "1.4.0"
 
 [features]
