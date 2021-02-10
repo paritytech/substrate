@@ -1306,7 +1306,7 @@ pub mod pallet_prelude {
 /// ```ignore
 /// #[pallet::event]
 /// #[pallet::metadata($SomeType = "$Metadata", $SomeOtherType = "$Metadata", ..)] // Optional
-/// #[pallet::generate_deposit($visbility fn deposit_event)] // Optional
+/// #[pallet::generate_deposit($visibility fn deposit_event)] // Optional
 /// pub enum Event<$some_generic> $optional_where_clause {
 /// 	/// Some doc
 /// 	$SomeName($SomeType, $YetanotherType, ...),
@@ -1337,7 +1337,7 @@ pub mod pallet_prelude {
 /// ```
 /// will write in event variant metadata `"SpecialU32"` and `"T::AccountId"`.
 ///
-/// The attribute `#[pallet::generate_deposit($visbility fn deposit_event)]` generate a helper
+/// The attribute `#[pallet::generate_deposit($visibility fn deposit_event)]` generate a helper
 /// function on `Pallet` to deposit event.
 ///
 /// NOTE: For instantiable pallet, event must be generic over T and I.
