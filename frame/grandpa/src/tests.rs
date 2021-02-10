@@ -19,7 +19,7 @@
 
 #![cfg(test)]
 
-use super::{Call, *};
+use super::{Call, Event, *};
 use crate::mock::*;
 use codec::{Decode, Encode};
 use fg_primitives::ScheduledChange;

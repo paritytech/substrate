@@ -17,7 +17,7 @@
 
 use codec::{Encode, Decode, Joiner};
 use frame_support::{
-	StorageValue, StorageMap,
+	StorageMap,
 	traits::Currency,
 	weights::{GetDispatchInfo, DispatchInfo, DispatchClass},
 };
@@ -336,7 +336,7 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::pallet_balances(pallet_balances::RawEvent::Transfer(
+				event: Event::pallet_balances(pallet_balances::Event::Transfer(
 					alice().into(),
 					bob().into(),
 					69 * DOLLARS,
@@ -389,7 +389,7 @@ fn full_native_block_import_works() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
 				event: Event::pallet_balances(
-					pallet_balances::RawEvent::Transfer(
+					pallet_balances::Event::Transfer(
 						bob().into(),
 						alice().into(),
 						5 * DOLLARS,
@@ -412,7 +412,7 @@ fn full_native_block_import_works() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(2),
 				event: Event::pallet_balances(
-					pallet_balances::RawEvent::Transfer(
+					pallet_balances::Event::Transfer(
 						alice().into(),
 						bob().into(),
 						15 * DOLLARS,
@@ -588,7 +588,7 @@ fn deploying_wasm_contract_should_work() {
 		&[],
 	);
 
-	let subsistence = pallet_contracts::ConfigCache::<Runtime>::subsistence_threshold_uncached();
+	let subsistence = pallet_contracts::Module::<Runtime>::subsistence_threshold();
 
 	let b = construct_block(
 		&mut new_test_ext(compact_code_unwrap(), false),
