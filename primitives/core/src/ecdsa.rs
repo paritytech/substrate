@@ -26,7 +26,7 @@ use sp_std::cmp::Ordering;
 use codec::{Encode, Decode};
 
 #[cfg(feature = "full_crypto")]
-use core::convert::{TryFrom, TryInto};
+use core::convert::TryFrom;
 #[cfg(feature = "std")]
 use substrate_bip39::seed_from_entropy;
 #[cfg(feature = "std")]
@@ -103,8 +103,18 @@ impl Public {
 	/// This will convert the full public key into the compressed format.
 	#[cfg(feature = "std")]
 	pub fn from_full(full: &[u8]) -> Result<Self, ()> {
-		secp256k1::PublicKey::parse_slice(full, None)
-			.map(|k| k.serialize_compressed())
+		let pubkey = if full.len() == 64 {
+			let mut full_with_tag = [0u8; 65];
+			full_with_tag[1..].copy_from_slice(full);
+			// Tag it as uncompressed public key
+			full_with_tag[0] = 0x04;
+			secp256k1::PublicKey::from_slice(&full_with_tag)
+		} else {
+			secp256k1::PublicKey::from_slice(&full)
+		};
+
+		pubkey
+			.map(|k| k.serialize())
 			.map(Self)
 			.map_err(|_| ())
 	}
@@ -165,7 +175,6 @@ impl sp_std::convert::TryFrom<&[u8]> for Public {
 		if data.len() == 33 {
 			Ok(Self::from_slice(data))
 		} else {
-
 			Err(())
 		}
 	}
@@ -348,31 +357,34 @@ impl Signature {
 	/// Recover the public key from this signature and a message.
 	#[cfg(feature = "full_crypto")]
 	pub fn recover<M: AsRef<[u8]>>(&self, message: M) -> Option<Public> {
-		let message = secp256k1::Message::parse(&blake2_256(message.as_ref()));
-		let sig: (_, _) = self.try_into().ok()?;
-		secp256k1::recover(&message, &sig.0, &sig.1)
+		let message = secp256k1::Message::from_slice(&blake2_256(message.as_ref())).ok()?;
+
+		let id = secp256k1::recovery::RecoveryId::from_i32(self.0[64] as i32).ok()?;
+		let sig = secp256k1::recovery::RecoverableSignature::from_compact(&self.0[..64], id).ok()?;
+
+		secp256k1::Secp256k1::verification_only().recover(&message, &sig)
 			.ok()
-			.map(|recovered| Public(recovered.serialize_compressed()))
+			.map(|recovered| Public(recovered.serialize()))
 	}
 }
 
 #[cfg(feature = "full_crypto")]
-impl From<(secp256k1::Signature, secp256k1::RecoveryId)> for Signature {
-	fn from(x: (secp256k1::Signature, secp256k1::RecoveryId)) -> Signature {
+impl From<(secp256k1::Signature, secp256k1::recovery::RecoveryId)> for Signature {
+	fn from(x: (secp256k1::Signature, secp256k1::recovery::RecoveryId)) -> Signature {
 		let mut r = Self::default();
-		r.0[0..64].copy_from_slice(&x.0.serialize()[..]);
-		r.0[64] = x.1.serialize();
+		r.0[0..64].copy_from_slice(&x.0.serialize_compact()[..]);
+		r.0[64] = x.1.to_i32() as u8;
 		r
 	}
 }
 
 #[cfg(feature = "full_crypto")]
-impl<'a> TryFrom<&'a Signature> for (secp256k1::Signature, secp256k1::RecoveryId) {
+impl<'a> TryFrom<&'a Signature> for (secp256k1::Signature, secp256k1::recovery::RecoveryId) {
 	type Error = ();
-	fn try_from(x: &'a Signature) -> Result<(secp256k1::Signature, secp256k1::RecoveryId), Self::Error> {
+	fn try_from(x: &'a Signature) -> Result<(secp256k1::Signature, secp256k1::recovery::RecoveryId), Self::Error> {
 		Ok((
-			secp256k1::Signature::parse_slice(&x.0[0..64]).expect("hardcoded to 64 bytes; qed"),
-			secp256k1::RecoveryId::parse(x.0[64]).map_err(|_| ())?,
+			secp256k1::Signature::from_compact(&x.0[0..64]).map_err(|_| ())?,
+			secp256k1::recovery::RecoveryId::from_i32(x.0[64] as i32).map_err(|_| ())?,
 		))
 	}
 }
@@ -450,9 +462,9 @@ impl TraitPair for Pair {
 	///
 	/// You should never need to use this; generate(), generate_with_phrase
 	fn from_seed_slice(seed_slice: &[u8]) -> Result<Pair, SecretStringError> {
-		let secret = SecretKey::parse_slice(seed_slice)
+		let secret = SecretKey::from_slice(seed_slice)
 			.map_err(|_| SecretStringError::InvalidSeedLength)?;
-		let public = PublicKey::from_secret_key(&secret);
+		let public = PublicKey::from_secret_key(&secp256k1::Secp256k1::signing_only(), &secret);
 		Ok(Pair{ secret, public })
 	}
 
@@ -461,7 +473,7 @@ impl TraitPair for Pair {
 		path: Iter,
 		_seed: Option<Seed>
 	) -> Result<(Pair, Option<Seed>), DeriveError> {
-		let mut acc = self.secret.serialize();
+		let mut acc = self.seed();
 		for j in path {
 			match j {
 				DeriveJunction::Soft(_cc) => return Err(DeriveError::SoftKeyInPath),
@@ -473,22 +485,24 @@ impl TraitPair for Pair {
 
 	/// Get the public key.
 	fn public(&self) -> Public {
-		Public(self.public.serialize_compressed())
+		Public(self.public.serialize())
 	}
 
 	/// Sign a message.
 	fn sign(&self, message: &[u8]) -> Signature {
-		let message = secp256k1::Message::parse(&blake2_256(message));
-		secp256k1::sign(&message, &self.secret).into()
+		let message = secp256k1::Message::from_slice(&blake2_256(message))
+			.expect("Message is 32 byte; qed");
+		let sig = secp256k1::Secp256k1::signing_only().sign_recoverable(&message, &self.secret);
+
+		let id = sig.serialize_compact().0;
+		(sig.to_standard(), id).into()
 	}
 
 	/// Verify a signature on a message. Returns true if the signature is good.
 	fn verify<M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: &Self::Public) -> bool {
-		let message = secp256k1::Message::parse(&blake2_256(message.as_ref()));
-		let sig: (_, _) = match sig.try_into() { Ok(x) => x, _ => return false };
-		match secp256k1::recover(&message, &sig.0, &sig.1) {
-			Ok(actual) => &pubkey.0[..] == &actual.serialize_compressed()[..],
-			_ => false,
+		match sig.recover(message) {
+			Some(actual) => actual == *pubkey,
+			None => false,
 		}
 	}
 
@@ -497,13 +511,17 @@ impl TraitPair for Pair {
 	/// This doesn't use the type system to ensure that `sig` and `pubkey` are the correct
 	/// size. Use it only if you're coming from byte buffers and need the speed.
 	fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(sig: &[u8], message: M, pubkey: P) -> bool {
-		let message = secp256k1::Message::parse(&blake2_256(message.as_ref()));
-		if sig.len() != 65 { return false }
-		let ri = match secp256k1::RecoveryId::parse(sig[64]) { Ok(x) => x, _ => return false };
-		let sig = match secp256k1::Signature::parse_slice(&sig[0..64]) { Ok(x) => x, _ => return false };
-		match secp256k1::recover(&message, &sig, &ri) {
-			Ok(actual) => pubkey.as_ref() == &actual.serialize()[1..],
-			_ => false,
+		if sig.len() != 65 {
+			return false
+		}
+
+		let mut signature = [0u8; 65];
+		signature.copy_from_slice(sig);
+		let sig = Signature(signature);
+
+		match sig.recover(message) {
+			None => false,
+			Some(actual) => pubkey.as_ref() == actual.as_ref(),
 		}
 	}
 
@@ -517,7 +535,7 @@ impl TraitPair for Pair {
 impl Pair {
 	/// Get the seed for this key.
 	pub fn seed(&self) -> Seed {
-		self.secret.serialize()
+		*self.secret.as_ref()
 	}
 
 	/// Exactly as `from_string` except that if no matches are found then, the the first 32
