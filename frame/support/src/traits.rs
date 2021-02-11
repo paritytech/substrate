@@ -1553,8 +1553,7 @@ pub trait OnRuntimeUpgrade {
 
 	/// Execute some pre-checks prior to a runtime upgrade.
 	///
-	/// These hooks are never meant to be executed on-chain, instead only be used by 3rd party tools
-	/// for testing.
+	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<(), &'static str> {
 		Ok(())
@@ -1562,8 +1561,7 @@ pub trait OnRuntimeUpgrade {
 
 	/// Execute some post-checks after a runtime upgrade.
 	///
-	/// These hooks are never meant to be executed on-chain, instead only be used by 3rd party tools
-	/// for testing.
+	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade() -> Result<(), &'static str> {
 		Ok(())

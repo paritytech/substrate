@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Supporting types for try-runtime, testing and dry-run commands.
+//! Supporting types for try-runtime, testing and dry-running commands.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -25,8 +25,8 @@ use sp_std::prelude::*;
 #[doc(hidden)]
 pub use frame_support as _support;
 
-/// Helper macro to generate the match expression needed to match pallet name to their
-/// `on_runtime_upgrade()` implementation.
+/// Helper macro to generate the match expression needed to match a pallet name to
+/// its `on_runtime_upgrade()` implementation.
 #[macro_export]
 macro_rules! match_pallet_on_runtime_upgrade {
 	($name:ident, $($pallet:ty),* $(,)*) => {
@@ -66,7 +66,7 @@ impl sp_std::str::FromStr for Target {
 }
 
 sp_api::decl_runtime_apis! {
-	/// Runtime api for testing the execution of an upcoming runtime upgrade.
+	/// Runtime api for testing the execution of a runtime upgrade.
 	pub trait TryRuntime {
 		/// dry-run runtime upgrades, returning the total weight consumed.
 		///
