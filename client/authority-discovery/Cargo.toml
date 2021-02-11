@@ -1,6 +1,6 @@
 [package]
 name = "sc-authority-discovery"
-version = "0.8.1"
+version = "0.9.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 build = "build.rs"
@@ -25,21 +25,21 @@ futures = "0.3.9"
 futures-timer = "3.0.1"
 libp2p = { version = "0.34.0", default-features = false, features = ["kad"] }
 log = "0.4.8"
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.8.0"}
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.9.0"}
 prost = "0.7"
 rand = "0.7.2"
-sc-client-api = { version = "2.0.0", path = "../api" }
-sc-network = { version = "0.8.0", path = "../network" }
+sc-client-api = { version = "3.0.0", path = "../api" }
+sc-network = { version = "0.9.0", path = "../network" }
 serde_json = "1.0.41"
-sp-authority-discovery = { version = "2.0.0", path = "../../primitives/authority-discovery" }
-sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
-sp-core = { version = "2.0.0", path = "../../primitives/core" }
-sp-keystore = { version = "0.8.0", path = "../../primitives/keystore" }
-sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
-sp-api = { version = "2.0.0", path = "../../primitives/api" }
+sp-authority-discovery = { version = "3.0.0", path = "../../primitives/authority-discovery" }
+sp-blockchain = { version = "3.0.0", path = "../../primitives/blockchain" }
+sp-core = { version = "3.0.0", path = "../../primitives/core" }
+sp-keystore = { version = "0.9.0", path = "../../primitives/keystore" }
+sp-runtime = { version = "3.0.0", path = "../../primitives/runtime" }
+sp-api = { version = "3.0.0", path = "../../primitives/api" }
 
 [dev-dependencies]
 quickcheck = "1.0.3"
-sp-tracing = { version = "2.0.0", path = "../../primitives/tracing" }
-sc-peerset = { version = "2.0.0", path = "../peerset" }
+sp-tracing = { version = "3.0.0", path = "../../primitives/tracing" }
+sc-peerset = { version = "3.0.0", path = "../peerset" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client"}

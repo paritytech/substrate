@@ -1156,7 +1156,7 @@ mod tests {
 			assert_eq!(Balances::free_balance(2), 0);
 			// Transfer Event
 			assert!(System::events().iter().any(|event| {
-				event.event == Event::pallet_balances(pallet_balances::RawEvent::Transfer(2, 3, 80))
+				event.event == Event::pallet_balances(pallet_balances::Event::Transfer(2, 3, 80))
 			}));
 			// Killed Event
 			assert!(System::events().iter().any(|event| {

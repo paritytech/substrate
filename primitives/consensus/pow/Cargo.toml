@@ -1,6 +1,6 @@
 [package]
 name = "sp-consensus-pow"
-version = "0.8.1"
+version = "0.9.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Primitives for Aura consensus"
 edition = "2018"
@@ -13,10 +13,10 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-api = { version = "2.0.0", default-features = false, path = "../../api" }
-sp-std = { version = "2.0.0", default-features = false, path = "../../std" }
-sp-runtime = { version = "2.0.0", default-features = false, path = "../../runtime" }
-sp-core = { version = "2.0.0", default-features = false, path = "../../core" }
+sp-api = { version = "3.0.0", default-features = false, path = "../../api" }
+sp-std = { version = "3.0.0", default-features = false, path = "../../std" }
+sp-runtime = { version = "3.0.0", default-features = false, path = "../../runtime" }
+sp-core = { version = "3.0.0", default-features = false, path = "../../core" }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 
 [features]
