@@ -1459,11 +1459,6 @@ pub trait PalletInfo {
 	fn name<P: 'static>() -> Option<&'static str>;
 }
 
-impl PalletInfo for () {
-	fn index<P: 'static>() -> Option<usize> { Some(0) }
-	fn name<P: 'static>() -> Option<&'static str> { Some("test") }
-}
-
 /// The function and pallet name of the Call.
 #[derive(Clone, Eq, PartialEq, Default, RuntimeDebug)]
 pub struct CallMetadata {
@@ -1560,7 +1555,7 @@ pub trait OnRuntimeUpgrade {
 	///
 	/// These hooks are never meant to be executed on-chain, instead only be used by 3rd party tools
 	/// for testing.
-	#[cfg(feature = "runtime-upgrade-dry-run")]
+	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<(), &'static str> {
 		Ok(())
 	}
@@ -1569,7 +1564,7 @@ pub trait OnRuntimeUpgrade {
 	///
 	/// These hooks are never meant to be executed on-chain, instead only be used by 3rd party tools
 	/// for testing.
-	#[cfg(feature = "runtime-upgrade-dry-run")]
+	#[cfg(feature = "try-runtime")]
 	fn post_upgrade() -> Result<(), &'static str> {
 		Ok(())
 	}
@@ -1583,14 +1578,14 @@ impl OnRuntimeUpgrade for Tuple {
 		weight
 	}
 
-	#[cfg(feature = "runtime-upgrade-dry-run")]
+	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<(), &'static str> {
 		let mut result = Ok(());
 		for_tuples!( #( result = result.and(Tuple::pre_upgrade()); )* );
 		result
 	}
 
-	#[cfg(feature = "runtime-upgrade-dry-run")]
+	#[cfg(feature = "try-runtime")]
 	fn post_upgrade() -> Result<(), &'static str> {
 		let mut result = Ok(());
 		for_tuples!( #( result = result.and(Tuple::post_upgrade()); )* );

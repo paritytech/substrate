@@ -24,10 +24,14 @@ use sp_state_machine::StateMachine;
 use sc_service::NativeExecutionDispatch;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use sp_core::storage::{StorageData, StorageKey, well_known_keys};
-use frame_dry_run_runtime_upgrade::Target;
+use frame_try_runtime::Target;
 
+/// Various commands to try-out (similar to `TryFrom`, `TryInto`) the new runtime, over configurable
+/// states.
+///
+/// For now this only assumes running the runtime-upgrade hooks.
 #[derive(Debug, structopt::StructOpt)]
-pub struct DryRunRuntimeUpgradeCmd {
+pub struct TryRuntimeCmd {
 	/// The shared parameters
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -69,7 +73,7 @@ impl FromStr for State {
 	}
 }
 
-impl DryRunRuntimeUpgradeCmd {
+impl TryRuntimeCmd {
 	pub async fn run<B, ExecDispatch>(&self, config: Configuration) -> sc_cli::Result<()>
 	where
 		B: BlockT,
@@ -108,7 +112,7 @@ impl DryRunRuntimeUpgradeCmd {
 			None,
 			&mut changes,
 			&executor,
-			"DryRunRuntimeUpgrade_dry_run_runtime_upgrade",
+			"TryRuntime_on_runtime_upgrade",
 			&self.target.encode(),
 			ext.extensions,
 			&sp_state_machine::backend::BackendRuntimeCode::new(&ext.backend)
@@ -122,7 +126,7 @@ impl DryRunRuntimeUpgradeCmd {
 
 		let weight = <u64 as Decode>::decode(&mut &*consumed_weight).unwrap();
 		log::info!(
-			"dry-run-runtime-upgraded executed without errors. Consumed weight = {}",
+			"try-runtime executed without errors. Consumed weight = {}",
 			weight,
 		);
 
@@ -130,7 +134,7 @@ impl DryRunRuntimeUpgradeCmd {
 	}
 }
 
-impl CliConfiguration for DryRunRuntimeUpgradeCmd {
+impl CliConfiguration for TryRuntimeCmd {
 	fn shared_params(&self) -> &sc_cli::SharedParams {
 		&self.shared_params
 	}

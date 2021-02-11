@@ -163,7 +163,7 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 	pub fn new_test(
 		pool_api: Arc<PoolApi>,
 	) -> (Self, Pin<Box<dyn Future<Output=()> + Send>>, intervalier::BackSignalControl) {
-		let pool = Arc::new(sc_transaction_graph::Pool::new(Default::default(), pool_api.clone()));
+		let pool = Arc::new(sc_transaction_graph::Pool::new(Default::default(), true.into(), pool_api.clone()));
 		let (revalidation_queue, background_task, notifier) =
 			revalidation::RevalidationQueue::new_test(pool_api.clone(), pool.clone());
 		(
@@ -184,12 +184,13 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 	/// revalidation type.
 	pub fn with_revalidation_type(
 		options: sc_transaction_graph::Options,
+		is_validator: txpool::IsValidator,
 		pool_api: Arc<PoolApi>,
 		prometheus: Option<&PrometheusRegistry>,
 		revalidation_type: RevalidationType,
 		spawner: impl SpawnNamed,
 	) -> Self {
-		let pool = Arc::new(sc_transaction_graph::Pool::new(options, pool_api.clone()));
+		let pool = Arc::new(sc_transaction_graph::Pool::new(options, is_validator, pool_api.clone()));
 		let (revalidation_queue, background_task) = match revalidation_type {
 			RevalidationType::Light => (revalidation::RevalidationQueue::new(pool_api.clone(), pool.clone()), None),
 			RevalidationType::Full => {
@@ -346,7 +347,7 @@ where
 	) -> Self {
 		let pool_api = Arc::new(LightChainApi::new(client, fetcher));
 		Self::with_revalidation_type(
-			options, pool_api, prometheus, RevalidationType::Light, spawner,
+			options, false.into(), pool_api, prometheus, RevalidationType::Light, spawner,
 		)
 	}
 }
@@ -364,13 +365,14 @@ where
 	/// Create new basic transaction pool for a full node with the provided api.
 	pub fn new_full(
 		options: sc_transaction_graph::Options,
+		is_validator: txpool::IsValidator,
 		prometheus: Option<&PrometheusRegistry>,
 		spawner: impl SpawnNamed,
 		client: Arc<Client>,
 	) -> Arc<Self> {
 		let pool_api = Arc::new(FullChainApi::new(client.clone(), prometheus));
 		let pool = Arc::new(Self::with_revalidation_type(
-			options, pool_api, prometheus, RevalidationType::Full, spawner
+			options, is_validator, pool_api, prometheus, RevalidationType::Full, spawner
 		));
 
 		// make transaction pool available for off-chain runtime calls.

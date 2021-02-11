@@ -67,11 +67,11 @@ impl sp_std::str::FromStr for Target {
 
 sp_api::decl_runtime_apis! {
 	/// Runtime api for testing the execution of an upcoming runtime upgrade.
-	pub trait DryRunRuntimeUpgrade {
+	pub trait TryRuntime {
 		/// dry-run runtime upgrades, returning the total weight consumed.
 		///
 		/// Returns the consumed weight of the migration in case of a successful one, and panics
 		/// otherwise.
-		fn dry_run_runtime_upgrade(target: Target) -> frame_support::weights::Weight;
+		fn on_runtime_upgrade(target: Target) -> frame_support::weights::Weight;
 	}
 }
