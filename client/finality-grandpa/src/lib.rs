@@ -127,7 +127,8 @@ pub use notification::{GrandpaJustificationSender, GrandpaJustificationStream};
 pub use import::GrandpaBlockImport;
 pub use justification::GrandpaJustification;
 pub use voting_rule::{
-	BeforeBestBlockBy, ThreeQuartersOfTheUnfinalizedChain, VotingRule, VotingRulesBuilder
+	BeforeBestBlockBy, ThreeQuartersOfTheUnfinalizedChain, VotingRule, VotingRuleResult,
+	VotingRulesBuilder,
 };
 pub use finality_grandpa::voter::report;
 pub use finality_proof::{prove_warp_sync, WarpSyncFragmentCache};
