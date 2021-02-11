@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -41,9 +41,6 @@ async fn telemetry_works() {
 	let server_task = async_std::task::spawn(async move {
 		loop {
 			use websocket_server::Event;
-
-			let mut received_telemetry = false;
-
 			match server.next_event().await {
 				// New connection on the listener.
 				Event::ConnectionOpen { address } => {
@@ -60,17 +57,12 @@ async fn telemetry_works() {
 					if matches!(object.get("best"), Some(serde_json::Value::String(_))) {
 						received_telemetry = true;
 					}
-					//println!("Received message: {}", json);
 				}
 
 				Event::TextFrame { .. } => unreachable!(),
 
 				// Connection has been closed.
 				Event::ConnectionError { .. } => {}
-			}
-
-			if received_telemetry {
-				break;
 			}
 		}
 	});
