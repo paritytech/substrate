@@ -108,6 +108,21 @@ pub trait BlockBackend<Block: BlockT> {
 	}
 }
 
+/// Interface to provide access to preimported blocks.
+/// A preimported block is one that has been announced, checked and verified
+/// but not yet imported into the chain's backend.
+pub trait PreImportedBlockProvider<Block: BlockT> {
+	/// Register a new block which has been announced
+	/// and downloaded from peers.
+	fn register_preimported_blocks(&self, blocks: Vec<Block>);
+
+	/// Fetch the header of a preimported block
+	fn preimported_block_header(&self, id: &BlockId<Block>) -> Option<Block::Header>;
+
+	/// Fetch the body of a preimported block
+	fn preimported_block_body(&self, id: &BlockId<Block>) -> Option<Vec<<Block as BlockT>::Extrinsic>>;
+}
+
 /// Provide a list of potential uncle headers for a given block.
 pub trait ProvideUncles<Block: BlockT> {
 	/// Gets the uncles of the block with `target_hash` going back `max_generation` ancestors.
