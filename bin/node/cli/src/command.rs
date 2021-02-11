@@ -152,7 +152,16 @@ pub fn run() -> Result<()> {
 		Some(Subcommand::TryRuntime(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
 			runner.async_run(|config| {
-				let PartialComponents { task_manager, .. } = new_partial(&config)?;
+				use sc_service::TaskManager;
+				// we don't need any of the components of new_partial, just a runtime, or a task
+				// manager to do `async_run`.
+				let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
+				let task_manager = TaskManager::new(
+					config.task_executor.clone(),
+					registry,
+					config.telemetry_span.clone(),
+				).unwrap();
+
 				Ok((cmd.run::<Block, Executor>(config), task_manager))
 			})
 		}

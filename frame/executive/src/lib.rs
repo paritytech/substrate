@@ -220,7 +220,7 @@ where
 	///
 	/// This should only be used for testing.
 	#[cfg(feature = "try-runtime")]
-	pub fn dry_run_runtime_upgrade() -> frame_support::weights::Weight {
+	pub fn try_runtime_upgrade() -> frame_support::weights::Weight {
 		<
 			(frame_system::Module::<System>, COnRuntimeUpgrade, AllModules)
 			as

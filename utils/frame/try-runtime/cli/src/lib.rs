@@ -15,6 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! `Structopt`-ready struct for `try-runtime`.
+
 use parity_scale_codec::{Decode, Encode};
 use std::{fmt::Debug, str::FromStr};
 use sc_service::Configuration;
@@ -79,6 +81,11 @@ impl TryRuntimeCmd {
 		B: BlockT,
 		ExecDispatch: NativeExecutionDispatch + 'static,
 	{
+		// // prevent a potentially confusing MethodNotFound error from state machine.
+		// if !cfg!(feature = "try-runtime") {
+		// 	panic!("`TryRuntime` api is not enabled without `try-runtime` feature. Compile with this feature.")
+		// }
+
 		let spec = config.chain_spec;
 		let genesis_storage = spec.build_storage()?;
 
@@ -122,7 +129,6 @@ impl TryRuntimeCmd {
 		)
 		.execute(strategy.into())
 		.unwrap();
-		// TODO: if MethodNotFound, then it must be wrong feature.
 
 		let weight = <u64 as Decode>::decode(&mut &*consumed_weight).unwrap();
 		log::info!(

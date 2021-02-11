@@ -402,14 +402,17 @@ impl Builder {
 mod tests {
 	use super::*;
 
-	#[async_std::test]
-	#[cfg(feature = "remote-test")]
-	async fn can_build_one_pallet() {
+	fn init_logger() {
 		let _ = env_logger::Builder::from_default_env()
 			.format_module_path(false)
 			.format_level(true)
 			.try_init();
+	}
 
+	#[async_std::test]
+	#[cfg(feature = "remote-test")]
+	async fn can_build_one_pallet() {
+		init_logger();
 		Builder::new()
 			.mode(Mode::Online(OnlineConfig {
 				modules: vec!["Proxy".into()],
@@ -422,11 +425,7 @@ mod tests {
 
 	#[async_std::test]
 	async fn can_load_cache() {
-		let _ = env_logger::Builder::from_default_env()
-			.format_module_path(false)
-			.format_level(true)
-			.try_init();
-
+		init_logger();
 		Builder::new()
 			.mode(Mode::Offline(OfflineConfig {
 				cache: CacheConfig { name: "proxy_test".into(), ..Default::default() },
@@ -439,11 +438,7 @@ mod tests {
 	#[async_std::test]
 	#[cfg(feature = "remote-test")]
 	async fn can_create_cache() {
-		let _ = env_logger::Builder::from_default_env()
-			.format_module_path(false)
-			.format_level(true)
-			.try_init();
-
+		init_logger();
 		Builder::new()
 			.mode(Mode::Online(OnlineConfig {
 				cache: Some(CacheConfig {
@@ -473,11 +468,7 @@ mod tests {
 	#[async_std::test]
 	#[cfg(feature = "remote-test")]
 	async fn can_build_all() {
-		let _ = env_logger::Builder::from_default_env()
-			.format_module_path(true)
-			.format_level(true)
-			.try_init();
-
+		init_logger();
 		Builder::new().build().await.execute_with(|| {});
 	}
 }

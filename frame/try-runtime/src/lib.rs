@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Supporting types for runtime upgrade dry-run api and command.
+//! Supporting types for try-runtime, testing and dry-run commands.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -44,7 +44,7 @@ macro_rules! match_pallet_on_runtime_upgrade {
 	};
 }
 
-/// Possible targets for dry-run runtime upgrade.
+/// Possible targets for try-runtime testing.
 #[derive(Debug, Encode, Decode)]
 pub enum Target {
 	/// All pallets.
