@@ -77,7 +77,7 @@ use sc_client_api::{
 	client::{
 		ImportNotifications, FinalityNotification, FinalityNotifications, BlockImportNotification,
 		ClientInfo, BlockchainEvents, BlockBackend, ProvideUncles, BadBlocks, ForkBlocks,
-		BlockOf,
+		BlockOf, PreImportedBlockProvider,
 	},
 	execution_extensions::ExecutionExtensions,
 	notifications::{StorageNotifications, StorageEventStream},
@@ -110,6 +110,7 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	storage_notifications: Mutex<StorageNotifications<Block>>,
 	import_notification_sinks: NotificationSinks<BlockImportNotification<Block>>,
 	finality_notification_sinks: NotificationSinks<FinalityNotification<Block>>,
+	downloaded_blocks: RwLock<HashMap<Block::Hash, Block>>,
 	// holds the block hash currently being imported. TODO: replace this with block queue
 	importing_block: RwLock<Option<Block::Hash>>,
 	block_rules: BlockRules<Block>,
@@ -323,6 +324,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			import_notification_sinks: Default::default(),
 			finality_notification_sinks: Default::default(),
 			importing_block: Default::default(),
+			downloaded_blocks: RwLock::new(HashMap::new()),
 			block_rules: BlockRules::new(fork_blocks, bad_blocks),
 			execution_extensions,
 			config,
@@ -1119,12 +1121,20 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	/// Get block header by id.
 	pub fn header(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<<Block as BlockT>::Header>> {
-		self.backend.blockchain().header(*id)
+		let mut header = self.backend.blockchain().header(*id)?;
+		if header.is_none() {
+			header = self.preimported_block_header(&*id);
+		}
+		Ok(header)
 	}
 
 	/// Get block body by id.
 	pub fn body(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Vec<<Block as BlockT>::Extrinsic>>> {
-		self.backend.blockchain().body(*id)
+		let mut body = self.backend.blockchain().body(*id)?;
+		if body.is_none() {
+			body = self.preimported_block_body(&*id);
+		}
+		Ok(body)
 	}
 
 	/// Gets the uncles of the block with `target_hash` going back `max_generation` ancestors.
@@ -1537,7 +1547,7 @@ impl<B, E, Block, RA> ChainHeaderBackend<Block> for Client<B, E, Block, RA> wher
 	RA: Send + Sync,
 {
 	fn header(&self, id: BlockId<Block>) -> sp_blockchain::Result<Option<Block::Header>> {
-		self.backend.blockchain().header(id)
+		self.header(&id)
 	}
 
 	fn info(&self) -> blockchain::Info<Block> {
@@ -1581,7 +1591,7 @@ impl<B, E, Block, RA> ChainHeaderBackend<Block> for &Client<B, E, Block, RA> whe
 	RA: Send + Sync,
 {
 	fn header(&self, id: BlockId<Block>) -> sp_blockchain::Result<Option<Block::Header>> {
-		(**self).backend.blockchain().header(id)
+		(**self).header(&id)
 	}
 
 	fn info(&self) -> blockchain::Info<Block> {
@@ -1926,6 +1936,39 @@ impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 
 	fn have_extrinsic(&self, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
 		self.backend.blockchain().have_extrinsic(hash)
+	}
+}
+
+impl<B, E, Block, RA> PreImportedBlockProvider<Block> for Client<B, E, Block, RA>
+	where
+		Block: BlockT,
+{
+	fn register_preimported_blocks(&self, blocks: Vec<Block>) {
+		self.downloaded_blocks.write().extend(blocks.into_iter().map(|b| (b.hash(), b)));
+	}
+
+	fn preimported_block_header(&self, id: &BlockId<Block>) -> Option<Block::Header> {
+		match id {
+			BlockId::Hash(h) => {
+				match self.downloaded_blocks.read().get(h) {
+					Some(block) => Some(block.header().clone()),
+					None => None,
+				}
+			},
+			_ => unimplemented!()
+		}
+	}
+
+	fn preimported_block_body(&self, id: &BlockId<Block>) -> Option<Vec<<Block as BlockT>::Extrinsic>> {
+		match id {
+			BlockId::Hash(h) => {
+				match self.downloaded_blocks.read().get(h) {
+					Some(block) => Some(block.extrinsics().to_vec()),
+					None => None,
+				}
+			},
+			_ => unimplemented!()
+		}
 	}
 }
 

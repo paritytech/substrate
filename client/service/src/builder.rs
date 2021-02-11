@@ -24,7 +24,7 @@ use crate::{
 	config::{Configuration, KeystoreConfig, PrometheusConfig},
 };
 use sc_client_api::{
-	light::RemoteBlockchain, ForkBlocks, BadBlocks, UsageProvider, ExecutorProvider,
+	light::RemoteBlockchain, ForkBlocks, BadBlocks, UsageProvider, ExecutorProvider, PreImportedBlockProvider,
 };
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sc_chain_spec::get_extension;
@@ -844,7 +844,7 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		TBl: BlockT,
 		TCl: ProvideRuntimeApi<TBl> + HeaderMetadata<TBl, Error=sp_blockchain::Error> + Chain<TBl> +
 		BlockBackend<TBl> + BlockIdTo<TBl, Error=sp_blockchain::Error> + ProofProvider<TBl> +
-		HeaderBackend<TBl> + BlockchainEvents<TBl> + 'static,
+		HeaderBackend<TBl> + BlockchainEvents<TBl> + PreImportedBlockProvider<TBl> + 'static,
 		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + 'static,
 		TImpQu: ImportQueue<TBl> + 'static,
 {
