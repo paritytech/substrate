@@ -6,7 +6,7 @@ edition = "2018"
 license = "Apache-2.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
-description = "Cli command for dry-running a runtime upgrade"
+description = "Cli command runtime testing and dry-running"
 readme = "README.md"
 
 [package.metadata.docs.rs]

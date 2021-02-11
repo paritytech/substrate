@@ -1340,7 +1340,7 @@ impl_runtime_apis! {
 			let weight = match target {
 				frame_try_runtime::Target::All => {
 					frame_support::debug::info!("Dry-running all on-runtime-upgrades.");
-					Executive::dry_run_runtime_upgrade()
+					Executive::try_runtime_upgrade()
 				},
 				frame_try_runtime::Target::Pallet(name) => {
 					let name = sp_std::str::from_utf8(&name).unwrap();
