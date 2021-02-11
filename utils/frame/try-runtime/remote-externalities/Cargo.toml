@@ -13,11 +13,8 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-jsonrpsee-http-client = { git = "https://github.com/paritytech/jsonrpsee" }
+jsonrpsee-http-client = { git = "https://github.com/paritytech/jsonrpsee", default-features = false, features = ["hyper-client"] }
 jsonrpsee-types = { git = "https://github.com/paritytech/jsonrpsee" }
-# TODO: these are not supported by `jsonrpsee`
-# sc-rpc-api = { path = "../../../../client/rpc-api" }
-# sc-rpc = { path = "../../../../client/rpc" }
 
 hex-literal = "0.3.1"
 env_logger = "0.8.2"
