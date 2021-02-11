@@ -280,7 +280,11 @@ impl LoggerBuilder {
 					self.telemetry_external_transport,
 					|builder| builder,
 				)?;
-				let profiling = crate::ProfilingLayer::new(tracing_receiver, &profiling_targets);
+				let profiling = crate::ProfilingLayer::new(
+					tracing_receiver,
+					&profiling_targets,
+					telemetry, // TODO... for... what node??
+				);
 
 				tracing::subscriber::set_global_default(subscriber.with(profiling))?;
 

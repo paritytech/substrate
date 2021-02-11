@@ -72,8 +72,10 @@ pub const CONSENSUS_WARN: VerbosityLevel = 4;
 /// Consensus INFO log level.
 pub const CONSENSUS_INFO: VerbosityLevel = 1;
 
+/// Telemetry message verbosity.
+pub type VerbosityLevel = u8;
+
 pub(crate) type Id = u64;
-pub(crate) type VerbosityLevel = u8;
 pub(crate) type TelemetryPayload = serde_json::Map<String, serde_json::Value>;
 pub(crate) type TelemetryMessage = (Id, VerbosityLevel, TelemetryPayload);
 
@@ -457,8 +459,8 @@ enum Register {
 /// ```
 #[macro_export(local_inner_macros)]
 macro_rules! telemetry {
-	( $telemetry:expr, $verbosity:expr; $msg:expr; $( $t:tt )* ) => {{
-		let verbosity: VerbosityLevel = $verbosity;
+	( $telemetry:expr; $verbosity:expr; $msg:expr; $( $t:tt )* ) => {{
+		let verbosity: $crate::VerbosityLevel = $verbosity;
 		match format_fields_to_json!($($t)*) {
 			Err(err) => {
 				$crate::tracing::error!(
