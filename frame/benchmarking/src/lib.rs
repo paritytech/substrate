@@ -830,6 +830,26 @@ macro_rules! impl_benchmark {
 				return Ok(results);
 			}
 		}
+
+		/// Test a particular benchmark by name.
+		///
+		/// This isn't called `test_benchmark_by_name` just in case some end-user eventually
+		/// writes a benchmark, itself called `by_name`; the function would be shadowed in
+		/// that case.
+		#[cfg(test)]
+		fn test_bench_by_name<T>(name: &[u8]) -> Result<(), &'static str>
+		where
+			T: Config + frame_system::Config, $( $where_clause )*
+		{
+			let name = sp_std::str::from_utf8(name)
+				.map_err(|_| "`name` is not a valid utf8 string!")?;
+			match name {
+				$( stringify!($name) => {
+					$crate::paste::paste! { [< test_benchmark_ $name >]::<T>() }
+				} )*
+				_ => Err("Could not find test for requested benchmark."),
+			}
+		}
 	};
 }
 
@@ -898,6 +918,85 @@ macro_rules! impl_benchmark_test {
 					}
 				}
 				Ok(())
+			}
+		}
+	};
+}
+
+/// This creates a test suite which runs the module's benchmarks.
+///
+/// When called in [`pallet_example`] as
+///
+/// ```rust,ignored
+/// impl_benchmark_test_suite!(crate::tests::new_test_ext, crate::tests::Test);
+/// ```
+///
+/// It expands to the equivalent of:
+///
+/// ```rust,ignored
+/// #[cfg(test)]
+/// mod tests {
+/// 	use super::*;
+/// 	use crate::tests::{new_test_ext, Test};
+/// 	use frame_support::assert_ok;
+///
+/// 	#[test]
+/// 	fn test_benchmarks() {
+/// 		new_test_ext().execute_with(|| {
+/// 			assert_ok!(test_benchmark_accumulate_dummy::<Test>());
+/// 			assert_ok!(test_benchmark_set_dummy::<Test>());
+/// 			assert_ok!(test_benchmark_another_set_dummy::<Test>());
+/// 			assert_ok!(test_benchmark_sort_vector::<Test>());
+/// 		});
+/// 	}
+/// }
+/// ```
+///
+/// ## Arguments
+///
+/// The first argument, `new_test_ext`, must be the path to a function which takes no arguments
+/// and returns either a `sp_io::TestExternalities`, or some other type with an identical interface.
+///
+/// The second argument, `test`, must be the path to the runtime. The item to which this must refer
+/// will generally take the form:
+///
+/// ```rust,ignored
+/// frame_support::construct_runtime!(
+/// 	pub enum Test where ...
+/// 	{ ... }
+/// );
+/// ```
+///
+// ## Notes (not for rustdoc)
+//
+// The biggest challenge for this macro is communicating the actual test functions to be run. We
+// can't just build an array of function pointers to each test function and iterate over it, because
+// the test functions are parameterized by the `Test` type. That's incompatible with
+// monomorphization: if it were legal, then even if the compiler detected and monomorphized the
+// functions into only the types of the callers, which implementation would the function pointer
+// point to? There would need to be some kind of syntax for selecting the destination of the pointer
+// according to a generic argument, and in general it would be a huge mess and not worth it.
+//
+// Instead, we're going to steal a trick from `fn run_benchmark`: generate a function which is
+// itself parametrized by `Test`, which accepts a `&[u8]` parameter containing the name of the
+// benchmark, and dispatches based on that to the appropriate real test implementation. Then, we can
+// just iterate over the `Benchmarking::benchmarks` list to run the actual implementations.
+#[macro_export]
+macro_rules! impl_benchmark_test_suite {
+	($new_test_ext:path, $test:path) => {
+		#[cfg(test)]
+		mod tests {
+			use super::*;
+			use $crate::frame_support::assert_ok;
+
+			#[test]
+			fn test_benchmarks() {
+				$new_test_ext().execute_with(|| {
+					use $crate::Benchmarking;
+					for benchmark_name in Module::<$test>::benchmarks(true) {
+						assert_ok!(test_bench_by_name::<$test>(benchmark_name));
+					}
+				});
 			}
 		}
 	};
@@ -1031,7 +1130,7 @@ macro_rules! add_benchmark {
 							*repeat,
 							whitelist,
 							*verify,
-						).map_err(|e| { 
+						).map_err(|e| {
 							$crate::show_benchmark_debug_info(
 								instance_string,
 								benchmark,
@@ -1058,7 +1157,7 @@ macro_rules! add_benchmark {
 						*repeat,
 						whitelist,
 						*verify,
-					).map_err(|e| { 
+					).map_err(|e| {
 						$crate::show_benchmark_debug_info(
 							instance_string,
 							benchmark,
