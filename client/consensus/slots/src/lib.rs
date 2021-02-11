@@ -47,7 +47,7 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header, HashFor, NumberFor}
 };
-use sc_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
+use sc_telemetry::{telemetry, Telemetry, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
 
 /// The changes that need to applied to the storage to create the state for a block.
 ///
@@ -78,7 +78,12 @@ pub trait SlotWorker<B: BlockT> {
 	///
 	/// Returns a future that resolves to a [`SlotResult`] iff a block was successfully built in
 	/// the slot. Otherwise `None` is returned.
-	fn on_slot(&mut self, chain_head: B::Header, slot_info: SlotInfo) -> Self::OnSlot;
+	fn on_slot(
+		&mut self,
+		chain_head: B::Header,
+		slot_info: SlotInfo,
+		telemetry: Option<Telemetry>,
+	) -> Self::OnSlot;
 }
 
 /// A skeleton implementation for `SlotWorker` which tries to claim a slot at
@@ -205,6 +210,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		&mut self,
 		chain_head: B::Header,
 		slot_info: SlotInfo,
+		mut telemetry: Option<Telemetry>,
 	) -> Pin<Box<dyn Future<Output = Option<SlotResult<B>>> + Send>>
 	where
 		<Self::Proposer as Proposer<B>>::Proposal: Unpin + Send + 'static,
@@ -234,7 +240,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				warn!("Unable to fetch epoch data at block {:?}: {:?}", chain_head.hash(), err);
 
 				telemetry!(
-					CONSENSUS_WARN; "slots.unable_fetching_authorities";
+					telemetry; CONSENSUS_WARN; "slots.unable_fetching_authorities";
 					"slot" => ?chain_head.hash(),
 					"err" => ?err,
 				);
@@ -253,8 +259,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		{
 			debug!(target: self.logging_target(), "Skipping proposal slot. Waiting for the network.");
 			telemetry!(
-				CONSENSUS_DEBUG;
-				"slots.skipping_proposal_slot";
+				telemetry; CONSENSUS_DEBUG; "slots.skipping_proposal_slot";
 				"authorities_len" => authorities_len,
 			);
 
@@ -278,24 +283,25 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		);
 
 		telemetry!(
-			CONSENSUS_DEBUG;
-			"slots.starting_authorship";
+			telemetry; CONSENSUS_DEBUG; "slots.starting_authorship";
 			"slot_num" => *slot,
 			"timestamp" => timestamp,
 		);
 
-		let awaiting_proposer = self.proposer(&chain_head).map_err(move |err| {
-			warn!("Unable to author block in slot {:?}: {:?}", slot, err);
+		let awaiting_proposer = {
+			let mut telemetry = telemetry.clone();
+			self.proposer(&chain_head).map_err(move |err| {
+				warn!("Unable to author block in slot {:?}: {:?}", slot, err);
 
-			telemetry!(
-				CONSENSUS_WARN;
-				"slots.unable_authoring_block";
-				"slot" => *slot,
-				"err" => ?err
-			);
+				telemetry!(
+					telemetry; CONSENSUS_WARN; "slots.unable_authoring_block";
+					"slot" => *slot,
+					"err" => ?err
+				);
 
-			err
-		});
+				err
+			})
+		};
 
 		let logs = self.pre_digest_data(slot, &claim);
 
@@ -309,7 +315,8 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			RecordProof::No,
 		).map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e))));
 
-		let proposal_work =
+		let proposal_work = {
+			let mut telemetry = telemetry.clone();
 			futures::future::select(proposing, proposing_remaining).map(move |v| match v {
 				Either::Left((b, _)) => b.map(|b| (b, claim)),
 				Either::Right(_) => {
@@ -318,14 +325,14 @@ pub trait SimpleSlotWorker<B: BlockT> {
 					#[cfg(build_type="debug")]
 					info!("👉 Recompile your node in `--release` mode to mitigate this problem.");
 					telemetry!(
-						CONSENSUS_INFO;
-						"slots.discarding_proposal_took_too_long";
+						telemetry; CONSENSUS_INFO; "slots.discarding_proposal_took_too_long";
 						"slot" => *slot,
 					);
 
 					Err(sp_consensus::Error::ClientImport("Timeout in the Slots proposer".into()))
 				},
-			});
+			})
+		};
 
 		let block_import_params_maker = self.block_import_params();
 		let block_import = self.block_import();
@@ -354,7 +361,8 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				header_hash,
 			);
 
-			telemetry!(CONSENSUS_INFO; "slots.pre_sealed_block";
+			telemetry!(
+				telemetry; CONSENSUS_INFO; "slots.pre_sealed_block";
 				"header_num" => ?header_num,
 				"hash_now" => ?block_import_params.post_hash(),
 				"hash_previously" => ?header_hash,
@@ -369,7 +377,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				);
 
 				telemetry!(
-					CONSENSUS_WARN; "slots.err_with_block_built_on";
+					telemetry; CONSENSUS_WARN; "slots.err_with_block_built_on";
 					"hash" => ?parent_hash,
 					"err" => ?err,
 				);
@@ -385,8 +393,13 @@ pub trait SimpleSlotWorker<B: BlockT> {
 impl<B: BlockT, T: SimpleSlotWorker<B>> SlotWorker<B> for T {
 	type OnSlot = Pin<Box<dyn Future<Output = Option<SlotResult<B>>> + Send>>;
 
-	fn on_slot(&mut self, chain_head: B::Header, slot_info: SlotInfo) -> Self::OnSlot {
-		SimpleSlotWorker::on_slot(self, chain_head, slot_info)
+	fn on_slot(
+		&mut self,
+		chain_head: B::Header,
+		slot_info: SlotInfo,
+		telemetry: Option<Telemetry>,
+	) -> Self::OnSlot {
+		SimpleSlotWorker::on_slot(self, chain_head, slot_info, telemetry)
 	}
 }
 
@@ -411,6 +424,7 @@ pub fn start_slot_worker<B, C, W, T, SO, SC, CAW>(
 	inherent_data_providers: InherentDataProviders,
 	timestamp_extractor: SC,
 	can_author_with: CAW,
+	telemetry: Option<Telemetry>,
 ) -> impl Future<Output = ()>
 where
 	B: BlockT,
@@ -458,7 +472,8 @@ where
 				Either::Right(future::ready(Ok(())))
 			} else {
 				Either::Left(
-					worker.on_slot(chain_head, slot_info).then(|_| future::ready(Ok(())))
+					worker.on_slot(chain_head, slot_info, telemetry.clone())
+						.then(|_| future::ready(Ok(())))
 				)
 			}
 		}).then(|res| {
