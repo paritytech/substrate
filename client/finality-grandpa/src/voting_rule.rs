@@ -73,7 +73,7 @@ impl<Block, B> VotingRule<Block, B> for () where
 		_best_target: &Block::Header,
 		_current_target: &Block::Header,
 	) -> VotingRuleResult<Block> {
-		Box::pin(std::future::ready(None))
+		Box::pin(async { None })
 	}
 }
 
@@ -96,7 +96,7 @@ impl<Block, B> VotingRule<Block, B> for BeforeBestBlockBy<NumberFor<Block>> wher
 		use sp_arithmetic::traits::Saturating;
 
 		if current_target.number().is_zero() {
-			return Box::pin(std::future::ready(None));
+			return Box::pin(async { None });
 		}
 
 		// find the target number restricted by this rule
@@ -104,17 +104,17 @@ impl<Block, B> VotingRule<Block, B> for BeforeBestBlockBy<NumberFor<Block>> wher
 
 		// our current target is already lower than this rule would restrict
 		if target_number >= *current_target.number() {
-			return Box::pin(std::future::ready(None));
+			return Box::pin(async { None });
 		}
 
 		let current_target = current_target.clone();
 
 		// find the block at the given target height
-		Box::pin(std::future::ready(find_target(
+		Box::pin(async move { find_target(
 			&*backend,
 			target_number.clone(),
 			&current_target,
-		)))
+		)})
 	}
 }
 
@@ -149,15 +149,15 @@ impl<Block, B> VotingRule<Block, B> for ThreeQuartersOfTheUnfinalizedChain where
 
 		// our current target is already lower than this rule would restrict
 		if target_number >= *current_target.number() {
-			return Box::pin(std::future::ready(None));
+			return Box::pin(async { None });
 		}
 
 		// find the block at the given target height
-		Box::pin(std::future::ready(find_target(
+		Box::pin(async move { find_target(
 			&*backend,
 			target_number,
 			current_target,
-		)))
+		)})
 	}
 }
 
