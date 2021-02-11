@@ -1589,8 +1589,9 @@ dependencies = [
 
 [[package]]
 name = "finality-grandpa"
-version = "0.13.0"
-source = "git+https://github.com/paritytech/finality-grandpa.git?branch=andre/async-prevote-construction#399b13f244a973091badf0abd4ee0c56a6daeb4a"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c6447e2f8178843749e8c8003206def83ec124a7859475395777a28b5338647c"
 dependencies = [
  "either",
  "futures 0.3.12",
