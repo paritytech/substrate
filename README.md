@@ -14,8 +14,6 @@ Simply go to [substrate.dev](https://substrate.dev) and follow the
 [installation](https://substrate.dev/docs/en/knowledgebase/getting-started/) instructions. You can
 also try out one of the [tutorials](https://substrate.dev/en/tutorials).
 
-Whatever
-
 ## Contributions & Code of Conduct
 
 Please follow the contributions guidelines as outlined in [`docs/CONTRIBUTING.adoc`](docs/CONTRIBUTING.adoc). In all communications and contributions, this project follows the [Contributor Covenant Code of Conduct](docs/CODE_OF_CONDUCT.md).
