@@ -33,12 +33,13 @@ use sc_telemetry::{ExtTransport, TelemetryWorker};
 use std::io;
 use tracing::Subscriber;
 use tracing_subscriber::{
+	filter::LevelFilter,
 	fmt::time::ChronoLocal,
 	fmt::{
 		format, FormatEvent, FormatFields, Formatter, Layer as FmtLayer, MakeWriter,
 		SubscriberBuilder,
 	},
-	layer::{self, SubscriberExt}, filter::LevelFilter,
+	layer::{self, SubscriberExt},
 	registry::LookupSpan,
 	EnvFilter, FmtSubscriber, Layer, Registry,
 };
@@ -164,8 +165,10 @@ where
 		"%Y-%m-%d %H:%M:%S%.3f".to_string()
 	});
 
-	let (telemetry_layer, telemetry_worker) =
-		sc_telemetry::TelemetryLayer::new(telemetry_buffer_size, telemetry_external_transport)?;
+	let telemetry_worker = sc_telemetry::TelemetryWorker::new(
+		telemetry_buffer_size.unwrap_or(16),
+		telemetry_external_transport,
+	)?;
 	let event_format = EventFormat {
 		timer,
 		display_target: !simple,
@@ -187,7 +190,7 @@ where
 	#[cfg(not(target_os = "unknown"))]
 	let builder = builder_hook(builder);
 
-	let subscriber = builder.finish().with(PrefixLayer).with(telemetry_layer);
+	let subscriber = builder.finish().with(PrefixLayer);
 
 	#[cfg(target_os = "unknown")]
 	let subscriber = subscriber.with(ConsoleLogLayer::new(event_format));
@@ -280,11 +283,7 @@ impl LoggerBuilder {
 					self.telemetry_external_transport,
 					|builder| builder,
 				)?;
-				let profiling = crate::ProfilingLayer::new(
-					tracing_receiver,
-					&profiling_targets,
-					telemetry, // TODO... for... what node??
-				);
+				let profiling = crate::ProfilingLayer::new(tracing_receiver, &profiling_targets);
 
 				tracing::subscriber::set_global_default(subscriber.with(profiling))?;
 
@@ -339,7 +338,8 @@ mod tests {
 	#[test]
 	fn test_logger_filters() {
 		if env::var("RUN_TEST_LOGGER_FILTERS").is_ok() {
-			let test_directives = "afg=debug,sync=trace,client=warn,telemetry,something-with-dash=error";
+			let test_directives =
+				"afg=debug,sync=trace,client=warn,telemetry,something-with-dash=error";
 			init_logger(&test_directives);
 
 			tracing::dispatcher::get_default(|dispatcher| {
