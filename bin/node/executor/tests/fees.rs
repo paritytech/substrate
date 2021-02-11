@@ -17,7 +17,6 @@
 
 use codec::{Encode, Joiner};
 use frame_support::{
-	StorageValue,
 	traits::Currency,
 	weights::{GetDispatchInfo, constants::ExtrinsicBaseWeight, IdentityFee, WeightToFeePolynomial},
 };

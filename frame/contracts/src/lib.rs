@@ -628,7 +628,7 @@ decl_module! {
 			let origin = ensure_signed(origin)?;
 			let mut gas_meter = GasMeter::new(gas_limit);
 			let result = Self::execute_wasm(origin, &mut gas_meter, |ctx, gas_meter| {
-				let executable = PrefabWasmModule::from_storage(code_hash, &ctx.config.schedule)?;
+				let executable = PrefabWasmModule::from_storage(code_hash, &ctx.schedule)?;
 				let result = ctx.instantiate(endowment, gas_meter, executable, data, &salt)
 					.map(|(_address, output)| output)?;
 				Ok(result)
@@ -764,6 +764,17 @@ where
 			.collect();
 		UncheckedFrom::unchecked_from(T::Hashing::hash(&buf))
 	}
+
+	/// Subsistence threshold is the extension of the minimum balance (aka existential deposit)
+	/// by the tombstone deposit, required for leaving a tombstone.
+	///
+	/// Rent or any contract initiated balance transfer mechanism cannot make the balance lower
+	/// than the subsistence threshold in order to guarantee that a tombstone is created.
+	///
+	/// The only way to completely kill a contract without a tombstone is calling `seal_terminate`.
+	pub fn subsistence_threshold() -> BalanceOf<T> {
+		T::Currency::minimum_balance().saturating_add(T::TombstoneDeposit::get())
+	}
 }
 
 impl<T: Config> Module<T>
@@ -778,8 +789,8 @@ where
 			&mut GasMeter<T>,
 		) -> ExecResult,
 	) -> ExecResult {
-		let cfg = ConfigCache::preload();
-		let mut ctx = ExecutionContext::top_level(origin, &cfg);
+		let schedule = <Module<T>>::current_schedule();
+		let mut ctx = ExecutionContext::top_level(origin, &schedule);
 		func(&mut ctx, gas_meter)
 	}
 }
@@ -873,51 +884,5 @@ decl_storage! {
 		/// Child trie deletion is a heavy operation depending on the amount of storage items
 		/// stored in said trie. Therefore this operation is performed lazily in `on_initialize`.
 		pub DeletionQueue: Vec<storage::DeletedContract>;
-	}
-}
-
-/// In-memory cache of configuration values.
-///
-/// We assume that these values can't be changed in the
-/// course of transaction execution.
-pub struct ConfigCache<T: Config> {
-	pub schedule: Schedule<T>,
-	pub existential_deposit: BalanceOf<T>,
-	pub tombstone_deposit: BalanceOf<T>,
-	pub max_depth: u32,
-	pub max_value_size: u32,
-}
-
-impl<T: Config> ConfigCache<T>
-where
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>
-{
-	fn preload() -> ConfigCache<T> {
-		ConfigCache {
-			schedule: <Module<T>>::current_schedule(),
-			existential_deposit: T::Currency::minimum_balance(),
-			tombstone_deposit: T::TombstoneDeposit::get(),
-			max_depth: T::MaxDepth::get(),
-			max_value_size: T::MaxValueSize::get(),
-		}
-	}
-
-	/// Subsistence threshold is the extension of the minimum balance (aka existential deposit) by the
-	/// tombstone deposit, required for leaving a tombstone.
-	///
-	/// Rent or any contract initiated balance transfer mechanism cannot make the balance lower
-	/// than the subsistence threshold in order to guarantee that a tombstone is created.
-	///
-	/// The only way to completely kill a contract without a tombstone is calling `seal_terminate`.
-	pub fn subsistence_threshold(&self) -> BalanceOf<T> {
-		self.existential_deposit.saturating_add(self.tombstone_deposit)
-	}
-
-	/// The same as `subsistence_threshold` but without the need for a preloaded instance.
-	///
-	/// This is for cases where this value is needed in rent calculation rather than
-	/// during contract execution.
-	pub fn subsistence_threshold_uncached() -> BalanceOf<T> {
-		T::Currency::minimum_balance().saturating_add(T::TombstoneDeposit::get())
 	}
 }

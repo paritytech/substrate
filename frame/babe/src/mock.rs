@@ -64,8 +64,6 @@ frame_support::construct_runtime!(
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const EpochDuration: u64 = 3;
-	pub const ExpectedBlockTime: u64 = 1;
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(16);
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1024);
@@ -231,6 +229,13 @@ impl pallet_offences::Config for Test {
 	type WeightSoftLimit = OffencesWeightSoftLimit;
 }
 
+parameter_types! {
+	pub const EpochDuration: u64 = 3;
+	pub const ExpectedBlockTime: u64 = 1;
+	pub const ReportLongevity: u64 =
+		BondingDuration::get() as u64 * SessionsPerEra::get() as u64 * EpochDuration::get();
+}
+
 impl Config for Test {
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ExpectedBlockTime;
@@ -246,7 +251,9 @@ impl Config for Test {
 		AuthorityId,
 	)>>::IdentificationTuple;
 
-	type HandleEquivocation = super::EquivocationHandler<Self::KeyOwnerIdentification, Offences>;
+	type HandleEquivocation =
+		super::EquivocationHandler<Self::KeyOwnerIdentification, Offences, ReportLongevity>;
+
 	type WeightInfo = ();
 }
 
