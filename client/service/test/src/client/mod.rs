@@ -1014,7 +1014,7 @@ fn import_with_justification() {
 	client.import(BlockOrigin::Own, a2.clone()).unwrap();
 
 	// A2 -> A3
-	let justification = Justifications(vec![(GRANDPA_ENGINE_ID, vec![1, 2, 3])]);
+	let justification = Justifications::from((GRANDPA_ENGINE_ID, vec![1, 2, 3]));
 	let a3 = client.new_block_at(
 		&BlockId::Hash(a2.hash()),
 		Default::default(),
@@ -1086,7 +1086,7 @@ fn importing_diverged_finalized_block_should_trigger_reorg() {
 	);
 
 	// importing B1 as finalized should trigger a re-org and set it as new best
-	let justification = Justifications(vec![(GRANDPA_ENGINE_ID, vec![1, 2, 3])]);
+	let justification = Justifications::from((GRANDPA_ENGINE_ID, vec![1, 2, 3]));
 	client.import_justified(BlockOrigin::Own, b1.clone(), justification).unwrap();
 
 	assert_eq!(

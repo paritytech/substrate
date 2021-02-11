@@ -312,14 +312,13 @@ impl<Block: BlockT> Blockchain<Block> {
 
 		if let Some(stored_justifications) = block_justification {
 			if stored_justifications
-				.0
 				.iter()
 				.find(|stored| stored.0 == justification.0)
 				.is_some()
 			{
 				return Err(sp_blockchain::Error::BadJustification("Duplicate".into()));
 			}
-			stored_justifications.0.push(justification);
+			stored_justifications.push(justification);
 		} else {
 			*block_justification = Some(Justifications::from(justification));
 		};
@@ -825,10 +824,10 @@ mod tests {
 
 	fn test_blockchain() -> Blockchain<Block> {
 		let blockchain = Blockchain::<Block>::new();
-		let just0 = Some(Justifications(vec![(ID1, vec![0])]));
-		let just1 = Some(Justifications(vec![(ID1, vec![1])]));
+		let just0 = Some(Justifications::from((ID1, vec![0])));
+		let just1 = Some(Justifications::from((ID1, vec![1])));
 		let just2 = None;
-		let just3 = Some(Justifications(vec![(ID1, vec![3])]));
+		let just3 = Some(Justifications::from((ID1, vec![3])));
 		blockchain.insert(header(0).hash(), header(0), just0, None, NewBlockState::Final).unwrap();
 		blockchain.insert(header(1).hash(), header(1), just1, None, NewBlockState::Final).unwrap();
 		blockchain.insert(header(2).hash(), header(2), just2, None, NewBlockState::Best).unwrap();
@@ -843,13 +842,12 @@ mod tests {
 		let block = BlockId::Hash(last_finalized);
 
 		blockchain.append_justification(block, (ID2, vec![4])).unwrap();
-		assert_eq!(
-			blockchain.justifications(block).unwrap(),
-			Some(Justifications(vec![
-				(ID1, vec![3]),
-				(ID2, vec![4]),
-			])),
-		);
+		let justifications = {
+			let mut just = Justifications::from((ID1, vec![3]));
+			just.push((ID2, vec![4]));
+			just
+		};
+		assert_eq!(blockchain.justifications(block).unwrap(), Some(justifications));
 	}
 
 	#[test]

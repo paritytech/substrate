@@ -131,7 +131,7 @@ impl <B: BlockT> BlockRequestHandler<B> {
 			// To keep compatibility we only send the grandpa justification
 			let justification = justifications
 				.map(|just|
-					match just.0.into_iter().find(|j| j.0 == GRANDPA_ENGINE_ID) {
+					match just.into_iter().find(|j| j.0 == GRANDPA_ENGINE_ID) {
 						Some((_, grandpa_justification)) => grandpa_justification,
 						None => Vec::new(),
 				})

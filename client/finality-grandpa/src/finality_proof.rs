@@ -208,7 +208,7 @@ where
 	let last_block_for_set_id = BlockId::Number(last_block_for_set);
 	let justification =
 		if let Some(justifications) = blockchain.justifications(last_block_for_set_id)? {
-			if let Some((_, grandpa_justification)) = justifications.0
+			if let Some((_, grandpa_justification)) = justifications
 				.into_iter()
 				.find(|j| j.0 == GRANDPA_ENGINE_ID)
 			{
@@ -321,7 +321,7 @@ pub fn prove_warp_sync<Block: BlockT, B: BlockchainBackend<Block>>(
 	if result.last().as_ref().map(|head| head.header.number()) != Some(&end_number) {
 		let header = blockchain.expect_header(end)?;
 		if let Some(justifications) = blockchain.justifications(BlockId::Number(end_number.clone()))? {
-			if let Some((_, justification)) = justifications.0.into_iter().find(|j| j.0 == GRANDPA_ENGINE_ID) {
+			if let Some((_, justification)) = justifications.into_iter().find(|j| j.0 == GRANDPA_ENGINE_ID) {
 				result.push(AuthoritySetProofFragment {
 					header: header.clone(),
 					justification,
@@ -356,7 +356,7 @@ fn get_warp_sync_proof_fragment<Block: BlockT, B: BlockchainBackend<Block>>(
 	})) = crate::import::find_forced_change::<Block>(&header) {
 		let dest = block_number + delay;
 		if let Some(justifications) = blockchain.justifications(BlockId::Number(index.clone()))? {
-			if let Some((_, justification)) = justifications.0.into_iter().find(|j| j.0 == GRANDPA_ENGINE_ID) {
+			if let Some((_, justification)) = justifications.into_iter().find(|j| j.0 == GRANDPA_ENGINE_ID) {
 				result = Some((AuthoritySetProofFragment {
 					header: header.clone(),
 					justification,
@@ -373,7 +373,7 @@ fn get_warp_sync_proof_fragment<Block: BlockT, B: BlockchainBackend<Block>>(
 	}) = crate::import::find_scheduled_change::<Block>(&header) {
 		let dest = index + delay;
 		if let Some(justifications) = blockchain.justifications(BlockId::Number(index.clone()))? {
-			if let Some((_, justification)) = justifications.0.into_iter().find(|j| j.0 == GRANDPA_ENGINE_ID) {
+			if let Some((_, justification)) = justifications.into_iter().find(|j| j.0 == GRANDPA_ENGINE_ID) {
 				result = Some((AuthoritySetProofFragment {
 					header: header.clone(),
 					justification,
@@ -672,10 +672,10 @@ pub(crate) mod tests {
 	fn test_blockchain() -> InMemoryBlockchain<Block> {
 		use sp_finality_grandpa::GRANDPA_ENGINE_ID as ID;
 		let blockchain = InMemoryBlockchain::<Block>::new();
-		let just0 = Some(Justifications(vec![(ID, vec![0])]));
-		let just1 = Some(Justifications(vec![(ID, vec![1])]));
+		let just0 = Some(Justifications::from((ID, vec![0])));
+		let just1 = Some(Justifications::from((ID, vec![1])));
 		let just2 = None;
-		let just3 = Some(Justifications(vec![(ID, vec![3])]));
+		let just3 = Some(Justifications::from((ID, vec![3])));
 		blockchain.insert(header(0).hash(), header(0), just0, None, NewBlockState::Final).unwrap();
 		blockchain.insert(header(1).hash(), header(1), just1, None, NewBlockState::Final).unwrap();
 		blockchain.insert(header(2).hash(), header(2), just2, None, NewBlockState::Best).unwrap();

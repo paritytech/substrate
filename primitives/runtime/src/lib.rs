@@ -103,7 +103,29 @@ pub type Justification = (ConsensusEngineId, EncodedJustification);
 /// Collection of Justifications, since we might have more than one stored per block.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
-pub struct Justifications(pub Vec<Justification>);
+pub struct Justifications(Vec<Justification>);
+
+impl Justifications {
+	/// WIP(JON)
+	pub fn iter(&self) -> impl Iterator<Item = &Justification> {
+		self.0.iter()
+	}
+
+	/// WIP(JON)
+	pub fn push(&mut self, justification: Justification) {
+		self.0.push(justification)
+	}
+}
+
+impl IntoIterator for Justifications {
+	type Item = Justification;
+	type IntoIter = sp_std::vec::IntoIter<Self::Item>;
+
+	/// WIP(JON)
+	fn into_iter(self) -> Self::IntoIter {
+		self.0.into_iter()
+	}
+}
 
 impl From<Justification> for Justifications {
 	fn from(justification: Justification) -> Self {

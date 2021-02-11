@@ -1689,14 +1689,13 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		let justifications =
 			if let Some(mut stored_justifications) = self.blockchain.justifications(block)? {
 				if stored_justifications
-					.0
 					.iter()
 					.find(|stored| stored.0 == justification.0)
 					.is_some()
 				{
 					return Err(ClientError::BadJustification("Duplicate".into()));
 				}
-				stored_justifications.0.push(justification);
+				stored_justifications.push(justification);
 				stored_justifications
 			} else {
 				Justifications::from(justification)
@@ -2562,7 +2561,7 @@ pub(crate) mod tests {
 		let block0 = insert_header(&backend, 0, Default::default(), None, Default::default());
 		let _ = insert_header(&backend, 1, block0, None, Default::default());
 
-		let justification = Some(Justifications(vec![(CONS0_ENGINE_ID, vec![1, 2, 3])]));
+		let justification = Some(Justifications::from((CONS0_ENGINE_ID, vec![1, 2, 3])));
 		backend.finalize_block(BlockId::Number(1), justification.clone()).unwrap();
 
 		assert_eq!(
@@ -2583,7 +2582,7 @@ pub(crate) mod tests {
 		let just0 = (CONS0_ENGINE_ID, vec![1, 2, 3]);
 		backend.finalize_block(
 			BlockId::Number(1),
-			Some(Justifications(vec![just0.clone()])),
+			Some(just0.clone().into()),
 		).unwrap();
 
 		let just1 = (CONS1_ENGINE_ID, vec![4, 5]);
@@ -2595,9 +2594,14 @@ pub(crate) mod tests {
 			Err(ClientError::BadJustification(_))
 		));
 
+		let justifications = {
+			let mut just = Justifications::from(just0);
+			just.push(just1);
+			just
+		};
 		assert_eq!(
 			backend.blockchain().justifications(BlockId::Number(1)).unwrap(),
-			Some(Justifications(vec![just0, just1])),
+			Some(justifications),
 		);
 	}
 

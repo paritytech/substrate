@@ -273,10 +273,20 @@ fn sync_justifications() {
 		net.poll(cx);
 
 		for height in (10..21).step_by(5) {
-			if net.peer(0).client().justifications(&BlockId::Number(height)).unwrap() != Some(Justifications(Vec::new())) {
+			if net
+				.peer(0)
+				.client()
+				.justifications(&BlockId::Number(height))
+				.unwrap() != Some(Justifications::from((ID, Vec::new())))
+			{
 				return Poll::Pending;
 			}
-			if net.peer(1).client().justifications(&BlockId::Number(height)).unwrap() != Some(Justifications(Vec::new())) {
+			if net
+				.peer(1)
+				.client()
+				.justifications(&BlockId::Number(height))
+				.unwrap() != Some(Justifications::from((ID, Vec::new())))
+			{
 				return Poll::Pending;
 			}
 		}
@@ -308,8 +318,16 @@ fn sync_justifications_across_forks() {
 	block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
 
-		if net.peer(0).client().justifications(&BlockId::Number(10)).unwrap() == Some(Justifications(Vec::new())) &&
-			net.peer(1).client().justifications(&BlockId::Number(10)).unwrap() == Some(Justifications(Vec::new()))
+		if net
+			.peer(0)
+			.client()
+			.justifications(&BlockId::Number(10))
+			.unwrap() == Some(Justifications::from((ID, Vec::new())))
+			&& net
+				.peer(1)
+				.client()
+				.justifications(&BlockId::Number(10))
+				.unwrap() == Some(Justifications::from((ID, Vec::new())))
 		{
 			Poll::Ready(())
 		} else {

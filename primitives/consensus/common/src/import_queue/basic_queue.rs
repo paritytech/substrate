@@ -538,12 +538,13 @@ mod tests {
 
 		let mut import_justification = || {
 			let hash = Hash::random();
+			const ENGINE_ID: sp_runtime::ConsensusEngineId = *b"TEST";
 
 			block_on(finality_sender.send(worker_messages::ImportJustification(
 				libp2p::PeerId::random(),
 				hash,
 				1,
-				sp_runtime::Justifications(Vec::new()),
+				sp_runtime::Justifications::from((ENGINE_ID, Vec::new())),
 			)))
 			.unwrap();
 

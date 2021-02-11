@@ -1572,7 +1572,7 @@ fn imports_justification_for_regular_blocks_on_import() {
 
 	// we import the block with justification attached
 	let mut import = BlockImportParams::new(BlockOrigin::File, block.header);
-	import.justifications = Some(Justifications(vec![(GRANDPA_ENGINE_ID, justification.encode())]));
+	import.justifications = Some((GRANDPA_ENGINE_ID, justification.encode()).into());
 	import.body = Some(block.extrinsics);
 	import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 

@@ -83,10 +83,10 @@ fn migrate_2_to_3<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> sp_b
 	let mut transaction = db.transaction();
 	for key in keys {
 		if let Some(justification) = db.get(columns::JUSTIFICATION, &key).map_err(db_err)? {
-			let justifications = sp_runtime::Justifications(vec![(
+			let justifications = sp_runtime::Justifications::from((
 				sp_finality_grandpa::GRANDPA_ENGINE_ID,
 				justification,
-			)]);
+			));
 
 			transaction.put_vec(columns::JUSTIFICATION, &key, justifications.encode());
 		}

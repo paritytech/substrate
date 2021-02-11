@@ -372,13 +372,14 @@ fn execution_proof_is_generated_and_checked() {
 
 	// prepare remote client
 	let mut remote_client = substrate_test_runtime_client::new();
+	const ID: sp_runtime::ConsensusEngineId = *b"TEST";
 	for i in 1u32..3u32 {
 		let mut digest = Digest::default();
 		digest.push(sp_runtime::generic::DigestItem::Other::<H256>(i.to_le_bytes().to_vec()));
 		remote_client.import_justified(
 			BlockOrigin::Own,
 			remote_client.new_block(digest).unwrap().build().unwrap().block,
-			Justifications(Default::default()),
+			Justifications::from((ID, Default::default())),
 		).unwrap();
 	}
 
