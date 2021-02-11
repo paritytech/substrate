@@ -112,7 +112,6 @@ use frame_support::traits::{
 
 use sp_runtime::{Permill, RuntimeDebug, DispatchResult, traits::{
 	Zero, StaticLookup, AccountIdConversion, Saturating, BadOrigin,
-	CheckedSub,
 }};
 
 use frame_support::dispatch::{DispatchError, DispatchResultWithPostInfo};
@@ -924,7 +923,7 @@ decl_module! {
 					ensure!(fee < subbounty_value, Error::<T>::InvalidFee);
 
 					// Update the master curator fee balance.
-					Bounties::<T>::mutate_exists(
+					Bounties::<T>::try_mutate_exists(
 						bounty_id,
 						|maybe_bounty| -> DispatchResult {
 							if let Some(bounty) = maybe_bounty.as_mut() {
@@ -932,10 +931,10 @@ decl_module! {
 								// master curator fee &
 								// reduce the master curator fee
 								// by subcurator fee.
+								ensure!(fee < bounty.fee, Error::<T>::InvalidFee);
 								bounty.fee = bounty
 									.fee
-									.checked_sub(&fee)
-									.ok_or(Error::<T>::InvalidFee)?;
+									.saturating_sub(fee);
 							}
 							Ok(())
 						}
