@@ -21,7 +21,6 @@ use nix::sys::signal::{kill, Signal::SIGINT};
 use nix::unistd::Pid;
 use std::convert::TryInto;
 use std::process;
-use tempfile::tempdir;
 
 pub mod common;
 pub mod websocket_server;
@@ -55,7 +54,7 @@ async fn telemetry_works() {
 					let payload = object.get("payload").unwrap();
 					let object = payload.as_object().unwrap();
 					if matches!(object.get("best"), Some(serde_json::Value::String(_))) {
-						received_telemetry = true;
+						break;
 					}
 				}
 
@@ -67,14 +66,11 @@ async fn telemetry_works() {
 		}
 	});
 
-	let base_path = tempdir().expect("could not create a temp dir");
 	let mut substrate = process::Command::new(cargo_bin("substrate"));
 
 	let mut substrate = substrate
-		.args(&["--dev", "--telemetry-url"])
+		.args(&["--dev", "--tmp", "--telemetry-url"])
 		.arg(format!("ws://{} 10", addr))
-		.arg("-d")
-		.arg(base_path.path())
 		.stdout(process::Stdio::piped())
 		.stderr(process::Stdio::piped())
 		.stdin(process::Stdio::null())
