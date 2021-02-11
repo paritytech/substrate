@@ -269,7 +269,6 @@ impl Builder {
 // RPC methods
 impl Builder {
 	async fn rpc_get_head(&self) -> Hash {
-		// TODO: move client to the builder.
 		trace!(target: LOG_TARGET, "rpc: finalized_head");
 		self.as_online().rpc.request("chain_getFinalizedHead", Params::None).await.unwrap()
 	}
