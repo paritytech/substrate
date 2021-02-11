@@ -836,7 +836,12 @@ macro_rules! impl_benchmark {
 		/// This isn't called `test_benchmark_by_name` just in case some end-user eventually
 		/// writes a benchmark, itself called `by_name`; the function would be shadowed in
 		/// that case.
+		///
+		/// This is generally intended to be used by child test modules such as those created
+		/// by the `impl_benchmark_test_suite` macro. However, it is not an error if a pallet
+		/// author chooses not to implement benchmarks.
 		#[cfg(test)]
+		#[allow(unused)]
 		fn test_bench_by_name<T>(name: &[u8]) -> Result<(), &'static str>
 		where
 			T: Config + frame_system::Config, $( $where_clause )*
