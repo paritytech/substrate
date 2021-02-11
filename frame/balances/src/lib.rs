@@ -611,16 +611,17 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 	fn post_mutation(
 		who: &T::AccountId,
 		new: AccountData<T::Balance>,
-	) -> Option<AccountData<T::Balance>> {
+	) -> (Option<AccountData<T::Balance>>, Option<NegativeImbalance<T, I>>) {
 		let total = new.total();
 		if total < T::ExistentialDeposit::get() {
-			if !total.is_zero() {
-				T::DustRemoval::on_unbalanced(NegativeImbalance::new(total));
+			if total.is_zero() {
+				(None, None)
+			} else {
 				Self::deposit_event(RawEvent::DustLost(who.clone(), total));
+				(None, Some(NegativeImbalance::new(total)))
 			}
-			None
 		} else {
-			Some(new)
+			(Some(new), None)
 		}
 	}
 
@@ -653,15 +654,21 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 		who: &T::AccountId,
 		f: impl FnOnce(&mut AccountData<T::Balance>, bool) -> Result<R, E>
 	) -> Result<R, E> {
-		T::AccountStore::try_mutate_exists(who, |maybe_account| {
+		let result = T::AccountStore::try_mutate_exists(who, |maybe_account| {
 			let is_new = maybe_account.is_none();
 			let mut account = maybe_account.take().unwrap_or_default();
 			f(&mut account, is_new).map(move |result| {
 				let maybe_endowed = if is_new { Some(account.free) } else { None };
-				*maybe_account = Self::post_mutation(who, account);
-				(maybe_endowed, result)
+				let maybe_account_maybe_dust = Self::post_mutation(who, account);
+				*maybe_account = maybe_account_maybe_dust.0;
+				(maybe_endowed, maybe_account_maybe_dust.1, result)
 			})
-		}).map(|(maybe_endowed, result)| {
+		});
+
+		result.map(|(maybe_endowed, maybe_dust, result)| {
+			if let Some(dust) = maybe_dust {
+				T::DustRemoval::on_unbalanced(dust);
+			}
 			if let Some(endowed) = maybe_endowed {
 				Self::deposit_event(RawEvent::Endowed(who.clone(), endowed));
 			}
