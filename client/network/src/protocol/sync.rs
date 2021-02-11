@@ -179,8 +179,6 @@ pub struct ChainSync<B: BlockT> {
 	peers: HashMap<PeerId, PeerSync<B>>,
 	/// A `BlockCollection` of blocks that are being downloaded from peers
 	blocks: BlockCollection<B>,
-	/// A list of block headers that have been verified but not imported
-	preimport_blocks: Vec<B::Header>,
 	/// The best block number in our queue of blocks to import
 	best_queued_number: NumberFor<B>,
 	/// The best block hash in our queue of blocks to import
@@ -460,7 +458,6 @@ impl<B: BlockT> ChainSync<B> {
 			client,
 			peers: HashMap::new(),
 			blocks: BlockCollection::new(),
-			preimport_blocks: vec![],
 			best_queued_hash: info.best_hash,
 			best_queued_number: info.best_number,
 			extra_justifications: ExtraRequests::new("justification"),
@@ -1068,7 +1065,7 @@ impl<B: BlockT> ChainSync<B> {
 	/// announcement takes place, requests for the pre-imported block header
 	/// can be answered.
 	pub fn on_block_verified(&mut self, header: B::Header) {
-		self.preimport_blocks.push(header);
+		self.client.verify_preimported_block(&BlockId::Hash(header.hash()));
 	}
 
 	/// A batch of blocks have been processed, with or without errors.

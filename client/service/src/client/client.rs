@@ -110,7 +110,7 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	storage_notifications: Mutex<StorageNotifications<Block>>,
 	import_notification_sinks: NotificationSinks<BlockImportNotification<Block>>,
 	finality_notification_sinks: NotificationSinks<FinalityNotification<Block>>,
-	downloaded_blocks: RwLock<HashMap<Block::Hash, Block>>,
+	downloaded_blocks: RwLock<HashMap<Block::Hash, (Block, bool)>>,
 	// holds the block hash currently being imported. TODO: replace this with block queue
 	importing_block: RwLock<Option<Block::Hash>>,
 	block_rules: BlockRules<Block>,
@@ -1944,21 +1944,21 @@ impl<B, E, Block, RA> PreImportedBlockProvider<Block> for Client<B, E, Block, RA
 		Block: BlockT,
 {
 	fn register_preimported_blocks(&self, blocks: Vec<Block>) {
-		self.downloaded_blocks.write().extend(blocks.into_iter().map(|b| (b.hash(), b)));
+		self.downloaded_blocks.write().extend(blocks.into_iter().map(|b| (b.hash(), (b, false))));
 	}
 
 	fn preimported_block_header(&self, id: &BlockId<Block>) -> Option<Block::Header> {
 		match id {
 			BlockId::Hash(h) => {
 				match self.downloaded_blocks.read().get(h) {
-					Some(b) => Some(b.header().clone()),
-					None => None,
+					Some((b, verified)) if *verified => Some(b.header().clone()),
+					_ => None,
 				}
 			},
 			BlockId::Number(n) => {
-				match self.downloaded_blocks.read().iter().filter(|(_, b)| b.header().number() == n).next() {
-					Some((_, b)) => Some(b.header().clone()),
-					None => None,
+				match self.downloaded_blocks.read().iter().filter(|(_, (b, _))| b.header().number() == n).next() {
+					Some((_, (b, verified))) if *verified => Some(b.header().clone()),
+					_ => None,
 				}
 			},
 		}
@@ -1968,15 +1968,32 @@ impl<B, E, Block, RA> PreImportedBlockProvider<Block> for Client<B, E, Block, RA
 		match id {
 			BlockId::Hash(h) => {
 				match self.downloaded_blocks.read().get(h) {
-					Some(block) => Some(block.extrinsics().to_vec()),
-					None => None,
+					Some((block, verified)) if *verified => Some(block.extrinsics().to_vec()),
+					_ => None,
 				}
 			},
 			BlockId::Number(n) => {
-				match self.downloaded_blocks.read().iter().filter(|(_, b)| b.header().number() == n).next() {
-					Some((_, b)) => Some(b.extrinsics().to_vec()),
-					None => None,
+				match self.downloaded_blocks.read().iter().filter(|(_, (b, _))| b.header().number() == n).next() {
+					Some((_, (b, verified))) if *verified => Some(b.extrinsics().to_vec()),
+					_ => None,
 				}
+			}
+		}
+	}
+
+	fn verify_preimported_block(&self, id: &BlockId<Block>) {
+		match id {
+			BlockId::Hash(h) => {
+				match self.downloaded_blocks.write().get_mut(h) {
+					Some((_, verified)) => *verified = true,
+					_ => return,
+				};
+			},
+			BlockId::Number(n) => {
+				match self.downloaded_blocks.write().iter_mut().filter(|(_, (b, _))| b.header().number() == n).next() {
+					Some((_, (_, verified))) => *verified = true,
+					_ => return,
+				};
 			}
 		}
 	}

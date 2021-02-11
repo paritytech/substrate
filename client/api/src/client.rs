@@ -121,6 +121,9 @@ pub trait PreImportedBlockProvider<Block: BlockT> {
 
 	/// Fetch the body of a preimported block
 	fn preimported_block_body(&self, id: &BlockId<Block>) -> Option<Vec<<Block as BlockT>::Extrinsic>>;
+
+	/// Mark a block as verified
+	fn verify_preimported_block(&self, id: &BlockId<Block>);
 }
 
 /// Provide a list of potential uncle headers for a given block.
