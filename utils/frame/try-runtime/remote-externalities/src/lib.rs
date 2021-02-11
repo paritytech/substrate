@@ -103,6 +103,7 @@
 
 use std::{
 	fs,
+	sync::Arc,
 	path::{Path, PathBuf},
 };
 use std::fmt::{Debug, Formatter, Result as FmtResult};
@@ -178,6 +179,10 @@ pub struct OfflineConfig {
 pub struct OnlineConfig {
 	/// The HTTP uri to use.
 	pub uri: String,
+	/// JSONRPC HTTP Client.
+	//
+	// NOTE: Arc is used here because `HttpClient` doesn't implement `Clone`.
+	pub rpc: Arc<HttpClient>,
 	/// The block number at which to connect. Will be latest finalized head if not provided.
 	pub at: Option<Hash>,
 	/// An optional cache file to WRITE to, not for reading. Not cached if set to `None`.
@@ -190,6 +195,13 @@ impl Default for OnlineConfig {
 	fn default() -> Self {
 		Self {
 			uri: "http://localhost:9933".into(),
+			rpc: Arc::new(
+				HttpClient::new(
+					"http://localhost:9933",
+					HttpConfig { max_request_body_size: u32::MAX }
+				)
+				.unwrap()
+			),
 			at: None,
 			cache: None,
 			modules: Default::default(),
@@ -231,12 +243,7 @@ impl Default for Builder {
 	fn default() -> Self {
 		Self {
 			inject: Default::default(),
-			mode: Mode::Online(OnlineConfig {
-				at: None,
-				uri: "http://localhost:9933".into(),
-				cache: None,
-				modules: Default::default(),
-			}),
+			mode: Mode::Online(OnlineConfig::default()),
 			chain: "UNSET".into(),
 		}
 	}
@@ -263,9 +270,8 @@ impl Builder {
 impl Builder {
 	async fn rpc_get_head(&self) -> Hash {
 		// TODO: move client to the builder.
-		let client = HttpClient::new(&self.as_online().uri, HttpConfig::default()).unwrap();
 		trace!(target: LOG_TARGET, "rpc: finalized_head");
-		let json_val = client.request("chain_getFinalizedHead", Params::None).await.unwrap();
+		let json_val = self.as_online().rpc.request("chain_getFinalizedHead", Params::None).await.unwrap();
 		// TODO: https://github.com/paritytech/jsonrpsee/pull/206
 		jsonrpc::from_value(json_val).unwrap()
 	}
@@ -274,19 +280,17 @@ impl Builder {
 	///
 	/// Note that this is an unsafe RPC.
 	async fn rpc_get_pairs(&self, prefix: StorageKey, at: Hash) -> Vec<KeyPair> {
-		let client = HttpClient::new(&self.as_online().uri, HttpConfig::default()).unwrap();
 		trace!(target: LOG_TARGET, "rpc: storage_pairs: {:?} / {:?}", prefix, at);
 		let params = Params::Array(vec![jsonrpc::to_value(prefix).unwrap(), jsonrpc::to_value(at).unwrap()]);
-		let json_val = client.request("state_getPairs", params).await.unwrap();
+		let json_val = self.as_online().rpc.request("state_getPairs", params).await.unwrap();
 		// TODO: https://github.com/paritytech/jsonrpsee/pull/206
 		jsonrpc::from_value(json_val).unwrap()
 	}
 
 	/// Get the chain name.
 	async fn chain_name(&self) -> String {
-		let client = HttpClient::new(&self.as_online().uri, HttpConfig::default()).unwrap();
 		trace!(target: LOG_TARGET, "rpc: system_chain");
-		let json_val = client.request("system_chain", Params::None).await.unwrap();
+		let json_val = self.as_online().rpc.request("system_chain", Params::None).await.unwrap();
 		// TODO: https://github.com/paritytech/jsonrpsee/pull/206
 		jsonrpc::from_value(json_val).unwrap()
 	}

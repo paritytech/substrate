@@ -80,7 +80,7 @@ dependencies = [
  "cipher",
  "ctr",
  "ghash",
- "subtle 2.3.0",
+ "subtle 2.4.0",
 ]
 
 [[package]]
@@ -941,7 +941,7 @@ dependencies = [
  "hmac 0.10.1",
  "percent-encoding 2.1.0",
  "rand 0.7.3",
- "sha2 0.9.2",
+ "sha2 0.9.3",
  "time 0.2.25",
  "version_check",
 ]
@@ -1250,7 +1250,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4857fd85a0c34b3c3297875b747c1e02e06b6a0ea32dd892d8192b9ce0813ea6"
 dependencies = [
  "generic-array 0.14.4",
- "subtle 2.3.0",
+ "subtle 2.4.0",
 ]
 
 [[package]]
@@ -2580,7 +2580,7 @@ dependencies = [
  "cookie",
  "futures-lite",
  "infer",
- "pin-project-lite 0.2.0",
+ "pin-project-lite 0.2.4",
  "rand 0.7.3",
  "serde",
  "serde_json",
@@ -2852,12 +2852,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2948a0ce43e2c2ef11d7edf6816508998d99e13badd1150be0914205df9388a"
 dependencies = [
  "bytes 0.5.6",
- "crossbeam-utils 0.8.0",
+ "crossbeam-utils 0.8.1",
  "curl",
  "curl-sys",
  "flume",
  "futures-lite",
- "http 0.2.1",
+ "http 0.2.3",
  "log",
  "once_cell",
  "slab",
@@ -3038,7 +3038,7 @@ name = "jsonrpsee-http-client"
 version = "0.1.0"
 source = "git+https://github.com/paritytech/jsonrpsee#ce1625b705d2e302fac30ff50bcbfe3352064742"
 dependencies = [
- "futures 0.3.9",
+ "futures 0.3.12",
  "jsonrpsee-types",
  "log",
  "serde",
@@ -3053,10 +3053,10 @@ name = "jsonrpsee-types"
 version = "0.1.0"
 source = "git+https://github.com/paritytech/jsonrpsee#ce1625b705d2e302fac30ff50bcbfe3352064742"
 dependencies = [
- "futures 0.3.9",
+ "futures 0.3.12",
  "serde",
  "serde_json",
- "smallvec 1.5.0",
+ "smallvec 1.6.1",
  "thiserror",
 ]
 
