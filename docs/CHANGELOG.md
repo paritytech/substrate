@@ -6,6 +6,147 @@ The format is based on [Keep a Changelog].
 
 ## Unreleased
 
+## 2.0.1-> 3.0.0 - Apollo 14
+
+Most notably, this is the first release of the new FRAME (2.0) with its new macro-syntax and some changes in types, and pallet versioning. This release also incorporates the faster and improve version 2.0 of the parity-scale-codec and upgraded dependencies all-around. While the `FinalityTracker` pallet has been dropped, this release marks the first public appereance of a few new pallets, too;Bounties, Lottery, Tips (extracted from the `Treasury`-pallet, see #7536) and Merkle-Mountain-Ranges (MMR).
+
+On the client side, the most notable changes are around the keystore, making it async and switching to a different signing model allowing for remote-signing to be implemented; and various changes to improve networking and light-client support, like adding the Grandpa warp sync request-response protocol (#7711).
+
+_Contracts_: Please note that the contracts pallet _is not part_ of this release. The pallet is not yet ready and will be released separately in the coming weeks. The currently released contracts pallet _is not compatible_ with the new FRAME, thus if you need the contracts pallet, we recommend you wait with the upgrade until it has been released, too.
+### Upgrade instructions
+
+Not too much has changed on the top and API level for developing Substrate betweeen 2.0 and 3.0. The easiest and quickest path for upgading is just to take the latest node-template and try applying your changes to it:
+1. take a diff between 2.0 and your changes
+2. store that diff
+3. remove everything, copy over the 3.0 node-template
+4. try re-applying your diff, manually, a hunk at a time.
+
+If that doesn't work for you, we are working on an in-depth-guide for all major changes that took place and how you need to adapt your code for it. [You can find the upgrade guide under `docs/` in the repo](https://github.com/paritytech/substrate/blob/master/docs/Upgrading-2.0-to-3.0.md), if you have further questions or problem, please [feel free to ask in the github discussion board](https://github.com/paritytech/substrate/discussions).
+
+
+Runtime
+-------
+
+* contracts: Charge rent for code storage (#7935)
+* contracts: Emit event on contract termination (#8014)
+* Fix elections-phragmen and proxy issue (#7040)
+* Allow validators to block and kick their nominator set. (#7930)
+* Decouple Stkaing and Election - Part1: Support traits (#7908)
+* Introduces account existence providers reference counting (#7363)
+* contracts: Cap the surcharge reward by the amount of rent that way payed by a contract (#7870)
+* Use checked math when calculating storage size (#7885)
+* Fix clear prefix check to avoid erasing child trie roots. (#7848)
+* contracts: Collect rent for the first block during deployment (#7847)
+* contracts: Add configurable per-storage item cost (#7819)
+* babe: expose next epoch data (#7829)
+* fix : remove `_{ }` syntax from benchmark macro (#7822)
+* Define ss58 prefix inside the runtime (#7810)
+* Allow council to slash treasury tip (#7753)
+* Don't allow self proxies (#7803)
+* add a `current_epoch` to BabeApi (#7789)
+* Add `pallet` attribute macro to declare pallets (#6877)
+* Make it possible to calculate the storage root as often as you want (#7714)
+* Issue 7143 | Refactor Treasury Pallet into Bounties, Tips, and Proposals (#7536)
+* Participating in Council Governance is Free for First Time Voters and Successful Closing (#7661)
+* Streamline frame_system weight parametrization (#6629)
+* Features needed for reserve-backed stablecoins (#7152)
+* `sudo_as` should return a result (#7620)
+* More Extensible Multiaddress Format (#7380)
+* Fix `on_runtime_upgrade` weight recording (#7480)
+* Implement batch_all and update Utility pallet for weight refunds (#7188)
+* Fix wrong outgoing calculation in election (#7384)
+* Implements pallet versioning (#7208)
+* Runtime worker threads (#7089)
+* Allow `schedule_after(0, ...)` to work (#7284)
+* Fix offchain election to respect the weight (#7215)
+* Fix weight for inner call with new origin (#7196)
+* Move proxies migration (#7205)
+* Introduce `cancel_proposal` to rid us of those pesky proposals (#7111)
+
+Client
+------
+
+* Remove backwards-compatibility networking hack (#8068)
+* Extend SS58 network identifiers (#8039)
+* Update dependencies ahead of next release (#8015)
+* Storage chains: serve transactions over IPFS/bitswap (#7963)
+* Add a send_request function to NetworkService (#8008)
+* Rename system_networkState to system_unstable_networkState (#8001)
+* Allow transaction for offchain indexing (#7290)
+* Grandpa warp sync request-response protocol (#7711)
+* Add explicit limits to notifications sizes and adjust yamux buffer size (#7925)
+* Rework priority groups, take 2 (#7700)
+* Define ss58 prefix inside the runtime (#7810)
+* Expand remote keystore interface to allow for hybrid mode (#7628)
+* Allow capping the amount of work performed when deleting a child trie (#7671)
+* RPC to allow setting the log filter (#7474)
+* Remove sc_network::NetworkService::register_notifications_protocol and partially refactor Grandpa tests (#7646)
+* minor fix and improvements on localkeystore (#7626)
+* contracts: Add `salt` argument to contract instantiation (#7482)
+* contracts: Rework contracts_call RPC (#7468)
+* Make sure to use the optimized method instead of reading the storage. (#7445)
+* WASM Local-blob override (#7317)
+* client/network: Allow configuring Kademlia's disjoint query paths (#7356)
+* client/network: Remove option to disable yamux flow control (#7358)
+* Make `queryStorage` and `storagePairs` unsafe RPC functions (#7342)
+* No longer actively open legacy substreams (#7076)
+* Make `run_node_until_exit` take a future (#7318)
+* Add an system_syncState RPC method (#7315)
+* Async keystore + Authority-Discovery async/await (#7000)
+* Fixes logging of target names with dashes (#7281)
+* Refactor CurrencyToVote (#6896)
+* client/network: Stop sending noise legacy handshake (#7211)
+
+API
+---
+
+* pallet macro: easier syntax for `#[pallet::pallet]` with `struct Pallet<T>(_)` (#8091)
+* WasmExecutor takes a cache directory (#8057)
+* Remove PalletInfo impl for () (#8090)
+* Migrate assets pallet to new macros (#7984)
+* contracts: Make ChainExtension trait generic over the runtime (#8003)
+* Decouple the session validators from im-online (#7127)
+* Update parity-scale-codec to 2.0 (#7994)
+* Merkle Mountain Range pallet improvements (#7891)
+* Cleaner GRANDPA RPC API for proving finality (#7339)
+* Migrate frame-system to pallet attribute macro (#7898)
+* Introduces account existence providers reference counting (#7363)
+* contracts: Lazy storage removal (#7740)
+* contracts: Allow runtime authors to define a chain extension (#7548)
+* Define ss58 prefix inside the runtime (#7810)
+* Add `pallet` attribute macro to declare pallets (#6877)
+* Add keccak-512 to host functions. (#7531)
+* Merkle Mountain Range pallet (#7312)
+* Allow capping the amount of work performed when deleting a child trie (#7671)
+* add an upgrade_keys method for pallet-session (#7688)
+* Streamline frame_system weight parametrization (#6629)
+* Rename pallet trait `Trait` to `Config` (#7599)
+* contracts: Add `salt` argument to contract instantiation (#7482)
+* pallet-evm: move to Frontier (Part IV) (#7573)
+* refactor subtrait/elevated trait as not needed (#7497)
+* Allow BabeConsensusDataProvider fork existing chain (#7078)
+* decouple transaction payment and currency (#6912)
+* contracts: Refactor the runtime API in order to simplify node integration (#7409)
+* client/authority-discovery: Remove sentry node logic (#7368)
+* client/network: Make NetworkService::set_priority_group async (#7352)
+* *: Bump async-std to v1.6.5 (#7306)
+* babe: make secondary slot randomness available on-chain (#7053)
+* allow where clause in decl_error (#7324)
+* reschedule (#6860)
+* SystemOrigin trait (#7226)
+* permit setting treasury pallet initial funding through genesis (#7214)
+
+Runtime Migrations
+------------------
+
+* Migrate assets pallet to new macros (#7984)
+* Fix elections-phragmen and proxy issue (#7040)
+* Allow validators to block and kick their nominator set. (#7930)
+* Migrate frame-system to pallet attribute macro (#7898)
+* Implements pallet versioning (#7208)
+* Move proxies migration (#7205)
+
+
 ## 2.0.0-> 2.0.1
 
 Patch release with backports to fix broken nightly builds.
