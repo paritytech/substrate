@@ -17,8 +17,8 @@ targets = ["x86_64-unknown-linux-gnu"]
 # This crate should not rely on any of the frame primitives.
 bitflags = "1.0"
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-sp-std = { version = "2.0.0", default-features = false, path = "../../../primitives/std" }
-sp-runtime = { version = "2.0.0", default-features = false, path = "../../../primitives/runtime" }
+sp-std = { version = "3.0.0", default-features = false, path = "../../../primitives/std" }
+sp-runtime = { version = "3.0.0", default-features = false, path = "../../../primitives/runtime" }
 
 [features]
 default = ["std"]

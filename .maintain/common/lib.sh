@@ -66,11 +66,17 @@ has_label(){
   repo="$1"
   pr_id="$2"
   label="$3"
+
+  # These will exist if the function is called in Gitlab.
+  # If the function's called in Github, we should have GITHUB_ACCESS_TOKEN set
+  # already.
   if [ -n "$GITHUB_RELEASE_TOKEN" ]; then
-    out=$(curl -H "Authorization: token $GITHUB_RELEASE_TOKEN" -s "$api_base/$repo/pulls/$pr_id")
-  else
-    out=$(curl -H "Authorization: token $GITHUB_PR_TOKEN" -s "$api_base/$repo/pulls/$pr_id")
+    GITHUB_TOKEN="$GITHUB_RELEASE_TOKEN"
+  elif [ -n "$GITHUB_PR_TOKEN" ]; then
+    GITHUB_TOKEN="$GITHUB_PR_TOKEN"
   fi
+
+  out=$(curl -H "Authorization: token $GITHUB_TOKEN" -s "$api_base/$repo/pulls/$pr_id")
   [ -n "$(echo "$out" | tr -d '\r\n' | jq ".labels | .[] | select(.name==\"$label\")")" ]
 }
 
