@@ -68,100 +68,100 @@ pub trait WeightInfo {
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn propose_bounty(d: u32, ) -> Weight {
-		(49_573_000 as Weight)
+		(49_741_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((1_000 as Weight).saturating_mul(d as Weight))
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
 	fn approve_bounty() -> Weight {
-		(13_826_000 as Weight)
+		(15_607_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	fn propose_curator() -> Weight {
-		(10_940_000 as Weight)
+		(12_212_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	fn unassign_curator() -> Weight {
-		(45_440_000 as Weight)
+		(47_527_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	fn accept_curator() -> Weight {
-		(42_078_000 as Weight)
+		(43_007_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	fn award_bounty() -> Weight {
-		(28_741_000 as Weight)
+		(28_890_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	fn claim_bounty() -> Weight {
-		(142_590_000 as Weight)
+		(144_094_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(5 as Weight))
 	}
 	fn close_bounty_proposed() -> Weight {
-		(45_150_000 as Weight)
+		(45_390_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
 	fn close_bounty_active() -> Weight {
-		(94_472_000 as Weight)
+		(95_260_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
 	fn extend_bounty_expiry() -> Weight {
-		(27_614_000 as Weight)
+		(27_702_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	fn spend_funds(b: u32, ) -> Weight {
-		(512_000 as Weight)
-			// Standard Error: 19_000
-			.saturating_add((66_681_000 as Weight).saturating_mul(b as Weight))
+		(5_606_000 as Weight)
+			// Standard Error: 26_000
+			.saturating_add((66_886_000 as Weight).saturating_mul(b as Weight))
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().reads((3 as Weight).saturating_mul(b as Weight)))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes((3 as Weight).saturating_mul(b as Weight)))
 	}
 	fn add_subbounty(d: u32, ) -> Weight {
-		(93_877_000 as Weight)
+		(94_844_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((1_000 as Weight).saturating_mul(d as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(6 as Weight))
 	}
 	fn propose_subcurator() -> Weight {
-		(30_534_000 as Weight)
+		(30_745_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	fn unassign_subcurator() -> Weight {
-		(41_112_000 as Weight)
+		(41_072_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	fn accept_subcurator() -> Weight {
-		(48_049_000 as Weight)
+		(48_235_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	fn award_subbounty() -> Weight {
-		(36_107_000 as Weight)
+		(35_689_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	fn claim_subbounty() -> Weight {
-		(152_239_000 as Weight)
+		(153_155_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().writes(6 as Weight))
 	}
 	fn close_subbounty() -> Weight {
-		(108_698_000 as Weight)
+		(108_351_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().writes(6 as Weight))
 	}
@@ -170,100 +170,100 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 // For backwards compatibility and tests
 impl WeightInfo for () {
 	fn propose_bounty(d: u32, ) -> Weight {
-		(49_573_000 as Weight)
+		(49_741_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((1_000 as Weight).saturating_mul(d as Weight))
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
 	}
 	fn approve_bounty() -> Weight {
-		(13_826_000 as Weight)
+		(15_607_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
 	fn propose_curator() -> Weight {
-		(10_940_000 as Weight)
+		(12_212_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	fn unassign_curator() -> Weight {
-		(45_440_000 as Weight)
+		(47_527_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
 	fn accept_curator() -> Weight {
-		(42_078_000 as Weight)
+		(43_007_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
 	fn award_bounty() -> Weight {
-		(28_741_000 as Weight)
+		(28_890_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	fn claim_bounty() -> Weight {
-		(142_590_000 as Weight)
+		(144_094_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
 	}
 	fn close_bounty_proposed() -> Weight {
-		(45_150_000 as Weight)
+		(45_390_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
 	fn close_bounty_active() -> Weight {
-		(94_472_000 as Weight)
+		(95_260_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
 	}
 	fn extend_bounty_expiry() -> Weight {
-		(27_614_000 as Weight)
+		(27_702_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	fn spend_funds(b: u32, ) -> Weight {
-		(512_000 as Weight)
-			// Standard Error: 19_000
-			.saturating_add((66_681_000 as Weight).saturating_mul(b as Weight))
+		(5_606_000 as Weight)
+			// Standard Error: 26_000
+			.saturating_add((66_886_000 as Weight).saturating_mul(b as Weight))
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((3 as Weight).saturating_mul(b as Weight)))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes((3 as Weight).saturating_mul(b as Weight)))
 	}
 	fn add_subbounty(d: u32, ) -> Weight {
-		(93_877_000 as Weight)
+		(94_844_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((1_000 as Weight).saturating_mul(d as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(6 as Weight))
 	}
 	fn propose_subcurator() -> Weight {
-		(30_534_000 as Weight)
+		(30_745_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
 	fn unassign_subcurator() -> Weight {
-		(41_112_000 as Weight)
+		(41_072_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
 	fn accept_subcurator() -> Weight {
-		(48_049_000 as Weight)
+		(48_235_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
 	fn award_subbounty() -> Weight {
-		(36_107_000 as Weight)
+		(35_689_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	fn claim_subbounty() -> Weight {
-		(152_239_000 as Weight)
+		(153_155_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(6 as Weight))
 	}
 	fn close_subbounty() -> Weight {
-		(108_698_000 as Weight)
+		(108_351_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(6 as Weight))
 	}
