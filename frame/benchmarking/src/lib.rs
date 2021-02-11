@@ -932,13 +932,13 @@ macro_rules! impl_benchmark_test {
 ///
 /// When called in [`pallet_example`] as
 ///
-/// ```rust,ignored
+/// ```rust,ignore
 /// impl_benchmark_test_suite!(crate::tests::new_test_ext, crate::tests::Test);
 /// ```
 ///
 /// It expands to the equivalent of:
 ///
-/// ```rust,ignored
+/// ```rust,ignore
 /// #[cfg(test)]
 /// mod tests {
 /// 	use super::*;
@@ -965,7 +965,7 @@ macro_rules! impl_benchmark_test {
 /// The second argument, `test`, must be the path to the runtime. The item to which this must refer
 /// will generally take the form:
 ///
-/// ```rust,ignored
+/// ```rust,ignore
 /// frame_support::construct_runtime!(
 /// 	pub enum Test where ...
 /// 	{ ... }
