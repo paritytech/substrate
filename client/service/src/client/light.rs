@@ -31,7 +31,6 @@ use super::{call_executor::LocalCallExecutor, client::{Client, ClientConfig}};
 use sc_client_api::light::Storage as BlockchainStorage;
 use sc_light::{Backend, GenesisCallExecutor};
 
-
 /// Create an instance of light client.
 pub fn new_light<B, S, RA, E>(
 	backend: Arc<Backend<S, HashFor<B>>>,

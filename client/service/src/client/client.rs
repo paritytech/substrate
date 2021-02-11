@@ -35,7 +35,7 @@ use sp_core::{
 };
 #[cfg(feature="test-helpers")]
 use sp_keystore::SyncCryptoStorePtr;
-use sc_telemetry::{telemetry, SUBSTRATE_INFO};
+use sc_telemetry::{telemetry, Telemetry, SUBSTRATE_INFO};
 use sp_runtime::{
 	Justification, BuildStorage,
 	generic::{BlockId, SignedBlock, DigestItem},
@@ -115,6 +115,7 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	block_rules: BlockRules<Block>,
 	execution_extensions: ExecutionExtensions<Block>,
 	config: ClientConfig,
+	telemetry: Option<Telemetry>,
 	_phantom: PhantomData<RA>,
 }
 
@@ -326,6 +327,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			block_rules: BlockRules::new(fork_blocks, bad_blocks),
 			execution_extensions,
 			config,
+			telemetry: None, // TODO how to inject
 			_phantom: Default::default(),
 		})
 	}
@@ -668,7 +670,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				if origin != BlockOrigin::NetworkInitialSync ||
 					rand::thread_rng().gen_bool(0.1)
 				{
-					telemetry!(SUBSTRATE_INFO; "block.import";
+					telemetry!(
+						self.telemetry.clone(); SUBSTRATE_INFO; "block.import";
 						"height" => height,
 						"best" => ?hash,
 						"origin" => ?origin
@@ -988,7 +991,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 					 indicated in the tree route; qed"
 				);
 
-			telemetry!(SUBSTRATE_INFO; "notify.finalized";
+			telemetry!(
+				self.telemetry.clone(); SUBSTRATE_INFO; "notify.finalized";
 				"height" => format!("{}", header.number()),
 				"best" => ?last,
 			);
