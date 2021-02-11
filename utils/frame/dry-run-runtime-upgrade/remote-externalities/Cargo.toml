@@ -13,16 +13,16 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-jsonrpc-core-client = { version = "15.1.0", features = ["http"] }
-sc-rpc-api = { path = "../../../../client/rpc-api" }
-sc-rpc = { path = "../../../../client/rpc" }
-futures = "0.1.29"
+jsonrpsee-http-client = { git = "https://github.com/paritytech/jsonrpsee" }
+jsonrpsee-types = { git = "https://github.com/paritytech/jsonrpsee" }
+# TODO: these are not supported by `jsonrpsee`
+# sc-rpc-api = { path = "../../../../client/rpc-api" }
+# sc-rpc = { path = "../../../../client/rpc" }
 
 hex-literal = "0.3.1"
 env_logger = "0.8.2"
 log = "0.4.11"
 bincode = "1.3.1"
-tokio = "0.1.22"
 
 sp-io = { path = "../../../../primitives/io" }
 sp-core = { path = "../../../../primitives/core" }

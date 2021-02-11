@@ -110,7 +110,8 @@ use log::*;
 use sp_core::{hashing::twox_128};
 pub use sp_io::TestExternalities;
 use sp_core::storage::{StorageKey, StorageData};
-use futures::future::Future;
+use jsonrpsee_http_client::{HttpClient, HttpConfig};
+use jsonrpsee_types::jsonrpc::{self, Params};
 
 type KeyPair = (StorageKey, StorageData);
 type Number = u32;
@@ -261,43 +262,33 @@ impl Builder {
 // RPC methods
 impl Builder {
 	async fn rpc_get_head(&self) -> Hash {
-		let mut rt = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
-		let uri = self.as_online().uri.clone();
-		rt.block_on::<_, _, ()>(futures::lazy(move || {
-			trace!(target: LOG_TARGET, "rpc: finalized_head");
-			let client: sc_rpc_api::chain::ChainClient<Number, Hash, (), ()> =
-				jsonrpc_core_client::transports::http::connect(&uri).wait().unwrap();
-			Ok(client.finalized_head().wait().unwrap())
-		}))
-		.unwrap()
+		// TODO: move client to the builder.
+		let client = HttpClient::new(&self.as_online().uri, HttpConfig::default()).unwrap();
+		trace!(target: LOG_TARGET, "rpc: finalized_head");
+		let json_val = client.request("chain_getFinalizedHead", Params::None).await.unwrap();
+		// TODO: https://github.com/paritytech/jsonrpsee/pull/206
+		jsonrpc::from_value(json_val).unwrap()
 	}
 
 	/// Relay the request to `state_getPairs` rpc endpoint.
 	///
 	/// Note that this is an unsafe RPC.
 	async fn rpc_get_pairs(&self, prefix: StorageKey, at: Hash) -> Vec<KeyPair> {
-		let mut rt = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
-		let uri = self.as_online().uri.clone();
-		rt.block_on::<_, _, ()>(futures::lazy(move || {
-			trace!(target: LOG_TARGET, "rpc: storage_pairs: {:?} / {:?}", prefix, at);
-			let client: sc_rpc_api::state::StateClient<Hash> =
-				jsonrpc_core_client::transports::http::connect(&uri).wait().unwrap();
-			Ok(client.storage_pairs(prefix, Some(at)).wait().unwrap())
-		}))
-		.unwrap()
+		let client = HttpClient::new(&self.as_online().uri, HttpConfig::default()).unwrap();
+		trace!(target: LOG_TARGET, "rpc: storage_pairs: {:?} / {:?}", prefix, at);
+		let params = Params::Array(vec![jsonrpc::to_value(prefix).unwrap(), jsonrpc::to_value(at).unwrap()]);
+		let json_val = client.request("state_getPairs", params).await.unwrap();
+		// TODO: https://github.com/paritytech/jsonrpsee/pull/206
+		jsonrpc::from_value(json_val).unwrap()
 	}
 
 	/// Get the chain name.
 	async fn chain_name(&self) -> String {
-		let mut rt = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
-		let uri = self.as_online().uri.clone();
-		rt.block_on::<_, _, ()>(futures::lazy(move || {
-			trace!(target: LOG_TARGET, "rpc: system_chain");
-			let client: sc_rpc_api::system::SystemClient<(), ()> =
-				jsonrpc_core_client::transports::http::connect(&uri).wait().unwrap();
-			Ok(client.system_chain().wait().unwrap())
-		}))
-		.unwrap()
+		let client = HttpClient::new(&self.as_online().uri, HttpConfig::default()).unwrap();
+		trace!(target: LOG_TARGET, "rpc: system_chain");
+		let json_val = client.request("system_chain", Params::None).await.unwrap();
+		// TODO: https://github.com/paritytech/jsonrpsee/pull/206
+		jsonrpc::from_value(json_val).unwrap()
 	}
 }
 
