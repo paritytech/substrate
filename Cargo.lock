@@ -3930,7 +3930,6 @@ dependencies = [
  "sc-transaction-pool",
  "serde",
  "serde_json",
- "slab",
  "soketto",
  "sp-authority-discovery",
  "sp-consensus",

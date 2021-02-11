@@ -126,7 +126,6 @@ regex = "1"
 platforms = "1.1"
 async-std = { version = "1.6.5", features = ["attributes"] }
 soketto = "0.4.2"
-slab = "0.4.2"
 
 [build-dependencies]
 structopt = { version = "0.3.8", optional = true }

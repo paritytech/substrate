@@ -51,7 +51,7 @@ async fn telemetry_works() {
 					if server.len() < 512 {
 						// Rather than passing `()`, it is possible to pass any value. The value is
 						// provided back on `TextFrame` and `ConnectionError` events.
-						server.accept(());
+						server.accept();
 					} else {
 						server.reject();
 					}

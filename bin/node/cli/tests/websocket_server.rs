@@ -20,7 +20,7 @@ use async_std::net::{TcpListener, TcpStream};
 use core::{fmt, pin::Pin, str};
 use futures::{channel::mpsc, prelude::*};
 use soketto::handshake::{server::Response, Server};
-use std::{io, net::SocketAddr};
+use std::{collections::HashMap, io, net::SocketAddr};
 
 /// Configuration for a [`WsServer`].
 pub struct Config {
@@ -46,10 +46,10 @@ pub struct Config {
 ///
 /// After a connection has been closed, its [`ConnectionId`] might be reused.
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-pub struct ConnectionId(usize);
+pub struct ConnectionId(u64);
 
 /// WebSockets listening socket and list of open connections.
-pub struct WsServer<T> {
+pub struct WsServer {
 	/// Value passed through [`Config::max_frame_size`].
 	max_frame_size: usize,
 
@@ -84,7 +84,7 @@ pub struct WsServer<T> {
 		stream::FuturesUnordered<Pin<Box<dyn Future<Output = (ConnectionId, u64)> + Send>>>,
 
 	/// List of connections that are either negotiating or open.
-	connections: slab::Slab<Connection<T>>,
+	connections: HashMap<ConnectionId, Connection>,
 
 	/// Value of [`Connection::unique_id`] for the next connection.
 	next_unique_id: u64,
@@ -93,9 +93,7 @@ pub struct WsServer<T> {
 	rejected_sockets: stream::FuturesUnordered<Pin<Box<dyn Future<Output = ()> + Send>>>,
 }
 
-struct Connection<T> {
-	user_data: T,
-
+struct Connection {
 	/// Sending side of [`Connection::send_rx`].
 	/// Can be `None` in order to force-close a connection.
 	send_tx: Option<mpsc::Sender<String>>,
@@ -111,7 +109,7 @@ struct Connection<T> {
 	unique_id: u64,
 }
 
-impl<T> WsServer<T> {
+impl WsServer {
 	/// Try opening a TCP listening socket.
 	///
 	/// Returns an error if the listening socket fails to open.
@@ -126,7 +124,7 @@ impl<T> WsServer<T> {
 			negotiating: stream::FuturesUnordered::new(),
 			incoming_messages: stream::SelectAll::new(),
 			sending_tasks: stream::FuturesUnordered::new(),
-			connections: slab::Slab::with_capacity(config.capacity),
+			connections: HashMap::with_capacity(config.capacity),
 			next_unique_id: 0,
 			rejected_sockets: stream::FuturesUnordered::new(),
 		})
@@ -146,7 +144,7 @@ impl<T> WsServer<T> {
 	///
 	/// Panics if no connection is pending.
 	///
-	pub fn accept(&mut self, user_data: T) -> ConnectionId {
+	pub fn accept(&mut self) -> ConnectionId {
 		let pending_incoming = self.pending_incoming.take().expect("no pending socket");
 
 		let unique_id = {
@@ -155,15 +153,22 @@ impl<T> WsServer<T> {
 			id
 		};
 
-		let connection_id = ConnectionId(self.connections.insert({
-			let (send_tx, send_rx) = mpsc::channel(self.send_buffer_len);
-			Connection {
-				user_data,
-				send_tx: Some(send_tx),
-				send_rx: Some(send_rx),
-				unique_id,
-			}
-		}));
+		let connection_id = ConnectionId(unique_id);
+
+		if self
+			.connections
+			.insert(connection_id, {
+				let (send_tx, send_rx) = mpsc::channel(self.send_buffer_len);
+				Connection {
+					send_tx: Some(send_tx),
+					send_rx: Some(send_rx),
+					unique_id,
+				}
+			})
+			.is_some()
+		{
+			panic!("duplicated connection ID should not happen");
+		}
 
 		self.negotiating.push(Box::pin(async move {
 			let mut server = Server::new(pending_incoming);
@@ -215,24 +220,6 @@ impl<T> WsServer<T> {
 		self.connections.len()
 	}
 
-	/// Returns the user data associated to a connection.
-	///
-	/// # Panic
-	///
-	/// Panics if the [`ConnectionId`] is invalid.
-	pub fn connection_user_data(&self, id: ConnectionId) -> &T {
-		&self.connections.get(id.0).unwrap().user_data
-	}
-
-	/// Returns the user data associated to a connection.
-	///
-	/// # Panic
-	///
-	/// Panics if the [`ConnectionId`] is invalid.
-	pub fn connection_mut_user_data(&mut self, id: ConnectionId) -> &mut T {
-		&mut self.connections.get_mut(id.0).unwrap().user_data
-	}
-
 	/// Destroys a connection.
 	///
 	/// The connection will be cleanly shut down in the background, but for API purposes this
@@ -241,8 +228,8 @@ impl<T> WsServer<T> {
 	/// # Panic
 	///
 	/// Panics if the [`ConnectionId`] is invalid.
-	pub fn close(&mut self, connection_id: ConnectionId) -> T {
-		self.connections.remove(connection_id.0).user_data
+	pub fn close(&mut self, connection_id: ConnectionId) {
+		self.connections.remove(&connection_id).unwrap();
 	}
 
 	/// Queues a text frame to be sent on the given connection.
@@ -255,15 +242,21 @@ impl<T> WsServer<T> {
 	///
 	/// Panics if the [`ConnectionId`] is invalid.
 	pub fn queue_send(&mut self, connection: ConnectionId, message: String) {
-		if let Some(send_tx) = self.connections[connection.0].send_tx.as_mut() {
+		if let Some(send_tx) = self
+			.connections
+			.get_mut(&connection)
+			.unwrap()
+			.send_tx
+			.as_mut()
+		{
 			if send_tx.try_send(message).is_err() {
-				self.connections[connection.0].send_tx = None;
+				self.connections.get_mut(&connection).unwrap().send_tx = None;
 			}
 		}
 	}
 
 	/// Returns the next event happening on the server.
-	pub async fn next_event(&'_ mut self) -> Event<'_, T> {
+	pub async fn next_event(&mut self) -> Event {
 		loop {
 			futures::select! {
 				// Only try to fetch a new incoming connection if none is pending.
@@ -290,10 +283,10 @@ impl<T> WsServer<T> {
 				(connection_id, unique_id, result) = self.negotiating.select_next_some() => {
 					// Make sure that what is in `self.connections` matches the outcome of the
 					// negotiation. Otherwise, it means that the connection is already closed.
-					if !self.connections.contains(connection_id.0) {
+					if !self.connections.contains_key(&connection_id) {
 						continue;
 					}
-					if self.connections[connection_id.0].unique_id != unique_id {
+					if self.connections[&connection_id].unique_id != unique_id {
 						continue;
 					}
 
@@ -301,7 +294,6 @@ impl<T> WsServer<T> {
 						Ok(s) => s,
 						Err(()) => return Event::ConnectionError {
 							connection_id,
-							user_data: self.connections.remove(connection_id.0).user_data,
 						},
 					};
 
@@ -330,7 +322,7 @@ impl<T> WsServer<T> {
 
 					// Spawn a task dedicated to sending the messages buffered to be sent.
 					self.sending_tasks.push({
-						let mut send_rx = self.connections[connection_id.0].send_rx.take().unwrap();
+						let mut send_rx = self.connections.get_mut(&connection_id).unwrap().send_rx.take().unwrap();
 						Box::pin(async move {
 							while let Some(message) = send_rx.next().await {
 								match sender.send_text(&message).await {
@@ -348,10 +340,10 @@ impl<T> WsServer<T> {
 				(connection_id, unique_id, result) = self.incoming_messages.select_next_some() => {
 					// Make sure that what is in `self.connections` matches the message. Otherwise,
 					// it means that the connection is already closed.
-					if !self.connections.contains(connection_id.0) {
+					if !self.connections.contains_key(&connection_id) {
 						continue;
 					}
-					if self.connections[connection_id.0].unique_id != unique_id {
+					if self.connections[&connection_id].unique_id != unique_id {
 						continue;
 					}
 
@@ -359,13 +351,11 @@ impl<T> WsServer<T> {
 						Ok(m) => m,
 						Err(()) => return Event::ConnectionError {
 							connection_id,
-							user_data: self.connections.remove(connection_id.0).user_data,
 						},
 					};
 
 					return Event::TextFrame {
 						connection_id,
-						user_data: &mut self.connections[connection_id.0].user_data,
 						message,
 					}
 				},
@@ -373,16 +363,15 @@ impl<T> WsServer<T> {
 				(connection_id, unique_id) = self.sending_tasks.select_next_some() => {
 					// Make sure that what is in `self.connections` matches the message. Otherwise,
 					// it means that the connection is already closed.
-					if !self.connections.contains(connection_id.0) {
+					if !self.connections.contains_key(&connection_id) {
 						continue;
 					}
-					if self.connections[connection_id.0].unique_id != unique_id {
+					if self.connections[&connection_id].unique_id != unique_id {
 						continue;
 					}
 
 					return Event::ConnectionError {
 						connection_id,
-						user_data: self.connections.remove(connection_id.0).user_data,
 					}
 				},
 
@@ -393,21 +382,17 @@ impl<T> WsServer<T> {
 	}
 }
 
-impl<T: fmt::Debug> fmt::Debug for WsServer<T> {
+impl fmt::Debug for WsServer {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		f.debug_list()
-			.entries(
-				self.connections
-					.iter()
-					.map(|c| (ConnectionId(c.0), &c.1.user_data)),
-			)
+			.entries(self.connections.iter().map(|c| *c.0))
 			.finish()
 	}
 }
 
 /// Event that has happened on a [`WsServer`].
 #[derive(Debug)]
-pub enum Event<'a, T> {
+pub enum Event {
 	/// A new TCP connection has arrived on the listening socket.
 	///
 	/// The connection *must* be accepted or rejected using [`WsServer::accept`] or
@@ -425,16 +410,12 @@ pub enum Event<'a, T> {
 		/// Identifier of the connection. This identifier might be reused by the [`WsServer`] for
 		/// another connection.
 		connection_id: ConnectionId,
-		/// User data associated with the connection.
-		user_data: T,
 	},
 
 	/// A text frame has been received on a connection.
 	TextFrame {
 		/// Identifier of the connection that sent the frame.
 		connection_id: ConnectionId,
-		/// User data associated with the connection.
-		user_data: &'a mut T,
 		/// Message sent by the remote. Its content is entirely decided by the client, and
 		/// nothing must be assumed about the validity of this message.
 		message: String,
