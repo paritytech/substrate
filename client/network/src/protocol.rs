@@ -1479,7 +1479,7 @@ fn prepare_block_request<B: BlockT, H: ExHashT>(
 
 	CustomMessageOutcome::BlockRequest {
 		target: who,
-		request: request,
+		request,
 		pending_response: tx,
 	}
 }

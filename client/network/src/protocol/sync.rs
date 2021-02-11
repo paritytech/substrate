@@ -821,6 +821,7 @@ impl<B: BlockT> ChainSync<B> {
 							let start_block = *start_block;
 							peer.state = PeerSyncState::Available;
 							validate_blocks::<B>(&blocks, who, Some(request))?;
+							self.register_preimport_blocks(blocks.clone());
 							self.blocks.insert(start_block, blocks, who.clone());
 							self.blocks
 								.drain(self.best_queued_number + One::one())
@@ -844,6 +845,7 @@ impl<B: BlockT> ChainSync<B> {
 								return Err(BadPeer(who.clone(), rep::NO_BLOCK));
 							}
 							validate_blocks::<B>(&blocks, who, Some(request))?;
+							self.register_preimport_blocks(blocks.clone());
 							blocks.into_iter().map(|b| {
 								IncomingBlock {
 									hash: b.hash,
@@ -953,6 +955,7 @@ impl<B: BlockT> ChainSync<B> {
 				} else {
 					// When request.is_none() this is a block announcement. Just accept blocks.
 					validate_blocks::<B>(&blocks, who, None)?;
+					self.register_preimport_blocks(blocks.clone());
 					blocks.into_iter().map(|b| {
 						IncomingBlock {
 							hash: b.hash,
@@ -1050,6 +1053,15 @@ impl<B: BlockT> ChainSync<B> {
 		Ok(OnBlockJustification::Nothing)
 	}
 
+	pub fn register_preimport_blocks(&self, blocks: Vec<message::BlockData<B>>) {
+		self.client.register_preimported_blocks(blocks.clone().into_iter().filter_map(|b| {
+			match (b.header, b.body) {
+				(Some(header), Some(body)) => Some(B::new(header, body)),
+				_ => None,
+			}
+		}).collect());
+	}
+	
 	/// A block has been checked/verified
 	/// For sync, this means that the list of verified block headers should be
 	/// maintained between pre-import and import so that once the pre-import
