@@ -1560,7 +1560,7 @@ pub trait OnRuntimeUpgrade {
 		Ok(())
 	}
 
-	/// Execute some post-checks prior to a runtime upgrade.
+	/// Execute some post-checks after a runtime upgrade.
 	///
 	/// These hooks are never meant to be executed on-chain, instead only be used by 3rd party tools
 	/// for testing.
