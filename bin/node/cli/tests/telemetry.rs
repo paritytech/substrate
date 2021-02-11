@@ -48,18 +48,12 @@ async fn telemetry_works() {
 				// New connection on the listener.
 				Event::ConnectionOpen { address } => {
 					println!("New connection from {:?}", address);
-					if server.len() < 512 {
-						// Rather than passing `()`, it is possible to pass any value. The value is
-						// provided back on `TextFrame` and `ConnectionError` events.
-						server.accept();
-					} else {
-						server.reject();
-					}
+					server.accept();
 				}
 
 				// Received a message from a connection.
-				Event::TextFrame { message, .. } => {
-					let json: serde_json::Value = serde_json::from_str(&message).unwrap();
+				Event::BinaryFrame { message, .. } => {
+					let json: serde_json::Value = serde_json::from_slice(&message).unwrap();
 					let object = json.as_object().unwrap();
 					let payload = object.get("payload").unwrap();
 					let object = payload.as_object().unwrap();
@@ -68,6 +62,8 @@ async fn telemetry_works() {
 					}
 					//println!("Received message: {}", json);
 				}
+
+				Event::TextFrame { .. } => unreachable!(),
 
 				// Connection has been closed.
 				Event::ConnectionError { .. } => {}
