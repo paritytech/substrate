@@ -1951,11 +1951,16 @@ impl<B, E, Block, RA> PreImportedBlockProvider<Block> for Client<B, E, Block, RA
 		match id {
 			BlockId::Hash(h) => {
 				match self.downloaded_blocks.read().get(h) {
-					Some(block) => Some(block.header().clone()),
+					Some(b) => Some(b.header().clone()),
 					None => None,
 				}
 			},
-			_ => unimplemented!()
+			BlockId::Number(n) => {
+				match self.downloaded_blocks.read().iter().filter(|(_, b)| b.header().number() == n).next() {
+					Some((_, b)) => Some(b.header().clone()),
+					None => None,
+				}
+			},
 		}
 	}
 
@@ -1967,7 +1972,12 @@ impl<B, E, Block, RA> PreImportedBlockProvider<Block> for Client<B, E, Block, RA
 					None => None,
 				}
 			},
-			_ => unimplemented!()
+			BlockId::Number(n) => {
+				match self.downloaded_blocks.read().iter().filter(|(_, b)| b.header().number() == n).next() {
+					Some((_, b)) => Some(b.extrinsics().to_vec()),
+					None => None,
+				}
+			}
 		}
 	}
 }
