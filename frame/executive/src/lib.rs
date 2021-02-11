@@ -219,7 +219,7 @@ where
 	/// Execute all `OnRuntimeUpgrade` of this runtime, including the pre and post migration checks.
 	///
 	/// This should only be used for testing.
-	#[cfg(feature = "runtime-upgrade-dry-run")]
+	#[cfg(feature = "try-runtime")]
 	pub fn dry_run_runtime_upgrade() -> frame_support::weights::Weight {
 		<
 			(frame_system::Module::<System>, COnRuntimeUpgrade, AllModules)

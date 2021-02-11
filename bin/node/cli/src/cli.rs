@@ -50,7 +50,7 @@ pub enum Subcommand {
 	/// Dry-run all of the runtime upgrade hooks in the current runtime upon a configurable state.
 	///
 	/// The state is independent of the current chain and can be fetched remotely.
-	DryRunRuntimeUpgrade(dry_run_runtime_upgrade_cli::DryRunRuntimeUpgradeCmd),
+	TryRuntime(try_runtime_cli::TryRuntimeCmd),
 
 	/// Verify a signature for a message, provided on STDIN, with a given (public or secret) key.
 	Verify(VerifyCmd),

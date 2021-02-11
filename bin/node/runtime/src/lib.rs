@@ -112,7 +112,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to 0. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 262,
+	spec_version: 264,
 	impl_version: 0,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 2,
@@ -319,6 +319,8 @@ impl pallet_scheduler::Config for Runtime {
 parameter_types! {
 	pub const EpochDuration: u64 = EPOCH_DURATION_IN_SLOTS;
 	pub const ExpectedBlockTime: Moment = MILLISECS_PER_BLOCK;
+	pub const ReportLongevity: u64 =
+		BondingDuration::get() as u64 * SessionsPerEra::get() as u64 * EpochDuration::get();
 }
 
 impl pallet_babe::Config for Runtime {
@@ -339,7 +341,7 @@ impl pallet_babe::Config for Runtime {
 	)>>::IdentificationTuple;
 
 	type HandleEquivocation =
-		pallet_babe::EquivocationHandler<Self::KeyOwnerIdentification, Offences>;
+		pallet_babe::EquivocationHandler<Self::KeyOwnerIdentification, Offences, ReportLongevity>;
 
 	type WeightInfo = ();
 }
@@ -866,7 +868,7 @@ impl pallet_grandpa::Config for Runtime {
 	)>>::IdentificationTuple;
 
 	type HandleEquivocation =
-		pallet_grandpa::EquivocationHandler<Self::KeyOwnerIdentification, Offences>;
+		pallet_grandpa::EquivocationHandler<Self::KeyOwnerIdentification, Offences, ReportLongevity>;
 
 	type WeightInfo = ();
 }
@@ -1330,21 +1332,21 @@ impl_runtime_apis! {
 		}
 	}
 
-	#[cfg(feature = "runtime-upgrade-dry-run")]
-	impl frame_dry_run_runtime_upgrade::DryRunRuntimeUpgrade<Block> for Runtime {
-		fn dry_run_runtime_upgrade(target: frame_dry_run_runtime_upgrade::Target) -> Weight {
+	#[cfg(feature = "try-runtime")]
+	impl frame_try_runtime::TryRuntime<Block> for Runtime {
+		fn on_runtime_upgrade(target: frame_try_runtime::Target) -> Weight {
 			frame_support::debug::RuntimeLogger::init();
 
 			let weight = match target {
-				frame_dry_run_runtime_upgrade::Target::All => {
+				frame_try_runtime::Target::All => {
 					frame_support::debug::info!("Dry-running all on-runtime-upgrades.");
 					Executive::dry_run_runtime_upgrade()
 				},
-				frame_dry_run_runtime_upgrade::Target::Pallet(name) => {
+				frame_try_runtime::Target::Pallet(name) => {
 					let name = sp_std::str::from_utf8(&name).unwrap();
 					frame_support::debug::info!("Dry-running on-runtime-upgrade of {}.", name);
 
-					frame_dry_run_runtime_upgrade::match_pallet_on_runtime_upgrade!(name,
+					frame_try_runtime::match_pallet_on_runtime_upgrade!(name,
 						System, Utility, Babe, Timestamp, Authorship, Indices, Balances,
 						TransactionPayment, Staking, Session, Democracy, Council,
 						TechnicalCommittee, Elections, TechnicalMembership, Grandpa, Treasury,

@@ -1,6 +1,6 @@
 [package]
 name = "substrate-browser-utils"
-version = "0.8.1"
+version = "0.9.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Utilities for creating a browser light-client."
 edition = "2018"
@@ -22,13 +22,13 @@ js-sys = "0.3.34"
 wasm-bindgen = "0.2.57"
 wasm-bindgen-futures = "0.4.18"
 kvdb-web = "0.9.0"
-sp-database = { version = "2.0.0", path = "../../primitives/database" }
-sc-informant = { version = "0.8.0", path = "../../client/informant" }
-sc-service = { version = "0.8.0", path = "../../client/service", default-features = false }
-sc-network = { path = "../../client/network", version = "0.8.0"}
-sc-chain-spec = { path = "../../client/chain-spec", version = "2.0.0"}
-sc-telemetry = { path = "../../client/telemetry", version = "2.0.0"}
-sc-tracing = { path = "../../client/tracing", version = "2.0.0"}
+sp-database = { version = "3.0.0", path = "../../primitives/database" }
+sc-informant = { version = "0.9.0", path = "../../client/informant" }
+sc-service = { version = "0.9.0", path = "../../client/service", default-features = false }
+sc-network = { path = "../../client/network", version = "0.9.0"}
+sc-chain-spec = { path = "../../client/chain-spec", version = "3.0.0"}
+sc-telemetry = { path = "../../client/telemetry", version = "3.0.0"}
+sc-tracing = { path = "../../client/tracing", version = "3.0.0"}
 
 # Imported just for the `wasm-bindgen` feature
 getrandom = { version = "0.2", features = ["js"] }

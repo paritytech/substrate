@@ -1,6 +1,6 @@
 [package]
-name = "frame-dry-run-runtime-upgrade"
-version = "2.0.1"
+name = "frame-try-runtime"
+version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -15,10 +15,10 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
 
-sp-api = { version = "2.0.1", path = "../../primitives/api", default-features = false }
-sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
+sp-api = { version = "3.0.0", path = "../../primitives/api", default-features = false }
+sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
 
-frame-support = { version = "2.0.1", path = "../support", default-features = false }
+frame-support = { version = "3.0.0", path = "../support", default-features = false }
 
 [features]
 default = [ "std" ]
