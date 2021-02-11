@@ -496,9 +496,7 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
-		type Event: From<Event<Self>>
-			+ Into<<Self as frame_system::Config>::Event>
-			+ IsType<<Self as frame_system::Config>::Event>;
+		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// Currency type.
 		type Currency: ReservableCurrency<Self::AccountId> + Currency<Self::AccountId>;
@@ -585,8 +583,8 @@ pub mod pallet {
 					log!(info, "Starting unsigned phase({}) at #{:?}.", enabled, now);
 
 					let base_weight = if need_snapshot {
-						T::WeightInfo::on_initialize_open_unsigned_with_snapshot() }
-					else {
+						T::WeightInfo::on_initialize_open_unsigned_with_snapshot()
+					} else {
 						T::WeightInfo::on_initialize_open_unsigned_without_snapshot()
 					};
 					base_weight.saturating_add(additional)
@@ -596,7 +594,7 @@ pub mod pallet {
 		}
 
 		fn offchain_worker(n: T::BlockNumber) {
-			// We only run the OCW in the fist block of the unsigned phase.
+			// We only run the OCW in the first block of the unsigned phase.
 			if Self::current_phase().is_unsigned_open_at(n) {
 				match Self::try_acquire_offchain_lock(n) {
 					Ok(_) => {

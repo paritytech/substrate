@@ -28,7 +28,7 @@ use sp_runtime::{offchain::storage::StorageValueRef, traits::TrailingZeroInput};
 use sp_std::cmp::Ordering;
 
 /// Storage key used to store the persistent offchain worker status.
-pub(crate) const OFFCHAIN_HEAD_DB: &[u8] = b"parity/multi-phase-unsigned-election/";
+pub(crate) const OFFCHAIN_HEAD_DB: &[u8] = b"parity/multi-phase-unsigned-election";
 
 /// The repeat threshold of the offchain worker. This means we won't run the offchain worker twice
 /// within a window of 5 blocks.
@@ -182,7 +182,7 @@ impl<T: Config> Pallet<T> {
 	pub fn trim_compact<FN>(
 		maximum_allowed_voters: u32,
 		mut compact: CompactOf<T>,
-		nominator_index: FN,
+		voter_index: FN,
 	) -> Result<CompactOf<T>, MinerError>
 	where
 		for<'r> FN: Fn(&'r T::AccountId) -> Option<CompactVoterIndexOf<T>>,
@@ -202,7 +202,7 @@ impl<T: Config> Pallet<T> {
 				// removed.
 				let mut removed = 0;
 				for (maybe_index, _stake) in
-					voters_sorted.iter().map(|(who, stake)| (nominator_index(&who), stake))
+					voters_sorted.iter().map(|(who, stake)| (voter_index(&who), stake))
 				{
 					let index = maybe_index.ok_or(MinerError::SnapshotUnAvailable)?;
 					if compact.remove_voter(index) {

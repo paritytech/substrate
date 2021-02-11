@@ -52,7 +52,7 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: frame_system::{Module, Call, Event<T>},
+		System: frame_system::{Module, Call, Event<T>, Config},
 		Balances: pallet_balances::{Module, Call, Event<T>, Config<T>},
 		TwoPhase: two_phase::{Module, Call, Event<T>},
 	}
@@ -154,7 +154,7 @@ impl frame_system::Config for Runtime {
 	type BlockLength = ();
 	type BlockWeights = BlockWeights;
 	type Version = ();
-	type PalletInfo = ();
+	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
