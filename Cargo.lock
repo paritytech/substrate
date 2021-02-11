@@ -3036,7 +3036,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-http-client"
 version = "0.1.0"
-source = "git+https://github.com/paritytech/jsonrpsee#ce1625b705d2e302fac30ff50bcbfe3352064742"
+source = "git+https://github.com/paritytech/jsonrpsee#523489e40b35405a99637b8d01deea0009c05e62"
 dependencies = [
  "futures 0.3.12",
  "jsonrpsee-types",
@@ -3051,7 +3051,7 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-types"
 version = "0.1.0"
-source = "git+https://github.com/paritytech/jsonrpsee#ce1625b705d2e302fac30ff50bcbfe3352064742"
+source = "git+https://github.com/paritytech/jsonrpsee#523489e40b35405a99637b8d01deea0009c05e62"
 dependencies = [
  "futures 0.3.12",
  "serde",

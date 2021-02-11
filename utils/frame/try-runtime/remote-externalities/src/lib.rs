@@ -271,9 +271,7 @@ impl Builder {
 	async fn rpc_get_head(&self) -> Hash {
 		// TODO: move client to the builder.
 		trace!(target: LOG_TARGET, "rpc: finalized_head");
-		let json_val = self.as_online().rpc.request("chain_getFinalizedHead", Params::None).await.unwrap();
-		// TODO: https://github.com/paritytech/jsonrpsee/pull/206
-		jsonrpc::from_value(json_val).unwrap()
+		self.as_online().rpc.request("chain_getFinalizedHead", Params::None).await.unwrap()
 	}
 
 	/// Relay the request to `state_getPairs` rpc endpoint.
@@ -282,17 +280,13 @@ impl Builder {
 	async fn rpc_get_pairs(&self, prefix: StorageKey, at: Hash) -> Vec<KeyPair> {
 		trace!(target: LOG_TARGET, "rpc: storage_pairs: {:?} / {:?}", prefix, at);
 		let params = Params::Array(vec![jsonrpc::to_value(prefix).unwrap(), jsonrpc::to_value(at).unwrap()]);
-		let json_val = self.as_online().rpc.request("state_getPairs", params).await.unwrap();
-		// TODO: https://github.com/paritytech/jsonrpsee/pull/206
-		jsonrpc::from_value(json_val).unwrap()
+		self.as_online().rpc.request("state_getPairs", params).await.unwrap()
 	}
 
 	/// Get the chain name.
 	async fn chain_name(&self) -> String {
 		trace!(target: LOG_TARGET, "rpc: system_chain");
-		let json_val = self.as_online().rpc.request("system_chain", Params::None).await.unwrap();
-		// TODO: https://github.com/paritytech/jsonrpsee/pull/206
-		jsonrpc::from_value(json_val).unwrap()
+		self.as_online().rpc.request("system_chain", Params::None).await.unwrap()
 	}
 }
 
