@@ -729,7 +729,7 @@ mod tests {
 	impl system::Config for TestRuntime {
 		type Origin = u32;
 		type BlockNumber = u32;
-		type PalletInfo = ();
+		type PalletInfo = crate::tests::PanicPalletInfo;
 		type DbWeight = ();
 	}
 
@@ -744,14 +744,14 @@ mod tests {
 	impl system_renamed::Config for TestRuntime2 {
 		type Origin = u32;
 		type BlockNumber = u32;
-		type PalletInfo = ();
+		type PalletInfo = crate::tests::PanicPalletInfo;
 		type DbWeight = ();
 	}
 
 	impl system::Config for TestRuntime2 {
 		type Origin = u32;
 		type BlockNumber = u32;
-		type PalletInfo = ();
+		type PalletInfo = crate::tests::PanicPalletInfo;
 		type DbWeight = ();
 	}
 

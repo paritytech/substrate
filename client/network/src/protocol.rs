@@ -424,12 +424,11 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			// The `reserved_nodes` of this set are later kept in sync with the peers we connect
 			// to through set 0.
 			sets.push(sc_peerset::SetConfig {
-				in_peers: network_config.default_peers_set.in_peers,
-				out_peers: network_config.default_peers_set.out_peers,
+				in_peers: 0,
+				out_peers: 0,
 				bootnodes: Vec::new(),
-				reserved_nodes: default_sets_reserved,
-				reserved_only: network_config.default_peers_set.non_reserved_mode
-					== config::NonReservedPeerMode::Deny,
+				reserved_nodes: HashSet::new(),
+				reserved_only: true,
 			});
 
 			for set_cfg in &network_config.extra_sets {
@@ -1698,7 +1697,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 
 							if self.on_sync_peer_connected(peer_id.clone(), handshake).is_ok() {
 								// Set 1 is kept in sync with the connected peers of set 0.
-								self.peerset_handle.add_to_peers_set(
+								self.peerset_handle.add_reserved_peer(
 									HARDCODED_PEERSETS_TX,
 									peer_id.clone()
 								);
@@ -1722,7 +1721,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 								Ok(handshake) => {
 									if self.on_sync_peer_connected(peer_id.clone(), handshake).is_ok() {
 										// Set 1 is kept in sync with the connected peers of set 0.
-										self.peerset_handle.add_to_peers_set(
+										self.peerset_handle.add_reserved_peer(
 											HARDCODED_PEERSETS_TX,
 											peer_id.clone()
 										);

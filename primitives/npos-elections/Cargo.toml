@@ -1,6 +1,6 @@
 [package]
 name = "sp-npos-elections"
-version = "2.0.1"
+version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -15,15 +15,15 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
-sp-std = { version = "2.0.0", default-features = false, path = "../std" }
-sp-npos-elections-compact = { version = "2.0.0", path = "./compact" }
-sp-arithmetic = { version = "2.0.0", default-features = false, path = "../arithmetic" }
-sp-core = { version = "2.0.0", default-features = false, path = "../core" }
+sp-std = { version = "3.0.0", default-features = false, path = "../std" }
+sp-npos-elections-compact = { version = "3.0.0", path = "./compact" }
+sp-arithmetic = { version = "3.0.0", default-features = false, path = "../arithmetic" }
+sp-core = { version = "3.0.0", default-features = false, path = "../core" }
 
 [dev-dependencies]
-substrate-test-utils = { version = "2.0.0", path = "../../test-utils" }
+substrate-test-utils = { version = "3.0.0", path = "../../test-utils" }
 rand = "0.7.3"
-sp-runtime = { version = "2.0.0", path = "../runtime" }
+sp-runtime = { version = "3.0.0", path = "../runtime" }
 
 [features]
 default = ["std"]
