@@ -116,7 +116,7 @@ trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 			|| self.client().info().best_hash,
 			|| self.client().import_notification_stream()
 				.map(|notification| Ok::<_, ()>(notification.header))
-				.compat()
+				.compat(),
 		)
 	}
 
@@ -143,7 +143,7 @@ trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 			|| self.client().import_notification_stream()
 				.filter(|notification| future::ready(notification.is_new_best))
 				.map(|notification| Ok::<_, ()>(notification.header))
-				.compat()
+				.compat(),
 		)
 	}
 

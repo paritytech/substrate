@@ -236,6 +236,7 @@ async fn build_network_future<
 				if announce_imported_blocks {
 					network.service().announce_block(notification.hash, None);
 				}
+
 				if notification.is_new_best {
 					network.service().new_best_block_imported(
 						notification.hash,

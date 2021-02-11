@@ -404,8 +404,7 @@ fn run_one_test(
 			// run each future until we get one of our own blocks with number higher than 5
 			// that was produced locally.
 			client.import_notification_stream()
-				.take_while(move |n| {
-					future::ready(n.header.number() < &5 || {
+				.take_while(move |n| future::ready(n.header.number() < &5 || {
 					if n.origin == BlockOrigin::Own {
 						got_own = true;
 					} else {
@@ -415,8 +414,7 @@ fn run_one_test(
 					// continue until we have at least one block of our own
 					// and one of another peer.
 					!(got_own && got_other)
-					  })
-				})
+				}))
 				.for_each(|_| future::ready(()) )
 		);
 
