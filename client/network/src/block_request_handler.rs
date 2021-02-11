@@ -130,13 +130,18 @@ impl <B: BlockT> BlockRequestHandler<B> {
 
 			// To keep compatibility we only send the grandpa justification
 			let justification = justifications
-				.map(|just|
-					match just.into_iter().find(|j| j.0 == GRANDPA_ENGINE_ID) {
-						Some((_, grandpa_justification)) => grandpa_justification,
-						None => Vec::new(),
-				})
-				.unwrap_or(Vec::new());
-			let is_empty_justification = justification.is_empty();
+				.map(|just| {
+					just.into_iter()
+						.find(|j| j.0 == GRANDPA_ENGINE_ID)
+						.map(|(_, grandpa_justification)| grandpa_justification)
+				});
+
+			let is_empty_justification = justification
+				.as_ref()
+				.map(|j| j.as_ref().map(|j| j.is_empty()).unwrap_or(false))
+				.unwrap_or(false);
+
+			let justification = justification.unwrap_or_default().unwrap_or_default();
 
 			let body = if get_body {
 				match self.client.block_body(&BlockId::Hash(hash))? {
