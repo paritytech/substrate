@@ -910,7 +910,7 @@ impl<T: Config> Pallet<T> {
 		// NOTE: this is a bit of duplicate, but we keep it around for veracity. The unsigned path
 		// already checked this in `unsigned_per_dispatch_checks`. The signed path *could* check it
 		// upon arrival, thus we would then remove it here. Given overlay it is cheap anyhow
-		ensure!(winners.len() as u32 == desired_targets, FeasibilityError::WrongWinnerCount,);
+		ensure!(winners.len() as u32 == desired_targets, FeasibilityError::WrongWinnerCount);
 
 		// read the entire snapshot.
 		let RoundSnapshot { voters: snapshot_voters, targets: snapshot_targets } =
