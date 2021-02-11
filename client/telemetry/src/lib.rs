@@ -48,6 +48,7 @@ use std::iter;
 use std::sync::Arc;
 
 pub use libp2p::wasm_ext::ExtTransport;
+pub use log;
 pub use serde_json;
 
 mod endpoints;
@@ -382,16 +383,23 @@ pub struct Telemetry {
 
 impl Telemetry {
 	/// Send telemetries.
-	pub async fn send(&mut self, verbosity: VerbosityLevel, payload: TelemetryPayload) {
+	pub fn send(&mut self, verbosity: VerbosityLevel, payload: TelemetryPayload) {
 		match self
 			.message_sender
-			.send((self.id, verbosity, payload))
-			.await
+			.try_send((self.id, verbosity, payload))
 		{
 			Ok(()) => {}
 			Err(err) if err.is_full() => todo!("overflow"),
 			Err(_) => unreachable!(),
 		}
+	}
+
+	/// Get event stream for telemetry connection established events.
+	///
+	/// This function will return an error if the telemetry has already been started by
+	/// [`TelemetryHandle::start_telemetry`].
+	pub fn on_connect_stream(&self) -> TracingUnboundedReceiver<()> {
+		self.connection_notifier.on_connect_stream()
 	}
 }
 
@@ -404,11 +412,7 @@ pub struct TelemetryConnectionNotifier {
 }
 
 impl TelemetryConnectionNotifier {
-	/// Get event stream for telemetry connection established events.
-	///
-	/// This function will return an error if the telemetry has already been started by
-	/// [`TelemetryHandle::start_telemetry`].
-	pub fn on_connect_stream(&self) -> TracingUnboundedReceiver<()> {
+	fn on_connect_stream(&self) -> TracingUnboundedReceiver<()> {
 		let (message_sender, message_receiver) = tracing_unbounded("mpsc_telemetry_on_connect");
 		if let Err(err) = self.register_sender.unbounded_send(Register::Notifier {
 			addresses: self.addresses.clone(),
@@ -451,7 +455,7 @@ enum Register {
 /// # let authority_id = 42_u64;
 /// # let set_id = (43_u64, 44_u64);
 /// # let authorities = vec![45_u64];
-/// telemetry!(CONSENSUS_INFO; "afg.authority_set";
+/// telemetry!(telemetry; CONSENSUS_INFO; "afg.authority_set";
 /// 	"authority_id" => authority_id.to_string(),
 /// 	"authority_set_id" => ?set_id,
 /// 	"authorities" => authorities,
@@ -460,19 +464,21 @@ enum Register {
 #[macro_export(local_inner_macros)]
 macro_rules! telemetry {
 	( $telemetry:expr; $verbosity:expr; $msg:expr; $( $t:tt )* ) => {{
-		let verbosity: $crate::VerbosityLevel = $verbosity;
-		match format_fields_to_json!($($t)*) {
-			Err(err) => {
-				$crate::tracing::error!(
-					target: "telemetry",
-					"Could not serialize value for telemetry: {}",
-					err,
-				);
-			},
-			Ok(mut json) => {
-				json.insert("msg".into(), $msg.into());
-				$telemetry.send(verbosity, json);
-			},
+		if let Some(telemetry) = $telemetry.as_mut() {
+			let verbosity: $crate::VerbosityLevel = $verbosity;
+			match format_fields_to_json!($($t)*) {
+				Err(err) => {
+					$crate::log::error!(
+						target: "telemetry",
+						"Could not serialize value for telemetry: {}",
+						err,
+					);
+				},
+				Ok(mut json) => {
+					json.insert("msg".into(), $msg.into());
+					telemetry.send(verbosity, json);
+				},
+			}
 		}
 	}};
 }

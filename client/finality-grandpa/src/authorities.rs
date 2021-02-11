@@ -23,7 +23,7 @@ use parking_lot::RwLock;
 use finality_grandpa::voter_set::VoterSet;
 use parity_scale_codec::{Encode, Decode};
 use log::debug;
-use sc_telemetry::{telemetry, CONSENSUS_INFO};
+use sc_telemetry::{telemetry, Telemetry, CONSENSUS_INFO};
 use sp_finality_grandpa::{AuthorityId, AuthorityList};
 
 use std::cmp::Ord;
@@ -43,8 +43,8 @@ pub enum Error<N, E> {
 	#[display(fmt = "Multiple pending forced authority set changes are not allowed.")]
 	MultiplePendingForcedAuthoritySetChanges,
 	#[display(
-		fmt = "A pending forced authority set change could not be applied since it must be applied after \
-		 the pending standard change at #{}",
+		fmt = "A pending forced authority set change could not be applied since it must be applied \
+		after the pending standard change at #{}",
 		_0
 	)]
 	ForcedAuthoritySetChangeDependencyUnsatisfied(N),
@@ -278,9 +278,13 @@ where
 		let hash = pending.canon_hash.clone();
 		let number = pending.canon_height.clone();
 
-		debug!(target: "afg", "Inserting potential standard set change signaled at block {:?} \
-							   (delayed by {:?} blocks).",
-			   (&number, &hash), pending.delay);
+		debug!(
+			target: "afg",
+			"Inserting potential standard set change signaled at block {:?} (delayed by {:?}
+			blocks).",
+			(&number, &hash),
+			pending.delay,
+		);
 
 		self.pending_standard_changes.import(
 			hash,
@@ -289,8 +293,10 @@ where
 			is_descendent_of,
 		)?;
 
-		debug!(target: "afg", "There are now {} alternatives for the next pending standard change (roots), \
-							   and a total of {} pending standard changes (across all forks).",
+		debug!(
+			target: "afg",
+			"There are now {} alternatives for the next pending standard change (roots), and a
+			total of {} pending standard changes (across all forks).",
 			self.pending_standard_changes.roots().count(),
 			self.pending_standard_changes.iter().count(),
 		);
@@ -326,9 +332,12 @@ where
 			))
 			.unwrap_or_else(|i| i);
 
-		debug!(target: "afg", "Inserting potential forced set change at block {:?} \
-							   (delayed by {:?} blocks).",
-			   (&pending.canon_height, &pending.canon_hash), pending.delay);
+		debug!(
+			target: "afg",
+			"Inserting potential forced set change at block {:?} (delayed by {:?} blocks).",
+			(&pending.canon_height, &pending.canon_hash),
+			pending.delay,
+		);
 
 		self.pending_forced_changes.insert(idx, pending);
 
@@ -409,6 +418,7 @@ where
 		best_number: N,
 		is_descendent_of: &F,
 		initial_sync: bool,
+		mut telemetry: Option<&mut Telemetry>,
 	) -> Result<Option<(N, Self)>, Error<N, E>>
 	where
 		F: Fn(&H, &H) -> Result<bool, E>,
@@ -461,8 +471,7 @@ where
 				);
 
 				telemetry!(
-					CONSENSUS_INFO;
-					"afg.applying_forced_authority_set_change";
+					telemetry; CONSENSUS_INFO; "afg.applying_forced_authority_set_change";
 					"block" => ?change.canon_height
 				);
 
@@ -505,6 +514,7 @@ where
 		finalized_number: N,
 		is_descendent_of: &F,
 		initial_sync: bool,
+		mut telemetry: Option<&mut Telemetry>,
 	) -> Result<Status<H, N>, Error<N, E>>
 	where
 		F: Fn(&H, &H) -> Result<bool, E>,
@@ -544,7 +554,8 @@ where
 						"👴 Applying authority set change scheduled at block #{:?}",
 						change.canon_height,
 					);
-					telemetry!(CONSENSUS_INFO; "afg.applying_scheduled_authority_set_change";
+					telemetry!(
+						telemetry; CONSENSUS_INFO; "afg.applying_scheduled_authority_set_change";
 						"block" => ?change.canon_height
 					);
 
