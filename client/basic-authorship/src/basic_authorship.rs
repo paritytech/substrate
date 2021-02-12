@@ -32,7 +32,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, Hash as HashT, Header as HeaderT, DigestFor, BlakeTwo256},
 };
 use sp_transaction_pool::{TransactionPool, InPoolTransaction};
-use sc_telemetry::{telemetry, CONSENSUS_INFO};
+use sc_telemetry::{telemetry, Telemetry, CONSENSUS_INFO};
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sp_api::{ProvideRuntimeApi, ApiExt};
 use futures::{future, future::{Future, FutureExt}, channel::oneshot, select};
@@ -60,9 +60,10 @@ pub struct ProposerFactory<A, B, C> {
 	transaction_pool: Arc<A>,
 	/// Prometheus Link,
 	metrics: PrometheusMetrics,
+	max_block_size: usize,
+	telemetry: Option<Telemetry>,
 	/// phantom member to pin the `Backend` type.
 	_phantom: PhantomData<B>,
-	max_block_size: usize,
 }
 
 impl<A, B, C> ProposerFactory<A, B, C> {
@@ -71,14 +72,16 @@ impl<A, B, C> ProposerFactory<A, B, C> {
 		client: Arc<C>,
 		transaction_pool: Arc<A>,
 		prometheus: Option<&PrometheusRegistry>,
+		telemetry: Option<Telemetry>,
 	) -> Self {
 		ProposerFactory {
 			spawn_handle: Box::new(spawn_handle),
 			client,
 			transaction_pool,
 			metrics: PrometheusMetrics::new(prometheus),
-			_phantom: PhantomData,
 			max_block_size: DEFAULT_MAX_BLOCK_SIZE,
+			telemetry,
+			_phantom: PhantomData,
 		}
 	}
 
@@ -121,8 +124,9 @@ impl<B, Block, C, A> ProposerFactory<A, B, C>
 			transaction_pool: self.transaction_pool.clone(),
 			now,
 			metrics: self.metrics.clone(),
-			_phantom: PhantomData,
 			max_block_size: self.max_block_size,
+			telemetry: self.telemetry.clone(),
+			_phantom: PhantomData,
 		};
 
 		proposer
@@ -162,8 +166,9 @@ pub struct Proposer<B, Block: BlockT, C, A: TransactionPool> {
 	transaction_pool: Arc<A>,
 	now: Box<dyn Fn() -> time::Instant + Send + Sync>,
 	metrics: PrometheusMetrics,
-	_phantom: PhantomData<B>,
 	max_block_size: usize,
+	telemetry: Option<Telemetry>,
+	_phantom: PhantomData<B>,
 }
 
 impl<A, B, Block, C> sp_consensus::Proposer<Block> for
@@ -343,7 +348,8 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 				.collect::<Vec<_>>()
 				.join(", ")
 		);
-		telemetry!(CONSENSUS_INFO; "prepared_block_for_proposing";
+		telemetry!(
+			self.telemetry.clone(); CONSENSUS_INFO; "prepared_block_for_proposing";
 			"number" => ?block.header().number(),
 			"hash" => ?<Block as BlockT>::Hash::from(block.header().hash()),
 		);
