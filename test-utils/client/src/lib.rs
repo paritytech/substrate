@@ -23,7 +23,7 @@ pub mod client_ext;
 
 pub use sc_client_api::{
 	execution_extensions::{ExecutionStrategies, ExecutionExtensions},
-	ForkBlocks, BadBlocks, BlockImportNotification,
+	ForkBlocks, BadBlocks,
 };
 pub use sc_client_db::{Backend, self};
 pub use sp_consensus;

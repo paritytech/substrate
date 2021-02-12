@@ -30,5 +30,5 @@ pub trait Client<Block: BlockT>: HeaderBackend<Block> + ProofProvider<Block> + B
 impl<Block: BlockT, T> Client<Block> for T
 	where
 		T: HeaderBackend<Block> + ProofProvider<Block> + BlockIdTo<Block, Error = Error>
-		+ BlockBackend<Block> + HeaderMetadata<Block, Error = Error> + Send + Sync
+			+ BlockBackend<Block> + HeaderMetadata<Block, Error = Error> + Send + Sync
 {}

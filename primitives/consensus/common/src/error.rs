@@ -73,9 +73,6 @@ pub enum Error {
 	/// Some other error.
 	#[error(transparent)]
 	Other(#[from] Box<dyn error::Error + Sync + Send + 'static>),
-	/// Error from the client prior to importing
-	#[error("Pre-import failed: {0}")]
-	ClientPreImport(String),
 	/// Error from the client while importing
 	#[error("Import failed: {0}")]
 	ClientImport(String),
