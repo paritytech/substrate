@@ -598,7 +598,7 @@ pub mod pallet {
 			if Self::current_phase().is_unsigned_open_at(n) {
 				match Self::try_acquire_offchain_lock(n) {
 					Ok(_) => {
-						let outcome = Self::mine_and_submit().map_err(ElectionError::from);
+						let outcome = Self::mine_check_and_submit().map_err(ElectionError::from);
 						log!(info, "miner exeuction done: {:?}", outcome);
 					}
 					Err(why) => log!(warn, "denied offchain worker: {:?}", why),

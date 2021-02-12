@@ -78,8 +78,10 @@ impl<T: Config> Pallet<T> {
 	/// If you want an unchecked solution, use [`Pallet::mine_solution`].
 	/// If you want a checked solution and submit it at the same time, use
 	/// [`Pallet::mine_check_and_submit`].
-	pub fn mine_and_check(iters: usize) -> Result<(RawSolution<CompactOf<T>>, SolutionOrSnapshotSize), MinerError> {
-		let (raw_solution, witness) = Self::mine_solution(balancing)?;
+	pub fn mine_and_check(
+		iters: usize,
+	) -> Result<(RawSolution<CompactOf<T>>, SolutionOrSnapshotSize), MinerError> {
+		let (raw_solution, witness) = Self::mine_solution(iters)?;
 
 		// ensure that this will pass the pre-dispatch checks
 		Self::unsigned_pre_dispatch_checks(&raw_solution).map_err(|e| {
@@ -88,10 +90,12 @@ impl<T: Config> Pallet<T> {
 		})?;
 
 		// ensure that this is a feasible solution
-		let _ = Self::feasibility_check(solution.clone(), ElectionCompute::Unsigned).map_err(|e| {
-			log!(warn, "feasibility-check failed for mined solution: {:?}", e);
-			e.into()
-		})?;
+		let _ = Self::feasibility_check(raw_solution.clone(), ElectionCompute::Unsigned).map_err(
+			|e| {
+				log!(warn, "feasibility-check failed for mined solution: {:?}", e);
+				MinerError::from(e)
+			},
+		)?;
 
 		Ok((raw_solution, witness))
 	}
@@ -723,10 +727,15 @@ mod tests {
 
 			// mine seq_phragmen solution with 2 iters.
 			assert_eq!(
-				MultiPhase::mine_and_submit().unwrap_err(),
+				MultiPhase::mine_check_and_submit().unwrap_err(),
 				MinerError::PreDispatchChecksFailed,
 			);
 		})
+	}
+
+	#[test]
+	fn miner_will_not_submit_if_not_feasible() {
+		todo!()
 	}
 
 	#[test]
