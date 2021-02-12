@@ -58,7 +58,7 @@ async fn telemetry_works() {
 					}
 				}
 
-				Event::TextFrame { .. } => unreachable!(),
+				Event::TextFrame { .. } => panic!("Got a TextFrame over the socket, this is a bug"),
 
 				// Connection has been closed.
 				Event::ConnectionError { .. } => {}
