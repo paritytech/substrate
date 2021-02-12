@@ -921,6 +921,10 @@ impl<T: Config> Pallet<T> {
 		let voter_index = helpers::voter_index_fn_usize::<T>(&cache);
 
 		// first, make sure that all the winners are sane.
+		// OPTIMIZATION: we could first build the assignments, and then extract the winners directly
+		// from that, as that would eliminate a little bit of duplicate work. For now, we keep them
+		// separate: First extract winners separately from compact, and then assignments. This is
+		// also better, because we can reject solutions that don't meet `desired_targets` early on.
 		let winners = winners
 			.into_iter()
 			.map(|i| target_at(i).ok_or(FeasibilityError::InvalidWinner))
