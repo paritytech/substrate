@@ -732,8 +732,8 @@ macro_rules! decl_tests {
 					assert_eq!(
 						events(),
 						[
+							Event::frame_system(system::Event::KilledAccount(1)),
 							Event::pallet_balances(RawEvent::DustLost(1, 99)),
-							Event::frame_system(system::Event::KilledAccount(1))
 						]
 					);
 				});

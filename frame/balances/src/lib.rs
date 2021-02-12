@@ -571,6 +571,17 @@ decl_module! {
 	}
 }
 
+pub struct DustCleaner<T: Config<I>, I: Instance>(Option<(T::AccountId, NegativeImbalance<T, I>)>);
+
+impl<T: Config<I>, I: Instance> Drop for DustCleaner<T, I> {
+	fn drop(&mut self) {
+		if let Some((who, dust)) = self.0.take() {
+			Module::<T, I>::deposit_event(RawEvent::DustLost(who, dust.peek()));
+			T::DustRemoval::on_unbalanced(dust);
+		}
+	}
+}
+
 impl<T: Config<I>, I: Instance> Module<T, I> {
 	// PRIVATE MUTABLES
 
@@ -601,14 +612,16 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 		T::AccountStore::get(&who)
 	}
 
-	/// Places the `free` and `reserved` parts of `new` into `account`. Also does any steps needed
-	/// after mutating an account. This includes DustRemoval unbalancing, in the case than the `new`
-	/// account's total balance is non-zero but below ED.
+	/// Handles any steps needed after mutating an account.
 	///
-	/// Returns the final free balance, iff the account was previously of total balance zero, known
-	/// as its "endowment".
+	/// This includes DustRemoval unbalancing, in the case than the `new` account's total balance
+	/// is non-zero but below ED.
+	///
+	/// Returns two values:
+	/// - `Some` containing the the `new` account, iff the account has sufficient balance.
+	/// - `Some` containing the dust to be dropped, iff some dust should be dropped.
 	fn post_mutation(
-		who: &T::AccountId,
+		_who: &T::AccountId,
 		new: AccountData<T::Balance>,
 	) -> (Option<AccountData<T::Balance>>, Option<NegativeImbalance<T, I>>) {
 		let total = new.total();
@@ -616,7 +629,6 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 			if total.is_zero() {
 				(None, None)
 			} else {
-				Self::deposit_event(RawEvent::DustLost(who.clone(), total));
 				(None, Some(NegativeImbalance::new(total)))
 			}
 		} else {
@@ -652,6 +664,30 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 		who: &T::AccountId,
 		f: impl FnOnce(&mut AccountData<T::Balance>, bool) -> Result<R, E>
 	) -> Result<R, E> {
+		Self::try_mutate_account_with_dust(who, f)
+			.map(|(result, dust_cleaner)| {
+				drop(dust_cleaner);
+				result
+			})
+	}
+
+	/// Mutate an account to some new value, or delete it entirely with `None`. Will enforce
+	/// `ExistentialDeposit` law, annulling the account as needed. This will do nothing if the
+	/// result of `f` is an `Err`.
+	///
+	/// It returns both the result from the closure, and an optional `DustCleaner` instance which
+	/// should be dropped once it is known that all nested mutates that could affect storage items
+	/// what the dust handler touches have completed.
+	///
+	/// NOTE: Doesn't do any preparatory work for creating a new account, so should only be used
+	/// when it is known that the account already exists.
+	///
+	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
+	/// the caller will do this.
+	fn try_mutate_account_with_dust<R, E: From<StoredMapError>>(
+		who: &T::AccountId,
+		f: impl FnOnce(&mut AccountData<T::Balance>, bool) -> Result<R, E>
+	) -> Result<(R, DustCleaner<T, I>), E> {
 		let result = T::AccountStore::try_mutate_exists(who, |maybe_account| {
 			let is_new = maybe_account.is_none();
 			let mut account = maybe_account.take().unwrap_or_default();
@@ -663,13 +699,11 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 			})
 		});
 		result.map(|(maybe_endowed, maybe_dust, result)| {
-			if let Some(dust) = maybe_dust {
-				T::DustRemoval::on_unbalanced(dust);
-			}
 			if let Some(endowed) = maybe_endowed {
 				Self::deposit_event(RawEvent::Endowed(who.clone(), endowed));
 			}
-			result
+			let dust_cleaner = DustCleaner(maybe_dust.map(|dust| (who.clone(), dust)));
+			(result, dust_cleaner)
 		})
 	}
 
@@ -962,8 +996,8 @@ impl<T: Config<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 	) -> DispatchResult {
 		if value.is_zero() || transactor == dest { return Ok(()) }
 
-		Self::try_mutate_account(dest, |to_account, _| -> DispatchResult {
-			Self::try_mutate_account(transactor, |from_account, _| -> DispatchResult {
+		Self::try_mutate_account_with_dust(dest, |to_account, _| -> Result<DustCleaner<T, I>, DispatchError> {
+			Self::try_mutate_account_with_dust(transactor, |from_account, _| -> DispatchResult {
 				from_account.free = from_account.free.checked_sub(&value)
 					.ok_or(Error::<T, I>::InsufficientBalance)?;
 
@@ -988,7 +1022,7 @@ impl<T: Config<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 				ensure!(allow_death || from_account.free >= ed, Error::<T, I>::KeepAlive);
 
 				Ok(())
-			})
+			}).map(|(_, maybe_dust_cleaner)| maybe_dust_cleaner)
 		})?;
 
 		// Emit transfer event.
@@ -1283,9 +1317,9 @@ impl<T: Config<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I
 			};
 		}
 
-		let actual = Self::try_mutate_account(beneficiary, |to_account, is_new|-> Result<Self::Balance, DispatchError> {
+		let ((actual, _maybe_one_dust), _maybe_other_dust) = Self::try_mutate_account_with_dust(beneficiary, |to_account, is_new|-> Result<(Self::Balance, DustCleaner<T, I>), DispatchError> {
 			ensure!(!is_new, Error::<T, I>::DeadAccount);
-			Self::try_mutate_account(slashed, |from_account, _| -> Result<Self::Balance, DispatchError> {
+			Self::try_mutate_account_with_dust(slashed, |from_account, _| -> Result<Self::Balance, DispatchError> {
 				let actual = cmp::min(from_account.reserved, value);
 				match status {
 					Status::Free => to_account.free = to_account.free.checked_add(&actual).ok_or(Error::<T, I>::Overflow)?,
