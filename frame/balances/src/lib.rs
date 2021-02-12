@@ -654,6 +654,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 		who: &T::AccountId,
 		f: impl FnOnce(&mut AccountData<T::Balance>, bool) -> Result<R, E>
 	) -> Result<R, E> {
+
 		let result = T::AccountStore::try_mutate_exists(who, |maybe_account| {
 			let is_new = maybe_account.is_none();
 			let mut account = maybe_account.take().unwrap_or_default();
@@ -953,49 +954,36 @@ impl<T: Config<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 		existence_requirement: ExistenceRequirement,
 	) -> DispatchResult {
 		if value.is_zero() || transactor == dest { return Ok(()) }
-		let ed = T::ExistentialDeposit::get();
 
-		// Pre-check dest for error before mutation.
-		T::AccountStore::try_mutate_exists(dest, |maybe_to_acc| -> DispatchResult {
-			let mut pre_chk_to_acc: AccountData<T::Balance> = maybe_to_acc.take().unwrap_or_default();
-			let mut pre_chk_to_acc_old: AccountData<T::Balance> = pre_chk_to_acc.clone();
-			pre_chk_to_acc.free = pre_chk_to_acc.free
-				.checked_add(&value).ok_or(Error::<T, I>::Overflow)?;
-			ensure!(pre_chk_to_acc.total() >= ed, Error::<T, I>::ExistentialDeposit);
-			*maybe_to_acc = Some(pre_chk_to_acc_old);
-			Ok(())
-		})?;
-
-		// update only transactor.
-		Self::try_mutate_account(transactor, |from_account, _| -> DispatchResult {
-			from_account.free = from_account.free.checked_sub(&value)
-				.ok_or(Error::<T, I>::InsufficientBalance)?;
-
-			Self::ensure_can_withdraw(
-				transactor,
-				value,
-				WithdrawReasons::TRANSFER,
-				from_account.free,
-			)?;
-
-			let allow_death = existence_requirement == ExistenceRequirement::AllowDeath;
-			let allow_death = allow_death && system::Module::<T>::allow_death(transactor);
-			ensure!(allow_death || from_account.free >= ed, Error::<T, I>::KeepAlive);
-			Ok(())
-		})?;
-
-		// update the dest
 		Self::try_mutate_account(dest, |to_account, _| -> DispatchResult {
-			// NOTE: total stake being stored in the same type means that this could never overflow
-			// but better to be safe than sorry.
-			to_account.free = to_account.free.checked_add(&value).unwrap();
-			Ok(())
+			Self::try_mutate_account(transactor, |from_account, _| -> DispatchResult {
+				from_account.free = from_account.free.checked_sub(&value)
+					.ok_or(Error::<T, I>::InsufficientBalance)?;
+
+				// NOTE: total stake being stored in the same type means that this could never overflow
+				// but better to be safe than sorry.
+				to_account.free = to_account.free.checked_add(&value).ok_or(Error::<T, I>::Overflow)?;
+
+				let ed = T::ExistentialDeposit::get();
+				ensure!(to_account.total() >= ed, Error::<T, I>::ExistentialDeposit);
+
+				Self::ensure_can_withdraw(
+					transactor,
+					value,
+					WithdrawReasons::TRANSFER,
+					from_account.free,
+				)?;
+
+				let allow_death = existence_requirement == ExistenceRequirement::AllowDeath;
+				let allow_death = allow_death && system::Module::<T>::allow_death(transactor);
+				ensure!(allow_death || from_account.free >= ed, Error::<T, I>::KeepAlive);
+
+				Ok(())
+			})
 		})?;
 
 		// Emit transfer event.
-		Self::deposit_event(
-			RawEvent::Transfer(transactor.clone(),dest.clone(),value)
-		);
+		Self::deposit_event(RawEvent::Transfer(transactor.clone(), dest.clone(), value));
 
 		Ok(())
 	}
