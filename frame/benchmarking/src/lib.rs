@@ -1025,15 +1025,21 @@ macro_rules! impl_benchmark_test_suite {
 		mod benchmark_tests {
 			use $path_to_benchmarks_invocation::test_bench_by_name;
 			use super::$bench_module;
-			use $crate::frame_support::assert_ok;
 
 			#[test]
 			fn test_benchmarks() {
 				$new_test_ext.execute_with(|| {
 					use $crate::Benchmarking;
+
+					let mut anything_failed = false;
+					println!("failing benchmark tests:");
 					for benchmark_name in $bench_module ::<$test>::benchmarks(true) {
-						assert_ok!(test_bench_by_name::<$test>(benchmark_name));
+						if let Err(err) = test_bench_by_name::<$test>(benchmark_name) {
+							println!("{}: {}", String::from_utf8_lossy(benchmark_name), err);
+							anything_failed = true;
+						}
 					}
+					assert!(!anything_failed);
 				});
 			}
 		}
