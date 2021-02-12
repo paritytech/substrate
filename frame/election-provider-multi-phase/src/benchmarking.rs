@@ -212,7 +212,7 @@ benchmarks! {
 		<CurrentPhase<T>>::put(Phase::Unsigned((true, 1u32.into())));
 
 		// encode the most significant storage item that needs to be decoded in the dispatch.
-		let snapshot = <MultiPhase<T>>::snapshot();
+		let snapshot = <MultiPhase<T>>::snapshot().unwrap();
 		let encoded_snapshot = snapshot.encode();
 		let voters_len = snapshot.voters.len();
 	}: {
@@ -245,7 +245,7 @@ benchmarks! {
 		assert_eq!(raw_solution.compact.unique_targets().len() as u32, d);
 
 		// encode the most significant storage item that needs to be decoded in the dispatch.
-		let snapshot = <MultiPhase<T>>::snapshot();
+		let snapshot = <MultiPhase<T>>::snapshot().unwrap();
 		let encoded_snapshot = snapshot.encode();
 		let voters_len = snapshot.voters.len();
 	}: {
