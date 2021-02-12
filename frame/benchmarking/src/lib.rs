@@ -993,14 +993,14 @@ macro_rules! impl_benchmark_test_suite {
 	($bench_module:tt, $new_test_ext:path, $test:path) => {
 		#[cfg(test)]
 		mod tests {
-			use super::*;
+			use super::{test_bench_by_name, $bench_module};
 			use $crate::frame_support::assert_ok;
 
 			#[test]
 			fn test_benchmarks() {
 				$new_test_ext().execute_with(|| {
 					use $crate::Benchmarking;
-					for benchmark_name in $bench_module::<$test>::benchmarks(true) {
+					for benchmark_name in $bench_module ::<$test>::benchmarks(true) {
 						assert_ok!(test_bench_by_name::<$test>(benchmark_name));
 					}
 				});
