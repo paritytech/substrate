@@ -160,14 +160,14 @@ impl TransactionsHandlerPrototype {
 	) -> error::Result<(TransactionsHandler<B, H>, TransactionsHandlerController<H>)> {
 		let event_stream = service.event_stream("transactions-handler").boxed();
 		let (to_handler, from_controller) = mpsc::unbounded();
-		let gossip_disabled = Arc::new(AtomicBool::new(false));
+		let gossip_enabled = Arc::new(AtomicBool::new(false));
 
 		let handler = TransactionsHandler {
 			protocol_name: self.protocol_name,
 			propagate_timeout: Box::pin(interval(PROPAGATE_TIMEOUT)),
 			pending_transactions: FuturesUnordered::new(),
 			pending_transactions_peers: HashMap::new(),
-			gossip_disabled: gossip_disabled.clone(),
+			gossip_enabled: gossip_enabled.clone(),
 			service,
 			event_stream,
 			peers: HashMap::new(),
@@ -183,7 +183,7 @@ impl TransactionsHandlerPrototype {
 
 		let controller = TransactionsHandlerController {
 			to_handler,
-			gossip_disabled,
+			gossip_enabled,
 		};
 
 		Ok((handler, controller))
@@ -193,13 +193,13 @@ impl TransactionsHandlerPrototype {
 /// Controls the behaviour of a [`TransactionsHandler`] it is connected to.
 pub struct TransactionsHandlerController<H: ExHashT> {
 	to_handler: mpsc::UnboundedSender<ToHandler<H>>,
-	gossip_disabled: Arc<AtomicBool>,
+	gossip_enabled: Arc<AtomicBool>,
 }
 
 impl<H: ExHashT> TransactionsHandlerController<H> {
 	/// Controls whether transactions are being gossiped on the network.
 	pub fn set_gossip_enabled(&mut self, enabled: bool) {
-		self.gossip_disabled.store(!enabled, Ordering::Relaxed);
+		self.gossip_enabled.store(enabled, Ordering::Relaxed);
 	}
 
 	/// You may call this when new transactions are imported by the transaction pool.
@@ -243,7 +243,7 @@ pub struct TransactionsHandler<B: BlockT + 'static, H: ExHashT> {
 	// All connected peers
 	peers: HashMap<PeerId, Peer<H>>,
 	transaction_pool: Arc<dyn TransactionPool<H, B>>,
-	gossip_disabled: Arc<AtomicBool>,
+	gossip_enabled: Arc<AtomicBool>,
 	local_role: config::Role,
 	from_controller: mpsc::UnboundedReceiver<ToHandler<H>>,
 	/// Prometheus metrics.
@@ -365,7 +365,7 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 		}
 
 		// Accept transactions only when enabled
-		if self.gossip_disabled.load(Ordering::Relaxed) {
+		if !self.gossip_enabled.load(Ordering::Relaxed) {
 			trace!(target: "sync", "{} Ignoring transactions while disabled", who);
 			return;
 		}
@@ -419,7 +419,7 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 	) {
 		debug!(target: "sync", "Propagating transaction [{:?}]", hash);
 		// Accept transactions only when enabled
-		if self.gossip_disabled.load(Ordering::Relaxed) {
+		if !self.gossip_enabled.load(Ordering::Relaxed) {
 			return;
 		}
 		if let Some(transaction) = self.transaction_pool.transaction(hash) {
@@ -476,7 +476,7 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 	fn propagate_transactions(&mut self) {
 		debug!(target: "sync", "Propagating transactions");
 		// Accept transactions only when enabled
-		if self.gossip_disabled.load(Ordering::Relaxed) {
+		if !self.gossip_enabled.load(Ordering::Relaxed) {
 			return;
 		}
 		let transactions = self.transaction_pool.transactions();
