@@ -977,6 +977,30 @@ macro_rules! impl_benchmark_test {
 /// );
 /// ```
 ///
+/// There is an optional fourth argument: `path_to_benchmarks_invocation`. In the typical case in
+/// which this macro is in the same module as the `benchmarks!` invocation, you don't need to supply
+/// this. However, if the `impl_benchmark_test_suite!`
+/// invocation is in a different module than the `benchmarks!` invocation, then you should provide
+/// the path to the module containing the `benchmarks!` invocation:
+///
+/// ```rust,ignore
+/// mod benches {
+/// 	benchmarks!{
+/// 		...
+/// 	}
+/// }
+///
+/// mod tests {
+/// 	// because of macro syntax limitations, neither Module nor benches can be paths, but both have
+/// 	// to be idents in the scope of `impl_benchmark_test_suite`.
+/// 	use crate::{benches, Module};
+///
+/// 	impl_benchmark_test_suite!(Module, new_test_ext(), Test, benches);
+///
+/// 	// new_test_ext and the Test item are defined later in this module
+/// }
+/// ```
+///
 // ## Notes (not for rustdoc)
 //
 // The biggest challenge for this macro is communicating the actual test functions to be run. We
@@ -993,10 +1017,14 @@ macro_rules! impl_benchmark_test {
 // just iterate over the `Benchmarking::benchmarks` list to run the actual implementations.
 #[macro_export]
 macro_rules! impl_benchmark_test_suite {
-	($bench_module:ident, $new_test_ext:expr, $test:path) => {
+	($bench_module:ident, $new_test_ext:expr, $test:path $(,)?) => {
+		impl_benchmark_test_suite!($bench_module, $new_test_ext, $test, super);
+	};
+	($bench_module:ident, $new_test_ext:expr, $test:path, $path_to_benchmarks_invocation:ident $(,)?) => {
 		#[cfg(test)]
-		mod tests {
-			use super::{test_bench_by_name, $bench_module};
+		mod benchmark_tests {
+			use $path_to_benchmarks_invocation::test_bench_by_name;
+			use super::$bench_module;
 			use $crate::frame_support::assert_ok;
 
 			#[test]
