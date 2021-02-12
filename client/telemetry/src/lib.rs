@@ -37,15 +37,13 @@
 #![warn(missing_docs)]
 
 use futures::{channel::mpsc, prelude::*};
+use global_counter::primitive::exact::CounterU64;
 use libp2p::Multiaddr;
 use log::{error, warn};
-use parking_lot::Mutex;
 use serde::Serialize;
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use std::collections::HashMap;
 use std::io;
-use std::iter;
-use std::sync::Arc;
 
 pub use libp2p::wasm_ext::ExtTransport;
 pub use log;
@@ -72,6 +70,8 @@ pub const CONSENSUS_DEBUG: VerbosityLevel = 5;
 pub const CONSENSUS_WARN: VerbosityLevel = 4;
 /// Consensus INFO log level.
 pub const CONSENSUS_INFO: VerbosityLevel = 1;
+
+static TELEMETRY_ID_COUNTER: CounterU64 = CounterU64::new(1);
 
 /// Telemetry message verbosity.
 pub type VerbosityLevel = u8;
@@ -338,7 +338,7 @@ impl TelemetryHandle {
 		&mut self,
 		endpoints: TelemetryEndpoints,
 		connection_message: ConnectionMessage,
-	) -> Option<Telemetry> {
+	) -> Telemetry {
 		let Self {
 			message_sender,
 			register_sender,
@@ -350,7 +350,7 @@ impl TelemetryHandle {
 			addresses: endpoints.0.iter().map(|(addr, _)| addr.clone()).collect(),
 		};
 
-		let id = id_generator.next()?;
+		let id = id_generator.next();
 		match register_sender.unbounded_send(Register::Telemetry {
 			id,
 			endpoints,
@@ -365,11 +365,11 @@ impl TelemetryHandle {
 			),
 		}
 
-		Some(Telemetry {
+		Telemetry {
 			message_sender: message_sender.clone(),
 			id,
 			connection_notifier,
-		})
+		}
 	}
 }
 
@@ -384,10 +384,7 @@ pub struct Telemetry {
 impl Telemetry {
 	/// Send telemetries.
 	pub fn send(&mut self, verbosity: VerbosityLevel, payload: TelemetryPayload) {
-		match self
-			.message_sender
-			.try_send((self.id, verbosity, payload))
-		{
+		match self.message_sender.try_send((self.id, verbosity, payload)) {
 			Ok(()) => {}
 			Err(err) if err.is_full() => todo!("overflow"),
 			Err(_) => unreachable!(),
@@ -520,18 +517,15 @@ macro_rules! format_fields_to_json {
 }
 
 #[derive(Debug, Clone)]
-struct IdGenerator(Arc<Mutex<iter::Successors<Id, Box<dyn FnMut(&Id) -> Option<Id>>>>>);
+struct IdGenerator;
 
 impl IdGenerator {
 	fn new() -> Self {
-		Self(Arc::new(Mutex::new(iter::successors(
-			Some(1),
-			Box::new(|n| n.checked_add(1)),
-		))))
+		Self
 	}
 
-	fn next(&mut self) -> Option<Id> {
-		self.0.lock().next()
+	fn next(&mut self) -> Id {
+		TELEMETRY_ID_COUNTER.inc()
 	}
 }
 

@@ -708,16 +708,7 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 
 	config.telemetry_handle
 		.as_mut()
-		.and_then(|handle| {
-			let telemetry = handle.start_telemetry(endpoints, connection_message);
-			if telemetry.is_none() {
-				log::error!(
-					target: "telemetry",
-					"Could not initialize telemetry. The maximum number has been reached.",
-				);
-			}
-			telemetry
-		})
+		.map(|handle| handle.start_telemetry(endpoints, connection_message))
 }
 
 fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
