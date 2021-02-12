@@ -208,10 +208,7 @@ where
 	let last_block_for_set_id = BlockId::Number(last_block_for_set);
 	let justification =
 		if let Some(justifications) = blockchain.justifications(last_block_for_set_id)? {
-			if let Some((_, grandpa_justification)) = justifications
-				.into_iter()
-				.find(|j| j.0 == GRANDPA_ENGINE_ID)
-			{
+			if let Some(grandpa_justification) = justifications.into_justification(GRANDPA_ENGINE_ID) {
 				grandpa_justification
 			} else {
 				trace!(
@@ -321,7 +318,7 @@ pub fn prove_warp_sync<Block: BlockT, B: BlockchainBackend<Block>>(
 	if result.last().as_ref().map(|head| head.header.number()) != Some(&end_number) {
 		let header = blockchain.expect_header(end)?;
 		if let Some(justifications) = blockchain.justifications(BlockId::Number(end_number.clone()))? {
-			if let Some((_, justification)) = justifications.into_iter().find(|j| j.0 == GRANDPA_ENGINE_ID) {
+			if let Some(justification) = justifications.into_justification(GRANDPA_ENGINE_ID) {
 				result.push(AuthoritySetProofFragment {
 					header: header.clone(),
 					justification,
@@ -356,7 +353,7 @@ fn get_warp_sync_proof_fragment<Block: BlockT, B: BlockchainBackend<Block>>(
 	})) = crate::import::find_forced_change::<Block>(&header) {
 		let dest = block_number + delay;
 		if let Some(justifications) = blockchain.justifications(BlockId::Number(index.clone()))? {
-			if let Some((_, justification)) = justifications.into_iter().find(|j| j.0 == GRANDPA_ENGINE_ID) {
+			if let Some(justification) = justifications.into_justification(GRANDPA_ENGINE_ID) {
 				result = Some((AuthoritySetProofFragment {
 					header: header.clone(),
 					justification,
@@ -373,7 +370,7 @@ fn get_warp_sync_proof_fragment<Block: BlockT, B: BlockchainBackend<Block>>(
 	}) = crate::import::find_scheduled_change::<Block>(&header) {
 		let dest = index + delay;
 		if let Some(justifications) = blockchain.justifications(BlockId::Number(index.clone()))? {
-			if let Some((_, justification)) = justifications.into_iter().find(|j| j.0 == GRANDPA_ENGINE_ID) {
+			if let Some(justification) = justifications.into_justification(GRANDPA_ENGINE_ID) {
 				result = Some((AuthoritySetProofFragment {
 					header: header.clone(),
 					justification,

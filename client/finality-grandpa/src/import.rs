@@ -625,15 +625,11 @@ where
 			));
 		}
 
-		let grandpa_justification =
-			match justifications.into_iter().find(|j| j.0 == GRANDPA_ENGINE_ID) {
-				Some((_, grandpa_justification)) => grandpa_justification,
-				None => {
-					return Err(ConsensusError::ClientImport(
-						"GRANDPA can only import GRANDPA Justifications.".into(),
-					));
-				}
-			};
+		let grandpa_justification = justifications
+			.into_justification(GRANDPA_ENGINE_ID)
+			.ok_or(ConsensusError::ClientImport(
+				"GRANDPA can only import GRANDPA Justifications.".into(),
+			))?;
 
 		let justification = GrandpaJustification::decode_and_verify_finalizes(
 			&grandpa_justification,

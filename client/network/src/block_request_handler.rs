@@ -130,11 +130,7 @@ impl <B: BlockT> BlockRequestHandler<B> {
 
 			// To keep compatibility we only send the grandpa justification
 			let justification = justifications
-				.map(|just| {
-					just.into_iter()
-						.find(|j| j.0 == GRANDPA_ENGINE_ID)
-						.map(|(_, grandpa_justification)| grandpa_justification)
-				});
+				.map(|just| just.into_justification(GRANDPA_ENGINE_ID));
 
 			let is_empty_justification = justification
 				.as_ref()

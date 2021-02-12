@@ -117,8 +117,13 @@ impl Justifications {
 	}
 
 	/// Return the encoded Justification for the given consensus engine, if it exists.
-	pub fn get(&self, engine_id: &ConsensusEngineId) -> Option<&EncodedJustification> {
-		self.iter().find(|j| &j.0 == engine_id).map(|j| &j.1)
+	pub fn get(&self, engine_id: ConsensusEngineId) -> Option<&EncodedJustification> {
+		self.iter().find(|j| j.0 == engine_id).map(|j| &j.1)
+	}
+
+	/// Return the encoded Justification
+	pub fn into_justification(self, engine_id: ConsensusEngineId) -> Option<EncodedJustification> {
+		self.into_iter().find(|j| j.0 == engine_id).map(|j| j.1)
 	}
 }
 
