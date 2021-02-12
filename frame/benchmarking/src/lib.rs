@@ -199,12 +199,12 @@ macro_rules! benchmarks_iter {
 		{ $( $where_clause:tt )* }
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
-		where_clause { where $( $where_ty:ty: $where_bound:path ),* $(,)? }
+		where_clause { where $( $where_ty:ty: $( $where_bound:tt )* ),* $(,)? }
 		$( $rest:tt )*
 	) => {
 		$crate::benchmarks_iter! {
 			{ $( $instance)? }
-			{ $( $where_ty: $where_bound ),* }
+			{ $( $where_ty: $( $where_bound )* ),* }
 			( $( $names )* )
 			( $( $names_extra )* )
 			$( $rest )*
@@ -1031,7 +1031,7 @@ macro_rules! add_benchmark {
 							*repeat,
 							whitelist,
 							*verify,
-						).map_err(|e| { 
+						).map_err(|e| {
 							$crate::show_benchmark_debug_info(
 								instance_string,
 								benchmark,
@@ -1058,7 +1058,7 @@ macro_rules! add_benchmark {
 						*repeat,
 						whitelist,
 						*verify,
-					).map_err(|e| { 
+					).map_err(|e| {
 						$crate::show_benchmark_debug_info(
 							instance_string,
 							benchmark,
