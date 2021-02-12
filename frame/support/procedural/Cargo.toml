@@ -1,6 +1,6 @@
 [package]
 name = "frame-support-procedural"
-version = "2.0.1"
+version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -15,7 +15,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 proc-macro = true
 
 [dependencies]
-frame-support-procedural-tools = { version = "2.0.0", path = "./tools" }
+frame-support-procedural-tools = { version = "3.0.0", path = "./tools" }
 proc-macro2 = "1.0.6"
 quote = "1.0.3"
 Inflector = "0.11.4"

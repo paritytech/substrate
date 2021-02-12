@@ -215,6 +215,17 @@ pub trait Backend<Block: BlockT>: HeaderBackend<Block> + HeaderMetadata<Block, E
 
 		Ok(None)
 	}
+
+	/// Get single extrinsic by hash.
+	fn extrinsic(
+		&self,
+		hash: &Block::Hash,
+	) -> Result<Option<<Block as BlockT>::Extrinsic>>;
+
+	/// Check if extrinsic exists.
+	fn have_extrinsic(&self, hash: &Block::Hash) -> Result<bool> {
+		Ok(self.extrinsic(hash)?.is_some())
+	}
 }
 
 /// Provides access to the optional cache.

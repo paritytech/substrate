@@ -401,7 +401,13 @@ pub fn read_meta<Block>(db: &dyn Database<DbHash>, col_header: u32) -> Result<
 			}
 		{
 			let hash = header.hash();
-			debug!("DB Opened blockchain db, fetched {} = {:?} ({})", desc, hash, header.number());
+			debug!(
+				target: "db",
+				"Opened blockchain db, fetched {} = {:?} ({})",
+				desc,
+				hash,
+				header.number()
+			);
 			Ok((hash, *header.number()))
 		} else {
 			Ok((genesis_hash.clone(), Zero::zero()))

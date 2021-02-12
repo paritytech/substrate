@@ -1,6 +1,6 @@
 [package]
 name = "sc-rpc-api"
-version = "0.8.1"
+version = "0.9.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
@@ -22,11 +22,11 @@ jsonrpc-derive = "15.1.0"
 jsonrpc-pubsub = "15.1.0"
 log = "0.4.8"
 parking_lot = "0.11.1"
-sp-core = { version = "2.0.0", path = "../../primitives/core" }
-sp-version = { version = "2.0.0", path = "../../primitives/version" }
-sp-runtime = { path = "../../primitives/runtime" , version = "2.0.0"}
-sp-chain-spec = { path = "../../primitives/chain-spec" , version = "2.0.0"}
+sp-core = { version = "3.0.0", path = "../../primitives/core" }
+sp-version = { version = "3.0.0", path = "../../primitives/version" }
+sp-runtime = { path = "../../primitives/runtime" , version = "3.0.0"}
+sp-chain-spec = { path = "../../primitives/chain-spec" , version = "3.0.0"}
 serde = { version = "1.0.101", features = ["derive"] }
 serde_json = "1.0.41"
-sp-transaction-pool = { version = "2.0.0", path = "../../primitives/transaction-pool" }
-sp-rpc = { version = "2.0.0", path = "../../primitives/rpc" }
+sp-transaction-pool = { version = "3.0.0", path = "../../primitives/transaction-pool" }
+sp-rpc = { version = "3.0.0", path = "../../primitives/rpc" }

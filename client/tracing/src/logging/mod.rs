@@ -38,7 +38,7 @@ use tracing_subscriber::{
 		format, FormatEvent, FormatFields, Formatter, Layer as FmtLayer, MakeWriter,
 		SubscriberBuilder,
 	},
-	layer::{self, SubscriberExt},
+	layer::{self, SubscriberExt}, filter::LevelFilter,
 	registry::LookupSpan,
 	EnvFilter, FmtSubscriber, Layer, Registry,
 };
@@ -73,7 +73,7 @@ macro_rules! enable_log_reloading {
 /// Common implementation to get the subscriber.
 fn prepare_subscriber<N, E, F, W>(
 	directives: &str,
-	max_level: Option<log::LevelFilter>,
+	profiling_targets: Option<&str>,
 	force_colors: Option<bool>,
 	telemetry_buffer_size: Option<usize>,
 	telemetry_external_transport: Option<ExtTransport>,
@@ -125,21 +125,27 @@ where
 	}
 
 	if directives != "" {
-		// We're not sure if log or tracing is available at this moment, so silently ignore the
-		// parse error.
 		env_filter = parse_user_directives(env_filter, directives)?;
+	}
+
+	if let Some(profiling_targets) = profiling_targets {
+		env_filter = parse_user_directives(env_filter, profiling_targets)?;
+		env_filter = env_filter
+			.add_directive(
+				parse_default_directive("sc_tracing=trace").expect("provided directive is valid")
+			);
 	}
 
 	let max_level_hint = Layer::<FmtSubscriber>::max_level_hint(&env_filter);
 
-	let max_level = max_level.unwrap_or_else(|| match max_level_hint {
-		Some(tracing_subscriber::filter::LevelFilter::INFO) | None => log::LevelFilter::Info,
-		Some(tracing_subscriber::filter::LevelFilter::TRACE) => log::LevelFilter::Trace,
-		Some(tracing_subscriber::filter::LevelFilter::WARN) => log::LevelFilter::Warn,
-		Some(tracing_subscriber::filter::LevelFilter::ERROR) => log::LevelFilter::Error,
-		Some(tracing_subscriber::filter::LevelFilter::DEBUG) => log::LevelFilter::Debug,
-		Some(tracing_subscriber::filter::LevelFilter::OFF) => log::LevelFilter::Off,
-	});
+	let max_level = match max_level_hint {
+		Some(LevelFilter::INFO) | None => log::LevelFilter::Info,
+		Some(LevelFilter::TRACE) => log::LevelFilter::Trace,
+		Some(LevelFilter::WARN) => log::LevelFilter::Warn,
+		Some(LevelFilter::ERROR) => log::LevelFilter::Error,
+		Some(LevelFilter::DEBUG) => log::LevelFilter::Debug,
+		Some(LevelFilter::OFF) => log::LevelFilter::Off,
+	};
 
 	tracing_log::LogTracer::builder()
 		.with_max_level(max_level)
@@ -251,13 +257,10 @@ impl LoggerBuilder {
 	/// This sets various global logging and tracing instances and thus may only be called once.
 	pub fn init(self) -> Result<TelemetryWorker> {
 		if let Some((tracing_receiver, profiling_targets)) = self.profiling {
-			// If profiling is activated, we require `trace` logging.
-			let max_level = Some(log::LevelFilter::Trace);
-
 			if self.log_reloading {
 				let (subscriber, telemetry_worker) = prepare_subscriber(
-					&format!("{},{},sc_tracing=trace", self.directives, profiling_targets),
-					max_level,
+					&self.directives,
+					Some(&profiling_targets),
 					self.force_colors,
 					self.telemetry_buffer_size,
 					self.telemetry_external_transport,
@@ -270,8 +273,8 @@ impl LoggerBuilder {
 				Ok(telemetry_worker)
 			} else {
 				let (subscriber, telemetry_worker) = prepare_subscriber(
-					&format!("{},{},sc_tracing=trace", self.directives, profiling_targets),
-					max_level,
+					&self.directives,
+					Some(&profiling_targets),
 					self.force_colors,
 					self.telemetry_buffer_size,
 					self.telemetry_external_transport,
@@ -329,57 +332,53 @@ mod tests {
 		let _ = LoggerBuilder::new(directives).init().unwrap();
 	}
 
-	fn run_in_process(test_name: &str) {
-		if env::var("RUN_IN_PROCESS").is_err() {
-			let status = Command::new(env::current_exe().unwrap())
-				.arg(test_name)
-				.env("RUN_IN_PROCESS", "true")
-				.status()
-				.unwrap();
-			assert!(status.success(), "process did not ended successfully");
-			std::process::exit(0);
-		}
-	}
-
 	#[test]
 	fn test_logger_filters() {
-		run_in_process("test_logger_filters");
+		if env::var("RUN_TEST_LOGGER_FILTERS").is_ok() {
+			let test_directives = "afg=debug,sync=trace,client=warn,telemetry,something-with-dash=error";
+			init_logger(&test_directives);
 
-		let test_directives = "afg=debug,sync=trace,client=warn,telemetry,something-with-dash=error";
-		init_logger(&test_directives);
-
-		tracing::dispatcher::get_default(|dispatcher| {
-			let test_filter = |target, level| {
-				struct DummyCallSite;
-				impl Callsite for DummyCallSite {
-					fn set_interest(&self, _: Interest) {}
-					fn metadata(&self) -> &Metadata<'_> {
-						unreachable!();
+			tracing::dispatcher::get_default(|dispatcher| {
+				let test_filter = |target, level| {
+					struct DummyCallSite;
+					impl Callsite for DummyCallSite {
+						fn set_interest(&self, _: Interest) {}
+						fn metadata(&self) -> &Metadata<'_> {
+							unreachable!();
+						}
 					}
-				}
 
-				let metadata = tracing::metadata!(
-					name: "",
-					target: target,
-					level: level,
-					fields: &[],
-					callsite: &DummyCallSite,
-					kind: Kind::SPAN,
-				);
+					let metadata = tracing::metadata!(
+						name: "",
+						target: target,
+						level: level,
+						fields: &[],
+						callsite: &DummyCallSite,
+						kind: Kind::SPAN,
+					);
 
-				dispatcher.enabled(&metadata)
-			};
+					dispatcher.enabled(&metadata)
+				};
 
-			assert!(test_filter("afg", Level::INFO));
-			assert!(test_filter("afg", Level::DEBUG));
-			assert!(!test_filter("afg", Level::TRACE));
+				assert!(test_filter("afg", Level::INFO));
+				assert!(test_filter("afg", Level::DEBUG));
+				assert!(!test_filter("afg", Level::TRACE));
 
-			assert!(test_filter("sync", Level::TRACE));
-			assert!(test_filter("client", Level::WARN));
+				assert!(test_filter("sync", Level::TRACE));
+				assert!(test_filter("client", Level::WARN));
 
-			assert!(test_filter("telemetry", Level::TRACE));
-			assert!(test_filter("something-with-dash", Level::ERROR));
-		});
+				assert!(test_filter("telemetry", Level::TRACE));
+				assert!(test_filter("something-with-dash", Level::ERROR));
+			});
+		} else {
+			let status = Command::new(env::current_exe().unwrap())
+				.arg("test_logger_filters")
+				.env("RUN_TEST_LOGGER_FILTERS", "1")
+				.output()
+				.unwrap()
+				.status;
+			assert!(status.success());
+		}
 	}
 
 	/// This test ensures that using dash (`-`) in the target name in logs and directives actually
@@ -500,11 +499,18 @@ mod tests {
 
 			let output = command.output().unwrap();
 
-			String::from_utf8(output.stderr).unwrap()
+			dbg!(String::from_utf8(output.stderr)).unwrap()
 		}
 
 		if env::var("PRINT_MAX_LOG_LEVEL").is_ok() {
-			init_logger(&env::var("TRACING_TARGETS").unwrap_or_default());
+			let mut builder = LoggerBuilder::new("");
+
+			if let Ok(targets) = env::var("TRACING_TARGETS") {
+				builder.with_profiling(crate::TracingReceiver::Log, targets);
+			}
+
+			builder.init().unwrap();
+
 			eprint!("MAX_LOG_LEVEL={:?}", log::max_level());
 		} else {
 			assert_eq!("MAX_LOG_LEVEL=Info", run_test(None, None));
