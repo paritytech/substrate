@@ -1049,7 +1049,7 @@ impl<T: Config<I>, I: 'static> Currency<T::AccountId> for Pallet<T, I> where
 					|from_account, _| -> DispatchResult {
 						from_account.free = from_account.free.checked_sub(&value)
 							.ok_or(Error::<T, I>::InsufficientBalance)?;
-		
+
 						// NOTE: total stake being stored in the same type means that this could never overflow
 						// but better to be safe than sorry.
 						to_account.free = to_account.free.checked_add(&value).ok_or(Error::<T, I>::Overflow)?;
@@ -1377,8 +1377,12 @@ impl<T: Config<I>, I: 'static> ReservableCurrency<T::AccountId> for Pallet<T, I>
 					|from_account, _| -> Result<Self::Balance, DispatchError> {
 						let actual = cmp::min(from_account.reserved, value);
 						match status {
-							Status::Free => to_account.free = to_account.free.checked_add(&actual).ok_or(Error::<T, I>::Overflow)?,
-							Status::Reserved => to_account.reserved = to_account.reserved.checked_add(&actual).ok_or(Error::<T, I>::Overflow)?,
+							Status::Free => to_account.free = to_account.free
+								.checked_add(&actual)
+								.ok_or(Error::<T, I>::Overflow)?,
+							Status::Reserved => to_account.reserved = to_account.reserved
+								.checked_add(&actual)
+								.ok_or(Error::<T, I>::Overflow)?,
 						}
 						from_account.reserved -= actual;
 						Ok(actual)
