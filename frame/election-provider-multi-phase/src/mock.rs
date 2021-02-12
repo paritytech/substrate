@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use super::*;
-use crate as two_phase;
+use crate as multi_phase;
 pub use frame_support::{assert_noop, assert_ok};
 use frame_support::{
 	parameter_types,
@@ -54,7 +54,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Module, Call, Event<T>, Config},
 		Balances: pallet_balances::{Module, Call, Event<T>, Config<T>},
-		TwoPhase: two_phase::{Module, Call, Event<T>},
+		MultiPhase: multi_phase::{Module, Call, Event<T>},
 	}
 );
 
@@ -67,11 +67,11 @@ sp_npos_elections::generate_solution_type!(
 );
 
 /// All events of this pallet.
-pub(crate) fn two_phase_events() -> Vec<super::Event<Runtime>> {
+pub(crate) fn multi_phase_events() -> Vec<super::Event<Runtime>> {
 	System::events()
 		.into_iter()
 		.map(|r| r.event)
-		.filter_map(|e| if let Event::two_phase(inner) = e { Some(inner) } else { None })
+		.filter_map(|e| if let Event::multi_phase(inner) = e { Some(inner) } else { None })
 		.collect::<Vec<_>>()
 }
 
@@ -80,7 +80,7 @@ pub fn roll_to(n: u64) {
 	let now = System::block_number();
 	for i in now + 1..=n {
 		System::set_block_number(i);
-		TwoPhase::on_initialize(i);
+		MultiPhase::on_initialize(i);
 	}
 }
 
@@ -88,8 +88,8 @@ pub fn roll_to_with_ocw(n: u64) {
 	let now = System::block_number();
 	for i in now + 1..=n {
 		System::set_block_number(i);
-		TwoPhase::on_initialize(i);
-		TwoPhase::offchain_worker(i);
+		MultiPhase::on_initialize(i);
+		MultiPhase::offchain_worker(i);
 	}
 }
 
@@ -97,8 +97,8 @@ pub fn roll_to_with_ocw(n: u64) {
 ///
 /// This is a good example of what an offchain miner would do.
 pub fn raw_solution() -> RawSolution<CompactOf<Runtime>> {
-	let RoundSnapshot { voters, targets } = TwoPhase::snapshot().unwrap();
-	let desired_targets = TwoPhase::desired_targets().unwrap();
+	let RoundSnapshot { voters, targets } = MultiPhase::snapshot().unwrap();
+	let desired_targets = MultiPhase::desired_targets().unwrap();
 
 	// closures
 	let cache = helpers::generate_voter_cache::<Runtime>(&voters);
@@ -123,12 +123,12 @@ pub fn raw_solution() -> RawSolution<CompactOf<Runtime>> {
 	let compact =
 		<CompactOf<Runtime>>::from_assignment(assignments, &voter_index, &target_index).unwrap();
 
-	let round = TwoPhase::round();
+	let round = MultiPhase::round();
 	RawSolution { compact, score, round }
 }
 
 pub fn witness() -> SolutionOrSnapshotSize {
-	TwoPhase::snapshot()
+	MultiPhase::snapshot()
 		.map(|snap| SolutionOrSnapshotSize {
 			voters: snap.voters.len() as u32,
 			targets: snap.targets.len() as u32,
@@ -210,33 +210,33 @@ parameter_types! {
 
 // Hopefully this won't be too much of a hassle to maintain.
 pub struct DualMockWeightInfo;
-impl two_phase::weights::WeightInfo for DualMockWeightInfo {
+impl multi_phase::weights::WeightInfo for DualMockWeightInfo {
 	fn on_initialize_nothing() -> Weight {
 		if MockWeightInfo::get() {
 			Zero::zero()
 		} else {
-			<() as two_phase::weights::WeightInfo>::on_initialize_nothing()
+			<() as multi_phase::weights::WeightInfo>::on_initialize_nothing()
 		}
 	}
 	fn on_initialize_open_signed() -> Weight {
 		if MockWeightInfo::get() {
 			Zero::zero()
 		} else {
-			<() as two_phase::weights::WeightInfo>::on_initialize_open_signed()
+			<() as multi_phase::weights::WeightInfo>::on_initialize_open_signed()
 		}
 	}
 	fn on_initialize_open_unsigned_with_snapshot() -> Weight {
 		if MockWeightInfo::get() {
 			Zero::zero()
 		} else {
-			<() as two_phase::weights::WeightInfo>::on_initialize_open_unsigned_with_snapshot()
+			<() as multi_phase::weights::WeightInfo>::on_initialize_open_unsigned_with_snapshot()
 		}
 	}
 	fn on_initialize_open_unsigned_without_snapshot() -> Weight {
 		if MockWeightInfo::get() {
 			Zero::zero()
 		} else {
-			<() as two_phase::weights::WeightInfo>::on_initialize_open_unsigned_without_snapshot()
+			<() as multi_phase::weights::WeightInfo>::on_initialize_open_unsigned_without_snapshot()
 		}
 	}
 	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight {
@@ -245,7 +245,7 @@ impl two_phase::weights::WeightInfo for DualMockWeightInfo {
 			// 5 per edge.
 			(10 as Weight).saturating_add((5 as Weight).saturating_mul(a as Weight))
 		} else {
-			<() as two_phase::weights::WeightInfo>::submit_unsigned(v, t, a, d)
+			<() as multi_phase::weights::WeightInfo>::submit_unsigned(v, t, a, d)
 		}
 	}
 	fn feasibility_check(v: u32, t: u32, a: u32, d: u32) -> Weight {
@@ -254,7 +254,7 @@ impl two_phase::weights::WeightInfo for DualMockWeightInfo {
 			// 5 per edge.
 			(10 as Weight).saturating_add((5 as Weight).saturating_mul(a as Weight))
 		} else {
-			<() as two_phase::weights::WeightInfo>::feasibility_check(v, t, a, d)
+			<() as multi_phase::weights::WeightInfo>::feasibility_check(v, t, a, d)
 		}
 	}
 }

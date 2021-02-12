@@ -1058,14 +1058,14 @@ mod feasibility_check {
 	fn snapshot_is_there() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
-			assert!(TwoPhase::current_phase().is_signed());
+			assert!(MultiPhase::current_phase().is_signed());
 			let solution = raw_solution();
 
 			// for whatever reason it might be:
 			<Snapshot<Runtime>>::kill();
 
 			assert_noop!(
-				TwoPhase::feasibility_check(solution, COMPUTE),
+				MultiPhase::feasibility_check(solution, COMPUTE),
 				FeasibilityError::SnapshotUnavailable
 			);
 		})
@@ -1075,12 +1075,12 @@ mod feasibility_check {
 	fn round() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
-			assert!(TwoPhase::current_phase().is_signed());
+			assert!(MultiPhase::current_phase().is_signed());
 
 			let mut solution = raw_solution();
 			solution.round += 1;
 			assert_noop!(
-				TwoPhase::feasibility_check(solution, COMPUTE),
+				MultiPhase::feasibility_check(solution, COMPUTE),
 				FeasibilityError::InvalidRound
 			);
 		})
@@ -1090,15 +1090,15 @@ mod feasibility_check {
 	fn desired_targets() {
 		ExtBuilder::default().desired_targets(8).build_and_execute(|| {
 			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
-			assert!(TwoPhase::current_phase().is_signed());
+			assert!(MultiPhase::current_phase().is_signed());
 
 			let solution = raw_solution();
 
 			assert_eq!(solution.compact.unique_targets().len(), 4);
-			assert_eq!(TwoPhase::desired_targets().unwrap(), 8);
+			assert_eq!(MultiPhase::desired_targets().unwrap(), 8);
 
 			assert_noop!(
-				TwoPhase::feasibility_check(solution, COMPUTE),
+				MultiPhase::feasibility_check(solution, COMPUTE),
 				FeasibilityError::WrongWinnerCount,
 			);
 		})
@@ -1108,10 +1108,10 @@ mod feasibility_check {
 	fn winner_indices() {
 		ExtBuilder::default().desired_targets(2).build_and_execute(|| {
 			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
-			assert!(TwoPhase::current_phase().is_signed());
+			assert!(MultiPhase::current_phase().is_signed());
 
 			let mut solution = raw_solution();
-			assert_eq!(TwoPhase::snapshot().unwrap().targets.len(), 4);
+			assert_eq!(MultiPhase::snapshot().unwrap().targets.len(), 4);
 			// ----------------------------------------------------^^ valid range is [0..3].
 
 			// swap all votes from 3 to 4. This will ensure that the number of unique winners
@@ -1132,7 +1132,7 @@ mod feasibility_check {
 				};
 			});
 			assert_noop!(
-				TwoPhase::feasibility_check(solution, COMPUTE),
+				MultiPhase::feasibility_check(solution, COMPUTE),
 				FeasibilityError::InvalidWinner
 			);
 		})
@@ -1143,10 +1143,10 @@ mod feasibility_check {
 		// should be caught in `compact.into_assignment`.
 		ExtBuilder::default().desired_targets(2).build_and_execute(|| {
 			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
-			assert!(TwoPhase::current_phase().is_signed());
+			assert!(MultiPhase::current_phase().is_signed());
 
 			let mut solution = raw_solution();
-			assert_eq!(TwoPhase::snapshot().unwrap().voters.len(), 8);
+			assert_eq!(MultiPhase::snapshot().unwrap().voters.len(), 8);
 			// ----------------------------------------------------^^ valid range is [0..7].
 
 			// check that there is a index 7 in votes1, and flip to 8.
@@ -1160,7 +1160,7 @@ mod feasibility_check {
 					.count() > 0
 			);
 			assert_noop!(
-				TwoPhase::feasibility_check(solution, COMPUTE),
+				MultiPhase::feasibility_check(solution, COMPUTE),
 				FeasibilityError::NposElection(sp_npos_elections::Error::CompactInvalidIndex),
 			);
 		})
@@ -1170,10 +1170,10 @@ mod feasibility_check {
 	fn voter_votes() {
 		ExtBuilder::default().desired_targets(2).build_and_execute(|| {
 			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
-			assert!(TwoPhase::current_phase().is_signed());
+			assert!(MultiPhase::current_phase().is_signed());
 
 			let mut solution = raw_solution();
-			assert_eq!(TwoPhase::snapshot().unwrap().voters.len(), 8);
+			assert_eq!(MultiPhase::snapshot().unwrap().voters.len(), 8);
 			// ----------------------------------------------------^^ valid range is [0..7].
 
 			// first, check that voter at index 7 (40) actually voted for 3 (40) -- this is self
@@ -1189,7 +1189,7 @@ mod feasibility_check {
 				1,
 			);
 			assert_noop!(
-				TwoPhase::feasibility_check(solution, COMPUTE),
+				MultiPhase::feasibility_check(solution, COMPUTE),
 				FeasibilityError::InvalidVote,
 			);
 		})
@@ -1199,16 +1199,16 @@ mod feasibility_check {
 	fn score() {
 		ExtBuilder::default().desired_targets(2).build_and_execute(|| {
 			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
-			assert!(TwoPhase::current_phase().is_signed());
+			assert!(MultiPhase::current_phase().is_signed());
 
 			let mut solution = raw_solution();
-			assert_eq!(TwoPhase::snapshot().unwrap().voters.len(), 8);
+			assert_eq!(MultiPhase::snapshot().unwrap().voters.len(), 8);
 
 			// simply faff with the score.
 			solution.score[0] += 1;
 
 			assert_noop!(
-				TwoPhase::feasibility_check(solution, COMPUTE),
+				MultiPhase::feasibility_check(solution, COMPUTE),
 				FeasibilityError::InvalidScore,
 			);
 		})
@@ -1229,60 +1229,60 @@ mod tests {
 			//         Signed      Unsigned                     Signed     Unsigned
 
 			assert_eq!(System::block_number(), 0);
-			assert_eq!(TwoPhase::current_phase(), Phase::Off);
-			assert_eq!(TwoPhase::round(), 1);
+			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+			assert_eq!(MultiPhase::round(), 1);
 
 			roll_to(4);
-			assert_eq!(TwoPhase::current_phase(), Phase::Off);
-			assert!(TwoPhase::snapshot().is_none());
-			assert_eq!(TwoPhase::round(), 1);
+			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+			assert!(MultiPhase::snapshot().is_none());
+			assert_eq!(MultiPhase::round(), 1);
 
 			roll_to(15);
-			assert_eq!(TwoPhase::current_phase(), Phase::Signed);
-			assert_eq!(two_phase_events(), vec![Event::SignedPhaseStarted(1)]);
-			assert!(TwoPhase::snapshot().is_some());
-			assert_eq!(TwoPhase::round(), 1);
+			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
+			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted(1)]);
+			assert!(MultiPhase::snapshot().is_some());
+			assert_eq!(MultiPhase::round(), 1);
 
 			roll_to(24);
-			assert_eq!(TwoPhase::current_phase(), Phase::Signed);
-			assert!(TwoPhase::snapshot().is_some());
-			assert_eq!(TwoPhase::round(), 1);
+			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
+			assert!(MultiPhase::snapshot().is_some());
+			assert_eq!(MultiPhase::round(), 1);
 
 			roll_to(25);
-			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 25)));
+			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
 			assert_eq!(
-				two_phase_events(),
+				multi_phase_events(),
 				vec![Event::SignedPhaseStarted(1), Event::UnsignedPhaseStarted(1)],
 			);
-			assert!(TwoPhase::snapshot().is_some());
+			assert!(MultiPhase::snapshot().is_some());
 
 			roll_to(29);
-			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 25)));
-			assert!(TwoPhase::snapshot().is_some());
+			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
+			assert!(MultiPhase::snapshot().is_some());
 
 			roll_to(30);
-			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 25)));
-			assert!(TwoPhase::snapshot().is_some());
+			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
+			assert!(MultiPhase::snapshot().is_some());
 
 			// we close when upstream tells us to elect.
 			roll_to(32);
-			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 25)));
-			assert!(TwoPhase::snapshot().is_some());
+			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
+			assert!(MultiPhase::snapshot().is_some());
 
-			TwoPhase::elect().unwrap();
+			MultiPhase::elect().unwrap();
 
-			assert!(TwoPhase::current_phase().is_off());
-			assert!(TwoPhase::snapshot().is_none());
-			assert_eq!(TwoPhase::round(), 2);
+			assert!(MultiPhase::current_phase().is_off());
+			assert!(MultiPhase::snapshot().is_none());
+			assert_eq!(MultiPhase::round(), 2);
 
 			roll_to(44);
-			assert!(TwoPhase::current_phase().is_off());
+			assert!(MultiPhase::current_phase().is_off());
 
 			roll_to(45);
-			assert!(TwoPhase::current_phase().is_signed());
+			assert!(MultiPhase::current_phase().is_signed());
 
 			roll_to(55);
-			assert!(TwoPhase::current_phase().is_unsigned_open_at(55));
+			assert!(MultiPhase::current_phase().is_unsigned_open_at(55));
 		})
 	}
 
@@ -1290,22 +1290,22 @@ mod tests {
 	fn signed_phase_void() {
 		ExtBuilder::default().phases(0, 10).build_and_execute(|| {
 			roll_to(15);
-			assert!(TwoPhase::current_phase().is_off());
+			assert!(MultiPhase::current_phase().is_off());
 
 			roll_to(19);
-			assert!(TwoPhase::current_phase().is_off());
+			assert!(MultiPhase::current_phase().is_off());
 
 			roll_to(20);
-			assert!(TwoPhase::current_phase().is_unsigned_open_at(20));
-			assert!(TwoPhase::snapshot().is_some());
+			assert!(MultiPhase::current_phase().is_unsigned_open_at(20));
+			assert!(MultiPhase::snapshot().is_some());
 
 			roll_to(30);
-			assert!(TwoPhase::current_phase().is_unsigned_open_at(20));
+			assert!(MultiPhase::current_phase().is_unsigned_open_at(20));
 
-			TwoPhase::elect().unwrap();
+			MultiPhase::elect().unwrap();
 
-			assert!(TwoPhase::current_phase().is_off());
-			assert!(TwoPhase::snapshot().is_none());
+			assert!(MultiPhase::current_phase().is_off());
+			assert!(MultiPhase::snapshot().is_none());
 		});
 	}
 
@@ -1313,22 +1313,22 @@ mod tests {
 	fn unsigned_phase_void() {
 		ExtBuilder::default().phases(10, 0).build_and_execute(|| {
 			roll_to(15);
-			assert!(TwoPhase::current_phase().is_off());
+			assert!(MultiPhase::current_phase().is_off());
 
 			roll_to(19);
-			assert!(TwoPhase::current_phase().is_off());
+			assert!(MultiPhase::current_phase().is_off());
 
 			roll_to(20);
-			assert!(TwoPhase::current_phase().is_signed());
-			assert!(TwoPhase::snapshot().is_some());
+			assert!(MultiPhase::current_phase().is_signed());
+			assert!(MultiPhase::snapshot().is_some());
 
 			roll_to(30);
-			assert!(TwoPhase::current_phase().is_signed());
+			assert!(MultiPhase::current_phase().is_signed());
 
-			let _ = TwoPhase::elect().unwrap();
+			let _ = MultiPhase::elect().unwrap();
 
-			assert!(TwoPhase::current_phase().is_off());
-			assert!(TwoPhase::snapshot().is_none());
+			assert!(MultiPhase::current_phase().is_off());
+			assert!(MultiPhase::snapshot().is_none());
 		});
 	}
 
@@ -1336,21 +1336,21 @@ mod tests {
 	fn both_phases_void() {
 		ExtBuilder::default().phases(0, 0).build_and_execute(|| {
 			roll_to(15);
-			assert!(TwoPhase::current_phase().is_off());
+			assert!(MultiPhase::current_phase().is_off());
 
 			roll_to(19);
-			assert!(TwoPhase::current_phase().is_off());
+			assert!(MultiPhase::current_phase().is_off());
 
 			roll_to(20);
-			assert!(TwoPhase::current_phase().is_off());
+			assert!(MultiPhase::current_phase().is_off());
 
 			roll_to(30);
-			assert!(TwoPhase::current_phase().is_off());
+			assert!(MultiPhase::current_phase().is_off());
 
 			// this module is now only capable of doing on-chain backup.
-			let _ = TwoPhase::elect().unwrap();
+			let _ = MultiPhase::elect().unwrap();
 
-			assert!(TwoPhase::current_phase().is_off());
+			assert!(MultiPhase::current_phase().is_off());
 		});
 	}
 
@@ -1360,31 +1360,31 @@ mod tests {
 		ExtBuilder::default().build_and_execute(|| {
 			// signed phase started at block 15 and will end at 25.
 			roll_to(14);
-			assert_eq!(TwoPhase::current_phase(), Phase::Off);
+			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
 			roll_to(15);
-			assert_eq!(two_phase_events(), vec![Event::SignedPhaseStarted(1)]);
-			assert_eq!(TwoPhase::current_phase(), Phase::Signed);
-			assert_eq!(TwoPhase::round(), 1);
+			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted(1)]);
+			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
+			assert_eq!(MultiPhase::round(), 1);
 
 			// an unexpected call to elect.
 			roll_to(20);
-			TwoPhase::elect().unwrap();
+			MultiPhase::elect().unwrap();
 
 			// we surely can't have any feasible solutions. This will cause an on-chain election.
 			assert_eq!(
-				two_phase_events(),
+				multi_phase_events(),
 				vec![
 					Event::SignedPhaseStarted(1),
 					Event::ElectionFinalized(Some(ElectionCompute::OnChain))
 				],
 			);
 			// all storage items must be cleared.
-			assert_eq!(TwoPhase::round(), 2);
-			assert!(TwoPhase::snapshot().is_none());
-			assert!(TwoPhase::snapshot_metadata().is_none());
-			assert!(TwoPhase::desired_targets().is_none());
-			assert!(TwoPhase::queued_solution().is_none());
+			assert_eq!(MultiPhase::round(), 2);
+			assert!(MultiPhase::snapshot().is_none());
+			assert!(MultiPhase::snapshot_metadata().is_none());
+			assert!(MultiPhase::desired_targets().is_none());
+			assert!(MultiPhase::queued_solution().is_none());
 		})
 	}
 
@@ -1392,13 +1392,13 @@ mod tests {
 	fn fallback_strategy_works() {
 		ExtBuilder::default().fallabck(FallbackStrategy::OnChain).build_and_execute(|| {
 			roll_to(15);
-			assert_eq!(TwoPhase::current_phase(), Phase::Signed);
+			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 
 			roll_to(25);
-			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 25)));
+			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
 
 			// zilch solutions thus far.
-			let supports = TwoPhase::elect().unwrap();
+			let supports = MultiPhase::elect().unwrap();
 
 			assert_eq!(
 				supports,
@@ -1411,13 +1411,13 @@ mod tests {
 
 		ExtBuilder::default().fallabck(FallbackStrategy::Nothing).build_and_execute(|| {
 			roll_to(15);
-			assert_eq!(TwoPhase::current_phase(), Phase::Signed);
+			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 
 			roll_to(25);
-			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 25)));
+			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
 
 			// zilch solutions thus far.
-			assert_eq!(TwoPhase::elect().unwrap_err(), ElectionError::NoFallbackConfigured);
+			assert_eq!(MultiPhase::elect().unwrap_err(), ElectionError::NoFallbackConfigured);
 		})
 	}
 
@@ -1426,8 +1426,8 @@ mod tests {
 		// Just a rough estimate with the substrate weights.
 		assert!(!MockWeightInfo::get());
 
-		let all_voters: u32 = 100_000;
-		let all_targets: u32 = 2_000;
+		let all_voters: u32 = 10_000;
+		let all_targets: u32 = 5_000;
 		let desired: u32 = 1_000;
 		let weight_with = |active| {
 			<Runtime as Config>::WeightInfo::submit_unsigned(
@@ -1441,6 +1441,7 @@ mod tests {
 		let mut active = 1;
 		while weight_with(active)
 			<= <Runtime as frame_system::Config>::BlockWeights::get().max_block
+			|| active == all_voters
 		{
 			active += 1;
 		}
