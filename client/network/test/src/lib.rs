@@ -42,7 +42,7 @@ use sc_client_api::{
 };
 use sc_consensus::LongestChain;
 use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
-use sc_network::config::Role;
+use sc_network::{config::Role, VerifiedBlocks};
 use sp_consensus::block_validation::{DefaultBlockAnnounceValidator, BlockAnnounceValidator};
 use sp_consensus::import_queue::{
 	BasicQueue, BoxJustificationImport, Verifier,
@@ -725,9 +725,10 @@ pub trait TestNetFactory: Sized {
 		}
 
 		let protocol_id = ProtocolId::from("test-protocol-name");
+		let verified_blocks = Arc::new(VerifiedBlocks::new(client.clone()));
 
 		let block_request_protocol_config = {
-			let (handler, protocol_config) = BlockRequestHandler::new(&protocol_id, client.clone());
+			let (handler, protocol_config) = BlockRequestHandler::new(&protocol_id, client.clone(), verified_blocks.clone());
 			self.spawn_task(handler.run().boxed());
 			protocol_config
 		};
@@ -752,6 +753,7 @@ pub trait TestNetFactory: Sized {
 			metrics_registry: None,
 			block_request_protocol_config,
 			light_client_request_protocol_config,
+			verified_blocks,
 		}).unwrap();
 
 		trace!(target: "test_network", "Peer identifier: {}", network.service().local_peer_id());
@@ -828,6 +830,7 @@ pub trait TestNetFactory: Sized {
 		let light_client_request_protocol_config =
 			light_client_requests::generate_protocol_config(&protocol_id);
 
+		let verified_blocks = Arc::new(VerifiedBlocks::new(client.clone()));
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: Role::Light,
 			executor: None,
@@ -841,6 +844,7 @@ pub trait TestNetFactory: Sized {
 			metrics_registry: None,
 			block_request_protocol_config,
 			light_client_request_protocol_config,
+			verified_blocks,
 		}).unwrap();
 
 		self.mut_peers(|peers| {
