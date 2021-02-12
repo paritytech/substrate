@@ -36,8 +36,11 @@ use sp_consensus::{BlockOrigin, BlockStatus,
 	block_validation::{BlockAnnounceValidator, Validation},
 	import_queue::{IncomingBlock, BlockImportResult, BlockImportError}
 };
-use crate::protocol::message::{
-	self, BlockAnnounce, BlockAttributes, BlockRequest, BlockResponse, Roles,
+use crate::{
+	VerifiedBlocks,
+	protocol::message::{
+		self, BlockAnnounce, BlockAttributes, BlockRequest, BlockResponse, Roles,
+	},
 };
 use either::Either;
 use extra_requests::ExtraRequests;
@@ -179,6 +182,8 @@ pub struct ChainSync<B: BlockT> {
 	peers: HashMap<PeerId, PeerSync<B>>,
 	/// A `BlockCollection` of blocks that are being downloaded from peers
 	blocks: BlockCollection<B>,
+	/// A container to store preimported(verified) blocks
+	verified_blocks: Arc<VerifiedBlocks<B>>,
 	/// The best block number in our queue of blocks to import
 	best_queued_number: NumberFor<B>,
 	/// The best block hash in our queue of blocks to import
@@ -447,6 +452,7 @@ impl<B: BlockT> ChainSync<B> {
 		info: &BlockchainInfo<B>,
 		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
 		max_parallel_downloads: u32,
+		verified_blocks: Arc<VerifiedBlocks<B>>,
 	) -> Self {
 		let mut required_block_attributes = BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION;
 
@@ -458,6 +464,7 @@ impl<B: BlockT> ChainSync<B> {
 			client,
 			peers: HashMap::new(),
 			blocks: BlockCollection::new(),
+			verified_blocks,
 			best_queued_hash: info.best_hash,
 			best_queued_number: info.best_number,
 			extra_justifications: ExtraRequests::new("justification"),
@@ -1051,7 +1058,7 @@ impl<B: BlockT> ChainSync<B> {
 	}
 
 	pub fn register_preimport_blocks(&self, blocks: Vec<message::BlockData<B>>) {
-		self.client.register_preimported_blocks(blocks.clone().into_iter().filter_map(|b| {
+		self.verified_blocks.extend(blocks.clone().into_iter().filter_map(|b| {
 			match (b.header, b.body) {
 				(Some(header), Some(body)) => Some(B::new(header, body)),
 				_ => None,
@@ -1065,7 +1072,7 @@ impl<B: BlockT> ChainSync<B> {
 	/// announcement takes place, requests for the pre-imported block header
 	/// can be answered.
 	pub fn on_block_verified(&mut self, header: B::Header) {
-		self.client.verify_preimported_block(&BlockId::Hash(header.hash()));
+		self.verified_blocks.verify(&BlockId::Hash(header.hash()));
 	}
 
 	/// A batch of blocks have been processed, with or without errors.
@@ -1937,6 +1944,7 @@ mod test {
 		let info = client.info();
 		let block_announce_validator = Box::new(DefaultBlockAnnounceValidator);
 		let peer_id = PeerId::random();
+		let verified_blocks = Arc::new(VerifiedBlocks::new(client.clone()));
 
 		let mut sync = ChainSync::new(
 			Roles::AUTHORITY,
@@ -1944,6 +1952,7 @@ mod test {
 			&info,
 			block_announce_validator,
 			1,
+			verified_blocks,
 		);
 
 		let (a1_hash, a1_number) = {
@@ -2008,6 +2017,7 @@ mod test {
 	fn restart_doesnt_affect_peers_downloading_finality_data() {
 		let mut client = Arc::new(TestClientBuilder::new().build());
 		let info = client.info();
+		let verified_blocks = Arc::new(VerifiedBlocks::new(client.clone()));
 
 		let mut sync = ChainSync::new(
 			Roles::AUTHORITY,
@@ -2015,6 +2025,7 @@ mod test {
 			&info,
 			Box::new(DefaultBlockAnnounceValidator),
 			1,
+			verified_blocks,
 		);
 
 		let peer_id1 = PeerId::random();
@@ -2174,6 +2185,7 @@ mod test {
 
 		let mut client = Arc::new(TestClientBuilder::new().build());
 		let info = client.info();
+		let verified_blocks = Arc::new(VerifiedBlocks::new(client.clone()));
 
 		let mut sync = ChainSync::new(
 			Roles::AUTHORITY,
@@ -2181,6 +2193,7 @@ mod test {
 			&info,
 			Box::new(DefaultBlockAnnounceValidator),
 			5,
+			verified_blocks,
 		);
 
 		let peer_id1 = PeerId::random();
@@ -2288,6 +2301,7 @@ mod test {
 
 		let mut client = Arc::new(TestClientBuilder::new().build());
 		let info = client.info();
+		let verified_blocks = Arc::new(VerifiedBlocks::new(client.clone()));
 
 		let mut sync = ChainSync::new(
 			Roles::AUTHORITY,
@@ -2295,6 +2309,7 @@ mod test {
 			&info,
 			Box::new(DefaultBlockAnnounceValidator),
 			5,
+			verified_blocks,
 		);
 
 		let peer_id1 = PeerId::random();
@@ -2407,6 +2422,7 @@ mod test {
 		};
 
 		let info = client.info();
+		let verified_blocks = Arc::new(VerifiedBlocks::new(client.clone()));
 
 		let mut sync = ChainSync::new(
 			Roles::AUTHORITY,
@@ -2414,6 +2430,7 @@ mod test {
 			&info,
 			Box::new(DefaultBlockAnnounceValidator),
 			5,
+			verified_blocks,
 		);
 
 		let finalized_block = blocks[MAX_BLOCKS_TO_LOOK_BACKWARDS as usize * 2 - 1].clone();

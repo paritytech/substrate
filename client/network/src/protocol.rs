@@ -23,6 +23,7 @@ use crate::{
 	error,
 	request_responses::RequestFailure,
 	utils::{interval, LruHashSet},
+	VerifiedBlocks,
 };
 
 use bytes::{Bytes, BytesMut};
@@ -347,6 +348,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		network_config: &config::NetworkConfiguration,
 		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
 		metrics_registry: Option<&Registry>,
+		verified_blocks: Arc<VerifiedBlocks<B>>,
 	) -> error::Result<(Protocol<B, H>, sc_peerset::PeersetHandle, Vec<(PeerId, Multiaddr)>)> {
 		let info = chain.info();
 		let sync = ChainSync::new(
@@ -355,6 +357,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			&info,
 			block_announce_validator,
 			config.max_parallel_downloads,
+			verified_blocks,
 		);
 
 		let boot_node_ids = {

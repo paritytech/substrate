@@ -19,7 +19,7 @@
 use crate::block_request_handler::BlockRequestHandler;
 use crate::light_client_requests::handler::LightClientRequestHandler;
 use crate::gossip::QueuedSender;
-use crate::{config,  Event, NetworkService, NetworkWorker};
+use crate::{config,  Event, NetworkService, NetworkWorker, VerifiedBlocks};
 
 use futures::prelude::*;
 use sp_runtime::traits::{Block as BlockT, Header as _};
@@ -94,11 +94,13 @@ fn build_test_full_node(network_config: config::NetworkConfiguration)
 	));
 
 	let protocol_id = config::ProtocolId::from("/test-protocol-name");
+	let verified_blocks = Arc::new(VerifiedBlocks::new(client.clone()));
 
 	let block_request_protocol_config = {
 		let (handler, protocol_config) = BlockRequestHandler::new(
 			&protocol_id,
 			client.clone(),
+			verified_blocks.clone(),
 		);
 		async_std::task::spawn(handler.run().boxed());
 		protocol_config
@@ -128,6 +130,7 @@ fn build_test_full_node(network_config: config::NetworkConfiguration)
 		metrics_registry: None,
 		block_request_protocol_config,
 		light_client_request_protocol_config,
+		verified_blocks,
 	})
 	.unwrap();
 

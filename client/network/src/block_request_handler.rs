@@ -18,6 +18,7 @@
 //! [`crate::request_responses::RequestResponsesBehaviour`].
 
 use codec::{Encode, Decode};
+use crate::VerifiedBlocks;
 use crate::chain::Client;
 use crate::config::ProtocolId;
 use crate::protocol::{message::BlockAttributes};
@@ -31,7 +32,7 @@ use prost::Message;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header, One, Zero};
 use std::cmp::min;
-use std::sync::{Arc};
+use std::sync::Arc;
 use std::time::Duration;
 
 const LOG_TARGET: &str = "block-request-handler";
@@ -62,14 +63,15 @@ pub(crate) fn generate_protocol_name(protocol_id: &ProtocolId) -> String {
 }
 
 /// Handler for incoming block requests from a remote peer.
-pub struct BlockRequestHandler<B> {
+pub struct BlockRequestHandler<B: BlockT> {
 	client: Arc<dyn Client<B>>,
+	verified_blocks: Arc<VerifiedBlocks<B>>,
 	request_receiver: mpsc::Receiver<IncomingRequest>,
 }
 
 impl <B: BlockT> BlockRequestHandler<B> {
 	/// Create a new [`BlockRequestHandler`].
-	pub fn new(protocol_id: &ProtocolId, client: Arc<dyn Client<B>>) -> (Self, ProtocolConfig) {
+	pub fn new(protocol_id: &ProtocolId, client: Arc<dyn Client<B>>, verified_blocks: Arc<VerifiedBlocks<B>>) -> (Self, ProtocolConfig) {
 		// Rate of arrival multiplied with the waiting time in the queue equals the queue length.
 		//
 		// An average Polkadot sentry node serves less than 5 requests per second. The 95th percentile
@@ -82,7 +84,7 @@ impl <B: BlockT> BlockRequestHandler<B> {
 		let mut protocol_config = generate_protocol_config(protocol_id);
 		protocol_config.inbound_queue = Some(tx);
 
-		(Self { client, request_receiver }, protocol_config)
+		(Self { client, verified_blocks, request_receiver }, protocol_config)
 	}
 
 	/// Run [`BlockRequestHandler`].
@@ -136,7 +138,7 @@ impl <B: BlockT> BlockRequestHandler<B> {
 		let mut block_id = from_block_id;
 
 		let mut total_size: usize = 0;
-		while let Some(header) = self.client.header(block_id).unwrap_or(None) {
+		while let Some(header) = self.verified_blocks.header(&block_id).unwrap_or(None) {
 			let number = *header.number();
 			let hash = header.hash();
 			let parent_hash = *header.parent_hash();
@@ -148,7 +150,7 @@ impl <B: BlockT> BlockRequestHandler<B> {
 			let is_empty_justification = justification.as_ref().map(|j| j.is_empty()).unwrap_or(false);
 
 			let body = if get_body {
-				match self.client.block_body(&BlockId::Hash(hash))? {
+				match self.verified_blocks.body(&BlockId::Hash(hash))? {
 					Some(mut extrinsics) => extrinsics.iter_mut()
 						.map(|extrinsic| extrinsic.encode())
 						.collect(),

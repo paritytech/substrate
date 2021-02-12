@@ -24,7 +24,7 @@ use crate::{
 	config::{Configuration, KeystoreConfig, PrometheusConfig},
 };
 use sc_client_api::{
-	light::RemoteBlockchain, ForkBlocks, BadBlocks, UsageProvider, ExecutorProvider, PreImportedBlockProvider,
+	light::RemoteBlockchain, ForkBlocks, BadBlocks, UsageProvider, ExecutorProvider,
 };
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sc_chain_spec::get_extension;
@@ -41,7 +41,7 @@ use futures::{
 use sc_keystore::LocalKeystore;
 use log::{info, warn};
 use sc_network::config::{Role, OnDemand};
-use sc_network::NetworkService;
+use sc_network::{NetworkService, VerifiedBlocks};
 use sc_network::block_request_handler::{self, BlockRequestHandler};
 use sc_network::light_client_requests::{self, handler::LightClientRequestHandler};
 use sp_runtime::generic::BlockId;
@@ -844,7 +844,7 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		TBl: BlockT,
 		TCl: ProvideRuntimeApi<TBl> + HeaderMetadata<TBl, Error=sp_blockchain::Error> + Chain<TBl> +
 		BlockBackend<TBl> + BlockIdTo<TBl, Error=sp_blockchain::Error> + ProofProvider<TBl> +
-		HeaderBackend<TBl> + BlockchainEvents<TBl> + PreImportedBlockProvider<TBl> + 'static,
+		HeaderBackend<TBl> + BlockchainEvents<TBl> + 'static,
 		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + 'static,
 		TImpQu: ImportQueue<TBl> + 'static,
 {
@@ -867,6 +867,8 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		Box::new(DefaultBlockAnnounceValidator)
 	};
 
+	let verified_blocks = Arc::new(VerifiedBlocks::new(client.clone()));
+
 	let block_request_protocol_config = {
 		if matches!(config.role, Role::Light) {
 			// Allow outgoing requests but deny incoming requests.
@@ -876,6 +878,7 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 			let (handler, protocol_config) = BlockRequestHandler::new(
 				&protocol_id,
 				client.clone(),
+				verified_blocks.clone(),
 			);
 			spawn_handle.spawn("block_request_handler", handler.run());
 			protocol_config
@@ -915,6 +918,7 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 		block_request_protocol_config,
 		light_client_request_protocol_config,
+		verified_blocks,
 	};
 
 	let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();

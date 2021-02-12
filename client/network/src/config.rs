@@ -35,7 +35,7 @@ pub use libp2p::{identity, core::PublicKey, wasm_ext::ExtTransport, build_multia
 #[doc(hidden)]
 pub use crate::protocol::ProtocolConfig;
 
-use crate::ExHashT;
+use crate::{ExHashT, VerifiedBlocks};
 
 use core::{fmt, iter};
 use futures::future;
@@ -119,6 +119,12 @@ pub struct Params<B: BlockT, H: ExHashT> {
 	/// [`light_client_requests::handler::LightClientRequestHandler::new`] allowing both outgoing
 	/// and incoming requests.
 	pub light_client_request_protocol_config: RequestResponseConfig,
+
+	/// A container of verified blocks
+	///
+	/// Used to serve blocks from the client's backend chain, if found.
+	/// Otherwise, falls back to serving blocks which have been verified but not yet imported.
+	pub verified_blocks: Arc<VerifiedBlocks<B>>,
 }
 
 /// Role of the local node.

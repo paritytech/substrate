@@ -193,6 +193,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			&params.network_config,
 			params.block_announce_validator,
 			params.metrics_registry.as_ref(),
+			params.verified_blocks,
 		)?;
 
 		// List of multiaddresses that we know in the network.

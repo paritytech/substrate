@@ -265,6 +265,12 @@ pub mod error;
 pub mod gossip;
 pub mod network_state;
 
+use std::{
+	collections::HashMap,
+	sync::Arc
+};
+use parking_lot::RwLock;
+
 #[doc(inline)]
 pub use libp2p::{multiaddr, Multiaddr, PeerId};
 pub use protocol::{event::{DhtEvent, Event, ObservedRole}, sync::SyncState, PeerInfo};
@@ -274,7 +280,10 @@ pub use service::{
 };
 
 pub use sc_peerset::ReputationChange;
-use sp_runtime::traits::{Block as BlockT, NumberFor};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, Header, NumberFor}
+};
 
 /// The maximum allowed number of established connections per peer.
 ///
@@ -320,4 +329,100 @@ pub struct NetworkStatus<B: BlockT> {
 	pub total_bytes_inbound: u64,
 	/// The total number of bytes sent.
 	pub total_bytes_outbound: u64,
+}
+
+/// Provides access to preimported blocks.
+/// A preimported block is one that has been announced, checked and verified
+/// but not yet imported into the chain's backend.
+pub struct VerifiedBlocks<B: BlockT> {
+	client: Arc<dyn crate::chain::Client<B>>,
+	blocks: RwLock<HashMap<B::Hash, (B, bool)>>,
+}
+
+impl<B: BlockT> VerifiedBlocks<B> {
+	/// Returns VerifiedBlocks
+	pub fn new(client: Arc<dyn crate::chain::Client<B>>) -> Self {
+		Self {
+			client,
+			blocks: RwLock::new(HashMap::new()),
+		}
+	}
+
+	/// Register a new block which has been announced
+	/// and downloaded from peers.
+	fn extend(&self, blocks: Vec<B>) {
+		self.blocks.write().extend(blocks.into_iter().map(|b| (b.hash(), (b, false))));
+	}
+
+	/// Fetch the header of a block.
+	/// This will try to fetch the imported block from the client's backend.
+	/// If not found, falls back to the preimported blocks.
+	fn header(&self, id: &BlockId<B>) -> sp_blockchain::Result<Option<<B as BlockT>::Header>> {
+		let mut header = self.client.header(*id)?;
+		if header.is_none() {
+			header = self.preimported_block_header(&*id);
+		}
+		Ok(header)
+	}
+
+	fn preimported_block_header(&self, id: &BlockId<B>) -> Option<B::Header> {
+		match id {
+			BlockId::Hash(h) => {
+				match self.blocks.read().get(h) {
+					Some((b, verified)) if *verified => Some(b.header().clone()),
+					_ => None,
+				}
+			},
+			BlockId::Number(n) => {
+				match self.blocks.read().iter().filter(|(_, (b, _))| b.header().number() == n).next() {
+					Some((_, (b, verified))) if *verified => Some(b.header().clone()),
+					_ => None,
+				}
+			},
+		}
+	}
+
+	/// Fetch the body of a preimported block
+	fn body(&self, id: &BlockId<B>) -> sp_blockchain::Result<Option<Vec<<B>::Extrinsic>>> {
+		let mut body= self.client.block_body(id)?;
+		if body.is_none() {
+			body = self.preimported_block_body(&*id);
+		}
+		Ok(body)
+	}
+
+	fn preimported_block_body(&self, id: &BlockId<B>) -> Option<Vec<B::Extrinsic>> {
+		match id {
+			BlockId::Hash(h) => {
+				match self.blocks.read().get(h) {
+					Some((block, verified)) if *verified => Some(block.extrinsics().to_vec()),
+					_ => None,
+				}
+			},
+			BlockId::Number(n) => {
+				match self.blocks.read().iter().filter(|(_, (b, _))| b.header().number() == n).next() {
+					Some((_, (b, verified))) if *verified => Some(b.extrinsics().to_vec()),
+					_ => None,
+				}
+			}
+		}
+	}
+
+	/// Mark a block as verified
+	fn verify(&self, id: &BlockId<B>) {
+		match id {
+			BlockId::Hash(h) => {
+				match self.blocks.write().get_mut(h) {
+					Some((_, verified)) => *verified = true,
+					_ => return,
+				};
+			},
+			BlockId::Number(n) => {
+				match self.blocks.write().iter_mut().filter(|(_, (b, _))| b.header().number() == n).next() {
+					Some((_, (_, verified))) => *verified = true,
+					_ => return,
+				};
+			}
+		}
+	}
 }
