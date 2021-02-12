@@ -199,7 +199,7 @@ pub struct TransactionsHandlerController<H: ExHashT> {
 impl<H: ExHashT> TransactionsHandlerController<H> {
 	/// Controls whether transactions are being gossiped on the network.
 	pub fn set_gossip_enabled(&mut self, enabled: bool) {
-		self.gossip_disabled.store(enabled, Ordering::Relaxed);
+		self.gossip_disabled.store(!enabled, Ordering::Relaxed);
 	}
 
 	/// You may call this when new transactions are imported by the transaction pool.
