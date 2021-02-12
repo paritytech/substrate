@@ -1,6 +1,6 @@
 [package]
 name = "sc-finality-grandpa-rpc"
-version = "0.8.0"
+version = "0.8.1"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "RPC extensions for the GRANDPA finality gadget"
 repository = "https://github.com/paritytech/substrate/"

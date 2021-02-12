@@ -42,7 +42,7 @@ fn compile_module<T: Trait>(code: &[u8]) -> (Vec<u8>, <T::Hashing as Hash>::Outp
 }
 
 fn funding<T: Trait>() -> BalanceOf<T> {
-	T::Currency::minimum_balance() * 10_000.into()
+	T::Currency::minimum_balance() * 10_000u32.into()
 }
 
 fn create_funded_user<T: Trait>(string: &'static str, n: u32) -> T::AccountId {
@@ -160,7 +160,7 @@ benchmarks! {
 	call {
 		let data = vec![0u8; 128];
 		let endowment = Config::<T>::subsistence_threshold_uncached();
-		let value = T::Currency::minimum_balance() * 100.into();
+		let value = T::Currency::minimum_balance() * 100u32.into();
 		let caller = create_funded_user::<T>("caller", 0);
 		let (binary, hash) = load_module!("dummy");
 		let addr = T::DetermineContractAddress::contract_address_for(&hash, &[], &caller);
@@ -195,7 +195,7 @@ benchmarks! {
 	// the reward for removing them.
 	claim_surcharge {
 		let endowment = Config::<T>::subsistence_threshold_uncached();
-		let value = T::Currency::minimum_balance() * 100.into();
+		let value = T::Currency::minimum_balance() * 100u32.into();
 		let caller = create_funded_user::<T>("caller", 0);
 		let (binary, hash) = load_module!("dummy");
 		let addr = T::DetermineContractAddress::contract_address_for(&hash, &[], &caller);
@@ -213,7 +213,7 @@ benchmarks! {
 		ContractInfoOf::<T>::get(addr.clone()).unwrap().get_alive().unwrap();
 
 		// generate some rent
-		advance_block::<T>(<T as Trait>::SignedClaimHandicap::get() + 1.into());
+		advance_block::<T>(<T as Trait>::SignedClaimHandicap::get() + 1u32.into());
 
 	}: _(RawOrigin::Signed(caller.clone()), addr.clone(), None)
 	verify {

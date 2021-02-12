@@ -1,6 +1,6 @@
 [package]
 name = "sc-consensus-manual-seal"
-version = "0.8.0"
+version = "0.8.1"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Manual sealing engine for Substrate"
 edition = "2018"

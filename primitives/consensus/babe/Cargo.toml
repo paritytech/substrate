@@ -1,6 +1,6 @@
 [package]
 name = "sp-consensus-babe"
-version = "0.8.0"
+version = "0.8.1"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Primitives for BABE consensus"
 edition = "2018"

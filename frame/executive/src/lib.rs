@@ -468,7 +468,7 @@ where
 		<AllModules as OffchainWorker<System::BlockNumber>>::offchain_worker(
 			// to maintain backward compatibility we call module offchain workers
 			// with parent block number.
-			header.number().saturating_sub(1.into())
+			header.number().saturating_sub(1u32.into())
 		)
 	}
 }

@@ -447,7 +447,7 @@ impl<T: Trait> Module<T> {
 
 				// only allow the next forced change when twice the window has passed since
 				// this one.
-				<NextForced<T>>::put(scheduled_at + in_blocks * 2.into());
+				<NextForced<T>>::put(scheduled_at + in_blocks * 2u32.into());
 			}
 
 			<PendingChange<T>>::put(StoredPendingChange {

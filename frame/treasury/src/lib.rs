@@ -1406,7 +1406,12 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		BountyCount::<I>::put(index + 1);
 
 		let bounty = Bounty {
-			proposer, value, fee: 0.into(), curator_deposit: 0.into(), bond, status: BountyStatus::Proposed,
+			proposer,
+			value,
+			fee: 0u32.into(),
+			curator_deposit: 0u32.into(),
+			bond,
+			status: BountyStatus::Proposed,
 		};
 
 		Bounties::<T, I>::insert(index, &bounty);

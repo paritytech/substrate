@@ -79,7 +79,7 @@ impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
 	}
 
 	fn genesis_hash(&self) -> <Block as BlockT>::Hash {
-		self.block_hash(0.into()).unwrap().unwrap()
+		self.block_hash(0u32.into()).unwrap().unwrap()
 	}
 }
 
