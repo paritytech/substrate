@@ -7161,7 +7161,7 @@ dependencies = [
 
 [[package]]
 name = "sc-finality-grandpa-warp-sync"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "derive_more",
  "futures 0.3.12",
