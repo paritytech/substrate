@@ -684,7 +684,7 @@ mod benchmarking {
 		}
 	}
 
-	impl_benchmark_test_suite!(Module, crate::tests::new_test_ext, crate::tests::Test);
+	impl_benchmark_test_suite!(Module, crate::tests::new_test_ext(), crate::tests::Test);
 }
 
 #[cfg(test)]

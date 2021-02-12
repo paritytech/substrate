@@ -933,7 +933,7 @@ macro_rules! impl_benchmark_test {
 /// When called in [`pallet_example`] as
 ///
 /// ```rust,ignore
-/// impl_benchmark_test_suite!(Module, crate::tests::new_test_ext, crate::tests::Test);
+/// impl_benchmark_test_suite!(Module, crate::tests::new_test_ext(), crate::tests::Test);
 /// ```
 ///
 /// It expands to the equivalent of:
@@ -961,8 +961,11 @@ macro_rules! impl_benchmark_test {
 ///
 /// The first argument, `module`, must be the path to this crate's module.
 ///
-/// The second argument, `new_test_ext`, must be the path to a function which takes no arguments
-/// and returns either a `sp_io::TestExternalities`, or some other type with an identical interface.
+/// The second argument, `new_test_ext`, must be a function call which returns either a
+/// `sp_io::TestExternalities`, or some other type with an identical interface.
+///
+/// Note that this function call is _not_ evaluated at compile time, but is instead copied textually
+/// into each appropriate invocation site.
 ///
 /// The third argument, `test`, must be the path to the runtime. The item to which this must refer
 /// will generally take the form:
@@ -990,7 +993,7 @@ macro_rules! impl_benchmark_test {
 // just iterate over the `Benchmarking::benchmarks` list to run the actual implementations.
 #[macro_export]
 macro_rules! impl_benchmark_test_suite {
-	($bench_module:ident, $new_test_ext:path, $test:path) => {
+	($bench_module:ident, $new_test_ext:expr, $test:path) => {
 		#[cfg(test)]
 		mod tests {
 			use super::{test_bench_by_name, $bench_module};
@@ -998,7 +1001,7 @@ macro_rules! impl_benchmark_test_suite {
 
 			#[test]
 			fn test_benchmarks() {
-				$new_test_ext().execute_with(|| {
+				$new_test_ext.execute_with(|| {
 					use $crate::Benchmarking;
 					for benchmark_name in $bench_module ::<$test>::benchmarks(true) {
 						assert_ok!(test_bench_by_name::<$test>(benchmark_name));
