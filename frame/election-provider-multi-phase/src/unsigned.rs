@@ -44,6 +44,8 @@ pub enum MinerError {
 	PoolSubmissionFailed,
 	/// The pre-dispatch checks failed for the mined solution.
 	PreDispatchChecksFailed,
+	/// The solution generated from the miner is not feasible.
+	Feasibility(FeasibilityError),
 }
 
 impl From<sp_npos_elections::Error> for MinerError {
@@ -52,23 +54,46 @@ impl From<sp_npos_elections::Error> for MinerError {
 	}
 }
 
+impl From<FeasibilityError> for MinerError {
+	fn from(e: FeasibilityError) -> Self {
+		MinerError::Feasibility(e)
+	}
+}
+
 impl<T: Config> Pallet<T> {
 	/// Mine a new solution, and submit it back to the chain as an unsigned transaction.
-	pub(crate) fn mine_and_submit() -> Result<(), MinerError> {
-		let balancing = Self::get_balancing_iters();
+	pub fn mine_check_and_submit() -> Result<(), MinerError> {
+		let iters = Self::get_balancing_iters();
+		// get the solution, with a load of checks to ensure if submitted, IT IS ABSOLUTELY VALID.
+		let (raw_solution, witness) = Self::mine_and_check(iters)?;
+
+		let call = Call::submit_unsigned(raw_solution, witness).into();
+		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call)
+			.map_err(|_| MinerError::PoolSubmissionFailed)
+	}
+
+	/// Mine a new npos solution, with all the relevant checks to make sure that it will be accepted
+	/// to the chain.
+	///
+	/// If you want an unchecked solution, use [`Pallet::mine_solution`].
+	/// If you want a checked solution and submit it at the same time, use
+	/// [`Pallet::mine_check_and_submit`].
+	pub fn mine_and_check(iters: usize) -> Result<(RawSolution<CompactOf<T>>, SolutionOrSnapshotSize), MinerError> {
 		let (raw_solution, witness) = Self::mine_solution(balancing)?;
 
 		// ensure that this will pass the pre-dispatch checks
 		Self::unsigned_pre_dispatch_checks(&raw_solution).map_err(|e| {
-			log!(warn, "pre-disaptch-checks failed for mined solution: {:?}", e);
+			log!(warn, "pre-dispatch-checks failed for mined solution: {:?}", e);
 			MinerError::PreDispatchChecksFailed
 		})?;
 
-		// submit the raw solution to the pool.
-		let call = Call::submit_unsigned(raw_solution, witness).into();
+		// ensure that this is a feasible solution
+		let _ = Self::feasibility_check(solution.clone(), ElectionCompute::Unsigned).map_err(|e| {
+			log!(warn, "feasibility-check failed for mined solution: {:?}", e);
+			e.into()
+		})?;
 
-		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call)
-			.map_err(|_| MinerError::PoolSubmissionFailed)
+		Ok((raw_solution, witness))
 	}
 
 	/// Mine a new npos solution.

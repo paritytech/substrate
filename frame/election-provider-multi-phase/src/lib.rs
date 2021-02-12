@@ -236,7 +236,7 @@ mod mock;
 #[macro_use]
 pub mod helpers;
 
-const LOG_TARGET: &'static str = "election-provider";
+const LOG_TARGET: &'static str = "runtime::election-provider";
 
 pub mod unsigned;
 pub mod weights;
