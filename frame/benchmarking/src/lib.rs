@@ -990,7 +990,7 @@ macro_rules! impl_benchmark_test {
 // just iterate over the `Benchmarking::benchmarks` list to run the actual implementations.
 #[macro_export]
 macro_rules! impl_benchmark_test_suite {
-	($bench_module:tt, $new_test_ext:path, $test:path) => {
+	($bench_module:ident, $new_test_ext:path, $test:path) => {
 		#[cfg(test)]
 		mod tests {
 			use super::{test_bench_by_name, $bench_module};
