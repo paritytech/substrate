@@ -151,6 +151,7 @@
 mod tests;
 mod tests_local;
 mod tests_composite;
+mod tests_reentrancy;
 mod benchmarking;
 pub mod weights;
 
