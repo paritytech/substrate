@@ -212,11 +212,16 @@ benchmarks! {
 		<CurrentPhase<T>>::put(Phase::Unsigned((true, 1u32.into())));
 
 		// encode the most significant storage item that needs to be decoded in the dispatch.
-		let encoded_snapshot = <MultiPhase<T>>::snapshot().encode();
+		let snapshot = <MultiPhase<T>>::snapshot();
+		let encoded_snapshot = snapshot.encode();
+		let voters_len = snapshot.voters.len();
 	}: {
 		assert_ok!(<MultiPhase<T>>::submit_unsigned(RawOrigin::None.into(), raw_solution, witness));
-		let _decoded = <RoundSnapshot<T::AccountId> as Decode>::decode(&mut &*encoded_snapshot).unwrap();
-		// NOTE: assert that this line is optimized away by the compiler in any way!
+		assert_eq!(
+			<RoundSnapshot<T::AccountId> as Decode>::decode(&mut &*encoded_snapshot).unwrap().voters.len(),
+			voters_len,
+		);
+		// This whole assert is to ensure that the statement is not optimized away.
 	} verify {
 		assert!(<MultiPhase<T>>::queued_solution().is_some());
 	}
@@ -240,11 +245,17 @@ benchmarks! {
 		assert_eq!(raw_solution.compact.unique_targets().len() as u32, d);
 
 		// encode the most significant storage item that needs to be decoded in the dispatch.
-		let encoded_snapshot = <MultiPhase<T>>::snapshot().encode();
+		let snapshot = <MultiPhase<T>>::snapshot();
+		let encoded_snapshot = snapshot.encode();
+		let voters_len = snapshot.voters.len();
 	}: {
 		assert_ok!(<MultiPhase<T>>::feasibility_check(raw_solution, ElectionCompute::Unsigned));
-		let _decoded = <RoundSnapshot<T::AccountId> as Decode>::decode(&mut &*encoded_snapshot).unwrap();
-		// NOTE: assert that this line is optimized away by the compiler in any way!
+		assert_eq!(
+			<RoundSnapshot<T::AccountId> as Decode>::decode(&mut &*encoded_snapshot).unwrap().voters.len(),
+			voters_len,
+		);
+		// This whole assert is to ensure that the statement is not optimized away.
+
 	}
 }
 
