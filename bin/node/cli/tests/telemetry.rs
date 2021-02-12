@@ -50,9 +50,7 @@ async fn telemetry_works() {
 				// Received a message from a connection.
 				Event::BinaryFrame { message, .. } => {
 					let json: serde_json::Value = serde_json::from_slice(&message).unwrap();
-					let object = json.as_object().unwrap();
-					let payload = object.get("payload").unwrap();
-					let object = payload.as_object().unwrap();
+					let object = json.as_object().unwrap().get("payload").unwrap().as_object().unwrap();
 					if matches!(object.get("best"), Some(serde_json::Value::String(_))) {
 						break;
 					}
