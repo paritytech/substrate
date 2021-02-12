@@ -473,7 +473,7 @@ fn instantiate_and_call_and_deposit_event() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: Event::pallet_balances(
-						pallet_balances::RawEvent::Endowed(ALICE, 1_000_000)
+						pallet_balances::Event::Endowed(ALICE, 1_000_000)
 					),
 					topics: vec![],
 				},
@@ -485,14 +485,14 @@ fn instantiate_and_call_and_deposit_event() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: Event::pallet_balances(
-						pallet_balances::RawEvent::Endowed(addr.clone(), subsistence * 100)
+						pallet_balances::Event::Endowed(addr.clone(), subsistence * 100)
 					),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
 					event: Event::pallet_balances(
-						pallet_balances::RawEvent::Transfer(ALICE, addr.clone(), subsistence * 100)
+						pallet_balances::Event::Transfer(ALICE, addr.clone(), subsistence * 100)
 					),
 					topics: vec![],
 				},
@@ -1202,7 +1202,7 @@ fn restoration(
 				EventRecord {
 					phase: Phase::Initialization,
 					event: Event::pallet_balances(
-						pallet_balances::RawEvent::Endowed(ALICE, 1_000_000)
+						pallet_balances::Event::Endowed(ALICE, 1_000_000)
 					),
 					topics: vec![],
 				},
@@ -1214,14 +1214,14 @@ fn restoration(
 				EventRecord {
 					phase: Phase::Initialization,
 					event: Event::pallet_balances(
-						pallet_balances::RawEvent::Endowed(addr_bob.clone(), 30_000)
+						pallet_balances::Event::Endowed(addr_bob.clone(), 30_000)
 					),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
 					event: Event::pallet_balances(
-						pallet_balances::RawEvent::Transfer(ALICE, addr_bob.clone(), 30_000)
+						pallet_balances::Event::Transfer(ALICE, addr_bob.clone(), 30_000)
 					),
 					topics: vec![],
 				},
@@ -1259,14 +1259,14 @@ fn restoration(
 					EventRecord {
 						phase: Phase::Initialization,
 						event: Event::pallet_balances(
-							pallet_balances::RawEvent::Endowed(addr_dummy.clone(), 20_000)
+							pallet_balances::Event::Endowed(addr_dummy.clone(), 20_000)
 						),
 						topics: vec![],
 					},
 					EventRecord {
 						phase: Phase::Initialization,
 						event: Event::pallet_balances(
-							pallet_balances::RawEvent::Transfer(ALICE, addr_dummy.clone(), 20_000)
+							pallet_balances::Event::Transfer(ALICE, addr_dummy.clone(), 20_000)
 						),
 						topics: vec![],
 					},
@@ -1408,7 +1408,7 @@ fn restoration(
 							},
 							EventRecord {
 								phase: Phase::Initialization,
-								event: Event::pallet_balances(pallet_balances::RawEvent::Endowed(CHARLIE, 1_000_000)),
+								event: Event::pallet_balances(pallet_balances::Event::Endowed(CHARLIE, 1_000_000)),
 								topics: vec![],
 							},
 							EventRecord {
@@ -1418,13 +1418,13 @@ fn restoration(
 							},
 							EventRecord {
 								phase: Phase::Initialization,
-								event: Event::pallet_balances(pallet_balances::RawEvent::Endowed(addr_django.clone(), 30_000)),
+								event: Event::pallet_balances(pallet_balances::Event::Endowed(addr_django.clone(), 30_000)),
 								topics: vec![],
 							},
 							EventRecord {
 								phase: Phase::Initialization,
 								event: Event::pallet_balances(
-									pallet_balances::RawEvent::Transfer(CHARLIE, addr_django.clone(), 30_000)
+									pallet_balances::Event::Transfer(CHARLIE, addr_django.clone(), 30_000)
 								),
 								topics: vec![],
 							},
@@ -1711,7 +1711,7 @@ fn self_destruct_works() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: Event::pallet_balances(
-						pallet_balances::RawEvent::Transfer(addr.clone(), DJANGO, 93_654)
+						pallet_balances::Event::Transfer(addr.clone(), DJANGO, 93_654)
 					),
 					topics: vec![],
 				},
