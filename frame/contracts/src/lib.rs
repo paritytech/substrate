@@ -557,7 +557,7 @@ decl_module! {
 				ctx.call(dest, value, gas_meter, data)
 			});
 			let code_len = result.as_ref().map(|r| r.1).unwrap_or(T::MaxCodeSize::get());
-			gas_meter.into_dispatch_result(result,T::WeightInfo::call(code_len / 1024))
+			gas_meter.into_dispatch_result(result, T::WeightInfo::call(code_len / 1024))
 		}
 
 		/// Instantiates a new contract from the supplied `code` optionally transferring
