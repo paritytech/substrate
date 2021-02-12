@@ -226,6 +226,11 @@ impl pallet_offences::Config for Test {
 	type WeightSoftLimit = OffencesWeightSoftLimit;
 }
 
+parameter_types! {
+	pub const ReportLongevity: u64 =
+		BondingDuration::get() as u64 * SessionsPerEra::get() as u64 * Period::get();
+}
+
 impl Config for Test {
 	type Event = Event;
 	type Call = Call;
@@ -240,7 +245,8 @@ impl Config for Test {
 		AuthorityId,
 	)>>::IdentificationTuple;
 
-	type HandleEquivocation = super::EquivocationHandler<Self::KeyOwnerIdentification, Offences>;
+	type HandleEquivocation =
+		super::EquivocationHandler<Self::KeyOwnerIdentification, Offences, ReportLongevity>;
 
 	type WeightInfo = ();
 }

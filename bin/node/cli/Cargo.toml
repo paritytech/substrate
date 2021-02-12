@@ -44,50 +44,50 @@ structopt = { version = "0.3.8", optional = true }
 parking_lot = "0.11.1"
 
 # primitives
-sp-authority-discovery = { version = "2.0.0",  path = "../../../primitives/authority-discovery" }
-sp-consensus-babe = { version = "0.8.0", path = "../../../primitives/consensus/babe" }
-grandpa-primitives = { version = "2.0.0", package = "sp-finality-grandpa", path = "../../../primitives/finality-grandpa" }
-sp-core = { version = "2.0.0", path = "../../../primitives/core" }
-sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
-sp-timestamp = { version = "2.0.0", default-features = false, path = "../../../primitives/timestamp" }
-sp-inherents = { version = "2.0.0", path = "../../../primitives/inherents" }
-sp-keyring = { version = "2.0.0", path = "../../../primitives/keyring" }
-sp-keystore = { version = "0.8.0", path = "../../../primitives/keystore" }
-sp-io = { version = "2.0.0", path = "../../../primitives/io" }
-sp-consensus = { version = "0.8.0", path = "../../../primitives/consensus/common" }
-sp-transaction-pool = { version = "2.0.0", path = "../../../primitives/transaction-pool" }
+sp-authority-discovery = { version = "3.0.0",  path = "../../../primitives/authority-discovery" }
+sp-consensus-babe = { version = "0.9.0", path = "../../../primitives/consensus/babe" }
+grandpa-primitives = { version = "3.0.0", package = "sp-finality-grandpa", path = "../../../primitives/finality-grandpa" }
+sp-core = { version = "3.0.0", path = "../../../primitives/core" }
+sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
+sp-timestamp = { version = "3.0.0", default-features = false, path = "../../../primitives/timestamp" }
+sp-inherents = { version = "3.0.0", path = "../../../primitives/inherents" }
+sp-keyring = { version = "3.0.0", path = "../../../primitives/keyring" }
+sp-keystore = { version = "0.9.0", path = "../../../primitives/keystore" }
+sp-io = { version = "3.0.0", path = "../../../primitives/io" }
+sp-consensus = { version = "0.9.0", path = "../../../primitives/consensus/common" }
+sp-transaction-pool = { version = "3.0.0", path = "../../../primitives/transaction-pool" }
 
 # client dependencies
-sc-client-api = { version = "2.0.0", path = "../../../client/api" }
-sc-chain-spec = { version = "2.0.0", path = "../../../client/chain-spec" }
-sc-consensus = { version = "0.8.0", path = "../../../client/consensus/common" }
-sc-transaction-pool = { version = "2.0.0", path = "../../../client/transaction-pool" }
-sc-network = { version = "0.8.0", path = "../../../client/network" }
-sc-consensus-slots = { version = "0.8.0", path = "../../../client/consensus/slots" }
-sc-consensus-babe = { version = "0.8.0", path = "../../../client/consensus/babe" }
-grandpa = { version = "0.8.0", package = "sc-finality-grandpa", path = "../../../client/finality-grandpa" }
-sc-client-db = { version = "0.8.0", default-features = false, path = "../../../client/db" }
-sc-offchain = { version = "2.0.0", path = "../../../client/offchain" }
-sc-rpc = { version = "2.0.0", path = "../../../client/rpc" }
-sc-basic-authorship = { version = "0.8.0", path = "../../../client/basic-authorship" }
-sc-service = { version = "0.8.0", default-features = false, path = "../../../client/service" }
-sc-tracing = { version = "2.0.0", path = "../../../client/tracing" }
-sc-telemetry = { version = "2.0.0", path = "../../../client/telemetry" }
-sc-authority-discovery = { version = "0.8.0",  path = "../../../client/authority-discovery" }
+sc-client-api = { version = "3.0.0", path = "../../../client/api" }
+sc-chain-spec = { version = "3.0.0", path = "../../../client/chain-spec" }
+sc-consensus = { version = "0.9.0", path = "../../../client/consensus/common" }
+sc-transaction-pool = { version = "3.0.0", path = "../../../client/transaction-pool" }
+sc-network = { version = "0.9.0", path = "../../../client/network" }
+sc-consensus-slots = { version = "0.9.0", path = "../../../client/consensus/slots" }
+sc-consensus-babe = { version = "0.9.0", path = "../../../client/consensus/babe" }
+grandpa = { version = "0.9.0", package = "sc-finality-grandpa", path = "../../../client/finality-grandpa" }
+sc-client-db = { version = "0.9.0", default-features = false, path = "../../../client/db" }
+sc-offchain = { version = "3.0.0", path = "../../../client/offchain" }
+sc-rpc = { version = "3.0.0", path = "../../../client/rpc" }
+sc-basic-authorship = { version = "0.9.0", path = "../../../client/basic-authorship" }
+sc-service = { version = "0.9.0", default-features = false, path = "../../../client/service" }
+sc-tracing = { version = "3.0.0", path = "../../../client/tracing" }
+sc-telemetry = { version = "3.0.0", path = "../../../client/telemetry" }
+sc-authority-discovery = { version = "0.9.0",  path = "../../../client/authority-discovery" }
 sc-finality-grandpa-warp-sync = { version = "0.8.0", path = "../../../client/finality-grandpa-warp-sync", optional = true }
 
 # frame dependencies
-pallet-indices = { version = "2.0.0", path = "../../../frame/indices" }
-pallet-timestamp = { version = "2.0.0", default-features = false, path = "../../../frame/timestamp" }
+pallet-indices = { version = "3.0.0", path = "../../../frame/indices" }
+pallet-timestamp = { version = "3.0.0", default-features = false, path = "../../../frame/timestamp" }
 pallet-contracts = { version = "2.0.0", path = "../../../frame/contracts" }
-frame-system = { version = "2.0.0", path = "../../../frame/system" }
-pallet-balances = { version = "2.0.0", path = "../../../frame/balances" }
-pallet-transaction-payment = { version = "2.0.0", path = "../../../frame/transaction-payment" }
-frame-support = { version = "2.0.0", default-features = false, path = "../../../frame/support" }
-pallet-im-online = { version = "2.0.0", default-features = false, path = "../../../frame/im-online" }
-pallet-authority-discovery = { version = "2.0.0", path = "../../../frame/authority-discovery" }
-pallet-staking = { version = "2.0.0", path = "../../../frame/staking" }
-pallet-grandpa = { version = "2.0.0", path = "../../../frame/grandpa" }
+frame-system = { version = "3.0.0", path = "../../../frame/system" }
+pallet-balances = { version = "3.0.0", path = "../../../frame/balances" }
+pallet-transaction-payment = { version = "3.0.0", path = "../../../frame/transaction-payment" }
+frame-support = { version = "3.0.0", default-features = false, path = "../../../frame/support" }
+pallet-im-online = { version = "3.0.0", default-features = false, path = "../../../frame/im-online" }
+pallet-authority-discovery = { version = "3.0.0", path = "../../../frame/authority-discovery" }
+pallet-staking = { version = "3.0.0", path = "../../../frame/staking" }
+pallet-grandpa = { version = "3.0.0", path = "../../../frame/grandpa" }
 
 # node-specific dependencies
 node-runtime = { version = "2.0.0", path = "../runtime" }
@@ -96,26 +96,26 @@ node-primitives = { version = "2.0.0", path = "../primitives" }
 node-executor = { version = "2.0.0", path = "../executor" }
 
 # CLI-specific dependencies
-sc-cli = { version = "0.8.0", optional = true, path = "../../../client/cli" }
-frame-benchmarking-cli = { version = "2.0.0", optional = true, path = "../../../utils/frame/benchmarking-cli" }
+sc-cli = { version = "0.9.0", optional = true, path = "../../../client/cli" }
+frame-benchmarking-cli = { version = "3.0.0", optional = true, path = "../../../utils/frame/benchmarking-cli" }
 node-inspect = { version = "0.8.0", optional = true, path = "../inspect" }
 
 # WASM-specific dependencies
 wasm-bindgen = { version = "0.2.57", optional = true }
 wasm-bindgen-futures = { version = "0.4.18", optional = true }
-browser-utils = { package = "substrate-browser-utils", path = "../../../utils/browser", optional = true, version = "0.8.0"}
+browser-utils = { package = "substrate-browser-utils", path = "../../../utils/browser", optional = true, version = "0.9.0"}
 
 [target.'cfg(target_arch="x86_64")'.dependencies]
 node-executor = { version = "2.0.0", path = "../executor", features = [ "wasmtime" ] }
-sc-cli = { version = "0.8.0", optional = true, path = "../../../client/cli", features = [ "wasmtime" ] }
-sc-service = { version = "0.8.0", default-features = false, path = "../../../client/service", features = [ "wasmtime" ] }
-sp-trie = { version = "2.0.0", default-features = false, path = "../../../primitives/trie", features = ["memory-tracker"] }
+sc-cli = { version = "0.9.0", optional = true, path = "../../../client/cli", features = [ "wasmtime" ] }
+sc-service = { version = "0.9.0", default-features = false, path = "../../../client/service", features = [ "wasmtime" ] }
+sp-trie = { version = "3.0.0", default-features = false, path = "../../../primitives/trie", features = ["memory-tracker"] }
 
 [dev-dependencies]
-sc-keystore = { version = "2.0.0", path = "../../../client/keystore" }
-sc-consensus = { version = "0.8.0", path = "../../../client/consensus/common" }
-sc-consensus-babe = { version = "0.8.0", features = ["test-helpers"], path = "../../../client/consensus/babe" }
-sc-consensus-epochs = { version = "0.8.0", path = "../../../client/consensus/epochs" }
+sc-keystore = { version = "3.0.0", path = "../../../client/keystore" }
+sc-consensus = { version = "0.9.0", path = "../../../client/consensus/common" }
+sc-consensus-babe = { version = "0.9.0", features = ["test-helpers"], path = "../../../client/consensus/babe" }
+sc-consensus-epochs = { version = "0.9.0", path = "../../../client/consensus/epochs" }
 sc-service-test = { version = "2.0.0", path = "../../../client/service/test" }
 futures = "0.3.9"
 tempfile = "3.1.0"
@@ -128,12 +128,12 @@ platforms = "1.1"
 [build-dependencies]
 structopt = { version = "0.3.8", optional = true }
 node-inspect = { version = "0.8.0", optional = true, path = "../inspect" }
-frame-benchmarking-cli = { version = "2.0.0", optional = true, path = "../../../utils/frame/benchmarking-cli" }
-substrate-build-script-utils = { version = "2.0.0", optional = true, path = "../../../utils/build-script-utils" }
-substrate-frame-cli = { version = "2.0.0", optional = true, path = "../../../utils/frame/frame-utilities-cli" }
+frame-benchmarking-cli = { version = "3.0.0", optional = true, path = "../../../utils/frame/benchmarking-cli" }
+substrate-build-script-utils = { version = "3.0.0", optional = true, path = "../../../utils/build-script-utils" }
+substrate-frame-cli = { version = "3.0.0", optional = true, path = "../../../utils/frame/frame-utilities-cli" }
 
 [build-dependencies.sc-cli]
-version = "0.8.0"
+version = "0.9.0"
 package = "sc-cli"
 path = "../../../client/cli"
 optional = true

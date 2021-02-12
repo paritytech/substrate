@@ -1,7 +1,7 @@
 [package]
 description = "Gossiping for the Substrate network protocol"
 name = "sc-network-gossip"
-version = "0.8.1"
+version = "0.9.0"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -20,9 +20,9 @@ futures-timer = "3.0.1"
 libp2p = { version = "0.34.0", default-features = false }
 log = "0.4.8"
 lru = "0.6.1"
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.8.0", path = "../../utils/prometheus" }
-sc-network = { version = "0.8.0", path = "../network" }
-sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.9.0", path = "../../utils/prometheus" }
+sc-network = { version = "0.9.0", path = "../network" }
+sp-runtime = { version = "3.0.0", path = "../../primitives/runtime" }
 wasm-timer = "0.2"
 
 [dev-dependencies]

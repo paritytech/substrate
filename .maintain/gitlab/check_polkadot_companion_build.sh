@@ -51,6 +51,8 @@ git merge origin/master
 # ancestor for successfully performing merges below.
 git clone --depth 20 https://github.com/paritytech/polkadot.git
 
+cargo install -f diener
+
 cd polkadot
 
 # either it's a pull request then check for a companion otherwise use
@@ -85,9 +87,8 @@ else
   boldprint "this is not a pull request - building polkadot:master"
 fi
 
-cd ..
-diener --substrate --branch $CI_COMMIT_REF_NAME --git https://gitlab.parity.io/parity/substrate.git --path polkadot
-cd polkadot
+# Patch all Substrate crates in Polkadot
+diener patch --crates-to-patch ../ --substrate
 
 # Test Polkadot pr or master branch with this Substrate commit.
 cargo update -p sp-io
