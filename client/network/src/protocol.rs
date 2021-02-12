@@ -275,6 +275,7 @@ impl<B: BlockT> Protocol<B> {
 		protocol_id: ProtocolId,
 		config_role: &config::Role,
 		network_config: &config::NetworkConfiguration,
+		notifications_protocols_handshakes: Vec<Vec<u8>>,
 		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
 		metrics_registry: Option<&Registry>,
 	) -> error::Result<(Protocol<B>, sc_peerset::PeersetHandle, Vec<(PeerId, Multiaddr)>)> {
@@ -384,7 +385,6 @@ impl<B: BlockT> Protocol<B> {
 
 		let behaviour = {
 			let versions = &((MIN_VERSION as u8)..=(CURRENT_VERSION as u8)).collect::<Vec<u8>>();
-			let handshake_message = Roles::from(config_role).encode();
 
 			let best_number = info.best_number;
 			let best_hash = info.best_hash;
@@ -403,11 +403,10 @@ impl<B: BlockT> Protocol<B> {
 				build_status_message::<B>(&config, best_number, best_hash, genesis_hash),
 				peerset,
 				iter::once((block_announces_protocol, block_announces_handshake, MAX_BLOCK_ANNOUNCE_SIZE))
-					.chain(network_config.extra_sets.iter().map(|s| (
-						s.notifications_protocol.clone(),
-						handshake_message.clone(),
-						s.max_notification_size
-					))),
+					.chain(network_config.extra_sets.iter()
+						.zip(notifications_protocols_handshakes)
+						.map(|(s, hs)| (s.notifications_protocol.clone(), hs, s.max_notification_size))
+					),
 			)
 		};
 

@@ -41,6 +41,7 @@ use crate::{
 	light_client_requests,
 	protocol::{
 		self,
+		message::generic::Roles,
 		NotifsHandlerError,
 		NotificationsSink,
 		PeerInfo,
@@ -51,8 +52,11 @@ use crate::{
 	},
 	transactions,
 	transport, ReputationChange,
+
 	bitswap::Bitswap,
 };
+
+use codec::Encode as _;
 use futures::{channel::oneshot, prelude::*};
 use libp2p::{PeerId, multiaddr, Multiaddr};
 use libp2p::core::{
@@ -187,6 +191,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			local_peer_id.to_base58(),
 		);
 
+		let default_notif_handshake_message = Roles::from(&params.role).encode();
 		let (protocol, peerset_handle, mut known_addresses) = Protocol::new(
 			protocol::ProtocolConfig {
 				roles: From::from(&params.role),
@@ -196,6 +201,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			params.protocol_id.clone(),
 			&params.role,
 			&params.network_config,
+			iter::once(Vec::new()).chain((0..params.network_config.extra_sets.len() - 1)
+				.map(|_| default_notif_handshake_message.clone())).collect(),
 			params.block_announce_validator,
 			params.metrics_registry.as_ref(),
 		)?;
