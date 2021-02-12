@@ -41,3 +41,6 @@ std = [
 	"frame-system/std",
 	"linregress",
 ]
+
+[profile.test]
+panic = "unwind"
