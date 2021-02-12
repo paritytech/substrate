@@ -2865,6 +2865,7 @@ impl<T: Config> Module<T> {
 
 		// Set staking information for new era.
 		let maybe_new_validators = Self::select_and_update_validators(current_era);
+		// TWO_PHASE_NOTE: use this later on.
 		let _unused_new_validators = Self::enact_election(current_era);
 
 		maybe_new_validators
@@ -3175,8 +3176,8 @@ impl<T: Config> Module<T> {
 	///
 	/// This will also process the election, as noted in [`process_election`].
 	fn enact_election(_current_era: EraIndex) -> Option<Vec<T::AccountId>> {
-		let outcome = T::ElectionProvider::elect().map(|_| ());
-		log!(debug, "Experimental election provider outputted {:?}", outcome);
+		let _outcome = T::ElectionProvider::elect().map(|_| ());
+		log!(debug, "Experimental election provider outputted {:?}", _outcome);
 		// TWO_PHASE_NOTE: This code path shall not return anything for now. Later on, redirect the
 		// results to `process_election`.
 		None

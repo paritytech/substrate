@@ -571,7 +571,8 @@ pub mod pallet {
 				{
 					let (need_snapshot, enabled, additional) = if current_phase == Phase::Signed {
 						// followed by a signed phase: close the signed phase, no need for snapshot.
-						// NOTE: SIGNED_PHASE
+						// TWO_PHASE_NOTE: later on once we have signed phase, this should return
+						// something else.
 						(false, true, Weight::zero())
 					} else {
 						// no signed phase: create a new snapshot, definitely `enable` the unsigned
