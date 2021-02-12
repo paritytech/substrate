@@ -106,14 +106,19 @@ pub type Justification = (ConsensusEngineId, EncodedJustification);
 pub struct Justifications(Vec<Justification>);
 
 impl Justifications {
-	/// WIP(JON)
+	/// Return an iterator over the Justifications.
 	pub fn iter(&self) -> impl Iterator<Item = &Justification> {
 		self.0.iter()
 	}
 
-	/// WIP(JON)
+	/// Append a justification.
 	pub fn push(&mut self, justification: Justification) {
 		self.0.push(justification)
+	}
+
+	/// Return the encoded Justification for the given consensus engine, if it exists.
+	pub fn get(&self, engine_id: &ConsensusEngineId) -> Option<&EncodedJustification> {
+		self.iter().find(|j| &j.0 == engine_id).map(|j| &j.1)
 	}
 }
 
@@ -121,7 +126,6 @@ impl IntoIterator for Justifications {
 	type Item = Justification;
 	type IntoIter = sp_std::vec::IntoIter<Self::Item>;
 
-	/// WIP(JON)
 	fn into_iter(self) -> Self::IntoIter {
 		self.0.into_iter()
 	}
