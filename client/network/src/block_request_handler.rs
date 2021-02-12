@@ -71,7 +71,11 @@ pub struct BlockRequestHandler<B: BlockT> {
 
 impl <B: BlockT> BlockRequestHandler<B> {
 	/// Create a new [`BlockRequestHandler`].
-	pub fn new(protocol_id: &ProtocolId, client: Arc<dyn Client<B>>, verified_blocks: Arc<VerifiedBlocks<B>>) -> (Self, ProtocolConfig) {
+	pub fn new(
+		protocol_id: &ProtocolId,
+		client: Arc<dyn Client<B>>,
+		verified_blocks: Arc<VerifiedBlocks<B>>
+	) -> (Self, ProtocolConfig) {
 		// Rate of arrival multiplied with the waiting time in the queue equals the queue length.
 		//
 		// An average Polkadot sentry node serves less than 5 requests per second. The 95th percentile
