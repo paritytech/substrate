@@ -164,7 +164,7 @@ fn main() {
 						assert_eq!(
 							call.dispatch_bypass_filter(origin.into()).unwrap_err().error,
 							DispatchError::Module {
-								index: 0,
+								index: 2,
 								error: 16,
 								message: Some("OffchainElectionWeakSubmission"),
 							},
