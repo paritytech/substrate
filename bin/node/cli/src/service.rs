@@ -34,7 +34,7 @@ use sp_runtime::traits::Block as BlockT;
 use futures::prelude::*;
 use sc_client_api::{ExecutorProvider, RemoteBackend};
 use node_executor::Executor;
-use sc_telemetry::{TelemetryConnectionNotifier, TelemetrySpan};
+use sc_telemetry::Telemetry;
 
 type FullClient = sc_service::TFullClient<Block, RuntimeApi, Executor>;
 type FullBackend = sc_service::TFullBackend<Block>;
@@ -75,7 +75,10 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 	);
 
 	let (grandpa_block_import, grandpa_link) = grandpa::block_import(
-		client.clone(), &(client.clone() as Arc<_>), select_chain.clone(),
+		client.clone(),
+		&(client.clone() as Arc<_>),
+		select_chain.clone(),
+		telemetry.clone(),
 	)?;
 	let justification_import = grandpa_block_import.clone();
 
@@ -97,6 +100,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		&task_manager.spawn_handle(),
 		config.prometheus_registry(),
 		sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone()),
+		telemetry.clone(),
 	)?;
 
 	let import_setup = (block_import, grandpa_link, babe_link);
@@ -226,10 +230,7 @@ pub fn new_full_base(
 	let enable_grandpa = !config.disable_grandpa;
 	let prometheus_registry = config.prometheus_registry().cloned();
 
-	let telemetry_span = TelemetrySpan::new();
-	let _telemetry_span_entered = telemetry_span.enter();
-
-	let (_rpc_handlers, telemetry_connection_notifier) = sc_service::spawn_tasks(
+	let (_rpc_handlers, telemetry) = sc_service::spawn_tasks(
 		sc_service::SpawnTasksParams {
 			config,
 			backend: backend.clone(),
@@ -243,7 +244,6 @@ pub fn new_full_base(
 			remote_blockchain: None,
 			network_status_sinks: network_status_sinks.clone(),
 			system_rpc_tx,
-			telemetry_span: Some(telemetry_span.clone()),
 		},
 	)?;
 
@@ -257,6 +257,7 @@ pub fn new_full_base(
 			client.clone(),
 			transaction_pool.clone(),
 			prometheus_registry.as_ref(),
+			telemetry.clone(),
 		);
 
 		let can_author_with =
@@ -274,6 +275,7 @@ pub fn new_full_base(
 			backoff_authoring_blocks,
 			babe_link,
 			can_author_with,
+			telemetry: telemetry.clone(),
 		};
 
 		let babe = sc_consensus_babe::start_babe(babe_config)?;
@@ -317,6 +319,7 @@ pub fn new_full_base(
 		observer_enabled: false,
 		keystore,
 		is_authority: role.is_authority(),
+		telemetry: telemetry.clone(),
 	};
 
 	if enable_grandpa {
@@ -330,7 +333,7 @@ pub fn new_full_base(
 			config,
 			link: grandpa_link,
 			network: network.clone(),
-			telemetry_on_connect: telemetry_connection_notifier.map(|x| x.on_connect_stream()),
+			telemetry: telemetry.clone(),
 			voting_rule: grandpa::VotingRulesBuilder::default().build(),
 			prometheus_registry,
 			shared_voter_state,
@@ -364,7 +367,7 @@ pub fn new_full(config: Configuration)
 }
 
 pub fn new_light_base(mut config: Configuration) -> Result<(
-	TaskManager, RpcHandlers, Option<TelemetryConnectionNotifier>, Arc<LightClient>,
+	TaskManager, RpcHandlers, Option<Telemetry>, Arc<LightClient>,
 	Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
 	Arc<sc_transaction_pool::LightPool<Block, LightClient, sc_network::config::OnDemand<Block>>>
 ), ServiceError> {
@@ -387,6 +390,7 @@ pub fn new_light_base(mut config: Configuration) -> Result<(
 		client.clone(),
 		&(client.clone() as Arc<_>),
 		select_chain.clone(),
+		telemetry.clone(), // TODO hmm how do I get the telemetry here...
 	)?;
 	let justification_import = grandpa_block_import.clone();
 
@@ -408,6 +412,7 @@ pub fn new_light_base(mut config: Configuration) -> Result<(
 		&task_manager.spawn_handle(),
 		config.prometheus_registry(),
 		sp_consensus::NeverCanAuthor,
+		telemetry.clone(), // TODO hmm how do I get the telemetry here...
 	)?;
 
 	let (network, network_status_sinks, system_rpc_tx, network_starter) =
@@ -437,10 +442,7 @@ pub fn new_light_base(mut config: Configuration) -> Result<(
 
 	let rpc_extensions = node_rpc::create_light(light_deps);
 
-	let telemetry_span = TelemetrySpan::new();
-	let _telemetry_span_entered = telemetry_span.enter();
-
-	let (rpc_handlers, telemetry_connection_notifier) =
+	let (rpc_handlers, telemetry) =
 		sc_service::spawn_tasks(sc_service::SpawnTasksParams {
 			on_demand: Some(on_demand),
 			remote_blockchain: Some(backend.remote_blockchain()),
@@ -451,13 +453,12 @@ pub fn new_light_base(mut config: Configuration) -> Result<(
 			config, backend, network_status_sinks, system_rpc_tx,
 			network: network.clone(),
 			task_manager: &mut task_manager,
-			telemetry_span: Some(telemetry_span.clone()),
 		})?;
 
 	Ok((
 		task_manager,
 		rpc_handlers,
-		telemetry_connection_notifier,
+		telemetry,
 		client,
 		network,
 		transaction_pool,
