@@ -474,11 +474,11 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 
 	/// Call when we must propagate ready transactions to peers.
 	fn propagate_transactions(&mut self) {
-		debug!(target: "sync", "Propagating transactions");
 		// Accept transactions only when enabled
 		if !self.gossip_enabled.load(Ordering::Relaxed) {
 			return;
 		}
+		debug!(target: "sync", "Propagating transactions");
 		let transactions = self.transaction_pool.transactions();
 		let propagated_to = self.do_propagate_transactions(&transactions);
 		self.transaction_pool.on_broadcasted(propagated_to);
