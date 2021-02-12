@@ -178,7 +178,7 @@ impl<T: Config> Pallet<T> {
 	/// down the line.
 	///
 	/// Indeed, the score must be computed **after** this step. If this step reduces the score too
-	/// much, then the solution will be discarded.
+	/// much or remove a winner, then the solution must be discarded **after** this step.
 	pub fn trim_compact<FN>(
 		maximum_allowed_voters: u32,
 		mut compact: CompactOf<T>,
