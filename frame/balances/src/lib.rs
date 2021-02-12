@@ -1041,34 +1041,40 @@ impl<T: Config<I>, I: 'static> Currency<T::AccountId> for Pallet<T, I> where
 	) -> DispatchResult {
 		if value.is_zero() || transactor == dest { return Ok(()) }
 
-		Self::try_mutate_account_with_dust(dest, |to_account, _| -> Result<DustCleaner<T, I>, DispatchError> {
-			Self::try_mutate_account_with_dust(transactor, |from_account, _| -> DispatchResult {
-				from_account.free = from_account.free.checked_sub(&value)
-					.ok_or(Error::<T, I>::InsufficientBalance)?;
-
-				// NOTE: total stake being stored in the same type means that this could never overflow
-				// but better to be safe than sorry.
-				to_account.free = to_account.free.checked_add(&value).ok_or(Error::<T, I>::Overflow)?;
-
-				let ed = T::ExistentialDeposit::get();
-				ensure!(to_account.total() >= ed, Error::<T, I>::ExistentialDeposit);
-
-				Self::ensure_can_withdraw(
+		Self::try_mutate_account_with_dust(
+			dest,
+			|to_account, _| -> Result<DustCleaner<T, I>, DispatchError> {
+				Self::try_mutate_account_with_dust(
 					transactor,
-					value,
-					WithdrawReasons::TRANSFER,
-					from_account.free,
-				).map_err(|_| Error::<T, I>::LiquidityRestrictions)?;
+					|from_account, _| -> DispatchResult {
+						from_account.free = from_account.free.checked_sub(&value)
+							.ok_or(Error::<T, I>::InsufficientBalance)?;
+		
+						// NOTE: total stake being stored in the same type means that this could never overflow
+						// but better to be safe than sorry.
+						to_account.free = to_account.free.checked_add(&value).ok_or(Error::<T, I>::Overflow)?;
 
-				// TODO: This is over-conservative. There may now be other providers, and this pallet
-				//   may not even be a provider.
-				let allow_death = existence_requirement == ExistenceRequirement::AllowDeath;
-				let allow_death = allow_death && !system::Pallet::<T>::is_provider_required(transactor);
-				ensure!(allow_death || from_account.free >= ed, Error::<T, I>::KeepAlive);
+						let ed = T::ExistentialDeposit::get();
+						ensure!(to_account.total() >= ed, Error::<T, I>::ExistentialDeposit);
 
-				Ok(())
-			}).map(|(_, maybe_dust_cleaner)| maybe_dust_cleaner)
-		})?;
+						Self::ensure_can_withdraw(
+							transactor,
+							value,
+							WithdrawReasons::TRANSFER,
+							from_account.free,
+						).map_err(|_| Error::<T, I>::LiquidityRestrictions)?;
+
+						// TODO: This is over-conservative. There may now be other providers, and this pallet
+						//   may not even be a provider.
+						let allow_death = existence_requirement == ExistenceRequirement::AllowDeath;
+						let allow_death = allow_death && !system::Pallet::<T>::is_provider_required(transactor);
+						ensure!(allow_death || from_account.free >= ed, Error::<T, I>::KeepAlive);
+
+						Ok(())
+					}
+				).map(|(_, maybe_dust_cleaner)| maybe_dust_cleaner)
+			}
+		)?;
 
 		// Emit transfer event.
 		Self::deposit_event(Event::Transfer(transactor.clone(), dest.clone(), value));
@@ -1362,18 +1368,24 @@ impl<T: Config<I>, I: 'static> ReservableCurrency<T::AccountId> for Pallet<T, I>
 			};
 		}
 
-		let ((actual, _maybe_one_dust), _maybe_other_dust) = Self::try_mutate_account_with_dust(beneficiary, |to_account, is_new|-> Result<(Self::Balance, DustCleaner<T, I>), DispatchError> {
-			ensure!(!is_new, Error::<T, I>::DeadAccount);
-			Self::try_mutate_account_with_dust(slashed, |from_account, _| -> Result<Self::Balance, DispatchError> {
-				let actual = cmp::min(from_account.reserved, value);
-				match status {
-					Status::Free => to_account.free = to_account.free.checked_add(&actual).ok_or(Error::<T, I>::Overflow)?,
-					Status::Reserved => to_account.reserved = to_account.reserved.checked_add(&actual).ok_or(Error::<T, I>::Overflow)?,
-				}
-				from_account.reserved -= actual;
-				Ok(actual)
-			})
-		})?;
+		let ((actual, _maybe_one_dust), _maybe_other_dust) = Self::try_mutate_account_with_dust(
+			beneficiary,
+			|to_account, is_new|-> Result<(Self::Balance, DustCleaner<T, I>), DispatchError> {
+				ensure!(!is_new, Error::<T, I>::DeadAccount);
+				Self::try_mutate_account_with_dust(
+					slashed,
+					|from_account, _| -> Result<Self::Balance, DispatchError> {
+						let actual = cmp::min(from_account.reserved, value);
+						match status {
+							Status::Free => to_account.free = to_account.free.checked_add(&actual).ok_or(Error::<T, I>::Overflow)?,
+							Status::Reserved => to_account.reserved = to_account.reserved.checked_add(&actual).ok_or(Error::<T, I>::Overflow)?,
+						}
+						from_account.reserved -= actual;
+						Ok(actual)
+					}
+				)
+			}
+		)?;
 
 		Self::deposit_event(Event::ReserveRepatriated(slashed.clone(), beneficiary.clone(), actual, status));
 		Ok(value - actual)
