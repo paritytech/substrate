@@ -618,7 +618,7 @@ impl Default for Releases {
 	}
 }
 
-pub struct DustCleaner<T: Config<I>, I: 'static>(Option<(T::AccountId, NegativeImbalance<T, I>)>);
+pub struct DustCleaner<T: Config<I>, I: 'static = ()>(Option<(T::AccountId, NegativeImbalance<T, I>)>);
 
 impl<T: Config<I>, I: 'static> Drop for DustCleaner<T, I> {
 	fn drop(&mut self) {
@@ -1370,7 +1370,7 @@ impl<T: Config<I>, I: 'static> ReservableCurrency<T::AccountId> for Pallet<T, I>
 
 		let ((actual, _maybe_one_dust), _maybe_other_dust) = Self::try_mutate_account_with_dust(
 			beneficiary,
-			|to_account, is_new|-> Result<(Self::Balance, DustCleaner<T, I>), DispatchError> {
+			|to_account, is_new| -> Result<(Self::Balance, DustCleaner<T, I>), DispatchError> {
 				ensure!(!is_new, Error::<T, I>::DeadAccount);
 				Self::try_mutate_account_with_dust(
 					slashed,
