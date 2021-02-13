@@ -27,7 +27,7 @@ use proc_macro2::{Span, TokenStream};
 use quote::{quote, quote_spanned};
 
 use syn::{
-	spanned::Spanned, parse_macro_input, Ident, Type, ItemImpl, ImplItem, TypePath, parse_quote,
+	spanned::Spanned, parse_macro_input, Ident, Type, ItemImpl, TypePath, parse_quote,
 	parse::{Parse, ParseStream, Result, Error}, fold::{self, Fold}, Attribute, Pat,
 };
 
@@ -215,9 +215,6 @@ struct FoldRuntimeApiImpl<'a> {
 	block_type: &'a TypePath,
 	/// The identifier of the trait being implemented.
 	impl_trait: &'a Ident,
-	/// Stores the error type that is being found in the trait implementation as associated type
-	/// with the name `Error`.
-	error_type: &'a mut Option<Type>,
 }
 
 impl<'a> Fold for FoldRuntimeApiImpl<'a> {
@@ -321,51 +318,12 @@ impl<'a> Fold for FoldRuntimeApiImpl<'a> {
 		input.block = block;
 		input
 	}
-
-	fn fold_impl_item(&mut self, input: ImplItem) -> ImplItem {
-		match input {
-			ImplItem::Type(ty) => {
-				if ty.ident == "Error" {
-					if let Some(error_type) = self.error_type {
-						if *error_type != ty.ty {
-							let mut error = Error::new(
-								ty.span(),
-								"Error type can not change between runtime apis",
-							);
-							let error_first = Error::new(
-								error_type.span(),
-								"First error type was declared here."
-							);
-
-							error.combine(error_first);
-
-							ImplItem::Verbatim(error.to_compile_error())
-						} else {
-							ImplItem::Verbatim(Default::default())
-						}
-					} else {
-						*self.error_type = Some(ty.ty);
-						ImplItem::Verbatim(Default::default())
-					}
-				} else {
-					let error = Error::new(
-						ty.span(),
-						"Only associated type with name `Error` is allowed",
-					);
-					ImplItem::Verbatim(error.to_compile_error())
-				}
-			},
-			o => fold::fold_impl_item(self, o),
-		}
-	}
 }
 
 /// Result of [`generate_runtime_api_impls`].
 struct GeneratedRuntimeApiImpls {
 	/// All the runtime api implementations.
 	impls: TokenStream,
-	/// The error type that should be used by the runtime apis.
-	error_type: Option<Type>,
 	/// The block type that is being used by the runtime apis.
 	block_type: TypePath,
 	/// The type the traits are implemented for.
@@ -378,7 +336,6 @@ struct GeneratedRuntimeApiImpls {
 /// extracts the error type, self type and the block type.
 fn generate_runtime_api_impls(impls: &[ItemImpl]) -> Result<GeneratedRuntimeApiImpls> {
 	let mut result = Vec::with_capacity(impls.len());
-	let mut error_type = None;
 	let mut global_block_type: Option<TypePath> = None;
 	let mut self_ty: Option<Box<Type>> = None;
 
@@ -436,7 +393,6 @@ fn generate_runtime_api_impls(impls: &[ItemImpl]) -> Result<GeneratedRuntimeApiI
 		let mut visitor = FoldRuntimeApiImpl {
 			block_type,
 			impl_trait: &impl_trait.ident,
-			error_type: &mut error_type,
 		};
 
 		result.push(visitor.fold_item_impl(impl_.clone()));
@@ -444,7 +400,6 @@ fn generate_runtime_api_impls(impls: &[ItemImpl]) -> Result<GeneratedRuntimeApiI
 
 	Ok(GeneratedRuntimeApiImpls {
 		impls: quote!( #( #result )* ),
-		error_type,
 		block_type: global_block_type.expect("There is a least one runtime api; qed"),
 		self_ty: *self_ty.expect("There is at least one runtime api; qed"),
 	})
@@ -460,7 +415,7 @@ pub fn mock_impl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro
 
 fn mock_impl_runtime_apis_impl_inner(api_impls: &[ItemImpl]) -> Result<TokenStream> {
 	let hidden_includes = generate_hidden_includes(HIDDEN_INCLUDES_ID);
-	let GeneratedRuntimeApiImpls { impls, error_type, block_type, self_ty } =
+	let GeneratedRuntimeApiImpls { impls, block_type, self_ty } =
 		generate_runtime_api_impls(api_impls)?;
 	let api_traits = implement_common_api_traits(block_type, self_ty)?;
 

@@ -263,7 +263,6 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				self.call
 					.runtime_version_at(at)
 					.map(|v| v.has_api_with(&A::ID, |v| v == A::VERSION))
-					.map_err(|e| #crate_::ApiError::Application(e))
 			}
 
 			fn has_api_with<A: #crate_::RuntimeApiInfo + ?Sized, P: Fn(u32) -> bool>(
@@ -274,7 +273,6 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				self.call
 					.runtime_version_at(at)
 					.map(|v| v.has_api_with(&A::ID, pred))
-					.map_err(|e| #crate_::ApiError::Application(e))
 			}
 
 			fn record_proof(&mut self) {

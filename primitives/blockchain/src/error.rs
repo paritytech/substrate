@@ -182,6 +182,15 @@ impl From<Box<dyn sp_state_machine::Error>> for Error {
 	}
 }
 
+impl From<Error> for ApiError {
+	fn from(err: Error) -> ApiError {
+		match err {
+			Error::RuntimeApiError(err) => err,
+			e => ApiError::Application(Box::new(e)),
+		}
+	}
+}
+
 impl Error {
 	/// Chain a blockchain error.
 	pub fn from_blockchain(e: Box<Error>) -> Self {

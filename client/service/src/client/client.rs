@@ -1638,7 +1638,7 @@ impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
 	>(
 		&self,
 		params: CallApiAtParams<'a, Block, C, NC, B::State>,
-	) -> Result<NativeOrEncoded<R>, Box<dyn std::error::Error + Send + Sync>> {
+	) -> Result<NativeOrEncoded<R>, sp_api::ApiError> {
 		let core_api = params.core_api;
 		let at = params.at;
 
@@ -1661,14 +1661,14 @@ impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
 			params.native_call,
 			params.recorder,
 			Some(extensions),
-		).map_err(|e| Box::new(e) as Box<_>)
+		).map_err(Into::into)
 	}
 
 	fn runtime_version_at(
 		&self,
 		at: &BlockId<Block>,
-	) -> Result<RuntimeVersion, Box<dyn std::error::Error + Send + Sync>> {
-		self.runtime_version_at(at).map_err(|e| Box::new(e) as Box<_>)
+	) -> Result<RuntimeVersion, sp_api::ApiError> {
+		self.runtime_version_at(at).map_err(Into::into)
 	}
 }
 

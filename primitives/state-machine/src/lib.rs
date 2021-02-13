@@ -869,7 +869,7 @@ mod tests {
 		map, traits::{Externalities, RuntimeCode}, testing::TaskExecutor,
 	};
 	use sp_runtime::traits::BlakeTwo256;
-	use std::{result, collections::HashMap};
+	use std::{result, collections::HashMap, panic::UnwindSafe};
 	use codec::Decode;
 	use sp_core::{
 		storage::ChildInfo, NativeOrEncoded, NeverNativeValue,

@@ -358,7 +358,7 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 				.map_err(client_err)
 				.and_then(|block|
 					self.client.runtime_version_at(&BlockId::Hash(block))
-						.map_err(|e| Error::Client(e))
+						.map_err(|e| Error::Client(Box::new(e)))
 				)
 		))
 	}
@@ -438,7 +438,7 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 					let info = client.info();
 					let version = client
 						.runtime_version_at(&BlockId::hash(info.best_hash))
-						.map_err(|e| Error::Client(e))
+						.map_err(|e| Error::Client(Box::new(e)))
 						.map_err(Into::into);
 					if previous_version != version {
 						previous_version = version.clone();

@@ -538,13 +538,13 @@ pub trait CallApiAt<Block: BlockT> {
 	>(
 		&self,
 		params: CallApiAtParams<'a, Block, C, NC, Self::StateBackend>,
-	) -> Result<NativeOrEncoded<R>, Box<dyn std::error::Error + Send + Sync>>;
+	) -> Result<NativeOrEncoded<R>, ApiError>;
 
 	/// Returns the runtime version at the given block.
 	fn runtime_version_at(
 		&self,
 		at: &BlockId<Block>,
-	) -> Result<RuntimeVersion, Box<dyn std::error::Error + Send + Sync>>;
+	) -> Result<RuntimeVersion, ApiError>;
 }
 
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.
