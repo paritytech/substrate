@@ -101,7 +101,6 @@ members = [
 	"frame/session/benchmarking",
 	"frame/society",
 	"frame/staking",
-	"frame/staking/fuzzer",
 	"frame/staking/reward-curve",
 	"frame/sudo",
 	"frame/support",

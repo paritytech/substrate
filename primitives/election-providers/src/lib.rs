@@ -163,7 +163,7 @@ use sp_std::{prelude::*, fmt::Debug};
 
 /// Re-export some type as they are used in the interface.
 pub use sp_arithmetic::PerThing;
-pub use sp_npos_elections::{Assignment, ExtendedBalance, PerThing128, Supports, VoteWeight};
+pub use sp_npos_elections::{Assignment, ExtendedBalance, PerThing128, Supports, Support, VoteWeight};
 
 /// Something that can provide the data to an [`ElectionProvider`].
 pub trait ElectionDataProvider<AccountId, BlockNumber> {
