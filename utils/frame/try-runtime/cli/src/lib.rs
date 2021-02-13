@@ -28,10 +28,9 @@ use sp_runtime::traits::{Block as BlockT, NumberFor};
 use sp_core::storage::{StorageData, StorageKey, well_known_keys};
 use frame_try_runtime::Target;
 
-/// Various commands to try-out (similar to `TryFrom`, `TryInto`) the new runtime, over configurable
-/// states.
+/// Various commands to try out the new runtime, over configurable states.
 ///
-/// For now this only assumes running the runtime-upgrade hooks.
+/// For now this only assumes running the `on_runtime_upgrade` hooks.
 #[derive(Debug, structopt::StructOpt)]
 pub struct TryRuntimeCmd {
 	/// The shared parameters
@@ -51,7 +50,7 @@ pub struct TryRuntimeCmd {
 /// The state to use for a migration dry-run.
 #[derive(Debug)]
 pub enum State {
-	/// A snapshot. Inner value is file path.
+	/// A snapshot. Inner value is a file path.
 	Snap(String),
 
 	/// A live chain. Inner value is the HTTP uri.
@@ -81,10 +80,6 @@ impl TryRuntimeCmd {
 		B: BlockT,
 		ExecDispatch: NativeExecutionDispatch + 'static,
 	{
-		// // prevent a potentially confusing MethodNotFound error from state machine.
-		// if !cfg!(feature = "try-runtime") {
-		// 	panic!("`TryRuntime` api is not enabled without `try-runtime` feature. Compile with this feature.")
-		// }
 
 		let spec = config.chain_spec;
 		let genesis_storage = spec.build_storage()?;
