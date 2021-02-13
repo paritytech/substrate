@@ -106,7 +106,7 @@ pub struct Limits {
 	pub subject_len: u32,
 
 	/// The maximum length of a contract code in bytes. This limit applies to the uninstrumented
-	/// and pristine form of the code as supplied to `put_code`.
+	/// and pristine form of the code as supplied to `instantiate_with_code`.
 	pub code_size: u32,
 }
 

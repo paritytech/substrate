@@ -370,7 +370,7 @@ impl OverlayedChanges {
 	/// transaction was open. Any transaction must be closed by either `rollback_transaction` or
 	/// `commit_transaction` before this overlay can be converted into storage changes.
 	///
-	/// Changes made without any open transaction are committed immediatly.
+	/// Changes made without any open transaction are committed immediately.
 	pub fn start_transaction(&mut self) {
 		self.top.start_transaction();
 		for (_, (changeset, _)) in self.children.iter_mut() {

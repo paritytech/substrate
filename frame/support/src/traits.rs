@@ -23,13 +23,15 @@ use sp_std::{prelude::*, result, marker::PhantomData, ops::Div, fmt::Debug};
 use codec::{FullCodec, Codec, Encode, Decode, EncodeLike};
 use sp_core::u32_trait::Value as U32;
 use sp_runtime::{
-	RuntimeDebug, ConsensusEngineId, DispatchResult, DispatchError,
+	RuntimeAppPublic, RuntimeDebug, BoundToRuntimeAppPublic,
+	ConsensusEngineId, DispatchResult, DispatchError,
 	traits::{
-		MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput, Bounded, Zero,
-		BadOrigin, AtLeast32BitUnsigned, UniqueSaturatedFrom, UniqueSaturatedInto,
-		SaturatedConversion, StoredMapError,
+	MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput, Bounded, Zero,
+	BadOrigin, AtLeast32BitUnsigned, Convert, UniqueSaturatedFrom, UniqueSaturatedInto,
+	SaturatedConversion, StoredMapError,
 	},
 };
+use sp_staking::SessionIndex;
 use crate::dispatch::Parameter;
 use crate::storage::StorageMap;
 use crate::weights::Weight;
@@ -39,6 +41,67 @@ use impl_trait_for_tuples::impl_for_tuples;
 /// Re-expected for the macro.
 #[doc(hidden)]
 pub use sp_std::{mem::{swap, take}, cell::RefCell, vec::Vec, boxed::Box};
+
+/// A trait for online node inspection in a session.
+///
+/// Something that can give information about the current validator set.
+pub trait ValidatorSet<AccountId> {
+	/// Type for representing validator id in a session.
+	type ValidatorId: Parameter;
+	/// A type for converting `AccountId` to `ValidatorId`.
+	type ValidatorIdOf: Convert<AccountId, Option<Self::ValidatorId>>;
+
+	/// Returns current session index.
+	fn session_index() -> SessionIndex;
+
+	/// Returns the active set of validators.
+	fn validators() -> Vec<Self::ValidatorId>;
+}
+
+/// [`ValidatorSet`] combined with an identification.
+pub trait ValidatorSetWithIdentification<AccountId>: ValidatorSet<AccountId> {
+	/// Full identification of `ValidatorId`.
+	type Identification: Parameter;
+	/// A type for converting `ValidatorId` to `Identification`.
+	type IdentificationOf: Convert<Self::ValidatorId, Option<Self::Identification>>;
+}
+
+/// A session handler for specific key type.
+pub trait OneSessionHandler<ValidatorId>: BoundToRuntimeAppPublic {
+	/// The key type expected.
+	type Key: Decode + Default + RuntimeAppPublic;
+
+	/// The given validator set will be used for the genesis session.
+	/// It is guaranteed that the given validator set will also be used
+	/// for the second session, therefore the first call to `on_new_session`
+	/// should provide the same validator set.
+	fn on_genesis_session<'a, I: 'a>(validators: I)
+		where I: Iterator<Item=(&'a ValidatorId, Self::Key)>, ValidatorId: 'a;
+
+	/// Session set has changed; act appropriately. Note that this can be called
+	/// before initialization of your module.
+	///
+	/// `changed` is true when at least one of the session keys
+	/// or the underlying economic identities/distribution behind one the
+	/// session keys has changed, false otherwise.
+	///
+	/// The `validators` are the validators of the incoming session, and `queued_validators`
+	/// will follow.
+	fn on_new_session<'a, I: 'a>(
+		changed: bool,
+		validators: I,
+		queued_validators: I,
+	) where I: Iterator<Item=(&'a ValidatorId, Self::Key)>, ValidatorId: 'a;
+
+	/// A notification for end of the session.
+	///
+	/// Note it is triggered before any `SessionManager::end_session` handlers,
+	/// so we can still affect the validator set.
+	fn on_before_session_ending() {}
+
+	/// A validator got disabled. Act accordingly until a new session begins.
+	fn on_disabled(_validator_index: usize);
+}
 
 /// Simple trait for providing a filter over a reference to some type.
 pub trait Filter<T> {
@@ -1394,11 +1457,6 @@ pub trait PalletInfo {
 	fn index<P: 'static>() -> Option<usize>;
 	/// Convert the given pallet `P` into its name as configured in the runtime.
 	fn name<P: 'static>() -> Option<&'static str>;
-}
-
-impl PalletInfo for () {
-	fn index<P: 'static>() -> Option<usize> { Some(0) }
-	fn name<P: 'static>() -> Option<&'static str> { Some("test") }
 }
 
 /// The function and pallet name of the Call.

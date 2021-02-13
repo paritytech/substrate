@@ -386,6 +386,13 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 	fn children(&self, _parent_hash: Block::Hash) -> sp_blockchain::Result<Vec<Block::Hash>> {
 		unimplemented!()
 	}
+
+	fn extrinsic(
+		&self,
+		_hash: &Block::Hash,
+	) -> sp_blockchain::Result<Option<<Block as BlockT>::Extrinsic>> {
+		unimplemented!("Not supported by the in-mem backend.")
+	}
 }
 
 impl<Block: BlockT> blockchain::ProvideCache<Block> for Blockchain<Block> {

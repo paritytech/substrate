@@ -28,6 +28,7 @@ use codec::Decode;
 use sp_core::traits::{Externalities, RuntimeCode, FetchRuntimeCode};
 use sp_version::RuntimeVersion;
 use std::panic::AssertUnwindSafe;
+use std::path::{Path, PathBuf};
 use sc_executor_common::wasm_runtime::{WasmModule, WasmInstance};
 
 use sp_wasm_interface::Function;
@@ -152,14 +153,22 @@ pub struct RuntimeCache {
 	runtimes: Mutex<[Option<Arc<VersionedRuntime>>; MAX_RUNTIMES]>,
 	/// The size of the instances cache for each runtime.
 	max_runtime_instances: usize,
+	cache_path: Option<PathBuf>,
 }
 
 impl RuntimeCache {
 	/// Creates a new instance of a runtimes cache.
-	pub fn new(max_runtime_instances: usize) -> RuntimeCache {
+	///
+	/// `max_runtime_instances` specifies the number of runtime instances preserved in an in-memory
+	/// cache.
+	///
+	/// `cache_path` allows to specify an optional directory where the executor can store files
+	/// for caching.
+	pub fn new(max_runtime_instances: usize, cache_path: Option<PathBuf>) -> RuntimeCache {
 		RuntimeCache {
 			runtimes: Default::default(),
 			max_runtime_instances,
+			cache_path,
 		}
 	}
 
@@ -235,6 +244,7 @@ impl RuntimeCache {
 					host_functions.into(),
 					allow_missing_func_imports,
 					self.max_runtime_instances,
+					self.cache_path.as_deref(),
 				);
 				if let Err(ref err) = result {
 					log::warn!(target: "wasm-runtime", "Cannot create a runtime: {:?}", err);
@@ -271,22 +281,32 @@ pub fn create_wasm_runtime_with_code(
 	code: &[u8],
 	host_functions: Vec<&'static dyn Function>,
 	allow_missing_func_imports: bool,
+	cache_path: Option<&Path>,
 ) -> Result<Arc<dyn WasmModule>, WasmError> {
 	match wasm_method {
-		WasmExecutionMethod::Interpreted =>
+		WasmExecutionMethod::Interpreted => {
+			// Wasmi doesn't have any need in a cache directory.
+			//
+			// We drop the cache_path here to silence warnings that cache_path is not used if compiling
+			// without the `wasmtime` flag.
+			drop(cache_path);
+
 			sc_executor_wasmi::create_runtime(
 				code,
 				heap_pages,
 				host_functions,
-				allow_missing_func_imports
-			).map(|runtime| -> Arc<dyn WasmModule> { Arc::new(runtime) }),
+				allow_missing_func_imports,
+			)
+			.map(|runtime| -> Arc<dyn WasmModule> { Arc::new(runtime) })
+		}
 		#[cfg(feature = "wasmtime")]
 		WasmExecutionMethod::Compiled =>
 			sc_executor_wasmtime::create_runtime(
 				code,
 				heap_pages,
 				host_functions,
-				allow_missing_func_imports
+				allow_missing_func_imports,
+				cache_path,
 			).map(|runtime| -> Arc<dyn WasmModule> { Arc::new(runtime) }),
 	}
 }
@@ -319,6 +339,7 @@ fn create_versioned_wasm_runtime(
 	host_functions: Vec<&'static dyn Function>,
 	allow_missing_func_imports: bool,
 	max_instances: usize,
+	cache_path: Option<&Path>,
 ) -> Result<VersionedRuntime, WasmError> {
 	#[cfg(not(target_os = "unknown"))]
 	let time = std::time::Instant::now();
@@ -328,6 +349,7 @@ fn create_versioned_wasm_runtime(
 		&code,
 		host_functions,
 		allow_missing_func_imports,
+		cache_path,
 	)?;
 
 	// Call to determine runtime version.

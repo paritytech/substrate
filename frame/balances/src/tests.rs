@@ -26,7 +26,7 @@ macro_rules! decl_tests {
 		use crate::*;
 		use sp_runtime::{FixedPointNumber, traits::{SignedExtension, BadOrigin}};
 		use frame_support::{
-			assert_noop, assert_storage_noop, assert_ok, assert_err,
+			assert_noop, assert_storage_noop, assert_ok, assert_err, StorageValue,
 			traits::{
 				LockableCurrency, LockIdentifier, WithdrawReasons,
 				Currency, ReservableCurrency, ExistenceRequirement::AllowDeath
@@ -469,7 +469,7 @@ macro_rules! decl_tests {
 				assert_ok!(Balances::repatriate_reserved(&1, &2, 41, Status::Free), 0);
 				assert_eq!(
 					last_event(),
-					Event::pallet_balances(RawEvent::ReserveRepatriated(1, 2, 41, Status::Free)),
+					Event::pallet_balances(crate::Event::ReserveRepatriated(1, 2, 41, Status::Free)),
 				);
 				assert_eq!(Balances::reserved_balance(1), 69);
 				assert_eq!(Balances::free_balance(1), 0);
@@ -688,7 +688,7 @@ macro_rules! decl_tests {
 
 					assert_eq!(
 						last_event(),
-						Event::pallet_balances(RawEvent::Reserved(1, 10)),
+						Event::pallet_balances(crate::Event::Reserved(1, 10)),
 					);
 
 					System::set_block_number(3);
@@ -696,7 +696,7 @@ macro_rules! decl_tests {
 
 					assert_eq!(
 						last_event(),
-						Event::pallet_balances(RawEvent::Unreserved(1, 5)),
+						Event::pallet_balances(crate::Event::Unreserved(1, 5)),
 					);
 
 					System::set_block_number(4);
@@ -705,7 +705,7 @@ macro_rules! decl_tests {
 					// should only unreserve 5
 					assert_eq!(
 						last_event(),
-						Event::pallet_balances(RawEvent::Unreserved(1, 5)),
+						Event::pallet_balances(crate::Event::Unreserved(1, 5)),
 					);
 				});
 		}
@@ -722,8 +722,8 @@ macro_rules! decl_tests {
 						events(),
 						[
 							Event::frame_system(system::Event::NewAccount(1)),
-							Event::pallet_balances(RawEvent::Endowed(1, 100)),
-							Event::pallet_balances(RawEvent::BalanceSet(1, 100, 0)),
+							Event::pallet_balances(crate::Event::Endowed(1, 100)),
+							Event::pallet_balances(crate::Event::BalanceSet(1, 100, 0)),
 						]
 					);
 
@@ -732,7 +732,7 @@ macro_rules! decl_tests {
 					assert_eq!(
 						events(),
 						[
-							Event::pallet_balances(RawEvent::DustLost(1, 99)),
+							Event::pallet_balances(crate::Event::DustLost(1, 99)),
 							Event::frame_system(system::Event::KilledAccount(1))
 						]
 					);
@@ -751,8 +751,8 @@ macro_rules! decl_tests {
 						events(),
 						[
 							Event::frame_system(system::Event::NewAccount(1)),
-							Event::pallet_balances(RawEvent::Endowed(1, 100)),
-							Event::pallet_balances(RawEvent::BalanceSet(1, 100, 0)),
+							Event::pallet_balances(crate::Event::Endowed(1, 100)),
+							Event::pallet_balances(crate::Event::BalanceSet(1, 100, 0)),
 						]
 					);
 
