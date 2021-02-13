@@ -205,7 +205,7 @@ where
 	UnsignedValidator: ValidateUnsigned<Call = CallOf<Block::Extrinsic, Context>>,
 {
 	/// Execute all `OnRuntimeUpgrade` of this runtime, and return the aggregate weight.
-	pub fn do_on_runtime_upgrade() -> frame_support::weights::Weight {
+	pub fn execute_on_runtime_upgrade() -> frame_support::weights::Weight {
 		let mut weight = 0;
 		weight = weight.saturating_add(
 			<frame_system::Module<System> as OnRuntimeUpgrade>::on_runtime_upgrade(),
@@ -227,7 +227,7 @@ where
 			OnRuntimeUpgrade
 		>::pre_upgrade().expect("pre_upgrade hook failed.");
 
-		let weight = Self::do_on_runtime_upgrade();
+		let weight = Self::execute_on_runtime_upgrade();
 
 		<
 			(frame_system::Module::<System>, COnRuntimeUpgrade, AllModules)
@@ -267,7 +267,7 @@ where
 	) {
 		let mut weight = 0;
 		if Self::runtime_upgraded() {
-			weight = weight.saturating_add(Self::do_on_runtime_upgrade());
+			weight = weight.saturating_add(Self::execute_on_runtime_upgrade());
 		}
 		<frame_system::Module<System>>::initialize(
 			block_number,
