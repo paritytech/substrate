@@ -374,15 +374,10 @@ macro_rules! decl_tests {
 			<$ext_builder>::default().build().execute_with(|| {
 				let _ = Balances::deposit_creating(&1, 111);
 				assert_ok!(Balances::reserve(&1, 69));
-				let transfer_rval = Balances::transfer(Some(1).into(), 2, 69);
 				assert_noop!(
-					transfer_rval,
+					Balances::transfer(Some(1).into(), 2, 69),
 					Error::<$test, _>::InsufficientBalance,
 				);
-				// assert_noop!(
-				// 	Balances::transfer(Some(1).into(), 2, 69),
-				// 	Error::<$test, _>::InsufficientBalance,
-				// );
 			});
 		}
 
@@ -601,10 +596,9 @@ macro_rules! decl_tests {
 		fn transfer_keep_alive_works() {
 			<$ext_builder>::default().existential_deposit(1).build().execute_with(|| {
 				let _ = Balances::deposit_creating(&1, 100);
-				let transfer_rval = Balances::transfer_keep_alive(Some(1).into(), 2, 100);
 				assert_noop!(
-					transfer_rval,
-					Error::<$test, _>::KeepAlive
+					Balances::transfer_keep_alive(Some(1).into(), 2, 100),
+					Error::<$test, _>::KeepAlive,
 				);
 				assert_eq!(Balances::total_balance(&1), 100);
 				assert_eq!(Balances::total_balance(&2), 0);
