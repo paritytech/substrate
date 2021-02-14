@@ -149,8 +149,8 @@
 
 #[macro_use]
 mod tests;
-mod tests_local;
-mod tests_composite;
+// mod tests_local;
+// mod tests_composite;
 mod tests_reentrancy;
 mod benchmarking;
 pub mod weights;
@@ -1404,7 +1404,6 @@ impl<T: Config<I>, I: 'static> ReservableCurrency<T::AccountId> for Pallet<T, I>
 		Self::deposit_event(Event::ReserveRepatriated(slashed.clone(), beneficiary.clone(), actual, status));
 		Ok(value - actual)
 	}
-
 }
 
 impl<T: Config<I>, I: 'static> LockableCurrency<T::AccountId> for Pallet<T, I>

@@ -165,30 +165,58 @@ impl ExtBuilder {
 decl_tests!{ Test, ExtBuilder, EXISTENTIAL_DEPOSIT }
 
 #[test]
-fn no_reentrancy_issue() {
+fn transfer_dust_removal_tst1_should_work() {
 	ExtBuilder::default()
 		.existential_deposit(100)
 		.build()
 		.execute_with(|| {
+			// Verification of reentrancy in dust removal
 			assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, 1000, 0));
 			assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 2, 500, 0));
 			assert_ok!(Balances::transfer(RawOrigin::Signed(2).into(), 3, 450));
 			assert_eq!(Balances::free_balance(&3), 450);
 			assert_eq!(Balances::free_balance(&2), 0);
 			assert_eq!(Balances::free_balance(&1), 1050);
-		});
+		}
+	);
 }
 
 #[test]
-fn has_reentrancy_issue() {
+fn transfer_dust_removal_tst2_should_work() {
 	ExtBuilder::default()
 		.existential_deposit(100)
 		.build()
 		.execute_with(|| {
+			// Verification of reentrancy in dust removal
 			assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, 1000, 0));
 			assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 2, 500, 0));
 			assert_ok!(Balances::transfer(RawOrigin::Signed(2).into(), 1, 450));
 			assert_eq!(Balances::free_balance(&2), 0);
 			assert_eq!(Balances::free_balance(&1), 1500);
-		});
+		}
+	);
+}
+
+
+#[test]
+fn repatriating_reserved_balance_dust_removal_should_work() {
+	ExtBuilder::default()
+		.existential_deposit(100)
+		.build()
+		.execute_with(|| {
+			// Verification of reentrancy in dust removal
+			let _ = Balances::deposit_creating(&1, 1000);
+			let _ = Balances::deposit_creating(&2, 500);
+			assert_ok!(Balances::reserve(&2, 450));
+			assert_ok!(Balances::repatriate_reserved(&2, &1, 450, Status::Free), 0);
+			assert_eq!(
+				last_event(),
+				Event::pallet_balances(crate::Event::ReserveRepatriated(2, 1, 450, Status::Free)),
+			);
+			assert_eq!(Balances::reserved_balance(2), 0);
+			assert_eq!(Balances::free_balance(2), 0);
+			assert_eq!(Balances::reserved_balance(1), 0);
+			assert_eq!(Balances::free_balance(1), 1500);
+		}
+	);
 }
