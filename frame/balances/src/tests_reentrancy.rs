@@ -24,39 +24,30 @@ use sp_runtime::{
 	testing::Header,
 };
 use sp_core::H256;
-use frame_support::{impl_outer_origin, impl_outer_event, parameter_types, traits::OnUnbalanced};
-use frame_support::weights::{DispatchInfo, IdentityFee};
-use pallet_transaction_payment::CurrencyAdapter;
-use crate::*;
-use sp_runtime::{FixedPointNumber, traits::{SignedExtension, BadOrigin}};
-use frame_support::{
-	assert_noop, assert_ok, assert_err,
-	traits::{
-		LockableCurrency, LockIdentifier, WithdrawReasons,
-		Currency, ReservableCurrency, ExistenceRequirement::AllowDeath, StoredMap
-	}
+use sp_io;
+use frame_support::parameter_types;
+use frame_support::traits::StorageMapShim;
+use frame_support::weights::{Weight, DispatchInfo, IdentityFee};
+use crate::{
+	self as pallet_balances,
+	Module, Config, decl_tests,
 };
-use frame_system::RawOrigin;
+use pallet_transaction_payment::CurrencyAdapter;
 
-use frame_system as system;
-impl_outer_origin!{
-	pub enum Origin for Test {}
-}
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
 
-mod balances {
-	pub use crate::Event;
-}
-
-impl_outer_event! {
-	pub enum Event for Test {
-		system<T>,
-		balances<T>,
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
 	}
-}
+);
 
-// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
@@ -71,7 +62,7 @@ impl frame_system::Config for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = ();
+	type Call = Call;
 	type Hash = H256;
 	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
@@ -80,8 +71,8 @@ impl frame_system::Config for Test {
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
-	type PalletInfo = ();
-	type AccountData = super::AccountData<u64>;
+	type PalletInfo = PalletInfo;
+	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
@@ -111,7 +102,12 @@ impl Config for Test {
 	type DustRemoval = OnDustRemoval;
 	type Event = Event;
 	type ExistentialDeposit = ExistentialDeposit;
-	type AccountStore = system::Module<Test>;
+	type AccountStore = StorageMapShim<
+		super::Account<Test>,
+		system::Provider<Test>,
+		u64,
+		super::AccountData<u64>,
+	>;
 	type MaxLocks = MaxLocks;
 	type WeightInfo = ();
 }
@@ -133,14 +129,31 @@ impl ExtBuilder {
 		self.existential_deposit = existential_deposit;
 		self
 	}
+	pub fn monied(mut self, monied: bool) -> Self {
+		self.monied = monied;
+		if self.existential_deposit == 0 {
+			self.existential_deposit = 1;
+		}
+		self
+	}
 	pub fn set_associated_consts(&self) {
 		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
 		self.set_associated_consts();
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		GenesisConfig::<Test> {
-			balances: vec![],
+		pallet_balances::GenesisConfig::<Test> {
+			balances: if self.monied {
+				vec![
+					(1, 10 * self.existential_deposit),
+					(2, 20 * self.existential_deposit),
+					(3, 30 * self.existential_deposit),
+					(4, 40 * self.existential_deposit),
+					(12, 10 * self.existential_deposit)
+				]
+			} else {
+				vec![]
+			},
 		}.assimilate_storage(&mut t).unwrap();
 
 		let mut ext = sp_io::TestExternalities::new(t);
@@ -149,8 +162,7 @@ impl ExtBuilder {
 	}
 }
 
-pub type System = frame_system::Module<Test>;
-pub type Balances = Module<Test>;
+decl_tests!{ Test, ExtBuilder, EXISTENTIAL_DEPOSIT }
 
 #[test]
 fn no_reentrancy_issue() {

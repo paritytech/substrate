@@ -217,7 +217,6 @@ fn should_submit_signed_twice_from_all_accounts() {
 #[test]
 fn submitted_transaction_should_be_valid() {
 	use codec::Encode;
-	use frame_support::storage::StorageMap;
 	use sp_runtime::transaction_validity::{TransactionSource, TransactionTag};
 	use sp_runtime::traits::StaticLookup;
 
@@ -253,7 +252,7 @@ fn submitted_transaction_should_be_valid() {
 		let author = extrinsic.signature.clone().unwrap().0;
 		let address = Indices::lookup(author).unwrap();
 		let data = pallet_balances::AccountData { free: 5_000_000_000_000, ..Default::default() };
-		let account = frame_system::AccountInfo { nonce: 0, refcount: 0, data };
+		let account = frame_system::AccountInfo { nonce: 0, consumers: 0, providers: 0, data };
 		<frame_system::Account<Runtime>>::insert(&address, account);
 
 		// check validity

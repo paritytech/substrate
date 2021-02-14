@@ -41,8 +41,6 @@ EOT
 git config --global user.name 'CI system'
 git config --global user.email '<>'
 
-cargo install -f --version 0.2.0 diener
-
 # Merge master into our branch before building Polkadot to make sure we don't miss
 # any commits that are required by Polkadot.
 git fetch --depth 100 origin
@@ -52,6 +50,8 @@ git merge origin/master
 # NOTE: we need to pull enough commits to be able to find a common
 # ancestor for successfully performing merges below.
 git clone --depth 20 https://github.com/paritytech/polkadot.git
+
+cargo install -f diener
 
 cd polkadot
 
@@ -69,8 +69,8 @@ then
   pr_body="$(sed -n -r 's/^[[:space:]]+"body": (".*")[^"]+$/\1/p' "${pr_data_file}")"
 
   pr_companion="$(echo "${pr_body}" | sed -n -r \
-      -e 's;^.*polkadot companion: paritytech/polkadot#([0-9]+).*$;\1;p' \
-      -e 's;^.*polkadot companion: https://github.com/paritytech/polkadot/pull/([0-9]+).*$;\1;p' \
+      -e 's;^.*[Cc]ompanion.*paritytech/polkadot#([0-9]+).*$;\1;p' \
+      -e 's;^.*[Cc]ompanion.*https://github.com/paritytech/polkadot/pull/([0-9]+).*$;\1;p' \
     | tail -n 1)"
 
   if [ "${pr_companion}" ]
@@ -87,9 +87,8 @@ else
   boldprint "this is not a pull request - building polkadot:master"
 fi
 
-cd ..
-$CARGO_HOME/bin/diener --substrate --branch $CI_COMMIT_REF_NAME --git https://gitlab.parity.io/parity/substrate.git --path polkadot
-cd polkadot
+# Patch all Substrate crates in Polkadot
+diener patch --crates-to-patch ../ --substrate
 
 # Test Polkadot pr or master branch with this Substrate commit.
 cargo update -p sp-io

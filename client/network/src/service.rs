@@ -38,7 +38,7 @@ use crate::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
 	},
 	on_demand_layer::AlwaysBadChecker,
-	light_client_handler,
+	light_client_requests,
 	protocol::{
 		self,
 		NotifsHandlerError,
@@ -50,6 +50,7 @@ use crate::{
 		sync::SyncState,
 	},
 	transport, ReputationChange,
+	bitswap::Bitswap,
 };
 use futures::{channel::oneshot, prelude::*};
 use libp2p::{PeerId, multiaddr, Multiaddr};
@@ -82,8 +83,11 @@ use sp_runtime::traits::{Block as BlockT, NumberFor};
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use std::{
 	borrow::Cow,
+	cmp,
 	collections::{HashMap, HashSet},
+	convert::TryFrom as _,
 	fs,
+	iter,
 	marker::PhantomData,
 	num:: NonZeroUsize,
 	pin::Pin,
@@ -95,7 +99,7 @@ use std::{
 	task::Poll,
 };
 
-pub use behaviour::{ResponseFailure, InboundFailure, RequestFailure, OutboundFailure};
+pub use behaviour::{ResponseFailure, InboundFailure, RequestFailure, OutboundFailure, IfDisconnected};
 
 mod metrics;
 mod out_events;
@@ -245,17 +249,17 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
 
 		// Build the swarm.
+		let client = params.chain.clone();
 		let (mut swarm, bandwidth): (Swarm<B, H>, _) = {
 			let user_agent = format!(
 				"{} ({})",
 				params.network_config.client_version,
 				params.network_config.node_name
 			);
-			let light_client_handler = {
-				let config = light_client_handler::Config::new(&params.protocol_id);
-				light_client_handler::LightClientHandler::new(
-					config,
-					params.chain,
+
+			let light_client_request_sender = {
+				light_client_requests::sender::LightClientRequestSender::new(
+					&params.protocol_id,
 					checker,
 					peerset_handle.clone(),
 				)
@@ -266,6 +270,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				config.with_user_defined(known_addresses);
 				config.discovery_limit(u64::from(params.network_config.default_peers_set.out_peers) + 15);
 				config.add_protocol(params.protocol_id.clone());
+				config.with_dht_random_walk(params.network_config.enable_dht_random_walk);
 				config.allow_non_globals_in_dht(params.network_config.allow_non_globals_in_dht);
 				config.use_kademlia_disjoint_query_paths(params.network_config.kademlia_disjoint_query_paths);
 
@@ -283,15 +288,65 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				config
 			};
 
+			let (transport, bandwidth) = {
+				let (config_mem, config_wasm) = match params.network_config.transport {
+					TransportConfig::MemoryOnly => (true, None),
+					TransportConfig::Normal { wasm_external_transport, .. } =>
+						(false, wasm_external_transport)
+				};
+
+				// The yamux buffer size limit is configured to be equal to the maximum frame size
+				// of all protocols. 10 bytes are added to each limit for the length prefix that
+				// is not included in the upper layer protocols limit but is still present in the
+				// yamux buffer. These 10 bytes correspond to the maximum size required to encode
+				// a variable-length-encoding 64bits number. In other words, we make the
+				// assumption that no notification larger than 2^64 will ever be sent.
+				let yamux_maximum_buffer_size = {
+					let requests_max = params.network_config
+						.request_response_protocols.iter()
+						.map(|cfg| usize::try_from(cfg.max_request_size).unwrap_or(usize::max_value()));
+					let responses_max = params.network_config
+						.request_response_protocols.iter()
+						.map(|cfg| usize::try_from(cfg.max_response_size).unwrap_or(usize::max_value()));
+					let notifs_max = params.network_config
+						.extra_sets.iter()
+						.map(|cfg| usize::try_from(cfg.max_notification_size).unwrap_or(usize::max_value()));
+
+					// A "default" max is added to cover all the other protocols: ping, identify,
+					// kademlia, block announces, and transactions.
+					let default_max = cmp::max(
+						1024 * 1024,
+						usize::try_from(protocol::BLOCK_ANNOUNCES_TRANSACTIONS_SUBSTREAM_SIZE)
+							.unwrap_or(usize::max_value())
+					);
+
+					iter::once(default_max)
+						.chain(requests_max).chain(responses_max).chain(notifs_max)
+						.max().expect("iterator known to always yield at least one element; qed")
+						.saturating_add(10)
+				};
+
+				transport::build_transport(
+					local_identity,
+					config_mem,
+					config_wasm,
+					params.network_config.yamux_window_size,
+					yamux_maximum_buffer_size
+				)
+			};
+
 			let behaviour = {
+				let bitswap = if params.network_config.ipfs_server { Some(Bitswap::new(client)) } else { None };
 				let result = Behaviour::new(
 					protocol,
 					params.role,
 					user_agent,
 					local_public,
-					light_client_handler,
+					light_client_request_sender,
 					discovery_config,
 					params.block_request_protocol_config,
+					bitswap,
+					params.light_client_request_protocol_config,
 					params.network_config.request_response_protocols,
 				);
 
@@ -305,14 +360,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				}
 			};
 
-			let (transport, bandwidth) = {
-				let (config_mem, config_wasm) = match params.network_config.transport {
-					TransportConfig::MemoryOnly => (true, None),
-					TransportConfig::Normal { wasm_external_transport, .. } =>
-						(false, wasm_external_transport)
-				};
-				transport::build_transport(local_identity, config_mem, config_wasm)
-			};
 			let mut builder = SwarmBuilder::new(transport, behaviour, local_peer_id.clone())
 				.connection_limits(ConnectionLimits::default()
 					.with_max_established_per_peer(Some(crate::MAX_CONNECTIONS_PER_PEER as u32))
@@ -628,8 +675,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 				// Notification silently discarded, as documented.
 				log::debug!(
 					target: "sub-libp2p",
-					"Attempted to send notification on missing or closed substream: {:?}",
-					protocol,
+					"Attempted to send notification on missing or closed substream: {}, {:?}",
+					target, protocol,
 				);
 				return;
 			}
@@ -769,9 +816,10 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// notifications should remain the default ways of communicating information. For example, a
 	/// peer can announce something through a notification, after which the recipient can obtain
 	/// more information by performing a request.
-	/// As such, this function is meant to be called only with peers we are already connected to.
-	/// Calling this method with a `target` we are not connected to will *not* attempt to connect
-	/// to said peer.
+	/// As such, call this function with `IfDisconnected::ImmediateError` for `connect`. This way you
+	/// will get an error immediately for disconnected peers, instead of waiting for a potentially very
+	/// long connection attempt, which would suggest that something is wrong anyway, as you are
+	/// supposed to be connected because of the notification protocol.
 	///
 	/// No limit or throttling of concurrent outbound requests per peer and protocol are enforced.
 	/// Such restrictions, if desired, need to be enforced at the call site(s).
@@ -783,15 +831,12 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		&self,
 		target: PeerId,
 		protocol: impl Into<Cow<'static, str>>,
-		request: Vec<u8>
+		request: Vec<u8>,
+		connect: IfDisconnected,
 	) -> Result<Vec<u8>, RequestFailure> {
 		let (tx, rx) = oneshot::channel();
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::Request {
-			target,
-			protocol: protocol.into(),
-			request,
-			pending_response: tx
-		});
+
+		self.start_request(target, protocol, request, tx, connect);
 
 		match rx.await {
 			Ok(v) => v,
@@ -800,6 +845,32 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			// closed, and we legitimately report this situation as a "ConnectionClosed".
 			Err(_) => Err(RequestFailure::Network(OutboundFailure::ConnectionClosed)),
 		}
+	}
+
+	/// Variation of `request` which starts a request whose response is delivered on a provided channel.
+	///
+	/// Instead of blocking and waiting for a reply, this function returns immediately, sending
+	/// responses via the passed in sender. This alternative API exists to make it easier to
+	/// integrate with message passing APIs.
+	///
+	/// Keep in mind that the connected receiver might receive a `Canceled` event in case of a
+	/// closing connection. This is expected behaviour. With `request` you would get a
+	/// `RequestFailure::Network(OutboundFailure::ConnectionClosed)` in that case.
+	pub fn start_request(
+		&self,
+		target: PeerId,
+		protocol: impl Into<Cow<'static, str>>,
+		request: Vec<u8>,
+		tx: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
+		connect: IfDisconnected,
+	) {
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::Request {
+			target,
+			protocol: protocol.into(),
+			request,
+			pending_response: tx,
+			connect,
+		});
 	}
 
 	/// You may call this when new transactons are imported by the transaction pool.
@@ -822,7 +893,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	///
 	/// In chain-based consensus, we often need to make sure non-best forks are
 	/// at least temporarily synced. This function forces such an announcement.
-	pub fn announce_block(&self, hash: B::Hash, data: Vec<u8>) {
+	pub fn announce_block(&self, hash: B::Hash, data: Option<Vec<u8>>) {
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::AnnounceBlock(hash, data));
 	}
 
@@ -1200,7 +1271,7 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 	PropagateTransaction(H),
 	PropagateTransactions,
 	RequestJustification(B::Hash, NumberFor<B>),
-	AnnounceBlock(B::Hash, Vec<u8>),
+	AnnounceBlock(B::Hash, Option<Vec<u8>>),
 	GetValue(record::Key),
 	PutValue(record::Key, Vec<u8>),
 	AddKnownAddress(PeerId, Multiaddr),
@@ -1219,6 +1290,7 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 		protocol: Cow<'static, str>,
 		request: Vec<u8>,
 		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
+		connect: IfDisconnected,
 	},
 	DisconnectPeer(PeerId, Cow<'static, str>),
 	NewBestBlockImported(B::Hash, NumberFor<B>),
@@ -1244,7 +1316,7 @@ pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT> {
 	/// Messages from the [`NetworkService`] that must be processed.
 	from_service: TracingUnboundedReceiver<ServiceToWorkerMsg<B, H>>,
 	/// Receiver for queries from the light client that must be processed.
-	light_client_rqs: Option<TracingUnboundedReceiver<light_client_handler::Request<B>>>,
+	light_client_rqs: Option<TracingUnboundedReceiver<light_client_requests::sender::Request<B>>>,
 	/// Senders for events that happen on the network.
 	event_streams: out_events::OutChannels,
 	/// Prometheus network metrics.
@@ -1270,10 +1342,14 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 		// Check for new incoming light client requests.
 		if let Some(light_client_rqs) = this.light_client_rqs.as_mut() {
 			while let Poll::Ready(Some(rq)) = light_client_rqs.poll_next_unpin(cx) {
-				// This can error if there are too many queued requests already.
-				if this.network_service.light_client_request(rq).is_err() {
-					log::warn!("Couldn't start light client request: too many pending requests");
+				let result = this.network_service.light_client_request(rq);
+				match result {
+					Ok(()) => {},
+					Err(light_client_requests::sender::SendRequestError::TooManyRequests) => {
+						log::warn!("Couldn't start light client request: too many pending requests");
+					}
 				}
+
 				if let Some(metrics) = this.metrics.as_ref() {
 					metrics.issued_light_requests.inc();
 				}
@@ -1338,8 +1414,8 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					this.network_service.user_protocol_mut().set_sync_fork_request(peer_ids, &hash, number),
 				ServiceToWorkerMsg::EventStream(sender) =>
 					this.event_streams.push(sender),
-				ServiceToWorkerMsg::Request { target, protocol, request, pending_response } => {
-					this.network_service.send_request(&target, &protocol, request, pending_response);
+				ServiceToWorkerMsg::Request { target, protocol, request, pending_response, connect } => {
+					this.network_service.send_request(&target, &protocol, request, pending_response, connect);
 				},
 				ServiceToWorkerMsg::DisconnectPeer(who, protocol_name) =>
 					this.network_service.user_protocol_mut().disconnect_peer(&who, &protocol_name),

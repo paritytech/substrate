@@ -16,339 +16,482 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Telemetry utilities.
+//! Substrate's client telemetry is a part of substrate that allows ingesting telemetry data
+//! with for example [Polkadot telemetry](https://github.com/paritytech/substrate-telemetry).
 //!
-//! Calling `init_telemetry` registers a global `slog` logger using `slog_scope::set_global_logger`.
-//! After that, calling `slog_scope::with_logger` will return a logger that sends information to
-//! the telemetry endpoints. The `telemetry!` macro is a short-cut for calling
-//! `slog_scope::with_logger` followed with `slog_log!`.
+//! It works using Tokio's [tracing](https://github.com/tokio-rs/tracing/) library. The telemetry
+//! information uses tracing's logging to report the telemetry data which is then retrieved by a
+//! tracing `Layer`. This layer will then send the data through an asynchronous channel to a
+//! background task called [`TelemetryWorker`] which will send the information to the configured
+//! remote telemetry servers.
 //!
-//! Note that you are supposed to only ever use `telemetry!` and not `slog_scope::with_logger` at
-//! the moment. Substrate may eventually be reworked to get proper `slog` support, including sending
-//! information to the telemetry.
+//! If multiple substrate nodes are running in the same process, it uses a `tracing::Span` to
+//! identify which substrate node is reporting the telemetry. Every task spawned using sc-service's
+//! `TaskManager` automatically inherit this span.
 //!
-//! The [`Telemetry`] struct implements `Stream` and must be polled regularly (or sent to a
-//! background thread/task) in order for the telemetry to properly function. Dropping the object
-//! will also deregister the global logger and replace it with a logger that discards messages.
-//! The `Stream` generates [`TelemetryEvent`]s.
-//!
-//! > **Note**: Cloning the [`Telemetry`] and polling from multiple clones has an unspecified behaviour.
-//!
-//! # Example
-//!
-//! ```no_run
-//! use futures::prelude::*;
-//!
-//! let telemetry = sc_telemetry::init_telemetry(sc_telemetry::TelemetryConfig {
-//! 	endpoints: sc_telemetry::TelemetryEndpoints::new(vec![
-//! 		// The `0` is the maximum verbosity level of messages to send to this endpoint.
-//! 		("wss://example.com".into(), 0)
-//! 	]).expect("Invalid URL or multiaddr provided"),
-//! 	// Can be used to pass an external implementation of WebSockets.
-//! 	wasm_external_transport: None,
-//! });
-//!
-//! // The `telemetry` object implements `Stream` and must be processed.
-//! std::thread::spawn(move || {
-//! 	futures::executor::block_on(telemetry.for_each(|_| future::ready(())));
-//! });
-//!
-//! // Sends a message on the telemetry.
-//! sc_telemetry::telemetry!(sc_telemetry::SUBSTRATE_INFO; "test";
-//! 	"foo" => "bar",
-//! )
-//! ```
-//!
+//! Substrate's nodes initialize/register with the [`TelemetryWorker`] using a [`TelemetryHandle`].
+//! This handle can be cloned and passed around. It uses an asynchronous channel to communicate with
+//! the running [`TelemetryWorker`] dedicated to registration. Registering can happen at any point
+//! in time during the process execution.
 
-use futures::{prelude::*, channel::mpsc};
-use libp2p::{Multiaddr, wasm_ext};
+#![warn(missing_docs)]
+
+use futures::{channel::mpsc, prelude::*};
+use libp2p::Multiaddr;
 use log::{error, warn};
-use parking_lot::Mutex;
-use serde::{Serialize, Deserialize, Deserializer};
-use std::{pin::Pin, sync::Arc, task::{Context, Poll}, time::Duration};
-use wasm_timer::Instant;
+use serde::Serialize;
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
+use std::collections::HashMap;
+use tracing::Id;
 
 pub use libp2p::wasm_ext::ExtTransport;
-pub use slog_scope::with_logger;
-pub use slog;
+pub use serde_json;
+pub use tracing;
 
-mod async_record;
-mod worker;
+mod endpoints;
+mod layer;
+mod node;
+mod transport;
 
-/// Configuration for telemetry.
-pub struct TelemetryConfig {
-	/// Collection of telemetry WebSocket servers with a corresponding verbosity level.
-	pub endpoints: TelemetryEndpoints,
+pub use endpoints::*;
+pub use layer::*;
+use node::*;
+use transport::*;
 
-	/// Optional external implementation of a libp2p transport. Used in WASM contexts where we need
-	/// some binding between the networking provided by the operating system or environment and
-	/// libp2p.
-	///
-	/// This parameter exists whatever the target platform is, but it is expected to be set to
-	/// `Some` only when compiling for WASM.
-	///
-	/// > **Important**: Each individual call to `write` corresponds to one message. There is no
-	/// >                internal buffering going on. In the context of WebSockets, each `write`
-	/// >                must be one individual WebSockets frame.
-	pub wasm_external_transport: Option<wasm_ext::ExtTransport>,
+/// Substrate DEBUG log level.
+pub const SUBSTRATE_DEBUG: u8 = 9;
+/// Substrate INFO log level.
+pub const SUBSTRATE_INFO: u8 = 0;
+
+/// Consensus TRACE log level.
+pub const CONSENSUS_TRACE: u8 = 9;
+/// Consensus DEBUG log level.
+pub const CONSENSUS_DEBUG: u8 = 5;
+/// Consensus WARN log level.
+pub const CONSENSUS_WARN: u8 = 4;
+/// Consensus INFO log level.
+pub const CONSENSUS_INFO: u8 = 1;
+
+pub(crate) type TelemetryMessage = (Id, u8, String);
+
+/// A handle representing a telemetry span, with the capability to enter the span if it exists.
+#[derive(Debug, Clone)]
+pub struct TelemetrySpan(tracing::Span);
+
+impl TelemetrySpan {
+	/// Enters this span, returning a guard that will exit the span when dropped.
+	pub fn enter(&self) -> tracing::span::Entered {
+		self.0.enter()
+	}
+
+	/// Constructs a new [`TelemetrySpan`].
+	pub fn new() -> Self {
+		Self(tracing::error_span!(TELEMETRY_LOG_SPAN))
+	}
+
+	/// Return a clone of the underlying `tracing::Span` instance.
+	pub fn span(&self) -> tracing::Span {
+		self.0.clone()
+	}
 }
 
-/// List of telemetry servers we want to talk to. Contains the URL of the server, and the
-/// maximum verbosity level.
+/// Message sent when the connection (re-)establishes.
+#[derive(Debug, Serialize)]
+pub struct ConnectionMessage {
+	/// Node's name.
+	pub name: String,
+	/// Node's implementation.
+	pub implementation: String,
+	/// Node's version.
+	pub version: String,
+	/// Node's configuration.
+	pub config: String,
+	/// Node's chain.
+	pub chain: String,
+	/// Node's genesis hash.
+	pub genesis_hash: String,
+	/// Node is an authority.
+	pub authority: bool,
+	/// Node's startup time.
+	pub startup_time: String,
+	/// Node's network ID.
+	pub network_id: String,
+}
+
+/// Telemetry worker.
 ///
-/// The URL string can be either a URL or a multiaddress.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct TelemetryEndpoints(
-	#[serde(deserialize_with = "url_or_multiaddr_deser")]
-	Vec<(Multiaddr, u8)>
-);
-
-/// Custom deserializer for TelemetryEndpoints, used to convert urls or multiaddr to multiaddr.
-fn url_or_multiaddr_deser<'de, D>(deserializer: D) -> Result<Vec<(Multiaddr, u8)>, D::Error>
-	where D: Deserializer<'de>
-{
-	Vec::<(String, u8)>::deserialize(deserializer)?
-		.iter()
-		.map(|e| Ok((url_to_multiaddr(&e.0)
-		.map_err(serde::de::Error::custom)?, e.1)))
-		.collect()
-}
-
-impl TelemetryEndpoints {
-	pub fn new(endpoints: Vec<(String, u8)>) -> Result<Self, libp2p::multiaddr::Error> {
-		let endpoints: Result<Vec<(Multiaddr, u8)>, libp2p::multiaddr::Error> = endpoints.iter()
-			.map(|e| Ok((url_to_multiaddr(&e.0)?, e.1)))
-			.collect();
-		endpoints.map(Self)
-	}
-}
-
-impl TelemetryEndpoints {
-	/// Return `true` if there are no telemetry endpoints, `false` otherwise.
-	pub fn is_empty(&self) -> bool {
-		self.0.is_empty()
-	}
-}
-
-/// Parses a WebSocket URL into a libp2p `Multiaddr`.
-fn url_to_multiaddr(url: &str) -> Result<Multiaddr, libp2p::multiaddr::Error> {
-	// First, assume that we have a `Multiaddr`.
-	let parse_error = match url.parse() {
-		Ok(ma) => return Ok(ma),
-		Err(err) => err,
-	};
-
-	// If not, try the `ws://path/url` format.
-	if let Ok(ma) = libp2p::multiaddr::from_url(url) {
-		return Ok(ma)
-	}
-
-	// If we have no clue about the format of that string, assume that we were expecting a
-	// `Multiaddr`.
-	Err(parse_error)
-}
-
-/// Log levels.
-pub const SUBSTRATE_DEBUG: &str = "9";
-pub const SUBSTRATE_INFO: &str = "0";
-
-pub const CONSENSUS_TRACE: &str = "9";
-pub const CONSENSUS_DEBUG: &str = "5";
-pub const CONSENSUS_WARN: &str = "4";
-pub const CONSENSUS_INFO: &str = "1";
-
-/// Telemetry object. Implements `Future` and must be polled regularly.
-/// Contains an `Arc` and can be cloned and pass around. Only one clone needs to be polled
-/// regularly and should be polled regularly.
-/// Dropping all the clones unregisters the telemetry.
-#[derive(Clone)]
-pub struct Telemetry {
-	inner: Arc<Mutex<TelemetryInner>>,
-	/// Slog guard so that we don't get deregistered.
-	_guard: Arc<slog_scope::GlobalLoggerGuard>,
-}
-
-/// Behind the `Mutex` in `Telemetry`.
-///
-/// Note that ideally we wouldn't have to make the `Telemetry` cloneable, as that would remove the
-/// need for a `Mutex`. However there is currently a weird hack in place in `sc-service`
-/// where we extract the telemetry registration so that it continues running during the shutdown
-/// process.
-struct TelemetryInner {
-	/// Worker for the telemetry. `None` if it failed to initialize.
-	worker: Option<worker::TelemetryWorker>,
-	/// Receives log entries for them to be dispatched to the worker.
-	receiver: mpsc::Receiver<async_record::AsyncRecord>,
-}
-
-/// Implements `slog::Drain`.
-struct TelemetryDrain {
-	/// Sends log entries.
-	sender: std::panic::AssertUnwindSafe<mpsc::Sender<async_record::AsyncRecord>>,
-}
-
-/// Initializes the telemetry. See the crate root documentation for more information.
-///
-/// Please be careful to not call this function twice in the same program. The `slog` crate
-/// doesn't provide any way of knowing whether a global logger has already been registered.
-pub fn init_telemetry(config: TelemetryConfig) -> Telemetry {
-	// Build the list of telemetry endpoints.
-	let (endpoints, wasm_external_transport) = (config.endpoints.0, config.wasm_external_transport);
-
-	let (sender, receiver) = mpsc::channel(16);
-	let guard = {
-		let logger = TelemetryDrain { sender: std::panic::AssertUnwindSafe(sender) };
-		let root = slog::Logger::root(slog::Drain::fuse(logger), slog::o!());
-		slog_scope::set_global_logger(root)
-	};
-
-	let worker = match worker::TelemetryWorker::new(endpoints, wasm_external_transport) {
-		Ok(w) => Some(w),
-		Err(err) => {
-			error!(target: "telemetry", "Failed to initialize telemetry worker: {:?}", err);
-			None
-		}
-	};
-
-	Telemetry {
-		inner: Arc::new(Mutex::new(TelemetryInner {
-			worker,
-			receiver,
-		})),
-		_guard: Arc::new(guard),
-	}
-}
-
-/// Event generated when polling the worker.
+/// It should run as a background task using the [`TelemetryWorker::run`] method. This method
+/// will consume the object and any further attempts of initializing a new telemetry through its
+/// handle will fail (without being fatal).
 #[derive(Debug)]
-pub enum TelemetryEvent {
-	/// We have established a connection to one of the telemetry endpoint, either for the first
-	/// time or after having been disconnected earlier.
-	Connected,
+pub struct TelemetryWorker {
+	message_receiver: mpsc::Receiver<TelemetryMessage>,
+	message_sender: mpsc::Sender<TelemetryMessage>,
+	register_receiver: mpsc::UnboundedReceiver<Register>,
+	register_sender: mpsc::UnboundedSender<Register>,
+	transport: WsTrans,
 }
 
-impl Stream for Telemetry {
-	type Item = TelemetryEvent;
+impl TelemetryWorker {
+	pub(crate) fn new(buffer_size: usize, transport: WsTrans) -> Self {
+		let (message_sender, message_receiver) = mpsc::channel(buffer_size);
+		let (register_sender, register_receiver) = mpsc::unbounded();
 
-	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-		let before = Instant::now();
+		Self {
+			message_receiver,
+			message_sender,
+			register_receiver,
+			register_sender,
+			transport,
+		}
+	}
 
-		// Because the `Telemetry` is cloneable, we need to put the actual fields behind a `Mutex`.
-		// However, the user is only ever supposed to poll from one instance of `Telemetry`, while
-		// the other instances are used only for RAII purposes.
-		// We assume that the user is following this advice and therefore that the `Mutex` is only
-		// ever locked once at a time.
-		let mut inner = match self.inner.try_lock() {
-			Some(l) => l,
-			None => {
-				warn!(
-					target: "telemetry",
-					"The telemetry seems to be polled multiple times simultaneously"
-				);
-				// Returning `Pending` here means that we may never get polled again, but this is
-				// ok because we're in a situation where something else is actually currently doing
-				// the polling.
-				return Poll::Pending;
+	/// Get a new [`TelemetryHandle`].
+	///
+	/// This is used when you want to register with the [`TelemetryWorker`].
+	pub fn handle(&self) -> TelemetryHandle {
+		TelemetryHandle {
+			message_sender: self.register_sender.clone(),
+		}
+	}
+
+	/// Get a clone of the channel's `Sender` used to send telemetry events.
+	pub(crate) fn message_sender(&self) -> mpsc::Sender<TelemetryMessage> {
+		self.message_sender.clone()
+	}
+
+	/// Run the telemetry worker.
+	///
+	/// This should be run in a background task.
+	pub async fn run(self) {
+		let Self {
+			mut message_receiver,
+			message_sender: _,
+			mut register_receiver,
+			register_sender: _,
+			transport,
+		} = self;
+
+		let mut node_map: HashMap<Id, Vec<(u8, Multiaddr)>> = HashMap::new();
+		let mut node_pool: HashMap<Multiaddr, _> = HashMap::new();
+
+		loop {
+			futures::select! {
+				message = message_receiver.next() => Self::process_message(
+					message,
+					&mut node_pool,
+					&node_map,
+				).await,
+				init_payload = register_receiver.next() => Self::process_register(
+					init_payload,
+					&mut node_pool,
+					&mut node_map,
+					transport.clone(),
+				).await,
 			}
+		}
+	}
+
+	async fn process_register(
+		input: Option<Register>,
+		node_pool: &mut HashMap<Multiaddr, Node<WsTrans>>,
+		node_map: &mut HashMap<Id, Vec<(u8, Multiaddr)>>,
+		transport: WsTrans,
+	) {
+		let input = input.expect("the stream is never closed; qed");
+
+		match input {
+			Register::Telemetry {
+				id,
+				endpoints,
+				connection_message,
+			} => {
+				let endpoints = endpoints.0;
+
+				let connection_message = match serde_json::to_value(&connection_message) {
+					Ok(serde_json::Value::Object(mut value)) => {
+						value.insert("msg".into(), "system.connected".into());
+						let mut obj = serde_json::Map::new();
+						obj.insert("id".to_string(), id.into_u64().into());
+						obj.insert("payload".to_string(), value.into());
+						Some(obj)
+					}
+					Ok(_) => {
+						unreachable!("ConnectionMessage always serialize to an object; qed")
+					}
+					Err(err) => {
+						log::error!(
+							target: "telemetry",
+							"Could not serialize connection message: {}",
+							err,
+						);
+						None
+					}
+				};
+
+				for (addr, verbosity) in endpoints {
+					log::trace!(
+						target: "telemetry",
+						"Initializing telemetry for: {:?}",
+						addr,
+					);
+					node_map
+						.entry(id.clone())
+						.or_default()
+						.push((verbosity, addr.clone()));
+
+					let node = node_pool.entry(addr.clone()).or_insert_with(|| {
+						Node::new(transport.clone(), addr.clone(), Vec::new(), Vec::new())
+					});
+
+					node.connection_messages.extend(connection_message.clone());
+				}
+			}
+			Register::Notifier {
+				addresses,
+				connection_notifier,
+			} => {
+				for addr in addresses {
+					if let Some(node) = node_pool.get_mut(&addr) {
+						node.telemetry_connection_notifier
+							.push(connection_notifier.clone());
+					} else {
+						log::error!(
+							target: "telemetry",
+							"Received connection notifier for unknown node ({}). This is a bug.",
+							addr,
+						);
+					}
+				}
+			}
+		}
+	}
+
+	// dispatch messages to the telemetry nodes
+	async fn process_message(
+		input: Option<TelemetryMessage>,
+		node_pool: &mut HashMap<Multiaddr, Node<WsTrans>>,
+		node_map: &HashMap<Id, Vec<(u8, Multiaddr)>>,
+	) {
+		let (id, verbosity, message) = input.expect("the stream is never closed; qed");
+
+		let nodes = if let Some(nodes) = node_map.get(&id) {
+			nodes
+		} else {
+			// This is a normal error because the telemetry span is entered before the telemetry
+			// is initialized so it is possible that some messages in the beginning don't get
+			// through.
+			log::trace!(
+				target: "telemetry",
+				"Received telemetry log for unknown id ({:?}): {}",
+				id,
+				message,
+			);
+			return;
 		};
 
-		let mut has_connected = false;
-
-		// The polling pattern is: poll the worker so that it processes its queue, then add one
-		// message from the receiver (if possible), then poll the worker again, and so on.
-		loop {
-			if let Some(worker) = inner.worker.as_mut() {
-				while let Poll::Ready(event) = worker.poll(cx) {
-					// Right now we only have one possible event. This line is here in order to not
-					// forget to handle any possible new event type.
-					let worker::TelemetryWorkerEvent::Connected = event;
-					has_connected = true;
-				}
+		for (node_max_verbosity, addr) in nodes {
+			if verbosity > *node_max_verbosity {
+				log::trace!(
+					target: "telemetry",
+					"Skipping {} for log entry with verbosity {:?}",
+					addr,
+					verbosity,
+				);
+				continue;
 			}
 
-			if let Poll::Ready(Some(log_entry)) = Stream::poll_next(Pin::new(&mut inner.receiver), cx) {
-				if let Some(worker) = inner.worker.as_mut() {
-					log_entry.as_record_values(|rec, val| { let _ = worker.log(rec, val); });
-				}
+			if let Some(node) = node_pool.get_mut(&addr) {
+				let _ = node.send(message.clone()).await;
 			} else {
-				break;
+				log::error!(
+					target: "telemetry",
+					"Received message for unknown node ({}). This is a bug. \
+					Message sent: {}",
+					addr,
+					message,
+				);
 			}
 		}
-
-		if before.elapsed() > Duration::from_millis(200) {
-			warn!(target: "telemetry", "Polling the telemetry took more than 200ms");
-		}
-
-		if has_connected {
-			Poll::Ready(Some(TelemetryEvent::Connected))
-		} else {
-			Poll::Pending
-		}
 	}
 }
 
-impl slog::Drain for TelemetryDrain {
-	type Ok = ();
-	type Err = ();
+/// Handle to the [`TelemetryWorker`] thats allows initializing the telemetry for a Substrate node.
+#[derive(Debug, Clone)]
+pub struct TelemetryHandle {
+	message_sender: mpsc::UnboundedSender<Register>,
+}
 
-	fn log(&self, record: &slog::Record, values: &slog::OwnedKVList) -> Result<Self::Ok, Self::Err> {
-		let before = Instant::now();
+impl TelemetryHandle {
+	/// Initialize the telemetry with the endpoints provided in argument for the current substrate
+	/// node.
+	///
+	/// This method must be called during the substrate node initialization.
+	///
+	/// The `endpoints` argument is a collection of telemetry WebSocket servers with a corresponding
+	/// verbosity level.
+	///
+	/// The `connection_message` argument is a JSON object that is sent every time the connection
+	/// (re-)establishes.
+	pub fn start_telemetry(
+		&mut self,
+		span: TelemetrySpan,
+		endpoints: TelemetryEndpoints,
+		connection_message: ConnectionMessage,
+	) -> TelemetryConnectionNotifier {
+		let Self { message_sender } = self;
 
-		let serialized = async_record::AsyncRecord::from(record, values);
-		// Note: interestingly, `try_send` requires a `&mut` because it modifies some internal value, while `clone()`
-		// is lock-free.
-		if let Err(err) = self.sender.clone().try_send(serialized) {
-			warn!(target: "telemetry", "Ignored telemetry message because of error on channel: {:?}", err);
+		let connection_notifier = TelemetryConnectionNotifier {
+			message_sender: message_sender.clone(),
+			addresses: endpoints.0.iter().map(|(addr, _)| addr.clone()).collect(),
+		};
+
+		match span.0.id() {
+			Some(id) => {
+				match message_sender.unbounded_send(Register::Telemetry {
+					id,
+					endpoints,
+					connection_message,
+				}) {
+					Ok(()) => {}
+					Err(err) => error!(
+						target: "telemetry",
+						"Could not initialize telemetry: \
+						the telemetry is probably already running: {}",
+						err,
+					),
+				}
+			}
+			None => error!(
+				target: "telemetry",
+				"Could not initialize telemetry: the span could not be entered",
+			),
 		}
 
-		if before.elapsed() > Duration::from_millis(50) {
-			warn!(target: "telemetry", "Writing a telemetry log took more than 50ms");
-		}
-
-		Ok(())
+		connection_notifier
 	}
 }
 
-/// Translates to `slog_scope::info`, but contains an additional verbosity
-/// parameter which the log record is tagged with. Additionally the verbosity
-/// parameter is added to the record as a key-value pair.
-#[macro_export]
+/// Used to create a stream of events with only one event: when a telemetry connection
+/// (re-)establishes.
+#[derive(Clone, Debug)]
+pub struct TelemetryConnectionNotifier {
+	message_sender: mpsc::UnboundedSender<Register>,
+	addresses: Vec<Multiaddr>,
+}
+
+impl TelemetryConnectionNotifier {
+	/// Get event stream for telemetry connection established events.
+	///
+	/// This function will return an error if the telemetry has already been started by
+	/// [`TelemetryHandle::start_telemetry`].
+	pub fn on_connect_stream(&self) -> TracingUnboundedReceiver<()> {
+		let (message_sender, message_receiver) = tracing_unbounded("mpsc_telemetry_on_connect");
+		if let Err(err) = self.message_sender.unbounded_send(Register::Notifier {
+			addresses: self.addresses.clone(),
+			connection_notifier: message_sender,
+		}) {
+			error!(
+				target: "telemetry",
+				"Could not create a telemetry connection notifier: \
+				the telemetry is probably already running: {}",
+				err,
+			);
+		}
+		message_receiver
+	}
+}
+
+#[derive(Debug)]
+enum Register {
+	Telemetry {
+		id: Id,
+		endpoints: TelemetryEndpoints,
+		connection_message: ConnectionMessage,
+	},
+	Notifier {
+		addresses: Vec<Multiaddr>,
+		connection_notifier: ConnectionNotifierSender,
+	},
+}
+
+/// Report a telemetry.
+///
+/// Translates to [`tracing::info`], but contains an additional verbosity parameter which the log
+/// record is tagged with. Additionally the verbosity parameter is added to the record as a
+/// key-value pair.
+///
+/// # Example
+///
+/// ```no_run
+/// # use sc_telemetry::*;
+/// # let authority_id = 42_u64;
+/// # let set_id = (43_u64, 44_u64);
+/// # let authorities = vec![45_u64];
+/// telemetry!(CONSENSUS_INFO; "afg.authority_set";
+/// 	"authority_id" => authority_id.to_string(),
+/// 	"authority_set_id" => ?set_id,
+/// 	"authorities" => authorities,
+/// );
+/// ```
+#[macro_export(local_inner_macros)]
 macro_rules! telemetry {
-	 ( $a:expr; $b:expr; $( $t:tt )* ) => {
-		$crate::with_logger(|l| {
-			$crate::slog::slog_info!(l, #$a, $b; $($t)* )
-		})
-	}
+	( $verbosity:expr; $msg:expr; $( $t:tt )* ) => {{
+		let verbosity: u8 = $verbosity;
+		match format_fields_to_json!($($t)*) {
+			Err(err) => {
+				$crate::tracing::error!(
+					target: "telemetry",
+					"Could not serialize value for telemetry: {}",
+					err,
+				);
+			},
+			Ok(mut json) => {
+				// NOTE: the span id will be added later in the JSON for the greater good
+				json.insert("msg".into(), $msg.into());
+				let serialized_json = $crate::serde_json::to_string(&json)
+					.expect("contains only string keys; qed");
+				$crate::tracing::info!(target: $crate::TELEMETRY_LOG_SPAN,
+					verbosity,
+					json = serialized_json.as_str(),
+				);
+			},
+		}
+	}};
 }
 
-#[cfg(test)]
-mod telemetry_endpoints_tests {
-	use libp2p::Multiaddr;
-	use super::TelemetryEndpoints;
-	use super::url_to_multiaddr;
-
-	#[test]
-	fn valid_endpoints() {
-		let endp = vec![("wss://telemetry.polkadot.io/submit/".into(), 3), ("/ip4/80.123.90.4/tcp/5432".into(), 4)];
-		let telem = TelemetryEndpoints::new(endp.clone()).expect("Telemetry endpoint should be valid");
-		let mut res: Vec<(Multiaddr, u8)> = vec![];
-		for (a, b) in endp.iter() {
-			res.push((url_to_multiaddr(a).expect("provided url should be valid"), *b))
-		}
-		assert_eq!(telem.0, res);
-	}
-
-	#[test]
-	fn invalid_endpoints() {
-		let endp = vec![("/ip4/...80.123.90.4/tcp/5432".into(), 3), ("/ip4/no:!?;rlkqre;;::::///tcp/5432".into(), 4)];
-		let telem = TelemetryEndpoints::new(endp);
-		assert!(telem.is_err());
-	}
-
-	#[test]
-	fn valid_and_invalid_endpoints() {
-		let endp = vec![("/ip4/80.123.90.4/tcp/5432".into(), 3), ("/ip4/no:!?;rlkqre;;::::///tcp/5432".into(), 4)];
-		let telem = TelemetryEndpoints::new(endp);
-		assert!(telem.is_err());
-	}
+#[macro_export(local_inner_macros)]
+#[doc(hidden)]
+macro_rules! format_fields_to_json {
+	( $k:literal => $v:expr $(,)? $(, $($t:tt)+ )? ) => {{
+		$crate::serde_json::to_value(&$v)
+			.map(|value| {
+				let mut map = $crate::serde_json::Map::new();
+				map.insert($k.into(), value);
+				map
+			})
+			$(
+				.and_then(|mut prev_map| {
+					format_fields_to_json!($($t)*)
+						.map(move |mut other_map| {
+							prev_map.append(&mut other_map);
+							prev_map
+						})
+				})
+			)*
+	}};
+	( $k:literal => ? $v:expr $(,)? $(, $($t:tt)+ )? ) => {{
+		let mut map = $crate::serde_json::Map::new();
+		map.insert($k.into(), std::format!("{:?}", &$v).into());
+		$crate::serde_json::Result::Ok(map)
+		$(
+			.and_then(|mut prev_map| {
+				format_fields_to_json!($($t)*)
+					.map(move |mut other_map| {
+						prev_map.append(&mut other_map);
+						prev_map
+					})
+			})
+		)*
+	}};
 }

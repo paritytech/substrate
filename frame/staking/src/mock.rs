@@ -18,16 +18,17 @@
 //! Test utilities
 
 use crate::*;
+use crate as staking;
 use frame_support::{
-	assert_ok, impl_outer_dispatch, impl_outer_event, impl_outer_origin, parameter_types,
-	traits::{Currency, FindAuthor, Get, OnFinalize, OnInitialize},
+	assert_ok, parameter_types,
+	traits::{Currency, FindAuthor, Get, OnFinalize, OnInitialize, OneSessionHandler},
 	weights::{constants::RocksDbWeight, Weight},
 	IterableStorageMap, StorageDoubleMap, StorageMap, StorageValue,
 };
 use sp_core::H256;
 use sp_io;
 use sp_npos_elections::{
-	build_support_map, evaluate_support, reduce, ExtendedBalance, StakedAssignment, ElectionScore,
+	to_support_map, EvaluateSupport, reduce, ExtendedBalance, StakedAssignment, ElectionScore,
 };
 use sp_runtime::{
 	curve::PiecewiseLinear,
@@ -52,7 +53,7 @@ thread_local! {
 
 /// Another session handler struct to test on_disabled.
 pub struct OtherSessionHandler;
-impl pallet_session::OneSessionHandler<AccountId> for OtherSessionHandler {
+impl OneSessionHandler<AccountId> for OtherSessionHandler {
 	type Key = UintAuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(_: I)
@@ -87,32 +88,22 @@ pub fn is_disabled(controller: AccountId) -> bool {
 	SESSION.with(|d| d.borrow().1.contains(&stash))
 }
 
-impl_outer_origin! {
-	pub enum Origin for Test where system = frame_system {}
-}
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
 
-impl_outer_dispatch! {
-	pub enum Call for Test where origin: Origin {
-		staking::Staking,
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
+		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
+		Staking: staking::{Module, Call, Config<T>, Storage, Event<T>, ValidateUnsigned},
+		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
 	}
-}
-
-mod staking {
-	// Re-export needed for `impl_outer_event!`.
-	pub use super::super::*;
-}
-use frame_system as system;
-use pallet_balances as balances;
-use pallet_session as session;
-
-impl_outer_event! {
-	pub enum MetaEvent for Test {
-		system<T>,
-		balances<T>,
-		session,
-		staking<T>,
-	}
-}
+);
 
 /// Author of block is always 11
 pub struct Author11;
@@ -123,10 +114,6 @@ impl FindAuthor<AccountId> for Author11 {
 		Some(11)
 	}
 }
-
-// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-#[derive(Clone, Eq, PartialEq, Debug)]
-pub struct Test;
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
@@ -158,10 +145,10 @@ impl frame_system::Config for Test {
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = MetaEvent;
+	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
-	type PalletInfo = ();
+	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<Balance>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
@@ -171,7 +158,7 @@ impl frame_system::Config for Test {
 impl pallet_balances::Config for Test {
 	type MaxLocks = MaxLocks;
 	type Balance = Balance;
-	type Event = MetaEvent;
+	type Event = Event;
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
@@ -191,7 +178,7 @@ impl pallet_session::Config for Test {
 	type Keys = SessionKeys;
 	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
 	type SessionHandler = (OtherSessionHandler,);
-	type Event = MetaEvent;
+	type Event = Event;
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = crate::StashOf<Test>;
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
@@ -257,7 +244,7 @@ impl Config for Test {
 	type UnixTime = Timestamp;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type RewardRemainder = RewardRemainderMock;
-	type Event = MetaEvent;
+	type Event = Event;
 	type Slash = ();
 	type Reward = ();
 	type SessionsPerEra = SessionsPerEra;
@@ -395,6 +382,8 @@ impl ExtBuilder {
 		};
 
 		let num_validators = self.num_validators.unwrap_or(self.validator_count);
+		// Check that the number of validators is sensible.
+		assert!(num_validators <= 8);
 		let validators = (0..num_validators)
 			.map(|x| ((x + 1) * 10 + 1) as AccountId)
 			.collect::<Vec<_>>();
@@ -413,6 +402,14 @@ impl ExtBuilder {
 				(31, balance_factor * 2000),
 				(40, balance_factor),
 				(41, balance_factor * 2000),
+				(50, balance_factor),
+				(51, balance_factor * 2000),
+				(60, balance_factor),
+				(61, balance_factor * 2000),
+				(70, balance_factor),
+				(71, balance_factor * 2000),
+				(80, balance_factor),
+				(81, balance_factor * 2000),
 				(100, 2000 * balance_factor),
 				(101, 2000 * balance_factor),
 				// This allows us to have a total_payout different from 0.
@@ -440,7 +437,7 @@ impl ExtBuilder {
 				(101, 100, balance_factor * 500, StakerStatus::<AccountId>::Nominator(nominated))
 			];
 		}
-		let _ = GenesisConfig::<Test>{
+		let _ = staking::GenesisConfig::<Test>{
 			stakers: stakers,
 			validator_count: self.validator_count,
 			minimum_validator_count: self.minimum_validator_count,
@@ -484,12 +481,6 @@ impl ExtBuilder {
 		ext.execute_with(post_conditions);
 	}
 }
-
-pub type System = frame_system::Module<Test>;
-pub type Balances = pallet_balances::Module<Test>;
-pub type Session = pallet_session::Module<Test>;
-pub type Timestamp = pallet_timestamp::Module<Test>;
-pub type Staking = Module<Test>;
 
 fn post_conditions() {
 	check_nominators();
@@ -850,8 +841,8 @@ pub(crate) fn horrible_npos_solution(
 	let score = {
 		let (_, _, better_score) = prepare_submission_with(true, true, 0, |_| {});
 
-		let support = build_support_map::<AccountId>(&winners, &staked_assignment).unwrap();
-		let score = evaluate_support(&support);
+		let support = to_support_map::<AccountId>(&winners, &staked_assignment).unwrap();
+		let score = support.evaluate();
 
 		assert!(sp_npos_elections::is_score_better::<Perbill>(
 			better_score,
@@ -950,11 +941,11 @@ pub(crate) fn prepare_submission_with(
 			Staking::slashable_balance_of_fn(),
 		);
 
-		let support_map = build_support_map::<AccountId>(
+		let support_map = to_support_map::<AccountId>(
 			winners.as_slice(),
 			staked.as_slice(),
 		).unwrap();
-		evaluate_support::<AccountId>(&support_map)
+		support_map.evaluate()
 	} else {
 		Default::default()
 	};
@@ -1006,9 +997,9 @@ macro_rules! assert_session_era {
 	};
 }
 
-pub(crate) fn staking_events() -> Vec<Event<Test>> {
+pub(crate) fn staking_events() -> Vec<staking::Event<Test>> {
 	System::events().into_iter().map(|r| r.event).filter_map(|e| {
-		if let MetaEvent::staking(inner) = e {
+		if let Event::staking(inner) = e {
 			Some(inner)
 		} else {
 			None

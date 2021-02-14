@@ -116,13 +116,14 @@ pub mod weights;
 
 use sp_std::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
 use codec::Decode;
-use sp_runtime::{KeyTypeId, Perbill, RuntimeAppPublic, BoundToRuntimeAppPublic};
+use sp_runtime::{KeyTypeId, Perbill, RuntimeAppPublic};
 use sp_runtime::traits::{Convert, Zero, Member, OpaqueKeys, Saturating};
 use sp_staking::SessionIndex;
 use frame_support::{
 	ensure, decl_module, decl_event, decl_storage, decl_error, ConsensusEngineId, Parameter,
 	traits::{
 		Get, FindAuthor, ValidatorRegistration, EstimateNextSessionRotation, EstimateNextNewSession,
+		OneSessionHandler, ValidatorSet,
 	},
 	dispatch::{self, DispatchResult, DispatchError},
 	weights::Weight,
@@ -256,45 +257,9 @@ pub trait SessionHandler<ValidatorId> {
 	fn on_disabled(validator_index: usize);
 }
 
-/// A session handler for specific key type.
-pub trait OneSessionHandler<ValidatorId>: BoundToRuntimeAppPublic {
-	/// The key type expected.
-	type Key: Decode + Default + RuntimeAppPublic;
-
-	fn on_genesis_session<'a, I: 'a>(validators: I)
-		where I: Iterator<Item=(&'a ValidatorId, Self::Key)>, ValidatorId: 'a;
-
-	/// Session set has changed; act appropriately. Note that this can be called
-	/// before initialization of your module.
-	///
-	/// `changed` is true when at least one of the session keys
-	/// or the underlying economic identities/distribution behind one the
-	/// session keys has changed, false otherwise.
-	///
-	/// The `validators` are the validators of the incoming session, and `queued_validators`
-	/// will follow.
-	fn on_new_session<'a, I: 'a>(
-		changed: bool,
-		validators: I,
-		queued_validators: I,
-	) where I: Iterator<Item=(&'a ValidatorId, Self::Key)>, ValidatorId: 'a;
-
-
-	/// A notification for end of the session.
-	///
-	/// Note it is triggered before any `SessionManager::end_session` handlers,
-	/// so we can still affect the validator set.
-	fn on_before_session_ending() {}
-
-	/// A validator got disabled. Act accordingly until a new session begins.
-	fn on_disabled(_validator_index: usize);
-}
-
 #[impl_trait_for_tuples::impl_for_tuples(1, 30)]
-#[tuple_types_no_default_trait_bound]
+#[tuple_types_custom_trait_bound(OneSessionHandler<AId>)]
 impl<AId> SessionHandler<AId> for Tuple {
-	for_tuples!( where #( Tuple: OneSessionHandler<AId> )* );
-
 	for_tuples!(
 		const KEY_TYPE_IDS: &'static [KeyTypeId] = &[ #( <Tuple::Key as RuntimeAppPublic>::ID ),* ];
 	);
@@ -444,7 +409,7 @@ decl_storage! {
 			for (account, val, keys) in config.keys.iter().cloned() {
 				<Module<T>>::inner_set_keys(&val, keys)
 					.expect("genesis config must not contain duplicates; qed");
-				frame_system::Module::<T>::inc_ref(&account);
+				assert!(frame_system::Module::<T>::inc_consumers(&account).is_ok());
 			}
 
 			let initial_validators_0 = T::SessionManager::new_session(0)
@@ -498,6 +463,8 @@ decl_error! {
 		DuplicatedKey,
 		/// No keys are associated with this account.
 		NoKeys,
+		/// Key setting account is not live, so it's impossible to associate keys.
+		NoAccount,
 	}
 }
 
@@ -746,9 +713,11 @@ impl<T: Config> Module<T> {
 		let who = T::ValidatorIdOf::convert(account.clone())
 			.ok_or(Error::<T>::NoAssociatedValidatorId)?;
 
+		frame_system::Module::<T>::inc_consumers(&account).map_err(|_| Error::<T>::NoAccount)?;
 		let old_keys = Self::inner_set_keys(&who, keys)?;
-		if old_keys.is_none() {
-			frame_system::Module::<T>::inc_ref(&account);
+		if old_keys.is_some() {
+			let _ = frame_system::Module::<T>::dec_consumers(&account);
+			// ^^^ Defensive only; Consumers were incremented just before, so should never fail.
 		}
 
 		Ok(())
@@ -796,7 +765,7 @@ impl<T: Config> Module<T> {
 			let key_data = old_keys.get_raw(*id);
 			Self::clear_key_owner(*id, key_data);
 		}
-		frame_system::Module::<T>::dec_ref(&account);
+		frame_system::Module::<T>::dec_consumers(&account);
 
 		Ok(())
 	}
@@ -823,6 +792,19 @@ impl<T: Config> Module<T> {
 
 	fn clear_key_owner(id: KeyTypeId, key_data: &[u8]) {
 		<KeyOwner<T>>::remove((id, key_data));
+	}
+}
+
+impl<T: Config> ValidatorSet<T::AccountId> for Module<T> {
+	type ValidatorId = T::ValidatorId;
+	type ValidatorIdOf = T::ValidatorIdOf;
+
+	fn session_index() -> sp_staking::SessionIndex {
+		Module::<T>::current_index()
+	}
+
+	fn validators() -> Vec<Self::ValidatorId> {
+		Module::<T>::validators()
 	}
 }
 

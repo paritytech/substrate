@@ -17,10 +17,7 @@
 
 use codec::{Encode, Decode};
 use crate::Config;
-use frame_support::{
-	weights::DispatchInfo,
-	StorageMap,
-};
+use frame_support::weights::DispatchInfo;
 use sp_runtime::{
 	traits::{SignedExtension, DispatchInfoOf, Dispatchable, One},
 	transaction_validity::{
@@ -129,7 +126,8 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			crate::Account::<Test>::insert(1, crate::AccountInfo {
 				nonce: 1,
-				refcount: 0,
+				consumers: 0,
+				providers: 0,
 				data: 0,
 			});
 			let info = DispatchInfo::default();

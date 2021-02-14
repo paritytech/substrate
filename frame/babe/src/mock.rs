@@ -18,7 +18,7 @@
 //! Test utilities
 
 use codec::Encode;
-use super::{Config, Module, CurrentSlot};
+use crate::{self as pallet_babe, Config, CurrentSlot};
 use sp_runtime::{
 	Perbill, impl_opaque_keys,
 	curve::PiecewiseLinear,
@@ -27,38 +27,42 @@ use sp_runtime::{
 };
 use frame_system::InitKind;
 use frame_support::{
-	impl_outer_dispatch, impl_outer_origin, parameter_types, StorageValue,
+	parameter_types, StorageValue,
 	traits::{KeyOwnerProofSystem, OnInitialize},
 	weights::Weight,
 };
 use sp_io;
 use sp_core::{H256, U256, crypto::{IsWrappedBy, KeyTypeId, Pair}};
-use sp_consensus_babe::{AuthorityId, AuthorityPair, SlotNumber};
+use sp_consensus_babe::{AuthorityId, AuthorityPair, Slot};
 use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
 use sp_staking::SessionIndex;
 use pallet_staking::EraIndex;
-
-impl_outer_origin!{
-	pub enum Origin for Test where system = frame_system {}
-}
-
-impl_outer_dispatch! {
-	pub enum Call for Test where origin: Origin {
-		babe::Babe,
-		staking::Staking,
-	}
-}
+use pallet_session::historical as pallet_session_historical;
 
 type DummyValidatorId = u64;
 
-// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct Test;
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
+
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
+		Historical: pallet_session_historical::{Module},
+		Offences: pallet_offences::{Module, Call, Storage, Event},
+		Babe: pallet_babe::{Module, Call, Storage, Config, Inherent, ValidateUnsigned},
+		Staking: pallet_staking::{Module, Call, Storage, Config<T>, Event<T>},
+		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
+		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
+	}
+);
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const EpochDuration: u64 = 3;
-	pub const ExpectedBlockTime: u64 = 1;
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(16);
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1024);
@@ -79,9 +83,9 @@ impl frame_system::Config for Test {
 	type AccountId = DummyValidatorId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = ();
+	type Event = Event;
 	type BlockHashCount = BlockHashCount;
-	type PalletInfo = ();
+	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u128>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
@@ -104,7 +108,7 @@ impl_opaque_keys! {
 }
 
 impl pallet_session::Config for Test {
-	type Event = ();
+	type Event = Event;
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
 	type ValidatorIdOf = pallet_staking::StashOf<Self>;
 	type ShouldEndSession = Babe;
@@ -151,7 +155,7 @@ impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type Balance = u128;
 	type DustRemoval = ();
-	type Event = ();
+	type Event = Event;
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
 	type WeightInfo = ();
@@ -182,7 +186,7 @@ parameter_types! {
 impl pallet_staking::Config for Test {
 	type RewardRemainder = ();
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
-	type Event = ();
+	type Event = Event;
 	type Currency = Balances;
 	type Slash = ();
 	type Reward = ();
@@ -210,10 +214,17 @@ parameter_types! {
 }
 
 impl pallet_offences::Config for Test {
-	type Event = ();
+	type Event = Event;
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
 	type WeightSoftLimit = OffencesWeightSoftLimit;
+}
+
+parameter_types! {
+	pub const EpochDuration: u64 = 3;
+	pub const ExpectedBlockTime: u64 = 1;
+	pub const ReportLongevity: u64 =
+		BondingDuration::get() as u64 * SessionsPerEra::get() as u64 * EpochDuration::get();
 }
 
 impl Config for Test {
@@ -231,18 +242,11 @@ impl Config for Test {
 		AuthorityId,
 	)>>::IdentificationTuple;
 
-	type HandleEquivocation = super::EquivocationHandler<Self::KeyOwnerIdentification, Offences>;
+	type HandleEquivocation =
+		super::EquivocationHandler<Self::KeyOwnerIdentification, Offences, ReportLongevity>;
+
 	type WeightInfo = ();
 }
-
-pub type Balances = pallet_balances::Module<Test>;
-pub type Historical = pallet_session::historical::Module<Test>;
-pub type Offences = pallet_offences::Module<Test>;
-pub type Session = pallet_session::Module<Test>;
-pub type Staking = pallet_staking::Module<Test>;
-pub type System = frame_system::Module<Test>;
-pub type Timestamp = pallet_timestamp::Module<Test>;
-pub type Babe = Module<Test>;
 
 pub fn go_to_block(n: u64, s: u64) {
 	use frame_support::traits::OnFinalize;
@@ -258,14 +262,14 @@ pub fn go_to_block(n: u64, s: u64) {
 		System::parent_hash()
 	};
 
-	let pre_digest = make_secondary_plain_pre_digest(0, s);
+	let pre_digest = make_secondary_plain_pre_digest(0, s.into());
 
 	System::initialize(&n, &parent_hash, &pre_digest, InitKind::Full);
 	System::set_block_number(n);
 	Timestamp::set_timestamp(n);
 
 	if s > 1 {
-		CurrentSlot::put(s);
+		CurrentSlot::put(Slot::from(s));
 	}
 
 	System::on_initialize(n);
@@ -275,8 +279,8 @@ pub fn go_to_block(n: u64, s: u64) {
 
 /// Slots will grow accordingly to blocks
 pub fn progress_to_block(n: u64) {
-	let mut slot = Babe::current_slot() + 1;
-	for i in System::block_number()+1..=n {
+	let mut slot = u64::from(Babe::current_slot()) + 1;
+	for i in System::block_number() + 1 ..= n {
 		go_to_block(i, slot);
 		slot += 1;
 	}
@@ -297,14 +301,14 @@ pub fn start_era(era_index: EraIndex) {
 
 pub fn make_primary_pre_digest(
 	authority_index: sp_consensus_babe::AuthorityIndex,
-	slot_number: sp_consensus_babe::SlotNumber,
+	slot: sp_consensus_babe::Slot,
 	vrf_output: VRFOutput,
 	vrf_proof: VRFProof,
 ) -> Digest {
 	let digest_data = sp_consensus_babe::digests::PreDigest::Primary(
 		sp_consensus_babe::digests::PrimaryPreDigest {
 			authority_index,
-			slot_number,
+			slot,
 			vrf_output,
 			vrf_proof,
 		}
@@ -315,12 +319,12 @@ pub fn make_primary_pre_digest(
 
 pub fn make_secondary_plain_pre_digest(
 	authority_index: sp_consensus_babe::AuthorityIndex,
-	slot_number: sp_consensus_babe::SlotNumber,
+	slot: sp_consensus_babe::Slot,
 ) -> Digest {
 	let digest_data = sp_consensus_babe::digests::PreDigest::SecondaryPlain(
 		sp_consensus_babe::digests::SecondaryPlainPreDigest {
 			authority_index,
-			slot_number,
+			slot,
 		}
 	);
 	let log = DigestItem::PreRuntime(sp_consensus_babe::BABE_ENGINE_ID, digest_data.encode());
@@ -329,14 +333,14 @@ pub fn make_secondary_plain_pre_digest(
 
 pub fn make_secondary_vrf_pre_digest(
 	authority_index: sp_consensus_babe::AuthorityIndex,
-	slot_number: sp_consensus_babe::SlotNumber,
+	slot: sp_consensus_babe::Slot,
 	vrf_output: VRFOutput,
 	vrf_proof: VRFProof,
 ) -> Digest {
 	let digest_data = sp_consensus_babe::digests::PreDigest::SecondaryVRF(
 		sp_consensus_babe::digests::SecondaryVRFPreDigest {
 			authority_index,
-			slot_number,
+			slot,
 			vrf_output,
 			vrf_proof,
 		}
@@ -346,11 +350,11 @@ pub fn make_secondary_vrf_pre_digest(
 }
 
 pub fn make_vrf_output(
-	slot_number: u64,
+	slot: Slot,
 	pair: &sp_consensus_babe::AuthorityPair
 ) -> (VRFOutput, VRFProof, [u8; 32]) {
 	let pair = sp_core::sr25519::Pair::from_ref(pair).as_ref();
-	let transcript = sp_consensus_babe::make_transcript(&Babe::randomness(), slot_number, 0);
+	let transcript = sp_consensus_babe::make_transcript(&Babe::randomness(), slot, 0);
 	let vrf_inout = pair.vrf_sign(transcript);
 	let vrf_randomness: sp_consensus_vrf::schnorrkel::Randomness = vrf_inout.0
 		.make_bytes::<[u8; 32]>(&sp_consensus_babe::BABE_VRF_INOUT_CONTEXT);
@@ -379,6 +383,14 @@ pub fn new_test_ext_raw_authorities(authorities: Vec<AuthorityId>) -> sp_io::Tes
 		.build_storage::<Test>()
 		.unwrap();
 
+	let balances: Vec<_> = (0..authorities.len())
+		.map(|i| (i as u64, 10_000_000))
+		.collect();
+
+	pallet_balances::GenesisConfig::<Test> { balances }
+		.assimilate_storage(&mut t)
+		.unwrap();
+
 	// stashes are the index.
 	let session_keys: Vec<_> = authorities
 		.iter()
@@ -394,6 +406,12 @@ pub fn new_test_ext_raw_authorities(authorities: Vec<AuthorityId>) -> sp_io::Tes
 		})
 		.collect();
 
+	// NOTE: this will initialize the babe authorities
+	// through OneSessionHandler::on_genesis_session
+	pallet_session::GenesisConfig::<Test> { keys: session_keys }
+		.assimilate_storage(&mut t)
+		.unwrap();
+
 	// controllers are the index + 1000
 	let stakers: Vec<_> = (0..authorities.len())
 		.map(|i| {
@@ -405,20 +423,6 @@ pub fn new_test_ext_raw_authorities(authorities: Vec<AuthorityId>) -> sp_io::Tes
 			)
 		})
 		.collect();
-
-	let balances: Vec<_> = (0..authorities.len())
-		.map(|i| (i as u64, 10_000_000))
-		.collect();
-
-	// NOTE: this will initialize the babe authorities
-	// through OneSessionHandler::on_genesis_session
-	pallet_session::GenesisConfig::<Test> { keys: session_keys }
-		.assimilate_storage(&mut t)
-		.unwrap();
-
-	pallet_balances::GenesisConfig::<Test> { balances }
-		.assimilate_storage(&mut t)
-		.unwrap();
 
 	let staking_config = pallet_staking::GenesisConfig::<Test> {
 		stakers,
@@ -438,7 +442,7 @@ pub fn new_test_ext_raw_authorities(authorities: Vec<AuthorityId>) -> sp_io::Tes
 pub fn generate_equivocation_proof(
 	offender_authority_index: u32,
 	offender_authority_pair: &AuthorityPair,
-	slot_number: SlotNumber,
+	slot: Slot,
 ) -> sp_consensus_babe::EquivocationProof<Header> {
 	use sp_consensus_babe::digests::CompatibleDigestItem;
 
@@ -447,7 +451,7 @@ pub fn generate_equivocation_proof(
 
 	let make_header = || {
 		let parent_hash = System::parent_hash();
-		let pre_digest = make_secondary_plain_pre_digest(offender_authority_index, slot_number);
+		let pre_digest = make_secondary_plain_pre_digest(offender_authority_index, slot);
 		System::initialize(&current_block, &parent_hash, &pre_digest, InitKind::Full);
 		System::set_block_number(current_block);
 		Timestamp::set_timestamp(current_block);
@@ -472,10 +476,10 @@ pub fn generate_equivocation_proof(
 	seal_header(&mut h2);
 
 	// restore previous runtime state
-	go_to_block(current_block, current_slot);
+	go_to_block(current_block, *current_slot);
 
 	sp_consensus_babe::EquivocationProof {
-		slot_number,
+		slot,
 		offender: offender_authority_pair.public(),
 		first_header: h1,
 		second_header: h2,

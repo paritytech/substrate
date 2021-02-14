@@ -31,7 +31,9 @@ use substrate_test_runtime_client::{
 use sc_client_api::{
 	StorageProvider, BlockBackend, in_mem, BlockchainEvents,
 };
-use sc_client_db::{Backend, DatabaseSettings, DatabaseSettingsSrc, PruningMode};
+use sc_client_db::{
+	Backend, DatabaseSettings, DatabaseSettingsSrc, PruningMode, KeepBlocks, TransactionStorageMode
+};
 use sc_block_builder::BlockBuilderProvider;
 use sc_service::client::{self, Client, LocalCallExecutor, new_in_mem};
 use sp_runtime::traits::{
@@ -39,7 +41,7 @@ use sp_runtime::traits::{
 };
 use substrate_test_runtime::TestAPI;
 use sp_state_machine::backend::Backend as _;
-use sp_api::{ProvideRuntimeApi, OffchainOverlayedChanges};
+use sp_api::ProvideRuntimeApi;
 use sp_core::{H256, ChangesTrieConfiguration, blake2_256, testing::TaskExecutor};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -161,7 +163,6 @@ fn construct_block(
 	};
 	let hash = header.hash();
 	let mut overlay = OverlayedChanges::default();
-	let mut offchain_overlay = OffchainOverlayedChanges::default();
 	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
 	let runtime_code = backend_runtime_code.runtime_code().expect("Code is part of the backend");
 	let task_executor = Box::new(TaskExecutor::new());
@@ -170,7 +171,6 @@ fn construct_block(
 		backend,
 		sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 		&mut overlay,
-		&mut offchain_overlay,
 		&executor(),
 		"Core_initialize_block",
 		&header.encode(),
@@ -186,7 +186,6 @@ fn construct_block(
 			backend,
 			sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 			&mut overlay,
-			&mut offchain_overlay,
 			&executor(),
 			"BlockBuilder_apply_extrinsic",
 			&tx.encode(),
@@ -202,7 +201,6 @@ fn construct_block(
 		backend,
 		sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 		&mut overlay,
-		&mut offchain_overlay,
 		&executor(),
 		"BlockBuilder_finalize_block",
 		&[],
@@ -250,13 +248,11 @@ fn construct_genesis_should_work_with_native() {
 	let runtime_code = backend_runtime_code.runtime_code().expect("Code is part of the backend");
 
 	let mut overlay = OverlayedChanges::default();
-	let mut offchain_overlay = OffchainOverlayedChanges::default();
 
 	let _ = StateMachine::new(
 		&backend,
 		sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 		&mut overlay,
-		&mut offchain_overlay,
 		&executor(),
 		"Core_execute_block",
 		&b1data,
@@ -286,13 +282,11 @@ fn construct_genesis_should_work_with_wasm() {
 	let runtime_code = backend_runtime_code.runtime_code().expect("Code is part of the backend");
 
 	let mut overlay = OverlayedChanges::default();
-	let mut offchain_overlay = OffchainOverlayedChanges::default();
 
 	let _ = StateMachine::new(
 		&backend,
 		sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 		&mut overlay,
-		&mut offchain_overlay,
 		&executor(),
 		"Core_execute_block",
 		&b1data,
@@ -322,13 +316,11 @@ fn construct_genesis_with_bad_transaction_should_panic() {
 	let runtime_code = backend_runtime_code.runtime_code().expect("Code is part of the backend");
 
 	let mut overlay = OverlayedChanges::default();
-	let mut offchain_overlay = OffchainOverlayedChanges::default();
 
 	let r = StateMachine::new(
 		&backend,
 		sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 		&mut overlay,
-		&mut offchain_overlay,
 		&executor(),
 		"Core_execute_block",
 		&b1data,
@@ -1275,7 +1267,9 @@ fn doesnt_import_blocks_that_revert_finality() {
 		DatabaseSettings {
 			state_cache_size: 1 << 20,
 			state_cache_child_ratio: None,
-			pruning: PruningMode::ArchiveAll,
+			state_pruning: PruningMode::ArchiveAll,
+			keep_blocks: KeepBlocks::All,
+			transaction_storage: TransactionStorageMode::BlockBody,
 			source: DatabaseSettingsSrc::RocksDb {
 				path: tmp.path().into(),
 				cache_size: 1024,
@@ -1476,7 +1470,9 @@ fn returns_status_for_pruned_blocks() {
 		DatabaseSettings {
 			state_cache_size: 1 << 20,
 			state_cache_child_ratio: None,
-			pruning: PruningMode::keep_blocks(1),
+			state_pruning: PruningMode::keep_blocks(1),
+			keep_blocks: KeepBlocks::All,
+			transaction_storage: TransactionStorageMode::BlockBody,
 			source: DatabaseSettingsSrc::RocksDb {
 				path: tmp.path().into(),
 				cache_size: 1024,
