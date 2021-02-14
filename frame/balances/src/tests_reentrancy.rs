@@ -197,7 +197,6 @@ fn transfer_dust_removal_tst2_should_work() {
 	);
 }
 
-
 #[test]
 fn repatriating_reserved_balance_dust_removal_should_work() {
 	ExtBuilder::default()
