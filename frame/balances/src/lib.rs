@@ -1060,7 +1060,7 @@ impl<T: Config<I>, I: 'static> Currency<T::AccountId> for Pallet<T, I> where
 				value,
 				WithdrawReasons::TRANSFER,
 				from_account.free,
-			)?;
+			).map_err(|_| Error::<T, I>::LiquidityRestrictions)?;
 
 			let allow_death = existence_requirement == ExistenceRequirement::AllowDeath;
 			let allow_death = allow_death && !system::Pallet::<T>::is_provider_required(transactor);
