@@ -23,7 +23,6 @@ use sp_api::{
 use sp_runtime::{traits::{GetNodeBlockType, Block as BlockT}, generic::BlockId};
 use sp_core::NativeOrEncoded;
 use substrate_test_runtime_client::runtime::Block;
-use sp_blockchain::Result;
 
 /// The declaration of the `Runtime` type and the implementation of the `GetNodeBlockType`
 /// trait are done by the `construct_runtime!` macro in a real runtime.
@@ -105,7 +104,7 @@ mock_impl_runtime_apis! {
 
 		#[advanced]
 		fn same_name(_: &BlockId<Block>) ->
-			std::result::Result<
+			Result<
 				NativeOrEncoded<()>,
 				ApiError
 			>
@@ -115,7 +114,7 @@ mock_impl_runtime_apis! {
 
 		#[advanced]
 		fn wild_card(at: &BlockId<Block>, _: u32) ->
-			std::result::Result<
+			Result<
 				NativeOrEncoded<()>,
 				ApiError
 			>
@@ -124,7 +123,7 @@ mock_impl_runtime_apis! {
 				// yeah
 				Ok(().into())
 			} else {
-				Err(ApiError::new("MockApi", codec::Error::from("Ohh noooo")))
+				Err((Box::from("Test error") as Box<dyn std::error::Error + Send + Sync>).into())
 			}
 		}
 	}
@@ -143,33 +142,33 @@ type TestClient = substrate_test_runtime_client::client::Client<
 
 #[test]
 fn test_client_side_function_signature() {
-	let _test: fn(&RuntimeApiImpl<Block, TestClient>, &BlockId<Block>, u64) -> Result<()> =
+	let _test: fn(&RuntimeApiImpl<Block, TestClient>, &BlockId<Block>, u64) -> Result<(), ApiError> =
 		RuntimeApiImpl::<Block, TestClient>::test;
 	let _something_with_block:
-		fn(&RuntimeApiImpl<Block, TestClient>, &BlockId<Block>, Block) -> Result<Block> =
+		fn(&RuntimeApiImpl<Block, TestClient>, &BlockId<Block>, Block) -> Result<Block, ApiError> =
 			RuntimeApiImpl::<Block, TestClient>::something_with_block;
 
 	#[allow(deprecated)]
 	let _same_name_before_version_2:
-		fn(&RuntimeApiImpl<Block, TestClient>, &BlockId<Block>) -> Result<String> =
+		fn(&RuntimeApiImpl<Block, TestClient>, &BlockId<Block>) -> Result<String, ApiError> =
 			RuntimeApiImpl::<Block, TestClient>::same_name_before_version_2;
 }
 
 #[test]
 fn check_runtime_api_info() {
-	assert_eq!(&Api::<Block, Error = ()>::ID, &runtime_decl_for_Api::ID);
-	assert_eq!(Api::<Block, Error = ()>::VERSION, runtime_decl_for_Api::VERSION);
-	assert_eq!(Api::<Block, Error = ()>::VERSION, 1);
+	assert_eq!(&Api::<Block>::ID, &runtime_decl_for_Api::ID);
+	assert_eq!(Api::<Block>::VERSION, runtime_decl_for_Api::VERSION);
+	assert_eq!(Api::<Block>::VERSION, 1);
 
 	assert_eq!(
-		ApiWithCustomVersion::<Block, Error = ()>::VERSION,
+		ApiWithCustomVersion::<Block>::VERSION,
 		runtime_decl_for_ApiWithCustomVersion::VERSION,
 	);
 	assert_eq!(
-		&ApiWithCustomVersion::<Block, Error = ()>::ID,
+		&ApiWithCustomVersion::<Block>::ID,
 		&runtime_decl_for_ApiWithCustomVersion::ID,
 	);
-	assert_eq!(ApiWithCustomVersion::<Block, Error = ()>::VERSION, 2);
+	assert_eq!(ApiWithCustomVersion::<Block>::VERSION, 2);
 }
 
 fn check_runtime_api_versions_contains<T: RuntimeApiInfo + ?Sized>() {
@@ -178,9 +177,9 @@ fn check_runtime_api_versions_contains<T: RuntimeApiInfo + ?Sized>() {
 
 #[test]
 fn check_runtime_api_versions() {
-	check_runtime_api_versions_contains::<dyn Api<Block, Error = ()>>();
-	check_runtime_api_versions_contains::<dyn ApiWithCustomVersion<Block, Error = ()>>();
-	check_runtime_api_versions_contains::<dyn sp_api::Core<Block, Error = ()>>();
+	check_runtime_api_versions_contains::<dyn Api<Block>>();
+	check_runtime_api_versions_contains::<dyn ApiWithCustomVersion<Block>>();
+	check_runtime_api_versions_contains::<dyn sp_api::Core<Block>>();
 }
 
 #[test]
@@ -188,9 +187,9 @@ fn mock_runtime_api_has_api() {
 	let mock = MockApi { block: None };
 
 	assert!(
-		mock.has_api::<dyn ApiWithCustomVersion<Block, Error = ()>>(&BlockId::Number(0)).unwrap(),
+		mock.has_api::<dyn ApiWithCustomVersion<Block>>(&BlockId::Number(0)).unwrap(),
 	);
-	assert!(mock.has_api::<dyn Api<Block, Error = ()>>(&BlockId::Number(0)).unwrap());
+	assert!(mock.has_api::<dyn Api<Block>>(&BlockId::Number(0)).unwrap());
 }
 
 #[test]
@@ -209,7 +208,7 @@ fn mock_runtime_api_works_with_advanced() {
 	Api::<Block>::same_name(&mock, &BlockId::Number(0)).unwrap();
 	mock.wild_card(&BlockId::Number(1337), 1).unwrap();
 	assert_eq!(
-		ApiError::new("MockApi", ::codec::Error::from("Ohh noooo")),
-		mock.wild_card(&BlockId::Number(1336), 1).unwrap_err()
+		"Test error".to_string(),
+		mock.wild_card(&BlockId::Number(1336), 1).unwrap_err().to_string(),
 	);
 }

@@ -99,7 +99,7 @@ pub fn executor() -> NativeExecutor<Executor> {
 
 pub fn executor_call<
 	R:Decode + Encode + PartialEq,
-	NC: FnOnce() -> std::result::Result<R, String> + std::panic::UnwindSafe
+	NC: FnOnce() -> std::result::Result<R, Box<dyn std::error::Error + Send + Sync>> + std::panic::UnwindSafe
 >(
 	t: &mut TestExternalities<BlakeTwo256>,
 	method: &str,

@@ -480,7 +480,7 @@ where
 	Block: BlockT,
 	BE: Backend<Block>,
 	C: crate::ClientForGrandpa<Block, BE>,
-	C::Api: GrandpaApi<Block, Error = sp_blockchain::Error>,
+	C::Api: GrandpaApi<Block>,
 	N: NetworkT<Block>,
 	SC: SelectChain<Block> + 'static,
 {
@@ -549,7 +549,7 @@ where
 				authority_set.set_id,
 				equivocation.offender().clone(),
 			)
-			.map_err(Error::Client)?
+			.map_err(Error::RuntimeApi)?
 		{
 			Some(proof) => proof,
 			None => {
@@ -571,7 +571,7 @@ where
 				equivocation_proof,
 				key_owner_proof,
 			)
-			.map_err(Error::Client)?;
+			.map_err(Error::RuntimeApi)?;
 
 		Ok(())
 	}
@@ -726,7 +726,7 @@ where
 	Block: 'static,
 	B: Backend<Block>,
 	C: crate::ClientForGrandpa<Block, B> + 'static,
-	C::Api: GrandpaApi<Block, Error = sp_blockchain::Error>,
+	C::Api: GrandpaApi<Block>,
 	N: NetworkT<Block> + 'static + Send + Sync,
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, C>,

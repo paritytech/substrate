@@ -15,19 +15,19 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 serde = { version = "1.0.101", optional = true }
-sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-npos-elections = { version = "2.0.0", default-features = false, path = "../../primitives/npos-elections" }
-frame-support = { version = "2.0.0", default-features = false, path = "../support" }
-frame-system = { version = "2.0.0", default-features = false, path = "../system" }
-sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
-frame-benchmarking = { version = "2.0.0", default-features = false, path = "../benchmarking", optional = true }
+sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-npos-elections = { version = "3.0.0", default-features = false, path = "../../primitives/npos-elections" }
+frame-support = { version = "3.0.0", default-features = false, path = "../support" }
+frame-system = { version = "3.0.0", default-features = false, path = "../system" }
+sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
+frame-benchmarking = { version = "3.0.0", default-features = false, path = "../benchmarking", optional = true }
 
 [dev-dependencies]
-sp-io = { version = "2.0.0", path = "../../primitives/io" }
+sp-io = { version = "3.0.0", path = "../../primitives/io" }
 hex-literal = "0.3.1"
-pallet-balances = { version = "2.0.0", path = "../balances" }
-sp-core = { version = "2.0.0", path = "../../primitives/core" }
-substrate-test-utils = { version = "2.0.0", path = "../../test-utils" }
+pallet-balances = { version = "3.0.0", path = "../balances" }
+sp-core = { version = "3.0.0", path = "../../primitives/core" }
+substrate-test-utils = { version = "3.0.0", path = "../../test-utils" }
 
 [features]
 default = ["std"]
