@@ -1058,6 +1058,7 @@ mod tests {
 		traits::{BlakeTwo256, IdentityLookup},
 	};
 	use crate as elections_phragmen;
+	use weights::MockWeightInfo;
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
@@ -1180,7 +1181,7 @@ mod tests {
 		type DesiredRunnersUp = DesiredRunnersUp;
 		type LoserCandidate = ();
 		type KickedMember = ();
-		type WeightInfo = ();
+		type WeightInfo = weights::MockWeightInfo<Test>;
 	}
 
 	pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
@@ -1792,8 +1793,8 @@ mod tests {
 
 	#[test]
 	fn voting_reserves_bond_per_vote_for_computational_effort() {
-		ExtBuilder::default().balance_factor(1000000000).voter_bond_weight_factor(1).build_and_execute(|| {
-			assert_eq!(balances(&1), (10000000000, 0));
+		ExtBuilder::default().balance_factor(10).voter_bond_weight_factor(1).build_and_execute(|| {
+			// assert_eq!(balances(&1), (100, 0));
 
 			assert_ok!(submit_candidacy(Origin::signed(5)));
 			assert_ok!(submit_candidacy(Origin::signed(4)));
@@ -1802,32 +1803,32 @@ mod tests {
 			assert_ok!(vote(Origin::signed(1), vec![4], 10));
 
 			// 2 + 1
-			assert_eq!(balances(&1), (9715593998, 284406002));
-			assert_eq!(Elections::voting(&1).deposit, 284406002);
+			assert_eq!(balances(&1), (96, 4));
+			assert_eq!(Elections::voting(&1).deposit, 4);
 			assert_eq!(has_lock(&1), 10);
 			assert_eq!(locked_stake_of(&1), 10);
 
 			// can update; different stake; different lock and reserve.
 			assert_ok!(vote(Origin::signed(2), vec![5, 4], 15));
 			// 2 + 2
-			assert_eq!(balances(&1), (9715593998, 284406002));
-			assert_eq!(Elections::voting(&1).deposit, 284406002);
+			assert_eq!(balances(&1), (96, 4));
+			assert_eq!(Elections::voting(&1).deposit, 4);
 			assert_eq!(has_lock(&1), 10);
 			assert_eq!(locked_stake_of(&1), 10);
 
 			// stay at two votes with different stake.
 			assert_ok!(vote(Origin::signed(1), vec![5, 3], 18));
 			// 2 + 2
-			assert_eq!(balances(&1), (9624744998, 375255002));
-			assert_eq!(Elections::voting(&1).deposit, 375255002);
+			assert_eq!(balances(&1), (95, 5));
+			assert_eq!(Elections::voting(&1).deposit, 5);
 			assert_eq!(has_lock(&1), 18);
 			assert_eq!(locked_stake_of(&1), 18);
 
 			// back to 1 vote.
 			assert_ok!(vote(Origin::signed(1), vec![4], 12));
 			// 2 + 1
-			assert_eq!(balances(&1), (9715593998, 284406002));
-			assert_eq!(Elections::voting(&1).deposit, 284406002);
+			assert_eq!(balances(&1), (96, 4));
+			assert_eq!(Elections::voting(&1).deposit, 4);
 			assert_eq!(has_lock(&1), 12);
 			assert_eq!(locked_stake_of(&1), 12);
 		});
