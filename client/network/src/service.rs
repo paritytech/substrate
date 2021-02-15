@@ -199,7 +199,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			},
 			params.chain.clone(),
 			params.protocol_id.clone(),
-			&params.role,
 			&params.network_config,
 			iter::once(Vec::new()).chain((0..params.network_config.extra_sets.len() - 1)
 				.map(|_| default_notif_handshake_message.clone())).collect(),

@@ -273,7 +273,6 @@ impl<B: BlockT> Protocol<B> {
 		config: ProtocolConfig,
 		chain: Arc<dyn Client<B>>,
 		protocol_id: ProtocolId,
-		config_role: &config::Role,
 		network_config: &config::NetworkConfiguration,
 		notifications_protocols_handshakes: Vec<Vec<u8>>,
 		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
@@ -1472,15 +1471,27 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 					}
 
 				} else {
-					match message::Roles::decode_all(&received_handshake[..]) {
-						Ok(roles) =>
+					match (message::Roles::decode_all(&received_handshake[..]), self.peers.get(&peer_id)) {
+						(Ok(roles), _) =>
 							CustomMessageOutcome::NotificationStreamOpened {
 								remote: peer_id,
 								protocol: self.notification_protocols[usize::from(set_id) - NUM_HARDCODED_PEERSETS].clone(),
 								roles,
 								notifications_sink,
 							},
-						Err(err) => {
+						(Err(_), Some(peer)) if received_handshake.is_empty() => {
+							// As a convenience, we allow opening substreams for "external"
+							// notification protocols with an empty handshake. This fetches the
+							// roles from the locally-known roles.
+							// TODO: remove this after https://github.com/paritytech/substrate/issues/5685
+							CustomMessageOutcome::NotificationStreamOpened {
+								remote: peer_id,
+								protocol: self.notification_protocols[usize::from(set_id) - NUM_HARDCODED_PEERSETS].clone(),
+								roles: peer.info.roles,
+								notifications_sink,
+							}
+						},
+						(Err(err), _) => {
 							debug!(target: "sync", "Failed to parse remote handshake: {}", err);
 							self.behaviour.disconnect_peer(&peer_id, set_id);
 							self.peerset_handle.report_peer(peer_id, rep::BAD_MESSAGE);
