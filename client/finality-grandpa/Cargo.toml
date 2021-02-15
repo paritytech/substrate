@@ -59,4 +59,3 @@ sp-state-machine = { version = "0.9.0", path = "../../primitives/state-machine" 
 sp-tracing = { version = "3.0.0", path = "../../primitives/tracing" }
 tokio = { version = "0.2", features = ["rt-core"] }
 tempfile = "3.1.0"
-sp-api = { version = "3.0.0", path = "../../primitives/api" }

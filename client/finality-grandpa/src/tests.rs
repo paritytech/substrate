@@ -174,8 +174,6 @@ impl ProvideRuntimeApi<Block> for TestApi {
 
 sp_api::mock_impl_runtime_apis! {
 	impl GrandpaApi<Block> for RuntimeApi {
-		type Error = sp_blockchain::Error;
-
 		fn grandpa_authorities(&self) -> AuthorityList {
 			self.inner.genesis_authorities.clone()
 		}
