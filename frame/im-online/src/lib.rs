@@ -530,7 +530,7 @@ impl<T: Config> Module<T> {
 			|| {
 				let call = prepare_heartbeat()?;
 				log::info!(
-					target: "imonline",
+					target: "runtime::im-online",
 					"[index: {:?}] Reporting im-online at block: {:?} (session: {:?}): {:?}",
 					authority_index,
 					block_number,
