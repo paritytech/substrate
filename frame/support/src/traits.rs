@@ -1607,7 +1607,7 @@ pub trait OnRuntimeUpgrade {
 #[impl_for_tuples(30)]
 impl OnRuntimeUpgrade for Tuple {
 	const ID: &'static str = "__TUPLE__";
-	// We will never use the ^^^^^^^^^^^^ this within the tuple expansion, effectively _don't care_.
+	// We will never use     ^^^^^^^^^^^^ within the tuple expansion, effectively _don't care_.
 
 	fn on_runtime_upgrade() -> crate::weights::Weight {
 		let mut weight = 0;
