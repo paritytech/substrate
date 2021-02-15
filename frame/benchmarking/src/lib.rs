@@ -962,7 +962,7 @@ macro_rules! impl_benchmark_test {
 /// The first argument, `module`, must be the path to this crate's module.
 ///
 /// The second argument, `new_test_ext`, must be a function call which returns either a
-/// `sp_io::TestExternalities`, or some other type with an identical interface.
+/// `sp_io::TestExternalities`, or some other type with a similar interface.
 ///
 /// Note that this function call is _not_ evaluated at compile time, but is instead copied textually
 /// into each appropriate invocation site.
@@ -977,11 +977,11 @@ macro_rules! impl_benchmark_test {
 /// );
 /// ```
 ///
-/// There is an optional fourth argument: `path_to_benchmarks_invocation`. In the typical case in
-/// which this macro is in the same module as the `benchmarks!` invocation, you don't need to supply
-/// this. However, if the `impl_benchmark_test_suite!`
-/// invocation is in a different module than the `benchmarks!` invocation, then you should provide
-/// the path to the module containing the `benchmarks!` invocation:
+/// There is an optional fourth argument, with keyword syntax: `benchmarks_path = path_to_benchmarks_invocation`.
+/// In the typical case in which this macro is in the same module as the `benchmarks!` invocation,
+/// you don't need to supply this. However, if the `impl_benchmark_test_suite!` invocation is in a
+/// different module than the `benchmarks!` invocation, then you should provide the path to the
+/// module containing the `benchmarks!` invocation:
 ///
 /// ```rust,ignore
 /// mod benches {
@@ -995,7 +995,7 @@ macro_rules! impl_benchmark_test {
 /// 	// to be idents in the scope of `impl_benchmark_test_suite`.
 /// 	use crate::{benches, Module};
 ///
-/// 	impl_benchmark_test_suite!(Module, new_test_ext(), Test, benches);
+/// 	impl_benchmark_test_suite!(Module, new_test_ext(), Test, benchmarks_path = benches);
 ///
 /// 	// new_test_ext and the Test item are defined later in this module
 /// }
@@ -1004,6 +1004,13 @@ macro_rules! impl_benchmark_test {
 /// There is an optional fifth argument, with keyword syntax: `extra = true` or `extra = false`.
 /// By default, this generates a test suite which iterates over all benchmarks, including those
 /// marked with the `#[extra]` annotation. Setting `extra = false` excludes those.
+///
+/// There is an optional sixth argument, with keyword syntax: `exec_name = custom_exec_name`.
+/// By default, this macro uses `execute_with` for this parameter. This argument, if set, is subject
+/// to these restrictions:
+///
+/// - It must be the name of a method applied to the output of the `new_test_ext` argument.
+/// - That method must have a signature capable of receiving a single argument of the form `impl FnOnce()`.
 ///
 // ## Notes (not for rustdoc)
 //
@@ -1021,31 +1028,113 @@ macro_rules! impl_benchmark_test {
 // just iterate over the `Benchmarking::benchmarks` list to run the actual implementations.
 #[macro_export]
 macro_rules! impl_benchmark_test_suite {
-	// no options set
-	($bench_module:ident, $new_test_ext:expr, $test:path $(,)?) => {
-		impl_benchmark_test_suite!($bench_module, $new_test_ext, $test, super, extra = true);
-	};
-	// set path to benchmarks invocation but not extra
-	($bench_module:ident, $new_test_ext:expr, $test:path, $path_to_benchmarks_invocation:ident $(,)?) => {
-		impl_benchmark_test_suite!(
-			$bench_module,
-			$new_test_ext,
-			$test,
-			$path_to_benchmarks_invocation,
-			extra = true,
-		);
-	};
-	// set extra but not path to benchmarks invocation
-	($bench_module:ident, $new_test_ext:expr, $test:path, extra = $extra:expr $(,)?) => {
-		impl_benchmark_test_suite!($bench_module, $new_test_ext, $test, super, extra = $extra);
-	};
-	// all options set
+	// user might or might not have set some keyword arguments; set the defaults
+	//
+	// The weird syntax indicates that `rest` comes only after a comma, which is otherwise optional
 	(
 		$bench_module:ident,
 		$new_test_ext:expr,
-		$test:path,
-		$path_to_benchmarks_invocation:ident,
-		extra = $extra:expr $(,)?
+		$test:path
+		$(, $( $rest:tt )* )?
+	) => {
+		impl_benchmark_test_suite!(
+			@selected:
+				$bench_module,
+				$new_test_ext,
+				$test,
+				benchmarks_path = super,
+				extra = true,
+				exec_name = execute_with,
+			@user:
+				$( $( $rest )* )?
+		);
+	};
+	// pick off the benchmarks_path keyword argument
+	(
+		@selected:
+			$bench_module:ident,
+			$new_test_ext:expr,
+			$test:path,
+			benchmarks_path = $old:ident,
+			extra = $extra:expr,
+			exec_name = $exec_name:ident,
+		@user:
+			benchmarks_path = $benchmarks_path:ident
+			$(, $( $rest:tt )* )?
+	) => {
+		impl_benchmark_test_suite!(
+			@selected:
+				$bench_module,
+				$new_test_ext,
+				$test,
+				benchmarks_path = $benchmarks_path,
+				extra = $extra,
+				exec_name = $exec_name,
+			@user:
+				$( $( $rest )* )?
+		);
+	};
+	// pick off the extra keyword argument
+	(
+		@selected:
+			$bench_module:ident,
+			$new_test_ext:expr,
+			$test:path,
+			benchmarks_path = $benchmarks_path:ident,
+			extra = $old:expr,
+			exec_name = $exec_name:ident,
+		@user:
+			extra = $extra:expr
+			$(, $( $rest:tt )* )?
+	) => {
+		impl_benchmark_test_suite!(
+			@selected:
+				$bench_module,
+				$new_test_ext,
+				$test,
+				benchmarks_path = $benchmarks_path,
+				extra = $extra,
+				exec_name = $exec_name,
+			@user:
+				$( $( $rest )* )?
+		);
+	};
+	// pick off the exec_name keyword argument
+	(
+		@selected:
+			$bench_module:ident,
+			$new_test_ext:expr,
+			$test:path,
+			benchmarks_path = $benchmarks_path:ident,
+			extra = $extra:expr,
+			exec_name = $old:ident,
+		@user:
+			exec_name = $exec_name:ident
+			$(, $( $rest:tt )* )?
+	) => {
+		impl_benchmark_test_suite!(
+			@selected:
+				$bench_module,
+				$new_test_ext,
+				$test,
+				benchmarks_path = $benchmarks_path,
+				extra = $extra,
+				exec_name = $exec_name,
+			@user:
+				$( $( $rest )* )?
+		);
+	};
+	// all options set; nothing else in user-provided keyword arguments
+	(
+		@selected:
+			$bench_module:ident,
+			$new_test_ext:expr,
+			$test:path,
+			benchmarks_path = $path_to_benchmarks_invocation:ident,
+			extra = $extra:expr,
+			exec_name = $exec_name:ident,
+		@user:
+			$(,)?
 	) => {
 		#[cfg(test)]
 		mod benchmark_tests {
@@ -1054,7 +1143,7 @@ macro_rules! impl_benchmark_test_suite {
 
 			#[test]
 			fn test_benchmarks() {
-				$new_test_ext.execute_with(|| {
+				$new_test_ext.$exec_name(|| {
 					use $crate::Benchmarking;
 
 					let mut anything_failed = false;
