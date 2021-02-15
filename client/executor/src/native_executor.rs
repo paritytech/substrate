@@ -456,7 +456,7 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 
 	fn call<
 		R: Decode + Encode + PartialEq,
-		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
+		NC: FnOnce() -> result::Result<R, Box<dyn std::error::Error + Send + Sync>> + UnwindSafe,
 	>(
 		&self,
 		ext: &mut dyn Externalities,
@@ -514,7 +514,7 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 						let res = with_externalities_safe(&mut **ext, move || (call)())
 							.and_then(|r| r
 								.map(NativeOrEncoded::Native)
-								.map_err(|s| Error::ApiError(s))
+								.map_err(Error::ApiError)
 							);
 
 						Ok(res)
