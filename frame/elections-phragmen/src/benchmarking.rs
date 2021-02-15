@@ -536,6 +536,9 @@ benchmarks! {
 	}
 }
 
+// can't use impl_benchmark_test_suite for this module because the tests depend on
+// `build_and_execute`, which checks pre- and post-conditions.
+
 #[cfg(test)]
 mod tests {
 	use super::*;
