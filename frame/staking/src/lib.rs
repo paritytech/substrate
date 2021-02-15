@@ -337,13 +337,13 @@ const STAKING_ID: LockIdentifier = *b"staking ";
 pub const MAX_UNLOCKING_CHUNKS: usize = 32;
 pub const MAX_NOMINATIONS: usize = <CompactAssignments as CompactSolution>::LIMIT;
 
-pub(crate) const LOG_TARGET: &'static str = "staking";
+pub(crate) const LOG_TARGET: &'static str = "runtime::staking";
 
 // syntactic sugar for logging.
 #[macro_export]
 macro_rules! log {
 	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
-		frame_support::debug::$level!(
+		log::$level!(
 			target: crate::LOG_TARGET,
 			$patter $(, $values)*
 		)
@@ -3189,29 +3189,29 @@ impl<T: Config> Module<T> {
 /// some session can lag in between the newest session planned and the latest session started.
 impl<T: Config> pallet_session::SessionManager<T::AccountId> for Module<T> {
 	fn new_session(new_index: SessionIndex) -> Option<Vec<T::AccountId>> {
-		frame_support::debug::native::trace!(
-			target: LOG_TARGET,
-			"[{}] planning new_session({})",
+		log!(
+			trace,
+			"[{:?}] planning new_session({})",
 			<frame_system::Module<T>>::block_number(),
-			new_index
+			new_index,
 		);
 		Self::new_session(new_index)
 	}
 	fn start_session(start_index: SessionIndex) {
-		frame_support::debug::native::trace!(
-			target: LOG_TARGET,
-			"[{}] starting start_session({})",
+		log!(
+			trace,
+			"[{:?}] starting start_session({})",
 			<frame_system::Module<T>>::block_number(),
-			start_index
+			start_index,
 		);
 		Self::start_session(start_index)
 	}
 	fn end_session(end_index: SessionIndex) {
-		frame_support::debug::native::trace!(
-			target: LOG_TARGET,
-			"[{}] ending end_session({})",
+		log!(
+			trace,
+			"[{:?}] ending end_session({})",
 			<frame_system::Module<T>>::block_number(),
-			end_index
+			end_index,
 		);
 		Self::end_session(end_index)
 	}

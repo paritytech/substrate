@@ -49,7 +49,7 @@ use sp_runtime::{RuntimeDebug, traits::Hash};
 
 use frame_support::{
 	codec::{Decode, Encode},
-	debug, decl_error, decl_event, decl_module, decl_storage,
+	decl_error, decl_event, decl_module, decl_storage,
 	dispatch::{
 		DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable, Parameter,
 		PostDispatchInfo,
@@ -320,19 +320,21 @@ decl_module! {
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			if new_members.len() > T::MaxMembers::get() as usize {
-				debug::error!(
-					"New members count exceeds maximum amount of members expected. (expected: {}, actual: {})",
-					T::MaxMembers::get(),
-					new_members.len()
+				tracing::error!(
+					target: "runtime::collective",
+					expected = %T::MaxMembers::get(),
+					actual = %new_members.len(),
+					"New members count exceeds maximum amount of members expected.",
 				);
 			}
 
 			let old = Members::<T, I>::get();
 			if old.len() > old_count as usize {
-				debug::warn!(
-					"Wrong count used to estimate set_members weight. (expected: {}, actual: {})",
-					old_count,
-					old.len()
+				tracing::warn!(
+					target: "runtime::collective",
+					expected = %old_count,
+					actual = %old.len(),
+					"Wrong count used to estimate set_members weight.",
 				);
 			}
 			let mut new_members = new_members;
@@ -811,10 +813,11 @@ impl<T: Config<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
 		new: &[T::AccountId],
 	) {
 		if new.len() > T::MaxMembers::get() as usize {
-			debug::error!(
-				"New members count exceeds maximum amount of members expected. (expected: {}, actual: {})",
-				T::MaxMembers::get(),
-				new.len()
+			tracing::error!(
+				target: "runtime::collective",
+				expected = %T::MaxMembers::get(),
+				actual = %new.len(),
+				"New members count exceeds maximum amount of members expected.",
 			);
 		}
 		// remove accounts from all current voting in motions.

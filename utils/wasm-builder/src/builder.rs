@@ -43,6 +43,7 @@ impl WasmBuilderSelectProject {
 			rust_flags: Vec::new(),
 			file_name: None,
 			project_cargo_toml: get_manifest_dir().join("Cargo.toml"),
+			features_to_enable: Vec::new(),
 		}
 	}
 
@@ -60,6 +61,7 @@ impl WasmBuilderSelectProject {
 				rust_flags: Vec::new(),
 				file_name: None,
 				project_cargo_toml: path,
+				features_to_enable: Vec::new(),
 			})
 		} else {
 			Err("Project path must point to the `Cargo.toml` of the project")
@@ -88,6 +90,8 @@ pub struct WasmBuilder {
 	/// The path to the `Cargo.toml` of the project that should be built
 	/// for wasm.
 	project_cargo_toml: PathBuf,
+	/// Features that should be enabled when building the wasm binary.
+	features_to_enable: Vec<String>,
 }
 
 impl WasmBuilder {
@@ -132,6 +136,14 @@ impl WasmBuilder {
 		self
 	}
 
+	/// Enable the given feature when building the wasm binary.
+	///
+	/// `feature` needs to be a valid feature that is defined in the project `Cargo.toml`.
+	pub fn enable_feature(mut self, feature: impl Into<String>) -> Self {
+		self.features_to_enable.push(feature.into());
+		self
+	}
+
 	/// Build the WASM binary.
 	pub fn build(self) {
 		let out_dir = PathBuf::from(env::var("OUT_DIR").expect("`OUT_DIR` is set by cargo!"));
@@ -151,6 +163,7 @@ impl WasmBuilder {
 			file_path,
 			self.project_cargo_toml,
 			self.rust_flags.into_iter().map(|f| format!("{} ", f)).collect(),
+			self.features_to_enable,
 		);
 
 		// As last step we need to generate our `rerun-if-changed` stuff. If a build fails, we don't
@@ -204,6 +217,7 @@ fn build_project(
 	file_name: PathBuf,
 	project_cargo_toml: PathBuf,
 	default_rustflags: String,
+	features_to_enable: Vec<String>,
 ) {
 	let cargo_cmd = match crate::prerequisites::check() {
 		Ok(cmd) => cmd,
@@ -217,6 +231,7 @@ fn build_project(
 		&project_cargo_toml,
 		&default_rustflags,
 		cargo_cmd,
+		features_to_enable,
 	);
 
 	let (wasm_binary, wasm_binary_bloaty) = if let Some(wasm_binary) = wasm_binary {

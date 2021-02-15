@@ -97,6 +97,7 @@ pub(crate) fn create_and_compile(
 	project_cargo_toml: &Path,
 	default_rustflags: &str,
 	cargo_cmd: CargoCommandVersioned,
+	features_to_enable: Vec<String>,
 ) -> (Option<WasmBinary>, WasmBinaryBloaty) {
 	let wasm_workspace_root = get_wasm_workspace_root();
 	let wasm_workspace = wasm_workspace_root.join("wbuild");
@@ -108,6 +109,7 @@ pub(crate) fn create_and_compile(
 		&wasm_workspace,
 		&crate_metadata,
 		&crate_metadata.workspace_root,
+		features_to_enable,
 	);
 
 	build_project(&project, default_rustflags, cargo_cmd);
@@ -199,7 +201,7 @@ fn create_project_cargo_toml(
 	crate_name: &str,
 	crate_path: &Path,
 	wasm_binary: &str,
-	enabled_features: &[String],
+	enabled_features: impl Iterator<Item = String>,
 ) {
 	let mut workspace_toml: Table = toml::from_str(
 		&fs::read_to_string(
@@ -265,7 +267,7 @@ fn create_project_cargo_toml(
 	wasm_project.insert("package".into(), crate_name.into());
 	wasm_project.insert("path".into(), crate_path.display().to_string().into());
 	wasm_project.insert("default-features".into(), false.into());
-	wasm_project.insert("features".into(), enabled_features.to_vec().into());
+	wasm_project.insert("features".into(), enabled_features.collect::<Vec<_>>().into());
 
 	dependencies.insert("wasm-project".into(), wasm_project.into());
 
@@ -339,6 +341,7 @@ fn create_project(
 	wasm_workspace: &Path,
 	crate_metadata: &Metadata,
 	workspace_root_path: &Path,
+	features_to_enable: Vec<String>,
 ) -> PathBuf {
 	let crate_name = get_crate_name(project_cargo_toml);
 	let crate_path = project_cargo_toml.parent().expect("Parent path exists; qed");
@@ -354,13 +357,16 @@ fn create_project(
 		enabled_features.push("runtime-wasm".into());
 	}
 
+	let mut enabled_features = enabled_features.into_iter().collect::<HashSet<_>>();
+	enabled_features.extend(features_to_enable.into_iter());
+
 	create_project_cargo_toml(
 		&wasm_project_folder,
 		workspace_root_path,
 		&crate_name,
 		&crate_path,
 		&wasm_binary,
-		&enabled_features,
+		enabled_features.into_iter(),
 	);
 
 	write_file_if_changed(

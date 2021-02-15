@@ -1665,6 +1665,7 @@ dependencies = [
  "frame-system",
  "hex-literal",
  "linregress",
+ "log",
  "parity-scale-codec",
  "paste 1.0.4",
  "serde",
@@ -1745,7 +1746,6 @@ dependencies = [
  "pretty_assertions",
  "serde",
  "smallvec 1.6.1",
- "sp-api",
  "sp-arithmetic",
  "sp-core",
  "sp-inherents",
@@ -1755,7 +1755,6 @@ dependencies = [
  "sp-state-machine",
  "sp-std",
  "sp-tracing",
- "substrate-test-runtime-client",
 ]
 
 [[package]]
@@ -1816,6 +1815,7 @@ dependencies = [
  "criterion",
  "frame-support",
  "impl-trait-for-tuples",
+ "log",
  "parity-scale-codec",
  "serde",
  "sp-core",
@@ -4059,6 +4059,7 @@ dependencies = [
  "frame-system-benchmarking",
  "frame-system-rpc-runtime-api",
  "hex-literal",
+ "log",
  "node-primitives",
  "pallet-assets",
  "pallet-authority-discovery",
@@ -4483,6 +4484,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "log",
  "pallet-authorship",
  "pallet-balances",
  "pallet-offences",
@@ -4512,6 +4514,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "log",
  "pallet-transaction-payment",
  "parity-scale-codec",
  "serde",
@@ -4554,6 +4557,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
+ "tracing",
 ]
 
 [[package]]
@@ -4565,6 +4569,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "hex-literal",
+ "log",
  "pallet-balances",
  "pallet-contracts-primitives",
  "pallet-contracts-proc-macro",
@@ -4680,6 +4685,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "hex-literal",
+ "log",
  "pallet-balances",
  "parity-scale-codec",
  "serde",
@@ -4714,6 +4720,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "lite-json",
+ "log",
  "parity-scale-codec",
  "serde",
  "sp-core",
@@ -4746,6 +4753,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "log",
  "pallet-authorship",
  "pallet-balances",
  "pallet-offences",
@@ -4790,6 +4798,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "log",
  "pallet-authorship",
  "pallet-session",
  "parity-scale-codec",
@@ -4875,6 +4884,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "hex-literal",
+ "log",
  "parity-scale-codec",
  "serde",
  "sp-api",
@@ -4920,6 +4930,7 @@ version = "2.0.0"
 dependencies = [
  "frame-support",
  "frame-system",
+ "log",
  "parity-scale-codec",
  "serde",
  "sp-core",
@@ -4934,6 +4945,7 @@ version = "3.0.0"
 dependencies = [
  "frame-support",
  "frame-system",
+ "log",
  "pallet-balances",
  "parity-scale-codec",
  "serde",
@@ -5024,6 +5036,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "log",
  "parity-scale-codec",
  "serde",
  "sp-core",
@@ -5115,6 +5128,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "hex",
+ "log",
  "pallet-authorship",
  "pallet-balances",
  "pallet-session",
@@ -5205,6 +5219,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "impl-trait-for-tuples",
+ "log",
  "parity-scale-codec",
  "serde",
  "sp-core",
@@ -8140,6 +8155,7 @@ name = "sp-api"
 version = "3.0.0"
 dependencies = [
  "hash-db",
+ "log",
  "parity-scale-codec",
  "sp-api-proc-macro",
  "sp-core",
@@ -8149,6 +8165,7 @@ dependencies = [
  "sp-test-primitives",
  "sp-version",
  "thiserror",
+ "tracing",
 ]
 
 [[package]]
@@ -8167,6 +8184,7 @@ name = "sp-api-test"
 version = "2.0.1"
 dependencies = [
  "criterion",
+ "log",
  "parity-scale-codec",
  "rustversion",
  "sc-block-builder",
@@ -8176,6 +8194,7 @@ dependencies = [
  "sp-core",
  "sp-runtime",
  "sp-state-machine",
+ "sp-tracing",
  "sp-version",
  "substrate-test-runtime-client",
  "trybuild",
@@ -8620,12 +8639,15 @@ dependencies = [
  "rand 0.7.3",
  "serde",
  "serde_json",
+ "sp-api",
  "sp-application-crypto",
  "sp-arithmetic",
  "sp-core",
  "sp-io",
  "sp-state-machine",
  "sp-std",
+ "sp-tracing",
+ "substrate-test-runtime-client",
 ]
 
 [[package]]
