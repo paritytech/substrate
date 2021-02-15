@@ -825,17 +825,20 @@ define_env!(Env, <E: Ext>,
 					)
 				}
 				// there is not enough gas to allocate for the nested call.
-				None => Err(Error::<<E as Ext>::T>::OutOfGas.into()),
+				None => Err((Error::<<E as Ext>::T>::OutOfGas.into(), 0)),
 			}
 		});
-
-		if let Ok(output) = &call_outcome {
-			ctx.adjust_gas(charged, RuntimeToken::CallSurchargeCodeSize(output.1));
-			ctx.write_sandbox_output(output_ptr, output_len_ptr, &output.0.data, true, |len| {
+		let code_len = match &call_outcome {
+			Ok((_, len)) => len,
+			Err((_, len)) => len,
+		};
+		ctx.adjust_gas(charged, RuntimeToken::CallSurchargeCodeSize(*code_len));
+		if let Ok((output, _)) = &call_outcome {
+			ctx.write_sandbox_output(output_ptr, output_len_ptr, &output.data, true, |len| {
 				Some(RuntimeToken::CallCopyOut(len))
 			})?;
 		}
-		Ok(Runtime::<E>::exec_into_return_code(call_outcome.map(|r| r.0))?)
+		Ok(Runtime::<E>::exec_into_return_code(call_outcome.map(|r| r.0).map_err(|r| r.0))?)
 	},
 
 	// Instantiate a contract with the specified code hash.
@@ -926,11 +929,15 @@ define_env!(Env, <E: Ext>,
 					)
 				}
 				// there is not enough gas to allocate for the nested call.
-				None => Err(Error::<<E as Ext>::T>::OutOfGas.into()),
+				None => Err((Error::<<E as Ext>::T>::OutOfGas.into(), 0)),
 			}
 		});
-		if let Ok((address, output, code_len)) = &instantiate_outcome {
-			ctx.adjust_gas(charged, RuntimeToken::InstantiateSurchargeCodeSize(*code_len));
+		let code_len = match &instantiate_outcome {
+			Ok((_, _, code_len)) => code_len,
+			Err((_, code_len)) => code_len,
+		};
+		ctx.adjust_gas(charged, RuntimeToken::InstantiateSurchargeCodeSize(*code_len));
+		if let Ok((address, output, _)) = &instantiate_outcome {
 			if !output.flags.contains(ReturnFlags::REVERT) {
 				ctx.write_sandbox_output(
 					address_ptr, address_len_ptr, &address.encode(), true, already_charged,
@@ -940,7 +947,9 @@ define_env!(Env, <E: Ext>,
 				Some(RuntimeToken::InstantiateCopyOut(len))
 			})?;
 		}
-		Ok(Runtime::<E>::exec_into_return_code(instantiate_outcome.map(|(_, retval, _)| retval))?)
+		Ok(Runtime::<E>::exec_into_return_code(
+			instantiate_outcome.map(|(_, retval, _)| retval).map_err(|(err, _)| err)
+		)?)
 	},
 
 	// Remove the calling account and transfer remaining balance.
@@ -971,9 +980,12 @@ define_env!(Env, <E: Ext>,
 		let charged = ctx.charge_gas(
 			RuntimeToken::TerminateSurchargeCodeSize(<E::T as Config>::MaxCodeSize::get())
 		)?;
-		let code_len = ctx.ext.terminate(&beneficiary)?;
+		let (result, code_len) = match ctx.ext.terminate(&beneficiary) {
+			Ok(len) => (Ok(()), len),
+			Err((err, len)) => (Err(err), len),
+		};
 		ctx.adjust_gas(charged, RuntimeToken::TerminateSurchargeCodeSize(code_len));
-
+		result?;
 		Err(TrapReason::Termination)
 	},
 
@@ -1263,11 +1275,17 @@ define_env!(Env, <E: Ext>,
 			caller_code: max_len,
 			tombstone_code: max_len,
 		})?;
-		let (caller_code, tombstone_code) = ctx.ext.restore_to(dest, code_hash, rent_allowance, delta)?;
+		let (result, caller_code, tombstone_code) = match ctx.ext.restore_to(
+			dest, code_hash, rent_allowance, delta
+		) {
+			Ok((code, tomb)) => (Ok(()), code, tomb),
+			Err((err, code, tomb)) => (Err(err), code, tomb),
+		};
 		ctx.adjust_gas(charged, RuntimeToken::RestoreToSurchargeCodeSize {
 			caller_code,
 			tombstone_code,
 		});
+		result?;
 		Err(TrapReason::Restoration)
 	},
 

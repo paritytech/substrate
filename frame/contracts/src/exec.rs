@@ -82,7 +82,7 @@ pub trait Ext {
 		gas_meter: &mut GasMeter<Self::T>,
 		input_data: Vec<u8>,
 		salt: &[u8],
-	) -> Result<(AccountIdOf<Self::T>, ExecReturnValue, u32), ExecError>;
+	) -> Result<(AccountIdOf<Self::T>, ExecReturnValue, u32), (ExecError, u32)>;
 
 	/// Transfer some amount of funds into the specified account.
 	fn transfer(
@@ -102,7 +102,7 @@ pub trait Ext {
 	fn terminate(
 		&mut self,
 		beneficiary: &AccountIdOf<Self::T>,
-	) -> Result<u32, DispatchError>;
+	) -> Result<u32, (DispatchError, u32)>;
 
 	/// Call (possibly transferring some amount of funds) into the specified account.
 	///
@@ -113,7 +113,7 @@ pub trait Ext {
 		value: BalanceOf<Self::T>,
 		gas_meter: &mut GasMeter<Self::T>,
 		input_data: Vec<u8>,
-	) -> Result<(ExecReturnValue, u32), ExecError>;
+	) -> Result<(ExecReturnValue, u32), (ExecError, u32)>;
 
 	/// Restores the given destination contract sacrificing the current one.
 	///
@@ -130,7 +130,7 @@ pub trait Ext {
 		code_hash: CodeHash<Self::T>,
 		rent_allowance: BalanceOf<Self::T>,
 		delta: Vec<StorageKey>,
-	) -> Result<(u32, u32), DispatchError>;
+	) -> Result<(u32, u32), (DispatchError, u32, u32)>;
 
 	/// Returns a reference to the account id of the caller.
 	fn caller(&self) -> &AccountIdOf<Self::T>;
@@ -309,16 +309,17 @@ where
 		value: BalanceOf<T>,
 		gas_meter: &mut GasMeter<T>,
 		input_data: Vec<u8>,
-	) -> Result<(ExecReturnValue, u32), ExecError> {
+	) -> Result<(ExecReturnValue, u32), (ExecError, u32)> {
 		if self.depth == T::MaxDepth::get() as usize {
-			Err(Error::<T>::MaxCallDepthReached)?
+			return Err((Error::<T>::MaxCallDepthReached.into(), 0));
 		}
 
 		let contract = <ContractInfoOf<T>>::get(&dest)
 			.and_then(|contract| contract.get_alive())
-			.ok_or(Error::<T>::NotCallable)?;
+			.ok_or((Error::<T>::NotCallable.into(), 0))?;
 
-		let executable = E::from_storage(contract.code_hash, &self.schedule)?;
+		let executable = E::from_storage(contract.code_hash, &self.schedule)
+			.map_err(|e| (e.into(), 0))?;
 		let code_len = executable.pristine_size();
 
 		// This charges the rent and denies access to a contract that is in need of
@@ -326,8 +327,9 @@ where
 		// changes would be rolled back in case this contract is called by another
 		// contract.
 		// See: https://github.com/paritytech/substrate/issues/6439#issuecomment-648754324
-		let contract = Rent::<T, E>::charge(&dest, contract, executable.occupied_storage())?
-			.ok_or(Error::<T>::NotCallable)?;
+		let contract = Rent::<T, E>::charge(&dest, contract, executable.occupied_storage())
+			.map_err(|e| (e.into(), code_len))?
+			.ok_or((Error::<T>::NotCallable.into(), code_len))?;
 
 		let transactor_kind = self.transactor_kind();
 		let caller = self.self_account.clone();
@@ -350,7 +352,7 @@ where
 				gas_meter,
 			).map_err(|e| ExecError { error: e.error, origin: ErrorOrigin::Callee })?;
 			Ok(output)
-		})?;
+		}).map_err(|e| (e, code_len))?;
 		Ok((result, code_len))
 	}
 
@@ -596,11 +598,13 @@ where
 		gas_meter: &mut GasMeter<T>,
 		input_data: Vec<u8>,
 		salt: &[u8],
-	) -> Result<(AccountIdOf<T>, ExecReturnValue, u32), ExecError> {
-		let executable = E::from_storage(code_hash, &self.ctx.schedule)?;
+	) -> Result<(AccountIdOf<T>, ExecReturnValue, u32), (ExecError, u32)> {
+		let executable = E::from_storage(code_hash, &self.ctx.schedule)
+			.map_err(|e| (e.into(), 0))?;
 		let code_len = executable.pristine_size();
-		let result = self.ctx.instantiate(endowment, gas_meter, executable, input_data, salt)?;
-		Ok((result.0, result.1, code_len))
+		self.ctx.instantiate(endowment, gas_meter, executable, input_data, salt)
+			.map(|r| (r.0, r.1, code_len))
+			.map_err(|e| (e, code_len))
 	}
 
 	fn transfer(
@@ -620,12 +624,12 @@ where
 	fn terminate(
 		&mut self,
 		beneficiary: &AccountIdOf<Self::T>,
-	) -> Result<u32, DispatchError> {
+	) -> Result<u32, (DispatchError, u32)> {
 		let self_id = self.ctx.self_account.clone();
 		let value = T::Currency::free_balance(&self_id);
 		if let Some(caller_ctx) = self.ctx.caller {
 			if caller_ctx.is_live(&self_id) {
-				return Err(Error::<T>::ReentranceDenied.into());
+				return Err((Error::<T>::ReentranceDenied.into(), 0));
 			}
 		}
 		transfer::<T>(
@@ -634,9 +638,9 @@ where
 			&self_id,
 			beneficiary,
 			value,
-		)?;
+		).map_err(|e| (e, 0))?;
 		if let Some(ContractInfo::Alive(info)) = ContractInfoOf::<T>::take(&self_id) {
-			Storage::<T>::queue_trie_for_deletion(&info)?;
+			Storage::<T>::queue_trie_for_deletion(&info).map_err(|e| (e, 0))?;
 			let code_len = E::remove_user(info.code_hash);
 			Contracts::<T>::deposit_event(RawEvent::Terminated(self_id, beneficiary.clone()));
 			Ok(code_len)
@@ -655,7 +659,7 @@ where
 		value: BalanceOf<T>,
 		gas_meter: &mut GasMeter<T>,
 		input_data: Vec<u8>,
-	) -> Result<(ExecReturnValue, u32), ExecError> {
+	) -> Result<(ExecReturnValue, u32), (ExecError, u32)> {
 		self.ctx.call(to.clone(), value, gas_meter, input_data)
 	}
 
@@ -665,10 +669,10 @@ where
 		code_hash: CodeHash<Self::T>,
 		rent_allowance: BalanceOf<Self::T>,
 		delta: Vec<StorageKey>,
-	) -> Result<(u32, u32), DispatchError> {
+	) -> Result<(u32, u32), (DispatchError, u32, u32)> {
 		if let Some(caller_ctx) = self.ctx.caller {
 			if caller_ctx.is_live(&self.ctx.self_account) {
-				return Err(Error::<T>::ReentranceDenied.into());
+				return Err((Error::<T>::ReentranceDenied.into(), 0, 0));
 			}
 		}
 
@@ -1133,7 +1137,7 @@ mod tests {
 					// Verify that we've got proper error and set `reached_bottom`.
 					assert_eq!(
 						r,
-						Err(Error::<Test>::MaxCallDepthReached.into())
+						Err((Error::<Test>::MaxCallDepthReached.into(), 0))
 					);
 					*reached_bottom = true;
 				} else {
@@ -1389,10 +1393,10 @@ mod tests {
 						vec![],
 						&[],
 					),
-					Err(ExecError {
+					Err((ExecError {
 						error: DispatchError::Other("It's a trap!"),
 						origin: ErrorOrigin::Callee,
-					})
+					}, 0))
 				);
 
 				exec_success()

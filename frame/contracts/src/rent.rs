@@ -456,22 +456,22 @@ where
 		code_hash: CodeHash<T>,
 		rent_allowance: BalanceOf<T>,
 		delta: Vec<crate::exec::StorageKey>,
-	) -> Result<(u32, u32), DispatchError> {
+	) -> Result<(u32, u32), (DispatchError, u32, u32)> {
 		let mut origin_contract = <ContractInfoOf<T>>::get(&origin)
 			.and_then(|c| c.get_alive())
-			.ok_or(Error::<T>::InvalidSourceContract)?;
+			.ok_or((Error::<T>::InvalidSourceContract.into(), 0, 0))?;
 
 		let child_trie_info = origin_contract.child_trie_info();
 
 		let current_block = <frame_system::Module<T>>::block_number();
 
 		if origin_contract.last_write == Some(current_block) {
-			return Err(Error::<T>::InvalidContractOrigin.into());
+			return Err((Error::<T>::InvalidContractOrigin.into(), 0, 0));
 		}
 
 		let dest_tombstone = <ContractInfoOf<T>>::get(&dest)
 			.and_then(|c| c.get_tombstone())
-			.ok_or(Error::<T>::InvalidDestinationContract)?;
+			.ok_or((Error::<T>::InvalidDestinationContract.into(), 0, 0))?;
 
 		let last_write = if !delta.is_empty() {
 			Some(current_block)
@@ -480,7 +480,7 @@ where
 		};
 
 		// Fails if the code hash does not exist on chain
-		let caller_code_len = E::add_user(code_hash)?;
+		let caller_code_len = E::add_user(code_hash).map_err(|e| (e, 0, 0))?;
 
 		// We are allowed to eagerly modify storage even though the function can
 		// fail later due to tombstones not matching. This is because the restoration
@@ -504,7 +504,7 @@ where
 		);
 
 		if tombstone != dest_tombstone {
-			return Err(Error::<T>::InvalidTombstone.into());
+			return Err((Error::<T>::InvalidTombstone.into(), caller_code_len, 0));
 		}
 
 		origin_contract.storage_size -= bytes_taken;

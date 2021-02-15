@@ -352,9 +352,7 @@ where
 fn calling_plain_account_fails() {
 	ExtBuilder::default().build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 100_000_000);
-		let base_cost = <<Test as Config>::WeightInfo as crate::WeightInfo>::call(
-			<Test as Config>::MaxCodeSize::get() / 1024
-		);
+		let base_cost = <<Test as Config>::WeightInfo as crate::WeightInfo>::call(0);
 
 		assert_eq!(
 			Contracts::call(Origin::signed(ALICE), BOB, 0, GAS_LIMIT, Vec::new()),

@@ -309,7 +309,7 @@ mod tests {
 			gas_meter: &mut GasMeter<Test>,
 			data: Vec<u8>,
 			salt: &[u8],
-		) -> Result<(AccountIdOf<Self::T>, ExecReturnValue, u32), ExecError> {
+		) -> Result<(AccountIdOf<Self::T>, ExecReturnValue, u32), (ExecError, u32)> {
 			self.instantiates.push(InstantiateEntry {
 				code_hash: code_hash.clone(),
 				endowment,
@@ -344,7 +344,7 @@ mod tests {
 			value: u64,
 			_gas_meter: &mut GasMeter<Test>,
 			data: Vec<u8>,
-		) -> Result<(ExecReturnValue, u32), ExecError> {
+		) -> Result<(ExecReturnValue, u32), (ExecError, u32)> {
 			self.transfers.push(TransferEntry {
 				to: to.clone(),
 				value,
@@ -357,7 +357,7 @@ mod tests {
 		fn terminate(
 			&mut self,
 			beneficiary: &AccountIdOf<Self::T>,
-		) -> Result<u32, DispatchError> {
+		) -> Result<u32, (DispatchError, u32)> {
 			self.terminations.push(TerminationEntry {
 				beneficiary: beneficiary.clone(),
 			});
@@ -369,7 +369,7 @@ mod tests {
 			code_hash: H256,
 			rent_allowance: u64,
 			delta: Vec<StorageKey>,
-		) -> Result<(u32, u32), DispatchError> {
+		) -> Result<(u32, u32), (DispatchError, u32, u32)> {
 			self.restores.push(RestoreEntry {
 				dest,
 				code_hash,
@@ -448,7 +448,7 @@ mod tests {
 			gas_meter: &mut GasMeter<Test>,
 			input_data: Vec<u8>,
 			salt: &[u8],
-		) -> Result<(AccountIdOf<Self::T>, ExecReturnValue, u32), ExecError> {
+		) -> Result<(AccountIdOf<Self::T>, ExecReturnValue, u32), (ExecError, u32)> {
 			(**self).instantiate(code, value, gas_meter, input_data, salt)
 		}
 		fn transfer(
@@ -461,7 +461,7 @@ mod tests {
 		fn terminate(
 			&mut self,
 			beneficiary: &AccountIdOf<Self::T>,
-		) -> Result<u32, DispatchError> {
+		) -> Result<u32, (DispatchError, u32)> {
 			(**self).terminate(beneficiary)
 		}
 		fn call(
@@ -470,7 +470,7 @@ mod tests {
 			value: u64,
 			gas_meter: &mut GasMeter<Test>,
 			input_data: Vec<u8>,
-		) -> Result<(ExecReturnValue, u32), ExecError> {
+		) -> Result<(ExecReturnValue, u32), (ExecError, u32)> {
 			(**self).call(to, value, gas_meter, input_data)
 		}
 		fn restore_to(
@@ -479,7 +479,7 @@ mod tests {
 			code_hash: H256,
 			rent_allowance: u64,
 			delta: Vec<StorageKey>,
-		) -> Result<(u32, u32), DispatchError> {
+		) -> Result<(u32, u32), (DispatchError, u32, u32)> {
 			(**self).restore_to(
 				dest,
 				code_hash,
