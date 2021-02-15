@@ -932,7 +932,8 @@ decl_module! {
 								// by subcurator fee.
 								bounty.fee = bounty
 									.fee
-									.checked_sub(fee).ok_or(Error::<T>::InvalidFee)?;
+									.checked_sub(&fee)
+									.ok_or(Error::<T>::InvalidFee)?;
 							}
 							Ok(())
 						}
