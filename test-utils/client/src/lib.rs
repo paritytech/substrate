@@ -198,6 +198,7 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 	) where
 		Executor: sc_client_api::CallExecutor<Block> + 'static,
 		Backend: sc_client_api::backend::Backend<Block>,
+		<Backend as sc_client_api::backend::Backend<Block>>::OffchainStorage: 'static,
 	{
 		let storage = {
 			let mut storage = self.genesis_init.genesis_storage();
@@ -225,6 +226,7 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 			ExecutionExtensions::new(
 				self.execution_strategies,
 				self.keystore,
+				sc_offchain::OffchainDb::factory_from_backend(&*self.backend),
 			),
 			None,
 			ClientConfig {

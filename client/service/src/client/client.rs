@@ -205,7 +205,11 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 		B: backend::LocalBackend<Block> + 'static,
 {
 	let call_executor = LocalCallExecutor::new(backend.clone(), executor, spawn_handle, config.clone())?;
-	let extensions = ExecutionExtensions::new(Default::default(), keystore);
+	let extensions = ExecutionExtensions::new(
+		Default::default(),
+		keystore,
+		sc_offchain::OffchainDb::factory_from_backend(&*backend),
+	);
 	Client::new(
 		backend,
 		call_executor,

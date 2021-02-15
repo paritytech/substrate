@@ -26,7 +26,7 @@ use pallet_staking::testing_utils::*;
 use frame_support::{assert_ok, storage::StorageValue, traits::UnfilteredDispatchable};
 use frame_system::RawOrigin;
 use sp_runtime::DispatchError;
-use sp_core::offchain::{testing::TestOffchainExt, OffchainExt};
+use sp_core::offchain::{testing::TestOffchainExt, OffchainWorkerExt, OffchainDbExt};
 use pallet_staking::{EraElectionStatus, ElectionStatus, Module as Staking, Call as StakingCall};
 
 mod mock;
@@ -55,7 +55,8 @@ pub fn new_test_ext(iterations: u32) -> sp_io::TestExternalities {
 	seed[0..4].copy_from_slice(&iterations.to_le_bytes());
 	offchain_state.write().seed = seed;
 
-	ext.register_extension(OffchainExt::new(offchain));
+	ext.register_extension(OffchainDbExt::new(offchain.clone()));
+	ext.register_extension(OffchainWorkerExt::new(offchain));
 
 	ext
 }

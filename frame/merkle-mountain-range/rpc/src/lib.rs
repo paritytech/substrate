@@ -124,7 +124,11 @@ where
 
 		// TODO [ToDr] add offchain context.
 		let (leaf, proof) = api
-			.generate_proof(&BlockId::hash(block_hash), leaf_index)
+			.generate_proof_with_context(
+				&BlockId::hash(block_hash),
+				sp_core::ExecutionContext::OffchainCall(None),
+				leaf_index,
+			)
 			.map_err(runtime_error_into_rpc_error)?
 			.map_err(mmr_error_into_rpc_error)?;
 
