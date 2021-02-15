@@ -80,7 +80,12 @@ pub type MmrRootHash = H256;
 pub enum ConsensusLog<AuthorityId: Codec> {
 	/// The authorities have changed.
 	#[codec(index = 1)]
-	AuthoritiesChange(Vec<AuthorityId>),
+	AuthoritiesChange {
+		/// Set of new validators to be used
+		new_validator_set: Vec<AuthorityId>,
+		/// Id for this new set of validators
+		new_validator_set_id: ValidatorSetId,
+	},
 	/// Disable the authority with given index.
 	#[codec(index = 2)]
 	OnDisabled(AuthorityIndex),

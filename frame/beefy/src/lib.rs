@@ -101,9 +101,18 @@ impl<T: Config> Pallet<T> {
 		// set has actually changed.
 		if new != Self::authorities() {
 			<Authorities<T>>::put(&new);
-			<ValidatorSetId<T>>::put(Self::validator_set_id() + 1);
-			let log: DigestItem<T::Hash> =
-				DigestItem::Consensus(BEEFY_ENGINE_ID, ConsensusLog::AuthoritiesChange(new).encode());
+
+			let next = Self::validator_set_id() + 1u64;
+			<ValidatorSetId<T>>::put(next);
+
+			let log: DigestItem<T::Hash> = DigestItem::Consensus(
+				BEEFY_ENGINE_ID,
+				ConsensusLog::AuthoritiesChange {
+					new_validator_set: new,
+					new_validator_set_id: next,
+				}
+				.encode(),
+			);
 			<frame_system::Module<T>>::deposit_log(log);
 		}
 
