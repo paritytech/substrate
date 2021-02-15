@@ -1319,7 +1319,7 @@ decl_module! {
 						// Remove the subbounty from bounty active subbouty list
 						Bounties::<T>::mutate_exists(
 							bounty_id,
-							|maybe_bounty| -> DispatchResult {
+							|maybe_bounty| {
 								// Remove the subbounty index from parent bounty
 								// active list.
 								if let Some(bounty) = maybe_bounty.as_mut() {
