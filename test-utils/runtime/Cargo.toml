@@ -98,4 +98,4 @@ std = [
 	"trie-db/std",
 ]
 # Special feature to disable logging
-disable-logging = [ "sp-api/disable-logging", "log/max_level_error" ]
+disable-logging = [ "sp-api/disable-logging" ]
