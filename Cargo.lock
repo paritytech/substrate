@@ -4496,7 +4496,6 @@ dependencies = [
  "sp-consensus-babe",
  "sp-consensus-vrf",
  "sp-core",
- "sp-inherents",
  "sp-io",
  "sp-runtime",
  "sp-session",
