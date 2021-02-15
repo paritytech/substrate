@@ -421,7 +421,7 @@ benchmarks! {
 }
 
 impl_benchmark_test_suite!(
-	Offences,
+	Module,
 	crate::mock::new_test_ext(),
 	crate::mock::Test,
 );
