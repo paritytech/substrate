@@ -2290,11 +2290,11 @@ fn subbunty_close_works() {
 		assert_eq!(Balances::reserved_balance(6), 1);
 
 		// ===Call close_bounty===
-		// Test for error "SubBountyActive"
+		// Test for error "RequireNoActiveSubBounty"
 		// from close parent bounty
 		assert_noop!(
 			Bounties::close_bounty(Origin::root(), 0),
-			Error::<Test>::SubBountyActive,
+			Error::<Test>::RequireNoActiveSubBounty,
 		);
 
 		// close Subbounty-1

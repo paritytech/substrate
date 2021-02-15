@@ -111,7 +111,7 @@ use frame_support::traits::{
 };
 
 use sp_runtime::{Permill, RuntimeDebug, DispatchResult, traits::{
-	Zero, StaticLookup, AccountIdConversion, Saturating, BadOrigin,
+	Zero, StaticLookup, AccountIdConversion, Saturating, BadOrigin, CheckedSub,
 }};
 
 use frame_support::dispatch::{DispatchError, DispatchResultWithPostInfo};
@@ -338,8 +338,8 @@ decl_error! {
 		/// The bounty balance is not enough to add new subbounty.
 		InsufficientBountyBalance,
 		/// Subbounty active
-		SubBountyActive,
-		/// Number of subbounty exceeds threahold of `MaxActiveSubBountyCount`
+		RequireNoActiveSubBounty,
+		/// Number of subbounty exceeds threahold of TooManySubBounties
 		TooManySubBounties,
 		/// Require subbounty curator.
 		RequireSubCurator,
@@ -601,7 +601,7 @@ decl_module! {
 				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T>::InvalidIndex)?;
 
 				// Ensure no active subbounties before processing the call.
-				ensure!(bounty.active_subbounty_count == 0, Error::<T>::SubBountyActive);
+				ensure!(bounty.active_subbounty_count == 0, Error::<T>::RequireNoActiveSubBounty);
 
 				match &bounty.status {
 					BountyStatus::Active {
@@ -698,7 +698,7 @@ decl_module! {
 				let bounty = maybe_bounty.as_ref().ok_or(Error::<T>::InvalidIndex)?;
 
 				// Ensure no active subbounties before processing the call.
-				ensure!(bounty.active_subbounty_count == 0, Error::<T>::SubBountyActive);
+				ensure!(bounty.active_subbounty_count == 0, Error::<T>::RequireNoActiveSubBounty);
 
 				match &bounty.status {
 					BountyStatus::Proposed => {
@@ -842,11 +842,6 @@ decl_module! {
 						// Create subbounty ID.
 						let subbounty_id = Self::bounty_count();
 
-						// Increment the active subbounty count.
-						bounty.active_subbounty_count += 1;
-
-						BountyCount::put(subbounty_id + 1);
-
 						// Transfer fund from parent bounty to subbounty.
 						let subbounty_account = Self::bounty_account_id(subbounty_id);
 						T::Currency::transfer(
@@ -854,7 +849,11 @@ decl_module! {
 							&subbounty_account,
 							value,
 							AllowDeath
-						).map_err(|_| Error::<T>::InsufficientBountyBalance)?;
+						)?;
+
+						// Increment the active subbounty count.
+						bounty.active_subbounty_count += 1;
+						BountyCount::put(subbounty_id + 1);
 
 						// Create subbounty instance
 						Self::create_subbounty(
@@ -931,7 +930,6 @@ decl_module! {
 								// master curator fee &
 								// reduce the master curator fee
 								// by subcurator fee.
-								ensure!(fee < bounty.fee, Error::<T>::InvalidFee);
 								bounty.fee = bounty
 									.fee
 									.checked_sub(fee).ok_or(Error::<T>::InvalidFee)?;
@@ -1316,18 +1314,17 @@ decl_module! {
 							)
 						);
 
-						// Remove the subbounty from bounty active subbouty list
+						// Update the active subbounty tracking count.
 						Bounties::<T>::mutate_exists(
 							bounty_id,
 							|maybe_bounty| {
-								// Remove the subbounty index from parent bounty
-								// active list.
 								if let Some(bounty) = maybe_bounty.as_mut() {
-									bounty.active_subbounty_count -= 1;
+									bounty.active_subbounty_count = bounty
+										.active_subbounty_count
+										.saturating_sub(1);
 								}
-								Ok(())
 							}
-						)?;
+						);
 						// Remove the subbounty description
 						BountyDescriptions::remove(subbounty_id);
 						// Remove the subbounty instance
@@ -1366,7 +1363,7 @@ decl_module! {
 		fn close_subbounty(origin,
 			#[compact] bounty_id: BountyIndex,
 			#[compact] subbounty_id: BountyIndex,
-		) -> DispatchResultWithPostInfo {
+		) {
 			let maybe_sender = ensure_signed(origin.clone())
 				.map(Some)
 				.or_else(|_| T::RejectOrigin::ensure_origin(origin).map(|_| None))?;
@@ -1381,8 +1378,6 @@ decl_module! {
 			);
 			// Call the internal implementation.
 			Self::impl_close_subbounty(bounty_id, subbounty_id)?;
-
-			Ok(Some(<T as Config>::WeightInfo::close_subbounty()).into())
 		}
 	}
 }
@@ -1485,23 +1480,25 @@ impl<T: Config> Module<T> {
 				match &subbounty.status {
 					SubBountyStatus::Added |
 					SubBountyStatus::SubCuratorProposed { .. } => {
-						// Nothing extra to do besides the removal of the bounty below.
+						// Nothing extra to do besides the removal of the subbounty below.
 					},
 					SubBountyStatus::Active { subcurator } => {
-						// Cancelled by council, refund deposit of the working curator.
+						// Cancelled by admin(master curator or Root origin),
+						// refund deposit of the working subcurator.
 						let _ = T::Currency::unreserve(subcurator, subbounty.curator_deposit);
-						// Then execute removal of the bounty below.
+						// Then execute removal of the subbounty below.
 					},
 					SubBountyStatus::PendingPayout { .. } => {
-						// Bounty is already pending payout. If council wants to cancel
-						// this bounty, it should mean the curator was acting maliciously.
-						// So the council should first unassign the curator, slashing their
-						// deposit.
+						// Subbounty is already in pending payout. If admin(master curator or
+						// Root origin) wants to cancel this subbounty,
+						// it should mean the subcurator was acting maliciously.
+						// So admin should first unassign the subcurator,
+						// slashing their deposit.
 						return Err(Error::<T>::PendingPayout.into())
 					},
 				}
 
-				// Update the master curator fee &
+				// revert the subcurator fee back to master curator &
 				// Reduce the active subbounty count.
 				Bounties::<T>::mutate_exists(
 					bounty_id,
@@ -1510,7 +1507,8 @@ impl<T: Config> Module<T> {
 							bounty.fee = bounty
 								.fee
 								.saturating_add(subbounty.fee);
-							bounty.active_subbounty_count -= 1;
+							bounty.active_subbounty_count = bounty.active_subbounty_count
+								.saturating_sub(1);
 						}
 					}
 				);
