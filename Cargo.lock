@@ -3963,6 +3963,7 @@ dependencies = [
  "parity-scale-codec",
  "sc-executor",
  "sp-application-crypto",
+ "sp-consensus-babe",
  "sp-core",
  "sp-externalities",
  "sp-io",
