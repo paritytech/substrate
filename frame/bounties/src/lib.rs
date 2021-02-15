@@ -764,7 +764,7 @@ decl_module! {
 		/// - O(1).
 		/// # </weight>
 		#[weight = <T as Config>::WeightInfo::extend_bounty_expiry()]
-		fn extend_bounty_expiry(origin, #[compact] bounty_id: BountyIndex, remark: Vec<u8>) {
+		fn extend_bounty_expiry(origin, #[compact] bounty_id: BountyIndex, _remark: Vec<u8>) {
 			let signer = ensure_signed(origin)?;
 
 			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
