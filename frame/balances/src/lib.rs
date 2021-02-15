@@ -1363,11 +1363,12 @@ impl<T: Config<I>, I: 'static> ReservableCurrency<T::AccountId> for Pallet<T, I>
 		if value.is_zero() { return Ok(Zero::zero()) }
 
 		// Pre-check dest for error before mutation
-		// ensure!(T::AccountStore::is_explicit(&beneficiary), Error::<T, I>::DeadAccount);
+		ensure!(frame_system::Module::<T>::account_exists(&beneficiary), Error::<T, I>::DeadAccount);
 		let pre_chk_beneficiary_acc = T::AccountStore::get(&beneficiary);
 		let pre_chk_slashed_acc = T::AccountStore::get(&slashed);
 		let actual = cmp::min(pre_chk_slashed_acc.reserved, value);
 
+		// Check for Overflow on beneficiary account.
 		match status {
 			Status::Free => pre_chk_beneficiary_acc
 				.free
@@ -1387,17 +1388,18 @@ impl<T: Config<I>, I: 'static> ReservableCurrency<T::AccountId> for Pallet<T, I>
 			};
 		}
 
-		Self::try_mutate_account(beneficiary, |to_account, is_new|-> Result<Self::Balance, DispatchError> {
-			ensure!(!is_new, Error::<T, I>::DeadAccount);
+		// Update the From or slashed account.
+		Self::try_mutate_account(slashed, |from_account, _| -> Result<Self::Balance, DispatchError> {
+			from_account.reserved -= actual;
+			Ok(actual)
+		})?;
+
+		// Update the To or beneficiary account.
+		Self::try_mutate_account(beneficiary, |to_account, _|-> Result<Self::Balance, DispatchError> {
 			match status {
 				Status::Free => to_account.free = to_account.free.saturating_add(actual),
 				Status::Reserved => to_account.reserved = to_account.reserved.saturating_add(actual),
 			}
-			Ok(actual)
-		})?;
-
-		Self::try_mutate_account(slashed, |from_account, _| -> Result<Self::Balance, DispatchError> {
-			from_account.reserved -= actual;
 			Ok(actual)
 		})?;
 
