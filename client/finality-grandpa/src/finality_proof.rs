@@ -249,127 +249,37 @@ where
 ///
 /// It is assumed that the caller already have a proof-of-finality for the block 'begin'.
 pub fn prove_warp_sync<Block: BlockT, B: BlockchainBackend<Block>>(
-	blockchain: &B,
+	backend: &B,
 	begin: Block::Hash,
-	max_fragment_limit: Option<usize>,
-	mut cache: Option<&mut WarpSyncFragmentCache<Block::Header>>,
+	set_changes: &AuthoritySetChanges<NumberFor<Block>>,
 ) -> ::sp_blockchain::Result<Vec<u8>> {
-
 	let begin = BlockId::Hash(begin);
-	let begin_number = blockchain.block_number_from_id(&begin)?
+	let begin_number = backend
+		.block_number_from_id(&begin)?
 		.ok_or_else(|| ClientError::Backend("Missing start block".to_string()))?;
-	let end = BlockId::Hash(blockchain.last_finalized()?);
-	let end_number = blockchain.block_number_from_id(&end)?
-		// This error should not happen, we could also panic.
-		.ok_or_else(|| ClientError::Backend("Missing last finalized block".to_string()))?;
-
-	if begin_number > end_number {
-		return Err(ClientError::Backend("Unfinalized start for authority proof".to_string()));
-	}
 
 	let mut result = Vec::new();
-	let mut last_apply = None;
 
-	let header = blockchain.expect_header(begin)?;
-	let mut index = *header.number();
-
-	// Find previous change in case there is a delay.
-	// This operation is a costy and only for the delay corner case.
-	while index > Zero::zero() {
-		index = index - One::one();
-		if let Some((fragment, apply_block)) = get_warp_sync_proof_fragment(blockchain, index, &mut cache)? {
-			if last_apply.map(|next| &next > header.number()).unwrap_or(false) {
-				result.push(fragment);
-				last_apply = Some(apply_block);
-			} else {
-				break;
-			}
-		}
-	}
-
-	let mut index = *header.number();
-	while index <= end_number {
-		if max_fragment_limit.map(|limit| result.len() >= limit).unwrap_or(false) {
-			break;
+	for (_, last_block) in &set_changes.0 {
+		if *last_block < begin_number {
+			continue;
 		}
 
-		if let Some((fragement, apply_block)) = get_warp_sync_proof_fragment(blockchain, index, &mut cache)? {
-			if last_apply.map(|next| apply_block < next).unwrap_or(false) {
-				// Previous delayed will not apply, do not include it.
-				result.pop();
-			}
-			result.push(fragement);
-			last_apply = Some(apply_block);
-		}
+		let header = backend.header(BlockId::Number(*last_block))?.expect(
+			"header number comes from previously applied set changes; must exist in db; qed.",
+		);
 
-		index = index + One::one();
-	}
+		let justification = backend
+			.justification(BlockId::Number(*last_block))?
+			.expect("header is last in set; must have justification; qed.");
 
-	let at_limit = max_fragment_limit.map(|limit| result.len() >= limit).unwrap_or(false);
-
-	// add last finalized block if reached and not already included.
-	if !at_limit && result.last().as_ref().map(|head| head.header.number()) != Some(&end_number) {
-		let header = blockchain.expect_header(end)?;
-		if let Some(justification) = blockchain.justification(BlockId::Number(end_number.clone()))? {
-			result.push(AuthoritySetProofFragment {
-				header: header.clone(),
-				justification,
-			});
-		} else {
-			// no justification, don't include it.
-		}
+		result.push(AuthoritySetProofFragment {
+			header: header.clone(),
+			justification,
+		});
 	}
 
 	Ok(result.encode())
-}
-
-/// Try get a warp sync proof fragment a a given finalized block.
-fn get_warp_sync_proof_fragment<Block: BlockT, B: BlockchainBackend<Block>>(
-	blockchain: &B,
-	index: NumberFor<Block>,
-	cache: &mut Option<&mut WarpSyncFragmentCache<Block::Header>>,
-) -> sp_blockchain::Result<Option<(AuthoritySetProofFragment<Block::Header>, NumberFor<Block>)>> {
-	if let Some(cache) = cache.as_mut() {
-		if let Some(result) = cache.get_item(index) {
-			return Ok(result);
-		}
-	}
-
-	let mut result = None;
-	let header = blockchain.expect_header(BlockId::number(index))?;
-
-	if let Some((block_number, sp_finality_grandpa::ScheduledChange {
-		next_authorities: _,
-		delay,
-	})) = crate::import::find_forced_change::<Block>(&header) {
-		let dest = block_number + delay;
-		if let Some(justification) = blockchain.justification(BlockId::Number(index.clone()))? {
-			result = Some((AuthoritySetProofFragment {
-				header: header.clone(),
-				justification,
-			}, dest));
-		} else {
-			return Err(ClientError::Backend("Unjustified block with authority set change".to_string()));
-		}
-	}
-
-	if let Some(sp_finality_grandpa::ScheduledChange {
-		next_authorities: _,
-		delay,
-	}) = crate::import::find_scheduled_change::<Block>(&header) {
-		let dest = index + delay;
-		if let Some(justification) = blockchain.justification(BlockId::Number(index.clone()))? {
-			result = Some((AuthoritySetProofFragment {
-				header: header.clone(),
-				justification,
-			}, dest));
-		} else {
-			return Err(ClientError::Backend("Unjustified block with authority set change".to_string()));
-		}
-	}
-
-	cache.as_mut().map(|cache| cache.new_item(index, result.clone()));
-	Ok(result)
 }
 
 /// Check GRANDPA authority change sequence to assert finality of a target block.

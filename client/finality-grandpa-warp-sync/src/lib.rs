@@ -28,13 +28,14 @@ use sp_runtime::traits::Block as BlockT;
 use std::time::Duration;
 use std::sync::Arc;
 use sc_service::{SpawnTaskHandle, config::{Configuration, Role}};
-use sc_finality_grandpa::WarpSyncFragmentCache;
+use sc_finality_grandpa::{SharedAuthoritySet, WarpSyncFragmentCache};
 
 /// Generates the appropriate [`RequestResponseConfig`] for a given chain configuration.
 pub fn request_response_config_for_chain<TBlock: BlockT, TBackend: Backend<TBlock> + 'static>(
 	config: &Configuration,
 	spawn_handle: SpawnTaskHandle,
 	backend: Arc<TBackend>,
+	authority_set: SharedAuthoritySet<TBlock::Hash, NumberFor<TBlock>>,
 ) -> RequestResponseConfig
 	where NumberFor<TBlock>: sc_finality_grandpa::BlockNumberOps,
 {
@@ -48,6 +49,7 @@ pub fn request_response_config_for_chain<TBlock: BlockT, TBackend: Backend<TBloc
 		let (handler, request_response_config) = GrandpaWarpSyncRequestHandler::new(
 			protocol_id.clone(),
 			backend.clone(),
+			authority_set,
 		);
 		spawn_handle.spawn("grandpa_warp_sync_request_handler", handler.run());
 		request_response_config
@@ -93,21 +95,37 @@ const WARP_SYNC_CACHE_SIZE: usize = WARP_SYNC_FRAGMENTS_LIMIT;
 /// Handler for incoming grandpa warp sync requests from a remote peer.
 pub struct GrandpaWarpSyncRequestHandler<TBackend, TBlock: BlockT> {
 	backend: Arc<TBackend>,
+	authority_set: SharedAuthoritySet<TBlock::Hash, NumberFor<TBlock>>,
 	cache: Arc<parking_lot::RwLock<WarpSyncFragmentCache<TBlock::Header>>>,
 	request_receiver: mpsc::Receiver<IncomingRequest>,
-	_phantom: std::marker::PhantomData<TBlock>
+	_phantom: std::marker::PhantomData<TBlock>,
 }
 
 impl<TBlock: BlockT, TBackend: Backend<TBlock>> GrandpaWarpSyncRequestHandler<TBackend, TBlock> {
 	/// Create a new [`GrandpaWarpSyncRequestHandler`].
-	pub fn new(protocol_id: ProtocolId, backend: Arc<TBackend>) -> (Self, RequestResponseConfig) {
+	pub fn new(
+		protocol_id: ProtocolId,
+		backend: Arc<TBackend>,
+		authority_set: SharedAuthoritySet<TBlock::Hash, NumberFor<TBlock>>,
+	) -> (Self, RequestResponseConfig) {
 		let (tx, request_receiver) = mpsc::channel(20);
 
 		let mut request_response_config = generate_request_response_config(protocol_id);
 		request_response_config.inbound_queue = Some(tx);
-		let cache = Arc::new(parking_lot::RwLock::new(WarpSyncFragmentCache::new(WARP_SYNC_CACHE_SIZE)));
+		let cache = Arc::new(parking_lot::RwLock::new(WarpSyncFragmentCache::new(
+			WARP_SYNC_CACHE_SIZE,
+		)));
 
-		(Self { backend, request_receiver, cache, _phantom: std::marker::PhantomData }, request_response_config)
+		(
+			Self {
+				backend,
+				request_receiver,
+				cache,
+				_phantom: std::marker::PhantomData,
+				authority_set,
+			},
+			request_response_config,
+		)
 	}
 
 	fn handle_request(
@@ -121,7 +139,9 @@ impl<TBlock: BlockT, TBackend: Backend<TBlock>> GrandpaWarpSyncRequestHandler<TB
 
 		let mut cache = self.cache.write();
 		let response = sc_finality_grandpa::prove_warp_sync(
-			self.backend.blockchain(), request.begin, Some(WARP_SYNC_FRAGMENTS_LIMIT), Some(&mut cache)
+			self.backend.blockchain(),
+			request.begin,
+			&self.authority_set.authority_set_changes(),
 		)?;
 
 		pending_response.send(OutgoingResponse {
