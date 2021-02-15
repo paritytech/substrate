@@ -37,8 +37,8 @@ pub enum Error {
 	#[error(transparent)]
 	Wasmi(#[from] wasmi::Error),
 
-	#[error("API Error: {0}")]
-	ApiError(String),
+	#[error("Error calling api function: {0}")]
+	ApiError(Box<dyn std::error::Error + Send + Sync>),
 
 	#[error("Method not found: '{0}'")]
 	MethodNotFound(String),
@@ -96,16 +96,16 @@ pub enum Error {
 
 	#[error(transparent)]
 	RuntimeConstruction(#[from] WasmError),
-	
+
 	#[error("Shared memory is not supported")]
 	SharedMemUnsupported,
-	
+
 	#[error("Imported globals are not supported yet")]
 	ImportedGlobalsUnsupported,
-	
+
 	#[error("initializer expression can have only up to 2 expressions in wasm 1.0")]
 	InitializerHasTooManyExpressions,
-	
+
 	#[error("Invalid initializer expression provided {0}")]
 	InvalidInitializerExpression(String),
 }

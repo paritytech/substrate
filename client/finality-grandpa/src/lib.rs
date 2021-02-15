@@ -295,6 +295,8 @@ pub enum Error {
 	Safety(String),
 	/// A timer failed to fire.
 	Timer(io::Error),
+	/// A runtime api request failed.
+	RuntimeApi(sp_api::ApiError),
 }
 
 impl From<GrandpaError> for Error {
@@ -698,7 +700,7 @@ where
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
 	C: ClientForGrandpa<Block, BE> + 'static,
-	C::Api: GrandpaApi<Block, Error = sp_blockchain::Error>,
+	C::Api: GrandpaApi<Block>,
 {
 	let GrandpaParams {
 		mut config,
@@ -824,7 +826,7 @@ where
 	Block: BlockT,
 	B: Backend<Block> + 'static,
 	C: ClientForGrandpa<Block, B> + 'static,
-	C::Api: GrandpaApi<Block, Error = sp_blockchain::Error>,
+	C::Api: GrandpaApi<Block>,
 	N: NetworkT<Block> + Sync,
 	NumberFor<Block>: BlockNumberOps,
 	SC: SelectChain<Block> + 'static,
@@ -1042,7 +1044,7 @@ where
 	NumberFor<Block>: BlockNumberOps,
 	SC: SelectChain<Block> + 'static,
 	C: ClientForGrandpa<Block, B> + 'static,
-	C::Api: GrandpaApi<Block, Error = sp_blockchain::Error>,
+	C::Api: GrandpaApi<Block>,
 	VR: VotingRule<Block, C> + Clone + 'static,
 {
 	type Output = Result<(), Error>;

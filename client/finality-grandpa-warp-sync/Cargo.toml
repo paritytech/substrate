@@ -1,11 +1,10 @@
 [package]
 description = "A request-response protocol for handling grandpa warp sync requests"
 name = "sc-finality-grandpa-warp-sync"
-version = "0.8.0"
+version = "0.9.0"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
-publish = false
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 
