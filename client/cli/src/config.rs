@@ -486,7 +486,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		let node_key = self.node_key(&net_config_dir)?;
 		let role = self.role(is_dev)?;
 		let max_runtime_instances = self.max_runtime_instances()?.unwrap_or(8);
-		let is_validator = role.is_network_authority();
+		let is_validator = role.is_authority();
 		let (keystore_remote, keystore) = self.keystore_config(&config_dir)?;
 		let telemetry_endpoints = telemetry_handle
 			.as_ref()
