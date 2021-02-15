@@ -21,7 +21,12 @@ use super::*;
 
 use frame_system::RawOrigin as SystemOrigin;
 use frame_system::EventRecord;
-use frame_benchmarking::{benchmarks_instance, account, whitelisted_caller, impl_benchmark_test_suite};
+use frame_benchmarking::{
+	benchmarks_instance,
+	account,
+	whitelisted_caller,
+	impl_benchmark_test_suite,
+};
 use sp_runtime::traits::Bounded;
 use sp_std::mem::size_of;
 

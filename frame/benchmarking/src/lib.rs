@@ -1027,14 +1027,26 @@ macro_rules! impl_benchmark_test_suite {
 	};
 	// set path to benchmarks invocation but not extra
 	($bench_module:ident, $new_test_ext:expr, $test:path, $path_to_benchmarks_invocation:ident $(,)?) => {
-		impl_benchmark_test_suite!($bench_module, $new_test_ext, $test, $path_to_benchmarks_invocation, extra = true);
+		impl_benchmark_test_suite!(
+			$bench_module,
+			$new_test_ext,
+			$test,
+			$path_to_benchmarks_invocation,
+			extra = true,
+		);
 	};
 	// set extra but not path to benchmarks invocation
 	($bench_module:ident, $new_test_ext:expr, $test:path, extra = $extra:expr $(,)?) => {
 		impl_benchmark_test_suite!($bench_module, $new_test_ext, $test, super, extra = $extra);
 	};
 	// all options set
-	($bench_module:ident, $new_test_ext:expr, $test:path, $path_to_benchmarks_invocation:ident, extra = $extra:expr $(,)?) => {
+	(
+		$bench_module:ident,
+		$new_test_ext:expr,
+		$test:path,
+		$path_to_benchmarks_invocation:ident,
+		extra = $extra:expr $(,)?
+	) => {
 		#[cfg(test)]
 		mod benchmark_tests {
 			use $path_to_benchmarks_invocation::test_bench_by_name;
@@ -1047,7 +1059,7 @@ macro_rules! impl_benchmark_test_suite {
 
 					let mut anything_failed = false;
 					println!("failing benchmark tests:");
-					for benchmark_name in $bench_module ::<$test>::benchmarks($extra) {
+					for benchmark_name in $bench_module::<$test>::benchmarks($extra) {
 						if let Err(err) = std::panic::catch_unwind(|| test_bench_by_name::<$test>(benchmark_name)) {
 							println!("{}: {:?}", String::from_utf8_lossy(benchmark_name), err);
 							anything_failed = true;
