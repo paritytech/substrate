@@ -13,7 +13,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-jsonrpsee-http-client = { git = "https://github.com/paritytech/jsonrpsee", default-features = false, features = ["hyper-client"] }
+jsonrpsee-http-client = { git = "https://github.com/paritytech/jsonrpsee", default-features = false, features = ["tokio02"] }
 jsonrpsee-types = { git = "https://github.com/paritytech/jsonrpsee" }
 
 hex-literal = "0.3.1"
