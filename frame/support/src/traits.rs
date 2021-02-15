@@ -1533,11 +1533,15 @@ pub trait OnGenesis {
 	fn on_genesis() {}
 }
 
+pub const ON_RUNTIME_UPGRADE_PREFIX: &[u8] = b"__ON_RUNTIME_UPGRADE__";
+
 /// The runtime upgrade trait.
 ///
 /// Implementing this lets you express what should happen when the runtime upgrades,
 /// and changes may need to occur to your module.
 pub trait OnRuntimeUpgrade {
+	const ID: &'static str;
+
 	/// Perform a module upgrade.
 	///
 	/// # Warning
@@ -1549,6 +1553,38 @@ pub trait OnRuntimeUpgrade {
 	/// Return the non-negotiable weight consumed for runtime upgrade.
 	fn on_runtime_upgrade() -> crate::weights::Weight {
 		0
+	}
+
+	/// Generate a storage key unique to this runtime upgrade.
+	///
+	/// This can be used to communicate data from pre-upgrade to post-upgrade state and check
+	/// them. See [`set_temp_storage`] and [`get_temp_storage`].
+	#[cfg(feature = "try-runtime")]
+	fn storage_key() -> [u8; 32] {
+		let prefix = sp_io::hashing::twox_128(ON_RUNTIME_UPGRADE_PREFIX);
+		let ident = sp_io::hashing::twox_128(Self::ID.as_bytes());
+
+		let mut final_key = [0u8; 32];
+		final_key[..16].copy_from_slice(&prefix);
+		final_key[16..].copy_from_slice(&ident);
+
+		final_key
+	}
+
+	/// Write some temporary data to a specific storage that can be read (potentially in
+	/// post-upgrade hook) via [`get_temp_storage`].
+	#[cfg(feature = "try-runtime")]
+	fn set_temp_storage<T: Encode>(data: T) {
+		sp_io::storage::set(&Self::storage_key(), &data.encode());
+	}
+
+	/// Get temporary storage data written by [`set_temp_storage`].
+	///
+	/// Returns `None` if either the data is unavailable or un-decodable.
+	#[cfg(feature = "try-runtime")]
+	fn get_temp_storage<T: Decode>() -> Option<T> {
+		sp_io::storage::get(&Self::storage_key())
+			.and_then(|bytes| Decode::decode(&mut &*bytes).ok())
 	}
 
 	/// Execute some pre-checks prior to a runtime upgrade.
@@ -1570,6 +1606,9 @@ pub trait OnRuntimeUpgrade {
 
 #[impl_for_tuples(30)]
 impl OnRuntimeUpgrade for Tuple {
+	const ID: &'static str = "__TUPLE__";
+	// We will never use the ^^^^^^^^^^^^ this within the tuple expansion, effectively _don't care_.
+
 	fn on_runtime_upgrade() -> crate::weights::Weight {
 		let mut weight = 0;
 		for_tuples!( #( weight = weight.saturating_add(Tuple::on_runtime_upgrade()); )* );
@@ -2161,6 +2200,7 @@ mod tests {
 			}
 		}
 		impl OnRuntimeUpgrade for Test {
+			const ID: &'static str = "TEST";
 			fn on_runtime_upgrade() -> crate::weights::Weight {
 				20
 			}

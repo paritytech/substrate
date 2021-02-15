@@ -421,3 +421,8 @@ pub fn require_transactional(attr: TokenStream, input: TokenStream) -> TokenStre
 pub fn crate_to_pallet_version(input: TokenStream) -> TokenStream {
 	pallet_version::crate_to_pallet_version(input).unwrap_or_else(|e| e.to_compile_error()).into()
 }
+
+#[proc_macro]
+pub fn crate_name(input: TokenStream) -> TokenStream {
+	pallet_version::crate_name(input).unwrap_or_else(|e| e.to_compile_error()).into()
+}

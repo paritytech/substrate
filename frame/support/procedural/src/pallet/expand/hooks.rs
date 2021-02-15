@@ -59,6 +59,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			#frame_support::traits::OnRuntimeUpgrade
 			for #pallet_ident<#type_use_gen> #where_clause
 		{
+			const ID: &'static str = #frame_support::crate_name!();
 			fn on_runtime_upgrade() -> #frame_support::weights::Weight {
 				let result = <
 					Self as #frame_support::traits::Hooks<
