@@ -218,7 +218,7 @@ pub enum BountyStatus<AccountId, BlockNumber> {
 /// A Subbounty proposal.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct SubBounty<AccountId, Balance, BlockNumber> {
-	/// The subcurator fee. Included in value.
+	/// The subcurator fee.
 	fee: Balance,
 	/// The deposit of subcurator.
 	curator_deposit: Balance,
