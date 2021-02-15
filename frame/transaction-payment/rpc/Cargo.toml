@@ -1,6 +1,6 @@
 [package]
 name = "pallet-transaction-payment-rpc"
-version = "2.0.1"
+version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -17,9 +17,9 @@ codec = { package = "parity-scale-codec", version = "2.0.0" }
 jsonrpc-core = "15.1.0"
 jsonrpc-core-client = "15.1.0"
 jsonrpc-derive = "15.1.0"
-sp-core = { version = "2.0.0", path = "../../../primitives/core" }
-sp-rpc = { version = "2.0.0", path = "../../../primitives/rpc" }
-sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
-sp-api = { version = "2.0.0", path = "../../../primitives/api" }
-sp-blockchain = { version = "2.0.0", path = "../../../primitives/blockchain" }
-pallet-transaction-payment-rpc-runtime-api = { version = "2.0.0", path = "./runtime-api" }
+sp-core = { version = "3.0.0", path = "../../../primitives/core" }
+sp-rpc = { version = "3.0.0", path = "../../../primitives/rpc" }
+sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
+sp-api = { version = "3.0.0", path = "../../../primitives/api" }
+sp-blockchain = { version = "3.0.0", path = "../../../primitives/blockchain" }
+pallet-transaction-payment-rpc-runtime-api = { version = "3.0.0", path = "./runtime-api" }

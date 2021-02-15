@@ -164,7 +164,7 @@ impl<Block, Client> BlockExecutor<Block, Client>
 		Block: BlockT + 'static,
 		Client: HeaderBackend<Block> + BlockBackend<Block> + ProvideRuntimeApi<Block>
 		+ Send + Sync + 'static,
-		Client::Api: Metadata<Block, Error=sp_blockchain::Error>,
+		Client::Api: Metadata<Block>,
 {
 	/// Create a new `BlockExecutor`
 	pub fn new(client: Arc<Client>, block: Block::Hash, targets: Option<String>) -> Self {

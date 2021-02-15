@@ -270,7 +270,7 @@ pub use libp2p::{multiaddr, Multiaddr, PeerId};
 pub use protocol::{event::{DhtEvent, Event, ObservedRole}, sync::SyncState, PeerInfo};
 pub use service::{
 	NetworkService, NetworkWorker, RequestFailure, OutboundFailure, NotificationSender,
-	NotificationSenderReady,
+	NotificationSenderReady, IfDisconnected,
 };
 
 pub use sc_peerset::ReputationChange;

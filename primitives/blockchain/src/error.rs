@@ -114,8 +114,8 @@ pub enum Error {
 	#[error("Error decoding call result of {0}")]
 	CallResultDecode(&'static str, #[source] CodecError),
 
-	#[error(transparent)]
-	RuntimeApiCodecError(#[from] ApiError),
+	#[error("Error at calling runtime api: {0}")]
+	RuntimeApiError(#[from] ApiError),
 
 	#[error("Runtime :code missing in storage")]
 	RuntimeCodeMissing,
@@ -153,7 +153,6 @@ pub enum Error {
 	#[error("Failed to get header for hash {0}")]
 	MissingHeader(String),
 
-
 	#[error("State Database error: {0}")]
 	StateDatabase(String),
 
@@ -180,6 +179,15 @@ impl From<Box<dyn sp_state_machine::Error + Send + Sync + 'static>> for Error {
 impl From<Box<dyn sp_state_machine::Error>> for Error {
 	fn from(e: Box<dyn sp_state_machine::Error>) -> Self {
 		Self::from_state(e)
+	}
+}
+
+impl From<Error> for ApiError {
+	fn from(err: Error) -> ApiError {
+		match err {
+			Error::RuntimeApiError(err) => err,
+			e => ApiError::Application(Box::new(e)),
+		}
 	}
 }
 
