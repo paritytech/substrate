@@ -934,7 +934,7 @@ decl_module! {
 								ensure!(fee < bounty.fee, Error::<T>::InvalidFee);
 								bounty.fee = bounty
 									.fee
-									.saturating_sub(fee);
+									.checked_sub(fee).ok_or(Error::<T>::InvalidFee)?;
 							}
 							Ok(())
 						}
