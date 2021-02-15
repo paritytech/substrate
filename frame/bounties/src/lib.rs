@@ -1184,7 +1184,7 @@ decl_module! {
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
 
 			// Ensure parent bounty is Active
-			let (_master_curator, _) = Self::ensure_bounty_active(bounty_id)?;
+			let (_, _) = Self::ensure_bounty_active(bounty_id)?;
 
 			// Ensure subbounty is in expected state
 			SubBounties::<T>::try_mutate_exists(
