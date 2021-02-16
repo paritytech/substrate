@@ -138,17 +138,13 @@ impl ExtBuilder {
 		self.set_associated_consts();
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		pallet_balances::GenesisConfig::<Test> {
-			balances: if self.monied {
-				vec![
-					(1, 10 * self.existential_deposit),
-					(2, 20 * self.existential_deposit),
-					(3, 30 * self.existential_deposit),
-					(4, 40 * self.existential_deposit),
-					(12, 10 * self.existential_deposit)
-				]
-			} else {
-				vec![]
-			},
+			balances: vec![
+				(1, 10 * self.existential_deposit),
+				(2, 20 * self.existential_deposit),
+				(3, 30 * self.existential_deposit),
+				(4, 40 * self.existential_deposit),
+				(12, 10 * self.existential_deposit)
+			]
 		}.assimilate_storage(&mut t).unwrap();
 
 		let mut ext = sp_io::TestExternalities::new(t);
