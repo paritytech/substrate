@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-	config::{ProtocolId, Role},
+	config::ProtocolId,
 	bitswap::Bitswap,
 	discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryOut},
 	protocol::{message::Roles, CustomMessageOutcome, NotificationsSink, Protocol},
@@ -70,10 +70,6 @@ pub struct Behaviour<B: BlockT, H: ExHashT> {
 	/// Queue of events to produce for the outside.
 	#[behaviour(ignore)]
 	events: VecDeque<BehaviourOut<B>>,
-
-	/// Role of our local node, as originally passed from the configuration.
-	#[behaviour(ignore)]
-	role: Role,
 
 	/// Light client request handling.
 	#[behaviour(ignore)]
@@ -180,7 +176,6 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 	/// Builds a new `Behaviour`.
 	pub fn new(
 		substrate: Protocol<B, H>,
-		role: Role,
 		user_agent: String,
 		local_public_key: PublicKey,
 		light_client_request_sender: light_client_requests::sender::LightClientRequestSender<B>,
@@ -206,7 +201,6 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 				request_responses::RequestResponsesBehaviour::new(request_response_protocols.into_iter())?,
 			light_client_request_sender,
 			events: VecDeque::new(),
-			role,
 
 			block_request_protocol_name,
 		})
@@ -290,15 +284,9 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 	}
 }
 
-fn reported_roles_to_observed_role(local_role: &Role, remote: &PeerId, roles: Roles) -> ObservedRole {
+fn reported_roles_to_observed_role(roles: Roles) -> ObservedRole {
 	if roles.is_authority() {
-		match local_role {
-			Role::Authority { sentry_nodes }
-				if sentry_nodes.iter().any(|s| s.peer_id == *remote) => ObservedRole::OurSentry,
-			Role::Sentry { validators }
-				if validators.iter().any(|s| s.peer_id == *remote) => ObservedRole::OurGuardedAuthority,
-			_ => ObservedRole::Authority
-		}
+		ObservedRole::Authority
 	} else if roles.is_full() {
 		ObservedRole::Full
 	} else {
@@ -337,11 +325,10 @@ Behaviour<B, H> {
 				);
 			},
 			CustomMessageOutcome::NotificationStreamOpened { remote, protocol, roles, notifications_sink } => {
-				let role = reported_roles_to_observed_role(&self.role, &remote, roles);
 				self.events.push_back(BehaviourOut::NotificationStreamOpened {
 					remote,
 					protocol,
-					role: role.clone(),
+					role: reported_roles_to_observed_role(roles),
 					notifications_sink: notifications_sink.clone(),
 				});
 			},
