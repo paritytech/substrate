@@ -288,7 +288,7 @@ const MAX_CONNECTIONS_PER_PEER: usize = 2;
 /// The maximum number of concurrent established connections that were incoming.
 const MAX_CONNECTIONS_ESTABLISHED_INCOMING: u32 = 10_000;
 
-// Redefine this locally to avoid depending on the grandpa crate.
+// Redefine this locally to avoid depending on the GRANDPA crate.
 // NOTE: This is purely during a backwards compatible transitionary period and should be removed
 // once we can assume all nodes can send and receive multiple Justifications
 const GRANDPA_ENGINE_ID: ConsensusEngineId = *b"FRNK";

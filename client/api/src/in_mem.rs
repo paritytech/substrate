@@ -312,7 +312,9 @@ impl<Block: BlockT> Blockchain<Block> {
 
 		if let Some(stored_justifications) = block_justification {
 			if !stored_justifications.push(justification) {
-				return Err(sp_blockchain::Error::BadJustification("Duplicate".into()));
+				return Err(sp_blockchain::Error::BadJustification(
+					"Duplicate consensus engine ID".into()
+				));
 			}
 		} else {
 			*block_justification = Some(Justifications::from(justification));

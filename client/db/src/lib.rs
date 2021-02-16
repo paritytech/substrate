@@ -1693,7 +1693,9 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		let justifications =
 			if let Some(mut stored_justifications) = self.blockchain.justifications(block)? {
 				if !stored_justifications.push(justification) {
-					return Err(ClientError::BadJustification("Duplicate".into()));
+					return Err(ClientError::BadJustification(
+						"Duplicate consensus engine ID".into()
+					));
 				}
 				stored_justifications
 			} else {
