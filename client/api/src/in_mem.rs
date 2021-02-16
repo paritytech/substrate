@@ -311,7 +311,7 @@ impl<Block: BlockT> Blockchain<Block> {
 		};
 
 		if let Some(stored_justifications) = block_justification {
-			if !stored_justifications.push(justification) {
+			if !stored_justifications.append(justification) {
 				return Err(sp_blockchain::Error::BadJustification(
 					"Duplicate consensus engine ID".into()
 				));
@@ -848,7 +848,7 @@ mod tests {
 		blockchain.append_justification(block, (ID2, vec![4])).unwrap();
 		let justifications = {
 			let mut just = Justifications::from((ID1, vec![3]));
-			just.push((ID2, vec![4]));
+			just.append((ID2, vec![4]));
 			just
 		};
 		assert_eq!(blockchain.justifications(block).unwrap(), Some(justifications));

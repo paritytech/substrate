@@ -97,7 +97,7 @@ pub use either::Either;
 /// bypasses this problem.
 pub type EncodedJustification = Vec<u8>;
 
-/// Justification together with an ID to tag it's origin.
+/// Justification together with an ID to tag its origin.
 pub type Justification = (ConsensusEngineId, EncodedJustification);
 
 /// Collection of Justifications, since we might have more than one stored per block.
@@ -113,7 +113,7 @@ impl Justifications {
 
 	/// Append a justification. Returns false if a Justification with the same ConsensusEngineId
 	/// already exists, in which case the Justification is not inserted.
-	pub fn push(&mut self, justification: Justification) -> bool {
+	pub fn append(&mut self, justification: Justification) -> bool {
 		if self.get(justification.0).is_some() {
 			return false;
 		}

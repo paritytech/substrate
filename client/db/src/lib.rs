@@ -1692,7 +1692,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		use sp_blockchain::Backend;
 		let justifications =
 			if let Some(mut stored_justifications) = self.blockchain.justifications(block)? {
-				if !stored_justifications.push(justification) {
+				if !stored_justifications.append(justification) {
 					return Err(ClientError::BadJustification(
 						"Duplicate consensus engine ID".into()
 					));
@@ -2597,7 +2597,7 @@ pub(crate) mod tests {
 
 		let justifications = {
 			let mut just = Justifications::from(just0);
-			just.push(just1);
+			just.append(just1);
 			just
 		};
 		assert_eq!(
