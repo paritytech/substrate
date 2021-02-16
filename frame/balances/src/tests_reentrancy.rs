@@ -114,7 +114,6 @@ impl Config for Test {
 
 pub struct ExtBuilder {
 	existential_deposit: u64,
-	monied: bool,
 }
 impl Default for ExtBuilder {
 	fn default() -> Self {
