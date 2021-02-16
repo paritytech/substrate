@@ -184,8 +184,8 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 			assert_eq!(
 				events(),
 				[
+					Event::frame_system(system::Event::KilledAccount(1)),
 					Event::pallet_balances(crate::Event::DustLost(1, 1)),
-					Event::frame_system(system::Event::KilledAccount(1))
 				]
 			);
 		});
