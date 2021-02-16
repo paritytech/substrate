@@ -250,7 +250,7 @@ parameter_types! {
 	pub const MaxValueSize: u32 = 16_384;
 	pub const DeletionQueueDepth: u32 = 1024;
 	pub const DeletionWeightLimit: Weight = 500_000_000_000;
-	pub const MaxCodeSize: u32 = 1 * 1024;
+	pub const MaxCodeSize: u32 = 2 * 1024;
 }
 
 parameter_types! {

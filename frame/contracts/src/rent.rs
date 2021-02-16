@@ -332,7 +332,7 @@ where
 			Some(ContractInfo::Alive(contract)) => contract,
 		};
 		let module = PrefabWasmModule::<T>::from_storage_noinstr(contract.code_hash)?;
-		let code_len = module.pristine_size();
+		let code_len = module.code_len();
 		let current_block_number = <frame_system::Module<T>>::block_number();
 		let verdict = Self::consider_case(
 			account,

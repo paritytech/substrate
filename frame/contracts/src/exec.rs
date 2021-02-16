@@ -249,8 +249,8 @@ pub trait Executable<T: Config>: Sized {
 	/// working with a stale value. Usually this inaccuracy is tolerable.
 	fn occupied_storage(&self) -> u32;
 
-	/// The size of the pristine source this executable was generated from.
-	fn pristine_size(&self) -> u32;
+	/// Size of the instrumented code in bytes.
+	fn code_len(&self) -> u32;
 }
 
 pub struct ExecutionContext<'a, T: Config + 'a, E> {
@@ -320,7 +320,7 @@ where
 
 		let executable = E::from_storage(contract.code_hash, &self.schedule)
 			.map_err(|e| (e.into(), 0))?;
-		let code_len = executable.pristine_size();
+		let code_len = executable.code_len();
 
 		// This charges the rent and denies access to a contract that is in need of
 		// eviction by returning `None`. We cannot evict eagerly here because those
@@ -601,7 +601,7 @@ where
 	) -> Result<(AccountIdOf<T>, ExecReturnValue, u32), (ExecError, u32)> {
 		let executable = E::from_storage(code_hash, &self.ctx.schedule)
 			.map_err(|e| (e.into(), 0))?;
-		let code_len = executable.pristine_size();
+		let code_len = executable.code_len();
 		self.ctx.instantiate(endowment, gas_meter, executable, input_data, salt)
 			.map(|r| (r.0, r.1, code_len))
 			.map_err(|e| (e, code_len))
@@ -893,7 +893,7 @@ mod tests {
 			0
 		}
 
-		fn pristine_size(&self) -> u32 {
+		fn code_len(&self) -> u32 {
 			0
 		}
 	}

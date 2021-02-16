@@ -345,8 +345,9 @@ pub trait Config: frame_system::Config {
 	/// The maximum amount of weight that can be consumed per block for lazy trie removal.
 	type DeletionWeightLimit: Get<Weight>;
 
-	/// The maximum length of a contract code in bytes. This limit applies to the uninstrumented
-	/// and pristine form of the code as supplied to `instantiate_with_code`.
+	/// The maximum length of a contract code in bytes. This limit applies to the instrumented
+	/// version of the code. Therefore `instantiate_with_code` can fail even when supplying
+	/// a wasm binary below this maximum size.
 	type MaxCodeSize: Get<u32>;
 }
 
@@ -605,6 +606,8 @@ decl_module! {
 			let schedule = <Module<T>>::current_schedule();
 			let mut ctx = ExecutionContext::<T, PrefabWasmModule<T>>::top_level(origin, &schedule);
 			let executable = PrefabWasmModule::from_code(code, &schedule)?;
+			let code_len = executable.code_len();
+			ensure!(code_len <= T::MaxCodeSize::get(), Error::<T>::CodeTooLarge);
 			let result = ctx.instantiate(endowment, &mut gas_meter, executable, data, &salt)
 				.map(|(_address, output)| output);
 			gas_meter.into_dispatch_result(
@@ -635,7 +638,7 @@ decl_module! {
 			let schedule = <Module<T>>::current_schedule();
 			let mut ctx = ExecutionContext::<T, PrefabWasmModule<T>>::top_level(origin, &schedule);
 			let executable = PrefabWasmModule::from_storage(code_hash, &ctx.schedule)?;
-			let code_len = executable.pristine_size();
+			let code_len = executable.code_len();
 			let result = ctx.instantiate(endowment, &mut gas_meter, executable, data, &salt)
 				.map(|(_address, output)| output);
 			gas_meter.into_dispatch_result(

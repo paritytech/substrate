@@ -223,8 +223,8 @@ where
 		len.checked_div(self.refcount as u32).unwrap_or(len)
 	}
 
-	fn pristine_size(&self) -> u32 {
-		self.original_code_len
+	fn code_len(&self) -> u32 {
+		self.code.len() as u32
 	}
 }
 
