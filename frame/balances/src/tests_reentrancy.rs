@@ -120,7 +120,6 @@ impl Default for ExtBuilder {
 	fn default() -> Self {
 		Self {
 			existential_deposit: 1,
-			monied: false,
 		}
 	}
 }
