@@ -246,11 +246,7 @@ fn transfer_dust_removal_tst2_should_work() {
 				System::events().iter().any(
 					|er|
 					er.event == Event::pallet_balances(
-						crate::Event::Transfer(
-							2,
-							1,
-							450,
-						),
+						crate::Event::Transfer(2, 1, 450),
 					),
 				),
 			);
@@ -259,10 +255,7 @@ fn transfer_dust_removal_tst2_should_work() {
 				System::events().iter().any(
 					|er|
 					er.event == Event::pallet_balances(
-						crate::Event::DustLost(
-							2,
-							50,
-						),
+						crate::Event::DustLost(2, 50),
 					),
 				),
 			);
@@ -309,12 +302,7 @@ fn repatriating_reserved_balance_dust_removal_should_work() {
 				System::events().iter().any(
 					|er|
 					er.event == Event::pallet_balances(
-						crate::Event::ReserveRepatriated(
-							2,
-							1,
-							450,
-							Status::Free,
-						)
+						crate::Event::ReserveRepatriated(2, 1, 450, Status::Free),
 					),
 				),
 			);
