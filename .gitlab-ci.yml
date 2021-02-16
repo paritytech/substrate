@@ -664,7 +664,7 @@ trigger-simnet:
     # script will fail if there is no artifacts/substrate/VERSION
     - job:                         publish-docker-substrate
       artifacts:                   true
-  image:                           parity/azure-ansible:v2
+  image:                           paritytech/ansible:latest
   allow_failure:                   true
   interruptible:                   true
   tags:
