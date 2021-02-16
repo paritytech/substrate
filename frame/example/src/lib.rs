@@ -577,7 +577,7 @@ impl<T: Config> Module<T> {
 //
 // Note that a signed extension can also indicate that a particular data must be present in the
 // _signing payload_ of a transaction by providing an implementation for the `additional_signed`
-// method. This example will not cover this type of extension. See `CheckSpecVersion` in 
+// method. This example will not cover this type of extension. See `CheckSpecVersion` in
 // [FRAME System](https://github.com/paritytech/substrate/tree/master/frame/system#signed-extensions)
 // for an example.
 //
@@ -652,7 +652,7 @@ where
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking {
 	use super::*;
-	use frame_benchmarking::{benchmarks, account};
+	use frame_benchmarking::{benchmarks, account, impl_benchmark_test_suite};
 	use frame_system::RawOrigin;
 
 	benchmarks!{
@@ -684,22 +684,7 @@ mod benchmarking {
 		}
 	}
 
-	#[cfg(test)]
-	mod tests {
-		use super::*;
-		use crate::tests::{new_test_ext, Test};
-		use frame_support::assert_ok;
-
-		#[test]
-		fn test_benchmarks() {
-			new_test_ext().execute_with(|| {
-				assert_ok!(test_benchmark_accumulate_dummy::<Test>());
-				assert_ok!(test_benchmark_set_dummy::<Test>());
-				assert_ok!(test_benchmark_another_set_dummy::<Test>());
-				assert_ok!(test_benchmark_sort_vector::<Test>());
-			});
-		}
-	}
+	impl_benchmark_test_suite!(Module, crate::tests::new_test_ext(), crate::tests::Test);
 }
 
 #[cfg(test)]
