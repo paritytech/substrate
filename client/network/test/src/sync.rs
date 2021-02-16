@@ -24,7 +24,7 @@ use sp_consensus::block_validation::Validation;
 use substrate_test_runtime::Header;
 use sp_runtime::{ConsensusEngineId, Justifications};
 
-const ID: ConsensusEngineId = *b"TEST";
+const ID: ConsensusEngineId = *b"FRNK";
 
 fn test_ancestor_search_when_common_is(n: usize) {
 	sp_tracing::try_init_simple();
