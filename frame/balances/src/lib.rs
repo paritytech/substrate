@@ -151,6 +151,7 @@
 mod tests;
 mod tests_local;
 mod tests_composite;
+mod tests_reentrancy;
 mod benchmarking;
 pub mod weights;
 
@@ -812,7 +813,7 @@ mod imbalances {
 	/// funds have been created without any equal and opposite accounting.
 	#[must_use]
 	#[derive(RuntimeDebug, PartialEq, Eq)]
-	pub struct PositiveImbalance<T: Config<I>, I: 'static>(T::Balance);
+	pub struct PositiveImbalance<T: Config<I>, I: 'static = ()>(T::Balance);
 
 	impl<T: Config<I>, I: 'static> PositiveImbalance<T, I> {
 		/// Create a new positive imbalance from a balance.
@@ -825,7 +826,7 @@ mod imbalances {
 	/// funds have been destroyed without any equal and opposite accounting.
 	#[must_use]
 	#[derive(RuntimeDebug, PartialEq, Eq)]
-	pub struct NegativeImbalance<T: Config<I>, I: 'static>(T::Balance);
+	pub struct NegativeImbalance<T: Config<I>, I: 'static = ()>(T::Balance);
 
 	impl<T: Config<I>, I: 'static> NegativeImbalance<T, I> {
 		/// Create a new negative imbalance from a balance.
