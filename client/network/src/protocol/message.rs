@@ -191,7 +191,6 @@ pub mod generic {
 			match roles {
 				crate::config::Role::Full => Roles::FULL,
 				crate::config::Role::Light => Roles::LIGHT,
-				crate::config::Role::Sentry { .. } => Roles::AUTHORITY,
 				crate::config::Role::Authority { .. } => Roles::AUTHORITY,
 			}
 		}

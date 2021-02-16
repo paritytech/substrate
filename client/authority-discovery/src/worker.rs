@@ -132,7 +132,7 @@ where
 	Network: NetworkProvider,
 	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static + HeaderBackend<Block>,
 	<Client as ProvideRuntimeApi<Block>>::Api:
-		AuthorityDiscoveryApi<Block, Error = sp_blockchain::Error>,
+		AuthorityDiscoveryApi<Block>,
 	DhtEventStream: Stream<Item = DhtEvent> + Unpin,
 {
 	/// Construct a [`Worker`].
@@ -332,7 +332,7 @@ where
 			.client
 			.runtime_api()
 			.authorities(&id)
-			.map_err(Error::CallingRuntime)?
+			.map_err(|e| Error::CallingRuntime(e.into()))?
 			.into_iter()
 			.filter(|id| !local_keys.contains(id.as_ref()))
 			.collect();
@@ -546,7 +546,7 @@ where
 		let id = BlockId::hash(client.info().best_hash);
 		let authorities = client.runtime_api()
 			.authorities(&id)
-			.map_err(Error::CallingRuntime)?
+			.map_err(|e| Error::CallingRuntime(e.into()))?
 			.into_iter()
 			.map(std::convert::Into::into)
 			.collect::<HashSet<_>>();

@@ -82,8 +82,6 @@ pub enum NodeRole {
 	LightClient,
 	/// The node is an authority
 	Authority,
-	/// The node is a sentry
-	Sentry,
 }
 
 /// The state of the syncing of the node.
