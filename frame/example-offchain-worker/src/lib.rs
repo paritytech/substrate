@@ -145,8 +145,7 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// Offchain Worker entry point.
 		///
-		/// By implementing `fn offchain_worker` within `decl_module!` you declare a new offchain
-		/// worker.
+		/// By implementing `fn offchain_worker` you declare a new offchain worker.
 		/// This function will be called when the node is fully synced and a new best block is
 		/// succesfuly imported.
 		/// Note that it's not guaranteed for offchain workers to run on EVERY block, there might

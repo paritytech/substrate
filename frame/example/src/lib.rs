@@ -278,7 +278,7 @@ use sp_runtime::{
 // The `WeightData<T>` trait has access to the arguments of the dispatch that it wants to assign a
 // weight to. Nonetheless, the trait itself can not make any assumptions about what the generic type
 // of the arguments (`T`) is. Based on our needs, we could replace `T` with a more concrete type
-// while implementing the trait. The `decl_module!` expects whatever implements `WeighData<T>` to
+// while implementing the trait. The `pallet::weight` expects whatever implements `WeighData<T>` to
 // replace `T` with a tuple of the dispatch arguments. This is exactly how we will craft the
 // implementation below.
 //
@@ -344,7 +344,7 @@ pub mod pallet {
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
-	// pallet implements [`Hooks`] trait to define some logic to execute in some context.
+	// Pallet implements [`Hooks`] trait to define some logic to execute in some context.
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		// `on_initialize` is executed at the beginning of the block before any extrinsic are
