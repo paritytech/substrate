@@ -129,13 +129,6 @@ impl ExtBuilder {
 		self
 	}
 
-	pub fn monied(mut self, monied: bool) -> Self {
-		self.monied = monied;
-		if self.existential_deposit == 0 {
-			self.existential_deposit = 1;
-		}
-		self
-	}
 
 	pub fn set_associated_consts(&self) {
 		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
