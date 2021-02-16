@@ -51,7 +51,11 @@ git merge origin/master
 # ancestor for successfully performing merges below.
 git clone --depth 20 https://github.com/paritytech/polkadot.git
 
-cargo install -f diener
+if ! command -v diener &> /dev/null
+then
+    boldprint "diener is not installed"
+    cargo install -f diener
+fi
 
 cd polkadot
 
