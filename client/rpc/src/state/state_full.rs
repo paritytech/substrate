@@ -228,8 +228,6 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 	Client: ExecutorProvider<Block> + StorageProvider<Block, BE> + ProofProvider<Block> + HeaderBackend<Block>
 		+ HeaderMetadata<Block, Error = sp_blockchain::Error> + BlockchainEvents<Block>
 		+ CallApiAt<Block> + ProvideRuntimeApi<Block>
-// Master had:
-// + CallApiAt<Block> + ProvideRuntimeApi<Block>
 		+ BlockBackend<Block>
 		+ Send + Sync + 'static,
 	Client::Api: Metadata<Block>,
