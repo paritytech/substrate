@@ -63,9 +63,9 @@
 //! // Include the following links that shows what trait needs to be implemented to use the pallet
 //! // and the supported dispatchables that are documented in the Call enum.
 //!
-//! - \[`<INSERT_CUSTOM_PALLET_NAME>::Config`](./trait.Config.html)
-//! - \[`Call`](./enum.Call.html)
-//! - \[`Module`](./struct.Module.html)
+//! - \[`Config`]
+//! - \[`Call`]
+//! - \[`Module`]
 //!
 //! \## Overview
 //!
