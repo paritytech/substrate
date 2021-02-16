@@ -86,6 +86,7 @@ impl<Storage: OffchainStorage> Db<Storage> {
 
 impl<Storage: OffchainStorage> offchain::DbExternalities for Db<Storage> {
 	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]) {
+		log::debug!("{:?}: Write: {:?} <= {:?}", kind, hex::encode(key), hex::encode(value));
 		match kind {
 			StorageKind::PERSISTENT => self.persistent.set(STORAGE_PREFIX, key, value),
 			StorageKind::LOCAL => unavailable_yet(LOCAL_DB),
@@ -93,6 +94,7 @@ impl<Storage: OffchainStorage> offchain::DbExternalities for Db<Storage> {
 	}
 
 	fn local_storage_clear(&mut self, kind: StorageKind, key: &[u8]) {
+		log::debug!("{:?}: Clear: {:?}", kind, hex::encode(key));
 		match kind {
 			StorageKind::PERSISTENT => self.persistent.remove(STORAGE_PREFIX, key),
 			StorageKind::LOCAL => unavailable_yet(LOCAL_DB),
@@ -106,6 +108,13 @@ impl<Storage: OffchainStorage> offchain::DbExternalities for Db<Storage> {
 		old_value: Option<&[u8]>,
 		new_value: &[u8],
 	) -> bool {
+		log::debug!(
+			"{:?}: CAS: {:?} <= {:?} vs {:?}",
+			kind,
+			hex::encode(key),
+			hex::encode(new_value),
+			old_value.as_ref().map(hex::encode),
+		);
 		match kind {
 			StorageKind::PERSISTENT => {
 				self.persistent.compare_and_set(STORAGE_PREFIX, key, old_value, new_value)
@@ -115,10 +124,17 @@ impl<Storage: OffchainStorage> offchain::DbExternalities for Db<Storage> {
 	}
 
 	fn local_storage_get(&mut self, kind: StorageKind, key: &[u8]) -> Option<Vec<u8>> {
-		match kind {
+		let result = match kind {
 			StorageKind::PERSISTENT => self.persistent.get(STORAGE_PREFIX, key),
 			StorageKind::LOCAL => unavailable_yet(LOCAL_DB),
-		}
+		};
+		log::debug!(
+			"{:?}: Read: {:?} => {:?}",
+			kind,
+			hex::encode(key),
+			result.as_ref().map(hex::encode)
+		);
+		result
 	}
 }
 

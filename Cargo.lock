@@ -7366,6 +7366,7 @@ dependencies = [
  "fnv",
  "futures 0.3.12",
  "futures-timer 3.0.2",
+ "hex",
  "hyper 0.13.9",
  "hyper-rustls",
  "lazy_static",
