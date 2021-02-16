@@ -192,11 +192,7 @@ fn transfer_dust_removal_tst1_should_work() {
 				System::events().iter().any(
 					|er|
 					er.event == Event::pallet_balances(
-						crate::Event::Transfer(
-							2,
-							3,
-							450,
-						),
+						crate::Event::Transfer(2, 3, 450),
 					),
 				),
 			);
@@ -205,10 +201,7 @@ fn transfer_dust_removal_tst1_should_work() {
 				System::events().iter().any(
 					|er|
 					er.event == Event::pallet_balances(
-						crate::Event::DustLost(
-							2,
-							50,
-						),
+						crate::Event::DustLost(2, 50)
 					),
 				),
 			);
