@@ -1304,6 +1304,8 @@ impl<T: Config<I>, I: 'static> ReservableCurrency<T::AccountId> for Pallet<T, I>
 
 	/// Move the reserved balance of one account into the balance of another, according to `status`.
 	///
+	/// `beneficiary` must be an existing account.
+	///
 	/// Is a no-op if:
 	/// - the value to be moved is zero; or
 	/// - the `slashed` id equal to `beneficiary` and the `status` is `Reserved`.
