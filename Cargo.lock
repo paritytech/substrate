@@ -1589,9 +1589,9 @@ dependencies = [
 
 [[package]]
 name = "finality-grandpa"
-version = "0.13.0"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2cd795898c348a8ec9edc66ec9e014031c764d4c88cc26d09b492cd93eb41339"
+checksum = "c6447e2f8178843749e8c8003206def83ec124a7859475395777a28b5338647c"
 dependencies = [
  "either",
  "futures 0.3.12",
@@ -7089,6 +7089,7 @@ version = "0.9.0"
 dependencies = [
  "assert_matches",
  "derive_more",
+ "dyn-clone",
  "finality-grandpa",
  "fork-tree",
  "futures 0.3.12",
