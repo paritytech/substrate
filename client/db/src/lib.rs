@@ -1692,14 +1692,9 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		use sp_blockchain::Backend;
 		let justifications =
 			if let Some(mut stored_justifications) = self.blockchain.justifications(block)? {
-				if stored_justifications
-					.iter()
-					.find(|stored| stored.0 == justification.0)
-					.is_some()
-				{
+				if !stored_justifications.push(justification) {
 					return Err(ClientError::BadJustification("Duplicate".into()));
 				}
-				stored_justifications.push(justification);
 				stored_justifications
 			} else {
 				Justifications::from(justification)

@@ -311,14 +311,9 @@ impl<Block: BlockT> Blockchain<Block> {
 		};
 
 		if let Some(stored_justifications) = block_justification {
-			if stored_justifications
-				.iter()
-				.find(|stored| stored.0 == justification.0)
-				.is_some()
-			{
+			if !stored_justifications.push(justification) {
 				return Err(sp_blockchain::Error::BadJustification("Duplicate".into()));
 			}
-			stored_justifications.push(justification);
 		} else {
 			*block_justification = Some(Justifications::from(justification));
 		};

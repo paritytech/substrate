@@ -111,9 +111,14 @@ impl Justifications {
 		self.0.iter()
 	}
 
-	/// Append a justification.
-	pub fn push(&mut self, justification: Justification) {
-		self.0.push(justification)
+	/// Append a justification. Returns false if a Justification with the same ConsensusEngineId
+	/// already exists, in which case the Justification is not inserted.
+	pub fn push(&mut self, justification: Justification) -> bool {
+		if self.get(justification.0).is_some() {
+			return false;
+		}
+		self.0.push(justification);
+		true
 	}
 
 	/// Return the encoded Justification for the given consensus engine, if it exists.
