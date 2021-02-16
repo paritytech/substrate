@@ -164,13 +164,19 @@ fn benchmark_main(c: &mut Criterion) {
 
 	c.bench_function("sequential 50 tx", |b| {
 		b.iter(|| {
-			bench_configured(Pool::new(Default::default(), TestApi::new_dependant().into()), 50);
+			bench_configured(
+				Pool::new(Default::default(), true.into(), TestApi::new_dependant().into()),
+				50,
+			);
 		});
 	});
 
 	c.bench_function("random 100 tx", |b| {
 		b.iter(|| {
-			bench_configured(Pool::new(Default::default(), TestApi::default().into()), 100);
+			bench_configured(
+				Pool::new(Default::default(), true.into(), TestApi::default().into()),
+				100,
+			);
 		});
 	});
 }

@@ -95,9 +95,9 @@ pub fn slot_duration<A, B, C>(client: &C) -> CResult<SlotDuration> where
 	A: Codec,
 	B: BlockT,
 	C: AuxStore + ProvideRuntimeApi<B>,
-	C::Api: AuraApi<B, A, Error = sp_blockchain::Error>,
+	C::Api: AuraApi<B, A>,
 {
-	SlotDuration::get_or_compute(client, |a, b| a.slot_duration(b))
+	SlotDuration::get_or_compute(client, |a, b| a.slot_duration(b).map_err(Into::into))
 }
 
 /// Get slot author for given block along with authorities.
@@ -494,7 +494,7 @@ impl<C, P, CAW, IDP> AuraVerifier<C, P, CAW, IDP> where
 		inherent_data: sp_inherents::InherentData,
 		inherent_data_providers: IDP::InherentDataProviders,
 	) -> Result<(), Error<B>> where
-		C: ProvideRuntimeApi<B>, C::Api: BlockBuilderApi<B, Error = sp_blockchain::Error>,
+		C: ProvideRuntimeApi<B>, C::Api: BlockBuilderApi<B>,
 		CAW: CanAuthorWith<B>,
 		IDP: CreateInherentDataProviders<B, ()>,
 		IDP::InherentDataProviders: InherentDataProviderExt + Send,
@@ -514,7 +514,7 @@ impl<C, P, CAW, IDP> AuraVerifier<C, P, CAW, IDP> where
 			&block_id,
 			block,
 			inherent_data,
-		).map_err(Error::Client)?;
+		).map_err(|e| Error::Client(e.into()))?;
 
 		if !inherent_res.ok() {
 			for (i, e) in inherent_res.into_errors() {
@@ -537,7 +537,7 @@ impl<B: BlockT, C, P, CAW, IDP> Verifier<B> for AuraVerifier<C, P, CAW, IDP> whe
 		sc_client_api::backend::AuxStore +
 		ProvideCache<B> +
 		BlockOf,
-	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B, Error = sp_blockchain::Error>,
+	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B>,
 	DigestItemFor<B>: CompatibleDigestItem<P>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + 'static,
@@ -592,7 +592,7 @@ impl<B: BlockT, C, P, CAW, IDP> Verifier<B> for AuraVerifier<C, P, CAW, IDP> whe
 					// skip the inherents verification if the runtime API is old.
 					if self.client
 						.runtime_api()
-						.has_api_with::<dyn BlockBuilderApi<B, Error = ()>, _>(
+						.has_api_with::<dyn BlockBuilderApi<B>, _>(
 							&BlockId::Hash(parent_hash),
 							|v| v >= 2,
 						)
@@ -794,7 +794,7 @@ pub fn import_queue<B, I, C, P, S, CAW, IDP>(
 	can_author_with: CAW,
 ) -> Result<DefaultImportQueue<B, C>, sp_consensus::Error> where
 	B: BlockT,
-	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B, Error = sp_blockchain::Error>,
+	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B>,
 	C: 'static + ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + Send + Sync + AuxStore + HeaderBackend<B>,
 	I: BlockImport<B, Error=ConsensusError, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	DigestItemFor<B>: CompatibleDigestItem<P>,

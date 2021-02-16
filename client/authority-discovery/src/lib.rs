@@ -93,7 +93,7 @@ where
 	Block: BlockT + Unpin + 'static,
 	Network: NetworkProvider,
 	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static + HeaderBackend<Block>,
-	<Client as ProvideRuntimeApi<Block>>::Api: AuthorityDiscoveryApi<Block, Error = sp_blockchain::Error>,
+	<Client as ProvideRuntimeApi<Block>>::Api: AuthorityDiscoveryApi<Block>,
 	DhtEventStream: Stream<Item = DhtEvent> + Unpin,
 {
 	new_worker_and_service_with_config(
@@ -121,7 +121,7 @@ where
 	Block: BlockT + Unpin + 'static,
 	Network: NetworkProvider,
 	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static + HeaderBackend<Block>,
-	<Client as ProvideRuntimeApi<Block>>::Api: AuthorityDiscoveryApi<Block, Error = sp_blockchain::Error>,
+	<Client as ProvideRuntimeApi<Block>>::Api: AuthorityDiscoveryApi<Block>,
 	DhtEventStream: Stream<Item = DhtEvent> + Unpin,
 {
 	let (to_worker, from_service) = mpsc::channel(0);

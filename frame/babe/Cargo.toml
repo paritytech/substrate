@@ -1,6 +1,6 @@
 [package]
 name = "pallet-babe"
-version = "2.0.1"
+version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -14,31 +14,31 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-frame-benchmarking = { version = "2.0.0", default-features = false, path = "../benchmarking", optional = true }
-frame-support = { version = "2.0.0", default-features = false, path = "../support" }
-frame-system = { version = "2.0.0", default-features = false, path = "../system" }
-pallet-authorship = { version = "2.0.0", default-features = false, path = "../authorship" }
-pallet-session = { version = "2.0.0", default-features = false, path = "../session" }
-pallet-timestamp = { version = "2.0.0", default-features = false, path = "../timestamp" }
+frame-benchmarking = { version = "3.0.0", default-features = false, path = "../benchmarking", optional = true }
+frame-support = { version = "3.0.0", default-features = false, path = "../support" }
+frame-system = { version = "3.0.0", default-features = false, path = "../system" }
+pallet-authorship = { version = "3.0.0", default-features = false, path = "../authorship" }
+pallet-session = { version = "3.0.0", default-features = false, path = "../session" }
+pallet-timestamp = { version = "3.0.0", default-features = false, path = "../timestamp" }
 serde = { version = "1.0.101", optional = true }
-sp-application-crypto = { version = "2.0.0", default-features = false, path = "../../primitives/application-crypto" }
-sp-consensus-babe = { version = "0.8.0", default-features = false, path = "../../primitives/consensus/babe" }
-sp-consensus-vrf = { version = "0.8.0", default-features = false, path = "../../primitives/consensus/vrf" }
-sp-inherents = { version = "2.0.0", default-features = false, path = "../../primitives/inherents" }
-sp-io = { version = "2.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-session = { version = "2.0.0", default-features = false, path = "../../primitives/session" }
-sp-staking = { version = "2.0.0", default-features = false, path = "../../primitives/staking" }
-sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
-sp-timestamp = { version = "2.0.0", default-features = false, path = "../../primitives/timestamp" }
+sp-application-crypto = { version = "3.0.0", default-features = false, path = "../../primitives/application-crypto" }
+sp-consensus-babe = { version = "0.9.0", default-features = false, path = "../../primitives/consensus/babe" }
+sp-consensus-vrf = { version = "0.9.0", default-features = false, path = "../../primitives/consensus/vrf" }
+sp-inherents = { version = "3.0.0", default-features = false, path = "../../primitives/inherents" }
+sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-session = { version = "3.0.0", default-features = false, path = "../../primitives/session" }
+sp-staking = { version = "3.0.0", default-features = false, path = "../../primitives/staking" }
+sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
+sp-timestamp = { version = "3.0.0", default-features = false, path = "../../primitives/timestamp" }
 
 [dev-dependencies]
-frame-benchmarking = { version = "2.0.0", path = "../benchmarking" }
-pallet-balances = { version = "2.0.0", path = "../balances" }
-pallet-offences = { version = "2.0.0", path = "../offences" }
-pallet-staking = { version = "2.0.0", path = "../staking" }
-pallet-staking-reward-curve = { version = "2.0.0", path = "../staking/reward-curve" }
-sp-core = { version = "2.0.0", path = "../../primitives/core" }
+frame-benchmarking = { version = "3.0.0", path = "../benchmarking" }
+pallet-balances = { version = "3.0.0", path = "../balances" }
+pallet-offences = { version = "3.0.0", path = "../offences" }
+pallet-staking = { version = "3.0.0", path = "../staking" }
+pallet-staking-reward-curve = { version = "3.0.0", path = "../staking/reward-curve" }
+sp-core = { version = "3.0.0", path = "../../primitives/core" }
 
 [features]
 default = ["std"]

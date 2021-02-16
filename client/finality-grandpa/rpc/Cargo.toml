@@ -1,6 +1,6 @@
 [package]
 name = "sc-finality-grandpa-rpc"
-version = "0.8.1"
+version = "0.9.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "RPC extensions for the GRANDPA finality gadget"
 repository = "https://github.com/paritytech/substrate/"
@@ -9,11 +9,11 @@ license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 readme = "README.md"
 
 [dependencies]
-sc-finality-grandpa = { version = "0.8.0", path = "../" }
-sc-rpc = { version = "2.0.0", path = "../../rpc" }
-sp-blockchain = { version = "2.0.0", path = "../../../primitives/blockchain" }
-sp-core = { version = "2.0.0", path = "../../../primitives/core" }
-sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
+sc-finality-grandpa = { version = "0.9.0", path = "../" }
+sc-rpc = { version = "3.0.0", path = "../../rpc" }
+sp-blockchain = { version = "3.0.0", path = "../../../primitives/blockchain" }
+sp-core = { version = "3.0.0", path = "../../../primitives/core" }
+sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
 finality-grandpa = { version = "0.13.0", features = ["derive-codec"] }
 jsonrpc-core = "15.1.0"
 jsonrpc-core-client = "15.1.0"
@@ -25,15 +25,15 @@ serde_json = "1.0.50"
 log = "0.4.8"
 derive_more = "0.99.2"
 parity-scale-codec = { version = "2.0.0", features = ["derive"] }
-sc-client-api = { version = "2.0.0", path = "../../api" }
+sc-client-api = { version = "3.0.0", path = "../../api" }
 
 [dev-dependencies]
-sc-block-builder = { version = "0.8.0", path = "../../block-builder" }
+sc-block-builder = { version = "0.9.0", path = "../../block-builder" }
 sc-network-test = { version = "0.8.0", path = "../../network/test" }
-sc-rpc = { version = "2.0.0", path = "../../rpc", features = ["test-helpers"] }
-sp-consensus = { version = "0.8.0", path = "../../../primitives/consensus/common" }
-sp-core = { version = "2.0.0", path = "../../../primitives/core" }
-sp-finality-grandpa = { version = "2.0.0", path = "../../../primitives/finality-grandpa" }
-sp-keyring = { version = "2.0.0", path = "../../../primitives/keyring" }
+sc-rpc = { version = "3.0.0", path = "../../rpc", features = ["test-helpers"] }
+sp-consensus = { version = "0.9.0", path = "../../../primitives/consensus/common" }
+sp-core = { version = "3.0.0", path = "../../../primitives/core" }
+sp-finality-grandpa = { version = "3.0.0", path = "../../../primitives/finality-grandpa" }
+sp-keyring = { version = "3.0.0", path = "../../../primitives/keyring" }
 substrate-test-runtime-client = { version = "2.0.0",  path = "../../../test-utils/runtime/client" }
 lazy_static = "1.4"

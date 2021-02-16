@@ -199,6 +199,8 @@ cargo-deny:
     when:                          always
     paths:
       - deny.log
+  # FIXME: Temorarily allow to fail.
+  allow_failure:                   true
 
 cargo-check-benches:
   stage:                           test
@@ -687,14 +689,3 @@ validator 4 4:
   <<:                              *validator-deploy
   script:
     - ./.maintain/flamingfir-deploy.sh flamingfir-validator4
-
-#### stage:                        .post
-
-check-labels:
-  stage:                           .post
-  image:                           paritytech/tools:latest
-  <<:                              *kubernetes-build
-  rules:
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
-  script:
-    - ./.maintain/gitlab/check_labels.sh

@@ -275,6 +275,8 @@ pub enum Error<B: BlockT> {
 	CheckInherentsUnhandled(sp_inherents::InherentIdentifier),
 	/// Client error
 	Client(sp_blockchain::Error),
+	/// Runtime Api error.
+	RuntimeApi(sp_api::ApiError),
 	/// Runtime error
 	Runtime(sp_inherents::Error),
 	/// Fork tree error
@@ -312,14 +314,14 @@ impl Config {
 	/// Either fetch the slot duration from disk or compute it from the genesis
 	/// state.
 	pub fn get_or_compute<B: BlockT, C>(client: &C) -> ClientResult<Self> where
-		C: AuxStore + ProvideRuntimeApi<B>, C::Api: BabeApi<B, Error = sp_blockchain::Error>,
+		C: AuxStore + ProvideRuntimeApi<B>, C::Api: BabeApi<B>,
 	{
 		trace!(target: "babe", "Getting slot duration");
 		match sc_consensus_slots::SlotDuration::get_or_compute(client, |a, b| {
-			let has_api_v1 = a.has_api_with::<dyn BabeApi<B, Error = sp_blockchain::Error>, _>(
+			let has_api_v1 = a.has_api_with::<dyn BabeApi<B>, _>(
 				&b, |v| v == 1,
 			)?;
-			let has_api_v2 = a.has_api_with::<dyn BabeApi<B, Error = sp_blockchain::Error>, _>(
+			let has_api_v2 = a.has_api_with::<dyn BabeApi<B>, _>(
 				&b, |v| v == 2,
 			)?;
 
@@ -328,7 +330,7 @@ impl Config {
 					Ok(a.configuration_before_version_2(b)?.into())
 				}
 			} else if has_api_v2 {
-				a.configuration(b)
+				a.configuration(b).map_err(Into::into)
 			} else {
 				Err(sp_blockchain::Error::VersionInvalid(
 					"Unsupported or invalid BabeApi version".to_string()
@@ -823,8 +825,7 @@ impl<Block, Client, SelectChain, CAW, CIDP> BabeVerifier<Block, Client, SelectCh
 where
 	Block: BlockT,
 	Client: AuxStore + HeaderBackend<Block> + HeaderMetadata<Block> + ProvideRuntimeApi<Block>,
-	Client::Api: BlockBuilderApi<Block, Error = sp_blockchain::Error>
-		+ BabeApi<Block, Error = sp_blockchain::Error>,
+	Client::Api: BlockBuilderApi<Block> + BabeApi<Block>,
 	SelectChain: sp_consensus::SelectChain<Block>,
 	CAW: CanAuthorWith<Block>,
 	CIDP: CreateInherentDataProviders<Block, ()>,
@@ -850,7 +851,7 @@ where
 			&block_id,
 			block,
 			inherent_data,
-		).map_err(Error::Client)?;
+		).map_err(Error::RuntimeApi)?;
 
 		if !inherent_res.ok() {
 			for (i, e) in inherent_res.into_errors() {
@@ -914,7 +915,7 @@ where
 			self.client
 				.runtime_api()
 				.generate_key_ownership_proof(block_id, slot, equivocation_proof.offender.clone())
-				.map_err(Error::Client)
+				.map_err(Error::RuntimeApi)
 		};
 
 		let parent_id = BlockId::Hash(*header.parent_hash());
@@ -937,7 +938,7 @@ where
 				equivocation_proof,
 				key_owner_proof,
 			)
-			.map_err(Error::Client)?;
+			.map_err(Error::RuntimeApi)?;
 
 		info!(target: "babe", "Submitted equivocation report for author {:?}", author);
 
@@ -952,7 +953,7 @@ where
 	Block: BlockT,
 	Client: HeaderMetadata<Block, Error = sp_blockchain::Error> + HeaderBackend<Block> + ProvideRuntimeApi<Block>
 		+ Send + Sync + AuxStore + ProvideCache<Block>,
-	Client::Api: BlockBuilderApi<Block, Error = sp_blockchain::Error> + BabeApi<Block, Error = sp_blockchain::Error>,
+	Client::Api: BlockBuilderApi<Block> + BabeApi<Block>,
 	SelectChain: sp_consensus::SelectChain<Block>,
 	CAW: CanAuthorWith<Block> + Send + Sync,
 	CIDP: CreateInherentDataProviders<Block, ()> + Send + Sync,
@@ -1483,7 +1484,7 @@ where
 		+ Send + Sync + 'static,
 	Client: ProvideRuntimeApi<Block> + ProvideCache<Block> + Send + Sync + AuxStore + 'static,
 	Client: HeaderBackend<Block> + HeaderMetadata<Block, Error = sp_blockchain::Error>,
-	Client::Api: BlockBuilderApi<Block> + BabeApi<Block> + ApiExt<Block, Error = sp_blockchain::Error>,
+	Client::Api: BlockBuilderApi<Block> + BabeApi<Block> + ApiExt<Block>,
 	SelectChain: sp_consensus::SelectChain<Block> + 'static,
 	CAW: CanAuthorWith<Block> + Send + Sync + 'static,
 	CIDP: CreateInherentDataProviders<Block, ()> + Send + Sync + 'static,
