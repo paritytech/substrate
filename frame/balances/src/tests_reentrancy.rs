@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Test utilities
+//! Test setup for potentil reentracy and lost updates of nested mutations. 
 
 #![cfg(test)]
 
