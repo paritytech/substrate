@@ -982,7 +982,7 @@ where
 
 		let inherent_data_providers = self
 			.inherent_data_providers
-			.create_inherent_data_providers(&BlockId::Hash(parent_hash), ())
+			.create_inherent_data_providers(parent_hash, ())
 			.await
 			.map_err(|e| Error::<Block>::Client(sp_consensus::Error::from(e).into()))?;
 

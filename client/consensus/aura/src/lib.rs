@@ -560,7 +560,7 @@ impl<B: BlockT, C, P, CAW, IDP> Verifier<B> for AuraVerifier<C, P, CAW, IDP> whe
 			.map_err(|e| format!("Could not fetch authorities at {:?}: {:?}", parent_hash, e))?;
 
 		let inherent_data_providers = self.inherent_data_providers.create_inherent_data_providers(
-			&BlockId::hash(parent_hash),
+			parent_hash,
 			(),
 		).map_err(|e| Error::<B>::Client(sp_blockchain::Error::Consensus(e.into())))?;
 

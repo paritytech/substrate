@@ -24,7 +24,7 @@ use super::{Slot, InherentDataProviderExt};
 use sp_consensus::{Error, SelectChain};
 use futures::{prelude::*, task::Context, task::Poll};
 use sp_inherents::{InherentData, CreateInherentDataProviders, InherentDataProvider};
-use sp_runtime::{traits::{Block as BlockT, Header as HeaderT}, generic::BlockId};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 
 use std::{pin::Pin, time::{Duration, Instant}};
 use futures_timer::Delay;
@@ -129,7 +129,7 @@ where
 			};
 
 			let inherent_data_providers = self.inherent_data_providers
-				.create_inherent_data_providers(&BlockId::Hash(chain_head.hash()), ())
+				.create_inherent_data_providers(chain_head.hash(), ())
 				.await?;
 
 			let timestamp = inherent_data_providers.timestamp();

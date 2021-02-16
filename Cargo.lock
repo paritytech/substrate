@@ -8490,7 +8490,6 @@ dependencies = [
  "async-trait",
  "impl-trait-for-tuples",
  "parity-scale-codec",
- "parking_lot 0.11.1",
  "sp-core",
  "sp-runtime",
  "sp-std",

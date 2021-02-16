@@ -33,19 +33,12 @@ const MAX_UNCLE_GENERATIONS: u32 = 8;
 /// Create a new [`sp_authorship::InherentDataProvider`] at the given block.
 pub fn create_uncles_inherent_data_provider<B, C>(
 	client: &C,
-	at: &BlockId<B>,
-) -> Result<sp_authorship::InherentDataProvider<B::Header>, C::Error> where
+	parent: B::Hash,
+) -> Result<sp_authorship::InherentDataProvider<B::Header>, sc_client_api::blockchain::Error> where
 	B: BlockT,
-	C: ProvideUncles<B> + BlockIdTo<B, Error = sc_client_api::blockchain::Error>,
+	C: ProvideUncles<B>,
 {
-	let hash = match client.to_hash(at)? {
-		Some(hash) => hash,
-		None => return Err(
-			sc_client_api::blockchain::Error::Application(Box::new(Error::NoHashForBlockId(*at)))
-		),
-	};
-
-	let uncles = client.uncles(hash, MAX_UNCLE_GENERATIONS.into())?;
+	let uncles = client.uncles(parent, MAX_UNCLE_GENERATIONS.into())?;
 
 	Ok(sp_authorship::InherentDataProvider::new(uncles))
 }

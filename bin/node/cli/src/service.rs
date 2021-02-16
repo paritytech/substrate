@@ -92,7 +92,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		Some(Box::new(justification_import)),
 		client.clone(),
 		select_chain.clone(),
-		move |at: &sp_runtime::generic::BlockId<Block>, ()| async move {
+		move |_, ()| async move {
 			let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
 
 			let slot =
@@ -280,13 +280,12 @@ pub fn new_full_base(
 			env: proposer,
 			block_import,
 			sync_oracle: network.clone(),
-			inherent_data_providers: move |at: &sp_runtime::generic::BlockId<Block>, ()| {
+			inherent_data_providers: move |parent, ()| {
 				let client_clone = client_clone.clone();
-				let at = *at;
 				async move {
 					let uncles = sc_consensus_uncles::create_uncles_inherent_data_provider(
 						&*client_clone,
-						&at,
+						parent,
 					)?;
 
 					let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
@@ -440,7 +439,7 @@ pub fn new_light_base(mut config: Configuration) -> Result<(
 		Some(Box::new(justification_import)),
 		client.clone(),
 		select_chain.clone(),
-		move |at: &sp_runtime::generic::BlockId<Block>, ()| async move {
+		move |_, ()| async move {
 			let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
 
 			let slot =

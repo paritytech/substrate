@@ -39,13 +39,7 @@ use codec::{Encode, Decode};
 use sp_std::{collections::btree_map::{BTreeMap, IntoIter, Entry}, vec::Vec};
 
 #[cfg(feature = "std")]
-use parking_lot::RwLock;
-
-#[cfg(feature = "std")]
-use std::{sync::Arc, format};
-
-#[cfg(feature = "std")]
-use sp_runtime::{traits::Block as BlockT, generic::BlockId};
+use sp_runtime::traits::Block as BlockT;
 
 /// An error that can occur within the inherent data system.
 #[cfg(feature = "std")]
@@ -267,7 +261,7 @@ pub trait CreateInherentDataProviders<Block: BlockT, ExtraArgs> {
 
 	async fn create_inherent_data_providers(
 		&self,
-		at: &BlockId<Block>,
+		parent: Block::Hash,
 		extra_args: ExtraArgs,
 	) -> Result<Self::InherentDataProviders, Box<dyn std::error::Error + Send + Sync>>;
 }
@@ -277,7 +271,7 @@ pub trait CreateInherentDataProviders<Block: BlockT, ExtraArgs> {
 impl<F, Block, IDP, ExtraArgs, Fut> CreateInherentDataProviders<Block, ExtraArgs> for F
 where
 	Block: BlockT,
-	F: Fn(&BlockId<Block>, ExtraArgs) -> Fut + Sync + Send,
+	F: Fn(Block::Hash, ExtraArgs) -> Fut + Sync + Send,
 	Fut: std::future::Future<Output = Result<IDP, Box<dyn std::error::Error + Send + Sync>>> + Send + 'static,
 	IDP: InherentDataProvider + 'static,
 	ExtraArgs: Send + 'static,
@@ -286,10 +280,10 @@ where
 
 	async fn create_inherent_data_providers(
 		&self,
-		at: &BlockId<Block>,
+		parent: Block::Hash,
 		extra_args: ExtraArgs,
 	) -> Result<Self::InherentDataProviders, Box<dyn std::error::Error + Send + Sync>> {
-		(*self)(at, extra_args).await
+		(*self)(parent, extra_args).await
 	}
 }
 
