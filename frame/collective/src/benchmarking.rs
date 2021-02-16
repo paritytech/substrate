@@ -21,7 +21,12 @@ use super::*;
 
 use frame_system::RawOrigin as SystemOrigin;
 use frame_system::EventRecord;
-use frame_benchmarking::{benchmarks_instance, account, whitelisted_caller};
+use frame_benchmarking::{
+	benchmarks_instance,
+	account,
+	whitelisted_caller,
+	impl_benchmark_test_suite,
+};
 use sp_runtime::traits::Bounded;
 use sp_std::mem::size_of;
 
@@ -42,7 +47,6 @@ fn assert_last_event<T: Config<I>, I: Instance>(generic_event: <T as Config<I>>:
 }
 
 benchmarks_instance! {
-	
 	set_members {
 		let m in 1 .. T::MaxMembers::get();
 		let n in 1 .. T::MaxMembers::get();
@@ -634,79 +638,8 @@ benchmarks_instance! {
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::tests::{new_test_ext, Test};
-	use frame_support::assert_ok;
-
-	#[test]
-	fn set_members() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_set_members::<Test>());
-		});
-	}
-
-	#[test]
-	fn execute() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_execute::<Test>());
-		});
-	}
-
-	#[test]
-	fn propose_execute() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_propose_execute::<Test>());
-		});
-	}
-
-	#[test]
-	fn propose_proposed() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_propose_proposed::<Test>());
-		});
-	}
-
-	#[test]
-	fn vote() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_vote::<Test>());
-		});
-	}
-
-	#[test]
-	fn close_early_disapproved() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_close_early_disapproved::<Test>());
-		});
-	}
-
-	#[test]
-	fn close_early_approved() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_close_early_approved::<Test>());
-		});
-	}
-
-	#[test]
-	fn close_disapproved() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_close_disapproved::<Test>());
-		});
-	}
-
-	#[test]
-	fn close_approved() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_close_approved::<Test>());
-		});
-	}
-
-	#[test]
-	fn disapprove_proposal() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_disapprove_proposal::<Test>());
-		});
-	}
-}
+impl_benchmark_test_suite!(
+	Collective,
+	crate::tests::new_test_ext(),
+	crate::tests::Test,
+);

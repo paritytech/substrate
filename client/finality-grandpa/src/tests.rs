@@ -1355,7 +1355,7 @@ where
 
 #[test]
 fn grandpa_environment_respects_voting_rules() {
-	use finality_grandpa::Chain;
+	use finality_grandpa::voter::Environment;
 
 	let peers = &[Ed25519Keyring::Alice];
 	let voters = make_ids(peers);
@@ -1390,25 +1390,25 @@ fn grandpa_environment_respects_voting_rules() {
 
 	// the unrestricted environment should just return the best block
 	assert_eq!(
-		unrestricted_env.best_chain_containing(
+		futures::executor::block_on(unrestricted_env.best_chain_containing(
 			peer.client().info().finalized_hash
-		).unwrap().1,
+		)).unwrap().unwrap().1,
 		21,
 	);
 
 	// both the other environments should return block 16, which is 3/4 of the
 	// way in the unfinalized chain
 	assert_eq!(
-		three_quarters_env.best_chain_containing(
+		futures::executor::block_on(three_quarters_env.best_chain_containing(
 			peer.client().info().finalized_hash
-		).unwrap().1,
+		)).unwrap().unwrap().1,
 		16,
 	);
 
 	assert_eq!(
-		default_env.best_chain_containing(
+		futures::executor::block_on(default_env.best_chain_containing(
 			peer.client().info().finalized_hash
-		).unwrap().1,
+		)).unwrap().unwrap().1,
 		16,
 	);
 
@@ -1417,18 +1417,18 @@ fn grandpa_environment_respects_voting_rules() {
 
 	// the 3/4 environment should propose block 21 for voting
 	assert_eq!(
-		three_quarters_env.best_chain_containing(
+		futures::executor::block_on(three_quarters_env.best_chain_containing(
 			peer.client().info().finalized_hash
-		).unwrap().1,
+		)).unwrap().unwrap().1,
 		21,
 	);
 
 	// while the default environment will always still make sure we don't vote
 	// on the best block (2 behind)
 	assert_eq!(
-		default_env.best_chain_containing(
+		futures::executor::block_on(default_env.best_chain_containing(
 			peer.client().info().finalized_hash
-		).unwrap().1,
+		)).unwrap().unwrap().1,
 		19,
 	);
 
@@ -1439,9 +1439,9 @@ fn grandpa_environment_respects_voting_rules() {
 	// best block, there's a hard rule that we can't cast any votes lower than
 	// the given base (#21).
 	assert_eq!(
-		default_env.best_chain_containing(
+		futures::executor::block_on(default_env.best_chain_containing(
 			peer.client().info().finalized_hash
-		).unwrap().1,
+		)).unwrap().unwrap().1,
 		21,
 	);
 }
