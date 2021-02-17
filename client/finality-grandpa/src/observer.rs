@@ -29,7 +29,7 @@ use log::{debug, info, warn};
 use sp_keystore::SyncCryptoStorePtr;
 use sp_consensus::SelectChain;
 use sc_client_api::backend::Backend;
-use sc_telemetry::TelemetryHandle;
+use sc_telemetry::{ClientTelemetry, TelemetryHandle};
 use sp_utils::mpsc::TracingUnboundedReceiver;
 use sp_runtime::traits::{NumberFor, Block as BlockT};
 use sp_blockchain::HeaderMetadata;
@@ -167,7 +167,7 @@ where
 	N: NetworkT<Block> + Send + Clone + 'static,
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
-	Client: crate::ClientForGrandpa<Block, BE> + 'static,
+	Client: crate::ClientForGrandpa<Block, BE> + ClientTelemetry + 'static,
 {
 	let LinkHalf {
 		client,
@@ -175,7 +175,6 @@ where
 		persistent_data,
 		voter_commands_rx,
 		justification_sender,
-		telemetry,
 		..
 	} = link;
 
@@ -184,17 +183,17 @@ where
 		config.clone(),
 		persistent_data.set_state.clone(),
 		None,
-		telemetry.clone(),
+		client.telemetry(),
 	);
 
 	let observer_work = ObserverWork::new(
-		client,
+		client.clone(),
 		network,
 		persistent_data,
 		config.keystore,
 		voter_commands_rx,
 		Some(justification_sender),
-		telemetry,
+		client.telemetry(),
 	);
 
 	let observer_work = observer_work

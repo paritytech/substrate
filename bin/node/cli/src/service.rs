@@ -78,7 +78,6 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		client.clone(),
 		&(client.clone() as Arc<_>),
 		select_chain.clone(),
-		client.telemetry(),
 	)?;
 	let justification_import = grandpa_block_import.clone();
 
@@ -100,7 +99,6 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		&task_manager.spawn_handle(),
 		config.prometheus_registry(),
 		sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone()),
-		client.telemetry(),
 	)?;
 
 	let import_setup = (block_import, grandpa_link, babe_link);
@@ -390,7 +388,6 @@ pub fn new_light_base(mut config: Configuration) -> Result<(
 		client.clone(),
 		&(client.clone() as Arc<_>),
 		select_chain.clone(),
-		client.telemetry(),
 	)?;
 	let justification_import = grandpa_block_import.clone();
 
@@ -412,7 +409,6 @@ pub fn new_light_base(mut config: Configuration) -> Result<(
 		&task_manager.spawn_handle(),
 		config.prometheus_registry(),
 		sp_consensus::NeverCanAuthor,
-		client.telemetry(), // TODO hmm how do I get the telemetry here...
 	)?;
 
 	let (network, network_status_sinks, system_rpc_tx, network_starter) =
