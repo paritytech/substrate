@@ -21,7 +21,7 @@ use std::{convert::TryFrom, time::SystemTime};
 use crate::{NetworkStatus, NetworkState, NetworkStatusSinks, config::Configuration};
 use futures_timer::Delay;
 use prometheus_endpoint::{register, Gauge, U64, Registry, PrometheusError, Opts, GaugeVec};
-use sc_telemetry::{telemetry, Telemetry, SUBSTRATE_INFO};
+use sc_telemetry::{telemetry, TelemetryHandle, SUBSTRATE_INFO};
 use sp_api::ProvideRuntimeApi;
 use sp_runtime::traits::{NumberFor, Block, SaturatedConversion, UniqueSaturatedInto};
 use sp_transaction_pool::{PoolStatus, MaintainedTransactionPool};
@@ -112,7 +112,7 @@ pub struct MetricsService {
 	last_update: Instant,
 	last_total_bytes_inbound: u64,
 	last_total_bytes_outbound: u64,
-	telemetry: Option<Telemetry>,
+	telemetry: Option<TelemetryHandle>,
 }
 
 impl MetricsService {

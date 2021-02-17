@@ -24,7 +24,7 @@ use parking_lot::RwLockWriteGuard;
 
 use sp_blockchain::{BlockStatus, well_known_cache_keys};
 use sc_client_api::{backend::Backend, utils::is_descendent_of};
-use sc_telemetry::Telemetry;
+use sc_telemetry::TelemetryHandle;
 use sp_utils::mpsc::TracingUnboundedSender;
 use sp_api::TransactionFor;
 
@@ -63,7 +63,7 @@ pub struct GrandpaBlockImport<Backend, Block: BlockT, Client, SC> {
 	send_voter_commands: TracingUnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
 	authority_set_hard_forks: HashMap<Block::Hash, PendingChange<Block::Hash, NumberFor<Block>>>,
 	justification_sender: GrandpaJustificationSender<Block>,
-	telemetry: Option<Telemetry>,
+	telemetry: Option<TelemetryHandle>,
 	_phantom: PhantomData<Backend>,
 }
 
@@ -565,7 +565,7 @@ impl<Backend, Block: BlockT, Client, SC> GrandpaBlockImport<Backend, Block, Clie
 		send_voter_commands: TracingUnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
 		authority_set_hard_forks: Vec<(SetId, PendingChange<Block::Hash, NumberFor<Block>>)>,
 		justification_sender: GrandpaJustificationSender<Block>,
-		telemetry: Option<Telemetry>,
+		telemetry: Option<TelemetryHandle>,
 	) -> GrandpaBlockImport<Backend, Block, Client, SC> {
 		// check for and apply any forced authority set hard fork that applies
 		// to the *current* authority set.

@@ -90,7 +90,7 @@ use sc_network::{ObservedRole, PeerId, ReputationChange};
 use parity_scale_codec::{Encode, Decode};
 use sp_finality_grandpa::AuthorityId;
 
-use sc_telemetry::{telemetry, Telemetry, CONSENSUS_DEBUG};
+use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG};
 use log::{trace, debug};
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use prometheus_endpoint::{CounterVec, Opts, PrometheusError, register, Registry, U64};
@@ -1283,7 +1283,7 @@ pub(super) struct GossipValidator<Block: BlockT> {
 	set_state: environment::SharedVoterSetState<Block>,
 	report_sender: TracingUnboundedSender<PeerReport>,
 	metrics: Option<Metrics>,
-	telemetry: Option<Telemetry>,
+	telemetry: Option<TelemetryHandle>,
 }
 
 impl<Block: BlockT> GossipValidator<Block> {
@@ -1294,7 +1294,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 		config: crate::Config,
 		set_state: environment::SharedVoterSetState<Block>,
 		prometheus_registry: Option<&Registry>,
-		telemetry: Option<Telemetry>,
+		telemetry: Option<TelemetryHandle>,
 	) -> (GossipValidator<Block>, TracingUnboundedReceiver<PeerReport>)	{
 		let metrics = match prometheus_registry.map(Metrics::register) {
 			Some(Ok(metrics)) => Some(metrics),

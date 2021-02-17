@@ -74,7 +74,7 @@ pub const CONSENSUS_INFO: VerbosityLevel = 1;
 
 static TELEMETRY_ID_COUNTER: CounterU64 = CounterU64::new(1);
 
-/// Telemetry message verbosity.
+/// TelemetryHandle message verbosity.
 pub type VerbosityLevel = u8;
 
 pub(crate) type Id = u64;
@@ -104,7 +104,7 @@ pub struct ConnectionMessage {
 	pub network_id: String,
 }
 
-/// Telemetry worker.
+/// TelemetryHandle worker.
 ///
 /// It should run as a background task using the [`TelemetryWorker::run`] method. This method
 /// will consume the object and any further attempts of initializing a new telemetry through its
@@ -193,7 +193,7 @@ impl TelemetryWorker {
 		let input = input.expect("the stream is never closed; qed");
 
 		match input {
-			Register::Telemetry {
+			Register::TelemetryHandle {
 				id,
 				endpoints,
 				connection_message,
@@ -339,10 +339,10 @@ pub struct TelemetryWorkerHandle {
 
 impl TelemetryWorkerHandle {
 	/// TODO
-	pub fn new_telemetry(&mut self, endpoints: TelemetryEndpoints) -> Telemetry {
+	pub fn new_telemetry(&mut self, endpoints: TelemetryEndpoints) -> TelemetryHandle {
 		let addresses = endpoints.0.iter().map(|(addr, _)| addr.clone()).collect();
 
-		Telemetry {
+		TelemetryHandle {
 			message_sender: self.message_sender.clone(),
 			register_sender: self.register_sender.clone(),
 			id: self.id_generator.next(),
@@ -357,7 +357,7 @@ impl TelemetryWorkerHandle {
 
 /// A telemetry instance that can be used to send telemetries.
 #[derive(Debug, Clone)]
-pub struct Telemetry {
+pub struct TelemetryHandle {
 	message_sender: mpsc::Sender<TelemetryMessage>,
 	register_sender: mpsc::UnboundedSender<Register>,
 	id: Id,
@@ -365,7 +365,7 @@ pub struct Telemetry {
 	endpoints: Option<TelemetryEndpoints>,
 }
 
-impl Telemetry {
+impl TelemetryHandle {
 	/// Send telemetries.
 	pub fn send(&mut self, verbosity: VerbosityLevel, payload: TelemetryPayload) {
 		match self.message_sender.try_send((self.id, verbosity, payload)) {
@@ -416,7 +416,7 @@ impl Telemetry {
 			}
 		};
 
-		match register_sender.unbounded_send(Register::Telemetry {
+		match register_sender.unbounded_send(Register::TelemetryHandle {
 			id: *id,
 			endpoints,
 			connection_message,
@@ -460,7 +460,7 @@ impl TelemetryConnectionNotifier {
 
 #[derive(Debug)]
 enum Register {
-	Telemetry {
+	TelemetryHandle {
 		id: Id,
 		endpoints: TelemetryEndpoints,
 		connection_message: ConnectionMessage,
@@ -564,5 +564,5 @@ impl IdGenerator {
 /// TODO
 pub trait ClientTelemetry {
 	/// TODO
-	fn telemetry(&self) -> Option<Telemetry>;
+	fn telemetry(&self) -> Option<TelemetryHandle>;
 }

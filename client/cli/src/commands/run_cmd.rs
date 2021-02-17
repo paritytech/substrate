@@ -149,7 +149,7 @@ pub struct RunCmd {
 
 	/// Disable connecting to the Substrate telemetry server.
 	///
-	/// Telemetry is on by default on global chains.
+	/// TelemetryHandle is on by default on global chains.
 	#[structopt(long = "no-telemetry")]
 	pub no_telemetry: bool,
 

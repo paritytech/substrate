@@ -32,7 +32,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, Hash as HashT, Header as HeaderT, DigestFor, BlakeTwo256},
 };
 use sp_transaction_pool::{TransactionPool, InPoolTransaction};
-use sc_telemetry::{telemetry, Telemetry, CONSENSUS_INFO};
+use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_INFO};
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sp_api::{ProvideRuntimeApi, ApiExt};
 use futures::{future, future::{Future, FutureExt}, channel::oneshot, select};
@@ -61,7 +61,7 @@ pub struct ProposerFactory<A, B, C> {
 	/// Prometheus Link,
 	metrics: PrometheusMetrics,
 	max_block_size: usize,
-	telemetry: Option<Telemetry>,
+	telemetry: Option<TelemetryHandle>,
 	/// phantom member to pin the `Backend` type.
 	_phantom: PhantomData<B>,
 }
@@ -72,7 +72,7 @@ impl<A, B, C> ProposerFactory<A, B, C> {
 		client: Arc<C>,
 		transaction_pool: Arc<A>,
 		prometheus: Option<&PrometheusRegistry>,
-		telemetry: Option<Telemetry>,
+		telemetry: Option<TelemetryHandle>,
 	) -> Self {
 		ProposerFactory {
 			spawn_handle: Box::new(spawn_handle),
@@ -167,7 +167,7 @@ pub struct Proposer<B, Block: BlockT, C, A: TransactionPool> {
 	now: Box<dyn Fn() -> time::Instant + Send + Sync>,
 	metrics: PrometheusMetrics,
 	max_block_size: usize,
-	telemetry: Option<Telemetry>,
+	telemetry: Option<TelemetryHandle>,
 	_phantom: PhantomData<B>,
 }
 

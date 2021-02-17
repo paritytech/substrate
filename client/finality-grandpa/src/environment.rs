@@ -39,7 +39,7 @@ use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, Zero,
 };
-use sc_telemetry::{telemetry, Telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
+use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO};
 
 use crate::{
 	local_authority_id, CommandOrError, Commit, Config, Error, NewAuthoritySet, Precommit, Prevote,
@@ -445,7 +445,7 @@ pub(crate) struct Environment<Backend, Block: BlockT, C, N: NetworkT<Block>, SC,
 	pub(crate) voting_rule: VR,
 	pub(crate) metrics: Option<Metrics>,
 	pub(crate) justification_sender: Option<GrandpaJustificationSender<Block>>,
-	pub(crate) telemetry: Option<Telemetry>,
+	pub(crate) telemetry: Option<TelemetryHandle>,
 	pub(crate) _phantom: PhantomData<Backend>,
 }
 
@@ -1214,7 +1214,7 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 	justification_or_commit: JustificationOrCommit<Block>,
 	initial_sync: bool,
 	justification_sender: Option<&GrandpaJustificationSender<Block>>,
-	telemetry: Option<Telemetry>,
+	telemetry: Option<TelemetryHandle>,
 ) -> Result<(), CommandOrError<Block::Hash, NumberFor<Block>>>
 where
 	Block: BlockT,

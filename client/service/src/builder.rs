@@ -56,7 +56,7 @@ use sc_telemetry::{
 	telemetry,
 	ClientTelemetry,
 	ConnectionMessage,
-	Telemetry,
+	TelemetryHandle,
 	SUBSTRATE_INFO,
 };
 use sp_transaction_pool::MaintainedTransactionPool;
@@ -441,7 +441,7 @@ pub fn new_client<E, Block, RA>(
 	execution_extensions: ExecutionExtensions<Block>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
-	telemetry: Option<Telemetry>,
+	telemetry: Option<TelemetryHandle>,
 	config: ClientConfig,
 ) -> Result<(
 	crate::client::Client<
@@ -677,7 +677,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 async fn transaction_notifications<TBl, TExPool>(
 	transaction_pool: Arc<TExPool>,
 	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
-	mut telemetry: Option<Telemetry>,
+	mut telemetry: Option<TelemetryHandle>,
 )
 	where
 		TBl: BlockT,
@@ -703,7 +703,7 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 	config: &mut Configuration,
 	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
 	client: Arc<TCl>,
-	mut telemetry: Telemetry,
+	mut telemetry: TelemetryHandle,
 ) {
 	let genesis_hash = client.block_hash(Zero::zero()).ok().flatten().unwrap_or_default();
 	let connection_message = ConnectionMessage {

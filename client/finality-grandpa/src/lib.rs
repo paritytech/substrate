@@ -79,7 +79,7 @@ use sp_core::{
 use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 use sp_application_crypto::AppKey;
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
-use sc_telemetry::{telemetry, Telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG};
+use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_INFO, CONSENSUS_DEBUG};
 use parking_lot::RwLock;
 
 use finality_grandpa::Error as GrandpaError;
@@ -271,8 +271,8 @@ pub struct Config {
 	pub name: Option<String>,
 	/// The keystore that manages the keys of this node.
 	pub keystore: Option<SyncCryptoStorePtr>,
-	/// Telemetry instance.
-	pub telemetry: Option<Telemetry>,
+	/// TelemetryHandle instance.
+	pub telemetry: Option<TelemetryHandle>,
 }
 
 impl Config {
@@ -454,7 +454,7 @@ pub struct LinkHalf<Block: BlockT, C, SC> {
 	voter_commands_rx: TracingUnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 	justification_sender: GrandpaJustificationSender<Block>,
 	justification_stream: GrandpaJustificationStream<Block>,
-	telemetry: Option<Telemetry>,
+	telemetry: Option<TelemetryHandle>,
 }
 
 impl<Block: BlockT, C, SC> LinkHalf<Block, C, SC> {
@@ -505,7 +505,7 @@ pub fn block_import<BE, Block: BlockT, Client, SC>(
 	client: Arc<Client>,
 	genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
 	select_chain: SC,
-	telemetry: Option<Telemetry>,
+	telemetry: Option<TelemetryHandle>,
 ) -> Result<
 	(
 		GrandpaBlockImport<BE, Block, Client, SC>,
@@ -537,7 +537,7 @@ pub fn block_import_with_authority_set_hard_forks<BE, Block: BlockT, Client, SC>
 	genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
 	select_chain: SC,
 	authority_set_hard_forks: Vec<(SetId, (Block::Hash, NumberFor<Block>), AuthorityList)>,
-	telemetry: Option<Telemetry>,
+	telemetry: Option<TelemetryHandle>,
 ) -> Result<
 	(
 		GrandpaBlockImport<BE, Block, Client, SC>,
@@ -679,8 +679,8 @@ pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
 	pub prometheus_registry: Option<prometheus_endpoint::Registry>,
 	/// The voter state is exposed at an RPC endpoint.
 	pub shared_voter_state: SharedVoterState,
-	/// Telemetry instance.
-	pub telemetry: Option<Telemetry>,
+	/// TelemetryHandle instance.
+	pub telemetry: Option<TelemetryHandle>,
 }
 
 /// Returns the configuration value to put in
@@ -837,7 +837,7 @@ struct VoterWork<B, Block: BlockT, C, N: NetworkT<Block>, SC, VR> {
 	env: Arc<Environment<B, Block, C, N, SC, VR>>,
 	voter_commands_rx: TracingUnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 	network: NetworkBridge<Block, N>,
-	telemetry: Option<Telemetry>,
+	telemetry: Option<TelemetryHandle>,
 	/// Prometheus metrics.
 	metrics: Option<Metrics>,
 }
@@ -864,7 +864,7 @@ where
 		prometheus_registry: Option<prometheus_endpoint::Registry>,
 		shared_voter_state: SharedVoterState,
 		justification_sender: GrandpaJustificationSender<Block>,
-		telemetry: Option<Telemetry>,
+		telemetry: Option<TelemetryHandle>,
 	) -> Self {
 		let metrics = match prometheus_registry.as_ref().map(Metrics::register) {
 			Some(Ok(metrics)) => Some(metrics),

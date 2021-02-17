@@ -89,7 +89,7 @@ use sp_runtime::{
 use sp_api::{ProvideRuntimeApi, NumberFor};
 use parking_lot::Mutex;
 use sp_inherents::{InherentDataProviders, InherentData};
-use sc_telemetry::{telemetry, Telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG};
+use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_TRACE, CONSENSUS_DEBUG};
 use sp_consensus::{
 	BlockImport, Environment, Proposer, BlockCheckParams,
 	ForkChoiceStrategy, BlockImportParams, BlockOrigin, Error as ConsensusError,
@@ -394,8 +394,8 @@ pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW, BS> {
 	/// Checks if the current native implementation can author with a runtime at a given block.
 	pub can_author_with: CAW,
 
-	/// Telemetry instance.
-	pub telemetry: Option<Telemetry>,
+	/// TelemetryHandle instance.
+	pub telemetry: Option<TelemetryHandle>,
 }
 
 /// Start the babe worker.
@@ -847,7 +847,7 @@ pub struct BabeVerifier<Block: BlockT, Client, SelectChain, CAW> {
 	epoch_changes: SharedEpochChanges<Block, Epoch>,
 	time_source: TimeSource,
 	can_author_with: CAW,
-	telemetry: Option<Telemetry>,
+	telemetry: Option<TelemetryHandle>,
 }
 
 impl<Block, Client, SelectChain, CAW> BabeVerifier<Block, Client, SelectChain, CAW>
@@ -1501,7 +1501,7 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, Inner, CAW>(
 	spawner: &impl sp_core::traits::SpawnNamed,
 	registry: Option<&Registry>,
 	can_author_with: CAW,
-	telemetry: Option<Telemetry>,
+	telemetry: Option<TelemetryHandle>,
 ) -> ClientResult<DefaultImportQueue<Block, Client>> where
 	Inner: BlockImport<Block, Error = ConsensusError, Transaction = sp_api::TransactionFor<Client, Block>>
 		+ Send + Sync + 'static,

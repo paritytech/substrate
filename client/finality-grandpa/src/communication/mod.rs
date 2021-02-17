@@ -42,7 +42,7 @@ use sc_network::{NetworkService, ReputationChange};
 use sc_network_gossip::{GossipEngine, Network as GossipNetwork};
 use parity_scale_codec::{Encode, Decode};
 use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor};
-use sc_telemetry::{telemetry, Telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
+use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO};
 
 use crate::{
 	CatchUp, Commit, CommunicationIn, CommunicationOutH,
@@ -193,7 +193,7 @@ pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>> {
 	// channel implementation.
 	gossip_validator_report_stream: Arc<Mutex<TracingUnboundedReceiver<PeerReport>>>,
 
-	telemetry: Option<Telemetry>,
+	telemetry: Option<TelemetryHandle>,
 }
 
 impl<B: BlockT, N: Network<B>> Unpin for NetworkBridge<B, N> {}
@@ -208,7 +208,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		config: crate::Config,
 		set_state: crate::environment::SharedVoterSetState<B>,
 		prometheus_registry: Option<&Registry>,
-		telemetry: Option<Telemetry>,
+		telemetry: Option<TelemetryHandle>,
 	) -> Self {
 		let (validator, report_stream) = GossipValidator::new(
 			config,
@@ -500,7 +500,7 @@ fn incoming_global<B: BlockT>(
 	voters: Arc<VoterSet<AuthorityId>>,
 	gossip_validator: Arc<GossipValidator<B>>,
 	neighbor_sender: periodic::NeighborPacketSender<B>,
-	telemetry: Option<Telemetry>,
+	telemetry: Option<TelemetryHandle>,
 ) -> impl Stream<Item = CommunicationIn<B>> {
 	let mut process_commit = {
 		let mut telemetry = telemetry.clone();
@@ -671,7 +671,7 @@ pub(crate) struct OutgoingMessages<Block: BlockT> {
 	sender: mpsc::Sender<SignedMessage<Block>>,
 	network: Arc<Mutex<GossipEngine<Block>>>,
 	has_voted: HasVoted<Block>,
-	telemetry: Option<Telemetry>,
+	telemetry: Option<TelemetryHandle>,
 }
 
 impl<B: BlockT> Unpin for OutgoingMessages<B> {}
@@ -773,7 +773,7 @@ fn check_compact_commit<Block: BlockT>(
 	voters: &VoterSet<AuthorityId>,
 	round: Round,
 	set_id: SetId,
-	mut telemetry: Option<&mut Telemetry>,
+	mut telemetry: Option<&mut TelemetryHandle>,
 ) -> Result<(), ReputationChange> {
 	// 4f + 1 = equivocations from f voters.
 	let f = voters.total_weight() - voters.threshold();
@@ -838,7 +838,7 @@ fn check_catch_up<Block: BlockT>(
 	msg: &CatchUp<Block>,
 	voters: &VoterSet<AuthorityId>,
 	set_id: SetId,
-	telemetry: Option<Telemetry>,
+	telemetry: Option<TelemetryHandle>,
 ) -> Result<(), ReputationChange> {
 	// 4f + 1 = equivocations from f voters.
 	let f = voters.total_weight() - voters.threshold();
@@ -889,7 +889,7 @@ fn check_catch_up<Block: BlockT>(
 		set_id: SetIdNumber,
 		mut signatures_checked: usize,
 		buf: &mut Vec<u8>,
-		mut telemetry: Option<Telemetry>,
+		mut telemetry: Option<TelemetryHandle>,
 	) -> Result<usize, ReputationChange> where
 		B: BlockT,
 		I: Iterator<Item=(Message<B>, &'a AuthorityId, &'a AuthoritySignature)>,
@@ -957,7 +957,7 @@ struct CommitsOut<Block: BlockT> {
 	is_voter: bool,
 	gossip_validator: Arc<GossipValidator<Block>>,
 	neighbor_sender: periodic::NeighborPacketSender<Block>,
-	telemetry: Option<Telemetry>,
+	telemetry: Option<TelemetryHandle>,
 }
 
 impl<Block: BlockT> CommitsOut<Block> {
@@ -968,7 +968,7 @@ impl<Block: BlockT> CommitsOut<Block> {
 		is_voter: bool,
 		gossip_validator: Arc<GossipValidator<Block>>,
 		neighbor_sender: periodic::NeighborPacketSender<Block>,
-		telemetry: Option<Telemetry>,
+		telemetry: Option<TelemetryHandle>,
 	) -> Self {
 		CommitsOut {
 			network,

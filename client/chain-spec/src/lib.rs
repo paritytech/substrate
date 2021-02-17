@@ -137,7 +137,7 @@ pub trait ChainSpec: BuildStorage + Send + Sync {
 	fn chain_type(&self) -> ChainType;
 	/// A list of bootnode addresses.
 	fn boot_nodes(&self) -> &[MultiaddrWithPeerId];
-	/// Telemetry endpoints (if any)
+	/// TelemetryHandle endpoints (if any)
 	fn telemetry_endpoints(&self) -> &Option<TelemetryEndpoints>;
 	/// Network protocol id.
 	fn protocol_id(&self) -> Option<&str>;

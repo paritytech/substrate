@@ -24,7 +24,7 @@
 //!
 //! See `sp-tracing` for examples on how to use tracing.
 //!
-//! Currently we provide `Log` (default), `Telemetry` variants for `Receiver`
+//! Currently we provide `Log` (default), `TelemetryHandle` variants for `Receiver`
 
 #![warn(missing_docs)]
 

@@ -92,7 +92,7 @@ mod tests {
 			("/ip4/80.123.90.4/tcp/5432".into(), 4),
 		];
 		let telem =
-			TelemetryEndpoints::new(endp.clone()).expect("Telemetry endpoint should be valid");
+			TelemetryEndpoints::new(endp.clone()).expect("TelemetryHandle endpoint should be valid");
 		let mut res: Vec<(Multiaddr, u8)> = vec![];
 		for (a, b) in endp.iter() {
 			res.push((

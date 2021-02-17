@@ -47,7 +47,7 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header, HashFor, NumberFor}
 };
-use sc_telemetry::{telemetry, Telemetry, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
+use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
 
 /// The changes that need to applied to the storage to create the state for a block.
 ///
@@ -82,7 +82,7 @@ pub trait SlotWorker<B: BlockT> {
 		&mut self,
 		chain_head: B::Header,
 		slot_info: SlotInfo,
-		telemetry: Option<Telemetry>,
+		telemetry: Option<TelemetryHandle>,
 	) -> Self::OnSlot;
 }
 
@@ -210,7 +210,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		&mut self,
 		chain_head: B::Header,
 		slot_info: SlotInfo,
-		mut telemetry: Option<Telemetry>,
+		mut telemetry: Option<TelemetryHandle>,
 	) -> Pin<Box<dyn Future<Output = Option<SlotResult<B>>> + Send>>
 	where
 		<Self::Proposer as Proposer<B>>::Proposal: Unpin + Send + 'static,
@@ -397,7 +397,7 @@ impl<B: BlockT, T: SimpleSlotWorker<B>> SlotWorker<B> for T {
 		&mut self,
 		chain_head: B::Header,
 		slot_info: SlotInfo,
-		telemetry: Option<Telemetry>,
+		telemetry: Option<TelemetryHandle>,
 	) -> Self::OnSlot {
 		SimpleSlotWorker::on_slot(self, chain_head, slot_info, telemetry)
 	}
@@ -424,7 +424,7 @@ pub fn start_slot_worker<B, C, W, T, SO, SC, CAW>(
 	inherent_data_providers: InherentDataProviders,
 	timestamp_extractor: SC,
 	can_author_with: CAW,
-	telemetry: Option<Telemetry>,
+	telemetry: Option<TelemetryHandle>,
 ) -> impl Future<Output = ()>
 where
 	B: BlockT,

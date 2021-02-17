@@ -35,7 +35,7 @@ use sp_core::{
 };
 #[cfg(feature="test-helpers")]
 use sp_keystore::SyncCryptoStorePtr;
-use sc_telemetry::{telemetry, ClientTelemetry, Telemetry, SUBSTRATE_INFO};
+use sc_telemetry::{telemetry, ClientTelemetry, TelemetryHandle, SUBSTRATE_INFO};
 use sp_runtime::{
 	Justification, BuildStorage,
 	generic::{BlockId, SignedBlock, DigestItem},
@@ -115,7 +115,7 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	block_rules: BlockRules<Block>,
 	execution_extensions: ExecutionExtensions<Block>,
 	config: ClientConfig,
-	telemetry: Option<Telemetry>,
+	telemetry: Option<TelemetryHandle>,
 	_phantom: PhantomData<RA>,
 }
 
@@ -153,7 +153,7 @@ pub fn new_in_mem<E, Block, S, RA>(
 	genesis_storage: &S,
 	keystore: Option<SyncCryptoStorePtr>,
 	prometheus_registry: Option<Registry>,
-	telemetry: Option<Telemetry>,
+	telemetry: Option<TelemetryHandle>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	config: ClientConfig,
 ) -> sp_blockchain::Result<Client<
@@ -199,7 +199,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 	keystore: Option<SyncCryptoStorePtr>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
-	telemetry: Option<Telemetry>,
+	telemetry: Option<TelemetryHandle>,
 	config: ClientConfig,
 ) -> sp_blockchain::Result<Client<B, LocalCallExecutor<B, E>, Block, RA>>
 	where
@@ -299,7 +299,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		bad_blocks: BadBlocks<Block>,
 		execution_extensions: ExecutionExtensions<Block>,
 		prometheus_registry: Option<Registry>,
-		telemetry: Option<Telemetry>,
+		telemetry: Option<TelemetryHandle>,
 		config: ClientConfig,
 	) -> sp_blockchain::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
@@ -2015,7 +2015,7 @@ impl<BE, E, B, RA> ClientTelemetry for Client<BE, E, B, RA>
 		E: CallExecutor<B>,
 		B: BlockT,
 {
-	fn telemetry(&self) -> Option<Telemetry> {
+	fn telemetry(&self) -> Option<TelemetryHandle> {
 		self.telemetry.clone()
 	}
 }

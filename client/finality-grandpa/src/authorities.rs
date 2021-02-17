@@ -23,7 +23,7 @@ use parking_lot::RwLock;
 use finality_grandpa::voter_set::VoterSet;
 use parity_scale_codec::{Encode, Decode};
 use log::debug;
-use sc_telemetry::{telemetry, Telemetry, CONSENSUS_INFO};
+use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_INFO};
 use sp_finality_grandpa::{AuthorityId, AuthorityList};
 
 use std::cmp::Ord;
@@ -418,7 +418,7 @@ where
 		best_number: N,
 		is_descendent_of: &F,
 		initial_sync: bool,
-		mut telemetry: Option<&mut Telemetry>,
+		mut telemetry: Option<&mut TelemetryHandle>,
 	) -> Result<Option<(N, Self)>, Error<N, E>>
 	where
 		F: Fn(&H, &H) -> Result<bool, E>,
@@ -514,7 +514,7 @@ where
 		finalized_number: N,
 		is_descendent_of: &F,
 		initial_sync: bool,
-		mut telemetry: Option<&mut Telemetry>,
+		mut telemetry: Option<&mut TelemetryHandle>,
 	) -> Result<Status<H, N>, Error<N, E>>
 	where
 		F: Fn(&H, &H) -> Result<bool, E>,
