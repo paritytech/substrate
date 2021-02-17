@@ -734,11 +734,6 @@ mod tests {
 	}
 
 	#[test]
-	fn miner_will_not_submit_if_not_feasible() {
-		todo!()
-	}
-
-	#[test]
 	fn unsigned_per_dispatch_checks_can_only_submit_threshold_better() {
 		ExtBuilder::default()
 			.desired_targets(1)
