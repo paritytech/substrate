@@ -675,7 +675,7 @@ pub mod pallet {
 			let error_message = "Invalid unsigned submission must produce invalid block and \
 			                     deprive validator from their authoring reward.";
 
-			// NOTE: since we do this in pre-dispatch, we _could_ just ignore it here.
+			// Check score being an improvement, phase, and desired targets.
 			Self::unsigned_pre_dispatch_checks(&solution).expect(error_message);
 
 			// ensure witness was correct.
