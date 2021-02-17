@@ -535,6 +535,13 @@ publish-docker-substrate:
   variables:
     <<:                            *docker-build-vars
     PRODUCT:                       substrate
+  after_script:
+    - echo "VERSION=${VERSION}" >> build.env
+  artifacts:
+    reports:
+      # this artifact is used in trigger-simnet job
+      # https://docs.gitlab.com/ee/ci/multi_project_pipelines.html#with-variable-inheritance
+      dotenv: artifacts/substrate/build.env
 
 publish-docker-subkey:
   stage:                           publish
@@ -650,7 +657,6 @@ trigger-simnet:
     - if: $CI_COMMIT_REF_NAME == "master" && $CI_PIPELINE_SOURCE == "schedule" && $PIPELINE == "nightly"
   needs:
     - job:                         publish-docker-substrate
-      artifacts:                   false
   trigger:
     project:                       parity/simnet
     branch:                        master
