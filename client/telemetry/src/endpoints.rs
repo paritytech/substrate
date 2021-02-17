@@ -25,7 +25,8 @@ use serde::{Deserialize, Deserializer, Serialize};
 /// The URL string can be either a URL or a multiaddress.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct TelemetryEndpoints(
-	#[serde(deserialize_with = "url_or_multiaddr_deser")] pub(crate) Vec<(Multiaddr, u8)>,
+	#[serde(deserialize_with = "url_or_multiaddr_deser")]
+	pub(crate) Vec<(Multiaddr, u8)>,
 );
 
 /// Custom deserializer for TelemetryEndpoints, used to convert urls or multiaddr to multiaddr.
@@ -92,7 +93,7 @@ mod tests {
 			("/ip4/80.123.90.4/tcp/5432".into(), 4),
 		];
 		let telem =
-			TelemetryEndpoints::new(endp.clone()).expect("TelemetryHandle endpoint should be valid");
+			TelemetryEndpoints::new(endp.clone()).expect("Telemetry endpoint should be valid");
 		let mut res: Vec<(Multiaddr, u8)> = vec![];
 		for (a, b) in endp.iter() {
 			res.push((

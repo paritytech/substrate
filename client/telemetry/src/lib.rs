@@ -411,14 +411,14 @@ impl Telemetry {
 		}
 	}
 
-    /// TODO
-    pub fn handle(&self) -> TelemetryHandle {
-        TelemetryHandle {
-            message_sender: self.message_sender.clone(),
-            id: self.id,
-            connection_notifier: self.connection_notifier.clone(),
-        }
-    }
+	/// TODO
+	pub fn handle(&self) -> TelemetryHandle {
+		TelemetryHandle {
+			message_sender: self.message_sender.clone(),
+			id: self.id,
+			connection_notifier: self.connection_notifier.clone(),
+		}
+	}
 }
 
 /// TODO
@@ -582,6 +582,6 @@ pub trait ClientTelemetry {
 	/// TODO
 	fn telemetry(&self) -> Option<TelemetryHandle>;
 
-    /// TODO
+	/// TODO
 	fn start_telemetry(&self, connection_message: ConnectionMessage);
 }
