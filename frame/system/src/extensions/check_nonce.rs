@@ -55,7 +55,8 @@ impl<T: Config + TypeInfo> sp_std::fmt::Debug for CheckNonce<T> {
 }
 
 impl<T: Config + TypeInfo> SignedExtension for CheckNonce<T> where
-	T::Call: Dispatchable<Info=DispatchInfo>
+	T::Call: Dispatchable<Info=DispatchInfo>,
+	<<T as Config>::Index as codec::HasCompact>::Type: TypeInfo, // todo: [AJ] this is a result of the derived compact TypeInfo impl, can we get rid of it?
 {
 	type AccountId = T::AccountId;
 	type Call = T::Call;
