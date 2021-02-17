@@ -74,12 +74,11 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		client.clone(),
 	);
 
-	let telemetry = client.telemetry();
 	let (grandpa_block_import, grandpa_link) = grandpa::block_import(
 		client.clone(),
 		&(client.clone() as Arc<_>),
 		select_chain.clone(),
-		telemetry.clone(),
+		client.telemetry(),
 	)?;
 	let justification_import = grandpa_block_import.clone();
 
@@ -101,7 +100,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		&task_manager.spawn_handle(),
 		config.prometheus_registry(),
 		sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone()),
-		telemetry.clone(),
+		client.telemetry(),
 	)?;
 
 	let import_setup = (block_import, grandpa_link, babe_link);
@@ -223,7 +222,6 @@ pub fn new_full_base(
 		);
 	}
 
-	let telemetry = client.telemetry();
 	let role = config.role.clone();
 	let force_authoring = config.force_authoring;
 	let backoff_authoring_blocks =
@@ -259,7 +257,7 @@ pub fn new_full_base(
 			client.clone(),
 			transaction_pool.clone(),
 			prometheus_registry.as_ref(),
-			telemetry.clone(),
+			client.telemetry(),
 		);
 
 		let can_author_with =
@@ -277,7 +275,7 @@ pub fn new_full_base(
 			backoff_authoring_blocks,
 			babe_link,
 			can_author_with,
-			telemetry: telemetry.clone(),
+			telemetry: client.telemetry(),
 		};
 
 		let babe = sc_consensus_babe::start_babe(babe_config)?;
@@ -321,7 +319,7 @@ pub fn new_full_base(
 		observer_enabled: false,
 		keystore,
 		is_authority: role.is_authority(),
-		telemetry: telemetry.clone(),
+		telemetry: client.telemetry(),
 	};
 
 	if enable_grandpa {
@@ -335,7 +333,7 @@ pub fn new_full_base(
 			config,
 			link: grandpa_link,
 			network: network.clone(),
-			telemetry: telemetry.clone(),
+			telemetry: client.telemetry(),
 			voting_rule: grandpa::VotingRulesBuilder::default().build(),
 			prometheus_registry,
 			shared_voter_state,
@@ -390,13 +388,11 @@ pub fn new_light_base(mut config: Configuration) -> Result<(
 		on_demand.clone(),
 	));
 
-	let telemetry = client.telemetry();
-
 	let (grandpa_block_import, _) = grandpa::block_import(
 		client.clone(),
 		&(client.clone() as Arc<_>),
 		select_chain.clone(),
-		telemetry.clone(),
+		client.telemetry(),
 	)?;
 	let justification_import = grandpa_block_import.clone();
 
@@ -418,7 +414,7 @@ pub fn new_light_base(mut config: Configuration) -> Result<(
 		&task_manager.spawn_handle(),
 		config.prometheus_registry(),
 		sp_consensus::NeverCanAuthor,
-		telemetry.clone(), // TODO hmm how do I get the telemetry here...
+		client.telemetry(), // TODO hmm how do I get the telemetry here...
 	)?;
 
 	let (network, network_status_sinks, system_rpc_tx, network_starter) =
