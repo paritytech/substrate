@@ -80,7 +80,7 @@ macro_rules! impl_outer_inherent {
 				let mut result = $crate::inherent::CheckInherentsResult::new();
 				for xt in block.extrinsics() {
 					if $crate::inherent::Extrinsic::is_signed(xt).unwrap_or(false) {
-						break
+						continue
 					}
 
 					$({
@@ -219,7 +219,7 @@ mod tests {
 			Some(CallTest2::Something)
 		}
 
-		fn is_inherent_required(_: &InherentData) -> Result<Option<Self::Error>, Self::Error> { 
+		fn is_inherent_required(_: &InherentData) -> Result<Option<Self::Error>, Self::Error> {
 			Ok(Some(().into()))
 		}
 	}
@@ -229,14 +229,22 @@ mod tests {
 	#[derive(codec::Encode, codec::Decode, Clone, PartialEq, Eq, Debug, serde::Serialize)]
 	struct Extrinsic {
 		function: Call,
+		signed: bool,
 	}
 
 	impl traits::Extrinsic for Extrinsic {
 		type Call = Call;
 		type SignaturePayload = ();
 
-		fn new(function: Call, _: Option<()>) -> Option<Self> {
-			Some(Self { function })
+		fn new(function: Call, signed_data: Option<()>) -> Option<Self> {
+			Some(Self {
+				function,
+				signed: signed_data.is_some(),
+			})
+		}
+
+		fn is_signed(&self) -> Option<bool> {
+			Some(self.signed)
 		}
 	}
 
@@ -254,8 +262,8 @@ mod tests {
 		let inherents = InherentData::new().create_extrinsics();
 
 		let expected = vec![
-			Extrinsic { function: Call::Test(CallTest::Something) },
-			Extrinsic { function: Call::Test2(CallTest2::Something) },
+			Extrinsic { function: Call::Test(CallTest::Something), signed: false },
+			Extrinsic { function: Call::Test2(CallTest2::Something), signed: false },
 		];
 		assert_eq!(expected, inherents);
 	}
@@ -265,8 +273,8 @@ mod tests {
 		let block = Block::new(
 			Header::new_from_number(1),
 			vec![
-				Extrinsic { function: Call::Test2(CallTest2::Something) },
-				Extrinsic { function: Call::Test(CallTest::Something) },
+				Extrinsic { function: Call::Test2(CallTest2::Something), signed: false },
+				Extrinsic { function: Call::Test(CallTest::Something), signed: false },
 			],
 		);
 
@@ -275,8 +283,8 @@ mod tests {
 		let block = Block::new(
 			Header::new_from_number(1),
 			vec![
-				Extrinsic { function: Call::Test2(CallTest2::Something) },
-				Extrinsic { function: Call::Test(CallTest::SomethingElse) },
+				Extrinsic { function: Call::Test2(CallTest2::Something), signed: false },
+				Extrinsic { function: Call::Test(CallTest::SomethingElse), signed: false },
 			],
 		);
 
@@ -287,9 +295,26 @@ mod tests {
 	fn required_inherents_enforced() {
 		let block = Block::new(
 			Header::new_from_number(1),
-			vec![Extrinsic { function: Call::Test(CallTest::Something) }],
+			vec![Extrinsic { function: Call::Test(CallTest::Something), signed: false }],
 		);
 
 		assert!(InherentData::new().check_extrinsics(&block).fatal_error());
+	}
+
+	#[test]
+	fn check_all_extrinsics() {
+		let block = Block::new(
+			Header::new_from_number(1),
+			vec![
+				Extrinsic { function: Call::Test2(CallTest2::Something), signed: false },
+				Extrinsic { function: Call::Test(CallTest::Something), signed: true },
+				Extrinsic { function: Call::Test(CallTest::SomethingElse), signed: false },
+			],
+		);
+
+		assert_eq!(
+			InherentData::new().check_extrinsics(&block).into_errors().into_iter().collect::<Vec<_>>(),
+			vec![(*b"test1235", vec![])],
+		);
 	}
 }

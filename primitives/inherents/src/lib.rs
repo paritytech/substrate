@@ -423,16 +423,28 @@ pub trait ProvideInherent {
 	///
 	/// - `Err(_)` indicates that this function failed and further operations should be aborted.
 	///
-	/// CAUTION: This check has a bug when used in pallets that also provide unsigned transactions.
-	/// See <https://github.com/paritytech/substrate/issues/6243> for details.
+	/// # Warning
+	///
+	/// If inherent is required then the runtime only assert at least one unsigned extrinsic of the
+	/// type [`Self::Call`] is in the block. If the pallet also accept some unsigned transactions
+	/// then this only assert that an inherent call or an unsigned transaction is in the block.
+	///
+	/// To ensure properly that a specific call has been made, one can use a transient storage like
+	/// `DidIncludeInherent`, set this storage to true when the inherent call is made, ensure the
+	/// storage contains true in `on_finalize`, and remove the storage in `on_finalize`.
 	fn is_inherent_required(_: &InherentData) -> Result<Option<Self::Error>, Self::Error> { Ok(None) }
 
-	/// Check whether the given inherent is valid. Checking the inherent is optional and can be
-	/// omitted by using the default implementation.
+	/// Check whether the given inherent is valid.
+	///
+	/// Checking the inherent is optional and can be omitted by using the default implementation.
 	///
 	/// When checking an inherent, the first parameter represents the inherent that is actually
 	/// included in the block by its author. Whereas the second parameter represents the inherent
 	/// data that the verifying node calculates.
+	///
+	/// NOTE: This function is called for any unsigned extrinsics with a call of type
+	/// [`Self::Call`] in the block.
+	/// Those checks are executed in a row from the state of the parent of the block.
 	fn check_inherent(_: &Self::Call, _: &InherentData) -> Result<(), Self::Error> {
 		Ok(())
 	}
