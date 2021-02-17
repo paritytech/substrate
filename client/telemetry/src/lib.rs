@@ -278,10 +278,8 @@ impl TelemetryWorker {
 		let nodes = if let Some(nodes) = node_map.get(&id) {
 			nodes
 		} else {
-			// This is a normal error because the telemetry span is entered before the telemetry
-			// is initialized so it is possible that some messages in the beginning don't get
-			// through.
-			// TODO probably never happen
+			// This is a normal error because the telemetry ID exists sooner than the telemetry is
+			// initialized.
 			log::trace!(
 				target: "telemetry",
 				"Received telemetry log for unknown id ({:?}): {}",
@@ -336,7 +334,7 @@ pub struct TelemetryWorkerHandle {
 }
 
 impl TelemetryWorkerHandle {
-	/// TODO
+	/// Instantiate a new [`Telemetry`] object which is normally stored in the Substrate's Client.
 	pub fn new_telemetry(&mut self, endpoints: TelemetryEndpoints) -> Telemetry {
 		let addresses = endpoints.0.iter().map(|(addr, _)| addr.clone()).collect();
 
@@ -409,7 +407,7 @@ impl Telemetry {
 		}
 	}
 
-	/// TODO
+	/// Make a new clonable handle to this [`Telemetry`]. This is used for reporting telemetries.
 	pub fn handle(&self) -> TelemetryHandle {
 		TelemetryHandle {
 			message_sender: self.message_sender.clone(),
@@ -419,7 +417,7 @@ impl Telemetry {
 	}
 }
 
-/// TODO
+/// Handle to a [`Telemetry`]. Used to report telemetries.
 #[derive(Debug, Clone)]
 pub struct TelemetryHandle {
 	message_sender: mpsc::Sender<TelemetryMessage>,
@@ -575,11 +573,12 @@ impl IdGenerator {
 	}
 }
 
-/// TODO
+/// A trait used by the Substrate's Client to get a [`TelemetryHandle`] or to initialize the
+/// [`Telemetry`].
 pub trait ClientTelemetry {
-	/// TODO
+	/// Get a clonable handle to the telemetry if it exists.
 	fn telemetry(&self) -> Option<TelemetryHandle>;
 
-	/// TODO
+	/// Initialize the [`Telemetry`].
 	fn start_telemetry(&self, connection_message: ConnectionMessage);
 }
