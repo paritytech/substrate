@@ -66,7 +66,7 @@ pub fn development_config() -> Result<ChainSpec, String> {
 		),
 		// Bootnodes
 		vec![],
-		// TelemetryHandle
+		// Telemetry
 		None,
 		// Protocol ID
 		None,
@@ -114,7 +114,7 @@ pub fn local_testnet_config() -> Result<ChainSpec, String> {
 		),
 		// Bootnodes
 		vec![],
-		// TelemetryHandle
+		// Telemetry
 		None,
 		// Protocol ID
 		None,
