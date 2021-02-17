@@ -100,7 +100,7 @@ pub struct Configuration {
 	///
 	/// This is a handle to a `TelemetryWorker` instance. It is used to initialize the telemetry for
 	/// a substrate node.
-	pub telemetry_handle: Option<sc_telemetry::TelemetryHandle>,
+	pub telemetry_worker_handle: Option<sc_telemetry::TelemetryWorkerHandle>,
 	/// The default number of 64KB pages to allocate for Wasm execution
 	pub default_heap_pages: Option<u64>,
 	/// Should offchain workers be executed.

@@ -29,7 +29,7 @@
 //! identify which substrate node is reporting the telemetry. Every task spawned using sc-service's
 //! `TaskManager` automatically inherit this span.
 //!
-//! Substrate's nodes initialize/register with the [`TelemetryWorker`] using a [`TelemetryHandle`].
+//! Substrate's nodes initialize/register with the [`TelemetryWorker`] using a [`TelemetryWorkerHandle`].
 //! This handle can be cloned and passed around. It uses an asynchronous channel to communicate with
 //! the running [`TelemetryWorker`] dedicated to registration. Registering can happen at any point
 //! in time during the process execution.
@@ -137,11 +137,11 @@ impl TelemetryWorker {
 		})
 	}
 
-	/// Get a new [`TelemetryHandle`].
+	/// Get a new [`TelemetryWorkerHandle`].
 	///
 	/// This is used when you want to register with the [`TelemetryWorker`].
-	pub fn handle(&self) -> TelemetryHandle {
-		TelemetryHandle {
+	pub fn handle(&self) -> TelemetryWorkerHandle {
+		TelemetryWorkerHandle {
 			message_sender: self.message_sender.clone(),
 			register_sender: self.register_sender.clone(),
 			id_generator: self.id_generator.clone(),
@@ -331,13 +331,13 @@ impl TelemetryWorker {
 
 /// Handle to the [`TelemetryWorker`] thats allows initializing the telemetry for a Substrate node.
 #[derive(Debug, Clone)]
-pub struct TelemetryHandle {
+pub struct TelemetryWorkerHandle {
 	message_sender: mpsc::Sender<TelemetryMessage>,
 	register_sender: mpsc::UnboundedSender<Register>,
 	id_generator: IdGenerator,
 }
 
-impl TelemetryHandle {
+impl TelemetryWorkerHandle {
 	/// TODO
 	pub fn new_telemetry(&mut self, endpoints: TelemetryEndpoints) -> Telemetry {
 		let addresses = endpoints.0.iter().map(|(addr, _)| addr.clone()).collect();
@@ -378,7 +378,7 @@ impl Telemetry {
 	/// Get event stream for telemetry connection established events.
 	///
 	/// This function will return an error if the telemetry has already been started by
-	/// [`TelemetryHandle::start_telemetry`].
+	/// [`TelemetryWorkerHandle::start_telemetry`].
 	pub fn on_connect_stream(&self) -> TracingUnboundedReceiver<()> {
 		self.connection_notifier.on_connect_stream()
 	}

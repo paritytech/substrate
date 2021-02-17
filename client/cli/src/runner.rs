@@ -25,7 +25,7 @@ use futures::select;
 use futures::{future, future::FutureExt, Future};
 use log::info;
 use sc_service::{Configuration, TaskType, TaskManager};
-use sc_telemetry::{TelemetryHandle, TelemetryWorker};
+use sc_telemetry::{TelemetryWorkerHandle, TelemetryWorker};
 use sp_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
 use std::marker::PhantomData;
 use sc_service::Error as ServiceError;
@@ -138,13 +138,13 @@ impl<C: SubstrateCli> Runner<C> {
 			}
 		};
 
-		let telemetry_handle = telemetry_worker.handle();
+		let telemetry_worker_handle = telemetry_worker.handle();
 
 		Ok(Runner {
 			config: command.create_configuration(
 				cli,
 				task_executor.into(),
-				Some(telemetry_handle),
+				Some(telemetry_worker_handle),
 			)?,
 			tokio_runtime,
 			telemetry_worker,
@@ -237,10 +237,10 @@ impl<C: SubstrateCli> Runner<C> {
 		&mut self.config
 	}
 
-	/// Get a new [`TelemetryHandle`].
+	/// Get a new [`TelemetryWorkerHandle`].
 	///
 	/// This is used when you want to register with the [`TelemetryWorker`].
-	pub fn telemetry_handle(&self) -> TelemetryHandle {
+	pub fn telemetry_worker_handle(&self) -> TelemetryWorkerHandle {
 		self.telemetry_worker.handle()
 	}
 }

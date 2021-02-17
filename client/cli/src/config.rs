@@ -33,7 +33,7 @@ use sc_service::config::{
 	TaskExecutor, TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
 };
 use sc_service::{ChainSpec, TracingReceiver, KeepBlocks, TransactionStorageMode};
-use sc_telemetry::TelemetryHandle;
+use sc_telemetry::TelemetryWorkerHandle;
 use sc_tracing::logging::LoggerBuilder;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -470,7 +470,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		&self,
 		cli: &C,
 		task_executor: TaskExecutor,
-		telemetry_handle: Option<TelemetryHandle>,
+		telemetry_worker_handle: Option<TelemetryWorkerHandle>,
 	) -> Result<Configuration> {
 		let is_dev = self.is_dev()?;
 		let chain_id = self.chain_id(is_dev)?;
@@ -488,7 +488,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		let max_runtime_instances = self.max_runtime_instances()?.unwrap_or(8);
 		let is_validator = role.is_authority();
 		let (keystore_remote, keystore) = self.keystore_config(&config_dir)?;
-		let telemetry_endpoints = telemetry_handle
+		let telemetry_endpoints = telemetry_worker_handle
 			.as_ref()
 			.and_then(|_| self.telemetry_endpoints(&chain_spec).transpose())
 			.transpose()?
@@ -548,7 +548,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			role,
 			base_path: Some(base_path),
 			informant_output_format: Default::default(),
-			telemetry_handle,
+			telemetry_worker_handle,
 		})
 	}
 
