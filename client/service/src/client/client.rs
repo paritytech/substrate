@@ -122,7 +122,8 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	block_rules: BlockRules<Block>,
 	execution_extensions: ExecutionExtensions<Block>,
 	config: ClientConfig,
-	telemetry: RwLock<Option<Telemetry>>,
+	telemetry: Mutex<Option<Telemetry>>,
+	telemetry_handle: Option<TelemetryHandle>,
 	_phantom: PhantomData<RA>,
 }
 
@@ -339,7 +340,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			block_rules: BlockRules::new(fork_blocks, bad_blocks),
 			execution_extensions,
 			config,
-			telemetry: RwLock::new(telemetry),
+			telemetry_handle: telemetry.as_ref().map(|x| x.handle()),
+			telemetry: Mutex::new(telemetry),
 			_phantom: Default::default(),
 		})
 	}
@@ -2023,11 +2025,11 @@ impl<BE, E, B, RA> ClientTelemetry for Client<BE, E, B, RA>
 		B: BlockT,
 {
 	fn telemetry(&self) -> Option<TelemetryHandle> {
-		self.telemetry.read().as_ref().map(|x| x.handle())
+		self.telemetry_handle.clone()
 	}
 
 	fn start_telemetry(&self, connection_message: ConnectionMessage) {
-		if let Some(telemetry) = self.telemetry.write().as_mut() {
+		if let Some(telemetry) = self.telemetry.lock().as_mut() {
 			telemetry.start_telemetry(connection_message);
 		}
 	}
