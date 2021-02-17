@@ -404,6 +404,7 @@ build-linux-substrate:             &build-binary
   rules:
     # .build-refs with manual on PRs
     - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_COMMIT_REF_NAME == "master"
     - if: $CI_COMMIT_REF_NAME == "tags"
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
@@ -528,17 +529,12 @@ build-rust-doc:
 publish-docker-substrate:
   stage:                           publish
   <<:                              *build-push-docker-image
-  # collect VERSION artifact here to pass it on to kubernetes
-  <<:                              *collect-artifacts
   needs:
     - job:                         build-linux-substrate
       artifacts:                   true
   variables:
     <<:                            *docker-build-vars
     PRODUCT:                       substrate
-  after_script:
-    # only VERSION information is needed for the deployment
-    - find ./artifacts/ -depth -not -name VERSION -type f -delete
 
 publish-docker-subkey:
   stage:                           publish
@@ -659,38 +655,3 @@ trigger-simnet:
     project:                       parity/simnet
     branch:                        master
     strategy:                      depend
-
-.validator-deploy:                 &validator-deploy
-  stage:                           deploy
-  rules:
-    # this job runs only on nightly pipeline with the mentioned variable, against `master` branch
-    - if: $CI_COMMIT_REF_NAME == "master" && $CI_PIPELINE_SOURCE == "schedule" && $PIPELINE == "nightly"
-  needs:
-    # script will fail if there is no artifacts/substrate/VERSION
-    - job:                         publish-docker-substrate
-      artifacts:                   true
-  image:                           paritytech/ansible:latest
-  allow_failure:                   true
-  interruptible:                   true
-  tags:
-    - linux-docker
-
-validator 1 4:
-  <<:                              *validator-deploy
-  script:
-    - ./.maintain/flamingfir-deploy.sh flamingfir-validator1
-
-validator 2 4:
-  <<:                              *validator-deploy
-  script:
-    - ./.maintain/flamingfir-deploy.sh flamingfir-validator2
-
-validator 3 4:
-  <<:                              *validator-deploy
-  script:
-    - ./.maintain/flamingfir-deploy.sh flamingfir-validator3
-
-validator 4 4:
-  <<:                              *validator-deploy
-  script:
-    - ./.maintain/flamingfir-deploy.sh flamingfir-validator4
