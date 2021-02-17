@@ -20,14 +20,24 @@ pub use crate::sp_std::vec::Vec;
 #[doc(hidden)]
 pub use crate::sp_runtime::traits::{Block as BlockT, Extrinsic};
 #[doc(hidden)]
-pub use sp_inherents::{InherentData, ProvideInherent, CheckInherentsResult, IsFatalError};
+pub use sp_inherents::{
+	InherentData, ProvideInherent, CheckInherentsResult, IsFatalError, RUNTIME_INHERENT,
+	MakeFatalError,
+};
 
 
 /// Implement the outer inherent.
-/// All given modules need to implement `ProvideInherent`.
 ///
-/// The order will be the order of created inherent and the enforced order of inherent in block
-/// extrinsics.
+/// All given pallets need to implement `ProvideInherent`.
+///
+/// Implements on `InherentData`:
+/// * `fn create_extrinsics`: calls each pallets `ProvideInherent::create_inherent` in the order of
+///   their definition.
+/// * `fn check_extrinsics`: calls each pallets `ProvideInherent::check_inherent` with the
+///   extrinsic associated to them.
+///   (First pallet will check for first extrinsic, second for second, ... until last pallet
+///   providing inherent).
+///   Also, all those extrinsics are checked to be unsigned.
 ///
 /// # Example
 ///
@@ -84,14 +94,21 @@ macro_rules! impl_outer_inherent {
 				use $crate::sp_runtime::traits::Block as _;
 
 				let mut result = $crate::inherent::CheckInherentsResult::new();
+				let runtime_id = $crate::inherent::RUNTIME_INHERENT;
 
-				let xts = block.extrinsics();
+				let mut xts = block.extrinsics().iter();
 
 				$(
 					match xts.next() {
 						Some(xt) => {
 							if xt.signature.is_some() {
-								todo!("return fatal error invalid inherent is signed");
+								result.put_error(
+									$crate::inherent::RUNTIME_INHERENT,
+									&$crate::inherent::MakeFatalError::from(
+										"Invalid inherent is signed"
+									),
+								).expect("There is only one fatal error; qed");
+								return result;
 							}
 
 							if let Some(call) = IsSubType::<_>::is_sub_type(&xt.function) {
@@ -104,11 +121,23 @@ macro_rules! impl_outer_inherent {
 									}
 								}
 							} else {
-								todo!("return fatal error invalid inherent is for different pallet");
+								result.put_error(
+									$crate::inherent::RUNTIME_INHERENT,
+									&$crate::inherent::MakeFatalError::from(
+										"Invalid inherent, expected call from another pallet"
+									),
+								).expect("There is only one fatal error; qed");
+								return result;
 							}
 						}
 						None => {
-							todo!("return fatal error invalid inherent is missing");
+							result.put_error(
+								$crate::inherent::RUNTIME_INHERENT,
+								&$crate::inherent::MakeFatalError::from(
+									"Invalid inherent, not enough extrinsics"
+								),
+							).expect("There is only one fatal error; qed");
+							return result;
 						}
 					}
 				)*

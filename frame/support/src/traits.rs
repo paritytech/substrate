@@ -2116,16 +2116,6 @@ pub trait GetPalletVersion {
 	fn storage_version() -> Option<PalletVersion>;
 }
 
-/// A hook for pallet to check some block with some inherent data.
-///
-/// It is called typically by validator, after the block execution. TODO TODO doc
-pub trait CheckInherentData {
-	/// TODO TODO doc
-	fn check_inherent_data(data: sp_inherents::InherentData) -> sp_inherents::CheckInherentsResult {
-		sp_inherents::CheckInherentsResult::new()
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;

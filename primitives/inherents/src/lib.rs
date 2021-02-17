@@ -80,6 +80,10 @@ impl From<&'static str> for Error {
 /// An identifier for an inherent.
 pub type InherentIdentifier = [u8; 8];
 
+/// An identifier for error happening in the runtime checks
+/// Related data type is `String`
+pub const RUNTIME_INHERENT: InherentIdentifier = *b"RuntimeI";
+
 /// Inherent data to include in a block.
 #[derive(Clone, Default, Encode, Decode)]
 pub struct InherentData {
@@ -398,9 +402,7 @@ impl<E: codec::Encode> IsFatalError for MakeFatalError<E> {
 	}
 }
 
-/// A pallet that provides or verifies an inherent extrinsic.
-///
-/// The pallet may provide the inherent, verify an inherent, or both provide and verify.
+/// A pallet that provides and verifies an inherent extrinsic.
 pub trait ProvideInherent {
 	/// The call type of the pallet.
 	type Call;
@@ -410,32 +412,14 @@ pub trait ProvideInherent {
 	const INHERENT_IDENTIFIER: self::InherentIdentifier;
 
 	/// Create an inherent out of the given `InherentData`.
-	fn create_inherent(data: &InherentData) -> Option<Self::Call>;
+	fn create_inherent(data: &InherentData) -> Self::Call;
 
-	/// Determines whether this inherent is required in this block.
-	///
-	/// - `Ok(None)` indicates that this inherent is not required in this block. The default
-	/// implementation returns this.
-	///
-	/// - `Ok(Some(e))` indicates that this inherent is required in this block. The
-	/// `impl_outer_inherent!`, will call this function from its `check_extrinsics`.
-	/// If the inherent is not present, it will return `e`.
-	///
-	/// - `Err(_)` indicates that this function failed and further operations should be aborted.
-	///
-	/// CAUTION: This check has a bug when used in pallets that also provide unsigned transactions.
-	/// See <https://github.com/paritytech/substrate/issues/6243> for details.
-	fn is_inherent_required(_: &InherentData) -> Result<Option<Self::Error>, Self::Error> { Ok(None) }
-
-	/// Check whether the given inherent is valid. Checking the inherent is optional and can be
-	/// omitted by using the default implementation.
+	/// Check whether the given inherent is valid.
 	///
 	/// When checking an inherent, the first parameter represents the inherent that is actually
 	/// included in the block by its author. Whereas the second parameter represents the inherent
 	/// data that the verifying node calculates.
-	fn check_inherent(_: &Self::Call, _: &InherentData) -> Result<(), Self::Error> {
-		Ok(())
-	}
+	fn check_inherent(_: &Self::Call, _: &InherentData) -> Result<(), Self::Error>;
 }
 
 #[cfg(test)]
