@@ -27,7 +27,7 @@ use sp_runtime::{
 	RuntimeDebug, DispatchResult, DispatchError,
 	traits::{
 		Zero, AtLeast32BitUnsigned, StaticLookup, CheckedAdd, CheckedSub,
-		MaybeSerializeDeserialize, Saturating, Bounded, StoredMapError,
+		MaybeSerializeDeserialize, Saturating, Bounded, StoredMapError, SaturatedConversion
 	},
 };
 use codec::{Codec, Encode, Decode};
@@ -97,6 +97,8 @@ pub mod pallet {
 		expiry: BlockNumber,
 	}
 
+	pub type ActiveIndex = u32;
+
 	/// The way of determining the net issuance (i.e. after factoring in all maturing frozen funds)
 	/// is:
 	///
@@ -107,6 +109,8 @@ pub mod pallet {
 		frozen: Balance,
 		/// The proportion of funds that the `frozen` balance represents to total issuance.
 		proportion: Perquintill,
+		/// The total number of gilts issued so far.
+		index: ActiveIndex,
 	}
 
 	#[pallet::storage]
@@ -117,11 +121,6 @@ pub mod pallet {
 		Vec<GiltBid<BalanceOf<T>, T::AccountId>>,
 		ValueQuery
 	>;
-
-	pub type ActiveIndex = u32;
-
-	#[pallet::storage]
-	pub type ActiveCounter<T> = StorageValue<_, ActiveIndex, ValueQuery>;
 
 	#[pallet::storage]
 	pub type QueueTotals<T> = StorageValue<_, Vec<(u32, BalanceOf<T>)>, ValueQuery>;
@@ -150,7 +149,7 @@ pub mod pallet {
 		BidRetracted(T::AccountId, BalanceOf<T>, u32),
 		/// A bid was accepted as a gilt. The balance may not be released until expiry.
 		/// \[ index, expiry, who, amount \]
-		GiltMinted(ActiveIndex, T::BlockNumber, T::AccountId, BalanceOf<T>),
+		GiltIssued(ActiveIndex, T::BlockNumber, T::AccountId, BalanceOf<T>),
 		/// An expired gilt has been thawed.
 		/// \[ index, who, original_amount, additional_amount \]
 		GiltThawed(ActiveIndex, T::AccountId, BalanceOf<T>, BalanceOf<T>),
@@ -184,8 +183,6 @@ pub mod pallet {
 			ensure!(duration <= queue_count as u32, Error::<T>::DurationTooBig);
 			ensure!(amount >= T::MinFreeze::get(), Error::<T>::AmountTooSmall);
 
-			let total_issuance = T::Currency::total_issuance();
-
 			QueueTotals::<T>::try_mutate(|qs| -> Result<(), DispatchError> {
 				qs.resize(queue_count as usize, (0, Zero::zero()));
 				ensure!(qs[queue_count - 1].0 < T::MaxQueueLen::get(), Error::<T>::QueueFull);
@@ -195,7 +192,7 @@ pub mod pallet {
 				Ok(())
 			})?;
 			Self::deposit_event(Event::BidPlaced(who.clone(), amount, duration));
-			Queues::<T>::mutate(duration, |q| q.push(GiltBid { amount, who }));
+			Queues::<T>::mutate(duration, |q| q.insert(0, GiltBid { amount, who }));
 
 			Ok(().into())
 		}
@@ -214,6 +211,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		/// Allow more freezing up to `amount`.
 		#[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1,1))]
 		pub fn enlarge(
 			origin: OriginFor<T>,
@@ -221,9 +219,57 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnlargeOrigin::ensure_origin(origin)?;
 
-			// TODO
+			let total_issuance = T::Currency::total_issuance();
+			let mut remaining = amount;
+			let now = frame_system::Module::<T>::block_number();
 
+			ActiveTotal::<T>::mutate(|totals| {
+				QueueTotals::<T>::mutate(|qs| {
+					for periods in (1..=T::QueueCount::get()).rev() {
+						if qs[periods as usize - 1].0 == 0 {
+							continue
+						}
+						let index = periods as usize - 1;
+						let expiry = now + T::Period::get() * periods.into();
+						Queues::<T>::mutate(periods, |q| {
+							while let Some(mut bid) = q.pop() {
+								if remaining < bid.amount {
+									let overflow = bid.amount - remaining;
+									bid.amount = remaining;
+									q.push(GiltBid { amount: overflow, who: bid.who.clone() });
+								}
+								// Can never overflow due to block above.
+								remaining -= bid.amount;
+								// Should never underflow since it should track the total of the bids
+								// exactly, but we'll be defensive.
+								qs[index].1 = qs[index].1.saturating_sub(bid.amount);
 
+								// Now to activate the bid...
+								let total_liquid = total_issuance.saturating_sub(totals.frozen);
+								let n: u128 = bid.amount.saturated_into();
+								let d: u128 = total_liquid.saturated_into();
+								let proportion = Perquintill::from_rational_approximation(n, d);
+								let who = bid.who;
+								let index = totals.index;
+								totals.frozen += bid.amount;
+								totals.proportion = totals.proportion.saturating_add(proportion);
+								totals.index += 1;
+								let e = Event::GiltIssued(index, expiry, who.clone(), bid.amount);
+								Self::deposit_event(e);
+								Active::<T>::insert(index, ActiveGilt { proportion, who, expiry });
+
+								if remaining.is_zero() {
+									break;
+								}
+							}
+							qs[index].0 = q.len() as u32;
+						});
+						if remaining.is_zero() {
+							break
+						}
+					}
+				});
+			});
 			Ok(().into())
 		}
 
