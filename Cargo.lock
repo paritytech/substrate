@@ -8349,6 +8349,7 @@ version = "0.9.0"
 dependencies = [
  "merlin",
  "parity-scale-codec",
+ "serde",
  "sp-api",
  "sp-application-crypto",
  "sp-consensus",
@@ -8378,6 +8379,7 @@ name = "sp-consensus-slots"
 version = "0.9.0"
 dependencies = [
  "parity-scale-codec",
+ "serde",
  "sp-arithmetic",
  "sp-runtime",
 ]

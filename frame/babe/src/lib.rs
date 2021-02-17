@@ -800,7 +800,8 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Module<T> {
 		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
 	{
 		let authorities = validators.map(|(_, k)| (k, 1)).collect::<Vec<_>>();
-		Self::initialize_authorities(&authorities);
+		let epoch_config = BabeEpochConfiguration::default();
+		Self::initialize_authorities_and_epoch_config(&authorities, &epoch_config);
 	}
 
 	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I, queued_validators: I)
