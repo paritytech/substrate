@@ -56,6 +56,7 @@ use sc_telemetry::{
 	telemetry,
 	ConnectionMessage,
 	TelemetryConnectionNotifier,
+	TelemetrySpan,
 	SUBSTRATE_INFO,
 };
 use sp_transaction_pool::MaintainedTransactionPool;
@@ -308,7 +309,7 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
-		TaskManager::new(config.task_executor.clone(), registry, config.telemetry_span.clone())?
+		TaskManager::new(config.task_executor.clone(), registry)?
 	};
 
 	let executor = NativeExecutor::<TExecDisp>::new(
@@ -377,7 +378,7 @@ pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 	let keystore_container = KeystoreContainer::new(&config.keystore)?;
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
-		TaskManager::new(config.task_executor.clone(), registry, config.telemetry_span.clone())?
+		TaskManager::new(config.task_executor.clone(), registry)?
 	};
 
 	let executor = NativeExecutor::<TExecDisp>::new(
@@ -491,6 +492,10 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	pub network_status_sinks: NetworkStatusSinks<TBl>,
 	/// A Sender for RPC requests.
 	pub system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
+	/// Telemetry span.
+	///
+	/// This span needs to be entered **before** calling [`spawn_tasks()`].
+	pub telemetry_span: Option<TelemetrySpan>,
 }
 
 /// Build a shared offchain workers instance.
@@ -569,6 +574,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		network,
 		network_status_sinks,
 		system_rpc_tx,
+		telemetry_span,
 	} = params;
 
 	let chain_info = client.usage_info().chain;
@@ -581,6 +587,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 
 	let telemetry_connection_notifier = init_telemetry(
 		&mut config,
+		telemetry_span,
 		network.clone(),
 		client.clone(),
 	);
@@ -681,10 +688,11 @@ async fn transaction_notifications<TBl, TExPool>(
 
 fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 	config: &mut Configuration,
+	telemetry_span: Option<TelemetrySpan>,
 	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
 	client: Arc<TCl>,
 ) -> Option<TelemetryConnectionNotifier> {
-	let telemetry_span = config.telemetry_span.clone()?;
+	let telemetry_span = telemetry_span?;
 	let endpoints = config.telemetry_endpoints.clone()?;
 	let genesis_hash = client.block_hash(Zero::zero()).ok().flatten().unwrap_or_default();
 	let connection_message = ConnectionMessage {
