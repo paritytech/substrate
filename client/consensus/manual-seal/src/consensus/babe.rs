@@ -73,7 +73,7 @@ impl<B, C> BabeConsensusDataProvider<B, C>
 	where
 		B: BlockT,
 		C: AuxStore + HeaderBackend<B> + ProvideRuntimeApi<B> + HeaderMetadata<B, Error = sp_blockchain::Error>,
-		C::Api: BabeApi<B, Error = sp_blockchain::Error>,
+		C::Api: BabeApi<B>,
 {
 	pub fn new(
 		client: Arc<C>,
@@ -131,7 +131,7 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 	where
 		B: BlockT,
 		C: AuxStore + HeaderBackend<B> + HeaderMetadata<B, Error = sp_blockchain::Error> + ProvideRuntimeApi<B>,
-		C::Api: BabeApi<B, Error = sp_blockchain::Error>,
+		C::Api: BabeApi<B>,
 {
 	type Transaction = TransactionFor<C, B>;
 
@@ -259,7 +259,7 @@ impl SlotTimestampProvider {
 		where
 			B: BlockT,
 			C: AuxStore + HeaderBackend<B> + ProvideRuntimeApi<B>,
-			C::Api: BabeApi<B, Error = sp_blockchain::Error>,
+			C::Api: BabeApi<B>,
 	{
 		let slot_duration = Config::get_or_compute(&*client)?.slot_duration;
 		let info = client.info();
