@@ -198,7 +198,7 @@ impl<G, E> ChainSpec<G, E> {
 		&self.client_spec.id
 	}
 
-	/// TelemetryHandle endpoints (if any)
+	/// Telemetry endpoints (if any)
 	pub fn telemetry_endpoints(&self) -> &Option<TelemetryEndpoints> {
 		&self.client_spec.telemetry_endpoints
 	}
