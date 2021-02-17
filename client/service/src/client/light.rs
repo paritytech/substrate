@@ -22,6 +22,7 @@ use std::sync::Arc;
 
 use sc_executor::RuntimeInfo;
 use sp_core::traits::{CodeExecutor, SpawnNamed};
+use sc_telemetry::Telemetry;
 use sp_runtime::BuildStorage;
 use sp_runtime::traits::{Block as BlockT, HashFor};
 use sp_blockchain::Result as ClientResult;
@@ -38,6 +39,7 @@ pub fn new_light<B, S, RA, E>(
 	code_executor: E,
 	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
+	telemetry: Option<Telemetry>,
 ) -> ClientResult<
 		Client<
 			Backend<S, HashFor<B>>,
@@ -69,6 +71,7 @@ pub fn new_light<B, S, RA, E>(
 		Default::default(),
 		Default::default(),
 		prometheus_registry,
+		telemetry,
 		ClientConfig::default(),
 	)
 }

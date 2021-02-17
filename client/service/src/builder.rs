@@ -343,6 +343,11 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 			Some(keystore_container.sync_keystore()),
 		);
 
+		let telemetry = match (config.telemetry_handle.clone(), config.telemetry_endpoints.clone()) {
+			(Some(mut handle), Some(endpoints)) => Some(handle.new_telemetry(endpoints)),
+			_ => None,
+		};
+
 		new_client(
 			db_config,
 			executor,
@@ -352,6 +357,7 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 			extensions,
 			Box::new(task_manager.spawn_handle()),
 			config.prometheus_config.as_ref().map(|config| config.registry.clone()),
+			telemetry,
 			ClientConfig {
 				offchain_worker_enabled : config.offchain_worker.enabled,
 				offchain_indexing_api: config.offchain_worker.indexing_enabled,
@@ -409,12 +415,17 @@ pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 	);
 	let on_demand = Arc::new(sc_network::config::OnDemand::new(fetch_checker));
 	let backend = sc_light::new_light_backend(light_blockchain);
+	let telemetry = match (config.telemetry_handle.clone(), config.telemetry_endpoints.clone()) {
+		(Some(mut handle), Some(endpoints)) => Some(handle.new_telemetry(endpoints)),
+		_ => None,
+	};
 	let client = Arc::new(light::new_light(
 		backend.clone(),
 		config.chain_spec.as_storage_builder(),
 		executor,
 		Box::new(task_manager.spawn_handle()),
 		config.prometheus_config.as_ref().map(|config| config.registry.clone()),
+		telemetry,
 	)?);
 
 	Ok((client, backend, keystore_container, task_manager, on_demand))
@@ -430,6 +441,7 @@ pub fn new_client<E, Block, RA>(
 	execution_extensions: ExecutionExtensions<Block>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
+	telemetry: Option<Telemetry>,
 	config: ClientConfig,
 ) -> Result<(
 	crate::client::Client<
@@ -459,6 +471,7 @@ pub fn new_client<E, Block, RA>(
 			bad_blocks,
 			execution_extensions,
 			prometheus_registry,
+			telemetry,
 			config,
 		)?,
 		backend,
@@ -538,7 +551,7 @@ pub fn build_offchain_workers<TBl, TBackend, TCl>(
 /// Spawn the tasks that are required to run a node.
 pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 	params: SpawnTasksParams<TBl, TCl, TExPool, TRpc, TBackend>,
-) -> Result<(RpcHandlers, Option<Telemetry>), Error>
+) -> Result<RpcHandlers, Error>
 	where
 		TCl: ProvideRuntimeApi<TBl> + HeaderMetadata<TBl, Error=sp_blockchain::Error> + Chain<TBl> +
 		BlockBackend<TBl> + BlockIdTo<TBl, Error=sp_blockchain::Error> + ProofProvider<TBl> +
@@ -579,14 +592,15 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default(),
 	).map_err(|e| Error::Application(Box::new(e)))?;
 
-	let telemetry = init_telemetry(
-		&mut config,
-		network.clone(),
-		client.clone(),
-	);
+	let telemetry = client.telemetry();
 
 	if let Some(telemetry) = telemetry.clone() {
-		client.set_telemetry(telemetry);
+		init_telemetry(
+			&mut config,
+			network.clone(),
+			client.clone(),
+			telemetry.clone(),
+		);
 	}
 
 	info!("📦 Highest known block at #{}", chain_info.best_number);
@@ -657,7 +671,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 
 	task_manager.keep_alive((config.base_path, rpc, rpc_handlers.clone()));
 
-	Ok((rpc_handlers, telemetry))
+	Ok(rpc_handlers)
 }
 
 async fn transaction_notifications<TBl, TExPool>(
@@ -689,8 +703,8 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 	config: &mut Configuration,
 	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
 	client: Arc<TCl>,
-) -> Option<Telemetry> {
-	let endpoints = config.telemetry_endpoints.clone()?;
+	mut telemetry: Telemetry,
+) {
 	let genesis_hash = client.block_hash(Zero::zero()).ok().flatten().unwrap_or_default();
 	let connection_message = ConnectionMessage {
 		name: config.network.node_name.to_owned(),
@@ -706,9 +720,7 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 		network_id: network.local_peer_id().to_base58(),
 	};
 
-	config.telemetry_handle
-		.as_mut()
-		.map(|handle| handle.start_telemetry(endpoints, connection_message))
+	telemetry.start_telemetry(connection_message)
 }
 
 fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(

@@ -41,8 +41,9 @@ use global_counter::primitive::exact::CounterU64;
 use libp2p::Multiaddr;
 use log::{error, warn};
 use serde::Serialize;
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use std::collections::HashMap;
+use std::mem;
 use std::io;
 
 pub use libp2p::wasm_ext::ExtTransport;
@@ -162,6 +163,7 @@ impl TelemetryWorker {
 
 		let mut node_map: HashMap<Id, Vec<(VerbosityLevel, Multiaddr)>> = HashMap::new();
 		let mut node_pool: HashMap<Multiaddr, _> = HashMap::new();
+		let mut pending_connection_notifications: Vec<_> = Vec::new();
 
 		loop {
 			futures::select! {
@@ -174,6 +176,7 @@ impl TelemetryWorker {
 					init_payload,
 					&mut node_pool,
 					&mut node_map,
+					&mut pending_connection_notifications,
 					transport.clone(),
 				).await,
 			}
@@ -184,6 +187,7 @@ impl TelemetryWorker {
 		input: Option<Register>,
 		node_pool: &mut HashMap<Multiaddr, Node<WsTrans>>,
 		node_map: &mut HashMap<Id, Vec<(VerbosityLevel, Multiaddr)>>,
+		pending_connection_notifications: &mut Vec<(Multiaddr, TracingUnboundedSender<()>)>,
 		transport: WsTrans,
 	) {
 		let input = input.expect("the stream is never closed; qed");
@@ -233,6 +237,16 @@ impl TelemetryWorker {
 					});
 
 					node.connection_messages.extend(connection_message.clone());
+
+					let (matching, rest): (Vec<_>, Vec<_>) =
+						mem::take(pending_connection_notifications)
+							.into_iter().partition(
+								|(addr_b, _)| *addr_b == addr
+							);
+					node.telemetry_connection_notifier.extend(
+						matching.into_iter().map(|(_, x)| x.clone())
+					);
+					let _ = mem::replace(pending_connection_notifications, rest);
 				}
 			}
 			Register::Notifier {
@@ -240,15 +254,15 @@ impl TelemetryWorker {
 				connection_notifier,
 			} => {
 				for addr in addresses {
+					// If the Node has been initialized, we directly push the connection_notifier.
+					// Otherwise we push it to a queue that will be consumed when the connection
+					// initializes, thus ensuring that the connection notifier will be sent to the
+					// Node when it becomes available.
 					if let Some(node) = node_pool.get_mut(&addr) {
 						node.telemetry_connection_notifier
 							.push(connection_notifier.clone());
 					} else {
-						log::error!(
-							target: "telemetry",
-							"Received connection notifier for unknown node ({}). This is a bug.",
-							addr,
-						);
+						pending_connection_notifications.push((addr, connection_notifier.clone()));
 					}
 				}
 			}
@@ -324,51 +338,19 @@ pub struct TelemetryHandle {
 }
 
 impl TelemetryHandle {
-	/// Initialize the telemetry with the endpoints provided in argument for the current substrate
-	/// node.
-	///
-	/// This method must be called during the substrate node initialization.
-	///
-	/// The `endpoints` argument is a collection of telemetry WebSocket servers with a corresponding
-	/// verbosity level.
-	///
-	/// The `connection_message` argument is a JSON object that is sent every time the connection
-	/// (re-)establishes.
-	pub fn start_telemetry(
-		&mut self,
-		endpoints: TelemetryEndpoints,
-		connection_message: ConnectionMessage,
-	) -> Telemetry {
-		let Self {
-			message_sender,
-			register_sender,
-			id_generator,
-		} = self;
-
-		let connection_notifier = TelemetryConnectionNotifier {
-			register_sender: register_sender.clone(),
-			addresses: endpoints.0.iter().map(|(addr, _)| addr.clone()).collect(),
-		};
-
-		let id = id_generator.next();
-		match register_sender.unbounded_send(Register::Telemetry {
-			id,
-			endpoints,
-			connection_message,
-		}) {
-			Ok(()) => {}
-			Err(err) => error!(
-				target: "telemetry",
-				"Could not initialize telemetry: \
-				the telemetry is probably already running: {}",
-				err,
-			),
-		}
+	/// TODO
+	pub fn new_telemetry(&mut self, endpoints: TelemetryEndpoints) -> Telemetry {
+		let addresses = endpoints.0.iter().map(|(addr, _)| addr.clone()).collect();
 
 		Telemetry {
-			message_sender: message_sender.clone(),
-			id,
-			connection_notifier,
+			message_sender: self.message_sender.clone(),
+			register_sender: self.register_sender.clone(),
+			id: self.id_generator.next(),
+			connection_notifier: TelemetryConnectionNotifier {
+				register_sender: self.register_sender.clone(),
+				addresses,
+			},
+			endpoints: Some(endpoints),
 		}
 	}
 }
@@ -377,8 +359,10 @@ impl TelemetryHandle {
 #[derive(Debug, Clone)]
 pub struct Telemetry {
 	message_sender: mpsc::Sender<TelemetryMessage>,
+	register_sender: mpsc::UnboundedSender<Register>,
 	id: Id,
 	connection_notifier: TelemetryConnectionNotifier,
+	endpoints: Option<TelemetryEndpoints>,
 }
 
 impl Telemetry {
@@ -397,6 +381,54 @@ impl Telemetry {
 	/// [`TelemetryHandle::start_telemetry`].
 	pub fn on_connect_stream(&self) -> TracingUnboundedReceiver<()> {
 		self.connection_notifier.on_connect_stream()
+	}
+
+	/// Initialize the telemetry with the endpoints provided in argument for the current substrate
+	/// node.
+	///
+	/// This method must be called during the substrate node initialization.
+	///
+	/// The `endpoints` argument is a collection of telemetry WebSocket servers with a corresponding
+	/// verbosity level.
+	///
+	/// The `connection_message` argument is a JSON object that is sent every time the connection
+	/// (re-)establishes.
+	pub fn start_telemetry(
+		&mut self,
+		connection_message: ConnectionMessage,
+	) {
+		let Self {
+			message_sender: _,
+			register_sender,
+			id,
+			connection_notifier: _,
+			endpoints,
+		} = self;
+
+		let endpoints = match endpoints.take() {
+			Some(x) => x,
+			None => {
+				error!(
+					target: "telemetry",
+					"This telemetry instance has already been initialized!",
+				);
+				return;
+			}
+		};
+
+		match register_sender.unbounded_send(Register::Telemetry {
+			id: *id,
+			endpoints,
+			connection_message,
+		}) {
+			Ok(()) => {}
+			Err(err) => error!(
+				target: "telemetry",
+				"Could not initialize telemetry: \
+				the telemetry is probably already running: {}",
+				err,
+			)
+		}
 	}
 }
 
@@ -532,5 +564,5 @@ impl IdGenerator {
 /// TODO
 pub trait ClientTelemetry {
 	/// TODO
-	fn set_telemetry(&self, telemetry: Telemetry);
+	fn telemetry(&self) -> Option<Telemetry>;
 }

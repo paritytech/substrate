@@ -34,7 +34,7 @@ use sp_runtime::traits::Block as BlockT;
 use futures::prelude::*;
 use sc_client_api::{ExecutorProvider, RemoteBackend};
 use node_executor::Executor;
-use sc_telemetry::Telemetry;
+use sc_telemetry::ClientTelemetry;
 
 type FullClient = sc_service::TFullClient<Block, RuntimeApi, Executor>;
 type FullBackend = sc_service::TFullBackend<Block>;
@@ -74,6 +74,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		client.clone(),
 	);
 
+	let telemetry = client.telemetry();
 	let (grandpa_block_import, grandpa_link) = grandpa::block_import(
 		client.clone(),
 		&(client.clone() as Arc<_>),
@@ -222,6 +223,7 @@ pub fn new_full_base(
 		);
 	}
 
+	let telemetry = client.telemetry();
 	let role = config.role.clone();
 	let force_authoring = config.force_authoring;
 	let backoff_authoring_blocks =
@@ -230,7 +232,7 @@ pub fn new_full_base(
 	let enable_grandpa = !config.disable_grandpa;
 	let prometheus_registry = config.prometheus_registry().cloned();
 
-	let (_rpc_handlers, telemetry) = sc_service::spawn_tasks(
+	let _rpc_handlers = sc_service::spawn_tasks(
 		sc_service::SpawnTasksParams {
 			config,
 			backend: backend.clone(),
@@ -367,7 +369,9 @@ pub fn new_full(config: Configuration)
 }
 
 pub fn new_light_base(mut config: Configuration) -> Result<(
-	TaskManager, RpcHandlers, Option<Telemetry>, Arc<LightClient>,
+	TaskManager,
+	RpcHandlers,
+	Arc<LightClient>,
 	Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
 	Arc<sc_transaction_pool::LightPool<Block, LightClient, sc_network::config::OnDemand<Block>>>
 ), ServiceError> {
@@ -386,11 +390,13 @@ pub fn new_light_base(mut config: Configuration) -> Result<(
 		on_demand.clone(),
 	));
 
+	let telemetry = client.telemetry();
+
 	let (grandpa_block_import, _) = grandpa::block_import(
 		client.clone(),
 		&(client.clone() as Arc<_>),
 		select_chain.clone(),
-		telemetry.clone(), // TODO hmm how do I get the telemetry here...
+		telemetry.clone(),
 	)?;
 	let justification_import = grandpa_block_import.clone();
 
@@ -442,7 +448,7 @@ pub fn new_light_base(mut config: Configuration) -> Result<(
 
 	let rpc_extensions = node_rpc::create_light(light_deps);
 
-	let (rpc_handlers, telemetry) =
+	let rpc_handlers =
 		sc_service::spawn_tasks(sc_service::SpawnTasksParams {
 			on_demand: Some(on_demand),
 			remote_blockchain: Some(backend.remote_blockchain()),
@@ -458,7 +464,6 @@ pub fn new_light_base(mut config: Configuration) -> Result<(
 	Ok((
 		task_manager,
 		rpc_handlers,
-		telemetry,
 		client,
 		network,
 		transaction_pool,
@@ -467,7 +472,7 @@ pub fn new_light_base(mut config: Configuration) -> Result<(
 
 /// Builds a new service for a light client.
 pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
-	new_light_base(config).map(|(task_manager, _, _, _, _, _)| {
+	new_light_base(config).map(|(task_manager, _, _, _, _)| {
 		task_manager
 	})
 }
