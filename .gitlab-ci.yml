@@ -85,6 +85,17 @@ default:
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
 
+.test-refs-no-trigger:             &test-refs-no-trigger
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "pipeline"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_COMMIT_REF_NAME == "master"
+    - if: $CI_COMMIT_REF_NAME == "tags"
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
+
 .build-refs:                       &build-refs
   rules:
     # .publish-refs with manual on PRs
@@ -172,6 +183,8 @@ test-prometheus-alerting-rules:
   image:                           paritytech/tools:latest
   <<:                              *kubernetes-build
   rules:
+    - if: $CI_PIPELINE_SOURCE == "pipeline"
+      when: never
     - if: $CI_COMMIT_BRANCH
       changes:
         - .gitlab-ci.yml
@@ -188,8 +201,6 @@ cargo-deny:
   <<:                              *docker-env
   rules:
     - if: $CI_PIPELINE_SOURCE == "pipeline"
-      when: never
-    - if: $CI_COMMIT_MESSAGE =~ /skip-checks/
       when: never
     - changes:
       - "Cargo.lock"
@@ -216,7 +227,7 @@ cargo-deny:
 cargo-check-benches:
   stage:                           test
   <<:                              *docker-env
-  <<:                              *test-refs
+  <<:                              *test-refs-no-trigger
   script:
     - SKIP_WASM_BUILD=1 time cargo +nightly check --benches --all
     - cargo run --release -p node-bench -- ::node::import::native::sr25519::transfer_keep_alive::paritydb::small
@@ -273,9 +284,6 @@ unleash-check:
   stage:                           test
   <<:                              *docker-env
   rules:
-    - if: $CI_COMMIT_MESSAGE =~ /skip-checks/
-      when: never
-      # .test-refs
     - if: $CI_COMMIT_REF_NAME == "master"
     - if: $CI_COMMIT_REF_NAME == "tags"
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
@@ -357,7 +365,7 @@ cargo-check-macos:
   stage:                           test
   # shell runner on mac ignores the image set in *docker-env
   <<:                              *docker-env
-  <<:                              *test-refs
+  <<:                              *test-refs-no-trigger
   script:
     - SKIP_WASM_BUILD=1 time cargo check --release
     - sccache -s
@@ -378,7 +386,7 @@ check-polkadot-companion-status:
 check-polkadot-companion-build:
   stage:                           build
   <<:                              *docker-env
-  <<:                              *test-refs
+  <<:                              *test-refs-no-trigger
   needs:
     - job:                         test-linux-stable-int
       artifacts:                   false
@@ -461,7 +469,7 @@ build-macos-subkey:
 build-rust-doc:
   stage:                           build
   <<:                              *docker-env
-  <<:                              *test-refs
+  <<:                              *test-refs-no-trigger
   needs:
     - job:                         test-linux-stable
       artifacts:                   false
