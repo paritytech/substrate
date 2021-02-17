@@ -21,7 +21,7 @@ use codec::{Encode, Decode};
 use hex_literal::hex;
 use sp_core::{
 	blake2_128, blake2_256, ed25519, sr25519, map, Pair,
-	offchain::{OffchainWorkerExt, testing},
+	offchain::{OffchainWorkerExt, OffchainDbExt, testing},
 	traits::{Externalities, CallInWasm},
 };
 use sc_runtime_test::wasm_binary_unwrap;
@@ -487,6 +487,7 @@ test_wasm_execution!(offchain_local_storage_should_work);
 fn offchain_local_storage_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let (offchain, state) = testing::TestOffchainExt::new();
+	ext.register_extension(OffchainDbExt::new(offchain.clone()));
 	ext.register_extension(OffchainWorkerExt::new(offchain));
 	assert_eq!(
 		call_in_wasm(
