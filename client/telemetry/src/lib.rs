@@ -74,7 +74,7 @@ pub const CONSENSUS_INFO: VerbosityLevel = 1;
 
 static TELEMETRY_ID_COUNTER: CounterU64 = CounterU64::new(1);
 
-/// TelemetryHandle message verbosity.
+/// Telemetry message verbosity.
 pub type VerbosityLevel = u8;
 
 pub(crate) type Id = u64;
@@ -104,7 +104,7 @@ pub struct ConnectionMessage {
 	pub network_id: String,
 }
 
-/// TelemetryHandle worker.
+/// Telemetry worker.
 ///
 /// It should run as a background task using the [`TelemetryWorker::run`] method. This method
 /// will consume the object and any further attempts of initializing a new telemetry through its
@@ -193,7 +193,7 @@ impl TelemetryWorker {
 		let input = input.expect("the stream is never closed; qed");
 
 		match input {
-			Register::TelemetryHandle {
+			Register::Telemetry {
 				id,
 				endpoints,
 				connection_message,
@@ -339,10 +339,10 @@ pub struct TelemetryWorkerHandle {
 
 impl TelemetryWorkerHandle {
 	/// TODO
-	pub fn new_telemetry(&mut self, endpoints: TelemetryEndpoints) -> TelemetryHandle {
+	pub fn new_telemetry(&mut self, endpoints: TelemetryEndpoints) -> Telemetry {
 		let addresses = endpoints.0.iter().map(|(addr, _)| addr.clone()).collect();
 
-		TelemetryHandle {
+		Telemetry {
 			message_sender: self.message_sender.clone(),
 			register_sender: self.register_sender.clone(),
 			id: self.id_generator.next(),
@@ -356,8 +356,8 @@ impl TelemetryWorkerHandle {
 }
 
 /// A telemetry instance that can be used to send telemetries.
-#[derive(Debug, Clone)]
-pub struct TelemetryHandle {
+#[derive(Debug)]
+pub struct Telemetry {
 	message_sender: mpsc::Sender<TelemetryMessage>,
 	register_sender: mpsc::UnboundedSender<Register>,
 	id: Id,
@@ -365,24 +365,7 @@ pub struct TelemetryHandle {
 	endpoints: Option<TelemetryEndpoints>,
 }
 
-impl TelemetryHandle {
-	/// Send telemetries.
-	pub fn send(&mut self, verbosity: VerbosityLevel, payload: TelemetryPayload) {
-		match self.message_sender.try_send((self.id, verbosity, payload)) {
-			Ok(()) => {}
-			Err(err) if err.is_full() => todo!("overflow"),
-			Err(_) => unreachable!(),
-		}
-	}
-
-	/// Get event stream for telemetry connection established events.
-	///
-	/// This function will return an error if the telemetry has already been started by
-	/// [`TelemetryWorkerHandle::start_telemetry`].
-	pub fn on_connect_stream(&self) -> TracingUnboundedReceiver<()> {
-		self.connection_notifier.on_connect_stream()
-	}
-
+impl Telemetry {
 	/// Initialize the telemetry with the endpoints provided in argument for the current substrate
 	/// node.
 	///
@@ -393,10 +376,7 @@ impl TelemetryHandle {
 	///
 	/// The `connection_message` argument is a JSON object that is sent every time the connection
 	/// (re-)establishes.
-	pub fn start_telemetry(
-		&mut self,
-		connection_message: ConnectionMessage,
-	) {
+	pub fn start_telemetry(&mut self, connection_message: ConnectionMessage) {
 		let Self {
 			message_sender: _,
 			register_sender,
@@ -416,7 +396,7 @@ impl TelemetryHandle {
 			}
 		};
 
-		match register_sender.unbounded_send(Register::TelemetryHandle {
+		match register_sender.unbounded_send(Register::Telemetry {
 			id: *id,
 			endpoints,
 			connection_message,
@@ -429,6 +409,42 @@ impl TelemetryHandle {
 				err,
 			)
 		}
+	}
+
+    /// TODO
+    pub fn handle(&self) -> TelemetryHandle {
+        TelemetryHandle {
+            message_sender: self.message_sender.clone(),
+            id: self.id,
+            connection_notifier: self.connection_notifier.clone(),
+        }
+    }
+}
+
+/// TODO
+#[derive(Debug, Clone)]
+pub struct TelemetryHandle {
+	message_sender: mpsc::Sender<TelemetryMessage>,
+	id: Id,
+	connection_notifier: TelemetryConnectionNotifier,
+}
+
+impl TelemetryHandle {
+	/// Send telemetries.
+	pub fn send(&mut self, verbosity: VerbosityLevel, payload: TelemetryPayload) {
+		match self.message_sender.try_send((self.id, verbosity, payload)) {
+			Ok(()) => {}
+			Err(err) if err.is_full() => todo!("overflow"),
+			Err(_) => unreachable!(),
+		}
+	}
+
+	/// Get event stream for telemetry connection established events.
+	///
+	/// This function will return an error if the telemetry has already been started by
+	/// [`TelemetryWorkerHandle::start_telemetry`].
+	pub fn on_connect_stream(&self) -> TracingUnboundedReceiver<()> {
+		self.connection_notifier.on_connect_stream()
 	}
 }
 
@@ -460,7 +476,7 @@ impl TelemetryConnectionNotifier {
 
 #[derive(Debug)]
 enum Register {
-	TelemetryHandle {
+	Telemetry {
 		id: Id,
 		endpoints: TelemetryEndpoints,
 		connection_message: ConnectionMessage,
@@ -565,4 +581,7 @@ impl IdGenerator {
 pub trait ClientTelemetry {
 	/// TODO
 	fn telemetry(&self) -> Option<TelemetryHandle>;
+
+    /// TODO
+	fn start_telemetry(&self, connection_message: ConnectionMessage);
 }

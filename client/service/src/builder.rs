@@ -56,6 +56,7 @@ use sc_telemetry::{
 	telemetry,
 	ClientTelemetry,
 	ConnectionMessage,
+	Telemetry,
 	TelemetryHandle,
 	SUBSTRATE_INFO,
 };
@@ -213,17 +214,17 @@ pub type TLightClientWithBackend<TBl, TRtApi, TExecDisp, TBackend> = Client<
 >;
 
 trait AsCryptoStoreRef {
-    fn keystore_ref(&self) -> Arc<dyn CryptoStore>;
-    fn sync_keystore_ref(&self) -> Arc<dyn SyncCryptoStore>;
+	fn keystore_ref(&self) -> Arc<dyn CryptoStore>;
+	fn sync_keystore_ref(&self) -> Arc<dyn SyncCryptoStore>;
 }
 
 impl<T> AsCryptoStoreRef for Arc<T> where T: CryptoStore + SyncCryptoStore + 'static {
-    fn keystore_ref(&self) -> Arc<dyn CryptoStore> {
-        self.clone()
-    }
-    fn sync_keystore_ref(&self) -> Arc<dyn SyncCryptoStore> {
-        self.clone()
-    }
+	fn keystore_ref(&self) -> Arc<dyn CryptoStore> {
+		self.clone()
+	}
+	fn sync_keystore_ref(&self) -> Arc<dyn SyncCryptoStore> {
+		self.clone()
+	}
 }
 
 /// Construct and hold different layers of Keystore wrappers
@@ -441,7 +442,7 @@ pub fn new_client<E, Block, RA>(
 	execution_extensions: ExecutionExtensions<Block>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
-	telemetry: Option<TelemetryHandle>,
+	telemetry: Option<Telemetry>,
 	config: ClientConfig,
 ) -> Result<(
 	crate::client::Client<
@@ -592,16 +593,11 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default(),
 	).map_err(|e| Error::Application(Box::new(e)))?;
 
-	let telemetry = client.telemetry();
-
-	if let Some(telemetry) = telemetry.clone() {
-		init_telemetry(
-			&mut config,
-			network.clone(),
-			client.clone(),
-			telemetry.clone(),
-		);
-	}
+	init_telemetry(
+		&mut config,
+		network.clone(),
+		client.clone(),
+	);
 
 	info!("📦 Highest known block at #{}", chain_info.best_number);
 
@@ -615,7 +611,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 
 	spawn_handle.spawn(
 		"on-transaction-imported",
-		transaction_notifications(transaction_pool.clone(), network.clone(), telemetry.clone()),
+		transaction_notifications(transaction_pool.clone(), network.clone(), client.telemetry()),
 	);
 
 	// Prometheus metrics.
@@ -699,11 +695,10 @@ async fn transaction_notifications<TBl, TExPool>(
 		.await;
 }
 
-fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
+fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl> + ClientTelemetry>(
 	config: &mut Configuration,
 	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
 	client: Arc<TCl>,
-	mut telemetry: TelemetryHandle,
 ) {
 	let genesis_hash = client.block_hash(Zero::zero()).ok().flatten().unwrap_or_default();
 	let connection_message = ConnectionMessage {
@@ -720,7 +715,7 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 		network_id: network.local_peer_id().to_base58(),
 	};
 
-	telemetry.start_telemetry(connection_message)
+	client.start_telemetry(connection_message)
 }
 
 fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(

@@ -35,7 +35,14 @@ use sp_core::{
 };
 #[cfg(feature="test-helpers")]
 use sp_keystore::SyncCryptoStorePtr;
-use sc_telemetry::{telemetry, ClientTelemetry, TelemetryHandle, SUBSTRATE_INFO};
+use sc_telemetry::{
+    telemetry,
+	ClientTelemetry,
+	ConnectionMessage,
+    Telemetry,
+	TelemetryHandle,
+	SUBSTRATE_INFO,
+};
 use sp_runtime::{
 	Justification, BuildStorage,
 	generic::{BlockId, SignedBlock, DigestItem},
@@ -115,7 +122,7 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	block_rules: BlockRules<Block>,
 	execution_extensions: ExecutionExtensions<Block>,
 	config: ClientConfig,
-	telemetry: Option<TelemetryHandle>,
+	telemetry: RwLock<Option<Telemetry>>,
 	_phantom: PhantomData<RA>,
 }
 
@@ -153,7 +160,7 @@ pub fn new_in_mem<E, Block, S, RA>(
 	genesis_storage: &S,
 	keystore: Option<SyncCryptoStorePtr>,
 	prometheus_registry: Option<Registry>,
-	telemetry: Option<TelemetryHandle>,
+	telemetry: Option<Telemetry>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	config: ClientConfig,
 ) -> sp_blockchain::Result<Client<
@@ -199,7 +206,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 	keystore: Option<SyncCryptoStorePtr>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
-	telemetry: Option<TelemetryHandle>,
+	telemetry: Option<Telemetry>,
 	config: ClientConfig,
 ) -> sp_blockchain::Result<Client<B, LocalCallExecutor<B, E>, Block, RA>>
 	where
@@ -299,7 +306,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		bad_blocks: BadBlocks<Block>,
 		execution_extensions: ExecutionExtensions<Block>,
 		prometheus_registry: Option<Registry>,
-		telemetry: Option<TelemetryHandle>,
+		telemetry: Option<Telemetry>,
 		config: ClientConfig,
 	) -> sp_blockchain::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
@@ -332,7 +339,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			block_rules: BlockRules::new(fork_blocks, bad_blocks),
 			execution_extensions,
 			config,
-			telemetry,
+			telemetry: RwLock::new(telemetry),
 			_phantom: Default::default(),
 		})
 	}
@@ -676,7 +683,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 					rand::thread_rng().gen_bool(0.1)
 				{
 					telemetry!(
-						self.telemetry.clone(); SUBSTRATE_INFO; "block.import";
+						self.telemetry(); SUBSTRATE_INFO; "block.import";
 						"height" => height,
 						"best" => ?hash,
 						"origin" => ?origin
@@ -997,7 +1004,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				);
 
 			telemetry!(
-				self.telemetry.clone(); SUBSTRATE_INFO; "notify.finalized";
+				self.telemetry(); SUBSTRATE_INFO; "notify.finalized";
 				"height" => format!("{}", header.number()),
 				"best" => ?last,
 			);
@@ -2016,6 +2023,12 @@ impl<BE, E, B, RA> ClientTelemetry for Client<BE, E, B, RA>
 		B: BlockT,
 {
 	fn telemetry(&self) -> Option<TelemetryHandle> {
-		self.telemetry.clone()
+		self.telemetry.read().as_ref().map(|x| x.handle())
+	}
+
+	fn start_telemetry(&self, connection_message: ConnectionMessage) {
+		if let Some(telemetry) = self.telemetry.write().as_mut() {
+			telemetry.start_telemetry(connection_message);
+		}
 	}
 }
