@@ -39,61 +39,43 @@
 use futures::{channel::mpsc, prelude::*};
 use libp2p::Multiaddr;
 use log::{error, warn};
+use parking_lot::Mutex;
 use serde::Serialize;
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use std::collections::HashMap;
-use tracing::Id;
+use std::io;
+use std::iter;
+use std::sync::Arc;
 
 pub use libp2p::wasm_ext::ExtTransport;
 pub use serde_json;
-pub use tracing;
 
 mod endpoints;
-mod layer;
 mod node;
 mod transport;
 
 pub use endpoints::*;
-pub use layer::*;
 use node::*;
 use transport::*;
 
 /// Substrate DEBUG log level.
-pub const SUBSTRATE_DEBUG: u8 = 9;
+pub const SUBSTRATE_DEBUG: VerbosityLevel = 9;
 /// Substrate INFO log level.
-pub const SUBSTRATE_INFO: u8 = 0;
+pub const SUBSTRATE_INFO: VerbosityLevel = 0;
 
 /// Consensus TRACE log level.
-pub const CONSENSUS_TRACE: u8 = 9;
+pub const CONSENSUS_TRACE: VerbosityLevel = 9;
 /// Consensus DEBUG log level.
-pub const CONSENSUS_DEBUG: u8 = 5;
+pub const CONSENSUS_DEBUG: VerbosityLevel = 5;
 /// Consensus WARN log level.
-pub const CONSENSUS_WARN: u8 = 4;
+pub const CONSENSUS_WARN: VerbosityLevel = 4;
 /// Consensus INFO log level.
-pub const CONSENSUS_INFO: u8 = 1;
+pub const CONSENSUS_INFO: VerbosityLevel = 1;
 
-pub(crate) type TelemetryMessage = (Id, u8, String);
-
-/// A handle representing a telemetry span, with the capability to enter the span if it exists.
-#[derive(Debug, Clone)]
-pub struct TelemetrySpan(tracing::Span);
-
-impl TelemetrySpan {
-	/// Enters this span, returning a guard that will exit the span when dropped.
-	pub fn enter(&self) -> tracing::span::Entered {
-		self.0.enter()
-	}
-
-	/// Constructs a new [`TelemetrySpan`].
-	pub fn new() -> Self {
-		Self(tracing::error_span!(TELEMETRY_LOG_SPAN))
-	}
-
-	/// Return a clone of the underlying `tracing::Span` instance.
-	pub fn span(&self) -> tracing::Span {
-		self.0.clone()
-	}
-}
+pub(crate) type Id = u64;
+pub(crate) type VerbosityLevel = u8;
+pub(crate) type TelemetryPayload = serde_json::Map<String, serde_json::Value>;
+pub(crate) type TelemetryMessage = (Id, VerbosityLevel, TelemetryPayload);
 
 /// Message sent when the connection (re-)establishes.
 #[derive(Debug, Serialize)]
@@ -129,21 +111,26 @@ pub struct TelemetryWorker {
 	message_sender: mpsc::Sender<TelemetryMessage>,
 	register_receiver: mpsc::UnboundedReceiver<Register>,
 	register_sender: mpsc::UnboundedSender<Register>,
+	id_generator: IdGenerator,
 	transport: WsTrans,
 }
 
 impl TelemetryWorker {
-	pub(crate) fn new(buffer_size: usize, transport: WsTrans) -> Self {
+	/// Instantiate a new [`TelemetryWorker`] which can run in background. Only one is needed for
+	/// the process.
+	pub fn new(buffer_size: usize, transport: Option<ExtTransport>) -> io::Result<Self> {
+		let transport = initialize_transport(transport)?;
 		let (message_sender, message_receiver) = mpsc::channel(buffer_size);
 		let (register_sender, register_receiver) = mpsc::unbounded();
 
-		Self {
+		Ok(Self {
 			message_receiver,
 			message_sender,
 			register_receiver,
 			register_sender,
+			id_generator: IdGenerator::new(),
 			transport,
-		}
+		})
 	}
 
 	/// Get a new [`TelemetryHandle`].
@@ -151,13 +138,10 @@ impl TelemetryWorker {
 	/// This is used when you want to register with the [`TelemetryWorker`].
 	pub fn handle(&self) -> TelemetryHandle {
 		TelemetryHandle {
-			message_sender: self.register_sender.clone(),
+			message_sender: self.message_sender.clone(),
+			register_sender: self.register_sender.clone(),
+			id_generator: self.id_generator.clone(),
 		}
-	}
-
-	/// Get a clone of the channel's `Sender` used to send telemetry events.
-	pub(crate) fn message_sender(&self) -> mpsc::Sender<TelemetryMessage> {
-		self.message_sender.clone()
 	}
 
 	/// Run the telemetry worker.
@@ -169,10 +153,11 @@ impl TelemetryWorker {
 			message_sender: _,
 			mut register_receiver,
 			register_sender: _,
+			id_generator: _,
 			transport,
 		} = self;
 
-		let mut node_map: HashMap<Id, Vec<(u8, Multiaddr)>> = HashMap::new();
+		let mut node_map: HashMap<Id, Vec<(VerbosityLevel, Multiaddr)>> = HashMap::new();
 		let mut node_pool: HashMap<Multiaddr, _> = HashMap::new();
 
 		loop {
@@ -195,7 +180,7 @@ impl TelemetryWorker {
 	async fn process_register(
 		input: Option<Register>,
 		node_pool: &mut HashMap<Multiaddr, Node<WsTrans>>,
-		node_map: &mut HashMap<Id, Vec<(u8, Multiaddr)>>,
+		node_map: &mut HashMap<Id, Vec<(VerbosityLevel, Multiaddr)>>,
 		transport: WsTrans,
 	) {
 		let input = input.expect("the stream is never closed; qed");
@@ -212,7 +197,7 @@ impl TelemetryWorker {
 					Ok(serde_json::Value::Object(mut value)) => {
 						value.insert("msg".into(), "system.connected".into());
 						let mut obj = serde_json::Map::new();
-						obj.insert("id".to_string(), id.into_u64().into());
+						obj.insert("id".to_string(), id.into());
 						obj.insert("payload".to_string(), value.into());
 						Some(obj)
 					}
@@ -271,7 +256,7 @@ impl TelemetryWorker {
 	async fn process_message(
 		input: Option<TelemetryMessage>,
 		node_pool: &mut HashMap<Multiaddr, Node<WsTrans>>,
-		node_map: &HashMap<Id, Vec<(u8, Multiaddr)>>,
+		node_map: &HashMap<Id, Vec<(VerbosityLevel, Multiaddr)>>,
 	) {
 		let (id, verbosity, message) = input.expect("the stream is never closed; qed");
 
@@ -281,11 +266,17 @@ impl TelemetryWorker {
 			// This is a normal error because the telemetry span is entered before the telemetry
 			// is initialized so it is possible that some messages in the beginning don't get
 			// through.
+			// TODO probably never happen
 			log::trace!(
 				target: "telemetry",
 				"Received telemetry log for unknown id ({:?}): {}",
 				id,
-				message,
+				serde_json::to_string(&message)
+					.unwrap_or_else(|err| format!(
+						"could not be serialized ({}): {:?}",
+						err,
+						message,
+					)),
 			);
 			return;
 		};
@@ -309,7 +300,12 @@ impl TelemetryWorker {
 					"Received message for unknown node ({}). This is a bug. \
 					Message sent: {}",
 					addr,
-					message,
+					serde_json::to_string(&message)
+						.unwrap_or_else(|err| format!(
+							"could not be serialized ({}): {:?}",
+							err,
+							message,
+						)),
 				);
 			}
 		}
@@ -319,7 +315,9 @@ impl TelemetryWorker {
 /// Handle to the [`TelemetryWorker`] thats allows initializing the telemetry for a Substrate node.
 #[derive(Debug, Clone)]
 pub struct TelemetryHandle {
-	message_sender: mpsc::UnboundedSender<Register>,
+	message_sender: mpsc::Sender<TelemetryMessage>,
+	register_sender: mpsc::UnboundedSender<Register>,
+	id_generator: IdGenerator,
 }
 
 impl TelemetryHandle {
@@ -335,40 +333,63 @@ impl TelemetryHandle {
 	/// (re-)establishes.
 	pub fn start_telemetry(
 		&mut self,
-		span: TelemetrySpan,
 		endpoints: TelemetryEndpoints,
 		connection_message: ConnectionMessage,
-	) -> TelemetryConnectionNotifier {
-		let Self { message_sender } = self;
+	) -> Option<Telemetry> {
+		let Self {
+			message_sender,
+			register_sender,
+			id_generator,
+		} = self;
 
 		let connection_notifier = TelemetryConnectionNotifier {
-			message_sender: message_sender.clone(),
+			register_sender: register_sender.clone(),
 			addresses: endpoints.0.iter().map(|(addr, _)| addr.clone()).collect(),
 		};
 
-		match span.0.id() {
-			Some(id) => {
-				match message_sender.unbounded_send(Register::Telemetry {
-					id,
-					endpoints,
-					connection_message,
-				}) {
-					Ok(()) => {}
-					Err(err) => error!(
-						target: "telemetry",
-						"Could not initialize telemetry: \
-						the telemetry is probably already running: {}",
-						err,
-					),
-				}
-			}
-			None => error!(
+		let id = id_generator.next()?;
+		match register_sender.unbounded_send(Register::Telemetry {
+			id,
+			endpoints,
+			connection_message,
+		}) {
+			Ok(()) => {}
+			Err(err) => error!(
 				target: "telemetry",
-				"Could not initialize telemetry: the span could not be entered",
+				"Could not initialize telemetry: \
+				the telemetry is probably already running: {}",
+				err,
 			),
 		}
 
-		connection_notifier
+		Some(Telemetry {
+			message_sender: message_sender.clone(),
+			id,
+			connection_notifier,
+		})
+	}
+}
+
+/// A telemetry instance that can be used to send telemetries.
+#[derive(Debug, Clone)]
+pub struct Telemetry {
+	message_sender: mpsc::Sender<TelemetryMessage>,
+	id: Id,
+	connection_notifier: TelemetryConnectionNotifier,
+}
+
+impl Telemetry {
+	/// Send telemetries.
+	pub async fn send(&mut self, verbosity: VerbosityLevel, payload: TelemetryPayload) {
+		match self
+			.message_sender
+			.send((self.id, verbosity, payload))
+			.await
+		{
+			Ok(()) => {}
+			Err(err) if err.is_full() => todo!("overflow"),
+			Err(_) => unreachable!(),
+		}
 	}
 }
 
@@ -376,7 +397,7 @@ impl TelemetryHandle {
 /// (re-)establishes.
 #[derive(Clone, Debug)]
 pub struct TelemetryConnectionNotifier {
-	message_sender: mpsc::UnboundedSender<Register>,
+	register_sender: mpsc::UnboundedSender<Register>,
 	addresses: Vec<Multiaddr>,
 }
 
@@ -387,7 +408,7 @@ impl TelemetryConnectionNotifier {
 	/// [`TelemetryHandle::start_telemetry`].
 	pub fn on_connect_stream(&self) -> TracingUnboundedReceiver<()> {
 		let (message_sender, message_receiver) = tracing_unbounded("mpsc_telemetry_on_connect");
-		if let Err(err) = self.message_sender.unbounded_send(Register::Notifier {
+		if let Err(err) = self.register_sender.unbounded_send(Register::Notifier {
 			addresses: self.addresses.clone(),
 			connection_notifier: message_sender,
 		}) {
@@ -436,8 +457,8 @@ enum Register {
 /// ```
 #[macro_export(local_inner_macros)]
 macro_rules! telemetry {
-	( $verbosity:expr; $msg:expr; $( $t:tt )* ) => {{
-		let verbosity: u8 = $verbosity;
+	( $telemetry:expr, $verbosity:expr; $msg:expr; $( $t:tt )* ) => {{
+		let verbosity: VerbosityLevel = $verbosity;
 		match format_fields_to_json!($($t)*) {
 			Err(err) => {
 				$crate::tracing::error!(
@@ -447,14 +468,8 @@ macro_rules! telemetry {
 				);
 			},
 			Ok(mut json) => {
-				// NOTE: the span id will be added later in the JSON for the greater good
 				json.insert("msg".into(), $msg.into());
-				let serialized_json = $crate::serde_json::to_string(&json)
-					.expect("contains only string keys; qed");
-				$crate::tracing::info!(target: $crate::TELEMETRY_LOG_SPAN,
-					verbosity,
-					json = serialized_json.as_str(),
-				);
+				$telemetry.send(verbosity, json);
 			},
 		}
 	}};
@@ -494,4 +509,20 @@ macro_rules! format_fields_to_json {
 			})
 		)*
 	}};
+}
+
+#[derive(Debug, Clone)]
+struct IdGenerator(Arc<Mutex<iter::Successors<Id, Box<dyn FnMut(&Id) -> Option<Id>>>>>);
+
+impl IdGenerator {
+	fn new() -> Self {
+		Self(Arc::new(Mutex::new(iter::successors(
+			Some(1),
+			Box::new(|n| n.checked_add(1)),
+		))))
+	}
+
+	fn next(&mut self) -> Option<Id> {
+		self.0.lock().next()
+	}
 }

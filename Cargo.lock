@@ -7660,8 +7660,6 @@ dependencies = [
  "serde_json",
  "sp-utils",
  "take_mut",
- "tracing",
- "tracing-subscriber",
  "void",
  "wasm-timer",
 ]

@@ -16,6 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use crate::TelemetryPayload;
 use futures::prelude::*;
 use libp2p::core::transport::Transport;
 use libp2p::Multiaddr;
@@ -45,7 +46,7 @@ pub(crate) struct Node<TTrans: Transport> {
 	/// Transport used to establish new connections.
 	transport: TTrans,
 	/// Messages that are sent when the connection (re-)establishes.
-	pub(crate) connection_messages: Vec<serde_json::Map<String, serde_json::Value>>,
+	pub(crate) connection_messages: Vec<TelemetryPayload>,
 	/// Notifier for when the connection (re-)establishes.
 	pub(crate) telemetry_connection_notifier: Vec<ConnectionNotifierSender>,
 }
@@ -123,7 +124,7 @@ where
 
 pub(crate) enum Infallible {}
 
-impl<TTrans: Transport, TSinkErr> Sink<String> for Node<TTrans>
+impl<TTrans: Transport, TSinkErr> Sink<TelemetryPayload> for Node<TTrans>
 where
 	TTrans: Clone + Unpin,
 	TTrans::Dial: Unpin,
@@ -234,16 +235,28 @@ where
 		Poll::Ready(Ok(()))
 	}
 
-	fn start_send(mut self: Pin<&mut Self>, item: String) -> Result<(), Self::Error> {
+	fn start_send(mut self: Pin<&mut Self>, item: TelemetryPayload) -> Result<(), Self::Error> {
 		match &mut self.socket {
-			NodeSocket::Connected(conn) => {
-				let _ = conn.sink.start_send_unpin(item.into()).expect("boo");
-			}
+			NodeSocket::Connected(conn) => match serde_json::to_vec(&item) {
+				Ok(data) => {
+					let _ = conn.sink.start_send_unpin(data);
+				}
+				Err(err) => log::error!(
+					target: "telemetry",
+					"Could not serialize payload: {}",
+					err,
+				),
+			},
 			_socket => {
 				log::trace!(
 					target: "telemetry",
 					"Message has been discarded: {}",
-					item,
+					serde_json::to_string(&item)
+						.unwrap_or_else(|err| format!(
+							"could not be serialized ({}): {:?}",
+							err,
+							item,
+						)),
 				);
 			}
 		}
