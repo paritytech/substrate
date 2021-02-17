@@ -36,10 +36,10 @@ use sp_core::{
 #[cfg(feature="test-helpers")]
 use sp_keystore::SyncCryptoStorePtr;
 use sc_telemetry::{
-    telemetry,
+	telemetry,
 	ClientTelemetry,
 	ConnectionMessage,
-    Telemetry,
+	Telemetry,
 	TelemetryHandle,
 	SUBSTRATE_INFO,
 };
