@@ -225,6 +225,12 @@ pub enum AllowedSlots {
 	PrimaryAndSecondaryVRFSlots,
 }
 
+impl Default for AllowedSlots {
+	fn default() -> Self {
+		Self::PrimarySlots
+	}
+}
+
 impl AllowedSlots {
 	/// Whether plain secondary slots are allowed.
 	pub fn is_secondary_plain_slots_allowed(&self) -> bool {
@@ -247,7 +253,7 @@ impl sp_consensus::SlotData for BabeGenesisConfiguration {
 }
 
 /// Configuration data used by the BABE consensus engine.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, Default)]
 pub struct BabeEpochConfiguration {
 	/// A constant value that is used in the threshold calculation formula.
 	/// Expressed as a rational where the first member of the tuple is the
@@ -362,6 +368,8 @@ pub struct Epoch {
 	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 	/// Randomness for this epoch.
 	pub randomness: [u8; VRF_OUTPUT_LENGTH],
+	/// Configuration of the epoch.
+	pub config: BabeEpochConfiguration,
 }
 
 sp_api::decl_runtime_apis! {

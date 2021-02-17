@@ -42,7 +42,8 @@ use sp_timestamp::OnTimestampSet;
 
 use sp_consensus_babe::{
 	digests::{NextConfigDescriptor, NextEpochDescriptor, PreDigest},
-	BabeAuthorityWeight, ConsensusLog, Epoch, EquivocationProof, Slot, BABE_ENGINE_ID,
+	BabeAuthorityWeight, BabeEpochConfiguration, ConsensusLog, Epoch,
+	EquivocationProof, Slot, BABE_ENGINE_ID,
 };
 use sp_consensus_vrf::schnorrkel;
 
@@ -187,7 +188,7 @@ decl_storage! {
 		pub Randomness get(fn randomness): schnorrkel::Randomness;
 
 		/// Next epoch configuration, if changed.
-		NextEpochConfig: Option<NextConfigDescriptor>;
+		PendingEpochConfigChange: Option<NextConfigDescriptor>;
 
 		/// Next epoch randomness.
 		NextRandomness: schnorrkel::Randomness;
@@ -224,10 +225,16 @@ decl_storage! {
 		/// on block finalization. Querying this storage entry outside of block
 		/// execution context should always yield zero.
 		Lateness get(fn lateness): T::BlockNumber;
+
+		EpochConfig: BabeEpochConfiguration;
+		NextEpochConfig: Option<BabeEpochConfiguration>;
 	}
 	add_extra_genesis {
 		config(authorities): Vec<(AuthorityId, BabeAuthorityWeight)>;
-		build(|config| Module::<T>::initialize_authorities(&config.authorities))
+		config(epoch_config): BabeEpochConfiguration;
+		build(|config| Module::<T>::initialize_authorities_and_epoch_config(
+			&config.authorities, &config.epoch_config
+		))
 	}
 }
 
@@ -436,7 +443,7 @@ impl<T: Config> Module<T> {
 	pub fn plan_config_change(
 		config: NextConfigDescriptor,
 	) {
-		NextEpochConfig::put(config);
+		PendingEpochConfigChange::put(config);
 	}
 
 	/// DANGEROUS: Enact an epoch change. Should be done on every block where `should_epoch_change` has returned `true`,
@@ -483,8 +490,16 @@ impl<T: Config> Module<T> {
 		};
 		Self::deposit_consensus(ConsensusLog::NextEpochData(next_epoch));
 
-		if let Some(next_config) = NextEpochConfig::take() {
-			Self::deposit_consensus(ConsensusLog::NextConfigData(next_config));
+		if let Some(pending_epoch_config_change) = PendingEpochConfigChange::take() {
+			if let Some(next_config) = NextEpochConfig::get() {
+				EpochConfig::put(next_config);
+			}
+
+			let next_epoch_config: BabeEpochConfiguration =
+				pending_epoch_config_change.clone().into();
+			NextEpochConfig::put(next_epoch_config);
+
+			Self::deposit_consensus(ConsensusLog::NextConfigData(pending_epoch_config_change));
 		}
 	}
 
@@ -503,6 +518,7 @@ impl<T: Config> Module<T> {
 			duration: T::EpochDuration::get(),
 			authorities: Self::authorities(),
 			randomness: Self::randomness(),
+			config: EpochConfig::get(),
 		}
 	}
 
@@ -520,6 +536,7 @@ impl<T: Config> Module<T> {
 			duration: T::EpochDuration::get(),
 			authorities: NextAuthorities::get(),
 			randomness: NextRandomness::get(),
+			config: NextEpochConfig::get().unwrap_or_else(EpochConfig::get),
 		}
 	}
 
@@ -668,12 +685,13 @@ impl<T: Config> Module<T> {
 		this_randomness
 	}
 
-	fn initialize_authorities(authorities: &[(AuthorityId, BabeAuthorityWeight)]) {
+	fn initialize_authorities_and_epoch_config(authorities: &[(AuthorityId, BabeAuthorityWeight)], epoch_config: &BabeEpochConfiguration) {
 		if !authorities.is_empty() {
 			assert!(Authorities::get().is_empty(), "Authorities are already initialized!");
 			Authorities::put(authorities);
 			NextAuthorities::put(authorities);
 		}
+		EpochConfig::put(epoch_config);
 	}
 
 	fn do_report_equivocation(
