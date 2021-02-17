@@ -33,7 +33,7 @@ use sc_service::config::{
 	TaskExecutor, TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
 };
 use sc_service::{ChainSpec, TracingReceiver, KeepBlocks, TransactionStorageMode};
-use sc_telemetry::{TelemetryHandle, TelemetrySpan};
+use sc_telemetry::TelemetryHandle;
 use sc_tracing::logging::LoggerBuilder;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -494,7 +494,6 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			.transpose()?
 			// Don't initialise telemetry if `telemetry_endpoints` == Some([])
 			.filter(|x| !x.is_empty());
-		let telemetry_span = telemetry_endpoints.as_ref().map(|_| TelemetrySpan::new());
 
 		let unsafe_pruning = self
 			.import_params()
@@ -534,7 +533,6 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			rpc_cors: self.rpc_cors(is_dev)?,
 			prometheus_config: self.prometheus_config(DCV::prometheus_listen_port())?,
 			telemetry_endpoints,
-			telemetry_span,
 			telemetry_external_transport: self.telemetry_external_transport()?,
 			default_heap_pages: self.default_heap_pages()?,
 			offchain_worker: self.offchain_worker(&role)?,
