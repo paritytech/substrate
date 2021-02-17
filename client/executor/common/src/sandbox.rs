@@ -100,6 +100,10 @@ impl Imports {
 	fn func_by_name(&self, module_name: &str, func_name: &str) -> Option<GuestFuncIndex> {
 		self.func_map.get(&(module_name.as_bytes().to_owned(), func_name.as_bytes().to_owned())).cloned()
 	}
+
+	fn memory_by_name(&self, module_name: &str, memory_name: &str) -> Option<Memory> {
+		self.memories_map.get(&(module_name.as_bytes().to_owned(), memory_name.as_bytes().to_owned())).cloned()
+	}
 }
 
 impl ImportResolver for Imports {
@@ -524,8 +528,8 @@ impl<FR> SandboxInstance<FR> {
 				let wasmtime_value = match global.get() {
 					wasmer::Val::I32(val) => Value::I32(val),
 					wasmer::Val::I64(val) => Value::I64(val),
-					wasmer::Val::F32(val) => Value::F32(val as u32),
-					wasmer::Val::F64(val) => Value::F64(val as u64),
+					wasmer::Val::F32(val) => Value::F32(f32::to_bits(val)),
+					wasmer::Val::F64(val) => Value::F64(f64::to_bits(val)),
 					_ => None?,
 				};
 
@@ -730,6 +734,8 @@ impl<FR> Store<FR> {
 
 		let memory = match &backend_context {
 			BackendContext::Wasmi => {
+				println!("creating wasmi memory {}..{}", initial, maximum.map(|v| v.to_string()).unwrap_or("?".into()));
+
 				Memory::Wasmi(MemoryInstance::alloc(
 					Pages(initial as usize),
 					maximum.map(|m| Pages(m as usize)),
@@ -738,10 +744,17 @@ impl<FR> Store<FR> {
 
 			BackendContext::Wasmer(context) => {
 				let ty = wasmer::MemoryType::new(initial, maximum, false);
+				println!("creating wasmer memory {:?}", ty);
+
+				// let bt = backtrace::Backtrace::new();
+				// println!("{:?}", bt);
 
 				Memory::Wasmer(
 					wasmer::Memory::new(&context.store, ty)
-						.map_err(|_| Error::InvalidMemoryReference)?
+						.map_err(|r| {
+							println!("Error creating wasmer Memory: {}", r.to_string());
+							Error::InvalidMemoryReference
+						})?
 				)
 			}
 
@@ -774,7 +787,8 @@ impl<FR> Store<FR> {
 	pub fn new_memory(&mut self, initial: u32, maximum: u32) -> Result<u32> {
 		let memories = &mut self.memories;
 		let backend_context = &self.backend_context;
-		Self::allocate_memory(memories, backend_context, initial, maximum).map(|(index, _)| index)
+		dbg!(initial, maximum);
+		dbg!(Self::allocate_memory(memories, backend_context, initial, maximum).map(|(index, _)| index))
 	}
 
 	/// Returns `SandboxInstance` by `instance_idx`.
@@ -799,7 +813,6 @@ impl<FR> Store<FR> {
 	/// if memory has been torn down.
 	pub fn memory(&self, memory_idx: u32) -> Result<Memory> {
 		self.memories
-			// .borrow()
 			.get(memory_idx as usize)
 			.cloned()
 			.ok_or_else(|| "Trying to access a non-existent sandboxed memory")?
@@ -1058,15 +1071,7 @@ impl<FR> Store<FR> {
 						wasmer::ExternType::Memory(memory_type) => {
 							println!("Importing memory '{}' :: '{}' {}", import.module(), import.name(), memory_type.to_string());
 							let exports = exports_map.entry(import.module().to_string()).or_insert(wasmer::Exports::new());
-							let (_memory_index, memory) = Self::allocate_memory(
-									memories,
-									backend_context,
-									memory_type.minimum.0,
-									memory_type.maximum
-										.map(|m| m.0)
-										.unwrap_or(sandbox_primitives::MEM_UNLIMITED)
-								)
-								.map_err(|_| InstantiationError::ModuleDecoding)?;
+							let memory = guest_env.imports.memory_by_name(import.module(), import.name()).ok_or(InstantiationError::ModuleDecoding)?;
 
 							exports.insert(import.name(), wasmer::Extern::Memory(memory.as_wasmer().unwrap()));
 						}
@@ -1094,8 +1099,8 @@ impl<FR> Store<FR> {
 										.map(|val| match val {
 											wasmer::Val::I32(val) => Value::I32(*val),
 											wasmer::Val::I64(val) => Value::I64(*val),
-											wasmer::Val::F32(val) => Value::F32(*val as u32),
-											wasmer::Val::F64(val) => Value::F64(*val as u64),
+											wasmer::Val::F32(val) => Value::F32(f32::to_bits(*val)),
+											wasmer::Val::F64(val) => Value::F64(f64::to_bits(*val)),
 											_ => unimplemented!()
 										})
 										.collect::<Vec<_>>()
