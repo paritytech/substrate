@@ -304,6 +304,19 @@ benchmarks! {
 		Storage::<T>::process_deletion_queue_batch(Weight::max_value())
 	}
 
+	// This benchmarks the additional weight that is charged when a contract is executed the
+	// first time after a new schedule was deployed: For every new schedule a contract needs
+	// to re-run the instrumentation once.
+	instrument {
+		let c in 0 .. T::MaxCodeSize::get() / 1024;
+		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c * 1024);
+		Contracts::<T>::store_code_raw(code)?;
+		let mut module = PrefabWasmModule::from_storage_noinstr(hash)?;
+		let schedule = Contracts::<T>::current_schedule();
+	}: {
+		Contracts::<T>::reinstrument_module(&mut module, &schedule)?;
+	}
+
 	// This extrinsic is pretty much constant as it is only a simple setter.
 	update_schedule {
 		let schedule = Schedule {

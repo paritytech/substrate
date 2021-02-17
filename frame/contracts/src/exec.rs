@@ -196,7 +196,11 @@ pub enum ExportedFunction {
 /// order to be able to mock the wasm logic for testing.
 pub trait Executable<T: Config>: Sized {
 	/// Load the executable from storage.
-	fn from_storage(code_hash: CodeHash<T>, schedule: &Schedule<T>) -> Result<Self, DispatchError>;
+	fn from_storage(
+		code_hash: CodeHash<T>,
+		schedule: &Schedule<T>,
+		gas_meter: &mut GasMeter<T>,
+	) -> Result<Self, DispatchError>;
 
 	/// Load the module from storage without re-instrumenting it.
 	///
@@ -318,7 +322,7 @@ where
 			.and_then(|contract| contract.get_alive())
 			.ok_or((Error::<T>::NotCallable.into(), 0))?;
 
-		let executable = E::from_storage(contract.code_hash, &self.schedule)
+		let executable = E::from_storage(contract.code_hash, &self.schedule, gas_meter)
 			.map_err(|e| (e.into(), 0))?;
 		let code_len = executable.code_len();
 
@@ -599,7 +603,7 @@ where
 		input_data: Vec<u8>,
 		salt: &[u8],
 	) -> Result<(AccountIdOf<T>, ExecReturnValue, u32), (ExecError, u32)> {
-		let executable = E::from_storage(code_hash, &self.ctx.schedule)
+		let executable = E::from_storage(code_hash, &self.ctx.schedule, gas_meter)
 			.map_err(|e| (e.into(), 0))?;
 		let code_len = executable.code_len();
 		self.ctx.instantiate(endowment, gas_meter, executable, input_data, salt)
@@ -848,7 +852,8 @@ mod tests {
 	impl Executable<Test> for MockExecutable {
 		fn from_storage(
 			code_hash: CodeHash<Test>,
-			_schedule: &Schedule<Test>
+			_schedule: &Schedule<Test>,
+			_gas_meter: &mut GasMeter<Test>,
 		) -> Result<Self, DispatchError> {
 			Self::from_storage_noinstr(code_hash)
 		}
@@ -1104,13 +1109,17 @@ mod tests {
 			let schedule = Contracts::current_schedule();
 			let subsistence = Contracts::<Test>::subsistence_threshold();
 			let mut ctx = MockContext::top_level(ALICE, &schedule);
+			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
+			let executable = MockExecutable::from_storage(
+				input_data_ch, &schedule, &mut gas_meter
+			).unwrap();
 
 			set_balance(&ALICE, subsistence * 10);
 
 			let result = ctx.instantiate(
 				subsistence * 3,
-				&mut GasMeter::<Test>::new(GAS_LIMIT),
-				MockExecutable::from_storage(input_data_ch, &schedule).unwrap(),
+				&mut gas_meter,
+				executable,
 				vec![1, 2, 3, 4],
 				&[],
 			);
@@ -1259,12 +1268,16 @@ mod tests {
 		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
 			let schedule = Contracts::current_schedule();
 			let mut ctx = MockContext::top_level(ALICE, &schedule);
+			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
+			let executable = MockExecutable::from_storage(
+				dummy_ch, &schedule, &mut gas_meter
+			).unwrap();
 
 			assert_matches!(
 				ctx.instantiate(
 					0, // <- zero endowment
-					&mut GasMeter::<Test>::new(GAS_LIMIT),
-					MockExecutable::from_storage(dummy_ch, &schedule).unwrap(),
+					&mut gas_meter,
+					executable,
 					vec![],
 					&[],
 				),
@@ -1282,13 +1295,17 @@ mod tests {
 		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
 			let schedule = Contracts::current_schedule();
 			let mut ctx = MockContext::top_level(ALICE, &schedule);
+			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
+			let executable = MockExecutable::from_storage(
+				dummy_ch, &schedule, &mut gas_meter
+			).unwrap();
 			set_balance(&ALICE, 1000);
 
 			let instantiated_contract_address = assert_matches!(
 				ctx.instantiate(
 					100,
-					&mut GasMeter::<Test>::new(GAS_LIMIT),
-					MockExecutable::from_storage(dummy_ch, &schedule).unwrap(),
+					&mut gas_meter,
+					executable,
 					vec![],
 					&[],
 				),
@@ -1313,13 +1330,17 @@ mod tests {
 		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
 			let schedule = Contracts::current_schedule();
 			let mut ctx = MockContext::top_level(ALICE, &schedule);
+			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
+			let executable = MockExecutable::from_storage(
+				dummy_ch, &schedule, &mut gas_meter
+			).unwrap();
 			set_balance(&ALICE, 1000);
 
 			let instantiated_contract_address = assert_matches!(
 				ctx.instantiate(
 					100,
-					&mut GasMeter::<Test>::new(GAS_LIMIT),
-					MockExecutable::from_storage(dummy_ch, &schedule).unwrap(),
+					&mut gas_meter,
+					executable,
 					vec![],
 					&[],
 				),
@@ -1434,13 +1455,17 @@ mod tests {
 			.execute_with(|| {
 				let schedule = Contracts::current_schedule();
 				let mut ctx = MockContext::top_level(ALICE, &schedule);
+				let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
+				let executable = MockExecutable::from_storage(
+					terminate_ch, &schedule, &mut gas_meter
+				).unwrap();
 				set_balance(&ALICE, 1000);
 
 				assert_eq!(
 					ctx.instantiate(
 						100,
-						&mut GasMeter::<Test>::new(GAS_LIMIT),
-						MockExecutable::from_storage(terminate_ch, &schedule).unwrap(),
+						&mut gas_meter,
+						executable,
 						vec![],
 						&[],
 					),
@@ -1469,12 +1494,16 @@ mod tests {
 			let subsistence = Contracts::<Test>::subsistence_threshold();
 			let schedule = Contracts::current_schedule();
 			let mut ctx = MockContext::top_level(ALICE, &schedule);
+			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
+			let executable = MockExecutable::from_storage(
+				rent_allowance_ch, &schedule, &mut gas_meter
+			).unwrap();
 			set_balance(&ALICE, subsistence * 10);
 
 			let result = ctx.instantiate(
 				subsistence * 5,
-				&mut GasMeter::<Test>::new(GAS_LIMIT),
-				MockExecutable::from_storage(rent_allowance_ch, &schedule).unwrap(),
+				&mut gas_meter,
+				executable,
 				vec![],
 				&[],
 			);

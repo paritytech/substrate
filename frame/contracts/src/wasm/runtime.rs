@@ -20,7 +20,7 @@
 use crate::{
 	HostFnWeights, Config, CodeHash, BalanceOf, Error,
 	exec::{Ext, StorageKey, TopicOf},
-	gas::{Gas, GasMeter, Token, GasMeterResult, ChargedAmount},
+	gas::{Gas, GasMeter, Token, ChargedAmount},
 	wasm::env_def::ConvertibleToWasm,
 };
 use parity_wasm::elements::ValueType;
@@ -424,10 +424,7 @@ where
 	where
 		Tok: Token<E::T, Metadata=HostFnWeights<E::T>>,
 	{
-		match self.gas_meter.charge(&self.ext.schedule().host_fn_weights, token) {
-			GasMeterResult::Proceed(amount) => Ok(amount),
-			GasMeterResult::OutOfGas => Err(Error::<E::T>::OutOfGas.into())
-		}
+		self.gas_meter.charge(&self.ext.schedule().host_fn_weights, token)
 	}
 
 	/// Correct previously charged gas amount.

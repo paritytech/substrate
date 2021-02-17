@@ -36,6 +36,8 @@ use codec::{Encode, Decode};
 use frame_support::dispatch::DispatchError;
 use pallet_contracts_primitives::ExecResult;
 pub use self::runtime::{ReturnCode, Runtime, RuntimeToken};
+#[cfg(feature = "runtime-benchmarks")]
+pub use self::code_cache::reinstrument;
 
 /// A prepared wasm module ready for execution.
 ///
@@ -145,9 +147,10 @@ where
 {
 	fn from_storage(
 		code_hash: CodeHash<T>,
-		schedule: &Schedule<T>
+		schedule: &Schedule<T>,
+		gas_meter: &mut GasMeter<T>,
 	) -> Result<Self, DispatchError> {
-		code_cache::load(code_hash, Some(schedule))
+		code_cache::load(code_hash, Some((schedule, gas_meter)))
 	}
 
 	fn from_storage_noinstr(code_hash: CodeHash<T>) -> Result<Self, DispatchError> {

@@ -80,7 +80,7 @@
 //! * [Balances](../pallet_balances/index.html)
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(feature = "runtime-benchmarks", recursion_limit="256")]
+#![cfg_attr(feature = "runtime-benchmarks", recursion_limit="512")]
 
 #[macro_use]
 mod gas;
@@ -604,10 +604,10 @@ decl_module! {
 			ensure!(code_len <= T::MaxCodeSize::get(), Error::<T>::CodeTooLarge);
 			let mut gas_meter = GasMeter::new(gas_limit);
 			let schedule = <Module<T>>::current_schedule();
-			let mut ctx = ExecutionContext::<T, PrefabWasmModule<T>>::top_level(origin, &schedule);
 			let executable = PrefabWasmModule::from_code(code, &schedule)?;
 			let code_len = executable.code_len();
 			ensure!(code_len <= T::MaxCodeSize::get(), Error::<T>::CodeTooLarge);
+			let mut ctx = ExecutionContext::<T, PrefabWasmModule<T>>::top_level(origin, &schedule);
 			let result = ctx.instantiate(endowment, &mut gas_meter, executable, data, &salt)
 				.map(|(_address, output)| output);
 			gas_meter.into_dispatch_result(
@@ -636,8 +636,8 @@ decl_module! {
 			let origin = ensure_signed(origin)?;
 			let mut gas_meter = GasMeter::new(gas_limit);
 			let schedule = <Module<T>>::current_schedule();
+			let executable = PrefabWasmModule::from_storage(code_hash, &schedule, &mut gas_meter)?;
 			let mut ctx = ExecutionContext::<T, PrefabWasmModule<T>>::top_level(origin, &schedule);
-			let executable = PrefabWasmModule::from_storage(code_hash, &ctx.schedule)?;
 			let code_len = executable.code_len();
 			let result = ctx.instantiate(endowment, &mut gas_meter, executable, data, &salt)
 				.map(|(_address, output)| output);
@@ -703,7 +703,6 @@ decl_module! {
 	}
 }
 
-/// Public APIs provided by the contracts module.
 impl<T: Config> Module<T>
 where
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
@@ -743,16 +742,10 @@ where
 		Ok(maybe_value)
 	}
 
+	/// Query how many blocks the contract stays alive given that the amount endowment
+	/// and consumed storage does not change.
 	pub fn rent_projection(address: T::AccountId) -> RentProjectionResult<T::BlockNumber> {
 		Rent::<T, PrefabWasmModule<T>>::compute_projection(&address)
-	}
-
-	/// Store code for benchmarks which does not check nor instrument the code.
-	#[cfg(feature = "runtime-benchmarks")]
-	pub fn store_code_raw(code: Vec<u8>) -> DispatchResult {
-		let schedule = <Module<T>>::current_schedule();
-		PrefabWasmModule::store_code_unchecked(code, &schedule)?;
-		Ok(())
 	}
 
 	/// Determine the address of a contract,
@@ -786,6 +779,23 @@ where
 	/// The only way to completely kill a contract without a tombstone is calling `seal_terminate`.
 	pub fn subsistence_threshold() -> BalanceOf<T> {
 		T::Currency::minimum_balance().saturating_add(T::TombstoneDeposit::get())
+	}
+
+	/// Store code for benchmarks which does not check nor instrument the code.
+	#[cfg(feature = "runtime-benchmarks")]
+	fn store_code_raw(code: Vec<u8>) -> DispatchResult {
+		let schedule = <Module<T>>::current_schedule();
+		PrefabWasmModule::store_code_unchecked(code, &schedule)?;
+		Ok(())
+	}
+
+	/// This exists so that benchmarks can determine the weight of running an instrumentation.
+	#[cfg(feature = "runtime-benchmarks")]
+	fn reinstrument_module(
+		module: &mut PrefabWasmModule<T>,
+		schedule: &Schedule<T>
+	) -> DispatchResult {
+		self::wasm::reinstrument(module, schedule)
 	}
 }
 

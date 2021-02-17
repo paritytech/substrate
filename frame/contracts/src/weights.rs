@@ -47,6 +47,7 @@ pub trait WeightInfo {
 	fn on_initialize() -> Weight;
 	fn on_initialize_per_trie_key(k: u32, ) -> Weight;
 	fn on_initialize_per_queue_item(q: u32, ) -> Weight;
+	fn instrument(q: u32, ) -> Weight;
 	fn update_schedule() -> Weight;
 	fn instantiate_with_code(c: u32, s: u32, ) -> Weight;
 	fn instantiate(c: u32, s: u32, ) -> Weight;
@@ -166,6 +167,13 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		(325_227_000 as Weight)
 			// Standard Error: 43_000
 			.saturating_add((149_497_000 as Weight).saturating_mul(q as Weight))
+			.saturating_add(T::DbWeight::get().reads(1 as Weight))
+			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+	}
+	fn instrument(c: u32, ) -> Weight {
+		(5_776_000 as Weight)
+			// Standard Error: 369_000
+			.saturating_add((117_153_000 as Weight).saturating_mul(c as Weight))
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -779,6 +787,13 @@ impl WeightInfo for () {
 		(325_227_000 as Weight)
 			// Standard Error: 43_000
 			.saturating_add((149_497_000 as Weight).saturating_mul(q as Weight))
+			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+	}
+	fn instrument(c: u32, ) -> Weight {
+		(5_776_000 as Weight)
+			// Standard Error: 369_000
+			.saturating_add((117_153_000 as Weight).saturating_mul(c as Weight))
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
