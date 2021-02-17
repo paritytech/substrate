@@ -87,6 +87,21 @@ default:
 
 .build-refs:                       &build-refs
   rules:
+    # .publish-refs with manual on PRs
+    - if: $CI_PIPELINE_SOURCE == "pipeline"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_COMMIT_REF_NAME == "master"
+    - if: $CI_COMMIT_REF_NAME == "tags"
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
+      when: manual
+      allow_failure: true
+
+.publish-refs:                     &publish-refs
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "pipeline"
+      when: never
     - if: $CI_PIPELINE_SOURCE == "web"
     - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_COMMIT_REF_NAME == "master"
@@ -147,6 +162,8 @@ test-dependency-rules:
   stage:                           check
   image:                           paritytech/tools:latest
   <<:                              *kubernetes-build
+  rules:
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
   script:
     - .maintain/ensure-deps.sh
 
@@ -161,28 +178,17 @@ test-prometheus-alerting-rules:
         - .maintain/monitoring/**/*
   script:
     - promtool check rules .maintain/monitoring/alerting-rules/alerting-rules.yaml
-    - cat .maintain/monitoring/alerting-rules/alerting-rules.yaml | promtool test rules .maintain/monitoring/alerting-rules/alerting-rule-tests.yaml
+    - cat .maintain/monitoring/alerting-rules/alerting-rules.yaml |
+        promtool test rules .maintain/monitoring/alerting-rules/alerting-rule-tests.yaml
 
 #### stage:                        test
-
-cargo-audit:
-  stage:                           test
-  <<:                              *docker-env
-  rules:
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
-      when: never
-    - if: $CI_PIPELINE_SOURCE == "web"
-    - if: $CI_PIPELINE_SOURCE == "schedule"
-    - if: $CI_COMMIT_REF_NAME == "master"
-    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
-  script:
-    - cargo audit
-  allow_failure:                   true
 
 cargo-deny:
   stage:                           test
   <<:                              *docker-env
   rules:
+    - if: $CI_PIPELINE_SOURCE == "pipeline"
+      when: never
     - if: $CI_COMMIT_MESSAGE =~ /skip-checks/
       when: never
     - changes:
@@ -401,16 +407,7 @@ build-linux-substrate:             &build-binary
   stage:                           build
   <<:                              *collect-artifacts
   <<:                              *docker-env
-  rules:
-    # .build-refs with manual on PRs
-    - if: $CI_PIPELINE_SOURCE == "web"
-    - if: $CI_PIPELINE_SOURCE == "schedule"
-    - if: $CI_COMMIT_REF_NAME == "master"
-    - if: $CI_COMMIT_REF_NAME == "tags"
-    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
-      when: manual
-      allow_failure: true
+  <<:                              *build-refs
   needs:
     - job:                         test-linux-stable
       artifacts:                   false
@@ -437,15 +434,7 @@ build-linux-subkey:                &build-subkey
   stage:                           build
   <<:                              *collect-artifacts
   <<:                              *docker-env
-  rules:
-    # .build-refs with manual on PRs
-    - if: $CI_PIPELINE_SOURCE == "web"
-    - if: $CI_COMMIT_REF_NAME == "master"
-    - if: $CI_COMMIT_REF_NAME == "tags"
-    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
-      when: manual
-      allow_failure: true
+  <<:                              *build-refs
   needs:
     - job:                         cargo-check-subkey
       artifacts:                   false
@@ -496,7 +485,7 @@ build-rust-doc:
 #### stage:                        publish
 
 .build-push-docker-image:          &build-push-docker-image
-  <<:                              *build-refs
+  <<:                              *publish-refs
   <<:                              *kubernetes-build
   image:                           quay.io/buildah/stable
   variables:                       &docker-build-vars
@@ -555,7 +544,7 @@ publish-docker-subkey:
 
 publish-s3-release:
   stage:                           publish
-  <<:                              *build-refs
+  <<:                              *publish-refs
   <<:                              *kubernetes-build
   needs:
     - job:                         build-linux-substrate
@@ -584,7 +573,7 @@ publish-s3-doc:
       artifacts:                   true
     - job:                         build-linux-substrate
       artifacts:                   false
-  <<:                              *build-refs
+  <<:                              *publish-refs
   <<:                              *kubernetes-build
   variables:
     GIT_STRATEGY:                  none
