@@ -88,6 +88,7 @@ default:
 .build-refs:                       &build-refs
   rules:
     - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_COMMIT_REF_NAME == "master"
     - if: $CI_COMMIT_REF_NAME == "tags"
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
@@ -184,6 +185,9 @@ cargo-deny:
   rules:
     - if: $CI_COMMIT_MESSAGE =~ /skip-checks/
       when: never
+    - changes:
+      - "Cargo.lock"
+      - "**/Cargo.toml"
     - if: $CI_PIPELINE_SOURCE == "web"
     - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_COMMIT_REF_NAME == "master"
