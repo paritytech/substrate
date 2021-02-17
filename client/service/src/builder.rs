@@ -619,7 +619,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		config.prometheus_config.clone()
 	{
 		// Set static metrics.
-		let metrics = MetricsService::with_prometheus(&registry, &config)?;
+		let metrics = MetricsService::with_prometheus(client.telemetry(), &registry, &config)?;
 		spawn_handle.spawn(
 			"prometheus-endpoint",
 			prometheus_endpoint::init_prometheus(port, registry).map(drop)
@@ -627,7 +627,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 
 		metrics
 	} else {
-		MetricsService::new()
+		MetricsService::new(client.telemetry())
 	};
 
 	// Periodically updated metrics and telemetry updates.

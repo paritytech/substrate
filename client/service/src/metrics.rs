@@ -118,19 +118,20 @@ pub struct MetricsService {
 impl MetricsService {
 	/// Creates a `MetricsService` that only sends information
 	/// to the telemetry.
-	pub fn new() -> Self {
+	pub fn new(telemetry: Option<TelemetryHandle>) -> Self {
 		MetricsService {
 			metrics: None,
 			last_total_bytes_inbound: 0,
 			last_total_bytes_outbound: 0,
 			last_update: Instant::now(),
-			telemetry: None, // TODO how to inject
+			telemetry,
 		}
 	}
 
 	/// Creates a `MetricsService` that sends metrics
 	/// to prometheus alongside the telemetry.
 	pub fn with_prometheus(
+		telemetry: Option<TelemetryHandle>,
 		registry: &Registry,
 		config: &Configuration,
 	) -> Result<Self, PrometheusError> {
@@ -151,7 +152,7 @@ impl MetricsService {
 			last_total_bytes_inbound: 0,
 			last_total_bytes_outbound: 0,
 			last_update: Instant::now(),
-			telemetry: None,
+			telemetry,
 		})
 	}
 
