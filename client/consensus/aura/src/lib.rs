@@ -66,7 +66,7 @@ use sp_inherents::{InherentDataProviders, InherentData};
 use sp_timestamp::{
 	TimestampInherentData, InherentType as TimestampInherent, InherentError as TIError
 };
-use sc_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_INFO};
+use sc_telemetry::{telemetry, ClientTelemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_INFO};
 
 use sc_consensus_slots::{
 	CheckedHeader, SlotInfo, SlotCompatible, StorageChanges, check_equivocation,
@@ -151,7 +151,8 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, BS, Error>(
 	can_author_with: CAW,
 ) -> Result<impl Future<Output = ()>, sp_consensus::Error> where
 	B: BlockT,
-	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + AuxStore + HeaderBackend<B> + Send + Sync,
+	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + AuxStore + HeaderBackend<B> + Send
+		+ ClientTelemetry + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
 	SC: SelectChain<B>,
 	E: Environment<B, Error = Error> + Send + Sync + 'static,
@@ -166,7 +167,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, BS, Error>(
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
 {
 	let worker = AuraWorker {
-		client,
+		client: client.clone(),
 		block_import: Arc::new(Mutex::new(block_import)),
 		env,
 		keystore,
@@ -187,6 +188,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, BS, Error>(
 		inherent_data_providers,
 		AuraSlotCompatible,
 		can_author_with,
+		client.telemetry(),
 	))
 }
 
@@ -505,6 +507,7 @@ pub struct AuraVerifier<C, P, CAW> {
 }
 
 impl<C, P, CAW> AuraVerifier<C, P, CAW> where
+	C: ClientTelemetry,
 	P: Send + Sync + 'static,
 	CAW: Send + Sync + 'static,
 {
@@ -553,8 +556,9 @@ impl<C, P, CAW> AuraVerifier<C, P, CAW> where
 							"halting for block {} seconds in the future",
 							diff
 						);
-						telemetry!(CONSENSUS_INFO; "aura.halting_for_future_block";
-							"diff" => ?diff
+						telemetry!(
+							self.client.telemetry(); CONSENSUS_INFO; "aura.halting_for_future_block";
+							"diff" => ?diff,
 						);
 						thread::sleep(Duration::from_secs(diff));
 						Ok(())
@@ -572,12 +576,13 @@ impl<C, P, CAW> AuraVerifier<C, P, CAW> where
 
 #[forbid(deprecated)]
 impl<B: BlockT, C, P, CAW> Verifier<B> for AuraVerifier<C, P, CAW> where
-	C: ProvideRuntimeApi<B> +
-		Send +
-		Sync +
-		sc_client_api::backend::AuxStore +
-		ProvideCache<B> +
-		BlockOf,
+	C: ProvideRuntimeApi<B>
+		+ sc_client_api::backend::AuxStore
+		+ ProvideCache<B>
+		+ BlockOf
+		+ ClientTelemetry
+		+ Send
+		+ Sync,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B>,
 	DigestItemFor<B>: CompatibleDigestItem<P>,
 	P: Pair + Send + Sync + 'static,
@@ -643,7 +648,10 @@ impl<B: BlockT, C, P, CAW> Verifier<B> for AuraVerifier<C, P, CAW> where
 				}
 
 				trace!(target: "aura", "Checked {:?}; importing.", pre_header);
-				telemetry!(CONSENSUS_TRACE; "aura.checked_and_importing"; "pre_header" => ?pre_header);
+				telemetry!(
+					self.client.telemetry(); CONSENSUS_TRACE; "aura.checked_and_importing";
+					"pre_header" => ?pre_header,
+				);
 
 				// Look for an authorities-change log.
 				let maybe_keys = pre_header.digest()
@@ -670,8 +678,11 @@ impl<B: BlockT, C, P, CAW> Verifier<B> for AuraVerifier<C, P, CAW> where
 			}
 			CheckedHeader::Deferred(a, b) => {
 				debug!(target: "aura", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
-				telemetry!(CONSENSUS_DEBUG; "aura.header_too_far_in_future";
-					"hash" => ?hash, "a" => ?a, "b" => ?b
+				telemetry!(
+					self.client.telemetry(); CONSENSUS_DEBUG; "aura.header_too_far_in_future";
+					"hash" => ?hash,
+					"a" => ?a,
+					"b" => ?b,
 				);
 				Err(format!("Header {:?} rejected: too far in the future", hash))
 			}
@@ -843,7 +854,15 @@ pub fn import_queue<B, I, C, P, S, CAW>(
 ) -> Result<DefaultImportQueue<B, C>, sp_consensus::Error> where
 	B: BlockT,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B>,
-	C: 'static + ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + Send + Sync + AuxStore + HeaderBackend<B>,
+	C: ProvideRuntimeApi<B>
+		+ BlockOf
+		+ ProvideCache<B>
+		+ AuxStore
+		+ HeaderBackend<B>
+		+ ClientTelemetry
+		+ Send
+		+ Sync
+		+ 'static,
 	I: BlockImport<B, Error=ConsensusError, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	DigestItemFor<B>: CompatibleDigestItem<P>,
 	P: Pair + Send + Sync + 'static,
