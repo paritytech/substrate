@@ -89,7 +89,7 @@ use sp_runtime::{
 use sp_api::{ProvideRuntimeApi, NumberFor};
 use parking_lot::Mutex;
 use sp_inherents::{InherentDataProviders, InherentData};
-use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_TRACE, CONSENSUS_DEBUG};
+use sc_telemetry::{telemetry, ClientTelemetry, TelemetryHandle, CONSENSUS_TRACE, CONSENSUS_DEBUG};
 use sp_consensus::{
 	BlockImport, Environment, Proposer, BlockCheckParams,
 	ForkChoiceStrategy, BlockImportParams, BlockOrigin, Error as ConsensusError,
@@ -358,7 +358,7 @@ impl std::ops::Deref for Config {
 }
 
 /// Parameters for BABE.
-pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW, BS> {
+pub struct BabeParams<B: BlockT, C: ClientTelemetry, E, I, SO, SC, CAW, BS> {
 	/// The keystore that manages the keys of the node.
 	pub keystore: SyncCryptoStorePtr,
 
@@ -393,9 +393,6 @@ pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW, BS> {
 
 	/// Checks if the current native implementation can author with a runtime at a given block.
 	pub can_author_with: CAW,
-
-	/// TelemetryHandle instance.
-	pub telemetry: Option<TelemetryHandle>,
 }
 
 /// Start the babe worker.
@@ -411,14 +408,14 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, BS, Error>(BabeParams {
 	backoff_authoring_blocks,
 	babe_link,
 	can_author_with,
-	telemetry,
 }: BabeParams<B, C, E, I, SO, SC, CAW, BS>) -> Result<
 	BabeWorker<B>,
 	sp_consensus::Error,
 > where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + ProvideCache<B> + ProvideUncles<B> + BlockchainEvents<B>
-		+ HeaderBackend<B> + HeaderMetadata<B, Error = ClientError> + Send + Sync + 'static,
+		+ HeaderBackend<B> + HeaderMetadata<B, Error = ClientError> + ClientTelemetry
+		+ Send + Sync + 'static,
 	C::Api: BabeApi<B>,
 	SC: SelectChain<B> + 'static,
 	E: Environment<B, Error = Error> + Send + Sync + 'static,
@@ -448,7 +445,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, BS, Error>(BabeParams {
 
 	register_babe_inherent_data_provider(&inherent_data_providers, config.slot_duration())?;
 	sc_consensus_uncles::register_uncles_inherent_data_provider(
-		client,
+		client.clone(),
 		select_chain.clone(),
 		&inherent_data_providers,
 	)?;
@@ -462,7 +459,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, BS, Error>(BabeParams {
 		inherent_data_providers,
 		babe_link.time_source,
 		can_author_with,
-		telemetry,
+		client.telemetry(),
 	);
 	Ok(BabeWorker {
 		inner: Box::pin(inner),

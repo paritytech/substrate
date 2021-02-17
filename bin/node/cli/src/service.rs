@@ -257,7 +257,6 @@ pub fn new_full_base(
 			client.clone(),
 			transaction_pool.clone(),
 			prometheus_registry.as_ref(),
-			client.telemetry(),
 		);
 
 		let can_author_with =
@@ -275,7 +274,6 @@ pub fn new_full_base(
 			backoff_authoring_blocks,
 			babe_link,
 			can_author_with,
-			telemetry: client.telemetry(),
 		};
 
 		let babe = sc_consensus_babe::start_babe(babe_config)?;
