@@ -234,11 +234,8 @@ pub mod pallet {
 
 			let data = extract_inherent_data(data).map_err(|e| InherentError::Other(e))?;
 
-			let minimum = (Self::now() + T::MinimumPeriod::get()).saturated_into::<u64>();
 			if t > data + MAX_TIMESTAMP_DRIFT_MILLIS {
 				Err(InherentError::Other("Timestamp too far in future to accept".into()))
-			} else if t < minimum {
-				Err(InherentError::ValidAtTimestamp(minimum))
 			} else {
 				Ok(())
 			}
