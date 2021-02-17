@@ -16,7 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../runtime" }
 sp-arithmetic = { version = "3.0.0", default-features = false, path = "../../arithmetic" }
-serde = { version = "1.0.123", features = ["derive"] }
+serde = { version = "1.0.123", features = ["derive"], default-features = false }
 
 [features]
 default = ["std"]
@@ -24,4 +24,5 @@ std = [
 	"codec/std",
 	"sp-runtime/std",
 	"sp-arithmetic/std",
+	"serde/std"
 ]

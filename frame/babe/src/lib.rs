@@ -685,7 +685,10 @@ impl<T: Config> Module<T> {
 		this_randomness
 	}
 
-	fn initialize_authorities_and_epoch_config(authorities: &[(AuthorityId, BabeAuthorityWeight)], epoch_config: &BabeEpochConfiguration) {
+	fn initialize_authorities_and_epoch_config(
+		authorities: &[(AuthorityId, BabeAuthorityWeight)],
+		epoch_config: &BabeEpochConfiguration,
+	) {
 		if !authorities.is_empty() {
 			assert!(Authorities::get().is_empty(), "Authorities are already initialized!");
 			Authorities::put(authorities);
