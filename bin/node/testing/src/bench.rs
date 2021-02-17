@@ -426,6 +426,7 @@ impl BenchDb {
 			ExecutionExtensions::new(profile.into_execution_strategies(), None),
 			Box::new(task_executor.clone()),
 			None,
+			None,
 			Default::default(),
 		).expect("Should not fail");
 

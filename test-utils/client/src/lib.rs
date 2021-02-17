@@ -227,6 +227,7 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 				self.keystore,
 			),
 			None,
+			None,
 			ClientConfig {
 				offchain_indexing_api: self.enable_offchain_indexing_api,
 				..Default::default()
