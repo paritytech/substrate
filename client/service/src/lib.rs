@@ -309,7 +309,6 @@ async fn build_network_future<
 							Role::Authority { .. } => NodeRole::Authority,
 							Role::Light => NodeRole::LightClient,
 							Role::Full => NodeRole::Full,
-							Role::Sentry { .. } => NodeRole::Sentry,
 						};
 
 						let _ = sender.send(vec![node_role]);
@@ -599,6 +598,7 @@ mod tests {
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let pool = BasicPool::new_full(
 			Default::default(),
+			true.into(),
 			None,
 			spawner,
 			client.clone(),

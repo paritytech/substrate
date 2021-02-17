@@ -18,8 +18,9 @@
 use crate::Config;
 use sp_std::marker::PhantomData;
 use sp_runtime::traits::Zero;
-use frame_support::dispatch::{
-	DispatchResultWithPostInfo, PostDispatchInfo, DispatchErrorWithPostInfo,
+use frame_support::{
+	dispatch::{DispatchResultWithPostInfo, PostDispatchInfo, DispatchErrorWithPostInfo},
+	weights::Weight,
 };
 use pallet_contracts_primitives::ExecError;
 
@@ -27,7 +28,7 @@ use pallet_contracts_primitives::ExecError;
 use std::{any::Any, fmt::Debug};
 
 // Gas is essentially the same as weight. It is a 1 to 1 correspondence.
-pub type Gas = frame_support::weights::Weight;
+pub type Gas = Weight;
 
 #[must_use]
 #[derive(Debug, PartialEq, Eq)]
@@ -201,12 +202,15 @@ impl<T: Config> GasMeter<T> {
 	}
 
 	/// Turn this GasMeter into a DispatchResult that contains the actually used gas.
-	pub fn into_dispatch_result<R, E>(self, result: Result<R, E>) -> DispatchResultWithPostInfo
+	pub fn into_dispatch_result<R, E>(
+		self, result: Result<R, E>,
+		base_weight: Weight,
+	) -> DispatchResultWithPostInfo
 	where
 		E: Into<ExecError>,
 	{
 		let post_info = PostDispatchInfo {
-			actual_weight: Some(self.gas_spent()),
+			actual_weight: Some(self.gas_spent().saturating_add(base_weight)),
 			pays_fee: Default::default(),
 		};
 

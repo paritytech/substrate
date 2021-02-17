@@ -1459,11 +1459,6 @@ pub trait PalletInfo {
 	fn name<P: 'static>() -> Option<&'static str>;
 }
 
-impl PalletInfo for () {
-	fn index<P: 'static>() -> Option<usize> { Some(0) }
-	fn name<P: 'static>() -> Option<&'static str> { Some("test") }
-}
-
 /// The function and pallet name of the Call.
 #[derive(Clone, Eq, PartialEq, Default, RuntimeDebug)]
 pub struct CallMetadata {

@@ -18,12 +18,12 @@ codec = { package = "parity-scale-codec", version = "2.0.0" }
 jsonrpc-core = "15.1.0"
 jsonrpc-core-client = "15.1.0"
 jsonrpc-derive = "15.1.0"
-sp-blockchain = { version = "2.0.0", path = "../../../primitives/blockchain" }
-sp-core = { version = "2.0.0", path = "../../../primitives/core" }
-sp-rpc = { version = "2.0.0", path = "../../../primitives/rpc" }
+sp-blockchain = { version = "3.0.0", path = "../../../primitives/blockchain" }
+sp-core = { version = "3.0.0", path = "../../../primitives/core" }
+sp-rpc = { version = "3.0.0", path = "../../../primitives/rpc" }
 serde = { version = "1.0.101", features = ["derive"] }
-sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
-sp-api = { version = "2.0.0", path = "../../../primitives/api" }
+sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
+sp-api = { version = "3.0.0", path = "../../../primitives/api" }
 pallet-contracts-primitives = { version = "2.0.0", path = "../common" }
 pallet-contracts-rpc-runtime-api = { version = "0.8.0", path = "./runtime-api" }
 
