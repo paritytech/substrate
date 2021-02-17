@@ -1,6 +1,6 @@
 [package]
 name = "pallet-im-online"
-version = "2.0.0"
+version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -13,23 +13,25 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-application-crypto = { version = "2.0.0", default-features = false, path = "../../primitives/application-crypto" }
-pallet-authorship = { version = "2.0.0", default-features = false, path = "../authorship" }
-codec = { package = "parity-scale-codec", version = "1.3.4", default-features = false, features = ["derive"] }
-sp-core = { version = "2.0.0", default-features = false, path = "../../primitives/core" }
-sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
+sp-application-crypto = { version = "3.0.0", default-features = false, path = "../../primitives/application-crypto" }
+pallet-authorship = { version = "3.0.0", default-features = false, path = "../authorship" }
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+sp-core = { version = "3.0.0", default-features = false, path = "../../primitives/core" }
+sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
 serde = { version = "1.0.101", optional = true }
-pallet-session = { version = "2.0.0", default-features = false, path = "../session" }
-sp-io = { version = "2.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-staking = { version = "2.0.0", default-features = false, path = "../../primitives/staking" }
-frame-support = { version = "2.0.0", default-features = false, path = "../support" }
-frame-system = { version = "2.0.0", default-features = false, path = "../system" }
+sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-staking = { version = "3.0.0", default-features = false, path = "../../primitives/staking" }
+frame-support = { version = "3.0.0", default-features = false, path = "../support" }
+frame-system = { version = "3.0.0", default-features = false, path = "../system" }
 
-frame-benchmarking = { version = "2.0.0", default-features = false, path = "../benchmarking", optional = true }
+frame-benchmarking = { version = "3.0.0", default-features = false, path = "../benchmarking", optional = true }
+
+[dev-dependencies]
+pallet-session = { version = "3.0.0", path = "../session" }
 
 [features]
-default = ["std", "pallet-session/historical"]
+default = ["std"]
 std = [
 	"sp-application-crypto/std",
 	"pallet-authorship/std",
@@ -37,7 +39,6 @@ std = [
 	"sp-core/std",
 	"sp-std/std",
 	"serde",
-	"pallet-session/std",
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-staking/std",

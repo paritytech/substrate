@@ -1,6 +1,6 @@
 [package]
 name = "pallet-multisig"
-version = "2.0.0"
+version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -14,19 +14,19 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 serde = { version = "1.0.101", optional = true }
-codec = { package = "parity-scale-codec", version = "1.3.4", default-features = false }
-frame-support = { version = "2.0.0", default-features = false, path = "../support" }
-frame-system = { version = "2.0.0", default-features = false, path = "../system" }
-sp-core = { version = "2.0.0", default-features = false, path = "../../primitives/core" }
-sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
-sp-io = { version = "2.0.0", default-features = false, path = "../../primitives/io" }
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
+frame-support = { version = "3.0.0", default-features = false, path = "../support" }
+frame-system = { version = "3.0.0", default-features = false, path = "../system" }
+sp-core = { version = "3.0.0", default-features = false, path = "../../primitives/core" }
+sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
+sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/io" }
 
-frame-benchmarking = { version = "2.0.0", default-features = false, path = "../benchmarking", optional = true }
+frame-benchmarking = { version = "3.0.0", default-features = false, path = "../benchmarking", optional = true }
 
 [dev-dependencies]
-sp-core = { version = "2.0.0", path = "../../primitives/core" }
-pallet-balances = { version = "2.0.0", path = "../balances" }
+sp-core = { version = "3.0.0", path = "../../primitives/core" }
+pallet-balances = { version = "3.0.0", path = "../balances" }
 
 [features]
 default = ["std"]

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -50,10 +50,7 @@ fn calling_wasm_runtime_function() {
 }
 
 #[test]
-#[should_panic(
-	expected =
-		"Could not convert parameter `param` between node and runtime: DecodeFails always fails"
-)]
+#[should_panic(expected = "FailedToConvertParameter { function: \"fail_convert_parameter\"")]
 fn calling_native_runtime_function_with_non_decodable_parameter() {
 	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::NativeWhenPossible).build();
 	let runtime_api = client.runtime_api();
@@ -62,7 +59,7 @@ fn calling_native_runtime_function_with_non_decodable_parameter() {
 }
 
 #[test]
-#[should_panic(expected = "Could not convert return value from runtime to node!")]
+#[should_panic(expected = "FailedToConvertReturnValue { function: \"fail_convert_return_value\"")]
 fn calling_native_runtime_function_with_non_decodable_return_value() {
 	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::NativeWhenPossible).build();
 	let runtime_api = client.runtime_api();

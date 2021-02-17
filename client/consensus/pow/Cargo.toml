@@ -1,6 +1,6 @@
 [package]
 name = "sc-consensus-pow"
-version = "0.8.0"
+version = "0.9.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "PoW consensus algorithm for substrate"
 edition = "2018"
@@ -13,20 +13,20 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "1.3.4", features = ["derive"] }
-sp-core = { version = "2.0.0", path = "../../../primitives/core" }
-sp-blockchain = { version = "2.0.0", path = "../../../primitives/blockchain" }
-sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
-sp-api = { version = "2.0.0", path = "../../../primitives/api" }
-sc-client-api = { version = "2.0.0", path = "../../api" }
-sp-block-builder = { version = "2.0.0", path = "../../../primitives/block-builder" }
-sp-inherents = { version = "2.0.0", path = "../../../primitives/inherents" }
-sp-consensus-pow = { version = "0.8.0", path = "../../../primitives/consensus/pow" }
-sp-consensus = { version = "0.8.0", path = "../../../primitives/consensus/common" }
+codec = { package = "parity-scale-codec", version = "2.0.0", features = ["derive"] }
+sp-core = { version = "3.0.0", path = "../../../primitives/core" }
+sp-blockchain = { version = "3.0.0", path = "../../../primitives/blockchain" }
+sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
+sp-api = { version = "3.0.0", path = "../../../primitives/api" }
+sc-client-api = { version = "3.0.0", path = "../../api" }
+sp-block-builder = { version = "3.0.0", path = "../../../primitives/block-builder" }
+sp-inherents = { version = "3.0.0", path = "../../../primitives/inherents" }
+sp-consensus-pow = { version = "0.9.0", path = "../../../primitives/consensus/pow" }
+sp-consensus = { version = "0.9.0", path = "../../../primitives/consensus/common" }
 log = "0.4.8"
 futures = { version = "0.3.1", features = ["compat"] }
 futures-timer = "3.0.1"
-parking_lot = "0.10.0"
-sp-timestamp = { version = "2.0.0", path = "../../../primitives/timestamp" }
+parking_lot = "0.11.1"
+sp-timestamp = { version = "3.0.0", path = "../../../primitives/timestamp" }
 derive_more = "0.99.2"
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.8.0"}
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.9.0"}

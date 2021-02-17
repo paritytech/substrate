@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -79,9 +79,11 @@ pub trait SystemApi<Hash, Number> {
 
 	/// Returns current state of the network.
 	///
-	/// **Warning**: This API is not stable.
-	// TODO: make this stable and move structs https://github.com/paritytech/substrate/issues/1890
-	#[rpc(name = "system_networkState", returns = "jsonrpc_core::Value")]
+	/// **Warning**: This API is not stable. Please do not programmatically interpret its output,
+	/// as its format might change at any time.
+	// TODO: the future of this call is uncertain: https://github.com/paritytech/substrate/issues/1890
+	// https://github.com/paritytech/substrate/issues/5541
+	#[rpc(name = "system_unstable_networkState", returns = "jsonrpc_core::Value")]
 	fn system_network_state(&self)
 		-> Compat<BoxFuture<'static, jsonrpc_core::Result<jsonrpc_core::Value>>>;
 

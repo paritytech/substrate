@@ -1,6 +1,6 @@
 [package]
 name = "frame-system-benchmarking"
-version = "2.0.0"
+version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -13,17 +13,17 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "1.3.1", default-features = false }
-sp-std = { version = "2.0.0", default-features = false, path = "../../../primitives/std" }
-sp-runtime = { version = "2.0.0", default-features = false, path = "../../../primitives/runtime" }
-frame-benchmarking = { version = "2.0.0", default-features = false, path = "../../benchmarking" }
-frame-system = { version = "2.0.0", default-features = false, path = "../../system" }
-frame-support = { version = "2.0.0", default-features = false, path = "../../support" }
-sp-core = { version = "2.0.0", default-features = false, path = "../../../primitives/core" }
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
+sp-std = { version = "3.0.0", default-features = false, path = "../../../primitives/std" }
+sp-runtime = { version = "3.0.0", default-features = false, path = "../../../primitives/runtime" }
+frame-benchmarking = { version = "3.0.0", default-features = false, path = "../../benchmarking" }
+frame-system = { version = "3.0.0", default-features = false, path = "../../system" }
+frame-support = { version = "3.0.0", default-features = false, path = "../../support" }
+sp-core = { version = "3.0.0", default-features = false, path = "../../../primitives/core" }
 
 [dev-dependencies]
 serde = { version = "1.0.101" }
-sp-io ={ version = "2.0.0", path = "../../../primitives/io" }
+sp-io ={ version = "3.0.0", path = "../../../primitives/io" }
 
 [features]
 default = ["std"]

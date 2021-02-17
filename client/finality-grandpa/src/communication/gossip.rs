@@ -1,18 +1,20 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Gossip and politeness for polite-grandpa.
 //!
@@ -368,7 +370,7 @@ pub(super) struct NeighborPacket<N> {
 /// A versioned neighbor packet.
 #[derive(Debug, Encode, Decode)]
 pub(super) enum VersionedNeighborPacket<N> {
-	#[codec(index = "1")]
+	#[codec(index = 1)]
 	V1(NeighborPacket<N>),
 }
 
@@ -561,12 +563,10 @@ impl<N: Ord> Peers<N> {
 	}
 
 	fn authorities(&self) -> usize {
-		// Note that our sentry and our validator are neither authorities nor non-authorities.
 		self.inner.iter().filter(|(_, info)| matches!(info.roles, ObservedRole::Authority)).count()
 	}
 
 	fn non_authorities(&self) -> usize {
-		// Note that our sentry and our validator are neither authorities nor non-authorities.
 		self.inner
 			.iter()
 			.filter(|(_, info)| matches!(info.roles, ObservedRole::Full | ObservedRole::Light))
@@ -663,8 +663,7 @@ impl CatchUpConfig {
 		match self {
 			CatchUpConfig::Disabled => false,
 			CatchUpConfig::Enabled { only_from_authorities, .. } => match peer.roles {
-				ObservedRole::Authority | ObservedRole::OurSentry |
-				ObservedRole::OurGuardedAuthority => true,
+				ObservedRole::Authority => true,
 				_ => !only_from_authorities
 			}
 		}
@@ -1156,7 +1155,6 @@ impl<Block: BlockT> Inner<Block> {
 		}
 
 		match peer.roles {
-			ObservedRole::OurGuardedAuthority | ObservedRole::OurSentry => true,
 			ObservedRole::Authority => {
 				let authorities = self.peers.authorities();
 
@@ -1212,7 +1210,6 @@ impl<Block: BlockT> Inner<Block> {
 		};
 
 		match peer.roles {
-			ObservedRole::OurSentry | ObservedRole::OurGuardedAuthority => true,
 			ObservedRole::Authority => {
 				let authorities = self.peers.authorities();
 
@@ -1413,7 +1410,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 				}
 				Err(e) => {
 					message_name = None;
-					debug!(target: "afg", "Error decoding message: {}", e.what());
+					debug!(target: "afg", "Error decoding message: {}", e);
 					telemetry!(CONSENSUS_DEBUG; "afg.err_decoding_msg"; "" => "");
 
 					let len = std::cmp::min(i32::max_value() as usize, data.len()) as i32;

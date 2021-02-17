@@ -1,6 +1,6 @@
 [package]
 name = "pallet-society"
-version = "2.0.0"
+version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -14,17 +14,17 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 serde = { version = "1.0.101", optional = true }
-codec = { package = "parity-scale-codec", version = "1.3.4", default-features = false, features = ["derive"] }
-sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
-frame-support = { version = "2.0.0", default-features = false, path = "../support" }
-frame-system = { version = "2.0.0", default-features = false, path = "../system" }
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
+frame-support = { version = "3.0.0", default-features = false, path = "../support" }
+frame-system = { version = "3.0.0", default-features = false, path = "../system" }
 rand_chacha = { version = "0.2", default-features = false }
 
 [dev-dependencies]
-sp-core = { version = "2.0.0", path = "../../primitives/core" }
-sp-io ={ version = "2.0.0", path = "../../primitives/io" }
-pallet-balances = { version = "2.0.0", path = "../balances" }
+sp-core = { version = "3.0.0", path = "../../primitives/core" }
+sp-io ={ version = "3.0.0", path = "../../primitives/io" }
+pallet-balances = { version = "3.0.0", path = "../balances" }
 
 [features]
 default = ["std"]

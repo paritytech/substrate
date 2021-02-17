@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -37,7 +37,7 @@ use crate::{DatabaseSettings, DatabaseSettingsSrc, Database, DbHash};
 /// Number of columns in the db. Must be the same for both full && light dbs.
 /// Otherwise RocksDb will fail to open database && check its type.
 #[cfg(any(feature = "with-kvdb-rocksdb", feature = "with-parity-db", feature = "test-helpers", test))]
-pub const NUM_COLUMNS: u32 = 11;
+pub const NUM_COLUMNS: u32 = 12;
 /// Meta column. The set of keys in the column is shared by full && light storages.
 pub const COLUMN_META: u32 = 0;
 
@@ -327,6 +327,23 @@ pub fn read_db<Block>(
 	})
 }
 
+/// Remove database column entry for the given block.
+pub fn remove_from_db<Block>(
+	transaction: &mut Transaction<DbHash>,
+	db: &dyn Database<DbHash>,
+	col_index: u32,
+	col: u32,
+	id: BlockId<Block>,
+) -> sp_blockchain::Result<()>
+where
+	Block: BlockT,
+{
+	block_id_to_lookup_key(db, col_index, id).and_then(|key| match key {
+		Some(key) => Ok(transaction.remove(col, key.as_ref())),
+		None => Ok(()),
+	})
+}
+
 /// Read a header from the database.
 pub fn read_header<Block: BlockT>(
 	db: &dyn Database<DbHash>,
@@ -384,7 +401,13 @@ pub fn read_meta<Block>(db: &dyn Database<DbHash>, col_header: u32) -> Result<
 			}
 		{
 			let hash = header.hash();
-			debug!("DB Opened blockchain db, fetched {} = {:?} ({})", desc, hash, header.number());
+			debug!(
+				target: "db",
+				"Opened blockchain db, fetched {} = {:?} ({})",
+				desc,
+				hash,
+				header.number()
+			);
 			Ok((hash, *header.number()))
 		} else {
 			Ok((genesis_hash.clone(), Zero::zero()))
