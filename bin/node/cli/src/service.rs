@@ -544,7 +544,7 @@ mod tests {
 				Ok((node, (inherent_data_providers, setup_handles.unwrap())))
 			},
 			|config| {
-				let (keep_alive, _, _, client, network, transaction_pool) = new_light_base(config)?;
+				let (keep_alive, _, client, network, transaction_pool) = new_light_base(config)?;
 				Ok(sc_service_test::TestNetComponents::new(keep_alive, client, network, transaction_pool))
 			},
 			|service, &mut (ref inherent_data_providers, (ref mut block_import, ref babe_link))| {
@@ -621,9 +621,10 @@ mod tests {
 					sp_consensus_babe::AuthorityId::ID,
 					&alice.to_public_crypto_pair(),
 					&to_sign,
-				).unwrap()
-				 .try_into()
-				 .unwrap();
+				)
+					.unwrap()
+					.try_into()
+					.unwrap();
 				let item = <DigestItem as CompatibleDigestItem>::babe_seal(
 					signature,
 				);
@@ -702,7 +703,7 @@ mod tests {
 				Ok(sc_service_test::TestNetComponents::new(task_manager, client, network, transaction_pool))
 			},
 			|config| {
-				let (keep_alive, _, _, client, network, transaction_pool) = new_light_base(config)?;
+				let (keep_alive, _, client, network, transaction_pool) = new_light_base(config)?;
 				Ok(sc_service_test::TestNetComponents::new(keep_alive, client, network, transaction_pool))
 			},
 			vec![

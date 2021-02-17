@@ -438,6 +438,7 @@ mod tests {
 			None,
 			voter_command_rx,
 			None,
+			None,
 		);
 
 		// Trigger a reputation change through the gossip validator.

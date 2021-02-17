@@ -320,6 +320,7 @@ impl TestNetFactory for BabeTestNet {
 				epoch_changes: data.link.epoch_changes.clone(),
 				time_source: data.link.time_source.clone(),
 				can_author_with: AlwaysCanAuthor,
+				telemetry: None,
 			},
 			mutator: MUTATOR.with(|m| m.borrow().clone()),
 		}

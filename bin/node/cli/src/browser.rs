@@ -60,7 +60,7 @@ async fn start_inner(
 	// Create the service. This is the most heavy initialization step.
 	let (task_manager, rpc_handlers) =
 		crate::service::new_light_base(config)
-			.map(|(components, rpc_handlers, _, _, _, _)| (components, rpc_handlers))
+			.map(|(components, rpc_handlers, _, _, _)| (components, rpc_handlers))
 			.map_err(|e| format!("{:?}", e))?;
 
 	task_manager.spawn_handle().spawn("telemetry", telemetry_worker.run());

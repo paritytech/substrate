@@ -7581,8 +7581,6 @@ dependencies = [
  "tokio 0.2.25",
  "tracing",
  "tracing-futures",
- "tracing-log",
- "tracing-subscriber",
  "wasm-timer",
 ]
 

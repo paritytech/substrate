@@ -884,6 +884,7 @@ mod tests {
 				_ => unreachable!(),
 			}),
 			false,
+			None,
 		).unwrap();
 
 		assert!(status.changed);
@@ -903,6 +904,7 @@ mod tests {
 				_ => unreachable!(),
 			}),
 			false,
+			None,
 		).unwrap();
 
 		assert!(status.changed);
@@ -961,7 +963,7 @@ mod tests {
 
 		// trying to finalize past `change_c` without finalizing `change_a` first
 		assert!(matches!(
-			authorities.apply_standard_changes("hash_d", 40, &is_descendent_of, false),
+			authorities.apply_standard_changes("hash_d", 40, &is_descendent_of, false, None),
 			Err(Error::ForkTree(fork_tree::Error::UnfinalizedAncestor))
 		));
 		assert_eq!(authorities.authority_set_changes, AuthoritySetChanges::empty());
@@ -971,6 +973,7 @@ mod tests {
 			15,
 			&is_descendent_of,
 			false,
+			None,
 		).unwrap();
 
 		assert!(status.changed);
@@ -986,6 +989,7 @@ mod tests {
 			40,
 			&is_descendent_of,
 			false,
+			None,
 		).unwrap();
 
 		assert!(status.changed);
@@ -1128,7 +1132,7 @@ mod tests {
 		// too early and there's no forced changes to apply.
 		assert!(
 			authorities
-				.apply_forced_changes("hash_a10", 10, &static_is_descendent_of(true), false)
+				.apply_forced_changes("hash_a10", 10, &static_is_descendent_of(true), false, None)
 				.unwrap()
 				.is_none()
 		);
@@ -1136,7 +1140,7 @@ mod tests {
 		// too late.
 		assert!(
 			authorities
-				.apply_forced_changes("hash_a16", 16, &is_descendent_of_a, false)
+				.apply_forced_changes("hash_a16", 16, &is_descendent_of_a, false, None)
 				.unwrap()
 				.is_none()
 		);
@@ -1144,7 +1148,7 @@ mod tests {
 		// on time -- chooses the right change for this fork.
 		assert_eq!(
 			authorities
-				.apply_forced_changes("hash_a15", 15, &is_descendent_of_a, false)
+				.apply_forced_changes("hash_a15", 15, &is_descendent_of_a, false, None)
 				.unwrap()
 				.unwrap(),
 			(
@@ -1192,7 +1196,7 @@ mod tests {
 		// it should be enacted at the same block that signaled it
 		assert!(
 			authorities
-				.apply_forced_changes("hash_a", 5, &static_is_descendent_of(false), false)
+				.apply_forced_changes("hash_a", 5, &static_is_descendent_of(false), false, None)
 				.unwrap()
 				.is_some()
 		);
@@ -1259,27 +1263,27 @@ mod tests {
 		// the forced change cannot be applied since the pending changes it depends on
 		// have not been applied yet.
 		assert!(matches!(
-			authorities.apply_forced_changes("hash_d45", 45, &static_is_descendent_of(true), false),
+			authorities.apply_forced_changes("hash_d45", 45, &static_is_descendent_of(true), false, None),
 			Err(Error::ForcedAuthoritySetChangeDependencyUnsatisfied(15))
 		));
 		assert_eq!(authorities.authority_set_changes, AuthoritySetChanges::empty());
 
 		// we apply the first pending standard change at #15
 		authorities
-			.apply_standard_changes("hash_a15", 15, &static_is_descendent_of(true), false)
+			.apply_standard_changes("hash_a15", 15, &static_is_descendent_of(true), false, None)
 			.unwrap();
 		assert_eq!(authorities.authority_set_changes, AuthoritySetChanges(vec![(0, 15)]));
 
 		// but the forced change still depends on the next standard change
 		assert!(matches!(
-			authorities.apply_forced_changes("hash_d", 45, &static_is_descendent_of(true), false),
+			authorities.apply_forced_changes("hash_d", 45, &static_is_descendent_of(true), false, None),
 			Err(Error::ForcedAuthoritySetChangeDependencyUnsatisfied(20))
 		));
 		assert_eq!(authorities.authority_set_changes, AuthoritySetChanges(vec![(0, 15)]));
 
 		// we apply the pending standard change at #20
 		authorities
-			.apply_standard_changes("hash_b", 20, &static_is_descendent_of(true), false)
+			.apply_standard_changes("hash_b", 20, &static_is_descendent_of(true), false, None)
 			.unwrap();
 		assert_eq!(authorities.authority_set_changes, AuthoritySetChanges(vec![(0, 15), (1, 20)]));
 
@@ -1288,7 +1292,7 @@ mod tests {
 		// at #35. subsequent forced changes on the same branch must be kept
 		assert_eq!(
 			authorities
-				.apply_forced_changes("hash_d", 45, &static_is_descendent_of(true), false)
+				.apply_forced_changes("hash_d", 45, &static_is_descendent_of(true), false, None)
 				.unwrap()
 				.unwrap(),
 			(
@@ -1385,7 +1389,7 @@ mod tests {
 
 		// we apply the change at A0 which should prune it and the fork at B
 		authorities
-			.apply_standard_changes("hash_a0", 5, &is_descendent_of, false)
+			.apply_standard_changes("hash_a0", 5, &is_descendent_of, false, None)
 			.unwrap();
 
 		// the next change is now at A1 (#10)
@@ -1573,14 +1577,14 @@ mod tests {
 		// applying the standard change at A should not prune anything
 		// other then the change that was applied
 		authorities
-			.apply_standard_changes("A", 5, &is_descendent_of, false)
+			.apply_standard_changes("A", 5, &is_descendent_of, false, None)
 			.unwrap();
 
 		assert_eq!(authorities.pending_changes().count(), 6);
 
 		// same for B
 		authorities
-			.apply_standard_changes("B", 10, &is_descendent_of, false)
+			.apply_standard_changes("B", 10, &is_descendent_of, false, None)
 			.unwrap();
 
 		assert_eq!(authorities.pending_changes().count(), 5);
@@ -1589,7 +1593,7 @@ mod tests {
 
 		// finalizing C2 should clear all forced changes
 		authorities
-			.apply_standard_changes("C2", 15, &is_descendent_of, false)
+			.apply_standard_changes("C2", 15, &is_descendent_of, false, None)
 			.unwrap();
 
 		assert_eq!(authorities.pending_forced_changes.len(), 0);
@@ -1597,7 +1601,7 @@ mod tests {
 		// finalizing C0 should clear all forced changes but D
 		let mut authorities = authorities2;
 		authorities
-			.apply_standard_changes("C0", 15, &is_descendent_of, false)
+			.apply_standard_changes("C0", 15, &is_descendent_of, false, None)
 			.unwrap();
 
 		assert_eq!(authorities.pending_forced_changes.len(), 1);
