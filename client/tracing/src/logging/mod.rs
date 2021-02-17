@@ -131,10 +131,9 @@ where
 
 	if let Some(profiling_targets) = profiling_targets {
 		env_filter = parse_user_directives(env_filter, profiling_targets)?;
-		env_filter = env_filter
-			.add_directive(
-				parse_default_directive("sc_tracing=trace").expect("provided directive is valid")
-			);
+		env_filter = env_filter.add_directive(
+			parse_default_directive("sc_tracing=trace").expect("provided directive is valid"),
+		);
 	}
 
 	let max_level_hint = Layer::<FmtSubscriber>::max_level_hint(&env_filter);

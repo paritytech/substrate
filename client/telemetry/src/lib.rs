@@ -43,8 +43,8 @@ use log::{error, warn};
 use serde::Serialize;
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use std::collections::HashMap;
-use std::mem;
 use std::io;
+use std::mem;
 
 pub use libp2p::wasm_ext::ExtTransport;
 pub use log;
@@ -240,12 +240,10 @@ impl TelemetryWorker {
 
 					let (matching, rest): (Vec<_>, Vec<_>) =
 						mem::take(pending_connection_notifications)
-							.into_iter().partition(
-								|(addr_b, _)| *addr_b == addr
-							);
-					node.telemetry_connection_notifier.extend(
-						matching.into_iter().map(|(_, x)| x.clone())
-					);
+							.into_iter()
+							.partition(|(addr_b, _)| *addr_b == addr);
+					node.telemetry_connection_notifier
+						.extend(matching.into_iter().map(|(_, x)| x.clone()));
 					let _ = mem::replace(pending_connection_notifications, rest);
 				}
 			}
@@ -407,7 +405,7 @@ impl Telemetry {
 				"Could not initialize telemetry: \
 				the telemetry is probably already running: {}",
 				err,
-			)
+			),
 		}
 	}
 
