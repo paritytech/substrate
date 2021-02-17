@@ -534,3 +534,9 @@ impl IdGenerator {
 		self.0.lock().next()
 	}
 }
+
+/// TODO
+pub trait ClientTelemetry {
+	/// TODO
+	fn set_telemetry(&self, telemetry: Telemetry);
+}

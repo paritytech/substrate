@@ -35,7 +35,7 @@ use sp_core::{
 };
 #[cfg(feature="test-helpers")]
 use sp_keystore::SyncCryptoStorePtr;
-use sc_telemetry::{telemetry, Telemetry, SUBSTRATE_INFO};
+use sc_telemetry::{telemetry, ClientTelemetry, Telemetry, SUBSTRATE_INFO};
 use sp_runtime::{
 	Justification, BuildStorage,
 	generic::{BlockId, SignedBlock, DigestItem},
@@ -115,7 +115,7 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	block_rules: BlockRules<Block>,
 	execution_extensions: ExecutionExtensions<Block>,
 	config: ClientConfig,
-	telemetry: Option<Telemetry>,
+	telemetry: RwLock<Option<Telemetry>>,
 	_phantom: PhantomData<RA>,
 }
 
@@ -327,7 +327,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			block_rules: BlockRules::new(fork_blocks, bad_blocks),
 			execution_extensions,
 			config,
-			telemetry: None, // TODO how to inject
+			telemetry: RwLock::new(None),
 			_phantom: Default::default(),
 		})
 	}
@@ -671,7 +671,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 					rand::thread_rng().gen_bool(0.1)
 				{
 					telemetry!(
-						self.telemetry.clone(); SUBSTRATE_INFO; "block.import";
+						self.telemetry.read().clone(); SUBSTRATE_INFO; "block.import";
 						"height" => height,
 						"best" => ?hash,
 						"origin" => ?origin
@@ -992,7 +992,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				);
 
 			telemetry!(
-				self.telemetry.clone(); SUBSTRATE_INFO; "notify.finalized";
+				self.telemetry.read().clone(); SUBSTRATE_INFO; "notify.finalized";
 				"height" => format!("{}", header.number()),
 				"best" => ?last,
 			);
@@ -1991,14 +1991,24 @@ impl<B, E, Block, RA> backend::AuxStore for &Client<B, E, Block, RA>
 }
 
 impl<BE, E, B, RA> sp_consensus::block_validation::Chain<B> for Client<BE, E, B, RA>
-	where BE: backend::Backend<B>,
-		  E: CallExecutor<B>,
-		  B: BlockT
+	where
+		BE: backend::Backend<B>,
+		E: CallExecutor<B>,
+		B: BlockT,
 {
 	fn block_status(
 		&self,
 		id: &BlockId<B>,
 	) -> Result<BlockStatus, Box<dyn std::error::Error + Send>> {
 		Client::block_status(self, id).map_err(|e| Box::new(e) as Box<_>)
+	}
+}
+
+impl<BE, E, B, RA> ClientTelemetry for Client<BE, E, B, RA>
+	where
+		B: BlockT,
+{
+	fn set_telemetry(&self, telemetry: Telemetry) {
+		*self.telemetry.write() = Some(telemetry);
 	}
 }
