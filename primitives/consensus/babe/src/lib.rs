@@ -363,7 +363,7 @@ impl OpaqueKeyOwnershipProof {
 }
 
 /// BABE epoch information
-#[derive(Decode, Encode, PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Decode, Encode, PartialEq, Eq, Clone, Debug)]
 pub struct Epoch {
 	/// The epoch index.
 	pub epoch_index: u64,
