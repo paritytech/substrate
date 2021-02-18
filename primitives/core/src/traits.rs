@@ -243,12 +243,12 @@ pub trait SpawnEssentialNamed: Clone + Send + Sync {
 	fn spawn_essential(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>);
 }
 
-impl SpawnEssentialNamed for Box<dyn SpawnNamed> {
+impl SpawnEssentialNamed for Box<dyn SpawnEssentialNamed> {
 	fn spawn_essential_blocking(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>) {
-		(**self).spawn_blocking(name, future)
+		(**self).spawn_essential_blocking(name, future)
 	}
 
 	fn spawn_essential(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>) {
-		(**self).spawn(name, future)
+		(**self).spawn_essential(name, future)
 	}
 }
