@@ -427,7 +427,7 @@ pub struct TelemetryHandle {
 
 impl TelemetryHandle {
 	/// Send telemetries.
-	pub fn send(&mut self, verbosity: VerbosityLevel, payload: TelemetryPayload) {
+	pub fn send_telemetry(&mut self, verbosity: VerbosityLevel, payload: TelemetryPayload) {
 		match self.message_sender.try_send((self.id, verbosity, payload)) {
 			Ok(()) => {}
 			Err(err) if err.is_full() => todo!("overflow"),
@@ -517,7 +517,7 @@ macro_rules! telemetry {
 				},
 				Ok(mut json) => {
 					json.insert("msg".into(), $msg.into());
-					telemetry.send(verbosity, json);
+					telemetry.send_telemetry(verbosity, json);
 				},
 			}
 		}
