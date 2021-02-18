@@ -45,6 +45,7 @@ use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnbound
 use std::collections::HashMap;
 use std::io;
 use std::mem;
+use std::sync::Arc;
 
 pub use libp2p::wasm_ext::ExtTransport;
 pub use log;
@@ -71,8 +72,6 @@ pub const CONSENSUS_DEBUG: VerbosityLevel = 5;
 pub const CONSENSUS_WARN: VerbosityLevel = 4;
 /// Consensus INFO log level.
 pub const CONSENSUS_INFO: VerbosityLevel = 1;
-
-static TELEMETRY_ID_COUNTER: CounterU64 = CounterU64::new(1);
 
 /// Telemetry message verbosity.
 pub type VerbosityLevel = u8;
@@ -115,7 +114,7 @@ pub struct TelemetryWorker {
 	message_sender: mpsc::Sender<TelemetryMessage>,
 	register_receiver: mpsc::UnboundedReceiver<Register>,
 	register_sender: mpsc::UnboundedSender<Register>,
-	id_generator: IdGenerator,
+	id_generator: Arc<CounterU64>,
 	transport: WsTrans,
 }
 
@@ -132,7 +131,7 @@ impl TelemetryWorker {
 			message_sender,
 			register_receiver,
 			register_sender,
-			id_generator: IdGenerator::new(),
+			id_generator: Arc::new(CounterU64::new(1)),
 			transport,
 		})
 	}
@@ -330,7 +329,7 @@ impl TelemetryWorker {
 pub struct TelemetryWorkerHandle {
 	message_sender: mpsc::Sender<TelemetryMessage>,
 	register_sender: mpsc::UnboundedSender<Register>,
-	id_generator: IdGenerator,
+	id_generator: Arc<CounterU64>,
 }
 
 impl TelemetryWorkerHandle {
@@ -341,7 +340,7 @@ impl TelemetryWorkerHandle {
 		Telemetry {
 			message_sender: self.message_sender.clone(),
 			register_sender: self.register_sender.clone(),
-			id: self.id_generator.next(),
+			id: self.id_generator.inc(),
 			connection_notifier: TelemetryConnectionNotifier {
 				register_sender: self.register_sender.clone(),
 				addresses,
@@ -558,19 +557,6 @@ macro_rules! format_fields_to_json {
 			})
 		)*
 	}};
-}
-
-#[derive(Debug, Clone)]
-struct IdGenerator;
-
-impl IdGenerator {
-	fn new() -> Self {
-		Self
-	}
-
-	fn next(&mut self) -> Id {
-		TELEMETRY_ID_COUNTER.inc()
-	}
 }
 
 /// A trait used by the Substrate's Client to get a [`TelemetryHandle`] or to initialize the
