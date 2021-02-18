@@ -320,7 +320,7 @@ where
 	) {
 		extrinsics.into_iter().for_each(|e| if let Err(e) = Self::apply_extrinsic(e) {
 			let err: &'static str = e.into();
-			panic!(err)
+			panic!("{}", err)
 		});
 
 		// post-extrinsics book-keeping
