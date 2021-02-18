@@ -147,7 +147,9 @@ impl WasmBuilder {
 	/// Build the WASM binary.
 	pub fn build(self) {
 		let out_dir = PathBuf::from(env::var("OUT_DIR").expect("`OUT_DIR` is set by cargo!"));
-		let file_path = out_dir.join(self.file_name.unwrap_or_else(|| "wasm_binary.rs".into()));
+		let file_path = out_dir.join(
+			self.file_name.clone().unwrap_or_else(|| "wasm_binary.rs".into()),
+		);
 
 		if check_skip_build() {
 			// If we skip the build, we still want to make sure to be called when an env variable
@@ -164,6 +166,7 @@ impl WasmBuilder {
 			self.project_cargo_toml,
 			self.rust_flags.into_iter().map(|f| format!("{} ", f)).collect(),
 			self.features_to_enable,
+			self.file_name,
 		);
 
 		// As last step we need to generate our `rerun-if-changed` stuff. If a build fails, we don't
@@ -213,11 +216,15 @@ fn generate_rerun_if_changed_instructions() {
 ///               constant `WASM_BINARY`, which contains the built WASM binary.
 /// `project_cargo_toml` - The path to the `Cargo.toml` of the project that should be built.
 /// `default_rustflags` - Default `RUSTFLAGS` that will always be set for the build.
+/// `features_to_enable` - Features that should be enabled for the project.
+/// `wasm_binary_name` - The optional wasm binary name that is extended with `.compact.wasm`.
+///                      If `None`, the project name will be used.
 fn build_project(
 	file_name: PathBuf,
 	project_cargo_toml: PathBuf,
 	default_rustflags: String,
 	features_to_enable: Vec<String>,
+	wasm_binary_name: Option<String>,
 ) {
 	let cargo_cmd = match crate::prerequisites::check() {
 		Ok(cmd) => cmd,
@@ -232,6 +239,7 @@ fn build_project(
 		&default_rustflags,
 		cargo_cmd,
 		features_to_enable,
+		wasm_binary_name,
 	);
 
 	let (wasm_binary, wasm_binary_bloaty) = if let Some(wasm_binary) = wasm_binary {

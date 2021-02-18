@@ -98,6 +98,7 @@ pub(crate) fn create_and_compile(
 	default_rustflags: &str,
 	cargo_cmd: CargoCommandVersioned,
 	features_to_enable: Vec<String>,
+	wasm_binary_name: Option<String>,
 ) -> (Option<WasmBinary>, WasmBinaryBloaty) {
 	let wasm_workspace_root = get_wasm_workspace_root();
 	let wasm_workspace = wasm_workspace_root.join("wbuild");
@@ -116,6 +117,7 @@ pub(crate) fn create_and_compile(
 	let (wasm_binary, bloaty) = compact_wasm_file(
 		&project,
 		project_cargo_toml,
+		wasm_binary_name,
 	);
 
 	wasm_binary.as_ref().map(|wasm_binary|
@@ -443,16 +445,22 @@ fn build_project(project: &Path, default_rustflags: &str, cargo_cmd: CargoComman
 fn compact_wasm_file(
 	project: &Path,
 	cargo_manifest: &Path,
+	wasm_binary_name: Option<String>,
 ) -> (Option<WasmBinary>, WasmBinaryBloaty) {
 	let is_release_build = is_release_build();
 	let target = if is_release_build { "release" } else { "debug" };
-	let wasm_binary = get_wasm_binary_name(cargo_manifest);
+	let default_wasm_binary_name = get_wasm_binary_name(cargo_manifest);
 	let wasm_file = project.join("target/wasm32-unknown-unknown")
 		.join(target)
-		.join(format!("{}.wasm", wasm_binary));
+		.join(format!("{}.wasm", default_wasm_binary_name));
 
 	let wasm_compact_file = if is_release_build {
-		let wasm_compact_file = project.join(format!("{}.compact.wasm", wasm_binary));
+		let wasm_compact_file = project.join(
+			format!(
+				"{}.compact.wasm",
+				wasm_binary_name.clone().unwrap_or_else(|| default_wasm_binary_name.clone()),
+			)
+		);
 		wasm_gc::garbage_collect_file(&wasm_file, &wasm_compact_file)
 			.expect("Failed to compact generated WASM binary.");
 		Some(WasmBinary(wasm_compact_file))
@@ -460,7 +468,16 @@ fn compact_wasm_file(
 		None
 	};
 
-	(wasm_compact_file, WasmBinaryBloaty(wasm_file))
+	let bloaty_file_name = if let Some(name) = wasm_binary_name {
+		format!("{}.wasm", name)
+	} else {
+		format!("{}.wasm", default_wasm_binary_name)
+	};
+
+	let bloaty_file = project.join(bloaty_file_name);
+	fs::copy(wasm_file, &bloaty_file).expect("Copying the bloaty file to the project dir.");
+
+	(wasm_compact_file, WasmBinaryBloaty(bloaty_file))
 }
 
 /// Custom wrapper for a [`cargo_metadata::Package`] to store it in
