@@ -17,7 +17,7 @@
 
 //! `Structopt`-ready struct for `try-runtime`.
 
-use parity_scale_codec::{Decode, Encode};
+use parity_scale_codec::Decode;
 use std::{fmt::Debug, str::FromStr};
 use sc_service::Configuration;
 use sc_cli::{CliConfiguration, ExecutionStrategy, WasmExecutionMethod};
@@ -26,7 +26,6 @@ use sc_service::NativeExecutionDispatch;
 use sp_state_machine::StateMachine;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use sp_core::storage::{StorageData, StorageKey, well_known_keys};
-use frame_try_runtime::Target;
 
 /// Various commands to try out the new runtime, over configurable states.
 ///
@@ -37,10 +36,6 @@ pub struct TryRuntimeCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: sc_cli::SharedParams,
-
-	/// The target pallet to run the migration against.
-	#[structopt(short, long, default_value = "All")]
-	pub target: Target,
 
 	/// The state to use to run the migration. Should be a valid FILE or HTTP URI.
 	#[structopt(short, long, default_value = "http://localhost:9933")]
@@ -147,7 +142,7 @@ impl TryRuntimeCmd {
 			&mut changes,
 			&executor,
 			"TryRuntime_on_runtime_upgrade",
-			&self.target.encode(),
+			&[],
 			ext.extensions,
 			&sp_state_machine::backend::BackendRuntimeCode::new(&ext.backend)
 				.runtime_code()?,
