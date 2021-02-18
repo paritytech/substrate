@@ -24,7 +24,7 @@ macro_rules! impl_runtime_metadata_vnext {
 			$( $rest:tt )*
 	) => {
 		impl $runtime {
-			pub fn metadata_vnext() -> $crate::metadata::RuntimeMetadataPrefixed {
+			pub fn metadata_vnext() -> $crate::metadata_vnext::frame_metadata2::RuntimeMetadataPrefixed {
 				$crate::metadata::v13::RuntimeMetadataLastVersion::new(
 					$crate::__runtime_modules_to_metadata_vnext!($runtime;; $( $rest )*),
 					$crate::metadata::v13::ExtrinsicMetadata {
