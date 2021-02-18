@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,53 +16,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! A set of utilities for resetting a wasm instance to its initial state.
-
 use crate::error::{self, Error};
+use super::RuntimeBlob;
 use std::mem;
-use parity_wasm::elements::{deserialize_buffer, DataSegment, Instruction, Module as RawModule};
-
-/// A bunch of information collected from a WebAssembly module.
-pub struct WasmModuleInfo {
-	raw_module: RawModule,
-}
-
-impl WasmModuleInfo {
-	/// Create `WasmModuleInfo` from the given wasm code.
-	///
-	/// Returns `None` if the wasm code cannot be deserialized.
-	pub fn new(wasm_code: &[u8]) -> Option<Self> {
-		let raw_module: RawModule = deserialize_buffer(wasm_code).ok()?;
-		Some(Self { raw_module })
-	}
-
-	/// Extract the data segments from the given wasm code.
-	///
-	/// Returns `Err` if the given wasm code cannot be deserialized.
-	fn data_segments(&self) -> Vec<DataSegment> {
-		self.raw_module
-			.data_section()
-			.map(|ds| ds.entries())
-			.unwrap_or(&[])
-			.to_vec()
-	}
-
-	/// The number of globals defined in locally in this module.
-	pub fn declared_globals_count(&self) -> u32 {
-		self.raw_module
-			.global_section()
-			.map(|gs| gs.entries().len() as u32)
-			.unwrap_or(0)
-	}
-
-	/// The number of imports of globals.
-	pub fn imported_globals_count(&self) -> u32 {
-		self.raw_module
-			.import_section()
-			.map(|is| is.globals() as u32)
-			.unwrap_or(0)
-	}
-}
+use parity_wasm::elements::Instruction;
 
 /// This is a snapshot of data segments specialzied for a particular instantiation.
 ///
@@ -75,7 +32,7 @@ pub struct DataSegmentsSnapshot {
 
 impl DataSegmentsSnapshot {
 	/// Create a snapshot from the data segments from the module.
-	pub fn take(module: &WasmModuleInfo) -> error::Result<Self> {
+	pub fn take(module: &RuntimeBlob) -> error::Result<Self> {
 		let data_segments = module
 			.data_segments()
 			.into_iter()
@@ -105,9 +62,7 @@ impl DataSegmentsSnapshot {
 						// if/when we gain those.
 						return Err(Error::ImportedGlobalsUnsupported);
 					}
-					insn => {
-						return Err(Error::InvalidInitializerExpression(format!("{:?}", insn)))
-					}
+					insn => return Err(Error::InvalidInitializerExpression(format!("{:?}", insn))),
 				};
 
 				Ok((offset, contents))

@@ -36,7 +36,7 @@ use sc_executor_common::{
 	error::{Error, WasmError},
 	sandbox,
 };
-use sc_executor_common::util::{DataSegmentsSnapshot, WasmModuleInfo};
+use sc_executor_common::runtime_blob::{RuntimeBlob, DataSegmentsSnapshot};
 
 struct FunctionExecutor<'a> {
 	sandbox_store: sandbox::Store<wasmi::FuncRef>,
@@ -662,7 +662,7 @@ pub fn create_runtime(
 		.map_err(|e| WasmError::Instantiation(e.to_string()))?;
 
 		let data_segments_snapshot = DataSegmentsSnapshot::take(
-			&WasmModuleInfo::new(code)
+			&RuntimeBlob::new(code)
 				.ok_or_else(|| WasmError::Other("cannot deserialize module".to_string()))?,
 		)
 		.map_err(|e| WasmError::Other(e.to_string()))?;

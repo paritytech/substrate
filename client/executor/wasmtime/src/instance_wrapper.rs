@@ -25,7 +25,7 @@ use crate::imports::Imports;
 use std::{slice, marker};
 use sc_executor_common::{
 	error::{Error, Result},
-	util::{WasmModuleInfo, DataSegmentsSnapshot},
+	runtime_blob::{RuntimeBlob, DataSegmentsSnapshot, GlobalsSnapshot},
 	wasm_runtime::InvokeMethod,
 };
 use sp_wasm_interface::{Pointer, WordSize, Value};
@@ -52,7 +52,7 @@ impl ModuleWrapper {
 		let module = Module::new(engine, &instrumented_code)
 			.map_err(|e| Error::from(format!("cannot create module: {}", e)))?;
 
-		let module_info = WasmModuleInfo::new(code)
+		let module_info = RuntimeBlob::new(code)
 			.ok_or_else(|| Error::from("cannot deserialize module".to_string()))?;
 
 		let data_segments_snapshot = DataSegmentsSnapshot::take(&module_info)
