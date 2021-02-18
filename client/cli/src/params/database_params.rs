@@ -39,7 +39,7 @@ pub struct DatabaseParams {
 
 	/// Enable storage chain mode
 	///
-	/// This changes the storage format for blocks bodys.
+	/// This changes the storage format for blocks bodies.
 	/// If this is enabled, each transaction is stored separately in the
 	/// transaction database column and is only referenced by hash
 	/// in the block body column.
