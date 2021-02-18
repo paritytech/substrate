@@ -170,16 +170,20 @@ pub mod pallet {
 		DurationTooBig,
 		AmountTooSmall,
 		QueueFull,
-		/// Gilt index is known.
+		/// Gilt index is unknown.
 		Unknown,
 		/// Not the owner of the gilt.
 		NotOwner,
 		/// Gilt not yet at expiry date.
 		NotExpired,
+		/// The given bid for retraction is not found.
+		NotFound,
 	}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		// TODO: on_initialise should be doing the main enlarge logic.
+	}
 
 	#[pallet::call]
 	impl<T:Config> Pallet<T> {
@@ -220,10 +224,31 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
-			// TODO
+			let queue_count = T::QueueCount::get() as usize;
+			ensure!(duration > 0, Error::<T>::DurationTooSmall);
+			ensure!(duration <= queue_count as u32, Error::<T>::DurationTooBig);
+			ensure!(amount >= T::MinFreeze::get(), Error::<T>::AmountTooSmall);
+
+			let bid = GiltBid { amount, who };
+			let new_len = Queues::<T>::try_mutate(duration, |q| -> Result<u32, DispatchError> {
+				let pos = q.iter().position(|i| i == &bid).ok_or(Error::<T>::NotFound)?;
+				q.remove(pos);
+				Ok(q.len() as u32)
+			})?;
+
+			QueueTotals::<T>::mutate(|qs| {
+				qs.resize(queue_count as usize, (0, Zero::zero()));
+				qs[queue_count - 1].0 = new_len;
+				qs[queue_count - 1].1 -= bid.amount;
+			});
+
+			T::Currency::unreserve(&bid.who, bid.amount);
+			Self::deposit_event(Event::BidRetracted(bid.who, bid.amount, duration));
 
 			Ok(().into())
 		}
+
+		// TODO: Set target proportion.
 
 		/// Allow more freezing up to `amount`.
 		#[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1,1))]
