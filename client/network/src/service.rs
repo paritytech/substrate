@@ -179,7 +179,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		let transactions_handler_proto = transactions::TransactionsHandlerPrototype::new(
 			params.protocol_id.clone()
 		);
-		params.network_config.extra_sets.push(transactions_handler_proto.set_config());
+		params.network_config.extra_sets.insert(0, transactions_handler_proto.set_config());
 
 		// Private and public keys configuration.
 		let local_identity = params.network_config.node_key.clone().into_keypair()?;
