@@ -70,18 +70,18 @@ type Threshold = ExtendedBalance;
 /// A sensible user of this module should make sure that the PJR check is executed and checked as
 /// little as possible, and take sufficient economical measures to ensure that this function cannot
 /// be abused.
-pub fn prepare_pjr_input<A: IdentifierT>(
-	winners: Vec<A>,
-	staked_assignments: Vec<StakedAssignment<A>>,
-	supports: &SupportMap<A>,
-	all_candidates: Vec<A>,
-	all_voters: Vec<(A, VoteWeight, Vec<A>)>,
-) -> (Vec<CandidatePtr<A>>, Vec<Voter<A>>) {
+pub fn prepare_pjr_input<AccountId: IdentifierT>(
+	winners: Vec<AccountId>,
+	staked_assignments: Vec<StakedAssignment<AccountId>>,
+	supports: &SupportMap<AccountId>,
+	all_candidates: Vec<AccountId>,
+	all_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
+) -> (Vec<CandidatePtr<AccountId>>, Vec<Voter<AccountId>>) {
 	// collect all candidates and winners into a unified `Vec<Candidate>`.
-	let mut candidates_index: BTreeMap<A, usize> = BTreeMap::new();
+	let mut candidates_index: BTreeMap<AccountId, usize> = BTreeMap::new();
 
 	// dump the staked assignments in a voter-major map for faster access down the road.
-	let mut assignment_map: BTreeMap<A, Vec<(A, ExtendedBalance)>> = BTreeMap::new();
+	let mut assignment_map: BTreeMap<AccountId, Vec<(AccountId, ExtendedBalance)>> = BTreeMap::new();
 	staked_assignments
 		.into_iter()
 		.for_each(|StakedAssignment { who, distribution }| {
@@ -106,7 +106,7 @@ pub fn prepare_pjr_input<A: IdentifierT>(
 
 	// collect all voters into a unified Vec<Voters>.
 	let voters = all_voters.into_iter().map(|(v, w, ts)| {
-		let mut edges: Vec<Edge<A>> = Vec::with_capacity(ts.len());
+		let mut edges: Vec<Edge<AccountId>> = Vec::with_capacity(ts.len());
 		for t in ts {
 			if edges.iter().any(|e| e.who == t) {
 				// duplicate edge.
@@ -157,12 +157,12 @@ pub fn prepare_pjr_input<A: IdentifierT>(
 /// needs to inspect un-elected candidates and edges, thus `all_candidates` and `all_voters`.
 ///
 /// See [`prepare_pjr_input`] for more info.
-pub fn pjr_check<A: IdentifierT>(
-	winners: Vec<A>,
-	staked_assignments: Vec<StakedAssignment<A>>,
-	supports: &SupportMap<A>,
-	all_candidates: Vec<A>,
-	all_voters: Vec<(A, VoteWeight, Vec<A>)>,
+pub fn pjr_check<AccountId: IdentifierT>(
+	winners: Vec<AccountId>,
+	staked_assignments: Vec<StakedAssignment<AccountId>>,
+	supports: &SupportMap<AccountId>,
+	all_candidates: Vec<AccountId>,
+	all_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
 	t: Threshold,
 ) -> bool {
 	// prepare data.
@@ -180,9 +180,9 @@ pub fn pjr_check<A: IdentifierT>(
 /// The internal implementation of the PJR check after having the data converted.
 ///
 /// See [`pjr_check`] for more info.
-pub fn pjr_check_core<A: IdentifierT>(
-	candidates: &[CandidatePtr<A>],
-	voters: &[Voter<A>],
+pub fn pjr_check_core<AccountId: IdentifierT>(
+	candidates: &[CandidatePtr<AccountId>],
+	voters: &[Voter<AccountId>],
 	t: Threshold,
 ) -> bool {
 	let unelected = candidates.iter().filter(|c| !c.borrow().elected);
@@ -197,9 +197,9 @@ pub fn pjr_check_core<A: IdentifierT>(
 /// allowing the backing stake of any other elected candidate to fall below `t`.
 ///
 /// In essence, it is the sum(slack(n, t)) for all `n` who vote for `unelected`.
-pub fn pre_score<A: IdentifierT>(
-	unelected: CandidatePtr<A>,
-	voters: &[Voter<A>],
+pub fn pre_score<AccountId: IdentifierT>(
+	unelected: CandidatePtr<AccountId>,
+	voters: &[Voter<AccountId>],
 	t: Threshold,
 ) -> ExtendedBalance {
 	debug_assert!(!unelected.borrow().elected);
@@ -221,7 +221,7 @@ pub fn pre_score<A: IdentifierT>(
 ///
 /// 1. If `c` exactly has `t` backing or less, then we don't generate any slack.
 /// 2. If `c` has more than `t`, then we reduce it to `t`.
-pub fn slack<A: IdentifierT>(voter: &Voter<A>, t: Threshold) -> ExtendedBalance {
+pub fn slack<AccountId: IdentifierT>(voter: &Voter<AccountId>, t: Threshold) -> ExtendedBalance {
 	let budget = voter.budget;
 	let leftover = voter.edges.iter().fold(Zero::zero(), |acc: ExtendedBalance, edge| {
 		let candidate = edge.candidate.borrow();
