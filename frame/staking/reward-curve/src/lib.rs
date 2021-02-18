@@ -353,13 +353,13 @@ fn generate_piecewise_linear(points: Vec<(u32, u32)>) -> TokenStream2 {
 		.unwrap_or(1_000_000_000);
 
 	for (x, y) in points {
-		let error = || panic!(format!(
+		let error = || panic!(
 			"Generated reward curve approximation doesn't fit into [0, 1] -> [0, 1] \
 			because of point:
 			x = {:07} per million
 			y = {:07} per million",
 			x, y
-		));
+		);
 
 		let x_perbill = x.checked_mul(1_000).unwrap_or_else(error);
 		let y_perbill = y.checked_mul(1_000).unwrap_or_else(error);

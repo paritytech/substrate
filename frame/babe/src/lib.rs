@@ -33,20 +33,18 @@ use frame_system::{ensure_none, ensure_signed};
 use sp_application_crypto::Public;
 use sp_runtime::{
 	generic::DigestItem,
-	traits::{Hash, IsMember, One, SaturatedConversion, Saturating},
+	traits::{Hash, IsMember, One, SaturatedConversion, Saturating, Zero},
 	ConsensusEngineId, KeyTypeId,
 };
 use sp_session::{GetSessionNumber, GetValidatorCount};
-use sp_std::{prelude::*, result};
+use sp_std::prelude::*;
 use sp_timestamp::OnTimestampSet;
 
 use sp_consensus_babe::{
 	digests::{NextConfigDescriptor, NextEpochDescriptor, PreDigest},
-	inherents::{BabeInherentData, INHERENT_IDENTIFIER},
 	BabeAuthorityWeight, ConsensusLog, Epoch, EquivocationProof, Slot, BABE_ENGINE_ID,
 };
 use sp_consensus_vrf::schnorrkel;
-use sp_inherents::{InherentData, InherentIdentifier, MakeFatalError, ProvideInherent};
 
 pub use sp_consensus_babe::{AuthorityId, PUBLIC_KEY_LENGTH, RANDOMNESS_LENGTH, VRF_OUTPUT_LENGTH};
 
@@ -744,7 +742,15 @@ impl<T: Config> Module<T> {
 }
 
 impl<T: Config> OnTimestampSet<T::Moment> for Module<T> {
-	fn on_timestamp_set(_moment: T::Moment) { }
+	fn on_timestamp_set(moment: T::Moment) {
+		let slot_duration = Self::slot_duration();
+		assert!(!slot_duration.is_zero(), "Babe slot duration cannot be zero.");
+
+		let timestamp_slot = moment / slot_duration;
+		let timestamp_slot = Slot::from(timestamp_slot.saturated_into::<u64>());
+
+		assert!(CurrentSlot::get() == timestamp_slot, "Timestamp slot must match `CurrentSlot`");
+	}
 }
 
 impl<T: Config> frame_support::traits::EstimateNextSessionRotation<T::BlockNumber> for Module<T> {
@@ -817,30 +823,4 @@ fn compute_randomness(
 	}
 
 	sp_io::hashing::blake2_256(&s)
-}
-
-impl<T: Config> ProvideInherent for Module<T> {
-	type Call = pallet_timestamp::Call<T>;
-	type Error = MakeFatalError<sp_inherents::Error>;
-	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
-
-	fn create_inherent(_: &InherentData) -> Option<Self::Call> {
-		None
-	}
-
-	fn check_inherent(call: &Self::Call, data: &InherentData) -> result::Result<(), Self::Error> {
-		let timestamp = match call {
-			pallet_timestamp::Call::set(ref timestamp) => timestamp.clone(),
-			_ => return Ok(()),
-		};
-
-		let timestamp_based_slot = (timestamp / Self::slot_duration()).saturated_into::<u64>();
-		let seal_slot = data.babe_inherent_data()?;
-
-		if timestamp_based_slot == *seal_slot {
-			Ok(())
-		} else {
-			Err(sp_inherents::Error::from("timestamp set in block doesn't match slot in seal").into())
-		}
-	}
 }
