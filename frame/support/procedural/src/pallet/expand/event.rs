@@ -73,8 +73,8 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 			quote::quote!(
 				#frame_support::metadata::v13::EventMetadata {
 					name: #name,
-					arguments: vec![ #( #args, )* ],
-					documentation: vec![ #( #docs, )* ],
+					arguments: #frame_support::scale_info::prelude::vec![ #( #args, )* ],
+					documentation: #frame_support::scale_info::prelude::vec![ #( #docs, )* ],
 				},
 			)
 		});
@@ -159,8 +159,8 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 
 			#[allow(dead_code)]
 			#[doc(hidden)]
-			pub fn metadata_vnext() -> Vec<#frame_support::metadata::v13::EventMetadata> {
-				vec![ #( #metadata_vnext )* ]
+			pub fn metadata_vnext() -> #frame_support::scale_info::prelude::vec::Vec<#frame_support::metadata::v13::EventMetadata> {
+				#frame_support::scale_info::prelude::vec![ #( #metadata_vnext )* ]
 			}
 		}
 	)
