@@ -58,6 +58,7 @@ use sc_telemetry::{
 	ConnectionMessage,
 	Telemetry,
 	TelemetryHandle,
+	TelemetryWorkerHandle,
 	SUBSTRATE_INFO,
 };
 use sp_transaction_pool::MaintainedTransactionPool;
@@ -292,16 +293,18 @@ impl KeystoreContainer {
 /// Creates a new full client for the given config.
 pub fn new_full_client<TBl, TRtApi, TExecDisp>(
 	config: &Configuration,
+	telemetry_worker_handle: Option<TelemetryWorkerHandle>,
 ) -> Result<TFullClient<TBl, TRtApi, TExecDisp>, Error> where
 	TBl: BlockT,
 	TExecDisp: NativeExecutionDispatch + 'static,
 {
-	new_full_parts(config).map(|parts| parts.0)
+	new_full_parts(config, telemetry_worker_handle).map(|parts| parts.0)
 }
 
 /// Create the initial parts of a full node.
 pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 	config: &Configuration,
+	telemetry_worker_handle: Option<TelemetryWorkerHandle>,
 ) -> Result<TFullParts<TBl, TRtApi, TExecDisp>,	Error> where
 	TBl: BlockT,
 	TExecDisp: NativeExecutionDispatch + 'static,
@@ -344,7 +347,7 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 			Some(keystore_container.sync_keystore()),
 		);
 
-		let telemetry = match (config.telemetry_worker_handle.clone(), config.telemetry_endpoints.clone()) {
+		let telemetry = match (telemetry_worker_handle, config.telemetry_endpoints.clone()) {
 			(Some(mut handle), Some(endpoints)) => Some(handle.new_telemetry(endpoints)),
 			_ => None,
 		};
@@ -378,6 +381,7 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 /// Create the initial parts of a light node.
 pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 	config: &Configuration,
+	telemetry_worker_handle: Option<TelemetryWorkerHandle>,
 ) -> Result<TLightParts<TBl, TRtApi, TExecDisp>, Error> where
 	TBl: BlockT,
 	TExecDisp: NativeExecutionDispatch + 'static,
@@ -416,7 +420,7 @@ pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 	);
 	let on_demand = Arc::new(sc_network::config::OnDemand::new(fetch_checker));
 	let backend = sc_light::new_light_backend(light_blockchain);
-	let telemetry = match (config.telemetry_worker_handle.clone(), config.telemetry_endpoints.clone()) {
+	let telemetry = match (telemetry_worker_handle, config.telemetry_endpoints.clone()) {
 		(Some(mut handle), Some(endpoints)) => Some(handle.new_telemetry(endpoints)),
 		_ => None,
 	};

@@ -75,10 +75,11 @@ pub fn run() -> Result<()> {
 	match &cli.subcommand {
 		None => {
 			let runner = cli.create_runner(&cli.run)?;
+			let telemetry_worker_handle = runner.telemetry_worker_handle();
 			runner.run_node_until_exit(|config| async move {
 				match config.role {
-					Role::Light => service::new_light(config),
-					_ => service::new_full(config),
+					Role::Light => service::new_light(config, Some(telemetry_worker_handle)),
+					_ => service::new_full(config, Some(telemetry_worker_handle)),
 				}.map_err(sc_cli::Error::Service)
 			})
 		}
@@ -109,7 +110,7 @@ pub fn run() -> Result<()> {
 			let runner = cli.create_runner(cmd)?;
 			runner.async_run(|config| {
 				let PartialComponents { client, task_manager, import_queue, ..}
-					= new_partial(&config)?;
+					= new_partial(&config, None)?;
 				Ok((cmd.run(client, import_queue), task_manager))
 			})
 		},
@@ -117,7 +118,7 @@ pub fn run() -> Result<()> {
 			let runner = cli.create_runner(cmd)?;
 			runner.async_run(|config| {
 				let PartialComponents { client, task_manager, ..}
-					= new_partial(&config)?;
+					= new_partial(&config, None)?;
 				Ok((cmd.run(client, config.database), task_manager))
 			})
 		},
@@ -125,7 +126,7 @@ pub fn run() -> Result<()> {
 			let runner = cli.create_runner(cmd)?;
 			runner.async_run(|config| {
 				let PartialComponents { client, task_manager, ..}
-					= new_partial(&config)?;
+					= new_partial(&config, None)?;
 				Ok((cmd.run(client, config.chain_spec), task_manager))
 			})
 		},
@@ -133,7 +134,7 @@ pub fn run() -> Result<()> {
 			let runner = cli.create_runner(cmd)?;
 			runner.async_run(|config| {
 				let PartialComponents { client, task_manager, import_queue, ..}
-					= new_partial(&config)?;
+					= new_partial(&config, None)?;
 				Ok((cmd.run(client, import_queue), task_manager))
 			})
 		},
@@ -145,7 +146,7 @@ pub fn run() -> Result<()> {
 			let runner = cli.create_runner(cmd)?;
 			runner.async_run(|config| {
 				let PartialComponents { client, task_manager, backend, ..}
-					= new_partial(&config)?;
+					= new_partial(&config, None)?;
 				Ok((cmd.run(client, backend), task_manager))
 			})
 		},
