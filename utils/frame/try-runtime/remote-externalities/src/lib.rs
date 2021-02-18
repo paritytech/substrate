@@ -109,7 +109,7 @@ use log::*;
 use sp_core::{hashing::twox_128};
 pub use sp_io::TestExternalities;
 use sp_core::{
-	hexdisplay::HexDisplayExt,
+	hexdisplay::HexDisplay,
 	storage::{StorageKey, StorageData},
 };
 use futures::future::Future;
@@ -302,7 +302,7 @@ impl Builder {
 					"downloaded data for module {} (count: {} / prefix: {:?}).",
 					f,
 					module_kv.len(),
-					hashed_prefix.hex_display(),
+					HexDisplay::from(&hashed_prefix),
 				);
 				filtered_kv.extend(module_kv);
 			}

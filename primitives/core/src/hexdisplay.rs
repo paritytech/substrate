@@ -53,18 +53,6 @@ impl<'a> sp_std::fmt::Debug for HexDisplay<'a> {
 	}
 }
 
-/// Extension trait for wrapping a [`HexDisplay`].
-pub trait HexDisplayExt {
-	/// Display self as hex string.
-	fn hex_display(&self) -> HexDisplay<'_>;
-}
-
-impl<T: AsBytesRef> HexDisplayExt for T {
-	fn hex_display(&self) -> HexDisplay<'_> {
-		HexDisplay::from(self)
-	}
-}
-
 /// Simple trait to transform various types to `&[u8]`
 pub trait AsBytesRef {
 	/// Transform `self` into `&[u8]`.
