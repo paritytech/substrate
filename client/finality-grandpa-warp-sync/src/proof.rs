@@ -101,8 +101,8 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 
 			let justification = backend.justification(BlockId::Number(*last_block))?.expect(
 				"header is last in set and contains standard change signal; \
-					 must have justification; \
-					 qed.",
+				 must have justification; \
+				 qed.",
 			);
 
 			let justification = GrandpaJustification::<Block>::decode(&mut &justification[..])?;
