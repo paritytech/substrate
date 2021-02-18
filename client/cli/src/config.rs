@@ -579,15 +579,11 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	/// 1. Sets the panic handler
 	/// 2. Initializes the logger
 	/// 3. Raises the FD limit
-	fn init<C: SubstrateCli>(&self) -> Result<sc_telemetry::TelemetryWorker> {
+	fn init<C: SubstrateCli>(&self) -> Result<()> {
 		sp_panic_handler::set(&C::support_url(), &C::impl_version());
 
 		let mut logger = LoggerBuilder::new(self.log_filters()?);
 		logger.with_log_reloading(!self.is_log_filter_reloading_disabled()?);
-
-		if let Some(transport) = self.telemetry_external_transport()? {
-			logger.with_transport(transport);
-		}
 
 		if let Some(tracing_targets) = self.tracing_targets()? {
 			let tracing_receiver = self.tracing_receiver()?;
@@ -598,7 +594,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			logger.with_colors(false);
 		}
 
-		let telemetry_worker = logger.init()?;
+		logger.init()?;
 
 		if let Some(new_limit) = fdlimit::raise_fd_limit() {
 			if new_limit < RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT {
@@ -610,7 +606,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			}
 		}
 
-		Ok(telemetry_worker)
+		Ok(())
 	}
 }
 

@@ -124,7 +124,6 @@ impl<C: SubstrateCli> Runner<C> {
 	pub fn new<T: CliConfiguration>(
 		cli: &C,
 		command: &T,
-		telemetry_worker: TelemetryWorker,
 	) -> Result<Runner<C>> {
 		let tokio_runtime = build_runtime()?;
 		let runtime_handle = tokio_runtime.handle().clone();
@@ -138,6 +137,10 @@ impl<C: SubstrateCli> Runner<C> {
 			}
 		};
 
+		let telemetry_worker = sc_telemetry::TelemetryWorker::new(
+			16,
+			command.telemetry_external_transport()?,
+		)?;
 		let telemetry_worker_handle = telemetry_worker.handle();
 
 		Ok(Runner {
