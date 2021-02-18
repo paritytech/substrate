@@ -199,12 +199,12 @@ macro_rules! benchmarks_iter {
 		{ $( $where_clause:tt )* }
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
-		where_clause { where $( $where_ty:ty: $where_bound:path ),* $(,)? }
+		where_clause { where $( $where_bound:tt )* }
 		$( $rest:tt )*
 	) => {
 		$crate::benchmarks_iter! {
 			{ $( $instance)? }
-			{ $( $where_ty: $where_bound ),* }
+			{ $( $where_bound )* }
 			( $( $names )* )
 			( $( $names_extra )* )
 			$( $rest )*
