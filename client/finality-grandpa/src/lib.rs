@@ -130,7 +130,6 @@ pub use voting_rule::{
 	BeforeBestBlockBy, ThreeQuartersOfTheUnfinalizedChain, VotingRule, VotingRulesBuilder
 };
 pub use finality_grandpa::voter::report;
-pub use finality_proof::{prove_warp_sync, WarpSyncFragmentCache};
 
 use aux_schema::PersistentData;
 use environment::{Environment, VoterSetState};
