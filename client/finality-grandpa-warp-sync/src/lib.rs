@@ -17,7 +17,7 @@
 //! Helper for handling (i.e. answering) grandpa warp sync requests from a remote peer via the
 //! [`crate::request_responses::RequestResponsesBehaviour`].
 
-use codec::Decode;
+use codec::{Decode, Encode};
 use sc_network::config::{IncomingRequest, OutgoingResponse, ProtocolId, RequestResponseConfig};
 use sc_client_api::Backend;
 use sp_runtime::traits::NumberFor;
@@ -29,6 +29,10 @@ use std::time::Duration;
 use std::sync::Arc;
 use sc_service::{SpawnTaskHandle, config::{Configuration, Role}};
 use sc_finality_grandpa::{SharedAuthoritySet, WarpSyncFragmentCache};
+
+mod proof;
+
+pub use proof::{AuthoritySetChangeProof, WarpSyncProof};
 
 /// Generates the appropriate [`RequestResponseConfig`] for a given chain configuration.
 pub fn request_response_config_for_chain<TBlock: BlockT, TBackend: Backend<TBlock> + 'static>(
@@ -78,9 +82,9 @@ fn generate_protocol_name(protocol_id: ProtocolId) -> String {
 	s
 }
 
-#[derive(codec::Decode)]
+#[derive(Decode)]
 struct Request<B: BlockT> {
-	begin: B::Hash
+	begin: B::Hash,
 }
 
 /// Setting a large fragment limit, allowing client
@@ -137,15 +141,14 @@ impl<TBlock: BlockT, TBackend: Backend<TBlock>> GrandpaWarpSyncRequestHandler<TB
 	{
 		let request = Request::<TBlock>::decode(&mut &payload[..])?;
 
-		let mut cache = self.cache.write();
-		let response = sc_finality_grandpa::prove_warp_sync(
+		let proof = WarpSyncProof::generate(
 			self.backend.blockchain(),
 			request.begin,
 			&self.authority_set.authority_set_changes(),
 		)?;
 
 		pending_response.send(OutgoingResponse {
-			result: Ok(response),
+			result: Ok(proof.encode()),
 			reputation_changes: Vec::new(),
 		}).map_err(|_| HandleRequestError::SendResponse)
 	}
@@ -170,7 +173,7 @@ impl<TBlock: BlockT, TBackend: Backend<TBlock>> GrandpaWarpSyncRequestHandler<TB
 }
 
 #[derive(derive_more::Display, derive_more::From)]
-enum HandleRequestError {
+pub enum HandleRequestError {
 	#[display(fmt = "Failed to decode request: {}.", _0)]
 	DecodeProto(prost::DecodeError),
 	#[display(fmt = "Failed to encode response: {}.", _0)]
@@ -178,6 +181,7 @@ enum HandleRequestError {
 	#[display(fmt = "Failed to decode block hash: {}.", _0)]
 	DecodeScale(codec::Error),
 	Client(sp_blockchain::Error),
+	InvalidRequest(String),
 	#[display(fmt = "Failed to send response.")]
 	SendResponse,
 }
