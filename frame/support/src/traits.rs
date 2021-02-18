@@ -1533,6 +1533,7 @@ pub trait OnGenesis {
 	fn on_genesis() {}
 }
 
+/// Prefix to be used (optionally) for implementing [`OnRuntimeUpgrade::storage_key`].
 pub const ON_RUNTIME_UPGRADE_PREFIX: &[u8] = b"__ON_RUNTIME_UPGRADE__";
 
 /// The runtime upgrade trait.
@@ -1540,8 +1541,6 @@ pub const ON_RUNTIME_UPGRADE_PREFIX: &[u8] = b"__ON_RUNTIME_UPGRADE__";
 /// Implementing this lets you express what should happen when the runtime upgrades,
 /// and changes may need to occur to your module.
 pub trait OnRuntimeUpgrade {
-	const ID: &'static str;
-
 	/// Perform a module upgrade.
 	///
 	/// # Warning
@@ -1560,9 +1559,9 @@ pub trait OnRuntimeUpgrade {
 	/// This can be used to communicate data from pre-upgrade to post-upgrade state and check
 	/// them. See [`set_temp_storage`] and [`get_temp_storage`].
 	#[cfg(feature = "try-runtime")]
-	fn storage_key() -> [u8; 32] {
+	fn storage_key(ident: &str) -> [u8; 32] {
 		let prefix = sp_io::hashing::twox_128(ON_RUNTIME_UPGRADE_PREFIX);
-		let ident = sp_io::hashing::twox_128(Self::ID.as_bytes());
+		let ident = sp_io::hashing::twox_128(ident.as_bytes());
 
 		let mut final_key = [0u8; 32];
 		final_key[..16].copy_from_slice(&prefix);
@@ -1573,17 +1572,22 @@ pub trait OnRuntimeUpgrade {
 
 	/// Write some temporary data to a specific storage that can be read (potentially in
 	/// post-upgrade hook) via [`get_temp_storage`].
+	///
+	/// A `at` storage identifier must be provided to indicate where the storage is being written
+	/// to.
 	#[cfg(feature = "try-runtime")]
-	fn set_temp_storage<T: Encode>(data: T) {
-		sp_io::storage::set(&Self::storage_key(), &data.encode());
+	fn set_temp_storage<T: Encode>(data: T, at: &str) {
+		sp_io::storage::set(&Self::storage_key(at), &data.encode());
 	}
 
 	/// Get temporary storage data written by [`set_temp_storage`].
 	///
 	/// Returns `None` if either the data is unavailable or un-decodable.
+	///
+	/// A `at` storage identifier must be provided to indicate where the storage is being read from.
 	#[cfg(feature = "try-runtime")]
-	fn get_temp_storage<T: Decode>() -> Option<T> {
-		sp_io::storage::get(&Self::storage_key())
+	fn get_temp_storage<T: Decode>(at: &str) -> Option<T> {
+		sp_io::storage::get(&Self::storage_key(at))
 			.and_then(|bytes| Decode::decode(&mut &*bytes).ok())
 	}
 
@@ -1606,9 +1610,6 @@ pub trait OnRuntimeUpgrade {
 
 #[impl_for_tuples(30)]
 impl OnRuntimeUpgrade for Tuple {
-	const ID: &'static str = "__TUPLE__";
-	// We will never use      ^^^^^^^^^^^ within the tuple expansion, effectively _don't care_.
-
 	fn on_runtime_upgrade() -> crate::weights::Weight {
 		let mut weight = 0;
 		for_tuples!( #( weight = weight.saturating_add(Tuple::on_runtime_upgrade()); )* );
@@ -1627,6 +1628,12 @@ impl OnRuntimeUpgrade for Tuple {
 		let mut result = Ok(());
 		for_tuples!( #( result = result.and(Tuple::post_upgrade()); )* );
 		result
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn storage_key(ident: &str) -> [u8; 32] {
+		// We will never use the key on a tuple, effectively _don't care_.
+		unreachable!()
 	}
 }
 
@@ -2200,7 +2207,6 @@ mod tests {
 			}
 		}
 		impl OnRuntimeUpgrade for Test {
-			const ID: &'static str = "TEST";
 			fn on_runtime_upgrade() -> crate::weights::Weight {
 				20
 			}

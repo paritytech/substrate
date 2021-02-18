@@ -1327,7 +1327,6 @@ macro_rules! decl_module {
 			$crate::traits::OnRuntimeUpgrade
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
-			const ID: &'static str = $crate::crate_name!();
 			fn on_runtime_upgrade() -> $return {
 				$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!("on_runtime_upgrade"));
 				let result: $return = (|| { $( $impl )* })();
@@ -1340,10 +1339,16 @@ macro_rules! decl_module {
 					<$trait_instance as $system::Config>::DbWeight as $crate::traits::Get<_>
 				>::get().writes(1);
 
+				let pallet_name = <<
+					$trait_instance
+					as
+					$system::Config
+				>::PalletInfo as $crate::traits::PalletInfo>::name::<Self>().expect("pallet will have name in the runtime.");
+
 				$crate::debug::info!(
 					target: $crate::LOG_TARGET,
 					"⚠️ running migration for {} and setting new storage version to {:?}",
-					Self::ID,
+					pallet_name,
 					new_storage_version,
 				);
 
@@ -1361,7 +1366,6 @@ macro_rules! decl_module {
 			$crate::traits::OnRuntimeUpgrade
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
-			const ID: &'static str = $crate::crate_name!();
 			fn on_runtime_upgrade() -> $crate::dispatch::Weight {
 				$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!("on_runtime_upgrade"));
 
@@ -1369,17 +1373,18 @@ macro_rules! decl_module {
 				new_storage_version
 					.put_into_storage::<<$trait_instance as $system::Config>::PalletInfo, Self>();
 
+				let pallet_name = <<
+					$trait_instance
+					as
+					$system::Config
+				>::PalletInfo as $crate::traits::PalletInfo>::name::<Self>().expect("pallet will have name in the runtime.");
+
 				$crate::debug::info!(
 					target: $crate::LOG_TARGET,
 					"✅ no migration for '{}' and setting new storage version to {:?}",
-					Self::ID,
+					pallet_name,
 					new_storage_version,
 				);
-				// TODO: idea: we can enforce each pallet to define a LOG_TARGET const, for which
-				// the default is crate_name!(). We prefix it automatically with `runtime::foo` to
-				// have unified logging. Lastly, we  could provide an additional macro like the one
-				// I have put in staking for easier logging. Then, we could use the real crate's
-				// LOG_TARGET here, not the one from frame-support.
 
 				<
 					<$trait_instance as $system::Config>::DbWeight as $crate::traits::Get<_>
@@ -2673,12 +2678,9 @@ mod tests {
 
 	#[test]
 	fn on_runtime_upgrade_should_work() {
-		sp_tracing::try_init_simple();
 		sp_io::TestExternalities::default().execute_with(|| {
 			assert_eq!(<Module<TraitImpl> as OnRuntimeUpgrade>::on_runtime_upgrade(), 10)
 		});
-
-		assert_eq!(<Module<TraitImpl> as OnRuntimeUpgrade>::ID, "frame_support");
 	}
 
 	#[test]

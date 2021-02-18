@@ -62,12 +62,3 @@ pub fn crate_to_pallet_version(input: proc_macro::TokenStream) -> Result<TokenSt
 		}
 	})
 }
-
-pub fn crate_name(input: proc_macro::TokenStream) -> Result<TokenStream> {
-	if !input.is_empty() {
-		return Err(create_error("No arguments expected!"));
-	}
-
-	let crate_name = env::var("CARGO_CRATE_NAME").unwrap();
-	Ok(quote::quote!(#crate_name))
-}

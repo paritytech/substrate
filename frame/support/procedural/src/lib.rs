@@ -17,7 +17,7 @@
 
 //! Proc macro of Support code for the runtime.
 
-#![recursion_limit="512"]
+#![recursion_limit = "512"]
 
 mod storage;
 mod construct_runtime;
@@ -420,9 +420,4 @@ pub fn require_transactional(attr: TokenStream, input: TokenStream) -> TokenStre
 #[proc_macro]
 pub fn crate_to_pallet_version(input: TokenStream) -> TokenStream {
 	pallet_version::crate_to_pallet_version(input).unwrap_or_else(|e| e.to_compile_error()).into()
-}
-
-#[proc_macro]
-pub fn crate_name(input: TokenStream) -> TokenStream {
-	pallet_version::crate_name(input).unwrap_or_else(|e| e.to_compile_error()).into()
 }
