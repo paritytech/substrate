@@ -150,6 +150,7 @@ impl sp_core::traits::SpawnNamed for SpawnTaskHandle {
 /// task spawned through it fails. The service should be on the receiver side
 /// and will shut itself down whenever it receives any message, i.e. an
 /// essential task has failed.
+#[derive(Clone)]
 pub struct SpawnEssentialTaskHandle {
 	essential_failed_tx: TracingUnboundedSender<()>,
 	inner: SpawnTaskHandle,
@@ -200,6 +201,16 @@ impl SpawnEssentialTaskHandle {
 			});
 
 		let _ = self.inner.spawn_inner(name, essential_task, task_type);
+	}
+}
+
+impl sp_core::traits::SpawnEssentialNamed for SpawnEssentialTaskHandle {
+	fn spawn_essential_blocking(&self, name: &'static str, future: BoxFuture<'static, ()>) {
+		self.spawn_blocking(name, future);
+	}
+
+	fn spawn_essential(&self, name: &'static str, future: BoxFuture<'static, ()>) {
+		self.spawn(name, future);
 	}
 }
 
