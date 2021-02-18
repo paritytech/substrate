@@ -37,7 +37,6 @@ pub use params::*;
 pub use runner::*;
 pub use sc_service::{ChainSpec, Role};
 use sc_service::{Configuration, TaskExecutor};
-use sc_telemetry::TelemetryWorkerHandle;
 pub use sc_tracing::logging::LoggerBuilder;
 pub use sp_version::RuntimeVersion;
 use std::io::Write;
@@ -214,9 +213,8 @@ pub trait SubstrateCli: Sized {
 		&self,
 		command: &T,
 		task_executor: TaskExecutor,
-		telemetry_worker_handle: Option<TelemetryWorkerHandle>,
 	) -> error::Result<Configuration> {
-		command.create_configuration(self, task_executor, telemetry_worker_handle)
+		command.create_configuration(self, task_executor)
 	}
 
 	/// Create a runner for the command provided in argument. This will create a Configuration and

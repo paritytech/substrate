@@ -34,7 +34,7 @@ use sp_runtime::traits::Block as BlockT;
 use futures::prelude::*;
 use sc_client_api::{ExecutorProvider, RemoteBackend};
 use node_executor::Executor;
-use sc_telemetry::{ClientTelemetry, TelemetryWorkerHandle};
+use sc_telemetry::{ClientTelemetry, TelemetryWorker};
 
 type FullClient = sc_service::TFullClient<Block, RuntimeApi, Executor>;
 type FullBackend = sc_service::TFullBackend<Block>;
@@ -45,7 +45,6 @@ type LightClient = sc_service::TLightClient<Block, RuntimeApi, Executor>;
 
 pub fn new_partial(
 	config: &Configuration,
-	telemetry_worker_handle: Option<TelemetryWorkerHandle>,
 ) -> Result<sc_service::PartialComponents<
 	FullClient, FullBackend, FullSelectChain,
 	sp_consensus::DefaultImportQueue<Block, FullClient>,
@@ -63,8 +62,12 @@ pub fn new_partial(
 		grandpa::SharedVoterState,
 	)
 >, ServiceError> {
+	let telemetry_worker = TelemetryWorker::new(16, None)?;
 	let (client, backend, keystore_container, task_manager) =
-		sc_service::new_full_parts::<Block, RuntimeApi, Executor>(&config, telemetry_worker_handle)?;
+		sc_service::new_full_parts::<Block, RuntimeApi, Executor>(
+			&config,
+			Some(telemetry_worker.handle()),
+		)?;
 	let client = Arc::new(client);
 
 	let select_chain = sc_consensus::LongestChain::new(backend.clone());
@@ -180,7 +183,6 @@ pub struct NewFullBase {
 /// Creates a full service from the configuration.
 pub fn new_full_base(
 	mut config: Configuration,
-	telemetry_worker_handle: Option<TelemetryWorkerHandle>,
 	with_startup_data: impl FnOnce(
 		&sc_consensus_babe::BabeBlockImport<Block, FullClient, FullGrandpaBlockImport>,
 		&sc_consensus_babe::BabeLink<Block>,
@@ -196,7 +198,7 @@ pub fn new_full_base(
 		transaction_pool,
 		inherent_data_providers,
 		other: (rpc_extensions_builder, import_setup, rpc_setup),
-	} = new_partial(&config, telemetry_worker_handle)?;
+	} = new_partial(&config)?;
 
 	let shared_voter_state = rpc_setup;
 
@@ -361,16 +363,14 @@ pub fn new_full_base(
 /// Builds a new service for a full client.
 pub fn new_full(
 	config: Configuration,
-	telemetry_worker_handle: Option<TelemetryWorkerHandle>,
 ) -> Result<TaskManager, ServiceError> {
-	new_full_base(config, telemetry_worker_handle, |_, _| ()).map(|NewFullBase { task_manager, .. }| {
+	new_full_base(config, |_, _| ()).map(|NewFullBase { task_manager, .. }| {
 		task_manager
 	})
 }
 
 pub fn new_light_base(
 	mut config: Configuration,
-	telemetry_worker_handle: Option<TelemetryWorkerHandle>,
 ) -> Result<(
 	TaskManager,
 	RpcHandlers,
@@ -378,10 +378,11 @@ pub fn new_light_base(
 	Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
 	Arc<sc_transaction_pool::LightPool<Block, LightClient, sc_network::config::OnDemand<Block>>>
 ), ServiceError> {
+	let telemetry_worker = TelemetryWorker::new(16, None)?;
 	let (client, backend, keystore_container, mut task_manager, on_demand) =
 		sc_service::new_light_parts::<Block, RuntimeApi, Executor>(
 			&config,
-			telemetry_worker_handle,
+			Some(telemetry_worker.handle()),
 		)?;
 
 	config.network.extra_sets.push(grandpa::grandpa_peers_set_config());
@@ -475,9 +476,8 @@ pub fn new_light_base(
 /// Builds a new service for a light client.
 pub fn new_light(
 	config: Configuration,
-	telemetry_worker_handle: Option<TelemetryWorkerHandle>,
 ) -> Result<TaskManager, ServiceError> {
-	new_light_base(config, telemetry_worker_handle).map(|(task_manager, _, _, _, _)| {
+	new_light_base(config).map(|(task_manager, _, _, _, _)| {
 		task_manager
 	})
 }
