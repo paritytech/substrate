@@ -650,10 +650,11 @@ impl<H, N: Add<Output=N> + Clone> PendingChange<H, N> {
 	}
 }
 
-// Tracks historical authority set changes. We store the block numbers for the first block of each
-// authority set, once they have been finalized.
+/// Tracks historical authority set changes. We store the block numbers for the last block
+/// of each authority set, once they have been finalized. These blocks are guaranteed to
+/// have a justification unless they were triggered by a forced change.
 #[derive(Debug, Encode, Decode, Clone, PartialEq)]
-pub struct AuthoritySetChanges<N>(pub Vec<(u64, N)>);
+pub struct AuthoritySetChanges<N>(Vec<(u64, N)>);
 
 impl<N: Ord + Clone> AuthoritySetChanges<N> {
 	pub(crate) fn empty() -> Self {
@@ -686,6 +687,12 @@ impl<N: Ord + Clone> AuthoritySetChanges<N> {
 		} else {
 			None
 		}
+	}
+
+	/// Returns an iterator over all historical authority set changes, the iterator yields
+	/// a tuple representing the set id and the block number of last block in that set.
+	pub fn iter(&self) -> impl Iterator<Item = &(u64, N)> {
+		self.0.iter()
 	}
 }
 

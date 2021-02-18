@@ -260,7 +260,7 @@ pub fn prove_warp_sync<Block: BlockT, B: BlockchainBackend<Block>>(
 
 	let mut result = Vec::new();
 
-	for (_, last_block) in &set_changes.0 {
+	for (_, last_block) in set_changes.iter() {
 		if *last_block < begin_number {
 			continue;
 		}

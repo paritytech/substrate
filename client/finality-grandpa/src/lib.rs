@@ -121,7 +121,7 @@ mod observer;
 mod until_imported;
 mod voting_rule;
 
-pub use authorities::{SharedAuthoritySet, AuthoritySet};
+pub use authorities::{AuthoritySet, AuthoritySetChanges, SharedAuthoritySet};
 pub use finality_proof::{FinalityProof, FinalityProofProvider, FinalityProofError};
 pub use notification::{GrandpaJustificationSender, GrandpaJustificationStream};
 pub use import::GrandpaBlockImport;
