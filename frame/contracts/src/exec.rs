@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use crate::{
-	CodeHash, Event, RawEvent, Config, Module as Contracts,
+	CodeHash, Event, Config, Module as Contracts,
 	TrieId, BalanceOf, ContractInfo, gas::GasMeter, rent::Rent, storage::{self, Storage},
 	Error, ContractInfoOf, Schedule,
 };
@@ -30,7 +30,7 @@ use frame_support::{
 	dispatch::{DispatchResult, DispatchError},
 	traits::{ExistenceRequirement, Currency, Time, Randomness, Get},
 	weights::Weight,
-	ensure, StorageMap,
+	ensure,
 };
 use pallet_contracts_primitives::{ErrorOrigin, ExecError, ExecReturnValue, ExecResult, ReturnFlags};
 
@@ -446,7 +446,7 @@ where
 					.ok_or(Error::<T>::NewContractNotFunded)?;
 
 				// Deposit an instantiation event.
-				deposit_event::<T>(vec![], RawEvent::Instantiated(caller.clone(), dest.clone()));
+				deposit_event::<T>(vec![], Event::Instantiated(caller.clone(), dest.clone()));
 
 				Ok(output)
 			});
@@ -664,7 +664,7 @@ where
 		if let Some(ContractInfo::Alive(info)) = ContractInfoOf::<T>::take(&self_id) {
 			Storage::<T>::queue_trie_for_deletion(&info).map_err(|e| (e, 0))?;
 			let code_len = E::remove_user(info.code_hash);
-			Contracts::<T>::deposit_event(RawEvent::Terminated(self_id, beneficiary.clone()));
+			Contracts::<T>::deposit_event(Event::Terminated(self_id, beneficiary.clone()));
 			Ok(code_len)
 		} else {
 			panic!(
@@ -708,7 +708,7 @@ where
 		if let Ok(_) = result {
 			deposit_event::<Self::T>(
 				vec![],
-				RawEvent::Restored(
+				Event::Restored(
 					self.ctx.self_account.clone(),
 					dest,
 					code_hash,
@@ -754,7 +754,7 @@ where
 	fn deposit_event(&mut self, topics: Vec<T::Hash>, data: Vec<u8>) {
 		deposit_event::<Self::T>(
 			topics,
-			RawEvent::ContractEmitted(self.ctx.self_account.clone(), data)
+			Event::ContractEmitted(self.ctx.self_account.clone(), data)
 		);
 	}
 
@@ -1334,7 +1334,7 @@ mod tests {
 			// there are instantiation event.
 			assert_eq!(Storage::<Test>::code_hash(&instantiated_contract_address).unwrap(), dummy_ch);
 			assert_eq!(&events(), &[
-				RawEvent::Instantiated(ALICE, instantiated_contract_address)
+				Event::Instantiated(ALICE, instantiated_contract_address)
 			]);
 		});
 	}
@@ -1410,7 +1410,7 @@ mod tests {
 			// there are instantiation event.
 			assert_eq!(Storage::<Test>::code_hash(&instantiated_contract_address).unwrap(), dummy_ch);
 			assert_eq!(&events(), &[
-				RawEvent::Instantiated(BOB, instantiated_contract_address)
+				Event::Instantiated(BOB, instantiated_contract_address)
 			]);
 		});
 	}

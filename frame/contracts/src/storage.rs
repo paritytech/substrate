@@ -31,9 +31,8 @@ use sp_runtime::traits::{Bounded, Saturating, Zero};
 use sp_core::crypto::UncheckedFrom;
 use frame_support::{
 	dispatch::DispatchResult,
-	StorageMap,
 	debug,
-	storage::{child::{self, KillOutcome}, StorageValue},
+	storage::child::{self, KillOutcome},
 	traits::Get,
 	weights::Weight,
 };
@@ -196,10 +195,10 @@ where
 	/// You must make sure that the contract is also removed or converted into a tombstone
 	/// when queuing the trie for deletion.
 	pub fn queue_trie_for_deletion(contract: &AliveContractInfo<T>) -> DispatchResult {
-		if DeletionQueue::decode_len().unwrap_or(0) >= T::DeletionQueueDepth::get() as usize {
+		if <DeletionQueue<T>>::decode_len().unwrap_or(0) >= T::DeletionQueueDepth::get() as usize {
 			Err(Error::<T>::DeletionQueueFull.into())
 		} else {
-			DeletionQueue::append(DeletedContract {
+			<DeletionQueue<T>>::append(DeletedContract {
 				pair_count: contract.pair_count,
 				trie_id: contract.trie_id.clone(),
 			});
@@ -234,7 +233,7 @@ where
 	/// It returns the amount of weight used for that task or `None` when no weight was used
 	/// apart from the base weight.
 	pub fn process_deletion_queue_batch(weight_limit: Weight) -> Weight {
-		let queue_len = DeletionQueue::decode_len().unwrap_or(0);
+		let queue_len = <DeletionQueue<T>>::decode_len().unwrap_or(0);
 		if queue_len == 0 {
 			return weight_limit;
 		}
@@ -251,7 +250,7 @@ where
 			return weight_limit;
 		}
 
-		let mut queue = DeletionQueue::get();
+		let mut queue = <DeletionQueue<T>>::get();
 
 		while !queue.is_empty() && remaining_key_budget > 0 {
 			// Cannot panic due to loop condition
@@ -283,7 +282,7 @@ where
 				.saturating_sub(remaining_key_budget.min(pair_count));
 		}
 
-		DeletionQueue::put(queue);
+		<DeletionQueue<T>>::put(queue);
 		weight_limit.saturating_sub(weight_per_key.saturating_mul(remaining_key_budget as Weight))
 	}
 
@@ -293,7 +292,7 @@ where
 		use sp_runtime::traits::Hash;
 		// Note that skipping a value due to error is not an issue here.
 		// We only need uniqueness, not sequence.
-		let new_seed = AccountCounter::mutate(|v| {
+		let new_seed = <AccountCounter<T>>::mutate(|v| {
 			*v = v.wrapping_add(1);
 			*v
 		});
@@ -322,6 +321,6 @@ where
 			trie_id: vec![],
 		})
 		.collect();
-		DeletionQueue::put(queue);
+		<DeletionQueue<T>>::put(queue);
 	}
 }
