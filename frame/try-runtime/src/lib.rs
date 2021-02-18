@@ -21,6 +21,7 @@
 
 use codec::{Decode, Encode};
 use sp_std::prelude::*;
+use frame_support::weights::Weight;
 
 #[doc(hidden)]
 pub use frame_support as _support;
@@ -33,9 +34,9 @@ macro_rules! match_pallet_on_runtime_upgrade {
 		match $name {
 			$(
 				stringify!($pallet) => {
-					<$pallet as $crate::_support::traits::OnRuntimeUpgrade>::pre_upgrade().unwrap();
+					<$pallet as $crate::_support::traits::OnRuntimeUpgrade>::pre_upgrade()?;
 					let weight = <$pallet as $crate::_support::traits::OnRuntimeUpgrade>::on_runtime_upgrade();
-					<$pallet as $crate::_support::traits::OnRuntimeUpgrade>::post_upgrade().unwrap();
+					<$pallet as $crate::_support::traits::OnRuntimeUpgrade>::post_upgrade()?;
 					weight
 				},
 			)*
@@ -70,8 +71,8 @@ sp_api::decl_runtime_apis! {
 	pub trait TryRuntime {
 		/// dry-run runtime upgrades, returning the total weight consumed.
 		///
-		/// Returns the consumed weight of the migration in case of a successful one, and panics
-		/// otherwise.
-		fn on_runtime_upgrade(target: Target) -> frame_support::weights::Weight;
+		/// Returns the consumed weight of the migration in case of a successful one, combined with
+		/// the total allowed block weight of the runtime.
+		fn on_runtime_upgrade(target: Target) -> Result<(Weight, Weight), sp_runtime::RuntimeString>;
 	}
 }

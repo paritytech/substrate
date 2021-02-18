@@ -152,7 +152,6 @@ std = [
 	"pallet-society/std",
 	"pallet-recovery/std",
 	"pallet-vesting/std",
-	"frame-try-runtime/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking",

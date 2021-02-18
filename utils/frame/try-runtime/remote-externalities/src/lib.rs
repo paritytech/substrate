@@ -105,11 +105,13 @@ use std::{
 	fs,
 	path::{Path, PathBuf},
 };
-use std::fmt::{Debug, Formatter, Result as FmtResult};
 use log::*;
 use sp_core::{hashing::twox_128};
 pub use sp_io::TestExternalities;
-use sp_core::storage::{StorageKey, StorageData};
+use sp_core::{
+	hexdisplay::HexDisplayExt,
+	storage::{StorageKey, StorageData},
+};
 use futures::future::Future;
 
 type KeyPair = (StorageKey, StorageData);
@@ -118,39 +120,6 @@ type Hash = sp_core::H256;
 // TODO: make these two generic.
 
 const LOG_TARGET: &'static str = "remote-ext";
-
-/// Struct for better hex printing of slice types.
-pub struct HexSlice<'a>(&'a [u8]);
-
-impl<'a> HexSlice<'a> {
-	pub fn new<T>(data: &'a T) -> HexSlice<'a>
-	where
-		T: ?Sized + AsRef<[u8]> + 'a,
-	{
-		HexSlice(data.as_ref())
-	}
-}
-
-// You can choose to implement multiple traits, like Lower and UpperHex
-impl Debug for HexSlice<'_> {
-	fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-		write!(f, "0x")?;
-		for byte in self.0 {
-			write!(f, "{:x}", byte)?;
-		}
-		Ok(())
-	}
-}
-/// Extension trait for hex display.
-pub trait HexDisplayExt {
-	fn hex_display(&self) -> HexSlice<'_>;
-}
-
-impl<T: ?Sized + AsRef<[u8]>> HexDisplayExt for T {
-	fn hex_display(&self) -> HexSlice<'_> {
-		HexSlice::new(self)
-	}
-}
 
 /// The execution mode.
 #[derive(Clone)]

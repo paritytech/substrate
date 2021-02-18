@@ -220,12 +220,12 @@ where
 	///
 	/// This should only be used for testing.
 	#[cfg(feature = "try-runtime")]
-	pub fn try_runtime_upgrade() -> frame_support::weights::Weight {
+	pub fn try_runtime_upgrade() -> Result<frame_support::weights::Weight, &'static str> {
 		<
 			(frame_system::Module::<System>, COnRuntimeUpgrade, AllModules)
 			as
 			OnRuntimeUpgrade
-		>::pre_upgrade().expect("pre_upgrade hook failed.");
+		>::pre_upgrade()?;
 
 		let weight = Self::execute_on_runtime_upgrade();
 
@@ -233,9 +233,9 @@ where
 			(frame_system::Module::<System>, COnRuntimeUpgrade, AllModules)
 			as
 			OnRuntimeUpgrade
-		>::post_upgrade().expect("post_upgrade hook failed.");
+		>::post_upgrade()?;
 
-		weight
+		Ok(weight)
 	}
 
 	/// Start the execution of a particular block.
