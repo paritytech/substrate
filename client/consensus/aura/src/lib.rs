@@ -147,7 +147,6 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, BS, Error, IDP>(
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
 	IDP: CreateInherentDataProviders<B, ()> + Send,
 	IDP::InherentDataProviders: InherentDataProviderExt + Send,
-	IDP::Error: Into<sp_consensus::Error>,
 {
 	let worker = AuraWorker {
 		client,
@@ -168,6 +167,43 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, BS, Error, IDP>(
 		inherent_data_providers,
 		can_author_with,
 	))
+}
+
+/// Build and return the aura worker.
+///
+/// The caller is responsible for running the returned worker.
+pub fn build_aura_worker<B, C, E, I, P, SO, BS, Error>(
+	client: Arc<C>,
+	block_import: I,
+	env: E,
+	sync_oracle: SO,
+	force_authoring: bool,
+	backoff_authoring_blocks: Option<BS>,
+	keystore: SyncCryptoStorePtr,
+) -> impl sc_consensus_slots::SlotWorker<B> where
+	B: BlockT,
+	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + AuxStore + HeaderBackend<B> + Send + Sync,
+	C::Api: AuraApi<B, AuthorityId<P>>,
+	E: Environment<B, Error = Error> + Send + Sync + 'static,
+	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
+	P: Pair + Send + Sync,
+	P::Public: AppPublic + Hash + Member + Encode + Decode,
+	P::Signature: TryFrom<Vec<u8>> + Hash + Member + Encode + Decode,
+	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
+	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
+	SO: SyncOracle + Send + Sync + Clone,
+	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
+{
+	AuraWorker {
+		client,
+		block_import: Arc::new(Mutex::new(block_import)),
+		env,
+		keystore,
+		sync_oracle,
+		force_authoring,
+		backoff_authoring_blocks,
+		_key_type: PhantomData::<P>,
+	}
 }
 
 struct AuraWorker<C, E, I, P, SO, BS> {
@@ -498,7 +534,6 @@ impl<C, P, CAW, IDP> AuraVerifier<C, P, CAW, IDP> where
 		CAW: CanAuthorWith<B>,
 		IDP: CreateInherentDataProviders<B, ()>,
 		IDP::InherentDataProviders: InherentDataProviderExt + Send,
-		IDP::Error: Into<sp_consensus::Error>,
 	{
 		if let Err(e) = self.can_author_with.can_author_with(&block_id) {
 			debug!(
@@ -545,7 +580,6 @@ impl<B: BlockT, C, P, CAW, IDP> Verifier<B> for AuraVerifier<C, P, CAW, IDP> whe
 	CAW: CanAuthorWith<B> + Send + Sync + 'static,
 	IDP: CreateInherentDataProviders<B, ()> + Send + Sync,
 	IDP::InherentDataProviders: InherentDataProviderExt + Send + Sync,
-	IDP::Error: Into<sp_consensus::Error>,
 {
 	async fn verify(
 		&mut self,
@@ -559,10 +593,13 @@ impl<B: BlockT, C, P, CAW, IDP> Verifier<B> for AuraVerifier<C, P, CAW, IDP> whe
 		let authorities = authorities(self.client.as_ref(), &BlockId::Hash(parent_hash))
 			.map_err(|e| format!("Could not fetch authorities at {:?}: {:?}", parent_hash, e))?;
 
-		let inherent_data_providers = self.inherent_data_providers.create_inherent_data_providers(
-			parent_hash,
-			(),
-		).map_err(|e| Error::<B>::Client(sp_blockchain::Error::Consensus(e.into())))?;
+		let inherent_data_providers = self.inherent_data_providers
+			.create_inherent_data_providers(
+				parent_hash,
+				(),
+			)
+			.await
+			.map_err(|e| Error::<B>::Client(sp_blockchain::Error::Application(e)))?;
 
 		let mut inherent_data = inherent_data_providers.create_inherent_data()
 			.map_err(|e| Error::<B>::Inherent(Box::new(e)))?;
@@ -805,7 +842,6 @@ pub fn import_queue<B, I, C, P, S, CAW, IDP>(
 	CAW: CanAuthorWith<B> + Send + Sync + 'static,
 	IDP: CreateInherentDataProviders<B, ()> + Sync + Send + 'static,
 	IDP::InherentDataProviders: InherentDataProviderExt + Send + Sync,
-	IDP::Error: Into<sp_consensus::Error>,
 {
 	initialize_authorities_cache(&*client)?;
 

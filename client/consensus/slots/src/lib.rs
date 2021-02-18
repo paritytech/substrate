@@ -71,14 +71,14 @@ pub struct SlotResult<Block: BlockT> {
 /// The implementation should not make any assumptions of the slot being bound to the time or
 /// similar. The only valid assumption is that the slot number is always increasing.
 pub trait SlotWorker<B: BlockT> {
-	/// The type of the future that will be returned when a new slot is triggered.
-	type OnSlot: Future<Output = Option<SlotResult<B>>>;
-
 	/// Called when a new slot is triggered.
 	///
 	/// Returns a future that resolves to a [`SlotResult`] iff a block was successfully built in
 	/// the slot. Otherwise `None` is returned.
-	fn on_slot(&mut self, slot_info: SlotInfo<B>) -> Self::OnSlot;
+	fn on_slot(
+		&mut self,
+		slot_info: SlotInfo<B>,
+	) -> Pin<Box<dyn Future<Output = Option<SlotResult<B>>> + Send>>;
 }
 
 /// A skeleton implementation for `SlotWorker` which tries to claim a slot at
@@ -401,9 +401,10 @@ pub trait SimpleSlotWorker<B: BlockT> {
 }
 
 impl<B: BlockT, T: SimpleSlotWorker<B>> SlotWorker<B> for T {
-	type OnSlot = Pin<Box<dyn Future<Output = Option<SlotResult<B>>> + Send>>;
-
-	fn on_slot(&mut self, slot_info: SlotInfo<B>) -> Self::OnSlot {
+	fn on_slot(
+		&mut self,
+		slot_info: SlotInfo<B>,
+	) -> Pin<Box<dyn Future<Output = Option<SlotResult<B>>> + Send>> {
 		SimpleSlotWorker::on_slot(self, slot_info)
 	}
 }
@@ -477,7 +478,6 @@ where
 	B: BlockT,
 	C: SelectChain<B>,
 	W: SlotWorker<B>,
-	W::OnSlot: Unpin,
 	SO: SyncOracle + Send,
 	T: SlotData + Clone,
 	CAW: CanAuthorWith<B> + Send,
