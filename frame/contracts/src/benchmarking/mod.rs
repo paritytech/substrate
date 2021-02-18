@@ -331,8 +331,13 @@ benchmarks! {
 	// determine the contract address.
 	// `c`: Size of the code in kilobytes.
 	// `s`: Size of the salt in kilobytes.
+	//
+	// # Note
+	//
+	// We cannot let `c` grow to the maximum code size because the code is not allowed
+	// to be larger than the maximum size **after instrumentation**.
 	instantiate_with_code {
-		let c in 0 .. T::MaxCodeSize::get() / 1024;
+		let c in 0 .. Perbill::from_percent(50).mul_ceil(T::MaxCodeSize::get() / 1024);
 		let s in 0 .. code::max_pages::<T>() * 64;
 		let salt = vec![42u8; (s * 1024) as usize];
 		let endowment = caller_funding::<T>() / 3u32.into();
