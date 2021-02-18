@@ -2678,9 +2678,9 @@ mod tests {
 
 	#[test]
 	fn on_runtime_upgrade_should_work() {
-		sp_io::TestExternalities::default().execute_with(|| {
+		sp_io::TestExternalities::default().execute_with(||
 			assert_eq!(<Module<TraitImpl> as OnRuntimeUpgrade>::on_runtime_upgrade(), 10)
-		});
+		);
 	}
 
 	#[test]
