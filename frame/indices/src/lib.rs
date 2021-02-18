@@ -43,7 +43,7 @@ type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Con
 pub trait Config: frame_system::Config {
 	/// Type used for storing an account's index; implies the maximum number of accounts the system
 	/// can hold.
-	type AccountIndex: Parameter + Member + Codec + Default + AtLeast32Bit + Copy;
+	type AccountIndex: Parameter + Member + Codec + Default + AtLeast32Bit + Copy + scale_info::TypeInfo;
 
 	/// The currency trait.
 	type Currency: ReservableCurrency<Self::AccountId>;
@@ -295,7 +295,10 @@ impl<T: Config> Module<T> {
 	}
 }
 
-impl<T: Config> StaticLookup for Module<T> {
+impl<T: Config> StaticLookup for Module<T>
+where
+	<<T as Config>::AccountIndex as codec::HasCompact>::Type: scale_info::TypeInfo
+{
 	type Source = MultiAddress<T::AccountId, T::AccountIndex>;
 	type Target = T::AccountId;
 
