@@ -425,7 +425,7 @@ pub trait ProvideInherent {
 	///
 	/// # Warning
 	///
-	/// If inherent is required then the runtime only assert at least one unsigned extrinsic of the
+	/// If inherent is required then the runtime asserts that at least one unsigned extrinsic of the
 	/// type [`Self::Call`] is in the block. If the pallet also accept some unsigned transactions
 	/// then this only assert that an inherent call or an unsigned transaction is in the block.
 	///
@@ -442,7 +442,7 @@ pub trait ProvideInherent {
 	/// included in the block by its author. Whereas the second parameter represents the inherent
 	/// data that the verifying node calculates.
 	///
-	/// NOTE: This function is called for any unsigned extrinsics with a call of type
+	/// NOTE: This function is called for any unsigned extrinsic with a call of type
 	/// [`Self::Call`] in the block.
 	/// Those checks are executed in a row from the state of the parent of the block.
 	fn check_inherent(_: &Self::Call, _: &InherentData) -> Result<(), Self::Error> {
