@@ -381,8 +381,10 @@ impl offchain::DbExternalities for TestOffchainExt {
 	) -> bool {
 		let mut state = self.0.write();
 		match kind {
-			StorageKind::LOCAL => state.local_storage.compare_and_set(b"", key, old_value, new_value),
-			StorageKind::PERSISTENT => state.persistent_storage.compare_and_set(b"", key, old_value, new_value),
+			StorageKind::LOCAL => state.local_storage
+				.compare_and_set(b"", key, old_value, new_value),
+			StorageKind::PERSISTENT => state.persistent_storage
+				.compare_and_set(b"", key, old_value, new_value),
 		}
 	}
 
