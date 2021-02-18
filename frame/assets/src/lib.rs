@@ -152,7 +152,7 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// The units in which we record balances.
-		type Balance: Member + Parameter + AtLeast32BitUnsigned + Default + Copy;
+		type Balance: Member + Parameter + AtLeast32BitUnsigned + Default + Copy + scale_info::TypeInfo;
 
 		/// The arithmetic type of asset identifier.
 		type AssetId: Member + Parameter + Default + Copy + HasCompact + scale_info::TypeInfo;
