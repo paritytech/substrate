@@ -453,7 +453,7 @@ pub trait BlockNumberProvider {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_core::offchain::{testing, OffchainWorkerExt};
+	use sp_core::offchain::{testing, OffchainWorkerExt, OffchainDbExt};
 	use sp_io::TestExternalities;
 
 	const VAL_1: u32 = 0u32;
@@ -463,6 +463,7 @@ mod tests {
 	fn storage_lock_write_unlock_lock_read_unlock() {
 		let (offchain, state) = testing::TestOffchainExt::new();
 		let mut t = TestExternalities::default();
+		t.register_extension(OffchainDbExt::new(offchain.clone()));
 		t.register_extension(OffchainWorkerExt::new(offchain));
 
 		t.execute_with(|| {
@@ -493,6 +494,7 @@ mod tests {
 	fn storage_lock_and_forget() {
 		let (offchain, state) = testing::TestOffchainExt::new();
 		let mut t = TestExternalities::default();
+		t.register_extension(OffchainDbExt::new(offchain.clone()));
 		t.register_extension(OffchainWorkerExt::new(offchain));
 
 		t.execute_with(|| {
@@ -517,6 +519,7 @@ mod tests {
 	fn storage_lock_and_let_expire_and_lock_again() {
 		let (offchain, state) = testing::TestOffchainExt::new();
 		let mut t = TestExternalities::default();
+		t.register_extension(OffchainDbExt::new(offchain.clone()));
 		t.register_extension(OffchainWorkerExt::new(offchain));
 
 		t.execute_with(|| {
@@ -549,6 +552,7 @@ mod tests {
 	fn extend_active_lock() {
 		let (offchain, state) = testing::TestOffchainExt::new();
 		let mut t = TestExternalities::default();
+		t.register_extension(OffchainDbExt::new(offchain.clone()));
 		t.register_extension(OffchainWorkerExt::new(offchain));
 
 		t.execute_with(|| {

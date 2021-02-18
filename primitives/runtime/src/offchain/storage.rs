@@ -105,6 +105,7 @@ mod tests {
 	use sp_io::TestExternalities;
 	use sp_core::offchain::{
 		OffchainWorkerExt,
+		OffchainDbExt,
 		testing,
 	};
 
@@ -112,6 +113,7 @@ mod tests {
 	fn should_set_and_get() {
 		let (offchain, state) = testing::TestOffchainExt::new();
 		let mut t = TestExternalities::default();
+		t.register_extension(OffchainDbExt::new(offchain.clone()));
 		t.register_extension(OffchainWorkerExt::new(offchain));
 
 		t.execute_with(|| {
