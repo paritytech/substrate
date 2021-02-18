@@ -155,7 +155,7 @@ pub mod pallet {
 		type Balance: Member + Parameter + AtLeast32BitUnsigned + Default + Copy;
 
 		/// The arithmetic type of asset identifier.
-		type AssetId: Member + Parameter + Default + Copy + HasCompact;
+		type AssetId: Member + Parameter + Default + Copy + HasCompact + scale_info::TypeInfo;
 
 		/// The currency mechanism.
 		type Currency: ReservableCurrency<Self::AccountId>;
