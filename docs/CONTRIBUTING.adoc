@@ -10,11 +10,11 @@ Individuals making significant and valuable contributions are given commit-acces
 
 There are a few basic ground-rules for contributors (including the maintainer(s) of the project):
 
-. **No `--force` pushes** or modifying the master branch history in any way. If you need to rebase, ensure you do it in your own repo.
+. **No `--force` pushes** or modifying the master branch history in any way. If you need to rebase, ensure you do it in your own repo. No rewriting of the history after the code has been shared (e.g. through a Pull-Request).
 . **Non-master branches**, prefixed with a short name moniker (e.g. `gav-my-feature`) must be used for ongoing work.
 . **All modifications** must be made in a **pull-request** to solicit feedback from other contributors.
 . A pull-request *must not be merged until CI* has finished successfully.
-. Contributors should adhere to the ./STYLE_GUIDE.md[house coding style].
+. Contributors should adhere to the link:STYLE_GUIDE.md[house coding style].
 
 
 == Merge Process
@@ -71,8 +71,15 @@ To create a Polkadot companion PR:
 . Make the changes required and build polkadot locally.
 . Submit all this as a PR against the Polkadot Repo. Link to your Polkadot PR in the _description_ of your Substrate PR as "polkadot companion: [URL]"
 . Now you should see that the `check_polkadot` CI job will build your Substrate PR agains the mentioned Polkadot branch in your PR description.
-. Wait for reviews on both
-. Once both PRs have been green lit, they can both be merged 🍻.
+. Wait for reviews on both the Substrate and the Polkadot pull request.
+. Once the Substrate pull request runs green, a member of the `parity` github group can comment on the Substrate pull request with `bot merge` which will:
+    - Merge the Substrate pull request.
+    - In case the pull request origins from https://github.com/paritytech/polkadot directly and not from a fork:
+        - The bot will push a commit to the Polkadot pull request updating its Substrate reference.
+        - The bot will merge the Polkadot pull request once all its CI checks are green.
+    - In case the pull request origins from a fork (relevant for pull requests by external contributors):
+        - You need to push a commit to the Polkadot pull request updating the Substrate reference.
+        - You need to merge by commenting `bot merge` on the Polkadot pull request once all CI checks on the pull request are green.
 
 If your PR is reviewed well, but a Polkadot PR is missing, signal it with https://github.com/paritytech/substrate/labels/A7-needspolkadotpr[`A7-needspolkadotpr`] to prevent it from getting automatically merged.
 

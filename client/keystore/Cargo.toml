@@ -1,6 +1,6 @@
 [package]
 name = "sc-keystore"
-version = "2.0.0"
+version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
@@ -15,12 +15,16 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 
 [dependencies]
+async-trait = "0.1.30"
 derive_more = "0.99.2"
-sp-core = { version = "2.0.0", path = "../../primitives/core" }
-sp-application-crypto = { version = "2.0.0", path = "../../primitives/application-crypto" }
+futures = "0.3.9"
+futures-util = "0.3.4"
+sp-application-crypto = { version = "3.0.0", path = "../../primitives/application-crypto" }
+sp-core = { version = "3.0.0", path = "../../primitives/core" }
+sp-keystore = { version = "0.9.0", path = "../../primitives/keystore" }
 hex = "0.4.0"
 merlin = { version = "2.0", default-features = false }
-parking_lot = "0.10.0"
+parking_lot = "0.11.1"
 rand = "0.7.2"
 serde_json = "1.0.41"
 subtle = "2.1.1"

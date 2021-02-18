@@ -1,0 +1,28 @@
+[package]
+name = "sc-sync-state-rpc"
+version = "0.9.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "A RPC handler to create sync states for light clients."
+edition = "2018"
+license = "Apache-2.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+readme = "README.md"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+thiserror = "1.0.21"
+jsonrpc-core = "15.0"
+jsonrpc-core-client = "15.0"
+jsonrpc-derive = "15.0"
+sc-chain-spec = { version = "3.0.0", path = "../chain-spec" }
+sc-client-api = { version = "3.0.0", path = "../api" }
+sc-consensus-babe = { version = "0.9.0", path = "../consensus/babe" }
+sc-consensus-epochs = { version = "0.9.0", path = "../consensus/epochs" }
+sc-finality-grandpa = { version = "0.9.0", path = "../finality-grandpa" }
+sc-rpc-api = { version = "0.9.0", path = "../rpc-api" }
+serde_json = "1.0.58"
+sp-blockchain = { version = "3.0.0", path = "../../primitives/blockchain" }
+sp-runtime = { version = "3.0.0", path = "../../primitives/runtime" }

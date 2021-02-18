@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -56,8 +56,12 @@ pub mod traits;
 pub mod transaction_validity;
 pub mod random_number_generator;
 mod runtime_string;
+mod multiaddress;
 
 pub use crate::runtime_string::*;
+
+// Re-export Multiaddress
+pub use multiaddress::MultiAddress;
 
 /// Re-export these since they're only "kind of" generic.
 pub use generic::{DigestItem, Digest};
@@ -388,10 +392,10 @@ pub type DispatchResultWithInfo<T> = sp_std::result::Result<T, DispatchErrorWith
 
 /// Reason why a dispatch call failed.
 #[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum DispatchError {
 	/// Some error occurred.
-	Other(#[codec(skip)] &'static str),
+	Other(#[codec(skip)] #[cfg_attr(feature = "std", serde(skip_deserializing))] &'static str),
 	/// Failed to lookup some data.
 	CannotLookup,
 	/// A bad origin.
@@ -404,8 +408,13 @@ pub enum DispatchError {
 		error: u8,
 		/// Optional error message.
 		#[codec(skip)]
+		#[cfg_attr(feature = "std", serde(skip_deserializing))]
 		message: Option<&'static str>,
 	},
+	/// At least one consumer is remaining so the account cannot be destroyed.
+	ConsumerRemaining,
+	/// There are no providers so the account cannot be created.
+	NoProviders,
 }
 
 /// Result of a `Dispatchable` which contains the `DispatchResult` and additional information about
@@ -455,6 +464,15 @@ impl From<crate::traits::BadOrigin> for DispatchError {
 	}
 }
 
+impl From<crate::traits::StoredMapError> for DispatchError {
+	fn from(e: crate::traits::StoredMapError) -> Self {
+		match e {
+			crate::traits::StoredMapError::ConsumerRemaining => Self::ConsumerRemaining,
+			crate::traits::StoredMapError::NoProviders => Self::NoProviders,
+		}
+	}
+}
+
 impl From<&'static str> for DispatchError {
 	fn from(err: &'static str) -> DispatchError {
 		DispatchError::Other(err)
@@ -465,9 +483,11 @@ impl From<DispatchError> for &'static str {
 	fn from(err: DispatchError) -> &'static str {
 		match err {
 			DispatchError::Other(msg) => msg,
-			DispatchError::CannotLookup => "Can not lookup",
+			DispatchError::CannotLookup => "Cannot lookup",
 			DispatchError::BadOrigin => "Bad origin",
 			DispatchError::Module { message, .. } => message.unwrap_or("Unknown module error"),
+			DispatchError::ConsumerRemaining => "Consumer remaining",
+			DispatchError::NoProviders => "No providers",
 		}
 	}
 }
@@ -485,7 +505,7 @@ impl traits::Printable for DispatchError {
 		"DispatchError".print();
 		match self {
 			Self::Other(err) => err.print(),
-			Self::CannotLookup => "Can not lookup".print(),
+			Self::CannotLookup => "Cannot lookup".print(),
 			Self::BadOrigin => "Bad origin".print(),
 			Self::Module { index, error, message } => {
 				index.print();
@@ -494,6 +514,8 @@ impl traits::Printable for DispatchError {
 					msg.print();
 				}
 			}
+			Self::ConsumerRemaining => "Consumer remaining".print(),
+			Self::NoProviders => "No providers".print(),
 		}
 	}
 }
@@ -569,116 +591,6 @@ pub fn verify_encoded_lazy<V: Verify, T: codec::Encode>(
 		LazyEncode { inner: || item.encode(), encoded: None },
 		signer,
 	)
-}
-
-/// Helper macro for `impl_outer_config`
-#[macro_export]
-macro_rules! __impl_outer_config_types {
-	// Generic + Instance
-	(
-		$concrete:ident $config:ident $snake:ident { $instance:ident } < $ignore:ident >;
-		$( $rest:tt )*
-	) => {
-		#[cfg(any(feature = "std", test))]
-		pub type $config = $snake::GenesisConfig<$concrete, $snake::$instance>;
-		$crate::__impl_outer_config_types! { $concrete $( $rest )* }
-	};
-	// Generic
-	(
-		$concrete:ident $config:ident $snake:ident < $ignore:ident >;
-		$( $rest:tt )*
-	) => {
-		#[cfg(any(feature = "std", test))]
-		pub type $config = $snake::GenesisConfig<$concrete>;
-		$crate::__impl_outer_config_types! { $concrete $( $rest )* }
-	};
-	// No Generic and maybe Instance
-	(
-		$concrete:ident $config:ident $snake:ident $( { $instance:ident } )?;
-		$( $rest:tt )*
-	) => {
-		#[cfg(any(feature = "std", test))]
-		pub type $config = $snake::GenesisConfig;
-		$crate::__impl_outer_config_types! { $concrete $( $rest )* }
-	};
-	($concrete:ident) => ()
-}
-
-/// Implement the output "meta" module configuration struct,
-/// which is basically:
-/// pub struct GenesisConfig {
-/// 	rust_module_one: Option<ModuleOneConfig>,
-/// 	...
-/// }
-#[macro_export]
-macro_rules! impl_outer_config {
-	(
-		pub struct $main:ident for $concrete:ident {
-			$( $config:ident =>
-				$snake:ident $( $instance:ident )? $( <$generic:ident> )*, )*
-		}
-	) => {
-		$crate::__impl_outer_config_types! {
-			$concrete $( $config $snake $( { $instance } )? $( <$generic> )*; )*
-		}
-
-		$crate::paste::item! {
-			#[cfg(any(feature = "std", test))]
-			#[derive($crate::serde::Serialize, $crate::serde::Deserialize)]
-			#[serde(rename_all = "camelCase")]
-			#[serde(deny_unknown_fields)]
-			pub struct $main {
-				$(
-					pub [< $snake $(_ $instance )? >]: Option<$config>,
-				)*
-			}
-			#[cfg(any(feature = "std", test))]
-			impl $crate::BuildStorage for $main {
-				fn assimilate_storage(
-					&self,
-					storage: &mut $crate::Storage,
-				) -> std::result::Result<(), String> {
-					$(
-						if let Some(ref extra) = self.[< $snake $(_ $instance )? >] {
-							$crate::impl_outer_config! {
-								@CALL_FN
-								$concrete;
-								$snake;
-								$( $instance )?;
-								extra;
-								storage;
-							}
-						}
-					)*
-					Ok(())
-				}
-			}
-		}
-	};
-	(@CALL_FN
-		$runtime:ident;
-		$module:ident;
-		$instance:ident;
-		$extra:ident;
-		$storage:ident;
-	) => {
-		$crate::BuildModuleGenesisStorage::<$runtime, $module::$instance>::build_module_genesis_storage(
-			$extra,
-			$storage,
-		)?;
-	};
-	(@CALL_FN
-		$runtime:ident;
-		$module:ident;
-		;
-		$extra:ident;
-		$storage:ident;
-	) => {
-		$crate::BuildModuleGenesisStorage::<$runtime, $module::__InherentHiddenInstance>::build_module_genesis_storage(
-			$extra,
-			$storage,
-		)?;
-	}
 }
 
 /// Checks that `$x` is equal to `$y` with an error rate of `$error`.

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -141,8 +141,9 @@
 //! block announces are pushed to other nodes. The handshake is empty on both sides. The message
 //! format is a SCALE-encoded tuple containing a block header followed with an opaque list of
 //! bytes containing some data associated with this block announcement, e.g. a candidate message.
-//! - Notifications protocols that are registered using the `register_notifications_protocol`
-//! method. For example: `/paritytech/grandpa/1`. See below for more information.
+//! - Notifications protocols that are registered using
+//! `NetworkConfiguration::notifications_protocols`. For example: `/paritytech/grandpa/1`. See
+//! below for more information.
 //!
 //! ## The legacy Substrate substream
 //!
@@ -245,12 +246,9 @@
 //!
 
 mod behaviour;
-mod block_requests;
 mod chain;
 mod peer_info;
 mod discovery;
-mod finality_requests;
-mod light_client_handler;
 mod on_demand_layer;
 mod protocol;
 mod request_responses;
@@ -259,6 +257,9 @@ mod service;
 mod transport;
 mod utils;
 
+pub mod block_request_handler;
+pub mod bitswap;
+pub mod light_client_requests;
 pub mod config;
 pub mod error;
 pub mod gossip;
@@ -269,7 +270,7 @@ pub use libp2p::{multiaddr, Multiaddr, PeerId};
 pub use protocol::{event::{DhtEvent, Event, ObservedRole}, sync::SyncState, PeerInfo};
 pub use service::{
 	NetworkService, NetworkWorker, RequestFailure, OutboundFailure, NotificationSender,
-	NotificationSenderReady,
+	NotificationSenderReady, IfDisconnected,
 };
 
 pub use sc_peerset::ReputationChange;
@@ -283,6 +284,9 @@ use sp_runtime::traits::{Block as BlockT, NumberFor};
 /// case of (possibly repeated) simultaneous dialing attempts between
 /// two peers, the per-peer connection limit is not set to 1 but 2.
 const MAX_CONNECTIONS_PER_PEER: usize = 2;
+
+/// The maximum number of concurrent established connections that were incoming.
+const MAX_CONNECTIONS_ESTABLISHED_INCOMING: u32 = 10_000;
 
 /// Minimum Requirements for a Hash within Networking
 pub trait ExHashT: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static {}

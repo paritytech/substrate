@@ -14,9 +14,10 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 ansi_term = "0.12.1"
-sc-keystore = { version = "2.0.0", path = "../../../client/keystore" }
-sc-chain-spec = { version = "2.0.0", path = "../../../client/chain-spec" }
+sc-keystore = { version = "3.0.0", path = "../../../client/keystore" }
+sc-chain-spec = { version = "3.0.0", path = "../../../client/chain-spec" }
 node-cli = { version = "2.0.0", path = "../../node/cli" }
-sp-core = { version = "2.0.0", path = "../../../primitives/core" }
+sp-core = { version = "3.0.0", path = "../../../primitives/core" }
+sp-keystore = { version = "0.9.0", path = "../../../primitives/keystore" }
 rand = "0.7.2"
 structopt = "0.3.8"

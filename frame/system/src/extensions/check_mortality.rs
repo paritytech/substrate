@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,8 +16,7 @@
 // limitations under the License.
 
 use codec::{Encode, Decode};
-use crate::{Trait, Module, BlockHash};
-use frame_support::StorageMap;
+use crate::{Config, Module, BlockHash};
 use sp_runtime::{
 	generic::Era,
 	traits::{SignedExtension, DispatchInfoOf, SaturatedConversion},
@@ -28,16 +27,16 @@ use sp_runtime::{
 
 /// Check for transaction mortality.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct CheckMortality<T: Trait + Send + Sync>(Era, sp_std::marker::PhantomData<T>);
+pub struct CheckMortality<T: Config + Send + Sync>(Era, sp_std::marker::PhantomData<T>);
 
-impl<T: Trait + Send + Sync> CheckMortality<T> {
+impl<T: Config + Send + Sync> CheckMortality<T> {
 	/// utility constructor. Used only in client/factory code.
 	pub fn from(era: Era) -> Self {
 		Self(era, sp_std::marker::PhantomData)
 	}
 }
 
-impl<T: Trait + Send + Sync> sp_std::fmt::Debug for CheckMortality<T> {
+impl<T: Config + Send + Sync> sp_std::fmt::Debug for CheckMortality<T> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(f, "CheckMortality({:?})", self.0)
@@ -49,7 +48,7 @@ impl<T: Trait + Send + Sync> sp_std::fmt::Debug for CheckMortality<T> {
 	}
 }
 
-impl<T: Trait + Send + Sync> SignedExtension for CheckMortality<T> {
+impl<T: Config + Send + Sync> SignedExtension for CheckMortality<T> {
 	type AccountId = T::AccountId;
 	type Call = T::Call;
 	type AdditionalSigned = T::Hash;
@@ -111,7 +110,7 @@ mod tests {
 			let normal = DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: Pays::Yes };
 			let len = 0_usize;
 			let ext = (
-				crate::CheckWeight::<Test>::default(),
+				crate::CheckWeight::<Test>::new(),
 				CheckMortality::<Test>::from(Era::mortal(16, 256)),
 			);
 			System::set_block_number(17);

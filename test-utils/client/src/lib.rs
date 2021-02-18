@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -33,7 +33,7 @@ pub use sp_keyring::{
 	ed25519::Keyring as Ed25519Keyring,
 	sr25519::Keyring as Sr25519Keyring,
 };
-pub use sp_core::traits::BareCryptoStorePtr;
+pub use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 pub use sp_runtime::{Storage, StorageChild};
 pub use sp_state_machine::ExecutionStrategy;
 pub use sc_service::{RpcHandlers, RpcSession, client};
@@ -76,9 +76,10 @@ pub struct TestClientBuilder<Block: BlockT, Executor, Backend, G: GenesisInit> {
 	child_storage_extension: HashMap<Vec<u8>, StorageChild>,
 	backend: Arc<Backend>,
 	_executor: std::marker::PhantomData<Executor>,
-	keystore: Option<BareCryptoStorePtr>,
+	keystore: Option<SyncCryptoStorePtr>,
 	fork_blocks: ForkBlocks<Block>,
 	bad_blocks: BadBlocks<Block>,
+	enable_offchain_indexing_api: bool,
 }
 
 impl<Block: BlockT, Executor, G: GenesisInit> Default
@@ -114,11 +115,12 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 			keystore: None,
 			fork_blocks: None,
 			bad_blocks: None,
+			enable_offchain_indexing_api: false,
 		}
 	}
 
 	/// Set the keystore that should be used by the externalities.
-	pub fn set_keystore(mut self, keystore: BareCryptoStorePtr) -> Self {
+	pub fn set_keystore(mut self, keystore: SyncCryptoStorePtr) -> Self {
 		self.keystore = Some(keystore);
 		self
 	}
@@ -175,6 +177,12 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 		self
 	}
 
+	/// Enable the offchain indexing api.
+	pub fn enable_offchain_indexing_api(mut self) -> Self {
+		self.enable_offchain_indexing_api = true;
+		self
+	}
+
 	/// Build the test client with the given native executor.
 	pub fn build_with_executor<RuntimeApi>(
 		self,
@@ -216,10 +224,13 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 			self.bad_blocks,
 			ExecutionExtensions::new(
 				self.execution_strategies,
-				self.keystore.clone(),
+				self.keystore,
 			),
 			None,
-			ClientConfig::default(),
+			ClientConfig {
+				offchain_indexing_api: self.enable_offchain_indexing_api,
+				..Default::default()
+			},
 		).expect("Creates new client");
 
 		let longest_chain = sc_consensus::LongestChain::new(self.backend);
@@ -259,7 +270,7 @@ impl<Block: BlockT, E, Backend, G: GenesisInit> TestClientBuilder<
 			executor,
 			Box::new(sp_core::testing::TaskExecutor::new()),
 			Default::default(),
-		);
+		).expect("Creates LocalCallExecutor");
 
 		self.build_with_executor(executor)
 	}

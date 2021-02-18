@@ -1,6 +1,6 @@
 [package]
 name = "substrate-browser-utils"
-version = "0.8.0"
+version = "0.9.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Utilities for creating a browser light-client."
 edition = "2018"
@@ -16,21 +16,22 @@ targets = ["x86_64-unknown-linux-gnu"]
 futures = { version = "0.3", features = ["compat"] }
 futures01 = { package = "futures", version = "0.1.29" }
 log = "0.4.8"
-libp2p-wasm-ext = { version = "0.22", features = ["websocket"] }
+libp2p-wasm-ext = { version = "0.27", features = ["websocket"] }
 console_error_panic_hook = "0.1.6"
-console_log = "0.1.2"
 js-sys = "0.3.34"
 wasm-bindgen = "0.2.57"
-wasm-bindgen-futures = "0.4.7"
-kvdb-web = "0.7"
-sp-database = { version = "2.0.0", path = "../../primitives/database" }
-sc-informant = { version = "0.8.0", path = "../../client/informant" }
-sc-service = { version = "0.8.0", path = "../../client/service", default-features = false }
-sc-network = { path = "../../client/network", version = "0.8.0"}
-sc-chain-spec = { path = "../../client/chain-spec", version = "2.0.0"}
+wasm-bindgen-futures = "0.4.18"
+kvdb-web = "0.9.0"
+sp-database = { version = "3.0.0", path = "../../primitives/database" }
+sc-informant = { version = "0.9.0", path = "../../client/informant" }
+sc-service = { version = "0.9.0", path = "../../client/service", default-features = false }
+sc-network = { path = "../../client/network", version = "0.9.0"}
+sc-chain-spec = { path = "../../client/chain-spec", version = "3.0.0"}
+sc-telemetry = { path = "../../client/telemetry", version = "3.0.0"}
+sc-tracing = { path = "../../client/tracing", version = "3.0.0"}
 
 # Imported just for the `wasm-bindgen` feature
-rand6 = { package = "rand", version = "0.6", features = ["wasm-bindgen"] }
+getrandom = { version = "0.2", features = ["js"] }
 rand = { version = "0.7", features = ["wasm-bindgen"] }
 futures-timer = { version = "3.0.1", features = ["wasm-bindgen"]}
 chrono = { version = "0.4", features = ["wasmbind"] }

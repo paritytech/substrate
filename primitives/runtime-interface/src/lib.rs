@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,16 +26,17 @@
 //! # Using a type in a runtime interface
 //!
 //! Any type that should be used in a runtime interface as argument or return value needs to
-//! implement [`RIType`]. The associated type [`FFIType`](RIType::FFIType) is the type that is used
-//! in the FFI function to represent the actual type. For example `[T]` is represented by an `u64`.
-//! The slice pointer and the length will be mapped to an `u64` value. For more information see
-//! this [table](#ffi-type-and-conversion). The FFI function definition is used when calling from
-//! the wasm runtime into the node.
+//! implement [`RIType`]. The associated type [`FFIType`](./trait.RIType.html#associatedtype.FFIType)
+//! is the type that is used in the FFI function to represent the actual type. For example `[T]` is
+//! represented by an `u64`. The slice pointer and the length will be mapped to an `u64` value.
+//! For more information see this [table](#ffi-type-and-conversion).
+//! The FFI function definition is used when calling from the wasm runtime into the node.
 //!
-//! Traits are used to convert from a type to the corresponding [`RIType::FFIType`].
+//! Traits are used to convert from a type to the corresponding
+//! [`RIType::FFIType`](./trait.RIType.html#associatedtype.FFIType).
 //! Depending on where and how a type should be used in a function signature, a combination of the
 //! following traits need to be implemented:
-//!
+//! <!-- markdown-link-check-enable -->
 //! 1. Pass as function argument: [`wasm::IntoFFIValue`] and [`host::FromFFIValue`]
 //! 2. As function return value: [`wasm::FromFFIValue`] and [`host::IntoFFIValue`]
 //! 3. Pass as mutable function argument: [`host::IntoPreallocatedFFIValue`]
@@ -43,7 +44,7 @@
 //! The traits are implemented for most of the common types like `[T]`, `Vec<T>`, arrays and
 //! primitive types.
 //!
-//! For custom types, we provide the [`PassBy`](pass_by::PassBy) trait and strategies that define
+//! For custom types, we provide the [`PassBy`](./pass_by#PassBy) trait and strategies that define
 //! how a type is passed between the wasm runtime and the node. Each strategy also provides a derive
 //! macro to simplify the implementation.
 //!
@@ -69,7 +70,7 @@
 //! ```
 //!
 //! For more information on declaring a runtime interface, see
-//! [`#[runtime_interface]`](attr.runtime_interface.html).
+//! [`#[runtime_interface]`](./attr.runtime_interface.html).
 //!
 //! # FFI type and conversion
 //!
@@ -97,8 +98,8 @@
 //! | `[u8; N]` | `u32` | `v.as_ptr()` |
 //! | `*const T` | `u32` | `Identity` |
 //! | `Option<T>` | `u64` | `let e = v.encode();`<br><br><code>e.len() 32bit << 32 &#124; e.as_ptr() 32bit</code> |
-//! | [`T where T: PassBy<PassBy=Inner>`](pass_by::Inner) | Depends on inner | Depends on inner |
-//! | [`T where T: PassBy<PassBy=Codec>`](pass_by::Codec) | `u64`| <code>v.len() 32bit << 32 &#124; v.as_ptr() 32bit</code> |
+//! | [`T where T: PassBy<PassBy=Inner>`](./pass_by#Inner) | Depends on inner | Depends on inner |
+//! | [`T where T: PassBy<PassBy=Codec>`](./pass_by#Codec)|`u64`|<code>v.len() 32bit << 32 &#124;v.as_ptr() 32bit</code>|
 //!
 //! `Identity` means that the value is converted directly into the corresponding FFI type.
 
@@ -312,7 +313,7 @@ pub mod pass_by;
 
 mod util;
 
-pub use util::unpack_ptr_and_len;
+pub use util::{unpack_ptr_and_len, pack_ptr_and_len};
 
 /// Something that can be used by the runtime interface as type to communicate between wasm and the
 /// host.

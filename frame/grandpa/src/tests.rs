@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,17 +19,16 @@
 
 #![cfg(test)]
 
-use super::{Call, *};
+use super::{Call, Event, *};
 use crate::mock::*;
 use codec::{Decode, Encode};
 use fg_primitives::ScheduledChange;
 use frame_support::{
 	assert_err, assert_ok,
-	traits::{Currency, OnFinalize},
+	traits::{Currency, OnFinalize, OneSessionHandler},
 	weights::{GetDispatchInfo, Pays},
 };
 use frame_system::{EventRecord, Phase};
-use pallet_session::OneSessionHandler;
 use sp_core::H256;
 use sp_keyring::Ed25519Keyring;
 use sp_runtime::testing::Digest;
@@ -707,8 +706,8 @@ fn report_equivocation_invalid_equivocation_proof() {
 #[test]
 fn report_equivocation_validate_unsigned_prevents_duplicates() {
 	use sp_runtime::transaction_validity::{
-		InvalidTransaction, TransactionLongevity, TransactionPriority, TransactionSource,
-		TransactionValidity, ValidTransaction,
+		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
+		ValidTransaction,
 	};
 
 	let authorities = test_authorities();
@@ -763,7 +762,7 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 				priority: TransactionPriority::max_value(),
 				requires: vec![],
 				provides: vec![("GrandpaEquivocation", tx_tag).encode()],
-				longevity: TransactionLongevity::max_value(),
+				longevity: ReportLongevity::get(),
 				propagate: false,
 			})
 		);
@@ -776,6 +775,15 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 			.unwrap();
 
 		// the report should now be considered stale and the transaction is invalid
+		// the check for staleness should be done on both `validate_unsigned` and on `pre_dispatch`
+		assert_err!(
+			<Grandpa as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
+				TransactionSource::Local,
+				&call,
+			),
+			InvalidTransaction::Stale,
+		);
+
 		assert_err!(
 			<Grandpa as sp_runtime::traits::ValidateUnsigned>::pre_dispatch(&call),
 			InvalidTransaction::Stale,
@@ -850,7 +858,7 @@ fn report_equivocation_has_valid_weight() {
 	// but there's a lower bound of 100 validators.
 	assert!(
 		(1..=100)
-			.map(<Test as Trait>::WeightInfo::report_equivocation)
+			.map(<Test as Config>::WeightInfo::report_equivocation)
 			.collect::<Vec<_>>()
 			.windows(2)
 			.all(|w| w[0] == w[1])
@@ -860,7 +868,7 @@ fn report_equivocation_has_valid_weight() {
 	// with every extra validator.
 	assert!(
 		(100..=1000)
-			.map(<Test as Trait>::WeightInfo::report_equivocation)
+			.map(<Test as Config>::WeightInfo::report_equivocation)
 			.collect::<Vec<_>>()
 			.windows(2)
 			.all(|w| w[0] < w[1])

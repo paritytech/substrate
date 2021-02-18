@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -25,7 +25,6 @@ use std::{
 use codec::{Encode, Decode};
 use sp_core::{
 	convert_hash, NativeOrEncoded, traits::{CodeExecutor, SpawnNamed},
-	offchain::storage::OffchainOverlayedChanges,
 };
 use sp_runtime::{
 	generic::BlockId, traits::{One, Block as BlockT, Header as HeaderT, HashFor},
@@ -105,7 +104,7 @@ impl<Block, B, Local> CallExecutor<Block> for
 			Result<NativeOrEncoded<R>, Self::Error>
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
+		NC: FnOnce() -> result::Result<R, sp_api::ApiError> + UnwindSafe,
 	>(
 		&self,
 		initialize_block_fn: IB,
@@ -113,7 +112,6 @@ impl<Block, B, Local> CallExecutor<Block> for
 		method: &str,
 		call_data: &[u8],
 		changes: &RefCell<OverlayedChanges>,
-		offchain_changes: &RefCell<OffchainOverlayedChanges>,
 		_: Option<&RefCell<StorageTransactionCache<Block, B::State>>>,
 		initialize_block: InitializeBlock<'a, Block>,
 		_manager: ExecutionManager<EM>,
@@ -140,7 +138,6 @@ impl<Block, B, Local> CallExecutor<Block> for
 				method,
 				call_data,
 				changes,
-				offchain_changes,
 				None,
 				initialize_block,
 				ExecutionManager::NativeWhenPossible,
@@ -276,7 +273,8 @@ pub fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader>(
 
 	// TODO: Remove when solved: https://github.com/paritytech/substrate/issues/5047
 	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&trie_backend);
-	let runtime_code = backend_runtime_code.runtime_code()?;
+	let runtime_code = backend_runtime_code.runtime_code()
+		.map_err(|_e| ClientError::RuntimeCodeMissing)?;
 
 	execution_proof_check_on_trie_backend::<H, Header::Number, _, _>(
 		&trie_backend,

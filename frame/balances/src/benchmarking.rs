@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,7 +22,7 @@
 use super::*;
 
 use frame_system::RawOrigin;
-use frame_benchmarking::{benchmarks, account, whitelisted_caller};
+use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
 use sp_runtime::traits::Bounded;
 
 use crate::Module as Balances;
@@ -33,8 +33,6 @@ const ED_MULTIPLIER: u32 = 10;
 
 
 benchmarks! {
-	_ { }
-
 	// Benchmark `transfer` extrinsic with the worst possible conditions:
 	// * Transfer will kill the sender account.
 	// * Transfer will create the recipient account.
@@ -49,7 +47,7 @@ benchmarks! {
 		// Transfer `e - 1` existential deposits + 1 unit, which guarantees to create one account, and reap this user.
 		let recipient: T::AccountId = account("recipient", 0, SEED);
 		let recipient_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(recipient.clone());
-		let transfer_amount = existential_deposit.saturating_mul((ED_MULTIPLIER - 1).into()) + 1.into();
+		let transfer_amount = existential_deposit.saturating_mul((ED_MULTIPLIER - 1).into()) + 1u32.into();
 	}: transfer(RawOrigin::Signed(caller.clone()), recipient_lookup, transfer_amount)
 	verify {
 		assert_eq!(Balances::<T>::free_balance(&caller), Zero::zero());
@@ -138,7 +136,7 @@ benchmarks! {
 		// Transfer `e - 1` existential deposits + 1 unit, which guarantees to create one account, and reap this user.
 		let recipient: T::AccountId = account("recipient", 0, SEED);
 		let recipient_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(recipient.clone());
-		let transfer_amount = existential_deposit.saturating_mul((ED_MULTIPLIER - 1).into()) + 1.into();
+		let transfer_amount = existential_deposit.saturating_mul((ED_MULTIPLIER - 1).into()) + 1u32.into();
 	}: force_transfer(RawOrigin::Root, source_lookup, recipient_lookup, transfer_amount)
 	verify {
 		assert_eq!(Balances::<T>::free_balance(&source), Zero::zero());
@@ -146,51 +144,8 @@ benchmarks! {
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::tests_composite::{ExtBuilder, Test};
-	use frame_support::assert_ok;
-
-	#[test]
-	fn transfer() {
-		ExtBuilder::default().build().execute_with(|| {
-			assert_ok!(test_benchmark_transfer::<Test>());
-		});
-	}
-
-	#[test]
-	fn transfer_best_case() {
-		ExtBuilder::default().build().execute_with(|| {
-			assert_ok!(test_benchmark_transfer_best_case::<Test>());
-		});
-	}
-
-	#[test]
-	fn transfer_keep_alive() {
-		ExtBuilder::default().build().execute_with(|| {
-			assert_ok!(test_benchmark_transfer_keep_alive::<Test>());
-		});
-	}
-
-	#[test]
-	fn transfer_set_balance_creating() {
-		ExtBuilder::default().build().execute_with(|| {
-			assert_ok!(test_benchmark_set_balance_creating::<Test>());
-		});
-	}
-
-	#[test]
-	fn transfer_set_balance_killing() {
-		ExtBuilder::default().build().execute_with(|| {
-			assert_ok!(test_benchmark_set_balance_killing::<Test>());
-		});
-	}
-
-	#[test]
-	fn force_transfer() {
-		ExtBuilder::default().build().execute_with(|| {
-			assert_ok!(test_benchmark_force_transfer::<Test>());
-		});
-	}
-}
+impl_benchmark_test_suite!(
+	Balances,
+	crate::tests_composite::ExtBuilder::default().build(),
+	crate::tests_composite::Test,
+);

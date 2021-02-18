@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,10 +19,13 @@
 
 #![cfg(test)]
 
-use crate::{seq_phragmen, ElectionResult, Assignment, VoteWeight, ExtendedBalance};
-use sp_arithmetic::{PerThing, InnerOf, traits::{SaturatedConversion, Zero, One}};
-use sp_std::collections::btree_map::BTreeMap;
+use crate::*;
+use sp_arithmetic::{
+	traits::{One, SaturatedConversion, Zero},
+	PerThing,
+};
 use sp_runtime::assert_eq_error_rate;
+use sp_std::collections::btree_map::BTreeMap;
 
 #[derive(Default, Debug)]
 pub(crate) struct _Candidate<A> {
@@ -308,20 +311,17 @@ pub(crate) fn create_stake_of(stakes: &[(AccountId, VoteWeight)])
 pub fn check_assignments_sum<T: PerThing>(assignments: Vec<Assignment<AccountId, T>>) {
 	for Assignment { distribution, .. } in assignments {
 		let mut sum: u128 = Zero::zero();
-		distribution.iter().for_each(|(_, p)| sum += p.deconstruct().saturated_into());
+		distribution.iter().for_each(|(_, p)| sum += p.deconstruct().saturated_into::<u128>());
 		assert_eq!(sum, T::ACCURACY.saturated_into(), "Assignment ratio sum is not 100%");
 	}
 }
 
-pub(crate) fn run_and_compare<Output: PerThing>(
+pub(crate) fn run_and_compare<Output: PerThing128>(
 	candidates: Vec<AccountId>,
 	voters: Vec<(AccountId, Vec<AccountId>)>,
 	stake_of: &Box<dyn Fn(&AccountId) -> VoteWeight>,
 	to_elect: usize,
-) where
-	ExtendedBalance: From<InnerOf<Output>>,
-	Output: sp_std::ops::Mul<ExtendedBalance, Output = ExtendedBalance>,
-{
+) {
 	// run fixed point code.
 	let ElectionResult { winners, assignments } = seq_phragmen::<_, Output>(
 		to_elect,

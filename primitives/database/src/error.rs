@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,7 +17,7 @@
 
 /// The error type for database operations.
 #[derive(Debug)]
-pub struct DatabaseError(pub Box<dyn std::error::Error + Send>);
+pub struct DatabaseError(pub Box<dyn std::error::Error + Send + Sync + 'static>);
 
 impl std::fmt::Display for DatabaseError {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -58,8 +58,8 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 ///
 /// The given struct provides function to convert from/to Assignment:
 ///
-/// - [`from_assignment()`].
-/// - [`fn into_assignment()`].
+/// - `fn from_assignment<..>(..)`
+/// - `fn into_assignment<..>(..)`
 ///
 /// The generated struct is by default deriving both `Encode` and `Decode`. This is okay but could
 /// lead to many 0s in the solution. If prefixed with `#[compact]`, then a custom compact encoding
@@ -95,19 +95,11 @@ pub fn generate_solution_type(item: TokenStream) -> TokenStream {
 		compact_encoding,
 	).unwrap_or_else(|e| e.to_compile_error());
 
-	let assignment_impls = assignment::assignment(
-		ident.clone(),
-		voter_type.clone(),
-		target_type.clone(),
-		weight_type.clone(),
-		count,
-	);
-
 	quote!(
 		#imports
 		#solution_struct
-		#assignment_impls
-	).into()
+	)
+	.into()
 }
 
 fn struct_def(
@@ -125,33 +117,37 @@ fn struct_def(
 
 	let singles = {
 		let name = field_name_for(1);
+		// NOTE: we use the visibility of the struct for the fields as well.. could be made better.
 		quote!(
-			#name: Vec<(#voter_type, #target_type)>,
+			#vis #name: Vec<(#voter_type, #target_type)>,
 		)
 	};
 
 	let doubles = {
 		let name = field_name_for(2);
 		quote!(
-			#name: Vec<(#voter_type, (#target_type, #weight_type), #target_type)>,
+			#vis #name: Vec<(#voter_type, (#target_type, #weight_type), #target_type)>,
 		)
 	};
 
-	let rest = (3..=count).map(|c| {
-		let field_name = field_name_for(c);
-		let array_len = c - 1;
-		quote!(
-			#field_name: Vec<(
-				#voter_type,
-				[(#target_type, #weight_type); #array_len],
-				#target_type
-			)>,
-		)
-	}).collect::<TokenStream2>();
+	let rest = (3..=count)
+		.map(|c| {
+			let field_name = field_name_for(c);
+			let array_len = c - 1;
+			quote!(
+				#vis #field_name: Vec<(
+					#voter_type,
+					[(#target_type, #weight_type); #array_len],
+					#target_type
+				)>,
+			)
+		})
+		.collect::<TokenStream2>();
 
 	let len_impl = len_impl(count);
 	let edge_count_impl = edge_count_impl(count);
 	let unique_targets_impl = unique_targets_impl(count);
+	let remove_voter_impl = remove_voter_impl(count);
 
 	let derives_and_maybe_compact_encoding = if compact_encoding {
 		// custom compact encoding.
@@ -171,40 +167,38 @@ fn struct_def(
 		quote!(#[derive(Default, PartialEq, Eq, Clone, Debug, _npos::codec::Encode, _npos::codec::Decode)])
 	};
 
+	let from_impl = assignment::from_impl(count);
+	let into_impl = assignment::into_impl(count, weight_type.clone());
+
 	Ok(quote! (
 		/// A struct to encode a election assignment in a compact way.
 		#derives_and_maybe_compact_encoding
 		#vis struct #ident { #singles #doubles #rest }
 
-		impl _npos::VotingLimit for #ident {
+		use _npos::__OrInvalidIndex;
+		impl _npos::CompactSolution for #ident {
 			const LIMIT: usize = #count;
-		}
+			type Voter = #voter_type;
+			type Target = #target_type;
+			type Accuracy = #weight_type;
 
-		impl #ident {
-			/// Get the length of all the assignments that this type is encoding. This is basically
-			/// the same as the number of assignments, or the number of voters in total.
-			pub fn len(&self) -> usize {
+			fn voter_count(&self) -> usize {
 				let mut all_len = 0usize;
 				#len_impl
 				all_len
 			}
 
-			/// Get the total count of edges.
-			pub fn edge_count(&self) -> usize {
+			fn edge_count(&self) -> usize {
 				let mut all_edges = 0usize;
 				#edge_count_impl
 				all_edges
 			}
 
-			/// Get the number of unique targets in the whole struct.
-			///
-			/// Once presented with a list of winners, this set and the set of winners must be
-			/// equal.
-			///
-			/// The resulting indices are sorted.
-			pub fn unique_targets(&self) -> Vec<#target_type> {
-				let mut all_targets: Vec<#target_type> = Vec::with_capacity(self.average_edge_count());
-				let mut maybe_insert_target = |t: #target_type| {
+			fn unique_targets(&self) -> Vec<Self::Target> {
+				// NOTE: this implementation returns the targets sorted, but we don't use it yet per
+				// se, nor is the API enforcing it.
+				let mut all_targets: Vec<Self::Target> = Vec::with_capacity(self.average_edge_count());
+				let mut maybe_insert_target = |t: Self::Target| {
 					match all_targets.binary_search(&t) {
 						Ok(_) => (),
 						Err(pos) => all_targets.insert(pos, t)
@@ -216,12 +210,82 @@ fn struct_def(
 				all_targets
 			}
 
-			/// Get the average edge count.
-			pub fn average_edge_count(&self) -> usize {
-				self.edge_count().checked_div(self.len()).unwrap_or(0)
+			fn remove_voter(&mut self, to_remove: Self::Voter) -> bool {
+				#remove_voter_impl
+				return false
+			}
+
+			fn from_assignment<FV, FT, A>(
+				assignments: Vec<_npos::Assignment<A, #weight_type>>,
+				index_of_voter: FV,
+				index_of_target: FT,
+			) -> Result<Self, _npos::Error>
+				where
+					A: _npos::IdentifierT,
+					for<'r> FV: Fn(&'r A) -> Option<Self::Voter>,
+					for<'r> FT: Fn(&'r A) -> Option<Self::Target>,
+			{
+				let mut compact: #ident = Default::default();
+
+				for _npos::Assignment { who, distribution } in assignments {
+					match distribution.len() {
+						0 => continue,
+						#from_impl
+						_ => {
+							return Err(_npos::Error::CompactTargetOverflow);
+						}
+					}
+				};
+				Ok(compact)
+			}
+
+			fn into_assignment<A: _npos::IdentifierT>(
+				self,
+				voter_at: impl Fn(Self::Voter) -> Option<A>,
+				target_at: impl Fn(Self::Target) -> Option<A>,
+			) -> Result<Vec<_npos::Assignment<A, #weight_type>>, _npos::Error> {
+				let mut assignments: Vec<_npos::Assignment<A, #weight_type>> = Default::default();
+				#into_impl
+				Ok(assignments)
 			}
 		}
 	))
+}
+
+fn remove_voter_impl(count: usize) -> TokenStream2 {
+	let field_name = field_name_for(1);
+	let single = quote! {
+		if let Some(idx) = self.#field_name.iter().position(|(x, _)| *x == to_remove) {
+			self.#field_name.remove(idx);
+			return true
+		}
+	};
+
+	let field_name = field_name_for(2);
+	let double = quote! {
+		if let Some(idx) = self.#field_name.iter().position(|(x, _, _)| *x == to_remove) {
+			self.#field_name.remove(idx);
+			return true
+		}
+	};
+
+	let rest = (3..=count)
+		.map(|c| {
+			let field_name = field_name_for(c);
+			quote! {
+				if let Some(idx) = self.#field_name.iter().position(|(x, _, _)| *x == to_remove) {
+					self.#field_name.remove(idx);
+					return true
+				}
+			}
+		})
+		.collect::<TokenStream2>();
+
+	quote! {
+		#single
+		#double
+		#rest
+	}
 }
 
 fn len_impl(count: usize) -> TokenStream2 {

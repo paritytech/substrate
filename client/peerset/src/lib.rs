@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,14 +18,27 @@
 
 //! Peer Set Manager (PSM). Contains the strategy for choosing which nodes the network should be
 //! connected to.
+//!
+//! The PSM handles *sets* of nodes. A set of nodes is defined as the nodes that are believed to
+//! support a certain capability, such as handling blocks and transactions of a specific chain,
+//! or collating a certain parachain.
+//!
+//! For each node in each set, the peerset holds a flag specifying whether the node is
+//! connected to us or not.
+//!
+//! This connected/disconnected status is specific to the node and set combination, and it is for
+//! example possible for a node to be connected through a specific set but not another.
+//!
+//! In addition, for each, set, the peerset also holds a list of reserved nodes towards which it
+//! will at all time try to maintain a connection with.
 
 mod peersstate;
 
-use std::{collections::{HashSet, HashMap}, collections::VecDeque};
+use std::{collections::HashSet, collections::VecDeque};
 use futures::prelude::*;
 use log::{debug, error, trace};
 use serde_json::json;
-use std::{pin::Pin, task::{Context, Poll}, time::Duration};
+use std::{collections::HashMap, pin::Pin, task::{Context, Poll}, time::Duration};
 use wasm_timer::Instant;
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
 
@@ -35,22 +48,46 @@ pub use libp2p::PeerId;
 const BANNED_THRESHOLD: i32 = 82 * (i32::min_value() / 100);
 /// Reputation change for a node when we get disconnected from it.
 const DISCONNECT_REPUTATION_CHANGE: i32 = -256;
-/// Reserved peers group ID
-const RESERVED_NODES: &'static str = "reserved";
 /// Amount of time between the moment we disconnect from a node and the moment we remove it from
 /// the list.
 const FORGET_AFTER: Duration = Duration::from_secs(3600);
 
 #[derive(Debug)]
 enum Action {
-	AddReservedPeer(PeerId),
-	RemoveReservedPeer(PeerId),
-	SetReservedPeers(HashSet<PeerId>),
-	SetReservedOnly(bool),
+	AddReservedPeer(SetId, PeerId),
+	RemoveReservedPeer(SetId, PeerId),
+	SetReservedPeers(SetId, HashSet<PeerId>),
+	SetReservedOnly(SetId, bool),
 	ReportPeer(PeerId, ReputationChange),
-	SetPriorityGroup(String, HashSet<PeerId>),
-	AddToPriorityGroup(String, PeerId),
-	RemoveFromPriorityGroup(String, PeerId),
+	AddToPeersSet(SetId, PeerId),
+	RemoveFromPeersSet(SetId, PeerId),
+}
+
+/// Identifier of a set in the peerset.
+///
+/// Can be constructed using the `From<usize>` trait implementation based on the index of the set
+/// within [`PeersetConfig::sets`]. For example, the first element of [`PeersetConfig::sets`] is
+/// later referred to with `SetId::from(0)`. It is intended that the code responsible for building
+/// the [`PeersetConfig`] is also responsible for constructing the [`SetId`]s.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SetId(usize);
+
+impl SetId {
+	pub const fn from(id: usize) -> Self {
+		SetId(id)
+	}
+}
+
+impl From<usize> for SetId {
+	fn from(id: usize) -> Self {
+		SetId(id)
+	}
+}
+
+impl From<SetId> for usize {
+	fn from(id: SetId) -> Self {
+		id.0
+	}
 }
 
 /// Description of a reputation adjustment for a node.
@@ -87,26 +124,27 @@ impl PeersetHandle {
 	/// Has no effect if the node was already a reserved peer.
 	///
 	/// > **Note**: Keep in mind that the networking has to know an address for this node,
-	/// >			otherwise it will not be able to connect to it.
-	pub fn add_reserved_peer(&self, peer_id: PeerId) {
-		let _ = self.tx.unbounded_send(Action::AddReservedPeer(peer_id));
+	/// >           otherwise it will not be able to connect to it.
+	pub fn add_reserved_peer(&self, set_id: SetId, peer_id: PeerId) {
+		let _ = self.tx.unbounded_send(Action::AddReservedPeer(set_id, peer_id));
 	}
 
 	/// Remove a previously-added reserved peer.
 	///
 	/// Has no effect if the node was not a reserved peer.
-	pub fn remove_reserved_peer(&self, peer_id: PeerId) {
-		let _ = self.tx.unbounded_send(Action::RemoveReservedPeer(peer_id));
+	pub fn remove_reserved_peer(&self, set_id: SetId, peer_id: PeerId) {
+		let _ = self.tx.unbounded_send(Action::RemoveReservedPeer(set_id, peer_id));
 	}
 
-	/// Sets whether or not the peerset only has connections .
-	pub fn set_reserved_only(&self, reserved: bool) {
-		let _ = self.tx.unbounded_send(Action::SetReservedOnly(reserved));
+	/// Sets whether or not the peerset only has connections with nodes marked as reserved for
+	/// the given set.
+	pub fn set_reserved_only(&self, set_id: SetId, reserved: bool) {
+		let _ = self.tx.unbounded_send(Action::SetReservedOnly(set_id, reserved));
 	}
-	
+
 	/// Set reserved peers to the new set.
-	pub fn set_reserved_peers(&self, peer_ids: HashSet<PeerId>) {
-		let _ = self.tx.unbounded_send(Action::SetReservedPeers(peer_ids));
+	pub fn set_reserved_peers(&self, set_id: SetId, peer_ids: HashSet<PeerId>) {
+		let _ = self.tx.unbounded_send(Action::SetReservedPeers(set_id, peer_ids));
 	}
 
 	/// Reports an adjustment to the reputation of the given peer.
@@ -114,19 +152,14 @@ impl PeersetHandle {
 		let _ = self.tx.unbounded_send(Action::ReportPeer(peer_id, score_diff));
 	}
 
-	/// Modify a priority group.
-	pub fn set_priority_group(&self, group_id: String, peers: HashSet<PeerId>) {
-		let _ = self.tx.unbounded_send(Action::SetPriorityGroup(group_id, peers));
+	/// Add a peer to a set.
+	pub fn add_to_peers_set(&self, set_id: SetId, peer_id: PeerId) {
+		let _ = self.tx.unbounded_send(Action::AddToPeersSet(set_id, peer_id));
 	}
 
-	/// Add a peer to a priority group.
-	pub fn add_to_priority_group(&self, group_id: String, peer_id: PeerId) {
-		let _ = self.tx.unbounded_send(Action::AddToPriorityGroup(group_id, peer_id));
-	}
-
-	/// Remove a peer from a priority group.
-	pub fn remove_from_priority_group(&self, group_id: String, peer_id: PeerId) {
-		let _ = self.tx.unbounded_send(Action::RemoveFromPriorityGroup(group_id, peer_id));
+	/// Remove a peer from a set.
+	pub fn remove_from_peers_set(&self, set_id: SetId, peer_id: PeerId) {
+		let _ = self.tx.unbounded_send(Action::RemoveFromPeersSet(set_id, peer_id));
 	}
 }
 
@@ -135,10 +168,18 @@ impl PeersetHandle {
 pub enum Message {
 	/// Request to open a connection to the given peer. From the point of view of the PSM, we are
 	/// immediately connected.
-	Connect(PeerId),
+	Connect {
+		set_id: SetId,
+		/// Peer to connect to.
+		peer_id: PeerId,
+	},
 
 	/// Drop the connection to the given peer, or cancel the connection attempt after a `Connect`.
-	Drop(PeerId),
+	Drop {
+		set_id: SetId,
+		/// Peer to disconnect from.
+		peer_id: PeerId,
+	},
 
 	/// Equivalent to `Connect` for the peer corresponding to this incoming index.
 	Accept(IncomingIndex),
@@ -160,26 +201,33 @@ impl From<u64> for IncomingIndex {
 /// Configuration to pass when creating the peer set manager.
 #[derive(Debug)]
 pub struct PeersetConfig {
+	/// List of sets of nodes the peerset manages.
+	pub sets: Vec<SetConfig>,
+}
+
+/// Configuration for a single set of nodes.
+#[derive(Debug)]
+pub struct SetConfig {
 	/// Maximum number of ingoing links to peers.
 	pub in_peers: u32,
 
 	/// Maximum number of outgoing links to peers.
 	pub out_peers: u32,
 
-	/// List of bootstrap nodes to initialize the peer with.
+	/// List of bootstrap nodes to initialize the set with.
 	///
 	/// > **Note**: Keep in mind that the networking has to know an address for these nodes,
-	/// >			otherwise it will not be able to connect to them.
+	/// >           otherwise it will not be able to connect to them.
 	pub bootnodes: Vec<PeerId>,
-
-	/// If true, we only accept nodes in [`PeersetConfig::priority_groups`].
-	pub reserved_only: bool,
 
 	/// Lists of nodes we should always be connected to.
 	///
 	/// > **Note**: Keep in mind that the networking has to know an address for these nodes,
 	/// >			otherwise it will not be able to connect to them.
-	pub priority_groups: Vec<(String, HashSet<PeerId>)>,
+	pub reserved_nodes: HashSet<PeerId>,
+
+	/// If true, we only accept nodes in [`SetConfig::reserved_nodes`].
+	pub reserved_only: bool,
 }
 
 /// Side of the peer set manager owned by the network. In other words, the "receiving" side.
@@ -190,11 +238,10 @@ pub struct PeersetConfig {
 pub struct Peerset {
 	/// Underlying data structure for the nodes's states.
 	data: peersstate::PeersState,
-	/// If true, we only accept reserved nodes.
-	reserved_only: bool,
-	/// Lists of nodes that don't occupy slots and that we should try to always be connected to.
-	/// Is kept in sync with the list of reserved nodes in [`Peerset::data`].
-	priority_groups: HashMap<String, HashSet<PeerId>>,
+	/// For each set, lists of nodes that don't occupy slots and that we should try to always be
+	/// connected to, and whether only reserved nodes are accepted. Is kept in sync with the list
+	/// of non-slot-occupying nodes in [`Peerset::data`].
+	reserved_nodes: Vec<(HashSet<PeerId>, bool)>,
 	/// Receiver for messages from the `PeersetHandle` and from `tx`.
 	rx: TracingUnboundedReceiver<Action>,
 	/// Sending side of `rx`.
@@ -216,28 +263,36 @@ impl Peerset {
 			tx: tx.clone(),
 		};
 
-		let now = Instant::now();
+		let mut peerset = {
+			let now = Instant::now();
 
-		let mut peerset = Peerset {
-			data: peersstate::PeersState::new(config.in_peers, config.out_peers),
-			tx,
-			rx,
-			reserved_only: config.reserved_only,
-			priority_groups: config.priority_groups.clone().into_iter().collect(),
-			message_queue: VecDeque::new(),
-			created: now,
-			latest_time_update: now,
+			Peerset {
+				data: peersstate::PeersState::new(config.sets.iter().map(|set| peersstate::SetConfig {
+					in_peers: set.in_peers,
+					out_peers: set.out_peers,
+				})),
+				tx,
+				rx,
+				reserved_nodes: config.sets.iter().map(|set| {
+					(set.reserved_nodes.clone(), set.reserved_only)
+				}).collect(),
+				message_queue: VecDeque::new(),
+				created: now,
+				latest_time_update: now,
+			}
 		};
 
-		for node in config.priority_groups.into_iter().flat_map(|(_, l)| l) {
-			peerset.data.add_no_slot_node(node);
-		}
+		for (set, set_config) in config.sets.into_iter().enumerate() {
+			for node in set_config.reserved_nodes {
+				peerset.data.add_no_slot_node(set, node);
+			}
 
-		for peer_id in config.bootnodes {
-			if let peersstate::Peer::Unknown(entry) = peerset.data.peer(&peer_id) {
-				entry.discover();
-			} else {
-				debug!(target: "peerset", "Duplicate bootnode in config: {:?}", peer_id);
+			for peer_id in set_config.bootnodes {
+				if let peersstate::Peer::Unknown(entry) = peerset.data.peer(set, &peer_id) {
+					entry.discover();
+				} else {
+					debug!(target: "peerset", "Duplicate bootnode in config: {:?}", peer_id);
+				}
 			}
 		}
 
@@ -245,96 +300,109 @@ impl Peerset {
 		(peerset, handle)
 	}
 
-	fn on_add_reserved_peer(&mut self, peer_id: PeerId) {
-		self.on_add_to_priority_group(RESERVED_NODES, peer_id);
+	fn on_add_reserved_peer(&mut self, set_id: SetId, peer_id: PeerId) {
+		let newly_inserted = self.reserved_nodes[set_id.0].0.insert(peer_id.clone());
+		if !newly_inserted {
+			return;
+		}
+
+		self.data.add_no_slot_node(set_id.0, peer_id);
+		self.alloc_slots();
 	}
 
-	fn on_remove_reserved_peer(&mut self, peer_id: PeerId) {
-		self.on_remove_from_priority_group(RESERVED_NODES, peer_id);
-	}
-	
-	fn on_set_reserved_peers(&mut self, peer_ids: HashSet<PeerId>) {
-		self.on_set_priority_group(RESERVED_NODES, peer_ids);
-	}
+	fn on_remove_reserved_peer(&mut self, set_id: SetId, peer_id: PeerId) {
+		if !self.reserved_nodes[set_id.0].0.remove(&peer_id) {
+			return;
+		}
 
-	fn on_set_reserved_only(&mut self, reserved_only: bool) {
-		self.reserved_only = reserved_only;
+		self.data.remove_no_slot_node(set_id.0, &peer_id);
 
-		if self.reserved_only {
-			// Disconnect all the nodes that aren't reserved.
-			for peer_id in self.data.connected_peers().cloned().collect::<Vec<_>>().into_iter() {
-				if self.priority_groups.get(RESERVED_NODES).map_or(false, |g| g.contains(&peer_id)) {
-					continue;
-				}
+		// Nothing more to do if not in reserved-only mode.
+		if !self.reserved_nodes[set_id.0].1 {
+			return;
+		}
 
-				let peer = self.data.peer(&peer_id).into_connected()
-					.expect("We are enumerating connected peers, therefore the peer is connected; qed");
-				peer.disconnect();
-				self.message_queue.push_back(Message::Drop(peer_id));
-			}
-
-		} else {
-			self.alloc_slots();
+		// If, however, the peerset is in reserved-only mode, then the removed node needs to be
+		// disconnected.
+		if let peersstate::Peer::Connected(peer) = self.data.peer(set_id.0, &peer_id) {
+			peer.disconnect();
+			self.message_queue.push_back(Message::Drop {
+				set_id,
+				peer_id,
+			});
 		}
 	}
 
-	fn on_set_priority_group(&mut self, group_id: &str, peers: HashSet<PeerId>) {
+	fn on_set_reserved_peers(&mut self, set_id: SetId, peer_ids: HashSet<PeerId>) {
 		// Determine the difference between the current group and the new list.
 		let (to_insert, to_remove) = {
-			let current_group = self.priority_groups.entry(group_id.to_owned()).or_default();
-			let to_insert = peers.difference(current_group)
+			let to_insert = peer_ids.difference(&self.reserved_nodes[set_id.0].0)
 				.cloned().collect::<Vec<_>>();
-			let to_remove = current_group.difference(&peers)
+			let to_remove = self.reserved_nodes[set_id.0].0.difference(&peer_ids)
 				.cloned().collect::<Vec<_>>();
 			(to_insert, to_remove)
 		};
 
-		// Enumerate elements in `peers` not in `current_group`.
-		for peer_id in &to_insert {
-			// We don't call `on_add_to_priority_group` here in order to avoid calling
-			// `alloc_slots` all the time.
-			self.priority_groups.entry(group_id.to_owned()).or_default().insert(peer_id.clone());
-			self.data.add_no_slot_node(peer_id.clone());
+		for node in to_insert {
+			self.on_add_reserved_peer(set_id, node);
 		}
 
-		// Enumerate elements in `current_group` not in `peers`.
-		for peer in to_remove {
-			self.on_remove_from_priority_group(group_id, peer);
+		for node in to_remove {
+			self.on_remove_reserved_peer(set_id, node);
 		}
+	}
 
-		if !to_insert.is_empty() {
+	fn on_set_reserved_only(&mut self, set_id: SetId, reserved_only: bool) {
+		self.reserved_nodes[set_id.0].1 = reserved_only;
+
+		if reserved_only {
+			// Disconnect all the nodes that aren't reserved.
+			for peer_id in self.data.connected_peers(set_id.0).cloned().collect::<Vec<_>>().into_iter() {
+				if self.reserved_nodes[set_id.0].0.contains(&peer_id) {
+					continue;
+				}
+
+				let peer = self.data.peer(set_id.0, &peer_id).into_connected()
+					.expect("We are enumerating connected peers, therefore the peer is connected; qed");
+				peer.disconnect();
+				self.message_queue.push_back(Message::Drop {
+					set_id,
+					peer_id
+				});
+			}
+
+		} else {
 			self.alloc_slots();
 		}
 	}
 
-	fn on_add_to_priority_group(&mut self, group_id: &str, peer_id: PeerId) {
-		self.priority_groups.entry(group_id.to_owned()).or_default().insert(peer_id.clone());
-		self.data.add_no_slot_node(peer_id);
-		self.alloc_slots();
+	/// Adds a node to the given set. The peerset will, if possible and not already the case,
+	/// try to connect to it.
+	///
+	/// > **Note**: This has the same effect as [`PeersetHandle::add_to_peers_set`].
+	pub fn add_to_peers_set(&mut self, set_id: SetId, peer_id: PeerId) {
+		if let peersstate::Peer::Unknown(entry) = self.data.peer(set_id.0, &peer_id) {
+			entry.discover();
+			self.alloc_slots();
+		}
 	}
 
-	fn on_remove_from_priority_group(&mut self, group_id: &str, peer_id: PeerId) {
-		if let Some(priority_group) = self.priority_groups.get_mut(group_id) {
-			if !priority_group.remove(&peer_id) {
-				// `PeerId` wasn't in the group in the first place.
-				return;
-			}
-		} else {
-			// Group doesn't exist, so the `PeerId` can't be in it.
+	fn on_remove_from_peers_set(&mut self, set_id: SetId, peer_id: PeerId) {
+		// Don't do anything if node is reserved.
+		if self.reserved_nodes[set_id.0].0.contains(&peer_id) {
 			return;
 		}
 
-		// If that `PeerId` isn't in any other group, then it is no longer no-slot-occupying.
-		if !self.priority_groups.values().any(|l| l.contains(&peer_id)) {
-			self.data.remove_no_slot_node(&peer_id);
-		}
-
-		// Disconnect the peer if necessary.
-		if group_id != RESERVED_NODES && self.reserved_only {
-			if let peersstate::Peer::Connected(peer) = self.data.peer(&peer_id) {
-				peer.disconnect();
-				self.message_queue.push_back(Message::Drop(peer_id));
+		match self.data.peer(set_id.0, &peer_id) {
+			peersstate::Peer::Connected(peer) => {
+				self.message_queue.push_back(Message::Drop {
+					set_id,
+					peer_id: peer.peer_id().clone(),
+				});
+				peer.disconnect().forget_peer();
 			}
+			peersstate::Peer::NotConnected(peer) => { peer.forget_peer(); }
+			peersstate::Peer::Unknown(_) => {}
 		}
 	}
 
@@ -342,23 +410,29 @@ impl Peerset {
 		// We want reputations to be up-to-date before adjusting them.
 		self.update_time();
 
-		match self.data.peer(&peer_id) {
-			peersstate::Peer::Connected(mut peer) => {
-				peer.add_reputation(change.value);
-				if peer.reputation() < BANNED_THRESHOLD {
-					debug!(target: "peerset", "Report {}: {:+} to {}. Reason: {}, Disconnecting",
-						peer_id, change.value, peer.reputation(), change.reason
-					);
-					peer.disconnect();
-					self.message_queue.push_back(Message::Drop(peer_id));
-				} else {
-					trace!(target: "peerset", "Report {}: {:+} to {}. Reason: {}",
-						peer_id, change.value, peer.reputation(), change.reason
-					);
-				}
-			},
-			peersstate::Peer::NotConnected(mut peer) => peer.add_reputation(change.value),
-			peersstate::Peer::Unknown(peer) => peer.discover().add_reputation(change.value),
+		let mut reputation = self.data.peer_reputation(peer_id.clone());
+		reputation.add_reputation(change.value);
+		if reputation.reputation() >= BANNED_THRESHOLD {
+			trace!(target: "peerset", "Report {}: {:+} to {}. Reason: {}",
+				peer_id, change.value, reputation.reputation(), change.reason
+			);
+			return;
+		}
+
+		debug!(target: "peerset", "Report {}: {:+} to {}. Reason: {}, Disconnecting",
+			peer_id, change.value, reputation.reputation(), change.reason
+		);
+
+		drop(reputation);
+
+		for set_index in 0..self.data.num_sets() {
+			if let peersstate::Peer::Connected(peer) = self.data.peer(set_index, &peer_id) {
+				let peer = peer.disconnect();
+				self.message_queue.push_back(Message::Drop {
+					set_id: SetId(set_index),
+					peer_id: peer.into_peer_id(),
+				});
+			}
 		}
 	}
 
@@ -393,27 +467,35 @@ impl Peerset {
 					}
 					reput.saturating_sub(diff)
 				}
-				match self.data.peer(&peer_id) {
-					peersstate::Peer::Connected(mut peer) => {
-						let before = peer.reputation();
-						let after = reput_tick(before);
-						trace!(target: "peerset", "Fleeting {}: {} -> {}", peer_id, before, after);
-						peer.set_reputation(after)
-					}
-					peersstate::Peer::NotConnected(mut peer) => {
-						if peer.reputation() == 0 &&
-							peer.last_connected_or_discovered() + FORGET_AFTER < now
-						{
-							peer.forget_peer();
-						} else {
-							let before = peer.reputation();
-							let after = reput_tick(before);
-							trace!(target: "peerset", "Fleeting {}: {} -> {}", peer_id, before, after);
-							peer.set_reputation(after)
+
+				let mut peer_reputation = self.data.peer_reputation(peer_id.clone());
+
+				let before = peer_reputation.reputation();
+				let after = reput_tick(before);
+				trace!(target: "peerset", "Fleeting {}: {} -> {}", peer_id, before, after);
+				peer_reputation.set_reputation(after);
+
+				if after != 0 {
+					continue;
+				}
+
+				drop(peer_reputation);
+
+				// If the peer reaches a reputation of 0, and there is no connection to it,
+				// forget it.
+				for set_index in 0..self.data.num_sets() {
+					match self.data.peer(set_index, &peer_id) {
+						peersstate::Peer::Connected(_) => {}
+						peersstate::Peer::NotConnected(peer) => {
+							if peer.last_connected_or_discovered() + FORGET_AFTER < now {
+								peer.forget_peer();
+							}
+						}
+						peersstate::Peer::Unknown(_) => {
+							// Happens if this peer does not belong to this set.
 						}
 					}
-					peersstate::Peer::Unknown(_) => unreachable!("We iterate over known peers; qed")
-				};
+				}
 			}
 		}
 	}
@@ -423,95 +505,54 @@ impl Peerset {
 		self.update_time();
 
 		// Try to connect to all the reserved nodes that we are not connected to.
-		loop {
-			let next = {
-				let data = &mut self.data;
-				self.priority_groups
-					.get(RESERVED_NODES)
-					.into_iter()
-					.flatten()
-					.filter(move |n| {
-						data.peer(n).into_connected().is_none()
-					})
-					.next()
-					.cloned()
-			};
+		for set_index in 0..self.data.num_sets() {
+			for reserved_node in &self.reserved_nodes[set_index].0 {
+				let entry = match self.data.peer(set_index, reserved_node) {
+					peersstate::Peer::Unknown(n) => n.discover(),
+					peersstate::Peer::NotConnected(n) => n,
+					peersstate::Peer::Connected(_) => continue,
+				};
 
-			let next = match next {
-				Some(n) => n,
-				None => break,
-			};
-
-			let next = match self.data.peer(&next) {
-				peersstate::Peer::Unknown(n) => n.discover(),
-				peersstate::Peer::NotConnected(n) => n,
-				peersstate::Peer::Connected(_) => {
-					debug_assert!(false, "State inconsistency: not connected state");
-					break;
+				match entry.try_outgoing() {
+					Ok(conn) => self.message_queue.push_back(Message::Connect {
+						set_id: SetId(set_index),
+						peer_id: conn.into_peer_id()
+					}),
+					Err(_) => {
+						// An error is returned only if no slot is available. Reserved nodes are
+						// marked in the state machine with a flag saying "doesn't occupy a slot",
+						// and as such this should never happen.
+						debug_assert!(false);
+						log::error!(
+							target: "peerset",
+							"Not enough slots to connect to reserved node"
+						);
+					}
 				}
-			};
-
-			match next.try_outgoing() {
-				Ok(conn) => self.message_queue.push_back(Message::Connect(conn.into_peer_id())),
-				Err(_) => break,	// No more slots available.
 			}
 		}
 
-		// Nothing more to do if we're in reserved mode.
-		if self.reserved_only {
-			return;
-		}
-
-		// Try to connect to all the nodes in priority groups and that we are not connected to.
-		loop {
-			let next = {
-				let data = &mut self.data;
-				self.priority_groups
-					.values()
-					.flatten()
-					.filter(move |n| {
-						data.peer(n).into_connected().is_none()
-					})
-					.next()
-					.cloned()
-			};
-
-			let next = match next {
-				Some(n) => n,
-				None => break,
-			};
-
-			let next = match self.data.peer(&next) {
-				peersstate::Peer::Unknown(n) => n.discover(),
-				peersstate::Peer::NotConnected(n) => n,
-				peersstate::Peer::Connected(_) => {
-					debug_assert!(false, "State inconsistency: not connected state");
-					break;
-				}
-			};
-
-			match next.try_outgoing() {
-				Ok(conn) => self.message_queue.push_back(Message::Connect(conn.into_peer_id())),
-				Err(_) => break,	// No more slots available.
+		// Now, we try to connect to other nodes.
+		for set_index in 0..self.data.num_sets() {
+			// Nothing more to do if we're in reserved mode.
+			if self.reserved_nodes[set_index].1 {
+				continue;
 			}
-		}
 
-		// Now, we try to connect to non-priority nodes.
-		loop {
 			// Try to grab the next node to attempt to connect to.
-			let next = match self.data.highest_not_connected_peer() {
-				Some(p) => p,
-				None => break,	// No known node to add.
-			};
+			while let Some(next) = self.data.highest_not_connected_peer(set_index) {
+				// Don't connect to nodes with an abysmal reputation.
+				if next.reputation() < BANNED_THRESHOLD {
+					break;
+				}
 
-			// Don't connect to nodes with an abysmal reputation.
-			if next.reputation() < BANNED_THRESHOLD {
-				break;
-			}
-
-			match next.try_outgoing() {
-				Ok(conn) => self.message_queue.push_back(Message::Connect(conn.into_peer_id())),
-				Err(_) => break,	// No more slots available.
+				match next.try_outgoing() {
+					Ok(conn) => self.message_queue.push_back(Message::Connect {
+						set_id: SetId(set_index),
+						peer_id: conn.into_peer_id()
+					}),
+					Err(_) => break,	// No more slots available.
+				}
 			}
 		}
 	}
@@ -526,18 +567,19 @@ impl Peerset {
 	// Implementation note: because of concurrency issues, it is possible that we push a `Connect`
 	// message to the output channel with a `PeerId`, and that `incoming` gets called with the same
 	// `PeerId` before that message has been read by the user. In this situation we must not answer.
-	pub fn incoming(&mut self, peer_id: PeerId, index: IncomingIndex) {
+	pub fn incoming(&mut self, set_id: SetId, peer_id: PeerId, index: IncomingIndex) {
 		trace!(target: "peerset", "Incoming {:?}", peer_id);
+
 		self.update_time();
 
-		if self.reserved_only {
-			if !self.priority_groups.get(RESERVED_NODES).map_or(false, |n| n.contains(&peer_id)) {
+		if self.reserved_nodes[set_id.0].1 {
+			if !self.reserved_nodes[set_id.0].0.contains(&peer_id) {
 				self.message_queue.push_back(Message::Reject(index));
 				return;
 			}
 		}
 
-		let not_connected = match self.data.peer(&peer_id) {
+		let not_connected = match self.data.peer(set_id.0, &peer_id) {
 			// If we're already connected, don't answer, as the docs mention.
 			peersstate::Peer::Connected(_) => return,
 			peersstate::Peer::NotConnected(mut entry) => {
@@ -562,42 +604,27 @@ impl Peerset {
 	///
 	/// Must only be called after the PSM has either generated a `Connect` message with this
 	/// `PeerId`, or accepted an incoming connection with this `PeerId`.
-	pub fn dropped(&mut self, peer_id: PeerId) {
-		trace!(target: "peerset", "Dropping {:?}", peer_id);
-
+	pub fn dropped(&mut self, set_id: SetId, peer_id: PeerId, reason: DropReason) {
 		// We want reputations to be up-to-date before adjusting them.
 		self.update_time();
 
-		match self.data.peer(&peer_id) {
+		match self.data.peer(set_id.0, &peer_id) {
 			peersstate::Peer::Connected(mut entry) => {
 				// Decrease the node's reputation so that we don't try it again and again and again.
 				entry.add_reputation(DISCONNECT_REPUTATION_CHANGE);
+				trace!(target: "peerset", "Dropping {}: {:+} to {}",
+					peer_id, DISCONNECT_REPUTATION_CHANGE, entry.reputation());
 				entry.disconnect();
 			}
 			peersstate::Peer::NotConnected(_) | peersstate::Peer::Unknown(_) =>
 				error!(target: "peerset", "Received dropped() for non-connected node"),
 		}
 
+		if let DropReason::Refused = reason {
+			self.on_remove_from_peers_set(set_id, peer_id);
+		}
+
 		self.alloc_slots();
-	}
-
-	/// Adds discovered peer ids to the PSM.
-	///
-	/// > **Note**: There is no equivalent "expired" message, meaning that it is the responsibility
-	/// >			of the PSM to remove `PeerId`s that fail to dial too often.
-	pub fn discovered<I: IntoIterator<Item = PeerId>>(&mut self, peer_ids: I) {
-		let mut discovered_any = false;
-
-		for peer_id in peer_ids {
-			if let peersstate::Peer::Unknown(entry) = self.data.peer(&peer_id) {
-				entry.discover();
-				discovered_any = true;
-			}
-		}
-
-		if discovered_any {
-			self.alloc_slots();
-		}
 	}
 
 	/// Reports an adjustment to the reputation of the given peer.
@@ -613,23 +640,29 @@ impl Peerset {
 		self.update_time();
 
 		json!({
-			"nodes": self.data.peers().cloned().collect::<Vec<_>>().into_iter().map(|peer_id| {
-				let state = match self.data.peer(&peer_id) {
-					peersstate::Peer::Connected(entry) => json!({
-						"connected": true,
-						"reputation": entry.reputation()
-					}),
-					peersstate::Peer::NotConnected(entry) => json!({
-						"connected": false,
-						"reputation": entry.reputation()
-					}),
-					peersstate::Peer::Unknown(_) =>
-						unreachable!("We iterate over the known peers; QED")
-				};
+			"sets": (0..self.data.num_sets()).map(|set_index| {
+				json!({
+					"nodes": self.data.peers().cloned().collect::<Vec<_>>().into_iter().filter_map(|peer_id| {
+						let state = match self.data.peer(set_index, &peer_id) {
+							peersstate::Peer::Connected(entry) => json!({
+								"connected": true,
+								"reputation": entry.reputation()
+							}),
+							peersstate::Peer::NotConnected(entry) => json!({
+								"connected": false,
+								"reputation": entry.reputation()
+							}),
+							peersstate::Peer::Unknown(_) => return None,
+						};
 
-				(peer_id.to_base58(), state)
-			}).collect::<HashMap<_, _>>(),
-			"reserved_only": self.reserved_only,
+						Some((peer_id.to_base58(), state))
+					}).collect::<HashMap<_, _>>(),
+					"reserved_nodes": self.reserved_nodes[set_index].0.iter().map(|peer_id| {
+						peer_id.to_base58()
+					}).collect::<HashSet<_>>(),
+					"reserved_only": self.reserved_nodes[set_index].1,
+				})
+			}).collect::<Vec<_>>(),
 			"message_queue": self.message_queue.len(),
 		})
 	}
@@ -637,11 +670,6 @@ impl Peerset {
 	/// Returns the number of peers that we have discovered.
 	pub fn num_discovered_peers(&self) -> usize {
 		self.data.peers().len()
-	}
-
-	/// Returns the content of a priority group.
-	pub fn priority_group(&self, group_id: &str) -> Option<impl ExactSizeIterator<Item = &PeerId>> {
-		self.priority_groups.get(group_id).map(|l| l.iter())
 	}
 }
 
@@ -661,32 +689,41 @@ impl Stream for Peerset {
 			};
 
 			match action {
-				Action::AddReservedPeer(peer_id) =>
-					self.on_add_reserved_peer(peer_id),
-				Action::RemoveReservedPeer(peer_id) =>
-					self.on_remove_reserved_peer(peer_id),
-				Action::SetReservedPeers(peer_ids) =>
-					self.on_set_reserved_peers(peer_ids),
-				Action::SetReservedOnly(reserved) =>
-					self.on_set_reserved_only(reserved),
+				Action::AddReservedPeer(set_id, peer_id) =>
+					self.on_add_reserved_peer(set_id, peer_id),
+				Action::RemoveReservedPeer(set_id, peer_id) =>
+					self.on_remove_reserved_peer(set_id, peer_id),
+				Action::SetReservedPeers(set_id, peer_ids) =>
+					self.on_set_reserved_peers(set_id, peer_ids),
+				Action::SetReservedOnly(set_id, reserved) =>
+					self.on_set_reserved_only(set_id, reserved),
 				Action::ReportPeer(peer_id, score_diff) =>
 					self.on_report_peer(peer_id, score_diff),
-				Action::SetPriorityGroup(group_id, peers) =>
-					self.on_set_priority_group(&group_id, peers),
-				Action::AddToPriorityGroup(group_id, peer_id) =>
-					self.on_add_to_priority_group(&group_id, peer_id),
-				Action::RemoveFromPriorityGroup(group_id, peer_id) =>
-					self.on_remove_from_priority_group(&group_id, peer_id),
+				Action::AddToPeersSet(sets_name, peer_id) =>
+					self.add_to_peers_set(sets_name, peer_id),
+				Action::RemoveFromPeersSet(sets_name, peer_id) =>
+					self.on_remove_from_peers_set(sets_name, peer_id),
 			}
 		}
 	}
+}
+
+/// Reason for calling [`Peerset::dropped`].
+pub enum DropReason {
+	/// Substream or connection has been closed for an unknown reason.
+	Unknown,
+	/// Substream or connection has been explicitly refused by the target. In other words, the
+	/// peer doesn't actually belong to this set.
+	///
+	/// This has the side effect of calling [`PeersetHandle::remove_from_peers_set`].
+	Refused,
 }
 
 #[cfg(test)]
 mod tests {
 	use libp2p::PeerId;
 	use futures::prelude::*;
-	use super::{PeersetConfig, Peerset, Message, IncomingIndex, ReputationChange, BANNED_THRESHOLD};
+	use super::{PeersetConfig, Peerset, Message, IncomingIndex, ReputationChange, SetConfig, SetId, BANNED_THRESHOLD};
 	use std::{pin::Pin, task::Poll, thread, time::Duration};
 
 	fn assert_messages(mut peerset: Peerset, messages: Vec<Message>) -> Peerset {
@@ -710,20 +747,22 @@ mod tests {
 		let reserved_peer = PeerId::random();
 		let reserved_peer2 = PeerId::random();
 		let config = PeersetConfig {
-			in_peers: 0,
-			out_peers: 2,
-			bootnodes: vec![bootnode],
-			reserved_only: true,
-			priority_groups: Vec::new(),
+			sets: vec![SetConfig {
+				in_peers: 0,
+				out_peers: 2,
+				bootnodes: vec![bootnode],
+				reserved_nodes: Default::default(),
+				reserved_only: true,
+			}],
 		};
 
 		let (peerset, handle) = Peerset::from_config(config);
-		handle.add_reserved_peer(reserved_peer.clone());
-		handle.add_reserved_peer(reserved_peer2.clone());
+		handle.add_reserved_peer(SetId::from(0), reserved_peer.clone());
+		handle.add_reserved_peer(SetId::from(0), reserved_peer2.clone());
 
 		assert_messages(peerset, vec![
-			Message::Connect(reserved_peer),
-			Message::Connect(reserved_peer2)
+			Message::Connect { set_id: SetId::from(0), peer_id: reserved_peer },
+			Message::Connect { set_id: SetId::from(0), peer_id: reserved_peer2 }
 		]);
 	}
 
@@ -738,21 +777,23 @@ mod tests {
 		let ii3 = IncomingIndex(3);
 		let ii4 = IncomingIndex(3);
 		let config = PeersetConfig {
-			in_peers: 2,
-			out_peers: 1,
-			bootnodes: vec![bootnode.clone()],
-			reserved_only: false,
-			priority_groups: Vec::new(),
+			sets: vec![SetConfig {
+				in_peers: 2,
+				out_peers: 1,
+				bootnodes: vec![bootnode.clone()],
+				reserved_nodes: Default::default(),
+				reserved_only: false,
+			}],
 		};
 
 		let (mut peerset, _handle) = Peerset::from_config(config);
-		peerset.incoming(incoming.clone(), ii);
-		peerset.incoming(incoming.clone(), ii4);
-		peerset.incoming(incoming2.clone(), ii2);
-		peerset.incoming(incoming3.clone(), ii3);
+		peerset.incoming(SetId::from(0), incoming.clone(), ii);
+		peerset.incoming(SetId::from(0), incoming.clone(), ii4);
+		peerset.incoming(SetId::from(0), incoming2.clone(), ii2);
+		peerset.incoming(SetId::from(0), incoming3.clone(), ii3);
 
 		assert_messages(peerset, vec![
-			Message::Connect(bootnode.clone()),
+			Message::Connect { set_id: SetId::from(0), peer_id: bootnode.clone() },
 			Message::Accept(ii),
 			Message::Accept(ii2),
 			Message::Reject(ii3),
@@ -764,15 +805,17 @@ mod tests {
 		let incoming = PeerId::random();
 		let ii = IncomingIndex(1);
 		let config = PeersetConfig {
-			in_peers: 50,
-			out_peers: 50,
-			bootnodes: vec![],
-			reserved_only: true,
-			priority_groups: vec![],
+			sets: vec![SetConfig {
+				in_peers: 50,
+				out_peers: 50,
+				bootnodes: vec![],
+				reserved_nodes: Default::default(),
+				reserved_only: true,
+			}],
 		};
 
 		let (mut peerset, _) = Peerset::from_config(config);
-		peerset.incoming(incoming.clone(), ii);
+		peerset.incoming(SetId::from(0), incoming.clone(), ii);
 
 		assert_messages(peerset, vec![
 			Message::Reject(ii),
@@ -785,32 +828,36 @@ mod tests {
 		let discovered = PeerId::random();
 		let discovered2 = PeerId::random();
 		let config = PeersetConfig {
-			in_peers: 0,
-			out_peers: 2,
-			bootnodes: vec![bootnode.clone()],
-			reserved_only: false,
-			priority_groups: vec![],
+			sets: vec![SetConfig {
+				in_peers: 0,
+				out_peers: 2,
+				bootnodes: vec![bootnode.clone()],
+				reserved_nodes: Default::default(),
+				reserved_only: false,
+			}],
 		};
 
 		let (mut peerset, _handle) = Peerset::from_config(config);
-		peerset.discovered(Some(discovered.clone()));
-		peerset.discovered(Some(discovered.clone()));
-		peerset.discovered(Some(discovered2));
+		peerset.add_to_peers_set(SetId::from(0), discovered.clone());
+		peerset.add_to_peers_set(SetId::from(0), discovered.clone());
+		peerset.add_to_peers_set(SetId::from(0), discovered2);
 
 		assert_messages(peerset, vec![
-			Message::Connect(bootnode),
-			Message::Connect(discovered),
+			Message::Connect { set_id: SetId::from(0), peer_id: bootnode },
+			Message::Connect { set_id: SetId::from(0), peer_id: discovered },
 		]);
 	}
 
 	#[test]
 	fn test_peerset_banned() {
 		let (mut peerset, handle) = Peerset::from_config(PeersetConfig {
-			in_peers: 25,
-			out_peers: 25,
-			bootnodes: vec![],
-			reserved_only: false,
-			priority_groups: vec![],
+			sets: vec![SetConfig {
+				in_peers: 25,
+				out_peers: 25,
+				bootnodes: vec![],
+				reserved_nodes: Default::default(),
+				reserved_only: false,
+			}],
 		});
 
 		// We ban a node by setting its reputation under the threshold.
@@ -822,7 +869,7 @@ mod tests {
 			assert_eq!(Stream::poll_next(Pin::new(&mut peerset), cx), Poll::Pending);
 
 			// Check that an incoming connection from that node gets refused.
-			peerset.incoming(peer_id.clone(), IncomingIndex(1));
+			peerset.incoming(SetId::from(0), peer_id.clone(), IncomingIndex(1));
 			if let Poll::Ready(msg) = Stream::poll_next(Pin::new(&mut peerset), cx) {
 				assert_eq!(msg.unwrap(), Message::Reject(IncomingIndex(1)));
 			} else {
@@ -833,7 +880,7 @@ mod tests {
 			thread::sleep(Duration::from_millis(1500));
 
 			// Try again. This time the node should be accepted.
-			peerset.incoming(peer_id.clone(), IncomingIndex(2));
+			peerset.incoming(SetId::from(0), peer_id.clone(), IncomingIndex(2));
 			while let Poll::Ready(msg) = Stream::poll_next(Pin::new(&mut peerset), cx) {
 				assert_eq!(msg.unwrap(), Message::Accept(IncomingIndex(2)));
 			}

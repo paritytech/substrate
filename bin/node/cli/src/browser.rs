@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -21,9 +21,8 @@ use log::info;
 use wasm_bindgen::prelude::*;
 use browser_utils::{
 	Client,
-	browser_configuration, set_console_error_panic_hook, init_console_log,
+	browser_configuration, init_logging_and_telemetry, set_console_error_panic_hook,
 };
-use std::str::FromStr;
 
 /// Starts the client.
 #[wasm_bindgen]
@@ -33,29 +32,38 @@ pub async fn start_client(chain_spec: Option<String>, log_level: String) -> Resu
 		.map_err(|err| JsValue::from_str(&err.to_string()))
 }
 
-async fn start_inner(chain_spec: Option<String>, log_level: String) -> Result<Client, Box<dyn std::error::Error>> {
+async fn start_inner(
+	chain_spec: Option<String>,
+	log_directives: String,
+) -> Result<Client, Box<dyn std::error::Error>> {
 	set_console_error_panic_hook();
-	init_console_log(log::Level::from_str(&log_level)?)?;
+	let telemetry_worker = init_logging_and_telemetry(&log_directives)?;
 	let chain_spec = match chain_spec {
 		Some(chain_spec) => ChainSpec::from_json_bytes(chain_spec.as_bytes().to_vec())
 			.map_err(|e| format!("{:?}", e))?,
 		None => crate::chain_spec::development_config(),
 	};
 
-	let config = browser_configuration(chain_spec).await?;
+	let telemetry_handle = telemetry_worker.handle();
+	let config = browser_configuration(
+		chain_spec,
+		Some(telemetry_handle),
+	).await?;
 
 	info!("Substrate browser node");
 	info!("✌️  version {}", config.impl_version);
-	info!("❤️  by Parity Technologies, 2017-2020");
+	info!("❤️  by Parity Technologies, 2017-2021");
 	info!("📋 Chain specification: {}", config.chain_spec.name());
-	info!("🏷  Node name: {}", config.network.node_name);
+	info!("🏷 Node name: {}", config.network.node_name);
 	info!("👤 Role: {:?}", config.role);
 
 	// Create the service. This is the most heavy initialization step.
 	let (task_manager, rpc_handlers) =
 		crate::service::new_light_base(config)
-			.map(|(components, rpc_handlers, _, _, _)| (components, rpc_handlers))
+			.map(|(components, rpc_handlers, _, _, _, _)| (components, rpc_handlers))
 			.map_err(|e| format!("{:?}", e))?;
+
+	task_manager.spawn_handle().spawn("telemetry", telemetry_worker.run());
 
 	Ok(browser_utils::start_client(task_manager, rpc_handlers))
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -54,6 +54,13 @@ pub enum InvalidTransaction {
 	/// it will only be able to assume a bad signature and cannot express a more meaningful error.
 	BadProof,
 	/// The transaction birth block is ancient.
+	///
+	/// # Possible causes
+	///
+	/// For `FRAME`-based runtimes this would be caused by `current block number
+	/// - Era::birth block number > BlockHashCount`. (e.g. in Polkadot `BlockHashCount` = 2400, so a
+	/// transaction with birth block number 1337 would be valid up until block number 1337 + 2400,
+	/// after which point the transaction would be considered to have an ancient birth block.)
 	AncientBirthBlock,
 	/// The transaction would exhaust the resources of current block.
 	///
@@ -181,6 +188,21 @@ impl From<InvalidTransaction> for TransactionValidityError {
 impl From<UnknownTransaction> for TransactionValidityError {
 	fn from(err: UnknownTransaction) -> Self {
 		TransactionValidityError::Unknown(err)
+	}
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for TransactionValidityError {
+	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+		None
+	}
+}
+
+#[cfg(feature = "std")]
+impl std::fmt::Display for TransactionValidityError {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let s: &'static str = (*self).into();
+		write!(f, "{}", s)
 	}
 }
 

@@ -13,39 +13,38 @@ publish = true
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-pallet-balances = { version = "2.0.0", path = "../../../frame/balances" }
-sc-service = { version = "0.8.0", features = ["test-helpers", "db"],  path = "../../../client/service" }
-sc-client-db = { version = "0.8.0", path = "../../../client/db/", features = ["kvdb-rocksdb", "parity-db"] }
-sc-client-api = { version = "2.0.0", path = "../../../client/api/" }
-codec = { package = "parity-scale-codec", version = "1.3.4" }
+pallet-balances = { version = "3.0.0", path = "../../../frame/balances" }
+sc-service = { version = "0.9.0", features = ["test-helpers", "db"],  path = "../../../client/service" }
+sc-client-db = { version = "0.9.0", path = "../../../client/db/", features = ["kvdb-rocksdb", "parity-db"] }
+sc-client-api = { version = "3.0.0", path = "../../../client/api/" }
+codec = { package = "parity-scale-codec", version = "2.0.0" }
 pallet-contracts = { version = "2.0.0", path = "../../../frame/contracts" }
-pallet-grandpa = { version = "2.0.0", path = "../../../frame/grandpa" }
-pallet-indices = { version = "2.0.0", path = "../../../frame/indices" }
-sp-keyring = { version = "2.0.0", path = "../../../primitives/keyring" }
+pallet-grandpa = { version = "3.0.0", path = "../../../frame/grandpa" }
+pallet-indices = { version = "3.0.0", path = "../../../frame/indices" }
+sp-keyring = { version = "3.0.0", path = "../../../primitives/keyring" }
 node-executor = { version = "2.0.0", path = "../executor" }
 node-primitives = { version = "2.0.0", path = "../primitives" }
 node-runtime = { version = "2.0.0", path = "../runtime" }
-sp-core = { version = "2.0.0", path = "../../../primitives/core" }
-sp-io = { version = "2.0.0", path = "../../../primitives/io" }
-frame-support = { version = "2.0.0", path = "../../../frame/support" }
-pallet-session = { version = "2.0.0", path = "../../../frame/session" }
-pallet-society = { version = "2.0.0", path = "../../../frame/society" }
-sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
-pallet-staking = { version = "2.0.0", path = "../../../frame/staking" }
-sc-executor = { version = "0.8.0", path = "../../../client/executor", features = ["wasmtime"] }
-sp-consensus = { version = "0.8.0", path = "../../../primitives/consensus/common" }
-frame-system = { version = "2.0.0", path = "../../../frame/system" }
+sp-core = { version = "3.0.0", path = "../../../primitives/core" }
+sp-io = { version = "3.0.0", path = "../../../primitives/io" }
+frame-support = { version = "3.0.0", path = "../../../frame/support" }
+pallet-session = { version = "3.0.0", path = "../../../frame/session" }
+pallet-society = { version = "3.0.0", path = "../../../frame/society" }
+sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
+pallet-staking = { version = "3.0.0", path = "../../../frame/staking" }
+sc-executor = { version = "0.9.0", path = "../../../client/executor", features = ["wasmtime"] }
+sp-consensus = { version = "0.9.0", path = "../../../primitives/consensus/common" }
+frame-system = { version = "3.0.0", path = "../../../frame/system" }
 substrate-test-client = { version = "2.0.0", path = "../../../test-utils/client" }
-pallet-timestamp = { version = "2.0.0", path = "../../../frame/timestamp" }
-pallet-transaction-payment = { version = "2.0.0", path = "../../../frame/transaction-payment" }
-pallet-treasury = { version = "2.0.0", path = "../../../frame/treasury" }
-sp-api = { version = "2.0.0", path = "../../../primitives/api" }
-sp-finality-tracker = { version = "2.0.0", default-features = false, path = "../../../primitives/finality-tracker" }
-sp-timestamp = { version = "2.0.0", default-features = false, path = "../../../primitives/timestamp" }
-sp-block-builder = { version = "2.0.0", path = "../../../primitives/block-builder" }
-sc-block-builder = { version = "0.8.0", path = "../../../client/block-builder" }
-sp-inherents = { version = "2.0.0", path = "../../../primitives/inherents" }
-sp-blockchain = { version = "2.0.0", path = "../../../primitives/blockchain" }
+pallet-timestamp = { version = "3.0.0", path = "../../../frame/timestamp" }
+pallet-transaction-payment = { version = "3.0.0", path = "../../../frame/transaction-payment" }
+pallet-treasury = { version = "3.0.0", path = "../../../frame/treasury" }
+sp-api = { version = "3.0.0", path = "../../../primitives/api" }
+sp-timestamp = { version = "3.0.0", default-features = false, path = "../../../primitives/timestamp" }
+sp-block-builder = { version = "3.0.0", path = "../../../primitives/block-builder" }
+sc-block-builder = { version = "0.9.0", path = "../../../client/block-builder" }
+sp-inherents = { version = "3.0.0", path = "../../../primitives/inherents" }
+sp-blockchain = { version = "3.0.0", path = "../../../primitives/blockchain" }
 log = "0.4.8"
 tempfile = "3.1.0"
 fs_extra = "1"
@@ -53,4 +52,4 @@ futures = "0.3.1"
 
 [dev-dependencies]
 criterion = "0.3.0"
-sc-cli = { version = "0.8.0", path = "../../../client/cli" }
+sc-cli = { version = "0.9.0", path = "../../../client/cli" }

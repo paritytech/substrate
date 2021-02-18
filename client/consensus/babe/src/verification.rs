@@ -1,28 +1,31 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Verification for BABE headers.
 use sp_runtime::{traits::Header, traits::DigestItemFor};
 use sp_core::{Pair, Public};
-use sp_consensus_babe::{make_transcript, AuthoritySignature, SlotNumber, AuthorityPair, AuthorityId};
+use sp_consensus_babe::{make_transcript, AuthoritySignature, AuthorityPair, AuthorityId};
 use sp_consensus_babe::digests::{
 	PreDigest, PrimaryPreDigest, SecondaryPlainPreDigest, SecondaryVRFPreDigest,
 	CompatibleDigestItem
 };
 use sc_consensus_slots::CheckedHeader;
+use sp_consensus_slots::Slot;
 use log::{debug, trace};
 use super::{find_pre_digest, babe_err, Epoch, BlockT, Error};
 use super::authorship::{calculate_primary_threshold, check_primary_threshold, secondary_slot_author};
@@ -36,7 +39,7 @@ pub(super) struct VerificationParams<'a, B: 'a + BlockT> {
 	/// work.
 	pub(super) pre_digest: Option<PreDigest>,
 	/// The slot number of the current time.
-	pub(super) slot_now: SlotNumber,
+	pub(super) slot_now: Slot,
 	/// Epoch descriptor of the epoch this block _should_ be under, if it's valid.
 	pub(super) epoch: &'a Epoch,
 }
@@ -81,9 +84,9 @@ pub(super) fn check_header<B: BlockT + Sized>(
 	// and that's what we sign
 	let pre_hash = header.hash();
 
-	if pre_digest.slot_number() > slot_now {
+	if pre_digest.slot() > slot_now {
 		header.digest_mut().push(seal);
-		return Ok(CheckedHeader::Deferred(header, pre_digest.slot_number()));
+		return Ok(CheckedHeader::Deferred(header, pre_digest.slot()));
 	}
 
 	let author = match authorities.get(pre_digest.authority_index() as usize) {
@@ -93,7 +96,11 @@ pub(super) fn check_header<B: BlockT + Sized>(
 
 	match &pre_digest {
 		PreDigest::Primary(primary) => {
-			debug!(target: "babe", "Verifying Primary block");
+			debug!(target: "babe",
+				"Verifying primary block #{} at slot: {}",
+				header.number(),
+				primary.slot,
+			);
 
 			check_primary_header::<B>(
 				pre_hash,
@@ -104,7 +111,12 @@ pub(super) fn check_header<B: BlockT + Sized>(
 			)?;
 		},
 		PreDigest::SecondaryPlain(secondary) if epoch.config.allowed_slots.is_secondary_plain_slots_allowed() => {
-			debug!(target: "babe", "Verifying Secondary plain block");
+			debug!(target: "babe",
+				"Verifying secondary plain block #{} at slot: {}",
+				header.number(),
+				secondary.slot,
+			);
+
 			check_secondary_plain_header::<B>(
 				pre_hash,
 				secondary,
@@ -113,7 +125,12 @@ pub(super) fn check_header<B: BlockT + Sized>(
 			)?;
 		},
 		PreDigest::SecondaryVRF(secondary) if epoch.config.allowed_slots.is_secondary_vrf_slots_allowed() => {
-			debug!(target: "babe", "Verifying Secondary VRF block");
+			debug!(target: "babe",
+				"Verifying secondary VRF block #{} at slot: {}",
+				header.number(),
+				secondary.slot,
+			);
+
 			check_secondary_vrf_header::<B>(
 				pre_hash,
 				secondary,
@@ -157,7 +174,7 @@ fn check_primary_header<B: BlockT + Sized>(
 		let (inout, _) = {
 			let transcript = make_transcript(
 				&epoch.randomness,
-				pre_digest.slot_number,
+				pre_digest.slot,
 				epoch.epoch_index,
 			);
 
@@ -197,7 +214,7 @@ fn check_secondary_plain_header<B: BlockT>(
 	// check the signature is valid under the expected authority and
 	// chain state.
 	let expected_author = secondary_slot_author(
-		pre_digest.slot_number,
+		pre_digest.slot,
 		&epoch.authorities,
 		epoch.randomness,
 	).ok_or_else(|| Error::NoSecondaryAuthorExpected)?;
@@ -225,7 +242,7 @@ fn check_secondary_vrf_header<B: BlockT>(
 	// check the signature is valid under the expected authority and
 	// chain state.
 	let expected_author = secondary_slot_author(
-		pre_digest.slot_number,
+		pre_digest.slot,
 		&epoch.authorities,
 		epoch.randomness,
 	).ok_or_else(|| Error::NoSecondaryAuthorExpected)?;
@@ -239,7 +256,7 @@ fn check_secondary_vrf_header<B: BlockT>(
 	if AuthorityPair::verify(&signature, pre_hash.as_ref(), author) {
 		let transcript = make_transcript(
 			&epoch.randomness,
-			pre_digest.slot_number,
+			pre_digest.slot,
 			epoch.epoch_index,
 		);
 

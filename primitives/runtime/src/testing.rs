@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -247,7 +247,7 @@ impl<'a, Xt> Deserialize<'a> for Block<Xt> where Block<Xt>: Decode {
 	fn deserialize<D: Deserializer<'a>>(de: D) -> Result<Self, D::Error> {
 		let r = <Vec<u8>>::deserialize(de)?;
 		Decode::decode(&mut &r[..])
-			.map_err(|e| DeError::custom(format!("Invalid value passed into decode: {}", e.what())))
+			.map_err(|e| DeError::custom(format!("Invalid value passed into decode: {}", e)))
 	}
 }
 
@@ -313,11 +313,17 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
 	fn validate<U: ValidateUnsigned<Call=Self::Call>>(
 		&self,
-		_source: TransactionSource,
-		_info: &DispatchInfoOf<Self::Call>,
-		_len: usize,
+		source: TransactionSource,
+		info: &DispatchInfoOf<Self::Call>,
+		len: usize,
 	) -> TransactionValidity {
-		Ok(Default::default())
+		if let Some((ref id, ref extra)) = self.signature {
+			Extra::validate(extra, id, &self.call, info, len)
+		} else {
+			let valid = Extra::validate_unsigned(&self.call, info, len)?;
+			let unsigned_validation = U::validate_unsigned(source, &self.call)?;
+			Ok(valid.combine_with(unsigned_validation))
+		}
 	}
 
 	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
@@ -332,6 +338,7 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 			Some(who)
 		} else {
 			Extra::pre_dispatch_unsigned(&self.call, info, len)?;
+			U::pre_dispatch(&self.call)?;
 			None
 		};
 

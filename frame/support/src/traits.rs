@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,19 +23,85 @@ use sp_std::{prelude::*, result, marker::PhantomData, ops::Div, fmt::Debug};
 use codec::{FullCodec, Codec, Encode, Decode, EncodeLike};
 use sp_core::u32_trait::Value as U32;
 use sp_runtime::{
-	RuntimeDebug, ConsensusEngineId, DispatchResult, DispatchError, traits::{
-		MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput, Bounded, Zero,
-		BadOrigin, AtLeast32BitUnsigned
+	RuntimeAppPublic, RuntimeDebug, BoundToRuntimeAppPublic,
+	ConsensusEngineId, DispatchResult, DispatchError,
+	traits::{
+	MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput, Bounded, Zero,
+	BadOrigin, AtLeast32BitUnsigned, Convert, UniqueSaturatedFrom, UniqueSaturatedInto,
+	SaturatedConversion, StoredMapError,
 	},
 };
+use sp_staking::SessionIndex;
 use crate::dispatch::Parameter;
 use crate::storage::StorageMap;
 use crate::weights::Weight;
+use bitflags::bitflags;
 use impl_trait_for_tuples::impl_for_tuples;
 
 /// Re-expected for the macro.
 #[doc(hidden)]
 pub use sp_std::{mem::{swap, take}, cell::RefCell, vec::Vec, boxed::Box};
+
+/// A trait for online node inspection in a session.
+///
+/// Something that can give information about the current validator set.
+pub trait ValidatorSet<AccountId> {
+	/// Type for representing validator id in a session.
+	type ValidatorId: Parameter;
+	/// A type for converting `AccountId` to `ValidatorId`.
+	type ValidatorIdOf: Convert<AccountId, Option<Self::ValidatorId>>;
+
+	/// Returns current session index.
+	fn session_index() -> SessionIndex;
+
+	/// Returns the active set of validators.
+	fn validators() -> Vec<Self::ValidatorId>;
+}
+
+/// [`ValidatorSet`] combined with an identification.
+pub trait ValidatorSetWithIdentification<AccountId>: ValidatorSet<AccountId> {
+	/// Full identification of `ValidatorId`.
+	type Identification: Parameter;
+	/// A type for converting `ValidatorId` to `Identification`.
+	type IdentificationOf: Convert<Self::ValidatorId, Option<Self::Identification>>;
+}
+
+/// A session handler for specific key type.
+pub trait OneSessionHandler<ValidatorId>: BoundToRuntimeAppPublic {
+	/// The key type expected.
+	type Key: Decode + Default + RuntimeAppPublic;
+
+	/// The given validator set will be used for the genesis session.
+	/// It is guaranteed that the given validator set will also be used
+	/// for the second session, therefore the first call to `on_new_session`
+	/// should provide the same validator set.
+	fn on_genesis_session<'a, I: 'a>(validators: I)
+		where I: Iterator<Item=(&'a ValidatorId, Self::Key)>, ValidatorId: 'a;
+
+	/// Session set has changed; act appropriately. Note that this can be called
+	/// before initialization of your module.
+	///
+	/// `changed` is true when at least one of the session keys
+	/// or the underlying economic identities/distribution behind one the
+	/// session keys has changed, false otherwise.
+	///
+	/// The `validators` are the validators of the incoming session, and `queued_validators`
+	/// will follow.
+	fn on_new_session<'a, I: 'a>(
+		changed: bool,
+		validators: I,
+		queued_validators: I,
+	) where I: Iterator<Item=(&'a ValidatorId, Self::Key)>, ValidatorId: 'a;
+
+	/// A notification for end of the session.
+	///
+	/// Note it is triggered before any `SessionManager::end_session` handlers,
+	/// so we can still affect the validator set.
+	fn on_before_session_ending() {}
+
+	/// A validator got disabled. Act accordingly until a new session begins.
+	fn on_disabled(_validator_index: usize);
+}
 
 /// Simple trait for providing a filter over a reference to some type.
 pub trait Filter<T> {
@@ -297,41 +363,60 @@ mod test_impl_filter_stack {
 
 /// An abstraction of a value stored within storage, but possibly as part of a larger composite
 /// item.
-pub trait StoredMap<K, T> {
+pub trait StoredMap<K, T: Default> {
 	/// Get the item, or its default if it doesn't yet exist; we make no distinction between the
 	/// two.
 	fn get(k: &K) -> T;
-	/// Get whether the item takes up any storage. If this is `false`, then `get` will certainly
-	/// return the `T::default()`. If `true`, then there is no implication for `get` (i.e. it
-	/// may return any value, including the default).
-	///
-	/// NOTE: This may still be `true`, even after `remove` is called. This is the case where
-	/// a single storage entry is shared between multiple `StoredMap` items single, without
-	/// additional logic to enforce it, deletion of any one them doesn't automatically imply
-	/// deletion of them all.
-	fn is_explicit(k: &K) -> bool;
-	/// Mutate the item.
-	fn mutate<R>(k: &K, f: impl FnOnce(&mut T) -> R) -> R;
-	/// Mutate the item, removing or resetting to default value if it has been mutated to `None`.
-	fn mutate_exists<R>(k: &K, f: impl FnOnce(&mut Option<T>) -> R) -> R;
+
 	/// Maybe mutate the item only if an `Ok` value is returned from `f`. Do nothing if an `Err` is
 	/// returned. It is removed or reset to default value if it has been mutated to `None`
-	fn try_mutate_exists<R, E>(k: &K, f: impl FnOnce(&mut Option<T>) -> Result<R, E>) -> Result<R, E>;
+	fn try_mutate_exists<R, E: From<StoredMapError>>(
+		k: &K,
+		f: impl FnOnce(&mut Option<T>) -> Result<R, E>,
+	) -> Result<R, E>;
+
+	// Everything past here has a default implementation.
+
+	/// Mutate the item.
+	fn mutate<R>(k: &K, f: impl FnOnce(&mut T) -> R) -> Result<R, StoredMapError> {
+		Self::mutate_exists(k, |maybe_account| match maybe_account {
+			Some(ref mut account) => f(account),
+			x @ None => {
+				let mut account = Default::default();
+				let r = f(&mut account);
+				*x = Some(account);
+				r
+			}
+		})
+	}
+
+	/// Mutate the item, removing or resetting to default value if it has been mutated to `None`.
+	///
+	/// This is infallible as long as the value does not get destroyed.
+	fn mutate_exists<R>(
+		k: &K,
+		f: impl FnOnce(&mut Option<T>) -> R,
+	) -> Result<R, StoredMapError> {
+		Self::try_mutate_exists(k, |x| -> Result<R, StoredMapError> { Ok(f(x)) })
+	}
+
 	/// Set the item to something new.
-	fn insert(k: &K, t: T) { Self::mutate(k, |i| *i = t); }
+	fn insert(k: &K, t: T) -> Result<(), StoredMapError> { Self::mutate(k, |i| *i = t) }
+
 	/// Remove the item or otherwise replace it with its default value; we don't care which.
-	fn remove(k: &K);
+	fn remove(k: &K) -> Result<(), StoredMapError> { Self::mutate_exists(k, |x| *x = None) }
 }
 
 /// A simple, generic one-parameter event notifier/handler.
-pub trait Happened<T> {
-	/// The thing happened.
-	fn happened(t: &T);
+pub trait HandleLifetime<T> {
+	/// An account was created.
+	fn created(_t: &T) -> Result<(), StoredMapError> { Ok(()) }
+
+	/// An account was killed.
+	fn killed(_t: &T) -> Result<(), StoredMapError> { Ok(()) }
 }
 
-impl<T> Happened<T> for () {
-	fn happened(_: &T) {}
-}
+impl<T> HandleLifetime<T> for () {}
 
 /// A shim for placing around a storage item in order to use it as a `StoredValue`. Ideally this
 /// wouldn't be needed as `StorageValue`s should blanket implement `StoredValue`s, however this
@@ -344,68 +429,63 @@ impl<T> Happened<T> for () {
 /// be the default value), or where the account is being removed or reset back to the default value
 /// where previously it did exist (though may have been in a default state). This works well with
 /// system module's `CallOnCreatedAccount` and `CallKillAccount`.
-pub struct StorageMapShim<
-	S,
-	Created,
-	Removed,
-	K,
-	T
->(sp_std::marker::PhantomData<(S, Created, Removed, K, T)>);
+pub struct StorageMapShim<S, L, K, T>(sp_std::marker::PhantomData<(S, L, K, T)>);
 impl<
 	S: StorageMap<K, T, Query=T>,
-	Created: Happened<K>,
-	Removed: Happened<K>,
+	L: HandleLifetime<K>,
 	K: FullCodec,
-	T: FullCodec,
-> StoredMap<K, T> for StorageMapShim<S, Created, Removed, K, T> {
+	T: FullCodec + Default,
+> StoredMap<K, T> for StorageMapShim<S, L, K, T> {
 	fn get(k: &K) -> T { S::get(k) }
-	fn is_explicit(k: &K) -> bool { S::contains_key(k) }
-	fn insert(k: &K, t: T) {
-		let existed = S::contains_key(&k);
+	fn insert(k: &K, t: T) -> Result<(), StoredMapError> {
+		if !S::contains_key(&k) {
+			L::created(k)?;
+		}
 		S::insert(k, t);
-		if !existed {
-			Created::happened(k);
-		}
+		Ok(())
 	}
-	fn remove(k: &K) {
-		let existed = S::contains_key(&k);
-		S::remove(k);
-		if existed {
-			Removed::happened(&k);
+	fn remove(k: &K) -> Result<(), StoredMapError> {
+		if S::contains_key(&k) {
+			L::killed(&k)?;
+			S::remove(k);
 		}
+		Ok(())
 	}
-	fn mutate<R>(k: &K, f: impl FnOnce(&mut T) -> R) -> R {
-		let existed = S::contains_key(&k);
-		let r = S::mutate(k, f);
-		if !existed {
-			Created::happened(k);
+	fn mutate<R>(k: &K, f: impl FnOnce(&mut T) -> R) -> Result<R, StoredMapError> {
+		if !S::contains_key(&k) {
+			L::created(k)?;
 		}
-		r
+		Ok(S::mutate(k, f))
 	}
-	fn mutate_exists<R>(k: &K, f: impl FnOnce(&mut Option<T>) -> R) -> R {
-		let (existed, exists, r) = S::mutate_exists(k, |maybe_value| {
-			let existed = maybe_value.is_some();
-			let r = f(maybe_value);
-			(existed, maybe_value.is_some(), r)
-		});
-		if !existed && exists {
-			Created::happened(k);
-		} else if existed && !exists {
-			Removed::happened(k);
-		}
-		r
-	}
-	fn try_mutate_exists<R, E>(k: &K, f: impl FnOnce(&mut Option<T>) -> Result<R, E>) -> Result<R, E> {
+	fn mutate_exists<R>(k: &K, f: impl FnOnce(&mut Option<T>) -> R) -> Result<R, StoredMapError> {
 		S::try_mutate_exists(k, |maybe_value| {
 			let existed = maybe_value.is_some();
-			f(maybe_value).map(|v| (existed, maybe_value.is_some(), v))
-		}).map(|(existed, exists, v)| {
+			let r = f(maybe_value);
+			let exists = maybe_value.is_some();
+
 			if !existed && exists {
-				Created::happened(k);
+				L::created(k)?;
 			} else if existed && !exists {
-				Removed::happened(k);
+				L::killed(k)?;
 			}
-			v
+			Ok(r)
+		})
+	}
+	fn try_mutate_exists<R, E: From<StoredMapError>>(
+		k: &K,
+		f: impl FnOnce(&mut Option<T>) -> Result<R, E>,
+	) -> Result<R, E> {
+		S::try_mutate_exists(k, |maybe_value| {
+			let existed = maybe_value.is_some();
+			let r = f(maybe_value)?;
+			let exists = maybe_value.is_some();
+
+			if !existed && exists {
+				L::created(k).map_err(E::from)?;
+			} else if existed && !exists {
+				L::killed(k).map_err(E::from)?;
+			}
+			Ok(r)
 		})
 	}
 }
@@ -502,18 +582,6 @@ pub trait ContainsLengthBound {
 	fn min_len() -> usize;
 	/// Maximum number of elements contained
 	fn max_len() -> usize;
-}
-
-/// Determiner to say whether a given account is unused.
-pub trait IsDeadAccount<AccountId> {
-	/// Is the given account dead?
-	fn is_dead_account(who: &AccountId) -> bool;
-}
-
-impl<AccountId> IsDeadAccount<AccountId> for () {
-	fn is_dead_account(_who: &AccountId) -> bool {
-		true
-	}
 }
 
 /// Handler for when a new account has been created.
@@ -1182,24 +1250,39 @@ pub trait VestingSchedule<AccountId> {
 	fn remove_vesting_schedule(who: &AccountId);
 }
 
-bitmask! {
+bitflags! {
 	/// Reasons for moving funds out of an account.
 	#[derive(Encode, Decode)]
-	pub mask WithdrawReasons: i8 where
-
-	/// Reason for moving funds out of an account.
-	#[derive(Encode, Decode)]
-	flags WithdrawReason {
+	pub struct WithdrawReasons: i8 {
 		/// In order to pay for (system) transaction costs.
-		TransactionPayment = 0b00000001,
+		const TRANSACTION_PAYMENT = 0b00000001;
 		/// In order to transfer ownership.
-		Transfer = 0b00000010,
+		const TRANSFER = 0b00000010;
 		/// In order to reserve some funds for a later return or repatriation.
-		Reserve = 0b00000100,
+		const RESERVE = 0b00000100;
 		/// In order to pay some other (higher-level) fees.
-		Fee = 0b00001000,
+		const FEE = 0b00001000;
 		/// In order to tip a validator for transaction inclusion.
-		Tip = 0b00010000,
+		const TIP = 0b00010000;
+	}
+}
+
+impl WithdrawReasons {
+	/// Choose all variants except for `one`.
+	///
+	/// ```rust
+	/// # use frame_support::traits::WithdrawReasons;
+	/// # fn main() {
+	/// assert_eq!(
+	/// 	WithdrawReasons::FEE | WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE | WithdrawReasons::TIP,
+	/// 	WithdrawReasons::except(WithdrawReasons::TRANSACTION_PAYMENT),
+	///	);
+	/// # }
+	/// ```
+	pub fn except(one: WithdrawReasons) -> WithdrawReasons {
+		let mut flags = Self::all();
+		flags.toggle(one);
+		flags
 	}
 }
 
@@ -1213,25 +1296,6 @@ pub trait Time {
 pub trait UnixTime {
 	/// Return duration since `SystemTime::UNIX_EPOCH`.
 	fn now() -> core::time::Duration;
-}
-
-impl WithdrawReasons {
-	/// Choose all variants except for `one`.
-	///
-	/// ```rust
-	/// # use frame_support::traits::{WithdrawReason, WithdrawReasons};
-	/// # fn main() {
-	/// assert_eq!(
-	/// 	WithdrawReason::Fee | WithdrawReason::Transfer | WithdrawReason::Reserve | WithdrawReason::Tip,
-	/// 	WithdrawReasons::except(WithdrawReason::TransactionPayment),
-	///	);
-	/// # }
-	/// ```
-	pub fn except(one: WithdrawReason) -> WithdrawReasons {
-		let mut mask = Self::all();
-		mask.toggle(one);
-		mask
-	}
 }
 
 /// Trait for type that can handle incremental changes to a set of account IDs.
@@ -1262,15 +1326,16 @@ pub trait ChangeMembers<AccountId: Clone + Ord> {
 	///
 	/// This resets any previous value of prime.
 	fn set_members_sorted(new_members: &[AccountId], old_members: &[AccountId]) {
-		let (incoming, outgoing) = Self::compute_members_diff(new_members, old_members);
+		let (incoming, outgoing) = Self::compute_members_diff_sorted(new_members, old_members);
 		Self::change_members_sorted(&incoming[..], &outgoing[..], &new_members);
 	}
 
-	/// Set the new members; they **must already be sorted**. This will compute the diff and use it to
-	/// call `change_members_sorted`.
-	fn compute_members_diff(
+	/// Compute diff between new and old members; they **must already be sorted**.
+	///
+	/// Returns incoming and outgoing members.
+	fn compute_members_diff_sorted(
 		new_members: &[AccountId],
-		old_members: &[AccountId]
+		old_members: &[AccountId],
 	) -> (Vec<AccountId>, Vec<AccountId>) {
 		let mut old_iter = old_members.iter();
 		let mut new_iter = new_members.iter();
@@ -1304,6 +1369,11 @@ pub trait ChangeMembers<AccountId: Clone + Ord> {
 
 	/// Set the prime member.
 	fn set_prime(_prime: Option<AccountId>) {}
+
+	/// Get the current prime.
+	fn get_prime() -> Option<AccountId> {
+		None
+	}
 }
 
 impl<T: Clone + Ord> ChangeMembers<T> for () {
@@ -1389,11 +1459,6 @@ pub trait PalletInfo {
 	fn name<P: 'static>() -> Option<&'static str>;
 }
 
-impl PalletInfo for () {
-	fn index<P: 'static>() -> Option<usize> { Some(0) }
-	fn name<P: 'static>() -> Option<&'static str> { Some("test") }
-}
-
 /// The function and pallet name of the Call.
 #[derive(Clone, Eq, PartialEq, Default, RuntimeDebug)]
 pub struct CallMetadata {
@@ -1421,20 +1486,30 @@ pub trait GetCallMetadata {
 	fn get_call_metadata(&self) -> CallMetadata;
 }
 
-/// The block finalization trait. Implementing this lets you express what should happen
-/// for your module when the block is ending.
+/// The block finalization trait.
+///
+/// Implementing this lets you express what should happen for your pallet when the block is ending.
 #[impl_for_tuples(30)]
 pub trait OnFinalize<BlockNumber> {
 	/// The block is being finalized. Implement to have something happen.
+	///
+	/// NOTE: This function is called AFTER ALL extrinsics in a block are applied,
+	/// including inherent extrinsics.
 	fn on_finalize(_n: BlockNumber) {}
 }
 
-/// The block initialization trait. Implementing this lets you express what should happen
-/// for your module when the block is beginning (right before the first extrinsic is executed).
+/// The block initialization trait.
+///
+/// Implementing this lets you express what should happen for your pallet when the block is
+/// beginning (right before the first extrinsic is executed).
 pub trait OnInitialize<BlockNumber> {
 	/// The block is being initialized. Implement to have something happen.
 	///
 	/// Return the non-negotiable weight consumed in the block.
+	///
+	/// NOTE: This function is called BEFORE ANY extrinsic in a block is applied,
+	/// including inherent extrinsics. Hence for instance, if you runtime includes
+	/// `pallet_timestamp`, the `timestamp` is not yet up to date at this point.
 	fn on_initialize(_n: BlockNumber) -> crate::weights::Weight { 0 }
 }
 
@@ -1445,6 +1520,17 @@ impl<BlockNumber: Clone> OnInitialize<BlockNumber> for Tuple {
 		for_tuples!( #( weight = weight.saturating_add(Tuple::on_initialize(_n.clone())); )* );
 		weight
 	}
+}
+
+/// A trait that will be called at genesis.
+///
+/// Implementing this trait for a pallet let's you express operations that should
+/// happen at genesis. It will be called in an externalities provided environment and
+/// will see the genesis state after all pallets have written their genesis state.
+#[impl_for_tuples(30)]
+pub trait OnGenesis {
+	/// Something that should happen at genesis.
+	fn on_genesis() {}
 }
 
 /// The runtime upgrade trait.
@@ -1529,11 +1615,9 @@ pub mod schedule {
 		/// An address which can be used for removing a scheduled task.
 		type Address: Codec + Clone + Eq + EncodeLike + Debug;
 
-		/// Schedule a one-off dispatch to happen at the beginning of some block in the future.
+		/// Schedule a dispatch to happen at the beginning of some block in the future.
 		///
 		/// This is not named.
-		///
-		/// Infallible.
 		fn schedule(
 			when: DispatchTime<BlockNumber>,
 			maybe_periodic: Option<Period<BlockNumber>>,
@@ -1553,6 +1637,22 @@ pub mod schedule {
 		/// NOTE2: This will not work to cancel periodic tasks after their initial execution. For
 		/// that, you must name the task explicitly using the `Named` trait.
 		fn cancel(address: Self::Address) -> Result<(), ()>;
+
+		/// Reschedule a task. For one-off tasks, this dispatch is guaranteed to succeed
+		/// only if it is executed *before* the currently scheduled block. For periodic tasks,
+		/// this dispatch is guaranteed to succeed only before the *initial* execution; for
+		/// others, use `reschedule_named`.
+		///
+		/// Will return an error if the `address` is invalid.
+		fn reschedule(
+			address: Self::Address,
+			when: DispatchTime<BlockNumber>,
+		) -> Result<Self::Address, DispatchError>;
+
+		/// Return the next dispatch time for a given task.
+		///
+		/// Will return an error if the `address` is invalid.
+		fn next_dispatch_time(address: Self::Address) -> Result<BlockNumber, ()>;
 	}
 
 	/// A type that can be used as a scheduler.
@@ -1560,7 +1660,7 @@ pub mod schedule {
 		/// An address which can be used for removing a scheduled task.
 		type Address: Codec + Clone + Eq + EncodeLike + sp_std::fmt::Debug;
 
-		/// Schedule a one-off dispatch to happen at the beginning of some block in the future.
+		/// Schedule a dispatch to happen at the beginning of some block in the future.
 		///
 		/// - `id`: The identity of the task. This must be unique and will return an error if not.
 		fn schedule_named(
@@ -1580,6 +1680,18 @@ pub mod schedule {
 		/// NOTE: This guaranteed to work only *before* the point that it is due to be executed.
 		/// If it ends up being delayed beyond the point of execution, then it cannot be cancelled.
 		fn cancel_named(id: Vec<u8>) -> Result<(), ()>;
+
+		/// Reschedule a task. For one-off tasks, this dispatch is guaranteed to succeed
+		/// only if it is executed *before* the currently scheduled block.
+		fn reschedule_named(
+			id: Vec<u8>,
+			when: DispatchTime<BlockNumber>,
+		) -> Result<Self::Address, DispatchError>;
+
+		/// Return the next dispatch time for a given task.
+		///
+		/// Will return an error if the `id` is invalid.
+		fn next_dispatch_time(id: Vec<u8>) -> Result<BlockNumber, ()>;
 	}
 }
 
@@ -1606,25 +1718,28 @@ pub trait EnsureOrigin<OuterOrigin> {
 /// Implemented for pallet dispatchable type by `decl_module` and for runtime dispatchable by
 /// `construct_runtime` and `impl_outer_dispatch`.
 pub trait UnfilteredDispatchable {
-	/// The origin type of the runtime, (i.e. `frame_system::Trait::Origin`).
+	/// The origin type of the runtime, (i.e. `frame_system::Config::Origin`).
 	type Origin;
 
 	/// Dispatch this call but do not check the filter in origin.
 	fn dispatch_bypass_filter(self, origin: Self::Origin) -> crate::dispatch::DispatchResultWithPostInfo;
 }
 
-/// Methods available on `frame_system::Trait::Origin`.
+/// Methods available on `frame_system::Config::Origin`.
 pub trait OriginTrait: Sized {
-	/// Runtime call type, as in `frame_system::Trait::Call`
+	/// Runtime call type, as in `frame_system::Config::Call`
 	type Call;
 
 	/// The caller origin, overarching type of all pallets origins.
 	type PalletsOrigin;
 
+	/// The AccountId used across the system.
+	type AccountId;
+
 	/// Add a filter to the origin.
 	fn add_filter(&mut self, filter: impl Fn(&Self::Call) -> bool + 'static);
 
-	/// Reset origin filters to default one, i.e `frame_system::Trait::BaseCallFilter`.
+	/// Reset origin filters to default one, i.e `frame_system::Config::BaseCallFilter`.
 	fn reset_filter(&mut self);
 
 	/// Replace the caller with caller from the other origin
@@ -1635,6 +1750,15 @@ pub trait OriginTrait: Sized {
 
 	/// Get the caller.
 	fn caller(&self) -> &Self::PalletsOrigin;
+
+	/// Create with system none origin and `frame-system::Config::BaseCallFilter`.
+	fn none() -> Self;
+
+	/// Create with system root origin and no filter.
+	fn root() -> Self;
+
+	/// Create with system signed origin and `frame-system::Config::BaseCallFilter`.
+	fn signed(by: Self::AccountId) -> Self;
 }
 
 /// Trait to be used when types are exactly same.
@@ -1668,8 +1792,328 @@ impl<T> IsType<T> for T {
 /// E.g. for module MyModule default instance will have prefix "MyModule" and other instances
 /// "InstanceNMyModule".
 pub trait Instance: 'static {
-    /// Unique module prefix. E.g. "InstanceNMyModule" or "MyModule"
-    const PREFIX: &'static str ;
+	/// Unique module prefix. E.g. "InstanceNMyModule" or "MyModule"
+	const PREFIX: &'static str;
+}
+
+/// An instance of a storage in a pallet.
+///
+/// Define an instance for an individual storage inside a pallet.
+/// The pallet prefix is used to isolate the storage between pallets, and the storage prefix is
+/// used to isolate storages inside a pallet.
+///
+/// NOTE: These information can be used to define storages in pallet such as a `StorageMap` which
+/// can use keys after `twox_128(pallet_prefix())++twox_128(STORAGE_PREFIX)`
+pub trait StorageInstance {
+	/// Prefix of a pallet to isolate it from other pallets.
+	fn pallet_prefix() -> &'static str;
+
+	/// Prefix given to a storage to isolate from other storages in the pallet.
+	const STORAGE_PREFIX: &'static str;
+}
+
+/// Implement Get by returning Default for any type that implements Default.
+pub struct GetDefault;
+impl<T: Default> crate::traits::Get<T> for GetDefault {
+	fn get() -> T {
+		T::default()
+	}
+}
+
+/// A trait similar to `Convert` to convert values from `B` an abstract balance type
+/// into u64 and back from u128. (This conversion is used in election and other places where complex
+/// calculation over balance type is needed)
+///
+/// Total issuance of the currency is passed in, but an implementation of this trait may or may not
+/// use it.
+///
+/// # WARNING
+///
+/// the total issuance being passed in implies that the implementation must be aware of the fact
+/// that its values can affect the outcome. This implies that if the vote value is dependent on the
+/// total issuance, it should never ber written to storage for later re-use.
+pub trait CurrencyToVote<B> {
+	/// Convert balance to u64.
+	fn to_vote(value: B, issuance: B) -> u64;
+
+	/// Convert u128 to balance.
+	fn to_currency(value: u128, issuance: B) -> B;
+}
+
+/// An implementation of `CurrencyToVote` tailored for chain's that have a balance type of u128.
+///
+/// The factor is the `(total_issuance / u64::max()).max(1)`, represented as u64. Let's look at the
+/// important cases:
+///
+/// If the chain's total issuance is less than u64::max(), this will always be 1, which means that
+/// the factor will not have any effect. In this case, any account's balance is also less. Thus,
+/// both of the conversions are basically an `as`; Any balance can fit in u64.
+///
+/// If the chain's total issuance is more than 2*u64::max(), then a factor might be multiplied and
+/// divided upon conversion.
+pub struct U128CurrencyToVote;
+
+impl U128CurrencyToVote {
+	fn factor(issuance: u128) -> u128 {
+		(issuance / u64::max_value() as u128).max(1)
+	}
+}
+
+impl CurrencyToVote<u128> for U128CurrencyToVote {
+	fn to_vote(value: u128, issuance: u128) -> u64 {
+		(value / Self::factor(issuance)).saturated_into()
+	}
+
+	fn to_currency(value: u128, issuance: u128) -> u128 {
+		value.saturating_mul(Self::factor(issuance))
+	}
+}
+
+
+/// A naive implementation of `CurrencyConvert` that simply saturates all conversions.
+///
+/// # Warning
+///
+/// This is designed to be used mostly for testing. Use with care, and think about the consequences.
+pub struct SaturatingCurrencyToVote;
+
+impl<B: UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128>> CurrencyToVote<B> for SaturatingCurrencyToVote {
+	fn to_vote(value: B, _: B) -> u64 {
+		value.unique_saturated_into()
+	}
+
+	fn to_currency(value: u128, _: B) -> B {
+		B::unique_saturated_from(value)
+	}
+}
+
+/// Something that can be checked to be a of sub type `T`.
+///
+/// This is useful for enums where each variant encapsulates a different sub type, and
+/// you need access to these sub types.
+///
+/// For example, in FRAME, this trait is implemented for the runtime `Call` enum. Pallets use this
+/// to check if a certain call is an instance of the local pallet's `Call` enum.
+///
+/// # Example
+///
+/// ```
+/// # use frame_support::traits::IsSubType;
+///
+/// enum Test {
+///     String(String),
+///     U32(u32),
+/// }
+///
+/// impl IsSubType<String> for Test {
+///     fn is_sub_type(&self) -> Option<&String> {
+///         match self {
+///             Self::String(ref r) => Some(r),
+///             _ => None,
+///         }
+///     }
+/// }
+///
+/// impl IsSubType<u32> for Test {
+///     fn is_sub_type(&self) -> Option<&u32> {
+///         match self {
+///             Self::U32(ref r) => Some(r),
+///             _ => None,
+///         }
+///     }
+/// }
+///
+/// fn main() {
+///     let data = Test::String("test".into());
+///
+///     assert_eq!("test", IsSubType::<String>::is_sub_type(&data).unwrap().as_str());
+/// }
+/// ```
+pub trait IsSubType<T> {
+	/// Returns `Some(_)` if `self` is an instance of sub type `T`.
+	fn is_sub_type(&self) -> Option<&T>;
+}
+
+/// The pallet hooks trait. Implementing this lets you express some logic to execute.
+pub trait Hooks<BlockNumber> {
+	/// The block is being finalized. Implement to have something happen.
+	fn on_finalize(_n: BlockNumber) {}
+
+	/// The block is being initialized. Implement to have something happen.
+	///
+	/// Return the non-negotiable weight consumed in the block.
+	fn on_initialize(_n: BlockNumber) -> crate::weights::Weight { 0 }
+
+	/// Perform a module upgrade.
+	///
+	/// NOTE: this doesn't include all pallet logic triggered on runtime upgrade. For instance it
+	/// doesn't include the write of the pallet version in storage. The final complete logic
+	/// triggered on runtime upgrade is given by implementation of `OnRuntimeUpgrade` trait by
+	/// `Pallet`.
+	///
+	/// # Warning
+	///
+	/// This function will be called before we initialized any runtime state, aka `on_initialize`
+	/// wasn't called yet. So, information like the block number and any other
+	/// block local data are not accessible.
+	///
+	/// Return the non-negotiable weight consumed for runtime upgrade.
+	fn on_runtime_upgrade() -> crate::weights::Weight { 0 }
+
+	/// Implementing this function on a module allows you to perform long-running tasks
+	/// that make (by default) validators generate transactions that feed results
+	/// of those long-running computations back on chain.
+	///
+	/// NOTE: This function runs off-chain, so it can access the block state,
+	/// but cannot preform any alterations. More specifically alterations are
+	/// not forbidden, but they are not persisted in any way after the worker
+	/// has finished.
+	///
+	/// This function is being called after every block import (when fully synced).
+	///
+	/// Implement this and use any of the `Offchain` `sp_io` set of APIs
+	/// to perform off-chain computations, calls and submit transactions
+	/// with results to trigger any on-chain changes.
+	/// Any state alterations are lost and are not persisted.
+	fn offchain_worker(_n: BlockNumber) {}
+
+	/// Run integrity test.
+	///
+	/// The test is not executed in a externalities provided environment.
+	fn integrity_test() {}
+}
+
+/// A trait to define the build function of a genesis config, T and I are placeholder for pallet
+/// trait and pallet instance.
+#[cfg(feature = "std")]
+pub trait GenesisBuild<T, I=()>: Default + MaybeSerializeDeserialize {
+	/// The build function is called within an externalities allowing storage APIs.
+	/// Thus one can write to storage using regular pallet storages.
+	fn build(&self);
+
+	/// Build the storage using `build` inside default storage.
+	fn build_storage(&self) -> Result<sp_runtime::Storage, String> {
+		let mut storage = Default::default();
+		self.assimilate_storage(&mut storage)?;
+		Ok(storage)
+	}
+
+	/// Assimilate the storage for this module into pre-existing overlays.
+	fn assimilate_storage(&self, storage: &mut sp_runtime::Storage) -> Result<(), String> {
+		sp_state_machine::BasicExternalities::execute_with_storage(storage, || {
+			self.build();
+			Ok(())
+		})
+	}
+}
+
+/// The storage key postfix that is used to store the [`PalletVersion`] per pallet.
+///
+/// The full storage key is built by using:
+/// Twox128([`PalletInfo::name`]) ++ Twox128([`PALLET_VERSION_STORAGE_KEY_POSTFIX`])
+pub const PALLET_VERSION_STORAGE_KEY_POSTFIX: &[u8] = b":__PALLET_VERSION__:";
+
+/// The version of a pallet.
+///
+/// Each pallet version is stored in the state under a fixed key. See
+/// [`PALLET_VERSION_STORAGE_KEY_POSTFIX`] for how this key is built.
+#[derive(RuntimeDebug, Eq, PartialEq, Encode, Decode, Ord, Clone, Copy)]
+pub struct PalletVersion {
+	/// The major version of the pallet.
+	pub major: u16,
+	/// The minor version of the pallet.
+	pub minor: u8,
+	/// The patch version of the pallet.
+	pub patch: u8,
+}
+
+impl PalletVersion {
+	/// Creates a new instance of `Self`.
+	pub fn new(major: u16, minor: u8, patch: u8) -> Self {
+		Self {
+			major,
+			minor,
+			patch,
+		}
+	}
+
+	/// Returns the storage key for a pallet version.
+	///
+	/// See [`PALLET_VERSION_STORAGE_KEY_POSTFIX`] on how this key is built.
+	///
+	/// Returns `None` if the given `PI` returned a `None` as name for the given
+	/// `Pallet`.
+	pub fn storage_key<PI: PalletInfo, Pallet: 'static>() -> Option<[u8; 32]> {
+		let pallet_name = PI::name::<Pallet>()?;
+
+		let pallet_name = sp_io::hashing::twox_128(pallet_name.as_bytes());
+		let postfix = sp_io::hashing::twox_128(PALLET_VERSION_STORAGE_KEY_POSTFIX);
+
+		let mut final_key = [0u8; 32];
+		final_key[..16].copy_from_slice(&pallet_name);
+		final_key[16..].copy_from_slice(&postfix);
+
+		Some(final_key)
+	}
+
+	/// Put this pallet version into the storage.
+	///
+	/// It will use the storage key that is associated with the given `Pallet`.
+	///
+	/// # Panics
+	///
+	/// This function will panic iff `Pallet` can not be found by `PalletInfo`.
+	/// In a runtime that is put together using
+	/// [`construct_runtime!`](crate::construct_runtime) this should never happen.
+	///
+	/// It will also panic if this function isn't executed in an externalities
+	/// provided environment.
+	pub fn put_into_storage<PI: PalletInfo, Pallet: 'static>(&self) {
+		let key = Self::storage_key::<PI, Pallet>()
+			.expect("Every active pallet has a name in the runtime; qed");
+
+		crate::storage::unhashed::put(&key, self);
+	}
+}
+
+impl sp_std::cmp::PartialOrd for PalletVersion {
+	fn partial_cmp(&self, other: &Self) -> Option<sp_std::cmp::Ordering> {
+		let res = self.major
+			.cmp(&other.major)
+			.then_with(||
+				self.minor
+					.cmp(&other.minor)
+					.then_with(|| self.patch.cmp(&other.patch)
+			));
+
+		Some(res)
+	}
+}
+
+/// Provides version information about a pallet.
+///
+/// This trait provides two functions for returning the version of a
+/// pallet. There is a state where both functions can return distinct versions.
+/// See [`GetPalletVersion::storage_version`] for more information about this.
+pub trait GetPalletVersion {
+	/// Returns the current version of the pallet.
+	fn current_version() -> PalletVersion;
+
+	/// Returns the version of the pallet that is stored in storage.
+	///
+	/// Most of the time this will return the exact same version as
+	/// [`GetPalletVersion::current_version`]. Only when being in
+	/// a state after a runtime upgrade happened and the pallet did
+	/// not yet updated its version in storage, this will return a
+	/// different(the previous, seen from the time of calling) version.
+	///
+	/// See [`PalletVersion`] for more information.
+	///
+	/// # Note
+	///
+	/// If there was no previous version of the pallet stored in the state,
+	/// this function returns `None`.
+	fn storage_version() -> Option<PalletVersion>;
 }
 
 #[cfg(test)]
@@ -1692,5 +2136,19 @@ mod tests {
 
 		assert_eq!(<(Test, Test)>::on_initialize(0), 20);
 		assert_eq!(<(Test, Test)>::on_runtime_upgrade(), 40);
+	}
+
+	#[test]
+	fn check_pallet_version_ordering() {
+		let version = PalletVersion::new(1, 0, 0);
+		assert!(version > PalletVersion::new(0, 1, 2));
+		assert!(version == PalletVersion::new(1, 0, 0));
+		assert!(version < PalletVersion::new(1, 0, 1));
+		assert!(version < PalletVersion::new(1, 1, 0));
+
+		let version = PalletVersion::new(2, 50, 50);
+		assert!(version < PalletVersion::new(2, 50, 51));
+		assert!(version > PalletVersion::new(2, 49, 51));
+		assert!(version < PalletVersion::new(3, 49, 51));
 	}
 }

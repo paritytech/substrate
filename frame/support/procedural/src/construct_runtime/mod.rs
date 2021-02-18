@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -62,6 +62,7 @@ impl Module {
 fn complete_modules(decl: impl Iterator<Item = ModuleDeclaration>) -> syn::Result<Vec<Module>> {
 	let mut indices = HashMap::new();
 	let mut last_index: Option<u8> = None;
+	let mut names = HashMap::new();
 
 	decl
 		.map(|module| {
@@ -85,6 +86,14 @@ fn complete_modules(decl: impl Iterator<Item = ModuleDeclaration>) -> syn::Resul
 				);
 				let mut err = syn::Error::new(used_module.span(), &msg);
 				err.combine(syn::Error::new(module.name.span(), msg));
+				return Err(err);
+			}
+
+			if let Some(used_module) = names.insert(module.name.clone(), module.name.span()) {
+				let msg = "Two modules with the same name!";
+
+				let mut err = syn::Error::new(used_module, &msg);
+				err.combine(syn::Error::new(module.name.span(), &msg));
 				return Err(err);
 			}
 
@@ -169,6 +178,12 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 	let res = quote!(
 		#scrate_decl
 
+		// Prevent UncheckedExtrinsic to print unused warning.
+		const _: () = {
+			#[allow(unused)]
+			type __hidden_use_of_unchecked_extrinsic = #unchecked_extrinsic;
+		};
+
 		#[derive(Clone, Copy, PartialEq, Eq, #scrate::sp_runtime::RuntimeDebug)]
 		pub struct #name;
 		impl #scrate::sp_runtime::traits::GetNodeBlockType for #name {
@@ -199,7 +214,7 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 		#integrity_test
 	);
 
-	Ok(res.into())
+	Ok(res)
 }
 
 fn decl_validate_unsigned<'a>(
@@ -274,8 +289,8 @@ fn decl_outer_config<'a>(
 			)
 		});
 	quote!(
-		#scrate::sp_runtime::impl_outer_config! {
-			pub struct GenesisConfig for #runtime {
+		#scrate::impl_outer_config! {
+			pub struct GenesisConfig for #runtime where AllModulesWithSystem = AllModulesWithSystem {
 				#(#modules_tokens)*
 			}
 		}
@@ -293,7 +308,7 @@ fn decl_runtime_metadata<'a>(
 			module_declaration.find_part("Module").map(|_| {
 				let filtered_names: Vec<_> = module_declaration
 					.module_parts()
-					.into_iter()
+					.iter()
 					.filter(|part| part.name() != "Module")
 					.map(|part| part.ident())
 					.collect();
@@ -333,7 +348,7 @@ fn decl_outer_dispatch<'a>(
 		.map(|module_declaration| {
 			let module = &module_declaration.module;
 			let name = &module_declaration.name;
-			let index = module_declaration.index.to_string();
+			let index = module_declaration.index;
 			quote!(#[codec(index = #index)] #module::#name)
 		});
 
@@ -354,29 +369,26 @@ fn decl_outer_origin<'a>(
 ) -> syn::Result<TokenStream2> {
 	let mut modules_tokens = TokenStream2::new();
 	for module_declaration in modules_except_system {
-		match module_declaration.find_part("Origin") {
-			Some(module_entry) => {
-				let module = &module_declaration.module;
-				let instance = module_declaration.instance.as_ref();
-				let generics = &module_entry.generics;
-				if instance.is_some() && generics.params.len() == 0 {
-					let msg = format!(
-						"Instantiable module with no generic `Origin` cannot \
-						 be constructed: module `{}` must have generic `Origin`",
-						module_declaration.name
-					);
-					return Err(syn::Error::new(module_declaration.name.span(), msg));
-				}
-				let index = module_declaration.index.to_string();
-				let tokens = quote!(#[codec(index = #index)] #module #instance #generics,);
-				modules_tokens.extend(tokens);
+		if let Some(module_entry) = module_declaration.find_part("Origin") {
+			let module = &module_declaration.module;
+			let instance = module_declaration.instance.as_ref();
+			let generics = &module_entry.generics;
+			if instance.is_some() && generics.params.is_empty() {
+				let msg = format!(
+					"Instantiable module with no generic `Origin` cannot \
+					 be constructed: module `{}` must have generic `Origin`",
+					module_declaration.name
+				);
+				return Err(syn::Error::new(module_declaration.name.span(), msg));
 			}
-			None => {}
+			let index = module_declaration.index;
+			let tokens = quote!(#[codec(index = #index)] #module #instance #generics,);
+			modules_tokens.extend(tokens);
 		}
 	}
 
 	let system_name = &system_module.module;
-	let system_index = system_module.index.to_string();
+	let system_index = system_module.index;
 
 	Ok(quote!(
 		#scrate::impl_outer_origin! {
@@ -397,25 +409,22 @@ fn decl_outer_event<'a>(
 ) -> syn::Result<TokenStream2> {
 	let mut modules_tokens = TokenStream2::new();
 	for module_declaration in module_declarations {
-		match module_declaration.find_part("Event") {
-			Some(module_entry) => {
-				let module = &module_declaration.module;
-				let instance = module_declaration.instance.as_ref();
-				let generics = &module_entry.generics;
-				if instance.is_some() && generics.params.len() == 0 {
-					let msg = format!(
-						"Instantiable module with no generic `Event` cannot \
-						 be constructed: module `{}` must have generic `Event`",
-						module_declaration.name,
-					);
-					return Err(syn::Error::new(module_declaration.name.span(), msg));
-				}
-
-				let index = module_declaration.index.to_string();
-				let tokens = quote!(#[codec(index = #index)] #module #instance #generics,);
-				modules_tokens.extend(tokens);
+		if let Some(module_entry) = module_declaration.find_part("Event") {
+			let module = &module_declaration.module;
+			let instance = module_declaration.instance.as_ref();
+			let generics = &module_entry.generics;
+			if instance.is_some() && generics.params.is_empty() {
+				let msg = format!(
+					"Instantiable module with no generic `Event` cannot \
+					 be constructed: module `{}` must have generic `Event`",
+					module_declaration.name,
+				);
+				return Err(syn::Error::new(module_declaration.name.span(), msg));
 			}
-			None => {}
+
+			let index = module_declaration.index;
+			let tokens = quote!(#[codec(index = #index)] #module #instance #generics,);
+			modules_tokens.extend(tokens);
 		}
 	}
 
@@ -456,9 +465,16 @@ fn decl_all_modules<'a>(
 		.filter(|n| **n != SYSTEM_MODULE_NAME)
 		.fold(TokenStream2::default(), |combined, name| quote!((#name, #combined)));
 
+	let all_modules_with_system = names.iter()
+		.fold(TokenStream2::default(), |combined, name| quote!((#name, #combined)));
+
 	quote!(
 		#types
-		type AllModules = ( #all_modules );
+		/// All pallets included in the runtime as a nested tuple of types.
+		/// Excludes the System pallet.
+		pub type AllModules = ( #all_modules );
+		/// All pallets included in the runtime as a nested tuple of types.
+		pub type AllModulesWithSystem = ( #all_modules_with_system );
 	)
 }
 

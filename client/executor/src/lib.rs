@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -80,6 +80,7 @@ mod tests {
 			Some(8),
 			sp_io::SubstrateHostFunctions::host_functions(),
 			8,
+			None,
 		);
 		let res = executor.call_in_wasm(
 			&wasm_binary_unwrap()[..],

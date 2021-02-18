@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -35,7 +35,7 @@ use parking_lot::Mutex;
 use prometheus_endpoint::Registry;
 use std::{pin::Pin, sync::Arc, task::{Context, Poll}};
 
-use sp_core::traits::BareCryptoStorePtr;
+use sp_keystore::SyncCryptoStorePtr;
 use finality_grandpa::Message::{Prevote, Precommit, PrimaryPropose};
 use finality_grandpa::{voter, voter_set::VoterSet};
 use sc_network::{NetworkService, ReputationChange};
@@ -68,7 +68,8 @@ mod periodic;
 #[cfg(test)]
 pub(crate) mod tests;
 
-pub use sp_finality_grandpa::GRANDPA_ENGINE_ID;
+/// Name of the notifications protocol used by Grandpa. Must be registered towards the networking
+/// in order for Grandpa to properly function.
 pub const GRANDPA_PROTOCOL_NAME: &'static str = "/paritytech/grandpa/1";
 
 // cost scalars for reporting peers.
@@ -107,7 +108,7 @@ mod benefit {
 
 /// A type that ties together our local authority id and a keystore where it is
 /// available for signing.
-pub struct LocalIdKeystore((AuthorityId, BareCryptoStorePtr));
+pub struct LocalIdKeystore((AuthorityId, SyncCryptoStorePtr));
 
 impl LocalIdKeystore {
 	/// Returns a reference to our local authority id.
@@ -116,19 +117,13 @@ impl LocalIdKeystore {
 	}
 
 	/// Returns a reference to the keystore.
-	fn keystore(&self) -> &BareCryptoStorePtr {
-		&(self.0).1
+	fn keystore(&self) -> SyncCryptoStorePtr{
+		(self.0).1.clone()
 	}
 }
 
-impl AsRef<BareCryptoStorePtr> for LocalIdKeystore {
-	fn as_ref(&self) -> &BareCryptoStorePtr {
-		self.keystore()
-	}
-}
-
-impl From<(AuthorityId, BareCryptoStorePtr)> for LocalIdKeystore {
-	fn from(inner: (AuthorityId, BareCryptoStorePtr)) -> LocalIdKeystore {
+impl From<(AuthorityId, SyncCryptoStorePtr)> for LocalIdKeystore {
+	fn from(inner: (AuthorityId, SyncCryptoStorePtr)) -> LocalIdKeystore {
 		LocalIdKeystore(inner)
 	}
 }
@@ -221,9 +216,9 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		let validator = Arc::new(validator);
 		let gossip_engine = Arc::new(Mutex::new(GossipEngine::new(
 			service.clone(),
-			GRANDPA_ENGINE_ID,
 			GRANDPA_PROTOCOL_NAME,
-			validator.clone()
+			validator.clone(),
+			prometheus_registry,
 		)));
 
 		{
@@ -696,7 +691,7 @@ impl<Block: BlockT> Sink<Message<Block>> for OutgoingMessages<Block>
 		if let Some(ref keystore) = self.keystore {
 			let target_hash = *(msg.target().0);
 			let signed = sp_finality_grandpa::sign_message(
-				keystore.as_ref(),
+				keystore.keystore(),
 				msg,
 				keystore.local_id().clone(),
 				self.round,
@@ -727,7 +722,7 @@ impl<Block: BlockT> Sink<Message<Block>> for OutgoingMessages<Block>
 			);
 
 			// announce the block we voted on to our peers.
-			self.network.lock().announce(target_hash, Vec::new());
+			self.network.lock().announce(target_hash, None);
 
 			// propagate the message to peers
 			let topic = round_topic::<Block>(self.round, self.set_id);
@@ -852,7 +847,7 @@ fn check_catch_up<Block: BlockT>(
 		}
 
 		Ok(())
-	};
+	}
 
 	check_weight(
 		voters,

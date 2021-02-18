@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,7 +17,7 @@
 
 //! # Recovery Pallet
 //!
-//! - [`recovery::Trait`](./trait.Trait.html)
+//! - [`recovery::Config`](./trait.Config.html)
 //! - [`Call`](./enum.Call.html)
 //!
 //! ## Overview
@@ -172,12 +172,12 @@ mod mock;
 mod tests;
 
 type BalanceOf<T> =
-	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 /// Configuration trait.
-pub trait Trait: frame_system::Trait {
+pub trait Config: frame_system::Config {
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// The overarching call type.
 	type Call: Parameter + Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo> + GetDispatchInfo;
@@ -237,7 +237,7 @@ pub struct RecoveryConfig<BlockNumber, Balance, AccountId> {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Recovery {
+	trait Store for Module<T: Config> as Recovery {
 		/// The set of recoverable accounts and their recovery configuration.
 		pub Recoverable get(fn recovery_config):
 			map hasher(twox_64_concat) T::AccountId
@@ -262,7 +262,7 @@ decl_storage! {
 decl_event! {
 	/// Events type.
 	pub enum Event<T> where
-		AccountId = <T as system::Trait>::AccountId,
+		AccountId = <T as system::Config>::AccountId,
 	{
 		/// A recovery process has been set up for an \[account\].
 		RecoveryCreated(AccountId),
@@ -284,7 +284,7 @@ decl_event! {
 }
 
 decl_error! {
-	pub enum Error for Module<T: Trait> {
+	pub enum Error for Module<T: Config> {
 		/// User is not allowed to make a call on behalf of this account
 		NotAllowed,
 		/// Threshold must be greater than zero
@@ -317,11 +317,13 @@ decl_error! {
 		Overflow,
 		/// This account is already set up for recovery
 		AlreadyProxy,
+		/// Some internal state is broken.
+		BadState,
 	}
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
 		/// The base amount of currency needed to reserve for creating a recovery configuration.
@@ -352,10 +354,19 @@ decl_module! {
 		/// - The weight of the `call` + 10,000.
 		/// - One storage lookup to check account is recovered by `who`. O(1)
 		/// # </weight>
-		#[weight = (call.get_dispatch_info().weight + 10_000, call.get_dispatch_info().class)]
+		#[weight = {
+			let dispatch_info = call.get_dispatch_info();
+			(
+				dispatch_info.weight
+					.saturating_add(10_000)
+					// AccountData for inner call origin accountdata.
+					.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
+				dispatch_info.class,
+			)
+		}]
 		fn as_recovered(origin,
 			account: T::AccountId,
-			call: Box<<T as Trait>::Call>
+			call: Box<<T as Config>::Call>
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			// Check `who` is allowed to make a call on behalf of `account`
@@ -577,9 +588,9 @@ decl_module! {
 				recovery_config.threshold as usize <= active_recovery.friends.len(),
 				Error::<T>::Threshold
 			);
+			system::Module::<T>::inc_consumers(&who).map_err(|_| Error::<T>::BadState)?;
 			// Create the recovery storage item
 			Proxy::<T>::insert(&who, &account);
-			system::Module::<T>::inc_ref(&who);
 			Self::deposit_event(RawEvent::AccountRecovered(account, who));
 		}
 
@@ -666,12 +677,12 @@ decl_module! {
 			// Check `who` is allowed to make a call on behalf of `account`
 			ensure!(Self::proxy(&who) == Some(account), Error::<T>::NotAllowed);
 			Proxy::<T>::remove(&who);
-			system::Module::<T>::dec_ref(&who);
+			system::Module::<T>::dec_consumers(&who);
 		}
 	}
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 	/// Check that friends list is sorted and has no duplicates.
 	fn is_sorted_and_unique(friends: &Vec<T::AccountId>) -> bool {
 		friends.windows(2).all(|w| w[0] < w[1])

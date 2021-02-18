@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,6 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! <!-- markdown-link-check-disable -->
 //! # Example Pallet
 //!
 //! <!-- Original author of paragraph: @gavofyork -->
@@ -62,7 +63,7 @@
 //! // Include the following links that shows what trait needs to be implemented to use the pallet
 //! // and the supported dispatchables that are documented in the Call enum.
 //!
-//! - \[`<INSERT_CUSTOM_PALLET_NAME>::Trait`](./trait.Trait.html)
+//! - \[`<INSERT_CUSTOM_PALLET_NAME>::Config`](./trait.Config.html)
 //! - \[`Call`](./enum.Call.html)
 //! - \[`Module`](./struct.Module.html)
 //!
@@ -130,7 +131,7 @@
 //! <!-- Original author of paragraph: ??? -->
 //!
 //! // Reference documentation of aspects such as `storageItems` and `dispatchable` functions should only be
-//! // included in the https://docs.rs Rustdocs for Substrate and not repeated in the README file.
+//! // included in the <https://docs.rs> Rustdocs for Substrate and not repeated in the README file.
 //!
 //! \### Dispatchable Functions
 //!
@@ -211,7 +212,7 @@
 //! \```rust
 //! use <INSERT_CUSTOM_PALLET_NAME>;
 //!
-//! pub trait Trait: <INSERT_CUSTOM_PALLET_NAME>::Trait { }
+//! pub trait Config: <INSERT_CUSTOM_PALLET_NAME>::Config { }
 //! \```
 //!
 //! \### Simple Code Snippet
@@ -223,8 +224,8 @@
 //! // Show a usage example in an actual runtime
 //!
 //! // See:
-//! // - Substrate TCR https://github.com/parity-samples/substrate-tcr
-//! // - Substrate Kitties https://shawntabrizi.github.io/substrate-collectables-workshop/#/
+//! // - Substrate TCR <https://github.com/parity-samples/substrate-tcr>
+//! // - Substrate Kitties <https://shawntabrizi.github.io/substrate-collectables-workshop/#/>
 //!
 //! \## Genesis Config
 //!
@@ -256,7 +257,7 @@
 
 use sp_std::marker::PhantomData;
 use frame_support::{
-	dispatch::{DispatchResult, IsSubType}, decl_module, decl_storage, decl_event,
+	dispatch::DispatchResult, decl_module, decl_storage, decl_event, traits::IsSubType,
 	weights::{DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee, Pays},
 };
 use sp_std::prelude::*;
@@ -285,9 +286,9 @@ use sp_runtime::{
 // - The final weight of each dispatch is calculated as the argument of the call multiplied by the
 //   parameter given to the `WeightForSetDummy`'s constructor.
 // - assigns a dispatch class `operational` if the argument of the call is more than 1000.
-struct WeightForSetDummy<T: pallet_balances::Trait>(BalanceOf<T>);
+struct WeightForSetDummy<T: pallet_balances::Config>(BalanceOf<T>);
 
-impl<T: pallet_balances::Trait> WeighData<(&BalanceOf<T>,)> for WeightForSetDummy<T>
+impl<T: pallet_balances::Config> WeighData<(&BalanceOf<T>,)> for WeightForSetDummy<T>
 {
 	fn weigh_data(&self, target: (&BalanceOf<T>,)) -> Weight {
 		let multiplier = self.0;
@@ -295,7 +296,7 @@ impl<T: pallet_balances::Trait> WeighData<(&BalanceOf<T>,)> for WeightForSetDumm
 	}
 }
 
-impl<T: pallet_balances::Trait> ClassifyDispatch<(&BalanceOf<T>,)> for WeightForSetDummy<T> {
+impl<T: pallet_balances::Config> ClassifyDispatch<(&BalanceOf<T>,)> for WeightForSetDummy<T> {
 	fn classify_dispatch(&self, target: (&BalanceOf<T>,)) -> DispatchClass {
 		if *target.0 > <BalanceOf<T>>::from(1000u32) {
 			DispatchClass::Operational
@@ -305,23 +306,23 @@ impl<T: pallet_balances::Trait> ClassifyDispatch<(&BalanceOf<T>,)> for WeightFor
 	}
 }
 
-impl<T: pallet_balances::Trait> PaysFee<(&BalanceOf<T>,)> for WeightForSetDummy<T> {
+impl<T: pallet_balances::Config> PaysFee<(&BalanceOf<T>,)> for WeightForSetDummy<T> {
 	fn pays_fee(&self, _target: (&BalanceOf<T>,)) -> Pays {
 		Pays::Yes
 	}
 }
 
 /// A type alias for the balance type from this pallet's point of view.
-type BalanceOf<T> = <T as pallet_balances::Trait>::Balance;
+type BalanceOf<T> = <T as pallet_balances::Config>::Balance;
 
 /// Our pallet's configuration trait. All our types and constants go in here. If the
 /// pallet is dependent on specific other pallets, then their configuration traits
 /// should be added to our implied traits list.
 ///
-/// `frame_system::Trait` should always be included in our implied traits.
-pub trait Trait: pallet_balances::Trait {
+/// `frame_system::Config` should always be included in our implied traits.
+pub trait Config: pallet_balances::Config {
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 }
 
 decl_storage! {
@@ -332,7 +333,7 @@ decl_storage! {
 	// It is important to update your storage name so that your pallet's
 	// storage items are isolated from other pallets.
 	// ---------------------------------vvvvvvv
-	trait Store for Module<T: Trait> as Example {
+	trait Store for Module<T: Config> as Example {
 		// Any storage declarations of the form:
 		//   `pub? Name get(fn getter_name)? [config()|config(myname)] [build(|_| {...})] : <type> (= <new_default_value>)?;`
 		// where `<type>` is either:
@@ -370,7 +371,7 @@ decl_event!(
 	/// Events are a simple means of reporting specific conditions and
 	/// circumstances that have happened that users, Dapps and/or chain explorers would find
 	/// interesting and otherwise difficult to detect.
-	pub enum Event<T> where B = <T as pallet_balances::Trait>::Balance {
+	pub enum Event<T> where B = <T as pallet_balances::Config>::Balance {
 		// Just a normal `enum`, here's a dummy event to ensure it compiles.
 		/// Dummy event, just here so there's a generic type that's used.
 		Dummy(B),
@@ -413,7 +414,7 @@ decl_event!(
 // `ensure_root` and `ensure_none`.
 decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what its working on.
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		/// Deposit one of this pallet's events by using the default implementation.
 		/// It is also possible to provide a custom implementation.
 		/// For non-generic events, the generic parameter just needs to be dropped, so that it
@@ -547,7 +548,7 @@ decl_module! {
 // - Public interface. These are functions that are `pub` and generally fall into inspector
 // functions that do not write to storage and operation functions that do.
 // - Private functions. These are your usual private utilities unavailable to other pallets.
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 	// Add public immutables and private mutables.
 	#[allow(dead_code)]
 	fn accumulate_foo(origin: T::Origin, increase_by: T::Balance) -> DispatchResult {
@@ -570,13 +571,14 @@ impl<T: Trait> Module<T> {
 // decodable type that implements `SignedExtension`. See the trait definition for the full list of
 // bounds. As a convention, you can follow this approach to create an extension for your pallet:
 //   - If the extension does not carry any data, then use a tuple struct with just a `marker`
-//     (needed for the compiler to accept `T: Trait`) will suffice.
+//     (needed for the compiler to accept `T: Config`) will suffice.
 //   - Otherwise, create a tuple struct which contains the external data. Of course, for the entire
 //     struct to be decodable, each individual item also needs to be decodable.
 //
 // Note that a signed extension can also indicate that a particular data must be present in the
 // _signing payload_ of a transaction by providing an implementation for the `additional_signed`
-// method. This example will not cover this type of extension. See `CheckRuntime` in FRAME System
+// method. This example will not cover this type of extension. See `CheckSpecVersion` in
+// [FRAME System](https://github.com/paritytech/substrate/tree/master/frame/system#signed-extensions)
 // for an example.
 //
 // Using the extension, you can add some hooks to the life cycle of each transaction. Note that by
@@ -601,21 +603,21 @@ impl<T: Trait> Module<T> {
 /// Additionally, it drops any transaction with an encoded length higher than 200 bytes. No
 /// particular reason why, just to demonstrate the power of signed extensions.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct WatchDummy<T: Trait + Send + Sync>(PhantomData<T>);
+pub struct WatchDummy<T: Config + Send + Sync>(PhantomData<T>);
 
-impl<T: Trait + Send + Sync> sp_std::fmt::Debug for WatchDummy<T> {
+impl<T: Config + Send + Sync> sp_std::fmt::Debug for WatchDummy<T> {
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(f, "WatchDummy")
 	}
 }
 
-impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T>
+impl<T: Config + Send + Sync> SignedExtension for WatchDummy<T>
 where
-	<T as frame_system::Trait>::Call: IsSubType<Call<T>>,
+	<T as frame_system::Config>::Call: IsSubType<Call<T>>,
 {
 	const IDENTIFIER: &'static str = "WatchDummy";
 	type AccountId = T::AccountId;
-	type Call = <T as frame_system::Trait>::Call;
+	type Call = <T as frame_system::Config>::Call;
 	type AdditionalSigned = ();
 	type Pre = ();
 
@@ -650,24 +652,19 @@ where
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking {
 	use super::*;
-	use frame_benchmarking::{benchmarks, account};
+	use frame_benchmarking::{benchmarks, account, impl_benchmark_test_suite};
 	use frame_system::RawOrigin;
 
 	benchmarks!{
-		_ {
-			// Define a common range for `b`.
-			let b in 1 .. 1000 => ();
-		}
-
 		// This will measure the execution time of `accumulate_dummy` for b in [1..1000] range.
 		accumulate_dummy {
-			let b in ...;
+			let b in 1 .. 1000;
 			let caller = account("caller", 0, 0);
 		}: _ (RawOrigin::Signed(caller), b.into())
 
 		// This will measure the execution time of `set_dummy` for b in [1..1000] range.
 		set_dummy {
-			let b in ...;
+			let b in 1 .. 1000;
 		}: set_dummy (RawOrigin::Root, b.into())
 
 		// This will measure the execution time of `set_dummy` for b in [1..10] range.
@@ -687,22 +684,7 @@ mod benchmarking {
 		}
 	}
 
-	#[cfg(test)]
-	mod tests {
-		use super::*;
-		use crate::tests::{new_test_ext, Test};
-		use frame_support::assert_ok;
-
-		#[test]
-		fn test_benchmarks() {
-			new_test_ext().execute_with(|| {
-				assert_ok!(test_benchmark_accumulate_dummy::<Test>());
-				assert_ok!(test_benchmark_set_dummy::<Test>());
-				assert_ok!(test_benchmark_another_set_dummy::<Test>());
-				assert_ok!(test_benchmark_sort_vector::<Test>());
-			});
-		}
-	}
+	impl_benchmark_test_suite!(Module, crate::tests::new_test_ext(), crate::tests::Test);
 }
 
 #[cfg(test)]
@@ -710,96 +692,94 @@ mod tests {
 	use super::*;
 
 	use frame_support::{
-		assert_ok, impl_outer_origin, parameter_types, impl_outer_dispatch,
+		assert_ok, parameter_types,
 		weights::{DispatchInfo, GetDispatchInfo}, traits::{OnInitialize, OnFinalize}
 	};
 	use sp_core::H256;
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sp_runtime::{
-		Perbill,
-		testing::Header,
+		testing::Header, BuildStorage,
 		traits::{BlakeTwo256, IdentityLookup},
 	};
+	// Reexport crate as its pallet name for construct_runtime.
+	use crate as pallet_example;
 
-	impl_outer_origin! {
-		pub enum Origin for Test where system = frame_system {}
-	}
+	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+	type Block = frame_system::mocking::MockBlock<Test>;
 
-	impl_outer_dispatch! {
-		pub enum OuterCall for Test where origin: Origin {
-			self::Example,
+	// For testing the pallet, we construct a mock runtime.
+	frame_support::construct_runtime!(
+		pub enum Test where
+			Block = Block,
+			NodeBlock = Block,
+			UncheckedExtrinsic = UncheckedExtrinsic,
+		{
+			System: frame_system::{Module, Call, Config, Storage, Event<T>},
+			Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
+			Example: pallet_example::{Module, Call, Storage, Config<T>, Event<T>},
 		}
-	}
+	);
 
-	// For testing the pallet, we construct most of a mock runtime. This means
-	// first constructing a configuration type (`Test`) which `impl`s each of the
-	// configuration traits of pallets we want to use.
-	#[derive(Clone, Eq, PartialEq)]
-	pub struct Test;
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: Weight = 1024;
-		pub const MaximumBlockLength: u32 = 2 * 1024;
-		pub const AvailableBlockRatio: Perbill = Perbill::one();
+		pub BlockWeights: frame_system::limits::BlockWeights =
+			frame_system::limits::BlockWeights::simple_max(1024);
 	}
-	impl frame_system::Trait for Test {
+	impl frame_system::Config for Test {
 		type BaseCallFilter = ();
+		type BlockWeights = ();
+		type BlockLength = ();
+		type DbWeight = ();
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
-		type Call = OuterCall;
+		type Call = Call;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = ();
+		type Event = Event;
 		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type DbWeight = ();
-		type BlockExecutionWeight = ();
-		type ExtrinsicBaseWeight = ();
-		type MaximumExtrinsicWeight = MaximumBlockWeight;
-		type MaximumBlockLength = MaximumBlockLength;
-		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
-		type PalletInfo = ();
+		type PalletInfo = PalletInfo;
 		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
+		type SS58Prefix = ();
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;
 	}
-	impl pallet_balances::Trait for Test {
+	impl pallet_balances::Config for Test {
 		type MaxLocks = ();
 		type Balance = u64;
 		type DustRemoval = ();
-		type Event = ();
+		type Event = Event;
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
 		type WeightInfo = ();
 	}
-	impl Trait for Test {
-		type Event = ();
+	impl Config for Test {
+		type Event = Event;
 	}
-	type System = frame_system::Module<Test>;
-	type Example = Module<Test>;
 
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
 	pub fn new_test_ext() -> sp_io::TestExternalities {
-		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		// We use default for brevity, but you can configure as desired if needed.
-		pallet_balances::GenesisConfig::<Test>::default().assimilate_storage(&mut t).unwrap();
-		GenesisConfig::<Test>{
-			dummy: 42,
-			// we configure the map with (key, value) pairs.
-			bar: vec![(1, 2), (2, 3)],
-			foo: 24,
-		}.assimilate_storage(&mut t).unwrap();
+		let t = GenesisConfig {
+			// We use default for brevity, but you can configure as desired if needed.
+			frame_system: Some(Default::default()),
+			pallet_balances: Some(Default::default()),
+			pallet_example: Some(pallet_example::GenesisConfig {
+				dummy: 42,
+				// we configure the map with (key, value) pairs.
+				bar: vec![(1, 2), (2, 3)],
+				foo: 24,
+			}),
+		}.build_storage().unwrap();
 		t.into()
 	}
 
@@ -836,7 +816,7 @@ mod tests {
 	#[test]
 	fn signed_ext_watch_dummy_works() {
 		new_test_ext().execute_with(|| {
-			let call = <Call<Test>>::set_dummy(10).into();
+			let call = <pallet_example::Call<Test>>::set_dummy(10).into();
 			let info = DispatchInfo::default();
 
 			assert_eq!(
@@ -855,13 +835,13 @@ mod tests {
 	#[test]
 	fn weights_work() {
 		// must have a defined weight.
-		let default_call = <Call<Test>>::accumulate_dummy(10);
+		let default_call = <pallet_example::Call<Test>>::accumulate_dummy(10);
 		let info = default_call.get_dispatch_info();
 		// aka. `let info = <Call<Test> as GetDispatchInfo>::get_dispatch_info(&default_call);`
 		assert_eq!(info.weight, 0);
 
 		// must have a custom weight of `100 * arg = 2000`
-		let custom_call = <Call<Test>>::set_dummy(20);
+		let custom_call = <pallet_example::Call<Test>>::set_dummy(20);
 		let info = custom_call.get_dispatch_info();
 		assert_eq!(info.weight, 2000);
 	}

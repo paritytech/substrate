@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -187,14 +187,15 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 	result.push(quote!(
 		#[cfg(any(feature = "std", test))]
 		fn convert_between_block_types
-			<I: #crate_::Encode, R: #crate_::Decode>(
-				input: &I, error_desc: &'static str,
-			) -> std::result::Result<R, String>
+			<I: #crate_::Encode, R: #crate_::Decode, F: FnOnce(#crate_::codec::Error) -> #crate_::ApiError>(
+				input: &I,
+				map_error: F,
+			) -> std::result::Result<R, #crate_::ApiError>
 		{
 			<R as #crate_::DecodeLimit>::decode_with_depth_limit(
 				#crate_::MAX_EXTRINSIC_DEPTH,
 				&mut &#crate_::Encode::encode(input)[..],
-			).map_err(|e| format!("{} {}", error_desc, e.what()))
+			).map_err(map_error)
 		}
 	));
 
@@ -202,19 +203,26 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 	for fn_ in fns {
 		let params = extract_parameter_names_types_and_borrows(&fn_, AllowSelfRefInParameters::No)?;
 		let trait_fn_name = &fn_.ident;
+		let function_name_str = fn_.ident.to_string();
 		let fn_name = generate_native_call_generator_fn_name(&fn_.ident);
 		let output = return_type_replace_block_with_node_block(fn_.output.clone());
 		let output_ty = return_type_extract_type(&output);
-		let output = quote!( std::result::Result<#output_ty, String> );
+		let output = quote!( std::result::Result<#output_ty, #crate_::ApiError> );
 
 		// Every type that is using the `Block` generic parameter, we need to encode/decode,
 		// to make it compatible between the runtime/node.
 		let conversions = params.iter().filter(|v| type_is_using_block(&v.1)).map(|(n, t, _)| {
-			let name_str = format!(
-				"Could not convert parameter `{}` between node and runtime:", quote!(#n)
-			);
+			let param_name = quote!(#n).to_string();
+
 			quote!(
-				let #n: #t = convert_between_block_types(&#n, #name_str)?;
+				let #n: #t = convert_between_block_types(
+					&#n,
+					|e| #crate_::ApiError::FailedToConvertParameter {
+						function: #function_name_str,
+						parameter: #param_name,
+						error: e,
+					},
+				)?;
 			)
 		});
 		// Same as for the input types, we need to check if we also need to convert the output,
@@ -223,7 +231,10 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 			quote!(
 				convert_between_block_types(
 					&res,
-					"Could not convert return value from runtime to node!"
+					|e| #crate_::ApiError::FailedToConvertReturnValue {
+						function: #function_name_str,
+						error: e,
+					},
 				)
 			)
 		} else {
@@ -399,17 +410,16 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 			#[cfg(any(feature = "std", test))]
 			pub fn #fn_name<
 				R: #crate_::Encode + #crate_::Decode + PartialEq,
-				NC: FnOnce() -> std::result::Result<R, String> + std::panic::UnwindSafe,
+				NC: FnOnce() -> std::result::Result<R, #crate_::ApiError> + std::panic::UnwindSafe,
 				Block: #crate_::BlockT,
 				T: #crate_::CallApiAt<Block>,
-				C: #crate_::Core<Block, Error = T::Error>,
+				C: #crate_::Core<Block>,
 			>(
 				call_runtime_at: &T,
 				core_api: &C,
 				at: &#crate_::BlockId<Block>,
 				args: Vec<u8>,
 				changes: &std::cell::RefCell<#crate_::OverlayedChanges>,
-				offchain_changes: &std::cell::RefCell<#crate_::OffchainOverlayedChanges>,
 				storage_transaction_cache: &std::cell::RefCell<
 					#crate_::StorageTransactionCache<Block, T::StateBackend>
 				>,
@@ -417,7 +427,7 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 				native_call: Option<NC>,
 				context: #crate_::ExecutionContext,
 				recorder: &Option<#crate_::ProofRecorder<Block>>,
-			) -> std::result::Result<#crate_::NativeOrEncoded<R>, T::Error> {
+			) -> std::result::Result<#crate_::NativeOrEncoded<R>, #crate_::ApiError> {
 				let version = call_runtime_at.runtime_version_at(at)?;
 				use #crate_::InitializeBlock;
 				let initialize_block = if #skip_initialize_block {
@@ -439,7 +449,6 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 							native_call: None,
 							arguments: args,
 							overlayed_changes: changes,
-							offchain_changes,
 							storage_transaction_cache,
 							initialize_block,
 							context,
@@ -460,7 +469,6 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 					native_call,
 					arguments: args,
 					overlayed_changes: changes,
-					offchain_changes,
 					storage_transaction_cache,
 					initialize_block,
 					context,
@@ -624,7 +632,7 @@ impl<'a> ToClientSideDecl<'a> {
 					context: #crate_::ExecutionContext,
 					params: Option<( #( #param_types ),* )>,
 					params_encoded: Vec<u8>,
-				) -> std::result::Result<#crate_::NativeOrEncoded<#ret_type>, Self::Error>;
+				) -> std::result::Result<#crate_::NativeOrEncoded<#ret_type>, #crate_::ApiError>;
 			}
 		)
 	}
@@ -650,7 +658,7 @@ impl<'a> ToClientSideDecl<'a> {
 		let params2 = params.clone();
 		let ret_type = return_type_extract_type(&method.sig.output);
 
-		fold_fn_decl_for_client_side(&mut method.sig, &self.block_id);
+		fold_fn_decl_for_client_side(&mut method.sig, &self.block_id, &self.crate_);
 
 		let name_impl = generate_method_runtime_api_impl_name(&self.trait_, &method.sig.ident);
 		let crate_ = self.crate_;
@@ -709,11 +717,10 @@ impl<'a> ToClientSideDecl<'a> {
 							#crate_::NativeOrEncoded::Encoded(r) => {
 								<#ret_type as #crate_::Decode>::decode(&mut &r[..])
 									.map_err(|err|
-										format!(
-											"Failed to decode result of `{}`: {}",
-											#function_name,
-											err.what(),
-										).into()
+										#crate_::ApiError::FailedToDecodeReturnValue {
+											function: #function_name,
+											error: err,
+										}
 									)
 							}
 						}
@@ -737,12 +744,10 @@ impl<'a> Fold for ToClientSideDecl<'a> {
 
 		if is_core_trait {
 			// Add all the supertraits we want to have for `Core`.
-			let crate_ = &self.crate_;
 			input.supertraits = parse_quote!(
 				'static
 				+ Send
 				+ Sync
-				+ #crate_::ApiErrorExt
 			);
 		} else {
 			// Add the `Core` runtime api as super trait.
@@ -812,12 +817,12 @@ fn generate_runtime_info_impl(trait_: &ItemTrait, version: u64) -> TokenStream {
 		let bounds = &t.bounds;
 
 		quote! { #ident #colon_token #bounds }
-	}).chain(std::iter::once(quote! { __Sr_Api_Error__ }));
+	});
 
 	let ty_generics = trait_.generics.type_params().map(|t| {
 		let ident = &t.ident;
 		quote! { #ident }
-	}).chain(std::iter::once(quote! { Error = __Sr_Api_Error__ }));
+	});
 
 	quote!(
 		#[cfg(any(feature = "std", test))]
@@ -912,6 +917,13 @@ impl CheckTraitDecl {
 				.entry(method.sig.ident.clone())
 				.or_default()
 				.push(changed_in);
+
+			if method.default.is_some() {
+				self.errors.push(Error::new(
+					method.default.span(),
+					"A runtime API function cannot have a default implementation!",
+				));
+			}
 		});
 
 		method_to_signature_changed.into_iter().for_each(|(f, changed)| {

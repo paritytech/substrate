@@ -17,28 +17,28 @@ tempfile = "3.1.0"
 tokio = "0.1.22"
 futures01 = { package = "futures", version = "0.1.29" }
 log = "0.4.8"
-fdlimit = "0.2.0"
-parking_lot = "0.10.0"
-sc-light = { version = "2.0.0", path = "../../light" }
-sp-blockchain = { version = "2.0.0", path = "../../../primitives/blockchain" }
-sp-api = { version = "2.0.0", path = "../../../primitives/api" }
-sp-state-machine = { version = "0.8.0", path = "../../../primitives/state-machine" }
-sp-externalities = { version = "0.8.0", path = "../../../primitives/externalities" }
-sp-trie = { version = "2.0.0", path = "../../../primitives/trie" }
-sp-storage = { version = "2.0.0", path = "../../../primitives/storage" }
-sc-client-db = { version = "0.8.0", default-features = false, path = "../../db" }
+fdlimit = "0.2.1"
+parking_lot = "0.11.1"
+sc-light = { version = "3.0.0", path = "../../light" }
+sp-blockchain = { version = "3.0.0", path = "../../../primitives/blockchain" }
+sp-api = { version = "3.0.0", path = "../../../primitives/api" }
+sp-state-machine = { version = "0.9.0", path = "../../../primitives/state-machine" }
+sp-externalities = { version = "0.9.0", path = "../../../primitives/externalities" }
+sp-trie = { version = "3.0.0", path = "../../../primitives/trie" }
+sp-storage = { version = "3.0.0", path = "../../../primitives/storage" }
+sc-client-db = { version = "0.9.0", default-features = false, path = "../../db" }
 futures = { version = "0.3.1", features = ["compat"] }
-sc-service = { version = "0.8.0", default-features = false, features = ["test-helpers"], path = "../../service" }
-sc-network = { version = "0.8.0", path = "../../network" }
-sp-consensus = { version = "0.8.0", path = "../../../primitives/consensus/common" }
-sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
-sp-core = { version = "2.0.0", path = "../../../primitives/core" }
-sp-transaction-pool = { version = "2.0.0", path = "../../../primitives/transaction-pool" }
+sc-service = { version = "0.9.0", default-features = false, features = ["test-helpers"], path = "../../service" }
+sc-network = { version = "0.9.0", path = "../../network" }
+sp-consensus = { version = "0.9.0", path = "../../../primitives/consensus/common" }
+sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
+sp-core = { version = "3.0.0", path = "../../../primitives/core" }
+sp-transaction-pool = { version = "3.0.0", path = "../../../primitives/transaction-pool" }
 substrate-test-runtime = { version = "2.0.0", path = "../../../test-utils/runtime" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
-sc-client-api = { version = "2.0.0", path = "../../api" }
-sc-block-builder = { version = "0.8.0", path = "../../block-builder" }
-sc-executor = { version = "0.8.0", path = "../../executor" }
-sp-panic-handler = { version = "2.0.0", path = "../../../primitives/panic-handler" }
-parity-scale-codec = "1.3.4"
-sp-tracing = { version = "2.0.0", path = "../../../primitives/tracing" }
+sc-client-api = { version = "3.0.0", path = "../../api" }
+sc-block-builder = { version = "0.9.0", path = "../../block-builder" }
+sc-executor = { version = "0.9.0", path = "../../executor" }
+sp-panic-handler = { version = "3.0.0", path = "../../../primitives/panic-handler" }
+parity-scale-codec = "2.0.0"
+sp-tracing = { version = "3.0.0", path = "../../../primitives/tracing" }

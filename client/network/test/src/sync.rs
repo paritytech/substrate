@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,7 +18,7 @@
 
 use sp_consensus::BlockOrigin;
 use std::time::Duration;
-use futures::executor::block_on;
+use futures::{Future, executor::block_on};
 use super::*;
 use sp_consensus::block_validation::Validation;
 use substrate_test_runtime::Header;
@@ -436,7 +436,7 @@ fn can_sync_small_non_best_forks() {
 	assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
 	assert!(!net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
 
-	net.peer(0).announce_block(small_hash, Vec::new());
+	net.peer(0).announce_block(small_hash, None);
 
 	// after announcing, peer 1 downloads the block.
 
@@ -452,7 +452,7 @@ fn can_sync_small_non_best_forks() {
 	net.block_until_sync();
 
 	let another_fork = net.peer(0).push_blocks_at(BlockId::Number(35), 2, true);
-	net.peer(0).announce_block(another_fork, Vec::new());
+	net.peer(0).announce_block(another_fork, None);
 	block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
 		if net.peer(1).client().header(&BlockId::Hash(another_fork)).unwrap().is_none() {
@@ -500,7 +500,7 @@ fn light_peer_imports_header_from_announce() {
 	sp_tracing::try_init_simple();
 
 	fn import_with_announce(net: &mut TestNet, hash: H256) {
-		net.peer(0).announce_block(hash, Vec::new());
+		net.peer(0).announce_block(hash, None);
 
 		block_on(futures::future::poll_fn::<(), _>(|cx| {
 			net.poll(cx);
@@ -610,7 +610,7 @@ fn does_not_sync_announced_old_best_block() {
 	net.peer(0).push_blocks(18, true);
 	net.peer(1).push_blocks(20, true);
 
-	net.peer(0).announce_block(old_hash, Vec::new());
+	net.peer(0).announce_block(old_hash, None);
 	block_on(futures::future::poll_fn::<(), _>(|cx| {
 		// poll once to import announcement
 		net.poll(cx);
@@ -618,7 +618,7 @@ fn does_not_sync_announced_old_best_block() {
 	}));
 	assert!(!net.peer(1).is_major_syncing());
 
-	net.peer(0).announce_block(old_hash_with_parent, Vec::new());
+	net.peer(0).announce_block(old_hash_with_parent, None);
 	block_on(futures::future::poll_fn::<(), _>(|cx| {
 		// poll once to import announcement
 		net.poll(cx);
@@ -653,8 +653,8 @@ fn imports_stale_once() {
 
 	fn import_with_announce(net: &mut TestNet, hash: H256) {
 		// Announce twice
-		net.peer(0).announce_block(hash, Vec::new());
-		net.peer(0).announce_block(hash, Vec::new());
+		net.peer(0).announce_block(hash, None);
+		net.peer(0).announce_block(hash, None);
 
 		block_on(futures::future::poll_fn::<(), _>(|cx| {
 			net.poll(cx);
@@ -693,14 +693,7 @@ fn can_sync_to_peers_with_wrong_common_block() {
 	let fork_hash = net.peer(0).push_blocks_at(BlockId::Number(0), 2, false);
 	net.peer(1).push_blocks_at(BlockId::Number(0), 2, false);
 	// wait for connection
-	block_on(futures::future::poll_fn::<(), _>(|cx| {
-		net.poll(cx);
-		if net.peer(0).num_peers() == 0  || net.peer(1).num_peers() == 0 {
-			Poll::Pending
-		} else {
-			Poll::Ready(())
-		}
-	}));
+	net.block_until_connected();
 
 	// both peers re-org to the same fork without notifying each other
 	net.peer(0).client().finalize_block(BlockId::Hash(fork_hash), Some(Vec::new()), true).unwrap();
@@ -709,7 +702,7 @@ fn can_sync_to_peers_with_wrong_common_block() {
 
 	net.block_until_sync();
 
-	assert!(net.peer(1).client().header(&BlockId::Hash(final_hash)).unwrap().is_some());
+	assert!(net.peer(1).has_block(&final_hash));
 }
 
 /// Returns `is_new_best = true` for each validated announcement.
@@ -720,15 +713,14 @@ impl BlockAnnounceValidator<Block> for NewBestBlockAnnounceValidator {
 		&mut self,
 		_: &Header,
 		_: &[u8],
-	) -> Result<Validation, Box<dyn std::error::Error + Send>> {
-		Ok(Validation::Success { is_new_best: true })
+	) -> Pin<Box<dyn Future<Output = Result<Validation, Box<dyn std::error::Error + Send>>> + Send>> {
+		async { Ok(Validation::Success { is_new_best: true }) }.boxed()
 	}
 }
 
 #[test]
 fn sync_blocks_when_block_announce_validator_says_it_is_new_best() {
 	sp_tracing::try_init_simple();
-	log::trace!(target: "sync", "Test");
 	let mut net = TestNet::with_fork_choice(ForkChoiceStrategy::Custom(false));
 	net.add_full_peer_with_config(Default::default());
 	net.add_full_peer_with_config(Default::default());
@@ -749,4 +741,197 @@ fn sync_blocks_when_block_announce_validator_says_it_is_new_best() {
 	// as new best. However, peer2 has a special block announcement validator
 	// that flags all blocks as `is_new_best` and thus, it should have synced the blocks.
 	assert!(!net.peer(1).has_block(&block_hash));
+}
+
+/// Waits for some time until the validation is successfull.
+struct DeferredBlockAnnounceValidator;
+
+impl BlockAnnounceValidator<Block> for DeferredBlockAnnounceValidator {
+	fn validate(
+		&mut self,
+		_: &Header,
+		_: &[u8],
+	) -> Pin<Box<dyn Future<Output = Result<Validation, Box<dyn std::error::Error + Send>>> + Send>> {
+		async {
+			futures_timer::Delay::new(std::time::Duration::from_millis(500)).await;
+			Ok(Validation::Success { is_new_best: false })
+		}.boxed()
+	}
+}
+
+#[test]
+fn wait_until_deferred_block_announce_validation_is_ready() {
+	sp_tracing::try_init_simple();
+	let mut net = TestNet::with_fork_choice(ForkChoiceStrategy::Custom(false));
+	net.add_full_peer_with_config(Default::default());
+	net.add_full_peer_with_config(FullPeerConfig {
+		block_announce_validator: Some(Box::new(NewBestBlockAnnounceValidator)),
+		..Default::default()
+	});
+
+	net.block_until_connected();
+
+	let block_hash = net.peer(0).push_blocks(1, true);
+
+	while !net.peer(1).has_block(&block_hash) {
+		net.block_until_idle();
+	}
+}
+
+/// When we don't inform the sync protocol about the best block, a node will not sync from us as the
+/// handshake is not does not contain our best block.
+#[test]
+fn sync_to_tip_requires_that_sync_protocol_is_informed_about_best_block() {
+	sp_tracing::try_init_simple();
+	let mut net = TestNet::new(1);
+
+	// Produce some blocks
+	let block_hash = net.peer(0).push_blocks_at_without_informing_sync(BlockId::Number(0), 3, true);
+
+	// Add a node and wait until they are connected
+	net.add_full_peer_with_config(Default::default());
+	net.block_until_connected();
+	net.block_until_idle();
+
+	// The peer should not have synced the block.
+	assert!(!net.peer(1).has_block(&block_hash));
+
+	// Make sync protocol aware of the best block
+	net.peer(0).network_service().new_best_block_imported(block_hash, 3);
+	net.block_until_idle();
+
+	// Connect another node that should now sync to the tip
+	net.add_full_peer_with_config(Default::default());
+	net.block_until_connected();
+
+	while !net.peer(2).has_block(&block_hash) {
+		net.block_until_idle();
+	}
+
+	// However peer 1 should still not have the block.
+	assert!(!net.peer(1).has_block(&block_hash));
+}
+
+/// Ensures that if we as a syncing node sync to the tip while we are connected to another peer
+/// that is currently also doing a major sync.
+#[test]
+fn sync_to_tip_when_we_sync_together_with_multiple_peers() {
+	sp_tracing::try_init_simple();
+
+	let mut net = TestNet::new(3);
+
+	let block_hash = net.peer(0).push_blocks_at_without_informing_sync(
+		BlockId::Number(0),
+		10_000,
+		false,
+	);
+
+	net.peer(1).push_blocks_at_without_informing_sync(
+		BlockId::Number(0),
+		5_000,
+		false,
+	);
+
+	net.block_until_connected();
+	net.block_until_idle();
+
+	assert!(!net.peer(2).has_block(&block_hash));
+
+	net.peer(0).network_service().new_best_block_imported(block_hash, 10_000);
+	while !net.peer(2).has_block(&block_hash) && !net.peer(1).has_block(&block_hash) {
+		net.block_until_idle();
+	}
+}
+
+/// Ensures that when we receive a block announcement with some data attached, that we propagate
+/// this data when reannouncing the block.
+#[test]
+fn block_announce_data_is_propagated() {
+	struct TestBlockAnnounceValidator;
+
+	impl BlockAnnounceValidator<Block> for TestBlockAnnounceValidator {
+		fn validate(
+			&mut self,
+			_: &Header,
+			data: &[u8],
+		) -> Pin<Box<dyn Future<Output = Result<Validation, Box<dyn std::error::Error + Send>>> + Send>> {
+			let correct = data.get(0) == Some(&137);
+			async move {
+				if correct {
+					Ok(Validation::Success { is_new_best: true })
+				} else {
+					Ok(Validation::Failure { disconnect: false })
+				}
+			}.boxed()
+		}
+	}
+
+	sp_tracing::try_init_simple();
+	let mut net = TestNet::new(1);
+
+	net.add_full_peer_with_config(FullPeerConfig {
+		block_announce_validator: Some(Box::new(TestBlockAnnounceValidator)),
+		..Default::default()
+	});
+
+	net.add_full_peer_with_config(FullPeerConfig {
+		block_announce_validator: Some(Box::new(TestBlockAnnounceValidator)),
+		connect_to_peers: Some(vec![1]),
+		..Default::default()
+	});
+
+	// Wait until peer 1 is connected to both nodes.
+	block_on(futures::future::poll_fn::<(), _>(|cx| {
+		net.poll(cx);
+		if net.peer(1).num_peers() == 2 {
+			Poll::Ready(())
+		} else {
+			Poll::Pending
+		}
+	}));
+
+	let block_hash = net.peer(0).push_blocks_at_without_announcing(BlockId::Number(0), 1, true);
+	net.peer(0).announce_block(block_hash, Some(vec![137]));
+
+	while !net.peer(1).has_block(&block_hash) || !net.peer(2).has_block(&block_hash) {
+		net.block_until_idle();
+	}
+}
+
+#[test]
+fn continue_to_sync_after_some_block_announcement_verifications_failed() {
+	struct TestBlockAnnounceValidator;
+
+	impl BlockAnnounceValidator<Block> for TestBlockAnnounceValidator {
+		fn validate(
+			&mut self,
+			header: &Header,
+			_: &[u8],
+		) -> Pin<Box<dyn Future<Output = Result<Validation, Box<dyn std::error::Error + Send>>> + Send>> {
+			let number = *header.number();
+			async move {
+				if number < 100 {
+					Err(Box::<dyn std::error::Error + Send + Sync>::from(String::from("error")) as Box<_>)
+				} else {
+					Ok(Validation::Success { is_new_best: false })
+				}
+			}.boxed()
+		}
+	}
+
+	sp_tracing::try_init_simple();
+	let mut net = TestNet::new(1);
+
+	net.add_full_peer_with_config(FullPeerConfig {
+		block_announce_validator: Some(Box::new(TestBlockAnnounceValidator)),
+		..Default::default()
+	});
+
+	net.block_until_connected();
+	net.block_until_idle();
+
+	let block_hash = net.peer(0).push_blocks(500, true);
+
+	net.block_until_sync();
+	assert!(net.peer(1).has_block(&block_hash));
 }

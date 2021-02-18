@@ -1,6 +1,6 @@
 [package]
 name = "frame-executive"
-version = "2.0.0"
+version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -13,24 +13,24 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "1.3.4", default-features = false, features = ["derive"] }
-frame-support = { version = "2.0.0", default-features = false, path = "../support" }
-frame-system = { version = "2.0.0", default-features = false, path = "../system" }
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+frame-support = { version = "3.0.0", default-features = false, path = "../support" }
+frame-system = { version = "3.0.0", default-features = false, path = "../system" }
 serde = { version = "1.0.101", optional = true }
-sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-tracing = { version = "2.0.0", default-features = false, path = "../../primitives/tracing" }
-sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
-sp-io = { version = "2.0.0", default-features = false, path = "../../primitives/io" }
-sp-core = { version = "2.0.0", default-features = false, path = "../../primitives/core" }
+sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-tracing = { version = "3.0.0", default-features = false, path = "../../primitives/tracing" }
+sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
+sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/io" }
+sp-core = { version = "3.0.0", default-features = false, path = "../../primitives/core" }
 
 [dev-dependencies]
 hex-literal = "0.3.1"
-sp-core = { version = "2.0.0", path = "../../primitives/core" }
-sp-io ={ version = "2.0.0", path = "../../primitives/io" }
-pallet-indices = { version = "2.0.0", path = "../indices" }
-pallet-balances = { version = "2.0.0", path = "../balances" }
-pallet-transaction-payment = { version = "2.0.0", path = "../transaction-payment" }
-sp-version = { version = "2.0.0", path = "../../primitives/version" }
+sp-core = { version = "3.0.0", path = "../../primitives/core" }
+sp-io ={ version = "3.0.0", path = "../../primitives/io" }
+pallet-indices = { version = "3.0.0", path = "../indices" }
+pallet-balances = { version = "3.0.0", path = "../balances" }
+pallet-transaction-payment = { version = "3.0.0", path = "../transaction-payment" }
+sp-version = { version = "3.0.0", path = "../../primitives/version" }
 
 [features]
 default = ["std"]

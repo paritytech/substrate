@@ -1,6 +1,6 @@
 [package]
 name = "sc-authority-discovery"
-version = "0.8.0"
+version = "0.9.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 build = "build.rs"
@@ -14,32 +14,32 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [build-dependencies]
-prost-build = "0.6.1"
+prost-build = "0.7"
 
 [dependencies]
-bytes = "0.5.0"
-codec = { package = "parity-scale-codec", default-features = false, version = "1.3.4" }
+async-trait = "0.1"
+codec = { package = "parity-scale-codec", default-features = false, version = "2.0.0" }
 derive_more = "0.99.2"
 either = "1.5.3"
-futures = "0.3.4"
+futures = "0.3.9"
 futures-timer = "3.0.1"
-libp2p = { version = "0.28.1", default-features = false, features = ["kad"] }
+libp2p = { version = "0.34.0", default-features = false, features = ["kad"] }
 log = "0.4.8"
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.8.0"}
-prost = "0.6.1"
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.9.0"}
+prost = "0.7"
 rand = "0.7.2"
-sc-client-api = { version = "2.0.0", path = "../api" }
-sc-keystore = { version = "2.0.0", path = "../keystore" }
-sc-network = { version = "0.8.0", path = "../network" }
+sc-client-api = { version = "3.0.0", path = "../api" }
+sc-network = { version = "0.9.0", path = "../network" }
 serde_json = "1.0.41"
-sp-authority-discovery = { version = "2.0.0", path = "../../primitives/authority-discovery" }
-sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
-sp-core = { version = "2.0.0", path = "../../primitives/core" }
-sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
-sp-api = { version = "2.0.0", path = "../../primitives/api" }
+sp-authority-discovery = { version = "3.0.0", path = "../../primitives/authority-discovery" }
+sp-blockchain = { version = "3.0.0", path = "../../primitives/blockchain" }
+sp-core = { version = "3.0.0", path = "../../primitives/core" }
+sp-keystore = { version = "0.9.0", path = "../../primitives/keystore" }
+sp-runtime = { version = "3.0.0", path = "../../primitives/runtime" }
+sp-api = { version = "3.0.0", path = "../../primitives/api" }
 
 [dev-dependencies]
-quickcheck = "0.9.0"
-sp-tracing = { version = "2.0.0", path = "../../primitives/tracing" }
-sc-peerset = { version = "2.0.0", path = "../peerset" }
+quickcheck = "1.0.3"
+sp-tracing = { version = "3.0.0", path = "../../primitives/tracing" }
+sc-peerset = { version = "3.0.0", path = "../peerset" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client"}

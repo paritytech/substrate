@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,19 +22,15 @@ mod tests {
 	use frame_support::metadata::*;
 	use sp_io::TestExternalities;
 	use std::marker::PhantomData;
-	use codec::{Encode, Decode, EncodeLike};
 
 	frame_support::decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {}
+		pub struct Module<T: Config> for enum Call where origin: T::Origin, system=frame_support_test {}
 	}
 
-	pub trait Trait {
-		type Origin: Encode + Decode + EncodeLike + std::default::Default;
-		type BlockNumber;
-	}
+	pub trait Config: frame_support_test::Config {}
 
 	frame_support::decl_storage! {
-		trait Store for Module<T: Trait> as TestStorage {
+		trait Store for Module<T: Config> as TestStorage {
 			// non-getters: pub / $default
 
 			/// Hello, this is doc!
@@ -74,7 +70,7 @@ mod tests {
 			pub PUBGETMAPU32MYDEF get(fn pub_map_u32_getter_mydef):
 				map hasher(blake2_128_concat) u32 => String = "pubmap".into();
 
-			COMPLEXTYPE1: ::std::vec::Vec<<T as Trait>::Origin>;
+			COMPLEXTYPE1: ::std::vec::Vec<T::Origin>;
 			COMPLEXTYPE2: (Vec<Vec<(u16, Box<()>)>>, u32);
 			COMPLEXTYPE3: [u32; 25];
 		}
@@ -85,10 +81,14 @@ mod tests {
 
 	struct TraitImpl {}
 
-	impl Trait for TraitImpl {
+	impl frame_support_test::Config for TraitImpl {
 		type Origin = u32;
 		type BlockNumber = u32;
+		type PalletInfo = frame_support_test::PanicPalletInfo;
+		type DbWeight = ();
 	}
+
+	impl Config for TraitImpl {}
 
 	const EXPECTED_METADATA: StorageMetadata = StorageMetadata {
 		prefix: DecodeDifferent::Encode("TestStorage"),
@@ -353,7 +353,7 @@ mod tests {
 				StorageEntryMetadata {
 					name: DecodeDifferent::Encode("COMPLEXTYPE1"),
 					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Plain(DecodeDifferent::Encode("::std::vec::Vec<<T as Trait>::Origin>")),
+					ty: StorageEntryType::Plain(DecodeDifferent::Encode("::std::vec::Vec<T::Origin>")),
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructCOMPLEXTYPE1(PhantomData::<TraitImpl>))
 					),
@@ -414,19 +414,16 @@ mod tests {
 #[cfg(test)]
 #[allow(dead_code)]
 mod test2 {
-	pub trait Trait {
-		type Origin;
-		type BlockNumber;
-	}
+	pub trait Config: frame_support_test::Config {}
 
 	frame_support::decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {}
+		pub struct Module<T: Config> for enum Call where origin: T::Origin, system=frame_support_test {}
 	}
 
 	type PairOf<T> = (T, T);
 
 	frame_support::decl_storage! {
-		trait Store for Module<T: Trait> as TestStorage {
+		trait Store for Module<T: Config> as TestStorage {
 			SingleDef : u32;
 			PairDef : PairOf<u32>;
 			Single : Option<u32>;
@@ -441,24 +438,26 @@ mod test2 {
 
 	struct TraitImpl {}
 
-	impl Trait for TraitImpl {
+	impl frame_support_test::Config for TraitImpl {
 		type Origin = u32;
 		type BlockNumber = u32;
+		type PalletInfo = frame_support_test::PanicPalletInfo;
+		type DbWeight = ();
 	}
+
+	impl Config for TraitImpl {}
 }
 
 #[cfg(test)]
 #[allow(dead_code)]
 mod test3 {
-	pub trait Trait {
-		type Origin;
-		type BlockNumber;
-	}
+	pub trait Config: frame_support_test::Config {}
+
 	frame_support::decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {}
+		pub struct Module<T: Config> for enum Call where origin: T::Origin, system=frame_support_test {}
 	}
 	frame_support::decl_storage! {
-		trait Store for Module<T: Trait> as Test {
+		trait Store for Module<T: Config> as Test {
 			Foo get(fn foo) config(initial_foo): u32;
 		}
 	}
@@ -467,10 +466,14 @@ mod test3 {
 
 	struct TraitImpl {}
 
-	impl Trait for TraitImpl {
+	impl frame_support_test::Config for TraitImpl {
 		type Origin = u32;
 		type BlockNumber = u32;
+		type PalletInfo = frame_support_test::PanicPalletInfo;
+		type DbWeight = ();
 	}
+
+	impl Config for TraitImpl {}
 }
 
 #[cfg(test)]
@@ -479,20 +482,17 @@ mod test_append_and_len {
 	use sp_io::TestExternalities;
 	use codec::{Encode, Decode};
 
-	pub trait Trait {
-		type Origin;
-		type BlockNumber;
-	}
+	pub trait Config: frame_support_test::Config {}
 
 	frame_support::decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {}
+		pub struct Module<T: Config> for enum Call where origin: T::Origin, system=frame_support_test {}
 	}
 
 	#[derive(PartialEq, Eq, Clone, Encode, Decode)]
 	struct NoDef(u32);
 
 	frame_support::decl_storage! {
-		trait Store for Module<T: Trait> as Test {
+		trait Store for Module<T: Config> as Test {
 			NoDefault: Option<NoDef>;
 
 			JustVec: Vec<u32>;
@@ -511,10 +511,14 @@ mod test_append_and_len {
 
 	struct Test {}
 
-	impl Trait for Test {
+	impl frame_support_test::Config for Test {
 		type Origin = u32;
 		type BlockNumber = u32;
+		type PalletInfo = frame_support_test::PanicPalletInfo;
+		type DbWeight = ();
 	}
+
+	impl Config for Test {}
 
 	#[test]
 	fn default_for_option() {

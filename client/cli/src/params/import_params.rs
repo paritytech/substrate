@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::arg_enums::{
-	ExecutionStrategy, TracingReceiver, WasmExecutionMethod, DEFAULT_EXECUTION_BLOCK_CONSTRUCTION,
+	ExecutionStrategy, WasmExecutionMethod, DEFAULT_EXECUTION_BLOCK_CONSTRUCTION,
 	DEFAULT_EXECUTION_IMPORT_BLOCK, DEFAULT_EXECUTION_IMPORT_BLOCK_VALIDATOR,
 	DEFAULT_EXECUTION_OFFCHAIN_WORKER, DEFAULT_EXECUTION_OTHER, DEFAULT_EXECUTION_SYNCING,
 };
@@ -25,6 +25,7 @@ use crate::params::DatabaseParams;
 use crate::params::PruningParams;
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use structopt::StructOpt;
+use std::path::PathBuf;
 
 /// Parameters for block import.
 #[derive(Debug, StructOpt)]
@@ -55,6 +56,12 @@ pub struct ImportParams {
 	)]
 	pub wasm_method: WasmExecutionMethod,
 
+	/// Specify the path where local WASM runtimes are stored.
+	///
+	/// These runtimes will override on-chain runtimes when the version matches.
+	#[structopt(long, value_name = "PATH", parse(from_os_str))]
+	pub wasm_runtime_overrides: Option<PathBuf>,
+
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub execution_strategies: ExecutionStrategiesParams,
@@ -66,32 +73,9 @@ pub struct ImportParams {
 		default_value = "67108864"
 	)]
 	pub state_cache_size: usize,
-
-	/// Comma separated list of targets for tracing.
-	#[structopt(long = "tracing-targets", value_name = "TARGETS")]
-	pub tracing_targets: Option<String>,
-
-	/// Receiver to process tracing messages.
-	#[structopt(
-		long = "tracing-receiver",
-		value_name = "RECEIVER",
-		possible_values = &TracingReceiver::variants(),
-		case_insensitive = true,
-		default_value = "Log"
-	)]
-	pub tracing_receiver: TracingReceiver,
 }
 
 impl ImportParams {
-	/// Receiver to process tracing messages.
-	pub fn tracing_receiver(&self) -> sc_service::TracingReceiver {
-		self.tracing_receiver.clone().into()
-	}
-
-	/// Comma separated list of targets for tracing.
-	pub fn tracing_targets(&self) -> Option<String> {
-		self.tracing_targets.clone()
-	}
 
 	/// Specify the state cache size.
 	pub fn state_cache_size(&self) -> usize {
@@ -101,6 +85,12 @@ impl ImportParams {
 	/// Get the WASM execution method from the parameters
 	pub fn wasm_method(&self) -> sc_service::config::WasmExecutionMethod {
 		self.wasm_method.into()
+	}
+
+	/// Enable overriding on-chain WASM with locally-stored WASM
+	/// by specifying the path where local WASM is stored.
+	pub fn wasm_runtime_overrides(&self) -> Option<PathBuf> {
+		self.wasm_runtime_overrides.clone()
 	}
 
 	/// Get execution strategies for the parameters

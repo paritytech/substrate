@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -84,7 +84,6 @@ pub fn import_queue<Block, Transaction>(
 		ManualSealVerifier,
 		block_import,
 		None,
-		None,
 		spawner,
 		registry,
 	)
@@ -164,10 +163,10 @@ pub async fn run_manual_seal<B, BI, CB, E, C, A, SC, CS>(
 		C: HeaderBackend<B> + Finalizer<B, CB> + ProvideRuntimeApi<B> + 'static,
 		CB: ClientBackend<B> + 'static,
 		E: Environment<B> + 'static,
-		E::Error: std::fmt::Display,
-		<E::Proposer as Proposer<B>>::Error: std::fmt::Display,
+		E::Proposer: Proposer<B, Transaction = TransactionFor<C, B>>,
 		CS: Stream<Item=EngineCommand<<B as BlockT>::Hash>> + Unpin + 'static,
 		SC: SelectChain<B> + 'static,
+		TransactionFor<C, B>: 'static,
 {
 	while let Some(command) = commands_stream.next().await {
 		match command {
@@ -231,9 +230,9 @@ pub async fn run_instant_seal<B, BI, CB, E, C, A, SC>(
 		C: HeaderBackend<B> + Finalizer<B, CB> + ProvideRuntimeApi<B> + 'static,
 		CB: ClientBackend<B> + 'static,
 		E: Environment<B> + 'static,
-		E::Error: std::fmt::Display,
-		<E::Proposer as Proposer<B>>::Error: std::fmt::Display,
-		SC: SelectChain<B> + 'static
+		E::Proposer: Proposer<B, Transaction = TransactionFor<C, B>>,
+		SC: SelectChain<B> + 'static,
+		TransactionFor<C, B>: 'static,
 {
 	// instant-seal creates blocks as soon as transactions are imported
 	// into the transaction pool.
@@ -294,9 +293,10 @@ mod tests {
 		let inherent_data_providers = InherentDataProviders::new();
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let pool = Arc::new(BasicPool::with_revalidation_type(
-			Options::default(), api(), None, RevalidationType::Full, spawner,
+			Options::default(), true.into(), api(), None, RevalidationType::Full, spawner.clone(),
 		));
 		let env = ProposerFactory::new(
+			spawner.clone(),
 			client.clone(),
 			pool.clone(),
 			None,
@@ -348,7 +348,6 @@ mod tests {
 					clear_justification_requests: false,
 					needs_justification: false,
 					bad_justification: false,
-					needs_finality_proof: false,
 					is_new_best: true,
 				}
 			}
@@ -365,9 +364,10 @@ mod tests {
 		let inherent_data_providers = InherentDataProviders::new();
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let pool = Arc::new(BasicPool::with_revalidation_type(
-			Options::default(), api(), None, RevalidationType::Full, spawner,
+			Options::default(), true.into(), api(), None, RevalidationType::Full, spawner.clone(),
 		));
 		let env = ProposerFactory::new(
+			spawner.clone(),
 			client.clone(),
 			pool.clone(),
 			None,
@@ -414,7 +414,6 @@ mod tests {
 					clear_justification_requests: false,
 					needs_justification: false,
 					bad_justification: false,
-					needs_finality_proof: false,
 					is_new_best: true,
 				}
 			}
@@ -440,9 +439,10 @@ mod tests {
 		let pool_api = api();
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let pool = Arc::new(BasicPool::with_revalidation_type(
-			Options::default(), pool_api.clone(), None, RevalidationType::Full, spawner,
+			Options::default(), true.into(), pool_api.clone(), None, RevalidationType::Full, spawner.clone(),
 		));
 		let env = ProposerFactory::new(
+			spawner.clone(),
 			client.clone(),
 			pool.clone(),
 			None,
@@ -491,7 +491,6 @@ mod tests {
 					clear_justification_requests: false,
 					needs_justification: false,
 					bad_justification: false,
-					needs_finality_proof: false,
 					is_new_best: true
 				}
 			}

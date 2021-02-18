@@ -1,6 +1,6 @@
 [package]
 name = "substrate-wasm-builder"
-version = "2.0.0"
+version = "4.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Utility for building WASM binaries"
 edition = "2018"
@@ -14,12 +14,10 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 build-helper = "0.1.1"
-cargo_metadata = "0.10.0"
+cargo_metadata = "0.12.0"
 tempfile = "3.1.0"
 toml = "0.5.4"
 walkdir = "2.3.1"
-fs2 = "0.4.3"
 wasm-gc-api = "0.1.11"
 atty = "0.2.13"
-itertools = "0.8.2"
 ansi_term = "0.12.1"

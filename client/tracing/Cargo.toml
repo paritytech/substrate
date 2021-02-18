@@ -1,6 +1,6 @@
 [package]
 name = "sc-tracing"
-version = "2.0.0"
+version = "3.0.0"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -13,15 +13,26 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+ansi_term = "0.12.1"
+atty = "0.2.13"
 erased-serde = "0.3.9"
+lazy_static = "1.4.0"
 log = { version = "0.4.8" }
-parking_lot = "0.10.0"
+once_cell = "1.4.1"
+parking_lot = "0.11.1"
+regex = "1.4.2"
 rustc-hash = "1.1.0"
 serde = "1.0.101"
 serde_json = "1.0.41"
-slog = { version = "2.5.2", features = ["nested-values"] }
-tracing = "0.1.19"
-tracing-core = "0.1.13"
-tracing-subscriber = "0.2.10"
-sp-tracing = { version = "2.0.0", path = "../../primitives/tracing" }
-sc-telemetry = { version = "2.0.0", path = "../telemetry" }
+thiserror = "1.0.21"
+tracing = "0.1.22"
+tracing-core = "0.1.17"
+tracing-log = "0.1.1"
+tracing-subscriber = "0.2.15"
+sp-tracing = { version = "3.0.0", path = "../../primitives/tracing" }
+sc-telemetry = { version = "3.0.0", path = "../telemetry" }
+sc-tracing-proc-macro = { version = "3.0.0", path = "./proc-macro" }
+
+[target.'cfg(target_os = "unknown")'.dependencies]
+wasm-bindgen = "0.2.67"
+web-sys = { version = "0.3.44", features = ["console"] }

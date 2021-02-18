@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! The Substrate runtime. This can be compiled with #[no_std], ready for Wasm.
+//! The Substrate runtime. This can be compiled with `#[no_std]`, ready for Wasm.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -42,9 +42,11 @@ use sp_runtime::{
 	},
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
-		GetNodeBlockType, GetRuntimeBlockType, NumberFor, Verify, IdentityLookup,
+		GetNodeBlockType, GetRuntimeBlockType, Verify, IdentityLookup,
 	},
 };
+#[cfg(feature = "std")]
+use sp_runtime::traits::NumberFor;
 use sp_version::RuntimeVersion;
 pub use sp_core::hash::H256;
 #[cfg(any(feature = "std", test))]
@@ -52,13 +54,14 @@ use sp_version::NativeVersion;
 use frame_support::{
 	impl_outer_origin, parameter_types,
 	traits::KeyOwnerProofSystem,
-	weights::{RuntimeDbWeight, Weight},
+	weights::RuntimeDbWeight,
 };
+use frame_system::limits::{BlockWeights, BlockLength};
 use sp_inherents::{CheckInherentsResult, InherentData};
 use cfg_if::cfg_if;
 
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
-pub use sp_consensus_babe::{AuthorityId, SlotNumber, AllowedSlots};
+pub use sp_consensus_babe::{AuthorityId, Slot, AllowedSlots};
 
 pub type AuraId = sp_consensus_aura::sr25519::AuthorityId;
 
@@ -66,8 +69,8 @@ pub type AuraId = sp_consensus_aura::sr25519::AuthorityId;
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
+/// Wasm binary unwrapped. If built with `SKIP_WASM_BUILD`, the function panics.
 #[cfg(feature = "std")]
-/// Wasm binary unwrapped. If built with `BUILD_DUMMY_WASM_BINARY`, the function panics.
 pub fn wasm_binary_unwrap() -> &'static [u8] {
 	WASM_BINARY.expect("Development wasm binary is not available. Testing is only \
 						supported with the flag disabled.")
@@ -146,6 +149,8 @@ pub enum Extrinsic {
 	IncludeData(Vec<u8>),
 	StorageChange(Vec<u8>, Option<Vec<u8>>),
 	ChangesTrieConfigUpdate(Option<ChangesTrieConfiguration>),
+	OffchainIndexSet(Vec<u8>, Vec<u8>),
+	OffchainIndexClear(Vec<u8>),
 }
 
 parity_util_mem::malloc_size_of_is_0!(Extrinsic); // non-opaque extrinsic does not need this
@@ -174,6 +179,10 @@ impl BlindCheckable for Extrinsic {
 			Extrinsic::StorageChange(key, value) => Ok(Extrinsic::StorageChange(key, value)),
 			Extrinsic::ChangesTrieConfigUpdate(new_config) =>
 				Ok(Extrinsic::ChangesTrieConfigUpdate(new_config)),
+			Extrinsic::OffchainIndexSet(key, value) =>
+				Ok(Extrinsic::OffchainIndexSet(key, value)),
+			Extrinsic::OffchainIndexClear(key) =>
+				Ok(Extrinsic::OffchainIndexClear(key)),
 		}
 	}
 }
@@ -197,7 +206,7 @@ impl ExtrinsicT for Extrinsic {
 
 impl sp_runtime::traits::Dispatchable for Extrinsic {
 	type Origin = Origin;
-	type Trait = ();
+	type Config = ();
 	type Info = ();
 	type PostInfo = ();
 	fn dispatch(self, _origin: Self::Origin) -> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
@@ -340,6 +349,8 @@ cfg_if! {
 				/// Test that ensures that we can call a function that takes multiple
 				/// arguments.
 				fn test_multiple_arguments(data: Vec<u8>, other: Vec<u8>, num: u32);
+				/// Traces log "Hey I'm runtime."
+				fn do_trace_log();
 			}
 		}
 	} else {
@@ -391,6 +402,8 @@ cfg_if! {
 				/// Test that ensures that we can call a function that takes multiple
 				/// arguments.
 				fn test_multiple_arguments(data: Vec<u8>, other: Vec<u8>, num: u32);
+				/// Traces log "Hey I'm runtime."
+				fn do_trace_log();
 			}
 		}
 	}
@@ -420,20 +433,54 @@ impl From<frame_system::Event<Runtime>> for Event {
 	}
 }
 
+impl frame_support::traits::PalletInfo for Runtime {
+	fn index<P: 'static>() -> Option<usize> {
+		let type_id = sp_std::any::TypeId::of::<P>();
+		if type_id == sp_std::any::TypeId::of::<system::Module<Runtime>>() {
+			return Some(0)
+		}
+		if type_id == sp_std::any::TypeId::of::<pallet_timestamp::Module<Runtime>>() {
+			return Some(1)
+		}
+		if type_id == sp_std::any::TypeId::of::<pallet_babe::Module<Runtime>>() {
+			return Some(2)
+		}
+
+		None
+	}
+	fn name<P: 'static>() -> Option<&'static str> {
+		let type_id = sp_std::any::TypeId::of::<P>();
+		if type_id == sp_std::any::TypeId::of::<system::Module<Runtime>>() {
+			return Some("System")
+		}
+		if type_id == sp_std::any::TypeId::of::<pallet_timestamp::Module<Runtime>>() {
+			return Some("Timestamp")
+		}
+		if type_id == sp_std::any::TypeId::of::<pallet_babe::Module<Runtime>>() {
+			return Some("Babe")
+		}
+
+		None
+	}
+}
+
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 2400;
 	pub const MinimumPeriod: u64 = 5;
-	pub const MaximumBlockWeight: Weight = 4 * 1024 * 1024;
 	pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
 		read: 100,
 		write: 1000,
 	};
-	pub const MaximumBlockLength: u32 = 4 * 1024 * 1024;
-	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
+	pub RuntimeBlockLength: BlockLength =
+		BlockLength::max(4 * 1024 * 1024);
+	pub RuntimeBlockWeights: BlockWeights =
+		BlockWeights::with_sensible_defaults(4 * 1024 * 1024, Perbill::from_percent(75));
 }
 
-impl frame_system::Trait for Runtime {
+impl frame_system::Config for Runtime {
 	type BaseCallFilter = ();
+	type BlockWeights = RuntimeBlockWeights;
+	type BlockLength = RuntimeBlockLength;
 	type Origin = Origin;
 	type Call = Extrinsic;
 	type Index = u64;
@@ -445,22 +492,17 @@ impl frame_system::Trait for Runtime {
 	type Header = Header;
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
 	type DbWeight = ();
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
-	type MaximumExtrinsicWeight = MaximumBlockWeight;
-	type MaximumBlockLength = MaximumBlockLength;
-	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
-	type PalletInfo = ();
+	type PalletInfo = Self;
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
+	type SS58Prefix = ();
 }
 
-impl pallet_timestamp::Trait for Runtime {
+impl pallet_timestamp::Config for Runtime {
 	/// A timestamp: milliseconds since the unix epoch.
 	type Moment = u64;
 	type OnTimestampSet = ();
@@ -473,7 +515,7 @@ parameter_types! {
 	pub const ExpectedBlockTime: u64 = 10_000;
 }
 
-impl pallet_babe::Trait for Runtime {
+impl pallet_babe::Config for Runtime {
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ExpectedBlockTime;
 	// there is no actual runtime in this test-runtime, so testing crates
@@ -698,6 +740,11 @@ cfg_if! {
 					assert_eq!(&data[..], &other[..]);
 					assert_eq!(data.len(), num as usize);
 				}
+
+				fn do_trace_log() {
+					frame_support::debug::RuntimeLogger::init();
+					frame_support::debug::trace!("Hey I'm runtime");
+				}
 			}
 
 			impl sp_consensus_aura::AuraApi<Block, AuraId> for Runtime {
@@ -723,8 +770,16 @@ cfg_if! {
 					}
 				}
 
-				fn current_epoch_start() -> SlotNumber {
+				fn current_epoch_start() -> Slot {
 					<pallet_babe::Module<Runtime>>::current_epoch_start()
+				}
+
+				fn current_epoch() -> sp_consensus_babe::Epoch {
+					<pallet_babe::Module<Runtime>>::current_epoch()
+				}
+
+				fn next_epoch() -> sp_consensus_babe::Epoch {
+					<pallet_babe::Module<Runtime>>::next_epoch()
 				}
 
 				fn submit_report_equivocation_unsigned_extrinsic(
@@ -737,7 +792,7 @@ cfg_if! {
 				}
 
 				fn generate_key_ownership_proof(
-					_slot_number: sp_consensus_babe::SlotNumber,
+					_slot: sp_consensus_babe::Slot,
 					_authority_id: sp_consensus_babe::AuthorityId,
 				) -> Option<sp_consensus_babe::OpaqueKeyOwnershipProof> {
 					None
@@ -944,6 +999,11 @@ cfg_if! {
 					assert_eq!(&data[..], &other[..]);
 					assert_eq!(data.len(), num as usize);
 				}
+
+				fn do_trace_log() {
+					frame_support::debug::RuntimeLogger::init();
+					frame_support::debug::trace!("Hey I'm runtime");
+				}
 			}
 
 			impl sp_consensus_aura::AuraApi<Block, AuraId> for Runtime {
@@ -969,8 +1029,16 @@ cfg_if! {
 					}
 				}
 
-				fn current_epoch_start() -> SlotNumber {
+				fn current_epoch_start() -> Slot {
 					<pallet_babe::Module<Runtime>>::current_epoch_start()
+				}
+
+				fn current_epoch() -> sp_consensus_babe::Epoch {
+					<pallet_babe::Module<Runtime>>::current_epoch()
+				}
+
+				fn next_epoch() -> sp_consensus_babe::Epoch {
+					<pallet_babe::Module<Runtime>>::next_epoch()
 				}
 
 				fn submit_report_equivocation_unsigned_extrinsic(
@@ -983,7 +1051,7 @@ cfg_if! {
 				}
 
 				fn generate_key_ownership_proof(
-					_slot_number: sp_consensus_babe::SlotNumber,
+					_slot: sp_consensus_babe::Slot,
 					_authority_id: sp_consensus_babe::AuthorityId,
 				) -> Option<sp_consensus_babe::OpaqueKeyOwnershipProof> {
 					None
@@ -1117,13 +1185,9 @@ fn test_witness(proof: StorageProof, root: crate::Hash) {
 		root,
 	);
 	let mut overlay = sp_state_machine::OverlayedChanges::default();
-	#[cfg(feature = "std")]
-	let mut offchain_overlay = Default::default();
 	let mut cache = sp_state_machine::StorageTransactionCache::<_, _, BlockNumber>::default();
 	let mut ext = sp_state_machine::Ext::new(
 		&mut overlay,
-		#[cfg(feature = "std")]
-		&mut offchain_overlay,
 		&mut cache,
 		&backend,
 		#[cfg(feature = "std")]

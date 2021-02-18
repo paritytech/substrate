@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -30,7 +30,7 @@
 //! as the [NetworkState](../../client/offchain/struct.NetworkState.html).
 //! It is submitted as an Unsigned Transaction via off-chain workers.
 //!
-//! - [`im_online::Trait`](./trait.Trait.html)
+//! - [`im_online::Config`](./trait.Config.html)
 //! - [`Call`](./enum.Call.html)
 //! - [`Module`](./struct.Module.html)
 //!
@@ -47,10 +47,10 @@
 //! use frame_system::ensure_signed;
 //! use pallet_im_online::{self as im_online};
 //!
-//! pub trait Trait: im_online::Trait {}
+//! pub trait Config: im_online::Config {}
 //!
 //! decl_module! {
-//! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//! 	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 //! 		#[weight = 0]
 //! 		pub fn is_online(origin, authority_index: u32) -> dispatch::DispatchResult {
 //! 			let _sender = ensure_signed(origin)?;
@@ -72,14 +72,13 @@
 mod mock;
 mod tests;
 mod benchmarking;
-mod default_weight;
+pub mod weights;
 
 use sp_application_crypto::RuntimeAppPublic;
 use codec::{Encode, Decode};
 use sp_core::offchain::OpaqueNetworkState;
 use sp_std::prelude::*;
 use sp_std::convert::TryInto;
-use pallet_session::historical::IdentificationTuple;
 use sp_runtime::{
 	offchain::storage::StorageValueRef,
 	RuntimeDebug,
@@ -95,14 +94,14 @@ use sp_staking::{
 };
 use frame_support::{
 	decl_module, decl_event, decl_storage, Parameter, debug, decl_error,
-	traits::Get,
-	weights::Weight,
+	traits::{Get, ValidatorSet, ValidatorSetWithIdentification, OneSessionHandler},
 };
 use frame_system::ensure_none;
 use frame_system::offchain::{
 	SendTransactionTypes,
 	SubmitTransaction,
 };
+pub use weights::WeightInfo;
 
 pub mod sr25519 {
 	mod app_sr25519 {
@@ -227,16 +226,24 @@ pub struct Heartbeat<BlockNumber>
 	pub validators_len: u32,
 }
 
-pub trait WeightInfo {
-	fn validate_unsigned_and_then_heartbeat(k: u32, e: u32, ) -> Weight;
-}
+/// A type for representing the validator id in a session.
+pub type ValidatorId<T> = <
+	<T as Config>::ValidatorSet as ValidatorSet<<T as frame_system::Config>::AccountId>
+>::ValidatorId;
 
-pub trait Trait: SendTransactionTypes<Call<Self>> + pallet_session::historical::Trait {
+/// A tuple of (ValidatorId, Identification) where `Identification` is the full identification of `ValidatorId`.
+pub type IdentificationTuple<T> = (
+	ValidatorId<T>,
+	<<T as Config>::ValidatorSet as
+		ValidatorSetWithIdentification<<T as frame_system::Config>::AccountId>>::Identification,
+);
+
+pub trait Config: SendTransactionTypes<Call<Self>> + frame_system::Config {
 	/// The identifier type for an authority.
 	type AuthorityId: Member + Parameter + RuntimeAppPublic + Default + Ord;
 
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// An expected duration of the session.
 	///
@@ -245,6 +252,9 @@ pub trait Trait: SendTransactionTypes<Call<Self>> + pallet_session::historical::
 	/// since the workers avoids sending them at the very beginning of the session, assuming
 	/// there is a chance the authority will produce a block and they won't be necessary.
 	type SessionDuration: Get<Self::BlockNumber>;
+
+	/// A type for retrieving the validators supposed to be online in a session.
+	type ValidatorSet: ValidatorSetWithIdentification<Self::AccountId>;
 
 	/// A type that gives us the ability to submit unresponsiveness offence reports.
 	type ReportUnresponsiveness:
@@ -266,7 +276,7 @@ pub trait Trait: SendTransactionTypes<Call<Self>> + pallet_session::historical::
 
 decl_event!(
 	pub enum Event<T> where
-		<T as Trait>::AuthorityId,
+		<T as Config>::AuthorityId,
 		IdentificationTuple = IdentificationTuple<T>,
 	{
 		/// A new heartbeat was received from `AuthorityId` \[authority_id\]
@@ -279,7 +289,7 @@ decl_event!(
 );
 
 decl_storage! {
-	trait Store for Module<T: Trait> as ImOnline {
+	trait Store for Module<T: Config> as ImOnline {
 		/// The block number after which it's ok to send heartbeats in current session.
 		///
 		/// At the beginning of each session we set this to a value that should
@@ -297,10 +307,10 @@ decl_storage! {
 			double_map hasher(twox_64_concat) SessionIndex, hasher(twox_64_concat) AuthIndex
 			=> Option<Vec<u8>>;
 
-		/// For each session index, we keep a mapping of `T::ValidatorId` to the
+		/// For each session index, we keep a mapping of `ValidatorId<T>` to the
 		/// number of blocks authored by the given authority.
 		AuthoredBlocks get(fn authored_blocks):
-			double_map hasher(twox_64_concat) SessionIndex, hasher(twox_64_concat) T::ValidatorId
+			double_map hasher(twox_64_concat) SessionIndex, hasher(twox_64_concat) ValidatorId<T>
 			=> u32;
 	}
 	add_extra_genesis {
@@ -311,7 +321,7 @@ decl_storage! {
 
 decl_error! {
 	/// Error for the im-online module.
-	pub enum Error for Module<T: Trait> {
+	pub enum Error for Module<T: Config> {
 		/// Non existent public key.
 		InvalidKey,
 		/// Duplicated heartbeat.
@@ -320,7 +330,7 @@ decl_error! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
 		fn deposit_event() = default;
@@ -336,7 +346,7 @@ decl_module! {
 		/// # </weight>
 		// NOTE: the weight includes the cost of validate_unsigned as it is part of the cost to
 		// import block with such an extrinsic.
-		#[weight = <T as Trait>::WeightInfo::validate_unsigned_and_then_heartbeat(
+		#[weight = <T as Config>::WeightInfo::validate_unsigned_and_then_heartbeat(
 			heartbeat.validators_len as u32,
 			heartbeat.network_state.external_addresses.len() as u32,
 		)]
@@ -349,7 +359,7 @@ decl_module! {
 		) {
 			ensure_none(origin)?;
 
-			let current_session = <pallet_session::Module<T>>::current_index();
+			let current_session = T::ValidatorSet::session_index();
 			let exists = <ReceivedHeartbeats>::contains_key(
 				&current_session,
 				&heartbeat.authority_index
@@ -397,27 +407,30 @@ decl_module! {
 	}
 }
 
-type OffchainResult<T, A> = Result<A, OffchainErr<<T as frame_system::Trait>::BlockNumber>>;
+type OffchainResult<T, A> = Result<A, OffchainErr<<T as frame_system::Config>::BlockNumber>>;
 
 /// Keep track of number of authored blocks per authority, uncles are counted as
 /// well since they're a valid proof of being online.
-impl<T: Trait + pallet_authorship::Trait> pallet_authorship::EventHandler<T::ValidatorId, T::BlockNumber> for Module<T> {
-	fn note_author(author: T::ValidatorId) {
+impl<
+	T: Config + pallet_authorship::Config,
+> pallet_authorship::EventHandler<ValidatorId<T>, T::BlockNumber> for Module<T>
+{
+	fn note_author(author: ValidatorId<T>) {
 		Self::note_authorship(author);
 	}
 
-	fn note_uncle(author: T::ValidatorId, _age: T::BlockNumber) {
+	fn note_uncle(author: ValidatorId<T>, _age: T::BlockNumber) {
 		Self::note_authorship(author);
 	}
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 	/// Returns `true` if a heartbeat has been received for the authority at
 	/// `authority_index` in the authorities series or if the authority has
 	/// authored at least one block, during the current session. Otherwise
 	/// `false`.
 	pub fn is_online(authority_index: AuthIndex) -> bool {
-		let current_validators = <pallet_session::Module<T>>::validators();
+		let current_validators = T::ValidatorSet::validators();
 
 		if authority_index >= current_validators.len() as u32 {
 			return false;
@@ -428,8 +441,8 @@ impl<T: Trait> Module<T> {
 		Self::is_online_aux(authority_index, authority)
 	}
 
-	fn is_online_aux(authority_index: AuthIndex, authority: &T::ValidatorId) -> bool {
-		let current_session = <pallet_session::Module<T>>::current_index();
+	fn is_online_aux(authority_index: AuthIndex, authority: &ValidatorId<T>) -> bool {
+		let current_session = T::ValidatorSet::session_index();
 
 		<ReceivedHeartbeats>::contains_key(&current_session, &authority_index) ||
 			<AuthoredBlocks<T>>::get(
@@ -441,13 +454,13 @@ impl<T: Trait> Module<T> {
 	/// Returns `true` if a heartbeat has been received for the authority at `authority_index` in
 	/// the authorities series, during the current session. Otherwise `false`.
 	pub fn received_heartbeat_in_current_session(authority_index: AuthIndex) -> bool {
-		let current_session = <pallet_session::Module<T>>::current_index();
+		let current_session = T::ValidatorSet::session_index();
 		<ReceivedHeartbeats>::contains_key(&current_session, &authority_index)
 	}
 
 	/// Note that the given authority has authored a block in the current session.
-	fn note_authorship(author: T::ValidatorId) {
-		let current_session = <pallet_session::Module<T>>::current_index();
+	fn note_authorship(author: ValidatorId<T>) {
+		let current_session = T::ValidatorSet::session_index();
 
 		<AuthoredBlocks<T>>::mutate(
 			&current_session,
@@ -464,8 +477,8 @@ impl<T: Trait> Module<T> {
 			return Err(OffchainErr::TooEarly(heartbeat_after))
 		}
 
-		let session_index = <pallet_session::Module<T>>::current_index();
-		let validators_len = <pallet_session::Module<T>>::validators().len() as u32;
+		let session_index = T::ValidatorSet::session_index();
+		let validators_len = Keys::<T>::decode_len().unwrap_or_default() as u32;
 
 		Ok(Self::local_authority_keys()
 			.map(move |(authority_index, key)|
@@ -594,7 +607,7 @@ impl<T: Trait> Module<T> {
 
 		// clear the lock in case we have failed to send transaction.
 		if res.is_err() {
-			new_status.sent_at = 0.into();
+			new_status.sent_at = 0u32.into();
 			storage.set(&new_status);
 		}
 
@@ -614,11 +627,11 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
+impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
 	type Public = T::AuthorityId;
 }
 
-impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
+impl<T: Config> OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = T::AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)
@@ -635,7 +648,7 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 		// Since we consider producing blocks as being online,
 		// the heartbeat is deferred a bit to prevent spamming.
 		let block_number = <frame_system::Module<T>>::block_number();
-		let half_session = T::SessionDuration::get() / 2.into();
+		let half_session = T::SessionDuration::get() / 2u32.into();
 		<HeartbeatAfter<T>>::put(block_number + half_session);
 
 		// Remember who the authorities are for the new session.
@@ -643,22 +656,24 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 	}
 
 	fn on_before_session_ending() {
-		let session_index = <pallet_session::Module<T>>::current_index();
+		let session_index = T::ValidatorSet::session_index();
 		let keys = Keys::<T>::get();
-		let current_validators = <pallet_session::Module<T>>::validators();
+		let current_validators = T::ValidatorSet::validators();
 
 		let offenders = current_validators.into_iter().enumerate()
 			.filter(|(index, id)|
 				!Self::is_online_aux(*index as u32, id)
 			).filter_map(|(_, id)|
-				T::FullIdentificationOf::convert(id.clone()).map(|full_id| (id, full_id))
+				<T::ValidatorSet as ValidatorSetWithIdentification<T::AccountId>>::IdentificationOf::convert(
+					id.clone()
+				).map(|full_id| (id, full_id))
 			).collect::<Vec<IdentificationTuple<T>>>();
 
 		// Remove all received heartbeats and number of authored blocks from the
 		// current session, they have already been processed and won't be needed
 		// anymore.
-		<ReceivedHeartbeats>::remove_prefix(&<pallet_session::Module<T>>::current_index());
-		<AuthoredBlocks<T>>::remove_prefix(&<pallet_session::Module<T>>::current_index());
+		<ReceivedHeartbeats>::remove_prefix(&T::ValidatorSet::session_index());
+		<AuthoredBlocks<T>>::remove_prefix(&T::ValidatorSet::session_index());
 
 		if offenders.is_empty() {
 			Self::deposit_event(RawEvent::AllGood);
@@ -681,7 +696,7 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 /// Invalid transaction custom error. Returned when validators_len field in heartbeat is incorrect.
 const INVALID_VALIDATORS_LEN: u8 = 10;
 
-impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
+impl<T: Config> frame_support::unsigned::ValidateUnsigned for Module<T> {
 	type Call = Call<T>;
 
 	fn validate_unsigned(
@@ -695,7 +710,7 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 			}
 
 			// check if session index from heartbeat is recent
-			let current_session = <pallet_session::Module<T>>::current_index();
+			let current_session = T::ValidatorSet::session_index();
 			if heartbeat.session_index != current_session {
 				return InvalidTransaction::Stale.into();
 			}
@@ -723,7 +738,7 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 				.priority(T::UnsignedPriority::get())
 				.and_provides((current_session, authority_id))
 				.longevity(TryInto::<u64>::try_into(
-					T::SessionDuration::get() / 2.into()
+					T::SessionDuration::get() / 2u32.into()
 				).unwrap_or(64_u64))
 				.propagate(true)
 				.build()

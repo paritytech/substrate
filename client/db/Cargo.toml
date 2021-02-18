@@ -1,6 +1,6 @@
 [package]
 name = "sc-client-db"
-version = "0.8.0"
+version = "0.9.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
@@ -13,37 +13,37 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-parking_lot = "0.10.0"
+parking_lot = "0.11.1"
 log = "0.4.8"
-kvdb = "0.7.0"
-kvdb-rocksdb = { version = "0.9.1", optional = true }
-kvdb-memorydb = "0.7.0"
+kvdb = "0.9.0"
+kvdb-rocksdb = { version = "0.11.0", optional = true }
+kvdb-memorydb = "0.9.0"
 linked-hash-map = "0.5.2"
 hash-db = "0.15.2"
-parity-util-mem = { version = "0.7.0", default-features = false, features = ["std"] }
-codec = { package = "parity-scale-codec", version = "1.3.4", features = ["derive"] }
+parity-util-mem = { version = "0.9.0", default-features = false, features = ["std"] }
+codec = { package = "parity-scale-codec", version = "2.0.0", features = ["derive"] }
 blake2-rfc = "0.2.18"
 
-sc-client-api = { version = "2.0.0", path = "../api" }
-sp-arithmetic = { version = "2.0.0", path = "../../primitives/arithmetic" }
-sp-core = { version = "2.0.0", path = "../../primitives/core" }
-sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
-sp-state-machine = { version = "0.8.0", path = "../../primitives/state-machine" }
-sc-executor = { version = "0.8.0", path = "../executor" }
-sc-state-db = { version = "0.8.0", path = "../state-db" }
-sp-trie = { version = "2.0.0", path = "../../primitives/trie" }
-sp-consensus = { version = "0.8.0", path = "../../primitives/consensus/common" }
-sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
-sp-database = { version = "2.0.0", path = "../../primitives/database" }
-parity-db = { version = "0.1.2", optional = true }
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.8.0", path = "../../utils/prometheus" }
+sc-client-api = { version = "3.0.0", path = "../api" }
+sp-arithmetic = { version = "3.0.0", path = "../../primitives/arithmetic" }
+sp-core = { version = "3.0.0", path = "../../primitives/core" }
+sp-runtime = { version = "3.0.0", path = "../../primitives/runtime" }
+sp-state-machine = { version = "0.9.0", path = "../../primitives/state-machine" }
+sc-executor = { version = "0.9.0", path = "../executor" }
+sc-state-db = { version = "0.9.0", path = "../state-db" }
+sp-trie = { version = "3.0.0", path = "../../primitives/trie" }
+sp-consensus = { version = "0.9.0", path = "../../primitives/consensus/common" }
+sp-blockchain = { version = "3.0.0", path = "../../primitives/blockchain" }
+sp-database = { version = "3.0.0", path = "../../primitives/database" }
+parity-db = { version = "0.2.2", optional = true }
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.9.0", path = "../../utils/prometheus" }
 
 [dev-dependencies]
-sp-keyring = { version = "2.0.0", path = "../../primitives/keyring" }
-sp-tracing = { version = "2.0.0", path = "../../primitives/tracing" }
+sp-keyring = { version = "3.0.0", path = "../../primitives/keyring" }
+sp-tracing = { version = "3.0.0", path = "../../primitives/tracing" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
-quickcheck = "0.9"
-kvdb-rocksdb = "0.9.1"
+quickcheck = "1.0.3"
+kvdb-rocksdb = "0.11.0"
 tempfile = "3"
 
 [features]

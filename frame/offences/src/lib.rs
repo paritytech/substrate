@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -42,11 +42,11 @@ use codec::{Encode, Decode};
 type OpaqueTimeSlot = Vec<u8>;
 
 /// A type alias for a report identifier.
-type ReportIdOf<T> = <T as frame_system::Trait>::Hash;
+type ReportIdOf<T> = <T as frame_system::Config>::Hash;
 
 /// Type of data stored as a deferred offence
 pub type DeferredOffenceOf<T> = (
-	Vec<OffenceDetails<<T as frame_system::Trait>::AccountId, <T as Trait>::IdentificationTuple>>,
+	Vec<OffenceDetails<<T as frame_system::Config>::AccountId, <T as Config>::IdentificationTuple>>,
 	Vec<Perbill>,
 	SessionIndex,
 );
@@ -66,9 +66,9 @@ impl WeightInfo for () {
 }
 
 /// Offences trait
-pub trait Trait: frame_system::Trait {
+pub trait Config: frame_system::Config {
 	/// The overarching event type.
-	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event> + Into<<Self as frame_system::Config>::Event>;
 	/// Full identification of the validator.
 	type IdentificationTuple: Parameter + Ord;
 	/// A handler called for every offence report.
@@ -80,7 +80,7 @@ pub trait Trait: frame_system::Trait {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Offences {
+	trait Store for Module<T: Config> as Offences {
 		/// The primary structure that holds all offence records keyed by report identifiers.
 		Reports get(fn reports):
 			map hasher(twox_64_concat) ReportIdOf<T>
@@ -116,7 +116,7 @@ decl_event!(
 );
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
 
 		fn on_initialize(now: T::BlockNumber) -> Weight {
@@ -158,7 +158,7 @@ decl_module! {
 	}
 }
 
-impl<T: Trait, O: Offence<T::IdentificationTuple>>
+impl<T: Config, O: Offence<T::IdentificationTuple>>
 	ReportOffence<T::AccountId, T::IdentificationTuple, O> for Module<T>
 where
 	T::IdentificationTuple: Clone,
@@ -168,7 +168,7 @@ where
 		let time_slot = offence.time_slot();
 		let validator_set_count = offence.validator_set_count();
 
-		// Go through all offenders in the offence report and find all offenders that was spotted
+		// Go through all offenders in the offence report and find all offenders that were spotted
 		// in unique reports.
 		let TriageOutcome { concurrent_offenders } = match Self::triage_offence_report::<O>(
 			reporters,
@@ -210,7 +210,7 @@ where
 	}
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 	/// Tries (without checking) to report an offence. Stores them in [`DeferredOffences`] in case
 	/// it fails. Returns false in case it has to store the offence.
 	fn report_or_store_offence(
@@ -293,7 +293,7 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-struct TriageOutcome<T: Trait> {
+struct TriageOutcome<T: Config> {
 	/// Other reports for the same report kinds.
 	concurrent_offenders: Vec<OffenceDetails<T::AccountId, T::IdentificationTuple>>,
 }
@@ -304,13 +304,13 @@ struct TriageOutcome<T: Trait> {
 /// This struct is responsible for aggregating storage writes and the underlying storage should not
 /// accessed directly meanwhile.
 #[must_use = "The changes are not saved without called `save`"]
-struct ReportIndexStorage<T: Trait, O: Offence<T::IdentificationTuple>> {
+struct ReportIndexStorage<T: Config, O: Offence<T::IdentificationTuple>> {
 	opaque_time_slot: OpaqueTimeSlot,
 	concurrent_reports: Vec<ReportIdOf<T>>,
 	same_kind_reports: Vec<(O::TimeSlot, ReportIdOf<T>)>,
 }
 
-impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportIndexStorage<T, O> {
+impl<T: Config, O: Offence<T::IdentificationTuple>> ReportIndexStorage<T, O> {
 	/// Preload indexes from the storage for the specific `time_slot` and the kind of the offence.
 	fn load(time_slot: &O::TimeSlot) -> Self {
 		let opaque_time_slot = time_slot.encode();

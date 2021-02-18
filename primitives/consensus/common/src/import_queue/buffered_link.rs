@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -81,8 +81,6 @@ enum BlockImportWorkerMsg<B: BlockT> {
 	BlocksProcessed(usize, usize, Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>),
 	JustificationImported(Origin, B::Hash, NumberFor<B>, bool),
 	RequestJustification(B::Hash, NumberFor<B>),
-	FinalityProofImported(Origin, (B::Hash, NumberFor<B>), Result<(B::Hash, NumberFor<B>), ()>),
-	RequestFinalityProof(B::Hash, NumberFor<B>),
 }
 
 impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
@@ -108,20 +106,6 @@ impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
 
 	fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
 		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::RequestJustification(hash.clone(), number));
-	}
-
-	fn finality_proof_imported(
-		&mut self,
-		who: Origin,
-		request_block: (B::Hash, NumberFor<B>),
-		finalization_result: Result<(B::Hash, NumberFor<B>), ()>,
-	) {
-		let msg = BlockImportWorkerMsg::FinalityProofImported(who, request_block, finalization_result);
-		let _ = self.tx.unbounded_send(msg);
-	}
-
-	fn request_finality_proof(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::RequestFinalityProof(hash.clone(), number));
 	}
 }
 
@@ -154,10 +138,6 @@ impl<B: BlockT> BufferedLinkReceiver<B> {
 					link.justification_imported(who, &hash, number, success),
 				BlockImportWorkerMsg::RequestJustification(hash, number) =>
 					link.request_justification(&hash, number),
-				BlockImportWorkerMsg::FinalityProofImported(who, block, result) =>
-					link.finality_proof_imported(who, block, result),
-				BlockImportWorkerMsg::RequestFinalityProof(hash, number) =>
-					link.request_finality_proof(&hash, number),
 			}
 		}
 	}

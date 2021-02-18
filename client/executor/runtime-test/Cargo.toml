@@ -13,23 +13,25 @@ repository = "https://github.com/paritytech/substrate/"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-std = { version = "2.0.0", default-features = false, path = "../../../primitives/std" }
-sp-io = { version = "2.0.0", default-features = false, path = "../../../primitives/io" }
-sp-sandbox = { version = "0.8.0", default-features = false, path = "../../../primitives/sandbox" }
-sp-core = { version = "2.0.0", default-features = false, path = "../../../primitives/core" }
-sp-runtime = { version = "2.0.0", default-features = false, path = "../../../primitives/runtime" }
-sp-allocator = { version = "2.0.0", default-features = false, path = "../../../primitives/allocator" }
+sp-allocator = { version = "3.0.0", default-features = false, path = "../../../primitives/allocator" }
+sp-core = { version = "3.0.0", default-features = false, path = "../../../primitives/core" }
+sp-io = { version = "3.0.0", default-features = false, path = "../../../primitives/io" }
+sp-runtime = { version = "3.0.0", default-features = false, path = "../../../primitives/runtime" }
+sp-sandbox = { version = "0.9.0", default-features = false, path = "../../../primitives/sandbox" }
+sp-std = { version = "3.0.0", default-features = false, path = "../../../primitives/std" }
+sp-tasks = { version = "3.0.0", default-features = false, path = "../../../primitives/tasks" }
 
 [build-dependencies]
-wasm-builder-runner = { version = "1.0.5", package = "substrate-wasm-builder-runner", path = "../../../utils/wasm-builder-runner" }
+substrate-wasm-builder = { version = "4.0.0", path = "../../../utils/wasm-builder" }
 
 [features]
 default = [ "std" ]
 std = [
+	"sp-allocator/std",
+	"sp-core/std",
 	"sp-io/std",
+	"sp-runtime/std",
 	"sp-sandbox/std",
 	"sp-std/std",
-	"sp-core/std",
-	"sp-runtime/std",
-	"sp-allocator/std",
+ 	"sp-tasks/std",
 ]

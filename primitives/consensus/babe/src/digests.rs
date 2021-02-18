@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +19,7 @@
 
 use super::{
 	AllowedSlots, AuthorityId, AuthorityIndex, AuthoritySignature, BabeAuthorityWeight,
-	BabeEpochConfiguration, SlotNumber, BABE_ENGINE_ID,
+	BabeEpochConfiguration, Slot, BABE_ENGINE_ID,
 };
 use codec::{Codec, Decode, Encode};
 use sp_std::vec::Vec;
@@ -32,8 +32,8 @@ use sp_consensus_vrf::schnorrkel::{Randomness, VRFOutput, VRFProof};
 pub struct PrimaryPreDigest {
 	/// Authority index
 	pub authority_index: super::AuthorityIndex,
-	/// Slot number
-	pub slot_number: SlotNumber,
+	/// Slot
+	pub slot: Slot,
 	/// VRF output
 	pub vrf_output: VRFOutput,
 	/// VRF proof
@@ -50,8 +50,8 @@ pub struct SecondaryPlainPreDigest {
 	/// it makes things easier for higher-level users of the chain data to
 	/// be aware of the author of a secondary-slot block.
 	pub authority_index: super::AuthorityIndex,
-	/// Slot number
-	pub slot_number: SlotNumber,
+	/// Slot
+	pub slot: Slot,
 }
 
 /// BABE secondary deterministic slot assignment with VRF outputs.
@@ -59,8 +59,8 @@ pub struct SecondaryPlainPreDigest {
 pub struct SecondaryVRFPreDigest {
 	/// Authority index
 	pub authority_index: super::AuthorityIndex,
-	/// Slot number
-	pub slot_number: SlotNumber,
+	/// Slot
+	pub slot: Slot,
 	/// VRF output
 	pub vrf_output: VRFOutput,
 	/// VRF proof
@@ -73,13 +73,13 @@ pub struct SecondaryVRFPreDigest {
 #[derive(Clone, RuntimeDebug, Encode, Decode)]
 pub enum PreDigest {
 	/// A primary VRF-based slot assignment.
-	#[codec(index = "1")]
+	#[codec(index = 1)]
 	Primary(PrimaryPreDigest),
 	/// A secondary deterministic slot assignment.
-	#[codec(index = "2")]
+	#[codec(index = 2)]
 	SecondaryPlain(SecondaryPlainPreDigest),
 	/// A secondary deterministic slot assignment with VRF outputs.
-	#[codec(index = "3")]
+	#[codec(index = 3)]
 	SecondaryVRF(SecondaryVRFPreDigest),
 }
 
@@ -93,12 +93,12 @@ impl PreDigest {
 		}
 	}
 
-	/// Returns the slot number of the pre digest.
-	pub fn slot_number(&self) -> SlotNumber {
+	/// Returns the slot of the pre digest.
+	pub fn slot(&self) -> Slot {
 		match self {
-			PreDigest::Primary(primary) => primary.slot_number,
-			PreDigest::SecondaryPlain(secondary) => secondary.slot_number,
-			PreDigest::SecondaryVRF(secondary) => secondary.slot_number,
+			PreDigest::Primary(primary) => primary.slot,
+			PreDigest::SecondaryPlain(secondary) => secondary.slot,
+			PreDigest::SecondaryVRF(secondary) => secondary.slot,
 		}
 	}
 
@@ -108,6 +108,15 @@ impl PreDigest {
 		match self {
 			PreDigest::Primary(_) => 1,
 			PreDigest::SecondaryPlain(_) | PreDigest::SecondaryVRF(_) => 0,
+		}
+	}
+
+	/// Returns the VRF output, if it exists.
+	pub fn vrf_output(&self) -> Option<&VRFOutput> {
+		match self {
+			PreDigest::Primary(primary) => Some(&primary.vrf_output),
+			PreDigest::SecondaryVRF(secondary) => Some(&secondary.vrf_output),
+			PreDigest::SecondaryPlain(_) => None,
 		}
 	}
 }
@@ -128,7 +137,7 @@ pub struct NextEpochDescriptor {
 #[derive(Decode, Encode, PartialEq, Eq, Clone, RuntimeDebug)]
 pub enum NextConfigDescriptor {
 	/// Version 1.
-	#[codec(index = "1")]
+	#[codec(index = 1)]
 	V1 {
 		/// Value of `c` in `BabeEpochConfiguration`.
 		c: (u64, u64),

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +19,7 @@
 
 use super::*;
 use std::cell::RefCell;
-use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
+use frame_support::{parameter_types, BasicExternalities};
 use sp_core::{crypto::key_types::DUMMY, H256};
 use sp_runtime::{
 	Perbill, impl_opaque_keys,
@@ -27,6 +27,9 @@ use sp_runtime::{
 	testing::{Header, UintAuthorityId},
 };
 use sp_staking::SessionIndex;
+use crate as pallet_session;
+#[cfg(feature = "historical")]
+use crate::historical as pallet_session_historical;
 
 impl_opaque_keys! {
 	pub struct MockSessionKeys {
@@ -40,9 +43,58 @@ impl From<UintAuthorityId> for MockSessionKeys {
 	}
 }
 
-impl_outer_origin! {
-	pub enum Origin for Test where system = frame_system {}
+pub const KEY_ID_A: KeyTypeId = KeyTypeId([4; 4]);
+pub const KEY_ID_B: KeyTypeId = KeyTypeId([9; 4]);
+
+#[derive(Debug, Clone, codec::Encode, codec::Decode, PartialEq, Eq)]
+pub struct PreUpgradeMockSessionKeys {
+	pub a: [u8; 32],
+	pub b: [u8; 64],
 }
+
+impl OpaqueKeys for PreUpgradeMockSessionKeys {
+	type KeyTypeIdProviders = ();
+
+	fn key_ids() -> &'static [KeyTypeId] {
+		&[KEY_ID_A, KEY_ID_B]
+	}
+
+	fn get_raw(&self, i: KeyTypeId) -> &[u8] {
+		match i {
+			i if i == KEY_ID_A => &self.a[..],
+			i if i == KEY_ID_B => &self.b[..],
+			_ => &[],
+		}
+	}
+}
+
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
+
+#[cfg(feature = "historical")]
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
+		Historical: pallet_session_historical::{Module},
+	}
+);
+
+#[cfg(not(feature = "historical"))]
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
+	}
+);
 
 thread_local! {
 	pub static VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![1, 2, 3]);
@@ -153,54 +205,54 @@ pub fn reset_before_session_end_called() {
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	GenesisConfig::<Test> {
-		keys: NEXT_VALIDATORS.with(|l|
-			l.borrow().iter().cloned().map(|i| (i, i, UintAuthorityId(i).into())).collect()
-		),
-	}.assimilate_storage(&mut t).unwrap();
+	let keys: Vec<_> = NEXT_VALIDATORS.with(|l|
+		l.borrow().iter().cloned().map(|i| (i, i, UintAuthorityId(i).into())).collect()
+	);
+	BasicExternalities::execute_with_storage(&mut t, || {
+		for (ref k, ..) in &keys {
+			frame_system::Module::<Test>::inc_providers(k);
+		}
+		frame_system::Module::<Test>::inc_providers(&4);
+		// An additional identity that we use.
+		frame_system::Module::<Test>::inc_providers(&69);
+	});
+	pallet_session::GenesisConfig::<Test> { keys }.assimilate_storage(&mut t).unwrap();
 	sp_io::TestExternalities::new(t)
 }
 
-#[derive(Clone, Eq, PartialEq)]
-pub struct Test;
-
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: Weight = 1024;
-	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const MinimumPeriod: u64 = 5;
-	pub const AvailableBlockRatio: Perbill = Perbill::one();
+	pub const BlockHashCount: u64 = 250;
+	pub BlockWeights: frame_system::limits::BlockWeights =
+		frame_system::limits::BlockWeights::simple_max(1024);
 }
 
-impl frame_system::Trait for Test {
+impl frame_system::Config for Test {
 	type BaseCallFilter = ();
+	type BlockWeights = ();
+	type BlockLength = ();
+	type DbWeight = ();
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = ();
+	type Call = Call;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = ();
+	type Event = Event;
 	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
-	type DbWeight = ();
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
-	type MaximumExtrinsicWeight = MaximumBlockWeight;
-	type AvailableBlockRatio = AvailableBlockRatio;
-	type MaximumBlockLength = MaximumBlockLength;
 	type Version = ();
-	type PalletInfo = ();
+	type PalletInfo = PalletInfo;
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
+	type SS58Prefix = ();
 }
 
-impl pallet_timestamp::Trait for Test {
+impl pallet_timestamp::Config for Test {
 	type Moment = u64;
 	type OnTimestampSet = ();
 	type MinimumPeriod = MinimumPeriod;
@@ -211,7 +263,7 @@ parameter_types! {
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
 }
 
-impl Trait for Test {
+impl Config for Test {
 	type ShouldEndSession = TestShouldEndSession;
 	#[cfg(feature = "historical")]
 	type SessionManager = crate::historical::NoteHistoricalRoot<Test, TestSessionManager>;
@@ -221,17 +273,14 @@ impl Trait for Test {
 	type ValidatorId = u64;
 	type ValidatorIdOf = ConvertInto;
 	type Keys = MockSessionKeys;
-	type Event = ();
+	type Event = Event;
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 	type NextSessionRotation = ();
 	type WeightInfo = ();
 }
 
 #[cfg(feature = "historical")]
-impl crate::historical::Trait for Test {
+impl crate::historical::Config for Test {
 	type FullIdentification = u64;
 	type FullIdentificationOf = sp_runtime::traits::ConvertInto;
 }
-
-pub type System = frame_system::Module<Test>;
-pub type Session = Module<Test>;

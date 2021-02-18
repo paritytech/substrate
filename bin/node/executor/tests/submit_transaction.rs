@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,18 +15,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
 use node_runtime::{
 	Executive, Indices, Runtime, UncheckedExtrinsic,
 };
 use sp_application_crypto::AppKey;
-use sp_core::testing::KeyStore;
 use sp_core::{
 	offchain::{
 		TransactionPoolExt,
 		testing::TestTransactionPoolExt,
 	},
-	traits::KeystoreExt,
 };
+use sp_keystore::{KeystoreExt, SyncCryptoStore, testing::KeyStore};
 use frame_system::{
 	offchain::{
 		Signer,
@@ -72,10 +72,22 @@ fn should_submit_signed_transaction() {
 	t.register_extension(TransactionPoolExt::new(pool));
 
 	let keystore = KeyStore::new();
-	keystore.write().sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
-	keystore.write().sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter2", PHRASE))).unwrap();
-	keystore.write().sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter3", PHRASE))).unwrap();
-	t.register_extension(KeystoreExt(keystore));
+	SyncCryptoStore::sr25519_generate_new(
+		&keystore,
+		sr25519::AuthorityId::ID,
+		Some(&format!("{}/hunter1", PHRASE))
+	).unwrap();
+	SyncCryptoStore::sr25519_generate_new(
+		&keystore,
+		sr25519::AuthorityId::ID,
+		Some(&format!("{}/hunter2", PHRASE))
+	).unwrap();
+	SyncCryptoStore::sr25519_generate_new(
+		&keystore,
+		sr25519::AuthorityId::ID,
+		Some(&format!("{}/hunter3", PHRASE))
+	).unwrap();
+	t.register_extension(KeystoreExt(Arc::new(keystore)));
 
 	t.execute_with(|| {
 		let results = Signer::<Runtime, TestAuthorityId>::all_accounts()
@@ -97,9 +109,17 @@ fn should_submit_signed_twice_from_the_same_account() {
 	t.register_extension(TransactionPoolExt::new(pool));
 
 	let keystore = KeyStore::new();
-	keystore.write().sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
-	keystore.write().sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter2", PHRASE))).unwrap();
-	t.register_extension(KeystoreExt(keystore));
+	SyncCryptoStore::sr25519_generate_new(
+		&keystore,
+		sr25519::AuthorityId::ID,
+		Some(&format!("{}/hunter1", PHRASE))
+	).unwrap();
+	SyncCryptoStore::sr25519_generate_new(
+		&keystore,
+		sr25519::AuthorityId::ID,
+		Some(&format!("{}/hunter2", PHRASE))
+	).unwrap();
+	t.register_extension(KeystoreExt(Arc::new(keystore)));
 
 	t.execute_with(|| {
 		let result = Signer::<Runtime, TestAuthorityId>::any_account()
@@ -141,9 +161,15 @@ fn should_submit_signed_twice_from_all_accounts() {
 	t.register_extension(TransactionPoolExt::new(pool));
 
 	let keystore = KeyStore::new();
-	keystore.write().sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
-	keystore.write().sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter2", PHRASE))).unwrap();
-	t.register_extension(KeystoreExt(keystore));
+	keystore.sr25519_generate_new(
+		sr25519::AuthorityId::ID,
+		Some(&format!("{}/hunter1", PHRASE))
+	).unwrap();
+	keystore.sr25519_generate_new(
+		sr25519::AuthorityId::ID,
+		Some(&format!("{}/hunter2", PHRASE))
+	).unwrap();
+	t.register_extension(KeystoreExt(Arc::new(keystore)));
 
 	t.execute_with(|| {
 		let results = Signer::<Runtime, TestAuthorityId>::all_accounts()
@@ -191,7 +217,6 @@ fn should_submit_signed_twice_from_all_accounts() {
 #[test]
 fn submitted_transaction_should_be_valid() {
 	use codec::Encode;
-	use frame_support::storage::StorageMap;
 	use sp_runtime::transaction_validity::{TransactionSource, TransactionTag};
 	use sp_runtime::traits::StaticLookup;
 
@@ -200,8 +225,11 @@ fn submitted_transaction_should_be_valid() {
 	t.register_extension(TransactionPoolExt::new(pool));
 
 	let keystore = KeyStore::new();
-	keystore.write().sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
-	t.register_extension(KeystoreExt(keystore));
+	SyncCryptoStore::sr25519_generate_new(
+		&keystore,
+		sr25519::AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE))
+	).unwrap();
+	t.register_extension(KeystoreExt(Arc::new(keystore)));
 
 	t.execute_with(|| {
 		let results = Signer::<Runtime, TestAuthorityId>::all_accounts()
@@ -224,7 +252,7 @@ fn submitted_transaction_should_be_valid() {
 		let author = extrinsic.signature.clone().unwrap().0;
 		let address = Indices::lookup(author).unwrap();
 		let data = pallet_balances::AccountData { free: 5_000_000_000_000, ..Default::default() };
-		let account = frame_system::AccountInfo { nonce: 0, refcount: 0, data };
+		let account = frame_system::AccountInfo { nonce: 0, consumers: 0, providers: 0, data };
 		<frame_system::Account<Runtime>>::insert(&address, account);
 
 		// check validity

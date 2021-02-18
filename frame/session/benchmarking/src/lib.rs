@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,10 +25,10 @@ mod mock;
 use sp_std::prelude::*;
 use sp_std::vec;
 
-use frame_benchmarking::benchmarks;
+use frame_benchmarking::{benchmarks, impl_benchmark_test_suite};
 use frame_support::{
 	codec::Decode,
-	storage::{StorageValue, StorageMap},
+	storage::StorageValue,
 	traits::{KeyOwnerProofSystem, OnInitialize},
 };
 use frame_system::RawOrigin;
@@ -41,21 +41,19 @@ use sp_runtime::traits::{One, StaticLookup};
 
 const MAX_VALIDATORS: u32 = 1000;
 
-pub struct Module<T: Trait>(pallet_session::Module<T>);
-pub trait Trait: pallet_session::Trait + pallet_session::historical::Trait + pallet_staking::Trait {}
+pub struct Module<T: Config>(pallet_session::Module<T>);
+pub trait Config: pallet_session::Config + pallet_session::historical::Config + pallet_staking::Config {}
 
-impl<T: Trait> OnInitialize<T::BlockNumber> for Module<T> {
+impl<T: Config> OnInitialize<T::BlockNumber> for Module<T> {
 	fn on_initialize(n: T::BlockNumber) -> frame_support::weights::Weight {
 		pallet_session::Module::<T>::on_initialize(n)
 	}
 }
 
 benchmarks! {
-	_ {	}
-
 	set_keys {
 		let n = MAX_NOMINATIONS as u32;
-		let v_stash = create_validator_with_nominators::<T>(
+		let (v_stash, _) = create_validator_with_nominators::<T>(
 			n,
 			MAX_NOMINATIONS as u32,
 			false,
@@ -71,7 +69,12 @@ benchmarks! {
 
 	purge_keys {
 		let n = MAX_NOMINATIONS as u32;
-		let v_stash = create_validator_with_nominators::<T>(n, MAX_NOMINATIONS as u32, false, RewardDestination::Staked)?;
+		let (v_stash, _) = create_validator_with_nominators::<T>(
+			n,
+			MAX_NOMINATIONS as u32,
+			false,
+			RewardDestination::Staked
+		)?;
 		let v_controller = pallet_staking::Module::<T>::bonded(&v_stash).ok_or("not stash")?;
 		let keys = T::Keys::default();
 		let proof: Vec<u8> = vec![0,1,2,3];
@@ -116,7 +119,7 @@ benchmarks! {
 /// Sets up the benchmark for checking a membership proof. It creates the given
 /// number of validators, sets random session keys and then creates a membership
 /// proof for the first authority and returns its key and the proof.
-fn check_membership_proof_setup<T: Trait>(
+fn check_membership_proof_setup<T: Config>(
 	n: u32,
 ) -> (
 	(sp_runtime::KeyTypeId, &'static [u8; 32]),
@@ -166,17 +169,9 @@ fn check_membership_proof_setup<T: Trait>(
 	(key, Historical::<T>::prove(key).unwrap())
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::mock::{new_test_ext, Test};
-	use frame_support::assert_ok;
-
-	#[test]
-	fn test_benchmarks() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_set_keys::<Test>());
-			assert_ok!(test_benchmark_purge_keys::<Test>());
-		});
-	}
-}
+impl_benchmark_test_suite!(
+	Module,
+	crate::mock::new_test_ext(),
+	crate::mock::Test,
+	extra = false,
+);

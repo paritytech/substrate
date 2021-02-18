@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -56,7 +56,7 @@ use sp_consensus::{
 	BlockCheckParams, ImportResult,
 };
 use sp_consensus::import_queue::{
-	BoxBlockImport, BasicQueue, Verifier, BoxJustificationImport, BoxFinalityProofImport,
+	BoxBlockImport, BasicQueue, Verifier, BoxJustificationImport,
 };
 use codec::{Encode, Decode};
 use prometheus_endpoint::Registry;
@@ -232,7 +232,7 @@ impl<B, I, C, S, Algorithm, CAW> PowBlockImport<B, I, C, S, Algorithm, CAW> wher
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync,
 	I::Error: Into<ConsensusError>,
 	C: ProvideRuntimeApi<B> + Send + Sync + HeaderBackend<B> + AuxStore + ProvideCache<B> + BlockOf,
-	C::Api: BlockBuilderApi<B, Error = sp_blockchain::Error>,
+	C::Api: BlockBuilderApi<B>,
 	Algorithm: PowAlgorithm<B>,
 	CAW: CanAuthorWith<B>,
 {
@@ -284,7 +284,7 @@ impl<B, I, C, S, Algorithm, CAW> PowBlockImport<B, I, C, S, Algorithm, CAW> wher
 			&block_id,
 			block,
 			inherent_data,
-		).map_err(Error::Client)?;
+		).map_err(|e| Error::Client(e.into()))?;
 
 		if !inherent_res.ok() {
 			inherent_res
@@ -314,7 +314,7 @@ impl<B, I, C, S, Algorithm, CAW> BlockImport<B> for PowBlockImport<B, I, C, S, A
 	I::Error: Into<ConsensusError>,
 	S: SelectChain<B>,
 	C: ProvideRuntimeApi<B> + Send + Sync + HeaderBackend<B> + AuxStore + ProvideCache<B> + BlockOf,
-	C::Api: BlockBuilderApi<B, Error = sp_blockchain::Error>,
+	C::Api: BlockBuilderApi<B>,
 	Algorithm: PowAlgorithm<B>,
 	Algorithm::Difficulty: 'static,
 	CAW: CanAuthorWith<B>,
@@ -503,7 +503,6 @@ pub type PowImportQueue<B, Transaction> = BasicQueue<B, Transaction>;
 pub fn import_queue<B, Transaction, Algorithm>(
 	block_import: BoxBlockImport<B, Transaction>,
 	justification_import: Option<BoxJustificationImport<B>>,
-	finality_proof_import: Option<BoxFinalityProofImport<B>>,
 	algorithm: Algorithm,
 	inherent_data_providers: InherentDataProviders,
 	spawner: &impl sp_core::traits::SpawnNamed,
@@ -524,7 +523,6 @@ pub fn import_queue<B, Transaction, Algorithm>(
 		verifier,
 		block_import,
 		justification_import,
-		finality_proof_import,
 		spawner,
 		registry,
 	))

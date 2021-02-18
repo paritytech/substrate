@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,12 +17,12 @@
 
 //! Key related CLI utilities
 
-use crate::Error;
+use crate::{Error, SubstrateCli};
 use structopt::StructOpt;
 
 use super::{
-	insert::InsertCmd,
-	inspect::InspectKeyCmd,
+	insert_key::InsertKeyCmd,
+	inspect_key::InspectKeyCmd,
 	generate::GenerateCmd,
 	inspect_node_key::InspectNodeKeyCmd,
 	generate_node_key::GenerateNodeKeyCmd,
@@ -45,17 +45,17 @@ pub enum KeySubcommand {
 	InspectNodeKey(InspectNodeKeyCmd),
 
 	/// Insert a key to the keystore of a node.
-	Insert(InsertCmd),
+	Insert(InsertKeyCmd),
 }
 
 impl KeySubcommand {
 	/// run the key subcommands
-	pub fn run(&self) -> Result<(), Error> {
+	pub fn run<C: SubstrateCli>(&self, cli: &C) -> Result<(), Error> {
 		match self {
 			KeySubcommand::GenerateNodeKey(cmd) => cmd.run(),
 			KeySubcommand::Generate(cmd) => cmd.run(),
 			KeySubcommand::InspectKey(cmd) => cmd.run(),
-			KeySubcommand::Insert(cmd) => cmd.run(),
+			KeySubcommand::Insert(cmd) => cmd.run(cli),
 			KeySubcommand::InspectNodeKey(cmd) => cmd.run(),
 		}
 	}

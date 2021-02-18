@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -32,7 +32,7 @@ use sp_runtime::{
 	},
 };
 use codec::{KeyedVec, Encode, Decode};
-use frame_system::Trait;
+use frame_system::Config;
 use crate::{
 	AccountId, BlockNumber, Extrinsic, Transfer, H256 as Hash, Block, Header, Digest, AuthorityId
 };
@@ -42,11 +42,11 @@ const NONCE_OF: &[u8] = b"nonce:";
 const BALANCE_OF: &[u8] = b"balance:";
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {}
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as TestRuntime {
+	trait Store for Module<T: Config> as TestRuntime {
 		ExtrinsicData: map hasher(blake2_128_concat) u32 => Vec<u8>;
 		// The current block number being processed. Set by `execute_block`.
 		Number get(fn number): Option<BlockNumber>;
@@ -261,6 +261,14 @@ fn execute_transaction_backend(utx: &Extrinsic, extrinsic_index: u32) -> ApplyEx
 			execute_storage_change(key, value.as_ref().map(|v| &**v)),
 		Extrinsic::ChangesTrieConfigUpdate(ref new_config) =>
 			execute_changes_trie_config_update(new_config.clone()),
+		Extrinsic::OffchainIndexSet(key, value) => {
+			sp_io::offchain_index::set(&key, &value);
+			Ok(Ok(()))
+		},
+		Extrinsic::OffchainIndexClear(key) => {
+			sp_io::offchain_index::clear(&key);
+			Ok(Ok(()))
+		}
 	}
 }
 

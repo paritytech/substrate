@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,12 +17,12 @@
 
 //! The crate's tests.
 
+use crate as pallet_democracy;
 use super::*;
-use std::cell::RefCell;
 use codec::Encode;
 use frame_support::{
-	impl_outer_origin, impl_outer_dispatch, assert_noop, assert_ok, parameter_types,
-	impl_outer_event, ord_parameter_types, traits::{Contains, OnInitialize, Filter},
+	assert_noop, assert_ok, parameter_types, ord_parameter_types,
+	traits::{Contains, OnInitialize, Filter},
 	weights::Weight,
 };
 use sp_core::H256;
@@ -49,30 +49,23 @@ const NAY: Vote = Vote { aye: false, conviction: Conviction::None };
 const BIG_AYE: Vote = Vote { aye: true, conviction: Conviction::Locked1x };
 const BIG_NAY: Vote = Vote { aye: false, conviction: Conviction::Locked1x };
 
-impl_outer_origin! {
-	pub enum Origin for Test where system = frame_system {}
-}
+const MAX_PROPOSALS: u32 = 100;
 
-impl_outer_dispatch! {
-	pub enum Call for Test where origin: Origin {
-		frame_system::System,
-		pallet_balances::Balances,
-		democracy::Democracy,
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
+
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
+		Scheduler: pallet_scheduler::{Module, Call, Storage, Config, Event<T>},
+		Democracy: pallet_democracy::{Module, Call, Storage, Config, Event<T>},
 	}
-}
-
-mod democracy {
-	pub use crate::Event;
-}
-
-impl_outer_event! {
-	pub enum Event for Test {
-		system<T>,
-		pallet_balances<T>,
-		pallet_scheduler<T>,
-		democracy<T>,
-	}
-}
+);
 
 // Test that a fitlered call can be dispatched.
 pub struct BaseFilter;
@@ -82,17 +75,16 @@ impl Filter<Call> for BaseFilter {
 	}
 }
 
-// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-#[derive(Clone, Eq, PartialEq, Debug)]
-pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: Weight = 1_000_000;
-	pub const MaximumBlockLength: u32 = 2 * 1024;
-	pub const AvailableBlockRatio: Perbill = Perbill::one();
+	pub BlockWeights: frame_system::limits::BlockWeights =
+		frame_system::limits::BlockWeights::simple_max(1_000_000);
 }
-impl frame_system::Trait for Test {
+impl frame_system::Config for Test {
 	type BaseCallFilter = BaseFilter;
+	type BlockWeights = ();
+	type BlockLength = ();
+	type DbWeight = ();
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -104,24 +96,18 @@ impl frame_system::Trait for Test {
 	type Header = Header;
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
-	type DbWeight = ();
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
-	type MaximumExtrinsicWeight = MaximumBlockWeight;
-	type MaximumBlockLength = MaximumBlockLength;
-	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
-	type PalletInfo = ();
+	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
+	type SS58Prefix = ();
 }
 parameter_types! {
-	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * MaximumBlockWeight::get();
+	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * BlockWeights::get().max_block;
 }
-impl pallet_scheduler::Trait for Test {
+impl pallet_scheduler::Config for Test {
 	type Event = Event;
 	type Origin = Origin;
 	type PalletsOrigin = OriginCaller;
@@ -134,7 +120,7 @@ impl pallet_scheduler::Trait for Test {
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
 }
-impl pallet_balances::Trait for Test {
+impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type Balance = u64;
 	type Event = Event;
@@ -151,6 +137,9 @@ parameter_types! {
 	pub const EnactmentPeriod: u64 = 2;
 	pub const CooloffPeriod: u64 = 2;
 	pub const MaxVotes: u32 = 100;
+	pub const MaxProposals: u32 = MAX_PROPOSALS;
+	pub static PreimageByteDeposit: u64 = 0;
+	pub static InstantAllowed: bool = false;
 }
 ord_parameter_types! {
 	pub const One: u64 = 1;
@@ -168,19 +157,8 @@ impl Contains<u64> for OneToFive {
 	#[cfg(feature = "runtime-benchmarks")]
 	fn add(_m: &u64) {}
 }
-thread_local! {
-	static PREIMAGE_BYTE_DEPOSIT: RefCell<u64> = RefCell::new(0);
-	static INSTANT_ALLOWED: RefCell<bool> = RefCell::new(false);
-}
-pub struct PreimageByteDeposit;
-impl Get<u64> for PreimageByteDeposit {
-	fn get() -> u64 { PREIMAGE_BYTE_DEPOSIT.with(|v| *v.borrow()) }
-}
-pub struct InstantAllowed;
-impl Get<bool> for InstantAllowed {
-	fn get() -> bool { INSTANT_ALLOWED.with(|v| *v.borrow()) }
-}
-impl super::Trait for Test {
+
+impl Config for Test {
 	type Proposal = Call;
 	type Event = Event;
 	type Currency = pallet_balances::Module<Self>;
@@ -194,6 +172,8 @@ impl super::Trait for Test {
 	type ExternalDefaultOrigin = EnsureSignedBy<One, u64>;
 	type FastTrackOrigin = EnsureSignedBy<Five, u64>;
 	type CancellationOrigin = EnsureSignedBy<Four, u64>;
+	type BlacklistOrigin = EnsureRoot<u64>;
+	type CancelProposalOrigin = EnsureRoot<u64>;
 	type VetoOrigin = EnsureSignedBy<OneToFive, u64>;
 	type CooloffPeriod = CooloffPeriod;
 	type PreimageByteDeposit = PreimageByteDeposit;
@@ -205,6 +185,7 @@ impl super::Trait for Test {
 	type OperationalPreimageOrigin = EnsureSignedBy<Six, u64>;
 	type PalletsOrigin = OriginCaller;
 	type WeightInfo = ();
+	type MaxProposals = MaxProposals;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
@@ -212,7 +193,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	pallet_balances::GenesisConfig::<Test>{
 		balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],
 	}.assimilate_storage(&mut t).unwrap();
-	GenesisConfig::default().assimilate_storage(&mut t).unwrap();
+	pallet_democracy::GenesisConfig::default().assimilate_storage(&mut t).unwrap();
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| System::set_block_number(1));
 	ext
@@ -223,11 +204,6 @@ pub fn new_test_ext_execute_with_cond(execute: impl FnOnce(bool) -> () + Clone) 
 	new_test_ext().execute_with(|| (execute.clone())(false));
 	new_test_ext().execute_with(|| execute(true));
 }
-
-type System = frame_system::Module<Test>;
-type Balances = pallet_balances::Module<Test>;
-type Scheduler = pallet_scheduler::Module<Test>;
-type Democracy = Module<Test>;
 
 #[test]
 fn params_should_work() {
@@ -246,7 +222,7 @@ fn set_balance_proposal(value: u64) -> Vec<u8> {
 fn set_balance_proposal_is_correctly_filtered_out() {
 	for i in 0..10 {
 		let call = Call::decode(&mut &set_balance_proposal(i)[..]).unwrap();
-		assert!(!<Test as frame_system::Trait>::BaseCallFilter::filter(&call));
+		assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
 	}
 }
 

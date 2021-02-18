@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -20,6 +20,7 @@
 
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]
+#![warn(unused_imports)]
 
 pub mod arg_enums;
 mod commands;
@@ -34,8 +35,10 @@ pub use config::*;
 pub use error::*;
 pub use params::*;
 pub use runner::*;
-use sc_service::{Configuration, TaskExecutor};
 pub use sc_service::{ChainSpec, Role};
+use sc_service::{Configuration, TaskExecutor};
+use sc_telemetry::TelemetryHandle;
+pub use sc_tracing::logging::LoggerBuilder;
 pub use sp_version::RuntimeVersion;
 use std::io::Write;
 pub use structopt;
@@ -43,7 +46,6 @@ use structopt::{
 	clap::{self, AppSettings},
 	StructOpt,
 };
-use tracing_subscriber::layer::SubscriberExt;
 
 /// Substrate client CLI
 ///
@@ -68,7 +70,8 @@ pub trait SubstrateCli: Sized {
 	/// Extracts the file name from `std::env::current_exe()`.
 	/// Resorts to the env var `CARGO_PKG_NAME` in case of Error.
 	fn executable_name() -> String {
-		std::env::current_exe().ok()
+		std::env::current_exe()
+			.ok()
 			.and_then(|e| e.file_name().map(|s| s.to_os_string()))
 			.and_then(|w| w.into_string().ok())
 			.unwrap_or_else(|| env!("CARGO_PKG_NAME").into())
@@ -156,7 +159,7 @@ pub trait SubstrateCli: Sized {
 					let _ = std::io::stdout().write_all(e.message.as_bytes());
 					std::process::exit(0);
 				}
-			},
+			}
 		};
 
 		<Self as StructOpt>::from_clap(&matches)
@@ -211,91 +214,18 @@ pub trait SubstrateCli: Sized {
 		&self,
 		command: &T,
 		task_executor: TaskExecutor,
+		telemetry_handle: Option<TelemetryHandle>,
 	) -> error::Result<Configuration> {
-		command.create_configuration(self, task_executor)
+		command.create_configuration(self, task_executor, telemetry_handle)
 	}
 
 	/// Create a runner for the command provided in argument. This will create a Configuration and
 	/// a tokio runtime
 	fn create_runner<T: CliConfiguration>(&self, command: &T) -> error::Result<Runner<Self>> {
-		command.init::<Self>()?;
-		Runner::new(self, command)
+		let telemetry_worker = command.init::<Self>()?;
+		Runner::new(self, command, telemetry_worker)
 	}
 
 	/// Native runtime version.
 	fn native_runtime_version(chain_spec: &Box<dyn ChainSpec>) -> &'static RuntimeVersion;
-}
-
-/// Initialize the global logger
-///
-/// This sets various global logging and tracing instances and thus may only be called once.
-pub fn init_logger(
-	pattern: &str,
-	tracing_receiver: sc_tracing::TracingReceiver,
-	tracing_targets: Option<String>,
-) -> std::result::Result<(), String> {
-	if let Err(e) = tracing_log::LogTracer::init() {
-		return Err(format!(
-			"Registering Substrate logger failed: {:}!", e
-		))
-	}
-
-	let mut env_filter = tracing_subscriber::EnvFilter::default()
-		// Disable info logging by default for some modules.
-		.add_directive("ws=off".parse().expect("provided directive is valid"))
-		.add_directive("yamux=off".parse().expect("provided directive is valid"))
-		.add_directive("cranelift_codegen=off".parse().expect("provided directive is valid"))
-		// Set warn logging by default for some modules.
-		.add_directive("cranelife_wasm=warn".parse().expect("provided directive is valid"))
-		.add_directive("hyper=warn".parse().expect("provided directive is valid"))
-		// Always log the special target `sc_tracing`, overrides global level.
-		.add_directive("sc_tracing=trace".parse().expect("provided directive is valid"))
-		// Enable info for others.
-		.add_directive(tracing_subscriber::filter::LevelFilter::INFO.into());
-
-	if let Ok(lvl) = std::env::var("RUST_LOG") {
-		if lvl != "" {
-			// We're not sure if log or tracing is available at this moment, so silently ignore the
-			// parse error.
-			if let Ok(directive) = lvl.parse() {
-				env_filter = env_filter.add_directive(directive);
-			}
-		}
-	}
-
-	if pattern != "" {
-		// We're not sure if log or tracing is available at this moment, so silently ignore the
-		// parse error.
-		if let Ok(directive) = pattern.parse() {
-			env_filter = env_filter.add_directive(directive);
-		}
-	}
-
-	let isatty = atty::is(atty::Stream::Stderr);
-	let enable_color = isatty;
-
-	let subscriber = tracing_subscriber::FmtSubscriber::builder()
-		.with_env_filter(env_filter)
-		.with_target(false)
-		.with_ansi(enable_color)
-		.with_writer(std::io::stderr)
-		.compact()
-		.finish();
-
-	if let Some(tracing_targets) = tracing_targets {
-		let profiling = sc_tracing::ProfilingLayer::new(tracing_receiver, &tracing_targets);
-
-		if let Err(e) = tracing::subscriber::set_global_default(subscriber.with(profiling)) {
-			return Err(format!(
-				"Registering Substrate tracing subscriber failed: {:}!", e
-			))
-		}
-	} else {
-		if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
-			return Err(format!(
-				"Registering Substrate tracing subscriber  failed: {:}!", e
-			))
-		}
-	}
-	Ok(())
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,21 +21,21 @@
 
 use super::*;
 use frame_system::{RawOrigin, EventRecord};
-use frame_benchmarking::{benchmarks, account, whitelisted_caller};
+use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
 use sp_runtime::traits::Bounded;
 use crate::Module as Proxy;
 
 const SEED: u32 = 0;
 
-fn assert_last_event<T: Trait>(generic_event: <T as Trait>::Event) {
+fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
 	let events = frame_system::Module::<T>::events();
-	let system_event: <T as frame_system::Trait>::Event = generic_event.into();
+	let system_event: <T as frame_system::Config>::Event = generic_event.into();
 	// compare to the last event record
 	let EventRecord { event, .. } = &events[events.len() - 1];
 	assert_eq!(event, &system_event);
 }
 
-fn add_proxies<T: Trait>(n: u32, maybe_who: Option<T::AccountId>) -> Result<(), &'static str> {
+fn add_proxies<T: Config>(n: u32, maybe_who: Option<T::AccountId>) -> Result<(), &'static str> {
 	let caller = maybe_who.unwrap_or_else(|| whitelisted_caller());
 	T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 	for i in 0..n {
@@ -49,7 +49,7 @@ fn add_proxies<T: Trait>(n: u32, maybe_who: Option<T::AccountId>) -> Result<(), 
 	Ok(())
 }
 
-fn add_announcements<T: Trait>(
+fn add_announcements<T: Config>(
 	n: u32,
 	maybe_who: Option<T::AccountId>,
 	maybe_real: Option<T::AccountId>
@@ -80,18 +80,14 @@ fn add_announcements<T: Trait>(
 }
 
 benchmarks! {
-	_ {
-		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p, None)?;
-	}
-
 	proxy {
-		let p in ...;
+		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p, None)?;
 		// In this case the caller is the "target" proxy
 		let caller: T::AccountId = account("target", p - 1, SEED);
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = whitelisted_caller();
-		let call: <T as Trait>::Call = frame_system::Call::<T>::remark(vec![]).into();
+		let call: <T as Config>::Call = frame_system::Call::<T>::remark(vec![]).into();
 	}: _(RawOrigin::Signed(caller), real, Some(T::ProxyType::default()), Box::new(call))
 	verify {
 		assert_last_event::<T>(RawEvent::ProxyExecuted(Ok(())).into())
@@ -99,14 +95,14 @@ benchmarks! {
 
 	proxy_announced {
 		let a in 0 .. T::MaxPending::get() - 1;
-		let p in ...;
+		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p, None)?;
 		// In this case the caller is the "target" proxy
 		let caller: T::AccountId = account("anonymous", 0, SEED);
 		let delegate: T::AccountId = account("target", p - 1, SEED);
 		T::Currency::make_free_balance_be(&delegate, BalanceOf::<T>::max_value());
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = whitelisted_caller();
-		let call: <T as Trait>::Call = frame_system::Call::<T>::remark(vec![]).into();
+		let call: <T as Config>::Call = frame_system::Call::<T>::remark(vec![]).into();
 		Proxy::<T>::announce(
 			RawOrigin::Signed(delegate.clone()).into(),
 			real.clone(),
@@ -120,13 +116,13 @@ benchmarks! {
 
 	remove_announcement {
 		let a in 0 .. T::MaxPending::get() - 1;
-		let p in ...;
+		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p, None)?;
 		// In this case the caller is the "target" proxy
 		let caller: T::AccountId = account("target", p - 1, SEED);
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = whitelisted_caller();
-		let call: <T as Trait>::Call = frame_system::Call::<T>::remark(vec![]).into();
+		let call: <T as Config>::Call = frame_system::Call::<T>::remark(vec![]).into();
 		Proxy::<T>::announce(
 			RawOrigin::Signed(caller.clone()).into(),
 			real.clone(),
@@ -141,13 +137,13 @@ benchmarks! {
 
 	reject_announcement {
 		let a in 0 .. T::MaxPending::get() - 1;
-		let p in ...;
+		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p, None)?;
 		// In this case the caller is the "target" proxy
 		let caller: T::AccountId = account("target", p - 1, SEED);
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = whitelisted_caller();
-		let call: <T as Trait>::Call = frame_system::Call::<T>::remark(vec![]).into();
+		let call: <T as Config>::Call = frame_system::Call::<T>::remark(vec![]).into();
 		Proxy::<T>::announce(
 			RawOrigin::Signed(caller.clone()).into(),
 			real.clone(),
@@ -162,14 +158,14 @@ benchmarks! {
 
 	announce {
 		let a in 0 .. T::MaxPending::get() - 1;
-		let p in ...;
+		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p, None)?;
 		// In this case the caller is the "target" proxy
 		let caller: T::AccountId = account("target", p - 1, SEED);
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = whitelisted_caller();
 		add_announcements::<T>(a, Some(caller.clone()), None)?;
-		let call: <T as Trait>::Call = frame_system::Call::<T>::remark(vec![]).into();
+		let call: <T as Config>::Call = frame_system::Call::<T>::remark(vec![]).into();
 		let call_hash = T::CallHasher::hash_of(&call);
 	}: _(RawOrigin::Signed(caller.clone()), real.clone(), call_hash)
 	verify {
@@ -177,7 +173,7 @@ benchmarks! {
 	}
 
 	add_proxy {
-		let p in ...;
+		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p, None)?;
 		let caller: T::AccountId = whitelisted_caller();
 	}: _(
 		RawOrigin::Signed(caller.clone()),
@@ -191,7 +187,7 @@ benchmarks! {
 	}
 
 	remove_proxy {
-		let p in ...;
+		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p, None)?;
 		let caller: T::AccountId = whitelisted_caller();
 	}: _(
 		RawOrigin::Signed(caller.clone()),
@@ -205,7 +201,7 @@ benchmarks! {
 	}
 
 	remove_proxies {
-		let p in ...;
+		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p, None)?;
 		let caller: T::AccountId = whitelisted_caller();
 	}: _(RawOrigin::Signed(caller.clone()))
 	verify {
@@ -214,7 +210,7 @@ benchmarks! {
 	}
 
 	anonymous {
-		let p in ...;
+		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p, None)?;
 		let caller: T::AccountId = whitelisted_caller();
 	}: _(
 		RawOrigin::Signed(caller.clone()),
@@ -255,25 +251,8 @@ benchmarks! {
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::tests::{new_test_ext, Test};
-	use frame_support::assert_ok;
-
-	#[test]
-	fn test_benchmarks() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_proxy::<Test>());
-			assert_ok!(test_benchmark_proxy_announced::<Test>());
-			assert_ok!(test_benchmark_remove_announcement::<Test>());
-			assert_ok!(test_benchmark_reject_announcement::<Test>());
-			assert_ok!(test_benchmark_announce::<Test>());
-			assert_ok!(test_benchmark_add_proxy::<Test>());
-			assert_ok!(test_benchmark_remove_proxy::<Test>());
-			assert_ok!(test_benchmark_remove_proxies::<Test>());
-			assert_ok!(test_benchmark_anonymous::<Test>());
-			assert_ok!(test_benchmark_kill_anonymous::<Test>());
-		});
-	}
-}
+impl_benchmark_test_suite!(
+	Proxy,
+	crate::tests::new_test_ext(),
+	crate::tests::Test,
+);

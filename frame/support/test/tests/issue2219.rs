@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use frame_support::sp_runtime::generic;
-use frame_support::sp_runtime::traits::{BlakeTwo256, Block as _, Verify};
+use frame_support::sp_runtime::traits::{BlakeTwo256, Verify};
 use frame_support::codec::{Encode, Decode};
 use sp_core::{H256, sr25519};
 use serde::{Serialize, Deserialize};
@@ -27,9 +27,9 @@ mod module {
 	use super::*;
 
 	pub type Request<T> = (
-		<T as system::Trait>::AccountId,
+		<T as system::Config>::AccountId,
 		Role,
-		<T as system::Trait>::BlockNumber,
+		<T as system::Config>::BlockNumber,
 	);
 	pub type Requests<T> = Vec<Request<T>>;
 
@@ -39,7 +39,7 @@ mod module {
 	}
 
 	#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, Debug)]
-	pub struct RoleParameters<T: Trait> {
+	pub struct RoleParameters<T: Config> {
 		// minimum actors to maintain - if role is unstaking
 		// and remaining actors would be less that this value - prevent or punish for unstaking
 		pub min_actors: u32,
@@ -65,7 +65,7 @@ mod module {
 		pub startup_grace_period: T::BlockNumber,
 	}
 
-	impl<T: Trait> Default for RoleParameters<T> {
+	impl<T: Config> Default for RoleParameters<T> {
 		fn default() -> Self {
 			Self {
 				max_actors: 10,
@@ -81,18 +81,18 @@ mod module {
 		}
 	}
 
-	pub trait Trait: system::Trait {}
+	pub trait Config: system::Config {}
 
 	frame_support::decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=system {}
+		pub struct Module<T: Config> for enum Call where origin: T::Origin, system=system {}
 	}
 
 	#[derive(Encode, Decode, Copy, Clone, Serialize, Deserialize)]
-	pub struct Data<T: Trait> {
+	pub struct Data<T: Config> {
 		pub	data: T::BlockNumber,
 	}
 
-	impl<T: Trait> Default for Data<T> {
+	impl<T: Config> Default for Data<T> {
 		fn default() -> Self {
 			Self {
 				data: T::BlockNumber::default(),
@@ -101,7 +101,7 @@ mod module {
 	}
 
 	frame_support::decl_storage! {
-		trait Store for Module<T: Trait> as Actors {
+		trait Store for Module<T: Config> as Actors {
 			/// requirements to enter and maintain status in roles
 			pub Parameters get(fn parameters) build(|config: &GenesisConfig| {
 				if config.enable_storage_role {
@@ -157,18 +157,19 @@ pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, ()>;
 
-impl system::Trait for Runtime {
+impl system::Config for Runtime {
 	type BaseCallFilter = ();
 	type Hash = H256;
 	type Origin = Origin;
 	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
 	type Event = Event;
-	type PalletInfo = ();
+	type PalletInfo = PalletInfo;
 	type Call = Call;
+	type DbWeight = ();
 }
 
-impl module::Trait for Runtime {}
+impl module::Config for Runtime {}
 
 frame_support::construct_runtime!(
 	pub enum Runtime where

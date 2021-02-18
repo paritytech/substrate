@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -22,10 +22,11 @@ use std::{mem, sync::Arc};
 use assert_matches::assert_matches;
 use codec::Encode;
 use sp_core::{
-	H256, blake2_256, hexdisplay::HexDisplay, testing::{ED25519, SR25519, KeyStore},
-	traits::BareCryptoStorePtr, ed25519, sr25519,
+	ed25519, sr25519,
+	H256, blake2_256, hexdisplay::HexDisplay, testing::{ED25519, SR25519},
 	crypto::{CryptoTypePublicPair, Pair, Public},
 };
+use sp_keystore::testing::KeyStore;
 use rpc::futures::Stream as _;
 use substrate_test_runtime_client::{
 	self, AccountKeyring, runtime::{Extrinsic, Transfer, SessionKeys, Block},
@@ -51,19 +52,20 @@ type FullTransactionPool = BasicPool<
 
 struct TestSetup {
 	pub client: Arc<Client<Backend>>,
-	pub keystore: BareCryptoStorePtr,
+	pub keystore: Arc<KeyStore>,
 	pub pool: Arc<FullTransactionPool>,
 }
 
 impl Default for TestSetup {
 	fn default() -> Self {
-		let keystore = KeyStore::new();
+		let keystore = Arc::new(KeyStore::new());
 		let client_builder = substrate_test_runtime_client::TestClientBuilder::new();
 		let client = Arc::new(client_builder.set_keystore(keystore.clone()).build());
 
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let pool = BasicPool::new_full(
 			Default::default(),
+			true.into(),
 			None,
 			spawner,
 			client.clone(),
@@ -235,7 +237,7 @@ fn should_insert_key() {
 		key_pair.public().0.to_vec().into(),
 	).expect("Insert key");
 
-	let public_keys = setup.keystore.read().keys(ED25519).unwrap();
+	let public_keys = SyncCryptoStore::keys(&*setup.keystore, ED25519).unwrap();
 
 	assert!(public_keys.contains(&CryptoTypePublicPair(ed25519::CRYPTO_ID, key_pair.public().to_raw_vec())));
 }
@@ -250,8 +252,8 @@ fn should_rotate_keys() {
 	let session_keys = SessionKeys::decode(&mut &new_public_keys[..])
 		.expect("SessionKeys decode successfully");
 
-	let ed25519_public_keys = setup.keystore.read().keys(ED25519).unwrap();
-	let sr25519_public_keys = setup.keystore.read().keys(SR25519).unwrap();
+	let ed25519_public_keys = SyncCryptoStore::keys(&*setup.keystore, ED25519).unwrap();
+	let sr25519_public_keys = SyncCryptoStore::keys(&*setup.keystore, SR25519).unwrap();
 
 	assert!(ed25519_public_keys.contains(&CryptoTypePublicPair(ed25519::CRYPTO_ID, session_keys.ed25519.to_raw_vec())));
 	assert!(sr25519_public_keys.contains(&CryptoTypePublicPair(sr25519::CRYPTO_ID, session_keys.sr25519.to_raw_vec())));

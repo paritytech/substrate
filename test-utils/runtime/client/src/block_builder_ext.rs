@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -43,7 +43,7 @@ pub trait BlockBuilderExt {
 
 impl<'a, A, B> BlockBuilderExt for sc_block_builder::BlockBuilder<'a, substrate_test_runtime::Block, A, B> where
 	A: ProvideRuntimeApi<substrate_test_runtime::Block> + 'a,
-	A::Api: BlockBuilderApi<substrate_test_runtime::Block, Error = sp_blockchain::Error> +
+	A::Api: BlockBuilderApi<substrate_test_runtime::Block> +
 		ApiExt<
 			substrate_test_runtime::Block,
 			StateBackend = backend::StateBackendFor<B, substrate_test_runtime::Block>

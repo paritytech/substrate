@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,58 +20,49 @@
 #![cfg(test)]
 
 use sp_runtime::{
-	Perbill,
 	traits::IdentityLookup,
 	testing::Header,
 };
 use sp_core::H256;
 use sp_io;
-use frame_support::{impl_outer_origin, impl_outer_event, parameter_types};
-use frame_support::traits::{Get, StorageMapShim};
+use frame_support::parameter_types;
+use frame_support::traits::StorageMapShim;
 use frame_support::weights::{Weight, DispatchInfo, IdentityFee};
-use std::cell::RefCell;
-use crate::{GenesisConfig, Module, Trait, decl_tests, tests::CallWithDispatchInfo};
+use crate::{
+	self as pallet_balances,
+	Module, Config, decl_tests,
+};
+use pallet_transaction_payment::CurrencyAdapter;
 
-use frame_system as system;
-impl_outer_origin!{
-	pub enum Origin for Test {}
-}
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
 
-mod balances {
-	pub use crate::Event;
-}
-
-impl_outer_event! {
-	pub enum Event for Test {
-		system<T>,
-		balances<T>,
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
 	}
-}
+);
 
-thread_local! {
-	static EXISTENTIAL_DEPOSIT: RefCell<u64> = RefCell::new(0);
-}
-
-pub struct ExistentialDeposit;
-impl Get<u64> for ExistentialDeposit {
-	fn get() -> u64 { EXISTENTIAL_DEPOSIT.with(|v| *v.borrow()) }
-}
-
-// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: Weight = 1024;
-	pub const MaximumBlockLength: u32 = 2 * 1024;
-	pub const AvailableBlockRatio: Perbill = Perbill::one();
+	pub BlockWeights: frame_system::limits::BlockWeights =
+		frame_system::limits::BlockWeights::simple_max(1024);
+	pub static ExistentialDeposit: u64 = 0;
 }
-impl frame_system::Trait for Test {
+impl frame_system::Config for Test {
 	type BaseCallFilter = ();
+	type BlockWeights = BlockWeights;
+	type BlockLength = ();
+	type DbWeight = ();
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = CallWithDispatchInfo;
+	type Call = Call;
 	type Hash = H256;
 	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
@@ -79,26 +70,19 @@ impl frame_system::Trait for Test {
 	type Header = Header;
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
-	type DbWeight = ();
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
-	type MaximumExtrinsicWeight = MaximumBlockWeight;
-	type MaximumBlockLength = MaximumBlockLength;
-	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
-	type PalletInfo = ();
-	type AccountData = super::AccountData<u64>;
+	type PalletInfo = PalletInfo;
+	type AccountData = ();
 	type OnNewAccount = ();
-	type OnKilledAccount = Module<Test>;
+	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
+	type SS58Prefix = ();
 }
 parameter_types! {
 	pub const TransactionByteFee: u64 = 1;
 }
-impl pallet_transaction_payment::Trait for Test {
-	type Currency = Module<Test>;
-	type OnTransactionPayment = ();
+impl pallet_transaction_payment::Config for Test {
+	type OnChargeTransaction = CurrencyAdapter<Module<Test>, ()>;
 	type TransactionByteFee = TransactionByteFee;
 	type WeightToFee = IdentityFee<u64>;
 	type FeeMultiplierUpdate = ();
@@ -106,16 +90,16 @@ impl pallet_transaction_payment::Trait for Test {
 parameter_types! {
 	pub const MaxLocks: u32 = 50;
 }
-impl Trait for Test {
+impl Config for Test {
 	type Balance = u64;
 	type DustRemoval = ();
 	type Event = Event;
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = StorageMapShim<
 		super::Account<Test>,
-		system::CallOnCreatedAccount<Test>,
-		system::CallKillAccount<Test>,
-		u64, super::AccountData<u64>
+		system::Provider<Test>,
+		u64,
+		super::AccountData<u64>,
 	>;
 	type MaxLocks = MaxLocks;
 	type WeightInfo = ();
@@ -151,7 +135,7 @@ impl ExtBuilder {
 	pub fn build(self) -> sp_io::TestExternalities {
 		self.set_associated_consts();
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		GenesisConfig::<Test> {
+		pallet_balances::GenesisConfig::<Test> {
 			balances: if self.monied {
 				vec![
 					(1, 10 * self.existential_deposit),
@@ -176,7 +160,7 @@ decl_tests!{ Test, ExtBuilder, EXISTENTIAL_DEPOSIT }
 #[test]
 fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 	<ExtBuilder>::default()
-		.existential_deposit(0)
+		.existential_deposit(2)
 		.build()
 		.execute_with(|| {
 			assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, 100, 0));
@@ -184,24 +168,24 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 			assert_eq!(
 				events(),
 				[
-					Event::system(system::RawEvent::NewAccount(1)),
-					Event::balances(RawEvent::Endowed(1, 100)),
-					Event::balances(RawEvent::BalanceSet(1, 100, 0)),
+					Event::frame_system(system::Event::NewAccount(1)),
+					Event::pallet_balances(crate::Event::Endowed(1, 100)),
+					Event::pallet_balances(crate::Event::BalanceSet(1, 100, 0)),
 				]
 			);
 
-			let _ = Balances::slash(&1, 99);
+			let _ = Balances::slash(&1, 98);
 
 			// no events
 			assert_eq!(events(), []);
 
-			assert_ok!(System::suicide(Origin::signed(1)));
+			let _ = Balances::slash(&1, 1);
 
 			assert_eq!(
 				events(),
 				[
-					Event::balances(RawEvent::DustLost(1, 1)),
-					Event::system(system::RawEvent::KilledAccount(1))
+					Event::frame_system(system::Event::KilledAccount(1)),
+					Event::pallet_balances(crate::Event::DustLost(1, 1)),
 				]
 			);
 		});

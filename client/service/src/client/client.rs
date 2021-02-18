@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -22,6 +22,7 @@ use std::{
 	marker::PhantomData,
 	collections::{HashSet, BTreeMap, HashMap},
 	sync::Arc, panic::UnwindSafe, result,
+	path::PathBuf
 };
 use log::{info, trace, warn};
 use parking_lot::{Mutex, RwLock};
@@ -32,13 +33,15 @@ use sp_core::{
 	storage::{well_known_keys, ChildInfo, PrefixedStorageKey, StorageData, StorageKey},
 	ChangesTrieConfiguration, ExecutionContext, NativeOrEncoded,
 };
+#[cfg(feature="test-helpers")]
+use sp_keystore::SyncCryptoStorePtr;
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_runtime::{
 	Justification, BuildStorage,
 	generic::{BlockId, SignedBlock, DigestItem},
 	traits::{
 		Block as BlockT, Header as HeaderT, Zero, NumberFor,
-		HashFor, SaturatedConversion, One, DigestFor,
+		HashFor, SaturatedConversion, One, DigestFor, UniqueSaturatedInto,
 	},
 };
 use sp_state_machine::{
@@ -147,7 +150,7 @@ impl<H> PrePostHeader<H> {
 pub fn new_in_mem<E, Block, S, RA>(
 	executor: E,
 	genesis_storage: &S,
-	keystore: Option<sp_core::traits::BareCryptoStorePtr>,
+	keystore: Option<SyncCryptoStorePtr>,
 	prometheus_registry: Option<Registry>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	config: ClientConfig,
@@ -179,6 +182,8 @@ pub struct ClientConfig {
 	pub offchain_worker_enabled: bool,
 	/// If true, allows access from the runtime to write into offchain worker db.
 	pub offchain_indexing_api: bool,
+	/// Path where WASM files exist to override the on-chain WASM.
+	pub wasm_runtime_overrides: Option<PathBuf>,
 }
 
 /// Create a client with the explicitly provided backend.
@@ -188,7 +193,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 	backend: Arc<B>,
 	executor: E,
 	build_genesis_storage: &S,
-	keystore: Option<sp_core::traits::BareCryptoStorePtr>,
+	keystore: Option<SyncCryptoStorePtr>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
 	config: ClientConfig,
@@ -199,7 +204,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 		Block: BlockT,
 		B: backend::LocalBackend<Block> + 'static,
 {
-	let call_executor = LocalCallExecutor::new(backend.clone(), executor, spawn_handle, config.clone());
+	let call_executor = LocalCallExecutor::new(backend.clone(), executor, spawn_handle, config.clone())?;
 	let extensions = ExecutionExtensions::new(Default::default(), keystore);
 	Client::new(
 		backend,
@@ -292,7 +297,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		config: ClientConfig,
 	) -> sp_blockchain::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
-			let genesis_storage = build_genesis_storage.build_storage()?;
+			let genesis_storage = build_genesis_storage.build_storage()
+				.map_err(sp_blockchain::Error::Storage)?;
 			let mut op = backend.begin_operation()?;
 			backend.begin_state_operation(&mut op, BlockId::Hash(Default::default()))?;
 			let state_root = op.reset_storage(genesis_storage)?;
@@ -395,7 +401,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			storage: &'a dyn ChangesTrieStorage<HashFor<Block>, NumberFor<Block>>,
 			min: NumberFor<Block>,
 			required_roots_proofs: Mutex<BTreeMap<NumberFor<Block>, Block::Hash>>,
-		};
+		}
 
 		impl<'a, Block: BlockT> ChangesTrieRootsStorage<HashFor<Block>, NumberFor<Block>> for
 			AccessedRootsRecorder<'a, Block>
@@ -598,7 +604,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> sp_blockchain::Result<ImportResult> where
 		Self: ProvideRuntimeApi<Block>,
-		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error> +
+		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block> +
 			ApiExt<Block, StateBackend = B::State>,
 	{
 		let BlockImportParams {
@@ -690,7 +696,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		import_existing: bool,
 	) -> sp_blockchain::Result<ImportResult> where
 		Self: ProvideRuntimeApi<Block>,
-		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error> +
+		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block> +
 				ApiExt<Block, StateBackend = B::State>,
 	{
 		let parent_hash = import_headers.post().parent_hash().clone();
@@ -832,7 +838,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	) -> sp_blockchain::Result<Option<ImportResult>>
 		where
 			Self: ProvideRuntimeApi<Block>,
-			<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error> +
+			<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block> +
 				ApiExt<Block, StateBackend = B::State>,
 	{
 		let parent_hash = import_block.header.parent_hash();
@@ -875,7 +881,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 					&state,
 					changes_trie_state.as_ref(),
 					*parent_hash,
-				)?;
+				).map_err(sp_blockchain::Error::Storage)?;
 
 				if import_block.header.state_root()
 					!= &gen_storage_changes.transaction_storage_root
@@ -1139,7 +1145,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let mut ancestor = load_header(ancestor_hash)?;
 		let mut uncles = Vec::new();
 
-		for _generation in 0..max_generation.saturated_into() {
+		for _generation in 0u32..UniqueSaturatedInto::<u32>::unique_saturated_into(max_generation) {
 			let children = self.backend.blockchain().children(ancestor_hash)?;
 			uncles.extend(children.into_iter().filter(|h| h != &current_hash));
 			current_hash = ancestor_hash;
@@ -1154,12 +1160,12 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	/// Prepare in-memory header that is used in execution environment.
 	fn prepare_environment_block(&self, parent: &BlockId<Block>) -> sp_blockchain::Result<Block::Header> {
-		let parent_header = self.backend.blockchain().expect_header(*parent)?;
+		let parent_hash = self.backend.blockchain().expect_block_hash_from_id(parent)?;
 		Ok(<<Block as BlockT>::Header as HeaderT>::new(
 			self.backend.blockchain().expect_block_number_from_id(parent)? + One::one(),
 			Default::default(),
 			Default::default(),
-			parent_header.hash(),
+			parent_hash,
 			Default::default(),
 		))
 	}
@@ -1266,7 +1272,7 @@ impl<B, E, Block, RA> BlockBuilderProvider<B, Block, Self> for Client<B, E, Bloc
 		Block: BlockT,
 		Self: ChainHeaderBackend<Block> + ProvideRuntimeApi<Block>,
 		<Self as ProvideRuntimeApi<Block>>::Api: ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
-			+ BlockBuilderApi<Block, Error = Error>,
+			+ BlockBuilderApi<Block>,
 {
 	fn new_block_at<R: Into<RecordProof>>(
 		&self,
@@ -1300,7 +1306,7 @@ impl<B, E, Block, RA> BlockBuilderProvider<B, Block, Self> for Client<B, E, Bloc
 	}
 }
 
-impl<B, E, Block, RA>  ExecutorProvider<Block> for Client<B, E, Block, RA> where
+impl<B, E, Block, RA> ExecutorProvider<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block>,
 	E: CallExecutor<Block>,
 	Block: BlockT,
@@ -1622,18 +1628,17 @@ impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
 	E: CallExecutor<Block, Backend = B> + Send + Sync,
 	Block: BlockT,
 {
-	type Error = Error;
 	type StateBackend = B::State;
 
 	fn call_api_at<
 		'a,
 		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
-		C: CoreApi<Block, Error = Error>,
+		NC: FnOnce() -> result::Result<R, sp_api::ApiError> + UnwindSafe,
+		C: CoreApi<Block>,
 	>(
 		&self,
 		params: CallApiAtParams<'a, Block, C, NC, B::State>,
-	) -> sp_blockchain::Result<NativeOrEncoded<R>> {
+	) -> Result<NativeOrEncoded<R>, sp_api::ApiError> {
 		let core_api = params.core_api;
 		let at = params.at;
 
@@ -1643,23 +1648,27 @@ impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
 		);
 
 		self.executor.contextual_call::<_, fn(_,_) -> _,_,_>(
-			|| core_api.initialize_block(at, &self.prepare_environment_block(at)?),
+			|| core_api
+				.initialize_block(at, &self.prepare_environment_block(at)?)
+				.map_err(Error::RuntimeApiError),
 			at,
 			params.function,
 			&params.arguments,
 			params.overlayed_changes,
-			params.offchain_changes,
 			Some(params.storage_transaction_cache),
 			params.initialize_block,
 			manager,
 			params.native_call,
 			params.recorder,
 			Some(extensions),
-		)
+		).map_err(Into::into)
 	}
 
-	fn runtime_version_at(&self, at: &BlockId<Block>) -> sp_blockchain::Result<RuntimeVersion> {
-		self.runtime_version_at(at)
+	fn runtime_version_at(
+		&self,
+		at: &BlockId<Block>,
+	) -> Result<RuntimeVersion, sp_api::ApiError> {
+		self.runtime_version_at(at).map_err(Into::into)
 	}
 }
 
@@ -1671,7 +1680,7 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for &Client<B, E, Block, 
 	E: CallExecutor<Block> + Send + Sync,
 	Block: BlockT,
 	Client<B, E, Block, RA>: ProvideRuntimeApi<Block>,
-	<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error> +
+	<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api: CoreApi<Block> +
 		ApiExt<Block, StateBackend = B::State>,
 {
 	type Error = ConsensusError;
@@ -1771,7 +1780,7 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for Client<B, E, Block, R
 	E: CallExecutor<Block> + Send + Sync,
 	Block: BlockT,
 	Self: ProvideRuntimeApi<Block>,
-	<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error> +
+	<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block> +
 		ApiExt<Block, StateBackend = B::State>,
 {
 	type Error = ConsensusError;
@@ -1895,8 +1904,7 @@ impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 		self.body(id)
 	}
 
-	fn block(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<SignedBlock<Block>>>
-	{
+	fn block(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<SignedBlock<Block>>> {
 		Ok(match (self.header(id)?, self.body(id)?, self.justification(id)?) {
 			(Some(header), Some(extrinsics), justification) =>
 				Some(SignedBlock { block: Block::new(header, extrinsics), justification }),
@@ -1905,26 +1913,7 @@ impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 	}
 
 	fn block_status(&self, id: &BlockId<Block>) -> sp_blockchain::Result<BlockStatus> {
-		// this can probably be implemented more efficiently
-		if let BlockId::Hash(ref h) = id {
-			if self.importing_block.read().as_ref().map_or(false, |importing| h == importing) {
-				return Ok(BlockStatus::Queued);
-			}
-		}
-		let hash_and_number = match id.clone() {
-			BlockId::Hash(hash) => self.backend.blockchain().number(hash)?.map(|n| (hash, n)),
-			BlockId::Number(n) => self.backend.blockchain().hash(n)?.map(|hash| (hash, n)),
-		};
-		match hash_and_number {
-			Some((hash, number)) => {
-				if self.backend.have_state_at(&hash, number) {
-					Ok(BlockStatus::InChainWithState)
-				} else {
-					Ok(BlockStatus::InChainPruned)
-				}
-			}
-			None => Ok(BlockStatus::Unknown),
-		}
+		Client::block_status(self, id)
 	}
 
 	fn justification(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justification>> {
@@ -1934,6 +1923,14 @@ impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 	fn block_hash(&self, number: NumberFor<Block>) -> sp_blockchain::Result<Option<Block::Hash>> {
 		self.backend.blockchain().hash(number)
 	}
+
+	fn extrinsic(&self, hash: &Block::Hash) -> sp_blockchain::Result<Option<Block::Extrinsic>> {
+		self.backend.blockchain().extrinsic(hash)
+	}
+
+	fn have_extrinsic(&self, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
+		self.backend.blockchain().have_extrinsic(hash)
+	}
 }
 
 impl<B, E, Block, RA> backend::AuxStore for Client<B, E, Block, RA>
@@ -1942,7 +1939,7 @@ impl<B, E, Block, RA> backend::AuxStore for Client<B, E, Block, RA>
 		E: CallExecutor<Block>,
 		Block: BlockT,
 		Self: ProvideRuntimeApi<Block>,
-		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error>,
+		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block>,
 {
 	/// Insert auxiliary data into key-value store.
 	fn insert_aux<
@@ -1972,7 +1969,7 @@ impl<B, E, Block, RA> backend::AuxStore for &Client<B, E, Block, RA>
 		E: CallExecutor<Block>,
 		Block: BlockT,
 		Client<B, E, Block, RA>: ProvideRuntimeApi<Block>,
-		<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error>,
+		<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api: CoreApi<Block>,
 {
 	fn insert_aux<
 		'a,

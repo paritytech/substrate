@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,8 +17,6 @@
 
 //! Block evaluation and evaluation errors.
 
-use super::MAX_BLOCK_SIZE;
-
 use codec::Encode;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, One, CheckedConversion};
 
@@ -30,26 +28,21 @@ type BlockNumber = Option<u128>;
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// Error type.
-#[derive(Debug, derive_more::Display)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
 	/// Proposal provided not a block.
-	#[display(fmt="Proposal provided not a block: decoding error: {}", _0)]
-	BadProposalFormat(codec::Error),
+	#[error("Proposal provided not a block: decoding error: {0}")]
+	BadProposalFormat(#[from] codec::Error),
 	/// Proposal had wrong parent hash.
-	#[display(fmt="Proposal had wrong parent hash. Expected {:?}, got {:?}", expected, got)]
+	#[error("Proposal had wrong parent hash. Expected {expected:?}, got {got:?}")]
 	WrongParentHash { expected: String, got: String },
 	/// Proposal had wrong number.
-	#[display(fmt="Proposal had wrong number. Expected {:?}, got {:?}", expected, got)]
+	#[error("Proposal had wrong number. Expected {expected:?}, got {got:?}")]
 	WrongNumber { expected: BlockNumber, got: BlockNumber },
 	/// Proposal exceeded the maximum size.
-	#[display(
-		fmt="Proposal exceeded the maximum size of {} by {} bytes.",
-		"MAX_BLOCK_SIZE", "_0.saturating_sub(MAX_BLOCK_SIZE)"
-	)]
-	ProposalTooLarge(usize),
+	#[error("Proposal size {block_size} exceeds maximum allowed size of {max_block_size}.")]
+	ProposalTooLarge { block_size: usize, max_block_size: usize },
 }
-
-impl std::error::Error for Error {}
 
 /// Attempt to evaluate a substrate block as a node block, returning error
 /// upon any initial validity checks failing.
@@ -57,28 +50,29 @@ pub fn evaluate_initial<Block: BlockT>(
 	proposal: &Block,
 	parent_hash: &<Block as BlockT>::Hash,
 	parent_number: <<Block as BlockT>::Header as HeaderT>::Number,
+	max_block_size: usize,
 ) -> Result<()> {
 
 	let encoded = Encode::encode(proposal);
 	let proposal = Block::decode(&mut &encoded[..])
 		.map_err(|e| Error::BadProposalFormat(e))?;
 
-	if encoded.len() > MAX_BLOCK_SIZE {
-		return Err(Error::ProposalTooLarge(encoded.len()))
+	if encoded.len() > max_block_size {
+		return Err(Error::ProposalTooLarge { max_block_size, block_size: encoded.len() })
 	}
 
 	if *parent_hash != *proposal.header().parent_hash() {
 		return Err(Error::WrongParentHash {
 			expected: format!("{:?}", *parent_hash),
 			got: format!("{:?}", proposal.header().parent_hash())
-		});
+		})
 	}
 
 	if parent_number + One::one() != *proposal.header().number() {
 		return Err(Error::WrongNumber {
 			expected: parent_number.checked_into::<u128>().map(|x| x + 1),
 			got: (*proposal.header().number()).checked_into::<u128>(),
-		});
+		})
 	}
 
 	Ok(())

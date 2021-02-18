@@ -1,6 +1,6 @@
 [package]
 name = "sc-telemetry"
-version = "2.0.0"
+version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Telemetry utils"
 edition = "2018"
@@ -15,17 +15,18 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 
 [dependencies]
-parking_lot = "0.10.0"
-futures = "0.3.4"
-futures-timer = "3.0.1"
-wasm-timer = "0.2.0"
-libp2p = { version = "0.28.1", default-features = false, features = ["dns", "tcp-async-std", "wasm-ext", "websocket"] }
+parking_lot = "0.11.1"
+futures = "0.3.9"
+wasm-timer = "0.2.5"
+libp2p = { version = "0.34.0", default-features = false, features = ["dns", "tcp-async-io", "wasm-ext", "websocket"] }
 log = "0.4.8"
-pin-project = "0.4.6"
+pin-project = "1.0.4"
 rand = "0.7.2"
 serde = { version = "1.0.101", features = ["derive"] }
-slog = { version = "2.5.2", features = ["nested-values"] }
-slog-json = { version = "2.3.0", features = ["nested-values"] }
-slog-scope = "4.1.2"
 take_mut = "0.2.2"
 void = "1.0.2"
+tracing = "0.1.10"
+tracing-subscriber = "0.2.13"
+serde_json = "1.0.41"
+sp-utils = { version = "3.0.0", path = "../../primitives/utils" }
+chrono = "0.4.19"

@@ -21,8 +21,8 @@
 		},
 		{
 			"prefix": 1,
-			"network": "reserved1",
-			"displayName": "This prefix is reserved.",
+			"network": null,
+			"displayName": "Bare 32-bit Schnorr/Ristretto (S/R 25519) public key.",
 			"symbols": null,
 			"decimals": null,
 			"standardAccount": null,
@@ -39,8 +39,8 @@
 		},
 		{
 			"prefix": 3,
-			"network": "reserved3",
-			"displayName": "This prefix is reserved.",
+			"network": null,
+			"displayName": "Bare 32-bit Ed25519 public key.",
 			"symbols": null,
 			"decimals": null,
 			"standardAccount": null,
@@ -66,8 +66,8 @@
 		},
 		{
 			"prefix": 6,
-			"network": "bitfrost",
-			"displayName": "Bitfrost",
+			"network": "bifrost",
+			"displayName": "Bifrost",
 			"symbols": ["BNC"],
 			"decimals": [12],
 			"standardAccount": "*25519",
@@ -98,7 +98,7 @@
 			"symbols": ["REY"],
 			"decimals": [18],
 			"standardAccount": "*25519",
-			"website": ["http://laminar.network/"]
+			"website": "http://laminar.network/"
 		},
 		{
 			"prefix": 10,
@@ -116,16 +116,16 @@
 			"symbols": ["LAMI"],
 			"decimals": [18],
 			"standardAccount": "*25519",
-			"website": ["http://laminar.network/"]
+			"website": "http://laminar.network/"
 		},
 		{
 			"prefix": 12,
-			"network": "polymath",
-			"displayName": "Polymath",
-			"symbols": null,
-			"decimals": null,
+			"network": "polymesh",
+			"displayName": "Polymesh",
+			"symbols": ["POLYX"],
+			"decimals": [6],
 			"standardAccount": "*25519",
-			"website": null
+			"website": "https://polymath.network/"
 		},
 		{
 			"prefix": 13,
@@ -135,6 +135,24 @@
 			"decimals": null,
 			"standardAccount": "*25519",
 			"website": "https://www.substratee.com"
+		},
+		{
+			"prefix": 14,
+			"network": "totem",
+			"displayName": "Totem",
+			"symbols": ["XTX"],
+			"decimals": [0],
+			"standardAccount": "*25519",
+			"website": "https://totemaccounting.com"
+		},
+		{
+			"prefix": 15,
+			"network": "synesthesia",
+			"displayName": "Synesthesia",
+			"symbols": ["SYN"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://synesthesia.network/"
 		},
 		{
 			"prefix": 16,
@@ -157,38 +175,47 @@
 		{
 			"prefix": 18,
 			"network": "darwinia",
-			"displayName": "Darwinia Chain",
-			"symbols": null,
-			"decimals": null,
+			"displayName": "Darwinia Network",
+			"symbols": ["RING", "KTON"],
+			"decimals": [9, 9],
 			"standardAccount": "*25519",
-			"website": null
+			"website": "https://darwinia.network/"
+		},
+		{
+			"prefix": 19,
+			"network": "geek",
+			"displayName": "GeekCash",
+			"symbols": ["GEEK"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://geekcash.org"
 		},
 		{
 			"prefix": 20,
 			"network": "stafi",
 			"displayName": "Stafi",
-			"symbols": null,
-			"decimals": null,
+			"symbols": ["FIS"],
+			"decimals": [12],
 			"standardAccount": "*25519",
-			"website": null
+			"website": "https://stafi.io"
 		},
 		{
 			"prefix": 21,
 			"network": "dock-testnet",
 			"displayName": "Dock Testnet",
-			"symbols": null,
-			"decimals": null,
+			"symbols": ["DCK"],
+			"decimals": [6],
 			"standardAccount": "*25519",
-			"website": null
+			"website": "https://dock.io"
 		},
 		{
 			"prefix": 22,
 			"network": "dock-mainnet",
 			"displayName": "Dock Mainnet",
-			"symbols": null,
-			"decimals": null,
+			"symbols": ["DCK"],
+			"decimals": [6],
 			"standardAccount": "*25519",
-			"website": null
+			"website": "https://dock.io"
 		},
 		{
 			"prefix": 23,
@@ -200,6 +227,42 @@
 			"website": null
 		},
 		{
+			"prefix": 24,
+			"network": "zero",
+			"displayName": "ZERO",
+			"symbols": ["PLAY"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://zero.io"
+		},
+		{
+			"prefix": 25,
+			"network": "zero-alphaville",
+			"displayName": "ZERO Alphaville",
+			"symbols": ["PLAY"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://zero.io"
+		},
+		{
+			"prefix": 26,
+			"network": "jupiter",
+			"displayName": "Jupiter",
+			"symbols": ["jDOT"],
+			"decimals": [10],
+			"standardAccount": "*25519",
+			"website": "https://jupiter.patract.io"
+		},
+		{
+			"prefix": 27,
+			"network": "patract",
+			"displayName": "Patract",
+			"symbols": ["pDOT", "pKSM"],
+			"decimals": [10, 12],
+			"standardAccount": "*25519",
+			"website": "https://patract.network"
+		},
+		{
 			"prefix": 28,
 			"network": "subsocial",
 			"displayName": "Subsocial",
@@ -209,22 +272,40 @@
 			"website": null
 		},
 		{
+			"prefix": 29,
+			"network": "cord",
+			"displayName": "Dhiway CORD Network",
+			"symbols": ["DCU"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://dhiway.com/"
+		},
+		{
 			"prefix": 30,
 			"network": "phala",
 			"displayName": "Phala Network",
-			"symbols": null,
-			"decimals": null,
+			"symbols": ["PHA"],
+			"decimals": [12],
 			"standardAccount": "*25519",
-			"website": null
+			"website": "https://phala.network"
+		},
+		{
+			"prefix": 31,
+			"network": "litentry",
+			"displayName": "Litentry Network",
+			"symbols": ["LIT"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://litentry.com/"
 		},
 		{
 			"prefix": 32,
 			"network": "robonomics",
-			"displayName": "Robonomics Network",
-			"symbols": null,
-			"decimals": null,
+			"displayName": "Robonomics",
+			"symbols": ["XRT"],
+			"decimals": [9],
 			"standardAccount": "*25519",
-			"website": null
+			"website": "https://robonomics.network"
 		},
 		{
 			"prefix": 33,
@@ -236,6 +317,24 @@
 			"website": null
 		},
 		{
+			"prefix": 34,
+			"network": "ares",
+			"displayName": "Ares Protocol",
+			"symbols": ["ARES"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://www.aresprotocol.com/"
+		},
+		{
+			"prefix": 35,
+			"network": "vln",
+			"displayName": "Valiu Liquidity Network",
+			"symbols": ["USDv"],
+			"decimals": [15],
+			"standardAccount": "*25519",
+			"website": "https://valiu.com/"
+		},
+		{
 			"prefix": 36,
 			"network": "centrifuge",
 			"displayName": "Centrifuge Chain",
@@ -243,6 +342,24 @@
 			"decimals": [18],
 			"standardAccount": "*25519",
 			"website": "https://centrifuge.io/"
+		},
+		{
+			"prefix": 37,
+			"network": "nodle",
+			"displayName": "Nodle Chain",
+			"symbols": ["NODL"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://nodle.io/"
+		},
+		{
+			"prefix": 38,
+			"network": "kilt",
+			"displayName": "KILT Chain",
+			"symbols": ["KILT"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://kilt.io/"
 		},
 		{
 			"prefix": 39,
@@ -263,6 +380,15 @@
 			"website": "https://mathwallet.org"
 		},
 		{
+			"prefix": 41,
+			"network": "poli",
+			"displayName": "Polimec Chain",
+			"symbols": null,
+			"decimals": null,
+			"standardAccount": "*25519",
+			"website": "https://polimec.io/"
+		},
+		{
 			"prefix": 42,
 			"network": "substrate",
 			"displayName": "Substrate",
@@ -273,8 +399,8 @@
 		},
 		{
 			"prefix": 43,
-			"network": "reserved43",
-			"displayName": "This prefix is reserved.",
+			"network": null,
+			"displayName": "Bare 32-bit ECDSA SECP-256k1 public key.",
 			"symbols": null,
 			"decimals": null,
 			"standardAccount": null,
@@ -284,10 +410,19 @@
 			"prefix": 44,
 			"network": "chainx",
 			"displayName": "ChainX",
-			"symbols": null,
-			"decimals": null,
+			"symbols": ["PCX"],
+			"decimals": [8],
 			"standardAccount": "*25519",
-			"website": null
+			"website": "https://chainx.org/"
+		},
+		{
+			"prefix": 45,
+			"network": "uniarts",
+			"displayName": "UniArts Network",
+			"symbols": ["UART", "UINK"],
+			"decimals": [12, 12],
+			"standardAccount": "*25519",
+			"website": "https://uniarts.me"
 		},
 		{
 			"prefix": 46,
@@ -308,13 +443,22 @@
 			"website": null
 		},
 		{
-			"prefix": 48,
-			"network": "reserved48",
-			"displayName": "All prefixes 48 and higher are reserved and cannot be allocated.",
-			"symbols": null,
-			"decimals": null,
-			"standardAccount": null,
-			"website": null
+			"prefix": 65,
+			"network": "aventus",
+			"displayName": "AvN Mainnet",
+			"symbols": ["AVT"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://aventus.io"
+		},
+		{
+			"prefix": 66,
+			"network": "crust",
+			"displayName": "Crust Network",
+			"symbols": ["CRU"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://crust.network"
 		}
 	]
 }
