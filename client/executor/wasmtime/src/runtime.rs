@@ -20,7 +20,7 @@
 
 use crate::host::HostState;
 use crate::imports::{Imports, resolve_imports};
-use crate::instance_wrapper::{ModuleWrapper, InstanceWrapper, GlobalsSnapshot, EntryPoint};
+use crate::instance_wrapper::{ModuleWrapper, InstanceWrapper, EntryPoint};
 use crate::state_holder;
 
 use std::rc::Rc;
@@ -28,6 +28,7 @@ use std::sync::Arc;
 use std::path::Path;
 use sc_executor_common::{
 	error::{Result, WasmError},
+	runtime_blob::{RuntimeBlob, GlobalsSnapshot},
 	wasm_runtime::{WasmModule, WasmInstance, InvokeMethod},
 };
 use sp_allocator::FreeingBumpHeapAllocator;
@@ -62,7 +63,13 @@ impl WasmModule for WasmtimeRuntime {
 		let instance_wrapper =
 			InstanceWrapper::new(&store, &self.module_wrapper, &imports, self.heap_pages)?;
 		let heap_base = instance_wrapper.extract_heap_base()?;
-		let globals_snapshot = GlobalsSnapshot::take(&instance_wrapper)?;
+
+		// This function panics if the instance was created from a runtime blob different from which
+		// the mutable globals were collected. Here, it is easy to see that there is only a single
+		// runtime blob and thus it's the same that was used for both creating the instance and
+		// collecting the mutable globals.
+		let globals_snapshot =
+			GlobalsSnapshot::take(&self.module_wrapper.mutable_globals(), &instance_wrapper);
 
 		Ok(Box::new(WasmtimeInstance {
 			store,
@@ -82,7 +89,7 @@ pub struct WasmtimeInstance {
 	store: Store,
 	module_wrapper: Arc<ModuleWrapper>,
 	instance_wrapper: Rc<InstanceWrapper>,
-	globals_snapshot: GlobalsSnapshot,
+	globals_snapshot: GlobalsSnapshot<wasmtime::Global>,
 	imports: Imports,
 	heap_pages: u32,
 	heap_base: u32,
@@ -104,7 +111,7 @@ impl WasmInstance for WasmtimeInstance {
 					.write_memory_from(Pointer::new(offset), contents)
 			})?;
 
-		self.globals_snapshot.apply(&*self.instance_wrapper)?;
+		self.globals_snapshot.apply(&*self.instance_wrapper);
 
 		perform_call(
 			data,
@@ -163,7 +170,7 @@ directory = \"{cache_dir}\"
 ///
 /// The `cache_path` designates where this executor implementation can put compiled artifacts.
 pub fn create_runtime(
-	code: &[u8],
+	runtime_blob: RuntimeBlob,
 	heap_pages: u64,
 	host_functions: Vec<&'static dyn Function>,
 	allow_missing_func_imports: bool,
@@ -182,7 +189,7 @@ pub fn create_runtime(
 	}
 
 	let engine = Engine::new(&config);
-	let module_wrapper = ModuleWrapper::new(&engine, code)
+	let module_wrapper = ModuleWrapper::new(&engine, runtime_blob)
 		.map_err(|e| WasmError::Other(format!("cannot create module: {}", e)))?;
 
 	Ok(WasmtimeRuntime {

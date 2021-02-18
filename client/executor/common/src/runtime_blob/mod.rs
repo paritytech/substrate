@@ -49,7 +49,9 @@
 //! from such a module deterministic.
 
 mod data_segments_snapshot;
+mod globals_snapshot;
 mod runtime_blob;
 
 pub use data_segments_snapshot::DataSegmentsSnapshot;
+pub use globals_snapshot::{GlobalsSnapshot, ExposedMutableGlobalsSet, InstanceGlobals};
 pub use runtime_blob::RuntimeBlob;

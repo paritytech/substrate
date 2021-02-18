@@ -16,9 +16,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use parity_wasm::elements::{deserialize_buffer, DataSegment, Module as RawModule};
+use parity_wasm::elements::{DataSegment, Module as RawModule, deserialize_buffer, serialize};
 
 /// A bunch of information collected from a WebAssembly module.
+#[derive(Clone)]
 pub struct RuntimeBlob {
 	raw_module: RawModule,
 }
@@ -62,5 +63,29 @@ impl RuntimeBlob {
 	/// Make sure that the mutable globals are exported
 	pub fn expose_mutable_globals(&mut self) {
 		pwasm_utils::export_mutable_globals(&mut self.raw_module, "exported_internal_global");
+	}
+
+	/// Returns an iterator of all globals which were exported by [`expose_mutable_globals`].
+	pub(super) fn exported_internal_global_names<'module>(
+		&'module self,
+	) -> impl Iterator<Item = &'module str> {
+		let exports = self
+			.raw_module
+			.export_section()
+			.map(|es| es.entries())
+			.unwrap_or(&[]);
+		exports.iter().filter_map(|export| match export.internal() {
+			parity_wasm::elements::Internal::Global(_)
+				if export.field().starts_with("exported_internal_global") =>
+			{
+				Some(export.field())
+			}
+			_ => None,
+		})
+	}
+
+	/// Consumes this runtime blob and serializes it.
+	pub fn serialize(self) -> Vec<u8> {
+		serialize(self.raw_module).unwrap()
 	}
 }

@@ -16,9 +16,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::state_holder;
+use crate::{state_holder, util};
 use sc_executor_common::error::WasmError;
-use sp_wasm_interface::{Function, Value, ValueType};
+use sp_wasm_interface::{Function, ValueType};
 use std::any::Any;
 use wasmtime::{
 	Extern, ExternType, Func, FuncType, ImportType, Limits, Memory, MemoryType, Module,
@@ -187,12 +187,12 @@ fn call_static(
 			qed
 			",
 		);
-		// `into_value` panics if it encounters a value that doesn't fit into the values
+		// `from_wasmtime_val` panics if it encounters a value that doesn't fit into the values
 		// available in substrate.
 		//
 		// This, however, cannot happen since the signature of this function is created from
 		// a `dyn Function` signature of which cannot have a non substrate value by definition.
-		let mut params = wasmtime_params.iter().cloned().map(into_value);
+		let mut params = wasmtime_params.iter().cloned().map(util::from_wasmtime_val);
 
 		std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
 			static_func.execute(&mut host_ctx, &mut params)
@@ -211,7 +211,7 @@ fn call_static(
 				"wasmtime function signature, therefore the number of results, should always \
 				correspond to the number of results returned by the host function",
 			);
-			wasmtime_results[0] = into_wasmtime_val(ret_val);
+			wasmtime_results[0] = util::into_wasmtime_val(ret_val);
 			Ok(())
 		}
 		Ok(None) => {
@@ -292,28 +292,6 @@ fn into_wasmtime_val_type(val_ty: ValueType) -> wasmtime::ValType {
 		ValueType::I64 => wasmtime::ValType::I64,
 		ValueType::F32 => wasmtime::ValType::F32,
 		ValueType::F64 => wasmtime::ValType::F64,
-	}
-}
-
-/// Converts a `Val` into a substrate runtime interface `Value`.
-///
-/// Panics if the given value doesn't have a corresponding variant in `Value`.
-pub fn into_value(val: Val) -> Value {
-	match val {
-		Val::I32(v) => Value::I32(v),
-		Val::I64(v) => Value::I64(v),
-		Val::F32(f_bits) => Value::F32(f_bits),
-		Val::F64(f_bits) => Value::F64(f_bits),
-		_ => panic!("Given value type is unsupported by substrate"),
-	}
-}
-
-pub fn into_wasmtime_val(value: Value) -> wasmtime::Val {
-	match value {
-		Value::I32(v) => Val::I32(v),
-		Value::I64(v) => Val::I64(v),
-		Value::F32(f_bits) => Val::F32(f_bits),
-		Value::F64(f_bits) => Val::F64(f_bits),
 	}
 }
 
