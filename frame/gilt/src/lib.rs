@@ -37,7 +37,7 @@ use frame_support::{
 		Currency, OnUnbalanced, TryDrop, StoredMap, EnsureOrigin, IsType,
 		WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 		Imbalance, SignedImbalance, ReservableCurrency, Get, ExistenceRequirement::KeepAlive,
-		ExistenceRequirement::AllowDeath, BalanceStatus as Status,
+		ExistenceRequirement::AllowDeath, BalanceStatus as Status
 	}
 };
 #[cfg(feature = "std")]
@@ -58,6 +58,10 @@ pub mod pallet {
 	use super::*;
 
 	type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+	type PositiveImbalanceOf<T> =
+		<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::PositiveImbalance;
+	type NegativeImbalanceOf<T> =
+		<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -66,6 +70,9 @@ pub mod pallet {
 		type Currency: ReservableCurrency<Self::AccountId>;
 
 		type EnlargeOrigin: EnsureOrigin<Self::Origin>;
+
+		type Deficit: OnUnbalanced<PositiveImbalanceOf<Self>>;
+		type Surplus: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
 		#[pallet::constant]
 		type QueueCount: Get<u32>;
@@ -91,8 +98,9 @@ pub mod pallet {
 	}
 
 	#[derive(Clone, Eq, PartialEq, Default, Encode, Decode, RuntimeDebug)]
-	pub struct ActiveGilt<AccountId, BlockNumber> {
+	pub struct ActiveGilt<Balance, AccountId, BlockNumber> {
 		proportion: Perquintill,
+		amount: Balance,
 		who: AccountId,
 		expiry: BlockNumber,
 	}
@@ -119,7 +127,7 @@ pub mod pallet {
 		Blake2_128Concat,
 		u32,
 		Vec<GiltBid<BalanceOf<T>, T::AccountId>>,
-		ValueQuery
+		ValueQuery,
 	>;
 
 	#[pallet::storage]
@@ -133,8 +141,8 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		ActiveIndex,
-		ActiveGilt<<T as frame_system::Config>::AccountId, <T as frame_system::Config>::BlockNumber>,
-		ValueQuery
+		ActiveGilt<BalanceOf<T>, <T as frame_system::Config>::AccountId, <T as frame_system::Config>::BlockNumber>,
+		OptionQuery,
 	>;
 
 	#[pallet::event]
@@ -162,6 +170,12 @@ pub mod pallet {
 		DurationTooBig,
 		AmountTooSmall,
 		QueueFull,
+		/// Gilt index is known.
+		Unknown,
+		/// Not the owner of the gilt.
+		NotOwner,
+		/// Gilt not yet at expiry date.
+		NotExpired,
 	}
 
 	#[pallet::hooks]
@@ -238,25 +252,30 @@ pub mod pallet {
 									bid.amount = remaining;
 									q.push(GiltBid { amount: overflow, who: bid.who.clone() });
 								}
+								let amount = bid.amount;
 								// Can never overflow due to block above.
-								remaining -= bid.amount;
+								remaining -= amount;
 								// Should never underflow since it should track the total of the bids
 								// exactly, but we'll be defensive.
 								qs[index].1 = qs[index].1.saturating_sub(bid.amount);
 
 								// Now to activate the bid...
-								let total_liquid = total_issuance.saturating_sub(totals.frozen);
-								let n: u128 = bid.amount.saturated_into();
-								let d: u128 = total_liquid.saturated_into();
+								let liquid_issuance: u128 = total_issuance.saturating_sub(totals.frozen)
+									.saturated_into();
+								let frozen_issuance = totals.proportion * liquid_issuance;
+								let actual_issued = frozen_issuance.saturating_add(liquid_issuance);
+								let n: u128 = amount.saturated_into();
+								let d = actual_issued;
 								let proportion = Perquintill::from_rational_approximation(n, d);
 								let who = bid.who;
 								let index = totals.index;
 								totals.frozen += bid.amount;
 								totals.proportion = totals.proportion.saturating_add(proportion);
 								totals.index += 1;
-								let e = Event::GiltIssued(index, expiry, who.clone(), bid.amount);
+								let e = Event::GiltIssued(index, expiry, who.clone(), amount);
 								Self::deposit_event(e);
-								Active::<T>::insert(index, ActiveGilt { proportion, who, expiry });
+								let gilt = ActiveGilt { amount, proportion, who, expiry };
+								Active::<T>::insert(index, gilt);
 
 								if remaining.is_zero() {
 									break;
@@ -277,11 +296,55 @@ pub mod pallet {
 		#[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1,1))]
 		pub fn thaw(
 			origin: OriginFor<T>,
-			#[pallet::compact] amount: BalanceOf<T>,
+			#[pallet::compact] index: ActiveIndex,
 		) -> DispatchResultWithPostInfo {
-			T::EnlargeOrigin::ensure_origin(origin)?;
+			let who = ensure_signed(origin)?;
 
-			// TODO
+			// Look for `index`
+			let gilt = Active::<T>::get(index).ok_or(Error::<T>::Unknown)?;
+			// If found, check the owner is `who`.
+			ensure!(gilt.who == who, Error::<T>::NotOwner);
+			let now = frame_system::Module::<T>::block_number();
+			ensure!(now >= gilt.expiry, Error::<T>::NotExpired);
+			// Remove it
+			Active::<T>::remove(index);
+
+			// Multiply the proportion it is by the total issued.
+			let total_issuance = T::Currency::total_issuance();
+			ActiveTotal::<T>::mutate(|totals| {
+				let liquid_issuance: u128 = total_issuance.saturating_sub(totals.frozen)
+					.saturated_into();
+				let frozen_issuance = totals.proportion * liquid_issuance;
+				let actual_issued = frozen_issuance.saturating_add(liquid_issuance);
+				let gilt_value: BalanceOf<T> = (gilt.proportion * actual_issued).saturated_into();
+
+				totals.frozen = totals.frozen.saturating_sub(gilt.amount);
+				totals.proportion = totals.proportion.saturating_sub(gilt.proportion);
+
+				// Remove or mint the additional to the amount using `Deficit`/`Surplus`.
+				if gilt_value > gilt.amount {
+					// Unreserve full amount.
+					T::Currency::unreserve(&gilt.who, gilt.amount);
+					let amount = gilt_value - gilt.amount;
+					let deficit = T::Currency::deposit_creating(&gilt.who, amount);
+					T::Deficit::on_unbalanced(deficit);
+				} else if gilt_value < gilt.amount {
+					// We take anything reserved beyond the gilt's final value.
+					let rest = gilt.amount - gilt_value;
+					// `slash` might seem a little aggressive, but it's the only way to do it
+					// in case it's locked into the staking system.
+					let surplus = T::Currency::slash_reserved(&gilt.who, rest).0;
+					T::Surplus::on_unbalanced(surplus);
+					// Unreserve only its new value (less than the amount reserved). Everything
+					// should add up, but (defensive) in case it doesn't, unreserve takes lower
+					// priority over the funds.
+					T::Currency::unreserve(&gilt.who, gilt_value);
+				}
+
+				let e = Event::GiltThawed(index, gilt.who, gilt.amount, gilt_value);
+				Self::deposit_event(e);
+			});
+
 			Ok(().into())
 		}
 	}
