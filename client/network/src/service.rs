@@ -30,7 +30,7 @@
 use crate::{
 	ExHashT, NetworkStateInfo, NetworkStatus,
 	behaviour::{self, Behaviour, BehaviourOut},
-	config::{parse_str_addr, Params, Role, TransportConfig},
+	config::{parse_str_addr, Params, TransportConfig},
 	DhtEvent,
 	discovery::DiscoveryConfig,
 	error::Error,
@@ -225,22 +225,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				}
 			)?;
 
-		// Print a message about the deprecation of sentry nodes.
-		let print_deprecated_message = match &params.role {
-			Role::Sentry { .. } => true,
-			Role::Authority { sentry_nodes } if !sentry_nodes.is_empty() => true,
-			_ => false,
-		};
-		if print_deprecated_message {
-			log::warn!(
-				"🙇 Sentry nodes are deprecated, and the `--sentry` and  `--sentry-nodes` \
-				CLI options will eventually be removed in a future version. The Substrate \
-				and Polkadot networking protocol require validators to be \
-				publicly-accessible. Please do not block access to your validator nodes. \
-				For details, see https://github.com/paritytech/substrate/issues/6845."
-			);
-		}
-
 		let checker = params.on_demand.as_ref()
 			.map(|od| od.checker().clone())
 			.unwrap_or_else(|| Arc::new(AlwaysBadChecker));
@@ -339,7 +323,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				let bitswap = if params.network_config.ipfs_server { Some(Bitswap::new(client)) } else { None };
 				let result = Behaviour::new(
 					protocol,
-					params.role,
 					user_agent,
 					local_public,
 					light_client_request_sender,

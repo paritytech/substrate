@@ -384,21 +384,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			let mut sets = Vec::with_capacity(NUM_HARDCODED_PEERSETS + network_config.extra_sets.len());
 
 			let mut default_sets_reserved = HashSet::new();
-			match config_role {
-				config::Role::Sentry { validators } => {
-					for validator in validators {
-						default_sets_reserved.insert(validator.peer_id.clone());
-						known_addresses.push((validator.peer_id.clone(), validator.multiaddr.clone()));
-					}
-				}
-				config::Role::Authority { sentry_nodes } => {
-					for sentry_node in sentry_nodes {
-						default_sets_reserved.insert(sentry_node.peer_id.clone());
-						known_addresses.push((sentry_node.peer_id.clone(), sentry_node.multiaddr.clone()));
-					}
-				}
-				_ => {}
-			};
 			for reserved in network_config.default_peers_set.reserved_nodes.iter() {
 				default_sets_reserved.insert(reserved.peer_id.clone());
 				known_addresses.push((reserved.peer_id.clone(), reserved.multiaddr.clone()));

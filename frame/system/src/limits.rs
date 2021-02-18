@@ -129,6 +129,7 @@ pub struct WeightsPerClass {
 /// `on_initialize` pallet callbacks are invoked and their cost is added before any extrinsic
 /// is executed. This cost is tracked as `Mandatory` dispatch class.
 ///
+/// ```ignore
 /// |   | `max_block`    |   |
 /// |   |                |   |
 /// |   |                |   |
@@ -139,12 +140,15 @@ pub struct WeightsPerClass {
 ///  ||\_ Mandatory
 ///  |\__ Operational
 ///  \___ Normal
+/// ```
 ///
 /// The remaining capacity can be used to dispatch extrinsics. Note that each dispatch class
 /// is being tracked separately, but the sum can't exceed `max_block` (except for `reserved`).
 /// Below you can see a picture representing full block with 3 extrinsics (two `Operational` and
 /// one `Normal`). Each class has it's own limit `max_total`, but also the sum cannot exceed
 /// `max_block` value.
+///
+/// ```ignore
 ///                          -- `Mandatory` limit (unlimited)
 /// | # |                 |   |
 /// | # | `Ext3`          | - - `Operational` limit
@@ -153,6 +157,7 @@ pub struct WeightsPerClass {
 /// |  #| `on_initialize` | ##|
 /// |  #| `base_block`    |###|
 /// |NOM|                 |NOM|
+/// ```
 ///
 /// It should be obvious now that it's possible for one class to reach it's limit (say `Normal`),
 /// while the block has still capacity to process more transactions (`max_block` not reached,
@@ -164,6 +169,8 @@ pub struct WeightsPerClass {
 /// full. For instance one might want to prevent high-priority `Normal` transactions from pushing
 /// out lower-priority `Operational` transactions. In such cases you might add a `reserved` capacity
 /// for given class.
+///
+/// ```ignore
 ///              _
 ///   #           \
 ///   #   `Ext8`   - `reserved`
@@ -175,6 +182,7 @@ pub struct WeightsPerClass {
 /// |  #| `on_initialize`       |###|
 /// |  #| `base_block`          |###|
 /// |NOM|                       |NOM|
+/// ```
 ///
 /// In the above example, `Ext4-6` fill up the block almost up to `max_block`. `Ext7` would not fit
 /// if there wasn't the extra `reserved` space for `Operational` transactions. Note that `max_total`

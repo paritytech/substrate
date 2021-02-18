@@ -100,8 +100,6 @@ pub(crate) struct RuntimeApi {
 
 sp_api::mock_impl_runtime_apis! {
 	impl AuthorityDiscoveryApi<Block> for RuntimeApi {
-		type Error = sp_blockchain::Error;
-
 		fn authorities(&self) -> Vec<AuthorityId> {
 			self.authorities.clone()
 		}
