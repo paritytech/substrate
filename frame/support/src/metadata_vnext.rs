@@ -64,7 +64,7 @@ macro_rules! __runtime_modules_to_metadata_vnext {
 			$runtime;
 			$( $metadata, )* $crate::metadata::v13::ModuleMetadata {
 				name: stringify!($name),
-				// index: $index,
+				index: $index,
 				// todo: [AJ] storage
 				storage: None,
 				// storage: $crate::__runtime_modules_to_metadata_calls_storage!(
@@ -76,6 +76,8 @@ macro_rules! __runtime_modules_to_metadata_vnext {
 				event: $crate::__runtime_modules_to_metadata_calls_event_vnext!(
 					$mod, $module $( <$instance> )?, $runtime, $(with $kw)*
 				),
+				// todo: [AJ] constants
+				constants: None,
 				// constants: $crate::metadata::DecodeDifferent::Encode(
 				// 	$crate::metadata::FnEncode(
 				// 		$mod::$module::<$runtime $(, $mod::$instance )?>::module_constants_metadata
