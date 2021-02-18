@@ -438,7 +438,7 @@ impl TelemetryHandle {
 	/// Get event stream for telemetry connection established events.
 	///
 	/// This function will return an error if the telemetry has already been started by
-	/// [`TelemetryWorkerHandle::start_telemetry`].
+	/// [`Telemetry::start_telemetry`].
 	pub fn on_connect_stream(&self) -> TracingUnboundedReceiver<()> {
 		self.connection_notifier.on_connect_stream()
 	}
