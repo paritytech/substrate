@@ -82,7 +82,7 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 				break;
 			}
 
-			if *last_block < begin_number {
+			if *last_block <= begin_number {
 				continue;
 			}
 
