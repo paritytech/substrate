@@ -22,7 +22,17 @@
 //!
 //! See [`pjr_check`] which is the main entry point of the module.
 
-use crate::*;
+use crate::{
+	Candidate,
+	CandidatePtr,
+	Edge,
+	ExtendedBalance,
+	IdentifierT,
+	StakedAssignment,
+	SupportMap,
+	Voter,
+	VoteWeight,
+};
 use sp_std::rc::Rc;
 use sp_std::collections::btree_map::BTreeMap;
 use sp_arithmetic::{traits::Zero, Perbill};
