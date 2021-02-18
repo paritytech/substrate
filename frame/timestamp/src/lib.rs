@@ -243,6 +243,10 @@ pub mod pallet {
 				Ok(())
 			}
 		}
+
+		fn is_inherent(call: &Self::Call) -> bool {
+			matches!(call, Call::set(_))
+		}
 	}
 }
 

@@ -20,8 +20,15 @@ pub use crate::sp_std::vec::Vec;
 #[doc(hidden)]
 pub use crate::sp_runtime::traits::{Block as BlockT, Extrinsic};
 #[doc(hidden)]
-pub use sp_inherents::{InherentData, ProvideInherent, CheckInherentsResult, IsFatalError};
+pub use sp_inherents::{
+	InherentData, ProvideInherent, CheckInherentsResult, IsFatalError, InherentIdentifier,
+	MakeFatalError,
+};
 
+/// The identifier for runtime inherent errors.
+///
+/// The associated error is a `String`.
+pub const RUNTIME_INHERENT_IDENTIFIER: InherentIdentifier = *b"RuntimeI";
 
 /// Implement the outer inherent.
 /// All given modules need to implement `ProvideInherent`.
@@ -78,37 +85,72 @@ macro_rules! impl_outer_inherent {
 				use $crate::sp_runtime::traits::Block as _;
 
 				let mut result = $crate::inherent::CheckInherentsResult::new();
-				for xt in block.extrinsics() {
-					if $crate::inherent::Extrinsic::is_signed(xt).unwrap_or(false) {
-						break
-					}
 
-					$({
-						if let Some(call) = IsSubType::<_>::is_sub_type(&xt.function) {
-							if let Err(e) = $module::check_inherent(call, self) {
-								result.put_error(
-									$module::INHERENT_IDENTIFIER, &e
-								).expect("There is only one fatal error; qed");
-								if e.is_fatal_error() {
-									return result
+				let mut checking_for_inherents = true;
+				for xt in block.extrinsics() {
+					let is_signed = $crate::inherent::Extrinsic::is_signed(xt).unwrap_or(false);
+
+					let is_inherent = if is_signed {
+						false
+					} else {
+						let mut is_inherent = false;
+						$({
+							if let Some(call) = IsSubType::<_>::is_sub_type(&xt.function) {
+								if $module::is_inherent(&call) {
+									is_inherent = true;
 								}
 							}
-						}
-					})*
+						})*
+						is_inherent
+					};
+
+					match (checking_for_inherents, is_inherent) {
+						(true, true) => {
+							$({
+								if let Some(call) = IsSubType::<_>::is_sub_type(&xt.function) {
+									if let Err(e) = $module::check_inherent(call, self) {
+										result.put_error(
+											$module::INHERENT_IDENTIFIER, &e
+										).expect("There is only one fatal error; qed");
+										if e.is_fatal_error() {
+											return result
+										}
+									}
+								}
+							})*
+						},
+						(true, false) => checking_for_inherents = false,
+						(false, true) => {
+							let e = $crate::inherent::MakeFatalError::from(
+								"Invalid inherent position: inherents must be before all other \
+								extrinsics in the block".as_bytes(),
+							);
+							result.put_error(
+								$crate::inherent::RUNTIME_INHERENT_IDENTIFIER,
+								&e,
+							).expect("There is only one fatal error; qed");
+							return result
+						},
+						(false, false) => (),
+					}
 				}
 
 				$(
 					match $module::is_inherent_required(self) {
 						Ok(Some(e)) => {
 							let found = block.extrinsics().iter().any(|xt| {
-								if $crate::inherent::Extrinsic::is_signed(xt).unwrap_or(false) {
-									return false
+								let is_signed = $crate::inherent::Extrinsic::is_signed(xt)
+									.unwrap_or(false);
+
+								if !is_signed {
+									if let Some(call) = IsSubType::<_>::is_sub_type(&xt.function) {
+										$module::is_inherent(&call)
+									} else {
+										false
+									}
+								} else {
+									false
 								}
-
-								let call: Option<&<$module as ProvideInherent>::Call> =
-									xt.function.is_sub_type();
-
-								call.is_some()
 							});
 
 							if !found {
@@ -143,6 +185,7 @@ mod tests {
 	use super::*;
 	use sp_runtime::{traits, testing::{Header, self}};
 	use crate::traits::IsSubType;
+	use codec::Encode;
 
 	#[derive(codec::Encode, codec::Decode, Clone, PartialEq, Eq, Debug, serde::Serialize)]
 	enum Call {
@@ -182,13 +225,13 @@ mod tests {
 
 	#[derive(codec::Encode, codec::Decode, Clone, PartialEq, Eq, Debug, serde::Serialize)]
 	enum CallTest {
-		Something,
-		SomethingElse,
+		OptionalInherent(bool),
+		NotInherent,
 	}
 
 	#[derive(codec::Encode, codec::Decode, Clone, PartialEq, Eq, Debug, serde::Serialize)]
 	enum CallTest2 {
-		Something,
+		RequiredInherent,
 	}
 
 	struct ModuleTest;
@@ -198,14 +241,19 @@ mod tests {
 		const INHERENT_IDENTIFIER: sp_inherents::InherentIdentifier = *b"test1235";
 
 		fn create_inherent(_: &InherentData) -> Option<Self::Call> {
-			Some(CallTest::Something)
+			Some(CallTest::OptionalInherent(true))
 		}
 
 		fn check_inherent(call: &Self::Call, _: &InherentData) -> Result<(), Self::Error> {
 			match call {
-				CallTest::Something => Ok(()),
-				CallTest::SomethingElse => Err(().into()),
+				CallTest::OptionalInherent(true) => Ok(()),
+				CallTest::OptionalInherent(false) => Err(().into()),
+				_ => Ok(())
 			}
+		}
+
+		fn is_inherent(call: &Self::Call) -> bool {
+			matches!(call, CallTest::OptionalInherent(_))
 		}
 	}
 
@@ -216,11 +264,15 @@ mod tests {
 		const INHERENT_IDENTIFIER: sp_inherents::InherentIdentifier = *b"test1234";
 
 		fn create_inherent(_: &InherentData) -> Option<Self::Call> {
-			Some(CallTest2::Something)
+			Some(CallTest2::RequiredInherent)
 		}
 
-		fn is_inherent_required(_: &InherentData) -> Result<Option<Self::Error>, Self::Error> { 
+		fn is_inherent_required(_: &InherentData) -> Result<Option<Self::Error>, Self::Error> {
 			Ok(Some(().into()))
+		}
+
+		fn is_inherent(call: &Self::Call) -> bool {
+			matches!(call, CallTest2::RequiredInherent)
 		}
 	}
 
@@ -228,6 +280,7 @@ mod tests {
 
 	#[derive(codec::Encode, codec::Decode, Clone, PartialEq, Eq, Debug, serde::Serialize)]
 	struct Extrinsic {
+		signed: bool,
 		function: Call,
 	}
 
@@ -235,8 +288,15 @@ mod tests {
 		type Call = Call;
 		type SignaturePayload = ();
 
-		fn new(function: Call, _: Option<()>) -> Option<Self> {
-			Some(Self { function })
+		fn new(function: Call, signed_data: Option<()>) -> Option<Self> {
+			Some(Self {
+				function,
+				signed: signed_data.is_some(),
+			})
+		}
+
+		fn is_signed(&self) -> Option<bool> {
+			Some(self.signed)
 		}
 	}
 
@@ -254,8 +314,8 @@ mod tests {
 		let inherents = InherentData::new().create_extrinsics();
 
 		let expected = vec![
-			Extrinsic { function: Call::Test(CallTest::Something) },
-			Extrinsic { function: Call::Test2(CallTest2::Something) },
+			Extrinsic { function: Call::Test(CallTest::OptionalInherent(true)), signed: false },
+			Extrinsic { function: Call::Test2(CallTest2::RequiredInherent), signed: false },
 		];
 		assert_eq!(expected, inherents);
 	}
@@ -265,8 +325,8 @@ mod tests {
 		let block = Block::new(
 			Header::new_from_number(1),
 			vec![
-				Extrinsic { function: Call::Test2(CallTest2::Something) },
-				Extrinsic { function: Call::Test(CallTest::Something) },
+				Extrinsic { function: Call::Test2(CallTest2::RequiredInherent), signed: false },
+				Extrinsic { function: Call::Test(CallTest::OptionalInherent(true)), signed: false },
 			],
 		);
 
@@ -275,8 +335,8 @@ mod tests {
 		let block = Block::new(
 			Header::new_from_number(1),
 			vec![
-				Extrinsic { function: Call::Test2(CallTest2::Something) },
-				Extrinsic { function: Call::Test(CallTest::SomethingElse) },
+				Extrinsic { function: Call::Test2(CallTest2::RequiredInherent), signed: false },
+				Extrinsic { function: Call::Test(CallTest::OptionalInherent(false)), signed: false },
 			],
 		);
 
@@ -287,9 +347,71 @@ mod tests {
 	fn required_inherents_enforced() {
 		let block = Block::new(
 			Header::new_from_number(1),
-			vec![Extrinsic { function: Call::Test(CallTest::Something) }],
+			vec![
+				Extrinsic { function: Call::Test(CallTest::OptionalInherent(true)), signed: false }
+			],
 		);
 
 		assert!(InherentData::new().check_extrinsics(&block).fatal_error());
+	}
+
+	#[test]
+	fn inherent_first_works() {
+		let block = Block::new(
+			Header::new_from_number(1),
+			vec![
+				Extrinsic { function: Call::Test2(CallTest2::RequiredInherent), signed: false },
+				Extrinsic { function: Call::Test(CallTest::OptionalInherent(true)), signed: false },
+				Extrinsic { function: Call::Test(CallTest::NotInherent), signed: false },
+				Extrinsic { function: Call::Test(CallTest::NotInherent), signed: false },
+			],
+		);
+
+		assert!(InherentData::new().check_extrinsics(&block).ok());
+	}
+
+	#[test]
+	fn signed_are_not_inherent() {
+		let block = Block::new(
+			Header::new_from_number(1),
+			vec![
+				Extrinsic { function: Call::Test2(CallTest2::RequiredInherent), signed: false },
+				// NOTE: checking this call would fail, but it is not checked as it is not an
+				// inherent, because it is signed.
+				Extrinsic { function: Call::Test(CallTest::OptionalInherent(false)), signed: true },
+			],
+		);
+
+		assert!(InherentData::new().check_extrinsics(&block).ok());
+
+		let block = Block::new(
+			Header::new_from_number(1),
+			vec![
+				// NOTE: this is not considered an inherent, thus block is failing because of
+				// missing required inherent.
+				Extrinsic { function: Call::Test2(CallTest2::RequiredInherent), signed: true },
+			],
+		);
+
+		assert!(InherentData::new().check_extrinsics(&block).fatal_error());
+	}
+
+	#[test]
+	fn inherent_cannot_be_placed_after_non_inherent() {
+		let block = Block::new(
+			Header::new_from_number(1),
+			vec![
+				Extrinsic { function: Call::Test2(CallTest2::RequiredInherent), signed: false },
+				Extrinsic { function: Call::Test(CallTest::NotInherent), signed: false },
+				Extrinsic { function: Call::Test(CallTest::OptionalInherent(true)), signed: false },
+			],
+		);
+
+		let err_msg = "Invalid inherent position: inherents must be before all other extrinsics in \
+			the block".as_bytes().encode();
+		assert_eq!(
+			InherentData::new().check_extrinsics(&block).into_errors().collect::<Vec<_>>(),
+			vec![(RUNTIME_INHERENT_IDENTIFIER, err_msg)],
+		);
 	}
 }
