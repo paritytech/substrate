@@ -122,6 +122,7 @@ use sp_std::{prelude::*, cmp::Ordering};
 mod benchmarking;
 pub mod weights;
 pub use weights::WeightInfo;
+pub mod mock;
 
 pub mod migrations_3_0_0;
 
@@ -655,6 +656,7 @@ decl_module! {
 	}
 }
 
+use sp_runtime::SaturatedConversion;
 impl<T: Config> Module<T> {
 	/// The deposit value of `count` votes.
 	fn deposit_of(count: usize) -> BalanceOf<T> {
@@ -662,7 +664,7 @@ impl<T: Config> Module<T> {
 			T::VotingBondStorageFactor::get().saturating_mul((count as u32).into())
 		).saturating_add(
 			T::VotingBondWeightFactor::get().saturating_mul(
-				(T::WeightInfo::election_phragmen(1, (count as u32).into(), 0) as u32).into()
+				T::WeightInfo::election_phragmen(1, (count as u32).into(), 0).saturated_into()
 			)
 		)
 	}
@@ -1058,7 +1060,6 @@ mod tests {
 		traits::{BlakeTwo256, IdentityLookup},
 	};
 	use crate as elections_phragmen;
-	use weights::MockWeightInfo;
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
@@ -1181,7 +1182,7 @@ mod tests {
 		type DesiredRunnersUp = DesiredRunnersUp;
 		type LoserCandidate = ();
 		type KickedMember = ();
-		type WeightInfo = weights::MockWeightInfo<Test>;
+		type WeightInfo = mock::MockWeightInfo<Test>;
 	}
 
 	pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
