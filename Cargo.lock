@@ -7669,6 +7669,7 @@ dependencies = [
  "serde_json",
  "sp-utils",
  "take_mut",
+ "thiserror",
  "void",
  "wasm-timer",
 ]

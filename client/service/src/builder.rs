@@ -601,7 +601,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		&mut config,
 		network.clone(),
 		client.clone(),
-	);
+	)?;
 
 	info!("📦 Highest known block at #{}", chain_info.best_number);
 
@@ -703,7 +703,7 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl> + ClientTelemetry>(
 	config: &mut Configuration,
 	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
 	client: Arc<TCl>,
-) {
+) -> sc_telemetry::Result<()> {
 	let genesis_hash = client.block_hash(Zero::zero()).ok().flatten().unwrap_or_default();
 	let connection_message = ConnectionMessage {
 		name: config.network.node_name.to_owned(),

@@ -42,7 +42,6 @@ use libp2p::Multiaddr;
 use log::{error, warn};
 use serde::Serialize;
 use std::collections::HashMap;
-use std::io;
 use std::mem;
 use std::sync::Arc;
 
@@ -51,10 +50,12 @@ pub use log;
 pub use serde_json;
 
 mod endpoints;
+mod error;
 mod node;
 mod transport;
 
 pub use endpoints::*;
+pub use error::*;
 use node::*;
 use transport::*;
 
@@ -120,7 +121,7 @@ pub struct TelemetryWorker {
 impl TelemetryWorker {
 	/// Instantiate a new [`TelemetryWorker`] which can run in background. Only one is needed for
 	/// the process.
-	pub fn new(buffer_size: usize, transport: Option<ExtTransport>) -> io::Result<Self> {
+	pub fn new(buffer_size: usize, transport: Option<ExtTransport>) -> Result<Self> {
 		let transport = initialize_transport(transport)?;
 		let (message_sender, message_receiver) = mpsc::channel(buffer_size);
 		let (register_sender, register_receiver) = mpsc::unbounded();
@@ -370,7 +371,7 @@ impl Telemetry {
 	///
 	/// The `connection_message` argument is a JSON object that is sent every time the connection
 	/// (re-)establishes.
-	pub fn start_telemetry(&mut self, connection_message: ConnectionMessage) {
+	pub fn start_telemetry(&mut self, connection_message: ConnectionMessage) -> Result<()> {
 		let Self {
 			message_sender: _,
 			register_sender,
@@ -381,28 +382,21 @@ impl Telemetry {
 
 		let endpoints = match endpoints.take() {
 			Some(x) => x,
-			None => {
-				error!(
-					target: "telemetry",
-					"This telemetry instance has already been initialized!",
-				);
-				return;
-			}
+			None => return Err(Error::TelemetryAlreadyInitialized),
 		};
 
-		match register_sender.unbounded_send(Register::Telemetry {
-			id: *id,
-			endpoints,
-			connection_message,
-		}) {
-			Ok(()) => {}
-			Err(err) => error!(
-				target: "telemetry",
-				"Could not initialize telemetry: \
-				the telemetry is probably already running: {}",
-				err,
-			),
+		if register_sender
+			.unbounded_send(Register::Telemetry {
+				id: *id,
+				endpoints,
+				connection_message,
+			})
+			.is_err()
+		{
+			return Err(Error::TelemetryWorkerDropped);
 		}
+
+		Ok(())
 	}
 
 	/// Make a new clonable handle to this [`Telemetry`]. This is used for reporting telemetries.
@@ -565,5 +559,5 @@ pub trait ClientTelemetry {
 	fn telemetry(&self) -> Option<TelemetryHandle>;
 
 	/// Initialize the [`Telemetry`].
-	fn start_telemetry(&self, connection_message: ConnectionMessage);
+	fn start_telemetry(&self, connection_message: ConnectionMessage) -> Result<()>;
 }

@@ -2028,9 +2028,10 @@ impl<BE, E, B, RA> ClientTelemetry for Client<BE, E, B, RA>
 		self.telemetry_handle.clone()
 	}
 
-	fn start_telemetry(&self, connection_message: ConnectionMessage) {
+	fn start_telemetry(&self, connection_message: ConnectionMessage) -> sc_telemetry::Result<()> {
 		if let Some(telemetry) = self.telemetry.lock().as_mut() {
-			telemetry.start_telemetry(connection_message);
+			telemetry.start_telemetry(connection_message)?;
 		}
+		Ok(())
 	}
 }
