@@ -849,7 +849,7 @@ pub fn import_queue<B, I, C, P, S, CAW>(
 	P: Pair + Send + Sync + 'static,
 	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode,
 	P::Signature: Encode + Decode,
-	S: sp_core::traits::SpawnNamed,
+	S: sp_core::traits::SpawnEssentialNamed,
 	CAW: CanAuthorWith<B> + Send + Sync + 'static,
 {
 	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
