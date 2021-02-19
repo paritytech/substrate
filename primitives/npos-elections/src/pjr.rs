@@ -154,7 +154,7 @@ fn prepare_pjr_input<AccountId: IdentifierT>(
 ///
 /// ### Semantics
 ///
-/// The t-PJR property is defined in the paper "Validator Election in Nominated Proof-of-Stake",
+/// The t-PJR property is defined in the paper ["Validator Election in Nominated Proof-of-Stake"][NPoS],
 /// section 5, definition 1.
 ///
 /// In plain language, the t-PJR condition is: if there is a group of `N` voters
@@ -172,6 +172,8 @@ fn prepare_pjr_input<AccountId: IdentifierT>(
 ///
 /// In addition to data that can be computed from the [`Supports`] struct, a PJR check also
 /// needs to inspect un-elected candidates and edges, thus `all_candidates` and `all_voters`.
+///
+/// [NPoS]: https://arxiv.org/pdf/2004.12990v1.pdf
 //
 // ### Implementation Notes
 //
