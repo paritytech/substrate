@@ -360,4 +360,73 @@ mod tests {
 		assert!(!pjr_check_core(&candidates, &voters, 10));
 		assert!(!pjr_check_core(&candidates, &voters, 20));
 	}
+
+	// This test ensures that the threshold property holds for us, but that's not it's real purpose.
+	// It was written to help develop an intuition about what the threshold value actually means
+	// in layman's terms.
+	//
+	// Its results tend to support the intuition that the threshold is the voting power at and below
+	// which a voter's preferences can simply be ignored.
+	#[test]
+	fn find_upper_bound_for_threshold() {
+		let all_candidates = vec![10, 20, 30, 40];
+		let all_voters = vec![
+			(1, 10, vec![10, 20, 30, 40]),
+			(2, 20, vec![10, 20, 30, 40]),
+			(3, 30, vec![10, 30]),
+		];
+		// tuples in voters vector are (AccountId, Balance)
+		let supports: Supports<u32> = vec![
+			(20, Support { total: 15, voters: vec![(1, 5), (2, 10)]}),
+			(40, Support { total: 15, voters: vec![(1, 5), (2, 10)]}),
+		];
+
+		let (candidates, voters) = prepare_pjr_input(
+			&supports,
+			all_candidates,
+			all_voters,
+		);
+
+		let mut threshold = 1;
+		let mut prev_threshold = 0;
+
+		// find the binary range containing the threshold beyond which the PJR check succeeds
+		while !pjr_check_core(&candidates, &voters, threshold) {
+			prev_threshold = threshold;
+			threshold = threshold.checked_mul(2).expect("pjr check must fail before we run out of capacity in u128");
+		}
+
+		// now binary search within that range to find the phase threshold
+		let mut high_bound = threshold;
+		let mut low_bound = prev_threshold;
+
+		while high_bound - low_bound > 1 {
+			// maintain the invariant that low_bound fails and high_bound passes
+			let test = low_bound + ((high_bound - low_bound) / 2);
+			if pjr_check_core(&candidates, &voters, test) {
+				high_bound = test;
+			} else {
+				low_bound = test;
+			}
+		}
+
+		println!("highest failing check:   {}", low_bound);
+		println!("lowest succeeding check: {}", high_bound);
+
+		// for a value to be a threshold, it must be the boundary between two conditions
+		let mut unexpected_failures = Vec::new();
+		let mut unexpected_successes = Vec::new();
+		for t in 0..=low_bound {
+			if pjr_check_core(&candidates, &voters, t) {
+				unexpected_successes.push(t);
+			}
+		}
+		for t in high_bound..(high_bound*2) {
+			if !pjr_check_core(&candidates, &voters, t) {
+				unexpected_failures.push(t);
+			}
+		}
+		dbg!(&unexpected_successes, &unexpected_failures);
+		assert!(unexpected_failures.is_empty() && unexpected_successes.is_empty());
+	}
 }
