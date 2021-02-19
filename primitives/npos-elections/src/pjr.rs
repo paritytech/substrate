@@ -62,7 +62,7 @@ type Threshold = ExtendedBalance;
 ///
 /// Note that the current function is rather unfortunately inefficient. The most significant
 /// slowdown is the fact that a typical solution that need to be checked for PJR only contains a
-/// subset of the entire NPoS edge graph, encoded as `staked_assignment`. This only encodes the
+/// subset of the entire NPoS edge graph, encoded as `supports`. This only encodes the
 /// edges that actually contribute to a winner's backing stake and ignores the rest to save space.
 /// To check PJR, we need the entire voter set, including those edges that point to non-winners.
 /// This could cause the caller runtime to have to read the entire list of voters, which is assumed
