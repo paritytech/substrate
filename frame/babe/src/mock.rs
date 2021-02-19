@@ -54,7 +54,7 @@ frame_support::construct_runtime!(
 		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
 		Historical: pallet_session_historical::{Module},
 		Offences: pallet_offences::{Module, Call, Storage, Event},
-		Babe: pallet_babe::{Module, Call, Storage, Config, Inherent, ValidateUnsigned},
+		Babe: pallet_babe::{Module, Call, Storage, Config, ValidateUnsigned},
 		Staking: pallet_staking::{Module, Call, Storage, Config<T>, Event<T>},
 		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
 		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
