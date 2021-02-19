@@ -28,8 +28,8 @@ use crate::{
 	Edge,
 	ExtendedBalance,
 	IdentifierT,
-	StakedAssignment,
-	SupportMap,
+	Support,
+	Supports,
 	Voter,
 	VoteWeight,
 };
@@ -70,10 +70,8 @@ type Threshold = ExtendedBalance;
 /// A sensible user of this module should make sure that the PJR check is executed and checked as
 /// little as possible, and take sufficient economical measures to ensure that this function cannot
 /// be abused.
-pub fn prepare_pjr_input<AccountId: IdentifierT>(
-	winners: Vec<AccountId>,
-	staked_assignments: Vec<StakedAssignment<AccountId>>,
-	supports: &SupportMap<AccountId>,
+fn prepare_pjr_input<AccountId: IdentifierT>(
+	supports: &Supports<AccountId>,
 	all_candidates: Vec<AccountId>,
 	all_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
 ) -> (Vec<CandidatePtr<AccountId>>, Vec<Voter<AccountId>>) {
@@ -82,19 +80,20 @@ pub fn prepare_pjr_input<AccountId: IdentifierT>(
 
 	// dump the staked assignments in a voter-major map for faster access down the road.
 	let mut assignment_map: BTreeMap<AccountId, Vec<(AccountId, ExtendedBalance)>> = BTreeMap::new();
-	staked_assignments
-		.into_iter()
-		.for_each(|StakedAssignment { who, distribution }| {
-			assignment_map.insert(who, distribution);
-		});
+	for (winner_id, Support { voters, .. }) in supports.iter() {
+		for (voter_id, support) in voters.iter() {
+			assignment_map.entry(voter_id.clone()).or_default().push((winner_id.clone(), *support));
+		}
+	}
 
 	let candidates = all_candidates.into_iter().enumerate().map(|(i, c)| {
 		candidates_index.insert(c.clone(), i);
 
 		// set the backing value and elected flag if the candidate is among the winners.
 		let who = c;
-		let elected = winners.iter().any(|w| w == &who);
-		let backed_stake = supports.get(&who).map(|s| s.total).unwrap_or_default();
+		let maybe_support = supports.iter().find(|(winner, _support)| winner == &who);
+		let elected = maybe_support.is_some();
+		let backed_stake = maybe_support.map(|(_id, support)| support.total).unwrap_or_default();
 
 		debug_assert!(
 			!(elected ^ (backed_stake > 0)),
@@ -141,15 +140,19 @@ pub fn prepare_pjr_input<AccountId: IdentifierT>(
 ///
 /// ### Semantics
 ///
-/// For a solution to be t-PJR, the original condition is as such: If there is a group of `N` voters
+/// The t-PJR property is defined in the paper "Validator Election in Nominated Proof-of-Stake",
+/// section 5, definition 1.
+///
+/// In plain language, the t-PJR condition is: ff there is a group of `N` voters
 /// who have `r` common candidates and can afford to support each of them with backing stake `t`
-/// (i.e `sum(stake(v) for all voters ) == r * t`), then this committee need to be represented by at
+/// (i.e `sum(stake(v) for v in voters) == r * t`), then this committee needs to be represented by at
 /// least `r` elected candidates.
 ///
 /// Section 5 of the NPoS paper shows that this property is equal to: For a feasible solution, if
 /// `Max {score(c)} < t` where c is every unelected candidate, then this solution is t-PJR.
 ///
-/// In this implementation we use the latter definition due to its simplicity.
+/// The text notes that we can verify this condition by running Algorithm 5: MaxPrescore and validating
+/// that MaxPrescore(A, w, t) < t).
 ///
 /// ### Interface
 ///
@@ -157,18 +160,26 @@ pub fn prepare_pjr_input<AccountId: IdentifierT>(
 /// needs to inspect un-elected candidates and edges, thus `all_candidates` and `all_voters`.
 ///
 /// See [`prepare_pjr_input`] for more info.
+//
+// ### Implementation Notes
+//
+// The paper uses mathematical notation, which priorities single-symbol names. For programmer ease,
+// we map these to more descriptive names as follows:
+//
+// C      => all_candidates
+// N      => all_voters
+// (A, w) => (candidates, voters)
+//
+// Note that while the names don't explicitly say so, `candidates` are the winning candidates, and
+// `voters` is the set of weighted edges from nominators to winning validators.
 pub fn pjr_check<AccountId: IdentifierT>(
-	winners: Vec<AccountId>,
-	staked_assignments: Vec<StakedAssignment<AccountId>>,
-	supports: &SupportMap<AccountId>,
+	supports: &Supports<AccountId>,
 	all_candidates: Vec<AccountId>,
 	all_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
 	t: Threshold,
 ) -> bool {
-	// prepare data.
+	// First order of business: derive `(candidates, voters)` from `supports`
 	let (candidates, voters) = prepare_pjr_input(
-		winners,
-		staked_assignments,
 		supports,
 		all_candidates,
 		all_voters,
@@ -180,7 +191,7 @@ pub fn pjr_check<AccountId: IdentifierT>(
 /// The internal implementation of the PJR check after having the data converted.
 ///
 /// See [`pjr_check`] for more info.
-pub fn pjr_check_core<AccountId: IdentifierT>(
+fn pjr_check_core<AccountId: IdentifierT>(
 	candidates: &[CandidatePtr<AccountId>],
 	voters: &[Voter<AccountId>],
 	t: Threshold,
@@ -197,7 +208,7 @@ pub fn pjr_check_core<AccountId: IdentifierT>(
 /// allowing the backing stake of any other elected candidate to fall below `t`.
 ///
 /// In essence, it is the sum(slack(n, t)) for all `n` who vote for `unelected`.
-pub fn pre_score<AccountId: IdentifierT>(
+fn pre_score<AccountId: IdentifierT>(
 	unelected: CandidatePtr<AccountId>,
 	voters: &[Voter<AccountId>],
 	t: Threshold,
@@ -221,7 +232,7 @@ pub fn pre_score<AccountId: IdentifierT>(
 ///
 /// 1. If `c` exactly has `t` backing or less, then we don't generate any slack.
 /// 2. If `c` has more than `t`, then we reduce it to `t`.
-pub fn slack<AccountId: IdentifierT>(voter: &Voter<AccountId>, t: Threshold) -> ExtendedBalance {
+fn slack<AccountId: IdentifierT>(voter: &Voter<AccountId>, t: Threshold) -> ExtendedBalance {
 	let budget = voter.budget;
 	let leftover = voter.edges.iter().fold(Zero::zero(), |acc: ExtendedBalance, edge| {
 		let candidate = edge.candidate.borrow();
@@ -288,24 +299,19 @@ mod tests {
 
 	#[test]
 	fn can_convert_data_from_external_api() {
-		let winners = vec![20u32, 40];
 		let all_candidates = vec![10, 20, 30, 40];
-		let staked_assignments = vec![
-			StakedAssignment { who: 1, distribution: vec![(20, 5), (40, 5)] },
-			StakedAssignment { who: 2, distribution: vec![(20, 10), (40, 10)] },
-		];
 		let all_voters = vec![
 			(1, 10, vec![10, 20, 30, 40]),
 			(2, 20, vec![10, 20, 30, 40]),
 			(3, 30, vec![10, 30]),
 		];
-		let mut supports = SupportMap::<u32>::new();
-		supports.insert(20, Support { total: 15, voters: vec![(5, 1), (10, 2)]} );
-		supports.insert(40, Support { total: 15, voters: vec![(5, 1), (10, 2)]} );
+		// tuples in voters vector are (AccountId, Balance)
+		let supports: Supports<u32> = vec![
+			(20, Support { total: 15, voters: vec![(1, 5), (2, 10)]}),
+			(40, Support { total: 15, voters: vec![(1, 5), (2, 10)]}),
+		];
 
 		let (candidates, voters) = prepare_pjr_input(
-			winners,
-			staked_assignments,
 			&supports,
 			all_candidates,
 			all_voters,
