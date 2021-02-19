@@ -459,7 +459,6 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, BS, Error>(BabeParams {
 		inherent_data_providers,
 		babe_link.time_source,
 		can_author_with,
-		client.telemetry(),
 	);
 	Ok(BabeWorker {
 		inner: Box::pin(inner),
@@ -524,7 +523,8 @@ where
 	C: ProvideRuntimeApi<B> +
 		ProvideCache<B> +
 		HeaderBackend<B> +
-		HeaderMetadata<B, Error = ClientError>,
+		HeaderMetadata<B, Error = ClientError> +
+		ClientTelemetry,
 	C::Api: BabeApi<B>,
 	E: Environment<B, Error = Error>,
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
@@ -700,6 +700,10 @@ where
 		Box::pin(self.env.init(block).map_err(|e| {
 			sp_consensus::Error::ClientImport(format!("{:?}", e))
 		}))
+	}
+
+	fn telemetry(&self) -> Option<TelemetryHandle> {
+		self.client.telemetry()
 	}
 
 	fn proposing_remaining_duration(

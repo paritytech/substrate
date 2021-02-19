@@ -82,7 +82,6 @@ pub trait SlotWorker<B: BlockT> {
 		&mut self,
 		chain_head: B::Header,
 		slot_info: SlotInfo,
-		telemetry: Option<TelemetryHandle>,
 	) -> Self::OnSlot;
 }
 
@@ -186,6 +185,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	/// Returns a `Proposer` to author on top of the given block.
 	fn proposer(&mut self, block: &B::Header) -> Self::CreateProposer;
 
+	/// Retruns a `TelemetryHandle` if any.
+	fn telemetry(&self) -> Option<TelemetryHandle>;
+
 	/// Remaining duration of the slot.
 	fn slot_remaining_duration(&self, slot_info: &SlotInfo) -> Duration {
 		let now = Instant::now();
@@ -210,12 +212,12 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		&mut self,
 		chain_head: B::Header,
 		slot_info: SlotInfo,
-		mut telemetry: Option<TelemetryHandle>,
 	) -> Pin<Box<dyn Future<Output = Option<SlotResult<B>>> + Send>>
 	where
 		<Self::Proposer as Proposer<B>>::Proposal: Unpin + Send + 'static,
 	{
 		let (timestamp, slot) = (slot_info.timestamp, slot_info.slot);
+        let mut telemetry = self.telemetry();
 
 		let slot_remaining_duration = self.slot_remaining_duration(&slot_info);
 		let proposing_remaining_duration = self.proposing_remaining_duration(&chain_head, &slot_info);
@@ -411,9 +413,8 @@ impl<B: BlockT, T: SimpleSlotWorker<B>> SlotWorker<B> for T {
 		&mut self,
 		chain_head: B::Header,
 		slot_info: SlotInfo,
-		telemetry: Option<TelemetryHandle>,
 	) -> Self::OnSlot {
-		SimpleSlotWorker::on_slot(self, chain_head, slot_info, telemetry)
+		SimpleSlotWorker::on_slot(self, chain_head, slot_info)
 	}
 }
 
@@ -438,7 +439,6 @@ pub fn start_slot_worker<B, C, W, T, SO, SC, CAW>(
 	inherent_data_providers: InherentDataProviders,
 	timestamp_extractor: SC,
 	can_author_with: CAW,
-	telemetry: Option<TelemetryHandle>,
 ) -> impl Future<Output = ()>
 where
 	B: BlockT,
@@ -486,7 +486,7 @@ where
 				Either::Right(future::ready(Ok(())))
 			} else {
 				Either::Left(
-					worker.on_slot(chain_head, slot_info, telemetry.clone())
+					worker.on_slot(chain_head, slot_info)
 						.then(|_| future::ready(Ok(())))
 				)
 			}
