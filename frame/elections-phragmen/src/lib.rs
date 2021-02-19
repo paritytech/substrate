@@ -115,14 +115,13 @@ use frame_system::{ensure_root, ensure_signed};
 use sp_npos_elections::{ElectionResult, ExtendedBalance};
 use sp_runtime::{
 	traits::{Saturating, StaticLookup, Zero},
-	DispatchError, Perbill, RuntimeDebug,
+	DispatchError, Perbill, RuntimeDebug, SaturatedConversion,
 };
 use sp_std::{prelude::*, cmp::Ordering};
 
 mod benchmarking;
 pub mod weights;
 pub use weights::WeightInfo;
-pub mod mock;
 
 pub mod migrations_3_0_0;
 
@@ -437,7 +436,7 @@ decl_module! {
 			ensure!(value > T::Currency::minimum_balance(), Error::<T>::LowBalance);
 
 			// Reserve bond.
-			let new_deposit = Self::deposit_of(votes.len());
+			let new_deposit = Self::deposit_of(votes.len() as u32);
 			let Voter { deposit: old_deposit, .. } = <Voting<T>>::get(&who);
 			match new_deposit.cmp(&old_deposit) {
 				Ordering::Greater => {
@@ -656,15 +655,14 @@ decl_module! {
 	}
 }
 
-use sp_runtime::SaturatedConversion;
 impl<T: Config> Module<T> {
 	/// The deposit value of `count` votes.
-	fn deposit_of(count: usize) -> BalanceOf<T> {
+	fn deposit_of(count: u32) -> BalanceOf<T> {
 		T::VotingBondStorageBase::get().saturating_add(
-			T::VotingBondStorageFactor::get().saturating_mul((count as u32).into())
+			T::VotingBondStorageFactor::get().saturating_mul(count.into())
 		).saturating_add(
 			T::VotingBondWeightFactor::get().saturating_mul(
-				T::WeightInfo::election_phragmen(1, (count as u32).into(), 0).saturated_into()
+				T::WeightInfo::election_phragmen(0, 1, count).saturated_into()
 			)
 		)
 	}
@@ -1050,16 +1048,61 @@ impl<T: Config> ContainsLengthBound for Module<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use frame_support::{assert_ok, assert_noop, parameter_types,
-		traits::OnInitialize,
+	use frame_support::{
+		assert_ok, assert_noop, parameter_types, traits::OnInitialize, dispatch::Weight,
 	};
 	use substrate_test_utils::assert_eq_uvec;
 	use sp_core::H256;
 	use sp_runtime::{
-		testing::Header, BuildStorage, DispatchResult,
+		testing::Header,
+		BuildStorage, DispatchResult,
 		traits::{BlakeTwo256, IdentityLookup},
 	};
+	use sp_std::marker::PhantomData;
 	use crate as elections_phragmen;
+
+	pub struct MockWeightInfo<T>(PhantomData<T>);
+	impl<T: frame_system::Config> WeightInfo for MockWeightInfo<T> {
+		fn vote_equal(_v: u32) -> Weight {
+			unreachable!();
+		}
+		fn vote_more(_v: u32) -> Weight {
+			unreachable!();
+		}
+		fn vote_less(_v: u32) -> Weight {
+			unreachable!();
+		}
+		fn remove_voter() -> Weight {
+			unreachable!();
+		}
+		fn submit_candidacy(_c: u32) -> Weight {
+			unreachable!();
+		}
+		fn renounce_candidacy_candidate(_c: u32) -> Weight {
+			unreachable!();
+		}
+		fn renounce_candidacy_members() -> Weight {
+			unreachable!();
+		}
+		fn renounce_candidacy_runners_up() -> Weight {
+			unreachable!();
+		}
+		fn remove_member_with_replacement() -> Weight {
+			unreachable!();
+		}
+		fn remove_member_wrong_refund() -> Weight {
+			66
+		}
+		fn clean_defunct_voters(_v: u32, _d: u32) -> Weight {
+			unreachable!()
+		}
+		fn election_phragmen(c: u32, v: u32, e: u32) -> Weight {
+			(0 as Weight)
+				.saturating_add((1 as Weight).saturating_mul(c as Weight))
+				.saturating_add((2 as Weight).saturating_mul(v as Weight))
+				.saturating_add((3 as Weight).saturating_mul(e as Weight))
+		}
+	}
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
@@ -1089,7 +1132,7 @@ mod tests {
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
-	type SS58Prefix = ();
+		type SS58Prefix = ();
 	}
 
 	parameter_types! {
@@ -1182,7 +1225,7 @@ mod tests {
 		type DesiredRunnersUp = DesiredRunnersUp;
 		type LoserCandidate = ();
 		type KickedMember = ();
-		type WeightInfo = mock::MockWeightInfo<Test>;
+		type WeightInfo = MockWeightInfo<Test>;
 	}
 
 	pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
@@ -1319,7 +1362,6 @@ mod tests {
 	}
 
 	fn has_lock(who: &u64) -> u64 {
-		dbg!(Balances::locks(who));
 		Balances::locks(who)
 			.get(0)
 			.cloned()
@@ -1793,9 +1835,9 @@ mod tests {
 	}
 
 	#[test]
-	fn voting_reserves_bond_per_vote_for_computational_effort() {
+	fn voting_reserves_bond_per_vote_weight() {
 		ExtBuilder::default().balance_factor(10).voter_bond_weight_factor(1).build_and_execute(|| {
-			// assert_eq!(balances(&1), (100, 0));
+			assert_eq!(balances(&1), (100, 0));
 
 			assert_ok!(submit_candidacy(Origin::signed(5)));
 			assert_ok!(submit_candidacy(Origin::signed(4)));
@@ -1803,34 +1845,33 @@ mod tests {
 			// initial vote.
 			assert_ok!(vote(Origin::signed(1), vec![4], 10));
 
-			// 2 + 1
-			assert_eq!(balances(&1), (96, 4));
-			assert_eq!(Elections::voting(&1).deposit, 4);
-			assert_eq!(has_lock(&1), 10);
+			// 2 + 2 + 3
+			assert_eq!(balances(&1), (93, 7));
+			assert_eq!(Elections::voting(&1).deposit, 7);
 			assert_eq!(locked_stake_of(&1), 10);
 
 			// can update; different stake; different lock and reserve.
-			assert_ok!(vote(Origin::signed(2), vec![5, 4], 15));
-			// 2 + 2
-			assert_eq!(balances(&1), (96, 4));
-			assert_eq!(Elections::voting(&1).deposit, 4);
-			assert_eq!(has_lock(&1), 10);
-			assert_eq!(locked_stake_of(&1), 10);
+			assert_ok!(vote(Origin::signed(1), vec![5, 4], 15));
+
+			// 2 + 2 + 6
+			assert_eq!(balances(&1), (90, 10));
+			assert_eq!(Elections::voting(&1).deposit, 10);
+			assert_eq!(locked_stake_of(&1), 15);
 
 			// stay at two votes with different stake.
 			assert_ok!(vote(Origin::signed(1), vec![5, 3], 18));
-			// 2 + 2
-			assert_eq!(balances(&1), (95, 5));
-			assert_eq!(Elections::voting(&1).deposit, 5);
-			assert_eq!(has_lock(&1), 18);
+
+			// 2 + 2 + 6
+			assert_eq!(balances(&1), (90, 10));
+			assert_eq!(Elections::voting(&1).deposit, 10);
 			assert_eq!(locked_stake_of(&1), 18);
 
 			// back to 1 vote.
 			assert_ok!(vote(Origin::signed(1), vec![4], 12));
-			// 2 + 1
-			assert_eq!(balances(&1), (96, 4));
-			assert_eq!(Elections::voting(&1).deposit, 4);
-			assert_eq!(has_lock(&1), 12);
+
+			// 2 + 2 + 3
+			assert_eq!(balances(&1), (93, 7));
+			assert_eq!(Elections::voting(&1).deposit, 7);
 			assert_eq!(locked_stake_of(&1), 12);
 		});
 	}
@@ -2489,10 +2530,8 @@ mod tests {
 					..
 				}
 			);
-			matches!(
-				unwrapped_error.post_info.actual_weight,
-				Some(x) if x < <Test as frame_system::Config>::BlockWeights::get().max_block
-			);
+			// refund weight is used.
+			assert_eq!(unwrapped_error.post_info.actual_weight.unwrap(), 66);
 		});
 
 		ExtBuilder::default().desired_runners_up(1).build_and_execute(|| {
@@ -2518,10 +2557,8 @@ mod tests {
 					..
 				}
 			);
-			matches!(
-				unwrapped_error.post_info.actual_weight,
-				Some(x) if x < <Test as frame_system::Config>::BlockWeights::get().max_block
-			);
+			// refund weight is used.
+			assert_eq!(unwrapped_error.post_info.actual_weight.unwrap(), 66);
 		});
 	}
 
