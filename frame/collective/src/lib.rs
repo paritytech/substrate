@@ -48,6 +48,7 @@
 // mod benchmarking;
 pub mod weights;
 
+use sp_std::if_std;
 use sp_std::{prelude::*, result};
 use sp_core::u32_trait::Value as U32;
 use sp_io::storage;
@@ -765,7 +766,15 @@ impl<T: Config<I>, I: 'static>  Pallet<T, I> {
 		// read the length of the proposal storage entry directly
 		let proposal_len = storage::read(&key, &mut [0; 0], 0)
 			.ok_or(Error::<T, I>::ProposalMissing)?;
+
+		// TODO :: Why len - 1  ? Why 1 byte extra from storage::read() ?.
+		let proposal_len = proposal_len - 1;
 		ensure!(proposal_len <= length_bound, Error::<T, I>::WrongProposalLength);
+
+		if_std!{
+			println!("Valid prop_len :: {:#?}", proposal_len);
+		}
+
 		let proposal = ProposalOf::<T, I>::get(hash).ok_or(Error::<T, I>::ProposalMissing)?;
 		let proposal_weight = proposal.get_dispatch_info().weight;
 		ensure!(proposal_weight <= weight_bound, Error::<T, I>::WrongProposalWeight);
@@ -1107,7 +1116,12 @@ mod tests {
 	}
 
 	fn make_proposal(value: u64) -> Call {
-		Call::System(frame_system::Call::remark(value.encode()))
+		let rval = Call::System(frame_system::Call::remark(value.encode()));
+		let proposal_len: u32 = rval.using_encoded(|p| p.len() as u32);
+		if_std!{
+			println!("prop_len :: {:#?}", proposal_len);
+		}
+		return rval
 	}
 
 	#[test]
