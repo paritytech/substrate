@@ -110,7 +110,7 @@ fn prepare_pjr_input<AccountId: IdentifierT>(
 		let backed_stake = maybe_support.map(|support| support.total).unwrap_or_default();
 
 		debug_assert!(
-			!(elected ^ (backed_stake > 0)),
+			elected == (backed_stake > 0),
 			"If a candidate is elected, then it must have a positive backing as well."
 		);
 
