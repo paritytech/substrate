@@ -177,7 +177,6 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		type Event: From<Event<Self>>
-			+ Into<<Self as frame_system::Config>::Event>
 			+ IsType<<Self as frame_system::Config>::Event>;
 
 		/// Identifier for the elections-phragmen pallet's lock
@@ -239,7 +238,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -625,15 +624,10 @@ pub mod pallet {
 	#[pallet::getter(fn candidates)]
 	pub type Candidates<T: Config> = StorageValue<_, Vec<(T::AccountId, BalanceOf<T>)>, ValueQuery>;
 
-	#[pallet::type_value]
-	pub fn DefaultForElectionRounds() -> u32 {
-		Zero::zero()
-	}
-
 	/// The total number of vote rounds that have happened, excluding the upcoming one.
 	#[pallet::storage]
 	#[pallet::getter(fn election_rounds)]
-	pub type ElectionRounds<T: Config> = StorageValue<_, u32, ValueQuery, DefaultForElectionRounds>;
+	pub type ElectionRounds<T: Config> = StorageValue<_, u32, ValueQuery>;
 
 	/// Votes and locked stake of a particular voter.
 	///
@@ -658,49 +652,44 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-			let extra_genesis_builder: fn(&Self) = |config: &GenesisConfig<T>| {
+			assert!(
+				self.members.len() as u32 <= T::DesiredMembers::get(),
+				"Cannot accept more than DesiredMembers genesis member",
+			);
+			let members = self.members.iter().map(|(ref member, ref stake)| {
+				// make sure they have enough stake.
 				assert!(
-					config.members.len() as u32 <= T::DesiredMembers::get(),
-					"Cannot accept more than DesiredMembers genesis member",
+					T::Currency::free_balance(member) >= *stake,
+					"Genesis member does not have enough stake.",
 				);
-				let members = config
-					.members
-					.iter()
-					.map(|(ref member, ref stake)| {
-						assert!(
-							T::Currency::free_balance(member) >= *stake,
-							"Genesis member does not have enough stake.",
-						);
-						Members::<T>::mutate(|members| {
-							match members.binary_search_by(|m| m.who.cmp(member)) {
-								Ok(_) => panic!(
-									"Duplicate member in elections-phragmen genesis: {}",
-									member
-								),
-								Err(pos) => members.insert(
-									pos,
-									SeatHolder {
-										who: member.clone(),
-										stake: *stake,
-										deposit: Zero::zero(),
-									},
-								),
-							}
-						});
-						<Voting<T>>::insert(
-							&member,
-							Voter {
-								votes: vec![member.clone()],
-								stake: *stake,
-								deposit: Zero::zero(),
-							},
-						);
-						member.clone()
-					})
-					.collect::<Vec<T::AccountId>>();
-				T::InitializeMembers::initialize_members(&members);
-			};
-			extra_genesis_builder(self);
+
+				// Note: all members will only vote for themselves, hence they must be given exactly
+				// their own stake as total backing. Any sane election should behave as such.
+				// Nonetheless, stakes will be updated for term 1 onwards according to the election.
+				Members::<T>::mutate(|members| {
+					match members.binary_search_by(|m| m.who.cmp(member)) {
+						Ok(_) => panic!("Duplicate member in elections-phragmen genesis: {}", member),
+						Err(pos) => members.insert(
+							pos,
+							SeatHolder { who: member.clone(), stake: *stake, deposit: Zero::zero() },
+						),
+					}
+				});
+
+				// set self-votes to make persistent. Genesis voters don't have any bond, nor do
+				// they have any lock. NOTE: this means that we will still try to remove a lock once
+				// this genesis voter is removed, and for now it is okay because remove_lock is noop
+				// if lock is not there.
+				<Voting<T>>::insert(
+					&member,
+					Voter { votes: vec![member.clone()], stake: *stake, deposit: Zero::zero() },
+				);
+
+				member.clone()
+			}).collect::<Vec<T::AccountId>>();
+
+			// report genesis members to upstream, if any.
+			T::InitializeMembers::initialize_members(&members);
 		}
 	}
 }
