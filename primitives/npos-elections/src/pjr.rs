@@ -170,10 +170,8 @@ fn prepare_pjr_input<AccountId: IdentifierT>(
 ///
 /// ### Interface
 ///
-/// In addition to data that can be computed from the [`ElectionResult`] struct, a PJR check also
+/// In addition to data that can be computed from the [`Supports`] struct, a PJR check also
 /// needs to inspect un-elected candidates and edges, thus `all_candidates` and `all_voters`.
-///
-/// See [`prepare_pjr_input`] for more info.
 //
 // ### Implementation Notes
 //
