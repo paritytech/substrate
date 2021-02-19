@@ -24,7 +24,13 @@ use rand::Rng as _;
 use std::{fmt, mem, pin::Pin, task::Context, task::Poll, time::Duration};
 use wasm_timer::Delay;
 
-pub(crate) type ConnectionNotifierSender = sp_utils::mpsc::TracingUnboundedSender<()>;
+pub(crate) type ConnectionNotifierSender = sp_utils::mpsc::TracingSender<()>;
+pub(crate) type ConnectionNotifierReceiver = sp_utils::mpsc::TracingReceiver<()>;
+
+pub(crate) fn connection_notifier_channel() -> (ConnectionNotifierSender, ConnectionNotifierReceiver)
+{
+	sp_utils::mpsc::tracing_channel("mpsc_telemetry_on_connect", 0)
+}
 
 /// Handler for a single telemetry node.
 ///

@@ -41,7 +41,6 @@ use global_counter::primitive::exact::CounterU64;
 use libp2p::Multiaddr;
 use log::{error, warn};
 use serde::Serialize;
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use std::collections::HashMap;
 use std::io;
 use std::mem;
@@ -186,7 +185,7 @@ impl TelemetryWorker {
 		input: Option<Register>,
 		node_pool: &mut HashMap<Multiaddr, Node<WsTrans>>,
 		node_map: &mut HashMap<Id, Vec<(VerbosityLevel, Multiaddr)>>,
-		pending_connection_notifications: &mut Vec<(Multiaddr, TracingUnboundedSender<()>)>,
+		pending_connection_notifications: &mut Vec<(Multiaddr, ConnectionNotifierSender)>,
 		transport: WsTrans,
 	) {
 		let input = input.expect("the stream is never closed; qed");
@@ -438,7 +437,7 @@ impl TelemetryHandle {
 	///
 	/// This function will return an error if the telemetry has already been started by
 	/// [`Telemetry::start_telemetry`].
-	pub fn on_connect_stream(&self) -> TracingUnboundedReceiver<()> {
+	pub fn on_connect_stream(&self) -> ConnectionNotifierReceiver {
 		self.connection_notifier.on_connect_stream()
 	}
 }
@@ -452,8 +451,8 @@ pub struct TelemetryConnectionNotifier {
 }
 
 impl TelemetryConnectionNotifier {
-	fn on_connect_stream(&self) -> TracingUnboundedReceiver<()> {
-		let (message_sender, message_receiver) = tracing_unbounded("mpsc_telemetry_on_connect");
+	fn on_connect_stream(&self) -> ConnectionNotifierReceiver {
+		let (message_sender, message_receiver) = connection_notifier_channel();
 		if let Err(err) = self.register_sender.unbounded_send(Register::Notifier {
 			addresses: self.addresses.clone(),
 			connection_notifier: message_sender,
