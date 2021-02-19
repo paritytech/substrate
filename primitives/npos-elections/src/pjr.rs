@@ -157,7 +157,7 @@ fn prepare_pjr_input<AccountId: IdentifierT>(
 /// The t-PJR property is defined in the paper "Validator Election in Nominated Proof-of-Stake",
 /// section 5, definition 1.
 ///
-/// In plain language, the t-PJR condition is: ff there is a group of `N` voters
+/// In plain language, the t-PJR condition is: if there is a group of `N` voters
 /// who have `r` common candidates and can afford to support each of them with backing stake `t`
 /// (i.e `sum(stake(v) for v in voters) == r * t`), then this committee needs to be represented by at
 /// least `r` elected candidates.
