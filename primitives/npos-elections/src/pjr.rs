@@ -361,14 +361,14 @@ mod tests {
 		assert!(!pjr_check_core(&candidates, &voters, 20));
 	}
 
-	// This test ensures that the threshold property holds for us, but that's not it's real purpose.
-	// It was written to help develop an intuition about what the threshold value actually means
+	// These next tests ensure that the threshold phase change property holds for us, but that's not their real purpose.
+	// They were written to help develop an intuition about what the threshold value actually means
 	// in layman's terms.
 	//
-	// Its results tend to support the intuition that the threshold is the voting power at and below
+	// The results tend to support the intuition that the threshold is the voting power at and below
 	// which a voter's preferences can simply be ignored.
 	#[test]
-	fn find_upper_bound_for_threshold() {
+	fn find_upper_bound_for_threshold_scenario_1() {
 		let all_candidates = vec![10, 20, 30, 40];
 		let all_voters = vec![
 			(1, 10, vec![10, 20, 30, 40]),
@@ -387,6 +387,59 @@ mod tests {
 			all_voters,
 		);
 
+		find_threshold_phase_change_for_scenario(candidates, voters);
+	}
+
+	#[test]
+	fn find_upper_bound_for_threshold_scenario_2() {
+		let all_candidates = vec![10, 20, 30, 40];
+		let all_voters = vec![
+			(1, 10, vec![10, 20, 30, 40]),
+			(2, 20, vec![10, 20, 30, 40]),
+			(3, 25, vec![10, 30]),
+		];
+		// tuples in voters vector are (AccountId, Balance)
+		let supports: Supports<u32> = vec![
+			(20, Support { total: 15, voters: vec![(1, 5), (2, 10)]}),
+			(40, Support { total: 15, voters: vec![(1, 5), (2, 10)]}),
+		];
+
+		let (candidates, voters) = prepare_pjr_input(
+			&supports,
+			all_candidates,
+			all_voters,
+		);
+
+		find_threshold_phase_change_for_scenario(candidates, voters);
+	}
+
+	#[test]
+	fn find_upper_bound_for_threshold_scenario_3() {
+		let all_candidates = vec![10, 20, 30, 40];
+		let all_voters = vec![
+			(1, 10, vec![10, 20, 30, 40]),
+			(2, 20, vec![10, 20, 30, 40]),
+			(3, 35, vec![10, 30]),
+		];
+		// tuples in voters vector are (AccountId, Balance)
+		let supports: Supports<u32> = vec![
+			(20, Support { total: 15, voters: vec![(1, 5), (2, 10)]}),
+			(40, Support { total: 15, voters: vec![(1, 5), (2, 10)]}),
+		];
+
+		let (candidates, voters) = prepare_pjr_input(
+			&supports,
+			all_candidates,
+			all_voters,
+		);
+
+		find_threshold_phase_change_for_scenario(candidates, voters);
+	}
+
+	fn find_threshold_phase_change_for_scenario<AccountId: IdentifierT>(
+		candidates: Vec<CandidatePtr<AccountId>>,
+		voters: Vec<Voter<AccountId>>
+	) -> Threshold {
 		let mut threshold = 1;
 		let mut prev_threshold = 0;
 
@@ -428,5 +481,7 @@ mod tests {
 		}
 		dbg!(&unexpected_successes, &unexpected_failures);
 		assert!(unexpected_failures.is_empty() && unexpected_successes.is_empty());
+
+		high_bound
 	}
 }
