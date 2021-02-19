@@ -68,6 +68,9 @@ pub struct Params<B: BlockT, H: ExHashT> {
 	/// default.
 	pub executor: Option<Box<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send>>,
 
+	/// How to spawn the background task dedicated to the transactions handler.
+	pub transactions_handler_executor: Box<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send>,
+
 	/// Network layer configuration.
 	pub network_config: NetworkConfiguration,
 
@@ -128,30 +131,14 @@ pub enum Role {
 	Full,
 	/// Regular light node.
 	Light,
-	/// Sentry node that guards an authority. Will be reported as "authority" on the wire protocol.
-	Sentry {
-		/// Address and identity of the validator nodes that we're guarding.
-		///
-		/// The nodes will be granted some priviledged status.
-		validators: Vec<MultiaddrWithPeerId>,
-	},
 	/// Actual authority.
-	Authority {
-		/// List of public addresses and identities of our sentry nodes.
-		sentry_nodes: Vec<MultiaddrWithPeerId>,
-	}
+	Authority,
 }
 
 impl Role {
 	/// True for `Role::Authority`
 	pub fn is_authority(&self) -> bool {
 		matches!(self, Role::Authority { .. })
-	}
-
-	/// True for `Role::Authority` and `Role::Sentry` since they're both
-	/// announced as having the authority role to the network.
-	pub fn is_network_authority(&self) -> bool {
-		matches!(self, Role::Authority { .. } | Role::Sentry { .. })
 	}
 }
 
@@ -160,7 +147,6 @@ impl fmt::Display for Role {
 		match self {
 			Role::Full => write!(f, "FULL"),
 			Role::Light => write!(f, "LIGHT"),
-			Role::Sentry { .. } => write!(f, "SENTRY"),
 			Role::Authority { .. } => write!(f, "AUTHORITY"),
 		}
 	}

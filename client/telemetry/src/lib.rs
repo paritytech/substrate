@@ -86,7 +86,7 @@ impl TelemetrySpan {
 
 	/// Constructs a new [`TelemetrySpan`].
 	pub fn new() -> Self {
-		Self(tracing::info_span!(TELEMETRY_LOG_SPAN))
+		Self(tracing::error_span!(TELEMETRY_LOG_SPAN))
 	}
 
 	/// Return a clone of the underlying `tracing::Span` instance.
@@ -230,6 +230,11 @@ impl TelemetryWorker {
 				};
 
 				for (addr, verbosity) in endpoints {
+					log::trace!(
+						target: "telemetry",
+						"Initializing telemetry for: {:?}",
+						addr,
+					);
 					node_map
 						.entry(id.clone())
 						.or_default()

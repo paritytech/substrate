@@ -36,7 +36,7 @@ use self::{
 	},
 	sandbox::Sandbox,
 };
-use frame_benchmarking::{benchmarks, account, whitelisted_caller};
+use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
 use frame_system::{Module as System, RawOrigin};
 use parity_wasm::elements::{Instruction, ValueType, BlockType};
 use sp_runtime::traits::{Hash, Bounded, Zero};
@@ -137,7 +137,7 @@ where
 		// same block number.
 		System::<T>::set_block_number(1u32.into());
 
-		Contracts::<T>::put_code_raw(module.code)?;
+		Contracts::<T>::store_code_raw(module.code)?;
 		Contracts::<T>::instantiate(
 			RawOrigin::Signed(caller.clone()).into(),
 			endowment,
@@ -198,7 +198,7 @@ where
 	/// Get the block number when this contract will be evicted. Returns an error when
 	/// the rent collection won't happen because the contract has to much endowment.
 	fn eviction_at(&self) -> Result<T::BlockNumber, &'static str> {
-		let projection = Rent::<T>::compute_projection(&self.account_id)
+		let projection = Rent::<T, PrefabWasmModule<T>>::compute_projection(&self.account_id)
 			.map_err(|_| "Invalid acc for rent")?;
 		match projection {
 			RentProjection::EvictionAt(at) => Ok(at),
@@ -250,7 +250,7 @@ where
 	/// Evict this contract.
 	fn evict(&mut self) -> Result<(), &'static str> {
 		self.set_block_num_for_eviction()?;
-		Rent::<T>::try_eviction(&self.contract.account_id, Zero::zero())?;
+		Rent::<T, PrefabWasmModule<T>>::try_eviction(&self.contract.account_id, Zero::zero())?;
 		self.contract.ensure_tombstone()
 	}
 }
@@ -314,24 +314,34 @@ benchmarks! {
 
 	// This constructs a contract that is maximal expensive to instrument.
 	// It creates a maximum number of metering blocks per byte.
-	// `n`: Size of the code in kilobytes.
-	put_code {
-		let n in 0 .. Contracts::<T>::current_schedule().limits.code_size / 1024;
+	// The size of the salt influences the runtime because is is hashed in order to
+	// determine the contract address.
+	// `c`: Size of the code in kilobytes.
+	// `s`: Size of the salt in kilobytes.
+	instantiate_with_code {
+		let c in 0 .. Contracts::<T>::current_schedule().limits.code_size / 1024;
+		let s in 0 .. code::max_pages::<T>() * 64;
+		let salt = vec![42u8; (s * 1024) as usize];
+		let endowment = caller_funding::<T>() / 3u32.into();
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
-		let module = WasmModule::<T>::sized(n * 1024);
-		let origin = RawOrigin::Signed(caller);
-	}: _(origin, module.code)
+		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c * 1024);
+		let origin = RawOrigin::Signed(caller.clone());
+		let addr = Contracts::<T>::contract_address(&caller, &hash, &salt);
+	}: _(origin, endowment, Weight::max_value(), code, vec![], salt)
+	verify {
+		// endowment was removed from the caller
+		assert_eq!(T::Currency::free_balance(&caller), caller_funding::<T>() - endowment);
+		// contract has the full endowment because no rent collection happended
+		assert_eq!(T::Currency::free_balance(&addr), endowment);
+		// instantiate should leave a alive contract
+		Contract::<T>::address_alive_info(&addr)?;
+	}
 
 	// Instantiate uses a dummy contract constructor to measure the overhead of the instantiate.
-	// The size of the input data influences the runtime because it is hashed in order to determine
-	// the contract address.
-	// `n`: Size of the data passed to constructor in kilobytes.
 	// `s`: Size of the salt in kilobytes.
 	instantiate {
-		let n in 0 .. code::max_pages::<T>() * 64;
 		let s in 0 .. code::max_pages::<T>() * 64;
-		let data = vec![42u8; (n * 1024) as usize];
 		let salt = vec![42u8; (s * 1024) as usize];
 		let endowment = caller_funding::<T>() / 3u32.into();
 		let caller = whitelisted_caller();
@@ -339,8 +349,8 @@ benchmarks! {
 		let WasmModule { code, hash, .. } = WasmModule::<T>::dummy_with_mem();
 		let origin = RawOrigin::Signed(caller.clone());
 		let addr = Contracts::<T>::contract_address(&caller, &hash, &salt);
-		Contracts::<T>::put_code_raw(code)?;
-	}: _(origin, endowment, Weight::max_value(), hash, data, salt)
+		Contracts::<T>::store_code_raw(code)?;
+	}: _(origin, endowment, Weight::max_value(), hash, vec![], salt)
 	verify {
 		// endowment was removed from the caller
 		assert_eq!(T::Currency::free_balance(&caller), caller_funding::<T>() - endowment);
@@ -1169,7 +1179,7 @@ benchmarks! {
 			.collect::<Vec<_>>();
 		let account_len = accounts.get(0).map(|i| i.encode().len()).unwrap_or(0);
 		let account_bytes = accounts.iter().flat_map(|x| x.encode()).collect();
-		let value = ConfigCache::<T>::subsistence_threshold_uncached();
+		let value = Contracts::<T>::subsistence_threshold();
 		assert!(value > 0u32.into());
 		let value_bytes = value.encode();
 		let value_len = value_bytes.len();
@@ -1369,7 +1379,7 @@ benchmarks! {
 					])),
 					.. Default::default()
 				});
-				Contracts::<T>::put_code_raw(code.code)?;
+				Contracts::<T>::store_code_raw(code.code)?;
 				Ok(code.hash)
 			})
 			.collect::<Result<Vec<_>, &'static str>>()?;
@@ -1492,7 +1502,7 @@ benchmarks! {
 		let hash = callee_code.hash.clone();
 		let hash_bytes = callee_code.hash.encode();
 		let hash_len = hash_bytes.len();
-		Contracts::<T>::put_code_raw(callee_code.code)?;
+		Contracts::<T>::store_code_raw(callee_code.code)?;
 		let inputs = (0..API_BENCHMARK_BATCH_SIZE).map(|x| x.encode()).collect::<Vec<_>>();
 		let input_len = inputs.get(0).map(|x| x.len()).unwrap_or(0);
 		let input_bytes = inputs.iter().cloned().flatten().collect::<Vec<_>>();
@@ -2430,127 +2440,10 @@ benchmarks! {
 	}: {}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::tests::{ExtBuilder, Test};
-	use frame_support::assert_ok;
-	use paste::paste;
 
-	macro_rules! create_test {
-		($name:ident) => {
-			#[test]
-			fn $name() {
-				ExtBuilder::default().build().execute_with(|| {
-					assert_ok!(paste!{
-						[<test_benchmark_ $name>]::<Test>()
-					});
-				});
-			}
-		}
-	}
 
-	create_test!(on_initialize);
-	create_test!(on_initialize_per_trie_key);
-	create_test!(on_initialize_per_queue_item);
-
-	create_test!(update_schedule);
-	create_test!(put_code);
-	create_test!(instantiate);
-	create_test!(call);
-	create_test!(claim_surcharge);
-
-	create_test!(seal_caller);
-	create_test!(seal_address);
-	create_test!(seal_gas_left);
-	create_test!(seal_balance);
-	create_test!(seal_value_transferred);
-	create_test!(seal_minimum_balance);
-	create_test!(seal_tombstone_deposit);
-	create_test!(seal_rent_allowance);
-	create_test!(seal_block_number);
-	create_test!(seal_now);
-	create_test!(seal_weight_to_fee);
-	create_test!(seal_gas);
-	create_test!(seal_input);
-	create_test!(seal_input_per_kb);
-	create_test!(seal_return);
-	create_test!(seal_return_per_kb);
-	create_test!(seal_terminate);
-	create_test!(seal_restore_to);
-	create_test!(seal_restore_to_per_delta);
-	create_test!(seal_random);
-	create_test!(seal_deposit_event);
-	create_test!(seal_deposit_event_per_topic_and_kb);
-	create_test!(seal_set_rent_allowance);
-	create_test!(seal_set_storage);
-	create_test!(seal_set_storage_per_kb);
-	create_test!(seal_get_storage);
-	create_test!(seal_get_storage_per_kb);
-	create_test!(seal_transfer);
-	create_test!(seal_call);
-	create_test!(seal_call_per_transfer_input_output_kb);
-	create_test!(seal_instantiate);
-	create_test!(seal_instantiate_per_input_output_salt_kb);
-	create_test!(seal_clear_storage);
-	create_test!(seal_hash_sha2_256);
-	create_test!(seal_hash_sha2_256_per_kb);
-	create_test!(seal_hash_keccak_256);
-	create_test!(seal_hash_keccak_256_per_kb);
-	create_test!(seal_hash_blake2_256);
-	create_test!(seal_hash_blake2_256_per_kb);
-	create_test!(seal_hash_blake2_128);
-	create_test!(seal_hash_blake2_128_per_kb);
-
-	create_test!(instr_i64const);
-	create_test!(instr_i64load);
-	create_test!(instr_i64store);
-	create_test!(instr_select);
-	create_test!(instr_if);
-	create_test!(instr_br);
-	create_test!(instr_br_if);
-	create_test!(instr_br_table);
-	create_test!(instr_br_table_per_entry);
-	create_test!(instr_call);
-	create_test!(instr_call_indirect);
-	create_test!(instr_call_indirect_per_param);
-	create_test!(instr_local_get);
-	create_test!(instr_local_set);
-	create_test!(instr_local_tee);
-	create_test!(instr_global_get);
-	create_test!(instr_global_set);
-	create_test!(instr_memory_current);
-	create_test!(instr_memory_grow);
-	create_test!(instr_i64clz);
-	create_test!(instr_i64ctz);
-	create_test!(instr_i64popcnt);
-	create_test!(instr_i64eqz);
-	create_test!(instr_i64extendsi32);
-	create_test!(instr_i64extendui32);
-	create_test!(instr_i32wrapi64);
-	create_test!(instr_i64eq);
-	create_test!(instr_i64ne);
-	create_test!(instr_i64lts);
-	create_test!(instr_i64ltu);
-	create_test!(instr_i64gts);
-	create_test!(instr_i64gtu);
-	create_test!(instr_i64les);
-	create_test!(instr_i64leu);
-	create_test!(instr_i64ges);
-	create_test!(instr_i64geu);
-	create_test!(instr_i64add);
-	create_test!(instr_i64sub);
-	create_test!(instr_i64mul);
-	create_test!(instr_i64divs);
-	create_test!(instr_i64divu);
-	create_test!(instr_i64rems);
-	create_test!(instr_i64remu);
-	create_test!(instr_i64and);
-	create_test!(instr_i64or);
-	create_test!(instr_i64xor);
-	create_test!(instr_i64shl);
-	create_test!(instr_i64shrs);
-	create_test!(instr_i64shru);
-	create_test!(instr_i64rotl);
-	create_test!(instr_i64rotr);
-}
+impl_benchmark_test_suite!(
+	Contracts,
+	crate::tests::ExtBuilder::default().build(),
+	crate::tests::Test,
+);

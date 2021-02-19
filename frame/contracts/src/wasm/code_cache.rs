@@ -27,46 +27,84 @@
 //! this guarantees that every instrumented contract code in cache cannot have the version equal to the current one.
 //! Thus, before executing a contract it should be reinstrument with new schedule.
 
-use crate::wasm::{prepare, runtime::Env, PrefabWasmModule};
-use crate::{CodeHash, CodeStorage, PristineCode, Schedule, Config};
-use sp_std::prelude::*;
-use sp_runtime::traits::Hash;
+use crate::{
+	CodeHash, CodeStorage, PristineCode, Schedule, Config, Error,
+	wasm::{prepare, PrefabWasmModule}, Module as Contracts, RawEvent,
+};
 use sp_core::crypto::UncheckedFrom;
-use frame_support::StorageMap;
+use frame_support::{StorageMap, dispatch::{DispatchError, DispatchResult}};
 
-/// Put code in the storage. The hash of code is used as a key and is returned
-/// as a result of this function.
+/// Put the instrumented module in storage.
 ///
-/// This function instruments the given code and caches it in the storage.
-pub fn save<T: Config>(
-	original_code: Vec<u8>,
-	schedule: &Schedule<T>,
-) -> Result<CodeHash<T>, &'static str> where T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]> {
-	let prefab_module = prepare::prepare_contract::<Env, T>(&original_code, schedule)?;
-	let code_hash = T::Hashing::hash(&original_code);
+/// Increments the refcount of the in-storage `prefab_module` if it already exists in storage
+/// under the specified `code_hash`.
+pub fn store<T: Config>(mut prefab_module: PrefabWasmModule<T>)
+where
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>
+{
+	let code_hash = sp_std::mem::take(&mut prefab_module.code_hash);
 
-	<CodeStorage<T>>::insert(code_hash, prefab_module);
-	<PristineCode<T>>::insert(code_hash, original_code);
-
-	Ok(code_hash)
+	// original_code is only `Some` if the contract was instantiated from a new code
+	// but `None` if it was loaded from storage.
+	if let Some(code) = prefab_module.original_code.take() {
+		<PristineCode<T>>::insert(&code_hash, code);
+	}
+	<CodeStorage<T>>::mutate(&code_hash, |existing| {
+		match existing {
+			Some(module) => increment_64(&mut module.refcount),
+			None => {
+				*existing = Some(prefab_module);
+				Contracts::<T>::deposit_event(RawEvent::CodeStored(code_hash))
+			}
+		}
+	});
 }
 
-/// Version of `save` to be used in runtime benchmarks.
-//
-/// This version neither checks nor instruments the passed in code. This is useful
-/// when code needs to be benchmarked without the injected instrumentation.
-#[cfg(feature = "runtime-benchmarks")]
-pub fn save_raw<T: Config>(
-	original_code: Vec<u8>,
-	schedule: &Schedule<T>,
-) -> Result<CodeHash<T>, &'static str> where T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]> {
-	let prefab_module = prepare::benchmarking::prepare_contract::<T>(&original_code, schedule)?;
-	let code_hash = T::Hashing::hash(&original_code);
+/// Decrement the refcount and store.
+///
+/// Removes the code instead of storing it when the refcount drops to zero.
+pub fn store_decremented<T: Config>(mut prefab_module: PrefabWasmModule<T>)
+where
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>
+{
+	prefab_module.refcount = prefab_module.refcount.saturating_sub(1);
+	if prefab_module.refcount > 0 {
+		<CodeStorage<T>>::insert(prefab_module.code_hash, prefab_module);
+	} else {
+		<CodeStorage<T>>::remove(prefab_module.code_hash);
+		finish_removal::<T>(prefab_module.code_hash);
+	}
+}
 
-	<CodeStorage<T>>::insert(code_hash, prefab_module);
-	<PristineCode<T>>::insert(code_hash, original_code);
+/// Increment the refcount of a code in-storage by one.
+pub fn increment_refcount<T: Config>(code_hash: CodeHash<T>) -> DispatchResult
+where
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>
+{
+	<CodeStorage<T>>::mutate(code_hash, |existing| {
+		if let Some(module) = existing {
+			increment_64(&mut module.refcount);
+			Ok(())
+		} else {
+			Err(Error::<T>::CodeNotFound.into())
+		}
+	})
+}
 
-	Ok(code_hash)
+/// Decrement the refcount of a code in-storage by one and remove the code when it drops to zero.
+pub fn decrement_refcount<T: Config>(code_hash: CodeHash<T>)
+where
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>
+{
+	<CodeStorage<T>>::mutate_exists(code_hash, |existing| {
+		if let Some(module) = existing {
+			module.refcount = module.refcount.saturating_sub(1);
+			if module.refcount == 0 {
+				*existing = None;
+				finish_removal::<T>(code_hash);
+			}
+		}
+	});
 }
 
 /// Load code with the given code hash.
@@ -75,21 +113,51 @@ pub fn save_raw<T: Config>(
 /// the current one given as an argument, then this function will perform
 /// re-instrumentation and update the cache in the storage.
 pub fn load<T: Config>(
-	code_hash: &CodeHash<T>,
-	schedule: &Schedule<T>,
-) -> Result<PrefabWasmModule, &'static str> where T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]> {
-	let mut prefab_module =
-		<CodeStorage<T>>::get(code_hash).ok_or_else(|| "code is not found")?;
+	code_hash: CodeHash<T>,
+	schedule: Option<&Schedule<T>>,
+) -> Result<PrefabWasmModule<T>, DispatchError>
+where
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>
+{
+	let mut prefab_module = <CodeStorage<T>>::get(code_hash)
+		.ok_or_else(|| Error::<T>::CodeNotFound)?;
 
-	if prefab_module.schedule_version < schedule.version {
-		// The current schedule version is greater than the version of the one cached
-		// in the storage.
-		//
-		// We need to re-instrument the code with the latest schedule here.
-		let original_code =
-			<PristineCode<T>>::get(code_hash).ok_or_else(|| "pristine code is not found")?;
-		prefab_module = prepare::prepare_contract::<Env, T>(&original_code, schedule)?;
-		<CodeStorage<T>>::insert(&code_hash, &prefab_module);
+	if let Some(schedule) = schedule {
+		if prefab_module.schedule_version < schedule.version {
+			// The current schedule version is greater than the version of the one cached
+			// in the storage.
+			//
+			// We need to re-instrument the code with the latest schedule here.
+			let original_code = <PristineCode<T>>::get(code_hash)
+				.ok_or_else(|| Error::<T>::CodeNotFound)?;
+			prefab_module.code = prepare::reinstrument_contract::<T>(original_code, schedule)?;
+			prefab_module.schedule_version = schedule.version;
+			<CodeStorage<T>>::insert(&code_hash, &prefab_module);
+		}
 	}
+	prefab_module.code_hash = code_hash;
 	Ok(prefab_module)
+}
+
+/// Finish removal of a code by deleting the pristine code and emitting an event.
+fn finish_removal<T: Config>(code_hash: CodeHash<T>)
+where
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>
+{
+	<PristineCode<T>>::remove(code_hash);
+	Contracts::<T>::deposit_event(RawEvent::CodeRemoved(code_hash))
+}
+
+/// Increment the refcount panicking if it should ever overflow (which will not happen).
+///
+/// We try hard to be infallible here because otherwise more storage transactions would be
+/// necessary to account for failures in storing code for an already instantiated contract.
+fn increment_64(refcount: &mut u64) {
+	*refcount = refcount.checked_add(1).expect("
+		refcount is 64bit. Generating this overflow would require to store
+		_at least_ 18 exabyte of data assuming that a contract consumes only
+		one byte of data. Any node would run out of storage space before hitting
+		this overflow.
+		qed
+	");
 }

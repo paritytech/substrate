@@ -1,6 +1,6 @@
 [package]
 name = "pallet-scheduler"
-version = "2.0.1"
+version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Unlicense"
@@ -12,17 +12,17 @@ readme = "README.md"
 [dependencies]
 serde = { version = "1.0.101", optional = true }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
-frame-support = { version = "2.0.0", default-features = false, path = "../support" }
-frame-system = { version = "2.0.0", default-features = false, path = "../system" }
-sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
-sp-io = { version = "2.0.0", default-features = false, path = "../../primitives/io" }
+frame-support = { version = "3.0.0", default-features = false, path = "../support" }
+frame-system = { version = "3.0.0", default-features = false, path = "../system" }
+sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
+sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/io" }
 
-frame-benchmarking = { version = "2.0.0", default-features = false, path = "../benchmarking", optional = true }
+frame-benchmarking = { version = "3.0.0", default-features = false, path = "../benchmarking", optional = true }
 
 [dev-dependencies]
-sp-core = { version = "2.0.0", path = "../../primitives/core", default-features = false }
-substrate-test-utils = { version = "2.0.0", path = "../../test-utils" }
+sp-core = { version = "3.0.0", path = "../../primitives/core", default-features = false }
+substrate-test-utils = { version = "3.0.0", path = "../../test-utils" }
 
 [features]
 default = ["std"]
