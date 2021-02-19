@@ -557,7 +557,9 @@ where
 						change.canon_height,
 					);
 					telemetry!(
-						telemetry; CONSENSUS_INFO; "afg.applying_scheduled_authority_set_change";
+						telemetry;
+						CONSENSUS_INFO;
+						"afg.applying_scheduled_authority_set_change";
 						"block" => ?change.canon_height
 					);
 

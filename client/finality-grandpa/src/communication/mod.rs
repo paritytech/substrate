@@ -818,7 +818,9 @@ fn check_compact_commit<Block: BlockT>(
 		) {
 			debug!(target: "afg", "Bad commit message signature {}", id);
 			telemetry!(
-				telemetry; CONSENSUS_DEBUG; "afg.bad_commit_msg_signature";
+				telemetry;
+				CONSENSUS_DEBUG;
+				"afg.bad_commit_msg_signature";
 				"id" => ?id,
 			);
 			let cost = Misbehavior::BadCommitMessage {
@@ -999,7 +1001,9 @@ impl<Block: BlockT> Sink<(RoundNumber, Commit<Block>)> for CommitsOut<Block> {
 		let round = Round(round);
 
 		telemetry!(
-			self.telemetry.clone(); CONSENSUS_DEBUG; "afg.commit_issued";
+			self.telemetry.clone();
+			CONSENSUS_DEBUG;
+			"afg.commit_issued";
 			"target_number" => ?commit.target_number,
 			"target_hash" => ?commit.target_hash,
 		);

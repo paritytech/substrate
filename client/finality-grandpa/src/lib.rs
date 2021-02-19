@@ -769,7 +769,9 @@ where
 				);
 
 				telemetry!(
-					telemetry; CONSENSUS_INFO; "afg.authority_set";
+					telemetry;
+					CONSENSUS_INFO;
+					"afg.authority_set";
 					"authority_id" => authority_id.to_string(),
 					"authority_set_id" => ?set_id,
 					"authorities" => authorities,
@@ -912,7 +914,9 @@ where
 			.unwrap_or_default();
 
 		telemetry!(
-			self.telemetry.clone(); CONSENSUS_DEBUG; "afg.starting_new_voter";
+			self.telemetry.clone();
+			CONSENSUS_DEBUG;
+			"afg.starting_new_voter";
 			"name" => ?self.env.config.name(),
 			"set_id" => ?self.env.set_id,
 			"authority_id" => authority_id.to_string(),
@@ -932,7 +936,9 @@ where
 		);
 
 		telemetry!(
-			self.telemetry.clone(); CONSENSUS_INFO; "afg.authority_set";
+			self.telemetry.clone();
+			CONSENSUS_INFO;
+			"afg.authority_set";
 			"number" => ?chain_info.finalized_number,
 			"hash" => ?chain_info.finalized_hash,
 			"authority_id" => authority_id.to_string(),
@@ -993,7 +999,9 @@ where
 					format!("{}", a)
 				}).collect();
 				telemetry!(
-					self.telemetry; CONSENSUS_INFO; "afg.voter_command_change_authorities";
+					self.telemetry;
+					CONSENSUS_INFO;
+					"afg.voter_command_change_authorities";
 					"number" => ?new.canon_number,
 					"hash" => ?new.canon_hash,
 					"voters" => ?voters,

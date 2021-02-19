@@ -312,7 +312,9 @@ impl MetricsService {
 				};
 
 			telemetry!(
-				self.telemetry; SUBSTRATE_INFO; "system.interval";
+				self.telemetry;
+				SUBSTRATE_INFO;
+				"system.interval";
 				"peers" => num_peers,
 				"bandwidth_download" => avg_bytes_per_sec_inbound,
 				"bandwidth_upload" => avg_bytes_per_sec_outbound,
@@ -332,7 +334,9 @@ impl MetricsService {
 		// Send network state information, if any.
 		if let Some(net_state) = net_state {
 			telemetry!(
-				self.telemetry; SUBSTRATE_INFO; "system.network_state";
+				self.telemetry;
+				SUBSTRATE_INFO;
+				"system.network_state";
 				"state" => net_state,
 			);
 		}

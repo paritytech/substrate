@@ -261,7 +261,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		{
 			debug!(target: self.logging_target(), "Skipping proposal slot. Waiting for the network.");
 			telemetry!(
-				telemetry; CONSENSUS_DEBUG; "slots.skipping_proposal_slot";
+				telemetry;
+				CONSENSUS_DEBUG;
+				"slots.skipping_proposal_slot";
 				"authorities_len" => authorities_len,
 			);
 
@@ -285,7 +287,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		);
 
 		telemetry!(
-			telemetry; CONSENSUS_DEBUG; "slots.starting_authorship";
+			telemetry;
+			CONSENSUS_DEBUG;
+			"slots.starting_authorship";
 			"slot_num" => *slot,
 			"timestamp" => timestamp,
 		);
@@ -296,7 +300,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				warn!("Unable to author block in slot {:?}: {:?}", slot, err);
 
 				telemetry!(
-					telemetry; CONSENSUS_WARN; "slots.unable_authoring_block";
+					telemetry;
+					CONSENSUS_WARN;
+					"slots.unable_authoring_block";
 					"slot" => *slot,
 					"err" => ?err
 				);
@@ -327,7 +333,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 					#[cfg(build_type="debug")]
 					info!("👉 Recompile your node in `--release` mode to mitigate this problem.");
 					telemetry!(
-						telemetry; CONSENSUS_INFO; "slots.discarding_proposal_took_too_long";
+						telemetry;
+						CONSENSUS_INFO;
+						"slots.discarding_proposal_took_too_long";
 						"slot" => *slot,
 					);
 
@@ -364,7 +372,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			);
 
 			telemetry!(
-				telemetry; CONSENSUS_INFO; "slots.pre_sealed_block";
+				telemetry;
+				CONSENSUS_INFO;
+				"slots.pre_sealed_block";
 				"header_num" => ?header_num,
 				"hash_now" => ?block_import_params.post_hash(),
 				"hash_previously" => ?header_hash,
@@ -379,7 +389,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				);
 
 				telemetry!(
-					telemetry; CONSENSUS_WARN; "slots.err_with_block_built_on";
+					telemetry;
+					CONSENSUS_WARN;
+					"slots.err_with_block_built_on";
 					"hash" => ?parent_hash,
 					"err" => ?err,
 				);

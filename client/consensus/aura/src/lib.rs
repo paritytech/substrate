@@ -651,7 +651,9 @@ impl<B: BlockT, C, P, CAW> Verifier<B> for AuraVerifier<C, P, CAW> where
 
 				trace!(target: "aura", "Checked {:?}; importing.", pre_header);
 				telemetry!(
-					self.client.telemetry(); CONSENSUS_TRACE; "aura.checked_and_importing";
+					self.client.telemetry();
+					CONSENSUS_TRACE;
+					"aura.checked_and_importing";
 					"pre_header" => ?pre_header,
 				);
 
@@ -681,7 +683,9 @@ impl<B: BlockT, C, P, CAW> Verifier<B> for AuraVerifier<C, P, CAW> where
 			CheckedHeader::Deferred(a, b) => {
 				debug!(target: "aura", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
 				telemetry!(
-					self.client.telemetry(); CONSENSUS_DEBUG; "aura.header_too_far_in_future";
+					self.client.telemetry();
+					CONSENSUS_DEBUG;
+					"aura.header_too_far_in_future";
 					"hash" => ?hash,
 					"a" => ?a,
 					"b" => ?b,

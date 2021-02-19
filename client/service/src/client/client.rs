@@ -1008,7 +1008,9 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				);
 
 			telemetry!(
-				self.telemetry(); SUBSTRATE_INFO; "notify.finalized";
+				self.telemetry();
+				SUBSTRATE_INFO;
+				"notify.finalized";
 				"height" => format!("{}", header.number()),
 				"best" => ?last,
 			);

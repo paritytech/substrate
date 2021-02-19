@@ -1092,7 +1092,9 @@ where
 			CheckedHeader::Deferred(a, b) => {
 				debug!(target: "babe", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
 				telemetry!(
-					self.telemetry; CONSENSUS_DEBUG; "babe.header_too_far_in_future";
+					self.telemetry;
+					CONSENSUS_DEBUG;
+					"babe.header_too_far_in_future";
 					"hash" => ?hash, "a" => ?a, "b" => ?b
 				);
 				Err(Error::<Block>::TooFarInFuture(hash).into())

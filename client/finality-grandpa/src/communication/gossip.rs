@@ -846,7 +846,9 @@ impl<Block: BlockT> Inner<Block> {
 		) {
 			debug!(target: "afg", "Bad message signature {}", full.message.id);
 			telemetry!(
-				self.config.telemetry.clone(); CONSENSUS_DEBUG; "afg.bad_msg_signature";
+				self.config.telemetry.clone();
+				CONSENSUS_DEBUG;
+				"afg.bad_msg_signature";
 				"signature" => ?full.message.id,
 			);
 			return Action::Discard(cost::BAD_SIGNATURE);
@@ -1423,7 +1425,9 @@ impl<Block: BlockT> GossipValidator<Block> {
 					message_name = None;
 					debug!(target: "afg", "Error decoding message: {}", e);
 					telemetry!(
-						self.telemetry.clone(); CONSENSUS_DEBUG; "afg.err_decoding_msg";
+						self.telemetry.clone();
+						CONSENSUS_DEBUG;
+						"afg.err_decoding_msg";
 						"" => "",
 					);
 
