@@ -66,7 +66,7 @@ use sp_inherents::{InherentDataProviders, InherentData};
 use sp_timestamp::{
 	TimestampInherentData, InherentType as TimestampInherent, InherentError as TIError
 };
-use sc_telemetry::{telemetry, ClientTelemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_INFO};
+use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_INFO};
 
 use sc_consensus_slots::{
 	CheckedHeader, SlotInfo, SlotCompatible, StorageChanges, check_equivocation,
@@ -149,10 +149,10 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, BS, Error>(
 	backoff_authoring_blocks: Option<BS>,
 	keystore: SyncCryptoStorePtr,
 	can_author_with: CAW,
+	telemetry: Option<TelemetryHandle>,
 ) -> Result<impl Future<Output = ()>, sp_consensus::Error> where
 	B: BlockT,
-	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + AuxStore + HeaderBackend<B> + Send
-		+ ClientTelemetry + Sync,
+	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + AuxStore + HeaderBackend<B> + Send + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
 	SC: SelectChain<B>,
 	E: Environment<B, Error = Error> + Send + Sync + 'static,
@@ -174,6 +174,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, BS, Error>(
 		sync_oracle: sync_oracle.clone(),
 		force_authoring,
 		backoff_authoring_blocks,
+		telemetry,
 		_key_type: PhantomData::<P>,
 	};
 	register_aura_inherent_data_provider(
@@ -188,7 +189,6 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, BS, Error>(
 		inherent_data_providers,
 		AuraSlotCompatible,
 		can_author_with,
-		client.telemetry(),
 	))
 }
 
@@ -200,6 +200,7 @@ struct AuraWorker<C, E, I, P, SO, BS> {
 	sync_oracle: SO,
 	force_authoring: bool,
 	backoff_authoring_blocks: Option<BS>,
+	telemetry: Option<TelemetryHandle>,
 	_key_type: PhantomData<P>,
 }
 
@@ -346,6 +347,10 @@ where
 		Box::pin(self.env.init(block).map_err(|e| {
 			sp_consensus::Error::ClientImport(format!("{:?}", e)).into()
 		}))
+	}
+
+	fn telemetry(&self) -> Option<TelemetryHandle> {
+		self.telemetry.clone()
 	}
 
 	fn proposing_remaining_duration(
@@ -504,10 +509,10 @@ pub struct AuraVerifier<C, P, CAW> {
 	phantom: PhantomData<P>,
 	inherent_data_providers: sp_inherents::InherentDataProviders,
 	can_author_with: CAW,
+	telemetry: Option<TelemetryHandle>,
 }
 
 impl<C, P, CAW> AuraVerifier<C, P, CAW> where
-	C: ClientTelemetry,
 	P: Send + Sync + 'static,
 	CAW: Send + Sync + 'static,
 {
@@ -557,7 +562,7 @@ impl<C, P, CAW> AuraVerifier<C, P, CAW> where
 							diff
 						);
 						telemetry!(
-							self.client.telemetry();
+							self.telemetry.clone();
 							CONSENSUS_INFO;
 							"aura.halting_for_future_block";
 							"diff" => ?diff,
@@ -582,7 +587,6 @@ impl<B: BlockT, C, P, CAW> Verifier<B> for AuraVerifier<C, P, CAW> where
 		+ sc_client_api::backend::AuxStore
 		+ ProvideCache<B>
 		+ BlockOf
-		+ ClientTelemetry
 		+ Send
 		+ Sync,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B>,
@@ -651,7 +655,7 @@ impl<B: BlockT, C, P, CAW> Verifier<B> for AuraVerifier<C, P, CAW> where
 
 				trace!(target: "aura", "Checked {:?}; importing.", pre_header);
 				telemetry!(
-					self.client.telemetry();
+					self.telemetry;
 					CONSENSUS_TRACE;
 					"aura.checked_and_importing";
 					"pre_header" => ?pre_header,
@@ -683,7 +687,7 @@ impl<B: BlockT, C, P, CAW> Verifier<B> for AuraVerifier<C, P, CAW> where
 			CheckedHeader::Deferred(a, b) => {
 				debug!(target: "aura", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
 				telemetry!(
-					self.client.telemetry();
+					self.telemetry;
 					CONSENSUS_DEBUG;
 					"aura.header_too_far_in_future";
 					"hash" => ?hash,
@@ -857,6 +861,7 @@ pub fn import_queue<B, I, C, P, S, CAW>(
 	spawner: &S,
 	registry: Option<&Registry>,
 	can_author_with: CAW,
+	telemetry: Option<TelemetryHandle>,
 ) -> Result<DefaultImportQueue<B, C>, sp_consensus::Error> where
 	B: BlockT,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B>,
@@ -865,7 +870,6 @@ pub fn import_queue<B, I, C, P, S, CAW>(
 		+ ProvideCache<B>
 		+ AuxStore
 		+ HeaderBackend<B>
-		+ ClientTelemetry
 		+ Send
 		+ Sync
 		+ 'static,
@@ -885,6 +889,7 @@ pub fn import_queue<B, I, C, P, S, CAW>(
 		inherent_data_providers,
 		phantom: PhantomData,
 		can_author_with,
+		telemetry,
 	};
 
 	Ok(BasicQueue::new(

@@ -11,7 +11,7 @@ pub use sc_executor::NativeExecutor;
 use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
 use sc_finality_grandpa::SharedVoterState;
 use sc_keystore::LocalKeystore;
-use sc_telemetry::ClientTelemetry;
+use sc_telemetry::{Telemetry, TelemetryWorker};
 
 // Our native executor instance.
 native_executor_instance!(
@@ -37,6 +37,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 			AuraPair
 		>,
 		sc_finality_grandpa::LinkHalf<Block, FullClient, FullSelectChain>,
+		Option<Telemetry>,
 	)
 >, ServiceError> {
 	if config.keystore_remote.is_some() {
@@ -45,9 +46,19 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 	}
 	let inherent_data_providers = sp_inherents::InherentDataProviders::new();
 
+	let telemetry_worker = TelemetryWorker::new(16, None)?;
+	let telemetry = config.telemetry_endpoints.clone()
+		.filter(|x| !x.is_empty())
+		.map(|endpoints| telemetry_worker.handle().new_telemetry(endpoints));
+
 	let (client, backend, keystore_container, task_manager) =
-		sc_service::new_full_parts::<Block, RuntimeApi, Executor>(&config)?;
+		sc_service::new_full_parts::<Block, RuntimeApi, Executor>(
+			&config,
+			telemetry.as_ref().map(|x| x.handle()),
+		)?;
 	let client = Arc::new(client);
+
+	task_manager.spawn_handle().spawn("telemetry", telemetry_worker.run());
 
 	let select_chain = sc_consensus::LongestChain::new(backend.clone());
 
@@ -60,7 +71,10 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 	);
 
 	let (grandpa_block_import, grandpa_link) = sc_finality_grandpa::block_import(
-		client.clone(), &(client.clone() as Arc<_>), select_chain.clone(),
+		client.clone(),
+		&(client.clone() as Arc<_>),
+		select_chain.clone(),
+		telemetry.as_ref().map(|x| x.handle()),
 	)?;
 
 	let aura_block_import = sc_consensus_aura::AuraBlockImport::<_, _, _, AuraPair>::new(
@@ -76,6 +90,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		&task_manager.spawn_handle(),
 		config.prometheus_registry(),
 		sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone()),
+		telemetry.as_ref().map(|x| x.handle()),
 	)?;
 
 	Ok(sc_service::PartialComponents {
@@ -87,7 +102,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		select_chain,
 		transaction_pool,
 		inherent_data_providers,
-		other: (aura_block_import, grandpa_link),
+		other: (aura_block_import, grandpa_link, telemetry),
 	})
 }
 
@@ -109,7 +124,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		select_chain,
 		transaction_pool,
 		inherent_data_providers,
-		other: (block_import, grandpa_link),
+		other: (block_import, grandpa_link, mut telemetry),
 	} = new_partial(&config)?;
 
 	if let Some(url) = &config.keystore_remote {
@@ -177,6 +192,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 			network_status_sinks,
 			system_rpc_tx,
 			config,
+			telemetry: telemetry.as_mut(),
 		},
 	)?;
 
@@ -186,6 +202,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 			client.clone(),
 			transaction_pool,
 			prometheus_registry.as_ref(),
+			telemetry.as_ref().map(|x| x.handle()),
 		);
 
 		let can_author_with =
@@ -203,6 +220,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 			backoff_authoring_blocks,
 			keystore_container.sync_keystore(),
 			can_author_with,
+			telemetry.as_ref().map(|x| x.handle()),
 		)?;
 
 		// the AURA authoring task is considered essential, i.e. if it
@@ -226,7 +244,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		observer_enabled: false,
 		keystore,
 		is_authority: role.is_authority(),
-		telemetry: client.telemetry(),
+		telemetry: telemetry.as_ref().map(|x| x.handle()),
 	};
 
 	if enable_grandpa {
@@ -243,7 +261,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 			voting_rule: sc_finality_grandpa::VotingRulesBuilder::default().build(),
 			prometheus_registry,
 			shared_voter_state: SharedVoterState::empty(),
-			telemetry: client.telemetry(),
+			telemetry: telemetry.as_ref().map(|x| x.handle()),
 		};
 
 		// the GRANDPA voter task is considered infallible, i.e.
@@ -260,8 +278,18 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 
 /// Builds a new service for a light client.
 pub fn new_light(mut config: Configuration) -> Result<TaskManager, ServiceError> {
+	let telemetry_worker = TelemetryWorker::new(16, None)?;
+	let mut telemetry = config.telemetry_endpoints.clone()
+		.filter(|x| !x.is_empty())
+		.map(|endpoints| telemetry_worker.handle().new_telemetry(endpoints));
+
 	let (client, backend, keystore_container, mut task_manager, on_demand) =
-		sc_service::new_light_parts::<Block, RuntimeApi, Executor>(&config)?;
+		sc_service::new_light_parts::<Block, RuntimeApi, Executor>(
+			&config,
+			telemetry.as_ref().map(|x| x.handle()),
+		)?;
+
+	task_manager.spawn_handle().spawn("telemetry", telemetry_worker.run());
 
 	config.network.extra_sets.push(sc_finality_grandpa::grandpa_peers_set_config());
 
@@ -279,6 +307,7 @@ pub fn new_light(mut config: Configuration) -> Result<TaskManager, ServiceError>
 		client.clone(),
 		&(client.clone() as Arc<_>),
 		select_chain.clone(),
+		telemetry.as_ref().map(|x| x.handle()),
 	)?;
 
 	let aura_block_import = sc_consensus_aura::AuraBlockImport::<_, _, _, AuraPair>::new(
@@ -295,6 +324,7 @@ pub fn new_light(mut config: Configuration) -> Result<TaskManager, ServiceError>
 		&task_manager.spawn_handle(),
 		config.prometheus_registry(),
 		sp_consensus::NeverCanAuthor,
+		telemetry.as_ref().map(|x| x.handle()),
 	)?;
 
 	let (network, network_status_sinks, system_rpc_tx, network_starter) =
@@ -327,6 +357,7 @@ pub fn new_light(mut config: Configuration) -> Result<TaskManager, ServiceError>
 		network,
 		network_status_sinks,
 		system_rpc_tx,
+		telemetry: telemetry.as_mut(),
 	})?;
 
 	network_starter.start_network();
