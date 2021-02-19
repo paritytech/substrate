@@ -136,6 +136,7 @@ mod tests {
 	fn should_mutate() {
 		let (offchain, state) = testing::TestOffchainExt::new();
 		let mut t = TestExternalities::default();
+		t.register_extension(OffchainDbExt::new(offchain.clone()));
 		t.register_extension(OffchainWorkerExt::new(offchain));
 
 		t.execute_with(|| {
