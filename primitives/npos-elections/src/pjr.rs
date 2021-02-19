@@ -17,7 +17,7 @@
 
 //! Implements functions and interfaces to check solutions for being t-PJR.
 //!
-//! PJR stands for proportional justified representation. PJR is a string absolute measure to make
+//! PJR stands for proportional justified representation. PJR is an absolute measure to make
 //! sure an NPoS solution adheres to a minimum standard.
 //!
 //! See [`pjr_check`] which is the main entry point of the module.
