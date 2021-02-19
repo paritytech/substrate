@@ -299,7 +299,9 @@ where
 			// sign_with_all returns Result<Signature, Error> signature
 			// is generated for a public key that is supported.
 			// Verify that all signatures exist for all provided keys.
-			let signature = sign_result.map_err(|_| Error::MissingSignature(key.clone()))?;
+			let signature = sign_result.ok()
+				.flatten()
+				.ok_or_else(|| Error::MissingSignature(key.clone()))?;
 			schema::SignedAuthorityAddresses {
 				addresses: serialized_addresses.clone(),
 				signature,
