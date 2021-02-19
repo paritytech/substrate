@@ -345,21 +345,30 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 						if voters.len().get() <= TELEMETRY_VOTERS_LIMIT {
 							match &msg.message.message {
 								PrimaryPropose(propose) => {
-									telemetry!(telemetry; CONSENSUS_INFO; "afg.received_propose";
+									telemetry!(
+										telemetry;
+										CONSENSUS_INFO;
+										"afg.received_propose";
 										"voter" => ?format!("{}", msg.message.id),
 										"target_number" => ?propose.target_number,
 										"target_hash" => ?propose.target_hash,
 									);
 								},
 								Prevote(prevote) => {
-									telemetry!(telemetry; CONSENSUS_INFO; "afg.received_prevote";
+									telemetry!(
+										telemetry;
+										CONSENSUS_INFO;
+										"afg.received_prevote";
 										"voter" => ?format!("{}", msg.message.id),
 										"target_number" => ?prevote.target_number,
 										"target_hash" => ?prevote.target_hash,
 									);
 								},
 								Precommit(precommit) => {
-									telemetry!(telemetry; CONSENSUS_INFO; "afg.received_precommit";
+									telemetry!(
+										telemetry;
+										CONSENSUS_INFO;
+										"afg.received_precommit";
 										"voter" => ?format!("{}", msg.message.id),
 										"target_number" => ?precommit.target_number,
 										"target_hash" => ?precommit.target_hash,
@@ -517,7 +526,10 @@ fn incoming_global<B: BlockT>(
 						format!("{}", a)
 					}).collect();
 
-				telemetry!(telemetry; CONSENSUS_INFO; "afg.received_commit";
+				telemetry!(
+					telemetry;
+					CONSENSUS_INFO;
+					"afg.received_commit";
 					"contains_precommits_signed_by" => ?precommits_signed_by,
 					"target_number" => ?msg.message.target_number.clone(),
 					"target_hash" => ?msg.message.target_hash.clone(),
@@ -912,7 +924,12 @@ fn check_catch_up<Block: BlockT>(
 				buf,
 			) {
 				debug!(target: "afg", "Bad catch up message signature {}", id);
-				telemetry!(telemetry; CONSENSUS_DEBUG; "afg.bad_catch_up_msg_signature"; "id" => ?id);
+				telemetry!(
+					telemetry;
+					CONSENSUS_DEBUG;
+					"afg.bad_catch_up_msg_signature";
+					"id" => ?id,
+				);
 
 				let cost = Misbehavior::BadCatchUpMessage {
 					signatures_checked: signatures_checked as i32,

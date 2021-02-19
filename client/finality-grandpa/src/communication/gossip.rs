@@ -876,7 +876,10 @@ impl<Block: BlockT> Inner<Block> {
 
 		if full.message.precommits.len() != full.message.auth_data.len() || full.message.precommits.is_empty() {
 			debug!(target: "afg", "Malformed compact commit");
-			telemetry!(self.config.telemetry; CONSENSUS_DEBUG; "afg.malformed_compact_commit";
+			telemetry!(
+				self.config.telemetry;
+				CONSENSUS_DEBUG;
+				"afg.malformed_compact_commit";
 				"precommits_len" => ?full.message.precommits.len(),
 				"auth_data_len" => ?full.message.auth_data.len(),
 				"precommits_is_empty" => ?full.message.precommits.is_empty(),

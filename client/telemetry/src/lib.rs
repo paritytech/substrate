@@ -488,10 +488,13 @@ enum Register {
 /// # let authority_id = 42_u64;
 /// # let set_id = (43_u64, 44_u64);
 /// # let authorities = vec![45_u64];
-/// telemetry!(telemetry; CONSENSUS_INFO; "afg.authority_set";
-/// 	"authority_id" => authority_id.to_string(),
-/// 	"authority_set_id" => ?set_id,
-/// 	"authorities" => authorities,
+/// telemetry!(
+///     telemetry;
+///     CONSENSUS_INFO;
+///     "afg.authority_set";
+///     "authority_id" => authority_id.to_string(),
+///     "authority_set_id" => ?set_id,
+///     "authorities" => authorities,
 /// );
 /// ```
 #[macro_export(local_inner_macros)]

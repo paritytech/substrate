@@ -893,7 +893,10 @@ where
 
 		let mut telemetry = self.telemetry.clone();
 		let mut report_prevote_metrics = move |prevote: &Prevote<Block>| {
-			telemetry!(telemetry; CONSENSUS_DEBUG; "afg.prevote_issued";
+			telemetry!(
+				telemetry;
+				CONSENSUS_DEBUG;
+				"afg.prevote_issued";
 				"round" => round,
 				"target_number" => ?prevote.target_number,
 				"target_hash" => ?prevote.target_hash,
@@ -953,7 +956,10 @@ where
 
 		let mut telemetry = self.telemetry.clone();
 		let mut report_precommit_metrics = move |precommit: &Precommit<Block>| {
-			telemetry!(telemetry; CONSENSUS_DEBUG; "afg.precommit_issued";
+			telemetry!(
+				telemetry;
+				CONSENSUS_DEBUG;
+				"afg.precommit_issued";
 				"round" => round,
 				"target_number" => ?precommit.target_number,
 				"target_hash" => ?precommit.target_hash,
@@ -1334,7 +1340,10 @@ where
 				warn!(target: "afg", "Error applying finality to block {:?}: {:?}", (hash, number), e);
 				e
 			})?;
-			telemetry!(telemetry; CONSENSUS_INFO; "afg.finalized_blocks_up_to";
+			telemetry!(
+				telemetry;
+				CONSENSUS_INFO;
+				"afg.finalized_blocks_up_to";
 				"number" => ?number, "hash" => ?hash,
 			);
 
@@ -1354,7 +1363,10 @@ where
 					);
 				}
 
-				telemetry!(telemetry; CONSENSUS_INFO; "afg.generating_new_authority_set";
+				telemetry!(
+					telemetry;
+					CONSENSUS_INFO;
+					"afg.generating_new_authority_set";
 					"number" => ?canon_number, "hash" => ?canon_hash,
 					"authorities" => ?set_ref.to_vec(),
 					"set_id" => ?new_id,
