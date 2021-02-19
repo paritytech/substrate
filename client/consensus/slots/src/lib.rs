@@ -240,7 +240,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				warn!("Unable to fetch epoch data at block {:?}: {:?}", chain_head.hash(), err);
 
 				telemetry!(
-					telemetry; CONSENSUS_WARN; "slots.unable_fetching_authorities";
+					telemetry;
+					CONSENSUS_WARN;
+					"slots.unable_fetching_authorities";
 					"slot" => ?chain_head.hash(),
 					"err" => ?err,
 				);

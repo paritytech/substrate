@@ -351,7 +351,9 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 				.join(", ")
 		);
 		telemetry!(
-			self.telemetry.clone(); CONSENSUS_INFO; "prepared_block_for_proposing";
+			self.telemetry.clone();
+			CONSENSUS_INFO;
+			"prepared_block_for_proposing";
 			"number" => ?block.header().number(),
 			"hash" => ?<Block as BlockT>::Hash::from(block.header().hash()),
 		);

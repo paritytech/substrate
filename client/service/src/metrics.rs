@@ -249,7 +249,9 @@ impl MetricsService {
 
 		// Update/send metrics that are always available.
 		telemetry!(
-			self.telemetry; SUBSTRATE_INFO; "system.interval";
+			self.telemetry;
+			SUBSTRATE_INFO;
+			"system.interval";
 			"height" => best_number,
 			"best" => ?best_hash,
 			"txcount" => txpool_status.ready,

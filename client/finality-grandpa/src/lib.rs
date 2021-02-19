@@ -558,7 +558,9 @@ where
 			move || {
 				let authorities = genesis_authorities_provider.get()?;
 				telemetry!(
-					telemetry; CONSENSUS_DEBUG; "afg.loading_authorities";
+					telemetry;
+					CONSENSUS_DEBUG;
+					"afg.loading_authorities";
 					"authorities_len" => ?authorities.len()
 				);
 				Ok(authorities)

@@ -829,7 +829,9 @@ impl<Block: BlockT> Inner<Block> {
 		if !self.authorities.contains(&full.message.id) {
 			debug!(target: "afg", "Message from unknown voter: {}", full.message.id);
 			telemetry!(
-				self.config.telemetry.clone(); CONSENSUS_DEBUG; "afg.bad_msg_signature";
+				self.config.telemetry.clone();
+				CONSENSUS_DEBUG;
+				"afg.bad_msg_signature";
 				"signature" => ?full.message.id,
 			);
 			return Action::Discard(cost::UNKNOWN_VOTER);

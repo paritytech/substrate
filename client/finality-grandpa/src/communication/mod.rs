@@ -734,7 +734,9 @@ impl<Block: BlockT> Sink<Message<Block>> for OutgoingMessages<Block>
 			);
 
 			telemetry!(
-				self.telemetry.clone(); CONSENSUS_DEBUG; "afg.announcing_blocks_to_voted_peers";
+				self.telemetry.clone();
+				CONSENSUS_DEBUG;
+				"afg.announcing_blocks_to_voted_peers";
 				"block" => ?target_hash, "round" => ?self.round, "set_id" => ?self.set_id,
 			);
 

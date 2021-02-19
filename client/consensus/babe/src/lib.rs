@@ -1072,7 +1072,8 @@ where
 
 				trace!(target: "babe", "Checked {:?}; importing.", pre_header);
 				telemetry!(
-					self.telemetry; CONSENSUS_TRACE;
+					self.telemetry;
+					CONSENSUS_TRACE;
 					"babe.checked_and_importing";
 					"pre_header" => ?pre_header);
 

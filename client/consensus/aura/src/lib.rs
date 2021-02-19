@@ -557,7 +557,9 @@ impl<C, P, CAW> AuraVerifier<C, P, CAW> where
 							diff
 						);
 						telemetry!(
-							self.client.telemetry(); CONSENSUS_INFO; "aura.halting_for_future_block";
+							self.client.telemetry();
+							CONSENSUS_INFO;
+							"aura.halting_for_future_block";
 							"diff" => ?diff,
 						);
 						thread::sleep(Duration::from_secs(diff));

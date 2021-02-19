@@ -471,7 +471,9 @@ where
 				);
 
 				telemetry!(
-					telemetry; CONSENSUS_INFO; "afg.applying_forced_authority_set_change";
+					telemetry;
+					CONSENSUS_INFO;
+					"afg.applying_forced_authority_set_change";
 					"block" => ?change.canon_height
 				);
 

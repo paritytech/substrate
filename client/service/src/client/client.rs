@@ -685,7 +685,9 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 					rand::thread_rng().gen_bool(0.1)
 				{
 					telemetry!(
-						self.telemetry(); SUBSTRATE_INFO; "block.import";
+						self.telemetry();
+						SUBSTRATE_INFO;
+						"block.import";
 						"height" => height,
 						"best" => ?hash,
 						"origin" => ?origin

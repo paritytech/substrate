@@ -690,7 +690,9 @@ async fn transaction_notifications<TBl, TExPool>(
 			network.propagate_transaction(hash);
 			let status = transaction_pool.status();
 			telemetry!(
-				telemetry; SUBSTRATE_INFO; "txpool.import";
+				telemetry;
+				SUBSTRATE_INFO;
+				"txpool.import";
 				"ready" => status.ready,
 				"future" => status.future,
 			);
