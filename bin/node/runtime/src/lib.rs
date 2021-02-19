@@ -66,6 +66,7 @@ use pallet_contracts_rpc_runtime_api::ContractExecResult;
 use pallet_session::{historical as pallet_session_historical};
 use sp_inherents::{InherentData, CheckInherentsResult};
 use static_assertions::const_assert;
+pub use pallet_cere_ddc;
 
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
@@ -887,6 +888,21 @@ impl pallet_vesting::Trait for Runtime {
 	type WeightInfo = weights::pallet_vesting::WeightInfo;
 }
 
+parameter_types! {
+	// Minimum bounds on storage are important to secure your chain.
+	pub const MinDataLength: usize = 1;
+	// Maximum bounds on storage are important to secure your chain.
+	pub const MaxDataLength: usize = usize::MAX;
+}
+
+/// Configure the send data pallet
+impl pallet_cere_ddc::Trait for Runtime {
+	type MinLength = MinDataLength;
+	type MaxLength = MaxDataLength;
+	// The ubiquitous event type.
+	type Event = Event;
+}
+
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -925,6 +941,7 @@ construct_runtime!(
 		Scheduler: pallet_scheduler::{Module, Call, Storage, Event<T>},
 		Proxy: pallet_proxy::{Module, Call, Storage, Event<T>},
 		Multisig: pallet_multisig::{Module, Call, Storage, Event<T>},
+		CereDDCModule: pallet_cere_ddc::{Module, Call, Storage, Event<T>},
 	}
 );
 

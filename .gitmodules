@@ -1,0 +1,3 @@
+[submodule "frame/ddc-pallet"]
+	path = frame/ddc-pallet
+	url = https://github.com/Cerebellum-Network/ddc-pallet.git

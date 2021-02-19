@@ -1,4 +1,4 @@
-#Cere Node with PoS consensus
+# Cere Node with PoS consensus
 
 ## How to become a validator
 
