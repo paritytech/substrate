@@ -36,7 +36,7 @@ use self::{
 	},
 	sandbox::Sandbox,
 };
-use frame_benchmarking::{benchmarks, account, whitelisted_caller};
+use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
 use frame_system::{Module as System, RawOrigin};
 use parity_wasm::elements::{Instruction, ValueType, BlockType};
 use sp_runtime::traits::{Hash, Bounded, Zero};
@@ -2440,127 +2440,10 @@ benchmarks! {
 	}: {}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::tests::{ExtBuilder, Test};
-	use frame_support::assert_ok;
-	use paste::paste;
 
-	macro_rules! create_test {
-		($name:ident) => {
-			#[test]
-			fn $name() {
-				ExtBuilder::default().build().execute_with(|| {
-					assert_ok!(paste!{
-						[<test_benchmark_ $name>]::<Test>()
-					});
-				});
-			}
-		}
-	}
 
-	create_test!(on_initialize);
-	create_test!(on_initialize_per_trie_key);
-	create_test!(on_initialize_per_queue_item);
-
-	create_test!(update_schedule);
-	create_test!(instantiate_with_code);
-	create_test!(instantiate);
-	create_test!(call);
-	create_test!(claim_surcharge);
-
-	create_test!(seal_caller);
-	create_test!(seal_address);
-	create_test!(seal_gas_left);
-	create_test!(seal_balance);
-	create_test!(seal_value_transferred);
-	create_test!(seal_minimum_balance);
-	create_test!(seal_tombstone_deposit);
-	create_test!(seal_rent_allowance);
-	create_test!(seal_block_number);
-	create_test!(seal_now);
-	create_test!(seal_weight_to_fee);
-	create_test!(seal_gas);
-	create_test!(seal_input);
-	create_test!(seal_input_per_kb);
-	create_test!(seal_return);
-	create_test!(seal_return_per_kb);
-	create_test!(seal_terminate);
-	create_test!(seal_restore_to);
-	create_test!(seal_restore_to_per_delta);
-	create_test!(seal_random);
-	create_test!(seal_deposit_event);
-	create_test!(seal_deposit_event_per_topic_and_kb);
-	create_test!(seal_set_rent_allowance);
-	create_test!(seal_set_storage);
-	create_test!(seal_set_storage_per_kb);
-	create_test!(seal_get_storage);
-	create_test!(seal_get_storage_per_kb);
-	create_test!(seal_transfer);
-	create_test!(seal_call);
-	create_test!(seal_call_per_transfer_input_output_kb);
-	create_test!(seal_instantiate);
-	create_test!(seal_instantiate_per_input_output_salt_kb);
-	create_test!(seal_clear_storage);
-	create_test!(seal_hash_sha2_256);
-	create_test!(seal_hash_sha2_256_per_kb);
-	create_test!(seal_hash_keccak_256);
-	create_test!(seal_hash_keccak_256_per_kb);
-	create_test!(seal_hash_blake2_256);
-	create_test!(seal_hash_blake2_256_per_kb);
-	create_test!(seal_hash_blake2_128);
-	create_test!(seal_hash_blake2_128_per_kb);
-
-	create_test!(instr_i64const);
-	create_test!(instr_i64load);
-	create_test!(instr_i64store);
-	create_test!(instr_select);
-	create_test!(instr_if);
-	create_test!(instr_br);
-	create_test!(instr_br_if);
-	create_test!(instr_br_table);
-	create_test!(instr_br_table_per_entry);
-	create_test!(instr_call);
-	create_test!(instr_call_indirect);
-	create_test!(instr_call_indirect_per_param);
-	create_test!(instr_local_get);
-	create_test!(instr_local_set);
-	create_test!(instr_local_tee);
-	create_test!(instr_global_get);
-	create_test!(instr_global_set);
-	create_test!(instr_memory_current);
-	create_test!(instr_memory_grow);
-	create_test!(instr_i64clz);
-	create_test!(instr_i64ctz);
-	create_test!(instr_i64popcnt);
-	create_test!(instr_i64eqz);
-	create_test!(instr_i64extendsi32);
-	create_test!(instr_i64extendui32);
-	create_test!(instr_i32wrapi64);
-	create_test!(instr_i64eq);
-	create_test!(instr_i64ne);
-	create_test!(instr_i64lts);
-	create_test!(instr_i64ltu);
-	create_test!(instr_i64gts);
-	create_test!(instr_i64gtu);
-	create_test!(instr_i64les);
-	create_test!(instr_i64leu);
-	create_test!(instr_i64ges);
-	create_test!(instr_i64geu);
-	create_test!(instr_i64add);
-	create_test!(instr_i64sub);
-	create_test!(instr_i64mul);
-	create_test!(instr_i64divs);
-	create_test!(instr_i64divu);
-	create_test!(instr_i64rems);
-	create_test!(instr_i64remu);
-	create_test!(instr_i64and);
-	create_test!(instr_i64or);
-	create_test!(instr_i64xor);
-	create_test!(instr_i64shl);
-	create_test!(instr_i64shrs);
-	create_test!(instr_i64shru);
-	create_test!(instr_i64rotl);
-	create_test!(instr_i64rotr);
-}
+impl_benchmark_test_suite!(
+	Contracts,
+	crate::tests::ExtBuilder::default().build(),
+	crate::tests::Test,
+);

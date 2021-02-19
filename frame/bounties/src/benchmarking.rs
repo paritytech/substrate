@@ -23,7 +23,7 @@ use super::*;
 
 use sp_runtime::traits::Bounded;
 use frame_system::{EventRecord, RawOrigin};
-use frame_benchmarking::{benchmarks, account, whitelisted_caller};
+use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
 use frame_support::traits::OnInitialize;
 
 use crate::Module as Bounties;
@@ -220,26 +220,8 @@ benchmarks! {
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::tests::{new_test_ext, Test};
-	use frame_support::assert_ok;
-
-	#[test]
-	fn test_benchmarks() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_propose_bounty::<Test>());
-			assert_ok!(test_benchmark_approve_bounty::<Test>());
-			assert_ok!(test_benchmark_propose_curator::<Test>());
-			assert_ok!(test_benchmark_unassign_curator::<Test>());
-			assert_ok!(test_benchmark_accept_curator::<Test>());
-			assert_ok!(test_benchmark_award_bounty::<Test>());
-			assert_ok!(test_benchmark_claim_bounty::<Test>());
-			assert_ok!(test_benchmark_close_bounty_proposed::<Test>());
-			assert_ok!(test_benchmark_close_bounty_active::<Test>());
-			assert_ok!(test_benchmark_extend_bounty_expiry::<Test>());
-			assert_ok!(test_benchmark_spend_funds::<Test>());
-		});
-	}
-}
+impl_benchmark_test_suite!(
+	Bounties,
+	crate::tests::new_test_ext(),
+	crate::tests::Test,
+);
