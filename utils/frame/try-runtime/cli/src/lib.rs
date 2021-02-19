@@ -133,7 +133,7 @@ impl TryRuntimeCmd {
 			};
 
 			// inject the code into this ext.
-			builder.inject(&[(code_key, code)]).build().await
+			builder.inject(&[(code_key, code)]).build().await?
 		};
 
 		let encoded_result = StateMachine::<_, _, NumberFor<B>, _>::new(
