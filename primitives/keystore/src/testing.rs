@@ -398,7 +398,7 @@ mod tests {
 			&key_pair.public(),
 			transcript_data.clone(),
 		);
-		assert!(result.is_err());
+		assert!(result.unwrap().is_none());
 
 		SyncCryptoStore::insert_unknown(
 			&store,
@@ -414,6 +414,6 @@ mod tests {
 			transcript_data,
 		);
 
-		assert!(result.is_ok());
+		assert!(result.unwrap().is_some());
 	}
 }
