@@ -1258,16 +1258,10 @@ mod tests {
 	}
 
 	impl ExtBuilder {
-		pub fn voter_bond_storage_base(self, bond: u64) -> Self {
-			VOTING_BOND_STORAGE_BASE.with(|v| *v.borrow_mut() = bond);
-			self
-		}
-		pub fn voter_bond_storage_factor(self, bond: u64) -> Self {
-			VOTING_BOND_STORAGE_FACTOR.with(|v| *v.borrow_mut() = bond);
-			self
-		}
-		pub fn voter_bond_weight_factor(self, bond: u64) -> Self {
-			VOTING_BOND_WEIGHT_FACTOR.with(|v| *v.borrow_mut() = bond);
+		pub fn voter_bonds(self, base: u64, storage: u64, weight: u64) -> Self {
+			VOTING_BOND_STORAGE_BASE.with(|v| *v.borrow_mut() = base);
+			VOTING_BOND_STORAGE_FACTOR.with(|v| *v.borrow_mut() = storage);
+			VOTING_BOND_WEIGHT_FACTOR.with(|v| *v.borrow_mut() = weight);
 			self
 		}
 		pub fn desired_runners_up(self, count: u32) -> Self {
@@ -1792,8 +1786,8 @@ mod tests {
 	}
 
 	#[test]
-	fn voting_reserves_bond_per_vote() {
-		ExtBuilder::default().voter_bond_storage_factor(1).build_and_execute(|| {
+	fn voting_reserves_bond_per_vote_storage() {
+		ExtBuilder::default().voter_bonds(2, 1, 0).build_and_execute(|| {
 			assert_eq!(balances(&2), (20, 0));
 
 			assert_ok!(submit_candidacy(Origin::signed(5)));
@@ -1836,7 +1830,7 @@ mod tests {
 
 	#[test]
 	fn voting_reserves_bond_per_vote_weight() {
-		ExtBuilder::default().balance_factor(10).voter_bond_weight_factor(1).build_and_execute(|| {
+		ExtBuilder::default().balance_factor(10).voter_bonds(2, 0, 1).build_and_execute(|| {
 			assert_eq!(balances(&1), (100, 0));
 
 			assert_ok!(submit_candidacy(Origin::signed(5)));
@@ -2062,7 +2056,7 @@ mod tests {
 
 	#[test]
 	fn remove_voter_should_work() {
-		ExtBuilder::default().voter_bond_storage_base(8).build_and_execute(|| {
+		ExtBuilder::default().voter_bonds(8, 0, 0).build_and_execute(|| {
 			assert_ok!(submit_candidacy(Origin::signed(5)));
 
 			assert_ok!(vote(Origin::signed(2), vec![5], 20));
