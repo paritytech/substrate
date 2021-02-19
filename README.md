@@ -1,6 +1,6 @@
 #Cere Node with PoS consensus
 
-## Try it out
+## How to become a validator
 
 Follow the [instructions](https://github.com/Cerebellum-Network/validator-instructions#how-to-become-a-validator) to get the Node up and running.
 
