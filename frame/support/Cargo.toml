@@ -57,3 +57,4 @@ std = [
 	"log/std",
 ]
 runtime-benchmarks = []
+try-runtime = []

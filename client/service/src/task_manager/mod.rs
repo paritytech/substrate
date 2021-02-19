@@ -234,7 +234,7 @@ pub struct TaskManager {
 impl TaskManager {
 	/// If a Prometheus registry is passed, it will be used to report statistics about the
 	/// service tasks.
-	pub(super) fn new(
+	pub fn new(
 		executor: TaskExecutor,
 		prometheus_registry: Option<&Registry>,
 	) -> Result<Self, PrometheusError> {
