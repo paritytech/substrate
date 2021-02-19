@@ -35,7 +35,7 @@ const EXTRINSIC_VERSION: u8 = 4;
 
 /// A extrinsic right from the external world. This is unchecked and so
 /// can contain a signature.
-#[derive(PartialEq, Eq, Clone, scale_info::TypeInfo)]
+#[derive(PartialEq, Eq, Clone)]
 pub struct UncheckedExtrinsic<Address, Call, Signature, Extra>
 where
 	Extra: SignedExtension
@@ -46,6 +46,24 @@ where
 	pub signature: Option<(Address, Signature, Extra)>,
 	/// The function that should be called.
 	pub function: Call,
+}
+
+// todo: [AJ] remove this manual impl once the top level runtime Call implements TypeInfo...
+// ...which it should be able to once all pallets are converted to frame v2 macros and all types have
+// scale_info support. It does mean for now that we won't have enough metadata to decode the raw
+// UncheckedExtrinsic bytes until all Pallet Calls are converted.
+impl<Address, Call, Signature, Extra> scale_info::TypeInfo for UncheckedExtrinsic<Address, Call, Signature, Extra>
+where
+	Extra: SignedExtension + scale_info::TypeInfo,
+{
+	type Identity = ();
+
+	fn type_info() -> scale_info::Type<scale_info::form::MetaForm> {
+		scale_info::Type::builder()
+			.path(scale_info::Path::new("UncheckedExtrinsic", module_path!()))
+			// dummy impl because we can't bound `Call` type param to `TypeInfo` yet (see above todo
+			.composite(scale_info::build::Fields::unit())
+	}
 }
 
 #[cfg(feature = "std")]
