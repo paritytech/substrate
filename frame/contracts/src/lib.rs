@@ -98,16 +98,16 @@ pub mod weights;
 mod tests;
 
 pub use crate::{
-	gas::{Gas, GasMeter},
-	wasm::{ReturnCode as RuntimeReturnCode, PrefabWasmModule},
-	weights::WeightInfo,
+	wasm::PrefabWasmModule,
 	schedule::{Schedule, HostFnWeights, InstructionWeights, Limits},
 	pallet::*,
 };
 use crate::{
+	gas::GasMeter,
 	exec::{ExecutionContext, Executable},
 	rent::Rent,
 	storage::{Storage, DeletedContract},
+	weights::WeightInfo,
 };
 use sp_core::crypto::UncheckedFrom;
 use sp_std::{prelude::*, marker::PhantomData, fmt::Debug};
@@ -121,6 +121,7 @@ use sp_runtime::{
 use frame_support::{
 	storage::child::ChildInfo,
 	traits::{OnUnbalanced, Currency, Get, Time, Randomness},
+	weights::Weight,
 };
 use frame_system::Module as System;
 use pallet_contracts_primitives::{
@@ -302,7 +303,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			dest: <T::Lookup as StaticLookup>::Source,
 			#[pallet::compact] value: BalanceOf<T>,
-			#[pallet::compact] gas_limit: Gas,
+			#[pallet::compact] gas_limit: Weight,
 			data: Vec<u8>
 		) -> DispatchResultWithPostInfo {
 			let origin = ensure_signed(origin)?;
@@ -348,7 +349,7 @@ pub mod pallet {
 		pub fn instantiate_with_code(
 			origin: OriginFor<T>,
 			#[pallet::compact] endowment: BalanceOf<T>,
-			#[pallet::compact] gas_limit: Gas,
+			#[pallet::compact] gas_limit: Weight,
 			code: Vec<u8>,
 			data: Vec<u8>,
 			salt: Vec<u8>,
@@ -382,7 +383,7 @@ pub mod pallet {
 		pub fn instantiate(
 			origin: OriginFor<T>,
 			#[pallet::compact] endowment: BalanceOf<T>,
-			#[pallet::compact] gas_limit: Gas,
+			#[pallet::compact] gas_limit: Weight,
 			code_hash: CodeHash<T>,
 			data: Vec<u8>,
 			salt: Vec<u8>,
@@ -675,7 +676,7 @@ where
 		origin: T::AccountId,
 		dest: T::AccountId,
 		value: BalanceOf<T>,
-		gas_limit: Gas,
+		gas_limit: Weight,
 		input_data: Vec<u8>,
 	) -> ContractExecResult {
 		let mut gas_meter = GasMeter::new(gas_limit);

@@ -28,9 +28,9 @@
 //! Thus, before executing a contract it should be reinstrument with new schedule.
 
 use crate::{
-	CodeHash, CodeStorage, PristineCode, Schedule, Config, Error,
+	CodeHash, CodeStorage, PristineCode, Schedule, Config, Error, Weight,
 	wasm::{prepare, PrefabWasmModule}, Module as Contracts, Event,
-	gas::{Gas, GasMeter, Token},
+	gas::{GasMeter, Token},
 	weights::WeightInfo,
 };
 use sp_core::crypto::UncheckedFrom;
@@ -196,7 +196,7 @@ struct InstrumentToken(u32);
 impl<T: Config> Token<T> for InstrumentToken {
 	type Metadata = ();
 
-	fn calculate_amount(&self, _metadata: &Self::Metadata) -> Gas {
+	fn calculate_amount(&self, _metadata: &Self::Metadata) -> Weight {
 		T::WeightInfo::instrument(self.0 / 1024)
 	}
 }

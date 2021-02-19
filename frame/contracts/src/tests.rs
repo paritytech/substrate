@@ -17,14 +17,15 @@
 
 use crate::{
 	BalanceOf, ContractInfo, ContractInfoOf, Module,
-	RawAliveContractInfo, Config, Schedule, gas::Gas,
-	Error, RuntimeReturnCode, storage::Storage,
+	RawAliveContractInfo, Config, Schedule,
+	Error, storage::Storage,
 	chain_extension::{
 		Result as ExtensionResult, Environment, ChainExtension, Ext, SysConfig, RetVal,
 		UncheckedFrom, InitState, ReturnFlags,
 	},
 	exec::{AccountIdOf, Executable}, wasm::PrefabWasmModule,
 	weights::WeightInfo,
+	wasm::ReturnCode as RuntimeReturnCode,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
@@ -292,7 +293,7 @@ pub const BOB: AccountId32 = AccountId32::new([2u8; 32]);
 pub const CHARLIE: AccountId32 = AccountId32::new([3u8; 32]);
 pub const DJANGO: AccountId32 = AccountId32::new([4u8; 32]);
 
-const GAS_LIMIT: Gas = 10_000_000_000;
+const GAS_LIMIT: Weight = 10_000_000_000;
 
 pub struct ExtBuilder {
 	existential_deposit: u64,
