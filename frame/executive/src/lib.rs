@@ -309,7 +309,7 @@ where
 			}
 
 			// any final checks
-			Self::final_checks(&header);
+			// Self::final_checks(&header);
 		} };
 	}
 

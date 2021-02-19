@@ -206,6 +206,14 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 		}
 	}
 
+	pub fn post_header(&self) -> Block::Header {
+		let mut hdr = self.header.clone();
+		for digest_item in &self.post_digests {
+			hdr.digest_mut().push(digest_item.clone());
+		}
+		hdr
+	}
+
 	/// Auxiliary function for "converting" the transaction type.
 	///
 	/// Actually this just sets `storage_changes` to `None` and makes rustc think that `Self` now

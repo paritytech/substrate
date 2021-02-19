@@ -172,7 +172,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, BS, Error, IDP>(
 /// Build and return the aura worker.
 ///
 /// The caller is responsible for running the returned worker.
-pub fn build_aura_worker<B, C, E, I, P, SO, BS, Error>(
+pub fn build_aura_worker<P, B, C, E, I, SO, BS, Error>(
 	client: Arc<C>,
 	block_import: I,
 	env: E,
