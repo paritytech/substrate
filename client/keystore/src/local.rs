@@ -278,7 +278,8 @@ impl SyncCryptoStore for LocalKeystore {
 	}
 
 	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
-		public_keys.iter().all(|(p, t)| self.0.read().key_phrase_by_type(&p, *t).is_ok())
+		public_keys.iter()
+			.all(|(p, t)| self.0.read().key_phrase_by_type(&p, *t).ok().flatten().is_some())
 	}
 
 	fn sr25519_vrf_sign(
@@ -560,6 +561,33 @@ mod tests {
 		assert_eq!(key.public(), key2.public());
 
 		assert_eq!(store.public_keys::<ed25519::AppPublic>().unwrap()[0], key.public());
+	}
+
+	#[test]
+	fn has_keys_works() {
+		let temp_dir = TempDir::new().unwrap();
+		let store = LocalKeystore::open(temp_dir.path(), None).unwrap();
+
+		let key: ed25519::AppPair = store.0.write().generate().unwrap();
+		let key2 = ed25519::Pair::generate().0;
+
+		assert!(
+			!SyncCryptoStore::has_keys(&store, &[(key2.public().to_vec(), ed25519::AppPublic::ID)])
+		);
+
+		assert!(
+			!SyncCryptoStore::has_keys(
+				&store,
+				&[
+					(key2.public().to_vec(), ed25519::AppPublic::ID),
+					(key.public().to_raw_vec(), ed25519::AppPublic::ID),
+				],
+			)
+		);
+
+		assert!(
+			SyncCryptoStore::has_keys(&store, &[(key.public().to_raw_vec(), ed25519::AppPublic::ID)])
+		);
 	}
 
 	#[test]
