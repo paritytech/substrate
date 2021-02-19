@@ -29,6 +29,7 @@ use crate::{
 	ExtendedBalance,
 	IdentifierT,
 	Support,
+	SupportMap,
 	Supports,
 	Voter,
 	VoteWeight,
@@ -86,14 +87,27 @@ fn prepare_pjr_input<AccountId: IdentifierT>(
 		}
 	}
 
+	// Convert Suppports into a SupportMap
+	//
+	// As a flat list, we're limited to linear search. That gives the production of `candidates`,
+	// below, a complexity of `O(s*c)`, where `s == supports.len()` and `c == all_candidates.len()`.
+	// For large lists, that's pretty bad.
+	//
+	// A `SupportMap`, as a `BTreeMap`, has access timing of `O(lg n)`. This means that constructing
+	// the map and then indexing from it gives us timing of `O((s + c) * lg(s))`. If in the future
+	// we get access to a deterministic `HashMap`, we can further improve that to `O(s+c)`.
+	//
+	// However, it does mean allocating sufficient space to store all the data again.
+	let supports: SupportMap<AccountId> = supports.iter().cloned().collect();
+
 	let candidates = all_candidates.into_iter().enumerate().map(|(i, c)| {
 		candidates_index.insert(c.clone(), i);
 
 		// set the backing value and elected flag if the candidate is among the winners.
 		let who = c;
-		let maybe_support = supports.iter().find(|(winner, _support)| winner == &who);
+		let maybe_support = supports.get(&who);
 		let elected = maybe_support.is_some();
-		let backed_stake = maybe_support.map(|(_id, support)| support.total).unwrap_or_default();
+		let backed_stake = maybe_support.map(|support| support.total).unwrap_or_default();
 
 		debug_assert!(
 			!(elected ^ (backed_stake > 0)),
