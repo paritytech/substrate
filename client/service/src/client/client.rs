@@ -37,9 +37,6 @@ use sp_core::{
 use sp_keystore::SyncCryptoStorePtr;
 use sc_telemetry::{
 	telemetry,
-	ClientTelemetry,
-	ConnectionMessage,
-	Telemetry,
 	TelemetryHandle,
 	SUBSTRATE_INFO,
 };
@@ -122,8 +119,7 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	block_rules: BlockRules<Block>,
 	execution_extensions: ExecutionExtensions<Block>,
 	config: ClientConfig,
-	telemetry: Mutex<Option<Telemetry>>,
-	telemetry_handle: Option<TelemetryHandle>,
+	telemetry: Option<TelemetryHandle>,
 	_phantom: PhantomData<RA>,
 }
 
@@ -161,7 +157,7 @@ pub fn new_in_mem<E, Block, S, RA>(
 	genesis_storage: &S,
 	keystore: Option<SyncCryptoStorePtr>,
 	prometheus_registry: Option<Registry>,
-	telemetry: Option<Telemetry>,
+	telemetry: Option<TelemetryHandle>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	config: ClientConfig,
 ) -> sp_blockchain::Result<Client<
@@ -207,7 +203,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 	keystore: Option<SyncCryptoStorePtr>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
-	telemetry: Option<Telemetry>,
+	telemetry: Option<TelemetryHandle>,
 	config: ClientConfig,
 ) -> sp_blockchain::Result<Client<B, LocalCallExecutor<B, E>, Block, RA>>
 	where
@@ -307,7 +303,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		bad_blocks: BadBlocks<Block>,
 		execution_extensions: ExecutionExtensions<Block>,
 		prometheus_registry: Option<Registry>,
-		telemetry: Option<Telemetry>,
+		telemetry: Option<TelemetryHandle>,
 		config: ClientConfig,
 	) -> sp_blockchain::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
@@ -340,8 +336,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			block_rules: BlockRules::new(fork_blocks, bad_blocks),
 			execution_extensions,
 			config,
-			telemetry_handle: telemetry.as_ref().map(|x| x.handle()),
-			telemetry: Mutex::new(telemetry),
+			telemetry,
 			_phantom: Default::default(),
 		})
 	}
@@ -685,7 +680,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 					rand::thread_rng().gen_bool(0.1)
 				{
 					telemetry!(
-						self.telemetry();
+						self.telemetry.clone();
 						SUBSTRATE_INFO;
 						"block.import";
 						"height" => height,
@@ -1008,7 +1003,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				);
 
 			telemetry!(
-				self.telemetry();
+				self.telemetry.clone();
 				SUBSTRATE_INFO;
 				"notify.finalized";
 				"height" => format!("{}", header.number()),
@@ -2019,23 +2014,5 @@ impl<BE, E, B, RA> sp_consensus::block_validation::Chain<B> for Client<BE, E, B,
 		id: &BlockId<B>,
 	) -> Result<BlockStatus, Box<dyn std::error::Error + Send>> {
 		Client::block_status(self, id).map_err(|e| Box::new(e) as Box<_>)
-	}
-}
-
-impl<BE, E, B, RA> ClientTelemetry for Client<BE, E, B, RA>
-	where
-		BE: backend::Backend<B>,
-		E: CallExecutor<B>,
-		B: BlockT,
-{
-	fn telemetry(&self) -> Option<TelemetryHandle> {
-		self.telemetry_handle.clone()
-	}
-
-	fn start_telemetry(&self, connection_message: ConnectionMessage) -> sc_telemetry::Result<()> {
-		if let Some(telemetry) = self.telemetry.lock().as_mut() {
-			telemetry.start_telemetry(connection_message)?;
-		}
-		Ok(())
 	}
 }

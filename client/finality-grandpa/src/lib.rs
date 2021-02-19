@@ -79,7 +79,7 @@ use sp_core::{
 use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 use sp_application_crypto::AppKey;
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
-use sc_telemetry::{telemetry, ClientTelemetry, TelemetryHandle, CONSENSUS_INFO, CONSENSUS_DEBUG};
+use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_INFO, CONSENSUS_DEBUG};
 use parking_lot::RwLock;
 
 use finality_grandpa::Error as GrandpaError;
@@ -454,6 +454,7 @@ pub struct LinkHalf<Block: BlockT, C, SC> {
 	voter_commands_rx: TracingUnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 	justification_sender: GrandpaJustificationSender<Block>,
 	justification_stream: GrandpaJustificationStream<Block>,
+	telemetry: Option<TelemetryHandle>,
 }
 
 impl<Block: BlockT, C, SC> LinkHalf<Block, C, SC> {
@@ -504,6 +505,7 @@ pub fn block_import<BE, Block: BlockT, Client, SC>(
 	client: Arc<Client>,
 	genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
 	select_chain: SC,
+	telemetry: Option<TelemetryHandle>,
 ) -> Result<
 	(
 		GrandpaBlockImport<BE, Block, Client, SC>,
@@ -514,13 +516,14 @@ pub fn block_import<BE, Block: BlockT, Client, SC>(
 where
 	SC: SelectChain<Block>,
 	BE: Backend<Block> + 'static,
-	Client: ClientForGrandpa<Block, BE> + ClientTelemetry + 'static,
+	Client: ClientForGrandpa<Block, BE> + 'static,
 {
 	block_import_with_authority_set_hard_forks(
 		client,
 		genesis_authorities_provider,
 		select_chain,
 		Default::default(),
+		telemetry,
 	)
 }
 
@@ -534,6 +537,7 @@ pub fn block_import_with_authority_set_hard_forks<BE, Block: BlockT, Client, SC>
 	genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
 	select_chain: SC,
 	authority_set_hard_forks: Vec<(SetId, (Block::Hash, NumberFor<Block>), AuthorityList)>,
+	telemetry: Option<TelemetryHandle>,
 ) -> Result<
 	(
 		GrandpaBlockImport<BE, Block, Client, SC>,
@@ -544,7 +548,7 @@ pub fn block_import_with_authority_set_hard_forks<BE, Block: BlockT, Client, SC>
 where
 	SC: SelectChain<Block>,
 	BE: Backend<Block> + 'static,
-	Client: ClientForGrandpa<Block, BE> + ClientTelemetry + 'static,
+	Client: ClientForGrandpa<Block, BE> + 'static,
 {
 	let chain_info = client.info();
 	let genesis_hash = chain_info.genesis_hash;
@@ -554,7 +558,7 @@ where
 		genesis_hash,
 		<NumberFor<Block>>::zero(),
 		{
-			let mut telemetry = client.telemetry();
+			let mut telemetry = telemetry.clone();
 			move || {
 				let authorities = genesis_authorities_provider.get()?;
 				telemetry!(
@@ -599,6 +603,7 @@ where
 			voter_commands_tx,
 			authority_set_hard_forks,
 			justification_sender.clone(),
+			telemetry.clone(),
 		),
 		LinkHalf {
 			client,
@@ -607,6 +612,7 @@ where
 			voter_commands_rx,
 			justification_sender,
 			justification_stream,
+			telemetry,
 		},
 	))
 }
@@ -734,6 +740,7 @@ where
 		voter_commands_rx,
 		justification_sender,
 		justification_stream: _,
+		telemetry: _,
 	} = link;
 
 	let network = NetworkBridge::new(

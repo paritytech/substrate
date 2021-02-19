@@ -54,11 +54,9 @@ use std::sync::Arc;
 use wasm_timer::SystemTime;
 use sc_telemetry::{
 	telemetry,
-	ClientTelemetry,
 	ConnectionMessage,
 	Telemetry,
 	TelemetryHandle,
-	TelemetryWorkerHandle,
 	SUBSTRATE_INFO,
 };
 use sp_transaction_pool::MaintainedTransactionPool;
@@ -293,18 +291,18 @@ impl KeystoreContainer {
 /// Creates a new full client for the given config.
 pub fn new_full_client<TBl, TRtApi, TExecDisp>(
 	config: &Configuration,
-	telemetry_worker_handle: Option<TelemetryWorkerHandle>,
+	telemetry: Option<TelemetryHandle>,
 ) -> Result<TFullClient<TBl, TRtApi, TExecDisp>, Error> where
 	TBl: BlockT,
 	TExecDisp: NativeExecutionDispatch + 'static,
 {
-	new_full_parts(config, telemetry_worker_handle).map(|parts| parts.0)
+	new_full_parts(config, telemetry).map(|parts| parts.0)
 }
 
 /// Create the initial parts of a full node.
 pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 	config: &Configuration,
-	telemetry_worker_handle: Option<TelemetryWorkerHandle>,
+	telemetry: Option<TelemetryHandle>,
 ) -> Result<TFullParts<TBl, TRtApi, TExecDisp>,	Error> where
 	TBl: BlockT,
 	TExecDisp: NativeExecutionDispatch + 'static,
@@ -347,11 +345,6 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 			Some(keystore_container.sync_keystore()),
 		);
 
-		let telemetry = match (telemetry_worker_handle, config.telemetry_endpoints.clone()) {
-			(Some(mut handle), Some(endpoints)) => Some(handle.new_telemetry(endpoints)),
-			_ => None,
-		};
-
 		new_client(
 			db_config,
 			executor,
@@ -381,7 +374,7 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 /// Create the initial parts of a light node.
 pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 	config: &Configuration,
-	telemetry_worker_handle: Option<TelemetryWorkerHandle>,
+	telemetry: Option<TelemetryHandle>,
 ) -> Result<TLightParts<TBl, TRtApi, TExecDisp>, Error> where
 	TBl: BlockT,
 	TExecDisp: NativeExecutionDispatch + 'static,
@@ -420,10 +413,6 @@ pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 	);
 	let on_demand = Arc::new(sc_network::config::OnDemand::new(fetch_checker));
 	let backend = sc_light::new_light_backend(light_blockchain);
-	let telemetry = match (telemetry_worker_handle, config.telemetry_endpoints.clone()) {
-		(Some(mut handle), Some(endpoints)) => Some(handle.new_telemetry(endpoints)),
-		_ => None,
-	};
 	let client = Arc::new(light::new_light(
 		backend.clone(),
 		config.chain_spec.as_storage_builder(),
@@ -446,7 +435,7 @@ pub fn new_client<E, Block, RA>(
 	execution_extensions: ExecutionExtensions<Block>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
-	telemetry: Option<Telemetry>,
+	telemetry: Option<TelemetryHandle>,
 	config: ClientConfig,
 ) -> Result<(
 	crate::client::Client<
@@ -510,6 +499,8 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	pub network_status_sinks: NetworkStatusSinks<TBl>,
 	/// A Sender for RPC requests.
 	pub system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
+	/// Telemetry instance for this node.
+	pub telemetry: Option<&'a mut Telemetry>,
 }
 
 /// Build a shared offchain workers instance.
@@ -561,7 +552,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		TCl: ProvideRuntimeApi<TBl> + HeaderMetadata<TBl, Error=sp_blockchain::Error> + Chain<TBl> +
 		BlockBackend<TBl> + BlockIdTo<TBl, Error=sp_blockchain::Error> + ProofProvider<TBl> +
 		HeaderBackend<TBl> + BlockchainEvents<TBl> + ExecutorProvider<TBl> + UsageProvider<TBl> +
-		StorageProvider<TBl, TBackend> + CallApiAt<TBl> + ClientTelemetry + Send + 'static,
+		StorageProvider<TBl, TBackend> + CallApiAt<TBl> + Send + 'static,
 		<TCl as ProvideRuntimeApi<TBl>>::Api:
 			sp_api::Metadata<TBl> +
 			sc_offchain::OffchainWorkerApi<TBl> +
@@ -587,6 +578,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		network,
 		network_status_sinks,
 		system_rpc_tx,
+		telemetry,
 	} = params;
 
 	let chain_info = client.usage_info().chain;
@@ -597,11 +589,16 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default(),
 	).map_err(|e| Error::Application(Box::new(e)))?;
 
-	init_telemetry(
-		&mut config,
-		network.clone(),
-		client.clone(),
-	)?;
+	let telemetry = telemetry
+		.map(|telemetry| {
+			init_telemetry(
+				&mut config,
+				network.clone(),
+				client.clone(),
+				telemetry,
+			)
+		})
+		.transpose()?;
 
 	info!("📦 Highest known block at #{}", chain_info.best_number);
 
@@ -615,7 +612,11 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 
 	spawn_handle.spawn(
 		"on-transaction-imported",
-		transaction_notifications(transaction_pool.clone(), network.clone(), client.telemetry()),
+		transaction_notifications(
+			transaction_pool.clone(),
+			network.clone(),
+			telemetry.clone(),
+		),
 	);
 
 	// Prometheus metrics.
@@ -623,7 +624,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		config.prometheus_config.clone()
 	{
 		// Set static metrics.
-		let metrics = MetricsService::with_prometheus(client.telemetry(), &registry, &config)?;
+		let metrics = MetricsService::with_prometheus(telemetry.clone(), &registry, &config)?;
 		spawn_handle.spawn(
 			"prometheus-endpoint",
 			prometheus_endpoint::init_prometheus(port, registry).map(drop)
@@ -631,7 +632,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 
 		metrics
 	} else {
-		MetricsService::new(client.telemetry())
+		MetricsService::new(telemetry.clone())
 	};
 
 	// Periodically updated metrics and telemetry updates.
@@ -701,11 +702,12 @@ async fn transaction_notifications<TBl, TExPool>(
 		.await;
 }
 
-fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl> + ClientTelemetry>(
+fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 	config: &mut Configuration,
 	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
 	client: Arc<TCl>,
-) -> sc_telemetry::Result<()> {
+	telemetry: &mut Telemetry,
+) -> sc_telemetry::Result<TelemetryHandle> {
 	let genesis_hash = client.block_hash(Zero::zero()).ok().flatten().unwrap_or_default();
 	let connection_message = ConnectionMessage {
 		name: config.network.node_name.to_owned(),
@@ -721,7 +723,9 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl> + ClientTelemetry>(
 		network_id: network.local_peer_id().to_base58(),
 	};
 
-	client.start_telemetry(connection_message)
+	telemetry.start_telemetry(connection_message)?;
+
+	Ok(telemetry.handle())
 }
 
 fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(

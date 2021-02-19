@@ -554,13 +554,3 @@ macro_rules! format_fields_to_json {
 		)*
 	}};
 }
-
-/// A trait used by the Substrate's Client to get a [`TelemetryHandle`] or to initialize the
-/// [`Telemetry`].
-pub trait ClientTelemetry {
-	/// Get a clonable handle to the telemetry if it exists.
-	fn telemetry(&self) -> Option<TelemetryHandle>;
-
-	/// Initialize the [`Telemetry`].
-	fn start_telemetry(&self, connection_message: ConnectionMessage) -> Result<()>;
-}

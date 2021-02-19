@@ -24,7 +24,7 @@ use parking_lot::RwLockWriteGuard;
 
 use sp_blockchain::{BlockStatus, well_known_cache_keys};
 use sc_client_api::{backend::Backend, utils::is_descendent_of};
-use sc_telemetry::ClientTelemetry;
+use sc_telemetry::TelemetryHandle;
 use sp_utils::mpsc::TracingUnboundedSender;
 use sp_api::TransactionFor;
 
@@ -63,6 +63,7 @@ pub struct GrandpaBlockImport<Backend, Block: BlockT, Client, SC> {
 	send_voter_commands: TracingUnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
 	authority_set_hard_forks: HashMap<Block::Hash, PendingChange<Block::Hash, NumberFor<Block>>>,
 	justification_sender: GrandpaJustificationSender<Block>,
+	telemetry: Option<TelemetryHandle>,
 	_phantom: PhantomData<Backend>,
 }
 
@@ -77,6 +78,7 @@ impl<Backend, Block: BlockT, Client, SC: Clone> Clone for
 			send_voter_commands: self.send_voter_commands.clone(),
 			authority_set_hard_forks: self.authority_set_hard_forks.clone(),
 			justification_sender: self.justification_sender.clone(),
+			telemetry: self.telemetry.clone(),
 			_phantom: PhantomData,
 		}
 	}
@@ -87,7 +89,7 @@ impl<BE, Block: BlockT, Client, SC> JustificationImport<Block>
 		NumberFor<Block>: finality_grandpa::BlockNumberOps,
 		DigestFor<Block>: Encode,
 		BE: Backend<Block>,
-		Client: crate::ClientForGrandpa<Block, BE> + ClientTelemetry,
+		Client: crate::ClientForGrandpa<Block, BE>,
 		SC: SelectChain<Block>,
 {
 	type Error = ConsensusError;
@@ -219,7 +221,7 @@ where
 	NumberFor<Block>: finality_grandpa::BlockNumberOps,
 	DigestFor<Block>: Encode,
 	BE: Backend<Block>,
-	Client: crate::ClientForGrandpa<Block, BE> + ClientTelemetry,
+	Client: crate::ClientForGrandpa<Block, BE>,
 {
 	// check for a new authority set change.
 	fn check_new_change(
@@ -340,7 +342,7 @@ where
 					number,
 					&is_descendent_of,
 					initial_sync,
-					self.inner.telemetry(),
+					self.telemetry.clone(),
 				)
 				.map_err(|e| ConsensusError::ClientImport(e.to_string()))
 				.map_err(ConsensusError::from)?;
@@ -416,7 +418,7 @@ impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
 		NumberFor<Block>: finality_grandpa::BlockNumberOps,
 		DigestFor<Block>: Encode,
 		BE: Backend<Block>,
-		Client: crate::ClientForGrandpa<Block, BE> + ClientTelemetry,
+		Client: crate::ClientForGrandpa<Block, BE>,
 		for<'a> &'a Client:
 			BlockImport<Block, Error = ConsensusError, Transaction = TransactionFor<Client, Block>>,
 {
@@ -563,6 +565,7 @@ impl<Backend, Block: BlockT, Client, SC> GrandpaBlockImport<Backend, Block, Clie
 		send_voter_commands: TracingUnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
 		authority_set_hard_forks: Vec<(SetId, PendingChange<Block::Hash, NumberFor<Block>>)>,
 		justification_sender: GrandpaJustificationSender<Block>,
+		telemetry: Option<TelemetryHandle>,
 	) -> GrandpaBlockImport<Backend, Block, Client, SC> {
 		// check for and apply any forced authority set hard fork that applies
 		// to the *current* authority set.
@@ -606,6 +609,7 @@ impl<Backend, Block: BlockT, Client, SC> GrandpaBlockImport<Backend, Block, Clie
 			send_voter_commands,
 			authority_set_hard_forks,
 			justification_sender,
+			telemetry,
 			_phantom: PhantomData,
 		}
 	}
@@ -614,7 +618,7 @@ impl<Backend, Block: BlockT, Client, SC> GrandpaBlockImport<Backend, Block, Clie
 impl<BE, Block: BlockT, Client, SC> GrandpaBlockImport<BE, Block, Client, SC>
 where
 	BE: Backend<Block>,
-	Client: crate::ClientForGrandpa<Block, BE> + ClientTelemetry,
+	Client: crate::ClientForGrandpa<Block, BE>,
 	NumberFor<Block>: finality_grandpa::BlockNumberOps,
 {
 	/// Import a block justification and finalize the block.
@@ -650,7 +654,7 @@ where
 			justification.into(),
 			initial_sync,
 			Some(&self.justification_sender),
-			self.inner.telemetry(),
+			self.telemetry.clone(),
 		);
 
 		match result {

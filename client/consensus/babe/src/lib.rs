@@ -89,7 +89,7 @@ use sp_runtime::{
 use sp_api::{ProvideRuntimeApi, NumberFor};
 use parking_lot::Mutex;
 use sp_inherents::{InherentDataProviders, InherentData};
-use sc_telemetry::{telemetry, ClientTelemetry, TelemetryHandle, CONSENSUS_TRACE, CONSENSUS_DEBUG};
+use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_TRACE, CONSENSUS_DEBUG};
 use sp_consensus::{
 	BlockImport, Environment, Proposer, BlockCheckParams,
 	ForkChoiceStrategy, BlockImportParams, BlockOrigin, Error as ConsensusError,
@@ -358,7 +358,7 @@ impl std::ops::Deref for Config {
 }
 
 /// Parameters for BABE.
-pub struct BabeParams<B: BlockT, C: ClientTelemetry, E, I, SO, SC, CAW, BS> {
+pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW, BS> {
 	/// The keystore that manages the keys of the node.
 	pub keystore: SyncCryptoStorePtr,
 
@@ -393,6 +393,9 @@ pub struct BabeParams<B: BlockT, C: ClientTelemetry, E, I, SO, SC, CAW, BS> {
 
 	/// Checks if the current native implementation can author with a runtime at a given block.
 	pub can_author_with: CAW,
+
+	/// Handle use to report telemetries.
+	pub telemetry: Option<TelemetryHandle>,
 }
 
 /// Start the babe worker.
@@ -408,13 +411,14 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, BS, Error>(BabeParams {
 	backoff_authoring_blocks,
 	babe_link,
 	can_author_with,
+	telemetry,
 }: BabeParams<B, C, E, I, SO, SC, CAW, BS>) -> Result<
 	BabeWorker<B>,
 	sp_consensus::Error,
 > where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + ProvideCache<B> + ProvideUncles<B> + BlockchainEvents<B>
-		+ HeaderBackend<B> + HeaderMetadata<B, Error = ClientError> + ClientTelemetry
+		+ HeaderBackend<B> + HeaderMetadata<B, Error = ClientError>
 		+ Send + Sync + 'static,
 	C::Api: BabeApi<B>,
 	SC: SelectChain<B> + 'static,
@@ -441,6 +445,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, BS, Error>(BabeParams {
 		epoch_changes: babe_link.epoch_changes.clone(),
 		slot_notification_sinks: slot_notification_sinks.clone(),
 		config: config.clone(),
+		telemetry,
 	};
 
 	register_babe_inherent_data_provider(&inherent_data_providers, config.slot_duration())?;
@@ -514,6 +519,7 @@ struct BabeSlotWorker<B: BlockT, C, E, I, SO, BS> {
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 	slot_notification_sinks: SlotNotificationSinks<B>,
 	config: Config,
+	telemetry: Option<TelemetryHandle>,
 }
 
 impl<B, C, E, I, Error, SO, BS> sc_consensus_slots::SimpleSlotWorker<B>
@@ -523,8 +529,7 @@ where
 	C: ProvideRuntimeApi<B> +
 		ProvideCache<B> +
 		HeaderBackend<B> +
-		HeaderMetadata<B, Error = ClientError> +
-		ClientTelemetry,
+		HeaderMetadata<B, Error = ClientError>,
 	C::Api: BabeApi<B>,
 	E: Environment<B, Error = Error>,
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
@@ -703,7 +708,7 @@ where
 	}
 
 	fn telemetry(&self) -> Option<TelemetryHandle> {
-		self.client.telemetry()
+		self.telemetry.clone()
 	}
 
 	fn proposing_remaining_duration(
@@ -1505,11 +1510,12 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, Inner, CAW>(
 	spawner: &impl sp_core::traits::SpawnNamed,
 	registry: Option<&Registry>,
 	can_author_with: CAW,
+	telemetry: Option<TelemetryHandle>,
 ) -> ClientResult<DefaultImportQueue<Block, Client>> where
 	Inner: BlockImport<Block, Error = ConsensusError, Transaction = sp_api::TransactionFor<Client, Block>>
 		+ Send + Sync + 'static,
 	Client: ProvideRuntimeApi<Block> + ProvideCache<Block> + HeaderBackend<Block>
-		+ HeaderMetadata<Block, Error = sp_blockchain::Error> + AuxStore + ClientTelemetry
+		+ HeaderMetadata<Block, Error = sp_blockchain::Error> + AuxStore
 		+ Send + Sync + 'static,
 	Client::Api: BlockBuilderApi<Block> + BabeApi<Block> + ApiExt<Block>,
 	SelectChain: sp_consensus::SelectChain<Block> + 'static,
@@ -1524,7 +1530,7 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, Inner, CAW>(
 		epoch_changes: babe_link.epoch_changes,
 		time_source: babe_link.time_source,
 		can_author_with,
-		telemetry: client.telemetry(),
+		telemetry,
 		client,
 	};
 
