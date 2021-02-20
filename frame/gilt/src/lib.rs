@@ -18,6 +18,43 @@
 //! # Gilt Pallet
 //! A pallet allowing accounts to auction for being frozen and receive open-ended
 //! inflation-protection in return.
+//!
+//! ## Overview
+//!
+//! Lock up tokens, for at least as long as you offer, and be free from both inflation and
+//! intermediate reward or exchange until the tokens become unlocked.
+//!
+//! ## Design
+//!
+//! Queues for each of 1-`QueueCount` periods, given in blocks (`Period`). Queues are limited in
+//! size to something sensible, `MaxQueueLen`. A secondary storage item with `QueueCount` x `u32`
+//! elements with the number of items in each queue.
+//!
+//! Account can enqueue a balance with some number of `Period`s lock up, up to a maximum of
+//! `QueueCount`. The balance gets reserved. There's a minimum of `MinFreeze` to avoid dust.
+//!
+//! Until your bid is turned into an issued gilt you can retract it instantly and the funds are
+//! unreserved.
+//!
+//! There's a target proportion of effective total issuance (i.e. accounting for existing gilts)
+//! which the we attempt to have frozen at any one time. It will likely be gradually increased over
+//! time by governance.
+//!
+//! As the total funds frozen under gilts drops below `FrozenFraction` of the total effective
+//! issuance, then bids are taken from queues, with the queue of the greatest period taking
+//! priority. If the item in the queue's locked amount is greater than the amount left to be
+//! frozen, then it is split up into multiple bids and becomes partially frozen under gilt.
+//!
+//! Once an account's balance is frozen, it remains frozen until the owner thaws the balance of the
+//! account. This may happen no earlier than queue's period after the point at which the gilt is
+//! issued.
+//!
+//! ## Suggested Values
+//!
+//! - `QueueCount`: 300
+//! - `Period`: 432,000
+//! - `MaxQueueLen`: 1000
+//! - `MinFreeze`: Around CHF 100 in value.
 
 pub use pallet::*;
 
@@ -43,30 +80,57 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
+		/// Overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
+		/// Currency type that this works on.
 		type Currency: ReservableCurrency<Self::AccountId>;
 
+		/// Origin required for setting the target proportion to be under gilt.
 		type AdminOrigin: EnsureOrigin<Self::Origin>;
 
+		/// Unbalanced handler to account for funds created (in case of a higher total issuance over
+		/// freezing period).
 		type Deficit: OnUnbalanced<PositiveImbalanceOf<Self>>;
+
+		/// Unbalanced handler to account for funds destroyed (in case of a lower total issuance
+		/// over freezing period).
 		type Surplus: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
+		/// Number of duration queues in total. This sets the maximum duration supported, which is
+		/// this value multiplied by `Period`.
 		#[pallet::constant]
 		type QueueCount: Get<u32>;
 
+		/// Maximum number of items that may be in each duration queue.
 		#[pallet::constant]
 		type MaxQueueLen: Get<u32>;
 
+		/// The base period for the duration queues. This is the common multiple across all
+		/// supported freezing durations that can be bid upon.
 		#[pallet::constant]
 		type Period: Get<Self::BlockNumber>;
 
+		/// The minimum amount of funds that may be offered to freeze for a gilt. Note that this
+		/// does not actually limit the amount which may be frozen in a gilt since gilts may be
+		/// split up in order to satisfy the desired amount of funds under gilts.
+		///
+		/// It should be at least big enough to ensure that there is no possible storage spam attack
+		/// or queue-filling attack.
 		#[pallet::constant]
 		type MinFreeze: Get<BalanceOf<Self>>;
 
+		/// The number of blocks between consecutive attempts to issue more gilts in an effort to
+		/// get to the target amount to be frozen.
+		///
+		/// A larger value results in fewer storage hits each block, but a slower period to get to
+		/// the target.
 		#[pallet::constant]
 		type IntakePeriod: Get<Self::BlockNumber>;
 
+		/// The maximum amount of bids that can be turned into issued gilts each block. A larger
+		/// value here means less of the block available for transactions should there be a glut of
+		/// bids to make into gilts to reach the target.
 		#[pallet::constant]
 		type MaxIntakeBids: Get<u32>;
 	}
@@ -75,22 +139,34 @@ pub mod pallet {
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
+	/// A single bid on a gilt, an item of a *queue* in `Queues`.
 	#[derive(Clone, Eq, PartialEq, Default, Encode, Decode, RuntimeDebug)]
 	pub struct GiltBid<Balance, AccountId> {
+		/// The amount bid.
 		pub amount: Balance,
+		/// The owner of the bid.
 		pub who: AccountId,
 	}
 
+	/// Information representing an active gilt.
 	#[derive(Clone, Eq, PartialEq, Default, Encode, Decode, RuntimeDebug)]
 	pub struct ActiveGilt<Balance, AccountId, BlockNumber> {
+		/// The proportion of the effective total issuance (i.e. accounting for any eventual gilt
+		/// expansion or contraction that may eventually be claimed).
 		pub proportion: Perquintill,
+		/// The amount reserved under this gilt.
 		pub amount: Balance,
+		/// The account to whom this gilt belongs.
 		pub who: AccountId,
+		/// The time after which this gilt can be redeemed for the proportional amount of balance.
 		pub expiry: BlockNumber,
 	}
 
+	/// An index for a gilt.
 	pub type ActiveIndex = u32;
 
+	/// Overall information package on the active gilts.
+	///
 	/// The way of determining the net issuance (i.e. after factoring in all maturing frozen funds)
 	/// is:
 	///
@@ -107,6 +183,15 @@ pub mod pallet {
 		pub target: Perquintill,
 	}
 
+	/// The totals of items and balances within each queue. Saves a lot of storage reads in the
+	/// case of sparsely packed queues.
+	///
+	/// The vector is indexed by duration in `Period`s, offset by one, so information on the queue
+	/// whose duration is one `Period` would be storage `0`.
+	#[pallet::storage]
+	pub type QueueTotals<T> = StorageValue<_, Vec<(u32, BalanceOf<T>)>, ValueQuery>;
+
+	/// The queues of bids ready to become gilts. Indexed by duration (in `Period`s).
 	#[pallet::storage]
 	pub type Queues<T: Config> = StorageMap<
 		_,
@@ -116,12 +201,11 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
-	#[pallet::storage]
-	pub type QueueTotals<T> = StorageValue<_, Vec<(u32, BalanceOf<T>)>, ValueQuery>;
-
+	/// Information relating to the gilts currently active.
 	#[pallet::storage]
 	pub type ActiveTotal<T> = StorageValue<_, ActiveGiltsTotal<BalanceOf<T>>, ValueQuery>;
 
+	/// The currently active gilts, indexed according to the order of creation.
 	#[pallet::storage]
 	pub type Active<T> = StorageMap<
 		_,
@@ -160,12 +244,15 @@ pub mod pallet {
 		GiltThawed(ActiveIndex, T::AccountId, BalanceOf<T>, BalanceOf<T>),
 	}
 
-	// Errors inform users that something went wrong.
 	#[pallet::error]
 	pub enum Error<T> {
+		/// The duration of the bid is less than one.
 		DurationTooSmall,
+		/// The duration is the bid is greater than the number of queues.
 		DurationTooBig,
+		/// The amount of the bid is less than the minimum allowed.
 		AmountTooSmall,
+		/// The queue for the bid's duration is already full.
 		QueueFull,
 		/// Gilt index is unknown.
 		Unknown,
@@ -203,7 +290,16 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T:Config> Pallet<T> {
-		/// Place a bid.
+		/// Place a bid for a gilt to be issued.
+		///
+		/// Origin must be Signed, and account must have at least `amount` in free balance.
+		///
+		/// - `amount`: The amount of the bid; these funds will be reserved. If the bid is
+		/// successfully elevated into an issued gilt, then these funds will continue to be
+		/// reserved until the gilt expires. Must be at least `MinFreeze`.
+		/// - `duration`: The number of periods for which the funds will be locked if the gilt is
+		/// issued. It will expire only after this period has elapsed after the point of issuance.
+		/// Must be greater than 1 and no more than `QueueCount`.
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
 		pub fn place_bid(
 			origin: OriginFor<T>,
@@ -233,6 +329,12 @@ pub mod pallet {
 		}
 
 		/// Retract a previously placed bid.
+		///
+		/// Origin must be Signed, and the account should have previously issued a still-active bid
+		/// of `amount` for `duration`.
+		///
+		/// - `amount`: The amount of the previous bid.
+		/// - `duration`: The duration of the previous bid.
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
 		pub fn retract_bid(
 			origin: OriginFor<T>,
@@ -266,6 +368,11 @@ pub mod pallet {
 		}
 
 		/// Set target proportion of gilt-funds.
+		///
+		/// Origin must be `AdminOrigin`.
+		///
+		/// - `target`: The target proportion of effective issued funds that should be under gilts
+		/// at any one time.
 		#[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1,1))]
 		pub fn set_target(
 			origin: OriginFor<T>,
@@ -276,7 +383,13 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Remove an active ongoing
+		/// Remove an active but expired gilt. Reserved funds under gilt are freed and balance is
+		/// adjusted to ensure that the funds grow or shrink to maintain the equivalent proportion
+		/// of effective total issued funds.
+		///
+		/// Origin must be Signed and the account must be the owner of the gilt of the given index.
+		///
+		/// - `index`: The index of the gilt to be thawed.
 		#[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1,1))]
 		pub fn thaw(
 			origin: OriginFor<T>,
