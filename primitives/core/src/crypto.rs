@@ -578,18 +578,12 @@ ss58_address_format!(
 		(46, "reserved46", "Reserved for future use (46).")
 	Reserved47 =>
 		(47, "reserved47", "Reserved for future use (47).")
+	NeatcoinAccount =>
+		(63, "neatcoin", "Neatcoin mainnet, standard account (*25519).")
 	AventusAccount =>
 		(65, "aventus", "Aventus Chain mainnet, standard account (*25519).")
 	CrustAccount =>
 		(66, "crust", "Crust Network, standard account (*25519).")
-	NeatcoinReserved1 =>
-		(8862, "neatcoinreserved1", "Neatcoin, reserved #1 (*25519).")
-	NeatcoinReserved2 =>
-		(9886, "neatcoinreserved2", "Neatcoin, reserved #2 (*25519).")
-	NeatcoinAccount =>
-		(12698, "neatcoin", "Neatcoin mainnet, standard account (*25519).")
-	NeatcoinReserved3 =>
-		(13722, "neatcoinreserved3", "Neatcoin, reserved #3 (*25519).")
 	// Note: 16384 and above are reserved.
 );
 
