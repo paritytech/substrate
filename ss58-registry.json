@@ -459,6 +459,42 @@
 			"decimals": [12],
 			"standardAccount": "*25519",
 			"website": "https://crust.network"
+		},
+		{
+			"prefix": 8862,
+			"network": "neatcoin",
+			"displayName": "Neatcoin Reserved#1",
+			"symbols": ["NEAT"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://neatcoin.org"
+		},
+		{
+			"prefix": 9886,
+			"network": "neatcoin",
+			"displayName": "Neatcoin Reserved#2",
+			"symbols": ["NEAT"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://neatcoin.org"
+		},
+		{
+			"prefix": 12698,
+			"network": "neatcoin",
+			"displayName": "Neatcoin Mainnet",
+			"symbols": ["NEAT"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://neatcoin.org"
+		},
+		{
+			"prefix": 13722,
+			"network": "neatcoin",
+			"displayName": "Neatcoin Reserved#3",
+			"symbols": ["NEAT"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://neatcoin.org"
 		}
 	]
 }
