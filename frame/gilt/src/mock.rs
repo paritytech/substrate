@@ -15,14 +15,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Tests for Gilt pallet.
+//! Test environment for Gilt pallet.
 
 use crate as pallet_gilt;
 
-use frame_support::{assert_ok, assert_noop, parameter_types, ord_parameter_types};
+use frame_support::{
+	parameter_types, ord_parameter_types, traits::{OnInitialize, OnFinalize, GenesisBuild},
+};
 use sp_core::H256;
 use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
-use pallet_balances::Error as BalancesError;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -36,7 +37,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Module, Call, Config<T>, Storage, Event<T>},
-		Gilt: pallet_gilt::{Module, Call, Storage, Event<T>},
+		Gilt: pallet_gilt::{Module, Call, Config, Storage, Event<T>},
 	}
 );
 
@@ -110,7 +111,25 @@ impl pallet_gilt::Config for Test {
 	type MaxIntakeBids = MaxIntakeBids;
 }
 
-// Build genesis storage according to the mock runtime.
+// This function basically just builds a genesis storage key/value store according to
+// our desired mockup.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
+	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	pallet_balances::GenesisConfig::<Test>{
+		balances: vec![(1, 100), (2, 100), (3, 100), (4, 100)],
+	}.assimilate_storage(&mut t).unwrap();
+	GenesisBuild::<Test>::assimilate_storage(&crate::GenesisConfig, &mut t).unwrap();
+	t.into()
+}
+
+pub fn run_to_block(n: u64) {
+	while System::block_number() < n {
+		Gilt::on_finalize(System::block_number());
+		Balances::on_finalize(System::block_number());
+		System::on_finalize(System::block_number());
+		System::set_block_number(System::block_number() + 1);
+		System::on_initialize(System::block_number());
+		Balances::on_initialize(System::block_number());
+		Gilt::on_initialize(System::block_number());
+	}
 }
