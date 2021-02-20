@@ -293,7 +293,7 @@ pub mod pallet {
 		/// # <weight>
 		/// - `O(1)`
 		/// # </weight>
-		#[pallet::weight(T::SystemWeightInfo::remark(remark.len() as u32))]
+		#[pallet::weight(T::SystemWeightInfo::remark(_remark.len() as u32))]
 		pub(crate) fn remark(origin: OriginFor<T>, _remark: Vec<u8>) -> DispatchResultWithPostInfo {
 			ensure_signed(origin)?;
 			Ok(().into())
