@@ -292,12 +292,10 @@ pub mod pallet {
 		///
 		/// # <weight>
 		/// - `O(1)`
-		/// - 1 event.
 		/// # </weight>
 		#[pallet::weight(T::SystemWeightInfo::remark(remark.len() as u32))]
-		pub(crate) fn remark(origin: OriginFor<T>, remark: Vec<u8>) -> DispatchResultWithPostInfo {
+		pub(crate) fn remark(origin: OriginFor<T>, _remark: Vec<u8>) -> DispatchResultWithPostInfo {
 			ensure_signed(origin)?;
-			Self::deposit_event(Event::Remarked(remark));
 			Ok(().into())
 		}
 
@@ -448,6 +446,19 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			storage::unhashed::kill_prefix(&prefix);
+			Ok(().into())
+		}
+
+		/// Make some on-chain remark and emit event.
+		///
+		/// # <weight>
+		/// - `O(1)`
+		/// - 1 event.
+		/// # </weight>
+		#[pallet::weight(T::SystemWeightInfo::remark(remark.len() as u32))]
+		pub(crate) fn remark_with_event(origin: OriginFor<T>, remark: Vec<u8>) -> DispatchResultWithPostInfo {
+			ensure_signed(origin)?;
+			Self::deposit_event(Event::Remarked(remark));
 			Ok(().into())
 		}
 	}
