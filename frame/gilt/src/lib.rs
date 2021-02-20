@@ -19,43 +19,21 @@
 //! A pallet allowing accounts to auction for being frozen and receive open-ended
 //! inflation-protection in return.
 
-use sp_std::prelude::*;
-
-use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr};
-use sp_arithmetic::Perquintill;
-use sp_runtime::{
-	RuntimeDebug, DispatchResult, DispatchError,
-	traits::{
-		Zero, AtLeast32BitUnsigned, StaticLookup, CheckedAdd, CheckedSub,
-		MaybeSerializeDeserialize, Saturating, Bounded, StoredMapError, SaturatedConversion
-	},
-};
-use codec::{Codec, Encode, Decode};
-use frame_support::{
-	ensure,
-	traits::{
-		Currency, OnUnbalanced, TryDrop, StoredMap, EnsureOrigin, IsType,
-		WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
-		Imbalance, SignedImbalance, ReservableCurrency, Get, ExistenceRequirement::KeepAlive,
-		ExistenceRequirement::AllowDeath, BalanceStatus as Status
-	}
-};
-#[cfg(feature = "std")]
-use frame_support::traits::GenesisBuild;
-
 pub use pallet::*;
 
 #[cfg(test)]
 mod mock;
-
 #[cfg(test)]
 mod tests;
 
 #[frame_support::pallet]
 pub mod pallet {
+	use sp_std::prelude::*;
+	use sp_arithmetic::Perquintill;
+	use sp_runtime::traits::{Zero, Saturating, SaturatedConversion};
+	use frame_support::traits::{Currency, OnUnbalanced, ReservableCurrency};
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use super::*;
 
 	type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 	type PositiveImbalanceOf<T> =
