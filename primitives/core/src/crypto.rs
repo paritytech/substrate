@@ -579,7 +579,7 @@ ss58_address_format!(
 	Reserved47 =>
 		(47, "reserved47", "Reserved for future use (47).")
 	NeatcoinAccount =>
-		(63, "neatcoin", "Neatcoin mainnet, standard account (*25519).")
+		(48, "neatcoin", "Neatcoin mainnet, standard account (*25519).")
 	AventusAccount =>
 		(65, "aventus", "Aventus Chain mainnet, standard account (*25519).")
 	CrustAccount =>
