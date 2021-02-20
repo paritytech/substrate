@@ -455,7 +455,7 @@ pub mod pallet {
 		/// - `O(1)`
 		/// - 1 event.
 		/// # </weight>
-		#[pallet::weight(T::SystemWeightInfo::remark(remark.len() as u32))]
+		#[pallet::weight(T::SystemWeightInfo::remark_with_event(remark.len() as u32))]
 		pub(crate) fn remark_with_event(origin: OriginFor<T>, remark: Vec<u8>) -> DispatchResultWithPostInfo {
 			ensure_signed(origin)?;
 			Self::deposit_event(Event::Remarked(remark));

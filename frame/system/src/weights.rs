@@ -50,6 +50,7 @@ pub trait WeightInfo {
 	fn kill_storage(i: u32, ) -> Weight;
 	fn kill_prefix(p: u32, ) -> Weight;
 	fn suicide() -> Weight;
+	fn remark_with_event(b: u32, ) -> Weight;
 }
 
 /// Weights for frame_system using the Substrate node and recommended hardware.
@@ -85,6 +86,9 @@ impl<T: crate::Config> WeightInfo for SubstrateWeight<T> {
 	fn suicide() -> Weight {
 		(37_209_000 as Weight)
 	}
+	fn remark_with_event(_b: u32, ) -> Weight {
+		(1_973_000 as Weight)
+	}
 }
 
 // For backwards compatibility and tests
@@ -118,5 +122,8 @@ impl WeightInfo for () {
 	}
 	fn suicide() -> Weight {
 		(37_209_000 as Weight)
+	}
+	fn remark_with_event(_b: u32, ) -> Weight {
+		(1_973_000 as Weight)
 	}
 }
