@@ -3335,19 +3335,44 @@ impl<T: Config> Module<T> {
 	}
 }
 
+use sp_election_providers::data_provider::ReturnValue;
+
 impl<T: Config> sp_election_providers::ElectionDataProvider<T::AccountId, T::BlockNumber>
 	for Module<T>
 {
-	fn desired_targets() -> u32 {
-		Self::validator_count()
+	type Additional = Weight;
+	fn desired_targets() -> ReturnValue<u32, Self::Additional> {
+		Ok((Self::validator_count(), <T as frame_system::Config>::DbWeight::get().reads(1)))
 	}
 
-	fn voters() -> Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> {
-		Self::get_npos_voters()
+	fn voters(
+		maybe_max_len: Option<usize>,
+	) -> ReturnValue<Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>, Self::Additional> {
+		let nominator_count = <Nominators<T>>::iter().count();
+		let validator_count = <Validators<T>>::iter().count();
+		let voter_count = nominator_count.saturating_add(validator_count);
+
+		if maybe_max_len.map_or(false, |max_len| voter_count > max_len) {
+			return Err("Voter snapshot too big");
+		}
+
+		// NOTE: in the grand scheme of things, given that we iterate all validators and only
+		// 'alive' validators can have slashing spans, we ought to read all slashing spans at least
+		// once, given overlay cache EXACTLY once from the database.
+		let read_count = voter_count.saturating_add(<SlashingSpans<T>>::iter().count());
+		let weight = <T as frame_system::Config>::DbWeight::get().reads(read_count as u64);
+		Ok((Self::get_npos_voters(), weight))
 	}
 
-	fn targets() -> Vec<T::AccountId> {
-		Self::get_npos_targets()
+	fn targets(maybe_max_len: Option<usize>) -> ReturnValue<Vec<T::AccountId>, Self::Additional> {
+		let target_count = <Validators<T>>::iter().count();
+
+		if maybe_max_len.map_or(false, |max_len| target_count > max_len) {
+			return Err("Target snapshot too big");
+		}
+
+		let weight = <T as frame_system::Config>::DbWeight::get().reads(target_count as u64);
+		Ok((Self::get_npos_targets(), weight))
 	}
 
 	fn next_election_prediction(now: T::BlockNumber) -> T::BlockNumber {

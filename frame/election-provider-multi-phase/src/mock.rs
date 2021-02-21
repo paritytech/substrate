@@ -31,7 +31,7 @@ use sp_core::{
 	},
 	H256,
 };
-use sp_election_providers::ElectionDataProvider;
+use sp_election_providers::{ElectionDataProvider, data_provider::ReturnValue};
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, seq_phragmen, to_supports, to_without_backing,
 	CompactSolution, ElectionResult, EvaluateSupport,
@@ -60,10 +60,12 @@ frame_support::construct_runtime!(
 
 pub(crate) type Balance = u64;
 pub(crate) type AccountId = u64;
+pub(crate) type VoterIndex = u32;
+pub(crate) type TargetIndex = u16;
 
 sp_npos_elections::generate_solution_type!(
 	#[compact]
-	pub struct TestCompact::<u32, u16, PerU16>(16)
+	pub struct TestCompact::<VoterIndex, TargetIndex, PerU16>(16)
 );
 
 /// All events of this pallet.
@@ -291,15 +293,29 @@ pub struct ExtBuilder {}
 
 pub struct StakingMock;
 impl ElectionDataProvider<AccountId, u64> for StakingMock {
-	fn targets() -> Vec<AccountId> {
-		Targets::get()
+	type Additional = u64;
+
+	fn targets(maybe_max_len: Option<usize>) -> ReturnValue<Vec<AccountId>, Self::Additional> {
+		if maybe_max_len.map_or(false, |max_len| Targets::get().len() > max_len) {
+			return Err("Targets too big");
+		}
+
+		Ok((Targets::get(), 0))
 	}
-	fn voters() -> Vec<(AccountId, VoteWeight, Vec<AccountId>)> {
-		Voters::get()
+
+	fn voters(
+		maybe_max_len: Option<usize>,
+	) -> ReturnValue<Vec<(AccountId, VoteWeight, Vec<AccountId>)>, Self::Additional> {
+		if maybe_max_len.map_or(false, |max_len| Voters::get().len() > max_len) {
+			return Err("Voters too big");
+		}
+
+		Ok((Voters::get(), 0))
 	}
-	fn desired_targets() -> u32 {
-		DesiredTargets::get()
+	fn desired_targets() -> ReturnValue<u32, Self::Additional> {
+		Ok((DesiredTargets::get(), 0))
 	}
+
 	fn next_election_prediction(now: u64) -> u64 {
 		now + EpochLength::get() - now % EpochLength::get()
 	}
@@ -319,7 +335,7 @@ impl ExtBuilder {
 		<UnsignedPhase>::set(unsigned);
 		self
 	}
-	pub fn fallabck(self, fallback: FallbackStrategy) -> Self {
+	pub fn fallback(self, fallback: FallbackStrategy) -> Self {
 		<Fallback>::set(fallback);
 		self
 	}

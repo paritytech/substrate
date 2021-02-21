@@ -78,7 +78,7 @@
 //! ## Example
 //!
 //! ```rust
-//! # use sp_election_providers::*;
+//! # use sp_election_providers::{*, data_provider::ReturnValue};
 //! # use sp_npos_elections::{Support, Assignment};
 //!
 //! type AccountId = u64;
@@ -99,14 +99,15 @@
 //!     pub struct Module<T: Config>(std::marker::PhantomData<T>);
 //!
 //!     impl<T: Config> ElectionDataProvider<AccountId, BlockNumber> for Module<T> {
-//!         fn desired_targets() -> u32 {
-//!             1
+//! 			type Additional = ();
+//!         fn desired_targets() -> ReturnValue<u32, Self::Additional> {
+//!             Ok((1, ()))
 //!         }
-//!         fn voters() -> Vec<(AccountId, VoteWeight, Vec<AccountId>)> {
-//!             Default::default()
+//!         fn voters(maybe_max_len: Option<usize>) -> ReturnValue<Vec<(AccountId, VoteWeight, Vec<AccountId>)>, Self::Additional> {
+//!             Ok((Default::default(), ()))
 //!         }
-//!         fn targets() -> Vec<AccountId> {
-//!             vec![10, 20, 30]
+//!         fn targets(maybe_max_len: Option<usize>) -> ReturnValue<Vec<AccountId>, Self::Additional> {
+//!             Ok((vec![10, 20, 30], ()))
 //!         }
 //!         fn next_election_prediction(now: BlockNumber) -> BlockNumber {
 //!             0
@@ -129,10 +130,12 @@
 //!         type DataProvider = T::DataProvider;
 //!
 //!         fn elect() -> Result<Supports<AccountId>, Self::Error> {
-//!             Self::DataProvider::targets()
-//!                 .first()
-//!                 .map(|winner| vec![(*winner, Support::default())])
-//!                 .ok_or(())
+//!             Self::DataProvider::targets(None)
+//!                 .map_err(|_| ())
+//! 				.and_then(|(t, _)| {
+//! 					t.first().map(|winner| vec![(*winner, Support::default())])
+//! 						.ok_or(())
+//! 				})
 //!         }
 //!     }
 //! }
@@ -160,23 +163,43 @@
 
 pub mod onchain;
 use sp_std::{prelude::*, fmt::Debug};
+use data_provider::ReturnValue;
 
 /// Re-export some type as they are used in the interface.
 pub use sp_arithmetic::PerThing;
 pub use sp_npos_elections::{Assignment, ExtendedBalance, PerThing128, Supports, VoteWeight};
 
+pub mod data_provider {
+	/// Alias for the return value of the election data provider.
+	pub type ReturnValue<T, Aux> = Result<(T, Aux)>;
+	/// Alias for the result type of the election data provider.
+	pub type Result<T> = sp_std::result::Result<T, &'static str>;
+}
+
 /// Something that can provide the data to an [`ElectionProvider`].
 pub trait ElectionDataProvider<AccountId, BlockNumber> {
+	/// Additional data can optionally be returned with the data. An example is an indication of the
+	/// resourced consumed during the operation.
+	type Additional: Default;
+
 	/// All possible targets for the election, i.e. the candidates.
-	fn targets() -> Vec<AccountId>;
+	///
+	/// If `maybe_max_len` is `Some(v)` then the resulting vector MUST NOT be longer than `v` items
+	/// long.
+	fn targets(maybe_max_len: Option<usize>) -> ReturnValue<Vec<AccountId>, Self::Additional>;
 
 	/// All possible voters for the election.
 	///
 	/// Note that if a notion of self-vote exists, it should be represented here.
-	fn voters() -> Vec<(AccountId, VoteWeight, Vec<AccountId>)>;
+	///
+	/// If `maybe_max_len` is `Some(v)` then the resulting vector MUST NOT be longer than `v` items
+	/// long.
+	fn voters(
+		maybe_max_len: Option<usize>,
+	) -> ReturnValue<Vec<(AccountId, VoteWeight, Vec<AccountId>)>, Self::Additional>;
 
 	/// The number of targets to elect.
-	fn desired_targets() -> u32;
+	fn desired_targets() -> ReturnValue<u32, Self::Additional>;
 
 	/// Provide a best effort prediction about when the next election is about to happen.
 	///
@@ -198,14 +221,17 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 
 #[cfg(feature = "std")]
 impl<AccountId, BlockNumber> ElectionDataProvider<AccountId, BlockNumber> for () {
-	fn targets() -> Vec<AccountId> {
-		Default::default()
+	type Additional = ();
+	fn targets(_maybe_max_len: Option<usize>) -> ReturnValue<Vec<AccountId>, Self::Additional> {
+		Ok(Default::default())
 	}
-	fn voters() -> Vec<(AccountId, VoteWeight, Vec<AccountId>)> {
-		Default::default()
+	fn voters(
+		_maybe_max_len: Option<usize>,
+	) -> ReturnValue<Vec<(AccountId, VoteWeight, Vec<AccountId>)>, Self::Additional> {
+		Ok(Default::default())
 	}
-	fn desired_targets() -> u32 {
-		Default::default()
+	fn desired_targets() -> ReturnValue<u32, Self::Additional> {
+		Ok(Default::default())
 	}
 	fn next_election_prediction(now: BlockNumber) -> BlockNumber {
 		now

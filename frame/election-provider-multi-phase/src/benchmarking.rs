@@ -157,7 +157,7 @@ benchmarks! {
 		assert!(<MultiPhase<T>>::snapshot().is_none());
 		assert!(<MultiPhase<T>>::current_phase().is_off());
 	}: {
-		<MultiPhase<T>>::on_initialize_open_signed();
+		<MultiPhase<T>>::on_initialize_open_signed().unwrap();
 	} verify {
 		assert!(<MultiPhase<T>>::snapshot().is_some());
 		assert!(<MultiPhase<T>>::current_phase().is_signed());
@@ -167,7 +167,7 @@ benchmarks! {
 		assert!(<MultiPhase<T>>::snapshot().is_none());
 		assert!(<MultiPhase<T>>::current_phase().is_off());
 	}: {
-		<MultiPhase<T>>::on_initialize_open_unsigned(true, true, 1u32.into());
+		<MultiPhase<T>>::on_initialize_open_unsigned(true, true, 1u32.into()).unwrap();
 	} verify {
 		assert!(<MultiPhase<T>>::snapshot().is_some());
 		assert!(<MultiPhase<T>>::current_phase().is_unsigned());
@@ -175,11 +175,11 @@ benchmarks! {
 
 	on_initialize_open_unsigned_without_snapshot {
 		// need to assume signed phase was open before
-		<MultiPhase<T>>::on_initialize_open_signed();
+		<MultiPhase<T>>::on_initialize_open_signed().unwrap();
 		assert!(<MultiPhase<T>>::snapshot().is_some());
 		assert!(<MultiPhase<T>>::current_phase().is_signed());
 	}: {
-		<MultiPhase<T>>::on_initialize_open_unsigned(false, true, 1u32.into());
+		<MultiPhase<T>>::on_initialize_open_unsigned(false, true, 1u32.into()).unwrap();
 	} verify {
 		assert!(<MultiPhase<T>>::snapshot().is_some());
 		assert!(<MultiPhase<T>>::current_phase().is_unsigned());

@@ -26,6 +26,8 @@ use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
 pub enum Error {
 	/// An internal error in the NPoS elections crate.
 	NposElections(sp_npos_elections::Error),
+	/// Errors from the data provider.
+	DataProvider(&'static str),
 }
 
 impl From<sp_npos_elections::Error> for Error {
@@ -40,7 +42,12 @@ impl From<sp_npos_elections::Error> for Error {
 ///
 /// ### Warning
 ///
-/// This can be very expensive to run frequently on-chain. Use with care.
+/// This can be very expensive to run frequently on-chain. Use with care. Moreover, this
+/// implementation ignores the additional data of the election data provider and gives no insight on
+/// how much weight was consumed.
+///
+/// Finally, this implementation does not impose any limits on the number of voters and targets that
+/// are provided.
 pub struct OnChainSequentialPhragmen<T: Config>(PhantomData<T>);
 
 /// Configuration trait of [`OnChainSequentialPhragmen`].
@@ -62,9 +69,10 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequen
 	type DataProvider = T::DataProvider;
 
 	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
-		let voters = Self::DataProvider::voters();
-		let targets = Self::DataProvider::targets();
-		let desired_targets = Self::DataProvider::desired_targets() as usize;
+		let (voters, _) = Self::DataProvider::voters(None).map_err(Error::DataProvider)?;
+		let (targets, _) = Self::DataProvider::targets(None).map_err(Error::DataProvider)?;
+		let (desired_targets, _) =
+			Self::DataProvider::desired_targets().map_err(Error::DataProvider)?;
 
 		let mut stake_map: BTreeMap<T::AccountId, VoteWeight> = BTreeMap::new();
 
@@ -77,7 +85,7 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequen
 		};
 
 		let ElectionResult { winners, assignments } =
-			seq_phragmen::<_, T::Accuracy>(desired_targets, targets, voters, None)
+			seq_phragmen::<_, T::Accuracy>(desired_targets as usize, targets, voters, None)
 				.map_err(Error::from)?;
 
 		let staked = assignment_ratio_to_staked_normalized(assignments, &stake_of)?;
@@ -108,24 +116,24 @@ mod tests {
 
 	mod mock_data_provider {
 		use super::*;
+		use crate::data_provider::ReturnValue;
 
 		pub struct DataProvider;
 
 		impl ElectionDataProvider<AccountId, BlockNumber> for DataProvider {
-			fn voters() -> Vec<(AccountId, VoteWeight, Vec<AccountId>)> {
-				vec![
-					(1, 10, vec![10, 20]),
-					(2, 20, vec![30, 20]),
-					(3, 30, vec![10, 30]),
-				]
+			type Additional = ();
+			fn voters(
+				_: Option<usize>,
+			) -> ReturnValue<Vec<(AccountId, VoteWeight, Vec<AccountId>)>, Self::Additional> {
+				Ok((vec![(1, 10, vec![10, 20]), (2, 20, vec![30, 20]), (3, 30, vec![10, 30])], ()))
 			}
 
-			fn targets() -> Vec<AccountId> {
-				vec![10, 20, 30]
+			fn targets(_: Option<usize>) -> ReturnValue<Vec<AccountId>, Self::Additional> {
+				Ok((vec![10, 20, 30], ()))
 			}
 
-			fn desired_targets() -> u32 {
-				2
+			fn desired_targets() -> ReturnValue<u32, Self::Additional> {
+				Ok((2, ()))
 			}
 
 			fn next_election_prediction(_: BlockNumber) -> BlockNumber {

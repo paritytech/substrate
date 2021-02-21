@@ -25,7 +25,7 @@ macro_rules! log {
 	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
 		frame_support::debug::$level!(
 			target: $crate::LOG_TARGET,
-			concat!("🗳 ", $patter) $(, $values)*
+			concat!("[#{:?}] 🗳  ", $patter), <frame_system::Module<T>>::block_number() $(, $values)*
 		)
 	};
 }

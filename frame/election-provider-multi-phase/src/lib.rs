@@ -222,6 +222,7 @@ use sp_runtime::{
 		TransactionValidityError, ValidTransaction,
 	},
 	DispatchError, PerThing, Perbill, RuntimeDebug, SaturatedConversion,
+	traits::Bounded,
 };
 use sp_std::prelude::*;
 use sp_arithmetic::{
@@ -435,6 +436,8 @@ pub enum ElectionError {
 	Miner(unsigned::MinerError),
 	/// An error in the on-chain fallback.
 	OnChainFallback(onchain::Error),
+	/// An error happened in the data provider.
+	DataProvider(&'static str),
 	/// No fallback is configured. This is a special case.
 	NoFallbackConfigured,
 }
@@ -524,8 +527,13 @@ pub mod pallet {
 		/// this values, based on [`WeightInfo::submit_unsigned`].
 		type MinerMaxWeight: Get<Weight>;
 
-		/// Something that will provide the election data.
-		type DataProvider: ElectionDataProvider<Self::AccountId, Self::BlockNumber>;
+		/// Something that will provide the election data. This pallet constrain the data provider
+		/// to return its weight as additional data for accurate metering.
+		type DataProvider: ElectionDataProvider<
+			Self::AccountId,
+			Self::BlockNumber,
+			Additional = Weight,
+		>;
 
 		/// The compact solution type
 		type CompactSolution: codec::Codec
@@ -562,14 +570,28 @@ pub mod pallet {
 
 			match current_phase {
 				Phase::Off if remaining <= signed_deadline && remaining > unsigned_deadline => {
-					Self::on_initialize_open_signed();
-					log!(info, "Starting signed phase at #{:?} , round {}.", now, Self::round());
-					T::WeightInfo::on_initialize_open_signed()
+					// NOTE: if signed-phase length is zero, second part will fail.
+					match Self::on_initialize_open_signed() {
+						Ok(snap_weight) => {
+							log!(info, "Starting signed phase round {}.", Self::round());
+							T::WeightInfo::on_initialize_open_signed().saturating_add(snap_weight)
+						}
+						Err(why) => {
+							// not much we can do about this at this point.
+							log!(warn, "failed to open signed phase due to {:?}", why);
+							T::WeightInfo::on_initialize_nothing()
+							// NOTE: ^^ this is a bit influenced by the fact that we know the
+							// implementation of the data provider does not consume much resources
+							// in case of error. Could be made more generalized.
+						}
+					}
 				}
 				Phase::Signed | Phase::Off
-					if remaining <= unsigned_deadline && remaining > 0u32.into() =>
+					if remaining <= unsigned_deadline && remaining > Zero::zero() =>
 				{
-					let (need_snapshot, enabled, additional) = if current_phase == Phase::Signed {
+					// Decide on the state of the phase: followed by signed or not?
+					let (need_snapshot, enabled, signed_weight) = if current_phase == Phase::Signed
+					{
 						// followed by a signed phase: close the signed phase, no need for snapshot.
 						// TWO_PHASE_NOTE: later on once we have signed phase, this should return
 						// something else.
@@ -580,15 +602,23 @@ pub mod pallet {
 						(true, true, Weight::zero())
 					};
 
-					Self::on_initialize_open_unsigned(need_snapshot, enabled, now);
-					log!(info, "Starting unsigned phase({}) at #{:?}.", enabled, now);
+					match Self::on_initialize_open_unsigned(need_snapshot, enabled, now) {
+						Ok(snap_weight) => {
+							log!(info, "Starting unsigned phase({}).", enabled);
+							let base_weight = if need_snapshot {
+								T::WeightInfo::on_initialize_open_unsigned_with_snapshot()
+							} else {
+								T::WeightInfo::on_initialize_open_unsigned_without_snapshot()
+							};
 
-					let base_weight = if need_snapshot {
-						T::WeightInfo::on_initialize_open_unsigned_with_snapshot()
-					} else {
-						T::WeightInfo::on_initialize_open_unsigned_without_snapshot()
-					};
-					base_weight.saturating_add(additional)
+							base_weight.saturating_add(snap_weight).saturating_add(signed_weight)
+						}
+						Err(why) => {
+							// not much we can do about this at this point.
+							log!(warn, "failed to open unsigned phase due to {:?}", why);
+							T::WeightInfo::on_initialize_nothing()
+						}
+					}
 				}
 				_ => T::WeightInfo::on_initialize_nothing(),
 			}
@@ -600,7 +630,7 @@ pub mod pallet {
 				match Self::try_acquire_offchain_lock(n) {
 					Ok(_) => {
 						let outcome = Self::mine_check_and_submit().map_err(ElectionError::from);
-						log!(info, "miner exeuction done: {:?}", outcome);
+						log!(info, "mine_check_and_submit execution done: {:?}", outcome);
 					}
 					Err(why) => log!(warn, "denied offchain worker: {:?}", why),
 				}
@@ -836,32 +866,41 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	/// Logic for `<Pallet as Hooks>::on_initialize` when signed phase is being opened.
+	/// Logic for [`<Pallet as Hooks>::on_initialize`] when signed phase is being opened.
 	///
 	/// This is decoupled for easy weight calculation.
-	pub(crate) fn on_initialize_open_signed() {
+	///
+	/// Returns `Ok(snapshot_weight)` if success, where `snapshot_weight` is the weight that
+	/// needs to recorded for the creation of snapshot.
+	pub(crate) fn on_initialize_open_signed() -> Result<Weight, ElectionError> {
+		let weight = Self::create_snapshot()?;
 		<CurrentPhase<T>>::put(Phase::Signed);
-		Self::create_snapshot();
 		Self::deposit_event(Event::SignedPhaseStarted(Self::round()));
+		Ok(weight)
 	}
 
-	/// Logic for `<Pallet as Hooks<T>>::on_initialize` when unsigned phase is being opened.
+	/// Logic for [`<Pallet as Hooks<T>>::on_initialize`] when unsigned phase is being opened.
 	///
-	/// This is decoupled for easy weight calculation. Note that the default weight benchmark of
-	/// this function will assume an empty signed queue for `finalize_signed_phase`.
+	/// This is decoupled for easy weight calculation.
+	///
+	/// Returns `Ok(snapshot_weight)` if success, where `snapshot_weight` is the weight that
+	/// needs to recorded for the creation of snapshot.
 	pub(crate) fn on_initialize_open_unsigned(
 		need_snapshot: bool,
 		enabled: bool,
 		now: T::BlockNumber,
-	) {
-		if need_snapshot {
+	) -> Result<Weight, ElectionError> {
+		let weight = if need_snapshot {
 			// if not being followed by a signed phase, then create the snapshots.
 			debug_assert!(Self::snapshot().is_none());
-			Self::create_snapshot();
-		}
+			Self::create_snapshot()?
+		} else {
+			0
+		};
 
 		<CurrentPhase<T>>::put(Phase::Unsigned((enabled, now)));
 		Self::deposit_event(Event::UnsignedPhaseStarted(Self::round()));
+		Ok(weight)
 	}
 
 	/// Creates the snapshot. Writes new data to:
@@ -869,18 +908,34 @@ impl<T: Config> Pallet<T> {
 	/// 1. [`SnapshotMetadata`]
 	/// 2. [`RoundSnapshot`]
 	/// 3. [`DesiredTargets`]
-	pub(crate) fn create_snapshot() {
-		// if any of them don't exist, create all of them. This is a bit conservative.
-		let targets = T::DataProvider::targets();
-		let voters = T::DataProvider::voters();
-		let desired_targets = T::DataProvider::desired_targets();
+	///
+	/// Returns `Ok(consumed_weight)` if operation is okay.
+	pub(crate) fn create_snapshot() -> Result<Weight, ElectionError> {
+		let target_limit = <CompactTargetIndexOf<T>>::max_value().saturated_into::<usize>();
+		let voter_limit = <CompactVoterIndexOf<T>>::max_value().saturated_into::<usize>();
 
+		// if any of them don't exist, create all of them. This is a bit conservative.
+		let (targets, w1) =
+			T::DataProvider::targets(Some(target_limit)).map_err(ElectionError::DataProvider)?;
+		let (voters, w2) =
+			T::DataProvider::voters(Some(voter_limit)).map_err(ElectionError::DataProvider)?;
+		let (desired_targets, w3) =
+			T::DataProvider::desired_targets().map_err(ElectionError::DataProvider)?;
+
+		// defensive-only
+		if targets.len() > target_limit || voters.len() > voter_limit {
+			debug_assert!(false, "Snapshot limit has not been respected.");
+			return Err(ElectionError::DataProvider("Snapshot too big for submission."));
+		}
+
+		// only write snapshot if all existed.
 		<SnapshotMetadata<T>>::put(SolutionOrSnapshotSize {
 			voters: voters.len() as u32,
 			targets: targets.len() as u32,
 		});
 		<DesiredTargets<T>>::put(desired_targets);
 		<Snapshot<T>>::put(RoundSnapshot { voters, targets });
+		Ok(w1.saturating_add(w2).saturating_add(w3))
 	}
 
 	/// Kill everything created by [`Pallet::create_snapshot`].
@@ -1126,13 +1181,13 @@ mod feasibility_check {
 				.compact
 				.votes1
 				.iter_mut()
-				.filter(|(_, t)| *t == 3u16)
+				.filter(|(_, t)| *t == 3 as TargetIndex)
 				.for_each(|(_, t)| *t += 1);
 			solution.compact.votes2.iter_mut().for_each(|(_, (t0, _), t1)| {
-				if *t0 == 3u16 {
+				if *t0 == 3 as TargetIndex {
 					*t0 += 1
 				};
-				if *t1 == 3u16 {
+				if *t1 == 3 as TargetIndex {
 					*t1 += 1
 				};
 			});
@@ -1160,7 +1215,7 @@ mod feasibility_check {
 					.compact
 					.votes1
 					.iter_mut()
-					.filter(|(v, _)| *v == 7u32)
+					.filter(|(v, _)| *v == 7 as VoterIndex)
 					.map(|(v, _)| *v = 8)
 					.count() > 0
 			);
@@ -1395,7 +1450,7 @@ mod tests {
 
 	#[test]
 	fn fallback_strategy_works() {
-		ExtBuilder::default().fallabck(FallbackStrategy::OnChain).build_and_execute(|| {
+		ExtBuilder::default().fallback(FallbackStrategy::OnChain).build_and_execute(|| {
 			roll_to(15);
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 
@@ -1414,7 +1469,7 @@ mod tests {
 			)
 		});
 
-		ExtBuilder::default().fallabck(FallbackStrategy::Nothing).build_and_execute(|| {
+		ExtBuilder::default().fallback(FallbackStrategy::Nothing).build_and_execute(|| {
 			roll_to(15);
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 
@@ -1423,6 +1478,26 @@ mod tests {
 
 			// zilch solutions thus far.
 			assert_eq!(MultiPhase::elect().unwrap_err(), ElectionError::NoFallbackConfigured);
+		})
+	}
+
+	#[test]
+	fn snapshot_creation_fails_if_too_big() {
+		ExtBuilder::default().build_and_execute(|| {
+			Targets::set((0..(TargetIndex::max_value() as AccountId) + 1).collect::<Vec<_>>());
+
+			// signed phase failed to open.
+			roll_to(15);
+			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+
+			// unsigned phase failed to open.
+			roll_to(25);
+			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+
+			// on-chain backup works though.
+			roll_to(29);
+			let supports = MultiPhase::elect().unwrap();
+			assert!(supports.len() > 0);
 		})
 	}
 
