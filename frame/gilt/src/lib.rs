@@ -56,12 +56,17 @@
 //! - `MaxQueueLen`: 1000
 //! - `MinFreeze`: Around CHF 100 in value.
 
+#![cfg_attr(not(feature = "std"), no_std)]
+
 pub use pallet::*;
 
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
+mod benchmarking;
+
+//pub mod weights;
 
 #[frame_support::pallet]
 pub mod pallet {

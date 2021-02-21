@@ -1004,6 +1004,29 @@ impl pallet_assets::Config for Runtime {
 	type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
 }
 
+parameter_types! {
+	pub const QueueCount: u32 = 300;
+	pub const MaxQueueLen: u32 = 1000;
+	pub const Period: BlockNumber = 432_000;
+	pub const MinFreeze: Balance = 100 * DOLLARS;
+	pub const IntakePeriod: BlockNumber = 10;
+	pub const MaxIntakeBids: u32 = 10;
+}
+
+impl pallet_gilt::Config for Runtime {
+	type Event = Event;
+	type Currency = Balances;
+	type AdminOrigin = frame_system::EnsureRoot<AccountId>;
+	type Deficit = ();
+	type Surplus = ();
+	type QueueCount = QueueCount;
+	type MaxQueueLen = MaxQueueLen;
+	type Period = Period;
+	type MinFreeze = MinFreeze;
+	type IntakePeriod = IntakePeriod;
+	type MaxIntakeBids = MaxIntakeBids;
+}
+
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -1046,6 +1069,7 @@ construct_runtime!(
 		Assets: pallet_assets::{Module, Call, Storage, Event<T>},
 		Mmr: pallet_mmr::{Module, Storage},
 		Lottery: pallet_lottery::{Module, Call, Storage, Event<T>},
+		Gilt: pallet_gilt::{Module, Call, Storage, Event<T>, Config},
 	}
 );
 
@@ -1368,6 +1392,7 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, pallet_contracts, Contracts);
 			add_benchmark!(params, batches, pallet_democracy, Democracy);
 			add_benchmark!(params, batches, pallet_elections_phragmen, Elections);
+			add_benchmark!(params, batches, pallet_gilt, Gilt);
 			add_benchmark!(params, batches, pallet_grandpa, Grandpa);
 			add_benchmark!(params, batches, pallet_identity, Identity);
 			add_benchmark!(params, batches, pallet_im_online, ImOnline);
