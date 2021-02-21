@@ -27,6 +27,8 @@ use sp_std::prelude::*;
 use frame_support::{decl_module, decl_storage, traits::OneSessionHandler};
 use sp_authority_discovery::AuthorityId;
 
+const DEFAULT_PAST_SESSIONS_TO_TRACK: u32 = 4;
+
 /// The module's config trait.
 pub trait Config: frame_system::Config + pallet_session::Config {}
 
@@ -36,10 +38,31 @@ decl_storage! {
 		Keys get(fn keys): Vec<AuthorityId>;
 		/// Keys of the next authority set.
 		NextKeys get(fn next_keys): Vec<AuthorityId>;
+
+		/// Previous session's authority sets treated as circular array
+		PreviousKeys get(fn previous_keys): Vec<Vec<AuthorityId>>
+			= vec![vec![]; DEFAULT_PAST_SESSIONS_TO_TRACK as usize];
+
+		/// Cursor in PreviousKeys circular array
+		PreviousKeysCursor get(fn previous_keys_cursor): u32;
+
+		/// Boolean flag indicating whether to store previous keys or not.
+		StorePreviousKeys get(fn store_previous_keys): bool = true;
 	}
 	add_extra_genesis {
 		config(keys): Vec<AuthorityId>;
-		build(|config| Module::<T>::initialize_keys(&config.keys))
+		config(past_sessions_to_track): u32;
+		build(|config| {
+			if config.past_sessions_to_track == 0 {
+				// We do not want to track past session's authority sets.
+				StorePreviousKeys::put(false);
+			} else {
+				StorePreviousKeys::put(true);
+				let previous_keys = vec![vec![]; config.past_sessions_to_track as usize];
+				PreviousKeys::put(&previous_keys);
+			}
+			Module::<T>::initialize_keys(&config.keys);
+		})
 	}
 }
 
@@ -54,8 +77,10 @@ impl<T: Config> Module<T> {
 	pub fn authorities() -> Vec<AuthorityId> {
 		let mut keys = Keys::get();
 		let next = NextKeys::get();
+		let previous_keys: Vec<AuthorityId> = PreviousKeys::get().drain(..).flatten().collect();
 
 		keys.extend(next);
+		keys.extend(previous_keys);
 		keys.sort();
 		keys.dedup();
 
@@ -101,6 +126,23 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Module<T> {
 	{
 		// Remember who the authorities are for the new and next session.
 		if changed {
+			let should_store_previous_keys = StorePreviousKeys::get();
+			if should_store_previous_keys {
+				let mut cursor = PreviousKeysCursor::get() as usize;
+				// Capture previous session keys
+				let mut previous_keys = PreviousKeys::get();
+
+				if cursor >= previous_keys.len() {
+					cursor = 0;
+				}
+
+				previous_keys[cursor] = Keys::get();
+				cursor += 1;
+
+				PreviousKeys::put(previous_keys);
+				PreviousKeysCursor::put(cursor as u32);
+			}
+
 			let keys = validators.map(|x| x.1);
 			Keys::put(keys.collect::<Vec<_>>());
 			let next_keys = queued_validators.map(|x| x.1);
@@ -218,37 +260,101 @@ mod tests {
 		fn on_genesis_session<Ks: OpaqueKeys>(_validators: &[(AuthorityId, Ks)]) {}
 	}
 
+	fn generate_test_data(account_id: &AuthorityId, number_of_authority_set_to_generate: u8)
+		-> (Vec<Vec<AuthorityId>>, Vec<Vec<(&AuthorityId, AuthorityId)>>) {
+		let mut authorities = vec![];
+		let mut authorities_and_account_ids = vec![];
+		for i in 0..number_of_authority_set_to_generate {
+			let authority: Vec<AuthorityId> = vec![i*2, i*2+1].into_iter()
+				.map(|i| AuthorityPair::from_seed_slice(vec![i; 32].as_ref()).unwrap().public())
+				.map(AuthorityId::from)
+				.collect();
+
+			authorities_and_account_ids.push(authority.clone()
+				.into_iter()
+				.map(|id| (account_id, id.clone()))
+				.collect::<Vec<(&AuthorityId, AuthorityId)> >());
+
+			authorities.push(authority);
+		}
+
+		(authorities, authorities_and_account_ids)
+	}
+
 	#[test]
-	fn authorities_returns_current_and_next_authority_set() {
-		// The whole authority discovery module ignores account ids, but we still need them for
-		// `pallet_session::OneSessionHandler::on_new_session`, thus its safe to use the same value
-		// everywhere.
+	fn disable_previous_sessions_tracking_via_config() {
 		let account_id = AuthorityPair::from_seed_slice(vec![10; 32].as_ref()).unwrap().public();
 
-		let mut first_authorities: Vec<AuthorityId> = vec![0, 1].into_iter()
-			.map(|i| AuthorityPair::from_seed_slice(vec![i; 32].as_ref()).unwrap().public())
-			.map(AuthorityId::from)
-			.collect();
+		let mut t = frame_system::GenesisConfig::default()
+			.build_storage::<Test>()
+			.unwrap();
 
-		let second_authorities: Vec<AuthorityId> = vec![2, 3].into_iter()
-			.map(|i| AuthorityPair::from_seed_slice(vec![i; 32].as_ref()).unwrap().public())
-			.map(AuthorityId::from)
-			.collect();
-		// Needed for `pallet_session::OneSessionHandler::on_new_session`.
-		let second_authorities_and_account_ids = second_authorities.clone()
-			.into_iter()
-			.map(|id| (&account_id, id))
-			.collect::<Vec<(&AuthorityId, AuthorityId)> >();
+		// We will only keep track of previous and next session
+		pallet_authority_discovery::GenesisConfig {
+			keys: vec![],
+			past_sessions_to_track: 0,
+		}.assimilate_storage::<Test>(&mut t).unwrap();
 
-		let mut third_authorities: Vec<AuthorityId> = vec![4, 5].into_iter()
-			.map(|i| AuthorityPair::from_seed_slice(vec![i; 32].as_ref()).unwrap().public())
-			.map(AuthorityId::from)
-			.collect();
-		// Needed for `pallet_session::OneSessionHandler::on_new_session`.
-		let third_authorities_and_account_ids = third_authorities.clone()
-			.into_iter()
-			.map(|id| (&account_id, id))
-			.collect::<Vec<(&AuthorityId, AuthorityId)> >();
+		let (mut authorities, authorities_and_account_ids) =
+			generate_test_data(&account_id, 4);
+
+		// Create externalities.
+		let mut externalities = TestExternalities::new(t);
+
+		externalities.execute_with(|| {
+			use frame_support::traits::OneSessionHandler;
+
+			AuthorityDiscovery::on_genesis_session(
+				authorities[0].iter().map(|id| (id, id.clone()))
+			);
+			authorities[0].sort();
+			let mut authorities_returned = AuthorityDiscovery::authorities();
+			authorities_returned.sort();
+			assert_eq!(authorities[0], authorities_returned);
+
+			// When `changed` set to true, the authority set should be updated.
+			AuthorityDiscovery::on_new_session(
+				true,
+				authorities_and_account_ids[1].clone().into_iter(),
+				authorities_and_account_ids[2].clone().into_iter(),
+			);
+			let mut all_authorities = authorities[1].iter()
+				.chain(authorities[2].iter())
+				.cloned()
+				.collect::<Vec<AuthorityId>>();
+			all_authorities.sort();
+			assert_eq!(
+				all_authorities,
+				AuthorityDiscovery::authorities(),
+				"Expected authority set to contain all authorities contained current and  \
+				 next session."
+			);
+
+			// When `changed` set to true, the authority set should be updated.
+			AuthorityDiscovery::on_new_session(
+				true,
+				authorities_and_account_ids[2].clone().into_iter(),
+				authorities_and_account_ids[3].clone().into_iter(),
+			);
+			let mut all_authorities = authorities[2].iter()
+				.chain(authorities[3].iter())
+				.cloned()
+				.collect::<Vec<AuthorityId>>();
+			all_authorities.sort();
+			assert_eq!(
+				all_authorities,
+				AuthorityDiscovery::authorities(),
+				"Expected authority set to contain all authorities contained in current and  \
+				 next session."
+			);
+		});
+	}
+
+	#[test]
+	fn authorities_returns_previous_current_and_next_authority_set() {
+		let account_id = AuthorityPair::from_seed_slice(vec![10; 32].as_ref()).unwrap().public();
+		let (mut authorities, authorities_and_account_ids)
+			= generate_test_data(&account_id, 6);
 
 		// Build genesis.
 		let mut t = frame_system::GenesisConfig::default()
@@ -257,6 +363,7 @@ mod tests {
 
 		pallet_authority_discovery::GenesisConfig {
 			keys: vec![],
+			past_sessions_to_track: 2,
 		}
 		.assimilate_storage::<Test>(&mut t)
 		.unwrap();
@@ -268,22 +375,22 @@ mod tests {
 			use frame_support::traits::OneSessionHandler;
 
 			AuthorityDiscovery::on_genesis_session(
-				first_authorities.iter().map(|id| (id, id.clone()))
+				authorities[0].iter().map(|id| (id, id.clone()))
 			);
-			first_authorities.sort();
+			authorities[0].sort();
 			let mut authorities_returned = AuthorityDiscovery::authorities();
 			authorities_returned.sort();
-			assert_eq!(first_authorities, authorities_returned);
+			assert_eq!(authorities[0], authorities_returned);
 
 			// When `changed` set to false, the authority set should not be updated.
 			AuthorityDiscovery::on_new_session(
 				false,
-				second_authorities_and_account_ids.clone().into_iter(),
-				third_authorities_and_account_ids.clone().into_iter(),
+				authorities_and_account_ids[1].clone().into_iter(),
+				authorities_and_account_ids[2].clone().into_iter(),
 			);
 			let authorities_returned = AuthorityDiscovery::authorities();
 			assert_eq!(
-				first_authorities,
+				authorities[0],
 				authorities_returned,
 				"Expected authority set not to change as `changed` was set to false.",
 			);
@@ -291,32 +398,99 @@ mod tests {
 			// When `changed` set to true, the authority set should be updated.
 			AuthorityDiscovery::on_new_session(
 				true,
-				second_authorities_and_account_ids.into_iter(),
-				third_authorities_and_account_ids.clone().into_iter(),
+				authorities_and_account_ids[1].clone().into_iter(),
+				authorities_and_account_ids[2].clone().into_iter(),
 			);
-			let mut second_and_third_authorities = second_authorities.iter()
-				.chain(third_authorities.iter())
+			let mut all_authorities = authorities[0].iter()
+				.chain(authorities[1].iter())
+				.chain(authorities[2].iter())
 				.cloned()
 				.collect::<Vec<AuthorityId>>();
-			second_and_third_authorities.sort();
+			all_authorities.sort();
 			assert_eq!(
-				second_and_third_authorities,
+				all_authorities,
 				AuthorityDiscovery::authorities(),
-				"Expected authority set to contain both the authorities of the new as well as the \
+				"Expected authority set to contain all authorities contained in past, current and  \
 				 next session."
 			);
 
-			// With overlapping authority sets, `authorities()` should return a deduplicated set.
+			// When `changed` set to true, the authority set should be updated.
 			AuthorityDiscovery::on_new_session(
 				true,
-				third_authorities_and_account_ids.clone().into_iter(),
-				third_authorities_and_account_ids.clone().into_iter(),
+				authorities_and_account_ids[2].clone().into_iter(),
+				authorities_and_account_ids[3].clone().into_iter(),
 			);
-			third_authorities.sort();
+			let mut all_authorities = authorities[0].iter()
+				.chain(authorities[1].iter())
+				.chain(authorities[2].iter())
+				.chain(authorities[3].iter())
+				.cloned()
+				.collect::<Vec<AuthorityId>>();
+			all_authorities.sort();
 			assert_eq!(
-				third_authorities,
+				all_authorities,
 				AuthorityDiscovery::authorities(),
-				"Expected authority set to be deduplicated."
+				"Expected authority set to contain all authorities contained in past, current and  \
+				 next session."
+			);
+
+			// First authority set is now removed from the storage, since max sessions to store are 2.
+			AuthorityDiscovery::on_new_session(
+				true,
+				authorities_and_account_ids[3].clone().into_iter(),
+				authorities_and_account_ids[4].clone().into_iter(),
+			);
+			all_authorities = authorities[1].iter()
+				.chain(authorities[2].iter())
+				.chain(authorities[3].iter())
+				.chain(authorities[4].iter())
+				.cloned()
+				.collect::<Vec<AuthorityId>>();
+			all_authorities.sort();
+			assert_eq!(
+				all_authorities,
+				AuthorityDiscovery::authorities(),
+				"Expected authority set to contain all authorities contained in past, current and  \
+				 next session."
+			);
+
+			// Second authority set is now removed from the storage
+			AuthorityDiscovery::on_new_session(
+				true,
+				authorities_and_account_ids[4].clone().into_iter(),
+				authorities_and_account_ids[5].clone().into_iter(),
+			);
+			all_authorities = authorities[2].iter()
+				.chain(authorities[3].iter())
+				.chain(authorities[4].iter())
+				.chain(authorities[5].iter())
+				.cloned()
+				.collect::<Vec<AuthorityId>>();
+			all_authorities.sort();
+			assert_eq!(
+				all_authorities,
+				AuthorityDiscovery::authorities(),
+				"Expected authority set to contain all authorities contained in past, current and  \
+				 next session."
+			);
+
+			// Fifth authority set is deduplicated and second authority set is removed
+			AuthorityDiscovery::on_new_session(
+				true,
+				authorities_and_account_ids[5].clone().into_iter(),
+				authorities_and_account_ids[5].clone().into_iter(),
+			);
+			all_authorities = authorities[3].iter()
+				.chain(authorities[4].iter())
+				.chain(authorities[5].iter())
+				.cloned()
+				.collect::<Vec<AuthorityId>>();
+			all_authorities.sort();
+			assert_eq!(
+				all_authorities,
+				AuthorityDiscovery::authorities(),
+				"Expected authority set to contain all authorities contained in past, current and  \
+				 next session."
 			);
 		});
 	}

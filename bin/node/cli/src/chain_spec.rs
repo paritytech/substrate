@@ -244,6 +244,7 @@ pub fn testnet_genesis(
 
 	const ENDOWMENT: Balance = 10_000_000 * DOLLARS;
 	const STASH: Balance = ENDOWMENT / 1000;
+	const PAST_SESSIONS_TO_TRACK: u32 = 4;
 
 	GenesisConfig {
 		frame_system: Some(SystemConfig {
@@ -311,6 +312,7 @@ pub fn testnet_genesis(
 		}),
 		pallet_authority_discovery: Some(AuthorityDiscoveryConfig {
 			keys: vec![],
+			past_sessions_to_track: PAST_SESSIONS_TO_TRACK,
 		}),
 		pallet_grandpa: Some(GrandpaConfig {
 			authorities: vec![],

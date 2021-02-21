@@ -87,7 +87,7 @@ pub enum Role {
 ///
 /// When constructed with either [`Role::PublishAndDiscover`] or [`Role::Publish`] a [`Worker`] will
 ///
-///    1. Retrieve the current and next set of authorities.
+///    1. Retrieve last few, current and next set of authorities.
 ///
 ///    2. Start DHT queries for the ids of the authorities.
 ///
@@ -527,12 +527,12 @@ where
 		Ok(())
 	}
 
-	/// Retrieve our public keys within the current and next authority set.
+	/// Retrieve our public keys within the last few, current and next authority set.
 	//
 	// A node might have multiple authority discovery keys within its keystore, e.g. an old one and
 	// one for the upcoming session. In addition it could be participating in the current and (/ or)
 	// next authority set with two keys. The function does not return all of the local authority
-	// discovery public keys, but only the ones intersecting with the current or next authority set.
+	// discovery public keys, but only the ones intersecting with the last few, current and next authority set.
 	async fn get_own_public_keys_within_authority_set(
 		key_store: Arc<dyn CryptoStore>,
 		client: &Client,
