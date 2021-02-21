@@ -1206,6 +1206,7 @@ mod tests {
 		assert_eq!(ext.kill_child_storage(&child_info, Some(4)), (true, 4));
 		// Only 4 items to remove
 		assert_eq!(ext.kill_child_storage(&child_info, Some(5)), (true, 4));
+		assert_eq!(ext.kill_child_storage(&child_info, None), (true, 4));
 	}
 
 	#[test]
