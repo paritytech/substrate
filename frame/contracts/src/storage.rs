@@ -270,13 +270,13 @@ where
 				let removed = queue.swap_remove(0);
 				match outcome {
 					// This should not happen as our budget was large enough to remove all keys.
-					KillOutcome::SomeRemaining => {
+					KillOutcome::SomeRemaining(_) => {
 						debug::error!(
 							"After deletion keys are remaining in this child trie: {:?}",
 							removed.trie_id,
 						);
 					},
-					KillOutcome::AllRemoved => (),
+					KillOutcome::AllRemoved(_) => (),
 				}
 			}
 			remaining_key_budget = remaining_key_budget

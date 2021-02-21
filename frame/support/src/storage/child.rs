@@ -25,12 +25,13 @@ use crate::sp_std::prelude::*;
 use codec::{Codec, Encode, Decode};
 pub use sp_core::storage::{ChildInfo, ChildType};
 
-/// The outcome of calling [`kill_storage`].
+/// The outcome of calling [`kill_storage`]. Returned value is the number of storage items
+/// removed from the trie from making the `kill_storage` call.
 pub enum KillOutcome {
 	/// No key remains in the child trie.
-	AllRemoved,
+	AllRemoved(u32),
 	/// At least one key still resides in the child trie due to the supplied limit.
-	SomeRemaining,
+	SomeRemaining(u32),
 }
 
 /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
@@ -178,15 +179,15 @@ pub fn kill_storage(
 	child_info: &ChildInfo,
 	limit: Option<u32>,
 ) -> KillOutcome {
-	let all_removed = match child_info.child_type() {
+	let (all_removed, amount_removed) = match child_info.child_type() {
 		ChildType::ParentKeyId => sp_io::default_child_storage::storage_kill(
 			child_info.storage_key(),
 			limit
 		),
 	};
 	match all_removed {
-		true => KillOutcome::AllRemoved,
-		false => KillOutcome::SomeRemaining,
+		true => KillOutcome::AllRemoved(amount_removed),
+		false => KillOutcome::SomeRemaining(amount_removed),
 	}
 }
 

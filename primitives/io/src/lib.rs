@@ -290,8 +290,9 @@ pub trait DefaultChildStorage {
 	/// The limit can be used to partially delete a child trie in case it is too large
 	/// to delete in one go (block).
 	///
-	/// It returns false iff some keys are remaining in
-	/// the child trie after the functions returns.
+	/// It returns a boolean false iff some keys are remaining in
+	/// the child trie after the functions returns. Also returns a `u32` with
+	/// the number of keys removed from the process.
 	///
 	/// # Note
 	///
@@ -305,7 +306,7 @@ pub trait DefaultChildStorage {
 	/// Use this function to distribute the deletion of a single child trie across multiple
 	/// blocks.
 	#[version(2)]
-	fn storage_kill(&mut self, storage_key: &[u8], limit: Option<u32>) -> bool {
+	fn storage_kill(&mut self, storage_key: &[u8], limit: Option<u32>) -> (bool, u32) {
 		let child_info = ChildInfo::new_default(storage_key);
 		self.kill_child_storage(&child_info, limit)
 	}

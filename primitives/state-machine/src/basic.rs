@@ -211,9 +211,9 @@ impl Externalities for BasicExternalities {
 		&mut self,
 		child_info: &ChildInfo,
 		_limit: Option<u32>,
-	) -> bool {
+	) -> (bool, u32) {
 		self.inner.children_default.remove(child_info.storage_key());
-		true
+		(true, 1)
 	}
 
 	fn clear_prefix(&mut self, prefix: &[u8]) {
