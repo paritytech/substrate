@@ -325,7 +325,7 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 	/// each key given that the key is supported.
 	///
 	/// Returns a list of `Result`s each representing the SCALE encoded
-	/// signature of each key, `None` if the key doesn't exist or a error when something failed.
+	/// signature of each key, `None` if the key doesn't exist or an error when something failed.
 	fn sign_with_all(
 		&self,
 		id: KeyTypeId,
