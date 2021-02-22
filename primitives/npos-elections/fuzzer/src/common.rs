@@ -20,7 +20,7 @@
 // Each function will be used based on which fuzzer binary is being used.
 #![allow(dead_code)]
 
-use rand::{self, Rng, RngCore};
+use rand::{self, Rng, RngCore, seq::SliceRandom};
 use sp_npos_elections::{phragmms, seq_phragmen, ElectionResult, VoteWeight};
 use sp_runtime::Perbill;
 use std::collections::{BTreeMap, HashSet};
@@ -99,15 +99,8 @@ pub fn generate_random_npos_inputs(
 		// it's not interesting if a voter chooses 0 or all candidates, so rule those cases out.
 		let n_candidates_chosen = rng.gen_range(1, candidates.len());
 
-		// I believe, but am not 100% certain, that this produces a uniform random distribution of
-		// chosen candidates assuming a uniform RNG.
-		let mut chosen_candidates = candidates.clone();
-		while chosen_candidates.len() > n_candidates_chosen {
-			chosen_candidates.swap_remove(rng.gen_range(0, chosen_candidates.len()));
-		}
-
-		chosen_candidates.shrink_to_fit();
-
+		let mut chosen_candidates = Vec::with_capacity(n_candidates_chosen);
+		chosen_candidates.extend(candidates.choose_multiple(&mut rng, n_candidates_chosen));
 		voters.push((id, vote_weight, chosen_candidates));
 	}
 
