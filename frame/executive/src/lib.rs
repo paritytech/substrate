@@ -118,7 +118,7 @@
 use sp_std::{prelude::*, marker::PhantomData};
 use frame_support::{
 	weights::{GetDispatchInfo, DispatchInfo, DispatchClass},
-	traits::{OnInitialize, OnFinalize, OnRuntimeUpgrade, OffchainWorker},
+	traits::{OnInitialize, OnFinalize, OnRuntimeUpgrade, OffchainWorker, InherentPositionCheck},
 	dispatch::PostDispatchInfo,
 };
 use sp_runtime::{
@@ -158,7 +158,7 @@ pub struct Executive<System, Block, Context, UnsignedValidator, AllModules, OnRu
 );
 
 impl<
-	System: frame_system::Config,
+	System: frame_system::Config + InherentPositionCheck<Block>,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Context: Default,
 	UnsignedValidator,
@@ -185,7 +185,7 @@ where
 }
 
 impl<
-	System: frame_system::Config,
+	System: frame_system::Config + InherentPositionCheck<Block>,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Context: Default,
 	UnsignedValidator,
@@ -284,6 +284,11 @@ where
 			n > System::BlockNumber::zero()
 			&& <frame_system::Module<System>>::block_hash(n - System::BlockNumber::one()) == *header.parent_hash(),
 			"Parent hash should be valid.",
+		);
+
+		assert!(
+			System::check_inherent_position(block).is_ok(),
+			"Invalid inherent position.",
 		);
 	}
 

@@ -423,8 +423,10 @@ pub trait ProvideInherent {
 	///
 	/// - `Err(_)` indicates that this function failed and further operations should be aborted.
 	///
-	/// NOTE: If inherent is required then the runtime asserts that at least one inherent call of
-	/// type [`Self::Call`] is in the block.
+	/// NOTE: If inherent is required then the runtime asserts that the block contains at least
+	/// one call for which:
+	/// * type is [`Self::Call`],
+	/// * [`Self::is_inherent`] returns true.
 	fn is_inherent_required(_: &InherentData) -> Result<Option<Self::Error>, Self::Error> { Ok(None) }
 
 	/// Check whether the given inherent is valid. Checking the inherent is optional and can be
@@ -434,7 +436,7 @@ pub trait ProvideInherent {
 	/// included in the block by its author. Whereas the second parameter represents the inherent
 	/// data that the verifying node calculates.
 	///
-	/// NOTE: A block can contains multiple inherent of the same type.
+	/// NOTE: A block can contains multiple inherent.
 	fn check_inherent(_: &Self::Call, _: &InherentData) -> Result<(), Self::Error> {
 		Ok(())
 	}
@@ -443,7 +445,12 @@ pub trait ProvideInherent {
 	///
 	/// NOTE: Signed extrinsics are not inherent, but signed extrinsic with the given call variant
 	/// can be dispatched.
-	/// NOTE: Unsigned transactions which are not inherent must no be able to send an inherent call.
+	///
+	/// # Warning
+	///
+	/// Pallets with unsigned transactions **must ensure** that no unsigned transaction call
+	/// is an inherent call.
+	/// Otherwise block producer can produce invalid blocks by including them after non inherent.
 	fn is_inherent(call: &Self::Call) -> bool;
 }
 

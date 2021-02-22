@@ -37,7 +37,11 @@ pub const RUNTIME_INHERENT_IDENTIFIER: InherentIdentifier = *b"RuntimeI";
 ///
 /// ```nocompile
 /// impl_outer_inherent! {
-///     impl Inherents where Block = Block, UncheckedExtrinsic = UncheckedExtrinsic {
+///     impl Inherents where
+///         Block = Block,
+///         UncheckedExtrinsic = UncheckedExtrinsic,
+///         Runtime = Runtime,
+///     {
 ///         timestamp,
 ///         consensus,
 ///         aura,
@@ -49,7 +53,8 @@ macro_rules! impl_outer_inherent {
 	(
 		impl Inherents where
 			Block = $block:ident,
-			UncheckedExtrinsic = $uncheckedextrinsic:ident
+			UncheckedExtrinsic = $uncheckedextrinsic:ident,
+			Runtime = $runtime:ident,
 		{
 			$( $module:ident, )*
 		}
@@ -86,52 +91,35 @@ macro_rules! impl_outer_inherent {
 
 				let mut result = $crate::inherent::CheckInherentsResult::new();
 
-				let mut checking_for_inherents = true;
 				for xt in block.extrinsics() {
-					let is_signed = $crate::inherent::Extrinsic::is_signed(xt).unwrap_or(false);
+					// Inherents are before any other extrinsics.
+					// And signed extrinsics are not inherents.
+					if $crate::inherent::Extrinsic::is_signed(xt).unwrap_or(false) {
+						break
+					}
 
-					let is_inherent = if is_signed {
-						false
-					} else {
-						let mut is_inherent = false;
-						$({
-							if let Some(call) = IsSubType::<_>::is_sub_type(&xt.function) {
-								if $module::is_inherent(&call) {
-									is_inherent = true;
-								}
-							}
-						})*
-						is_inherent
-					};
+					let mut is_inherent = false;
 
-					match (checking_for_inherents, is_inherent) {
-						(true, true) => {
-							$({
-								if let Some(call) = IsSubType::<_>::is_sub_type(&xt.function) {
-									if let Err(e) = $module::check_inherent(call, self) {
-										result.put_error(
-											$module::INHERENT_IDENTIFIER, &e
-										).expect("There is only one fatal error; qed");
-										if e.is_fatal_error() {
-											return result
-										}
+					$({
+						if let Some(call) = IsSubType::<_>::is_sub_type(&xt.function) {
+							if $module::is_inherent(call) {
+								is_inherent = true;
+								if let Err(e) = $module::check_inherent(call, self) {
+									result.put_error(
+										$module::INHERENT_IDENTIFIER, &e
+									).expect("There is only one fatal error; qed");
+									if e.is_fatal_error() {
+										return result
 									}
 								}
-							})*
-						},
-						(true, false) => checking_for_inherents = false,
-						(false, true) => {
-							let e = $crate::inherent::MakeFatalError::from(
-								"Invalid inherent position: inherents must be before all other \
-								extrinsics in the block".as_bytes(),
-							);
-							result.put_error(
-								$crate::inherent::RUNTIME_INHERENT_IDENTIFIER,
-								&e,
-							).expect("There is only one fatal error; qed");
-							return result
-						},
-						(false, false) => (),
+							}
+						}
+					})*
+
+					// Inherents are before any other extrinsics.
+					// No module marked it as inherent thus it is not.
+					if !is_inherent {
+						break
 					}
 				}
 
@@ -149,6 +137,7 @@ macro_rules! impl_outer_inherent {
 										false
 									}
 								} else {
+									// Signed extrinsics are not inherents.
 									false
 								}
 							});
@@ -175,6 +164,45 @@ macro_rules! impl_outer_inherent {
 				)*
 
 				result
+			}
+		}
+
+		impl $crate::traits::InherentPositionCheck<$block> for $runtime {
+			fn check_inherent_position(block: &$block) -> Result<(), ()> {
+				use $crate::inherent::ProvideInherent;
+				use $crate::traits::IsSubType;
+				use $crate::sp_runtime::traits::Block as _;
+
+				let mut checking_for_inherents = true;
+
+				for xt in block.extrinsics() {
+					let is_signed = $crate::inherent::Extrinsic::is_signed(xt).unwrap_or(false);
+
+					let is_inherent = if is_signed {
+						// Signed extrinsics are not inherents.
+						false
+					} else {
+						let mut is_inherent = false;
+						$({
+							if let Some(call) = IsSubType::<_>::is_sub_type(&xt.function) {
+								if $module::is_inherent(&call) {
+									is_inherent = true;
+								}
+							}
+						})*
+						is_inherent
+					};
+
+					match (checking_for_inherents, is_inherent) {
+						(true, true) => (),
+						(true, false) => checking_for_inherents = false,
+						// Invalid inherent position found.
+						(false, true) => return Err(()),
+						(false, false) => (),
+					}
+				}
+
+				Ok(())
 			}
 		}
 	};
@@ -302,8 +330,14 @@ mod tests {
 
 	parity_util_mem::malloc_size_of_is_0!(Extrinsic);
 
+	struct Runtime;
+
 	impl_outer_inherent! {
-		impl Inherents where Block = Block, UncheckedExtrinsic = Extrinsic {
+		impl Inherents where
+			Block = Block,
+			UncheckedExtrinsic = Extrinsic,
+			Runtime = Runtime,
+		{
 			ModuleTest,
 			ModuleTest2,
 		}

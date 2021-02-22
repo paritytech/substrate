@@ -2116,6 +2116,14 @@ pub trait GetPalletVersion {
 	fn storage_version() -> Option<PalletVersion>;
 }
 
+/// A trait to check the position of inherent in a block.
+///
+/// This is typically implemented on runtime, through `construct_runtime!`.
+pub trait InherentPositionCheck<Block> {
+	/// Check the position of inherents in a block.
+	fn check_inherent_position(block: &Block) -> Result<(), ()>;
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
