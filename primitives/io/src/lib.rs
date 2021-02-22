@@ -57,7 +57,7 @@ use sp_core::{
 use sp_trie::{TrieConfiguration, trie_types::Layout};
 
 use sp_runtime_interface::{runtime_interface, Pointer};
-use sp_runtime_interface::pass_by::PassBy;
+use sp_runtime_interface::pass_by::{PassBy, PassByCodec};
 
 use codec::{Encode, Decode};
 
@@ -79,6 +79,16 @@ pub enum EcdsaVerifyError {
 	BadV,
 	/// Invalid signature
 	BadSignature,
+}
+
+/// The outcome of calling [`kill_storage`]. Returned value is the number of storage items
+/// removed from the trie from making the `kill_storage` call.
+#[derive(PassByCodec, Encode, Decode)]
+pub enum KillOutcome {
+	/// No key remains in the child trie.
+	AllRemoved(u32),
+	/// At least one key still resides in the child trie due to the supplied limit.
+	SomeRemaining(u32),
 }
 
 /// Interface for accessing the storage from within the runtime.
@@ -307,7 +317,8 @@ pub trait DefaultChildStorage {
 	#[version(2)]
 	fn storage_kill(&mut self, storage_key: &[u8], limit: Option<u32>) -> bool {
 		let child_info = ChildInfo::new_default(storage_key);
-		self.kill_child_storage(&child_info, limit).0
+		let (all_removed, _num_removed) = self.kill_child_storage(&child_info, limit);
+		all_removed
 	}
 
 	/// Clear a child storage key.
@@ -334,9 +345,13 @@ pub trait DefaultChildStorage {
 	/// Use this function to distribute the deletion of a single child trie across multiple
 	/// blocks.
 	#[version(3)]
-	fn storage_kill(&mut self, storage_key: &[u8], limit: Option<u32>) -> (bool, u32) {
+	fn storage_kill(&mut self, storage_key: &[u8], limit: Option<u32>) -> KillOutcome {
 		let child_info = ChildInfo::new_default(storage_key);
-		self.kill_child_storage(&child_info, limit)
+		let (all_removed, num_removed) = self.kill_child_storage(&child_info, limit);
+		match all_removed {
+			true => KillOutcome::AllRemoved(num_removed),
+			false => KillOutcome::SomeRemaining(num_removed),
+		}
 	}
 
 	/// Check a child storage key.
