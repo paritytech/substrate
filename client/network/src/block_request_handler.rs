@@ -148,6 +148,8 @@ impl <B: BlockT> BlockRequestHandler<B> {
 			};
 
 			// To keep compatibility we only send the grandpa justification
+			// We want to replace this by sending all Justifications if the possible. See
+			// https://github.com/paritytech/substrate/issues/8172 for the issue tracking this work.
 			let justification = justifications
 				.map(|just| just.into_justification(GRANDPA_ENGINE_ID));
 

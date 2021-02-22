@@ -292,6 +292,7 @@ const MAX_CONNECTIONS_ESTABLISHED_INCOMING: u32 = 10_000;
 // Redefine this locally to avoid depending on the GRANDPA crate.
 // NOTE: This is purely during a backwards compatible transitionary period and should be removed
 // once we can assume all nodes can send and receive multiple Justifications
+// See https://github.com/paritytech/substrate/issues/8172
 const GRANDPA_ENGINE_ID: ConsensusEngineId = *b"FRNK";
 
 /// Minimum Requirements for a Hash within Networking
