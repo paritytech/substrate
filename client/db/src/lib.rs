@@ -1647,7 +1647,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	fn finalize_block(
 		&self,
 		block: BlockId<Block>,
-		justifications: Option<Justifications>,
+		justification: Option<Justification>,
 	) -> ClientResult<()> {
 		let mut transaction = Transaction::new();
 		let hash = self.blockchain.expect_block_hash_from_id(&block)?;
@@ -1655,6 +1655,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		let mut displaced = None;
 
 		let mut changes_trie_cache_ops = None;
+		let justifications = justification.map(Justifications::from);
 		let (hash, number, is_best, is_finalized) = self.finalize_block_with_transaction(
 			&mut transaction,
 			&hash,
@@ -2563,12 +2564,12 @@ pub(crate) mod tests {
 		let block0 = insert_header(&backend, 0, Default::default(), None, Default::default());
 		let _ = insert_header(&backend, 1, block0, None, Default::default());
 
-		let justification = Some(Justifications::from((CONS0_ENGINE_ID, vec![1, 2, 3])));
+		let justification = Some((CONS0_ENGINE_ID, vec![1, 2, 3]));
 		backend.finalize_block(BlockId::Number(1), justification.clone()).unwrap();
 
 		assert_eq!(
 			backend.blockchain().justifications(BlockId::Number(1)).unwrap(),
-			justification,
+			justification.map(Justifications::from),
 		);
 	}
 

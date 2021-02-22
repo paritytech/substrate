@@ -428,7 +428,7 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	fn finalize_block(
 		&self,
 		block: BlockId<Block>,
-		justifications: Option<Justifications>,
+		justification: Option<Justification>,
 	) -> sp_blockchain::Result<()>;
 
 	/// Append justification to the block with the given Id.

@@ -272,7 +272,7 @@ impl<Block: BlockT> Blockchain<Block> {
 		Ok(())
 	}
 
-	fn finalize_header(&self, id: BlockId<Block>, justifications: Option<Justifications>) -> sp_blockchain::Result<()> {
+	fn finalize_header(&self, id: BlockId<Block>, justification: Option<Justification>) -> sp_blockchain::Result<()> {
 		let hash = match self.header(id)? {
 			Some(h) => h.hash(),
 			None => return Err(sp_blockchain::Error::UnknownBlock(format!("{}", id))),
@@ -281,7 +281,7 @@ impl<Block: BlockT> Blockchain<Block> {
 		let mut storage = self.storage.write();
 		storage.finalized_hash = hash;
 
-		if justifications.is_some() {
+		if justification.is_some() {
 			let block = storage.blocks.get_mut(&hash)
 				.expect("hash was fetched from a block in the db; qed");
 
@@ -289,7 +289,7 @@ impl<Block: BlockT> Blockchain<Block> {
 				StoredBlock::Header(_, ref mut j) | StoredBlock::Full(_, ref mut j) => j
 			};
 
-			*block_justifications = justifications;
+			*block_justifications = justification.map(Justifications::from);
 		}
 
 		Ok(())
@@ -520,7 +520,7 @@ pub struct BlockImportOperation<Block: BlockT> {
 	old_state: InMemoryBackend<HashFor<Block>>,
 	new_state: Option<<InMemoryBackend<HashFor<Block>> as StateBackend<HashFor<Block>>>::Transaction>,
 	aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
-	finalized_blocks: Vec<(BlockId<Block>, Option<Justifications>)>,
+	finalized_blocks: Vec<(BlockId<Block>, Option<Justification>)>,
 	set_head: Option<BlockId<Block>>,
 }
 
@@ -607,8 +607,7 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 		block: BlockId<Block>,
 		justification: Option<Justification>,
 	) -> sp_blockchain::Result<()> {
-		let justifications = justification.map(Justifications::from);
-		self.finalized_blocks.push((block, justifications));
+		self.finalized_blocks.push((block, justification));
 		Ok(())
 	}
 
@@ -724,9 +723,9 @@ impl<Block: BlockT> backend::Backend<Block> for Backend<Block> where Block::Hash
 	fn finalize_block(
 		&self,
 		block: BlockId<Block>,
-		justifications: Option<Justifications>,
+		justification: Option<Justification>,
 	) -> sp_blockchain::Result<()> {
-		self.blockchain.finalize_header(block, justifications)
+		self.blockchain.finalize_header(block, justification)
 	}
 
 	fn append_justification(

@@ -194,7 +194,7 @@ impl<S, Block> ClientBackend<Block> for Backend<S, HashFor<Block>>
 	fn finalize_block(
 		&self,
 		block: BlockId<Block>,
-		_justification: Option<Justifications>,
+		_justification: Option<Justification>,
 	) -> ClientResult<()> {
 		self.blockchain.storage().finalize_header(block)
 	}
