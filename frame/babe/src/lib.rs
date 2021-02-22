@@ -187,7 +187,7 @@ decl_storage! {
 		// variable to its underlying value.
 		pub Randomness get(fn randomness): schnorrkel::Randomness;
 
-		/// Next epoch configuration, if changed.
+		/// Pending epoch configuration change that will be applied when the next epoch is enacted.
 		PendingEpochConfigChange: Option<NextConfigDescriptor>;
 
 		/// Next epoch randomness.
@@ -226,15 +226,19 @@ decl_storage! {
 		/// execution context should always yield zero.
 		Lateness get(fn lateness): T::BlockNumber;
 
+		/// The configuration for the current epoch.
 		EpochConfig: BabeEpochConfiguration;
+
+		/// The configuration for the next epoch. Uses `EpochConfig` instead if `None`.
 		NextEpochConfig: Option<BabeEpochConfiguration>;
 	}
 	add_extra_genesis {
 		config(authorities): Vec<(AuthorityId, BabeAuthorityWeight)>;
 		config(epoch_config): BabeEpochConfiguration;
-		build(|config| Module::<T>::initialize_authorities_and_epoch_config(
-			&config.authorities, &config.epoch_config
-		))
+		build(|config| {
+			Module::<T>::initialize_authorities(&config.authorities);
+			EpochConfig::put(config.epoch_config.clone());
+		})
 	}
 }
 
@@ -685,16 +689,12 @@ impl<T: Config> Module<T> {
 		this_randomness
 	}
 
-	fn initialize_authorities_and_epoch_config(
-		authorities: &[(AuthorityId, BabeAuthorityWeight)],
-		epoch_config: &BabeEpochConfiguration,
-	) {
+	fn initialize_authorities(authorities: &[(AuthorityId, BabeAuthorityWeight)]) {
 		if !authorities.is_empty() {
 			assert!(Authorities::get().is_empty(), "Authorities are already initialized!");
 			Authorities::put(authorities);
 			NextAuthorities::put(authorities);
 		}
-		EpochConfig::put(epoch_config);
 	}
 
 	fn do_report_equivocation(
@@ -803,8 +803,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Module<T> {
 		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
 	{
 		let authorities = validators.map(|(_, k)| (k, 1)).collect::<Vec<_>>();
-		let epoch_config = BabeEpochConfiguration::default();
-		Self::initialize_authorities_and_epoch_config(&authorities, &epoch_config);
+		Self::initialize_authorities(&authorities);
 	}
 
 	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I, queued_validators: I)

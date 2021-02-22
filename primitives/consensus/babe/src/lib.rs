@@ -49,7 +49,7 @@ mod app {
 pub const BABE_VRF_PREFIX: &[u8] = b"substrate-babe-vrf";
 
 /// 1 in 4 blocks (on average, not counting collisions) will be primary BABE blocks.
-pub const PRIMARY_PROBABILITY: (u64, u64) = (1, 4);
+pub const DEFAULT_PRIMARY_PROBABILITY: (u64, u64) = (1, 4);
 
 /// BABE VRFInOut context.
 pub static BABE_VRF_INOUT_CONTEXT: &[u8] = b"BabeVRFInOutContext";
@@ -269,7 +269,7 @@ pub struct BabeEpochConfiguration {
 impl Default for BabeEpochConfiguration {
 	fn default() -> Self {
 		Self {
-			c: PRIMARY_PROBABILITY,
+			c: DEFAULT_PRIMARY_PROBABILITY,
 			allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 		}
 	}
