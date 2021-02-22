@@ -1,6 +1,6 @@
 [package]
 name = "substrate-build-script-utils"
-version = "2.0.0"
+version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -13,4 +13,4 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-platforms = "0.2.1"
+platforms = "1.1"

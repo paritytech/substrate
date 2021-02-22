@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -45,6 +45,8 @@ pub struct EventDef {
 	pub deposit_event: Option<(syn::Visibility, proc_macro2::Span)>,
 	/// Where clause used in event definition.
 	pub where_clause: Option<syn::WhereClause>,
+	/// The span of the pallet::event attribute.
+	pub attr_span: proc_macro2::Span,
 }
 
 /// Attribute for Event: defines metadata name to use.
@@ -70,8 +72,8 @@ enum PalletEventAttr {
 impl PalletEventAttr {
 	fn span(&self) -> proc_macro2::Span {
 		match self {
-			Self::Metadata { span, .. } => span.clone(),
-			Self::DepositEvent { span, .. } => span.clone(),
+			Self::Metadata { span, .. } => *span,
+			Self::DepositEvent { span, .. } => *span,
 		}
 	}
 }
@@ -150,7 +152,11 @@ impl PalletEventAttrInfo {
 }
 
 impl EventDef {
-	pub fn try_from(index: usize, item: &mut syn::Item) -> syn::Result<Self> {
+	pub fn try_from(
+		attr_span: proc_macro2::Span,
+		index: usize,
+		item: &mut syn::Item,
+	) -> syn::Result<Self> {
 		let item = if let syn::Item::Enum(item) = item {
 			item
 		} else {
@@ -159,7 +165,7 @@ impl EventDef {
 
 		let event_attrs: Vec<PalletEventAttr> = helper::take_item_attrs(&mut item.attrs)?;
 		let attr_info = PalletEventAttrInfo::from_attrs(event_attrs)?;
-		let metadata = attr_info.metadata.unwrap_or_else(|| vec![]);
+		let metadata = attr_info.metadata.unwrap_or_else(Vec::new);
 		let deposit_event = attr_info.deposit_event;
 
 		if !matches!(item.vis, syn::Visibility::Public(_)) {
@@ -208,6 +214,7 @@ impl EventDef {
 			.collect();
 
 		Ok(EventDef {
+			attr_span,
 			index,
 			metadata,
 			instances,

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,7 +27,7 @@ use frame_support_procedural_tools::generate_crate_access_2018;
 /// The version is parsed into the requested destination type.
 fn get_version<T: FromStr>(version_env: &str) -> std::result::Result<T, ()> {
 	let version = env::var(version_env)
-		.expect(&format!("`{}` is always set by cargo; qed", version_env));
+		.unwrap_or_else(|_| panic!("`{}` is always set by cargo; qed", version_env));
 
 	T::from_str(&version).map_err(drop)
 }

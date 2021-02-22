@@ -11,14 +11,14 @@ repository = "https://github.com/paritytech/substrate/"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "1.3.4", default-features = false, features = ["derive"] }
-frame-system = { version = "2.0.0", default-features = false, path = "../../../frame/system" }
-sp-application-crypto = { version = "2.0.0", default-features = false, path = "../../../primitives/application-crypto" }
-sp-core = { version = "2.0.0", default-features = false, path = "../../../primitives/core" }
-sp-runtime = { version = "2.0.0", default-features = false, path = "../../../primitives/runtime" }
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+frame-system = { version = "3.0.0", default-features = false, path = "../../../frame/system" }
+sp-application-crypto = { version = "3.0.0", default-features = false, path = "../../../primitives/application-crypto" }
+sp-core = { version = "3.0.0", default-features = false, path = "../../../primitives/core" }
+sp-runtime = { version = "3.0.0", default-features = false, path = "../../../primitives/runtime" }
 
 [dev-dependencies]
-sp-serializer = { version = "2.0.0", path = "../../../primitives/serializer" }
+sp-serializer = { version = "3.0.0", path = "../../../primitives/serializer" }
 pretty_assertions = "0.6.1"
 
 [features]

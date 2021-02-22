@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -383,7 +383,7 @@ impl<
 		iterator
 	}
 
-	fn translate<O: Decode, F: Fn(K1, K2, O) -> Option<V>>(f: F) {
+	fn translate<O: Decode, F: FnMut(K1, K2, O) -> Option<V>>(mut f: F) {
 		let prefix = G::prefix_hash();
 		let mut previous_key = prefix.clone();
 		while let Some(next) = sp_io::storage::next_key(&previous_key)

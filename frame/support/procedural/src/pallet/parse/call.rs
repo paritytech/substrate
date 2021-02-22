@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -40,7 +40,7 @@ pub struct CallDef {
 	pub index: usize,
 	/// Information on methods (used for expansion).
 	pub methods: Vec<CallVariantDef>,
-	/// The span of the attribute.
+	/// The span of the pallet::call attribute.
 	pub attr_span: proc_macro2::Span,
 }
 
@@ -57,7 +57,7 @@ pub struct CallVariantDef {
 }
 
 /// Attributes for functions in call impl block.
-/// Parse for `#[pallet::weight = expr]`
+/// Parse for `#[pallet::weight(expr)]`
 pub struct FunctionAttr {
 	weight: syn::Expr,
 }
@@ -124,7 +124,6 @@ pub fn check_dispatchable_first_arg_type(ty: &syn::Type) -> syn::Result<()> {
 
 impl CallDef {
 	pub fn try_from(
-		// Span needed for expansion
 		attr_span: proc_macro2::Span,
 		index: usize,
 		item: &mut syn::Item
@@ -175,8 +174,8 @@ impl CallDef {
 					helper::take_item_attrs(&mut method.attrs)?;
 
 				if call_var_attrs.len() != 1 {
-					let msg = if call_var_attrs.len() == 0 {
-						"Invalid pallet::call, require weight attribute i.e. `#[pallet::weight = $expr]`"
+					let msg = if call_var_attrs.is_empty() {
+						"Invalid pallet::call, requires weight attribute i.e. `#[pallet::weight($expr)]`"
 					} else {
 						"Invalid pallet::call, too many weight attributes given"
 					};

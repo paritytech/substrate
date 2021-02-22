@@ -1,6 +1,6 @@
 [package]
 name = "substrate-test-utils"
-version = "2.0.0"
+version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -13,9 +13,9 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 futures = { version = "0.3.1", features = ["compat"] }
-substrate-test-utils-derive = { version = "0.8.0", path = "./derive" }
+substrate-test-utils-derive = { version = "0.9.0", path = "./derive" }
 tokio = { version = "0.2.13", features = ["macros"] }
 
 [dev-dependencies]
-sc-service = { version = "0.8.0", path = "../client/service" }
+sc-service = { version = "0.9.0", path = "../client/service" }
 trybuild = { version = "1.0.38", features = [ "diff" ] }

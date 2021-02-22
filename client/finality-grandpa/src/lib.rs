@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -122,15 +122,16 @@ mod until_imported;
 mod voting_rule;
 
 pub use authorities::{SharedAuthoritySet, AuthoritySet};
-pub use communication::GRANDPA_PROTOCOL_NAME;
-pub use finality_proof::{FinalityProofFragment, FinalityProofProvider, StorageAndProofProvider};
+pub use finality_proof::{FinalityProof, FinalityProofProvider, FinalityProofError};
 pub use notification::{GrandpaJustificationSender, GrandpaJustificationStream};
 pub use import::GrandpaBlockImport;
 pub use justification::GrandpaJustification;
 pub use voting_rule::{
-	BeforeBestBlockBy, ThreeQuartersOfTheUnfinalizedChain, VotingRule, VotingRulesBuilder
+	BeforeBestBlockBy, ThreeQuartersOfTheUnfinalizedChain, VotingRule, VotingRuleResult,
+	VotingRulesBuilder,
 };
 pub use finality_grandpa::voter::report;
+pub use finality_proof::{prove_warp_sync, WarpSyncFragmentCache};
 
 use aux_schema::PersistentData;
 use environment::{Environment, VoterSetState};
@@ -295,6 +296,8 @@ pub enum Error {
 	Safety(String),
 	/// A timer failed to fire.
 	Timer(io::Error),
+	/// A runtime api request failed.
+	RuntimeApi(sp_api::ApiError),
 }
 
 impl From<GrandpaError> for Error {
@@ -656,7 +659,7 @@ pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
 	///
 	/// It is assumed that this network will feed us Grandpa notifications. When using the
 	/// `sc_network` crate, it is assumed that the Grandpa notifications protocol has been passed
-	/// to the configuration of the networking.
+	/// to the configuration of the networking. See [`grandpa_peers_set_config`].
 	pub network: N,
 	/// If supplied, can be used to hook on telemetry connection established events.
 	pub telemetry_on_connect: Option<TracingUnboundedReceiver<()>>,
@@ -666,6 +669,22 @@ pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
 	pub prometheus_registry: Option<prometheus_endpoint::Registry>,
 	/// The voter state is exposed at an RPC endpoint.
 	pub shared_voter_state: SharedVoterState,
+}
+
+/// Returns the configuration value to put in
+/// [`sc_network::config::NetworkConfiguration::extra_sets`].
+pub fn grandpa_peers_set_config() -> sc_network::config::NonDefaultSetConfig {
+	sc_network::config::NonDefaultSetConfig {
+		notifications_protocol: communication::GRANDPA_PROTOCOL_NAME.into(),
+		// Notifications reach ~256kiB in size at the time of writing on Kusama and Polkadot.
+		max_notification_size: 1024 * 1024,
+		set_config: sc_network::config::SetConfig {
+			in_peers: 0,
+			out_peers: 0,
+			reserved_nodes: Vec::new(),
+			non_reserved_mode: sc_network::config::NonReservedPeerMode::Deny,
+		},
+	}
 }
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
@@ -682,7 +701,7 @@ where
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
 	C: ClientForGrandpa<Block, BE> + 'static,
-	C::Api: GrandpaApi<Block, Error = sp_blockchain::Error>,
+	C::Api: GrandpaApi<Block>,
 {
 	let GrandpaParams {
 		mut config,
@@ -808,7 +827,7 @@ where
 	Block: BlockT,
 	B: Backend<Block> + 'static,
 	C: ClientForGrandpa<Block, B> + 'static,
-	C::Api: GrandpaApi<Block, Error = sp_blockchain::Error>,
+	C::Api: GrandpaApi<Block>,
 	N: NetworkT<Block> + Sync,
 	NumberFor<Block>: BlockNumberOps,
 	SC: SelectChain<Block> + 'static,
@@ -1026,7 +1045,7 @@ where
 	NumberFor<Block>: BlockNumberOps,
 	SC: SelectChain<Block> + 'static,
 	C: ClientForGrandpa<Block, B> + 'static,
-	C::Api: GrandpaApi<Block, Error = sp_blockchain::Error>,
+	C::Api: GrandpaApi<Block>,
 	VR: VotingRule<Block, C> + Clone + 'static,
 {
 	type Output = Result<(), Error>;

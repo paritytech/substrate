@@ -1,6 +1,6 @@
 [package]
 name = "sc-consensus-babe-rpc"
-version = "0.8.0"
+version = "0.9.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "RPC extensions for the BABE consensus algorithm"
 edition = "2018"
@@ -13,28 +13,28 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sc-consensus-babe = { version = "0.8.0", path = "../" }
-sc-rpc-api = { version = "0.8.0", path = "../../../rpc-api" }
+sc-consensus-babe = { version = "0.9.0", path = "../" }
+sc-rpc-api = { version = "0.9.0", path = "../../../rpc-api" }
 jsonrpc-core = "15.1.0"
 jsonrpc-core-client = "15.1.0"
 jsonrpc-derive = "15.1.0"
-sp-consensus-babe = { version = "0.8.0", path = "../../../../primitives/consensus/babe" }
+sp-consensus-babe = { version = "0.9.0", path = "../../../../primitives/consensus/babe" }
 serde = { version = "1.0.104", features=["derive"] }
-sp-blockchain = { version = "2.0.0", path = "../../../../primitives/blockchain" }
-sp-runtime = { version = "2.0.0", path = "../../../../primitives/runtime" }
-sc-consensus-epochs = { version = "0.8.0", path = "../../epochs" }
+sp-blockchain = { version = "3.0.0", path = "../../../../primitives/blockchain" }
+sp-runtime = { version = "3.0.0", path = "../../../../primitives/runtime" }
+sc-consensus-epochs = { version = "0.9.0", path = "../../epochs" }
 futures = { version = "0.3.4", features = ["compat"] }
 derive_more = "0.99.2"
-sp-api = { version = "2.0.0", path = "../../../../primitives/api" }
-sp-consensus = { version = "0.8.0", path = "../../../../primitives/consensus/common" }
-sp-core = { version = "2.0.0", path = "../../../../primitives/core" }
-sp-application-crypto = { version = "2.0.0", path = "../../../../primitives/application-crypto" }
-sp-keystore = { version = "0.8.0", path = "../../../../primitives/keystore" }
+sp-api = { version = "3.0.0", path = "../../../../primitives/api" }
+sp-consensus = { version = "0.9.0", path = "../../../../primitives/consensus/common" }
+sp-core = { version = "3.0.0", path = "../../../../primitives/core" }
+sp-application-crypto = { version = "3.0.0", path = "../../../../primitives/application-crypto" }
+sp-keystore = { version = "0.9.0", path = "../../../../primitives/keystore" }
 
 [dev-dependencies]
-sc-consensus = { version = "0.8.0", path = "../../../consensus/common" }
+sc-consensus = { version = "0.9.0", path = "../../../consensus/common" }
 serde_json = "1.0.50"
-sp-keyring = { version = "2.0.0", path = "../../../../primitives/keyring" }
-sc-keystore = { version = "2.0.0", path = "../../../keystore" }
+sp-keyring = { version = "3.0.0", path = "../../../../primitives/keyring" }
+sc-keystore = { version = "3.0.0", path = "../../../keystore" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../../test-utils/runtime/client" }
 tempfile = "3.1.0"

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,10 +25,10 @@ mod mock;
 use sp_std::prelude::*;
 use sp_std::vec;
 
-use frame_benchmarking::benchmarks;
+use frame_benchmarking::{benchmarks, impl_benchmark_test_suite};
 use frame_support::{
 	codec::Decode,
-	storage::{StorageValue, StorageMap},
+	storage::StorageValue,
 	traits::{KeyOwnerProofSystem, OnInitialize},
 };
 use frame_system::RawOrigin;
@@ -51,8 +51,6 @@ impl<T: Config> OnInitialize<T::BlockNumber> for Module<T> {
 }
 
 benchmarks! {
-	_ {	}
-
 	set_keys {
 		let n = MAX_NOMINATIONS as u32;
 		let (v_stash, _) = create_validator_with_nominators::<T>(
@@ -171,17 +169,9 @@ fn check_membership_proof_setup<T: Config>(
 	(key, Historical::<T>::prove(key).unwrap())
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::mock::{new_test_ext, Test};
-	use frame_support::assert_ok;
-
-	#[test]
-	fn test_benchmarks() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_set_keys::<Test>());
-			assert_ok!(test_benchmark_purge_keys::<Test>());
-		});
-	}
-}
+impl_benchmark_test_suite!(
+	Module,
+	crate::mock::new_test_ext(),
+	crate::mock::Test,
+	extra = false,
+);

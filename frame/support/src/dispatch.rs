@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -2409,7 +2409,7 @@ mod tests {
 	use crate::weights::{DispatchInfo, DispatchClass, Pays, RuntimeDbWeight};
 	use crate::traits::{
 		CallMetadata, GetCallMetadata, GetCallName, OnInitialize, OnFinalize, OnRuntimeUpgrade,
-		IntegrityTest, Get,
+		IntegrityTest, Get, PalletInfo,
 	};
 
 	pub trait Config: system::Config + Sized where Self::AccountId: From<u32> { }
@@ -2562,13 +2562,32 @@ mod tests {
 		}
 	}
 
+	impl PalletInfo for TraitImpl {
+		fn index<P: 'static>() -> Option<usize> {
+			let type_id = sp_std::any::TypeId::of::<P>();
+			if type_id == sp_std::any::TypeId::of::<Test>() {
+				return Some(0)
+			}
+
+			None
+		}
+		fn name<P: 'static>() -> Option<&'static str> {
+			let type_id = sp_std::any::TypeId::of::<P>();
+			if type_id == sp_std::any::TypeId::of::<Test>() {
+				return Some("Test")
+			}
+
+			None
+		}
+	}
+
 	impl system::Config for TraitImpl {
 		type Origin = OuterOrigin;
 		type AccountId = u32;
 		type Call = OuterCall;
 		type BaseCallFilter = ();
 		type BlockNumber = u32;
-		type PalletInfo = ();
+		type PalletInfo = Self;
 		type DbWeight = ();
 	}
 

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,6 +19,7 @@ use codec::{Encode, Decode};
 use frame_system::offchain::AppCrypto;
 use frame_support::Hashable;
 use sp_state_machine::TestExternalities as CoreTestExternalities;
+use sp_consensus_babe::{BABE_ENGINE_ID, Slot, digests::{PreDigest, SecondaryPlainPreDigest}};
 use sp_core::{
 	NeverNativeValue, NativeOrEncoded,
 	crypto::KeyTypeId,
@@ -29,6 +30,8 @@ use sp_runtime::{
 	ApplyExtrinsicResult,
 	MultiSigner,
 	MultiSignature,
+	Digest,
+	DigestItem,
 	traits::{Header as HeaderT, BlakeTwo256},
 };
 use sc_executor::{NativeExecutor, WasmExecutionMethod};
@@ -99,7 +102,7 @@ pub fn executor() -> NativeExecutor<Executor> {
 
 pub fn executor_call<
 	R:Decode + Encode + PartialEq,
-	NC: FnOnce() -> std::result::Result<R, String> + std::panic::UnwindSafe
+	NC: FnOnce() -> std::result::Result<R, Box<dyn std::error::Error + Send + Sync>> + std::panic::UnwindSafe
 >(
 	t: &mut TestExternalities<BlakeTwo256>,
 	method: &str,
@@ -145,6 +148,7 @@ pub fn construct_block(
 	number: BlockNumber,
 	parent_hash: Hash,
 	extrinsics: Vec<CheckedExtrinsic>,
+	babe_slot: Slot,
 ) -> (Vec<u8>, Hash) {
 	use sp_trie::{TrieConfiguration, trie_types::Layout};
 
@@ -162,7 +166,17 @@ pub fn construct_block(
 		number,
 		extrinsics_root,
 		state_root: Default::default(),
-		digest: Default::default(),
+		digest: Digest {
+			logs: vec![
+				DigestItem::PreRuntime(
+					BABE_ENGINE_ID,
+					PreDigest::SecondaryPlain(SecondaryPlainPreDigest {
+						slot: babe_slot,
+						authority_index: 42,
+					}).encode()
+				),
+			],
+		},
 	};
 
 	// execute the block to get the real header.

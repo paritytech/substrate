@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -98,8 +98,7 @@ impl MutItemAttrs for syn::Item {
 			Self::Type(item) => Some(item.attrs.as_mut()),
 			Self::Union(item) => Some(item.attrs.as_mut()),
 			Self::Use(item) => Some(item.attrs.as_mut()),
-			Self::Verbatim(_) => None,
-			Self::__Nonexhaustive => None,
+			_ => None,
 		}
 	}
 }
@@ -112,8 +111,7 @@ impl MutItemAttrs for syn::TraitItem {
 			Self::Method(item) => Some(item.attrs.as_mut()),
 			Self::Type(item) => Some(item.attrs.as_mut()),
 			Self::Macro(item) => Some(item.attrs.as_mut()),
-			Self::Verbatim(_) => None,
-			Self::__Nonexhaustive => None,
+			_ => None,
 		}
 	}
 }
@@ -136,7 +134,7 @@ pub fn get_doc_literals(attrs: &Vec<syn::Attribute>) -> Vec<syn::Lit> {
 		.filter_map(|attr| {
 			if let Ok(syn::Meta::NameValue(meta)) = attr.parse_meta() {
 				if meta.path.get_ident().map_or(false, |ident| ident == "doc") {
-					Some(meta.lit.clone())
+					Some(meta.lit)
 				} else {
 					None
 				}

@@ -1,6 +1,6 @@
 [package]
 name = "pallet-staking-reward-curve"
-version = "2.0.0"
+version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -15,10 +15,10 @@ targets = ["x86_64-unknown-linux-gnu"]
 proc-macro = true
 
 [dependencies]
-syn = { version = "1.0.7", features = ["full", "visit"] }
+syn = { version = "1.0.58", features = ["full", "visit"] }
 quote = "1.0.3"
 proc-macro2 = "1.0.6"
 proc-macro-crate = "0.1.4"
 
 [dev-dependencies]
-sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
+sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }

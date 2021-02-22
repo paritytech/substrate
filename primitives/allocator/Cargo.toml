@@ -1,6 +1,6 @@
 [package]
 name = "sp-allocator"
-version = "2.0.0"
+version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -14,9 +14,9 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-std = { version = "2.0.0", path = "../std", default-features = false }
-sp-core = { version = "2.0.0", path = "../core", default-features = false }
-sp-wasm-interface = { version = "2.0.0", path = "../wasm-interface", default-features = false }
+sp-std = { version = "3.0.0", path = "../std", default-features = false }
+sp-core = { version = "3.0.0", path = "../core", default-features = false }
+sp-wasm-interface = { version = "3.0.0", path = "../wasm-interface", default-features = false }
 log = { version = "0.4.11", optional = true }
 thiserror = { version = "1.0.21", optional = true }
 

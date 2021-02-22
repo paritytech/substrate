@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -302,6 +302,11 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 /// The population of the genesis storage depends on the order of modules. So, if one of your
 /// modules depends on another module, the module that is depended upon needs to come before
 /// the module depending on it.
+///
+/// # Type definitions
+///
+/// * The macro generates a type alias for each pallet to their `Module` (or `Pallet`).
+///   E.g. `type System = frame_system::Module<Runtime>`
 #[proc_macro]
 pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	construct_runtime::construct_runtime(input)

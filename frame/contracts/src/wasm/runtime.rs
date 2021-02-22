@@ -1,33 +1,32 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate. If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Environment definition of the wasm smart-contract runtime.
 
 use crate::{
-	HostFnWeights, Schedule, Config, CodeHash, BalanceOf, Error,
+	HostFnWeights, Config, CodeHash, BalanceOf, Error,
 	exec::{Ext, StorageKey, TopicOf},
-	gas::{Gas, GasMeter, Token, GasMeterResult},
+	gas::{Gas, GasMeter, Token, ChargedAmount},
 	wasm::env_def::ConvertibleToWasm,
 };
-use sp_sandbox;
 use parity_wasm::elements::ValueType;
-use frame_system;
-use frame_support::dispatch::DispatchError;
+use frame_support::{dispatch::DispatchError, ensure, traits::Get};
 use sp_std::prelude::*;
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeAll, Encode};
 use sp_runtime::traits::SaturatedConversion;
 use sp_core::crypto::UncheckedFrom;
 use sp_io::hashing::{
@@ -39,6 +38,13 @@ use sp_io::hashing::{
 use pallet_contracts_primitives::{ExecResult, ExecReturnValue, ReturnFlags, ExecError};
 
 /// Every error that can be returned to a contract when it calls any of the host functions.
+///
+/// # Note
+///
+/// This enum can be extended in the future: New codes can be added but existing codes
+/// will not be changed or removed. This means that any contract **must not** exhaustively
+/// match return codes. Instead, contracts should prepare for unknown variants and deal with
+/// those errors gracefuly in order to be forward compatible.
 #[repr(u32)]
 pub enum ReturnCode {
 	/// API call successful.
@@ -125,7 +131,7 @@ impl<T: Into<DispatchError>> From<T> for TrapReason {
 
 #[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 #[derive(Copy, Clone)]
-enum RuntimeToken {
+pub enum RuntimeToken {
 	/// Charge the gas meter with the cost of a metering block. The charged costs are
 	/// the supplied cost of the block plus the overhead of the metering itself.
 	MeteringBlock(u32),
@@ -159,8 +165,12 @@ enum RuntimeToken {
 	Return(u32),
 	/// Weight of calling `seal_terminate`.
 	Terminate,
+	/// Weight that is added to `seal_terminate` for every byte of the terminated contract.
+	TerminateSurchargeCodeSize(u32),
 	/// Weight of calling `seal_restore_to` per number of supplied delta entries.
 	RestoreTo(u32),
+	/// Weight that is added to `seal_restore_to` for the involved code sizes.
+	RestoreToSurchargeCodeSize{caller_code: u32, tombstone_code: u32},
 	/// Weight of calling `seal_random`. It includes the weight for copying the subject.
 	Random,
 	/// Weight of calling `seal_reposit_event` with the given number of topics and event size.
@@ -179,6 +189,8 @@ enum RuntimeToken {
 	Transfer,
 	/// Weight of calling `seal_call` for the given input size.
 	CallBase(u32),
+	/// Weight that is added to `seal_call` for every byte of the called contract.
+	CallSurchargeCodeSize(u32),
 	/// Weight of the transfer performed during a call.
 	CallSurchargeTransfer,
 	/// Weight of output received through `seal_call` for the given size.
@@ -187,6 +199,8 @@ enum RuntimeToken {
 	/// This includes the transfer as an instantiate without a value will always be below
 	/// the existential deposit and is disregarded as corner case.
 	InstantiateBase{input_data_len: u32, salt_len: u32},
+	/// Weight that is added to `seal_instantiate` for every byte of the instantiated contract.
+	InstantiateSurchargeCodeSize(u32),
 	/// Weight of output received through `seal_instantiate` for the given size.
 	InstantiateCopyOut(u32),
 	/// Weight of calling `seal_hash_sha_256` for the given input size.
@@ -197,6 +211,10 @@ enum RuntimeToken {
 	HashBlake256(u32),
 	/// Weight of calling `seal_hash_blake2_128` for the given input size.
 	HashBlake128(u32),
+	/// Weight charged by a chain extension through `seal_call_chain_extension`.
+	ChainExtension(u64),
+	/// Weight charged for copying data from the sandbox.
+	CopyIn(u32),
 }
 
 impl<T: Config> Token<T> for RuntimeToken
@@ -225,8 +243,13 @@ where
 			Return(len) => s.r#return
 				.saturating_add(s.return_per_byte.saturating_mul(len.into())),
 			Terminate => s.terminate,
+			TerminateSurchargeCodeSize(len) => s.terminate_per_code_byte.saturating_mul(len.into()),
 			RestoreTo(delta) => s.restore_to
 				.saturating_add(s.restore_to_per_delta.saturating_mul(delta.into())),
+			RestoreToSurchargeCodeSize{caller_code, tombstone_code} =>
+				s.restore_to_per_caller_code_byte.saturating_mul(caller_code.into()).saturating_add(
+					s.restore_to_per_tombstone_code_byte.saturating_mul(tombstone_code.into())
+				),
 			Random => s.random,
 			DepositEvent{num_topic, len} => s.deposit_event
 				.saturating_add(s.deposit_event_per_topic.saturating_mul(num_topic.into()))
@@ -240,11 +263,14 @@ where
 			Transfer => s.transfer,
 			CallBase(len) => s.call
 				.saturating_add(s.call_per_input_byte.saturating_mul(len.into())),
+			CallSurchargeCodeSize(len) => s.call_per_code_byte.saturating_mul(len.into()),
 			CallSurchargeTransfer => s.call_transfer_surcharge,
 			CallCopyOut(len) => s.call_per_output_byte.saturating_mul(len.into()),
 			InstantiateBase{input_data_len, salt_len} => s.instantiate
 				.saturating_add(s.instantiate_per_input_byte.saturating_mul(input_data_len.into()))
 				.saturating_add(s.instantiate_per_salt_byte.saturating_mul(salt_len.into())),
+			InstantiateSurchargeCodeSize(len) =>
+				s.instantiate_per_code_byte.saturating_mul(len.into()),
 			InstantiateCopyOut(len) => s.instantiate_per_output_byte
 				.saturating_mul(len.into()),
 			HashSha256(len) => s.hash_sha2_256
@@ -255,6 +281,8 @@ where
 				.saturating_add(s.hash_blake2_256_per_byte.saturating_mul(len.into())),
 			HashBlake128(len) => s.hash_blake2_128
 				.saturating_add(s.hash_blake2_128_per_byte.saturating_mul(len.into())),
+			ChainExtension(amount) => amount,
+			CopyIn(len) => s.return_per_byte.saturating_mul(len.into()),
 		}
 	}
 }
@@ -288,7 +316,6 @@ fn has_duplicates<T: PartialEq + AsRef<[u8]>>(items: &mut Vec<T>) -> bool {
 pub struct Runtime<'a, E: Ext + 'a> {
 	ext: &'a mut E,
 	input_data: Option<Vec<u8>>,
-	schedule: &'a Schedule<E::T>,
 	memory: sp_sandbox::Memory,
 	gas_meter: &'a mut GasMeter<E::T>,
 	trap_reason: Option<TrapReason>,
@@ -303,14 +330,12 @@ where
 	pub fn new(
 		ext: &'a mut E,
 		input_data: Vec<u8>,
-		schedule: &'a Schedule<E::T>,
 		memory: sp_sandbox::Memory,
 		gas_meter: &'a mut GasMeter<E::T>,
 	) -> Self {
 		Runtime {
 			ext,
 			input_data: Some(input_data),
-			schedule,
 			memory,
 			gas_meter,
 			trap_reason: None,
@@ -375,6 +400,14 @@ where
 		}
 	}
 
+	/// Get a mutable reference to the inner `Ext`.
+	///
+	/// This is mainly for the chain extension to have access to the environment the
+	/// contract is executing in.
+	pub fn ext(&mut self) -> &mut E {
+		self.ext
+	}
+
 	/// Store the reason for a host function triggered trap.
 	///
 	/// This is called by the `define_env` macro in order to store any error returned by
@@ -387,14 +420,23 @@ where
 	/// Charge the gas meter with the specified token.
 	///
 	/// Returns `Err(HostError)` if there is not enough gas.
-	fn charge_gas<Tok>(&mut self, token: Tok) -> Result<(), DispatchError>
+	pub fn charge_gas<Tok>(&mut self, token: Tok) -> Result<ChargedAmount, DispatchError>
 	where
 		Tok: Token<E::T, Metadata=HostFnWeights<E::T>>,
 	{
-		match self.gas_meter.charge(&self.schedule.host_fn_weights, token) {
-			GasMeterResult::Proceed => Ok(()),
-			GasMeterResult::OutOfGas => Err(Error::<E::T>::OutOfGas.into())
-		}
+		self.gas_meter.charge(&self.ext.schedule().host_fn_weights, token)
+	}
+
+	/// Correct previously charged gas amount.
+	pub fn adjust_gas<Tok>(&mut self, charged_amount: ChargedAmount, adjusted_amount: Tok)
+	where
+		Tok: Token<E::T, Metadata=HostFnWeights<E::T>>,
+	{
+		self.gas_meter.adjust_gas(
+			charged_amount,
+			&self.ext.schedule().host_fn_weights,
+			adjusted_amount,
+		);
 	}
 
 	/// Read designated chunk from the sandbox memory.
@@ -402,9 +444,10 @@ where
 	/// Returns `Err` if one of the following conditions occurs:
 	///
 	/// - requested buffer is not within the bounds of the sandbox memory.
-	fn read_sandbox_memory(&self, ptr: u32, len: u32)
+	pub fn read_sandbox_memory(&self, ptr: u32, len: u32)
 	-> Result<Vec<u8>, DispatchError>
 	{
+		ensure!(len <= self.ext.schedule().limits.max_memory_size(), Error::<E::T>::OutOfBounds);
 		let mut buf = vec![0u8; len as usize];
 		self.memory.get(ptr, buf.as_mut_slice())
 			.map_err(|_| Error::<E::T>::OutOfBounds)?;
@@ -416,7 +459,7 @@ where
 	/// Returns `Err` if one of the following conditions occurs:
 	///
 	/// - requested buffer is not within the bounds of the sandbox memory.
-	fn read_sandbox_memory_into_buf(&self, ptr: u32, buf: &mut [u8])
+	pub fn read_sandbox_memory_into_buf(&self, ptr: u32, buf: &mut [u8])
 	-> Result<(), DispatchError>
 	{
 		self.memory.get(ptr, buf).map_err(|_| Error::<E::T>::OutOfBounds.into())
@@ -428,20 +471,29 @@ where
 	///
 	/// - requested buffer is not within the bounds of the sandbox memory.
 	/// - the buffer contents cannot be decoded as the required type.
-	fn read_sandbox_memory_as<D: Decode>(&self, ptr: u32, len: u32)
+	///
+	/// # Note
+	///
+	/// It is safe to forgo benchmarking and charging weight relative to `len` for fixed
+	/// size types (basically everything not containing a heap collection):
+	/// Despite the fact that we are usually about to read the encoding of a fixed size
+	/// type, we cannot know the encoded size of that type. We therefore are required to
+	/// use the length provided by the contract. This length is untrusted and therefore
+	/// we charge weight relative to the provided size upfront that covers the copy costs.
+	/// On success this cost is refunded as the copying was already covered in the
+	/// overall cost of the host function. This is different from `read_sandbox_memory`
+	/// where the size is dynamic and the costs resulting from that dynamic size must
+	/// be charged relative to this dynamic size anyways (before reading) by constructing
+	/// the benchmark for that.
+	pub fn read_sandbox_memory_as<D: Decode>(&mut self, ptr: u32, len: u32)
 	-> Result<D, DispatchError>
 	{
+		let amount = self.charge_gas(RuntimeToken::CopyIn(len))?;
 		let buf = self.read_sandbox_memory(ptr, len)?;
-		D::decode(&mut &buf[..]).map_err(|_| Error::<E::T>::DecodingFailed.into())
-	}
-
-	/// Write the given buffer to the designated location in the sandbox memory.
-	///
-	/// Returns `Err` if one of the following conditions occurs:
-	///
-	/// - designated area is not within the bounds of the sandbox memory.
-	fn write_sandbox_memory(&mut self, ptr: u32, buf: &[u8]) -> Result<(), DispatchError> {
-		self.memory.set(ptr, buf).map_err(|_| Error::<E::T>::OutOfBounds.into())
+		let decoded = D::decode_all(&mut &buf[..])
+			.map_err(|_| DispatchError::from(Error::<E::T>::DecodingFailed))?;
+		self.gas_meter.refund(amount);
+		Ok(decoded)
 	}
 
 	/// Write the given buffer and its length to the designated locations in sandbox memory and
@@ -463,7 +515,7 @@ where
 	///
 	/// In addition to the error conditions of `write_sandbox_memory` this functions returns
 	/// `Err` if the size of the buffer located at `out_ptr` is too small to fit `buf`.
-	fn write_sandbox_output(
+	pub fn write_sandbox_output(
 		&mut self,
 		out_ptr: u32,
 		out_len_ptr: u32,
@@ -493,6 +545,15 @@ where
 		.map_err(|_| Error::<E::T>::OutOfBounds)?;
 
 		Ok(())
+	}
+
+	/// Write the given buffer to the designated location in the sandbox memory.
+	///
+	/// Returns `Err` if one of the following conditions occurs:
+	///
+	/// - designated area is not within the bounds of the sandbox memory.
+	fn write_sandbox_memory(&mut self, ptr: u32, buf: &[u8]) -> Result<(), DispatchError> {
+		self.memory.set(ptr, buf).map_err(|_| Error::<E::T>::OutOfBounds.into())
 	}
 
 	/// Computes the given hash function on the supplied input.
@@ -611,8 +672,7 @@ define_env!(Env, <E: Ext>,
 		let mut key: StorageKey = [0; 32];
 		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
 		let value = Some(ctx.read_sandbox_memory(value_ptr, value_len)?);
-		ctx.ext.set_storage(key, value);
-		Ok(())
+		ctx.ext.set_storage(key, value).map_err(Into::into)
 	},
 
 	// Clear the value at the given key in the contract storage.
@@ -624,8 +684,7 @@ define_env!(Env, <E: Ext>,
 		ctx.charge_gas(RuntimeToken::ClearStorage)?;
 		let mut key: StorageKey = [0; 32];
 		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
-		ctx.ext.set_storage(key, None);
-		Ok(())
+		ctx.ext.set_storage(key, None).map_err(Into::into)
 	},
 
 	// Retrieve the value under the given key from storage.
@@ -740,11 +799,12 @@ define_env!(Env, <E: Ext>,
 			ctx.read_sandbox_memory_as(callee_ptr, callee_len)?;
 		let value: BalanceOf<<E as Ext>::T> = ctx.read_sandbox_memory_as(value_ptr, value_len)?;
 		let input_data = ctx.read_sandbox_memory(input_data_ptr, input_data_len)?;
-
 		if value > 0u32.into() {
 			ctx.charge_gas(RuntimeToken::CallSurchargeTransfer)?;
 		}
-
+		let charged = ctx.charge_gas(
+			RuntimeToken::CallSurchargeCodeSize(<E::T as Config>::MaxCodeSize::get())
+		)?;
 		let nested_gas_limit = if gas == 0 {
 			ctx.gas_meter.gas_left()
 		} else {
@@ -762,16 +822,20 @@ define_env!(Env, <E: Ext>,
 					)
 				}
 				// there is not enough gas to allocate for the nested call.
-				None => Err(Error::<<E as Ext>::T>::OutOfGas.into()),
+				None => Err((Error::<<E as Ext>::T>::OutOfGas.into(), 0)),
 			}
 		});
-
-		if let Ok(output) = &call_outcome {
+		let code_len = match &call_outcome {
+			Ok((_, len)) => len,
+			Err((_, len)) => len,
+		};
+		ctx.adjust_gas(charged, RuntimeToken::CallSurchargeCodeSize(*code_len));
+		if let Ok((output, _)) = &call_outcome {
 			ctx.write_sandbox_output(output_ptr, output_len_ptr, &output.data, true, |len| {
 				Some(RuntimeToken::CallCopyOut(len))
 			})?;
 		}
-		Ok(Runtime::<E>::exec_into_return_code(call_outcome)?)
+		Ok(Runtime::<E>::exec_into_return_code(call_outcome.map(|r| r.0).map_err(|r| r.0))?)
 	},
 
 	// Instantiate a contract with the specified code hash.
@@ -841,7 +905,9 @@ define_env!(Env, <E: Ext>,
 		let value: BalanceOf<<E as Ext>::T> = ctx.read_sandbox_memory_as(value_ptr, value_len)?;
 		let input_data = ctx.read_sandbox_memory(input_data_ptr, input_data_len)?;
 		let salt = ctx.read_sandbox_memory(salt_ptr, salt_len)?;
-
+		let charged = ctx.charge_gas(
+			RuntimeToken::InstantiateSurchargeCodeSize(<E::T as Config>::MaxCodeSize::get())
+		)?;
 		let nested_gas_limit = if gas == 0 {
 			ctx.gas_meter.gas_left()
 		} else {
@@ -852,7 +918,7 @@ define_env!(Env, <E: Ext>,
 			match nested_meter {
 				Some(nested_meter) => {
 					ext.instantiate(
-						&code_hash,
+						code_hash,
 						value,
 						nested_meter,
 						input_data,
@@ -860,10 +926,15 @@ define_env!(Env, <E: Ext>,
 					)
 				}
 				// there is not enough gas to allocate for the nested call.
-				None => Err(Error::<<E as Ext>::T>::OutOfGas.into()),
+				None => Err((Error::<<E as Ext>::T>::OutOfGas.into(), 0)),
 			}
 		});
-		if let Ok((address, output)) = &instantiate_outcome {
+		let code_len = match &instantiate_outcome {
+			Ok((_, _, code_len)) => code_len,
+			Err((_, code_len)) => code_len,
+		};
+		ctx.adjust_gas(charged, RuntimeToken::InstantiateSurchargeCodeSize(*code_len));
+		if let Ok((address, output, _)) = &instantiate_outcome {
 			if !output.flags.contains(ReturnFlags::REVERT) {
 				ctx.write_sandbox_output(
 					address_ptr, address_len_ptr, &address.encode(), true, already_charged,
@@ -873,7 +944,9 @@ define_env!(Env, <E: Ext>,
 				Some(RuntimeToken::InstantiateCopyOut(len))
 			})?;
 		}
-		Ok(Runtime::<E>::exec_into_return_code(instantiate_outcome.map(|(_id, retval)| retval))?)
+		Ok(Runtime::<E>::exec_into_return_code(
+			instantiate_outcome.map(|(_, retval, _)| retval).map_err(|(err, _)| err)
+		)?)
 	},
 
 	// Remove the calling account and transfer remaining balance.
@@ -890,6 +963,8 @@ define_env!(Env, <E: Ext>,
 	// # Traps
 	//
 	// - The contract is live i.e is already on the call stack.
+	// - Failed to send the balance to the beneficiary.
+	// - The deletion queue is full.
 	seal_terminate(
 		ctx,
 		beneficiary_ptr: u32,
@@ -899,14 +974,32 @@ define_env!(Env, <E: Ext>,
 		let beneficiary: <<E as Ext>::T as frame_system::Config>::AccountId =
 			ctx.read_sandbox_memory_as(beneficiary_ptr, beneficiary_len)?;
 
-		ctx.ext.terminate(&beneficiary)?;
+		let charged = ctx.charge_gas(
+			RuntimeToken::TerminateSurchargeCodeSize(<E::T as Config>::MaxCodeSize::get())
+		)?;
+		let (result, code_len) = match ctx.ext.terminate(&beneficiary) {
+			Ok(len) => (Ok(()), len),
+			Err((err, len)) => (Err(err), len),
+		};
+		ctx.adjust_gas(charged, RuntimeToken::TerminateSurchargeCodeSize(code_len));
+		result?;
 		Err(TrapReason::Termination)
 	},
 
-	seal_input(ctx, buf_ptr: u32, buf_len_ptr: u32) => {
+	// Stores the input passed by the caller into the supplied buffer.
+	//
+	// The value is stored to linear memory at the address pointed to by `out_ptr`.
+	// `out_len_ptr` must point to a u32 value that describes the available space at
+	// `out_ptr`. This call overwrites it with the size of the value. If the available
+	// space at `out_ptr` is less than the size of the value a trap is triggered.
+	//
+	// # Note
+	//
+	// This function can only be called once. Calling it multiple times will trigger a trap.
+	seal_input(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		ctx.charge_gas(RuntimeToken::InputBase)?;
 		if let Some(input) = ctx.input_data.take() {
-			ctx.write_sandbox_output(buf_ptr, buf_len_ptr, &input, false, |len| {
+			ctx.write_sandbox_output(out_ptr, out_len_ptr, &input, false, |len| {
 				Some(RuntimeToken::InputCopyOut(len))
 			})?;
 			Ok(())
@@ -1045,7 +1138,7 @@ define_env!(Env, <E: Ext>,
 	// The data is encoded as T::Hash.
 	seal_random(ctx, subject_ptr: u32, subject_len: u32, out_ptr: u32, out_len_ptr: u32) => {
 		ctx.charge_gas(RuntimeToken::Random)?;
-		if subject_len > ctx.schedule.limits.subject_len {
+		if subject_len > ctx.ext.schedule().limits.subject_len {
 			Err(Error::<E::T>::RandomSubjectTooLong)?;
 		}
 		let subject_buf = ctx.read_sandbox_memory(subject_ptr, subject_len)?;
@@ -1106,25 +1199,30 @@ define_env!(Env, <E: Ext>,
 	// the caller contract and restore the destination contract and set the specified `rent_allowance`.
 	// All caller's funds are transfered to the destination.
 	//
-	// If there is no tombstone at the destination address, the hashes don't match or this contract
-	// instance is already present on the contract call stack, a trap is generated.
+	// The tombstone hash is derived as `hash(code_hash, storage_root_hash)`. In order to match
+	// this hash to its own hash the restorer must make its storage equal to the one of the
+	// evicted destination contract. In order to allow for additional storage items in the
+	// restoring contract a delta can be specified to this function. All keys specified as
+	// delta are disregarded when calculating the storage root hash.
 	//
-	// Otherwise, the destination contract is restored. This function is diverging and stops execution
-	// even on success.
+	// On success, the destination contract is restored. This function is diverging and
+	// stops execution even on success.
 	//
-	// `dest_ptr`, `dest_len` - the pointer and the length of a buffer that encodes `T::AccountId`
-	// with the address of the to be restored contract.
-	// `code_hash_ptr`, `code_hash_len` - the pointer and the length of a buffer that encodes
-	// a code hash of the to be restored contract.
-	// `rent_allowance_ptr`, `rent_allowance_len` - the pointer and the length of a buffer that
-	// encodes the rent allowance that must be set in the case of successful restoration.
-	// `delta_ptr` is the pointer to the start of a buffer that has `delta_count` storage keys
-	// laid out sequentially.
+	// - `dest_ptr`, `dest_len` - the pointer and the length of a buffer that encodes `T::AccountId`
+	//    with the address of the to be restored contract.
+	// - `code_hash_ptr`, `code_hash_len` - the pointer and the length of a buffer that encodes
+	//    a code hash of the to be restored contract.
+	// - `rent_allowance_ptr`, `rent_allowance_len` - the pointer and the length of a buffer that
+	//    encodes the rent allowance that must be set in the case of successful restoration.
+	// - `delta_ptr` is the pointer to the start of a buffer that has `delta_count` storage keys
+	//    laid out sequentially.
 	//
 	// # Traps
 	//
-	// - Tombstone hashes do not match
-	// - Calling cantract is live i.e is already on the call stack.
+	// - There is no tombstone at the destination address.
+	// - Tombstone hashes do not match.
+	// - The calling contract is already present on the call stack.
+	// - The supplied code_hash does not exist on-chain.
 	seal_restore_to(
 		ctx,
 		dest_ptr: u32,
@@ -1144,17 +1242,23 @@ define_env!(Env, <E: Ext>,
 		let rent_allowance: BalanceOf<<E as Ext>::T> =
 			ctx.read_sandbox_memory_as(rent_allowance_ptr, rent_allowance_len)?;
 		let delta = {
+			const KEY_SIZE: usize = 32;
+
 			// We can eagerly allocate because we charged for the complete delta count already
-			let mut delta = Vec::with_capacity(delta_count as usize);
+			// We still need to make sure that the allocation isn't larger than the memory
+			// allocator can handle.
+			ensure!(
+				delta_count
+					.saturating_mul(KEY_SIZE as u32) <= ctx.ext.schedule().limits.max_memory_size(),
+				Error::<E::T>::OutOfBounds,
+			);
+			let mut delta = vec![[0; KEY_SIZE]; delta_count as usize];
 			let mut key_ptr = delta_ptr;
 
-			for _ in 0..delta_count {
-				const KEY_SIZE: usize = 32;
-
-				// Read the delta into the provided buffer and collect it into the buffer.
-				let mut delta_key: StorageKey = [0; KEY_SIZE];
-				ctx.read_sandbox_memory_into_buf(key_ptr, &mut delta_key)?;
-				delta.push(delta_key);
+			for i in 0..delta_count {
+				// Read the delta into the provided buffer
+				// This cannot panic because of the loop condition
+				ctx.read_sandbox_memory_into_buf(key_ptr, &mut delta[i as usize])?;
 
 				// Offset key_ptr to the next element.
 				key_ptr = key_ptr.checked_add(KEY_SIZE as u32).ok_or(Error::<E::T>::OutOfBounds)?;
@@ -1163,7 +1267,22 @@ define_env!(Env, <E: Ext>,
 			delta
 		};
 
-		ctx.ext.restore_to(dest, code_hash, rent_allowance, delta)?;
+		let max_len = <E::T as Config>::MaxCodeSize::get();
+		let charged = ctx.charge_gas(RuntimeToken::RestoreToSurchargeCodeSize {
+			caller_code: max_len,
+			tombstone_code: max_len,
+		})?;
+		let (result, caller_code, tombstone_code) = match ctx.ext.restore_to(
+			dest, code_hash, rent_allowance, delta
+		) {
+			Ok((code, tomb)) => (Ok(()), code, tomb),
+			Err((err, code, tomb)) => (Err(err), code, tomb),
+		};
+		ctx.adjust_gas(charged, RuntimeToken::RestoreToSurchargeCodeSize {
+			caller_code,
+			tombstone_code,
+		});
+		result?;
 		Err(TrapReason::Restoration)
 	},
 
@@ -1193,7 +1312,7 @@ define_env!(Env, <E: Ext>,
 		};
 
 		// If there are more than `event_topics`, then trap.
-		if topics.len() > ctx.schedule.limits.event_topics as usize {
+		if topics.len() > ctx.ext.schedule().limits.event_topics as usize {
 			Err(Error::<E::T>::TooManyTopics)?;
 		}
 
@@ -1360,5 +1479,38 @@ define_env!(Env, <E: Ext>,
 	seal_hash_blake2_128(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
 		ctx.charge_gas(RuntimeToken::HashBlake128(input_len))?;
 		Ok(ctx.compute_hash_on_intermediate_buffer(blake2_128, input_ptr, input_len, output_ptr)?)
+	},
+
+	// Call into the chain extension provided by the chain if any.
+	//
+	// Handling of the input values is up to the specific chain extension and so is the
+	// return value. The extension can decide to use the inputs as primitive inputs or as
+	// in/out arguments by interpreting them as pointers. Any caller of this function
+	// must therefore coordinate with the chain that it targets.
+	//
+	// # Note
+	//
+	// If no chain extension exists the contract will trap with the `NoChainExtension`
+	// module error.
+	seal_call_chain_extension(
+		ctx,
+		func_id: u32,
+		input_ptr: u32,
+		input_len: u32,
+		output_ptr: u32,
+		output_len_ptr: u32
+	) -> u32 => {
+		use crate::chain_extension::{ChainExtension, Environment, RetVal};
+		if <E::T as Config>::ChainExtension::enabled() == false {
+			Err(Error::<E::T>::NoChainExtension)?;
+		}
+		let env = Environment::new(ctx, input_ptr, input_len, output_ptr, output_len_ptr);
+		match <E::T as Config>::ChainExtension::call(func_id, env)? {
+			RetVal::Converging(val) => Ok(val),
+			RetVal::Diverging{flags, data} => Err(TrapReason::Return(ReturnData {
+				flags: flags.bits(),
+				data,
+			})),
+		}
 	},
 );

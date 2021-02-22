@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,8 +28,8 @@ pub fn expand_store_trait(def: &mut Def) -> proc_macro2::TokenStream {
 		return Default::default()
 	};
 
-	let type_impl_gen = &def.type_impl_generics();
-	let type_use_gen = &def.type_use_generics();
+	let type_impl_gen = &def.type_impl_generics(trait_store.span());
+	let type_use_gen = &def.type_use_generics(trait_store.span());
 	let pallet_ident = &def.pallet_struct.pallet;
 
 	let mut where_clauses = vec![&def.config.where_clause];

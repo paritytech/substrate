@@ -1,6 +1,6 @@
 [package]
 name = "sp-version"
-version = "2.0.0"
+version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -17,9 +17,9 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 impl-serde = { version = "0.3.1", optional = true }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
-codec = { package = "parity-scale-codec", version = "1.3.1", default-features = false, features = ["derive"] }
-sp-std = { version = "2.0.0", default-features = false, path = "../std" }
-sp-runtime = { version = "2.0.0", default-features = false, path = "../runtime" }
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+sp-std = { version = "3.0.0", default-features = false, path = "../std" }
+sp-runtime = { version = "3.0.0", default-features = false, path = "../runtime" }
 
 [features]
 default = ["std"]

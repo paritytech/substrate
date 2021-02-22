@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -31,9 +31,14 @@ use codec::{Encode, Decode};
 #[derive(PartialEq, Eq, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Hash, PartialOrd, Ord, Clone))]
 pub struct StorageKey(
-	#[cfg_attr(feature = "std", serde(with="impl_serde::serialize"))]
-	pub Vec<u8>,
+	#[cfg_attr(feature = "std", serde(with = "impl_serde::serialize"))] pub Vec<u8>,
 );
+
+impl AsRef<[u8]> for StorageKey {
+	fn as_ref(&self) -> &[u8] {
+		self.0.as_ref()
+	}
+}
 
 /// Storage key with read/write tracking information.
 #[derive(PartialEq, Eq, RuntimeDebug, Clone, Encode, Decode)]
@@ -180,6 +185,16 @@ pub mod well_known_keys {
 		// Other code might depend on this, so be careful changing this.
 		key.starts_with(CHILD_STORAGE_KEY_PREFIX)
 	}
+
+	/// Returns if the given `key` starts with [`CHILD_STORAGE_KEY_PREFIX`] or collides with it.
+	pub fn starts_with_child_storage_key(key: &[u8]) -> bool {
+		if key.len() > CHILD_STORAGE_KEY_PREFIX.len() {
+			key.starts_with(CHILD_STORAGE_KEY_PREFIX)
+		} else {
+			CHILD_STORAGE_KEY_PREFIX.starts_with(key)
+		}
+	}
+
 }
 
 /// Information related to a child state.
