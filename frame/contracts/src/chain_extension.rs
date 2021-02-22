@@ -18,7 +18,7 @@
 //! A mechanism for runtime authors to augment the functionality of contracts.
 //!
 //! The runtime is able to call into any contract and retrieve the result using
-//! [`bare_call`](crate::Module::bare_call). This already allows customization of runtime
+//! [`bare_call`](crate::Pallet::bare_call). This already allows customization of runtime
 //! behaviour by user generated code (contracts). However, often it is more straightforward
 //! to allow the reverse behaviour: The contract calls into the runtime. We call the latter
 //! one a "chain extension" because it allows the chain to extend the set of functions that are
@@ -37,7 +37,7 @@
 //! [`charge_weight`](Environment::charge_weight) function must be called **before**
 //! carrying out any action that causes the consumption of the chargeable weight.
 //! It cannot be overstated how delicate of a process the creation of a chain extension
-//! is. Check whether using [`bare_call`](crate::Module::bare_call) suffices for the
+//! is. Check whether using [`bare_call`](crate::Pallet::bare_call) suffices for the
 //! use case at hand.
 //!
 //! # Benchmarking
@@ -328,7 +328,7 @@ where
 	///
 	/// If the contract supplied buffer is smaller than the passed `buffer` an `Err` is returned.
 	/// If `allow_skip` is set to true the contract is allowed to skip the copying of the buffer
-	/// by supplying the guard value of [`u32::max_value()`] as `out_ptr`. The
+	/// by supplying the guard value of `u32::max_value()` as `out_ptr`. The
 	/// `weight_per_byte` is only charged when the write actually happens and is not skipped or
 	/// failed due to a too small output buffer.
 	pub fn write(

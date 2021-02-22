@@ -18,7 +18,7 @@
 //! A module responsible for computing the right amount of weight and charging it.
 
 use crate::{
-	AliveContractInfo, BalanceOf, ContractInfo, ContractInfoOf, Module, RawEvent,
+	AliveContractInfo, BalanceOf, ContractInfo, ContractInfoOf, Module, Event,
 	TombstoneContractInfo, Config, CodeHash, Error,
 	storage::Storage, wasm::PrefabWasmModule, exec::Executable,
 };
@@ -26,7 +26,7 @@ use sp_std::prelude::*;
 use sp_io::hashing::blake2_256;
 use sp_core::crypto::UncheckedFrom;
 use frame_support::{
-	debug, StorageMap,
+	debug,
 	storage::child,
 	traits::{Currency, ExistenceRequirement, Get, OnUnbalanced, WithdrawReasons},
 };
@@ -268,7 +268,7 @@ where
 				let tombstone_info = ContractInfo::Tombstone(tombstone);
 				<ContractInfoOf<T>>::insert(account, &tombstone_info);
 				code.drop_from_storage();
-				<Module<T>>::deposit_event(RawEvent::Evicted(account.clone()));
+				<Module<T>>::deposit_event(Event::Evicted(account.clone()));
 				Ok(None)
 			}
 			(Verdict::Evict { amount: _ }, None) => {
