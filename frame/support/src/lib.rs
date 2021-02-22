@@ -1739,6 +1739,10 @@ pub mod pallet_prelude {
 /// 		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
 /// 			unimplemented!();
 /// 		}
+///
+/// 		fn is_inherent(_call: &Self::Call) -> bool {
+/// 			unimplemented!();
+/// 		}
 /// 	}
 ///
 /// 	// Regular rust code needed for implementing ProvideInherent trait
@@ -1864,6 +1868,10 @@ pub mod pallet_prelude {
 /// 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 ///
 /// 		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
+/// 			unimplemented!();
+/// 		}
+///
+/// 		fn is_inherent(_call: &Self::Call) -> bool {
 /// 			unimplemented!();
 /// 		}
 /// 	}

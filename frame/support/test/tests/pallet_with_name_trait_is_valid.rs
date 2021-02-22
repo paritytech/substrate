@@ -81,6 +81,10 @@ impl<T: Trait> sp_inherents::ProvideInherent for Module<T> {
 	fn check_inherent(_: &Self::Call, _: &sp_inherents::InherentData) -> std::result::Result<(), Self::Error> {
 		unimplemented!();
 	}
+
+	fn is_inherent(_call: &Self::Call) -> bool {
+		unimplemented!();
+	}
 }
 
 #[cfg(test)]

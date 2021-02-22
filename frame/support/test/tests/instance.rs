@@ -122,6 +122,10 @@ mod module1 {
 		fn check_inherent(_: &Self::Call, _: &InherentData) -> std::result::Result<(), Self::Error> {
 			unimplemented!();
 		}
+
+		fn is_inherent(_call: &Self::Call) -> bool {
+			unimplemented!();
+		}
 	}
 }
 
@@ -180,6 +184,10 @@ mod module2 {
 		}
 
 		fn check_inherent(_call: &Self::Call, _data: &InherentData) -> std::result::Result<(), Self::Error> {
+			unimplemented!();
+		}
+
+		fn is_inherent(_call: &Self::Call) -> bool {
 			unimplemented!();
 		}
 	}

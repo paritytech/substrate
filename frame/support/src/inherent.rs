@@ -393,7 +393,10 @@ mod tests {
 			],
 		);
 
-		assert!(InherentData::new().check_extrinsics(&block).fatal_error());
+		assert_eq!(
+			InherentData::new().check_extrinsics(&block).into_errors().collect::<Vec<_>>(),
+			vec![(*b"test1234", ().into())],
+		);
 	}
 
 	#[test]
