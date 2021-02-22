@@ -199,12 +199,12 @@ macro_rules! benchmarks_iter {
 		{ $( $where_clause:tt )* }
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
-		where_clause { where $( $where_ty:ty: $where_bound:path ),* $(,)? }
+		where_clause { where $( $where_bound:tt )* }
 		$( $rest:tt )*
 	) => {
 		$crate::benchmarks_iter! {
 			{ $( $instance)? }
-			{ $( $where_ty: $where_bound ),* }
+			{ $( $where_bound )* }
 			( $( $names )* )
 			( $( $names_extra )* )
 			$( $rest )*
@@ -930,7 +930,7 @@ macro_rules! impl_benchmark_test {
 
 /// This creates a test suite which runs the module's benchmarks.
 ///
-/// When called in [`pallet_example`] as
+/// When called in `pallet_example` as
 ///
 /// ```rust,ignore
 /// impl_benchmark_test_suite!(Module, crate::tests::new_test_ext(), crate::tests::Test);

@@ -15,36 +15,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::Config;
+use crate::{Config, Error};
 use sp_std::marker::PhantomData;
 use sp_runtime::traits::Zero;
 use frame_support::{
-	dispatch::{DispatchResultWithPostInfo, PostDispatchInfo, DispatchErrorWithPostInfo},
+	dispatch::{
+		DispatchResultWithPostInfo, PostDispatchInfo, DispatchErrorWithPostInfo, DispatchError,
+	},
 	weights::Weight,
 };
 use pallet_contracts_primitives::ExecError;
+use sp_core::crypto::UncheckedFrom;
 
 #[cfg(test)]
 use std::{any::Any, fmt::Debug};
 
 // Gas is essentially the same as weight. It is a 1 to 1 correspondence.
 pub type Gas = Weight;
-
-#[must_use]
-#[derive(Debug, PartialEq, Eq)]
-pub enum GasMeterResult {
-	Proceed(ChargedAmount),
-	OutOfGas,
-}
-
-impl GasMeterResult {
-	pub fn is_out_of_gas(&self) -> bool {
-		match *self {
-			GasMeterResult::OutOfGas => true,
-			GasMeterResult::Proceed(_) => false,
-		}
-	}
-}
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct ChargedAmount(Gas);
@@ -103,7 +90,11 @@ pub struct GasMeter<T: Config> {
 	#[cfg(test)]
 	tokens: Vec<ErasedToken>,
 }
-impl<T: Config> GasMeter<T> {
+
+impl<T: Config> GasMeter<T>
+where
+	T::AccountId: UncheckedFrom<<T as frame_system::Config>::Hash> + AsRef<[u8]>
+{
 	pub fn new(gas_limit: Gas) -> Self {
 		GasMeter {
 			gas_limit,
@@ -128,7 +119,7 @@ impl<T: Config> GasMeter<T> {
 		&mut self,
 		metadata: &Tok::Metadata,
 		token: Tok,
-	) -> GasMeterResult {
+	) -> Result<ChargedAmount, DispatchError> {
 		#[cfg(test)]
 		{
 			// Unconditionally add the token to the storage.
@@ -149,9 +140,23 @@ impl<T: Config> GasMeter<T> {
 		self.gas_left = new_value.unwrap_or_else(Zero::zero);
 
 		match new_value {
-			Some(_) => GasMeterResult::Proceed(ChargedAmount(amount)),
-			None => GasMeterResult::OutOfGas,
+			Some(_) => Ok(ChargedAmount(amount)),
+			None => Err(Error::<T>::OutOfGas.into()),
 		}
+	}
+
+	/// Adjust a previously charged amount down to its actual amount.
+	///
+	/// This is when a maximum a priori amount was charged and then should be partially
+	/// refunded to match the actual amount.
+	pub fn adjust_gas<Tok: Token<T>>(
+		&mut self,
+		charged_amount: ChargedAmount,
+		metadata: &Tok::Metadata,
+		token: Tok,
+	) {
+		let adjustment = charged_amount.0.saturating_sub(token.calculate_amount(metadata));
+		self.gas_left = self.gas_left.saturating_add(adjustment).min(self.gas_limit);
 	}
 
 	/// Refund previously charged gas back to the gas meter.
@@ -304,7 +309,7 @@ mod tests {
 
 		let result = gas_meter
 			.charge(&MultiplierTokenMetadata { multiplier: 3 }, MultiplierToken(10));
-		assert!(!result.is_out_of_gas());
+		assert!(!result.is_err());
 
 		assert_eq!(gas_meter.gas_left(), 49_970);
 	}
@@ -312,10 +317,10 @@ mod tests {
 	#[test]
 	fn tracing() {
 		let mut gas_meter = GasMeter::<Test>::new(50000);
-		assert!(!gas_meter.charge(&(), SimpleToken(1)).is_out_of_gas());
+		assert!(!gas_meter.charge(&(), SimpleToken(1)).is_err());
 		assert!(!gas_meter
 			.charge(&MultiplierTokenMetadata { multiplier: 3 }, MultiplierToken(10))
-			.is_out_of_gas());
+			.is_err());
 
 		let mut tokens = gas_meter.tokens()[0..2].iter();
 		match_tokens!(tokens, SimpleToken(1), MultiplierToken(10),);
@@ -325,7 +330,7 @@ mod tests {
 	#[test]
 	fn refuse_to_execute_anything_if_zero() {
 		let mut gas_meter = GasMeter::<Test>::new(0);
-		assert!(gas_meter.charge(&(), SimpleToken(1)).is_out_of_gas());
+		assert!(gas_meter.charge(&(), SimpleToken(1)).is_err());
 	}
 
 	// Make sure that if the gas meter is charged by exceeding amount then not only an error
@@ -338,10 +343,10 @@ mod tests {
 		let mut gas_meter = GasMeter::<Test>::new(200);
 
 		// The first charge is should lead to OOG.
-		assert!(gas_meter.charge(&(), SimpleToken(300)).is_out_of_gas());
+		assert!(gas_meter.charge(&(), SimpleToken(300)).is_err());
 
 		// The gas meter is emptied at this moment, so this should also fail.
-		assert!(gas_meter.charge(&(), SimpleToken(1)).is_out_of_gas());
+		assert!(gas_meter.charge(&(), SimpleToken(1)).is_err());
 	}
 
 
@@ -350,6 +355,6 @@ mod tests {
 	#[test]
 	fn charge_exact_amount() {
 		let mut gas_meter = GasMeter::<Test>::new(25);
-		assert!(!gas_meter.charge(&(), SimpleToken(25)).is_out_of_gas());
+		assert!(!gas_meter.charge(&(), SimpleToken(25)).is_err());
 	}
 }
