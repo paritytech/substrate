@@ -296,8 +296,6 @@ where
 		for (sign_result, key) in signatures.into_iter().zip(keys) {
 			let mut signed_addresses = vec![];
 
-			// sign_with_all returns Result<Signature, Error> signature
-			// is generated for a public key that is supported.
 			// Verify that all signatures exist for all provided keys.
 			let signature = sign_result.ok()
 				.flatten()
