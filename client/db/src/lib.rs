@@ -678,7 +678,7 @@ pub struct BlockImportOperation<Block: BlockT> {
 	changes_trie_config_update: Option<Option<ChangesTrieConfiguration>>,
 	pending_block: Option<PendingBlock<Block>>,
 	aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
-	finalized_blocks: Vec<(BlockId<Block>, Option<Justifications>)>,
+	finalized_blocks: Vec<(BlockId<Block>, Option<Justification>)>,
 	set_head: Option<BlockId<Block>>,
 	commit_state: bool,
 }
@@ -814,8 +814,7 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 		block: BlockId<Block>,
 		justification: Option<Justification>,
 	) -> ClientResult<()> {
-		let justifications = justification.map(Justifications::from);
-		self.finalized_blocks.push((block, justifications));
+		self.finalized_blocks.push((block, justification));
 		Ok(())
 	}
 
@@ -1113,7 +1112,7 @@ impl<Block: BlockT> Backend<Block> {
 		hash: &Block::Hash,
 		header: &Block::Header,
 		last_finalized: Option<Block::Hash>,
-		justifications: Option<Justifications>,
+		justification: Option<Justification>,
 		changes_trie_cache_ops: &mut Option<DbChangesTrieStorageTransaction<Block>>,
 		finalization_displaced: &mut Option<FinalizationDisplaced<Block::Hash, NumberFor<Block>>>,
 	) -> ClientResult<(Block::Hash, <Block::Header as HeaderT>::Number, bool, bool)> {
@@ -1130,11 +1129,11 @@ impl<Block: BlockT> Backend<Block> {
 			finalization_displaced,
 		)?;
 
-		if let Some(justifications) = justifications {
+		if let Some(justification) = justification {
 			transaction.set_from_vec(
 				columns::JUSTIFICATION,
 				&utils::number_and_hash_to_lookup_key(number, hash)?,
-				justifications.encode(),
+				Justifications::from(justification).encode(),
 			);
 		}
 		Ok((*hash, number, false, true))
@@ -1655,13 +1654,12 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		let mut displaced = None;
 
 		let mut changes_trie_cache_ops = None;
-		let justifications = justification.map(Justifications::from);
 		let (hash, number, is_best, is_finalized) = self.finalize_block_with_transaction(
 			&mut transaction,
 			&hash,
 			&header,
 			None,
-			justifications,
+			justification,
 			&mut changes_trie_cache_ops,
 			&mut displaced,
 		)?;
