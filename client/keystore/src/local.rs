@@ -420,7 +420,11 @@ impl KeystoreInner {
 			return Ok(Some(phrase.clone()))
 		}
 
-		let path = self.key_file_path(public, key_type)?;
+		let path = if let Some(path) = self.key_file_path(public, key_type) {
+			path
+		} else {
+			return Ok(None);
+		};
 
 		if path.exists() {
 			let file = File::open(path)?;
