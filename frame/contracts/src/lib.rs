@@ -604,11 +604,6 @@ pub mod pallet {
 		DuplicateContract,
 	}
 
-	#[pallet::type_value]
-	pub fn Null() -> u64 {
-		0
-	}
-
 	/// Current cost schedule for contracts.
 	#[pallet::storage]
 	#[pallet::getter(fn current_schedule)]
@@ -624,7 +619,7 @@ pub mod pallet {
 
 	/// The subtrie counter.
 	#[pallet::storage]
-	pub type AccountCounter<T: Config> = StorageValue<_, u64, ValueQuery, Null>;
+	pub type AccountCounter<T: Config> = StorageValue<_, u64, ValueQuery>;
 
 	/// The code associated with a given account.
 	///
