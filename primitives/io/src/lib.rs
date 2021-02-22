@@ -474,8 +474,9 @@ pub trait Crypto {
 		let keystore = &***self.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!");
 		SyncCryptoStore::sign_with(keystore, id, &pub_key.into(), msg)
-			.map(|sig| ed25519::Signature::from_slice(sig.as_slice()))
 			.ok()
+			.flatten()
+			.map(|sig| ed25519::Signature::from_slice(sig.as_slice()))
 	}
 
 	/// Verify `ed25519` signature.
@@ -600,8 +601,9 @@ pub trait Crypto {
 		let keystore = &***self.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!");
 		SyncCryptoStore::sign_with(keystore, id, &pub_key.into(), msg)
-			.map(|sig| sr25519::Signature::from_slice(sig.as_slice()))
 			.ok()
+			.flatten()
+			.map(|sig| sr25519::Signature::from_slice(sig.as_slice()))
 	}
 
 	/// Verify an `sr25519` signature.
@@ -646,8 +648,9 @@ pub trait Crypto {
 		let keystore = &***self.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!");
 		SyncCryptoStore::sign_with(keystore, id, &pub_key.into(), msg)
-			.map(|sig| ecdsa::Signature::from_slice(sig.as_slice()))
 			.ok()
+			.flatten()
+			.map(|sig| ecdsa::Signature::from_slice(sig.as_slice()))
 	}
 
 	/// Verify `ecdsa` signature.

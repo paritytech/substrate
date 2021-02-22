@@ -741,6 +741,7 @@ pub trait TestNetFactory: Sized {
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: Role::Full,
 			executor: None,
+			transactions_handler_executor: Box::new(|task| { async_std::task::spawn(task); }),
 			network_config,
 			chain: client.clone(),
 			on_demand: None,
@@ -831,6 +832,7 @@ pub trait TestNetFactory: Sized {
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: Role::Light,
 			executor: None,
+			transactions_handler_executor: Box::new(|task| { async_std::task::spawn(task); }),
 			network_config,
 			chain: client.clone(),
 			on_demand: None,

@@ -649,6 +649,9 @@ where
 			)
 			.map_err(|e| sp_consensus::Error::CannotSign(
 				public.clone(), e.to_string(),
+			))?
+			.ok_or_else(|| sp_consensus::Error::CannotSign(
+				public.clone(), "Could not find key in keystore.".into(),
 			))?;
 			let signature: AuthoritySignature = signature.clone().try_into()
 				.map_err(|_| sp_consensus::Error::InvalidSignature(
@@ -1491,7 +1494,7 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, Inner, CAW>(
 	client: Arc<Client>,
 	select_chain: SelectChain,
 	inherent_data_providers: InherentDataProviders,
-	spawner: &impl sp_core::traits::SpawnNamed,
+	spawner: &impl sp_core::traits::SpawnEssentialNamed,
 	registry: Option<&Registry>,
 	can_author_with: CAW,
 ) -> ClientResult<DefaultImportQueue<Block, Client>> where
