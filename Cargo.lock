@@ -7586,7 +7586,6 @@ dependencies = [
  "sp-consensus",
  "sp-core",
  "sp-externalities",
- "sp-finality-grandpa",
  "sp-panic-handler",
  "sp-runtime",
  "sp-state-machine",
