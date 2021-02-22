@@ -33,7 +33,7 @@ use frame_support::{
 	dispatch::DispatchResult,
 	StorageMap,
 	debug,
-	storage::{child::{self, KillOutcome}, StorageValue},
+	storage::{child::{self, KillChildStorageResult}, StorageValue},
 	traits::Get,
 	weights::Weight,
 };
@@ -270,13 +270,13 @@ where
 				let removed = queue.swap_remove(0);
 				match outcome {
 					// This should not happen as our budget was large enough to remove all keys.
-					KillOutcome::SomeRemaining(_) => {
+					KillChildStorageResult::SomeRemaining(_) => {
 						debug::error!(
 							"After deletion keys are remaining in this child trie: {:?}",
 							removed.trie_id,
 						);
 					},
-					KillOutcome::AllRemoved(_) => (),
+					KillChildStorageResult::AllRemoved(_) => (),
 				}
 			}
 			remaining_key_budget = remaining_key_budget

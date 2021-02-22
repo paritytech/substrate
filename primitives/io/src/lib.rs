@@ -84,7 +84,7 @@ pub enum EcdsaVerifyError {
 /// The outcome of calling [`kill_storage`]. Returned value is the number of storage items
 /// removed from the trie from making the `kill_storage` call.
 #[derive(PassByCodec, Encode, Decode)]
-pub enum KillOutcome {
+pub enum KillChildStorageResult {
 	/// No key remains in the child trie.
 	AllRemoved(u32),
 	/// At least one key still resides in the child trie due to the supplied limit.
@@ -345,12 +345,12 @@ pub trait DefaultChildStorage {
 	/// Use this function to distribute the deletion of a single child trie across multiple
 	/// blocks.
 	#[version(3)]
-	fn storage_kill(&mut self, storage_key: &[u8], limit: Option<u32>) -> KillOutcome {
+	fn storage_kill(&mut self, storage_key: &[u8], limit: Option<u32>) -> KillChildStorageResult {
 		let child_info = ChildInfo::new_default(storage_key);
 		let (all_removed, num_removed) = self.kill_child_storage(&child_info, limit);
 		match all_removed {
-			true => KillOutcome::AllRemoved(num_removed),
-			false => KillOutcome::SomeRemaining(num_removed),
+			true => KillChildStorageResult::AllRemoved(num_removed),
+			false => KillChildStorageResult::SomeRemaining(num_removed),
 		}
 	}
 
