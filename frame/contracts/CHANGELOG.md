@@ -5,20 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-The semantic versioning garantuees do cover the interface to the substrate runtime which
+The semantic versioning guarantees do cover the interface to the substrate runtime which
 includes this pallet as a dependency. This module will also add storage migrations whenever
 changes require this. Stability with regard to offchain tooling is explicitly excluded from
-this garantuee: For example adding a new field to an in-storage data structure will require
+this guarantee: For example adding a new field to an in-storage data structure will require
 changes to frontends to properly display it. However, those changes will still be regarded
 as a minor version bump.
 
-The interface provided to smart contracts will adhere to semver to with one exception: Even
+The interface provided to smart contracts will adhere to semver with one exception: Even
 major version bumps will be backwards compatible with regard to already deployed contracts.
 In other words: Upgrading this pallet will not break pre-existing contracts.
 
 ## [v3.0.0]
 
-This version constitutes the first release that brings any stability garantuess (see above).
+This version constitutes the first release that brings any stability guarantees (see above).
 
 ### Added
 
