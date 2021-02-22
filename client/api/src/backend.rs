@@ -21,7 +21,7 @@
 use std::sync::Arc;
 use std::collections::{HashMap, HashSet};
 use sp_core::ChangesTrieConfigurationRange;
-use sp_core::offchain::{OffchainStorage};
+use sp_core::offchain::OffchainStorage;
 use sp_runtime::{generic::BlockId, Justification, Justifications, Storage};
 use sp_runtime::traits::{Block as BlockT, NumberFor, HashFor};
 use sp_state_machine::{
@@ -227,7 +227,7 @@ pub trait Finalizer<Block: BlockT, B: Backend<Block>> {
 		&self,
 		operation: &mut ClientImportOperation<Block, B>,
 		id: BlockId<Block>,
-		justifications: Option<Justifications>,
+		justification: Option<Justification>,
 		notify: bool,
 	) -> sp_blockchain::Result<()>;
 
@@ -247,7 +247,7 @@ pub trait Finalizer<Block: BlockT, B: Backend<Block>> {
 	fn finalize_block(
 		&self,
 		id: BlockId<Block>,
-		justifications: Option<Justifications>,
+		justification: Option<Justification>,
 		notify: bool,
 	) -> sp_blockchain::Result<()>;
 }

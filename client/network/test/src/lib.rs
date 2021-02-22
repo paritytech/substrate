@@ -63,7 +63,7 @@ use sp_core::H256;
 use sc_network::config::ProtocolConfig;
 use sp_runtime::generic::{BlockId, OpaqueDigestItemId};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use sp_runtime::Justifications;
+use sp_runtime::{Justification, Justifications};
 use substrate_test_runtime_client::{self, AccountKeyring};
 use sc_service::client::Client;
 pub use sc_network::config::EmptyTransactionPool;
@@ -208,12 +208,12 @@ impl PeersClient {
 	pub fn finalize_block(
 		&self,
 		id: BlockId<Block>,
-		justifications: Option<Justifications>,
+		justification: Option<Justification>,
 		notify: bool
 	) -> ClientResult<()> {
 		match *self {
-			PeersClient::Full(ref client, ref _backend) => client.finalize_block(id, justifications, notify),
-			PeersClient::Light(ref client, ref _backend) => client.finalize_block(id, justifications, notify),
+			PeersClient::Full(ref client, ref _backend) => client.finalize_block(id, justification, notify),
+			PeersClient::Light(ref client, ref _backend) => client.finalize_block(id, justification, notify),
 		}
 	}
 }
@@ -1034,7 +1034,9 @@ impl JustificationImport<Block> for ForceFinalized {
 		_number: NumberFor<Block>,
 		justifications: Justifications,
 	) -> Result<(), Self::Error> {
-		self.0.finalize_block(BlockId::Hash(hash), Some(justifications), true)
+		// WIP(JON)
+		let justification = justifications.into_iter().next();
+		self.0.finalize_block(BlockId::Hash(hash), justification, true)
 			.map_err(|_| ConsensusError::InvalidJustification.into())
 	}
 }
