@@ -1679,16 +1679,17 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		let header = self.blockchain.expect_header(block)?;
 		let number = *header.number();
 
-		// Check if block is finalized first
+		// Check if the block is finalized first.
 		let is_descendent_of = is_descendent_of(&self.blockchain, None);
 		let last_finalized = self.blockchain.last_finalized()?;
-		if hash != last_finalized && !is_descendent_of(&hash, &last_finalized)? {
-			return Err(ClientError::BadJustification(
-				"Can't append Justification to unfinalized block".into(),
-			));
+
+		// We can do a quick check first, before doing a proper but more expensive check
+		if number > self.blockchain.info().finalized_number
+			|| (hash != last_finalized && !is_descendent_of(&hash, &last_finalized)?)
+		{
+			return Err(ClientError::NotInFinalizedChain);
 		}
 
-		// Read and merge Justification
 		use sp_blockchain::Backend;
 		let justifications =
 			if let Some(mut stored_justifications) = self.blockchain.justifications(block)? {
@@ -1702,14 +1703,12 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 				Justifications::from(justification)
 			};
 
-		// Set Justification in Transaction in the same way as in finalize_block_with_transaction
 		transaction.set_from_vec(
 			columns::JUSTIFICATION,
 			&utils::number_and_hash_to_lookup_key(number, hash)?,
 			justifications.encode(),
 		);
 
-		// Commit to storage
 		self.storage.db.commit(transaction)?;
 
 		Ok(())
