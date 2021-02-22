@@ -1862,6 +1862,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "frame-try-runtime"
+version = "0.9.0"
+dependencies = [
+ "frame-support",
+ "parity-scale-codec",
+ "sp-api",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "fs-swap"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3949,6 +3960,7 @@ dependencies = [
  "substrate-build-script-utils",
  "substrate-frame-cli",
  "tempfile",
+ "try-runtime-cli",
  "wasm-bindgen",
  "wasm-bindgen-futures",
 ]
@@ -4072,6 +4084,7 @@ dependencies = [
  "frame-system",
  "frame-system-benchmarking",
  "frame-system-rpc-runtime-api",
+ "frame-try-runtime",
  "hex-literal",
  "node-primitives",
  "pallet-assets",
@@ -6370,6 +6383,24 @@ dependencies = [
  "libc",
  "mach",
  "winapi 0.3.9",
+]
+
+[[package]]
+name = "remote-externalities"
+version = "0.9.0"
+dependencies = [
+ "async-std",
+ "bincode",
+ "env_logger 0.8.2",
+ "futures 0.1.30",
+ "hex-literal",
+ "jsonrpc-core-client",
+ "log",
+ "sc-rpc",
+ "sc-rpc-api",
+ "sp-core",
+ "sp-io",
+ "tokio 0.1.22",
 ]
 
 [[package]]
@@ -9897,6 +9928,27 @@ name = "try-lock"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59547bce71d9c38b83d9c0e92b6066c4253371f15005def0c30d9657f50c7642"
+
+[[package]]
+name = "try-runtime-cli"
+version = "0.9.0"
+dependencies = [
+ "frame-try-runtime",
+ "log",
+ "parity-scale-codec",
+ "remote-externalities",
+ "sc-cli",
+ "sc-client-api",
+ "sc-executor",
+ "sc-service",
+ "sp-api",
+ "sp-blockchain",
+ "sp-core",
+ "sp-externalities",
+ "sp-runtime",
+ "sp-state-machine",
+ "structopt",
+]
 
 [[package]]
 name = "trybuild"

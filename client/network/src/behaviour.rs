@@ -22,7 +22,7 @@ use crate::{
 	discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryOut},
 	protocol::{message::Roles, CustomMessageOutcome, NotificationsSink, Protocol},
 	peer_info, request_responses, light_client_requests,
-	ObservedRole, DhtEvent, ExHashT,
+	ObservedRole, DhtEvent,
 };
 
 use bytes::Bytes;
@@ -54,9 +54,9 @@ pub use crate::request_responses::{
 /// General behaviour of the network. Combines all protocols together.
 #[derive(NetworkBehaviour)]
 #[behaviour(out_event = "BehaviourOut<B>", poll_method = "poll")]
-pub struct Behaviour<B: BlockT, H: ExHashT> {
+pub struct Behaviour<B: BlockT> {
 	/// All the substrate-specific protocols.
-	substrate: Protocol<B, H>,
+	substrate: Protocol<B>,
 	/// Periodically pings and identifies the nodes we are connected to, and store information in a
 	/// cache.
 	peer_info: peer_info::PeerInfoBehaviour,
@@ -172,10 +172,10 @@ pub enum BehaviourOut<B: BlockT> {
 	Dht(DhtEvent, Duration),
 }
 
-impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
+impl<B: BlockT> Behaviour<B> {
 	/// Builds a new `Behaviour`.
 	pub fn new(
-		substrate: Protocol<B, H>,
+		substrate: Protocol<B>,
 		user_agent: String,
 		local_public_key: PublicKey,
 		light_client_request_sender: light_client_requests::sender::LightClientRequestSender<B>,
@@ -256,12 +256,12 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 	}
 
 	/// Returns a shared reference to the user protocol.
-	pub fn user_protocol(&self) -> &Protocol<B, H> {
+	pub fn user_protocol(&self) -> &Protocol<B> {
 		&self.substrate
 	}
 
 	/// Returns a mutable reference to the user protocol.
-	pub fn user_protocol_mut(&mut self) -> &mut Protocol<B, H> {
+	pub fn user_protocol_mut(&mut self) -> &mut Protocol<B> {
 		&mut self.substrate
 	}
 
@@ -294,15 +294,15 @@ fn reported_roles_to_observed_role(roles: Roles) -> ObservedRole {
 	}
 }
 
-impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<void::Void> for
-Behaviour<B, H> {
+impl<B: BlockT> NetworkBehaviourEventProcess<void::Void> for
+Behaviour<B> {
 	fn inject_event(&mut self, event: void::Void) {
 		void::unreachable(event)
 	}
 }
 
-impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<CustomMessageOutcome<B>> for
-Behaviour<B, H> {
+impl<B: BlockT> NetworkBehaviourEventProcess<CustomMessageOutcome<B>> for
+Behaviour<B> {
 	fn inject_event(&mut self, event: CustomMessageOutcome<B>) {
 		match event {
 			CustomMessageOutcome::BlockImport(origin, blocks) =>
@@ -362,7 +362,7 @@ Behaviour<B, H> {
 	}
 }
 
-impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<request_responses::Event> for Behaviour<B, H> {
+impl<B: BlockT> NetworkBehaviourEventProcess<request_responses::Event> for Behaviour<B> {
 	fn inject_event(&mut self, event: request_responses::Event) {
 		match event {
 			request_responses::Event::InboundRequest { peer, protocol, result } => {
@@ -386,8 +386,8 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<request_responses::Even
 	}
 }
 
-impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<peer_info::PeerInfoEvent>
-	for Behaviour<B, H> {
+impl<B: BlockT> NetworkBehaviourEventProcess<peer_info::PeerInfoEvent>
+	for Behaviour<B> {
 	fn inject_event(&mut self, event: peer_info::PeerInfoEvent) {
 		let peer_info::PeerInfoEvent::Identified {
 			peer_id,
@@ -416,8 +416,8 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<peer_info::PeerInfoEven
 	}
 }
 
-impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<DiscoveryOut>
-	for Behaviour<B, H> {
+impl<B: BlockT> NetworkBehaviourEventProcess<DiscoveryOut>
+	for Behaviour<B> {
 	fn inject_event(&mut self, out: DiscoveryOut) {
 		match out {
 			DiscoveryOut::UnroutablePeer(_peer_id) => {
@@ -450,7 +450,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<DiscoveryOut>
 	}
 }
 
-impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
+impl<B: BlockT> Behaviour<B> {
 	fn poll<TEv>(
 		&mut self,
 		cx: &mut Context,
