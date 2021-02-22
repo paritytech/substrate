@@ -121,13 +121,12 @@ use sp_runtime::{
 use frame_support::{
 	storage::child::ChildInfo,
 	traits::{OnUnbalanced, Currency, Get, Time, Randomness},
-	weights::Weight,
+	weights::{Weight, PostDispatchInfo, WithPostDispatchInfo},
 };
 use frame_system::Module as System;
 use pallet_contracts_primitives::{
 	RentProjectionResult, GetStorageResult, ContractAccessError, ContractExecResult,
 };
-use frame_support::weights::{PostDispatchInfo, WithPostDispatchInfo};
 
 pub type CodeHash<T> = <T as frame_system::Config>::Hash;
 pub type TrieId = Vec<u8>;
