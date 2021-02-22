@@ -33,8 +33,8 @@ mod common;
 use common::{generate_random_npos_inputs, to_range};
 use rand::{self, SeedableRng};
 use sp_npos_elections::{
-	pjr_check, seq_phragmen, to_supports, ElectionResult, ExtendedBalance, StakedAssignment,
-	Supports,
+	assignment_ratio_to_staked, pjr_check, seq_phragmen, to_supports, to_without_backing,
+	ElectionResult, ExtendedBalance, Supports,
 };
 
 type AccountId = u64;
@@ -54,7 +54,7 @@ fn main() {
 			let (rounds, candidates, voters) =
 				generate_random_npos_inputs(candidate_count, voter_count, rng);
 
-			// Run the NPoS validator selection algorithm
+			// Run seq-phragmen
 			let ElectionResult {
 				winners,
 				assignments,
@@ -62,19 +62,15 @@ fn main() {
 				.expect("seq_phragmen must succeed");
 
 			// pjr_check only cares about the identity of the winner, not its balance
-			let winners: Vec<_> = winners.into_iter().map(|(id, _stake)| id).collect();
+			let winners = to_without_backing(winners);
 
 			// convert assignments into staked assignments
-			let assignments: Vec<StakedAssignment<AccountId>> = assignments
-				.into_iter()
-				.map(|assignment| {
-					let voter_idx = voters
-						.binary_search_by_key(&assignment.who, |(id, _weight, _assignments)| *id)
-						.expect("voter must be present in voters list");
-					let weight: ExtendedBalance = voters[voter_idx].1.into();
-					assignment.into_staked(weight)
-				})
-				.collect();
+			let assignments = assignment_ratio_to_staked(assignments, |who| {
+				let voter_idx = voters
+					.binary_search_by_key(who, |(id, _weight, _assignments)| *id)
+					.expect("voter must be present in voters list");
+				voters[voter_idx].1
+			});
 
 			let supports: Supports<AccountId> = to_supports(&winners, &assignments)
 				.expect("election result must be structurally valid");
