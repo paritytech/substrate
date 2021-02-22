@@ -289,8 +289,7 @@ impl SyncCryptoStore for LocalKeystore {
 		transcript_data: VRFTranscriptData,
 	) -> std::result::Result<Option<VRFSignature>, TraitError> {
 		let transcript = make_transcript(transcript_data);
-		let pair = self.0.read().key_pair_by_type::<Sr25519Pair>(public, key_type)
-			.map_err(|e| TraitError::PairNotFound(e.to_string()))?;
+		let pair = self.0.read().key_pair_by_type::<Sr25519Pair>(public, key_type)?;
 
 		if let Some(pair) = pair {
 			let (inout, proof, _) = pair.as_ref().vrf_sign(transcript);
@@ -419,12 +418,9 @@ impl KeystoreInner {
 	fn key_phrase_by_type(&self, public: &[u8], key_type: KeyTypeId) -> Result<Option<String>> {
 		if let Some(phrase) = self.get_additional_pair(public, key_type) {
 			return Ok(Some(phrase.clone()))
-		} else if self.path.is_none() {
-			return Ok(None)
 		}
 
-		let path = self.key_file_path(public, key_type)
-			.expect("We checked above that path exists; qed");
+		let path = self.key_file_path(public, key_type)?;
 
 		if path.exists() {
 			let file = File::open(path)?;

@@ -34,9 +34,6 @@ pub enum Error {
 	/// Public key type is not supported
 	#[display(fmt="Key not supported: {:?}", _0)]
 	KeyNotSupported(KeyTypeId),
-	/// Pair not found for public key and KeyTypeId
-	#[display(fmt="Pair was not found: {}", _0)]
-	PairNotFound(String),
 	/// Validation error
 	#[display(fmt="Validation error: {}", _0)]
 	ValidationError(String),
