@@ -76,7 +76,7 @@ fn main() {
 				.expect("election result must be structurally valid");
 
 			assert!(
-				pjr_check(&supports, candidates, voters, PJR_THRESHOLD),
+				pjr_check(&supports, candidates, voters),
 				"unbalanced sequential phragmen must satisfy PJR",
 			);
 		});

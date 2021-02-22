@@ -165,8 +165,11 @@ fn prepare_pjr_input<AccountId: IdentifierT>(
 /// Section 5 of the NPoS paper shows that this property is equal to: For a feasible solution, if
 /// `Max {score(c)} < t` where c is every unelected candidate, then this solution is t-PJR.
 ///
-/// The text notes that we can verify this condition by running Algorithm 5: MaxPrescore and validating
-/// that MaxPrescore(A, w, t) < t).
+/// The text notes the following:
+///
+/// - we can verify this condition by running Algorithm 5: MaxPrescore and validating
+///   that MaxPrescore(A, w, t) < t).
+/// - the property gets stronger as the threshold decreases.
 ///
 /// ### Interface
 ///
@@ -186,7 +189,7 @@ fn prepare_pjr_input<AccountId: IdentifierT>(
 //
 // Note that while the names don't explicitly say so, `candidates` are the winning candidates, and
 // `voters` is the set of weighted edges from nominators to winning validators.
-pub fn pjr_check<AccountId: IdentifierT>(
+pub fn t_pjr_check<AccountId: IdentifierT>(
 	supports: &Supports<AccountId>,
 	all_candidates: Vec<AccountId>,
 	all_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
@@ -264,6 +267,24 @@ fn slack<AccountId: IdentifierT>(voter: &Voter<AccountId>, t: Threshold) -> Exte
 
 	// NOTE: candidate for saturating_log_sub()
 	budget.saturating_sub(leftover)
+}
+
+/// Check a solution to be PJR.
+///
+/// The PJR property is true if `t-PJR` is true when `t == sum(stake) / committee_size`.
+pub fn pjr_check<AccountId: IdentifierT>(
+	supports: &Supports<AccountId>,
+	all_candidates: Vec<AccountId>,
+	all_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
+) -> bool {
+	use sp_arithmetic::traits::One;
+
+	let t: ExtendedBalance = all_voters
+		.iter()
+		.map(|(_id, weight, _allocation)| weight)
+		.sum()
+		/ supports.len() as ExtendedBalance;
+	t_pjr_check(supports, all_candidates, all_voters, t)
 }
 
 #[cfg(test)]
