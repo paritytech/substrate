@@ -4978,3 +4978,40 @@ fn cannot_bond_extra_to_lower_than_ed() {
 			);
 		})
 }
+
+#[test]
+fn do_not_die_when_active_is_ed() {
+	let ed = 10;
+	ExtBuilder::default()
+		.existential_deposit(ed)
+		.build_and_execute(|| {
+			// initial stuff.
+			assert_eq!(
+				Staking::ledger(&20).unwrap(),
+				StakingLedger {
+					stash: 21,
+					total: 1000,
+					active: 1000,
+					unlocking: vec![],
+					claimed_rewards: vec![]
+				}
+			);
+
+			// unbond all of it except ed.
+			assert_ok!(Staking::unbond(Origin::signed(20), 1000 - ed));
+			start_active_era(3);
+			assert_ok!(Staking::withdraw_unbonded(Origin::signed(20), 100));
+
+			// initial stuff.
+			assert_eq!(
+				Staking::ledger(&20).unwrap(),
+				StakingLedger {
+					stash: 21,
+					total: ed,
+					active: ed,
+					unlocking: vec![],
+					claimed_rewards: vec![]
+				}
+			);
+		})
+}
