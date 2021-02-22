@@ -625,9 +625,7 @@ mod tests {
 					sp_consensus_babe::AuthorityId::ID,
 					&alice.to_public_crypto_pair(),
 					&to_sign,
-				).unwrap()
-				 .try_into()
-				 .unwrap();
+				).unwrap().unwrap().try_into().unwrap();
 				let item = <DigestItem as CompatibleDigestItem>::babe_seal(
 					signature,
 				);
