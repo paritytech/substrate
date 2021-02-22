@@ -75,6 +75,10 @@ pub trait Ext {
 	/// Returns the original code size of the called contract.
 	/// The newly created account will be associated with `code`. `value` specifies the amount of value
 	/// transferred from this to the newly created account (also known as endowment).
+	///
+	/// # Return Value
+	///
+	/// Result<(AccountId, ExecReturnValue, CodeSize), (ExecError, CodeSize)>
 	fn instantiate(
 		&mut self,
 		code: CodeHash<Self::T>,
@@ -99,6 +103,10 @@ pub trait Ext {
 	///
 	/// This function will fail if the same contract is present on the contract
 	/// call stack.
+	///
+	/// # Return Value
+	///
+	/// Result<CodeSize, (DispatchError, CodeSize)>
 	fn terminate(
 		&mut self,
 		beneficiary: &AccountIdOf<Self::T>,
@@ -107,6 +115,10 @@ pub trait Ext {
 	/// Call (possibly transferring some amount of funds) into the specified account.
 	///
 	/// Returns the original code size of the called contract.
+	///
+	/// # Return Value
+	///
+	/// Result<(ExecReturnValue, CodeSize), (ExecError, CodeSize)>
 	fn call(
 		&mut self,
 		to: &AccountIdOf<Self::T>,
@@ -117,13 +129,15 @@ pub trait Ext {
 
 	/// Restores the given destination contract sacrificing the current one.
 	///
-	/// Returns `(caller_code_len, tombstone_code_len)` which are the pristine code sizes.
-	///
 	/// Since this function removes the self contract eagerly, if succeeded, no further actions should
 	/// be performed on this `Ext` instance.
 	///
 	/// This function will fail if the same contract is present
 	/// on the contract call stack.
+	///
+	/// # Return Value
+	///
+	/// Result<(CallerCodeSize, DestCodeSize), (DispatchError, CallerCodeSize, DestCodesize)>
 	fn restore_to(
 		&mut self,
 		dest: AccountIdOf<Self::T>,
@@ -307,6 +321,10 @@ where
 	}
 
 	/// Make a call to the specified address, optionally transferring some funds.
+	///
+	/// # Return Value
+	///
+	/// Result<(ExecReturnValue, CodeSize), (ExecError, CodeSize)>
 	pub fn call(
 		&mut self,
 		dest: T::AccountId,

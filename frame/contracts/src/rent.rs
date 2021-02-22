@@ -438,8 +438,6 @@ where
 
 	/// Restores the destination account using the origin as prototype.
 	///
-	/// Returns `(caller_code_len, tombstone_code_len)` which are the pristine code sizes.
-	///
 	/// The restoration will be performed iff:
 	/// - the supplied code_hash does still exist on-chain
 	/// - origin exists and is alive,
@@ -450,6 +448,10 @@ where
 	/// Upon succesful restoration, `origin` will be destroyed, all its funds are transferred to
 	/// the restored account. The restored account will inherit the last write block and its last
 	/// deduct block will be set to the current block.
+	///
+	/// # Return Value
+	///
+	/// Result<(CallerCodeSize, DestCodeSize), (DispatchError, CallerCodeSize, DestCodesize)>
 	pub fn restore_to(
 		origin: T::AccountId,
 		dest: T::AccountId,
