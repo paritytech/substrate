@@ -109,6 +109,7 @@ impl pallet_gilt::Config for Test {
 	type MinFreeze = MinFreeze;
 	type IntakePeriod = IntakePeriod;
 	type MaxIntakeBids = MaxIntakeBids;
+	type WeightInfo = ();
 }
 
 // This function basically just builds a genesis storage key/value store according to

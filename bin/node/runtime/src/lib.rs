@@ -1025,6 +1025,7 @@ impl pallet_gilt::Config for Runtime {
 	type MinFreeze = MinFreeze;
 	type IntakePeriod = IntakePeriod;
 	type MaxIntakeBids = MaxIntakeBids;
+	type WeightInfo = pallet_gilt::weights::SubstrateWeight<Runtime>;
 }
 
 construct_runtime!(

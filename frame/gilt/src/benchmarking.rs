@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Benchmarks for Gilt Pallet
+//! Benchmarks for Gilt Pallet
 
 #![cfg(feature = "runtime-benchmarks")]
 
@@ -24,7 +24,7 @@ use super::*;
 use sp_runtime::traits::Bounded;
 use frame_system::RawOrigin;
 use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
-use frame_support::traits::Currency;
+use frame_support::traits::{Currency, Get};
 
 use crate::Pallet as Gilt;
 
@@ -34,12 +34,20 @@ type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Con
 
 benchmarks! {
 	place_bid {
+		let l in 0..(T::MaxQueueLen::get() - 1);
 		let caller: T::AccountId = whitelisted_caller();
+		let another: T::AccountId = account("bidder", 0, SEED);
+		T::Currency::make_free_balance_be(&another, BalanceOf::<T>::max_value());
+		for i in 0..l {
+			Gilt::<T>::place_bid(RawOrigin::Signed(another.clone()).into(), T::MinFreeze::get(), 1)?;
+		}
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
-	}: _(RawOrigin::Signed(caller.clone()), BalanceOf::<T>::max_value(), 1)
+	}: _(RawOrigin::Signed(caller.clone()), T::MinFreeze::get(), 1)
 	verify {
-		assert_eq!(QueueTotals::<T>::get()[0], (1, BalanceOf::<T>::max_value()));
+		assert_eq!(QueueTotals::<T>::get()[0], (l + 1, T::MinFreeze::get() * BalanceOf::<T>::from(l + 1)));
 	}
+
+
 }
 
 impl_benchmark_test_suite!(

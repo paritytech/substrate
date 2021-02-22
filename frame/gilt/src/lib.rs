@@ -65,8 +65,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 mod benchmarking;
-
-//pub mod weights;
+pub mod weights;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -76,6 +75,7 @@ pub mod pallet {
 	use frame_support::traits::{Currency, OnUnbalanced, ReservableCurrency};
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
+	pub use crate::weights::WeightInfo;
 
 	type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 	type PositiveImbalanceOf<T> =
@@ -138,6 +138,9 @@ pub mod pallet {
 		/// bids to make into gilts to reach the target.
 		#[pallet::constant]
 		type MaxIntakeBids: Get<u32>;
+
+		/// Information on runtime weights.
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::pallet]
@@ -305,7 +308,10 @@ pub mod pallet {
 		/// - `duration`: The number of periods for which the funds will be locked if the gilt is
 		/// issued. It will expire only after this period has elapsed after the point of issuance.
 		/// Must be greater than 1 and no more than `QueueCount`.
-		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+		///
+		/// Complexities:
+		/// - `Queues[duration].len()` (just take max).
+		#[pallet::weight(T::WeightInfo::place_bid(T::MaxQueueLen::get() - 1))]
 		pub fn place_bid(
 			origin: OriginFor<T>,
 			#[pallet::compact] amount: BalanceOf<T>,
