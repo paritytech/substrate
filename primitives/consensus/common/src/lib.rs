@@ -74,9 +74,9 @@ pub enum BlockStatus {
 /// Environment for a Consensus instance.
 ///
 /// Creates proposer instance.
-pub trait Environment<B: BlockT> {
+pub trait Environment<B: BlockT, RecordProof: crate::RecordProof> {
 	/// The proposer type this creates.
-	type Proposer: Proposer<B> + Send + 'static;
+	type Proposer: Proposer<B, RecordProof> + Send + 'static;
 	/// A future that resolves to the proposer.
 	type CreateProposer: Future<Output = Result<Self::Proposer, Self::Error>>
 		+ Send + Unpin + 'static;
@@ -89,53 +89,17 @@ pub trait Environment<B: BlockT> {
 }
 
 /// A proposal that is created by a [`Proposer`].
-pub struct Proposal<Block: BlockT, Transaction> {
+pub struct Proposal<Block: BlockT, Transaction, Proof> {
 	/// The block that was build.
 	pub block: Block,
-	/// Optional proof that was recorded while building the block.
-	pub proof: Option<sp_state_machine::StorageProof>,
+	/// Proof that was recorded while building the block.
+	pub proof: Proof,
 	/// The storage changes while building this block.
 	pub storage_changes: sp_state_machine::StorageChanges<Transaction, HashFor<Block>, NumberFor<Block>>,
 }
 
-/// Used as parameter to [`Proposer`] to tell the requirement on recording a proof.
-///
-/// When `RecordProof::Yes` is given, all accessed trie nodes should be saved. These recorded
-/// trie nodes can be used by a third party to proof this proposal without having access to the
-/// full storage.
-#[derive(Copy, Clone, PartialEq)]
-pub enum RecordProof {
-	/// `Yes`, record a proof.
-	Yes,
-	/// `No`, don't record any proof.
-	No,
-}
-
-impl RecordProof {
-	/// Returns if `Self` == `Yes`.
-	pub fn yes(&self) -> bool {
-		match self {
-			Self::Yes => true,
-			Self::No => false,
-		}
-	}
-}
-
-/// Will return [`RecordProof::No`] as default value.
-impl Default for RecordProof {
-	fn default() -> Self {
-		Self::No
-	}
-}
-
-impl From<bool> for RecordProof {
-	fn from(val: bool) -> Self {
-		if val {
-			Self::Yes
-		} else {
-			Self::No
-		}
-	}
+pub trait RecordProof {
+	type Proof;
 }
 
 /// Logic for a proposer.
@@ -144,13 +108,13 @@ impl From<bool> for RecordProof {
 /// block.
 ///
 /// Proposers are generic over bits of "consensus data" which are engine-specific.
-pub trait Proposer<B: BlockT> {
+pub trait Proposer<B: BlockT, RecordProof: crate::RecordProof> {
 	/// Error type which can occur when proposing or evaluating.
 	type Error: From<Error> + std::fmt::Debug + 'static;
 	/// The transaction type used by the backend.
 	type Transaction: Default + Send + 'static;
 	/// Future that resolves to a committed proposal with an optional proof.
-	type Proposal: Future<Output = Result<Proposal<B, Self::Transaction>, Self::Error>> +
+	type Proposal: Future<Output = Result<Proposal<B, Self::Transaction, RecordProof::Proof>, Self::Error>> +
 		Send + Unpin + 'static;
 
 	/// Create a proposal.
@@ -167,7 +131,6 @@ pub trait Proposer<B: BlockT> {
 		inherent_data: InherentData,
 		inherent_digests: DigestFor<B>,
 		max_duration: Duration,
-		record_proof: RecordProof,
 	) -> Self::Proposal;
 }
 
