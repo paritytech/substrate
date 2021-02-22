@@ -4597,7 +4597,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-contracts"
-version = "2.0.1"
+version = "3.0.0"
 dependencies = [
  "assert_matches",
  "frame-benchmarking",
@@ -4628,7 +4628,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-contracts-primitives"
-version = "2.0.1"
+version = "3.0.0"
 dependencies = [
  "bitflags",
  "parity-scale-codec",
@@ -4638,7 +4638,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-contracts-proc-macro"
-version = "0.1.0"
+version = "3.0.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4647,7 +4647,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-contracts-rpc"
-version = "0.8.1"
+version = "3.0.0"
 dependencies = [
  "jsonrpc-core",
  "jsonrpc-core-client",
@@ -4666,7 +4666,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-contracts-rpc-runtime-api"
-version = "0.8.1"
+version = "3.0.0"
 dependencies = [
  "pallet-contracts-primitives",
  "parity-scale-codec",
