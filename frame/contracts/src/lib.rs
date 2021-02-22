@@ -80,7 +80,7 @@
 //! * [Balances](../pallet_balances/index.html)
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(feature = "runtime-benchmarks", recursion_limit="256")]
+#![cfg_attr(feature = "runtime-benchmarks", recursion_limit="512")]
 
 #[macro_use]
 mod gas;
@@ -126,9 +126,9 @@ use frame_support::{
 };
 use frame_system::{ensure_signed, ensure_root, Module as System};
 use pallet_contracts_primitives::{
-	RentProjectionResult, GetStorageResult, ContractAccessError, ContractExecResult, ExecResult,
+	RentProjectionResult, GetStorageResult, ContractAccessError, ContractExecResult,
 };
-use frame_support::weights::Weight;
+use frame_support::weights::{Weight, PostDispatchInfo, WithPostDispatchInfo};
 
 pub type CodeHash<T> = <T as frame_system::Config>::Hash;
 pub type TrieId = Vec<u8>;
@@ -344,6 +344,11 @@ pub trait Config: frame_system::Config {
 
 	/// The maximum amount of weight that can be consumed per block for lazy trie removal.
 	type DeletionWeightLimit: Get<Weight>;
+
+	/// The maximum length of a contract code in bytes. This limit applies to the instrumented
+	/// version of the code. Therefore `instantiate_with_code` can fail even when supplying
+	/// a wasm binary below this maximum size.
+	type MaxCodeSize: Get<u32>;
 }
 
 decl_error! {
@@ -538,7 +543,7 @@ decl_module! {
 		/// * If the account is a regular account, any value will be transferred.
 		/// * If no account exists and the call value is not less than `existential_deposit`,
 		/// a regular account will be created and any value will be transferred.
-		#[weight = T::WeightInfo::call().saturating_add(*gas_limit)]
+		#[weight = T::WeightInfo::call(T::MaxCodeSize::get() / 1024).saturating_add(*gas_limit)]
 		pub fn call(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -549,10 +554,13 @@ decl_module! {
 			let origin = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
 			let mut gas_meter = GasMeter::new(gas_limit);
-			let result = Self::execute_wasm(origin, &mut gas_meter, |ctx, gas_meter| {
-				ctx.call(dest, value, gas_meter, data)
-			});
-			gas_meter.into_dispatch_result(result, T::WeightInfo::call())
+			let schedule = <Module<T>>::current_schedule();
+			let mut ctx = ExecutionContext::<T, PrefabWasmModule<T>>::top_level(origin, &schedule);
+			let (result, code_len) = match ctx.call(dest, value, &mut gas_meter, data) {
+				Ok((output, len)) => (Ok(output), len),
+				Err((err, len)) => (Err(err), len),
+			};
+			gas_meter.into_dispatch_result(result, T::WeightInfo::call(code_len / 1024))
 		}
 
 		/// Instantiates a new contract from the supplied `code` optionally transferring
@@ -592,16 +600,16 @@ decl_module! {
 			salt: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			let origin = ensure_signed(origin)?;
-			let schedule = <Module<T>>::current_schedule();
 			let code_len = code.len() as u32;
-			ensure!(code_len <= schedule.limits.code_size, Error::<T>::CodeTooLarge);
+			ensure!(code_len <= T::MaxCodeSize::get(), Error::<T>::CodeTooLarge);
 			let mut gas_meter = GasMeter::new(gas_limit);
-			let result = Self::execute_wasm(origin, &mut gas_meter, |ctx, gas_meter| {
-				let executable = PrefabWasmModule::from_code(code, &schedule)?;
-				let result = ctx.instantiate(endowment, gas_meter, executable, data, &salt)
-					.map(|(_address, output)| output)?;
-				Ok(result)
-			});
+			let schedule = <Module<T>>::current_schedule();
+			let executable = PrefabWasmModule::from_code(code, &schedule)?;
+			let code_len = executable.code_len();
+			ensure!(code_len <= T::MaxCodeSize::get(), Error::<T>::CodeTooLarge);
+			let mut ctx = ExecutionContext::<T, PrefabWasmModule<T>>::top_level(origin, &schedule);
+			let result = ctx.instantiate(endowment, &mut gas_meter, executable, data, &salt)
+				.map(|(_address, output)| output);
 			gas_meter.into_dispatch_result(
 				result,
 				T::WeightInfo::instantiate_with_code(code_len / 1024, salt.len() as u32 / 1024)
@@ -614,8 +622,8 @@ decl_module! {
 		/// code deployment step. Instead, the `code_hash` of an on-chain deployed wasm binary
 		/// must be supplied.
 		#[weight =
-			T::WeightInfo::instantiate(salt.len() as u32 / 1024)
-			.saturating_add(*gas_limit)
+			T::WeightInfo::instantiate(T::MaxCodeSize::get() / 1024, salt.len() as u32 / 1024)
+				.saturating_add(*gas_limit)
 		]
 		pub fn instantiate(
 			origin,
@@ -627,15 +635,15 @@ decl_module! {
 		) -> DispatchResultWithPostInfo {
 			let origin = ensure_signed(origin)?;
 			let mut gas_meter = GasMeter::new(gas_limit);
-			let result = Self::execute_wasm(origin, &mut gas_meter, |ctx, gas_meter| {
-				let executable = PrefabWasmModule::from_storage(code_hash, &ctx.schedule)?;
-				let result = ctx.instantiate(endowment, gas_meter, executable, data, &salt)
-					.map(|(_address, output)| output)?;
-				Ok(result)
-			});
+			let schedule = <Module<T>>::current_schedule();
+			let executable = PrefabWasmModule::from_storage(code_hash, &schedule, &mut gas_meter)?;
+			let mut ctx = ExecutionContext::<T, PrefabWasmModule<T>>::top_level(origin, &schedule);
+			let code_len = executable.code_len();
+			let result = ctx.instantiate(endowment, &mut gas_meter, executable, data, &salt)
+				.map(|(_address, output)| output);
 			gas_meter.into_dispatch_result(
 				result,
-				T::WeightInfo::instantiate(salt.len() as u32 / 1024)
+				T::WeightInfo::instantiate(code_len / 1024, salt.len() as u32 / 1024),
 			)
 		}
 
@@ -648,7 +656,7 @@ decl_module! {
 		///
 		/// If contract is not evicted as a result of this call, [`Error::ContractNotEvictable`]
 		/// is returned and the sender is not eligible for the reward.
-		#[weight = T::WeightInfo::claim_surcharge()]
+		#[weight = T::WeightInfo::claim_surcharge(T::MaxCodeSize::get() / 1024)]
 		pub fn claim_surcharge(
 			origin,
 			dest: T::AccountId,
@@ -675,23 +683,26 @@ decl_module! {
 			};
 
 			// If poking the contract has lead to eviction of the contract, give out the rewards.
-			if let Some(rent_payed) =
-				Rent::<T, PrefabWasmModule<T>>::try_eviction(&dest, handicap)?
-			{
-				T::Currency::deposit_into_existing(
-					&rewarded,
-					T::SurchargeReward::get().min(rent_payed),
-				)
-				.map(|_| Pays::No.into())
-				.map_err(Into::into)
-			} else {
-				Err(Error::<T>::ContractNotEvictable.into())
+			match Rent::<T, PrefabWasmModule<T>>::try_eviction(&dest, handicap)? {
+				(Some(rent_payed), code_len) => {
+					T::Currency::deposit_into_existing(
+						&rewarded,
+						T::SurchargeReward::get().min(rent_payed),
+					)
+					.map(|_| PostDispatchInfo {
+						actual_weight: Some(T::WeightInfo::claim_surcharge(code_len / 1024)),
+						pays_fee: Pays::No,
+					})
+					.map_err(Into::into)
+				}
+				(None, code_len) => Err(Error::<T>::ContractNotEvictable.with_weight(
+					T::WeightInfo::claim_surcharge(code_len / 1024)
+				)),
 			}
 		}
 	}
 }
 
-/// Public APIs provided by the contracts module.
 impl<T: Config> Module<T>
 where
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
@@ -710,12 +721,12 @@ where
 		input_data: Vec<u8>,
 	) -> ContractExecResult {
 		let mut gas_meter = GasMeter::new(gas_limit);
-		let exec_result = Self::execute_wasm(origin, &mut gas_meter, |ctx, gas_meter| {
-			ctx.call(dest, value, gas_meter, input_data)
-		});
+		let schedule = <Module<T>>::current_schedule();
+		let mut ctx = ExecutionContext::<T, PrefabWasmModule<T>>::top_level(origin, &schedule);
+		let result = ctx.call(dest, value, &mut gas_meter, input_data);
 		let gas_consumed = gas_meter.gas_spent();
 		ContractExecResult {
-			exec_result,
+			exec_result: result.map(|r| r.0).map_err(|r| r.0),
 			gas_consumed,
 		}
 	}
@@ -731,16 +742,10 @@ where
 		Ok(maybe_value)
 	}
 
+	/// Query how many blocks the contract stays alive given that the amount endowment
+	/// and consumed storage does not change.
 	pub fn rent_projection(address: T::AccountId) -> RentProjectionResult<T::BlockNumber> {
 		Rent::<T, PrefabWasmModule<T>>::compute_projection(&address)
-	}
-
-	/// Store code for benchmarks which does not check nor instrument the code.
-	#[cfg(feature = "runtime-benchmarks")]
-	pub fn store_code_raw(code: Vec<u8>) -> DispatchResult {
-		let schedule = <Module<T>>::current_schedule();
-		PrefabWasmModule::store_code_unchecked(code, &schedule)?;
-		Ok(())
 	}
 
 	/// Determine the address of a contract,
@@ -775,23 +780,22 @@ where
 	pub fn subsistence_threshold() -> BalanceOf<T> {
 		T::Currency::minimum_balance().saturating_add(T::TombstoneDeposit::get())
 	}
-}
 
-impl<T: Config> Module<T>
-where
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-{
-	fn execute_wasm(
-		origin: T::AccountId,
-		gas_meter: &mut GasMeter<T>,
-		func: impl FnOnce(
-			&mut ExecutionContext<T, PrefabWasmModule<T>>,
-			&mut GasMeter<T>,
-		) -> ExecResult,
-	) -> ExecResult {
+	/// Store code for benchmarks which does not check nor instrument the code.
+	#[cfg(feature = "runtime-benchmarks")]
+	fn store_code_raw(code: Vec<u8>) -> DispatchResult {
 		let schedule = <Module<T>>::current_schedule();
-		let mut ctx = ExecutionContext::top_level(origin, &schedule);
-		func(&mut ctx, gas_meter)
+		PrefabWasmModule::store_code_unchecked(code, &schedule)?;
+		Ok(())
+	}
+
+	/// This exists so that benchmarks can determine the weight of running an instrumentation.
+	#[cfg(feature = "runtime-benchmarks")]
+	fn reinstrument_module(
+		module: &mut PrefabWasmModule<T>,
+		schedule: &Schedule<T>
+	) -> DispatchResult {
+		self::wasm::reinstrument(module, schedule)
 	}
 }
 

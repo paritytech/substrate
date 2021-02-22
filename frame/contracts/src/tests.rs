@@ -24,6 +24,7 @@ use crate::{
 		UncheckedFrom, InitState, ReturnFlags,
 	},
 	exec::{AccountIdOf, Executable}, wasm::PrefabWasmModule,
+	weights::WeightInfo,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
@@ -35,7 +36,7 @@ use sp_runtime::{
 use sp_io::hashing::blake2_256;
 use frame_support::{
 	assert_ok, assert_err, assert_err_ignore_postinfo,
-	parameter_types, StorageMap, assert_storage_noop,
+	parameter_types, StorageMap, StorageValue, assert_storage_noop,
 	traits::{Currency, ReservableCurrency, OnInitialize},
 	weights::{Weight, PostDispatchInfo, DispatchClass, constants::WEIGHT_PER_SECOND},
 	dispatch::DispatchErrorWithPostInfo,
@@ -250,6 +251,7 @@ parameter_types! {
 	pub const MaxValueSize: u32 = 16_384;
 	pub const DeletionQueueDepth: u32 = 1024;
 	pub const DeletionWeightLimit: Weight = 500_000_000_000;
+	pub const MaxCodeSize: u32 = 2 * 1024;
 }
 
 parameter_types! {
@@ -282,6 +284,7 @@ impl Config for Test {
 	type ChainExtension = TestExtension;
 	type DeletionQueueDepth = DeletionQueueDepth;
 	type DeletionWeightLimit = DeletionWeightLimit;
+	type MaxCodeSize = MaxCodeSize;
 }
 
 pub const ALICE: AccountId32 = AccountId32::new([1u8; 32]);
@@ -350,7 +353,7 @@ where
 fn calling_plain_account_fails() {
 	ExtBuilder::default().build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 100_000_000);
-		let base_cost = <<Test as crate::Config>::WeightInfo as crate::WeightInfo>::call();
+		let base_cost = <<Test as Config>::WeightInfo as WeightInfo>::call(0);
 
 		assert_eq!(
 			Contracts::call(Origin::signed(ALICE), BOB, 0, GAS_LIMIT, Vec::new()),
@@ -2432,7 +2435,7 @@ fn lazy_removal_does_no_run_on_full_block() {
 		// Run the lazy removal without any limit so that all keys would be removed if there
 		// had been some weight left in the block.
 		let weight_used = Contracts::on_initialize(Weight::max_value());
-		let base = <<Test as crate::Config>::WeightInfo as crate::WeightInfo>::on_initialize();
+		let base = <<Test as Config>::WeightInfo as WeightInfo>::on_initialize();
 		assert_eq!(weight_used, base);
 
 		// All the keys are still in place
@@ -2715,5 +2718,71 @@ fn refcounter() {
 		// all code should be gone
 		assert_matches!(crate::PristineCode::<Test>::get(code_hash), None);
 		assert_matches!(crate::CodeStorage::<Test>::get(code_hash), None);
+	});
+}
+
+
+#[test]
+fn reinstrument_does_charge() {
+	let (wasm, code_hash) = compile_module::<Test>("return_with_data").unwrap();
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let subsistence = Module::<Test>::subsistence_threshold();
+		let zero = 0u32.to_le_bytes().encode();
+		let code_len = wasm.len() as u32;
+
+		assert_ok!(Contracts::instantiate_with_code(
+			Origin::signed(ALICE),
+			subsistence * 100,
+			GAS_LIMIT,
+			wasm,
+			zero.clone(),
+			vec![],
+		));
+
+		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
+
+		// Call the contract two times without reinstrument
+
+		let result0 = Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			zero.clone(),
+		);
+		assert!(result0.exec_result.unwrap().is_success());
+
+		let result1 = Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			zero.clone(),
+		);
+		assert!(result1.exec_result.unwrap().is_success());
+
+		// They should match because both where called with the same schedule.
+		assert_eq!(result0.gas_consumed, result1.gas_consumed);
+
+		// Update the schedule version but keep the rest the same
+		crate::CurrentSchedule::mutate(|old: &mut Schedule<Test>| {
+			old.version += 1;
+		});
+
+		// This call should trigger reinstrumentation
+		let result2 = Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			zero.clone(),
+		);
+		assert!(result2.exec_result.unwrap().is_success());
+		assert!(result2.gas_consumed > result1.gas_consumed);
+		assert_eq!(
+			result2.gas_consumed,
+			result1.gas_consumed + <Test as Config>::WeightInfo::instrument(code_len / 1024),
+		);
 	});
 }

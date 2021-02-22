@@ -99,6 +99,7 @@ node-executor = { version = "2.0.0", path = "../executor" }
 sc-cli = { version = "0.9.0", optional = true, path = "../../../client/cli" }
 frame-benchmarking-cli = { version = "3.0.0", optional = true, path = "../../../utils/frame/benchmarking-cli" }
 node-inspect = { version = "0.8.0", optional = true, path = "../inspect" }
+try-runtime-cli = { version = "0.9.0", optional = true, path = "../../../utils/frame/try-runtime/cli" }
 
 # WASM-specific dependencies
 wasm-bindgen = { version = "0.2.57", optional = true }
@@ -133,6 +134,7 @@ node-inspect = { version = "0.8.0", optional = true, path = "../inspect" }
 frame-benchmarking-cli = { version = "3.0.0", optional = true, path = "../../../utils/frame/benchmarking-cli" }
 substrate-build-script-utils = { version = "3.0.0", optional = true, path = "../../../utils/build-script-utils" }
 substrate-frame-cli = { version = "3.0.0", optional = true, path = "../../../utils/frame/frame-utilities-cli" }
+try-runtime-cli = { version = "0.9.0", optional = true, path = "../../../utils/frame/try-runtime/cli" }
 
 [build-dependencies.sc-cli]
 version = "0.9.0"
@@ -157,8 +159,15 @@ cli = [
 	"sc-finality-grandpa-warp-sync",
 	"structopt",
 	"substrate-build-script-utils",
+	"try-runtime-cli",
 ]
 runtime-benchmarks = [
 	"node-runtime/runtime-benchmarks",
 	"frame-benchmarking-cli",
+]
+# Enable features that allow the runtime to be tried and debugged. Name might be subject to change
+# in the near future.
+try-runtime = [
+	"node-runtime/try-runtime",
+	"try-runtime-cli",
 ]

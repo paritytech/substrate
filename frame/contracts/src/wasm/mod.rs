@@ -33,9 +33,11 @@ use crate::{
 use sp_std::prelude::*;
 use sp_core::crypto::UncheckedFrom;
 use codec::{Encode, Decode};
-use frame_support::dispatch::{DispatchError, DispatchResult};
+use frame_support::dispatch::DispatchError;
 use pallet_contracts_primitives::ExecResult;
 pub use self::runtime::{ReturnCode, Runtime, RuntimeToken};
+#[cfg(feature = "runtime-benchmarks")]
+pub use self::code_cache::reinstrument;
 
 /// A prepared wasm module ready for execution.
 ///
@@ -125,7 +127,7 @@ where
 	pub fn store_code_unchecked(
 		original_code: Vec<u8>,
 		schedule: &Schedule<T>
-	) -> DispatchResult {
+	) -> Result<(), DispatchError> {
 		let executable = prepare::benchmarking::prepare_contract(original_code, schedule)
 			.map_err::<DispatchError, _>(Into::into)?;
 		code_cache::store(executable);
@@ -145,9 +147,10 @@ where
 {
 	fn from_storage(
 		code_hash: CodeHash<T>,
-		schedule: &Schedule<T>
+		schedule: &Schedule<T>,
+		gas_meter: &mut GasMeter<T>,
 	) -> Result<Self, DispatchError> {
-		code_cache::load(code_hash, Some(schedule))
+		code_cache::load(code_hash, Some((schedule, gas_meter)))
 	}
 
 	fn from_storage_noinstr(code_hash: CodeHash<T>) -> Result<Self, DispatchError> {
@@ -158,11 +161,11 @@ where
 		code_cache::store_decremented(self);
 	}
 
-	fn add_user(code_hash: CodeHash<T>) -> DispatchResult {
+	fn add_user(code_hash: CodeHash<T>) -> Result<u32, DispatchError> {
 		code_cache::increment_refcount::<T>(code_hash)
 	}
 
-	fn remove_user(code_hash: CodeHash<T>) {
+	fn remove_user(code_hash: CodeHash<T>) -> u32 {
 		code_cache::decrement_refcount::<T>(code_hash)
 	}
 
@@ -221,6 +224,10 @@ where
 		// dominated by the code size.
 		let len = self.original_code_len.saturating_add(self.code.len() as u32);
 		len.checked_div(self.refcount as u32).unwrap_or(len)
+	}
+
+	fn code_len(&self) -> u32 {
+		self.code.len() as u32
 	}
 }
 
@@ -305,7 +312,7 @@ mod tests {
 			gas_meter: &mut GasMeter<Test>,
 			data: Vec<u8>,
 			salt: &[u8],
-		) -> Result<(AccountIdOf<Self::T>, ExecReturnValue), ExecError> {
+		) -> Result<(AccountIdOf<Self::T>, ExecReturnValue, u32), (ExecError, u32)> {
 			self.instantiates.push(InstantiateEntry {
 				code_hash: code_hash.clone(),
 				endowment,
@@ -319,6 +326,7 @@ mod tests {
 					flags: ReturnFlags::empty(),
 					data: Vec::new(),
 				},
+				0,
 			))
 		}
 		fn transfer(
@@ -339,7 +347,7 @@ mod tests {
 			value: u64,
 			_gas_meter: &mut GasMeter<Test>,
 			data: Vec<u8>,
-		) -> ExecResult {
+		) -> Result<(ExecReturnValue, u32), (ExecError, u32)> {
 			self.transfers.push(TransferEntry {
 				to: to.clone(),
 				value,
@@ -347,16 +355,16 @@ mod tests {
 			});
 			// Assume for now that it was just a plain transfer.
 			// TODO: Add tests for different call outcomes.
-			Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Vec::new() })
+			Ok((ExecReturnValue { flags: ReturnFlags::empty(), data: Vec::new() }, 0))
 		}
 		fn terminate(
 			&mut self,
 			beneficiary: &AccountIdOf<Self::T>,
-		) -> Result<(), DispatchError> {
+		) -> Result<u32, (DispatchError, u32)> {
 			self.terminations.push(TerminationEntry {
 				beneficiary: beneficiary.clone(),
 			});
-			Ok(())
+			Ok(0)
 		}
 		fn restore_to(
 			&mut self,
@@ -364,14 +372,14 @@ mod tests {
 			code_hash: H256,
 			rent_allowance: u64,
 			delta: Vec<StorageKey>,
-		) -> Result<(), DispatchError> {
+		) -> Result<(u32, u32), (DispatchError, u32, u32)> {
 			self.restores.push(RestoreEntry {
 				dest,
 				code_hash,
 				rent_allowance,
 				delta,
 			});
-			Ok(())
+			Ok((0, 0))
 		}
 		fn caller(&self) -> &AccountIdOf<Self::T> {
 			&ALICE
@@ -443,7 +451,7 @@ mod tests {
 			gas_meter: &mut GasMeter<Test>,
 			input_data: Vec<u8>,
 			salt: &[u8],
-		) -> Result<(AccountIdOf<Self::T>, ExecReturnValue), ExecError> {
+		) -> Result<(AccountIdOf<Self::T>, ExecReturnValue, u32), (ExecError, u32)> {
 			(**self).instantiate(code, value, gas_meter, input_data, salt)
 		}
 		fn transfer(
@@ -456,7 +464,7 @@ mod tests {
 		fn terminate(
 			&mut self,
 			beneficiary: &AccountIdOf<Self::T>,
-		) -> Result<(), DispatchError> {
+		) -> Result<u32, (DispatchError, u32)> {
 			(**self).terminate(beneficiary)
 		}
 		fn call(
@@ -465,7 +473,7 @@ mod tests {
 			value: u64,
 			gas_meter: &mut GasMeter<Test>,
 			input_data: Vec<u8>,
-		) -> ExecResult {
+		) -> Result<(ExecReturnValue, u32), (ExecError, u32)> {
 			(**self).call(to, value, gas_meter, input_data)
 		}
 		fn restore_to(
@@ -474,7 +482,7 @@ mod tests {
 			code_hash: H256,
 			rent_allowance: u64,
 			delta: Vec<StorageKey>,
-		) -> Result<(), DispatchError> {
+		) -> Result<(u32, u32), (DispatchError, u32, u32)> {
 			(**self).restore_to(
 				dest,
 				code_hash,
