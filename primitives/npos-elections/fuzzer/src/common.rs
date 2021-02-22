@@ -84,7 +84,7 @@ pub fn generate_random_npos_inputs(
 	}
 	candidates.sort_unstable();
 	candidates.dedup();
-	debug_assert_eq!(candidates.len(), candidate_count);
+	assert_eq!(candidates.len(), candidate_count);
 
 	let mut voters = Vec::with_capacity(voter_count);
 	for _ in 0..voter_count {
@@ -113,7 +113,7 @@ pub fn generate_random_npos_inputs(
 
 	voters.sort_unstable();
 	voters.dedup_by_key(|(id, _weight, _chosen_candidates)| *id);
-	debug_assert_eq!(voters.len(), voter_count);
+	assert_eq!(voters.len(), voter_count);
 
 	(rounds, candidates, voters)
 }
