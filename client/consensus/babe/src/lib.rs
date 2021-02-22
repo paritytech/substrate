@@ -1491,7 +1491,7 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, Inner, CAW>(
 	client: Arc<Client>,
 	select_chain: SelectChain,
 	inherent_data_providers: InherentDataProviders,
-	spawner: &impl sp_core::traits::SpawnNamed,
+	spawner: &impl sp_core::traits::SpawnEssentialNamed,
 	registry: Option<&Registry>,
 	can_author_with: CAW,
 ) -> ClientResult<DefaultImportQueue<Block, Client>> where

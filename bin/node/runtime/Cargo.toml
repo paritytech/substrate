@@ -43,6 +43,7 @@ frame-support = { version = "3.0.0", default-features = false, path = "../../../
 frame-system = { version = "3.0.0", default-features = false, path = "../../../frame/system" }
 frame-system-benchmarking = { version = "3.0.0", default-features = false, path = "../../../frame/system/benchmarking", optional = true }
 frame-system-rpc-runtime-api = { version = "3.0.0", default-features = false, path = "../../../frame/system/rpc/runtime-api/" }
+frame-try-runtime = { version = "0.9.0", default-features = false, path = "../../../frame/try-runtime", optional = true }
 pallet-assets = { version = "3.0.0", default-features = false, path = "../../../frame/assets" }
 pallet-authority-discovery = { version = "3.0.0", default-features = false, path = "../../../frame/authority-discovery" }
 pallet-authorship = { version = "3.0.0", default-features = false, path = "../../../frame/authorship" }
@@ -185,4 +186,8 @@ runtime-benchmarks = [
 	"pallet-session-benchmarking",
 	"frame-system-benchmarking",
 	"hex-literal",
+]
+try-runtime = [
+	"frame-executive/try-runtime",
+	"frame-try-runtime",
 ]
