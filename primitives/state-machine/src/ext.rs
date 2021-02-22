@@ -575,27 +575,41 @@ where
 	#[cfg(feature = "std")]
 	fn storage_changes_root(&mut self, parent_hash: &[u8]) -> Result<Option<Vec<u8>>, ()> {
 		let _guard = guard();
-		let root = self.overlay.changes_trie_root(
-			self.backend,
-			self.changes_trie_state.as_ref(),
-			Decode::decode(&mut &parent_hash[..]).map_err(|e|
-				trace!(
-					target: "state",
-					"Failed to decode changes root parent hash: {}",
-					e,
-				)
-			)?,
-			true,
-			self.storage_transaction_cache,
-		);
+		if let Some(ref root) = self.storage_transaction_cache.changes_trie_transaction_storage_root {
+			trace!(
+				target: "state",
+				"{:04x}: ChangesRoot({})(cached) {:?}",
+				self.id,
+				HexDisplay::from(&parent_hash),
+				root,
+			);
 
-		trace!(target: "state", "{:04x}: ChangesRoot({}) {:?}",
-			self.id,
-			HexDisplay::from(&parent_hash),
-			root,
-		);
+			Ok(Some(root.encode()))
+		} else {
+			let root = self.overlay.changes_trie_root(
+				self.backend,
+				self.changes_trie_state.as_ref(),
+				Decode::decode(&mut &parent_hash[..]).map_err(|e|
+					trace!(
+						target: "state",
+						"Failed to decode changes root parent hash: {}",
+						e,
+					)
+				)?,
+				true,
+				self.storage_transaction_cache,
+			);
 
-		root.map(|r| r.map(|o| o.encode()))
+			trace!(
+				target: "state",
+				"{:04x}: ChangesRoot({}) {:?}",
+				self.id,
+				HexDisplay::from(&parent_hash),
+				root,
+			);
+
+			root.map(|r| r.map(|o| o.encode()))
+		}
 	}
 
 	fn storage_start_transaction(&mut self) {

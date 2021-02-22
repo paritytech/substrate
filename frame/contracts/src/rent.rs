@@ -325,13 +325,14 @@ where
 	pub fn try_eviction(
 		account: &T::AccountId,
 		handicap: T::BlockNumber,
-	) -> Result<Option<BalanceOf<T>>, DispatchError> {
+	) -> Result<(Option<BalanceOf<T>>, u32), DispatchError> {
 		let contract = <ContractInfoOf<T>>::get(account);
 		let contract = match contract {
-			None | Some(ContractInfo::Tombstone(_)) => return Ok(None),
+			None | Some(ContractInfo::Tombstone(_)) => return Ok((None, 0)),
 			Some(ContractInfo::Alive(contract)) => contract,
 		};
 		let module = PrefabWasmModule::<T>::from_storage_noinstr(contract.code_hash)?;
+		let code_len = module.code_len();
 		let current_block_number = <frame_system::Module<T>>::block_number();
 		let verdict = Self::consider_case(
 			account,
@@ -353,9 +354,9 @@ where
 				Self::enact_verdict(
 					account, contract, current_block_number, verdict, Some(module),
 				)?;
-				Ok(Some(rent_payed))
+				Ok((Some(rent_payed), code_len))
 			}
-			_ => Ok(None),
+			_ => Ok((None, code_len)),
 		}
 	}
 
@@ -447,28 +448,32 @@ where
 	/// Upon succesful restoration, `origin` will be destroyed, all its funds are transferred to
 	/// the restored account. The restored account will inherit the last write block and its last
 	/// deduct block will be set to the current block.
+	///
+	/// # Return Value
+	///
+	/// Result<(CallerCodeSize, DestCodeSize), (DispatchError, CallerCodeSize, DestCodesize)>
 	pub fn restore_to(
 		origin: T::AccountId,
 		dest: T::AccountId,
 		code_hash: CodeHash<T>,
 		rent_allowance: BalanceOf<T>,
 		delta: Vec<crate::exec::StorageKey>,
-	) -> Result<(), DispatchError> {
+	) -> Result<(u32, u32), (DispatchError, u32, u32)> {
 		let mut origin_contract = <ContractInfoOf<T>>::get(&origin)
 			.and_then(|c| c.get_alive())
-			.ok_or(Error::<T>::InvalidSourceContract)?;
+			.ok_or((Error::<T>::InvalidSourceContract.into(), 0, 0))?;
 
 		let child_trie_info = origin_contract.child_trie_info();
 
 		let current_block = <frame_system::Module<T>>::block_number();
 
 		if origin_contract.last_write == Some(current_block) {
-			return Err(Error::<T>::InvalidContractOrigin.into());
+			return Err((Error::<T>::InvalidContractOrigin.into(), 0, 0));
 		}
 
 		let dest_tombstone = <ContractInfoOf<T>>::get(&dest)
 			.and_then(|c| c.get_tombstone())
-			.ok_or(Error::<T>::InvalidDestinationContract)?;
+			.ok_or((Error::<T>::InvalidDestinationContract.into(), 0, 0))?;
 
 		let last_write = if !delta.is_empty() {
 			Some(current_block)
@@ -477,7 +482,7 @@ where
 		};
 
 		// Fails if the code hash does not exist on chain
-		E::add_user(code_hash)?;
+		let caller_code_len = E::add_user(code_hash).map_err(|e| (e, 0, 0))?;
 
 		// We are allowed to eagerly modify storage even though the function can
 		// fail later due to tombstones not matching. This is because the restoration
@@ -501,13 +506,13 @@ where
 		);
 
 		if tombstone != dest_tombstone {
-			return Err(Error::<T>::InvalidTombstone.into());
+			return Err((Error::<T>::InvalidTombstone.into(), caller_code_len, 0));
 		}
 
 		origin_contract.storage_size -= bytes_taken;
 
 		<ContractInfoOf<T>>::remove(&origin);
-		E::remove_user(origin_contract.code_hash);
+		let tombstone_code_len = E::remove_user(origin_contract.code_hash);
 		<ContractInfoOf<T>>::insert(&dest, ContractInfo::Alive(AliveContractInfo::<T> {
 			trie_id: origin_contract.trie_id,
 			storage_size: origin_contract.storage_size,
@@ -523,6 +528,6 @@ where
 		T::Currency::make_free_balance_be(&origin, <BalanceOf<T>>::zero());
 		T::Currency::deposit_creating(&dest, origin_free_balance);
 
-		Ok(())
+		Ok((caller_code_len, tombstone_code_len))
 	}
 }
