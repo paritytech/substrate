@@ -17,7 +17,6 @@
 
 use codec::{Encode, Decode, Joiner};
 use frame_support::{
-	StorageMap,
 	traits::Currency,
 	weights::{GetDispatchInfo, DispatchInfo, DispatchClass},
 };
