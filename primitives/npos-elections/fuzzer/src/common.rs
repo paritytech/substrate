@@ -21,7 +21,10 @@
 #![allow(dead_code)]
 
 use sp_npos_elections::{ElectionResult, VoteWeight, phragmms, seq_phragmen};
-use sp_std::collections::btree_map::BTreeMap;
+use sp_std::{
+	collections::btree_map::BTreeMap,
+	ops::DerefMut,
+};
 use sp_runtime::Perbill;
 use rand::{self, Rng, RngCore};
 
@@ -43,6 +46,59 @@ pub enum ElectionType {
 }
 
 pub type AccountId = u64;
+
+/// Generate a set of inputs suitable for fuzzing an election algorithm
+///
+/// Given parameters governing how many candidates and voters should exist, generates a voting
+/// scenario suitable for fuzz-testing an election algorithm.
+///
+/// Note that the actual counts of candidates may be lower than the requested value due to collisions.
+/// The returned candidate list is sorted and deduplicated. This sorting property should not affect
+/// the result of the calculation.
+///
+/// Note that this does not generate balancing parameters.
+pub fn generate_random_npos_inputs(
+	candidate_count: usize,
+	voter_count: usize,
+	mut rng: impl Rng,
+) -> (usize, Vec<AccountId>, Vec<(AccountId, VoteWeight, Vec<AccountId>)>) {
+	// always generate a sensible number of candidates: elections are uninteresting if we desire
+	// 0 candidates, or a number of candidates >= the actual number of candidates present
+	let rounds = rng.gen_range(1, candidate_count);
+
+	// candidates are easy: just a completely random set of IDs
+	let mut candidates: Vec<AccountId> = vec![0; candidate_count];
+	rng.fill(candidates.deref_mut());
+	candidates.sort();
+	candidates.dedup();
+
+	let mut voters = Vec::with_capacity(voter_count);
+
+	for _ in 0..voter_count {
+		let mut id = rng.gen();
+		while candidates.binary_search(&id).is_ok() {
+			id = rng.gen();
+		}
+
+		let vote_weight = rng.gen();
+
+		// it's not interesting if a voter chooses 0 or all candidates, so rule those cases out.
+		let n_candidates_chosen = rng.gen_range(1, candidates.len());
+
+		// I believe, but am not 100% certain, that this produces a uniform random distribution of
+		// chosen candidates assuming a uniform RNG.
+		let mut chosen_candidates = candidates.clone();
+		while chosen_candidates.len() > n_candidates_chosen {
+			chosen_candidates.swap_remove(rng.gen_range(0, chosen_candidates.len()));
+		}
+
+		chosen_candidates.shrink_to_fit();
+
+		voters.push((id, vote_weight, chosen_candidates));
+	}
+
+	(rounds, candidates, voters)
+}
 
 pub fn generate_random_npos_result(
 	voter_count: u64,
