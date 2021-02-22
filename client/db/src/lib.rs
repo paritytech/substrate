@@ -812,8 +812,9 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 	fn mark_finalized(
 		&mut self,
 		block: BlockId<Block>,
-		justifications: Option<Justifications>,
+		justification: Option<Justification>,
 	) -> ClientResult<()> {
+		let justifications = justification.map(Justifications::from);
 		self.finalized_blocks.push((block, justifications));
 		Ok(())
 	}

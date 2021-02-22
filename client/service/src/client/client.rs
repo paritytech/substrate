@@ -906,7 +906,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		&self,
 		operation: &mut ClientImportOperation<Block, B>,
 		block: Block::Hash,
-		justifications: Option<Justifications>,
+		justification: Option<Justification>,
 		best_block: Block::Hash,
 		notify: bool,
 	) -> sp_blockchain::Result<()> {
@@ -948,7 +948,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		}
 
 		assert_eq!(enacted.last().map(|e| e.hash), Some(block));
-		operation.op.mark_finalized(BlockId::Hash(block), justifications)?;
+		operation.op.mark_finalized(BlockId::Hash(block), justification)?;
 
 		if notify {
 			// sometimes when syncing, tons of blocks can be finalized at once.
@@ -1816,11 +1816,10 @@ impl<B, E, Block, RA> Finalizer<Block, B> for Client<B, E, Block, RA> where
 	) -> sp_blockchain::Result<()> {
 		let last_best = self.backend.blockchain().info().best_hash;
 		let to_finalize_hash = self.backend.blockchain().expect_block_hash_from_id(&id)?;
-		let justifications = justification.map(Justifications::from);
 		self.apply_finality_with_block_hash(
 			operation,
 			to_finalize_hash,
-			justifications,
+			justification,
 			last_best,
 			notify,
 		)

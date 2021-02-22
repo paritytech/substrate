@@ -364,7 +364,7 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 	fn mark_finalized(
 		&mut self,
 		block: BlockId<Block>,
-		_justification: Option<Justifications>,
+		_justifications: Option<Justification>,
 	) -> ClientResult<()> {
 		self.finalized_blocks.push(block);
 		Ok(())

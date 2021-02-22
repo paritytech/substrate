@@ -605,8 +605,9 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 	fn mark_finalized(
 		&mut self,
 		block: BlockId<Block>,
-		justifications: Option<Justifications>,
+		justification: Option<Justification>,
 	) -> sp_blockchain::Result<()> {
+		let justifications = justification.map(Justifications::from);
 		self.finalized_blocks.push((block, justifications));
 		Ok(())
 	}

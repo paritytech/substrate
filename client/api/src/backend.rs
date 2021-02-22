@@ -195,7 +195,7 @@ pub trait BlockImportOperation<Block: BlockT> {
 	fn mark_finalized(
 		&mut self,
 		id: BlockId<Block>,
-		justifications: Option<Justifications>,
+		justification: Option<Justification>,
 	) -> sp_blockchain::Result<()>;
 
 	/// Mark a block as new head. If both block import and set head are specified, set head
