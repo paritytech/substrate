@@ -60,7 +60,7 @@ impl LocalKeystore {
 
 	/// Get a key pair for the given public key.
 	///
-	/// Returns `Ok(None)` if the key doesn't exist, `Ok(Some(_))` if the key exist or
+	/// Returns `Ok(None)` if the key doesn't exist, `Ok(Some(_))` if the key exists and
 	/// `Err(_)` when something failed.
 	pub fn key_pair<Pair: AppPair>(&self, public: &<Pair as AppKey>::Public) -> Result<Option<Pair>> {
 		self.0.read().key_pair::<Pair>(public)
