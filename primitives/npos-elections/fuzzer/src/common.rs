@@ -20,13 +20,10 @@
 // Each function will be used based on which fuzzer binary is being used.
 #![allow(dead_code)]
 
-use sp_npos_elections::{ElectionResult, VoteWeight, phragmms, seq_phragmen};
-use sp_std::{
-	collections::btree_map::BTreeMap,
-	ops::DerefMut,
-};
-use sp_runtime::Perbill;
 use rand::{self, Rng, RngCore};
+use sp_npos_elections::{phragmms, seq_phragmen, ElectionResult, VoteWeight};
+use sp_runtime::Perbill;
+use std::collections::{BTreeMap, HashSet};
 
 /// converts x into the range [a, b] in a pseudo-fair way.
 pub fn to_range(x: usize, a: usize, b: usize) -> usize {
@@ -42,7 +39,7 @@ pub fn to_range(x: usize, a: usize, b: usize) -> usize {
 
 pub enum ElectionType {
 	Phragmen(Option<(usize, u128)>),
-	Phragmms(Option<(usize, u128)>)
+	Phragmms(Option<(usize, u128)>),
 }
 
 pub type AccountId = u64;
@@ -52,31 +49,48 @@ pub type AccountId = u64;
 /// Given parameters governing how many candidates and voters should exist, generates a voting
 /// scenario suitable for fuzz-testing an election algorithm.
 ///
-/// Note that the actual counts of candidates may be lower than the requested value due to collisions.
-/// The returned candidate list is sorted and deduplicated. This sorting property should not affect
-/// the result of the calculation.
+/// The returned candidate list is sorted. This sorting property should not affect the result of the
+/// calculation.
+///
+/// The returned voters list is sorted. This enables binary searching for a particular voter by
+/// account id. This sorting property should not affect the results of the calculation.
 ///
 /// Note that this does not generate balancing parameters.
 pub fn generate_random_npos_inputs(
 	candidate_count: usize,
 	voter_count: usize,
 	mut rng: impl Rng,
-) -> (usize, Vec<AccountId>, Vec<(AccountId, VoteWeight, Vec<AccountId>)>) {
-	// always generate a sensible number of candidates: elections are uninteresting if we desire
-	// 0 candidates, or a number of candidates >= the actual number of candidates present
+) -> (
+	usize,
+	Vec<AccountId>,
+	Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
+) {
+	// cache for fast generation of unique candidate and voter ids
+	let mut used_ids = HashSet::with_capacity(candidate_count + voter_count);
+
+	// always generate a sensible desired number of candidates: elections are uninteresting if we
+	// desire 0 candidates, or a number of candidates >= the actual number of candidates present
 	let rounds = rng.gen_range(1, candidate_count);
 
 	// candidates are easy: just a completely random set of IDs
-	let mut candidates: Vec<AccountId> = vec![0; candidate_count];
-	rng.fill(candidates.deref_mut());
-	candidates.sort();
+	let mut candidates: Vec<AccountId> = Vec::with_capacity(candidate_count);
+	for _ in 0..candidate_count {
+		let mut id = rng.gen();
+		// insert returns `false` when the value was already present
+		while !used_ids.insert(id) {
+			id = rng.gen();
+		}
+		candidates.push(id);
+	}
+	candidates.sort_unstable();
 	candidates.dedup();
+	debug_assert_eq!(candidates.len(), candidate_count);
 
 	let mut voters = Vec::with_capacity(voter_count);
-
 	for _ in 0..voter_count {
 		let mut id = rng.gen();
-		while candidates.binary_search(&id).is_ok() {
+		// insert returns `false` when the value was already present
+		while !used_ids.insert(id) {
 			id = rng.gen();
 		}
 
@@ -96,6 +110,10 @@ pub fn generate_random_npos_inputs(
 
 		voters.push((id, vote_weight, chosen_candidates));
 	}
+
+	voters.sort_unstable();
+	voters.dedup_by_key(|(id, _weight, _chosen_candidates)| *id);
+	debug_assert_eq!(voters.len(), voter_count);
 
 	(rounds, candidates, voters)
 }
@@ -127,19 +145,20 @@ pub fn generate_random_npos_result(
 	});
 
 	let mut voters = Vec::with_capacity(voter_count as usize);
-	(prefix ..= (prefix + voter_count)).for_each(|acc| {
+	(prefix..=(prefix + voter_count)).for_each(|acc| {
 		let edge_per_this_voter = rng.gen_range(1, candidates.len());
 		// all possible targets
 		let mut all_targets = candidates.clone();
 		// we remove and pop into `targets` `edge_per_this_voter` times.
-		let targets = (0..edge_per_this_voter).map(|_| {
-			let upper = all_targets.len() - 1;
-			let idx = rng.gen_range(0, upper);
-			all_targets.remove(idx)
-		})
-		.collect::<Vec<AccountId>>();
+		let targets = (0..edge_per_this_voter)
+			.map(|_| {
+				let upper = all_targets.len() - 1;
+				let idx = rng.gen_range(0, upper);
+				all_targets.remove(idx)
+			})
+			.collect::<Vec<AccountId>>();
 
-		let stake_var = rng.gen_range(ed, 100 * ed) ;
+		let stake_var = rng.gen_range(ed, 100 * ed);
 		let stake = base_stake + stake_var;
 		stake_of.insert(acc, stake);
 		voters.push((acc, stake, targets));
@@ -147,20 +166,20 @@ pub fn generate_random_npos_result(
 
 	(
 		match election_type {
-			ElectionType::Phragmen(conf) =>
-				seq_phragmen::<AccountId, sp_runtime::Perbill>(
-					to_elect,
-					candidates.clone(),
-					voters.clone(),
-					conf,
-				).unwrap(),
-			ElectionType::Phragmms(conf) =>
-				phragmms::<AccountId, sp_runtime::Perbill>(
-					to_elect,
-					candidates.clone(),
-					voters.clone(),
-					conf,
-				).unwrap(),
+			ElectionType::Phragmen(conf) => seq_phragmen::<AccountId, sp_runtime::Perbill>(
+				to_elect,
+				candidates.clone(),
+				voters.clone(),
+				conf,
+			)
+			.unwrap(),
+			ElectionType::Phragmms(conf) => phragmms::<AccountId, sp_runtime::Perbill>(
+				to_elect,
+				candidates.clone(),
+				voters.clone(),
+				conf,
+			)
+			.unwrap(),
 		},
 		candidates,
 		voters,

@@ -8590,6 +8590,7 @@ dependencies = [
  "honggfuzz",
  "parity-scale-codec",
  "rand 0.7.3",
+ "sp-arithmetic",
  "sp-npos-elections",
  "sp-runtime",
  "sp-std",
