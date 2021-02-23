@@ -30,7 +30,14 @@
 //! size to something sensible, `MaxQueueLen`. A secondary storage item with `QueueCount` x `u32`
 //! elements with the number of items in each queue.
 //!
-//! Account can enqueue a balance with some number of `Period`s lock up, up to a maximum of
+//! Queues are split into two parts. The first part is a priority queue based on bid size. The
+//! second part is just a FIFO (the size of the second part is set with `FifoQueueLen`). Items are
+//! always prepended so that removal is always O(1) since removal often happens many times under a
+//! single weighed function (`on_initialize`) yet placing bids only ever happens once per weighed
+//! function (`place_bid`). If the queue has a priority portion, then it remains sorted in order of
+//! bid size so that smaller bids fall off as it gets too large.
+//!
+//! Account may enqueue a balance with some number of `Period`s lock up, up to a maximum of
 //! `QueueCount`. The balance gets reserved. There's a minimum of `MinFreeze` to avoid dust.
 //!
 //! Until your bid is turned into an issued gilt you can retract it instantly and the funds are
@@ -305,6 +312,7 @@ pub mod pallet {
 		/// Complexities:
 		/// - `Queues[duration].len()` (just take max).
 		#[pallet::weight(T::WeightInfo::place_bid(T::MaxQueueLen::get() - 1))]
+//		#[pallet::weight(T::WeightInfo::place_bid_max())]
 		pub fn place_bid(
 			origin: OriginFor<T>,
 			#[pallet::compact] amount: BalanceOf<T>,
@@ -319,15 +327,19 @@ pub mod pallet {
 			ensure!(queue_index < queue_count, Error::<T>::DurationTooBig);
 
 			let bid = GiltBid { amount, who: who.clone() };
-			let growth = Queues::<T>::try_mutate(duration, |q| -> Result<u32, DispatchError> {
+			let net = Queues::<T>::try_mutate(duration, |q|
+				-> Result<(u32, BalanceOf::<T>), DispatchError>
+			{
 				// queue is <Ordered: Lowest ... Highest><Fifo: Last ... First>
-				let growth = if q.len() == T::MaxQueueLen::get() as usize {
+				let net = if q.len() == T::MaxQueueLen::get() as usize {
 					ensure!(q[0].amount < amount, Error::<T>::QueueFull);
+					let old = q[0].amount;
+					T::Currency::unreserve(&q[0].who, old);
 					q[0] = bid;
-					0
+					(0, amount - old)
 				} else {
 					q.insert(0, bid);
-					1
+					(1, amount)
 				};
 				let sorted_item_count = q.len().saturating_sub(T::FifoQueueLen::get() as usize);
 				if sorted_item_count > 1 {
@@ -335,12 +347,12 @@ pub mod pallet {
 				}
 
 				T::Currency::reserve(&who, amount)?;
-				Ok(growth)	// net change in queue length; 0 or 1
+				Ok(net)	// net change in queue length; 0 or 1
 			})?;
 			QueueTotals::<T>::mutate(|qs| {
 				qs.resize(queue_count, (0, Zero::zero()));
-				qs[queue_index].0 += growth;
-				qs[queue_index].1 += amount;
+				qs[queue_index].0 += net.0;
+				qs[queue_index].1 += net.1;
 			});
 			Self::deposit_event(Event::BidPlaced(who.clone(), amount, duration));
 

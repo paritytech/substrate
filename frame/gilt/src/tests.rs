@@ -81,13 +81,17 @@ fn place_bid_queuing_works() {
 		assert_ok!(Gilt::place_bid(Origin::signed(1), 5, 2));
 		assert_noop!(Gilt::place_bid(Origin::signed(1), 5, 2), Error::<Test>::QueueFull);
 		assert_ok!(Gilt::place_bid(Origin::signed(1), 15, 2));
+		assert_eq!(Balances::reserved_balance(1), 45);
+
 		assert_ok!(Gilt::place_bid(Origin::signed(1), 25, 2));
+		assert_eq!(Balances::reserved_balance(1), 60);
 		assert_noop!(Gilt::place_bid(Origin::signed(1), 10, 2), Error::<Test>::QueueFull);
 		assert_eq!(Queues::<Test>::get(2), vec![
 			GiltBid { amount: 15, who: 1 },
 			GiltBid { amount: 25, who: 1 },
 			GiltBid { amount: 20, who: 1 },
 		]);
+		assert_eq!(QueueTotals::<Test>::get(), vec![(0, 0), (3, 60), (0, 0)]);
 	});
 }
 

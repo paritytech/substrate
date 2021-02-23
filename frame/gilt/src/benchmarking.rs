@@ -44,6 +44,26 @@ benchmarks! {
 		assert_eq!(QueueTotals::<T>::get()[0], (l + 1, T::MinFreeze::get() * BalanceOf::<T>::from(l + 2)));
 	}
 
+	place_bid_max {
+		let caller: T::AccountId = whitelisted_caller();
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+		for i in 0..T::MaxQueueLen::get() {
+			Gilt::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinFreeze::get(), 1)?;
+		}
+	}: {
+		Gilt::<T>::place_bid(
+			RawOrigin::Signed(caller.clone()).into(),
+			T::MinFreeze::get() * BalanceOf::<T>::from(2u32),
+			1,
+		)?
+	}
+	verify {
+		assert_eq!(QueueTotals::<T>::get()[0], (
+			T::MaxQueueLen::get(),
+			T::MinFreeze::get() * BalanceOf::<T>::from(T::MaxQueueLen::get() + 1),
+		));
+	}
+
 	retract_bid {
 		let l in 1..T::MaxQueueLen::get();
 		let caller: T::AccountId = whitelisted_caller();
