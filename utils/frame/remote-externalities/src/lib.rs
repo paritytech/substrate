@@ -400,6 +400,7 @@ mod tests {
 			}))
 			.build()
 			.await
+			.unwrap()
 			.execute_with(|| {});
 	}
 
@@ -412,6 +413,7 @@ mod tests {
 			}))
 			.build()
 			.await
+			.unwrap()
 			.execute_with(|| {});
 	}
 
@@ -429,6 +431,7 @@ mod tests {
 			}))
 			.build()
 			.await
+			.unwrap()
 			.execute_with(|| {});
 
 		let to_delete = std::fs::read_dir(CacheConfig::default().directory)
@@ -449,6 +452,6 @@ mod tests {
 	#[cfg(feature = "remote-test")]
 	async fn can_build_all() {
 		init_logger();
-		Builder::new().build().await.execute_with(|| {});
+		Builder::new().build().await.unwrap().execute_with(|| {});
 	}
 }
