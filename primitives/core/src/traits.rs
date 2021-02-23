@@ -40,7 +40,7 @@ pub trait CodeExecutor: Sized + Send + Sync + CallInWasm + Clone + 'static {
 	/// or an execution error) together with a `bool`, which is true if native execution was used.
 	fn call<
 		R: codec::Codec + PartialEq,
-		NC: FnOnce() -> Result<R, String> + UnwindSafe,
+		NC: FnOnce() -> Result<R, Box<dyn std::error::Error + Send + Sync>> + UnwindSafe,
 	>(
 		&self,
 		ext: &mut dyn Externalities,
@@ -266,7 +266,7 @@ pub type DismissHandle = Box<dyn DismissHandleTrait>;
 /// Alias of the future type to use with `SpawnedNamed` trait.
 pub type BoxFuture = futures::future::BoxFuture<'static, ()>;
 
-/// Something that can spawn futures (blocking and non-blocking) with an assigned name.
+/// Something that can spawn tasks (blocking and non-blocking) with an assigned name.
 #[cfg_attr(feature = "std", dyn_clonable::clonable)]
 pub trait SpawnNamed: SpawnLimiter + Clone + Send + Sync {
 	/// Spawn the given blocking future.
@@ -341,5 +341,30 @@ impl SpawnLimiter for Box<dyn SpawnNamed> {
 
 	fn release(&self, number_of_tasks: usize) {
 		(**self).release(number_of_tasks)
+	}
+}
+
+/// Something that can spawn essential tasks (blocking and non-blocking) with an assigned name.
+///
+/// Essential tasks are special tasks that should take down the node when they end.
+#[dyn_clonable::clonable]
+pub trait SpawnEssentialNamed: Clone + Send + Sync {
+	/// Spawn the given blocking future.
+	///
+	/// The given `name` is used to identify the future in tracing.
+	fn spawn_essential_blocking(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>);
+	/// Spawn the given non-blocking future.
+	///
+	/// The given `name` is used to identify the future in tracing.
+	fn spawn_essential(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>);
+}
+
+impl SpawnEssentialNamed for Box<dyn SpawnEssentialNamed> {
+	fn spawn_essential_blocking(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+		(**self).spawn_essential_blocking(name, future)
+	}
+
+	fn spawn_essential(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+		(**self).spawn_essential(name, future)
 	}
 }

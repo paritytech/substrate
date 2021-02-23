@@ -75,6 +75,7 @@ fn call_in_wasm<E: Externalities>(
 		Some(1024),
 		HostFunctions::host_functions(),
 		8,
+		None,
 	);
 	executor.call_in_wasm(
 		&wasm_binary_unwrap()[..],
@@ -536,6 +537,7 @@ fn should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 		Some(17),  // `17` is the initial number of pages compiled into the binary.
 		HostFunctions::host_functions(),
 		8,
+		None,
 	);
 
 	let err = executor.call_in_wasm(
@@ -558,6 +560,7 @@ fn returns_mutable_static(wasm_method: WasmExecutionMethod) {
 		&wasm_binary_unwrap()[..],
 		HostFunctions::host_functions(),
 		true,
+		None,
 	).expect("Creates runtime");
 
 	let instance = runtime.new_instance().unwrap();
@@ -591,6 +594,7 @@ fn restoration_of_globals(wasm_method: WasmExecutionMethod) {
 		&wasm_binary_unwrap()[..],
 		HostFunctions::host_functions(),
 		true,
+		None,
 	).expect("Creates runtime");
 	let instance = runtime.new_instance().unwrap();
 
@@ -611,6 +615,7 @@ fn heap_is_reset_between_calls(wasm_method: WasmExecutionMethod) {
 		&wasm_binary_unwrap()[..],
 		HostFunctions::host_functions(),
 		true,
+		None,
 	).expect("Creates runtime");
 	let instance = runtime.new_instance().unwrap();
 
@@ -634,6 +639,7 @@ fn parallel_execution(wasm_method: WasmExecutionMethod) {
 		Some(1024),
 		HostFunctions::host_functions(),
 		8,
+		None,
 	));
 	let code_hash = blake2_256(wasm_binary_unwrap()).to_vec();
 	let threads: Vec<_> = (0..8).map(|_|

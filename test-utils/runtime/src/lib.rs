@@ -433,6 +433,37 @@ impl From<frame_system::Event<Runtime>> for Event {
 	}
 }
 
+impl frame_support::traits::PalletInfo for Runtime {
+	fn index<P: 'static>() -> Option<usize> {
+		let type_id = sp_std::any::TypeId::of::<P>();
+		if type_id == sp_std::any::TypeId::of::<system::Module<Runtime>>() {
+			return Some(0)
+		}
+		if type_id == sp_std::any::TypeId::of::<pallet_timestamp::Module<Runtime>>() {
+			return Some(1)
+		}
+		if type_id == sp_std::any::TypeId::of::<pallet_babe::Module<Runtime>>() {
+			return Some(2)
+		}
+
+		None
+	}
+	fn name<P: 'static>() -> Option<&'static str> {
+		let type_id = sp_std::any::TypeId::of::<P>();
+		if type_id == sp_std::any::TypeId::of::<system::Module<Runtime>>() {
+			return Some("System")
+		}
+		if type_id == sp_std::any::TypeId::of::<pallet_timestamp::Module<Runtime>>() {
+			return Some("Timestamp")
+		}
+		if type_id == sp_std::any::TypeId::of::<pallet_babe::Module<Runtime>>() {
+			return Some("Babe")
+		}
+
+		None
+	}
+}
+
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 2400;
 	pub const MinimumPeriod: u64 = 5;
@@ -463,7 +494,7 @@ impl frame_system::Config for Runtime {
 	type BlockHashCount = BlockHashCount;
 	type DbWeight = ();
 	type Version = ();
-	type PalletInfo = ();
+	type PalletInfo = Self;
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();

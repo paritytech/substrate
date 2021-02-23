@@ -563,12 +563,10 @@ impl<N: Ord> Peers<N> {
 	}
 
 	fn authorities(&self) -> usize {
-		// Note that our sentry and our validator are neither authorities nor non-authorities.
 		self.inner.iter().filter(|(_, info)| matches!(info.roles, ObservedRole::Authority)).count()
 	}
 
 	fn non_authorities(&self) -> usize {
-		// Note that our sentry and our validator are neither authorities nor non-authorities.
 		self.inner
 			.iter()
 			.filter(|(_, info)| matches!(info.roles, ObservedRole::Full | ObservedRole::Light))
@@ -665,8 +663,7 @@ impl CatchUpConfig {
 		match self {
 			CatchUpConfig::Disabled => false,
 			CatchUpConfig::Enabled { only_from_authorities, .. } => match peer.roles {
-				ObservedRole::Authority | ObservedRole::OurSentry |
-				ObservedRole::OurGuardedAuthority => true,
+				ObservedRole::Authority => true,
 				_ => !only_from_authorities
 			}
 		}
@@ -1158,7 +1155,6 @@ impl<Block: BlockT> Inner<Block> {
 		}
 
 		match peer.roles {
-			ObservedRole::OurGuardedAuthority | ObservedRole::OurSentry => true,
 			ObservedRole::Authority => {
 				let authorities = self.peers.authorities();
 
@@ -1214,7 +1210,6 @@ impl<Block: BlockT> Inner<Block> {
 		};
 
 		match peer.roles {
-			ObservedRole::OurSentry | ObservedRole::OurGuardedAuthority => true,
 			ObservedRole::Authority => {
 				let authorities = self.peers.authorities();
 

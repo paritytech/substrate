@@ -14,8 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Helper for handling (i.e. answering) grandpa warp sync requests from a remote peer via the
-//! [`crate::request_responses::RequestResponsesBehaviour`].
+//! Helper for handling (i.e. answering) grandpa warp sync requests from a remote peer.
 
 use codec::Decode;
 use sc_network::config::{IncomingRequest, OutgoingResponse, ProtocolId, RequestResponseConfig};
@@ -86,9 +85,9 @@ struct Request<B: BlockT> {
 const WARP_SYNC_FRAGMENTS_LIMIT: usize = 100;
 
 /// Number of item with justification in warp sync cache.
-/// This should be customizable, setting a low number
-/// until then.
-const WARP_SYNC_CACHE_SIZE: usize = 20;
+/// This should be customizable, but setting it to the max number of fragments
+/// we return seems like a good idea until then.
+const WARP_SYNC_CACHE_SIZE: usize = WARP_SYNC_FRAGMENTS_LIMIT;
 
 /// Handler for incoming grandpa warp sync requests from a remote peer.
 pub struct GrandpaWarpSyncRequestHandler<TBackend, TBlock: BlockT> {

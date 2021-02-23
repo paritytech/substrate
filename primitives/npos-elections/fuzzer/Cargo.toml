@@ -14,9 +14,9 @@ publish = false
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-npos-elections = { version = "2.0.0", path = ".." }
-sp-std = { version = "2.0.0", path = "../../std" }
-sp-runtime = { version = "2.0.0", path = "../../runtime" }
+sp-npos-elections = { version = "3.0.0", path = ".." }
+sp-std = { version = "3.0.0", path = "../../std" }
+sp-runtime = { version = "3.0.0", path = "../../runtime" }
 honggfuzz = "0.5"
 rand = { version = "0.7.3", features = ["std", "small_rng"] }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }

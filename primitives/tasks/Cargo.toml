@@ -1,6 +1,6 @@
 [package]
 name = "sp-tasks"
-version = "2.0.0"
+version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -16,20 +16,20 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 derive_more = { version = "0.99.2", optional = true }
 log = { version = "0.4.8", optional = true }
-wasmi = { version = "0.6.2", optional = true }
-sp-core = { version = "2.0.0", default-features = false, path = "../core" }
-sp-externalities = { version = "0.8.0", default-features = false, path = "../externalities" }
-sp-io = { version = "2.0.0", default-features = false, path = "../io" }
-sp-state-machine = { version = "0.8.0", default-features = false, path = "../state-machine" }
-sp-std = { version = "2.0.0", default-features = false, path = "../std" }
-sp-panic-handler = { version = "2.0.0", optional = true, path = "../panic-handler" }
-sp-allocator = { version = "2.0.0", optional = true, path = "../allocator" }
-sp-wasm-interface = { version = "2.0.0", default-features = false, path = "../wasm-interface" }
-sp-runtime-interface = { version = "2.0.0", default-features = false, path = "../runtime-interface" }
 sp-serializer = { version = "2.0.0", optional = true, path = "../serializer" }
 parking_lot = { version = "0.10.2", optional = true }
 thiserror = { version = "1.0.21", optional = true }
 ambassador = "0.2.1"
+sp-core = { version = "3.0.0", default-features = false, path = "../core" }
+sp-externalities = { version = "0.9.0", optional = true, path = "../externalities" }
+sp-io = { version = "3.0.0", default-features = false, path = "../io" }
+sp-runtime-interface = { version = "3.0.0", default-features = false, path = "../runtime-interface" }
+sp-std = { version = "3.0.0", default-features = false, path = "../std" }
+wasmi = { version = "0.6.2", optional = true }
+sp-panic-handler = { version = "2.0.0", optional = true, path = "../panic-handler" }
+sp-allocator = { version = "2.0.0", optional = true, path = "../allocator" }
+sp-wasm-interface = { version = "2.0.0", default-features = false, path = "../wasm-interface" }
+sp-runtime-interface = { version = "2.0.0", default-features = false, path = "../runtime-interface" }
 
 [dev-dependencies]
 codec = { package = "parity-scale-codec", default-features = false, version = "2.0.0" }

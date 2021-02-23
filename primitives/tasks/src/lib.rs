@@ -74,7 +74,6 @@ pub use async_externalities::new_async_externalities;
 #[cfg(feature = "std")]
 pub use crate::pool_spawn::with_externalities_safe;
 pub use async_externalities::{new_inline_only_externalities, AsyncExternalities};
-pub use sp_state_machine::async_ext::AsyncExt;
 pub use sp_externalities::{WorkerResult, WorkerDeclaration};
 pub use sp_io::Crossing;
 use sp_std::vec::Vec;
