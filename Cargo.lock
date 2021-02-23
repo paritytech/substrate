@@ -8594,6 +8594,7 @@ dependencies = [
  "sp-npos-elections",
  "sp-runtime",
  "sp-std",
+ "structopt",
 ]
 
 [[package]]

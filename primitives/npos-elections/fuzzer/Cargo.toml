@@ -21,6 +21,7 @@ sp-arithmetic = { version = "3.0.0", path = "../../arithmetic" }
 sp-npos-elections = { version = "3.0.0", path = ".." }
 sp-runtime = { version = "3.0.0", path = "../../runtime" }
 sp-std = { version = "3.0.0", path = "../../std" }
+structopt = "0.3.21"
 
 [[bin]]
 name = "reduce"
