@@ -277,12 +277,10 @@ pub fn pjr_check<AccountId: IdentifierT>(
 	all_candidates: Vec<AccountId>,
 	all_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
 ) -> bool {
-	use sp_arithmetic::traits::One;
-
-	let t: ExtendedBalance = all_voters
+	let t = all_voters
 		.iter()
-		.map(|(_id, weight, _allocation)| weight)
-		.sum()
+		.map(|(_id, weight, _allocation)| *weight as ExtendedBalance)
+		.sum::<ExtendedBalance>()
 		/ supports.len() as ExtendedBalance;
 	t_pjr_check(supports, all_candidates, all_voters, t)
 }

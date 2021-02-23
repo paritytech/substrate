@@ -34,14 +34,11 @@ use common::{generate_random_npos_inputs, to_range};
 use rand::{self, SeedableRng};
 use sp_npos_elections::{
 	assignment_ratio_to_staked, pjr_check, seq_phragmen, to_supports, to_without_backing,
-	ElectionResult, ExtendedBalance, Supports,
+	ElectionResult, Supports,
 };
 
 type AccountId = u64;
 type PerThing = sp_arithmetic::PerU16;
-
-/// TODO: This value is currently _entirely arbitrary_.
-const PJR_THRESHOLD: ExtendedBalance = 1_000_000_000_000;
 
 fn main() {
 	loop {
