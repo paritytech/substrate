@@ -50,7 +50,6 @@ pub trait WeightInfo {
 	fn set_storage(i: u32, ) -> Weight;
 	fn kill_storage(i: u32, ) -> Weight;
 	fn kill_prefix(p: u32, ) -> Weight;
-	fn suicide() -> Weight;
 }
 
 /// Weights for frame_system using the Substrate node and recommended hardware.
@@ -83,9 +82,6 @@ impl<T: crate::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add((857_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(p as Weight)))
 	}
-	fn suicide() -> Weight {
-		(37_209_000 as Weight)
-	}
 }
 
 // For backwards compatibility and tests
@@ -116,8 +112,5 @@ impl WeightInfo for () {
 		(11_844_000 as Weight)
 			.saturating_add((857_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(p as Weight)))
-	}
-	fn suicide() -> Weight {
-		(37_209_000 as Weight)
 	}
 }
