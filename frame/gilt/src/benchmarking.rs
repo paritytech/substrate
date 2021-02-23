@@ -39,9 +39,9 @@ benchmarks! {
 		for i in 0..l {
 			Gilt::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinFreeze::get(), 1)?;
 		}
-	}: _(RawOrigin::Signed(caller.clone()), T::MinFreeze::get(), 1)
+	}: _(RawOrigin::Signed(caller.clone()), T::MinFreeze::get() * BalanceOf::<T>::from(2u32), 1)
 	verify {
-		assert_eq!(QueueTotals::<T>::get()[0], (l + 1, T::MinFreeze::get() * BalanceOf::<T>::from(l + 1)));
+		assert_eq!(QueueTotals::<T>::get()[0], (l + 1, T::MinFreeze::get() * BalanceOf::<T>::from(l + 2)));
 	}
 
 	retract_bid {

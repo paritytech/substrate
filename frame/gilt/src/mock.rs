@@ -88,6 +88,7 @@ impl pallet_balances::Config for Test {
 parameter_types! {
 	pub const QueueCount: u32 = 3;
 	pub const MaxQueueLen: u32 = 3;
+	pub const FifoQueueLen: u32 = 1;
 	pub const Period: u64 = 3;
 	pub const MinFreeze: u64 = 2;
 	pub const IntakePeriod: u64 = 2;
@@ -105,6 +106,7 @@ impl pallet_gilt::Config for Test {
 	type Surplus = ();
 	type QueueCount = QueueCount;
 	type MaxQueueLen = MaxQueueLen;
+	type FifoQueueLen = FifoQueueLen;
 	type Period = Period;
 	type MinFreeze = MinFreeze;
 	type IntakePeriod = IntakePeriod;

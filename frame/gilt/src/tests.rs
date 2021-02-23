@@ -69,7 +69,25 @@ fn place_bid_works() {
 		assert_eq!(Balances::reserved_balance(1), 10);
 		assert_eq!(Queues::<Test>::get(2), vec![GiltBid { amount: 10, who: 1 }]);
 		assert_eq!(QueueTotals::<Test>::get(), vec![(0, 0), (1, 10), (0, 0)]);
+	});
+}
 
+#[test]
+fn place_bid_queuing_works() {
+	new_test_ext().execute_with(|| {
+		run_to_block(1);
+		assert_ok!(Gilt::place_bid(Origin::signed(1), 20, 2));
+		assert_ok!(Gilt::place_bid(Origin::signed(1), 10, 2));
+		assert_ok!(Gilt::place_bid(Origin::signed(1), 5, 2));
+		assert_noop!(Gilt::place_bid(Origin::signed(1), 5, 2), Error::<Test>::QueueFull);
+		assert_ok!(Gilt::place_bid(Origin::signed(1), 15, 2));
+		assert_ok!(Gilt::place_bid(Origin::signed(1), 25, 2));
+		assert_noop!(Gilt::place_bid(Origin::signed(1), 10, 2), Error::<Test>::QueueFull);
+		assert_eq!(Queues::<Test>::get(2), vec![
+			GiltBid { amount: 15, who: 1 },
+			GiltBid { amount: 25, who: 1 },
+			GiltBid { amount: 20, who: 1 },
+		]);
 	});
 }
 

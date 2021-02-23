@@ -111,6 +111,12 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxQueueLen: Get<u32>;
 
+		/// Portion of the queue which is free from ordering and just a FIFO.
+		///
+		/// Must be no greater than `MaxQueueLen`.
+		#[pallet::constant]
+		type FifoQueueLen: Get<u32>;
+
 		/// The base period for the duration queues. This is the common multiple across all
 		/// supported freezing durations that can be bid upon.
 		#[pallet::constant]
@@ -312,16 +318,31 @@ pub mod pallet {
 				.ok_or(Error::<T>::DurationTooSmall)? as usize;
 			ensure!(queue_index < queue_count, Error::<T>::DurationTooBig);
 
-			QueueTotals::<T>::try_mutate(|qs| -> Result<(), DispatchError> {
-				qs.resize(queue_count, (0, Zero::zero()));
-				ensure!(qs[queue_index].0 < T::MaxQueueLen::get(), Error::<T>::QueueFull);
-				qs[queue_index].0 += 1;
+			let bid = GiltBid { amount, who: who.clone() };
+			let growth = Queues::<T>::try_mutate(duration, |q| -> Result<u32, DispatchError> {
+				// queue is <Ordered: Lowest ... Highest><Fifo: Last ... First>
+				let growth = if q.len() == T::MaxQueueLen::get() as usize {
+					ensure!(q[0].amount < amount, Error::<T>::QueueFull);
+					q[0] = bid;
+					0
+				} else {
+					q.insert(0, bid);
+					1
+				};
+				let sorted_item_count = q.len().saturating_sub(T::FifoQueueLen::get() as usize);
+				if sorted_item_count > 1 {
+					q[0..sorted_item_count].sort_by_key(|x| x.amount);
+				}
+
 				T::Currency::reserve(&who, amount)?;
-				qs[queue_index].1 += amount;
-				Ok(())
+				Ok(growth)	// net change in queue length; 0 or 1
 			})?;
+			QueueTotals::<T>::mutate(|qs| {
+				qs.resize(queue_count, (0, Zero::zero()));
+				qs[queue_index].0 += growth;
+				qs[queue_index].1 += amount;
+			});
 			Self::deposit_event(Event::BidPlaced(who.clone(), amount, duration));
-			Queues::<T>::mutate(duration, |q| q.insert(0, GiltBid { amount, who }));
 
 			Ok(().into())
 		}
