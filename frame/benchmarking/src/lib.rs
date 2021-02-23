@@ -930,7 +930,7 @@ macro_rules! impl_benchmark_test {
 
 /// This creates a test suite which runs the module's benchmarks.
 ///
-/// When called in [`pallet_example`] as
+/// When called in `pallet_example` as
 ///
 /// ```rust,ignore
 /// impl_benchmark_test_suite!(Module, crate::tests::new_test_ext(), crate::tests::Test);
