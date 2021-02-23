@@ -118,6 +118,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	transaction_version: 2,
 };
 
+/// The BABE epoch configuration at genesis.
 pub const BABE_GENESIS_EPOCH_CONFIG: sp_consensus_babe::BabeEpochConfiguration =
 	sp_consensus_babe::BabeEpochConfiguration {
 		c: PRIMARY_PROBABILITY,
