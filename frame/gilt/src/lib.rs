@@ -276,23 +276,10 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			if (n % T::IntakePeriod::get()).is_zero() {
-				let totals = ActiveTotal::<T>::get();
-				if totals.proportion < totals.target {
-					let missing = totals.target.saturating_sub(totals.proportion);
-
-					let total_issuance = T::Currency::total_issuance();
-					let nongilt_issuance: u128 = total_issuance.saturating_sub(totals.frozen)
-						.saturated_into();
-					let effective_issuance = totals.proportion.left_from_one()
-						.saturating_reciprocal_mul(nongilt_issuance);
-					let intake: BalanceOf<T> = (missing * effective_issuance).saturated_into();
-
-					let bids_taken = Self::enlarge(intake, T::MaxIntakeBids::get());
-					// TODO: Determine actual weight
-					return bids_taken as Weight
-				}
+				Self::pursue_target(T::MaxIntakeBids::get())
+			} else {
+				0
 			}
-			0
 		}
 	}
 
@@ -346,7 +333,7 @@ pub mod pallet {
 		///
 		/// - `amount`: The amount of the previous bid.
 		/// - `duration`: The duration of the previous bid.
-		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+		#[pallet::weight(T::WeightInfo::place_bid(T::MaxQueueLen::get()))]
 		pub fn retract_bid(
 			origin: OriginFor<T>,
 			#[pallet::compact] amount: BalanceOf<T>,
@@ -384,7 +371,7 @@ pub mod pallet {
 		///
 		/// - `target`: The target proportion of effective issued funds that should be under gilts
 		/// at any one time.
-		#[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1,1))]
+		#[pallet::weight(T::WeightInfo::set_target())]
 		pub fn set_target(
 			origin: OriginFor<T>,
 			#[pallet::compact] target: Perquintill,
@@ -401,7 +388,7 @@ pub mod pallet {
 		/// Origin must be Signed and the account must be the owner of the gilt of the given index.
 		///
 		/// - `index`: The index of the gilt to be thawed.
-		#[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1,1))]
+		#[pallet::weight(T::WeightInfo::thaw())]
 		pub fn thaw(
 			origin: OriginFor<T>,
 			#[pallet::compact] index: ActiveIndex,
@@ -460,17 +447,42 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
+		/// Attempt to enlarge our gilt-set from bids in order to satisfy our desired target amount
+		/// of funds frozen into gilts.
+		pub fn pursue_target(max_bids: u32) -> Weight {
+			let totals = ActiveTotal::<T>::get();
+			if totals.proportion < totals.target {
+				let missing = totals.target.saturating_sub(totals.proportion);
+
+				let total_issuance = T::Currency::total_issuance();
+				let nongilt_issuance: u128 = total_issuance.saturating_sub(totals.frozen)
+					.saturated_into();
+				let effective_issuance = totals.proportion.left_from_one()
+					.saturating_reciprocal_mul(nongilt_issuance);
+				let intake: BalanceOf<T> = (missing * effective_issuance).saturated_into();
+
+				let (bids_taken, queues_hit) = Self::enlarge(intake, max_bids);
+				let first_from_each_queue = T::WeightInfo::pursue_target_per_queue(queues_hit);
+				let rest_from_each_queue = T::WeightInfo::pursue_target_per_item(bids_taken)
+						.saturating_sub(T::WeightInfo::pursue_target_per_item(queues_hit));
+				first_from_each_queue + rest_from_each_queue
+			} else {
+				T::WeightInfo::pursue_target_noop()
+			}
+		}
+
 		/// Freeze additional funds from queue of bids up to `amount`. Use at most `max_bids`
 		/// from the queue.
 		///
-		/// Return the number of bids taken.
+		/// Return the number of bids taken and the number of distinct queues taken from.
 		pub fn enlarge(
 			amount: BalanceOf<T>,
 			max_bids: u32,
-		) -> u32 {
+		) -> (u32, u32) {
 			let total_issuance = T::Currency::total_issuance();
 			let mut remaining = amount;
 			let mut bids_taken = 0;
+			let mut queues_hit = 0;
 			let now = frame_system::Module::<T>::block_number();
 
 			ActiveTotal::<T>::mutate(|totals| {
@@ -519,6 +531,7 @@ pub mod pallet {
 									break;
 								}
 							}
+							queues_hit += 1;
 							qs[queue_index].0 = q.len() as u32;
 						});
 						if remaining.is_zero() || bids_taken == max_bids {
@@ -527,7 +540,7 @@ pub mod pallet {
 					}
 				});
 			});
-			bids_taken
+			(bids_taken, queues_hit)
 		}
 	}
 }

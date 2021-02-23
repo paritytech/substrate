@@ -21,14 +21,13 @@
 
 use sp_std::prelude::*;
 use super::*;
-use sp_runtime::traits::Bounded;
+use sp_runtime::traits::{Zero, Bounded};
+use sp_arithmetic::Perquintill;
 use frame_system::RawOrigin;
-use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
-use frame_support::traits::{Currency, Get};
+use frame_benchmarking::{benchmarks, whitelisted_caller, impl_benchmark_test_suite};
+use frame_support::{traits::{Currency, Get, EnsureOrigin}, dispatch::UnfilteredDispatchable};
 
 use crate::Pallet as Gilt;
-
-const SEED: u32 = 0;
 
 type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
@@ -36,18 +35,79 @@ benchmarks! {
 	place_bid {
 		let l in 0..(T::MaxQueueLen::get() - 1);
 		let caller: T::AccountId = whitelisted_caller();
-		let another: T::AccountId = account("bidder", 0, SEED);
-		T::Currency::make_free_balance_be(&another, BalanceOf::<T>::max_value());
-		for i in 0..l {
-			Gilt::<T>::place_bid(RawOrigin::Signed(another.clone()).into(), T::MinFreeze::get(), 1)?;
-		}
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+		for i in 0..l {
+			Gilt::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinFreeze::get(), 1)?;
+		}
 	}: _(RawOrigin::Signed(caller.clone()), T::MinFreeze::get(), 1)
 	verify {
 		assert_eq!(QueueTotals::<T>::get()[0], (l + 1, T::MinFreeze::get() * BalanceOf::<T>::from(l + 1)));
 	}
 
+	retract_bid {
+		let l in 1..T::MaxQueueLen::get();
+		let caller: T::AccountId = whitelisted_caller();
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+		for i in 0..l {
+			Gilt::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinFreeze::get(), 1)?;
+		}
+	}: _(RawOrigin::Signed(caller.clone()), T::MinFreeze::get(), 1)
+	verify {
+		assert_eq!(QueueTotals::<T>::get()[0], (l - 1, T::MinFreeze::get() * BalanceOf::<T>::from(l - 1)));
+	}
 
+	set_target {
+		let call = Call::<T>::set_target(Default::default());
+		let origin = T::AdminOrigin::successful_origin();
+	}: { call.dispatch_bypass_filter(origin)? }
+
+	thaw {
+		let caller: T::AccountId = whitelisted_caller();
+		T::Currency::make_free_balance_be(&caller, T::MinFreeze::get() * BalanceOf::<T>::from(3u32));
+		Gilt::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinFreeze::get(), 1)?;
+		Gilt::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinFreeze::get(), 1)?;
+		Gilt::<T>::enlarge(T::MinFreeze::get() * BalanceOf::<T>::from(2u32), 2);
+		Active::<T>::mutate(0, |m_g| if let Some(ref mut g) = m_g { g.expiry = Zero::zero() });
+	}: _(RawOrigin::Signed(caller.clone()), 0)
+	verify {
+		assert!(Active::<T>::get(0).is_none());
+	}
+
+	pursue_target_noop {
+	}: { Gilt::<T>::pursue_target(0) }
+
+	pursue_target_per_item {
+		// bids taken
+		let b in 1..T::MaxQueueLen::get();
+
+		let max = T::MaxQueueLen::get();
+		let caller: T::AccountId = whitelisted_caller();
+		T::Currency::make_free_balance_be(&caller, T::MinFreeze::get() * BalanceOf::<T>::from(b + 1));
+
+		for _ in 0..b {
+			Gilt::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinFreeze::get(), 1)?;
+		}
+
+		Call::<T>::set_target(Perquintill::from_percent(100))
+			.dispatch_bypass_filter(T::AdminOrigin::successful_origin())?;
+
+	}: { Gilt::<T>::pursue_target(b) }
+
+	pursue_target_per_queue {
+		// total queues hit
+		let q in 1..T::QueueCount::get();
+
+		let caller: T::AccountId = whitelisted_caller();
+		T::Currency::make_free_balance_be(&caller, T::MinFreeze::get() * BalanceOf::<T>::from(q + 1));
+
+		for i in 0..q {
+			Gilt::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinFreeze::get(), i + 1)?;
+		}
+
+		Call::<T>::set_target(Perquintill::from_percent(100))
+			.dispatch_bypass_filter(T::AdminOrigin::successful_origin())?;
+
+	}: { Gilt::<T>::pursue_target(q) }
 }
 
 impl_benchmark_test_suite!(
