@@ -25,7 +25,7 @@ use codec::{Decode, Encode};
 use frame_support::{
 	decl_error, decl_module, decl_storage,
 	dispatch::DispatchResultWithPostInfo,
-	traits::{FindAuthor, Get, KeyOwnerProofSystem, OneSessionHandler, Randomness as RandomnessT},
+	traits::{FindAuthor, Get, KeyOwnerProofSystem, OneSessionHandler},
 	weights::{Pays, Weight},
 	Parameter,
 };
@@ -33,7 +33,7 @@ use frame_system::{ensure_none, ensure_signed};
 use sp_application_crypto::Public;
 use sp_runtime::{
 	generic::DigestItem,
-	traits::{Hash, IsMember, One, SaturatedConversion, Saturating, Zero},
+	traits::{IsMember, One, SaturatedConversion, Saturating, Zero},
 	ConsensusEngineId, KeyTypeId,
 };
 use sp_session::{GetSessionNumber, GetValidatorCount};
@@ -48,8 +48,9 @@ use sp_consensus_vrf::schnorrkel;
 
 pub use sp_consensus_babe::{AuthorityId, PUBLIC_KEY_LENGTH, RANDOMNESS_LENGTH, VRF_OUTPUT_LENGTH};
 
-mod equivocation;
 mod default_weights;
+mod equivocation;
+mod randomness;
 
 #[cfg(any(feature = "runtime-benchmarks", test))]
 mod benchmarking;
@@ -59,6 +60,9 @@ mod mock;
 mod tests;
 
 pub use equivocation::{BabeEquivocationOffence, EquivocationHandler, HandleEquivocation};
+pub use randomness::{
+	CurrentBlockRandomness, RandomnessFromOneEpochAgo, RandomnessFromTwoEpochsAgo,
+};
 
 pub trait Config: pallet_timestamp::Config {
 	/// The amount of time, in slots, that each epoch should last.
@@ -314,47 +318,6 @@ decl_module! {
 				key_owner_proof,
 			)
 		}
-	}
-}
-
-/// Randomness computed two epochs ago.
-pub struct RandomnessFromTwoEpochsAgo<T>(sp_std::marker::PhantomData<T>);
-
-/// Randomness computed one epoch ago.
-pub struct RandomnessFromOneEpochAgo<T>(sp_std::marker::PhantomData<T>);
-
-/// VRF Randomness provided by the block author within the current block.
-pub struct CurrentBlockRandomness<T>(sp_std::marker::PhantomData<T>);
-
-impl<T: Config> RandomnessT<<T as frame_system::Config>::Hash> for RandomnessFromTwoEpochsAgo<T> {
-	fn random(subject: &[u8]) -> T::Hash {
-		let mut subject = subject.to_vec();
-		subject.reserve(VRF_OUTPUT_LENGTH);
-		subject.extend_from_slice(&Randomness::get()[..]);
-
-		<T as frame_system::Config>::Hashing::hash(&subject[..])
-	}
-}
-
-impl<T: Config> RandomnessT<<T as frame_system::Config>::Hash> for RandomnessFromOneEpochAgo<T> {
-	fn random(subject: &[u8]) -> T::Hash {
-		let mut subject = subject.to_vec();
-		subject.reserve(VRF_OUTPUT_LENGTH);
-		subject.extend_from_slice(&NextRandomness::get()[..]);
-
-		<T as frame_system::Config>::Hashing::hash(&subject[..])
-	}
-}
-
-impl<T: Config> RandomnessT<Option<<T as frame_system::Config>::Hash>> for CurrentBlockRandomness<T> {
-	fn random(subject: &[u8]) -> Option<T::Hash> {
-		AuthorVrfRandomness::get().map(|random| {
-			let mut subject = subject.to_vec();
-			subject.reserve(VRF_OUTPUT_LENGTH);
-			subject.extend_from_slice(&random);
-
-			<T as frame_system::Config>::Hashing::hash(&subject[..])
-		})
 	}
 }
 
