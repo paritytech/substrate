@@ -77,7 +77,7 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 
 		let mut proofs = Vec::new();
 
-		for (_, last_block) in set_changes.iter() {
+		for (_, last_block) in set_changes.iter_from(begin_number) {
 			if proofs.len() >= MAX_CHANGES_PER_WARP_SYNC_PROOF {
 				break;
 			}
