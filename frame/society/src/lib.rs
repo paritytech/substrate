@@ -196,6 +196,11 @@
 //! process is useful in situations where a user may not have enough balance to
 //! satisfy the bid deposit. A member can only vouch one user at a time.
 //!
+//! Finally, Members can bid to perform actions as a society, by putting up a deposit
+//! to at least cover the cost of storing that action onchain, this deposit is given to
+//! the society if the action is not accepted, and returned to the member twofold if the
+//! action is successful. A member can only bid for one action at a time.
+//!
 //! During rotation periods, a random group of members are selected as "skeptics".
 //! These skeptics are expected to vote on the current candidates. If they do not vote,
 //! their skeptic status is treated as a rejection vote, the member is deemed
@@ -225,6 +230,7 @@
 //!
 //! * `vouch` - A member can place a bid on behalf of a user to join the membership society.
 //! * `unvouch` - A member can revoke their vouch for a user.
+//! * `bid_action` - A member can place a bid to execute an action as a society.
 //! * `vote` - A member can vote to approve or reject a candidate's request to join the society.
 //! * `defender_vote` - A member can vote to approve or reject a defender's continued membership
 //! to the society.
@@ -260,11 +266,11 @@ use sp_runtime::{Percent, ModuleId, RuntimeDebug,
 		TrailingZeroInput, CheckedSub
 	}
 };
-use frame_support::{decl_error, decl_module, decl_storage, decl_event, ensure, dispatch::DispatchResult};
+use frame_support::{Parameter, decl_error, decl_event, decl_module, decl_storage, dispatch::{DispatchResult, Dispatchable, GetDispatchInfo, PostDispatchInfo}, ensure};
 use frame_support::weights::Weight;
 use frame_support::traits::{
-	Currency, ReservableCurrency, Randomness, Get, ChangeMembers, BalanceStatus,
-	ExistenceRequirement::AllowDeath, EnsureOrigin, OnUnbalanced, Imbalance
+	Currency, ReservableCurrency, Randomness, Get, ChangeMembers, BalanceStatus, IsSubType,
+	ExistenceRequirement::AllowDeath, EnsureOrigin, OnUnbalanced, Imbalance, IsType
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 
@@ -316,8 +322,17 @@ pub trait Config<I=DefaultInstance>: system::Config {
 
 	/// The number of blocks between membership challenges.
 	type ChallengePeriod: Get<Self::BlockNumber>;
+
+	/// The overarching call type.
+	type Call: Parameter + Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo>
+		+ GetDispatchInfo + From<system::Call<Self>> + IsSubType<system::Call<Self>>
+		+ IsType<<Self as system::Config>::Call> + Encode + Decode;
+
+	/// The amount of balance that must be deposited per byte of action stored.
+	type ActionByteDeposit: Get<BalanceOf<Self, I>>;
 }
 
+pub type OpaqueCall = Vec<u8>;
 /// A vote by a member on a candidate application.
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
 pub enum Vote {
@@ -368,26 +383,28 @@ pub type StrikeCount = u32;
 
 /// A bid for entry into society.
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug,)]
-pub struct Bid<AccountId, Balance> {
+pub struct Bid<AccountId, Balance, Call> {
 	/// The bidder/candidate trying to enter society
 	who: AccountId,
 	/// The kind of bid placed for this bidder/candidate. See `BidKind`.
-	kind: BidKind<AccountId, Balance>,
+	kind: BidKind<AccountId, Balance, Call>,
 	/// The reward that the bidder has requested for successfully joining the society.
 	value: Balance,
 }
 
 /// A vote by a member on a candidate application.
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
-pub enum BidKind<AccountId, Balance> {
+pub enum BidKind<AccountId, Balance, Call> {
 	/// The CandidateDeposit was paid for this bid.
 	Deposit(Balance),
 	/// A member vouched for this bid. The account should be reinstated into `Members` once the
 	/// bid is successful (or if it is rescinded prior to launch).
 	Vouch(AccountId, Balance),
+	/// This is not a bid for membership, but a bid to action. The ActionDeposit was paid for this bid.
+	Action(Balance, Call)
 }
 
-impl<AccountId: PartialEq, Balance> BidKind<AccountId, Balance> {
+impl<AccountId: PartialEq, Balance, Call> BidKind<AccountId, Balance, Call> {
 	fn check_voucher(&self, v: &AccountId) -> DispatchResult {
 		if let BidKind::Vouch(ref a, _) = self {
 			if a == v {
@@ -413,12 +430,12 @@ decl_storage! {
 		pub Rules get(fn rules): Option<T::Hash>;
 
 		/// The current set of candidates; bidders that are attempting to become members.
-		pub Candidates get(fn candidates): Vec<Bid<T::AccountId, BalanceOf<T, I>>>;
+		pub Candidates get(fn candidates): Vec<Bid<T::AccountId, BalanceOf<T, I>, OpaqueCall>>;
 
 		/// The set of suspended candidates.
 		pub SuspendedCandidates get(fn suspended_candidate):
 			map hasher(twox_64_concat) T::AccountId
-			=> Option<(BalanceOf<T, I>, BidKind<T::AccountId, BalanceOf<T, I>>)>;
+			=> Option<(BalanceOf<T, I>, BidKind<T::AccountId, BalanceOf<T, I>, OpaqueCall>)>;
 
 		/// Amount of our account balance that is specifically for the next round's bid(s).
 		pub Pot get(fn pot) config(): BalanceOf<T, I>;
@@ -438,7 +455,7 @@ decl_storage! {
 		pub SuspendedMembers get(fn suspended_member): map hasher(twox_64_concat) T::AccountId => bool;
 
 		/// The current bids, stored ordered by the value of the bid.
-		Bids: Vec<Bid<T::AccountId, BalanceOf<T, I>>>;
+		Bids: Vec<Bid<T::AccountId, BalanceOf<T, I>, OpaqueCall>>;
 
 		/// Members currently vouching or banned from vouching again
 		Vouching get(fn vouching): map hasher(twox_64_concat) T::AccountId => Option<VouchingStatus>;
@@ -543,7 +560,7 @@ decl_module! {
 			let candidates = <Candidates<T, I>>::get();
 			ensure!(!Self::is_candidate(&candidates, &who), Error::<T, I>::AlreadyCandidate);
 			let members = <Members<T, I>>::get();
-			ensure!(!Self::is_member(&members ,&who), Error::<T, I>::AlreadyMember);
+			ensure!(!Self::is_member(&members, &who), Error::<T, I>::AlreadyMember);
 
 			let deposit = T::CandidateDeposit::get();
 			T::Currency::reserve(&who, deposit)?;
@@ -583,7 +600,7 @@ decl_module! {
 					// In neither case can we do much if the action isn't completable, but there's
 					// no reason that either should fail.
 					match b.remove(pos).kind {
-						BidKind::Deposit(deposit) => {
+						BidKind::Deposit(deposit) | BidKind::Action(deposit, _) => {
 							let _ = T::Currency::unreserve(&who, deposit);
 						}
 						BidKind::Vouch(voucher, _) => {
@@ -701,7 +718,6 @@ decl_module! {
 				}
 			)
 		}
-
 		/// As a member, vote on a candidate.
 		///
 		/// The dispatch origin for this call must be _Signed_ and a member.
@@ -983,18 +999,23 @@ decl_module! {
 						// Add payout for new candidate
 						let maturity = <system::Module<T>>::block_number()
 							+ Self::lock_duration(Self::members().len() as u32);
-						Self::pay_accepted_candidate(&who, value, kind, maturity);
+						Self::execute_accepted_candidate(&who, value, kind, maturity);
 					}
 					Judgement::Reject => {
 						// Founder has rejected this candidate
 						match kind {
 							BidKind::Deposit(deposit) => {
-								// Slash deposit and move it to the society account
+								// Slash deposit and move it to the society treasury account
 								let _ = T::Currency::repatriate_reserved(&who, &Self::account_id(), deposit, BalanceStatus::Free);
 							}
 							BidKind::Vouch(voucher, _) => {
 								// Ban the voucher from vouching again
 								<Vouching<T, I>>::insert(&voucher, VouchingStatus::Banned);
+							}
+							BidKind::Action(deposit, _) => {
+								// Punish the member for the bad proposal, but do not do anything outside of that
+								// repatriate to the action account of the society instead of the "treasury"
+								let _ = T::Currency::repatriate_reserved(&who, &Self::actions(), deposit, BalanceStatus::Free);
 							}
 						}
 					}
@@ -1032,6 +1053,67 @@ decl_module! {
 			ensure!(max > 1, Error::<T, I>::MaxMembers);
 			MaxMembers::<I>::put(max);
 			Self::deposit_event(RawEvent::NewMaxMembers(max));
+		}
+
+		/// As a member, create a bid to perform an action as a society.
+		///
+		/// Unlike bidding for membership, the deposit is based directly on the value of the bid,
+		/// with a minimum value of the call per-byte deposit. If the bid fails, the deposit gets
+		/// moved to the Society's action origin instead of the society account.
+		///
+		/// The dispatch origin for this call must be _Signed_ and a member.
+		///
+		/// Parameters:
+		/// - `value`: The total reward to be paid to you if the action is carried out.
+		/// - `call`: The call being executed by the society action origin if this bid is successful.
+		///
+		/// # <weight>
+		/// Key: B (len of bids), C (len of candidates), M (len of members)
+		/// - Storage Reads:
+		/// 	- One storage read to retrieve all members. O(M)
+		/// 	- One storage read to check for suspended candidate. O(1)
+		/// 	- One storage read to check for suspended member. O(1)
+		/// 	- One storage read to retrieve all current bids. O(B)
+		/// 	- One storage read to retrieve all current candidates. O(C)
+		/// - Storage Writes:
+		/// 	- One storage mutate to add a new bid to the vector O(B) (TODO: possible optimization w/ read)
+		/// 	- Up to one storage removal if bid.len() > MAX_BID_COUNT. O(1)
+		/// - Notable Computation:
+		/// 	- O(log M) search to check sender is a member.
+		/// 	- O(log B) search to insert the new bid sorted.
+		/// - External Module Operations:
+		/// 	- One balance reserve operation. O(X)
+		/// 	- Up to one balance unreserve operation if bids.len() > MAX_BID_COUNT.
+		/// - Events:
+		/// 	- One event for action bid.
+		/// 	- Up to one event for AutoUnbid if bid.len() > MAX_BID_COUNT.
+		///
+		/// Total Complexity: O(M + B + C + logM + logB + X)
+		/// # </weight>
+		#[weight = T::BlockWeights::get().max_block / 10]
+		pub fn bid_action(origin, value: BalanceOf<T, I>, call: Box<<T as Config<I>>::Call>) -> DispatchResult {
+			let actor = ensure_signed(origin)?;
+			// Check value is at least per-byte deposit for call
+			let encoded_call = call.encode();
+			let min_value = <BalanceOf<T, I>>::from(encoded_call.len() as u32)
+				.saturating_mul(T::ActionByteDeposit::get());
+			ensure!(value>=min_value, Error::<T, I>::InsufficientActionDeposit);
+			// Check user is not suspended.
+			ensure!(!<SuspendedCandidates<T, I>>::contains_key(&actor), Error::<T, I>::Suspended);
+			ensure!(!<SuspendedMembers<T, I>>::contains_key(&actor), Error::<T, I>::Suspended);
+			// Check user is not a bid or candidate.
+			let bids = <Bids<T, I>>::get();
+			ensure!(!Self::is_bid(&bids, &actor), Error::<T, I>::AlreadyBid);
+			let candidates = <Candidates<T, I>>::get();
+			ensure!(!Self::is_candidate(&candidates, &actor), Error::<T, I>::AlreadyCandidate);
+			let members = <Members<T, I>>::get();
+			// Check sender can create actions.
+			ensure!(Self::is_member(&members, &actor), Error::<T, I>::NotMember);
+			// Reserve the value of the action.
+			T::Currency::reserve(&actor, value.clone())?;
+			Self::put_bid(bids, &actor, value.clone(), BidKind::Action(value.clone(), encoded_call));
+			Self::deposit_event(RawEvent::ActionBid(actor, value));
+			Ok(())
 		}
 
 		fn on_initialize(n: T::BlockNumber) -> Weight {
@@ -1103,6 +1185,8 @@ decl_error! {
 		NotFounder,
 		/// The caller is not the head.
 		NotHead,
+		/// The action bid has too little value for it's call.
+		InsufficientActionDeposit
 	}
 }
 
@@ -1147,6 +1231,13 @@ decl_event! {
 		Unfounded(AccountId),
 		/// Some funds were deposited into the society account. \[value\]
 		Deposit(Balance),
+		/// A member just bid to enact an action. The given account is the member's ID and their reward if
+		/// the action passes is the second. \[member_id, value\]
+		ActionBid(AccountId, Balance),
+		/// A \[member\] dropped their bid to action (by their request).
+		ActionUnbid(AccountId),
+		/// A user got a strike for voting on the wrong side. \[candidate, voter\]
+		Strike(AccountId, AccountId),
 	}
 }
 
@@ -1187,10 +1278,10 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 	/// Puts a bid into storage ordered by smallest to largest value.
 	/// Allows a maximum of 1000 bids in queue, removing largest value people first.
 	fn put_bid(
-		mut bids: Vec<Bid<T::AccountId, BalanceOf<T, I>>>,
+		mut bids: Vec<Bid<T::AccountId, BalanceOf<T, I>, OpaqueCall>>,
 		who: &T::AccountId,
 		value: BalanceOf<T, I>,
-		bid_kind: BidKind<T::AccountId, BalanceOf<T, I>>
+		bid_kind: BidKind<T::AccountId, BalanceOf<T, I>, OpaqueCall>
 	) {
 		const MAX_BID_COUNT: usize = 1000;
 
@@ -1234,7 +1325,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 		if bids.len() > MAX_BID_COUNT {
 			let Bid { who: popped, kind, .. } = bids.pop().expect("b.len() > 1000; qed");
 			match kind {
-				BidKind::Deposit(deposit) => {
+				BidKind::Deposit(deposit) | BidKind::Action(deposit, _) => {
 					let _ = T::Currency::unreserve(&popped, deposit);
 				}
 				BidKind::Vouch(voucher, _) => {
@@ -1248,13 +1339,13 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 	}
 
 	/// Check a user is a bid.
-	fn is_bid(bids: &Vec<Bid<T::AccountId, BalanceOf<T, I>>>, who: &T::AccountId) -> bool {
+	fn is_bid(bids: &Vec<Bid<T::AccountId, BalanceOf<T, I>, OpaqueCall>>, who: &T::AccountId) -> bool {
 		// Bids are ordered by `value`, so we cannot binary search for a user.
 		bids.iter().find(|bid| bid.who == *who).is_some()
 	}
 
 	/// Check a user is a candidate.
-	fn is_candidate(candidates: &Vec<Bid<T::AccountId, BalanceOf<T, I>>>, who: &T::AccountId) -> bool {
+	fn is_candidate(candidates: &Vec<Bid<T::AccountId, BalanceOf<T, I>, OpaqueCall>>, who: &T::AccountId) -> bool {
 		// Looking up a candidate is the same as looking up a bid
 		Self::is_bid(candidates, who)
 	}
@@ -1350,9 +1441,10 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 					// Voter voted wrong way (or was just a lazy skeptic) then reduce their payout
 					// and increase their strikes. after MaxStrikes then they go into suspension.
 					let amount = Self::slash_payout(m, T::WrongSideDeduction::get());
-
+					
 					let strikes = <Strikes<T, I>>::mutate(m, |s| {
 						*s += 1;
+						Self::deposit_event(RawEvent::Strike(candidate.clone(), m.clone()));
 						*s
 					});
 					if strikes >= T::MaxStrikes::get() {
@@ -1376,17 +1468,22 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 					total_payouts += value;
 					members.push(candidate.clone());
 
-					Self::pay_accepted_candidate(&candidate, value, kind, maturity);
+					Self::execute_accepted_candidate(&candidate, value, kind, maturity);
 
 					// We track here the total_approvals so that every candidate has a unique range
 					// of numbers from 0 to `total_approvals` with length `approval_count` so each
 					// candidate is proportionally represented when selecting a "primary" below.
 					Some((candidate, total_approvals, value))
 				} else {
-					// Suspend Candidate
-					<SuspendedCandidates<T, I>>::insert(&candidate, (value, kind));
-					Self::deposit_event(RawEvent::CandidateSuspended(candidate));
-					None
+					// Do nothing for actions - they've already paid via deposit
+					if let BidKind::Action(_, _) = kind {
+						None
+					} else {
+						// Suspend Candidate
+						<SuspendedCandidates<T, I>>::insert(&candidate, (value, kind));
+						Self::deposit_event(RawEvent::CandidateSuspended(candidate));
+						None	
+					}
 				}
 			}).collect::<Vec<_>>();
 
@@ -1501,11 +1598,11 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 		}
 	}
 
-	/// Pay an accepted candidate their bid value.
-	fn pay_accepted_candidate(
+	/// Execute an accepted candidate, be it a membership bid (ie, payment) or an action.
+	fn execute_accepted_candidate(
 		candidate: &T::AccountId,
 		value: BalanceOf<T, I>,
-		kind: BidKind<T::AccountId, BalanceOf<T, I>>,
+		kind: BidKind<T::AccountId, BalanceOf<T, I>, OpaqueCall>,
 		maturity: T::BlockNumber,
 	) {
 		let value = match kind {
@@ -1525,6 +1622,19 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 				} else {
 					value
 				}
+			}
+			BidKind::Action(deposit, call) => {
+				let _ = T::Currency::unreserve(candidate, deposit);
+				// build society call origin
+				let society_account = Self::actions();
+				let society_origin: T::Origin =
+						system::RawOrigin::Signed(society_account).into();
+				let call_option: Option<<T as Config<I>>::Call> = Decode::decode(&mut &call[..]).ok();
+				call_option.map(|decoded_call|{
+					// execute call
+					let _ = decoded_call.dispatch(society_origin);
+				});
+				value
 			}
 		};
 
@@ -1596,6 +1706,14 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 		T::ModuleId::get().into_sub_account(b"payouts")
 	}
 
+	/// The account ID of the payouts pot. This is where payouts are made from.
+	///
+	/// This actually does computation. If you need to keep using it, then make sure you cache the
+	/// value and only call this once.
+	pub fn actions() -> T::AccountId {
+		T::ModuleId::get().into_sub_account(b"actions")
+	}
+
 	/// Return the duration of the lock, in blocks, with the given number of members.
 	///
 	/// This is a rather opaque calculation based on the formula here:
@@ -1612,7 +1730,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 	pub fn take_selected(
 		members_len: usize,
 		pot: BalanceOf<T, I>
-	) -> Vec<Bid<T::AccountId, BalanceOf<T, I>>> {
+	) -> Vec<Bid<T::AccountId, BalanceOf<T, I>, OpaqueCall>>{
 		let max_members = MaxMembers::<I>::get() as usize;
 		// No more than 10 will be returned.
 		let mut max_selections: usize = 10.min(max_members.saturating_sub(members_len));
