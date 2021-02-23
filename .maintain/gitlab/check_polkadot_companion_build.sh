@@ -51,8 +51,6 @@ git merge origin/master
 # ancestor for successfully performing merges below.
 git clone --depth 20 https://github.com/paritytech/polkadot.git
 
-cargo install -f diener
-
 cd polkadot
 
 # either it's a pull request then check for a companion otherwise use

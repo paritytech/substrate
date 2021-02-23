@@ -2034,9 +2034,9 @@ pub mod pallet_prelude {
 /// 	* `add_extra_genesis` fields are converted to `GenesisConfig` field with their correct
 /// 		default if specified
 /// 	* `add_extra_genesis` build is written into `GenesisBuild::build`
-/// * storage items defined with [`pallet`] use the name of the pallet provided by [`PalletInfo::name`]
-/// 	as `pallet_prefix` (in `decl_storage`, storage items used the `pallet_prefix` given as input of
-/// 	`decl_storage` with the syntax `as Example`).
+/// * storage items defined with [`pallet`] use the name of the pallet provided by
+/// 	[`traits::PalletInfo::name`] as `pallet_prefix` (in `decl_storage`, storage items used the
+/// 	`pallet_prefix` given as input of `decl_storage` with the syntax `as Example`).
 /// 	Thus a runtime using the pallet must be careful with this change.
 /// 	To handle this change:
 /// 	* either ensure that the name of the pallet given to `construct_runtime!` is the same

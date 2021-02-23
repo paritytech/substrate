@@ -14,8 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Helper for handling (i.e. answering) grandpa warp sync requests from a remote peer via the
-//! [`crate::request_responses::RequestResponsesBehaviour`].
+//! Helper for handling (i.e. answering) grandpa warp sync requests from a remote peer.
 
 use codec::Decode;
 use sc_network::config::{IncomingRequest, OutgoingResponse, ProtocolId, RequestResponseConfig};
