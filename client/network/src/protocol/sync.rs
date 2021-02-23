@@ -1899,15 +1899,12 @@ mod test {
 	use sc_block_builder::BlockBuilderProvider;
 	use sp_blockchain::HeaderBackend;
 	use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
-	use sp_runtime::ConsensusEngineId;
 	use substrate_test_runtime_client::{
 		runtime::{Block, Hash, Header},
 		ClientBlockImportExt, DefaultTestClientBuilderExt, TestClientBuilder, TestClientBuilderExt,
 		BlockBuilderExt, TestClient, ClientExt,
 	};
 	use futures::{future::poll_fn, executor::block_on};
-
-	const ID: ConsensusEngineId = *b"TEST";
 
 	#[test]
 	fn processes_empty_response_on_justification_request_for_unknown_block() {
@@ -2399,7 +2396,7 @@ mod test {
 		);
 
 		let finalized_block = blocks[MAX_BLOCKS_TO_LOOK_BACKWARDS as usize * 2 - 1].clone();
-		let just = (ID, Vec::new());
+		let just = (b"TEST", Vec::new());
 		client.finalize_block(BlockId::Hash(finalized_block.hash()), Some(just)).unwrap();
 		sync.update_chain_info(&info.best_hash, info.best_number);
 
