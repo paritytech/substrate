@@ -22,9 +22,7 @@ use futures::{Future, executor::block_on};
 use super::*;
 use sp_consensus::block_validation::Validation;
 use substrate_test_runtime::Header;
-use sp_runtime::{ConsensusEngineId, Justifications};
-
-const ID: ConsensusEngineId = *b"FRNK";
+use sp_runtime::Justifications;
 
 fn test_ancestor_search_when_common_is(n: usize) {
 	sp_tracing::try_init_simple();
@@ -277,7 +275,7 @@ fn sync_justifications() {
 				.peer(0)
 				.client()
 				.justifications(&BlockId::Number(height))
-				.unwrap() != Some(Justifications::from((ID, Vec::new())))
+				.unwrap() != Some(Justifications::from((b"FRNK", Vec::new())))
 			{
 				return Poll::Pending;
 			}
@@ -285,7 +283,7 @@ fn sync_justifications() {
 				.peer(1)
 				.client()
 				.justifications(&BlockId::Number(height))
-				.unwrap() != Some(Justifications::from((ID, Vec::new())))
+				.unwrap() != Some(Justifications::from((b"FRNK", Vec::new())))
 			{
 				return Poll::Pending;
 			}
@@ -322,12 +320,12 @@ fn sync_justifications_across_forks() {
 			.peer(0)
 			.client()
 			.justifications(&BlockId::Number(10))
-			.unwrap() == Some(Justifications::from((ID, Vec::new())))
+			.unwrap() == Some(Justifications::from((b"FRNK", Vec::new())))
 			&& net
 				.peer(1)
 				.client()
 				.justifications(&BlockId::Number(10))
-				.unwrap() == Some(Justifications::from((ID, Vec::new())))
+				.unwrap() == Some(Justifications::from((b"FRNK", Vec::new())))
 		{
 			Poll::Ready(())
 		} else {

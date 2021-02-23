@@ -657,10 +657,10 @@ impl<B: BlockT> Protocol<B> {
 					// For compatibility we assume that the incoming Justifications is an
 					// `EncodedJustification`, as before, and that it can only be for GRANDPA.
 					let justification: EncodedJustification = block_data.justification;
-					let justification = (GRANDPA_ENGINE_ID, justification);
+					let justification = (b"FRNK", justification);
 					Some(Justifications::from(justification))
 				} else if block_data.is_empty_justification {
-					Some(Justifications::from((GRANDPA_ENGINE_ID, Vec::new())))
+					Some(Justifications::from((b"FRNK", Vec::new())))
 				} else {
 					None
 				},
