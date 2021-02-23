@@ -1069,7 +1069,7 @@ impl<T: Config<I>, I: 'static> Currency<T::AccountId> for Pallet<T, I> where
 						//   may not even be a provider.
 						let allow_death = existence_requirement == ExistenceRequirement::AllowDeath;
 						let allow_death = allow_death && !system::Pallet::<T>::is_provider_required(transactor);
-						ensure!(allow_death || from_account.free >= ed, Error::<T, I>::KeepAlive);
+						ensure!(allow_death || from_account.total() >= ed, Error::<T, I>::KeepAlive);
 
 						Ok(())
 					}
