@@ -25,7 +25,7 @@ use frame_support::{
 };
 use mock::*;
 use pallet_session::ShouldEndSession;
-use sp_consensus_babe::AllowedSlots;
+use sp_consensus_babe::{AllowedSlots, Slot};
 use sp_core::crypto::Pair;
 
 const EMPTY_RANDOMNESS: [u8; 32] = [
@@ -62,7 +62,7 @@ fn first_block_epoch_zero_start() {
 	let (pairs, mut ext) = new_test_ext_with_pairs(4);
 
 	ext.execute_with(|| {
-		let genesis_slot = 100;
+		let genesis_slot = Slot::from(100);
 		let (vrf_output, vrf_proof, vrf_randomness) = make_vrf_output(genesis_slot, &pairs[0]);
 
 		let first_vrf = vrf_output;
@@ -73,7 +73,7 @@ fn first_block_epoch_zero_start() {
 			vrf_proof,
 		);
 
-		assert_eq!(Babe::genesis_slot(), 0);
+		assert_eq!(Babe::genesis_slot(), Slot::from(0));
 		System::initialize(
 			&1,
 			&Default::default(),
@@ -120,7 +120,7 @@ fn author_vrf_output_for_primary() {
 	let (pairs, mut ext) = new_test_ext_with_pairs(1);
 
 	ext.execute_with(|| {
-		let genesis_slot = 10;
+		let genesis_slot = Slot::from(10);
 		let (vrf_output, vrf_proof, vrf_randomness) = make_vrf_output(genesis_slot, &pairs[0]);
 		let primary_pre_digest = make_primary_pre_digest(0, genesis_slot, vrf_output, vrf_proof);
 
@@ -146,7 +146,7 @@ fn author_vrf_output_for_secondary_vrf() {
 	let (pairs, mut ext) = new_test_ext_with_pairs(1);
 
 	ext.execute_with(|| {
-		let genesis_slot = 10;
+		let genesis_slot = Slot::from(10);
 		let (vrf_output, vrf_proof, vrf_randomness) = make_vrf_output(genesis_slot, &pairs[0]);
 		let secondary_vrf_pre_digest = make_secondary_vrf_pre_digest(0, genesis_slot, vrf_output, vrf_proof);
 
@@ -170,7 +170,7 @@ fn author_vrf_output_for_secondary_vrf() {
 #[test]
 fn no_author_vrf_output_for_secondary_plain() {
 	new_test_ext(1).execute_with(|| {
-		let genesis_slot = 10;
+		let genesis_slot = Slot::from(10);
 		let secondary_plain_pre_digest = make_secondary_plain_pre_digest(0, genesis_slot);
 
 		System::initialize(
@@ -205,17 +205,17 @@ fn can_predict_next_epoch_change() {
 		assert_eq!(<Test as Config>::EpochDuration::get(), 3);
 		// this sets the genesis slot to 6;
 		go_to_block(1, 6);
-		assert_eq!(Babe::genesis_slot(), 6);
-		assert_eq!(Babe::current_slot(), 6);
+		assert_eq!(*Babe::genesis_slot(), 6);
+		assert_eq!(*Babe::current_slot(), 6);
 		assert_eq!(Babe::epoch_index(), 0);
 
 		progress_to_block(5);
 
 		assert_eq!(Babe::epoch_index(), 5 / 3);
-		assert_eq!(Babe::current_slot(), 10);
+		assert_eq!(*Babe::current_slot(), 10);
 
 		// next epoch change will be at
-		assert_eq!(Babe::current_epoch_start(), 9); // next change will be 12, 2 slots from now
+		assert_eq!(*Babe::current_epoch_start(), 9); // next change will be 12, 2 slots from now
 		assert_eq!(Babe::next_expected_epoch_change(System::block_number()), Some(5 + 2));
 	})
 }
@@ -226,8 +226,8 @@ fn can_enact_next_config() {
 		assert_eq!(<Test as Config>::EpochDuration::get(), 3);
 		// this sets the genesis slot to 6;
 		go_to_block(1, 6);
-		assert_eq!(Babe::genesis_slot(), 6);
-		assert_eq!(Babe::current_slot(), 6);
+		assert_eq!(*Babe::genesis_slot(), 6);
+		assert_eq!(*Babe::current_slot(), 6);
 		assert_eq!(Babe::epoch_index(), 0);
 		go_to_block(2, 7);
 
@@ -269,12 +269,12 @@ fn can_fetch_current_and_next_epoch_data() {
 
 		let current_epoch = Babe::current_epoch();
 		assert_eq!(current_epoch.epoch_index, 3);
-		assert_eq!(current_epoch.start_slot, 10);
+		assert_eq!(*current_epoch.start_slot, 10);
 		assert_eq!(current_epoch.authorities.len(), 5);
 
 		let next_epoch = Babe::next_epoch();
 		assert_eq!(next_epoch.epoch_index, 4);
-		assert_eq!(next_epoch.start_slot, 13);
+		assert_eq!(*next_epoch.start_slot, 13);
 		assert_eq!(next_epoch.authorities.len(), 5);
 
 		// the on-chain randomness should always change across epochs
@@ -572,7 +572,7 @@ fn report_equivocation_invalid_equivocation_proof() {
 			&offending_authority_pair,
 			CurrentSlot::get(),
 		);
-		equivocation_proof.slot_number = 0;
+		equivocation_proof.slot = Slot::from(0);
 		assert_invalid_equivocation(equivocation_proof.clone());
 
 		// different slot numbers in headers
@@ -611,8 +611,8 @@ fn report_equivocation_invalid_equivocation_proof() {
 #[test]
 fn report_equivocation_validate_unsigned_prevents_duplicates() {
 	use sp_runtime::transaction_validity::{
-		InvalidTransaction, TransactionLongevity, TransactionPriority, TransactionSource,
-		TransactionValidity, ValidTransaction,
+		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
+		ValidTransaction,
 	};
 
 	let (pairs, mut ext) = new_test_ext_with_pairs(3);
@@ -664,7 +664,7 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 				priority: TransactionPriority::max_value(),
 				requires: vec![],
 				provides: vec![("BabeEquivocation", tx_tag).encode()],
-				longevity: TransactionLongevity::max_value(),
+				longevity: ReportLongevity::get(),
 				propagate: false,
 			})
 		);
@@ -676,7 +676,16 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 		Babe::report_equivocation_unsigned(Origin::none(), equivocation_proof, key_owner_proof)
 			.unwrap();
 
-		// the report should now be considered stale and the transaction is invalid
+		// the report should now be considered stale and the transaction is invalid.
+		// the check for staleness should be done on both `validate_unsigned` and on `pre_dispatch`
+		assert_err!(
+			<Babe as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
+				TransactionSource::Local,
+				&inner,
+			),
+			InvalidTransaction::Stale,
+		);
+
 		assert_err!(
 			<Babe as sp_runtime::traits::ValidateUnsigned>::pre_dispatch(&inner),
 			InvalidTransaction::Stale,

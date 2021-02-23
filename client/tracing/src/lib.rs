@@ -26,12 +26,13 @@
 //!
 //! Currently we provide `Log` (default), `Telemetry` variants for `Receiver`
 
+#![warn(missing_docs)]
+
 pub mod logging;
 
 use rustc_hash::FxHashMap;
 use std::fmt;
 use std::time::{Duration, Instant};
-
 use parking_lot::Mutex;
 use serde::ser::{Serialize, Serializer, SerializeMap};
 use tracing::{
@@ -42,107 +43,16 @@ use tracing::{
 	subscriber::Subscriber,
 };
 use tracing_subscriber::{
-	fmt::time::ChronoLocal,
 	CurrentSpan,
-	EnvFilter,
-	layer::{self, Layer, Context},
-	fmt as tracing_fmt,
-	Registry,
+	layer::{Layer, Context},
 };
-
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_tracing::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
-use tracing_subscriber::reload::Handle;
-use once_cell::sync::OnceCell;
-use tracing_subscriber::filter::Directive;
+
+#[doc(hidden)]
+pub use tracing;
 
 const ZERO_DURATION: Duration = Duration::from_nanos(0);
-
-// The layered Subscriber as built up in `init_logger()`.
-// Used in the reload `Handle`.
-type SCSubscriber<
-	N = tracing_fmt::format::DefaultFields,
-	E = logging::EventFormat<ChronoLocal>,
-	W = fn() -> std::io::Stderr
-> = layer::Layered<tracing_fmt::Layer<Registry, N, E, W>, Registry>;
-
-// Handle to reload the tracing log filter
-static FILTER_RELOAD_HANDLE: OnceCell<Handle<EnvFilter, SCSubscriber>> = OnceCell::new();
-// Directives that are defaulted to when resetting the log filter
-static DEFAULT_DIRECTIVES: OnceCell<Mutex<Vec<String>>> = OnceCell::new();
-// Current state of log filter
-static CURRENT_DIRECTIVES: OnceCell<Mutex<Vec<String>>> = OnceCell::new();
-
-/// Initialize FILTER_RELOAD_HANDLE, only possible once
-pub fn set_reload_handle(handle: Handle<EnvFilter, SCSubscriber>) {
-	let _ = FILTER_RELOAD_HANDLE.set(handle);
-}
-
-/// Add log filter directive(s) to the defaults
-///
-/// The syntax is identical to the CLI `<target>=<level>`:
-///
-/// `sync=debug,state=trace`
-pub fn add_default_directives(directives: &str) {
-	DEFAULT_DIRECTIVES.get_or_init(|| Mutex::new(Vec::new())).lock().push(directives.to_owned());
-	add_directives(directives);
-}
-
-/// Add directives to current directives
-pub fn add_directives(directives: &str) {
-	CURRENT_DIRECTIVES.get_or_init(|| Mutex::new(Vec::new())).lock().push(directives.to_owned());
-}
-
-/// Reload the logging filter with the supplied directives added to the existing directives
-pub fn reload_filter() -> Result<(), String> {
-	let mut env_filter = EnvFilter::default();
-	if let Some(current_directives) = CURRENT_DIRECTIVES.get() {
-		// Use join and then split in case any directives added together
-		for directive in current_directives.lock().join(",").split(',').map(|d| d.parse()) {
-			match directive {
-				Ok(dir) => env_filter = env_filter.add_directive(dir),
-				Err(invalid_directive) => {
-					log::warn!(
-						target: "tracing",
-						"Unable to parse directive while setting log filter: {:?}",
-						invalid_directive,
-					);
-				}
-			}
-		}
-	}
-	env_filter = env_filter.add_directive(
-		"sc_tracing=trace"
-			.parse()
-			.expect("provided directive is valid"),
-	);
-	log::debug!(target: "tracing", "Reloading log filter with: {}", env_filter);
-	FILTER_RELOAD_HANDLE.get()
-		.ok_or("No reload handle present".to_string())?
-		.reload(env_filter)
-		.map_err(|e| format!("{}", e))
-}
-
-/// Resets the log filter back to the original state when the node was started.
-///
-/// Includes substrate defaults and CLI supplied directives.
-pub fn reset_log_filter() -> Result<(), String> {
-	*CURRENT_DIRECTIVES
-		.get_or_init(|| Mutex::new(Vec::new())).lock() =
-		DEFAULT_DIRECTIVES.get_or_init(|| Mutex::new(Vec::new())).lock().clone();
-	reload_filter()
-}
-
-/// Parse `Directive` and add to default directives if successful. 
-///
-/// Ensures the supplied directive will be restored when resetting the log filter.
-pub fn parse_default_directive(directive: &str) -> Result<Directive, String> {
-	let dir = directive
-		.parse()
-		.map_err(|_| format!("Unable to parse directive: {}", directive))?;
-	add_default_directives(directive);
-	Ok(dir)
-}
 
 /// Responsible for assigning ids to new spans, which are not re-used.
 pub struct ProfilingLayer {
@@ -178,10 +88,15 @@ pub trait TraceHandler: Send + Sync {
 /// Represents a tracing event, complete with values
 #[derive(Debug)]
 pub struct TraceEvent {
+	/// Name of the event.
 	pub name: &'static str,
+	/// Target of the event.
 	pub target: String,
+	/// Level of the event.
 	pub level: Level,
+	/// Values for this event.
 	pub values: Values,
+	/// Id of the parent tracing event, if any.
 	pub parent_id: Option<Id>,
 }
 
@@ -288,27 +203,6 @@ impl fmt::Display for Values {
 		let string_iter = self.string_values.iter().map(|(k, v)| format!("{}=\"{}\"", k, v));
 		let values = bool_iter.chain(i64_iter).chain(u64_iter).chain(string_iter).collect::<Vec<String>>().join(", ");
 		write!(f, "{}", values)
-	}
-}
-
-impl slog::SerdeValue for Values {
-	fn as_serde(&self) -> &dyn erased_serde::Serialize {
-		self
-	}
-
-	fn to_sendable(&self) -> Box<dyn slog::SerdeValue + Send + 'static> {
-		Box::new(self.clone())
-	}
-}
-
-impl slog::Value for Values {
-	fn serialize(
-		&self,
-		_record: &slog::Record,
-		key: slog::Key,
-		ser: &mut dyn slog::Serializer,
-	) -> slog::Result {
-		ser.emit_serde(key, self)
 	}
 }
 
@@ -510,7 +404,7 @@ impl TraceHandler for TelemetryTraceHandler {
 			"target" => span_datum.target,
 			"time" => span_datum.overall_time.as_nanos(),
 			"id" => span_datum.id.into_u64(),
-			"parent_id" => span_datum.parent_id.map(|i| i.into_u64()),
+			"parent_id" => span_datum.parent_id.as_ref().map(|i| i.into_u64()),
 			"values" => span_datum.values
 		);
 	}
@@ -519,7 +413,7 @@ impl TraceHandler for TelemetryTraceHandler {
 		telemetry!(SUBSTRATE_INFO; "tracing.event";
 			"name" => event.name,
 			"target" => event.target,
-			"parent_id" => event.parent_id.map(|i| i.into_u64()),
+			"parent_id" => event.parent_id.as_ref().map(|i| i.into_u64()),
 			"values" => event.values
 		);
 	}
@@ -546,12 +440,11 @@ mod tests {
 		}
 	}
 
-	type TestSubscriber = tracing_subscriber::layer::Layered<
-		ProfilingLayer,
-		tracing_subscriber::fmt::Subscriber
-	>;
-
-	fn setup_subscriber() -> (TestSubscriber, Arc<Mutex<Vec<SpanDatum>>>, Arc<Mutex<Vec<TraceEvent>>>) {
+	fn setup_subscriber() -> (
+		impl tracing::Subscriber + Send + Sync,
+		Arc<Mutex<Vec<SpanDatum>>>,
+		Arc<Mutex<Vec<TraceEvent>>>
+	) {
 		let spans = Arc::new(Mutex::new(Vec::new()));
 		let events = Arc::new(Mutex::new(Vec::new()));
 		let handler = TestTraceHandler {
@@ -562,7 +455,7 @@ mod tests {
 			Box::new(handler),
 			"test_target",
 		);
-		let subscriber = tracing_subscriber::fmt().finish().with(layer);
+		let subscriber = tracing_subscriber::fmt().with_writer(std::io::sink).finish().with(layer);
 		(subscriber, spans, events)
 	}
 
@@ -666,64 +559,76 @@ mod tests {
 
 	#[test]
 	fn test_parent_id_with_threads() {
-		use std::sync::mpsc;
-		use std::thread;
+		use std::{sync::mpsc, thread};
 
-		let (sub, spans, events) = setup_subscriber();
-		let _sub_guard = tracing::subscriber::set_global_default(sub);
-		let span1 = tracing::info_span!(target: "test_target", "test_span1");
-		let _guard1 = span1.enter();
+		if std::env::var("RUN_TEST_PARENT_ID_WITH_THREADS").is_err() {
+			let executable = std::env::current_exe().unwrap();
+			let mut command = std::process::Command::new(executable);
 
-		let (tx, rx) = mpsc::channel();
-		let handle = thread::spawn(move || {
-			let span2 = tracing::info_span!(target: "test_target", "test_span2");
-			let _guard2 = span2.enter();
-			// emit event
-			tracing::event!(target: "test_target", tracing::Level::INFO, "test_event1");
-			for msg in rx.recv() {
-				if msg == false {
-					break;
+			let res = command
+				.env("RUN_TEST_PARENT_ID_WITH_THREADS", "1")
+				.args(&["--nocapture", "test_parent_id_with_threads"])
+				.output()
+				.unwrap()
+				.status;
+			assert!(res.success());
+		} else {
+			let (sub, spans, events) = setup_subscriber();
+			let _sub_guard = tracing::subscriber::set_global_default(sub);
+			let span1 = tracing::info_span!(target: "test_target", "test_span1");
+			let _guard1 = span1.enter();
+
+			let (tx, rx) = mpsc::channel();
+			let handle = thread::spawn(move || {
+				let span2 = tracing::info_span!(target: "test_target", "test_span2");
+				let _guard2 = span2.enter();
+				// emit event
+				tracing::event!(target: "test_target", tracing::Level::INFO, "test_event1");
+				for msg in rx.recv() {
+					if msg == false {
+						break;
+					}
 				}
+				// gard2 and span2 dropped / exited
+			});
+
+			// wait for Event to be dispatched and stored
+			while events.lock().is_empty() {
+				thread::sleep(Duration::from_millis(1));
 			}
-			// gard2 and span2 dropped / exited
-		});
 
-		// wait for Event to be dispatched and stored
-		while events.lock().is_empty() {
-			thread::sleep(Duration::from_millis(1));
+			// emit new event (will be second item in Vec) while span2 still active in other thread
+			tracing::event!(target: "test_target", tracing::Level::INFO, "test_event2");
+
+			// stop thread and drop span
+			let _ = tx.send(false);
+			let _ = handle.join();
+
+			// wait for Span to be dispatched and stored
+			while spans.lock().is_empty() {
+				thread::sleep(Duration::from_millis(1));
+			}
+			let span2 = spans.lock().remove(0);
+			let event1 = events.lock().remove(0);
+			drop(_guard1);
+			drop(span1);
+
+			// emit event with no parent
+			tracing::event!(target: "test_target", tracing::Level::INFO, "test_event3");
+
+			let span1 = spans.lock().remove(0);
+			let event2 = events.lock().remove(0);
+
+			assert_eq!(event1.values.string_values.get("message").unwrap(), "test_event1");
+			assert_eq!(event2.values.string_values.get("message").unwrap(), "test_event2");
+			assert!(span1.parent_id.is_none());
+			assert!(span2.parent_id.is_none());
+			assert_eq!(span2.id, event1.parent_id.unwrap());
+			assert_eq!(span1.id, event2.parent_id.unwrap());
+			assert_ne!(span2.id, span1.id);
+
+			let event3 = events.lock().remove(0);
+			assert!(event3.parent_id.is_none());
 		}
-
-		// emit new event (will be second item in Vec) while span2 still active in other thread
-		tracing::event!(target: "test_target", tracing::Level::INFO, "test_event2");
-
-		// stop thread and drop span
-		let _ = tx.send(false);
-		let _ = handle.join();
-
-		// wait for Span to be dispatched and stored
-		while spans.lock().is_empty() {
-			thread::sleep(Duration::from_millis(1));
-		}
-		let span2 = spans.lock().remove(0);
-		let event1 = events.lock().remove(0);
-		drop(_guard1);
-		drop(span1);
-
-		// emit event with no parent
-		tracing::event!(target: "test_target", tracing::Level::INFO, "test_event3");
-
-		let span1 = spans.lock().remove(0);
-		let event2 = events.lock().remove(0);
-
-		assert_eq!(event1.values.string_values.get("message").unwrap(), "test_event1");
-		assert_eq!(event2.values.string_values.get("message").unwrap(), "test_event2");
-		assert!(span1.parent_id.is_none());
-		assert!(span2.parent_id.is_none());
-		assert_eq!(span2.id, event1.parent_id.unwrap());
-		assert_eq!(span1.id, event2.parent_id.unwrap());
-		assert_ne!(span2.id, span1.id);
-
-		let event3 = events.lock().remove(0);
-		assert!(event3.parent_id.is_none());
 	}
 }

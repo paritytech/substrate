@@ -44,7 +44,8 @@
 //!
 //! ## Usage
 //!
-//! The default Substrate node template declares the [`Executive`](./struct.Executive.html) type in its library.
+//! The default Substrate node template declares the [`Executive`](./struct.Executive.html) type in
+//! its library.
 //!
 //! ### Example
 //!
@@ -117,7 +118,7 @@
 
 use sp_std::{prelude::*, marker::PhantomData};
 use frame_support::{
-	StorageValue, StorageMap, weights::{GetDispatchInfo, DispatchInfo, DispatchClass},
+	weights::{GetDispatchInfo, DispatchInfo, DispatchClass},
 	traits::{OnInitialize, OnFinalize, OnRuntimeUpgrade, OffchainWorker},
 	dispatch::PostDispatchInfo,
 };
@@ -185,26 +186,58 @@ where
 }
 
 impl<
-	System: frame_system::Config,
-	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
-	Context: Default,
-	UnsignedValidator,
-	AllModules:
-		OnRuntimeUpgrade +
-		OnInitialize<System::BlockNumber> +
-		OnFinalize<System::BlockNumber> +
-		OffchainWorker<System::BlockNumber>,
-	COnRuntimeUpgrade: OnRuntimeUpgrade,
-> Executive<System, Block, Context, UnsignedValidator, AllModules, COnRuntimeUpgrade>
+		System: frame_system::Config,
+		Block: traits::Block<Header = System::Header, Hash = System::Hash>,
+		Context: Default,
+		UnsignedValidator,
+		AllModules: OnRuntimeUpgrade
+			+ OnInitialize<System::BlockNumber>
+			+ OnFinalize<System::BlockNumber>
+			+ OffchainWorker<System::BlockNumber>,
+		COnRuntimeUpgrade: OnRuntimeUpgrade,
+	> Executive<System, Block, Context, UnsignedValidator, AllModules, COnRuntimeUpgrade>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
-	CheckedOf<Block::Extrinsic, Context>:
-		Applyable +
-		GetDispatchInfo,
-	CallOf<Block::Extrinsic, Context>: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>,
+	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
+	CallOf<Block::Extrinsic, Context>:
+		Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
-	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
+	UnsignedValidator: ValidateUnsigned<Call = CallOf<Block::Extrinsic, Context>>,
 {
+	/// Execute all `OnRuntimeUpgrade` of this runtime, and return the aggregate weight.
+	pub fn execute_on_runtime_upgrade() -> frame_support::weights::Weight {
+		let mut weight = 0;
+		weight = weight.saturating_add(
+			<frame_system::Module<System> as OnRuntimeUpgrade>::on_runtime_upgrade(),
+		);
+		weight = weight.saturating_add(COnRuntimeUpgrade::on_runtime_upgrade());
+		weight = weight.saturating_add(<AllModules as OnRuntimeUpgrade>::on_runtime_upgrade());
+
+		weight
+	}
+
+	/// Execute all `OnRuntimeUpgrade` of this runtime, including the pre and post migration checks.
+	///
+	/// This should only be used for testing.
+	#[cfg(feature = "try-runtime")]
+	pub fn try_runtime_upgrade() -> Result<frame_support::weights::Weight, &'static str> {
+		<
+			(frame_system::Module::<System>, COnRuntimeUpgrade, AllModules)
+			as
+			OnRuntimeUpgrade
+		>::pre_upgrade()?;
+
+		let weight = Self::execute_on_runtime_upgrade();
+
+		<
+			(frame_system::Module::<System>, COnRuntimeUpgrade, AllModules)
+			as
+			OnRuntimeUpgrade
+		>::post_upgrade()?;
+
+		Ok(weight)
+	}
+
 	/// Start the execution of a particular block.
 	pub fn initialize_block(header: &System::Header) {
 		sp_io::init_tracing();
@@ -234,10 +267,7 @@ where
 	) {
 		let mut weight = 0;
 		if Self::runtime_upgraded() {
-			// System is not part of `AllModules`, so we need to call this manually.
-			weight = weight.saturating_add(<frame_system::Module::<System> as OnRuntimeUpgrade>::on_runtime_upgrade());
-			weight = weight.saturating_add(COnRuntimeUpgrade::on_runtime_upgrade());
-			weight = weight.saturating_add(<AllModules as OnRuntimeUpgrade>::on_runtime_upgrade());
+			weight = weight.saturating_add(Self::execute_on_runtime_upgrade());
 		}
 		<frame_system::Module<System>>::initialize(
 			block_number,
@@ -261,11 +291,11 @@ where
 
 	/// Returns if the runtime was upgraded since the last time this function was called.
 	fn runtime_upgraded() -> bool {
-		let last = frame_system::LastRuntimeUpgrade::get();
+		let last = frame_system::LastRuntimeUpgrade::<System>::get();
 		let current = <System::Version as frame_support::traits::Get<_>>::get();
 
 		if last.map(|v| v.was_upgraded(&current)).unwrap_or(true) {
-			frame_system::LastRuntimeUpgrade::put(
+			frame_system::LastRuntimeUpgrade::<System>::put(
 				frame_system::LastRuntimeUpgradeInfo::from(current),
 			);
 			true
@@ -320,7 +350,7 @@ where
 	) {
 		extrinsics.into_iter().for_each(|e| if let Err(e) = Self::apply_extrinsic(e) {
 			let err: &'static str = e.into();
-			panic!(err)
+			panic!("{}", err)
 		});
 
 		// post-extrinsics book-keeping
@@ -749,7 +779,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("ba1a82a264b8007e0c04c9ea35e541593daad08b6e2bf7c0a6780a67d1c55018").into(),
+					state_root: hex!("1599922f15b2d5cf75e83370e29e13b96fdf799d917a5b6319736af292f21665").into(),
 					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -998,7 +1028,7 @@ mod tests {
 		new_test_ext(1).execute_with(|| {
 			RUNTIME_VERSION.with(|v| *v.borrow_mut() = Default::default());
 			// It should be added at genesis
-			assert!(frame_system::LastRuntimeUpgrade::exists());
+			assert!(frame_system::LastRuntimeUpgrade::<Runtime>::exists());
 			assert!(!Executive::runtime_upgraded());
 
 			RUNTIME_VERSION.with(|v| *v.borrow_mut() = sp_version::RuntimeVersion {
@@ -1008,7 +1038,7 @@ mod tests {
 			assert!(Executive::runtime_upgraded());
 			assert_eq!(
 				Some(LastRuntimeUpgradeInfo { spec_version: 1.into(), spec_name: "".into() }),
-				frame_system::LastRuntimeUpgrade::get(),
+				frame_system::LastRuntimeUpgrade::<Runtime>::get(),
 			);
 
 			RUNTIME_VERSION.with(|v| *v.borrow_mut() = sp_version::RuntimeVersion {
@@ -1019,7 +1049,7 @@ mod tests {
 			assert!(Executive::runtime_upgraded());
 			assert_eq!(
 				Some(LastRuntimeUpgradeInfo { spec_version: 1.into(), spec_name: "test".into() }),
-				frame_system::LastRuntimeUpgrade::get(),
+				frame_system::LastRuntimeUpgrade::<Runtime>::get(),
 			);
 
 			RUNTIME_VERSION.with(|v| *v.borrow_mut() = sp_version::RuntimeVersion {
@@ -1030,11 +1060,11 @@ mod tests {
 			});
 			assert!(!Executive::runtime_upgraded());
 
-			frame_system::LastRuntimeUpgrade::take();
+			frame_system::LastRuntimeUpgrade::<Runtime>::take();
 			assert!(Executive::runtime_upgraded());
 			assert_eq!(
 				Some(LastRuntimeUpgradeInfo { spec_version: 1.into(), spec_name: "test".into() }),
-				frame_system::LastRuntimeUpgrade::get(),
+				frame_system::LastRuntimeUpgrade::<Runtime>::get(),
 			);
 		})
 	}

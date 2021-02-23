@@ -68,7 +68,7 @@ impl sc_network_gossip::Network<Block> for TestNetwork {
 		let _ = self.sender.unbounded_send(Event::WriteNotification(who, message));
 	}
 
-	fn announce(&self, block: Hash, _associated_data: Vec<u8>) {
+	fn announce(&self, block: Hash, _associated_data: Option<Vec<u8>>) {
 		let _ = self.sender.unbounded_send(Event::Announce(block));
 	}
 }

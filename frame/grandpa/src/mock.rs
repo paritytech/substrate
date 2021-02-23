@@ -19,11 +19,11 @@
 
 #![cfg(test)]
 
-use crate::{AuthorityId, AuthorityList, ConsensusLog, Module, Config};
+use crate::{AuthorityId, AuthorityList, ConsensusLog, Config, self as pallet_grandpa};
 use ::grandpa as finality_grandpa;
 use codec::Encode;
 use frame_support::{
-	impl_outer_dispatch, impl_outer_event, impl_outer_origin, parameter_types,
+	parameter_types,
 	traits::{KeyOwnerProofSystem, OnFinalize, OnInitialize},
 	weights::Weight,
 };
@@ -40,37 +40,33 @@ use sp_runtime::{
 	DigestItem, Perbill,
 };
 use sp_staking::SessionIndex;
+use pallet_session::historical as pallet_session_historical;
 
-impl_outer_origin! {
-	pub enum Origin for Test {}
-}
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
 
-impl_outer_dispatch! {
-	pub enum Call for Test where origin: Origin {
-		pallet_grandpa::Grandpa,
-		pallet_staking::Staking,
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
+		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
+		Staking: pallet_staking::{Module, Call, Config<T>, Storage, Event<T>, ValidateUnsigned},
+		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
+		Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event, ValidateUnsigned},
+		Offences: pallet_offences::{Module, Call, Storage, Event},
+		Historical: pallet_session_historical::{Module},
 	}
-}
+);
 
 impl_opaque_keys! {
 	pub struct TestSessionKeys {
 		pub grandpa_authority: super::Module<Test>,
 	}
 }
-
-impl_outer_event! {
-	pub enum TestEvent for Test {
-		frame_system<T>,
-		pallet_balances<T>,
-		pallet_grandpa,
-		pallet_offences,
-		pallet_session,
-		pallet_staking<T>,
-	}
-}
-
-#[derive(Clone, Eq, PartialEq)]
-pub struct Test;
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
@@ -92,10 +88,10 @@ impl frame_system::Config for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = TestEvent;
+	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
-	type PalletInfo = ();
+	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u128>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
@@ -119,7 +115,7 @@ parameter_types! {
 
 /// Custom `SessionHandler` since we use `TestSessionKeys` as `Keys`.
 impl pallet_session::Config for Test {
-	type Event = TestEvent;
+	type Event = Event;
 	type ValidatorId = u64;
 	type ValidatorIdOf = pallet_staking::StashOf<Self>;
 	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
@@ -155,7 +151,7 @@ impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type Balance = u128;
 	type DustRemoval = ();
-	type Event = TestEvent;
+	type Event = Event;
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
 	type WeightInfo = ();
@@ -197,7 +193,7 @@ parameter_types! {
 impl pallet_staking::Config for Test {
 	type RewardRemainder = ();
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
-	type Event = TestEvent;
+	type Event = Event;
 	type Currency = Balances;
 	type Slash = ();
 	type Reward = ();
@@ -224,14 +220,19 @@ parameter_types! {
 }
 
 impl pallet_offences::Config for Test {
-	type Event = TestEvent;
+	type Event = Event;
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
 	type WeightSoftLimit = OffencesWeightSoftLimit;
 }
 
+parameter_types! {
+	pub const ReportLongevity: u64 =
+		BondingDuration::get() as u64 * SessionsPerEra::get() as u64 * Period::get();
+}
+
 impl Config for Test {
-	type Event = TestEvent;
+	type Event = Event;
 	type Call = Call;
 
 	type KeyOwnerProofSystem = Historical;
@@ -244,23 +245,11 @@ impl Config for Test {
 		AuthorityId,
 	)>>::IdentificationTuple;
 
-	type HandleEquivocation = super::EquivocationHandler<Self::KeyOwnerIdentification, Offences>;
+	type HandleEquivocation =
+		super::EquivocationHandler<Self::KeyOwnerIdentification, Offences, ReportLongevity>;
 
 	type WeightInfo = ();
 }
-
-mod pallet_grandpa {
-	pub use crate::Event;
-}
-
-pub type Balances = pallet_balances::Module<Test>;
-pub type Historical = pallet_session::historical::Module<Test>;
-pub type Offences = pallet_offences::Module<Test>;
-pub type Session = pallet_session::Module<Test>;
-pub type Staking = pallet_staking::Module<Test>;
-pub type System = frame_system::Module<Test>;
-pub type Timestamp = pallet_timestamp::Module<Test>;
-pub type Grandpa = Module<Test>;
 
 pub fn grandpa_log(log: ConsensusLog<u64>) -> DigestItem<H256> {
 	DigestItem::Consensus(GRANDPA_ENGINE_ID, log.encode())
@@ -287,6 +276,14 @@ pub fn new_test_ext_raw_authorities(authorities: AuthorityList) -> sp_io::TestEx
 		.build_storage::<Test>()
 		.unwrap();
 
+	let balances: Vec<_> = (0..authorities.len())
+		.map(|i| (i as u64, 10_000_000))
+		.collect();
+
+	pallet_balances::GenesisConfig::<Test> { balances }
+		.assimilate_storage(&mut t)
+		.unwrap();
+
 	// stashes are the index.
 	let session_keys: Vec<_> = authorities
 		.iter()
@@ -302,6 +299,12 @@ pub fn new_test_ext_raw_authorities(authorities: AuthorityList) -> sp_io::TestEx
 		})
 		.collect();
 
+	// NOTE: this will initialize the grandpa authorities
+	// through OneSessionHandler::on_genesis_session
+	pallet_session::GenesisConfig::<Test> { keys: session_keys }
+		.assimilate_storage(&mut t)
+		.unwrap();
+
 	// controllers are the index + 1000
 	let stakers: Vec<_> = (0..authorities.len())
 		.map(|i| {
@@ -313,20 +316,6 @@ pub fn new_test_ext_raw_authorities(authorities: AuthorityList) -> sp_io::TestEx
 			)
 		})
 		.collect();
-
-	let balances: Vec<_> = (0..authorities.len())
-		.map(|i| (i as u64, 10_000_000))
-		.collect();
-
-	// NOTE: this will initialize the grandpa authorities
-	// through OneSessionHandler::on_genesis_session
-	pallet_session::GenesisConfig::<Test> { keys: session_keys }
-		.assimilate_storage(&mut t)
-		.unwrap();
-
-	pallet_balances::GenesisConfig::<Test> { balances }
-		.assimilate_storage(&mut t)
-		.unwrap();
 
 	let staking_config = pallet_staking::GenesisConfig::<Test> {
 		stakers,

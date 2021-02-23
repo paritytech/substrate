@@ -17,7 +17,6 @@
 
 use codec::{Encode, Decode, Joiner};
 use frame_support::{
-	StorageValue, StorageMap,
 	traits::Currency,
 	weights::{GetDispatchInfo, DispatchInfo, DispatchClass},
 };
@@ -32,7 +31,7 @@ use frame_system::{self, EventRecord, Phase};
 use node_runtime::{
 	Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
 	System, TransactionPayment, Event,
-	constants::currency::*,
+	constants::{time::SLOT_DURATION, currency::*},
 };
 use node_primitives::{Balance, Hash};
 use wat;
@@ -76,6 +75,7 @@ fn set_heap_pages<E: Externalities>(ext: &mut E, heap_pages: u64) {
 }
 
 fn changes_trie_block() -> (Vec<u8>, Hash) {
+	let time = 42 * 1000;
 	construct_block(
 		&mut new_test_ext(compact_code_unwrap(), true),
 		1,
@@ -83,13 +83,14 @@ fn changes_trie_block() -> (Vec<u8>, Hash) {
 		vec![
 			CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(pallet_timestamp::Call::set(42 * 1000)),
+				function: Call::Timestamp(pallet_timestamp::Call::set(time)),
 			},
 			CheckedExtrinsic {
 				signed: Some((alice(), signed_extra(0, 0))),
 				function: Call::Balances(pallet_balances::Call::transfer(bob().into(), 69 * DOLLARS)),
 			},
-		]
+		],
+		(time / SLOT_DURATION).into(),
 	)
 }
 
@@ -98,6 +99,7 @@ fn changes_trie_block() -> (Vec<u8>, Hash) {
 /// from block1's execution to block2 to derive the correct storage_root.
 fn blocks() -> ((Vec<u8>, Hash), (Vec<u8>, Hash)) {
 	let mut t = new_test_ext(compact_code_unwrap(), false);
+	let time1 = 42 * 1000;
 	let block1 = construct_block(
 		&mut t,
 		1,
@@ -105,14 +107,16 @@ fn blocks() -> ((Vec<u8>, Hash), (Vec<u8>, Hash)) {
 		vec![
 			CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(pallet_timestamp::Call::set(42 * 1000)),
+				function: Call::Timestamp(pallet_timestamp::Call::set(time1)),
 			},
 			CheckedExtrinsic {
 				signed: Some((alice(), signed_extra(0, 0))),
 				function: Call::Balances(pallet_balances::Call::transfer(bob().into(), 69 * DOLLARS)),
 			},
-		]
+		],
+		(time1 / SLOT_DURATION).into(),
 	);
+	let time2 = 52 * 1000;
 	let block2 = construct_block(
 		&mut t,
 		2,
@@ -120,7 +124,7 @@ fn blocks() -> ((Vec<u8>, Hash), (Vec<u8>, Hash)) {
 		vec![
 			CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(pallet_timestamp::Call::set(52 * 1000)),
+				function: Call::Timestamp(pallet_timestamp::Call::set(time2)),
 			},
 			CheckedExtrinsic {
 				signed: Some((bob(), signed_extra(0, 0))),
@@ -130,12 +134,13 @@ fn blocks() -> ((Vec<u8>, Hash), (Vec<u8>, Hash)) {
 				signed: Some((alice(), signed_extra(1, 0))),
 				function: Call::Balances(pallet_balances::Call::transfer(bob().into(), 15 * DOLLARS)),
 			}
-		]
+		],
+		(time2 / SLOT_DURATION).into(),
 	);
 
 	// session change => consensus authorities change => authorities change digest item appears
 	let digest = Header::decode(&mut &block2.0[..]).unwrap().digest;
-	assert_eq!(digest.logs().len(), 0);
+	assert_eq!(digest.logs().len(), 1 /* Just babe slot */);
 
 	(block1, block2)
 }
@@ -154,7 +159,8 @@ fn block_with_size(time: u64, nonce: u32, size: usize) -> (Vec<u8>, Hash) {
 				signed: Some((alice(), signed_extra(nonce, 0))),
 				function: Call::System(frame_system::Call::remark(vec![0; size])),
 			}
-		]
+		],
+		(time * 1000 / SLOT_DURATION).into(),
 	)
 }
 
@@ -192,7 +198,7 @@ fn bad_extrinsic_with_native_equivalent_code_gives_error() {
 	let mut t = new_test_ext(compact_code_unwrap(), false);
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
-		(0u32, 0u32, 69u128, 0u128, 0u128, 0u128).encode()
+		(0u32, 0u32, 0u32, 69u128, 0u128, 0u128, 0u128).encode()
 	);
 	t.insert(<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec(), 69_u128.encode());
 	t.insert(<frame_system::BlockHash<Runtime>>::hashed_key_for(0), vec![0u8; 32]);
@@ -221,11 +227,11 @@ fn successful_execution_with_native_equivalent_code_gives_ok() {
 	let mut t = new_test_ext(compact_code_unwrap(), false);
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
-		(0u32, 0u32, 111 * DOLLARS, 0u128, 0u128, 0u128).encode()
+		(0u32, 0u32, 0u32, 111 * DOLLARS, 0u128, 0u128, 0u128).encode()
 	);
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(bob()),
-		(0u32, 0u32, 0 * DOLLARS, 0u128, 0u128, 0u128).encode()
+		(0u32, 0u32, 0u32, 0 * DOLLARS, 0u128, 0u128, 0u128).encode()
 	);
 	t.insert(
 		<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec(),
@@ -264,11 +270,11 @@ fn successful_execution_with_foreign_code_gives_ok() {
 	let mut t = new_test_ext(bloaty_code_unwrap(), false);
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
-		(0u32, 0u32, 111 * DOLLARS, 0u128, 0u128, 0u128).encode()
+		(0u32, 0u32, 0u32, 111 * DOLLARS, 0u128, 0u128, 0u128).encode()
 	);
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(bob()),
-		(0u32, 0u32, 0 * DOLLARS, 0u128, 0u128, 0u128).encode()
+		(0u32, 0u32, 0u32, 0 * DOLLARS, 0u128, 0u128, 0u128).encode()
 	);
 	t.insert(
 		<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec(),
@@ -329,14 +335,14 @@ fn full_native_block_import_works() {
 		let events = vec![
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
+				event: Event::frame_system(frame_system::Event::ExtrinsicSuccess(
 					DispatchInfo { weight: timestamp_weight, class: DispatchClass::Mandatory, ..Default::default() }
 				)),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::pallet_balances(pallet_balances::RawEvent::Transfer(
+				event: Event::pallet_balances(pallet_balances::Event::Transfer(
 					alice().into(),
 					bob().into(),
 					69 * DOLLARS,
@@ -350,7 +356,7 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
+				event: Event::frame_system(frame_system::Event::ExtrinsicSuccess(
 					DispatchInfo { weight: transfer_weight, ..Default::default() }
 				)),
 				topics: vec![],
@@ -381,7 +387,7 @@ fn full_native_block_import_works() {
 		let events = vec![
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
+				event: Event::frame_system(frame_system::Event::ExtrinsicSuccess(
 					DispatchInfo { weight: timestamp_weight, class: DispatchClass::Mandatory, ..Default::default() }
 				)),
 				topics: vec![],
@@ -389,7 +395,7 @@ fn full_native_block_import_works() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
 				event: Event::pallet_balances(
-					pallet_balances::RawEvent::Transfer(
+					pallet_balances::Event::Transfer(
 						bob().into(),
 						alice().into(),
 						5 * DOLLARS,
@@ -404,7 +410,7 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
+				event: Event::frame_system(frame_system::Event::ExtrinsicSuccess(
 					DispatchInfo { weight: transfer_weight, ..Default::default() }
 				)),
 				topics: vec![],
@@ -412,7 +418,7 @@ fn full_native_block_import_works() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(2),
 				event: Event::pallet_balances(
-					pallet_balances::RawEvent::Transfer(
+					pallet_balances::Event::Transfer(
 						alice().into(),
 						bob().into(),
 						15 * DOLLARS,
@@ -427,7 +433,7 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(2),
-				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
+				event: Event::frame_system(frame_system::Event::ExtrinsicSuccess(
 					DispatchInfo { weight: transfer_weight, ..Default::default() }
 				)),
 				topics: vec![],
@@ -588,8 +594,9 @@ fn deploying_wasm_contract_should_work() {
 		&[],
 	);
 
-	let subsistence = pallet_contracts::ConfigCache::<Runtime>::subsistence_threshold_uncached();
+	let subsistence = pallet_contracts::Module::<Runtime>::subsistence_threshold();
 
+	let time = 42 * 1000;
 	let b = construct_block(
 		&mut new_test_ext(compact_code_unwrap(), false),
 		1,
@@ -597,28 +604,22 @@ fn deploying_wasm_contract_should_work() {
 		vec![
 			CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(pallet_timestamp::Call::set(42 * 1000)),
+				function: Call::Timestamp(pallet_timestamp::Call::set(time)),
 			},
 			CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(0, 0))),
 				function: Call::Contracts(
-					pallet_contracts::Call::put_code::<Runtime>(transfer_code)
-				),
-			},
-			CheckedExtrinsic {
-				signed: Some((charlie(), signed_extra(1, 0))),
-				function: Call::Contracts(
-					pallet_contracts::Call::instantiate::<Runtime>(
-						1 * DOLLARS + subsistence,
+					pallet_contracts::Call::instantiate_with_code::<Runtime>(
+						1000 * DOLLARS + subsistence,
 						500_000_000,
-						transfer_ch,
+						transfer_code,
 						Vec::new(),
 						Vec::new(),
 					)
 				),
 			},
 			CheckedExtrinsic {
-				signed: Some((charlie(), signed_extra(2, 0))),
+				signed: Some((charlie(), signed_extra(1, 0))),
 				function: Call::Contracts(
 					pallet_contracts::Call::call::<Runtime>(
 						sp_runtime::MultiAddress::Id(addr.clone()),
@@ -628,7 +629,8 @@ fn deploying_wasm_contract_should_work() {
 					)
 				),
 			},
-		]
+		],
+		(time / SLOT_DURATION).into(),
 	);
 
 	let mut t = new_test_ext(compact_code_unwrap(), false);
@@ -702,7 +704,7 @@ fn panic_execution_gives_error() {
 	let mut t = new_test_ext(bloaty_code_unwrap(), false);
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
-		(0u32, 0u32, 0 * DOLLARS, 0u128, 0u128, 0u128).encode()
+		(0u32, 0u32, 0u32, 0 * DOLLARS, 0u128, 0u128, 0u128).encode()
 	);
 	t.insert(<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec(), 0_u128.encode());
 	t.insert(<frame_system::BlockHash<Runtime>>::hashed_key_for(0), vec![0u8; 32]);
@@ -731,11 +733,11 @@ fn successful_execution_gives_ok() {
 	let mut t = new_test_ext(compact_code_unwrap(), false);
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
-		(0u32, 0u32, 111 * DOLLARS, 0u128, 0u128, 0u128).encode()
+		(0u32, 0u32, 0u32, 111 * DOLLARS, 0u128, 0u128, 0u128).encode()
 	);
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(bob()),
-		(0u32, 0u32, 0 * DOLLARS, 0u128, 0u128, 0u128).encode()
+		(0u32, 0u32, 0u32, 0 * DOLLARS, 0u128, 0u128, 0u128).encode()
 	);
 	t.insert(
 		<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec(),

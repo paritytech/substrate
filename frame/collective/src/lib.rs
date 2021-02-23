@@ -40,7 +40,7 @@
 //! If there are not, or if no prime is set, then the motion is dropped without being executed.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![recursion_limit="128"]
+#![recursion_limit = "128"]
 
 use sp_std::{prelude::*, result};
 use sp_core::u32_trait::Value as U32;
@@ -840,6 +840,10 @@ impl<T: Config<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
 	fn set_prime(prime: Option<T::AccountId>) {
 		Prime::<T, I>::set(prime);
 	}
+
+	fn get_prime() -> Option<T::AccountId> {
+		Prime::<T, I>::get()
+	}
 }
 
 impl<T: Config<I>, I: Instance> InitializeMembers<T::AccountId> for Module<T, I> {
@@ -961,7 +965,7 @@ mod tests {
 	use hex_literal::hex;
 	use sp_core::H256;
 	use sp_runtime::{
-		traits::{BlakeTwo256, IdentityLookup, Block as BlockT}, testing::Header,
+		traits::{BlakeTwo256, IdentityLookup}, testing::Header,
 		BuildStorage,
 	};
 	use crate as collective;
@@ -991,7 +995,7 @@ mod tests {
 		type Event = Event;
 		type BlockHashCount = BlockHashCount;
 		type Version = ();
-		type PalletInfo = ();
+		type PalletInfo = PalletInfo;
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
