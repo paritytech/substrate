@@ -42,7 +42,7 @@ pub const INSTR_BENCHMARK_BATCH_SIZE: u32 = 1_000;
 /// Definition of the cost schedule and other parameterizations for wasm vm.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(bound(serialize = "", deserialize = "")))]
-#[derive(Clone, Encode, Decode, PartialEq, Eq, ScheduleDebug)]
+#[derive(Clone, Encode, Decode, PartialEq, Eq, ScheduleDebug, scale_info::TypeInfo)]
 pub struct Schedule<T: Config> {
 	/// Version of the schedule.
 	pub version: u32,
@@ -134,7 +134,7 @@ impl Limits {
 ///    that use them as supporting instructions. Supporting means mainly pushing arguments
 ///    and dropping return values in order to maintain a valid module.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Clone, Encode, Decode, PartialEq, Eq, WeightDebug)]
+#[derive(Clone, Encode, Decode, PartialEq, Eq, WeightDebug, scale_info::TypeInfo)]
 pub struct InstructionWeights<T: Config> {
 	pub i64const: u32,
 	pub i64load: u32,
@@ -193,7 +193,7 @@ pub struct InstructionWeights<T: Config> {
 
 /// Describes the weight for each imported function that a contract is allowed to call.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Clone, Encode, Decode, PartialEq, Eq, WeightDebug)]
+#[derive(Clone, Encode, Decode, PartialEq, Eq, WeightDebug, scale_info::TypeInfo)]
 pub struct HostFnWeights<T: Config> {
 	/// Weight of calling `seal_caller`.
 	pub caller: Weight,

@@ -387,7 +387,7 @@ impl<T:
 pub trait Hash: 'static + MaybeSerializeDeserialize + Debug + Clone + Eq + PartialEq + Hasher<Out = <Self as Hash>::Output> {
 	/// The hash type produced.
 	type Output: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash
-		+ AsRef<[u8]> + AsMut<[u8]> + Copy + Default + Encode + Decode;
+		+ AsRef<[u8]> + AsMut<[u8]> + Copy + Default + Encode + Decode + scale_info::TypeInfo;
 
 	/// Produce the hash of some byte-slice.
 	fn hash(s: &[u8]) -> Self::Output {
@@ -552,7 +552,7 @@ pub trait Header:
 	/// Header hash type
 	type Hash: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash + Ord
 		+ Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]>
-		+ AsMut<[u8]> + MaybeMallocSizeOf;
+		+ AsMut<[u8]> + MaybeMallocSizeOf + scale_info::TypeInfo;
 	/// Hashing algorithm
 	type Hashing: Hash<Output = Self::Hash>;
 
@@ -608,7 +608,7 @@ pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + May
 	/// Block hash type.
 	type Hash: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash + Ord
 		+ Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>
-		+ MaybeMallocSizeOf;
+		+ MaybeMallocSizeOf + scale_info::TypeInfo;
 
 	/// Returns a reference to the header.
 	fn header(&self) -> &Self::Header;

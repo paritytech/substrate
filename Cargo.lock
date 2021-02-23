@@ -1632,6 +1632,17 @@ dependencies = [
 [[package]]
 name = "fixed-hash"
 version = "0.7.0"
+source = "git+https://github.com/paritytech/parity-common#db7c985b6dfe11cb7ef44072cbcaeb7022ae2ca4"
+dependencies = [
+ "byteorder",
+ "rand 0.8.3",
+ "rustc-hex",
+ "static_assertions",
+]
+
+[[package]]
+name = "fixed-hash"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cfcf0ed7fe52a17a03854ec54a9f76d6d84508d1c0e66bc1793301c73fc8493c"
 dependencies = [
@@ -2595,6 +2606,14 @@ dependencies = [
 [[package]]
 name = "impl-codec"
 version = "0.5.0"
+source = "git+https://github.com/paritytech/parity-common#db7c985b6dfe11cb7ef44072cbcaeb7022ae2ca4"
+dependencies = [
+ "parity-scale-codec",
+]
+
+[[package]]
+name = "impl-codec"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df170efa359aebdd5cb7fe78edcc67107748e4737bdca8a8fb40d15ea7a877ed"
 dependencies = [
@@ -3156,7 +3175,7 @@ dependencies = [
  "rand 0.7.3",
  "sha2 0.9.3",
  "smallvec 1.6.1",
- "uint",
+ "uint 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "unsigned-varint 0.7.0",
  "void",
  "wasm-timer",
@@ -4635,6 +4654,7 @@ dependencies = [
  "pwasm-utils 0.16.0",
  "rand 0.7.3",
  "rand_pcg",
+ "scale-info",
  "serde",
  "sp-core",
  "sp-io",
@@ -5488,7 +5508,7 @@ dependencies = [
  "impl-trait-for-tuples",
  "parity-util-mem-derive",
  "parking_lot 0.11.1",
- "primitive-types",
+ "primitive-types 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "smallvec 1.6.1",
  "winapi 0.3.9",
 ]
@@ -5918,13 +5938,23 @@ dependencies = [
 [[package]]
 name = "primitive-types"
 version = "0.9.0"
+source = "git+https://github.com/paritytech/parity-common#db7c985b6dfe11cb7ef44072cbcaeb7022ae2ca4"
+dependencies = [
+ "fixed-hash 0.7.0 (git+https://github.com/paritytech/parity-common)",
+ "impl-codec 0.5.0 (git+https://github.com/paritytech/parity-common)",
+ "uint 0.9.0 (git+https://github.com/paritytech/parity-common)",
+]
+
+[[package]]
+name = "primitive-types"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2415937401cb030a2a0a4d922483f945fa068f52a7dbb22ce0fe5f2b6f6adace"
 dependencies = [
- "fixed-hash",
- "impl-codec",
+ "fixed-hash 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "impl-codec 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "impl-serde",
- "uint",
+ "uint 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -8319,7 +8349,7 @@ dependencies = [
  "integer-sqrt",
  "num-traits",
  "parity-scale-codec",
- "primitive-types",
+ "primitive-types 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.7.3",
  "scale-info",
  "serde",
@@ -8335,7 +8365,7 @@ dependencies = [
  "honggfuzz",
  "num-bigint",
  "num-traits",
- "primitive-types",
+ "primitive-types 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-arithmetic",
 ]
 
@@ -8511,7 +8541,7 @@ dependencies = [
  "parity-util-mem",
  "parking_lot 0.11.1",
  "pretty_assertions",
- "primitive-types",
+ "primitive-types 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "regex",
@@ -8744,7 +8774,7 @@ version = "3.0.0"
 dependencies = [
  "impl-trait-for-tuples",
  "parity-scale-codec",
- "primitive-types",
+ "primitive-types 0.9.0 (git+https://github.com/paritytech/parity-common)",
  "rustversion",
  "sp-core",
  "sp-externalities",
@@ -10051,6 +10081,17 @@ name = "ucd-trie"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56dee185309b50d1f11bfedef0fe6d036842e3fb77413abef29f8f8d1c5d4c1c"
+
+[[package]]
+name = "uint"
+version = "0.9.0"
+source = "git+https://github.com/paritytech/parity-common#db7c985b6dfe11cb7ef44072cbcaeb7022ae2ca4"
+dependencies = [
+ "byteorder",
+ "crunchy",
+ "hex",
+ "static_assertions",
+]
 
 [[package]]
 name = "uint"
