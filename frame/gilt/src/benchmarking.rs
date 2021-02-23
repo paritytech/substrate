@@ -80,7 +80,6 @@ benchmarks! {
 		// bids taken
 		let b in 1..T::MaxQueueLen::get();
 
-		let max = T::MaxQueueLen::get();
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, T::MinFreeze::get() * BalanceOf::<T>::from(b + 1));
 
