@@ -1554,7 +1554,52 @@ pub trait OnGenesis {
 }
 
 /// Prefix to be used (optionally) for implementing [`OnRuntimeUpgrade::storage_key`].
+#[cfg(feature = "try-runtime")]
 pub const ON_RUNTIME_UPGRADE_PREFIX: &[u8] = b"__ON_RUNTIME_UPGRADE__";
+
+/// Some helper functions for [`OnRuntimeUpgrade`] during `try-runtime` testing.
+#[cfg(feature = "try-runtime")]
+pub trait OnRuntimeUpgradeHelpersExt {
+	/// Generate a storage key unique to this runtime upgrade.
+	///
+	/// This can be used to communicate data from pre-upgrade to post-upgrade state and check
+	/// them. See [`set_temp_storage`] and [`get_temp_storage`].
+	#[cfg(feature = "try-runtime")]
+	fn storage_key(ident: &str) -> [u8; 32] {
+		let prefix = sp_io::hashing::twox_128(ON_RUNTIME_UPGRADE_PREFIX);
+		let ident = sp_io::hashing::twox_128(ident.as_bytes());
+
+		let mut final_key = [0u8; 32];
+		final_key[..16].copy_from_slice(&prefix);
+		final_key[16..].copy_from_slice(&ident);
+
+		final_key
+	}
+
+	/// Get temporary storage data written by [`set_temp_storage`].
+	///
+	/// Returns `None` if either the data is unavailable or un-decodable.
+	///
+	/// A `at` storage identifier must be provided to indicate where the storage is being read from.
+	#[cfg(feature = "try-runtime")]
+	fn get_temp_storage<T: Decode>(at: &str) -> Option<T> {
+		sp_io::storage::get(&Self::storage_key(at))
+			.and_then(|bytes| Decode::decode(&mut &*bytes).ok())
+	}
+
+	/// Write some temporary data to a specific storage that can be read (potentially in
+	/// post-upgrade hook) via [`get_temp_storage`].
+	///
+	/// A `at` storage identifier must be provided to indicate where the storage is being written
+	/// to.
+	#[cfg(feature = "try-runtime")]
+	fn set_temp_storage<T: Encode>(data: T, at: &str) {
+		sp_io::storage::set(&Self::storage_key(at), &data.encode());
+	}
+}
+
+#[cfg(feature = "try-runtime")]
+impl<U: OnRuntimeUpgrade> OnRuntimeUpgradeHelpersExt for U {}
 
 /// The runtime upgrade trait.
 ///
@@ -1572,43 +1617,6 @@ pub trait OnRuntimeUpgrade {
 	/// Return the non-negotiable weight consumed for runtime upgrade.
 	fn on_runtime_upgrade() -> crate::weights::Weight {
 		0
-	}
-
-	/// Generate a storage key unique to this runtime upgrade.
-	///
-	/// This can be used to communicate data from pre-upgrade to post-upgrade state and check
-	/// them. See [`set_temp_storage`] and [`get_temp_storage`].
-	#[cfg(feature = "try-runtime")]
-	fn storage_key(ident: &str) -> [u8; 32] {
-		let prefix = sp_io::hashing::twox_128(ON_RUNTIME_UPGRADE_PREFIX);
-		let ident = sp_io::hashing::twox_128(ident.as_bytes());
-
-		let mut final_key = [0u8; 32];
-		final_key[..16].copy_from_slice(&prefix);
-		final_key[16..].copy_from_slice(&ident);
-
-		final_key
-	}
-
-	/// Write some temporary data to a specific storage that can be read (potentially in
-	/// post-upgrade hook) via [`get_temp_storage`].
-	///
-	/// A `at` storage identifier must be provided to indicate where the storage is being written
-	/// to.
-	#[cfg(feature = "try-runtime")]
-	fn set_temp_storage<T: Encode>(data: T, at: &str) {
-		sp_io::storage::set(&Self::storage_key(at), &data.encode());
-	}
-
-	/// Get temporary storage data written by [`set_temp_storage`].
-	///
-	/// Returns `None` if either the data is unavailable or un-decodable.
-	///
-	/// A `at` storage identifier must be provided to indicate where the storage is being read from.
-	#[cfg(feature = "try-runtime")]
-	fn get_temp_storage<T: Decode>(at: &str) -> Option<T> {
-		sp_io::storage::get(&Self::storage_key(at))
-			.and_then(|bytes| Decode::decode(&mut &*bytes).ok())
 	}
 
 	/// Execute some pre-checks prior to a runtime upgrade.
@@ -1648,12 +1656,6 @@ impl OnRuntimeUpgrade for Tuple {
 		let mut result = Ok(());
 		for_tuples!( #( result = result.and(Tuple::post_upgrade()); )* );
 		result
-	}
-
-	#[cfg(feature = "try-runtime")]
-	fn storage_key(ident: &str) -> [u8; 32] {
-		// We will never use the key on a tuple, effectively _don't care_.
-		unreachable!()
 	}
 }
 
