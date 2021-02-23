@@ -326,7 +326,7 @@ mod tests {
 		{
 			let mut ext = ext.ext();
 
-			assert!(!ext.kill_child_storage(&child_info, Some(2)), "Should not delete all keys");
+			assert!(!ext.kill_child_storage(&child_info, Some(2)).0, "Should not delete all keys");
 
 			assert!(ext.child_storage(&child_info, &b"doe"[..]).is_none());
 			assert!(ext.child_storage(&child_info, &b"dog"[..]).is_none());

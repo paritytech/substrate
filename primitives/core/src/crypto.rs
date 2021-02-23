@@ -596,13 +596,19 @@ pub fn set_default_ss58_version(version: Ss58AddressFormat) {
 }
 
 #[cfg(feature = "std")]
+lazy_static::lazy_static! {
+	static ref SS58_REGEX: Regex = Regex::new(r"^(?P<ss58>[\w\d ]+)?(?P<path>(//?[^/]+)*)$")
+		.expect("constructed from known-good static value; qed");
+	static ref SECRET_PHRASE_REGEX: Regex = Regex::new(r"^(?P<phrase>[\d\w ]+)?(?P<path>(//?[^/]+)*)(///(?P<password>.*))?$")
+		.expect("constructed from known-good static value; qed");
+	static ref JUNCTION_REGEX: Regex = Regex::new(r"/(/?[^/]+)")
+		.expect("constructed from known-good static value; qed");
+}
+
+#[cfg(feature = "std")]
 impl<T: Sized + AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 	fn from_string(s: &str) -> Result<Self, PublicError> {
-		let re = Regex::new(r"^(?P<ss58>[\w\d ]+)?(?P<path>(//?[^/]+)*)$")
-			.expect("constructed from known-good static value; qed");
-		let cap = re.captures(s).ok_or(PublicError::InvalidFormat)?;
-		let re_junction = Regex::new(r"/(/?[^/]+)")
-			.expect("constructed from known-good static value; qed");
+		let cap = SS58_REGEX.captures(s).ok_or(PublicError::InvalidFormat)?;
 		let s = cap.name("ss58")
 			.map(|r| r.as_str())
 			.unwrap_or(DEV_ADDRESS);
@@ -621,7 +627,7 @@ impl<T: Sized + AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 		if cap["path"].is_empty() {
 			Ok(addr)
 		} else {
-			let path = re_junction.captures_iter(&cap["path"])
+			let path = JUNCTION_REGEX.captures_iter(&cap["path"])
 				.map(|f| DeriveJunction::from(&f[1]));
 			addr.derive(path)
 				.ok_or(PublicError::InvalidPath)
@@ -629,11 +635,7 @@ impl<T: Sized + AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 	}
 
 	fn from_string_with_version(s: &str) -> Result<(Self, Ss58AddressFormat), PublicError> {
-		let re = Regex::new(r"^(?P<ss58>[\w\d ]+)?(?P<path>(//?[^/]+)*)$")
-			.expect("constructed from known-good static value; qed");
-		let cap = re.captures(s).ok_or(PublicError::InvalidFormat)?;
-		let re_junction = Regex::new(r"/(/?[^/]+)")
-			.expect("constructed from known-good static value; qed");
+		let cap = SS58_REGEX.captures(s).ok_or(PublicError::InvalidFormat)?;
 		let (addr, v) = Self::from_ss58check_with_version(
 			cap.name("ss58")
 				.map(|r| r.as_str())
@@ -642,7 +644,7 @@ impl<T: Sized + AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 		if cap["path"].is_empty() {
 			Ok((addr, v))
 		} else {
-			let path = re_junction.captures_iter(&cap["path"])
+			let path = JUNCTION_REGEX.captures_iter(&cap["path"])
 				.map(|f| DeriveJunction::from(&f[1]));
 			addr.derive(path)
 				.ok_or(PublicError::InvalidPath)
@@ -999,13 +1001,9 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	fn from_string_with_seed(s: &str, password_override: Option<&str>)
 		-> Result<(Self, Option<Self::Seed>), SecretStringError>
 	{
-		let re = Regex::new(r"^(?P<phrase>[\d\w ]+)?(?P<path>(//?[^/]+)*)(///(?P<password>.*))?$")
-			.expect("constructed from known-good static value; qed");
-		let cap = re.captures(s).ok_or(SecretStringError::InvalidFormat)?;
+		let cap = SECRET_PHRASE_REGEX.captures(s).ok_or(SecretStringError::InvalidFormat)?;
 
-		let re_junction = Regex::new(r"/(/?[^/]+)")
-			.expect("constructed from known-good static value; qed");
-		let path = re_junction.captures_iter(&cap["path"])
+		let path = JUNCTION_REGEX.captures_iter(&cap["path"])
 			.map(|f| DeriveJunction::from(&f[1]));
 
 		let phrase = cap.name("phrase").map(|r| r.as_str()).unwrap_or(DEV_PHRASE);
