@@ -228,7 +228,9 @@ impl<Block, B> VotingRule<Block, B> for VotingRules<Block, B> where
 					.restrict_vote(backend.clone(), &base, &best_target, &restricted_target)
 					.await
 					.filter(|(_, restricted_number)| {
-						// we can only restrict votes within the interval [base, target]
+						// NOTE: we can only restrict votes within the interval [base, target] but
+						// if the given number is the same as the current target then we can return
+						// `None` and just use the existing `restricted_target`.
 						restricted_number >= base.number()
 							&& restricted_number < restricted_target.number()
 					})
