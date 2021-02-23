@@ -1377,7 +1377,7 @@ macro_rules! decl_module {
 					$trait_instance
 					as
 					$system::Config
-				>::PalletInfo as $crate::traits::PalletInfo>::name::<Self>().expect("pallet will have name in the runtime.");
+				>::PalletInfo as $crate::traits::PalletInfo>::name::<Self>().expect("pallet will have name in the runtime; qed");
 
 				$crate::debug::info!(
 					target: $crate::LOG_TARGET,
