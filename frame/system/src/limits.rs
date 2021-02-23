@@ -129,7 +129,7 @@ pub struct WeightsPerClass {
 /// `on_initialize` pallet callbacks are invoked and their cost is added before any extrinsic
 /// is executed. This cost is tracked as `Mandatory` dispatch class.
 ///
-/// ```ignore
+/// ```text,ignore
 /// |   | `max_block`    |   |
 /// |   |                |   |
 /// |   |                |   |
@@ -148,7 +148,7 @@ pub struct WeightsPerClass {
 /// one `Normal`). Each class has it's own limit `max_total`, but also the sum cannot exceed
 /// `max_block` value.
 ///
-/// ```ignore
+/// ```text,ignore
 ///                          -- `Mandatory` limit (unlimited)
 /// | # |                 |   |
 /// | # | `Ext3`          | - - `Operational` limit
@@ -170,7 +170,7 @@ pub struct WeightsPerClass {
 /// out lower-priority `Operational` transactions. In such cases you might add a `reserved` capacity
 /// for given class.
 ///
-/// ```ignore
+/// ```test,ignore
 ///              _
 ///   #           \
 ///   #   `Ext8`   - `reserved`

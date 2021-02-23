@@ -43,6 +43,7 @@ frame-support = { version = "3.0.0", default-features = false, path = "../../../
 frame-system = { version = "3.0.0", default-features = false, path = "../../../frame/system" }
 frame-system-benchmarking = { version = "3.0.0", default-features = false, path = "../../../frame/system/benchmarking", optional = true }
 frame-system-rpc-runtime-api = { version = "3.0.0", default-features = false, path = "../../../frame/system/rpc/runtime-api/" }
+frame-try-runtime = { version = "0.9.0", default-features = false, path = "../../../frame/try-runtime", optional = true }
 pallet-assets = { version = "3.0.0", default-features = false, path = "../../../frame/assets" }
 pallet-authority-discovery = { version = "3.0.0", default-features = false, path = "../../../frame/authority-discovery" }
 pallet-authorship = { version = "3.0.0", default-features = false, path = "../../../frame/authorship" }
@@ -54,6 +55,7 @@ pallet-contracts = { version = "2.0.0", default-features = false, path = "../../
 pallet-contracts-primitives = { version = "2.0.0", default-features = false, path = "../../../frame/contracts/common/" }
 pallet-contracts-rpc-runtime-api = { version = "0.8.0", default-features = false, path = "../../../frame/contracts/rpc/runtime-api/" }
 pallet-democracy = { version = "3.0.0", default-features = false, path = "../../../frame/democracy" }
+pallet-election-provider-multi-phase = { version = "3.0.0", default-features = false, path = "../../../frame/election-provider-multi-phase" }
 pallet-elections-phragmen = { version = "3.0.0", default-features = false, path = "../../../frame/elections-phragmen" }
 pallet-gilt = { version = "3.0.0", default-features = false, path = "../../../frame/gilt" }
 pallet-grandpa = { version = "3.0.0", default-features = false, path = "../../../frame/grandpa" }
@@ -142,6 +144,7 @@ std = [
 	"frame-benchmarking/std",
 	"frame-system-rpc-runtime-api/std",
 	"frame-system/std",
+	"pallet-election-provider-multi-phase/std",
 	"pallet-timestamp/std",
 	"pallet-tips/std",
 	"pallet-transaction-payment-rpc-runtime-api/std",
@@ -158,6 +161,7 @@ runtime-benchmarks = [
 	"frame-benchmarking",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
+	"pallet-election-provider-multi-phase/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
 	"pallet-assets/runtime-benchmarks",
 	"pallet-babe/runtime-benchmarks",
@@ -188,4 +192,8 @@ runtime-benchmarks = [
 	"pallet-session-benchmarking",
 	"frame-system-benchmarking",
 	"hex-literal",
+]
+try-runtime = [
+	"frame-executive/try-runtime",
+	"frame-try-runtime",
 ]
