@@ -212,8 +212,7 @@ macro_rules! impl_outer_inherent {
 mod tests {
 	use super::*;
 	use sp_runtime::{traits, testing::{Header, self}};
-	use crate::traits::IsSubType;
-	use codec::Encode;
+	use crate::traits::{IsSubType, InherentPositionCheck};
 
 	#[derive(codec::Encode, codec::Decode, Clone, PartialEq, Eq, Debug, serde::Serialize)]
 	enum Call {
@@ -390,21 +389,6 @@ mod tests {
 	}
 
 	#[test]
-	fn inherent_first_works() {
-		let block = Block::new(
-			Header::new_from_number(1),
-			vec![
-				Extrinsic { function: Call::Test2(CallTest2::RequiredInherent), signed: false },
-				Extrinsic { function: Call::Test(CallTest::OptionalInherent(true)), signed: false },
-				Extrinsic { function: Call::Test(CallTest::NotInherent), signed: false },
-				Extrinsic { function: Call::Test(CallTest::NotInherent), signed: false },
-			],
-		);
-
-		assert!(InherentData::new().check_extrinsics(&block).ok());
-	}
-
-	#[test]
 	fn signed_are_not_inherent() {
 		let block = Block::new(
 			Header::new_from_number(1),
@@ -429,8 +413,23 @@ mod tests {
 
 		assert_eq!(
 			InherentData::new().check_extrinsics(&block).into_errors().collect::<Vec<_>>(),
-			vec![(*b"test1234", ().into())],
+			vec![(*b"test1234", vec![])],
 		);
+	}
+
+	#[test]
+	fn inherent_first_works() {
+		let block = Block::new(
+			Header::new_from_number(1),
+			vec![
+				Extrinsic { function: Call::Test2(CallTest2::RequiredInherent), signed: false },
+				Extrinsic { function: Call::Test(CallTest::OptionalInherent(true)), signed: false },
+				Extrinsic { function: Call::Test(CallTest::NotInherent), signed: false },
+				Extrinsic { function: Call::Test(CallTest::NotInherent), signed: false },
+			],
+		);
+
+		assert!(Runtime::check_inherent_position(&block).is_ok());
 	}
 
 	#[test]
@@ -440,15 +439,23 @@ mod tests {
 			vec![
 				Extrinsic { function: Call::Test2(CallTest2::RequiredInherent), signed: false },
 				Extrinsic { function: Call::Test(CallTest::NotInherent), signed: false },
+				// This inherent is placed after non inherent: invalid
 				Extrinsic { function: Call::Test(CallTest::OptionalInherent(true)), signed: false },
 			],
 		);
 
-		let err_msg = "Invalid inherent position: inherents must be before all other extrinsics in \
-			the block".as_bytes().encode();
-		assert_eq!(
-			InherentData::new().check_extrinsics(&block).into_errors().collect::<Vec<_>>(),
-			vec![(RUNTIME_INHERENT_IDENTIFIER, err_msg)],
+		assert!(Runtime::check_inherent_position(&block).is_err());
+
+		let block = Block::new(
+			Header::new_from_number(1),
+			vec![
+				Extrinsic { function: Call::Test2(CallTest2::RequiredInherent), signed: false },
+				Extrinsic { function: Call::Test(CallTest::OptionalInherent(true)), signed: true },
+				// This inherent is placed after non inherent: invalid
+				Extrinsic { function: Call::Test(CallTest::OptionalInherent(true)), signed: false },
+			],
 		);
+
+		assert!(Runtime::check_inherent_position(&block).is_err());
 	}
 }
