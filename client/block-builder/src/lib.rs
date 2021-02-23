@@ -42,8 +42,7 @@ pub use sp_block_builder::BlockBuilder as BlockBuilderApi;
 
 use sc_client_api::backend;
 
-
-/// Used as parameter to [`Proposer`] to tell the requirement on recording a proof.
+/// Used as parameter to [`BlockBuilderProvider`] to express if proof recording should be enabled.
 ///
 /// When `RecordProof::Yes` is given, all accessed trie nodes should be saved. These recorded
 /// trie nodes can be used by a third party to proof this proposal without having access to the

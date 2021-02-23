@@ -36,7 +36,7 @@ use sp_runtime::{
 	generic::BlockId, traits::{Block as BlockT, DigestFor, NumberFor, HashFor},
 };
 use futures::prelude::*;
-pub use sp_inherents::InherentData;
+use sp_state_machine::StorageProof;
 
 pub mod block_validation;
 pub mod offline_tracker;
@@ -55,6 +55,7 @@ pub use block_import::{
 pub use select_chain::SelectChain;
 pub use sp_state_machine::Backend as StateBackend;
 pub use import_queue::DefaultImportQueue;
+pub use sp_inherents::InherentData;
 
 /// Block status.
 #[derive(Debug, PartialEq, Eq)]
@@ -74,9 +75,9 @@ pub enum BlockStatus {
 /// Environment for a Consensus instance.
 ///
 /// Creates proposer instance.
-pub trait Environment<B: BlockT, RecordProof: crate::RecordProof> {
+pub trait Environment<B: BlockT> {
 	/// The proposer type this creates.
-	type Proposer: Proposer<B, RecordProof> + Send + 'static;
+	type Proposer: Proposer<B> + Send + 'static;
 	/// A future that resolves to the proposer.
 	type CreateProposer: Future<Output = Result<Self::Proposer, Self::Error>>
 		+ Send + Unpin + 'static;
@@ -98,8 +99,72 @@ pub struct Proposal<Block: BlockT, Transaction, Proof> {
 	pub storage_changes: sp_state_machine::StorageChanges<Transaction, HashFor<Block>, NumberFor<Block>>,
 }
 
-pub trait RecordProof {
-	type Proof;
+/// Error that is returned when [`ProofRecording`] requested to record a proof,
+/// but no proof was recorded.
+#[derive(Debug, thiserror::Error)]
+#[error("Proof should be recorded, but no proof was provided.")]
+pub struct NoProofRecorded;
+
+/// A trait to express the state of proof recording on type system level.
+///
+/// This is used by [`Proposer`] to signal if proof recording is enabled. This can be used by
+/// downstream users of the [`Proposer`] trait to enforce that proof recording is activated when
+/// required. The only two implementations of this trait are [`DisableProofRecording`] and
+/// [`EnableProofRecording`].
+///
+/// This trait is sealed and can not be implemented outside of this crate!
+pub trait ProofRecording: Send + Sync + private::Sealed + 'static {
+	/// The proof type that will be used internally.
+	type Proof: Send + Sync + 'static;
+	/// Is proof recording enabled?
+	const ENABLED: bool;
+	/// Convert the given `storage_proof` into [`Self::Proof`].
+	///
+	/// Internally Substrate uses `Option<StorageProof>` to express the both states of proof
+	/// recording (for now) and as [`Self::Proof`] is some different type, we need to provide a
+	/// function to convert this value.
+	///
+	/// If the proof recording was requested, but `None` is given, this will return
+	/// `Err(NoProofRecorded)`.
+	fn into_proof(storage_proof: Option<StorageProof>) -> Result<Self::Proof, NoProofRecorded>;
+}
+
+/// Express that proof recording is disabled.
+///
+/// For more information see [`ProofRecording`].
+pub struct DisableProofRecording;
+
+impl ProofRecording for DisableProofRecording {
+	type Proof = ();
+	const ENABLED: bool = false;
+
+	fn into_proof(_: Option<StorageProof>) -> Result<Self::Proof, NoProofRecorded> {
+		Ok(())
+	}
+}
+
+/// Express that proof recording is enabled.
+///
+/// For more information see [`ProofRecording`].
+pub struct EnableProofRecording;
+
+impl ProofRecording for EnableProofRecording {
+	type Proof = sp_state_machine::StorageProof;
+	const ENABLED: bool = true;
+
+	fn into_proof(proof: Option<StorageProof>) -> Result<Self::Proof, NoProofRecorded> {
+		proof.ok_or_else(|| NoProofRecorded)
+	}
+}
+
+/// Provides `Sealed` trait to prevent implementing trait [`ProofRecording`] outside of this crate.
+mod private {
+	/// Special trait that prevents the implementation of [`super::ProofRecording`] outside of this
+	/// crate.
+	pub trait Sealed {}
+
+	impl Sealed for super::DisableProofRecording {}
+	impl Sealed for super::EnableProofRecording {}
 }
 
 /// Logic for a proposer.
@@ -108,14 +173,22 @@ pub trait RecordProof {
 /// block.
 ///
 /// Proposers are generic over bits of "consensus data" which are engine-specific.
-pub trait Proposer<B: BlockT, RecordProof: crate::RecordProof> {
+pub trait Proposer<B: BlockT> {
 	/// Error type which can occur when proposing or evaluating.
 	type Error: From<Error> + std::fmt::Debug + 'static;
 	/// The transaction type used by the backend.
 	type Transaction: Default + Send + 'static;
 	/// Future that resolves to a committed proposal with an optional proof.
-	type Proposal: Future<Output = Result<Proposal<B, Self::Transaction, RecordProof::Proof>, Self::Error>> +
-		Send + Unpin + 'static;
+	type Proposal:
+		Future<Output = Result<Proposal<B, Self::Transaction, Self::Proof>, Self::Error>>
+		+ Send
+		+ Unpin
+		+ 'static;
+	/// The supported proof recording by the implementator of this trait. See [`ProofRecording`]
+	/// for more information.
+	type ProofRecording: self::ProofRecording<Proof = Self::Proof> + Send + Sync + 'static;
+	/// The proof type used by [`Self::ProofRecording`].
+	type Proof: Send + Sync + 'static;
 
 	/// Create a proposal.
 	///

@@ -179,7 +179,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, BS, Error>(
 		&inherent_data_providers,
 		slot_duration.slot_duration()
 	)?;
-	Ok(sc_consensus_slots::start_slot_worker::<_, _, _, _, _, AuraSlotCompatible, _>(
+	Ok(sc_consensus_slots::start_slot_worker::<_, _, _, _, _, AuraSlotCompatible, _, _>(
 		slot_duration,
 		select_chain,
 		worker,
@@ -877,7 +877,9 @@ pub fn import_queue<B, I, C, P, S, CAW>(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_consensus::{NoNetwork as DummyOracle, Proposal, RecordProof, AlwaysCanAuthor};
+	use sp_consensus::{
+		NoNetwork as DummyOracle, Proposal, AlwaysCanAuthor, DisableProofRecording,
+	};
 	use sc_network_test::{Block as TestBlock, *};
 	use sp_runtime::traits::{Block as BlockT, DigestFor};
 	use sc_network::config::ProtocolConfig;
@@ -916,20 +918,21 @@ mod tests {
 			substrate_test_runtime_client::Backend,
 			TestBlock
 		>;
-		type Proposal = future::Ready<Result<Proposal<TestBlock, Self::Transaction>, Error>>;
+		type Proposal = future::Ready<Result<Proposal<TestBlock, Self::Transaction, ()>, Error>>;
+		type ProofRecording = DisableProofRecording;
+		type Proof = ();
 
 		fn propose(
 			self,
 			_: InherentData,
 			digests: DigestFor<TestBlock>,
 			_: Duration,
-			_: RecordProof,
 		) -> Self::Proposal {
 			let r = self.1.new_block(digests).unwrap().build().map_err(|e| e.into());
 
 			future::ready(r.map(|b| Proposal {
 				block: b.block,
-				proof: b.proof,
+				proof: (),
 				storage_changes: b.storage_changes,
 			}))
 		}
