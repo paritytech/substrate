@@ -25,11 +25,6 @@ pub use sp_inherents::{
 	MakeFatalError,
 };
 
-/// The identifier for runtime inherent errors.
-///
-/// The associated error is a `String`.
-pub const RUNTIME_INHERENT_IDENTIFIER: InherentIdentifier = *b"RuntimeI";
-
 /// Implement the outer inherent.
 /// All given modules need to implement `ProvideInherent`.
 ///
