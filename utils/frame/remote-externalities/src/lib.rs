@@ -113,7 +113,7 @@ use sp_core::{
 	storage::{StorageKey, StorageData},
 };
 use futures::{
-	compat::{Future01CompatExt},
+	compat::Future01CompatExt,
 	TryFutureExt,
 };
 
