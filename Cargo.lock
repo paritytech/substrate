@@ -1641,18 +1641,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fixed-hash"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfcf0ed7fe52a17a03854ec54a9f76d6d84508d1c0e66bc1793301c73fc8493c"
-dependencies = [
- "byteorder",
- "rand 0.8.3",
- "rustc-hex",
- "static_assertions",
-]
-
-[[package]]
 name = "fixedbitset"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2612,12 +2600,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "impl-codec"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df170efa359aebdd5cb7fe78edcc67107748e4737bdca8a8fb40d15ea7a877ed"
+name = "impl-serde"
+version = "0.3.1"
+source = "git+https://github.com/paritytech/parity-common#db7c985b6dfe11cb7ef44072cbcaeb7022ae2ca4"
 dependencies = [
- "parity-scale-codec",
+ "serde",
 ]
 
 [[package]]
@@ -5500,17 +5487,26 @@ dependencies = [
 [[package]]
 name = "parity-util-mem"
 version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "664a8c6b8e62d8f9f2f937e391982eb433ab285b4cd9545b342441e04a906e42"
+source = "git+https://github.com/paritytech/parity-common#db7c985b6dfe11cb7ef44072cbcaeb7022ae2ca4"
 dependencies = [
  "cfg-if 1.0.0",
  "hashbrown",
  "impl-trait-for-tuples",
- "parity-util-mem-derive",
+ "parity-util-mem-derive 0.1.0 (git+https://github.com/paritytech/parity-common)",
  "parking_lot 0.11.1",
- "primitive-types 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "primitive-types",
  "smallvec 1.6.1",
  "winapi 0.3.9",
+]
+
+[[package]]
+name = "parity-util-mem-derive"
+version = "0.1.0"
+source = "git+https://github.com/paritytech/parity-common#db7c985b6dfe11cb7ef44072cbcaeb7022ae2ca4"
+dependencies = [
+ "proc-macro2",
+ "syn",
+ "synstructure",
 ]
 
 [[package]]
@@ -5940,21 +5936,12 @@ name = "primitive-types"
 version = "0.9.0"
 source = "git+https://github.com/paritytech/parity-common#db7c985b6dfe11cb7ef44072cbcaeb7022ae2ca4"
 dependencies = [
- "fixed-hash 0.7.0 (git+https://github.com/paritytech/parity-common)",
- "impl-codec 0.5.0 (git+https://github.com/paritytech/parity-common)",
+ "fixed-hash",
+ "impl-codec",
+ "impl-serde 0.3.1 (git+https://github.com/paritytech/parity-common)",
+ "parity-scale-codec",
+ "scale-info",
  "uint 0.9.0 (git+https://github.com/paritytech/parity-common)",
-]
-
-[[package]]
-name = "primitive-types"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2415937401cb030a2a0a4d922483f945fa068f52a7dbb22ce0fe5f2b6f6adace"
-dependencies = [
- "fixed-hash 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "impl-codec 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "impl-serde",
- "uint 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -7717,7 +7704,7 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "parity-util-mem",
- "parity-util-mem-derive",
+ "parity-util-mem-derive 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.11.1",
  "sc-client-api",
  "sp-core",
@@ -8349,7 +8336,7 @@ dependencies = [
  "integer-sqrt",
  "num-traits",
  "parity-scale-codec",
- "primitive-types 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "primitive-types",
  "rand 0.7.3",
  "scale-info",
  "serde",
@@ -8365,7 +8352,7 @@ dependencies = [
  "honggfuzz",
  "num-bigint",
  "num-traits",
- "primitive-types 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "primitive-types",
  "sp-arithmetic",
 ]
 
@@ -8531,7 +8518,7 @@ dependencies = [
  "hash256-std-hasher",
  "hex",
  "hex-literal",
- "impl-serde",
+ "impl-serde 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static",
  "libsecp256k1",
  "log",
@@ -8541,7 +8528,7 @@ dependencies = [
  "parity-util-mem",
  "parking_lot 0.11.1",
  "pretty_assertions",
- "primitive-types 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "primitive-types",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "regex",
@@ -8774,7 +8761,7 @@ version = "3.0.0"
 dependencies = [
  "impl-trait-for-tuples",
  "parity-scale-codec",
- "primitive-types 0.9.0 (git+https://github.com/paritytech/parity-common)",
+ "primitive-types",
  "rustversion",
  "sp-core",
  "sp-externalities",
@@ -8914,7 +8901,7 @@ version = "3.0.0"
 name = "sp-storage"
 version = "3.0.0"
 dependencies = [
- "impl-serde",
+ "impl-serde 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec",
  "ref-cast",
  "serde",
@@ -9020,7 +9007,7 @@ dependencies = [
 name = "sp-version"
 version = "3.0.0"
 dependencies = [
- "impl-serde",
+ "impl-serde 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec",
  "serde",
  "sp-runtime",

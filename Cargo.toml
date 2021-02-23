@@ -261,3 +261,7 @@ zeroize = { opt-level = 3 }
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
+
+[patch.crates-io]
+parity-util-mem = { git = "https://github.com/paritytech/parity-common" }
+primitive-types = { git = "https://github.com/paritytech/parity-common" }
