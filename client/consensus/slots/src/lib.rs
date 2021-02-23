@@ -334,7 +334,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 
 		proposal_work.and_then(move |(proposal, claim)| async move {
 			let (block, storage_proof) = (proposal.block, proposal.proof);
-			let (header, body) = block.clone().deconstruct();
+			let (header, body) = block.deconstruct();
 			let header_num = *header.number();
 			let header_hash = header.hash();
 			let parent_hash = *header.parent_hash();
@@ -342,7 +342,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			let block_import_params = block_import_params_maker(
 				header,
 				&header_hash,
-				body,
+				body.clone(),
 				proposal.storage_changes,
 				claim,
 				epoch_data,
@@ -361,6 +361,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				"hash_previously" => ?header_hash,
 			);
 
+			let header = block_import_params.post_header();
 			if let Err(err) = block_import.lock().import_block(block_import_params, Default::default()) {
 				warn!(
 					target: logging_target,
@@ -376,7 +377,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				);
 			}
 
-			Ok(SlotResult { block, storage_proof })
+			Ok(SlotResult { block: B::new(header, body), storage_proof })
 		}).then(|r| async move {
 			r.map_err(|e| warn!(target: "slots", "Encountered consensus error: {:?}", e)).ok()
 		}).boxed()
