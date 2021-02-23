@@ -255,11 +255,6 @@ fn enlarge_respects_amount_limit_and_will_split() {
 	});
 }
 
-// QueueTotals: Vec<(u32, BalanceOf<T>)>
-// Queues: u32 -> Vec<GiltBid<BalanceOf<T>, T::AccountId>>,
-// ActiveTotal: ActiveGiltsTotal
-// Active: ActiveIndex -> Option<ActiveGilt>
-
 #[test]
 fn basic_thaw_works() {
 	new_test_ext().execute_with(|| {
