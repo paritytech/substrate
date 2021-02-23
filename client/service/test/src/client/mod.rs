@@ -990,8 +990,10 @@ fn key_changes_works() {
 		).unwrap();
 		match actual_result == expected_result {
 			true => (),
-			false => panic!(format!("Failed test {}: actual = {:?}, expected = {:?}",
-			                        index, actual_result, expected_result)),
+			false => panic!(
+				"Failed test {}: actual = {:?}, expected = {:?}",
+				index, actual_result, expected_result,
+			),
 		}
 	}
 }

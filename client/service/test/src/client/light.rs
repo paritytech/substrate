@@ -686,8 +686,10 @@ fn changes_proof_is_generated_and_checked_when_headers_are_not_pruned() {
 		// ..and ensure that result is the same as on remote node
 		match local_result == expected_result {
 			true => (),
-			false => panic!(format!("Failed test {}: local = {:?}, expected = {:?}",
-									index, local_result, expected_result)),
+			false => panic!(
+				"Failed test {}: local = {:?}, expected = {:?}",
+				index, local_result, expected_result,
+			),
 		}
 	}
 }
