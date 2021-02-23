@@ -260,13 +260,13 @@ pub struct TestXt<Call, Extra> {
 	/// Signature of the extrinsic.
 	pub signature: Option<(u64, Extra)>,
 	/// Call of the extrinsic.
-	pub call: Call,
+	pub function: Call,
 }
 
 impl<Call, Extra> TestXt<Call, Extra> {
 	/// Create a new `TextXt`.
-	pub fn new(call: Call, signature: Option<(u64, Extra)>) -> Self {
-		Self { call, signature }
+	pub fn new(function: Call, signature: Option<(u64, Extra)>) -> Self {
+		Self { function, signature }
 	}
 }
 
@@ -299,8 +299,16 @@ impl<Call: Codec + Sync + Send, Extra> traits::Extrinsic for TestXt<Call, Extra>
 	}
 
 	fn new(c: Call, sig: Option<Self::SignaturePayload>) -> Option<Self> {
-		Some(TestXt { signature: sig, call: c })
+		Some(TestXt { signature: sig, function: c })
 	}
+}
+
+impl<Call, Extra> traits::ExtrinsicMetadata for TestXt<Call, Extra> where
+	Call: Codec + Sync + Send,
+	Extra: SignedExtension<AccountId=u64, Call=Call>,
+{
+	type SignedExtensions = Extra;
+	const VERSION: u8 = 0u8;
 }
 
 impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
@@ -318,10 +326,10 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 		len: usize,
 	) -> TransactionValidity {
 		if let Some((ref id, ref extra)) = self.signature {
-			Extra::validate(extra, id, &self.call, info, len)
+			Extra::validate(extra, id, &self.function, info, len)
 		} else {
-			let valid = Extra::validate_unsigned(&self.call, info, len)?;
-			let unsigned_validation = U::validate_unsigned(source, &self.call)?;
+			let valid = Extra::validate_unsigned(&self.function, info, len)?;
+			let unsigned_validation = U::validate_unsigned(source, &self.function)?;
 			Ok(valid.combine_with(unsigned_validation))
 		}
 	}
@@ -334,14 +342,14 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 		len: usize,
 	) -> ApplyExtrinsicResultWithInfo<PostDispatchInfoOf<Self::Call>> {
 		let maybe_who = if let Some((who, extra)) = self.signature {
-			Extra::pre_dispatch(extra, &who, &self.call, info, len)?;
+			Extra::pre_dispatch(extra, &who, &self.function, info, len)?;
 			Some(who)
 		} else {
-			Extra::pre_dispatch_unsigned(&self.call, info, len)?;
-			U::pre_dispatch(&self.call)?;
+			Extra::pre_dispatch_unsigned(&self.function, info, len)?;
+			U::pre_dispatch(&self.function)?;
 			None
 		};
 
-		Ok(self.call.dispatch(maybe_who.into()))
+		Ok(self.function.dispatch(maybe_who.into()))
 	}
 }

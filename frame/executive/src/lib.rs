@@ -532,7 +532,7 @@ mod tests {
 	mod custom {
 		use frame_support::weights::{Weight, DispatchClass};
 		use sp_runtime::transaction_validity::{
-			UnknownTransaction, TransactionSource, TransactionValidity
+			UnknownTransaction, TransactionSource, TransactionValidity, TransactionValidityError,
 		};
 
 		pub trait Config: frame_system::Config {}
@@ -563,6 +563,11 @@ mod tests {
 					let _ = frame_system::ensure_root(origin)?;
 				}
 
+				#[weight = 0]
+				fn inherent_call(origin) {
+					let _ = frame_system::ensure_none(origin)?;
+				}
+
 				// module hooks.
 				// one with block number arg and one without
 				fn on_initialize(n: T::BlockNumber) -> Weight {
@@ -591,9 +596,22 @@ mod tests {
 			}
 		}
 
+		impl<T: Config> sp_inherents::ProvideInherent for Module<T> {
+			type Call = Call<T>;
+			type Error = sp_inherents::MakeFatalError<()>;
+			const INHERENT_IDENTIFIER: [u8; 8] = *b"test1234";
+			fn create_inherent(_data: &sp_inherents::InherentData) -> Option<Self::Call> {
+				None
+			}
+			fn is_inherent(call: &Self::Call) -> bool {
+				*call == Call::<T>::inherent_call()
+			}
+		}
+
 		impl<T: Config> sp_runtime::traits::ValidateUnsigned for Module<T> {
 			type Call = Call<T>;
 
+			// Inherent call is not validated as unsigned
 			fn validate_unsigned(
 				_source: TransactionSource,
 				call: &Self::Call,
@@ -601,6 +619,18 @@ mod tests {
 				match call {
 					Call::allowed_unsigned(..) => Ok(Default::default()),
 					_ => UnknownTransaction::NoUnsignedValidator.into(),
+				}
+
+			}
+
+			// Inherent call is accepted for being dispatched
+			fn pre_dispatch(
+				call: &Self::Call,
+			) -> Result<(), TransactionValidityError> {
+				match call {
+					Call::allowed_unsigned(..) => Ok(()),
+					Call::inherent_call(..) => Ok(()),
+					_ => Err(UnknownTransaction::NoUnsignedValidator.into()),
 				}
 			}
 		}
@@ -614,7 +644,7 @@ mod tests {
 		{
 			System: frame_system::{Module, Call, Config, Storage, Event<T>},
 			Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
-			Custom: custom::{Module, Call, ValidateUnsigned},
+			Custom: custom::{Module, Call, ValidateUnsigned, Inherent},
 		}
 	);
 
@@ -701,12 +731,7 @@ mod tests {
 	);
 	type TestXt = sp_runtime::testing::TestXt<Call, SignedExtra>;
 	type TestBlock = Block<TestXt>;
-	type TestUncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<
-		<Runtime as frame_system::Config>::AccountId,
-		<Runtime as frame_system::Config>::Call,
-		(),
-		SignedExtra,
-	>;
+	type TestUncheckedExtrinsic = TestXt;
 
 	// Will contain `true` when the custom runtime logic was called.
 	const CUSTOM_ON_RUNTIME_KEY: &[u8] = &*b":custom:on_runtime";
@@ -1207,6 +1232,59 @@ mod tests {
 
 		new_test_ext(1).execute_with(|| {
 			Executive::execute_block(Block::new(header, vec![xt]));
+		});
+	}
+
+	#[test]
+	#[should_panic(expected = "Invalid inherent position.")]
+	fn invalid_inherent_position_fail() {
+		let xt1 = TestXt::new(Call::Balances(BalancesCall::transfer(33, 0)), sign_extra(1, 0, 0));
+		let xt2 = TestXt::new(Call::Custom(custom::Call::inherent_call()), None);
+
+		let header = new_test_ext(1).execute_with(|| {
+			// Let's build some fake block.
+			Executive::initialize_block(&Header::new(
+				1,
+				H256::default(),
+				H256::default(),
+				[69u8; 32].into(),
+				Digest::default(),
+			));
+
+			Executive::apply_extrinsic(xt1.clone()).unwrap().unwrap();
+			Executive::apply_extrinsic(xt2.clone()).unwrap().unwrap();
+
+			Executive::finalize_block()
+		});
+
+		new_test_ext(1).execute_with(|| {
+			Executive::execute_block(Block::new(header, vec![xt1, xt2]));
+		});
+	}
+
+	#[test]
+	fn valid_inherents_position_works() {
+		let xt1 = TestXt::new(Call::Custom(custom::Call::inherent_call()), None);
+		let xt2 = TestXt::new(Call::Balances(BalancesCall::transfer(33, 0)), sign_extra(1, 0, 0));
+
+		let header = new_test_ext(1).execute_with(|| {
+			// Let's build some fake block.
+			Executive::initialize_block(&Header::new(
+				1,
+				H256::default(),
+				H256::default(),
+				[69u8; 32].into(),
+				Digest::default(),
+			));
+
+			Executive::apply_extrinsic(xt1.clone()).unwrap().unwrap();
+			Executive::apply_extrinsic(xt2.clone()).unwrap().unwrap();
+
+			Executive::finalize_block()
+		});
+
+		new_test_ext(1).execute_with(|| {
+			Executive::execute_block(Block::new(header, vec![xt1, xt2]));
 		});
 	}
 }

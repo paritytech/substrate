@@ -74,7 +74,7 @@ macro_rules! impl_outer_inherent {
 
 				$(
 					if let Some(inherent) = $module::create_inherent(self) {
-						inherents.push($uncheckedextrinsic::new(
+						inherents.push(<$uncheckedextrinsic as Extrinsic>::new(
 							inherent.into(),
 							None,
 						).expect("Runtime UncheckedExtrinsic is not Opaque, so it has to return `Some`; qed"));
