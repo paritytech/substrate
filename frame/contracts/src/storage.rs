@@ -182,6 +182,7 @@ where
 				rent_payed: <BalanceOf<T>>::zero(),
 				pair_count: 0,
 				last_write: None,
+				_reserved: None,
 			};
 
 			*existing = Some(contract.into());
