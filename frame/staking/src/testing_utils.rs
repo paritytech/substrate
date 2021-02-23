@@ -381,7 +381,7 @@ pub fn create_assignments_for_offchain<T: Config>(
 		.take(num_assignments as usize)
 		.map(|(n, t)| Assignment {
 			who: n,
-			distribution: t.targets.iter().map(|v| (v.clone(), ratio)).collect(),
+			distribution: t.targets.iter().map(|(v, _)| (v.clone(), ratio)).collect(),
 		})
 		.collect();
 

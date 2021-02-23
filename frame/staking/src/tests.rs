@@ -108,7 +108,7 @@ fn basic_setup_works() {
 			Staking::ledger(100),
 			Some(StakingLedger { stash: 101, total: 500, active: 500, unlocking: vec![], claimed_rewards: vec![] })
 		);
-		assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
+		assert_eq!(Staking::nominators(101).unwrap().targets, vec![(11, true), (21, true)]);
 
 		assert_eq!(
 			Staking::eras_stakers(Staking::active_era().unwrap().index, 11),
@@ -378,7 +378,7 @@ fn blocking_and_kicking_works() {
 			// attempt to nominate from 100/101...
 			assert_ok!(Staking::nominate(Origin::signed(100), vec![11]));
 			// should have worked since we're already nominated them
-			assert_eq!(Nominators::<Test>::get(&101).unwrap().targets, vec![11]);
+			assert_eq!(Nominators::<Test>::get(&101).unwrap().targets, vec![(11, true)]);
 			// kick the nominator
 			assert_ok!(Staking::kick(Origin::signed(10), vec![101]));
 			// should have been kicked now

@@ -782,7 +782,7 @@ pub(crate) fn horrible_npos_solution(
 
 	// add nominator stuff
 	<Nominators<Test>>::iter().for_each(|(who, nomination)| {
-		nomination.targets.iter().for_each(|v| {
+		nomination.targets.iter().for_each(|(v, _)| {
 			*backing_stake_of.entry(*v).or_insert(Zero::zero()) +=
 				Staking::slashable_balance_of(&who)
 		})
@@ -801,7 +801,7 @@ pub(crate) fn horrible_npos_solution(
 	let mut staked_assignment: Vec<StakedAssignment<AccountId>> = Vec::new();
 	<Nominators<Test>>::iter().for_each(|(who, nomination)| {
 		let mut dist: Vec<(AccountId, ExtendedBalance)> = Vec::new();
-		nomination.targets.iter().for_each(|v| {
+		nomination.targets.iter().for_each(|(v, _)| {
 			if winners.iter().find(|w| *w == v).is_some() {
 				dist.push((*v, ExtendedBalance::zero()));
 			}

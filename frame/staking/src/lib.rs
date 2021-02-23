@@ -282,6 +282,9 @@ pub mod offchain_election;
 pub mod inflation;
 pub mod weights;
 
+mod scheduler;
+mod scheduler1;
+
 use sp_std::{
 	result,
 	prelude::*,
@@ -613,7 +616,7 @@ impl<AccountId, Balance> StakingLedger<AccountId, Balance> where
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct Nominations<AccountId> {
 	/// The targets of nomination.
-	pub targets: Vec<AccountId>,
+	pub targets: Vec<(AccountId, bool)>,
 	/// The era the nominations were submitted.
 	///
 	/// Except for initial nominations which are considered submitted at era 0.
@@ -910,6 +913,59 @@ impl Default for Releases {
 	}
 }
 
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, Default)]
+pub struct ChillTask<AccountId> {
+	slashed: AccountId,
+	last_key: Vec<u8>,
+}
+
+struct ChillTaskExecution<T>(sp_std::marker::PhantomData<T>);
+impl<T: Config> scheduler1::TaskExecution<ChillTask<T::AccountId>> for ChillTaskExecution<T> {
+	fn execute(mut task: ChillTask<T::AccountId>, max_weight: Weight) -> (Option<ChillTask<T::AccountId>>, Weight) {
+		let weight_per_iteration = <T as frame_system::Config>::DbWeight::get().reads_writes(1, 1);
+		let max_iterations = max_weight / weight_per_iteration;
+		let mut iterated: Weight = 0;
+
+		while let Some(next_key) = sp_io::storage::next_key(task.last_key.as_ref()) {
+			if iterated > max_iterations {
+				break;
+			}
+
+			let mut next_nominations: Nominations<T::AccountId> =
+				frame_support::storage::unhashed::get(&next_key).unwrap();
+			// TODO: 4 cases need to be considered: 1- a key is added before the current
+			// cursor: don't care. 2- a key is removed after the current cursor: don't care.
+			// 3- a key is added after the current cursor: worth having a test, but no
+			// biggie.  4- a key is removed after the current cursor: worth having a test,
+			// but no biggie. 5- the current key is deleted: then the next_key must be
+			// updated.
+
+			next_nominations.targets.iter_mut().for_each(|(target, active)| {
+				if target == &task.slashed {
+					*active = false;
+				}
+			});
+
+			frame_support::storage::unhashed::put(&next_key, &next_nominations);
+
+			iterated = iterated.saturating_add(1);
+			task.last_key = next_key;
+		}
+
+		let consumed_weight = weight_per_iteration.saturating_mul(iterated);
+		// to avoid any edge cases, we simply check one last time if there is any further keys to
+		// work on:
+		let leftover_task = if sp_io::storage::next_key(task.last_key.as_ref()).is_some() {
+			Some(task)
+		} else {
+			None
+		};
+
+		(leftover_task, consumed_weight)
+	}
+}
+
+
 decl_storage! {
 	trait Store for Module<T: Config> as Staking {
 		/// Number of eras to keep in history.
@@ -1066,6 +1122,9 @@ decl_storage! {
 		/// The earliest era for which we have a pending, unapplied slash.
 		EarliestUnappliedSlash: Option<EraIndex>;
 
+		/// Task scheduler for chill tasks
+		NominatorChillTasks: Vec<ChillTask<T::AccountId>>;
+
 		/// Snapshot of validators at the beginning of the current election window. This should only
 		/// have a value when [`EraElectionStatus`] == `ElectionStatus::Open(_)`.
 		pub SnapshotValidators get(fn snapshot_validators): Option<Vec<T::AccountId>>;
@@ -1149,6 +1208,40 @@ pub mod migrations {
 	pub fn migrate_to_blockable<T: Config>() -> frame_support::weights::Weight {
 		Validators::<T>::translate::<OldValidatorPrefs, _>(|_, p| Some(p.upgraded()));
 		ErasValidatorPrefs::<T>::translate::<OldValidatorPrefs, _>(|_, _, p| Some(p.upgraded()));
+		T::BlockWeights::get().max_block
+	}
+
+	#[derive(Decode)]
+	struct OldNominations<AccountId> {
+		targets: Vec<AccountId>,
+		submitted_in: EraIndex,
+		suppressed: bool,
+	}
+
+	pub fn migrate_to_reversable_slash<T: Config>() -> frame_support::weights::Weight {
+		Nominators::<T>::translate::<OldNominations<T::AccountId>, _>(|_, nomination| {
+			let targets = nomination
+				.targets
+				.iter()
+				.map(|target| {
+					(
+						target.clone(),
+						<SlashingSpans<T>>::get(&target).map_or(true, |spans| {
+							nomination.submitted_in >= spans.last_nonzero_slash()
+						}),
+						/* active if no slashing span, or if submitted after the last nonzero
+						 * slash. */
+					)
+				})
+				.collect::<Vec<_>>();
+			Some(Nominations {
+				targets,
+				suppressed: nomination.suppressed,
+				submitted_in: nomination.submitted_in,
+			})
+			// TODO: any reason to keep the submitted_in around? I don't think so.
+		});
+
 		T::BlockWeights::get().max_block
 	}
 }
@@ -1360,6 +1453,11 @@ decl_module! {
 			add_weight(3, 0, 0);
 			// Additional read from `on_finalize`
 			add_weight(1, 0, 0);
+
+			<NominatorChillTasks<T>>::mutate(|tasks| {
+				scheduler1::TaskExecutor::execute::<_, ChillTaskExecution<T>>(tasks, 1000)
+			});
+
 			consumed_weight
 		}
 
@@ -1721,16 +1819,16 @@ decl_module! {
 			ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
 			ensure!(targets.len() <= MAX_NOMINATIONS, Error::<T>::TooManyTargets);
 
-			let old = Nominators::<T>::get(stash).map_or_else(Vec::new, |x| x.targets);
+			let old = Nominators::<T>::get(stash).map_or_else(Vec::new, |x| x.targets.into_iter().map(|(x, _)| x).collect::<Vec<_>>());
 
 			let targets = targets.into_iter()
 				.map(|t| T::Lookup::lookup(t).map_err(DispatchError::from))
 				.map(|n| n.and_then(|n| if old.contains(&n) || !Validators::<T>::get(&n).blocked {
-					Ok(n)
+					Ok((n, true)) // all newly submitted nominations are active again TODO: test for this.
 				} else {
 					Err(Error::<T>::BadTarget.into())
 				}))
-				.collect::<result::Result<Vec<T::AccountId>, _>>()?;
+				.collect::<result::Result<Vec<(T::AccountId, bool)>, _>>()?;
 
 			let nominations = Nominations {
 				targets,
@@ -2247,7 +2345,7 @@ decl_module! {
 				.into_iter()
 			{
 				Nominators::<T>::mutate(&nom_stash, |maybe_nom| if let Some(ref mut nom) = maybe_nom {
-					if let Some(pos) = nom.targets.iter().position(|v| v == stash) {
+					if let Some(pos) = nom.targets.iter().position(|(v, _)| v == stash) {
 						nom.targets.swap_remove(pos);
 						Self::deposit_event(RawEvent::Kicked(nom_stash.clone(), stash.clone()));
 					}
@@ -2659,15 +2757,8 @@ impl<T: Config> Module<T> {
 				for (t, _) in distribution {
 					// each target in the provided distribution must be actually nominated by the
 					// nominator after the last non-zero slash.
-					if nomination.targets.iter().find(|&tt| tt == t).is_none() {
+					if nomination.targets.iter().find(|&(tt, _)| tt == t).map_or(false, |(_, active)| *active) {
 						return Err(Error::<T>::OffchainElectionBogusNomination.into());
-					}
-
-					if <Self as Store>::SlashingSpans::get(&t).map_or(
-						false,
-						|spans| nomination.submitted_in < spans.last_nonzero_slash(),
-					) {
-						return Err(Error::<T>::OffchainElectionSlashedNomination.into());
 					}
 				}
 			} else {
@@ -3003,16 +3094,15 @@ impl<T: Config> Module<T> {
 		}
 
 		let nominator_votes = <Nominators<T>>::iter().map(|(nominator, nominations)| {
-			let Nominations { submitted_in, mut targets, suppressed: _ } = nominations;
+			let Nominations { targets: targets_unfiltered, suppressed: _, submitted_in: _ } =
+				nominations;
 
 			// Filter out nomination targets which were nominated before the most recent
 			// slashing span.
-			targets.retain(|stash| {
-				<Self as Store>::SlashingSpans::get(&stash).map_or(
-					true,
-					|spans| submitted_in >= spans.last_nonzero_slash(),
-				)
-			});
+			let targets = targets_unfiltered
+				.into_iter()
+				.filter_map(|(stash, active)| if active { Some(stash) } else { None })
+				.collect::<Vec<_>>();
 
 			(nominator, targets)
 		});
