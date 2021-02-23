@@ -473,7 +473,6 @@ impl historied_db::management::tree::TreeManagementStorage for TreeManagementPer
 	type Mapping = historied_tree_bindings::Mapping;
 	type JournalDelete = historied_tree_bindings::JournalDelete;
 	type LastIndex = historied_tree_bindings::LastIndex;
-	type NeutralElt = historied_tree_bindings::NeutralElt;
 	type TreeMeta = historied_tree_bindings::TreeMeta;
 	type TreeState = historied_tree_bindings::TreeState;
 }

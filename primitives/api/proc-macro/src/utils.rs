@@ -99,6 +99,7 @@ pub fn replace_wild_card_parameter_names(input: &mut Signature) {
 pub fn fold_fn_decl_for_client_side(
 	input: &mut Signature,
 	block_id: &TokenStream,
+	crate_: &TokenStream,
 ) {
 	replace_wild_card_parameter_names(input);
 
@@ -109,7 +110,7 @@ pub fn fold_fn_decl_for_client_side(
 	// Wrap the output in a `Result`
 	input.output = {
 		let ty = return_type_extract_type(&input.output);
-		parse_quote!( -> std::result::Result<#ty, Self::Error> )
+		parse_quote!( -> std::result::Result<#ty, #crate_::ApiError> )
 	};
 }
 

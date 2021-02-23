@@ -55,7 +55,6 @@ pub trait TreeManagementStorage: Sized {
 	type Mapping: MapInfo + Send + Sync;
 	type JournalDelete: MapInfo + Send + Sync;
 	type LastIndex: VariableInfo + Send + Sync;
-	type NeutralElt: VariableInfo + Send + Sync;
 	type TreeMeta: VariableInfo + Send + Sync;
 	type TreeState: MapInfo + Send + Sync;
 }
@@ -66,7 +65,6 @@ impl TreeManagementStorage for () {
 	type Mapping = ();
 	type JournalDelete = ();
 	type LastIndex = ();
-	type NeutralElt = ();
 	type TreeMeta = ();
 	type TreeState = ();
 }

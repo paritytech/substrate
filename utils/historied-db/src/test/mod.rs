@@ -56,7 +56,6 @@ mod bindings {
 	const CST: &'static[u8] = &[2u8, 0, 0, 0];
 	static_instance!(JournalDelete, &[3u8, 0, 0, 0]);
 	static_instance_variable!(LastIndex, CST, b"tree_mgmt/last_index", false);
-	static_instance_variable!(NeutralElt,CST, b"tree_mgmt/neutral_elt", false);
 	static_instance_variable!(TreeMeta, CST, b"tree_mgmt/tree_meta", true);
 }
 
@@ -66,7 +65,6 @@ impl crate::management::tree::TreeManagementStorage for MappingTests {
 	type Mapping = bindings::Mapping;
 	type JournalDelete = bindings::JournalDelete;
 	type LastIndex = bindings::LastIndex;
-	type NeutralElt = bindings::NeutralElt;
 	type TreeMeta = bindings::TreeMeta;
 	type TreeState = bindings::TreeState;
 }

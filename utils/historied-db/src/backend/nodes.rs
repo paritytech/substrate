@@ -22,7 +22,7 @@ use sp_std::collections::btree_map::BTreeMap;
 use sp_std::cell::RefCell;
 use sp_std::vec::Vec;
 use sp_std::borrow::Cow;
-use super::{LinearStorage};
+use super::LinearStorage;
 use crate::historied::HistoriedValue;
 use derivative::Derivative;
 use crate::{Context, ContextBuilder, InitFrom, DecodeWithContext, Trigger};

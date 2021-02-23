@@ -232,7 +232,7 @@ impl<B, I, C, S, Algorithm, CAW> PowBlockImport<B, I, C, S, Algorithm, CAW> wher
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync,
 	I::Error: Into<ConsensusError>,
 	C: ProvideRuntimeApi<B> + Send + Sync + HeaderBackend<B> + AuxStore + ProvideCache<B> + BlockOf,
-	C::Api: BlockBuilderApi<B, Error = sp_blockchain::Error>,
+	C::Api: BlockBuilderApi<B>,
 	Algorithm: PowAlgorithm<B>,
 	CAW: CanAuthorWith<B>,
 {
@@ -284,7 +284,7 @@ impl<B, I, C, S, Algorithm, CAW> PowBlockImport<B, I, C, S, Algorithm, CAW> wher
 			&block_id,
 			block,
 			inherent_data,
-		).map_err(Error::Client)?;
+		).map_err(|e| Error::Client(e.into()))?;
 
 		if !inherent_res.ok() {
 			inherent_res
@@ -314,7 +314,7 @@ impl<B, I, C, S, Algorithm, CAW> BlockImport<B> for PowBlockImport<B, I, C, S, A
 	I::Error: Into<ConsensusError>,
 	S: SelectChain<B>,
 	C: ProvideRuntimeApi<B> + Send + Sync + HeaderBackend<B> + AuxStore + ProvideCache<B> + BlockOf,
-	C::Api: BlockBuilderApi<B, Error = sp_blockchain::Error>,
+	C::Api: BlockBuilderApi<B>,
 	Algorithm: PowAlgorithm<B>,
 	Algorithm::Difficulty: 'static,
 	CAW: CanAuthorWith<B>,
@@ -505,7 +505,7 @@ pub fn import_queue<B, Transaction, Algorithm>(
 	justification_import: Option<BoxJustificationImport<B>>,
 	algorithm: Algorithm,
 	inherent_data_providers: InherentDataProviders,
-	spawner: &impl sp_core::traits::SpawnNamed,
+	spawner: &impl sp_core::traits::SpawnEssentialNamed,
 	registry: Option<&Registry>,
 ) -> Result<
 	PowImportQueue<B, Transaction>,

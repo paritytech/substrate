@@ -9,10 +9,10 @@ edition = "2018"
 
 [dependencies]
 derivative = { version = "2.1", features = ["use_core"] }
-smallvec = "1.5"
+smallvec = "1.6"
 hash-db = { default-features = false, version = "0.15.2"}
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-sp-std = { version = "2.0.0", default-features = false }
+sp-std = { version = "3.0.0", default-features = false }
 num-traits = { version = "0.2.14", default-features = false } # only for zero_one
 
 [dev-dependencies]

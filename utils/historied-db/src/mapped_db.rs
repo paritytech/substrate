@@ -661,6 +661,9 @@ pub struct TransactionalMappedDB<DB> {
 	pub db: DB,
 }
 
+/// Pending layer of change of `TransactionalMappedDB`.
+pub type PendingChanges = BTreeMap<&'static [u8], (BTreeMap<Vec<u8>, Option<Vec<u8>>>, bool)>;
+
 impl<DB: MappedDB> MappedDB for TransactionalMappedDB<DB> {
 	// Using on non active do not make much sense here.
 	#[inline(always)]
