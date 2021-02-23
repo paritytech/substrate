@@ -2156,6 +2156,32 @@ pub trait InherentPositionCheck<Block> {
 	fn check_inherent_position(block: &Block) -> Result<(), ()>;
 }
 
+/// An extrinsic on which we can get access to call.
+pub trait ExtrinsicCall: sp_runtime::traits::Extrinsic {
+	/// Get the call of the extrinsic.
+	fn call(&self) -> &Self::Call;
+}
+
+impl<Call, Extra> ExtrinsicCall for sp_runtime::testing::TestXt<Call, Extra> where
+	Call: Codec + Sync + Send,
+{
+	/// Get the call of the extrinsic.
+	fn call(&self) -> &Self::Call {
+		&self.call
+	}
+}
+
+impl<Address, Call, Signature, Extra> ExtrinsicCall
+for sp_runtime::generic::UncheckedExtrinsic<Address, Call, Signature, Extra>
+where
+	Extra: sp_runtime::traits::SignedExtension,
+{
+	/// Get the call of the extrinsic.
+	fn call(&self) -> &Self::Call {
+		&self.function
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;

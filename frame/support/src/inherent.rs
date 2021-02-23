@@ -86,7 +86,7 @@ macro_rules! impl_outer_inherent {
 
 			fn check_extrinsics(&self, block: &$block) -> $crate::inherent::CheckInherentsResult {
 				use $crate::inherent::{ProvideInherent, IsFatalError};
-				use $crate::traits::IsSubType;
+				use $crate::traits::{IsSubType, ExtrinsicCall};
 				use $crate::sp_runtime::traits::Block as _;
 
 				let mut result = $crate::inherent::CheckInherentsResult::new();
@@ -101,7 +101,8 @@ macro_rules! impl_outer_inherent {
 					let mut is_inherent = false;
 
 					$({
-						if let Some(call) = IsSubType::<_>::is_sub_type(&xt.function) {
+						let call = <$uncheckedextrinsic as ExtrinsicCall>::call(xt);
+						if let Some(call) = IsSubType::<_>::is_sub_type(call) {
 							if $module::is_inherent(call) {
 								is_inherent = true;
 								if let Err(e) = $module::check_inherent(call, self) {
@@ -131,7 +132,10 @@ macro_rules! impl_outer_inherent {
 									.unwrap_or(false);
 
 								if !is_signed {
-									if let Some(call) = IsSubType::<_>::is_sub_type(&xt.function) {
+									let call = <
+										$uncheckedextrinsic as ExtrinsicCall
+									>::call(xt);
+									if let Some(call) = IsSubType::<_>::is_sub_type(call) {
 										$module::is_inherent(&call)
 									} else {
 										false
@@ -170,7 +174,7 @@ macro_rules! impl_outer_inherent {
 		impl $crate::traits::InherentPositionCheck<$block> for $runtime {
 			fn check_inherent_position(block: &$block) -> Result<(), ()> {
 				use $crate::inherent::ProvideInherent;
-				use $crate::traits::IsSubType;
+				use $crate::traits::{IsSubType, ExtrinsicCall};
 				use $crate::sp_runtime::traits::Block as _;
 
 				let mut checking_for_inherents = true;
@@ -184,7 +188,8 @@ macro_rules! impl_outer_inherent {
 					} else {
 						let mut is_inherent = false;
 						$({
-							if let Some(call) = IsSubType::<_>::is_sub_type(&xt.function) {
+							let call = <$uncheckedextrinsic as ExtrinsicCall>::call(xt);
+							if let Some(call) = IsSubType::<_>::is_sub_type(call) {
 								if $module::is_inherent(&call) {
 									is_inherent = true;
 								}
