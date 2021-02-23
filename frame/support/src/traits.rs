@@ -490,10 +490,16 @@ impl<
 	}
 }
 
-/// Something that can estimate at which block the next session rotation will happen. This should
-/// be the same logical unit that dictates `ShouldEndSession` to the session module. No Assumptions
-/// are made about the scheduling of the sessions.
+/// Something that can estimate at which block the next session rotation will happen.
+///
+/// This should be the same logical unit that dictates `ShouldEndSession` to the session module. No
+/// Assumptions are made about the scheduling of the sessions.
 pub trait EstimateNextSessionRotation<BlockNumber> {
+	/// Return the average length of a session.
+	///
+	/// This may or may not be accurate.
+	fn average_session_length() -> BlockNumber;
+
 	/// Return the block number at which the next session rotation is estimated to happen.
 	///
 	/// None should be returned if the estimation fails to come to an answer
@@ -503,7 +509,11 @@ pub trait EstimateNextSessionRotation<BlockNumber> {
 	fn weight(now: BlockNumber) -> Weight;
 }
 
-impl<BlockNumber: Bounded> EstimateNextSessionRotation<BlockNumber> for () {
+impl<BlockNumber: Bounded + Default> EstimateNextSessionRotation<BlockNumber> for () {
+	fn average_session_length() -> BlockNumber {
+		Default::default()
+	}
+
 	fn estimate_next_session_rotation(_: BlockNumber) -> Option<BlockNumber> {
 		Default::default()
 	}
@@ -513,9 +523,15 @@ impl<BlockNumber: Bounded> EstimateNextSessionRotation<BlockNumber> for () {
 	}
 }
 
-/// Something that can estimate at which block the next `new_session` will be triggered. This must
-/// always be implemented by the session module.
+/// Something that can estimate at which block the next `new_session` will be triggered.
+///
+/// This must always be implemented by the session module.
 pub trait EstimateNextNewSession<BlockNumber> {
+	/// Return the average length of a session.
+	///
+	/// This may or may not be accurate.
+	fn average_session_length() -> BlockNumber;
+
 	/// Return the block number at which the next new session is estimated to happen.
 	fn estimate_next_new_session(now: BlockNumber) -> Option<BlockNumber>;
 
@@ -523,7 +539,11 @@ pub trait EstimateNextNewSession<BlockNumber> {
 	fn weight(now: BlockNumber) -> Weight;
 }
 
-impl<BlockNumber: Bounded> EstimateNextNewSession<BlockNumber> for () {
+impl<BlockNumber: Bounded + Default> EstimateNextNewSession<BlockNumber> for () {
+	fn average_session_length() -> BlockNumber {
+		Default::default()
+	}
+
 	fn estimate_next_new_session(_: BlockNumber) -> Option<BlockNumber> {
 		Default::default()
 	}

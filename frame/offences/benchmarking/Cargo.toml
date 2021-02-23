@@ -27,6 +27,7 @@ pallet-staking = { version = "3.0.0", default-features = false, features = ["run
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-staking = { version = "3.0.0", default-features = false, path = "../../../primitives/staking" }
 sp-std = { version = "3.0.0", default-features = false, path = "../../../primitives/std" }
+sp-election-providers = { version = "3.0.0", default-features = false, path = "../../../primitives/election-providers" }
 
 [dev-dependencies]
 pallet-staking-reward-curve = { version = "3.0.0", path = "../../staking/reward-curve" }
@@ -50,6 +51,7 @@ std = [
 	"pallet-staking/std",
 	"sp-runtime/std",
 	"sp-staking/std",
+	"sp-election-providers/std",
 	"sp-std/std",
 	"codec/std",
 ]

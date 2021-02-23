@@ -1159,7 +1159,7 @@ mod tests {
 				changes_trie::disabled_state::<_, u64>(),
 				None,
 			);
-			assert_eq!(ext.kill_child_storage(&child_info, Some(2)), false);
+			assert_eq!(ext.kill_child_storage(&child_info, Some(2)), (false, 2));
 		}
 
 		assert_eq!(
@@ -1199,12 +1199,14 @@ mod tests {
 			changes_trie::disabled_state::<_, u64>(),
 			None,
 		);
-		assert_eq!(ext.kill_child_storage(&child_info, Some(0)), false);
-		assert_eq!(ext.kill_child_storage(&child_info, Some(1)), false);
-		assert_eq!(ext.kill_child_storage(&child_info, Some(2)), false);
-		assert_eq!(ext.kill_child_storage(&child_info, Some(3)), false);
-		assert_eq!(ext.kill_child_storage(&child_info, Some(4)), true);
-		assert_eq!(ext.kill_child_storage(&child_info, Some(5)), true);
+		assert_eq!(ext.kill_child_storage(&child_info, Some(0)), (false, 0));
+		assert_eq!(ext.kill_child_storage(&child_info, Some(1)), (false, 1));
+		assert_eq!(ext.kill_child_storage(&child_info, Some(2)), (false, 2));
+		assert_eq!(ext.kill_child_storage(&child_info, Some(3)), (false, 3));
+		assert_eq!(ext.kill_child_storage(&child_info, Some(4)), (true, 4));
+		// Only 4 items to remove
+		assert_eq!(ext.kill_child_storage(&child_info, Some(5)), (true, 4));
+		assert_eq!(ext.kill_child_storage(&child_info, None), (true, 4));
 	}
 
 	#[test]
