@@ -1036,7 +1036,8 @@ impl JustificationImport<Block> for ForceFinalized {
 		_number: NumberFor<Block>,
 		justifications: Justifications,
 	) -> Result<(), Self::Error> {
-		// WIP(JON)
+		// Currently we just import the first Justification. It would be useful to extend this in
+		// the future to also append any additional Justifications.
 		let justification = justifications.into_iter().next();
 		self.0.finalize_block(BlockId::Hash(hash), justification, true)
 			.map_err(|_| ConsensusError::InvalidJustification.into())

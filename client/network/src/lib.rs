@@ -275,7 +275,7 @@ pub use service::{
 };
 
 pub use sc_peerset::ReputationChange;
-use sp_runtime::{ConsensusEngineId, traits::{Block as BlockT, NumberFor}};
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 /// The maximum allowed number of established connections per peer.
 ///
@@ -288,12 +288,6 @@ const MAX_CONNECTIONS_PER_PEER: usize = 2;
 
 /// The maximum number of concurrent established connections that were incoming.
 const MAX_CONNECTIONS_ESTABLISHED_INCOMING: u32 = 10_000;
-
-// Redefine this locally to avoid depending on the GRANDPA crate.
-// NOTE: This is purely during a backwards compatible transitionary period and should be removed
-// once we can assume all nodes can send and receive multiple Justifications
-// See https://github.com/paritytech/substrate/issues/8172
-const GRANDPA_ENGINE_ID: ConsensusEngineId = *b"FRNK";
 
 /// Minimum Requirements for a Hash within Networking
 pub trait ExHashT: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static {}

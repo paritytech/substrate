@@ -19,7 +19,7 @@
 use crate::{
 	chain::Client,
 	config::{self, ProtocolId},
-	error, GRANDPA_ENGINE_ID,
+	error,
 	request_responses::RequestFailure,
 	utils::{interval, LruHashSet},
 };
@@ -43,9 +43,10 @@ use sp_consensus::{
 	block_validation::BlockAnnounceValidator,
 	import_queue::{BlockImportResult, BlockImportError, IncomingBlock, Origin}
 };
-use sp_runtime::{generic::BlockId, EncodedJustification, Justifications};
-use sp_runtime::traits::{
-	Block as BlockT, Header as HeaderT, NumberFor, Zero, CheckedSub
+use sp_runtime::{
+	Justifications,
+	generic::BlockId,
+	traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero, CheckedSub},
 };
 use sp_arithmetic::traits::SaturatedConversion;
 use sync::{ChainSync, SyncState};
@@ -654,13 +655,14 @@ impl<B: BlockT> Protocol<B> {
 					None
 				},
 				justifications: if !block_data.justification.is_empty() {
-					// For compatibility we assume that the incoming Justifications is an
-					// `EncodedJustification`, as before, and that it can only be for GRANDPA.
-					let justification: EncodedJustification = block_data.justification;
-					let justification = (b"FRNK", justification);
-					Some(Justifications::from(justification))
+					// For compatibility we assume that the incoming Justifications is from GRANDPA.
+					// The ID tag is hardcoded here to avoid depending on the GRANDPA crate.
+					// NOTE: This is purely during a backwards compatible transitionary period and should be removed
+					// once we can assume all nodes can send and receive multiple Justifications
+					// See https://github.com/paritytech/substrate/issues/8172
+					Some(Justifications::from((*b"FRNK", block_data.justification)))
 				} else if block_data.is_empty_justification {
-					Some(Justifications::from((b"FRNK", Vec::new())))
+					Some(Justifications::from((*b"FRNK", Vec::new())))
 				} else {
 					None
 				},

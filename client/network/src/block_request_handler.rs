@@ -24,7 +24,6 @@ use crate::protocol::{message::BlockAttributes};
 use crate::request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig};
 use crate::schema::v1::block_request::FromBlock;
 use crate::schema::v1::{BlockResponse, Direction};
-use crate::GRANDPA_ENGINE_ID;
 use futures::channel::{mpsc, oneshot};
 use futures::stream::StreamExt;
 use log::debug;
@@ -147,11 +146,15 @@ impl <B: BlockT> BlockRequestHandler<B> {
 				None
 			};
 
-			// To keep compatibility we only send the grandpa justification
-			// We want to replace this by sending all Justifications if the possible. See
-			// https://github.com/paritytech/substrate/issues/8172 for the issue tracking this work.
-			let justification = justifications
-				.map(|just| just.into_justification(GRANDPA_ENGINE_ID));
+			// In a follow up PR tracked by https://github.com/paritytech/substrate/issues/8172
+			// we want to send/receive all Justifications if possible.
+			// For now we keep compatibility by selecting precisely the GRANDPA one, and not just
+			// the first one. When sending we could have just taken the first one, since we don't
+			// expect there to be any other kind currently, but when receiving we need to add the
+			// engine ID tag.
+			// The ID tag is hardcoded here to avoid depending on the GRANDPA crate, and will be
+			// removed when resolving the above issue.
+			let justification = justifications.map(|just| just.into_justification(*b"FRNK"));
 
 			let is_empty_justification = justification
 				.as_ref()
