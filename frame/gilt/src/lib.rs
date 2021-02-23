@@ -311,8 +311,7 @@ pub mod pallet {
 		///
 		/// Complexities:
 		/// - `Queues[duration].len()` (just take max).
-		#[pallet::weight(T::WeightInfo::place_bid(T::MaxQueueLen::get() - 1))]
-//		#[pallet::weight(T::WeightInfo::place_bid_max())]
+		#[pallet::weight(T::WeightInfo::place_bid_max())]
 		pub fn place_bid(
 			origin: OriginFor<T>,
 			#[pallet::compact] amount: BalanceOf<T>,
