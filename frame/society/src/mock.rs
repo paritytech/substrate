@@ -57,6 +57,7 @@ parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const ExistentialDeposit: u64 = 1;
 	pub const SocietyModuleId: ModuleId = ModuleId(*b"py/socie");
+	pub const ActionByteDeposit: u64 = 1;
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1024);
 }
@@ -116,6 +117,8 @@ impl Config for Test {
 	type SuspensionJudgementOrigin = EnsureSignedBy<SuspensionJudgementSetAccount, u128>;
 	type ChallengePeriod = ChallengePeriod;
 	type ModuleId = SocietyModuleId;
+	type Call = Call;
+	type ActionByteDeposit = ActionByteDeposit;
 }
 
 pub struct EnvBuilder {
@@ -201,11 +204,11 @@ pub fn run_to_block(n: u64) {
 }
 
 /// Creates a bid struct using input parameters.
-pub fn create_bid<AccountId, Balance>(
+pub fn create_bid<AccountId, Balance, OpaqueCall>(
 	value: Balance,
 	who: AccountId,
-	kind: BidKind<AccountId, Balance>
-) -> Bid<AccountId, Balance>
+	kind: BidKind<AccountId, Balance, OpaqueCall>
+) -> Bid<AccountId, Balance, OpaqueCall>
 {
 	Bid {
 		who,
