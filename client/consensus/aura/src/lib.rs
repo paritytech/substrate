@@ -255,8 +255,8 @@ where
 		let expected_author = slot_author::<P>(slot, epoch_data);
 		expected_author.and_then(|p| {
 			if SyncCryptoStore::has_keys(
-				 &*self.keystore,
-				 &[(p.to_raw_vec(), sp_application_crypto::key_types::AURA)],
+				&*self.keystore,
+				&[(p.to_raw_vec(), sp_application_crypto::key_types::AURA)],
 			) {
 				Some(p.clone())
 			} else {
@@ -299,6 +299,9 @@ where
 				header_hash.as_ref()
 			).map_err(|e| sp_consensus::Error::CannotSign(
 				public.clone(), e.to_string(),
+			))?
+			.ok_or_else(|| sp_consensus::Error::CannotSign(
+				public.clone(), "Could not find key in keystore.".into(),
 			))?;
 			let signature = signature.clone().try_into()
 				.map_err(|_| sp_consensus::Error::InvalidSignature(
