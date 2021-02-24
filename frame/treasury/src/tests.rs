@@ -15,12 +15,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Treasury pallet tests.
+//! Test utilities
 
 #![cfg(test)]
 
-use crate as treasury;
-use super::*;
+use crate::*;
+use sp_std::{prelude::*};
+
 use std::cell::RefCell;
 use frame_support::{
 	assert_noop, assert_ok, parameter_types,
@@ -29,25 +30,15 @@ use frame_support::{
 
 use sp_core::H256;
 use sp_runtime::{
-	ModuleId,
+	Permill, ModuleId,
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
-type Block = frame_system::mocking::MockBlock<Test>;
-
-frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
-	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
-		Treasury: treasury::{Module, Call, Storage, Config, Event<T>},
-	}
-);
+use crate::{
+	self as treasury,
+	Config,
+};
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
@@ -119,14 +110,35 @@ impl Config for Test {
 	type SpendFunds = ();
 }
 
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
+
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Module, Call, Storage, Config, Event<T>},
+		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
+		Treasury: treasury::{Module, Call, Storage, Config<T>, Event<T>},
+	}
+);
+
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	pallet_balances::GenesisConfig::<Test>{
-		// Total issuance will be 200 with treasury account initialized at ED.
+
+	pallet_balances::GenesisConfig::<Test> {
 		balances: vec![(0, 100), (1, 98), (2, 1)],
 	}.assimilate_storage(&mut t).unwrap();
-	treasury::GenesisConfig::default().assimilate_storage::<Test, _>(&mut t).unwrap();
-	t.into()
+
+	treasury::GenesisConfig::<Test, _>::default()
+		.assimilate_storage(&mut t).unwrap();
+
+	let mut ext = sp_io::TestExternalities::new(t);
+	ext.execute_with(|| System::set_block_number(1));
+
+	ext
 }
 
 #[test]
@@ -351,7 +363,7 @@ fn genesis_funding_works() {
 		// Total issuance will be 200 with treasury account initialized with 100.
 		balances: vec![(0, 100), (Treasury::account_id(), initial_funding)],
 	}.assimilate_storage(&mut t).unwrap();
-	treasury::GenesisConfig::default().assimilate_storage::<Test, _>(&mut t).unwrap();
+	treasury::GenesisConfig::<Test, _>::default().assimilate_storage(&mut t).unwrap();
 	let mut t: sp_io::TestExternalities = t.into();
 
 	t.execute_with(|| {
