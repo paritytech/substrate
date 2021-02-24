@@ -283,7 +283,6 @@ pub mod inflation;
 pub mod weights;
 
 mod scheduler;
-mod scheduler1;
 
 use sp_std::{
 	result,
@@ -913,20 +912,29 @@ impl Default for Releases {
 	}
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, Default)]
-pub struct ChillTask<AccountId> {
-	slashed: AccountId,
+use frame_support::{CloneNoBound, PartialEqNoBound, EqNoBound, RuntimeDebugNoBound};
+#[derive(Encode, Decode, CloneNoBound, PartialEqNoBound, EqNoBound, RuntimeDebugNoBound)]
+pub struct ChillTaskFull<T: Config> {
+	slashed: T::AccountId,
 	last_key: Vec<u8>,
 }
 
-struct ChillTaskExecution<T>(sp_std::marker::PhantomData<T>);
-impl<T: Config> scheduler1::TaskExecution<ChillTask<T::AccountId>> for ChillTaskExecution<T> {
-	fn execute(mut task: ChillTask<T::AccountId>, max_weight: Weight) -> (Option<ChillTask<T::AccountId>>, Weight) {
+impl<T: Config> Default for ChillTaskFull<T> where T::AccountId: Default {
+	fn default() -> Self {
+		Self {
+			slashed: Default::default(),
+			last_key: vec![],
+		}
+	}
+}
+
+impl<T: Config> scheduler::RuntimeTask for ChillTaskFull<T> {
+	fn execute(mut self, max_weight: Weight) -> (Option<Self>, Weight) {
 		let weight_per_iteration = <T as frame_system::Config>::DbWeight::get().reads_writes(1, 1);
 		let max_iterations = max_weight / weight_per_iteration;
 		let mut iterated: Weight = 0;
 
-		while let Some(next_key) = sp_io::storage::next_key(task.last_key.as_ref()) {
+		while let Some(next_key) = sp_io::storage::next_key(self.last_key.as_ref()) {
 			if iterated > max_iterations {
 				break;
 			}
@@ -941,7 +949,7 @@ impl<T: Config> scheduler1::TaskExecution<ChillTask<T::AccountId>> for ChillTask
 			// updated.
 
 			next_nominations.targets.iter_mut().for_each(|(target, active)| {
-				if target == &task.slashed {
+				if target == &self.slashed {
 					*active = false;
 				}
 			});
@@ -949,14 +957,14 @@ impl<T: Config> scheduler1::TaskExecution<ChillTask<T::AccountId>> for ChillTask
 			frame_support::storage::unhashed::put(&next_key, &next_nominations);
 
 			iterated = iterated.saturating_add(1);
-			task.last_key = next_key;
+			self.last_key = next_key;
 		}
 
 		let consumed_weight = weight_per_iteration.saturating_mul(iterated);
 		// to avoid any edge cases, we simply check one last time if there is any further keys to
 		// work on:
-		let leftover_task = if sp_io::storage::next_key(task.last_key.as_ref()).is_some() {
-			Some(task)
+		let leftover_task = if sp_io::storage::next_key(self.last_key.as_ref()).is_some() {
+			Some(self)
 		} else {
 			None
 		};
@@ -964,7 +972,6 @@ impl<T: Config> scheduler1::TaskExecution<ChillTask<T::AccountId>> for ChillTask
 		(leftover_task, consumed_weight)
 	}
 }
-
 
 decl_storage! {
 	trait Store for Module<T: Config> as Staking {
@@ -1123,7 +1130,7 @@ decl_storage! {
 		EarliestUnappliedSlash: Option<EraIndex>;
 
 		/// Task scheduler for chill tasks
-		NominatorChillTasks: Vec<ChillTask<T::AccountId>>;
+		NominatorChillTasks: scheduler::RuntimeTaskScheduler<ChillTaskFull<T>>;
 
 		/// Snapshot of validators at the beginning of the current election window. This should only
 		/// have a value when [`EraElectionStatus`] == `ElectionStatus::Open(_)`.
@@ -1454,9 +1461,7 @@ decl_module! {
 			// Additional read from `on_finalize`
 			add_weight(1, 0, 0);
 
-			<NominatorChillTasks<T>>::mutate(|tasks| {
-				scheduler1::TaskExecutor::execute::<_, ChillTaskExecution<T>>(tasks, 1000)
-			});
+			let _weight = <NominatorChillTasks<T>>::mutate(|task_scheduler| task_scheduler.execute(1000));
 
 			consumed_weight
 		}
@@ -3463,6 +3468,7 @@ for Module<T> where
 				continue
 			}
 
+			// TODO: add a task to `NominatorChillTasks`.
 			let unapplied = slashing::compute_slash::<T>(slashing::SlashParams {
 				stash,
 				slash: *slash_fraction,
