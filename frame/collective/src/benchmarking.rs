@@ -22,7 +22,7 @@ use super::*;
 use frame_system::RawOrigin as SystemOrigin;
 use frame_system::EventRecord;
 use frame_benchmarking::{
-	benchmarks_instance,
+	benchmarks_instance_pallet,
 	account,
 	whitelisted_caller,
 	impl_benchmark_test_suite,
@@ -38,7 +38,7 @@ const SEED: u32 = 0;
 
 const MAX_BYTES: u32 = 1_024;
 
-fn assert_last_event<T: Config<I>, I: Instance>(generic_event: <T as Config<I>>::Event) {
+fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::Event) {
 	let events = System::<T>::events();
 	let system_event: <T as frame_system::Config>::Event = generic_event.into();
 	// compare to the last event record
@@ -46,7 +46,7 @@ fn assert_last_event<T: Config<I>, I: Instance>(generic_event: <T as Config<I>>:
 	assert_eq!(event, &system_event);
 }
 
-benchmarks_instance! {
+benchmarks_instance_pallet! {
 	set_members {
 		let m in 1 .. T::MaxMembers::get();
 		let n in 1 .. T::MaxMembers::get();
