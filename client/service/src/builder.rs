@@ -678,7 +678,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 async fn transaction_notifications<TBl, TExPool>(
 	transaction_pool: Arc<TExPool>,
 	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
-	mut telemetry: Option<TelemetryHandle>,
+	telemetry: Option<TelemetryHandle>,
 )
 	where
 		TBl: BlockT,

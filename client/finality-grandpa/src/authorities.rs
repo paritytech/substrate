@@ -418,7 +418,7 @@ where
 		best_number: N,
 		is_descendent_of: &F,
 		initial_sync: bool,
-		mut telemetry: Option<TelemetryHandle>,
+		telemetry: Option<TelemetryHandle>,
 	) -> Result<Option<(N, Self)>, Error<N, E>>
 	where
 		F: Fn(&H, &H) -> Result<bool, E>,
@@ -516,7 +516,7 @@ where
 		finalized_number: N,
 		is_descendent_of: &F,
 		initial_sync: bool,
-		mut telemetry: Option<&mut TelemetryHandle>,
+		telemetry: Option<&mut TelemetryHandle>,
 	) -> Result<Status<H, N>, Error<N, E>>
 	where
 		F: Fn(&H, &H) -> Result<bool, E>,

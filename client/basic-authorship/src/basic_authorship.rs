@@ -349,7 +349,7 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 				.join(", ")
 		);
 		telemetry!(
-			self.telemetry.clone();
+			self.telemetry;
 			CONSENSUS_INFO;
 			"prepared_block_for_proposing";
 			"number" => ?block.header().number(),

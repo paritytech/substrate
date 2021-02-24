@@ -214,7 +214,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		<Self::Proposer as Proposer<B>>::Proposal: Unpin + Send + 'static,
 	{
 		let (timestamp, slot) = (slot_info.timestamp, slot_info.slot);
-		let mut telemetry = self.telemetry();
+		let telemetry = self.telemetry();
 
 		let slot_remaining_duration = self.slot_remaining_duration(&slot_info);
 		let proposing_remaining_duration = self.proposing_remaining_duration(&chain_head, &slot_info);
@@ -294,7 +294,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		);
 
 		let awaiting_proposer = {
-			let mut telemetry = telemetry.clone();
+			let telemetry = telemetry.clone();
 			self.proposer(&chain_head).map_err(move |err| {
 				warn!("Unable to author block in slot {:?}: {:?}", slot, err);
 
@@ -323,7 +323,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		).map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e))));
 
 		let proposal_work = {
-			let mut telemetry = telemetry.clone();
+			let telemetry = telemetry.clone();
 			futures::future::select(proposing, proposing_remaining).map(move |v| match v {
 				Either::Left((b, _)) => b.map(|b| (b, claim)),
 				Either::Right(_) => {

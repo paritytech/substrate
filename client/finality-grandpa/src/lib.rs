@@ -558,7 +558,7 @@ where
 		genesis_hash,
 		<NumberFor<Block>>::zero(),
 		{
-			let mut telemetry = telemetry.clone();
+			let telemetry = telemetry.clone();
 			move || {
 				let authorities = genesis_authorities_provider.get()?;
 				telemetry!(
@@ -757,7 +757,7 @@ where
 		.map(|x| x.on_connect_stream())
 	{
 		let authorities = persistent_data.authority_set.clone();
-		let mut telemetry = telemetry.clone();
+		let telemetry = telemetry.clone();
 		let events = telemetry_on_connect
 			.for_each(move |_| {
 				let current_authorities = authorities.current_authorities();
@@ -921,7 +921,7 @@ where
 			.unwrap_or_default();
 
 		telemetry!(
-			self.telemetry.clone();
+			self.telemetry;
 			CONSENSUS_DEBUG;
 			"afg.starting_new_voter";
 			"name" => ?self.env.config.name(),
@@ -943,7 +943,7 @@ where
 		);
 
 		telemetry!(
-			self.telemetry.clone();
+			self.telemetry;
 			CONSENSUS_INFO;
 			"afg.authority_set";
 			"number" => ?chain_info.finalized_number,

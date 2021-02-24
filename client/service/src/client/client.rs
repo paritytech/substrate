@@ -680,7 +680,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 					rand::thread_rng().gen_bool(0.1)
 				{
 					telemetry!(
-						self.telemetry.clone();
+						self.telemetry;
 						SUBSTRATE_INFO;
 						"block.import";
 						"height" => height,
@@ -1003,7 +1003,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				);
 
 			telemetry!(
-				self.telemetry.clone();
+				self.telemetry;
 				SUBSTRATE_INFO;
 				"notify.finalized";
 				"height" => format!("{}", header.number()),

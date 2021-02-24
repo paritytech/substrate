@@ -829,7 +829,7 @@ impl<Block: BlockT> Inner<Block> {
 		if !self.authorities.contains(&full.message.id) {
 			debug!(target: "afg", "Message from unknown voter: {}", full.message.id);
 			telemetry!(
-				self.config.telemetry.clone();
+				self.config.telemetry;
 				CONSENSUS_DEBUG;
 				"afg.bad_msg_signature";
 				"signature" => ?full.message.id,
@@ -846,7 +846,7 @@ impl<Block: BlockT> Inner<Block> {
 		) {
 			debug!(target: "afg", "Bad message signature {}", full.message.id);
 			telemetry!(
-				self.config.telemetry.clone();
+				self.config.telemetry;
 				CONSENSUS_DEBUG;
 				"afg.bad_msg_signature";
 				"signature" => ?full.message.id,
@@ -1428,7 +1428,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 					message_name = None;
 					debug!(target: "afg", "Error decoding message: {}", e);
 					telemetry!(
-						self.telemetry.clone();
+						self.telemetry;
 						CONSENSUS_DEBUG;
 						"afg.err_decoding_msg";
 						"" => "",

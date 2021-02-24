@@ -325,7 +325,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		});
 
 		let topic = round_topic::<B>(round.0, set_id.0);
-		let mut telemetry = self.telemetry.clone();
+		let telemetry = self.telemetry.clone();
 		let incoming = self.gossip_engine.lock().messages_for(topic)
 			.filter_map(move |notification| {
 				let decoded = GossipMessage::<B>::decode(&mut &notification.message[..]);
@@ -746,7 +746,7 @@ impl<Block: BlockT> Sink<Message<Block>> for OutgoingMessages<Block>
 			);
 
 			telemetry!(
-				self.telemetry.clone();
+				self.telemetry;
 				CONSENSUS_DEBUG;
 				"afg.announcing_blocks_to_voted_peers";
 				"block" => ?target_hash, "round" => ?self.round, "set_id" => ?self.set_id,
@@ -787,7 +787,7 @@ fn check_compact_commit<Block: BlockT>(
 	voters: &VoterSet<AuthorityId>,
 	round: Round,
 	set_id: SetId,
-	mut telemetry: Option<&mut TelemetryHandle>,
+	telemetry: Option<&mut TelemetryHandle>,
 ) -> Result<(), ReputationChange> {
 	// 4f + 1 = equivocations from f voters.
 	let f = voters.total_weight() - voters.threshold();
@@ -905,7 +905,7 @@ fn check_catch_up<Block: BlockT>(
 		set_id: SetIdNumber,
 		mut signatures_checked: usize,
 		buf: &mut Vec<u8>,
-		mut telemetry: Option<TelemetryHandle>,
+		telemetry: Option<TelemetryHandle>,
 	) -> Result<usize, ReputationChange> where
 		B: BlockT,
 		I: Iterator<Item=(Message<B>, &'a AuthorityId, &'a AuthoritySignature)>,
@@ -1018,7 +1018,7 @@ impl<Block: BlockT> Sink<(RoundNumber, Commit<Block>)> for CommitsOut<Block> {
 		let round = Round(round);
 
 		telemetry!(
-			self.telemetry.clone();
+			self.telemetry;
 			CONSENSUS_DEBUG;
 			"afg.commit_issued";
 			"target_number" => ?commit.target_number,

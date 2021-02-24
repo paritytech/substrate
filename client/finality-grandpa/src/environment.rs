@@ -891,8 +891,8 @@ where
 			None => return Ok(()),
 		};
 
-		let mut telemetry = self.telemetry.clone();
-		let mut report_prevote_metrics = move |prevote: &Prevote<Block>| {
+		let telemetry = self.telemetry.clone();
+		let report_prevote_metrics = move |prevote: &Prevote<Block>| {
 			telemetry!(
 				telemetry;
 				CONSENSUS_DEBUG;
@@ -954,8 +954,8 @@ where
 			None => return Ok(()),
 		};
 
-		let mut telemetry = self.telemetry.clone();
-		let mut report_precommit_metrics = move |precommit: &Precommit<Block>| {
+		let telemetry = self.telemetry.clone();
+		let report_precommit_metrics = move |precommit: &Precommit<Block>| {
 			telemetry!(
 				telemetry;
 				CONSENSUS_DEBUG;

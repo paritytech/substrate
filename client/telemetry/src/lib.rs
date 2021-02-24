@@ -41,6 +41,7 @@ use global_counter::primitive::exact::CounterU64;
 use libp2p::Multiaddr;
 use log::{error, warn};
 use serde::Serialize;
+use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::mem;
 use std::sync::Arc;
@@ -402,7 +403,7 @@ impl Telemetry {
 	/// Make a new clonable handle to this [`Telemetry`]. This is used for reporting telemetries.
 	pub fn handle(&self) -> TelemetryHandle {
 		TelemetryHandle {
-			message_sender: self.message_sender.clone(),
+			message_sender: Arc::new(Mutex::new(self.message_sender.clone())),
 			id: self.id,
 			connection_notifier: self.connection_notifier.clone(),
 		}
@@ -412,15 +413,15 @@ impl Telemetry {
 /// Handle to a [`Telemetry`]. Used to report telemetries.
 #[derive(Debug, Clone)]
 pub struct TelemetryHandle {
-	message_sender: mpsc::Sender<TelemetryMessage>,
+	message_sender: Arc<Mutex<mpsc::Sender<TelemetryMessage>>>,
 	id: Id,
 	connection_notifier: TelemetryConnectionNotifier,
 }
 
 impl TelemetryHandle {
 	/// Send telemetries.
-	pub fn send_telemetry(&mut self, verbosity: VerbosityLevel, payload: TelemetryPayload) {
-		match self.message_sender.try_send((self.id, verbosity, payload)) {
+	pub fn send_telemetry(&self, verbosity: VerbosityLevel, payload: TelemetryPayload) {
+		match self.message_sender.lock().try_send((self.id, verbosity, payload)) {
 			Ok(()) => {}
 			Err(err) if err.is_full() => todo!("overflow"),
 			Err(_) => unreachable!(),
@@ -500,7 +501,7 @@ enum Register {
 #[macro_export(local_inner_macros)]
 macro_rules! telemetry {
 	( $telemetry:expr; $verbosity:expr; $msg:expr; $( $t:tt )* ) => {{
-		if let Some(telemetry) = $telemetry.as_mut() {
+		if let Some(telemetry) = $telemetry.as_ref() {
 			let verbosity: $crate::VerbosityLevel = $verbosity;
 			match format_fields_to_json!($($t)*) {
 				Err(err) => {
