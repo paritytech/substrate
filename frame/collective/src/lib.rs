@@ -195,11 +195,13 @@ pub mod pallet {
 		///
 		/// NOTE: Does not enforce the expected `MaxMembers` limit on the amount of members, but
 		///       the weight estimations rely on it to estimate dispatchable weight.
-		#[pallet::weight(
+		#[pallet::weight((
 			T::WeightInfo::set_members(
 				*old_count, // M
 				new_members.len() as u32, // N
 				T::MaxProposals::get() // P
+			),
+			DispatchClass::Operational
 		))]
 		pub fn set_members(
 			origin: OriginFor<T>,
@@ -239,12 +241,13 @@ pub mod pallet {
 		/// Dispatch a proposal from a member using the `Member` origin.
 		///
 		/// Origin must be a member of the collective.
-		#[pallet::weight(
+		#[pallet::weight((
 			T::WeightInfo::execute(
 				*length_bound, // B
 				T::MaxMembers::get(), // M
-			)
-		)]
+			).saturating_add(proposal.get_dispatch_info().weight), // P
+			DispatchClass::Operational,
+		))]
 		pub fn execute(
 			origin: OriginFor<T>,
 			proposal: Box<<T as Config<I>>::Proposal>,
@@ -277,7 +280,7 @@ pub mod pallet {
 		/// `threshold` determines whether `proposal` is executed directly (`threshold < 2`)
 		/// or put up for voting.
 		///
-		#[pallet::weight(
+		#[pallet::weight((
 			if *threshold < 2 {
 				T::WeightInfo::propose_execute(
 					*length_bound, // B
@@ -289,8 +292,9 @@ pub mod pallet {
 					T::MaxMembers::get(), // M
 					T::MaxProposals::get(), // P2
 				)
-			}
-		)]
+			},
+			DispatchClass::Operational
+		))]
 		pub fn propose(
 			origin: OriginFor<T>,
 			#[pallet::compact] threshold: MemberCount,
@@ -351,7 +355,10 @@ pub mod pallet {
 		///
 		/// Transaction fees will be waived if the member is voting on any particular proposal
 		/// for the first time and the call is successful. Subsequent vote changes will charge a fee.
-		#[pallet::weight(T::WeightInfo::vote(T::MaxMembers::get()))]
+		#[pallet::weight((
+			T::WeightInfo::vote(T::MaxMembers::get()),
+			DispatchClass::Operational
+		))]
 		pub fn vote(
 			origin: OriginFor<T>,
 			proposal: T::Hash,
@@ -427,7 +434,7 @@ pub mod pallet {
 		/// + `length_bound`: The upper bound for the length of the proposal in storage. Checked via
 		///                   `storage::read` so it is `size_of::<u32>() == 4` larger than the pure length.
 		///
-		#[pallet::weight(
+		#[pallet::weight((
 			{
 				let b = *length_bound;
 				let m = T::MaxMembers::get();
@@ -438,8 +445,9 @@ pub mod pallet {
 					.max(T::WeightInfo::close_approved(b, m, p2))
 					.max(T::WeightInfo::close_disapproved(m, p2))
 					.saturating_add(p1)
-			}
-		)]
+			},
+			DispatchClass::Operational
+		))]
 		pub fn close(
 			origin: OriginFor<T>,
 			proposal_hash: T::Hash,
