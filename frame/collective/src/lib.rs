@@ -324,7 +324,7 @@ pub mod pallet {
 				let active_proposals =
 					<Proposals<T, I>>::try_mutate(|proposals| -> Result<usize, DispatchError> {
 						proposals.push(proposal_hash);
-						ensure!(proposals.len() <= T::MaxProposals::get() as usize,<Error<T, I>>::TooManyProposals);
+						ensure!(proposals.len() <= T::MaxProposals::get() as usize, <Error<T, I>>::TooManyProposals);
 						Ok(proposals.len())
 					})?;
 				let index = Self::proposal_count();
