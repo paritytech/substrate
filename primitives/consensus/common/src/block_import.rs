@@ -200,7 +200,7 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 	/// Get the post header.
 	pub fn post_header(&self) -> Block::Header {
 		if self.post_digests.is_empty() {
-				self.header.clone()
+			self.header.clone()
 		} else {
 			let mut hdr = self.header.clone();
 			for digest_item in &self.post_digests {
