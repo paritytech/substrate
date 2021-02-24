@@ -158,7 +158,7 @@ impl<TBlock: BlockT, TBackend: Backend<TBlock>> GrandpaWarpSyncRequestHandler<TB
 	}
 }
 
-#[derive(derive_more::Display, derive_more::From)]
+#[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum HandleRequestError {
 	#[display(fmt = "Failed to decode request: {}.", _0)]
 	DecodeProto(prost::DecodeError),

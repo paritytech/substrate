@@ -656,6 +656,12 @@ impl<H, N: Add<Output=N> + Clone> PendingChange<H, N> {
 #[derive(Debug, Encode, Decode, Clone, PartialEq)]
 pub struct AuthoritySetChanges<N>(Vec<(u64, N)>);
 
+impl<N> From<Vec<(u64, N)>> for AuthoritySetChanges<N> {
+	fn from(changes: Vec<(u64, N)>) -> AuthoritySetChanges<N> {
+		AuthoritySetChanges(changes)
+	}
+}
+
 impl<N: Ord + Clone> AuthoritySetChanges<N> {
 	pub(crate) fn empty() -> Self {
 		Self(Default::default())
