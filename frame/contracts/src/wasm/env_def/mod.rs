@@ -22,7 +22,7 @@ use sp_sandbox::Value;
 use parity_wasm::elements::{FunctionType, ValueType};
 
 #[macro_use]
-pub(crate) mod macros;
+pub mod macros;
 
 pub trait ConvertibleToWasm: Sized {
 	const VALUE_TYPE: ValueType;
@@ -67,13 +67,13 @@ impl ConvertibleToWasm for u64 {
 	}
 }
 
-pub(crate) type HostFunc<E> =
+pub type HostFunc<E> =
 	fn(
 		&mut Runtime<E>,
 		&[sp_sandbox::Value]
 	) -> Result<sp_sandbox::ReturnValue, sp_sandbox::HostError>;
 
-pub(crate) trait FunctionImplProvider<E: Ext> {
+pub trait FunctionImplProvider<E: Ext> {
 	fn impls<F: FnMut(&[u8], HostFunc<E>)>(f: &mut F);
 }
 

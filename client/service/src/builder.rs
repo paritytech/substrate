@@ -912,6 +912,12 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 				spawn_handle.spawn("libp2p-node", fut);
 			}))
 		},
+		transactions_handler_executor: {
+			let spawn_handle = Clone::clone(&spawn_handle);
+			Box::new(move |fut| {
+				spawn_handle.spawn("network-transactions-handler", fut);
+			})
+		},
 		network_config: config.network.clone(),
 		chain: client.clone(),
 		on_demand: on_demand,

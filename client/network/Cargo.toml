@@ -36,7 +36,7 @@ hex = "0.4.0"
 ip_network = "0.3.4"
 linked-hash-map = "0.5.2"
 linked_hash_set = "0.1.3"
-lru = "0.6.3"
+lru = "0.6.5"
 log = "0.4.8"
 nohash-hasher = "0.2.0"
 parking_lot = "0.11.1"
@@ -63,17 +63,17 @@ wasm-timer = "0.2"
 zeroize = "1.2.0"
 
 [dependencies.libp2p]
-version = "0.34.0"
+version = "0.35.1"
 
 [target.'cfg(target_os = "unknown")'.dependencies.libp2p]
-version = "0.34.0"
+version = "0.35.1"
 default-features = false
 features = ["identify", "kad", "mdns", "mplex", "noise", "ping", "request-response", "tcp-async-io", "websocket", "yamux"]
 
 
 [dev-dependencies]
 assert_matches = "1.3"
-libp2p = { version = "0.34.0", default-features = false }
+libp2p = { version = "0.35.1", default-features = false }
 quickcheck = "1.0.3"
 rand = "0.7.2"
 sp-keyring = { version = "3.0.0", path = "../../primitives/keyring" }
