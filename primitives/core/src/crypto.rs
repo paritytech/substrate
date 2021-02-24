@@ -585,7 +585,7 @@ ss58_address_format!(
 	CrustAccount =>
 		(66, "crust", "Crust Network, standard account (*25519).")
 	CeruleanAccount =>
-		(206, "crust", "Cerulean mainnet, standard account (*25519).")
+		(206, "cerulean", "Cerulean mainnet, standard account (*25519).")
 	// Note: 16384 and above are reserved.
 );
 
