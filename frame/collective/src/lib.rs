@@ -50,17 +50,17 @@ use sp_runtime::{RuntimeDebug, traits::Hash};
 use frame_support::{
 	codec::{Decode, Encode}, debug,
 	dispatch::{
-		DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable, Parameter,
+		DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable,
 		PostDispatchInfo,
 	},
 	ensure,
 	traits::{ChangeMembers, EnsureOrigin, Get, InitializeMembers},
-	weights::{DispatchClass, GetDispatchInfo, Weight, Pays},
+	weights::{GetDispatchInfo, Weight},
 };
 #[cfg(feature = "std")]
 use frame_support::traits::GenesisBuild;
 
-use frame_system::{self as system, ensure_signed, ensure_root};
+use frame_system::{self as system};
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
@@ -960,7 +960,10 @@ impl<
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use frame_support::{Hashable, assert_ok, assert_noop, parameter_types};
+	use frame_support::{
+		Hashable, assert_ok, assert_noop, parameter_types,
+		weights::{Pays},
+	};
 	use frame_system::{self as system, EventRecord, Phase};
 	use hex_literal::hex;
 	use sp_core::H256;
