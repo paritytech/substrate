@@ -68,7 +68,7 @@ pub struct ProposerFactory<A, B, C, RP> {
 impl<A, B, C> ProposerFactory<A, B, C, DisableProofRecording> {
 	/// Create a new proposer factory.
 	///
-	/// Proof recording will be disabled when using proposers build by this instance to build blocks.
+	/// Proof recording will be disabled when using proposers built by this instance to build blocks.
 	pub fn new(
 		spawn_handle: impl SpawnNamed + 'static,
 		client: Arc<C>,
