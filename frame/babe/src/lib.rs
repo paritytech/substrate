@@ -847,3 +847,32 @@ fn compute_randomness(
 
 	sp_io::hashing::blake2_256(&s)
 }
+
+pub mod migrations {
+	use super::*;
+	use frame_support::pallet_prelude::{ValueQuery, StorageValue};
+
+	struct __OldNextEpochConfig;
+	impl frame_support::traits::StorageInstance for __OldNextEpochConfig {
+		fn pallet_prefix() -> &'static str { "BabeApi" }
+		const STORAGE_PREFIX: &'static str = "NextEpochConfig";
+	}
+
+	type OldNextEpochConfig = StorageValue<
+		__OldNextEpochConfig, Option<NextConfigDescriptor>, ValueQuery
+	>;
+
+	pub fn add_epoch_configurations(
+		current_epoch_config: BabeEpochConfiguration,
+		next_epoch_config: BabeEpochConfiguration,
+	) {
+		if let Some(pending_change) = OldNextEpochConfig::get() {
+			PendingEpochConfigChange::put(pending_change);
+		}
+
+		OldNextEpochConfig::kill();
+
+		EpochConfig::put(current_epoch_config);
+		NextEpochConfig::put(next_epoch_config);
+	}
+}
