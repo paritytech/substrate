@@ -468,6 +468,15 @@
 			"decimals": [12],
 			"standardAccount": "*25519",
 			"website": "https://crust.network"
+		},
+		{
+			"prefix": 206,
+			"network": "cerulean",
+			"displayName": "Cerulean Mainnet",
+			"symbols": ["CER"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://cerulean.cash"
 		}
 	]
 }
