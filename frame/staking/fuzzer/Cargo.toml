@@ -28,6 +28,7 @@ sp-io ={ version = "3.0.0", path = "../../../primitives/io" }
 sp-core = { version = "3.0.0", path = "../../../primitives/core" }
 sp-npos-elections = { version = "3.0.0", path = "../../../primitives/npos-elections" }
 sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
+sp-election-providers = { version = "3.0.0", path = "../../../primitives/election-providers" }
 serde = "1.0.101"
 
 [features]
