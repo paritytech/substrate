@@ -1,7 +1,6 @@
-use thiserror::Error;
 
 #[allow(missing_docs)]
-#[derive(Debug, Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
 	#[error("IO Error")]
 	IoError(#[from] std::io::Error),

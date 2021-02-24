@@ -182,7 +182,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	/// Returns a `Proposer` to author on top of the given block.
 	fn proposer(&mut self, block: &B::Header) -> Self::CreateProposer;
 
-	/// Retruns a `TelemetryHandle` if any.
+	/// Returns a [`TelemetryHandle`] if any.
 	fn telemetry(&self) -> Option<TelemetryHandle>;
 
 	/// Remaining duration of the slot.
