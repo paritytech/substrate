@@ -443,6 +443,15 @@
 			"website": null
 		},
 		{
+			"prefix": 48,
+			"network": "neatcoin",
+			"displayName": "Neatcoin Mainnet",
+			"symbols": ["NEAT"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://neatcoin.org"
+		},
+		{
 			"prefix": 65,
 			"network": "aventus",
 			"displayName": "AvN Mainnet",

@@ -683,7 +683,7 @@ impl<B: BlockT, C, P, CAW> Verifier<B> for AuraVerifier<C, P, CAW> where
 }
 
 fn initialize_authorities_cache<A, B, C>(client: &C) -> Result<(), ConsensusError> where
-	A: Codec,
+	A: Codec + Debug,
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B>,
 	C::Api: AuraApi<B, A>,
@@ -719,7 +719,7 @@ fn initialize_authorities_cache<A, B, C>(client: &C) -> Result<(), ConsensusErro
 
 #[allow(deprecated)]
 fn authorities<A, B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<A>, ConsensusError> where
-	A: Codec,
+	A: Codec + Debug,
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B>,
 	C::Api: AuraApi<B, A>,
@@ -886,7 +886,7 @@ mod tests {
 	use sc_client_api::BlockchainEvents;
 	use sp_consensus_aura::sr25519::AuthorityPair;
 	use sc_consensus_slots::{SimpleSlotWorker, BackoffAuthoringOnFinalizedHeadLagging};
-	use std::task::Poll;
+	use std::{task::Poll, time::Instant};
 	use sc_block_builder::BlockBuilderProvider;
 	use sp_runtime::traits::Header as _;
 	use substrate_test_runtime_client::{TestClient, runtime::{Header, H256}};
@@ -1123,5 +1123,52 @@ mod tests {
 		assert!(worker.claim_slot(&head, 5.into(), &authorities).is_none());
 		assert!(worker.claim_slot(&head, 6.into(), &authorities).is_none());
 		assert!(worker.claim_slot(&head, 7.into(), &authorities).is_some());
+	}
+
+	#[test]
+	fn on_slot_returns_correct_block() {
+		let net = AuraTestNet::new(4);
+
+		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
+		let keystore = LocalKeystore::open(keystore_path.path(), None)
+			.expect("Creates keystore.");
+		SyncCryptoStore::sr25519_generate_new(
+			&keystore,
+			AuthorityPair::ID, Some(&Keyring::Alice.to_seed()),
+		).expect("Key should be created");
+
+		let net = Arc::new(Mutex::new(net));
+
+		let mut net = net.lock();
+		let peer = net.peer(3);
+		let client = peer.client().as_full().expect("full clients are created").clone();
+		let environ = DummyFactory(client.clone());
+
+		let mut worker = AuraWorker {
+			client: client.clone(),
+			block_import: Arc::new(Mutex::new(client.clone())),
+			env: environ,
+			keystore: keystore.into(),
+			sync_oracle: DummyOracle.clone(),
+			force_authoring: false,
+			backoff_authoring_blocks: Option::<()>::None,
+			_key_type: PhantomData::<AuthorityPair>,
+		};
+
+		let head = client.header(&BlockId::Number(0)).unwrap().unwrap();
+
+		let res = futures::executor::block_on(worker.on_slot(
+			head,
+			SlotInfo {
+				slot: 0.into(),
+				timestamp: 0,
+				ends_at: Instant::now() + Duration::from_secs(100),
+				inherent_data: InherentData::new(),
+				duration: 1000,
+			},
+		)).unwrap();
+
+		// The returned block should be imported and we should be able to get its header by now.
+		assert!(client.header(&BlockId::Hash(res.block.hash())).unwrap().is_some());
 	}
 }

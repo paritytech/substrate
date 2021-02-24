@@ -413,12 +413,14 @@ impl<T: Config> Module<T> {
 	/// In other word, this is only accurate if no slots are missed. Given missed slots, the slot
 	/// number will grow while the block number will not. Hence, the result can be interpreted as an
 	/// upper bound.
-	// -------------- IMPORTANT NOTE --------------
+	//
+	// ## IMPORTANT NOTE
+	//
 	// This implementation is linked to how [`should_epoch_change`] is working. This might need to
 	// be updated accordingly, if the underlying mechanics of slot and epochs change.
 	//
-	// WEIGHT NOTE: This function is tied to the weight of `EstimateNextSessionRotation`. If you update
-	// this function, you must also update the corresponding weight.
+	// WEIGHT NOTE: This function is tied to the weight of `EstimateNextSessionRotation`. If you
+	// update this function, you must also update the corresponding weight.
 	pub fn next_expected_epoch_change(now: T::BlockNumber) -> Option<T::BlockNumber> {
 		let next_slot = Self::current_epoch_start().saturating_add(T::EpochDuration::get());
 		next_slot
@@ -754,6 +756,10 @@ impl<T: Config> OnTimestampSet<T::Moment> for Module<T> {
 }
 
 impl<T: Config> frame_support::traits::EstimateNextSessionRotation<T::BlockNumber> for Module<T> {
+	fn average_session_length() -> T::BlockNumber {
+		T::EpochDuration::get().saturated_into()
+	}
+
 	fn estimate_next_session_rotation(now: T::BlockNumber) -> Option<T::BlockNumber> {
 		Self::next_expected_epoch_change(now)
 	}

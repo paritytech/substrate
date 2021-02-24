@@ -56,6 +56,7 @@ pallet-contracts-primitives = { version = "2.0.0", default-features = false, pat
 pallet-contracts-rpc-runtime-api = { version = "0.8.0", default-features = false, path = "../../../frame/contracts/rpc/runtime-api/" }
 pallet-democracy = { version = "3.0.0", default-features = false, path = "../../../frame/democracy" }
 pallet-elections-phragmen = { version = "3.0.0", default-features = false, path = "../../../frame/elections-phragmen" }
+pallet-election-provider-multi-phase = { version = "3.0.0", default-features = false, path = "../../../frame/election-provider-multi-phase" }
 pallet-grandpa = { version = "3.0.0", default-features = false, path = "../../../frame/grandpa" }
 pallet-im-online = { version = "3.0.0", default-features = false, path = "../../../frame/im-online" }
 pallet-indices = { version = "3.0.0", default-features = false, path = "../../../frame/indices" }
@@ -141,6 +142,7 @@ std = [
 	"frame-benchmarking/std",
 	"frame-system-rpc-runtime-api/std",
 	"frame-system/std",
+	"pallet-election-provider-multi-phase/std",
 	"pallet-timestamp/std",
 	"pallet-tips/std",
 	"pallet-transaction-payment-rpc-runtime-api/std",
@@ -157,6 +159,7 @@ runtime-benchmarks = [
 	"frame-benchmarking",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
+	"pallet-election-provider-multi-phase/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
 	"pallet-assets/runtime-benchmarks",
 	"pallet-babe/runtime-benchmarks",

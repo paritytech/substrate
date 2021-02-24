@@ -25,7 +25,7 @@ use codec::Decode;
 use frame_support::{traits::Get, weights::Weight, IterableStorageMap};
 use frame_system::offchain::SubmitTransaction;
 use sp_npos_elections::{
-	to_support_map, EvaluateSupport, reduce, Assignment, ElectionResult, ElectionScore,
+	to_supports, EvaluateSupport, reduce, Assignment, ElectionResult, ElectionScore,
 	ExtendedBalance, CompactSolution,
 };
 use sp_runtime::{
@@ -127,7 +127,7 @@ pub(crate) fn compute_offchain_election<T: Config>() -> Result<(), OffchainElect
 
 	crate::log!(
 		info,
-		"💸 prepared a seq-phragmen solution with {} balancing iterations and score {:?}",
+		"prepared a seq-phragmen solution with {} balancing iterations and score {:?}",
 		iters,
 		score,
 	);
@@ -284,7 +284,7 @@ where
 				if compact.remove_voter(index) {
 					crate::log!(
 						trace,
-						"💸 removed a voter at index {} with stake {:?} from compact to reduce the size",
+						"removed a voter at index {} with stake {:?} from compact to reduce the size",
 						index,
 						_stake,
 					);
@@ -297,19 +297,17 @@ where
 			}
 
 			crate::log!(
-					warn,
-					"💸 {} nominators out of {} had to be removed from compact solution due to size limits.",
-					removed,
-					compact.voter_count() + removed,
-				);
+				warn,
+				"{} nominators out of {} had to be removed from compact solution due to size \
+				 limits.",
+				removed,
+				compact.voter_count() + removed,
+			);
 			Ok(compact)
 		}
 		_ => {
 			// nada, return as-is
-			crate::log!(
-				info,
-				"💸 Compact solution did not get trimmed due to block weight limits.",
-			);
+			crate::log!(info, "Compact solution did not get trimmed due to block weight limits.",);
 			Ok(compact)
 		}
 	}
@@ -390,13 +388,16 @@ pub fn prepare_submission<T: Config>(
 	let maximum_allowed_voters =
 		maximum_compact_len::<T::WeightInfo>(winners.len() as u32, size, maximum_weight);
 
-	crate::log!(debug, "💸 Maximum weight = {:?} // current weight = {:?} // maximum voters = {:?} // current votes = {:?}",
+	crate::log!(
+		debug,
+		"Maximum weight = {:?} // current weight = {:?} // maximum voters = {:?} // current votes \
+		 = {:?}",
 		maximum_weight,
 		T::WeightInfo::submit_solution_better(
-				size.validators.into(),
-				size.nominators.into(),
-				compact.voter_count() as u32,
-				winners.len() as u32,
+			size.validators.into(),
+			size.nominators.into(),
+			compact.voter_count() as u32,
+			winners.len() as u32,
 		),
 		maximum_allowed_voters,
 		compact.voter_count(),
@@ -415,7 +416,7 @@ pub fn prepare_submission<T: Config>(
 			<Module<T>>::slashable_balance_of_fn(),
 		);
 
-		let support_map = to_support_map::<T::AccountId>(&winners, &staked)
+		let support_map = to_supports::<T::AccountId>(&winners, &staked)
 			.map_err(|_| OffchainElectionError::ElectionFailed)?;
 		support_map.evaluate()
 	};
