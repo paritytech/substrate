@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Test utilities
+//! Treasury test utilities
 
 #![cfg(test)]
 
@@ -128,6 +128,7 @@ frame_support::construct_runtime!(
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
+	// Total issuance will be 200 with treasury account initialized at ED.
 	pallet_balances::GenesisConfig::<Test> {
 		balances: vec![(0, 100), (1, 98), (2, 1)],
 	}.assimilate_storage(&mut t).unwrap();

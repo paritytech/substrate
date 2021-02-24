@@ -245,8 +245,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::RejectOrigin::ensure_origin(origin)?;
 
-			let proposal = <Proposals<T, I>>::take(&proposal_id)
-				.ok_or(Error::<T, I>::InvalidIndex)?;
+			let proposal = <Proposals<T, I>>::take(&proposal_id).ok_or(Error::<T, I>::InvalidIndex)?;
 			let value = proposal.bond;
 			let imbalance = T::Currency::slash_reserved(&proposal.proposer, value).0;
 			T::OnSlash::on_unbalanced(imbalance);
