@@ -34,7 +34,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Example: pallet_example_parallel::{Module, Call, Storage, Event},
+		Example: pallet_example_parallel::{Module, Call, Storage},
 	}
 );
 
@@ -75,7 +75,6 @@ parameter_types! {
 }
 
 impl Config for Test {
-	type Event = Event;
 	type Call = Call;
 }
 
