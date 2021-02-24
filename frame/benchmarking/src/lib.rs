@@ -194,7 +194,7 @@ macro_rules! benchmarks_instance {
 
 /// Same as [`benchmarks`] but for instantiable pallet declared [`frame_support::pallet`].
 ///
-/// NOTE: For pallet declared with `decl_module!`, use [`benchmarks_instnace`].
+/// NOTE: For pallet declared with `decl_module!`, use [`benchmarks_instance`].
 #[macro_export]
 macro_rules! benchmarks_instance_pallet {
 	(
