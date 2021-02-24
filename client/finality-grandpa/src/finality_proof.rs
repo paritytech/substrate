@@ -132,7 +132,7 @@ pub struct FinalityProof<Header: HeaderT> {
 	/// The hash of block F for which justification is provided.
 	pub block: Header::Hash,
 	/// Justification of the block F.
-	pub justification: EncodedJustification,
+	pub justification: Vec<u8>,
 	/// The set of headers in the range (B; F] that we believe are unknown to the caller. Ordered.
 	pub unknown_headers: Vec<Header>,
 }
