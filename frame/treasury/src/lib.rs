@@ -57,11 +57,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[macro_use]
+#[cfg(test)]
 mod tests;
-mod mock;
 mod benchmarking;
-pub mod weights;
 
 use sp_std::prelude::*;
 
@@ -85,6 +83,8 @@ use sp_runtime::{
 use frame_support::traits::GenesisBuild;
 
 use codec::{Encode, Decode};
+
+pub mod weights;
 pub use weights::WeightInfo;
 
 pub use pallet::*;
@@ -225,12 +225,12 @@ pub mod pallet {
 			<ProposalCount<T, I>>::put(c + 1);
 			<Proposals<T, I>>::insert(
 				c,
-				Some( Proposal::<T::AccountId, BalanceOf<T, I>>{
+				Proposal::<T::AccountId, BalanceOf<T, I>>{
 					proposer,
 					value,
 					beneficiary,
 					bond,
-				}),
+				},
 			);
 			Self::deposit_event(Event::Proposed(c));
 			Ok(().into())
@@ -317,8 +317,8 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		ProposalIndex,
-		Option<Proposal<T::AccountId, BalanceOf<T, I>>>,
-		ValueQuery,
+		Proposal<T::AccountId, BalanceOf<T, I>>,
+		OptionQuery,
 	>;
 
 	/// Proposal indices that have been approved but not yet awarded.

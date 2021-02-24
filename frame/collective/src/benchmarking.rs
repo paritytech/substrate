@@ -22,7 +22,7 @@ use super::*;
 use frame_system::RawOrigin as SystemOrigin;
 use frame_system::EventRecord;
 use frame_benchmarking::{
-	benchmarks_instance,
+	benchmarks_instance_pallet,
 	account,
 	whitelisted_caller,
 	impl_benchmark_test_suite,
@@ -46,7 +46,7 @@ fn assert_last_event<T: Config<I>, I: Instance>(generic_event: <T as Config<I>>:
 	assert_eq!(event, &system_event);
 }
 
-benchmarks_instance! {
+benchmarks_instance_pallet! {
 	set_members {
 		let m in 1 .. T::MaxMembers::get();
 		let n in 1 .. T::MaxMembers::get();

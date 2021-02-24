@@ -22,16 +22,11 @@
 use super::*;
 
 use frame_system::RawOrigin;
-use frame_benchmarking::{
-	benchmarks,
-	account,
-	impl_benchmark_test_suite,
-};
+use frame_benchmarking::{benchmarks_instance_pallet, account, impl_benchmark_test_suite};
 use frame_support::{
 	ensure,
-	traits::OnInitialize
+	traits::{OnInitialize},
 };
-
 use crate::Module as Treasury;
 
 const SEED: u32 = 0;
@@ -72,7 +67,7 @@ fn setup_pot_account<T: Config<I>, I: 'static>() {
 	let _ = T::Currency::make_free_balance_be(&pot_account, value);
 }
 
-benchmarks! {
+benchmarks_instance_pallet! {
 
 	propose_spend {
 		let (caller, value, beneficiary_lookup) = setup_proposal::<T, _>(SEED);
@@ -112,6 +107,6 @@ benchmarks! {
 
 impl_benchmark_test_suite!(
 	Treasury,
-	crate::mock::new_test_ext(),
-	crate::mock::Test,
+	crate::tests::new_test_ext(),
+	crate::tests::Test,
 );
