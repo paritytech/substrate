@@ -786,14 +786,16 @@ fn add_epoch_configurations_migration_works() {
 	};
 
 	new_test_ext(1).execute_with(|| {
+		let next_config_descriptor = NextConfigDescriptor::V1 {
+			c: (3, 4),
+			allowed_slots: AllowedSlots::PrimarySlots
+		};
+
 		put_storage_value(
 			b"BabeApi",
 			b"NextEpochConfig",
 			&[],
-			Some(NextConfigDescriptor::V1 {
-				c: (2, 4),
-				allowed_slots: AllowedSlots::PrimarySlots
-			})
+			Some(next_config_descriptor.clone())
 		);
 
 		assert!(get_storage_value::<Option<NextConfigDescriptor>>(
@@ -824,5 +826,6 @@ fn add_epoch_configurations_migration_works() {
 
 		assert_eq!(EpochConfig::get(), Some(current_epoch));
 		assert_eq!(NextEpochConfig::get(), Some(next_epoch));
+		assert_eq!(PendingEpochConfigChange::get(), Some(next_config_descriptor));
 	});
 }
