@@ -241,7 +241,8 @@ const LOG_TARGET: &'static str = "runtime::election-provider";
 pub mod unsigned;
 pub mod weights;
 
-use weights::WeightInfo;
+/// The weight declaration of the pallet.
+pub use weights::WeightInfo;
 
 /// The compact solution type used by this crate.
 pub type CompactOf<T> = <T as Config>::CompactSolution;
