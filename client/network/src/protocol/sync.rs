@@ -44,7 +44,7 @@ use extra_requests::ExtraRequests;
 use libp2p::PeerId;
 use log::{debug, trace, warn, info, error};
 use sp_runtime::{
-	Justifications,
+	EncodedJustification, Justifications,
 	generic::BlockId,
 	traits::{
 		Block as BlockT, Header as HeaderT, NumberFor, Zero, One, CheckedSub, SaturatedConversion,
@@ -823,11 +823,13 @@ impl<B: BlockT> ChainSync<B> {
 								.drain(self.best_queued_number + One::one())
 								.into_iter()
 								.map(|block_data| {
+									let justifications =
+										legacy_justification_mapping(block_data.block.justification);
 									IncomingBlock {
 										hash: block_data.block.hash,
 										header: block_data.block.header,
 										body: block_data.block.body,
-										justifications: block_data.block.justifications,
+										justifications,
 										origin: block_data.origin,
 										allow_missing_state: true,
 										import_existing: false,
@@ -846,7 +848,7 @@ impl<B: BlockT> ChainSync<B> {
 									hash: b.hash,
 									header: b.header,
 									body: b.body,
-									justifications: b.justifications,
+									justifications: legacy_justification_mapping(b.justification),
 									origin: Some(who.clone()),
 									allow_missing_state: true,
 									import_existing: false,
@@ -955,7 +957,7 @@ impl<B: BlockT> ChainSync<B> {
 							hash: b.hash,
 							header: b.header,
 							body: b.body,
-							justifications: b.justifications,
+							justifications: legacy_justification_mapping(b.justification),
 							origin: Some(who.clone()),
 							allow_missing_state: true,
 							import_existing: false,
@@ -1026,7 +1028,7 @@ impl<B: BlockT> ChainSync<B> {
 					return Err(BadPeer(who, rep::BAD_JUSTIFICATION));
 				}
 
-				block.justifications
+				block.justification
 			} else {
 				// we might have asked the peer for a justification on a block that we assumed it
 				// had but didn't (regardless of whether it had a justification for it or not).
@@ -1039,7 +1041,10 @@ impl<B: BlockT> ChainSync<B> {
 				None
 			};
 
-			if let Some((peer, hash, number, j)) = self.extra_justifications.on_response(who, justification) {
+			if let Some((peer, hash, number, j)) = self
+				.extra_justifications
+				.on_response(who, legacy_justification_mapping(justification))
+			{
 				return Ok(OnBlockJustification::Import { peer, hash, number, justifications: j })
 			}
 		}
@@ -1597,6 +1602,14 @@ impl<B: BlockT> ChainSync<B> {
 	}
 }
 
+// This is purely during a backwards compatible transitionary period and should be removed
+// once we can assume all nodes can send and receive multiple Justifications
+// The ID tag is hardcoded here to avoid depending on the GRANDPA crate.
+// See https://github.com/paritytech/substrate/issues/8172
+fn legacy_justification_mapping(justification: Option<EncodedJustification>) -> Option<Justifications> {
+	justification.map(|just| (*b"FRNK", just).into())
+}
+
 #[derive(Debug)]
 pub(crate) struct Metrics {
 	pub(crate) queued_blocks: u32,
@@ -2091,7 +2104,7 @@ mod test {
 					body: Some(b.deconstruct().1),
 					receipt: None,
 					message_queue: None,
-					justifications: None,
+					justification: None,
 				}
 			).collect(),
 		}

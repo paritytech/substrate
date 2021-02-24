@@ -227,7 +227,7 @@ mod test {
 			body: None,
 			message_queue: None,
 			receipt: None,
-			justifications: None,
+			justification: None,
 		}).collect()
 	}
 

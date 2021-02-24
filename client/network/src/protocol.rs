@@ -654,15 +654,10 @@ impl<B: BlockT> Protocol<B> {
 				} else {
 					None
 				},
-				justifications: if !block_data.justification.is_empty() {
-					// For compatibility we assume that the incoming Justifications is from GRANDPA.
-					// The ID tag is hardcoded here to avoid depending on the GRANDPA crate.
-					// NOTE: This is purely during a backwards compatible transitionary period and should be removed
-					// once we can assume all nodes can send and receive multiple Justifications
-					// See https://github.com/paritytech/substrate/issues/8172
-					Some(Justifications::from((*b"FRNK", block_data.justification)))
+				justification: if !block_data.justification.is_empty() {
+					Some(block_data.justification)
 				} else if block_data.is_empty_justification {
-					Some(Justifications::from((*b"FRNK", Vec::new())))
+					Some(Vec::new())
 				} else {
 					None
 				},
@@ -993,7 +988,7 @@ impl<B: BlockT> Protocol<B> {
 						body: None,
 						receipt: None,
 						message_queue: None,
-						justifications: None,
+						justification: None,
 					},
 				],
 			},
