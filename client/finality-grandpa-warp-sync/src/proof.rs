@@ -31,21 +31,27 @@ use crate::HandleRequestError;
 /// The maximum number of authority set change proofs to include in a single warp sync proof.
 const MAX_CHANGES_PER_WARP_SYNC_PROOF: usize = 256;
 
+/// A proof of an authority set change.
 #[derive(Decode, Encode)]
 pub struct AuthoritySetChangeProof<Block: BlockT> {
-	/// must contain the authorities for the following set
+	/// The last block that the given authority set finalized. This block should contain a digest
+	/// signaling an authority set change from which we can fetch the next authority set.
 	pub header: Block::Header,
-	/// this justification proves finality of the header above
-	/// it must be validated against the authorities of the previous set.
+	/// A justification for the header above which proves its finality. In order to validate it the
+	/// verifier must be aware of the authorities and set id for which the justification refers to.
 	pub justification: GrandpaJustification<Block>,
 }
 
+/// An accumulated proof of multiple authority set changes.
 #[derive(Decode, Encode)]
 pub struct WarpSyncProof<Block: BlockT> {
 	proofs: Vec<AuthoritySetChangeProof<Block>>,
 }
 
 impl<Block: BlockT> WarpSyncProof<Block> {
+	/// Generates a warp sync proof starting at the given block. It will generate authority set
+	/// change proofs for all changes that happened from `begin` until the current authority set
+	/// (capped by MAX_CHANGES_PER_WARP_SYNC_PROOF).
 	pub fn generate<Backend>(
 		backend: &Backend,
 		begin: Block::Hash,
@@ -115,6 +121,8 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 		Ok(WarpSyncProof { proofs })
 	}
 
+	/// Verifies the warp sync proof starting at the given set id and with the given authorities.
+	/// If the proof is valid the new set id and authorities is returned.
 	pub fn verify(
 		&self,
 		set_id: SetId,
