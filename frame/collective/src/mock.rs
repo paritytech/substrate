@@ -145,9 +145,9 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{Module, Call, Event<T>},
-		Collective: collective::<Instance1>::{Module, Call, Event<T>, Origin<T>, Config<T>},
-		CollectiveMajority: collective::<Instance2>::{Module, Call, Event<T>, Origin<T>, Config<T>},
-		DefaultCollective: collective::{Module, Call, Event<T>, Origin<T>, Config<T>},
+		Collective: collective::<Instance1>::{Module, Call, Storage, Event<T>, Origin<T>, Config<T>},
+		CollectiveMajority: collective::<Instance2>::{Module, Call, Storage, Event<T>, Origin<T>, Config<T>},
+		DefaultCollective: collective::{Module, Call, Storage, Event<T>, Origin<T>, Config<T>},
 	}
 );
 
