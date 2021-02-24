@@ -226,18 +226,18 @@ decl_storage! {
 		/// execution context should always yield zero.
 		Lateness get(fn lateness): T::BlockNumber;
 
-		/// The configuration for the current epoch.
-		EpochConfig: BabeEpochConfiguration;
+		/// The configuration for the current epoch. Should never be `None`.
+		EpochConfig: Option<BabeEpochConfiguration>;
 
 		/// The configuration for the next epoch. Uses `EpochConfig` instead if `None`.
 		NextEpochConfig: Option<BabeEpochConfiguration>;
 	}
 	add_extra_genesis {
 		config(authorities): Vec<(AuthorityId, BabeAuthorityWeight)>;
-		config(epoch_config): BabeEpochConfiguration;
+		config(epoch_config): Option<BabeEpochConfiguration>;
 		build(|config| {
 			Module::<T>::initialize_authorities(&config.authorities);
-			EpochConfig::put(config.epoch_config.clone());
+			EpochConfig::put(config.epoch_config.clone().expect("EpochConfig is never None; qed"));
 		})
 	}
 }
@@ -522,7 +522,7 @@ impl<T: Config> Module<T> {
 			duration: T::EpochDuration::get(),
 			authorities: Self::authorities(),
 			randomness: Self::randomness(),
-			config: EpochConfig::get(),
+			config: EpochConfig::get().expect("EpochConfig is never None; qed"),
 		}
 	}
 
@@ -540,7 +540,9 @@ impl<T: Config> Module<T> {
 			duration: T::EpochDuration::get(),
 			authorities: NextAuthorities::get(),
 			randomness: NextRandomness::get(),
-			config: NextEpochConfig::get().unwrap_or_else(EpochConfig::get),
+			config: NextEpochConfig::get().unwrap_or_else(|| {
+				EpochConfig::get().expect("EpochConfig is never None; qed")
+			}),
 		}
 	}
 

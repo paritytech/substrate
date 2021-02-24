@@ -29,6 +29,7 @@ pub use sp_consensus_vrf::schnorrkel::{
 };
 
 use codec::{Decode, Encode};
+#[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 #[cfg(feature = "std")]
 use sp_keystore::vrf::{VRFTranscriptData, VRFTranscriptValue};
@@ -47,9 +48,6 @@ mod app {
 
 /// The prefix used by BABE for its VRF keys.
 pub const BABE_VRF_PREFIX: &[u8] = b"substrate-babe-vrf";
-
-/// 1 in 4 blocks (on average, not counting collisions) will be primary BABE blocks.
-pub const DEFAULT_PRIMARY_PROBABILITY: (u64, u64) = (1, 4);
 
 /// BABE VRFInOut context.
 pub static BABE_VRF_INOUT_CONTEXT: &[u8] = b"BabeVRFInOutContext";
@@ -219,7 +217,8 @@ pub struct BabeGenesisConfiguration {
 }
 
 /// Types of allowed slots.
-#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, RuntimeDebug, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum AllowedSlots {
 	/// Only allow primary slots.
 	PrimarySlots,
@@ -251,7 +250,8 @@ impl sp_consensus::SlotData for BabeGenesisConfiguration {
 }
 
 /// Configuration data used by the BABE consensus engine.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct BabeEpochConfiguration {
 	/// A constant value that is used in the threshold calculation formula.
 	/// Expressed as a rational where the first member of the tuple is the
@@ -264,15 +264,6 @@ pub struct BabeEpochConfiguration {
 	/// Whether this chain should run with secondary slots, which are assigned
 	/// in round-robin manner.
 	pub allowed_slots: AllowedSlots,
-}
-
-impl Default for BabeEpochConfiguration {
-	fn default() -> Self {
-		Self {
-			c: DEFAULT_PRIMARY_PROBABILITY,
-			allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
-		}
-	}
 }
 
 /// Verifies the equivocation proof by making sure that: both headers have
