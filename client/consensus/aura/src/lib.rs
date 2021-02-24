@@ -179,7 +179,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, BS, Error>(
 		&inherent_data_providers,
 		slot_duration.slot_duration()
 	)?;
-	Ok(sc_consensus_slots::start_slot_worker::<_, _, _, _, _, AuraSlotCompatible, _>(
+	Ok(sc_consensus_slots::start_slot_worker::<_, _, _, _, _, AuraSlotCompatible, _, _>(
 		slot_duration,
 		select_chain,
 		worker,
@@ -683,7 +683,7 @@ impl<B: BlockT, C, P, CAW> Verifier<B> for AuraVerifier<C, P, CAW> where
 }
 
 fn initialize_authorities_cache<A, B, C>(client: &C) -> Result<(), ConsensusError> where
-	A: Codec,
+	A: Codec + Debug,
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B>,
 	C::Api: AuraApi<B, A>,
@@ -719,7 +719,7 @@ fn initialize_authorities_cache<A, B, C>(client: &C) -> Result<(), ConsensusErro
 
 #[allow(deprecated)]
 fn authorities<A, B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<A>, ConsensusError> where
-	A: Codec,
+	A: Codec + Debug,
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B>,
 	C::Api: AuraApi<B, A>,
@@ -877,7 +877,9 @@ pub fn import_queue<B, I, C, P, S, CAW>(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_consensus::{NoNetwork as DummyOracle, Proposal, RecordProof, AlwaysCanAuthor};
+	use sp_consensus::{
+		NoNetwork as DummyOracle, Proposal, AlwaysCanAuthor, DisableProofRecording,
+	};
 	use sc_network_test::{Block as TestBlock, *};
 	use sp_runtime::traits::{Block as BlockT, DigestFor};
 	use sc_network::config::ProtocolConfig;
@@ -886,7 +888,7 @@ mod tests {
 	use sc_client_api::BlockchainEvents;
 	use sp_consensus_aura::sr25519::AuthorityPair;
 	use sc_consensus_slots::{SimpleSlotWorker, BackoffAuthoringOnFinalizedHeadLagging};
-	use std::task::Poll;
+	use std::{task::Poll, time::Instant};
 	use sc_block_builder::BlockBuilderProvider;
 	use sp_runtime::traits::Header as _;
 	use substrate_test_runtime_client::{TestClient, runtime::{Header, H256}};
@@ -916,20 +918,21 @@ mod tests {
 			substrate_test_runtime_client::Backend,
 			TestBlock
 		>;
-		type Proposal = future::Ready<Result<Proposal<TestBlock, Self::Transaction>, Error>>;
+		type Proposal = future::Ready<Result<Proposal<TestBlock, Self::Transaction, ()>, Error>>;
+		type ProofRecording = DisableProofRecording;
+		type Proof = ();
 
 		fn propose(
 			self,
 			_: InherentData,
 			digests: DigestFor<TestBlock>,
 			_: Duration,
-			_: RecordProof,
 		) -> Self::Proposal {
 			let r = self.1.new_block(digests).unwrap().build().map_err(|e| e.into());
 
 			future::ready(r.map(|b| Proposal {
 				block: b.block,
-				proof: b.proof,
+				proof: (),
 				storage_changes: b.storage_changes,
 			}))
 		}
@@ -1123,5 +1126,52 @@ mod tests {
 		assert!(worker.claim_slot(&head, 5.into(), &authorities).is_none());
 		assert!(worker.claim_slot(&head, 6.into(), &authorities).is_none());
 		assert!(worker.claim_slot(&head, 7.into(), &authorities).is_some());
+	}
+
+	#[test]
+	fn on_slot_returns_correct_block() {
+		let net = AuraTestNet::new(4);
+
+		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
+		let keystore = LocalKeystore::open(keystore_path.path(), None)
+			.expect("Creates keystore.");
+		SyncCryptoStore::sr25519_generate_new(
+			&keystore,
+			AuthorityPair::ID, Some(&Keyring::Alice.to_seed()),
+		).expect("Key should be created");
+
+		let net = Arc::new(Mutex::new(net));
+
+		let mut net = net.lock();
+		let peer = net.peer(3);
+		let client = peer.client().as_full().expect("full clients are created").clone();
+		let environ = DummyFactory(client.clone());
+
+		let mut worker = AuraWorker {
+			client: client.clone(),
+			block_import: Arc::new(Mutex::new(client.clone())),
+			env: environ,
+			keystore: keystore.into(),
+			sync_oracle: DummyOracle.clone(),
+			force_authoring: false,
+			backoff_authoring_blocks: Option::<()>::None,
+			_key_type: PhantomData::<AuthorityPair>,
+		};
+
+		let head = client.header(&BlockId::Number(0)).unwrap().unwrap();
+
+		let res = futures::executor::block_on(worker.on_slot(
+			head,
+			SlotInfo {
+				slot: 0.into(),
+				timestamp: 0,
+				ends_at: Instant::now() + Duration::from_secs(100),
+				inherent_data: InherentData::new(),
+				duration: 1000,
+			},
+		)).unwrap();
+
+		// The returned block should be imported and we should be able to get its header by now.
+		assert!(client.header(&BlockId::Hash(res.block.hash())).unwrap().is_some());
 	}
 }

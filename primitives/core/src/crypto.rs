@@ -578,11 +578,13 @@ ss58_address_format!(
 		(46, "reserved46", "Reserved for future use (46).")
 	Reserved47 =>
 		(47, "reserved47", "Reserved for future use (47).")
+	NeatcoinAccount =>
+		(48, "neatcoin", "Neatcoin mainnet, standard account (*25519).")
 	AventusAccount =>
 		(65, "aventus", "Aventus Chain mainnet, standard account (*25519).")
 	CrustAccount =>
 		(66, "crust", "Crust Network, standard account (*25519).")
-	// Note: 48 and above are reserved.
+	// Note: 16384 and above are reserved.
 );
 
 /// Set the default "version" (actually, this is a bit of a misnomer and the version byte is
