@@ -85,10 +85,6 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 				break;
 			}
 
-			if *last_block <= begin_number {
-				continue;
-			}
-
 			let header = backend.header(BlockId::Number(*last_block))?.expect(
 				"header number comes from previously applied set changes; must exist in db; qed.",
 			);
