@@ -16,8 +16,11 @@
 
 use codec::{Decode, Encode};
 
-use sc_finality_grandpa::{AuthoritySetChanges, GrandpaJustification};
+use sc_finality_grandpa::{
+	find_scheduled_change, AuthoritySetChanges, BlockNumberOps, GrandpaJustification,
+};
 use sp_blockchain::Backend as BlockchainBackend;
+use sp_finality_grandpa::{AuthorityList, SetId};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, NumberFor},
@@ -92,7 +95,7 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 
 			// the last block in a set is the one that triggers a change to the next set,
 			// therefore the block must have a digest that signals the authority set change
-			if sc_finality_grandpa::find_scheduled_change::<Block>(&header).is_none() {
+			if find_scheduled_change::<Block>(&header).is_none() {
 				// if it doesn't contain a signal for standard change then the set must have changed
 				// through a forced changed, in which case we stop collecting proofs as the chain of
 				// trust in authority handoffs was broken.
@@ -114,5 +117,35 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 		}
 
 		Ok(WarpSyncProof { proofs })
+	}
+
+	pub fn verify(
+		&self,
+		set_id: SetId,
+		authorities: AuthorityList,
+	) -> Result<(SetId, AuthorityList), HandleRequestError>
+	where
+		NumberFor<Block>: BlockNumberOps,
+	{
+		let mut current_set_id = set_id;
+		let mut current_authorities = authorities;
+
+		for proof in &self.proofs {
+			proof
+				.justification
+				.verify(current_set_id, &current_authorities)
+				.map_err(|err| HandleRequestError::InvalidProof(err.to_string()))?;
+
+			let scheduled_change = find_scheduled_change::<Block>(&proof.header).ok_or(
+				HandleRequestError::InvalidProof(
+					"Header is missing authority set change digest".to_string(),
+				),
+			)?;
+
+			current_authorities = scheduled_change.next_authorities;
+			current_set_id += 1;
+		}
+
+		Ok((current_set_id, current_authorities))
 	}
 }

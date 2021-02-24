@@ -167,7 +167,10 @@ pub enum HandleRequestError {
 	#[display(fmt = "Failed to decode block hash: {}.", _0)]
 	DecodeScale(codec::Error),
 	Client(sp_blockchain::Error),
+	#[from(ignore)]
 	InvalidRequest(String),
+	#[from(ignore)]
+	InvalidProof(String),
 	#[display(fmt = "Failed to send response.")]
 	SendResponse,
 }

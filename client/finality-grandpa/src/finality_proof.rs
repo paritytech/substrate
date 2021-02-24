@@ -280,7 +280,7 @@ where
 			ClientError::Consensus(sp_consensus::Error::InvalidAuthoritiesSet),
 		)?;
 
-		GrandpaJustification::verify(self, set_id, &authorities)
+		GrandpaJustification::verify_with_voter_set(self, set_id, &authorities)
 	}
 }
 

@@ -7189,6 +7189,7 @@ dependencies = [
  "sc-network",
  "sc-service",
  "sp-blockchain",
+ "sp-finality-grandpa",
  "sp-runtime",
 ]
 
