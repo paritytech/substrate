@@ -42,6 +42,7 @@ use libp2p::Multiaddr;
 use log::{error, warn};
 use serde::Serialize;
 use parking_lot::Mutex;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::mem;
 use std::sync::Arc;
@@ -421,11 +422,23 @@ pub struct TelemetryHandle {
 impl TelemetryHandle {
 	/// Send telemetries.
 	pub fn send_telemetry(&self, verbosity: VerbosityLevel, payload: TelemetryPayload) {
-		match self.message_sender.lock().try_send((self.id, verbosity, payload)) {
-			Ok(()) => {}
-			Err(err) if err.is_full() => todo!("overflow"),
-			Err(_) => unreachable!(),
+		thread_local! {
+			static SENDER: RefCell<Option<mpsc::Sender<TelemetryMessage>>> = RefCell::new(None);
 		}
+
+		SENDER.with(|sender| {
+			let mut sender = sender.borrow_mut();
+
+			if sender.is_none() {
+				sender.replace(self.message_sender.lock().clone());
+			}
+
+			match sender.as_mut().unwrap().try_send((self.id, verbosity, payload)) {
+				Ok(()) => {}
+				Err(err) if err.is_full() => todo!("overflow"),
+				Err(_) => unreachable!(),
+			}
+		})
 	}
 
 	/// Get event stream for telemetry connection established events.
