@@ -293,6 +293,6 @@ mod tests {
 			.collect::<Vec<_>>();
 
 		assert_eq!(new_set_id, current_set_id);
-		assert_eq!(new_authorities, expected_authorities,);
+		assert_eq!(new_authorities, expected_authorities);
 	}
 }
