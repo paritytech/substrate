@@ -600,8 +600,8 @@ pub mod pallet {
 		_,
 		Identity,
 		T::Hash,
-		Option<Votes<T::AccountId, T::BlockNumber>>,
-		ValueQuery
+		Votes<T::AccountId, T::BlockNumber>,
+		OptionQuery
 	>;
 
 	/// Proposals so far.
