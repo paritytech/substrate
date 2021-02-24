@@ -82,7 +82,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 					Self
 					as
 					#frame_support::traits::Hooks<<T as #frame_system::Config>::BlockNumber>
-				>::pre_upgrade();
+				>::pre_upgrade()
 			}
 
 			#[cfg(feature = "try-runtime")]
@@ -91,7 +91,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 					Self
 					as
 					#frame_support::traits::Hooks<<T as #frame_system::Config>::BlockNumber>
-				>::post_upgrade();
+				>::post_upgrade()
 			}
 		}
 

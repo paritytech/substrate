@@ -194,4 +194,5 @@ runtime-benchmarks = [
 try-runtime = [
 	"frame-executive/try-runtime",
 	"frame-try-runtime",
+	"pallet-balances/try-runtime",
 ]
