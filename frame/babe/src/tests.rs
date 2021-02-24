@@ -25,7 +25,7 @@ use frame_support::{
 };
 use mock::*;
 use pallet_session::ShouldEndSession;
-use sp_consensus_babe::{AllowedSlots, Slot};
+use sp_consensus_babe::{AllowedSlots, Slot, BabeEpochConfiguration};
 use sp_core::crypto::Pair;
 
 const EMPTY_RANDOMNESS: [u8; 32] = [
@@ -255,6 +255,11 @@ fn can_enact_next_config() {
 #[test]
 fn can_fetch_current_and_next_epoch_data() {
 	new_test_ext(5).execute_with(|| {
+		EpochConfig::put(BabeEpochConfiguration {
+			c: (1, 4),
+			allowed_slots: sp_consensus_babe::AllowedSlots::PrimarySlots,
+		});
+
 		// genesis authorities should be used for the first and second epoch
 		assert_eq!(
 			Babe::current_epoch().authorities,
@@ -772,4 +777,52 @@ fn valid_equivocation_reports_dont_pay_fees() {
 		assert!(post_info.actual_weight.is_none());
 		assert_eq!(post_info.pays_fee, Pays::Yes);
 	})
+}
+
+#[test]
+fn add_epoch_configurations_migration_works() {
+	use frame_support::storage::migration::{
+		put_storage_value, get_storage_value,
+	};
+
+	new_test_ext(1).execute_with(|| {
+		put_storage_value(
+			b"BabeApi",
+			b"NextEpochConfig",
+			&[],
+			Some(NextConfigDescriptor::V1 {
+				c: (2, 4),
+				allowed_slots: AllowedSlots::PrimarySlots
+			})
+		);
+
+		assert!(get_storage_value::<Option<NextConfigDescriptor>>(
+			b"BabeApi",
+			b"NextEpochConfig",
+			&[],
+		).is_some());
+
+		let current_epoch = BabeEpochConfiguration {
+			c: (1, 4),
+			allowed_slots: sp_consensus_babe::AllowedSlots::PrimarySlots,
+		};
+
+		let next_epoch = BabeEpochConfiguration {
+			c: (2, 4),
+			allowed_slots: sp_consensus_babe::AllowedSlots::PrimarySlots,
+		};
+
+		crate::migrations::add_epoch_configurations(
+			current_epoch.clone(), next_epoch.clone()
+		);
+
+		assert!(get_storage_value::<Option<NextConfigDescriptor>>(
+			b"BabeApi",
+			b"NextEpochConfig",
+			&[],
+		).is_none());
+
+		assert_eq!(EpochConfig::get(), Some(current_epoch));
+		assert_eq!(NextEpochConfig::get(), Some(next_epoch));
+	});
 }
