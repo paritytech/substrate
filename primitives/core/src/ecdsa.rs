@@ -55,6 +55,16 @@ type Seed = [u8; 32];
 #[derive(Clone, Encode, Decode, PassByInner)]
 pub struct Public(pub [u8; 33]);
 
+// todo: remove this once https://github.com/paritytech/scale-info/pull/54 is merged, which
+// introduces const generics for arrays and should support a 33 element array.
+impl scale_info::TypeInfo for Public {
+	type Identity = Self;
+
+	fn type_info() -> scale_info::Type {
+		scale_info::TypeDefArray::new(33, scale_info::MetaType::new::<u8>()).into()
+	}
+}
+
 impl PartialOrd for Public {
 	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
 		Some(self.cmp(other))

@@ -146,7 +146,7 @@ pub mod pallet {
 	use super::*;
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config {
+	pub trait Config: frame_system::Config + scale_info::TypeInfo { // todo: we shouldn't need this TypeInfo bound
 		/// The time implementation used to supply timestamps to conntracts through `seal_now`.
 		type Time: Time;
 
@@ -271,7 +271,7 @@ pub mod pallet {
 	impl<T: Config> Pallet<T>
 	where
 		T::AccountId: UncheckedFrom<T::Hash>,
-		T::AccountId: AsRef<[u8]>,
+		T::AccountId: AsRef<[u8]> + scale_info::TypeInfo,
 	{
 		/// Updates the schedule for metering contracts.
 		///
@@ -659,7 +659,7 @@ pub mod pallet {
 
 impl<T: Config> Module<T>
 where
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]> + scale_info::TypeInfo,
 {
 	/// Perform a call to a specified contract.
 	///

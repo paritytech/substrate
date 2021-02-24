@@ -63,7 +63,7 @@ pub struct Schedule<T: Config> {
 
 /// Describes the upper limits on various metrics.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Clone, Encode, Decode, PartialEq, Eq, RuntimeDebug)]
+#[derive(Clone, Encode, Decode, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
 pub struct Limits {
 	/// The maximum number of topics supported by an event.
 	pub event_topics: u32,
