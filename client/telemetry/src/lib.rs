@@ -489,7 +489,7 @@ enum Register {
 /// # let set_id = (43_u64, 44_u64);
 /// # let authorities = vec![45_u64];
 /// telemetry!(
-///     telemetry;
+///     telemetry;      // an `Option<Telemetry>`
 ///     CONSENSUS_INFO;
 ///     "afg.authority_set";
 ///     "authority_id" => authority_id.to_string(),
