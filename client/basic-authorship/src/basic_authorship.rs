@@ -52,7 +52,7 @@ use sc_proposer_metrics::MetricsLink as PrometheusMetrics;
 pub const DEFAULT_MAX_BLOCK_SIZE: usize = 4 * 1024 * 1024 + 512;
 
 /// Proposer factory.
-pub struct ProposerFactory<A, B, C, RP> {
+pub struct ProposerFactory<A, B, C, PR> {
 	spawn_handle: Box<dyn SpawnNamed>,
 	/// The client instance.
 	client: Arc<C>,
@@ -61,7 +61,7 @@ pub struct ProposerFactory<A, B, C, RP> {
 	/// Prometheus Link,
 	metrics: PrometheusMetrics,
 	/// phantom member to pin the `Backend`/`ProofRecording` type.
-	_phantom: PhantomData<(B, RP)>,
+	_phantom: PhantomData<(B, PR)>,
 	max_block_size: usize,
 }
 
@@ -107,7 +107,7 @@ impl<A, B, C> ProposerFactory<A, B, C, EnableProofRecording> {
 	}
 }
 
-impl<A, B, C, RP> ProposerFactory<A, B, C, RP> {
+impl<A, B, C, PR> ProposerFactory<A, B, C, PR> {
 	/// Set the maximum block size in bytes.
 	///
 	/// The default value for the maximum block size is:
@@ -117,7 +117,7 @@ impl<A, B, C, RP> ProposerFactory<A, B, C, RP> {
 	}
 }
 
-impl<B, Block, C, A, RP> ProposerFactory<A, B, C, RP>
+impl<B, Block, C, A, PR> ProposerFactory<A, B, C, PR>
 	where
 		A: TransactionPool<Block = Block> + 'static,
 		B: backend::Backend<Block> + Send + Sync + 'static,
@@ -131,14 +131,14 @@ impl<B, Block, C, A, RP> ProposerFactory<A, B, C, RP>
 		&mut self,
 		parent_header: &<Block as BlockT>::Header,
 		now: Box<dyn Fn() -> time::Instant + Send + Sync>,
-	) -> Proposer<B, Block, C, A, RP> {
+	) -> Proposer<B, Block, C, A, PR> {
 		let parent_hash = parent_header.hash();
 
 		let id = BlockId::hash(parent_hash);
 
 		info!("🙌 Starting consensus session on top of parent {:?}", parent_hash);
 
-		let proposer = Proposer::<_, _, _, _, RP> {
+		let proposer = Proposer::<_, _, _, _, PR> {
 			spawn_handle: self.spawn_handle.clone(),
 			client: self.client.clone(),
 			parent_hash,
@@ -155,8 +155,8 @@ impl<B, Block, C, A, RP> ProposerFactory<A, B, C, RP>
 	}
 }
 
-impl<A, B, Block, C, RP> sp_consensus::Environment<Block> for
-	ProposerFactory<A, B, C, RP>
+impl<A, B, Block, C, PR> sp_consensus::Environment<Block> for
+	ProposerFactory<A, B, C, PR>
 		where
 			A: TransactionPool<Block = Block> + 'static,
 			B: backend::Backend<Block> + Send + Sync + 'static,
@@ -165,10 +165,10 @@ impl<A, B, Block, C, RP> sp_consensus::Environment<Block> for
 				+ Send + Sync + 'static,
 			C::Api: ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
 				+ BlockBuilderApi<Block>,
-			RP: ProofRecording,
+			PR: ProofRecording,
 {
 	type CreateProposer = future::Ready<Result<Self::Proposer, Self::Error>>;
-	type Proposer = Proposer<B, Block, C, A, RP>;
+	type Proposer = Proposer<B, Block, C, A, PR>;
 	type Error = sp_blockchain::Error;
 
 	fn init(
@@ -180,7 +180,7 @@ impl<A, B, Block, C, RP> sp_consensus::Environment<Block> for
 }
 
 /// The proposer logic.
-pub struct Proposer<B, Block: BlockT, C, A: TransactionPool, RP> {
+pub struct Proposer<B, Block: BlockT, C, A: TransactionPool, PR> {
 	spawn_handle: Box<dyn SpawnNamed>,
 	client: Arc<C>,
 	parent_hash: <Block as BlockT>::Hash,
@@ -189,12 +189,12 @@ pub struct Proposer<B, Block: BlockT, C, A: TransactionPool, RP> {
 	transaction_pool: Arc<A>,
 	now: Box<dyn Fn() -> time::Instant + Send + Sync>,
 	metrics: PrometheusMetrics,
-	_phantom: PhantomData<(B, RP)>,
+	_phantom: PhantomData<(B, PR)>,
 	max_block_size: usize,
 }
 
-impl<A, B, Block, C, RP> sp_consensus::Proposer<Block> for
-	Proposer<B, Block, C, A, RP>
+impl<A, B, Block, C, PR> sp_consensus::Proposer<Block> for
+	Proposer<B, Block, C, A, PR>
 		where
 			A: TransactionPool<Block = Block> + 'static,
 			B: backend::Backend<Block> + Send + Sync + 'static,
@@ -203,15 +203,15 @@ impl<A, B, Block, C, RP> sp_consensus::Proposer<Block> for
 				+ Send + Sync + 'static,
 			C::Api: ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
 				+ BlockBuilderApi<Block>,
-			RP: ProofRecording,
+			PR: ProofRecording,
 {
 	type Transaction = backend::TransactionFor<B, Block>;
 	type Proposal = Pin<Box<dyn Future<
-		Output = Result<Proposal<Block, Self::Transaction, RP::Proof>, Self::Error>
+		Output = Result<Proposal<Block, Self::Transaction, PR::Proof>, Self::Error>
 	> + Send>>;
 	type Error = sp_blockchain::Error;
-	type ProofRecording = RP;
-	type Proof = RP::Proof;
+	type ProofRecording = PR;
+	type Proof = PR::Proof;
 
 	fn propose(
 		self,
@@ -241,7 +241,7 @@ impl<A, B, Block, C, RP> sp_consensus::Proposer<Block> for
 	}
 }
 
-impl<A, B, Block, C, RP> Proposer<B, Block, C, A, RP>
+impl<A, B, Block, C, PR> Proposer<B, Block, C, A, PR>
 	where
 		A: TransactionPool<Block = Block>,
 		B: backend::Backend<Block> + Send + Sync + 'static,
@@ -250,14 +250,14 @@ impl<A, B, Block, C, RP> Proposer<B, Block, C, A, RP>
 			+ Send + Sync + 'static,
 		C::Api: ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
 			+ BlockBuilderApi<Block>,
-		RP: ProofRecording,
+		PR: ProofRecording,
 {
 	async fn propose_with(
 		self,
 		inherent_data: InherentData,
 		inherent_digests: DigestFor<Block>,
 		deadline: time::Instant,
-	) -> Result<Proposal<Block, backend::TransactionFor<B, Block>, RP::Proof>, sp_blockchain::Error> {
+	) -> Result<Proposal<Block, backend::TransactionFor<B, Block>, PR::Proof>, sp_blockchain::Error> {
 		/// If the block is full we will attempt to push at most
 		/// this number of transactions before quitting for real.
 		/// It allows us to increase block utilization.
@@ -266,7 +266,7 @@ impl<A, B, Block, C, RP> Proposer<B, Block, C, A, RP>
 		let mut block_builder = self.client.new_block_at(
 			&self.parent_id,
 			inherent_digests,
-			RP::ENABLED,
+			PR::ENABLED,
 		)?;
 
 		for inherent in block_builder.create_inherents(inherent_data)? {
@@ -389,7 +389,7 @@ impl<A, B, Block, C, RP> Proposer<B, Block, C, A, RP>
 			error!("Failed to evaluate authored block: {:?}", err);
 		}
 
-		let proof = RP::into_proof(proof)
+		let proof = PR::into_proof(proof)
 			.map_err(|e| sp_blockchain::Error::Application(Box::new(e)))?;
 		Ok(Proposal { block, proof, storage_changes })
 	}
