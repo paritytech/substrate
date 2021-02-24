@@ -347,7 +347,7 @@ impl SpawnLimiter for Box<dyn SpawnNamed> {
 /// Something that can spawn essential tasks (blocking and non-blocking) with an assigned name.
 ///
 /// Essential tasks are special tasks that should take down the node when they end.
-#[dyn_clonable::clonable]
+#[cfg_attr(feature = "std", dyn_clonable::clonable)]
 pub trait SpawnEssentialNamed: Clone + Send + Sync {
 	/// Spawn the given blocking future.
 	///
@@ -359,6 +359,7 @@ pub trait SpawnEssentialNamed: Clone + Send + Sync {
 	fn spawn_essential(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>);
 }
 
+#[cfg(feature = "std")]
 impl SpawnEssentialNamed for Box<dyn SpawnEssentialNamed> {
 	fn spawn_essential_blocking(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>) {
 		(**self).spawn_essential_blocking(name, future)

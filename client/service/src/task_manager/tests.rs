@@ -373,12 +373,7 @@ fn subprocess_telemetry_span_is_forwarded_to_task() {
 
 	let handle = runtime.handle().clone();
 	let task_executor = TaskExecutor::from(move |fut, _| handle.spawn(fut).map(|_| ()));
-<<<<<<< HEAD
-	let task_manager = TaskManager::new(task_executor, None, None, Some(telemetry_span.clone()))
-		.unwrap();
-=======
 	let task_manager = new_task_manager(task_executor);
->>>>>>> master
 
 	let (sender, receiver) = futures::channel::oneshot::channel();
 

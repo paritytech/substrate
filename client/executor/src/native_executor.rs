@@ -24,7 +24,7 @@ use crate::{
 use std::{
 	panic::{UnwindSafe, AssertUnwindSafe},
 	result,
-	sync::{Arc, atomic::{AtomicU64, Ordering}, mpsc},
+	sync::Arc,
 	path::PathBuf,
 };
 

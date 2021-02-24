@@ -16,20 +16,19 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 derive_more = { version = "0.99.2", optional = true }
 log = { version = "0.4.8", optional = true }
-sp-serializer = { version = "2.0.0", optional = true, path = "../serializer" }
 parking_lot = { version = "0.10.2", optional = true }
 thiserror = { version = "1.0.21", optional = true }
 ambassador = "0.2.1"
 sp-core = { version = "3.0.0", default-features = false, path = "../core" }
-sp-externalities = { version = "0.9.0", optional = true, path = "../externalities" }
+sp-externalities = { version = "0.9.0", default-features = false, path = "../externalities" }
 sp-io = { version = "3.0.0", default-features = false, path = "../io" }
-sp-runtime-interface = { version = "3.0.0", default-features = false, path = "../runtime-interface" }
 sp-std = { version = "3.0.0", default-features = false, path = "../std" }
 wasmi = { version = "0.6.2", optional = true }
-sp-panic-handler = { version = "2.0.0", optional = true, path = "../panic-handler" }
-sp-allocator = { version = "2.0.0", optional = true, path = "../allocator" }
-sp-wasm-interface = { version = "2.0.0", default-features = false, path = "../wasm-interface" }
-sp-runtime-interface = { version = "2.0.0", default-features = false, path = "../runtime-interface" }
+sp-panic-handler = { version = "3.0.0", optional = true, path = "../panic-handler" }
+sp-allocator = { version = "3.0.0", optional = true, path = "../allocator" }
+sp-wasm-interface = { version = "3.0.0", default-features = false, path = "../wasm-interface" }
+sp-runtime-interface = { version = "3.0.0", default-features = false, path = "../runtime-interface" }
+sp-serializer = { version = "3.0.0", optional = true, path = "../serializer" }
 
 [dev-dependencies]
 codec = { package = "parity-scale-codec", default-features = false, version = "2.0.0" }
@@ -51,7 +50,6 @@ std = [
 	"sp-externalities/std",
 	"sp-panic-handler",
 	"sp-io/std",
-	"sp-state-machine/std",
 	"sp-std/std",
 	"sp-wasm-interface/std",
 ]

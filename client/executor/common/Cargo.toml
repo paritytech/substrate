@@ -18,10 +18,7 @@ parity-wasm = "0.41.0"
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 wasmi = "0.6.2"
 sp-core = { version = "3.0.0", path = "../../../primitives/core" }
-sp-allocator = { version = "3.0.0", path = "../../../primitives/allocator" }
 sp-wasm-interface = { version = "3.0.0", path = "../../../primitives/wasm-interface" }
-sp-serializer = { version = "3.0.0", path = "../../../primitives/serializer" }
-thiserror = "1.0.21"
 sp-tasks = { version = "3.0.0", path = "../../../primitives/tasks" }
 
 [features]

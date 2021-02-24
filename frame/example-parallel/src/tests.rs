@@ -78,8 +78,6 @@ impl Config for Test {
 	type Call = Call;
 }
 
-type Example = Module<Test>;
-
 use sp_tasks::pool_spawn::RuntimeInstanceSpawn;
 use sp_core::Pair;
 use sp_core::traits::RuntimeSpawnExt;

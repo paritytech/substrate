@@ -158,7 +158,7 @@ impl Externalities for AsyncExt {
 		&mut self,
 		_child_info: &ChildInfo,
 		_limit: Option<u32>,
-	) -> bool {
+	) -> (bool, u32) {
 		panic!("`kill_child_storage`: should not be used in read only worker externalities!");
 	}
 
