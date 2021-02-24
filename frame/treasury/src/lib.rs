@@ -238,7 +238,12 @@ pub mod pallet {
 		/// Reject a proposed spend. The original deposit will be slashed.
 		///
 		/// May only be called from `T::RejectOrigin`.
-		#[pallet::weight(T::WeightInfo::reject_proposal())]
+		#[pallet::weight(
+			(
+				T::WeightInfo::reject_proposal(),
+				DispatchClass::Operational,
+			)
+		)]
 		pub fn reject_proposal(
 			origin: OriginFor<T>,
 			#[pallet::compact] proposal_id: ProposalIndex
@@ -257,7 +262,12 @@ pub mod pallet {
 		/// and the original deposit will be returned.
 		///
 		/// May only be called from `T::ApproveOrigin`.
-		#[pallet::weight(T::WeightInfo::approve_proposal())]
+		#[pallet::weight(
+			(
+				T::WeightInfo::approve_proposal(),
+				DispatchClass::Operational
+			)
+		)]
 		pub fn approve_proposal(
 			origin: OriginFor<T>,
 			#[pallet::compact] proposal_id: ProposalIndex,
