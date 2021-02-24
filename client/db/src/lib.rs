@@ -28,6 +28,45 @@
 
 #![warn(missing_docs)]
 
+/// Define key to use for subcollection by using a key prefixing
+/// strategy.
+/// This just concatenate the subcollection prefix to the key.
+macro_rules! subcollection_prefixed_key {
+	($prefix: ident, $key: ident) => {
+		let mut prefixed_key;
+		let $key = if let Some(k) = $prefix {
+			prefixed_key = Vec::with_capacity(k.len() + $key.len());
+			prefixed_key.extend_from_slice(&k[..]);
+			prefixed_key.extend_from_slice(&$key[..]);
+			&prefixed_key[..]
+		} else {
+			&$key[..]
+		};
+	}
+}
+
+macro_rules! static_instance {
+	($name: ident, $col: expr) => {
+
+	/// Simple db map or instance definition for $name.
+	#[derive(Default, Clone)]
+	pub struct $name;
+	impl historied_db::mapped_db::MapInfo for $name {
+		const STATIC_COL: &'static [u8] = $col;
+	}
+}}
+
+macro_rules! static_instance_variable {
+	($name: ident, $col: expr, $path: expr, $lazy: expr) => {
+		static_instance!($name, $col);
+	impl historied_db::mapped_db::VariableInfo for $name {
+		const PATH: &'static [u8] = $path;
+		const LAZY: bool = $lazy;
+	}
+}}
+
+
+
 pub mod light;
 pub mod offchain;
 
@@ -44,6 +83,7 @@ mod utils;
 mod stats;
 #[cfg(feature = "with-parity-db")]
 mod parity_db;
+mod tree_management;
 
 use historied_db::{
 	DecodeWithContext,
@@ -71,7 +111,7 @@ use sp_blockchain::{
 	Result as ClientResult, Error as ClientError,
 	well_known_cache_keys, HeaderBackend,
 };
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, Compact};
 use hash_db::Prefix;
 use sp_trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};
 use sp_database::{Transaction, RadixTreeDatabase};
@@ -94,9 +134,10 @@ use sc_state_db::StateDb;
 use sp_blockchain::{CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache};
 use crate::storage_cache::{CachingState, SyncingCachingState, SharedCache, new_shared_cache};
 use crate::stats::StateUsageStats;
+use crate::tree_management::{TreeManagement, TreeManagementSync, TreeManagementPersistence};
 
 // Re-export the Database trait so that one can pass an implementation of it.
-pub use sp_database::Database;
+pub use sp_database::{Database, OrderedDatabase};
 pub use sc_state_db::PruningMode;
 
 #[cfg(any(feature = "with-kvdb-rocksdb", test))]
@@ -446,235 +487,6 @@ pub(crate) mod columns {
 	pub const TRANSACTION: u32 = 11;
 }
 
-#[derive(Clone)]
-/// Persistence mapping of historied db state management.
-///
-/// Definitions for storage of historied
-/// db tree state (maps block hashes to internal
-/// history index).
-pub struct TreeManagementPersistence;
-
-#[cfg(any(feature = "with-kvdb-rocksdb", test))]
-/// Rocksdb database for ordered key value.
-///
-/// It can support historied db state management persistence.
-pub struct RocksdbStorage(Arc<kvdb_rocksdb::Database>);
-
-/// Unordered key value database support for ordered key value.
-///
-/// It can support historied db state management persistence.
-/// It internaly use a radix tree to index nodes.
-pub struct DatabaseStorage<H: Clone + PartialEq + std::fmt::Debug>(RadixTreeDatabase<H>);
-
-impl historied_db::management::tree::TreeManagementStorage for TreeManagementPersistence {
-	const JOURNAL_CHANGES: bool = true;
-	// Use pointer to serialize db with a transactional layer.
-	type Storage = TransactionalMappedDB<MappedDBDyn>;
-	type Mapping = historied_tree_bindings::Mapping;
-	type JournalDelete = historied_tree_bindings::JournalDelete;
-	type LastIndex = historied_tree_bindings::LastIndex;
-	type TreeMeta = historied_tree_bindings::TreeMeta;
-	type TreeState = historied_tree_bindings::TreeState;
-}
-
-/// Define key to use for subcollection by using a key prefixing
-/// strategy.
-/// This just concatenate the subcollection prefix to the key.
-macro_rules! subcollection_prefixed_key {
-	($prefix: ident, $key: ident) => {
-		let mut prefixed_key;
-		let $key = if let Some(k) = $prefix {
-			prefixed_key = Vec::with_capacity(k.len() + $key.len());
-			prefixed_key.extend_from_slice(&k[..]);
-			prefixed_key.extend_from_slice(&$key[..]);
-			&prefixed_key[..]
-		} else {
-			&$key[..]
-		};
-	}
-}
-
-/// Function that split a collection identifier into a column index and
-/// a subcollection prefix.
-/// Collections are defined by four byte encoding of their index.
-/// Subcollection are behind a prefixed location (remaining bytes).
-/// Note that subcollection should define their prefix in a way that no key
-/// collision happen.
-pub fn resolve_collection<'a>(c: &'a [u8]) -> Option<(u32, Option<&'a [u8]>)> {
-	if c.len() < 4 {
-		return None;
-	}
-	let index = resolve_collection_inner(&c[..4]);
-	let prefix = if c.len() == 4 {
-		None
-	} else {
-		Some(&c[4..])
-	};
-	if index < crate::utils::NUM_COLUMNS {
-		return Some((index, prefix));
-	}
-	None
-}
-
-const fn resolve_collection_inner<'a>(c: &'a [u8]) -> u32 {
-	let mut buf = [0u8; 4];
-	buf[0] = c[0];
-	buf[1] = c[1];
-	buf[2] = c[2];
-	buf[3] = c[3];
-	u32::from_le_bytes(buf)
-}
-
-#[cfg(any(feature = "with-kvdb-rocksdb", test))]
-impl historied_db::mapped_db::MappedDB for RocksdbStorage {
-	#[inline(always)]
-	fn is_active(&self) -> bool {
-		true
-	}
-
-	fn write(&mut self, c: &'static [u8], k: &[u8], v: &[u8]) {
-		resolve_collection(c).map(|(c, p)| {
-			subcollection_prefixed_key!(p, k);
-			let mut tx = self.0.transaction();
-			tx.put(c, k, v);
-			self.0.write(tx)
-				.expect("Unsupported serialize error")
-		});
-	}
-
-	fn remove(&mut self, c: &'static [u8], k: &[u8]) {
-		resolve_collection(c).map(|(c, p)| {
-			subcollection_prefixed_key!(p, k);
-			let mut tx = self.0.transaction();
-			tx.delete(c, k);
-			self.0.write(tx)
-				.expect("Unsupported serialize error")
-		});
-	}
-
-	fn clear(&mut self, c: &'static [u8]) {
-		resolve_collection(c).map(|(c, p)| {
-			let mut tx = self.0.transaction();
-			tx.delete_prefix(c, p.unwrap_or(&[]));
-			self.0.write(tx)
-				.expect("Unsupported serialize error")
-		});
-	}
-
-	fn read(&self, c: &'static [u8], k: &[u8]) -> Option<Vec<u8>> {
-		resolve_collection(c).and_then(|(c, p)| {
-			subcollection_prefixed_key!(p, k);
-			self.0.get(c, k)
-				.expect("Unsupported readdb error")
-		})
-	}
-
-	fn iter<'a>(&'a self, c: &'static [u8]) -> historied_db::mapped_db::MappedDBIter<'a> {
-		let iter = resolve_collection(c).map(|(c, p)| {
-			use kvdb::KeyValueDB;
-			if let Some(p) = p {
-				self.0.iter_with_prefix(c, p)
-			} else {
-				<kvdb_rocksdb::Database as KeyValueDB>::iter(&*self.0, c)
-			}.map(|(k, v)| (Vec::<u8>::from(k), Vec::<u8>::from(v)))
-		}).into_iter().flat_map(|i| i);
-
-		Box::new(iter)
-	}
-
-	fn contains_collection(&self, collection: &'static [u8]) -> bool {
-		resolve_collection(collection).is_some()
-	}
-}
-
-impl<H> historied_db::mapped_db::MappedDB for DatabaseStorage<H>
-	where H: Clone + PartialEq + std::fmt::Debug + Default + 'static,
-{
-	#[inline(always)]
-	fn is_active(&self) -> bool {
-		true
-	}
-
-	fn write(&mut self, c: &'static [u8], k: &[u8], v: &[u8]) {
-		resolve_collection(c).map(|(c, p)| {
-			subcollection_prefixed_key!(p, k);
-			self.0.set(c, k, v)
-				.expect("Unsupported database error");
-		});
-	}
-
-	fn remove(&mut self, c: &'static [u8], k: &[u8]) {
-		resolve_collection(c).map(|(c, p)| {
-			subcollection_prefixed_key!(p, k);
-			self.0.remove(c, k)
-				.expect("Unsupported database error");
-		});
-	}
-
-	fn clear(&mut self, c: &'static [u8]) {
-		// Inefficient implementation.
-		let keys: Vec<Vec<u8>> = self.iter(c).map(|kv| kv.0).collect();
-		for key in keys {
-			self.remove(c, key.as_slice());
-		}
-	}
-
-	fn read(&self, c: &'static [u8], k: &[u8]) -> Option<Vec<u8>> {
-		resolve_collection(c).and_then(|(c, p)| {
-			subcollection_prefixed_key!(p, k);
-			self.0.get(c, k)
-		})
-	}
-
-	fn iter<'a>(&'a self, c: &'static [u8]) -> historied_db::mapped_db::MappedDBIter<'a> {
-		let iter = resolve_collection(c).map(|(c, p)| {
-			if let Some(p) = p {
-				self.0.prefix_iter(c, p, true)
-			} else {
-				self.0.iter(c)
-			}
-		}).into_iter().flat_map(|i| i);
-
-		Box::new(iter)
-	}
-
-	fn contains_collection(&self, collection: &'static [u8]) -> bool {
-		resolve_collection(collection).is_some()
-	}
-}
-
-/// Definition of mappings used by `TreeManagementPersistence`.
-pub mod historied_tree_bindings {
-	macro_rules! static_instance {
-		($name: ident, $col: expr) => {
-
-		/// Simple db map or instance definition for $name.
-		#[derive(Default, Clone)]
-		pub struct $name;
-		impl historied_db::mapped_db::MapInfo for $name {
-			const STATIC_COL: &'static [u8] = $col;
-		}
-	}}
-	macro_rules! static_instance_variable {
-		($name: ident, $col: expr, $path: expr, $lazy: expr) => {
-			static_instance!($name, $col);
-		impl historied_db::mapped_db::VariableInfo for $name {
-			const PATH: &'static [u8] = $path;
-			const LAZY: bool = $lazy;
-		}
-	}}
-	static_instance!(Mapping, b"\x08\x00\x00\x00tree_mgmt/mapping");
-	static_instance!(TreeState, b"\x08\x00\x00\x00tree_mgmt/state");
-	static_instance!(JournalDelete, b"\x08\x00\x00\x00tree_mgmt/journal_delete");
-	const CST: &'static[u8] = &[8u8, 0, 0, 0]; // AUX collection
-	static_instance_variable!(TouchedGC, CST, b"tree_mgmt/touched_gc", false);
-	static_instance_variable!(CurrentGC, CST, b"tree_mgmt/current_gc", false);
-	static_instance_variable!(LastIndex, CST, b"tree_mgmt/last_index", false);
-	static_instance_variable!(NeutralElt,CST, b"tree_mgmt/neutral_elt", false);
-	static_instance_variable!(TreeMeta, CST, b"tree_mgmt/tree_meta", true);
-	static_instance!(LocalOffchainDelete, b"\x08\x00\x00\x00offchain/journal_delete");
-}
-
 struct PendingBlock<Block: BlockT> {
 	header: Block::Header,
 	justification: Option<Justification>,
@@ -704,26 +516,27 @@ fn cache_header<Hash: std::cmp::Eq + std::hash::Hash, Header>(
 	}
 }
 
+#[derive(Clone)]
 /// Block database
 pub struct BlockchainDb<Block: BlockT> {
 	db: Arc<dyn Database<DbHash>>,
 	meta: Arc<RwLock<Meta<NumberFor<Block>, Block::Hash>>>,
-	leaves: RwLock<LeafSet<Block::Hash, NumberFor<Block>>>,
+	leaves: Arc<RwLock<LeafSet<Block::Hash, NumberFor<Block>>>>,
 	header_metadata_cache: Arc<HeaderMetadataCache<Block>>,
-	header_cache: Mutex<LinkedHashMap<Block::Hash, Option<Block::Header>>>,
+	header_cache: Arc<Mutex<LinkedHashMap<Block::Hash, Option<Block::Header>>>>,
 	transaction_storage: TransactionStorageMode,
 }
 
 impl<Block: BlockT> BlockchainDb<Block> {
 	fn new(
 		db: Arc<dyn Database<DbHash>>,
-		transaction_storage: TransactionStorageMode
+		transaction_storage: TransactionStorageMode,
 	) -> ClientResult<Self> {
 		let meta = read_meta::<Block>(&*db, columns::HEADER)?;
 		let leaves = LeafSet::read_from_db(&*db, columns::META, meta_keys::LEAF_PREFIX)?;
 		Ok(BlockchainDb {
 			db,
-			leaves: RwLock::new(leaves),
+			leaves: Arc::new(RwLock::new(leaves)),
 			meta: Arc::new(RwLock::new(meta)),
 			header_metadata_cache: Arc::new(HeaderMetadataCache::default()),
 			header_cache: Default::default(),
@@ -1038,7 +851,7 @@ impl<Block: BlockT> BlockImportOperation<Block> {
 			// Note that this is safe because we import a new block.
 			// Otherwhise we would need to share cache with a single journal instance.
 			let mut journals = historied_db::management::JournalForMigrationBasis
-				::<_, _, _, crate::historied_tree_bindings::LocalOffchainDelete>
+				::<_, _, _, crate::offchain::LocalOffchainDelete>
 				::from_db(ordered_db);
 			journals.add_changes(
 				ordered_db,
@@ -1266,17 +1079,6 @@ impl<T: Clone> FrozenForDuration<T> {
 	}
 }
 
-/// Historied db state tree management for substrate.
-///
-/// Branch indexes are `u32`, block indexes `u64`,
-/// and values ar encoded as `Vec<u8>`.
-pub type TreeManagement<H, S> = historied_db::management::tree::TreeManagement<
-	H,
-	u32,
-	u64,
-	S,
->;
-
 /// Registered historied db state consumer.
 ///
 /// Mainly a way to trigger migration over all component using the state.
@@ -1295,7 +1097,7 @@ pub struct Backend<Block: BlockT> {
 	storage: Arc<StorageDb<Block>>,
 	offchain_storage: offchain::LocalStorage,
 	offchain_local_storage: offchain::BlockChainLocalStorage<
-		<HashFor<Block> as Hasher>::Out,
+		Block,
 		TreeManagementPersistence,
 	>,
 	changes_tries_storage: DbChangesTrieStorage<Block>,
@@ -1308,23 +1110,12 @@ pub struct Backend<Block: BlockT> {
 	transaction_storage: TransactionStorageMode,
 	io_stats: FrozenForDuration<(kvdb::IoStats, StateUsageInfo)>,
 	state_usage: Arc<StateUsageStats>,
-	historied_management: Arc<RwLock<TreeManagement<
-		<HashFor<Block> as Hasher>::Out,
-		TreeManagementPersistence,
-	>>>,
-	historied_pruning_window: Option<NumberFor<Block>>,
-	historied_next_finalizable: Arc<RwLock<Option<NumberFor<Block>>>>,
-	historied_management_consumer: RegisteredConsumer<
-		<HashFor<Block> as Hasher>::Out,
-		TreeManagementPersistence,
-	>,
-	historied_management_consumer_transaction: Arc<RwLock<Transaction<DbHash>>>,
 }
 
 // write management state changes
 fn apply_historied_management_changes<'a, Block: BlockT>(
 	mut historied_management: parking_lot::RwLockWriteGuard<'a, TreeManagement<
-		<HashFor<Block> as Hasher>::Out,
+		Block::Hash,
 		TreeManagementPersistence,
 	>>,
 	transaction: &mut Transaction<DbHash>,
@@ -1337,7 +1128,7 @@ fn apply_historied_management_changes<'a, Block: BlockT>(
 				changes.insert(key, None);
 			}
 		}
-		if let Some((col, p)) = resolve_collection(col) {
+		if let Some((col, p)) = crate::utils::ordered_database::resolve_collection(col) {
 			for (key, change) in changes {
 				subcollection_prefixed_key!(p, key);
 				match change {
@@ -1399,19 +1190,18 @@ impl<Block: BlockT> Backend<Block> {
 
 	fn from_database(
 		db: Arc<dyn Database<DbHash>>,
-		ordered_db: MappedDBDyn,
-		ordered_db_2: MappedDBDyn,
+		ordered_db: Arc<dyn OrderedDatabase<DbHash>>,
+		management_db: historied_db::mapped_db::MappedDBDyn,
 		canonicalization_delay: u64,
 		config: &DatabaseSettings,
 	) -> ClientResult<Self> {
 		let is_archive_pruning = config.state_pruning.is_archive();
-		let blockchain = BlockchainDb::new(db.clone(), config.transaction_storage.clone())?;
+		let blockchain = BlockchainDb::new(
+			db.clone(),
+			config.transaction_storage.clone(),
+		)?;
 		let meta = blockchain.meta.clone();
 		let map_e = |e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from_state_db(e);
-		let historied_pruning_window = match &config.state_pruning {
-			PruningMode::Constrained(constraint) => constraint.max_blocks.map(|nb| nb.into()),
-			_ => None,
-		};
 		let state_db: StateDb<_, _> = StateDb::new(
 			config.state_pruning.clone(),
 			!config.source.supports_ref_counting(),
@@ -1440,10 +1230,10 @@ impl<Block: BlockT> Backend<Block> {
 		)?;
 
 		let historied_persistence = TransactionalMappedDB {
-			db: ordered_db,
+			db: management_db,
 			pending: Default::default(),
 		};
-		let historied_management = Arc::new(RwLock::new(TreeManagement::from_ser(historied_persistence)));
+		let historied_management = TreeManagementSync::from_persistence(historied_persistence);
 		// TODO allow to skip those locks through config (putting in db config feels awkward but could
 		// do the job).
 		// Reminder, without the locks if the offchain worker do not manage its concurrency properly
@@ -1453,8 +1243,8 @@ impl<Block: BlockT> Backend<Block> {
 		let safe_offchain_locks = true;
 		let offchain_local_storage = offchain::BlockChainLocalStorage::new(
 			db,
-			historied_management.clone(),
-			ordered_db_2,
+			historied_management,
+			unimplemented!(), //ordered_db_2, TODO
 			safe_offchain_locks,
 		);
 		let mut historied_management_consumer: RegisteredConsumer<
@@ -1486,11 +1276,6 @@ impl<Block: BlockT> Backend<Block> {
 			state_usage: Arc::new(StateUsageStats::new()),
 			keep_blocks: config.keep_blocks.clone(),
 			transaction_storage: config.transaction_storage.clone(),
-			historied_management,
-			historied_next_finalizable: Arc::new(RwLock::new(None)),
-			historied_management_consumer,
-			historied_pruning_window,
-			historied_management_consumer_transaction,
 		})
 	}
 
@@ -1653,7 +1438,10 @@ impl<Block: BlockT> Backend<Block> {
 		let mut finalization_displaced_leaves = None;
 
 		operation.apply_aux(&mut transaction);
-
+//		operation.apply_offchain(&mut transaction);
+ // TODO also apply offchain change (pass self.offchain_persistent_storage as param
+		self.offchain_local_storage.apply_block_change(&operation, &mut transaction)?;
+/*
 		let hashes = operation.pending_block.as_ref().map(|pending_block| {
 			let hash = pending_block.header.hash();
 			let parent_hash = *pending_block.header.parent_hash();
@@ -1717,7 +1505,8 @@ impl<Block: BlockT> Backend<Block> {
 		}
 
 		apply_historied_management_changes::<Block>(self.historied_management.write(), &mut transaction);
-
+		TODO check all in apply_block_change of offchaindb
+*/
 		let mut meta_updates = Vec::with_capacity(operation.finalized_blocks.len());
 		let mut last_finalized_hash = self.blockchain.meta.read().finalized_hash;
 
@@ -2035,7 +1824,7 @@ impl<Block: BlockT> Backend<Block> {
 
 		Ok(())
 	}
-
+/* TODO check in finalize call
 	fn historied_pruning(&self, hash: &Block::Hash, number: NumberFor<Block>)
 		-> ClientResult<()> {
 		let do_finalize = &number > &self.historied_next_finalizable.read().as_ref()
@@ -2043,6 +1832,10 @@ impl<Block: BlockT> Backend<Block> {
 		if !do_finalize {
 			return Ok(())
 		}
+		let historied_pruning_window = match &config.state_pruning {
+			PruningMode::Constrained(constraint) => constraint.max_blocks.map(|nb| nb.into()),
+			_ => None,
+		};
 
 		let prune_index = self.historied_pruning_window.map(|nb| {
 			number.saturating_sub(nb).saturated_into::<u64>()
@@ -2082,7 +1875,7 @@ impl<Block: BlockT> Backend<Block> {
 		*self.historied_next_finalizable.write() = Some(number + HISTORIED_FINALIZATION_WINDOWS.into());
 		Ok(())
 	}
-
+*/
 	fn prune_blocks(
 		&self,
 		transaction: &mut Transaction<DbHash>,
@@ -2177,7 +1970,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	type State = SyncingCachingState<RefTrackingState<Block>, Block>;
 	type OffchainPersistentStorage = offchain::LocalStorage;
 	type OffchainLocalStorage = offchain::BlockChainLocalStorage<
-		<HashFor<Block> as Hasher>::Out,
+		Block,
 		TreeManagementPersistence,
 	>;
 
@@ -2221,6 +2014,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		let usage = operation.old_state.usage_info();
 		self.state_usage.merge_sm(usage);
 		let last_final = operation.finalized_blocks.last().cloned();
+
 		match self.try_commit_operation(operation) {
 			Ok(_) => {
 				self.storage.state_db.apply_pending();
@@ -2230,10 +2024,10 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 					let block = latest_final.0;
 					if let (Some(number), Some(hash)) = (self.blockchain.block_number_from_id(&block)?,
 						self.blockchain.block_hash_from_id(&block)?) {
-						self.historied_pruning(&hash, number)?;
+						self.offchain_local_storage.historied_management().migrate(&hash, number, &self.storage.db)?;
 					}
 				}
-	
+
 				Ok(())
 			},
 			e @ Err(_) => {
@@ -2267,7 +2061,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		self.blockchain.update_meta(hash, number, is_best, is_finalized);
 		self.changes_tries_storage.post_commit(changes_trie_cache_ops);
 		if let Some(number) = self.blockchain.block_number_from_id(&block)? {
-			self.historied_pruning(&hash, number)?;
+			self.offchain_local_storage.historied_management().migrate(&hash, number, &self.storage.db)?;
 		}
 		Ok(())
 	}

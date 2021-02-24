@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! RocksDB-based offchain workers local storage.
+//! Offchain workers local storage and historied storage.
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -28,8 +28,13 @@ use historied_db::{Latest, UpdateResult,
 	historied::tree::Tree,
 	backend::nodes::{NodesMeta, NodeStorage, NodeStorageMut, Node, ContextHead},
 };
+use sp_runtime::traits::{
+	Block as BlockT, NumberFor, SaturatedConversion, HashFor,
+};
 use codec::{Decode, Encode, Codec};
 use log::error;
+use crate::tree_management::{TreeManagement, TreeManagementSync};
+use sp_blockchain::{Result as ClientResult, Error as ClientError};
 
 /// Offchain local storage
 #[derive(Clone)]
@@ -38,11 +43,13 @@ pub struct LocalStorage {
 	locks: Arc<Mutex<HashMap<Vec<u8>, Arc<Mutex<()>>>>>,
 }
 
+static_instance!(LocalOffchainDelete, b"\x08\x00\x00\x00offchain/journal_delete");
+
 type ChangesJournal<Db> = historied_db::management::JournalForMigrationBasis<
 	(u64, u32),
 	Vec<u8>,
 	Db,
-	crate::historied_tree_bindings::LocalOffchainDelete,
+	LocalOffchainDelete,
 >;
 
 /// Journal for changes, it write directly its changes.
@@ -52,10 +59,16 @@ pub(crate) type ChangesJournalSync = Arc<Mutex<ChangesJournal<historied_db::mapp
 
 /// Offchain local storage with blockchain historied storage.
 #[derive(Clone)]
-pub struct BlockChainLocalStorage<H: Ord, S: TreeManagementStorage> {
-	historied_management: Arc<RwLock<crate::TreeManagement<H, S>>>,
+pub struct BlockChainLocalStorage<Block: BlockT, S: TreeManagementStorage + 'static> {
+	/// Historied management use by snapshot db.
+	/// Currently snapshot db is single consumer, so init and clear
+	/// operation also act on `historied_management`.
+	/// This use a transactional layer in storage.
+	historied_management: TreeManagementSync<Block, S>,
+	/// Database with historied items. Warning, this is non transactional.
 	db: Arc<dyn Database<DbHash>>,
 	locks: Arc<Mutex<HashMap<Vec<u8>, Arc<Mutex<()>>>>>,
+	/// TODO see snapshot.
 	ordered_db: Arc<Mutex<historied_db::mapped_db::MappedDBDyn>>,
 	changes_journals: ChangesJournalSync,
 	// With blockchain local if concurrency is not
@@ -78,19 +91,20 @@ pub struct BlockChainLocalStorage<H: Ord, S: TreeManagementStorage> {
 ///
 /// Read journaled keys and update inner transaction with requires
 /// migration changes.
-pub struct TransactionalConsumer<H: Ord, S: TreeManagementStorage> {
+pub struct TransactionalConsumer<Block: BlockT, S: TreeManagementStorage + 'static> {
 	/// Storage to use.
-	pub storage: BlockChainLocalStorage<H, S>,
+	pub storage: BlockChainLocalStorage<Block, S>,
 	/// Transaction to update on migrate.
 	pub pending: Arc<RwLock<Transaction<DbHash>>>,
 }
 
-impl<H, S> historied_db::management::ManagementConsumer<H, crate::TreeManagement<H, S>> for TransactionalConsumer<H, S>
+impl<B, S> historied_db::management::ManagementConsumer<B::Hash, TreeManagement<B::Hash, S>> for TransactionalConsumer<B, S>
 	where
-		H: Ord + Clone + Codec + Send + Sync + 'static,
+		B: BlockT,
+		B::Hash: Ord + Clone + Codec + Send + Sync + 'static, // TODO needed bound?
 		S: TreeManagementStorage + 'static,
 {
-	fn migrate(&self, migrate: &mut historied_db::management::Migrate<H, crate::TreeManagement<H, S>>) {
+	fn migrate(&self, migrate: &mut historied_db::management::Migrate<B::Hash, TreeManagement<B::Hash, S>>) {
 		let mut keys_to_migrate = std::collections::BTreeSet::<Vec<u8>>::new();
 		let (prune, state_changes) = migrate.migrate().touched_state();
 		// this db is transactional.
@@ -257,7 +271,7 @@ impl std::fmt::Debug for LocalStorage {
 	}
 }
 
-impl<H: Ord, S: TreeManagementStorage> std::fmt::Debug for BlockChainLocalStorage<H, S> {
+impl<B: BlockT, S: TreeManagementStorage> std::fmt::Debug for BlockChainLocalStorage<B, S> {
 	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
 		fmt.debug_struct("BlockChainLocalStorage")
 			.finish()
@@ -282,11 +296,11 @@ impl LocalStorage {
 	}
 }
 
-impl<H: Ord, S: TreeManagementStorage> BlockChainLocalStorage<H, S> {
+impl<B: BlockT, S: TreeManagementStorage> BlockChainLocalStorage<B, S> {
 	/// Create offchain local storage with given `KeyValueDB` backend.
 	pub fn new(
 		db: Arc<dyn Database<DbHash>>,
-		historied_management: Arc<RwLock<crate::TreeManagement<H, S>>>,
+		historied_management: TreeManagementSync<B, S>,
 		journals_db: historied_db::mapped_db::MappedDBDyn,
 		safe_offchain_locks: bool,
 	) -> Self {
@@ -302,16 +316,38 @@ impl<H: Ord, S: TreeManagementStorage> BlockChainLocalStorage<H, S> {
 	}
 }
 
-impl<H: Ord> BlockChainLocalStorage<H, ()> {
+impl<B: BlockT> BlockChainLocalStorage<B, ()> {
 	/// Create new offchain storage for tests (backed by memorydb)
+	/// TODO remove.
 	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn new_test() -> Self {
-		let db = kvdb_memorydb::create(crate::utils::NUM_COLUMNS);
-		let db: Arc<dyn Database<DbHash>> = sp_database::as_database(db);
-		let historied_management = Arc::new(RwLock::new(crate::TreeManagement::default()));
-		let ordered = sp_database::RadixTreeDatabase::new(db.clone());
-		let ordered = Box::new(crate::DatabaseStorage(ordered));
-		Self::new(db as _, historied_management, ordered, true)
+		let config = unimplemented!("try remove this function or factor with default param use in client/db tests");
+		let (db, ordered, management) = crate::utils::open_database_and_historied::<B>(
+			&config,
+			crate::utils::DatabaseType::Full,
+		).unwrap();
+	
+		unimplemented!()
+		//let historied_management = TreeManagementSync::from_persistence(management);
+
+		// TODO refact struct fileld (eg remove journal)
+		//Self::new(db as _, historied_management, ordered, true)
+	}
+}
+
+impl<B: BlockT, S: TreeManagementStorage> BlockChainLocalStorage<B, S> {
+	/// Process block changes, and update a input transaction.
+	pub fn apply_block_change(
+		&self,
+		operation: &crate::BlockImportOperation<B>,
+		transaction: &mut Transaction<DbHash>,
+	) -> ClientResult<()> {
+		unimplemented!("see snapshotdb");
+	}
+
+	/// Access underlying historied management
+	pub fn historied_management(&self) -> &TreeManagementSync<B, S> {
+		&self.historied_management
 	}
 }
 
@@ -384,18 +420,19 @@ pub(crate) fn concatenate_prefix_and_key(prefix: &[u8], key: &[u8]) -> Vec<u8> {
 		.collect()
 }
 
-impl<H, S> sp_core::offchain::BlockChainOffchainStorage for BlockChainLocalStorage<H, S>
+impl<B, S> sp_core::offchain::BlockChainOffchainStorage for BlockChainLocalStorage<B, S>
 	where
-		H: Send + Sync + Ord + Clone + Codec,
+		B: BlockT,
+		B::Hash: Send + Sync + Ord + Clone + Codec, // TODO usefull?
 		S: TreeManagementStorage + Send + Sync + Clone,
 {
-	type BlockId = H;
+	type BlockId = B::Hash;
 	type OffchainStorage = BlockChainLocalAt;
 
 	fn at(&self, id: Self::BlockId) -> Option<Self::OffchainStorage> {
-		let db_state = self.historied_management.write().get_db_state(&id);
+		let db_state = self.historied_management.inner.write().instance.get_db_state(&id);
 		if let Some(at_read) = db_state {
-			let at_write = self.historied_management.write().get_db_state_mut(&id);
+			let at_write = self.historied_management.inner.write().instance.get_db_state_mut(&id);
 			Some(BlockChainLocalAt {
 				db: self.db.clone(),
 				branch_nodes: BranchNodes::new(self.db.clone()),
@@ -413,7 +450,7 @@ impl<H, S> sp_core::offchain::BlockChainOffchainStorage for BlockChainLocalStora
 		}
 	}
 	fn latest(&self) -> Option<Self::BlockId> {
-		self.historied_management.write().latest_external_state()
+		self.historied_management.inner.write().instance.latest_external_state()
 	}
 }
 
@@ -993,5 +1030,4 @@ mod tests {
 		assert_eq!(storage.get(prefix, key), Some(b"asd".to_vec()));
 		assert!(storage.locks.lock().is_empty(), "Locks map should be empty!");
 	}
-
 }

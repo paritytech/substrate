@@ -262,3 +262,6 @@ zeroize = { opt-level = 3 }
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
+
+[patch.crates-io]
+kvdb-rocksdb = { git="https://github.com/cheme/parity-common", branch="historied-db-cache" }
