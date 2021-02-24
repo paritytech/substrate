@@ -1513,4 +1513,27 @@ define_env!(Env, <E: Ext>,
 			})),
 		}
 	},
+
+	// Stores the rent params into the supplied buffer.
+	//
+	// The value is stored to linear memory at the address pointed to by `out_ptr`.
+	// `out_len_ptr` must point to a u32 value that describes the available space at
+	// `out_ptr`. This call overwrites it with the size of the value. If the available
+	// space at `out_ptr` is less than the size of the value a trap is triggered.
+	//
+	// The data is encoded as [`crate::exec::RentParams`].
+	//
+	// # Note
+	//
+	// The returned information was collected and cached when the current contract call
+	// starts execution. Any change to those values that happens due to actions of the
+	// current call or contracts that are called by this contract are not considered.
+	// The fields that are subject to these changes are `refcount` and `rent_allowance`.
+	seal_rent_params(ctx, out_ptr: u32, out_len_ptr: u32) => {
+		// TODO: create benchmark and runtime token
+		ctx.charge_gas(RuntimeToken::RentAllowance)?;
+		Ok(ctx.write_sandbox_output(
+			out_ptr, out_len_ptr, &ctx.ext.rent_params().encode(), false, already_charged
+		)?)
+	},
 );
