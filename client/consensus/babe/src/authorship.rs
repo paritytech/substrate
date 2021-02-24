@@ -159,7 +159,7 @@ fn claim_secondary_slot(
 					authority_id.as_ref(),
 					transcript_data,
 				);
-				if let Ok(signature)  = result {
+				if let Ok(Some(signature)) = result {
 					Some(PreDigest::SecondaryVRF(SecondaryVRFPreDigest {
 						slot,
 						vrf_output: VRFOutput(signature.output),
@@ -265,7 +265,7 @@ fn claim_primary_slot(
 			authority_id.as_ref(),
 			transcript_data,
 		);
-		if let Ok(signature)  = result {
+		if let Ok(Some(signature)) = result {
 			let public = PublicKey::from_bytes(&authority_id.to_raw_vec()).ok()?;
 			let inout = match signature.output.attach_input_hash(&public, transcript) {
 				Ok(inout) => inout,

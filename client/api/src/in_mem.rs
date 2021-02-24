@@ -488,7 +488,6 @@ impl<Block: BlockT> ProvideChtRoots<Block> for Blockchain<Block> {
 /// In-memory operation.
 pub struct BlockImportOperation<Block: BlockT> {
 	pending_block: Option<PendingBlock<Block>>,
-	pending_cache: HashMap<CacheKeyId, Vec<u8>>,
 	old_state: InMemoryBackend<HashFor<Block>>,
 	new_state: Option<<InMemoryBackend<HashFor<Block>> as StateBackend<HashFor<Block>>>::Transaction>,
 	aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
@@ -520,9 +519,7 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 		Ok(())
 	}
 
-	fn update_cache(&mut self, cache: HashMap<CacheKeyId, Vec<u8>>) {
-		self.pending_cache = cache;
-	}
+	fn update_cache(&mut self, _cache: HashMap<CacheKeyId, Vec<u8>>) {}
 
 	fn update_db_storage(
 		&mut self,
@@ -637,7 +634,6 @@ impl<Block: BlockT> backend::Backend<Block> for Backend<Block> where Block::Hash
 		let old_state = self.state_at(BlockId::Hash(Default::default()))?;
 		Ok(BlockImportOperation {
 			pending_block: None,
-			pending_cache: Default::default(),
 			old_state,
 			new_state: None,
 			aux: Default::default(),

@@ -420,14 +420,14 @@ fn generate_test_module(input: &INposInput) -> TokenStream2 {
 							/ float_res as u64
 						) as u32;
 						if err > #precision {
-							panic!(format!("\n\
+							panic!("\n\
 								Generated reward curve approximation differ from real one:\n\t\
 								for i = {} and base = {}, f(i/base) * base = {},\n\t\
 								but approximation = {},\n\t\
 								err = {:07} millionth,\n\t\
 								try increase the number of segment: {} or the test_error: {}.\n",
 								i, base, float_res, int_res, err, #max_piece_count, #precision
-							));
+							);
 						}
 					}
 				}
