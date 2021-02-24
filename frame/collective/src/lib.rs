@@ -617,7 +617,7 @@ pub mod pallet {
 	/// The prime member that helps determine the default vote behavior in case of absentations.
 	#[pallet::storage]
 	#[pallet::getter(fn prime)]
-	pub type Prime<T: Config<I>, I: 'static = ()> = StorageValue<_, Option<T::AccountId>, ValueQuery>;
+	pub type Prime<T: Config<I>, I: 'static = ()> = StorageValue<_, T::AccountId, OptionQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()>{
