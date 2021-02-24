@@ -214,7 +214,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		<Self::Proposer as Proposer<B>>::Proposal: Unpin + Send + 'static,
 	{
 		let (timestamp, slot) = (slot_info.timestamp, slot_info.slot);
-        let mut telemetry = self.telemetry();
+		let mut telemetry = self.telemetry();
 
 		let slot_remaining_duration = self.slot_remaining_duration(&slot_info);
 		let proposing_remaining_duration = self.proposing_remaining_duration(&chain_head, &slot_info);
