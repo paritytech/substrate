@@ -22,7 +22,15 @@
 use super::*;
 
 use frame_system::RawOrigin;
-use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
+use frame_benchmarking::{
+	benchmarks,
+	account,
+	whitelisted_caller,
+	impl_benchmark_test_suite,
+};
+use frame_support::{
+	ensure,
+};
 use sp_runtime::{traits::{Saturating}};
 
 use crate::Module as TipsMod;
@@ -85,7 +93,8 @@ fn setup_pot_account<T: Config>() {
 	let _ = T::Currency::make_free_balance_be(&pot_account, value);
 }
 
-const MAX_BYTES: u32 = 16384;
+// const MAX_BYTES: u32 = 16384;
+const MAX_BYTES: u32 = 2;
 const MAX_TIPPERS: u32 = 100;
 
 benchmarks! {
@@ -191,6 +200,7 @@ benchmarks! {
 		let hash = T::Hashing::hash_of(&(&reason_hash, &beneficiary));
 		ensure!(Tips::<T>::contains_key(hash), "tip does not exist");
 	}: _(RawOrigin::Root, hash)
+
 }
 
 impl_benchmark_test_suite!(
