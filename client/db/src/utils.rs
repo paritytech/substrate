@@ -32,7 +32,7 @@ use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, Zero,
 	UniqueSaturatedFrom, UniqueSaturatedInto,
 };
-use crate::{DatabaseSettings, DatabaseSettingsSrc, Database, OrderedDatabase, DbHash};
+use crate::{DatabaseSettings, DatabaseSettingsSrc, Database, DbHash};
 
 /// Number of columns in the db. Must be the same for both full && light dbs.
 /// Otherwise RocksDb will fail to open database && check its type.
@@ -221,7 +221,6 @@ pub fn open_database_and_historied<Block: BlockT>(
 	db_type: DatabaseType,
 ) -> sp_blockchain::Result<(
 	Arc<dyn Database<DbHash>>,
-	Arc<dyn OrderedDatabase<DbHash>>,
 	historied_db::mapped_db::MappedDBDyn,
 )> {
 	#[allow(unused)]
@@ -231,9 +230,8 @@ pub fn open_database_and_historied<Block: BlockT>(
 		)
 	}
 
-	let mut db: (
+	let db: (
 		Arc<dyn Database<DbHash>>,
-		Arc<dyn OrderedDatabase<DbHash>>,
 		historied_db::mapped_db::MappedDBDyn,
 	) = match &config.source {
 		#[cfg(any(feature = "with-kvdb-rocksdb", test))]
@@ -287,9 +285,8 @@ pub fn open_database_and_historied<Block: BlockT>(
 				.map_err(|err| sp_blockchain::Error::Backend(format!("{}", err)))?;
 
 			let rocks_db = Arc::new(db);
-			let ordered = Arc::new(ordered_database::RocksdbStorage(rocks_db.clone()));
 			let management = Box::new(ordered_database::RocksdbStorage(rocks_db.clone()));
-			(sp_database::arc_as_database(rocks_db), ordered, management)
+			(sp_database::arc_as_database(rocks_db), management)
 		},
 		#[cfg(not(any(feature = "with-kvdb-rocksdb", test)))]
 		DatabaseSettingsSrc::RocksDb { .. } => {
@@ -300,10 +297,9 @@ pub fn open_database_and_historied<Block: BlockT>(
 			let parity_db = crate::parity_db::open(&path, db_type)
 				.map_err(|e| sp_blockchain::Error::Backend(format!("{:?}", e)))?;
 			let inner = sp_database::RadixTreeDatabase::new(parity_db.clone());
-			let ordered = Arc::new(inner.clone());
 			let management = Box::new(ordered_database::DatabaseStorage(inner.clone()));
 
-			(parity_db, ordered, management)
+			(parity_db, management)
 		},
 		#[cfg(not(feature = "with-parity-db"))]
 		DatabaseSettingsSrc::ParityDb { .. } => {
@@ -311,9 +307,8 @@ pub fn open_database_and_historied<Block: BlockT>(
 		},
 		DatabaseSettingsSrc::Custom(db) => {
 			let inner = sp_database::RadixTreeDatabase::new(db.clone());
-			let ordered = Arc::new(inner.clone());
 			let management = Box::new(ordered_database::DatabaseStorage(inner.clone()));
-			(db.clone(), ordered, management)
+			(db.clone(), management)
 		},
 	};
 

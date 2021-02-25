@@ -84,20 +84,14 @@ mod stats;
 #[cfg(feature = "with-parity-db")]
 mod parity_db;
 mod tree_management;
+mod historied_nodes;
 
-use historied_db::{
-	DecodeWithContext,
-	management::{ManagementMut, ForkableManagement},
-	historied::DataMut,
-	mapped_db::{TransactionalMappedDB, MappedDBDyn},
-	backend::nodes::ContextHead,
-};
+use historied_db::mapped_db::TransactionalMappedDB;
 
 use std::sync::Arc;
 use std::path::{Path, PathBuf};
 use std::io;
 use std::collections::{HashMap, HashSet};
-use offchain::{BlockNodes, BranchNodes};
 use parking_lot::{Mutex, RwLock};
 use linked_hash_map::LinkedHashMap;
 use log::{trace, debug, warn};
@@ -111,12 +105,11 @@ use sp_blockchain::{
 	Result as ClientResult, Error as ClientError,
 	well_known_cache_keys, HeaderBackend,
 };
-use codec::{Decode, Encode, Compact};
+use codec::{Decode, Encode};
 use hash_db::Prefix;
 use sp_trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};
-use sp_database::{Transaction, RadixTreeDatabase};
+use sp_database::Transaction;
 use sp_core::{Hasher, ChangesTrieConfiguration};
-use sp_core::offchain::OffchainOverlayedChange;
 use sp_core::storage::{well_known_keys, ChildInfo};
 use sp_arithmetic::traits::Saturating;
 use sp_runtime::{generic::{DigestItem, BlockId}, Justification, Storage};
@@ -134,7 +127,7 @@ use sc_state_db::StateDb;
 use sp_blockchain::{CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache};
 use crate::storage_cache::{CachingState, SyncingCachingState, SharedCache, new_shared_cache};
 use crate::stats::StateUsageStats;
-use crate::tree_management::{TreeManagement, TreeManagementSync, TreeManagementPersistence};
+use crate::tree_management::{TreeManagementSync, TreeManagementPersistence};
 
 // Re-export the Database trait so that one can pass an implementation of it.
 pub use sp_database::{Database, OrderedDatabase};
@@ -153,81 +146,6 @@ const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
 pub type DbState<B> = sp_state_machine::TrieBackend<
 	Arc<dyn sp_state_machine::Storage<HashFor<B>>>, HashFor<B>
 >;
-
-/// Modifiable Historied DB for a given new block state.
-///
-/// This assumes that the block is a head block and modification
-/// is conflict free (writing the delta a the end of a fork branch
-/// without concurrent access).
-pub struct HistoriedDBMut {
-	/// Branch head indexes of a latest block.
-	pub current_state: historied_db::Latest<(u32, u64)>,
-	/// Inner database storing historied values.
-	pub db: Arc<dyn Database<DbHash>>,
-}
-
-impl HistoriedDBMut {
-	/// Create a transaction for this historied db.
-	pub fn transaction(&self) -> Transaction<DbHash> {
-		Transaction::new()
-	}
-
-	/// Update transaction for a offchain local storage historied value.
-	pub fn update_single_offchain(
-		&mut self,
-		k: &[u8],
-		change: Option<Vec<u8>>,
-		change_set: &mut Transaction<DbHash>,
-		branch_nodes: &BranchNodes,
-		block_nodes: &BlockNodes,
-	) {
-		use crate::offchain::HValue;
-		let column = crate::columns::OFFCHAIN;
-		let init_nodes = ContextHead {
-			key: k.to_vec(),
-			backend: block_nodes.clone(),
-			encoded_indexes: Vec::new(),
-			node_init_from: (),
-		};
-		let init = ContextHead {
-			key: k.to_vec(),
-			backend: branch_nodes.clone(),
-			encoded_indexes: Vec::new(),
-			node_init_from: init_nodes.clone(),
-		};
-
-		let histo = if let Some(histo) = self.db.get(column, k) {
-			Some(HValue::decode_with_context(&mut &histo[..], &(init.clone(), init_nodes.clone()))
-				.expect("Corrupted db, wrong historied value encoding, closing."))
-		} else {
-			if change.is_none() {
-				return;
-			}
-			None
-		};
-
-		let mut new_value;
-		match if let Some(histo) = histo {
-			new_value = histo;
-			new_value.set(change, &self.current_state)
-		} else {
-			new_value = HValue::new(change, &self.current_state, (init, init_nodes));
-			historied_db::UpdateResult::Changed(())
-		} {
-			historied_db::UpdateResult::Changed(()) => {
-				use historied_db::Trigger;
-				new_value.trigger_flush();
-				change_set.set_from_vec(column, k, new_value.encode());
-			},
-			historied_db::UpdateResult::Cleared(()) => {
-				use historied_db::Trigger;
-				new_value.trigger_flush();
-				change_set.remove(column, k);
-			},
-			historied_db::UpdateResult::Unchanged => (),
-		}
-	}
-}
 
 const DB_HASH_LEN: usize = 32;
 
@@ -810,63 +728,6 @@ pub struct BlockImportOperation<Block: BlockT> {
 }
 
 impl<Block: BlockT> BlockImportOperation<Block> {
-	fn apply_offchain(
-		&mut self,
-		transaction: &mut Transaction<DbHash>,
-		historied: Option<&mut HistoriedDBMut>,
-		journals: Option<&mut TransactionalMappedDB<MappedDBDyn>>,
-	) {
-		let mut historied = historied.map(|historied_db| {
-			let block_nodes = BlockNodes::new(historied_db.db.clone());
-			let branch_nodes = BranchNodes::new(historied_db.db.clone());
-			(historied_db, block_nodes, branch_nodes)
-		});
-		let mut journal_keys = journals.as_ref().map(|_| Vec::new());
-		for ((prefix, key), value_operation) in self.offchain_storage_updates.drain(..) {
-			let key = crate::offchain::concatenate_prefix_and_key(&prefix, &key);
-			match value_operation {
-				OffchainOverlayedChange::SetValue(val) =>
-					transaction.set_from_vec(columns::OFFCHAIN, &key, val),
-				OffchainOverlayedChange::Remove =>
-					transaction.remove(columns::OFFCHAIN, &key),
-				OffchainOverlayedChange::SetLocalValue(val) => {
-					historied.as_mut().map(|(historied_db, block_nodes, branch_nodes)|
-						historied_db.update_single_offchain(&key, Some(val), transaction, branch_nodes, block_nodes)
-					);
-					journal_keys.as_mut().map(|journal| journal.push(key));
-				},
-				OffchainOverlayedChange::RemoveLocal => {
-					historied.as_mut().map(|(historied_db, block_nodes, branch_nodes)|
-						historied_db.update_single_offchain(&key, None, transaction, branch_nodes, block_nodes)
-					);
-					journal_keys.as_mut().map(|journal| journal.push(key));
-				},
-			}
-		}
-		if let (
-			Some(journal_keys),
-			Some(ordered_db),
-			Some(historied),
-		) = (journal_keys, journals, historied.as_ref()) {
-			// Note that this is safe because we import a new block.
-			// Otherwhise we would need to share cache with a single journal instance.
-			let mut journals = historied_db::management::JournalForMigrationBasis
-				::<_, _, _, crate::offchain::LocalOffchainDelete>
-				::from_db(ordered_db);
-			journals.add_changes(
-				ordered_db,
-				historied.0.current_state.latest().clone(),
-				journal_keys,
-				true, // New block, no need for fetch.
-			)
-		}
-
-		historied.as_mut().map(|(_historied_db, block_nodes, branch_nodes)| {
-			block_nodes.apply_transaction(transaction);
-			branch_nodes.apply_transaction(transaction);
-		});
-	}
-
 	fn apply_aux(&mut self, transaction: &mut Transaction<DbHash>) {
 		for (key, maybe_val) in self.aux_ops.drain(..) {
 			match maybe_val {
@@ -942,6 +803,20 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 
 		self.db_updates = transaction;
 		self.changes_trie_config_update = Some(changes_trie_config);
+
+		let storage_top: StorageCollection = storage.top.into_iter()
+			.map(|(k, v)| (k, Some(v))).collect();
+		let mut storage_child = ChildStorageCollection::default();
+		for (_child_key, collection) in storage.children_default.into_iter() {
+			let child_key = collection.child_info.into_prefixed_storage_key()
+				.into_inner();
+			let storage: StorageCollection = collection.data.into_iter()
+				.map(|(k, v)| (k, Some(v))).collect();
+			storage_child.push((child_key, storage));
+		}
+		// feed cache and the historied db
+		self.update_storage(storage_top, storage_child)?;
+
 		self.commit_state = true;
 		Ok(root)
 	}
@@ -1079,16 +954,6 @@ impl<T: Clone> FrozenForDuration<T> {
 	}
 }
 
-/// Registered historied db state consumer.
-///
-/// Mainly a way to trigger migration over all component using the state.
-pub type RegisteredConsumer<H, S> = historied_db::management::tree::RegisteredConsumer<
-	H,
-	u32,
-	u64,
-	S,
->;
-
 /// Disk backend.
 ///
 /// Disk backend keeps data in a key-value store. In archive mode, trie nodes are kept from all blocks.
@@ -1112,54 +977,21 @@ pub struct Backend<Block: BlockT> {
 	state_usage: Arc<StateUsageStats>,
 }
 
-// write management state changes
-fn apply_historied_management_changes<'a, Block: BlockT>(
-	mut historied_management: parking_lot::RwLockWriteGuard<'a, TreeManagement<
-		Block::Hash,
-		TreeManagementPersistence,
-	>>,
-	transaction: &mut Transaction<DbHash>,
-) {
-	let pending = std::mem::replace(&mut historied_management.ser().pending, Default::default());
-	for (col, (mut changes, dropped)) in pending {
-		if dropped {
-			use historied_db::mapped_db::MappedDB;
-			for (key, _v) in historied_management.ser_ref().iter(col) {
-				changes.insert(key, None);
-			}
-		}
-		if let Some((col, p)) = crate::utils::ordered_database::resolve_collection(col) {
-			for (key, change) in changes {
-				subcollection_prefixed_key!(p, key);
-				match change {
-					Some(value) => transaction.set_from_vec(col, key, value),
-					None => transaction.remove(col, key),
-				}
-			}
-		} else {
-			warn!("Unknown collection for tree management pending transaction {:?}", col);
-		}
-	}
-}
-
 impl<Block: BlockT> Backend<Block> {
 	/// Create a new instance of database backend.
 	///
 	/// The pruning window is how old a block must be before the state is pruned.
 	pub fn new(config: DatabaseSettings, canonicalization_delay: u64) -> ClientResult<Self> {
-		let (db, ordered, ordered_2) = crate::utils::open_database_and_historied::<Block>(
+		let (db, management) = crate::utils::open_database_and_historied::<Block>(
 			&config,
 			DatabaseType::Full,
 		)?;
-		Self::from_database(db as Arc<_>, ordered, ordered_2, canonicalization_delay, &config)
+		Self::from_database(db as Arc<_>, management, canonicalization_delay, &config)
 	}
 
 	/// Create new memory-backed client backend for tests.
 	#[cfg(any(test, feature = "test-helpers"))]
-	pub fn new_test(
-		keep_blocks: u32,
-		canonicalization_delay: u64,
-	) -> Self {
+	pub fn new_test(keep_blocks: u32, canonicalization_delay: u64) -> Self {
 		Self::new_test_with_tx_storage(
 			keep_blocks,
 			canonicalization_delay,
@@ -1169,7 +1001,7 @@ impl<Block: BlockT> Backend<Block> {
 
 	/// Create new memory-backed client backend for tests.
 	#[cfg(any(test, feature = "test-helpers"))]
-	fn new_test_with_tx_storage(
+	pub fn new_test_with_tx_storage(
 		keep_blocks: u32,
 		canonicalization_delay: u64,
 		transaction_storage: TransactionStorageMode,
@@ -1190,7 +1022,6 @@ impl<Block: BlockT> Backend<Block> {
 
 	fn from_database(
 		db: Arc<dyn Database<DbHash>>,
-		ordered_db: Arc<dyn OrderedDatabase<DbHash>>,
 		management_db: historied_db::mapped_db::MappedDBDyn,
 		canonicalization_delay: u64,
 		config: &DatabaseSettings,
@@ -1244,21 +1075,8 @@ impl<Block: BlockT> Backend<Block> {
 		let offchain_local_storage = offchain::BlockChainLocalStorage::new(
 			db,
 			historied_management,
-			unimplemented!(), //ordered_db_2, TODO
 			safe_offchain_locks,
 		);
-		let mut historied_management_consumer: RegisteredConsumer<
-			<HashFor<Block> as Hasher>::Out,
-			TreeManagementPersistence,
-		> = Default::default();
-		let historied_management_consumer_transaction = Arc::new(RwLock::new(
-			Default::default()
-		));
-		historied_management_consumer.register_consumer(Box::new(
-			offchain::TransactionalConsumer {
-				storage: offchain_local_storage.clone(),
-				pending: historied_management_consumer_transaction.clone(),
-			}));
 		Ok(Backend {
 			storage: Arc::new(storage_db),
 			offchain_storage,
@@ -1438,75 +1256,8 @@ impl<Block: BlockT> Backend<Block> {
 		let mut finalization_displaced_leaves = None;
 
 		operation.apply_aux(&mut transaction);
-//		operation.apply_offchain(&mut transaction);
- // TODO also apply offchain change (pass self.offchain_persistent_storage as param
-		self.offchain_local_storage.apply_block_change(&operation, &mut transaction)?;
-/*
-		let hashes = operation.pending_block.as_ref().map(|pending_block| {
-			let hash = pending_block.header.hash();
-			let parent_hash = *pending_block.header.parent_hash();
-			(hash, parent_hash)
-		});
+		self.offchain_local_storage.apply_block_change(&mut operation, &mut transaction)?;
 
-		let mut historied_db = if let Some((hash, parent_hash)) = hashes {
-			// lazy init, not that this can lead to no finalization
-			// if the node get close to often, with current windows
-			// size, this is fine, otherwhise this value will need
-			// to persist.
-			if self.historied_next_finalizable.read().is_none() {
-				let parent_block = BlockId::Hash(parent_hash.clone());
-				if let Some(nb) = self.blockchain.block_number_from_id(&parent_block)? {
-					*self.historied_next_finalizable.write() = Some(nb + HISTORIED_FINALIZATION_WINDOWS.into());
-				}
-			}
-
-			// Ensure pending layer is clean
-			let pending = std::mem::replace(&mut self.historied_management.write().ser().pending, Default::default());
-			assert!(pending.iter().next().is_none());
-			let update_plan = {
-				// lock does notinclude update of value as we do not have concurrent block creation
-				let mut management = self.historied_management.write();
-				if let Some(state) = Some(management.get_db_state_for_fork(&parent_hash)
-					.unwrap_or_else(|| {
-						// allow this to start from existing state TODO add a stored boolean to only allow
-						// that once in genesis or in tests
-						warn!("state not found for parent hash, appending to latest");
-						management.latest_state_fork()
-					}))
-				{
-					let _query_plan = management.append_external_state(hash.clone(), &state)
-						.ok_or(sp_blockchain::Error::from_state_db("correct state resolution"))?;
-					let update_plan = management.get_db_state_mut(&hash)
-						.ok_or(sp_blockchain::Error::from_state_db("correct state resolution"))?;
-					update_plan
-				} else {
-					return Err(sp_blockchain::Error::from_state_db("missing update plan"));
-				}
-			};
-			Some(HistoriedDBMut {
-				current_state: update_plan,
-				db: self.blockchain.db.clone(),
-			})
-		} else {
-			None
-		};
-
-		{
-			use historied_db::management::tree::TreeManagementStorage;
-			let mut management;
-			let journals = if TreeManagementPersistence::JOURNAL_CHANGES {
-				management = self.historied_management.write();
-				Some(management.ser())
-			} else {
-				None
-			};
-		
-			operation.apply_offchain(&mut transaction, historied_db.as_mut(), journals);
-		}
-
-		apply_historied_management_changes::<Block>(self.historied_management.write(), &mut transaction);
-		TODO check all in apply_block_change of offchaindb
-*/
 		let mut meta_updates = Vec::with_capacity(operation.finalized_blocks.len());
 		let mut last_finalized_hash = self.blockchain.meta.read().finalized_hash;
 
@@ -1824,58 +1575,7 @@ impl<Block: BlockT> Backend<Block> {
 
 		Ok(())
 	}
-/* TODO check in finalize call
-	fn historied_pruning(&self, hash: &Block::Hash, number: NumberFor<Block>)
-		-> ClientResult<()> {
-		let do_finalize = &number > &self.historied_next_finalizable.read().as_ref()
-			.unwrap_or(&0u16.into());
-		if !do_finalize {
-			return Ok(())
-		}
-		let historied_pruning_window = match &config.state_pruning {
-			PruningMode::Constrained(constraint) => constraint.max_blocks.map(|nb| nb.into()),
-			_ => None,
-		};
 
-		let prune_index = self.historied_pruning_window.map(|nb| {
-			number.saturating_sub(nb).saturated_into::<u64>()
-		});
-
-		// This lock can be rather long, so we really need to migrate occasionally.
-		// TODO this is bad design, migrate requires this lock, but the actual
-		// pruning does not require it that much: we should be able to run
-		// a migration without attaching the historied_management to it.
-		// This is due to the fact that transaction is use, and we can apply thing
-		// rather atomically.
-		// TODO create TransactionalMigration that do not require locking?
-		// Maybe some api like AssertUnwindSafe : AssertTransactionalMigrate.
-		let mut historied_management = self.historied_management.write();
-		// Ensure pending layer is clean
-		let _ = std::mem::replace(&mut historied_management.ser().pending, Default::default());
-
-		let switch_index = historied_management.get_db_state_for_fork(hash);
-		let path = {
-			use historied_db::management::Management;
-			historied_management.get_db_state(hash)
-		};
-		
-		if let (Some(switch_index), Some(path)) = (switch_index, path) {
-			historied_management.canonicalize(path, switch_index, prune_index);
-			// do migrate data
-			self.historied_management_consumer.migrate(&mut *historied_management);
-		} else {
-			return Err(ClientError::UnknownBlock("Missing in historied management".to_string()));
-		}
-
-		// flush historied management changes
-		let mut transaction = std::mem::replace(&mut *self.historied_management_consumer_transaction.write(), Default::default());
-		apply_historied_management_changes::<Block>(historied_management, &mut transaction);
-
-		self.storage.db.commit(transaction)?;
-		*self.historied_next_finalizable.write() = Some(number + HISTORIED_FINALIZATION_WINDOWS.into());
-		Ok(())
-	}
-*/
 	fn prune_blocks(
 		&self,
 		transaction: &mut Transaction<DbHash>,
@@ -1920,10 +1620,6 @@ impl<Block: BlockT> Backend<Block> {
 		Ok(())
 	}
 }
-
-/// Avoid finalizing at every block.
-/// TODO get this value from conf
-const HISTORIED_FINALIZATION_WINDOWS: u8 = 101;
 
 fn apply_state_commit(transaction: &mut Transaction<DbHash>, commit: sc_state_db::CommitSet<Vec<u8>>) {
 	for (key, val) in commit.data.inserted.into_iter() {

@@ -1011,12 +1011,6 @@ impl<V: EstimateSize> EstimateSize for Option<V> {
 	}
 }
 
-impl<V: EstimateSize, S: EstimateSize> EstimateSize for crate::backend::in_memory::MemoryOnly<V, S> {
-	fn estimate_size(&self) -> usize {
-		unimplemented!("This should be avoided");
-	}
-}
-
 impl<D, M, B, NI> AsRef<[u8]> for Head<Vec<u8>, u64, D, M, B, NI>
 	where
 		D: AsRef<[u8]>,
