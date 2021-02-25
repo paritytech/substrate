@@ -101,6 +101,7 @@ pub fn generate_random_npos_inputs(
 
 		let mut chosen_candidates = Vec::with_capacity(n_candidates_chosen);
 		chosen_candidates.extend(candidates.choose_multiple(&mut rng, n_candidates_chosen));
+		chosen_candidates.sort();
 		voters.push((id, vote_weight, chosen_candidates));
 	}
 

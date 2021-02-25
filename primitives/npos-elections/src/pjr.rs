@@ -211,9 +211,10 @@ fn pjr_check_core<AccountId: IdentifierT>(
 	t: Threshold,
 ) -> bool {
 	let unelected = candidates.iter().filter(|c| !c.borrow().elected);
-	let maybe_max_pre_score = unelected.map(|c| pre_score(Rc::clone(c), voters, t)).max();
+	let maybe_max_pre_score = unelected.map(|c| (pre_score(Rc::clone(c), voters, t), c.borrow().who.clone())).max();
 	// if unelected is empty then the solution is indeed PJR.
-	maybe_max_pre_score.map_or(true, |max_pre_score| max_pre_score < t)
+	dbg!(&maybe_max_pre_score);
+	maybe_max_pre_score.map_or(true, |(max_pre_score, _)| dbg!(max_pre_score < t))
 }
 
 /// The pre-score of an unelected candidate.
@@ -279,6 +280,7 @@ pub fn pjr_check<AccountId: IdentifierT>(
 		.map(|(_id, weight, _allocation)| *weight as ExtendedBalance)
 		.sum::<ExtendedBalance>()
 		/ supports.len() as ExtendedBalance;
+	dbg!(t);
 	t_pjr_check(supports, all_candidates, all_voters, t)
 }
 

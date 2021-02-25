@@ -42,3 +42,7 @@ path = "src/compact.rs"
 [[bin]]
 name = "phragmen_pjr"
 path = "src/phragmen_pjr.rs"
+
+[[bin]]
+name = "phragmms_pjr"
+path = "src/phragmms_pjr.rs"

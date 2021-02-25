@@ -25,18 +25,20 @@
 //! limit should reasonably be. Simply run the program without the `fuzzing` configuration to run a
 //! single iteration: `cargo run --bin phragmen_pjr`.
 //!
+//! On a relatively modern machine (late 2019 era), a single iteration takes ~30 seconds with maximum
+//! parameters.
+//!
 //! ## Running
 //!
-//! Run with `HFUZZ_RUN_ARGS="-t 10" cargo hfuzz run phragmen_pjr`.
+//! Run with `HFUZZ_RUN_ARGS="-t 60" cargo hfuzz run phragmen_pjr`.
 //!
 //! Note the environment variable: by default, `cargo hfuzz` shuts down each iteration after 1 second
 //! of runtime. We significantly increase that to ensure that the fuzzing gets a chance to complete.
-//! Running a single iteration can help determine an appropriate value for this parameter.
 //!
 //! ## Debugging a panic
 //!
 //! Once a panic is found, it can be debugged with
-//! `HFUZZ_RUN_ARGS="-t 10" cargo hfuzz run-debug phragmen_pjr hfuzz_workspace/phragmen_pjr/*.fuzz`.
+//! `HFUZZ_RUN_ARGS="-t 60" cargo hfuzz run-debug phragmen_pjr hfuzz_workspace/phragmen_pjr/*.fuzz`.
 //!
 
 #[cfg(fuzzing)]
@@ -49,17 +51,17 @@ mod common;
 use common::{generate_random_npos_inputs, to_range};
 use rand::{self, SeedableRng};
 use sp_npos_elections::{
-	assignment_ratio_to_staked, pjr_check, seq_phragmen, phragmms, to_supports, to_without_backing,
+	assignment_ratio_to_staked, pjr_check, phragmms, to_supports, to_without_backing,
 	ElectionResult, Supports,
 };
 
 type AccountId = u64;
 type PerThing = sp_arithmetic::Permill;
 
-const MIN_CANDIDATES: usize = 5;
-const MAX_CANDIDATES: usize = 35;
-const MIN_VOTERS: usize = 5;
-const MAX_VOTERS: usize = 35;
+const MIN_CANDIDATES: usize = 10;
+const MAX_CANDIDATES: usize = 20;
+const MIN_VOTERS: usize = 10;
+const MAX_VOTERS: usize = 20;
 
 #[cfg(fuzzing)]
 fn main() {
@@ -113,8 +115,8 @@ fn iteration(mut candidate_count: usize, mut voter_count: usize, seed: u64) {
 	let ElectionResult {
 		winners,
 		assignments,
-	} = seq_phragmen::<AccountId, PerThing>(rounds, candidates.clone(), voters.clone(), None)
-		.expect("seq_phragmen must succeed");
+	} = phragmms::<AccountId, PerThing>(rounds, candidates.clone(), voters.clone(), None)
+		.expect("phragmms must succeed");
 
 	dbg!(&winners, &assignments);
 
@@ -134,32 +136,8 @@ fn iteration(mut candidate_count: usize, mut voter_count: usize, seed: u64) {
 
 	dbg!(&supports);
 
-	let pjr_success = pjr_check(&supports, candidates.clone(), voters.clone());
-	if !pjr_success {
-		let ElectionResult {
-			winners,
-			assignments,
-		} = phragmms::<AccountId, PerThing>(rounds, candidates.clone(), voters.clone(), None)
-			.expect("phragmms must succeed");
-
-		// pjr_check only cares about the identity of the winner, not its balance
-		let winners = to_without_backing(winners);
-
-		// convert assignments into staked assignments
-		let assignments = assignment_ratio_to_staked(assignments, |who| {
-			let voter_idx = voters
-				.binary_search_by_key(who, |(id, _weight, _assignments)| *id)
-				.expect("voter must be present in voters list");
-			voters[voter_idx].1
-		});
-
-		let supports: Supports<AccountId> = to_supports(&winners, &assignments)
-			.expect("election result must be structurally valid");
-
-		println!("phragmms satisfies PJR with the same inputs: {}", pjr_check(&supports, candidates, voters))
-	}
 	assert!(
-		pjr_success,
-		"unbalanced sequential phragmen must satisfy PJR",
+		pjr_check(&supports, candidates, voters),
+		"unbalanced phragmms must satisfy PJR",
 	);
 }
