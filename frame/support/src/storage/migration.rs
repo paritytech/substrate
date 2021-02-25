@@ -19,7 +19,7 @@
 
 use sp_std::prelude::*;
 use codec::{Encode, Decode};
-use crate::{StorageHasher, Twox128};
+use crate::{StorageHasher, Twox128, storage::unhashed};
 use crate::hash::ReversibleStorageHasher;
 
 use super::PrefixIterator;
@@ -199,6 +199,9 @@ pub fn take_storage_item<K: Encode + Sized, T: Decode + Sized, H: StorageHasher>
 }
 
 /// Move a storage from a pallet prefix to another pallet prefix.
+///
+/// NOTE: It actually moves every key after the storage prefix to the new storage prefix,
+/// key on storage prefix is also moved.
 pub fn move_storage_from_pallet(item: &[u8], old_pallet: &[u8], new_pallet: &[u8]) {
 	let mut new_prefix = Vec::new();
 	new_prefix.extend_from_slice(&Twox128::hash(new_pallet));
@@ -208,15 +211,23 @@ pub fn move_storage_from_pallet(item: &[u8], old_pallet: &[u8], new_pallet: &[u8
 	old_prefix.extend_from_slice(&Twox128::hash(old_pallet));
 	old_prefix.extend_from_slice(&Twox128::hash(item));
 
-	move_prefix(&old_prefix, &new_prefix)
+	move_prefix(&old_prefix, &new_prefix);
+
+	if let Some(value) = unhashed::get_raw(&old_prefix) {
+		unhashed::put_raw(&new_prefix, &value);
+		unhashed::kill(&old_prefix);
+	}
+
 }
 
-/// Move all storage from a pallet prefix to another pallet prefix.
+/// Move all storage key after the pallet prefix `old_pallet` to `new_pallet`
 pub fn move_pallet(old_pallet: &[u8], new_pallet: &[u8]) {
 	move_prefix(&Twox128::hash(old_pallet), &Twox128::hash(new_pallet))
 }
 
-/// Move all `(key, value)` from one prefix to the other prefix.
+/// Move all `(key, value)` after prefix to the other prefix
+///
+/// NOTE: It doesn't move key on the prefix itself.
 pub fn move_prefix(from_prefix: &[u8], to_prefix: &[u8]) {
 	if from_prefix == to_prefix {
 		return
@@ -231,7 +242,7 @@ pub fn move_prefix(from_prefix: &[u8], to_prefix: &[u8]) {
 
 	for (key, value) in iter {
 		let full_key = [to_prefix.clone(), &key].concat();
-		crate::storage::unhashed::put_raw(&full_key, &value);
+		unhashed::put_raw(&full_key, &value);
 	}
 }
 
@@ -308,6 +319,13 @@ mod tests {
 			assert_eq!(OldStorageValue::get(), Some(3));
 			assert_eq!(OldStorageMap::iter().collect::<Vec<_>>(), vec![]);
 			assert_eq!(NewStorageValue::get(), None);
+			assert_eq!(NewStorageMap::iter().collect::<Vec<_>>(), vec![(1, 2), (3, 4)]);
+
+			move_storage_from_pallet(b"foo_value", b"my_old_pallet", b"my_new_pallet");
+
+			assert_eq!(OldStorageValue::get(), None);
+			assert_eq!(OldStorageMap::iter().collect::<Vec<_>>(), vec![]);
+			assert_eq!(NewStorageValue::get(), Some(3));
 			assert_eq!(NewStorageMap::iter().collect::<Vec<_>>(), vec![(1, 2), (3, 4)]);
 		})
 	}
