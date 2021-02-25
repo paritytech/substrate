@@ -237,7 +237,7 @@ decl_storage! {
 		config(epoch_config): Option<BabeEpochConfiguration>;
 		build(|config| {
 			Module::<T>::initialize_authorities(&config.authorities);
-			EpochConfig::put(config.epoch_config.clone().expect("EpochConfig is never None; qed"));
+			EpochConfig::put(config.epoch_config.clone().expect("epoch_config must not be None"));
 		})
 	}
 }
