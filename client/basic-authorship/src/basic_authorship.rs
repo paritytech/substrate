@@ -98,14 +98,16 @@ impl<A, B, C> ProposerFactory<A, B, C, EnableProofRecording> {
 		client: Arc<C>,
 		transaction_pool: Arc<A>,
 		prometheus: Option<&PrometheusRegistry>,
+		telemetry: Option<TelemetryHandle>,
 	) -> Self {
 		ProposerFactory {
 			spawn_handle: Box::new(spawn_handle),
 			client,
 			transaction_pool,
 			metrics: PrometheusMetrics::new(prometheus),
-			_phantom: PhantomData,
 			max_block_size: DEFAULT_MAX_BLOCK_SIZE,
+			telemetry,
+			_phantom: PhantomData,
 		}
 	}
 }
