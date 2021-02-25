@@ -23,7 +23,7 @@ use sp_keyring::{Ed25519Keyring, Sr25519Keyring};
 use node_runtime::{
 	GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, SystemConfig,
 	GrandpaConfig, IndicesConfig, ContractsConfig, SocietyConfig, wasm_binary_unwrap,
-	AccountId, StakerStatus,
+	AccountId, StakerStatus, BabeConfig, BABE_GENESIS_EPOCH_CONFIG,
 };
 use node_runtime::constants::currency::*;
 use sp_core::ChangesTrieConfiguration;
@@ -100,7 +100,10 @@ pub fn config_endowed(
 		pallet_contracts: Some(ContractsConfig {
 			current_schedule: Default::default(),
 		}),
-		pallet_babe: Some(Default::default()),
+		pallet_babe: Some(BabeConfig {
+			authorities: vec![],
+			epoch_config: Some(BABE_GENESIS_EPOCH_CONFIG),
+		}),
 		pallet_grandpa: Some(GrandpaConfig {
 			authorities: vec![],
 		}),
