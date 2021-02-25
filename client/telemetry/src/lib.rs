@@ -44,7 +44,6 @@ use serde::Serialize;
 use parking_lot::Mutex;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::mem;
 use std::sync::Arc;
 
 pub use libp2p::wasm_ext::ExtTransport;
@@ -239,13 +238,16 @@ impl TelemetryWorker {
 
 					node.connection_messages.extend(connection_message.clone());
 
-					let (matching, rest): (Vec<_>, Vec<_>) =
-						mem::take(pending_connection_notifications)
-							.into_iter()
-							.partition(|(addr_b, _)| *addr_b == addr);
-					node.telemetry_connection_notifier
-						.extend(matching.into_iter().map(|(_, x)| x.clone()));
-					let _ = mem::replace(pending_connection_notifications, rest);
+					pending_connection_notifications.retain(
+						|(addr_b, connection_message)| {
+							if *addr_b == addr {
+								node.telemetry_connection_notifier.push(connection_message.clone());
+								false
+							} else {
+								true
+							}
+						}
+					);
 				}
 			}
 			Register::Notifier {
