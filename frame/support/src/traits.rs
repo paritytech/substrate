@@ -1575,17 +1575,13 @@ pub trait OnRuntimeUpgrade {
 	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<(), &'static str> {
-		Ok(())
-	}
+	fn pre_upgrade() -> Result<(), &'static str>;
 
 	/// Execute some post-checks after a runtime upgrade.
 	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade() -> Result<(), &'static str> {
-		Ok(())
-	}
+	fn post_upgrade() -> Result<(), &'static str>;
 }
 
 #[impl_for_tuples(30)]
@@ -2011,6 +2007,22 @@ pub trait Hooks<BlockNumber> {
 	///
 	/// Return the non-negotiable weight consumed for runtime upgrade.
 	fn on_runtime_upgrade() -> crate::weights::Weight { 0 }
+
+	/// Execute some pre-checks prior to a runtime upgrade.
+	///
+	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<(), &'static str> {
+		Ok(())
+	}
+
+	/// Execute some post-checks after a runtime upgrade.
+	///
+	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade() -> Result<(), &'static str> {
+		Ok(())
+	}
 
 	/// Implementing this function on a module allows you to perform long-running tasks
 	/// that make (by default) validators generate transactions that feed results
