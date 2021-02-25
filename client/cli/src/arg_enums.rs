@@ -168,7 +168,7 @@ impl Into<sc_service::config::RpcMethods> for RpcMethods {
 pub enum Database {
 	/// Facebooks RocksDB
 	RocksDb,
-	/// ParityDb. https://github.com/paritytech/parity-db/
+	/// ParityDb. <https://github.com/paritytech/parity-db/>
 	ParityDb,
 }
 
