@@ -45,3 +45,4 @@ std = [
 	"sp-timestamp/std"
 ]
 runtime-benchmarks = ["frame-benchmarking", "sp-io"]
+try-runtime = ["frame-support/try-runtime"]

@@ -69,3 +69,4 @@ runtime-benchmarks = [
 	"sp-election-providers/runtime-benchmarks",
 	"rand_chacha",
 ]
+try-runtime = ["frame-support/try-runtime"]

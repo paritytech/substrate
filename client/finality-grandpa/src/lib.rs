@@ -121,17 +121,16 @@ mod observer;
 mod until_imported;
 mod voting_rule;
 
-pub use authorities::{SharedAuthoritySet, AuthoritySet};
+pub use authorities::{AuthoritySet, AuthoritySetChanges, SharedAuthoritySet};
 pub use finality_proof::{FinalityProof, FinalityProofProvider, FinalityProofError};
 pub use notification::{GrandpaJustificationSender, GrandpaJustificationStream};
-pub use import::GrandpaBlockImport;
+pub use import::{find_scheduled_change, find_forced_change, GrandpaBlockImport};
 pub use justification::GrandpaJustification;
 pub use voting_rule::{
 	BeforeBestBlockBy, ThreeQuartersOfTheUnfinalizedChain, VotingRule, VotingRuleResult,
 	VotingRulesBuilder,
 };
 pub use finality_grandpa::voter::report;
-pub use finality_proof::{prove_warp_sync, WarpSyncFragmentCache};
 
 use aux_schema::PersistentData;
 use environment::{Environment, VoterSetState};
