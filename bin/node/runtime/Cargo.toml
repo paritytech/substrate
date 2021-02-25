@@ -51,9 +51,9 @@ pallet-babe = { version = "3.0.0", default-features = false, path = "../../../fr
 pallet-balances = { version = "3.0.0", default-features = false, path = "../../../frame/balances" }
 pallet-bounties = { version = "3.0.0", default-features = false, path = "../../../frame/bounties" }
 pallet-collective = { version = "3.0.0", default-features = false, path = "../../../frame/collective" }
-pallet-contracts = { version = "2.0.0", default-features = false, path = "../../../frame/contracts" }
-pallet-contracts-primitives = { version = "2.0.0", default-features = false, path = "../../../frame/contracts/common/" }
-pallet-contracts-rpc-runtime-api = { version = "0.8.0", default-features = false, path = "../../../frame/contracts/rpc/runtime-api/" }
+pallet-contracts = { version = "3.0.0", default-features = false, path = "../../../frame/contracts" }
+pallet-contracts-primitives = { version = "3.0.0", default-features = false, path = "../../../frame/contracts/common/" }
+pallet-contracts-rpc-runtime-api = { version = "3.0.0", default-features = false, path = "../../../frame/contracts/rpc/runtime-api/" }
 pallet-democracy = { version = "3.0.0", default-features = false, path = "../../../frame/democracy" }
 pallet-elections-phragmen = { version = "3.0.0", default-features = false, path = "../../../frame/elections-phragmen" }
 pallet-election-provider-multi-phase = { version = "3.0.0", default-features = false, path = "../../../frame/election-provider-multi-phase" }

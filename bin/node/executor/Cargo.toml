@@ -30,7 +30,7 @@ frame-support = { version = "3.0.0", path = "../../../frame/support" }
 frame-system = { version = "3.0.0", path = "../../../frame/system" }
 node-testing = { version = "2.0.0", path = "../testing" }
 pallet-balances = { version = "3.0.0", path = "../../../frame/balances" }
-pallet-contracts = { version = "2.0.0", path = "../../../frame/contracts" }
+pallet-contracts = { version = "3.0.0", path = "../../../frame/contracts" }
 pallet-grandpa = { version = "3.0.0", path = "../../../frame/grandpa" }
 pallet-im-online = { version = "3.0.0", path = "../../../frame/im-online" }
 pallet-indices = { version = "3.0.0", path = "../../../frame/indices" }
