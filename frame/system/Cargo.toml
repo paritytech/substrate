@@ -44,6 +44,7 @@ runtime-benchmarks = [
 	"sp-runtime/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
 ]
+try-runtime = ["frame-support/try-runtime"]
 
 [[bench]]
 name = "bench"

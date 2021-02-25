@@ -197,9 +197,14 @@ pub fn new_full_base(
 	config.network.extra_sets.push(grandpa::grandpa_peers_set_config());
 
 	#[cfg(feature = "cli")]
-	config.network.request_response_protocols.push(sc_finality_grandpa_warp_sync::request_response_config_for_chain(
-		&config, task_manager.spawn_handle(), backend.clone(),
-	));
+	config.network.request_response_protocols.push(
+		sc_finality_grandpa_warp_sync::request_response_config_for_chain(
+			&config,
+			task_manager.spawn_handle(),
+			backend.clone(),
+			import_setup.1.shared_authority_set().clone(),
+		)
+	);
 
 	let (network, network_status_sinks, system_rpc_tx, network_starter) =
 		sc_service::build_network(sc_service::BuildNetworkParams {
@@ -478,7 +483,6 @@ mod tests {
 	use sc_consensus_epochs::descendent_query;
 	use sp_consensus::{
 		Environment, Proposer, BlockImportParams, BlockOrigin, ForkChoiceStrategy, BlockImport,
-		RecordProof,
 	};
 	use node_primitives::{Block, DigestItem, Signature};
 	use node_runtime::{BalancesCall, Call, UncheckedExtrinsic, Address};
@@ -611,7 +615,6 @@ mod tests {
 						inherent_data,
 						digest,
 						std::time::Duration::from_secs(1),
-						RecordProof::Yes,
 					).await
 				}).expect("Error making test block").block;
 

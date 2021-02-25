@@ -1354,6 +1354,16 @@ macro_rules! decl_module {
 
 				result.saturating_add(additional_write)
 			}
+
+			#[cfg(feature = "try-runtime")]
+			fn pre_upgrade() -> Result<(), &'static str> {
+				Ok(())
+			}
+
+			#[cfg(feature = "try-runtime")]
+			fn post_upgrade() -> Result<(), &'static str> {
+				Ok(())
+			}
 		}
 	};
 
@@ -1389,6 +1399,16 @@ macro_rules! decl_module {
 				<
 					<$trait_instance as $system::Config>::DbWeight as $crate::traits::Get<_>
 				>::get().writes(1)
+			}
+
+			#[cfg(feature = "try-runtime")]
+			fn pre_upgrade() -> Result<(), &'static str> {
+				Ok(())
+			}
+
+			#[cfg(feature = "try-runtime")]
+			fn post_upgrade() -> Result<(), &'static str> {
+				Ok(())
 			}
 		}
 	};
