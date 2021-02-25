@@ -22,7 +22,7 @@ sp-io = { version = "3.0.0", path = "../../../primitives/io" }
 sp-state-machine = { version = "0.9.0", path = "../../../primitives/state-machine" }
 sp-trie = { version = "3.0.0", path = "../../../primitives/trie" }
 trie-root = "0.16.0"
-frame-benchmarking = { version = "3.0.0", path = "../../../frame/benchmarking" }
+frame-benchmarking = { version = "3.1.0", path = "../../../frame/benchmarking" }
 
 [dev-dependencies]
 criterion = "0.3.0"

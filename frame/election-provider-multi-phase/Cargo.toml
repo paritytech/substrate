@@ -28,7 +28,7 @@ sp-arithmetic = { version = "3.0.0", default-features = false, path = "../../pri
 sp-election-providers = { version = "3.0.0", default-features = false, path = "../../primitives/election-providers" }
 
 # Optional imports for benchmarking
-frame-benchmarking = { version = "3.0.0", default-features = false, path = "../benchmarking", optional = true }
+frame-benchmarking = { version = "3.1.0", default-features = false, path = "../benchmarking", optional = true }
 rand = { version = "0.7.3", default-features = false, optional = true, features = ["alloc", "small_rng"] }
 
 [dev-dependencies]
@@ -42,7 +42,7 @@ sp-core = { version = "3.0.0", path = "../../primitives/core" }
 sp-tracing = { version = "3.0.0", path = "../../primitives/tracing" }
 sp-election-providers = { version = "3.0.0", features = ["runtime-benchmarks"], path = "../../primitives/election-providers" }
 pallet-balances = { version = "3.0.0", path = "../balances" }
-frame-benchmarking = { path = "../benchmarking" }
+frame-benchmarking = { path = "../benchmarking" , version = "3.1.0"}
 
 [features]
 default = ["std"]
