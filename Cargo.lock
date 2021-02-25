@@ -7254,18 +7254,25 @@ name = "sc-finality-grandpa-warp-sync"
 version = "0.9.0"
 dependencies = [
  "derive_more",
+ "finality-grandpa",
  "futures 0.3.12",
  "log",
  "num-traits",
  "parity-scale-codec",
  "parking_lot 0.11.1",
  "prost",
+ "rand 0.8.3",
+ "sc-block-builder",
  "sc-client-api",
  "sc-finality-grandpa",
  "sc-network",
  "sc-service",
  "sp-blockchain",
+ "sp-consensus",
+ "sp-finality-grandpa",
+ "sp-keyring",
  "sp-runtime",
+ "substrate-test-runtime-client",
 ]
 
 [[package]]
