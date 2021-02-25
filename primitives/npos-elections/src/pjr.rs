@@ -162,8 +162,10 @@ fn prepare_pjr_input<AccountId: IdentifierT>(
 /// (i.e `sum(stake(v) for v in voters) == r * t`), then this committee needs to be represented by at
 /// least `r` elected candidates.
 ///
-/// Section 5 of the NPoS paper shows that this property is equal to: For a feasible solution, if
-/// `Max {score(c)} < t` where c is every unelected candidate, then this solution is t-PJR.
+/// Section 5 of the NPoS paper shows that this property can be tested by: for a feasible solution, if
+/// `Max {score(c)} < t` where c is every unelected candidate, then this solution is t-PJR. However,
+/// this test is incomplete: while every solution which passes this test satisfies t-PJR, not every
+/// solution which is t-PJR passes this test. We therefore look to a more accurate test.
 ///
 /// The text notes the following:
 ///
