@@ -17,14 +17,15 @@
 
 use crate::{
 	BalanceOf, ContractInfo, ContractInfoOf, Module,
-	RawAliveContractInfo, RawEvent, Config, Schedule, gas::Gas,
-	Error, RuntimeReturnCode, storage::Storage,
+	RawAliveContractInfo, Config, Schedule,
+	Error, storage::Storage,
 	chain_extension::{
 		Result as ExtensionResult, Environment, ChainExtension, Ext, SysConfig, RetVal,
 		UncheckedFrom, InitState, ReturnFlags,
 	},
 	exec::{AccountIdOf, Executable}, wasm::PrefabWasmModule,
 	weights::WeightInfo,
+	wasm::ReturnCode as RuntimeReturnCode,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
@@ -36,8 +37,8 @@ use sp_runtime::{
 use sp_io::hashing::blake2_256;
 use frame_support::{
 	assert_ok, assert_err, assert_err_ignore_postinfo,
-	parameter_types, StorageMap, StorageValue, assert_storage_noop,
-	traits::{Currency, ReservableCurrency, OnInitialize},
+	parameter_types, assert_storage_noop,
+	traits::{Currency, ReservableCurrency, OnInitialize, GenesisBuild},
 	weights::{Weight, PostDispatchInfo, DispatchClass, constants::WEIGHT_PER_SECOND},
 	dispatch::DispatchErrorWithPostInfo,
 	storage::child,
@@ -73,7 +74,7 @@ pub mod test_utils {
 		exec::{StorageKey, AccountIdOf},
 		Module as Contracts,
 	};
-	use frame_support::{StorageMap, traits::Currency};
+	use frame_support::traits::Currency;
 
 	pub fn set_storage(addr: &AccountIdOf<Test>, key: &StorageKey, value: Option<Vec<u8>>) {
 		let contract_info = <ContractInfoOf::<Test>>::get(&addr).unwrap().get_alive().unwrap();
@@ -292,7 +293,7 @@ pub const BOB: AccountId32 = AccountId32::new([2u8; 32]);
 pub const CHARLIE: AccountId32 = AccountId32::new([3u8; 32]);
 pub const DJANGO: AccountId32 = AccountId32::new([4u8; 32]);
 
-const GAS_LIMIT: Gas = 10_000_000_000;
+const GAS_LIMIT: Weight = 10_000_000_000;
 
 pub struct ExtBuilder {
 	existential_deposit: u64,
@@ -501,19 +502,19 @@ fn instantiate_and_call_and_deposit_event() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::pallet_contracts(RawEvent::CodeStored(code_hash.into())),
+					event: Event::pallet_contracts(crate::Event::CodeStored(code_hash.into())),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
 					event: Event::pallet_contracts(
-						RawEvent::ContractEmitted(addr.clone(), vec![1, 2, 3, 4])
+						crate::Event::ContractEmitted(addr.clone(), vec![1, 2, 3, 4])
 					),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::pallet_contracts(RawEvent::Instantiated(ALICE, addr.clone())),
+					event: Event::pallet_contracts(crate::Event::Instantiated(ALICE, addr.clone())),
 					topics: vec![],
 				},
 			]);
@@ -1230,12 +1231,16 @@ fn restoration(
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::pallet_contracts(RawEvent::CodeStored(set_rent_code_hash.into())),
+					event: Event::pallet_contracts(
+						crate::Event::CodeStored(set_rent_code_hash.into())
+					),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::pallet_contracts(RawEvent::Instantiated(ALICE, addr_bob.clone())),
+					event: Event::pallet_contracts(
+						crate::Event::Instantiated(ALICE, addr_bob.clone())
+					),
 					topics: vec![],
 				},
 			];
@@ -1275,7 +1280,9 @@ fn restoration(
 					},
 					EventRecord {
 						phase: Phase::Initialization,
-						event: Event::pallet_contracts(RawEvent::Instantiated(ALICE, addr_dummy.clone())),
+						event: Event::pallet_contracts(
+							crate::Event::Instantiated(ALICE, addr_dummy.clone())
+						),
 						topics: vec![],
 					},
 				].iter().cloned());
@@ -1401,7 +1408,7 @@ fn restoration(
 						assert_eq!(System::events(), vec![
 							EventRecord {
 								phase: Phase::Initialization,
-								event: Event::pallet_contracts(RawEvent::Evicted(addr_bob)),
+								event: Event::pallet_contracts(crate::Event::Evicted(addr_bob)),
 								topics: vec![],
 							},
 							EventRecord {
@@ -1433,12 +1440,16 @@ fn restoration(
 							},
 							EventRecord {
 								phase: Phase::Initialization,
-								event: Event::pallet_contracts(RawEvent::CodeStored(restoration_code_hash)),
+								event: Event::pallet_contracts(
+									crate::Event::CodeStored(restoration_code_hash)
+								),
 								topics: vec![],
 							},
 							EventRecord {
 								phase: Phase::Initialization,
-								event: Event::pallet_contracts(RawEvent::Instantiated(CHARLIE, addr_django.clone())),
+								event: Event::pallet_contracts(
+									crate::Event::Instantiated(CHARLIE, addr_django.clone())
+								),
 								topics: vec![],
 							},
 
@@ -1470,7 +1481,7 @@ fn restoration(
 				assert_eq!(System::events(), vec![
 					EventRecord {
 						phase: Phase::Initialization,
-						event: Event::pallet_contracts(RawEvent::CodeRemoved(restoration_code_hash)),
+						event: Event::pallet_contracts(crate::Event::CodeRemoved(restoration_code_hash)),
 						topics: vec![],
 					},
 					EventRecord {
@@ -1481,7 +1492,9 @@ fn restoration(
 					EventRecord {
 						phase: Phase::Initialization,
 						event: Event::pallet_contracts(
-							RawEvent::Restored(addr_django, addr_bob, bob_contract.code_hash, 50)
+							crate::Event::Restored(
+								addr_django, addr_bob, bob_contract.code_hash, 50
+							)
 						),
 						topics: vec![],
 					},
@@ -1720,13 +1733,13 @@ fn self_destruct_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::pallet_contracts(RawEvent::CodeRemoved(code_hash)),
+					event: Event::pallet_contracts(crate::Event::CodeRemoved(code_hash)),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
 					event: Event::pallet_contracts(
-						RawEvent::Terminated(addr.clone(), DJANGO)
+						crate::Event::Terminated(addr.clone(), DJANGO)
 					),
 					topics: vec![],
 				},
