@@ -217,7 +217,6 @@ pub fn move_storage_from_pallet(item: &[u8], old_pallet: &[u8], new_pallet: &[u8
 		unhashed::put_raw(&new_prefix, &value);
 		unhashed::kill(&old_prefix);
 	}
-
 }
 
 /// Move all storage key after the pallet prefix `old_pallet` to `new_pallet`
