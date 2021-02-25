@@ -650,10 +650,17 @@ impl<H, N: Add<Output=N> + Clone> PendingChange<H, N> {
 	}
 }
 
-// Tracks historical authority set changes. We store the block numbers for the first block of each
-// authority set, once they have been finalized.
+/// Tracks historical authority set changes. We store the block numbers for the last block
+/// of each authority set, once they have been finalized. These blocks are guaranteed to
+/// have a justification unless they were triggered by a forced change.
 #[derive(Debug, Encode, Decode, Clone, PartialEq)]
-pub struct AuthoritySetChanges<N>(pub Vec<(u64, N)>);
+pub struct AuthoritySetChanges<N>(Vec<(u64, N)>);
+
+impl<N> From<Vec<(u64, N)>> for AuthoritySetChanges<N> {
+	fn from(changes: Vec<(u64, N)>) -> AuthoritySetChanges<N> {
+		AuthoritySetChanges(changes)
+	}
+}
 
 impl<N: Ord + Clone> AuthoritySetChanges<N> {
 	pub(crate) fn empty() -> Self {
@@ -668,6 +675,7 @@ impl<N: Ord + Clone> AuthoritySetChanges<N> {
 		let idx = self.0
 			.binary_search_by_key(&block_number, |(_, n)| n.clone())
 			.unwrap_or_else(|b| b);
+
 		if idx < self.0.len() {
 			let (set_id, block_number) = self.0[idx].clone();
 			// To make sure we have the right set we need to check that the one before it also exists.
@@ -686,6 +694,19 @@ impl<N: Ord + Clone> AuthoritySetChanges<N> {
 		} else {
 			None
 		}
+	}
+
+	/// Returns an iterator over all historical authority set changes starting at the given block
+	/// number (excluded). The iterator yields a tuple representing the set id and the block number
+	/// of the last block in that set.
+	pub fn iter_from(&self, block_number: N) -> impl Iterator<Item = &(u64, N)> {
+		let idx = self.0.binary_search_by_key(&block_number, |(_, n)| n.clone())
+			// if there was a change at the given block number then we should start on the next
+			// index since we want to exclude the current block number
+			.map(|n| n + 1)
+			.unwrap_or_else(|b| b);
+
+		self.0[idx..].iter()
 	}
 }
 
@@ -1626,5 +1647,33 @@ mod tests {
 		assert_eq!(authority_set_changes.get_set_id(41), None);
 		assert_eq!(authority_set_changes.get_set_id(42), Some((3, 81)));
 		assert_eq!(authority_set_changes.get_set_id(141), None);
+	}
+
+	#[test]
+	fn iter_from_works() {
+		let mut authority_set_changes = AuthoritySetChanges::empty();
+		authority_set_changes.append(1, 41);
+		authority_set_changes.append(2, 81);
+		authority_set_changes.append(3, 121);
+
+		assert_eq!(
+			vec![(1, 41), (2, 81), (3, 121)],
+			authority_set_changes.iter_from(40).cloned().collect::<Vec<_>>(),
+		);
+
+		assert_eq!(
+			vec![(2, 81), (3, 121)],
+			authority_set_changes.iter_from(41).cloned().collect::<Vec<_>>(),
+		);
+
+		assert_eq!(
+			0,
+			authority_set_changes.iter_from(121).count(),
+		);
+
+		assert_eq!(
+			0,
+			authority_set_changes.iter_from(200).count(),
+		);
 	}
 }

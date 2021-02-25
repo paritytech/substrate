@@ -242,7 +242,8 @@ const LOG_TARGET: &'static str = "runtime::election-provider";
 pub mod unsigned;
 pub mod weights;
 
-use weights::WeightInfo;
+/// The weight declaration of the pallet.
+pub use weights::WeightInfo;
 
 /// The compact solution type used by this crate.
 pub type CompactOf<T> = <T as Config>::CompactSolution;
@@ -590,8 +591,7 @@ pub mod pallet {
 					if remaining <= unsigned_deadline && remaining > Zero::zero() =>
 				{
 					// Decide on the state of the phase: followed by signed or not?
-					let (need_snapshot, enabled, signed_weight) = if current_phase == Phase::Signed
-					{
+					let (need_snapshot, enabled, signed_weight) = if current_phase == Phase::Signed {
 						// followed by a signed phase: close the signed phase, no need for snapshot.
 						// TWO_PHASE_NOTE: later on once we have signed phase, this should return
 						// something else.
