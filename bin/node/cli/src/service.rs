@@ -611,6 +611,7 @@ mod tests {
 					service.client(),
 					service.transaction_pool(),
 					None,
+					None,
 				);
 
 				let epoch_descriptor = babe_link.epoch_changes().lock().epoch_descriptor_for_child_of(
