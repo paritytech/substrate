@@ -1605,7 +1605,7 @@ impl<B: BlockT> ChainSync<B> {
 // This is purely during a backwards compatible transitionary period and should be removed
 // once we can assume all nodes can send and receive multiple Justifications
 // The ID tag is hardcoded here to avoid depending on the GRANDPA crate.
-// See https://github.com/paritytech/substrate/issues/8172
+// TODO: https://github.com/paritytech/substrate/issues/8172
 fn legacy_justification_mapping(justification: Option<EncodedJustification>) -> Option<Justifications> {
 	justification.map(|just| (*b"FRNK", just).into())
 }

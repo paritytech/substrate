@@ -146,7 +146,7 @@ impl <B: BlockT> BlockRequestHandler<B> {
 				None
 			};
 
-			// In a follow up PR tracked by https://github.com/paritytech/substrate/issues/8172
+			// TODO: In a follow up PR tracked by https://github.com/paritytech/substrate/issues/8172
 			// we want to send/receive all Justifications if possible.
 			// For now we keep compatibility by selecting precisely the GRANDPA one, and not just
 			// the first one. When sending we could have just taken the first one, since we don't

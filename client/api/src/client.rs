@@ -90,7 +90,7 @@ pub trait BlockBackend<Block: BlockT> {
 	/// Get block status.
 	fn block_status(&self, id: &BlockId<Block>) -> sp_blockchain::Result<sp_consensus::BlockStatus>;
 
-	/// Get block justifications set by id.
+	/// Get block justifications for the block with the given id.
 	fn justifications(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justifications>>;
 
 	/// Get block hash by number.
