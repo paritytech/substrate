@@ -138,7 +138,8 @@ mod benchmarks {
 	crate::benchmarks!{
 		where_clause {
 			where
-				<T as pallet_test::OtherConfig>::OtherEvent: Into<<T as pallet_test::Config>::Event>
+				<T as pallet_test::OtherConfig>::OtherEvent: Into<<T as pallet_test::Config>::Event> + Clone,
+				<T as pallet_test::Config>::Event: Clone,
 		}
 
 		set_value {

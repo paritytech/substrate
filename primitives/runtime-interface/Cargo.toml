@@ -1,6 +1,6 @@
 [package]
 name = "sp-runtime-interface"
-version = "2.0.1"
+version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -14,22 +14,22 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-wasm-interface = { version = "2.0.0", path = "../wasm-interface", default-features = false }
-sp-std = { version = "2.0.0", default-features = false, path = "../std" }
-sp-tracing = { version = "2.0.0", default-features = false, path = "../tracing" }
-sp-runtime-interface-proc-macro = { version = "2.0.0", path = "proc-macro" }
-sp-externalities = { version = "0.8.0", optional = true, path = "../externalities" }
+sp-wasm-interface = { version = "3.0.0", path = "../wasm-interface", default-features = false }
+sp-std = { version = "3.0.0", default-features = false, path = "../std" }
+sp-tracing = { version = "3.0.0", default-features = false, path = "../tracing" }
+sp-runtime-interface-proc-macro = { version = "3.0.0", path = "proc-macro" }
+sp-externalities = { version = "0.9.0", optional = true, path = "../externalities" }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
 static_assertions = "1.0.0"
 primitive-types = { version = "0.9.0", default-features = false }
-sp-storage = { version = "2.0.0", default-features = false, path = "../storage" }
+sp-storage = { version = "3.0.0", default-features = false, path = "../storage" }
 impl-trait-for-tuples = "0.2.1"
 
 [dev-dependencies]
 sp-runtime-interface-test-wasm = { version = "2.0.0", path = "test-wasm" }
-sp-state-machine = { version = "0.8.0", path = "../state-machine" }
-sp-core = { version = "2.0.0", path = "../core" }
-sp-io = { version = "2.0.0", path = "../io" }
+sp-state-machine = { version = "0.9.0", path = "../state-machine" }
+sp-core = { version = "3.0.0", path = "../core" }
+sp-io = { version = "3.0.0", path = "../io" }
 rustversion = "1.0.0"
 trybuild = "1.0.38"
 
