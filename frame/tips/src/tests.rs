@@ -19,8 +19,8 @@
 
 #![cfg(test)]
 
-use crate as tips;
 use super::*;
+use crate as pallet_tips;
 use std::cell::RefCell;
 use frame_support::{assert_noop, assert_ok, parameter_types, weights::Weight, traits::Contains};
 use sp_runtime::Permill;
@@ -30,23 +30,6 @@ use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup, BadOrigin},
 };
-
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
-type Block = frame_system::mocking::MockBlock<Test>;
-
-frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
-	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
-		Treasury: pallet_treasury::{Module, Call, Storage, Config, Event<T>},
-		TipsModTestInst: tips::{Module, Call, Storage, Event<T>},
-	}
-);
-
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const MaximumBlockWeight: Weight = 1024;
@@ -154,23 +137,43 @@ impl Config for Test {
 	type WeightInfo = ();
 }
 
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
+
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Module, Call, Storage, Config, Event<T>},
+		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
+		Treasury: pallet_treasury::{Module, Call, Storage, Config<T>, Event<T>},
+		Tips: pallet_tips::{Module, Call, Storage, Event<T>},
+	}
+);
+
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	pallet_balances::GenesisConfig::<Test>{
-		// Total issuance will be 200 with treasury account initialized at ED.
+
+	pallet_balances::GenesisConfig::<Test> {
 		balances: vec![(0, 100), (1, 98), (2, 1)],
 	}.assimilate_storage(&mut t).unwrap();
-	pallet_treasury::GenesisConfig::default().assimilate_storage::<Test, _>(&mut t).unwrap();
-	t.into()
+
+	pallet_treasury::GenesisConfig::<Test, _>::default()
+		.assimilate_storage(&mut t).unwrap();
+
+	pallet_tips::GenesisConfig::<Test>::default()
+		.assimilate_storage(&mut t).unwrap();
+
+	let mut ext = sp_io::TestExternalities::new(t);
+	ext.execute_with(|| System::set_block_number(1));
+
+	ext
 }
 
-fn last_event() -> RawEvent<u64, u128, H256> {
-	System::events().into_iter().map(|r| r.event)
-		.filter_map(|e| {
-			if let Event::tips(inner) = e { Some(inner) } else { None }
-		})
-		.last()
-		.unwrap()
+fn last_event() -> Event {
+	system::Module::<Test>::events().pop().expect("Event expected").event
 }
 
 #[test]
@@ -189,9 +192,9 @@ fn tip_hash() -> H256 {
 fn tip_new_cannot_be_used_twice() {
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
-		assert_ok!(TipsModTestInst::tip_new(Origin::signed(10), b"awesome.dot".to_vec(), 3, 10));
+		assert_ok!(Tips::tip_new(Origin::signed(10), b"awesome.dot".to_vec(), 3, 10));
 		assert_noop!(
-			TipsModTestInst::tip_new(Origin::signed(11), b"awesome.dot".to_vec(), 3, 10),
+			Tips::tip_new(Origin::signed(11), b"awesome.dot".to_vec(), 3, 10),
 			Error::<Test>::AlreadyKnown
 		);
 	});
@@ -201,23 +204,23 @@ fn tip_new_cannot_be_used_twice() {
 fn report_awesome_and_tip_works() {
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
-		assert_ok!(TipsModTestInst::report_awesome(Origin::signed(0), b"awesome.dot".to_vec(), 3));
+		assert_ok!(Tips::report_awesome(Origin::signed(0), b"awesome.dot".to_vec(), 3));
 		assert_eq!(Balances::reserved_balance(0), 12);
 		assert_eq!(Balances::free_balance(0), 88);
 
 		// other reports don't count.
 		assert_noop!(
-			TipsModTestInst::report_awesome(Origin::signed(1), b"awesome.dot".to_vec(), 3),
+			Tips::report_awesome(Origin::signed(1), b"awesome.dot".to_vec(), 3),
 			Error::<Test>::AlreadyKnown
 		);
 
 		let h = tip_hash();
-		assert_ok!(TipsModTestInst::tip(Origin::signed(10), h.clone(), 10));
-		assert_ok!(TipsModTestInst::tip(Origin::signed(11), h.clone(), 10));
-		assert_ok!(TipsModTestInst::tip(Origin::signed(12), h.clone(), 10));
-		assert_noop!(TipsModTestInst::tip(Origin::signed(9), h.clone(), 10), BadOrigin);
+		assert_ok!(Tips::tip(Origin::signed(10), h.clone(), 10));
+		assert_ok!(Tips::tip(Origin::signed(11), h.clone(), 10));
+		assert_ok!(Tips::tip(Origin::signed(12), h.clone(), 10));
+		assert_noop!(Tips::tip(Origin::signed(9), h.clone(), 10), BadOrigin);
 		System::set_block_number(2);
-		assert_ok!(TipsModTestInst::close_tip(Origin::signed(100), h.into()));
+		assert_ok!(Tips::close_tip(Origin::signed(100), h.into()));
 		assert_eq!(Balances::reserved_balance(0), 0);
 		assert_eq!(Balances::free_balance(0), 102);
 		assert_eq!(Balances::free_balance(3), 8);
@@ -228,15 +231,15 @@ fn report_awesome_and_tip_works() {
 fn report_awesome_from_beneficiary_and_tip_works() {
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
-		assert_ok!(TipsModTestInst::report_awesome(Origin::signed(0), b"awesome.dot".to_vec(), 0));
+		assert_ok!(Tips::report_awesome(Origin::signed(0), b"awesome.dot".to_vec(), 0));
 		assert_eq!(Balances::reserved_balance(0), 12);
 		assert_eq!(Balances::free_balance(0), 88);
 		let h = BlakeTwo256::hash_of(&(BlakeTwo256::hash(b"awesome.dot"), 0u128));
-		assert_ok!(TipsModTestInst::tip(Origin::signed(10), h.clone(), 10));
-		assert_ok!(TipsModTestInst::tip(Origin::signed(11), h.clone(), 10));
-		assert_ok!(TipsModTestInst::tip(Origin::signed(12), h.clone(), 10));
+		assert_ok!(Tips::tip(Origin::signed(10), h.clone(), 10));
+		assert_ok!(Tips::tip(Origin::signed(11), h.clone(), 10));
+		assert_ok!(Tips::tip(Origin::signed(12), h.clone(), 10));
 		System::set_block_number(2);
-		assert_ok!(TipsModTestInst::close_tip(Origin::signed(100), h.into()));
+		assert_ok!(Tips::close_tip(Origin::signed(100), h.into()));
 		assert_eq!(Balances::reserved_balance(0), 0);
 		assert_eq!(Balances::free_balance(0), 110);
 	});
@@ -250,30 +253,39 @@ fn close_tip_works() {
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
 		assert_eq!(Treasury::pot(), 100);
 
-		assert_ok!(TipsModTestInst::tip_new(Origin::signed(10), b"awesome.dot".to_vec(), 3, 10));
+		assert_ok!(Tips::tip_new(Origin::signed(10), b"awesome.dot".to_vec(), 3, 10));
 
 		let h = tip_hash();
 
-		assert_eq!(last_event(), RawEvent::NewTip(h));
+		assert_eq!(
+			last_event(),
+			Event::pallet_tips(crate::Event::NewTip(h)),
+		);
 
-		assert_ok!(TipsModTestInst::tip(Origin::signed(11), h.clone(), 10));
+		assert_ok!(Tips::tip(Origin::signed(11), h.clone(), 10));
 
-		assert_noop!(TipsModTestInst::close_tip(Origin::signed(0), h.into()), Error::<Test>::StillOpen);
+		assert_noop!(Tips::close_tip(Origin::signed(0), h.into()), Error::<Test>::StillOpen);
 
-		assert_ok!(TipsModTestInst::tip(Origin::signed(12), h.clone(), 10));
+		assert_ok!(Tips::tip(Origin::signed(12), h.clone(), 10));
 
-		assert_eq!(last_event(), RawEvent::TipClosing(h));
+		assert_eq!(
+			last_event(),
+			Event::pallet_tips(crate::Event::TipClosing(h)),
+		);
 
-		assert_noop!(TipsModTestInst::close_tip(Origin::signed(0), h.into()), Error::<Test>::Premature);
+		assert_noop!(Tips::close_tip(Origin::signed(0), h.into()), Error::<Test>::Premature);
 
 		System::set_block_number(2);
-		assert_noop!(TipsModTestInst::close_tip(Origin::none(), h.into()), BadOrigin);
-		assert_ok!(TipsModTestInst::close_tip(Origin::signed(0), h.into()));
+		assert_noop!(Tips::close_tip(Origin::none(), h.into()), BadOrigin);
+		assert_ok!(Tips::close_tip(Origin::signed(0), h.into()));
 		assert_eq!(Balances::free_balance(3), 10);
 
-		assert_eq!(last_event(), RawEvent::TipClosed(h, 3, 10));
+		assert_eq!(
+			last_event(),
+			Event::pallet_tips(crate::Event::TipClosed(h, 3, 10)),
+		);
 
-		assert_noop!(TipsModTestInst::close_tip(Origin::signed(100), h.into()), Error::<Test>::UnknownTip);
+		assert_noop!(Tips::close_tip(Origin::signed(100), h.into()), Error::<Test>::UnknownTip);
 	});
 }
 
@@ -287,23 +299,29 @@ fn slash_tip_works() {
 		assert_eq!(Balances::reserved_balance(0), 0);
 		assert_eq!(Balances::free_balance(0), 100);
 
-		assert_ok!(TipsModTestInst::report_awesome(Origin::signed(0), b"awesome.dot".to_vec(), 3));
+		assert_ok!(Tips::report_awesome(Origin::signed(0), b"awesome.dot".to_vec(), 3));
 
 		assert_eq!(Balances::reserved_balance(0), 12);
 		assert_eq!(Balances::free_balance(0), 88);
 
 		let h = tip_hash();
-		assert_eq!(last_event(), RawEvent::NewTip(h));
+		assert_eq!(
+			last_event(),
+			Event::pallet_tips(crate::Event::NewTip(h)),
+		);
 
 		// can't remove from any origin
 		assert_noop!(
-			TipsModTestInst::slash_tip(Origin::signed(0), h.clone()),
+			Tips::slash_tip(Origin::signed(0), h.clone()),
 			BadOrigin,
 		);
 
 		// can remove from root.
-		assert_ok!(TipsModTestInst::slash_tip(Origin::root(), h.clone()));
-		assert_eq!(last_event(), RawEvent::TipSlashed(h, 0, 12));
+		assert_ok!(Tips::slash_tip(Origin::root(), h.clone()));
+		assert_eq!(
+			last_event(),
+			Event::pallet_tips(crate::Event::TipSlashed(h, 0, 12)),
+		);
 
 		// tipper slashed
 		assert_eq!(Balances::reserved_balance(0), 0);
@@ -316,26 +334,26 @@ fn retract_tip_works() {
 	new_test_ext().execute_with(|| {
 		// with report awesome
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
-		assert_ok!(TipsModTestInst::report_awesome(Origin::signed(0), b"awesome.dot".to_vec(), 3));
+		assert_ok!(Tips::report_awesome(Origin::signed(0), b"awesome.dot".to_vec(), 3));
 		let h = tip_hash();
-		assert_ok!(TipsModTestInst::tip(Origin::signed(10), h.clone(), 10));
-		assert_ok!(TipsModTestInst::tip(Origin::signed(11), h.clone(), 10));
-		assert_ok!(TipsModTestInst::tip(Origin::signed(12), h.clone(), 10));
-		assert_noop!(TipsModTestInst::retract_tip(Origin::signed(10), h.clone()), Error::<Test>::NotFinder);
-		assert_ok!(TipsModTestInst::retract_tip(Origin::signed(0), h.clone()));
+		assert_ok!(Tips::tip(Origin::signed(10), h.clone(), 10));
+		assert_ok!(Tips::tip(Origin::signed(11), h.clone(), 10));
+		assert_ok!(Tips::tip(Origin::signed(12), h.clone(), 10));
+		assert_noop!(Tips::retract_tip(Origin::signed(10), h.clone()), Error::<Test>::NotFinder);
+		assert_ok!(Tips::retract_tip(Origin::signed(0), h.clone()));
 		System::set_block_number(2);
-		assert_noop!(TipsModTestInst::close_tip(Origin::signed(0), h.into()), Error::<Test>::UnknownTip);
+		assert_noop!(Tips::close_tip(Origin::signed(0), h.into()), Error::<Test>::UnknownTip);
 
 		// with tip new
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
-		assert_ok!(TipsModTestInst::tip_new(Origin::signed(10), b"awesome.dot".to_vec(), 3, 10));
+		assert_ok!(Tips::tip_new(Origin::signed(10), b"awesome.dot".to_vec(), 3, 10));
 		let h = tip_hash();
-		assert_ok!(TipsModTestInst::tip(Origin::signed(11), h.clone(), 10));
-		assert_ok!(TipsModTestInst::tip(Origin::signed(12), h.clone(), 10));
-		assert_noop!(TipsModTestInst::retract_tip(Origin::signed(0), h.clone()), Error::<Test>::NotFinder);
-		assert_ok!(TipsModTestInst::retract_tip(Origin::signed(10), h.clone()));
+		assert_ok!(Tips::tip(Origin::signed(11), h.clone(), 10));
+		assert_ok!(Tips::tip(Origin::signed(12), h.clone(), 10));
+		assert_noop!(Tips::retract_tip(Origin::signed(0), h.clone()), Error::<Test>::NotFinder);
+		assert_ok!(Tips::retract_tip(Origin::signed(10), h.clone()));
 		System::set_block_number(2);
-		assert_noop!(TipsModTestInst::close_tip(Origin::signed(10), h.into()), Error::<Test>::UnknownTip);
+		assert_noop!(Tips::close_tip(Origin::signed(10), h.into()), Error::<Test>::UnknownTip);
 	});
 }
 
@@ -343,12 +361,12 @@ fn retract_tip_works() {
 fn tip_median_calculation_works() {
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
-		assert_ok!(TipsModTestInst::tip_new(Origin::signed(10), b"awesome.dot".to_vec(), 3, 0));
+		assert_ok!(Tips::tip_new(Origin::signed(10), b"awesome.dot".to_vec(), 3, 0));
 		let h = tip_hash();
-		assert_ok!(TipsModTestInst::tip(Origin::signed(11), h.clone(), 10));
-		assert_ok!(TipsModTestInst::tip(Origin::signed(12), h.clone(), 1000000));
+		assert_ok!(Tips::tip(Origin::signed(11), h.clone(), 10));
+		assert_ok!(Tips::tip(Origin::signed(12), h.clone(), 1000000));
 		System::set_block_number(2);
-		assert_ok!(TipsModTestInst::close_tip(Origin::signed(0), h.into()));
+		assert_ok!(Tips::close_tip(Origin::signed(0), h.into()));
 		assert_eq!(Balances::free_balance(3), 10);
 	});
 }
@@ -357,17 +375,17 @@ fn tip_median_calculation_works() {
 fn tip_changing_works() {
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
-		assert_ok!(TipsModTestInst::tip_new(Origin::signed(10), b"awesome.dot".to_vec(), 3, 10000));
+		assert_ok!(Tips::tip_new(Origin::signed(10), b"awesome.dot".to_vec(), 3, 10000));
 		let h = tip_hash();
-		assert_ok!(TipsModTestInst::tip(Origin::signed(11), h.clone(), 10000));
-		assert_ok!(TipsModTestInst::tip(Origin::signed(12), h.clone(), 10000));
-		assert_ok!(TipsModTestInst::tip(Origin::signed(13), h.clone(), 0));
-		assert_ok!(TipsModTestInst::tip(Origin::signed(14), h.clone(), 0));
-		assert_ok!(TipsModTestInst::tip(Origin::signed(12), h.clone(), 1000));
-		assert_ok!(TipsModTestInst::tip(Origin::signed(11), h.clone(), 100));
-		assert_ok!(TipsModTestInst::tip(Origin::signed(10), h.clone(), 10));
+		assert_ok!(Tips::tip(Origin::signed(11), h.clone(), 10000));
+		assert_ok!(Tips::tip(Origin::signed(12), h.clone(), 10000));
+		assert_ok!(Tips::tip(Origin::signed(13), h.clone(), 0));
+		assert_ok!(Tips::tip(Origin::signed(14), h.clone(), 0));
+		assert_ok!(Tips::tip(Origin::signed(12), h.clone(), 1000));
+		assert_ok!(Tips::tip(Origin::signed(11), h.clone(), 100));
+		assert_ok!(Tips::tip(Origin::signed(10), h.clone(), 10));
 		System::set_block_number(2);
-		assert_ok!(TipsModTestInst::close_tip(Origin::signed(0), h.into()));
+		assert_ok!(Tips::close_tip(Origin::signed(0), h.into()));
 		assert_eq!(Balances::free_balance(3), 10);
 	});
 }
@@ -423,11 +441,11 @@ fn test_last_reward_migration() {
 
 	let data = vec![
 		(
-			Tips::<Test>::hashed_key_for(hash1),
+			pallet_tips::Tips::<Test>::hashed_key_for(hash1),
 			old_tip_finder.encode().to_vec()
 		),
 		(
-			Tips::<Test>::hashed_key_for(hash2),
+			pallet_tips::Tips::<Test>::hashed_key_for(hash2),
 			old_tip_no_finder.encode().to_vec()
 		),
 	];
@@ -436,11 +454,11 @@ fn test_last_reward_migration() {
 
 	sp_io::TestExternalities::new(s).execute_with(|| {
 
-		TipsModTestInst::migrate_retract_tip_for_tip_new();
+		Tips::migrate_retract_tip_for_tip_new();
 
 		// Test w/ finder
 		assert_eq!(
-			Tips::<Test>::get(hash1),
+			pallet_tips::Tips::<Test>::get(hash1),
 			Some(OpenTip {
 				reason: reason1,
 				who: 10,
@@ -454,7 +472,7 @@ fn test_last_reward_migration() {
 
 		// Test w/o finder
 		assert_eq!(
-			Tips::<Test>::get(hash2),
+			pallet_tips::Tips::<Test>::get(hash2),
 			Some(OpenTip {
 				reason: reason2,
 				who: 20,
@@ -476,7 +494,10 @@ fn genesis_funding_works() {
 		// Total issuance will be 200 with treasury account initialized with 100.
 		balances: vec![(0, 100), (Treasury::account_id(), initial_funding)],
 	}.assimilate_storage(&mut t).unwrap();
-	pallet_treasury::GenesisConfig::default().assimilate_storage::<Test, _>(&mut t).unwrap();
+
+	pallet_treasury::GenesisConfig::<Test, _>::default()
+		.assimilate_storage(&mut t).unwrap();
+
 	let mut t: sp_io::TestExternalities = t.into();
 
 	t.execute_with(|| {
