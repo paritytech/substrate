@@ -275,7 +275,7 @@ fn periodic_session_works() {
 	}
 
 	assert!(P::should_end_session(13u64));
-	assert_eq!(P::estimate_next_session_rotation(13u64).unwrap(), 13);
+	assert_eq!(P::estimate_next_session_rotation(13u64).unwrap(), 23);
 
 	assert!(!P::should_end_session(14u64));
 	assert_eq!(P::estimate_next_session_rotation(14u64).unwrap(), 23);

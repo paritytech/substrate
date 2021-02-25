@@ -13,9 +13,9 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-std = { version = "3.0.0", default-features = false, path = "../../../primitives/std" }
 sp-session = { version = "3.0.0", default-features = false, path = "../../../primitives/session" }
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../../primitives/runtime" }
+sp-std = { version = "3.0.0", default-features = false, path = "../../../primitives/std" }
 frame-system = { version = "3.0.0", default-features = false, path = "../../system" }
 frame-benchmarking = { version = "3.0.0", default-features = false, path = "../../benchmarking" }
 frame-support = { version = "3.0.0", default-features = false, path = "../../support" }
@@ -31,12 +31,14 @@ pallet-staking-reward-curve = { version = "3.0.0", path = "../../staking/reward-
 sp-io ={ version = "3.0.0", path = "../../../primitives/io" }
 pallet-timestamp = { version = "3.0.0", path = "../../timestamp" }
 pallet-balances = { version = "3.0.0", path = "../../balances" }
+sp-election-providers = { version = "3.0.0", path = "../../../primitives/election-providers" }
 
 [features]
 default = ["std"]
 std = [
 	"sp-std/std",
 	"sp-session/std",
+	"sp-election-providers/std",
 	"sp-runtime/std",
 	"frame-system/std",
 	"frame-benchmarking/std",

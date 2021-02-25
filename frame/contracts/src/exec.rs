@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use crate::{
-	CodeHash, Event, RawEvent, Config, Module as Contracts,
+	CodeHash, Event, Config, Module as Contracts,
 	TrieId, BalanceOf, ContractInfo, gas::GasMeter, rent::Rent, storage::{self, Storage},
 	Error, ContractInfoOf, Schedule,
 };
@@ -30,7 +30,7 @@ use frame_support::{
 	dispatch::{DispatchResult, DispatchError},
 	traits::{ExistenceRequirement, Currency, Time, Randomness, Get},
 	weights::Weight,
-	ensure, StorageMap,
+	ensure,
 };
 use pallet_contracts_primitives::{ErrorOrigin, ExecError, ExecReturnValue, ExecResult, ReturnFlags};
 
@@ -57,7 +57,11 @@ pub enum TransactorKind {
 ///
 /// This interface is specialized to an account of the executing code, so all
 /// operations are implicitly performed on that account.
-pub trait Ext {
+///
+/// # Note
+///
+/// This trait is sealed and cannot be implemented by downstream crates.
+pub trait Ext: sealing::Sealed {
 	type T: Config;
 
 	/// Returns the storage entry of the executing account by the given `key`.
@@ -446,7 +450,7 @@ where
 					.ok_or(Error::<T>::NewContractNotFunded)?;
 
 				// Deposit an instantiation event.
-				deposit_event::<T>(vec![], RawEvent::Instantiated(caller.clone(), dest.clone()));
+				deposit_event::<T>(vec![], Event::Instantiated(caller.clone(), dest.clone()));
 
 				Ok(output)
 			});
@@ -664,7 +668,7 @@ where
 		if let Some(ContractInfo::Alive(info)) = ContractInfoOf::<T>::take(&self_id) {
 			Storage::<T>::queue_trie_for_deletion(&info).map_err(|e| (e, 0))?;
 			let code_len = E::remove_user(info.code_hash);
-			Contracts::<T>::deposit_event(RawEvent::Terminated(self_id, beneficiary.clone()));
+			Contracts::<T>::deposit_event(Event::Terminated(self_id, beneficiary.clone()));
 			Ok(code_len)
 		} else {
 			panic!(
@@ -708,7 +712,7 @@ where
 		if let Ok(_) = result {
 			deposit_event::<Self::T>(
 				vec![],
-				RawEvent::Restored(
+				Event::Restored(
 					self.ctx.self_account.clone(),
 					dest,
 					code_hash,
@@ -754,7 +758,7 @@ where
 	fn deposit_event(&mut self, topics: Vec<T::Hash>, data: Vec<u8>) {
 		deposit_event::<Self::T>(
 			topics,
-			RawEvent::ContractEmitted(self.ctx.self_account.clone(), data)
+			Event::ContractEmitted(self.ctx.self_account.clone(), data)
 		);
 	}
 
@@ -799,6 +803,20 @@ fn deposit_event<T: Config>(
 	)
 }
 
+mod sealing {
+	use super::*;
+
+	pub trait Sealed {}
+
+	impl<'a, 'b: 'a, T: Config, E> Sealed for CallContext<'a, 'b, T, E> {}
+
+	#[cfg(test)]
+	impl Sealed for crate::wasm::MockExt {}
+
+	#[cfg(test)]
+	impl Sealed for &mut crate::wasm::MockExt {}
+}
+
 /// These tests exercise the executive layer.
 ///
 /// In these tests the VM/loader are mocked. Instead of dealing with wasm bytecode they use simple closures.
@@ -809,13 +827,12 @@ mod tests {
 	use super::*;
 	use crate::{
 		gas::GasMeter, tests::{ExtBuilder, Test, Event as MetaEvent},
-		gas::Gas,
 		storage::Storage,
 		tests::{
 			ALICE, BOB, CHARLIE,
 			test_utils::{place_contract, set_balance, get_balance},
 		},
-		Error,
+		Error, Weight,
 	};
 	use sp_runtime::DispatchError;
 	use assert_matches::assert_matches;
@@ -823,7 +840,7 @@ mod tests {
 
 	type MockContext<'a> = ExecutionContext<'a, Test, MockExecutable>;
 
-	const GAS_LIMIT: Gas = 10_000_000_000;
+	const GAS_LIMIT: Weight = 10_000_000_000;
 
 	thread_local! {
 		static LOADER: RefCell<MockLoader> = RefCell::new(MockLoader::default());
@@ -1334,7 +1351,7 @@ mod tests {
 			// there are instantiation event.
 			assert_eq!(Storage::<Test>::code_hash(&instantiated_contract_address).unwrap(), dummy_ch);
 			assert_eq!(&events(), &[
-				RawEvent::Instantiated(ALICE, instantiated_contract_address)
+				Event::Instantiated(ALICE, instantiated_contract_address)
 			]);
 		});
 	}
@@ -1410,7 +1427,7 @@ mod tests {
 			// there are instantiation event.
 			assert_eq!(Storage::<Test>::code_hash(&instantiated_contract_address).unwrap(), dummy_ch);
 			assert_eq!(&events(), &[
-				RawEvent::Instantiated(BOB, instantiated_contract_address)
+				Event::Instantiated(BOB, instantiated_contract_address)
 			]);
 		});
 	}

@@ -20,11 +20,11 @@
 use crate::{
 	HostFnWeights, Config, CodeHash, BalanceOf, Error,
 	exec::{Ext, StorageKey, TopicOf},
-	gas::{Gas, GasMeter, Token, ChargedAmount},
+	gas::{GasMeter, Token, ChargedAmount},
 	wasm::env_def::ConvertibleToWasm,
 };
 use parity_wasm::elements::ValueType;
-use frame_support::{dispatch::DispatchError, ensure, traits::Get};
+use frame_support::{dispatch::DispatchError, ensure, traits::Get, weights::Weight};
 use sp_std::prelude::*;
 use codec::{Decode, DecodeAll, Encode};
 use sp_runtime::traits::SaturatedConversion;
@@ -223,7 +223,7 @@ where
 {
 	type Metadata = HostFnWeights<T>;
 
-	fn calculate_amount(&self, s: &Self::Metadata) -> Gas {
+	fn calculate_amount(&self, s: &Self::Metadata) -> Weight {
 		use self::RuntimeToken::*;
 		match *self {
 			MeteringBlock(amount) => s.gas.saturating_add(amount.into()),

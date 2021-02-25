@@ -187,7 +187,7 @@ async fn build_dht_event(
 			serialized_addresses.as_slice(),
 		)
 		.await
-		.map_err(|_| Error::Signing)
+		.unwrap()
 		.unwrap();
 
 	let mut signed_addresses = vec![];
@@ -195,9 +195,7 @@ async fn build_dht_event(
 		addresses: serialized_addresses.clone(),
 		signature,
 	}
-	.encode(&mut signed_addresses)
-		.map_err(Error::EncodingProto)
-		.unwrap();
+	.encode(&mut signed_addresses).unwrap();
 
 	let key = hash_authority_id(&public_key.to_raw_vec());
 	let value = signed_addresses;
