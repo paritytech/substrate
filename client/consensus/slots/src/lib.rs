@@ -40,7 +40,7 @@ use log::{debug, error, info, warn};
 use parking_lot::Mutex;
 use sp_api::{ProvideRuntimeApi, ApiRef};
 use sp_arithmetic::traits::BaseArithmetic;
-use sp_consensus::{BlockImport, Proposer, SyncOracle, SelectChain, CanAuthorWith, SlotData, RecordProof};
+use sp_consensus::{BlockImport, Proposer, SyncOracle, SelectChain, CanAuthorWith, SlotData};
 use sp_consensus_slots::Slot;
 use sp_inherents::{InherentData, InherentDataProviders};
 use sp_runtime::{
@@ -57,20 +57,18 @@ pub type StorageChanges<Transaction, Block> =
 
 /// The result of [`SlotWorker::on_slot`].
 #[derive(Debug, Clone)]
-pub struct SlotResult<Block: BlockT> {
+pub struct SlotResult<Block: BlockT, Proof> {
 	/// The block that was built.
 	pub block: Block,
-	/// The optional storage proof that was calculated while building the block.
-	///
-	/// This needs to be enabled for the proposer to get this storage proof.
-	pub storage_proof: Option<sp_trie::StorageProof>,
+	/// The storage proof that was recorded while building the block.
+	pub storage_proof: Proof,
 }
 
 /// A worker that should be invoked at every new slot.
 ///
 /// The implementation should not make any assumptions of the slot being bound to the time or
 /// similar. The only valid assumption is that the slot number is always increasing.
-pub trait SlotWorker<B: BlockT> {
+pub trait SlotWorker<B: BlockT, Proof> {
 	/// Called when a new slot is triggered.
 	///
 	/// Returns a future that resolves to a [`SlotResult`] iff a block was successfully built in
@@ -79,7 +77,7 @@ pub trait SlotWorker<B: BlockT> {
 		&mut self,
 		chain_head: B::Header,
 		slot_info: SlotInfo,
-	) -> Pin<Box<dyn Future<Output = Option<SlotResult<B>>> + Send>>;
+	) -> Pin<Box<dyn Future<Output = Option<SlotResult<B, Proof>>> + Send>>;
 }
 
 /// A skeleton implementation for `SlotWorker` which tries to claim a slot at
@@ -206,7 +204,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		&mut self,
 		chain_head: B::Header,
 		slot_info: SlotInfo,
-	) -> Pin<Box<dyn Future<Output = Option<SlotResult<B>>> + Send>>
+	) -> Pin<Box<dyn Future<Output = Option<SlotResult<B, <Self::Proposer as Proposer<B>>::Proof>>> + Send>>
 	where
 		<Self::Proposer as Proposer<B>>::Proposal: Unpin + Send + 'static,
 	{
@@ -307,7 +305,6 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				logs,
 			},
 			slot_remaining_duration,
-			RecordProof::No,
 		).map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e))));
 
 		let proposal_work =
@@ -384,12 +381,13 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	}
 }
 
-impl<B: BlockT, T: SimpleSlotWorker<B>> SlotWorker<B> for T {
+impl<B: BlockT, T: SimpleSlotWorker<B>> SlotWorker<B, <T::Proposer as Proposer<B>>::Proof> for T
+{
 	fn on_slot(
 		&mut self,
 		chain_head: B::Header,
 		slot_info: SlotInfo,
-	) -> Pin<Box<dyn Future<Output = Option<SlotResult<B>>> + Send>> {
+	) -> Pin<Box<dyn Future<Output = Option<SlotResult<B, <T::Proposer as Proposer<B>>::Proof>>> + Send>> {
 		SimpleSlotWorker::on_slot(self, chain_head, slot_info)
 	}
 }
@@ -407,7 +405,7 @@ pub trait SlotCompatible {
 ///
 /// Every time a new slot is triggered, `worker.on_slot` is called and the future it returns is
 /// polled until completion, unless we are major syncing.
-pub fn start_slot_worker<B, C, W, T, SO, SC, CAW>(
+pub fn start_slot_worker<B, C, W, T, SO, SC, CAW, Proof>(
 	slot_duration: SlotDuration<T>,
 	client: C,
 	mut worker: W,
@@ -419,7 +417,7 @@ pub fn start_slot_worker<B, C, W, T, SO, SC, CAW>(
 where
 	B: BlockT,
 	C: SelectChain<B>,
-	W: SlotWorker<B>,
+	W: SlotWorker<B, Proof>,
 	SO: SyncOracle + Send,
 	SC: SlotCompatible + Unpin,
 	T: SlotData + Clone,
