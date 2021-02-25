@@ -220,6 +220,9 @@ pub fn move_storage_from_pallet(item: &[u8], old_pallet: &[u8], new_pallet: &[u8
 }
 
 /// Move all storage key after the pallet prefix `old_pallet` to `new_pallet`
+///
+/// NOTE: It actually moves every key after the pallet prefix to the new pallet prefix,
+/// key on pallet prefix is not moved.
 pub fn move_pallet(old_pallet: &[u8], new_pallet: &[u8]) {
 	move_prefix(&Twox128::hash(old_pallet), &Twox128::hash(new_pallet))
 }
