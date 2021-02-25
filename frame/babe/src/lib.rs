@@ -494,11 +494,11 @@ impl<T: Config> Module<T> {
 		};
 		Self::deposit_consensus(ConsensusLog::NextEpochData(next_epoch));
 
-		if let Some(pending_epoch_config_change) = PendingEpochConfigChange::take() {
-			if let Some(next_config) = NextEpochConfig::get() {
-				EpochConfig::put(next_config);
-			}
+		if let Some(next_config) = NextEpochConfig::get() {
+			EpochConfig::put(next_config);
+		}
 
+		if let Some(pending_epoch_config_change) = PendingEpochConfigChange::take() {
 			let next_epoch_config: BabeEpochConfiguration =
 				pending_epoch_config_change.clone().into();
 			NextEpochConfig::put(next_epoch_config);
