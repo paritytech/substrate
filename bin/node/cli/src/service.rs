@@ -395,7 +395,14 @@ pub fn new_light_base(
 	Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
 	Arc<sc_transaction_pool::LightPool<Block, LightClient, sc_network::config::OnDemand<Block>>>
 ), ServiceError> {
-	let telemetry_worker = TelemetryWorker::new(16, None)?;
+	#[cfg(browser)]
+	let transport = Some(
+		sc_telemetry::ExtTransport::new(libp2p_wasm_ext::ffi::websocket_transport())
+	);
+	#[cfg(not(browser))]
+	let transport = None;
+
+	let telemetry_worker = TelemetryWorker::new(16, transport)?;
 	let mut telemetry = config.telemetry_endpoints.clone()
 		.filter(|x| !x.is_empty())
 		.map(|endpoints| telemetry_worker.handle().new_telemetry(endpoints));

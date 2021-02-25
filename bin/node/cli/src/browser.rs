@@ -21,7 +21,7 @@ use log::info;
 use wasm_bindgen::prelude::*;
 use browser_utils::{
 	Client,
-	browser_configuration, init_logging_and_telemetry, set_console_error_panic_hook,
+	browser_configuration, init_logging, set_console_error_panic_hook,
 };
 
 /// Starts the client.
@@ -37,18 +37,14 @@ async fn start_inner(
 	log_directives: String,
 ) -> Result<Client, Box<dyn std::error::Error>> {
 	set_console_error_panic_hook();
-	let telemetry_worker = init_logging_and_telemetry(&log_directives)?;
+	init_logging(&log_directives)?;
 	let chain_spec = match chain_spec {
 		Some(chain_spec) => ChainSpec::from_json_bytes(chain_spec.as_bytes().to_vec())
 			.map_err(|e| format!("{:?}", e))?,
 		None => crate::chain_spec::development_config(),
 	};
 
-	let telemetry_worker_handle = telemetry_worker.handle();
-	let config = browser_configuration(
-		chain_spec,
-		Some(telemetry_worker_handle),
-	).await?;
+	let config = browser_configuration(chain_spec).await?;
 
 	info!("Substrate browser node");
 	info!("✌️  version {}", config.impl_version);
@@ -62,8 +58,6 @@ async fn start_inner(
 		crate::service::new_light_base(config)
 			.map(|(components, rpc_handlers, _, _, _)| (components, rpc_handlers))
 			.map_err(|e| format!("{:?}", e))?;
-
-	task_manager.spawn_handle().spawn("telemetry", telemetry_worker.run());
 
 	Ok(browser_utils::start_client(task_manager, rpc_handlers))
 }
