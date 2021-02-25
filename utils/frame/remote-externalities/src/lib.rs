@@ -116,6 +116,7 @@ use futures::{
 	compat::Future01CompatExt,
 	TryFutureExt,
 };
+use codec::{Encode, Decode};
 
 type KeyPair = (StorageKey, StorageData);
 type Number = u32;
@@ -268,9 +269,8 @@ impl Builder {
 impl Builder {
 	/// Save the given data as cache.
 	fn save_cache(&self, data: &[KeyPair], path: &Path) -> Result<(), &'static str> {
-		let bdata = bincode::serialize(data).map_err(|_| "bincode::serialize failed.")?;
 		info!(target: LOG_TARGET, "writing to cache file {:?}", path);
-		fs::write(path, bdata).map_err(|_| "fs::write failed.")?;
+		fs::write(path, data.encode()).map_err(|_| "fs::write failed.")?;
 		Ok(())
 	}
 
@@ -278,7 +278,7 @@ impl Builder {
 	fn load_cache(&self, path: &Path) -> Result<Vec<KeyPair>, &'static str> {
 		info!(target: LOG_TARGET, "scraping keypairs from cache {:?}", path,);
 		let bytes = fs::read(path).map_err(|_| "fs::read failed.")?;
-		bincode::deserialize(&bytes[..]).map_err(|_| "bincode::deserialize failed")
+		Decode::decode(&mut &*bytes).map_err(|_| "decode failed")
 	}
 
 	/// Build `Self` from a network node denoted by `uri`.
@@ -405,6 +405,7 @@ mod tests {
 	}
 
 	#[async_std::test]
+	#[cfg(feature = "remote-test")]
 	async fn can_load_cache() {
 		init_logger();
 		Builder::new()
