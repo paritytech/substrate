@@ -380,6 +380,7 @@ impl Builder {
 
 #[cfg(test)]
 mod tests {
+	#[cfg(feature = "remote-test")]
 	use super::*;
 
 	fn init_logger() {
