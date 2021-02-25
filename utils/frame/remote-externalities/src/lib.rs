@@ -378,9 +378,9 @@ impl Builder {
 	}
 }
 
+#[cfg(feature = "remote-test")]
 #[cfg(test)]
 mod tests {
-	#[cfg(feature = "remote-test")]
 	use super::*;
 
 	fn init_logger() {
@@ -391,7 +391,6 @@ mod tests {
 	}
 
 	#[async_std::test]
-	#[cfg(feature = "remote-test")]
 	async fn can_build_one_pallet() {
 		init_logger();
 		Builder::new()
@@ -406,7 +405,6 @@ mod tests {
 	}
 
 	#[async_std::test]
-	#[cfg(feature = "remote-test")]
 	async fn can_load_cache() {
 		init_logger();
 		Builder::new()
@@ -420,7 +418,6 @@ mod tests {
 	}
 
 	#[async_std::test]
-	#[cfg(feature = "remote-test")]
 	async fn can_create_cache() {
 		init_logger();
 		Builder::new()
@@ -451,7 +448,6 @@ mod tests {
 	}
 
 	#[async_std::test]
-	#[cfg(feature = "remote-test")]
 	async fn can_build_all() {
 		init_logger();
 		Builder::new().build().await.unwrap().execute_with(|| {});
