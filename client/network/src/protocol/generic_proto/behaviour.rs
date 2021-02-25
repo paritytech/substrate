@@ -1503,9 +1503,9 @@ impl NetworkBehaviour for GenericProto {
 								});
 								*connec_state = ConnectionState::Opening;
 							} else {
-								// Connections in `OpeningThenClosing` and `Closing` state can be
-								// in a Closed phase, and as such can emit `OpenDesiredByRemote`
-								// messages.
+								// Connections in `OpeningThenClosing`, `Opening`, and `Closing`
+								// state can be in a Closed phase, and as such can emit
+								// `OpenDesiredByRemote` messages.
 								// Since an `Open` message haS already been sent, there is nothing
 								// more to do.
 								debug_assert!(matches!(
