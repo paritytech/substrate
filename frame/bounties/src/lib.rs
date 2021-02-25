@@ -99,29 +99,29 @@ mod tests;
 mod benchmarking;
 pub mod weights;
 
-use sp_std::{
-	prelude::*,
+use sp_std::prelude::*;
+
+use frame_support::{
+	decl_module, decl_storage, decl_event, ensure, decl_error,
+	traits::{
+		Currency, Get, Imbalance, OnUnbalanced, ExistenceRequirement::{AllowDeath},
+		ReservableCurrency, EnsureOrigin,
+	},
+	dispatch::{DispatchError, DispatchResultWithPostInfo},
+	weights::{Weight},
 };
 
-use frame_support::{decl_module, decl_storage, decl_event, ensure, decl_error};
-
-use frame_support::traits::{
-	Currency, Get, Imbalance, OnUnbalanced, ExistenceRequirement::{AllowDeath},
-	ReservableCurrency,
+use sp_runtime::{
+	Permill, RuntimeDebug, DispatchResult,
+	traits::{
+		Zero, StaticLookup, AccountIdConversion, Saturating, BadOrigin, CheckedSub,
+	}
 };
-
-use sp_runtime::{Permill, RuntimeDebug, DispatchResult, traits::{
-	Zero, StaticLookup, AccountIdConversion, Saturating, BadOrigin, CheckedSub,
-}};
-
-use frame_support::dispatch::{DispatchError, DispatchResultWithPostInfo};
-
-use frame_support::traits::{EnsureOrigin};
-
-use frame_support::weights::{Weight};
 
 use codec::{Encode, Decode};
+
 use frame_system::{self as system, ensure_signed};
+
 pub use weights::WeightInfo;
 
 type BalanceOf<T> = pallet_treasury::BalanceOf<T>;
@@ -991,8 +991,7 @@ decl_module! {
 					.ok_or(Error::<T>::InvalidIndex)?;
 
 				// Ensure subbounty is in expected state
-				if let SubBountyStatus::SubCuratorProposed { ref subcurator } =
-					subbounty.status
+				if let SubBountyStatus::SubCuratorProposed { ref subcurator } = subbounty.status
 				{
 					ensure!(signer == *subcurator, Error::<T>::RequireSubCurator);
 
