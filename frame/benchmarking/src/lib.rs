@@ -1175,7 +1175,7 @@ macro_rules! impl_benchmark_test_suite {
 								anything_failed = true;
 							},
 							Ok(Err(err)) => {
-								println!("{}: {:?}", String::from_utf8_lossy(benchmark_name), err);
+								println!("{}: {}", String::from_utf8_lossy(benchmark_name), err);
 								anything_failed = true;
 							},
 							_ => (),
