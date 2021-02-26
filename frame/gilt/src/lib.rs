@@ -354,7 +354,7 @@ pub mod pallet {
 			QueueTotals::<T>::mutate(|qs| {
 				qs.resize(queue_count, (0, Zero::zero()));
 				qs[queue_index].0 += net.0;
-				qs[queue_index].1 += net.1;
+				qs[queue_index].1 = qs[queue_index].1.saturating_add(net.1);
 			});
 			Self::deposit_event(Event::BidPlaced(who.clone(), amount, duration));
 
@@ -391,7 +391,7 @@ pub mod pallet {
 			QueueTotals::<T>::mutate(|qs| {
 				qs.resize(queue_count, (0, Zero::zero()));
 				qs[queue_index].0 = new_len;
-				qs[queue_index].1 -= bid.amount;
+				qs[queue_index].1 = qs[queue_index].1.saturating_sub(bid.amount);
 			});
 
 			T::Currency::unreserve(&bid.who, bid.amount);
