@@ -377,10 +377,10 @@ where
 		let block_number = <frame_system::Module<System>>::block_number();
 
 
-		let weight=  <frame_system::Module<System>>::block_weight();
+		let weight =  <frame_system::Module<System>>::block_weight();
 		let max_weight =  <System::BlockWeights as frame_support::traits::Get<_>>::get().max_block;
 		let remaining_weight = max_weight.saturating_sub(weight.total());
-		// TODO weight from on idle needs to be added to total weight so next on idle trigger can get a new weight estimate
+
 		<frame_system::Module<System> as OnIdle<System::BlockNumber>>::on_idle(block_number, remaining_weight);
 		<AllModules as OnIdle<System::BlockNumber>>::on_idle(block_number, remaining_weight);
 
