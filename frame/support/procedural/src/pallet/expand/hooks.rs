@@ -41,6 +41,19 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 		}
 
 		impl<#type_impl_gen>
+			#frame_support::traits::OnIdle<<T as #frame_system::Config>::BlockNumber>
+			for #pallet_ident<#type_use_gen> #where_clause
+		{
+			fn on_idle(n: <T as #frame_system::Config>::BlockNumber) {
+				<
+					Self as #frame_support::traits::Hooks<
+						<T as #frame_system::Config>::BlockNumber
+					>
+				>::on_idle(n)
+			}
+		}
+
+		impl<#type_impl_gen>
 			#frame_support::traits::OnInitialize<<T as #frame_system::Config>::BlockNumber>
 			for #pallet_ident<#type_use_gen> #where_clause
 		{
