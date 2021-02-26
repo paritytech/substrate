@@ -6436,12 +6436,12 @@ name = "remote-externalities"
 version = "0.9.0"
 dependencies = [
  "async-std",
- "bincode",
  "env_logger 0.8.2",
- "futures 0.1.30",
+ "futures 0.3.12",
  "hex-literal",
  "jsonrpc-core-client",
  "log",
+ "parity-scale-codec",
  "sc-rpc",
  "sc-rpc-api",
  "sp-core",
