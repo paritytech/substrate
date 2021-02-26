@@ -22,7 +22,7 @@
 use super::*;
 
 use frame_system::RawOrigin;
-use frame_benchmarking::{benchmarks_instance, account};
+use frame_benchmarking::{benchmarks_instance, account, impl_benchmark_test_suite};
 use frame_support::traits::OnInitialize;
 
 use crate::Module as Treasury;
@@ -66,7 +66,7 @@ fn setup_pot_account<T: Config<I>, I: Instance>() {
 }
 
 benchmarks_instance! {
-	
+
 	propose_spend {
 		let (caller, value, beneficiary_lookup) = setup_proposal::<T, _>(SEED);
 		// Whitelist caller account from further DB operations.
@@ -103,19 +103,8 @@ benchmarks_instance! {
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::tests::{new_test_ext, Test};
-	use frame_support::assert_ok;
-
-	#[test]
-	fn test_benchmarks() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_propose_spend::<Test>());
-			assert_ok!(test_benchmark_reject_proposal::<Test>());
-			assert_ok!(test_benchmark_approve_proposal::<Test>());
-			assert_ok!(test_benchmark_on_initialize_proposals::<Test>());
-		});
-	}
-}
+impl_benchmark_test_suite!(
+	Treasury,
+	crate::tests::new_test_ext(),
+	crate::tests::Test,
+);

@@ -532,7 +532,7 @@ fn weight_check_works() {
 
 		assert_noop!(
 			Multisig::as_multi(Origin::signed(2), 2, vec![1, 3], Some(now()), data, false, 0),
-			Error::<Test>::WeightTooLow,
+			Error::<Test>::MaxWeightTooLow,
 		);
 	});
 }

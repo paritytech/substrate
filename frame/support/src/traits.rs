@@ -494,10 +494,16 @@ impl<
 	}
 }
 
-/// Something that can estimate at which block the next session rotation will happen. This should
-/// be the same logical unit that dictates `ShouldEndSession` to the session module. No Assumptions
-/// are made about the scheduling of the sessions.
+/// Something that can estimate at which block the next session rotation will happen.
+///
+/// This should be the same logical unit that dictates `ShouldEndSession` to the session module. No
+/// Assumptions are made about the scheduling of the sessions.
 pub trait EstimateNextSessionRotation<BlockNumber> {
+	/// Return the average length of a session.
+	///
+	/// This may or may not be accurate.
+	fn average_session_length() -> BlockNumber;
+
 	/// Return the block number at which the next session rotation is estimated to happen.
 	///
 	/// None should be returned if the estimation fails to come to an answer
@@ -507,7 +513,11 @@ pub trait EstimateNextSessionRotation<BlockNumber> {
 	fn weight(now: BlockNumber) -> Weight;
 }
 
-impl<BlockNumber: Bounded> EstimateNextSessionRotation<BlockNumber> for () {
+impl<BlockNumber: Bounded + Default> EstimateNextSessionRotation<BlockNumber> for () {
+	fn average_session_length() -> BlockNumber {
+		Default::default()
+	}
+
 	fn estimate_next_session_rotation(_: BlockNumber) -> Option<BlockNumber> {
 		Default::default()
 	}
@@ -517,9 +527,15 @@ impl<BlockNumber: Bounded> EstimateNextSessionRotation<BlockNumber> for () {
 	}
 }
 
-/// Something that can estimate at which block the next `new_session` will be triggered. This must
-/// always be implemented by the session module.
+/// Something that can estimate at which block the next `new_session` will be triggered.
+///
+/// This must always be implemented by the session module.
 pub trait EstimateNextNewSession<BlockNumber> {
+	/// Return the average length of a session.
+	///
+	/// This may or may not be accurate.
+	fn average_session_length() -> BlockNumber;
+
 	/// Return the block number at which the next new session is estimated to happen.
 	fn estimate_next_new_session(now: BlockNumber) -> Option<BlockNumber>;
 
@@ -527,7 +543,11 @@ pub trait EstimateNextNewSession<BlockNumber> {
 	fn weight(now: BlockNumber) -> Weight;
 }
 
-impl<BlockNumber: Bounded> EstimateNextNewSession<BlockNumber> for () {
+impl<BlockNumber: Bounded + Default> EstimateNextNewSession<BlockNumber> for () {
+	fn average_session_length() -> BlockNumber {
+		Default::default()
+	}
+
 	fn estimate_next_new_session(_: BlockNumber) -> Option<BlockNumber> {
 		Default::default()
 	}
@@ -875,11 +895,6 @@ pub trait PalletInfo {
 	fn name<P: 'static>() -> Option<&'static str>;
 }
 
-impl PalletInfo for () {
-	fn index<P: 'static>() -> Option<usize> { Some(0) }
-	fn name<P: 'static>() -> Option<&'static str> { Some("test") }
-}
-
 /// The function and pallet name of the Call.
 #[derive(Clone, Eq, PartialEq, Default, RuntimeDebug)]
 pub struct CallMetadata {
@@ -968,7 +983,21 @@ pub trait OnRuntimeUpgrade {
 	/// block local data are not accessible.
 	///
 	/// Return the non-negotiable weight consumed for runtime upgrade.
-	fn on_runtime_upgrade() -> crate::weights::Weight { 0 }
+	fn on_runtime_upgrade() -> crate::weights::Weight {
+		0
+	}
+
+	/// Execute some pre-checks prior to a runtime upgrade.
+	///
+	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<(), &'static str>;
+
+	/// Execute some post-checks after a runtime upgrade.
+	///
+	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade() -> Result<(), &'static str>;
 }
 
 #[impl_for_tuples(30)]
@@ -977,6 +1006,20 @@ impl OnRuntimeUpgrade for Tuple {
 		let mut weight = 0;
 		for_tuples!( #( weight = weight.saturating_add(Tuple::on_runtime_upgrade()); )* );
 		weight
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<(), &'static str> {
+		let mut result = Ok(());
+		for_tuples!( #( result = result.and(Tuple::pre_upgrade()); )* );
+		result
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade() -> Result<(), &'static str> {
+		let mut result = Ok(());
+		for_tuples!( #( result = result.and(Tuple::post_upgrade()); )* );
+		result
 	}
 }
 
@@ -1380,6 +1423,22 @@ pub trait Hooks<BlockNumber> {
 	///
 	/// Return the non-negotiable weight consumed for runtime upgrade.
 	fn on_runtime_upgrade() -> crate::weights::Weight { 0 }
+
+	/// Execute some pre-checks prior to a runtime upgrade.
+	///
+	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<(), &'static str> {
+		Ok(())
+	}
+
+	/// Execute some post-checks after a runtime upgrade.
+	///
+	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade() -> Result<(), &'static str> {
+		Ok(())
+	}
 
 	/// Implementing this function on a module allows you to perform long-running tasks
 	/// that make (by default) validators generate transactions that feed results

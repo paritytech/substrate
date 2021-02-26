@@ -1334,6 +1334,16 @@ macro_rules! decl_module {
 
 				result.saturating_add(additional_write)
 			}
+
+			#[cfg(feature = "try-runtime")]
+			fn pre_upgrade() -> Result<(), &'static str> {
+				Ok(())
+			}
+
+			#[cfg(feature = "try-runtime")]
+			fn post_upgrade() -> Result<(), &'static str> {
+				Ok(())
+			}
 		}
 	};
 
@@ -1355,6 +1365,16 @@ macro_rules! decl_module {
 				<
 					<$trait_instance as $system::Config>::DbWeight as $crate::traits::Get<_>
 				>::get().writes(1)
+			}
+
+			#[cfg(feature = "try-runtime")]
+			fn pre_upgrade() -> Result<(), &'static str> {
+				Ok(())
+			}
+
+			#[cfg(feature = "try-runtime")]
+			fn post_upgrade() -> Result<(), &'static str> {
+				Ok(())
 			}
 		}
 	};
@@ -2409,7 +2429,7 @@ mod tests {
 	use crate::weights::{DispatchInfo, DispatchClass, Pays, RuntimeDbWeight};
 	use crate::traits::{
 		CallMetadata, GetCallMetadata, GetCallName, OnInitialize, OnFinalize, OnRuntimeUpgrade,
-		IntegrityTest, Get,
+		IntegrityTest, Get, PalletInfo,
 	};
 
 	pub trait Config: system::Config + Sized where Self::AccountId: From<u32> { }
@@ -2562,13 +2582,32 @@ mod tests {
 		}
 	}
 
+	impl PalletInfo for TraitImpl {
+		fn index<P: 'static>() -> Option<usize> {
+			let type_id = sp_std::any::TypeId::of::<P>();
+			if type_id == sp_std::any::TypeId::of::<Test>() {
+				return Some(0)
+			}
+
+			None
+		}
+		fn name<P: 'static>() -> Option<&'static str> {
+			let type_id = sp_std::any::TypeId::of::<P>();
+			if type_id == sp_std::any::TypeId::of::<Test>() {
+				return Some("Test")
+			}
+
+			None
+		}
+	}
+
 	impl system::Config for TraitImpl {
 		type Origin = OuterOrigin;
 		type AccountId = u32;
 		type Call = OuterCall;
 		type BaseCallFilter = ();
 		type BlockNumber = u32;
-		type PalletInfo = ();
+		type PalletInfo = Self;
 		type DbWeight = ();
 	}
 
