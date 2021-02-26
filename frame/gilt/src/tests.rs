@@ -309,7 +309,7 @@ fn thaw_when_issuance_higher_works() {
 		assert_ok!(Gilt::place_bid(Origin::signed(1), 100, 1));
 		Gilt::enlarge(100, 1);
 
-		// Everybody else's balances go up by 50%
+		// Everybody else's balances goes up by 50%
 		Balances::make_free_balance_be(&2, 150);
 		Balances::make_free_balance_be(&3, 150);
 		Balances::make_free_balance_be(&4, 150);

@@ -410,10 +410,10 @@ pub mod pallet {
 		pub fn set_target(
 			origin: OriginFor<T>,
 			#[pallet::compact] target: Perquintill,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::AdminOrigin::ensure_origin(origin)?;
 			ActiveTotal::<T>::mutate(|totals| totals.target = target);
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Remove an active but expired gilt. Reserved funds under gilt are freed and balance is
@@ -470,7 +470,8 @@ pub mod pallet {
 					// Unreserve only its new value (less than the amount reserved). Everything
 					// should add up, but (defensive) in case it doesn't, unreserve takes lower
 					// priority over the funds.
-					T::Currency::unreserve(&gilt.who, gilt_value);
+					let err_amt = T::Currency::unreserve(&gilt.who, gilt_value);
+					debug_assert!(err_amt.is_zero());
 				}
 
 				let e = Event::GiltThawed(index, gilt.who, gilt.amount, gilt_value);
