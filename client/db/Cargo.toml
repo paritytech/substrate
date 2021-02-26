@@ -33,7 +33,6 @@ sc-executor = { version = "0.9.0", path = "../executor" }
 sc-state-db = { version = "0.9.0", path = "../state-db" }
 sp-trie = { version = "3.0.0", path = "../../primitives/trie" }
 sp-consensus = { version = "0.9.0", path = "../../primitives/consensus/common" }
-sp-finality-grandpa = { version = "3.0.0", path = "../../primitives/finality-grandpa" }
 sp-blockchain = { version = "3.0.0", path = "../../primitives/blockchain" }
 sp-database = { version = "3.0.0", path = "../../primitives/database" }
 parity-db = { version = "0.2.2", optional = true }

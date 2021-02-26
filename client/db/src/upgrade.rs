@@ -83,11 +83,8 @@ fn migrate_2_to_3<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> sp_b
 	let mut transaction = db.transaction();
 	for key in keys {
 		if let Some(justification) = db.get(columns::JUSTIFICATION, &key).map_err(db_err)? {
-			let justifications = sp_runtime::Justifications::from((
-				sp_finality_grandpa::GRANDPA_ENGINE_ID,
-				justification,
-			));
-
+			// Tag each Justification with the hardcoded ID for GRANDPA. Avoid the dependency on the GRANDPA crate
+			let justifications = sp_runtime::Justifications::from((*b"FRNK", justification));
 			transaction.put_vec(columns::JUSTIFICATION, &key, justifications.encode());
 		}
 	}
