@@ -1524,7 +1524,7 @@ pub trait OnIdle<BlockNumber> {
 	///
 	/// NOTE: This function is called AFTER ALL extrinsics in a block are applied,
 	/// including inherent extrinsics.
-	fn on_idle(_n: BlockNumber) {}
+	fn on_idle(_n: BlockNumber, _remaining_weight: crate::weights::Weight) {}
 }
 
 /// The block initialization trait.
@@ -1997,7 +1997,7 @@ pub trait Hooks<BlockNumber> {
 	fn on_finalize(_n: BlockNumber) {}
 
 	/// The block is being finalized. Implement to have something happen.
-	fn on_idle(_n: BlockNumber) {}
+	fn on_idle(_n: BlockNumber, _remaining_weight: crate::weights::Weight) {}
 
 	/// The block is being initialized. Implement to have something happen.
 	///

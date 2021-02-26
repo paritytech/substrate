@@ -58,11 +58,14 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_finalize(block_number: T::BlockNumber) {
-			debug::info!("on finalize");
-		}
-		fn on_idle(block_number: T::BlockNumber) {
-			debug::info!("on idle");
+		// TODO remove and add as an example
+		fn on_idle(block_number: T::BlockNumber, remaining_weight: frame_support::weights::Weight) {
+			// TODO, better example implementation
+			if remaining_weight > 1994237262000 {
+				debug::info!("on idle: do something weight :{}", remaining_weight);
+			} else {
+				debug::info!("on idle: meh im busy weight :{}", remaining_weight);
+			}
 		}
 	}
 
