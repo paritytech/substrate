@@ -95,10 +95,12 @@ pub use either::Either;
 /// the block itself would allow swapping justifications to change the block's hash
 /// (and thus fork the chain). Sending a `Justification` alongside a block instead
 /// bypasses this problem.
-pub type EncodedJustification = Vec<u8>;
-
-/// Justification together with an ID to tag its origin.
+/// Each Justifications comes encoded, and together with an ID tag since we might have multiple
+/// Justifications per block.
 pub type Justification = (ConsensusEngineId, EncodedJustification);
+
+/// The Justification specific to a consensus engine, and encoded.
+pub type EncodedJustification = Vec<u8>;
 
 /// Collection of Justifications, since we might have more than one stored per block.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
