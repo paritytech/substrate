@@ -468,7 +468,8 @@ pub mod pallet {
 					// Unreserve only its new value (less than the amount reserved). Everything
 					// should add up, but (defensive) in case it doesn't, unreserve takes lower
 					// priority over the funds.
-					T::Currency::unreserve(&gilt.who, gilt_value);
+					let err_amt = T::Currency::unreserve(&gilt.who, gilt_value);
+					debug_assert!(err_amt.is_zero());
 				}
 
 				let e = Event::GiltThawed(index, gilt.who, gilt.amount, gilt_value);
