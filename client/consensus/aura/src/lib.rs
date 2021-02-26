@@ -1003,6 +1003,7 @@ mod tests {
 						inherent_data_providers,
 						phantom: Default::default(),
 						can_author_with: AlwaysCanAuthor,
+						telemetry: None,
 					}
 				},
 				PeersClient::Light(_, _) => unreachable!("No (yet) tests for light client + Aura"),
@@ -1079,6 +1080,7 @@ mod tests {
 				Some(BackoffAuthoringOnFinalizedHeadLagging::default()),
 				keystore,
 				sp_consensus::AlwaysCanAuthor,
+				None,
 			).expect("Starts aura"));
 		}
 
@@ -1138,6 +1140,7 @@ mod tests {
 			sync_oracle: DummyOracle.clone(),
 			force_authoring: false,
 			backoff_authoring_blocks: Some(BackoffAuthoringOnFinalizedHeadLagging::default()),
+			telemetry: None,
 			_key_type: PhantomData::<AuthorityPair>,
 		};
 
@@ -1185,6 +1188,7 @@ mod tests {
 			sync_oracle: DummyOracle.clone(),
 			force_authoring: false,
 			backoff_authoring_blocks: Option::<()>::None,
+			telemetry: None,
 			_key_type: PhantomData::<AuthorityPair>,
 		};
 
