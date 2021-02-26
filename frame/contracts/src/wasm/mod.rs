@@ -38,6 +38,8 @@ use pallet_contracts_primitives::ExecResult;
 pub use self::runtime::{ReturnCode, Runtime, RuntimeToken};
 #[cfg(feature = "runtime-benchmarks")]
 pub use self::code_cache::reinstrument;
+#[cfg(test)]
+pub use tests::MockExt;
 
 /// A prepared wasm module ready for execution.
 ///
@@ -237,7 +239,7 @@ mod tests {
 	use crate::{
 		CodeHash, BalanceOf, Error, Module as Contracts,
 		exec::{Ext, StorageKey, AccountIdOf, Executable},
-		gas::{Gas, GasMeter},
+		gas::GasMeter,
 		tests::{Test, Call, ALICE, BOB},
 	};
 	use std::collections::HashMap;
@@ -248,7 +250,7 @@ mod tests {
 	use assert_matches::assert_matches;
 	use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags, ExecError, ErrorOrigin};
 
-	const GAS_LIMIT: Gas = 10_000_000_000;
+	const GAS_LIMIT: Weight = 10_000_000_000;
 
 	#[derive(Debug, PartialEq, Eq)]
 	struct DispatchEntry(Call);
@@ -1202,7 +1204,7 @@ mod tests {
 			&mut gas_meter,
 		).unwrap();
 
-		let gas_left = Gas::decode(&mut output.data.as_slice()).unwrap();
+		let gas_left = Weight::decode(&mut output.data.as_slice()).unwrap();
 		assert!(gas_left < GAS_LIMIT, "gas_left must be less than initial");
 		assert!(gas_left > gas_meter.gas_left(), "gas_left must be greater than final");
 	}

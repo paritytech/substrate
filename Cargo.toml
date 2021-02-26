@@ -75,6 +75,7 @@ members = [
 	"frame/democracy",
 	"frame/try-runtime",
 	"frame/elections",
+	"frame/election-provider-multi-phase",
 	"frame/example",
 	"frame/example-offchain-worker",
 	"frame/example-parallel",

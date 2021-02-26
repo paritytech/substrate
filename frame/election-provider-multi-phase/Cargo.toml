@@ -1,0 +1,67 @@
+[package]
+name = "pallet-election-provider-multi-phase"
+version = "3.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "Apache-2.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+description = "PALLET two phase election providers"
+readme = "README.md"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+static_assertions = "1.1.0"
+serde = { version = "1.0.101", optional = true }
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+
+frame-support = { version = "3.0.0", default-features = false, path = "../support" }
+frame-system = { version = "3.0.0", default-features = false, path = "../system" }
+
+sp-io ={ version = "3.0.0", default-features = false, path = "../../primitives/io" }
+sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
+sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-npos-elections = { version = "3.0.0", default-features = false, path = "../../primitives/npos-elections" }
+sp-arithmetic = { version = "3.0.0", default-features = false, path = "../../primitives/arithmetic" }
+sp-election-providers = { version = "3.0.0", default-features = false, path = "../../primitives/election-providers" }
+
+# Optional imports for benchmarking
+frame-benchmarking = { version = "3.1.0", default-features = false, path = "../benchmarking", optional = true }
+rand = { version = "0.7.3", default-features = false, optional = true, features = ["alloc", "small_rng"] }
+
+[dev-dependencies]
+paste = "1.0.3"
+parking_lot = "0.11.0"
+rand = { version = "0.7.3" }
+hex-literal = "0.3.1"
+substrate-test-utils = { version = "3.0.0", path = "../../test-utils" }
+sp-io = { version = "3.0.0", path = "../../primitives/io" }
+sp-core = { version = "3.0.0", path = "../../primitives/core" }
+sp-tracing = { version = "3.0.0", path = "../../primitives/tracing" }
+sp-election-providers = { version = "3.0.0", features = ["runtime-benchmarks"], path = "../../primitives/election-providers" }
+pallet-balances = { version = "3.0.0", path = "../balances" }
+frame-benchmarking = { path = "../benchmarking" , version = "3.1.0"}
+
+[features]
+default = ["std"]
+std = [
+	"serde",
+	"codec/std",
+
+	"frame-support/std",
+	"frame-system/std",
+
+	"sp-io/std",
+	"sp-std/std",
+	"sp-runtime/std",
+	"sp-npos-elections/std",
+	"sp-arithmetic/std",
+	"sp-election-providers/std",
+]
+runtime-benchmarks = [
+	"frame-benchmarking",
+	"rand",
+]
+try-runtime = ["frame-support/try-runtime"]

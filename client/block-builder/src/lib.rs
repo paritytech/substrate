@@ -37,11 +37,47 @@ use sp_core::ExecutionContext;
 use sp_api::{
 	Core, ApiExt, ApiRef, ProvideRuntimeApi, StorageChanges, StorageProof, TransactionOutcome,
 };
-use sp_consensus::RecordProof;
 
 pub use sp_block_builder::BlockBuilder as BlockBuilderApi;
 
 use sc_client_api::backend;
+
+/// Used as parameter to [`BlockBuilderProvider`] to express if proof recording should be enabled.
+///
+/// When `RecordProof::Yes` is given, all accessed trie nodes should be saved. These recorded
+/// trie nodes can be used by a third party to proof this proposal without having access to the
+/// full storage.
+#[derive(Copy, Clone, PartialEq)]
+pub enum RecordProof {
+	/// `Yes`, record a proof.
+	Yes,
+	/// `No`, don't record any proof.
+	No,
+}
+
+impl RecordProof {
+	/// Returns if `Self` == `Yes`.
+	pub fn yes(&self) -> bool {
+		matches!(self, Self::Yes)
+	}
+}
+
+/// Will return [`RecordProof::No`] as default value.
+impl Default for RecordProof {
+	fn default() -> Self {
+		Self::No
+	}
+}
+
+impl From<bool> for RecordProof {
+	fn from(val: bool) -> Self {
+		if val {
+			Self::Yes
+		} else {
+			Self::No
+		}
+	}
+}
 
 /// A block that was build by [`BlockBuilder`] plus some additional data.
 ///

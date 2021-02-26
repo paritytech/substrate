@@ -30,14 +30,11 @@ use sp_core::crypto::UncheckedFrom;
 #[cfg(test)]
 use std::{any::Any, fmt::Debug};
 
-// Gas is essentially the same as weight. It is a 1 to 1 correspondence.
-pub type Gas = Weight;
-
 #[derive(Debug, PartialEq, Eq)]
-pub struct ChargedAmount(Gas);
+pub struct ChargedAmount(Weight);
 
 impl ChargedAmount {
-	pub fn amount(&self) -> Gas {
+	pub fn amount(&self) -> Weight {
 		self.0
 	}
 }
@@ -72,7 +69,7 @@ pub trait Token<T: Config>: Copy + Clone + TestAuxiliaries {
 	/// That said, implementors of this function still can run into overflows
 	/// while calculating the amount. In this case it is ok to use saturating operations
 	/// since on overflow they will return `max_value` which should consume all gas.
-	fn calculate_amount(&self, metadata: &Self::Metadata) -> Gas;
+	fn calculate_amount(&self, metadata: &Self::Metadata) -> Weight;
 }
 
 /// A wrapper around a type-erased trait object of what used to be a `Token`.
@@ -83,9 +80,9 @@ pub struct ErasedToken {
 }
 
 pub struct GasMeter<T: Config> {
-	gas_limit: Gas,
+	gas_limit: Weight,
 	/// Amount of gas left from initial gas limit. Can reach zero.
-	gas_left: Gas,
+	gas_left: Weight,
 	_phantom: PhantomData<T>,
 	#[cfg(test)]
 	tokens: Vec<ErasedToken>,
@@ -95,7 +92,7 @@ impl<T: Config> GasMeter<T>
 where
 	T::AccountId: UncheckedFrom<<T as frame_system::Config>::Hash> + AsRef<[u8]>
 {
-	pub fn new(gas_limit: Gas) -> Self {
+	pub fn new(gas_limit: Weight) -> Self {
 		GasMeter {
 			gas_limit,
 			gas_left: gas_limit,
@@ -177,7 +174,7 @@ where
 	/// All unused gas in the nested gas meter is returned to this gas meter.
 	pub fn with_nested<R, F: FnOnce(Option<&mut GasMeter<T>>) -> R>(
 		&mut self,
-		amount: Gas,
+		amount: Weight,
 		f: F,
 	) -> R {
 		// NOTE that it is ok to allocate all available gas since it still ensured
@@ -197,12 +194,12 @@ where
 	}
 
 	/// Returns how much gas was used.
-	pub fn gas_spent(&self) -> Gas {
+	pub fn gas_spent(&self) -> Weight {
 		self.gas_limit - self.gas_left
 	}
 
 	/// Returns how much gas left from the initial budget.
-	pub fn gas_left(&self) -> Gas {
+	pub fn gas_left(&self) -> Weight {
 		self.gas_left
 	}
 
@@ -230,48 +227,47 @@ where
 	}
 }
 
-/// A simple utility macro that helps to match against a
-/// list of tokens.
-#[macro_export]
-macro_rules! match_tokens {
-	($tokens_iter:ident,) => {
-	};
-	($tokens_iter:ident, $x:expr, $($rest:tt)*) => {
-		{
-			let next = ($tokens_iter).next().unwrap();
-			let pattern = $x;
-
-			// Note that we don't specify the type name directly in this macro,
-			// we only have some expression $x of some type. At the same time, we
-			// have an iterator of Box<dyn Any> and to downcast we need to specify
-			// the type which we want downcast to.
-			//
-			// So what we do is we assign `_pattern_typed_next_ref` to a variable which has
-			// the required type.
-			//
-			// Then we make `_pattern_typed_next_ref = token.downcast_ref()`. This makes
-			// rustc infer the type `T` (in `downcast_ref<T: Any>`) to be the same as in $x.
-
-			let mut _pattern_typed_next_ref = &pattern;
-			_pattern_typed_next_ref = match next.token.downcast_ref() {
-				Some(p) => {
-					assert_eq!(p, &pattern);
-					p
-				}
-				None => {
-					panic!("expected type {} got {}", stringify!($x), next.description);
-				}
-			};
-		}
-
-		match_tokens!($tokens_iter, $($rest)*);
-	};
-}
-
 #[cfg(test)]
 mod tests {
 	use super::{GasMeter, Token};
 	use crate::tests::Test;
+
+	/// A simple utility macro that helps to match against a
+	/// list of tokens.
+	macro_rules! match_tokens {
+		($tokens_iter:ident,) => {
+		};
+		($tokens_iter:ident, $x:expr, $($rest:tt)*) => {
+			{
+				let next = ($tokens_iter).next().unwrap();
+				let pattern = $x;
+
+				// Note that we don't specify the type name directly in this macro,
+				// we only have some expression $x of some type. At the same time, we
+				// have an iterator of Box<dyn Any> and to downcast we need to specify
+				// the type which we want downcast to.
+				//
+				// So what we do is we assign `_pattern_typed_next_ref` to a variable which has
+				// the required type.
+				//
+				// Then we make `_pattern_typed_next_ref = token.downcast_ref()`. This makes
+				// rustc infer the type `T` (in `downcast_ref<T: Any>`) to be the same as in $x.
+
+				let mut _pattern_typed_next_ref = &pattern;
+				_pattern_typed_next_ref = match next.token.downcast_ref() {
+					Some(p) => {
+						assert_eq!(p, &pattern);
+						p
+					}
+					None => {
+						panic!("expected type {} got {}", stringify!($x), next.description);
+					}
+				};
+			}
+
+			match_tokens!($tokens_iter, $($rest)*);
+		};
+	}
 
 	/// A trivial token that charges the specified number of gas units.
 	#[derive(Copy, Clone, PartialEq, Eq, Debug)]
