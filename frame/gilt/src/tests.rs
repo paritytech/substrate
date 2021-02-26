@@ -258,7 +258,7 @@ fn enlarge_respects_amount_limit_and_will_split() {
 		assert_ok!(Gilt::place_bid(Origin::signed(1), 80, 1));
 		Gilt::enlarge(40, 2);
 
-		// Should have taken 4/3 and 2/2, then stopped because it's only allowed 2.
+		// Takes 2/2, then stopped because it reaches its max amount
 		assert_eq!(Queues::<Test>::get(1), vec![ GiltBid { amount: 40, who: 1 } ]);
 		assert_eq!(QueueTotals::<Test>::get(), vec![(1, 40), (0, 0), (0, 0)]);
 
