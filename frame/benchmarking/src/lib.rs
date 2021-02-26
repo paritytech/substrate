@@ -1178,7 +1178,7 @@ macro_rules! impl_benchmark_test_suite {
 								println!("{}: {}", String::from_utf8_lossy(benchmark_name), err);
 								anything_failed = true;
 							},
-							_ => (),
+							Ok(Ok(_)) => (),
 						}
 					}
 					assert!(!anything_failed);
