@@ -326,28 +326,30 @@ pub mod pallet {
 				.ok_or(Error::<T>::DurationTooSmall)? as usize;
 			ensure!(queue_index < queue_count, Error::<T>::DurationTooBig);
 
-			let bid = GiltBid { amount, who: who.clone() };
 			let net = Queues::<T>::try_mutate(duration, |q|
 				-> Result<(u32, BalanceOf::<T>), DispatchError>
 			{
+				let queue_full = q.len() == T::MaxQueueLen::get() as usize;
+				ensure!(!queue_full || q[0].amount < amount, Error::<T>::BidTooLow);
+				T::Currency::reserve(&who, amount)?;
+
 				// queue is <Ordered: Lowest ... Highest><Fifo: Last ... First>
-				let net = if q.len() == T::MaxQueueLen::get() as usize {
-					ensure!(q[0].amount < amount, Error::<T>::BidTooLow);
-					let old = q[0].amount;
-					T::Currency::unreserve(&q[0].who, old);
-					q[0] = bid;
-					(0, amount - old)
+				let mut bid = GiltBid { amount, who: who.clone() };
+				let net = if queue_full {
+					sp_std::mem::swap(&mut q[0], &mut bid);
+					T::Currency::unreserve(&bid.who, bid.amount);
+					(0, amount - bid.amount)
 				} else {
 					q.insert(0, bid);
 					(1, amount)
 				};
+
 				let sorted_item_count = q.len().saturating_sub(T::FifoQueueLen::get() as usize);
 				if sorted_item_count > 1 {
 					q[0..sorted_item_count].sort_by_key(|x| x.amount);
 				}
 
-				T::Currency::reserve(&who, amount)?;
-				Ok(net)	// net change in queue length; 0 or 1
+				Ok(net)
 			})?;
 			QueueTotals::<T>::mutate(|qs| {
 				qs.resize(queue_count, (0, Zero::zero()));
@@ -525,7 +527,7 @@ pub mod pallet {
 							continue
 						}
 						let queue_index = duration as usize - 1;
-						let expiry = now + T::Period::get() * duration.into();
+						let expiry = now.saturating_add(T::Period::get().saturating_mul(duration.into()));
 						Queues::<T>::mutate(duration, |q| {
 							while let Some(mut bid) = q.pop() {
 								if remaining < bid.amount {
