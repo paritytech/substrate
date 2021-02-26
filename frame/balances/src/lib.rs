@@ -1324,7 +1324,7 @@ impl<T: Config<I>, I: Instance> NamedReservableCurrency<T::AccountId> for Module
 		let reserves = Self::reserves(who);
 		reserves
 			.binary_search_by_key(id, |data| data.id)
-			.map(|idx| reserves[idx].amount)
+			.map(|index| reserves[index].amount)
 			.unwrap_or_default()
 	}
 
@@ -1334,13 +1334,13 @@ impl<T: Config<I>, I: Instance> NamedReservableCurrency<T::AccountId> for Module
 	fn reserve_named(id: &ReserveIdentifier, who: &T::AccountId, value: Self::Balance) -> DispatchResult {
 		Reserves::<T, I>::try_mutate(who, |reserves| -> DispatchResult {
 			match reserves.binary_search_by_key(id, |data| data.id) {
-				Ok(idx) => {
+				Ok(index) => {
 					// this add can't overflow but just to be defensive.
-					reserves[idx].amount = reserves[idx].amount.saturating_add(value);
+					reserves[index].amount = reserves[index].amount.saturating_add(value);
 				},
-				Err(idx) => {
+				Err(index) => {
 					ensure!((reserves.len() as u32) < T::MaxReserves::get(), Error::<T, I>::TooManyReserves);
-					reserves.insert(idx, ReserveData {
+					reserves.insert(index, ReserveData {
 						id: id.clone(),
 						amount: value
 					});
@@ -1360,8 +1360,8 @@ impl<T: Config<I>, I: Instance> NamedReservableCurrency<T::AccountId> for Module
 		Reserves::<T, I>::mutate_exists(who, |maybe_reserves| -> Self::Balance {
 			if let Some(reserves) = maybe_reserves.as_mut() {
 				match reserves.binary_search_by_key(id, |data| data.id) {
-					Ok(idx) => {
-						let to_change = cmp::min(reserves[idx].amount, value);
+					Ok(index) => {
+						let to_change = cmp::min(reserves[index].amount, value);
 
 						let remain = <Self as ReservableCurrency<_>>::unreserve(who, to_change);
 
@@ -1369,15 +1369,15 @@ impl<T: Config<I>, I: Instance> NamedReservableCurrency<T::AccountId> for Module
 						let actual = to_change.saturating_sub(remain);
 
 						// `actual <= to_change` and `to_change <= amount`; qed;
-						reserves[idx].amount -= actual;
+						reserves[index].amount -= actual;
 
-						if reserves[idx].amount.is_zero() {
+						if reserves[index].amount.is_zero() {
 							if reserves.len() == 1 {
 								// no more named reserves
 								*maybe_reserves = None;
 							} else {
 								// remove this named reserve
-								reserves.remove(idx);
+								reserves.remove(index);
 							}
 						}
 
@@ -1406,8 +1406,8 @@ impl<T: Config<I>, I: Instance> NamedReservableCurrency<T::AccountId> for Module
 
 		Reserves::<T, I>::mutate(who, |reserves| -> (Self::NegativeImbalance, Self::Balance) {
 			match reserves.binary_search_by_key(id, |data| data.id) {
-				Ok(idx) => {
-					let to_change = cmp::min(reserves[idx].amount, value);
+				Ok(index) => {
+					let to_change = cmp::min(reserves[index].amount, value);
 
 					let (imb, remain) = <Self as ReservableCurrency<_>>::slash_reserved(who, to_change);
 
@@ -1415,7 +1415,7 @@ impl<T: Config<I>, I: Instance> NamedReservableCurrency<T::AccountId> for Module
 					let actual = to_change.saturating_sub(remain);
 
 					// `actual <= to_change` and `to_change <= amount`; qed;
-					reserves[idx].amount -= actual;
+					reserves[index].amount -= actual;
 
 					(imb, value - actual)
 				},
@@ -1450,25 +1450,25 @@ impl<T: Config<I>, I: Instance> NamedReservableCurrency<T::AccountId> for Module
 
 		Reserves::<T, I>::try_mutate(slashed, |reserves| -> Result<Self::Balance, DispatchError> {
 			match reserves.binary_search_by_key(id, |data| data.id) {
-				Ok(idx) => {
-					let to_change = cmp::min(reserves[idx].amount, value);
+				Ok(index) => {
+					let to_change = cmp::min(reserves[index].amount, value);
 
 					let actual = if status == Status::Reserved {
 						// make it the reserved under same identifier
 						Reserves::<T, I>::try_mutate(beneficiary, |reserves| -> Result<T::Balance, DispatchError> {
 							match reserves.binary_search_by_key(id, |data| data.id) {
-								Ok(idx) => {
+								Ok(index) => {
 									let remain = <Self as ReservableCurrency<_>>::repatriate_reserved(slashed, beneficiary, to_change, status)?;
 
 									// remain should always be zero but just to be defensive here
 									let actual = to_change.saturating_sub(remain);
 
 									// this add can't overflow but just to be defensive.
-									reserves[idx].amount = reserves[idx].amount.saturating_add(actual);
+									reserves[index].amount = reserves[index].amount.saturating_add(actual);
 
 									Ok(actual)
 								},
-								Err(idx) => {
+								Err(index) => {
 									ensure!((reserves.len() as u32) < T::MaxReserves::get(), Error::<T, I>::TooManyReserves);
 
 									let remain = <Self as ReservableCurrency<_>>::repatriate_reserved(slashed, beneficiary, to_change, status)?;
@@ -1476,7 +1476,7 @@ impl<T: Config<I>, I: Instance> NamedReservableCurrency<T::AccountId> for Module
 									// remain should always be zero but just to be defensive here
 									let actual = to_change.saturating_sub(remain);
 
-									reserves.insert(idx, ReserveData {
+									reserves.insert(index, ReserveData {
 										id: id.clone(),
 										amount: actual
 									});
@@ -1493,7 +1493,7 @@ impl<T: Config<I>, I: Instance> NamedReservableCurrency<T::AccountId> for Module
 					};
 
 					// `actual <= to_change` and `to_change <= amount`; qed;
-					reserves[idx].amount -= actual;
+					reserves[index].amount -= actual;
 
 					Ok(value - actual)
 				},
