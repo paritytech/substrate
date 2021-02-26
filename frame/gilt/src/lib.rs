@@ -408,10 +408,10 @@ pub mod pallet {
 		pub fn set_target(
 			origin: OriginFor<T>,
 			#[pallet::compact] target: Perquintill,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::AdminOrigin::ensure_origin(origin)?;
 			ActiveTotal::<T>::mutate(|totals| totals.target = target);
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Remove an active but expired gilt. Reserved funds under gilt are freed and balance is
