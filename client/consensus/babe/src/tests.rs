@@ -432,6 +432,7 @@ fn run_one_test(
 			babe_link: data.link.clone(),
 			keystore,
 			can_author_with: sp_consensus::AlwaysCanAuthor,
+			telemetry: None,
 		}).expect("Starts babe"));
 	}
 	futures::executor::block_on(future::select(
