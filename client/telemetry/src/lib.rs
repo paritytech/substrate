@@ -425,7 +425,10 @@ impl TelemetryHandle {
 	pub fn send_telemetry(&self, verbosity: VerbosityLevel, payload: TelemetryPayload) {
 		match self.message_sender.lock().try_send((self.id, verbosity, payload)) {
 			Ok(()) => {}
-			Err(err) if err.is_full() => todo!("overflow"),
+			Err(err) if err.is_full() => log::trace!(
+				target: "telemetry",
+				"buffer overflow",
+			),
 			Err(_) => unreachable!(),
 		}
 	}
