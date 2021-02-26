@@ -192,7 +192,7 @@ fn basic_enlarge_works() {
 		assert_ok!(Gilt::place_bid(Origin::signed(2), 40, 2));
 		Gilt::enlarge(40, 2);
 
-		// Should have taken 4/3 and 2/2, then stopped because it's only allowed 2.
+		// Takes 2/2, then stopped because it reaches its max amount
 		assert_eq!(Balances::reserved_balance(1), 40);
 		assert_eq!(Balances::reserved_balance(2), 40);
 		assert_eq!(Queues::<Test>::get(1), vec![ GiltBid { amount: 40, who: 1 } ]);
@@ -329,7 +329,7 @@ fn thaw_when_issuance_lower_works() {
 		assert_ok!(Gilt::place_bid(Origin::signed(1), 100, 1));
 		Gilt::enlarge(100, 1);
 
-		// Everybody else's balances go up by 50%
+		// Everybody else's balances goes down by 25%
 		Balances::make_free_balance_be(&2, 75);
 		Balances::make_free_balance_be(&3, 75);
 		Balances::make_free_balance_be(&4, 75);
