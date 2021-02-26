@@ -471,6 +471,7 @@ mod tests {
 			client.clone(),
 			txpool.clone(),
 			None,
+			None,
 		);
 
 		let cell = Mutex::new((false, time::Instant::now()));
@@ -517,6 +518,7 @@ mod tests {
 			spawner.clone(),
 			client.clone(),
 			txpool.clone(),
+			None,
 			None,
 		);
 
@@ -573,6 +575,7 @@ mod tests {
 			spawner.clone(),
 			client.clone(),
 			txpool.clone(),
+			None,
 			None,
 		);
 
@@ -648,6 +651,7 @@ mod tests {
 			spawner.clone(),
 			client.clone(),
 			txpool.clone(),
+			None,
 			None,
 		);
 		let mut propose_block = |
