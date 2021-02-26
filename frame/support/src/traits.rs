@@ -1518,13 +1518,21 @@ pub trait OnFinalize<BlockNumber> {
 	fn on_finalize(_n: BlockNumber) {}
 }
 
-#[impl_for_tuples(30)]
 pub trait OnIdle<BlockNumber> {
 	/// The block is being finalized. Implement to have something happen.
 	///
 	/// NOTE: This function is called AFTER ALL extrinsics in a block are applied,
 	/// including inherent extrinsics.
-	fn on_idle(_n: BlockNumber, _remaining_weight: crate::weights::Weight) {}
+	fn on_idle(_n: BlockNumber, _remaining_weight: crate::weights::Weight) -> crate::weights::Weight { 0 }
+}
+
+#[impl_for_tuples(30)]
+impl<BlockNumber: Clone> OnIdle<BlockNumber> for Tuple {
+	fn on_idle(_n: BlockNumber,  _remaining_weight: crate::weights::Weight) -> crate::weights::Weight {
+		let mut weight = 0;
+		for_tuples!( #( weight = weight.saturating_add(Tuple::on_idle(_n.clone(),  _remaining_weight.clone())); )* );
+		weight
+	}
 }
 
 /// The block initialization trait.
@@ -1997,7 +2005,7 @@ pub trait Hooks<BlockNumber> {
 	fn on_finalize(_n: BlockNumber) {}
 
 	/// The block is being finalized. Implement to have something happen.
-	fn on_idle(_n: BlockNumber, _remaining_weight: crate::weights::Weight) {}
+	fn on_idle(_n: BlockNumber, _remaining_weight: crate::weights::Weight) -> crate::weights::Weight { 0 }
 
 	/// The block is being initialized. Implement to have something happen.
 	///
