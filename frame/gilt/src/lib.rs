@@ -273,8 +273,9 @@ pub mod pallet {
 		DurationTooBig,
 		/// The amount of the bid is less than the minimum allowed.
 		AmountTooSmall,
-		/// The queue for the bid's duration is already full.
-		QueueFull,
+		/// The queue for the bid's duration is full and the amount bid is too low to get in through
+		/// replacing an existing bid.
+		BidTooLow,
 		/// Gilt index is unknown.
 		Unknown,
 		/// Not the owner of the gilt.
@@ -331,7 +332,7 @@ pub mod pallet {
 			{
 				// queue is <Ordered: Lowest ... Highest><Fifo: Last ... First>
 				let net = if q.len() == T::MaxQueueLen::get() as usize {
-					ensure!(q[0].amount < amount, Error::<T>::QueueFull);
+					ensure!(q[0].amount < amount, Error::<T>::BidTooLow);
 					let old = q[0].amount;
 					T::Currency::unreserve(&q[0].who, old);
 					q[0] = bid;
