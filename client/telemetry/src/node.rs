@@ -245,11 +245,6 @@ where
 		match &mut self.socket {
 			NodeSocket::Connected(conn) => match serde_json::to_vec(&item) {
 				Ok(data) => {
-					log::error!(
-						target: "telemetry",
-						"sent: {}",
-						serde_json::to_string(&item).unwrap(),
-					);
 					let _ = conn.sink.start_send_unpin(data);
 				}
 				Err(err) => log::error!(

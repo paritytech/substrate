@@ -275,7 +275,13 @@ impl TelemetryWorker {
 		node_pool: &mut HashMap<Multiaddr, Node<WsTrans>>,
 		node_map: &HashMap<Id, Vec<(VerbosityLevel, Multiaddr)>>,
 	) {
-		let (id, verbosity, message) = input.expect("the stream is never closed; qed");
+		let (id, verbosity, payload) = input.expect("the stream is never closed; qed");
+
+		let ts = chrono::Local::now().to_rfc3339().to_string();
+		let mut message = serde_json::Map::new();
+		message.insert("id".into(), id.into());
+		message.insert("ts".into(), ts.into());
+		message.insert("payload".into(), payload.into());
 
 		let nodes = if let Some(nodes) = node_map.get(&id) {
 			nodes
