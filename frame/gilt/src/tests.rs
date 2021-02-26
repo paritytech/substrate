@@ -329,7 +329,7 @@ fn thaw_when_issuance_lower_works() {
 		assert_ok!(Gilt::place_bid(Origin::signed(1), 100, 1));
 		Gilt::enlarge(100, 1);
 
-		// Everybody else's balances go up by 50%
+		// Everybody else's balances goes down by 25%
 		Balances::make_free_balance_be(&2, 75);
 		Balances::make_free_balance_be(&3, 75);
 		Balances::make_free_balance_be(&4, 75);
