@@ -27,7 +27,7 @@ use crate::Module as Assets;
 
 const SEED: u32 = 0;
 
-fn create_default_asset<T: Config>(max_zombies: u32)
+fn create_default_asset<T: Config>(is_sufficient: bool)
 	-> (T::AccountId, <T::Lookup as StaticLookup>::Source)
 {
 	let caller: T::AccountId = whitelisted_caller();
@@ -37,16 +37,19 @@ fn create_default_asset<T: Config>(max_zombies: u32)
 		root,
 		Default::default(),
 		caller_lookup.clone(),
-		max_zombies,
+		is_sufficient,
 		1u32.into(),
 	).is_ok());
 	(caller, caller_lookup)
 }
 
-fn create_default_minted_asset<T: Config>(max_zombies: u32, amount: T::Balance)
+fn create_default_minted_asset<T: Config>(is_sufficient: bool, amount: T::Balance)
 	-> (T::AccountId, <T::Lookup as StaticLookup>::Source)
 {
-	let (caller, caller_lookup)  = create_default_asset::<T>(max_zombies);
+	let (caller, caller_lookup)  = create_default_asset::<T>(is_sufficient);
+	if !is_sufficient {
+		T::Currency::make_free_balance_be(&caller, T::Currency::minimum_balance());
+	}
 	assert!(Assets::<T>::mint(
 		SystemOrigin::Signed(caller.clone()).into(),
 		Default::default(),
@@ -56,12 +59,57 @@ fn create_default_minted_asset<T: Config>(max_zombies: u32, amount: T::Balance)
 	(caller, caller_lookup)
 }
 
-fn add_zombies<T: Config>(minter: T::AccountId, n: u32) {
+fn swap_is_sufficient<T: Config>(s: &mut bool) {
+	Asset::<T>::mutate(&T::AssetId::default(), |maybe_a|
+		if let Some(ref mut a) = maybe_a { std::mem::swap(s, &mut a.is_sufficient) }
+	);
+}
+
+fn add_consumers<T: Config>(minter: T::AccountId, n: u32) {
 	let origin = SystemOrigin::Signed(minter);
+	let mut s = false;
+	swap_is_sufficient::<T>(&mut s);
 	for i in 0..n {
-		let target = account("zombie", i, SEED);
+		let target = account("consumer", i, SEED);
+		T::Currency::make_free_balance_be(&target, T::Currency::minimum_balance());
 		let target_lookup = T::Lookup::unlookup(target);
 		assert!(Assets::<T>::mint(origin.clone().into(), Default::default(), target_lookup, 100u32.into()).is_ok());
+	}
+	swap_is_sufficient::<T>(&mut s);
+}
+
+fn add_sufficients<T: Config>(minter: T::AccountId, n: u32) {
+	let origin = SystemOrigin::Signed(minter);
+	let mut s = true;
+	swap_is_sufficient::<T>(&mut s);
+	for i in 0..n {
+		let target = account("sufficient", i, SEED);
+		let target_lookup = T::Lookup::unlookup(target);
+		assert!(Assets::<T>::mint(origin.clone().into(), Default::default(), target_lookup, 100u32.into()).is_ok());
+	}
+	swap_is_sufficient::<T>(&mut s);
+}
+
+fn add_approvals<T: Config>(minter: T::AccountId, n: u32) {
+	T::Currency::deposit_creating(&minter, T::ApprovalDeposit::get() * n.into());
+	let minter_lookup = T::Lookup::unlookup(minter.clone());
+	let origin = SystemOrigin::Signed(minter);
+	assert!(Assets::<T>::mint(
+		origin.clone().into(),
+		Default::default(),
+		minter_lookup,
+		(100 * n).into()
+	).is_ok());
+	for i in 0..n {
+		let target = account("approval", i, SEED);
+		T::Currency::make_free_balance_be(&target, T::Currency::minimum_balance());
+		let target_lookup = T::Lookup::unlookup(target);
+		Assets::<T>::approve_transfer(
+			origin.clone().into(),
+			Default::default(),
+			target_lookup,
+			100u32.into(),
+		).unwrap();
 	}
 }
 
@@ -78,7 +126,7 @@ benchmarks! {
 		let caller: T::AccountId = whitelisted_caller();
 		let caller_lookup = T::Lookup::unlookup(caller.clone());
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
-	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), caller_lookup, 1, 1u32.into())
+	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), caller_lookup, 1u32.into())
 	verify {
 		assert_last_event::<T>(Event::Created(Default::default(), caller.clone(), caller).into());
 	}
@@ -86,31 +134,41 @@ benchmarks! {
 	force_create {
 		let caller: T::AccountId = whitelisted_caller();
 		let caller_lookup = T::Lookup::unlookup(caller.clone());
-	}: _(SystemOrigin::Root, Default::default(), caller_lookup, 1, 1u32.into())
+	}: _(SystemOrigin::Root, Default::default(), caller_lookup, true, 1u32.into())
 	verify {
 		assert_last_event::<T>(Event::ForceCreated(Default::default(), caller).into());
 	}
 
 	destroy {
-		let z in 0 .. 10_000;
-		let (caller, _) = create_default_asset::<T>(10_000);
-		add_zombies::<T>(caller.clone(), z);
-	}: _(SystemOrigin::Signed(caller), Default::default(), 10_000)
+		let c in 0 .. 10_000;
+		let s in 0 .. 10_000;
+		let a in 0 .. 10_000;
+		let (caller, _) = create_default_asset::<T>(true);
+		add_consumers::<T>(caller.clone(), c);
+		add_sufficients::<T>(caller.clone(), s);
+		add_approvals::<T>(caller.clone(), a);
+		let witness = Asset::<T>::get(T::AssetId::default()).unwrap().destroy_witness();
+	}: _(SystemOrigin::Signed(caller), Default::default(), witness)
 	verify {
 		assert_last_event::<T>(Event::Destroyed(Default::default()).into());
 	}
 
 	force_destroy {
-		let z in 0 .. 10_000;
-		let (caller, _) = create_default_asset::<T>(10_000);
-		add_zombies::<T>(caller.clone(), z);
-	}: _(SystemOrigin::Root, Default::default(), 10_000)
+		let c in 0 .. 10_000;
+		let s in 0 .. 10_000;
+		let a in 0 .. 10_000;
+		let (caller, _) = create_default_asset::<T>(true);
+		add_consumers::<T>(caller.clone(), c);
+		add_sufficients::<T>(caller.clone(), s);
+		add_approvals::<T>(caller.clone(), a);
+		let witness = Asset::<T>::get(T::AssetId::default()).unwrap().destroy_witness();
+	}: _(SystemOrigin::Root, Default::default(), witness)
 	verify {
 		assert_last_event::<T>(Event::Destroyed(Default::default()).into());
 	}
 
 	mint {
-		let (caller, caller_lookup) = create_default_asset::<T>(10);
+		let (caller, caller_lookup) = create_default_asset::<T>(true);
 		let amount = T::Balance::from(100u32);
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), caller_lookup, amount)
 	verify {
@@ -119,7 +177,7 @@ benchmarks! {
 
 	burn {
 		let amount = T::Balance::from(100u32);
-		let (caller, caller_lookup) = create_default_minted_asset::<T>(10, amount);
+		let (caller, caller_lookup) = create_default_minted_asset::<T>(true, amount);
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), caller_lookup, amount)
 	verify {
 		assert_last_event::<T>(Event::Burned(Default::default(), caller, amount).into());
@@ -127,7 +185,7 @@ benchmarks! {
 
 	transfer {
 		let amount = T::Balance::from(100u32);
-		let (caller, caller_lookup) = create_default_minted_asset::<T>(10, amount);
+		let (caller, caller_lookup) = create_default_minted_asset::<T>(true, amount);
 		let target: T::AccountId = account("target", 0, SEED);
 		let target_lookup = T::Lookup::unlookup(target.clone());
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), target_lookup, amount)
@@ -137,25 +195,25 @@ benchmarks! {
 
 	force_transfer {
 		let amount = T::Balance::from(100u32);
-		let (caller, caller_lookup) = create_default_minted_asset::<T>(10, amount);
+		let (caller, caller_lookup) = create_default_minted_asset::<T>(true, amount);
 		let target: T::AccountId = account("target", 0, SEED);
 		let target_lookup = T::Lookup::unlookup(target.clone());
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), caller_lookup, target_lookup, amount)
 	verify {
 		assert_last_event::<T>(
-			Event::ForceTransferred(Default::default(), caller, target, amount).into()
+			Event::Transferred(Default::default(), caller, target, amount).into()
 		);
 	}
 
 	freeze {
-		let (caller, caller_lookup) = create_default_minted_asset::<T>(10, 100u32.into());
+		let (caller, caller_lookup) = create_default_minted_asset::<T>(true, 100u32.into());
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), caller_lookup)
 	verify {
 		assert_last_event::<T>(Event::Frozen(Default::default(), caller).into());
 	}
 
 	thaw {
-		let (caller, caller_lookup) = create_default_minted_asset::<T>(10, 100u32.into());
+		let (caller, caller_lookup) = create_default_minted_asset::<T>(true, 100u32.into());
 		Assets::<T>::freeze(
 			SystemOrigin::Signed(caller.clone()).into(),
 			Default::default(),
@@ -167,14 +225,14 @@ benchmarks! {
 	}
 
 	freeze_asset {
-		let (caller, caller_lookup) = create_default_minted_asset::<T>(10, 100u32.into());
+		let (caller, caller_lookup) = create_default_minted_asset::<T>(true, 100u32.into());
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default())
 	verify {
 		assert_last_event::<T>(Event::AssetFrozen(Default::default()).into());
 	}
 
 	thaw_asset {
-		let (caller, caller_lookup) = create_default_minted_asset::<T>(10, 100u32.into());
+		let (caller, caller_lookup) = create_default_minted_asset::<T>(true, 100u32.into());
 		Assets::<T>::freeze_asset(
 			SystemOrigin::Signed(caller.clone()).into(),
 			Default::default(),
@@ -185,7 +243,7 @@ benchmarks! {
 	}
 
 	transfer_ownership {
-		let (caller, _) = create_default_asset::<T>(10);
+		let (caller, _) = create_default_asset::<T>(true);
 		let target: T::AccountId = account("target", 0, SEED);
 		let target_lookup = T::Lookup::unlookup(target.clone());
 	}: _(SystemOrigin::Signed(caller), Default::default(), target_lookup)
@@ -194,7 +252,7 @@ benchmarks! {
 	}
 
 	set_team {
-		let (caller, _) = create_default_asset::<T>(10);
+		let (caller, _) = create_default_asset::<T>(true);
 		let target0 = T::Lookup::unlookup(account("target", 0, SEED));
 		let target1 = T::Lookup::unlookup(account("target", 1, SEED));
 		let target2 = T::Lookup::unlookup(account("target", 2, SEED));
@@ -207,7 +265,7 @@ benchmarks! {
 			account("target", 2, SEED),
 		).into());
 	}
-
+/*
 	set_max_zombies {
 		let (caller, _) = create_default_asset::<T>(10);
 		let max_zombies: u32 = 100;
@@ -216,7 +274,7 @@ benchmarks! {
 	verify {
 		assert_last_event::<T>(Event::MaxZombiesChanged(Default::default(), max_zombies).into());
 	}
-
+*/
 	set_metadata {
 		let n in 0 .. T::StringLimit::get();
 		let s in 0 .. T::StringLimit::get();
@@ -225,7 +283,7 @@ benchmarks! {
 		let symbol = vec![0u8; s as usize];
 		let decimals = 12;
 
-		let (caller, _) = create_default_asset::<T>(10);
+		let (caller, _) = create_default_asset::<T>(true);
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 	}: _(SystemOrigin::Signed(caller), Default::default(), name.clone(), symbol.clone(), decimals)
 	verify {

@@ -200,14 +200,16 @@ pub struct AssetMetadata<DepositBalance> {
 }
 
 /// Witness data for the destroy transactions.
-// TODO: make compact encoding.
 #[derive(Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
 pub struct DestroyWitness {
 	/// The number of accounts holding the asset.
+	#[codec(compact)]
 	accounts: u32,
 	/// The number of accounts holding the asset with a self-sufficient reference.
+	#[codec(compact)]
 	sufficients: u32,
 	/// The number of transfer-approvals of the asset.
+	#[codec(compact)]
 	approvals: u32,
 }
 
@@ -509,7 +511,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(c + p + a)` where:
 		/// - `c = (witness.accounts - witness.sufficients)`
-		/// - `p = witness.sufficients`
+		/// - `s = witness.sufficients`
 		/// - `a = witness.approvals`
 //		#[pallet::weight(T::WeightInfo::force_destroy(
 //			witness.accounts.saturating_sub(witness.sufficients),
@@ -537,7 +539,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(c + p + a)` where:
 		/// - `c = (witness.accounts - witness.sufficients)`
-		/// - `p = witness.sufficients`
+		/// - `s = witness.sufficients`
 		/// - `a = witness.approvals`
 //		#[pallet::weight(T::WeightInfo::force_destroy(
 //			witness.accounts.saturating_sub(witness.sufficients),
@@ -976,7 +978,7 @@ pub mod pallet {
 
 		// TODO: Weight
 		#[pallet::weight(0)]
-		fn approve_transfer(
+		pub(super) fn approve_transfer(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
 			beneficiary: <T::Lookup as StaticLookup>::Source,
@@ -1003,7 +1005,7 @@ pub mod pallet {
 
 		// TODO: Weight
 		#[pallet::weight(0)]
-		fn cancel_approval(
+		pub(super) fn cancel_approval(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
 			beneficiary: <T::Lookup as StaticLookup>::Source,
@@ -1021,7 +1023,7 @@ pub mod pallet {
 
 		// TODO: Weight
 		#[pallet::weight(0)]
-		fn transfer_approved(
+		pub(super) fn transfer_approved(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
 			owner: <T::Lookup as StaticLookup>::Source,
@@ -1089,8 +1091,7 @@ impl<T: Config> Pallet<T> {
 	) {
 		if sufficient {
 			d.sufficients = d.sufficients.saturating_sub(1);
-			let e = frame_system::Module::<T>::dec_sufficients(who);
-			debug_assert!(e.is_ok(), "Assets: Self-sufficient refcount underflow");
+			frame_system::Module::<T>::dec_sufficients(who);
 		} else {
 			frame_system::Module::<T>::dec_consumers(who);
 		}
