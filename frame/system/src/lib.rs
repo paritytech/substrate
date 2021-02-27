@@ -972,8 +972,8 @@ pub enum RefStatus {
 	Unreferenced,
 }
 
-/// Some resultant status relevant to incrementing a provider reference.
-#[derive(RuntimeDebug)]
+/// Some resultant status relevant to incrementing a provider/self-sufficient reference.
+#[derive(Eq, PartialEq, RuntimeDebug)]
 pub enum IncRefStatus {
 	/// Account was created.
 	Created,
@@ -981,8 +981,8 @@ pub enum IncRefStatus {
 	Existed,
 }
 
-/// Some resultant status relevant to decrementing a provider reference.
-#[derive(RuntimeDebug)]
+/// Some resultant status relevant to decrementing a provider/self-sufficient reference.
+#[derive(Eq, PartialEq, RuntimeDebug)]
 pub enum DecRefStatus {
 	/// Account was destroyed.
 	Reaped,
@@ -991,14 +991,14 @@ pub enum DecRefStatus {
 }
 
 /// Some resultant status relevant to decrementing a provider reference.
-#[derive(RuntimeDebug)]
+#[derive(Eq, PartialEq, RuntimeDebug)]
 pub enum DecRefError {
 	/// Account cannot have the last provider reference removed while there is a consumer.
 	ConsumerRemaining,
 }
 
-/// Some resultant status relevant to incrementing a provider reference.
-#[derive(RuntimeDebug)]
+/// Some resultant status relevant to incrementing a consumer reference.
+#[derive(Eq, PartialEq, RuntimeDebug)]
 pub enum IncRefError {
 	/// Account cannot introduce a consumer while there are no providers.
 	NoProviders,
@@ -1036,7 +1036,7 @@ impl<T: Config> Module<T> {
 
 	/// Increment the provider reference counter on an account.
 	pub fn inc_providers(who: &T::AccountId) -> IncRefStatus {
-		Account::<T>::mutate(who, |a| if a.providers == 0 {
+		Account::<T>::mutate(who, |a| if a.providers == 0 && a.sufficients == 0 {
 			// Account is being created.
 			a.providers = 1;
 			Self::on_created_account(who.clone(), a);
@@ -1053,22 +1053,24 @@ impl<T: Config> Module<T> {
 	pub fn dec_providers(who: &T::AccountId) -> Result<DecRefStatus, DecRefError> {
 		Account::<T>::try_mutate_exists(who, |maybe_account| {
 			if let Some(mut account) = maybe_account.take() {
-				match (account.providers, account.consumers) {
-					(0, _) => {
-						// Logic error - cannot decrement beyond zero and no item should
-						// exist with zero providers.
-						debug::print!("Logic error: Unexpected underflow in reducing provider");
-						Ok(DecRefStatus::Reaped)
-					},
-					(1, 0) => {
+				if account.providers == 0 {
+					// Logic error - cannot decrement beyond zero.
+					debug::print!("Logic error: Unexpected underflow in reducing sufficients");
+					account.providers = 1;
+				}
+				match (account.providers, account.consumers, account.sufficients) {
+					(1, 0, 0) => {
+						// No providers left (and no consumers) and no sufficients. Account dead.
 						Module::<T>::on_killed_account(who.clone());
 						Ok(DecRefStatus::Reaped)
 					}
-					(1, _) => {
+					(1, c, _) if c > 0 => {
 						// Cannot remove last provider if there are consumers.
 						Err(DecRefError::ConsumerRemaining)
 					}
-					(x, _) => {
+					(x, _, _) => {
+						// Account will continue to exist as there is either > 1 provider or
+						// > 0 sufficients.
 						account.providers = x - 1;
 						*maybe_account = Some(account);
 						Ok(DecRefStatus::Exists)
@@ -1097,29 +1099,27 @@ impl<T: Config> Module<T> {
 	/// Decrement the sufficients reference counter on an account.
 	///
 	/// This *MUST* only be done once for every time you called `inc_sufficients` on `who`.
-	pub fn dec_sufficients(who: &T::AccountId) -> Result<DecRefStatus, DecRefError> {
-		Account::<T>::try_mutate_exists(who, |maybe_account| {
+	pub fn dec_sufficients(who: &T::AccountId) -> DecRefStatus {
+		Account::<T>::mutate_exists(who, |maybe_account| {
 			if let Some(mut account) = maybe_account.take() {
 				if account.sufficients == 0 {
-					// Logic error - cannot decrement beyond zero and no item should
-					// exist with zero providers.
+					// Logic error - cannot decrement beyond zero.
 					debug::print!("Logic error: Unexpected underflow in reducing sufficients");
-					// let it complete, since we're presumably out of references.
 				}
 				match (account.sufficients, account.providers) {
 					(0, 0) | (1, 0) => {
 						Module::<T>::on_killed_account(who.clone());
-						Ok(DecRefStatus::Reaped)
+						DecRefStatus::Reaped
 					}
 					(x, _) => {
 						account.sufficients = x - 1;
 						*maybe_account = Some(account);
-						Ok(DecRefStatus::Exists)
+						DecRefStatus::Exists
 					}
 				}
 			} else {
 				debug::print!("Logic error: Account already dead when reducing provider");
-				Ok(DecRefStatus::Reaped)
+				DecRefStatus::Reaped
 			}
 		})
 	}
@@ -1501,11 +1501,8 @@ impl<T: Config> HandleLifetime<T::AccountId> for SelfSufficient<T> {
 		Ok(())
 	}
 	fn killed(t: &T::AccountId) -> Result<(), StoredMapError> {
-		Module::<T>::dec_sufficients(t)
-			.map(|_| ())
-			.or_else(|e| match e {
-				DecRefError::ConsumerRemaining => Err(StoredMapError::ConsumerRemaining),
-			})
+		Module::<T>::dec_sufficients(t);
+		Ok(())
 	}
 }
 

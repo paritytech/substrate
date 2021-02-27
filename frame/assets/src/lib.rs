@@ -154,11 +154,11 @@ pub struct AssetDetails<
 	min_balance: Balance,
 	/// If `true`, then any account with this asset is given a provider reference. Otherwise, it
 	/// requires a consumer reference.
-	is_provider: bool,
+	is_sufficient: bool,
 	/// The total number of accounts.
 	accounts: u32,
 	/// The total number of accounts for which we have placed a self-sufficient reference.
-	provideds: u32,
+	sufficients: u32,
 	/// The total number of approvals.
 	approvals: u32,
 	/// Whether the asset is frozen for non-admin transfers.
@@ -169,7 +169,7 @@ impl<Balance, AccountId, DepositBalance> AssetDetails<Balance, AccountId, Deposi
 	pub fn destroy_witness(&self) -> DestroyWitness {
 		DestroyWitness {
 			accounts: self.accounts,
-			provideds: self.provideds,
+			sufficients: self.sufficients,
 			approvals: self.approvals,
 		}
 	}
@@ -182,7 +182,7 @@ pub struct AssetBalance<Balance> {
 	/// Whether the account is frozen.
 	is_frozen: bool,
 	/// `true` if this balance gave the account a self-sufficient reference.
-	provided: bool,
+	sufficient: bool,
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default)]
@@ -205,13 +205,13 @@ pub struct AssetMetadata<DepositBalance> {
 pub struct DestroyWitness {
 	/// The number of accounts holding the asset.
 	accounts: u32,
-	/// The number of accounts holding the asset with a provider reference.
-	provideds: u32,
+	/// The number of accounts holding the asset with a self-sufficient reference.
+	sufficients: u32,
 	/// The number of transfer-approvals of the asset.
 	approvals: u32,
 }
 
-// TODO: transaction to alter `is_provider`.
+// TODO: transaction to alter `is_sufficient`.
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -435,9 +435,9 @@ pub mod pallet {
 				supply: Zero::zero(),
 				deposit,
 				min_balance,
-				is_provider: false,
+				is_sufficient: false,
 				accounts: 0,
-				provideds: 0,
+				sufficients: 0,
 				approvals: 0,
 				is_frozen: false,
 			});
@@ -471,7 +471,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
 			owner: <T::Lookup as StaticLookup>::Source,
-			is_provider: bool,
+			is_sufficient: bool,
 			#[pallet::compact] min_balance: T::Balance,
 		) -> DispatchResultWithPostInfo {
 			T::ForceOrigin::ensure_origin(origin)?;
@@ -488,9 +488,9 @@ pub mod pallet {
 				supply: Zero::zero(),
 				deposit: Zero::zero(),
 				min_balance,
-				is_provider,
+				is_sufficient,
 				accounts: 0,
-				provideds: 0,
+				sufficients: 0,
 				approvals: 0,
 				is_frozen: false,
 			});
@@ -508,15 +508,15 @@ pub mod pallet {
 		/// Emits `Destroyed` event when successful.
 		///
 		/// Weight: `O(c + p + a)` where:
-		/// - `c = (witness.accounts - witness.provideds)`
-		/// - `p = witness.provideds`
+		/// - `c = (witness.accounts - witness.sufficients)`
+		/// - `p = witness.sufficients`
 		/// - `a = witness.approvals`
 //		#[pallet::weight(T::WeightInfo::force_destroy(
-//			witness.accounts.saturating_sub(witness.provideds),
-// 			witness.provideds,
+//			witness.accounts.saturating_sub(witness.sufficients),
+// 			witness.sufficients,
 // 			witness.approvals,
 // 		))]
-		#[pallet::weight(T::WeightInfo::destroy(witness.accounts.saturating_sub(witness.provideds)))]
+		#[pallet::weight(T::WeightInfo::destroy(witness.accounts.saturating_sub(witness.sufficients)))]
 		pub(super) fn destroy(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
@@ -536,15 +536,15 @@ pub mod pallet {
 		/// Emits `Destroyed` event when successful.
 		///
 		/// Weight: `O(c + p + a)` where:
-		/// - `c = (witness.accounts - witness.provideds)`
-		/// - `p = witness.provideds`
+		/// - `c = (witness.accounts - witness.sufficients)`
+		/// - `p = witness.sufficients`
 		/// - `a = witness.approvals`
 //		#[pallet::weight(T::WeightInfo::force_destroy(
-//			witness.accounts.saturating_sub(witness.provideds),
-// 			witness.provideds,
+//			witness.accounts.saturating_sub(witness.sufficients),
+// 			witness.sufficients,
 // 			witness.approvals,
 // 		))]
-		#[pallet::weight(T::WeightInfo::force_destroy(witness.accounts.saturating_sub(witness.provideds)))]
+		#[pallet::weight(T::WeightInfo::force_destroy(witness.accounts.saturating_sub(witness.sufficients)))]
 		pub(super) fn force_destroy(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
@@ -586,7 +586,7 @@ pub mod pallet {
 					let new_balance = t.balance.saturating_add(amount);
 					ensure!(new_balance >= details.min_balance, Error::<T>::BalanceLow);
 					if t.balance.is_zero() {
-						t.provided = Self::new_account(&beneficiary, details)?;
+						t.sufficient = Self::new_account(&beneficiary, details)?;
 					}
 					t.balance = new_balance;
 					Ok(().into())
@@ -634,7 +634,7 @@ pub mod pallet {
 						account.balance -= burned;
 						*maybe_account = if account.balance < d.min_balance {
 							burned += account.balance;
-							Self::dead_account(&who, d, account.provided);
+							Self::dead_account(&who, d, account.sufficient);
 							None
 						} else {
 							Some(account)
@@ -1070,25 +1070,25 @@ impl<T: Config> Pallet<T> {
 		d: &mut AssetDetails<T::Balance, T::AccountId, BalanceOf<T>>,
 	) -> Result<bool, DispatchError> {
 		let accounts = d.accounts.checked_add(1).ok_or(Error::<T>::Overflow)?;
-		let is_provided = if d.is_provider {
+		let is_sufficient = if d.is_sufficient {
 			frame_system::Module::<T>::inc_sufficients(who);
-			d.provideds += 1;
+			d.sufficients += 1;
 			true
 		} else {
 			frame_system::Module::<T>::inc_consumers(who).map_err(|_| Error::<T>::NoProvider)?;
 			false
 		};
 		d.accounts = accounts;
-		Ok(is_provided)
+		Ok(is_sufficient)
 	}
 
 	fn dead_account(
 		who: &T::AccountId,
 		d: &mut AssetDetails<T::Balance, T::AccountId, BalanceOf<T>>,
-		provided: bool,
+		sufficient: bool,
 	) {
-		if provided {
-			d.provideds = d.provideds.saturating_sub(1);
+		if sufficient {
+			d.sufficients = d.sufficients.saturating_sub(1);
 			let e = frame_system::Module::<T>::dec_sufficients(who);
 			debug_assert!(e.is_ok(), "Assets: Self-sufficient refcount underflow");
 		} else {
@@ -1108,14 +1108,14 @@ impl<T: Config> Pallet<T> {
 				ensure!(details.owner == check_owner, Error::<T>::NoPermission);
 			}
 			ensure!(details.accounts == witness.accounts, Error::<T>::BadWitness);
-			ensure!(details.provideds == witness.provideds, Error::<T>::BadWitness);
+			ensure!(details.sufficients == witness.sufficients, Error::<T>::BadWitness);
 			ensure!(details.approvals == witness.approvals, Error::<T>::BadWitness);
 
 			for (who, v) in Account::<T>::drain_prefix(id) {
-				Self::dead_account(&who, &mut details, v.provided);
+				Self::dead_account(&who, &mut details, v.sufficient);
 			}
 			debug_assert_eq!(details.accounts, 0);
-			debug_assert_eq!(details.provideds, 0);
+			debug_assert_eq!(details.sufficients, 0);
 
 			let metadata = Metadata::<T>::take(&id);
 			T::Currency::unreserve(&details.owner, details.deposit.saturating_add(metadata.deposit));
@@ -1123,7 +1123,7 @@ impl<T: Config> Pallet<T> {
 			Approvals::<T>::remove_prefix(&id);
 			Self::deposit_event(Event::Destroyed(id));
 
-			// TODO: could use postinfo to reflect the actual number of accounts/provided/approvals
+			// TODO: could use postinfo to reflect the actual number of accounts/sufficient/approvals
 			Ok(())
 		})
 	}
@@ -1169,14 +1169,14 @@ impl<T: Config> Pallet<T> {
 				ensure!(new_balance >= details.min_balance, Error::<T>::BalanceLow);
 
 				if a.balance.is_zero() {
-					a.provided = Self::new_account(&dest, details)?;
+					a.sufficient = Self::new_account(&dest, details)?;
 				}
 				a.balance = new_balance;
 				Ok(())
 			})?;
 
 			if source_account.balance.is_zero() {
-				Self::dead_account(&source, details, source_account.provided);
+				Self::dead_account(&source, details, source_account.sufficient);
 				Account::<T>::remove(id, &source);
 			} else {
 				Account::<T>::insert(id, &source, &source_account)
