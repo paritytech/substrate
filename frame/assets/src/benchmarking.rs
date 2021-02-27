@@ -94,12 +94,12 @@ fn add_approvals<T: Config>(minter: T::AccountId, n: u32) {
 	T::Currency::deposit_creating(&minter, T::ApprovalDeposit::get() * n.into());
 	let minter_lookup = T::Lookup::unlookup(minter.clone());
 	let origin = SystemOrigin::Signed(minter);
-	assert!(Assets::<T>::mint(
+	Assets::<T>::mint(
 		origin.clone().into(),
 		Default::default(),
 		minter_lookup,
-		(100 * n).into()
-	).is_ok());
+		(100 * (n + 1)).into(),
+	).unwrap();
 	for i in 0..n {
 		let target = account("approval", i, SEED);
 		T::Currency::make_free_balance_be(&target, T::Currency::minimum_balance());
