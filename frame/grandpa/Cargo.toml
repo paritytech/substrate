@@ -22,14 +22,14 @@ sp-session = { version = "3.0.0", default-features = false, path = "../../primit
 sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-staking = { version = "3.0.0", default-features = false, path = "../../primitives/staking" }
-frame-benchmarking = { version = "3.0.0", default-features = false, path = "../benchmarking", optional = true }
+frame-benchmarking = { version = "3.1.0", default-features = false, path = "../benchmarking", optional = true }
 frame-support = { version = "3.0.0", default-features = false, path = "../support" }
 frame-system = { version = "3.0.0", default-features = false, path = "../system" }
 pallet-authorship = { version = "3.0.0", default-features = false, path = "../authorship" }
 pallet-session = { version = "3.0.0", default-features = false, path = "../session" }
 
 [dev-dependencies]
-frame-benchmarking = { version = "3.0.0", path = "../benchmarking" }
+frame-benchmarking = { version = "3.1.0", path = "../benchmarking" }
 grandpa = { package = "finality-grandpa", version = "0.14.0", features = ["derive-codec"] }
 sp-io = { version = "3.0.0", path = "../../primitives/io" }
 sp-keyring = { version = "3.0.0", path = "../../primitives/keyring" }

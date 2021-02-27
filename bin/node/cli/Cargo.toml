@@ -79,7 +79,7 @@ sc-finality-grandpa-warp-sync = { version = "0.9.0", path = "../../../client/fin
 # frame dependencies
 pallet-indices = { version = "3.0.0", path = "../../../frame/indices" }
 pallet-timestamp = { version = "3.0.0", default-features = false, path = "../../../frame/timestamp" }
-pallet-contracts = { version = "2.0.0", path = "../../../frame/contracts" }
+pallet-contracts = { version = "3.0.0", path = "../../../frame/contracts" }
 frame-system = { version = "3.0.0", path = "../../../frame/system" }
 pallet-balances = { version = "3.0.0", path = "../../../frame/balances" }
 pallet-transaction-payment = { version = "3.0.0", path = "../../../frame/transaction-payment" }

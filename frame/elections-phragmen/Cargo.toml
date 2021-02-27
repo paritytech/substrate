@@ -20,7 +20,7 @@ sp-npos-elections = { version = "3.0.0", default-features = false, path = "../..
 frame-support = { version = "3.0.0", default-features = false, path = "../support" }
 frame-system = { version = "3.0.0", default-features = false, path = "../system" }
 sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
-frame-benchmarking = { version = "3.0.0", default-features = false, path = "../benchmarking", optional = true }
+frame-benchmarking = { version = "3.1.0", default-features = false, path = "../benchmarking", optional = true }
 
 [dev-dependencies]
 sp-io = { version = "3.0.0", path = "../../primitives/io" }

@@ -46,6 +46,7 @@ pub struct AuthoritySetChangeProof<Block: BlockT> {
 #[derive(Decode, Encode)]
 pub struct WarpSyncProof<Block: BlockT> {
 	proofs: Vec<AuthoritySetChangeProof<Block>>,
+	is_finished: bool,
 }
 
 impl<Block: BlockT> WarpSyncProof<Block> {
@@ -86,8 +87,11 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 
 		let mut proofs = Vec::new();
 
+		let mut proof_limit_reached = false;
+
 		for (_, last_block) in set_changes.iter_from(begin_number) {
 			if proofs.len() >= MAX_CHANGES_PER_WARP_SYNC_PROOF {
+				proof_limit_reached = true;
 				break;
 			}
 
@@ -118,7 +122,10 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 			});
 		}
 
-		Ok(WarpSyncProof { proofs })
+		Ok(WarpSyncProof {
+			proofs,
+			is_finished: !proof_limit_reached,
+		})
 	}
 
 	/// Verifies the warp sync proof starting at the given set id and with the given authorities.

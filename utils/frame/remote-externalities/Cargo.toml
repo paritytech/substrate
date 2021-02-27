@@ -16,12 +16,12 @@ targets = ["x86_64-unknown-linux-gnu"]
 jsonrpc-core-client = { version = "15.1.0", features = ["http"] }
 sc-rpc-api = { version = "0.9.0", path = "../../../client/rpc-api" }
 sc-rpc = { version = "3.0.0", path = "../../../client/rpc" }
-futures = "0.1.29"
+futures = "0.3"
 
 hex-literal = "0.3.1"
 env_logger = "0.8.2"
 log = "0.4.11"
-bincode = "1.3.1"
+codec = { package = "parity-scale-codec", version = "2.0.0" }
 tokio = "0.1.22"
 
 sp-io = { version = "3.0.0", path = "../../../primitives/io" }

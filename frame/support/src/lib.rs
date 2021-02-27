@@ -80,6 +80,9 @@ pub use self::storage::{
 pub use self::dispatch::{Parameter, Callable};
 pub use sp_runtime::{self, ConsensusEngineId, print, traits::Printable};
 
+/// A unified log target for support operations.
+pub const LOG_TARGET: &'static str = "runtime::frame-support";
+
 /// A type that cannot be instantiated.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Never {}
