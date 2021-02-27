@@ -173,7 +173,7 @@ pub enum RuntimeToken {
 	RestoreToSurchargeCodeSize{caller_code: u32, tombstone_code: u32},
 	/// Weight of calling `seal_random`. It includes the weight for copying the subject.
 	Random,
-	/// Weight of calling `seal_reposit_event` with the given number of topics and event size.
+	/// Weight of calling `seal_deposit_event` with the given number of topics and event size.
 	DepositEvent{num_topic: u32, len: u32},
 	/// Weight of calling `seal_set_rent_allowance`.
 	SetRentAllowance,
@@ -846,8 +846,8 @@ define_env!(Env, <E: Ext>,
 	// length to `output_len_ptr`. The copy of the output buffer and address can be skipped by
 	// supplying the sentinel value of `u32::max_value()` to `output_ptr` or `address_ptr`.
 	//
-	// After running the constructor it is verfied that the contract account holds at
-	// least the subsistence threshold. If that is not the case the instantion fails and
+	// After running the constructor it is verified that the contract account holds at
+	// least the subsistence threshold. If that is not the case the instantiation fails and
 	// the contract is not created.
 	//
 	// # Parameters
@@ -866,7 +866,7 @@ define_env!(Env, <E: Ext>,
 	// - output_ptr: a pointer where the output buffer is copied to.
 	// - output_len_ptr: in-out pointer to where the length of the buffer is read from
 	//   and the actual length is written to.
-	// - salt_ptr: Pointer to raw bytes used for address deriviation. See `fn contract_address`.
+	// - salt_ptr: Pointer to raw bytes used for address derivation. See `fn contract_address`.
 	// - salt_len: length in bytes of the supplied salt.
 	//
 	// # Errors
@@ -956,7 +956,7 @@ define_env!(Env, <E: Ext>,
 	// which is considered fatal and results in a trap + rollback.
 	//
 	// - beneficiary_ptr: a pointer to the address of the beneficiary account where all
-	//   where all remaining funds of the caller are transfered.
+	//   where all remaining funds of the caller are transferred.
 	//   Should be decodable as an `T::AccountId`. Traps otherwise.
 	// - beneficiary_len: length of the address buffer.
 	//
@@ -1010,7 +1010,7 @@ define_env!(Env, <E: Ext>,
 
 	// Cease contract execution and save a data buffer as a result of the execution.
 	//
-	// This function never retuns as it stops execution of the caller.
+	// This function never returns as it stops execution of the caller.
 	// This is the only way to return a data buffer to the caller. Returning from
 	// execution without calling this function is equivalent to calling:
 	// ```
@@ -1197,7 +1197,7 @@ define_env!(Env, <E: Ext>,
 	// This function will compute a tombstone hash from the caller's storage and the given code hash
 	// and if the hash matches the hash found in the tombstone at the specified address - kill
 	// the caller contract and restore the destination contract and set the specified `rent_allowance`.
-	// All caller's funds are transfered to the destination.
+	// All caller's funds are transferred to the destination.
 	//
 	// The tombstone hash is derived as `hash(code_hash, storage_root_hash)`. In order to match
 	// this hash to its own hash the restorer must make its storage equal to the one of the

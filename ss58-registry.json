@@ -452,6 +452,15 @@
 			"website": "https://neatcoin.org"
 		},
 		{
+			"prefix": 63,
+			"network": "hydradx",
+			"displayName": "HydraDX",
+			"symbols": ["HDX"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://hydradx.io"
+		},
+		{
 			"prefix": 65,
 			"network": "aventus",
 			"displayName": "AvN Mainnet",

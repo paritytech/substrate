@@ -514,14 +514,12 @@ where
 		<ContractInfoOf<T>>::remove(&origin);
 		let tombstone_code_len = E::remove_user(origin_contract.code_hash);
 		<ContractInfoOf<T>>::insert(&dest, ContractInfo::Alive(AliveContractInfo::<T> {
-			trie_id: origin_contract.trie_id,
-			storage_size: origin_contract.storage_size,
-			pair_count: origin_contract.pair_count,
 			code_hash,
 			rent_allowance,
 			rent_payed: <BalanceOf<T>>::zero(),
 			deduct_block: current_block,
 			last_write,
+			.. origin_contract
 		}));
 
 		let origin_free_balance = T::Currency::free_balance(&origin);
