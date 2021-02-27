@@ -180,7 +180,7 @@ pub fn build_aura_worker<B, C, E, I, P, SO, BS, Error>(
 	force_authoring: bool,
 	backoff_authoring_blocks: Option<BS>,
 	keystore: SyncCryptoStorePtr,
-) -> impl sc_consensus_slots::SlotWorker<B> where
+) -> impl sc_consensus_slots::SlotWorker<B, <E::Proposer as Proposer<B>>::Proof> where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + AuxStore + HeaderBackend<B> + Send + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
