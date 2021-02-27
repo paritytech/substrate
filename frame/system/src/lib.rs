@@ -452,7 +452,7 @@ pub mod pallet {
 		/// Make some on-chain remark and emit event.
 		///
 		/// # <weight>
-		/// - `O(1)`
+		/// - `O(b)` where b is the length of the remark.
 		/// - 1 event.
 		/// # </weight>
 		#[pallet::weight(T::SystemWeightInfo::remark_with_event(remark.len() as u32))]
