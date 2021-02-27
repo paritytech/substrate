@@ -103,7 +103,7 @@ pub struct GenericProto {
 	/// Notification protocols. Entries are only ever added and not removed.
 	/// Contains, for each protocol, the protocol name and the message to send as part of the
 	/// initial handshake.
-	notif_protocols: Vec<(Cow<'static, str>, Arc<RwLock<Vec<u8>>>)>,
+	notif_protocols: Vec<(Cow<'static, str>, Arc<RwLock<Vec<u8>>>, u64)>,
 
 	/// Receiver for instructions about who to connect to or disconnect from.
 	peerset: sc_peerset::Peerset,
@@ -374,10 +374,10 @@ impl GenericProto {
 		versions: &[u8],
 		handshake_message: Vec<u8>,
 		peerset: sc_peerset::Peerset,
-		notif_protocols: impl Iterator<Item = (Cow<'static, str>, Vec<u8>)>,
+		notif_protocols: impl Iterator<Item = (Cow<'static, str>, Vec<u8>, u64)>,
 	) -> Self {
 		let notif_protocols = notif_protocols
-			.map(|(n, hs)| (n, Arc::new(RwLock::new(hs))))
+			.map(|(n, hs, sz)| (n, Arc::new(RwLock::new(hs)), sz))
 			.collect::<Vec<_>>();
 
 		assert!(!notif_protocols.is_empty());
@@ -469,7 +469,7 @@ impl GenericProto {
 				timer: _
 			} => {
 				debug!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
-				self.peerset.dropped(set_id, peer_id.clone());
+				self.peerset.dropped(set_id, peer_id.clone(), sc_peerset::DropReason::Unknown);
 				let backoff_until = Some(if let Some(ban) = ban {
 					cmp::max(timer_deadline, Instant::now() + ban)
 				} else {
@@ -486,7 +486,7 @@ impl GenericProto {
 			// If relevant, the external API is instantly notified.
 			PeerState::Enabled { mut connections } => {
 				debug!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
-				self.peerset.dropped(set_id, peer_id.clone());
+				self.peerset.dropped(set_id, peer_id.clone(), sc_peerset::DropReason::Unknown);
 
 				if connections.iter().any(|(_, s)| matches!(s, ConnectionState::Open(_))) {
 					debug!(target: "sub-libp2p", "External API <= Closed({}, {:?})", peer_id, set_id);
@@ -942,7 +942,7 @@ impl GenericProto {
 				_ => {
 					debug!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})",
 						incoming.peer_id, incoming.set_id);
-					self.peerset.dropped(incoming.set_id, incoming.peer_id);
+					self.peerset.dropped(incoming.set_id, incoming.peer_id, sc_peerset::DropReason::Unknown);
 				},
 			}
 			return
@@ -1184,7 +1184,7 @@ impl NetworkBehaviour for GenericProto {
 
 					if connections.is_empty() {
 						debug!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
-						self.peerset.dropped(set_id, peer_id.clone());
+						self.peerset.dropped(set_id, peer_id.clone(), sc_peerset::DropReason::Unknown);
 						*entry.get_mut() = PeerState::Backoff { timer, timer_deadline };
 
 					} else {
@@ -1324,7 +1324,7 @@ impl NetworkBehaviour for GenericProto {
 
 					if connections.is_empty() {
 						debug!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
-						self.peerset.dropped(set_id, peer_id.clone());
+						self.peerset.dropped(set_id, peer_id.clone(), sc_peerset::DropReason::Unknown);
 						let ban_dur = Uniform::new(5, 10).sample(&mut rand::thread_rng());
 
 						let delay_id = self.next_delay_id;
@@ -1345,7 +1345,7 @@ impl NetworkBehaviour for GenericProto {
 						matches!(s, ConnectionState::Opening | ConnectionState::Open(_)))
 					{
 						debug!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
-						self.peerset.dropped(set_id, peer_id.clone());
+						self.peerset.dropped(set_id, peer_id.clone(), sc_peerset::DropReason::Unknown);
 
 						*entry.get_mut() = PeerState::Disabled {
 							connections,
@@ -1396,7 +1396,7 @@ impl NetworkBehaviour for GenericProto {
 					st @ PeerState::Requested |
 					st @ PeerState::PendingRequest { .. } => {
 						debug!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
-						self.peerset.dropped(set_id, peer_id.clone());
+						self.peerset.dropped(set_id, peer_id.clone(), sc_peerset::DropReason::Unknown);
 
 						let now = Instant::now();
 						let ban_duration = match st {
@@ -1467,13 +1467,14 @@ impl NetworkBehaviour for GenericProto {
 							if let ConnectionState::Closed = *connec_state {
 								*connec_state = ConnectionState::OpenDesiredByRemote;
 							} else {
-								// Connections in `OpeningThenClosing` state are in a Closed phase,
-								// and as such can emit `OpenDesiredByRemote` messages.
-								// Since an `Open` and a `Close` messages have already been sent,
+								// Connections in `OpeningThenClosing` and `Closing` state can be
+								// in a Closed phase, and as such can emit `OpenDesiredByRemote`
+								// messages.
+								// Since an `Open` and/or a `Close` message have already been sent,
 								// there is nothing much that can be done about this anyway.
 								debug_assert!(matches!(
 									connec_state,
-									ConnectionState::OpeningThenClosing
+									ConnectionState::OpeningThenClosing | ConnectionState::Closing
 								));
 							}
 						} else {
@@ -1502,13 +1503,15 @@ impl NetworkBehaviour for GenericProto {
 								});
 								*connec_state = ConnectionState::Opening;
 							} else {
-								// Connections in `OpeningThenClosing` and `Opening` are in a Closed
-								// phase, and as such can emit `OpenDesiredByRemote` messages.
+								// Connections in `OpeningThenClosing`, `Opening`, and `Closing`
+								// state can be in a Closed phase, and as such can emit
+								// `OpenDesiredByRemote` messages.
 								// Since an `Open` message haS already been sent, there is nothing
 								// more to do.
 								debug_assert!(matches!(
 									connec_state,
-									ConnectionState::OpenDesiredByRemote | ConnectionState::Opening
+									ConnectionState::OpenDesiredByRemote |
+									ConnectionState::Closing | ConnectionState::Opening
 								));
 							}
 						} else {
@@ -1544,12 +1547,13 @@ impl NetworkBehaviour for GenericProto {
 								*entry.into_mut() = PeerState::Incoming { connections, backoff_until };
 
 							} else {
-								// Connections in `OpeningThenClosing` are in a Closed phase, and
-								// as such can emit `OpenDesiredByRemote` messages.
+								// Connections in `OpeningThenClosing` and `Closing` state can be
+								// in a Closed phase, and as such can emit `OpenDesiredByRemote`
+								// messages.
 								// We ignore them.
 								debug_assert!(matches!(
 									connec_state,
-									ConnectionState::OpeningThenClosing
+									ConnectionState::OpeningThenClosing | ConnectionState::Closing
 								));
 								*entry.into_mut() = PeerState::Disabled { connections, backoff_until };
 							}
@@ -1578,12 +1582,13 @@ impl NetworkBehaviour for GenericProto {
 								*entry.into_mut() = PeerState::Enabled { connections };
 
 							} else {
-								// Connections in `OpeningThenClosing` are in a Closed phase, and
-								// as such can emit `OpenDesiredByRemote` messages.
+								// Connections in `OpeningThenClosing` and `Closing` state can be
+								// in a Closed phase, and as such can emit `OpenDesiredByRemote`
+								// messages.
 								// We ignore them.
 								debug_assert!(matches!(
 									connec_state,
-									ConnectionState::OpeningThenClosing
+									ConnectionState::OpeningThenClosing | ConnectionState::Closing
 								));
 								*entry.into_mut() = PeerState::DisabledPendingEnable {
 									connections,
@@ -1682,7 +1687,7 @@ impl NetworkBehaviour for GenericProto {
 							// List of open connections wasn't empty before but now it is.
 							if !connections.iter().any(|(_, s)| matches!(s, ConnectionState::Opening)) {
 								debug!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", source, set_id);
-								self.peerset.dropped(set_id, source.clone());
+								self.peerset.dropped(set_id, source.clone(), sc_peerset::DropReason::Refused);
 								*entry.into_mut() = PeerState::Disabled {
 									connections, backoff_until: None
 								};
@@ -1846,7 +1851,7 @@ impl NetworkBehaviour for GenericProto {
 							matches!(s, ConnectionState::Opening | ConnectionState::Open(_)))
 						{
 							debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", source);
-							self.peerset.dropped(set_id, source.clone());
+							self.peerset.dropped(set_id, source.clone(), sc_peerset::DropReason::Refused);
 
 							*entry.into_mut() = PeerState::Disabled {
 								connections,

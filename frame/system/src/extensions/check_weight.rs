@@ -28,7 +28,6 @@ use sp_runtime::{
 use frame_support::{
 	traits::{Get},
 	weights::{PostDispatchInfo, DispatchInfo, DispatchClass, priority::FrameTransactionPriority},
-	StorageValue,
 };
 
 /// Block resource (weight) limit check.
@@ -115,8 +114,8 @@ impl<T: Config + Send + Sync> CheckWeight<T> where
 		let next_weight = Self::check_block_weight(info)?;
 		Self::check_extrinsic_weight(info)?;
 
-		crate::AllExtrinsicsLen::put(next_len);
-		crate::BlockWeight::put(next_weight);
+		crate::AllExtrinsicsLen::<T>::put(next_len);
+		crate::BlockWeight::<T>::put(next_weight);
 		Ok(())
 	}
 
@@ -257,7 +256,7 @@ impl<T: Config + Send + Sync> SignedExtension for CheckWeight<T> where
 
 		let unspent = post_info.calc_unspent(info);
 		if unspent > 0 {
-			crate::BlockWeight::mutate(|current_weight| {
+			crate::BlockWeight::<T>::mutate(|current_weight| {
 				current_weight.sub(unspent, info.class);
 			})
 		}
@@ -465,7 +464,7 @@ mod tests {
 			let normal_limit = normal_weight_limit();
 
 			// given almost full block
-			BlockWeight::mutate(|current_weight| {
+			BlockWeight::<Test>::mutate(|current_weight| {
 				current_weight.set(normal_limit, DispatchClass::Normal)
 			});
 			// will not fit.
@@ -475,7 +474,7 @@ mod tests {
 
 			// likewise for length limit.
 			let len = 100_usize;
-			AllExtrinsicsLen::put(normal_length_limit());
+			AllExtrinsicsLen::<Test>::put(normal_length_limit());
 			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &normal, len).is_err());
 			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &op, len).is_ok());
 		})
@@ -508,7 +507,7 @@ mod tests {
 			let normal = DispatchInfo::default();
 			let normal_limit = normal_weight_limit() as usize;
 			let reset_check_weight = |tx, s, f| {
-				AllExtrinsicsLen::put(0);
+				AllExtrinsicsLen::<Test>::put(0);
 				let r = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, tx, s);
 				if f { assert!(r.is_err()) } else { assert!(r.is_ok()) }
 			};
@@ -544,7 +543,7 @@ mod tests {
 			let len = 0_usize;
 
 			let reset_check_weight = |i, f, s| {
-				BlockWeight::mutate(|current_weight| {
+				BlockWeight::<Test>::mutate(|current_weight| {
 					current_weight.set(s, DispatchClass::Normal)
 				});
 				let r = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, i, len);
@@ -570,20 +569,20 @@ mod tests {
 			let base_extrinsic = block_weights().get(DispatchClass::Normal).base_extrinsic;
 
 			// We allow 75% for normal transaction, so we put 25% - extrinsic base weight
-			BlockWeight::mutate(|current_weight| {
+			BlockWeight::<Test>::mutate(|current_weight| {
 				current_weight.set(0, DispatchClass::Mandatory);
 				current_weight.set(256 - base_extrinsic, DispatchClass::Normal);
 			});
 
 			let pre = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &info, len).unwrap();
-			assert_eq!(BlockWeight::get().total(), info.weight + 256);
+			assert_eq!(BlockWeight::<Test>::get().total(), info.weight + 256);
 
 			assert!(
 				CheckWeight::<Test>::post_dispatch(pre, &info, &post_info, len, &Ok(()))
 				.is_ok()
 			);
 			assert_eq!(
-				BlockWeight::get().total(),
+				BlockWeight::<Test>::get().total(),
 				post_info.actual_weight.unwrap() + 256,
 			);
 		})
@@ -599,14 +598,14 @@ mod tests {
 			};
 			let len = 0_usize;
 
-			BlockWeight::mutate(|current_weight| {
+			BlockWeight::<Test>::mutate(|current_weight| {
 				current_weight.set(0, DispatchClass::Mandatory);
 				current_weight.set(128, DispatchClass::Normal);
 			});
 
 			let pre = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &info, len).unwrap();
 			assert_eq!(
-				BlockWeight::get().total(),
+				BlockWeight::<Test>::get().total(),
 				info.weight + 128 + block_weights().get(DispatchClass::Normal).base_extrinsic,
 			);
 
@@ -615,7 +614,7 @@ mod tests {
 				.is_ok()
 			);
 			assert_eq!(
-				BlockWeight::get().total(),
+				BlockWeight::<Test>::get().total(),
 				info.weight + 128 + block_weights().get(DispatchClass::Normal).base_extrinsic,
 			);
 		})

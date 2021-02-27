@@ -121,13 +121,14 @@ mod observer;
 mod until_imported;
 mod voting_rule;
 
-pub use authorities::{SharedAuthoritySet, AuthoritySet};
-pub use finality_proof::{FinalityProofFragment, FinalityProofProvider, StorageAndProofProvider};
+pub use authorities::{AuthoritySet, AuthoritySetChanges, SharedAuthoritySet};
+pub use finality_proof::{FinalityProof, FinalityProofProvider, FinalityProofError};
 pub use notification::{GrandpaJustificationSender, GrandpaJustificationStream};
-pub use import::GrandpaBlockImport;
+pub use import::{find_scheduled_change, find_forced_change, GrandpaBlockImport};
 pub use justification::GrandpaJustification;
 pub use voting_rule::{
-	BeforeBestBlockBy, ThreeQuartersOfTheUnfinalizedChain, VotingRule, VotingRulesBuilder
+	BeforeBestBlockBy, ThreeQuartersOfTheUnfinalizedChain, VotingRule, VotingRuleResult,
+	VotingRulesBuilder,
 };
 pub use finality_grandpa::voter::report;
 
@@ -294,6 +295,8 @@ pub enum Error {
 	Safety(String),
 	/// A timer failed to fire.
 	Timer(io::Error),
+	/// A runtime api request failed.
+	RuntimeApi(sp_api::ApiError),
 }
 
 impl From<GrandpaError> for Error {
@@ -672,11 +675,13 @@ pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
 pub fn grandpa_peers_set_config() -> sc_network::config::NonDefaultSetConfig {
 	sc_network::config::NonDefaultSetConfig {
 		notifications_protocol: communication::GRANDPA_PROTOCOL_NAME.into(),
+		// Notifications reach ~256kiB in size at the time of writing on Kusama and Polkadot.
+		max_notification_size: 1024 * 1024,
 		set_config: sc_network::config::SetConfig {
-			in_peers: 25,
-			out_peers: 25,
+			in_peers: 0,
+			out_peers: 0,
 			reserved_nodes: Vec::new(),
-			non_reserved_mode: sc_network::config::NonReservedPeerMode::Accept,
+			non_reserved_mode: sc_network::config::NonReservedPeerMode::Deny,
 		},
 	}
 }
@@ -695,7 +700,7 @@ where
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
 	C: ClientForGrandpa<Block, BE> + 'static,
-	C::Api: GrandpaApi<Block, Error = sp_blockchain::Error>,
+	C::Api: GrandpaApi<Block>,
 {
 	let GrandpaParams {
 		mut config,
@@ -821,7 +826,7 @@ where
 	Block: BlockT,
 	B: Backend<Block> + 'static,
 	C: ClientForGrandpa<Block, B> + 'static,
-	C::Api: GrandpaApi<Block, Error = sp_blockchain::Error>,
+	C::Api: GrandpaApi<Block>,
 	N: NetworkT<Block> + Sync,
 	NumberFor<Block>: BlockNumberOps,
 	SC: SelectChain<Block> + 'static,
@@ -1039,7 +1044,7 @@ where
 	NumberFor<Block>: BlockNumberOps,
 	SC: SelectChain<Block> + 'static,
 	C: ClientForGrandpa<Block, B> + 'static,
-	C::Api: GrandpaApi<Block, Error = sp_blockchain::Error>,
+	C::Api: GrandpaApi<Block>,
 	VR: VotingRule<Block, C> + Clone + 'static,
 {
 	type Output = Result<(), Error>;

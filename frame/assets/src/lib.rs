@@ -29,9 +29,9 @@
 //! * Asset Freezing
 //! * Asset Destruction (Burning)
 //!
-//! To use it in your runtime, you need to implement the assets [`Config`](./trait.Config.html).
+//! To use it in your runtime, you need to implement the assets [`Config`].
 //!
-//! The supported dispatchable functions are documented in the [`Call`](./enum.Call.html) enum.
+//! The supported dispatchable functions are documented in the [`Call`] enum.
 //!
 //! ### Terminology
 //!
@@ -113,66 +113,30 @@
 mod benchmarking;
 pub mod weights;
 
-use sp_std::{fmt::Debug};
-use sp_runtime::{RuntimeDebug, traits::{
-	Member, AtLeast32BitUnsigned, Zero, StaticLookup, Saturating, CheckedSub, CheckedAdd
-}};
-use codec::{Encode, Decode, HasCompact};
-use frame_support::{Parameter, decl_module, decl_event, decl_storage, decl_error, ensure,
-	traits::{Currency, ReservableCurrency, EnsureOrigin, Get, BalanceStatus::Reserved},
-	dispatch::{DispatchResult, DispatchError},
+use sp_std::prelude::*;
+use sp_runtime::{
+	RuntimeDebug,
+	traits::{
+		AtLeast32BitUnsigned, Zero, StaticLookup, Saturating, CheckedSub, CheckedAdd,
+	}
 };
-use frame_system::ensure_signed;
+use codec::{Encode, Decode, HasCompact};
+use frame_support::{
+	ensure,
+	traits::{Currency, ReservableCurrency, BalanceStatus::Reserved},
+	dispatch::{DispatchError, DispatchResult},
+};
 pub use weights::WeightInfo;
+
+pub use pallet::*;
 
 type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
-/// The module configuration trait.
-pub trait Config: frame_system::Config {
-	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
-
-	/// The units in which we record balances.
-	type Balance: Member + Parameter + AtLeast32BitUnsigned + Default + Copy;
-
-	/// The arithmetic type of asset identifier.
-	type AssetId: Member + Parameter + Default + Copy + HasCompact;
-
-	/// The currency mechanism.
-	type Currency: ReservableCurrency<Self::AccountId>;
-
-	/// The origin which may forcibly create or destroy an asset.
-	type ForceOrigin: EnsureOrigin<Self::Origin>;
-
-	/// The basic amount of funds that must be reserved when creating a new asset class.
-	type AssetDepositBase: Get<BalanceOf<Self>>;
-
-	/// The additional funds that must be reserved for every zombie account that an asset class
-	/// supports.
-	type AssetDepositPerZombie: Get<BalanceOf<Self>>;
-
-	/// Weight information for extrinsics in this pallet.
-	type WeightInfo: WeightInfo;
-
-	/// The amount of funds that must be reserved when creating a new approval.
-	type ApprovalDeposit: Get<BalanceOf<Self>>;
-}
-
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
-/// The amount by which this asset is trusted to be worth anything.
-pub enum Quality {
-	/// Not trusted; assume it's worth nothing and thus requires a consumer reference.
-	Unknown,
-	/// Trusted; the `min_balance` of this asset is assumed to be an adequate ED and thus it gives
-	/// a provider reference.
-	Valuable,
-}
-
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
 pub struct AssetDetails<
-	Balance: Encode + Decode + Clone + Debug + Eq + PartialEq,
-	AccountId: Encode + Decode + Clone + Debug + Eq + PartialEq,
-	DepositBalance: Encode + Decode + Clone + Debug + Eq + PartialEq,
+	Balance,
+	AccountId,
+	DepositBalance,
 > {
 	/// Can change `owner`, `issuer`, `freezer` and `admin` accounts.
 	owner: AccountId,
@@ -184,94 +148,213 @@ pub struct AssetDetails<
 	freezer: AccountId,
 	/// The total supply across all accounts.
 	supply: Balance,
-	/// The balance deposited for this asset.
-	///
-	/// This pays for the data stored here together with any virtual accounts.
+	/// The balance deposited for this asset. This pays for the data stored here.
 	deposit: DepositBalance,
-	/// The number of balance-holding accounts that this asset may have, excluding those that were
-	/// created when they had a system-level ED.
-	max_zombies: u32,
 	/// The ED for virtual accounts.
 	min_balance: Balance,
-	/// The current number of zombie accounts.
-	zombies: u32,
+	/// If `true`, then any account with this asset is given a provider reference. Otherwise, it
+	/// requires a consumer reference.
+	is_provider: bool,
 	/// The total number of accounts.
 	accounts: u32,
-	/// Whether the asset is considered valuable.
-	quality: Quality,
+	/// The total number of accounts for which we have placed a self-sufficient reference.
+	provideds: u32,
+	/// The total number of approvals.
+	approvals: u32,
+	/// Whether the asset is frozen for non-admin transfers.
+	is_frozen: bool,
+}
+
+impl<Balance, AccountId, DepositBalance> AssetDetails<Balance, AccountId, DepositBalance> {
+	pub fn destroy_witness(&self) -> DestroyWitness {
+		DestroyWitness {
+			accounts: self.accounts,
+			provideds: self.provideds,
+			approvals: self.approvals,
+		}
+	}
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default)]
-pub struct AssetBalance<
-	Balance: Encode + Decode + Clone + Debug + Eq + PartialEq,
-> {
+pub struct AssetBalance<Balance> {
 	/// The balance.
 	balance: Balance,
 	/// Whether the account is frozen.
 	is_frozen: bool,
-	/// Whether the account is a zombie. If not, then it has a reference.
-	is_zombie: bool,
+	/// `true` if this balance gave the account a self-sufficient reference.
+	provided: bool,
 }
 
-decl_storage! {
-	trait Store for Module<T: Config> as Assets {
-		/// Details of an asset.
-		Asset: map hasher(blake2_128_concat) T::AssetId => Option<AssetDetails<
-			T::Balance,
-			T::AccountId,
-			BalanceOf<T>,
-		>>;
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default)]
+pub struct AssetMetadata<DepositBalance> {
+	/// The balance deposited for this metadata.
+	///
+	/// This pays for the data stored in this struct.
+	deposit: DepositBalance,
+	/// The user friendly name of this asset. Limited in length by `StringLimit`.
+	name: Vec<u8>,
+	/// The ticker symbol for this asset. Limited in length by `StringLimit`.
+	symbol: Vec<u8>,
+	/// The number of decimals this asset uses to represent one unit.
+	decimals: u8,
+}
 
-		/// The number of units of assets held by any given account.
-		Account: double_map
-			hasher(blake2_128_concat) T::AssetId,
-			hasher(blake2_128_concat) T::AccountId
-			=> AssetBalance<T::Balance>;
+/// Witness data for the destroy transactions.
+// TODO: make compact encoding.
+#[derive(Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
+pub struct DestroyWitness {
+	/// The number of accounts holding the asset.
+	accounts: u32,
+	/// The number of accounts holding the asset with a provider reference.
+	provideds: u32,
+	/// The number of transfer-approvals of the asset.
+	approvals: u32,
+}
 
-		/// Approved balance transfers. First balance is the amount approved for transfer. Second
-		/// is the amount of `T::Currency` reserved for storing this.
-		Approvals: double_map
-			hasher(blake2_128_concat) T::AssetId,
-			hasher(blake2_128_concat) (T::AccountId, T::AccountId)
-			=> (T::Balance, T::Balance);
+// TODO: transaction to alter `is_provider`.
+
+#[frame_support::pallet]
+pub mod pallet {
+	use frame_support::{
+		dispatch::DispatchResultWithPostInfo,
+		pallet_prelude::*,
+	};
+	use frame_system::pallet_prelude::*;
+	use super::*;
+
+	#[pallet::pallet]
+	#[pallet::generate_store(pub(super) trait Store)]
+	pub struct Pallet<T>(_);
+
+	#[pallet::config]
+	/// The module configuration trait.
+	pub trait Config: frame_system::Config {
+		/// The overarching event type.
+		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+
+		/// The units in which we record balances.
+		type Balance: Member + Parameter + AtLeast32BitUnsigned + Default + Copy;
+
+		/// The arithmetic type of asset identifier.
+		type AssetId: Member + Parameter + Default + Copy + HasCompact;
+
+		/// The currency mechanism.
+		type Currency: ReservableCurrency<Self::AccountId>;
+
+		/// The origin which may forcibly create or destroy an asset.
+		type ForceOrigin: EnsureOrigin<Self::Origin>;
+
+		/// The basic amount of funds that must be reserved for an asset.
+		type AssetDeposit: Get<BalanceOf<Self>>;
+
+		/// The basic amount of funds that must be reserved when adding metadata to your asset.
+		type MetadataDepositBase: Get<BalanceOf<Self>>;
+
+		/// The additional funds that must be reserved for the number of bytes you store in your
+		/// metadata.
+		type MetadataDepositPerByte: Get<BalanceOf<Self>>;
+
+		/// The amount of funds that must be reserved when creating a new approval.
+		type ApprovalDeposit: Get<BalanceOf<Self>>;
+
+		/// The maximum length of a name or symbol stored on-chain.
+		type StringLimit: Get<u32>;
+
+		/// Weight information for extrinsics in this pallet.
+		type WeightInfo: WeightInfo;
 	}
-}
 
-decl_event! {
-	pub enum Event<T> where
-		<T as frame_system::Config>::AccountId,
-		<T as Config>::Balance,
-		<T as Config>::AssetId,
-	{
+	#[pallet::storage]
+	/// Details of an asset.
+	pub(super) type Asset<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		T::AssetId,
+		AssetDetails<T::Balance, T::AccountId, BalanceOf<T>>
+	>;
+
+	#[pallet::storage]
+	/// The number of units of assets held by any given account.
+	pub(super) type Account<T: Config> = StorageDoubleMap<
+		_,
+		Blake2_128Concat,
+		T::AssetId,
+		Blake2_128Concat,
+		T::AccountId,
+		AssetBalance<T::Balance>,
+		ValueQuery
+	>;
+
+	#[pallet::storage]
+	/// Approved balance transfers. First balance is the amount approved for transfer. Second
+	/// is the amount of `T::Currency` reserved for storing this.
+	pub(super) type Approvals<T: Config> = StorageDoubleMap<
+		_,
+		Blake2_128Concat,
+		T::AssetId,
+		Blake2_128Concat,
+		(T::AccountId, T::AccountId),
+		(T::Balance, BalanceOf<T>),
+		ValueQuery
+	>;
+
+	#[pallet::storage]
+	/// Metadata of an asset.
+	pub(super) type Metadata<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		T::AssetId,
+		AssetMetadata<BalanceOf<T>>,
+		ValueQuery
+	>;
+
+	#[pallet::event]
+	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	#[pallet::metadata(T::AccountId = "AccountId", T::Balance = "Balance", T::AssetId = "AssetId")]
+	pub enum Event<T: Config> {
 		/// Some asset class was created. \[asset_id, creator, owner\]
-		Created(AssetId, AccountId, AccountId),
+		Created(T::AssetId, T::AccountId, T::AccountId),
 		/// Some assets were issued. \[asset_id, owner, total_supply\]
-		Issued(AssetId, AccountId, Balance),
+		Issued(T::AssetId, T::AccountId, T::Balance),
 		/// Some assets were transferred. \[asset_id, from, to, amount\]
-		Transferred(AssetId, AccountId, AccountId, Balance),
+		Transferred(T::AssetId, T::AccountId, T::AccountId, T::Balance),
 		/// Some assets were destroyed. \[asset_id, owner, balance\]
-		Burned(AssetId, AccountId, Balance),
+		Burned(T::AssetId, T::AccountId, T::Balance),
 		/// The management team changed \[asset_id, issuer, admin, freezer\]
-		TeamChanged(AssetId, AccountId, AccountId, AccountId),
+		TeamChanged(T::AssetId, T::AccountId, T::AccountId, T::AccountId),
 		/// The owner changed \[asset_id, owner\]
-		OwnerChanged(AssetId, AccountId),
-		/// Some assets was transferred by an admin. \[asset_id, from, to, amount\]
-		ForceTransferred(AssetId, AccountId, AccountId, Balance),
+		OwnerChanged(T::AssetId, T::AccountId),
 		/// Some account `who` was frozen. \[asset_id, who\]
-		Frozen(AssetId, AccountId),
+		Frozen(T::AssetId, T::AccountId),
 		/// Some account `who` was thawed. \[asset_id, who\]
-		Thawed(AssetId, AccountId),
+		Thawed(T::AssetId, T::AccountId),
+		/// Some asset `asset_id` was frozen. \[asset_id\]
+		AssetFrozen(T::AssetId),
+		/// Some asset `asset_id` was thawed. \[asset_id\]
+		AssetThawed(T::AssetId),
 		/// An asset class was destroyed.
-		Destroyed(AssetId),
+		Destroyed(T::AssetId),
 		/// Some asset class was force-created. \[asset_id, owner\]
-		ForceCreated(AssetId, AccountId),
-		/// The maximum amount of zombies allowed has changed. \[asset_id, max_zombies\]
-		MaxZombiesChanged(AssetId, u32),
+		ForceCreated(T::AssetId, T::AccountId),
+		/// New metadata has been set for an asset. \[asset_id, name, symbol, decimals\]
+		MetadataSet(T::AssetId, Vec<u8>, Vec<u8>, u8),
+		/// Additional funds have been approved for transfer to a destination account.
+		/// \[asset_id, source, destination, amount\]
+		ApprovedTransfer(T::AssetId, T::AccountId, T::AccountId, T::Balance),
+		/// An approval for account `beneficiary` was cancelled by `owner`.
+		/// \[id, owner, beneficiary\]
+		ApprovalCancelled(T::AssetId, T::AccountId, T::AccountId),
+		/// An `amount` was transferred in its entirety from `owner` to `destination` by
+		/// the approved `beneficiary`.
+		/// \[id, owner, beneficiary, destination\]
+		ApprovalTransferred(T::AssetId, T::AccountId, T::AccountId, T::AccountId, T::Balance),
 	}
-}
 
-decl_error! {
-	pub enum Error for Module<T: Config> {
+	#[deprecated(note = "use `Event` instead")]
+	pub type RawEvent<T> = Event<T>;
+
+	#[pallet::error]
+	pub enum Error<T> {
 		/// Transfer amount should be non-zero.
 		AmountZero,
 		/// Account balance must be greater than or equal to the transfer amount.
@@ -286,27 +369,25 @@ decl_error! {
 		Frozen,
 		/// The asset ID is already taken.
 		InUse,
-		/// Too many zombie accounts in use.
-		TooManyZombies,
-		/// Attempt to destroy an asset class when non-zombie, reference-bearing accounts exist.
-		RefsLeft,
 		/// Invalid witness data given.
 		BadWitness,
 		/// Minimum balance should be non-zero.
 		MinBalanceZero,
 		/// A mint operation lead to an overflow.
 		Overflow,
-		/// Some internal state is broken.
-		BadState,
+		/// No provider reference exists to allow a non-zero balance of a non-self-sufficient asset.
+		NoProvider,
+		/// Invalid metadata given.
+		BadMetadata,
+		/// No approval exists that would allow the transfer.
+		Unapproved,
 	}
-}
 
-decl_module! {
-	pub struct Module<T: Config> for enum Call where origin: T::Origin {
-		type Error = Error<T>;
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
 
-		fn deposit_event() = default;
-
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {
 		/// Issue a new class of fungible assets from a public origin.
 		///
 		/// This new asset class has no assets initially.
@@ -330,22 +411,20 @@ decl_module! {
 		/// Emits `Created` event when successful.
 		///
 		/// Weight: `O(1)`
-		#[weight = T::WeightInfo::create()]
-		fn create(origin,
-			#[compact] id: T::AssetId,
+		#[pallet::weight(T::WeightInfo::create())]
+		pub(super) fn create(
+			origin: OriginFor<T>,
+			#[pallet::compact] id: T::AssetId,
 			admin: <T::Lookup as StaticLookup>::Source,
-			max_zombies: u32,
 			min_balance: T::Balance,
-		) {
+		) -> DispatchResultWithPostInfo {
 			let owner = ensure_signed(origin)?;
 			let admin = T::Lookup::lookup(admin)?;
 
 			ensure!(!Asset::<T>::contains_key(id), Error::<T>::InUse);
 			ensure!(!min_balance.is_zero(), Error::<T>::MinBalanceZero);
 
-			let deposit = T::AssetDepositPerZombie::get()
-				.saturating_mul(max_zombies.into())
-			 	.saturating_add(T::AssetDepositBase::get());
+			let deposit = T::AssetDeposit::get();
 			T::Currency::reserve(&owner, deposit)?;
 
 			Asset::<T>::insert(id, AssetDetails {
@@ -355,12 +434,15 @@ decl_module! {
 				freezer: admin.clone(),
 				supply: Zero::zero(),
 				deposit,
-				max_zombies,
 				min_balance,
-				zombies: Zero::zero(),
-				accounts: Zero::zero(),
+				is_provider: false,
+				accounts: 0,
+				provideds: 0,
+				approvals: 0,
+				is_frozen: false,
 			});
-			Self::deposit_event(RawEvent::Created(id, owner, admin));
+			Self::deposit_event(Event::Created(id, owner, admin));
+			Ok(().into())
 		}
 
 		/// Issue a new class of fungible assets from a privileged origin.
@@ -384,13 +466,14 @@ decl_module! {
 		/// Emits `ForceCreated` event when successful.
 		///
 		/// Weight: `O(1)`
-		#[weight = T::WeightInfo::force_create()]
-		fn force_create(origin,
-			#[compact] id: T::AssetId,
+		#[pallet::weight(T::WeightInfo::force_create())]
+		pub(super) fn force_create(
+			origin: OriginFor<T>,
+			#[pallet::compact] id: T::AssetId,
 			owner: <T::Lookup as StaticLookup>::Source,
-			#[compact] max_zombies: u32,
-			#[compact] min_balance: T::Balance,
-		) {
+			is_provider: bool,
+			#[pallet::compact] min_balance: T::Balance,
+		) -> DispatchResultWithPostInfo {
 			T::ForceOrigin::ensure_origin(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
 
@@ -404,12 +487,15 @@ decl_module! {
 				freezer: owner.clone(),
 				supply: Zero::zero(),
 				deposit: Zero::zero(),
-				max_zombies,
 				min_balance,
-				zombies: Zero::zero(),
-				accounts: Zero::zero(),
+				is_provider,
+				accounts: 0,
+				provideds: 0,
+				approvals: 0,
+				is_frozen: false,
 			});
-			Self::deposit_event(RawEvent::ForceCreated(id, owner));
+			Self::deposit_event(Event::ForceCreated(id, owner));
+			Ok(().into())
 		}
 
 		/// Destroy a class of fungible assets owned by the sender.
@@ -421,26 +507,23 @@ decl_module! {
 		///
 		/// Emits `Destroyed` event when successful.
 		///
-		/// Weight: `O(z)` where `z` is the number of zombie accounts.
-		#[weight = T::WeightInfo::destroy(*zombies_witness)]
-		fn destroy(origin,
-			#[compact] id: T::AssetId,
-			#[compact] zombies_witness: u32,
-		) -> DispatchResult {
-			let origin = ensure_signed(origin)?;
-
-			Asset::<T>::try_mutate_exists(id, |maybe_details| {
-				let details = maybe_details.take().ok_or(Error::<T>::Unknown)?;
-				ensure!(details.owner == origin, Error::<T>::NoPermission);
-				ensure!(details.accounts == details.zombies, Error::<T>::RefsLeft);
-				ensure!(details.zombies <= zombies_witness, Error::<T>::BadWitness);
-				T::Currency::unreserve(&details.owner, details.deposit);
-
-				*maybe_details = None;
-				Account::<T>::remove_prefix(&id);
-				Self::deposit_event(RawEvent::Destroyed(id));
-				Ok(())
-			})
+		/// Weight: `O(c + p + a)` where:
+		/// - `c = (witness.accounts - witness.provideds)`
+		/// - `p = witness.provideds`
+		/// - `a = witness.approvals`
+//		#[pallet::weight(T::WeightInfo::force_destroy(
+//			witness.accounts.saturating_sub(witness.provideds),
+// 			witness.provideds,
+// 			witness.approvals,
+// 		))]
+		#[pallet::weight(T::WeightInfo::destroy(witness.accounts.saturating_sub(witness.provideds)))]
+		pub(super) fn destroy(
+			origin: OriginFor<T>,
+			#[pallet::compact] id: T::AssetId,
+			/*#[pallet::compact]*/ witness: DestroyWitness,
+		) -> DispatchResultWithPostInfo {
+			let check_owner = ensure_signed(origin)?;
+			Ok(Self::do_destroy(id, witness, Some(check_owner))?.into())
 		}
 
 		/// Destroy a class of fungible assets.
@@ -452,25 +535,23 @@ decl_module! {
 		///
 		/// Emits `Destroyed` event when successful.
 		///
-		/// Weight: `O(1)`
-		#[weight = T::WeightInfo::force_destroy(*zombies_witness)]
-		fn force_destroy(origin,
-			#[compact] id: T::AssetId,
-			#[compact] zombies_witness: u32,
-		) -> DispatchResult {
+		/// Weight: `O(c + p + a)` where:
+		/// - `c = (witness.accounts - witness.provideds)`
+		/// - `p = witness.provideds`
+		/// - `a = witness.approvals`
+//		#[pallet::weight(T::WeightInfo::force_destroy(
+//			witness.accounts.saturating_sub(witness.provideds),
+// 			witness.provideds,
+// 			witness.approvals,
+// 		))]
+		#[pallet::weight(T::WeightInfo::force_destroy(witness.accounts.saturating_sub(witness.provideds)))]
+		pub(super) fn force_destroy(
+			origin: OriginFor<T>,
+			#[pallet::compact] id: T::AssetId,
+			/*#[pallet::compact]*/ witness: DestroyWitness,
+		) -> DispatchResultWithPostInfo {
 			T::ForceOrigin::ensure_origin(origin)?;
-
-			Asset::<T>::try_mutate_exists(id, |maybe_details| {
-				let details = maybe_details.take().ok_or(Error::<T>::Unknown)?;
-				ensure!(details.accounts == details.zombies, Error::<T>::RefsLeft);
-				ensure!(details.zombies <= zombies_witness, Error::<T>::BadWitness);
-				T::Currency::unreserve(&details.owner, details.deposit);
-
-				*maybe_details = None;
-				Account::<T>::remove_prefix(&id);
-				Self::deposit_event(RawEvent::Destroyed(id));
-				Ok(())
-			})
+			Ok(Self::do_destroy(id, witness, None)?.into())
 		}
 
 		/// Mint assets of a particular class.
@@ -485,12 +566,13 @@ decl_module! {
 		///
 		/// Weight: `O(1)`
 		/// Modes: Pre-existing balance of `beneficiary`; Account pre-existence of `beneficiary`.
-		#[weight = T::WeightInfo::mint()]
-		fn mint(origin,
-			#[compact] id: T::AssetId,
+		#[pallet::weight(T::WeightInfo::mint())]
+		pub(super) fn mint(
+			origin: OriginFor<T>,
+			#[pallet::compact] id: T::AssetId,
 			beneficiary: <T::Lookup as StaticLookup>::Source,
-			#[compact] amount: T::Balance
-		) -> DispatchResult {
+			#[pallet::compact] amount: T::Balance
+		) -> DispatchResultWithPostInfo {
 			let origin = ensure_signed(origin)?;
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
 
@@ -500,17 +582,17 @@ decl_module! {
 				ensure!(&origin == &details.issuer, Error::<T>::NoPermission);
 				details.supply = details.supply.checked_add(&amount).ok_or(Error::<T>::Overflow)?;
 
-				Account::<T>::try_mutate(id, &beneficiary, |t| -> DispatchResult {
+				Account::<T>::try_mutate(id, &beneficiary, |t| -> DispatchResultWithPostInfo {
 					let new_balance = t.balance.saturating_add(amount);
 					ensure!(new_balance >= details.min_balance, Error::<T>::BalanceLow);
 					if t.balance.is_zero() {
-						t.is_zombie = Self::new_account(&beneficiary, details)?;
+						t.provided = Self::new_account(&beneficiary, details)?;
 					}
 					t.balance = new_balance;
-					Ok(())
+					Ok(().into())
 				})?;
-				Self::deposit_event(RawEvent::Issued(id, beneficiary, amount));
-				Ok(())
+				Self::deposit_event(Event::Issued(id, beneficiary, amount));
+				Ok(().into())
 			})
 		}
 
@@ -529,12 +611,13 @@ decl_module! {
 		///
 		/// Weight: `O(1)`
 		/// Modes: Post-existence of `who`; Pre & post Zombie-status of `who`.
-		#[weight = T::WeightInfo::burn()]
-		fn burn(origin,
-			#[compact] id: T::AssetId,
+		#[pallet::weight(T::WeightInfo::burn())]
+		pub(super) fn burn(
+			origin: OriginFor<T>,
+			#[pallet::compact] id: T::AssetId,
 			who: <T::Lookup as StaticLookup>::Source,
-			#[compact] amount: T::Balance
-		) -> DispatchResult {
+			#[pallet::compact] amount: T::Balance
+		) -> DispatchResultWithPostInfo {
 			let origin = ensure_signed(origin)?;
 			let who = T::Lookup::lookup(who)?;
 
@@ -551,7 +634,7 @@ decl_module! {
 						account.balance -= burned;
 						*maybe_account = if account.balance < d.min_balance {
 							burned += account.balance;
-							Self::dead_account(&who, d, account.is_zombie);
+							Self::dead_account(&who, d, account.provided);
 							None
 						} else {
 							Some(account)
@@ -562,8 +645,8 @@ decl_module! {
 
 				d.supply = d.supply.saturating_sub(burned);
 
-				Self::deposit_event(RawEvent::Burned(id, who, burned));
-				Ok(())
+				Self::deposit_event(Event::Burned(id, who, burned));
+				Ok(().into())
 			})
 		}
 
@@ -585,58 +668,17 @@ decl_module! {
 		/// Weight: `O(1)`
 		/// Modes: Pre-existence of `target`; Post-existence of sender; Prior & post zombie-status
 		/// of sender; Account pre-existence of `target`.
-		#[weight = T::WeightInfo::transfer()]
-		fn transfer(origin,
-			#[compact] id: T::AssetId,
+		#[pallet::weight(T::WeightInfo::transfer())]
+		pub(super) fn transfer(
+			origin: OriginFor<T>,
+			#[pallet::compact] id: T::AssetId,
 			target: <T::Lookup as StaticLookup>::Source,
-			#[compact] amount: T::Balance
-		) -> DispatchResult {
+			#[pallet::compact] amount: T::Balance
+		) -> DispatchResultWithPostInfo {
 			let origin = ensure_signed(origin)?;
-			ensure!(!amount.is_zero(), Error::<T>::AmountZero);
-
-			let mut origin_account = Account::<T>::get(id, &origin);
-			ensure!(!origin_account.is_frozen, Error::<T>::Frozen);
-			origin_account.balance = origin_account.balance.checked_sub(&amount)
-				.ok_or(Error::<T>::BalanceLow)?;
-
 			let dest = T::Lookup::lookup(target)?;
-			Asset::<T>::try_mutate(id, |maybe_details| {
-				let details = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
 
-				if dest == origin {
-					return Ok(())
-				}
-
-				let mut amount = amount;
-				if origin_account.balance < details.min_balance {
-					amount += origin_account.balance;
-					origin_account.balance = Zero::zero();
-				}
-
-				Account::<T>::try_mutate(id, &dest, |a| -> DispatchResult {
-					let new_balance = a.balance.saturating_add(amount);
-					ensure!(new_balance >= details.min_balance, Error::<T>::BalanceLow);
-					if a.balance.is_zero() {
-						a.is_zombie = Self::new_account(&dest, details)?;
-					}
-					a.balance = new_balance;
-					Ok(())
-				})?;
-
-				match origin_account.balance.is_zero() {
-					false => {
-						Self::dezombify(&origin, details, &mut origin_account.is_zombie);
-						Account::<T>::insert(id, &origin, &origin_account)
-					}
-					true => {
-						Self::dead_account(&origin, details, origin_account.is_zombie);
-						Account::<T>::remove(id, &origin);
-					}
-				}
-
-				Self::deposit_event(RawEvent::Transferred(id, origin, dest, amount));
-				Ok(())
-			})
+			Ok(Self::do_transfer(id, origin, dest, amount, None)?.into())
 		}
 
 		/// Move some assets from one account to another.
@@ -658,59 +700,19 @@ decl_module! {
 		/// Weight: `O(1)`
 		/// Modes: Pre-existence of `dest`; Post-existence of `source`; Prior & post zombie-status
 		/// of `source`; Account pre-existence of `dest`.
-		#[weight = T::WeightInfo::force_transfer()]
-		fn force_transfer(origin,
-			#[compact] id: T::AssetId,
+		#[pallet::weight(T::WeightInfo::force_transfer())]
+		pub(super) fn force_transfer(
+			origin: OriginFor<T>,
+			#[pallet::compact] id: T::AssetId,
 			source: <T::Lookup as StaticLookup>::Source,
 			dest: <T::Lookup as StaticLookup>::Source,
-			#[compact] amount: T::Balance,
-		) -> DispatchResult {
+			#[pallet::compact] amount: T::Balance,
+		) -> DispatchResultWithPostInfo {
 			let origin = ensure_signed(origin)?;
-
 			let source = T::Lookup::lookup(source)?;
-			let mut source_account = Account::<T>::get(id, &source);
-			let mut amount = amount.min(source_account.balance);
-			ensure!(!amount.is_zero(), Error::<T>::AmountZero);
-
 			let dest = T::Lookup::lookup(dest)?;
-			if dest == source {
-				return Ok(())
-			}
 
-			Asset::<T>::try_mutate(id, |maybe_details| {
-				let details = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
-				ensure!(&origin == &details.admin, Error::<T>::NoPermission);
-
-				source_account.balance -= amount;
-				if source_account.balance < details.min_balance {
-					amount += source_account.balance;
-					source_account.balance = Zero::zero();
-				}
-
-				Account::<T>::try_mutate(id, &dest, |a| -> DispatchResult {
-					let new_balance = a.balance.saturating_add(amount);
-					ensure!(new_balance >= details.min_balance, Error::<T>::BalanceLow);
-					if a.balance.is_zero() {
-						a.is_zombie = Self::new_account(&dest, details)?;
-					}
-					a.balance = new_balance;
-					Ok(())
-				})?;
-
-				match source_account.balance.is_zero() {
-					false => {
-						Self::dezombify(&source, details, &mut source_account.is_zombie);
-						Account::<T>::insert(id, &source, &source_account)
-					}
-					true => {
-						Self::dead_account(&source, details, source_account.is_zombie);
-						Account::<T>::remove(id, &source);
-					}
-				}
-
-				Self::deposit_event(RawEvent::ForceTransferred(id, source, dest, amount));
-				Ok(())
-			})
+			Ok(Self::do_transfer(id, source, dest, amount, Some(origin))?.into())
 		}
 
 		/// Disallow further unprivileged transfers from an account.
@@ -723,8 +725,12 @@ decl_module! {
 		/// Emits `Frozen`.
 		///
 		/// Weight: `O(1)`
-		#[weight = T::WeightInfo::freeze()]
-		fn freeze(origin, #[compact] id: T::AssetId, who: <T::Lookup as StaticLookup>::Source) {
+		#[pallet::weight(T::WeightInfo::freeze())]
+		pub(super) fn freeze(
+			origin: OriginFor<T>,
+			#[pallet::compact] id: T::AssetId,
+			who: <T::Lookup as StaticLookup>::Source
+		) -> DispatchResultWithPostInfo {
 			let origin = ensure_signed(origin)?;
 
 			let d = Asset::<T>::get(id).ok_or(Error::<T>::Unknown)?;
@@ -735,6 +741,7 @@ decl_module! {
 			Account::<T>::mutate(id, &who, |a| a.is_frozen = true);
 
 			Self::deposit_event(Event::<T>::Frozen(id, who));
+			Ok(().into())
 		}
 
 		/// Allow unprivileged transfers from an account again.
@@ -747,8 +754,13 @@ decl_module! {
 		/// Emits `Thawed`.
 		///
 		/// Weight: `O(1)`
-		#[weight = T::WeightInfo::thaw()]
-		fn thaw(origin, #[compact] id: T::AssetId, who: <T::Lookup as StaticLookup>::Source) {
+		#[pallet::weight(T::WeightInfo::thaw())]
+		pub(super) fn thaw(
+			origin: OriginFor<T>,
+			#[pallet::compact]
+			id: T::AssetId,
+			who: <T::Lookup as StaticLookup>::Source
+		) -> DispatchResultWithPostInfo {
 			let origin = ensure_signed(origin)?;
 
 			let details = Asset::<T>::get(id).ok_or(Error::<T>::Unknown)?;
@@ -759,6 +771,61 @@ decl_module! {
 			Account::<T>::mutate(id, &who, |a| a.is_frozen = false);
 
 			Self::deposit_event(Event::<T>::Thawed(id, who));
+			Ok(().into())
+		}
+
+		/// Disallow further unprivileged transfers for the asset class.
+		///
+		/// Origin must be Signed and the sender should be the Freezer of the asset `id`.
+		///
+		/// - `id`: The identifier of the asset to be frozen.
+		///
+		/// Emits `Frozen`.
+		///
+		/// Weight: `O(1)`
+		#[pallet::weight(T::WeightInfo::freeze_asset())]
+		pub(super) fn freeze_asset(
+			origin: OriginFor<T>,
+			#[pallet::compact] id: T::AssetId
+		) -> DispatchResultWithPostInfo {
+			let origin = ensure_signed(origin)?;
+
+			Asset::<T>::try_mutate(id, |maybe_details| {
+				let d = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
+				ensure!(&origin == &d.freezer, Error::<T>::NoPermission);
+
+				d.is_frozen = true;
+
+				Self::deposit_event(Event::<T>::AssetFrozen(id));
+				Ok(().into())
+			})
+		}
+
+		/// Allow unprivileged transfers for the asset again.
+		///
+		/// Origin must be Signed and the sender should be the Admin of the asset `id`.
+		///
+		/// - `id`: The identifier of the asset to be frozen.
+		///
+		/// Emits `Thawed`.
+		///
+		/// Weight: `O(1)`
+		#[pallet::weight(T::WeightInfo::thaw_asset())]
+		pub(super) fn thaw_asset(
+			origin: OriginFor<T>,
+			#[pallet::compact] id: T::AssetId
+		) -> DispatchResultWithPostInfo {
+			let origin = ensure_signed(origin)?;
+
+			Asset::<T>::try_mutate(id, |maybe_details| {
+				let d = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
+				ensure!(&origin == &d.admin, Error::<T>::NoPermission);
+
+				d.is_frozen = false;
+
+				Self::deposit_event(Event::<T>::AssetThawed(id));
+				Ok(().into())
+			})
 		}
 
 		/// Change the Owner of an asset.
@@ -771,26 +838,30 @@ decl_module! {
 		/// Emits `OwnerChanged`.
 		///
 		/// Weight: `O(1)`
-		#[weight = T::WeightInfo::transfer_ownership()]
-		fn transfer_ownership(origin,
-			#[compact] id: T::AssetId,
+		#[pallet::weight(T::WeightInfo::transfer_ownership())]
+		pub(super) fn transfer_ownership(
+			origin: OriginFor<T>,
+			#[pallet::compact] id: T::AssetId,
 			owner: <T::Lookup as StaticLookup>::Source,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			let origin = ensure_signed(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
 
 			Asset::<T>::try_mutate(id, |maybe_details| {
 				let details = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
 				ensure!(&origin == &details.owner, Error::<T>::NoPermission);
-				if details.owner == owner { return Ok(()) }
+				if details.owner == owner { return Ok(().into()) }
+
+				let metadata_deposit = Metadata::<T>::get(id).deposit;
+				let deposit = details.deposit + metadata_deposit;
 
 				// Move the deposit to the new owner.
-				T::Currency::repatriate_reserved(&details.owner, &owner, details.deposit, Reserved)?;
+				T::Currency::repatriate_reserved(&details.owner, &owner, deposit, Reserved)?;
 
 				details.owner = owner.clone();
 
-				Self::deposit_event(RawEvent::OwnerChanged(id, owner));
-				Ok(())
+				Self::deposit_event(Event::OwnerChanged(id, owner));
+				Ok(().into())
 			})
 		}
 
@@ -806,13 +877,14 @@ decl_module! {
 		/// Emits `TeamChanged`.
 		///
 		/// Weight: `O(1)`
-		#[weight = T::WeightInfo::set_team()]
-		fn set_team(origin,
-			#[compact] id: T::AssetId,
+		#[pallet::weight(T::WeightInfo::set_team())]
+		pub(super) fn set_team(
+			origin: OriginFor<T>,
+			#[pallet::compact] id: T::AssetId,
 			issuer: <T::Lookup as StaticLookup>::Source,
 			admin: <T::Lookup as StaticLookup>::Source,
 			freezer: <T::Lookup as StaticLookup>::Source,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			let origin = ensure_signed(origin)?;
 			let issuer = T::Lookup::lookup(issuer)?;
 			let admin = T::Lookup::lookup(admin)?;
@@ -826,105 +898,161 @@ decl_module! {
 				details.admin = admin.clone();
 				details.freezer = freezer.clone();
 
-				Self::deposit_event(RawEvent::TeamChanged(id, issuer, admin, freezer));
-				Ok(())
+				Self::deposit_event(Event::TeamChanged(id, issuer, admin, freezer));
+				Ok(().into())
 			})
 		}
 
-		#[weight = T::WeightInfo::set_max_zombies()]
-		fn set_max_zombies(origin,
-			#[compact] id: T::AssetId,
-			#[compact] max_zombies: u32,
-		) -> DispatchResult {
+		/// Set the metadata for an asset.
+		///
+		/// NOTE: There is no `unset_metadata` call. Simply pass an empty name, symbol,
+		/// and 0 decimals to this function to remove the metadata of an asset and
+		/// return your deposit.
+		///
+		/// Origin must be Signed and the sender should be the Owner of the asset `id`.
+		///
+		/// Funds of sender are reserved according to the formula:
+		/// `MetadataDepositBase + MetadataDepositPerByte * (name.len + symbol.len)` taking into
+		/// account any already reserved funds.
+		///
+		/// - `id`: The identifier of the asset to update.
+		/// - `name`: The user friendly name of this asset. Limited in length by `StringLimit`.
+		/// - `symbol`: The exchange symbol for this asset. Limited in length by `StringLimit`.
+		/// - `decimals`: The number of decimals this asset uses to represent one unit.
+		///
+		/// Emits `MaxZombiesChanged`.
+		///
+		/// Weight: `O(1)`
+		#[pallet::weight(T::WeightInfo::set_metadata(name.len() as u32, symbol.len() as u32))]
+		pub(super) fn set_metadata(
+			origin: OriginFor<T>,
+			#[pallet::compact] id: T::AssetId,
+			name: Vec<u8>,
+			symbol: Vec<u8>,
+			decimals: u8,
+		) -> DispatchResultWithPostInfo {
 			let origin = ensure_signed(origin)?;
 
-			Asset::<T>::try_mutate(id, |maybe_details| {
-				let details = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
-				ensure!(&origin == &details.owner, Error::<T>::NoPermission);
-				ensure!(max_zombies >= details.zombies, Error::<T>::TooManyZombies);
+			ensure!(name.len() <= T::StringLimit::get() as usize, Error::<T>::BadMetadata);
+			ensure!(symbol.len() <= T::StringLimit::get() as usize, Error::<T>::BadMetadata);
 
-				let new_deposit = T::AssetDepositPerZombie::get()
-					.saturating_mul(max_zombies.into())
-					.saturating_add(T::AssetDepositBase::get());
+			let d = Asset::<T>::get(id).ok_or(Error::<T>::Unknown)?;
+			ensure!(&origin == &d.owner, Error::<T>::NoPermission);
 
-				if new_deposit > details.deposit {
-					T::Currency::reserve(&origin, new_deposit - details.deposit)?;
+			Metadata::<T>::try_mutate_exists(id, |metadata| {
+				let bytes_used = name.len() + symbol.len();
+				let old_deposit = match metadata {
+					Some(m) => m.deposit,
+					None => Default::default()
+				};
+
+				// Metadata is being removed
+				if bytes_used.is_zero() && decimals.is_zero() {
+					T::Currency::unreserve(&origin, old_deposit);
+					*metadata = None;
 				} else {
-					T::Currency::unreserve(&origin, details.deposit - new_deposit);
+					let new_deposit = T::MetadataDepositPerByte::get()
+						.saturating_mul(((name.len() + symbol.len()) as u32).into())
+						.saturating_add(T::MetadataDepositBase::get());
+
+					if new_deposit > old_deposit {
+						T::Currency::reserve(&origin, new_deposit - old_deposit)?;
+					} else {
+						T::Currency::unreserve(&origin, old_deposit - new_deposit);
+					}
+
+					*metadata = Some(AssetMetadata {
+						deposit: new_deposit,
+						name: name.clone(),
+						symbol: symbol.clone(),
+						decimals,
+					})
 				}
 
-				details.max_zombies = max_zombies;
-
-				Self::deposit_event(RawEvent::MaxZombiesChanged(id, max_zombies));
-				Ok(())
+				Self::deposit_event(Event::MetadataSet(id, name, symbol, decimals));
+				Ok(().into())
 			})
 		}
 
-		#[weight = 0]
-		fn approve_transfer(origin,
-			#[compact] id: T::AssetId,
-			destination: <T::Lookup as StaticLookup>::Source,
-			#[compact] amount: BalanceOf<T>,
-		) -> DispatchResult {
-			let origin = ensure_signed(origin)?;
-			let destination = T::Lookup::lookup(destination)?;
+		// TODO: Weight
+		#[pallet::weight(0)]
+		fn approve_transfer(
+			origin: OriginFor<T>,
+			#[pallet::compact] id: T::AssetId,
+			beneficiary: <T::Lookup as StaticLookup>::Source,
+			#[pallet::compact] amount: T::Balance,
+		) -> DispatchResultWithPostInfo {
+			let owner = ensure_signed(origin)?;
+			let beneficiary = T::Lookup::lookup(beneficiary)?;
 
-			let key = (origin, destination);
-			Approvals::<T>::try_mutate(id, &key, |&mut (mut approved, mut deposit)| {
+			let key = (owner, beneficiary);
+			Approvals::<T>::try_mutate(id, &key, |&mut (ref mut approved, ref mut deposit)| -> DispatchResult {
 				let approval_deposit = T::ApprovalDeposit::get();
-				if deposit < approval_deposit {
-					T::Currency::reserve(origin, approval_deposit - deposit)?;
-					deposit = approval_deposit;
+				if *deposit < approval_deposit {
+					T::Currency::reserve(&key.0, approval_deposit - *deposit)?;
+					*deposit = approval_deposit;
 				}
-				approved = approved.saturating_add(&amount)
-			});
-			let (origin, destination) = key;
-			Self::deposit_event(RawEvent::TransferApproved(id, origin, destination, amount));
+				*approved = approved.saturating_add(amount);
+				Ok(())
+			})?;
+			let (owner, beneficiary) = key;
+
+			Self::deposit_event(Event::ApprovedTransfer(id, owner, beneficiary, amount));
+			Ok(().into())
 		}
 
-		#[weight = 0]
-		fn cancel_approval(origin,
-			#[compact] id: T::AssetId,
-			destination: <T::Lookup as StaticLookup>::Source,
-		) -> DispatchResult {
-			let origin = ensure_signed(origin)?;
-			let destination = T::Lookup::lookup(destination)?;
-			let key = (origin, destination);
-			Approvals::<T>::remove(id, &key);
-			let (origin, destination) = key;
-			Self::deposit_event(RawEvent::ApprovalCancelled(id, origin, destination));
+		// TODO: Weight
+		#[pallet::weight(0)]
+		fn cancel_approval(
+			origin: OriginFor<T>,
+			#[pallet::compact] id: T::AssetId,
+			beneficiary: <T::Lookup as StaticLookup>::Source,
+		) -> DispatchResultWithPostInfo {
+			let owner = ensure_signed(origin)?;
+			let beneficiary = T::Lookup::lookup(beneficiary)?;
+			let key = (owner, beneficiary);
+			let approval = Approvals::<T>::take(id, &key);
+			let (owner, beneficiary) = key;
+			T::Currency::unreserve(&owner, approval.1);
+
+			Self::deposit_event(Event::ApprovalCancelled(id, owner, beneficiary));
+			Ok(().into())
 		}
 
-		#[weight = 0]
-		fn transfer_approved(origin,
-			#[compact] id: T::AssetId,
-			source: <T::Lookup as StaticLookup>::Source,
+		// TODO: Weight
+		#[pallet::weight(0)]
+		fn transfer_approved(
+			origin: OriginFor<T>,
+			#[pallet::compact] id: T::AssetId,
+			owner: <T::Lookup as StaticLookup>::Source,
 			destination: <T::Lookup as StaticLookup>::Source,
-			#[compact] amount: BalanceOf<T>,
-		) -> DispatchResult {
-			let origin = ensure_signed(origin)?;
-			let source = T::Lookup::lookup(destination)?;
+			#[pallet::compact] amount: T::Balance,
+		) -> DispatchResultWithPostInfo {
+			let beneficiary = ensure_signed(origin)?;
+			let owner = T::Lookup::lookup(owner)?;
 			let destination = T::Lookup::lookup(destination)?;
 
-			let key = ;
-			Approvals::<T>::try_mutate_exists(id, (source.clone(), origin.clone()), |approved| {
+			let key = (owner, beneficiary);
+			Approvals::<T>::try_mutate_exists(id, &key, |approved| -> DispatchResult {
 				let (mut remaining, deposit) = approved.take().unwrap_or_default();
 				ensure!(remaining >= amount, Error::<T>::Unapproved);
 				remaining -= amount;
 				if remaining.is_zero() {
-					T::Currency::unreserve(source, deposit);
+					T::Currency::unreserve(&key.0, deposit);
 				} else {
 					*approved = Some((remaining, deposit));
 				}
-			});
-			let (origin, destination) = key;
-			Self::deposit_event(RawEvent::ApprovalCancelled(id, origin, destination));
+				Ok(())
+			})?;
+			let (owner, beneficiary) = key;
+			Self::deposit_event(Event::ApprovalTransferred(id, owner, beneficiary, destination, amount));
+			Ok(().into())
 		}
 	}
 }
 
 // The main implementation block for the module.
-impl<T: Config> Module<T> {
+impl<T: Config> Pallet<T> {
 	// Public immutables
 
 	/// Get the asset `id` balance of `who`.
@@ -937,83 +1065,154 @@ impl<T: Config> Module<T> {
 		Asset::<T>::get(id).map(|x| x.supply).unwrap_or_else(Zero::zero)
 	}
 
-	/// Check the number of zombies allow yet for an asset.
-	pub fn zombie_allowance(id: T::AssetId) -> u32 {
-		Asset::<T>::get(id).map(|x| x.max_zombies - x.zombies).unwrap_or_else(Zero::zero)
-	}
-
 	fn new_account(
 		who: &T::AccountId,
 		d: &mut AssetDetails<T::Balance, T::AccountId, BalanceOf<T>>,
 	) -> Result<bool, DispatchError> {
 		let accounts = d.accounts.checked_add(1).ok_or(Error::<T>::Overflow)?;
-		let r = Ok(if frame_system::Module::<T>::account_exists(who) {
-			frame_system::Module::<T>::inc_consumers(who).map_err(|_| Error::<T>::BadState)?;
-			false
-		} else {
-			ensure!(d.zombies < d.max_zombies, Error::<T>::TooManyZombies);
-			d.zombies += 1;
+		let is_provided = if d.is_provider {
+			frame_system::Module::<T>::inc_sufficients(who);
+			d.provideds += 1;
 			true
-		});
+		} else {
+			frame_system::Module::<T>::inc_consumers(who).map_err(|_| Error::<T>::NoProvider)?;
+			false
+		};
 		d.accounts = accounts;
-		r
-	}
-
-	/// If `who`` exists in system and it's a zombie, dezombify it.
-	fn dezombify(
-		who: &T::AccountId,
-		d: &mut AssetDetails<T::Balance, T::AccountId, BalanceOf<T>>,
-		is_zombie: &mut bool,
-	) {
-		if *is_zombie && frame_system::Module::<T>::account_exists(who) {
-			// If the account exists, then it should have at least one provider
-			// so this cannot fail... but being defensive anyway.
-			let _ = frame_system::Module::<T>::inc_consumers(who);
-			*is_zombie = false;
-			d.zombies = d.zombies.saturating_sub(1);
-		}
+		Ok(is_provided)
 	}
 
 	fn dead_account(
 		who: &T::AccountId,
 		d: &mut AssetDetails<T::Balance, T::AccountId, BalanceOf<T>>,
-		is_zombie: bool,
+		provided: bool,
 	) {
-		if is_zombie {
-			d.zombies = d.zombies.saturating_sub(1);
+		if provided {
+			d.provideds = d.provideds.saturating_sub(1);
+			let e = frame_system::Module::<T>::dec_sufficients(who);
+			debug_assert!(e.is_ok(), "Assets: Self-sufficient refcount underflow");
 		} else {
 			frame_system::Module::<T>::dec_consumers(who);
 		}
 		d.accounts = d.accounts.saturating_sub(1);
+	}
+
+	fn do_destroy(
+		id: T::AssetId,
+		witness: DestroyWitness,
+		maybe_check_owner: Option<T::AccountId>,
+	) -> DispatchResult {
+		Asset::<T>::try_mutate_exists(id, |maybe_details| {
+			let mut details = maybe_details.take().ok_or(Error::<T>::Unknown)?;
+			if let Some(check_owner) = maybe_check_owner {
+				ensure!(details.owner == check_owner, Error::<T>::NoPermission);
+			}
+			ensure!(details.accounts == witness.accounts, Error::<T>::BadWitness);
+			ensure!(details.provideds == witness.provideds, Error::<T>::BadWitness);
+			ensure!(details.approvals == witness.approvals, Error::<T>::BadWitness);
+
+			for (who, v) in Account::<T>::drain_prefix(id) {
+				Self::dead_account(&who, &mut details, v.provided);
+			}
+			debug_assert_eq!(details.accounts, 0);
+			debug_assert_eq!(details.provideds, 0);
+
+			let metadata = Metadata::<T>::take(&id);
+			T::Currency::unreserve(&details.owner, details.deposit.saturating_add(metadata.deposit));
+
+			Approvals::<T>::remove_prefix(&id);
+			Self::deposit_event(Event::Destroyed(id));
+
+			// TODO: could use postinfo to reflect the actual number of accounts/provided/approvals
+			Ok(())
+		})
+	}
+
+	fn do_transfer(
+		id: T::AssetId,
+		source: T::AccountId,
+		dest: T::AccountId,
+		amount: T::Balance,
+		maybe_need_admin: Option<T::AccountId>,
+	) -> DispatchResult {
+		ensure!(!amount.is_zero(), Error::<T>::AmountZero);
+
+		let mut source_account = Account::<T>::get(id, &source);
+		ensure!(!source_account.is_frozen, Error::<T>::Frozen);
+
+		source_account.balance = source_account.balance.checked_sub(&amount)
+			.ok_or(Error::<T>::BalanceLow)?;
+
+		Asset::<T>::try_mutate(id, |maybe_details| {
+			let details = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
+			ensure!(!details.is_frozen, Error::<T>::Frozen);
+
+			if let Some(need_admin) = maybe_need_admin {
+				ensure!(&need_admin == &details.admin, Error::<T>::NoPermission);
+			}
+
+			if dest == source {
+				return Ok(())
+			}
+
+			let mut amount = amount;
+			if source_account.balance < details.min_balance {
+				amount += source_account.balance;
+				source_account.balance = Zero::zero();
+			}
+
+			Account::<T>::try_mutate(id, &dest, |a| -> DispatchResult {
+				let new_balance = a.balance.saturating_add(amount);
+
+				// This is impossible since `new_balance > amount > min_balance`, but we can
+				// handle it, so we do.
+				ensure!(new_balance >= details.min_balance, Error::<T>::BalanceLow);
+
+				if a.balance.is_zero() {
+					a.provided = Self::new_account(&dest, details)?;
+				}
+				a.balance = new_balance;
+				Ok(())
+			})?;
+
+			if source_account.balance.is_zero() {
+				Self::dead_account(&source, details, source_account.provided);
+				Account::<T>::remove(id, &source);
+			} else {
+				Account::<T>::insert(id, &source, &source_account)
+			}
+
+			Self::deposit_event(Event::Transferred(id, source, dest, amount));
+			Ok(())
+		})
 	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate as pallet_assets;
 
-	use frame_support::{impl_outer_origin, assert_ok, assert_noop, parameter_types, impl_outer_event};
+	use frame_support::{assert_ok, assert_noop, parameter_types};
 	use sp_core::H256;
 	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+	use pallet_balances::Error as BalancesError;
 
-	mod pallet_assets {
-		pub use crate::Event;
-	}
+	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+	type Block = frame_system::mocking::MockBlock<Test>;
 
-	impl_outer_event! {
-		pub enum Event for Test {
-			frame_system<T>,
-			pallet_balances<T>,
-			pallet_assets<T>,
+	frame_support::construct_runtime!(
+		pub enum Test where
+			Block = Block,
+			NodeBlock = Block,
+			UncheckedExtrinsic = UncheckedExtrinsic,
+		{
+			System: frame_system::{Module, Call, Config, Storage, Event<T>},
+			Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
+			Assets: pallet_assets::{Module, Call, Storage, Event<T>},
 		}
-	}
+	);
 
-	impl_outer_origin! {
-		pub enum Origin for Test where system = frame_system {}
-	}
-
-	#[derive(Clone, Eq, PartialEq)]
-	pub struct Test;
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
 	}
@@ -1024,7 +1223,7 @@ mod tests {
 		type DbWeight = ();
 		type Origin = Origin;
 		type Index = u64;
-		type Call = ();
+		type Call = Call;
 		type BlockNumber = u64;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
@@ -1034,7 +1233,7 @@ mod tests {
 		type Event = Event;
 		type BlockHashCount = BlockHashCount;
 		type Version = ();
-		type PalletInfo = ();
+		type PalletInfo = PalletInfo;
 		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
@@ -1057,8 +1256,11 @@ mod tests {
 	}
 
 	parameter_types! {
-		pub const AssetDepositBase: u64 = 1;
-		pub const AssetDepositPerZombie: u64 = 1;
+		pub const AssetDeposit: u64 = 1;
+		pub const ApprovalDeposit: u64 = 1;
+		pub const StringLimit: u32 = 50;
+		pub const MetadataDepositBase: u64 = 1;
+		pub const MetadataDepositPerByte: u64 = 1;
 	}
 
 	impl Config for Test {
@@ -1067,13 +1269,13 @@ mod tests {
 		type Balance = u64;
 		type AssetId = u32;
 		type ForceOrigin = frame_system::EnsureRoot<u64>;
-		type AssetDepositBase = AssetDepositBase;
-		type AssetDepositPerZombie = AssetDepositPerZombie;
+		type AssetDeposit = AssetDeposit;
+		type StringLimit = StringLimit;
+		type MetadataDepositBase = MetadataDepositBase;
+		type MetadataDepositPerByte = MetadataDepositPerByte;
 		type WeightInfo = ();
+		type ApprovalDeposit = ApprovalDeposit;
 	}
-	type System = frame_system::Module<Test>;
-	type Balances = pallet_balances::Module<Test>;
-	type Assets = Module<Test>;
 
 	pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 		frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
@@ -1082,7 +1284,7 @@ mod tests {
 	#[test]
 	fn basic_minting_should_work() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 			assert_eq!(Assets::balance(0, 1), 100);
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 2, 100));
@@ -1094,30 +1296,47 @@ mod tests {
 	fn lifecycle_should_work() {
 		new_test_ext().execute_with(|| {
 			Balances::make_free_balance_be(&1, 100);
-			assert_ok!(Assets::create(Origin::signed(1), 0, 1, 10, 1));
-			assert_eq!(Balances::reserved_balance(&1), 11);
+			assert_ok!(Assets::create(Origin::signed(1), 0, 1, 1));
+			assert_eq!(Balances::reserved_balance(&1), 1);
+			assert!(Asset::<Test>::contains_key(0));
 
-			assert_ok!(Assets::destroy(Origin::signed(1), 0, 100));
+			assert_ok!(Assets::set_metadata(Origin::signed(1), 0, vec![0], vec![0], 12));
+			assert_eq!(Balances::reserved_balance(&1), 4);
+			assert!(Metadata::<Test>::contains_key(0));
+
+			Balances::make_free_balance_be(&10, 100);
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 10, 100));
+			Balances::make_free_balance_be(&20, 100);
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 20, 100));
+			assert_eq!(Account::<Test>::iter_prefix(0).count(), 2);
+
+			let w = Asset::<Test>::get(0).unwrap().destroy_witness();
+			assert_ok!(Assets::destroy(Origin::signed(1), 0, w));
 			assert_eq!(Balances::reserved_balance(&1), 0);
 
-			assert_ok!(Assets::create(Origin::signed(1), 0, 1, 10, 1));
-			assert_eq!(Balances::reserved_balance(&1), 11);
+			assert!(!Asset::<Test>::contains_key(0));
+			assert!(!Metadata::<Test>::contains_key(0));
+			assert_eq!(Account::<Test>::iter_prefix(0).count(), 0);
 
-			assert_ok!(Assets::force_destroy(Origin::root(), 0, 100));
+			assert_ok!(Assets::create(Origin::signed(1), 0, 1, 1));
+			assert_eq!(Balances::reserved_balance(&1), 1);
+			assert!(Asset::<Test>::contains_key(0));
+
+			assert_ok!(Assets::set_metadata(Origin::signed(1), 0, vec![0], vec![0], 12));
+			assert_eq!(Balances::reserved_balance(&1), 4);
+			assert!(Metadata::<Test>::contains_key(0));
+
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 10, 100));
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 20, 100));
+			assert_eq!(Account::<Test>::iter_prefix(0).count(), 2);
+
+			let w = Asset::<Test>::get(0).unwrap().destroy_witness();
+			assert_ok!(Assets::force_destroy(Origin::root(), 0, w));
 			assert_eq!(Balances::reserved_balance(&1), 0);
-		});
-	}
 
-	#[test]
-	fn destroy_with_non_zombies_should_not_work() {
-		new_test_ext().execute_with(|| {
-			Balances::make_free_balance_be(&1, 100);
-			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
-			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
-			assert_noop!(Assets::destroy(Origin::signed(1), 0, 100), Error::<Test>::RefsLeft);
-			assert_noop!(Assets::force_destroy(Origin::root(), 0, 100), Error::<Test>::RefsLeft);
-			assert_ok!(Assets::burn(Origin::signed(1), 0, 1, 100));
-			assert_ok!(Assets::destroy(Origin::signed(1), 0, 100));
+			assert!(!Asset::<Test>::contains_key(0));
+			assert!(!Metadata::<Test>::contains_key(0));
+			assert_eq!(Account::<Test>::iter_prefix(0).count(), 0);
 		});
 	}
 
@@ -1125,79 +1344,40 @@ mod tests {
 	fn destroy_with_bad_witness_should_not_work() {
 		new_test_ext().execute_with(|| {
 			Balances::make_free_balance_be(&1, 100);
-			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
+			let w = Asset::<Test>::get(0).unwrap().destroy_witness();
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 10, 100));
-			assert_noop!(Assets::destroy(Origin::signed(1), 0, 0), Error::<Test>::BadWitness);
-			assert_noop!(Assets::force_destroy(Origin::root(), 0, 0), Error::<Test>::BadWitness);
+			assert_noop!(Assets::destroy(Origin::signed(1), 0, w), Error::<Test>::BadWitness);
+			assert_noop!(Assets::force_destroy(Origin::root(), 0, w), Error::<Test>::BadWitness);
 		});
 	}
 
 	#[test]
-	fn max_zombies_should_work() {
+	fn non_providing_should_work() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 2, 1));
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, false, 1));
+
+			Balances::make_free_balance_be(&0, 100);
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 0, 100));
-			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 
-			assert_eq!(Assets::zombie_allowance(0), 0);
-			assert_noop!(Assets::mint(Origin::signed(1), 0, 2, 100), Error::<Test>::TooManyZombies);
-			assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 50), Error::<Test>::TooManyZombies);
-			assert_noop!(Assets::force_transfer(Origin::signed(1), 0, 1, 2, 50), Error::<Test>::TooManyZombies);
+			// Cannot mint into account 2 since it doesn't (yet) exist...
+			assert_noop!(Assets::mint(Origin::signed(1), 0, 1, 100), Error::<Test>::NoProvider);
+			// ...or transfer...
+			assert_noop!(Assets::transfer(Origin::signed(0), 0, 1, 50), Error::<Test>::NoProvider);
+			// ...or force-transfer
+			assert_noop!(Assets::force_transfer(Origin::signed(1), 0, 0, 1, 50), Error::<Test>::NoProvider);
 
-			Balances::make_free_balance_be(&3, 100);
-			assert_ok!(Assets::mint(Origin::signed(1), 0, 3, 100));
-
-			assert_ok!(Assets::transfer(Origin::signed(0), 0, 1, 100));
-			assert_eq!(Assets::zombie_allowance(0), 1);
-			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
-		});
-	}
-
-	#[test]
-	fn resetting_max_zombies_should_work() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 2, 1));
 			Balances::make_free_balance_be(&1, 100);
-			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
-			assert_ok!(Assets::mint(Origin::signed(1), 0, 2, 100));
-			assert_ok!(Assets::mint(Origin::signed(1), 0, 3, 100));
-
-			assert_eq!(Assets::zombie_allowance(0), 0);
-
-			assert_noop!(Assets::set_max_zombies(Origin::signed(1), 0, 1), Error::<Test>::TooManyZombies);
-
-			assert_ok!(Assets::set_max_zombies(Origin::signed(1), 0, 3));
-			assert_eq!(Assets::zombie_allowance(0), 1);
-		});
-	}
-
-	#[test]
-	fn dezombifying_should_work() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 10));
-			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
-			assert_eq!(Assets::zombie_allowance(0), 9);
-
-			// introduce a bit of balance for account 2.
 			Balances::make_free_balance_be(&2, 100);
-
-			// transfer 25 units, nothing changes.
-			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 25));
-			assert_eq!(Assets::zombie_allowance(0), 9);
-
-			// introduce a bit of balance; this will create the account.
-			Balances::make_free_balance_be(&1, 100);
-
-			// now transferring 25 units will create it.
-			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 25));
-			assert_eq!(Assets::zombie_allowance(0), 10);
+			assert_ok!(Assets::transfer(Origin::signed(0), 0, 1, 25));
+			assert_ok!(Assets::force_transfer(Origin::signed(1), 0, 0, 2, 25));
 		});
 	}
 
 	#[test]
 	fn min_balance_should_work() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 10));
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 10));
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 			assert_eq!(Asset::<Test>::get(0).unwrap().accounts, 1);
 
@@ -1227,7 +1407,7 @@ mod tests {
 	#[test]
 	fn querying_total_supply_should_work() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 			assert_eq!(Assets::balance(0, 1), 100);
 			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
@@ -1245,7 +1425,7 @@ mod tests {
 	#[test]
 	fn transferring_amount_below_available_balance_should_work() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 			assert_eq!(Assets::balance(0, 1), 100);
 			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
@@ -1255,9 +1435,9 @@ mod tests {
 	}
 
 	#[test]
-	fn transferring_frozen_balance_should_not_work() {
+	fn transferring_frozen_user_should_not_work() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 			assert_eq!(Assets::balance(0, 1), 100);
 			assert_ok!(Assets::freeze(Origin::signed(1), 0, 1));
@@ -1268,9 +1448,22 @@ mod tests {
 	}
 
 	#[test]
+	fn transferring_frozen_asset_should_not_work() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+			assert_eq!(Assets::balance(0, 1), 100);
+			assert_ok!(Assets::freeze_asset(Origin::signed(1), 0));
+			assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 50), Error::<Test>::Frozen);
+			assert_ok!(Assets::thaw_asset(Origin::signed(1), 0));
+			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
+		});
+	}
+
+	#[test]
 	fn origin_guards_should_work() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 			assert_noop!(Assets::transfer_ownership(Origin::signed(2), 0, 2), Error::<Test>::NoPermission);
 			assert_noop!(Assets::set_team(Origin::signed(2), 0, 2, 2, 2), Error::<Test>::NoPermission);
@@ -1279,8 +1472,8 @@ mod tests {
 			assert_noop!(Assets::mint(Origin::signed(2), 0, 2, 100), Error::<Test>::NoPermission);
 			assert_noop!(Assets::burn(Origin::signed(2), 0, 1, 100), Error::<Test>::NoPermission);
 			assert_noop!(Assets::force_transfer(Origin::signed(2), 0, 1, 2, 100), Error::<Test>::NoPermission);
-			assert_noop!(Assets::set_max_zombies(Origin::signed(2), 0, 11), Error::<Test>::NoPermission);
-			assert_noop!(Assets::destroy(Origin::signed(2), 0, 100), Error::<Test>::NoPermission);
+			let w = Asset::<Test>::get(0).unwrap().destroy_witness();
+			assert_noop!(Assets::destroy(Origin::signed(2), 0, w), Error::<Test>::NoPermission);
 		});
 	}
 
@@ -1288,19 +1481,21 @@ mod tests {
 	fn transfer_owner_should_work() {
 		new_test_ext().execute_with(|| {
 			Balances::make_free_balance_be(&1, 100);
-			Balances::make_free_balance_be(&2, 1);
-			assert_ok!(Assets::create(Origin::signed(1), 0, 1, 10, 1));
+			Balances::make_free_balance_be(&2, 100);
+			assert_ok!(Assets::create(Origin::signed(1), 0, 1, 1));
 
-			assert_eq!(Balances::reserved_balance(&1), 11);
+			assert_eq!(Balances::reserved_balance(&1), 1);
 
 			assert_ok!(Assets::transfer_ownership(Origin::signed(1), 0, 2));
-			assert_eq!(Balances::reserved_balance(&2), 11);
+			assert_eq!(Balances::reserved_balance(&2), 1);
 			assert_eq!(Balances::reserved_balance(&1), 0);
 
 			assert_noop!(Assets::transfer_ownership(Origin::signed(1), 0, 1), Error::<Test>::NoPermission);
 
+			// Set metadata now and make sure that deposit gets transferred back.
+			assert_ok!(Assets::set_metadata(Origin::signed(2), 0, vec![0u8; 10], vec![0u8; 10], 12));
 			assert_ok!(Assets::transfer_ownership(Origin::signed(2), 0, 1));
-			assert_eq!(Balances::reserved_balance(&1), 11);
+			assert_eq!(Balances::reserved_balance(&1), 22);
 			assert_eq!(Balances::reserved_balance(&2), 0);
 		});
 	}
@@ -1308,7 +1503,7 @@ mod tests {
 	#[test]
 	fn set_team_should_work() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
 			assert_ok!(Assets::set_team(Origin::signed(1), 0, 2, 3, 4));
 
 			assert_ok!(Assets::mint(Origin::signed(2), 0, 2, 100));
@@ -1322,7 +1517,7 @@ mod tests {
 	#[test]
 	fn transferring_to_frozen_account_should_work() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 2, 100));
 			assert_eq!(Assets::balance(0, 1), 100);
@@ -1336,7 +1531,7 @@ mod tests {
 	#[test]
 	fn transferring_amount_more_than_available_balance_should_not_work() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 			assert_eq!(Assets::balance(0, 1), 100);
 			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
@@ -1352,7 +1547,7 @@ mod tests {
 	#[test]
 	fn transferring_less_than_one_unit_should_not_work() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 			assert_eq!(Assets::balance(0, 1), 100);
 			assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 0), Error::<Test>::AmountZero);
@@ -1362,7 +1557,7 @@ mod tests {
 	#[test]
 	fn transferring_more_units_than_total_supply_should_not_work() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 			assert_eq!(Assets::balance(0, 1), 100);
 			assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 101), Error::<Test>::BalanceLow);
@@ -1372,7 +1567,7 @@ mod tests {
 	#[test]
 	fn burning_asset_balance_with_positive_balance_should_work() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 			assert_eq!(Assets::balance(0, 1), 100);
 			assert_ok!(Assets::burn(Origin::signed(1), 0, 1, u64::max_value()));
@@ -1383,10 +1578,59 @@ mod tests {
 	#[test]
 	fn burning_asset_balance_with_zero_balance_should_not_work() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(Assets::force_create(Origin::root(), 0, 1, 10, 1));
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
 			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 			assert_eq!(Assets::balance(0, 2), 0);
 			assert_noop!(Assets::burn(Origin::signed(1), 0, 2, u64::max_value()), Error::<Test>::BalanceZero);
+		});
+	}
+
+	#[test]
+	fn set_metadata_should_work() {
+		new_test_ext().execute_with(|| {
+			// Cannot add metadata to unknown asset
+			assert_noop!(
+				Assets::set_metadata(Origin::signed(1), 0, vec![0u8; 10], vec![0u8; 10], 12),
+				Error::<Test>::Unknown,
+			);
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
+			// Cannot add metadata to unowned asset
+			assert_noop!(
+				Assets::set_metadata(Origin::signed(2), 0, vec![0u8; 10], vec![0u8; 10], 12),
+				Error::<Test>::NoPermission,
+			);
+
+			// Cannot add oversized metadata
+			assert_noop!(
+				Assets::set_metadata(Origin::signed(1), 0, vec![0u8; 100], vec![0u8; 10], 12),
+				Error::<Test>::BadMetadata,
+			);
+			assert_noop!(
+				Assets::set_metadata(Origin::signed(1), 0, vec![0u8; 10], vec![0u8; 100], 12),
+				Error::<Test>::BadMetadata,
+			);
+
+			// Successfully add metadata and take deposit
+			Balances::make_free_balance_be(&1, 30);
+			assert_ok!(Assets::set_metadata(Origin::signed(1), 0, vec![0u8; 10], vec![0u8; 10], 12));
+			assert_eq!(Balances::free_balance(&1), 9);
+
+			// Update deposit
+			assert_ok!(Assets::set_metadata(Origin::signed(1), 0, vec![0u8; 10], vec![0u8; 5], 12));
+			assert_eq!(Balances::free_balance(&1), 14);
+			assert_ok!(Assets::set_metadata(Origin::signed(1), 0, vec![0u8; 10], vec![0u8; 15], 12));
+			assert_eq!(Balances::free_balance(&1), 4);
+
+			// Cannot over-reserve
+			assert_noop!(
+				Assets::set_metadata(Origin::signed(1), 0, vec![0u8; 20], vec![0u8; 20], 12),
+				BalancesError::<Test, _>::InsufficientBalance,
+			);
+
+			// Clear Metadata
+			assert!(Metadata::<Test>::contains_key(0));
+			assert_ok!(Assets::set_metadata(Origin::signed(1), 0, vec![], vec![], 0));
+			assert!(!Metadata::<Test>::contains_key(0));
 		});
 	}
 }

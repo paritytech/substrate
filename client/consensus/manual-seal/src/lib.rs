@@ -73,7 +73,7 @@ impl<B: BlockT> Verifier<B> for ManualSealVerifier {
 /// Instantiate the import queue for the manual seal consensus engine.
 pub fn import_queue<Block, Transaction>(
 	block_import: BoxBlockImport<Block, Transaction>,
-	spawner: &impl sp_core::traits::SpawnNamed,
+	spawner: &impl sp_core::traits::SpawnEssentialNamed,
 	registry: Option<&Registry>,
 ) -> BasicQueue<Block, Transaction>
 	where
@@ -293,7 +293,7 @@ mod tests {
 		let inherent_data_providers = InherentDataProviders::new();
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let pool = Arc::new(BasicPool::with_revalidation_type(
-			Options::default(), api(), None, RevalidationType::Full, spawner.clone(),
+			Options::default(), true.into(), api(), None, RevalidationType::Full, spawner.clone(),
 		));
 		let env = ProposerFactory::new(
 			spawner.clone(),
@@ -364,7 +364,7 @@ mod tests {
 		let inherent_data_providers = InherentDataProviders::new();
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let pool = Arc::new(BasicPool::with_revalidation_type(
-			Options::default(), api(), None, RevalidationType::Full, spawner.clone(),
+			Options::default(), true.into(), api(), None, RevalidationType::Full, spawner.clone(),
 		));
 		let env = ProposerFactory::new(
 			spawner.clone(),
@@ -439,7 +439,7 @@ mod tests {
 		let pool_api = api();
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let pool = Arc::new(BasicPool::with_revalidation_type(
-			Options::default(), pool_api.clone(), None, RevalidationType::Full, spawner.clone(),
+			Options::default(), true.into(), pool_api.clone(), None, RevalidationType::Full, spawner.clone(),
 		));
 		let env = ProposerFactory::new(
 			spawner.clone(),
