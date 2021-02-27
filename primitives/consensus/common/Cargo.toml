@@ -16,7 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 thiserror = "1.0.21"
-libp2p = { version = "0.34.0", default-features = false }
+libp2p = { version = "0.35.1", default-features = false }
 log = "0.4.8"
 sp-core = { path= "../../core", version = "3.0.0"}
 sp-inherents = { version = "3.0.0", path = "../../inherents" }
