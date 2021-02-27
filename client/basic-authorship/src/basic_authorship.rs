@@ -200,7 +200,7 @@ impl<A, B, Block, C> sp_consensus::Proposer<Block> for
 				inherent_data,
 				inherent_digests,
 				deadline,
-				true.into(),
+				record_proof,
 			).await;
 			if tx.send(res).is_err() {
 				trace!("Could not send block production result to proposer!");
