@@ -265,13 +265,15 @@ impl Analysis {
 			.map(|(a, b): (u128, u128)| { a.max(b) })
 			.collect::<Vec<u128>>();
 		let names = median_slopes.names;
+		let value_dists = min_squares.value_dists;
+		let model = min_squares.model;
 
 		Some(Self {
 			base,
 			slopes,
 			names,
-			value_dists: None,
-			model: None,
+			value_dists,
+			model,
 		})
 	}
 }
