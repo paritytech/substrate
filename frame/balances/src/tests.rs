@@ -962,6 +962,7 @@ macro_rules! decl_tests {
 				});
 		}
 
+		#[test]
 		fn transfer_keep_alive_all_free_succeed() {
 			<$ext_builder>::default()
 				.existential_deposit(100)
