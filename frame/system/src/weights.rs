@@ -56,7 +56,7 @@ pub trait WeightInfo {
 
 /// Weights for frame_system using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
-impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
+impl<T: crate::Config> WeightInfo for SubstrateWeight<T> {
 	fn remark(_b: u32, ) -> Weight {
 		(1_345_000 as Weight)
 	}
