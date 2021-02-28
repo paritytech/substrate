@@ -20,12 +20,13 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
+use core::convert::TryInto;
 
 use serde::Serialize;
 use inflector::Inflector;
 
 use crate::BenchmarkCmd;
-use frame_benchmarking::{BenchmarkBatch, BenchmarkSelector, Analysis, RegressionModel};
+use frame_benchmarking::{BenchmarkBatch, BenchmarkSelector, Analysis, AnalysisChoice, RegressionModel};
 use sp_runtime::traits::Zero;
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
@@ -71,6 +72,7 @@ struct CmdData {
 	wasm_execution: String,
 	chain: String,
 	db_cache: u32,
+	analysis_choice: String,
 }
 
 // This encodes the component name and whether that component is used.
@@ -104,7 +106,10 @@ fn io_error(s: &str) -> std::io::Error {
 // p1 -> [b1, b2, b3]
 // p2 -> [b1, b2]
 // ```
-fn map_results(batches: &[BenchmarkBatch]) -> Result<HashMap<(String, String), Vec<BenchmarkData>>, std::io::Error> {
+fn map_results(
+	batches: &[BenchmarkBatch],
+	analysis_choice: &AnalysisChoice,
+) -> Result<HashMap<(String, String), Vec<BenchmarkData>>, std::io::Error> {
 	// Skip if batches is empty.
 	if batches.is_empty() { return Err(io_error("empty batches")) }
 
@@ -118,7 +123,7 @@ fn map_results(batches: &[BenchmarkBatch]) -> Result<HashMap<(String, String), V
 
 		let pallet_string = String::from_utf8(batch.pallet.clone()).unwrap();
 		let instance_string = String::from_utf8(batch.instance.clone()).unwrap();
-		let benchmark_data = get_benchmark_data(batch);
+		let benchmark_data = get_benchmark_data(batch, analysis_choice);
 		pallet_benchmarks.push(benchmark_data);
 
 		// Check if this is the end of the iterator
@@ -150,11 +155,20 @@ fn extract_errors(model: &Option<RegressionModel>) -> impl Iterator<Item=u128> +
 }
 
 // Analyze and return the relevant results for a given benchmark.
-fn get_benchmark_data(batch: &BenchmarkBatch) -> BenchmarkData {
+fn get_benchmark_data(
+	batch: &BenchmarkBatch,
+	analysis_choice: &AnalysisChoice,
+) -> BenchmarkData {
 	// Analyze benchmarks to get the linear regression.
-	let extrinsic_time = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::ExtrinsicTime).unwrap();
-	let reads = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Reads).unwrap();
-	let writes = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Writes).unwrap();
+	let analysis_function = match analysis_choice {
+		AnalysisChoice::MinSquares => Analysis::min_squares_iqr,
+		AnalysisChoice::MedianSlopes => Analysis::median_slopes,
+		AnalysisChoice::Max => Analysis::max,
+	};
+
+	let extrinsic_time = analysis_function(&batch.results, BenchmarkSelector::ExtrinsicTime).unwrap();
+	let reads = analysis_function(&batch.results, BenchmarkSelector::Reads).unwrap();
+	let writes = analysis_function(&batch.results, BenchmarkSelector::Writes).unwrap();
 
 	// Analysis data may include components that are not used, this filters out anything whose value is zero.
 	let mut used_components = Vec::new();
@@ -255,6 +269,11 @@ pub fn write_results(
 	// Full CLI args passed to trigger the benchmark.
 	let args = std::env::args().collect::<Vec<String>>();
 
+	// Which analysis function should be used when outputting benchmarks
+	let analysis_choice: AnalysisChoice = cmd.output_analysis.clone()
+		.try_into()
+		.map_err(|e| io_error(e))?;
+
 	// Capture individual args
 	let cmd_data = CmdData {
 		steps: cmd.steps.clone(),
@@ -265,6 +284,7 @@ pub fn write_results(
 		wasm_execution: cmd.wasm_method.to_string(),
 		chain: format!("{:?}", cmd.shared_params.chain),
 		db_cache: cmd.database_cache_size,
+		analysis_choice: format!("{:?}", analysis_choice),
 	};
 
 	// New Handlebars instance with helpers.
@@ -275,7 +295,7 @@ pub fn write_results(
 	handlebars.register_escape_fn(|s| -> String { s.to_string() });
 
 	// Organize results by pallet into a JSON map
-	let all_results = map_results(batches)?;
+	let all_results = map_results(batches, &analysis_choice)?;
 	for ((pallet, instance), results) in all_results.iter() {
 		let mut file_path = path.clone();
 		// If a user only specified a directory...
