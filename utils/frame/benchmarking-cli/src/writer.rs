@@ -475,7 +475,7 @@ mod test {
 			test_data(b"first", b"first", BenchmarkParameter::a, 10, 3),
 			test_data(b"first", b"second", BenchmarkParameter::b, 9, 2),
 			test_data(b"second", b"first", BenchmarkParameter::c, 3, 4),
-		], &AnalysisChoice::MinSquares).unwrap();
+		], &AnalysisChoice::default()).unwrap();
 
 		let first_benchmark = &mapped_results.get(
 			&("first_pallet".to_string(), "instance".to_string())
