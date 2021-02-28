@@ -645,8 +645,10 @@ mod migrations {
 
 	/// Must be used.
 	pub fn migrate_to_triple_ref_count<T: Config>() -> frame_support::weights::Weight {
-		Account::<T>::translate::<(T::Index, RefCount, RefCount, T::AccountData), _>(|_key, (nonce, consumers, providers, data)|
-			Some(AccountInfo { nonce, consumers, providers, sufficients: 0, data })
+		Account::<T>::translate::<(T::Index, RefCount, RefCount, T::AccountData), _>(
+			|_key, (nonce, consumers, providers, data)| {
+				Some(AccountInfo { nonce, consumers, providers, sufficients: 0, data })
+			}
 		);
 		T::BlockWeights::get().max_block
 	}

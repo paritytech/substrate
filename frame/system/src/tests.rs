@@ -34,7 +34,13 @@ fn stored_map_works() {
 		assert!(System::insert(&0, 42).is_ok());
 		assert!(!System::is_provider_required(&0));
 
-		assert_eq!(Account::<Test>::get(0), AccountInfo { nonce: 0, providers: 1, consumers: 0, sufficients: 0, data: 42 });
+		assert_eq!(Account::<Test>::get(0), AccountInfo {
+			nonce: 0,
+			providers: 1,
+			consumers: 0,
+			sufficients: 0,
+			data: 42,
+		});
 
 		assert!(System::inc_consumers(&0).is_ok());
 		assert!(System::is_provider_required(&0));
@@ -492,7 +498,7 @@ fn events_not_emitted_during_genesis() {
 	new_test_ext().execute_with(|| {
 		// Block Number is zero at genesis
 		assert!(System::block_number().is_zero());
-		let mut account_data = AccountInfo { nonce: 0, consumers: 0, providers: 0, sufficients: 0, data: 0 };
+		let mut account_data = AccountInfo::default();
 		System::on_created_account(Default::default(), &mut account_data);
 		assert!(System::events().is_empty());
 		// Events will be emitted starting on block 1
