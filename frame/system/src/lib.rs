@@ -1129,7 +1129,7 @@ impl<T: Config> Module<T> {
 		Account::<T>::get(who).providers
 	}
 
-	/// The number of outstanding provider references for the account `who`.
+	/// The number of outstanding sufficient references for the account `who`.
 	pub fn sufficients(who: &T::AccountId) -> RefCount {
 		Account::<T>::get(who).sufficients
 	}
