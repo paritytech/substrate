@@ -134,7 +134,7 @@ pub use weights::WeightInfo;
 
 pub use pallet::*;
 
-type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+type DepositBalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
 pub struct AssetDetails<
@@ -177,6 +177,25 @@ impl<Balance, AccountId, DepositBalance> AssetDetails<Balance, AccountId, Deposi
 			approvals: self.approvals,
 		}
 	}
+}
+
+/// A pair to act as a key for the approval storage map.
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
+pub struct ApprovalKey<AccountId> {
+	/// The owner of the funds that are being approved.
+	owner: AccountId,
+	/// The party to whom transfer of the funds is being delegated.
+	delegate: AccountId,
+}
+
+/// Data concerning an approval.
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default)]
+pub struct Approval<Balance, DepositBalance> {
+	/// The amount of funds approved for the balance transfer from the owner to some delegated
+	/// target.
+	amount: Balance,
+	/// The amount reserved on the owner's account to hold this item in storage.
+	deposit: DepositBalance,
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default)]
@@ -251,17 +270,17 @@ pub mod pallet {
 		type ForceOrigin: EnsureOrigin<Self::Origin>;
 
 		/// The basic amount of funds that must be reserved for an asset.
-		type AssetDeposit: Get<BalanceOf<Self>>;
+		type AssetDeposit: Get<DepositBalanceOf<Self>>;
 
 		/// The basic amount of funds that must be reserved when adding metadata to your asset.
-		type MetadataDepositBase: Get<BalanceOf<Self>>;
+		type MetadataDepositBase: Get<DepositBalanceOf<Self>>;
 
 		/// The additional funds that must be reserved for the number of bytes you store in your
 		/// metadata.
-		type MetadataDepositPerByte: Get<BalanceOf<Self>>;
+		type MetadataDepositPerByte: Get<DepositBalanceOf<Self>>;
 
 		/// The amount of funds that must be reserved when creating a new approval.
-		type ApprovalDeposit: Get<BalanceOf<Self>>;
+		type ApprovalDeposit: Get<DepositBalanceOf<Self>>;
 
 		/// The maximum length of a name or symbol stored on-chain.
 		type StringLimit: Get<u32>;
@@ -276,7 +295,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		T::AssetId,
-		AssetDetails<T::Balance, T::AccountId, BalanceOf<T>>
+		AssetDetails<T::Balance, T::AccountId, DepositBalanceOf<T>>,
 	>;
 
 	#[pallet::storage]
@@ -288,10 +307,8 @@ pub mod pallet {
 		Blake2_128Concat,
 		T::AccountId,
 		AssetBalance<T::Balance>,
-		ValueQuery
+		ValueQuery,
 	>;
-
-	// TODO: use struct instead of tuple.
 
 	#[pallet::storage]
 	/// Approved balance transfers. First balance is the amount approved for transfer. Second
@@ -301,9 +318,9 @@ pub mod pallet {
 		Blake2_128Concat,
 		T::AssetId,
 		Blake2_128Concat,
-		(T::AccountId, T::AccountId),
-		(T::Balance, BalanceOf<T>),
-		ValueQuery
+		ApprovalKey<T::AccountId>,
+		Approval<T::Balance, DepositBalanceOf<T>>,
+		OptionQuery,
 	>;
 
 	#[pallet::storage]
@@ -312,8 +329,8 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		T::AssetId,
-		AssetMetadata<BalanceOf<T>>,
-		ValueQuery
+		AssetMetadata<DepositBalanceOf<T>>,
+		ValueQuery,
 	>;
 
 	#[pallet::event]
@@ -346,15 +363,15 @@ pub mod pallet {
 		ForceCreated(T::AssetId, T::AccountId),
 		/// New metadata has been set for an asset. \[asset_id, name, symbol, decimals\]
 		MetadataSet(T::AssetId, Vec<u8>, Vec<u8>, u8),
-		/// Additional funds have been approved for transfer to a destination account.
-		/// \[asset_id, source, destination, amount\]
+		/// (Additional) funds have been approved for transfer to a destination account.
+		/// \[asset_id, source, delegate, amount\]
 		ApprovedTransfer(T::AssetId, T::AccountId, T::AccountId, T::Balance),
-		/// An approval for account `beneficiary` was cancelled by `owner`.
-		/// \[id, owner, beneficiary\]
+		/// An approval for account `delegate` was cancelled by `owner`.
+		/// \[id, owner, delegate\]
 		ApprovalCancelled(T::AssetId, T::AccountId, T::AccountId),
 		/// An `amount` was transferred in its entirety from `owner` to `destination` by
-		/// the approved `beneficiary`.
-		/// \[id, owner, beneficiary, destination\]
+		/// the approved `delegate`.
+		/// \[id, owner, delegate, destination\]
 		ApprovalTransferred(T::AssetId, T::AccountId, T::AccountId, T::AccountId, T::Balance),
 	}
 
@@ -528,6 +545,7 @@ pub mod pallet {
 		pub(super) fn destroy(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
+			// TODO: make work
 			/*#[pallet::compact]*/ witness: DestroyWitness,
 		) -> DispatchResultWithPostInfo {
 			let check_owner = ensure_signed(origin)?;
@@ -556,6 +574,7 @@ pub mod pallet {
 		pub(super) fn force_destroy(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
+			// TODO: make work
 			/*#[pallet::compact]*/ witness: DestroyWitness,
 		) -> DispatchResultWithPostInfo {
 			T::ForceOrigin::ensure_origin(origin)?;
@@ -991,25 +1010,26 @@ pub mod pallet {
 		pub(super) fn approve_transfer(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			beneficiary: <T::Lookup as StaticLookup>::Source,
+			delegate: <T::Lookup as StaticLookup>::Source,
 			#[pallet::compact] amount: T::Balance,
 		) -> DispatchResultWithPostInfo {
 			let owner = ensure_signed(origin)?;
-			let beneficiary = T::Lookup::lookup(beneficiary)?;
+			let delegate = T::Lookup::lookup(delegate)?;
 
-			let key = (owner, beneficiary);
-			Approvals::<T>::try_mutate(id, &key, |&mut (ref mut approved, ref mut deposit)| -> DispatchResult {
-				let approval_deposit = T::ApprovalDeposit::get();
-				if *deposit < approval_deposit {
-					T::Currency::reserve(&key.0, approval_deposit - *deposit)?;
-					*deposit = approval_deposit;
+			let key = ApprovalKey { owner, delegate };
+			Approvals::<T>::try_mutate(id, &key, |maybe_approved| -> DispatchResult {
+				let mut approved = maybe_approved.take().unwrap_or_default();
+				let deposit_required = T::ApprovalDeposit::get();
+				if approved.deposit < deposit_required {
+					T::Currency::reserve(&key.owner, deposit_required - approved.deposit)?;
+					approved.deposit = deposit_required;
 				}
-				*approved = approved.saturating_add(amount);
+				approved.amount = approved.amount.saturating_add(amount);
+				*maybe_approved = Some(approved);
 				Ok(())
 			})?;
-			let (owner, beneficiary) = key;
+			Self::deposit_event(Event::ApprovedTransfer(id, key.owner, key.delegate, amount));
 
-			Self::deposit_event(Event::ApprovedTransfer(id, owner, beneficiary, amount));
 			Ok(().into())
 		}
 
@@ -1018,17 +1038,15 @@ pub mod pallet {
 		pub(super) fn cancel_approval(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			beneficiary: <T::Lookup as StaticLookup>::Source,
+			delegate: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResultWithPostInfo {
 			let owner = ensure_signed(origin)?;
-			let beneficiary = T::Lookup::lookup(beneficiary)?;
-			let key = (owner, beneficiary);
-			ensure!(Approvals::<T>::contains_key(id, &key), Error::<T>::Unknown);
-			let approval = Approvals::<T>::take(id, &key);
-			let (owner, beneficiary) = key;
-			T::Currency::unreserve(&owner, approval.1);
+			let delegate = T::Lookup::lookup(delegate)?;
+			let key = ApprovalKey { owner, delegate };
+			let approval = Approvals::<T>::take(id, &key).ok_or(Error::<T>::Unknown)?;
+			T::Currency::unreserve(&key.owner, approval.deposit);
 
-			Self::deposit_event(Event::ApprovalCancelled(id, owner, beneficiary));
+			Self::deposit_event(Event::ApprovalCancelled(id, key.owner, key.delegate));
 			Ok(().into())
 		}
 
@@ -1038,7 +1056,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
 			owner: <T::Lookup as StaticLookup>::Source,
-			beneficiary: <T::Lookup as StaticLookup>::Source,
+			delegate: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResultWithPostInfo {
 			let origin = ensure_signed(origin)?;
 
@@ -1046,15 +1064,13 @@ pub mod pallet {
 			ensure!(&origin == &d.admin, Error::<T>::NoPermission);
 
 			let owner = T::Lookup::lookup(owner)?;
-			let beneficiary = T::Lookup::lookup(beneficiary)?;
+			let delegate = T::Lookup::lookup(delegate)?;
 
-			let key = (owner, beneficiary);
-			ensure!(Approvals::<T>::contains_key(id, &key), Error::<T>::Unknown);
-			let approval = Approvals::<T>::take(id, &key);
-			let (owner, beneficiary) = key;
-			T::Currency::unreserve(&owner, approval.1);
+			let key = ApprovalKey { owner, delegate };
+			let approval = Approvals::<T>::take(id, &key).ok_or(Error::<T>::Unknown)?;
+			T::Currency::unreserve(&key.owner, approval.deposit);
 
-			Self::deposit_event(Event::ApprovalCancelled(id, owner, beneficiary));
+			Self::deposit_event(Event::ApprovalCancelled(id, key.owner, key.delegate));
 			Ok(().into())
 		}
 
@@ -1067,27 +1083,27 @@ pub mod pallet {
 			destination: <T::Lookup as StaticLookup>::Source,
 			#[pallet::compact] amount: T::Balance,
 		) -> DispatchResultWithPostInfo {
-			let beneficiary = ensure_signed(origin)?;
+			let delegate = ensure_signed(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
 			let destination = T::Lookup::lookup(destination)?;
 
-			let key = (owner, beneficiary);
-			Approvals::<T>::try_mutate_exists(id, &key, |approved| -> DispatchResult {
-				let (mut remaining, deposit) = approved.take().unwrap_or_default();
-				ensure!(remaining >= amount, Error::<T>::Unapproved);
+			let key = ApprovalKey { owner, delegate };
+			Approvals::<T>::try_mutate_exists(id, &key, |maybe_approved| -> DispatchResult {
+				let mut approved = maybe_approved.take().ok_or(Error::<T>::Unapproved)?;
+				let remaining = approved.amount.checked_sub(&amount).ok_or(Error::<T>::Unapproved)?;
 
-				Self::do_transfer(id, &key.0, &destination, amount, None)?;
+				Self::do_transfer(id, &key.owner, &destination, amount, None)?;
 
-				remaining -= amount;
 				if remaining.is_zero() {
-					T::Currency::unreserve(&key.0, deposit);
+					T::Currency::unreserve(&key.owner, approved.deposit);
 				} else {
-					*approved = Some((remaining, deposit));
+					approved.amount = remaining;
+					*maybe_approved = Some(approved);
 				}
 				Ok(())
 			})?;
-			let (owner, beneficiary) = key;
-			Self::deposit_event(Event::ApprovalTransferred(id, owner, beneficiary, destination, amount));
+			let event = Event::ApprovalTransferred(id, key.owner, key.delegate, destination, amount);
+			Self::deposit_event(event);
 			Ok(().into())
 		}
 	}
@@ -1109,7 +1125,7 @@ impl<T: Config> Pallet<T> {
 
 	fn new_account(
 		who: &T::AccountId,
-		d: &mut AssetDetails<T::Balance, T::AccountId, BalanceOf<T>>,
+		d: &mut AssetDetails<T::Balance, T::AccountId, DepositBalanceOf<T>>,
 	) -> Result<bool, DispatchError> {
 		let accounts = d.accounts.checked_add(1).ok_or(Error::<T>::Overflow)?;
 		let is_sufficient = if d.is_sufficient {
@@ -1126,7 +1142,7 @@ impl<T: Config> Pallet<T> {
 
 	fn dead_account(
 		who: &T::AccountId,
-		d: &mut AssetDetails<T::Balance, T::AccountId, BalanceOf<T>>,
+		d: &mut AssetDetails<T::Balance, T::AccountId, DepositBalanceOf<T>>,
 		sufficient: bool,
 	) {
 		if sufficient {
