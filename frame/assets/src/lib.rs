@@ -220,6 +220,8 @@ pub struct AssetMetadata<DepositBalance> {
 	symbol: Vec<u8>,
 	/// The number of decimals this asset uses to represent one unit.
 	decimals: u8,
+	/// Whether the asset metadata may be changed by a non Force origin.
+	is_frozen: bool,
 }
 
 /// Witness data for the destroy transactions.
@@ -361,8 +363,8 @@ pub mod pallet {
 		Destroyed(T::AssetId),
 		/// Some asset class was force-created. \[asset_id, owner\]
 		ForceCreated(T::AssetId, T::AccountId),
-		/// New metadata has been set for an asset. \[asset_id, name, symbol, decimals\]
-		MetadataSet(T::AssetId, Vec<u8>, Vec<u8>, u8),
+		/// New metadata has been set for an asset. \[asset_id, name, symbol, decimals, is_frozen\]
+		MetadataSet(T::AssetId, Vec<u8>, Vec<u8>, u8, bool),
 		/// (Additional) funds have been approved for transfer to a destination account.
 		/// \[asset_id, source, delegate, amount\]
 		ApprovedTransfer(T::AssetId, T::AccountId, T::AccountId, T::Balance),
@@ -976,6 +978,7 @@ pub mod pallet {
 					Some(m) => m.deposit,
 					None => Default::default()
 				};
+				ensure!(metadata.as_ref().map_or(true, |m| !m.is_frozen), Error::<T>::NoPermission);
 
 				// Metadata is being removed
 				if bytes_used.is_zero() && decimals.is_zero() {
@@ -997,10 +1000,92 @@ pub mod pallet {
 						name: name.clone(),
 						symbol: symbol.clone(),
 						decimals,
+						is_frozen: false,
 					})
 				}
 
-				Self::deposit_event(Event::MetadataSet(id, name, symbol, decimals));
+				Self::deposit_event(Event::MetadataSet(id, name, symbol, decimals, false));
+				Ok(().into())
+			})
+		}
+
+		// TODO: Weight
+		#[pallet::weight(0)]
+		pub(super) fn force_asset_status(
+			origin: OriginFor<T>,
+			#[pallet::compact] id: T::AssetId,
+			owner: T::AccountId,
+			issuer: T::AccountId,
+			admin: T::AccountId,
+			freezer: T::AccountId,
+			#[pallet::compact] min_balance: T::Balance,
+			is_sufficient: bool,
+			is_frozen: bool,
+		) -> DispatchResultWithPostInfo {
+			T::ForceOrigin::ensure_origin(origin)?;
+
+			Asset::<T>::try_mutate(id, |maybe_asset| {
+				let mut asset = maybe_asset.take().ok_or(Error::<T>::Unknown)?;
+				asset.owner = owner;
+				asset.issuer = issuer;
+				asset.admin = admin;
+				asset.freezer = freezer;
+				asset.min_balance = min_balance;
+				asset.is_sufficient = is_sufficient;
+				asset.is_frozen = is_frozen;
+				*maybe_asset = Some(asset);
+				Ok(().into())
+			})
+		}
+
+		#[pallet::weight(T::WeightInfo::set_metadata(name.len() as u32, symbol.len() as u32))]
+		pub(super) fn force_set_metadata(
+			origin: OriginFor<T>,
+			#[pallet::compact] id: T::AssetId,
+			name: Vec<u8>,
+			symbol: Vec<u8>,
+			decimals: u8,
+			is_frozen: bool,
+		) -> DispatchResultWithPostInfo {
+			T::ForceOrigin::ensure_origin(origin)?;
+
+			ensure!(name.len() <= T::StringLimit::get() as usize, Error::<T>::BadMetadata);
+			ensure!(symbol.len() <= T::StringLimit::get() as usize, Error::<T>::BadMetadata);
+
+			let d = Asset::<T>::get(id).ok_or(Error::<T>::Unknown)?;
+
+			Metadata::<T>::try_mutate_exists(id, |metadata| {
+				let bytes_used = name.len() + symbol.len();
+				let old_deposit = match metadata {
+					Some(m) => m.deposit,
+					None => Default::default()
+				};
+
+				// Metadata is being removed
+				if bytes_used.is_zero() && decimals.is_zero() {
+					T::Currency::unreserve(&d.owner, old_deposit);
+					*metadata = None;
+				} else {
+					let new_deposit = T::MetadataDepositPerByte::get()
+						.saturating_mul(((name.len() + symbol.len()) as u32).into())
+						.saturating_add(T::MetadataDepositBase::get());
+
+					if new_deposit > old_deposit {
+						T::Currency::reserve(&d.owner, new_deposit - old_deposit)?;
+					} else {
+						T::Currency::unreserve(&d.owner, old_deposit - new_deposit);
+					}
+
+					*metadata = Some(AssetMetadata {
+						deposit: new_deposit,
+						name: name.clone(),
+						symbol: symbol.clone(),
+						decimals,
+						is_frozen,
+					})
+				}
+
+				Self::deposit_event(Event::MetadataSet(id, name, symbol, decimals, is_frozen));
 				Ok(().into())
 			})
 		}
