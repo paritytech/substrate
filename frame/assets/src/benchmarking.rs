@@ -17,11 +17,17 @@
 
 //! Assets pallet benchmarking.
 
+#![cfg(feature = "runtime-benchmarks")]
+
+use sp_std::prelude::*;
 use super::*;
 use sp_runtime::traits::Bounded;
 use frame_system::RawOrigin as SystemOrigin;
-use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
+use frame_benchmarking::{
+	benchmarks, account, whitelisted_caller, whitelist_account, impl_benchmark_test_suite
+};
 use frame_support::traits::Get;
+//use frame_support::{traits::EnsureOrigin, dispatch::UnfilteredDispatchable};
 
 use crate::Module as Assets;
 
@@ -125,7 +131,7 @@ benchmarks! {
 	create {
 		let caller: T::AccountId = whitelisted_caller();
 		let caller_lookup = T::Lookup::unlookup(caller.clone());
-		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+		T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T>::max_value());
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), caller_lookup, 1u32.into())
 	verify {
 		assert_last_event::<T>(Event::Created(Default::default(), caller.clone(), caller).into());
@@ -140,9 +146,9 @@ benchmarks! {
 	}
 
 	destroy {
-		let c in 0 .. 5_000;
-		let s in 0 .. 5_000;
-		let a in 0 .. 5_000;
+		let c in 0 .. 5_0;//00;
+		let s in 0 .. 5_0;//00;
+		let a in 0 .. 5_00;
 		let (caller, _) = create_default_asset::<T>(true);
 		add_consumers::<T>(caller.clone(), c);
 		add_sufficients::<T>(caller.clone(), s);
@@ -154,9 +160,9 @@ benchmarks! {
 	}
 
 	force_destroy {
-		let c in 0 .. 5_000;
-		let s in 0 .. 5_000;
-		let a in 0 .. 5_000;
+		let c in 0 .. 5_0;//00;
+		let s in 0 .. 5_0;//00;
+		let a in 0 .. 5_00;
 		let (caller, _) = create_default_asset::<T>(true);
 		add_consumers::<T>(caller.clone(), c);
 		add_sufficients::<T>(caller.clone(), s);
@@ -269,7 +275,7 @@ benchmarks! {
 	set_max_zombies {
 		let (caller, _) = create_default_asset::<T>(10);
 		let max_zombies: u32 = 100;
-		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+		T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T>::max_value());
 	}: _(SystemOrigin::Signed(caller), Default::default(), max_zombies)
 	verify {
 		assert_last_event::<T>(Event::MaxZombiesChanged(Default::default(), max_zombies).into());
@@ -284,11 +290,85 @@ benchmarks! {
 		let decimals = 12;
 
 		let (caller, _) = create_default_asset::<T>(true);
-		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+		T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T>::max_value());
 	}: _(SystemOrigin::Signed(caller), Default::default(), name.clone(), symbol.clone(), decimals)
 	verify {
-		assert_last_event::<T>(Event::MetadataSet(Default::default(), name, symbol, decimals).into());
+		let id = Default::default();
+		assert_last_event::<T>(Event::MetadataSet(id, name, symbol, decimals, false).into());
+	}
+
+	clear_metadata {
+		let (caller, _) = create_default_asset::<T>(true);
+		T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T>::max_value());
+		let dummy = vec![0u8; T::StringLimit::get() as usize];
+		let origin = SystemOrigin::Signed(caller.clone()).into();
+		Assets::<T>::set_metadata(origin, Default::default(), dummy.clone(), dummy, 12)?;
+	}: _(SystemOrigin::Signed(caller), Default::default())
+	verify {
+		assert_last_event::<T>(Event::MetadataCleared(Default::default()).into());
+	}
+
+	approve_transfer {
+		let (caller, _) = create_default_minted_asset::<T>(true, 100u32.into());
+		T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T>::max_value());
+
+		let id = Default::default();
+		let delegate: T::AccountId = account("delegate", 0, SEED);
+		let delegate_lookup = T::Lookup::unlookup(delegate.clone());
+		let amount = 100u32.into();
+	}: _(SystemOrigin::Signed(caller.clone()), id, delegate_lookup, amount)
+	verify {
+		assert_last_event::<T>(Event::ApprovedTransfer(id, caller, delegate, amount).into());
+	}
+
+	transfer_approved {
+		let (owner, owner_lookup) = create_default_minted_asset::<T>(true, 100u32.into());
+		T::Currency::make_free_balance_be(&owner, DepositBalanceOf::<T>::max_value());
+
+		let id = Default::default();
+		let delegate: T::AccountId = account("delegate", 0, SEED);
+		whitelist_account!(delegate);
+		let delegate_lookup = T::Lookup::unlookup(delegate.clone());
+		let amount = 100u32.into();
+		let origin = SystemOrigin::Signed(owner.clone()).into();
+		Assets::<T>::approve_transfer(origin, id, delegate_lookup.clone(), amount)?;
+
+		let dest: T::AccountId = account("dest", 0, SEED);
+		let dest_lookup = T::Lookup::unlookup(dest.clone());
+	}: _(SystemOrigin::Signed(delegate.clone()), id, owner_lookup, dest_lookup, amount)
+	verify {
+		assert_last_event::<T>(Event::TransferredApproved(id, owner, delegate, dest, amount).into());
+	}
+
+	cancel_approval {
+		let (caller, _) = create_default_minted_asset::<T>(true, 100u32.into());
+		T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T>::max_value());
+
+		let id = Default::default();
+		let delegate: T::AccountId = account("delegate", 0, SEED);
+		let delegate_lookup = T::Lookup::unlookup(delegate.clone());
+		let amount = 100u32.into();
+		let origin = SystemOrigin::Signed(caller.clone()).into();
+		Assets::<T>::approve_transfer(origin, id, delegate_lookup.clone(), amount)?;
+	}: _(SystemOrigin::Signed(caller.clone()), id, delegate_lookup)
+	verify {
+		assert_last_event::<T>(Event::ApprovalCancelled(id, caller, delegate).into());
+	}
+
+	force_cancel_approval {
+		let (caller, caller_lookup) = create_default_minted_asset::<T>(true, 100u32.into());
+		T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T>::max_value());
+
+		let id = Default::default();
+		let delegate: T::AccountId = account("delegate", 0, SEED);
+		let delegate_lookup = T::Lookup::unlookup(delegate.clone());
+		let amount = 100u32.into();
+		let origin = SystemOrigin::Signed(caller.clone()).into();
+		Assets::<T>::approve_transfer(origin, id, delegate_lookup.clone(), amount)?;
+	}: _(SystemOrigin::Signed(caller.clone()), id, caller_lookup, delegate_lookup)
+	verify {
+		assert_last_event::<T>(Event::ApprovalCancelled(id, caller, delegate).into());
 	}
 }
 
-impl_benchmark_test_suite!(Assets, crate::tests::new_test_ext(), crate::tests::Test);
+impl_benchmark_test_suite!(Assets, crate::mock::new_test_ext(), crate::mock::Test);

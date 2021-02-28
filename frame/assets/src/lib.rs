@@ -113,7 +113,7 @@ pub mod weights;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 #[cfg(test)]
-mod mock;
+pub mod mock;
 #[cfg(test)]
 mod tests;
 
@@ -376,7 +376,7 @@ pub mod pallet {
 		/// An `amount` was transferred in its entirety from `owner` to `destination` by
 		/// the approved `delegate`.
 		/// \[id, owner, delegate, destination\]
-		ApprovalTransferred(T::AssetId, T::AccountId, T::AccountId, T::AccountId, T::Balance),
+		TransferredApproved(T::AssetId, T::AccountId, T::AccountId, T::AccountId, T::Balance),
 	}
 
 	#[deprecated(note = "use `Event` instead")]
@@ -540,12 +540,11 @@ pub mod pallet {
 		/// - `c = (witness.accounts - witness.sufficients)`
 		/// - `s = witness.sufficients`
 		/// - `a = witness.approvals`
-//		#[pallet::weight(T::WeightInfo::force_destroy(
-//			witness.accounts.saturating_sub(witness.sufficients),
-// 			witness.sufficients,
-// 			witness.approvals,
-// 		))]
-		#[pallet::weight(T::WeightInfo::destroy(witness.accounts.saturating_sub(witness.sufficients)))]
+		#[pallet::weight(T::WeightInfo::force_destroy(
+			witness.accounts.saturating_sub(witness.sufficients),
+ 			witness.sufficients,
+ 			witness.approvals,
+ 		))]
 		pub(super) fn destroy(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
@@ -569,12 +568,11 @@ pub mod pallet {
 		/// - `c = (witness.accounts - witness.sufficients)`
 		/// - `s = witness.sufficients`
 		/// - `a = witness.approvals`
-//		#[pallet::weight(T::WeightInfo::force_destroy(
-//			witness.accounts.saturating_sub(witness.sufficients),
-// 			witness.sufficients,
-// 			witness.approvals,
-// 		))]
-		#[pallet::weight(T::WeightInfo::force_destroy(witness.accounts.saturating_sub(witness.sufficients)))]
+		#[pallet::weight(T::WeightInfo::force_destroy(
+			witness.accounts.saturating_sub(witness.sufficients),
+ 			witness.sufficients,
+ 			witness.approvals,
+ 		))]
 		pub(super) fn force_destroy(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
@@ -1182,10 +1180,14 @@ pub mod pallet {
 			owner: <T::Lookup as StaticLookup>::Source,
 			delegate: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResultWithPostInfo {
-			let origin = ensure_signed(origin)?;
-
-			let d = Asset::<T>::get(id).ok_or(Error::<T>::Unknown)?;
-			ensure!(&origin == &d.admin, Error::<T>::NoPermission);
+			T::ForceOrigin::try_origin(origin)
+				.map(|_| ())
+				.or_else(|origin| -> DispatchResult {
+					let origin = ensure_signed(origin)?;
+					let d = Asset::<T>::get(id).ok_or(Error::<T>::Unknown)?;
+					ensure!(&origin == &d.admin, Error::<T>::NoPermission);
+					Ok(())
+				})?;
 
 			let owner = T::Lookup::lookup(owner)?;
 			let delegate = T::Lookup::lookup(delegate)?;
@@ -1226,7 +1228,7 @@ pub mod pallet {
 				}
 				Ok(())
 			})?;
-			let event = Event::ApprovalTransferred(id, key.owner, key.delegate, destination, amount);
+			let event = Event::TransferredApproved(id, key.owner, key.delegate, destination, amount);
 			Self::deposit_event(event);
 			Ok(().into())
 		}
