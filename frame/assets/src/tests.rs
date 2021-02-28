@@ -463,7 +463,11 @@ fn set_metadata_should_work() {
 
 		// Clear Metadata
 		assert!(Metadata::<Test>::contains_key(0));
-		assert_ok!(Assets::set_metadata(Origin::signed(1), 0, vec![], vec![], 0));
+		assert_noop!(Assets::clear_metadata(Origin::signed(2), 0), Error::<Test>::NoPermission);
+		assert_noop!(Assets::clear_metadata(Origin::signed(1), 1), Error::<Test>::Unknown);
+		assert_ok!(Assets::clear_metadata(Origin::signed(1), 0));
 		assert!(!Metadata::<Test>::contains_key(0));
 	});
 }
+
+// TODO: tests for force_set_metadata, force_clear_metadata, force_asset_status

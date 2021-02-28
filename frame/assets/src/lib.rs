@@ -365,6 +365,8 @@ pub mod pallet {
 		ForceCreated(T::AssetId, T::AccountId),
 		/// New metadata has been set for an asset. \[asset_id, name, symbol, decimals, is_frozen\]
 		MetadataSet(T::AssetId, Vec<u8>, Vec<u8>, u8, bool),
+		/// Metadata has been cleared for an asset. \[asset_id\]
+		MetadataCleared(T::AssetId),
 		/// (Additional) funds have been approved for transfer to a destination account.
 		/// \[asset_id, source, delegate, amount\]
 		ApprovedTransfer(T::AssetId, T::AccountId, T::AccountId, T::Balance),
@@ -938,10 +940,6 @@ pub mod pallet {
 
 		/// Set the metadata for an asset.
 		///
-		/// NOTE: There is no `unset_metadata` call. Simply pass an empty name, symbol,
-		/// and 0 decimals to this function to remove the metadata of an asset and
-		/// return your deposit.
-		///
 		/// Origin must be Signed and the sender should be the Owner of the asset `id`.
 		///
 		/// Funds of sender are reserved according to the formula:
@@ -953,7 +951,7 @@ pub mod pallet {
 		/// - `symbol`: The exchange symbol for this asset. Limited in length by `StringLimit`.
 		/// - `decimals`: The number of decimals this asset uses to represent one unit.
 		///
-		/// Emits `MaxZombiesChanged`.
+		/// Emits `MetadataSet`.
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::set_metadata(name.len() as u32, symbol.len() as u32))]
@@ -973,38 +971,131 @@ pub mod pallet {
 			ensure!(&origin == &d.owner, Error::<T>::NoPermission);
 
 			Metadata::<T>::try_mutate_exists(id, |metadata| {
-				let bytes_used = name.len() + symbol.len();
-				let old_deposit = match metadata {
-					Some(m) => m.deposit,
-					None => Default::default()
-				};
 				ensure!(metadata.as_ref().map_or(true, |m| !m.is_frozen), Error::<T>::NoPermission);
 
-				// Metadata is being removed
-				if bytes_used.is_zero() && decimals.is_zero() {
-					T::Currency::unreserve(&origin, old_deposit);
-					*metadata = None;
+				let old_deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
+				let new_deposit = T::MetadataDepositPerByte::get()
+					.saturating_mul(((name.len() + symbol.len()) as u32).into())
+					.saturating_add(T::MetadataDepositBase::get());
+
+				if new_deposit > old_deposit {
+					T::Currency::reserve(&origin, new_deposit - old_deposit)?;
 				} else {
-					let new_deposit = T::MetadataDepositPerByte::get()
-						.saturating_mul(((name.len() + symbol.len()) as u32).into())
-						.saturating_add(T::MetadataDepositBase::get());
-
-					if new_deposit > old_deposit {
-						T::Currency::reserve(&origin, new_deposit - old_deposit)?;
-					} else {
-						T::Currency::unreserve(&origin, old_deposit - new_deposit);
-					}
-
-					*metadata = Some(AssetMetadata {
-						deposit: new_deposit,
-						name: name.clone(),
-						symbol: symbol.clone(),
-						decimals,
-						is_frozen: false,
-					})
+					T::Currency::unreserve(&origin, old_deposit - new_deposit);
 				}
 
+				*metadata = Some(AssetMetadata {
+					deposit: new_deposit,
+					name: name.clone(),
+					symbol: symbol.clone(),
+					decimals,
+					is_frozen: false,
+				});
+
 				Self::deposit_event(Event::MetadataSet(id, name, symbol, decimals, false));
+				Ok(().into())
+			})
+		}
+
+		/// Clear the metadata for an asset.
+		///
+		/// Origin must be Signed and the sender should be the Owner of the asset `id`.
+		///
+		/// Any deposit is freed for the asset owner.
+		///
+		/// - `id`: The identifier of the asset to clear.
+		///
+		/// Emits `MetadataCleared`.
+		///
+		/// Weight: `O(1)`
+		// TODO: Weight
+		#[pallet::weight(0)]
+		pub(super) fn clear_metadata(
+			origin: OriginFor<T>,
+			#[pallet::compact] id: T::AssetId,
+		) -> DispatchResultWithPostInfo {
+			let origin = ensure_signed(origin)?;
+
+			let d = Asset::<T>::get(id).ok_or(Error::<T>::Unknown)?;
+			ensure!(&origin == &d.owner, Error::<T>::NoPermission);
+
+			Metadata::<T>::try_mutate_exists(id, |metadata| {
+				let deposit = metadata.take().ok_or(Error::<T>::Unknown)?.deposit;
+				T::Currency::unreserve(&d.owner, deposit);
+				Self::deposit_event(Event::MetadataCleared(id));
+				Ok(().into())
+			})
+		}
+
+		/// Force the metadata for an asset to some value.
+		///
+		/// Origin must be ForceOrigin.
+		///
+		/// Any deposit is left alone.
+		///
+		/// - `id`: The identifier of the asset to update.
+		/// - `name`: The user friendly name of this asset. Limited in length by `StringLimit`.
+		/// - `symbol`: The exchange symbol for this asset. Limited in length by `StringLimit`.
+		/// - `decimals`: The number of decimals this asset uses to represent one unit.
+		///
+		/// Emits `MetadataSet`.
+		///
+		/// Weight: `O(1)`
+		// TODO: Weight
+		#[pallet::weight(T::WeightInfo::set_metadata(name.len() as u32, symbol.len() as u32))]
+		pub(super) fn force_set_metadata(
+			origin: OriginFor<T>,
+			#[pallet::compact] id: T::AssetId,
+			name: Vec<u8>,
+			symbol: Vec<u8>,
+			decimals: u8,
+			is_frozen: bool,
+		) -> DispatchResultWithPostInfo {
+			T::ForceOrigin::ensure_origin(origin)?;
+
+			ensure!(name.len() <= T::StringLimit::get() as usize, Error::<T>::BadMetadata);
+			ensure!(symbol.len() <= T::StringLimit::get() as usize, Error::<T>::BadMetadata);
+
+			ensure!(Asset::<T>::contains_key(id), Error::<T>::Unknown);
+			Metadata::<T>::try_mutate_exists(id, |metadata| {
+				let deposit = metadata.take().ok_or(Error::<T>::Unknown)?.deposit;
+				*metadata = Some(AssetMetadata {
+					deposit,
+					name: name.clone(),
+					symbol: symbol.clone(),
+					decimals,
+					is_frozen,
+				});
+
+				Self::deposit_event(Event::MetadataSet(id, name, symbol, decimals, is_frozen));
+				Ok(().into())
+			})
+		}
+
+		/// Clear the metadata for an asset.
+		///
+		/// Origin must be ForceOrigin.
+		///
+		/// Any deposit is returned.
+		///
+		/// - `id`: The identifier of the asset to clear.
+		///
+		/// Emits `MetadataCleared`.
+		///
+		/// Weight: `O(1)`
+		// TODO: Weight
+		#[pallet::weight(0)]
+		pub(super) fn force_clear_metadata(
+			origin: OriginFor<T>,
+			#[pallet::compact] id: T::AssetId,
+		) -> DispatchResultWithPostInfo {
+			T::ForceOrigin::ensure_origin(origin)?;
+
+			let d = Asset::<T>::get(id).ok_or(Error::<T>::Unknown)?;
+			Metadata::<T>::try_mutate_exists(id, |metadata| {
+				let deposit = metadata.take().ok_or(Error::<T>::Unknown)?.deposit;
+				T::Currency::unreserve(&d.owner, deposit);
+				Self::deposit_event(Event::MetadataCleared(id));
 				Ok(().into())
 			})
 		}
@@ -1034,58 +1125,6 @@ pub mod pallet {
 				asset.is_sufficient = is_sufficient;
 				asset.is_frozen = is_frozen;
 				*maybe_asset = Some(asset);
-				Ok(().into())
-			})
-		}
-
-		#[pallet::weight(T::WeightInfo::set_metadata(name.len() as u32, symbol.len() as u32))]
-		pub(super) fn force_set_metadata(
-			origin: OriginFor<T>,
-			#[pallet::compact] id: T::AssetId,
-			name: Vec<u8>,
-			symbol: Vec<u8>,
-			decimals: u8,
-			is_frozen: bool,
-		) -> DispatchResultWithPostInfo {
-			T::ForceOrigin::ensure_origin(origin)?;
-
-			ensure!(name.len() <= T::StringLimit::get() as usize, Error::<T>::BadMetadata);
-			ensure!(symbol.len() <= T::StringLimit::get() as usize, Error::<T>::BadMetadata);
-
-			let d = Asset::<T>::get(id).ok_or(Error::<T>::Unknown)?;
-
-			Metadata::<T>::try_mutate_exists(id, |metadata| {
-				let bytes_used = name.len() + symbol.len();
-				let old_deposit = match metadata {
-					Some(m) => m.deposit,
-					None => Default::default()
-				};
-
-				// Metadata is being removed
-				if bytes_used.is_zero() && decimals.is_zero() {
-					T::Currency::unreserve(&d.owner, old_deposit);
-					*metadata = None;
-				} else {
-					let new_deposit = T::MetadataDepositPerByte::get()
-						.saturating_mul(((name.len() + symbol.len()) as u32).into())
-						.saturating_add(T::MetadataDepositBase::get());
-
-					if new_deposit > old_deposit {
-						T::Currency::reserve(&d.owner, new_deposit - old_deposit)?;
-					} else {
-						T::Currency::unreserve(&d.owner, old_deposit - new_deposit);
-					}
-
-					*metadata = Some(AssetMetadata {
-						deposit: new_deposit,
-						name: name.clone(),
-						symbol: symbol.clone(),
-						decimals,
-						is_frozen,
-					})
-				}
-
-				Self::deposit_event(Event::MetadataSet(id, name, symbol, decimals, is_frozen));
 				Ok(().into())
 			})
 		}
