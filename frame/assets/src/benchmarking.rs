@@ -308,6 +308,44 @@ benchmarks! {
 		assert_last_event::<T>(Event::MetadataCleared(Default::default()).into());
 	}
 
+	force_set_metadata {
+		let n in 0 .. T::StringLimit::get();
+		let s in 0 .. T::StringLimit::get();
+
+		let name = vec![0u8; n as usize];
+		let symbol = vec![0u8; s as usize];
+		let decimals = 12;
+
+		create_default_asset::<T>(true);
+
+		let origin = T::ForceOrigin::successful_origin();
+		let call = Call::<T>::force_set_metadata(
+			Default::default(),
+			name.clone(),
+			symbol.clone(),
+			decimals,
+			false,
+		);
+	}: { call.dispatch_bypass_filter(origin)? }
+	verify {
+		let id = Default::default();
+		assert_last_event::<T>(Event::MetadataSet(id, name, symbol, decimals, false).into());
+	}
+
+	force_clear_metadata {
+		let (caller, _) = create_default_asset::<T>(true);
+		T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T>::max_value());
+		let dummy = vec![0u8; T::StringLimit::get() as usize];
+		let origin = SystemOrigin::Signed(caller.clone()).into();
+		Assets::<T>::set_metadata(origin, Default::default(), dummy.clone(), dummy, 12)?;
+
+		let origin = T::ForceOrigin::successful_origin();
+		let call = Call::<T>::force_clear_metadata(Default::default());
+	}: { call.dispatch_bypass_filter(origin)? }
+	verify {
+		assert_last_event::<T>(Event::MetadataCleared(Default::default()).into());
+	}
+
 	force_asset_status {
 		let (caller, caller_lookup) = create_default_asset::<T>(true);
 

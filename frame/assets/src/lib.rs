@@ -1041,7 +1041,7 @@ pub mod pallet {
 		/// Emits `MetadataSet`.
 		///
 		/// Weight: `O(1)`
-		#[pallet::weight(T::WeightInfo::set_metadata(name.len() as u32, symbol.len() as u32))]
+		#[pallet::weight(T::WeightInfo::force_set_metadata(name.len() as u32, symbol.len() as u32))]
 		pub(super) fn force_set_metadata(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
@@ -1057,7 +1057,7 @@ pub mod pallet {
 
 			ensure!(Asset::<T>::contains_key(id), Error::<T>::Unknown);
 			Metadata::<T>::try_mutate_exists(id, |metadata| {
-				let deposit = metadata.take().ok_or(Error::<T>::Unknown)?.deposit;
+				let deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
 				*metadata = Some(AssetMetadata {
 					deposit,
 					name: name.clone(),
@@ -1082,7 +1082,7 @@ pub mod pallet {
 		/// Emits `MetadataCleared`.
 		///
 		/// Weight: `O(1)`
-		#[pallet::weight(T::WeightInfo::clear_metadata())]
+		#[pallet::weight(T::WeightInfo::force_clear_metadata())]
 		pub(super) fn force_clear_metadata(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
@@ -1098,8 +1098,7 @@ pub mod pallet {
 			})
 		}
 
-		// TODO: Weight
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::force_asset_status())]
 		pub(super) fn force_asset_status(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
