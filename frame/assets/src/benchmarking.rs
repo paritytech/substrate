@@ -140,9 +140,9 @@ benchmarks! {
 	}
 
 	destroy {
-		let c in 0 .. 10_000;
-		let s in 0 .. 10_000;
-		let a in 0 .. 10_000;
+		let c in 0 .. 5_000;
+		let s in 0 .. 5_000;
+		let a in 0 .. 5_000;
 		let (caller, _) = create_default_asset::<T>(true);
 		add_consumers::<T>(caller.clone(), c);
 		add_sufficients::<T>(caller.clone(), s);
@@ -154,9 +154,9 @@ benchmarks! {
 	}
 
 	force_destroy {
-		let c in 0 .. 10_000;
-		let s in 0 .. 10_000;
-		let a in 0 .. 10_000;
+		let c in 0 .. 5_000;
+		let s in 0 .. 5_000;
+		let a in 0 .. 5_000;
 		let (caller, _) = create_default_asset::<T>(true);
 		add_consumers::<T>(caller.clone(), c);
 		add_sufficients::<T>(caller.clone(), s);

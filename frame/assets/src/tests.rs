@@ -34,6 +34,99 @@ fn basic_minting_should_work() {
 }
 
 #[test]
+fn approval_lifecycle_works() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
+		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+		Balances::make_free_balance_be(&1, 1);
+		assert_ok!(Assets::approve_transfer(Origin::signed(1), 0, 2, 50));
+		assert_eq!(Balances::reserved_balance(&1), 1);
+		assert_ok!(Assets::transfer_approved(Origin::signed(2), 0, 1, 3, 40));
+		assert_ok!(Assets::cancel_approval(Origin::signed(1), 0, 2));
+		assert_eq!(Assets::balance(0, 1), 60);
+		assert_eq!(Assets::balance(0, 3), 40);
+		assert_eq!(Balances::reserved_balance(&1), 0);
+	});
+}
+
+#[test]
+fn approval_deposits_work() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
+		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+		let e = BalancesError::<Test>::InsufficientBalance;
+		assert_noop!(Assets::approve_transfer(Origin::signed(1), 0, 2, 50), e);
+
+		Balances::make_free_balance_be(&1, 1);
+		assert_ok!(Assets::approve_transfer(Origin::signed(1), 0, 2, 50));
+		assert_eq!(Balances::reserved_balance(&1), 1);
+
+		assert_ok!(Assets::transfer_approved(Origin::signed(2), 0, 1, 3, 50));
+		assert_eq!(Balances::reserved_balance(&1), 0);
+
+		assert_ok!(Assets::approve_transfer(Origin::signed(1), 0, 2, 50));
+		assert_ok!(Assets::cancel_approval(Origin::signed(1), 0, 2));
+		assert_eq!(Balances::reserved_balance(&1), 0);
+	});
+}
+
+#[test]
+fn cannot_transfer_more_than_approved() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
+		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+		Balances::make_free_balance_be(&1, 1);
+		assert_ok!(Assets::approve_transfer(Origin::signed(1), 0, 2, 50));
+		let e = Error::<Test>::Unapproved;
+		assert_noop!(Assets::transfer_approved(Origin::signed(2), 0, 1, 3, 51), e);
+	});
+}
+
+#[test]
+fn cannot_transfer_more_than_exists() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
+		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+		Balances::make_free_balance_be(&1, 1);
+		assert_ok!(Assets::approve_transfer(Origin::signed(1), 0, 2, 101));
+		let e = Error::<Test>::BalanceLow;
+		assert_noop!(Assets::transfer_approved(Origin::signed(2), 0, 1, 3, 101), e);
+	});
+}
+
+#[test]
+fn cancel_approval_works() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
+		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+		Balances::make_free_balance_be(&1, 1);
+		assert_ok!(Assets::approve_transfer(Origin::signed(1), 0, 2, 50));
+		assert_noop!(Assets::cancel_approval(Origin::signed(1), 1, 2), Error::<Test>::Unknown);
+		assert_noop!(Assets::cancel_approval(Origin::signed(2), 0, 2), Error::<Test>::Unknown);
+		assert_noop!(Assets::cancel_approval(Origin::signed(1), 0, 3), Error::<Test>::Unknown);
+		assert_ok!(Assets::cancel_approval(Origin::signed(1), 0, 2));
+		assert_noop!(Assets::cancel_approval(Origin::signed(1), 0, 2), Error::<Test>::Unknown);
+	});
+}
+
+#[test]
+fn force_cancel_approval_works() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
+		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+		Balances::make_free_balance_be(&1, 1);
+		assert_ok!(Assets::approve_transfer(Origin::signed(1), 0, 2, 50));
+		let e = Error::<Test>::NoPermission;
+		assert_noop!(Assets::force_cancel_approval(Origin::signed(2), 0, 1, 2), e);
+		assert_noop!(Assets::force_cancel_approval(Origin::signed(1), 1, 1, 2), Error::<Test>::Unknown);
+		assert_noop!(Assets::force_cancel_approval(Origin::signed(1), 0, 2, 2), Error::<Test>::Unknown);
+		assert_noop!(Assets::force_cancel_approval(Origin::signed(1), 0, 1, 3), Error::<Test>::Unknown);
+		assert_ok!(Assets::force_cancel_approval(Origin::signed(1), 0, 1, 2));
+		assert_noop!(Assets::force_cancel_approval(Origin::signed(1), 0, 1, 2), Error::<Test>::Unknown);
+	});
+}
+
+#[test]
 fn lifecycle_should_work() {
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&1, 100);
@@ -372,19 +465,5 @@ fn set_metadata_should_work() {
 		assert!(Metadata::<Test>::contains_key(0));
 		assert_ok!(Assets::set_metadata(Origin::signed(1), 0, vec![], vec![], 0));
 		assert!(!Metadata::<Test>::contains_key(0));
-	});
-}
-
-#[test]
-fn approvals_work() {
-	new_test_ext().execute_with(|| {
-		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
-		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
-		Balances::make_free_balance_be(&1, 100);
-		assert_ok!(Assets::approve_transfer(Origin::signed(1), 0, 2, 50));
-		assert_ok!(Assets::transfer_approved(Origin::signed(2), 0, 1, 3, 40));
-		assert_ok!(Assets::cancel_approval(Origin::signed(1), 0, 2));
-		assert_eq!(Assets::balance(0, 1), 60);
-		assert_eq!(Assets::balance(0, 3), 40);
 	});
 }

@@ -291,6 +291,8 @@ pub mod pallet {
 		ValueQuery
 	>;
 
+	// TODO: use struct instead of tuple.
+
 	#[pallet::storage]
 	/// Approved balance transfers. First balance is the amount approved for transfer. Second
 	/// is the amount of `T::Currency` reserved for storing this.
@@ -1021,6 +1023,33 @@ pub mod pallet {
 			let owner = ensure_signed(origin)?;
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
 			let key = (owner, beneficiary);
+			ensure!(Approvals::<T>::contains_key(id, &key), Error::<T>::Unknown);
+			let approval = Approvals::<T>::take(id, &key);
+			let (owner, beneficiary) = key;
+			T::Currency::unreserve(&owner, approval.1);
+
+			Self::deposit_event(Event::ApprovalCancelled(id, owner, beneficiary));
+			Ok(().into())
+		}
+
+		// TODO: Weight
+		#[pallet::weight(0)]
+		pub(super) fn force_cancel_approval(
+			origin: OriginFor<T>,
+			#[pallet::compact] id: T::AssetId,
+			owner: <T::Lookup as StaticLookup>::Source,
+			beneficiary: <T::Lookup as StaticLookup>::Source,
+		) -> DispatchResultWithPostInfo {
+			let origin = ensure_signed(origin)?;
+
+			let d = Asset::<T>::get(id).ok_or(Error::<T>::Unknown)?;
+			ensure!(&origin == &d.admin, Error::<T>::NoPermission);
+
+			let owner = T::Lookup::lookup(owner)?;
+			let beneficiary = T::Lookup::lookup(beneficiary)?;
+
+			let key = (owner, beneficiary);
+			ensure!(Approvals::<T>::contains_key(id, &key), Error::<T>::Unknown);
 			let approval = Approvals::<T>::take(id, &key);
 			let (owner, beneficiary) = key;
 			T::Currency::unreserve(&owner, approval.1);
