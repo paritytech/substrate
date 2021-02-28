@@ -1169,9 +1169,16 @@ macro_rules! impl_benchmark_test_suite {
 					let mut anything_failed = false;
 					println!("failing benchmark tests:");
 					for benchmark_name in $bench_module::<$test>::benchmarks($extra) {
-						if let Err(err) = std::panic::catch_unwind(|| test_bench_by_name::<$test>(benchmark_name)) {
-							println!("{}: {:?}", String::from_utf8_lossy(benchmark_name), err);
-							anything_failed = true;
+						match std::panic::catch_unwind(|| test_bench_by_name::<$test>(benchmark_name)) {
+							Err(err) => {
+								println!("{}: {:?}", String::from_utf8_lossy(benchmark_name), err);
+								anything_failed = true;
+							},
+							Ok(Err(err)) => {
+								println!("{}: {}", String::from_utf8_lossy(benchmark_name), err);
+								anything_failed = true;
+							},
+							Ok(Ok(_)) => (),
 						}
 					}
 					assert!(!anything_failed);

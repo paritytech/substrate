@@ -112,7 +112,11 @@ use sp_core::{
 	hexdisplay::HexDisplay,
 	storage::{StorageKey, StorageData},
 };
-use futures::future::Future;
+use futures::{
+	compat::Future01CompatExt,
+	TryFutureExt,
+};
+use codec::{Encode, Decode};
 
 type KeyPair = (StorageKey, StorageData);
 type Number = u32;
@@ -192,7 +196,6 @@ impl CacheConfig {
 pub struct Builder {
 	inject: Vec<KeyPair>,
 	mode: Mode,
-	chain: String,
 }
 
 impl Default for Builder {
@@ -205,7 +208,6 @@ impl Default for Builder {
 				cache: None,
 				modules: Default::default(),
 			}),
-			chain: "UNSET".into(),
 		}
 	}
 }
@@ -229,74 +231,71 @@ impl Builder {
 
 // RPC methods
 impl Builder {
-	async fn rpc_get_head(&self) -> Hash {
-		let mut rt = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
+	async fn rpc_get_head(&self) -> Result<Hash, &'static str> {
 		let uri = self.as_online().uri.clone();
-		rt.block_on::<_, _, ()>(futures::lazy(move || {
-			trace!(target: LOG_TARGET, "rpc: finalized_head");
-			let client: sc_rpc_api::chain::ChainClient<Number, Hash, (), ()> =
-				jsonrpc_core_client::transports::http::connect(&uri).wait().unwrap();
-			Ok(client.finalized_head().wait().unwrap())
-		}))
-		.unwrap()
+		trace!(target: LOG_TARGET, "rpc: finalized_head");
+		let client: sc_rpc_api::chain::ChainClient<Number, Hash, (), ()> =
+			jsonrpc_core_client::transports::http::connect(&uri)
+				.compat()
+				.map_err(|_| "client initialization failed")
+				.await?;
+		client.finalized_head().compat().map_err(|_| "rpc finalized_head failed.").await
 	}
 
 	/// Relay the request to `state_getPairs` rpc endpoint.
 	///
 	/// Note that this is an unsafe RPC.
-	async fn rpc_get_pairs(&self, prefix: StorageKey, at: Hash) -> Vec<KeyPair> {
-		let mut rt = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
+	async fn rpc_get_pairs(
+		&self,
+		prefix: StorageKey,
+		at: Hash,
+	) -> Result<Vec<KeyPair>, &'static str> {
 		let uri = self.as_online().uri.clone();
-		rt.block_on::<_, _, ()>(futures::lazy(move || {
-			trace!(target: LOG_TARGET, "rpc: storage_pairs: {:?} / {:?}", prefix, at);
-			let client: sc_rpc_api::state::StateClient<Hash> =
-				jsonrpc_core_client::transports::http::connect(&uri).wait().unwrap();
-			Ok(client.storage_pairs(prefix, Some(at)).wait().unwrap())
-		}))
-		.unwrap()
-	}
-
-	/// Get the chain name.
-	async fn chain_name(&self) -> String {
-		let mut rt = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
-		let uri = self.as_online().uri.clone();
-		rt.block_on::<_, _, ()>(futures::lazy(move || {
-			trace!(target: LOG_TARGET, "rpc: system_chain");
-			let client: sc_rpc_api::system::SystemClient<(), ()> =
-				jsonrpc_core_client::transports::http::connect(&uri).wait().unwrap();
-			Ok(client.system_chain().wait().unwrap())
-		}))
-		.unwrap()
+		trace!(target: LOG_TARGET, "rpc: storage_pairs: {:?} / {:?}", prefix, at);
+		let client: sc_rpc_api::state::StateClient<Hash> =
+			jsonrpc_core_client::transports::http::connect(&uri)
+				.compat()
+				.map_err(|_| "client initialization failed")
+				.await?;
+		client
+			.storage_pairs(prefix, Some(at))
+			.compat()
+			.map_err(|_| "rpc finalized_head failed.")
+			.await
 	}
 }
 
 // Internal methods
 impl Builder {
 	/// Save the given data as cache.
-	fn save_cache(&self, data: &[KeyPair], path: &Path) {
-		let bdata = bincode::serialize(data).unwrap();
+	fn save_cache(&self, data: &[KeyPair], path: &Path) -> Result<(), &'static str> {
 		info!(target: LOG_TARGET, "writing to cache file {:?}", path);
-		fs::write(path, bdata).unwrap();
+		fs::write(path, data.encode()).map_err(|_| "fs::write failed.")?;
+		Ok(())
 	}
 
 	/// initialize `Self` from cache. Panics if the file does not exist.
-	fn load_cache(&self, path: &Path) -> Vec<KeyPair> {
+	fn load_cache(&self, path: &Path) -> Result<Vec<KeyPair>, &'static str> {
 		info!(target: LOG_TARGET, "scraping keypairs from cache {:?}", path,);
-		let bytes = fs::read(path).unwrap();
-		bincode::deserialize(&bytes[..]).unwrap()
+		let bytes = fs::read(path).map_err(|_| "fs::read failed.")?;
+		Decode::decode(&mut &*bytes).map_err(|_| "decode failed")
 	}
 
 	/// Build `Self` from a network node denoted by `uri`.
-	async fn load_remote(&self) -> Vec<KeyPair> {
+	async fn load_remote(&self) -> Result<Vec<KeyPair>, &'static str> {
 		let config = self.as_online();
-		let at = self.as_online().at.unwrap().clone();
+		let at = self
+			.as_online()
+			.at
+			.expect("online config must be initialized by this point; qed.")
+			.clone();
 		info!(target: LOG_TARGET, "scraping keypairs from remote node {} @ {:?}", config.uri, at);
 
 		let keys_and_values = if config.modules.len() > 0 {
 			let mut filtered_kv = vec![];
 			for f in config.modules.iter() {
 				let hashed_prefix = StorageKey(twox_128(f.as_bytes()).to_vec());
-				let module_kv = self.rpc_get_pairs(hashed_prefix.clone(), at).await;
+				let module_kv = self.rpc_get_pairs(hashed_prefix.clone(), at).await?;
 				info!(
 					target: LOG_TARGET,
 					"downloaded data for module {} (count: {} / prefix: {:?}).",
@@ -309,25 +308,26 @@ impl Builder {
 			filtered_kv
 		} else {
 			info!(target: LOG_TARGET, "downloading data for all modules.");
-			self.rpc_get_pairs(StorageKey(vec![]), at).await.into_iter().collect::<Vec<_>>()
+			self.rpc_get_pairs(StorageKey(vec![]), at).await?.into_iter().collect::<Vec<_>>()
 		};
 
-		keys_and_values
+		Ok(keys_and_values)
 	}
 
-	async fn init_remote_client(&mut self) {
-		self.as_online_mut().at = Some(self.rpc_get_head().await);
-		self.chain = self.chain_name().await;
+	async fn init_remote_client(&mut self) -> Result<(), &'static str> {
+		let at = self.rpc_get_head().await?;
+		self.as_online_mut().at = Some(at);
+		Ok(())
 	}
 
-	async fn pre_build(mut self) -> Vec<KeyPair> {
+	async fn pre_build(mut self) -> Result<Vec<KeyPair>, &'static str> {
 		let mut base_kv = match self.mode.clone() {
-			Mode::Offline(config) => self.load_cache(&config.cache.path()),
+			Mode::Offline(config) => self.load_cache(&config.cache.path())?,
 			Mode::Online(config) => {
-				self.init_remote_client().await;
-				let kp = self.load_remote().await;
+				self.init_remote_client().await?;
+				let kp = self.load_remote().await?;
 				if let Some(c) = config.cache {
-					self.save_cache(&kp, &c.path());
+					self.save_cache(&kp, &c.path())?;
 				}
 				kp
 			}
@@ -339,7 +339,7 @@ impl Builder {
 			self.inject.len()
 		);
 		base_kv.extend(self.inject.clone());
-		base_kv
+		Ok(base_kv)
 	}
 }
 
@@ -365,8 +365,8 @@ impl Builder {
 	}
 
 	/// Build the test externalities.
-	pub async fn build(self) -> TestExternalities {
-		let kv = self.pre_build().await;
+	pub async fn build(self) -> Result<TestExternalities, &'static str> {
+		let kv = self.pre_build().await?;
 		let mut ext = TestExternalities::new_empty();
 
 		info!(target: LOG_TARGET, "injecting a total of {} keys", kv.len());
@@ -374,10 +374,11 @@ impl Builder {
 			let (k, v) = (k.0, v.0);
 			ext.insert(k, v);
 		}
-		ext
+		Ok(ext)
 	}
 }
 
+#[cfg(feature = "remote-test")]
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -390,7 +391,6 @@ mod tests {
 	}
 
 	#[async_std::test]
-	#[cfg(feature = "remote-test")]
 	async fn can_build_one_pallet() {
 		init_logger();
 		Builder::new()
@@ -400,6 +400,7 @@ mod tests {
 			}))
 			.build()
 			.await
+			.unwrap()
 			.execute_with(|| {});
 	}
 
@@ -412,11 +413,11 @@ mod tests {
 			}))
 			.build()
 			.await
+			.unwrap()
 			.execute_with(|| {});
 	}
 
 	#[async_std::test]
-	#[cfg(feature = "remote-test")]
 	async fn can_create_cache() {
 		init_logger();
 		Builder::new()
@@ -429,6 +430,7 @@ mod tests {
 			}))
 			.build()
 			.await
+			.unwrap()
 			.execute_with(|| {});
 
 		let to_delete = std::fs::read_dir(CacheConfig::default().directory)
@@ -446,9 +448,8 @@ mod tests {
 	}
 
 	#[async_std::test]
-	#[cfg(feature = "remote-test")]
 	async fn can_build_all() {
 		init_logger();
-		Builder::new().build().await.execute_with(|| {});
+		Builder::new().build().await.unwrap().execute_with(|| {});
 	}
 }

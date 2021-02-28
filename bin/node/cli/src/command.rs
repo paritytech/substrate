@@ -159,7 +159,7 @@ pub fn run() -> Result<()> {
 				let task_manager = sc_service::TaskManager::new(
 					config.task_executor.clone(),
 					registry,
-				).unwrap();
+				).map_err(|e| sc_cli::Error::Service(sc_service::Error::Prometheus(e)))?;
 
 				Ok((cmd.run::<Block, Executor>(config), task_manager))
 			})
