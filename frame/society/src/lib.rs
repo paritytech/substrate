@@ -433,7 +433,7 @@ decl_storage! {
 		pub Rules get(fn rules): Option<T::Hash>;
 
 		/// The current set of candidates; bidders that are attempting to become members.
-		pub Candidates get(fn candidates): Vec<Bid<T::AccountId, BalanceOf<T, I>, <T as frame_system::Config>::Call>>;
+		pub Candidates get(fn candidates): Vec<Bid<T::AccountId, BalanceOf<T, I>, OpaqueCall>>;
 
 		/// The set of suspended candidates.
 		pub SuspendedCandidates get(fn suspended_candidate):
@@ -1435,24 +1435,25 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 					.collect::<Vec<_>>();
 
 				// Select one of the votes at random.
-				// Note that `Vote::Skeptical` and `Vote::Reject` both reject the candidate.
+				// Note that `Vote::Skeptic` and `Vote::Reject` both reject the candidate.
 				let is_accepted = pick_item(&mut rng, &votes).map(|x| x.0) == Some(Vote::Approve);
 
 				let matching_vote = if is_accepted { Vote::Approve } else { Vote::Reject };
 
-				let bad_vote = |m: &T::AccountId| {
+				let bad_vote = |v: Vote, m: &T::AccountId| {
 					// Voter voted wrong way (or was just a lazy skeptic) then reduce their payout
-					// and increase their strikes. after MaxStrikes then they go into suspension.
+					// increase their strikes only if skeptic. after MaxStrikes then they go into suspension.
 					let amount = Self::slash_payout(m, T::WrongSideDeduction::get());
-					
-					let strikes = <Strikes<T, I>>::mutate(m, |s| {
-						*s += 1;
+					let mut strikes = <Strikes<T, I>>::get(m); 
+					if v == Vote::Skeptic {
+						strikes += 1;
 						Self::deposit_event(RawEvent::Strike(candidate.clone(), m.clone()));
-						*s
-					});
+						<Strikes<T, I>>::insert(m, strikes);
+					}
 					if strikes >= T::MaxStrikes::get() {
 						Self::suspend_member(m);
 					}
+					
 					amount
 				};
 
@@ -1460,7 +1461,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 				rewardees.extend(votes.into_iter()
 					.filter_map(|(v, m)|
 						if v == matching_vote { Some(m) } else {
-							total_slash += bad_vote(m);
+							total_slash += bad_vote(v, m);
 							None
 						}
 					).cloned()
