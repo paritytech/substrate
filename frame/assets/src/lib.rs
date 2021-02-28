@@ -680,7 +680,9 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(target)?;
 
-			Ok(Self::do_transfer(id, origin, dest, amount, None)?.into())
+			Self::do_transfer(id, &origin, &dest, amount, None)?;
+			Self::deposit_event(Event::Transferred(id, origin, dest, amount));
+			Ok(().into())
 		}
 
 		/// Move some assets from one account to another.
@@ -714,7 +716,9 @@ pub mod pallet {
 			let source = T::Lookup::lookup(source)?;
 			let dest = T::Lookup::lookup(dest)?;
 
-			Ok(Self::do_transfer(id, source, dest, amount, Some(origin))?.into())
+			Self::do_transfer(id, &source, &dest, amount, Some(origin))?;
+			Self::deposit_event(Event::Transferred(id, source, dest, amount));
+			Ok(().into())
 		}
 
 		/// Disallow further unprivileged transfers from an account.
@@ -1038,6 +1042,9 @@ pub mod pallet {
 			Approvals::<T>::try_mutate_exists(id, &key, |approved| -> DispatchResult {
 				let (mut remaining, deposit) = approved.take().unwrap_or_default();
 				ensure!(remaining >= amount, Error::<T>::Unapproved);
+
+				Self::do_transfer(id, &key.0, &destination, amount, None)?;
+
 				remaining -= amount;
 				if remaining.is_zero() {
 					T::Currency::unreserve(&key.0, deposit);
@@ -1131,14 +1138,14 @@ impl<T: Config> Pallet<T> {
 
 	fn do_transfer(
 		id: T::AssetId,
-		source: T::AccountId,
-		dest: T::AccountId,
+		source: &T::AccountId,
+		dest: &T::AccountId,
 		amount: T::Balance,
 		maybe_need_admin: Option<T::AccountId>,
 	) -> DispatchResult {
 		ensure!(!amount.is_zero(), Error::<T>::AmountZero);
 
-		let mut source_account = Account::<T>::get(id, &source);
+		let mut source_account = Account::<T>::get(id, source);
 		ensure!(!source_account.is_frozen, Error::<T>::Frozen);
 
 		source_account.balance = source_account.balance.checked_sub(&amount)
@@ -1162,7 +1169,7 @@ impl<T: Config> Pallet<T> {
 				source_account.balance = Zero::zero();
 			}
 
-			Account::<T>::try_mutate(id, &dest, |a| -> DispatchResult {
+			Account::<T>::try_mutate(id, dest, |a| -> DispatchResult {
 				let new_balance = a.balance.saturating_add(amount);
 
 				// This is impossible since `new_balance > amount > min_balance`, but we can
@@ -1170,20 +1177,19 @@ impl<T: Config> Pallet<T> {
 				ensure!(new_balance >= details.min_balance, Error::<T>::BalanceLow);
 
 				if a.balance.is_zero() {
-					a.sufficient = Self::new_account(&dest, details)?;
+					a.sufficient = Self::new_account(dest, details)?;
 				}
 				a.balance = new_balance;
 				Ok(())
 			})?;
 
 			if source_account.balance.is_zero() {
-				Self::dead_account(&source, details, source_account.sufficient);
-				Account::<T>::remove(id, &source);
+				Self::dead_account(source, details, source_account.sufficient);
+				Account::<T>::remove(id, source);
 			} else {
-				Account::<T>::insert(id, &source, &source_account)
+				Account::<T>::insert(id, source, &source_account)
 			}
 
-			Self::deposit_event(Event::Transferred(id, source, dest, amount));
 			Ok(())
 		})
 	}
@@ -1632,6 +1638,20 @@ mod tests {
 			assert!(Metadata::<Test>::contains_key(0));
 			assert_ok!(Assets::set_metadata(Origin::signed(1), 0, vec![], vec![], 0));
 			assert!(!Metadata::<Test>::contains_key(0));
+		});
+	}
+
+	#[test]
+	fn approvals_work() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
+			assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+			Balances::make_free_balance_be(&1, 100);
+			assert_ok!(Assets::approve_transfer(Origin::signed(1), 0, 2, 50));
+			assert_ok!(Assets::transfer_approved(Origin::signed(2), 0, 1, 3, 40));
+			assert_ok!(Assets::cancel_approval(Origin::signed(1), 0, 2));
+			assert_eq!(Assets::balance(0, 1), 60);
+			assert_eq!(Assets::balance(0, 3), 40);
 		});
 	}
 }
