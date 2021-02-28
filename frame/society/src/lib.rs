@@ -266,7 +266,10 @@ use sp_runtime::{Percent, ModuleId, RuntimeDebug,
 		TrailingZeroInput, CheckedSub
 	}
 };
-use frame_support::{Parameter, decl_error, decl_event, decl_module, decl_storage, dispatch::{DispatchResult, Dispatchable, GetDispatchInfo, PostDispatchInfo}, ensure};
+use frame_support::{
+	Parameter, decl_error, decl_event, decl_module, decl_storage, ensure,
+	dispatch::{DispatchResult, Dispatchable, GetDispatchInfo, PostDispatchInfo},
+};
 use frame_support::weights::Weight;
 use frame_support::traits::{
 	Currency, ReservableCurrency, Randomness, Get, ChangeMembers, BalanceStatus, IsSubType,
@@ -430,7 +433,7 @@ decl_storage! {
 		pub Rules get(fn rules): Option<T::Hash>;
 
 		/// The current set of candidates; bidders that are attempting to become members.
-		pub Candidates get(fn candidates): Vec<Bid<T::AccountId, BalanceOf<T, I>, OpaqueCall>>;
+		pub Candidates get(fn candidates): Vec<Bid<T::AccountId, BalanceOf<T, I>, <T as frame_system::Config>::Call>>;
 
 		/// The set of suspended candidates.
 		pub SuspendedCandidates get(fn suspended_candidate):
