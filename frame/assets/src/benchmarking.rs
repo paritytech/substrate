@@ -27,7 +27,7 @@ use frame_benchmarking::{
 	benchmarks, account, whitelisted_caller, whitelist_account, impl_benchmark_test_suite
 };
 use frame_support::traits::Get;
-//use frame_support::{traits::EnsureOrigin, dispatch::UnfilteredDispatchable};
+use frame_support::{traits::EnsureOrigin, dispatch::UnfilteredDispatchable};
 
 use crate::Module as Assets;
 
@@ -306,6 +306,25 @@ benchmarks! {
 	}: _(SystemOrigin::Signed(caller), Default::default())
 	verify {
 		assert_last_event::<T>(Event::MetadataCleared(Default::default()).into());
+	}
+
+	force_asset_status {
+		let (caller, caller_lookup) = create_default_asset::<T>(true);
+
+		let origin = T::ForceOrigin::successful_origin();
+		let call = Call::<T>::force_asset_status(
+			Default::default(),
+			caller_lookup.clone(),
+			caller_lookup.clone(),
+			caller_lookup.clone(),
+			caller_lookup.clone(),
+			100u32.into(),
+			true,
+			false,
+		);
+	}: { call.dispatch_bypass_filter(origin)? }
+	verify {
+		assert_last_event::<T>(Event::AssetStatusChanged(Default::default()).into());
 	}
 
 	approve_transfer {

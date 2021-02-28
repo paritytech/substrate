@@ -377,6 +377,9 @@ pub mod pallet {
 		/// the approved `delegate`.
 		/// \[id, owner, delegate, destination\]
 		TransferredApproved(T::AssetId, T::AccountId, T::AccountId, T::AccountId, T::Balance),
+		/// An aset has had its attributes changed by the `Force` origin.
+		/// \[id\]
+		AssetStatusChanged(T::AssetId),
 	}
 
 	#[deprecated(note = "use `Event` instead")]
@@ -1006,8 +1009,7 @@ pub mod pallet {
 		/// Emits `MetadataCleared`.
 		///
 		/// Weight: `O(1)`
-		// TODO: Weight
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::clear_metadata())]
 		pub(super) fn clear_metadata(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
@@ -1039,7 +1041,6 @@ pub mod pallet {
 		/// Emits `MetadataSet`.
 		///
 		/// Weight: `O(1)`
-		// TODO: Weight
 		#[pallet::weight(T::WeightInfo::set_metadata(name.len() as u32, symbol.len() as u32))]
 		pub(super) fn force_set_metadata(
 			origin: OriginFor<T>,
@@ -1081,8 +1082,7 @@ pub mod pallet {
 		/// Emits `MetadataCleared`.
 		///
 		/// Weight: `O(1)`
-		// TODO: Weight
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::clear_metadata())]
 		pub(super) fn force_clear_metadata(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
@@ -1103,10 +1103,10 @@ pub mod pallet {
 		pub(super) fn force_asset_status(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			owner: T::AccountId,
-			issuer: T::AccountId,
-			admin: T::AccountId,
-			freezer: T::AccountId,
+			owner: <T::Lookup as StaticLookup>::Source,
+			issuer: <T::Lookup as StaticLookup>::Source,
+			admin: <T::Lookup as StaticLookup>::Source,
+			freezer: <T::Lookup as StaticLookup>::Source,
 			#[pallet::compact] min_balance: T::Balance,
 			is_sufficient: bool,
 			is_frozen: bool,
@@ -1115,20 +1115,21 @@ pub mod pallet {
 
 			Asset::<T>::try_mutate(id, |maybe_asset| {
 				let mut asset = maybe_asset.take().ok_or(Error::<T>::Unknown)?;
-				asset.owner = owner;
-				asset.issuer = issuer;
-				asset.admin = admin;
-				asset.freezer = freezer;
+				asset.owner = T::Lookup::lookup(owner)?;
+				asset.issuer = T::Lookup::lookup(issuer)?;
+				asset.admin = T::Lookup::lookup(admin)?;
+				asset.freezer = T::Lookup::lookup(freezer)?;
 				asset.min_balance = min_balance;
 				asset.is_sufficient = is_sufficient;
 				asset.is_frozen = is_frozen;
 				*maybe_asset = Some(asset);
+
+				Self::deposit_event(Event::AssetStatusChanged(id));
 				Ok(().into())
 			})
 		}
 
-		// TODO: Weight
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::approve_transfer())]
 		pub(super) fn approve_transfer(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
@@ -1155,8 +1156,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		// TODO: Weight
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::cancel_approval())]
 		pub(super) fn cancel_approval(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
@@ -1172,8 +1172,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		// TODO: Weight
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::force_cancel_approval())]
 		pub(super) fn force_cancel_approval(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
@@ -1200,8 +1199,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		// TODO: Weight
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::transfer_approved())]
 		pub(super) fn transfer_approved(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
