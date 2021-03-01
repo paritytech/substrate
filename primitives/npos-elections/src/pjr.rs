@@ -296,6 +296,72 @@ fn slack<AccountId: IdentifierT>(voter: &Voter<AccountId>, t: Threshold) -> Exte
 	budget.saturating_sub(leftover)
 }
 
+/// Validate a challenge to an election result.
+///
+/// A challenge to an election result is valid if there exists some counterexample for which
+/// `pre_score(counterexample) >= threshold`. Validating an existing counterexample is computationally
+/// cheaper than re-running the PJR check.
+///
+/// Returns `true` if the challenge is valid: the proposed solution does not satisfy PJR.
+/// Returns `false` if the challenge is invalid: the proposed solution does in fact satisfy PJR.
+fn validate_pjr_challenge_core<AccountId: IdentifierT>(
+	counterexample: AccountId,
+	candidates: &[CandidatePtr<AccountId>],
+	voters: &[Voter<AccountId>],
+	threshold: Threshold,
+) -> bool {
+	let candidate = match candidates.iter().find(|candidate| candidate.borrow().who == counterexample) {
+		None => return false,
+		Some(candidate) => candidate.clone(),
+	};
+	pre_score(candidate, &voters, threshold) >= threshold
+}
+
+/// Validate a challenge to an election result.
+///
+/// A challenge to an election result is valid if there exists some counterexample for which
+/// `pre_score(counterexample) >= threshold`. Validating an existing counterexample is computationally
+/// cheaper than re-running the PJR check.
+///
+/// This function uses a supplied threshold.
+///
+/// Returns `true` if the challenge is valid: the proposed solution does not satisfy PJR.
+/// Returns `false` if the challenge is invalid: the proposed solution does in fact satisfy PJR.
+pub fn validate_t_pjr_challenge<AccountId: IdentifierT>(
+	counterexample: AccountId,
+	supports: &Supports<AccountId>,
+	all_candidates: Vec<AccountId>,
+	all_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
+	threshold: Threshold,
+) -> bool {
+	let (candidates, voters) = prepare_pjr_input(
+		supports,
+		all_candidates,
+		all_voters,
+	);
+	validate_pjr_challenge_core(counterexample, &candidates, &voters, threshold)
+}
+
+/// Validate a challenge to an election result.
+///
+/// A challenge to an election result is valid if there exists some counterexample for which
+/// `pre_score(counterexample) >= threshold`. Validating an existing counterexample is computationally
+/// cheaper than re-running the PJR check.
+///
+/// This function uses the standard threshold.
+///
+/// Returns `true` if the challenge is valid: the proposed solution does not satisfy PJR.
+/// Returns `false` if the challenge is invalid: the proposed solution does in fact satisfy PJR.
+pub fn validate_pjr_challenge<AccountId: IdentifierT>(
+	counterexample: AccountId,
+	supports: &Supports<AccountId>,
+	all_candidates: Vec<AccountId>,
+	all_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
+) -> bool {
+	let threshold = standard_threshold(supports.len(), all_voters.iter().map(|voter| voter.1 as ExtendedBalance));
+	validate_t_pjr_challenge(counterexample, supports, all_candidates, all_voters, threshold)
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -388,9 +454,9 @@ mod tests {
 
 		// fyi. this is not PJR, obviously because the votes of 3 can bump the stake a lot but they
 		// are being ignored.
-		assert!(!pjr_check_core(&candidates, &voters, 1));
-		assert!(!pjr_check_core(&candidates, &voters, 10));
-		assert!(!pjr_check_core(&candidates, &voters, 20));
+		assert!(pjr_check_core(&candidates, &voters, 1).is_err());
+		assert!(pjr_check_core(&candidates, &voters, 10).is_err());
+		assert!(pjr_check_core(&candidates, &voters, 20).is_err());
 	}
 
 	// These next tests ensure that the threshold phase change property holds for us, but that's not their real purpose.
@@ -476,7 +542,7 @@ mod tests {
 		let mut prev_threshold = 0;
 
 		// find the binary range containing the threshold beyond which the PJR check succeeds
-		while !pjr_check_core(&candidates, &voters, threshold) {
+		while pjr_check_core(&candidates, &voters, threshold).is_err() {
 			prev_threshold = threshold;
 			threshold = threshold.checked_mul(2).expect("pjr check must fail before we run out of capacity in u128");
 		}
@@ -488,7 +554,7 @@ mod tests {
 		while high_bound - low_bound > 1 {
 			// maintain the invariant that low_bound fails and high_bound passes
 			let test = low_bound + ((high_bound - low_bound) / 2);
-			if pjr_check_core(&candidates, &voters, test) {
+			if pjr_check_core(&candidates, &voters, test).is_ok() {
 				high_bound = test;
 			} else {
 				low_bound = test;
@@ -502,12 +568,12 @@ mod tests {
 		let mut unexpected_failures = Vec::new();
 		let mut unexpected_successes = Vec::new();
 		for t in 0..=low_bound {
-			if pjr_check_core(&candidates, &voters, t) {
+			if pjr_check_core(&candidates, &voters, t).is_ok() {
 				unexpected_successes.push(t);
 			}
 		}
 		for t in high_bound..(high_bound*2) {
-			if !pjr_check_core(&candidates, &voters, t) {
+			if pjr_check_core(&candidates, &voters, t).is_err() {
 				unexpected_failures.push(t);
 			}
 		}
