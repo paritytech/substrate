@@ -615,7 +615,7 @@ cfg_if! {
 				}
 
 				fn execute_block(block: Block) {
-					system::execute_block(block)
+					system::execute_block(block);
 				}
 
 				fn initialize_block(header: &<Block as BlockT>::Header) {
@@ -869,7 +869,7 @@ cfg_if! {
 				}
 
 				fn execute_block(block: Block) {
-					system::execute_block(block)
+					system::execute_block(block);
 				}
 
 				fn initialize_block(header: &<Block as BlockT>::Header) {
