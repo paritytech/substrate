@@ -60,6 +60,6 @@ Bounty protocol:
 - `accept_subcurator` - Accept a subbounty assignment from the Master curator,
    setting a subcurator deposit.
 - `unassign_subcurator` - Unassign an accepted subcurator from a specific earmark.
-- `award_subbounty` - Close and specify the subbouty payout benefiiary address.
+- `award_subbounty` - Close and specify the subbouty payout beneficiary address.
 - `claim_subbounty` - Claim a payout amount & subcurator fee for specific subbounty.
 - `close_subbounty` - Cancel the earmark for a specific treasury amount and close the bounty.
