@@ -32,11 +32,10 @@ use sp_consensus_babe::{AuthorityPair, Slot, AllowedSlots, make_transcript, make
 use sc_consensus_slots::BackoffAuthoringOnFinalizedHeadLagging;
 use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 use sp_consensus::{
-	NoNetwork as DummyOracle, Proposal, RecordProof, AlwaysCanAuthor,
+	NoNetwork as DummyOracle, Proposal, DisableProofRecording, AlwaysCanAuthor,
 	import_queue::{BoxBlockImport, BoxJustificationImport},
 };
-use sc_network_test::*;
-use sc_network_test::{Block as TestBlock, PeersClient};
+use sc_network_test::{Block as TestBlock, *};
 use sc_network::config::ProtocolConfig;
 use sp_runtime::{generic::DigestItem, traits::{Block as BlockT, DigestFor}};
 use sc_client_api::{BlockchainEvents, backend::TransactionFor};
@@ -44,8 +43,7 @@ use log::debug;
 use std::{time::Duration, cell::RefCell, task::Poll};
 use rand::RngCore;
 use rand_chacha::{
-	rand_core::SeedableRng,
-	ChaChaRng,
+	rand_core::SeedableRng, ChaChaRng,
 };
 use sc_keystore::LocalKeystore;
 use sp_application_crypto::key_types::BABE;
@@ -112,7 +110,8 @@ impl DummyProposer {
 			Result<
 				Proposal<
 					TestBlock,
-					sc_client_api::TransactionFor<substrate_test_runtime_client::Backend, TestBlock>
+					sc_client_api::TransactionFor<substrate_test_runtime_client::Backend, TestBlock>,
+					()
 				>,
 				Error
 			>
@@ -163,21 +162,22 @@ impl DummyProposer {
 		// mutate the block header according to the mutator.
 		(self.factory.mutator)(&mut block.header, Stage::PreSeal);
 
-		future::ready(Ok(Proposal { block, proof: None, storage_changes: Default::default() }))
+		future::ready(Ok(Proposal { block, proof: (), storage_changes: Default::default() }))
 	}
 }
 
 impl Proposer<TestBlock> for DummyProposer {
 	type Error = Error;
 	type Transaction = sc_client_api::TransactionFor<substrate_test_runtime_client::Backend, TestBlock>;
-	type Proposal = future::Ready<Result<Proposal<TestBlock, Self::Transaction>, Error>>;
+	type Proposal = future::Ready<Result<Proposal<TestBlock, Self::Transaction, ()>, Error>>;
+	type ProofRecording = DisableProofRecording;
+	type Proof = ();
 
 	fn propose(
 		mut self,
 		_: InherentData,
 		pre_digests: DigestFor<TestBlock>,
 		_: Duration,
-		_: RecordProof,
 	) -> Self::Proposal {
 		self.propose_with(pre_digests)
 	}

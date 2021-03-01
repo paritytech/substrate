@@ -75,6 +75,24 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 
 				result.saturating_add(additional_write)
 			}
+
+			#[cfg(feature = "try-runtime")]
+			fn pre_upgrade() -> Result<(), &'static str> {
+				<
+					Self
+					as
+					#frame_support::traits::Hooks<<T as #frame_system::Config>::BlockNumber>
+				>::pre_upgrade()
+			}
+
+			#[cfg(feature = "try-runtime")]
+			fn post_upgrade() -> Result<(), &'static str> {
+				<
+					Self
+					as
+					#frame_support::traits::Hooks<<T as #frame_system::Config>::BlockNumber>
+				>::post_upgrade()
+			}
 		}
 
 		impl<#type_impl_gen>

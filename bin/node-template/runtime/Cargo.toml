@@ -41,7 +41,7 @@ frame-system-rpc-runtime-api = { version = "3.0.0", default-features = false, pa
 pallet-transaction-payment-rpc-runtime-api = { version = "3.0.0", default-features = false, path = "../../../frame/transaction-payment/rpc/runtime-api/" }
 
 # Used for runtime benchmarking
-frame-benchmarking = { version = "3.0.0", default-features = false, path = "../../../frame/benchmarking", optional = true }
+frame-benchmarking = { version = "3.1.0", default-features = false, path = "../../../frame/benchmarking", optional = true }
 frame-system-benchmarking = { version = "3.0.0", default-features = false, path = "../../../frame/system/benchmarking", optional = true }
 hex-literal = { version = "0.3.1", optional = true }
 
