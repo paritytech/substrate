@@ -2276,7 +2276,7 @@ dependencies = [
 [[package]]
 name = "hash-db"
 version = "0.15.2"
-source = "git+https://github.com/cheme/trie.git?branch=light_iter#d0c47410d5a63b5e6522c27b5be5165a9815a246"
+source = "git+https://github.com/cheme/trie.git?branch=light_iter#19a9b721fbcf5a217f52852164c810d02b769983"
 
 [[package]]
 name = "hash256-std-hasher"
@@ -9963,7 +9963,7 @@ dependencies = [
 [[package]]
 name = "trie-db"
 version = "0.22.4"
-source = "git+https://github.com/cheme/trie.git?branch=light_iter#d0c47410d5a63b5e6522c27b5be5165a9815a246"
+source = "git+https://github.com/cheme/trie.git?branch=light_iter#19a9b721fbcf5a217f52852164c810d02b769983"
 dependencies = [
  "hash-db",
  "hashbrown",

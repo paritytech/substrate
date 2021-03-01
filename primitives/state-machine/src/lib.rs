@@ -1620,8 +1620,8 @@ mod tests {
 		test(None, None, 1, None, Some(3), &values[..1].to_vec());
 		test(None, None, 3, None, Some(1), &values[..3].to_vec());
 		test(None, Some(b"valu"), 3, None, None, &values[3..].to_vec());
-//		test(None, None, 3, Some(b"valu"), None, &values[3..].to_vec());
-//		test(None, Some(b"valu"), 3, Some(b"value111"), None, &values[4..].to_vec());
+		test(None, None, 2, Some(b"valu"), None, &values[3..].to_vec());
+		test(None, Some(b"valu"), 3, Some(b"value111"), None, &values[4..].to_vec());
 		test(Some(child_info), None, 1, None, None, &child_values[..1].to_vec());
 		test(Some(child_info), None, 8, None, None, &child_values[..].to_vec());
 	}
