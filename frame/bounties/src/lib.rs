@@ -979,8 +979,8 @@ decl_module! {
 		) {
 			let signer = ensure_signed(origin)?;
 
-			// Ensure parent bounty is Active & get status of curator
-			let (_, _) = Self::ensure_bounty_active(bounty_id)?;
+			// Ensure parent bounty is Active
+			let _ = Self::ensure_bounty_active(bounty_id)?;
 
 			// Mutate Subbounty
 			SubBounties::<T>::try_mutate_exists(bounty_id, subbounty_id,
