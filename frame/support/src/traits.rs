@@ -1530,7 +1530,8 @@ pub trait OnIdle<BlockNumber> {
 impl<BlockNumber: Clone> OnIdle<BlockNumber> for Tuple {
 	fn on_idle(_n: BlockNumber,  _remaining_weight: crate::weights::Weight) -> crate::weights::Weight {
 		let mut weight = 0;
-		for_tuples!( #( weight = weight.saturating_add(Tuple::on_idle(_n.clone(),  _remaining_weight.clone())); )* );
+		let adjusted_remaining_weight = if weight < _remaining_weight {_remaining_weight.saturating_sub(weight)} else {0};
+		for_tuples!( #( weight = weight.saturating_add(Tuple::on_idle(_n.clone(),  adjusted_remaining_weight.clone())); )* );
 		weight
 	}
 }

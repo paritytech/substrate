@@ -357,12 +357,13 @@ where
 
 		// post-extrinsics book-keeping
 		<frame_system::Module<System>>::note_finished_extrinsics();
-		//TODO: does this need to be implemented here too?
-		// let weight =  frame_system::BlockWeight;
-		// debug::info!("book keeping {}", weight);
 
-		// <frame_system::Module<System> as OnIdle<System::BlockNumber>>::on_idle(block_number);
-		// <AllModules as OnIdle<System::BlockNumber>>::on_idle(block_number);
+		let weight =  <frame_system::Module<System>>::block_weight();
+		let max_weight =  <System::BlockWeights as frame_support::traits::Get<_>>::get().max_block;
+		let remaining_weight = max_weight.saturating_sub(weight.total());
+
+		<frame_system::Module<System> as OnIdle<System::BlockNumber>>::on_idle(block_number, remaining_weight);
+		<AllModules as OnIdle<System::BlockNumber>>::on_idle(block_number, remaining_weight);
 
 		<frame_system::Module<System> as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
 		<AllModules as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
