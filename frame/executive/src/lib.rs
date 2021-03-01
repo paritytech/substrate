@@ -136,7 +136,7 @@ use frame_system::DigestOf;
 /// Trait that can be used to execute a block.
 pub trait ExecuteBlock<Block: BlockT> {
 	/// Actually execute all transitions for `block`.
-	fn execute_block(block: Block);
+	fn execute_block(block: Block) -> Block::Header;
 }
 
 pub type CheckedOf<E, C> = <E as Checkable<C>>::Checked;
@@ -180,7 +180,7 @@ where
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
 {
-	fn execute_block(block: Block) {
+	fn execute_block(block: Block) -> Block::Header {
 		Executive::<System, Block, Context, UnsignedValidator, AllModules>::execute_block(block);
 	}
 }
@@ -318,11 +318,11 @@ where
 	}
 
 	/// Actually execute all transitions for `block`.
-	pub fn execute_block(block: Block) {
+	pub fn execute_block(block: Block) -> Block::Header {
 		sp_io::init_tracing();
 		sp_tracing::within_span! {
-			sp_tracing::info_span!( "execute_block", ?block);
-		{
+			sp_tracing::info_span!("execute_block", ?block);
+
 			Self::initialize_block(block.header());
 
 			// any initial checks
@@ -339,8 +339,8 @@ where
 			}
 
 			// any final checks
-			Self::final_checks(&header);
-		} };
+			Self::final_checks(&header)
+		}
 	}
 
 	/// Execute given extrinsics and take care of post-extrinsics book-keeping.
@@ -412,7 +412,7 @@ where
 		Ok(r.map(|_| ()).map_err(|e| e.error))
 	}
 
-	fn final_checks(header: &System::Header) {
+	fn final_checks(header: &System::Header) -> System::Header {
 		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "final_checks");
 		// remove temporaries
 		let new_header = <frame_system::Module<System>>::finalize();
@@ -438,6 +438,8 @@ where
 			header.extrinsics_root() == new_header.extrinsics_root(),
 			"Transaction trie root must be valid.",
 		);
+
+		new_header
 	}
 
 	/// Check a given signed transaction for validity. This doesn't execute any
