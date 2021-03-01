@@ -2276,8 +2276,7 @@ dependencies = [
 [[package]]
 name = "hash-db"
 version = "0.15.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d23bd4e7b5eda0d0f3a307e8b381fdc8ba9000f26fbe912250c0a4cc3956364a"
+source = "git+https://github.com/cheme/trie.git?branch=light_iter#d0c47410d5a63b5e6522c27b5be5165a9815a246"
 
 [[package]]
 name = "hash256-std-hasher"
@@ -9963,9 +9962,8 @@ dependencies = [
 
 [[package]]
 name = "trie-db"
-version = "0.22.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec051edf7f0fc9499a2cb0947652cab2148b9d7f61cee7605e312e9f970dacaf"
+version = "0.22.4"
+source = "git+https://github.com/cheme/trie.git?branch=light_iter#d0c47410d5a63b5e6522c27b5be5165a9815a246"
 dependencies = [
  "hash-db",
  "hashbrown",

@@ -191,14 +191,31 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 
 	/// Retrieve all entries keys of storage and call `f` for each of those keys.
 	/// Aborts as soon as `f` returns false.
-	pub fn apply_to_key_values_while<F: FnMut(&[u8], &[u8]) -> bool>(
+	pub fn apply_to_key_values_while(
 		&self,
 		child_info: Option<&ChildInfo>,
 		prefix: Option<&[u8]>,
 		start_at: Option<&[u8]>,
-		f: F,
+		mut f: impl FnMut(&[u8], &[u8]) -> bool,
 	) -> Result<()> {
-		unimplemented!("TODO");
+		let mut child_root;
+		let root = if let Some(child_info) = child_info.as_ref() {
+			if let Some(fetched_child_root) = self.child_root(child_info)? {
+				child_root = H::Out::default();
+				// root is fetched from DB, not writable by runtime, so it's always valid.
+				child_root.as_mut().copy_from_slice(fetched_child_root.as_slice());
+	
+				&child_root
+			} else {
+				return Ok(());
+			}
+		} else {
+			&self.root
+		};
+
+		let prefix = prefix.unwrap_or(&[]);
+		self.keys_values_with_prefix_inner(&root, prefix, |k, v| f(k, v), child_info, start_at)?;
+		Ok(())
 	}
 
 	/// Retrieve all entries keys of child storage and call `f` for each of those keys.
@@ -211,6 +228,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		let root = match self.child_root(child_info) {
 			Ok(v) => v.unwrap_or_else(|| empty_child_trie_root::<Layout<H>>().encode()),
 			Err(e) => {
+				// error is ignored, should not
 				debug!(target: "trie", "Error while iterating child storage: {}", e);
 				return;
 			}
@@ -222,16 +240,17 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 			&root,
 			f,
 		) {
+			// error is ignored, should not
 			debug!(target: "trie", "Error while iterating child storage: {}", e);
 		}
 	}
 
 	/// Execute given closure for all keys starting with prefix.
-	pub fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
+	pub fn for_child_keys_with_prefix(
 		&self,
 		child_info: &ChildInfo,
 		prefix: &[u8],
-		mut f: F,
+		mut f: impl FnMut(&[u8]),
 	) {
 		let root_vec = match self.child_root(child_info) {
 			Ok(v) => v.unwrap_or_else(|| empty_child_trie_root::<Layout<H>>().encode()),
@@ -242,30 +261,48 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		};
 		let mut root = H::Out::default();
 		root.as_mut().copy_from_slice(&root_vec);
-		self.keys_values_with_prefix_inner(&root, prefix, |k, _v| f(k), Some(child_info))
+		// error is ignored (should not).
+		let _ = self.keys_values_with_prefix_inner(
+			&root,
+			prefix,
+			|k, _v| { f(k); true },
+			Some(child_info),
+			None,
+		);
 	}
 
 	/// Execute given closure for all keys starting with prefix.
-	pub fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], mut f: F) {
-		self.keys_values_with_prefix_inner(&self.root, prefix, |k, _v| f(k), None)
+	pub fn for_keys_with_prefix(&self, prefix: &[u8], mut f: impl FnMut(&[u8])) {
+		// error is ignored (should not).
+		let _ = self.keys_values_with_prefix_inner(&self.root, prefix, |k, _v| { f(k); true }, None, None);
 	}
 
-	fn keys_values_with_prefix_inner<F: FnMut(&[u8], &[u8])>(
+	fn keys_values_with_prefix_inner(
 		&self,
 		root: &H::Out,
 		prefix: &[u8],
-		mut f: F,
+		mut f: impl FnMut(&[u8], &[u8]) -> bool,
 		child_info: Option<&ChildInfo>,
-	) {
+		start_at: Option<&[u8]>,
+	) -> Result<()> {
 		let mut iter = move |db| -> sp_std::result::Result<(), Box<TrieError<H::Out>>> {
 			let trie = TrieDB::<H>::new(db, root)?;
 
-			for x in TrieDBIterator::new_prefixed(&trie, prefix)? {
+			let iterator = if let Some(start_at) = start_at {
+				TrieDBIterator::new_prefixed_then_seek(&trie, prefix, start_at)?
+			} else {
+				TrieDBIterator::new_prefixed(&trie, prefix)?
+			};
+			for x in iterator {
 				let (key, value) = x?;
 
-				debug_assert!(key.starts_with(prefix));
+				if !key.starts_with(prefix) {
+					break;
+				}
 
-				f(&key, &value);
+				if !f(&key, &value) {
+					break;
+				}
 			}
 
 			Ok(())
@@ -277,14 +314,16 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		} else {
 			iter(self)
 		};
-		if let Err(e) = result {
+		result.map_err(|e| {
 			debug!(target: "trie", "Error while iterating by prefix: {}", e);
-		}
+			format!("TrieDB iteration error: {}", e)
+		})
 	}
 
 	/// Execute given closure for all key and values starting with prefix.
-	pub fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
-		self.keys_values_with_prefix_inner(&self.root, prefix, f, None)
+	pub fn for_key_values_with_prefix(&self, prefix: &[u8], mut f: impl FnMut(&[u8], &[u8])) {
+		// error is ignored (should not).
+		let _ = self.keys_values_with_prefix_inner(&self.root, prefix, |k, v| {f(k, v); true}, None, None);
 	}
 }
 

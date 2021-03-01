@@ -1549,20 +1549,37 @@ mod tests {
 
 	#[test]
 	fn prove_range_read_and_check_works() {
+		let child_root = vec![206, 225, 81, 119, 188, 109, 160, 191, 91, 170, 236,
+			47, 249, 176, 18, 168, 127, 250, 224, 148, 124, 213, 179, 57, 121, 29,
+			219, 187, 109, 97, 55, 204];
+		let values = vec![
+			(b":child_storage:default:sub1".to_vec(), child_root),
+			(b":code".to_vec(), b"return 42".to_vec()),
+			(b"key".to_vec(), b"value".to_vec()),
+			(b"value1".to_vec(), vec![42]),
+			(b"value2".to_vec(), vec![24]),
+			// 128 .. 255 pairs
+		];
+		let child_values = vec![
+			(b"value3".to_vec(), vec![142]),
+			(b"value4".to_vec(), vec![124]),
+		];
+	
+
 		let child_info = ChildInfo::new_default(b"sub1");
 		let child_info = &child_info;
 		// fetch read proof from 'remote' full node
-		let remote_backend = trie_backend::tests::test_trie();
-		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
 		let test = |
 			child_info: Option<&ChildInfo>,
 			prefix: Option<&[u8]>,
 			count: u32,
 			start_at: Option<&[u8]>,
-			next_count_in_proof: bool,
-			mut expected_result: Vec<(Vec<u8>, Vec<u8>)>,
+			next_count_in_proof: Option<u32>,
+			mut expected_result: &[(Vec<u8>, Vec<u8>)],
 		| -> () {
-			let remote_proof = prove_range_read(&remote_backend, child_info, prefix, count, start_at)
+			let remote_backend = trie_backend::tests::test_trie();
+			let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
+			let remote_proof = prove_range_read(remote_backend, child_info, prefix, count, start_at)
 				.unwrap();
 			// check proof locally
 			let local_result_1 = read_range_proof_check::<BlakeTwo256>(
@@ -1581,22 +1598,32 @@ mod tests {
 				count - 1,
 				start_at,
 			).unwrap();
-			let local_result_3 = read_range_proof_check::<BlakeTwo256>(
-				remote_root.clone(),
-				remote_proof.clone(),
-				child_info,
-				prefix,
-				count + 1,
-				start_at,
-			);
-			// check that results are correct
-			assert_eq!(local_result_1, expected_result);
-			let _ = expected_result.pop();
-			assert_eq!(local_result_2, expected_result);
-			assert_eq!(next_count_in_proof, local_result_3.is_ok());
+			assert_eq!(local_result_1.as_slice(), expected_result);
+			if expected_result.len() > count as usize - 1 {
+				expected_result = &expected_result[0..count as usize - 1];
+			}
+			assert_eq!(local_result_2.as_slice(), expected_result);
+			if let Some(next_count_in_proof) = next_count_in_proof {
+				let local_result_3 = read_range_proof_check::<BlakeTwo256>(
+					remote_root.clone(),
+					remote_proof.clone(),
+					child_info,
+					prefix,
+					count + next_count_in_proof + 1,
+					start_at,
+				);
+				// check that results are correct
+				assert!(local_result_3.is_err());
+			}
 		};
 
-		unimplemented!("TODO some calls to test");
+		test(None, None, 1, None, Some(3), &values[..1].to_vec());
+		test(None, None, 3, None, Some(1), &values[..3].to_vec());
+		test(None, Some(b"valu"), 3, None, None, &values[3..].to_vec());
+//		test(None, None, 3, Some(b"valu"), None, &values[3..].to_vec());
+//		test(None, Some(b"valu"), 3, Some(b"value111"), None, &values[4..].to_vec());
+		test(Some(child_info), None, 1, None, None, &child_values[..1].to_vec());
+		test(Some(child_info), None, 8, None, None, &child_values[..].to_vec());
 	}
 
 	#[test]
