@@ -868,17 +868,28 @@ pub mod migrations {
 		__OldNextEpochConfig, Option<NextConfigDescriptor>, ValueQuery
 	>;
 
-	pub fn add_epoch_configurations(
+	pub fn add_epoch_configurations<T: Config>(
 		current_epoch_config: BabeEpochConfiguration,
 		next_epoch_config: BabeEpochConfiguration,
-	) {
+	) -> Weight {
+		let mut writes = 0;
+		let mut reads = 0;
+
 		if let Some(pending_change) = OldNextEpochConfig::get() {
 			PendingEpochConfigChange::put(pending_change);
+
+			writes += 1;
 		}
+
+		reads += 1;
 
 		OldNextEpochConfig::kill();
 
 		EpochConfig::put(current_epoch_config);
 		NextEpochConfig::put(next_epoch_config);
+
+		writes += 3;
+
+		T::DbWeight::get().writes(writes) + T::DbWeight::get().reads(reads)
 	}
 }
