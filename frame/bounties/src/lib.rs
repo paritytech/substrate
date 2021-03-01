@@ -1018,7 +1018,7 @@ decl_module! {
 		/// Parent bounty must be in active state,
 		/// for this subbounty call to work.
 		///
-		/// If this function is called by the `RejectOrigin`, we assume that
+		/// If this function is called by the `RejectOrigin` or the curator, we assume that
 		/// the subcurator is malicious or inactive. As a result,
 		/// subcurator deposit may be slashed.
 		///
