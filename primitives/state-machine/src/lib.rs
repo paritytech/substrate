@@ -754,7 +754,10 @@ mod execution {
 		H: Hasher,
 		H::Out: Ord + Codec,
 	{
-		unimplemented!("TODO");
+		let trie_backend = backend.as_trie_backend()
+			.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<dyn Error>)?;
+
+		prove_range_read_on_trie_backend(trie_backend, child_info, prefix, count, start_at)
 	}
 
 	/// Generate storage read proof on pre-created trie backend.
@@ -797,6 +800,30 @@ mod execution {
 				.child_storage(child_info, key.as_ref())
 				.map_err(|e| Box::new(e) as Box<dyn Error>)?;
 		}
+		Ok(proving_backend.extract_proof())
+	}
+
+	/// Generate range storage read proof.
+	pub fn prove_range_read_on_trie_backend<S, H>(
+		trie_backend: &TrieBackend<S, H>,
+		child_info: Option<&ChildInfo>,
+		prefix: Option<&[u8]>,
+		mut count: u32,
+		start_at: Option<&[u8]>,
+	) -> Result<StorageProof, Box<dyn Error>>
+	where
+		S: trie_backend_essence::TrieBackendStorage<H>,
+		H: Hasher,
+		H::Out: Ord + Codec,
+	{
+		let proving_backend = proving_backend::ProvingBackend::<S, H>::new(trie_backend);
+		proving_backend.apply_to_key_values_while(child_info, prefix, start_at, |_key, _value| {
+			if count == 0 {
+				return false;
+			}
+			count -= 1;
+			true
+		}).map_err(|e| Box::new(e) as Box<dyn Error>)?;
 		Ok(proving_backend.extract_proof())
 	}
 
@@ -860,7 +887,14 @@ mod execution {
 		H: Hasher,
 		H::Out: Ord + Codec,
 	{
-		unimplemented!("TODO");
+		let proving_backend = create_proof_check_backend::<H>(root, proof)?;
+		read_range_proof_check_on_proving_backend(
+			&proving_backend,
+			child_info,
+			prefix,
+			count,
+			start_at,
+		)
 	}
 
 	/// Check storage read proof on pre-created proving backend.
@@ -887,6 +921,29 @@ mod execution {
 	{
 		proving_backend.child_storage(child_info, key)
 			.map_err(|e| Box::new(e) as Box<dyn Error>)
+	}
+
+	/// Check child storage range proof on pre-created proving backend.
+	pub fn read_range_proof_check_on_proving_backend<H>(
+		proving_backend: &TrieBackend<MemoryDB<H>, H>,
+		child_info: Option<&ChildInfo>,
+		prefix: Option<&[u8]>,
+		count: u32,
+		start_at: Option<&[u8]>,
+	) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Box<dyn Error>>
+	where
+		H: Hasher,
+		H::Out: Ord + Codec,
+	{
+		let mut result = Vec::new();
+		proving_backend.apply_to_key_values_while(child_info, prefix, start_at, |key, value| {
+			if result.len() as u32 == count {
+				return false;
+			}
+			result.push((key.to_vec(), value.to_vec()));
+			true
+		}).map_err(|e| Box::new(e) as Box<dyn Error>)?;
+		Ok(result)
 	}
 }
 
@@ -1443,7 +1500,7 @@ mod tests {
 		let remote_backend = trie_backend::tests::test_trie();
 		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
 		let remote_proof = prove_read(remote_backend, &[b"value2"]).unwrap();
- 		// check proof locally
+		// check proof locally
 		let local_result1 = read_proof_check::<BlakeTwo256, _>(
 			remote_root,
 			remote_proof.clone(),
@@ -1454,7 +1511,7 @@ mod tests {
 			remote_proof.clone(),
 			&[&[0xff]],
 		).is_ok();
- 		// check that results are correct
+		// check that results are correct
 		assert_eq!(
 			local_result1.into_iter().collect::<Vec<_>>(),
 			vec![(b"value2".to_vec(), Some(vec![24]))],
@@ -1505,46 +1562,40 @@ mod tests {
 			next_count_in_proof: bool,
 			mut expected_result: Vec<(Vec<u8>, Vec<u8>)>,
 		| -> () {
-			let remote_proof = prove_range_read(remote_backend, child_inof, prefix, count, start_at)
+			let remote_proof = prove_range_read(&remote_backend, child_info, prefix, count, start_at)
 				.unwrap();
 			// check proof locally
-			let local_result_1 = read_range_proof_check::<BlakeTwo256, _>(
+			let local_result_1 = read_range_proof_check::<BlakeTwo256>(
 				remote_root.clone(),
+				remote_proof.clone(),
 				child_info,
 				prefix,
 				count,
 				start_at,
 			).unwrap();
-			let local_result_2 = read_range_proof_check::<BlakeTwo256, _>(
+			let local_result_2 = read_range_proof_check::<BlakeTwo256>(
 				remote_root.clone(),
+				remote_proof.clone(),
 				child_info,
 				prefix,
 				count - 1,
 				start_at,
 			).unwrap();
-			let local_result_3 = read_range_proof_check::<BlakeTwo256, _>(
+			let local_result_3 = read_range_proof_check::<BlakeTwo256>(
 				remote_root.clone(),
+				remote_proof.clone(),
 				child_info,
 				prefix,
 				count + 1,
 				start_at,
 			);
-	 		// check that results are correct
-			assert_eq!(
-				local_result1,
-				expected_result,
-			);
-			expected_result.pop();
-			assert_eq!(
-				local_result2,
-				expected_result,
-			);
+			// check that results are correct
+			assert_eq!(local_result_1, expected_result);
+			let _ = expected_result.pop();
+			assert_eq!(local_result_2, expected_result);
 			assert_eq!(next_count_in_proof, local_result_3.is_ok());
 		};
 
-		// on child trie
-		let remote_backend = trie_backend::tests::test_trie();
-		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
 		unimplemented!("TODO some calls to test");
 	}
 

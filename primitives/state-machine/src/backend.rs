@@ -93,8 +93,19 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		key: &[u8]
 	) -> Result<Option<StorageKey>, Self::Error>;
 
+	/// Iterate on storage starting at key, for a given prefix and child trie.
+	/// Aborts as soon as `f` returns false.
+	fn apply_to_key_values_while<F: FnMut(&[u8], &[u8]) -> bool>(
+		&self,
+		child_info: Option<&ChildInfo>,
+		prefix: Option<&[u8]>,
+		start_at: Option<&[u8]>,
+		f: F,
+	) -> Result<(), Self::Error>;
+
 	/// Retrieve all entries keys of child storage and call `f` for each of those keys.
 	/// Aborts as soon as `f` returns false.
+	/// TODO default impl from `apply_to_child_keys_while`
 	fn apply_to_child_keys_while<F: FnMut(&[u8]) -> bool>(
 		&self,
 		child_info: &ChildInfo,
@@ -103,17 +114,20 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 
 	/// Retrieve all entries keys which start with the given prefix and
 	/// call `f` for each of those keys.
+	/// TODO default impl from `apply_to_child_keys_while`
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], mut f: F) {
 		self.for_key_values_with_prefix(prefix, |k, _v| f(k))
 	}
 
 	/// Retrieve all entries keys and values of which start with the given prefix and
 	/// call `f` for each of those keys.
+	/// TODO default impl from `apply_to_child_keys_while`
 	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F);
 
 
 	/// Retrieve all child entries keys which start with the given prefix and
 	/// call `f` for each of those keys.
+	/// TODO default impl from `apply_to_child_keys_while`
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
 		&self,
 		child_info: &ChildInfo,
@@ -262,6 +276,16 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 		key: &[u8],
 	) -> Result<Option<StorageKey>, Self::Error> {
 		(*self).child_storage(child_info, key)
+	}
+
+	fn apply_to_key_values_while<F: FnMut(&[u8], &[u8]) -> bool>(
+		&self,
+		child_info: Option<&ChildInfo>,
+		prefix: Option<&[u8]>,
+		start_at: Option<&[u8]>,
+		f: F,
+	) -> Result<(), Self::Error> {
+		(*self).apply_to_key_values_while(child_info, prefix, start_at, f)
 	}
 
 	fn apply_to_child_keys_while<F: FnMut(&[u8]) -> bool>(

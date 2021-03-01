@@ -189,6 +189,18 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 			.map_err(map_e)
 	}
 
+	/// Retrieve all entries keys of storage and call `f` for each of those keys.
+	/// Aborts as soon as `f` returns false.
+	pub fn apply_to_key_values_while<F: FnMut(&[u8], &[u8]) -> bool>(
+		&self,
+		child_info: Option<&ChildInfo>,
+		prefix: Option<&[u8]>,
+		start_at: Option<&[u8]>,
+		f: F,
+	) -> Result<()> {
+		unimplemented!("TODO");
+	}
+
 	/// Retrieve all entries keys of child storage and call `f` for each of those keys.
 	/// Aborts as soon as `f` returns false.
 	pub fn apply_to_child_keys_while<F: FnMut(&[u8]) -> bool>(

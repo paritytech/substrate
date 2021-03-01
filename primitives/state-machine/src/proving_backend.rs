@@ -204,6 +204,16 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		self.0.child_storage(child_info, key)
 	}
 
+	fn apply_to_key_values_while<F: FnMut(&[u8], &[u8]) -> bool>(
+		&self,
+		child_info: Option<&ChildInfo>,
+		prefix: Option<&[u8]>,
+		start_at: Option<&[u8]>,
+		f: F,
+	) -> Result<(), Self::Error> {
+		self.0.apply_to_key_values_while(child_info, prefix, start_at, f)
+	}
+
 	fn apply_to_child_keys_while<F: FnMut(&[u8]) -> bool>(
 		&self,
 		child_info: &ChildInfo,

@@ -603,6 +603,16 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 		self.state.exists_child_storage(child_info, key)
 	}
 
+	fn apply_to_key_values_while<F: FnMut(&[u8], &[u8]) -> bool>(
+		&self,
+		child_info: Option<&ChildInfo>,
+		prefix: Option<&[u8]>,
+		start_at: Option<&[u8]>,
+		f: F,
+	) -> Result<(), Self::Error> {
+		self.state.apply_to_key_values_while(child_info, prefix, start_at, f)
+	}
+
 	fn apply_to_child_keys_while<F: FnMut(&[u8]) -> bool>(
 		&self,
 		child_info: &ChildInfo,
@@ -783,6 +793,16 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Syncin
 		key: &[u8],
 	) -> Result<bool, Self::Error> {
 		self.caching_state().exists_child_storage(child_info, key)
+	}
+
+	fn apply_to_key_values_while<F: FnMut(&[u8], &[u8]) -> bool>(
+		&self,
+		child_info: Option<&ChildInfo>,
+		prefix: Option<&[u8]>,
+		start_at: Option<&[u8]>,
+		f: F,
+	) -> Result<(), Self::Error> {
+		self.caching_state().apply_to_key_values_while(child_info, prefix, start_at, f)
 	}
 
 	fn apply_to_child_keys_while<F: FnMut(&[u8]) -> bool>(
