@@ -35,10 +35,7 @@
 //! definition.
 //!
 
-use frame_support::{
-	debug,
-	traits::{Get, KeyOwnerProofSystem},
-};
+use frame_support::traits::{Get, KeyOwnerProofSystem};
 use sp_consensus_babe::{EquivocationProof, Slot};
 use sp_runtime::transaction_validity::{
 	InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
@@ -163,8 +160,15 @@ where
 		let call = Call::report_equivocation_unsigned(equivocation_proof, key_owner_proof);
 
 		match SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into()) {
-			Ok(()) => debug::info!("Submitted BABE equivocation report."),
-			Err(e) => debug::error!("Error submitting equivocation report: {:?}", e),
+			Ok(()) => log::info!(
+				target: "runtime::babe",
+				"Submitted BABE equivocation report.",
+			),
+			Err(e) => log::error!(
+				target: "runtime::babe",
+				"Error submitting equivocation report: {:?}",
+				e,
+			),
 		}
 
 		Ok(())
@@ -186,9 +190,9 @@ impl<T: Config> frame_support::unsigned::ValidateUnsigned for Module<T> {
 			match source {
 				TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ }
 				_ => {
-					debug::warn!(
-						target: "babe",
-						"rejecting unsigned report equivocation transaction because it is not local/in-block."
+					log::warn!(
+						target: "runtime::babe",
+						"rejecting unsigned report equivocation transaction because it is not local/in-block.",
 					);
 
 					return InvalidTransaction::Call.into();

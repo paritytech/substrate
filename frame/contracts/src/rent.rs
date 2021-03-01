@@ -26,7 +26,6 @@ use sp_std::prelude::*;
 use sp_io::hashing::blake2_256;
 use sp_core::crypto::UncheckedFrom;
 use frame_support::{
-	debug,
 	storage::child,
 	traits::{Currency, ExistenceRequirement, Get, OnUnbalanced, WithdrawReasons},
 };
@@ -183,9 +182,10 @@ where
 				// accidental loss of a contract. Ony `seal_terminate` can remove a
 				// contract without a tombstone. Therefore this case should be never
 				// hit.
-				debug::error!(
+				log::error!(
+					target: "runtime::contracts",
 					"Tombstoned a contract that is below the subsistence threshold: {:?}",
-					account
+					account,
 				);
 				0u32.into()
 			}
@@ -514,14 +514,12 @@ where
 		<ContractInfoOf<T>>::remove(&origin);
 		let tombstone_code_len = E::remove_user(origin_contract.code_hash);
 		<ContractInfoOf<T>>::insert(&dest, ContractInfo::Alive(AliveContractInfo::<T> {
-			trie_id: origin_contract.trie_id,
-			storage_size: origin_contract.storage_size,
-			pair_count: origin_contract.pair_count,
 			code_hash,
 			rent_allowance,
 			rent_payed: <BalanceOf<T>>::zero(),
 			deduct_block: current_block,
 			last_write,
+			.. origin_contract
 		}));
 
 		let origin_free_balance = T::Currency::free_balance(&origin);

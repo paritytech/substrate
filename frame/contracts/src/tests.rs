@@ -392,6 +392,7 @@ fn account_removal_does_not_remove_storage() {
 				rent_allowance: 40,
 				rent_payed: 0,
 				last_write: None,
+				_reserved: None,
 			});
 			let _ = Balances::deposit_creating(&ALICE, 110);
 			ContractInfoOf::<Test>::insert(ALICE, &alice_contract_info);
@@ -407,6 +408,7 @@ fn account_removal_does_not_remove_storage() {
 				rent_allowance: 40,
 				rent_payed: 0,
 				last_write: None,
+				_reserved: None,
 			});
 			let _ = Balances::deposit_creating(&BOB, 110);
 			ContractInfoOf::<Test>::insert(BOB, &bob_contract_info);
