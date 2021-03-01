@@ -181,7 +181,7 @@ where
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
 {
 	fn execute_block(block: Block) -> Block::Header {
-		Executive::<System, Block, Context, UnsignedValidator, AllModules>::execute_block(block);
+		Executive::<System, Block, Context, UnsignedValidator, AllModules>::execute_block(block)
 	}
 }
 
