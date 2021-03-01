@@ -1590,7 +1590,7 @@ macro_rules! decl_module {
 		{ $system:ident }
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		{ $( $other_where_bounds:tt )* }
-		fn on_idle($param:ident : $param_ty:ty) { $( $impl:tt )* }
+		fn on_idle($param1:ident : $param1_ty:ty, $param2:ident, $param2_ty:ty) -> $return:ty { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $system::Config + $trait_name$(<I>, $instance: $instantiable)?>
 			$crate::traits::OnIdle<<$trait_instance as $system::Config>::BlockNumber>
