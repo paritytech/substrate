@@ -814,7 +814,7 @@ fn add_epoch_configurations_migration_works() {
 			allowed_slots: sp_consensus_babe::AllowedSlots::PrimarySlots,
 		};
 
-		crate::migrations::add_epoch_configurations(
+		crate::migrations::add_epoch_configurations::<Test>(
 			current_epoch.clone(), next_epoch.clone()
 		);
 
