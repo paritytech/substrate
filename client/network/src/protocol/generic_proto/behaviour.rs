@@ -1467,13 +1467,14 @@ impl NetworkBehaviour for GenericProto {
 							if let ConnectionState::Closed = *connec_state {
 								*connec_state = ConnectionState::OpenDesiredByRemote;
 							} else {
-								// Connections in `OpeningThenClosing` state are in a Closed phase,
-								// and as such can emit `OpenDesiredByRemote` messages.
-								// Since an `Open` and a `Close` messages have already been sent,
+								// Connections in `OpeningThenClosing` and `Closing` state can be
+								// in a Closed phase, and as such can emit `OpenDesiredByRemote`
+								// messages.
+								// Since an `Open` and/or a `Close` message have already been sent,
 								// there is nothing much that can be done about this anyway.
 								debug_assert!(matches!(
 									connec_state,
-									ConnectionState::OpeningThenClosing
+									ConnectionState::OpeningThenClosing | ConnectionState::Closing
 								));
 							}
 						} else {
@@ -1502,13 +1503,15 @@ impl NetworkBehaviour for GenericProto {
 								});
 								*connec_state = ConnectionState::Opening;
 							} else {
-								// Connections in `OpeningThenClosing` and `Opening` are in a Closed
-								// phase, and as such can emit `OpenDesiredByRemote` messages.
+								// Connections in `OpeningThenClosing`, `Opening`, and `Closing`
+								// state can be in a Closed phase, and as such can emit
+								// `OpenDesiredByRemote` messages.
 								// Since an `Open` message haS already been sent, there is nothing
 								// more to do.
 								debug_assert!(matches!(
 									connec_state,
-									ConnectionState::OpenDesiredByRemote | ConnectionState::Opening
+									ConnectionState::OpenDesiredByRemote |
+									ConnectionState::Closing | ConnectionState::Opening
 								));
 							}
 						} else {
@@ -1544,12 +1547,13 @@ impl NetworkBehaviour for GenericProto {
 								*entry.into_mut() = PeerState::Incoming { connections, backoff_until };
 
 							} else {
-								// Connections in `OpeningThenClosing` are in a Closed phase, and
-								// as such can emit `OpenDesiredByRemote` messages.
+								// Connections in `OpeningThenClosing` and `Closing` state can be
+								// in a Closed phase, and as such can emit `OpenDesiredByRemote`
+								// messages.
 								// We ignore them.
 								debug_assert!(matches!(
 									connec_state,
-									ConnectionState::OpeningThenClosing
+									ConnectionState::OpeningThenClosing | ConnectionState::Closing
 								));
 								*entry.into_mut() = PeerState::Disabled { connections, backoff_until };
 							}
@@ -1578,12 +1582,13 @@ impl NetworkBehaviour for GenericProto {
 								*entry.into_mut() = PeerState::Enabled { connections };
 
 							} else {
-								// Connections in `OpeningThenClosing` are in a Closed phase, and
-								// as such can emit `OpenDesiredByRemote` messages.
+								// Connections in `OpeningThenClosing` and `Closing` state can be
+								// in a Closed phase, and as such can emit `OpenDesiredByRemote`
+								// messages.
 								// We ignore them.
 								debug_assert!(matches!(
 									connec_state,
-									ConnectionState::OpeningThenClosing
+									ConnectionState::OpeningThenClosing | ConnectionState::Closing
 								));
 								*entry.into_mut() = PeerState::DisabledPendingEnable {
 									connections,

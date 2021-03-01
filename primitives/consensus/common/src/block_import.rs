@@ -193,16 +193,21 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 		if let Some(hash) = self.post_hash {
 			hash
 		} else {
-			if self.post_digests.is_empty() {
-				self.header.hash()
-			} else {
-				let mut hdr = self.header.clone();
-				for digest_item in &self.post_digests {
-					hdr.digest_mut().push(digest_item.clone());
-				}
+			self.post_header().hash()
+		}
+	}
 
-				hdr.hash()
+	/// Get the post header.
+	pub fn post_header(&self) -> Block::Header {
+		if self.post_digests.is_empty() {
+			self.header.clone()
+		} else {
+			let mut hdr = self.header.clone();
+			for digest_item in &self.post_digests {
+				hdr.digest_mut().push(digest_item.clone());
 			}
+
+			hdr
 		}
 	}
 
