@@ -4592,6 +4592,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "hex-literal",
+ "log",
  "pallet-balances",
  "parity-scale-codec",
  "serde",
@@ -4599,7 +4600,6 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
- "tracing",
 ]
 
 [[package]]
@@ -8282,7 +8282,6 @@ dependencies = [
  "sp-test-primitives",
  "sp-version",
  "thiserror",
- "tracing",
 ]
 
 [[package]]

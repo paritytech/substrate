@@ -61,6 +61,7 @@ std = [
 	"sp-npos-elections/std",
 	"sp-arithmetic/std",
 	"sp-election-providers/std",
+	"log/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking",

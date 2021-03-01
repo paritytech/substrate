@@ -23,7 +23,6 @@ sp-state-machine = { version = "0.9.0", optional = true, path = "../state-machin
 hash-db = { version = "0.15.2", optional = true }
 thiserror = { version = "1.0.21", optional = true }
 
-tracing = { version = "0.1.22", default-features = false }
 log = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]
@@ -41,7 +40,6 @@ std = [
 	"hash-db",
 	"thiserror",
 	"log/std",
-	"tracing/std",
 ]
 # Special feature to disable logging completly.
 #
@@ -49,8 +47,7 @@ std = [
 # logging functionality increases the code size. It is recommended to enable this feature when
 # building a runtime for registering it on chain.
 #
-# This sets the max logging level to `off` for `tracing` and `log`.
+# This sets the max logging level to `off` for `log`.
 disable-logging = [
-	"tracing/max_level_off",
 	"log/max_level_off",
 ]
