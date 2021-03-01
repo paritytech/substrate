@@ -23,6 +23,7 @@ use codec::{Encode, Decode, Codec};
 use sp_std::vec::Vec;
 use sp_runtime::ConsensusEngineId;
 
+pub mod digests;
 pub mod inherents;
 
 pub mod sr25519 {
