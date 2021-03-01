@@ -63,6 +63,9 @@ const DEN: ExtendedBalance = ExtendedBalance::max_value();
 /// `expect` this to return `Ok`.
 ///
 /// This can only fail if the normalization fails.
+///
+/// Note that rounding errors can potentially cause the output of this function to fail a PJR check.
+/// The underlying algorithm is sound, but the conversions between numeric types can be lossy.
 pub fn seq_phragmen<AccountId: IdentifierT, P: PerThing128>(
 	rounds: usize,
 	initial_candidates: Vec<AccountId>,

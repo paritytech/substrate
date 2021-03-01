@@ -423,6 +423,12 @@ impl<AccountId: IdentifierT> Voter<AccountId> {
 			}
 		})
 	}
+
+	/// This voter's budget
+	#[inline]
+	pub fn budget(&self) -> ExtendedBalance {
+		self.budget
+	}
 }
 
 /// Final result of the election.
@@ -756,7 +762,7 @@ pub fn is_score_better<P: PerThing>(this: ElectionScore, that: ElectionScore, ep
 /// This will perform some cleanup that are most often important:
 /// - It drops any votes that are pointing to non-candidates.
 /// - It drops duplicate targets within a voter.
-pub(crate) fn setup_inputs<AccountId: IdentifierT>(
+pub fn setup_inputs<AccountId: IdentifierT>(
 	initial_candidates: Vec<AccountId>,
 	initial_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
 ) -> (Vec<CandidatePtr<AccountId>>, Vec<Voter<AccountId>>) {

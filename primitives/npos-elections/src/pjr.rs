@@ -204,16 +204,16 @@ pub fn t_pjr_check<AccountId: IdentifierT>(
 
 /// The internal implementation of the PJR check after having the data converted.
 ///
-/// See [`pjr_check`] for more info.
-fn pjr_check_core<AccountId: IdentifierT>(
+/// [`pjr_check`] or [`t_pjr_check`] are typically easier to work with.
+pub fn pjr_check_core<AccountId: IdentifierT>(
 	candidates: &[CandidatePtr<AccountId>],
 	voters: &[Voter<AccountId>],
 	t: Threshold,
 ) -> bool {
 	let unelected = candidates.iter().filter(|c| !c.borrow().elected);
-	let maybe_max_pre_score = unelected.map(|c| pre_score(Rc::clone(c), voters, t)).max();
+	let maybe_max_pre_score = unelected.map(|c| (pre_score(Rc::clone(c), voters, t), c.borrow().who.clone())).max();
 	// if unelected is empty then the solution is indeed PJR.
-	maybe_max_pre_score.map_or(true, |max_pre_score| max_pre_score < t)
+	maybe_max_pre_score.map_or(true, |(max_pre_score, _)| max_pre_score < t)
 }
 
 /// The pre-score of an unelected candidate.
@@ -266,6 +266,28 @@ fn slack<AccountId: IdentifierT>(voter: &Voter<AccountId>, t: Threshold) -> Exte
 	budget.saturating_sub(leftover)
 }
 
+/// Compute the threshold corresponding to the standard PJR property
+///
+/// `t-PJR` checks can check PJR according to an arbitrary threshold. The threshold can be any value,
+/// but the property gets stronger as the threshold gets smaller. The strongest possible `t-PJR` property
+/// corresponds to `t == 0`.
+///
+/// However, standard PJR is less stringent than that. This function returns the threshold whose
+/// strength corresponds to the standard PJR property.
+///
+/// - `committed_size` is the number of winners of the election.
+/// - `weights` is an iterator of voter stakes. If the sum of stakes is already known,
+///   `std::iter::once(sum_of_stakes)` is appropriate here.
+pub fn standard_threshold(
+	committeed_size: usize,
+	weights: impl IntoIterator<Item = ExtendedBalance>,
+) -> Threshold {
+	weights
+		.into_iter()
+		.sum::<Threshold>()
+	/ committeed_size as Threshold
+}
+
 /// Check a solution to be PJR.
 ///
 /// The PJR property is true if `t-PJR` is true when `t == sum(stake) / committee_size`.
@@ -274,11 +296,7 @@ pub fn pjr_check<AccountId: IdentifierT>(
 	all_candidates: Vec<AccountId>,
 	all_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
 ) -> bool {
-	let t = all_voters
-		.iter()
-		.map(|(_id, weight, _allocation)| *weight as ExtendedBalance)
-		.sum::<ExtendedBalance>()
-		/ supports.len() as ExtendedBalance;
+	let t = standard_threshold(supports.len(), all_voters.iter().map(|voter| voter.1 as ExtendedBalance));
 	t_pjr_check(supports, all_candidates, all_voters, t)
 }
 

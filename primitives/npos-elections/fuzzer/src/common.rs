@@ -20,7 +20,7 @@
 // Each function will be used based on which fuzzer binary is being used.
 #![allow(dead_code)]
 
-use rand::{self, Rng, RngCore, seq::SliceRandom};
+use rand::{self, seq::SliceRandom, Rng, RngCore};
 use sp_npos_elections::{phragmms, seq_phragmen, ElectionResult, VoteWeight};
 use sp_runtime::Perbill;
 use std::collections::{BTreeMap, HashSet};
@@ -54,6 +54,8 @@ pub type AccountId = u64;
 ///
 /// The returned voters list is sorted. This enables binary searching for a particular voter by
 /// account id. This sorting property should not affect the results of the calculation.
+///
+/// Each voter's selection of candidates to vote for is sorted.
 ///
 /// Note that this does not generate balancing parameters.
 pub fn generate_random_npos_inputs(
@@ -101,6 +103,7 @@ pub fn generate_random_npos_inputs(
 
 		let mut chosen_candidates = Vec::with_capacity(n_candidates_chosen);
 		chosen_candidates.extend(candidates.choose_multiple(&mut rng, n_candidates_chosen));
+		chosen_candidates.sort();
 		voters.push((id, vote_weight, chosen_candidates));
 	}
 
