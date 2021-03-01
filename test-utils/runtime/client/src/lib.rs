@@ -36,8 +36,8 @@ use sp_core::storage::{ChildInfo, Storage, StorageChild};
 use substrate_test_runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, NumberFor, HashFor};
 use sc_client_api::light::{
-	RemoteCallRequest, RemoteChangesRequest, RemoteBodyRequest,
-	Fetcher, RemoteHeaderRequest, RemoteReadRequest, RemoteReadChildRequest,
+	RemoteCallRequest, RemoteChangesRequest, RemoteBodyRequest, Fetcher,
+	RemoteHeaderRequest, RemoteReadRequest,RemoteReadChildRequest, RemoteReadRangeRequest,
 };
 
 /// A prelude to import in tests.
@@ -297,6 +297,7 @@ impl LightFetcher {
 impl Fetcher<substrate_test_runtime::Block> for LightFetcher {
 	type RemoteHeaderResult = FetcherFutureResult<substrate_test_runtime::Header>;
 	type RemoteReadResult = FetcherFutureResult<HashMap<Vec<u8>, Option<Vec<u8>>>>;
+	type RemoteReadRangeResult = FetcherFutureResult<Vec<(Vec<u8>, Vec<u8>)>>;
 	type RemoteCallResult = FetcherFutureResult<Vec<u8>>;
 	type RemoteChangesResult = FetcherFutureResult<Vec<(NumberFor<substrate_test_runtime::Block>, u32)>>;
 	type RemoteBodyResult = FetcherFutureResult<Vec<substrate_test_runtime::Extrinsic>>;
@@ -306,6 +307,13 @@ impl Fetcher<substrate_test_runtime::Block> for LightFetcher {
 	}
 
 	fn remote_read(&self, _: RemoteReadRequest<substrate_test_runtime::Header>) -> Self::RemoteReadResult {
+		unimplemented!()
+	}
+
+	fn remote_read_range(
+		&self,
+		_: RemoteReadRangeRequest<substrate_test_runtime::Header>,
+	) -> Self::RemoteReadRangeResult {
 		unimplemented!()
 	}
 

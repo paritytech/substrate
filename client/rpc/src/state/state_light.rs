@@ -46,7 +46,7 @@ use sc_client_api::{
 	BlockchainEvents,
 	light::{
 		RemoteCallRequest, RemoteReadRequest, RemoteReadChildRequest,
-		RemoteBlockchain, Fetcher, future_header,
+		RemoteReadRangeRequest, RemoteBlockchain, Fetcher, future_header,
 	},
 };
 use sp_core::{
@@ -208,12 +208,23 @@ impl<Block, F, Client> StateBackend<Block, Client> for LightState<Block, F, Clie
 
 	fn storage_keys_paged(
 		&self,
-		_block: Option<Block::Hash>,
-		_prefix: Option<StorageKey>,
-		_count: u32,
-		_start_key: Option<StorageKey>,
+		block: Option<Block::Hash>,
+		prefix: Option<StorageKey>,
+		count: u32,
+		start_key: Option<StorageKey>,
 	) -> FutureResult<Vec<StorageKey>> {
-		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
+		Box::new(storage_range(
+			&*self.remote_blockchain,
+			self.fetcher.clone(),
+			self.block_or_best(block),
+			None,
+			prefix.map(|key| key.0),
+			count,
+			start_key.map(|key| key.0),
+		).boxed().compat().map(move |key_values| key_values.into_iter()
+			.map(|key_value| key_value.0)
+			.collect()
+		))
 	}
 
 	fn storage_size(
@@ -619,6 +630,37 @@ fn storage<Block: BlockT, F: Fetcher<Block>>(
 		})
 }
 
+/// Get storage key value for a given range.
+fn storage_range<Block: BlockT, F: Fetcher<Block>>(
+	remote_blockchain: &dyn RemoteBlockchain<Block>,
+	fetcher: Arc<F>,
+	block: Block::Hash,
+	child_trie_key: Option<PrefixedStorageKey>,
+	prefix: Option<Vec<u8>>,
+	count: u32,
+	start_key: Option<Vec<u8>>,
+) -> impl std::future::Future<Output = Result<Vec<(StorageKey, StorageData)>, Error>> {
+	resolve_header(remote_blockchain, &*fetcher, block)
+		.then(move |result| match result {
+			Ok(header) => Either::Left(fetcher.remote_read_range(RemoteReadRangeRequest {
+				block,
+				header,
+				child_trie_key,
+				prefix,
+				count,
+				start_key,
+				retry_count: Default::default(),
+			}).then(|result| ready(result
+				.map(|result| result
+					.into_iter()
+					.map(|(key, value)| (StorageKey(key), StorageData(value)))
+					.collect()
+				).map_err(client_err)
+			))),
+			Err(error) => Either::Right(ready(Err(error))),
+		})
+}
+	
 /// Returns subscription stream that issues request on every imported block and
 /// if value has changed from previous block, emits (stream) item.
 fn subscription_stream<

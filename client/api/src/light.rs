@@ -90,6 +90,26 @@ pub struct RemoteReadChildRequest<Header: HeaderT> {
 	pub retry_count: Option<usize>,
 }
 
+/// Remote storage range read request.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct RemoteReadRangeRequest<Header: HeaderT> {
+	/// Read at state of given block.
+	pub block: Header::Hash,
+	/// Header of block at which read is performed.
+	pub header: Header,
+	/// Storage key of child trie to query, `None` for top trie.
+	pub child_trie_key: Option<PrefixedStorageKey>,
+	/// Limit range of query to a given prefix.
+	pub prefix: Option<Vec<u8>>,
+	/// Maximum number of key value to query.
+	pub count: u32,
+	/// Start key for query. Allows resuming from previous
+	/// range query.
+	pub start_key: Option<Vec<u8>>,
+	/// Number of times to retry request. None means that default RETRY_COUNT is used.
+	pub retry_count: Option<usize>,
+}
+
 /// Remote key changes read request.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RemoteChangesRequest<Header: HeaderT> {
@@ -151,6 +171,11 @@ pub trait Fetcher<Block: BlockT>: Send + Sync {
 		HashMap<Vec<u8>, Option<Vec<u8>>>,
 		ClientError,
 	>> + Unpin + Send + 'static;
+	/// Remote storage range read future.
+	type RemoteReadRangeResult: Future<Output = Result<
+		Vec<(Vec<u8>, Vec<u8>)>,
+		ClientError,
+	>> + Unpin + Send + 'static;
 	/// Remote call result future.
 	type RemoteCallResult: Future<Output = Result<
 		Vec<u8>,
@@ -179,6 +204,11 @@ pub trait Fetcher<Block: BlockT>: Send + Sync {
 		&self,
 		request: RemoteReadChildRequest<Block::Header>
 	) -> Self::RemoteReadResult;
+	/// Fetch remote storage child value.
+	fn remote_read_range(
+		&self,
+		request: RemoteReadRangeRequest<Block::Header>
+	) -> Self::RemoteReadRangeResult;
 	/// Fetch remote call result.
 	fn remote_call(&self, request: RemoteCallRequest<Block::Header>) -> Self::RemoteCallResult;
 	/// Fetch remote changes ((block number, extrinsic index)) where given key has been changed
@@ -334,6 +364,7 @@ pub mod tests {
 	impl Fetcher<Block> for OkCallFetcher {
 		type RemoteHeaderResult = Ready<Result<Header, ClientError>>;
 		type RemoteReadResult = Ready<Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError>>;
+		type RemoteReadRangeResult = Ready<Result<Vec<(Vec<u8>, Vec<u8>)>, ClientError>>;
 		type RemoteCallResult = Ready<Result<Vec<u8>, ClientError>>;
 		type RemoteChangesResult = Ready<Result<Vec<(NumberFor<Block>, u32)>, ClientError>>;
 		type RemoteBodyResult = Ready<Result<Vec<Extrinsic>, ClientError>>;
@@ -350,6 +381,13 @@ pub mod tests {
 			not_implemented_in_tests()
 		}
 
+		fn remote_read_range(
+			&self,
+			_request: RemoteReadRangeRequest<Header>
+		) -> Self::RemoteReadRangeResult {
+			not_implemented_in_tests()
+		}
+	
 		fn remote_call(&self, _request: RemoteCallRequest<Header>) -> Self::RemoteCallResult {
 			futures::future::ready(Ok((*self.lock()).clone()))
 		}

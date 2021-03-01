@@ -24,7 +24,8 @@ use futures::{channel::oneshot, prelude::*};
 use parking_lot::Mutex;
 use sc_client_api::{
 	FetchChecker, Fetcher, RemoteBodyRequest, RemoteCallRequest, RemoteChangesRequest,
-	RemoteHeaderRequest, RemoteReadChildRequest, RemoteReadRequest, StorageProof, ChangesProof,
+	RemoteHeaderRequest, RemoteReadChildRequest, RemoteReadRequest, RemoteReadRangeRequest,
+	StorageProof, ChangesProof,
 };
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_blockchain::Error as ClientError;
@@ -162,6 +163,7 @@ where
 {
 	type RemoteHeaderResult = RemoteResponse<B::Header>;
 	type RemoteReadResult = RemoteResponse<HashMap<Vec<u8>, Option<Vec<u8>>>>;
+	type RemoteReadRangeResult = RemoteResponse<Vec<(Vec<u8>, Vec<u8>)>>;
 	type RemoteCallResult = RemoteResponse<Vec<u8>>;
 	type RemoteChangesResult = RemoteResponse<Vec<(NumberFor<B>, u32)>>;
 	type RemoteBodyResult = RemoteResponse<Vec<B::Extrinsic>>;
@@ -193,6 +195,13 @@ where
 		RemoteResponse { receiver }
 	}
 
+	fn remote_read_range(
+		&self,
+		request: RemoteReadRangeRequest<B::Header>,
+	) -> Self::RemoteReadRangeResult {
+		unimplemented!("TODO")
+	}
+	
 	fn remote_call(&self, request: RemoteCallRequest<B::Header>) -> Self::RemoteCallResult {
 		let (sender, receiver) = oneshot::channel();
 		let _ = self
