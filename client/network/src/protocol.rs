@@ -168,6 +168,13 @@ pub struct Protocol<B: BlockT> {
 	behaviour: GenericProto,
 	/// List of notifications protocols that have been registered.
 	notification_protocols: Vec<Cow<'static, str>>,
+	/// If we receive a new "substream open" event that contains an invalid handshake, we ask the
+	/// inner layer to force-close the substream. Force-closing the substream will generate a
+	/// "substream closed" event. This is a problem: since we can't propagate the "substream open"
+	/// event to the outer layers, we also shouldn't propagate this "substream closed" event. To
+	/// solve this, an entry is added to this map whenever an invalid handshake is received.
+	/// Entries are removed when the corresponding "substream closed" is later received.
+	bad_handshake_substreams: HashSet<(PeerId, sc_peerset::SetId)>,
 	/// Prometheus metrics.
 	metrics: Option<Metrics>,
 	/// The `PeerId`'s of all boot nodes.
@@ -412,6 +419,7 @@ impl<B: BlockT> Protocol<B> {
 			behaviour,
 			notification_protocols:
 				network_config.extra_sets.iter().map(|s| s.notifications_protocol.clone()).collect(),
+			bad_handshake_substreams: Default::default(),
 			metrics: if let Some(r) = metrics_registry {
 				Some(Metrics::register(r)?)
 			} else {
@@ -1493,6 +1501,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 						},
 						(Err(err), _) => {
 							debug!(target: "sync", "Failed to parse remote handshake: {}", err);
+							self.bad_handshake_substreams.insert((peer_id.clone(), set_id));
 							self.behaviour.disconnect_peer(&peer_id, set_id);
 							self.peerset_handle.report_peer(peer_id, rep::BAD_MESSAGE);
 							CustomMessageOutcome::None
@@ -1502,6 +1511,8 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 			}
 			GenericProtoOut::CustomProtocolReplaced { peer_id, notifications_sink, set_id } => {
 				if set_id == HARDCODED_PEERSETS_SYNC {
+					CustomMessageOutcome::None
+				} else if self.bad_handshake_substreams.contains(&(peer_id.clone(), set_id)) {
 					CustomMessageOutcome::None
 				} else {
 					CustomMessageOutcome::NotificationStreamReplaced {
@@ -1524,6 +1535,11 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 						);
 						CustomMessageOutcome::None
 					}
+				} else if self.bad_handshake_substreams.remove(&(peer_id.clone(), set_id)) {
+					// The substream that has just been closed had been opened with a bad
+					// handshake. The outer layers have never received an opening event about this
+					// substream, and consequently shouldn't receive a closing event either.
+					CustomMessageOutcome::None
 				} else {
 					CustomMessageOutcome::NotificationStreamClosed {
 						remote: peer_id,
