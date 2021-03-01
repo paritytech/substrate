@@ -639,7 +639,7 @@ macro_rules! decl_module {
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		#[weight = $weight:expr]
-		fn on_idle( $( $param_name:ident : $param:ty ),* $(,)? ) { $( $impl:tt )* }
+		fn on_idle( $param_name1:ident: $param1:ty, $param_name2:ident, $param2:ty  $(,)? ) -> $return:ty { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
 		compile_error!("`on_idle` can only be passed once as input.");
