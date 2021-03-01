@@ -96,6 +96,14 @@ impl<Block: BlockT> FetchChecker<Block> for AlwaysBadChecker {
 		Err(ErrorAlwaysBadChecker.into())
 	}
 
+	fn check_read_range_proof(
+		&self,
+		_request: &RemoteReadRangeRequest<Block::Header>,
+		_remote_proof: StorageProof,
+	) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ClientError> {
+		Err(ErrorAlwaysBadChecker.into())
+	}
+
 	fn check_execution_proof(
 		&self,
 		_request: &RemoteCallRequest<Block::Header>,
@@ -199,9 +207,13 @@ where
 		&self,
 		request: RemoteReadRangeRequest<B::Header>,
 	) -> Self::RemoteReadRangeResult {
-		unimplemented!("TODO")
+		let (sender, receiver) = oneshot::channel();
+		let _ = self
+			.requests_send
+			.unbounded_send(light_client_requests::sender::Request::ReadRange { request, sender });
+		RemoteResponse { receiver }
 	}
-	
+
 	fn remote_call(&self, request: RemoteCallRequest<B::Header>) -> Self::RemoteCallResult {
 		let (sender, receiver) = oneshot::channel();
 		let _ = self

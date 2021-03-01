@@ -46,8 +46,9 @@ use sp_runtime::{
 };
 use sp_state_machine::{
 	DBValue, Backend as StateBackend, ChangesTrieAnchorBlockId,
-	prove_read, prove_child_read, ChangesTrieRootsStorage, ChangesTrieStorage,
-	ChangesTrieConfigurationRange, key_changes, key_changes_proof,
+	prove_read, prove_child_read, prove_range_read, ChangesTrieRootsStorage,
+	ChangesTrieStorage, ChangesTrieConfigurationRange, key_changes,
+	key_changes_proof,
 };
 use sc_executor::RuntimeVersion;
 use sp_consensus::{
@@ -1208,6 +1209,19 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 	) -> sp_blockchain::Result<StorageProof> {
 		self.state_at(id)
 			.and_then(|state| prove_child_read(state, child_info, keys)
+				.map_err(Into::into))
+	}
+
+	fn read_range_proof(
+		&self,
+		id: &BlockId<Block>,
+		child_info: Option<&ChildInfo>,
+		prefix: Option<&[u8]>,
+		count: u32,
+		start_at: Option<&[u8]>,
+	) -> sp_blockchain::Result<StorageProof> {
+		self.state_at(id)
+			.and_then(|state| prove_range_read(state, child_info, prefix, count, start_at)
 				.map_err(Into::into))
 	}
 

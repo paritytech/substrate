@@ -52,6 +52,10 @@ use log::debug;
 
 const LOG_TARGET: &str = "light-client-request-handler";
 
+/// Hard coded limit to range request size.
+/// TODO different length or parameterizable??
+const MAX_LIGHT_RANGE_COUNT: u32 = 1000;
+
 /// Handler for incoming light client requests from a remote peer.
 pub struct LightClientRequestHandler<B: Block> {
 	request_receiver: mpsc::Receiver<IncomingRequest>,
@@ -140,6 +144,8 @@ impl<B: Block> LightClientRequestHandler<B> {
 				self.on_remote_header_request(&peer, r)?,
 			Some(schema::v1::light::request::Request::RemoteReadChildRequest(r)) =>
 				self.on_remote_read_child_request(&peer, r)?,
+			Some(schema::v1::light::request::Request::RemoteReadRangeRequest(r)) =>
+				self.on_remote_read_range_request(&peer, r)?,
 			Some(schema::v1::light::request::Request::RemoteChangesRequest(r)) =>
 				self.on_remote_changes_request(&peer, r)?,
 			None => {
@@ -277,6 +283,72 @@ impl<B: Block> LightClientRequestHandler<B> {
 
 		Ok(schema::v1::light::Response { response: Some(response) })
 	}
+
+	fn on_remote_read_range_request(
+		&mut self,
+		peer: &PeerId,
+		request: &schema::v1::light::RemoteReadRangeRequest,
+	) -> Result<schema::v1::light::Response, HandleRequestError> {
+		if request.count > MAX_LIGHT_RANGE_COUNT {
+			log::debug!("Invalid remote range read request sent by {}.", peer);
+			return Err(HandleRequestError::BadRequest("Range read request too big."))
+		}
+
+		log::trace!(
+			"Remote read range request from {} ({} {} {:?} {} at {:?}).",
+			peer,
+			HexDisplay::from(&request.child_trie_key),
+			HexDisplay::from(&request.prefix),
+			&request.count,
+			HexDisplay::from(&request.start_key),
+			request.block,
+		);
+
+		let block = Decode::decode(&mut request.block.as_ref())?;
+
+		let prefix = (request.prefix.len() == 0).then(|| request.prefix.as_slice());
+		let count = request.count.clone();
+		let start_key = (request.start_key.len() == 0).then(|| request.start_key.as_slice());
+		let child_info = if request.child_trie_key.len() == 0 {
+			Ok(None)
+		} else {
+			let prefixed_key = PrefixedStorageKey::new_ref(&request.child_trie_key);
+			match ChildType::from_prefixed_key(prefixed_key) {
+				Some((ChildType::ParentKeyId, storage_key)) => Ok(Some(ChildInfo::new_default(storage_key))),
+				None => Err(sp_blockchain::Error::InvalidChildStorageKey),
+			}
+		};
+		let proof = match child_info.and_then(|child_info| self.client.read_range_proof(
+			&BlockId::Hash(block),
+			child_info.as_ref(),
+			prefix,
+			count,
+			start_key,
+		)) {
+			Ok(proof) => proof,
+			Err(error) => {
+				log::trace!(
+					"remote read range request from {} ({} {} {:?} {} at {:?}) failed with: {}",
+					peer,
+					HexDisplay::from(&request.child_trie_key),
+					HexDisplay::from(&request.prefix),
+					&request.count,
+					HexDisplay::from(&request.start_key),
+					request.block,
+					error,
+				);
+				StorageProof::empty()
+			}
+		};
+
+		let response = {
+			let r = schema::v1::light::RemoteReadResponse { proof: proof.encode() };
+			schema::v1::light::response::Response::RemoteReadResponse(r)
+		};
+
+		Ok(schema::v1::light::Response { response: Some(response) })
+	}
+
 
 	fn on_remote_header_request(
 		&mut self,

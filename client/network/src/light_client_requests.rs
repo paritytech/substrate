@@ -62,7 +62,7 @@ mod tests {
 	use sc_client_api::StorageProof;
 	use sc_client_api::light::{RemoteCallRequest, RemoteChangesRequest, RemoteHeaderRequest};
 	use sc_client_api::light::{self, RemoteReadRequest, RemoteBodyRequest, ChangesProof};
-	use sc_client_api::{FetchChecker, RemoteReadChildRequest};
+	use sc_client_api::{FetchChecker, RemoteReadChildRequest, RemoteReadRangeRequest};
 	use sp_blockchain::Error as ClientError;
 	use sp_core::storage::ChildInfo;
 	use sp_runtime::generic::Header;
@@ -116,6 +116,17 @@ mod tests {
 					.cloned()
 					.map(|k| (k, Some(vec![42])))
 					.collect()),
+				false => Err(ClientError::Backend("Test error".into())),
+			}
+		}
+
+		fn check_read_range_proof(
+			&self,
+			_request: &RemoteReadRangeRequest<B::Header>,
+			_: StorageProof,
+		) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ClientError> {
+			match self.ok {
+				true => Ok(vec![(vec![42], vec![42])]),
 				false => Err(ClientError::Backend("Test error".into())),
 			}
 		}

@@ -240,6 +240,11 @@ where
 						let reply = self.checker.check_read_child_proof(&request, proof)?;
 						Ok(Reply::MapVecU8OptVecU8(reply))
 					}
+					Request::ReadRange { request, .. } => {
+						let proof = Decode::decode(&mut response.proof.as_ref())?;
+						let reply = self.checker.check_read_range_proof(&request, proof)?;
+						Ok(Reply::MapVecU8VecPairU8(reply))
+					}
 					_ => Err(Error::UnexpectedResponse)
 				}
 			Some(Response::RemoteChangesResponse(response)) =>
@@ -599,11 +604,11 @@ enum Error {
 enum Reply<B: Block> {
 	VecU8(Vec<u8>),
 	VecNumberU32(Vec<(<B::Header as Header>::Number, u32)>),
+	MapVecU8VecPairU8(Vec<(Vec<u8>, Vec<u8>)>),
 	MapVecU8OptVecU8(HashMap<Vec<u8>, Option<Vec<u8>>>),
 	Header(B::Header),
 	Extrinsics(Vec<B::Extrinsic>),
 }
-
 
 /// Information we have about some peer.
 #[derive(Debug)]
@@ -667,6 +672,13 @@ pub enum Request<B: Block> {
 		/// [`oneshot::Sender`] to return response.
 		sender: oneshot::Sender<Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError>>
 	},
+	/// Remote read range request.
+	ReadRange {
+		/// Request.
+		request: light::RemoteReadRangeRequest<B::Header>,
+		/// [`oneshot::Sender`] to return response.
+		sender: oneshot::Sender<Result<Vec<(Vec<u8>, Vec<u8>)>, ClientError>>
+	},
 	/// Remote call request.
 	Call {
 		/// Request.
@@ -694,6 +706,7 @@ impl<B: Block> Request<B> {
 			Request::Header { request, .. } => request.block,
 			Request::Read { request, .. } => *request.header.number(),
 			Request::ReadChild { request, .. } => *request.header.number(),
+			Request::ReadRange { request, .. } => *request.header.number(),
 			Request::Call { request, .. } => *request.header.number(),
 			Request::Changes { request, .. } => request.max_block.0,
 		}
@@ -705,6 +718,7 @@ impl<B: Block> Request<B> {
 			Request::Header { request, .. } => request.retry_count,
 			Request::Read { request, .. } => request.retry_count,
 			Request::ReadChild { request, .. } => request.retry_count,
+			Request::ReadRange { request, .. } => request.retry_count,
 			Request::Call { request, .. } => request.retry_count,
 			Request::Changes { request, .. } => request.retry_count,
 		};
@@ -746,6 +760,21 @@ impl<B: Block> Request<B> {
 					keys: request.keys.clone(),
 				};
 				schema::v1::light::request::Request::RemoteReadChildRequest(r)
+			}
+			Request::ReadRange { request, .. } => {
+				// TODO check if need a v2 schema??
+				let r = schema::v1::light::RemoteReadRangeRequest {
+					block: request.block.encode(),
+					child_trie_key: request.child_trie_key.clone()
+						.map(|prefixed_key| prefixed_key.into_inner())
+						.unwrap_or_else(Default::default),
+					prefix: request.prefix.clone()
+						.unwrap_or_else(Default::default),
+					count: request.count.clone(),
+					start_key: request.start_key.clone()
+						.unwrap_or_else(Default::default),
+				};
+				schema::v1::light::request::Request::RemoteReadRangeRequest(r)
 			}
 			Request::Call { request, .. } => {
 				let r = schema::v1::light::RemoteCallRequest {
@@ -799,6 +828,11 @@ impl<B: Block> Request<B> {
 				Err(e) => send(Err(e), sender),
 				Ok(Reply::MapVecU8OptVecU8(x)) => send(Ok(x), sender),
 				reply => log::error!("invalid reply for read child request: {:?}, {:?}", reply, request),
+			}
+			Request::ReadRange { request, sender } => match result {
+				Err(e) => send(Err(e), sender),
+				Ok(Reply::MapVecU8VecPairU8(x)) => send(Ok(x), sender),
+				reply => log::error!("invalid reply for read range request: {:?}, {:?}", reply, request),
 			}
 			Request::Call { request, sender } => match result {
 				Err(e) => send(Err(e), sender),
@@ -1206,6 +1240,14 @@ mod tests {
 					response: Some(schema::v1::light::response::Response::RemoteReadResponse(r)),
 				}
 			}
+			Request::ReadRange { .. } => {
+				let r = schema::v1::light::RemoteReadResponse {
+					proof: empty_proof(),
+				};
+				schema::v1::light::Response {
+					response: Some(schema::v1::light::response::Response::RemoteReadResponse(r)),
+				}
+			}
 			Request::Call { .. } => {
 				let r = schema::v1::light::RemoteCallResponse {
 					proof: empty_proof(),
@@ -1296,6 +1338,25 @@ mod tests {
 			retry_count: None,
 		};
 		issue_request(Request::ReadChild {
+			request,
+			sender: chan.0,
+		});
+		assert_matches!(chan.1.try_recv(), Ok(Some(Ok(_))))
+	}
+
+	#[test]
+	fn receives_remote_read_range_response() {
+		let mut chan = oneshot::channel();
+		let request = light::RemoteReadRangeRequest {
+			header: dummy_header(),
+			block: Default::default(),
+			child_trie_key: None,
+			prefix: None,
+			count: 5,
+			start_key: None,
+			retry_count: None,
+		};
+		issue_request(Request::ReadRange {
 			request,
 			sender: chan.0,
 		});

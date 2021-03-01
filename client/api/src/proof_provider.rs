@@ -42,6 +42,17 @@ pub trait ProofProvider<Block: BlockT> {
 		keys: &mut dyn Iterator<Item=&[u8]>,
 	) -> sp_blockchain::Result<StorageProof>;
 
+	/// Reads range storage key value, returning
+	/// read proof.
+	fn read_range_proof(
+		&self,
+		id: &BlockId<Block>,
+		child_info: Option<&ChildInfo>,
+		prefix: Option<&[u8]>,
+		count: u32,
+		start_at: Option<&[u8]>,
+	) -> sp_blockchain::Result<StorageProof>;
+
 	/// Execute a call to a contract on top of state in a block of given hash
 	/// AND returning execution proof.
 	///

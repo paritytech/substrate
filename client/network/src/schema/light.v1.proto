@@ -20,6 +20,7 @@ message Request {
 		RemoteHeaderRequest remote_header_request = 3;
 		RemoteReadChildRequest remote_read_child_request = 4;
 		RemoteChangesRequest remote_changes_request = 5;
+		RemoteReadRangeRequest remote_read_range_request = 6;
 	}
 }
 
@@ -64,6 +65,25 @@ message RemoteReadResponse {
 }
 
 // Remote storage read child request.
+message RemoteReadRangeRequest {
+	// Block at which to perform call.
+	bytes block = 2;
+
+	// Child trie storage keys.
+	bytes child_trie_key = 3; // optional
+
+	/// Limit range of query to a given prefix.
+	bytes prefix = 4; // optional
+
+	/// Maximum number of key value to query.
+	uint32 count = 5;
+
+	/// Start key for query. Allows resuming from previous
+	/// range query.
+	bytes start_key = 6; // optional
+}
+
+// Remote storage read range request.
 message RemoteReadChildRequest {
 	// Block at which to perform call.
 	bytes block = 2;
@@ -73,6 +93,7 @@ message RemoteReadChildRequest {
 	// Storage keys.
 	repeated bytes keys = 6;
 }
+
 
 // Remote header request.
 message RemoteHeaderRequest {

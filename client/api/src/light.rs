@@ -242,6 +242,12 @@ pub trait FetchChecker<Block: BlockT>: Send + Sync {
 		request: &RemoteReadChildRequest<Block::Header>,
 		remote_proof: StorageProof,
 	) -> ClientResult<HashMap<Vec<u8>, Option<Vec<u8>>>>;
+	/// Check remote storage read range proof.
+	fn check_read_range_proof(
+		&self,
+		request: &RemoteReadRangeRequest<Block::Header>,
+		remote_proof: StorageProof,
+	) -> ClientResult<Vec<(Vec<u8>, Vec<u8>)>>;
 	/// Check remote method execution proof.
 	fn check_execution_proof(
 		&self,
@@ -352,8 +358,8 @@ pub mod tests {
 		fn into(self) -> ClientError {
 			ClientError::Application(Box::new(self))
 		}
-	}	
-	
+	}
+
 	pub type OkCallFetcher = Mutex<Vec<u8>>;
 
 	fn not_implemented_in_tests<T>() -> Ready<Result<T, ClientError>>
@@ -387,7 +393,7 @@ pub mod tests {
 		) -> Self::RemoteReadRangeResult {
 			not_implemented_in_tests()
 		}
-	
+
 		fn remote_call(&self, _request: RemoteCallRequest<Header>) -> Self::RemoteCallResult {
 			futures::future::ready(Ok((*self.lock()).clone()))
 		}

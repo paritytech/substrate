@@ -660,7 +660,7 @@ fn storage_range<Block: BlockT, F: Fetcher<Block>>(
 			Err(error) => Either::Right(ready(Err(error))),
 		})
 }
-	
+
 /// Returns subscription stream that issues request on every imported block and
 /// if value has changed from previous block, emits (stream) item.
 fn subscription_stream<

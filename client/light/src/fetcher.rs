@@ -32,7 +32,7 @@ use sp_runtime::traits::{
 use sp_state_machine::{
 	ChangesTrieRootsStorage, ChangesTrieAnchorBlockId, ChangesTrieConfigurationRange,
 	InMemoryChangesTrieStorage, TrieBackend, read_proof_check, key_changes_proof_check_with_db,
-	read_child_proof_check,
+	read_child_proof_check, read_range_proof_check,
 };
 pub use sp_state_machine::StorageProof;
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
@@ -40,8 +40,8 @@ use sp_blockchain::{Error as ClientError, Result as ClientResult};
 pub use sc_client_api::{
 	light::{
 		RemoteCallRequest, RemoteHeaderRequest, RemoteReadRequest, RemoteReadChildRequest,
-		RemoteChangesRequest, ChangesProof, RemoteBodyRequest, Fetcher, FetchChecker,
-		Storage as BlockchainStorage,
+		RemoteChangesRequest, RemoteReadRangeRequest, ChangesProof, RemoteBodyRequest,
+		Fetcher, FetchChecker, Storage as BlockchainStorage,
 	},
 	cht,
 };
@@ -256,6 +256,29 @@ impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
 			remote_proof,
 			&child_info,
 			request.keys.iter(),
+		).map_err(|e| ClientError::from(e))
+	}
+
+	fn check_read_range_proof(
+		&self,
+		request: &RemoteReadRangeRequest<Block::Header>,
+		remote_proof: StorageProof,
+	) -> ClientResult<Vec<(Vec<u8>, Vec<u8>)>> {
+		let child_info = if let Some(storage_key) = request.child_trie_key.as_ref() {
+			match ChildType::from_prefixed_key(storage_key) {
+				Some((ChildType::ParentKeyId, storage_key)) => Some(ChildInfo::new_default(storage_key)),
+				None => return Err(ClientError::InvalidChildType),
+			}
+		} else {
+			None
+		};
+		read_range_proof_check::<H>(
+			convert_hash(request.header.state_root()),
+			remote_proof,
+			child_info.as_ref(),
+			request.prefix.as_ref().map(Vec::as_slice),
+			request.count,
+			request.start_key.as_ref().map(Vec::as_slice),
 		).map_err(|e| ClientError::from(e))
 	}
 
