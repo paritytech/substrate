@@ -85,7 +85,7 @@ use sp_runtime::{
 
 use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
 use frame_support::{
-	Parameter, debug, storage,
+	Parameter, storage,
 	traits::{
 		Contains, Get, PalletInfo, OnNewAccount, OnKilledAccount, HandleLifetime,
 		StoredMap, EnsureOrigin, OriginTrait, Filter,
@@ -1060,7 +1060,10 @@ impl<T: Config> Module<T> {
 					(0, _) => {
 						// Logic error - cannot decrement beyond zero and no item should
 						// exist with zero providers.
-						debug::print!("Logic error: Unexpected underflow in reducing provider");
+						log::error!(
+							target: "runtime::system",
+							"Logic error: Unexpected underflow in reducing provider",
+						);
 						Ok(DecRefStatus::Reaped)
 					},
 					(1, 0) => {
@@ -1078,7 +1081,10 @@ impl<T: Config> Module<T> {
 					}
 				}
 			} else {
-				debug::print!("Logic error: Account already dead when reducing provider");
+				log::error!(
+					target: "runtime::system",
+					"Logic error: Account already dead when reducing provider",
+				);
 				Ok(DecRefStatus::Reaped)
 			}
 		})
@@ -1107,7 +1113,10 @@ impl<T: Config> Module<T> {
 		Account::<T>::mutate(who, |a| if a.consumers > 0 {
 			a.consumers -= 1;
 		} else {
-			debug::print!("Logic error: Unexpected underflow in reducing consumer");
+			log::error!(
+				target: "runtime::system",
+				"Logic error: Unexpected underflow in reducing consumer",
+			);
 		})
 	}
 
