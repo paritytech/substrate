@@ -1277,8 +1277,12 @@ define_env!(Env, <E: Ext>,
 	// - data_ptr - a pointer to a raw data buffer which will saved along the event.
 	// - data_len - the length of the data buffer.
 	seal_deposit_event(ctx, topics_ptr: u32, topics_len: u32, data_ptr: u32, data_len: u32) => {
+
 		fn has_duplicates<T: Ord>(items: &mut Vec<T>) -> bool {
-			// Unstable sort is fine because we are rejecting duplicates anyways.
+			// # Warning
+			//
+			// Unstable sorts are non-deterministic across architectures. The usage here is OK
+			// because we are rejecting duplicates which removes the non determinism.
 			items.sort_unstable();
 			// Find any two consecutive equal elements.
 			items.windows(2).any(|w| {
