@@ -27,6 +27,7 @@ frame-support = { version = "3.0.0", default-features = false, path = "../suppor
 frame-system = { version = "3.0.0", default-features = false, path = "../system" }
 pallet-authorship = { version = "3.0.0", default-features = false, path = "../authorship" }
 pallet-session = { version = "3.0.0", default-features = false, path = "../session" }
+log = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]
 frame-benchmarking = { version = "3.1.0", path = "../benchmarking" }
@@ -57,6 +58,7 @@ std = [
 	"frame-system/std",
 	"pallet-authorship/std",
 	"pallet-session/std",
+	"log/std",
 ]
 runtime-benchmarks = ["frame-benchmarking"]
 try-runtime = ["frame-support/try-runtime"]

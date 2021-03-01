@@ -24,6 +24,7 @@ sp-io = { version = "3.0.0", path = "../../primitives/io", default-features = fa
 sp-storage = { version = "3.0.0", path = "../../primitives/storage", default-features = false }
 frame-support = { version = "3.0.0", default-features = false, path = "../support" }
 frame-system = { version = "3.0.0", default-features = false, path = "../system" }
+log = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]
 hex-literal = "0.3.1"
@@ -40,4 +41,5 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 	"linregress",
+	"log/std",
 ]
