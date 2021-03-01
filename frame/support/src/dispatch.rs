@@ -615,7 +615,7 @@ macro_rules! decl_module {
 		$($rest:tt)*
 	) => {
 		compile_error!(
-			"`on_id;e` can't be given weight attribute anymore, weight must be returned by \
+			"`on_idle` can't be given weight attribute anymore, weight must be returned by \
 			`on_initialize` or `on_runtime_upgrade` instead"
 		);
 	};
