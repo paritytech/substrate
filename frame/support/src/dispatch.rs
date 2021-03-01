@@ -582,7 +582,7 @@ macro_rules! decl_module {
 			{ $( $on_initialize )* }
 			{ $( $on_runtime_upgrade )* }
 			{
-				fn on_idle( $( $param_name : $param ),* ) { $( $impl )* }
+				fn on_idle( $param_name1: $param1, $param_name2: $param2 ) -> $return:ty { $( $impl )* }
 			}
 			{ $( $on_finalize:tt )* }
 			{ $( $offchain )* }
