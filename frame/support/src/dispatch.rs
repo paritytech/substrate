@@ -1596,7 +1596,7 @@ macro_rules! decl_module {
 			$crate::traits::OnIdle<<$trait_instance as $system::Config>::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
-			fn on_idle($param: $param_ty) {
+			fn on_idle($param1: $param1_ty, $param2: $param2_ty) -> $return {
 				$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!("on_idle"));
 				{ $( $impl )* }
 			}
