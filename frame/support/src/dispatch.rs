@@ -615,7 +615,7 @@ macro_rules! decl_module {
 		fn on_idle
 		$($rest:tt)*
 	) => {
-		compile_error!("`on_idle` cannot be implemented in decl_module, name is reserved to avoid confusion with on_idle hook");
+		compile_error!("`on_idle` method is reserved and syntax doesn't match expected syntax.");
 	};
 
 	// compile_error on_runtime_upgrade, without a given weight removed syntax.
