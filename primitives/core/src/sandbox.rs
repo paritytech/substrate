@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -31,12 +31,12 @@ pub struct HostError;
 pub enum ExternEntity {
 	/// Function that is specified by an index in a default table of
 	/// a module that creates the sandbox.
-	#[codec(index = "1")]
+	#[codec(index = 1)]
 	Function(u32),
 
 	/// Linear memory that is specified by some identifier returned by sandbox
 	/// module upon creation new sandboxed memory.
-	#[codec(index = "2")]
+	#[codec(index = 2)]
 	Memory(u32),
 }
 

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -137,7 +137,18 @@ pub trait Externalities: ExtensionStore {
 	) -> Option<Vec<u8>>;
 
 	/// Clear an entire child storage.
-	fn kill_child_storage(&mut self, child_info: &ChildInfo);
+	///
+	/// Deletes all keys from the overlay and up to `limit` keys from the backend. No
+	/// limit is applied if `limit` is `None`. Returned boolean is `true` if the child trie was
+	/// removed completely and `false` if there are remaining keys after the function
+	/// returns. Returned `u32` is the number of keys that was removed at the end of the
+	/// operation.
+	///
+	/// # Note
+	///
+	/// An implementation is free to delete more keys than the specified limit as long as
+	/// it is able to do that in constant time.
+	fn kill_child_storage(&mut self, child_info: &ChildInfo, limit: Option<u32>) -> (bool, u32);
 
 	/// Clear storage entries which keys are start with the given prefix.
 	fn clear_prefix(&mut self, prefix: &[u8]);
@@ -159,9 +170,6 @@ pub trait Externalities: ExtensionStore {
 		key: Vec<u8>,
 		value: Option<Vec<u8>>,
 	);
-
-	/// Get the identity of the chain.
-	fn chain_id(&self) -> u64;
 
 	/// Get the trie root of the current storage map.
 	///

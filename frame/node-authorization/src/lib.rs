@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -267,7 +267,7 @@ decl_module! {
 		pub fn reset_well_known_nodes(origin, nodes: Vec<(PeerId, T::AccountId)>) {
 			T::ResetOrigin::ensure_origin(origin)?;
 			ensure!(nodes.len() < T::MaxWellKnownNodes::get() as usize, Error::<T>::TooManyNodes);
-	
+
 			Self::initialize_nodes(&nodes);
 
 			Self::deposit_event(RawEvent::NodesReset(nodes));
@@ -280,7 +280,7 @@ decl_module! {
 		#[weight = T::WeightInfo::claim_node()]
 		pub fn claim_node(origin, node: PeerId) {
 			let sender = ensure_signed(origin)?;
-			
+
 			ensure!(node.0.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
 			ensure!(!Owners::<T>::contains_key(&node),Error::<T>::AlreadyClaimed);
 
@@ -431,54 +431,55 @@ impl<T: Config> Module<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate as pallet_node_authorization;
 
-	use frame_support::{
-		assert_ok, assert_noop, impl_outer_origin, weights::Weight,
-		parameter_types, ord_parameter_types,
-	};
+	use frame_support::{assert_ok, assert_noop, parameter_types, ord_parameter_types};
 	use frame_system::EnsureSignedBy;
 	use sp_core::H256;
-	use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup, BadOrigin}, testing::Header};
+	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup, BadOrigin}, testing::Header};
 
-	impl_outer_origin! {
-		pub enum Origin for Test where system = frame_system {}
-	}
+	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+	type Block = frame_system::mocking::MockBlock<Test>;
 
-	#[derive(Clone, Eq, PartialEq)]
-	pub struct Test;
+	frame_support::construct_runtime!(
+		pub enum Test where
+			Block = Block,
+			NodeBlock = Block,
+			UncheckedExtrinsic = UncheckedExtrinsic,
+		{
+			System: frame_system::{Module, Call, Config, Storage, Event<T>},
+			NodeAuthorization: pallet_node_authorization::{
+				Module, Call, Storage, Config<T>, Event<T>,
+			},
+		}
+	);
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: Weight = 1024;
-		pub const MaximumBlockLength: u32 = 2 * 1024;
-		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl frame_system::Config for Test {
 		type BaseCallFilter = ();
+		type DbWeight = ();
+		type BlockWeights = ();
+		type BlockLength = ();
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
-		type Call = ();
+		type Call = Call;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = ();
+		type Event = Event;
 		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type DbWeight = ();
-		type BlockExecutionWeight = ();
-		type ExtrinsicBaseWeight = ();
-		type MaximumExtrinsicWeight = MaximumBlockWeight;
-		type MaximumBlockLength = MaximumBlockLength;
-		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
-		type PalletInfo = ();
+		type PalletInfo = PalletInfo;
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
+		type SS58Prefix = ();
 	}
 
 	ord_parameter_types! {
@@ -492,7 +493,7 @@ mod tests {
 		pub const MaxPeerIdLength: u32 = 2;
 	}
 	impl Config for Test {
-		type Event = ();
+		type Event = Event;
 		type MaxWellKnownNodes = MaxWellKnownNodes;
 		type MaxPeerIdLength = MaxPeerIdLength;
 		type AddOrigin = EnsureSignedBy<One, u64>;
@@ -502,15 +503,13 @@ mod tests {
 		type WeightInfo = ();
 	}
 
-	type NodeAuthorization = Module<Test>;
-
 	fn test_node(id: u8) -> PeerId {
 		PeerId(vec![id])
 	}
 
 	fn new_test_ext() -> sp_io::TestExternalities {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		GenesisConfig::<Test> {
+		pallet_node_authorization::GenesisConfig::<Test> {
 			nodes: vec![(test_node(10), 10), (test_node(20), 20), (test_node(30), 30)],
 		}.assimilate_storage(&mut t).unwrap();
 		t.into()

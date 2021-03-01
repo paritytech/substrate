@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,7 +18,7 @@
 //! A number type that can be serialized both as a number or a string that encodes a number in a
 //! string.
 
-use std::{convert::TryFrom, fmt::Debug};
+use std::{convert::{TryFrom, TryInto}, fmt::Debug};
 use serde::{Serialize, Deserialize};
 use sp_core::U256;
 
@@ -39,6 +39,12 @@ pub enum NumberOrHex {
 	Hex(U256),
 }
 
+impl Default for NumberOrHex {
+	fn default() -> Self {
+		Self::Number(Default::default())
+	}
+}
+
 impl NumberOrHex {
 	/// Converts this number into an U256.
 	pub fn into_u256(self) -> U256 {
@@ -49,9 +55,21 @@ impl NumberOrHex {
 	}
 }
 
+impl From<u32> for NumberOrHex {
+	fn from(n: u32) -> Self {
+		NumberOrHex::Number(n.into())
+	}
+}
+
 impl From<u64> for NumberOrHex {
 	fn from(n: u64) -> Self {
 		NumberOrHex::Number(n)
+	}
+}
+
+impl From<u128> for NumberOrHex {
+	fn from(n: u128) -> Self {
+		NumberOrHex::Hex(n.into())
 	}
 }
 
@@ -66,25 +84,28 @@ pub struct TryFromIntError(pub(crate) ());
 
 impl TryFrom<NumberOrHex> for u32 {
 	type Error = TryFromIntError;
-	fn try_from(num_or_hex: NumberOrHex) -> Result<u32, TryFromIntError> {
-		let num_or_hex = num_or_hex.into_u256();
-		if num_or_hex > U256::from(u32::max_value()) {
-			return Err(TryFromIntError(()));
-		} else {
-			Ok(num_or_hex.as_u32())
-		}
+	fn try_from(num_or_hex: NumberOrHex) -> Result<u32, Self::Error> {
+		num_or_hex.into_u256().try_into().map_err(|_| TryFromIntError(()))
 	}
 }
 
 impl TryFrom<NumberOrHex> for u64 {
 	type Error = TryFromIntError;
-	fn try_from(num_or_hex: NumberOrHex) -> Result<u64, TryFromIntError> {
-		let num_or_hex = num_or_hex.into_u256();
-		if num_or_hex > U256::from(u64::max_value()) {
-			return Err(TryFromIntError(()));
-		} else {
-			Ok(num_or_hex.as_u64())
-		}
+	fn try_from(num_or_hex: NumberOrHex) -> Result<u64, Self::Error> {
+		num_or_hex.into_u256().try_into().map_err(|_| TryFromIntError(()))
+	}
+}
+
+impl TryFrom<NumberOrHex> for u128 {
+	type Error = TryFromIntError;
+	fn try_from(num_or_hex: NumberOrHex) -> Result<u128, Self::Error> {
+		num_or_hex.into_u256().try_into().map_err(|_| TryFromIntError(()))
+	}
+}
+
+impl From<NumberOrHex> for U256 {
+	fn from(num_or_hex: NumberOrHex) -> U256 {
+		num_or_hex.into_u256()
 	}
 }
 

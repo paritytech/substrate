@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -19,15 +19,16 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+use finality_grandpa::{voter_set::VoterSet, Error as GrandpaError};
+use parity_scale_codec::{Decode, Encode};
 use sp_blockchain::{Error as ClientError, HeaderBackend};
-use parity_scale_codec::{Encode, Decode};
-use finality_grandpa::voter_set::VoterSet;
-use finality_grandpa::{Error as GrandpaError};
-use sp_runtime::generic::BlockId;
-use sp_runtime::traits::{NumberFor, Block as BlockT, Header as HeaderT};
 use sp_finality_grandpa::AuthorityId;
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, Header as HeaderT, NumberFor},
+};
 
-use crate::{Commit, Error};
+use crate::{AuthorityList, Commit, Error};
 
 /// A GRANDPA justification for block finality, it includes a commit message and
 /// an ancestry proof including all headers routing all precommit target blocks
@@ -105,12 +106,30 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 			let msg = "invalid commit target in grandpa justification".to_string();
 			Err(ClientError::BadJustification(msg))
 		} else {
-			justification.verify(set_id, voters).map(|_| justification)
+			justification
+				.verify_with_voter_set(set_id, voters)
+				.map(|_| justification)
 		}
 	}
 
 	/// Validate the commit and the votes' ancestry proofs.
-	pub(crate) fn verify(&self, set_id: u64, voters: &VoterSet<AuthorityId>) -> Result<(), ClientError>
+	pub fn verify(&self, set_id: u64, authorities: &AuthorityList) -> Result<(), ClientError>
+	where
+		NumberFor<Block>: finality_grandpa::BlockNumberOps,
+	{
+		let voters = VoterSet::new(authorities.iter().cloned()).ok_or(ClientError::Consensus(
+			sp_consensus::Error::InvalidAuthoritiesSet,
+		))?;
+
+		self.verify_with_voter_set(set_id, &voters)
+	}
+
+	/// Validate the commit and the votes' ancestry proofs.
+	pub(crate) fn verify_with_voter_set(
+		&self,
+		set_id: u64,
+		voters: &VoterSet<AuthorityId>,
+	) -> Result<(), ClientError>
 	where
 		NumberFor<Block>: finality_grandpa::BlockNumberOps,
 	{
@@ -216,9 +235,5 @@ impl<Block: BlockT> finality_grandpa::Chain<Block::Hash, NumberFor<Block>> for A
 		route.pop(); // remove the base
 
 		Ok(route)
-	}
-
-	fn best_chain_containing(&self, _block: Block::Hash) -> Option<(Block::Hash, NumberFor<Block>)> {
-		None
 	}
 }

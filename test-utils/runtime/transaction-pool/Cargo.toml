@@ -13,11 +13,11 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 substrate-test-runtime-client = { version = "2.0.0", path = "../client" }
-parking_lot = "0.10.0"
-codec = { package = "parity-scale-codec", version = "1.3.1" }
-sp-blockchain = { version = "2.0.0", path = "../../../primitives/blockchain" }
-sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
-sp-transaction-pool = { version = "2.0.0", path = "../../../primitives/transaction-pool" }
-sc-transaction-graph = { version = "2.0.0", path = "../../../client/transaction-pool/graph" }
+parking_lot = "0.11.1"
+codec = { package = "parity-scale-codec", version = "2.0.0" }
+sp-blockchain = { version = "3.0.0", path = "../../../primitives/blockchain" }
+sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
+sp-transaction-pool = { version = "3.0.0", path = "../../../primitives/transaction-pool" }
+sc-transaction-graph = { version = "3.0.0", path = "../../../client/transaction-pool/graph" }
 futures = { version = "0.3.1", features = ["compat"] }
 derive_more = "0.99.2"

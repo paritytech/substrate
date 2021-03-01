@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,10 +26,11 @@ use frame_support::{
 };
 use frame_system as system;
 use sp_runtime::{
-	traits::{IdentityLookup, Block as BlockT},
+	traits::IdentityLookup,
 	testing::{Header, UintAuthorityId},
 };
-
+use sp_election_providers::onchain;
+use pallet_session::historical as pallet_session_historical;
 
 type AccountId = u64;
 type AccountIndex = u32;
@@ -37,11 +38,15 @@ type BlockNumber = u64;
 type Balance = u64;
 
 parameter_types! {
-	pub const MaximumBlockWeight: Weight = 2 * WEIGHT_PER_SECOND;
+	pub BlockWeights: frame_system::limits::BlockWeights =
+		frame_system::limits::BlockWeights::simple_max(2 * WEIGHT_PER_SECOND);
 }
 
 impl frame_system::Config for Test {
 	type BaseCallFilter = ();
+	type BlockWeights = ();
+	type BlockLength = ();
+	type DbWeight = ();
 	type Origin = Origin;
 	type Index = AccountIndex;
 	type BlockNumber = BlockNumber;
@@ -53,19 +58,13 @@ impl frame_system::Config for Test {
 	type Header = sp_runtime::testing::Header;
 	type Event = Event;
 	type BlockHashCount = ();
-	type MaximumBlockWeight = MaximumBlockWeight;
-	type DbWeight = ();
-	type AvailableBlockRatio = ();
-	type MaximumBlockLength = ();
 	type Version = ();
-	type PalletInfo = ();
+	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
-	type OnKilledAccount = (Balances,);
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
-	type MaximumExtrinsicWeight = ();
+	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
+	type SS58Prefix = ();
 }
 parameter_types! {
 	pub const ExistentialDeposit: Balance = 10;
@@ -132,6 +131,7 @@ impl pallet_session::Config for Test {
 	type DisabledValidatorsThreshold = ();
 	type WeightInfo = ();
 }
+
 pallet_staking_reward_curve::build! {
 	const I_NPOS: sp_runtime::curve::PiecewiseLinear<'static> = curve!(
 		min_inflation: 0_025_000,
@@ -148,6 +148,13 @@ parameter_types! {
 }
 
 pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
+
+impl onchain::Config for Test {
+	type AccountId = AccountId;
+	type BlockNumber = BlockNumber;
+	type Accuracy = Perbill;
+	type DataProvider = Staking;
+}
 
 impl pallet_staking::Config for Test {
 	type Currency = Balances;
@@ -171,12 +178,14 @@ impl pallet_staking::Config for Test {
 	type MaxIterations = ();
 	type MinSolutionScoreBump = ();
 	type OffchainSolutionWeightLimit = ();
+	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type WeightInfo = ();
 }
 
 impl pallet_im_online::Config for Test {
 	type AuthorityId = UintAuthorityId;
 	type Event = Event;
+	type ValidatorSet = Historical;
 	type SessionDuration = Period;
 	type ReportUnresponsiveness = Offences;
 	type UnsignedPriority = ();
@@ -184,7 +193,7 @@ impl pallet_im_online::Config for Test {
 }
 
 parameter_types! {
-	pub OffencesWeightSoftLimit: Weight = Perbill::from_percent(60) * MaximumBlockWeight::get();
+	pub OffencesWeightSoftLimit: Weight = Perbill::from_percent(60) * BlockWeights::get().max_block;
 }
 
 impl pallet_offences::Config for Test {
@@ -216,6 +225,7 @@ frame_support::construct_runtime!(
 		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
 		ImOnline: pallet_im_online::{Module, Call, Storage, Event<T>, ValidateUnsigned, Config<T>},
 		Offences: pallet_offences::{Module, Call, Storage, Event},
+		Historical: pallet_session_historical::{Module},
 	}
 );
 

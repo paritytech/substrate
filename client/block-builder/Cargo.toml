@@ -1,6 +1,6 @@
 [package]
 name = "sc-block-builder"
-version = "0.8.0"
+version = "0.9.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
@@ -14,17 +14,16 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 
 [dependencies]
-sp-state-machine = { version = "0.8.0", path = "../../primitives/state-machine" }
-sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
-sp-api = { version = "2.0.0", path = "../../primitives/api" }
-sp-consensus = { version = "0.8.0", path = "../../primitives/consensus/common" }
-sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
-sp-core = { version = "2.0.0", path = "../../primitives/core" }
-sp-block-builder = { version = "2.0.0", path = "../../primitives/block-builder" }
-sp-inherents = { version = "2.0.0", path = "../../primitives/inherents" }
-sc-client-api = { version = "2.0.0", path = "../api" }
-codec = { package = "parity-scale-codec", version = "1.3.4", features = ["derive"] }
+sp-state-machine = { version = "0.9.0", path = "../../primitives/state-machine" }
+sp-runtime = { version = "3.0.0", path = "../../primitives/runtime" }
+sp-api = { version = "3.0.0", path = "../../primitives/api" }
+sp-blockchain = { version = "3.0.0", path = "../../primitives/blockchain" }
+sp-core = { version = "3.0.0", path = "../../primitives/core" }
+sp-block-builder = { version = "3.0.0", path = "../../primitives/block-builder" }
+sp-inherents = { version = "3.0.0", path = "../../primitives/inherents" }
+sc-client-api = { version = "3.0.0", path = "../api" }
+codec = { package = "parity-scale-codec", version = "2.0.0", features = ["derive"] }
 
 [dev-dependencies]
 substrate-test-runtime-client = { path = "../../test-utils/runtime/client" }
-sp-trie = { version = "2.0.0", path = "../../primitives/trie" }
+sp-trie = { version = "3.0.0", path = "../../primitives/trie" }

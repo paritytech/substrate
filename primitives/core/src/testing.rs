@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -149,6 +149,16 @@ impl crate::traits::SpawnNamed for TaskExecutor {
 		self.0.spawn_ok(future);
 	}
 	fn spawn(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+		self.0.spawn_ok(future);
+	}
+}
+
+#[cfg(feature = "std")]
+impl crate::traits::SpawnEssentialNamed for TaskExecutor {
+	fn spawn_essential_blocking(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+		self.0.spawn_ok(future);
+	}
+	fn spawn_essential(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
 		self.0.spawn_ok(future);
 	}
 }

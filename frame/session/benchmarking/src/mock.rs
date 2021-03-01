@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,33 +20,35 @@
 #![cfg(test)]
 
 use sp_runtime::traits::IdentityLookup;
-use frame_support::{impl_outer_origin, impl_outer_dispatch, parameter_types};
+use sp_election_providers::onchain;
+use frame_support::parameter_types;
 
 type AccountId = u64;
 type AccountIndex = u32;
 type BlockNumber = u64;
 type Balance = u64;
 
-type System = frame_system::Module<Test>;
-type Balances = pallet_balances::Module<Test>;
-type Staking = pallet_staking::Module<Test>;
-type Session = pallet_session::Module<Test>;
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
 
-impl_outer_origin! {
-	pub enum Origin for Test where system = frame_system {}
-}
-
-impl_outer_dispatch! {
-	pub enum Call for Test where origin: Origin {
-		pallet_staking::Staking,
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
+		Staking: pallet_staking::{Module, Call, Config<T>, Storage, Event<T>, ValidateUnsigned},
+		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
 	}
-}
-
-#[derive(Clone, Eq, PartialEq, Debug)]
-pub struct Test;
+);
 
 impl frame_system::Config for Test {
 	type BaseCallFilter = ();
+	type BlockWeights = ();
+	type BlockLength = ();
+	type DbWeight = ();
 	type Origin = Origin;
 	type Index = AccountIndex;
 	type BlockNumber = BlockNumber;
@@ -56,21 +58,15 @@ impl frame_system::Config for Test {
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = sp_runtime::testing::Header;
-	type Event = ();
+	type Event = Event;
 	type BlockHashCount = ();
-	type MaximumBlockWeight = ();
-	type DbWeight = ();
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
-	type MaximumExtrinsicWeight = ();
-	type AvailableBlockRatio = ();
-	type MaximumBlockLength = ();
 	type Version = ();
-	type PalletInfo = ();
+	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
-	type OnKilledAccount = Balances;
+	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
+	type SS58Prefix = ();
 }
 parameter_types! {
 	pub const ExistentialDeposit: Balance = 10;
@@ -78,7 +74,7 @@ parameter_types! {
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type Balance = Balance;
-	type Event = ();
+	type Event = Event;
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
@@ -126,7 +122,7 @@ impl pallet_session::Config for Test {
 	type ShouldEndSession = pallet_session::PeriodicSessions<(), ()>;
 	type NextSessionRotation = pallet_session::PeriodicSessions<(), ()>;
 	type SessionHandler = TestSessionHandler;
-	type Event = ();
+	type Event = Event;
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = pallet_staking::StashOf<Test>;
 	type DisabledValidatorsThreshold = ();
@@ -150,11 +146,19 @@ parameter_types! {
 
 pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
 
-impl<C> frame_system::offchain::SendTransactionTypes<C> for Test where
+impl<C> frame_system::offchain::SendTransactionTypes<C> for Test
+where
 	Call: From<C>,
 {
 	type OverarchingCall = Call;
 	type Extrinsic = Extrinsic;
+}
+
+impl onchain::Config for Test {
+	type AccountId = AccountId;
+	type BlockNumber = BlockNumber;
+	type Accuracy = sp_runtime::Perbill;
+	type DataProvider = Staking;
 }
 
 impl pallet_staking::Config for Test {
@@ -162,7 +166,7 @@ impl pallet_staking::Config for Test {
 	type UnixTime = pallet_timestamp::Module<Self>;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type RewardRemainder = ();
-	type Event = ();
+	type Event = Event;
 	type Slash = ();
 	type Reward = ();
 	type SessionsPerEra = ();
@@ -179,6 +183,7 @@ impl pallet_staking::Config for Test {
 	type MaxIterations = ();
 	type MinSolutionScoreBump = ();
 	type OffchainSolutionWeightLimit = ();
+	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type WeightInfo = ();
 }
 

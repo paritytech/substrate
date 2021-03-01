@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -47,7 +47,7 @@ mod keyword {
 pub struct Opt<P> {
 	pub inner: Option<P>,
 }
-impl<P: syn::export::ToTokens> syn::export::ToTokens for Opt<P> {
+impl<P: quote::ToTokens> quote::ToTokens for Opt<P> {
 	fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
 		if let Some(ref p) = self.inner {
 			p.to_tokens(tokens);

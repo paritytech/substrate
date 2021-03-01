@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,7 +22,7 @@
 use super::*;
 
 use frame_system::{EventRecord, RawOrigin};
-use frame_benchmarking::{benchmarks, account, whitelisted_caller};
+use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
 use sp_runtime::traits::Bounded;
 
 use crate::Module as Identity;
@@ -107,25 +107,6 @@ fn create_identity_info<T: Config>(num_fields: u32) -> IdentityInfo {
 }
 
 benchmarks! {
-	// These are the common parameters along with their instancing.
-	_ {
-		let r in 1 .. T::MaxRegistrars::get() => add_registrars::<T>(r)?;
-		// extra parameter for the set_subs bench for previous sub accounts
-		let p in 1 .. T::MaxSubAccounts::get() => ();
-		let s in 1 .. T::MaxSubAccounts::get() => {
-			// Give them s many sub accounts
-			let caller: T::AccountId = whitelisted_caller();
-			let _ = add_sub_accounts::<T>(&caller, s)?;
-		};
-		let x in 1 .. T::MaxAdditionalFields::get() => {
-			// Create their main identity with x additional fields
-			let info = create_identity_info::<T>(x);
-			let caller: T::AccountId = whitelisted_caller();
-			let caller_origin = <T as frame_system::Config>::Origin::from(RawOrigin::Signed(caller));
-			Identity::<T>::set_identity(caller_origin, info)?;
-		};
-	}
-
 	add_registrar {
 		let r in 1 .. T::MaxRegistrars::get() - 1 => add_registrars::<T>(r)?;
 		ensure!(Registrars::<T>::get().len() as u32 == r, "Registrars not set up correctly.");
@@ -135,10 +116,8 @@ benchmarks! {
 	}
 
 	set_identity {
-		let r in ...;
-		// This X doesn't affect the caller ID up front like with the others, so we don't use the
-		// standard preparation.
-		let x in _ .. _ => ();
+		let r in 1 .. T::MaxRegistrars::get() => add_registrars::<T>(r)?;
+		let x in 1 .. T::MaxAdditionalFields::get();
 		let caller = {
 			// The target user
 			let caller: T::AccountId = whitelisted_caller();
@@ -204,9 +183,19 @@ benchmarks! {
 		let caller_lookup = <T::Lookup as StaticLookup>::unlookup(caller.clone());
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
-		let r in ...;
-		let s in ...;
-		let x in ...;
+		let r in 1 .. T::MaxRegistrars::get() => add_registrars::<T>(r)?;
+		let s in 1 .. T::MaxSubAccounts::get() => {
+			// Give them s many sub accounts
+			let caller: T::AccountId = whitelisted_caller();
+			let _ = add_sub_accounts::<T>(&caller, s)?;
+		};
+		let x in 1 .. T::MaxAdditionalFields::get() => {
+			// Create their main identity with x additional fields
+			let info = create_identity_info::<T>(x);
+			let caller: T::AccountId = whitelisted_caller();
+			let caller_origin = <T as frame_system::Config>::Origin::from(RawOrigin::Signed(caller));
+			Identity::<T>::set_identity(caller_origin, info)?;
+		};
 
 		// User requests judgement from all the registrars, and they approve
 		for i in 0..r {
@@ -228,8 +217,14 @@ benchmarks! {
 		let caller: T::AccountId = whitelisted_caller();
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
-		let r in ...;
-		let x in ...;
+		let r in 1 .. T::MaxRegistrars::get() => add_registrars::<T>(r)?;
+		let x in 1 .. T::MaxAdditionalFields::get() => {
+			// Create their main identity with x additional fields
+			let info = create_identity_info::<T>(x);
+			let caller: T::AccountId = whitelisted_caller();
+			let caller_origin = <T as frame_system::Config>::Origin::from(RawOrigin::Signed(caller));
+			Identity::<T>::set_identity(caller_origin, info)?;
+		};
 	}: _(RawOrigin::Signed(caller.clone()), r - 1, 10u32.into())
 	verify {
 		assert_last_event::<T>(Event::<T>::JudgementRequested(caller, r-1).into());
@@ -240,8 +235,14 @@ benchmarks! {
 		let caller_origin = <T as frame_system::Config>::Origin::from(RawOrigin::Signed(caller.clone()));
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
-		let r in ...;
-		let x in ...;
+		let r in 1 .. T::MaxRegistrars::get() => add_registrars::<T>(r)?;
+		let x in 1 .. T::MaxAdditionalFields::get() => {
+			// Create their main identity with x additional fields
+			let info = create_identity_info::<T>(x);
+			let caller: T::AccountId = whitelisted_caller();
+			let caller_origin = <T as frame_system::Config>::Origin::from(RawOrigin::Signed(caller));
+			Identity::<T>::set_identity(caller_origin, info)?;
+		};
 
 		Identity::<T>::request_judgement(caller_origin, r - 1, 10u32.into())?;
 	}: _(RawOrigin::Signed(caller.clone()), r - 1)
@@ -308,8 +309,7 @@ benchmarks! {
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
 		let r in 1 .. T::MaxRegistrars::get() - 1 => add_registrars::<T>(r)?;
-		// For this x, it's the user identity that gts the fields, not the caller.
-		let x in _ .. _ => {
+		let x in 1 .. T::MaxAdditionalFields::get() => {
 			let info = create_identity_info::<T>(x);
 			Identity::<T>::set_identity(user_origin.clone(), info)?;
 		};
@@ -322,10 +322,9 @@ benchmarks! {
 	}
 
 	kill_identity {
-		let r in ...;
-		// Setting up our own account below.
-		let s in _ .. _ => {};
-		let x in _ .. _ => {};
+		let r in 1 .. T::MaxRegistrars::get() => add_registrars::<T>(r)?;
+		let s in 1 .. T::MaxSubAccounts::get();
+		let x in 1 .. T::MaxAdditionalFields::get();
 
 		let target: T::AccountId = account("target", 0, SEED);
 		let target_origin: <T as frame_system::Config>::Origin = RawOrigin::Signed(target.clone()).into();
@@ -404,31 +403,8 @@ benchmarks! {
 
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::tests::{new_test_ext, Test};
-	use frame_support::assert_ok;
-
-	#[test]
-	fn test_benchmarks() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_add_registrar::<Test>());
-			assert_ok!(test_benchmark_set_identity::<Test>());
-			assert_ok!(test_benchmark_set_subs_new::<Test>());
-			assert_ok!(test_benchmark_set_subs_old::<Test>());
-			assert_ok!(test_benchmark_clear_identity::<Test>());
-			assert_ok!(test_benchmark_request_judgement::<Test>());
-			assert_ok!(test_benchmark_cancel_request::<Test>());
-			assert_ok!(test_benchmark_set_fee::<Test>());
-			assert_ok!(test_benchmark_set_account_id::<Test>());
-			assert_ok!(test_benchmark_set_fields::<Test>());
-			assert_ok!(test_benchmark_provide_judgement::<Test>());
-			assert_ok!(test_benchmark_kill_identity::<Test>());
-			assert_ok!(test_benchmark_add_sub::<Test>());
-			assert_ok!(test_benchmark_rename_sub::<Test>());
-			assert_ok!(test_benchmark_remove_sub::<Test>());
-			assert_ok!(test_benchmark_quit_sub::<Test>());
-		});
-	}
-}
+impl_benchmark_test_suite!(
+	Identity,
+	crate::tests::new_test_ext(),
+	crate::tests::Test,
+);

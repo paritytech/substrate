@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -24,6 +24,7 @@
 use sp_core::Pair;
 use sp_consensus_aura::AURA_ENGINE_ID;
 use sp_runtime::generic::{DigestItem, OpaqueDigestItemId};
+use sp_consensus_slots::Slot;
 use codec::{Encode, Codec};
 use std::fmt::Debug;
 
@@ -38,10 +39,10 @@ pub trait CompatibleDigestItem<P: Pair>: Sized {
 	fn as_aura_seal(&self) -> Option<Signature<P>>;
 
 	/// Construct a digest item which contains the slot number
-	fn aura_pre_digest(slot_num: u64) -> Self;
+	fn aura_pre_digest(slot: Slot) -> Self;
 
 	/// If this item is an AuRa pre-digest, return the slot number
-	fn as_aura_pre_digest(&self) -> Option<u64>;
+	fn as_aura_pre_digest(&self) -> Option<Slot>;
 }
 
 impl<P, Hash> CompatibleDigestItem<P> for DigestItem<Hash> where
@@ -57,11 +58,11 @@ impl<P, Hash> CompatibleDigestItem<P> for DigestItem<Hash> where
 		self.try_to(OpaqueDigestItemId::Seal(&AURA_ENGINE_ID))
 	}
 
-	fn aura_pre_digest(slot_num: u64) -> Self {
-		DigestItem::PreRuntime(AURA_ENGINE_ID, slot_num.encode())
+	fn aura_pre_digest(slot: Slot) -> Self {
+		DigestItem::PreRuntime(AURA_ENGINE_ID, slot.encode())
 	}
 
-	fn as_aura_pre_digest(&self) -> Option<u64> {
+	fn as_aura_pre_digest(&self) -> Option<Slot> {
 		self.try_to(OpaqueDigestItemId::PreRuntime(&AURA_ENGINE_ID))
 	}
 }

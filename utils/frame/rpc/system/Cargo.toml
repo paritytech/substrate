@@ -1,6 +1,6 @@
 [package]
 name = "substrate-frame-rpc-system"
-version = "2.0.0"
+version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -13,24 +13,24 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sc-client-api = { version = "2.0.0", path = "../../../../client/api" }
-codec = { package = "parity-scale-codec", version = "1.3.1" }
+sc-client-api = { version = "3.0.0", path = "../../../../client/api" }
+codec = { package = "parity-scale-codec", version = "2.0.0" }
 futures = { version = "0.3.4", features = ["compat"] }
 jsonrpc-core = "15.1.0"
 jsonrpc-core-client = "15.1.0"
 jsonrpc-derive = "15.1.0"
 log = "0.4.8"
 serde = { version = "1.0.101", features = ["derive"] }
-sp-runtime = { version = "2.0.0", path = "../../../../primitives/runtime" }
-sp-api = { version = "2.0.0", path = "../../../../primitives/api" }
-frame-system-rpc-runtime-api = { version = "2.0.0", path = "../../../../frame/system/rpc/runtime-api" }
-sp-core = { version = "2.0.0", path = "../../../../primitives/core" }
-sp-blockchain = { version = "2.0.0", path = "../../../../primitives/blockchain" }
-sp-transaction-pool = { version = "2.0.0", path = "../../../../primitives/transaction-pool" }
-sp-block-builder = { version = "2.0.0", path = "../../../../primitives/block-builder" }
-sc-rpc-api = { version = "0.8.0", path = "../../../../client/rpc-api" }
+sp-runtime = { version = "3.0.0", path = "../../../../primitives/runtime" }
+sp-api = { version = "3.0.0", path = "../../../../primitives/api" }
+frame-system-rpc-runtime-api = { version = "3.0.0", path = "../../../../frame/system/rpc/runtime-api" }
+sp-core = { version = "3.0.0", path = "../../../../primitives/core" }
+sp-blockchain = { version = "3.0.0", path = "../../../../primitives/blockchain" }
+sp-transaction-pool = { version = "3.0.0", path = "../../../../primitives/transaction-pool" }
+sp-block-builder = { version = "3.0.0", path = "../../../../primitives/block-builder" }
+sc-rpc-api = { version = "0.9.0", path = "../../../../client/rpc-api" }
 
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../../test-utils/runtime/client" }
-sp-tracing = { version = "2.0.0", path = "../../../../primitives/tracing" }
-sc-transaction-pool = { version = "2.0.0", path = "../../../../client/transaction-pool" }
+sp-tracing = { version = "3.0.0", path = "../../../../primitives/tracing" }
+sc-transaction-pool = { version = "3.0.0", path = "../../../../client/transaction-pool" }

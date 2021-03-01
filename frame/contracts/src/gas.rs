@@ -1,46 +1,41 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-// You should have received a copy of the GNU General Public License
-// along with Substrate. If not, see <http://www.gnu.org/licenses/>.
-
-use crate::Config;
+use crate::{Config, Error};
 use sp_std::marker::PhantomData;
 use sp_runtime::traits::Zero;
-use frame_support::dispatch::{
-	DispatchResultWithPostInfo, PostDispatchInfo, DispatchErrorWithPostInfo,
+use frame_support::{
+	dispatch::{
+		DispatchResultWithPostInfo, PostDispatchInfo, DispatchErrorWithPostInfo, DispatchError,
+	},
+	weights::Weight,
 };
 use pallet_contracts_primitives::ExecError;
+use sp_core::crypto::UncheckedFrom;
 
 #[cfg(test)]
 use std::{any::Any, fmt::Debug};
 
-// Gas is essentially the same as weight. It is a 1 to 1 correspondence.
-pub type Gas = frame_support::weights::Weight;
-
-#[must_use]
 #[derive(Debug, PartialEq, Eq)]
-pub enum GasMeterResult {
-	Proceed,
-	OutOfGas,
-}
+pub struct ChargedAmount(Weight);
 
-impl GasMeterResult {
-	pub fn is_out_of_gas(&self) -> bool {
-		match *self {
-			GasMeterResult::OutOfGas => true,
-			GasMeterResult::Proceed => false,
-		}
+impl ChargedAmount {
+	pub fn amount(&self) -> Weight {
+		self.0
 	}
 }
 
@@ -74,7 +69,7 @@ pub trait Token<T: Config>: Copy + Clone + TestAuxiliaries {
 	/// That said, implementors of this function still can run into overflows
 	/// while calculating the amount. In this case it is ok to use saturating operations
 	/// since on overflow they will return `max_value` which should consume all gas.
-	fn calculate_amount(&self, metadata: &Self::Metadata) -> Gas;
+	fn calculate_amount(&self, metadata: &Self::Metadata) -> Weight;
 }
 
 /// A wrapper around a type-erased trait object of what used to be a `Token`.
@@ -85,15 +80,19 @@ pub struct ErasedToken {
 }
 
 pub struct GasMeter<T: Config> {
-	gas_limit: Gas,
+	gas_limit: Weight,
 	/// Amount of gas left from initial gas limit. Can reach zero.
-	gas_left: Gas,
+	gas_left: Weight,
 	_phantom: PhantomData<T>,
 	#[cfg(test)]
 	tokens: Vec<ErasedToken>,
 }
-impl<T: Config> GasMeter<T> {
-	pub fn new(gas_limit: Gas) -> Self {
+
+impl<T: Config> GasMeter<T>
+where
+	T::AccountId: UncheckedFrom<<T as frame_system::Config>::Hash> + AsRef<[u8]>
+{
+	pub fn new(gas_limit: Weight) -> Self {
 		GasMeter {
 			gas_limit,
 			gas_left: gas_limit,
@@ -117,7 +116,7 @@ impl<T: Config> GasMeter<T> {
 		&mut self,
 		metadata: &Tok::Metadata,
 		token: Tok,
-	) -> GasMeterResult {
+	) -> Result<ChargedAmount, DispatchError> {
 		#[cfg(test)]
 		{
 			// Unconditionally add the token to the storage.
@@ -138,17 +137,32 @@ impl<T: Config> GasMeter<T> {
 		self.gas_left = new_value.unwrap_or_else(Zero::zero);
 
 		match new_value {
-			Some(_) => GasMeterResult::Proceed,
-			None => GasMeterResult::OutOfGas,
+			Some(_) => Ok(ChargedAmount(amount)),
+			None => Err(Error::<T>::OutOfGas.into()),
 		}
 	}
 
-	// Account for not fully used gas.
-	//
-	// This can be used after dispatching a runtime call to refund gas that was not
-	// used by the dispatchable.
-	pub fn refund(&mut self, gas: Gas) {
-		self.gas_left = self.gas_left.saturating_add(gas).max(self.gas_limit);
+	/// Adjust a previously charged amount down to its actual amount.
+	///
+	/// This is when a maximum a priori amount was charged and then should be partially
+	/// refunded to match the actual amount.
+	pub fn adjust_gas<Tok: Token<T>>(
+		&mut self,
+		charged_amount: ChargedAmount,
+		metadata: &Tok::Metadata,
+		token: Tok,
+	) {
+		let adjustment = charged_amount.0.saturating_sub(token.calculate_amount(metadata));
+		self.gas_left = self.gas_left.saturating_add(adjustment).min(self.gas_limit);
+	}
+
+	/// Refund previously charged gas back to the gas meter.
+	///
+	/// This can be used if a gas worst case estimation must be charged before
+	/// performing a certain action. This way the difference can be refundend when
+	/// the worst case did not happen.
+	pub fn refund(&mut self, amount: ChargedAmount) {
+		self.gas_left = self.gas_left.saturating_add(amount.0).min(self.gas_limit)
 	}
 
 	/// Allocate some amount of gas and perform some work with
@@ -160,7 +174,7 @@ impl<T: Config> GasMeter<T> {
 	/// All unused gas in the nested gas meter is returned to this gas meter.
 	pub fn with_nested<R, F: FnOnce(Option<&mut GasMeter<T>>) -> R>(
 		&mut self,
-		amount: Gas,
+		amount: Weight,
 		f: F,
 	) -> R {
 		// NOTE that it is ok to allocate all available gas since it still ensured
@@ -180,22 +194,25 @@ impl<T: Config> GasMeter<T> {
 	}
 
 	/// Returns how much gas was used.
-	pub fn gas_spent(&self) -> Gas {
+	pub fn gas_spent(&self) -> Weight {
 		self.gas_limit - self.gas_left
 	}
 
 	/// Returns how much gas left from the initial budget.
-	pub fn gas_left(&self) -> Gas {
+	pub fn gas_left(&self) -> Weight {
 		self.gas_left
 	}
 
 	/// Turn this GasMeter into a DispatchResult that contains the actually used gas.
-	pub fn into_dispatch_result<R, E>(self, result: Result<R, E>) -> DispatchResultWithPostInfo
+	pub fn into_dispatch_result<R, E>(
+		self, result: Result<R, E>,
+		base_weight: Weight,
+	) -> DispatchResultWithPostInfo
 	where
 		E: Into<ExecError>,
 	{
 		let post_info = PostDispatchInfo {
-			actual_weight: Some(self.gas_spent()),
+			actual_weight: Some(self.gas_spent().saturating_add(base_weight)),
 			pays_fee: Default::default(),
 		};
 
@@ -210,48 +227,47 @@ impl<T: Config> GasMeter<T> {
 	}
 }
 
-/// A simple utility macro that helps to match against a
-/// list of tokens.
-#[macro_export]
-macro_rules! match_tokens {
-	($tokens_iter:ident,) => {
-	};
-	($tokens_iter:ident, $x:expr, $($rest:tt)*) => {
-		{
-			let next = ($tokens_iter).next().unwrap();
-			let pattern = $x;
-
-			// Note that we don't specify the type name directly in this macro,
-			// we only have some expression $x of some type. At the same time, we
-			// have an iterator of Box<dyn Any> and to downcast we need to specify
-			// the type which we want downcast to.
-			//
-			// So what we do is we assign `_pattern_typed_next_ref` to a variable which has
-			// the required type.
-			//
-			// Then we make `_pattern_typed_next_ref = token.downcast_ref()`. This makes
-			// rustc infer the type `T` (in `downcast_ref<T: Any>`) to be the same as in $x.
-
-			let mut _pattern_typed_next_ref = &pattern;
-			_pattern_typed_next_ref = match next.token.downcast_ref() {
-				Some(p) => {
-					assert_eq!(p, &pattern);
-					p
-				}
-				None => {
-					panic!("expected type {} got {}", stringify!($x), next.description);
-				}
-			};
-		}
-
-		match_tokens!($tokens_iter, $($rest)*);
-	};
-}
-
 #[cfg(test)]
 mod tests {
 	use super::{GasMeter, Token};
 	use crate::tests::Test;
+
+	/// A simple utility macro that helps to match against a
+	/// list of tokens.
+	macro_rules! match_tokens {
+		($tokens_iter:ident,) => {
+		};
+		($tokens_iter:ident, $x:expr, $($rest:tt)*) => {
+			{
+				let next = ($tokens_iter).next().unwrap();
+				let pattern = $x;
+
+				// Note that we don't specify the type name directly in this macro,
+				// we only have some expression $x of some type. At the same time, we
+				// have an iterator of Box<dyn Any> and to downcast we need to specify
+				// the type which we want downcast to.
+				//
+				// So what we do is we assign `_pattern_typed_next_ref` to a variable which has
+				// the required type.
+				//
+				// Then we make `_pattern_typed_next_ref = token.downcast_ref()`. This makes
+				// rustc infer the type `T` (in `downcast_ref<T: Any>`) to be the same as in $x.
+
+				let mut _pattern_typed_next_ref = &pattern;
+				_pattern_typed_next_ref = match next.token.downcast_ref() {
+					Some(p) => {
+						assert_eq!(p, &pattern);
+						p
+					}
+					None => {
+						panic!("expected type {} got {}", stringify!($x), next.description);
+					}
+				};
+			}
+
+			match_tokens!($tokens_iter, $($rest)*);
+		};
+	}
 
 	/// A trivial token that charges the specified number of gas units.
 	#[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -289,7 +305,7 @@ mod tests {
 
 		let result = gas_meter
 			.charge(&MultiplierTokenMetadata { multiplier: 3 }, MultiplierToken(10));
-		assert!(!result.is_out_of_gas());
+		assert!(!result.is_err());
 
 		assert_eq!(gas_meter.gas_left(), 49_970);
 	}
@@ -297,10 +313,10 @@ mod tests {
 	#[test]
 	fn tracing() {
 		let mut gas_meter = GasMeter::<Test>::new(50000);
-		assert!(!gas_meter.charge(&(), SimpleToken(1)).is_out_of_gas());
+		assert!(!gas_meter.charge(&(), SimpleToken(1)).is_err());
 		assert!(!gas_meter
 			.charge(&MultiplierTokenMetadata { multiplier: 3 }, MultiplierToken(10))
-			.is_out_of_gas());
+			.is_err());
 
 		let mut tokens = gas_meter.tokens()[0..2].iter();
 		match_tokens!(tokens, SimpleToken(1), MultiplierToken(10),);
@@ -310,7 +326,7 @@ mod tests {
 	#[test]
 	fn refuse_to_execute_anything_if_zero() {
 		let mut gas_meter = GasMeter::<Test>::new(0);
-		assert!(gas_meter.charge(&(), SimpleToken(1)).is_out_of_gas());
+		assert!(gas_meter.charge(&(), SimpleToken(1)).is_err());
 	}
 
 	// Make sure that if the gas meter is charged by exceeding amount then not only an error
@@ -323,10 +339,10 @@ mod tests {
 		let mut gas_meter = GasMeter::<Test>::new(200);
 
 		// The first charge is should lead to OOG.
-		assert!(gas_meter.charge(&(), SimpleToken(300)).is_out_of_gas());
+		assert!(gas_meter.charge(&(), SimpleToken(300)).is_err());
 
 		// The gas meter is emptied at this moment, so this should also fail.
-		assert!(gas_meter.charge(&(), SimpleToken(1)).is_out_of_gas());
+		assert!(gas_meter.charge(&(), SimpleToken(1)).is_err());
 	}
 
 
@@ -335,6 +351,6 @@ mod tests {
 	#[test]
 	fn charge_exact_amount() {
 		let mut gas_meter = GasMeter::<Test>::new(25);
-		assert!(!gas_meter.charge(&(), SimpleToken(25)).is_out_of_gas());
+		assert!(!gas_meter.charge(&(), SimpleToken(25)).is_err());
 	}
 }

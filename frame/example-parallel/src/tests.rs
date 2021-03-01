@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,35 +15,39 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::*;
+use crate::{self as pallet_example_parallel, *};
 
-use codec::{Encode, Decode};
-use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
+use frame_support::parameter_types;
 use sp_core::H256;
 use sp_runtime::{
-	Perbill,
-	testing::{Header},
+	Perbill, testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
 
-impl_outer_origin! {
-	pub enum Origin for Test where system = frame_system {}
-}
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
 
-#[derive(Clone, Eq, PartialEq, Encode, Decode)]
-pub struct Test;
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		Example: pallet_example_parallel::{Module, Call, Storage},
+	}
+);
+
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: Weight = 1024;
-	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 
 impl frame_system::Config for Test {
 	type BaseCallFilter = ();
 	type Origin = Origin;
-	type Call = ();
-	type PalletInfo = ();
+	type Call = Call;
+	type PalletInfo = PalletInfo;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -51,20 +55,17 @@ impl frame_system::Config for Test {
 	type AccountId = sp_core::sr25519::Public;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = ();
+	type Event = Event;
 	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
 	type DbWeight = ();
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
-	type MaximumExtrinsicWeight = MaximumBlockWeight;
-	type MaximumBlockLength = MaximumBlockLength;
-	type AvailableBlockRatio = AvailableBlockRatio;
+	type BlockWeights = ();
+	type BlockLength = ();
 	type Version = ();
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
+	type SS58Prefix = ();
 }
 
 parameter_types! {
@@ -74,11 +75,8 @@ parameter_types! {
 }
 
 impl Config for Test {
-	type Event = ();
-	type Call = Call<Test>;
+	type Call = Call;
 }
-
-type Example = Module<Test>;
 
 #[test]
 fn it_can_enlist() {

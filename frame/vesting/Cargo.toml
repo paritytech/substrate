@@ -1,6 +1,6 @@
 [package]
 name = "pallet-vesting"
-version = "2.0.0"
+version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -14,19 +14,19 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 serde = { version = "1.0.101", optional = true }
-codec = { package = "parity-scale-codec", version = "1.3.1", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 enumflags2 = { version = "0.6.2" }
-sp-std = { version = "2.0.0", default-features = false, path = "../../primitives/std" }
-sp-runtime = { version = "2.0.0", default-features = false, path = "../../primitives/runtime" }
-frame-support = { version = "2.0.0", default-features = false, path = "../support" }
-frame-system = { version = "2.0.0", default-features = false, path = "../system" }
-frame-benchmarking = { version = "2.0.0", default-features = false, path = "../benchmarking", optional = true }
+sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
+sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
+frame-support = { version = "3.0.0", default-features = false, path = "../support" }
+frame-system = { version = "3.0.0", default-features = false, path = "../system" }
+frame-benchmarking = { version = "3.1.0", default-features = false, path = "../benchmarking", optional = true }
 
 [dev-dependencies]
-sp-io = { version = "2.0.0", path = "../../primitives/io" }
-sp-core = { version = "2.0.0", path = "../../primitives/core" }
-pallet-balances = { version = "2.0.0", path = "../balances" }
-sp-storage = { version = "2.0.0", path = "../../primitives/storage" }
+sp-io = { version = "3.0.0", path = "../../primitives/io" }
+sp-core = { version = "3.0.0", path = "../../primitives/core" }
+pallet-balances = { version = "3.0.0", path = "../balances" }
+sp-storage = { version = "3.0.0", path = "../../primitives/storage" }
 hex-literal = "0.3.1"
 
 [features]
@@ -40,3 +40,4 @@ std = [
 	"frame-system/std",
 ]
 runtime-benchmarks = ["frame-benchmarking"]
+try-runtime = ["frame-support/try-runtime"]

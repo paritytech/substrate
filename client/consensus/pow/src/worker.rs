@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -40,21 +40,31 @@ pub struct MiningMetadata<H, D> {
 }
 
 /// A build of mining, containing the metadata and the block proposal.
-pub struct MiningBuild<Block: BlockT, Algorithm: PowAlgorithm<Block>, C: sp_api::ProvideRuntimeApi<Block>> {
+pub struct MiningBuild<
+	Block: BlockT,
+	Algorithm: PowAlgorithm<Block>,
+	C: sp_api::ProvideRuntimeApi<Block>,
+	Proof
+> {
 	/// Mining metadata.
 	pub metadata: MiningMetadata<Block::Hash, Algorithm::Difficulty>,
 	/// Mining proposal.
-	pub proposal: Proposal<Block, sp_api::TransactionFor<C, Block>>,
+	pub proposal: Proposal<Block, sp_api::TransactionFor<C, Block>, Proof>,
 }
 
 /// Mining worker that exposes structs to query the current mining build and submit mined blocks.
-pub struct MiningWorker<Block: BlockT, Algorithm: PowAlgorithm<Block>, C: sp_api::ProvideRuntimeApi<Block>> {
-	pub(crate) build: Option<MiningBuild<Block, Algorithm, C>>,
+pub struct MiningWorker<
+	Block: BlockT,
+	Algorithm: PowAlgorithm<Block>,
+	C: sp_api::ProvideRuntimeApi<Block>,
+	Proof
+> {
+	pub(crate) build: Option<MiningBuild<Block, Algorithm, C, Proof>>,
 	pub(crate) algorithm: Algorithm,
 	pub(crate) block_import: BoxBlockImport<Block, sp_api::TransactionFor<C, Block>>,
 }
 
-impl<Block, Algorithm, C> MiningWorker<Block, Algorithm, C> where
+impl<Block, Algorithm, C, Proof> MiningWorker<Block, Algorithm, C, Proof> where
 	Block: BlockT,
 	C: sp_api::ProvideRuntimeApi<Block>,
 	Algorithm: PowAlgorithm<Block>,
@@ -72,7 +82,7 @@ impl<Block, Algorithm, C> MiningWorker<Block, Algorithm, C> where
 
 	pub(crate) fn on_build(
 		&mut self,
-		build: MiningBuild<Block, Algorithm, C>,
+		build: MiningBuild<Block, Algorithm, C, Proof>,
 	) {
 		self.build = Some(build);
 	}

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -21,12 +21,12 @@
 use std::sync::Arc;
 use std::collections::{HashMap, HashSet};
 use sp_core::ChangesTrieConfigurationRange;
-use sp_core::offchain::{OffchainStorage,storage::OffchainOverlayedChanges};
+use sp_core::offchain::OffchainStorage;
 use sp_runtime::{generic::BlockId, Justification, Storage};
 use sp_runtime::traits::{Block as BlockT, NumberFor, HashFor};
 use sp_state_machine::{
 	ChangesTrieState, ChangesTrieStorage as StateChangesTrieStorage, ChangesTrieTransaction,
-	StorageCollection, ChildStorageCollection,
+	StorageCollection, ChildStorageCollection, OffchainChangesCollection,
 };
 use sp_storage::{StorageData, StorageKey, PrefixedStorageKey, ChildInfo};
 use crate::{
@@ -174,7 +174,7 @@ pub trait BlockImportOperation<Block: BlockT> {
 	/// Write offchain storage changes to the database.
 	fn update_offchain_storage(
 		&mut self,
-		_offchain_update: OffchainOverlayedChanges,
+		_offchain_update: OffchainChangesCollection,
 	) -> sp_blockchain::Result<()> {
 		 Ok(())
 	}

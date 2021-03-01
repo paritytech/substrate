@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -22,7 +22,7 @@
 //!
 //! ```
 //! # use sc_basic_authorship::ProposerFactory;
-//! # use sp_consensus::{Environment, Proposer, RecordProof};
+//! # use sp_consensus::{Environment, Proposer};
 //! # use sp_runtime::generic::BlockId;
 //! # use std::{sync::Arc, time::Duration};
 //! # use substrate_test_runtime_client::{
@@ -34,6 +34,7 @@
 //! # let spawner = sp_core::testing::TaskExecutor::new();
 //! # let txpool = BasicPool::new_full(
 //! #     Default::default(),
+//! #     true.into(),
 //! #     None,
 //! #     spawner.clone(),
 //! #     client.clone(),
@@ -60,7 +61,6 @@
 //! 	Default::default(),
 //! 	Default::default(),
 //! 	Duration::from_secs(2),
-//! 	RecordProof::Yes,
 //! );
 //!
 //! // We wait until the proposition is performed.
@@ -71,4 +71,4 @@
 
 mod basic_authorship;
 
-pub use crate::basic_authorship::{ProposerFactory, Proposer};
+pub use crate::basic_authorship::{ProposerFactory, Proposer, DEFAULT_MAX_BLOCK_SIZE};

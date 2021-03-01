@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -27,7 +27,7 @@ use crate::params::TransactionPoolParams;
 use crate::CliConfiguration;
 use regex::Regex;
 use sc_service::{
-	config::{BasePath, MultiaddrWithPeerId, PrometheusConfig, TransactionPoolOptions},
+	config::{BasePath, PrometheusConfig, TransactionPoolOptions},
 	ChainSpec, Role,
 };
 use sc_telemetry::TelemetryEndpoints;
@@ -43,39 +43,23 @@ pub struct RunCmd {
 	/// participate in any consensus task that it can (e.g. depending on
 	/// availability of local keys).
 	#[structopt(
-		long = "validator",
-		conflicts_with_all = &[ "sentry" ]
+		long = "validator"
 	)]
 	pub validator: bool,
-
-	/// Enable sentry mode.
-	///
-	/// The node will be started with the authority role and participate in
-	/// consensus tasks as an "observer", it will never actively participate
-	/// regardless of whether it could (e.g. keys are available locally). This
-	/// mode is useful as a secure proxy for validators (which would run
-	/// detached from the network), since we want this node to participate in
-	/// the full consensus protocols in order to have all needed consensus data
-	/// available to relay to private nodes.
-	#[structopt(
-		long = "sentry",
-		conflicts_with_all = &[ "validator", "light" ],
-		parse(try_from_str)
-	)]
-	pub sentry: Vec<MultiaddrWithPeerId>,
 
 	/// Disable GRANDPA voter when running in validator mode, otherwise disable the GRANDPA observer.
 	#[structopt(long)]
 	pub no_grandpa: bool,
 
 	/// Experimental: Run in light client mode.
-	#[structopt(long = "light", conflicts_with = "sentry")]
+	#[structopt(long = "light")]
 	pub light: bool,
 
 	/// Listen to all RPC interfaces.
 	///
 	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use an RPC proxy
-	/// server to filter out dangerous methods. More details: https://github.com/paritytech/substrate/wiki/Public-RPC.
+	/// server to filter out dangerous methods. More details:
+	/// <https://github.com/paritytech/substrate/wiki/Public-RPC>.
 	/// Use `--unsafe-rpc-external` to suppress the warning if you understand the risks.
 	#[structopt(long = "rpc-external")]
 	pub rpc_external: bool,
@@ -105,7 +89,7 @@ pub struct RunCmd {
 	/// Listen to all Websocket interfaces.
 	///
 	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use an RPC proxy
-	/// server to filter out dangerous methods. More details: https://github.com/paritytech/substrate/wiki/Public-RPC.
+	/// server to filter out dangerous methods. More details: <https://github.com/paritytech/substrate/wiki/Public-RPC>.
 	/// Use `--unsafe-ws-external` to suppress the warning if you understand the risks.
 	#[structopt(long = "ws-external")]
 	pub ws_external: bool,
@@ -142,7 +126,7 @@ pub struct RunCmd {
 	///
 	/// A comma-separated list of origins (protocol://domain or special `null`
 	/// value). Value of `all` will disable origin validation. Default is to
-	/// allow localhost and https://polkadot.js.org origins. When running in
+	/// allow localhost and <https://polkadot.js.org> origins. When running in
 	/// --dev mode the default is to allow all origins.
 	#[structopt(long = "rpc-cors", value_name = "ORIGINS", parse(try_from_str = parse_cors))]
 	pub rpc_cors: Option<Cors>,
@@ -243,17 +227,6 @@ pub struct RunCmd {
 	/// The default value is 8 and the values higher than 256 are ignored.
 	#[structopt(long)]
 	pub max_runtime_instances: Option<usize>,
-
-	/// Specify a list of sentry node public addresses.
-	///
-	/// Can't be used with --public-addr as the sentry node would take precedence over the public address
-	/// specified there.
-	#[structopt(
-		long = "sentry-nodes",
-		value_name = "ADDR",
-		conflicts_with_all = &[ "sentry", "public-addr" ]
-	)]
-	pub sentry_nodes: Vec<MultiaddrWithPeerId>,
 
 	/// Run a temporary node.
 	///
@@ -365,13 +338,7 @@ impl CliConfiguration for RunCmd {
 		Ok(if is_light {
 			sc_service::Role::Light
 		} else if is_authority {
-			sc_service::Role::Authority {
-				sentry_nodes: self.sentry_nodes.clone(),
-			}
-		} else if !self.sentry.is_empty() {
-			sc_service::Role::Sentry {
-				validators: self.sentry.clone(),
-			}
+			sc_service::Role::Authority
 		} else {
 			sc_service::Role::Full
 		})

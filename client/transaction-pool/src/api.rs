@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -84,7 +84,6 @@ where
 	Client: ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block>,
 	Client: Send + Sync + 'static,
 	Client::Api: TaggedTransactionQueue<Block>,
-	sp_api::ApiErrorFor<Client, Block>: Send + std::fmt::Display,
 {
 	type Block = Block;
 	type Error = error::Error;
@@ -166,14 +165,13 @@ where
 	Client: ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block>,
 	Client: Send + Sync + 'static,
 	Client::Api: TaggedTransactionQueue<Block>,
-	sp_api::ApiErrorFor<Client, Block>: Send + std::fmt::Display,
 {
 	sp_tracing::within_span!(sp_tracing::Level::TRACE, "validate_transaction";
 	{
 		let runtime_api = client.runtime_api();
 		let has_v2 = sp_tracing::within_span! { sp_tracing::Level::TRACE, "check_version";
 			runtime_api
-				.has_api_with::<dyn TaggedTransactionQueue<Block, Error=()>, _>(&at, |v| v >= 2)
+				.has_api_with::<dyn TaggedTransactionQueue<Block>, _>(&at, |v| v >= 2)
 				.unwrap_or_default()
 		};
 
@@ -198,7 +196,6 @@ where
 	Client: ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block>,
 	Client: Send + Sync + 'static,
 	Client::Api: TaggedTransactionQueue<Block>,
-	sp_api::ApiErrorFor<Client, Block>: Send + std::fmt::Display,
 {
 	/// Validates a transaction by calling into the runtime, same as
 	/// `validate_transaction` but blocks the current thread when performing

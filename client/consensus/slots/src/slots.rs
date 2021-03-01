@@ -1,24 +1,26 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Utility stream for yielding slots in a loop.
 //!
 //! This is used instead of `futures_timer::Interval` because it was unreliable.
 
-use super::SlotCompatible;
+use super::{SlotCompatible, Slot};
 use sp_consensus::Error;
 use futures::{prelude::*, task::Context, task::Poll};
 use sp_inherents::{InherentData, InherentDataProviders};
@@ -46,7 +48,7 @@ pub fn time_until_next(now: Duration, slot_duration: u64) -> Duration {
 /// Information about a slot.
 pub struct SlotInfo {
 	/// The slot number.
-	pub number: u64,
+	pub slot: Slot,
 	/// Current timestamp.
 	pub timestamp: u64,
 	/// The instant at which the slot ends.
@@ -59,7 +61,7 @@ pub struct SlotInfo {
 
 /// A stream that returns every time there is a new slot.
 pub(crate) struct Slots<SC> {
-	last_slot: u64,
+	last_slot: Slot,
 	slot_duration: u64,
 	inner_delay: Option<Delay>,
 	inherent_data_providers: InherentDataProviders,
@@ -74,7 +76,7 @@ impl<SC> Slots<SC> {
 		timestamp_extractor: SC,
 	) -> Self {
 		Slots {
-			last_slot: 0,
+			last_slot: 0.into(),
 			slot_duration,
 			inner_delay: None,
 			inherent_data_providers,
@@ -112,7 +114,7 @@ impl<SC: SlotCompatible> Stream for Slots<SC> {
 				Err(err) => return Poll::Ready(Some(Err(sp_consensus::Error::InherentData(err)))),
 			};
 			let result = self.timestamp_extractor.extract_timestamp_and_slot(&inherent_data);
-			let (timestamp, slot_num, offset) = match result {
+			let (timestamp, slot, offset) = match result {
 				Ok(v) => v,
 				Err(err) => return Poll::Ready(Some(Err(err))),
 			};
@@ -123,11 +125,11 @@ impl<SC: SlotCompatible> Stream for Slots<SC> {
 			self.inner_delay = Some(Delay::new(ends_in));
 
 			// never yield the same slot twice.
-			if slot_num > self.last_slot {
-				self.last_slot = slot_num;
+			if slot > self.last_slot {
+				self.last_slot = slot;
 
 				break Poll::Ready(Some(Ok(SlotInfo {
-					number: slot_num,
+					slot,
 					duration: self.slot_duration,
 					timestamp,
 					ends_at,

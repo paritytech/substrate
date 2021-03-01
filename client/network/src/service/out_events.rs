@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -227,6 +227,16 @@ impl Metrics {
 					.with_label_values(&["dht", "sent", name])
 					.inc_by(num);
 			}
+			Event::SyncConnected { .. } => {
+				self.events_total
+					.with_label_values(&["sync-connected", "sent", name])
+					.inc_by(num);
+			}
+			Event::SyncDisconnected { .. } => {
+				self.events_total
+					.with_label_values(&["sync-disconnected", "sent", name])
+					.inc_by(num);
+			}
 			Event::NotificationStreamOpened { protocol, .. } => {
 				self.events_total
 					.with_label_values(&[&format!("notif-open-{:?}", protocol), "sent", name])
@@ -255,6 +265,16 @@ impl Metrics {
 			Event::Dht(_) => {
 				self.events_total
 					.with_label_values(&["dht", "received", name])
+					.inc();
+			}
+			Event::SyncConnected { .. } => {
+				self.events_total
+					.with_label_values(&["sync-connected", "received", name])
+					.inc();
+			}
+			Event::SyncDisconnected { .. } => {
+				self.events_total
+					.with_label_values(&["sync-disconnected", "received", name])
 					.inc();
 			}
 			Event::NotificationStreamOpened { protocol, .. } => {

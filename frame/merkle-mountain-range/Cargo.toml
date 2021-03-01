@@ -1,0 +1,47 @@
+[package]
+name = "pallet-mmr"
+version = "3.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "Apache-2.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+description = "FRAME Merkle Mountain Range pallet."
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
+frame-benchmarking = { version = "3.1.0", default-features = false, path = "../benchmarking", optional = true }
+frame-support = { version = "3.0.0", default-features = false, path = "../support" }
+frame-system = { version = "3.0.0", default-features = false, path = "../system" }
+mmr-lib = { package = "ckb-merkle-mountain-range", default-features = false, version = "0.3.1" }
+pallet-mmr-primitives = { version = "3.0.0", default-features = false, path = "./primitives" }
+serde = { version = "1.0.101", optional = true }
+sp-core = { version = "3.0.0", default-features = false, path = "../../primitives/core" }
+sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
+
+[dev-dependencies]
+env_logger = "0.8"
+hex-literal = "0.3"
+
+[features]
+default = ["std"]
+std = [
+	"codec/std",
+	"frame-benchmarking/std",
+	"frame-support/std",
+	"frame-system/std",
+	"mmr-lib/std",
+	"pallet-mmr-primitives/std",
+	"serde",
+	"sp-core/std",
+	"sp-io/std",
+	"sp-runtime/std",
+	"sp-std/std",
+]
+runtime-benchmarks = ["frame-benchmarking"]
+try-runtime = ["frame-support/try-runtime"]
