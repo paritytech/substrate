@@ -570,7 +570,7 @@ macro_rules! decl_module {
 		{ $( $integrity_test:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
-		fn on_idle( $( $param_name:ident : $param:ty ),* $(,)? ) { $( $impl:tt )* }
+		fn on_idle($param_name1:ident : $param1:ty, $param_name2:ident: $param2:ty $(,)? ) -> $return:ty { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
 		$crate::decl_module!(@normalize
