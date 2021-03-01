@@ -36,12 +36,13 @@ use self::{
 	},
 	sandbox::Sandbox,
 };
-use frame_benchmarking::{benchmarks, account, whitelisted_caller};
+use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
 use frame_system::{Module as System, RawOrigin};
 use parity_wasm::elements::{Instruction, ValueType, BlockType};
 use sp_runtime::traits::{Hash, Bounded, Zero};
 use sp_std::{default::Default, convert::{TryInto}, vec::Vec, vec};
 use pallet_contracts_primitives::RentProjection;
+use frame_support::weights::Weight;
 
 /// How many batches we do per API benchmark.
 const API_BENCHMARK_BATCHES: u32 = 20;
@@ -304,6 +305,19 @@ benchmarks! {
 		Storage::<T>::process_deletion_queue_batch(Weight::max_value())
 	}
 
+	// This benchmarks the additional weight that is charged when a contract is executed the
+	// first time after a new schedule was deployed: For every new schedule a contract needs
+	// to re-run the instrumentation once.
+	instrument {
+		let c in 0 .. T::MaxCodeSize::get() / 1024;
+		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c * 1024);
+		Contracts::<T>::store_code_raw(code)?;
+		let mut module = PrefabWasmModule::from_storage_noinstr(hash)?;
+		let schedule = Contracts::<T>::current_schedule();
+	}: {
+		Contracts::<T>::reinstrument_module(&mut module, &schedule)?;
+	}
+
 	// This extrinsic is pretty much constant as it is only a simple setter.
 	update_schedule {
 		let schedule = Schedule {
@@ -318,8 +332,13 @@ benchmarks! {
 	// determine the contract address.
 	// `c`: Size of the code in kilobytes.
 	// `s`: Size of the salt in kilobytes.
+	//
+	// # Note
+	//
+	// We cannot let `c` grow to the maximum code size because the code is not allowed
+	// to be larger than the maximum size **after instrumentation**.
 	instantiate_with_code {
-		let c in 0 .. Contracts::<T>::current_schedule().limits.code_size / 1024;
+		let c in 0 .. Perbill::from_percent(50).mul_ceil(T::MaxCodeSize::get() / 1024);
 		let s in 0 .. code::max_pages::<T>() * 64;
 		let salt = vec![42u8; (s * 1024) as usize];
 		let endowment = caller_funding::<T>() / 3u32.into();
@@ -339,14 +358,16 @@ benchmarks! {
 	}
 
 	// Instantiate uses a dummy contract constructor to measure the overhead of the instantiate.
+	// `c`: Size of the code in kilobytes.
 	// `s`: Size of the salt in kilobytes.
 	instantiate {
+		let c in 0 .. T::MaxCodeSize::get() / 1024;
 		let s in 0 .. code::max_pages::<T>() * 64;
 		let salt = vec![42u8; (s * 1024) as usize];
 		let endowment = caller_funding::<T>() / 3u32.into();
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
-		let WasmModule { code, hash, .. } = WasmModule::<T>::dummy_with_mem();
+		let WasmModule { code, hash, .. } = WasmModule::<T>::dummy_with_bytes(c * 1024);
 		let origin = RawOrigin::Signed(caller.clone());
 		let addr = Contracts::<T>::contract_address(&caller, &hash, &salt);
 		Contracts::<T>::store_code_raw(code)?;
@@ -365,10 +386,12 @@ benchmarks! {
 	// won't call `seal_input` in its constructor to copy the data to contract memory.
 	// The dummy contract used here does not do this. The costs for the data copy is billed as
 	// part of `seal_input`.
+	// `c`: Size of the code in kilobytes.
 	call {
+		let c in 0 .. T::MaxCodeSize::get() / 1024;
 		let data = vec![42u8; 1024];
 		let instance = Contract::<T>::with_caller(
-			whitelisted_caller(), WasmModule::dummy_with_mem(), vec![], Endow::CollectRent
+			whitelisted_caller(), WasmModule::dummy_with_bytes(c * 1024), vec![], Endow::CollectRent
 		)?;
 		let value = T::Currency::minimum_balance() * 100u32.into();
 		let origin = RawOrigin::Signed(instance.caller.clone());
@@ -396,9 +419,11 @@ benchmarks! {
 	// will be distributed over multiple blocks using a scheduler. Otherwise there is
 	// no incentive to remove large contracts when the removal is more expensive than
 	// the reward for removing them.
+	// `c`: Size of the code of the contract that should be evicted.
 	claim_surcharge {
+		let c in 0 .. T::MaxCodeSize::get() / 1024;
 		let instance = Contract::<T>::with_caller(
-			whitelisted_caller(), WasmModule::dummy(), vec![], Endow::CollectRent
+			whitelisted_caller(), WasmModule::dummy_with_bytes(c * 1024), vec![], Endow::CollectRent
 		)?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 		let account_id = instance.account_id.clone();
@@ -694,6 +719,42 @@ benchmarks! {
 		}
 	}
 
+	seal_terminate_per_code_kb {
+		let c in 0 .. T::MaxCodeSize::get() / 1024;
+		let beneficiary = account::<T::AccountId>("beneficiary", 0, 0);
+		let beneficiary_bytes = beneficiary.encode();
+		let beneficiary_len = beneficiary_bytes.len();
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			imported_functions: vec![ImportedFunction {
+				name: "seal_terminate",
+				params: vec![ValueType::I32, ValueType::I32],
+				return_type: None,
+			}],
+			data_segments: vec![
+				DataSegment {
+					offset: 0,
+					value: beneficiary_bytes,
+				},
+			],
+			call_body: Some(body::repeated(1, &[
+				Instruction::I32Const(0), // beneficiary_ptr
+				Instruction::I32Const(beneficiary_len as i32), // beneficiary_len
+				Instruction::Call(0),
+			])),
+			dummy_section: c * 1024,
+			.. Default::default()
+		});
+		let instance = Contract::<T>::new(code, vec![], Endow::Max)?;
+		let origin = RawOrigin::Signed(instance.caller.clone());
+		assert_eq!(T::Currency::total_balance(&beneficiary), 0u32.into());
+		assert_eq!(T::Currency::total_balance(&instance.account_id), Endow::max::<T>());
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+	verify {
+		assert_eq!(T::Currency::total_balance(&instance.account_id), 0u32.into());
+		assert_eq!(T::Currency::total_balance(&beneficiary), Endow::max::<T>());
+	}
+
 	seal_restore_to {
 		let r in 0 .. 1;
 
@@ -772,9 +833,16 @@ benchmarks! {
 		}
 	}
 
-	seal_restore_to_per_delta {
+	// `c`: Code size of caller contract
+	// `t`: Code size of tombstone contract
+	// `d`: Number of supplied delta keys
+	seal_restore_to_per_code_kb_delta {
+		let c in 0 .. T::MaxCodeSize::get() / 1024;
+		let t in 0 .. T::MaxCodeSize::get() / 1024;
 		let d in 0 .. API_BENCHMARK_BATCHES;
-		let mut tombstone = ContractWithStorage::<T>::new(0, 0)?;
+		let mut tombstone = ContractWithStorage::<T>::with_code(
+			WasmModule::<T>::dummy_with_bytes(t * 1024), 0, 0
+		)?;
 		tombstone.evict()?;
 		let delta = create_storage::<T>(d * API_BENCHMARK_BATCH_SIZE, T::MaxValueSize::get())?;
 
@@ -837,6 +905,7 @@ benchmarks! {
 				Instruction::Call(0),
 				Instruction::End,
 			])),
+			dummy_section: c * 1024,
 			.. Default::default()
 		});
 
@@ -1225,7 +1294,7 @@ benchmarks! {
 	// We call unique accounts.
 	seal_call {
 		let r in 0 .. API_BENCHMARK_BATCHES;
-		let dummy_code = WasmModule::<T>::dummy_with_mem();
+		let dummy_code = WasmModule::<T>::dummy_with_bytes(0);
 		let callees = (0..r * API_BENCHMARK_BATCH_SIZE)
 			.map(|i| Contract::with_index(i + 1, dummy_code.clone(), vec![], Endow::Max))
 			.collect::<Result<Vec<_>, _>>()?;
@@ -1280,7 +1349,8 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
-	seal_call_per_transfer_input_output_kb {
+	seal_call_per_code_transfer_input_output_kb {
+		let c in 0 .. T::MaxCodeSize::get() / 1024;
 		let t in 0 .. 1;
 		let i in 0 .. code::max_pages::<T>() * 64;
 		let o in 0 .. (code::max_pages::<T>() - 1) * 64;
@@ -1302,6 +1372,7 @@ benchmarks! {
 				Instruction::Call(0),
 				Instruction::End,
 			])),
+			dummy_section: c * 1024,
 			.. Default::default()
 		});
 		let callees = (0..API_BENCHMARK_BATCH_SIZE)
@@ -1475,7 +1546,8 @@ benchmarks! {
 		}
 	}
 
-	seal_instantiate_per_input_output_salt_kb {
+	seal_instantiate_per_code_input_output_salt_kb {
+		let c in 0 .. T::MaxCodeSize::get() / 1024;
 		let i in 0 .. (code::max_pages::<T>() - 1) * 64;
 		let o in 0 .. (code::max_pages::<T>() - 1) * 64;
 		let s in 0 .. (code::max_pages::<T>() - 1) * 64;
@@ -1497,6 +1569,7 @@ benchmarks! {
 				Instruction::Call(0),
 				Instruction::End,
 			])),
+			dummy_section: c * 1024,
 			.. Default::default()
 		});
 		let hash = callee_code.hash.clone();
@@ -2440,127 +2513,8 @@ benchmarks! {
 	}: {}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::tests::{ExtBuilder, Test};
-	use frame_support::assert_ok;
-	use paste::paste;
-
-	macro_rules! create_test {
-		($name:ident) => {
-			#[test]
-			fn $name() {
-				ExtBuilder::default().build().execute_with(|| {
-					assert_ok!(paste!{
-						[<test_benchmark_ $name>]::<Test>()
-					});
-				});
-			}
-		}
-	}
-
-	create_test!(on_initialize);
-	create_test!(on_initialize_per_trie_key);
-	create_test!(on_initialize_per_queue_item);
-
-	create_test!(update_schedule);
-	create_test!(instantiate_with_code);
-	create_test!(instantiate);
-	create_test!(call);
-	create_test!(claim_surcharge);
-
-	create_test!(seal_caller);
-	create_test!(seal_address);
-	create_test!(seal_gas_left);
-	create_test!(seal_balance);
-	create_test!(seal_value_transferred);
-	create_test!(seal_minimum_balance);
-	create_test!(seal_tombstone_deposit);
-	create_test!(seal_rent_allowance);
-	create_test!(seal_block_number);
-	create_test!(seal_now);
-	create_test!(seal_weight_to_fee);
-	create_test!(seal_gas);
-	create_test!(seal_input);
-	create_test!(seal_input_per_kb);
-	create_test!(seal_return);
-	create_test!(seal_return_per_kb);
-	create_test!(seal_terminate);
-	create_test!(seal_restore_to);
-	create_test!(seal_restore_to_per_delta);
-	create_test!(seal_random);
-	create_test!(seal_deposit_event);
-	create_test!(seal_deposit_event_per_topic_and_kb);
-	create_test!(seal_set_rent_allowance);
-	create_test!(seal_set_storage);
-	create_test!(seal_set_storage_per_kb);
-	create_test!(seal_get_storage);
-	create_test!(seal_get_storage_per_kb);
-	create_test!(seal_transfer);
-	create_test!(seal_call);
-	create_test!(seal_call_per_transfer_input_output_kb);
-	create_test!(seal_instantiate);
-	create_test!(seal_instantiate_per_input_output_salt_kb);
-	create_test!(seal_clear_storage);
-	create_test!(seal_hash_sha2_256);
-	create_test!(seal_hash_sha2_256_per_kb);
-	create_test!(seal_hash_keccak_256);
-	create_test!(seal_hash_keccak_256_per_kb);
-	create_test!(seal_hash_blake2_256);
-	create_test!(seal_hash_blake2_256_per_kb);
-	create_test!(seal_hash_blake2_128);
-	create_test!(seal_hash_blake2_128_per_kb);
-
-	create_test!(instr_i64const);
-	create_test!(instr_i64load);
-	create_test!(instr_i64store);
-	create_test!(instr_select);
-	create_test!(instr_if);
-	create_test!(instr_br);
-	create_test!(instr_br_if);
-	create_test!(instr_br_table);
-	create_test!(instr_br_table_per_entry);
-	create_test!(instr_call);
-	create_test!(instr_call_indirect);
-	create_test!(instr_call_indirect_per_param);
-	create_test!(instr_local_get);
-	create_test!(instr_local_set);
-	create_test!(instr_local_tee);
-	create_test!(instr_global_get);
-	create_test!(instr_global_set);
-	create_test!(instr_memory_current);
-	create_test!(instr_memory_grow);
-	create_test!(instr_i64clz);
-	create_test!(instr_i64ctz);
-	create_test!(instr_i64popcnt);
-	create_test!(instr_i64eqz);
-	create_test!(instr_i64extendsi32);
-	create_test!(instr_i64extendui32);
-	create_test!(instr_i32wrapi64);
-	create_test!(instr_i64eq);
-	create_test!(instr_i64ne);
-	create_test!(instr_i64lts);
-	create_test!(instr_i64ltu);
-	create_test!(instr_i64gts);
-	create_test!(instr_i64gtu);
-	create_test!(instr_i64les);
-	create_test!(instr_i64leu);
-	create_test!(instr_i64ges);
-	create_test!(instr_i64geu);
-	create_test!(instr_i64add);
-	create_test!(instr_i64sub);
-	create_test!(instr_i64mul);
-	create_test!(instr_i64divs);
-	create_test!(instr_i64divu);
-	create_test!(instr_i64rems);
-	create_test!(instr_i64remu);
-	create_test!(instr_i64and);
-	create_test!(instr_i64or);
-	create_test!(instr_i64xor);
-	create_test!(instr_i64shl);
-	create_test!(instr_i64shrs);
-	create_test!(instr_i64shru);
-	create_test!(instr_i64rotl);
-	create_test!(instr_i64rotr);
-}
+impl_benchmark_test_suite!(
+	Contracts,
+	crate::tests::ExtBuilder::default().build(),
+	crate::tests::Test,
+);

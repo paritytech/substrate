@@ -80,6 +80,9 @@ pub use self::storage::{
 pub use self::dispatch::{Parameter, Callable};
 pub use sp_runtime::{self, ConsensusEngineId, print, traits::Printable};
 
+/// A unified log target for support operations.
+pub const LOG_TARGET: &'static str = "runtime::frame-support";
+
 /// A type that cannot be instantiated.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Never {}
@@ -2034,9 +2037,9 @@ pub mod pallet_prelude {
 /// 	* `add_extra_genesis` fields are converted to `GenesisConfig` field with their correct
 /// 		default if specified
 /// 	* `add_extra_genesis` build is written into `GenesisBuild::build`
-/// * storage items defined with [`pallet`] use the name of the pallet provided by [`PalletInfo::name`]
-/// 	as `pallet_prefix` (in `decl_storage`, storage items used the `pallet_prefix` given as input of
-/// 	`decl_storage` with the syntax `as Example`).
+/// * storage items defined with [`pallet`] use the name of the pallet provided by
+/// 	[`traits::PalletInfo::name`] as `pallet_prefix` (in `decl_storage`, storage items used the
+/// 	`pallet_prefix` given as input of `decl_storage` with the syntax `as Example`).
 /// 	Thus a runtime using the pallet must be careful with this change.
 /// 	To handle this change:
 /// 	* either ensure that the name of the pallet given to `construct_runtime!` is the same

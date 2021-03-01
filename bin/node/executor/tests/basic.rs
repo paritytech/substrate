@@ -17,7 +17,6 @@
 
 use codec::{Encode, Decode, Joiner};
 use frame_support::{
-	StorageMap,
 	traits::Currency,
 	weights::{GetDispatchInfo, DispatchInfo, DispatchClass},
 };
@@ -32,7 +31,7 @@ use frame_system::{self, EventRecord, Phase};
 use node_runtime::{
 	Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
 	System, TransactionPayment, Event,
-	constants::currency::*,
+	constants::{time::SLOT_DURATION, currency::*},
 };
 use node_primitives::{Balance, Hash};
 use wat;
@@ -76,6 +75,7 @@ fn set_heap_pages<E: Externalities>(ext: &mut E, heap_pages: u64) {
 }
 
 fn changes_trie_block() -> (Vec<u8>, Hash) {
+	let time = 42 * 1000;
 	construct_block(
 		&mut new_test_ext(compact_code_unwrap(), true),
 		1,
@@ -83,13 +83,14 @@ fn changes_trie_block() -> (Vec<u8>, Hash) {
 		vec![
 			CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(pallet_timestamp::Call::set(42 * 1000)),
+				function: Call::Timestamp(pallet_timestamp::Call::set(time)),
 			},
 			CheckedExtrinsic {
 				signed: Some((alice(), signed_extra(0, 0))),
 				function: Call::Balances(pallet_balances::Call::transfer(bob().into(), 69 * DOLLARS)),
 			},
-		]
+		],
+		(time / SLOT_DURATION).into(),
 	)
 }
 
@@ -98,6 +99,7 @@ fn changes_trie_block() -> (Vec<u8>, Hash) {
 /// from block1's execution to block2 to derive the correct storage_root.
 fn blocks() -> ((Vec<u8>, Hash), (Vec<u8>, Hash)) {
 	let mut t = new_test_ext(compact_code_unwrap(), false);
+	let time1 = 42 * 1000;
 	let block1 = construct_block(
 		&mut t,
 		1,
@@ -105,14 +107,16 @@ fn blocks() -> ((Vec<u8>, Hash), (Vec<u8>, Hash)) {
 		vec![
 			CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(pallet_timestamp::Call::set(42 * 1000)),
+				function: Call::Timestamp(pallet_timestamp::Call::set(time1)),
 			},
 			CheckedExtrinsic {
 				signed: Some((alice(), signed_extra(0, 0))),
 				function: Call::Balances(pallet_balances::Call::transfer(bob().into(), 69 * DOLLARS)),
 			},
-		]
+		],
+		(time1 / SLOT_DURATION).into(),
 	);
+	let time2 = 52 * 1000;
 	let block2 = construct_block(
 		&mut t,
 		2,
@@ -120,7 +124,7 @@ fn blocks() -> ((Vec<u8>, Hash), (Vec<u8>, Hash)) {
 		vec![
 			CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(pallet_timestamp::Call::set(52 * 1000)),
+				function: Call::Timestamp(pallet_timestamp::Call::set(time2)),
 			},
 			CheckedExtrinsic {
 				signed: Some((bob(), signed_extra(0, 0))),
@@ -130,12 +134,13 @@ fn blocks() -> ((Vec<u8>, Hash), (Vec<u8>, Hash)) {
 				signed: Some((alice(), signed_extra(1, 0))),
 				function: Call::Balances(pallet_balances::Call::transfer(bob().into(), 15 * DOLLARS)),
 			}
-		]
+		],
+		(time2 / SLOT_DURATION).into(),
 	);
 
 	// session change => consensus authorities change => authorities change digest item appears
 	let digest = Header::decode(&mut &block2.0[..]).unwrap().digest;
-	assert_eq!(digest.logs().len(), 0);
+	assert_eq!(digest.logs().len(), 1 /* Just babe slot */);
 
 	(block1, block2)
 }
@@ -154,7 +159,8 @@ fn block_with_size(time: u64, nonce: u32, size: usize) -> (Vec<u8>, Hash) {
 				signed: Some((alice(), signed_extra(nonce, 0))),
 				function: Call::System(frame_system::Call::remark(vec![0; size])),
 			}
-		]
+		],
+		(time * 1000 / SLOT_DURATION).into(),
 	)
 }
 
@@ -590,6 +596,7 @@ fn deploying_wasm_contract_should_work() {
 
 	let subsistence = pallet_contracts::Module::<Runtime>::subsistence_threshold();
 
+	let time = 42 * 1000;
 	let b = construct_block(
 		&mut new_test_ext(compact_code_unwrap(), false),
 		1,
@@ -597,7 +604,7 @@ fn deploying_wasm_contract_should_work() {
 		vec![
 			CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(pallet_timestamp::Call::set(42 * 1000)),
+				function: Call::Timestamp(pallet_timestamp::Call::set(time)),
 			},
 			CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(0, 0))),
@@ -622,7 +629,8 @@ fn deploying_wasm_contract_should_work() {
 					)
 				),
 			},
-		]
+		],
+		(time / SLOT_DURATION).into(),
 	);
 
 	let mut t = new_test_ext(compact_code_unwrap(), false);

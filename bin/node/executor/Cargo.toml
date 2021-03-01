@@ -22,7 +22,7 @@ sp-io = { version = "3.0.0", path = "../../../primitives/io" }
 sp-state-machine = { version = "0.9.0", path = "../../../primitives/state-machine" }
 sp-trie = { version = "3.0.0", path = "../../../primitives/trie" }
 trie-root = "0.16.0"
-frame-benchmarking = { version = "3.0.0", path = "../../../frame/benchmarking" }
+frame-benchmarking = { version = "3.1.0", path = "../../../frame/benchmarking" }
 
 [dev-dependencies]
 criterion = "0.3.0"
@@ -30,7 +30,7 @@ frame-support = { version = "3.0.0", path = "../../../frame/support" }
 frame-system = { version = "3.0.0", path = "../../../frame/system" }
 node-testing = { version = "2.0.0", path = "../testing" }
 pallet-balances = { version = "3.0.0", path = "../../../frame/balances" }
-pallet-contracts = { version = "2.0.0", path = "../../../frame/contracts" }
+pallet-contracts = { version = "3.0.0", path = "../../../frame/contracts" }
 pallet-grandpa = { version = "3.0.0", path = "../../../frame/grandpa" }
 pallet-im-online = { version = "3.0.0", path = "../../../frame/im-online" }
 pallet-indices = { version = "3.0.0", path = "../../../frame/indices" }
@@ -39,6 +39,7 @@ pallet-timestamp = { version = "3.0.0", path = "../../../frame/timestamp" }
 pallet-transaction-payment = { version = "3.0.0", path = "../../../frame/transaction-payment" }
 pallet-treasury = { version = "3.0.0", path = "../../../frame/treasury" }
 sp-application-crypto = { version = "3.0.0", path = "../../../primitives/application-crypto" }
+sp-consensus-babe = { version = "0.9.0", path = "../../../primitives/consensus/babe" }
 sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
 sp-externalities = { version = "0.9.0", path = "../../../primitives/externalities" }
 substrate-test-client = { version = "2.0.0", path = "../../../test-utils/client" }
