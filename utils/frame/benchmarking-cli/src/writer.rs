@@ -166,9 +166,12 @@ fn get_benchmark_data(
 		AnalysisChoice::Max => Analysis::max,
 	};
 
-	let extrinsic_time = analysis_function(&batch.results, BenchmarkSelector::ExtrinsicTime).unwrap();
-	let reads = analysis_function(&batch.results, BenchmarkSelector::Reads).unwrap();
-	let writes = analysis_function(&batch.results, BenchmarkSelector::Writes).unwrap();
+	let extrinsic_time = analysis_function(&batch.results, BenchmarkSelector::ExtrinsicTime)
+		.expect("analysis function should return an extrinsic time for valid inputs");
+	let reads = analysis_function(&batch.results, BenchmarkSelector::Reads)
+		.expect("analysis function should return the number of reads for valid inputs");
+	let writes = analysis_function(&batch.results, BenchmarkSelector::Writes)
+		.expect("analysis function should return the number of writes for valid inputs");
 
 	// Analysis data may include components that are not used, this filters out anything whose value is zero.
 	let mut used_components = Vec::new();

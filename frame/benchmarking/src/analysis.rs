@@ -42,8 +42,11 @@ pub enum BenchmarkSelector {
 
 #[derive(Debug)]
 pub enum AnalysisChoice {
+	/// Use minimum squares regression for analyzing the benchmarking results.
 	MinSquares,
+	/// Use median slopes for analyzing the benchmarking results.
 	MedianSlopes,
+	/// Use the maximum values among all other analysis functions for the benchmarking results.
 	Max,
 }
 
@@ -261,9 +264,14 @@ impl Analysis {
 		let min_squares = min_squares.unwrap();
 
 		let base = median_slopes.base.max(min_squares.base);
-		let slopes = median_slopes.slopes.into_iter().zip(min_squares.slopes.into_iter())
+		let slopes = median_slopes.slopes.into_iter()
+			.zip(min_squares.slopes.into_iter())
 			.map(|(a, b): (u128, u128)| { a.max(b) })
 			.collect::<Vec<u128>>();
+		// components should always be in the same order
+		median_slopes.names.iter()
+			.zip(min_squares.names.iter())
+			.for_each(|(a, b)| assert!(a == b, "benchmark results not in the same order"));
 		let names = median_slopes.names;
 		let value_dists = min_squares.value_dists;
 		let model = min_squares.model;
