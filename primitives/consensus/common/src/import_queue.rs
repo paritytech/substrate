@@ -102,8 +102,8 @@ pub trait Verifier<B: BlockT>: Send + Sync {
 pub trait ImportQueue<B: BlockT>: Send {
 	/// Import bunch of blocks.
 	fn import_blocks(&mut self, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>);
-	/// Import a block justification.
-	fn import_justification(
+	/// Import block justifications.
+	fn import_justifications(
 		&mut self,
 		who: Origin,
 		hash: B::Hash,

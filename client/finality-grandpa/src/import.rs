@@ -33,7 +33,7 @@ use sp_consensus::{
 	SelectChain,
 };
 use sp_finality_grandpa::{ConsensusLog, ScheduledChange, SetId, GRANDPA_ENGINE_ID};
-use sp_runtime::Justifications;
+use sp_runtime::Justification;
 use sp_runtime::generic::{BlockId, OpaqueDigestItemId};
 use sp_runtime::traits::{
 	Block as BlockT, DigestFor, Header as HeaderT, NumberFor, Zero,
@@ -128,14 +128,14 @@ impl<BE, Block: BlockT, Client, SC> JustificationImport<Block>
 		&mut self,
 		hash: Block::Hash,
 		number: NumberFor<Block>,
-		justifications: Justifications,
+		justification: Justification,
 	) -> Result<(), Self::Error> {
 		// this justification was requested by the sync service, therefore we
 		// are not sure if it should enact a change or not. it could have been a
 		// request made as part of initial sync but that means the justification
 		// wasn't part of the block and was requested asynchronously, probably
 		// makes sense to log in that case.
-		GrandpaBlockImport::import_justification(self, hash, number, justifications, false, false)
+		GrandpaBlockImport::import_justification(self, hash, number, justification, false, false)
 	}
 }
 
@@ -502,12 +502,15 @@ impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
 			_ => {},
 		}
 
-		match justifications {
-			Some(justifications) => {
+		let grandpa_justification = justifications
+			.map(|just| just.into_justification(GRANDPA_ENGINE_ID))
+			.flatten();
+		match grandpa_justification {
+			Some(justification) => {
 				let import_res = self.import_justification(
 					hash,
 					number,
-					justifications,
+					(GRANDPA_ENGINE_ID, justification),
 					needs_justification,
 					initial_sync,
 				);
@@ -615,24 +618,18 @@ where
 		&mut self,
 		hash: Block::Hash,
 		number: NumberFor<Block>,
-		justifications: Justifications,
+		justification: Justification,
 		enacts_change: bool,
 		initial_sync: bool,
 	) -> Result<(), ConsensusError> {
-		if justifications.iter().filter(|j| j.0 == GRANDPA_ENGINE_ID).count() > 1 {
+		if justification.0 != GRANDPA_ENGINE_ID {
 			return Err(ConsensusError::ClientImport(
-				"Received multiple GRANDPA Justifications for the same block.".into(),
+				"GRANDPA can only import GRANDPA Justifications.".into(),
 			));
 		}
 
-		let grandpa_justification = justifications
-			.into_justification(GRANDPA_ENGINE_ID)
-			.ok_or(ConsensusError::ClientImport(
-				"GRANDPA can only import GRANDPA Justifications.".into(),
-			))?;
-
 		let justification = GrandpaJustification::decode_and_verify_finalizes(
-			&grandpa_justification,
+			&justification.1,
 			(hash, number),
 			self.authority_set.set_id(),
 			&self.authority_set.current_authorities(),

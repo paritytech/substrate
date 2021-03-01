@@ -18,7 +18,7 @@
 //! Block import helpers.
 
 use sp_runtime::traits::{Block as BlockT, DigestItemFor, Header as HeaderT, NumberFor, HashFor};
-use sp_runtime::Justifications;
+use sp_runtime::{Justification, Justifications};
 use serde::{Serialize, Deserialize};
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -345,6 +345,6 @@ pub trait JustificationImport<B: BlockT> {
 		&mut self,
 		hash: B::Hash,
 		number: NumberFor<B>,
-		justifications: Justifications,
+		justification: Justification,
 	) -> Result<(), Self::Error>;
 }

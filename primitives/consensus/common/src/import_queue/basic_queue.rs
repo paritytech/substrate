@@ -18,7 +18,7 @@
 use std::{pin::Pin, time::Duration, marker::PhantomData};
 use futures::{prelude::*, task::Context, task::Poll};
 use futures_timer::Delay;
-use sp_runtime::{Justifications, traits::{Block as BlockT, Header as HeaderT, NumberFor}};
+use sp_runtime::{Justification, Justifications, traits::{Block as BlockT, Header as HeaderT, NumberFor}};
 use sp_utils::mpsc::{TracingUnboundedSender, tracing_unbounded, TracingUnboundedReceiver};
 use prometheus_endpoint::Registry;
 
@@ -112,22 +112,24 @@ impl<B: BlockT, Transaction: Send> ImportQueue<B> for BasicQueue<B, Transaction>
 		}
 	}
 
-	fn import_justification(
+	fn import_justifications(
 		&mut self,
 		who: Origin,
 		hash: B::Hash,
 		number: NumberFor<B>,
 		justifications: Justifications,
 	) {
-		let res = self.justification_sender.unbounded_send(
-			worker_messages::ImportJustification(who, hash, number, justifications),
-		);
-
-		if res.is_err() {
-			log::error!(
-				target: "sync",
-				"import_justification: Background import task is no longer alive"
+		for justification in justifications {
+			let res = self.justification_sender.unbounded_send(
+				worker_messages::ImportJustification(who, hash, number, justification),
 			);
+
+			if res.is_err() {
+				log::error!(
+					target: "sync",
+					"import_justification: Background import task is no longer alive"
+				);
+			}
 		}
 	}
 
@@ -143,7 +145,7 @@ mod worker_messages {
 	use super::*;
 
 	pub struct ImportBlocks<B: BlockT>(pub BlockOrigin, pub Vec<IncomingBlock<B>>);
-	pub struct ImportJustification<B: BlockT>(pub Origin, pub B::Hash, pub NumberFor<B>, pub Justifications);
+	pub struct ImportJustification<B: BlockT>(pub Origin, pub B::Hash, pub NumberFor<B>, pub Justification);
 }
 
 /// The process of importing blocks.
@@ -281,11 +283,11 @@ impl<B: BlockT> BlockImportWorker<B> {
 		who: Origin,
 		hash: B::Hash,
 		number: NumberFor<B>,
-		justifications: Justifications
+		justification: Justification,
 	) {
 		let started = wasm_timer::Instant::now();
 		let success = self.justification_import.as_mut().map(|justification_import| {
-			justification_import.import_justification(hash, number, justifications)
+			justification_import.import_justification(hash, number, justification)
 				.map_err(|e| {
 					debug!(
 						target: "sync",
@@ -476,7 +478,7 @@ mod tests {
 			&mut self,
 			_hash: Hash,
 			_number: BlockNumber,
-			_justification: Justifications,
+			_justification: Justification,
 		) -> Result<(), Self::Error> {
 			Ok(())
 		}
@@ -560,7 +562,7 @@ mod tests {
 				libp2p::PeerId::random(),
 				hash,
 				1,
-				sp_runtime::Justifications::from((ENGINE_ID, Vec::new())),
+				(ENGINE_ID, Vec::new()),
 			)))
 			.unwrap();
 
