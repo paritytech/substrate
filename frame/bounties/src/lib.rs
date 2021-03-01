@@ -786,7 +786,7 @@ decl_module! {
 		/// Add a new subbounty.
 		///
 		/// The dispatch origin for this call must be master curator.
-		/// parent bounty must me in "active" state.
+		/// parent bounty must be in "active" state.
 		///
 		/// Subbouty gets added successfully & fund gets transfered from
 		/// parent bounty to subbounty account, if parent bounty has
