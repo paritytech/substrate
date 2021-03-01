@@ -34,7 +34,7 @@ use crate::{
 	Voter,
 	VoteWeight,
 };
-use sp_std::rc::Rc;
+use sp_std::{rc::Rc, vec::Vec};
 use sp_std::collections::btree_map::BTreeMap;
 use sp_arithmetic::{traits::Zero, Perbill};
 
