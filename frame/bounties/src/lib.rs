@@ -1229,7 +1229,7 @@ decl_module! {
 		/// The dispatch origin for this call may be any signed origin.
 		///
 		/// Call works independent of parent bounty state,
-		/// No need for parent bounty must be in active state.
+		/// No need for parent bounty to be in active state.
 		///
 		/// Beneficiary is paid out with with agreed bounty value.
 		/// SubCurator fee is paid & curator deposit is unreserved.
