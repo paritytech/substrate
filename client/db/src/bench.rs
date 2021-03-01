@@ -357,7 +357,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		start_at: Option<&[u8]>,
 		f: F,
 	) -> Result<(), Self::Error> {
-		state.borrow().as_ref().ok_or_else(state_err)?
+		self.state.borrow().as_ref().ok_or_else(state_err)?
 			.apply_to_key_values_while(child_info, prefix, start_at, f)
 	}
 
