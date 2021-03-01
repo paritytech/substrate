@@ -339,7 +339,7 @@ decl_error! {
 		InsufficientBountyBalance,
 		/// Subbounty active
 		RequireNoActiveSubBounty,
-		/// Number of subbounty exceeds threahold of TooManySubBounties
+		/// Number of subbounty exceeds limit `MaxActiveSubBountyCount`.
 		TooManySubBounties,
 		/// Require subbounty curator.
 		RequireSubCurator,
