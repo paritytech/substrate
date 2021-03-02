@@ -215,6 +215,8 @@ pub enum RuntimeToken {
 	ChainExtension(u64),
 	/// Weight charged for copying data from the sandbox.
 	CopyIn(u32),
+	/// Weight of calling `seal_rent_params`.
+	RentParams,
 }
 
 impl<T: Config> Token<T> for RuntimeToken
@@ -283,6 +285,7 @@ where
 				.saturating_add(s.hash_blake2_128_per_byte.saturating_mul(len.into())),
 			ChainExtension(amount) => amount,
 			CopyIn(len) => s.return_per_byte.saturating_mul(len.into()),
+			RentParams => s.rent_params,
 		}
 	}
 }
@@ -1529,8 +1532,7 @@ define_env!(Env, <E: Ext>,
 	// started execution. Any change to those values that happens due to actions of the
 	// current call or contracts that are called by this contract are not considered.
 	seal_rent_params(ctx, out_ptr: u32, out_len_ptr: u32) => {
-		// TODO: create benchmark and runtime token
-		ctx.charge_gas(RuntimeToken::RentAllowance)?;
+		ctx.charge_gas(RuntimeToken::RentParams)?;
 		Ok(ctx.write_sandbox_output(
 			out_ptr, out_len_ptr, &ctx.ext.rent_params().encode(), false, already_charged
 		)?)
