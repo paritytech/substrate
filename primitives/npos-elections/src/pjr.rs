@@ -157,16 +157,10 @@ fn prepare_pjr_input<AccountId: IdentifierT>(
 /// (i.e `sum(stake(v) for v in voters) == r * t`), then this committee needs to be represented by at
 /// least `r` elected candidates.
 ///
-/// Section 5 of the NPoS paper shows that this property can be tested by: for a feasible solution, if
-/// `Max {score(c)} < t` where c is every unelected candidate, then this solution is t-PJR. However,
-/// this test is incomplete: while every solution which passes this test satisfies t-PJR, not every
-/// solution which is t-PJR passes this test. We therefore look to a more accurate test.
-///
-/// The text notes the following:
-///
-/// - we can verify this condition by running Algorithm 5: MaxPrescore and validating
-///   that MaxPrescore(A, w, t) < t).
-/// - the property gets stronger as the threshold decreases.
+/// Section 5 of the NPoS paper shows that this property can be tested by: for a feasible solution,
+/// if `Max {score(c)} < t` where c is every unelected candidate, then this solution is t-PJR. There
+/// may exist edge cases which satisfy the formal definition of t-PJR but do not pass this test, but
+/// those should be rare enough that we can discount them.
 ///
 /// ### Interface
 ///
@@ -261,7 +255,7 @@ fn slack<AccountId: IdentifierT>(voter: &Voter<AccountId>, t: Threshold) -> Exte
 		}
 	});
 
-	// NOTE: candidate for saturating_log_sub(). Defensive-only. 
+	// NOTE: candidate for saturating_log_sub(). Defensive-only.
 	budget.saturating_sub(leftover)
 }
 
