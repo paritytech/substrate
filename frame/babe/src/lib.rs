@@ -34,7 +34,7 @@ use sp_application_crypto::Public;
 use sp_runtime::{
 	generic::DigestItem,
 	traits::{Hash, IsMember, One, SaturatedConversion, Saturating, Zero},
-	ConsensusEngineId, KeyTypeId,
+	ConsensusEngineId, KeyTypeId, Percent,
 };
 use sp_session::{GetSessionNumber, GetValidatorCount};
 use sp_std::prelude::*;
@@ -765,12 +765,26 @@ impl<T: Config> frame_support::traits::EstimateNextSessionRotation<T::BlockNumbe
 		T::EpochDuration::get().saturated_into()
 	}
 
+	fn estimate_current_session_progress(_now: T::BlockNumber) -> Option<Percent> {
+		let elapsed = CurrentSlot::get().saturating_sub(Self::current_epoch_start());
+		Some(Percent::from_rational_approximation(
+			*elapsed,
+			T::EpochDuration::get(),
+		))
+	}
+
 	fn estimate_next_session_rotation(now: T::BlockNumber) -> Option<T::BlockNumber> {
 		Self::next_expected_epoch_change(now)
 	}
 
 	// The validity of this weight depends on the implementation of `estimate_next_session_rotation`
-	fn weight(_now: T::BlockNumber) -> Weight {
+	fn estimate_next_session_rotation_weight(_now: T::BlockNumber) -> Weight {
+		// Read: Current Slot, Epoch Index, Genesis Slot
+		T::DbWeight::get().reads(3)
+	}
+
+	// The validity of this weight depends on the implementation of `estimate_current_session_progress`
+	fn estimate_current_session_progress_weight(_now: T::BlockNumber) -> Weight {
 		// Read: Current Slot, Epoch Index, Genesis Slot
 		T::DbWeight::get().reads(3)
 	}

@@ -23,13 +23,13 @@ use sp_std::{prelude::*, result, marker::PhantomData, ops::Div, fmt::Debug};
 use codec::{FullCodec, Codec, Encode, Decode, EncodeLike};
 use sp_core::u32_trait::Value as U32;
 use sp_runtime::{
-	RuntimeAppPublic, RuntimeDebug, BoundToRuntimeAppPublic,
-	ConsensusEngineId, DispatchResult, DispatchError,
 	traits::{
-	MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput, Bounded, Zero,
-	BadOrigin, AtLeast32BitUnsigned, Convert, UniqueSaturatedFrom, UniqueSaturatedInto,
-	SaturatedConversion, StoredMapError,
+		AtLeast32Bit, AtLeast32BitUnsigned, BadOrigin, Convert, MaybeSerializeDeserialize,
+		SaturatedConversion, Saturating, StoredMapError, TrailingZeroInput, UniqueSaturatedFrom,
+		UniqueSaturatedInto, Zero,
 	},
+	BoundToRuntimeAppPublic, ConsensusEngineId, DispatchError, DispatchResult, Percent,
+	RuntimeAppPublic, RuntimeDebug,
 };
 use sp_staking::SessionIndex;
 use crate::dispatch::Parameter;
@@ -492,40 +492,65 @@ impl<
 
 /// Something that can estimate at which block the next session rotation will happen.
 ///
+/// The accuracy of the estimates is dependent on the specific implementation, but in order to get
+/// the best estimate possible these methods should be called throughout the duration of the session
+/// (rather than calling once and storing the result).
+///
 /// This should be the same logical unit that dictates `ShouldEndSession` to the session module. No
-/// Assumptions are made about the scheduling of the sessions.
+/// assumptions are made about the scheduling of the sessions.
 pub trait EstimateNextSessionRotation<BlockNumber> {
 	/// Return the average length of a session.
 	///
 	/// This may or may not be accurate.
 	fn average_session_length() -> BlockNumber;
 
+	/// Return an estimate of the current session progress.
+	///
+	/// None should be returned if the estimation fails to come to an answer.
+	fn estimate_current_session_progress(now: BlockNumber) -> Option<Percent>;
+
 	/// Return the block number at which the next session rotation is estimated to happen.
 	///
-	/// None should be returned if the estimation fails to come to an answer
+	/// None should be returned if the estimation fails to come to an answer.
 	fn estimate_next_session_rotation(now: BlockNumber) -> Option<BlockNumber>;
 
-	/// Return the weight of calling `estimate_next_session_rotation`
-	fn weight(now: BlockNumber) -> Weight;
+	/// Return the weight of calling `estimate_current_session_progress`.
+	fn estimate_current_session_progress_weight(now: BlockNumber) -> Weight;
+
+	/// Return the weight of calling `estimate_next_session_rotation`.
+	fn estimate_next_session_rotation_weight(now: BlockNumber) -> Weight;
 }
 
-impl<BlockNumber: Bounded + Default> EstimateNextSessionRotation<BlockNumber> for () {
+impl<BlockNumber: Zero> EstimateNextSessionRotation<BlockNumber> for () {
 	fn average_session_length() -> BlockNumber {
-		Default::default()
+		Zero::zero()
+	}
+
+	fn estimate_current_session_progress(_: BlockNumber) -> Option<Percent> {
+		None
 	}
 
 	fn estimate_next_session_rotation(_: BlockNumber) -> Option<BlockNumber> {
-		Default::default()
+		None
 	}
 
-	fn weight(_: BlockNumber) -> Weight {
-		0
+	fn estimate_current_session_progress_weight(_: BlockNumber) -> Weight {
+		Zero::zero()
+	}
+
+	fn estimate_next_session_rotation_weight(_: BlockNumber) -> Weight {
+		Zero::zero()
 	}
 }
 
-/// Something that can estimate at which block the next `new_session` will be triggered.
+/// Something that can estimate at which block the next `new_session` will be triggered, i.e. when
+/// we will try to fetch new validators. For example, if we are using a staking module this would be
+/// the block when the session module would ask staking what the next validator set will be, as such
+/// this must always be implemented by the session module.
 ///
-/// This must always be implemented by the session module.
+/// With `pallet-session` fetching the new validators happens when we rotate sessions but different
+/// implementations of session could have different logic, still any estimate coming from here should
+/// always be lower or equal to the estimates for next session rotates.
 pub trait EstimateNextNewSession<BlockNumber> {
 	/// Return the average length of a session.
 	///
@@ -533,23 +558,25 @@ pub trait EstimateNextNewSession<BlockNumber> {
 	fn average_session_length() -> BlockNumber;
 
 	/// Return the block number at which the next new session is estimated to happen.
+	///
+	/// None should be returned if the estimation fails to come to an answer.
 	fn estimate_next_new_session(now: BlockNumber) -> Option<BlockNumber>;
 
-	/// Return the weight of calling `estimate_next_new_session`
-	fn weight(now: BlockNumber) -> Weight;
+	/// Return the weight of calling `estimate_next_new_session`.
+	fn estimate_next_new_session_weight(now: BlockNumber) -> Weight;
 }
 
-impl<BlockNumber: Bounded + Default> EstimateNextNewSession<BlockNumber> for () {
+impl<BlockNumber: Zero> EstimateNextNewSession<BlockNumber> for () {
 	fn average_session_length() -> BlockNumber {
-		Default::default()
+		Zero::zero()
 	}
 
 	fn estimate_next_new_session(_: BlockNumber) -> Option<BlockNumber> {
-		Default::default()
+		None
 	}
 
-	fn weight(_: BlockNumber) -> Weight {
-		0
+	fn estimate_next_new_session_weight(_: BlockNumber) -> Weight {
+		Zero::zero()
 	}
 }
 
