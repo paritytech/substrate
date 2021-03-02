@@ -52,10 +52,10 @@ use sp_npos_elections::{pjr_check_core, seq_phragmen_core, setup_inputs, standar
 
 type AccountId = u64;
 
-const MIN_CANDIDATES: usize = 5;
-const MAX_CANDIDATES: usize = 200;
-const MIN_VOTERS: usize = 5;
-const MAX_VOTERS: usize = 500;
+const MIN_CANDIDATES: usize = 250;
+const MAX_CANDIDATES: usize = 1000;
+const MIN_VOTERS: usize = 500;
+const MAX_VOTERS: usize = 2500;
 
 #[cfg(fuzzing)]
 fn main() {
