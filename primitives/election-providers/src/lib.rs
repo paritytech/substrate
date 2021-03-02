@@ -78,7 +78,7 @@
 //! ## Example
 //!
 //! ```rust
-//! # use sp_election_providers::{*, data_provider::ReturnValue};
+//! # use sp_election_providers::{*, data_provider};
 //! # use sp_npos_elections::{Support, Assignment};
 //!
 //! type AccountId = u64;
@@ -100,13 +100,13 @@
 //!
 //!     impl<T: Config> ElectionDataProvider<AccountId, BlockNumber> for Module<T> {
 //! 			type Additional = ();
-//!         fn desired_targets() -> ReturnValue<u32, Self::Additional> {
+//!         fn desired_targets() -> data_provider::Result<(u32, Self::Additional)> {
 //!             Ok((1, ()))
 //!         }
-//!         fn voters(maybe_max_len: Option<usize>) -> ReturnValue<Vec<(AccountId, VoteWeight, Vec<AccountId>)>, Self::Additional> {
+//!         fn voters(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<(AccountId, VoteWeight, Vec<AccountId>)>, Self::Additional)> {
 //!             Ok((Default::default(), ()))
 //!         }
-//!         fn targets(maybe_max_len: Option<usize>) -> ReturnValue<Vec<AccountId>, Self::Additional> {
+//!         fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<AccountId>, Self::Additional).> {
 //!             Ok((vec![10, 20, 30], ()))
 //!         }
 //!         fn next_election_prediction(now: BlockNumber) -> BlockNumber {
@@ -163,15 +163,13 @@
 
 pub mod onchain;
 use sp_std::{prelude::*, fmt::Debug};
-use data_provider::ReturnValue;
 
 /// Re-export some type as they are used in the interface.
 pub use sp_arithmetic::PerThing;
 pub use sp_npos_elections::{Assignment, ExtendedBalance, PerThing128, Supports, VoteWeight};
 
+/// Types that are used by the data provider trait.
 pub mod data_provider {
-	/// Alias for the return value of the election data provider.
-	pub type ReturnValue<T, Aux> = Result<(T, Aux)>;
 	/// Alias for the result type of the election data provider.
 	pub type Result<T> = sp_std::result::Result<T, &'static str>;
 }
@@ -180,7 +178,7 @@ pub mod data_provider {
 pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	/// Additional data can optionally be returned with the data. An example is an indication of the
 	/// resourced consumed during the operation.
-	type Additional: Default;
+	type Additional;
 
 	/// All possible targets for the election, i.e. the candidates.
 	///
@@ -189,7 +187,7 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	///
 	/// It is assumed that this function will only consume a notable amount of weight, when it
 	/// returns `Ok(_)`.
-	fn targets(maybe_max_len: Option<usize>) -> ReturnValue<Vec<AccountId>, Self::Additional>;
+	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<AccountId>, Self::Additional)>;
 
 	/// All possible voters for the election.
 	///
@@ -202,10 +200,10 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	/// returns `Ok(_)`.
 	fn voters(
 		maybe_max_len: Option<usize>,
-	) -> ReturnValue<Vec<(AccountId, VoteWeight, Vec<AccountId>)>, Self::Additional>;
+	) -> data_provider::Result<(Vec<(AccountId, VoteWeight, Vec<AccountId>)>, Self::Additional)>;
 
 	/// The number of targets to elect.
-	fn desired_targets() -> ReturnValue<u32, Self::Additional>;
+	fn desired_targets() -> data_provider::Result<(u32, Self::Additional)>;
 
 	/// Provide a best effort prediction about when the next election is about to happen.
 	///
@@ -228,15 +226,15 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 #[cfg(feature = "std")]
 impl<AccountId, BlockNumber> ElectionDataProvider<AccountId, BlockNumber> for () {
 	type Additional = ();
-	fn targets(_maybe_max_len: Option<usize>) -> ReturnValue<Vec<AccountId>, Self::Additional> {
+	fn targets(_maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<AccountId>, Self::Additional)> {
 		Ok(Default::default())
 	}
 	fn voters(
 		_maybe_max_len: Option<usize>,
-	) -> ReturnValue<Vec<(AccountId, VoteWeight, Vec<AccountId>)>, Self::Additional> {
+	) -> data_provider::Result<(Vec<(AccountId, VoteWeight, Vec<AccountId>)>, Self::Additional)> {
 		Ok(Default::default())
 	}
-	fn desired_targets() -> ReturnValue<u32, Self::Additional> {
+	fn desired_targets() -> data_provider::Result<(u32, Self::Additional)> {
 		Ok(Default::default())
 	}
 	fn next_election_prediction(now: BlockNumber) -> BlockNumber {

@@ -1089,6 +1089,7 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for Pallet<T> {
 
 	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
 		let outcome = Self::do_elect();
+		// IMPORTANT: regardless of if election was `Ok` or `Err`, we shall do some cleanup.
 		Self::post_elect();
 		outcome
 	}

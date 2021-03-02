@@ -331,7 +331,7 @@ use sp_npos_elections::{
 	to_supports, EvaluateSupport, seq_phragmen, generate_solution_type, is_score_better, Supports,
 	VoteWeight, CompactSolution, PerThing128,
 };
-use sp_election_providers::ElectionProvider;
+use sp_election_providers::{ElectionProvider, data_provider};
 pub use weights::WeightInfo;
 
 const STAKING_ID: LockIdentifier = *b"staking ";
@@ -3335,19 +3335,18 @@ impl<T: Config> Module<T> {
 	}
 }
 
-use sp_election_providers::data_provider::ReturnValue;
-
 impl<T: Config> sp_election_providers::ElectionDataProvider<T::AccountId, T::BlockNumber>
 	for Module<T>
 {
 	type Additional = Weight;
-	fn desired_targets() -> ReturnValue<u32, Self::Additional> {
+
+	fn desired_targets() -> data_provider::Result<(u32, Self::Additional)> {
 		Ok((Self::validator_count(), <T as frame_system::Config>::DbWeight::get().reads(1)))
 	}
 
 	fn voters(
 		maybe_max_len: Option<usize>,
-	) -> ReturnValue<Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>, Self::Additional> {
+	) -> data_provider::Result<(Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>, Self::Additional)> {
 		let nominator_count = <Nominators<T>>::iter().count();
 		let validator_count = <Validators<T>>::iter().count();
 		let voter_count = nominator_count.saturating_add(validator_count);
@@ -3364,7 +3363,7 @@ impl<T: Config> sp_election_providers::ElectionDataProvider<T::AccountId, T::Blo
 		Ok((Self::get_npos_voters(), weight))
 	}
 
-	fn targets(maybe_max_len: Option<usize>) -> ReturnValue<Vec<T::AccountId>, Self::Additional> {
+	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<T::AccountId>, Self::Additional)> {
 		let target_count = <Validators<T>>::iter().count();
 
 		if maybe_max_len.map_or(false, |max_len| target_count > max_len) {

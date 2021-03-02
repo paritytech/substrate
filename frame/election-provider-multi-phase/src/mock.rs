@@ -31,7 +31,7 @@ use sp_core::{
 	},
 	H256,
 };
-use sp_election_providers::{ElectionDataProvider, data_provider::ReturnValue};
+use sp_election_providers::{ElectionDataProvider, data_provider};
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, seq_phragmen, to_supports, to_without_backing,
 	CompactSolution, ElectionResult, EvaluateSupport,
@@ -295,7 +295,7 @@ pub struct StakingMock;
 impl ElectionDataProvider<AccountId, u64> for StakingMock {
 	type Additional = u64;
 
-	fn targets(maybe_max_len: Option<usize>) -> ReturnValue<Vec<AccountId>, Self::Additional> {
+	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<AccountId>, Self::Additional)> {
 		if maybe_max_len.map_or(false, |max_len| Targets::get().len() > max_len) {
 			return Err("Targets too big");
 		}
@@ -305,14 +305,14 @@ impl ElectionDataProvider<AccountId, u64> for StakingMock {
 
 	fn voters(
 		maybe_max_len: Option<usize>,
-	) -> ReturnValue<Vec<(AccountId, VoteWeight, Vec<AccountId>)>, Self::Additional> {
+	) -> data_provider::Result<(Vec<(AccountId, VoteWeight, Vec<AccountId>)>, Self::Additional)> {
 		if maybe_max_len.map_or(false, |max_len| Voters::get().len() > max_len) {
 			return Err("Voters too big");
 		}
 
 		Ok((Voters::get(), 0))
 	}
-	fn desired_targets() -> ReturnValue<u32, Self::Additional> {
+	fn desired_targets() -> data_provider::Result<(u32, Self::Additional)> {
 		Ok((DesiredTargets::get(), 0))
 	}
 

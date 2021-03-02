@@ -116,7 +116,7 @@ mod tests {
 
 	mod mock_data_provider {
 		use super::*;
-		use crate::data_provider::ReturnValue;
+		use crate::data_provider;
 
 		pub struct DataProvider;
 
@@ -124,15 +124,15 @@ mod tests {
 			type Additional = ();
 			fn voters(
 				_: Option<usize>,
-			) -> ReturnValue<Vec<(AccountId, VoteWeight, Vec<AccountId>)>, Self::Additional> {
+			) -> data_provider::Result<(Vec<(AccountId, VoteWeight, Vec<AccountId>)>, Self::Additional)> {
 				Ok((vec![(1, 10, vec![10, 20]), (2, 20, vec![30, 20]), (3, 30, vec![10, 30])], ()))
 			}
 
-			fn targets(_: Option<usize>) -> ReturnValue<Vec<AccountId>, Self::Additional> {
+			fn targets(_: Option<usize>) -> data_provider::Result<(Vec<AccountId>, Self::Additional)> {
 				Ok((vec![10, 20, 30], ()))
 			}
 
-			fn desired_targets() -> ReturnValue<u32, Self::Additional> {
+			fn desired_targets() -> data_provider::Result<(u32, Self::Additional)> {
 				Ok((2, ()))
 			}
 
