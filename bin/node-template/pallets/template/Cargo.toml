@@ -55,6 +55,7 @@ std = [
 	'codec/std',
 	'frame-support/std',
 	'frame-system/std',
+	'frame-benchmarking/std',
 ]
 runtime-benchmarks = ["frame-benchmarking"]
 try-runtime = ["frame-support/try-runtime"]
