@@ -161,6 +161,14 @@ pub mod pallet {
 
 			Ok(().into())
 		}
+
+		// Test for DispatchResult return type
+		#[pallet::weight(1)]
+		fn foo_no_post_info(
+			_origin: OriginFor<T>,
+		) -> DispatchResult {
+			Ok(())
+		}
 	}
 
 	#[pallet::error]
