@@ -85,7 +85,7 @@ use sp_runtime::{
 
 use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
 use frame_support::{
-	Parameter, debug, storage,
+	Parameter, storage,
 	traits::{
 		Contains, Get, PalletInfo, OnNewAccount, OnKilledAccount, HandleLifetime,
 		StoredMap, EnsureOrigin, OriginTrait, Filter,
@@ -642,6 +642,7 @@ mod migrations {
 	use super::*;
 
 	#[allow(dead_code)]
+	/// Migrate from unique `u8` reference counting to triple `u32` reference counting.
 	pub fn migrate_all<T: Config>() -> frame_support::weights::Weight {
 		Account::<T>::translate::<(T::Index, u8, T::AccountData), _>(|_key, (nonce, rc, data)|
 			Some(AccountInfo { nonce, consumers: rc as RefCount, providers: 1, sufficients: 0, data })
@@ -650,6 +651,7 @@ mod migrations {
 	}
 
 	#[allow(dead_code)]
+	/// Migrate from unique `u32` reference counting to triple `u32` reference counting.
 	pub fn migrate_to_dual_ref_count<T: Config>() -> frame_support::weights::Weight {
 		Account::<T>::translate::<(T::Index, RefCount, T::AccountData), _>(|_key, (nonce, consumers, data)|
 			Some(AccountInfo { nonce, consumers, providers: 1, sufficients: 0, data })
@@ -657,7 +659,7 @@ mod migrations {
 		T::BlockWeights::get().max_block
 	}
 
-	/// Must be used.
+	/// Migrate from dual `u32` reference counting to triple `u32` reference counting.
 	pub fn migrate_to_triple_ref_count<T: Config>() -> frame_support::weights::Weight {
 		Account::<T>::translate::<(T::Index, RefCount, RefCount, T::AccountData), _>(
 			|_key, (nonce, consumers, providers, data)| {
@@ -1071,12 +1073,16 @@ impl<T: Config> Module<T> {
 			if let Some(mut account) = maybe_account.take() {
 				if account.providers == 0 {
 					// Logic error - cannot decrement beyond zero.
-					debug::print!("Logic error: Unexpected underflow in reducing sufficients");
+					log::error!(
+						target: "runtime::system",
+			      "Logic error: Unexpected underflow in reducing provider",
+					);
 					account.providers = 1;
 				}
 				match (account.providers, account.consumers, account.sufficients) {
 					(1, 0, 0) => {
 						// No providers left (and no consumers) and no sufficients. Account dead.
+
 						Module::<T>::on_killed_account(who.clone());
 						Ok(DecRefStatus::Reaped)
 					}
@@ -1093,7 +1099,10 @@ impl<T: Config> Module<T> {
 					}
 				}
 			} else {
-				debug::print!("Logic error: Account already dead when reducing provider");
+				log::error!(
+					target: "runtime::system",
+					"Logic error: Account already dead when reducing provider",
+				);
 				Ok(DecRefStatus::Reaped)
 			}
 		})
@@ -1174,7 +1183,10 @@ impl<T: Config> Module<T> {
 		Account::<T>::mutate(who, |a| if a.consumers > 0 {
 			a.consumers -= 1;
 		} else {
-			debug::print!("Logic error: Unexpected underflow in reducing consumer");
+			log::error!(
+				target: "runtime::system",
+				"Logic error: Unexpected underflow in reducing consumer",
+			);
 		})
 	}
 

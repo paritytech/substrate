@@ -31,7 +31,6 @@ use sp_runtime::traits::{Bounded, Saturating, Zero};
 use sp_core::crypto::UncheckedFrom;
 use frame_support::{
 	dispatch::DispatchResult,
-	debug,
 	storage::child::{self, KillChildStorageResult},
 	traits::Get,
 	weights::Weight,
@@ -271,7 +270,8 @@ where
 				match outcome {
 					// This should not happen as our budget was large enough to remove all keys.
 					KillChildStorageResult::SomeRemaining(_) => {
-						debug::error!(
+						log::error!(
+							target: "runtime::contracts",
 							"After deletion keys are remaining in this child trie: {:?}",
 							removed.trie_id,
 						);
