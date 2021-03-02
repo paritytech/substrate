@@ -232,7 +232,7 @@ where
 		self.code.len() as u32
 	}
 
-	fn origignal_code_len(&self) -> u32 {
+	fn original_code_len(&self) -> u32 {
 		self.original_code_len
 	}
 

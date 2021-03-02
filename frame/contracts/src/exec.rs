@@ -47,7 +47,7 @@ pub type TopicOf<T> = <T as frame_system::Config>::Hash;
 #[derive(codec::Encode)]
 #[cfg_attr(test, derive(Debug, PartialEq))]
 pub struct RentParams<T: Config> {
-	/// The free balance of the contract.
+	/// The total balance of the contract.
 	total_balance: BalanceOf<T>,
 	/// The free balance of the contract.
 	free_balance: BalanceOf<T>,
@@ -93,7 +93,7 @@ where
 			rent_allowance: contract.rent_allowance,
 			rent_fraction: T::RentFraction::get(),
 			storage_size: contract.storage_size,
-			code_size: executable.code_len().saturating_add(executable.origignal_code_len()),
+			code_size: executable.code_len().saturating_add(executable.original_code_len()),
 			code_refcount: executable.refcount(),
 			_reserved: None,
 		}
@@ -348,7 +348,7 @@ pub trait Executable<T: Config>: Sized {
 	fn code_len(&self) -> u32;
 
 	/// Size of the original code in bytes.
-	fn origignal_code_len(&self) -> u32;
+	fn original_code_len(&self) -> u32;
 
 	// The number of contracts using this executable.
 	fn refcount(&self) -> u32;
@@ -1111,7 +1111,7 @@ mod tests {
 			0
 		}
 
-		fn origignal_code_len(&self) -> u32 {
+		fn original_code_len(&self) -> u32 {
 			0
 		}
 
