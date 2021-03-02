@@ -62,7 +62,7 @@ mod debug_helper {
 			let mut val = v.borrow_mut();
 			*val += 1;
 			if *val > 10 {
-				crate::debug::warn!(
+				log::warn!(
 					"Detected with_transaction with nest level {}. Nested usage of with_transaction is not recommended.",
 					*val
 				);
@@ -532,9 +532,9 @@ impl<T> Iterator for PrefixIterator<T> {
 					let raw_value = match unhashed::get_raw(&self.previous_key) {
 						Some(raw_value) => raw_value,
 						None => {
-							crate::debug::error!(
+							log::error!(
 								"next_key returned a key with no value at {:?}",
-								self.previous_key
+								self.previous_key,
 							);
 							continue
 						}
@@ -546,9 +546,10 @@ impl<T> Iterator for PrefixIterator<T> {
 					let item = match (self.closure)(raw_key_without_prefix, &raw_value[..]) {
 						Ok(item) => item,
 						Err(e) => {
-							crate::debug::error!(
+							log::error!(
 								"(key, value) failed to decode at {:?}: {:?}",
-								self.previous_key, e
+								self.previous_key,
+								e,
 							);
 							continue
 						}
@@ -628,9 +629,9 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 					None => unhashed::kill(&previous_key),
 				},
 				None => {
-					crate::debug::error!(
+					log::error!(
 						"old key failed to decode at {:?}",
-						previous_key
+						previous_key,
 					);
 					continue
 				},

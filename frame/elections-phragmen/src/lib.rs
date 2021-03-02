@@ -704,8 +704,9 @@ impl<T: Config> Module<T> {
 				} else {
 					// overlap. This can never happen. If so, it seems like our intended replacement
 					// is already a member, so not much more to do.
-					frame_support::debug::error!(
-						"pallet-elections-phragmen: a member seems to also be a runner-up."
+					log::error!(
+						target: "runtime::elections-phragmen",
+						"A member seems to also be a runner-up.",
 					);
 				}
 				next_best
@@ -998,7 +999,11 @@ impl<T: Config> Module<T> {
 			Self::deposit_event(RawEvent::NewTerm(new_members_sorted_by_id));
 			ElectionRounds::mutate(|v| *v += 1);
 		}).map_err(|e| {
-			frame_support::debug::error!("elections-phragmen: failed to run election [{:?}].", e);
+			log::error!(
+				target: "runtime::elections-phragmen",
+				"Failed to run election [{:?}].",
+				e,
+			);
 			Self::deposit_event(RawEvent::ElectionError);
 		});
 
