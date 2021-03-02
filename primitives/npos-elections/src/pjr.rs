@@ -76,7 +76,6 @@ fn prepare_pjr_input<AccountId: IdentifierT>(
 	all_candidates: Vec<AccountId>,
 	all_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
 ) -> (Vec<CandidatePtr<AccountId>>, Vec<Voter<AccountId>>) {
-	// collect all candidates and winners into a unified `Vec<Candidate>`.
 	let mut candidates_index: BTreeMap<AccountId, usize> = BTreeMap::new();
 
 	// dump the staked assignments in a voter-major map for faster access down the road.
@@ -100,6 +99,7 @@ fn prepare_pjr_input<AccountId: IdentifierT>(
 	// However, it does mean allocating sufficient space to store all the data again.
 	let supports: SupportMap<AccountId> = supports.iter().cloned().collect();
 
+	// collect all candidates and winners into a unified `Vec<CandidatePtr>`.
 	let candidates = all_candidates.into_iter().enumerate().map(|(i, c)| {
 		candidates_index.insert(c.clone(), i);
 
