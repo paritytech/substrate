@@ -47,9 +47,9 @@ pub type TopicOf<T> = <T as frame_system::Config>::Hash;
 #[derive(codec::Encode)]
 #[cfg_attr(test, derive(Debug, PartialEq))]
 pub struct RentParams<T: Config> {
-	/// The total balance of the contract.
+	/// The total balance of the contract. Includes the balance transferred from the caller.
 	total_balance: BalanceOf<T>,
-	/// The free balance of the contract.
+	/// The free balance of the contract. Includes the balance transferred from the caller.
 	free_balance: BalanceOf<T>,
 	/// See crate [`Contracts::subsistence_threshold()`].
 	subsistence_threshold: BalanceOf<T>,

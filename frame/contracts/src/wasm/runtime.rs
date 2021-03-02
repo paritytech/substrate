@@ -1526,9 +1526,8 @@ define_env!(Env, <E: Ext>,
 	// # Note
 	//
 	// The returned information was collected and cached when the current contract call
-	// starts execution. Any change to those values that happens due to actions of the
+	// started execution. Any change to those values that happens due to actions of the
 	// current call or contracts that are called by this contract are not considered.
-	// The fields that are subject to these changes are `refcount` and `rent_allowance`.
 	seal_rent_params(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		// TODO: create benchmark and runtime token
 		ctx.charge_gas(RuntimeToken::RentAllowance)?;
