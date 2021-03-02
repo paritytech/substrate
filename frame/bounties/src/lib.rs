@@ -88,7 +88,7 @@
 //! - `accept_subcurator` - Accept a subbounty assignment from the Master curator,
 //!    setting a subcurator deposit.
 //! - `unassign_subcurator` - Unassign an accepted subcurator from a specific earmark.
-//! - `award_subbounty` - Close and specify the subbouty payout benefiiary address.
+//! - `award_subbounty` - Close and specify the subbouty payout beneficiary address.
 //! - `claim_subbounty` - Claim a payout amount & subcurator fee for specific subbounty.
 //! - `close_subbounty` - Cancel the earmark for a specific treasury amount
 //!    and close the bounty.
@@ -339,7 +339,7 @@ decl_error! {
 		InsufficientBountyBalance,
 		/// Subbounty active
 		RequireNoActiveSubBounty,
-		/// Number of subbounty exceeds threahold of TooManySubBounties
+		/// Number of subbounty exceeds limit `MaxActiveSubBountyCount`.
 		TooManySubBounties,
 		/// Require subbounty curator.
 		RequireSubCurator,
@@ -786,7 +786,7 @@ decl_module! {
 		/// Add a new subbounty.
 		///
 		/// The dispatch origin for this call must be master curator.
-		/// Parent bounty must me in "active" state.
+		/// parent bounty must be in "active" state.
 		///
 		/// Subbouty gets added successfully & fund gets transferred from
 		/// parent bounty to subbounty account, if parent bounty has
@@ -979,8 +979,8 @@ decl_module! {
 		) {
 			let signer = ensure_signed(origin)?;
 
-			// Ensure parent bounty is Active & get status of curator
-			let (_, _) = Self::ensure_bounty_active(bounty_id)?;
+			// Ensure parent bounty is Active
+			let _ = Self::ensure_bounty_active(bounty_id)?;
 
 			// Mutate Subbounty
 			SubBounties::<T>::try_mutate_exists(bounty_id, subbounty_id,
@@ -1018,12 +1018,12 @@ decl_module! {
 		/// Parent bounty must be in active state,
 		/// for this subbounty call to work.
 		///
-		/// If this function is called by the `RejectOrigin`, we assume that
-		/// the subcurator is malicious or inactive. As a result,
-		/// subcurator deposit may be slashed.
+		/// If this function is called by the `RejectOrigin` or the curator,
+		/// we assume that the subcurator is malicious or inactive.
+		/// As a result, subcurator deposit may be slashed.
 		///
 		/// If the origin is the subcurator, we take this as a sign they are
-		/// unable to do their job and they willingly give up.
+		/// unable to do their job, and they willingly give up.
 		/// We could slash the deposit, but for now we allow them to
 		/// unreserve their deposit and exit without issue.
 		/// (We may want to change this if it is abused.)
@@ -1031,6 +1031,7 @@ decl_module! {
 		/// Finally, the origin can be anyone if and only if the subcurator
 		/// is "inactive". Expiry update due of parent bounty is
 		/// used to estimate mature or inactive state of subcurator.
+		///
 		/// This allows anyone in the community to call out
 		/// that a subcurator is not doing their due diligence, and
 		/// we should pick a new subcurator. In this case the subcurator
@@ -1165,8 +1166,8 @@ decl_module! {
 		/// for this subbounty call to work.
 		///
 		/// Subbounty must be in active state, for
-		/// processing the call. and state of subbounty is
-		/// moved to PendingPayout on successful call
+		/// processing the call. And state of subbounty is
+		/// moved to "PendingPayout" on successful call
 		/// completion.
 		///
 		/// - `bounty_id`: ID pair Bounty ID.
@@ -1182,7 +1183,7 @@ decl_module! {
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
 
 			// Ensure parent bounty is Active
-			let (_, _) = Self::ensure_bounty_active(bounty_id)?;
+			let _ = Self::ensure_bounty_active(bounty_id)?;
 
 			// Ensure subbounty is in expected state
 			SubBounties::<T>::try_mutate_exists(
@@ -1229,13 +1230,13 @@ decl_module! {
 		/// The dispatch origin for this call may be any signed origin.
 		///
 		/// Call works independent of parent bounty state,
-		/// No need for parent bounty must be in active state.
+		/// No need for parent bounty to be in active state.
 		///
-		/// Beneficiary is paid out with with agreed bounty value.
+		/// The Beneficiary is paid out with agreed bounty value.
 		/// SubCurator fee is paid & curator deposit is unreserved.
 		///
-		/// Subbounty must be in PendingPayout state, for
-		/// processing the call. and instance of subbounty is
+		/// Subbounty must be in "PendingPayout" state, for
+		/// processing the call. And instance of subbounty is
 		/// deallocated from DB on successful call completion.
 		///
 		/// - `bounty_id`: ID pair Bounty ID.
@@ -1246,16 +1247,6 @@ decl_module! {
 			#[compact] subbounty_id: BountyIndex,
 		) {
 			let _ = ensure_signed(origin)?;
-
-			// TODO :: Have to recheck
-			// ignoring the requirement of parent bounty should be active
-			// for claiming the subbounty.
-			// Since subbounty is executed & in waiting period of PendingPayout.
-			// We can gracefully execute this call, without having dependency on
-			// state of parent bounty, This enables to call close_subbounty()
-			// recursively from close_bounty() without any issue.
-			// // Ensure parent bounty is Active
-			// let master_curator = Self::ensure_bounty_active(bounty_id)?;
 
 			// Ensure subbounty is in expected state
 			SubBounties::<T>::try_mutate_exists(
@@ -1340,16 +1331,16 @@ decl_module! {
 
 		/// Cancel a proposed or active subbounty.
 		/// Subbounty account funds are transferred to parent bounty account.
-		/// the subcurator deposit may be unreserved if possible.
+		/// The subcurator deposit may be unreserved if possible.
 		///
 		/// The dispatch origin for this call must be
 		/// either master curator of this subbounty or `T::RejectOrigin`.
 		///
-		/// If state of subbounty is `Active`,
+		/// If the state of subbounty is `Active`,
 		/// subcurator deposit is unreserved.
 		///
-		/// If state of subbounty is `PendingPayout`,
-		/// call fails & returns PendingPayout error.
+		/// If the state of subbounty is `PendingPayout`,
+		/// call fails & returns `PendingPayout` error.
 		///
 		/// Parent bounty must be in active state,
 		/// for this subbounty call to work.
