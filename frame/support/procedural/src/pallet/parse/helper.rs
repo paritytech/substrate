@@ -603,7 +603,6 @@ pub fn check_type_value_gen(
 pub fn check_pallet_call_return_type(
 	type_: &syn::Type,
 ) -> syn::Result<()> {
-	let expected = "expected `DispatchResultWithPostInfo` or `DispatchResult`";
 	pub struct Checker;
 	impl syn::parse::Parse for Checker {
 		fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
@@ -621,11 +620,5 @@ pub fn check_pallet_call_return_type(
 	}
 
 	syn::parse2::<Checker>(type_.to_token_stream())
-		.map_err(|e| {
-			let msg = format!("Invalid pallet::call return type: {}", expected);
-			let mut err = syn::Error::new(type_.span(), msg);
-			err.combine(e);
-			err
-		})
 		.map(|_| ())
 }
