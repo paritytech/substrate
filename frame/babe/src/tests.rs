@@ -231,10 +231,13 @@ fn can_enact_next_config() {
 		assert_eq!(Babe::epoch_index(), 0);
 		go_to_block(2, 7);
 
-		Babe::plan_config_change(NextConfigDescriptor::V1 {
-			c: (1, 4),
-			allowed_slots: AllowedSlots::PrimarySlots,
-		});
+		Babe::plan_config_change(
+			Origin::root(),
+			NextConfigDescriptor::V1 {
+				c: (1, 4),
+				allowed_slots: AllowedSlots::PrimarySlots,
+			},
+		).unwrap();
 
 		progress_to_block(4);
 		Babe::on_finalize(9);
@@ -249,6 +252,39 @@ fn can_enact_next_config() {
 		let consensus_digest = DigestItem::Consensus(BABE_ENGINE_ID, consensus_log.encode());
 
 		assert_eq!(header.digest.logs[2], consensus_digest.clone())
+	});
+}
+
+#[test]
+fn only_root_can_enact_config_change() {
+	use sp_runtime::DispatchError;
+
+	new_test_ext(1).execute_with(|| {
+		let next_config = NextConfigDescriptor::V1 {
+			c: (1, 4),
+			allowed_slots: AllowedSlots::PrimarySlots,
+		};
+
+		let res = Babe::plan_config_change(
+			Origin::none(),
+			next_config.clone(),
+		);
+
+		assert_eq!(res, Err(DispatchError::BadOrigin));
+
+		let res = Babe::plan_config_change(
+			Origin::signed(1),
+			next_config.clone(),
+		);
+
+		assert_eq!(res, Err(DispatchError::BadOrigin));
+
+		let res = Babe::plan_config_change(
+			Origin::root(),
+			next_config,
+		);
+
+		assert!(res.is_ok());
 	});
 }
 

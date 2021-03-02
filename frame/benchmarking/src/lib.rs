@@ -29,10 +29,16 @@ pub use utils::*;
 pub use analysis::{Analysis, BenchmarkSelector, RegressionModel};
 #[doc(hidden)]
 pub use sp_io::storage::root as storage_root;
+#[doc(hidden)]
 pub use sp_runtime::traits::Zero;
+#[doc(hidden)]
 pub use frame_support;
+#[doc(hidden)]
 pub use paste;
+#[doc(hidden)]
 pub use sp_storage::TrackedStorageKey;
+#[doc(hidden)]
+pub use log;
 
 /// Construct pallet benchmarks for weighing dispatchables.
 ///
@@ -751,7 +757,7 @@ macro_rules! impl_benchmark {
 							closure_to_benchmark()?;
 						} else {
 							// Time the extrinsic logic.
-							frame_support::debug::trace!(
+							$crate::log::trace!(
 								target: "benchmark",
 								"Start Benchmark: {:?}", c
 							);
@@ -764,12 +770,12 @@ macro_rules! impl_benchmark {
 							let elapsed_extrinsic = finish_extrinsic - start_extrinsic;
 							// Commit the changes to get proper write count
 							$crate::benchmarking::commit_db();
-							frame_support::debug::trace!(
+							$crate::log::trace!(
 								target: "benchmark",
 								"End Benchmark: {} ns", elapsed_extrinsic
 							);
 							let read_write_count = $crate::benchmarking::read_write_count();
-							frame_support::debug::trace!(
+							$crate::log::trace!(
 								target: "benchmark",
 								"Read/Write Count {:?}", read_write_count
 							);
@@ -1169,9 +1175,16 @@ macro_rules! impl_benchmark_test_suite {
 					let mut anything_failed = false;
 					println!("failing benchmark tests:");
 					for benchmark_name in $bench_module::<$test>::benchmarks($extra) {
-						if let Err(err) = std::panic::catch_unwind(|| test_bench_by_name::<$test>(benchmark_name)) {
-							println!("{}: {:?}", String::from_utf8_lossy(benchmark_name), err);
-							anything_failed = true;
+						match std::panic::catch_unwind(|| test_bench_by_name::<$test>(benchmark_name)) {
+							Err(err) => {
+								println!("{}: {:?}", String::from_utf8_lossy(benchmark_name), err);
+								anything_failed = true;
+							},
+							Ok(Err(err)) => {
+								println!("{}: {}", String::from_utf8_lossy(benchmark_name), err);
+								anything_failed = true;
+							},
+							Ok(Ok(_)) => (),
 						}
 					}
 					assert!(!anything_failed);

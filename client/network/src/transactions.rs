@@ -439,7 +439,7 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 
 		for (who, peer) in self.peers.iter_mut() {
 			// never send transactions to the light node
-			if !matches!(peer.role, ObservedRole::Full) {
+			if matches!(peer.role, ObservedRole::Light) {
 				continue;
 			}
 

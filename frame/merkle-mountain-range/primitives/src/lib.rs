@@ -20,7 +20,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
 
-use frame_support::{RuntimeDebug, debug};
+use frame_support::RuntimeDebug;
 use sp_runtime::traits::{self, Saturating, One};
 use sp_std::fmt;
 #[cfg(not(feature = "std"))]
@@ -307,13 +307,23 @@ impl Error {
 	#![allow(unused_variables)]
 	/// Consume given error `e` with `self` and generate a native log entry with error details.
 	pub fn log_error(self, e: impl fmt::Debug) -> Self {
-		debug::native::error!("[{:?}] MMR error: {:?}", self, e);
+		log::error!(
+			target: "runtime::mmr",
+			"[{:?}] MMR error: {:?}",
+			self,
+			e,
+		);
 		self
 	}
 
 	/// Consume given error `e` with `self` and generate a native log entry with error details.
 	pub fn log_debug(self, e: impl fmt::Debug) -> Self {
-		debug::native::debug!("[{:?}] MMR error: {:?}", self, e);
+		log::debug!(
+			target: "runtime::mmr",
+			"[{:?}] MMR error: {:?}",
+			self,
+			e,
+		);
 		self
 	}
 }
