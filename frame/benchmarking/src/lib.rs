@@ -34,6 +34,8 @@ pub use sp_runtime::traits::Zero;
 #[doc(hidden)]
 pub use frame_support;
 #[doc(hidden)]
+pub use sp_std;
+#[doc(hidden)]
 pub use paste;
 #[doc(hidden)]
 pub use sp_storage::TrackedStorageKey;
@@ -696,7 +698,7 @@ macro_rules! impl_benchmark {
 				verify: bool,
 			) -> Result<Vec<$crate::BenchmarkResults>, &'static str> {
 				// Map the input to the selected benchmark.
-				let extrinsic = sp_std::str::from_utf8(extrinsic)
+				let extrinsic = $crate::sp_std::str::from_utf8(extrinsic)
 					.map_err(|_| "`extrinsic` is not a valid utf8 string!")?;
 				let selected_benchmark = match extrinsic {
 					$( stringify!($name) => SelectedBenchmark::$name, )*
@@ -710,7 +712,7 @@ macro_rules! impl_benchmark {
 				// Add whitelist to DB including whitelisted caller
 				let mut whitelist = whitelist.to_vec();
 				let whitelisted_caller_key =
-					<frame_system::Account::<T> as frame_support::storage::StorageMap<_,_>>::hashed_key_for(
+					<frame_system::Account::<T> as $crate::frame_support::storage::StorageMap<_,_>>::hashed_key_for(
 						$crate::whitelisted_caller::<T::AccountId>()
 					);
 				whitelist.push(whitelisted_caller_key.into());
@@ -872,7 +874,7 @@ macro_rules! impl_benchmark {
 		where
 			T: Config + frame_system::Config, $( $where_clause )*
 		{
-			let name = sp_std::str::from_utf8(name)
+			let name = $crate::sp_std::str::from_utf8(name)
 				.map_err(|_| "`name` is not a valid utf8 string!")?;
 			match name {
 				$( stringify!($name) => {
