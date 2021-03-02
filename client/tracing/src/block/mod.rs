@@ -34,7 +34,7 @@ use sp_tracing::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
 
 use tracing_core::{Level, span::{Attributes, Record, Id}};
 use wasm_timer::Instant;
-
+use log::{log};
 
 // Default to only runtime and state related traces
 const DEFAULT_TARGETS: &'static str = "pallet,frame,sp_io::storage=debug";
@@ -60,6 +60,8 @@ impl BlockSubscriber {
 			.split(',')
 			.map(|s| crate::parse_target(s))
 			.collect();
+
+		log!(target: "BLOCKTRACE", log::Level::Trace, "Specified trace targets: {:#?}", targets);
 		// Ensure that WASM traces are always enabled
 		// Filtering happens when decoding the actual target / level
 		targets.push((WASM_TRACE_IDENTIFIER.to_owned(), Level::TRACE));
@@ -102,6 +104,7 @@ impl Subscriber for BlockSubscriber {
 			exited: vec![],
 			values: Values::default(),
 		};
+				log!(target: "BLOCKTRACE", log::Level::Trace, "span id {:#?}", id);
 		let id = Id::from_u64(id);
 		self.spans.lock().insert(id.clone(), span);
 		id
@@ -132,6 +135,7 @@ impl Subscriber for BlockSubscriber {
 			values: values.into(),
 			parent_id,
 		};
+		log!(target: "BLOCKTRACE", log::Level::Trace, "trace event {:#?}", trace_event);
 		self.events.lock().push(trace_event);
 	}
 
