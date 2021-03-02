@@ -261,7 +261,6 @@ impl<Hash> DigestItem<Hash> {
 		self.dref().try_to::<T>(id)
 	}
 
-
 	/// Try to match this to a `Self::Seal`, check `id` matches and decode it.
 	///
 	/// Returns `None` if this isn't a seal item, the `id` isn't of variant seal,
