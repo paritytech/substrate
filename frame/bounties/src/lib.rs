@@ -786,18 +786,18 @@ decl_module! {
 		/// Add a new subbounty.
 		///
 		/// The dispatch origin for this call must be master curator.
-		/// parent bounty must me in "active" state.
+		/// Parent bounty must me in "active" state.
 		///
-		/// Subbouty gets added successfully & fund gets transfered from
+		/// Subbouty gets added successfully & fund gets transferred from
 		/// parent bounty to subbounty account, if parent bounty has
-		/// enough fund. else call get failed.
+		/// enough fund. Else call gets failed.
 		///
-		/// Upperbount to maximum active number of subbounties that
+		/// Upper bound to maximum number of active  subbounties that
 		/// can be added are managed via runtime trait config
 		/// 'MaxActiveSubBountyCount'.
 		///
-		/// if call is success, state of subbounty is moved to "Approved" state.
-		/// And later moved to "Funded" state as part of "spend_fund()" callback.
+		/// If the call is success, the state of subbounty is
+		/// moved to "Added" state.
 		///
 		/// - `bounty_id`: Bounty ID for which subbounty to be added.
 		/// - `value`: Value for executing the proposal.
@@ -876,9 +876,9 @@ decl_module! {
 		/// Parent bounty must be in active state,
 		/// for this subbounty call to work.
 		///
-		/// Subbounty must be in "Funded" state, for
-		/// processing the call. and state of subbounty is
-		/// moved to CuratorProposed on successful call
+		/// Subbounty must be in "Added" state, for
+		/// processing the call. And state of subbounty is
+		/// moved to "SubCuratorProposed" on successful call
 		/// completion.
 		///
 		/// - `bounty_id`: ID pair Bounty ID.
@@ -953,20 +953,20 @@ decl_module! {
 
 		/// Accept the subcurator role for the subbounty.
 		///
-		/// A deposit will be reserved from subcurator and
+		/// The dispatch origin for this call must be
+		/// the subcurator of this subbounty.
+		///
+		/// A deposit will be reserved from the subcurator and
 		/// refund upon successful payout or cancellation.
 		///
 		/// Fee for subcurator is deducted from curator
 		/// fee of parent bounty.
 		///
-		/// The dispatch origin for this call must be
-		/// the subcurator of this subbounty.
-		///
 		/// Parent bounty must be in active state,
 		/// for this subbounty call to work.
 		///
-		/// Subbounty must be in "CuratorProposed" state, for
-		/// processing the call. and state of subbounty is
+		/// Subbounty must be in "SubCuratorProposed" state, for
+		/// processing the call. And state of subbounty is
 		/// moved to "Active" on successful call
 		/// completion.
 		///
