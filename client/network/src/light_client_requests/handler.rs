@@ -53,7 +53,8 @@ use log::debug;
 const LOG_TARGET: &str = "light-client-request-handler";
 
 /// Hard coded limit to range request size.
-/// TODO different length or parameterizable??
+/// This is defined to be the same limit as
+/// `sc_rpc::state::STORAGE_KEYS_PAGED_MAX_COUNT`.
 const MAX_LIGHT_RANGE_COUNT: u32 = 1000;
 
 /// Handler for incoming light client requests from a remote peer.
