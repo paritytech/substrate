@@ -29,24 +29,22 @@ use frame_support::{
 	weights::{Pays, Weight},
 	Parameter,
 };
-use frame_system::{ensure_none, ensure_signed};
+use frame_system::{ensure_none, ensure_root, ensure_signed};
 use sp_application_crypto::Public;
 use sp_runtime::{
 	generic::DigestItem,
-	traits::{Hash, IsMember, One, SaturatedConversion, Saturating},
+	traits::{Hash, IsMember, One, SaturatedConversion, Saturating, Zero},
 	ConsensusEngineId, KeyTypeId,
 };
 use sp_session::{GetSessionNumber, GetValidatorCount};
-use sp_std::{prelude::*, result};
+use sp_std::prelude::*;
 use sp_timestamp::OnTimestampSet;
 
 use sp_consensus_babe::{
 	digests::{NextConfigDescriptor, NextEpochDescriptor, PreDigest},
-	inherents::{BabeInherentData, INHERENT_IDENTIFIER},
 	BabeAuthorityWeight, ConsensusLog, Epoch, EquivocationProof, Slot, BABE_ENGINE_ID,
 };
 use sp_consensus_vrf::schnorrkel;
-use sp_inherents::{InherentData, InherentIdentifier, MakeFatalError, ProvideInherent};
 
 pub use sp_consensus_babe::{AuthorityId, PUBLIC_KEY_LENGTH, RANDOMNESS_LENGTH, VRF_OUTPUT_LENGTH};
 
@@ -110,6 +108,7 @@ pub trait Config: pallet_timestamp::Config {
 }
 
 pub trait WeightInfo {
+	fn plan_config_change() -> Weight;
 	fn report_equivocation(validator_count: u32) -> Weight;
 }
 
@@ -316,6 +315,19 @@ decl_module! {
 				key_owner_proof,
 			)
 		}
+
+		/// Plan an epoch config change. The epoch config change is recorded and will be enacted on
+		/// the next call to `enact_epoch_change`. The config will be activated one epoch after.
+		/// Multiple calls to this method will replace any existing planned config change that had
+		/// not been enacted yet.
+		#[weight = <T as Config>::WeightInfo::plan_config_change()]
+		fn plan_config_change(
+			origin,
+			config: NextConfigDescriptor,
+		) {
+			ensure_root(origin)?;
+			NextEpochConfig::put(config);
+		}
 	}
 }
 
@@ -415,12 +427,14 @@ impl<T: Config> Module<T> {
 	/// In other word, this is only accurate if no slots are missed. Given missed slots, the slot
 	/// number will grow while the block number will not. Hence, the result can be interpreted as an
 	/// upper bound.
-	// -------------- IMPORTANT NOTE --------------
+	//
+	// ## IMPORTANT NOTE
+	//
 	// This implementation is linked to how [`should_epoch_change`] is working. This might need to
 	// be updated accordingly, if the underlying mechanics of slot and epochs change.
 	//
-	// WEIGHT NOTE: This function is tied to the weight of `EstimateNextSessionRotation`. If you update
-	// this function, you must also update the corresponding weight.
+	// WEIGHT NOTE: This function is tied to the weight of `EstimateNextSessionRotation`. If you
+	// update this function, you must also update the corresponding weight.
 	pub fn next_expected_epoch_change(now: T::BlockNumber) -> Option<T::BlockNumber> {
 		let next_slot = Self::current_epoch_start().saturating_add(T::EpochDuration::get());
 		next_slot
@@ -430,15 +444,6 @@ impl<T: Config> Module<T> {
 				let blocks_remaining: T::BlockNumber = slots_remaining.saturated_into();
 				now.saturating_add(blocks_remaining)
 			})
-	}
-
-	/// Plan an epoch config change. The epoch config change is recorded and will be enacted on the
-	/// next call to `enact_epoch_change`. The config will be activated one epoch after. Multiple calls to this
-	/// method will replace any existing planned config change that had not been enacted yet.
-	pub fn plan_config_change(
-		config: NextConfigDescriptor,
-	) {
-		NextEpochConfig::put(config);
 	}
 
 	/// DANGEROUS: Enact an epoch change. Should be done on every block where `should_epoch_change` has returned `true`,
@@ -744,10 +749,22 @@ impl<T: Config> Module<T> {
 }
 
 impl<T: Config> OnTimestampSet<T::Moment> for Module<T> {
-	fn on_timestamp_set(_moment: T::Moment) { }
+	fn on_timestamp_set(moment: T::Moment) {
+		let slot_duration = Self::slot_duration();
+		assert!(!slot_duration.is_zero(), "Babe slot duration cannot be zero.");
+
+		let timestamp_slot = moment / slot_duration;
+		let timestamp_slot = Slot::from(timestamp_slot.saturated_into::<u64>());
+
+		assert!(CurrentSlot::get() == timestamp_slot, "Timestamp slot must match `CurrentSlot`");
+	}
 }
 
 impl<T: Config> frame_support::traits::EstimateNextSessionRotation<T::BlockNumber> for Module<T> {
+	fn average_session_length() -> T::BlockNumber {
+		T::EpochDuration::get().saturated_into()
+	}
+
 	fn estimate_next_session_rotation(now: T::BlockNumber) -> Option<T::BlockNumber> {
 		Self::next_expected_epoch_change(now)
 	}
@@ -817,30 +834,4 @@ fn compute_randomness(
 	}
 
 	sp_io::hashing::blake2_256(&s)
-}
-
-impl<T: Config> ProvideInherent for Module<T> {
-	type Call = pallet_timestamp::Call<T>;
-	type Error = MakeFatalError<sp_inherents::Error>;
-	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
-
-	fn create_inherent(_: &InherentData) -> Option<Self::Call> {
-		None
-	}
-
-	fn check_inherent(call: &Self::Call, data: &InherentData) -> result::Result<(), Self::Error> {
-		let timestamp = match call {
-			pallet_timestamp::Call::set(ref timestamp) => timestamp.clone(),
-			_ => return Ok(()),
-		};
-
-		let timestamp_based_slot = (timestamp / Self::slot_duration()).saturated_into::<u64>();
-		let seal_slot = data.babe_inherent_data()?;
-
-		if timestamp_based_slot == *seal_slot {
-			Ok(())
-		} else {
-			Err(sp_inherents::Error::from("timestamp set in block doesn't match slot in seal").into())
-		}
-	}
 }

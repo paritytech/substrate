@@ -44,7 +44,8 @@
 //!
 //! ## Usage
 //!
-//! The default Substrate node template declares the [`Executive`](./struct.Executive.html) type in its library.
+//! The default Substrate node template declares the [`Executive`](./struct.Executive.html) type in
+//! its library.
 //!
 //! ### Example
 //!
@@ -185,26 +186,58 @@ where
 }
 
 impl<
-	System: frame_system::Config,
-	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
-	Context: Default,
-	UnsignedValidator,
-	AllModules:
-		OnRuntimeUpgrade +
-		OnInitialize<System::BlockNumber> +
-		OnFinalize<System::BlockNumber> +
-		OffchainWorker<System::BlockNumber>,
-	COnRuntimeUpgrade: OnRuntimeUpgrade,
-> Executive<System, Block, Context, UnsignedValidator, AllModules, COnRuntimeUpgrade>
+		System: frame_system::Config,
+		Block: traits::Block<Header = System::Header, Hash = System::Hash>,
+		Context: Default,
+		UnsignedValidator,
+		AllModules: OnRuntimeUpgrade
+			+ OnInitialize<System::BlockNumber>
+			+ OnFinalize<System::BlockNumber>
+			+ OffchainWorker<System::BlockNumber>,
+		COnRuntimeUpgrade: OnRuntimeUpgrade,
+	> Executive<System, Block, Context, UnsignedValidator, AllModules, COnRuntimeUpgrade>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
-	CheckedOf<Block::Extrinsic, Context>:
-		Applyable +
-		GetDispatchInfo,
-	CallOf<Block::Extrinsic, Context>: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>,
+	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
+	CallOf<Block::Extrinsic, Context>:
+		Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
-	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
+	UnsignedValidator: ValidateUnsigned<Call = CallOf<Block::Extrinsic, Context>>,
 {
+	/// Execute all `OnRuntimeUpgrade` of this runtime, and return the aggregate weight.
+	pub fn execute_on_runtime_upgrade() -> frame_support::weights::Weight {
+		let mut weight = 0;
+		weight = weight.saturating_add(
+			<frame_system::Module<System> as OnRuntimeUpgrade>::on_runtime_upgrade(),
+		);
+		weight = weight.saturating_add(COnRuntimeUpgrade::on_runtime_upgrade());
+		weight = weight.saturating_add(<AllModules as OnRuntimeUpgrade>::on_runtime_upgrade());
+
+		weight
+	}
+
+	/// Execute all `OnRuntimeUpgrade` of this runtime, including the pre and post migration checks.
+	///
+	/// This should only be used for testing.
+	#[cfg(feature = "try-runtime")]
+	pub fn try_runtime_upgrade() -> Result<frame_support::weights::Weight, &'static str> {
+		<
+			(frame_system::Module::<System>, COnRuntimeUpgrade, AllModules)
+			as
+			OnRuntimeUpgrade
+		>::pre_upgrade()?;
+
+		let weight = Self::execute_on_runtime_upgrade();
+
+		<
+			(frame_system::Module::<System>, COnRuntimeUpgrade, AllModules)
+			as
+			OnRuntimeUpgrade
+		>::post_upgrade()?;
+
+		Ok(weight)
+	}
+
 	/// Start the execution of a particular block.
 	pub fn initialize_block(header: &System::Header) {
 		sp_io::init_tracing();
@@ -234,10 +267,7 @@ where
 	) {
 		let mut weight = 0;
 		if Self::runtime_upgraded() {
-			// System is not part of `AllModules`, so we need to call this manually.
-			weight = weight.saturating_add(<frame_system::Module::<System> as OnRuntimeUpgrade>::on_runtime_upgrade());
-			weight = weight.saturating_add(COnRuntimeUpgrade::on_runtime_upgrade());
-			weight = weight.saturating_add(<AllModules as OnRuntimeUpgrade>::on_runtime_upgrade());
+			weight = weight.saturating_add(Self::execute_on_runtime_upgrade());
 		}
 		<frame_system::Module<System>>::initialize(
 			block_number,
@@ -320,7 +350,7 @@ where
 	) {
 		extrinsics.into_iter().for_each(|e| if let Err(e) = Self::apply_extrinsic(e) {
 			let err: &'static str = e.into();
-			panic!(err)
+			panic!("{}", err)
 		});
 
 		// post-extrinsics book-keeping
@@ -460,10 +490,6 @@ where
 		// the hash for the header before. However, here we are aware of the hash and we can add it
 		// as well.
 		frame_system::BlockHash::<System>::insert(header.number(), header.hash());
-
-		// Initialize logger, so the log messages are visible
-		// also when running WASM.
-		frame_support::debug::RuntimeLogger::init();
 
 		<AllModules as OffchainWorker<System::BlockNumber>>::offchain_worker(*header.number())
 	}
