@@ -7,7 +7,6 @@ use frame_benchmarking::{benchmarks, whitelisted_caller, impl_benchmark_test_sui
 #[allow(unused)]
 use crate::Module as Template;
 
-
 benchmarks! {
 	do_something {
 		let s in 0 .. 100;
