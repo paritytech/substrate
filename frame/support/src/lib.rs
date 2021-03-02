@@ -44,9 +44,9 @@ pub use sp_state_machine::BasicExternalities;
 pub use sp_io::{storage::root as storage_root, self};
 #[doc(hidden)]
 pub use sp_runtime::RuntimeDebug;
+#[doc(hidden)]
+pub use log;
 
-#[macro_use]
-pub mod debug;
 #[macro_use]
 mod origin;
 #[macro_use]
@@ -338,6 +338,30 @@ macro_rules! ord_parameter_types {
 			fn add(_: &$type) {}
 		}
 	}
+}
+
+/// Print out a formatted message.
+///
+/// # Example
+///
+/// ```
+/// frame_support::runtime_print!("my value is {}", 3);
+/// ```
+#[macro_export]
+macro_rules! runtime_print {
+	($($arg:tt)+) => {
+		{
+			use core::fmt::Write;
+			let mut w = $crate::sp_std::Writer::default();
+			let _ = core::write!(&mut w, $($arg)+);
+			$crate::sp_io::misc::print_utf8(&w.inner())
+		}
+	}
+}
+
+/// Print out the debuggable type.
+pub fn debug(data: &impl sp_std::fmt::Debug) {
+	runtime_print!("{:?}", data);
 }
 
 #[doc(inline)]
@@ -1051,7 +1075,7 @@ pub mod pallet_prelude {
 	pub use frame_support::traits::GenesisBuild;
 	pub use frame_support::{
 		EqNoBound, PartialEqNoBound, RuntimeDebugNoBound, DebugNoBound, CloneNoBound, Twox256,
-		Twox128, Blake2_256, Blake2_128, Identity, Twox64Concat, Blake2_128Concat, debug, ensure,
+		Twox128, Blake2_256, Blake2_128, Identity, Twox64Concat, Blake2_128Concat, ensure,
 		RuntimeDebug, storage,
 		traits::{Get, Hooks, IsType, GetPalletVersion, EnsureOrigin},
 		dispatch::{DispatchResultWithPostInfo, Parameter, DispatchError},

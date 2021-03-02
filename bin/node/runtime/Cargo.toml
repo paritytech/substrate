@@ -18,6 +18,7 @@ codec = { package = "parity-scale-codec", version = "2.0.0", default-features = 
 serde = { version = "1.0.102", optional = true }
 static_assertions = "1.1.0"
 hex-literal = { version = "0.3.1", optional = true }
+log = { version = "0.4.14", default-features = false }
 
 # primitives
 sp-authority-discovery = { version = "3.0.0", default-features = false, path = "../../../primitives/authority-discovery" }
@@ -156,6 +157,7 @@ std = [
 	"pallet-society/std",
 	"pallet-recovery/std",
 	"pallet-vesting/std",
+	"log/std",
 	"frame-try-runtime/std",
 ]
 runtime-benchmarks = [

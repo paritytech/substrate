@@ -294,24 +294,6 @@ fn already_charged(_: u32) -> Option<RuntimeToken> {
 	None
 }
 
-/// Finds duplicates in a given vector.
-///
-/// This function has complexity of O(n log n) and no additional memory is required, although
-/// the order of items is not preserved.
-fn has_duplicates<T: PartialEq + AsRef<[u8]>>(items: &mut Vec<T>) -> bool {
-	// Sort the vector
-	items.sort_by(|a, b| {
-		Ord::cmp(a.as_ref(), b.as_ref())
-	});
-	// And then find any two consecutive equal elements.
-	items.windows(2).any(|w| {
-		match w {
-			&[ref a, ref b] => a == b,
-			_ => false,
-		}
-	})
-}
-
 /// Can only be used for one call.
 pub struct Runtime<'a, E: Ext + 'a> {
 	ext: &'a mut E,
@@ -1295,6 +1277,22 @@ define_env!(Env, <E: Ext>,
 	// - data_ptr - a pointer to a raw data buffer which will saved along the event.
 	// - data_len - the length of the data buffer.
 	seal_deposit_event(ctx, topics_ptr: u32, topics_len: u32, data_ptr: u32, data_len: u32) => {
+
+		fn has_duplicates<T: Ord>(items: &mut Vec<T>) -> bool {
+			// # Warning
+			//
+			// Unstable sorts are non-deterministic across architectures. The usage here is OK
+			// because we are rejecting duplicates which removes the non determinism.
+			items.sort_unstable();
+			// Find any two consecutive equal elements.
+			items.windows(2).any(|w| {
+				match &w {
+					&[a, b] => a == b,
+					_ => false,
+				}
+			})
+		}
+
 		let num_topic = topics_len
 			.checked_div(sp_std::mem::size_of::<TopicOf<E::T>>() as u32)
 			.ok_or_else(|| "Zero sized topics are not allowed")?;
@@ -1317,6 +1315,8 @@ define_env!(Env, <E: Ext>,
 		}
 
 		// Check for duplicate topics. If there are any, then trap.
+		// Complexity O(n * log(n)) and no additional allocations.
+		// This also sorts the topics.
 		if has_duplicates(&mut topics) {
 			Err(Error::<E::T>::DuplicateTopics)?;
 		}

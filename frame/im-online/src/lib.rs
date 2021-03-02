@@ -93,7 +93,7 @@ use sp_staking::{
 	offence::{ReportOffence, Offence, Kind},
 };
 use frame_support::{
-	decl_module, decl_event, decl_storage, Parameter, debug, decl_error,
+	decl_module, decl_event, decl_storage, Parameter, decl_error,
 	traits::{Get, ValidatorSet, ValidatorSetWithIdentification, OneSessionHandler},
 };
 use frame_system::ensure_none;
@@ -388,8 +388,8 @@ decl_module! {
 			if sp_io::offchain::is_validator() {
 				for res in Self::send_heartbeats(now).into_iter().flatten() {
 					if let Err(e) = res {
-						debug::debug!(
-							target: "imonline",
+						log::debug!(
+							target: "runtime::im-online",
 							"Skipping heartbeat at {:?}: {:?}",
 							now,
 							e,
@@ -397,8 +397,8 @@ decl_module! {
 					}
 				}
 			} else {
-				debug::trace!(
-					target: "imonline",
+				log::trace!(
+					target: "runtime::im-online",
 					"Skipping heartbeat at {:?}. Not a validator.",
 					now,
 				)
@@ -529,8 +529,8 @@ impl<T: Config> Module<T> {
 			block_number,
 			|| {
 				let call = prepare_heartbeat()?;
-				debug::info!(
-					target: "imonline",
+				log::info!(
+					target: "runtime::im-online",
 					"[index: {:?}] Reporting im-online at block: {:?} (session: {:?}): {:?}",
 					authority_index,
 					block_number,
