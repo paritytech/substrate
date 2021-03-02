@@ -189,7 +189,7 @@ benchmarks! {
 	create_snapshot {
 		assert!(<MultiPhase<T>>::snapshot().is_none());
 	}: {
-		<MultiPhase::<T>>::create_snapshot()
+		<MultiPhase::<T>>::create_snapshot().unwrap()
 	} verify {
 		assert!(<MultiPhase<T>>::snapshot().is_some());
 	}

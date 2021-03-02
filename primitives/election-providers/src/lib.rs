@@ -186,6 +186,9 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	///
 	/// If `maybe_max_len` is `Some(v)` then the resulting vector MUST NOT be longer than `v` items
 	/// long.
+	///
+	/// It is assumed that this function will only consume a notable amount of weight, when it
+	/// returns `Ok(_)`.
 	fn targets(maybe_max_len: Option<usize>) -> ReturnValue<Vec<AccountId>, Self::Additional>;
 
 	/// All possible voters for the election.
@@ -194,6 +197,9 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	///
 	/// If `maybe_max_len` is `Some(v)` then the resulting vector MUST NOT be longer than `v` items
 	/// long.
+	///
+	/// It is assumed that this function will only consume a notable amount of weight, when it
+	/// returns `Ok(_)`.
 	fn voters(
 		maybe_max_len: Option<usize>,
 	) -> ReturnValue<Vec<(AccountId, VoteWeight, Vec<AccountId>)>, Self::Additional>;
