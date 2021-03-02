@@ -192,7 +192,7 @@ pub fn t_pjr_check<AccountId: IdentifierT>(
 	all_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
 	t: Threshold,
 ) -> bool {
-	// First order of business: derive `(candidates, voters)` from `supports`
+	// First order of business: derive `(candidates, voters)` from `supports`.
 	let (candidates, voters) = prepare_pjr_input(
 		supports,
 		all_candidates,
@@ -251,7 +251,6 @@ fn slack<AccountId: IdentifierT>(voter: &Voter<AccountId>, t: Threshold) -> Exte
 	let leftover = voter.edges.iter().fold(Zero::zero(), |acc: ExtendedBalance, edge| {
 		let candidate = edge.candidate.borrow();
 		if candidate.elected {
-			// TODO: using perbill here is just going to cause annoyance, why not just subtract?
 			let extra =
 				Perbill::one().min(Perbill::from_rational_approximation(t, candidate.backed_stake))
 				* edge.weight;
@@ -262,7 +261,7 @@ fn slack<AccountId: IdentifierT>(voter: &Voter<AccountId>, t: Threshold) -> Exte
 		}
 	});
 
-	// NOTE: candidate for saturating_log_sub()
+	// NOTE: candidate for saturating_log_sub(). Defensive-only. 
 	budget.saturating_sub(leftover)
 }
 
