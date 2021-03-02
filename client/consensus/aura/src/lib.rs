@@ -456,6 +456,7 @@ fn check_header<C, B: BlockT, P: Pair>(
 	mut header: B::Header,
 	hash: B::Hash,
 	authorities: &[AuthorityId<P>],
+	check_for_equivocation: CheckForEquivocation,
 ) -> Result<CheckedHeader<B::Header, (Slot, DigestItemFor<B>)>, Error<B>> where
 	DigestItemFor<B>: CompatibleDigestItem<P::Signature>,
 	P::Signature: Codec,
@@ -487,19 +488,22 @@ fn check_header<C, B: BlockT, P: Pair>(
 		let pre_hash = header.hash();
 
 		if P::verify(&sig, pre_hash.as_ref(), expected_author) {
-			if let Some(equivocation_proof) = check_equivocation(
-				client,
-				slot_now,
-				slot,
-				&header,
-				expected_author,
-			).map_err(Error::Client)? {
-				info!(
-					"Slot author is equivocating at slot {} with headers {:?} and {:?}",
+			if check_for_equivocation.check_for_equivocation() {
+				if let Some(equivocation_proof) = check_equivocation(
+					client,
+					slot_now,
 					slot,
-					equivocation_proof.first_header.hash(),
-					equivocation_proof.second_header.hash(),
-				);
+					&header,
+					expected_author,
+				).map_err(Error::Client)? {
+					info!(
+						target: "aura",
+						"Slot author is equivocating at slot {} with headers {:?} and {:?}",
+						slot,
+						equivocation_proof.first_header.hash(),
+						equivocation_proof.second_header.hash(),
+					);
+				}
 			}
 
 			Ok(CheckedHeader::Checked(header, (slot, seal)))
@@ -515,6 +519,7 @@ pub struct AuraVerifier<C, P, CAW, IDP> {
 	phantom: PhantomData<P>,
 	inherent_data_providers: IDP,
 	can_author_with: CAW,
+	check_for_equivocation: CheckForEquivocation,
 }
 
 impl<C, P, CAW, IDP> AuraVerifier<C, P, CAW, IDP> where
@@ -614,6 +619,7 @@ impl<B: BlockT, C, P, CAW, IDP> Verifier<B> for AuraVerifier<C, P, CAW, IDP> whe
 			header,
 			hash,
 			&authorities[..],
+			self.check_for_equivocation,
 		).map_err(|e| e.to_string())?;
 		match checked_header {
 			CheckedHeader::Checked(pre_header, (slot, seal)) => {
@@ -819,27 +825,84 @@ impl<Block: BlockT, C, I, P> BlockImport<Block> for AuraBlockImport<Block, C, I,
 	}
 }
 
+/// Should we check for equivocation of a block author?
+#[derive(Debug, Clone, Copy)]
+pub enum CheckForEquivocation {
+	/// Yes, check for equivocation.
+	///
+	/// This is the default setting for this.
+	Yes,
+	/// No, don't check for equivocation.
+	No,
+}
+
+impl CheckForEquivocation {
+	/// Should we check for equivocation?
+	fn check_for_equivocation(self) -> bool {
+		matches!(self, Self::Yes)
+	}
+}
+
+impl Default for CheckForEquivocation {
+	fn default() -> Self {
+		Self::Yes
+	}
+}
+
+/// Parameters of [`import_queue`].
+pub struct ImportQueueParams<'a, Block, I, C, IDP, S, CAW> {
+	/// The block import to use.
+	pub block_import: I,
+	/// The justification import.
+	pub justification_import: Option<BoxJustificationImport<Block>>,
+	/// The client to interact with the chain.
+	pub client: Arc<C>,
+	/// The inherent data providers, to create the inherent data.
+	pub inherent_data_providers: IDP,
+	/// The spawner to spawn background tasks.
+	pub spawner: &'a S,
+	/// The prometheus registry.
+	pub registry: Option<&'a Registry>,
+	/// Can we author with the current node?
+	pub can_author_with: CAW,
+	/// Should we check for equivocation?
+	pub check_for_equivocation: CheckForEquivocation,
+}
+
 /// Start an import queue for the Aura consensus algorithm.
-pub fn import_queue<B, I, C, P, S, CAW, IDP>(
-	block_import: I,
-	justification_import: Option<BoxJustificationImport<B>>,
-	client: Arc<C>,
-	inherent_data_providers: IDP,
-	spawner: &S,
-	registry: Option<&Registry>,
-	can_author_with: CAW,
-) -> Result<DefaultImportQueue<B, C>, sp_consensus::Error> where
-	B: BlockT,
-	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B>,
-	C: 'static + ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + Send + Sync + AuxStore + HeaderBackend<B>,
-	I: BlockImport<B, Error=ConsensusError, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
-	DigestItemFor<B>: CompatibleDigestItem<P::Signature>,
+pub fn import_queue<'a, P, Block, I, C, S, CAW, IDP>(
+	ImportQueueParams {
+		block_import,
+		justification_import,
+		client,
+		inherent_data_providers,
+		spawner,
+		registry,
+		can_author_with,
+		check_for_equivocation
+	}: ImportQueueParams<'a, Block, I, C, IDP, S, CAW>
+) -> Result<DefaultImportQueue<Block, C>, sp_consensus::Error> where
+	Block: BlockT,
+	C::Api: BlockBuilderApi<Block> + AuraApi<Block, AuthorityId<P>> + ApiExt<Block>,
+	C: 'static
+		+ ProvideRuntimeApi<Block>
+		+ BlockOf
+		+ ProvideCache<Block>
+		+ Send
+		+ Sync
+		+ AuxStore
+		+ HeaderBackend<Block>,
+	I: BlockImport<Block, Error=ConsensusError, Transaction = sp_api::TransactionFor<C, Block>>
+		+ Send
+		+ Sync
+		+ 'static,
+	DigestItemFor<Block>: CompatibleDigestItem<P::Signature>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode,
 	P::Signature: Encode + Decode,
 	S: sp_core::traits::SpawnEssentialNamed,
-	CAW: CanAuthorWith<B> + Send + Sync + 'static,
-	IDP: CreateInherentDataProviders<B, ()> + Sync + Send + 'static,
+	CAW: CanAuthorWith<Block> + Send + Sync + 'static,
+	IDP: CreateInherentDataProviders<Block, ()> + Sync + Send + 'static,
 	IDP::InherentDataProviders: InherentDataProviderExt + Send + Sync,
 {
 	initialize_authorities_cache(&*client)?;
@@ -849,6 +912,7 @@ pub fn import_queue<B, I, C, P, S, CAW, IDP>(
 		inherent_data_providers,
 		phantom: PhantomData,
 		can_author_with,
+		check_for_equivocation,
 	};
 
 	Ok(BasicQueue::new(
