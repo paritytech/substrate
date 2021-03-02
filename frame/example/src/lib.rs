@@ -255,12 +255,12 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use sp_std::prelude::*;
 use sp_std::marker::PhantomData;
 use frame_support::{
 	dispatch::DispatchResult, traits::IsSubType,
 	weights::{DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee, Pays},
 };
-use sp_std::prelude::*;
 use frame_system::{ensure_signed};
 use codec::{Encode, Decode};
 use sp_runtime::{
@@ -318,6 +318,11 @@ type BalanceOf<T> = <T as pallet_balances::Config>::Balance;
 // Re-export pallet items so that they can be accessed from the crate namespace.
 pub use pallet::*;
 
+mod tests;
+mod benchmarking;
+pub mod weights;
+pub use weights::WeightInfo;
+
 // Definition of the pallet logic, to be aggregated at runtime definition through
 // `construct_runtime`.
 #[frame_support::pallet]
@@ -326,6 +331,13 @@ pub mod pallet {
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 	use super::*;
+
+	pub trait WeightInfoTrait {
+		fn accumulate_dummy(_b: u32, ) -> Weight;
+		fn set_dummy(_b: u32, ) -> Weight;
+		fn another_set_dummy(b: u32, ) -> Weight;
+		fn sort_vector(x: u32, ) -> Weight;
+	}
 
 	/// Our pallet's configuration trait. All our types and constants go in here. If the
 	/// pallet is dependent on specific other pallets, then their configuration traits
@@ -336,6 +348,7 @@ pub mod pallet {
 	pub trait Config: pallet_balances::Config + frame_system::Config {
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type WeightInfo: WeightInfoTrait;
 	}
 
 	// Simple declaration of the `Pallet` type. It is placeholder we use to implement traits and
@@ -455,7 +468,7 @@ pub mod pallet {
 		// difficulty) of the transaction and the latter demonstrates the [`DispatchClass`] of the
 		// call. A higher weight means a larger transaction (less of which can be placed in a
 		// single block).
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as pallet::Config>::WeightInfo::accumulate_dummy(0))]
 		pub(super) fn accumulate_dummy(
 			origin: OriginFor<T>,
 			increase_by: T::Balance
@@ -496,7 +509,8 @@ pub mod pallet {
 		// calls to be executed - we don't need to care why. Because it's privileged, we can
 		// assume it's a one-off operation and substantial processing/storage/memory can be used
 		// without worrying about gameability or attack scenarios.
-		#[pallet::weight(WeightForSetDummy::<T>(<BalanceOf<T>>::from(100u32)))]
+		#[pallet::weight(<T as pallet::Config>::WeightInfo::another_set_dummy(
+			(*new_value).saturated_into()))]
 		fn set_dummy(
 			origin: OriginFor<T>,
 			#[pallet::compact] new_value: T::Balance,
@@ -689,203 +703,5 @@ where
 			}
 			_ => Ok(Default::default()),
 		}
-	}
-}
-
-#[cfg(feature = "runtime-benchmarks")]
-mod benchmarking {
-	use super::*;
-	use frame_benchmarking::{benchmarks, account, impl_benchmark_test_suite};
-	use frame_system::RawOrigin;
-
-	benchmarks!{
-		// This will measure the execution time of `accumulate_dummy` for b in [1..1000] range.
-		accumulate_dummy {
-			let b in 1 .. 1000;
-			let caller = account("caller", 0, 0);
-		}: _ (RawOrigin::Signed(caller), b.into())
-
-		// This will measure the execution time of `set_dummy` for b in [1..1000] range.
-		set_dummy {
-			let b in 1 .. 1000;
-		}: set_dummy (RawOrigin::Root, b.into())
-
-		// This will measure the execution time of `set_dummy` for b in [1..10] range.
-		another_set_dummy {
-			let b in 1 .. 10;
-		}: set_dummy (RawOrigin::Root, b.into())
-
-		// This will measure the execution time of sorting a vector.
-		sort_vector {
-			let x in 0 .. 10000;
-			let mut m = Vec::<u32>::new();
-			for i in (0..x).rev() {
-				m.push(i);
-			}
-		}: {
-			m.sort();
-		}
-	}
-
-	impl_benchmark_test_suite!(Pallet, crate::tests::new_test_ext(), crate::tests::Test);
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	use frame_support::{
-		assert_ok, parameter_types,
-		weights::{DispatchInfo, GetDispatchInfo}, traits::{OnInitialize, OnFinalize}
-	};
-	use sp_core::H256;
-	// The testing primitives are very useful for avoiding having to work with signatures
-	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
-	use sp_runtime::{
-		testing::Header, BuildStorage,
-		traits::{BlakeTwo256, IdentityLookup},
-	};
-	// Reexport crate as its pallet name for construct_runtime.
-	use crate as pallet_example;
-
-	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
-	type Block = frame_system::mocking::MockBlock<Test>;
-
-	// For testing the pallet, we construct a mock runtime.
-	frame_support::construct_runtime!(
-		pub enum Test where
-			Block = Block,
-			NodeBlock = Block,
-			UncheckedExtrinsic = UncheckedExtrinsic,
-		{
-			System: frame_system::{Module, Call, Config, Storage, Event<T>},
-			Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
-			Example: pallet_example::{Module, Call, Storage, Config<T>, Event<T>},
-		}
-	);
-
-	parameter_types! {
-		pub const BlockHashCount: u64 = 250;
-		pub BlockWeights: frame_system::limits::BlockWeights =
-			frame_system::limits::BlockWeights::simple_max(1024);
-	}
-	impl frame_system::Config for Test {
-		type BaseCallFilter = ();
-		type BlockWeights = ();
-		type BlockLength = ();
-		type DbWeight = ();
-		type Origin = Origin;
-		type Index = u64;
-		type BlockNumber = u64;
-		type Hash = H256;
-		type Call = Call;
-		type Hashing = BlakeTwo256;
-		type AccountId = u64;
-		type Lookup = IdentityLookup<Self::AccountId>;
-		type Header = Header;
-		type Event = Event;
-		type BlockHashCount = BlockHashCount;
-		type Version = ();
-		type PalletInfo = PalletInfo;
-		type AccountData = pallet_balances::AccountData<u64>;
-		type OnNewAccount = ();
-		type OnKilledAccount = ();
-		type SystemWeightInfo = ();
-		type SS58Prefix = ();
-	}
-	parameter_types! {
-		pub const ExistentialDeposit: u64 = 1;
-	}
-	impl pallet_balances::Config for Test {
-		type MaxLocks = ();
-		type Balance = u64;
-		type DustRemoval = ();
-		type Event = Event;
-		type ExistentialDeposit = ExistentialDeposit;
-		type AccountStore = System;
-		type WeightInfo = ();
-	}
-	impl Config for Test {
-		type Event = Event;
-	}
-
-	// This function basically just builds a genesis storage key/value store according to
-	// our desired mockup.
-	pub fn new_test_ext() -> sp_io::TestExternalities {
-		let t = GenesisConfig {
-			// We use default for brevity, but you can configure as desired if needed.
-			frame_system: Some(Default::default()),
-			pallet_balances: Some(Default::default()),
-			pallet_example: Some(pallet_example::GenesisConfig {
-				dummy: 42,
-				// we configure the map with (key, value) pairs.
-				bar: vec![(1, 2), (2, 3)],
-				foo: 24,
-			}),
-		}.build_storage().unwrap();
-		t.into()
-	}
-
-	#[test]
-	fn it_works_for_optional_value() {
-		new_test_ext().execute_with(|| {
-			// Check that GenesisBuilder works properly.
-			assert_eq!(Example::dummy(), Some(42));
-
-			// Check that accumulate works when we have Some value in Dummy already.
-			assert_ok!(Example::accumulate_dummy(Origin::signed(1), 27));
-			assert_eq!(Example::dummy(), Some(69));
-
-			// Check that finalizing the block removes Dummy from storage.
-			<Example as OnFinalize<u64>>::on_finalize(1);
-			assert_eq!(Example::dummy(), None);
-
-			// Check that accumulate works when we Dummy has None in it.
-			<Example as OnInitialize<u64>>::on_initialize(2);
-			assert_ok!(Example::accumulate_dummy(Origin::signed(1), 42));
-			assert_eq!(Example::dummy(), Some(42));
-		});
-	}
-
-	#[test]
-	fn it_works_for_default_value() {
-		new_test_ext().execute_with(|| {
-			assert_eq!(Example::foo(), 24);
-			assert_ok!(Example::accumulate_foo(Origin::signed(1), 1));
-			assert_eq!(Example::foo(), 25);
-		});
-	}
-
-	#[test]
-	fn signed_ext_watch_dummy_works() {
-		new_test_ext().execute_with(|| {
-			let call = <pallet_example::Call<Test>>::set_dummy(10).into();
-			let info = DispatchInfo::default();
-
-			assert_eq!(
-				WatchDummy::<Test>(PhantomData).validate(&1, &call, &info, 150)
-					.unwrap()
-					.priority,
-				u64::max_value(),
-			);
-			assert_eq!(
-				WatchDummy::<Test>(PhantomData).validate(&1, &call, &info, 250),
-				InvalidTransaction::ExhaustsResources.into(),
-			);
-		})
-	}
-
-	#[test]
-	fn weights_work() {
-		// must have a defined weight.
-		let default_call = <pallet_example::Call<Test>>::accumulate_dummy(10);
-		let info = default_call.get_dispatch_info();
-		// aka. `let info = <Call<Test> as GetDispatchInfo>::get_dispatch_info(&default_call);`
-		assert_eq!(info.weight, 0);
-
-		// must have a custom weight of `100 * arg = 2000`
-		let custom_call = <pallet_example::Call<Test>>::set_dummy(20);
-		let info = custom_call.get_dispatch_info();
-		assert_eq!(info.weight, 2000);
 	}
 }
