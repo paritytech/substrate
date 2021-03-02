@@ -628,6 +628,7 @@ mod migrations {
 	use super::*;
 
 	#[allow(dead_code)]
+	/// Migrate from unique `u8` reference counting to triple `u32` reference counting.
 	pub fn migrate_all<T: Config>() -> frame_support::weights::Weight {
 		Account::<T>::translate::<(T::Index, u8, T::AccountData), _>(|_key, (nonce, rc, data)|
 			Some(AccountInfo { nonce, consumers: rc as RefCount, providers: 1, sufficients: 0, data })
