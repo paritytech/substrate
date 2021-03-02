@@ -644,7 +644,7 @@ decl_module! {
 					// Get bounty account id
 					let bounty_account = Self::bounty_account_id(bounty_id);
 					let balance = T::Currency::free_balance(&bounty_account);
-					let fee = bounty.fee.min(balance); // just to be safe
+					let fee = bounty.fee.min(balance); // in case curator gave more to subbounties
 
 					// Make curator fee payment & unreserve the deposit
 					let _ = T::Currency::unreserve(&curator, bounty.curator_deposit);
