@@ -22,7 +22,7 @@
 //! `CompatibleDigestItem` trait to appear in public interfaces.
 
 use crate::AURA_ENGINE_ID;
-use sp_runtime::generic::{DigestItem, OpaqueDigestItemId};
+use sp_runtime::generic::DigestItem;
 use sp_consensus_slots::Slot;
 use codec::{Encode, Codec};
 use sp_std::fmt::Debug;
@@ -51,7 +51,7 @@ impl<Signature, Hash> CompatibleDigestItem<Signature> for DigestItem<Hash> where
 	}
 
 	fn as_aura_seal(&self) -> Option<Signature> {
-		self.seal_try_to(OpaqueDigestItemId::Seal(&AURA_ENGINE_ID))
+		self.seal_try_to(&AURA_ENGINE_ID)
 	}
 
 	fn aura_pre_digest(slot: Slot) -> Self {
@@ -59,6 +59,6 @@ impl<Signature, Hash> CompatibleDigestItem<Signature> for DigestItem<Hash> where
 	}
 
 	fn as_aura_pre_digest(&self) -> Option<Slot> {
-		self.pre_runtime_try_to(OpaqueDigestItemId::PreRuntime(&AURA_ENGINE_ID))
+		self.pre_runtime_try_to(&AURA_ENGINE_ID)
 	}
 }

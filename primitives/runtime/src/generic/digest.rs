@@ -263,25 +263,24 @@ impl<Hash> DigestItem<Hash> {
 
 	/// Try to match this to a `Self::Seal`, check `id` matches and decode it.
 	///
-	/// Returns `None` if this isn't a seal item, the `id` isn't of variant seal,
-	/// the `id` identifier doesn't match or when the decoding fails.
-	pub fn seal_try_to<T: Decode>(&self, id: OpaqueDigestItemId) -> Option<T> {
+	/// Returns `None` if this isn't a seal item, the `id` doesn't match or when the decoding fails.
+	pub fn seal_try_to<T: Decode>(&self, id: &ConsensusEngineId) -> Option<T> {
 		self.dref().seal_try_to(id)
 	}
 
 	/// Try to match this to a `Self::Consensus`, check `id` matches and decode it.
 	///
-	/// Returns `None` if this isn't a consensus item, the `id` isn't of variant consensus,
-	/// the `id` identifier doesn't match or when the decoding fails.
-	pub fn consensus_try_to<T: Decode>(&self, id: OpaqueDigestItemId) -> Option<T> {
+	/// Returns `None` if this isn't a consensus item, the `id` doesn't match or
+	/// when the decoding fails.
+	pub fn consensus_try_to<T: Decode>(&self, id: &ConsensusEngineId) -> Option<T> {
 		self.dref().consensus_try_to(id)
 	}
 
 	/// Try to match this to a `Self::PreRuntime`, check `id` matches and decode it.
 	///
-	/// Returns `None` if this isn't a pre-runtime item, the `id` isn't of variant pre runtime,
-	/// the `id` identifier doesn't match or when the decoding fails.
-	pub fn pre_runtime_try_to<T: Decode>(&self, id: OpaqueDigestItemId) -> Option<T> {
+	/// Returns `None` if this isn't a pre-runtime item, the `id` doesn't match or
+	/// when the decoding fails.
+	pub fn pre_runtime_try_to<T: Decode>(&self, id: &ConsensusEngineId) -> Option<T> {
 		self.dref().pre_runtime_try_to(id)
 	}
 }
@@ -394,11 +393,10 @@ impl<'a, Hash> DigestItemRef<'a, Hash> {
 
 	/// Try to match this to a `Self::Seal`, check `id` matches and decode it.
 	///
-	/// Returns `None` if this isn't a seal item, the `id` isn't of variant seal,
-	/// the `id` identifier doesn't match or when the decoding fails.
-	pub fn seal_try_to<T: Decode>(&self, id: OpaqueDigestItemId) -> Option<T> {
-		match (id, self) {
-			(OpaqueDigestItemId::Seal(w), &Self::Seal(v, s)) if v == w =>
+	/// Returns `None` if this isn't a seal item, the `id` doesn't match or when the decoding fails.
+	pub fn seal_try_to<T: Decode>(&self, id: &ConsensusEngineId) -> Option<T> {
+		match self {
+			Self::Seal(v, s) if *v == id =>
 				Decode::decode(&mut &s[..]).ok(),
 			_ => None,
 		}
@@ -406,11 +404,11 @@ impl<'a, Hash> DigestItemRef<'a, Hash> {
 
 	/// Try to match this to a `Self::Consensus`, check `id` matches and decode it.
 	///
-	/// Returns `None` if this isn't a consensus item, the `id` isn't of variant consensus,
-	/// the `id` identifier doesn't match or when the decoding fails.
-	pub fn consensus_try_to<T: Decode>(&self, id: OpaqueDigestItemId) -> Option<T> {
-		match (id, self) {
-			(OpaqueDigestItemId::Consensus(w), &Self::Consensus(v, s)) if v == w =>
+	/// Returns `None` if this isn't a consensus item, the `id` doesn't match or
+	/// when the decoding fails.
+	pub fn consensus_try_to<T: Decode>(&self, id: &ConsensusEngineId) -> Option<T> {
+		match self {
+			Self::Consensus(v, s) if *v == id =>
 				Decode::decode(&mut &s[..]).ok(),
 			_ => None,
 		}
@@ -418,11 +416,11 @@ impl<'a, Hash> DigestItemRef<'a, Hash> {
 
 	/// Try to match this to a `Self::PreRuntime`, check `id` matches and decode it.
 	///
-	/// Returns `None` if this isn't a pre-runtime item, the `id` isn't of variant pre runtime,
-	/// the `id` identifier doesn't match or when the decoding fails.
-	pub fn pre_runtime_try_to<T: Decode>(&self, id: OpaqueDigestItemId) -> Option<T> {
-		match (id, self) {
-			(OpaqueDigestItemId::PreRuntime(w), &Self::PreRuntime(v, s)) if v == w =>
+	/// Returns `None` if this isn't a pre-runtime item, the `id` doesn't match or
+	/// when the decoding fails.
+	pub fn pre_runtime_try_to<T: Decode>(&self, id: &ConsensusEngineId) -> Option<T> {
+		match self {
+			Self::PreRuntime(v, s) if *v == id =>
 				Decode::decode(&mut &s[..]).ok(),
 			_ => None,
 		}
