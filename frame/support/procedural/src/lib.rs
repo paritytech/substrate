@@ -17,7 +17,7 @@
 
 //! Proc macro of Support code for the runtime.
 
-#![recursion_limit="512"]
+#![recursion_limit = "512"]
 
 mod storage;
 mod construct_runtime;

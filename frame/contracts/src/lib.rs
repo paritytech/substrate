@@ -837,6 +837,8 @@ pub struct RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
 	pub deduct_block: BlockNumber,
 	/// Last block child storage has been written.
 	pub last_write: Option<BlockNumber>,
+	/// This field is reserved for future evolution of format.
+	pub _reserved: Option<()>,
 }
 
 impl<CodeHash, Balance, BlockNumber> RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
