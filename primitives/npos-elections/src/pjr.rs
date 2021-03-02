@@ -284,7 +284,9 @@ pub fn standard_threshold(
 ) -> Threshold {
 	weights
 		.into_iter()
-		.sum::<Threshold>()
+		.fold(Threshold::zero(), |acc, elem| {
+			acc.saturating_add(elem)
+		})
 	/ committeed_size as Threshold
 }
 
