@@ -282,7 +282,7 @@ pub fn move_prefix(from_prefix: &[u8], to_prefix: &[u8]) {
 	};
 
 	for (key, value) in iter {
-		let full_key = [to_prefix.clone(), &key].concat();
+		let full_key = [to_prefix, &key].concat();
 		unhashed::put_raw(&full_key, &value);
 	}
 }
