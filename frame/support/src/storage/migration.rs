@@ -200,16 +200,36 @@ pub fn take_storage_item<K: Encode + Sized, T: Decode + Sized, H: StorageHasher>
 
 /// Move a storage from a pallet prefix to another pallet prefix.
 ///
-/// NOTE: It actually moves every key after the storage prefix to the new storage prefix,
-/// key on storage prefix is also moved.
-pub fn move_storage_from_pallet(item: &[u8], old_pallet: &[u8], new_pallet: &[u8]) {
+/// Keys used in pallet storages always start with:
+/// `concat(twox_128(pallet_name), towx_128(storage_name))`.
+///
+/// This function will remove all value for which the key start with
+/// `concat(twox_128(old_pallet_name), towx_128(storage_name))` and insert them at the key with
+/// the start replaced by `concat(twox_128(new_pallet_name), towx_128(storage_name))`.
+///
+/// # Example
+///
+/// If a pallet named "my_example" has 2 storages named "Foo" and "Bar" and the pallet is renamed
+/// "my_new_example_name", a migration can be:
+/// ```
+/// # use frame_support::storage::migration::move_storage_from_pallet;
+/// # sp_io::TestExternalities::new_empty().execute_with(|| {
+/// move_storage_from_pallet(b"Foo", b"my_example", b"my_new_example_name");
+/// move_storage_from_pallet(b"Bar", b"my_example", b"my_new_example_name");
+/// # })
+/// ```
+pub fn move_storage_from_pallet(
+	storage_name: &[u8],
+	old_pallet_name: &[u8],
+	new_pallet_name: &[u8]
+) {
 	let mut new_prefix = Vec::new();
-	new_prefix.extend_from_slice(&Twox128::hash(new_pallet));
-	new_prefix.extend_from_slice(&Twox128::hash(item));
+	new_prefix.extend_from_slice(&Twox128::hash(new_pallet_name));
+	new_prefix.extend_from_slice(&Twox128::hash(storage_name));
 
 	let mut old_prefix = Vec::new();
-	old_prefix.extend_from_slice(&Twox128::hash(old_pallet));
-	old_prefix.extend_from_slice(&Twox128::hash(item));
+	old_prefix.extend_from_slice(&Twox128::hash(old_pallet_name));
+	old_prefix.extend_from_slice(&Twox128::hash(storage_name));
 
 	move_prefix(&old_prefix, &new_prefix);
 
@@ -219,17 +239,36 @@ pub fn move_storage_from_pallet(item: &[u8], old_pallet: &[u8], new_pallet: &[u8
 	}
 }
 
-/// Move all storage key after the pallet prefix `old_pallet` to `new_pallet`
+/// Move all storages from a pallet prefix to another pallet prefix.
 ///
-/// NOTE: It actually moves every key after the pallet prefix to the new pallet prefix,
-/// key on pallet prefix is not moved.
-pub fn move_pallet(old_pallet: &[u8], new_pallet: &[u8]) {
-	move_prefix(&Twox128::hash(old_pallet), &Twox128::hash(new_pallet))
+/// Keys used in pallet storages always start with:
+/// `concat(twox_128(pallet_name), towx_128(storage_name))`.
+///
+/// This function will remove all value for which the key start with `twox_128(old_pallet_name)`
+/// and insert them at the key with the start replaced by `twox_128(new_pallet_name)`.
+///
+/// NOTE: The value at the key `twox_128(old_pallet_name)` is not moved.
+///
+/// # Example
+///
+/// If a pallet named "my_example" has some storages and the pallet is renamed
+/// "my_new_example_name", a migration can be:
+/// ```
+/// # use frame_support::storage::migration::move_pallet;
+/// # sp_io::TestExternalities::new_empty().execute_with(|| {
+/// move_pallet(b"my_example", b"my_new_example_name");
+/// # })
+/// ```
+pub fn move_pallet(old_pallet_name: &[u8], new_pallet_name: &[u8]) {
+	move_prefix(&Twox128::hash(old_pallet_name), &Twox128::hash(new_pallet_name))
 }
 
-/// Move all `(key, value)` after prefix to the other prefix
+/// Move all `(key, value)` after some prefix to the another prefix
 ///
-/// NOTE: It doesn't move key on the prefix itself.
+/// This function will remove all value for which the key start with `from_prefix`
+/// and insert them at the key with the start replaced by `to_prefix`.
+///
+/// NOTE: The value at the key `from_prefix` is not moved.
 pub fn move_prefix(from_prefix: &[u8], to_prefix: &[u8]) {
 	if from_prefix == to_prefix {
 		return
