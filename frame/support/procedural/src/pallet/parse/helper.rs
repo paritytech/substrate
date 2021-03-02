@@ -619,6 +619,5 @@ pub fn check_pallet_call_return_type(
 		}
 	}
 
-	syn::parse2::<Checker>(type_.to_token_stream())
-		.map(|_| ())
+	syn::parse2::<Checker>(type_.to_token_stream()).map(|_| ())
 }
