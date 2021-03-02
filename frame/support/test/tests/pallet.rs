@@ -677,6 +677,11 @@ fn metadata() {
 					" Doc comment put in metadata".to_string(),
 				]),
 			},
+			FunctionMetadata {
+				name: DecodeDifferent::Decoded("foo_no_post_info".to_string()),
+				arguments: DecodeDifferent::Decoded(vec![]),
+				documentation: DecodeDifferent::Decoded(vec![]),
+			},
 		])),
 		event: Some(DecodeDifferent::Decoded(vec![
 			EventMetadata {
