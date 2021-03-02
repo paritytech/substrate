@@ -60,8 +60,10 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		// TODO remove and add as an example
 		fn on_idle(block_number: T::BlockNumber, remaining_weight: frame_support::weights::Weight) -> Weight{
-			// TODO, better example implementation
-			if remaining_weight > 1994237262000 {
+			let weights = T::BlockWeights::get();
+			let normal_max_weight = weights.get(DispatchClass::Normal).max_total.unwrap_or(0);
+			let threshold_weight = normal_max_weight / 2 ;
+			if remaining_weight > threshold_weight {
 				debug::info!("on idle: do something weight :{}", remaining_weight);
 			} else {
 				debug::info!("on idle: meh im busy weight :{}", remaining_weight);
