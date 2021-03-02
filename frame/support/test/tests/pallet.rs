@@ -433,7 +433,7 @@ fn call_expand() {
 	assert_eq!(call_foo.get_call_name(), "foo");
 	assert_eq!(
 		pallet::Call::<Runtime>::get_call_names(),
-		&["foo", "foo_transactional"],
+		&["foo", "foo_transactional", "foo_no_post_info"],
 	);
 }
 
