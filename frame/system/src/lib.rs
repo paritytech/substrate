@@ -645,7 +645,7 @@ mod migrations {
 		T::BlockWeights::get().max_block
 	}
 
-	/// Must be used.
+	/// Migrate from dual `u32` reference counting to triple `u32` reference counting.
 	pub fn migrate_to_triple_ref_count<T: Config>() -> frame_support::weights::Weight {
 		Account::<T>::translate::<(T::Index, RefCount, RefCount, T::AccountData), _>(
 			|_key, (nonce, consumers, providers, data)| {
