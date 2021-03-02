@@ -1345,7 +1345,7 @@ macro_rules! decl_module {
 					$system::Config
 				>::PalletInfo as $crate::traits::PalletInfo>::name::<Self>().expect("pallet will have name in the runtime; qed");
 
-				$crate::debug::info!(
+				$crate::log::info!(
 					target: $crate::LOG_TARGET,
 					"⚠️ running migration for {} and setting new storage version to {:?}",
 					pallet_name,
@@ -1389,7 +1389,7 @@ macro_rules! decl_module {
 					$system::Config
 				>::PalletInfo as $crate::traits::PalletInfo>::name::<Self>().expect("pallet will have name in the runtime; qed");
 
-				$crate::debug::info!(
+				$crate::log::info!(
 					target: $crate::LOG_TARGET,
 					"✅ no migration for '{}' and setting new storage version to {:?}",
 					pallet_name,

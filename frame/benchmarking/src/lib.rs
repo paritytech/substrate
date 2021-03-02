@@ -29,10 +29,16 @@ pub use utils::*;
 pub use analysis::{Analysis, BenchmarkSelector, RegressionModel};
 #[doc(hidden)]
 pub use sp_io::storage::root as storage_root;
+#[doc(hidden)]
 pub use sp_runtime::traits::Zero;
+#[doc(hidden)]
 pub use frame_support;
+#[doc(hidden)]
 pub use paste;
+#[doc(hidden)]
 pub use sp_storage::TrackedStorageKey;
+#[doc(hidden)]
+pub use log;
 
 /// Construct pallet benchmarks for weighing dispatchables.
 ///
@@ -751,7 +757,7 @@ macro_rules! impl_benchmark {
 							closure_to_benchmark()?;
 						} else {
 							// Time the extrinsic logic.
-							frame_support::debug::trace!(
+							$crate::log::trace!(
 								target: "benchmark",
 								"Start Benchmark: {:?}", c
 							);
@@ -764,12 +770,12 @@ macro_rules! impl_benchmark {
 							let elapsed_extrinsic = finish_extrinsic - start_extrinsic;
 							// Commit the changes to get proper write count
 							$crate::benchmarking::commit_db();
-							frame_support::debug::trace!(
+							$crate::log::trace!(
 								target: "benchmark",
 								"End Benchmark: {} ns", elapsed_extrinsic
 							);
 							let read_write_count = $crate::benchmarking::read_write_count();
-							frame_support::debug::trace!(
+							$crate::log::trace!(
 								target: "benchmark",
 								"Read/Write Count {:?}", read_write_count
 							);

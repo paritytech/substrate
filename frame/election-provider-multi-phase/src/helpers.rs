@@ -22,10 +22,10 @@ use sp_std::{collections::btree_map::BTreeMap, convert::TryInto, boxed::Box, pre
 
 #[macro_export]
 macro_rules! log {
-	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
-		frame_support::debug::$level!(
+	($level:tt, $pattern:expr $(, $values:expr)* $(,)?) => {
+		log::$level!(
 			target: $crate::LOG_TARGET,
-			concat!("🗳 ", $patter) $(, $values)*
+			concat!("🗳 ", $pattern) $(, $values)*
 		)
 	};
 }
