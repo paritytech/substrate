@@ -201,6 +201,7 @@ pub struct InstructionWeights<T: Config> {
 	pub i64rotl: u32,
 	pub i64rotr: u32,
 	/// The type parameter is used in the default implementation.
+	#[codec(skip)]
 	pub _phantom: PhantomData<T>,
 }
 
@@ -365,6 +366,7 @@ pub struct HostFnWeights<T: Config> {
 	pub rent_params: Weight,
 
 	/// The type parameter is used in the default implementation.
+	#[codec(skip)]
 	pub _phantom: PhantomData<T>
 }
 
