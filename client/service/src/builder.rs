@@ -883,6 +883,7 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 			let (handler, protocol_config) = BlockRequestHandler::new(
 				&protocol_id,
 				client.clone(),
+				&config.network,
 			);
 			spawn_handle.spawn("block_request_handler", handler.run());
 			protocol_config

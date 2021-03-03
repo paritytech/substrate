@@ -99,6 +99,7 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 		let (handler, protocol_config) = BlockRequestHandler::new(
 			&protocol_id,
 			client.clone(),
+			&config,
 		);
 		async_std::task::spawn(handler.run().boxed());
 		protocol_config
