@@ -425,7 +425,10 @@ impl TelemetryHandle {
 				target: "telemetry",
 				"Telemetry channel full.",
 			),
-			Err(_) => unreachable!(),
+			Err(_) => log::trace!(
+				target: "telemetry",
+				"Telemetry channel closed.",
+			),
 		}
 	}
 
