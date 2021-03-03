@@ -202,6 +202,14 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 	fn set_whitelist(&mut self, _: Vec<TrackedStorageKey>) {
 		unimplemented!("set_whitelist is not supported in ReadOnlyExternalities")
 	}
+
+	fn storage_store_offchain(&mut self, _offset: u32, _size: u32, _duration: u32) -> Result<Vec<u8>, ()> {
+		unimplemented!("storage_store_offchain is not supported by ReadOnlyExternalities");
+	}
+
+	fn storage_renew_offchain(&mut self, _hash: &[u8], _size: u32) -> Result<(), ()> {
+		unimplemented!("storage_renew_offchain is not supported by ReadOnlyExternalities");
+	}
 }
 
 impl<'a, H: Hasher, B: 'a + Backend<H>> sp_externalities::ExtensionStore for ReadOnlyExternalities<'a, H, B> {

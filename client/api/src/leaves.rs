@@ -25,7 +25,7 @@ use sp_runtime::traits::AtLeast32Bit;
 use codec::{Encode, Decode};
 use sp_blockchain::{Error, Result};
 
-type DbHash = [u8; 32];
+type DbHash = sp_core::H256;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct LeafSetItem<H, N> {

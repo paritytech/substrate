@@ -77,7 +77,7 @@ use sp_runtime::traits::{
 use sp_state_machine::{
 	DBValue, ChangesTrieTransaction, ChangesTrieCacheAction, UsageInfo as StateUsageInfo,
 	StorageCollection, ChildStorageCollection, OffchainChangesCollection,
-	backend::Backend as StateBackend, StateMachineStats,
+	backend::Backend as StateBackend, StateMachineStats, IndexOperation,
 };
 use crate::utils::{DatabaseType, Meta, meta_keys, read_db, read_meta};
 use crate::changes_tries_storage::{DbChangesTrieStorage, DbChangesTrieStorageTransaction};
@@ -106,7 +106,7 @@ pub type DbState<B> = sp_state_machine::TrieBackend<
 
 const DB_HASH_LEN: usize = 32;
 /// Hash type that this backend uses for the database.
-pub type DbHash = [u8; DB_HASH_LEN];
+pub type DbHash = sp_core::H256;
 
 /// A reference tracking state.
 ///
@@ -680,6 +680,7 @@ pub struct BlockImportOperation<Block: BlockT> {
 	finalized_blocks: Vec<(BlockId<Block>, Option<Justification>)>,
 	set_head: Option<BlockId<Block>>,
 	commit_state: bool,
+	index_ops: Vec<IndexOperation>,
 }
 
 impl<Block: BlockT> BlockImportOperation<Block> {
@@ -820,6 +821,11 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 	fn mark_head(&mut self, block: BlockId<Block>) -> ClientResult<()> {
 		assert!(self.set_head.is_none(), "Only one set head per operation is allowed");
 		self.set_head = Some(block);
+		Ok(())
+	}
+
+	fn update_transaction_index(&mut self, index_ops: Vec<IndexOperation>) -> ClientResult<()> {
+		self.index_ops = index_ops;
 		Ok(())
 	}
 }
@@ -1142,7 +1148,6 @@ impl<Block: BlockT> Backend<Block> {
 	fn force_delayed_canonicalize(
 		&self,
 		transaction: &mut Transaction<DbHash>,
-		hash: Block::Hash,
 		number: NumberFor<Block>,
 	)
 		-> ClientResult<()>
@@ -1155,20 +1160,27 @@ impl<Block: BlockT> Backend<Block> {
 				return Ok(())
 			}
 
-			let hash = if new_canonical == number_u64 {
-				hash
-			} else {
-				::sc_client_api::blockchain::HeaderBackend::hash(&self.blockchain, new_canonical.saturated_into())?
-					.expect("existence of block with number `new_canonical` \
-						implies existence of blocks with all numbers before it; qed")
-			};
+			let header = sc_client_api::blockchain::HeaderBackend::header(
+				&self.blockchain,
+				BlockId::number(new_canonical.saturated_into())
+			)?
+			.ok_or_else(||
+				sp_blockchain::Error::UnknownBlock(
+					format!("Cannot find block hash {:?}", new_canonical))
+			)?;
 
-			trace!(target: "db", "Canonicalize block #{} ({:?})", new_canonical, hash);
-			let commit = self.storage.state_db.canonicalize_block(&hash)
-				.map_err(|e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from_state_db(e))?;
-			apply_state_commit(transaction, commit);
+			let canon_hash = header.hash();
+
+			trace!(target: "db", "Force canonicalize block #{} ({:?})", new_canonical, canon_hash);
+			self.note_finalized(
+				transaction,
+				false,
+				&header,
+				canon_hash,
+				&mut None,
+				&mut None,
+			)?;
 		};
-
 		Ok(())
 	}
 
@@ -1224,20 +1236,13 @@ impl<Block: BlockT> Backend<Block> {
 			)?;
 
 			transaction.set_from_vec(columns::HEADER, &lookup_key, pending_block.header.encode());
-			if let Some(body) = &pending_block.body {
+			if let Some(body) = pending_block.body {
 				match self.transaction_storage {
 					TransactionStorageMode::BlockBody => {
 						transaction.set_from_vec(columns::BODY, &lookup_key, body.encode());
 					},
 					TransactionStorageMode::StorageChain => {
-						let mut hashes = Vec::with_capacity(body.len());
-						for extrinsic in body {
-							let extrinsic = extrinsic.encode();
-							let hash = HashFor::<Block>::hash(&extrinsic);
-							transaction.set(columns::TRANSACTION, &hash.as_ref(), &extrinsic);
-							hashes.push(hash);
-						}
-						transaction.set_from_vec(columns::BODY, &lookup_key, hashes.encode());
+						apply_index_ops::<Block>(&mut transaction, &hash, body, operation.index_ops);
 					},
 				}
 			}
@@ -1310,6 +1315,7 @@ impl<Block: BlockT> Backend<Block> {
 					&pending_block.header.parent_hash(),
 					changeset,
 				).map_err(|e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from_state_db(e))?;
+
 				apply_state_commit(&mut transaction, commit);
 
 				// Check if need to finalize. Genesis is always finalized instantly.
@@ -1340,7 +1346,7 @@ impl<Block: BlockT> Backend<Block> {
 			// release state reference so that it can be finalized
 			let cache = operation.old_state.into_cache_changes();
 
-			if finalized {
+			if finalized || self.canonicalization_delay == 0 {
 				// TODO: ensure best chain contains this block.
 				self.ensure_sequential_finalization(header, Some(last_finalized_hash))?;
 				self.note_finalized(
@@ -1353,7 +1359,7 @@ impl<Block: BlockT> Backend<Block> {
 				)?;
 			} else {
 				// canonicalize blocks which are old enough, regardless of finality.
-				self.force_delayed_canonicalize(&mut transaction, hash, *header.number())?
+				self.force_delayed_canonicalize(&mut transaction, *header.number())?
 			}
 
 			debug!(target: "db", "DB Commit {:?} ({}), best = {}", hash, number, is_best);
@@ -1525,10 +1531,10 @@ impl<Block: BlockT> Backend<Block> {
 					match self.transaction_storage {
 						TransactionStorageMode::BlockBody => {},
 						TransactionStorageMode::StorageChain => {
-							match Vec::<Block::Hash>::decode(&mut &body[..]) {
-								Ok(hashes) => {
-									for h in hashes {
-										transaction.remove(columns::TRANSACTION, h.as_ref());
+							match Vec::<(Block::Hash, Vec<u8>)>::decode(&mut &body[..]) {
+								Ok(body) => {
+									for (h, _) in body {
+										transaction.release(columns::TRANSACTION, DbHash::from_slice(h.as_ref()));
 									}
 								}
 								Err(err) => return Err(sp_blockchain::Error::Backend(
@@ -1558,6 +1564,41 @@ fn apply_state_commit(transaction: &mut Transaction<DbHash>, commit: sc_state_db
 	for key in commit.meta.deleted.into_iter() {
 		transaction.remove(columns::STATE_META, &key[..]);
 	}
+}
+
+fn apply_index_ops<Block: BlockT>(
+	transaction: &mut Transaction<DbHash>,
+	block_hash: &Block::Hash,
+	body: Vec<Block::Extrinsic>,
+	ops: Vec<IndexOperation>
+) {
+	let mut extrinsic_headers = Vec::with_capacity(body.len());
+	let mut index_map = HashMap::new();
+	let (mut inserted, mut renewed) = (0, 0);
+	for op in ops {
+		match op {
+			IndexOperation::Insert { extrinsic, offset } => {
+				index_map.insert(extrinsic, offset);
+				inserted += 1;
+			}
+			IndexOperation::Renew { hash, .. } => {
+				renewed += 1;
+				transaction.store(columns::TRANSACTION, DbHash::from_slice(hash.as_ref()), None);
+			}
+		}
+	}
+	for (index, extrinsic) in body.into_iter().enumerate() {
+		let extrinsic = extrinsic.encode();
+		let offset = match index_map.get(&(index as u32)) {
+			Some(offset) if *offset as usize <= extrinsic.len() => *offset as usize,
+			_ => 0usize,
+		};
+		let hash = HashFor::<Block>::hash(&extrinsic[offset..]);
+		transaction.set(columns::TRANSACTION, &hash.as_ref(), &extrinsic[offset..]);
+		extrinsic_headers.push((hash, extrinsic[..offset].to_vec()));
+	}
+	debug!(target: "db", "DB transaction index: {} inserted, {} renewed", inserted, renewed);
+	transaction.set_from_vec(columns::BODY, block_hash.as_ref(), extrinsic_headers.encode());
 }
 
 impl<Block> sc_client_api::backend::AuxStore for Backend<Block> where Block: BlockT {
@@ -1608,6 +1649,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			finalized_blocks: Vec::new(),
 			set_head: None,
 			commit_state: false,
+			index_ops: Default::default(),
 		})
 	}
 
@@ -2587,6 +2629,35 @@ pub(crate) mod tests {
 
 	#[test]
 	fn prune_blocks_on_finalize() {
+		for storage in &[TransactionStorageMode::BlockBody, TransactionStorageMode::StorageChain] {
+			let backend = Backend::<Block>::new_test_with_tx_storage(2, 0, *storage);
+			let mut blocks = Vec::new();
+			let mut prev_hash = Default::default();
+			for i in 0 .. 5 {
+				let hash = insert_block(&backend, i, prev_hash, None, Default::default(), vec![i.into()]);
+				blocks.push(hash);
+				prev_hash = hash;
+			}
+
+			{
+				let mut op = backend.begin_operation().unwrap();
+				backend.begin_state_operation(&mut op, BlockId::Hash(blocks[4])).unwrap();
+				for i in 1 .. 5 {
+					op.mark_finalized(BlockId::Hash(blocks[i]), None).unwrap();
+				}
+				backend.commit_operation(op).unwrap();
+			}
+			let bc = backend.blockchain();
+			assert_eq!(None, bc.body(BlockId::hash(blocks[0])).unwrap());
+			assert_eq!(None, bc.body(BlockId::hash(blocks[1])).unwrap());
+			assert_eq!(None, bc.body(BlockId::hash(blocks[2])).unwrap());
+			assert_eq!(Some(vec![3.into()]), bc.body(BlockId::hash(blocks[3])).unwrap());
+			assert_eq!(Some(vec![4.into()]), bc.body(BlockId::hash(blocks[4])).unwrap());
+		}
+	}
+
+	#[test]
+	fn prune_blocks_on_finalize2() {
 		for storage in &[TransactionStorageMode::BlockBody, TransactionStorageMode::StorageChain] {
 			let backend = Backend::<Block>::new_test_with_tx_storage(2, 0, *storage);
 			let mut blocks = Vec::new();

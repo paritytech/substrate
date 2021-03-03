@@ -568,6 +568,30 @@ where
 		}
 	}
 
+	fn storage_store_offchain(&mut self, index: u32, offset: u32, size: u32) -> Result<Vec<u8>, ()>{
+		trace!(
+			target: "state",
+			"{:04x}: StoreOffchain ({}): [{}; {}]",
+			self.id,
+			index,
+			offset,
+			size,
+		);
+		Ok(Default::default())
+	}
+
+	/// Renew existing piece of data storage.
+	fn storage_renew_offchain(&mut self, hash: &[u8], size: u32) -> Result<(), ()> {
+		trace!(
+			target: "state",
+			"{:04x}: RenewOffchain ({}) {} bytes",
+			self.id,
+			HexDisplay::from(&hash),
+			size,
+		);
+		Ok(())
+	}
+
 	#[cfg(not(feature = "std"))]
 	fn storage_changes_root(&mut self, _parent_hash: &[u8]) -> Result<Option<Vec<u8>>, ()> {
 		Ok(None)

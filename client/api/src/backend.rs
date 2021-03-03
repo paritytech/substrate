@@ -26,7 +26,7 @@ use sp_runtime::{generic::BlockId, Justification, Storage};
 use sp_runtime::traits::{Block as BlockT, NumberFor, HashFor};
 use sp_state_machine::{
 	ChangesTrieState, ChangesTrieStorage as StateChangesTrieStorage, ChangesTrieTransaction,
-	StorageCollection, ChildStorageCollection, OffchainChangesCollection,
+	StorageCollection, ChildStorageCollection, OffchainChangesCollection, IndexOperation,
 };
 use sp_storage::{StorageData, StorageKey, PrefixedStorageKey, ChildInfo};
 use crate::{
@@ -200,6 +200,13 @@ pub trait BlockImportOperation<Block: BlockT> {
 	/// Mark a block as new head. If both block import and set head are specified, set head
 	/// overrides block import's best block rule.
 	fn mark_head(&mut self, id: BlockId<Block>) -> sp_blockchain::Result<()>;
+
+
+	/// Add transaction index updates
+	fn update_transaction_index(&mut self, _index: Vec<IndexOperation>) -> sp_blockchain::Result<()>{
+		Ok(())
+	}
+
 }
 
 /// Interface for performing operations on the backend.

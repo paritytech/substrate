@@ -228,6 +228,13 @@ pub trait Externalities: ExtensionStore {
 	/// no transaction is open that can be closed.
 	fn storage_commit_transaction(&mut self) -> Result<(), ()>;
 
+	/// Index specified transaction slice and store it for the duration measured in blocks.
+	/// Returns slice hash.
+	fn storage_store_offchain(&mut self, offset: u32, size: u32, duration: u32) -> Result<Vec<u8>, ()>;
+
+	/// Renew existing piece of data storage.
+	fn storage_renew_offchain(&mut self, hash: &[u8], size: u32) -> Result<(), ()>;
+
 	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	/// Benchmarking related functionality and shouldn't be used anywhere else!
 	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
