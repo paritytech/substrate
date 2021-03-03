@@ -774,7 +774,6 @@ benchmarks! {
 		// total number of slashing spans. Assigned to validators randomly.
 		let s in 1 .. 20;
 
-		let mut rng = ChaChaRng::from_seed(SEED.using_encoded(sp_io::hashing::blake2_256));
 		let validators = create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false, None)?
 			.into_iter()
 			.map(|v| T::Lookup::lookup(v).unwrap())
@@ -794,7 +793,6 @@ benchmarks! {
 		// number of nominator intention.
 		let n = 500;
 
-		let mut rng = ChaChaRng::from_seed(SEED.using_encoded(sp_io::hashing::blake2_256));
 		let _ = create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false, None)?;
 	}: {
 		let targets = <Staking<T>>::get_npos_targets();
