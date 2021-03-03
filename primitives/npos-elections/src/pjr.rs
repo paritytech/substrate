@@ -268,11 +268,11 @@ fn slack<AccountId: IdentifierT>(voter: &Voter<AccountId>, t: Threshold) -> Exte
 /// However, standard PJR is less stringent than that. This function returns the threshold whose
 /// strength corresponds to the standard PJR property.
 ///
-/// - `committed_size` is the number of winners of the election.
+/// - `committee_size` is the number of winners of the election.
 /// - `weights` is an iterator of voter stakes. If the sum of stakes is already known,
 ///   `std::iter::once(sum_of_stakes)` is appropriate here.
 pub fn standard_threshold(
-	committeed_size: usize,
+	committee_size: usize,
 	weights: impl IntoIterator<Item = ExtendedBalance>,
 ) -> Threshold {
 	weights
@@ -280,7 +280,7 @@ pub fn standard_threshold(
 		.fold(Threshold::zero(), |acc, elem| {
 			acc.saturating_add(elem)
 		})
-	/ committeed_size as Threshold
+	/ committee_size as Threshold
 }
 
 /// Check a solution to be PJR.
