@@ -5293,6 +5293,7 @@ dependencies = [
 name = "pallet-template"
 version = "2.0.0"
 dependencies = [
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "parity-scale-codec",
@@ -9282,7 +9283,6 @@ name = "substrate-test-runtime"
 version = "2.0.0"
 dependencies = [
  "cfg-if 1.0.0",
- "frame-executive",
  "frame-support",
  "frame-system",
  "frame-system-rpc-runtime-api",
