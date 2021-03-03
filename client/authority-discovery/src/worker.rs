@@ -132,7 +132,7 @@ where
 	Network: NetworkProvider,
 	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static + HeaderBackend<Block>,
 	<Client as ProvideRuntimeApi<Block>>::Api:
-		AuthorityDiscoveryApi<Block, Error = sp_blockchain::Error>,
+		AuthorityDiscoveryApi<Block>,
 	DhtEventStream: Stream<Item = DhtEvent> + Unpin,
 {
 	/// Construct a [`Worker`].
@@ -296,10 +296,10 @@ where
 		for (sign_result, key) in signatures.into_iter().zip(keys) {
 			let mut signed_addresses = vec![];
 
-			// sign_with_all returns Result<Signature, Error> signature
-			// is generated for a public key that is supported.
 			// Verify that all signatures exist for all provided keys.
-			let signature = sign_result.map_err(|_| Error::MissingSignature(key.clone()))?;
+			let signature = sign_result.ok()
+				.flatten()
+				.ok_or_else(|| Error::MissingSignature(key.clone()))?;
 			schema::SignedAuthorityAddresses {
 				addresses: serialized_addresses.clone(),
 				signature,
@@ -332,7 +332,7 @@ where
 			.client
 			.runtime_api()
 			.authorities(&id)
-			.map_err(Error::CallingRuntime)?
+			.map_err(|e| Error::CallingRuntime(e.into()))?
 			.into_iter()
 			.filter(|id| !local_keys.contains(id.as_ref()))
 			.collect();
@@ -546,7 +546,7 @@ where
 		let id = BlockId::hash(client.info().best_hash);
 		let authorities = client.runtime_api()
 			.authorities(&id)
-			.map_err(Error::CallingRuntime)?
+			.map_err(|e| Error::CallingRuntime(e.into()))?
 			.into_iter()
 			.map(std::convert::Into::into)
 			.collect::<HashSet<_>>();

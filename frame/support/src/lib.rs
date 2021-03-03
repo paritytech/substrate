@@ -44,9 +44,9 @@ pub use sp_state_machine::BasicExternalities;
 pub use sp_io::{storage::root as storage_root, self};
 #[doc(hidden)]
 pub use sp_runtime::RuntimeDebug;
+#[doc(hidden)]
+pub use log;
 
-#[macro_use]
-pub mod debug;
 #[macro_use]
 mod origin;
 #[macro_use]
@@ -79,6 +79,9 @@ pub use self::storage::{
 };
 pub use self::dispatch::{Parameter, Callable};
 pub use sp_runtime::{self, ConsensusEngineId, print, traits::Printable};
+
+/// A unified log target for support operations.
+pub const LOG_TARGET: &'static str = "runtime::frame-support";
 
 /// A type that cannot be instantiated.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -337,6 +340,30 @@ macro_rules! ord_parameter_types {
 	}
 }
 
+/// Print out a formatted message.
+///
+/// # Example
+///
+/// ```
+/// frame_support::runtime_print!("my value is {}", 3);
+/// ```
+#[macro_export]
+macro_rules! runtime_print {
+	($($arg:tt)+) => {
+		{
+			use core::fmt::Write;
+			let mut w = $crate::sp_std::Writer::default();
+			let _ = core::write!(&mut w, $($arg)+);
+			$crate::sp_io::misc::print_utf8(&w.inner())
+		}
+	}
+}
+
+/// Print out the debuggable type.
+pub fn debug(data: &impl sp_std::fmt::Debug) {
+	runtime_print!("{:?}", data);
+}
+
 #[doc(inline)]
 pub use frame_support_procedural::{
 	decl_storage, construct_runtime, transactional, RuntimeDebugNoBound
@@ -571,7 +598,7 @@ macro_rules! assert_ok {
 pub use serde::{Serialize, Deserialize};
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
 	use super::*;
 	use codec::{Codec, EncodeLike};
 	use frame_metadata::{
@@ -580,6 +607,18 @@ mod tests {
 	};
 	use sp_std::{marker::PhantomData, result};
 	use sp_io::TestExternalities;
+
+	/// A PalletInfo implementation which just panics.
+	pub struct PanicPalletInfo;
+
+	impl crate::traits::PalletInfo for PanicPalletInfo {
+		fn index<P: 'static>() -> Option<usize> {
+			unimplemented!("PanicPalletInfo mustn't be triggered by tests");
+		}
+		fn name<P: 'static>() -> Option<&'static str> {
+			unimplemented!("PanicPalletInfo mustn't be triggered by tests");
+		}
+	}
 
 	pub trait Config: 'static {
 		type BlockNumber: Codec + EncodeLike + Default;
@@ -625,7 +664,7 @@ mod tests {
 	impl Config for Test {
 		type BlockNumber = u32;
 		type Origin = u32;
-		type PalletInfo = ();
+		type PalletInfo = PanicPalletInfo;
 		type DbWeight = ();
 	}
 
@@ -1036,7 +1075,7 @@ pub mod pallet_prelude {
 	pub use frame_support::traits::GenesisBuild;
 	pub use frame_support::{
 		EqNoBound, PartialEqNoBound, RuntimeDebugNoBound, DebugNoBound, CloneNoBound, Twox256,
-		Twox128, Blake2_256, Blake2_128, Identity, Twox64Concat, Blake2_128Concat, debug, ensure,
+		Twox128, Blake2_256, Blake2_128, Identity, Twox64Concat, Blake2_128Concat, ensure,
 		RuntimeDebug, storage,
 		traits::{Get, Hooks, IsType, GetPalletVersion, EnsureOrigin},
 		dispatch::{DispatchResultWithPostInfo, Parameter, DispatchError},
@@ -1129,7 +1168,7 @@ pub mod pallet_prelude {
 /// Item must be defined as followed:
 /// ```ignore
 /// #[pallet::pallet]
-/// pub struct Pallet<T>(PhantomData<T>);
+/// pub struct Pallet<T>(_);
 /// ```
 /// I.e. a regular struct definition named `Pallet`, with generic T and no where clause.
 ///
@@ -1138,7 +1177,7 @@ pub mod pallet_prelude {
 /// ```ignore
 /// #[pallet::pallet]
 /// #[pallet::generate_store(pub(super) trait Store)]
-/// pub struct Pallet<T>(PhantomData<T>);
+/// pub struct Pallet<T>(_);
 /// ```
 /// More precisely the store trait contains an associated type for each storage. It is implemented
 /// for `Pallet` allowing to access the storage from pallet struct.
@@ -1157,6 +1196,7 @@ pub mod pallet_prelude {
 /// 	frame_support::RuntimeDebugNoBound,
 /// )]
 /// ```
+/// and replace the type `_` by `PhantomData<T>`.
 ///
 /// It implements on pallet:
 /// * [`traits::GetPalletVersion`]
@@ -1294,7 +1334,7 @@ pub mod pallet_prelude {
 /// ```ignore
 /// #[pallet::event]
 /// #[pallet::metadata($SomeType = "$Metadata", $SomeOtherType = "$Metadata", ..)] // Optional
-/// #[pallet::generate_deposit($visbility fn deposit_event)] // Optional
+/// #[pallet::generate_deposit($visibility fn deposit_event)] // Optional
 /// pub enum Event<$some_generic> $optional_where_clause {
 /// 	/// Some doc
 /// 	$SomeName($SomeType, $YetanotherType, ...),
@@ -1325,7 +1365,7 @@ pub mod pallet_prelude {
 /// ```
 /// will write in event variant metadata `"SpecialU32"` and `"T::AccountId"`.
 ///
-/// The attribute `#[pallet::generate_deposit($visbility fn deposit_event)]` generate a helper
+/// The attribute `#[pallet::generate_deposit($visibility fn deposit_event)]` generate a helper
 /// function on `Pallet` to deposit event.
 ///
 /// NOTE: For instantiable pallet, event must be generic over T and I.
@@ -1590,7 +1630,7 @@ pub mod pallet_prelude {
 /// 	// Define the pallet struct placeholder, various pallet function are implemented on it.
 /// 	#[pallet::pallet]
 /// 	#[pallet::generate_store(pub(super) trait Store)]
-/// 	pub struct Pallet<T>(PhantomData<T>);
+/// 	pub struct Pallet<T>(_);
 ///
 /// 	// Implement the pallet hooks.
 /// 	#[pallet::hooks]
@@ -1908,7 +1948,7 @@ pub mod pallet_prelude {
 /// 		#[pallet::generate_store($visibility_of_trait_store trait Store)]
 /// 		// NOTE: if the visibility of trait store is private but you want to make it available
 /// 		// in super, then use `pub(super)` or `pub(crate)` to make it available in crate.
-/// 		pub struct Pallet<T>(PhantomData<T>);
+/// 		pub struct Pallet<T>(_);
 /// 		// pub struct Pallet<T, I = ()>(PhantomData<T>); // for instantiable pallet
 /// 	}
 /// 	```
@@ -1993,10 +2033,10 @@ pub mod pallet_prelude {
 /// 	implementation.
 ///
 /// 10. **migrate origin**: move the origin to the pallet module under `#[pallet::origin]`
-/// 11. **migrate validate_unsigned**: move the ValidateUnsigned implementation to the pallet
+/// 11. **migrate validate_unsigned**: move the `ValidateUnsigned` implementation to the pallet
 /// 	module under `#[pallet::validate_unsigned]`
-/// 12. **migrate provide_inherent**: move the ValidateUnsigned implementation to the pallet
-/// 	module under `#[pallet::provide_inherent]`
+/// 12. **migrate provide_inherent**: move the `ProvideInherent` implementation to the pallet
+/// 	module under `#[pallet::inherent]`
 /// 13. rename the usage of `Module` to `Pallet` inside the crate.
 /// 14. migration is done, now double check migration with the checking migration guidelines.
 ///
@@ -2021,9 +2061,9 @@ pub mod pallet_prelude {
 /// 	* `add_extra_genesis` fields are converted to `GenesisConfig` field with their correct
 /// 		default if specified
 /// 	* `add_extra_genesis` build is written into `GenesisBuild::build`
-/// * storage items defined with [`pallet`] use the name of the pallet provided by [`PalletInfo::name`]
-/// 	as `pallet_prefix` (in `decl_storage`, storage items used the `pallet_prefix` given as input of
-/// 	`decl_storage` with the syntax `as Example`).
+/// * storage items defined with [`pallet`] use the name of the pallet provided by
+/// 	[`traits::PalletInfo::name`] as `pallet_prefix` (in `decl_storage`, storage items used the
+/// 	`pallet_prefix` given as input of `decl_storage` with the syntax `as Example`).
 /// 	Thus a runtime using the pallet must be careful with this change.
 /// 	To handle this change:
 /// 	* either ensure that the name of the pallet given to `construct_runtime!` is the same

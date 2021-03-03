@@ -69,11 +69,26 @@ pub type AuraId = sp_consensus_aura::sr25519::AuthorityId;
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
+#[cfg(feature = "std")]
+pub mod wasm_binary_logging_disabled {
+	include!(concat!(env!("OUT_DIR"), "/wasm_binary_logging_disabled.rs"));
+}
+
 /// Wasm binary unwrapped. If built with `SKIP_WASM_BUILD`, the function panics.
 #[cfg(feature = "std")]
 pub fn wasm_binary_unwrap() -> &'static [u8] {
 	WASM_BINARY.expect("Development wasm binary is not available. Testing is only \
 						supported with the flag disabled.")
+}
+
+/// Wasm binary unwrapped. If built with `SKIP_WASM_BUILD`, the function panics.
+#[cfg(feature = "std")]
+pub fn wasm_binary_logging_disabled_unwrap() -> &'static [u8] {
+	wasm_binary_logging_disabled::WASM_BINARY
+		.expect(
+			"Development wasm binary is not available. Testing is only supported with the flag \
+			disabled."
+		)
 }
 
 /// Test runtime version.
@@ -433,6 +448,37 @@ impl From<frame_system::Event<Runtime>> for Event {
 	}
 }
 
+impl frame_support::traits::PalletInfo for Runtime {
+	fn index<P: 'static>() -> Option<usize> {
+		let type_id = sp_std::any::TypeId::of::<P>();
+		if type_id == sp_std::any::TypeId::of::<system::Module<Runtime>>() {
+			return Some(0)
+		}
+		if type_id == sp_std::any::TypeId::of::<pallet_timestamp::Module<Runtime>>() {
+			return Some(1)
+		}
+		if type_id == sp_std::any::TypeId::of::<pallet_babe::Module<Runtime>>() {
+			return Some(2)
+		}
+
+		None
+	}
+	fn name<P: 'static>() -> Option<&'static str> {
+		let type_id = sp_std::any::TypeId::of::<P>();
+		if type_id == sp_std::any::TypeId::of::<system::Module<Runtime>>() {
+			return Some("System")
+		}
+		if type_id == sp_std::any::TypeId::of::<pallet_timestamp::Module<Runtime>>() {
+			return Some("Timestamp")
+		}
+		if type_id == sp_std::any::TypeId::of::<pallet_babe::Module<Runtime>>() {
+			return Some("Babe")
+		}
+
+		None
+	}
+}
+
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 2400;
 	pub const MinimumPeriod: u64 = 5;
@@ -463,7 +509,7 @@ impl frame_system::Config for Runtime {
 	type BlockHashCount = BlockHashCount;
 	type DbWeight = ();
 	type Version = ();
-	type PalletInfo = ();
+	type PalletInfo = Self;
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
@@ -711,8 +757,7 @@ cfg_if! {
 				}
 
 				fn do_trace_log() {
-					frame_support::debug::RuntimeLogger::init();
-					frame_support::debug::trace!("Hey I'm runtime");
+					log::trace!("Hey I'm runtime");
 				}
 			}
 
@@ -970,8 +1015,7 @@ cfg_if! {
 				}
 
 				fn do_trace_log() {
-					frame_support::debug::RuntimeLogger::init();
-					frame_support::debug::trace!("Hey I'm runtime");
+					log::error!("Hey I'm runtime: {}", log::STATIC_MAX_LEVEL);
 				}
 			}
 

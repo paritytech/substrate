@@ -19,7 +19,7 @@
 
 use super::*;
 
-use frame_benchmarking::{benchmarks, account, whitelist_account};
+use frame_benchmarking::{benchmarks, account, whitelist_account, impl_benchmark_test_suite};
 use frame_support::{
 	IterableStorageMap,
 	traits::{Currency, Get, EnsureOrigin, OnInitialize, UnfilteredDispatchable, schedule::DispatchTime},
@@ -781,44 +781,9 @@ benchmarks! {
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::tests::{new_test_ext, Test};
-	use frame_support::assert_ok;
 
-	#[test]
-	fn test_benchmarks() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_propose::<Test>());
-			assert_ok!(test_benchmark_second::<Test>());
-			assert_ok!(test_benchmark_vote_new::<Test>());
-			assert_ok!(test_benchmark_vote_existing::<Test>());
-			assert_ok!(test_benchmark_emergency_cancel::<Test>());
-			assert_ok!(test_benchmark_external_propose::<Test>());
-			assert_ok!(test_benchmark_external_propose_majority::<Test>());
-			assert_ok!(test_benchmark_external_propose_default::<Test>());
-			assert_ok!(test_benchmark_fast_track::<Test>());
-			assert_ok!(test_benchmark_veto_external::<Test>());
-			assert_ok!(test_benchmark_cancel_referendum::<Test>());
-			assert_ok!(test_benchmark_cancel_queued::<Test>());
-			assert_ok!(test_benchmark_on_initialize_external::<Test>());
-			assert_ok!(test_benchmark_on_initialize_public::<Test>());
-			assert_ok!(test_benchmark_on_initialize_base::<Test>());
-			assert_ok!(test_benchmark_delegate::<Test>());
-			assert_ok!(test_benchmark_undelegate::<Test>());
-			assert_ok!(test_benchmark_clear_public_proposals::<Test>());
-			assert_ok!(test_benchmark_note_preimage::<Test>());
-			assert_ok!(test_benchmark_note_imminent_preimage::<Test>());
-			assert_ok!(test_benchmark_reap_preimage::<Test>());
-			assert_ok!(test_benchmark_unlock_remove::<Test>());
-			assert_ok!(test_benchmark_unlock_set::<Test>());
-			assert_ok!(test_benchmark_remove_vote::<Test>());
-			assert_ok!(test_benchmark_remove_other_vote::<Test>());
-			assert_ok!(test_benchmark_enact_proposal_execute::<Test>());
-			assert_ok!(test_benchmark_enact_proposal_slash::<Test>());
-			assert_ok!(test_benchmark_blacklist::<Test>());
-			assert_ok!(test_benchmark_cancel_proposal::<Test>());
-		});
-	}
-}
+impl_benchmark_test_suite!(
+	Democracy,
+	crate::tests::new_test_ext(),
+	crate::tests::Test,
+);
