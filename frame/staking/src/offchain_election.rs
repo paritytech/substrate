@@ -524,7 +524,7 @@ mod test {
 		fn get_npos_voters(v: u32, n: u32, s: u32) -> Weight {
 			unimplemented!()
 		}
-		fn get_npos_targets(v: u32, n: u32, s: u32) -> Weight {
+		fn get_npos_targets(v: u32) -> Weight {
 			unimplemented!()
 		}
 	}
