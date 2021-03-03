@@ -17,8 +17,8 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::TelemetryPayload;
-use futures::prelude::*;
 use futures::channel::mpsc;
+use futures::prelude::*;
 use libp2p::core::transport::Transport;
 use libp2p::Multiaddr;
 use rand::Rng as _;

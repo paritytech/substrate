@@ -37,13 +37,12 @@
 #![warn(missing_docs)]
 
 use futures::{channel::mpsc, prelude::*};
-use global_counter::primitive::exact::CounterU64;
 use libp2p::Multiaddr;
 use log::{error, warn};
-use serde::Serialize;
 use parking_lot::Mutex;
+use serde::Serialize;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{atomic, Arc};
 
 pub use libp2p::wasm_ext::ExtTransport;
 pub use log;
@@ -114,7 +113,7 @@ pub struct TelemetryWorker {
 	message_sender: mpsc::Sender<TelemetryMessage>,
 	register_receiver: mpsc::UnboundedReceiver<Register>,
 	register_sender: mpsc::UnboundedSender<Register>,
-	id_generator: Arc<CounterU64>,
+	id_counter: Arc<atomic::AtomicU64>,
 	transport: WsTrans,
 }
 
@@ -132,7 +131,7 @@ impl TelemetryWorker {
 			message_sender,
 			register_receiver,
 			register_sender,
-			id_generator: Arc::new(CounterU64::new(1)),
+			id_counter: Arc::new(atomic::AtomicU64::new(1)),
 			transport,
 		})
 	}
@@ -144,40 +143,31 @@ impl TelemetryWorker {
 		TelemetryWorkerHandle {
 			message_sender: self.message_sender.clone(),
 			register_sender: self.register_sender.clone(),
-			id_generator: self.id_generator.clone(),
+			id_counter: self.id_counter.clone(),
 		}
 	}
 
 	/// Run the telemetry worker.
 	///
 	/// This should be run in a background task.
-	pub async fn run(self) {
-		let Self {
-			mut message_receiver,
-			message_sender: _,
-			mut register_receiver,
-			register_sender: _,
-			id_generator: _,
-			transport,
-		} = self;
-
+	pub async fn run(mut self) {
 		let mut node_map: HashMap<Id, Vec<(VerbosityLevel, Multiaddr)>> = HashMap::new();
 		let mut node_pool: HashMap<Multiaddr, _> = HashMap::new();
 		let mut pending_connection_notifications: Vec<_> = Vec::new();
 
 		loop {
 			futures::select! {
-				message = message_receiver.next() => Self::process_message(
+				message = self.message_receiver.next() => Self::process_message(
 					message,
 					&mut node_pool,
 					&node_map,
 				).await,
-				init_payload = register_receiver.next() => Self::process_register(
+				init_payload = self.register_receiver.next() => Self::process_register(
 					init_payload,
 					&mut node_pool,
 					&mut node_map,
 					&mut pending_connection_notifications,
-					transport.clone(),
+					self.transport.clone(),
 				).await,
 			}
 		}
@@ -238,16 +228,15 @@ impl TelemetryWorker {
 
 					node.connection_messages.extend(connection_message.clone());
 
-					pending_connection_notifications.retain(
-						|(addr_b, connection_message)| {
-							if *addr_b == addr {
-								node.telemetry_connection_notifier.push(connection_message.clone());
-								false
-							} else {
-								true
-							}
+					pending_connection_notifications.retain(|(addr_b, connection_message)| {
+						if *addr_b == addr {
+							node.telemetry_connection_notifier
+								.push(connection_message.clone());
+							false
+						} else {
+							true
 						}
-					);
+					});
 				}
 			}
 			Register::Notifier {
@@ -339,7 +328,7 @@ impl TelemetryWorker {
 pub struct TelemetryWorkerHandle {
 	message_sender: mpsc::Sender<TelemetryMessage>,
 	register_sender: mpsc::UnboundedSender<Register>,
-	id_generator: Arc<CounterU64>,
+	id_counter: Arc<atomic::AtomicU64>,
 }
 
 impl TelemetryWorkerHandle {
@@ -350,7 +339,7 @@ impl TelemetryWorkerHandle {
 		Telemetry {
 			message_sender: self.message_sender.clone(),
 			register_sender: self.register_sender.clone(),
-			id: self.id_generator.inc(),
+			id: self.id_counter.fetch_add(1, atomic::Ordering::Relaxed),
 			connection_notifier: TelemetryConnectionNotifier {
 				register_sender: self.register_sender.clone(),
 				addresses,
@@ -419,7 +408,11 @@ pub struct TelemetryHandle {
 impl TelemetryHandle {
 	/// Send telemetry messages.
 	pub fn send_telemetry(&self, verbosity: VerbosityLevel, payload: TelemetryPayload) {
-		match self.message_sender.lock().try_send((self.id, verbosity, payload)) {
+		match self
+			.message_sender
+			.lock()
+			.try_send((self.id, verbosity, payload))
+		{
 			Ok(()) => {}
 			Err(err) if err.is_full() => log::trace!(
 				target: "telemetry",
