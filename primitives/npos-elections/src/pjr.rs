@@ -38,11 +38,113 @@ use sp_std::{rc::Rc, vec::Vec};
 use sp_std::collections::btree_map::BTreeMap;
 use sp_arithmetic::{traits::Zero, Perbill};
 
-
 /// The type used as the threshold.
 ///
 /// Just some reading sugar; Must always be same as [`ExtendedBalance`];
 type Threshold = ExtendedBalance;
+
+/// Compute the threshold corresponding to the standard PJR property
+///
+/// `t-PJR` checks can check PJR according to an arbitrary threshold. The threshold can be any value,
+/// but the property gets stronger as the threshold gets smaller. The strongest possible `t-PJR` property
+/// corresponds to `t == 0`.
+///
+/// However, standard PJR is less stringent than that. This function returns the threshold whose
+/// strength corresponds to the standard PJR property.
+///
+/// - `committee_size` is the number of winners of the election.
+/// - `weights` is an iterator of voter stakes. If the sum of stakes is already known,
+///   `std::iter::once(sum_of_stakes)` is appropriate here.
+pub fn standard_threshold(
+	committee_size: usize,
+	weights: impl IntoIterator<Item = ExtendedBalance>,
+) -> Threshold {
+	weights
+		.into_iter()
+		.fold(Threshold::zero(), |acc, elem| {
+			acc.saturating_add(elem)
+		})
+	/ committee_size as Threshold
+}
+
+/// Check a solution to be PJR.
+///
+/// The PJR property is true if `t-PJR` is true when `t == sum(stake) / committee_size`.
+pub fn pjr_check<AccountId: IdentifierT>(
+	supports: &Supports<AccountId>,
+	all_candidates: Vec<AccountId>,
+	all_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
+) -> bool {
+	let t = standard_threshold(supports.len(), all_voters.iter().map(|voter| voter.1 as ExtendedBalance));
+	t_pjr_check(supports, all_candidates, all_voters, t)
+}
+
+/// Check a solution to be t-PJR.
+///
+/// ### Semantics
+///
+/// The t-PJR property is defined in the paper ["Validator Election in Nominated Proof-of-Stake"][NPoS],
+/// section 5, definition 1.
+///
+/// In plain language, the t-PJR condition is: if there is a group of `N` voters
+/// who have `r` common candidates and can afford to support each of them with backing stake `t`
+/// (i.e `sum(stake(v) for v in voters) == r * t`), then this committee needs to be represented by at
+/// least `r` elected candidates.
+///
+/// Section 5 of the NPoS paper shows that this property can be tested by: for a feasible solution,
+/// if `Max {score(c)} < t` where c is every unelected candidate, then this solution is t-PJR. There
+/// may exist edge cases which satisfy the formal definition of t-PJR but do not pass this test, but
+/// those should be rare enough that we can discount them.
+///
+/// ### Interface
+///
+/// In addition to data that can be computed from the [`Supports`] struct, a PJR check also
+/// needs to inspect un-elected candidates and edges, thus `all_candidates` and `all_voters`.
+///
+/// [NPoS]: https://arxiv.org/pdf/2004.12990v1.pdf
+//
+// ### Implementation Notes
+//
+// The paper uses mathematical notation, which priorities single-symbol names. For programmer ease,
+// we map these to more descriptive names as follows:
+//
+// C      => all_candidates
+// N      => all_voters
+// (A, w) => (candidates, voters)
+//
+// Note that while the names don't explicitly say so, `candidates` are the winning candidates, and
+// `voters` is the set of weighted edges from nominators to winning validators.
+pub fn t_pjr_check<AccountId: IdentifierT>(
+	supports: &Supports<AccountId>,
+	all_candidates: Vec<AccountId>,
+	all_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
+	t: Threshold,
+) -> bool {
+	// First order of business: derive `(candidates, voters)` from `supports`.
+	let (candidates, voters) = prepare_pjr_input(
+		supports,
+		all_candidates,
+		all_voters,
+	);
+	// compute with threshold t.
+	pjr_check_core(candidates.as_ref(), voters.as_ref(), t)
+}
+
+/// The internal implementation of the PJR check after having the data converted.
+///
+/// [`pjr_check`] or [`t_pjr_check`] are typically easier to work with.
+pub fn pjr_check_core<AccountId: IdentifierT>(
+	candidates: &[CandidatePtr<AccountId>],
+	voters: &[Voter<AccountId>],
+	t: Threshold,
+) -> bool {
+	let unelected = candidates.iter().filter(|c| !c.borrow().elected);
+	let maybe_max_pre_score = unelected.map(|c| (pre_score(Rc::clone(c), voters, t), c.borrow().who.clone())).max();
+	// if unelected is empty then the solution is indeed PJR.
+	maybe_max_pre_score.map_or(true, |(max_pre_score, _)| max_pre_score < t)
+}
+
+
 
 /// Convert the data types that the user runtime has into ones that can be used by this module.
 ///
@@ -145,71 +247,6 @@ fn prepare_pjr_input<AccountId: IdentifierT>(
 	(candidates, voters)
 }
 
-/// Check a solution to be t-PJR.
-///
-/// ### Semantics
-///
-/// The t-PJR property is defined in the paper ["Validator Election in Nominated Proof-of-Stake"][NPoS],
-/// section 5, definition 1.
-///
-/// In plain language, the t-PJR condition is: if there is a group of `N` voters
-/// who have `r` common candidates and can afford to support each of them with backing stake `t`
-/// (i.e `sum(stake(v) for v in voters) == r * t`), then this committee needs to be represented by at
-/// least `r` elected candidates.
-///
-/// Section 5 of the NPoS paper shows that this property can be tested by: for a feasible solution,
-/// if `Max {score(c)} < t` where c is every unelected candidate, then this solution is t-PJR. There
-/// may exist edge cases which satisfy the formal definition of t-PJR but do not pass this test, but
-/// those should be rare enough that we can discount them.
-///
-/// ### Interface
-///
-/// In addition to data that can be computed from the [`Supports`] struct, a PJR check also
-/// needs to inspect un-elected candidates and edges, thus `all_candidates` and `all_voters`.
-///
-/// [NPoS]: https://arxiv.org/pdf/2004.12990v1.pdf
-//
-// ### Implementation Notes
-//
-// The paper uses mathematical notation, which priorities single-symbol names. For programmer ease,
-// we map these to more descriptive names as follows:
-//
-// C      => all_candidates
-// N      => all_voters
-// (A, w) => (candidates, voters)
-//
-// Note that while the names don't explicitly say so, `candidates` are the winning candidates, and
-// `voters` is the set of weighted edges from nominators to winning validators.
-pub fn t_pjr_check<AccountId: IdentifierT>(
-	supports: &Supports<AccountId>,
-	all_candidates: Vec<AccountId>,
-	all_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
-	t: Threshold,
-) -> bool {
-	// First order of business: derive `(candidates, voters)` from `supports`.
-	let (candidates, voters) = prepare_pjr_input(
-		supports,
-		all_candidates,
-		all_voters,
-	);
-	// compute with threshold t.
-	pjr_check_core(candidates.as_ref(), voters.as_ref(), t)
-}
-
-/// The internal implementation of the PJR check after having the data converted.
-///
-/// [`pjr_check`] or [`t_pjr_check`] are typically easier to work with.
-pub fn pjr_check_core<AccountId: IdentifierT>(
-	candidates: &[CandidatePtr<AccountId>],
-	voters: &[Voter<AccountId>],
-	t: Threshold,
-) -> bool {
-	let unelected = candidates.iter().filter(|c| !c.borrow().elected);
-	let maybe_max_pre_score = unelected.map(|c| (pre_score(Rc::clone(c), voters, t), c.borrow().who.clone())).max();
-	// if unelected is empty then the solution is indeed PJR.
-	maybe_max_pre_score.map_or(true, |(max_pre_score, _)| max_pre_score < t)
-}
-
 /// The pre-score of an unelected candidate.
 ///
 /// This is the amount of stake that *all voter* can spare to devote to this candidate without
@@ -257,42 +294,6 @@ fn slack<AccountId: IdentifierT>(voter: &Voter<AccountId>, t: Threshold) -> Exte
 
 	// NOTE: candidate for saturating_log_sub(). Defensive-only.
 	budget.saturating_sub(leftover)
-}
-
-/// Compute the threshold corresponding to the standard PJR property
-///
-/// `t-PJR` checks can check PJR according to an arbitrary threshold. The threshold can be any value,
-/// but the property gets stronger as the threshold gets smaller. The strongest possible `t-PJR` property
-/// corresponds to `t == 0`.
-///
-/// However, standard PJR is less stringent than that. This function returns the threshold whose
-/// strength corresponds to the standard PJR property.
-///
-/// - `committee_size` is the number of winners of the election.
-/// - `weights` is an iterator of voter stakes. If the sum of stakes is already known,
-///   `std::iter::once(sum_of_stakes)` is appropriate here.
-pub fn standard_threshold(
-	committee_size: usize,
-	weights: impl IntoIterator<Item = ExtendedBalance>,
-) -> Threshold {
-	weights
-		.into_iter()
-		.fold(Threshold::zero(), |acc, elem| {
-			acc.saturating_add(elem)
-		})
-	/ committee_size as Threshold
-}
-
-/// Check a solution to be PJR.
-///
-/// The PJR property is true if `t-PJR` is true when `t == sum(stake) / committee_size`.
-pub fn pjr_check<AccountId: IdentifierT>(
-	supports: &Supports<AccountId>,
-	all_candidates: Vec<AccountId>,
-	all_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
-) -> bool {
-	let t = standard_threshold(supports.len(), all_voters.iter().map(|voter| voter.1 as ExtendedBalance));
-	t_pjr_check(supports, all_candidates, all_voters, t)
 }
 
 #[cfg(test)]
