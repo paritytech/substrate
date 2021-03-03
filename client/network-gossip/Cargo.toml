@@ -17,9 +17,9 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 futures = "0.3.9"
 futures-timer = "3.0.1"
-libp2p = { version = "0.34.0", default-features = false }
+libp2p = { version = "0.35.1", default-features = false }
 log = "0.4.8"
-lru = "0.6.1"
+lru = "0.6.5"
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.9.0", path = "../../utils/prometheus" }
 sc-network = { version = "0.9.0", path = "../network" }
 sp-runtime = { version = "3.0.0", path = "../../primitives/runtime" }
