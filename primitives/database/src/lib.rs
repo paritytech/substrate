@@ -174,9 +174,137 @@ pub trait Database<H: Clone>: Send + Sync {
 	}
 }
 
+impl<H: Clone> Database<H> for std::sync::Arc<dyn Database<H>> {
+	fn commit(&self, transaction: Transaction<H>) -> error::Result<()> {
+		self.as_ref().commit(transaction)
+	}
+
+	fn commit_ref<'a>(&self, transaction: &mut dyn Iterator<Item=ChangeRef<'a, H>>) -> error::Result<()> {
+		self.as_ref().commit_ref(transaction)
+	}
+
+	fn get(&self, col: ColumnId, key: &[u8]) -> Option<Vec<u8>> {
+		self.as_ref().get(col, key)
+	}
+
+	fn with_get(&self, col: ColumnId, key: &[u8], f: &mut dyn FnMut(&[u8])) {
+		self.as_ref().with_get(col, key, f)
+	}
+
+	fn set(&self, col: ColumnId, key: &[u8], value: &[u8]) -> error::Result<()> {
+		self.as_ref().set(col, key, value)
+	}
+
+	fn remove(&self, col: ColumnId, key: &[u8]) -> error::Result<()> {
+		self.as_ref().remove(col, key)
+	}
+
+	fn lookup(&self, hash: &H) -> Option<Vec<u8>> {
+		self.as_ref().lookup(hash)
+	}
+
+	fn with_lookup(&self, hash: &H, f: &mut dyn FnMut(&[u8])) {
+		self.as_ref().with_lookup(hash, f)
+	}
+
+	fn store(&self, hash: &H, preimage: &[u8]) -> error::Result<()> {
+		self.as_ref().store(hash, preimage)
+	}
+
+	fn release(&self, hash: &H) -> error::Result<()> {
+		self.as_ref().release(hash)
+	}
+}
+
+impl<H: Clone> Database<H> for std::sync::Arc<dyn OrderedDatabase<H>> {
+	fn commit(&self, transaction: Transaction<H>) -> error::Result<()> {
+		self.as_ref().commit(transaction)
+	}
+
+	fn commit_ref<'a>(&self, transaction: &mut dyn Iterator<Item=ChangeRef<'a, H>>) -> error::Result<()> {
+		self.as_ref().commit_ref(transaction)
+	}
+
+	fn get(&self, col: ColumnId, key: &[u8]) -> Option<Vec<u8>> {
+		self.as_ref().get(col, key)
+	}
+
+	fn with_get(&self, col: ColumnId, key: &[u8], f: &mut dyn FnMut(&[u8])) {
+		self.as_ref().with_get(col, key, f)
+	}
+
+	fn set(&self, col: ColumnId, key: &[u8], value: &[u8]) -> error::Result<()> {
+		self.as_ref().set(col, key, value)
+	}
+
+	fn remove(&self, col: ColumnId, key: &[u8]) -> error::Result<()> {
+		self.as_ref().remove(col, key)
+	}
+
+	fn lookup(&self, hash: &H) -> Option<Vec<u8>> {
+		self.as_ref().lookup(hash)
+	}
+
+	fn with_lookup(&self, hash: &H, f: &mut dyn FnMut(&[u8])) {
+		self.as_ref().with_lookup(hash, f)
+	}
+
+	fn store(&self, hash: &H, preimage: &[u8]) -> error::Result<()> {
+		self.as_ref().store(hash, preimage)
+	}
+
+	fn release(&self, hash: &H) -> error::Result<()> {
+		self.as_ref().release(hash)
+	}
+}
+
+pub trait OrderedDatabase<H: Clone>: Database<H> {
+	/// Iterate on value from the database.
+	fn iter<'a>(&'a self, col: ColumnId) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + 'a>;
+
+	/// Iterate on value over a given prefix, the prefix can be removed from
+	/// the resulting keys.
+	fn prefix_iter<'a>(
+		&'a self,
+		col: ColumnId,
+		prefix: &'a [u8],
+		trim_prefix: bool,
+	) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + 'a>;
+
+	/// Iterate from a start position (same seek then iterate).
+	fn iter_from<'a>(
+		&'a self,
+		col: ColumnId,
+		start: &[u8],
+	) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + 'a>;
+
+	/// Clear by prefix
+	fn clear_prefix(
+		&self,
+		col: ColumnId,
+		prefix: &[u8],
+	) {
+		// Default implementation got problematic memory consumption,
+		// specific implementation should be use for backend targetting
+		// large volume.
+		let keys: Vec<_> = self.prefix_iter(col, prefix, false).map(|kv| kv.0).collect();
+		for key in keys {
+			// iterating on remove individually is bad for perf.
+			self.remove(col, key.as_slice())
+				.expect("Fail clearing prefix");
+		}
+	}
+}
+
 impl<H> std::fmt::Debug for dyn Database<H> {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		write!(f, "Database")
+	}
+}
+
+impl<H> std::fmt::Debug for dyn OrderedDatabase<H> {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(f, "OrderedDatabase")
 	}
 }
 
@@ -348,21 +476,18 @@ mod ordered {
 		}
 	}
 
-	impl<H: Clone + PartialEq + Debug + Default + 'static> RadixTreeDatabase<H> {
-		/// Iterate on value from the database.
-		pub fn iter(&self, col: ColumnId) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)>> {
+	impl<H: Clone + PartialEq + Debug + Default + 'static> OrderedDatabase<H> for RadixTreeDatabase<H> {
+		fn iter<'a>(&'a self, col: ColumnId) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + 'a> {
 			self.lazy_column_init(col);
 			let tree = self.trees.read()[col as usize].clone();
 			Box::new(tree.owned_iter())
 		}
-
-		/// Iterate on value over a given prefix, the prefix can be removed from
-		/// the resulting keys.
-		pub fn prefix_iter(
-			&self, col: ColumnId,
-			prefix: &[u8],
+		fn prefix_iter<'a>(
+			&'a self,
+			col: ColumnId,
+			prefix: &'a [u8],
 			trim_prefix: bool,
-		) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)>> {
+		) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + 'a> {
 			self.lazy_column_init(col);
 			let tree = self.trees.read()[col as usize].clone();
 			if trim_prefix {
@@ -374,6 +499,15 @@ mod ordered {
 			} else {
 				Box::new(tree.owned_prefix_iter(prefix))
 			}
+		}
+		fn iter_from<'a>(
+			&'a self,
+			col: ColumnId,
+			start: &[u8],
+		) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + 'a> {
+			self.lazy_column_init(col);
+			let tree = self.trees.read()[col as usize].clone();
+			Box::new(tree.owned_iter_from(start))
 		}
 	}
 }

@@ -222,7 +222,6 @@ pub fn open_database_and_historied<Block: BlockT>(
 ) -> sp_blockchain::Result<(
 	Arc<dyn Database<DbHash>>,
 	historied_db::mapped_db::MappedDBDyn,
-	historied_db::mapped_db::MappedDBDyn,
 )> {
 	#[allow(unused)]
 	fn db_open_error(feat: &'static str) -> sp_blockchain::Error {
@@ -231,10 +230,8 @@ pub fn open_database_and_historied<Block: BlockT>(
 		)
 	}
 
-	// if we need more than 2 instance, we could also return the conversion method from the first db.
 	let db: (
 		Arc<dyn Database<DbHash>>,
-		historied_db::mapped_db::MappedDBDyn,
 		historied_db::mapped_db::MappedDBDyn,
 	) = match &config.source {
 		#[cfg(any(feature = "with-kvdb-rocksdb", test))]
@@ -288,9 +285,8 @@ pub fn open_database_and_historied<Block: BlockT>(
 				.map_err(|err| sp_blockchain::Error::Backend(format!("{}", err)))?;
 
 			let rocks_db = Arc::new(db);
-			let ordered = Box::new(crate::RocksdbStorage(rocks_db.clone()));
-			let ordered_2 = Box::new(crate::RocksdbStorage(rocks_db.clone()));
-			(sp_database::arc_as_database(rocks_db), ordered, ordered_2)
+			let management = Box::new(ordered_database::RocksdbStorage(rocks_db.clone()));
+			(sp_database::arc_as_database(rocks_db), management)
 		},
 		#[cfg(not(any(feature = "with-kvdb-rocksdb", test)))]
 		DatabaseSettingsSrc::RocksDb { .. } => {
@@ -300,22 +296,19 @@ pub fn open_database_and_historied<Block: BlockT>(
 		DatabaseSettingsSrc::ParityDb { path } => {
 			let parity_db = crate::parity_db::open(&path, db_type)
 				.map_err(|e| sp_blockchain::Error::Backend(format!("{:?}", e)))?;
-			let ordered = sp_database::RadixTreeDatabase::new(parity_db.clone());
-			let ordered = Box::new(crate::DatabaseStorage(ordered));
-			let ordered_2 = sp_database::RadixTreeDatabase::new(parity_db.clone());
-			let ordered_2 = Box::new(crate::DatabaseStorage(ordered_2));
-			(parity_db, ordered, ordered_2)
+			let inner = sp_database::RadixTreeDatabase::new(parity_db.clone());
+			let management = Box::new(ordered_database::DatabaseStorage(inner.clone()));
+
+			(parity_db, management)
 		},
 		#[cfg(not(feature = "with-parity-db"))]
 		DatabaseSettingsSrc::ParityDb { .. } => {
 			return Err(db_open_error("with-parity-db"))
 		},
 		DatabaseSettingsSrc::Custom(db) => {
-			let ordered = sp_database::RadixTreeDatabase::new(db.clone());
-			let ordered = Box::new(crate::DatabaseStorage(ordered));
-			let ordered_2 = sp_database::RadixTreeDatabase::new(db.clone());
-			let ordered_2 = Box::new(crate::DatabaseStorage(ordered_2));
-			(db.clone(), ordered, ordered_2)
+			let inner = sp_database::RadixTreeDatabase::new(db.clone());
+			let management = Box::new(ordered_database::DatabaseStorage(inner.clone()));
+			(db.clone(), management)
 		},
 	};
 
@@ -477,6 +470,236 @@ impl DatabaseType {
 		match *self {
 			DatabaseType::Full => "full",
 			DatabaseType::Light => "light",
+		}
+	}
+}
+
+
+/// `OrderedDatabase` trait implementations.
+pub(crate) mod ordered_database {
+	#[cfg(any(feature = "with-kvdb-rocksdb", test))]
+	use std::sync::Arc;
+	#[cfg(any(feature = "with-kvdb-rocksdb", test))]
+	use sp_database::Transaction;
+	use sp_database::{RadixTreeDatabase, Database, OrderedDatabase};
+
+	#[cfg(any(feature = "with-kvdb-rocksdb", test))]
+	#[derive(Clone)]
+	/// Database backed tree management for a rocksdb database.
+	pub struct RocksdbStorage(pub(super) Arc<kvdb_rocksdb::Database>);
+
+	/// Database backed tree management for an unoredered database.
+	/// We set any Hash as inner type,
+	pub struct DatabaseStorage<H: Clone + PartialEq + std::fmt::Debug>(pub(super) RadixTreeDatabase<H>);
+
+	/// Function that split a collection identifier into a column index and
+	/// a subcollection prefix.
+	/// Collections are defined by four byte encoding of their index.
+	/// Subcollection are behind a prefixed location (remaining bytes).
+	/// Note that subcollection should define their prefix in a way that no key
+	/// collision happen.
+	pub fn resolve_collection<'a>(c: &'a [u8]) -> Option<(u32, Option<&'a [u8]>)> {
+		if c.len() < 4 {
+			return None;
+		}
+		let index = resolve_collection_inner(&c[..4]);
+		let prefix = if c.len() == 4 {
+			None
+		} else {
+			Some(&c[4..])
+		};
+		if index < crate::utils::NUM_COLUMNS {
+			return Some((index, prefix));
+		}
+		None
+	}
+	const fn resolve_collection_inner<'a>(c: &'a [u8]) -> u32 {
+		let mut buf = [0u8; 4];
+		buf[0] = c[0];
+		buf[1] = c[1];
+		buf[2] = c[2];
+		buf[3] = c[3];
+		u32::from_le_bytes(buf)
+	}
+
+	#[cfg(any(feature = "with-kvdb-rocksdb", test))]
+	impl historied_db::mapped_db::MappedDB for RocksdbStorage {
+		#[inline(always)]
+		fn is_active(&self) -> bool {
+			true
+		}
+
+		fn write(&mut self, c: &'static [u8], k: &[u8], v: &[u8]) {
+			resolve_collection(c).map(|(c, p)| {
+				subcollection_prefixed_key!(p, k);
+				let mut tx = self.0.transaction();
+				tx.put(c, k, v);
+				self.0.write(tx)
+					.expect("Unsupported serialize error")
+			});
+		}
+
+		fn remove(&mut self, c: &'static [u8], k: &[u8]) {
+			resolve_collection(c).map(|(c, p)| {
+				subcollection_prefixed_key!(p, k);
+				let mut tx = self.0.transaction();
+				tx.delete(c, k);
+				self.0.write(tx)
+					.expect("Unsupported serialize error")
+			});
+		}
+
+		fn clear(&mut self, c: &'static [u8]) {
+			resolve_collection(c).map(|(c, p)| {
+				let mut tx = self.0.transaction();
+				tx.delete_prefix(c, p.unwrap_or(&[]));
+				self.0.write(tx)
+					.expect("Unsupported serialize error")
+			});
+		}
+
+		fn read(&self, c: &'static [u8], k: &[u8]) -> Option<Vec<u8>> {
+			resolve_collection(c).and_then(|(c, p)| {
+				subcollection_prefixed_key!(p, k);
+				self.0.get(c, k)
+					.expect("Unsupported readdb error")
+			})
+		}
+
+		fn iter<'a>(&'a self, c: &'static [u8]) -> historied_db::mapped_db::MappedDBIter<'a> {
+			let iter = resolve_collection(c).map(|(c, p)| {
+				use kvdb::KeyValueDB;
+				if let Some(p) = p {
+					<kvdb_rocksdb::Database as KeyValueDB>::iter_with_prefix(&*self.0, c, p)
+				} else {
+					<kvdb_rocksdb::Database as KeyValueDB>::iter(&*self.0, c)
+				}.map(|(k, v)| (Vec::<u8>::from(k), Vec::<u8>::from(v)))
+			}).into_iter().flat_map(|i| i);
+
+			Box::new(iter)
+		}
+
+		fn contains_collection(&self, collection: &'static [u8]) -> bool {
+			resolve_collection(collection).is_some()
+		}
+	}
+
+	#[cfg(any(feature = "with-kvdb-rocksdb", test))]
+	// redundant code with kvdb implementation, here only to get iter_from implementation
+	// without putting iter_from into kvdb on patched branch TODO ?? remove
+	impl<H: Clone> Database<H> for RocksdbStorage {
+		fn commit(&self, transaction: Transaction<H>) -> sp_database::error::Result<()> {
+			use sp_database::Change;
+			let mut tx = kvdb::DBTransaction::new();
+			for change in transaction.0.into_iter() {
+				match change {
+					Change::Set(col, key, value) => tx.put_vec(col, &key, value),
+					Change::Remove(col, key) => tx.delete(col, &key),
+					_ => unimplemented!(),
+				}
+			}
+			self.0.write(tx).map_err(|e| sp_database::error::DatabaseError(Box::new(e)))
+		}
+
+		fn get(&self, col: u32, key: &[u8]) -> Option<Vec<u8>> {
+			match self.0.get(col, key) {
+				Ok(r) => r,
+				Err(e) =>  {
+					panic!("Critical database eror: {:?}", e);
+				}
+			}
+		}
+
+		fn lookup(&self, _hash: &H) -> Option<Vec<u8>> {
+			unimplemented!();
+		}
+	}
+
+	#[cfg(any(feature = "with-kvdb-rocksdb", test))]
+	impl<H: Clone> OrderedDatabase<H> for RocksdbStorage {
+		fn iter<'a>(&'a self, col: u32) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + 'a> {
+			Box::new(self.0.iter(col).map(|(k, v)| (k.to_vec(), v.to_vec())))
+		}
+
+		fn prefix_iter<'a>(
+			&'a self,
+			col: u32,
+			prefix: &'a [u8],
+			trim_prefix: bool,
+		) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + 'a> {
+			if trim_prefix {
+				let len = prefix.len();
+				Box::new(self.0.iter_with_prefix(col, prefix).map(move |(k, v)| {
+					(k[len..].to_vec(), v.to_vec())
+				}))
+			} else {
+				Box::new(self.0.iter_with_prefix(col, prefix).map(|(k, v)| (k.to_vec(), v.to_vec())))
+			}
+	
+		}
+
+		fn iter_from<'a>(
+			&'a self,
+			col: u32,
+			start: &[u8],
+		) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + 'a> {
+			Box::new(self.0.iter_from(col, start).map(|(k, v)| (k.to_vec(), v.to_vec())))
+		}
+	}
+
+	impl<H> historied_db::mapped_db::MappedDB for DatabaseStorage<H>
+		where H: Clone + PartialEq + std::fmt::Debug + Default + 'static,
+	{
+		#[inline(always)]
+		fn is_active(&self) -> bool {
+			true
+		}
+
+		fn write(&mut self, c: &'static [u8], k: &[u8], v: &[u8]) {
+			resolve_collection(c).map(|(c, p)| {
+				subcollection_prefixed_key!(p, k);
+				self.0.set(c, k, v)
+					.expect("Unsupported database error");
+			});
+		}
+
+		fn remove(&mut self, c: &'static [u8], k: &[u8]) {
+			resolve_collection(c).map(|(c, p)| {
+				subcollection_prefixed_key!(p, k);
+				self.0.remove(c, k)
+					.expect("Unsupported database error");
+			});
+		}
+
+		fn clear(&mut self, c: &'static [u8]) {
+			// Inefficient implementation.
+			let keys: Vec<Vec<u8>> = self.iter(c).map(|kv| kv.0).collect();
+			for key in keys {
+				self.remove(c, key.as_slice());
+			}
+		}
+
+		fn read(&self, c: &'static [u8], k: &[u8]) -> Option<Vec<u8>> {
+			resolve_collection(c).and_then(|(c, p)| {
+				subcollection_prefixed_key!(p, k);
+				self.0.get(c, k)
+			})
+		}
+
+		fn iter<'a>(&'a self, c: &'static [u8]) -> historied_db::mapped_db::MappedDBIter<'a> {
+			let iter = resolve_collection(c).map(|(c, p)| {
+				if let Some(p) = p {
+					self.0.prefix_iter(c, p, true)
+				} else {
+					self.0.iter(c)
+				}
+			}).into_iter().flat_map(|i| i);
+
+			Box::new(iter)
+		}
+
+		fn contains_collection(&self, collection: &'static [u8]) -> bool {
+			resolve_collection(collection).is_some()
 		}
 	}
 }

@@ -23,6 +23,7 @@ use super::{LinearStorage, LinearStorageMem};
 use sp_std::mem::replace;
 use crate::{Context, InitFrom, DecodeWithContext, Trigger};
 use sp_std::vec::Vec;
+use crate::backend::nodes::EstimateSize;
 
 macro_rules! memory_only_stack_size {
 	($memory_only: ident, $allocated_history: expr) => {
@@ -178,6 +179,15 @@ impl<V: Clone + Context, S: Clone> LinearStorage<V, S> for $memory_only<V, S> {
 	}
 	fn emplace(&mut self, index: Self::Index, value: HistoriedValue<V, S>) {
 		self.0[index as usize] = value;
+	}
+}
+
+// Dummy implementation related to some constraint.
+impl<V: EstimateSize, S: EstimateSize> EstimateSize for $memory_only<V, S> {
+	fn estimate_size(&self) -> usize {
+		// Actually, if needed we could warp memory only with a counter,
+		// exposing a non costless estimate_size isn't an option here.
+		unimplemented!("This should be avoided");
 	}
 }
 
