@@ -3347,6 +3347,9 @@ impl<T: Config> sp_election_providers::ElectionDataProvider<T::AccountId, T::Blo
 	fn voters(
 		maybe_max_len: Option<usize>,
 	) -> data_provider::Result<(Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>, Self::Additional)> {
+		// NOTE: reading these counts already needs to iterate a lot of storage keys, but they get
+		// cached. This is okay for the case of `Ok(_)`, but bad for `Err(_)`, as the trait does not
+		// report weight in failures. TODO: https://github.com/paritytech/substrate/issues/8246
 		let nominator_count = <Nominators<T>>::iter().count();
 		let validator_count = <Validators<T>>::iter().count();
 		let voter_count = nominator_count.saturating_add(validator_count);
@@ -3355,11 +3358,8 @@ impl<T: Config> sp_election_providers::ElectionDataProvider<T::AccountId, T::Blo
 			return Err("Voter snapshot too big");
 		}
 
-		// NOTE: in the grand scheme of things, given that we iterate all validators and only
-		// 'alive' validators can have slashing spans, we ought to read all slashing spans at least
-		// once, given overlay cache EXACTLY once from the database.
-		let read_count = voter_count.saturating_add(<SlashingSpans<T>>::iter().count());
-		let weight = <T as frame_system::Config>::DbWeight::get().reads(read_count as u64);
+		let slashing_spans = <SlashingSpans<T>>::iter().count();
+		let weight = T::WeightInfo::get_npos_voters(nominator_count as u32, validator_count as u32, slashing_spans as u32);
 		Ok((Self::get_npos_voters(), weight))
 	}
 

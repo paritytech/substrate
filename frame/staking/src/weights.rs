@@ -69,6 +69,8 @@ pub trait WeightInfo {
 	fn reap_stash(s: u32, ) -> Weight;
 	fn new_era(v: u32, n: u32, ) -> Weight;
 	fn submit_solution_better(v: u32, n: u32, a: u32, w: u32, ) -> Weight;
+	fn get_npos_voters(v: u32, n: u32, s: u32) -> Weight;
+	fn get_npos_targets(v: u32, n: u32, s: u32) -> Weight;
 }
 
 /// Weights for pallet_staking using the Substrate node and recommended hardware.
@@ -245,6 +247,12 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads((1 as Weight).saturating_mul(w as Weight)))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
+	fn get_npos_voters(v: u32, n: u32, s: u32) -> Weight {
+		0
+	}
+	fn get_npos_targets(v: u32, n: u32, s: u32) -> Weight {
+		0
+	}
 }
 
 // For backwards compatibility and tests
@@ -419,5 +427,11 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads((4 as Weight).saturating_mul(a as Weight)))
 			.saturating_add(RocksDbWeight::get().reads((1 as Weight).saturating_mul(w as Weight)))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+	}
+	fn get_npos_voters(v: u32, n: u32, s: u32) -> Weight {
+		0
+	}
+	fn get_npos_targets(v: u32, n: u32, s: u32) -> Weight {
+		0
 	}
 }
