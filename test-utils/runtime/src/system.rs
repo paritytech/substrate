@@ -149,9 +149,9 @@ fn execute_block_with_state_root_handler(block: &mut Block, mode: Mode) -> Heade
 /// The block executor.
 pub struct BlockExecutor;
 
-impl frame_executive::ExecuteBlock<Block> for BlockExecutor {
-	fn execute_block(block: Block) -> Header {
-		execute_block(block)
+impl frame_support::traits::ExecuteBlock<Block> for BlockExecutor {
+	fn execute_block(block: Block) {
+		execute_block(block);
 	}
 }
 
@@ -409,7 +409,7 @@ mod tests {
 
 	#[test]
 	fn block_import_works_native() {
-		block_import_works(|b, ext| ext.execute_with(|| execute_block(b)));
+		block_import_works(|b, ext| ext.execute_with(|| { execute_block(b); }));
 	}
 
 	#[test]
@@ -509,7 +509,7 @@ mod tests {
 
 	#[test]
 	fn block_import_with_transaction_works_native() {
-		block_import_with_transaction_works(|b, ext| ext.execute_with(|| execute_block(b)));
+		block_import_with_transaction_works(|b, ext| ext.execute_with(|| { execute_block(b); }));
 	}
 
 	#[test]
