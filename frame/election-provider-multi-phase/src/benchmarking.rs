@@ -18,7 +18,7 @@
 //! Two phase election pallet benchmarking.
 
 use super::*;
-use crate::Module as TwoPhase;
+use crate::Module as MultiPhase;
 
 pub use frame_benchmarking::{account, benchmarks, whitelist_account, whitelisted_caller};
 use frame_support::{assert_ok, traits::OnInitialize};
@@ -137,30 +137,40 @@ fn solution_with_size<T: Config>(
 	let compact =
 		<CompactOf<T>>::from_assignment(assignments, &voter_index, &target_index).unwrap();
 	let score = compact.clone().score(&winners, stake_of, voter_at, target_at).unwrap();
-	let round = <TwoPhase<T>>::round();
+	let round = <MultiPhase<T>>::round();
 	RawSolution { compact, score, round }
 }
 
 benchmarks! {
 	on_initialize_nothing {
-		assert!(<TwoPhase<T>>::current_phase().is_off());
+		assert!(<MultiPhase<T>>::current_phase().is_off());
 	}: {
-		<TwoPhase<T>>::on_initialize(1u32.into());
+		<MultiPhase<T>>::on_initialize(1u32.into());
 	} verify {
-		assert!(<TwoPhase<T>>::current_phase().is_off());
+		assert!(<MultiPhase<T>>::current_phase().is_off());
 	}
 
 	on_initialize_open_signed {
 		// NOTE: this benchmark currently doesn't have any components because the length of a db
 		// read/write is not captured. Otherwise, it is quite influenced by how much data
 		// `T::ElectionDataProvider` is reading and passing on.
-		assert!(<TwoPhase<T>>::snapshot().is_none());
-		assert!(<TwoPhase<T>>::current_phase().is_off());
+		assert!(<MultiPhase<T>>::snapshot().is_none());
+		assert!(<MultiPhase<T>>::current_phase().is_off());
 	}: {
-		<TwoPhase<T>>::on_initialize_open_signed();
+		<MultiPhase<T>>::on_initialize_open_signed();
 	} verify {
-		assert!(<TwoPhase<T>>::snapshot().is_some());
-		assert!(<TwoPhase<T>>::current_phase().is_signed());
+		assert!(<MultiPhase<T>>::snapshot().is_some());
+		assert!(<MultiPhase<T>>::current_phase().is_signed());
+	}
+
+	on_initialize_open_unsigned_with_snapshot {
+		assert!(<MultiPhase<T>>::snapshot().is_none());
+		assert!(<MultiPhase<T>>::current_phase().is_off());
+	}: {
+		<MultiPhase<T>>::on_initialize_open_unsigned(true, true, 1u32.into());
+	} verify {
+		assert!(<MultiPhase<T>>::snapshot().is_some());
+		assert!(<MultiPhase<T>>::current_phase().is_unsigned());
 	}
 
 	finalize_signed_phase_accept_solution {
@@ -174,7 +184,7 @@ benchmarks! {
 		assert_ok!(T::Currency::reserve(&receiver, deposit));
 		assert_eq!(T::Currency::free_balance(&receiver), initial_balance - 10u32.into());
 	}: {
-		<TwoPhase<T>>::finalize_signed_phase_accept_solution(ready, &receiver, deposit, reward)
+		<MultiPhase<T>>::finalize_signed_phase_accept_solution(ready, &receiver, deposit, reward)
 	} verify {
 		assert_eq!(T::Currency::free_balance(&receiver), initial_balance + 20u32.into());
 		assert_eq!(T::Currency::reserved_balance(&receiver), 0u32.into());
@@ -190,41 +200,31 @@ benchmarks! {
 		assert_eq!(T::Currency::free_balance(&receiver), initial_balance - 10u32.into());
 		assert_eq!(T::Currency::reserved_balance(&receiver), 10u32.into());
 	}: {
-		<TwoPhase<T>>::finalize_signed_phase_reject_solution(&receiver, deposit)
+		<MultiPhase<T>>::finalize_signed_phase_reject_solution(&receiver, deposit)
 	} verify {
 		assert_eq!(T::Currency::free_balance(&receiver), initial_balance - 10u32.into());
 		assert_eq!(T::Currency::reserved_balance(&receiver), 0u32.into());
 	}
 
-	on_initialize_open_unsigned_with_snapshot {
-		assert!(<TwoPhase<T>>::snapshot().is_none());
-		assert!(<TwoPhase<T>>::current_phase().is_off());
-	}: {
-		<TwoPhase<T>>::on_initialize_open_unsigned(true, true, 1u32.into());
-	} verify {
-		assert!(<TwoPhase<T>>::snapshot().is_some());
-		assert!(<TwoPhase<T>>::current_phase().is_unsigned());
-	}
-
 	on_initialize_open_unsigned_without_snapshot {
 		// need to assume signed phase was open before
-		<TwoPhase<T>>::on_initialize_open_signed();
-		assert!(<TwoPhase<T>>::snapshot().is_some());
-		assert!(<TwoPhase<T>>::current_phase().is_signed());
+		<MultiPhase<T>>::on_initialize_open_signed();
+		assert!(<MultiPhase<T>>::snapshot().is_some());
+		assert!(<MultiPhase<T>>::current_phase().is_signed());
 	}: {
-		<TwoPhase<T>>::on_initialize_open_unsigned(false, true, 1u32.into());
+		<MultiPhase<T>>::on_initialize_open_unsigned(false, true, 1u32.into());
 	} verify {
-		assert!(<TwoPhase<T>>::snapshot().is_some());
-		assert!(<TwoPhase<T>>::current_phase().is_unsigned());
+		assert!(<MultiPhase<T>>::snapshot().is_some());
+		assert!(<MultiPhase<T>>::current_phase().is_unsigned());
 	}
 
 	#[extra]
 	create_snapshot {
-		assert!(<TwoPhase<T>>::snapshot().is_none());
+		assert!(<MultiPhase<T>>::snapshot().is_none());
 	}: {
-		<TwoPhase::<T>>::create_snapshot()
+		<MultiPhase::<T>>::create_snapshot()
 	} verify {
-		assert!(<TwoPhase<T>>::snapshot().is_some());
+		assert!(<MultiPhase<T>>::snapshot().is_some());
 	}
 
 	submit {
@@ -251,7 +251,7 @@ benchmarks! {
 
 	}: _(RawOrigin::Signed(caller), solution, c)
 	verify {
-		assert!(<TwoPhase<T>>::signed_submissions().len() as u32 == c + 1);
+		assert!(<MultiPhase<T>>::signed_submissions().len() as u32 == c + 1);
 	}
 
 	submit_unsigned {
@@ -268,11 +268,18 @@ benchmarks! {
 		let witness = SolutionOrSnapshotSize { voters: v, targets: t };
 		let raw_solution = solution_with_size::<T>(witness, a, d);
 
-		assert!(<TwoPhase<T>>::queued_solution().is_none());
+		assert!(<MultiPhase<T>>::queued_solution().is_none());
 		<CurrentPhase<T>>::put(Phase::Unsigned((true, 1u32.into())));
-	}: _(RawOrigin::None, raw_solution, witness)
-	verify {
-		assert!(<TwoPhase<T>>::queued_solution().is_some());
+
+		// encode the most significant storage item that needs to be decoded in the dispatch.
+		let encoded_snapshot = <MultiPhase<T>>::snapshot().unwrap().encode();
+		let encoded_call = <Call<T>>::submit_unsigned(raw_solution.clone(), witness).encode();
+	}: {
+		assert_ok!(<MultiPhase<T>>::submit_unsigned(RawOrigin::None.into(), raw_solution, witness));
+		let _decoded_snap = <RoundSnapshot<T::AccountId> as Decode>::decode(&mut &*encoded_snapshot).unwrap();
+		let _decoded_call = <Call<T> as Decode>::decode(&mut &*encoded_call).unwrap();
+	} verify {
+		assert!(<MultiPhase<T>>::queued_solution().is_some());
 	}
 
 	// This is checking a valid solution. The worse case is indeed a valid solution.
@@ -292,13 +299,18 @@ benchmarks! {
 
 		assert_eq!(raw_solution.compact.voter_count() as u32, a);
 		assert_eq!(raw_solution.compact.unique_targets().len() as u32, d);
+
+		// encode the most significant storage item that needs to be decoded in the dispatch.
+		let encoded_snapshot = <MultiPhase<T>>::snapshot().unwrap().encode();
 	}: {
-		assert_ok!(<TwoPhase<T>>::feasibility_check(raw_solution, ElectionCompute::Unsigned));
+		assert_ok!(<MultiPhase<T>>::feasibility_check(raw_solution, ElectionCompute::Unsigned));
+		let _decoded_snap = <RoundSnapshot<T::AccountId> as Decode>::decode(&mut &*encoded_snapshot).unwrap();
 	}
 }
 
 #[cfg(test)]
 mod test {
+	// TODO: use the macro here.
 	use super::*;
 	use crate::mock::*;
 

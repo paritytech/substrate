@@ -267,22 +267,22 @@ mod tests {
 		origin: Origin,
 		solution: RawSolution<CompactOf<Runtime>>,
 	) -> DispatchResultWithPostInfo {
-		TwoPhase::submit(origin, solution, TwoPhase::signed_submissions().len() as u32)
+		MultiPhase::submit(origin, solution, MultiPhase::signed_submissions().len() as u32)
 	}
 
 	#[test]
 	fn cannot_submit_too_early() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(2);
-			assert_eq!(TwoPhase::current_phase(), Phase::Off);
+			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
 			// create a temp snapshot only for this test.
-			TwoPhase::create_snapshot();
+			MultiPhase::create_snapshot();
 			let solution = raw_solution();
 
 			assert_noop!(
 				submit_with_witness(Origin::signed(10), solution),
-				Error::<Runtime>::EarlySubmission,
+				Error::<Runtime>::PreDispatchEarlySubmission,
 			);
 		})
 	}
@@ -291,16 +291,16 @@ mod tests {
 	fn wrong_witness_fails() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(15);
-			assert!(TwoPhase::current_phase().is_signed());
+			assert!(MultiPhase::current_phase().is_signed());
 
 			let solution = raw_solution();
 			// submit this once correctly
 			assert_ok!(submit_with_witness(Origin::signed(99), solution.clone()));
-			assert_eq!(TwoPhase::signed_submissions().len(), 1);
+			assert_eq!(MultiPhase::signed_submissions().len(), 1);
 
 			// now try and cheat by passing a lower queue length
 			assert_noop!(
-				TwoPhase::submit(Origin::signed(99), solution, 0,),
+				MultiPhase::submit(Origin::signed(99), solution, 0,),
 				Error::<Runtime>::SignedInvalidWitness,
 			);
 		})
@@ -310,7 +310,7 @@ mod tests {
 	fn should_pay_deposit() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(15);
-			assert!(TwoPhase::current_phase().is_signed());
+			assert!(MultiPhase::current_phase().is_signed());
 
 			let solution = raw_solution();
 			assert_eq!(balances(&99), (100, 0));
@@ -318,7 +318,7 @@ mod tests {
 			assert_ok!(submit_with_witness(Origin::signed(99), solution));
 
 			assert_eq!(balances(&99), (95, 5));
-			assert_eq!(TwoPhase::signed_submissions().first().unwrap().deposit, 5);
+			assert_eq!(MultiPhase::signed_submissions().first().unwrap().deposit, 5);
 		})
 	}
 
@@ -326,7 +326,7 @@ mod tests {
 	fn good_solution_is_rewarded() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(15);
-			assert!(TwoPhase::current_phase().is_signed());
+			assert!(MultiPhase::current_phase().is_signed());
 
 			let solution = raw_solution();
 			assert_eq!(balances(&99), (100, 0));
@@ -334,7 +334,7 @@ mod tests {
 			assert_ok!(submit_with_witness(Origin::signed(99), solution));
 			assert_eq!(balances(&99), (95, 5));
 
-			assert!(TwoPhase::finalize_signed_phase().0);
+			assert!(MultiPhase::finalize_signed_phase().0);
 			assert_eq!(balances(&99), (100 + 7, 0));
 		})
 	}
@@ -343,7 +343,7 @@ mod tests {
 	fn reward_is_capped() {
 		ExtBuilder::default().reward(5, Perbill::from_percent(25), 10).build_and_execute(|| {
 			roll_to(15);
-			assert!(TwoPhase::current_phase().is_signed());
+			assert!(MultiPhase::current_phase().is_signed());
 
 			let solution = raw_solution();
 			assert_eq!(solution.score[0], 40);
@@ -352,14 +352,14 @@ mod tests {
 			assert_ok!(submit_with_witness(Origin::signed(99), solution));
 			assert_eq!(balances(&99), (95, 5));
 
-			assert!(TwoPhase::finalize_signed_phase().0);
+			assert!(MultiPhase::finalize_signed_phase().0);
 			// expected reward is 5 + 10
 			assert_eq!(balances(&99), (100 + 10, 0));
 		});
 
 		ExtBuilder::default().reward(5, Perbill::from_percent(25), 20).build_and_execute(|| {
 			roll_to(15);
-			assert!(TwoPhase::current_phase().is_signed());
+			assert!(MultiPhase::current_phase().is_signed());
 
 			let solution = raw_solution();
 			assert_eq!(solution.score[0], 40);
@@ -368,7 +368,7 @@ mod tests {
 			assert_ok!(submit_with_witness(Origin::signed(99), solution));
 			assert_eq!(balances(&99), (95, 5));
 
-			assert!(TwoPhase::finalize_signed_phase().0);
+			assert!(MultiPhase::finalize_signed_phase().0);
 			// expected reward is 5 + 10
 			assert_eq!(balances(&99), (100 + 15, 0));
 		});
@@ -378,7 +378,7 @@ mod tests {
 	fn bad_solution_is_slashed() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(15);
-			assert!(TwoPhase::current_phase().is_signed());
+			assert!(MultiPhase::current_phase().is_signed());
 
 			let mut solution = raw_solution();
 			assert_eq!(balances(&99), (100, 0));
@@ -390,7 +390,7 @@ mod tests {
 			assert_eq!(balances(&99), (95, 5));
 
 			// no good solution was stored.
-			assert!(!TwoPhase::finalize_signed_phase().0);
+			assert!(!MultiPhase::finalize_signed_phase().0);
 			// and the bond is gone.
 			assert_eq!(balances(&99), (95, 0));
 		})
@@ -400,7 +400,7 @@ mod tests {
 	fn suppressed_solution_gets_bond_back() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(15);
-			assert!(TwoPhase::current_phase().is_signed());
+			assert!(MultiPhase::current_phase().is_signed());
 
 			let mut solution = raw_solution();
 			assert_eq!(balances(&99), (100, 0));
@@ -416,7 +416,7 @@ mod tests {
 			assert_eq!(balances(&999), (95, 5));
 
 			// _some_ good solution was stored.
-			assert!(TwoPhase::finalize_signed_phase().0);
+			assert!(MultiPhase::finalize_signed_phase().0);
 
 			// 99 is rewarded.
 			assert_eq!(balances(&99), (100 + 7, 0));
@@ -429,7 +429,7 @@ mod tests {
 	fn cannot_submit_worse_with_full_queue() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(15);
-			assert!(TwoPhase::current_phase().is_signed());
+			assert!(MultiPhase::current_phase().is_signed());
 
 			for s in 0..SignedMaxSubmissions::get() {
 				// score is always getting better
@@ -451,7 +451,7 @@ mod tests {
 	fn weakest_is_removed_if_better_provided() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(15);
-			assert!(TwoPhase::current_phase().is_signed());
+			assert!(MultiPhase::current_phase().is_signed());
 
 			for s in 0..SignedMaxSubmissions::get() {
 				// score is always getting better
@@ -460,7 +460,7 @@ mod tests {
 			}
 
 			assert_eq!(
-				TwoPhase::signed_submissions()
+				MultiPhase::signed_submissions()
 					.into_iter()
 					.map(|s| s.solution.score[0])
 					.collect::<Vec<_>>(),
@@ -473,7 +473,7 @@ mod tests {
 
 			// the one with score 5 was rejected, the new one inserted.
 			assert_eq!(
-				TwoPhase::signed_submissions()
+				MultiPhase::signed_submissions()
 					.into_iter()
 					.map(|s| s.solution.score[0])
 					.collect::<Vec<_>>(),
@@ -486,7 +486,7 @@ mod tests {
 	fn weakest_is_removed_if_better_provided_wont_remove_self() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(15);
-			assert!(TwoPhase::current_phase().is_signed());
+			assert!(MultiPhase::current_phase().is_signed());
 
 			for s in 1..SignedMaxSubmissions::get() {
 				// score is always getting better
@@ -498,7 +498,7 @@ mod tests {
 			assert_ok!(submit_with_witness(Origin::signed(99), solution));
 
 			assert_eq!(
-				TwoPhase::signed_submissions()
+				MultiPhase::signed_submissions()
 					.into_iter()
 					.map(|s| s.solution.score[0])
 					.collect::<Vec<_>>(),
@@ -511,7 +511,7 @@ mod tests {
 
 			// the one with score 5 was rejected, the new one inserted.
 			assert_eq!(
-				TwoPhase::signed_submissions()
+				MultiPhase::signed_submissions()
 					.into_iter()
 					.map(|s| s.solution.score[0])
 					.collect::<Vec<_>>(),
@@ -524,7 +524,7 @@ mod tests {
 	fn early_ejected_solution_gets_bond_back() {
 		ExtBuilder::default().signed_deposit(2, 0, 0).build_and_execute(|| {
 			roll_to(15);
-			assert!(TwoPhase::current_phase().is_signed());
+			assert!(MultiPhase::current_phase().is_signed());
 
 			for s in 0..SignedMaxSubmissions::get() {
 				// score is always getting better
@@ -549,14 +549,14 @@ mod tests {
 	fn equally_good_solution_is_not_accepted() {
 		ExtBuilder::default().signed_max_submission(3).build_and_execute(|| {
 			roll_to(15);
-			assert!(TwoPhase::current_phase().is_signed());
+			assert!(MultiPhase::current_phase().is_signed());
 
 			for i in 0..SignedMaxSubmissions::get() {
 				let solution = RawSolution { score: [(5 + i).into(), 0, 0], ..Default::default() };
 				assert_ok!(submit_with_witness(Origin::signed(99), solution));
 			}
 			assert_eq!(
-				TwoPhase::signed_submissions()
+				MultiPhase::signed_submissions()
 					.into_iter()
 					.map(|s| s.solution.score[0])
 					.collect::<Vec<_>>(),
@@ -576,14 +576,14 @@ mod tests {
 	fn solutions_are_always_sorted() {
 		ExtBuilder::default().signed_max_submission(3).build_and_execute(|| {
 			let scores = || {
-				TwoPhase::signed_submissions()
+				MultiPhase::signed_submissions()
 					.into_iter()
 					.map(|s| s.solution.score[0])
 					.collect::<Vec<_>>()
 			};
 
 			roll_to(15);
-			assert!(TwoPhase::current_phase().is_signed());
+			assert!(MultiPhase::current_phase().is_signed());
 
 			let solution = RawSolution { score: [5, 0, 0], ..Default::default() };
 			assert_ok!(submit_with_witness(Origin::signed(99), solution));
@@ -623,7 +623,7 @@ mod tests {
 		// - suppressed_solution_gets_bond_back
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(15);
-			assert!(TwoPhase::current_phase().is_signed());
+			assert!(MultiPhase::current_phase().is_signed());
 
 			assert_eq!(balances(&99), (100, 0));
 			assert_eq!(balances(&999), (100, 0));
@@ -643,12 +643,12 @@ mod tests {
 			assert_ok!(submit_with_witness(Origin::signed(9999), solution));
 
 			assert_eq!(
-				TwoPhase::signed_submissions().iter().map(|x| x.who).collect::<Vec<_>>(),
+				MultiPhase::signed_submissions().iter().map(|x| x.who).collect::<Vec<_>>(),
 				vec![9999, 99, 999]
 			);
 
 			// _some_ good solution was stored.
-			assert!(TwoPhase::finalize_signed_phase().0);
+			assert!(MultiPhase::finalize_signed_phase().0);
 
 			// 99 is rewarded.
 			assert_eq!(balances(&99), (100 + 7, 0));
@@ -663,9 +663,9 @@ mod tests {
 	fn cannot_consume_too_much_future_weight() {
 		ExtBuilder::default().signed_weight(40).mock_weight_info(true).build_and_execute(|| {
 			roll_to(15);
-			assert!(TwoPhase::current_phase().is_signed());
+			assert!(MultiPhase::current_phase().is_signed());
 
-			let (solution, witness) = TwoPhase::mine_solution(2).unwrap();
+			let (solution, witness) = MultiPhase::mine_solution(2).unwrap();
 			let solution_weight = <Runtime as Config>::WeightInfo::feasibility_check(
 				witness.voters,
 				witness.targets,

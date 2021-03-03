@@ -16,23 +16,23 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Substrate's client telemetry is a part of substrate that allows logging telemetry information
-//! with a [Polkadot telemetry](https://github.com/paritytech/substrate-telemetry).
+//! Substrate's client telemetry is a part of substrate that allows ingesting telemetry data
+//! with for example [Polkadot telemetry](https://github.com/paritytech/substrate-telemetry).
 //!
-//! It works using Tokio's [tracing](https://github.com/tokio-rs/tracing/). The telemetry
-//! information uses tracing's logging to report the telemetry which is then retrieved by a
-//! tracing's `Layer`. This layer will then send the data through an asynchronous channel and to a
-//! background task called [`TelemetryWorker`] which will send the information to the telemetry
-//! server.
+//! It works using Tokio's [tracing](https://github.com/tokio-rs/tracing/) library. The telemetry
+//! information uses tracing's logging to report the telemetry data which is then retrieved by a
+//! tracing `Layer`. This layer will then send the data through an asynchronous channel to a
+//! background task called [`TelemetryWorker`] which will send the information to the configured
+//! remote telemetry servers.
 //!
-//! If multiple substrate nodes are running, it uses a tracing's `Span` to identify which substrate
-//! node is reporting the telemetry. Every task spawned using sc-service's `TaskManager`
-//! automatically inherit this span.
+//! If multiple substrate nodes are running in the same process, it uses a `tracing::Span` to
+//! identify which substrate node is reporting the telemetry. Every task spawned using sc-service's
+//! `TaskManager` automatically inherit this span.
 //!
-//! Substrate's nodes initialize/register to the [`TelemetryWorker`] using a [`TelemetryHandle`].
+//! Substrate's nodes initialize/register with the [`TelemetryWorker`] using a [`TelemetryHandle`].
 //! This handle can be cloned and passed around. It uses an asynchronous channel to communicate with
-//! the running [`TelemetryWorker`] dedicated to registration. Registering a telemetry can happen at
-//! any point in time during the execution.
+//! the running [`TelemetryWorker`] dedicated to registration. Registering can happen at any point
+//! in time during the process execution.
 
 #![warn(missing_docs)]
 
@@ -86,7 +86,12 @@ impl TelemetrySpan {
 
 	/// Constructs a new [`TelemetrySpan`].
 	pub fn new() -> Self {
-		Self(tracing::info_span!(TELEMETRY_LOG_SPAN))
+		Self(tracing::error_span!(TELEMETRY_LOG_SPAN))
+	}
+
+	/// Return a clone of the underlying `tracing::Span` instance.
+	pub fn span(&self) -> tracing::Span {
+		self.0.clone()
 	}
 }
 
@@ -115,7 +120,7 @@ pub struct ConnectionMessage {
 
 /// Telemetry worker.
 ///
-/// It should be ran as a background task using the [`TelemetryWorker::run`] method. This method
+/// It should run as a background task using the [`TelemetryWorker::run`] method. This method
 /// will consume the object and any further attempts of initializing a new telemetry through its
 /// handle will fail (without being fatal).
 #[derive(Debug)]
@@ -143,7 +148,7 @@ impl TelemetryWorker {
 
 	/// Get a new [`TelemetryHandle`].
 	///
-	/// This is used when you want to register a new telemetry for a Substrate node.
+	/// This is used when you want to register with the [`TelemetryWorker`].
 	pub fn handle(&self) -> TelemetryHandle {
 		TelemetryHandle {
 			message_sender: self.register_sender.clone(),
@@ -225,6 +230,11 @@ impl TelemetryWorker {
 				};
 
 				for (addr, verbosity) in endpoints {
+					log::trace!(
+						target: "telemetry",
+						"Initializing telemetry for: {:?}",
+						addr,
+					);
 					node_map
 						.entry(id.clone())
 						.or_default()

@@ -207,19 +207,6 @@ impl Configuration {
 		self.prometheus_config.as_ref().map(|config| &config.registry)
 	}
 
-	/// Returns the telemetry endpoints if any and if the telemetry handle exists.
-	pub(crate) fn telemetry_endpoints(&self) -> Option<&TelemetryEndpoints> {
-		if self.telemetry_handle.is_none() {
-			return None;
-		}
-
-		match self.telemetry_endpoints.as_ref() {
-			// Don't initialise telemetry if `telemetry_endpoints` == Some([])
-			Some(endpoints) if !endpoints.is_empty() => Some(endpoints),
-			_ => None,
-		}
-	}
-
 	/// Returns the network protocol id from the chain spec, or the default.
 	pub fn protocol_id(&self) -> sc_network::config::ProtocolId {
 		let protocol_id_full = match self.chain_spec.protocol_id() {

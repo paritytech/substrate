@@ -335,13 +335,13 @@ use sp_election_providers::ElectionProvider;
 pub use weights::WeightInfo;
 
 const STAKING_ID: LockIdentifier = *b"staking ";
-pub(crate) const LOG_TARGET: &'static str = "staking";
+pub(crate) const LOG_TARGET: &'static str = "runtime::staking";
 
 // syntactic sugar for logging.
 #[macro_export]
 macro_rules! log {
 	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
-		frame_support::debug::$level!(
+		log::$level!(
 			target: crate::LOG_TARGET,
 			concat!("💸 ", $patter) $(, $values)*
 		)
@@ -1668,7 +1668,7 @@ decl_module! {
 				ledger = ledger.consolidate_unlocked(current_era)
 			}
 
-			let post_info_weight = if ledger.unlocking.is_empty() && ledger.active <= T::Currency::minimum_balance() {
+			let post_info_weight = if ledger.unlocking.is_empty() && ledger.active < T::Currency::minimum_balance() {
 				// This account must have called `unbond()` with some value that caused the active
 				// portion to fall below existential deposit + will have no more unlocking chunks
 				// left. We can now safely remove all staking-related information.
@@ -2865,6 +2865,7 @@ impl<T: Config> Module<T> {
 
 		// Set staking information for new era.
 		let maybe_new_validators = Self::select_and_update_validators(current_era);
+		// TWO_PHASE_NOTE: use this later on.
 		let _unused_new_validators = Self::enact_election(current_era);
 
 		maybe_new_validators
@@ -3175,8 +3176,8 @@ impl<T: Config> Module<T> {
 	///
 	/// This will also process the election, as noted in [`process_election`].
 	fn enact_election(_current_era: EraIndex) -> Option<Vec<T::AccountId>> {
-		let outcome = T::ElectionProvider::elect().map(|_| ());
-		log!(debug, "Experimental election provider outputted {:?}", outcome);
+		let _outcome = T::ElectionProvider::elect().map(|_| ());
+		log!(debug, "Experimental election provider outputted {:?}", _outcome);
 		// TWO_PHASE_NOTE: This code path shall not return anything for now. Later on, redirect the
 		// results to `process_election`.
 		None
@@ -3187,7 +3188,7 @@ impl<T: Config> Module<T> {
 	/// Assumes storage is upgraded before calling.
 	///
 	/// This is called:
-	/// - after a `withdraw_unbond()` call that frees all of a stash's bonded balance.
+	/// - after a `withdraw_unbonded()` call that frees all of a stash's bonded balance.
 	/// - through `reap_stash()` if the balance has fallen to zero (through slashing).
 	fn kill_stash(stash: &T::AccountId, num_slashing_spans: u32) -> DispatchResult {
 		let controller = <Bonded<T>>::get(stash).ok_or(Error::<T>::NotStash)?;
@@ -3403,30 +3404,30 @@ impl<T: Config> sp_election_providers::ElectionDataProvider<T::AccountId, T::Blo
 /// some session can lag in between the newest session planned and the latest session started.
 impl<T: Config> pallet_session::SessionManager<T::AccountId> for Module<T> {
 	fn new_session(new_index: SessionIndex) -> Option<Vec<T::AccountId>> {
-		frame_support::debug::native::trace!(
-			target: LOG_TARGET,
-			"[{}] planning new_session({})",
+		log!(
+			trace,
+			"[{:?}] planning new_session({})",
 			<frame_system::Module<T>>::block_number(),
-			new_index
+			new_index,
 		);
 		CurrentPlannedSession::put(new_index);
 		Self::new_session(new_index)
 	}
 	fn start_session(start_index: SessionIndex) {
-		frame_support::debug::native::trace!(
-			target: LOG_TARGET,
-			"[{}] starting start_session({})",
+		log!(
+			trace,
+			"[{:?}] starting start_session({})",
 			<frame_system::Module<T>>::block_number(),
-			start_index
+			start_index,
 		);
 		Self::start_session(start_index)
 	}
 	fn end_session(end_index: SessionIndex) {
-		frame_support::debug::native::trace!(
-			target: LOG_TARGET,
-			"[{}] ending end_session({})",
+		log!(
+			trace,
+			"[{:?}] ending end_session({})",
 			<frame_system::Module<T>>::block_number(),
-			end_index
+			end_index,
 		);
 		Self::end_session(end_index)
 	}

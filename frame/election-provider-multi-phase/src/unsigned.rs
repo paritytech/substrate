@@ -28,7 +28,7 @@ use sp_runtime::{offchain::storage::StorageValueRef, traits::TrailingZeroInput};
 use sp_std::cmp::Ordering;
 
 /// Storage key used to store the persistent offchain worker status.
-pub(crate) const OFFCHAIN_HEAD_DB: &[u8] = b"parity/multi-phase-unsigned-election/";
+pub(crate) const OFFCHAIN_HEAD_DB: &[u8] = b"parity/multi-phase-unsigned-election";
 
 /// The repeat threshold of the offchain worker. This means we won't run the offchain worker twice
 /// within a window of 5 blocks.
@@ -45,6 +45,8 @@ pub enum MinerError {
 	/// The pre-dispatch checks failed for the mined solution.
 	// TODO: maybe wrap a DispatchError here to be able to clarify which one failed?
 	PreDispatchChecksFailed,
+	/// The solution generated from the miner is not feasible.
+	Feasibility(FeasibilityError),
 }
 
 impl From<sp_npos_elections::Error> for MinerError {
@@ -53,23 +55,51 @@ impl From<sp_npos_elections::Error> for MinerError {
 	}
 }
 
+impl From<FeasibilityError> for MinerError {
+	fn from(e: FeasibilityError) -> Self {
+		MinerError::Feasibility(e)
+	}
+}
+
+
 impl<T: Config> Pallet<T> {
 	/// Mine a new solution, and submit it back to the chain as an unsigned transaction.
-	pub(crate) fn mine_and_submit() -> Result<(), MinerError> {
-		let balancing = Self::get_balancing_iters();
-		let (raw_solution, witness) = Self::mine_solution(balancing)?;
+	pub fn mine_check_and_submit() -> Result<(), MinerError> {
+		let iters = Self::get_balancing_iters();
+		// get the solution, with a load of checks to ensure if submitted, IT IS ABSOLUTELY VALID.
+		let (raw_solution, witness) = Self::mine_and_check(iters)?;
+
+		let call = Call::submit_unsigned(raw_solution, witness).into();
+		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call)
+			.map_err(|_| MinerError::PoolSubmissionFailed)
+	}
+
+	/// Mine a new npos solution, with all the relevant checks to make sure that it will be accepted
+	/// to the chain.
+	///
+	/// If you want an unchecked solution, use [`Pallet::mine_solution`].
+	/// If you want a checked solution and submit it at the same time, use
+	/// [`Pallet::mine_check_and_submit`].
+	pub fn mine_and_check(
+		iters: usize,
+	) -> Result<(RawSolution<CompactOf<T>>, SolutionOrSnapshotSize), MinerError> {
+		let (raw_solution, witness) = Self::mine_solution(iters)?;
 
 		// ensure that this will pass the pre-dispatch checks
 		Self::unsigned_pre_dispatch_checks(&raw_solution).map_err(|e| {
-			log!(warn, "pre-disaptch-checks failed for mined solution: {:?}", e);
+			log!(warn, "pre-dispatch-checks failed for mined solution: {:?}", e);
 			MinerError::PreDispatchChecksFailed
 		})?;
 
-		// submit the raw solution to the pool.
-		let call = Call::submit_unsigned(raw_solution, witness).into();
+		// ensure that this is a feasible solution
+		let _ = Self::feasibility_check(raw_solution.clone(), ElectionCompute::Unsigned).map_err(
+			|e| {
+				log!(warn, "feasibility-check failed for mined solution: {:?}", e);
+				MinerError::from(e)
+			},
+		)?;
 
-		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call)
-			.map_err(|_| MinerError::PoolSubmissionFailed)
+		Ok((raw_solution, witness))
 	}
 
 	/// Mine a new npos solution.
@@ -179,11 +209,11 @@ impl<T: Config> Pallet<T> {
 	/// down the line.
 	///
 	/// Indeed, the score must be computed **after** this step. If this step reduces the score too
-	/// much, then the solution will be discarded.
+	/// much or remove a winner, then the solution must be discarded **after** this step.
 	pub fn trim_compact<FN>(
 		maximum_allowed_voters: u32,
 		mut compact: CompactOf<T>,
-		nominator_index: FN,
+		voter_index: FN,
 	) -> Result<CompactOf<T>, MinerError>
 	where
 		for<'r> FN: Fn(&'r T::AccountId) -> Option<CompactVoterIndexOf<T>>,
@@ -203,7 +233,7 @@ impl<T: Config> Pallet<T> {
 				// removed.
 				let mut removed = 0;
 				for (maybe_index, _stake) in
-					voters_sorted.iter().map(|(who, stake)| (nominator_index(&who), stake))
+					voters_sorted.iter().map(|(who, stake)| (voter_index(&who), stake))
 				{
 					let index = maybe_index.ok_or(MinerError::SnapshotUnAvailable)?;
 					if compact.remove_voter(index) {
@@ -288,9 +318,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		debug_assert!(
-			weight_with(voters.min(size.voters)) <= max_weight || weight_with(0) > max_weight,
-			// --------------------------------------------------^^ Base weight is more than max,
-			// not much we can do here.
+			weight_with(voters.min(size.voters)) <= max_weight,
 			"weight_with({}) <= {}",
 			voters.min(size.voters),
 			max_weight,
@@ -348,7 +376,7 @@ impl<T: Config> Pallet<T> {
 		solution: &RawSolution<CompactOf<T>>,
 	) -> DispatchResult {
 		// ensure solution is timely. Don't panic yet. This is a cheap check.
-		ensure!(Self::current_phase().is_unsigned_open(), Error::<T>::EarlySubmission);
+		ensure!(Self::current_phase().is_unsigned_open(), Error::<T>::PreDispatchEarlySubmission);
 
 		// ensure correct number of winners.
 		ensure!(
@@ -372,42 +400,93 @@ impl<T: Config> Pallet<T> {
 }
 
 #[cfg(test)]
-mod weight_trim {
+mod max_weight {
+	#![allow(unused_variables)]
 	use super::{mock::*, *};
+
+	struct TestWeight;
+	impl crate::weights::WeightInfo for TestWeight {
+		fn on_initialize_nothing() -> Weight {
+			unreachable!()
+		}
+		fn on_initialize_open_signed() -> Weight {
+			unreachable!()
+		}
+		fn on_initialize_open_unsigned_with_snapshot() -> Weight {
+			unreachable!()
+		}
+		fn on_initialize_open_unsigned_without_snapshot() -> Weight {
+			unreachable!()
+		}
+		fn finalize_signed_phase_accept_solution() -> Weight {
+			unreachable!()
+		}
+		fn finalize_signed_phase_reject_solution() -> Weight {
+			unreachable!()
+		}
+		fn submit(c: u32) -> Weight {
+			unreachable!()
+		}
+		fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight {
+			(0 * v + 0 * t + 1000 * a + 0 * d) as Weight
+		}
+		fn feasibility_check(v: u32, _t: u32, a: u32, d: u32) -> Weight {
+			unreachable!()
+		}
+	}
 
 	#[test]
 	fn find_max_voter_binary_search_works() {
-		<MockWeightInfo>::set(true);
-
 		let w = SolutionOrSnapshotSize { voters: 10, targets: 0 };
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 0), 0);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 1), 0);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 9), 0);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 14), 0);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 15), 1);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 19), 1);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 20), 2);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 25), 3);
+
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 0), 0);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1), 0);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 999), 0);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1000), 1);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1001), 1);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1990), 1);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1999), 1);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2000), 2);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2001), 2);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2010), 2);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2990), 2);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2999), 2);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 3000), 3);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 3333), 3);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 5500), 5);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 7777), 7);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 9999), 9);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 10_000), 10);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 10_999), 10);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 11_000), 10);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 22_000), 10);
 
 		let w = SolutionOrSnapshotSize { voters: 1, targets: 0 };
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 0), 0);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 1), 0);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 9), 0);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 14), 0);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 15), 1);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 19), 1);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 20), 1);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 25), 1);
+
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 0), 0);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1), 0);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 999), 0);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1000), 1);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1001), 1);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1990), 1);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1999), 1);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2000), 1);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2001), 1);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2010), 1);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 3333), 1);
 
 		let w = SolutionOrSnapshotSize { voters: 2, targets: 0 };
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 0), 0);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 1), 0);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 9), 0);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 14), 0);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 15), 1);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 19), 1);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 20), 2);
-		assert_eq!(TwoPhase::maximum_voter_for_weight::<DualMockWeightInfo>(0, w, 25), 2);
+
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 0), 0);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1), 0);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 999), 0);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1000), 1);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1001), 1);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 1999), 1);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2000), 2);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2001), 2);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 2010), 2);
+		assert_eq!(MultiPhase::maximum_voter_for_weight::<TestWeight>(0, w, 3333), 2);
 	}
 }
 
@@ -429,51 +508,51 @@ mod tests {
 			let call = Call::submit_unsigned(solution.clone(), witness());
 
 			// initial
-			assert_eq!(TwoPhase::current_phase(), Phase::Off);
+			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 			assert!(matches!(
-				<TwoPhase as ValidateUnsigned>::validate_unsigned(TransactionSource::Local, &call)
+				<MultiPhase as ValidateUnsigned>::validate_unsigned(TransactionSource::Local, &call)
 					.unwrap_err(),
 				TransactionValidityError::Invalid(InvalidTransaction::Custom(0))
 			));
 			assert!(matches!(
-				<TwoPhase as ValidateUnsigned>::pre_dispatch(&call).unwrap_err(),
+				<MultiPhase as ValidateUnsigned>::pre_dispatch(&call).unwrap_err(),
 				TransactionValidityError::Invalid(InvalidTransaction::Custom(0))
 			));
 
 			// signed
 			roll_to(15);
-			assert_eq!(TwoPhase::current_phase(), Phase::Signed);
+			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 			assert!(matches!(
-				<TwoPhase as ValidateUnsigned>::validate_unsigned(TransactionSource::Local, &call)
+				<MultiPhase as ValidateUnsigned>::validate_unsigned(TransactionSource::Local, &call)
 					.unwrap_err(),
 				TransactionValidityError::Invalid(InvalidTransaction::Custom(0))
 			));
 			assert!(matches!(
-				<TwoPhase as ValidateUnsigned>::pre_dispatch(&call).unwrap_err(),
+				<MultiPhase as ValidateUnsigned>::pre_dispatch(&call).unwrap_err(),
 				TransactionValidityError::Invalid(InvalidTransaction::Custom(0))
 			));
 
 			// unsigned
 			roll_to(25);
-			assert!(TwoPhase::current_phase().is_unsigned());
+			assert!(MultiPhase::current_phase().is_unsigned());
 
-			assert!(<TwoPhase as ValidateUnsigned>::validate_unsigned(
+			assert!(<MultiPhase as ValidateUnsigned>::validate_unsigned(
 				TransactionSource::Local,
 				&call
 			)
 			.is_ok());
-			assert!(<TwoPhase as ValidateUnsigned>::pre_dispatch(&call).is_ok());
+			assert!(<MultiPhase as ValidateUnsigned>::pre_dispatch(&call).is_ok());
 
 			// unsigned -- but not enabled.
 			<CurrentPhase<Runtime>>::put(Phase::Unsigned((false, 25)));
-			assert!(TwoPhase::current_phase().is_unsigned());
+			assert!(MultiPhase::current_phase().is_unsigned());
 			assert!(matches!(
-				<TwoPhase as ValidateUnsigned>::validate_unsigned(TransactionSource::Local, &call)
+				<MultiPhase as ValidateUnsigned>::validate_unsigned(TransactionSource::Local, &call)
 					.unwrap_err(),
 				TransactionValidityError::Invalid(InvalidTransaction::Custom(0))
 			));
 			assert!(matches!(
-				<TwoPhase as ValidateUnsigned>::pre_dispatch(&call).unwrap_err(),
+				<MultiPhase as ValidateUnsigned>::pre_dispatch(&call).unwrap_err(),
 				TransactionValidityError::Invalid(InvalidTransaction::Custom(0))
 			));
 		})
@@ -483,18 +562,18 @@ mod tests {
 	fn validate_unsigned_retracts_low_score() {
 		ExtBuilder::default().desired_targets(0).build_and_execute(|| {
 			roll_to(25);
-			assert!(TwoPhase::current_phase().is_unsigned());
+			assert!(MultiPhase::current_phase().is_unsigned());
 
 			let solution = RawSolution::<TestCompact> { score: [5, 0, 0], ..Default::default() };
 			let call = Call::submit_unsigned(solution.clone(), witness());
 
 			// initial
-			assert!(<TwoPhase as ValidateUnsigned>::validate_unsigned(
+			assert!(<MultiPhase as ValidateUnsigned>::validate_unsigned(
 				TransactionSource::Local,
 				&call
 			)
 			.is_ok());
-			assert!(<TwoPhase as ValidateUnsigned>::pre_dispatch(&call).is_ok());
+			assert!(<MultiPhase as ValidateUnsigned>::pre_dispatch(&call).is_ok());
 
 			// set a better score
 			let ready = ReadySolution { score: [10, 0, 0], ..Default::default() };
@@ -502,12 +581,15 @@ mod tests {
 
 			// won't work anymore.
 			assert!(matches!(
-				<TwoPhase as ValidateUnsigned>::validate_unsigned(TransactionSource::Local, &call)
-					.unwrap_err(),
+				<MultiPhase as ValidateUnsigned>::validate_unsigned(
+					TransactionSource::Local,
+					&call
+				)
+				.unwrap_err(),
 				TransactionValidityError::Invalid(InvalidTransaction::Custom(2))
 			));
 			assert!(matches!(
-				<TwoPhase as ValidateUnsigned>::pre_dispatch(&call).unwrap_err(),
+				<MultiPhase as ValidateUnsigned>::pre_dispatch(&call).unwrap_err(),
 				TransactionValidityError::Invalid(InvalidTransaction::Custom(2))
 			));
 		})
@@ -517,7 +599,7 @@ mod tests {
 	fn validate_unsigned_retracts_incorrect_winner_count() {
 		ExtBuilder::default().desired_targets(1).build_and_execute(|| {
 			roll_to(25);
-			assert!(TwoPhase::current_phase().is_unsigned());
+			assert!(MultiPhase::current_phase().is_unsigned());
 
 			let solution = RawSolution::<TestCompact> { score: [5, 0, 0], ..Default::default() };
 			let call = Call::submit_unsigned(solution.clone(), witness());
@@ -525,8 +607,11 @@ mod tests {
 
 			// won't work anymore.
 			assert!(matches!(
-				<TwoPhase as ValidateUnsigned>::validate_unsigned(TransactionSource::Local, &call)
-					.unwrap_err(),
+				<MultiPhase as ValidateUnsigned>::validate_unsigned(
+					TransactionSource::Local,
+					&call
+				)
+				.unwrap_err(),
 				TransactionValidityError::Invalid(InvalidTransaction::Custom(1))
 			));
 		})
@@ -536,15 +621,18 @@ mod tests {
 	fn priority_is_set() {
 		ExtBuilder::default().miner_tx_priority(20).desired_targets(0).build_and_execute(|| {
 			roll_to(25);
-			assert!(TwoPhase::current_phase().is_unsigned());
+			assert!(MultiPhase::current_phase().is_unsigned());
 
 			let solution = RawSolution::<TestCompact> { score: [5, 0, 0], ..Default::default() };
 			let call = Call::submit_unsigned(solution.clone(), witness());
 
 			assert_eq!(
-				<TwoPhase as ValidateUnsigned>::validate_unsigned(TransactionSource::Local, &call)
-					.unwrap()
-					.priority,
+				<MultiPhase as ValidateUnsigned>::validate_unsigned(
+					TransactionSource::Local,
+					&call
+				)
+				.unwrap()
+				.priority,
 				25
 			);
 		})
@@ -553,12 +641,12 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Invalid unsigned submission must produce invalid block and \
 	                           deprive validator from their authoring reward.: \
-	                           DispatchError::Module { index: 0, error: 1, message: \
+	                           DispatchError::Module { index: 2, error: 1, message: \
 	                           Some(\"PreDispatchWrongWinnerCount\") }")]
 	fn unfeasible_solution_panics() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(25);
-			assert!(TwoPhase::current_phase().is_unsigned());
+			assert!(MultiPhase::current_phase().is_unsigned());
 
 			// This is in itself an invalid BS solution.
 			let solution = RawSolution::<TestCompact> { score: [5, 0, 0], ..Default::default() };
@@ -574,7 +662,7 @@ mod tests {
 	fn wrong_witness_panics() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(25);
-			assert!(TwoPhase::current_phase().is_unsigned());
+			assert!(MultiPhase::current_phase().is_unsigned());
 
 			// This solution is unfeasible as well, but we won't even get there.
 			let solution = RawSolution::<TestCompact> { score: [5, 0, 0], ..Default::default() };
@@ -592,19 +680,19 @@ mod tests {
 	fn miner_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(25);
-			assert!(TwoPhase::current_phase().is_unsigned());
+			assert!(MultiPhase::current_phase().is_unsigned());
 
 			// ensure we have snapshots in place.
-			assert!(TwoPhase::snapshot().is_some());
-			assert_eq!(TwoPhase::desired_targets().unwrap(), 2);
+			assert!(MultiPhase::snapshot().is_some());
+			assert_eq!(MultiPhase::desired_targets().unwrap(), 2);
 
 			// mine seq_phragmen solution with 2 iters.
-			let (solution, witness) = TwoPhase::mine_solution(2).unwrap();
+			let (solution, witness) = MultiPhase::mine_solution(2).unwrap();
 
 			// ensure this solution is valid.
-			assert!(TwoPhase::queued_solution().is_none());
-			assert_ok!(TwoPhase::submit_unsigned(Origin::none(), solution, witness));
-			assert!(TwoPhase::queued_solution().is_some());
+			assert!(MultiPhase::queued_solution().is_none());
+			assert_ok!(MultiPhase::submit_unsigned(Origin::none(), solution, witness));
+			assert!(MultiPhase::queued_solution().is_some());
 		})
 	}
 
@@ -612,9 +700,9 @@ mod tests {
 	fn miner_trims_weight() {
 		ExtBuilder::default().miner_weight(100).mock_weight_info(true).build_and_execute(|| {
 			roll_to(25);
-			assert!(TwoPhase::current_phase().is_unsigned());
+			assert!(MultiPhase::current_phase().is_unsigned());
 
-			let (solution, witness) = TwoPhase::mine_solution(2).unwrap();
+			let (solution, witness) = MultiPhase::mine_solution(2).unwrap();
 			let solution_weight = <Runtime as Config>::WeightInfo::submit_unsigned(
 				witness.voters,
 				witness.targets,
@@ -628,7 +716,7 @@ mod tests {
 			// now reduce the max weight
 			<MinerMaxWeight>::set(25);
 
-			let (solution, witness) = TwoPhase::mine_solution(2).unwrap();
+			let (solution, witness) = MultiPhase::mine_solution(2).unwrap();
 			let solution_weight = <Runtime as Config>::WeightInfo::submit_unsigned(
 				witness.voters,
 				witness.targets,
@@ -646,11 +734,11 @@ mod tests {
 		let (mut ext, _) = ExtBuilder::default().desired_targets(8).build_offchainify(0);
 		ext.execute_with(|| {
 			roll_to(25);
-			assert!(TwoPhase::current_phase().is_unsigned());
+			assert!(MultiPhase::current_phase().is_unsigned());
 
-			// can't have 8 results.
+			// mine seq_phragmen solution with 2 iters.
 			assert_eq!(
-				TwoPhase::mine_and_submit().unwrap_err(),
+				MultiPhase::mine_check_and_submit().unwrap_err(),
 				MinerError::PreDispatchChecksFailed,
 			);
 		})
@@ -665,8 +753,8 @@ mod tests {
 			.solution_improvement_threshold(Perbill::from_percent(50))
 			.build_and_execute(|| {
 				roll_to(25);
-				assert!(TwoPhase::current_phase().is_unsigned());
-				assert_eq!(TwoPhase::desired_targets().unwrap(), 1);
+				assert!(MultiPhase::current_phase().is_unsigned());
+				assert_eq!(MultiPhase::desired_targets().unwrap(), 1);
 
 				// an initial solution
 				let result = ElectionResult {
@@ -677,10 +765,10 @@ mod tests {
 						distribution: vec![(10, PerU16::one())],
 					}],
 				};
-				let (solution, witness) = TwoPhase::prepare_election_result(result).unwrap();
-				assert_ok!(TwoPhase::unsigned_pre_dispatch_checks(&solution));
-				assert_ok!(TwoPhase::submit_unsigned(Origin::none(), solution, witness));
-				assert_eq!(TwoPhase::queued_solution().unwrap().score[0], 10);
+				let (solution, witness) = MultiPhase::prepare_election_result(result).unwrap();
+				assert_ok!(MultiPhase::unsigned_pre_dispatch_checks(&solution));
+				assert_ok!(MultiPhase::submit_unsigned(Origin::none(), solution, witness));
+				assert_eq!(MultiPhase::queued_solution().unwrap().score[0], 10);
 
 				// trial 1: a solution who's score is only 2, i.e. 20% better in the first element.
 				let result = ElectionResult {
@@ -694,11 +782,11 @@ mod tests {
 						},
 					],
 				};
-				let (solution, _) = TwoPhase::prepare_election_result(result).unwrap();
+				let (solution, _) = MultiPhase::prepare_election_result(result).unwrap();
 				// 12 is not 50% more than 10
 				assert_eq!(solution.score[0], 12);
 				assert_noop!(
-					TwoPhase::unsigned_pre_dispatch_checks(&solution),
+					MultiPhase::unsigned_pre_dispatch_checks(&solution),
 					Error::<Runtime>::PreDispatchWeakSubmission,
 				);
 				// submitting this will actually panic.
@@ -716,12 +804,12 @@ mod tests {
 						},
 					],
 				};
-				let (solution, witness) = TwoPhase::prepare_election_result(result).unwrap();
+				let (solution, witness) = MultiPhase::prepare_election_result(result).unwrap();
 				assert_eq!(solution.score[0], 17);
 
 				// and it is fine
-				assert_ok!(TwoPhase::unsigned_pre_dispatch_checks(&solution));
-				assert_ok!(TwoPhase::submit_unsigned(Origin::none(), solution, witness));
+				assert_ok!(MultiPhase::unsigned_pre_dispatch_checks(&solution));
+				assert_ok!(MultiPhase::submit_unsigned(Origin::none(), solution, witness));
 			})
 	}
 
@@ -730,31 +818,27 @@ mod tests {
 		let (mut ext, _) = ExtBuilder::default().build_offchainify(0);
 		ext.execute_with(|| {
 			roll_to(25);
-			assert!(TwoPhase::current_phase().is_unsigned());
+			assert!(MultiPhase::current_phase().is_unsigned());
 
 			// first execution -- okay.
-			assert!(TwoPhase::try_acquire_offchain_lock(25).is_ok());
+			assert!(MultiPhase::try_acquire_offchain_lock(25).is_ok());
 
 			// next block: rejected.
-			assert!(TwoPhase::try_acquire_offchain_lock(26).is_err());
+			assert!(MultiPhase::try_acquire_offchain_lock(26).is_err());
 
 			// allowed after `OFFCHAIN_REPEAT`
-			assert!(TwoPhase::try_acquire_offchain_lock((26 + OFFCHAIN_REPEAT).into())
-				.is_ok());
+			assert!(MultiPhase::try_acquire_offchain_lock((26 + OFFCHAIN_REPEAT).into()).is_ok());
 
 			// a fork like situation: re-execute last 3.
-			assert!(TwoPhase::try_acquire_offchain_lock(
-				(26 + OFFCHAIN_REPEAT - 3).into()
-			)
-			.is_err());
-			assert!(TwoPhase::try_acquire_offchain_lock(
-				(26 + OFFCHAIN_REPEAT - 2).into()
-			)
-			.is_err());
-			assert!(TwoPhase::try_acquire_offchain_lock(
-				(26 + OFFCHAIN_REPEAT - 1).into()
-			)
-			.is_err());
+			assert!(
+				MultiPhase::try_acquire_offchain_lock((26 + OFFCHAIN_REPEAT - 3).into()).is_err()
+			);
+			assert!(
+				MultiPhase::try_acquire_offchain_lock((26 + OFFCHAIN_REPEAT - 2).into()).is_err()
+			);
+			assert!(
+				MultiPhase::try_acquire_offchain_lock((26 + OFFCHAIN_REPEAT - 1).into()).is_err()
+			);
 		})
 	}
 
@@ -763,22 +847,22 @@ mod tests {
 		let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
 		ext.execute_with(|| {
 			roll_to(25);
-			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 25)));
+			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
 
 			// we must clear the offchain storage to ensure the offchain execution check doesn't get
 			// in the way.
 			let mut storage = StorageValueRef::persistent(&OFFCHAIN_HEAD_DB);
 
-			TwoPhase::offchain_worker(24);
+			MultiPhase::offchain_worker(24);
 			assert!(pool.read().transactions.len().is_zero());
 			storage.clear();
 
-			TwoPhase::offchain_worker(26);
+			MultiPhase::offchain_worker(26);
 			assert!(pool.read().transactions.len().is_zero());
 			storage.clear();
 
 			// submits!
-			TwoPhase::offchain_worker(25);
+			MultiPhase::offchain_worker(25);
 			assert!(!pool.read().transactions.len().is_zero());
 		})
 	}
@@ -788,13 +872,13 @@ mod tests {
 		let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
 		ext.execute_with(|| {
 			roll_to_with_ocw(25);
-			assert_eq!(TwoPhase::current_phase(), Phase::Unsigned((true, 25)));
+			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
 			// OCW must have submitted now
 
 			let encoded = pool.read().transactions[0].clone();
 			let extrinsic: Extrinsic = Decode::decode(&mut &*encoded).unwrap();
 			let call = extrinsic.call;
-			assert!(matches!(call, OuterCall::TwoPhase(Call::submit_unsigned(_, _))));
+			assert!(matches!(call, OuterCall::MultiPhase(Call::submit_unsigned(_, _))));
 		})
 	}
 }

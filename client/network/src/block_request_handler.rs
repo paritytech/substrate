@@ -39,7 +39,7 @@ const MAX_BLOCKS_IN_RESPONSE: usize = 128;
 const MAX_BODY_BYTES: usize = 8 * 1024 * 1024;
 
 /// Generates a [`ProtocolConfig`] for the block request protocol, refusing incoming requests.
-pub fn generate_protocol_config(protocol_id: ProtocolId) -> ProtocolConfig {
+pub fn generate_protocol_config(protocol_id: &ProtocolId) -> ProtocolConfig {
 	ProtocolConfig {
 		name: generate_protocol_name(protocol_id).into(),
 		max_request_size: 1024 * 1024,
@@ -50,7 +50,10 @@ pub fn generate_protocol_config(protocol_id: ProtocolId) -> ProtocolConfig {
 }
 
 /// Generate the block protocol name from chain specific protocol identifier.
-fn generate_protocol_name(protocol_id: ProtocolId) -> String {
+//
+// Visibility `pub(crate)` to allow `crate::light_client_requests::sender` to generate block request
+// protocol name and send block requests.
+pub(crate) fn generate_protocol_name(protocol_id: &ProtocolId) -> String {
 	let mut s = String::new();
 	s.push_str("/");
 	s.push_str(protocol_id.as_ref());
@@ -66,10 +69,10 @@ pub struct BlockRequestHandler<B> {
 
 impl <B: BlockT> BlockRequestHandler<B> {
 	/// Create a new [`BlockRequestHandler`].
-	pub fn new(protocol_id: ProtocolId, client: Arc<dyn Client<B>>) -> (Self, ProtocolConfig) {
+	pub fn new(protocol_id: &ProtocolId, client: Arc<dyn Client<B>>) -> (Self, ProtocolConfig) {
 		// Rate of arrival multiplied with the waiting time in the queue equals the queue length.
 		//
-		// An average Polkadot sentry node serves less than 5 requests per second. The 95th percentile
+		// An average Polkadot node serves less than 5 requests per second. The 95th percentile
 		// serving a request is less than 2 second. Thus one would estimate the queue length to be
 		// below 10.
 		//
@@ -80,6 +83,22 @@ impl <B: BlockT> BlockRequestHandler<B> {
 		protocol_config.inbound_queue = Some(tx);
 
 		(Self { client, request_receiver }, protocol_config)
+	}
+
+	/// Run [`BlockRequestHandler`].
+	pub async fn run(mut self) {
+		while let Some(request) = self.request_receiver.next().await {
+			let IncomingRequest { peer, payload, pending_response } = request;
+
+			match self.handle_request(payload, pending_response) {
+				Ok(()) => debug!(target: LOG_TARGET, "Handled block request from {}.", peer),
+				Err(e) => debug!(
+					target: LOG_TARGET,
+					"Failed to handle block request from {}: {}",
+					peer, e,
+				),
+			}
+		}
 	}
 
 	fn handle_request(
@@ -185,22 +204,6 @@ impl <B: BlockT> BlockRequestHandler<B> {
 			result: Ok(data),
 			reputation_changes: Vec::new(),
 		}).map_err(|_| HandleRequestError::SendResponse)
-	}
-
-	/// Run [`BlockRequestHandler`].
-	pub async fn run(mut self) {
-		while let Some(request) = self.request_receiver.next().await {
-			let IncomingRequest { peer, payload, pending_response } = request;
-
-			match self.handle_request(payload, pending_response) {
-				Ok(()) => debug!(target: LOG_TARGET, "Handled block request from {}.", peer),
-				Err(e) => debug!(
-					target: LOG_TARGET,
-					"Failed to handle block request from {}: {}",
-					peer, e,
-				),
-			}
-		}
 	}
 }
 
