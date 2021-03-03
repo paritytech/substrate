@@ -231,11 +231,31 @@ fn can_enact_next_config() {
 		assert_eq!(Babe::epoch_index(), 0);
 		go_to_block(2, 7);
 
+		let current_config = BabeEpochConfiguration {
+			c: (0, 4),
+			allowed_slots: sp_consensus_babe::AllowedSlots::PrimarySlots,
+		};
+
+		let next_config = BabeEpochConfiguration {
+			c: (1, 4),
+			allowed_slots: sp_consensus_babe::AllowedSlots::PrimarySlots,
+		};
+
+		let next_next_config = BabeEpochConfiguration {
+			c: (2, 4),
+			allowed_slots: sp_consensus_babe::AllowedSlots::PrimarySlots,
+		};
+
+		EpochConfig::put(current_config);
+		NextEpochConfig::put(next_config.clone());
+
+		assert_eq!(NextEpochConfig::get(), Some(next_config.clone()));
+
 		Babe::plan_config_change(
 			Origin::root(),
 			NextConfigDescriptor::V1 {
-				c: (1, 4),
-				allowed_slots: AllowedSlots::PrimarySlots,
+				c: next_next_config.c,
+				allowed_slots: next_next_config.allowed_slots,
 			},
 		).unwrap();
 
@@ -243,10 +263,13 @@ fn can_enact_next_config() {
 		Babe::on_finalize(9);
 		let header = System::finalize();
 
+		assert_eq!(EpochConfig::get(), Some(next_config));
+		assert_eq!(NextEpochConfig::get(), Some(next_next_config.clone()));
+
 		let consensus_log = sp_consensus_babe::ConsensusLog::NextConfigData(
-			sp_consensus_babe::digests::NextConfigDescriptor::V1 {
-				c: (1, 4),
-				allowed_slots: AllowedSlots::PrimarySlots,
+			NextConfigDescriptor::V1 {
+				c: next_next_config.c,
+				allowed_slots: next_next_config.allowed_slots,
 			}
 		);
 		let consensus_digest = DigestItem::Consensus(BABE_ENGINE_ID, consensus_log.encode());
@@ -845,13 +868,8 @@ fn add_epoch_configurations_migration_works() {
 			allowed_slots: sp_consensus_babe::AllowedSlots::PrimarySlots,
 		};
 
-		let next_epoch = BabeEpochConfiguration {
-			c: (2, 4),
-			allowed_slots: sp_consensus_babe::AllowedSlots::PrimarySlots,
-		};
-
-		crate::migrations::add_epoch_configurations::<Test>(
-			current_epoch.clone(), next_epoch.clone()
+		crate::migrations::add_epoch_configuration::<Test>(
+			current_epoch.clone()
 		);
 
 		assert!(get_storage_value::<Option<NextConfigDescriptor>>(
@@ -861,7 +879,6 @@ fn add_epoch_configurations_migration_works() {
 		).is_none());
 
 		assert_eq!(EpochConfig::get(), Some(current_epoch));
-		assert_eq!(NextEpochConfig::get(), Some(next_epoch));
 		assert_eq!(PendingEpochConfigChange::get(), Some(next_config_descriptor));
 	});
 }

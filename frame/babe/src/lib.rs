@@ -549,7 +549,7 @@ impl<T: Config> Module<T> {
 			authorities: NextAuthorities::get(),
 			randomness: NextRandomness::get(),
 			config: NextEpochConfig::get().unwrap_or_else(|| {
-				EpochConfig::get().expect("EpochConfig is initialized in genesis; we never `take` or `kill` it; qed"),
+				EpochConfig::get().expect("EpochConfig is initialized in genesis; we never `take` or `kill` it; qed")
 			}),
 		}
 	}
@@ -874,9 +874,8 @@ pub mod migrations {
 		__OldNextEpochConfig, Option<NextConfigDescriptor>, ValueQuery
 	>;
 
-	pub fn add_epoch_configurations<T: Config>(
-		current_epoch_config: BabeEpochConfiguration,
-		next_epoch_config: BabeEpochConfiguration,
+	pub fn add_epoch_configuration<T: Config>(
+		epoch_config: BabeEpochConfiguration,
 	) -> Weight {
 		let mut writes = 0;
 		let mut reads = 0;
@@ -891,8 +890,8 @@ pub mod migrations {
 
 		OldNextEpochConfig::kill();
 
-		EpochConfig::put(current_epoch_config);
-		NextEpochConfig::put(next_epoch_config);
+		EpochConfig::put(epoch_config.clone());
+		NextEpochConfig::put(epoch_config);
 
 		writes += 3;
 
