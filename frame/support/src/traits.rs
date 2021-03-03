@@ -26,9 +26,9 @@ use sp_runtime::{
 	RuntimeAppPublic, RuntimeDebug, BoundToRuntimeAppPublic,
 	ConsensusEngineId, DispatchResult, DispatchError,
 	traits::{
-	MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput, Bounded, Zero,
-	BadOrigin, AtLeast32BitUnsigned, Convert, UniqueSaturatedFrom, UniqueSaturatedInto,
-	SaturatedConversion, StoredMapError,
+		MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput, Bounded, Zero,
+		BadOrigin, AtLeast32BitUnsigned, Convert, UniqueSaturatedFrom, UniqueSaturatedInto,
+		SaturatedConversion, StoredMapError, Block as BlockT,
 	},
 };
 use sp_staking::SessionIndex;
@@ -2226,6 +2226,23 @@ pub trait GetPalletVersion {
 	/// If there was no previous version of the pallet stored in the state,
 	/// this function returns `None`.
 	fn storage_version() -> Option<PalletVersion>;
+}
+
+/// Something that can execute a given block.
+///
+/// Executing a block means that all extrinsics in a given block will be executed and the resulting
+/// header will be checked against the header of the given block.
+pub trait ExecuteBlock<Block: BlockT> {
+	/// Execute the given `block`.
+	///
+	/// This will execute all extrinsics in the block and check that the resulting header is correct.
+	///
+	/// Returns the result header.
+	///
+	/// # Panic
+	///
+	/// Panics when an extrinsics panics or the resulting header doesn't match the expected header.
+	fn execute_block(block: Block) -> Block::Header;
 }
 
 #[cfg(test)]

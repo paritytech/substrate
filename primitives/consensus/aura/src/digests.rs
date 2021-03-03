@@ -21,22 +21,19 @@
 //! This implements the digests for AuRa, to allow the private
 //! `CompatibleDigestItem` trait to appear in public interfaces.
 
-use sp_core::Pair;
-use sp_consensus_aura::AURA_ENGINE_ID;
-use sp_runtime::generic::{DigestItem, OpaqueDigestItemId};
+use crate::AURA_ENGINE_ID;
+use sp_runtime::generic::DigestItem;
 use sp_consensus_slots::Slot;
 use codec::{Encode, Codec};
-use std::fmt::Debug;
-
-type Signature<P> = <P as Pair>::Signature;
+use sp_std::fmt::Debug;
 
 /// A digest item which is usable with aura consensus.
-pub trait CompatibleDigestItem<P: Pair>: Sized {
+pub trait CompatibleDigestItem<Signature>: Sized {
 	/// Construct a digest item which contains a signature on the hash.
-	fn aura_seal(signature: Signature<P>) -> Self;
+	fn aura_seal(signature: Signature) -> Self;
 
 	/// If this item is an Aura seal, return the signature.
-	fn as_aura_seal(&self) -> Option<Signature<P>>;
+	fn as_aura_seal(&self) -> Option<Signature>;
 
 	/// Construct a digest item which contains the slot number
 	fn aura_pre_digest(slot: Slot) -> Self;
@@ -45,17 +42,16 @@ pub trait CompatibleDigestItem<P: Pair>: Sized {
 	fn as_aura_pre_digest(&self) -> Option<Slot>;
 }
 
-impl<P, Hash> CompatibleDigestItem<P> for DigestItem<Hash> where
-	P: Pair,
-	Signature<P>: Codec,
+impl<Signature, Hash> CompatibleDigestItem<Signature> for DigestItem<Hash> where
+	Signature: Codec,
 	Hash: Debug + Send + Sync + Eq + Clone + Codec + 'static
 {
-	fn aura_seal(signature: Signature<P>) -> Self {
+	fn aura_seal(signature: Signature) -> Self {
 		DigestItem::Seal(AURA_ENGINE_ID, signature.encode())
 	}
 
-	fn as_aura_seal(&self) -> Option<Signature<P>> {
-		self.try_to(OpaqueDigestItemId::Seal(&AURA_ENGINE_ID))
+	fn as_aura_seal(&self) -> Option<Signature> {
+		self.seal_try_to(&AURA_ENGINE_ID)
 	}
 
 	fn aura_pre_digest(slot: Slot) -> Self {
@@ -63,6 +59,6 @@ impl<P, Hash> CompatibleDigestItem<P> for DigestItem<Hash> where
 	}
 
 	fn as_aura_pre_digest(&self) -> Option<Slot> {
-		self.try_to(OpaqueDigestItemId::PreRuntime(&AURA_ENGINE_ID))
+		self.pre_runtime_try_to(&AURA_ENGINE_ID)
 	}
 }

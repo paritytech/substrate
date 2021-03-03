@@ -22,7 +22,6 @@
 use crate::*;
 use frame_support::traits::OnInitialize;
 use frame_benchmarking::{benchmarks, impl_benchmark_test_suite};
-use sp_std::prelude::*;
 
 benchmarks! {
 	on_initialize {

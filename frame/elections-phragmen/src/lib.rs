@@ -704,8 +704,9 @@ impl<T: Config> Module<T> {
 				} else {
 					// overlap. This can never happen. If so, it seems like our intended replacement
 					// is already a member, so not much more to do.
-					frame_support::debug::error!(
-						"pallet-elections-phragmen: a member seems to also be a runner-up."
+					log::error!(
+						target: "runtime::elections-phragmen",
+						"A member seems to also be a runner-up.",
 					);
 				}
 				next_best
@@ -998,7 +999,11 @@ impl<T: Config> Module<T> {
 			Self::deposit_event(RawEvent::NewTerm(new_members_sorted_by_id));
 			ElectionRounds::mutate(|v| *v += 1);
 		}).map_err(|e| {
-			frame_support::debug::error!("elections-phragmen: failed to run election [{:?}].", e);
+			log::error!(
+				target: "runtime::elections-phragmen",
+				"Failed to run election [{:?}].",
+				e,
+			);
 			Self::deposit_event(RawEvent::ElectionError);
 		});
 
@@ -2422,17 +2427,14 @@ mod tests {
 
 			// no replacement yet.
 			let unwrapped_error = Elections::remove_member(Origin::root(), 4, true).unwrap_err();
-			matches!(
+			assert!(matches!(
 				unwrapped_error.error,
 				DispatchError::Module {
 					message: Some("InvalidReplacement"),
 					..
 				}
-			);
-			matches!(
-				unwrapped_error.post_info.actual_weight,
-				Some(x) if x < <Test as frame_system::Config>::BlockWeights::get().max_block
-			);
+			));
+			assert!(unwrapped_error.post_info.actual_weight.is_some());
 		});
 
 		ExtBuilder::default().desired_runners_up(1).build_and_execute(|| {
@@ -2451,17 +2453,14 @@ mod tests {
 
 			// there is a replacement! and this one needs a weight refund.
 			let unwrapped_error = Elections::remove_member(Origin::root(), 4, false).unwrap_err();
-			matches!(
+			assert!(matches!(
 				unwrapped_error.error,
 				DispatchError::Module {
 					message: Some("InvalidReplacement"),
 					..
 				}
-			);
-			matches!(
-				unwrapped_error.post_info.actual_weight,
-				Some(x) if x < <Test as frame_system::Config>::BlockWeights::get().max_block
-			);
+			));
+			assert!(unwrapped_error.post_info.actual_weight.is_some());
 		});
 	}
 
