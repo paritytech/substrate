@@ -227,10 +227,11 @@ decl_storage! {
 		/// execution context should always yield zero.
 		Lateness get(fn lateness): T::BlockNumber;
 
-		/// The configuration for the current epoch. Should never be `None`.
+		/// The configuration for the current epoch. Should never be `None` as it is initialized in genesis.
 		EpochConfig: Option<BabeEpochConfiguration>;
 
-		/// The configuration for the next epoch. Uses `EpochConfig` instead if `None`.
+		/// The configuration for the next epoch, `None` if the config will not change
+		/// (you can fallback to `EpochConfig` instead in that case).
 		NextEpochConfig: Option<BabeEpochConfiguration>;
 	}
 	add_extra_genesis {
@@ -529,7 +530,7 @@ impl<T: Config> Module<T> {
 			duration: T::EpochDuration::get(),
 			authorities: Self::authorities(),
 			randomness: Self::randomness(),
-			config: EpochConfig::get().expect("EpochConfig is never None; qed"),
+			config: EpochConfig::get().expect("EpochConfig is initialized in genesis; we never `take` or `kill` it; qed"),
 		}
 	}
 
@@ -548,7 +549,7 @@ impl<T: Config> Module<T> {
 			authorities: NextAuthorities::get(),
 			randomness: NextRandomness::get(),
 			config: NextEpochConfig::get().unwrap_or_else(|| {
-				EpochConfig::get().expect("EpochConfig is never None; qed")
+				EpochConfig::get().expect("EpochConfig is initialized in genesis; we never `take` or `kill` it; qed"),
 			}),
 		}
 	}
