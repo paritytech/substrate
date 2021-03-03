@@ -25,48 +25,11 @@ use crate::imports::Imports;
 use std::{slice, marker};
 use sc_executor_common::{
 	error::{Error, Result},
-	runtime_blob::{self, ExposedMutableGlobalsSet, DataSegmentsSnapshot, RuntimeBlob},
+	runtime_blob,
 	wasm_runtime::InvokeMethod,
 };
 use sp_wasm_interface::{Pointer, WordSize, Value};
-use wasmtime::{Engine, Instance, Module, Memory, Table, Val, Func, Extern, Global, Store};
-
-pub struct ModuleWrapper {
-	module: Module,
-	mutable_globals: ExposedMutableGlobalsSet,
-	data_segments_snapshot: DataSegmentsSnapshot,
-}
-
-impl ModuleWrapper {
-	pub fn new(engine: &Engine, runtime_blob: RuntimeBlob) -> Result<Self> {
-		let data_segments_snapshot = DataSegmentsSnapshot::take(&runtime_blob)
-			.map_err(|e| Error::from(format!("cannot take data segments snapshot: {}", e)))?;
-
-		let mutable_globals = ExposedMutableGlobalsSet::collect(&runtime_blob);
-
-		let bytecode = runtime_blob.serialize();
-		let module = Module::new(engine, &bytecode)
-			.map_err(|e| Error::from(format!("cannot create module: {}", e)))?;
-
-		Ok(Self {
-			module,
-			mutable_globals,
-			data_segments_snapshot,
-		})
-	}
-
-	pub fn module(&self) -> &Module {
-		&self.module
-	}
-
-	pub fn mutable_globals(&self) -> &ExposedMutableGlobalsSet {
-		&self.mutable_globals
-	}
-
-	pub fn data_segments_snapshot(&self) -> &DataSegmentsSnapshot {
-		&self.data_segments_snapshot
-	}
-}
+use wasmtime::{Instance, Module, Memory, Table, Val, Func, Extern, Global, Store};
 
 /// Invoked entrypoint format.
 pub enum EntryPointType {
@@ -192,8 +155,8 @@ fn extern_func(extern_: &Extern) -> Option<&Func> {
 
 impl InstanceWrapper {
 	/// Create a new instance wrapper from the given wasm module.
-	pub fn new(store: &Store, module_wrapper: &ModuleWrapper, imports: &Imports, heap_pages: u32) -> Result<Self> {
-		let instance = Instance::new(store, &module_wrapper.module, &imports.externs)
+	pub fn new(store: &Store, module: &Module, imports: &Imports, heap_pages: u32) -> Result<Self> {
+		let instance = Instance::new(store, module, &imports.externs)
 			.map_err(|e| Error::from(format!("cannot instantiate: {}", e)))?;
 
 		let memory = match imports.memory_import_index {

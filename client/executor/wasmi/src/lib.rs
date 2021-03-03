@@ -661,11 +661,8 @@ pub fn create_runtime(
 		)
 		.map_err(|e| WasmError::Instantiation(e.to_string()))?;
 
-		let data_segments_snapshot = DataSegmentsSnapshot::take(
-			&RuntimeBlob::new(code)
-				.ok_or_else(|| WasmError::Other("cannot deserialize module".to_string()))?,
-		)
-		.map_err(|e| WasmError::Other(e.to_string()))?;
+		let data_segments_snapshot = DataSegmentsSnapshot::take(&RuntimeBlob::new(code)?)
+			.map_err(|e| WasmError::Other(e.to_string()))?;
 		let global_vals_snapshot = GlobalValsSnapshot::take(&instance);
 
 		(data_segments_snapshot, global_vals_snapshot)

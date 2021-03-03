@@ -18,6 +18,8 @@
 
 use parity_wasm::elements::{DataSegment, Module as RawModule, deserialize_buffer, serialize};
 
+use crate::error::WasmError;
+
 /// A bunch of information collected from a WebAssembly module.
 #[derive(Clone)]
 pub struct RuntimeBlob {
@@ -28,9 +30,10 @@ impl RuntimeBlob {
 	/// Create `RuntimeBlob` from the given wasm code.
 	///
 	/// Returns `None` if the wasm code cannot be deserialized.
-	pub fn new(wasm_code: &[u8]) -> Option<Self> {
-		let raw_module: RawModule = deserialize_buffer(wasm_code).ok()?;
-		Some(Self { raw_module })
+	pub fn new(wasm_code: &[u8]) -> Result<Self, WasmError> {
+		let raw_module: RawModule = deserialize_buffer(wasm_code)
+			.map_err(|e| WasmError::Other(format!("cannot deserialize module: {:?}", e)))?;
+		Ok(Self { raw_module })
 	}
 
 	/// Extract the data segments from the given wasm code.

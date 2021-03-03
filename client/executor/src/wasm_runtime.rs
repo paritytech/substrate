@@ -301,18 +301,19 @@ pub fn create_wasm_runtime_with_code(
 		}
 		#[cfg(feature = "wasmtime")]
 		WasmExecutionMethod::Compiled => {
-			let mut blob = sc_executor_common::runtime_blob::RuntimeBlob::new(code).unwrap();
-
-			// Substrate Runtime relies on quick wasm instance reuse and that requires working mutable
-			// globals snapshot taking. Hence we perform this instrumentation here.
-			blob.expose_mutable_globals();
-
+			let blob = sc_executor_common::runtime_blob::RuntimeBlob::new(code)?;
 			sc_executor_wasmtime::create_runtime(
-				blob,
-				heap_pages,
+				sc_executor_wasmtime::CodeSupplyMode::Verbatim { blob },
+				sc_executor_wasmtime::Config {
+				    heap_pages: heap_pages as u32,
+				    allow_missing_func_imports,
+				    cache_path: cache_path.map(ToOwned::to_owned),
+				    semantics: sc_executor_wasmtime::Semantics {
+				        fast_instance_reuse: true,
+				        stack_depth_metering: false,
+					},
+				},
 				host_functions,
-				allow_missing_func_imports,
-				cache_path,
 			).map(|runtime| -> Arc<dyn WasmModule> { Arc::new(runtime) })
 		},
 	}
