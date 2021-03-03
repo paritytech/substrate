@@ -154,6 +154,72 @@ pub fn pjr_check_core<AccountId: IdentifierT>(
 	}
 }
 
+/// Validate a challenge to an election result.
+///
+/// A challenge to an election result is valid if there exists some counter_example for which
+/// `pre_score(counter_example) >= threshold`. Validating an existing counter_example is computationally
+/// cheaper than re-running the PJR check.
+///
+/// This function uses the standard threshold.
+///
+/// Returns `true` if the challenge is valid: the proposed solution does not satisfy PJR.
+/// Returns `false` if the challenge is invalid: the proposed solution does in fact satisfy PJR.
+pub fn validate_pjr_challenge<AccountId: IdentifierT>(
+	counter_example: AccountId,
+	supports: &Supports<AccountId>,
+	all_candidates: Vec<AccountId>,
+	all_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
+) -> bool {
+	let threshold = standard_threshold(supports.len(), all_voters.iter().map(|voter| voter.1 as ExtendedBalance));
+	validate_t_pjr_challenge(counter_example, supports, all_candidates, all_voters, threshold)
+}
+
+/// Validate a challenge to an election result.
+///
+/// A challenge to an election result is valid if there exists some counter_example for which
+/// `pre_score(counter_example) >= threshold`. Validating an existing counter_example is computationally
+/// cheaper than re-running the PJR check.
+///
+/// This function uses a supplied threshold.
+///
+/// Returns `true` if the challenge is valid: the proposed solution does not satisfy PJR.
+/// Returns `false` if the challenge is invalid: the proposed solution does in fact satisfy PJR.
+pub fn validate_t_pjr_challenge<AccountId: IdentifierT>(
+	counter_example: AccountId,
+	supports: &Supports<AccountId>,
+	all_candidates: Vec<AccountId>,
+	all_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
+	threshold: Threshold,
+) -> bool {
+	let (candidates, voters) = prepare_pjr_input(
+		supports,
+		all_candidates,
+		all_voters,
+	);
+	validate_pjr_challenge_core(counter_example, &candidates, &voters, threshold)
+}
+
+/// Validate a challenge to an election result.
+///
+/// A challenge to an election result is valid if there exists some counter_example for which
+/// `pre_score(counter_example) >= threshold`. Validating an existing counter_example is computationally
+/// cheaper than re-running the PJR check.
+///
+/// Returns `true` if the challenge is valid: the proposed solution does not satisfy PJR.
+/// Returns `false` if the challenge is invalid: the proposed solution does in fact satisfy PJR.
+fn validate_pjr_challenge_core<AccountId: IdentifierT>(
+	counter_example: AccountId,
+	candidates: &[CandidatePtr<AccountId>],
+	voters: &[Voter<AccountId>],
+	threshold: Threshold,
+) -> bool {
+	let candidate = match candidates.iter().find(|candidate| candidate.borrow().who == counter_example) {
+		None => return false,
+		Some(candidate) => candidate.clone(),
+	};
+	pre_score(candidate, &voters, threshold) >= threshold
+}
+
 /// Convert the data types that the user runtime has into ones that can be used by this module.
 ///
 /// It is expected that this function's interface might change over time, or multiple variants of it
@@ -302,72 +368,6 @@ fn slack<AccountId: IdentifierT>(voter: &Voter<AccountId>, t: Threshold) -> Exte
 
 	// NOTE: candidate for saturating_log_sub(). Defensive-only.
 	budget.saturating_sub(leftover)
-}
-
-/// Validate a challenge to an election result.
-///
-/// A challenge to an election result is valid if there exists some counter_example for which
-/// `pre_score(counter_example) >= threshold`. Validating an existing counter_example is computationally
-/// cheaper than re-running the PJR check.
-///
-/// Returns `true` if the challenge is valid: the proposed solution does not satisfy PJR.
-/// Returns `false` if the challenge is invalid: the proposed solution does in fact satisfy PJR.
-fn validate_pjr_challenge_core<AccountId: IdentifierT>(
-	counter_example: AccountId,
-	candidates: &[CandidatePtr<AccountId>],
-	voters: &[Voter<AccountId>],
-	threshold: Threshold,
-) -> bool {
-	let candidate = match candidates.iter().find(|candidate| candidate.borrow().who == counter_example) {
-		None => return false,
-		Some(candidate) => candidate.clone(),
-	};
-	pre_score(candidate, &voters, threshold) >= threshold
-}
-
-/// Validate a challenge to an election result.
-///
-/// A challenge to an election result is valid if there exists some counter_example for which
-/// `pre_score(counter_example) >= threshold`. Validating an existing counter_example is computationally
-/// cheaper than re-running the PJR check.
-///
-/// This function uses a supplied threshold.
-///
-/// Returns `true` if the challenge is valid: the proposed solution does not satisfy PJR.
-/// Returns `false` if the challenge is invalid: the proposed solution does in fact satisfy PJR.
-pub fn validate_t_pjr_challenge<AccountId: IdentifierT>(
-	counter_example: AccountId,
-	supports: &Supports<AccountId>,
-	all_candidates: Vec<AccountId>,
-	all_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
-	threshold: Threshold,
-) -> bool {
-	let (candidates, voters) = prepare_pjr_input(
-		supports,
-		all_candidates,
-		all_voters,
-	);
-	validate_pjr_challenge_core(counter_example, &candidates, &voters, threshold)
-}
-
-/// Validate a challenge to an election result.
-///
-/// A challenge to an election result is valid if there exists some counter_example for which
-/// `pre_score(counter_example) >= threshold`. Validating an existing counter_example is computationally
-/// cheaper than re-running the PJR check.
-///
-/// This function uses the standard threshold.
-///
-/// Returns `true` if the challenge is valid: the proposed solution does not satisfy PJR.
-/// Returns `false` if the challenge is invalid: the proposed solution does in fact satisfy PJR.
-pub fn validate_pjr_challenge<AccountId: IdentifierT>(
-	counter_example: AccountId,
-	supports: &Supports<AccountId>,
-	all_candidates: Vec<AccountId>,
-	all_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
-) -> bool {
-	let threshold = standard_threshold(supports.len(), all_voters.iter().map(|voter| voter.1 as ExtendedBalance));
-	validate_t_pjr_challenge(counter_example, supports, all_candidates, all_voters, threshold)
 }
 
 #[cfg(test)]
