@@ -69,6 +69,15 @@ pub const BEEFY_ENGINE_ID: sp_runtime::ConsensusEngineId = *b"BEEF";
 /// A typedef for validator set id.
 pub type ValidatorSetId = u64;
 
+/// A set of BEEFY authorities, a.k.a. validators.
+#[derive(Decode, Encode, Debug)]
+pub struct ValidatorSet<AuthorityId> {
+	/// Public keys of the validator set elements
+	pub validators: Vec<AuthorityId>,
+	/// Identifier of the validator set
+	pub id: ValidatorSetId,
+}
+
 /// The index of an authority.
 pub type AuthorityIndex = u32;
 
@@ -80,12 +89,7 @@ pub type MmrRootHash = H256;
 pub enum ConsensusLog<AuthorityId: Codec> {
 	/// The authorities have changed.
 	#[codec(index = 1)]
-	AuthoritiesChange {
-		/// Set of new validators to be used
-		new_validator_set: Vec<AuthorityId>,
-		/// Id for this new set of validators
-		new_validator_set_id: ValidatorSetId,
-	},
+	AuthoritiesChange(ValidatorSet<AuthorityId>),
 	/// Disable the authority with given index.
 	#[codec(index = 2)]
 	OnDisabled(AuthorityIndex),
