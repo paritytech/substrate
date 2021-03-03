@@ -119,8 +119,9 @@ pub struct TelemetryWorker {
 }
 
 impl TelemetryWorker {
-	/// Instantiate a new [`TelemetryWorker`] which can run in background. Only one is needed for
-	/// the process.
+	/// Instantiate a new [`TelemetryWorker`] which can run in background.
+	///
+	/// Only one is needed per process.
 	pub fn new(buffer_size: usize, transport: Option<ExtTransport>) -> Result<Self> {
 		let transport = initialize_transport(transport)?;
 		let (message_sender, message_receiver) = mpsc::channel(buffer_size);
@@ -286,7 +287,7 @@ impl TelemetryWorker {
 		let nodes = if let Some(nodes) = node_map.get(&id) {
 			nodes
 		} else {
-			// This is a normal error because the telemetry ID exists sooner than the telemetry is
+			// This is a normal error because the telemetry ID exists before the telemetry is
 			// initialized.
 			log::trace!(
 				target: "telemetry",
@@ -342,7 +343,7 @@ pub struct TelemetryWorkerHandle {
 }
 
 impl TelemetryWorkerHandle {
-	/// Instantiate a new [`Telemetry`] object which is normally stored in the Substrate's Client.
+	/// Instantiate a new [`Telemetry`] object.
 	pub fn new_telemetry(&mut self, endpoints: TelemetryEndpoints) -> Telemetry {
 		let addresses = endpoints.0.iter().map(|(addr, _)| addr.clone()).collect();
 
@@ -359,7 +360,7 @@ impl TelemetryWorkerHandle {
 	}
 }
 
-/// A telemetry instance that can be used to send telemetries.
+/// A telemetry instance that can be used to send telemetry messages.
 #[derive(Debug)]
 pub struct Telemetry {
 	message_sender: mpsc::Sender<TelemetryMessage>,
@@ -381,31 +382,18 @@ impl Telemetry {
 	/// The `connection_message` argument is a JSON object that is sent every time the connection
 	/// (re-)establishes.
 	pub fn start_telemetry(&mut self, connection_message: ConnectionMessage) -> Result<()> {
-		let Self {
-			message_sender: _,
-			register_sender,
-			id,
-			connection_notifier: _,
-			endpoints,
-		} = self;
-
-		let endpoints = match endpoints.take() {
+		let endpoints = match self.endpoints.take() {
 			Some(x) => x,
 			None => return Err(Error::TelemetryAlreadyInitialized),
 		};
 
-		if register_sender
+		self.register_sender
 			.unbounded_send(Register::Telemetry {
-				id: *id,
+				id: *self.id,
 				endpoints,
 				connection_message,
 			})
-			.is_err()
-		{
-			return Err(Error::TelemetryWorkerDropped);
-		}
-
-		Ok(())
+			.map_err(|_| Error::TelemetryWorkerDropped)
 	}
 
 	/// Make a new clonable handle to this [`Telemetry`]. This is used for reporting telemetries.
@@ -418,7 +406,9 @@ impl Telemetry {
 	}
 }
 
-/// Handle to a [`Telemetry`]. Used to report telemetries.
+/// Handle to a [`Telemetry`].
+///
+/// Used to report telemetry messages.
 #[derive(Debug, Clone)]
 pub struct TelemetryHandle {
 	message_sender: Arc<Mutex<mpsc::Sender<TelemetryMessage>>>,
@@ -427,13 +417,13 @@ pub struct TelemetryHandle {
 }
 
 impl TelemetryHandle {
-	/// Send telemetries.
+	/// Send telemetry messages.
 	pub fn send_telemetry(&self, verbosity: VerbosityLevel, payload: TelemetryPayload) {
 		match self.message_sender.lock().try_send((self.id, verbosity, payload)) {
 			Ok(()) => {}
 			Err(err) if err.is_full() => log::trace!(
 				target: "telemetry",
-				"buffer overflow",
+				"Telemetry channel full.",
 			),
 			Err(_) => unreachable!(),
 		}
@@ -516,7 +506,7 @@ macro_rules! telemetry {
 			let verbosity: $crate::VerbosityLevel = $verbosity;
 			match format_fields_to_json!($($t)*) {
 				Err(err) => {
-					$crate::log::error!(
+					$crate::log::debug!(
 						target: "telemetry",
 						"Could not serialize value for telemetry: {}",
 						err,
