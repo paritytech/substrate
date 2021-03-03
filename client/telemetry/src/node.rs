@@ -18,18 +18,19 @@
 
 use crate::TelemetryPayload;
 use futures::prelude::*;
+use futures::channel::mpsc;
 use libp2p::core::transport::Transport;
 use libp2p::Multiaddr;
 use rand::Rng as _;
 use std::{fmt, mem, pin::Pin, task::Context, task::Poll, time::Duration};
 use wasm_timer::Delay;
 
-pub(crate) type ConnectionNotifierSender = sp_utils::mpsc::TracingSender<()>;
-pub(crate) type ConnectionNotifierReceiver = sp_utils::mpsc::TracingReceiver<()>;
+pub(crate) type ConnectionNotifierSender = mpsc::Sender<()>;
+pub(crate) type ConnectionNotifierReceiver = mpsc::Receiver<()>;
 
 pub(crate) fn connection_notifier_channel() -> (ConnectionNotifierSender, ConnectionNotifierReceiver)
 {
-	sp_utils::mpsc::tracing_channel("mpsc_telemetry_on_connect", 0)
+	mpsc::channel(0)
 }
 
 /// Handler for a single telemetry node.
