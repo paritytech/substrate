@@ -492,6 +492,10 @@ parameter_types! {
 		BlockWeights::with_sensible_defaults(4 * 1024 * 1024, Perbill::from_percent(75));
 }
 
+impl frame_accounts::Config for Runtime {
+	type AccountData = ();
+}
+
 impl frame_system::Config for Runtime {
 	type BaseCallFilter = ();
 	type BlockWeights = RuntimeBlockWeights;
@@ -515,6 +519,7 @@ impl frame_system::Config for Runtime {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type AccountStorage = frame_accounts::Pallet::<Runtime>;
 }
 
 impl pallet_timestamp::Config for Runtime {

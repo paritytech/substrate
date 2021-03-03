@@ -1682,6 +1682,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "frame-accounts"
+version = "3.0.0"
+dependencies = [
+ "criterion",
+ "frame-support",
+ "frame-system",
+ "impl-trait-for-tuples",
+ "log",
+ "parity-scale-codec",
+ "serde",
+ "sp-core",
+ "sp-externalities",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+ "sp-version",
+ "substrate-test-runtime-client",
+]
+
+[[package]]
 name = "frame-benchmarking"
 version = "3.1.0"
 dependencies = [
@@ -1837,6 +1857,7 @@ name = "frame-system"
 version = "3.0.0"
 dependencies = [
  "criterion",
+ "frame-accounts",
  "frame-support",
  "impl-trait-for-tuples",
  "log",
@@ -9283,6 +9304,7 @@ name = "substrate-test-runtime"
 version = "2.0.0"
 dependencies = [
  "cfg-if 1.0.0",
+ "frame-accounts",
  "frame-support",
  "frame-system",
  "frame-system-rpc-runtime-api",

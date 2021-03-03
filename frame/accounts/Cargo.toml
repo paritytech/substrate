@@ -1,12 +1,12 @@
 [package]
-name = "frame-system"
+name = "frame-accounts"
 version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
-description = "FRAME system module"
+description = "FRAME accounts module"
 readme = "README.md"
 
 [package.metadata.docs.rs]
@@ -21,6 +21,7 @@ sp-io = { version = "3.0.0", path = "../../primitives/io", default-features = fa
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-version = { version = "3.0.0", default-features = false, path = "../../primitives/version" }
 frame-support = { version = "3.0.0", default-features = false, path = "../support" }
+frame-system = { version = "3.0.0", default-features = false, path = "../system" }
 impl-trait-for-tuples = "0.2.1"
 log = { version = "0.4.14", default-features = false }
 
@@ -28,7 +29,6 @@ log = { version = "0.4.14", default-features = false }
 criterion = "0.3.3"
 sp-externalities = { version = "0.9.0", path = "../../primitives/externalities" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
-frame-accounts = { version = "3.0.0", path = "../accounts" }
 
 [features]
 default = ["std"]
@@ -39,16 +39,14 @@ std = [
 	"sp-std/std",
 	"sp-io/std",
 	"frame-support/std",
+	"frame-system/std",
 	"sp-runtime/std",
 	"sp-version/std",
 	"log/std",
 ]
 runtime-benchmarks = [
+	"frame-system/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
 ]
 try-runtime = ["frame-support/try-runtime"]
-
-[[bench]]
-name = "bench"
-harness = false

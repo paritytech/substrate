@@ -88,7 +88,7 @@ use frame_support::{
 	Parameter, storage,
 	traits::{
 		Contains, Get, PalletInfo, OnNewAccount, OnKilledAccount, HandleLifetime,
-		StoredMap, EnsureOrigin, OriginTrait, Filter,
+		StoredMap, EnsureOrigin, OriginTrait, Filter, AccountApi,
 	},
 	weights::{
 		Weight, RuntimeDbWeight, DispatchInfo, DispatchClass,
@@ -253,6 +253,8 @@ pub mod pallet {
 		/// an identifier of the chain.
 		#[pallet::constant]
 		type SS58Prefix: Get<u8>;
+
+		type AccountStorage: AccountApi;
 	}
 
 	#[pallet::pallet]

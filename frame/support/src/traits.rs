@@ -2245,6 +2245,22 @@ pub trait ExecuteBlock<Block: BlockT> {
 	fn execute_block(block: Block) -> Block::Header;
 }
 
+/// A minimal API for creating an account system compatible with FRAME System.
+pub trait AccountApi {
+	type AccountId;
+	type Index;
+
+	/// Return whether an account exists in storage.
+	fn account_exists(who: &Self::AccountId) -> bool;
+
+	/// Retrieve the account transaction counter from storage.
+	fn account_nonce(who: Self::AccountId) -> Self::Index;
+
+	/// Increment a particular account's nonce by 1.
+	fn inc_account_nonce(who: Self::AccountId);
+
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
