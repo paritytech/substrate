@@ -46,19 +46,27 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 	}
 	let inherent_data_providers = sp_inherents::InherentDataProviders::new();
 
-	let telemetry_worker = TelemetryWorker::new(16, None)?;
 	let telemetry = config.telemetry_endpoints.clone()
 		.filter(|x| !x.is_empty())
-		.map(|endpoints| telemetry_worker.handle().new_telemetry(endpoints));
+		.map(|endpoints| -> Result<_, sc_telemetry::Error> {
+			let worker = TelemetryWorker::new(16, None)?;
+			let telemetry = worker.handle().new_telemetry(endpoints);
+			Ok((worker, telemetry))
+		})
+		.transpose()?;
 
 	let (client, backend, keystore_container, task_manager) =
 		sc_service::new_full_parts::<Block, RuntimeApi, Executor>(
 			&config,
-			telemetry.as_ref().map(|x| x.handle()),
+			telemetry.as_ref().map(|(_, telemetry)| telemetry.handle()),
 		)?;
 	let client = Arc::new(client);
 
-	task_manager.spawn_handle().spawn("telemetry", telemetry_worker.run());
+	let telemetry = telemetry
+		.map(|(worker, telemetry)| {
+			task_manager.spawn_handle().spawn("telemetry", worker.run());
+			telemetry
+		});
 
 	let select_chain = sc_consensus::LongestChain::new(backend.clone());
 
@@ -278,18 +286,26 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 
 /// Builds a new service for a light client.
 pub fn new_light(mut config: Configuration) -> Result<TaskManager, ServiceError> {
-	let telemetry_worker = TelemetryWorker::new(16, None)?;
-	let mut telemetry = config.telemetry_endpoints.clone()
+	let telemetry = config.telemetry_endpoints.clone()
 		.filter(|x| !x.is_empty())
-		.map(|endpoints| telemetry_worker.handle().new_telemetry(endpoints));
+		.map(|endpoints| -> Result<_, sc_telemetry::Error> {
+			let worker = TelemetryWorker::new(16, None)?;
+			let telemetry = worker.handle().new_telemetry(endpoints);
+			Ok((worker, telemetry))
+		})
+		.transpose()?;
 
 	let (client, backend, keystore_container, mut task_manager, on_demand) =
 		sc_service::new_light_parts::<Block, RuntimeApi, Executor>(
 			&config,
-			telemetry.as_ref().map(|x| x.handle()),
+			telemetry.as_ref().map(|(_, telemetry)| telemetry.handle()),
 		)?;
 
-	task_manager.spawn_handle().spawn("telemetry", telemetry_worker.run());
+	let mut telemetry = telemetry
+		.map(|(worker, telemetry)| {
+			task_manager.spawn_handle().spawn("telemetry", worker.run());
+			telemetry
+		});
 
 	config.network.extra_sets.push(sc_finality_grandpa::grandpa_peers_set_config());
 

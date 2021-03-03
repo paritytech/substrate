@@ -63,19 +63,27 @@ pub fn new_partial(
 		Option<Telemetry>,
 	)
 >, ServiceError> {
-	let telemetry_worker = TelemetryWorker::new(16, None)?;
 	let telemetry = config.telemetry_endpoints.clone()
 		.filter(|x| !x.is_empty())
-		.map(|endpoints| telemetry_worker.handle().new_telemetry(endpoints));
+		.map(|endpoints| -> Result<_, sc_telemetry::Error> {
+			let worker = TelemetryWorker::new(16, None)?;
+			let telemetry = worker.handle().new_telemetry(endpoints);
+			Ok((worker, telemetry))
+		})
+		.transpose()?;
 
 	let (client, backend, keystore_container, task_manager) =
 		sc_service::new_full_parts::<Block, RuntimeApi, Executor>(
 			&config,
-			telemetry.as_ref().map(|x| x.handle()),
+			telemetry.as_ref().map(|(_, telemetry)| telemetry.handle()),
 		)?;
 	let client = Arc::new(client);
 
-	task_manager.spawn_handle().spawn("telemetry", telemetry_worker.run());
+	let telemetry = telemetry
+		.map(|(worker, telemetry)| {
+			task_manager.spawn_handle().spawn("telemetry", worker.run());
+			telemetry
+		});
 
 	let select_chain = sc_consensus::LongestChain::new(backend.clone());
 
@@ -395,25 +403,33 @@ pub fn new_light_base(
 	Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
 	Arc<sc_transaction_pool::LightPool<Block, LightClient, sc_network::config::OnDemand<Block>>>
 ), ServiceError> {
-	#[cfg(feature = "browser")]
-	let transport = Some(
-		sc_telemetry::ExtTransport::new(libp2p_wasm_ext::ffi::websocket_transport())
-	);
-	#[cfg(not(feature = "browser"))]
-	let transport = None;
-
-	let telemetry_worker = TelemetryWorker::new(16, transport)?;
-	let mut telemetry = config.telemetry_endpoints.clone()
+	let telemetry = config.telemetry_endpoints.clone()
 		.filter(|x| !x.is_empty())
-		.map(|endpoints| telemetry_worker.handle().new_telemetry(endpoints));
+		.map(|endpoints| -> Result<_, sc_telemetry::Error> {
+			#[cfg(feature = "browser")]
+			let transport = Some(
+				sc_telemetry::ExtTransport::new(libp2p_wasm_ext::ffi::websocket_transport())
+			);
+			#[cfg(not(feature = "browser"))]
+			let transport = None;
+
+			let worker = TelemetryWorker::new(16, transport)?;
+			let telemetry = worker.handle().new_telemetry(endpoints);
+			Ok((worker, telemetry))
+		})
+		.transpose()?;
 
 	let (client, backend, keystore_container, mut task_manager, on_demand) =
 		sc_service::new_light_parts::<Block, RuntimeApi, Executor>(
 			&config,
-			telemetry.as_ref().map(|x| x.handle()),
+			telemetry.as_ref().map(|(_, telemetry)| telemetry.handle()),
 		)?;
 
-	task_manager.spawn_handle().spawn("telemetry", telemetry_worker.run());
+	let mut telemetry = telemetry
+		.map(|(worker, telemetry)| {
+			task_manager.spawn_handle().spawn("telemetry", worker.run());
+			telemetry
+		});
 
 	config.network.extra_sets.push(grandpa::grandpa_peers_set_config());
 
