@@ -489,7 +489,7 @@ macro_rules! decl_module {
 			{ $( $deposit_event )* }
 			{ $( $on_initialize )* }
 			{ $( $on_runtime_upgrade )* }
-			{ $( $on_idle:tt )* }
+			{ $( $on_idle )* }
 			{
 				fn on_finalize( $( $param_name : $param ),* ) { $( $impl )* }
 			}
@@ -2575,7 +2575,7 @@ mod tests {
 	use super::*;
 	use crate::weights::{DispatchInfo, DispatchClass, Pays, RuntimeDbWeight};
 	use crate::traits::{
-		CallMetadata, GetCallMetadata, GetCallName, OnInitialize, OnFinalize, OnRuntimeUpgrade,
+		CallMetadata, GetCallMetadata, GetCallName, OnInitialize, OnFinalize, OnIdle, OnRuntimeUpgrade,
 		IntegrityTest, Get, PalletInfo,
 	};
 
@@ -2638,6 +2638,7 @@ mod tests {
 			fn operational(_origin) { unreachable!() }
 
 			fn on_initialize(n: T::BlockNumber,) -> Weight { if n.into() == 42 { panic!("on_initialize") } 7 }
+			fn on_idle(n: T::BlockNumber, remaining_weight: Weight,) -> Weight { if n.into() == 42 || remaining_weight == 42  { panic!("on_idle") } 7 }
 			fn on_finalize(n: T::BlockNumber,) { if n.into() == 42 { panic!("on_finalize") } }
 			fn on_runtime_upgrade() -> Weight { 10 }
 			fn offchain_worker() {}
@@ -2801,6 +2802,23 @@ mod tests {
 	#[test]
 	fn on_initialize_should_work_2() {
 		assert_eq!(<Module<TraitImpl> as OnInitialize<u32>>::on_initialize(10), 7);
+	}
+
+	#[test]
+	#[should_panic(expected = "on_idle")]
+	fn on_idle_should_work_1() {
+		<Module<TraitImpl> as OnIdle<u32>>::on_idle(42, 9);
+	}
+
+	#[test]
+	#[should_panic(expected = "on_idle")]
+	fn on_idle_should_work_2() {
+		<Module<TraitImpl> as OnIdle<u32>>::on_idle(9, 42);
+	}
+
+	#[test]
+	fn on_idle_should_work_3() {
+		assert_eq!(<Module<TraitImpl> as OnIdle<u32>>::on_idle(10, 11), 7);
 	}
 
 	#[test]
