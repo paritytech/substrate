@@ -74,7 +74,7 @@ pub fn pjr_check<AccountId: IdentifierT>(
 	supports: &Supports<AccountId>,
 	all_candidates: Vec<AccountId>,
 	all_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
-) -> bool {
+) -> Result<(), AccountId> {
 	let t = standard_threshold(supports.len(), all_voters.iter().map(|voter| voter.1 as ExtendedBalance));
 	t_pjr_check(supports, all_candidates, all_voters, t)
 }
@@ -119,7 +119,7 @@ pub fn t_pjr_check<AccountId: IdentifierT>(
 	all_candidates: Vec<AccountId>,
 	all_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
 	t: Threshold,
-) -> bool {
+) -> Result<(), AccountId> {
 	// First order of business: derive `(candidates, voters)` from `supports`.
 	let (candidates, voters) = prepare_pjr_input(
 		supports,
@@ -133,18 +133,26 @@ pub fn t_pjr_check<AccountId: IdentifierT>(
 /// The internal implementation of the PJR check after having the data converted.
 ///
 /// [`pjr_check`] or [`t_pjr_check`] are typically easier to work with.
+///
+/// This function returns an `AccountId` in the `Err` case. This is the counter_example: the ID of the
+/// unelected candidate with the highest prescore, such that `pre_score(counter_example) >= t`.
 pub fn pjr_check_core<AccountId: IdentifierT>(
 	candidates: &[CandidatePtr<AccountId>],
 	voters: &[Voter<AccountId>],
 	t: Threshold,
-) -> bool {
+) -> Result<(), AccountId> {
 	let unelected = candidates.iter().filter(|c| !c.borrow().elected);
 	let maybe_max_pre_score = unelected.map(|c| (pre_score(Rc::clone(c), voters, t), c.borrow().who.clone())).max();
 	// if unelected is empty then the solution is indeed PJR.
-	maybe_max_pre_score.map_or(true, |(max_pre_score, _)| max_pre_score < t)
+	match maybe_max_pre_score {
+		None => Ok(()),
+		Some((max_pre_score, counter_example)) => if max_pre_score < t {
+			Ok(())
+		} else {
+			Err(counter_example)
+		}
+	}
 }
-
-
 
 /// Convert the data types that the user runtime has into ones that can be used by this module.
 ///
