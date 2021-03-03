@@ -28,29 +28,30 @@
 //! on this, a phase is chosen. The timeline is as follows.
 //!
 //! ```ignore
-//!                                                                    elect()
-//!                 +   <--T::SignedPhase-->  +  <--T::UnsignedPhase-->   +
-//!   +-------------------------------------------------------------------+
-//!    Phase::Off   +       Phase::Signed     +      Phase::Unsigned      +
+//!                                                                                                 elect()
+//!                 +   <--T::SignedPhase-->  +  <--T::ChallengePhase-->   +  <--T::UnsignedPhase-->   +
+//!   +--------------------------------------------------------------------+----------------------------
+//!    Phase::Off   +       Phase::Signed     +      Phase::Challenge      +      Phase::Unsigned      +
 //! ```
 //!
-//! Note that the unsigned phase starts [`pallet::Config::UnsignedPhase`] blocks before the
+//! Note that the challenge phase starts [`pallet::Config::ChallengePhase`] blocks before the
 //! `next_election_prediction`, but only ends when a call to [`ElectionProvider::elect`] happens. If
-//! no `elect` happens, the signed phase is extended.
+//! no `elect` happens, the challenge phase is extended.
 //!
-//! > Given this, it is rather important for the user of this pallet to ensure it always terminates
-//! election via `elect` before requesting a new one.
+//! > It is important for the user of this pallet to ensure `elect` is called before a new election
+//! > phase begins.
 //!
-//! Each of the phases can be disabled by essentially setting their length to zero. If both phases
-//! have length zero, then the pallet essentially runs only the fallback strategy, denoted by
+//! Each of the phases can be disabled by setting their length to zero. If all phases have length
+//! zero, then the pallet essentially runs only the fallback strategy, configured as
 //! [`Config::FallbackStrategy`].
+//!
 //! ### Signed Phase
 //!
 //!	In the signed phase, solutions (of type [`RawSolution`]) are submitted and queued on chain. A
 //! deposit is reserved, based on the size of the solution, for the cost of keeping this solution
 //! on-chain for a number of blocks, and the potential weight of the solution upon being checked. A
 //! maximum of [`pallet::Config::MaxSignedSubmissions`] solutions are stored. The queue is always
-//! sorted based on score (worse to best).
+//! sorted based on score (worst to best).
 //!
 //! Upon arrival of a new solution:
 //!
@@ -64,12 +65,31 @@
 //! A signed solution cannot be reversed, taken back, updated, or retracted. In other words, the
 //! origin can not bail out in any way, if their solution is queued.
 //!
-//! Upon the end of the signed phase, the solutions are examined from best to worse (i.e. `pop()`ed
-//! until drained). Each solution undergoes an expensive [`Pallet::feasibility_check`], which
-//! ensures the score claimed by this score was correct, and it is valid based on the election data
-//! (i.e. votes and candidates). At each step, if the current best solution passes the feasibility
-//! check, it is considered to be the best one. The sender of the origin is rewarded, and the rest
-//! of the queued solutions get their deposit back and are discarded, without being checked.
+//! ### Challenge Phase
+//!
+//! The challenge phase is designed to ensure that only solutions which exceed an absolute quality
+//! floor are accepted. During this phase, miners can download the solution stack and subject any of
+//! them to a (very expensive) PJR check. In the event that this check fails, they will discover a
+//! counterexample: a small piece of data which can be used to cheaply prove that the solution does
+//! not satisfy PJR. They can then submit a transaction containing this counterexample. One of a few
+//! things can happen then:
+//!
+//! - The counterexample correctly disproves the solution: solution author slashed, solution
+//!   discarded, miner rewarded
+//! - The counterexample correctly disproves the solution but with a severity below some threshold:
+//!   miner receives minor reward, but solution is retained
+//! - The counterexample fails to disprove the solution: miner slashed
+//!
+//! > TODO: link to PJR docs
+//!
+//! At the end of the challenge phase, the solutions are examined from best to worst. For each
+//! solution:
+//!
+//! - Compute an expensive [`Pallet::feasibility_check`]. This ensures the score claimed by this
+//!   score was correct, and it is valid based on the election data (i.e. votes and candidates).
+//! - If the current best solution passes the feasibility check, it is considered to be the best
+//!   one. The sender of the origin is rewarded, and the rest of the queued solutions get their
+//!   deposit back and are discarded, without being checked.
 //!
 //! The following example covers all of the cases at the end of the signed phase:
 //!
@@ -91,9 +111,9 @@
 //! Note that both of the bottom solutions end up being discarded and get their deposit back,
 //! despite one of them being *invalid*.
 //!
-//! ## Unsigned Phase
+//! ### Unsigned Phase
 //!
-//! The unsigned phase will always follow the signed phase, with the specified duration. In this
+//! The unsigned phase will always follow the challenge phase, with the specified duration. In this
 //! phase, only validator nodes can submit solutions. A validator node who has offchain workers
 //! enabled will start to mine a solution in this phase and submits it back to the chain as an
 //! unsigned transaction, thus the name _unsigned_ phase. This unsigned transaction can never be
@@ -103,7 +123,7 @@
 //! than the best queued one (see [`pallet::Config::SolutionImprovementThreshold`]) and will limit
 //! the weigh of the solution to [`pallet::Config::MinerMaxWeight`].
 //!
-//! The unsigned phase can be made passive depending on how the previous signed phase went, by
+//! The unsigned phase can be skipped depending on how the previous signed phase went, by
 //! setting the first inner value of [`Phase`] to `false`. For now, the signed phase is always
 //! active.
 //!
@@ -138,8 +158,8 @@
 //!
 //! ## Error types
 //!
-//! This pallet provides a verbose error system to ease future debugging and debugging. The
-//! overall hierarchy of errors is as follows:
+//! This pallet provides a verbose error system to ease future debugging and debugging. The overall
+//! hierarchy of errors is as follows:
 //!
 //! 1. [`pallet::Error`]: These are the errors that can be returned in the dispatchables of the
 //!    pallet, either signed or unsigned. Since decomposition with nested enums is not possible
@@ -155,16 +175,6 @@
 //! `SnapshotUnavailable` can happen in both miner and feasibility check phase.
 //!
 //! ## Future Plans
-//!
-//! **Challenge Phase**. We plan adding a third phase to the pallet, called the challenge phase.
-//! This is phase in which no further solutions are processed, and the current best solution might
-//! be challenged by anyone (signed or unsigned). The main plan here is to enforce the solution to
-//! be PJR. Checking PJR on-chain is quite expensive, yet proving that a solution is **not** PJR is
-//! rather cheap. If a queued solution is challenged:
-//!
-//! 1. We must surely slash whoever submitted that solution (might be a challenge for unsigned
-//!    solutions).
-//! 2. It is probably fine to fallback to the on-chain election, as we expect this to happen rarely.
 //!
 //! **Bailing out**. The functionality of bailing out of a queued solution is nice. A miner can
 //! submit a solution as soon as they _think_ it is high probability feasible, and do the checks
