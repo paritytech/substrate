@@ -316,7 +316,7 @@ impl TelemetryWorker {
 			if let Some(node) = node_pool.get_mut(&addr) {
 				let _ = node.send(message.clone()).await;
 			} else {
-				log::error!(
+				log::debug!(
 					target: "telemetry",
 					"Received message for unknown node ({}). This is a bug. \
 					Message sent: {}",
