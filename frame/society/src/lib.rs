@@ -1552,10 +1552,13 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 		<Candidates<T, I>>::put(&candidates);
 
 		// Select sqrt(n) random members from the society and make them skeptics.
+		// Exclude any suspended members selected this way.
 		let pick_member = |_| pick_item(&mut rng, &members[..]).expect("exited if members empty; qed");
 		for skeptic in (0..members.len().integer_sqrt()).map(pick_member) {
 			for Bid{ who: c, .. } in candidates.iter() {
-				<Votes<T, I>>::insert(c, skeptic, Vote::Skeptic);
+				if !<SuspendedMembers<T, I>>::contains_key(&skeptic) {
+					<Votes<T, I>>::insert(c, skeptic, Vote::Skeptic);
+				}
 			}
 		}
 	}
