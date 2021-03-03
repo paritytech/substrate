@@ -1338,7 +1338,7 @@ macro_rules! decl_module {
 
 				$crate::log::info!(
 					target: $crate::LOG_TARGET,
-					"⚠️ running migration for {} and setting new storage version to {:?}",
+					"⚠️ {} declares internal migrations (which *might* execute), setting storage version to {:?}",
 					pallet_name,
 					new_storage_version,
 				);
@@ -1387,7 +1387,7 @@ macro_rules! decl_module {
 
 				$crate::log::info!(
 					target: $crate::LOG_TARGET,
-					"✅ no migration for '{}' and setting new storage version to {:?}",
+					"✅ no migration for {}, setting storage version to {:?}",
 					pallet_name,
 					new_storage_version,
 				);

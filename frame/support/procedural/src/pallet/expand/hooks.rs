@@ -32,7 +32,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 		quote::quote! {
 			#frame_support::log::info!(
 				target: #frame_support::LOG_TARGET,
-				"⚠️ running migration for {} and setting new storage version to {:?}",
+				"⚠️ {} declares internal migrations (which *might* execute), setting storage version to {:?}",
 				pallet_name,
 				new_storage_version,
 			);
@@ -42,7 +42,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 		quote::quote! {
 			#frame_support::log::info!(
 				target: #frame_support::LOG_TARGET,
-				"✅ no migration for '{}' and setting new storage version to {:?}",
+				"✅ no migration for {}, setting storage version to {:?}",
 				pallet_name,
 				new_storage_version,
 			);
