@@ -213,6 +213,17 @@ fn validate_pjr_challenge_core<AccountId: IdentifierT>(
 	voters: &[Voter<AccountId>],
 	threshold: Threshold,
 ) -> bool {
+	// Performing a linear search of the candidate list is not great, for obvious reasons. However,
+	// the alternatives are worse:
+	//
+	// - we could pre-sort the candidates list in `prepare_pjr_input` (n log n) which would let us
+	//   binary search for the appropriate one here (log n). Overall runtime is `n log n` which is
+	//   worse than the current runtime of `n`.
+	//
+	// - we could probably pre-sort the candidates list in `n` in `prepare_pjr_input` using some
+	//   unsafe code leveraging the existing `candidates_index`: allocate an uninitialized vector of
+	//   appropriate length, then copy in all the elements. We'd really prefer to avoid unsafe code
+	//   in the runtime, though.
 	let candidate = match candidates.iter().find(|candidate| candidate.borrow().who == counter_example) {
 		None => return false,
 		Some(candidate) => candidate.clone(),
