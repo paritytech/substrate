@@ -20,23 +20,13 @@
 #[cfg(not(feature = "metered"))]
 mod inner {
 	// just aliased, non performance implications
-	use futures::channel::mpsc::{self, UnboundedReceiver, UnboundedSender, Receiver, Sender};
+	use futures::channel::mpsc::{self, UnboundedReceiver, UnboundedSender};
 	pub type TracingUnboundedSender<T> = UnboundedSender<T>;
 	pub type TracingUnboundedReceiver<T> = UnboundedReceiver<T>;
-	pub type TracingSender<T> = Sender<T>;
-	pub type TracingReceiver<T> = Receiver<T>;
 
 	/// Alias `mpsc::unbounded`
 	pub fn tracing_unbounded<T>(_key: &'static str) ->(TracingUnboundedSender<T>, TracingUnboundedReceiver<T>) {
 		mpsc::unbounded()
-	}
-
-	/// Alias `mpsc::channel`
-	pub fn tracing_channel<T>(
-		_key: &'static str,
-		buffer: usize,
-	) -> (TracingUnboundedSender<T>, TracingUnboundedReceiver<T>) {
-		mpsc::channel()
 	}
 }
 
@@ -45,7 +35,7 @@ mod inner {
 mod inner {
 	//tracing implementation
 	use futures::channel::mpsc::{self,
-		UnboundedReceiver, UnboundedSender, Receiver, Sender,
+		UnboundedReceiver, UnboundedSender,
 		TryRecvError, TrySendError, SendError
 	};
 	use futures::{sink::Sink, task::{Poll, Context}, stream::{Stream, FusedStream}};
@@ -177,7 +167,7 @@ mod inner {
 				Poll::Ready(msg) => {
 					if msg.is_some() {
 						UNBOUNDED_CHANNELS_COUNTER.with_label_values(&[s.0, "received"]).inc();
-					}
+				   	}
 					Poll::Ready(msg)
 				}
 				Poll::Pending => {
@@ -256,183 +246,6 @@ mod inner {
 			Poll::Ready(Ok(()))
 		}
 	}
-
-	/// Wrapper Type around `Sender` that increases the global
-	/// measure when a message is added
-	#[derive(Debug)]
-	pub struct TracingSender<T>(&'static str, Sender<T>);
-
-	// Strangely, deriving `Clone` requires that `T` is also `Clone`.
-	impl<T> Clone for TracingSender<T> {
-		fn clone(&self) -> Self {
-			Self(self.0, self.1.clone())
-		}
-	}
-
-	/// Wrapper Type around `Receiver` that decreases the global
-	/// measure when a message is polled
-	#[derive(Debug)]
-	pub struct TracingReceiver<T>(&'static str, Receiver<T>);
-
-	/// Wrapper around `mpsc::unbounded` that tracks the in- and outflow via
-	/// `UNBOUNDED_CHANNELS_COUNTER`
-	pub fn tracing_channel<T>(
-		key: &'static str,
-		buffer: usize,
-	) -> (TracingSender<T>, TracingReceiver<T>) {
-		let (s, r) = mpsc::channel(buffer);
-		(TracingSender(key, s), TracingReceiver(key,r))
-	}
-
-	impl<T> TracingSender<T> {
-		/// Proxy function to mpsc::Sender
-		pub fn poll_ready(&mut self, ctx: &mut Context) -> Poll<Result<(), SendError>> {
-			self.1.poll_ready(ctx)
-		}
-
-		/// Proxy function to mpsc::Sender
-		pub fn is_closed(&self) -> bool {
-			self.1.is_closed()
-		}
-
-		/// Proxy function to mpsc::Sender
-		pub fn close_channel(&mut self) {
-			self.1.close_channel()
-		}
-
-		/// Proxy function to mpsc::Sender
-		pub fn disconnect(&mut self) {
-			self.1.disconnect()
-		}
-
-		/// Proxy function to mpsc::Sender
-		pub fn start_send(&mut self, msg: T) -> Result<(), SendError> {
-			self.1.start_send(msg)
-		}
-
-		/// Proxy function to mpsc::Sender
-		pub fn try_send(&mut self, msg: T) -> Result<(), TrySendError<T>> {
-			self.1.try_send(msg).map(|s|{
-				UNBOUNDED_CHANNELS_COUNTER.with_label_values(&[self.0, &"send"]).inc();
-				s
-			})
-		}
-
-		/// Proxy function to mpsc::Sender
-		pub fn same_receiver(&self, other: &Sender<T>) -> bool {
-			self.1.same_receiver(other)
-		}
-	}
-
-	impl<T> TracingReceiver<T> {
-
-		fn consume(&mut self) {
-			// consume all items, make sure to reflect the updated count
-			let mut count = 0;
-			loop {
-				if self.1.is_terminated() {
-					break;
-				}
-
-				match self.try_next() {
-					Ok(Some(..)) => count += 1,
-					_ => break
-				}
-			}
-			// and discount the messages
-			if count > 0 {
-				UNBOUNDED_CHANNELS_COUNTER.with_label_values(&[self.0, &"dropped"]).inc_by(count);
-			}
-
-		}
-
-		/// Proxy function to mpsc::Receiver
-		/// that consumes all messages first and updates the counter
-		pub fn close(&mut self) {
-			self.consume();
-			self.1.close()
-		}
-
-		/// Proxy function to mpsc::Receiver
-		/// that discounts the messages taken out
-		pub fn try_next(&mut self) -> Result<Option<T>, TryRecvError> {
-			self.1.try_next().map(|s| {
-				if s.is_some() {
-					UNBOUNDED_CHANNELS_COUNTER.with_label_values(&[self.0, &"received"]).inc();
-				}
-				s
-			})
-		}
-	}
-
-	impl<T> Drop for TracingReceiver<T> {
-		fn drop(&mut self) {
-			self.consume();
-		}
-	}
-
-	impl<T> Unpin for TracingReceiver<T> {}
-
-	impl<T> Stream for TracingReceiver<T> {
-		type Item = T;
-
-		fn poll_next(
-			self: Pin<&mut Self>,
-			cx: &mut Context<'_>,
-		) -> Poll<Option<T>> {
-			let s = self.get_mut();
-			match Pin::new(&mut s.1).poll_next(cx) {
-				Poll::Ready(msg) => {
-					if msg.is_some() {
-						UNBOUNDED_CHANNELS_COUNTER.with_label_values(&[s.0, "received"]).inc();
-					}
-					Poll::Ready(msg)
-				}
-				Poll::Pending => {
-					Poll::Pending
-				}
-			}
-		}
-	}
-
-	impl<T> FusedStream for TracingReceiver<T> {
-		fn is_terminated(&self) -> bool {
-			self.1.is_terminated()
-		}
-	}
-
-	impl<T> Sink<T> for TracingSender<T> {
-		type Error = SendError;
-
-		fn poll_ready(
-			mut self: Pin<&mut Self>,
-			cx: &mut Context<'_>,
-		) -> Poll<Result<(), Self::Error>> {
-			TracingSender::poll_ready(&mut *self, cx)
-		}
-
-		fn start_send(
-			mut self: Pin<&mut Self>,
-			msg: T,
-		) -> Result<(), Self::Error> {
-			TracingSender::start_send(&mut *self, msg)
-		}
-
-		fn poll_flush(
-			self: Pin<&mut Self>,
-			_: &mut Context<'_>,
-		) -> Poll<Result<(), Self::Error>> {
-			Poll::Ready(Ok(()))
-		}
-
-		fn poll_close(
-			mut self: Pin<&mut Self>,
-			_: &mut Context<'_>,
-		) -> Poll<Result<(), Self::Error>> {
-			self.disconnect();
-			Poll::Ready(Ok(()))
-		}
-	}
 }
 
-pub use inner::*;
+pub use inner::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
