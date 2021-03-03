@@ -1075,7 +1075,7 @@ impl<T: Config> Module<T> {
 					// Logic error - cannot decrement beyond zero.
 					log::error!(
 						target: "runtime::system",
-			      "Logic error: Unexpected underflow in reducing provider",
+						"Logic error: Unexpected underflow in reducing provider",
 					);
 					account.providers = 1;
 				}
