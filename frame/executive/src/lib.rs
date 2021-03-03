@@ -588,6 +588,11 @@ mod tests {
 					175
 				}
 
+				fn on_idle(n: T::BlockNumber, remaining_weight: Weight) -> Weight {
+					println!("on_idle{}, {})", n, remaining_weight);
+					175
+				}
+
 				fn on_finalize() {
 					println!("on_finalize(?)");
 				}
@@ -802,7 +807,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("1599922f15b2d5cf75e83370e29e13b96fdf799d917a5b6319736af292f21665").into(),
+					state_root: hex!("994f47ae1896aa1a26dfdb64c84186dec838667468421b494a2934c70ea75280").into(),
 					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -1039,10 +1044,11 @@ mod tests {
 		new_test_ext(1).execute_with(|| {
 
 			Executive::initialize_block(&Header::new_from_number(1));
+			Executive::finalize_block();
 			// NOTE: might need updates over time if new weights are introduced.
 			// For now it only accounts for the base block execution weight and
 			// the `on_initialize` weight defined in the custom test module.
-			assert_eq!(<frame_system::Module<Runtime>>::block_weight().total(), 175 + 10);
+			assert_eq!(<frame_system::Module<Runtime>>::block_weight().total(), 175 + 175  + 10);
 		})
 	}
 
