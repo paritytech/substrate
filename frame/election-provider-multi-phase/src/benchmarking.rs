@@ -29,7 +29,7 @@ use sp_arithmetic::traits::One;
 use sp_runtime::InnerOf;
 use sp_std::convert::TryInto;
 
-const SEED: u32 = 0;
+const SEED: u32 = 999;
 
 /// Creates a **valid** solution with exactly the given size.
 ///
@@ -57,7 +57,7 @@ fn solution_with_size<T: Config>(
 	let targets: Vec<T::AccountId> =
 		(0..size.targets).map(|i| account("Targets", i, SEED)).collect();
 
-	let mut rng = SmallRng::seed_from_u64(999u64);
+	let mut rng = SmallRng::seed_from_u64(SEED.into());
 
 	// decide who are the winners.
 	let winners = targets

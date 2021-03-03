@@ -47,13 +47,13 @@ pub fn generate_voter_cache<T: Config>(
 	cache
 }
 
-/// Create a function the returns the index a voter in the snapshot.
+/// Create a function that returns the index of a voter in the snapshot.
 ///
 /// The returning index type is the same as the one defined in [`T::CompactSolution::Voter`].
 ///
 /// ## Warning
 ///
-/// The snapshot must be the same is the one used to create `cache`.
+/// Note that this will represent the snapshot data from which the `cache` is generated.
 pub fn voter_index_fn<T: Config>(
 	cache: &BTreeMap<T::AccountId, usize>,
 ) -> Box<dyn Fn(&T::AccountId) -> Option<CompactVoterIndexOf<T>> + '_> {
@@ -66,7 +66,7 @@ pub fn voter_index_fn<T: Config>(
 ///
 /// ## Warning
 ///
-/// The snapshot must be the same is the one used to create `cache`.
+/// Note that this will represent the snapshot data from which the `cache` is generated.
 pub fn voter_index_fn_usize<T: Config>(
 	cache: &BTreeMap<T::AccountId, usize>,
 ) -> Box<dyn Fn(&T::AccountId) -> Option<usize> + '_> {
@@ -90,7 +90,7 @@ pub fn voter_index_fn_linear<T: Config>(
 	})
 }
 
-/// Create a function the returns the index a targets in the snapshot.
+/// Create a function that returns the index of a targets in the snapshot.
 ///
 /// The returning index type is the same as the one defined in [`T::CompactSolution::Target`].
 pub fn target_index_fn_linear<T: Config>(
