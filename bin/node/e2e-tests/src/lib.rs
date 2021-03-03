@@ -18,11 +18,13 @@
 
 //! End to end runtime tests
 
-use substrate_test_runner::{Node, ChainInfo, SignatureVerificationOverride};
+use test_runner::{Node, ChainInfo, SignatureVerificationOverride, base_path};
 use grandpa::GrandpaBlockImport;
-use sc_service::{TFullBackend, TFullClient, Configuration, TaskManager, new_full_parts};
-use node_runtime::{SignedExtra, Runtime, Event};
-use sp_runtime::generic::Era;
+use sc_service::{
+    TFullBackend, TFullClient, Configuration, TaskManager, new_full_parts, BasePath,
+    DatabaseConfig, KeepBlocks, TransactionStorageMode, TaskExecutor, ChainSpec, Role,
+    config::{NetworkConfiguration, KeystoreConfig},
+};
 use std::sync::Arc;
 use sp_inherents::InherentDataProviders;
 use sc_consensus_babe::BabeBlockImport;
@@ -31,7 +33,11 @@ use sp_keyring::sr25519::Keyring::{Alice, Bob};
 use node_cli::chain_spec::development_config;
 use sp_consensus_babe::AuthorityId;
 use sc_consensus_manual_seal::{ConsensusDataProvider, consensus::babe::BabeConsensusDataProvider};
-use sp_runtime::{traits::IdentifyAccount, MultiSigner};
+use sp_runtime::{traits::IdentifyAccount, MultiSigner, generic::Era};
+use sc_executor::WasmExecutionMethod;
+use sc_network::{multiaddr, config::TransportConfig};
+use sc_client_api::execution_extensions::ExecutionStrategies;
+use sc_informant::OutputFormat;
 
 type BlockImport<B, BE, C, SC> = BabeBlockImport<B, C, GrandpaBlockImport<BE, B, C, SC>>;
 
@@ -57,10 +63,96 @@ impl ChainInfo for NodeTemplateChainInfo {
         TFullClient<Self::Block, Self::RuntimeApi, Self::Executor>,
         Self::SelectChain,
     >;
-    type SignedExtras = SignedExtra;
+    type SignedExtras = node_runtime::SignedExtra;
 
-    fn load_spec() -> Result<Box<dyn sc_service::ChainSpec>, String> {
-        Ok(Box::new(development_config()))
+    fn configuration(task_executor: TaskExecutor) -> Configuration {
+        let mut chain_spec = development_config();
+        let base_path = if let Some(base) = base_path() {
+            BasePath::new(base)
+        } else {
+            BasePath::new_temp_dir().expect("couldn't create a temp dir")
+        };
+        let root_path = base_path.path().to_path_buf().join("chains").join(chain_spec.id());
+
+        let key_seed = Alice.to_seed();
+        let storage = chain_spec
+            .as_storage_builder()
+            .build_storage()
+            .expect("could not build storage");
+
+        chain_spec.set_storage(storage);
+
+        let mut network_config = NetworkConfiguration::new(
+            format!("Test Node for: {}", key_seed),
+            "network/test/0.1",
+            Default::default(),
+            None,
+        );
+        let informant_output_format = OutputFormat { enable_color: false };
+
+        network_config.allow_non_globals_in_dht = true;
+
+        network_config
+            .listen_addresses
+            .push(multiaddr::Protocol::Memory(rand::random()).into());
+
+        network_config.transport = TransportConfig::MemoryOnly;
+
+        Configuration {
+            impl_name: "test-node".to_string(),
+            impl_version: "0.1".to_string(),
+            role: Role::Authority,
+            task_executor,
+            transaction_pool: Default::default(),
+            network: network_config,
+            keystore: KeystoreConfig::Path {
+                path: root_path.join("key"),
+                password: None,
+            },
+            database: DatabaseConfig::RocksDb {
+                path: root_path.join("db"),
+                cache_size: 128,
+            },
+            state_cache_size: 16777216,
+            state_cache_child_ratio: None,
+            chain_spec: Box::new(chain_spec),
+            wasm_method: WasmExecutionMethod::Interpreted,
+            // NOTE: we enforce the use of the wasm runtime to make use of the signature overrides
+            execution_strategies: ExecutionStrategies {
+                syncing: sc_client_api::ExecutionStrategy::AlwaysWasm,
+                importing: sc_client_api::ExecutionStrategy::AlwaysWasm,
+                block_construction: sc_client_api::ExecutionStrategy::AlwaysWasm,
+                offchain_worker: sc_client_api::ExecutionStrategy::AlwaysWasm,
+                other: sc_client_api::ExecutionStrategy::AlwaysWasm,
+            },
+            rpc_http: None,
+            rpc_ws: None,
+            rpc_ipc: None,
+            rpc_ws_max_connections: None,
+            rpc_cors: None,
+            rpc_methods: Default::default(),
+            prometheus_config: None,
+            telemetry_endpoints: None,
+            telemetry_external_transport: None,
+            default_heap_pages: None,
+            offchain_worker: Default::default(),
+            force_authoring: false,
+            disable_grandpa: false,
+            dev_key_seed: Some(key_seed),
+            tracing_targets: None,
+            tracing_receiver: Default::default(),
+            max_runtime_instances: 8,
+            announce_block: true,
+            base_path: Some(base_path),
+            wasm_runtime_overrides: None,
+            informant_output_format,
+            disable_log_reloading: false,
+            keystore_remote: None,
+            keep_blocks: KeepBlocks::All,
+            state_pruning: Default::default(),
+            transaction_storage: TransactionStorageMode::BlockBody,
+            telemetry_handle: Default::default(),
+        }
     }
 
     fn signed_extras(from: <Self::Runtime as frame_system::Config>::AccountId) -> Self::SignedExtras {
@@ -154,26 +246,6 @@ mod tests {
     fn runtime_upgrade() {
         let mut node = Node::<NodeTemplateChainInfo>::new().unwrap();
 
-        // first perform runtime upgrade
-        let wasm = include_bytes!("./runtime.wasm");
-        println!("\n\n\nUpgrading\n\n\n");
-        node.upgrade_runtime(wasm.to_vec());
-        println!("\n\n\nUpgraded\n\n\n {:#?}", node.with_state(|| frame_system::Module::<Runtime>::events()));
-
-        // assert that the runtime is upgraded by looking at events
-        let events = node.with_state(|| frame_system::Module::<Runtime>::events())
-            .into_iter()
-            .filter(|event| {
-                match event.event {
-                    Event::frame_system(frame_system::Event::CodeUpdated) => true,
-                    _ => false,
-                }
-            })
-            .collect::<Vec<_>>();
-
-        // make sure event is in state
-        assert_eq!(events.len(), 1);
-
         let (alice, bob) = (
             MultiSigner::from(Alice.public()).into_account(),
             MultiSigner::from(Bob.public()).into_account()
@@ -183,6 +255,5 @@ mod tests {
         transfer_keep_alive(&mut node, alice.clone(), bob.clone());
         set_balance(&mut node, alice.clone());
         force_transfer(&mut node, alice, bob);
-
     }
 }

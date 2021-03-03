@@ -1,40 +1,3 @@
-[patch.'https://github.com/paritytech/substrate']
-sc-executor = { version = "0.8.0", path = "./client/executor" }
-sc-service = { version = "0.8.0", path = "./client/service" }
-sc-informant = { version = "0.8.0", path = "./client/informant" }
-sc-network = { version = "0.8.0", path = "./client/network" }
-sc-cli = { version = "0.8.0", path = "./client/cli" }
-sc-basic-authorship = { version = "0.8.0", path = "./client/basic-authorship" }
-sc-rpc = { version = "2.0.0", path = "./client/rpc" }
-sc-transaction-pool = { version = "2.0.0", path = "./client/transaction-pool" }
-sc-transaction-graph = { version = "2.0.0", path = "./client/transaction-pool/graph" }
-sc-client-api = { version = "2.0.0", path = "./client/api" }
-sc-rpc-server = { version = "2.0.0", path = "./client/rpc-servers" }
-sc-consensus-manual-seal= { version = "0.8.0", path = "./client/consensus/manual-seal" }
-
-# primitive deps
-sp-core = { version = "2.0.0", path = "./primitives/core" }
-sp-blockchain = { version = "2.0.0", path = "./primitives/blockchain" }
-sp-block-builder = { version = "2.0.0", path = "./primitives/block-builder" }
-sp-api = { version = "2.0.0", path = "./primitives/api" }
-sp-io = { version = "2.0.0", path = "./primitives/io" }
-sp-transaction-pool = { version = "2.0.0", path = "./primitives/transaction-pool" }
-sp-consensus = { version = "0.8.0", path = "./primitives/consensus/common" }
-sp-keystore = { version = "0.8.0", path = "./primitives/keystore" }
-sp-runtime = { version = "2.0.0", path = "./primitives/runtime" }
-sp-session = { version = "2.0.0", path = "./primitives/session" }
-sp-offchain = { version = "2.0.0", path = "./primitives/offchain" }
-sp-inherents = { version = "2.0.0", path = "./primitives/inherents" }
-sp-keyring = { version = "2.0.0", path = "./primitives/keyring" }
-
-sp-externalities = { version = "0.8.0", path = "./primitives/externalities" }
-sp-state-machine = { version = "0.8.0", path = "./primitives/state-machine" }
-sp-wasm-interface = { version = "2.0.0", path = "./primitives/wasm-interface" }
-sp-runtime-interface = { version = "2.0.0", path = "./primitives/runtime-interface" }
-
-# pallets
-frame-system = { version = "2.0.0", path = "./frame/system" }
-
 [workspace]
 members = [
 	"bin/node-template/node",
@@ -222,6 +185,7 @@ members = [
 	"test-utils/runtime",
 	"test-utils/runtime/client",
 	"test-utils/runtime/transaction-pool",
+	"test-utils/test-runner",
 	"test-utils/test-crate",
 	"utils/browser",
 	"utils/build-script-utils",

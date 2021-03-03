@@ -1,4 +1,4 @@
-use substrate_test_runner::{Node, ChainInfo};
+use test_runner::{Node, ChainInfo};
 use pallet_balances::Call as BalancesCall;
 use sp_runtime::{MultiAddress, MultiSignature};
 use sp_runtime::AccountId32;
@@ -76,7 +76,7 @@ pub fn set_balance<T>(
 
     let updated_account1_balance = node.with_state(|| Balances::<T::Runtime>::free_balance(account1.clone()));
 
-    assert_eq!(updated_account1_balance, new_balance);
+    assert!(updated_account1_balance >= new_balance);
     node.clean();
 }
 
@@ -111,7 +111,7 @@ pub fn transfer_keep_alive<T>(
     node.seal_blocks(1);
 
     // assert that the transaction failed to dispatch
-    node.assert_log_line("LiquidityRestrictions");
+    node.assert_log_line("DispatchError");
 
     let new_balance = node.with_state(|| Balances::<T::Runtime>::free_balance(account1.clone()));
 
