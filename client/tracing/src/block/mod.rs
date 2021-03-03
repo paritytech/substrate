@@ -36,8 +36,8 @@ use tracing_core::{Level, span::{Attributes, Record, Id}};
 use wasm_timer::Instant;
 use log::{log};
 
-// Default to only runtime and state related traces
-const DEFAULT_TARGETS: &'static str = "pallet,frame,sp_io::storage=debug";
+// Default to only pallet, frame support and state related traces
+const DEFAULT_TARGETS: &'static str = "pallet,frame,state";
 const TRACE_TARGET: &'static str = "block_trace";
 
 struct BlockSubscriber {
@@ -104,7 +104,9 @@ impl Subscriber for BlockSubscriber {
 			exited: vec![],
 			values: Values::default(),
 		};
-				log!(target: "BLOCKTRACE", log::Level::Trace, "span id {:#?}", id);
+		log!(target: "BLOCKTRACE", log::Level::Trace, "span id: {:#?}, span name: {}, span target: {}",
+			id, attrs.metadata().name().to_owned(), attrs.metadata().target().to_owned()
+		);
 		let id = Id::from_u64(id);
 		self.spans.lock().insert(id.clone(), span);
 		id
@@ -141,6 +143,7 @@ impl Subscriber for BlockSubscriber {
 
 	fn enter(&self, id: &Id) {
 		self.current_span.enter(id.clone());
+		log!(target: "BLOCKTRACE", log::Level::Trace, "trace current span {:#?}", self.current_span);
 		let mut span_data = self.spans.lock();
 		if let Some(span) = span_data.get_mut(&id) {
 			span.entered.push(Instant::now() - self.timestamp);
@@ -214,11 +217,18 @@ impl<Block, Client> BlockExecutor<Block, Client>
 			.drain()
 			.map(|(_, s)| s.into())
 			.into_iter()
+			.map(|s| {
+				log!(target: "BLOCKTRACE", log::Level::Trace, "TESTING PLZ HALP");
+				log!(target: "BLOCKTRACE", log::Level::Trace, "Span in unfiltered array: {:#?}", s);
+				s
+			})
 			// First filter out any spans that were never entered
 			.filter(|s: &Span| !s.entered.is_empty())
 			// Patch wasm identifiers
 			.filter_map(|s| patch_and_filter(s, targets))
 			.collect();
+
+		
 		spans.sort_by(|a, b| a.entered[0].cmp(&b.entered[0]));
 
 		let events = sub.events.lock().drain(..).map(|s| s.into()).collect();

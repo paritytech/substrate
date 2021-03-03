@@ -75,7 +75,6 @@ struct InnerValue<V> {
 #[derive(Debug, Clone)]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct OverlayedEntry<V> {
-	/// The individual versions of that value.
 	/// One entry per transactions during that the value was actually written.
 	transactions: Transactions<V>,
 }

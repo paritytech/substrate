@@ -194,6 +194,8 @@ where
 	N: crate::changes_trie::BlockNumber,
 {
 	fn set_offchain_storage(&mut self, key: &[u8], value: Option<&[u8]>) {
+		// TODO REVIEW should we be tracing off chain storage? I don't think I need it for
+		// balance reconciliation in polkadot runtimes, but maybe someone else does?
 		self.overlay.set_offchain_storage(key, value)
 	}
 
@@ -201,10 +203,17 @@ where
 		let _guard = guard();
 		let result = self.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
 			self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL));
-		trace!(target: "state", "{:04x}: Get {}={:?}",
-			self.id,
-			HexDisplay::from(&key),
-			result.as_ref().map(HexDisplay::from)
+		// trace!(target: "state", "{:04x}: Get {}={:?}",
+		// 	self.id,
+		// 	HexDisplay::from(&key),
+		// 	result.as_ref().map(HexDisplay::from)
+		// );
+		let ready_to_encode_result = result.as_ref().map(|v| EncodeOpaqueValue(v.to_owned()));
+		trace!(target: "state",
+			method = "Get",
+			ext_id = self.id,
+			key = %HexDisplay::from(&key),
+			result = %HexDisplay::from(&ready_to_encode_result.encode()),
 		);
 		result
 	}
@@ -216,10 +225,11 @@ where
 			.map(|x| x.map(|x| H::hash(x)))
 			.unwrap_or_else(|| self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL));
 
-		trace!(target: "state", "{:04x}: Hash {}={:?}",
-			self.id,
-			HexDisplay::from(&key),
-			result,
+		trace!(target: "state",
+			method = "GetHash",
+			ext_id = self.id,
+			key = %HexDisplay::from(&key),
+			result = %HexDisplay::from(&result.encode()),
 		);
 		result.map(|r| r.encode())
 	}
@@ -238,11 +248,19 @@ where
 					.expect(EXT_NOT_ALLOWED_TO_FAIL)
 			);
 
-		trace!(target: "state", "{:04x}: GetChild({}) {}={:?}",
-			self.id,
-			HexDisplay::from(&child_info.storage_key()),
-			HexDisplay::from(&key),
-			result.as_ref().map(HexDisplay::from)
+		// trace!(target: "state", "{:04x}: GetChild({}) {}={:?}",
+		// 	self.id,
+		// 	HexDisplay::from(&child_info.storage_key()),
+		// 	HexDisplay::from(&key),
+		// 	result.as_ref().map(HexDisplay::from)
+		// );
+		trace!(target: "state",
+			method = "GetChild",
+			ext_id = self.id,
+			key = %HexDisplay::from(&key),
+			// TODO REVIEW is this necessary?
+			child_trie_parent_key_id = %HexDisplay::from(&child_info.storage_key()),
+			result = %HexDisplay::from(&result.encode()),
 		);
 
 		result
@@ -262,11 +280,19 @@ where
 					.expect(EXT_NOT_ALLOWED_TO_FAIL)
 			);
 
-		trace!(target: "state", "{:04x}: ChildHash({}) {}={:?}",
-			self.id,
-			HexDisplay::from(&child_info.storage_key()),
-			HexDisplay::from(&key),
-			result,
+		// trace!(target: "state", "{:04x}: ChildHash({}) {}={:?}",
+		// 	self.id,
+		// 	HexDisplay::from(&child_info.storage_key()),
+		// 	HexDisplay::from(&key),
+		// 	result,
+		// );
+		trace!(target: "state",
+			method = "GetChildHash",
+			ext_id = self.id,
+			key = %HexDisplay::from(&key),
+			// TODO REVIEW is this necessary?
+			child_trie_parent_key_id = %HexDisplay::from(&child_info.storage_key()),
+			result = %HexDisplay::from(&result.encode()),
 		);
 
 		result.map(|r| r.encode())
@@ -279,10 +305,16 @@ where
 			_ => self.backend.exists_storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL),
 		};
 
-		trace!(target: "state", "{:04x}: Exists {}={:?}",
-			self.id,
-			HexDisplay::from(&key),
-			result,
+		// trace!(target: "state", "{:04x}: Exists {}={:?}",
+		// 	self.id,
+		// 	HexDisplay::from(&key),
+		// 	result,
+		// );
+		trace!(target: "state",
+			method = "Exists",
+			ext_id = self.id,
+			key = %HexDisplay::from(&key),
+			result = %HexDisplay::from(&result.encode()),
 		);
 
 		result
@@ -302,12 +334,21 @@ where
 				.expect(EXT_NOT_ALLOWED_TO_FAIL),
 		};
 
-		trace!(target: "state", "{:04x}: ChildExists({}) {}={:?}",
-			self.id,
-			HexDisplay::from(&child_info.storage_key()),
-			HexDisplay::from(&key),
-			result,
+		// trace!(target: "state", "{:04x}: ChildExists({}) {}={:?}",
+		// 	self.id,
+		// 	HexDisplay::from(&child_info.storage_key()),
+		// 	HexDisplay::from(&key),
+		// 	result,
+		// );
+		trace!(target: "state",
+			method = "ExistsChild",
+			ext_id = self.id,
+			key = %HexDisplay::from(&key),
+			// TODO REVIEW is this necessary?
+			child_trie_parent_key_id = %HexDisplay::from(&child_info.storage_key()),
+			result = %HexDisplay::from(&result.encode()),
 		);
+
 		result
 	}
 
@@ -354,16 +395,23 @@ where
 	}
 
 	fn place_storage(&mut self, key: StorageKey, value: Option<StorageValue>) {
-		trace!(target: "state", "{:04x}: Put {}={:?}",
-			self.id,
-			HexDisplay::from(&key),
-			value.as_ref().map(HexDisplay::from)
-		);
+		// trace!(target: "state", "{:04x}: Put {}={:?}",
+		// 	self.id,
+		// 	HexDisplay::from(&key),
+		// 	value.as_ref().map(HexDisplay::from)
+		// );
 		let _guard = guard();
 		if is_child_storage_key(&key) {
 			warn!(target: "trie", "Refuse to directly set child storage key");
 			return;
 		}
+
+		trace!(target: "state",
+			method = "Put",
+			ext_id = self.id,
+			key = %HexDisplay::from(&key),
+			result = %HexDisplay::from(&value.encode()),
+		);
 
 		self.mark_dirty();
 		self.overlay.set_storage(key, value);
@@ -375,12 +423,19 @@ where
 		key: StorageKey,
 		value: Option<StorageValue>,
 	) {
-		trace!(target: "state", "{:04x}: PutChild({}) {}={:?}",
-			self.id,
-			HexDisplay::from(&child_info.storage_key()),
-			HexDisplay::from(&key),
-			value.as_ref().map(HexDisplay::from)
+		// trace!(target: "state", "{:04x}: PutChild({}) {}={:?}",
+		// 	self.id,
+		// 	HexDisplay::from(&child_info.storage_key()),
+		// 	HexDisplay::from(&key),
+		// 	value.as_ref().map(HexDisplay::from)
+		// );
+		trace!(target: "state",
+			method = "PutChild",
+			ext_id = self.id,
+			key = %HexDisplay::from(&key),
+			result = %HexDisplay::from(&value.encode()),
 		);
+
 		let _guard = guard();
 
 		self.mark_dirty();
@@ -392,10 +447,10 @@ where
 		child_info: &ChildInfo,
 		limit: Option<u32>,
 	) -> (bool, u32) {
-		trace!(target: "state", "{:04x}: KillChild({})",
-			self.id,
-			HexDisplay::from(&child_info.storage_key()),
-		);
+		// trace!(target: "state", "{:04x}: KillChild({})",
+		// 	self.id,
+		// 	HexDisplay::from(&child_info.storage_key()),
+		// );
 		let _guard = guard();
 		self.mark_dirty();
 		self.overlay.clear_child_storage(child_info);
@@ -417,6 +472,15 @@ where
 				self.overlay.set_child_storage(child_info, key.to_vec(), None);
 				true
 			});
+
+			trace!(target: "state",
+				method = "KillChild",
+				ext_id = self.id,
+				// TODO REVIEW is this necessary?
+				child_trie_parent_key_id = %HexDisplay::from(&child_info.storage_key()),
+				result = ?(all_deleted, num_deleted),
+			);
+
 			(all_deleted, num_deleted)
 		} else {
 			self.backend.apply_to_child_keys_while(child_info, |key| {
@@ -424,21 +488,36 @@ where
 				self.overlay.set_child_storage(child_info, key.to_vec(), None);
 				true
 			});
+
+			trace!(target: "state",
+				method = "KillChild",
+				ext_id = self.id,
+				// TODO REVIEW is this necessary?
+				child_trie_parent_key_id = %HexDisplay::from(&child_info.storage_key()),
+				result = ?(true, num_deleted),
+			);
+
 			(true, num_deleted)
 		}
 	}
 
 	fn clear_prefix(&mut self, prefix: &[u8]) {
-		trace!(target: "state", "{:04x}: ClearPrefix {}",
-			self.id,
-			HexDisplay::from(&prefix),
-		);
+		// trace!(target: "state", "{:04x}: ClearPrefix {}",
+		// 	self.id,
+		// 	HexDisplay::from(&prefix),
+		// );
 		let _guard = guard();
 
 		if sp_core::storage::well_known_keys::starts_with_child_storage_key(prefix) {
 			warn!(target: "trie", "Refuse to directly clear prefix that is part or contains of child storage key");
 			return;
 		}
+
+		trace!(target: "state",
+			method = "ClearPrefix",
+			ext_id = self.id,
+			prefix = %HexDisplay::from(&prefix),
+		);
 
 		self.mark_dirty();
 		self.overlay.clear_prefix(prefix);
@@ -452,10 +531,17 @@ where
 		child_info: &ChildInfo,
 		prefix: &[u8],
 	) {
-		trace!(target: "state", "{:04x}: ClearChildPrefix({}) {}",
-			self.id,
-			HexDisplay::from(&child_info.storage_key()),
-			HexDisplay::from(&prefix),
+		// trace!(target: "state", "{:04x}: ClearChildPrefix({}) {}",
+		// 	self.id,
+		// 	HexDisplay::from(&child_info.storage_key()),
+		// 	HexDisplay::from(&prefix),
+		// );
+		trace!(target: "state",
+			method = "ClearChildPrefix",
+			ext_id = self.id,
+			// TODO REVIEW is this necessary?
+			child_trie_parent_key_id = %HexDisplay::from(&child_info.storage_key()),
+			prefix = %HexDisplay::from(&prefix),
 		);
 		let _guard = guard();
 
@@ -471,10 +557,17 @@ where
 		key: Vec<u8>,
 		value: Vec<u8>,
 	) {
-		trace!(target: "state", "{:04x}: Append {}={}",
-			self.id,
-			HexDisplay::from(&key),
-			HexDisplay::from(&value),
+		// trace!(target: "state", "{:04x}: Append {}={}",
+		// 	self.id,
+		// 	HexDisplay::from(&key),
+		// 	HexDisplay::from(&value),
+		// );
+
+		trace!(target: "state",
+			method = "Append",
+			ext_id = self.id,
+			key = %HexDisplay::from(&key),
+			result = %HexDisplay::from(&value.encode()),
 		);
 
 		let _guard = guard();
@@ -491,15 +584,24 @@ where
 	fn storage_root(&mut self) -> Vec<u8> {
 		let _guard = guard();
 		if let Some(ref root) = self.storage_transaction_cache.transaction_storage_root {
-			trace!(target: "state", "{:04x}: Root(cached) {}",
-				self.id,
-				HexDisplay::from(&root.as_ref()),
+			let encoded_root = root.encode();
+			trace!(target: "state",
+				method = "GetRootCached",
+				ext_id = self.id,
+				root = %HexDisplay::from(&encoded_root)
 			);
-			return root.encode();
+			return encoded_root;
 		}
 
 		let root = self.overlay.storage_root(self.backend, self.storage_transaction_cache);
-		trace!(target: "state", "{:04x}: Root {}", self.id, HexDisplay::from(&root.as_ref()));
+		let encoded_root = root.encode();
+		// trace!(target: "state", "{:04x}: Root {}", self.id, HexDisplay::from(&root.as_ref()));
+		trace!(target: "state",
+			method = "GetRootCached",
+			ext_id = self.id,
+			root = %HexDisplay::from(&encoded_root)
+		);
+
 		root.encode()
 	}
 
