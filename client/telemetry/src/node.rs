@@ -248,7 +248,7 @@ where
 				Ok(data) => {
 					let _ = conn.sink.start_send_unpin(data);
 				}
-				Err(err) => log::error!(
+				Err(err) => log::debug!(
 					target: "telemetry",
 					"Could not serialize payload: {}",
 					err,
