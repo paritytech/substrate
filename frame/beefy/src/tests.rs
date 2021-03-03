@@ -16,6 +16,7 @@
 
 use std::vec;
 
+use beefy_primitives::ValidatorSet;
 use codec::Encode;
 
 use sp_core::H256;
@@ -69,16 +70,17 @@ fn session_change_updates_authorities() {
 
 		assert!(1 == Beefy::validator_set_id());
 
-		let want = beefy_log(ConsensusLog::AuthoritiesChange {
-			new_validator_set: vec![mock_beefy_id(3), mock_beefy_id(4)],
-			new_validator_set_id: 1,
-		});
+		let want = beefy_log(ConsensusLog::AuthoritiesChange(ValidatorSet {
+			validators: vec![mock_beefy_id(3), mock_beefy_id(4)],
+			id: 1,
+		}));
 
 		let log = System::digest().logs[0].clone();
 
 		assert_eq!(want, log);
 	});
 }
+
 #[test]
 fn session_change_updates_next_authorities() {
 	let want = vec![mock_beefy_id(1), mock_beefy_id(2), mock_beefy_id(3), mock_beefy_id(4)];

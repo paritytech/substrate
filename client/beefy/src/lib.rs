@@ -24,7 +24,10 @@ use futures::{future, FutureExt, Stream, StreamExt};
 use log::{debug, error, info, trace, warn};
 use parking_lot::Mutex;
 
-use beefy_primitives::{BeefyApi, Commitment, ConsensusLog, MmrRootHash, SignedCommitment, BEEFY_ENGINE_ID, KEY_TYPE};
+use beefy_primitives::{
+	BeefyApi, Commitment, ConsensusLog, MmrRootHash, SignedCommitment, ValidatorSet, ValidatorSetId, BEEFY_ENGINE_ID,
+	KEY_TYPE,
+};
 
 use sc_client_api::{Backend as BackendT, BlockchainEvents, FinalityNotification, Finalizer};
 use sc_network_gossip::{
@@ -194,6 +197,7 @@ struct BeefyWorker<Block: BlockT, Id, Signature, FinalityNotifications> {
 	signed_commitment_sender: BeefySignedCommitmentSender<Block, Signature>,
 	best_finalized_block: NumberFor<Block>,
 	best_block_voted_on: NumberFor<Block>,
+	validator_set_id: Option<ValidatorSetId>,
 }
 
 impl<Block, Id, Signature, FinalityNotifications> BeefyWorker<Block, Id, Signature, FinalityNotifications>
@@ -210,6 +214,7 @@ where
 		signed_commitment_sender: BeefySignedCommitmentSender<Block, Signature>,
 		best_finalized_block: NumberFor<Block>,
 		best_block_voted_on: NumberFor<Block>,
+		validator_set_id: Option<ValidatorSetId>,
 	) -> Self {
 		BeefyWorker {
 			local_id,
@@ -221,6 +226,7 @@ where
 			signed_commitment_sender,
 			best_finalized_block,
 			best_block_voted_on,
+			validator_set_id,
 		}
 	}
 }
@@ -259,7 +265,7 @@ where
 	}
 
 	fn handle_finality_notification(&mut self, notification: FinalityNotification<Block>) {
-		debug!(target: "beefy", "Finality notification: {:?}", notification);
+		debug!(target: "beefy", "🥩 Finality notification: {:?}", notification);
 
 		if self.should_vote_on(*notification.header.number()) {
 			let local_id = if let BeefyId::Validator(id) = &self.local_id {
@@ -276,12 +282,22 @@ where
 				return;
 			};
 
-			// TODO: this needs added support for validator set changes (and abstracting the
-			// "thing to sign" would be nice).
+			if let Some(new) = find_authorities_change::<Block, Id>(&notification.header) {
+				debug!(target: "beefy", "🥩 New validator set: {:?}", new);
+				self.validator_set_id = Some(new.id);
+			};
+
+			let current_set_id = if let Some(set_id) = self.validator_set_id {
+				set_id
+			} else {
+				warn!(target: "beefy", "🥩 Unknown validator set id - can't vote for: {:?}", notification.header.hash());
+				return;
+			};
+
 			let commitment = Commitment {
 				payload: mmr_root,
 				block_number: notification.header.number(),
-				validator_set_id: 0,
+				validator_set_id: current_set_id,
 			};
 
 			// TODO #92
@@ -299,7 +315,7 @@ where
 			}) {
 				Ok(sig) => sig,
 				Err(err) => {
-					warn!(target: "beefy", "Error signing: {:?}", err);
+					warn!(target: "beefy", "🥩 Error signing: {:?}", err);
 					return;
 				}
 			};
@@ -316,7 +332,7 @@ where
 				.lock()
 				.gossip_message(topic::<Block>(), message.encode(), false);
 
-			debug!(target: "beefy", "Sent vote message: {:?}", message);
+			debug!(target: "beefy", "🥩 Sent vote message: {:?}", message);
 
 			self.handle_vote(
 				(message.commitment.payload, *message.commitment.block_number),
@@ -333,12 +349,12 @@ where
 
 		if vote_added && self.rounds.is_done(&round) {
 			if let Some(signatures) = self.rounds.drop(&round) {
-				// TODO: this needs added support for validator set changes (and abstracting the
-				// "thing to sign" would be nice).
 				let commitment = Commitment {
 					payload: round.0,
 					block_number: round.1,
-					validator_set_id: 0,
+					validator_set_id: self
+						.validator_set_id
+						.expect("We voted only in case of a valid validator_set_id; qed"),
 				};
 
 				let signed_commitment = SignedCommitment { commitment, signatures };
@@ -353,7 +369,7 @@ where
 	async fn run(mut self) {
 		let mut votes = Box::pin(self.gossip_engine.lock().messages_for(topic::<Block>()).filter_map(
 			|notification| async move {
-				debug!(target: "beefy", "Got vote message: {:?}", notification);
+				debug!(target: "beefy", "🥩 Got vote message: {:?}", notification);
 
 				VoteMessage::<MmrRootHash, NumberFor<Block>, Id, Signature>::decode(&mut &notification.message[..]).ok()
 			},
@@ -382,7 +398,7 @@ where
 					}
 				},
 				_ = gossip_engine.fuse() => {
-					error!(target: "beefy", "Gossip engine has terminated.");
+					error!(target: "beefy", "🥩 Gossip engine has terminated.");
 					return;
 				}
 			}
@@ -453,6 +469,8 @@ pub async fn start_beefy_gadget<Block, Pair, Backend, Client, Network, SyncOracl
 		signed_commitment_sender,
 		best_finalized_block,
 		best_block_voted_on,
+		// TODO #95
+		Some(0),
 	);
 
 	worker.run().await
@@ -469,4 +487,21 @@ where
 			_ => None,
 		}
 	})
+}
+
+/// Scan the `header` digest log for a BEEFY validator set change. Return either the new
+/// validator set or `None` in case no validator set change has been signaled.
+fn find_authorities_change<B, Id>(header: &B::Header) -> Option<ValidatorSet<Id>>
+where
+	B: BlockT,
+	Id: Codec,
+{
+	let id = OpaqueDigestItemId::Consensus(&BEEFY_ENGINE_ID);
+
+	let filter = |log: ConsensusLog<Id>| match log {
+		ConsensusLog::AuthoritiesChange(validator_set) => Some(validator_set),
+		_ => None,
+	};
+
+	header.digest().convert_first(|l| l.try_to(id).and_then(filter))
 }

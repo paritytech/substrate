@@ -27,7 +27,7 @@ use sp_runtime::{
 };
 use sp_std::prelude::*;
 
-use beefy_primitives::{AuthorityIndex, ConsensusLog, BEEFY_ENGINE_ID};
+use beefy_primitives::{AuthorityIndex, ConsensusLog, ValidatorSet, BEEFY_ENGINE_ID};
 
 #[cfg(test)]
 mod mock;
@@ -102,15 +102,15 @@ impl<T: Config> Pallet<T> {
 		if new != Self::authorities() {
 			<Authorities<T>>::put(&new);
 
-			let next = Self::validator_set_id() + 1u64;
-			<ValidatorSetId<T>>::put(next);
+			let next_id = Self::validator_set_id() + 1u64;
+			<ValidatorSetId<T>>::put(next_id);
 
 			let log: DigestItem<T::Hash> = DigestItem::Consensus(
 				BEEFY_ENGINE_ID,
-				ConsensusLog::AuthoritiesChange {
-					new_validator_set: new,
-					new_validator_set_id: next,
-				}
+				ConsensusLog::AuthoritiesChange(ValidatorSet {
+					validators: new,
+					id: next_id,
+				})
 				.encode(),
 			);
 			<frame_system::Module<T>>::deposit_log(log);
