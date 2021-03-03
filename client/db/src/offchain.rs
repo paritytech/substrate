@@ -37,9 +37,8 @@ use codec::Encode;
 use log::error;
 use crate::tree_management::{TreeManagement, TreeManagementSync};
 use sp_blockchain::Result as ClientResult;
-use crate::historied_nodes::nodes_database::{BlockNodes, BranchNodes};
+use crate::historied_nodes::nodes_database::{BlockNodes, BranchNodes, NODES_COL};
 use crate::historied_nodes::nodes_backend::Context;
-use nodes_backend::NODES_COL;
 use sp_core::offchain::OffchainOverlayedChange;
 
 /// Offchain local storage
@@ -336,13 +335,14 @@ impl<Block, S> BlockChainLocalStorage<Block, S>
 			)
 		}
 
+		let mut management = management.unwrap_or_else(||
+			self.historied_management.inner.write()
+		);
 		// write management state changes (after changing values because change
 		// journal is using historied management db).
-		management.as_mut().map(|management|
-			TreeManagementSync::<Block, _>::apply_historied_management_changes(
-				&mut management.instance,
-				transaction,
-			)
+		TreeManagementSync::<Block, _>::apply_historied_management_changes(
+			&mut management.instance,
+			transaction,
 		);
 
 		Ok(())
@@ -395,11 +395,6 @@ mod nodes_backend {
 	/// size.
 	#[derive(Clone, Copy)]
 	pub struct MetaBlocks;
-
-	/// Nodes for snapshot db are stored in `AUX`
-	/// column (convenient prefix definition, could be move
-	/// elsewhere).
-	pub const NODES_COL: u32 = crate::columns::AUX;
 
 	impl NodesMeta for MetaBranches {
 		const APPLY_SIZE_LIMIT: bool = true;
