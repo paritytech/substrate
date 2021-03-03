@@ -3359,7 +3359,11 @@ impl<T: Config> sp_election_providers::ElectionDataProvider<T::AccountId, T::Blo
 		}
 
 		let slashing_spans = <SlashingSpans<T>>::iter().count();
-		let weight = T::WeightInfo::get_npos_voters(nominator_count as u32, validator_count as u32, slashing_spans as u32);
+		let weight = T::WeightInfo::get_npos_voters(
+			nominator_count as u32,
+			validator_count as u32,
+			slashing_spans as u32,
+		);
 		Ok((Self::get_npos_voters(), weight))
 	}
 
