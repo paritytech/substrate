@@ -64,7 +64,7 @@ pub fn standard_threshold(
 		.fold(Threshold::zero(), |acc, elem| {
 			acc.saturating_add(elem)
 		})
-	/ committee_size as Threshold
+	/ committee_size.max(1) as Threshold
 }
 
 /// Check a solution to be PJR.
