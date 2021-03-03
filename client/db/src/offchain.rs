@@ -37,9 +37,10 @@ use codec::Encode;
 use log::error;
 use crate::tree_management::{TreeManagement, TreeManagementSync};
 use sp_blockchain::Result as ClientResult;
-use crate::historied_nodes::nodes_database::{BlockNodes, BranchNodes, NODES_COL};
+use crate::historied_nodes::nodes_database::{BlockNodes, BranchNodes};
 use crate::historied_nodes::nodes_backend::Context;
 use sp_core::offchain::OffchainOverlayedChange;
+use nodes_backend::NODES_COL;
 
 /// Offchain local storage
 #[derive(Clone)]
@@ -385,6 +386,11 @@ fn rev_index(index: &(u32, u64)) -> (u64, u32) {
 
 mod nodes_backend {
 	use historied_db::backend::nodes::NodesMeta;
+
+	/// Nodes for offchain are stored in `AUX`
+	/// column (as heads).
+	/// This should change.
+	pub(crate) const NODES_COL: u32 = crate::columns::AUX;
 
 	/// Multiple node splitting strategy based on content
 	/// size.
