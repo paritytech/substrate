@@ -389,7 +389,7 @@ impl Telemetry {
 
 		self.register_sender
 			.unbounded_send(Register::Telemetry {
-				id: *self.id,
+				id: self.id,
 				endpoints,
 				connection_message,
 			})
