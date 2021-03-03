@@ -2246,18 +2246,20 @@ pub trait ExecuteBlock<Block: BlockT> {
 }
 
 /// A minimal API for creating an account system compatible with FRAME System.
-pub trait AccountApi {
-	type AccountId;
-	type Index;
+pub trait AccountApi<AccountId, Index> {
+	type AccountData;
 
 	/// Return whether an account exists in storage.
-	fn account_exists(who: &Self::AccountId) -> bool;
+	fn account_exists(who: &AccountId) -> bool;
+
+	/// Return the data for an account.
+	fn get(who: &AccountId) -> Self::AccountData;
 
 	/// Retrieve the account transaction counter from storage.
-	fn account_nonce(who: Self::AccountId) -> Self::Index;
+	fn account_nonce(who: AccountId) -> Index;
 
 	/// Increment a particular account's nonce by 1.
-	fn inc_account_nonce(who: Self::AccountId);
+	fn inc_account_nonce(who: AccountId);
 
 }
 

@@ -1,6 +1,13 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_runtime::RuntimeDebug;
+use sp_std::marker::PhantomData;
+use sp_runtime::{
+	RuntimeDebug,
+	traits::StoredMapError,
+};
+use frame_support::traits::{
+	HandleLifetime, StoredMap, OnNewAccount, OnKilledAccount,
+};
 use codec::{Encode, Decode, FullCodec};
 
 /// Type used to encode the number of references an account has.
@@ -22,6 +29,45 @@ pub struct AccountInfo<Index, AccountData> {
 	pub data: AccountData,
 }
 
+/// Reference status; can be either referenced or unreferenced.
+#[derive(RuntimeDebug)]
+pub enum RefStatus {
+	Referenced,
+	Unreferenced,
+}
+
+/// Some resultant status relevant to incrementing a provider reference.
+#[derive(RuntimeDebug)]
+pub enum IncRefStatus {
+	/// Account was created.
+	Created,
+	/// Account already existed.
+	Existed,
+}
+
+/// Some resultant status relevant to decrementing a provider reference.
+#[derive(RuntimeDebug)]
+pub enum DecRefStatus {
+	/// Account was destroyed.
+	Reaped,
+	/// Account still exists.
+	Exists,
+}
+
+/// Some resultant status relevant to decrementing a provider reference.
+#[derive(RuntimeDebug)]
+pub enum DecRefError {
+	/// Account cannot have the last provider reference removed while there is a consumer.
+	ConsumerRemaining,
+}
+
+/// Some resultant status relevant to incrementing a provider reference.
+#[derive(RuntimeDebug)]
+pub enum IncRefError {
+	/// Account cannot introduce a consumer while there are no providers.
+	NoProviders,
+}
+
 pub use pallet::*;
 
 #[frame_support::pallet]
@@ -36,9 +82,30 @@ pub mod pallet {
 	/// System configuration trait. Implemented by runtime.
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
+		/// The overarching event type.
+		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+
 		/// Data to be associated with an account (other than nonce/transaction counter, which this
 		/// pallet does regardless).
 		type AccountData: Member + FullCodec + Clone + Default;
+
+		/// Handler for when a new account has just been created.
+		type OnNewAccount: OnNewAccount<Self::AccountId>;
+
+		/// A function that is invoked when an account has been determined to be dead.
+		///
+		/// All resources should be cleaned up associated with the given account.
+		type OnKilledAccount: OnKilledAccount<Self::AccountId>;
+	}
+
+	/// Event for the Accounts pallet.
+	#[pallet::event]
+	#[pallet::metadata(T::AccountId = "AccountId")]
+	pub enum Event<T: Config> {
+		/// A new \[account\] was created.
+		NewAccount(T::AccountId),
+		/// An \[account\] was reaped.
+		KilledAccount(T::AccountId),
 	}
 
 	/// The full account information for a particular account ID.
@@ -62,23 +129,213 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {}
 
-	impl<T: Config> AccountApi for Pallet<T> {
-		type AccountId = <T as frame_system::Config>::AccountId;
-		type Index = <T as frame_system::Config>::Index;
+	impl<T: Config> AccountApi<T::AccountId, T::Index> for Pallet<T> {
+		type AccountData = T::AccountData;
 
 		/// Return whether an account exists in storage.
-		fn account_exists(who: &Self::AccountId) -> bool {
+		fn account_exists(who: &T::AccountId) -> bool {
 			Account::<T>::contains_key(who)
 		}
 
+		/// Return the data for an account
+		fn get(who: &T::AccountId) -> Self::AccountData {
+			Account::<T>::get(who)
+		}
+
 		/// Retrieve the account transaction counter from storage.
-		fn account_nonce(who: Self::AccountId) -> Self::Index {
+		fn account_nonce(who: T::AccountId) -> T::Index {
 			Account::<T>::get(who).nonce
 		}
 
 		/// Increment a particular account's nonce by 1.
-		fn inc_account_nonce(who: Self::AccountId) {
-			Account::<T>::mutate(who, |a| a.nonce += Self::Index::one());
+		fn inc_account_nonce(who: T::AccountId) {
+			Account::<T>::mutate(who, |a| a.nonce += T::Index::one());
 		}
 	}
+
+	impl<T: Config> Pallet<T> {
+		/// An account is being created.
+		pub fn on_created_account(who: T::AccountId, _a: &mut AccountInfo<T::Index, T::AccountData>) {
+			T::OnNewAccount::on_new_account(&who);
+			Self::deposit_event(Event::NewAccount(who));
+		}
+
+		/// Do anything that needs to be done after an account has been killed.
+		fn on_killed_account(who: T::AccountId) {
+			T::OnKilledAccount::on_killed_account(&who);
+			Self::deposit_event(Event::KilledAccount(who));
+		}
+
+		/// Increment the reference counter on an account.
+		///
+		/// The account `who`'s `providers` must be non-zero or this will return an error.
+		pub fn inc_providers(who: &T::AccountId) -> IncRefStatus {
+			Account::<T>::mutate(who, |a| if a.providers == 0 {
+				// Account is being created.
+				a.providers = 1;
+				frame_system::Module::<T>::on_created_account(who.clone(), a);
+				IncRefStatus::Created
+			} else {
+				a.providers = a.providers.saturating_add(1);
+				IncRefStatus::Existed
+			})
+		}
+
+		/// Decrement the reference counter on an account. This *MUST* only be done once for every time
+		/// you called `inc_consumers` on `who`.
+		pub fn dec_providers(who: &T::AccountId) -> Result<DecRefStatus, DecRefError> {
+			Account::<T>::try_mutate_exists(who, |maybe_account| {
+				if let Some(mut account) = maybe_account.take() {
+					match (account.providers, account.consumers) {
+						(0, _) => {
+							// Logic error - cannot decrement beyond zero and no item should
+							// exist with zero providers.
+							log::error!(
+								target: "runtime::system",
+								"Logic error: Unexpected underflow in reducing provider",
+							);
+							Ok(DecRefStatus::Reaped)
+						},
+						(1, 0) => {
+							frame_system::Module::<T>::on_killed_account(who.clone());
+							Ok(DecRefStatus::Reaped)
+						}
+						(1, _) => {
+							// Cannot remove last provider if there are consumers.
+							Err(DecRefError::ConsumerRemaining)
+						}
+						(x, _) => {
+							account.providers = x - 1;
+							*maybe_account = Some(account);
+							Ok(DecRefStatus::Exists)
+						}
+					}
+				} else {
+					log::error!(
+						target: "runtime::system",
+						"Logic error: Account already dead when reducing provider",
+					);
+					Ok(DecRefStatus::Reaped)
+				}
+			})
+		}
+
+		/// The number of outstanding references for the account `who`.
+		pub fn providers(who: &T::AccountId) -> RefCount {
+			Account::<T>::get(who).providers
+		}
+
+		/// Increment the reference counter on an account.
+		///
+		/// The account `who`'s `providers` must be non-zero or this will return an error.
+		pub fn inc_consumers(who: &T::AccountId) -> Result<(), IncRefError> {
+			Account::<T>::try_mutate(who, |a| if a.providers > 0 {
+				a.consumers = a.consumers.saturating_add(1);
+				Ok(())
+			} else {
+				Err(IncRefError::NoProviders)
+			})
+		}
+
+		/// Decrement the reference counter on an account. This *MUST* only be done once for every time
+		/// you called `inc_consumers` on `who`.
+		pub fn dec_consumers(who: &T::AccountId) {
+			Account::<T>::mutate(who, |a| if a.consumers > 0 {
+				a.consumers -= 1;
+			} else {
+				log::error!(
+					target: "runtime::system",
+					"Logic error: Unexpected underflow in reducing consumer",
+				);
+			})
+		}
+
+		/// The number of outstanding references for the account `who`.
+		pub fn consumers(who: &T::AccountId) -> RefCount {
+			Account::<T>::get(who).consumers
+		}
+
+		/// True if the account has some outstanding references.
+		pub fn is_provider_required(who: &T::AccountId) -> bool {
+			Account::<T>::get(who).consumers != 0
+		}
+
+
+		pub fn insert(who: T::AccountId, account: T::AccountData) {
+			Account::<T>::insert(who, account)
+		}
+	}
+}
+
+/// Event handler which registers a provider when created.
+pub struct Provider<T>(PhantomData<T>);
+impl<T: Config> HandleLifetime<T::AccountId> for Provider<T> {
+	fn created(t: &T::AccountId) -> Result<(), StoredMapError> {
+		Module::<T>::inc_providers(t);
+		Ok(())
+	}
+	fn killed(t: &T::AccountId) -> Result<(), StoredMapError> {
+		Module::<T>::dec_providers(t)
+			.map(|_| ())
+			.or_else(|e| match e {
+				DecRefError::ConsumerRemaining => Err(StoredMapError::ConsumerRemaining),
+			})
+	}
+}
+
+/// Event handler which registers a consumer when created.
+pub struct Consumer<T>(PhantomData<T>);
+impl<T: Config> HandleLifetime<T::AccountId> for Consumer<T> {
+	fn created(t: &T::AccountId) -> Result<(), StoredMapError> {
+		Module::<T>::inc_consumers(t)
+			.map_err(|e| match e {
+				IncRefError::NoProviders => StoredMapError::NoProviders
+			})
+	}
+	fn killed(t: &T::AccountId) -> Result<(), StoredMapError> {
+		Module::<T>::dec_consumers(t);
+		Ok(())
+	}
+}
+
+
+/// Implement StoredMap for a simple single-item, provide-when-not-default system. This works fine
+/// for storing a single item which allows the account to continue existing as long as it's not
+/// empty/default.
+///
+/// Anything more complex will need more sophisticated logic.
+impl<T: Config> StoredMap<T::AccountId, <T as Config>::AccountData> for Pallet<T> {
+	fn get(k: &T::AccountId) -> <T as Config>::AccountData {
+		Account::<T>::get(k).data
+	}
+
+	fn try_mutate_exists<R, E: From<StoredMapError>>(
+		k: &T::AccountId,
+		f: impl FnOnce(&mut Option<<T as Config>::AccountData>) -> Result<R, E>,
+	) -> Result<R, E> {
+		let account = Account::<T>::get(k);
+		let was_providing = is_providing(&account.data);
+		let mut some_data = if was_providing { Some(account.data) } else { None };
+		let result = f(&mut some_data)?;
+		let is_providing = some_data.is_some();
+		if !was_providing && is_providing {
+			Self::inc_providers(k);
+		} else if was_providing && !is_providing {
+			match Self::dec_providers(k) {
+				Err(DecRefError::ConsumerRemaining) => Err(StoredMapError::ConsumerRemaining)?,
+				Ok(DecRefStatus::Reaped) => return Ok(result),
+				Ok(DecRefStatus::Exists) => {
+					// Update value as normal...
+				}
+			}
+		} else if !was_providing && !is_providing {
+			return Ok(result)
+		}
+		Account::<T>::mutate(k, |a| a.data = some_data.unwrap_or_default());
+		Ok(result)
+	}
+}
+
+fn is_providing<T: Default + Eq>(d: &T) -> bool {
+	d != &T::default()
 }

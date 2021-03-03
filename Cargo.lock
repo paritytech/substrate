@@ -4225,6 +4225,7 @@ dependencies = [
 name = "node-template-runtime"
 version = "2.0.0"
 dependencies = [
+ "frame-accounts",
  "frame-benchmarking",
  "frame-executive",
  "frame-support",

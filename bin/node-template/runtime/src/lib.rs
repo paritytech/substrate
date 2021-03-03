@@ -188,6 +188,12 @@ impl frame_system::Config for Runtime {
 	type SystemWeightInfo = ();
 	/// This is used as an identifier of the chain. 42 is the generic substrate prefix.
 	type SS58Prefix = SS58Prefix;
+	/// This is where we store account information.
+	type AccountStorage = Accounts;
+}
+
+impl frame_accounts::Config for Runtime {
+	type AccountData = pallet_balances::AccountData<Balance>;
 }
 
 impl pallet_aura::Config for Runtime {
@@ -271,6 +277,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		Accounts: frame_accounts::{Module, Call, Storage},
 		RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Module, Call, Storage},
 		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
 		Aura: pallet_aura::{Module, Config<T>},

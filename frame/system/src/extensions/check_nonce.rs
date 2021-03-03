@@ -17,7 +17,10 @@
 
 use codec::{Encode, Decode};
 use crate::Config;
-use frame_support::weights::DispatchInfo;
+use frame_support::{
+	traits::AccountApi,
+	weights::DispatchInfo,
+};
 use sp_runtime::{
 	traits::{SignedExtension, DispatchInfoOf, Dispatchable, One},
 	transaction_validity::{
@@ -71,18 +74,17 @@ impl<T: Config> SignedExtension for CheckNonce<T> where
 		_info: &DispatchInfoOf<Self::Call>,
 		_len: usize,
 	) -> Result<(), TransactionValidityError> {
-		let mut account = crate::Account::<T>::get(who);
-		if self.0 != account.nonce {
+		let account_nonce = T::AccountStorage::account_nonce(who.clone());
+		if self.0 != account_nonce {
 			return Err(
-				if self.0 < account.nonce {
+				if self.0 < account_nonce {
 					InvalidTransaction::Stale
 				} else {
 					InvalidTransaction::Future
 				}.into()
 			)
 		}
-		account.nonce += T::Index::one();
-		crate::Account::<T>::insert(who, account);
+		T::AccountStorage::inc_account_nonce(who.clone());
 		Ok(())
 	}
 
@@ -94,13 +96,13 @@ impl<T: Config> SignedExtension for CheckNonce<T> where
 		_len: usize,
 	) -> TransactionValidity {
 		// check index
-		let account = crate::Account::<T>::get(who);
-		if self.0 < account.nonce {
+		let account_nonce = T::AccountStorage::account_nonce(who.clone());
+		if self.0 < account_nonce {
 			return InvalidTransaction::Stale.into()
 		}
 
 		let provides = vec![Encode::encode(&(who, self.0))];
-		let requires = if account.nonce < self.0 {
+		let requires = if account_nonce < self.0 {
 			vec![Encode::encode(&(who, self.0 - One::one()))]
 		} else {
 			vec![]

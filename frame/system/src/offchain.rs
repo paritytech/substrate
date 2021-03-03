@@ -63,7 +63,7 @@ use sp_std::convert::{TryInto, TryFrom};
 use sp_std::prelude::{Box, Vec};
 use sp_runtime::app_crypto::RuntimeAppPublic;
 use sp_runtime::traits::{Extrinsic as ExtrinsicT, IdentifyAccount, One};
-use frame_support::RuntimeDebug;
+use frame_support::{RuntimeDebug, traits::AccountApi};
 
 /// Marker struct used to flag using all supported keys to sign a payload.
 pub struct ForAll {}
@@ -549,18 +549,18 @@ pub trait SendSignedTransaction<
 		account: &Account<T>,
 		call: LocalCall,
 	) -> Option<Result<(), ()>> {
-		let mut account_data = crate::Account::<T>::get(&account.id);
+		let account_nonce = T::AccountStorage::account_nonce(account.id.clone());
 		log::debug!(
 			target: "runtime::offchain",
 			"Creating signed transaction from account: {:?} (nonce: {:?})",
 			account.id,
-			account_data.nonce,
+			account_nonce,
 		);
 		let (call, signature) = T::create_transaction::<C>(
 			call.into(),
 			account.public.clone(),
 			account.id.clone(),
-			account_data.nonce
+			account_nonce,
 		)?;
 		let res = SubmitTransaction::<T, LocalCall>
 			::submit_transaction(call, Some(signature));
@@ -568,8 +568,7 @@ pub trait SendSignedTransaction<
 		if res.is_ok() {
 			// increment the nonce. This is fine, since the code should always
 			// be running in off-chain context, so we NEVER persists data.
-			account_data.nonce += One::one();
-			crate::Account::<T>::insert(&account.id, account_data);
+			T::AccountStorage::inc_account_nonce(account.id.clone());
 		}
 
 		Some(res)
