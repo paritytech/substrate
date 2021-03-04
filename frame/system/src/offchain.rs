@@ -63,7 +63,7 @@ use sp_std::convert::{TryInto, TryFrom};
 use sp_std::prelude::{Box, Vec};
 use sp_runtime::app_crypto::RuntimeAppPublic;
 use sp_runtime::traits::{Extrinsic as ExtrinsicT, IdentifyAccount, One};
-use frame_support::{debug, RuntimeDebug};
+use frame_support::RuntimeDebug;
 
 /// Marker struct used to flag using all supported keys to sign a payload.
 pub struct ForAll {}
@@ -550,8 +550,8 @@ pub trait SendSignedTransaction<
 		call: LocalCall,
 	) -> Option<Result<(), ()>> {
 		let mut account_data = crate::Account::<T>::get(&account.id);
-		debug::native::debug!(
-			target: "offchain",
+		log::debug!(
+			target: "runtime::offchain",
 			"Creating signed transaction from account: {:?} (nonce: {:?})",
 			account.id,
 			account_data.nonce,

@@ -52,7 +52,7 @@ use sp_state_machine::{
 use sc_executor::RuntimeVersion;
 use sp_consensus::{
 	Error as ConsensusError, BlockStatus, BlockImportParams, BlockCheckParams,
-	ImportResult, BlockOrigin, ForkChoiceStrategy, RecordProof,
+	ImportResult, BlockOrigin, ForkChoiceStrategy,
 };
 use sp_blockchain::{
 	self as blockchain,
@@ -66,7 +66,7 @@ use sp_api::{
 	CallApiAt, ConstructRuntimeApi, Core as CoreApi, ApiExt, ApiRef, ProvideRuntimeApi,
 	CallApiAtParams,
 };
-use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
+use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider, RecordProof};
 use sc_client_api::{
 	backend::{
 		self, BlockImportOperation, PrunableStateChangesTrieStorage,
