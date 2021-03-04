@@ -541,7 +541,7 @@ fn incoming_global<B: BlockT>(
 				voters,
 				msg.round,
 				msg.set_id,
-				telemetry.clone(),
+				telemetry.as_ref(),
 			) {
 				if let Some(who) = notification.sender {
 					gossip_engine.lock().report(who, cost);
@@ -787,7 +787,7 @@ fn check_compact_commit<Block: BlockT>(
 	voters: &VoterSet<AuthorityId>,
 	round: Round,
 	set_id: SetId,
-	telemetry: Option<TelemetryHandle>,
+	telemetry: Option<&TelemetryHandle>,
 ) -> Result<(), ReputationChange> {
 	// 4f + 1 = equivocations from f voters.
 	let f = voters.total_weight() - voters.threshold();
