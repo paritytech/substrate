@@ -72,7 +72,7 @@ impl <B: BlockT> BlockRequestHandler<B> {
 	pub fn new(protocol_id: &ProtocolId, client: Arc<dyn Client<B>>) -> (Self, ProtocolConfig) {
 		// Rate of arrival multiplied with the waiting time in the queue equals the queue length.
 		//
-		// An average Polkadot sentry node serves less than 5 requests per second. The 95th percentile
+		// An average Polkadot node serves less than 5 requests per second. The 95th percentile
 		// serving a request is less than 2 second. Thus one would estimate the queue length to be
 		// below 10.
 		//

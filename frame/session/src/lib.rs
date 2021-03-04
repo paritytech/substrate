@@ -169,11 +169,13 @@ impl<
 		Some(if now > offset {
 			let block_after_last_session = (now.clone() - offset) % period.clone();
 			if block_after_last_session > Zero::zero() {
-				now.saturating_add(
-					period.saturating_sub(block_after_last_session)
-				)
+				now.saturating_add(period.saturating_sub(block_after_last_session))
 			} else {
-				now
+				// this branch happens when the session is already rotated or will rotate in this
+				// block (depending on being called before or after `session::on_initialize`). Here,
+				// we assume the latter, namely that this is called after `session::on_initialize`,
+				// and thus we add period to it as well.
+				now + period
 			}
 		} else {
 			offset
@@ -186,6 +188,10 @@ impl<
 		// zero for now. However, this value of zero was not properly calculated, and so it would be
 		// reasonable to come back here and properly calculate the weight of this function.
 		0
+	}
+
+	fn average_session_length() -> BlockNumber {
+		Period::get()
 	}
 }
 
@@ -831,6 +837,10 @@ impl<T: Config> EstimateNextNewSession<T::BlockNumber> for Module<T> {
 	/// do a simple proxy and pass the function to next rotation.
 	fn estimate_next_new_session(now: T::BlockNumber) -> Option<T::BlockNumber> {
 		T::NextSessionRotation::estimate_next_session_rotation(now)
+	}
+
+	fn average_session_length() -> T::BlockNumber {
+		T::NextSessionRotation::average_session_length()
 	}
 
 	fn weight(now: T::BlockNumber) -> Weight {

@@ -268,7 +268,6 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 		telemetry_endpoints: None,
 		telemetry_external_transport: None,
 		telemetry_handle: None,
-		telemetry_span: None,
 		default_heap_pages: None,
 		offchain_worker: Default::default(),
 		force_authoring: false,
@@ -337,7 +336,7 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 			let node_config = node_config(
 				self.nodes,
 				&self.chain_spec,
-				Role::Authority { sentry_nodes: Vec::new() },
+				Role::Authority,
 				task_executor.clone(),
 				Some(key),
 				self.base_port,

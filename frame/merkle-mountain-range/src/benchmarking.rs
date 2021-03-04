@@ -21,8 +21,7 @@
 
 use crate::*;
 use frame_support::traits::OnInitialize;
-use frame_benchmarking::benchmarks;
-use sp_std::prelude::*;
+use frame_benchmarking::{benchmarks, impl_benchmark_test_suite};
 
 benchmarks! {
 	on_initialize {
@@ -38,17 +37,8 @@ benchmarks! {
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::mock::*;
-	use crate::tests::new_test_ext;
-	use frame_support::assert_ok;
-
-	#[test]
-	fn test_benchmarks() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_on_initialize::<Test>());
-		})
-	}
-}
+impl_benchmark_test_suite!(
+	Module,
+	crate::tests::new_test_ext(),
+	crate::mock::Test,
+);

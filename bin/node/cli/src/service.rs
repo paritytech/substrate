@@ -34,7 +34,7 @@ use sp_runtime::traits::Block as BlockT;
 use futures::prelude::*;
 use sc_client_api::{ExecutorProvider, RemoteBackend};
 use node_executor::Executor;
-use sc_telemetry::TelemetryConnectionNotifier;
+use sc_telemetry::{TelemetryConnectionNotifier, TelemetrySpan};
 
 type FullClient = sc_service::TFullClient<Block, RuntimeApi, Executor>;
 type FullBackend = sc_service::TFullBackend<Block>;
@@ -94,7 +94,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		client.clone(),
 		select_chain.clone(),
 		inherent_data_providers.clone(),
-		&task_manager.spawn_handle(),
+		&task_manager.spawn_essential_handle(),
 		config.prometheus_registry(),
 		sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone()),
 	)?;
@@ -197,9 +197,14 @@ pub fn new_full_base(
 	config.network.extra_sets.push(grandpa::grandpa_peers_set_config());
 
 	#[cfg(feature = "cli")]
-	config.network.request_response_protocols.push(sc_finality_grandpa_warp_sync::request_response_config_for_chain(
-		&config, task_manager.spawn_handle(), backend.clone(),
-	));
+	config.network.request_response_protocols.push(
+		sc_finality_grandpa_warp_sync::request_response_config_for_chain(
+			&config,
+			task_manager.spawn_handle(),
+			backend.clone(),
+			import_setup.1.shared_authority_set().clone(),
+		)
+	);
 
 	let (network, network_status_sinks, system_rpc_tx, network_starter) =
 		sc_service::build_network(sc_service::BuildNetworkParams {
@@ -226,6 +231,9 @@ pub fn new_full_base(
 	let enable_grandpa = !config.disable_grandpa;
 	let prometheus_registry = config.prometheus_registry().cloned();
 
+	let telemetry_span = TelemetrySpan::new();
+	let _telemetry_span_entered = telemetry_span.enter();
+
 	let (_rpc_handlers, telemetry_connection_notifier) = sc_service::spawn_tasks(
 		sc_service::SpawnTasksParams {
 			config,
@@ -240,6 +248,7 @@ pub fn new_full_base(
 			remote_blockchain: None,
 			network_status_sinks: network_status_sinks.clone(),
 			system_rpc_tx,
+			telemetry_span: Some(telemetry_span.clone()),
 		},
 	)?;
 
@@ -312,7 +321,7 @@ pub fn new_full_base(
 		name: Some(name),
 		observer_enabled: false,
 		keystore,
-		is_authority: role.is_network_authority(),
+		is_authority: role.is_authority(),
 	};
 
 	if enable_grandpa {
@@ -401,7 +410,7 @@ pub fn new_light_base(mut config: Configuration) -> Result<(
 		client.clone(),
 		select_chain.clone(),
 		inherent_data_providers.clone(),
-		&task_manager.spawn_handle(),
+		&task_manager.spawn_essential_handle(),
 		config.prometheus_registry(),
 		sp_consensus::NeverCanAuthor,
 	)?;
@@ -433,6 +442,9 @@ pub fn new_light_base(mut config: Configuration) -> Result<(
 
 	let rpc_extensions = node_rpc::create_light(light_deps);
 
+	let telemetry_span = TelemetrySpan::new();
+	let _telemetry_span_entered = telemetry_span.enter();
+
 	let (rpc_handlers, telemetry_connection_notifier) =
 		sc_service::spawn_tasks(sc_service::SpawnTasksParams {
 			on_demand: Some(on_demand),
@@ -444,6 +456,7 @@ pub fn new_light_base(mut config: Configuration) -> Result<(
 			config, backend, network_status_sinks, system_rpc_tx,
 			network: network.clone(),
 			task_manager: &mut task_manager,
+			telemetry_span: Some(telemetry_span.clone()),
 		})?;
 
 	Ok((
@@ -470,7 +483,6 @@ mod tests {
 	use sc_consensus_epochs::descendent_query;
 	use sp_consensus::{
 		Environment, Proposer, BlockImportParams, BlockOrigin, ForkChoiceStrategy, BlockImport,
-		RecordProof,
 	};
 	use node_primitives::{Block, DigestItem, Signature};
 	use node_runtime::{BalancesCall, Call, UncheckedExtrinsic, Address};
@@ -603,7 +615,6 @@ mod tests {
 						inherent_data,
 						digest,
 						std::time::Duration::from_secs(1),
-						RecordProof::Yes,
 					).await
 				}).expect("Error making test block").block;
 
@@ -617,9 +628,7 @@ mod tests {
 					sp_consensus_babe::AuthorityId::ID,
 					&alice.to_public_crypto_pair(),
 					&to_sign,
-				).unwrap()
-				 .try_into()
-				 .unwrap();
+				).unwrap().unwrap().try_into().unwrap();
 				let item = <DigestItem as CompatibleDigestItem>::babe_seal(
 					signature,
 				);

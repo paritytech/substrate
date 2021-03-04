@@ -17,21 +17,19 @@
 
 //! `Structopt`-ready struct for `try-runtime`.
 
-use parity_scale_codec::{Decode, Encode};
+use parity_scale_codec::Decode;
 use std::{fmt::Debug, str::FromStr};
 use sc_service::Configuration;
-use sc_cli::{CliConfiguration, ExecutionStrategy};
-use sc_executor::{WasmExecutionMethod, NativeExecutor};
-use sp_state_machine::StateMachine;
+use sc_cli::{CliConfiguration, ExecutionStrategy, WasmExecutionMethod};
+use sc_executor::NativeExecutor;
 use sc_service::NativeExecutionDispatch;
+use sp_state_machine::StateMachine;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use sp_core::storage::{StorageData, StorageKey, well_known_keys};
-use frame_try_runtime::Target;
 
-/// Various commands to try-out (similar to `TryFrom`, `TryInto`) the new runtime, over configurable
-/// states.
+/// Various commands to try out the new runtime, over configurable states.
 ///
-/// For now this only assumes running the runtime-upgrade hooks.
+/// For now this only assumes running the `on_runtime_upgrade` hooks.
 #[derive(Debug, structopt::StructOpt)]
 pub struct TryRuntimeCmd {
 	/// The shared parameters
@@ -39,19 +37,35 @@ pub struct TryRuntimeCmd {
 	#[structopt(flatten)]
 	pub shared_params: sc_cli::SharedParams,
 
-	/// The target pallet to run the migration against.
-	#[structopt(short, long, default_value = "All")]
-	pub target: Target,
-
 	/// The state to use to run the migration. Should be a valid FILE or HTTP URI.
 	#[structopt(short, long, default_value = "http://localhost:9933")]
 	pub state: State,
+
+	/// The execution strategy that should be used for benchmarks
+	#[structopt(
+		long = "execution",
+		value_name = "STRATEGY",
+		possible_values = &ExecutionStrategy::variants(),
+		case_insensitive = true,
+		default_value = "Native",
+	)]
+	pub execution: ExecutionStrategy,
+
+	/// Method for executing Wasm runtime code.
+	#[structopt(
+		long = "wasm-execution",
+		value_name = "METHOD",
+		possible_values = &WasmExecutionMethod::enabled_variants(),
+		case_insensitive = true,
+		default_value = "Interpreted"
+	)]
+	pub wasm_method: WasmExecutionMethod,
 }
 
 /// The state to use for a migration dry-run.
 #[derive(Debug)]
 pub enum State {
-	/// A snapshot. Inner value is file path.
+	/// A snapshot. Inner value is a file path.
 	Snap(String),
 
 	/// A live chain. Inner value is the HTTP uri.
@@ -81,23 +95,30 @@ impl TryRuntimeCmd {
 		B: BlockT,
 		ExecDispatch: NativeExecutionDispatch + 'static,
 	{
-		// // prevent a potentially confusing MethodNotFound error from state machine.
-		// if !cfg!(feature = "try-runtime") {
-		// 	panic!("`TryRuntime` api is not enabled without `try-runtime` feature. Compile with this feature.")
-		// }
-
 		let spec = config.chain_spec;
 		let genesis_storage = spec.build_storage()?;
 
-		let code = StorageData(genesis_storage.top.get(well_known_keys::CODE).unwrap().to_vec());
+		let code = StorageData(
+			genesis_storage
+				.top
+				.get(well_known_keys::CODE)
+				.expect("code key must exist in genesis storage; qed")
+				.to_vec(),
+		);
 		let code_key = StorageKey(well_known_keys::CODE.to_vec());
 
-		let wasm_method = WasmExecutionMethod::Interpreted;
-		let strategy = ExecutionStrategy::Native;
-		let mut changes = Default::default();
+		let wasm_method = self.wasm_method;
+		let execution = self.execution;
 
-		let heap_pages = Some(1024);
-		let executor = NativeExecutor::<ExecDispatch>::new(wasm_method, heap_pages, 2);
+		let mut changes = Default::default();
+		// don't really care about these -- use the default values.
+		let max_runtime_instances = config.max_runtime_instances;
+		let heap_pages = config.default_heap_pages;
+		let executor = NativeExecutor::<ExecDispatch>::new(
+			wasm_method.into(),
+			heap_pages,
+			max_runtime_instances,
+		);
 
 		let ext = {
 			use remote_externalities::{Builder, Mode, CacheConfig, OfflineConfig, OnlineConfig};
@@ -111,29 +132,32 @@ impl TryRuntimeCmd {
 				})),
 			};
 
-			builder.inject(&[(code_key, code)]).build().await
+			// inject the code into this ext.
+			builder.inject(&[(code_key, code)]).build().await?
 		};
 
-		let consumed_weight = StateMachine::<_, _, NumberFor<B>, _>::new(
+		let encoded_result = StateMachine::<_, _, NumberFor<B>, _>::new(
 			&ext.backend,
 			None,
 			&mut changes,
 			&executor,
 			"TryRuntime_on_runtime_upgrade",
-			&self.target.encode(),
+			&[],
 			ext.extensions,
 			&sp_state_machine::backend::BackendRuntimeCode::new(&ext.backend)
-				.runtime_code()
-				.unwrap(),
+				.runtime_code()?,
 			sp_core::testing::TaskExecutor::new(),
 		)
-		.execute(strategy.into())
-		.unwrap();
+		.execute(execution.into())
+		.map_err(|e| format!("failed to execute 'TryRuntime_on_runtime_upgrade' due to {:?}", e))?;
 
-		let weight = <u64 as Decode>::decode(&mut &*consumed_weight).unwrap();
+		let (weight, total_weight) = <(u64, u64) as Decode>::decode(&mut &*encoded_result)
+			.map_err(|e| format!("failed to decode output due to {:?}", e))?;
 		log::info!(
-			"try-runtime executed without errors. Consumed weight = {}",
+			"try-runtime executed without errors. Consumed weight = {}, total weight = {} ({})",
 			weight,
+			total_weight,
+			weight as f64 / total_weight as f64
 		);
 
 		Ok(())

@@ -49,6 +49,7 @@ pub enum Subcommand {
 
 	/// Try some experimental command on the runtime. This includes migration and runtime-upgrade
 	/// testing.
+	#[cfg(feature = "try-runtime")]
 	TryRuntime(try_runtime_cli::TryRuntimeCmd),
 
 	/// Verify a signature for a message, provided on STDIN, with a given (public or secret) key.
