@@ -63,16 +63,19 @@ macro_rules! impl_outer_inherent {
 		impl InherentDataExt for $crate::inherent::InherentData {
 			fn create_extrinsics(&self) ->
 				$crate::inherent::Vec<<$block as $crate::inherent::BlockT>::Extrinsic> {
-				use $crate::inherent::{ProvideInherent, Extrinsic};
+				use $crate::inherent::ProvideInherent;
 
 				let mut inherents = Vec::new();
 
 				$(
 					if let Some(inherent) = $module::create_inherent(self) {
-						inherents.push(<$uncheckedextrinsic as Extrinsic>::new(
+						let inherent = <$uncheckedextrinsic as $crate::inherent::Extrinsic>::new(
 							inherent.into(),
 							None,
-						).expect("Runtime UncheckedExtrinsic is not Opaque, so it has to return `Some`; qed"));
+						).expect("Runtime UncheckedExtrinsic is not Opaque, so it has to return \
+							`Some`; qed");
+
+						inherents.push(inherent);
 					}
 				)*
 
@@ -212,7 +215,6 @@ macro_rules! impl_outer_inherent {
 mod tests {
 	use super::*;
 	use sp_runtime::{traits, testing::{Header, self}};
-	use crate::traits::{IsSubType, InherentPositionCheck};
 
 	#[derive(codec::Encode, codec::Decode, Clone, PartialEq, Eq, Debug, serde::Serialize)]
 	enum Call {
@@ -232,7 +234,7 @@ mod tests {
 		}
 	}
 
-	impl IsSubType<CallTest> for Call {
+	impl crate::traits::IsSubType<CallTest> for Call {
 		fn is_sub_type(&self) -> Option<&CallTest> {
 			match self {
 				Self::Test(test) => Some(test),
@@ -241,7 +243,7 @@ mod tests {
 		}
 	}
 
-	impl IsSubType<CallTest2> for Call {
+	impl crate::traits::IsSubType<CallTest2> for Call {
 		fn is_sub_type(&self) -> Option<&CallTest2> {
 			match self {
 				Self::Test2(test) => Some(test),
@@ -324,6 +326,12 @@ mod tests {
 
 		fn is_signed(&self) -> Option<bool> {
 			Some(self.signed)
+		}
+	}
+
+	impl crate::traits::ExtrinsicCall for Extrinsic {
+		fn call(&self) -> &Self::Call {
+			&self.function
 		}
 	}
 
@@ -419,6 +427,7 @@ mod tests {
 
 	#[test]
 	fn inherent_first_works() {
+		use crate::traits::InherentPositionCheck;
 		let block = Block::new(
 			Header::new_from_number(1),
 			vec![
@@ -434,6 +443,7 @@ mod tests {
 
 	#[test]
 	fn inherent_cannot_be_placed_after_non_inherent() {
+		use crate::traits::InherentPositionCheck;
 		let block = Block::new(
 			Header::new_from_number(1),
 			vec![
