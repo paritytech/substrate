@@ -1162,7 +1162,7 @@ impl<Block: BlockT> Backend<Block> {
 				sc_client_api::blockchain::HeaderBackend::hash(&self.blockchain, new_canonical.saturated_into())?
 					.expect("existence of block with number `new_canonical` \
 							implies existence of blocks with all numbers before it; qed")
-			}
+			};
 
 			trace!(target: "db", "Canonicalize block #{} ({:?})", new_canonical, hash);
 			let commit = self.storage.state_db.canonicalize_block(&hash)
