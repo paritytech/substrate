@@ -226,7 +226,7 @@ impl ChainInfo for NodeTemplateChainInfo {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use substrate_test_runner::Node;
+	use test_runner::Node;
 
 	#[test]
 	fn it_works() {
