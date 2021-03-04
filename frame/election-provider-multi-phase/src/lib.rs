@@ -29,9 +29,9 @@
 //!
 //! ```ignore
 //!                                                                                                 elect()
-//!                 +   <--T::SignedPhase-->  +  <--T::ChallengePhase-->   +  <--T::UnsignedPhase-->   +
-//!   +--------------------------------------------------------------------+----------------------------
-//!    Phase::Off   +       Phase::Signed     +      Phase::Challenge      +      Phase::Unsigned      +
+//!                 +   <--T::SignedPhase-->  +  <--T::UnsignedPhase-->   +  <--T::ChallengePhase-->   +
+//!   +-------------------------------------------------------------------------------------------------+
+//!    Phase::Off   +       Phase::Signed     +      Phase::Unsigned      +      Phase::Challenge      +
 //! ```
 //!
 //! Note that the challenge phase starts [`pallet::Config::ChallengePhase`] blocks before the
@@ -65,28 +65,12 @@
 //! A signed solution cannot be reversed, taken back, updated, or retracted. In other words, the
 //! origin can not bail out in any way, if their solution is queued.
 //!
-//! ### Challenge Phase
-//!
-//! The challenge phase is designed to ensure that only solutions which exceed an absolute quality
-//! floor are accepted. During this phase, miners can download the solution stack and subject any of
-//! them to a (very expensive) PJR check. In the event that this check fails, they will discover a
-//! counterexample: a small piece of data which can be used to cheaply prove that the solution does
-//! not satisfy PJR. They can then submit a transaction containing this counterexample. One of a few
-//! things can happen then:
-//!
-//! - The counterexample correctly disproves the solution: solution author slashed, solution
-//!   discarded, miner rewarded
-//! - The counterexample correctly disproves the solution but with a severity below some threshold:
-//!   miner receives minor reward, but solution is retained
-//! - The counterexample fails to disprove the solution: miner slashed
-//!
-//! > TODO: link to PJR docs
-//!
-//! At the end of the challenge phase, the solutions are examined from best to worst. For each
+//! At the end of the signed phase, the solutions are examined from best to worst. For each
 //! solution:
 //!
-//! - Compute an expensive [`Pallet::feasibility_check`]. This ensures the score claimed by this
-//!   score was correct, and it is valid based on the election data (i.e. votes and candidates).
+//! - Compute a (relatively expensive) on-chain [`Pallet::feasibility_check`]. This ensures the
+//!   score claimed by this score was correct, and it is valid based on the election data (i.e.
+//!   votes and candidates).
 //! - If the current best solution passes the feasibility check, it is considered to be the best
 //!   one. The sender of the origin is rewarded, and the rest of the queued solutions get their
 //!   deposit back and are discarded, without being checked.
@@ -111,9 +95,12 @@
 //! Note that both of the bottom solutions end up being discarded and get their deposit back,
 //! despite one of them being *invalid*.
 //!
+//! At the end of this phase, the only item remaining in storage is the best feasible solution, if
+//! one was computed. Otherwise, there is nothing.
+//!
 //! ### Unsigned Phase
 //!
-//! The unsigned phase will always follow the challenge phase, with the specified duration. In this
+//! The unsigned phase will always follow the signed phase, with the specified duration. In this
 //! phase, only validator nodes can submit solutions. A validator node who has offchain workers
 //! enabled will start to mine a solution in this phase and submits it back to the chain as an
 //! unsigned transaction, thus the name _unsigned_ phase. This unsigned transaction can never be
@@ -121,11 +108,34 @@
 //!
 //! Validators will only submit solutions if the one that they have computed is sufficiently better
 //! than the best queued one (see [`pallet::Config::SolutionImprovementThreshold`]) and will limit
-//! the weigh of the solution to [`pallet::Config::MinerMaxWeight`].
+//! the weight of the solution to [`pallet::Config::MinerMaxWeight`].
 //!
 //! The unsigned phase can be skipped depending on how the previous signed phase went, by
 //! setting the first inner value of [`Phase`] to `false`. For now, the signed phase is always
 //! active.
+//!
+//! At the end of this phase, the only item remaining in storage is the best feasible solution, if
+//! one was computed. If the validator mined a better solution than was provided in the signed phase,
+//! then the signed solution is replaced.
+//!
+//! ### Challenge Phase
+//!
+//! The challenge phase is designed to ensure that only solutions which exceed an absolute quality
+//! floor are accepted. During this phase, miners can download the best feasible solution and subject it
+//! to a (very expensive) offchain PJR check. In the event that this check fails, they will discover a
+//! counterexample. The counterexample is a small piece of data which can be used to cheaply prove that the solution does
+//! not satisfy PJR. They can then submit a transaction containing this counterexample. One of a few
+//! things can happen then:
+//!
+//! - The counterexample correctly disproves the solution: solution author slashed, solution
+//!   discarded, miner rewarded. We must then fall back to an on-chain election.
+//! - The counterexample correctly disproves the solution but with a severity below some threshold:
+//!   miner receives minor reward, but solution is retained
+//! - The counterexample fails to disprove the solution: miner slashed
+//!
+//! > TODO: link to PJR docs
+//!
+//! > TODO: define more precisely how to determine whether a PJR violation is "severe".
 //!
 //! ### Fallback
 //!
