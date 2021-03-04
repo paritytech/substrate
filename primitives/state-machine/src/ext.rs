@@ -214,8 +214,8 @@ where
 			ext_id = self.id,
 			key = %HexDisplay::from(&key),
 			result = %HexDisplay::from(&ready_to_encode_result.encode()),
-			test = ?result.as_ref().map(HexDisplay::from),
 		);
+
 		result
 	}
 
@@ -416,7 +416,6 @@ where
 			key = %HexDisplay::from(&key),
 			result = %HexDisplay::from(&value.encode()),
 			result = %HexDisplay::from(&ready_to_encode_result.encode()),
-			test = ?value.as_ref().map(HexDisplay::from),
 		);
 
 		self.mark_dirty();
