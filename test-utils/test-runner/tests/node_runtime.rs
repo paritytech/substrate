@@ -1,6 +1,6 @@
 //! End to end runtime tests
 
-use substrate_test_runner::{Node, ChainInfo, SignatureVerificationOverride, base_path};
+use test_runner::{Node, ChainInfo, SignatureVerificationOverride, base_path};
 use sc_finality_grandpa::GrandpaBlockImport;
 use sc_service::{
 	TFullBackend, TFullClient, Configuration, TaskManager,

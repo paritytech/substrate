@@ -130,7 +130,7 @@ impl<T: ChainInfo> Node<T> {
 
 		let transaction_pool = BasicPool::new_full(
 			config.transaction_pool.clone(),
-			false.into(),
+			true.into(),
 			config.prometheus_registry(),
 			task_manager.spawn_handle(),
 			client.clone(),

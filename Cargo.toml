@@ -67,7 +67,6 @@ members = [
 	"frame/authorship",
 	"frame/babe",
 	"frame/balances",
-	"frame/balances/e2e-tests",
 	"frame/benchmarking",
 	"frame/bounties",
 	"frame/collective",

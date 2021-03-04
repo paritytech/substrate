@@ -29,7 +29,7 @@ use std::sync::Arc;
 use sp_inherents::InherentDataProviders;
 use sc_consensus_babe::BabeBlockImport;
 use sp_keystore::SyncCryptoStorePtr;
-use sp_keyring::sr25519::Keyring::{Alice, Bob};
+use sp_keyring::sr25519::Keyring::Alice;
 use node_cli::chain_spec::development_config;
 use sp_consensus_babe::AuthorityId;
 use sc_consensus_manual_seal::{ConsensusDataProvider, consensus::babe::BabeConsensusDataProvider};
@@ -240,20 +240,20 @@ impl ChainInfo for NodeTemplateChainInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pallet_balances_e2e_tests::*;
+    use frame_system::{Call, Pallet};
 
     #[test]
     fn runtime_upgrade() {
         let mut node = Node::<NodeTemplateChainInfo>::new().unwrap();
+        // seals blocks
+        node.seal_blocks(1);
+        // submit extrinsics
+        let alice = MultiSigner::from(Alice.public()).into_account();
+        node.submit_extrinsic(Call::remark((b"hello world").to_vec()), alice);
 
-        let (alice, bob) = (
-            MultiSigner::from(Alice.public()).into_account(),
-            MultiSigner::from(Bob.public()).into_account()
-        );
-
-        // pallet balances assertions
-        transfer_keep_alive(&mut node, alice.clone(), bob.clone());
-        set_balance(&mut node, alice.clone());
-        force_transfer(&mut node, alice, bob);
+        // look ma, i can read state
+        let _events = node.with_state(|| Pallet::<node_runtime::Runtime>::events());
+        // get access to the underlying client.
+        let _client = node.client();
     }
 }
