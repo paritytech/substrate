@@ -201,11 +201,16 @@ impl frame_system::Config for Runtime {
 	type BlockHashCount = BlockHashCount;
 	type Version = Version;
 	type PalletInfo = PalletInfo;
+	type SystemWeightInfo = frame_system::weights::SubstrateWeight<Runtime>;
+	type SS58Prefix = SS58Prefix;
+	type AccountStorage = Accounts;
+}
+
+impl frame_accounts::Config for Runtime {
+	type Event = Event;
 	type AccountData = pallet_balances::AccountData<Balance>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
-	type SystemWeightInfo = frame_system::weights::SubstrateWeight<Runtime>;
-	type SS58Prefix = SS58Prefix;
 }
 
 impl pallet_utility::Config for Runtime {
@@ -372,7 +377,7 @@ impl pallet_balances::Config for Runtime {
 	type DustRemoval = ();
 	type Event = Event;
 	type ExistentialDeposit = ExistentialDeposit;
-	type AccountStore = frame_system::Module<Runtime>;
+	type AccountStore = Accounts;
 	type WeightInfo = pallet_balances::weights::SubstrateWeight<Runtime>;
 }
 
@@ -1078,6 +1083,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		Accounts: frame_accounts::{Module, Call, Storage, Event<T>},
 		Utility: pallet_utility::{Module, Call, Event},
 		Babe: pallet_babe::{Module, Call, Storage, Config, ValidateUnsigned},
 		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
@@ -1323,7 +1329,8 @@ impl_runtime_apis! {
 
 	impl frame_accounts_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
 		fn account_nonce(account: AccountId) -> Index {
-			System::account_nonce(account)
+			use frame_support::traits::AccountApi;
+			Accounts::account_nonce(account)
 		}
 	}
 

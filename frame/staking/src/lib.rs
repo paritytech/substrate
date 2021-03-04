@@ -323,7 +323,7 @@ use sp_staking::{
 #[cfg(feature = "std")]
 use sp_runtime::{Serialize, Deserialize};
 use frame_system::{
-	self as system, ensure_signed, ensure_root, ensure_none,
+	ensure_signed, ensure_root, ensure_none,
 	offchain::SendTransactionTypes,
 };
 use sp_npos_elections::{
@@ -780,7 +780,7 @@ impl<T: Config> SessionInterface<<T as frame_system::Config>::AccountId> for T w
 	}
 }
 
-pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
+pub trait Config: frame_system::Config + frame_accounts::Config + SendTransactionTypes<Call<Self>> {
 	/// The staking balance.
 	type Currency: LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>;
 
@@ -1500,7 +1500,7 @@ decl_module! {
 				Err(Error::<T>::InsufficientValue)?
 			}
 
-			system::Module::<T>::inc_consumers(&stash).map_err(|_| Error::<T>::BadState)?;
+			frame_accounts::Module::<T>::inc_consumers(&stash).map_err(|_| Error::<T>::BadState)?;
 
 			// You're auto-bonded forever, here. We might improve this by only bonding when
 			// you actually validate/nominate and remove once you unbond __everything__.
@@ -3202,7 +3202,7 @@ impl<T: Config> Module<T> {
 		<Validators<T>>::remove(stash);
 		<Nominators<T>>::remove(stash);
 
-		system::Module::<T>::dec_consumers(stash);
+		frame_accounts::Module::<T>::dec_consumers(stash);
 
 		Ok(())
 	}

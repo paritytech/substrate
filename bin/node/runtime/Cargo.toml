@@ -38,6 +38,7 @@ sp-transaction-pool = { version = "3.0.0", default-features = false, path = "../
 sp-version = { version = "3.0.0", default-features = false, path = "../../../primitives/version" }
 
 # frame dependencies
+frame-accounts = { version = "3.0.0", default-features = false, path = "../../../frame/accounts" }
 frame-executive = { version = "3.0.0", default-features = false, path = "../../../frame/executive" }
 frame-benchmarking = { version = "3.1.0", default-features = false, path = "../../../frame/benchmarking", optional = true }
 frame-support = { version = "3.0.0", default-features = false, path = "../../../frame/support" }

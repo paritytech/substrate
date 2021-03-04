@@ -24,6 +24,7 @@ sp-runtime = { version = "3.0.0", default-features = false, path = "../../primit
 sp-staking = { version = "3.0.0", default-features = false, path = "../../primitives/staking" }
 frame-support = { version = "3.0.0", default-features = false, path = "../support" }
 frame-system = { version = "3.0.0", default-features = false, path = "../system" }
+frame-accounts = { version = "3.0.0", default-features = false, path = "../accounts" }
 pallet-session = { version = "3.0.0", default-features = false, features = ["historical"], path = "../session" }
 pallet-authorship = { version = "3.0.0", default-features = false, path = "../authorship" }
 sp-application-crypto = { version = "3.0.0", default-features = false, path = "../../primitives/application-crypto" }
@@ -61,6 +62,7 @@ std = [
 	"sp-staking/std",
 	"pallet-session/std",
 	"frame-system/std",
+	"frame-accounts/std",
 	"pallet-authorship/std",
 	"sp-application-crypto/std",
 	"log/std",

@@ -4112,6 +4112,7 @@ dependencies = [
 name = "node-runtime"
 version = "2.0.1"
 dependencies = [
+ "frame-accounts",
  "frame-accounts-rpc-runtime-api",
  "frame-benchmarking",
  "frame-executive",
@@ -4458,6 +4459,7 @@ dependencies = [
 name = "pallet-assets"
 version = "3.0.0"
 dependencies = [
+ "frame-accounts",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -5129,6 +5131,7 @@ name = "pallet-recovery"
 version = "3.0.0"
 dependencies = [
  "enumflags2",
+ "frame-accounts",
  "frame-support",
  "frame-system",
  "pallet-balances",
@@ -5237,6 +5240,7 @@ dependencies = [
 name = "pallet-staking"
 version = "3.0.0"
 dependencies = [
+ "frame-accounts",
  "frame-benchmarking",
  "frame-support",
  "frame-system",

@@ -21,6 +21,7 @@ sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
 frame-support = { version = "3.0.0", default-features = false, path = "../support" }
 frame-system = { version = "3.0.0", default-features = false, path = "../system" }
+frame-accounts = { version = "3.0.0", default-features = false, path = "../accounts" }
 
 [dev-dependencies]
 sp-core = { version = "3.0.0", path = "../../primitives/core" }
@@ -36,5 +37,6 @@ std = [
 	"sp-runtime/std",
 	"frame-support/std",
 	"frame-system/std",
+	"frame-accounts/std",
 ]
 try-runtime = ["frame-support/try-runtime"]
