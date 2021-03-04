@@ -29,42 +29,6 @@ fn origin_works() {
 }
 
 #[test]
-fn sufficient_cannot_support_consumer() {
-	new_test_ext().execute_with(|| {
-		assert_eq!(System::inc_sufficients(&0), IncRefStatus::Created);
-		System::inc_account_nonce(&0);
-		assert_eq!(System::account_nonce(&0), 1);
-		assert_noop!(System::inc_consumers(&0), IncRefError::NoProviders);
-
-		assert_eq!(System::inc_providers(&0), IncRefStatus::Existed);
-		assert!(System::inc_consumers(&0).is_ok());
-		assert_noop!(System::dec_providers(&0), DecRefError::ConsumerRemaining);
-	});
-}
-
-#[test]
-fn provider_required_to_support_consumer() {
-	new_test_ext().execute_with(|| {
-		assert_noop!(System::inc_consumers(&0), IncRefError::NoProviders);
-
-		assert_eq!(System::inc_providers(&0), IncRefStatus::Created);
-		System::inc_account_nonce(&0);
-		assert_eq!(System::account_nonce(&0), 1);
-
-		assert_eq!(System::inc_providers(&0), IncRefStatus::Existed);
-		assert_eq!(System::dec_providers(&0).unwrap(), DecRefStatus::Exists);
-		assert_eq!(System::account_nonce(&0), 1);
-
-		assert!(System::inc_consumers(&0).is_ok());
-		assert_noop!(System::dec_providers(&0), DecRefError::ConsumerRemaining);
-
-		System::dec_consumers(&0);
-		assert_eq!(System::dec_providers(&0).unwrap(), DecRefStatus::Reaped);
-		assert_eq!(System::account_nonce(&0), 0);
-	});
-}
-
-#[test]
 fn deposit_event_should_work() {
 	new_test_ext().execute_with(|| {
 		System::initialize(

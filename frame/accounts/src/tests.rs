@@ -17,10 +17,7 @@
 
 use crate::*;
 use mock::*;
-use frame_support::{
-	assert_noop, weights::WithPostDispatchInfo, dispatch::PostDispatchInfo,
-	sp_runtime::{DispatchError, DispatchErrorWithPostInfo, traits::{Header, BlakeTwo256}},
-};
+use frame_support::assert_noop;
 
 #[test]
 fn stored_map_works() {
@@ -102,6 +99,42 @@ fn self_sufficient_ref_handover_to_provider_ref_works() {
 		assert_eq!(Accounts::account_nonce(&0), 1);
 
 		// decreasing the providers should delete the account
+		assert_eq!(Accounts::dec_providers(&0).unwrap(), DecRefStatus::Reaped);
+		assert_eq!(Accounts::account_nonce(&0), 0);
+	});
+}
+
+#[test]
+fn sufficient_cannot_support_consumer() {
+	new_test_ext().execute_with(|| {
+		assert_eq!(Accounts::inc_sufficients(&0), IncRefStatus::Created);
+		Accounts::inc_account_nonce(&0);
+		assert_eq!(Accounts::account_nonce(&0), 1);
+		assert_noop!(Accounts::inc_consumers(&0), IncRefError::NoProviders);
+
+		assert_eq!(Accounts::inc_providers(&0), IncRefStatus::Existed);
+		assert!(Accounts::inc_consumers(&0).is_ok());
+		assert_noop!(Accounts::dec_providers(&0), DecRefError::ConsumerRemaining);
+	});
+}
+
+#[test]
+fn provider_required_to_support_consumer() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(Accounts::inc_consumers(&0), IncRefError::NoProviders);
+
+		assert_eq!(Accounts::inc_providers(&0), IncRefStatus::Created);
+		Accounts::inc_account_nonce(&0);
+		assert_eq!(Accounts::account_nonce(&0), 1);
+
+		assert_eq!(Accounts::inc_providers(&0), IncRefStatus::Existed);
+		assert_eq!(Accounts::dec_providers(&0).unwrap(), DecRefStatus::Exists);
+		assert_eq!(Accounts::account_nonce(&0), 1);
+
+		assert!(Accounts::inc_consumers(&0).is_ok());
+		assert_noop!(Accounts::dec_providers(&0), DecRefError::ConsumerRemaining);
+
+		Accounts::dec_consumers(&0);
 		assert_eq!(Accounts::dec_providers(&0).unwrap(), DecRefStatus::Reaped);
 		assert_eq!(Accounts::account_nonce(&0), 0);
 	});
