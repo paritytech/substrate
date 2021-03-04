@@ -23,7 +23,7 @@ use frame_support::{
 	dispatch::{UnfilteredDispatchable, Parameter},
 	storage::unhashed,
 };
-use sp_runtime::{traits::Block as _, DispatchError};
+use sp_runtime::DispatchError;
 use sp_io::{TestExternalities, hashing::{twox_64, twox_128, blake2_128}};
 
 pub struct SomeType1;
@@ -100,7 +100,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T>
@@ -155,11 +155,19 @@ pub mod pallet {
 			#[pallet::compact] foo: u32,
 		) -> DispatchResultWithPostInfo {
 			Self::deposit_event(Event::Something(0));
-			if foo != 0 {
-				Ok(().into())
-			} else {
-				Err(Error::<T>::InsufficientProposersBalance.into())
+			if foo == 0 {
+				Err(Error::<T>::InsufficientProposersBalance)?;
 			}
+
+			Ok(().into())
+		}
+
+		// Test for DispatchResult return type
+		#[pallet::weight(1)]
+		fn foo_no_post_info(
+			_origin: OriginFor<T>,
+		) -> DispatchResult {
+			Ok(())
 		}
 	}
 
@@ -290,7 +298,7 @@ pub mod pallet2 {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T>
@@ -425,7 +433,7 @@ fn call_expand() {
 	assert_eq!(call_foo.get_call_name(), "foo");
 	assert_eq!(
 		pallet::Call::<Runtime>::get_call_names(),
-		&["foo", "foo_transactional"],
+		&["foo", "foo_transactional", "foo_no_post_info"],
 	);
 }
 
@@ -668,6 +676,11 @@ fn metadata() {
 				documentation: DecodeDifferent::Decoded(vec![
 					" Doc comment put in metadata".to_string(),
 				]),
+			},
+			FunctionMetadata {
+				name: DecodeDifferent::Decoded("foo_no_post_info".to_string()),
+				arguments: DecodeDifferent::Decoded(vec![]),
+				documentation: DecodeDifferent::Decoded(vec![]),
 			},
 		])),
 		event: Some(DecodeDifferent::Decoded(vec![

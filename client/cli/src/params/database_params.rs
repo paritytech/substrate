@@ -18,6 +18,7 @@
 
 use crate::arg_enums::Database;
 use structopt::StructOpt;
+use sc_service::TransactionStorageMode;
 
 /// Parameters for block import.
 #[derive(Debug, StructOpt)]
@@ -28,12 +29,22 @@ pub struct DatabaseParams {
 		alias = "db",
 		value_name = "DB",
 		case_insensitive = true,
+		possible_values = &Database::variants(),
 	)]
 	pub database: Option<Database>,
 
 	/// Limit the memory the database cache can use.
 	#[structopt(long = "db-cache", value_name = "MiB")]
 	pub database_cache_size: Option<usize>,
+
+	/// Enable storage chain mode
+	///
+	/// This changes the storage format for blocks bodies.
+	/// If this is enabled, each transaction is stored separately in the
+	/// transaction database column and is only referenced by hash
+	/// in the block body column.
+	#[structopt(long)]
+	pub storage_chain: bool,
 }
 
 impl DatabaseParams {
@@ -45,5 +56,14 @@ impl DatabaseParams {
 	/// Limit the memory the database cache can use.
 	pub fn database_cache_size(&self) -> Option<usize> {
 		self.database_cache_size
+	}
+
+	/// Transaction storage scheme.
+	pub fn transaction_storage(&self) -> TransactionStorageMode {
+		if self.storage_chain {
+			TransactionStorageMode::StorageChain
+		} else {
+			TransactionStorageMode::BlockBody
+		}
 	}
 }

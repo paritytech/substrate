@@ -20,7 +20,7 @@
 //!
 //! This is used instead of `futures_timer::Interval` because it was unreliable.
 
-use super::SlotCompatible;
+use super::{SlotCompatible, Slot};
 use sp_consensus::Error;
 use futures::{prelude::*, task::Context, task::Poll};
 use sp_inherents::{InherentData, InherentDataProviders};
@@ -48,7 +48,7 @@ pub fn time_until_next(now: Duration, slot_duration: u64) -> Duration {
 /// Information about a slot.
 pub struct SlotInfo {
 	/// The slot number.
-	pub number: u64,
+	pub slot: Slot,
 	/// Current timestamp.
 	pub timestamp: u64,
 	/// The instant at which the slot ends.
@@ -61,7 +61,7 @@ pub struct SlotInfo {
 
 /// A stream that returns every time there is a new slot.
 pub(crate) struct Slots<SC> {
-	last_slot: u64,
+	last_slot: Slot,
 	slot_duration: u64,
 	inner_delay: Option<Delay>,
 	inherent_data_providers: InherentDataProviders,
@@ -76,7 +76,7 @@ impl<SC> Slots<SC> {
 		timestamp_extractor: SC,
 	) -> Self {
 		Slots {
-			last_slot: 0,
+			last_slot: 0.into(),
 			slot_duration,
 			inner_delay: None,
 			inherent_data_providers,
@@ -114,7 +114,7 @@ impl<SC: SlotCompatible> Stream for Slots<SC> {
 				Err(err) => return Poll::Ready(Some(Err(sp_consensus::Error::InherentData(err)))),
 			};
 			let result = self.timestamp_extractor.extract_timestamp_and_slot(&inherent_data);
-			let (timestamp, slot_num, offset) = match result {
+			let (timestamp, slot, offset) = match result {
 				Ok(v) => v,
 				Err(err) => return Poll::Ready(Some(Err(err))),
 			};
@@ -125,11 +125,11 @@ impl<SC: SlotCompatible> Stream for Slots<SC> {
 			self.inner_delay = Some(Delay::new(ends_in));
 
 			// never yield the same slot twice.
-			if slot_num > self.last_slot {
-				self.last_slot = slot_num;
+			if slot > self.last_slot {
+				self.last_slot = slot;
 
 				break Poll::Ready(Some(Ok(SlotInfo {
-					number: slot_num,
+					slot,
 					duration: self.slot_duration,
 					timestamp,
 					ends_at,

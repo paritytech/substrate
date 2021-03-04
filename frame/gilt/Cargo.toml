@@ -1,0 +1,46 @@
+[package]
+name = "pallet-gilt"
+version = "3.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "Apache-2.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+description = "FRAME pallet for rewarding account freezing."
+readme = "README.md"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+serde = { version = "1.0.101", optional = true }
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
+sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-arithmetic = { version = "3.0.0", default-features = false, path = "../../primitives/arithmetic" }
+frame-benchmarking = { version = "3.0.0", default-features = false, path = "../benchmarking", optional = true }
+frame-support = { version = "3.0.0", default-features = false, path = "../support" }
+frame-system = { version = "3.0.0", default-features = false, path = "../system" }
+
+[dev-dependencies]
+sp-io = { version = "3.0.0", path = "../../primitives/io" }
+sp-core = { version = "3.0.0", path = "../../primitives/core" }
+pallet-balances = { version = "3.0.0", path = "../balances" }
+
+[features]
+default = ["std"]
+std = [
+	"serde",
+	"codec/std",
+	"sp-std/std",
+	"sp-runtime/std",
+	"sp-arithmetic/std",
+	"frame-benchmarking/std",
+	"frame-support/std",
+	"frame-system/std",
+]
+runtime-benchmarks = [
+	"frame-benchmarking",
+	"frame-support/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+]

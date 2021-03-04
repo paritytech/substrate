@@ -75,6 +75,7 @@ fn call_in_wasm<E: Externalities>(
 		Some(1024),
 		HostFunctions::host_functions(),
 		8,
+		None,
 	);
 	executor.call_in_wasm(
 		&wasm_binary_unwrap()[..],
@@ -475,13 +476,11 @@ fn offchain_index(wasm_method: WasmExecutionMethod) {
 		&mut ext.ext(),
 	).unwrap();
 
-	use sp_core::offchain::storage::OffchainOverlayedChange;
-	assert_eq!(
-		ext.ext()
-			.get_offchain_storage_changes()
-			.get(sp_core::offchain::STORAGE_PREFIX, b"k"),
-		Some(OffchainOverlayedChange::SetValue(b"v".to_vec()))
-	);
+	use sp_core::offchain::OffchainOverlayedChange;
+	let data = ext.overlayed_changes().clone().offchain_drain_committed().find(|(k, _v)| {
+		k == &(sp_core::offchain::STORAGE_PREFIX.to_vec(), b"k".to_vec())
+	});
+	assert_eq!(data.map(|data| data.1), Some(OffchainOverlayedChange::SetValue(b"v".to_vec())));
 }
 
 test_wasm_execution!(offchain_local_storage_should_work);
@@ -538,6 +537,7 @@ fn should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 		Some(17),  // `17` is the initial number of pages compiled into the binary.
 		HostFunctions::host_functions(),
 		8,
+		None,
 	);
 
 	let err = executor.call_in_wasm(
@@ -560,6 +560,7 @@ fn returns_mutable_static(wasm_method: WasmExecutionMethod) {
 		&wasm_binary_unwrap()[..],
 		HostFunctions::host_functions(),
 		true,
+		None,
 	).expect("Creates runtime");
 
 	let instance = runtime.new_instance().unwrap();
@@ -593,6 +594,7 @@ fn restoration_of_globals(wasm_method: WasmExecutionMethod) {
 		&wasm_binary_unwrap()[..],
 		HostFunctions::host_functions(),
 		true,
+		None,
 	).expect("Creates runtime");
 	let instance = runtime.new_instance().unwrap();
 
@@ -613,6 +615,7 @@ fn heap_is_reset_between_calls(wasm_method: WasmExecutionMethod) {
 		&wasm_binary_unwrap()[..],
 		HostFunctions::host_functions(),
 		true,
+		None,
 	).expect("Creates runtime");
 	let instance = runtime.new_instance().unwrap();
 
@@ -636,6 +639,7 @@ fn parallel_execution(wasm_method: WasmExecutionMethod) {
 		Some(1024),
 		HostFunctions::host_functions(),
 		8,
+		None,
 	));
 	let code_hash = blake2_256(wasm_binary_unwrap()).to_vec();
 	let threads: Vec<_> = (0..8).map(|_|

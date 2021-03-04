@@ -20,7 +20,7 @@
 #![recursion_limit="128"]
 
 use codec::{Decode, Encode};
-use sp_runtime::{generic, traits::{BlakeTwo256, Block as _, Verify}, BuildStorage};
+use sp_runtime::{generic, traits::{BlakeTwo256, Verify}, BuildStorage};
 use frame_support::{
 	traits::{PALLET_VERSION_STORAGE_KEY_POSTFIX, PalletVersion, OnRuntimeUpgrade, GetPalletVersion},
 	crate_to_pallet_version, weights::Weight,
@@ -86,7 +86,7 @@ mod pallet3 {
 	}
 
 	#[pallet::pallet]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {

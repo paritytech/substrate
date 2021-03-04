@@ -19,10 +19,13 @@
 
 #![cfg(test)]
 
-use crate::{seq_phragmen, ElectionResult, Assignment, VoteWeight, ExtendedBalance};
-use sp_arithmetic::{PerThing, InnerOf, traits::{SaturatedConversion, Zero, One}};
-use sp_std::collections::btree_map::BTreeMap;
+use crate::*;
+use sp_arithmetic::{
+	traits::{One, SaturatedConversion, Zero},
+	PerThing,
+};
 use sp_runtime::assert_eq_error_rate;
+use sp_std::collections::btree_map::BTreeMap;
 
 #[derive(Default, Debug)]
 pub(crate) struct _Candidate<A> {
@@ -313,15 +316,12 @@ pub fn check_assignments_sum<T: PerThing>(assignments: Vec<Assignment<AccountId,
 	}
 }
 
-pub(crate) fn run_and_compare<Output: PerThing>(
+pub(crate) fn run_and_compare<Output: PerThing128>(
 	candidates: Vec<AccountId>,
 	voters: Vec<(AccountId, Vec<AccountId>)>,
 	stake_of: &Box<dyn Fn(&AccountId) -> VoteWeight>,
 	to_elect: usize,
-) where
-	ExtendedBalance: From<InnerOf<Output>>,
-	Output: sp_std::ops::Mul<ExtendedBalance, Output = ExtendedBalance>,
-{
+) {
 	// run fixed point code.
 	let ElectionResult { winners, assignments } = seq_phragmen::<_, Output>(
 		to_elect,

@@ -21,7 +21,6 @@ use syn::spanned::Spanned;
 
 /// List of additional token to be used for parsing.
 mod keyword {
-	syn::custom_keyword!(DispatchResultWithPostInfo);
 	syn::custom_keyword!(Call);
 	syn::custom_keyword!(OriginFor);
 	syn::custom_keyword!(weight);
@@ -57,7 +56,7 @@ pub struct CallVariantDef {
 }
 
 /// Attributes for functions in call impl block.
-/// Parse for `#[pallet::weight = expr]`
+/// Parse for `#[pallet::weight(expr)]`
 pub struct FunctionAttr {
 	weight: syn::Expr,
 }
@@ -163,7 +162,7 @@ impl CallDef {
 				}
 
 				if let syn::ReturnType::Type(_, type_) = &method.sig.output {
-					syn::parse2::<keyword::DispatchResultWithPostInfo>(type_.to_token_stream())?;
+					helper::check_pallet_call_return_type(type_)?;
 				} else {
 					let msg = "Invalid pallet::call, require return type \
 						DispatchResultWithPostInfo";
@@ -174,8 +173,8 @@ impl CallDef {
 					helper::take_item_attrs(&mut method.attrs)?;
 
 				if call_var_attrs.len() != 1 {
-					let msg = if call_var_attrs.len() == 0 {
-						"Invalid pallet::call, require weight attribute i.e. `#[pallet::weight = $expr]`"
+					let msg = if call_var_attrs.is_empty() {
+						"Invalid pallet::call, requires weight attribute i.e. `#[pallet::weight($expr)]`"
 					} else {
 						"Invalid pallet::call, too many weight attributes given"
 					};

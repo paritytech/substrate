@@ -185,7 +185,7 @@ pub enum BountyStatus<AccountId, BlockNumber> {
 	},
 }
 
-// Note :: For backward compatability reasons,
+// Note :: For backward compatibility reasons,
 // pallet-bounties uses Treasury for storage.
 // This is temporary solution, soon will get replaced with
 // Own storage identifier.
@@ -269,6 +269,9 @@ decl_module! {
 
 		/// The delay period for which a bounty beneficiary need to wait before claim the payout.
 		const BountyDepositPayoutDelay: T::BlockNumber = T::BountyDepositPayoutDelay::get();
+
+		/// Bounty duration in blocks.
+		const BountyUpdatePeriod: T::BlockNumber = T::BountyUpdatePeriod::get();
 
 		/// Percentage of the curator fee that will be reserved upfront as deposit for bounty curator.
 		const BountyCuratorDeposit: Permill = T::BountyCuratorDeposit::get();

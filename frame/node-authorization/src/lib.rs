@@ -46,9 +46,7 @@ use sp_std::{
 use codec::Decode;
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error,
-	debug, ensure,
-	weights::{DispatchClass, Weight},
-	traits::{Get, EnsureOrigin},
+	ensure, weights::{DispatchClass, Weight}, traits::{Get, EnsureOrigin},
 };
 use frame_system::ensure_signed;
 
@@ -387,11 +385,19 @@ decl_module! {
 		fn offchain_worker(now: T::BlockNumber) {
 			let network_state = sp_io::offchain::network_state();
 			match network_state {
-				Err(_) => debug::error!("Error: failed to get network state of node at {:?}", now),
+				Err(_) => log::error!(
+					target: "runtime::node-authorization",
+					"Error: failed to get network state of node at {:?}",
+					now,
+				),
 				Ok(state) => {
 					let encoded_peer = state.peer_id.0;
 					match Decode::decode(&mut &encoded_peer[..]) {
-						Err(_) => debug::error!("Error: failed to decode PeerId at {:?}", now),
+						Err(_) => log::error!(
+							target: "runtime::node-authorization",
+							"Error: failed to decode PeerId at {:?}",
+							now,
+						),
 						Ok(node) => sp_io::offchain::set_authorized_nodes(
 							Self::get_authorized_nodes(&PeerId(node)),
 							true
@@ -431,21 +437,28 @@ impl<T: Config> Module<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate as pallet_node_authorization;
 
-	use frame_support::{
-		assert_ok, assert_noop, impl_outer_origin,
-		parameter_types, ord_parameter_types,
-	};
+	use frame_support::{assert_ok, assert_noop, parameter_types, ord_parameter_types};
 	use frame_system::EnsureSignedBy;
 	use sp_core::H256;
 	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup, BadOrigin}, testing::Header};
 
-	impl_outer_origin! {
-		pub enum Origin for Test where system = frame_system {}
-	}
+	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+	type Block = frame_system::mocking::MockBlock<Test>;
 
-	#[derive(Clone, Eq, PartialEq)]
-	pub struct Test;
+	frame_support::construct_runtime!(
+		pub enum Test where
+			Block = Block,
+			NodeBlock = Block,
+			UncheckedExtrinsic = UncheckedExtrinsic,
+		{
+			System: frame_system::{Module, Call, Config, Storage, Event<T>},
+			NodeAuthorization: pallet_node_authorization::{
+				Module, Call, Storage, Config<T>, Event<T>,
+			},
+		}
+	);
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
@@ -459,15 +472,15 @@ mod tests {
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
-		type Call = ();
+		type Call = Call;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = ();
+		type Event = Event;
 		type BlockHashCount = BlockHashCount;
 		type Version = ();
-		type PalletInfo = ();
+		type PalletInfo = PalletInfo;
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
@@ -486,7 +499,7 @@ mod tests {
 		pub const MaxPeerIdLength: u32 = 2;
 	}
 	impl Config for Test {
-		type Event = ();
+		type Event = Event;
 		type MaxWellKnownNodes = MaxWellKnownNodes;
 		type MaxPeerIdLength = MaxPeerIdLength;
 		type AddOrigin = EnsureSignedBy<One, u64>;
@@ -496,15 +509,13 @@ mod tests {
 		type WeightInfo = ();
 	}
 
-	type NodeAuthorization = Module<Test>;
-
 	fn test_node(id: u8) -> PeerId {
 		PeerId(vec![id])
 	}
 
 	fn new_test_ext() -> sp_io::TestExternalities {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		GenesisConfig::<Test> {
+		pallet_node_authorization::GenesisConfig::<Test> {
 			nodes: vec![(test_node(10), 10), (test_node(20), 20), (test_node(30), 30)],
 		}.assimilate_storage(&mut t).unwrap();
 		t.into()

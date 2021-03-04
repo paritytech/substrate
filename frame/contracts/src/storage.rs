@@ -27,13 +27,11 @@ use codec::{Encode, Decode};
 use sp_std::prelude::*;
 use sp_std::marker::PhantomData;
 use sp_io::hashing::blake2_256;
-use sp_runtime::traits::{Bounded, Saturating};
+use sp_runtime::traits::{Bounded, Saturating, Zero};
 use sp_core::crypto::UncheckedFrom;
 use frame_support::{
 	dispatch::DispatchResult,
-	StorageMap,
-	debug,
-	storage::{child::{self, KillOutcome}, StorageValue},
+	storage::child::{self, KillChildStorageResult},
 	traits::Get,
 	weights::Weight,
 };
@@ -48,8 +46,6 @@ pub struct DeletedContract {
 	pair_count: u32,
 	trie_id: TrieId,
 }
-
-
 
 pub struct Storage<T>(PhantomData<T>);
 
@@ -75,15 +71,19 @@ where
 	/// `read`, this function also requires the `account` ID.
 	///
 	/// If the contract specified by the id `account` doesn't exist `Err` is returned.`
+	///
+	/// # Panics
+	///
+	/// Panics iff the `account` specified is not alive and in storage.
 	pub fn write(
 		account: &AccountIdOf<T>,
 		trie_id: &TrieId,
 		key: &StorageKey,
 		opt_new_value: Option<Vec<u8>>,
-	) -> Result<(), ContractAbsentError> {
+	) -> DispatchResult {
 		let mut new_info = match <ContractInfoOf<T>>::get(account) {
 			Some(ContractInfo::Alive(alive)) => alive,
-			None | Some(ContractInfo::Tombstone(_)) => return Err(ContractAbsentError),
+			None | Some(ContractInfo::Tombstone(_)) => panic!("Contract not found"),
 		};
 
 		let hashed_key = blake2_256(key);
@@ -94,10 +94,12 @@ where
 		// Update the total number of KV pairs and the number of empty pairs.
 		match (&opt_prev_len, &opt_new_value) {
 			(Some(_), None) => {
-				new_info.pair_count -= 1;
+				new_info.pair_count = new_info.pair_count.checked_sub(1)
+					.ok_or_else(|| Error::<T>::StorageExhausted)?;
 			},
 			(None, Some(_)) => {
-				new_info.pair_count += 1;
+				new_info.pair_count = new_info.pair_count.checked_add(1)
+					.ok_or_else(|| Error::<T>::StorageExhausted)?;
 			},
 			(Some(_), Some(_)) => {},
 			(None, None) => {},
@@ -111,8 +113,9 @@ where
 			.unwrap_or(0);
 		new_info.storage_size = new_info
 			.storage_size
-			.saturating_add(new_value_len)
-			.saturating_sub(prev_value_len);
+			.checked_sub(prev_value_len)
+			.and_then(|val| val.checked_add(new_value_len))
+			.ok_or_else(|| Error::<T>::StorageExhausted)?;
 
 		new_info.last_write = Some(<frame_system::Module<T>>::block_number());
 		<ContractInfoOf<T>>::insert(&account, ContractInfo::Alive(new_info));
@@ -159,28 +162,29 @@ where
 		account: &AccountIdOf<T>,
 		trie_id: TrieId,
 		ch: CodeHash<T>,
-	) -> Result<(), &'static str> {
-		<ContractInfoOf<T>>::mutate(account, |maybe_contract_info| {
-			if maybe_contract_info.is_some() {
-				return Err("Alive contract or tombstone already exists");
+	) -> DispatchResult {
+		<ContractInfoOf<T>>::try_mutate(account, |existing| {
+			if existing.is_some() {
+				return Err(Error::<T>::DuplicateContract.into());
 			}
 
-			*maybe_contract_info = Some(
-				AliveContractInfo::<T> {
-					code_hash: ch,
-					storage_size: 0,
-					trie_id,
-					deduct_block:
-						// We want to charge rent for the first block in advance. Therefore we
-						// treat the contract as if it was created in the last block and then
-						// charge rent for it during instantation.
-						<frame_system::Module<T>>::block_number().saturating_sub(1u32.into()),
-					rent_allowance: <BalanceOf<T>>::max_value(),
-					pair_count: 0,
-					last_write: None,
-				}
-				.into(),
-			);
+			let contract = AliveContractInfo::<T> {
+				code_hash: ch,
+				storage_size: 0,
+				trie_id,
+				deduct_block:
+					// We want to charge rent for the first block in advance. Therefore we
+					// treat the contract as if it was created in the last block and then
+					// charge rent for it during instantiation.
+					<frame_system::Module<T>>::block_number().saturating_sub(1u32.into()),
+				rent_allowance: <BalanceOf<T>>::max_value(),
+				rent_payed: <BalanceOf<T>>::zero(),
+				pair_count: 0,
+				last_write: None,
+				_reserved: None,
+			};
+
+			*existing = Some(contract.into());
 
 			Ok(())
 		})
@@ -191,10 +195,10 @@ where
 	/// You must make sure that the contract is also removed or converted into a tombstone
 	/// when queuing the trie for deletion.
 	pub fn queue_trie_for_deletion(contract: &AliveContractInfo<T>) -> DispatchResult {
-		if DeletionQueue::decode_len().unwrap_or(0) >= T::DeletionQueueDepth::get() as usize {
+		if <DeletionQueue<T>>::decode_len().unwrap_or(0) >= T::DeletionQueueDepth::get() as usize {
 			Err(Error::<T>::DeletionQueueFull.into())
 		} else {
-			DeletionQueue::append(DeletedContract {
+			<DeletionQueue<T>>::append(DeletedContract {
 				pair_count: contract.pair_count,
 				trie_id: contract.trie_id.clone(),
 			});
@@ -229,7 +233,7 @@ where
 	/// It returns the amount of weight used for that task or `None` when no weight was used
 	/// apart from the base weight.
 	pub fn process_deletion_queue_batch(weight_limit: Weight) -> Weight {
-		let queue_len = DeletionQueue::decode_len().unwrap_or(0);
+		let queue_len = <DeletionQueue<T>>::decode_len().unwrap_or(0);
 		if queue_len == 0 {
 			return weight_limit;
 		}
@@ -246,7 +250,7 @@ where
 			return weight_limit;
 		}
 
-		let mut queue = DeletionQueue::get();
+		let mut queue = <DeletionQueue<T>>::get();
 
 		while !queue.is_empty() && remaining_key_budget > 0 {
 			// Cannot panic due to loop condition
@@ -265,20 +269,21 @@ where
 				let removed = queue.swap_remove(0);
 				match outcome {
 					// This should not happen as our budget was large enough to remove all keys.
-					KillOutcome::SomeRemaining => {
-						debug::error!(
+					KillChildStorageResult::SomeRemaining(_) => {
+						log::error!(
+							target: "runtime::contracts",
 							"After deletion keys are remaining in this child trie: {:?}",
 							removed.trie_id,
 						);
 					},
-					KillOutcome::AllRemoved => (),
+					KillChildStorageResult::AllRemoved(_) => (),
 				}
 			}
 			remaining_key_budget = remaining_key_budget
 				.saturating_sub(remaining_key_budget.min(pair_count));
 		}
 
-		DeletionQueue::put(queue);
+		<DeletionQueue<T>>::put(queue);
 		weight_limit.saturating_sub(weight_per_key.saturating_mul(remaining_key_budget as Weight))
 	}
 
@@ -288,7 +293,7 @@ where
 		use sp_runtime::traits::Hash;
 		// Note that skipping a value due to error is not an issue here.
 		// We only need uniqueness, not sequence.
-		let new_seed = AccountCounter::mutate(|v| {
+		let new_seed = <AccountCounter<T>>::mutate(|v| {
 			*v = v.wrapping_add(1);
 			*v
 		});
@@ -317,6 +322,6 @@ where
 			trie_id: vec![],
 		})
 		.collect();
-		DeletionQueue::put(queue);
+		<DeletionQueue<T>>::put(queue);
 	}
 }
