@@ -526,7 +526,7 @@ pub mod benchmarking {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{exec::Ext, Limits};
+	use crate::{exec::Ext, schedule::Limits};
 	use std::fmt;
 	use assert_matches::assert_matches;
 

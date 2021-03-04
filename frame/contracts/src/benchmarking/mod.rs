@@ -36,6 +36,7 @@ use self::{
 	},
 	sandbox::Sandbox,
 };
+use codec::Encode;
 use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
 use frame_system::{Module as System, RawOrigin};
 use parity_wasm::elements::{Instruction, ValueType, BlockType};

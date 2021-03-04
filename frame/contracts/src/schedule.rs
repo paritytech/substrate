@@ -39,7 +39,11 @@ pub const API_BENCHMARK_BATCH_SIZE: u32 = 100;
 /// as for `API_BENCHMARK_BATCH_SIZE`.
 pub const INSTR_BENCHMARK_BATCH_SIZE: u32 = 1_000;
 
-/// Definition of the cost schedule and other parameterizations for wasm vm.
+/// Definition of the cost schedule and other parameterizations for the wasm vm.
+///
+/// Its fields are private to the crate in order to allow addition of new contract
+/// callable functions without bumping to a new major version. A genesis config should
+/// rely on public functions of this type.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(bound(serialize = "", deserialize = "")))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq, ScheduleDebug)]
@@ -53,20 +57,20 @@ pub struct Schedule<T: Config> {
 	/// of all contracts which are triggered by a version comparison on call.
 	/// Changes to other parts of the schedule should not increment the version in
 	/// order to avoid unnecessary re-instrumentations.
-	pub version: u32,
+	pub(crate) version: u32,
 
 	/// Whether the `seal_println` function is allowed to be used contracts.
 	/// MUST only be enabled for `dev` chains, NOT for production chains
-	pub enable_println: bool,
+	pub(crate) enable_println: bool,
 
 	/// Describes the upper limits on various metrics.
-	pub limits: Limits,
+	pub(crate) limits: Limits,
 
 	/// The weights for individual wasm instructions.
-	pub instruction_weights: InstructionWeights<T>,
+	pub(crate) instruction_weights: InstructionWeights<T>,
 
 	/// The weights for each imported function a contract is allowed to call.
-	pub host_fn_weights: HostFnWeights<T>,
+	pub(crate) host_fn_weights: HostFnWeights<T>,
 }
 
 /// Describes the upper limits on various metrics.
@@ -602,7 +606,21 @@ struct ScheduleRules<'a, T: Config> {
 }
 
 impl<T: Config> Schedule<T> {
-	pub fn rules(&self, module: &elements::Module) -> impl rules::Rules + '_ {
+	/// Allow contracts to call `seal_println` in order to print messages to the console.
+	///
+	/// This should only ever be activated in development chains. The printed messages
+	/// can be observed on the console by setting the environment variable
+	/// `RUST_LOG=runtime=debug` when running the node.
+	///
+	/// # Note
+	///
+	/// Is set to `false` by default.
+	pub fn enable_println(mut self, enable: bool) -> Self {
+		self.enable_println = enable;
+		self
+	}
+
+	pub(crate) fn rules(&self, module: &elements::Module) -> impl rules::Rules + '_ {
 		ScheduleRules {
 			schedule: &self,
 			params: module

@@ -19,22 +19,130 @@
 
 use crate::{
 	exec::{AccountIdOf, StorageKey},
-	AliveContractInfo, BalanceOf, CodeHash, ContractInfo, ContractInfoOf, Config, TrieId,
+	BalanceOf, CodeHash, ContractInfoOf, Config, TrieId,
 	AccountCounter, DeletionQueue, Error,
 	weights::WeightInfo,
 };
-use codec::{Encode, Decode};
+use codec::{Codec, Encode, Decode};
 use sp_std::prelude::*;
-use sp_std::marker::PhantomData;
+use sp_std::{marker::PhantomData, fmt::Debug};
 use sp_io::hashing::blake2_256;
-use sp_runtime::traits::{Bounded, Saturating, Zero};
+use sp_runtime::{
+	RuntimeDebug,
+	traits::{Bounded, Saturating, Zero, Hash, Member, MaybeSerializeDeserialize},
+};
 use sp_core::crypto::UncheckedFrom;
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
-	storage::child::{self, KillChildStorageResult},
+	storage::child::{self, KillChildStorageResult, ChildInfo},
 	traits::Get,
 	weights::Weight,
 };
+
+pub type AliveContractInfo<T> =
+	RawAliveContractInfo<CodeHash<T>, BalanceOf<T>, <T as frame_system::Config>::BlockNumber>;
+pub type TombstoneContractInfo<T> =
+	RawTombstoneContractInfo<<T as frame_system::Config>::Hash, <T as frame_system::Config>::Hashing>;
+
+/// Information for managing an account and its sub trie abstraction.
+/// This is the required info to cache for an account
+#[derive(Encode, Decode, RuntimeDebug)]
+pub enum ContractInfo<T: Config> {
+	Alive(AliveContractInfo<T>),
+	Tombstone(TombstoneContractInfo<T>),
+}
+
+impl<T: Config> ContractInfo<T> {
+	/// If contract is alive then return some alive info
+	pub fn get_alive(self) -> Option<AliveContractInfo<T>> {
+		if let ContractInfo::Alive(alive) = self {
+			Some(alive)
+		} else {
+			None
+		}
+	}
+	/// If contract is alive then return some reference to alive info
+	pub fn as_alive(&self) -> Option<&AliveContractInfo<T>> {
+		if let ContractInfo::Alive(ref alive) = self {
+			Some(alive)
+		} else {
+			None
+		}
+	}
+
+	/// If contract is tombstone then return some tombstone info
+	pub fn get_tombstone(self) -> Option<TombstoneContractInfo<T>> {
+		if let ContractInfo::Tombstone(tombstone) = self {
+			Some(tombstone)
+		} else {
+			None
+		}
+	}
+}
+
+/// Information for managing an account and its sub trie abstraction.
+/// This is the required info to cache for an account.
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
+	/// Unique ID for the subtree encoded as a bytes vector.
+	pub trie_id: TrieId,
+	/// The total number of bytes used by this contract.
+	///
+	/// It is a sum of each key-value pair stored by this contract.
+	pub storage_size: u32,
+	/// The total number of key-value pairs in storage of this contract.
+	pub pair_count: u32,
+	/// The code associated with a given account.
+	pub code_hash: CodeHash,
+	/// Pay rent at most up to this value.
+	pub rent_allowance: Balance,
+	/// The amount of rent that was payed by the contract over its whole lifetime.
+	///
+	/// A restored contract starts with a value of zero just like a new contract.
+	pub rent_payed: Balance,
+	/// Last block rent has been payed.
+	pub deduct_block: BlockNumber,
+	/// Last block child storage has been written.
+	pub last_write: Option<BlockNumber>,
+	/// This field is reserved for future evolution of format.
+	pub _reserved: Option<()>,
+}
+
+impl<CodeHash, Balance, BlockNumber> RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
+	/// Associated child trie unique id is built from the hash part of the trie id.
+	pub fn child_trie_info(&self) -> ChildInfo {
+		child_trie_info(&self.trie_id[..])
+	}
+}
+
+/// Associated child trie unique id is built from the hash part of the trie id.
+fn child_trie_info(trie_id: &[u8]) -> ChildInfo {
+	ChildInfo::new_default(trie_id)
+}
+
+#[derive(Encode, Decode, PartialEq, Eq, RuntimeDebug)]
+pub struct RawTombstoneContractInfo<H, Hasher>(H, PhantomData<Hasher>);
+
+impl<H, Hasher> RawTombstoneContractInfo<H, Hasher>
+where
+	H: Member + MaybeSerializeDeserialize+ Debug
+		+ AsRef<[u8]> + AsMut<[u8]> + Copy + Default
+		+ sp_std::hash::Hash + Codec,
+	Hasher: Hash<Output=H>,
+{
+	pub fn new(storage_root: &[u8], code_hash: H) -> Self {
+		let mut buf = Vec::new();
+		storage_root.using_encoded(|encoded| buf.extend_from_slice(encoded));
+		buf.extend_from_slice(code_hash.as_ref());
+		RawTombstoneContractInfo(<Hasher as Hash>::hash(&buf[..]), PhantomData)
+	}
+}
+
+impl<T: Config> From<AliveContractInfo<T>> for ContractInfo<T> {
+	fn from(alive_info: AliveContractInfo<T>) -> Self {
+		Self::Alive(alive_info)
+	}
+}
 
 /// An error that means that the account requested either doesn't exist or represents a tombstone
 /// account.
@@ -59,7 +167,7 @@ where
 	/// The read is performed from the `trie_id` only. The `address` is not necessary. If the contract
 	/// doesn't store under the given `key` `None` is returned.
 	pub fn read(trie_id: &TrieId, key: &StorageKey) -> Option<Vec<u8>> {
-		child::get_raw(&crate::child_trie_info(&trie_id), &blake2_256(key))
+		child::get_raw(&child_trie_info(&trie_id), &blake2_256(key))
 	}
 
 	/// Update a storage entry into a contract's kv storage.
@@ -87,7 +195,7 @@ where
 		};
 
 		let hashed_key = blake2_256(key);
-		let child_trie_info = &crate::child_trie_info(&trie_id);
+		let child_trie_info = &child_trie_info(&trie_id);
 
 		let opt_prev_len = child::len(&child_trie_info, &hashed_key);
 
@@ -257,7 +365,7 @@ where
 			let trie = &mut queue[0];
 			let pair_count = trie.pair_count;
 			let outcome = child::kill_storage(
-				&crate::child_trie_info(&trie.trie_id),
+				&child_trie_info(&trie.trie_id),
 				Some(remaining_key_budget),
 			);
 			if pair_count > remaining_key_budget {
@@ -290,7 +398,6 @@ where
 	/// This generator uses inner counter for account id and applies the hash over `AccountId +
 	/// accountid_counter`.
 	pub fn generate_trie_id(account_id: &AccountIdOf<T>) -> TrieId {
-		use sp_runtime::traits::Hash;
 		// Note that skipping a value due to error is not an issue here.
 		// We only need uniqueness, not sequence.
 		let new_seed = <AccountCounter<T>>::mutate(|v| {
