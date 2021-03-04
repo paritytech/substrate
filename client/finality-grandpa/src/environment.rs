@@ -1245,6 +1245,7 @@ where
 			number,
 			&is_descendent_of::<Block, _>(&*client, None),
 			initial_sync,
+			None,
 		).map_err(|e| Error::Safety(e.to_string()))?;
 
 		// send a justification notification if a sender exists and in case of error log it.

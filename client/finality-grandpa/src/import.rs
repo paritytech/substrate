@@ -346,7 +346,7 @@ where
 					number,
 					&is_descendent_of,
 					initial_sync,
-					//self.telemetry.clone(),
+					self.telemetry.clone(),
 				)
 				.map_err(|e| ConsensusError::ClientImport(e.to_string()))
 				.map_err(ConsensusError::from)?;
