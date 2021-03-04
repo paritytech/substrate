@@ -358,19 +358,7 @@ where
 		// post-extrinsics book-keeping
 		<frame_system::Module<System>>::note_finished_extrinsics();
 
-		let weight =  <frame_system::Module<System>>::block_weight();
-		let max_weight =  <System::BlockWeights as frame_support::traits::Get<_>>::get().max_block;
-		let mut remaining_weight = max_weight.saturating_sub(weight.total());
-
-		if remaining_weight > 0 {
-			let mut used_weight = <frame_system::Module<System> as OnIdle<System::BlockNumber>>::on_idle(block_number, remaining_weight);
-			remaining_weight = remaining_weight.saturating_sub(used_weight);
-			used_weight = <AllModules as OnIdle<System::BlockNumber>>::on_idle(block_number, remaining_weight).saturating_add(used_weight);
-			<frame_system::Module::<System>>::register_extra_weight_unchecked(used_weight, DispatchClass::Mandatory);
-		}
-
-		<frame_system::Module<System> as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
-		<AllModules as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
+		Self::idle_and_finalize_hook(block_number);
 	}
 
 	/// Finalize the block - it is up the caller to ensure that all header fields are valid
@@ -382,6 +370,12 @@ where
 		let block_number = <frame_system::Module<System>>::block_number();
 
 
+		Self::idle_and_finalize_hook(block_number);
+
+		<frame_system::Module<System>>::finalize()
+	}
+
+	fn idle_and_finalize_hook(block_number: NumberFor<Block>) {
 		let weight =  <frame_system::Module<System>>::block_weight();
 		let max_weight =  <System::BlockWeights as frame_support::traits::Get<_>>::get().max_block;
 		let mut remaining_weight = max_weight.saturating_sub(weight.total());
@@ -395,8 +389,6 @@ where
 
 		<frame_system::Module<System> as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
 		<AllModules as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
-
-		<frame_system::Module<System>>::finalize()
 	}
 
 	/// Apply extrinsic outside of the block execution function.
