@@ -891,7 +891,7 @@ where
 		};
 
 		let report_prevote_metrics = |prevote: &Prevote<Block>| {
-			telemetry!(CONSENSUS_DEBUG; "afg.prevote_issued";
+			telemetry!(None; CONSENSUS_DEBUG; "afg.prevote_issued";
 				"round" => round,
 				"target_number" => ?prevote.target_number,
 				"target_hash" => ?prevote.target_hash,
@@ -950,7 +950,7 @@ where
 		};
 
 		let report_precommit_metrics = |precommit: &Precommit<Block>| {
-			telemetry!(CONSENSUS_DEBUG; "afg.precommit_issued";
+			telemetry!(None; CONSENSUS_DEBUG; "afg.precommit_issued";
 				"round" => round,
 				"target_number" => ?precommit.target_number,
 				"target_hash" => ?precommit.target_hash,
@@ -1320,7 +1320,7 @@ where
 			warn!(target: "afg", "Error applying finality to block {:?}: {:?}", (hash, number), e);
 			e
 		})?;
-		telemetry!(CONSENSUS_INFO; "afg.finalized_blocks_up_to";
+		telemetry!(None; CONSENSUS_INFO; "afg.finalized_blocks_up_to";
 			"number" => ?number, "hash" => ?hash,
 		);
 
@@ -1340,7 +1340,7 @@ where
 				);
 			}
 
-			telemetry!(CONSENSUS_INFO; "afg.generating_new_authority_set";
+			telemetry!(None; CONSENSUS_INFO; "afg.generating_new_authority_set";
 				"number" => ?canon_number, "hash" => ?canon_hash,
 				"authorities" => ?set_ref.to_vec(),
 				"set_id" => ?new_id,

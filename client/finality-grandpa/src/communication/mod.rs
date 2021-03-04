@@ -339,21 +339,21 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 						if voters.len().get() <= TELEMETRY_VOTERS_LIMIT {
 							match &msg.message.message {
 								PrimaryPropose(propose) => {
-									telemetry!(CONSENSUS_INFO; "afg.received_propose";
+									telemetry!(None; CONSENSUS_INFO; "afg.received_propose";
 										"voter" => ?format!("{}", msg.message.id),
 										"target_number" => ?propose.target_number,
 										"target_hash" => ?propose.target_hash,
 									);
 								},
 								Prevote(prevote) => {
-									telemetry!(CONSENSUS_INFO; "afg.received_prevote";
+									telemetry!(None; CONSENSUS_INFO; "afg.received_prevote";
 										"voter" => ?format!("{}", msg.message.id),
 										"target_number" => ?prevote.target_number,
 										"target_hash" => ?prevote.target_hash,
 									);
 								},
 								Precommit(precommit) => {
-									telemetry!(CONSENSUS_INFO; "afg.received_precommit";
+									telemetry!(None; CONSENSUS_INFO; "afg.received_precommit";
 										"voter" => ?format!("{}", msg.message.id),
 										"target_number" => ?precommit.target_number,
 										"target_hash" => ?precommit.target_hash,
@@ -505,7 +505,7 @@ fn incoming_global<B: BlockT>(
 					format!("{}", a)
 				}).collect();
 
-			telemetry!(CONSENSUS_INFO; "afg.received_commit";
+			telemetry!(None; CONSENSUS_INFO; "afg.received_commit";
 				"contains_precommits_signed_by" => ?precommits_signed_by,
 				"target_number" => ?msg.message.target_number.clone(),
 				"target_hash" => ?msg.message.target_hash.clone(),
@@ -717,7 +717,7 @@ impl<Block: BlockT> Sink<Message<Block>> for OutgoingMessages<Block>
 			);
 
 			telemetry!(
-				CONSENSUS_DEBUG; "afg.announcing_blocks_to_voted_peers";
+				None; CONSENSUS_DEBUG; "afg.announcing_blocks_to_voted_peers";
 				"block" => ?target_hash, "round" => ?self.round, "set_id" => ?self.set_id,
 			);
 
@@ -797,7 +797,7 @@ fn check_compact_commit<Block: BlockT>(
 			&mut buf,
 		) {
 			debug!(target: "afg", "Bad commit message signature {}", id);
-			telemetry!(CONSENSUS_DEBUG; "afg.bad_commit_msg_signature"; "id" => ?id);
+			telemetry!(None; CONSENSUS_DEBUG; "afg.bad_commit_msg_signature"; "id" => ?id);
 			let cost = Misbehavior::BadCommitMessage {
 				signatures_checked: i as i32,
 				blocks_loaded: 0,
@@ -885,7 +885,7 @@ fn check_catch_up<Block: BlockT>(
 				buf,
 			) {
 				debug!(target: "afg", "Bad catch up message signature {}", id);
-				telemetry!(CONSENSUS_DEBUG; "afg.bad_catch_up_msg_signature"; "id" => ?id);
+				telemetry!(None; CONSENSUS_DEBUG; "afg.bad_catch_up_msg_signature"; "id" => ?id);
 
 				let cost = Misbehavior::BadCatchUpMessage {
 					signatures_checked: signatures_checked as i32,
@@ -968,7 +968,7 @@ impl<Block: BlockT> Sink<(RoundNumber, Commit<Block>)> for CommitsOut<Block> {
 		let (round, commit) = input;
 		let round = Round(round);
 
-		telemetry!(CONSENSUS_DEBUG; "afg.commit_issued";
+		telemetry!(None; CONSENSUS_DEBUG; "afg.commit_issued";
 			"target_number" => ?commit.target_number, "target_hash" => ?commit.target_hash,
 		);
 		let (precommits, auth_data) = commit.precommits.into_iter()

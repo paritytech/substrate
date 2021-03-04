@@ -828,7 +828,7 @@ impl<Block: BlockT> Inner<Block> {
 		// ensure authority is part of the set.
 		if !self.authorities.contains(&full.message.id) {
 			debug!(target: "afg", "Message from unknown voter: {}", full.message.id);
-			telemetry!(CONSENSUS_DEBUG; "afg.bad_msg_signature"; "signature" => ?full.message.id);
+			telemetry!(None; CONSENSUS_DEBUG; "afg.bad_msg_signature"; "signature" => ?full.message.id);
 			return Action::Discard(cost::UNKNOWN_VOTER);
 		}
 
@@ -840,7 +840,7 @@ impl<Block: BlockT> Inner<Block> {
 			full.set_id.0,
 		) {
 			debug!(target: "afg", "Bad message signature {}", full.message.id);
-			telemetry!(CONSENSUS_DEBUG; "afg.bad_msg_signature"; "signature" => ?full.message.id);
+			telemetry!(None; CONSENSUS_DEBUG; "afg.bad_msg_signature"; "signature" => ?full.message.id);
 			return Action::Discard(cost::BAD_SIGNATURE);
 		}
 
@@ -866,7 +866,7 @@ impl<Block: BlockT> Inner<Block> {
 
 		if full.message.precommits.len() != full.message.auth_data.len() || full.message.precommits.is_empty() {
 			debug!(target: "afg", "Malformed compact commit");
-			telemetry!(CONSENSUS_DEBUG; "afg.malformed_compact_commit";
+			telemetry!(None; CONSENSUS_DEBUG; "afg.malformed_compact_commit";
 				"precommits_len" => ?full.message.precommits.len(),
 				"auth_data_len" => ?full.message.auth_data.len(),
 				"precommits_is_empty" => ?full.message.precommits.is_empty(),
@@ -1411,7 +1411,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 				Err(e) => {
 					message_name = None;
 					debug!(target: "afg", "Error decoding message: {}", e);
-					telemetry!(CONSENSUS_DEBUG; "afg.err_decoding_msg"; "" => "");
+					telemetry!(None; CONSENSUS_DEBUG; "afg.err_decoding_msg"; "" => "");
 
 					let len = std::cmp::min(i32::max_value() as usize, data.len()) as i32;
 					Action::Discard(Misbehavior::UndecodablePacket(len).cost())

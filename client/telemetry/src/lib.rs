@@ -487,7 +487,7 @@ enum Register {
 /// # let set_id = (43_u64, 44_u64);
 /// # let authorities = vec![45_u64];
 /// telemetry!(
-///     telemetry;      // an `Option<Telemetry>`
+///     telemetry;      // an `Option<TelemetryHandle>`
 ///     CONSENSUS_INFO;
 ///     "afg.authority_set";
 ///     "authority_id" => authority_id.to_string(),
@@ -498,7 +498,8 @@ enum Register {
 #[macro_export(local_inner_macros)]
 macro_rules! telemetry {
 	( $telemetry:expr; $verbosity:expr; $msg:expr; $( $t:tt )* ) => {{
-		if let Some(telemetry) = $telemetry.as_ref() {
+		let telemetry: Option<&$crate::TelemetryHandle> = $telemetry.as_ref();
+		if let Some(telemetry) = telemetry {
 			let verbosity: $crate::VerbosityLevel = $verbosity;
 			match format_fields_to_json!($($t)*) {
 				Err(err) => {

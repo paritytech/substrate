@@ -461,7 +461,7 @@ where
 				);
 
 				telemetry!(
-					CONSENSUS_INFO;
+					None; CONSENSUS_INFO;
 					"afg.applying_forced_authority_set_change";
 					"block" => ?change.canon_height
 				);
@@ -544,7 +544,7 @@ where
 						"👴 Applying authority set change scheduled at block #{:?}",
 						change.canon_height,
 					);
-					telemetry!(CONSENSUS_INFO; "afg.applying_scheduled_authority_set_change";
+					telemetry!(None; CONSENSUS_INFO; "afg.applying_scheduled_authority_set_change";
 						"block" => ?change.canon_height
 					);
 

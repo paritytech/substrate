@@ -552,7 +552,7 @@ where
 		<NumberFor<Block>>::zero(),
 		|| {
 			let authorities = genesis_authorities_provider.get()?;
-			telemetry!(CONSENSUS_DEBUG; "afg.loading_authorities";
+			telemetry!(None; CONSENSUS_DEBUG; "afg.loading_authorities";
 				"authorities_len" => ?authorities.len()
 			);
 			Ok(authorities)
@@ -754,7 +754,7 @@ where
 					 elements are always of type string",
 				);
 
-				telemetry!(CONSENSUS_INFO; "afg.authority_set";
+				telemetry!(None; CONSENSUS_INFO; "afg.authority_set";
 					"authority_id" => authority_id.to_string(),
 					"authority_set_id" => ?set_id,
 					"authorities" => authorities,
@@ -892,7 +892,7 @@ where
 		let authority_id = local_authority_id(&self.env.voters, self.env.config.keystore.as_ref())
 			.unwrap_or_default();
 
-		telemetry!(CONSENSUS_DEBUG; "afg.starting_new_voter";
+		telemetry!(None; CONSENSUS_DEBUG; "afg.starting_new_voter";
 			"name" => ?self.env.config.name(),
 			"set_id" => ?self.env.set_id,
 			"authority_id" => authority_id.to_string(),
@@ -911,7 +911,10 @@ where
 			"authorities is always at least an empty vector; elements are always of type string",
 		);
 
-		telemetry!(CONSENSUS_INFO; "afg.authority_set";
+		telemetry!(
+			None;
+			CONSENSUS_INFO;
+			"afg.authority_set";
 			"number" => ?chain_info.finalized_number,
 			"hash" => ?chain_info.finalized_hash,
 			"authority_id" => authority_id.to_string(),
@@ -971,7 +974,10 @@ where
 				let voters: Vec<String> = new.authorities.iter().map(move |(a, _)| {
 					format!("{}", a)
 				}).collect();
-				telemetry!(CONSENSUS_INFO; "afg.voter_command_change_authorities";
+				telemetry!(
+					None;
+					CONSENSUS_INFO;
+					"afg.voter_command_change_authorities";
 					"number" => ?new.canon_number,
 					"hash" => ?new.canon_hash,
 					"voters" => ?voters,
