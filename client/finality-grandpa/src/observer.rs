@@ -123,7 +123,7 @@ where
 				(round, commit).into(),
 				false,
 				justification_sender.as_ref(),
-				//telemetry.clone(),
+				telemetry.clone(),
 			) {
 				Ok(_) => {},
 				Err(e) => return future::err(e),

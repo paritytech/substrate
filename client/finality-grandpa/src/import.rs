@@ -658,7 +658,7 @@ where
 			justification.into(),
 			initial_sync,
 			Some(&self.justification_sender),
-			//self.telemetry.clone(),
+			self.telemetry.clone(),
 		);
 
 		match result {

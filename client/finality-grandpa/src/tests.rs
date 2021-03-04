@@ -1361,7 +1361,7 @@ where
 		voting_rule,
 		metrics: None,
 		justification_sender: None,
-		//telemetry: None,
+		telemetry: None,
 		_phantom: PhantomData,
 	}
 }

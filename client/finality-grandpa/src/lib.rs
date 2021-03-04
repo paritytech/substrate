@@ -891,7 +891,7 @@ where
 			voter_set_state: persistent_data.set_state,
 			metrics: metrics.as_ref().map(|m| m.environment.clone()),
 			justification_sender: Some(justification_sender),
-			//telemetry: telemetry.clone(),
+			telemetry: telemetry.clone(),
 			_phantom: PhantomData,
 		});
 
@@ -1048,7 +1048,7 @@ where
 					voting_rule: self.env.voting_rule.clone(),
 					metrics: self.env.metrics.clone(),
 					justification_sender: self.env.justification_sender.clone(),
-					//telemetry: self.telemetry.clone(),
+					telemetry: self.telemetry.clone(),
 					_phantom: PhantomData,
 				});
 
