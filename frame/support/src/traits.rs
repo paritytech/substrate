@@ -2244,7 +2244,7 @@ pub trait ExecuteBlock<Block: BlockT> {
 }
 
 /// A minimal API for creating an account system compatible with FRAME System.
-pub trait AccountApi<AccountId, Index> {
+pub trait BasicAccount<AccountId, Index> {
 	type AccountInfo;
 
 	/// Return whether an account exists in storage.
@@ -2261,6 +2261,56 @@ pub trait AccountApi<AccountId, Index> {
 
 	/// Return the storage key for an account.
 	fn hashed_key_for(who: AccountId) -> Vec<u8>;
+}
+
+/// An API on top of `BasicAccount` which provides the ability for users to place
+/// reference counters on an account, preventing account deletion.
+pub trait ReferencedAccount<AccountId, Index>: BasicAccount<AccountId, Index> {
+	type RefCount;
+	type IncRefStatus;
+	type DecRefStatus;
+	type IncRefError;
+	type DecRefError;
+
+	/// Increment the provider reference counter on an account.
+	fn inc_providers(who: &AccountId) -> Self::IncRefStatus;
+
+	/// Decrement the provider reference counter on an account.
+	///
+	/// This *MUST* only be done once for every time you called `inc_providers` on `who`.
+	fn dec_providers(who: &AccountId) -> Result<Self::DecRefStatus, Self::DecRefError>;
+
+	/// Increment the self-sufficient reference counter on an account.
+	fn inc_sufficients(who: &AccountId) -> Self::IncRefStatus;
+
+	/// Decrement the sufficients reference counter on an account.
+	///
+	/// This *MUST* only be done once for every time you called `inc_sufficients` on `who`.
+	fn dec_sufficients(who: &AccountId) -> Self::DecRefStatus;
+
+	/// The number of outstanding provider references for the account `who`.
+	fn providers(who: &AccountId) -> Self::RefCount;
+
+	/// The number of outstanding sufficient references for the account `who`.
+	fn sufficients(who: &AccountId) -> Self::RefCount;
+
+	/// The number of outstanding provider and sufficient references for the account `who`.
+	fn reference_count(who: &AccountId) -> Self::RefCount;
+
+	/// Increment the reference counter on an account.
+	///
+	/// The account `who`'s `providers` must be non-zero or this will return an error.
+	fn inc_consumers(who: &AccountId) -> Result<(), Self::IncRefError>;
+
+	/// Decrement the reference counter on an account. This *MUST* only be done once for every time
+	/// you called `inc_consumers` on `who`.
+	fn dec_consumers(who: &AccountId);
+
+	/// The number of outstanding references for the account `who`.
+	fn consumers(who: &AccountId) -> Self::RefCount;
+
+	/// True if the account has some outstanding references.
+	fn is_provider_required(who: &AccountId) -> bool;
 }
 
 #[cfg(test)]

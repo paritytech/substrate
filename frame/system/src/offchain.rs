@@ -63,7 +63,7 @@ use sp_std::convert::{TryInto, TryFrom};
 use sp_std::prelude::{Box, Vec};
 use sp_runtime::app_crypto::RuntimeAppPublic;
 use sp_runtime::traits::{Extrinsic as ExtrinsicT, IdentifyAccount};
-use frame_support::{RuntimeDebug, traits::AccountApi};
+use frame_support::{RuntimeDebug, traits::BasicAccount};
 
 /// Marker struct used to flag using all supported keys to sign a payload.
 pub struct ForAll {}

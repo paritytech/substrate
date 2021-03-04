@@ -1688,16 +1688,10 @@ dependencies = [
  "criterion",
  "frame-support",
  "frame-system",
- "impl-trait-for-tuples",
  "log",
  "parity-scale-codec",
- "serde",
- "sp-core",
  "sp-externalities",
- "sp-io",
- "sp-runtime",
  "sp-std",
- "sp-version",
  "substrate-test-runtime-client",
 ]
 
@@ -5179,7 +5173,6 @@ dependencies = [
 name = "pallet-session"
 version = "3.0.0"
 dependencies = [
- "frame-accounts",
  "frame-support",
  "frame-system",
  "impl-trait-for-tuples",

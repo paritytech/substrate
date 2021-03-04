@@ -18,7 +18,7 @@
 use codec::{Encode, Decode};
 use crate::Config;
 use frame_support::{
-	traits::AccountApi,
+	traits::BasicAccount,
 	weights::DispatchInfo,
 };
 use sp_runtime::{

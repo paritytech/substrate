@@ -123,7 +123,7 @@ use frame_support::{
 	ensure, decl_module, decl_event, decl_storage, decl_error, ConsensusEngineId, Parameter,
 	traits::{
 		Get, FindAuthor, ValidatorRegistration, EstimateNextSessionRotation, EstimateNextNewSession,
-		OneSessionHandler, ValidatorSet,
+		OneSessionHandler, ValidatorSet, ReferencedAccount,
 	},
 	dispatch::{self, DispatchResult, DispatchError},
 	weights::Weight,
@@ -329,7 +329,7 @@ impl<T: Config> ValidatorRegistration<T::ValidatorId> for Module<T> {
 	}
 }
 
-pub trait Config: frame_system::Config + frame_accounts::Config {
+pub trait Config: frame_system::Config {
 	/// The overarching event type.
 	type Event: From<Event> + Into<<Self as frame_system::Config>::Event>;
 
@@ -366,6 +366,9 @@ pub trait Config: frame_system::Config + frame_accounts::Config {
 
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
+
+	/// A way to add reference counters to accounts;
+	type ReferencedAccount: ReferencedAccount<Self::AccountId, Self::Index>;
 }
 
 decl_storage! {
@@ -415,7 +418,7 @@ decl_storage! {
 			for (account, val, keys) in config.keys.iter().cloned() {
 				<Module<T>>::inner_set_keys(&val, keys)
 					.expect("genesis config must not contain duplicates; qed");
-				assert!(frame_accounts::Module::<T>::inc_consumers(&account).is_ok());
+				assert!(T::ReferencedAccount::inc_consumers(&account).is_ok());
 			}
 
 			let initial_validators_0 = T::SessionManager::new_session(0)
@@ -719,10 +722,10 @@ impl<T: Config> Module<T> {
 		let who = T::ValidatorIdOf::convert(account.clone())
 			.ok_or(Error::<T>::NoAssociatedValidatorId)?;
 
-		frame_accounts::Module::<T>::inc_consumers(&account).map_err(|_| Error::<T>::NoAccount)?;
+		T::ReferencedAccount::inc_consumers(&account).map_err(|_| Error::<T>::NoAccount)?;
 		let old_keys = Self::inner_set_keys(&who, keys)?;
 		if old_keys.is_some() {
-			let _ = frame_accounts::Module::<T>::dec_consumers(&account);
+			let _ = T::ReferencedAccount::dec_consumers(&account);
 			// ^^^ Defensive only; Consumers were incremented just before, so should never fail.
 		}
 
@@ -771,7 +774,7 @@ impl<T: Config> Module<T> {
 			let key_data = old_keys.get_raw(*id);
 			Self::clear_key_owner(*id, key_data);
 		}
-		frame_accounts::Module::<T>::dec_consumers(&account);
+		T::ReferencedAccount::dec_consumers(&account);
 
 		Ok(())
 	}

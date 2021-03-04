@@ -4,12 +4,14 @@ use sp_std::{
 	vec::Vec,
 	marker::PhantomData,
 };
-use sp_runtime::{
-	RuntimeDebug,
-	traits::StoredMapError,
-};
-use frame_support::traits::{
-	HandleLifetime, StoredMap, OnNewAccount, OnKilledAccount,
+use frame_support::{
+	sp_runtime::{
+		RuntimeDebug,
+		traits::{StoredMapError, One},
+	},
+	traits::{
+		HandleLifetime, StoredMap, OnNewAccount, OnKilledAccount, ReferencedAccount, BasicAccount,
+	}
 };
 use codec::{Encode, Decode, FullCodec};
 
@@ -82,8 +84,6 @@ pub mod pallet {
 
 	use frame_system::pallet_prelude::*;
 	use frame_support::pallet_prelude::*;
-	use frame_support::traits::AccountApi;
-	use sp_runtime::traits::One;
 
 	/// System configuration trait. Implemented by runtime.
 	#[pallet::config]
@@ -136,7 +136,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {}
 
-	impl<T: Config> AccountApi<T::AccountId, T::Index> for Pallet<T> {
+	impl<T: Config> BasicAccount<T::AccountId, T::Index> for Pallet<T> {
 		type AccountInfo = AccountInfo<T::Index, <T as Config>::AccountData>;
 
 		/// Return whether an account exists in storage.
@@ -177,13 +177,16 @@ pub mod pallet {
 			T::OnKilledAccount::on_killed_account(&who);
 			Self::deposit_event(Event::KilledAccount(who));
 		}
+	}
 
-		pub fn account_exists(who: &T::AccountId) -> bool {
-			Account::<T>::contains_key(who)
-		}
-
+	impl<T: Config> ReferencedAccount<T::AccountId, T::Index> for Pallet<T> {
+		type RefCount = RefCount;
+		type IncRefStatus = IncRefStatus;
+		type DecRefStatus = DecRefStatus;
+		type IncRefError = IncRefError;
+		type DecRefError = DecRefError;
 		/// Increment the provider reference counter on an account.
-		pub fn inc_providers(who: &T::AccountId) -> IncRefStatus {
+		fn inc_providers(who: &T::AccountId) -> IncRefStatus {
 			Account::<T>::mutate(who, |a| if a.providers == 0 && a.sufficients == 0 {
 				// Account is being created.
 				a.providers = 1;
@@ -198,7 +201,7 @@ pub mod pallet {
 		/// Decrement the provider reference counter on an account.
 		///
 		/// This *MUST* only be done once for every time you called `inc_providers` on `who`.
-		pub fn dec_providers(who: &T::AccountId) -> Result<DecRefStatus, DecRefError> {
+		fn dec_providers(who: &T::AccountId) -> Result<DecRefStatus, DecRefError> {
 			Account::<T>::try_mutate_exists(who, |maybe_account| {
 				if let Some(mut account) = maybe_account.take() {
 					if account.providers == 0 {
@@ -239,7 +242,7 @@ pub mod pallet {
 		}
 
 		/// Increment the self-sufficient reference counter on an account.
-		pub fn inc_sufficients(who: &T::AccountId) -> IncRefStatus {
+		fn inc_sufficients(who: &T::AccountId) -> IncRefStatus {
 			Account::<T>::mutate(who, |a| if a.providers + a.sufficients == 0 {
 				// Account is being created.
 				a.sufficients = 1;
@@ -254,7 +257,7 @@ pub mod pallet {
 		/// Decrement the sufficients reference counter on an account.
 		///
 		/// This *MUST* only be done once for every time you called `inc_sufficients` on `who`.
-		pub fn dec_sufficients(who: &T::AccountId) -> DecRefStatus {
+		fn dec_sufficients(who: &T::AccountId) -> DecRefStatus {
 			Account::<T>::mutate_exists(who, |maybe_account| {
 				if let Some(mut account) = maybe_account.take() {
 					if account.sufficients == 0 {
@@ -286,17 +289,17 @@ pub mod pallet {
 		}
 
 		/// The number of outstanding provider references for the account `who`.
-		pub fn providers(who: &T::AccountId) -> RefCount {
+		fn providers(who: &T::AccountId) -> RefCount {
 			Account::<T>::get(who).providers
 		}
 
 		/// The number of outstanding sufficient references for the account `who`.
-		pub fn sufficients(who: &T::AccountId) -> RefCount {
+		fn sufficients(who: &T::AccountId) -> RefCount {
 			Account::<T>::get(who).sufficients
 		}
 
 		/// The number of outstanding provider and sufficient references for the account `who`.
-		pub fn reference_count(who: &T::AccountId) -> RefCount {
+		fn reference_count(who: &T::AccountId) -> RefCount {
 			let a = Account::<T>::get(who);
 			a.providers + a.sufficients
 		}
@@ -304,7 +307,7 @@ pub mod pallet {
 		/// Increment the reference counter on an account.
 		///
 		/// The account `who`'s `providers` must be non-zero or this will return an error.
-		pub fn inc_consumers(who: &T::AccountId) -> Result<(), IncRefError> {
+		fn inc_consumers(who: &T::AccountId) -> Result<(), IncRefError> {
 			Account::<T>::try_mutate(who, |a| if a.providers > 0 {
 				a.consumers = a.consumers.saturating_add(1);
 				Ok(())
@@ -315,7 +318,7 @@ pub mod pallet {
 
 		/// Decrement the reference counter on an account. This *MUST* only be done once for every time
 		/// you called `inc_consumers` on `who`.
-		pub fn dec_consumers(who: &T::AccountId) {
+		fn dec_consumers(who: &T::AccountId) {
 			Account::<T>::mutate(who, |a| if a.consumers > 0 {
 				a.consumers -= 1;
 			} else {
@@ -327,12 +330,12 @@ pub mod pallet {
 		}
 
 		/// The number of outstanding references for the account `who`.
-		pub fn consumers(who: &T::AccountId) -> RefCount {
+		fn consumers(who: &T::AccountId) -> RefCount {
 			Account::<T>::get(who).consumers
 		}
 
 		/// True if the account has some outstanding references.
-		pub fn is_provider_required(who: &T::AccountId) -> bool {
+		fn is_provider_required(who: &T::AccountId) -> bool {
 			Account::<T>::get(who).consumers != 0
 		}
 

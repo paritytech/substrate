@@ -88,7 +88,7 @@ use frame_support::{
 	Parameter, storage,
 	traits::{
 		Contains, Get, PalletInfo,
-		EnsureOrigin, OriginTrait, Filter, AccountApi,
+		EnsureOrigin, OriginTrait, Filter, BasicAccount,
 	},
 	weights::{
 		Weight, RuntimeDbWeight, DispatchInfo, DispatchClass,
@@ -242,7 +242,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type SS58Prefix: Get<u8>;
 
-		type AccountStorage: AccountApi<Self::AccountId, Self::Index>;
+		type AccountStorage: BasicAccount<Self::AccountId, Self::Index>;
 	}
 
 	#[pallet::pallet]

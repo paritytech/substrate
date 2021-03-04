@@ -714,7 +714,7 @@ macro_rules! impl_benchmark {
 				let whitelisted_caller_key =
 					<
 						<T as frame_system::Config>::AccountStorage as
-						$crate::frame_support::traits::AccountApi<T::AccountId, T::Index>
+						$crate::frame_support::traits::BasicAccount<T::AccountId, T::Index>
 					>::hashed_key_for(
 						$crate::whitelisted_caller::<T::AccountId>()
 					);
