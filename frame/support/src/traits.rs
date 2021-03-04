@@ -2237,12 +2237,10 @@ pub trait ExecuteBlock<Block: BlockT> {
 	///
 	/// This will execute all extrinsics in the block and check that the resulting header is correct.
 	///
-	/// Returns the result header.
-	///
 	/// # Panic
 	///
 	/// Panics when an extrinsics panics or the resulting header doesn't match the expected header.
-	fn execute_block(block: Block) -> Block::Header;
+	fn execute_block(block: Block);
 }
 
 #[cfg(test)]

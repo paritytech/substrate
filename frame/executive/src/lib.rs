@@ -174,8 +174,8 @@ where
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
 {
-	fn execute_block(block: Block) -> Block::Header {
-		Executive::<System, Block, Context, UnsignedValidator, AllModules>::execute_block(block)
+	fn execute_block(block: Block) {
+		Executive::<System, Block, Context, UnsignedValidator, AllModules>::execute_block(block);
 	}
 }
 
@@ -312,7 +312,7 @@ where
 	}
 
 	/// Actually execute all transitions for `block`.
-	pub fn execute_block(block: Block) -> Block::Header {
+	pub fn execute_block(block: Block) {
 		sp_io::init_tracing();
 		sp_tracing::within_span! {
 			sp_tracing::info_span!("execute_block", ?block);
@@ -333,7 +333,7 @@ where
 			}
 
 			// any final checks
-			Self::final_checks(&header)
+			Self::final_checks(&header);
 		}
 	}
 
@@ -406,7 +406,7 @@ where
 		Ok(r.map(|_| ()).map_err(|e| e.error))
 	}
 
-	fn final_checks(header: &System::Header) -> System::Header {
+	fn final_checks(header: &System::Header) {
 		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "final_checks");
 		// remove temporaries
 		let new_header = <frame_system::Module<System>>::finalize();
@@ -432,8 +432,6 @@ where
 			header.extrinsics_root() == new_header.extrinsics_root(),
 			"Transaction trie root must be valid.",
 		);
-
-		new_header
 	}
 
 	/// Check a given signed transaction for validity. This doesn't execute any
@@ -771,7 +769,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("1599922f15b2d5cf75e83370e29e13b96fdf799d917a5b6319736af292f21665").into(),
+					state_root: hex!("2c01e6f33d595793119823478b45b36978a8f65a731b5ae3fdfb6330b4cd4b11").into(),
 					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},
