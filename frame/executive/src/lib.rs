@@ -362,10 +362,12 @@ where
 		let max_weight =  <System::BlockWeights as frame_support::traits::Get<_>>::get().max_block;
 		let mut remaining_weight = max_weight.saturating_sub(weight.total());
 
-		let mut reduced_weight = <frame_system::Module<System> as OnIdle<System::BlockNumber>>::on_idle(block_number, remaining_weight);
-		remaining_weight = remaining_weight.saturating_sub(reduced_weight);
-		reduced_weight = <AllModules as OnIdle<System::BlockNumber>>::on_idle(block_number, remaining_weight).saturating_add(reduced_weight);
-		<frame_system::Module::<System>>::register_extra_weight_unchecked(reduced_weight, DispatchClass::Mandatory);
+		if remaining_weight > 0 {
+			let mut reduced_weight = <frame_system::Module<System> as OnIdle<System::BlockNumber>>::on_idle(block_number, remaining_weight);
+			remaining_weight = remaining_weight.saturating_sub(reduced_weight);
+			reduced_weight = <AllModules as OnIdle<System::BlockNumber>>::on_idle(block_number, remaining_weight).saturating_add(reduced_weight);
+			<frame_system::Module::<System>>::register_extra_weight_unchecked(reduced_weight, DispatchClass::Mandatory);
+		}
 
 		<frame_system::Module<System> as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
 		<AllModules as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
@@ -384,10 +386,12 @@ where
 		let max_weight =  <System::BlockWeights as frame_support::traits::Get<_>>::get().max_block;
 		let mut remaining_weight = max_weight.saturating_sub(weight.total());
 
-		let mut reduced_weight = <frame_system::Module<System> as OnIdle<System::BlockNumber>>::on_idle(block_number, remaining_weight);
-		remaining_weight = remaining_weight.saturating_sub(reduced_weight);
-		reduced_weight = <AllModules as OnIdle<System::BlockNumber>>::on_idle(block_number, remaining_weight).saturating_add(reduced_weight);
-		<frame_system::Module::<System>>::register_extra_weight_unchecked(reduced_weight, DispatchClass::Mandatory);
+		if remaining_weight > 0 {
+			let mut reduced_weight = <frame_system::Module<System> as OnIdle<System::BlockNumber>>::on_idle(block_number, remaining_weight);
+			remaining_weight = remaining_weight.saturating_sub(reduced_weight);
+			reduced_weight = <AllModules as OnIdle<System::BlockNumber>>::on_idle(block_number, remaining_weight).saturating_add(reduced_weight);
+			<frame_system::Module::<System>>::register_extra_weight_unchecked(reduced_weight, DispatchClass::Mandatory);
+		}
 
 		<frame_system::Module<System> as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
 		<AllModules as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
