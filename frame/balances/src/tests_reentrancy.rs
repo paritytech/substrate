@@ -47,7 +47,7 @@ type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 fn last_event() -> Event {
-	system::Module::<Test>::events().pop().expect("Event expected").event
+	frame_system::Module::<Test>::events().pop().expect("Event expected").event
 }
 
 frame_support::construct_runtime!(
@@ -57,6 +57,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		Accounts: pallet_accounts::{Module, Call, Storage, Event<T>},
 		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
 	}
 );
@@ -89,6 +90,12 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 }
+impl pallet_accounts::Config for Test {
+	type Event = Event;
+	type OnKilledAccount = ();
+	type OnNewAccount = ();
+	type AccountData = pallet_balances::AccountData<u128>;
+}
 parameter_types! {
 	pub const TransactionByteFee: u64 = 1;
 }
@@ -115,12 +122,13 @@ impl Config for Test {
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = StorageMapShim<
 		super::Account<Test>,
-		system::Provider<Test>,
+		pallet_accounts::Provider<Test>,
 		u64,
 		super::AccountData<u64>,
 	>;
 	type MaxLocks = MaxLocks;
 	type WeightInfo = ();
+	type ReferencedAccount = Accounts;
 }
 
 pub struct ExtBuilder {

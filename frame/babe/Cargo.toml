@@ -33,6 +33,7 @@ sp-timestamp = { version = "3.0.0", default-features = false, path = "../../prim
 log = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]
+pallet-accounts = { version = "3.0.0", path = "../accounts" }
 pallet-balances = { version = "3.0.0", path = "../balances" }
 pallet-offences = { version = "3.0.0", path = "../offences" }
 pallet-staking = { version = "3.0.0", path = "../staking" }

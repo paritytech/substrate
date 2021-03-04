@@ -44,6 +44,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		Accounts: pallet_accounts::{Module, Call, Storage, Event<T>},
 		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
 	}
 );
@@ -76,6 +77,12 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 }
+impl pallet_accounts::Config for Test {
+	type Event = Event;
+	type OnKilledAccount = ();
+	type OnNewAccount = ();
+	type AccountData = ();
+}
 parameter_types! {
 	pub const TransactionByteFee: u64 = 1;
 }
@@ -95,11 +102,12 @@ impl Config for Test {
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = StorageMapShim<
 		super::Account<Test>,
-		system::Provider<Test>,
+		pallet_accounts::Provider<Test>,
 		u64,
 		super::AccountData<u64>,
 	>;
 	type MaxLocks = MaxLocks;
+	type ReferencedAccount = Accounts;
 	type WeightInfo = ();
 }
 
@@ -166,7 +174,7 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 			assert_eq!(
 				events(),
 				[
-					Event::frame_system(system::Event::NewAccount(1)),
+					Event::pallet_accounts(pallet_accounts::Event::NewAccount(1)),
 					Event::pallet_balances(crate::Event::Endowed(1, 100)),
 					Event::pallet_balances(crate::Event::BalanceSet(1, 100, 0)),
 				]
@@ -182,7 +190,7 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 			assert_eq!(
 				events(),
 				[
-					Event::frame_system(system::Event::KilledAccount(1)),
+					Event::pallet_accounts(pallet_accounts::Event::KilledAccount(1)),
 					Event::pallet_balances(crate::Event::DustLost(1, 1)),
 				]
 			);

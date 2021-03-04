@@ -137,12 +137,20 @@ mod tests {
 			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
 			System: frame_system::{Module, Call, Config, Storage, Event<T>},
+			Accounts: pallet_accounts::{Module, Call, Storage, Event<T>},
 			Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
 			AuthorityDiscovery: pallet_authority_discovery::{Module, Call, Config},
 		}
 	);
 
 	impl Config for Test {}
+
+	impl pallet_accounts::Config for Test {
+		type Event = Event;
+		type OnKilledAccount = ();
+		type OnNewAccount = ();
+		type AccountData = ();
+	}
 
 	parameter_types! {
 		pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
@@ -158,6 +166,7 @@ mod tests {
 		type ValidatorIdOf = ConvertInto;
 		type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 		type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
+		type ReferencedAccount = Accounts;
 		type WeightInfo = ();
 	}
 

@@ -4472,6 +4472,7 @@ version = "3.0.0"
 dependencies = [
  "frame-support",
  "frame-system",
+ "pallet-accounts",
  "pallet-balances",
  "parity-scale-codec",
  "serde",
@@ -4508,6 +4509,7 @@ version = "3.0.0"
 dependencies = [
  "frame-support",
  "frame-system",
+ "pallet-accounts",
  "pallet-session",
  "parity-scale-codec",
  "serde",
@@ -4545,6 +4547,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "log",
+ "pallet-accounts",
  "pallet-authorship",
  "pallet-balances",
  "pallet-offences",
