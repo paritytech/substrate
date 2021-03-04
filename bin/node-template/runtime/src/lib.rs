@@ -244,6 +244,7 @@ impl pallet_balances::Config for Runtime {
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = Accounts;
+	type ReferencedAccount = Accounts;
 	type WeightInfo = pallet_balances::weights::SubstrateWeight<Runtime>;
 }
 
