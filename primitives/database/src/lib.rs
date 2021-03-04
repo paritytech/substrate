@@ -110,7 +110,11 @@ impl<H> std::fmt::Debug for dyn Database<H> {
 /// `key` is not currently in the database.
 ///
 /// This may be faster than `get` since it doesn't allocate.
-pub fn with_get<R, H: Clone + AsRef<[u8]>>(db: &dyn Database<H>, col: ColumnId, key: &[u8], mut f: impl FnMut(&[u8]) -> R) -> Option<R> {
+pub fn with_get<R, H: Clone + AsRef<[u8]>>(
+	db: &dyn Database<H>,
+	col: ColumnId,
+	key: &[u8], mut f: impl FnMut(&[u8]) -> R
+) -> Option<R> {
 	let mut result: Option<R> = None;
 	let mut adapter = |k: &_| { result = Some(f(k)); };
 	db.with_get(col, key, &mut adapter);

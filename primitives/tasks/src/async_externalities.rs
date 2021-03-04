@@ -189,14 +189,6 @@ impl Externalities for AsyncExternalities {
 	fn set_whitelist(&mut self, _: Vec<TrackedStorageKey>) {
 		unimplemented!("set_whitelist is not supported in AsyncExternalities")
 	}
-
-	fn storage_index_transaction(&mut self, _index: u32, _offset: u32) -> Result<(), ()> {
-		unimplemented!("storage_index_transaction is not supported in AsyncExternalities");
-	}
-
-	fn storage_renew_transaction_index(&mut self, _index: u32, _hash: &[u8], _size: u32) -> Result<(), ()> {
-		unimplemented!("storage_renew_transaction_index is not supported in AsyncExternalities");
-	}
 }
 
 impl sp_externalities::ExtensionStore for AsyncExternalities {

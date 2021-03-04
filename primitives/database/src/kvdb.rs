@@ -33,7 +33,9 @@ fn handle_err<T>(result: std::io::Result<T>) -> T {
 }
 
 /// Wrap RocksDb database into a trait object that implements `sp_database::Database`
-pub fn as_database<D: KeyValueDB + 'static, H: Clone + AsRef<[u8]>>(db: D) -> std::sync::Arc<dyn Database<H>> {
+pub fn as_database<D, H>(db: D) -> std::sync::Arc<dyn Database<H>>
+	where D: KeyValueDB + 'static, H: Clone + AsRef<[u8]>
+{
 	std::sync::Arc::new(DbAdapter(db))
 }
 

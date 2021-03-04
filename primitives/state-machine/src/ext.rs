@@ -584,7 +584,12 @@ where
 	}
 
 	/// Renew existing piece of data storage.
-	fn storage_renew_transaction_index(&mut self, index: u32, hash: &[u8], size: u32) -> Result<(), ()> {
+	fn storage_renew_transaction_index(
+		&mut self,
+		index: u32,
+		hash: &[u8],
+		size: u32
+	) -> Result<(), ()> {
 		trace!(
 			target: "state",
 			"{:04x}: RenewTransactionIndex ({}) {} bytes",

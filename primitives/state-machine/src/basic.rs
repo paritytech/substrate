@@ -332,14 +332,6 @@ impl Externalities for BasicExternalities {
 	fn set_whitelist(&mut self, _: Vec<TrackedStorageKey>) {
 		unimplemented!("set_whitelist is not supported in Basic")
 	}
-
-	fn storage_index_transaction(&mut self, _index: u32, _offset: u32) -> Result<(), ()> {
-		unimplemented!("storage_index_transaction is not supported by BasicExternalities");
-	}
-
-	fn storage_renew_transaction_index(&mut self, _index: u32, _hash: &[u8], _size: u32) -> Result<(), ()> {
-		unimplemented!("storage_renew_transaction_index is not supported by BasicExternalities");
-	}
 }
 
 impl sp_externalities::ExtensionStore for BasicExternalities {

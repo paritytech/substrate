@@ -1159,9 +1159,11 @@ impl<Block: BlockT> Backend<Block> {
 			let hash = if new_canonical == number_u64 {
 				hash
 			} else {
-				sc_client_api::blockchain::HeaderBackend::hash(&self.blockchain, new_canonical.saturated_into())?
-					.expect("existence of block with number `new_canonical` \
-							implies existence of blocks with all numbers before it; qed")
+				sc_client_api::blockchain::HeaderBackend::hash(
+					&self.blockchain,
+					new_canonical.saturated_into(),
+				)?.expect("existence of block with number `new_canonical` \
+					implies existence of blocks with all numbers before it; qed")
 			};
 
 			trace!(target: "db", "Canonicalize block #{} ({:?})", new_canonical, hash);
@@ -1619,7 +1621,12 @@ fn apply_index_ops<Block: BlockT>(
 		);
 		extrinsic_headers.push((DbHash::from_slice(&hash.as_ref()), extrinsic[..offset].to_vec()));
 	}
-	debug!(target: "db", "DB transaction index: {} inserted, {} renewed", index_map.len(), renewed_map.len());
+	debug!(
+		target: "db",
+		"DB transaction index: {} inserted, {} renewed",
+		index_map.len(),
+		renewed_map.len()
+	);
 	extrinsic_headers.encode()
 }
 
@@ -2684,7 +2691,11 @@ pub(crate) mod tests {
 
 	#[test]
 	fn prune_blocks_on_finalize_with_fork() {
-		let backend = Backend::<Block>::new_test_with_tx_storage(2, 10, TransactionStorageMode::StorageChain);
+		let backend = Backend::<Block>::new_test_with_tx_storage(
+			2,
+			10,
+			TransactionStorageMode::StorageChain
+		);
 		let mut blocks = Vec::new();
 		let mut prev_hash = Default::default();
 		for i in 0 .. 5 {
@@ -2694,7 +2705,15 @@ pub(crate) mod tests {
 		}
 
 		// insert a fork at block 2
-		let fork_hash_root = insert_block(&backend, 2, blocks[1], None, sp_core::H256::random(), vec![2.into()], None);
+		let fork_hash_root = insert_block(
+			&backend,
+			2,
+			blocks[1],
+			None,
+			sp_core::H256::random(),
+			vec![2.into()],
+			None
+		);
 		insert_block(&backend, 3, fork_hash_root, None, H256::random(), vec![3.into(), 11.into()], None);
 		let mut op = backend.begin_operation().unwrap();
 		backend.begin_state_operation(&mut op, BlockId::Hash(blocks[4])).unwrap();
@@ -2718,7 +2737,11 @@ pub(crate) mod tests {
 
 	#[test]
 	fn renew_transaction_storage() {
-		let backend = Backend::<Block>::new_test_with_tx_storage(2, 10, TransactionStorageMode::StorageChain);
+		let backend = Backend::<Block>::new_test_with_tx_storage(
+			2,
+			10,
+			TransactionStorageMode::StorageChain
+		);
 		let mut blocks = Vec::new();
 		let mut prev_hash = Default::default();
 		let x1 = ExtrinsicWrapper::from(0u64).encode();
@@ -2735,7 +2758,15 @@ pub(crate) mod tests {
 					size: x1.len() as u32,
 				});
 			} // else stop renewing
-			let hash = insert_block(&backend, i, prev_hash, None, Default::default(), vec![i.into()], Some(index));
+			let hash = insert_block(
+				&backend,
+				i,
+				prev_hash,
+				None,
+				Default::default(),
+				vec![i.into()],
+				Some(index)
+			);
 			blocks.push(hash);
 			prev_hash = hash;
 		}

@@ -229,10 +229,19 @@ pub trait Externalities: ExtensionStore {
 	fn storage_commit_transaction(&mut self) -> Result<(), ()>;
 
 	/// Index specified transaction slice and store it.
-	fn storage_index_transaction(&mut self, index: u32, offset: u32) -> Result<(), ()>;
+	fn storage_index_transaction(&mut self, _index: u32, _offset: u32) -> Result<(), ()> {
+		unimplemented!("storage_index_transaction");
+	}
 
 	/// Renew existing piece of transaction storage.
-	fn storage_renew_transaction_index(&mut self, index: u32, hash: &[u8], size: u32) -> Result<(), ()>;
+	fn storage_renew_transaction_index(
+		&mut self,
+		_index: u32,
+		_hash: &[u8],
+		_size: u32
+	) -> Result<(), ()> {
+		unimplemented!("storage_renew_transaction_index");
+	}
 
 	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	/// Benchmarking related functionality and shouldn't be used anywhere else!
