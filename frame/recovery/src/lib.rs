@@ -175,7 +175,7 @@ type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 /// Configuration trait.
-pub trait Config: frame_system::Config + frame_accounts::Config {
+pub trait Config: frame_system::Config + pallet_accounts::Config {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
@@ -591,7 +591,7 @@ decl_module! {
 				recovery_config.threshold as usize <= active_recovery.friends.len(),
 				Error::<T>::Threshold
 			);
-			frame_accounts::Module::<T>::inc_consumers(&who).map_err(|_| Error::<T>::BadState)?;
+			pallet_accounts::Module::<T>::inc_consumers(&who).map_err(|_| Error::<T>::BadState)?;
 			// Create the recovery storage item
 			Proxy::<T>::insert(&who, &account);
 			Self::deposit_event(RawEvent::AccountRecovered(account, who));
@@ -680,7 +680,7 @@ decl_module! {
 			// Check `who` is allowed to make a call on behalf of `account`
 			ensure!(Self::proxy(&who) == Some(account), Error::<T>::NotAllowed);
 			Proxy::<T>::remove(&who);
-			frame_accounts::Module::<T>::dec_consumers(&who);
+			pallet_accounts::Module::<T>::dec_consumers(&who);
 		}
 	}
 }

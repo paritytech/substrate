@@ -32,9 +32,9 @@ sp-session = { version = "3.0.0", default-features = false, path = "../../primit
 sp-api = { version = "3.0.0", default-features = false, path = "../../primitives/api" }
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
 pallet-babe = { version = "3.0.0", default-features = false, path = "../../frame/babe" }
-frame-accounts = { version = "3.0.0", default-features = false, path = "../../frame/accounts" }
+pallet-accounts = { version = "3.0.0", default-features = false, path = "../../frame/accounts" }
 frame-system = { version = "3.0.0", default-features = false, path = "../../frame/system" }
-frame-accounts-rpc-runtime-api = { version = "3.0.0", default-features = false, path = "../../frame/accounts/rpc/runtime-api" }
+frame-system-rpc-runtime-api = { version = "3.0.0", default-features = false, path = "../../frame/system/rpc/runtime-api" }
 pallet-timestamp = { version = "3.0.0", default-features = false, path = "../../frame/timestamp" }
 sp-finality-grandpa = { version = "3.0.0", default-features = false, path = "../../primitives/finality-grandpa" }
 sp-trie = { version = "3.0.0", default-features = false, path = "../../primitives/trie" }
@@ -87,9 +87,9 @@ std = [
 	"sp-externalities/std",
 	"sp-state-machine/std",
 	"pallet-babe/std",
-	"frame-accounts-rpc-runtime-api/std",
+	"frame-system-rpc-runtime-api/std",
 	"frame-system/std",
-	"frame-accounts/std",
+	"pallet-accounts/std",
 	"pallet-timestamp/std",
 	"sc-service",
 	"sp-finality-grandpa/std",

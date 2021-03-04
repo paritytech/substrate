@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{self as frame_accounts, *};
+use crate::{self as pallet_accounts, *};
 use sp_std::cell::RefCell;
 use sp_core::H256;
 use frame_support::{
@@ -35,7 +35,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Accounts: frame_accounts::{Module, Call, Storage, Event<T>},
+		Accounts: pallet_accounts::{Module, Call, Storage, Event<T>},
 	}
 );
 
@@ -71,7 +71,7 @@ impl frame_system::Config for Test {
 	type AccountStorage = Accounts;
 }
 
-impl frame_accounts::Config for Test {
+impl pallet_accounts::Config for Test {
 	type Event = Event;
 	type AccountData = u32;
 	type OnNewAccount = ();

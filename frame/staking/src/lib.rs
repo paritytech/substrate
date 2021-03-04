@@ -780,7 +780,7 @@ impl<T: Config> SessionInterface<<T as frame_system::Config>::AccountId> for T w
 	}
 }
 
-pub trait Config: frame_system::Config + frame_accounts::Config + SendTransactionTypes<Call<Self>> {
+pub trait Config: frame_system::Config + pallet_accounts::Config + SendTransactionTypes<Call<Self>> {
 	/// The staking balance.
 	type Currency: LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>;
 

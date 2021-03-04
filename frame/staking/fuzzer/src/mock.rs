@@ -34,7 +34,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Accounts: frame_accounts::{Module, Call, Storage, Event<T>},
+		Accounts: pallet_accounts::{Module, Call, Storage, Event<T>},
 		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
 		Staking: pallet_staking::{Module, Call, Config<T>, Storage, Event<T>, ValidateUnsigned},
 		Indices: pallet_indices::{Module, Call, Storage, Config<T>, Event<T>},
@@ -65,7 +65,7 @@ impl frame_system::Config for Test {
 	type AccountStorage = Accounts;
 }
 
-impl frame_accounts::Config for Test {
+impl pallet_accounts::Config for Test {
 	type Event = Event;
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
@@ -82,6 +82,7 @@ impl pallet_balances::Config for Test {
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = Accounts;
+	type ReferencedAccount = Accounts;
 	type WeightInfo = ();
 }
 impl pallet_indices::Config for Test {
@@ -136,6 +137,7 @@ impl pallet_session::Config for Test {
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = pallet_staking::StashOf<Test>;
 	type DisabledValidatorsThreshold = ();
+	type ReferencedAccount = Accounts;
 	type WeightInfo = ();
 }
 pallet_staking_reward_curve::build! {
@@ -198,4 +200,5 @@ impl pallet_staking::Config for Test {
 	type OffchainSolutionWeightLimit = ();
 	type WeightInfo = ();
 	type ElectionProvider = MockElectionProvider;
+	type ReferencedAccount = Accounts;
 }

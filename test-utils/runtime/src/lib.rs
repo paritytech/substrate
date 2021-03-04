@@ -448,8 +448,8 @@ impl From<frame_system::Event<Runtime>> for Event {
 	}
 }
 
-impl From<frame_accounts::Event<Runtime>> for Event {
-	fn from(_evt: frame_accounts::Event<Runtime>) -> Self {
+impl From<pallet_accounts::Event<Runtime>> for Event {
+	fn from(_evt: pallet_accounts::Event<Runtime>) -> Self {
 		unimplemented!("Not required in tests!")
 	}
 }
@@ -498,7 +498,7 @@ parameter_types! {
 		BlockWeights::with_sensible_defaults(4 * 1024 * 1024, Perbill::from_percent(75));
 }
 
-impl frame_accounts::Config for Runtime {
+impl pallet_accounts::Config for Runtime {
 	type Event = Event;
 	type AccountData = ();
 	type OnNewAccount = ();
@@ -525,7 +525,7 @@ impl frame_system::Config for Runtime {
 	type PalletInfo = Self;
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
-	type AccountStorage = frame_accounts::Pallet::<Runtime>;
+	type AccountStorage = pallet_accounts::Pallet::<Runtime>;
 }
 
 impl pallet_timestamp::Config for Runtime {
@@ -866,7 +866,7 @@ cfg_if! {
 				}
 			}
 
-			impl frame_accounts_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
+			impl frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
 				fn account_nonce(_account: AccountId) -> Index {
 					0
 				}
@@ -1101,7 +1101,7 @@ cfg_if! {
 				}
 			}
 
-			impl frame_accounts_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
+			impl frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
 				fn account_nonce(_account: AccountId) -> Index {
 					0
 				}

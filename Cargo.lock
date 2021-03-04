@@ -1682,28 +1682,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "frame-accounts"
-version = "3.0.0"
-dependencies = [
- "frame-support",
- "frame-system",
- "log",
- "parity-scale-codec",
- "serde",
- "sp-core",
- "sp-io",
- "sp-std",
-]
-
-[[package]]
-name = "frame-accounts-rpc-runtime-api"
-version = "3.0.0"
-dependencies = [
- "parity-scale-codec",
- "sp-api",
-]
-
-[[package]]
 name = "frame-benchmarking"
 version = "3.1.0"
 dependencies = [
@@ -1859,10 +1837,10 @@ name = "frame-system"
 version = "3.0.0"
 dependencies = [
  "criterion",
- "frame-accounts",
  "frame-support",
  "impl-trait-for-tuples",
  "log",
+ "pallet-accounts",
  "parity-scale-codec",
  "serde",
  "sp-core",
@@ -1887,6 +1865,14 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
+]
+
+[[package]]
+name = "frame-system-rpc-runtime-api"
+version = "3.0.0"
+dependencies = [
+ "parity-scale-codec",
+ "sp-api",
 ]
 
 [[package]]
@@ -4106,17 +4092,17 @@ dependencies = [
 name = "node-runtime"
 version = "2.0.1"
 dependencies = [
- "frame-accounts",
- "frame-accounts-rpc-runtime-api",
  "frame-benchmarking",
  "frame-executive",
  "frame-support",
  "frame-system",
  "frame-system-benchmarking",
+ "frame-system-rpc-runtime-api",
  "frame-try-runtime",
  "hex-literal",
  "log",
  "node-primitives",
+ "pallet-accounts",
  "pallet-assets",
  "pallet-authority-discovery",
  "pallet-authorship",
@@ -4220,14 +4206,14 @@ dependencies = [
 name = "node-template-runtime"
 version = "2.0.0"
 dependencies = [
- "frame-accounts",
- "frame-accounts-rpc-runtime-api",
  "frame-benchmarking",
  "frame-executive",
  "frame-support",
  "frame-system",
  "frame-system-benchmarking",
+ "frame-system-rpc-runtime-api",
  "hex-literal",
+ "pallet-accounts",
  "pallet-aura",
  "pallet-balances",
  "pallet-grandpa",
@@ -4450,13 +4436,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-accounts"
+version = "3.0.0"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "log",
+ "parity-scale-codec",
+ "serde",
+ "sp-core",
+ "sp-io",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-assets"
 version = "3.0.0"
 dependencies = [
- "frame-accounts",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "pallet-accounts",
  "pallet-balances",
  "parity-scale-codec",
  "serde",
@@ -4571,11 +4571,11 @@ dependencies = [
 name = "pallet-balances"
 version = "3.0.0"
 dependencies = [
- "frame-accounts",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
  "log",
+ "pallet-accounts",
  "pallet-transaction-payment",
  "parity-scale-codec",
  "serde",
@@ -5125,9 +5125,9 @@ name = "pallet-recovery"
 version = "3.0.0"
 dependencies = [
  "enumflags2",
- "frame-accounts",
  "frame-support",
  "frame-system",
+ "pallet-accounts",
  "pallet-balances",
  "parity-scale-codec",
  "serde",
@@ -5233,12 +5233,12 @@ dependencies = [
 name = "pallet-staking"
 version = "3.0.0"
 dependencies = [
- "frame-accounts",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
  "hex",
  "log",
+ "pallet-accounts",
  "pallet-authorship",
  "pallet-balances",
  "pallet-session",
@@ -5266,10 +5266,10 @@ dependencies = [
 name = "pallet-staking-fuzz"
 version = "0.0.0"
 dependencies = [
- "frame-accounts",
  "frame-support",
  "frame-system",
  "honggfuzz",
+ "pallet-accounts",
  "pallet-balances",
  "pallet-indices",
  "pallet-session",
@@ -9240,7 +9240,7 @@ dependencies = [
 name = "substrate-frame-rpc-system"
 version = "3.0.0"
 dependencies = [
- "frame-accounts-rpc-runtime-api",
+ "frame-system-rpc-runtime-api",
  "futures 0.3.12",
  "jsonrpc-core",
  "jsonrpc-core-client",
@@ -9305,12 +9305,12 @@ name = "substrate-test-runtime"
 version = "2.0.0"
 dependencies = [
  "cfg-if 1.0.0",
- "frame-accounts",
- "frame-accounts-rpc-runtime-api",
  "frame-support",
  "frame-system",
+ "frame-system-rpc-runtime-api",
  "log",
  "memory-db",
+ "pallet-accounts",
  "pallet-babe",
  "pallet-timestamp",
  "parity-scale-codec",

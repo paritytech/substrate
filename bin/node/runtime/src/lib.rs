@@ -206,7 +206,7 @@ impl frame_system::Config for Runtime {
 	type AccountStorage = Accounts;
 }
 
-impl frame_accounts::Config for Runtime {
+impl pallet_accounts::Config for Runtime {
 	type Event = Event;
 	type AccountData = pallet_balances::AccountData<Balance>;
 	type OnNewAccount = ();
@@ -1088,7 +1088,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Accounts: frame_accounts::{Module, Call, Storage, Event<T>},
+		Accounts: pallet_accounts::{Module, Call, Storage, Event<T>},
 		Utility: pallet_utility::{Module, Call, Event},
 		Babe: pallet_babe::{Module, Call, Storage, Config, ValidateUnsigned},
 		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
@@ -1332,10 +1332,10 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl frame_accounts_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
+	impl frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
 		fn account_nonce(account: AccountId) -> Index {
 			use frame_support::traits::BasicAccount;
-			Accounts::account_nonce(account)
+			Accounts::account_nonce(&account)
 		}
 	}
 

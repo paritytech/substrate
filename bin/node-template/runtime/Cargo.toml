@@ -15,7 +15,7 @@ codec = { package = "parity-scale-codec", version = "2.0.0", default-features = 
 
 pallet-aura = { version = "3.0.0", default-features = false, path = "../../../frame/aura" }
 pallet-balances = { version = "3.0.0", default-features = false, path = "../../../frame/balances" }
-frame-accounts = { version = "3.0.0", default-features = false, path = "../../../frame/accounts" }
+pallet-accounts = { version = "3.0.0", default-features = false, path = "../../../frame/accounts" }
 frame-support = { version = "3.0.0", default-features = false, path = "../../../frame/support" }
 pallet-grandpa = { version = "3.0.0", default-features = false, path = "../../../frame/grandpa" }
 pallet-randomness-collective-flip = { version = "3.0.0", default-features = false, path = "../../../frame/randomness-collective-flip" }
@@ -38,7 +38,7 @@ sp-transaction-pool = { version = "3.0.0", default-features = false, path = "../
 sp-version = { version = "3.0.0", default-features = false, path = "../../../primitives/version" }
 
 # Used for the node template's RPCs
-frame-accounts-rpc-runtime-api = { version = "3.0.0", default-features = false, path = "../../../frame/accounts/rpc/runtime-api/" }
+frame-system-rpc-runtime-api = { version = "3.0.0", default-features = false, path = "../../../frame/system/rpc/runtime-api/" }
 pallet-transaction-payment-rpc-runtime-api = { version = "3.0.0", default-features = false, path = "../../../frame/transaction-payment/rpc/runtime-api/" }
 
 # Used for runtime benchmarking
@@ -78,7 +78,7 @@ std = [
 	"sp-transaction-pool/std",
 	"sp-version/std",
 	"frame-system/std",
-	"frame-accounts-rpc-runtime-api/std",
+	"frame-system-rpc-runtime-api/std",
 	"template/std",
 ]
 runtime-benchmarks = [
