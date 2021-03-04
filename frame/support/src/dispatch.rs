@@ -593,7 +593,7 @@ macro_rules! decl_module {
 			$($rest)*
 		);
 	};
-	// compile_error for not hook on_idle in decl_module
+	// compile_error for invalid on_idle function signature in decl_module
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<
