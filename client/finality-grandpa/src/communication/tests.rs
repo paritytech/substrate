@@ -139,6 +139,7 @@ fn config() -> crate::Config {
 		name: None,
 		is_authority: true,
 		observer_enabled: true,
+		telemetry: None,
 	}
 }
 
