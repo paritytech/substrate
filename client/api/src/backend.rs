@@ -201,12 +201,10 @@ pub trait BlockImportOperation<Block: BlockT> {
 	/// overrides block import's best block rule.
 	fn mark_head(&mut self, id: BlockId<Block>) -> sp_blockchain::Result<()>;
 
-
-	/// Add transaction index updates
+	/// Add a transaction index operation.
 	fn update_transaction_index(&mut self, _index: Vec<IndexOperation>) -> sp_blockchain::Result<()>{
 		Ok(())
 	}
-
 }
 
 /// Interface for performing operations on the backend.

@@ -1161,8 +1161,8 @@ impl<Block: BlockT> Backend<Block> {
 			} else {
 				sc_client_api::blockchain::HeaderBackend::hash(&self.blockchain, new_canonical.saturated_into())?
 					.expect("existence of block with number `new_canonical` \
-											implies existence of blocks with all numbers before it; qed")
-			};
+							implies existence of blocks with all numbers before it; qed")
+			}
 
 			trace!(target: "db", "Canonicalize block #{} ({:?})", new_canonical, hash);
 			let commit = self.storage.state_db.canonicalize_block(&hash)
@@ -1304,7 +1304,6 @@ impl<Block: BlockT> Backend<Block> {
 					&pending_block.header.parent_hash(),
 					changeset,
 				).map_err(|e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from_state_db(e))?;
-
 				apply_state_commit(&mut transaction, commit);
 
 				// Check if need to finalize. Genesis is always finalized instantly.
