@@ -1926,12 +1926,12 @@ impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 		self.backend.blockchain().hash(number)
 	}
 
-	fn extrinsic(&self, hash: &Block::Hash) -> sp_blockchain::Result<Option<Block::Extrinsic>> {
-		self.backend.blockchain().extrinsic(hash)
+	fn transaction(&self, hash: &Block::Hash) -> sp_blockchain::Result<Option<Vec<u8>>> {
+		self.backend.blockchain().transaction(hash)
 	}
 
-	fn have_extrinsic(&self, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
-		self.backend.blockchain().have_extrinsic(hash)
+	fn have_transaction(&self, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
+		self.backend.blockchain().have_transaction(hash)
 	}
 }
 

@@ -123,6 +123,8 @@ pub enum IndexOperation {
 	},
 	/// Renew existing transaction storage.
 	Renew {
+		/// Extrinsic index in the current block.
+		extrinsic: u32,
 		/// Referenced index hash.
 		hash: Vec<u8>,
 		/// Expected data size.
@@ -699,6 +701,11 @@ impl OverlayedChanges {
 			Some(value) => self.offchain.set(STORAGE_PREFIX, key, value),
 			None => self.offchain.remove(STORAGE_PREFIX, key),
 		}
+	}
+
+	/// Add transaction index operation.
+	pub fn add_transaction_index(&mut self, op: IndexOperation) {
+		self.transaction_index_ops.push(op)
 	}
 }
 

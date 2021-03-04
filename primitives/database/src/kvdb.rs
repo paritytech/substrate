@@ -52,12 +52,13 @@ impl<D: KeyValueDB, H: Clone + AsRef<[u8]>> Database<H> for DbAdapter<D> {
 					// Add a key suffix for the counter
 					let mut counter_key = key.as_ref().to_vec();
 					counter_key.push(0);
-					match self.0.get(col, key.as_ref()).map_err(|e| error::DatabaseError(Box::new(e)))? {
+					match self.0.get(col, &counter_key).map_err(|e| error::DatabaseError(Box::new(e)))? {
 						Some(data) => {
 							let mut counter_data = [0; 4];
 							if data.len() != 4 {
 								return Err(error::DatabaseError(Box::new(
-										std::io::Error::new(std::io::ErrorKind::Other, "Unexpected counter len"))
+									std::io::Error::new(std::io::ErrorKind::Other,
+										format!("Unexpected counter len {}", data.len())))
 								))
 							}
 							&mut counter_data.copy_from_slice(&data);
@@ -66,7 +67,8 @@ impl<D: KeyValueDB, H: Clone + AsRef<[u8]>> Database<H> for DbAdapter<D> {
 							tx.put(col, &counter_key, &counter.to_le_bytes());
 						} None => {
 							if let Some(value) = value {
-								tx.put(col, &counter_key, &1u32.to_le_bytes());
+								let d = 1u32.to_le_bytes();
+								tx.put(col, &counter_key, &d);
 								tx.put_vec(col, key.as_ref(), value);
 							}
 						}
@@ -76,11 +78,12 @@ impl<D: KeyValueDB, H: Clone + AsRef<[u8]>> Database<H> for DbAdapter<D> {
 					// Add a key suffix for the counter
 					let mut counter_key = key.as_ref().to_vec();
 					counter_key.push(0);
-					if let Some(data) = self.0.get(col, key.as_ref()).map_err(|e| error::DatabaseError(Box::new(e)))? {
+					if let Some(data) = self.0.get(col, &counter_key).map_err(|e| error::DatabaseError(Box::new(e)))? {
 						let mut counter_data = [0; 4];
 						if data.len() != 4 {
 							return Err(error::DatabaseError(Box::new(
-									std::io::Error::new(std::io::ErrorKind::Other, "Unexpected counter len"))
+								std::io::Error::new(std::io::ErrorKind::Other,
+									format!("Unexpected counter {}", data.len())))
 							))
 						}
 						&mut counter_data.copy_from_slice(&data);

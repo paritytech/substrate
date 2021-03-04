@@ -387,10 +387,10 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 		unimplemented!()
 	}
 
-	fn extrinsic(
+	fn transaction(
 		&self,
 		_hash: &Block::Hash,
-	) -> sp_blockchain::Result<Option<<Block as BlockT>::Extrinsic>> {
+	) -> sp_blockchain::Result<Option<Vec<u8>>> {
 		unimplemented!("Not supported by the in-mem backend.")
 	}
 }

@@ -55,6 +55,11 @@ impl<H, N: Ord> FinalizationDisplaced<H, N> {
 		// one transaction, then there will be no overlap in the keys.
 		self.leaves.append(&mut other.leaves);
 	}
+
+	/// Iterate over all displaced blocks.
+	pub fn leaves(&self) -> impl IntoIterator<Item=&H> {
+		self.leaves.values().flatten()
+	}
 }
 
 /// list of leaf hashes ordered by number (descending).
