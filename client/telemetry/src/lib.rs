@@ -486,6 +486,7 @@ enum Register {
 /// # let authority_id = 42_u64;
 /// # let set_id = (43_u64, 44_u64);
 /// # let authorities = vec![45_u64];
+/// # let telemetry: Option<TelemetryHandle> = None;
 /// telemetry!(
 ///     telemetry;      // an `Option<TelemetryHandle>`
 ///     CONSENSUS_INFO;
