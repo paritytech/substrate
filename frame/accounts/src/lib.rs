@@ -387,8 +387,6 @@ impl<T: Config> HandleLifetime<T::AccountId> for Consumer<T> {
 	}
 }
 
-
-
 /// Implement StoredMap for a simple single-item, provide-when-not-default system. This works fine
 /// for storing a single item which allows the account to continue existing as long as it's not
 /// empty/default.
