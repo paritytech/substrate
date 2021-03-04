@@ -1329,28 +1329,28 @@ macro_rules! decl_module {
 		{
 			fn on_runtime_upgrade() -> $return {
 				$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!("on_runtime_upgrade"));
+				let pallet_name = <<
+					$trait_instance
+					as
+					$system::Config
+				>::PalletInfo as $crate::traits::PalletInfo>::name::<Self>().unwrap_or("<unknown pallet name>");
+				let new_storage_version = $crate::crate_to_pallet_version!();
+
+				$crate::log::info!(
+					target: $crate::LOG_TARGET,
+					"⚠️ {} declares internal migrations (which *might* execute), setting storage version to {:?}",
+					pallet_name,
+					new_storage_version,
+				);
+
 				let result: $return = (|| { $( $impl )* })();
 
-				let new_storage_version = $crate::crate_to_pallet_version!();
 				new_storage_version
 					.put_into_storage::<<$trait_instance as $system::Config>::PalletInfo, Self>();
 
 				let additional_write = <
 					<$trait_instance as $system::Config>::DbWeight as $crate::traits::Get<_>
 				>::get().writes(1);
-
-				let pallet_name = <<
-					$trait_instance
-					as
-					$system::Config
-				>::PalletInfo as $crate::traits::PalletInfo>::name::<Self>().expect("pallet will have name in the runtime; qed");
-
-				$crate::log::info!(
-					target: $crate::LOG_TARGET,
-					"⚠️ running migration for {} and setting new storage version to {:?}",
-					pallet_name,
-					new_storage_version,
-				);
 
 				result.saturating_add(additional_write)
 			}
@@ -1378,27 +1378,24 @@ macro_rules! decl_module {
 		{
 			fn on_runtime_upgrade() -> $crate::dispatch::Weight {
 				$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!("on_runtime_upgrade"));
-
-				let new_storage_version = $crate::crate_to_pallet_version!();
-				new_storage_version
-					.put_into_storage::<<$trait_instance as $system::Config>::PalletInfo, Self>();
-
 				let pallet_name = <<
 					$trait_instance
 					as
 					$system::Config
-				>::PalletInfo as $crate::traits::PalletInfo>::name::<Self>().expect("pallet will have name in the runtime; qed");
+				>::PalletInfo as $crate::traits::PalletInfo>::name::<Self>().unwrap_or("<unknown pallet name>");
+				let new_storage_version = $crate::crate_to_pallet_version!();
 
 				$crate::log::info!(
 					target: $crate::LOG_TARGET,
-					"✅ no migration for '{}' and setting new storage version to {:?}",
+					"✅ no migration for {}, setting storage version to {:?}",
 					pallet_name,
 					new_storage_version,
 				);
 
-				<
-					<$trait_instance as $system::Config>::DbWeight as $crate::traits::Get<_>
-				>::get().writes(1)
+				new_storage_version
+					.put_into_storage::<<$trait_instance as $system::Config>::PalletInfo, Self>();
+
+				<<$trait_instance as $system::Config>::DbWeight as $crate::traits::Get<_>>::get().writes(1)
 			}
 
 			#[cfg(feature = "try-runtime")]
