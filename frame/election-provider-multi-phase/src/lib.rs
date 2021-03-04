@@ -121,11 +121,11 @@
 //! ### Challenge Phase
 //!
 //! The challenge phase is designed to ensure that only solutions which exceed an absolute quality
-//! floor are accepted. During this phase, miners can download the best feasible solution and subject it
-//! to a (very expensive) offchain PJR check. In the event that this check fails, they will discover a
-//! counterexample. The counterexample is a small piece of data which can be used to cheaply prove that the solution does
-//! not satisfy PJR. They can then submit a transaction containing this counterexample. One of a few
-//! things can happen then:
+//! floor are accepted. During this phase, miners can download the best feasible solution and
+//! subject it to a (very expensive) offchain PJR check. In the event that this check fails, they
+//! will discover a counterexample. The counterexample is a small piece of data which can be used to
+//! cheaply prove that the solution does not satisfy PJR. They can then submit a transaction
+//! containing this counterexample. One of a few things can happen then:
 //!
 //! - The counterexample correctly disproves the solution: solution author slashed, solution
 //!   discarded, miner rewarded. We must then fall back to an on-chain election.
@@ -133,9 +133,17 @@
 //!   miner receives minor reward, but solution is retained
 //! - The counterexample fails to disprove the solution: miner slashed
 //!
-//! > TODO: link to PJR docs
+//! It's worth noting how PJR severity is defined. The PJR property is defined in terms of a
+//! threshold. This threshold is an arbitrary positive number; the PJR property guarantees only that
+//! the property is stronger when the threshold is smaller. There exists a standard threshold, which
+//! can be computed from the voting solution.
 //!
-//! > TODO: define more precisely how to determine whether a PJR violation is "severe".
+//! For a counterexample to cause the solution author to be slashed, it must cause the PJR check to
+//! fail at the standard threshold. For a counterexample to give the challenge miner a reward but
+//! cause no slash, it must cause the cause the PJR check to fail at threshold _t'_. The exact ratio
+//! is set by governance, but by default, `t' = t * 1.1`.
+//!
+//! > TODO: link to PJR docs
 //!
 //! ### Fallback
 //!
