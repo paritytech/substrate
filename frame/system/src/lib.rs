@@ -568,10 +568,10 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type UpgradedToU32RefCount<T: Config> = StorageValue<_, bool, ValueQuery>;
 
-	/// True if we have upgraded so that AccountInfo contains two types of `RefCount`. False
+	/// True if we have upgraded so that AccountInfo contains three types of `RefCount`. False
 	/// (default) if not.
 	#[pallet::storage]
-	pub(super) type UpgradedToDualRefCount<T: Config> = StorageValue<_, bool, ValueQuery>;
+	pub(super) type UpgradedToTripleRefCount<T: Config> = StorageValue<_, bool, ValueQuery>;
 
 	/// The execution phase of the block.
 	#[pallet::storage]
@@ -601,7 +601,7 @@ pub mod pallet {
 			<ParentHash<T>>::put::<T::Hash>(hash69());
 			<LastRuntimeUpgrade<T>>::put(LastRuntimeUpgradeInfo::from(T::Version::get()));
 			<UpgradedToU32RefCount<T>>::put(true);
-			<UpgradedToDualRefCount<T>>::put(true);
+			<UpgradedToTripleRefCount<T>>::put(true);
 
 			sp_io::storage::set(well_known_keys::CODE, &self.code);
 			sp_io::storage::set(well_known_keys::EXTRINSIC_INDEX, &0u32.encode());
@@ -717,8 +717,11 @@ pub struct AccountInfo<Index, AccountData> {
 	/// cannot be reaped until this is zero.
 	pub consumers: RefCount,
 	/// The number of other modules that allow this account to exist. The account may not be reaped
-	/// until this is zero.
+	/// until this and `sufficients` are both zero.
 	pub providers: RefCount,
+	/// The number of modules that allow this account to exist for their own purposes only. The
+	/// account may not be reaped until this and `providers` are both zero.
+	pub sufficients: RefCount,
 	/// The additional data that belongs to this account. Used to store the balance(s) in a lot of
 	/// chains.
 	pub data: AccountData,
@@ -929,8 +932,8 @@ pub enum RefStatus {
 	Unreferenced,
 }
 
-/// Some resultant status relevant to incrementing a provider reference.
-#[derive(RuntimeDebug)]
+/// Some resultant status relevant to incrementing a provider/self-sufficient reference.
+#[derive(Eq, PartialEq, RuntimeDebug)]
 pub enum IncRefStatus {
 	/// Account was created.
 	Created,
@@ -938,8 +941,8 @@ pub enum IncRefStatus {
 	Existed,
 }
 
-/// Some resultant status relevant to decrementing a provider reference.
-#[derive(RuntimeDebug)]
+/// Some resultant status relevant to decrementing a provider/self-sufficient reference.
+#[derive(Eq, PartialEq, RuntimeDebug)]
 pub enum DecRefStatus {
 	/// Account was destroyed.
 	Reaped,
@@ -948,14 +951,14 @@ pub enum DecRefStatus {
 }
 
 /// Some resultant status relevant to decrementing a provider reference.
-#[derive(RuntimeDebug)]
+#[derive(Eq, PartialEq, RuntimeDebug)]
 pub enum DecRefError {
 	/// Account cannot have the last provider reference removed while there is a consumer.
 	ConsumerRemaining,
 }
 
-/// Some resultant status relevant to incrementing a provider reference.
-#[derive(RuntimeDebug)]
+/// Some resultant status relevant to incrementing a consumer reference.
+#[derive(Eq, PartialEq, RuntimeDebug)]
 pub enum IncRefError {
 	/// Account cannot introduce a consumer while there are no providers.
 	NoProviders,
