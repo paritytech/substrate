@@ -2242,6 +2242,7 @@ pub trait ExtrinsicCall: sp_runtime::traits::Extrinsic {
 	fn call(&self) -> &Self::Call;
 }
 
+#[cfg(feature = "std")]
 impl<Call, Extra> ExtrinsicCall for sp_runtime::testing::TestXt<Call, Extra> where
 	Call: Codec + Sync + Send,
 {
