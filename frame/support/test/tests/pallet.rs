@@ -282,18 +282,33 @@ pub mod pallet {
 	pub const INHERENT_IDENTIFIER: sp_inherents::InherentIdentifier = *b"testpall";
 }
 
-// Test that a pallet with non generic event and generic genesis_config is correctly handled
+// Test that:
+// * a pallet with non generic event and generic genesis_config is correctly handled
+// * autoweight works
 #[frame_support::pallet]
 pub mod pallet2 {
 	use super::{SomeType1, SomeAssociation1};
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
+	pub trait WeightInfo {
+		fn foo() -> Weight;
+		fn bar(a: u32) -> Weight;
+		fn bar2(a: u32, b: u32) -> Weight;
+	}
+
+	impl WeightInfo for () {
+		fn foo() -> Weight { 0 }
+		fn bar(_a: u32) -> Weight { 0 }
+		fn bar2(_a: u32, _b: u32) -> Weight { 0 }
+	}
+
 	#[pallet::config]
 	pub trait Config: frame_system::Config
 	where <Self as frame_system::Config>::AccountId: From<SomeType1> + SomeAssociation1,
 	{
 		type Event: From<Event> + IsType<<Self as frame_system::Config>::Event>;
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::pallet]
@@ -307,9 +322,25 @@ pub mod pallet2 {
 	}
 
 	#[pallet::call]
+	// NOTE: the generated code only works because WeightInfo trait is in scope, but we can't
+	// specify `<T::WeightInfo as WeightInfo>` as it cannot be parsed as a `syn::Type`.
+	#[pallet::weight_info(T::WeightInfo)]
 	impl<T: Config> Pallet<T>
 	where T::AccountId: From<SomeType1> + SomeAssociation1,
 	{
+		fn foo(_origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+			Ok(().into())
+		}
+		#[pallet::autoweight(a.len() as u32)]
+		fn bar(_origin: OriginFor<T>, a: Vec<u32>) -> DispatchResultWithPostInfo {
+			let _ = a;
+			Ok(().into())
+		}
+		#[pallet::autoweight(a.len() as u32, *b)]
+		fn bar2(_origin: OriginFor<T>, a: Vec<u32>, b: u32) -> DispatchResultWithPostInfo {
+			let _ = (a, b);
+			Ok(().into())
+		}
 	}
 
 	#[pallet::event]
@@ -384,6 +415,7 @@ impl pallet::Config for Runtime {
 
 impl pallet2::Config for Runtime {
 	type Event = Event;
+	type WeightInfo = ();
 }
 
 pub type Header = sp_runtime::generic::Header<u32, sp_runtime::traits::BlakeTwo256>;

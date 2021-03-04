@@ -24,6 +24,8 @@ mod keyword {
 	syn::custom_keyword!(Call);
 	syn::custom_keyword!(OriginFor);
 	syn::custom_keyword!(weight);
+	syn::custom_keyword!(autoweight);
+	syn::custom_keyword!(weight_info);
 	syn::custom_keyword!(compact);
 	syn::custom_keyword!(T);
 	syn::custom_keyword!(pallet);
@@ -55,10 +57,15 @@ pub struct CallVariantDef {
 	pub docs: Vec<syn::Lit>,
 }
 
+type AutoweightArgs = syn::punctuated::Punctuated<syn::Expr, syn::token::Comma>;
+
 /// Attributes for functions in call impl block.
-/// Parse for `#[pallet::weight(expr)]`
-pub struct FunctionAttr {
-	weight: syn::Expr,
+/// Parse for:
+/// * `#[pallet::weight(expr)]`
+/// * `#[pallet::autoweight(expr)]`
+enum FunctionAttr {
+	Weight(syn::Expr),
+	Autoweight(AutoweightArgs),
 }
 
 impl syn::parse::Parse for FunctionAttr {
@@ -68,18 +75,53 @@ impl syn::parse::Parse for FunctionAttr {
 		syn::bracketed!(content in input);
 		content.parse::<keyword::pallet>()?;
 		content.parse::<syn::Token![::]>()?;
-		content.parse::<keyword::weight>()?;
 
-		let weight_content;
-		syn::parenthesized!(weight_content in content);
-		Ok(FunctionAttr {
-			weight: weight_content.parse::<syn::Expr>()?,
-		})
+		let lookahead = content.lookahead1();
+		if lookahead.peek(keyword::weight) {
+			content.parse::<keyword::weight>()?;
+
+			let weight_content;
+			syn::parenthesized!(weight_content in content);
+			Ok(FunctionAttr::Weight(weight_content.parse::<syn::Expr>()?))
+		} else if lookahead.peek(keyword::autoweight) {
+			content.parse::<keyword::autoweight>()?;
+
+			let weight_content;
+			syn::parenthesized!(weight_content in content);
+			let args = AutoweightArgs::parse_terminated(&weight_content)?;
+			Ok(FunctionAttr::Autoweight(args))
+		} else {
+			Err(lookahead.error())
+		}
+	}
+}
+
+/// Generate the weight formula from the attribute for the call.
+///
+/// Fails if autoweight or no attribute are used while weight_info is not defined.
+fn call_weight_formula(
+	call_attr: Option<FunctionAttr>,
+	weight_info: &Option<syn::Type>,
+	call_name: &syn::Ident,
+	call_span: proc_macro2::Span,
+) -> syn::Result<syn::Expr> {
+	match (call_attr, weight_info) {
+		(Some(FunctionAttr::Weight(expr)), _) => Ok(expr),
+		(Some(FunctionAttr::Autoweight(expr)), Some(weight_info)) =>
+			Ok(syn::parse_quote!(#weight_info :: #call_name ( #expr ) )),
+		(None, Some(weight_info)) =>
+			Ok(syn::parse_quote!(#weight_info :: #call_name () )),
+		_ => {
+			let msg = "Invalid pallet::call, weight must be specified with \
+				`#[pallet::weight($expr)]` or otherwise weight info type must be specified on the
+				impl item with `#[pallet::weight_info($type)]`.";
+			return Err(syn::Error::new(call_span, msg));
+		}
 	}
 }
 
 /// Attribute for arguments in function in call impl block.
-/// Parse for `#[pallet::compact]|
+/// Parse for `#[pallet::compact]`
 pub struct ArgAttrIsCompact;
 
 impl syn::parse::Parse for ArgAttrIsCompact {
@@ -121,6 +163,50 @@ pub fn check_dispatchable_first_arg_type(ty: &syn::Type) -> syn::Result<()> {
 	Ok(())
 }
 
+/// Attribute for Call: can define the weight_info
+///
+/// Syntax is: `#[pallet::weight_info($type)]`.
+struct PalletCallAttr {
+	weight_info: syn::Type,
+	span: proc_macro2::Span,
+}
+
+impl syn::parse::Parse for PalletCallAttr {
+	fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+		let span = input.span();
+		input.parse::<syn::Token![#]>()?;
+		let content;
+		syn::bracketed!(content in input);
+		content.parse::<keyword::pallet>()?;
+		content.parse::<syn::Token![::]>()?;
+		content.parse::<keyword::weight_info>()?;
+
+		let weight_info_content;
+		syn::parenthesized!(weight_info_content in content);
+		Ok(PalletCallAttr {
+			span,
+			weight_info: weight_info_content.parse()?,
+		})
+	}
+}
+
+/// Process the attribute given to pallet::call item return optional weight info.
+///
+/// Only at most one `#[pallet::weight_info(..)]` is allowed, weight info type is returned if
+/// attribute is given.
+fn process_pallet_call_attrs(mut attrs: Vec<PalletCallAttr>) -> syn::Result<Option<syn::Type>> {
+	if attrs.len() > 1 {
+		let msg = "duplicate attribute, at most one `pallet::weight_info` is expected";
+		let mut err = syn::Error::new(attrs[0].span, msg);
+		for attr in &attrs[1..] {
+			err.combine(syn::Error::new(attr.span, msg));
+		}
+		return Err(err);
+	}
+
+	Ok(attrs.pop().map(|attr| attr.weight_info))
+}
+
 impl CallDef {
 	pub fn try_from(
 		attr_span: proc_macro2::Span,
@@ -132,6 +218,9 @@ impl CallDef {
 		} else {
 			return Err(syn::Error::new(item.span(), "Invalid pallet::call, expected item impl"));
 		};
+
+		let call_attrs: Vec<PalletCallAttr> = helper::take_item_attrs(&mut item.attrs)?;
+		let weight_info = process_pallet_call_attrs(call_attrs)?;
 
 		let mut instances = vec![];
 		instances.push(helper::check_impl_gen(&item.generics, item.impl_token.span())?);
@@ -172,15 +261,18 @@ impl CallDef {
 				let mut call_var_attrs: Vec<FunctionAttr> =
 					helper::take_item_attrs(&mut method.attrs)?;
 
-				if call_var_attrs.len() != 1 {
-					let msg = if call_var_attrs.is_empty() {
-						"Invalid pallet::call, requires weight attribute i.e. `#[pallet::weight($expr)]`"
-					} else {
-						"Invalid pallet::call, too many weight attributes given"
-					};
-					return Err(syn::Error::new(method.sig.span(), msg));
+				if call_var_attrs.len() > 1 {
+					return Err(syn::Error::new(
+						method.sig.span(),
+						"Invalid pallet::call, too many weight attributes given",
+					));
 				}
-				let weight = call_var_attrs.pop().unwrap().weight;
+				let weight = call_weight_formula(
+					call_var_attrs.pop(),
+					&weight_info,
+					&method.sig.ident,
+					method.sig.span(),
+				)?;
 
 				let mut args = vec![];
 				for arg in method.sig.inputs.iter_mut().skip(1) {

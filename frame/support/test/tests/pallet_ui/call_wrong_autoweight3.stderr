@@ -1,0 +1,16 @@
+error[E0061]: this function takes 2 arguments but 3 arguments were supplied
+  --> $DIR/call_wrong_autoweight3.rs:22:24
+   |
+22 |       #[pallet::weight_info(WeightInfo)]
+   |  ___________________________^
+23 | |     impl<T: Config> Pallet<T> {
+24 | |         #[pallet::autoweight(*a, *a, *a)]
+   | |                              --  --  -- supplied 3 arguments
+25 | |         fn foo(origin: OriginFor<T>, a: u32) -> DispatchResultWithPostInfo {
+   | |______________^ expected 2 arguments
+   |
+note: associated function defined here
+  --> $DIR/call_wrong_autoweight3.rs:17:6
+   |
+17 |         fn foo(a: u32, b: u32) -> Weight {
+   |            ^^^---------

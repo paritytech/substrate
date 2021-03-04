@@ -1,0 +1,5 @@
+error: unexpected token
+  --> $DIR/call_wrong_weight_info.rs:16:28
+   |
+16 |     #[pallet::weight_info(not a type)]
+   |                               ^

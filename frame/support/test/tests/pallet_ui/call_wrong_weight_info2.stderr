@@ -1,0 +1,23 @@
+error[E0277]: the trait bound `NotWeight: WeighData<()>` is not satisfied
+  --> $DIR/call_wrong_weight_info2.rs:22:12
+   |
+22 |     #[pallet::call]
+   |               ^^^^ the trait `WeighData<()>` is not implemented for `NotWeight`
+   |
+   = note: required for the cast to the object type `dyn WeighData<()>`
+
+error[E0277]: the trait bound `NotWeight: ClassifyDispatch<()>` is not satisfied
+  --> $DIR/call_wrong_weight_info2.rs:22:12
+   |
+22 |     #[pallet::call]
+   |               ^^^^ the trait `ClassifyDispatch<()>` is not implemented for `NotWeight`
+   |
+   = note: required for the cast to the object type `dyn ClassifyDispatch<()>`
+
+error[E0277]: the trait bound `NotWeight: PaysFee<()>` is not satisfied
+  --> $DIR/call_wrong_weight_info2.rs:22:12
+   |
+22 |     #[pallet::call]
+   |               ^^^^ the trait `PaysFee<()>` is not implemented for `NotWeight`
+   |
+   = note: required for the cast to the object type `dyn PaysFee<()>`

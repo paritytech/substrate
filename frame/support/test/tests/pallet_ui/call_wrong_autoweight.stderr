@@ -1,0 +1,23 @@
+error[E0061]: this function takes 2 arguments but 0 arguments were supplied
+  --> $DIR/call_wrong_autoweight.rs:22:24
+   |
+1  |    #[frame_support::pallet]
+   |   _________________________-
+2  |  | mod pallet {
+3  |  |     use frame_support::pallet_prelude::{Hooks, Weight, DispatchResultWithPostInfo};
+4  |  |     use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
+...   |
+22 |  |     #[pallet::weight_info(WeightInfo)]
+   |  |___________________________^
+23 | ||     impl<T: Config> Pallet<T> {
+24 | ||         fn foo(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+   | ||              ^
+   | ||______________|
+   | |_______________supplied 0 arguments
+   |                 expected 2 arguments
+   |
+note: associated function defined here
+  --> $DIR/call_wrong_autoweight.rs:17:6
+   |
+17 |         fn foo(a: u32, b: u32) -> Weight {
+   |            ^^^---------

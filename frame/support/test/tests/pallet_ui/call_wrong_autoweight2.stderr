@@ -1,0 +1,5 @@
+error[E0308]: mismatched types
+  --> $DIR/call_wrong_autoweight2.rs:24:24
+   |
+24 |         #[pallet::autoweight(a)]
+   |                              ^ expected `u32`, found `&u64`
