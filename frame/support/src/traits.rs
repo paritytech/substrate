@@ -2245,13 +2245,13 @@ pub trait ExecuteBlock<Block: BlockT> {
 
 /// A minimal API for creating an account system compatible with FRAME System.
 pub trait AccountApi<AccountId, Index> {
-	type AccountData;
+	type AccountInfo;
 
 	/// Return whether an account exists in storage.
 	fn account_exists(who: &AccountId) -> bool;
 
 	/// Return the data for an account.
-	fn get(who: &AccountId) -> Self::AccountData;
+	fn get(who: &AccountId) -> Self::AccountInfo;
 
 	/// Retrieve the account transaction counter from storage.
 	fn account_nonce(who: AccountId) -> Index;

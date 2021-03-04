@@ -22,8 +22,11 @@ pub struct AccountInfo<Index, AccountData> {
 	/// cannot be reaped until this is zero.
 	pub consumers: RefCount,
 	/// The number of other modules that allow this account to exist. The account may not be reaped
-	/// until this is zero.
+	/// until this and `sufficients` are both zero.
 	pub providers: RefCount,
+	/// The number of modules that allow this account to exist for their own purposes only. The
+	/// account may not be reaped until this and `providers` are both zero.
+	pub sufficients: RefCount,
 	/// The additional data that belongs to this account. Used to store the balance(s) in a lot of
 	/// chains.
 	pub data: AccountData,
@@ -100,6 +103,7 @@ pub mod pallet {
 
 	/// Event for the Accounts pallet.
 	#[pallet::event]
+	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	#[pallet::metadata(T::AccountId = "AccountId")]
 	pub enum Event<T: Config> {
 		/// A new \[account\] was created.
@@ -130,7 +134,7 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {}
 
 	impl<T: Config> AccountApi<T::AccountId, T::Index> for Pallet<T> {
-		type AccountData = T::AccountData;
+		type AccountInfo = AccountInfo<T::Index, <T as Config>::AccountData>;
 
 		/// Return whether an account exists in storage.
 		fn account_exists(who: &T::AccountId) -> bool {
@@ -138,7 +142,7 @@ pub mod pallet {
 		}
 
 		/// Return the data for an account
-		fn get(who: &T::AccountId) -> Self::AccountData {
+		fn get(who: &T::AccountId) -> Self::AccountInfo {
 			Account::<T>::get(who)
 		}
 
@@ -166,14 +170,16 @@ pub mod pallet {
 			Self::deposit_event(Event::KilledAccount(who));
 		}
 
-		/// Increment the reference counter on an account.
-		///
-		/// The account `who`'s `providers` must be non-zero or this will return an error.
+		pub fn account_exists(who: &T::AccountId) -> bool {
+			Account::<T>::contains_key(who)
+		}
+
+		/// Increment the provider reference counter on an account.
 		pub fn inc_providers(who: &T::AccountId) -> IncRefStatus {
-			Account::<T>::mutate(who, |a| if a.providers == 0 {
+			Account::<T>::mutate(who, |a| if a.providers == 0 && a.sufficients == 0 {
 				// Account is being created.
 				a.providers = 1;
-				frame_system::Module::<T>::on_created_account(who.clone(), a);
+				Self::on_created_account(who.clone(), a);
 				IncRefStatus::Created
 			} else {
 				a.providers = a.providers.saturating_add(1);
@@ -181,30 +187,34 @@ pub mod pallet {
 			})
 		}
 
-		/// Decrement the reference counter on an account. This *MUST* only be done once for every time
-		/// you called `inc_consumers` on `who`.
+		/// Decrement the provider reference counter on an account.
+		///
+		/// This *MUST* only be done once for every time you called `inc_providers` on `who`.
 		pub fn dec_providers(who: &T::AccountId) -> Result<DecRefStatus, DecRefError> {
 			Account::<T>::try_mutate_exists(who, |maybe_account| {
 				if let Some(mut account) = maybe_account.take() {
-					match (account.providers, account.consumers) {
-						(0, _) => {
-							// Logic error - cannot decrement beyond zero and no item should
-							// exist with zero providers.
-							log::error!(
-								target: "runtime::system",
-								"Logic error: Unexpected underflow in reducing provider",
-							);
-							Ok(DecRefStatus::Reaped)
-						},
-						(1, 0) => {
-							frame_system::Module::<T>::on_killed_account(who.clone());
+					if account.providers == 0 {
+						// Logic error - cannot decrement beyond zero.
+						log::error!(
+							target: "runtime::system",
+							"Logic error: Unexpected underflow in reducing provider",
+						);
+						account.providers = 1;
+					}
+					match (account.providers, account.consumers, account.sufficients) {
+						(1, 0, 0) => {
+							// No providers left (and no consumers) and no sufficients. Account dead.
+
+							Module::<T>::on_killed_account(who.clone());
 							Ok(DecRefStatus::Reaped)
 						}
-						(1, _) => {
+						(1, c, _) if c > 0 => {
 							// Cannot remove last provider if there are consumers.
 							Err(DecRefError::ConsumerRemaining)
 						}
-						(x, _) => {
+						(x, _, _) => {
+							// Account will continue to exist as there is either > 1 provider or
+							// > 0 sufficients.
 							account.providers = x - 1;
 							*maybe_account = Some(account);
 							Ok(DecRefStatus::Exists)
@@ -220,9 +230,67 @@ pub mod pallet {
 			})
 		}
 
-		/// The number of outstanding references for the account `who`.
+		/// Increment the self-sufficient reference counter on an account.
+		pub fn inc_sufficients(who: &T::AccountId) -> IncRefStatus {
+			Account::<T>::mutate(who, |a| if a.providers + a.sufficients == 0 {
+				// Account is being created.
+				a.sufficients = 1;
+				Self::on_created_account(who.clone(), a);
+				IncRefStatus::Created
+			} else {
+				a.sufficients = a.sufficients.saturating_add(1);
+				IncRefStatus::Existed
+			})
+		}
+
+		/// Decrement the sufficients reference counter on an account.
+		///
+		/// This *MUST* only be done once for every time you called `inc_sufficients` on `who`.
+		pub fn dec_sufficients(who: &T::AccountId) -> DecRefStatus {
+			Account::<T>::mutate_exists(who, |maybe_account| {
+				if let Some(mut account) = maybe_account.take() {
+					if account.sufficients == 0 {
+						// Logic error - cannot decrement beyond zero.
+						log::error!(
+							target: "runtime::system",
+							"Logic error: Unexpected underflow in reducing sufficients",
+						);
+					}
+					match (account.sufficients, account.providers) {
+						(0, 0) | (1, 0) => {
+							Module::<T>::on_killed_account(who.clone());
+							DecRefStatus::Reaped
+						}
+						(x, _) => {
+							account.sufficients = x - 1;
+							*maybe_account = Some(account);
+							DecRefStatus::Exists
+						}
+					}
+				} else {
+					log::error!(
+						target: "runtime::system",
+						"Logic error: Account already dead when reducing provider",
+					);
+					DecRefStatus::Reaped
+				}
+			})
+		}
+
+		/// The number of outstanding provider references for the account `who`.
 		pub fn providers(who: &T::AccountId) -> RefCount {
 			Account::<T>::get(who).providers
+		}
+
+		/// The number of outstanding sufficient references for the account `who`.
+		pub fn sufficients(who: &T::AccountId) -> RefCount {
+			Account::<T>::get(who).sufficients
+		}
+
+		/// The number of outstanding provider and sufficient references for the account `who`.
+		pub fn reference_count(who: &T::AccountId) -> RefCount {
+			let a = Account::<T>::get(who);
+			a.providers + a.sufficients
 		}
 
 		/// Increment the reference counter on an account.
@@ -260,12 +328,9 @@ pub mod pallet {
 			Account::<T>::get(who).consumers != 0
 		}
 
-
-		pub fn insert(who: T::AccountId, account: T::AccountData) {
-			Account::<T>::insert(who, account)
-		}
 	}
 }
+
 
 /// Event handler which registers a provider when created.
 pub struct Provider<T>(PhantomData<T>);
@@ -283,6 +348,19 @@ impl<T: Config> HandleLifetime<T::AccountId> for Provider<T> {
 	}
 }
 
+/// Event handler which registers a self-sufficient when created.
+pub struct SelfSufficient<T>(PhantomData<T>);
+impl<T: Config> HandleLifetime<T::AccountId> for SelfSufficient<T> {
+	fn created(t: &T::AccountId) -> Result<(), StoredMapError> {
+		Module::<T>::inc_sufficients(t);
+		Ok(())
+	}
+	fn killed(t: &T::AccountId) -> Result<(), StoredMapError> {
+		Module::<T>::dec_sufficients(t);
+		Ok(())
+	}
+}
+
 /// Event handler which registers a consumer when created.
 pub struct Consumer<T>(PhantomData<T>);
 impl<T: Config> HandleLifetime<T::AccountId> for Consumer<T> {
@@ -297,6 +375,7 @@ impl<T: Config> HandleLifetime<T::AccountId> for Consumer<T> {
 		Ok(())
 	}
 }
+
 
 
 /// Implement StoredMap for a simple single-item, provide-when-not-default system. This works fine

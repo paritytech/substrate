@@ -5175,6 +5175,7 @@ dependencies = [
 name = "pallet-session"
 version = "3.0.0"
 dependencies = [
+ "frame-accounts",
  "frame-support",
  "frame-system",
  "impl-trait-for-tuples",

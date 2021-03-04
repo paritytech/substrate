@@ -448,6 +448,12 @@ impl From<frame_system::Event<Runtime>> for Event {
 	}
 }
 
+impl From<frame_accounts::Event<Runtime>> for Event {
+	fn from(_evt: frame_accounts::Event<Runtime>) -> Self {
+		unimplemented!("Not required in tests!")
+	}
+}
+
 impl frame_support::traits::PalletInfo for Runtime {
 	fn index<P: 'static>() -> Option<usize> {
 		let type_id = sp_std::any::TypeId::of::<P>();
@@ -493,7 +499,10 @@ parameter_types! {
 }
 
 impl frame_accounts::Config for Runtime {
+	type Event = Event;
 	type AccountData = ();
+	type OnNewAccount = ();
+	type OnKilledAccount = ();
 }
 
 impl frame_system::Config for Runtime {
@@ -514,9 +523,6 @@ impl frame_system::Config for Runtime {
 	type DbWeight = ();
 	type Version = ();
 	type PalletInfo = Self;
-	type AccountData = ();
-	type OnNewAccount = ();
-	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type AccountStorage = frame_accounts::Pallet::<Runtime>;

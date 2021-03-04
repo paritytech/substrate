@@ -329,7 +329,7 @@ impl<T: Config> ValidatorRegistration<T::ValidatorId> for Module<T> {
 	}
 }
 
-pub trait Config: frame_system::Config {
+pub trait Config: frame_system::Config + frame_accounts::Config {
 	/// The overarching event type.
 	type Event: From<Event> + Into<<Self as frame_system::Config>::Event>;
 
@@ -415,7 +415,7 @@ decl_storage! {
 			for (account, val, keys) in config.keys.iter().cloned() {
 				<Module<T>>::inner_set_keys(&val, keys)
 					.expect("genesis config must not contain duplicates; qed");
-				assert!(frame_system::Module::<T>::inc_consumers(&account).is_ok());
+				assert!(frame_accounts::Module::<T>::inc_consumers(&account).is_ok());
 			}
 
 			let initial_validators_0 = T::SessionManager::new_session(0)
@@ -719,10 +719,10 @@ impl<T: Config> Module<T> {
 		let who = T::ValidatorIdOf::convert(account.clone())
 			.ok_or(Error::<T>::NoAssociatedValidatorId)?;
 
-		frame_system::Module::<T>::inc_consumers(&account).map_err(|_| Error::<T>::NoAccount)?;
+		frame_accounts::Module::<T>::inc_consumers(&account).map_err(|_| Error::<T>::NoAccount)?;
 		let old_keys = Self::inner_set_keys(&who, keys)?;
 		if old_keys.is_some() {
-			let _ = frame_system::Module::<T>::dec_consumers(&account);
+			let _ = frame_accounts::Module::<T>::dec_consumers(&account);
 			// ^^^ Defensive only; Consumers were incremented just before, so should never fail.
 		}
 
@@ -771,7 +771,7 @@ impl<T: Config> Module<T> {
 			let key_data = old_keys.get_raw(*id);
 			Self::clear_key_owner(*id, key_data);
 		}
-		frame_system::Module::<T>::dec_consumers(&account);
+		frame_accounts::Module::<T>::dec_consumers(&account);
 
 		Ok(())
 	}

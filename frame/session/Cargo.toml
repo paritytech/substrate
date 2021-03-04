@@ -23,6 +23,7 @@ sp-session = { version = "3.0.0", default-features = false, path = "../../primit
 sp-staking = { version = "3.0.0", default-features = false, path = "../../primitives/staking" }
 frame-support = { version = "3.0.0", default-features = false, path = "../support" }
 frame-system = { version = "3.0.0", default-features = false, path = "../system" }
+frame-accounts = { version = "3.0.0", default-features = false, path = "../accounts" }
 pallet-timestamp = { version = "3.0.0", default-features = false, path = "../timestamp" }
 sp-trie = { version = "3.0.0", optional = true, default-features = false, path = "../../primitives/trie" }
 impl-trait-for-tuples = "0.2.1"
@@ -40,6 +41,8 @@ std = [
 	"sp-std/std",
 	"sp-io/std",
 	"frame-support/std",
+	"frame-system/std",
+	"frame-accounts/std",
 	"sp-core/std",
 	"sp-runtime/std",
 	"sp-session/std",
