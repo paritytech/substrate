@@ -602,7 +602,7 @@ where
 			voter_commands_tx,
 			authority_set_hard_forks,
 			justification_sender.clone(),
-			//telemetry.clone(),
+			telemetry.clone(),
 		),
 		LinkHalf {
 			client,
