@@ -300,7 +300,7 @@ use frame_support::{
 	},
 	traits::{
 		Currency, LockIdentifier, LockableCurrency, WithdrawReasons, OnUnbalanced, Imbalance, Get,
-		UnixTime, EstimateNextNewSession, EnsureOrigin, CurrencyToVote, IsSubType,
+		UnixTime, EstimateNextNewSession, EnsureOrigin, CurrencyToVote, IsSubType, ReferencedAccount,
 	}
 };
 use pallet_session::historical;
@@ -884,6 +884,9 @@ pub trait Config: frame_system::Config + frame_accounts::Config + SendTransactio
 
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
+
+	/// A way to place reference counters on an account.
+	type ReferencedAccount: ReferencedAccount<Self::AccountId, Self::Index>;
 }
 
 /// Mode of era-forcing.
@@ -1500,7 +1503,7 @@ decl_module! {
 				Err(Error::<T>::InsufficientValue)?
 			}
 
-			frame_accounts::Module::<T>::inc_consumers(&stash).map_err(|_| Error::<T>::BadState)?;
+			T::ReferencedAccount::inc_consumers(&stash).map_err(|_| Error::<T>::BadState)?;
 
 			// You're auto-bonded forever, here. We might improve this by only bonding when
 			// you actually validate/nominate and remove once you unbond __everything__.
@@ -3202,7 +3205,7 @@ impl<T: Config> Module<T> {
 		<Validators<T>>::remove(stash);
 		<Nominators<T>>::remove(stash);
 
-		frame_accounts::Module::<T>::dec_consumers(stash);
+		T::ReferencedAccount::dec_consumers(stash);
 
 		Ok(())
 	}

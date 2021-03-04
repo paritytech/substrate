@@ -123,7 +123,7 @@ use sp_runtime::{
 use codec::{Encode, Decode, HasCompact};
 use frame_support::{
 	ensure,
-	traits::{Currency, ReservableCurrency, BalanceStatus::Reserved},
+	traits::{Currency, ReservableCurrency, BalanceStatus::Reserved, BasicAccount, ReferencedAccount},
 	dispatch::DispatchError,
 };
 pub use weights::WeightInfo;
@@ -147,7 +147,7 @@ pub mod pallet {
 
 	#[pallet::config]
 	/// The module configuration trait.
-	pub trait Config: frame_system::Config + frame_accounts::Config {
+	pub trait Config: frame_system::Config {
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
@@ -182,6 +182,9 @@ pub mod pallet {
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
+
+		/// A way to place reference counters on accounts.
+		type ReferencedAccount: ReferencedAccount<Self::AccountId, Self::Index>;
 	}
 
 	#[pallet::hooks]
@@ -1098,8 +1101,8 @@ impl<T: Config> Pallet<T> {
 		d: &mut AssetDetails<T::Balance, T::AccountId, BalanceOf<T>>,
 	) -> Result<bool, DispatchError> {
 		let accounts = d.accounts.checked_add(1).ok_or(Error::<T>::Overflow)?;
-		let r = Ok(if frame_accounts::Module::<T>::account_exists(who) {
-			frame_accounts::Module::<T>::inc_consumers(who).map_err(|_| Error::<T>::BadState)?;
+		let r = Ok(if T::ReferencedAccount::account_exists(who) {
+			T::ReferencedAccount::inc_consumers(who).map_err(|_| Error::<T>::BadState)?;
 			false
 		} else {
 			ensure!(d.zombies < d.max_zombies, Error::<T>::TooManyZombies);
@@ -1116,10 +1119,10 @@ impl<T: Config> Pallet<T> {
 		d: &mut AssetDetails<T::Balance, T::AccountId, BalanceOf<T>>,
 		is_zombie: &mut bool,
 	) {
-		if *is_zombie && frame_accounts::Module::<T>::account_exists(who) {
+		if *is_zombie && T::ReferencedAccount::account_exists(who) {
 			// If the account exists, then it should have at least one provider
 			// so this cannot fail... but being defensive anyway.
-			let _ = frame_accounts::Module::<T>::inc_consumers(who);
+			let _ = T::ReferencedAccount::inc_consumers(who);
 			*is_zombie = false;
 			d.zombies = d.zombies.saturating_sub(1);
 		}
@@ -1133,7 +1136,7 @@ impl<T: Config> Pallet<T> {
 		if is_zombie {
 			d.zombies = d.zombies.saturating_sub(1);
 		} else {
-			frame_accounts::Module::<T>::dec_consumers(who);
+			T::ReferencedAccount::dec_consumers(who);
 		}
 		d.accounts = d.accounts.saturating_sub(1);
 	}

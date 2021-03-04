@@ -164,7 +164,7 @@ use frame_support::{
 		Currency, OnUnbalanced, TryDrop, StoredMap,
 		WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 		Imbalance, SignedImbalance, ReservableCurrency, Get, ExistenceRequirement::KeepAlive,
-		ExistenceRequirement::AllowDeath, BalanceStatus as Status,
+		ExistenceRequirement::AllowDeath, BalanceStatus as Status, ReferencedAccount,
 	}
 };
 #[cfg(feature = "std")]
@@ -188,7 +188,7 @@ pub mod pallet {
 	use super::*;
 
 	#[pallet::config]
-	pub trait Config<I: 'static = ()>: frame_system::Config + frame_accounts::Config {
+	pub trait Config<I: 'static = ()>: frame_system::Config {
 		/// The balance of an account.
 		type Balance: Parameter + Member + AtLeast32BitUnsigned + Codec + Default + Copy +
 			MaybeSerializeDeserialize + Debug;
@@ -212,6 +212,9 @@ pub mod pallet {
 		/// The maximum number of locks that should exist on an account.
 		/// Not strictly enforced, but used for weight estimation.
 		type MaxLocks: Get<u32>;
+
+		/// A way to place reference counters on an account.
+		type ReferencedAccount: ReferencedAccount<Self::AccountId, Self::Index>;
 	}
 
 	#[pallet::pallet]
@@ -781,12 +784,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			if existed {
 				// TODO: use Locks::<T, I>::hashed_key
 				// https://github.com/paritytech/substrate/issues/4969
-				frame_accounts::Pallet::<T>::dec_consumers(who);
+				T::ReferencedAccount::dec_consumers(who);
 			}
 		} else {
 			Locks::<T, I>::insert(who, locks);
 			if !existed {
-				if frame_accounts::Pallet::<T>::inc_consumers(who).is_err() {
+				if T::ReferencedAccount::inc_consumers(who).is_err() {
 					// No providers for the locks. This is impossible under normal circumstances
 					// since the funds that are under the lock will themselves be stored in the
 					// account and therefore will need a reference.
@@ -1069,7 +1072,7 @@ impl<T: Config<I>, I: 'static> Currency<T::AccountId> for Pallet<T, I> where
 						// TODO: This is over-conservative. There may now be other providers, and this pallet
 						//   may not even be a provider.
 						let allow_death = existence_requirement == ExistenceRequirement::AllowDeath;
-						let allow_death = allow_death && !frame_accounts::Pallet::<T>::is_provider_required(transactor);
+						let allow_death = allow_death && !T::ReferencedAccount::is_provider_required(transactor);
 						ensure!(allow_death || from_account.total() >= ed, Error::<T, I>::KeepAlive);
 
 						Ok(())

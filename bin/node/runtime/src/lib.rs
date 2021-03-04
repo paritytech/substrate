@@ -378,6 +378,7 @@ impl pallet_balances::Config for Runtime {
 	type Event = Event;
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = Accounts;
+	type ReferencedAccount = Accounts;
 	type WeightInfo = pallet_balances::weights::SubstrateWeight<Runtime>;
 }
 
@@ -441,6 +442,7 @@ impl pallet_session::Config for Runtime {
 	type SessionHandler = <SessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type Keys = SessionKeys;
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
+	type ReferencedAccount = Accounts;
 	type WeightInfo = pallet_session::weights::SubstrateWeight<Runtime>;
 }
 
@@ -506,6 +508,7 @@ impl pallet_staking::Config for Runtime {
 	// a single extrinsic.
 	type OffchainSolutionWeightLimit = OffchainSolutionWeightLimit;
 	type ElectionProvider = ElectionProviderMultiPhase;
+	type ReferencedAccount = Accounts;
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Runtime>;
 }
 
@@ -957,6 +960,7 @@ impl pallet_recovery::Config for Runtime {
 	type ConfigDepositBase = ConfigDepositBase;
 	type FriendDepositFactor = FriendDepositFactor;
 	type MaxFriends = MaxFriends;
+	type ReferencedAccount = Accounts;
 	type RecoveryDeposit = RecoveryDeposit;
 }
 
@@ -1047,6 +1051,7 @@ impl pallet_assets::Config for Runtime {
 	type StringLimit = StringLimit;
 	type MetadataDepositBase = MetadataDepositBase;
 	type MetadataDepositPerByte = MetadataDepositPerByte;
+	type ReferencedAccount = Accounts;
 	type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
 }
 

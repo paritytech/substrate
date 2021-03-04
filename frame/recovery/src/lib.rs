@@ -161,7 +161,7 @@ use codec::{Encode, Decode};
 use frame_support::{
 	decl_module, decl_event, decl_storage, decl_error, ensure,
 	Parameter, RuntimeDebug, weights::GetDispatchInfo,
-	traits::{Currency, ReservableCurrency, Get, BalanceStatus},
+	traits::{Currency, ReservableCurrency, Get, BalanceStatus, ReferencedAccount},
 	dispatch::PostDispatchInfo,
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
@@ -207,6 +207,9 @@ pub trait Config: frame_system::Config + frame_accounts::Config {
 	/// `sizeof(BlockNumber, Balance + T * AccountId)` bytes. Where T is a configurable
 	/// threshold.
 	type RecoveryDeposit: Get<BalanceOf<Self>>;
+
+	/// A way to place reference counters on accounts.
+	type ReferencedAccount: ReferencedAccount<Self::AccountId, Self::Index>;
 }
 
 /// An active recovery process.
