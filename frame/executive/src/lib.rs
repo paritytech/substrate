@@ -454,7 +454,7 @@ where
 		};
 
 		let xt = within_span!{ sp_tracing::Level::TRACE, "check";
-				uxt.check(&Default::default())
+			uxt.check(&Default::default())
 		}?;
 
 		let dispatch_info = within_span!{ sp_tracing::Level::TRACE, "dispatch_info";
