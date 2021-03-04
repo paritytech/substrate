@@ -895,7 +895,7 @@ decl_module! {
 			let subcurator = T::Lookup::lookup(subcurator)?;
 
 			// Ensure parent bounty is Active & get status of curator
-			let (master_curator, _) = Self::ensure_bounty_active(bounty_id)?;
+			let (master_curator, _) = Self::ensure_bounty_active(bounty_id, false)?;
 
 			// Mutate the Subbounty instance
 			SubBounties::<T>::try_mutate_exists(
@@ -980,7 +980,7 @@ decl_module! {
 			let signer = ensure_signed(origin)?;
 
 			// Ensure parent bounty is Active
-			let _ = Self::ensure_bounty_active(bounty_id)?;
+			let _ = Self::ensure_bounty_active(bounty_id, false)?;
 
 			// Mutate Subbounty
 			SubBounties::<T>::try_mutate_exists(bounty_id, subbounty_id,
@@ -1015,11 +1015,16 @@ decl_module! {
 		/// The dispatch origin for this call can be
 		/// either `RejectOrigin` or any signed origin.
 		///
+		/// For the origin other than T::RejectOrigin,
 		/// Parent bounty must be in active state,
-		/// for this subbounty call to work.
+		/// for this subbounty call to work. For origin
+		/// T::RejectOrigin execution is forced by ignoring
+		/// the state of parent bounty.
 		///
-		/// If this function is called by the `RejectOrigin` or the curator,
-		/// we assume that the subcurator is malicious or inactive.
+		/// If this function is called by the `RejectOrigin` or
+		/// the master curator, we assume that the subcurator is
+		/// malicious or inactive.
+		///
 		/// As a result, subcurator deposit may be slashed.
 		///
 		/// If the origin is the subcurator, we take this as a sign they are
@@ -1053,7 +1058,10 @@ decl_module! {
 				.or_else(|_| T::RejectOrigin::ensure_origin(origin).map(|_| None))?;
 
 			// Ensure parent bounty is Active & get status of curator
-			let (master_curator, update_due) = Self::ensure_bounty_active(bounty_id)?;
+			let (master_curator, update_due) = Self::ensure_bounty_active(
+				bounty_id,
+				maybe_sender.is_none(),
+			)?;
 
 			// Ensure subbounty is in expected state
 			SubBounties::<T>::try_mutate_exists(
@@ -1183,7 +1191,7 @@ decl_module! {
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
 
 			// Ensure parent bounty is Active
-			let _ = Self::ensure_bounty_active(bounty_id)?;
+			let _ = Self::ensure_bounty_active(bounty_id, false)?;
 
 			// Ensure subbounty is in expected state
 			SubBounties::<T>::try_mutate_exists(
@@ -1342,8 +1350,10 @@ decl_module! {
 		/// If the state of subbounty is `PendingPayout`,
 		/// call fails & returns `PendingPayout` error.
 		///
+		/// For the origin other than T::RejectOrigin,
 		/// Parent bounty must be in active state,
-		/// for this subbounty call to work.
+		/// for this subbounty call to work. For origin
+		/// T::RejectOrigin execution is forced.
 		///
 		/// Instance of subbounty is deallocated from DB
 		/// on successful call completion.
@@ -1360,13 +1370,19 @@ decl_module! {
 				.or_else(|_| T::RejectOrigin::ensure_origin(origin).map(|_| None))?;
 
 			// Ensure parent bounty is Active
-			let (master_curator, _) = Self::ensure_bounty_active(bounty_id)?;
+			let (master_curator, _) = Self::ensure_bounty_active(
+				bounty_id,
+				maybe_sender.is_none(),
+			)?;
 
-			// Either `RejectOrigin` or the master curator can close subbounty.
 			ensure!(
-				maybe_sender.map_or(true, |sender| sender == master_curator),
-				BadOrigin
+				maybe_sender.map_or(
+					true,
+					|sender| sender == master_curator,
+				),
+				BadOrigin,
 			);
+
 			// Call the internal implementation.
 			Self::impl_close_subbounty(bounty_id, subbounty_id)?;
 		}
@@ -1429,12 +1445,23 @@ impl<T: Config> Module<T> {
 
 	fn ensure_bounty_active(
 		bounty_id: BountyIndex,
+		is_reject_origin: bool,
 	) -> Result<(T::AccountId, T::BlockNumber), DispatchError> {
+
 		let bounty = Self::bounties(&bounty_id).ok_or(Error::<T>::InvalidIndex)?;
+
 		if let BountyStatus::Active { curator, update_due } = bounty.status {
 			Ok((curator, update_due))
 		} else {
-			Err(Error::<T>::UnexpectedStatus.into())
+			if is_reject_origin {
+				// If call originates from T::RejectOrigin
+				// state check on parent bounty is ignored,
+				// and execution is forced with dummy object
+				// This object is not to get used by the caller.
+				Ok((Default::default(), Default::default()))
+			} else {
+				Err(Error::<T>::UnexpectedStatus.into())
+			}
 		}
 	}
 
