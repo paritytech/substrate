@@ -101,6 +101,9 @@
 //! }
 //! ```
 
+// jsonrpsee_proc_macros generates faulty warnings: https://github.com/paritytech/jsonrpsee/issues/106
+#![allow(dead_code)]
+
 use std::{
 	fs,
 	path::{Path, PathBuf},
@@ -117,14 +120,12 @@ use codec::{Encode, Decode};
 use jsonrpsee_http_client::{HttpClient, HttpConfig};
 
 type KeyPair = (StorageKey, StorageData);
-type Number = u32;
 type Hash = sp_core::H256;
 // TODO: make these two generic.
 
 const LOG_TARGET: &str = "remote-ext";
 const TARGET: &str = "http://localhost:9933";
 
-// This faulty warnings: https://github.com/paritytech/jsonrpsee/issues/106
 jsonrpsee_proc_macros::rpc_client_api! {
 	RpcApi {
 		#[rpc(method = "state_getPairs")]
