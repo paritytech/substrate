@@ -90,7 +90,7 @@ use sc_network::{ObservedRole, PeerId, ReputationChange};
 use parity_scale_codec::{Encode, Decode};
 use sp_finality_grandpa::AuthorityId;
 
-use sc_telemetry::{telemetry, CONSENSUS_DEBUG};
+use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG};
 use log::{trace, debug};
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use prometheus_endpoint::{CounterVec, Opts, PrometheusError, register, Registry, U64};
@@ -744,7 +744,7 @@ impl<Block: BlockT> Inner<Block> {
 	fn note_set(&mut self, set_id: SetId, authorities: Vec<AuthorityId>) -> MaybeMessage<Block> {
 		{
 			let local_view = match self.local_view {
- 				ref mut x @ None => x.get_or_insert(LocalView::new(
+				ref mut x @ None => x.get_or_insert(LocalView::new(
 					set_id,
 					Round(1),
 				)),
@@ -828,7 +828,12 @@ impl<Block: BlockT> Inner<Block> {
 		// ensure authority is part of the set.
 		if !self.authorities.contains(&full.message.id) {
 			debug!(target: "afg", "Message from unknown voter: {}", full.message.id);
-			telemetry!(None; CONSENSUS_DEBUG; "afg.bad_msg_signature"; "signature" => ?full.message.id);
+			telemetry!(
+				self.config.telemetry;
+				CONSENSUS_DEBUG;
+				"afg.bad_msg_signature";
+				"signature" => ?full.message.id,
+			);
 			return Action::Discard(cost::UNKNOWN_VOTER);
 		}
 
@@ -840,7 +845,12 @@ impl<Block: BlockT> Inner<Block> {
 			full.set_id.0,
 		) {
 			debug!(target: "afg", "Bad message signature {}", full.message.id);
-			telemetry!(None; CONSENSUS_DEBUG; "afg.bad_msg_signature"; "signature" => ?full.message.id);
+			telemetry!(
+				self.config.telemetry;
+				CONSENSUS_DEBUG;
+				"afg.bad_msg_signature";
+				"signature" => ?full.message.id,
+			);
 			return Action::Discard(cost::BAD_SIGNATURE);
 		}
 
@@ -866,7 +876,10 @@ impl<Block: BlockT> Inner<Block> {
 
 		if full.message.precommits.len() != full.message.auth_data.len() || full.message.precommits.is_empty() {
 			debug!(target: "afg", "Malformed compact commit");
-			telemetry!(None; CONSENSUS_DEBUG; "afg.malformed_compact_commit";
+			telemetry!(
+				self.config.telemetry;
+				CONSENSUS_DEBUG;
+				"afg.malformed_compact_commit";
 				"precommits_len" => ?full.message.precommits.len(),
 				"auth_data_len" => ?full.message.auth_data.len(),
 				"precommits_is_empty" => ?full.message.precommits.is_empty(),
@@ -1277,6 +1290,7 @@ pub(super) struct GossipValidator<Block: BlockT> {
 	set_state: environment::SharedVoterSetState<Block>,
 	report_sender: TracingUnboundedSender<PeerReport>,
 	metrics: Option<Metrics>,
+	telemetry: Option<TelemetryHandle>,
 }
 
 impl<Block: BlockT> GossipValidator<Block> {
@@ -1287,6 +1301,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 		config: crate::Config,
 		set_state: environment::SharedVoterSetState<Block>,
 		prometheus_registry: Option<&Registry>,
+		telemetry: Option<TelemetryHandle>,
 	) -> (GossipValidator<Block>, TracingUnboundedReceiver<PeerReport>)	{
 		let metrics = match prometheus_registry.map(Metrics::register) {
 			Some(Ok(metrics)) => Some(metrics),
@@ -1303,6 +1318,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 			set_state,
 			report_sender: tx,
 			metrics,
+			telemetry,
 		};
 
 		(val, rx)
@@ -1411,7 +1427,12 @@ impl<Block: BlockT> GossipValidator<Block> {
 				Err(e) => {
 					message_name = None;
 					debug!(target: "afg", "Error decoding message: {}", e);
-					telemetry!(None; CONSENSUS_DEBUG; "afg.err_decoding_msg"; "" => "");
+					telemetry!(
+						self.telemetry;
+						CONSENSUS_DEBUG;
+						"afg.err_decoding_msg";
+						"" => "",
+					);
 
 					let len = std::cmp::min(i32::max_value() as usize, data.len()) as i32;
 					Action::Discard(Misbehavior::UndecodablePacket(len).cost())
@@ -1798,6 +1819,7 @@ mod tests {
 			config(),
 			voter_set_state(),
 			None,
+			None,
 		);
 
 		let set_id = 1;
@@ -1833,6 +1855,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			voter_set_state(),
+			None,
 			None,
 		);
 		let set_id = 1;
@@ -1878,6 +1901,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			voter_set_state(),
+			None,
 			None,
 		);
 
@@ -1948,6 +1972,7 @@ mod tests {
 			config(),
 			set_state.clone(),
 			None,
+			None,
 		);
 
 		let set_id = 1;
@@ -2002,6 +2027,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			set_state.clone(),
+			None,
 			None,
 		);
 
@@ -2083,6 +2109,7 @@ mod tests {
 			config(),
 			voter_set_state(),
 			None,
+			None,
 		);
 
 		// the validator starts at set id 1.
@@ -2157,6 +2184,7 @@ mod tests {
 			config,
 			voter_set_state(),
 			None,
+			None,
 		);
 
 		// the validator starts at set id 1.
@@ -2190,6 +2218,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			voter_set_state(),
+			None,
 			None,
 		);
 
@@ -2251,6 +2280,7 @@ mod tests {
 			config,
 			voter_set_state(),
 			None,
+			None,
 		);
 
 		// the validator starts at set id 1.
@@ -2290,6 +2320,7 @@ mod tests {
 			config(),
 			voter_set_state(),
 			None,
+			None,
 		);
 
 		// the validator starts at set id 1.
@@ -2322,6 +2353,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config,
 			voter_set_state(),
+			None,
 			None,
 		);
 
@@ -2402,6 +2434,7 @@ mod tests {
 			config(),
 			voter_set_state(),
 			None,
+			None,
 		);
 
 		// the validator start at set id 0
@@ -2441,6 +2474,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config,
 			voter_set_state(),
+			None,
 			None,
 		);
 
@@ -2491,7 +2525,7 @@ mod tests {
 
 	#[test]
 	fn only_gossip_commits_to_peers_on_same_set() {
-		let (val, _) = GossipValidator::<Block>::new(config(), voter_set_state(), None);
+		let (val, _) = GossipValidator::<Block>::new(config(), voter_set_state(), None, None);
 
 		// the validator start at set id 1
 		val.note_set(SetId(1), Vec::new(), |_, _| {});
@@ -2569,7 +2603,7 @@ mod tests {
 
 	#[test]
 	fn expire_commits_from_older_rounds() {
-		let (val, _) = GossipValidator::<Block>::new(config(), voter_set_state(), None);
+		let (val, _) = GossipValidator::<Block>::new(config(), voter_set_state(), None, None);
 
 		let commit = |round, set_id, target_number| {
 			let commit = finality_grandpa::CompactCommit {
@@ -2620,7 +2654,7 @@ mod tests {
 
 	#[test]
 	fn allow_noting_different_authorities_for_same_set() {
-		let (val, _) = GossipValidator::<Block>::new(config(), voter_set_state(), None);
+		let (val, _) = GossipValidator::<Block>::new(config(), voter_set_state(), None, None);
 
 		let a1 = vec![AuthorityId::from_slice(&[0; 32])];
 		val.note_set(SetId(1), a1.clone(), |_, _| {});

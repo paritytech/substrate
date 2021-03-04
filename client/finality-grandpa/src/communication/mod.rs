@@ -214,7 +214,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			config,
 			set_state.clone(),
 			prometheus_registry,
-			//telemetry.clone(),
+			telemetry.clone(),
 		);
 
 		let validator = Arc::new(validator);
