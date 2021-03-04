@@ -452,6 +452,15 @@
 			"website": "https://neatcoin.org"
 		},
 		{
+			"prefix": 49,
+			"network": "sora",
+			"displayName": "SORA Network",
+			"symbols": ["XOR"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://sora.org"
+		},
+		{
 			"prefix": 63,
 			"network": "hydradx",
 			"displayName": "HydraDX",
