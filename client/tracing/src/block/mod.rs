@@ -37,7 +37,7 @@ use wasm_timer::Instant;
 use log::{log};
 
 // Default to only pallet, frame support and state related traces
-const DEFAULT_TARGETS: &'static str = "pallet,frame,state,balances,transfer,transferkeepalive";
+const DEFAULT_TARGETS: &'static str = "pallet,frame,state,system,sp_io::storage=debug";
 const TRACE_TARGET: &'static str = "block_trace";
 
 struct BlockSubscriber {
@@ -218,8 +218,7 @@ impl<Block, Client> BlockExecutor<Block, Client>
 			.map(|(_, s)| s.into())
 			.into_iter()
 			.map(|s| {
-				log!(target: "BLOCKTRACE", log::Level::Trace, "TESTING PLZ HALP");
-				log!(target: "BLOCKTRACE", log::Level::Trace, "Span in unfiltered array: {:#?}", s);
+				log!(target: "BLOCKTRACE", log::Level::Trace, "Span in unfiltered array {:#?}", s);
 				s
 			})
 			// First filter out any spans that were never entered
@@ -228,7 +227,6 @@ impl<Block, Client> BlockExecutor<Block, Client>
 			.filter_map(|s| patch_and_filter(s, targets))
 			.collect();
 
-		
 		spans.sort_by(|a, b| a.entered[0].cmp(&b.entered[0]));
 
 		let events = sub.events.lock().drain(..).map(|s| s.into()).collect();

@@ -1544,6 +1544,7 @@ macro_rules! decl_module {
 			$origin: $origin_ty $(, $param: $param_ty )*
 		) -> $crate::dispatch::DispatchResult {
 			$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!(stringify!($name)));
+			$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!("pallet_testing"));
 			{ $( $impl )* }
 			Ok(())
 		}
@@ -1563,6 +1564,7 @@ macro_rules! decl_module {
 		$(#[$fn_attr])*
 		$vis fn $name($origin: $origin_ty $(, $param: $param_ty )* ) -> $result {
 			$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!(stringify!($name)));
+			$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!("pallet_testing"));
 			$( $impl )*
 		}
 	};

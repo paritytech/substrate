@@ -208,7 +208,7 @@ where
 		// 	HexDisplay::from(&key),
 		// 	result.as_ref().map(HexDisplay::from)
 		// );
-		let ready_to_encode_result = result.as_ref().map(|v| EncodeOpaqueValue(v.to_owned()));
+		let ready_to_encode_result = result.as_ref().map(|v| EncodeOpaqueValue(v.clone()));
 		trace!(target: "state",
 			method = "Get",
 			ext_id = self.id,
@@ -409,7 +409,7 @@ where
 			return;
 		}
 
-		let ready_to_encode_result = value.as_ref().map(|v| EncodeOpaqueValue(v.to_owned()));
+		let ready_to_encode_result = value.as_ref().map(|v| EncodeOpaqueValue(v.clone()));
 		trace!(target: "state",
 			method = "Put",
 			ext_id = self.id,
@@ -434,7 +434,7 @@ where
 		// 	HexDisplay::from(&key),
 		// 	value.as_ref().map(HexDisplay::from)
 		// );
-		let ready_to_encode_result = value.as_ref().map(|v| EncodeOpaqueValue(v.to_owned()));
+		let ready_to_encode_result = value.as_ref().map(|v| EncodeOpaqueValue(v.clone()));
 		trace!(target: "state",
 			method = "PutChild",
 			ext_id = self.id,
