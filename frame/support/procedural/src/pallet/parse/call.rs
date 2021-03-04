@@ -21,7 +21,6 @@ use syn::spanned::Spanned;
 
 /// List of additional token to be used for parsing.
 mod keyword {
-	syn::custom_keyword!(DispatchResultWithPostInfo);
 	syn::custom_keyword!(Call);
 	syn::custom_keyword!(OriginFor);
 	syn::custom_keyword!(weight);
@@ -163,7 +162,7 @@ impl CallDef {
 				}
 
 				if let syn::ReturnType::Type(_, type_) = &method.sig.output {
-					syn::parse2::<keyword::DispatchResultWithPostInfo>(type_.to_token_stream())?;
+					helper::check_pallet_call_return_type(type_)?;
 				} else {
 					let msg = "Invalid pallet::call, require return type \
 						DispatchResultWithPostInfo";

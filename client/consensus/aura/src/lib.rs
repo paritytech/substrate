@@ -77,16 +77,13 @@ use sp_consensus_slots::Slot;
 use sp_api::ApiExt;
 
 pub use sp_consensus_aura::{
-	ConsensusLog, AuraApi, AURA_ENGINE_ID,
+	ConsensusLog, AuraApi, AURA_ENGINE_ID, digests::CompatibleDigestItem,
 	inherents::{
 		InherentType as AuraInherent,
 		AuraInherentData, INHERENT_IDENTIFIER, InherentDataProvider,
 	},
 };
 pub use sp_consensus::SyncOracle;
-pub use digests::CompatibleDigestItem;
-
-mod digests;
 
 type AuthorityId<P> = <P as Pair>::Public;
 
@@ -179,7 +176,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, BS, Error>(
 		&inherent_data_providers,
 		slot_duration.slot_duration()
 	)?;
-	Ok(sc_consensus_slots::start_slot_worker::<_, _, _, _, _, AuraSlotCompatible, _>(
+	Ok(sc_consensus_slots::start_slot_worker::<_, _, _, _, _, AuraSlotCompatible, _, _>(
 		slot_duration,
 		select_chain,
 		worker,
@@ -255,8 +252,8 @@ where
 		let expected_author = slot_author::<P>(slot, epoch_data);
 		expected_author.and_then(|p| {
 			if SyncCryptoStore::has_keys(
-				 &*self.keystore,
-				 &[(p.to_raw_vec(), sp_application_crypto::key_types::AURA)],
+				&*self.keystore,
+				&[(p.to_raw_vec(), sp_application_crypto::key_types::AURA)],
 			) {
 				Some(p.clone())
 			} else {
@@ -271,7 +268,7 @@ where
 		_claim: &Self::Claim,
 	) -> Vec<sp_runtime::DigestItem<B::Hash>> {
 		vec![
-			<DigestItemFor<B> as CompatibleDigestItem<P>>::aura_pre_digest(slot),
+			<DigestItemFor<B> as CompatibleDigestItem<P::Signature>>::aura_pre_digest(slot),
 		]
 	}
 
@@ -299,13 +296,18 @@ where
 				header_hash.as_ref()
 			).map_err(|e| sp_consensus::Error::CannotSign(
 				public.clone(), e.to_string(),
+			))?
+			.ok_or_else(|| sp_consensus::Error::CannotSign(
+				public.clone(), "Could not find key in keystore.".into(),
 			))?;
 			let signature = signature.clone().try_into()
 				.map_err(|_| sp_consensus::Error::InvalidSignature(
 					signature, public
 				))?;
 
-			let signature_digest_item = <DigestItemFor<B> as CompatibleDigestItem<P>>::aura_seal(signature);
+			let signature_digest_item = <
+				DigestItemFor<B> as CompatibleDigestItem<P::Signature>
+			>::aura_seal(signature);
 
 			let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
 			import_block.post_digests.push(signature_digest_item);
@@ -323,7 +325,7 @@ where
 
 	fn should_backoff(&self, slot: Slot, chain_head: &B::Header) -> bool {
 		if let Some(ref strategy) = self.backoff_authoring_blocks {
-			if let Ok(chain_head_slot) = find_pre_digest::<B, P>(chain_head) {
+			if let Ok(chain_head_slot) = find_pre_digest::<B, P::Signature>(chain_head) {
 				return strategy.should_backoff(
 					*chain_head.number(),
 					chain_head_slot,
@@ -353,7 +355,7 @@ where
 	) -> Option<std::time::Duration> {
 		let slot_remaining = self.slot_remaining_duration(slot_info);
 
-		let parent_slot = match find_pre_digest::<B, P>(head) {
+		let parent_slot = match find_pre_digest::<B, P::Signature>(head) {
 			Err(_) => return Some(slot_remaining),
 			Ok(d) => d,
 		};
@@ -411,11 +413,7 @@ impl<B: BlockT> std::convert::From<Error<B>> for String {
 	}
 }
 
-fn find_pre_digest<B: BlockT, P: Pair>(header: &B::Header) -> Result<Slot, Error<B>>
-	where DigestItemFor<B>: CompatibleDigestItem<P>,
-		P::Signature: Decode,
-		P::Public: Encode + Decode + PartialEq + Clone,
-{
+fn find_pre_digest<B: BlockT, Signature: Codec>(header: &B::Header) -> Result<Slot, Error<B>> {
 	if header.number().is_zero() {
 		return Ok(0.into());
 	}
@@ -423,7 +421,7 @@ fn find_pre_digest<B: BlockT, P: Pair>(header: &B::Header) -> Result<Slot, Error
 	let mut pre_digest: Option<Slot> = None;
 	for log in header.digest().logs() {
 		trace!(target: "aura", "Checking log {:?}", log);
-		match (log.as_aura_pre_digest(), pre_digest.is_some()) {
+		match (CompatibleDigestItem::<Signature>::as_aura_pre_digest(log), pre_digest.is_some()) {
 			(Some(_), true) => Err(aura_err(Error::MultipleHeaders))?,
 			(None, _) => trace!(target: "aura", "Ignoring digest not meant for us"),
 			(s, false) => pre_digest = s,
@@ -432,8 +430,9 @@ fn find_pre_digest<B: BlockT, P: Pair>(header: &B::Header) -> Result<Slot, Error
 	pre_digest.ok_or_else(|| aura_err(Error::NoDigestFound))
 }
 
-/// check a header has been signed by the right key. If the slot is too far in the future, an error will be returned.
-/// if it's successful, returns the pre-header and the digest item containing the seal.
+/// check a header has been signed by the right key. If the slot is too far in the future, an error
+/// will be returned. If it's successful, returns the pre-header and the digest item
+/// containing the seal.
 ///
 /// This digest item will always return `Some` when used with `as_aura_seal`.
 //
@@ -444,8 +443,8 @@ fn check_header<C, B: BlockT, P: Pair>(
 	hash: B::Hash,
 	authorities: &[AuthorityId<P>],
 ) -> Result<CheckedHeader<B::Header, (Slot, DigestItemFor<B>)>, Error<B>> where
-	DigestItemFor<B>: CompatibleDigestItem<P>,
-	P::Signature: Decode,
+	DigestItemFor<B>: CompatibleDigestItem<P::Signature>,
+	P::Signature: Codec,
 	C: sc_client_api::backend::AuxStore,
 	P::Public: Encode + Decode + PartialEq + Clone,
 {
@@ -458,7 +457,7 @@ fn check_header<C, B: BlockT, P: Pair>(
 		aura_err(Error::HeaderBadSeal(hash))
 	})?;
 
-	let slot = find_pre_digest::<B, _>(&header)?;
+	let slot = find_pre_digest::<B, P::Signature>(&header)?;
 
 	if slot > slot_now {
 		header.digest_mut().push(seal);
@@ -579,7 +578,7 @@ impl<B: BlockT, C, P, CAW> Verifier<B> for AuraVerifier<C, P, CAW> where
 		ProvideCache<B> +
 		BlockOf,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B>,
-	DigestItemFor<B>: CompatibleDigestItem<P>,
+	DigestItemFor<B>: CompatibleDigestItem<P::Signature>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + 'static,
 	P::Signature: Encode + Decode,
@@ -680,7 +679,7 @@ impl<B: BlockT, C, P, CAW> Verifier<B> for AuraVerifier<C, P, CAW> where
 }
 
 fn initialize_authorities_cache<A, B, C>(client: &C) -> Result<(), ConsensusError> where
-	A: Codec,
+	A: Codec + Debug,
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B>,
 	C::Api: AuraApi<B, A>,
@@ -716,7 +715,7 @@ fn initialize_authorities_cache<A, B, C>(client: &C) -> Result<(), ConsensusErro
 
 #[allow(deprecated)]
 fn authorities<A, B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<A>, ConsensusError> where
-	A: Codec,
+	A: Codec + Debug,
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B>,
 	C::Api: AuraApi<B, A>,
@@ -802,7 +801,7 @@ impl<Block: BlockT, C, I, P> BlockImport<Block> for AuraBlockImport<Block, C, I,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		let hash = block.post_hash();
-		let slot = find_pre_digest::<Block, P>(&block.header)
+		let slot = find_pre_digest::<Block, P::Signature>(&block.header)
 			.expect("valid Aura headers must contain a predigest; \
 					 header has been already verified; qed");
 
@@ -813,7 +812,7 @@ impl<Block: BlockT, C, I, P> BlockImport<Block> for AuraBlockImport<Block, C, I,
 				Error::<Block>::ParentUnavailable(parent_hash, hash)
 			).into()))?;
 
-		let parent_slot = find_pre_digest::<Block, P>(&parent_header)
+		let parent_slot = find_pre_digest::<Block, P::Signature>(&parent_header)
 			.expect("valid Aura headers contain a pre-digest; \
 					parent header has already been verified; qed");
 
@@ -845,7 +844,7 @@ pub fn import_queue<B, I, C, P, S, CAW>(
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B>,
 	C: 'static + ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + Send + Sync + AuxStore + HeaderBackend<B>,
 	I: BlockImport<B, Error=ConsensusError, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
-	DigestItemFor<B>: CompatibleDigestItem<P>,
+	DigestItemFor<B>: CompatibleDigestItem<P::Signature>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode,
 	P::Signature: Encode + Decode,
@@ -855,7 +854,7 @@ pub fn import_queue<B, I, C, P, S, CAW>(
 	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
 	initialize_authorities_cache(&*client)?;
 
-	let verifier = AuraVerifier {
+	let verifier = AuraVerifier::<_, P, _> {
 		client,
 		inherent_data_providers,
 		phantom: PhantomData,
@@ -874,7 +873,9 @@ pub fn import_queue<B, I, C, P, S, CAW>(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_consensus::{NoNetwork as DummyOracle, Proposal, RecordProof, AlwaysCanAuthor};
+	use sp_consensus::{
+		NoNetwork as DummyOracle, Proposal, AlwaysCanAuthor, DisableProofRecording,
+	};
 	use sc_network_test::{Block as TestBlock, *};
 	use sp_runtime::traits::{Block as BlockT, DigestFor};
 	use sc_network::config::ProtocolConfig;
@@ -883,7 +884,7 @@ mod tests {
 	use sc_client_api::BlockchainEvents;
 	use sp_consensus_aura::sr25519::AuthorityPair;
 	use sc_consensus_slots::{SimpleSlotWorker, BackoffAuthoringOnFinalizedHeadLagging};
-	use std::task::Poll;
+	use std::{task::Poll, time::Instant};
 	use sc_block_builder::BlockBuilderProvider;
 	use sp_runtime::traits::Header as _;
 	use substrate_test_runtime_client::{TestClient, runtime::{Header, H256}};
@@ -913,20 +914,21 @@ mod tests {
 			substrate_test_runtime_client::Backend,
 			TestBlock
 		>;
-		type Proposal = future::Ready<Result<Proposal<TestBlock, Self::Transaction>, Error>>;
+		type Proposal = future::Ready<Result<Proposal<TestBlock, Self::Transaction, ()>, Error>>;
+		type ProofRecording = DisableProofRecording;
+		type Proof = ();
 
 		fn propose(
 			self,
 			_: InherentData,
 			digests: DigestFor<TestBlock>,
 			_: Duration,
-			_: RecordProof,
 		) -> Self::Proposal {
 			let r = self.1.new_block(digests).unwrap().build().map_err(|e| e.into());
 
 			future::ready(r.map(|b| Proposal {
 				block: b.block,
-				proof: b.proof,
+				proof: (),
 				storage_changes: b.storage_changes,
 			}))
 		}
@@ -1120,5 +1122,52 @@ mod tests {
 		assert!(worker.claim_slot(&head, 5.into(), &authorities).is_none());
 		assert!(worker.claim_slot(&head, 6.into(), &authorities).is_none());
 		assert!(worker.claim_slot(&head, 7.into(), &authorities).is_some());
+	}
+
+	#[test]
+	fn on_slot_returns_correct_block() {
+		let net = AuraTestNet::new(4);
+
+		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
+		let keystore = LocalKeystore::open(keystore_path.path(), None)
+			.expect("Creates keystore.");
+		SyncCryptoStore::sr25519_generate_new(
+			&keystore,
+			AuthorityPair::ID, Some(&Keyring::Alice.to_seed()),
+		).expect("Key should be created");
+
+		let net = Arc::new(Mutex::new(net));
+
+		let mut net = net.lock();
+		let peer = net.peer(3);
+		let client = peer.client().as_full().expect("full clients are created").clone();
+		let environ = DummyFactory(client.clone());
+
+		let mut worker = AuraWorker {
+			client: client.clone(),
+			block_import: Arc::new(Mutex::new(client.clone())),
+			env: environ,
+			keystore: keystore.into(),
+			sync_oracle: DummyOracle.clone(),
+			force_authoring: false,
+			backoff_authoring_blocks: Option::<()>::None,
+			_key_type: PhantomData::<AuthorityPair>,
+		};
+
+		let head = client.header(&BlockId::Number(0)).unwrap().unwrap();
+
+		let res = futures::executor::block_on(worker.on_slot(
+			head,
+			SlotInfo {
+				slot: 0.into(),
+				timestamp: 0,
+				ends_at: Instant::now() + Duration::from_secs(100),
+				inherent_data: InherentData::new(),
+				duration: 1000,
+			},
+		)).unwrap();
+
+		// The returned block should be imported and we should be able to get its header by now.
+		assert!(client.header(&BlockId::Hash(res.block.hash())).unwrap().is_some());
 	}
 }

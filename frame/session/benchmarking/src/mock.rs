@@ -20,6 +20,7 @@
 #![cfg(test)]
 
 use sp_runtime::traits::IdentityLookup;
+use sp_election_providers::onchain;
 use frame_support::parameter_types;
 
 type AccountId = u64;
@@ -145,11 +146,19 @@ parameter_types! {
 
 pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
 
-impl<C> frame_system::offchain::SendTransactionTypes<C> for Test where
+impl<C> frame_system::offchain::SendTransactionTypes<C> for Test
+where
 	Call: From<C>,
 {
 	type OverarchingCall = Call;
 	type Extrinsic = Extrinsic;
+}
+
+impl onchain::Config for Test {
+	type AccountId = AccountId;
+	type BlockNumber = BlockNumber;
+	type Accuracy = sp_runtime::Perbill;
+	type DataProvider = Staking;
 }
 
 impl pallet_staking::Config for Test {
@@ -174,6 +183,7 @@ impl pallet_staking::Config for Test {
 	type MaxIterations = ();
 	type MinSolutionScoreBump = ();
 	type OffchainSolutionWeightLimit = ();
+	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type WeightInfo = ();
 }
 

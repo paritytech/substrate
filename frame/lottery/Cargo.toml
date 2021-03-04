@@ -19,7 +19,7 @@ sp-runtime = { version = "3.0.0", default-features = false, path = "../../primit
 frame-support = { version = "3.0.0", default-features = false, path = "../support" }
 frame-system = { version = "3.0.0", default-features = false, path = "../system" }
 
-frame-benchmarking = { version = "3.0.0", default-features = false, path = "../benchmarking", optional = true }
+frame-benchmarking = { version = "3.1.0", default-features = false, path = "../benchmarking", optional = true }
 
 [dev-dependencies]
 pallet-balances = { version = "3.0.0", path = "../balances" }
@@ -41,3 +41,4 @@ runtime-benchmarks = [
 	"frame-system/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
 ]
+try-runtime = ["frame-support/try-runtime"]

@@ -44,10 +44,10 @@ use parity_scale_codec::{Encode, Decode};
 use sp_blockchain::{Backend as BlockchainBackend, Error as ClientError, Result as ClientResult};
 use sp_runtime::{
 	Justification, generic::BlockId,
-	traits::{NumberFor, Block as BlockT, Header as HeaderT, Zero, One},
+	traits::{NumberFor, Block as BlockT, Header as HeaderT, One},
 };
 use sc_client_api::backend::Backend;
-use sp_finality_grandpa::{AuthorityId, AuthorityList};
+use sp_finality_grandpa::AuthorityId;
 
 use crate::authorities::AuthoritySetChanges;
 use crate::justification::GrandpaJustification;
@@ -151,23 +151,6 @@ pub enum FinalityProofError {
 	Client(sp_blockchain::Error),
 }
 
-/// Single fragment of authority set proof.
-///
-/// Finality for block B is proved by providing:
-/// 1) headers of this block;
-/// 2) the justification for the block containing a authority set change digest;
-#[derive(Debug, PartialEq, Clone, Encode, Decode)]
-pub(crate) struct AuthoritySetProofFragment<Header: HeaderT> {
-	/// The header of the given block.
-	pub header: Header,
-	/// Justification of the block F.
-	pub justification: Vec<u8>,
-}
-
-/// Proof of authority set is the ordered set of authority set fragments, where:
-/// - last fragment match target block.
-type AuthoritySetProof<Header> = Vec<AuthoritySetProofFragment<Header>>;
-
 fn prove_finality<Block, B, J>(
 	blockchain: &B,
 	authority_set_changes: AuthoritySetChanges<NumberFor<Block>>,
@@ -242,238 +225,6 @@ where
 	))
 }
 
-/// Prepare authority proof for the best possible block starting at a given trusted block.
-///
-/// Started block should be in range of bonding duration.
-/// We only return proof for finalized blocks (with justification).
-///
-/// It is assumed that the caller already have a proof-of-finality for the block 'begin'.
-pub fn prove_warp_sync<Block: BlockT, B: BlockchainBackend<Block>>(
-	blockchain: &B,
-	begin: Block::Hash,
-	max_fragment_limit: Option<usize>,
-	mut cache: Option<&mut WarpSyncFragmentCache<Block::Header>>,
-) -> ::sp_blockchain::Result<Vec<u8>> {
-
-	let begin = BlockId::Hash(begin);
-	let begin_number = blockchain.block_number_from_id(&begin)?
-		.ok_or_else(|| ClientError::Backend("Missing start block".to_string()))?;
-	let end = BlockId::Hash(blockchain.last_finalized()?);
-	let end_number = blockchain.block_number_from_id(&end)?
-		// This error should not happen, we could also panic.
-		.ok_or_else(|| ClientError::Backend("Missing last finalized block".to_string()))?;
-
-	if begin_number > end_number {
-		return Err(ClientError::Backend("Unfinalized start for authority proof".to_string()));
-	}
-
-	let mut result = Vec::new();
-	let mut last_apply = None;
-
-	let header = blockchain.expect_header(begin)?;
-	let mut index = *header.number();
-
-	// Find previous change in case there is a delay.
-	// This operation is a costy and only for the delay corner case.
-	while index > Zero::zero() {
-		index = index - One::one();
-		if let Some((fragment, apply_block)) = get_warp_sync_proof_fragment(blockchain, index, &mut cache)? {
-			if last_apply.map(|next| &next > header.number()).unwrap_or(false) {
-				result.push(fragment);
-				last_apply = Some(apply_block);
-			} else {
-				break;
-			}
-		}
-	}
-
-	let mut index = *header.number();
-	while index <= end_number {
-		if max_fragment_limit.map(|limit| result.len() >= limit).unwrap_or(false) {
-			break;
-		}
-
-		if let Some((fragement, apply_block)) = get_warp_sync_proof_fragment(blockchain, index, &mut cache)? {
-			if last_apply.map(|next| apply_block < next).unwrap_or(false) {
-				// Previous delayed will not apply, do not include it.
-				result.pop();
-			}
-			result.push(fragement);
-			last_apply = Some(apply_block);
-		}
-
-		index = index + One::one();
-	}
-
-	let at_limit = max_fragment_limit.map(|limit| result.len() >= limit).unwrap_or(false);
-
-	// add last finalized block if reached and not already included.
-	if !at_limit && result.last().as_ref().map(|head| head.header.number()) != Some(&end_number) {
-		let header = blockchain.expect_header(end)?;
-		if let Some(justification) = blockchain.justification(BlockId::Number(end_number.clone()))? {
-			result.push(AuthoritySetProofFragment {
-				header: header.clone(),
-				justification,
-			});
-		} else {
-			// no justification, don't include it.
-		}
-	}
-
-	Ok(result.encode())
-}
-
-/// Try get a warp sync proof fragment a a given finalized block.
-fn get_warp_sync_proof_fragment<Block: BlockT, B: BlockchainBackend<Block>>(
-	blockchain: &B,
-	index: NumberFor<Block>,
-	cache: &mut Option<&mut WarpSyncFragmentCache<Block::Header>>,
-) -> sp_blockchain::Result<Option<(AuthoritySetProofFragment<Block::Header>, NumberFor<Block>)>> {
-	if let Some(cache) = cache.as_mut() {
-		if let Some(result) = cache.get_item(index) {
-			return Ok(result);
-		}
-	}
-
-	let mut result = None;
-	let header = blockchain.expect_header(BlockId::number(index))?;
-
-	if let Some((block_number, sp_finality_grandpa::ScheduledChange {
-		next_authorities: _,
-		delay,
-	})) = crate::import::find_forced_change::<Block>(&header) {
-		let dest = block_number + delay;
-		if let Some(justification) = blockchain.justification(BlockId::Number(index.clone()))? {
-			result = Some((AuthoritySetProofFragment {
-				header: header.clone(),
-				justification,
-			}, dest));
-		} else {
-			return Err(ClientError::Backend("Unjustified block with authority set change".to_string()));
-		}
-	}
-
-	if let Some(sp_finality_grandpa::ScheduledChange {
-		next_authorities: _,
-		delay,
-	}) = crate::import::find_scheduled_change::<Block>(&header) {
-		let dest = index + delay;
-		if let Some(justification) = blockchain.justification(BlockId::Number(index.clone()))? {
-			result = Some((AuthoritySetProofFragment {
-				header: header.clone(),
-				justification,
-			}, dest));
-		} else {
-			return Err(ClientError::Backend("Unjustified block with authority set change".to_string()));
-		}
-	}
-
-	cache.as_mut().map(|cache| cache.new_item(index, result.clone()));
-	Ok(result)
-}
-
-/// Check GRANDPA authority change sequence to assert finality of a target block.
-///
-/// Returns the header of the target block.
-#[allow(unused)]
-pub(crate) fn check_warp_sync_proof<Block: BlockT, J>(
-	current_set_id: u64,
-	current_authorities: AuthorityList,
-	remote_proof: Vec<u8>,
-) -> ClientResult<(Block::Header, u64, AuthorityList)>
-where
-		NumberFor<Block>: BlockNumberOps,
-		J: Decode + ProvableJustification<Block::Header> + BlockJustification<Block::Header>,
-{
-	// decode finality proof
-	let proof = AuthoritySetProof::<Block::Header>::decode(&mut &remote_proof[..])
-		.map_err(|_| ClientError::BadJustification("failed to decode authority proof".into()))?;
-
-		let last = proof.len() - 1;
-
-		let mut result = (current_set_id, current_authorities, NumberFor::<Block>::zero());
-
-		for (ix, fragment) in proof.into_iter().enumerate() {
-			let is_last = ix == last;
-			result = check_warp_sync_proof_fragment::<Block, J>(
-				result.0,
-				&result.1,
-				&result.2,
-				is_last,
-				&fragment,
-			)?;
-
-			if is_last {
-				return Ok((fragment.header, result.0, result.1))
-			}
-		}
-
-		// empty proof can't prove anything
-		return Err(ClientError::BadJustification("empty proof of authority".into()));
-}
-
-/// Check finality authority set sequence.
-fn check_warp_sync_proof_fragment<Block: BlockT, J>(
-	current_set_id: u64,
-	current_authorities: &AuthorityList,
-	previous_checked_block: &NumberFor<Block>,
-	is_last: bool,
-	authorities_proof: &AuthoritySetProofFragment<Block::Header>,
-) -> ClientResult<(u64, AuthorityList, NumberFor<Block>)>
-where
-		NumberFor<Block>: BlockNumberOps,
-		J: Decode + ProvableJustification<Block::Header> + BlockJustification<Block::Header>,
-{
-	let justification: J = Decode::decode(&mut authorities_proof.justification.as_slice())
-		.map_err(|_| ClientError::JustificationDecode)?;
-		justification.verify(current_set_id, &current_authorities)?;
-
-		// assert justification is for this header
-		if &justification.number() != authorities_proof.header.number()
-			|| justification.hash().as_ref() != authorities_proof.header.hash().as_ref() {
-				return Err(ClientError::Backend("Invalid authority warp proof, justification do not match header".to_string()));
-		}
-
-		if authorities_proof.header.number() <= previous_checked_block {
-			return Err(ClientError::Backend("Invalid authority warp proof".to_string()));
-		}
-		let current_block = authorities_proof.header.number();
-		let mut at_block = None;
-		if let Some(sp_finality_grandpa::ScheduledChange {
-			next_authorities,
-			delay,
-		}) = crate::import::find_scheduled_change::<Block>(&authorities_proof.header) {
-			let dest = *current_block + delay;
-			at_block = Some((dest, next_authorities));
-		}
-		if let Some((block_number, sp_finality_grandpa::ScheduledChange {
-			next_authorities,
-			delay,
-		})) = crate::import::find_forced_change::<Block>(&authorities_proof.header) {
-			let dest = block_number + delay;
-			at_block = Some((dest, next_authorities));
-		}
-
-		// Fragment without change only allowed for proof last block.
-		if at_block.is_none() && !is_last {
-			return Err(ClientError::Backend("Invalid authority warp proof".to_string()));
-		}
-		if let Some((at_block, next_authorities)) = at_block {
-			Ok((current_set_id + 1, next_authorities, at_block))
-		} else {
-			Ok((current_set_id, current_authorities.clone(), current_block.clone()))
-		}
-}
-
-/// Block info extracted from the justification.
-pub(crate) trait BlockJustification<Header: HeaderT> {
-	/// Block number justified.
-	fn number(&self) -> Header::Number;
-
-	/// Block hash justified.
-	fn hash(&self) -> Header::Hash;
-}
-
 /// Check GRANDPA proof-of-finality for the given block.
 ///
 /// Returns the vector of headers that MUST be validated + imported
@@ -483,7 +234,7 @@ pub(crate) trait BlockJustification<Header: HeaderT> {
 #[cfg(test)]
 fn check_finality_proof<Header: HeaderT, J>(
 	current_set_id: u64,
-	current_authorities: AuthorityList,
+	current_authorities: sp_finality_grandpa::AuthorityList,
 	remote_proof: Vec<u8>,
 ) -> ClientResult<FinalityProof<Header>>
 where
@@ -529,70 +280,7 @@ where
 			ClientError::Consensus(sp_consensus::Error::InvalidAuthoritiesSet),
 		)?;
 
-		GrandpaJustification::verify(self, set_id, &authorities)
-	}
-}
-
-impl<Block: BlockT> BlockJustification<Block::Header> for GrandpaJustification<Block> {
-	fn number(&self) -> NumberFor<Block> {
-		self.commit.target_number.clone()
-	}
-	fn hash(&self) -> Block::Hash {
-		self.commit.target_hash.clone()
-	}
-}
-
-/// Simple cache for warp sync queries.
-pub struct WarpSyncFragmentCache<Header: HeaderT> {
-	header_has_proof_fragment: std::collections::HashMap<Header::Number, bool>,
-	cache: linked_hash_map::LinkedHashMap<
-		Header::Number,
-		(AuthoritySetProofFragment<Header>, Header::Number),
-		>,
-	limit: usize,
-}
-
-impl<Header: HeaderT> WarpSyncFragmentCache<Header> {
-	/// Instantiate a new cache for the warp sync prover.
-	pub fn new(size: usize) -> Self {
-		WarpSyncFragmentCache {
-			header_has_proof_fragment: Default::default(),
-			cache: Default::default(),
-			limit: size,
-		}
-	}
-
-	fn new_item(
-		&mut self,
-		at: Header::Number,
-		item: Option<(AuthoritySetProofFragment<Header>, Header::Number)>,
-	) {
-		self.header_has_proof_fragment.insert(at, item.is_some());
-
-		if let Some(item) = item {
-			if self.cache.len() == self.limit {
-				self.pop_one();
-			}
-
-			self.cache.insert(at, item);
-		}
-	}
-
-	fn pop_one(&mut self) {
-		if let Some((header_number, _)) = self.cache.pop_front() {
-			self.header_has_proof_fragment.remove(&header_number);
-		}
-	}
-
-	fn get_item(
-		&mut self,
-		block: Header::Number,
-	) -> Option<Option<(AuthoritySetProofFragment<Header>, Header::Number)>> {
-		match self.header_has_proof_fragment.get(&block) {
-			Some(true) => Some(self.cache.get_refresh(&block).cloned()),
-			Some(false) => Some(None),
-			None => None
-		}
+		GrandpaJustification::verify_with_voter_set(self, set_id, &authorities)
 	}
 }
 
@@ -623,15 +311,6 @@ pub(crate) mod tests {
 
 	#[derive(Debug, PartialEq, Encode, Decode)]
 	pub struct TestBlockJustification(TestJustification, u64, H256);
-
-	impl BlockJustification<Header> for TestBlockJustification {
-		fn number(&self) -> <Header as HeaderT>::Number {
-			self.1
-		}
-		fn hash(&self) -> <Header as HeaderT>::Hash {
-			self.2.clone()
-		}
-	}
 
 	impl ProvableJustification<Header> for TestBlockJustification {
 		fn verify(&self, set_id: u64, authorities: &[(AuthorityId, u64)]) -> ClientResult<()> {
@@ -825,162 +504,5 @@ pub(crate) mod tests {
 				unknown_headers: vec![header(6)],
 			}
 		);
-	}
-
-	#[test]
-	fn warp_sync_proof_encoding_decoding() {
-		fn test_blockchain(
-			nb_blocks: u64,
-			mut set_change: &[(u64, Vec<u8>)],
-			mut justifications: &[(u64, Vec<u8>)],
-		) -> (InMemoryBlockchain<Block>, Vec<H256>) {
-			let blockchain = InMemoryBlockchain::<Block>::new();
-			let mut hashes = Vec::<H256>::new();
-			let mut set_id = 0;
-			for i in 0..nb_blocks {
-				let mut set_id_next = set_id;
-				let mut header = header(i);
-				set_change.first()
-					.map(|j| if i == j.0 {
-						set_change = &set_change[1..];
-						let next_authorities: Vec<_> = j.1.iter().map(|i| (AuthorityId::from_slice(&[*i; 32]), 1u64)).collect();
-						set_id_next += 1;
-						header.digest_mut().logs.push(
-							sp_runtime::generic::DigestItem::Consensus(
-								sp_finality_grandpa::GRANDPA_ENGINE_ID,
-								sp_finality_grandpa::ConsensusLog::ScheduledChange(
-									sp_finality_grandpa::ScheduledChange { delay: 0u64, next_authorities }
-								).encode(),
-							));
-					});
-
-				if let Some(parent) = hashes.last() {
-					header.set_parent_hash(parent.clone());
-				}
-				let header_hash = header.hash();
-
-				let justification = justifications.first()
-					.and_then(|j| if i == j.0 {
-						justifications = &justifications[1..];
-
-						let authority = j.1.iter().map(|j|
-							(AuthorityId::from_slice(&[*j; 32]), 1u64)
-						).collect();
-						let justification = TestBlockJustification(
-							TestJustification((set_id, authority), vec![i as u8]),
-							i,
-							header_hash,
-						);
-						Some(justification.encode())
-					} else {
-						None
-					});
-				hashes.push(header_hash.clone());
-				set_id = set_id_next;
-
-				blockchain.insert(header_hash, header, justification, None, NewBlockState::Final)
-					.unwrap();
-					}
-			(blockchain, hashes)
-		}
-
-		let (blockchain, hashes) = test_blockchain(
-			7,
-			vec![(3, vec![9])].as_slice(),
-			vec![
-			(1, vec![1, 2, 3]),
-			(2, vec![1, 2, 3]),
-			(3, vec![1, 2, 3]),
-			(4, vec![9]),
-			(6, vec![9]),
-			].as_slice(),
-		);
-
-		// proof after set change
-		let mut cache = WarpSyncFragmentCache::new(5);
-		let proof_no_cache = prove_warp_sync(&blockchain, hashes[6], None, Some(&mut cache)).unwrap();
-		let proof = prove_warp_sync(&blockchain, hashes[6], None, Some(&mut cache)).unwrap();
-		assert_eq!(proof_no_cache, proof);
-
-		let initial_authorities: Vec<_> = [1u8, 2, 3].iter().map(|i|
-			(AuthorityId::from_slice(&[*i; 32]), 1u64)
-		).collect();
-
-		let authorities_next: Vec<_> = [9u8].iter().map(|i|
-			(AuthorityId::from_slice(&[*i; 32]), 1u64)
-		).collect();
-
-		assert!(check_warp_sync_proof::<Block, TestBlockJustification>(
-				0,
-				initial_authorities.clone(),
-				proof.clone(),
-		).is_err());
-		assert!(check_warp_sync_proof::<Block, TestBlockJustification>(
-				0,
-				authorities_next.clone(),
-				proof.clone(),
-		).is_err());
-		assert!(check_warp_sync_proof::<Block, TestBlockJustification>(
-				1,
-				initial_authorities.clone(),
-				proof.clone(),
-		).is_err());
-		let (
-			_header,
-			current_set_id,
-			current_set,
-		) = check_warp_sync_proof::<Block, TestBlockJustification>(
-		1,
-		authorities_next.clone(),
-		proof.clone(),
-		).unwrap();
-
-		assert_eq!(current_set_id, 1);
-		assert_eq!(current_set, authorities_next);
-
-		// proof before set change
-		let proof = prove_warp_sync(&blockchain, hashes[1], None, None).unwrap();
-		let (
-			_header,
-			current_set_id,
-			current_set,
-		) = check_warp_sync_proof::<Block, TestBlockJustification>(
-		0,
-		initial_authorities.clone(),
-		proof.clone(),
-		).unwrap();
-
-		assert_eq!(current_set_id, 1);
-		assert_eq!(current_set, authorities_next);
-
-		// two changes
-		let (blockchain, hashes) = test_blockchain(
-			13,
-			vec![(3, vec![7]), (8, vec![9])].as_slice(),
-			vec![
-			(1, vec![1, 2, 3]),
-			(2, vec![1, 2, 3]),
-			(3, vec![1, 2, 3]),
-			(4, vec![7]),
-			(6, vec![7]),
-			(8, vec![7]), // warning, requires a justification on change set
-			(10, vec![9]),
-			].as_slice(),
-		);
-
-		// proof before set change
-		let proof = prove_warp_sync(&blockchain, hashes[1], None, None).unwrap();
-		let (
-			_header,
-			current_set_id,
-			current_set,
-		) = check_warp_sync_proof::<Block, TestBlockJustification>(
-		0,
-		initial_authorities.clone(),
-		proof.clone(),
-		).unwrap();
-
-		assert_eq!(current_set_id, 2);
-		assert_eq!(current_set, authorities_next);
 	}
 }

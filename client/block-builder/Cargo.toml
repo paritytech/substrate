@@ -17,7 +17,6 @@ targets = ["x86_64-unknown-linux-gnu"]
 sp-state-machine = { version = "0.9.0", path = "../../primitives/state-machine" }
 sp-runtime = { version = "3.0.0", path = "../../primitives/runtime" }
 sp-api = { version = "3.0.0", path = "../../primitives/api" }
-sp-consensus = { version = "0.9.0", path = "../../primitives/consensus/common" }
 sp-blockchain = { version = "3.0.0", path = "../../primitives/blockchain" }
 sp-core = { version = "3.0.0", path = "../../primitives/core" }
 sp-block-builder = { version = "3.0.0", path = "../../primitives/block-builder" }
