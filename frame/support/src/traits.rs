@@ -1519,7 +1519,7 @@ pub trait OnFinalize<BlockNumber> {
 }
 
 pub trait OnIdle<BlockNumber> {
-	/// The block is being finalized. Implement to have something happen.
+	/// The block is being finalized. Implement to have something happen if the remaining_weight is high enough.
 	///
 	/// NOTE: This function is called AFTER ALL extrinsics in a block are applied,
 	/// including inherent extrinsics.

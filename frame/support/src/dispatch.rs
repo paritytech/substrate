@@ -294,6 +294,12 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 ///   * `fn on_initialize(n: BlockNumber) -> frame_support::weights::Weight` or
 ///   * `fn on_initialize() -> frame_support::weights::Weight`
 ///
+/// * `on_idle`: Executes at the end of a block. Passes a remaining weight to provide a threshold
+/// for when to execute non vital functions. Using this function will implement the
+/// [`OnIdle`] trait.
+/// Function signature is:
+///   * `fn on_idle(n: BlockNumber, remaining_weight: Weight) -> frame_support::weights::Weight`
+///
 /// * `on_finalize`: Executes at the end of a block. Using this function will
 /// implement the [`OnFinalize`](./traits/trait.OnFinalize.html) trait.
 /// Function signature can be either:
