@@ -56,7 +56,7 @@ impl<H, N: Ord> FinalizationDisplaced<H, N> {
 		self.leaves.append(&mut other.leaves);
 	}
 
-	/// Iterate over all displaced blocks.
+	/// Iterate over all displaced leaves.
 	pub fn leaves(&self) -> impl IntoIterator<Item=&H> {
 		self.leaves.values().flatten()
 	}
