@@ -115,17 +115,24 @@ use sp_core::{
 };
 use codec::{Encode, Decode};
 use jsonrpsee_http_client::{HttpClient, HttpConfig};
-use jsonrpsee_types::{
-	jsonrpc::{self, Params},
-	traits::Client
-};
 
 type KeyPair = (StorageKey, StorageData);
 type Number = u32;
 type Hash = sp_core::H256;
 // TODO: make these two generic.
 
-const LOG_TARGET: &'static str = "remote-ext";
+const LOG_TARGET: &str = "remote-ext";
+const TARGET: &str = "http://localhost:9933";
+
+// This faulty warnings: https://github.com/paritytech/jsonrpsee/issues/106
+jsonrpsee_proc_macros::rpc_client_api! {
+	RpcApi {
+		#[rpc(method = "state_getPairs")]
+		fn storage_pairs(prefix: StorageKey, hash: Option<Hash>) -> Vec<(StorageKey, StorageData)>;
+		#[rpc(method = "chain_getFinalizedHead")]
+		fn finalized_head() -> Hash;
+	}
+}
 
 /// The execution mode.
 #[derive(Clone)]
@@ -167,12 +174,12 @@ pub struct OnlineConfig {
 impl Default for OnlineConfig {
 	fn default() -> Self {
 		Self {
-			uri: "http://localhost:9933".into(),
+			uri: TARGET.to_owned(),
 			rpc: Arc::new(
 				HttpClient::new(
-					"http://localhost:9933",
+					TARGET,
 					HttpConfig { max_request_body_size: u32::MAX }
-				).unwrap()
+				).expect("valid HTTP url; qed")
 			),
 			at: None,
 			cache: None,
@@ -240,9 +247,7 @@ impl Builder {
 impl Builder {
 	async fn rpc_get_head(&self) -> Result<Hash, &'static str> {
 		trace!(target: LOG_TARGET, "rpc: finalized_head");
-		self.as_online().rpc.request("chain_getFinalizedHead", Params::None)
-			.await
-			.map_err(|_| "chain_getFinalizedHead failed")
+		RpcApi::finalized_head(&*self.as_online().rpc).await.map_err(|_| "rpc finalized_head failed.")
 	}
 
 	/// Relay the request to `state_getPairs` rpc endpoint.
@@ -254,10 +259,7 @@ impl Builder {
 		at: Hash,
 	) -> Result<Vec<KeyPair>, &'static str> {
 		trace!(target: LOG_TARGET, "rpc: storage_pairs: {:?} / {:?}", prefix, at);
-		let params = Params::Array(vec![jsonrpc::to_value(prefix).unwrap(), jsonrpc::to_value(at).unwrap()]);
-		self.as_online().rpc.request("state_getPairs", params)
-			.await
-			.map_err(|_| "state_getPairs request failed")
+		RpcApi::storage_pairs(&*self.as_online().rpc, prefix, at).await.map_err(|_| "rpc finalized_head failed.")
 	}
 }
 
