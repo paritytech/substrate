@@ -19,7 +19,7 @@ use crate::*;
 use mock::{*, Origin};
 use sp_core::H256;
 use sp_runtime::{DispatchError, DispatchErrorWithPostInfo, traits::{Header, BlakeTwo256}};
-use frame_support::{assert_noop, weights::WithPostDispatchInfo, dispatch::PostDispatchInfo};
+use frame_support::{assert_ok, weights::WithPostDispatchInfo, dispatch::PostDispatchInfo};
 
 #[test]
 fn origin_works() {
@@ -377,12 +377,11 @@ fn events_not_emitted_during_genesis() {
 	new_test_ext().execute_with(|| {
 		// Block Number is zero at genesis
 		assert!(System::block_number().is_zero());
-		let mut account_data = AccountInfo::default();
-		System::on_created_account(Default::default(), &mut account_data);
+		assert_ok!(System::remark_with_event(Origin::signed(1), vec![1,2,3]));
 		assert!(System::events().is_empty());
 		// Events will be emitted starting on block 1
 		System::set_block_number(1);
-		System::on_created_account(Default::default(), &mut account_data);
+		assert_ok!(System::remark_with_event(Origin::signed(1), vec![1,2,3]));
 		assert!(System::events().len() == 1);
 	});
 }

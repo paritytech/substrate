@@ -16,7 +16,6 @@
 // limitations under the License.
 
 use crate::{self as frame_system, *};
-use sp_std::cell::RefCell;
 use sp_core::H256;
 use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
@@ -75,15 +74,6 @@ parameter_types! {
 		limits::BlockLength::max_with_normal_ratio(1024, NORMAL_DISPATCH_RATIO);
 }
 
-thread_local!{
-	pub static KILLED: RefCell<Vec<u64>> = RefCell::new(vec![]);
-}
-
-pub struct RecordKilled;
-impl OnKilledAccount<u64> for RecordKilled {
-	fn on_killed_account(who: &u64) { KILLED.with(|r| r.borrow_mut().push(*who)) }
-}
-
 impl Config for Test {
 	type BaseCallFilter = ();
 	type BlockWeights = RuntimeBlockWeights;
@@ -102,11 +92,9 @@ impl Config for Test {
 	type DbWeight = DbWeight;
 	type Version = Version;
 	type PalletInfo = PalletInfo;
-	type AccountData = u32;
-	type OnNewAccount = ();
-	type OnKilledAccount = RecordKilled;
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type AccountStorage = System;
 }
 
 pub type SysEvent = frame_system::Event<Test>;

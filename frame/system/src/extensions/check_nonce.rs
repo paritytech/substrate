@@ -126,13 +126,7 @@ mod tests {
 	#[test]
 	fn signed_ext_check_nonce_works() {
 		new_test_ext().execute_with(|| {
-			crate::Account::<Test>::insert(1, crate::AccountInfo {
-				nonce: 1,
-				consumers: 0,
-				providers: 0,
-				sufficients: 0,
-				data: 0,
-			});
+			crate::Account::<Test>::insert(1, 1);
 			let info = DispatchInfo::default();
 			let len = 0_usize;
 			// stale
