@@ -498,8 +498,7 @@ enum Register {
 #[macro_export(local_inner_macros)]
 macro_rules! telemetry {
 	( $telemetry:expr; $verbosity:expr; $msg:expr; $( $t:tt )* ) => {{
-		let telemetry = $telemetry.as_ref();
-		if let Some(telemetry) = telemetry {
+		if let Some(telemetry) = $telemetry.as_ref() {
 			let verbosity: $crate::VerbosityLevel = $verbosity;
 			match format_fields_to_json!($($t)*) {
 				Err(err) => {
