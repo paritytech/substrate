@@ -22,6 +22,7 @@ pallet-indices = { version = "3.0.0", path = "../../indices" }
 pallet-balances = { version = "3.0.0", path = "../../balances" }
 pallet-timestamp = { version = "3.0.0", path = "../../timestamp" }
 frame-system = { version = "3.0.0", path = "../../system" }
+frame-accounts = { version = "3.0.0", path = "../../accounts" }
 frame-support = { version = "3.0.0", path = "../../support" }
 sp-std = { version = "3.0.0", path = "../../../primitives/std" }
 sp-io ={ version = "3.0.0", path = "../../../primitives/io" }

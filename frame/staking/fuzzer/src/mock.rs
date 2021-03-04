@@ -34,6 +34,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		Accounts: frame_accounts::{Module, Call, Storage, Event<T>},
 		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
 		Staking: pallet_staking::{Module, Call, Config<T>, Storage, Event<T>, ValidateUnsigned},
 		Indices: pallet_indices::{Module, Call, Storage, Config<T>, Event<T>},
@@ -59,12 +60,18 @@ impl frame_system::Config for Test {
 	type BlockHashCount = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;
+	type SystemWeightInfo = ();
+	type SS58Prefix = ();
+	type AccountStorage = Accounts;
+}
+
+impl frame_accounts::Config for Test {
+	type Event = Event;
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
-	type SystemWeightInfo = ();
-	type SS58Prefix = ();
 }
+
 parameter_types! {
 	pub const ExistentialDeposit: Balance = 10;
 }
@@ -74,7 +81,7 @@ impl pallet_balances::Config for Test {
 	type Event = Event;
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
-	type AccountStore = System;
+	type AccountStore = Accounts;
 	type WeightInfo = ();
 }
 impl pallet_indices::Config for Test {

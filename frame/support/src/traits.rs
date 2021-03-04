@@ -2259,6 +2259,8 @@ pub trait AccountApi<AccountId, Index> {
 	/// Increment a particular account's nonce by 1.
 	fn inc_account_nonce(who: AccountId);
 
+	/// Return the storage key for an account.
+	fn hashed_key_for(who: AccountId) -> Vec<u8>;
 }
 
 #[cfg(test)]

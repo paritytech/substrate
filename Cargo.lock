@@ -5273,6 +5273,7 @@ dependencies = [
 name = "pallet-staking-fuzz"
 version = "0.0.0"
 dependencies = [
+ "frame-accounts",
  "frame-support",
  "frame-system",
  "honggfuzz",

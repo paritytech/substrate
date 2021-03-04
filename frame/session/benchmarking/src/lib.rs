@@ -25,7 +25,7 @@ mod mock;
 use sp_std::prelude::*;
 use sp_std::vec;
 
-use frame_benchmarking::{benchmarks, impl_benchmark_test_suite};
+use frame_benchmarking::{benchmarks, impl_benchmark_test_suite, whitelist_account};
 use frame_support::{
 	codec::Decode,
 	storage::StorageValue,
@@ -63,8 +63,7 @@ benchmarks! {
 		let keys = T::Keys::default();
 		let proof: Vec<u8> = vec![0,1,2,3];
 		// Whitelist controller account from further DB operations.
-		let v_controller_key = frame_system::Account::<T>::hashed_key_for(&v_controller);
-		frame_benchmarking::benchmarking::add_to_whitelist(v_controller_key.into());
+		whitelist_account!(v_controller);
 	}: _(RawOrigin::Signed(v_controller), keys, proof)
 
 	purge_keys {
@@ -80,8 +79,7 @@ benchmarks! {
 		let proof: Vec<u8> = vec![0,1,2,3];
 		Session::<T>::set_keys(RawOrigin::Signed(v_controller.clone()).into(), keys, proof)?;
 		// Whitelist controller account from further DB operations.
-		let v_controller_key = frame_system::Account::<T>::hashed_key_for(&v_controller);
-		frame_benchmarking::benchmarking::add_to_whitelist(v_controller_key.into());
+		whitelist_account!(v_controller);
 	}: _(RawOrigin::Signed(v_controller))
 
 	#[extra]

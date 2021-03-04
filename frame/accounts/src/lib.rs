@@ -1,6 +1,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::marker::PhantomData;
+use sp_std::{
+	vec::Vec,
+	marker::PhantomData,
+};
 use sp_runtime::{
 	RuntimeDebug,
 	traits::StoredMapError,
@@ -154,6 +157,11 @@ pub mod pallet {
 		/// Increment a particular account's nonce by 1.
 		fn inc_account_nonce(who: T::AccountId) {
 			Account::<T>::mutate(who, |a| a.nonce += T::Index::one());
+		}
+
+		/// Return the storage key for an account.
+		fn hashed_key_for(who: T::AccountId) -> Vec<u8> {
+			Account::<T>::hashed_key_for(who)
 		}
 	}
 
