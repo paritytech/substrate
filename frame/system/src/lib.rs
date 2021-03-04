@@ -78,7 +78,7 @@ use sp_runtime::{
 		self, CheckEqual, AtLeast32Bit, Zero, Lookup, LookupError,
 		SimpleBitOps, Hash, Member, MaybeDisplay, BadOrigin,
 		MaybeSerializeDeserialize, MaybeMallocSizeOf, StaticLookup, One, Bounded,
-		Dispatchable, AtLeast32BitUnsigned, Saturating, StoredMapError,
+		Dispatchable, AtLeast32BitUnsigned, Saturating,
 	},
 	offchain::storage_lock::BlockNumberProvider,
 };
@@ -87,8 +87,8 @@ use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
 use frame_support::{
 	Parameter, storage,
 	traits::{
-		Contains, Get, PalletInfo, OnNewAccount, OnKilledAccount, HandleLifetime,
-		StoredMap, EnsureOrigin, OriginTrait, Filter, AccountApi,
+		Contains, Get, PalletInfo,
+		EnsureOrigin, OriginTrait, Filter, AccountApi,
 	},
 	weights::{
 		Weight, RuntimeDbWeight, DispatchInfo, DispatchClass,
@@ -96,7 +96,7 @@ use frame_support::{
 	},
 	dispatch::DispatchResultWithPostInfo,
 };
-use codec::{Encode, Decode, FullCodec, EncodeLike};
+use codec::{Encode, Decode};
 
 #[cfg(feature = "std")]
 use frame_support::traits::GenesisBuild;
@@ -707,25 +707,6 @@ type EventIndex = u32;
 
 /// Type used to encode the number of references an account has.
 pub type RefCount = u32;
-
-/// Information of an account.
-#[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]
-pub struct AccountInfo<Index, AccountData> {
-	/// The number of transactions this account has sent.
-	pub nonce: Index,
-	/// The number of other modules that currently depend on this account's existence. The account
-	/// cannot be reaped until this is zero.
-	pub consumers: RefCount,
-	/// The number of other modules that allow this account to exist. The account may not be reaped
-	/// until this and `sufficients` are both zero.
-	pub providers: RefCount,
-	/// The number of modules that allow this account to exist for their own purposes only. The
-	/// account may not be reaped until this and `providers` are both zero.
-	pub sufficients: RefCount,
-	/// The additional data that belongs to this account. Used to store the balance(s) in a lot of
-	/// chains.
-	pub data: AccountData,
-}
 
 /// Stores the `spec_version` and `spec_name` of when the last runtime upgrade
 /// happened.

@@ -1702,6 +1702,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "frame-accounts-rpc-runtime-api"
+version = "3.0.0"
+dependencies = [
+ "parity-scale-codec",
+ "sp-api",
+]
+
+[[package]]
 name = "frame-benchmarking"
 version = "3.1.0"
 dependencies = [
@@ -1885,14 +1893,6 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
-]
-
-[[package]]
-name = "frame-system-rpc-runtime-api"
-version = "3.0.0"
-dependencies = [
- "parity-scale-codec",
- "sp-api",
 ]
 
 [[package]]
@@ -4112,12 +4112,12 @@ dependencies = [
 name = "node-runtime"
 version = "2.0.1"
 dependencies = [
+ "frame-accounts-rpc-runtime-api",
  "frame-benchmarking",
  "frame-executive",
  "frame-support",
  "frame-system",
  "frame-system-benchmarking",
- "frame-system-rpc-runtime-api",
  "frame-try-runtime",
  "hex-literal",
  "log",
@@ -4226,12 +4226,12 @@ name = "node-template-runtime"
 version = "2.0.0"
 dependencies = [
  "frame-accounts",
+ "frame-accounts-rpc-runtime-api",
  "frame-benchmarking",
  "frame-executive",
  "frame-support",
  "frame-system",
  "frame-system-benchmarking",
- "frame-system-rpc-runtime-api",
  "hex-literal",
  "pallet-aura",
  "pallet-balances",
@@ -4575,6 +4575,7 @@ dependencies = [
 name = "pallet-balances"
 version = "3.0.0"
 dependencies = [
+ "frame-accounts",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -9241,7 +9242,7 @@ dependencies = [
 name = "substrate-frame-rpc-system"
 version = "3.0.0"
 dependencies = [
- "frame-system-rpc-runtime-api",
+ "frame-accounts-rpc-runtime-api",
  "futures 0.3.12",
  "jsonrpc-core",
  "jsonrpc-core-client",
@@ -9307,9 +9308,9 @@ version = "2.0.0"
 dependencies = [
  "cfg-if 1.0.0",
  "frame-accounts",
+ "frame-accounts-rpc-runtime-api",
  "frame-support",
  "frame-system",
- "frame-system-rpc-runtime-api",
  "log",
  "memory-db",
  "pallet-babe",

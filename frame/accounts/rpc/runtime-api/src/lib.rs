@@ -15,11 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Runtime API definition required by System RPC extensions.
+//! Runtime API definition required by Accounts RPC extensions.
 //!
 //! This API should be imported and implemented by the runtime,
 //! of a node that wants to use the custom RPC extension
-//! adding System access methods.
+//! adding Accounts access methods.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 

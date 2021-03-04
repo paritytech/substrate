@@ -866,7 +866,7 @@ cfg_if! {
 				}
 			}
 
-			impl frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
+			impl frame_accounts_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
 				fn account_nonce(_account: AccountId) -> Index {
 					0
 				}
@@ -1101,7 +1101,7 @@ cfg_if! {
 				}
 			}
 
-			impl frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
+			impl frame_accounts_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
 				fn account_nonce(_account: AccountId) -> Index {
 					0
 				}

@@ -40,7 +40,7 @@ use sp_transaction_pool::{TransactionPool, InPoolTransaction};
 use sp_block_builder::BlockBuilder;
 use sc_rpc_api::DenyUnsafe;
 
-pub use frame_system_rpc_runtime_api::AccountNonceApi;
+pub use frame_accounts_rpc_runtime_api::AccountNonceApi;
 pub use self::gen_client::Client as SystemClient;
 
 /// Future that resolves to account nonce.

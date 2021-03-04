@@ -43,7 +43,7 @@ frame-benchmarking = { version = "3.1.0", default-features = false, path = "../.
 frame-support = { version = "3.0.0", default-features = false, path = "../../../frame/support" }
 frame-system = { version = "3.0.0", default-features = false, path = "../../../frame/system" }
 frame-system-benchmarking = { version = "3.0.0", default-features = false, path = "../../../frame/system/benchmarking", optional = true }
-frame-system-rpc-runtime-api = { version = "3.0.0", default-features = false, path = "../../../frame/system/rpc/runtime-api/" }
+frame-accounts-rpc-runtime-api = { version = "3.0.0", default-features = false, path = "../../../frame/accounts/rpc/runtime-api/" }
 frame-try-runtime = { version = "0.9.0", default-features = false, path = "../../../frame/try-runtime", optional = true }
 pallet-assets = { version = "3.0.0", default-features = false, path = "../../../frame/assets" }
 pallet-authority-discovery = { version = "3.0.0", default-features = false, path = "../../../frame/authority-discovery" }
@@ -143,7 +143,7 @@ std = [
 	"pallet-sudo/std",
 	"frame-support/std",
 	"frame-benchmarking/std",
-	"frame-system-rpc-runtime-api/std",
+	"frame-accounts-rpc-runtime-api/std",
 	"frame-system/std",
 	"pallet-election-provider-multi-phase/std",
 	"pallet-timestamp/std",

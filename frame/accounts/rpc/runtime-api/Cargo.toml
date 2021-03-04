@@ -1,12 +1,12 @@
 [package]
-name = "frame-system-rpc-runtime-api"
+name = "frame-accounts-rpc-runtime-api"
 version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
-description = "Runtime API definition required by System RPC extensions."
+description = "Runtime API definition required by Accounts RPC extensions."
 readme = "README.md"
 
 [package.metadata.docs.rs]

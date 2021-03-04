@@ -176,7 +176,6 @@ use sp_runtime::{
 		MaybeSerializeDeserialize, Saturating, Bounded, StoredMapError,
 	},
 };
-use frame_system as system;
 pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
 pub use weights::WeightInfo;
 
@@ -189,7 +188,7 @@ pub mod pallet {
 	use super::*;
 
 	#[pallet::config]
-	pub trait Config<I: 'static = ()>: frame_system::Config {
+	pub trait Config<I: 'static = ()>: frame_system::Config + frame_accounts::Config {
 		/// The balance of an account.
 		type Balance: Parameter + Member + AtLeast32BitUnsigned + Codec + Default + Copy +
 			MaybeSerializeDeserialize + Debug;
@@ -782,12 +781,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			if existed {
 				// TODO: use Locks::<T, I>::hashed_key
 				// https://github.com/paritytech/substrate/issues/4969
-				system::Pallet::<T>::dec_consumers(who);
+				frame_accounts::Pallet::<T>::dec_consumers(who);
 			}
 		} else {
 			Locks::<T, I>::insert(who, locks);
 			if !existed {
-				if system::Pallet::<T>::inc_consumers(who).is_err() {
+				if frame_accounts::Pallet::<T>::inc_consumers(who).is_err() {
 					// No providers for the locks. This is impossible under normal circumstances
 					// since the funds that are under the lock will themselves be stored in the
 					// account and therefore will need a reference.
@@ -1070,7 +1069,7 @@ impl<T: Config<I>, I: 'static> Currency<T::AccountId> for Pallet<T, I> where
 						// TODO: This is over-conservative. There may now be other providers, and this pallet
 						//   may not even be a provider.
 						let allow_death = existence_requirement == ExistenceRequirement::AllowDeath;
-						let allow_death = allow_death && !system::Pallet::<T>::is_provider_required(transactor);
+						let allow_death = allow_death && !frame_accounts::Pallet::<T>::is_provider_required(transactor);
 						ensure!(allow_death || from_account.total() >= ed, Error::<T, I>::KeepAlive);
 
 						Ok(())
