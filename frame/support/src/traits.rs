@@ -2007,7 +2007,7 @@ pub trait Hooks<BlockNumber> {
 	/// The block is being finalized. Implement to have something happen.
 	fn on_finalize(_n: BlockNumber) {}
 
-	/// The block is being finalized. Implement to have something happen.
+	/// The block is being finalized. Implement to have something happen based on remaining weight.
 	fn on_idle(_n: BlockNumber, _remaining_weight: crate::weights::Weight) -> crate::weights::Weight { 0 }
 
 	/// The block is being initialized. Implement to have something happen.
