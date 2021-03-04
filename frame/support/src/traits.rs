@@ -2254,13 +2254,13 @@ pub trait BasicAccount<AccountId, Index> {
 	fn get(who: &AccountId) -> Self::AccountInfo;
 
 	/// Retrieve the account transaction counter from storage.
-	fn account_nonce(who: AccountId) -> Index;
+	fn account_nonce(who: &AccountId) -> Index;
 
 	/// Increment a particular account's nonce by 1.
-	fn inc_account_nonce(who: AccountId);
+	fn inc_account_nonce(who: &AccountId);
 
 	/// Return the storage key for an account.
-	fn hashed_key_for(who: AccountId) -> Vec<u8>;
+	fn hashed_key_for(who: &AccountId) -> Vec<u8>;
 }
 
 /// An API on top of `BasicAccount` which provides the ability for users to place

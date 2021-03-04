@@ -74,7 +74,7 @@ impl<T: Config> SignedExtension for CheckNonce<T> where
 		_info: &DispatchInfoOf<Self::Call>,
 		_len: usize,
 	) -> Result<(), TransactionValidityError> {
-		let account_nonce = T::AccountStorage::account_nonce(who.clone());
+		let account_nonce = T::AccountStorage::account_nonce(who);
 		if self.0 != account_nonce {
 			return Err(
 				if self.0 < account_nonce {
@@ -84,7 +84,7 @@ impl<T: Config> SignedExtension for CheckNonce<T> where
 				}.into()
 			)
 		}
-		T::AccountStorage::inc_account_nonce(who.clone());
+		T::AccountStorage::inc_account_nonce(who);
 		Ok(())
 	}
 
@@ -96,7 +96,7 @@ impl<T: Config> SignedExtension for CheckNonce<T> where
 		_len: usize,
 	) -> TransactionValidity {
 		// check index
-		let account_nonce = T::AccountStorage::account_nonce(who.clone());
+		let account_nonce = T::AccountStorage::account_nonce(who);
 		if self.0 < account_nonce {
 			return InvalidTransaction::Stale.into()
 		}

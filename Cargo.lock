@@ -1685,14 +1685,14 @@ dependencies = [
 name = "frame-accounts"
 version = "3.0.0"
 dependencies = [
- "criterion",
  "frame-support",
  "frame-system",
  "log",
  "parity-scale-codec",
- "sp-externalities",
+ "serde",
+ "sp-core",
+ "sp-io",
  "sp-std",
- "substrate-test-runtime-client",
 ]
 
 [[package]]

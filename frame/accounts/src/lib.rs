@@ -15,6 +15,12 @@ use frame_support::{
 };
 use codec::{Encode, Decode, FullCodec};
 
+#[cfg(test)]
+mod mock;
+
+#[cfg(test)]
+mod tests;
+
 /// Type used to encode the number of references an account has.
 pub type RefCount = u32;
 
@@ -44,8 +50,8 @@ pub enum RefStatus {
 	Unreferenced,
 }
 
-/// Some resultant status relevant to incrementing a provider reference.
-#[derive(RuntimeDebug)]
+/// Some resultant status relevant to incrementing a provider/self-sufficient reference.
+#[derive(Eq, PartialEq, RuntimeDebug)]
 pub enum IncRefStatus {
 	/// Account was created.
 	Created,
@@ -53,8 +59,8 @@ pub enum IncRefStatus {
 	Existed,
 }
 
-/// Some resultant status relevant to decrementing a provider reference.
-#[derive(RuntimeDebug)]
+/// Some resultant status relevant to decrementing a provider/self-sufficient reference.
+#[derive(Eq, PartialEq, RuntimeDebug)]
 pub enum DecRefStatus {
 	/// Account was destroyed.
 	Reaped,
@@ -63,14 +69,14 @@ pub enum DecRefStatus {
 }
 
 /// Some resultant status relevant to decrementing a provider reference.
-#[derive(RuntimeDebug)]
+#[derive(Eq, PartialEq, RuntimeDebug)]
 pub enum DecRefError {
 	/// Account cannot have the last provider reference removed while there is a consumer.
 	ConsumerRemaining,
 }
 
-/// Some resultant status relevant to incrementing a provider reference.
-#[derive(RuntimeDebug)]
+/// Some resultant status relevant to incrementing a consumer reference.
+#[derive(Eq, PartialEq, RuntimeDebug)]
 pub enum IncRefError {
 	/// Account cannot introduce a consumer while there are no providers.
 	NoProviders,
@@ -150,17 +156,17 @@ pub mod pallet {
 		}
 
 		/// Retrieve the account transaction counter from storage.
-		fn account_nonce(who: T::AccountId) -> T::Index {
+		fn account_nonce(who: &T::AccountId) -> T::Index {
 			Account::<T>::get(who).nonce
 		}
 
 		/// Increment a particular account's nonce by 1.
-		fn inc_account_nonce(who: T::AccountId) {
+		fn inc_account_nonce(who: &T::AccountId) {
 			Account::<T>::mutate(who, |a| a.nonce += T::Index::one());
 		}
 
 		/// Return the storage key for an account.
-		fn hashed_key_for(who: T::AccountId) -> Vec<u8> {
+		fn hashed_key_for(who: &T::AccountId) -> Vec<u8> {
 			Account::<T>::hashed_key_for(who)
 		}
 	}

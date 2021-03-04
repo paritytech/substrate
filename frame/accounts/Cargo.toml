@@ -20,9 +20,9 @@ frame-system = { version = "3.0.0", default-features = false, path = "../system"
 log = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]
-criterion = "0.3.3"
-sp-externalities = { version = "0.9.0", path = "../../primitives/externalities" }
-substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
+serde = { version = "1.0.101", features = ["derive"] }
+sp-core = { version = "3.0.0", path = "../../primitives/core" }
+sp-io = { version = "3.0.0", path = "../../primitives/io" }
 
 [features]
 default = ["std"]

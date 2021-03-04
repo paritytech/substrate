@@ -549,7 +549,7 @@ pub trait SendSignedTransaction<
 		account: &Account<T>,
 		call: LocalCall,
 	) -> Option<Result<(), ()>> {
-		let account_nonce = T::AccountStorage::account_nonce(account.id.clone());
+		let account_nonce = T::AccountStorage::account_nonce(&account.id);
 		log::debug!(
 			target: "runtime::offchain",
 			"Creating signed transaction from account: {:?} (nonce: {:?})",
@@ -568,7 +568,7 @@ pub trait SendSignedTransaction<
 		if res.is_ok() {
 			// increment the nonce. This is fine, since the code should always
 			// be running in off-chain context, so we NEVER persists data.
-			T::AccountStorage::inc_account_nonce(account.id.clone());
+			T::AccountStorage::inc_account_nonce(&account.id);
 		}
 
 		Some(res)

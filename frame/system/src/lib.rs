@@ -1293,17 +1293,17 @@ impl<T: Config> BasicAccount<T::AccountId, T::Index> for Pallet<T> {
 	}
 
 	/// Retrieve the account transaction counter from storage.
-	fn account_nonce(who: T::AccountId) -> T::Index {
+	fn account_nonce(who: &T::AccountId) -> T::Index {
 		Account::<T>::get(who)
 	}
 
 	/// Increment a particular account's nonce by 1.
-	fn inc_account_nonce(who: T::AccountId) {
+	fn inc_account_nonce(who: &T::AccountId) {
 		Account::<T>::mutate(who, |a| *a += T::Index::one());
 	}
 
 	/// Return the storage key for an account.
-	fn hashed_key_for(who: T::AccountId) -> Vec<u8> {
+	fn hashed_key_for(who: &T::AccountId) -> Vec<u8> {
 		Account::<T>::hashed_key_for(who)
 	}
 }
