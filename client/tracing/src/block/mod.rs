@@ -37,7 +37,7 @@ use wasm_timer::Instant;
 use log::{log};
 
 // Default to only pallet, frame support and state related traces
-const DEFAULT_TARGETS: &'static str = "pallet,frame,state";
+const DEFAULT_TARGETS: &'static str = "pallet,frame,state,balances,transfer,transferkeepalive";
 const TRACE_TARGET: &'static str = "block_trace";
 
 struct BlockSubscriber {

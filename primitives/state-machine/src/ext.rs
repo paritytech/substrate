@@ -214,6 +214,7 @@ where
 			ext_id = self.id,
 			key = %HexDisplay::from(&key),
 			result = %HexDisplay::from(&ready_to_encode_result.encode()),
+			test = ?result.as_ref().map(HexDisplay::from),
 		);
 		result
 	}
@@ -231,6 +232,7 @@ where
 			key = %HexDisplay::from(&key),
 			result = %HexDisplay::from(&result.encode()),
 		);
+
 		result.map(|r| r.encode())
 	}
 
@@ -254,13 +256,14 @@ where
 		// 	HexDisplay::from(&key),
 		// 	result.as_ref().map(HexDisplay::from)
 		// );
+		let ready_to_encode_result = result.as_ref().map(|v| EncodeOpaqueValue(v.to_vec()));
 		trace!(target: "state",
 			method = "GetChild",
 			ext_id = self.id,
 			key = %HexDisplay::from(&key),
 			// TODO REVIEW is this necessary?
 			child_trie_parent_key_id = %HexDisplay::from(&child_info.storage_key()),
-			result = %HexDisplay::from(&result.encode()),
+			result = %HexDisplay::from(&ready_to_encode_result.encode()),
 		);
 
 		result
@@ -406,11 +409,14 @@ where
 			return;
 		}
 
+		let ready_to_encode_result = value.as_ref().map(|v| EncodeOpaqueValue(v.to_owned()));
 		trace!(target: "state",
 			method = "Put",
 			ext_id = self.id,
 			key = %HexDisplay::from(&key),
 			result = %HexDisplay::from(&value.encode()),
+			result = %HexDisplay::from(&ready_to_encode_result.encode()),
+			test = ?value.as_ref().map(HexDisplay::from),
 		);
 
 		self.mark_dirty();
@@ -429,11 +435,12 @@ where
 		// 	HexDisplay::from(&key),
 		// 	value.as_ref().map(HexDisplay::from)
 		// );
+		let ready_to_encode_result = value.as_ref().map(|v| EncodeOpaqueValue(v.to_owned()));
 		trace!(target: "state",
 			method = "PutChild",
 			ext_id = self.id,
 			key = %HexDisplay::from(&key),
-			result = %HexDisplay::from(&value.encode()),
+			result = %HexDisplay::from(&ready_to_encode_result.encode()),
 		);
 
 		let _guard = guard();
@@ -562,12 +569,11 @@ where
 		// 	HexDisplay::from(&key),
 		// 	HexDisplay::from(&value),
 		// );
-
 		trace!(target: "state",
 			method = "Append",
 			ext_id = self.id,
 			key = %HexDisplay::from(&key),
-			result = %HexDisplay::from(&value.encode()),
+			result = %HexDisplay::from(&value),
 		);
 
 		let _guard = guard();
@@ -602,7 +608,7 @@ where
 			root = %HexDisplay::from(&encoded_root)
 		);
 
-		root.encode()
+		encoded_root
 	}
 
 	fn child_storage_root(
@@ -619,12 +625,20 @@ where
 				.unwrap_or_else(
 					|| empty_child_trie_root::<Layout<H>>()
 				);
-			trace!(target: "state", "{:04x}: ChildRoot({})(cached) {}",
-				self.id,
-				HexDisplay::from(&storage_key),
-				HexDisplay::from(&root.as_ref()),
+			// trace!(target: "state", "{:04x}: ChildRoot({})(cached) {}",
+			// 	self.id,
+			// 	HexDisplay::from(&storage_key),
+			// 	HexDisplay::from(&root.as_ref()),
+			// );
+			let encoded_root = root.encode();
+			trace!(target: "state",
+				method = "ChildRootCached",
+				ext_id = self.id,
+				key = %HexDisplay::from(&storage_key),
+				root = %HexDisplay::from(&encoded_root)
 			);
-			root.encode()
+
+			encoded_root
 		} else {
 			let root = if let Some((changes, info)) = self.overlay.child_changes(storage_key) {
 				let delta = changes.map(|(k, v)| (k.as_ref(), v.value().map(AsRef::as_ref)));
@@ -646,11 +660,18 @@ where
 					self.overlay.set_storage(prefixed_storage_key.into_inner(), Some(root.clone()));
 				}
 
-				trace!(target: "state", "{:04x}: ChildRoot({}) {}",
-					self.id,
-					HexDisplay::from(&storage_key.as_ref()),
-					HexDisplay::from(&root.as_ref()),
+				// trace!(target: "state", "{:04x}: ChildRoot({}) {}",
+				// 	self.id,
+				// 	HexDisplay::from(&storage_key.as_ref()),
+				// 	HexDisplay::from(&root.as_ref()),
+				// );
+				trace!(target: "state",
+					method = "ChildRoot",
+					ext_id = self.id,
+					key = %HexDisplay::from(&storage_key),
+					root = %HexDisplay::from(&root)
 				);
+
 				root
 			} else {
 				// empty overlay
@@ -660,12 +681,20 @@ where
 					.unwrap_or_else(
 						|| empty_child_trie_root::<Layout<H>>()
 					);
-				trace!(target: "state", "{:04x}: ChildRoot({})(no_change) {}",
-					self.id,
-					HexDisplay::from(&storage_key.as_ref()),
-					HexDisplay::from(&root.as_ref()),
+				// trace!(target: "state", "{:04x}: ChildRoot({})(no_change) {}",
+				// 	self.id,
+				// 	HexDisplay::from(&storage_key.as_ref()),
+				// 	HexDisplay::from(&root.as_ref()),
+				// );
+				let encoded_root = root.encode();
+				trace!(target: "state",
+					method = "ChildRootNoChange",
+					ext_id = self.id,
+					key = %HexDisplay::from(&storage_key),
+					root = %HexDisplay::from(&encoded_root)
 				);
-				root.encode()
+
+				encoded_root
 			}
 		}
 	}
