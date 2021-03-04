@@ -787,9 +787,7 @@ mod tests {
 		type BlockHashCount = BlockHashCount;
 		type Version = ();
 		type PalletInfo = PalletInfo;
-		type AccountData = pallet_balances::AccountData<u64>;
-		type OnNewAccount = ();
-		type OnKilledAccount = ();
+		type AccountStorage = System;
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
 	}
@@ -802,7 +800,7 @@ mod tests {
 		type DustRemoval = ();
 		type Event = Event;
 		type ExistentialDeposit = ExistentialDeposit;
-		type AccountStore = System;
+		type AccountStore = Balances;
 		type WeightInfo = ();
 	}
 	impl Config for Test {

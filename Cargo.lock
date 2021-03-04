@@ -4941,6 +4941,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "pallet-accounts",
  "pallet-balances",
  "parity-scale-codec",
  "serde",

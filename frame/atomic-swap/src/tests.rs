@@ -48,9 +48,7 @@ impl frame_system::Config for Test {
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
 	type PalletInfo = PalletInfo;
-	type AccountData = pallet_balances::AccountData<u64>;
-	type OnNewAccount = ();
-	type OnKilledAccount = ();
+	type AccountStorage = System;
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 }
@@ -63,7 +61,7 @@ impl pallet_balances::Config for Test {
 	type DustRemoval = ();
 	type Event = Event;
 	type ExistentialDeposit = ExistentialDeposit;
-	type AccountStore = System;
+	type AccountStore = Balances;
 	type WeightInfo = ();
 }
 parameter_types! {

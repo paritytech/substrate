@@ -61,9 +61,7 @@ impl frame_system::Config for Test {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type Version = ();
-	type AccountData = ();
-	type OnNewAccount = ();
-	type OnKilledAccount = ();
+	type AccountStorage = System;
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 }

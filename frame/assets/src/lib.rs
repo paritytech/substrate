@@ -1162,6 +1162,7 @@ mod tests {
 			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
 			System: frame_system::{Module, Call, Config, Storage, Event<T>},
+			Accounts: pallet_accounts::{Module, Call, Storage, Event<T>},
 			Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
 			Assets: pallet_assets::{Module, Call, Storage, Event<T>},
 		}
@@ -1188,11 +1189,16 @@ mod tests {
 		type BlockHashCount = BlockHashCount;
 		type Version = ();
 		type PalletInfo = PalletInfo;
-		type AccountData = pallet_balances::AccountData<u64>;
-		type OnNewAccount = ();
-		type OnKilledAccount = ();
+		type AccountStorage = Accounts;
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
+	}
+
+	impl pallet_accounts::Config for Test {
+		type Event = Event;
+		type OnKilledAccount = ();
+		type OnNewAccount = ();
+		type AccountData = pallet_balances::AccountData<u64>;
 	}
 
 	parameter_types! {
@@ -1205,7 +1211,8 @@ mod tests {
 		type DustRemoval = ();
 		type Event = Event;
 		type ExistentialDeposit = ExistentialDeposit;
-		type AccountStore = System;
+		type AccountStore = Accounts;
+		type ReferencedAccount = Accounts;
 		type WeightInfo = ();
 	}
 
@@ -1228,6 +1235,7 @@ mod tests {
 		type StringLimit = StringLimit;
 		type MetadataDepositBase = MetadataDepositBase;
 		type MetadataDepositPerByte = MetadataDepositPerByte;
+		type ReferencedAccount = Accounts;
 		type WeightInfo = ();
 	}
 

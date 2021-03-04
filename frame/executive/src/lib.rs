@@ -634,9 +634,7 @@ mod tests {
 		type BlockHashCount = BlockHashCount;
 		type Version = RuntimeVersion;
 		type PalletInfo = PalletInfo;
-		type AccountData = pallet_balances::AccountData<Balance>;
-		type OnNewAccount = ();
-		type OnKilledAccount = ();
+		type AccountStorage = System;
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
 	}
@@ -650,7 +648,7 @@ mod tests {
 		type Event = Event;
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
-		type AccountStore = System;
+		type AccountStore = Balances;
 		type MaxLocks = ();
 		type WeightInfo = ();
 	}

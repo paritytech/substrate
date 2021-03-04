@@ -830,9 +830,7 @@ mod tests {
 		type BlockHashCount = BlockHashCount;
 		type Version = ();
 		type PalletInfo = PalletInfo;
-		type AccountData = ();
-		type OnNewAccount = ();
-		type OnKilledAccount = ();
+		type AccountStorage = System;
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
 	}
