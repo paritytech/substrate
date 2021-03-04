@@ -139,7 +139,6 @@ fn config() -> crate::Config {
 		name: None,
 		is_authority: true,
 		observer_enabled: true,
-		telemetry: None,
 	}
 }
 
@@ -189,7 +188,6 @@ pub(crate) fn make_test_network() -> (
 		net.clone(),
 		config(),
 		voter_set_state(),
-		None,
 		None,
 	);
 

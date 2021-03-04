@@ -29,7 +29,6 @@ use log::{debug, info, warn};
 use sp_keystore::SyncCryptoStorePtr;
 use sp_consensus::SelectChain;
 use sc_client_api::backend::Backend;
-use sc_telemetry::TelemetryHandle;
 use sp_utils::mpsc::TracingUnboundedReceiver;
 use sp_runtime::traits::{NumberFor, Block as BlockT};
 use sp_blockchain::HeaderMetadata;
@@ -68,7 +67,6 @@ fn grandpa_observer<BE, Block: BlockT, Client, S, F>(
 	last_finalized_number: NumberFor<Block>,
 	commits: S,
 	note_round: F,
-	telemetry: Option<TelemetryHandle>,
 ) -> impl Future<Output = Result<(), CommandOrError<Block::Hash, NumberFor<Block>>>>
 where
 	NumberFor<Block>: BlockNumberOps,
@@ -123,7 +121,6 @@ where
 				(round, commit).into(),
 				false,
 				justification_sender.as_ref(),
-				telemetry.clone(),
 			) {
 				Ok(_) => {},
 				Err(e) => return future::err(e),
@@ -175,8 +172,7 @@ where
 		persistent_data,
 		voter_commands_rx,
 		justification_sender,
-		justification_stream: _,
-		telemetry,
+		..
 	} = link;
 
 	let network = NetworkBridge::new(
@@ -184,17 +180,15 @@ where
 		config.clone(),
 		persistent_data.set_state.clone(),
 		None,
-		telemetry.clone(),
 	);
 
 	let observer_work = ObserverWork::new(
-		client.clone(),
+		client,
 		network,
 		persistent_data,
 		config.keystore,
 		voter_commands_rx,
 		Some(justification_sender),
-		telemetry.clone(),
 	);
 
 	let observer_work = observer_work
@@ -216,7 +210,6 @@ struct ObserverWork<B: BlockT, BE, Client, N: NetworkT<B>> {
 	keystore: Option<SyncCryptoStorePtr>,
 	voter_commands_rx: TracingUnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
 	justification_sender: Option<GrandpaJustificationSender<B>>,
-	telemetry: Option<TelemetryHandle>,
 	_phantom: PhantomData<BE>,
 }
 
@@ -235,7 +228,6 @@ where
 		keystore: Option<SyncCryptoStorePtr>,
 		voter_commands_rx: TracingUnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
 		justification_sender: Option<GrandpaJustificationSender<B>>,
-		telemetry: Option<TelemetryHandle>,
 	) -> Self {
 
 		let mut work = ObserverWork {
@@ -248,7 +240,6 @@ where
 			keystore: keystore.clone(),
 			voter_commands_rx,
 			justification_sender,
-			telemetry,
 			_phantom: PhantomData,
 		};
 		work.rebuild_observer();
@@ -298,7 +289,6 @@ where
 			last_finalized_number,
 			global_in,
 			note_round,
-			self.telemetry.clone(),
 		);
 
 		self.observer = Box::pin(observer);
@@ -438,7 +428,6 @@ mod tests {
 			persistent_data,
 			None,
 			voter_command_rx,
-			None,
 			None,
 		);
 

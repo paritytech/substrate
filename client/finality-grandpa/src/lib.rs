@@ -79,7 +79,7 @@ use sp_core::{
 use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 use sp_application_crypto::AppKey;
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
-use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_INFO, CONSENSUS_DEBUG};
+use sc_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG};
 use parking_lot::RwLock;
 
 use finality_grandpa::Error as GrandpaError;
@@ -270,8 +270,6 @@ pub struct Config {
 	pub name: Option<String>,
 	/// The keystore that manages the keys of this node.
 	pub keystore: Option<SyncCryptoStorePtr>,
-	/// TelemetryHandle instance.
-	pub telemetry: Option<TelemetryHandle>,
 }
 
 impl Config {
@@ -453,7 +451,6 @@ pub struct LinkHalf<Block: BlockT, C, SC> {
 	voter_commands_rx: TracingUnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 	justification_sender: GrandpaJustificationSender<Block>,
 	justification_stream: GrandpaJustificationStream<Block>,
-	telemetry: Option<TelemetryHandle>,
 }
 
 impl<Block: BlockT, C, SC> LinkHalf<Block, C, SC> {
@@ -504,7 +501,6 @@ pub fn block_import<BE, Block: BlockT, Client, SC>(
 	client: Arc<Client>,
 	genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
 	select_chain: SC,
-	telemetry: Option<TelemetryHandle>,
 ) -> Result<
 	(
 		GrandpaBlockImport<BE, Block, Client, SC>,
@@ -522,7 +518,6 @@ where
 		genesis_authorities_provider,
 		select_chain,
 		Default::default(),
-		telemetry,
 	)
 }
 
@@ -536,7 +531,6 @@ pub fn block_import_with_authority_set_hard_forks<BE, Block: BlockT, Client, SC>
 	genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
 	select_chain: SC,
 	authority_set_hard_forks: Vec<(SetId, (Block::Hash, NumberFor<Block>), AuthorityList)>,
-	telemetry: Option<TelemetryHandle>,
 ) -> Result<
 	(
 		GrandpaBlockImport<BE, Block, Client, SC>,
@@ -556,19 +550,13 @@ where
 		&*client,
 		genesis_hash,
 		<NumberFor<Block>>::zero(),
-		{
-			let telemetry = telemetry.clone();
-			move || {
-				let authorities = genesis_authorities_provider.get()?;
-				telemetry!(
-					telemetry;
-					CONSENSUS_DEBUG;
-					"afg.loading_authorities";
-					"authorities_len" => ?authorities.len()
-				);
-				Ok(authorities)
-			}
-		},
+		|| {
+			let authorities = genesis_authorities_provider.get()?;
+			telemetry!(CONSENSUS_DEBUG; "afg.loading_authorities";
+				"authorities_len" => ?authorities.len()
+			);
+			Ok(authorities)
+		}
 	)?;
 
 	let (voter_commands_tx, voter_commands_rx) = tracing_unbounded("mpsc_grandpa_voter_command");
@@ -602,7 +590,6 @@ where
 			voter_commands_tx,
 			authority_set_hard_forks,
 			justification_sender.clone(),
-			telemetry.clone(),
 		),
 		LinkHalf {
 			client,
@@ -611,7 +598,6 @@ where
 			voter_commands_rx,
 			justification_sender,
 			justification_stream,
-			telemetry,
 		},
 	))
 }
@@ -674,14 +660,14 @@ pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
 	/// `sc_network` crate, it is assumed that the Grandpa notifications protocol has been passed
 	/// to the configuration of the networking. See [`grandpa_peers_set_config`].
 	pub network: N,
+	/// If supplied, can be used to hook on telemetry connection established events.
+	pub telemetry_on_connect: Option<TracingUnboundedReceiver<()>>,
 	/// A voting rule used to potentially restrict target votes.
 	pub voting_rule: VR,
 	/// The prometheus metrics registry.
 	pub prometheus_registry: Option<prometheus_endpoint::Registry>,
 	/// The voter state is exposed at an RPC endpoint.
 	pub shared_voter_state: SharedVoterState,
-	/// TelemetryHandle instance.
-	pub telemetry: Option<TelemetryHandle>,
 }
 
 /// Returns the configuration value to put in
@@ -720,10 +706,10 @@ where
 		mut config,
 		link,
 		network,
+		telemetry_on_connect,
 		voting_rule,
 		prometheus_registry,
 		shared_voter_state,
-		telemetry,
 	} = grandpa_params;
 
 	// NOTE: we have recently removed `run_grandpa_observer` from the public
@@ -739,7 +725,6 @@ where
 		voter_commands_rx,
 		justification_sender,
 		justification_stream: _,
-		telemetry: _,
 	} = link;
 
 	let network = NetworkBridge::new(
@@ -747,16 +732,11 @@ where
 		config.clone(),
 		persistent_data.set_state.clone(),
 		prometheus_registry.as_ref(),
-		telemetry.clone(),
 	);
 
 	let conf = config.clone();
-	let telemetry_task = if let Some(telemetry_on_connect) = telemetry
-		.as_ref()
-		.map(|x| x.on_connect_stream())
-	{
+	let telemetry_task = if let Some(telemetry_on_connect) = telemetry_on_connect {
 		let authorities = persistent_data.authority_set.clone();
-		let telemetry = telemetry.clone();
 		let events = telemetry_on_connect
 			.for_each(move |_| {
 				let current_authorities = authorities.current_authorities();
@@ -771,13 +751,10 @@ where
 
 				let authorities = serde_json::to_string(&authorities).expect(
 					"authorities is always at least an empty vector; \
-					elements are always of type string",
+					 elements are always of type string",
 				);
 
-				telemetry!(
-					telemetry;
-					CONSENSUS_INFO;
-					"afg.authority_set";
+				telemetry!(CONSENSUS_INFO; "afg.authority_set";
 					"authority_id" => authority_id.to_string(),
 					"authority_set_id" => ?set_id,
 					"authorities" => authorities,
@@ -801,7 +778,6 @@ where
 		prometheus_registry,
 		shared_voter_state,
 		justification_sender,
-		telemetry,
 	);
 
 	let voter_work = voter_work.map(|res| match res {
@@ -840,7 +816,7 @@ struct VoterWork<B, Block: BlockT, C, N: NetworkT<Block>, SC, VR> {
 	env: Arc<Environment<B, Block, C, N, SC, VR>>,
 	voter_commands_rx: TracingUnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 	network: NetworkBridge<Block, N>,
-	telemetry: Option<TelemetryHandle>,
+
 	/// Prometheus metrics.
 	metrics: Option<Metrics>,
 }
@@ -867,7 +843,6 @@ where
 		prometheus_registry: Option<prometheus_endpoint::Registry>,
 		shared_voter_state: SharedVoterState,
 		justification_sender: GrandpaJustificationSender<Block>,
-		telemetry: Option<TelemetryHandle>,
 	) -> Self {
 		let metrics = match prometheus_registry.as_ref().map(Metrics::register) {
 			Some(Ok(metrics)) => Some(metrics),
@@ -891,7 +866,6 @@ where
 			voter_set_state: persistent_data.set_state,
 			metrics: metrics.as_ref().map(|m| m.environment.clone()),
 			justification_sender: Some(justification_sender),
-			telemetry: telemetry.clone(),
 			_phantom: PhantomData,
 		});
 
@@ -903,7 +877,6 @@ where
 			env,
 			voter_commands_rx,
 			network,
-			telemetry,
 			metrics,
 		};
 		work.rebuild_voter();
@@ -919,10 +892,7 @@ where
 		let authority_id = local_authority_id(&self.env.voters, self.env.config.keystore.as_ref())
 			.unwrap_or_default();
 
-		telemetry!(
-			self.telemetry;
-			CONSENSUS_DEBUG;
-			"afg.starting_new_voter";
+		telemetry!(CONSENSUS_DEBUG; "afg.starting_new_voter";
 			"name" => ?self.env.config.name(),
 			"set_id" => ?self.env.set_id,
 			"authority_id" => authority_id.to_string(),
@@ -941,10 +911,7 @@ where
 			"authorities is always at least an empty vector; elements are always of type string",
 		);
 
-		telemetry!(
-			self.telemetry;
-			CONSENSUS_INFO;
-			"afg.authority_set";
+		telemetry!(CONSENSUS_INFO; "afg.authority_set";
 			"number" => ?chain_info.finalized_number,
 			"hash" => ?chain_info.finalized_hash,
 			"authority_id" => authority_id.to_string(),
@@ -1004,10 +971,7 @@ where
 				let voters: Vec<String> = new.authorities.iter().map(move |(a, _)| {
 					format!("{}", a)
 				}).collect();
-				telemetry!(
-					self.telemetry;
-					CONSENSUS_INFO;
-					"afg.voter_command_change_authorities";
+				telemetry!(CONSENSUS_INFO; "afg.voter_command_change_authorities";
 					"number" => ?new.canon_number,
 					"hash" => ?new.canon_hash,
 					"voters" => ?voters,
@@ -1028,11 +992,10 @@ where
 				})?;
 
 				let voters = Arc::new(VoterSet::new(new.authorities.into_iter())
-					.expect(
-						"new authorities come from pending change; \
-						pending change comes from `AuthoritySet`; \
-						`AuthoritySet` validates authorities is non-empty and weights are non-zero; \
-						qed."
+					.expect("new authorities come from pending change; \
+							 pending change comes from `AuthoritySet`; \
+							 `AuthoritySet` validates authorities is non-empty and weights are non-zero; \
+							 qed."
 					)
 				);
 
@@ -1048,7 +1011,6 @@ where
 					voting_rule: self.env.voting_rule.clone(),
 					metrics: self.env.metrics.clone(),
 					justification_sender: self.env.justification_sender.clone(),
-					telemetry: self.telemetry.clone(),
 					_phantom: PhantomData,
 				});
 
