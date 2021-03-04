@@ -19,17 +19,16 @@
 //!
 //! The Contract module provides functionality for the runtime to deploy and execute WebAssembly smart-contracts.
 //!
-//! - [`contract::Config`](./trait.Config.html)
-//! - [`Call`](./enum.Call.html)
+//! See [`pallet`] for more information.
 //!
 //! ## Overview
 //!
-//! This module extends accounts based on the `Currency` trait to have smart-contract functionality. It can
-//! be used with other modules that implement accounts based on `Currency`. These "smart-contract accounts"
+//! This module extends accounts based on the [`Currency`] trait to have smart-contract functionality. It can
+//! be used with other modules that implement accounts based on [`Currency`]. These "smart-contract accounts"
 //! have the ability to instantiate smart-contracts and make calls to other contract and non-contract accounts.
 //!
-//! The smart-contract code is stored once in a `code_cache`, and later retrievable via its `code_hash`.
-//! This means that multiple smart-contracts can be instantiated from the same `code_cache`, without replicating
+//! The smart-contract code is stored once in a code cache, and later retrievable via its hash.
+//! This means that multiple smart-contracts can be instantiated from the same hash, without replicating
 //! the code each time.
 //!
 //! When a smart-contract is called, its associated code is retrieved via the code hash and gets executed.
@@ -59,12 +58,17 @@
 //!
 //! ### Dispatchable functions
 //!
-//! * `instantiate_with_code` - Deploys a new contract from the supplied wasm binary, optionally transferring
-//! some balance. This instantiates a new smart contract account and calls its contract deploy
-//! handler to initialize the contract.
-//! * `instantiate` - The same as `instantiate_with_code` but instead of uploading new code an
-//! existing `code_hash` is supplied.
-//! * `call` - Makes a call to an account, optionally transferring some balance.
+//! * [`Pallet::update_schedule`] -
+//! ([Root Origin](https://substrate.dev/docs/en/knowledgebase/runtime/origin) Only) -
+//! Set a new [`Schedule`].
+//! * [`Pallet::instantiate_with_code`] - Deploys a new contract from the supplied wasm binary,
+//! optionally transferring
+//! some balance. This instantiates a new smart contract account with the supplied code and
+//! calls its constructor to initialize the contract.
+//! * [`Pallet::instantiate`] - The same as `instantiate_with_code` but instead of uploading new
+//! code an existing `code_hash` is supplied.
+//! * [`Pallet::call`] - Makes a call to an account, optionally transferring some balance.
+//! * [`Pallet::claim_surcharge`] - Evict a contract that cannot pay rent anymore.
 //!
 //! ## Usage
 //!
@@ -326,7 +330,7 @@ pub mod pallet {
 		/// * `gas_limit`: The gas limit enforced when executing the constructor.
 		/// * `code`: The contract code to deploy in raw bytes.
 		/// * `data`: The input data to pass to the contract constructor.
-		/// * `salt`: Used for the address derivation. See [`Self::contract_address`].
+		/// * `salt`: Used for the address derivation. See [`Pallet::contract_address`].
 		///
 		/// Instantiation is executed as follows:
 		///
@@ -630,6 +634,7 @@ pub mod pallet {
 	/// stored in said trie. Therefore this operation is performed lazily in `on_initialize`.
 	#[pallet::storage]
 	pub(crate) type DeletionQueue<T: Config> = StorageValue<_, Vec<DeletedContract>, ValueQuery>;
+
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
