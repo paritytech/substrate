@@ -511,8 +511,8 @@ fn incoming_global<B: BlockT>(
 	neighbor_sender: periodic::NeighborPacketSender<B>,
 	telemetry: Option<TelemetryHandle>,
 ) -> impl Stream<Item = CommunicationIn<B>> {
-	let mut process_commit = {
-		let mut telemetry = telemetry.clone();
+	let process_commit = {
+		let telemetry = telemetry.clone();
 		move |
 			msg: FullCommitMessage<B>,
 			mut notification: sc_network_gossip::TopicNotification,
