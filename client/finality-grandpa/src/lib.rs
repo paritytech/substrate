@@ -747,7 +747,7 @@ where
 		config.clone(),
 		persistent_data.set_state.clone(),
 		prometheus_registry.as_ref(),
-		//telemetry.clone(),
+		telemetry.clone(),
 	);
 
 	let conf = config.clone();

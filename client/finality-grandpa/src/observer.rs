@@ -184,7 +184,7 @@ where
 		config.clone(),
 		persistent_data.set_state.clone(),
 		None,
-		//telemetry.clone(),
+		telemetry.clone(),
 	);
 
 	let observer_work = ObserverWork::new(

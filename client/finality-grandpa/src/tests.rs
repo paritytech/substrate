@@ -944,7 +944,7 @@ fn voter_persists_its_votes() {
 			config.clone(),
 			set_state,
 			None,
-			//None,
+			None,
 		)
 	};
 
@@ -1346,7 +1346,7 @@ where
 		config.clone(),
 		set_state.clone(),
 		None,
-		//None,
+		None,
 	);
 
 	Environment {

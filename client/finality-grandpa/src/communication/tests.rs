@@ -190,6 +190,7 @@ pub(crate) fn make_test_network() -> (
 		config(),
 		voter_set_state(),
 		None,
+		None,
 	);
 
 	(
