@@ -1782,9 +1782,7 @@ macro_rules! decl_module {
 					$(#[$fn_attr])*
 					$fn_vis fn $fn_name (
 						$from $(, $param_name : $param )*
-					) $( -> $result )* {
-						$( $impl )*
-					}
+					) $( -> $result )* { $( $impl )* }
 				}
 			)*
 		}
