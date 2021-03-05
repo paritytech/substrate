@@ -45,9 +45,6 @@ const MAX_NUMBER_OF_SAME_REQUESTS_PER_PEER: usize = 2;
 mod rep {
 	use super::ReputationChange as Rep;
 
-	/// Reputation change when a peer sent us an invalid request.
-	pub const INVALID_REQUEST: Rep = Rep::new(-(1 << 16), "Invalid block request");
-
 	/// Reputation change when a peer sent us the same request multiple times.
 	pub const SAME_REQUEST: Rep = Rep::new(i32::min_value(), "Same block request multiple times");
 }
@@ -112,7 +109,7 @@ impl<B: BlockT> BlockRequestHandler<B> {
 	pub fn new(
 		protocol_id: &ProtocolId,
 		client: Arc<dyn Client<B>>,
-		network_config: &crate::config::NetworkConfiguration,
+		num_peer_hint: usize,
 	) -> (Self, ProtocolConfig) {
 		// Rate of arrival multiplied with the waiting time in the queue equals the queue length.
 		//
@@ -126,10 +123,7 @@ impl<B: BlockT> BlockRequestHandler<B> {
 		let mut protocol_config = generate_protocol_config(protocol_id);
 		protocol_config.inbound_queue = Some(tx);
 
-		let seen_requests = LruCache::new(
-			(network_config.default_peers_set.in_peers as usize
-				+ network_config.default_peers_set.out_peers as usize) * 2,
-		);
+		let seen_requests = LruCache::new(num_peer_hint * 2);
 
 		(Self { client, request_receiver, seen_requests }, protocol_config)
 	}
@@ -248,21 +242,7 @@ impl<B: BlockT> BlockRequestHandler<B> {
 		let mut blocks = Vec::new();
 
 		let mut total_size: usize = 0;
-		loop {
-			let header = match self.client.header(block_id) {
-				Ok(Some(h)) => h,
-				Ok(None) => {
-					// If someone send us a request with an ascending direction and we don't have
-					// the block, we should decrease its reputation.
-					if direction == Direction::Ascending {
-						reputation_changes.push(rep::INVALID_REQUEST);
-					}
-
-					break;
-				},
-				Err(_) => break,
-			};
-
+		while let Some(header) = self.client.header(block_id).unwrap_or_default() {
 			let number = *header.number();
 			let hash = header.hash();
 			let parent_hash = *header.parent_hash();
