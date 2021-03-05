@@ -97,8 +97,6 @@ pub mod weights;
 
 use sp_std::{result, cmp};
 use sp_inherents::InherentData;
-#[cfg(feature = "std")]
-use frame_support::debug;
 use frame_support::traits::{Time, UnixTime};
 use sp_runtime::{
 	RuntimeString,
@@ -287,8 +285,9 @@ impl<T: Config> UnixTime for Pallet<T> {
 		let now = Self::now();
 		sp_std::if_std! {
 			if now == T::Moment::zero() {
-				debug::error!(
-					"`pallet_timestamp::UnixTime::now` is called at genesis, invalid value returned: 0"
+				log::error!(
+					target: "runtime::timestamp",
+					"`pallet_timestamp::UnixTime::now` is called at genesis, invalid value returned: 0",
 				);
 			}
 		}

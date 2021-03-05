@@ -119,25 +119,19 @@
 use sp_std::{prelude::*, marker::PhantomData};
 use frame_support::{
 	weights::{GetDispatchInfo, DispatchInfo, DispatchClass},
-	traits::{OnInitialize, OnIdle, OnFinalize, OnRuntimeUpgrade, OffchainWorker},
-	dispatch::PostDispatchInfo
+	traits::{OnInitialize, OnIdle, OnFinalize, OnRuntimeUpgrade, OffchainWorker, ExecuteBlock},
+	dispatch::PostDispatchInfo,
 };
 use sp_runtime::{
 	generic::Digest, ApplyExtrinsicResult,
 	traits::{
 		self, Header, Zero, One, Checkable, Applyable, CheckEqual, ValidateUnsigned, NumberFor,
-		Block as BlockT, Dispatchable, Saturating,
+		Dispatchable, Saturating,
 	},
 	transaction_validity::{TransactionValidity, TransactionSource},
 };
 use codec::{Codec, Encode};
 use frame_system::DigestOf;
-
-/// Trait that can be used to execute a block.
-pub trait ExecuteBlock<Block: BlockT> {
-	/// Actually execute all transitions for `block`.
-	fn execute_block(block: Block);
-}
 
 pub type CheckedOf<E, C> = <E as Checkable<C>>::Checked;
 pub type CallOf<E, C> = <CheckedOf<E, C> as Applyable>::Call;
@@ -323,8 +317,8 @@ where
 	pub fn execute_block(block: Block) {
 		sp_io::init_tracing();
 		sp_tracing::within_span! {
-			sp_tracing::info_span!( "execute_block", ?block);
-		{
+			sp_tracing::info_span!("execute_block", ?block);
+
 			Self::initialize_block(block.header());
 
 			// any initial checks
@@ -342,7 +336,7 @@ where
 
 			// any final checks
 			Self::final_checks(&header);
-		} };
+		}
 	}
 
 	/// Execute given extrinsics and take care of post-extrinsics book-keeping.
@@ -510,10 +504,6 @@ where
 		// as well.
 		frame_system::BlockHash::<System>::insert(header.number(), header.hash());
 
-		// Initialize logger, so the log messages are visible
-		// also when running WASM.
-		frame_support::debug::RuntimeLogger::init();
-
 		<AllModules as OffchainWorker<System::BlockNumber>>::offchain_worker(*header.number())
 	}
 }
@@ -525,7 +515,7 @@ mod tests {
 	use sp_core::H256;
 	use sp_runtime::{
 		generic::{Era, DigestItem}, DispatchError, testing::{Digest, Header, Block},
-		traits::{Header as HeaderT, BlakeTwo256, IdentityLookup},
+		traits::{Header as HeaderT, BlakeTwo256, IdentityLookup, Block as BlockT},
 		transaction_validity::{
 			InvalidTransaction, ValidTransaction, TransactionValidityError, UnknownTransaction
 		},
@@ -803,7 +793,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("994f47ae1896aa1a26dfdb64c84186dec838667468421b494a2934c70ea75280").into(),
+					state_root: hex!("6e70de4fa07bac443dc7f8a812c8a0c941aacfa892bb373c5899f7d511d4c25b").into(),
 					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},

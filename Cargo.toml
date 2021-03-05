@@ -80,6 +80,7 @@ members = [
 	"frame/example-offchain-worker",
 	"frame/example-parallel",
 	"frame/executive",
+	"frame/gilt",
 	"frame/grandpa",
 	"frame/identity",
 	"frame/im-online",

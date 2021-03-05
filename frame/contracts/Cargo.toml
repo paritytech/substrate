@@ -28,6 +28,7 @@ sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/
 sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
 sp-sandbox = { version = "0.9.0", default-features = false, path = "../../primitives/sandbox" }
 wasmi-validation = { version = "0.3.0", default-features = false }
+log = { version = "0.4.14", default-features = false }
 
 # Only used in benchmarking to generate random contract code
 rand = { version = "0.7.0", optional = true, default-features = false }
@@ -60,6 +61,7 @@ std = [
 	"wasmi-validation/std",
 	"pallet-contracts-primitives/std",
 	"pallet-contracts-proc-macro/full",
+	"log/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking",

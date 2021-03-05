@@ -29,7 +29,7 @@ use frame_support::{
 	weights::{Pays, Weight},
 	Parameter,
 };
-use frame_system::{ensure_none, ensure_signed};
+use frame_system::{ensure_none, ensure_root, ensure_signed};
 use sp_application_crypto::Public;
 use sp_runtime::{
 	generic::DigestItem,
@@ -108,6 +108,7 @@ pub trait Config: pallet_timestamp::Config {
 }
 
 pub trait WeightInfo {
+	fn plan_config_change() -> Weight;
 	fn report_equivocation(validator_count: u32) -> Weight;
 }
 
@@ -314,6 +315,19 @@ decl_module! {
 				key_owner_proof,
 			)
 		}
+
+		/// Plan an epoch config change. The epoch config change is recorded and will be enacted on
+		/// the next call to `enact_epoch_change`. The config will be activated one epoch after.
+		/// Multiple calls to this method will replace any existing planned config change that had
+		/// not been enacted yet.
+		#[weight = <T as Config>::WeightInfo::plan_config_change()]
+		fn plan_config_change(
+			origin,
+			config: NextConfigDescriptor,
+		) {
+			ensure_root(origin)?;
+			NextEpochConfig::put(config);
+		}
 	}
 }
 
@@ -430,15 +444,6 @@ impl<T: Config> Module<T> {
 				let blocks_remaining: T::BlockNumber = slots_remaining.saturated_into();
 				now.saturating_add(blocks_remaining)
 			})
-	}
-
-	/// Plan an epoch config change. The epoch config change is recorded and will be enacted on the
-	/// next call to `enact_epoch_change`. The config will be activated one epoch after. Multiple calls to this
-	/// method will replace any existing planned config change that had not been enacted yet.
-	pub fn plan_config_change(
-		config: NextConfigDescriptor,
-	) {
-		NextEpochConfig::put(config);
 	}
 
 	/// DANGEROUS: Enact an epoch change. Should be done on every block where `should_epoch_change` has returned `true`,

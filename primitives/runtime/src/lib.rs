@@ -57,6 +57,7 @@ pub mod transaction_validity;
 pub mod random_number_generator;
 mod runtime_string;
 mod multiaddress;
+pub mod runtime_logger;
 
 pub use crate::runtime_string::*;
 
