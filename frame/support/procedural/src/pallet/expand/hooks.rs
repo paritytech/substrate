@@ -67,7 +67,10 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			#frame_support::traits::OnIdle<<T as #frame_system::Config>::BlockNumber>
 			for #pallet_ident<#type_use_gen> #where_clause
 		{
-			fn on_idle(n: <T as #frame_system::Config>::BlockNumber, _remaining_weight: #frame_support::weights::Weight) -> #frame_support::weights::Weight {
+			fn on_idle(
+				n: <T as #frame_system::Config>::BlockNumber,
+				_remaining_weight: #frame_support::weights::Weight
+			) -> #frame_support::weights::Weight {
 				<
 					Self as #frame_support::traits::Hooks<
 						<T as #frame_system::Config>::BlockNumber

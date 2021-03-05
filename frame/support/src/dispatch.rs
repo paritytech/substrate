@@ -2675,7 +2675,10 @@ mod tests {
 			fn operational(_origin) { unreachable!() }
 
 			fn on_initialize(n: T::BlockNumber,) -> Weight { if n.into() == 42 { panic!("on_initialize") } 7 }
-			fn on_idle(n: T::BlockNumber, remaining_weight: Weight,) -> Weight { if n.into() == 42 || remaining_weight == 42  { panic!("on_idle") } 7 }
+			fn on_idle(n: T::BlockNumber, remaining_weight: Weight,) -> Weight {
+				if n.into() == 42 || remaining_weight == 42  { panic!("on_idle") }
+				7
+			}
 			fn on_finalize(n: T::BlockNumber,) { if n.into() == 42 { panic!("on_finalize") } }
 			fn on_runtime_upgrade() -> Weight { 10 }
 			fn offchain_worker() {}

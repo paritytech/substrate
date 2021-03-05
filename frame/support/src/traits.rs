@@ -1519,11 +1519,17 @@ pub trait OnFinalize<BlockNumber> {
 }
 
 pub trait OnIdle<BlockNumber> {
-	/// The block is being finalized. Implement to have something happen if the remaining_weight is high enough.
+	/// The block is being finalized.
+	/// Implement to have something happen if the remaining_weight is high enough.
 	///
 	/// NOTE: This function is called AFTER ALL extrinsics in a block are applied,
 	/// including inherent extrinsics.
-	fn on_idle(_n: BlockNumber, _remaining_weight: crate::weights::Weight) -> crate::weights::Weight { 0 }
+	fn on_idle(
+		_n: BlockNumber,
+		_remaining_weight: crate::weights::Weight
+	) -> crate::weights::Weight {
+		0
+	}
 }
 
 #[impl_for_tuples(30)]
@@ -2056,7 +2062,12 @@ pub trait Hooks<BlockNumber> {
 	fn on_finalize(_n: BlockNumber) {}
 
 	/// The block is being finalized. Implement to have something happen based on remaining weight.
-	fn on_idle(_n: BlockNumber, _remaining_weight: crate::weights::Weight) -> crate::weights::Weight { 0 }
+	fn on_idle(
+		_n: BlockNumber,
+		_remaining_weight: crate::weights::Weight
+	) -> crate::weights::Weight {
+		0
+	}
 
 	/// The block is being initialized. Implement to have something happen.
 	///
