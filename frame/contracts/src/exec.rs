@@ -740,7 +740,7 @@ where
 	}
 
 	fn random(&self, subject: &[u8]) -> SeedOf<T> {
-		T::Randomness::random(subject)
+		T::Randomness::random(subject).0
 	}
 
 	fn now(&self) -> &MomentOf<T> {
