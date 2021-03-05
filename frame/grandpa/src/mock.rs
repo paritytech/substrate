@@ -40,7 +40,7 @@ use sp_runtime::{
 };
 use sp_staking::SessionIndex;
 use pallet_session::historical as pallet_session_historical;
-use sp_election_providers::onchain;
+use election_provider_support::onchain;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;

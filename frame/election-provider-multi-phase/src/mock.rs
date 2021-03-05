@@ -31,7 +31,7 @@ use sp_core::{
 	},
 	H256,
 };
-use sp_election_providers::{ElectionDataProvider, data_provider};
+use election_provider_support::{ElectionDataProvider, data_provider};
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, seq_phragmen, to_supports, to_without_backing,
 	CompactSolution, ElectionResult, EvaluateSupport,

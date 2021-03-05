@@ -20,7 +20,7 @@
 #![cfg(test)]
 
 use sp_runtime::traits::IdentityLookup;
-use sp_election_providers::onchain;
+use election_provider_support::onchain;
 use frame_support::parameter_types;
 
 type AccountId = u64;

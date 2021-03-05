@@ -487,7 +487,7 @@ mod tests {
 	};
 	use frame_support::{dispatch::Dispatchable, traits::OffchainWorker};
 	use mock::Call as OuterCall;
-	use sp_election_providers::Assignment;
+	use election_provider_support::Assignment;
 	use sp_runtime::{traits::ValidateUnsigned, PerU16};
 
 	#[test]

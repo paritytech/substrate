@@ -23,8 +23,8 @@
 //! ## Phases
 //!
 //! The timeline of pallet is as follows. At each block,
-//! [`sp_election_providers::ElectionDataProvider::next_election_prediction`] is used to estimate
-//! the time remaining to the next call to [`sp_election_providers::ElectionProvider::elect`]. Based
+//! [`election_provider_support::ElectionDataProvider::next_election_prediction`] is used to estimate
+//! the time remaining to the next call to [`election_provider_support::ElectionProvider::elect`]. Based
 //! on this, a phase is chosen. The timeline is as follows.
 //!
 //! ```ignore
@@ -149,7 +149,7 @@
 //!    are helpful for logging and are thus nested as:
 //!    - [`ElectionError::Miner`]: wraps a [`unsigned::MinerError`].
 //!    - [`ElectionError::Feasibility`]: wraps a [`FeasibilityError`].
-//!    - [`ElectionError::OnChainFallback`]: wraps a [`sp_election_providers::onchain::Error`].
+//!    - [`ElectionError::OnChainFallback`]: wraps a [`election_provider_support::onchain::Error`].
 //!
 //! Note that there could be an overlap between these sub-errors. For example, A
 //! `SnapshotUnavailable` can happen in both miner and feasibility check phase.
@@ -184,7 +184,7 @@
 //!
 //! **Recursive Fallback**: Currently, the fallback is a separate enum. A different and fancier way
 //! of doing this would be to have the fallback be another
-//! [`sp_election_providers::ElectionProvider`]. In this case, this pallet can even have the
+//! [`election_provider_support::ElectionProvider`]. In this case, this pallet can even have the
 //! on-chain election provider as fallback, or special _noop_ fallback that simply returns an error,
 //! thus replicating [`FallbackStrategy::Nothing`]. In this case, we won't need the additional
 //! config OnChainAccuracy either.
@@ -211,7 +211,7 @@ use frame_support::{
 	weights::Weight,
 };
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
-use sp_election_providers::{ElectionDataProvider, ElectionProvider, onchain};
+use election_provider_support::{ElectionDataProvider, ElectionProvider, onchain};
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, is_score_better, CompactSolution, ElectionScore,
 	EvaluateSupport, PerThing128, Supports, VoteWeight,
@@ -1279,7 +1279,7 @@ mod feasibility_check {
 #[cfg(test)]
 mod tests {
 	use super::{mock::*, Event, *};
-	use sp_election_providers::ElectionProvider;
+	use election_provider_support::ElectionProvider;
 	use sp_npos_elections::Support;
 
 	#[test]

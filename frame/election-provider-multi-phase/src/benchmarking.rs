@@ -24,7 +24,7 @@ pub use frame_benchmarking::{account, benchmarks, whitelist_account, whitelisted
 use frame_support::{assert_ok, traits::OnInitialize};
 use frame_system::RawOrigin;
 use rand::{prelude::SliceRandom, rngs::SmallRng, SeedableRng};
-use sp_election_providers::Assignment;
+use election_provider_support::Assignment;
 use sp_arithmetic::traits::One;
 use sp_runtime::InnerOf;
 use sp_std::convert::TryInto;

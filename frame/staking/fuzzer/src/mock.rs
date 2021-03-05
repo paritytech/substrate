@@ -158,7 +158,7 @@ where
 }
 
 pub struct MockElectionProvider;
-impl sp_election_providers::ElectionProvider<AccountId, BlockNumber> for MockElectionProvider {
+impl election_provider_support::ElectionProvider<AccountId, BlockNumber> for MockElectionProvider {
 	type Error = ();
 	type DataProvider = pallet_staking::Module<Test>;
 

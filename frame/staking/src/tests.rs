@@ -5018,7 +5018,7 @@ fn do_not_die_when_active_is_ed() {
 
 mod election_data_provider {
 	use super::*;
-	use sp_election_providers::ElectionDataProvider;
+	use election_provider_support::ElectionDataProvider;
 
 	#[test]
 	fn voters_include_self_vote() {
