@@ -522,6 +522,13 @@ pub mod pallet {
 		#[pallet::constant]
 		type SolutionImprovementThreshold: Get<Perbill>;
 
+		/// The repeat threshold of the offchain worker.
+		///
+		/// For example, if it is 5, that means that at least 5 blocks will elapse between attempts
+		/// to submit the worker's solution.
+		#[pallet::constant]
+		type OffchainRepeat: Get<Self::BlockNumber>;
+
 		/// The priority of the unsigned transaction submitted in the unsigned-phase
 		type MinerTxPriority: Get<TransactionPriority>;
 		/// Maximum number of iteration of balancing that will be executed in the embedded miner of
