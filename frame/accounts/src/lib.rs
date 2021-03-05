@@ -260,7 +260,7 @@ pub mod pallet {
 			})
 		}
 
-		/// Decrement the sufficients reference counter on an account.
+		/// Decrement the self-sufficient reference counter on an account.
 		///
 		/// This *MUST* only be done once for every time you called `inc_sufficients` on `who`.
 		fn dec_sufficients(who: &T::AccountId) -> DecRefStatus {
