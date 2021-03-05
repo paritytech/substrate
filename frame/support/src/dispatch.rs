@@ -1283,7 +1283,7 @@ macro_rules! decl_module {
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_initialize(_block_number_not_used: <$trait_instance as $system::Config>::BlockNumber) -> $return {
-				$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!("on_initializeTEST-40"));
+				$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!("on_initialize"));
 				{ $( $impl )* }
 			}
 		}
@@ -1300,7 +1300,7 @@ macro_rules! decl_module {
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_initialize($param: $param_ty) -> $return {
-				$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!("on_initializeTEST-41"));
+				$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!("on_initialize"));
 				{ $( $impl )* }
 			}
 		}
@@ -1450,8 +1450,7 @@ macro_rules! decl_module {
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_finalize(_block_number_not_used: <$trait_instance as $system::Config>::BlockNumber) {
-				$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!("on_finalizeTEST-32"));
-				// $crate::log::info!(target: "SOS", "on_finalizeTEST-32");
+				$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!("on_finalize"));
 				{ $( $impl )* }
 			}
 		}
@@ -1468,9 +1467,7 @@ macro_rules! decl_module {
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_finalize($param: $param_ty) {
-				$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!("on_finalizeTEST-31"));
-				// $crate::log::info!(target: "SOS", "on_finalizeTEST-31");
-
+				$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!("on_finalize"));
 				{ $( $impl )* }
 			}
 		}
@@ -1543,9 +1540,7 @@ macro_rules! decl_module {
 		$vis fn $name(
 			$origin: $origin_ty $(, $param: $param_ty )*
 		) -> $crate::dispatch::DispatchResult {
-			$crate::log::info!(target: "SOS", "\nno-return PRE-span: {}", stringify!($name));
-			$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!(stringify!($name), "spans-working-1"));
-			$crate::log::info!(target: "SOS", "no-return POST-span: {}\n", stringify!($name));
+			$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!(stringify!($name)));
 			{ $( $impl )* }
 			Ok(())
 		}
@@ -1564,9 +1559,7 @@ macro_rules! decl_module {
 	) => {
 		$(#[$fn_attr])*
 		$vis fn $name($origin: $origin_ty $(, $param: $param_ty )* ) -> $result {
-			$crate::log::info!(target: "SOS", "PRE-span: {}", stringify!($name));
-			$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!(stringify!($name), "spans-working-2"));
-			$crate::log::info!(target: "SOS", "POST-span: {}", stringify!($name));
+			$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!(stringify!($name)));
 			$( $impl )*
 		}
 	};
@@ -1790,8 +1783,6 @@ macro_rules! decl_module {
 					$fn_vis fn $fn_name (
 						$from $(, $param_name : $param )*
 					) $( -> $result )* {
-						$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!(stringify!($fn_name), "ln 1793"));
-						$crate::log::info!(target: "SOS", "\nIn impl_function decl_module line 1793\n");
 						$( $impl )*
 					}
 				}
