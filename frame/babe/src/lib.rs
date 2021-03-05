@@ -222,6 +222,13 @@ decl_storage! {
 		/// secondary plain slots are enabled (which don't contain a VRF output).
 		AuthorVrfRandomness get(fn author_vrf_randomness): MaybeRandomness;
 
+		/// The block numbers when the last and current epoch have started, respectively `N-1` and
+		/// `N`.
+		/// NOTE: We track this is in order to annotate the block number when a given pool of
+		/// entropy was fixed (i.e. it was known to chain observers). Since epochs are defined in
+		/// slots, which may be skipped, the block numbers may not line up with the slot numbers.
+		EpochStart: (T::BlockNumber, T::BlockNumber);
+
 		/// How late the current block is compared to its parent.
 		///
 		/// This entry is populated as part of block execution and is cleaned up
@@ -451,6 +458,12 @@ impl<T: Config> Module<T> {
 
 		// Update the next epoch authorities.
 		NextAuthorities::put(&next_authorities);
+
+		// Update the start blocks of the previous and new current epoch.
+		<EpochStart<T>>::mutate(|(previous_epoch_start_block, current_epoch_start_block)| {
+			*previous_epoch_start_block = sp_std::mem::take(current_epoch_start_block);
+			*current_epoch_start_block = <frame_system::Module<T>>::block_number();
+		});
 
 		// After we update the current epoch, we signal the *next* epoch change
 		// so that nodes can track changes.
