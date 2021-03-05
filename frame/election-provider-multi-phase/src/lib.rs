@@ -303,27 +303,27 @@ impl<Bn> Default for Phase<Bn> {
 }
 
 impl<Bn: PartialEq + Eq> Phase<Bn> {
-	/// Weather the phase is signed or not.
+	/// Whether the phase is signed or not.
 	pub fn is_signed(&self) -> bool {
 		matches!(self, Phase::Signed)
 	}
 
-	/// Weather the phase is unsigned or not.
+	/// Whether the phase is unsigned or not.
 	pub fn is_unsigned(&self) -> bool {
 		matches!(self, Phase::Unsigned(_))
 	}
 
-	/// Weather the phase is unsigned and open or not, with specific start.
+	/// Whether the phase is unsigned and open or not, with specific start.
 	pub fn is_unsigned_open_at(&self, at: Bn) -> bool {
 		matches!(self, Phase::Unsigned((true, real)) if *real == at)
 	}
 
-	/// Weather the phase is unsigned and open or not.
+	/// Whether the phase is unsigned and open or not.
 	pub fn is_unsigned_open(&self) -> bool {
 		matches!(self, Phase::Unsigned((true, _)))
 	}
 
-	/// Weather the phase is off or not.
+	/// Whether the phase is off or not.
 	pub fn is_off(&self) -> bool {
 		matches!(self, Phase::Off)
 	}
