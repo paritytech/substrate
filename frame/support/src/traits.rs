@@ -1623,13 +1623,13 @@ pub trait OnRuntimeUpgrade {
 	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<(), &'static str>;
+	fn pre_upgrade() -> Result<(), &'static str> { Ok(()) }
 
 	/// Execute some post-checks after a runtime upgrade.
 	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade() -> Result<(), &'static str>;
+	fn post_upgrade() -> Result<(), &'static str> { Ok(()) }
 }
 
 #[impl_for_tuples(30)]
