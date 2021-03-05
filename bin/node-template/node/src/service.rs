@@ -296,7 +296,7 @@ pub fn new_light(mut config: Configuration) -> Result<TaskManager, ServiceError>
 	);
 
 	let import_queue = sc_consensus_aura::import_queue::<AuraPair, _, _, _, _, _>(
-	ImportQueueParams {
+		ImportQueueParams {
 			block_import: aura_block_import.clone(),
 			justification_import: Some(Box::new(grandpa_block_import.clone())),
 			client: client.clone(),
