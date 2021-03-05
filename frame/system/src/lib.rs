@@ -1075,7 +1075,7 @@ impl<T: Config> Module<T> {
 					// Logic error - cannot decrement beyond zero.
 					log::error!(
 						target: "runtime::system",
-			      "Logic error: Unexpected underflow in reducing provider",
+						"Logic error: Unexpected underflow in reducing provider",
 					);
 					account.providers = 1;
 				}
@@ -1129,7 +1129,10 @@ impl<T: Config> Module<T> {
 			if let Some(mut account) = maybe_account.take() {
 				if account.sufficients == 0 {
 					// Logic error - cannot decrement beyond zero.
-					debug::print!("Logic error: Unexpected underflow in reducing sufficients");
+					log::error!(
+						target: "runtime::system",
+						"Logic error: Unexpected underflow in reducing sufficients",
+					);
 				}
 				match (account.sufficients, account.providers) {
 					(0, 0) | (1, 0) => {
@@ -1143,7 +1146,10 @@ impl<T: Config> Module<T> {
 					}
 				}
 			} else {
-				debug::print!("Logic error: Account already dead when reducing provider");
+				log::error!(
+					target: "runtime::system",
+					"Logic error: Account already dead when reducing provider",
+				);
 				DecRefStatus::Reaped
 			}
 		})

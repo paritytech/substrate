@@ -2286,6 +2286,34 @@ decl_module! {
 
 			Ok(())
 		}
+
+		/// (Re-)set the controller of a stash by the controller account.
+		///
+		/// Effects will be felt at the beginning of the next era.
+		///
+		/// The dispatch origin for this call must be _Signed_ by the controller.
+		///
+		/// # <weight>
+		/// - Independent of the arguments. Insignificant complexity.
+		/// - Contains a limited number of reads.
+		/// - Writes are limited to the `origin` account key.
+		/// ----------
+		/// Weight: O(1)
+		/// DB Weight:
+		/// - Read: Bonded, Ledger New Controller, Ledger Old Controller
+		/// - Write: Bonded, Ledger New Controller, Ledger Old Controller
+		/// # </weight>
+		#[weight = T::WeightInfo::set_controller()]
+		fn change_controller(origin, controller: <T::Lookup as StaticLookup>::Source) {
+			let old_controller = ensure_signed(origin)?;
+			let controller = T::Lookup::lookup(controller)?;
+			if controller != old_controller {
+				ensure!(!<Ledger<T>>::contains_key(&controller), Error::<T>::AlreadyPaired);
+				let ledger = Ledger::<T>::take(&old_controller).ok_or(Error::<T>::NotController);
+				Bonded::<T>::insert(&ledger.stash, &controller);
+				Ledger::<T>::insert(&controller, &ledger);
+			}
+		}
 	}
 }
 

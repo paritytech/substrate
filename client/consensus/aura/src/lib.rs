@@ -77,16 +77,13 @@ use sp_consensus_slots::Slot;
 use sp_api::ApiExt;
 
 pub use sp_consensus_aura::{
-	ConsensusLog, AuraApi, AURA_ENGINE_ID,
+	ConsensusLog, AuraApi, AURA_ENGINE_ID, digests::CompatibleDigestItem,
 	inherents::{
 		InherentType as AuraInherent,
 		AuraInherentData, INHERENT_IDENTIFIER, InherentDataProvider,
 	},
 };
 pub use sp_consensus::SyncOracle;
-pub use digests::CompatibleDigestItem;
-
-mod digests;
 
 type AuthorityId<P> = <P as Pair>::Public;
 
@@ -271,7 +268,7 @@ where
 		_claim: &Self::Claim,
 	) -> Vec<sp_runtime::DigestItem<B::Hash>> {
 		vec![
-			<DigestItemFor<B> as CompatibleDigestItem<P>>::aura_pre_digest(slot),
+			<DigestItemFor<B> as CompatibleDigestItem<P::Signature>>::aura_pre_digest(slot),
 		]
 	}
 
@@ -308,7 +305,9 @@ where
 					signature, public
 				))?;
 
-			let signature_digest_item = <DigestItemFor<B> as CompatibleDigestItem<P>>::aura_seal(signature);
+			let signature_digest_item = <
+				DigestItemFor<B> as CompatibleDigestItem<P::Signature>
+			>::aura_seal(signature);
 
 			let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
 			import_block.post_digests.push(signature_digest_item);
@@ -326,7 +325,7 @@ where
 
 	fn should_backoff(&self, slot: Slot, chain_head: &B::Header) -> bool {
 		if let Some(ref strategy) = self.backoff_authoring_blocks {
-			if let Ok(chain_head_slot) = find_pre_digest::<B, P>(chain_head) {
+			if let Ok(chain_head_slot) = find_pre_digest::<B, P::Signature>(chain_head) {
 				return strategy.should_backoff(
 					*chain_head.number(),
 					chain_head_slot,
@@ -356,7 +355,7 @@ where
 	) -> Option<std::time::Duration> {
 		let slot_remaining = self.slot_remaining_duration(slot_info);
 
-		let parent_slot = match find_pre_digest::<B, P>(head) {
+		let parent_slot = match find_pre_digest::<B, P::Signature>(head) {
 			Err(_) => return Some(slot_remaining),
 			Ok(d) => d,
 		};
@@ -414,11 +413,7 @@ impl<B: BlockT> std::convert::From<Error<B>> for String {
 	}
 }
 
-fn find_pre_digest<B: BlockT, P: Pair>(header: &B::Header) -> Result<Slot, Error<B>>
-	where DigestItemFor<B>: CompatibleDigestItem<P>,
-		P::Signature: Decode,
-		P::Public: Encode + Decode + PartialEq + Clone,
-{
+fn find_pre_digest<B: BlockT, Signature: Codec>(header: &B::Header) -> Result<Slot, Error<B>> {
 	if header.number().is_zero() {
 		return Ok(0.into());
 	}
@@ -426,7 +421,7 @@ fn find_pre_digest<B: BlockT, P: Pair>(header: &B::Header) -> Result<Slot, Error
 	let mut pre_digest: Option<Slot> = None;
 	for log in header.digest().logs() {
 		trace!(target: "aura", "Checking log {:?}", log);
-		match (log.as_aura_pre_digest(), pre_digest.is_some()) {
+		match (CompatibleDigestItem::<Signature>::as_aura_pre_digest(log), pre_digest.is_some()) {
 			(Some(_), true) => Err(aura_err(Error::MultipleHeaders))?,
 			(None, _) => trace!(target: "aura", "Ignoring digest not meant for us"),
 			(s, false) => pre_digest = s,
@@ -435,8 +430,9 @@ fn find_pre_digest<B: BlockT, P: Pair>(header: &B::Header) -> Result<Slot, Error
 	pre_digest.ok_or_else(|| aura_err(Error::NoDigestFound))
 }
 
-/// check a header has been signed by the right key. If the slot is too far in the future, an error will be returned.
-/// if it's successful, returns the pre-header and the digest item containing the seal.
+/// check a header has been signed by the right key. If the slot is too far in the future, an error
+/// will be returned. If it's successful, returns the pre-header and the digest item
+/// containing the seal.
 ///
 /// This digest item will always return `Some` when used with `as_aura_seal`.
 //
@@ -447,8 +443,8 @@ fn check_header<C, B: BlockT, P: Pair>(
 	hash: B::Hash,
 	authorities: &[AuthorityId<P>],
 ) -> Result<CheckedHeader<B::Header, (Slot, DigestItemFor<B>)>, Error<B>> where
-	DigestItemFor<B>: CompatibleDigestItem<P>,
-	P::Signature: Decode,
+	DigestItemFor<B>: CompatibleDigestItem<P::Signature>,
+	P::Signature: Codec,
 	C: sc_client_api::backend::AuxStore,
 	P::Public: Encode + Decode + PartialEq + Clone,
 {
@@ -461,7 +457,7 @@ fn check_header<C, B: BlockT, P: Pair>(
 		aura_err(Error::HeaderBadSeal(hash))
 	})?;
 
-	let slot = find_pre_digest::<B, _>(&header)?;
+	let slot = find_pre_digest::<B, P::Signature>(&header)?;
 
 	if slot > slot_now {
 		header.digest_mut().push(seal);
@@ -582,7 +578,7 @@ impl<B: BlockT, C, P, CAW> Verifier<B> for AuraVerifier<C, P, CAW> where
 		ProvideCache<B> +
 		BlockOf,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B>,
-	DigestItemFor<B>: CompatibleDigestItem<P>,
+	DigestItemFor<B>: CompatibleDigestItem<P::Signature>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + 'static,
 	P::Signature: Encode + Decode,
@@ -805,7 +801,7 @@ impl<Block: BlockT, C, I, P> BlockImport<Block> for AuraBlockImport<Block, C, I,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		let hash = block.post_hash();
-		let slot = find_pre_digest::<Block, P>(&block.header)
+		let slot = find_pre_digest::<Block, P::Signature>(&block.header)
 			.expect("valid Aura headers must contain a predigest; \
 					 header has been already verified; qed");
 
@@ -816,7 +812,7 @@ impl<Block: BlockT, C, I, P> BlockImport<Block> for AuraBlockImport<Block, C, I,
 				Error::<Block>::ParentUnavailable(parent_hash, hash)
 			).into()))?;
 
-		let parent_slot = find_pre_digest::<Block, P>(&parent_header)
+		let parent_slot = find_pre_digest::<Block, P::Signature>(&parent_header)
 			.expect("valid Aura headers contain a pre-digest; \
 					parent header has already been verified; qed");
 
@@ -848,7 +844,7 @@ pub fn import_queue<B, I, C, P, S, CAW>(
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B>,
 	C: 'static + ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + Send + Sync + AuxStore + HeaderBackend<B>,
 	I: BlockImport<B, Error=ConsensusError, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
-	DigestItemFor<B>: CompatibleDigestItem<P>,
+	DigestItemFor<B>: CompatibleDigestItem<P::Signature>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode,
 	P::Signature: Encode + Decode,
@@ -858,7 +854,7 @@ pub fn import_queue<B, I, C, P, S, CAW>(
 	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
 	initialize_authorities_cache(&*client)?;
 
-	let verifier = AuraVerifier {
+	let verifier = AuraVerifier::<_, P, _> {
 		client,
 		inherent_data_providers,
 		phantom: PhantomData,
