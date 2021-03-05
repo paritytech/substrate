@@ -100,6 +100,7 @@ mod tests {
 	use super::*;
 	use sp_npos_elections::Support;
 	use sp_runtime::Perbill;
+	use frame_support::weights::Weight;
 
 	type AccountId = u64;
 	type BlockNumber = u32;
@@ -121,19 +122,18 @@ mod tests {
 		pub struct DataProvider;
 
 		impl ElectionDataProvider<AccountId, BlockNumber> for DataProvider {
-			type Additional = ();
 			fn voters(
 				_: Option<usize>,
-			) -> data_provider::Result<(Vec<(AccountId, VoteWeight, Vec<AccountId>)>, Self::Additional)> {
-				Ok((vec![(1, 10, vec![10, 20]), (2, 20, vec![30, 20]), (3, 30, vec![10, 30])], ()))
+			) -> data_provider::Result<(Vec<(AccountId, VoteWeight, Vec<AccountId>)>, Weight)> {
+				Ok((vec![(1, 10, vec![10, 20]), (2, 20, vec![30, 20]), (3, 30, vec![10, 30])], 0))
 			}
 
-			fn targets(_: Option<usize>) -> data_provider::Result<(Vec<AccountId>, Self::Additional)> {
-				Ok((vec![10, 20, 30], ()))
+			fn targets(_: Option<usize>) -> data_provider::Result<(Vec<AccountId>, Weight)> {
+				Ok((vec![10, 20, 30], 0))
 			}
 
-			fn desired_targets() -> data_provider::Result<(u32, Self::Additional)> {
-				Ok((2, ()))
+			fn desired_targets() -> data_provider::Result<(u32, Weight)> {
+				Ok((2, 0))
 			}
 
 			fn next_election_prediction(_: BlockNumber) -> BlockNumber {

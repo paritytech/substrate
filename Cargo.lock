@@ -1456,6 +1456,7 @@ checksum = "e78d4f1cc4ae33bbfc157ed5d5a5ef3bc29227303d595861deb238fcec4e9457"
 name = "election-provider-support"
 version = "3.0.0"
 dependencies = [
+ "frame-support",
  "parity-scale-codec",
  "sp-arithmetic",
  "sp-npos-elections",
@@ -4534,6 +4535,7 @@ dependencies = [
 name = "pallet-babe"
 version = "3.0.0"
 dependencies = [
+ "election-provider-support",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -4551,7 +4553,6 @@ dependencies = [
  "sp-consensus-babe",
  "sp-consensus-vrf",
  "sp-core",
- "sp-election-providers",
  "sp-io",
  "sp-runtime",
  "sp-session",
@@ -4718,6 +4719,7 @@ dependencies = [
 name = "pallet-election-provider-multi-phase"
 version = "3.0.0"
 dependencies = [
+ "election-provider-support",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -4731,7 +4733,6 @@ dependencies = [
  "serde",
  "sp-arithmetic",
  "sp-core",
- "sp-election-providers",
  "sp-io",
  "sp-npos-elections",
  "sp-runtime",
@@ -4846,6 +4847,7 @@ dependencies = [
 name = "pallet-grandpa"
 version = "3.0.0"
 dependencies = [
+ "election-provider-support",
  "finality-grandpa",
  "frame-benchmarking",
  "frame-support",
@@ -4862,7 +4864,6 @@ dependencies = [
  "serde",
  "sp-application-crypto",
  "sp-core",
- "sp-election-providers",
  "sp-finality-grandpa",
  "sp-io",
  "sp-keyring",
@@ -5058,6 +5059,7 @@ dependencies = [
 name = "pallet-offences-benchmarking"
 version = "3.0.0"
 dependencies = [
+ "election-provider-support",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -5073,7 +5075,6 @@ dependencies = [
  "parity-scale-codec",
  "serde",
  "sp-core",
- "sp-election-providers",
  "sp-io",
  "sp-runtime",
  "sp-staking",
@@ -5185,6 +5186,7 @@ dependencies = [
 name = "pallet-session-benchmarking"
 version = "3.0.0"
 dependencies = [
+ "election-provider-support",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -5197,7 +5199,6 @@ dependencies = [
  "rand 0.7.3",
  "serde",
  "sp-core",
- "sp-election-providers",
  "sp-io",
  "sp-runtime",
  "sp-session",
@@ -5224,6 +5225,7 @@ dependencies = [
 name = "pallet-staking"
 version = "3.0.0"
 dependencies = [
+ "election-provider-support",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -5240,7 +5242,6 @@ dependencies = [
  "serde",
  "sp-application-crypto",
  "sp-core",
- "sp-election-providers",
  "sp-io",
  "sp-npos-elections",
  "sp-runtime",
@@ -5256,6 +5257,7 @@ dependencies = [
 name = "pallet-staking-fuzz"
 version = "0.0.0"
 dependencies = [
+ "election-provider-support",
  "frame-support",
  "frame-system",
  "honggfuzz",
@@ -5268,7 +5270,6 @@ dependencies = [
  "parity-scale-codec",
  "serde",
  "sp-core",
- "sp-election-providers",
  "sp-io",
  "sp-npos-elections",
  "sp-runtime",
@@ -8589,17 +8590,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "sp-election-providers"
-version = "3.0.0"
-dependencies = [
- "parity-scale-codec",
- "sp-arithmetic",
- "sp-npos-elections",
- "sp-runtime",
- "sp-std",
 ]
 
 [[package]]

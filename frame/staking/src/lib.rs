@@ -3338,15 +3338,13 @@ impl<T: Config> Module<T> {
 impl<T: Config> election_provider_support::ElectionDataProvider<T::AccountId, T::BlockNumber>
 	for Module<T>
 {
-	type Additional = Weight;
-
-	fn desired_targets() -> data_provider::Result<(u32, Self::Additional)> {
+	fn desired_targets() -> data_provider::Result<(u32, Weight)> {
 		Ok((Self::validator_count(), <T as frame_system::Config>::DbWeight::get().reads(1)))
 	}
 
 	fn voters(
 		maybe_max_len: Option<usize>,
-	) -> data_provider::Result<(Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>, Self::Additional)> {
+	) -> data_provider::Result<(Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>, Weight)> {
 		// NOTE: reading these counts already needs to iterate a lot of storage keys, but they get
 		// cached. This is okay for the case of `Ok(_)`, but bad for `Err(_)`, as the trait does not
 		// report weight in failures. TODO: https://github.com/paritytech/substrate/issues/8246
@@ -3367,7 +3365,7 @@ impl<T: Config> election_provider_support::ElectionDataProvider<T::AccountId, T:
 		Ok((Self::get_npos_voters(), weight))
 	}
 
-	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<T::AccountId>, Self::Additional)> {
+	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<T::AccountId>, Weight)> {
 		let target_count = <Validators<T>>::iter().count();
 
 		if maybe_max_len.map_or(false, |max_len| target_count > max_len) {

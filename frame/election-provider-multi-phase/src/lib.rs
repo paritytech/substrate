@@ -530,11 +530,7 @@ pub mod pallet {
 
 		/// Something that will provide the election data. This pallet constrain the data provider
 		/// to return its weight as additional data for accurate metering.
-		type DataProvider: ElectionDataProvider<
-			Self::AccountId,
-			Self::BlockNumber,
-			Additional = Weight,
-		>;
+		type DataProvider: ElectionDataProvider<Self::AccountId, Self::BlockNumber>;
 
 		/// The compact solution type
 		type CompactSolution: codec::Codec
