@@ -186,6 +186,7 @@ pub mod pallet {
 		type DecRefStatus = DecRefStatus;
 		type IncRefError = IncRefError;
 		type DecRefError = DecRefError;
+
 		/// Increment the provider reference counter on an account.
 		fn inc_providers(who: &T::AccountId) -> IncRefStatus {
 			Account::<T>::mutate(who, |a| if a.providers == 0 && a.sufficients == 0 {
