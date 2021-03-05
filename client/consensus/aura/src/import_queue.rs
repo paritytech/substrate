@@ -16,6 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+//! Module implementing the logic for verifying and importing AuRa blocks.
+
 use crate::{
 	AuthorityId, find_pre_digest, slot_author, aura_err, Error, AuraSlotCompatible, SlotDuration,
 	register_aura_inherent_data_provider, authorities,
