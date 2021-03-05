@@ -1,4 +1,4 @@
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -19,10 +19,13 @@ use std::convert::{TryFrom, TryInto};
 use std::fmt::Debug;
 use std::sync::Arc;
 
-use codec::{Codec, Decode, Encode};
-use futures::{future, FutureExt, Stream, StreamExt};
-use log::{debug, error, info, trace, warn};
-use parking_lot::Mutex;
+use {
+	codec::{Codec, Decode, Encode},
+	futures::{future, FutureExt, Stream, StreamExt},
+	hex::ToHex,
+	log::{debug, error, info, trace, warn},
+	parking_lot::Mutex,
+};
 
 use beefy_primitives::{
 	BeefyApi, Commitment, ConsensusLog, MmrRootHash, SignedCommitment, ValidatorSet, ValidatorSetId, BEEFY_ENGINE_ID,
@@ -43,6 +46,8 @@ use sp_runtime::{
 	generic::OpaqueDigestItemId,
 	traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor, Zero},
 };
+
+mod error;
 
 pub mod notification;
 
@@ -264,15 +269,17 @@ where
 		number == next_block_to_vote_on
 	}
 
-	fn sign_commitment(&self, id: &Id, commitment: &[u8]) -> Option<Signature> {
+	fn sign_commitment(&self, id: &Id, commitment: &[u8]) -> Result<Signature, error::Error<Id>> {
 		let sig = SyncCryptoStore::sign_with(&*self.key_store, KEY_TYPE, &id.to_public_crypto_pair(), &commitment)
-			.ok()
-			.flatten()?
-			.try_into()
-			.ok()?;
+			.map_err(|e| error::Error::CannotSign((*id).clone(), e.to_string()))?
+			.ok_or_else(|| error::Error::CannotSign((*id).clone(), "No key in KeyStore found".into()))?;
 
-		// TODO #98 - return errors as well
-		Some(sig)
+		let sig = sig
+			.clone()
+			.try_into()
+			.map_err(|_| error::Error::InvalidSignature(sig.encode_hex(), (*id).clone()))?;
+
+		Ok(sig)
 	}
 
 	fn handle_finality_notification(&mut self, notification: FinalityNotification<Block>) {
@@ -312,9 +319,9 @@ where
 			};
 
 			let signature = match self.sign_commitment(local_id, commitment.encode().as_ref()) {
-				Some(sig) => sig,
-				None => {
-					warn!(target: "beefy", "🥩 Error signing commitment: {:?}", commitment);
+				Ok(sig) => sig,
+				Err(err) => {
+					warn!(target: "beefy", "🥩 Error signing commitment: {:?}", err);
 					return;
 				}
 			};
