@@ -260,7 +260,7 @@ impl Builder {
 		at: Hash,
 	) -> Result<Vec<KeyPair>, &'static str> {
 		trace!(target: LOG_TARGET, "rpc: storage_pairs: {:?} / {:?}", prefix, at);
-		RpcApi::storage_pairs(&*self.as_online().rpc, prefix, at).await.map_err(|_| "rpc finalized_head failed.")
+		RpcApi::storage_pairs(&*self.as_online().rpc, prefix, Some(at)).await.map_err(|_| "rpc storage_pairs failed.")
 	}
 }
 
