@@ -665,7 +665,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// >			preventing the message from being delivered.
 	///
 	/// The protocol must have been registered with
-	/// [`NetworkConfiguration::notifications_protocols`](crate::config::NetworkConfiguration::notifications_protocols).
+	/// `NetworkConfiguration::notifications_protocols`
 	///
 	pub fn write_notification(&self, target: PeerId, protocol: Cow<'static, str>, message: Vec<u8>) {
 		// We clone the `NotificationsSink` in order to be able to unlock the network-wide
@@ -726,7 +726,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// in which case enqueued notifications will be lost.
 	///
 	/// The protocol must have been registered with
-	/// [`NetworkConfiguration::notifications_protocols`](crate::config::NetworkConfiguration::notifications_protocols).
+	/// `NetworkConfiguration::notifications_protocols`
 	///
 	/// # Usage
 	///

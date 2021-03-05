@@ -105,22 +105,23 @@ pub struct Params<B: BlockT, H: ExHashT> {
 
 	/// Request response configuration for the block request protocol.
 	///
-	/// [`RequestResponseConfig`] [`name`] is used to tag outgoing block requests with the correct
+	/// [`RequestResponseConfig`] `name` is used to tag outgoing block requests with the correct
 	/// protocol name. In addition all of [`RequestResponseConfig`] is used to handle incoming block
 	/// requests, if enabled.
 	///
-	/// Can be constructed either via [`block_request_handler::generate_protocol_config`] allowing
-	/// outgoing but not incoming requests, or constructed via
-	/// [`block_request_handler::BlockRequestHandler::new`] allowing both outgoing and incoming
-	/// requests.
+	/// Can be constructed either via [`crate::block_request_handler::generate_protocol_config`]
+	/// allowing outgoing but not incoming requests, or constructed via
+	/// [`crate::block_request_handler::BlockRequestHandler::new`] allowing both outgoing and
+	/// incoming requests.
 	pub block_request_protocol_config: RequestResponseConfig,
 
 	/// Request response configuration for the light client request protocol.
 	///
-	/// Can be constructed either via [`light_client_requests::generate_protocol_config`] allowing
-	/// outgoing but not incoming requests, or constructed via
-	/// [`light_client_requests::handler::LightClientRequestHandler::new`] allowing both outgoing
-	/// and incoming requests.
+	/// Can be constructed either via
+	/// [`crate::light_client_requests::generate_protocol_config`] allowing outgoing but not
+	/// incoming requests, or constructed via
+	/// [`crate::light_client_requests::handler::LightClientRequestHandler::new`] allowing
+	/// both outgoing and incoming requests.
 	pub light_client_request_protocol_config: RequestResponseConfig,
 }
 
@@ -554,7 +555,7 @@ pub enum TransportConfig {
 
 		/// If true, allow connecting to private IPv4 addresses (as defined in
 		/// [RFC1918](https://tools.ietf.org/html/rfc1918)). Irrelevant for addresses that have
-		/// been passed in [`NetworkConfiguration::reserved_nodes`] or
+		/// been passed in `NetworkConfiguration::reserved_nodes` or
 		/// [`NetworkConfiguration::boot_nodes`].
 		allow_private_ipv4: bool,
 

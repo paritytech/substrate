@@ -19,7 +19,8 @@
 //! Helper for incoming light client requests.
 //!
 //! Handle (i.e. answer) incoming light client requests from a remote peer received via
-//! [`crate::request_responses::RequestResponsesBehaviour`] with [`LightClientRequestHandler`].
+//! `crate::request_responses::RequestResponsesBehaviour` with
+//! [`crate::light_client_requests::handler::LightClientRequestHandler`].
 
 use codec::{self, Encode, Decode};
 use crate::{
@@ -60,7 +61,7 @@ pub struct LightClientRequestHandler<B: Block> {
 }
 
 impl<B: Block> LightClientRequestHandler<B> {
-	/// Create a new [`BlockRequestHandler`].
+	/// Create a new [`crate::block_request_handler::BlockRequestHandler`].
 	pub fn new(
 		protocol_id: &ProtocolId,
 		client: Arc<dyn Client<B>>,

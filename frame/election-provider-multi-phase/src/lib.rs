@@ -43,13 +43,13 @@
 //!
 //! Each of the phases can be disabled by essentially setting their length to zero. If both phases
 //! have length zero, then the pallet essentially runs only the fallback strategy, denoted by
-//! [`Config::FallbackStrategy`].
+//! [`Config::Fallback`].
 //! ### Signed Phase
 //!
 //!	In the signed phase, solutions (of type [`RawSolution`]) are submitted and queued on chain. A
 //! deposit is reserved, based on the size of the solution, for the cost of keeping this solution
 //! on-chain for a number of blocks, and the potential weight of the solution upon being checked. A
-//! maximum of [`pallet::Config::MaxSignedSubmissions`] solutions are stored. The queue is always
+//! maximum of `pallet::Config::MaxSignedSubmissions` solutions are stored. The queue is always
 //! sorted based on score (worse to best).
 //!
 //! Upon arrival of a new solution:
@@ -65,7 +65,7 @@
 //! origin can not bail out in any way, if their solution is queued.
 //!
 //! Upon the end of the signed phase, the solutions are examined from best to worse (i.e. `pop()`ed
-//! until drained). Each solution undergoes an expensive [`Pallet::feasibility_check`], which
+//! until drained). Each solution undergoes an expensive `Pallet::feasibility_check`, which
 //! ensures the score claimed by this score was correct, and it is valid based on the election data
 //! (i.e. votes and candidates). At each step, if the current best solution passes the feasibility
 //! check, it is considered to be the best one. The sender of the origin is rewarded, and the rest
@@ -192,14 +192,14 @@
 //! **Score based on (byte) size**: We should always prioritize small solutions over bigger ones, if
 //! there is a tie. Even more harsh should be to enforce the bound of the `reduce` algorithm.
 //!
-//! **Offchain resubmit**: Essentially port https://github.com/paritytech/substrate/pull/7976 to
+//! **Offchain resubmit**: Essentially port <https://github.com/paritytech/substrate/pull/7976> to
 //! this pallet as well. The `OFFCHAIN_REPEAT` also needs to become an adjustable parameter of the
 //! pallet.
 //!
 //! **Make the number of nominators configurable from the runtime**. Remove `sp_npos_elections`
 //! dependency from staking and the compact solution type. It should be generated at runtime, there
 //! it should be encoded how many votes each nominators have. Essentially translate
-//! https://github.com/paritytech/substrate/pull/7929 to this pallet.
+//! <https://github.com/paritytech/substrate/pull/7929> to this pallet.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -364,7 +364,7 @@ impl Default for ElectionCompute {
 /// This is what will get submitted to the chain.
 ///
 /// Such a solution should never become effective in anyway before being checked by the
-/// [`Pallet::feasibility_check`]
+/// `Pallet::feasibility_check`
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct RawSolution<C> {
 	/// Compact election edges.

@@ -38,4 +38,7 @@ std = [
 	"sp-runtime/std",
 	"frame-system/std",
 ]
-try-runtime = ["frame-support/try-runtime"]
+try-runtime = [
+	"frame-system/try-runtime",
+	"frame-support/try-runtime",
+]

@@ -63,4 +63,10 @@ std = [
 	"log/std",
 ]
 runtime-benchmarks = ["frame-benchmarking"]
-try-runtime = ["frame-support/try-runtime"]
+try-runtime = [
+	"frame-system/try-runtime",
+	"frame-support/try-runtime",
+	"pallet-authorship/try-runtime",
+	"pallet-session/try-runtime",
+	"pallet-timestamp/try-runtime",
+]

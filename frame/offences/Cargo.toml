@@ -41,4 +41,8 @@ std = [
 	"log/std",
 ]
 runtime-benchmarks = []
-try-runtime = ["frame-support/try-runtime"]
+try-runtime = [
+	"pallet-balances/try-runtime",
+	"frame-system/try-runtime",
+	"frame-support/try-runtime",
+]

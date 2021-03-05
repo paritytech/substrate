@@ -36,4 +36,7 @@ std = [
 	"sp-std/std",
 	"sp-tasks/std",
 ]
-try-runtime = ["frame-support/try-runtime"]
+try-runtime = [
+	"frame-system/try-runtime",
+	"frame-support/try-runtime",
+]
