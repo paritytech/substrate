@@ -85,7 +85,7 @@
 //! type Balance = u64;
 //! type BlockNumber = u32;
 //!
-//! mod data_provider {
+//! mod data_provider_mod {
 //!     use super::*;
 //!
 //!     pub trait Config: Sized {
@@ -99,14 +99,14 @@
 //!     pub struct Module<T: Config>(std::marker::PhantomData<T>);
 //!
 //!     impl<T: Config> ElectionDataProvider<AccountId, BlockNumber> for Module<T> {
-//! 			type Additional = ();
+//! 		type Additional = ();
 //!         fn desired_targets() -> data_provider::Result<(u32, Self::Additional)> {
 //!             Ok((1, ()))
 //!         }
 //!         fn voters(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<(AccountId, VoteWeight, Vec<AccountId>)>, Self::Additional)> {
 //!             Ok((Default::default(), ()))
 //!         }
-//!         fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<AccountId>, Self::Additional).> {
+//!         fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<AccountId>, Self::Additional)> {
 //!             Ok((vec![10, 20, 30], ()))
 //!         }
 //!         fn next_election_prediction(now: BlockNumber) -> BlockNumber {
@@ -142,15 +142,15 @@
 //!
 //! mod runtime {
 //!     use super::generic_election_provider;
-//!     use super::data_provider;
+//!     use super::data_provider_mod;
 //!     use super::AccountId;
 //!
 //!     struct Runtime;
 //!     impl generic_election_provider::Config for Runtime {
-//!         type DataProvider = data_provider::Module<Runtime>;
+//!         type DataProvider = data_provider_mod::Module<Runtime>;
 //!     }
 //!
-//!     impl data_provider::Config for Runtime {
+//!     impl data_provider_mod::Config for Runtime {
 //!         type ElectionProvider = generic_election_provider::GenericElectionProvider<Runtime>;
 //!     }
 //!

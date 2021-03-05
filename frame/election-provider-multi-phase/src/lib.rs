@@ -581,16 +581,15 @@ pub mod pallet {
 							// not much we can do about this at this point.
 							log!(warn, "failed to open signed phase due to {:?}", why);
 							T::WeightInfo::on_initialize_nothing()
-							// NOTE: ^^ this is a bit influenced by the fact that we know the
-							// implementation of the data provider does not consume much resources
-							// in case of error. Could be made more generalized.
+							// NOTE: ^^ The trait specifies that this is a noop in terms of weight
+							// in case of error.
 						}
 					}
 				}
 				Phase::Signed | Phase::Off
 					if remaining <= unsigned_deadline && remaining > Zero::zero() =>
 				{
-					// Decide on the state of the phase: followed by signed or not?
+					// followed by signed or not?
 					let (need_snapshot, enabled, signed_weight) = if current_phase == Phase::Signed {
 						// followed by a signed phase: close the signed phase, no need for snapshot.
 						// TWO_PHASE_NOTE: later on once we have signed phase, this should return
@@ -877,7 +876,7 @@ impl<T: Config> Pallet<T> {
 		let weight = Self::create_snapshot()?;
 		<CurrentPhase<T>>::put(Phase::Signed);
 		Self::deposit_event(Event::SignedPhaseStarted(Self::round()));
-		Ok(weight)
+		Ok(weight.saturating_add(T::DbWeight::get().writes(1)))
 	}
 
 	/// Logic for [`<Pallet as Hooks<T>>::on_initialize`] when unsigned phase is being opened.
@@ -936,7 +935,7 @@ impl<T: Config> Pallet<T> {
 		});
 		<DesiredTargets<T>>::put(desired_targets);
 		<Snapshot<T>>::put(RoundSnapshot { voters, targets });
-		Ok(w1.saturating_add(w2).saturating_add(w3))
+		Ok(w1.saturating_add(w2).saturating_add(w3).saturating_add(T::DbWeight::get().writes(3)))
 	}
 
 	/// Kill everything created by [`Pallet::create_snapshot`].
