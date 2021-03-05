@@ -213,7 +213,7 @@ use frame_support::{
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use sp_election_providers::{ElectionDataProvider, ElectionProvider, onchain};
 use sp_npos_elections::{
-	assignment_ratio_to_staked_normalized, is_score_better, CompactSolution, ElectionScore,
+	assignment_ratio_to_staked_normalized, CompactSolution, ElectionScore,
 	EvaluateSupport, PerThing128, Supports, VoteWeight,
 };
 use sp_runtime::{

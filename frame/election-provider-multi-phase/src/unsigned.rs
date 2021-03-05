@@ -17,15 +17,38 @@
 
 //! The unsigned phase implementation.
 
-use crate::*;
-use frame_support::dispatch::DispatchResult;
+use crate::{
+	helpers,
+	Call,
+	CompactAccuracyOf,
+	CompactOf,
+	CompactVoterIndexOf,
+	Config,
+	ElectionCompute,
+	Error,
+	FeasibilityError,
+	Pallet,
+	RawSolution,
+	ReadySolution,
+	RoundSnapshot,
+	SolutionOrSnapshotSize,
+	Weight,
+	WeightInfo,
+};
+use codec::Decode;
+use frame_support::{dispatch::DispatchResult, ensure, traits::Get};
 use frame_system::offchain::SubmitTransaction;
+use sp_arithmetic::Perbill;
 use sp_npos_elections::{
-	seq_phragmen, CompactSolution, ElectionResult, assignment_ratio_to_staked_normalized,
+	assignment_ratio_to_staked_normalized,
 	assignment_staked_to_ratio_normalized,
+	is_score_better,
+	seq_phragmen,
+	CompactSolution,
+	ElectionResult,
 };
 use sp_runtime::{offchain::storage::StorageValueRef, traits::TrailingZeroInput};
-use sp_std::cmp::Ordering;
+use sp_std::{cmp::Ordering, vec::Vec};
 
 /// Storage key used to store the persistent offchain worker status.
 pub(crate) const OFFCHAIN_HEAD_DB: &[u8] = b"parity/multi-phase-unsigned-election";
@@ -400,7 +423,8 @@ impl<T: Config> Pallet<T> {
 #[cfg(test)]
 mod max_weight {
 	#![allow(unused_variables)]
-	use super::{mock::*, *};
+	use super::*;
+	use crate::mock::MultiPhase;
 
 	struct TestWeight;
 	impl crate::weights::WeightInfo for TestWeight {
@@ -481,12 +505,30 @@ mod max_weight {
 
 #[cfg(test)]
 mod tests {
-	use super::{
-		mock::{Origin, *},
-		Call, *,
+	use super::*;
+	use crate::{
+		mock::{
+			roll_to,
+			roll_to_with_ocw,
+			witness,
+			Call as OuterCall,
+			ExtBuilder,
+			Extrinsic,
+			MinerMaxWeight,
+			MultiPhase,
+			Origin,
+			Runtime,
+			TestCompact,
+		},
+		CurrentPhase,
+		InvalidTransaction,
+		Phase,
+		QueuedSolution,
+		TransactionSource,
+		TransactionValidityError,
 	};
-	use frame_support::{dispatch::Dispatchable, traits::OffchainWorker};
-	use mock::Call as OuterCall;
+	use frame_benchmarking::Zero;
+	use frame_support::{assert_noop, assert_ok, dispatch::Dispatchable, traits::OffchainWorker};
 	use sp_election_providers::Assignment;
 	use sp_runtime::{traits::ValidateUnsigned, PerU16};
 
