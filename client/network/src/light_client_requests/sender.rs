@@ -18,15 +18,15 @@
 
 //! Helper for outgoing light client requests.
 //!
-//! Call `LightClientRequestSender::send_request` to send out light client requests. It will:
+//! Call [`LightClientRequestSender::send_request`] to send out light client requests. It will:
 //!
 //! 1. Build the request.
 //!
-//! 2. Forward the request to `crate::request_responses::RequestResponsesBehaviour` via
-//! `OutEvent::SendRequest`.
+//! 2. Forward the request to [`crate::request_responses::RequestResponsesBehaviour`] via
+//! [`OutEvent::SendRequest`].
 //!
-//! 3. Wait for the response and forward the response via the `oneshot::Sender` provided earlier
-//! with `LightClientRequestSender::send_request`.
+//! 3. Wait for the response and forward the response via the [`oneshot::Sender`] provided earlier
+//! with [`LightClientRequestSender::send_request`].
 
 use codec::{self, Encode, Decode};
 use crate::{
@@ -546,13 +546,13 @@ impl<B: Block> Stream for LightClientRequestSender<B> {
 /// Events returned by [`LightClientRequestSender`].
 #[derive(Debug)]
 pub enum OutEvent {
-	/// Emit a request to be send out on the network e.g. via `crate::request_responses`.
+	/// Emit a request to be send out on the network e.g. via [`crate::request_responses`].
 	SendRequest {
 		/// The remote peer to send the request to.
 		target: PeerId,
 		/// The encoded request.
 		request: Vec<u8>,
-		/// The `onehsot::Sender` channel to pass the response to.
+		/// The [`onehsot::Sender`] channel to pass the response to.
 		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
 		/// The name of the protocol to use to send the request.
 		protocol_name: String,
@@ -643,42 +643,42 @@ pub enum Request<B: Block> {
 	Body {
 		/// Request.
 		request: RemoteBodyRequest<B::Header>,
-		/// `oneshot::Sender` to return response.
+		/// [`oneshot::Sender`] to return response.
 		sender: oneshot::Sender<Result<Vec<B::Extrinsic>, ClientError>>
 	},
 	/// Remote header request.
 	Header {
 		/// Request.
 		request: light::RemoteHeaderRequest<B::Header>,
-		/// `oneshot::Sender` to return response.
+		/// [`oneshot::Sender`] to return response.
 		sender: oneshot::Sender<Result<B::Header, ClientError>>
 	},
 	/// Remote read request.
 	Read {
 		/// Request.
 		request: light::RemoteReadRequest<B::Header>,
-		/// `oneshot::Sender` to return response.
+		/// [`oneshot::Sender`] to return response.
 		sender: oneshot::Sender<Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError>>
 	},
 	/// Remote read child request.
 	ReadChild {
 		/// Request.
 		request: light::RemoteReadChildRequest<B::Header>,
-		/// `oneshot::Sender` to return response.
+		/// [`oneshot::Sender`] to return response.
 		sender: oneshot::Sender<Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError>>
 	},
 	/// Remote call request.
 	Call {
 		/// Request.
 		request: light::RemoteCallRequest<B::Header>,
-		/// `oneshot::Sender` to return response.
+		/// [`oneshot::Sender`] to return response.
 		sender: oneshot::Sender<Result<Vec<u8>, ClientError>>
 	},
 	/// Remote changes request.
 	Changes {
 		/// Request.
 		request: light::RemoteChangesRequest<B::Header>,
-		/// `oneshot::Sender` to return response.
+		/// [`oneshot::Sender`] to return response.
 		sender: oneshot::Sender<Result<Vec<(NumberFor<B>, u32)>, ClientError>>
 	}
 }

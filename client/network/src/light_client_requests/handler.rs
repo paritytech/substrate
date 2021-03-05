@@ -19,8 +19,7 @@
 //! Helper for incoming light client requests.
 //!
 //! Handle (i.e. answer) incoming light client requests from a remote peer received via
-//! `crate::request_responses::RequestResponsesBehaviour` with
-//! [`crate::light_client_requests::handler::LightClientRequestHandler`].
+//! [`crate::request_responses::RequestResponsesBehaviour`] with [`LightClientRequestHandler`].
 
 use codec::{self, Encode, Decode};
 use crate::{
