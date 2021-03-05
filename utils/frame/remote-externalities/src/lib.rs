@@ -128,7 +128,7 @@ const TARGET: &str = "http://localhost:9933";
 
 jsonrpsee_proc_macros::rpc_client_api! {
 	RpcApi {
-		#[rpc(method = "state_getPairs")]
+		#[rpc(method = "state_getPairs", positional_params)]
 		fn storage_pairs(prefix: StorageKey, hash: Option<Hash>) -> Vec<(StorageKey, StorageData)>;
 		#[rpc(method = "chain_getFinalizedHead")]
 		fn finalized_head() -> Hash;
@@ -248,7 +248,9 @@ impl Builder {
 impl Builder {
 	async fn rpc_get_head(&self) -> Result<Hash, &'static str> {
 		trace!(target: LOG_TARGET, "rpc: finalized_head");
-		RpcApi::finalized_head(&*self.as_online().rpc).await.map_err(|_| "rpc finalized_head failed.")
+		RpcApi::finalized_head(&*self.as_online().rpc)
+			.await
+			.map_err(|_| "rpc storage_pairs failed.")
 	}
 
 	/// Relay the request to `state_getPairs` rpc endpoint.
@@ -260,7 +262,9 @@ impl Builder {
 		at: Hash,
 	) -> Result<Vec<KeyPair>, &'static str> {
 		trace!(target: LOG_TARGET, "rpc: storage_pairs: {:?} / {:?}", prefix, at);
-		RpcApi::storage_pairs(&*self.as_online().rpc, prefix, Some(at)).await.map_err(|_| "rpc storage_pairs failed.")
+		RpcApi::storage_pairs(&*self.as_online().rpc, prefix, Some(at))
+			.await
+			.map_err(|_| "rpc finalized_head failed")
 	}
 }
 
