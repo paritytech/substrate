@@ -194,8 +194,6 @@ where
 	N: crate::changes_trie::BlockNumber,
 {
 	fn set_offchain_storage(&mut self, key: &[u8], value: Option<&[u8]>) {
-		// TODO REVIEW should we be tracing off chain storage? I don't think I need it for
-		// balance reconciliation in polkadot runtimes, but maybe someone else does?
 		self.overlay.set_offchain_storage(key, value)
 	}
 
@@ -203,11 +201,7 @@ where
 		let _guard = guard();
 		let result = self.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
 			self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL));
-		// trace!(target: "state", "{:04x}: Get {}={:?}",
-		// 	self.id,
-		// 	HexDisplay::from(&key),
-		// 	result.as_ref().map(HexDisplay::from)
-		// );
+
 		let ready_to_encode_result = result.as_ref().map(|v| EncodeOpaqueValue(v.clone()));
 		trace!(target: "state",
 			method = "Get",
@@ -250,12 +244,6 @@ where
 					.expect(EXT_NOT_ALLOWED_TO_FAIL)
 			);
 
-		// trace!(target: "state", "{:04x}: GetChild({}) {}={:?}",
-		// 	self.id,
-		// 	HexDisplay::from(&child_info.storage_key()),
-		// 	HexDisplay::from(&key),
-		// 	result.as_ref().map(HexDisplay::from)
-		// );
 		let ready_to_encode_result = result.as_ref().map(|v| EncodeOpaqueValue(v.to_vec()));
 		trace!(target: "state",
 			method = "GetChild",
@@ -283,12 +271,6 @@ where
 					.expect(EXT_NOT_ALLOWED_TO_FAIL)
 			);
 
-		// trace!(target: "state", "{:04x}: ChildHash({}) {}={:?}",
-		// 	self.id,
-		// 	HexDisplay::from(&child_info.storage_key()),
-		// 	HexDisplay::from(&key),
-		// 	result,
-		// );
 		trace!(target: "state",
 			method = "GetChildHash",
 			ext_id = self.id,
@@ -308,11 +290,6 @@ where
 			_ => self.backend.exists_storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL),
 		};
 
-		// trace!(target: "state", "{:04x}: Exists {}={:?}",
-		// 	self.id,
-		// 	HexDisplay::from(&key),
-		// 	result,
-		// );
 		trace!(target: "state",
 			method = "Exists",
 			ext_id = self.id,
@@ -337,12 +314,6 @@ where
 				.expect(EXT_NOT_ALLOWED_TO_FAIL),
 		};
 
-		// trace!(target: "state", "{:04x}: ChildExists({}) {}={:?}",
-		// 	self.id,
-		// 	HexDisplay::from(&child_info.storage_key()),
-		// 	HexDisplay::from(&key),
-		// 	result,
-		// );
 		trace!(target: "state",
 			method = "ExistsChild",
 			ext_id = self.id,
@@ -398,11 +369,6 @@ where
 	}
 
 	fn place_storage(&mut self, key: StorageKey, value: Option<StorageValue>) {
-		// trace!(target: "state", "{:04x}: Put {}={:?}",
-		// 	self.id,
-		// 	HexDisplay::from(&key),
-		// 	value.as_ref().map(HexDisplay::from)
-		// );
 		let _guard = guard();
 		if is_child_storage_key(&key) {
 			warn!(target: "trie", "Refuse to directly set child storage key");
@@ -428,12 +394,6 @@ where
 		key: StorageKey,
 		value: Option<StorageValue>,
 	) {
-		// trace!(target: "state", "{:04x}: PutChild({}) {}={:?}",
-		// 	self.id,
-		// 	HexDisplay::from(&child_info.storage_key()),
-		// 	HexDisplay::from(&key),
-		// 	value.as_ref().map(HexDisplay::from)
-		// );
 		let ready_to_encode_result = value.as_ref().map(|v| EncodeOpaqueValue(v.clone()));
 		trace!(target: "state",
 			method = "PutChild",
@@ -453,10 +413,6 @@ where
 		child_info: &ChildInfo,
 		limit: Option<u32>,
 	) -> (bool, u32) {
-		// trace!(target: "state", "{:04x}: KillChild({})",
-		// 	self.id,
-		// 	HexDisplay::from(&child_info.storage_key()),
-		// );
 		let _guard = guard();
 		self.mark_dirty();
 		self.overlay.clear_child_storage(child_info);
@@ -508,10 +464,6 @@ where
 	}
 
 	fn clear_prefix(&mut self, prefix: &[u8]) {
-		// trace!(target: "state", "{:04x}: ClearPrefix {}",
-		// 	self.id,
-		// 	HexDisplay::from(&prefix),
-		// );
 		let _guard = guard();
 
 		if sp_core::storage::well_known_keys::starts_with_child_storage_key(prefix) {
@@ -537,11 +489,6 @@ where
 		child_info: &ChildInfo,
 		prefix: &[u8],
 	) {
-		// trace!(target: "state", "{:04x}: ClearChildPrefix({}) {}",
-		// 	self.id,
-		// 	HexDisplay::from(&child_info.storage_key()),
-		// 	HexDisplay::from(&prefix),
-		// );
 		trace!(target: "state",
 			method = "ClearChildPrefix",
 			ext_id = self.id,
@@ -563,11 +510,6 @@ where
 		key: Vec<u8>,
 		value: Vec<u8>,
 	) {
-		// trace!(target: "state", "{:04x}: Append {}={}",
-		// 	self.id,
-		// 	HexDisplay::from(&key),
-		// 	HexDisplay::from(&value),
-		// );
 		trace!(target: "state",
 			method = "Append",
 			ext_id = self.id,
@@ -600,7 +542,7 @@ where
 
 		let root = self.overlay.storage_root(self.backend, self.storage_transaction_cache);
 		let encoded_root = root.encode();
-		// trace!(target: "state", "{:04x}: Root {}", self.id, HexDisplay::from(&root.as_ref()));
+
 		trace!(target: "state",
 			method = "GetRootCached",
 			ext_id = self.id,
@@ -624,11 +566,7 @@ where
 				.unwrap_or_else(
 					|| empty_child_trie_root::<Layout<H>>()
 				);
-			// trace!(target: "state", "{:04x}: ChildRoot({})(cached) {}",
-			// 	self.id,
-			// 	HexDisplay::from(&storage_key),
-			// 	HexDisplay::from(&root.as_ref()),
-			// );
+
 			let encoded_root = root.encode();
 			trace!(target: "state",
 				method = "ChildRootCached",
@@ -659,11 +597,6 @@ where
 					self.overlay.set_storage(prefixed_storage_key.into_inner(), Some(root.clone()));
 				}
 
-				// trace!(target: "state", "{:04x}: ChildRoot({}) {}",
-				// 	self.id,
-				// 	HexDisplay::from(&storage_key.as_ref()),
-				// 	HexDisplay::from(&root.as_ref()),
-				// );
 				trace!(target: "state",
 					method = "ChildRoot",
 					ext_id = self.id,
@@ -680,11 +613,7 @@ where
 					.unwrap_or_else(
 						|| empty_child_trie_root::<Layout<H>>()
 					);
-				// trace!(target: "state", "{:04x}: ChildRoot({})(no_change) {}",
-				// 	self.id,
-				// 	HexDisplay::from(&storage_key.as_ref()),
-				// 	HexDisplay::from(&root.as_ref()),
-				// );
+
 				let encoded_root = root.encode();
 				trace!(target: "state",
 					method = "ChildRootNoChange",
@@ -707,15 +636,17 @@ where
 	fn storage_changes_root(&mut self, parent_hash: &[u8]) -> Result<Option<Vec<u8>>, ()> {
 		let _guard = guard();
 		if let Some(ref root) = self.storage_transaction_cache.changes_trie_transaction_storage_root {
+			let encoded_root = root.encode();
+
 			trace!(
 				target: "state",
-				"{:04x}: ChangesRoot({})(cached) {:?}",
-				self.id,
-				HexDisplay::from(&parent_hash),
-				root,
+				method = "ChangesRootCached",
+				ext_id = self.id,
+				pareant_hash = %HexDisplay::from(&parent_hash),
+				root = %HexDisplay::from(&encoded_root)
 			);
 
-			Ok(Some(root.encode()))
+			Ok(Some(encoded_root))
 		} else {
 			let root = self.overlay.changes_trie_root(
 				self.backend,
@@ -731,15 +662,19 @@ where
 				self.storage_transaction_cache,
 			);
 
+			let root = root.map(|r| r.map(|o| o.encode()));
+
+			let ready_to_encode_root = root.as_ref()
+				.map(|r| r.as_ref().map(|o| EncodeOpaqueValue(o.to_vec())));
 			trace!(
 				target: "state",
-				"{:04x}: ChangesRoot({}) {:?}",
-				self.id,
-				HexDisplay::from(&parent_hash),
-				root,
+				method = "ChangesRoot",
+				ext_id = self.id,
+				parent_hash = %HexDisplay::from(&parent_hash),
+				root = %HexDisplay::from(&ready_to_encode_root.encode()),
 			);
 
-			root.map(|r| r.map(|o| o.encode()))
+			root
 		}
 	}
 
