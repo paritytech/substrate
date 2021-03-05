@@ -363,7 +363,6 @@ where
 		<frame_system::Module<System>>::note_finished_extrinsics();
 		let block_number = <frame_system::Module<System>>::block_number();
 
-
 		Self::idle_and_finalize_hook(block_number);
 
 		<frame_system::Module<System>>::finalize()
