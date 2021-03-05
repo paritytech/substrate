@@ -8,7 +8,7 @@ use sc_service::{error::Error as ServiceError, Configuration, TaskManager};
 use sp_inherents::InherentDataProviders;
 use sc_executor::native_executor_instance;
 pub use sc_executor::NativeExecutor;
-use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
+use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
 use sc_consensus_aura::{ImportQueueParams, StartAuraParams};
 use sc_finality_grandpa::SharedVoterState;
 use sc_keystore::LocalKeystore;
@@ -44,7 +44,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		return Err(ServiceError::Other(
 			format!("Remote Keystores are not supported.")))
 	}
-	let inherent_data_providers = sp_inherents::InherentDataProviders::new();
+	let inherent_data_providers = InherentDataProviders::new();
 
 	let (client, backend, keystore_container, task_manager) =
 		sc_service::new_full_parts::<Block, RuntimeApi, Executor>(&config)?;
@@ -295,15 +295,18 @@ pub fn new_light(mut config: Configuration) -> Result<TaskManager, ServiceError>
 		client.clone(),
 	);
 
-	let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, _, _>(
-		sc_consensus_aura::slot_duration(&*client)?,
-		aura_block_import,
-		Some(Box::new(grandpa_block_import)),
-		client.clone(),
-		InherentDataProviders::new(),
-		&task_manager.spawn_essential_handle(),
-		config.prometheus_registry(),
-		sp_consensus::NeverCanAuthor,
+	let import_queue = sc_consensus_aura::import_queue::<AuraPair, _, _, _, _, _>(
+	ImportQueueParams {
+			block_import: aura_block_import.clone(),
+			justification_import: Some(Box::new(grandpa_block_import.clone())),
+			client: client.clone(),
+			inherent_data_providers: InherentDataProviders::new(),
+			spawner: &task_manager.spawn_essential_handle(),
+			can_author_with: sp_consensus::NeverCanAuthor,
+			slot_duration: sc_consensus_aura::slot_duration(&*client)?,
+			registry: config.prometheus_registry(),
+			check_for_equivocation: Default::default(),
+		},
 	)?;
 
 	let (network, network_status_sinks, system_rpc_tx, network_starter) =
