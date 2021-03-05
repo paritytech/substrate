@@ -44,6 +44,7 @@ sp-tracing = { version = "3.0.0", path = "../../primitives/tracing" }
 sp-election-providers = { version = "3.0.0", features = ["runtime-benchmarks"], path = "../../primitives/election-providers" }
 pallet-balances = { version = "3.0.0", path = "../balances" }
 frame-benchmarking = { path = "../benchmarking" , version = "3.1.0"}
+pallet-accounts = { path = "../accounts" , version = "3.0.0"}
 
 [features]
 default = ["std"]

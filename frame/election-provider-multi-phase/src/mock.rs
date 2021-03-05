@@ -55,6 +55,7 @@ frame_support::construct_runtime!(
 		System: frame_system::{Module, Call, Event<T>, Config},
 		Balances: pallet_balances::{Module, Call, Event<T>, Config<T>},
 		MultiPhase: multi_phase::{Module, Call, Event<T>},
+		Accounts: pallet_accounts::{Module, Call, Event<T>,},
 	}
 );
 
@@ -155,12 +156,15 @@ impl frame_system::Config for Runtime {
 	type BlockWeights = BlockWeights;
 	type Version = ();
 	type PalletInfo = PalletInfo;
-	type AccountData = pallet_balances::AccountData<u64>;
-	type OnNewAccount = ();
-	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
+	type AccountStorage = Accounts;
 }
-
+impl pallet_accounts::Config for Runtime {
+	type Event = Event;
+	type OnKilledAccount = ();
+	type OnNewAccount = ();
+	type AccountData = pallet_balances::AccountData<u64>;
+}
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
@@ -173,7 +177,8 @@ impl pallet_balances::Config for Runtime {
 	type Event = Event;
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
-	type AccountStore = System;
+	type AccountStore = Accounts;
+	type ReferencedAccount = Accounts;
 	type MaxLocks = ();
 	type WeightInfo = ();
 }
