@@ -1457,6 +1457,7 @@ name = "election-provider-support"
 version = "3.0.0"
 dependencies = [
  "frame-support",
+ "frame-system",
  "parity-scale-codec",
  "sp-arithmetic",
  "sp-npos-elections",

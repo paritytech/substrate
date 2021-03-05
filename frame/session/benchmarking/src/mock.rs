@@ -157,6 +157,7 @@ where
 impl onchain::Config for Test {
 	type AccountId = AccountId;
 	type BlockNumber = BlockNumber;
+	type BlockWeights = ();
 	type Accuracy = sp_runtime::Perbill;
 	type DataProvider = Staking;
 }

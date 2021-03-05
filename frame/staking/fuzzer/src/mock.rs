@@ -162,7 +162,7 @@ impl election_provider_support::ElectionProvider<AccountId, BlockNumber> for Moc
 	type Error = ();
 	type DataProvider = pallet_staking::Module<Test>;
 
-	fn elect() -> Result<sp_npos_elections::Supports<AccountId>, Self::Error> {
+	fn elect() -> Result<(sp_npos_elections::Supports<AccountId>, frame_support::weights::Weight), Self::Error> {
 		Err(())
 	}
 }

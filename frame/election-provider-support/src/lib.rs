@@ -253,7 +253,7 @@ pub trait ElectionProvider<AccountId, BlockNumber> {
 	/// Elect a new set of winners.
 	///
 	/// The result is returned in a target major format, namely as vector of  supports.
-	fn elect() -> Result<Supports<AccountId>, Self::Error>;
+	fn elect() -> Result<(Supports<AccountId>, Weight), Self::Error>;
 }
 
 #[cfg(feature = "std")]
@@ -261,7 +261,7 @@ impl<AccountId, BlockNumber> ElectionProvider<AccountId, BlockNumber> for () {
 	type Error = &'static str;
 	type DataProvider = ();
 
-	fn elect() -> Result<Supports<AccountId>, Self::Error> {
+	fn elect() -> Result<(Supports<AccountId>, Weight), Self::Error> {
 		Err("<() as ElectionProvider> cannot do anything.")
 	}
 }

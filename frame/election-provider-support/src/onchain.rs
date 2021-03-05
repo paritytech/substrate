@@ -20,6 +20,7 @@
 use crate::{ElectionDataProvider, ElectionProvider};
 use sp_npos_elections::*;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
+use frame_support::{traits::Get, weights::Weight};
 
 /// Errors of the on-chain election.
 #[derive(Eq, PartialEq, Debug)]
@@ -54,6 +55,8 @@ pub struct OnChainSequentialPhragmen<T: Config>(PhantomData<T>);
 ///
 /// Note that this is similar to a pallet traits, but [`OnChainSequentialPhragmen`] is not a pallet.
 pub trait Config {
+	/// The block limits.
+	type BlockWeights: Get<frame_system::limits::BlockWeights>;
 	/// The account identifier type.
 	type AccountId: IdentifierT;
 	/// The block number type.
@@ -68,7 +71,7 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequen
 	type Error = Error;
 	type DataProvider = T::DataProvider;
 
-	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
+	fn elect() -> Result<(Supports<T::AccountId>, Weight), Self::Error> {
 		let (voters, _) = Self::DataProvider::voters(None).map_err(Error::DataProvider)?;
 		let (targets, _) = Self::DataProvider::targets(None).map_err(Error::DataProvider)?;
 		let (desired_targets, _) =
@@ -91,7 +94,7 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequen
 		let staked = assignment_ratio_to_staked_normalized(assignments, &stake_of)?;
 		let winners = to_without_backing(winners);
 
-		to_supports(&winners, &staked).map_err(Error::from)
+		to_supports(&winners, &staked).map_err(Error::from).map(|s| (s, T::BlockWeights::get().max_block))
 	}
 }
 
@@ -104,9 +107,9 @@ mod tests {
 
 	type AccountId = u64;
 	type BlockNumber = u32;
-
 	struct Runtime;
 	impl Config for Runtime {
+		type BlockWeights = ();
 		type AccountId = AccountId;
 		type BlockNumber = BlockNumber;
 		type Accuracy = Perbill;
@@ -145,7 +148,7 @@ mod tests {
 	#[test]
 	fn onchain_seq_phragmen_works() {
 		assert_eq!(
-			OnChainPhragmen::elect().unwrap(),
+			OnChainPhragmen::elect().unwrap().0,
 			vec![
 				(
 					10,

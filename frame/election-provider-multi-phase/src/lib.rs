@@ -262,6 +262,7 @@ struct OnChainConfig<T: Config>(sp_std::marker::PhantomData<T>);
 impl<T: Config> onchain::Config for OnChainConfig<T> {
 	type AccountId = T::AccountId;
 	type BlockNumber = T::BlockNumber;
+	type BlockWeights = T::BlockWeights;
 	type Accuracy = T::OnChainAccuracy;
 	type DataProvider = T::DataProvider;
 }
@@ -1047,7 +1048,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// On-chain fallback of election.
-	fn onchain_fallback() -> Result<Supports<T::AccountId>, ElectionError> {
+	fn onchain_fallback() -> Result<(Supports<T::AccountId>, Weight), ElectionError> {
 		<onchain::OnChainSequentialPhragmen<OnChainConfig<T>> as ElectionProvider<
 			T::AccountId,
 			T::BlockNumber,
@@ -1055,21 +1056,21 @@ impl<T: Config> Pallet<T> {
 		.map_err(Into::into)
 	}
 
-	fn do_elect() -> Result<Supports<T::AccountId>, ElectionError> {
+	fn do_elect() -> Result<(Supports<T::AccountId>, Weight), ElectionError> {
 		<QueuedSolution<T>>::take()
 			.map_or_else(
 				|| match T::Fallback::get() {
 					FallbackStrategy::OnChain => Self::onchain_fallback()
-						.map(|r| (r, ElectionCompute::OnChain))
+						.map(|(s, w)| (s, w, ElectionCompute::OnChain))
 						.map_err(Into::into),
 					FallbackStrategy::Nothing => Err(ElectionError::NoFallbackConfigured),
 				},
-				|ReadySolution { supports, compute, .. }| Ok((supports, compute)),
+				|ReadySolution { supports, compute, .. }| Ok((supports, 0, compute)),
 			)
-			.map(|(supports, compute)| {
+			.map(|(supports, weight, compute)| {
 				Self::deposit_event(Event::ElectionFinalized(Some(compute)));
 				log!(info, "Finalized election round with compute {:?}.", compute);
-				supports
+				(supports, weight)
 			})
 			.map_err(|err| {
 				Self::deposit_event(Event::ElectionFinalized(None));
@@ -1083,11 +1084,11 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for Pallet<T> {
 	type Error = ElectionError;
 	type DataProvider = T::DataProvider;
 
-	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
-		let outcome = Self::do_elect();
+	fn elect() -> Result<(Supports<T::AccountId>, Weight), Self::Error> {
+		let outcome_and_weight = Self::do_elect();
 		// IMPORTANT: regardless of if election was `Ok` or `Err`, we shall do some cleanup.
 		Self::post_elect();
-		outcome
+		outcome_and_weight
 	}
 }
 
@@ -1455,7 +1456,7 @@ mod tests {
 			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
 
 			// zilch solutions thus far.
-			let supports = MultiPhase::elect().unwrap();
+			let (supports, _) = MultiPhase::elect().unwrap();
 
 			assert_eq!(
 				supports,
@@ -1493,7 +1494,7 @@ mod tests {
 
 			// on-chain backup works though.
 			roll_to(29);
-			let supports = MultiPhase::elect().unwrap();
+			let (supports, _) = MultiPhase::elect().unwrap();
 			assert!(supports.len() > 0);
 		})
 	}
