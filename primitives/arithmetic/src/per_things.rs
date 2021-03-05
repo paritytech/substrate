@@ -80,6 +80,11 @@ pub trait PerThing:
 		Self::from_rational_approximation::<Self::Upper>(p * p, q * q)
 	}
 
+	/// Return the part left when `self` is saturating-subtracted from `Self::one()`.
+	fn left_from_one(self) -> Self {
+		Self::one().saturating_sub(self)
+	}
+
 	/// Multiplication that always rounds down to a whole number. The standard `Mul` rounds to the
 	/// nearest whole number.
 	///
