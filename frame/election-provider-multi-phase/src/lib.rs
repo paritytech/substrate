@@ -673,8 +673,9 @@ pub mod pallet {
 			witness: SolutionOrSnapshotSize,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
-			let error_message = "Invalid unsigned submission must produce invalid block and \
-			                     deprive validator from their authoring reward.";
+			let error_message =
+				"Invalid unsigned submission must produce invalid block and \
+				 deprive validator from their authoring reward.";
 
 			// Check score being an improvement, phase, and desired targets.
 			Self::unsigned_pre_dispatch_checks(&solution).expect(error_message);
@@ -684,8 +685,8 @@ pub mod pallet {
 				Self::snapshot_metadata().expect(error_message);
 
 			// NOTE: we are asserting, not `ensure`ing -- we want to panic here.
-			assert!(voters as u32 == witness.voters, error_message);
-			assert!(targets as u32 == witness.targets, error_message);
+			assert!(voters as u32 == witness.voters, "{}", error_message);
+			assert!(targets as u32 == witness.targets, "{}", error_message);
 
 			let ready =
 				Self::feasibility_check(solution, ElectionCompute::Unsigned).expect(error_message);
