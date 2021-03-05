@@ -36,7 +36,7 @@ use pallet_mmr_primitives::{Error as MmrError, Proof};
 
 pub use pallet_mmr_primitives::MmrApi as MmrRuntimeApi;
 
-/// Retrieved MMR leaf and it's proof.
+/// Retrieved MMR leaf and its proof.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct LeafProof<BlockHash> {
@@ -122,7 +122,6 @@ where
 			self.client.info().best_hash
 		);
 
-		// TODO [ToDr] add offchain context.
 		let (leaf, proof) = api
 			.generate_proof_with_context(
 				&BlockId::hash(block_hash),
