@@ -291,8 +291,16 @@ pub enum Phase<Bn> {
 	Off,
 	/// Signed phase is open.
 	Signed,
-	/// Unsigned phase. First element is whether it is open or not, second the starting block
+	/// Unsigned phase. First element is whether it is active or not, second the starting block
 	/// number.
+	///
+	/// We do not yet check whether the unsigned phase is active or passive. The intent is for the
+	/// blockchain to be able to declare: "I believe that there exists an adequate signed solution,"
+	/// advising validators not to bother running the unsigned offchain worker.
+	///
+	/// As validator nodes are free to edit their OCW code, they could simply ignore this advisory
+	/// and always compute their own solution. However, by default, when the unsigned phase is passive,
+	/// the offchain workers will not bother running.
 	Unsigned((bool, Bn)),
 }
 
