@@ -5,13 +5,8 @@ use sp_std::{
 	marker::PhantomData,
 };
 use frame_support::{
-	sp_runtime::{
-		RuntimeDebug,
-		traits::{StoredMapError, One},
-	},
-	traits::{
-		HandleLifetime, StoredMap, OnNewAccount, OnKilledAccount, ReferencedAccount, BasicAccount,
-	}
+	sp_runtime::{RuntimeDebug, traits::{StoredMapError, One}},
+	traits::{HandleLifetime, StoredMap, OnNewAccount, OnKilledAccount, ReferencedAccount, BasicAccount},
 };
 use codec::{Encode, Decode, FullCodec};
 
