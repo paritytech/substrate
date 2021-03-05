@@ -1413,22 +1413,24 @@ impl<T> InitializeMembers<T> for () {
 	fn initialize_members(_: &[T]) {}
 }
 
-// A trait that is able to provide randomness.
+/// A trait that is able to provide randomness.
+///
+/// Being a deterministic blockchain, real randomness is difficult to come by, different
+/// implementations of this trait will provide different security guarantees. At best,
+/// this will be randomness which was hard to predict a long time ago, but that has become
+/// easy to predict recently.
 pub trait Randomness<Output, BlockNumber> {
-	/// Get a "random" value
-	///
-	/// Being a deterministic blockchain, real randomness is difficult to come by.
-	/// This gives you something that approximates it. At best, this will be
-	/// randomness which was hard to predict a long time ago, but that has become
-	/// easy to predict recently.
+	/// Get the most recently determined random seed, along with the time in the past
+	/// since when it was determinable by chain observers.
 	///
 	/// `subject` is a context identifier and allows you to get a different result to
 	/// other callers of this function; use it like `random(&b"my context"[..])`.
 	///
-	/// The result contains the block number at which this randomness was known to
-	/// external chain observers. Any commitments relying on this random value must
-	/// have been made before that block number so that the outcome cannot be easily
-	/// predicted.
+	/// NOTE: The returned seed should only be used to distinguish commitments made before
+	/// the returned block number. If the block number is too early (i.e. commitments were
+	/// made afterwards), then ensure no further commitments may be made and repeatedly
+	/// call this on later blocks until the block number returned is later than the latest
+	/// commitment.
 	fn random(subject: &[u8]) -> (Output, BlockNumber);
 
 	/// Get the basic random seed.
@@ -1437,10 +1439,11 @@ pub trait Randomness<Output, BlockNumber> {
 	/// you to give a subject for the random result and whose value will be
 	/// independently low-influence random from any other such seeds.
 	///
-	/// The result contains the block number at which this randomness was known to
-	/// external chain observers. Any commitments relying on this random value must
-	/// have been made before that block number so that the outcome cannot be easily
-	/// predicted.
+	/// NOTE: The returned seed should only be used to distinguish commitments made before
+	/// the returned block number. If the block number is too early (i.e. commitments were
+	/// made afterwards), then ensure no further commitments may be made and repeatedly
+	/// call this on later blocks until the block number returned is later than the latest
+	/// commitment.
 	fn random_seed() -> (Output, BlockNumber) {
 		Self::random(&[][..])
 	}
