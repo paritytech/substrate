@@ -427,7 +427,9 @@ mod tests {
 		let output = String::from_utf8(output.stderr).unwrap();
 		assert!(
 			re.is_match(output.trim()),
-			format!("Expected:\n{}\nGot:\n{}", re, output),
+			"Expected:\n{}\nGot:\n{}",
+			re,
+			output,
 		);
 	}
 
@@ -475,7 +477,9 @@ mod tests {
 		let output = String::from_utf8(output.stderr).unwrap();
 		assert!(
 			re.is_match(output.trim()),
-			format!("Expected:\n{}\nGot:\n{}", re, output),
+			"Expected:\n{}\nGot:\n{}",
+			re,
+			output,
 		);
 	}
 
