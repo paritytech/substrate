@@ -47,8 +47,4 @@ std = [
 	"pallet-timestamp/std",
 	"sp-trie/std",
 ]
-try-runtime = [
-	"frame-system/try-runtime",
-	"frame-support/try-runtime",
-	"pallet-timestamp/try-runtime",
-]
+try-runtime = ["frame-support/try-runtime"]

@@ -68,7 +68,4 @@ runtime-benchmarks = [
 	"rand",
 	"rand_pcg",
 ]
-try-runtime = [
-	"frame-system/try-runtime",
-	"frame-support/try-runtime",
-]
+try-runtime = ["frame-support/try-runtime"]

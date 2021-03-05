@@ -35,7 +35,4 @@ std = [
 	"sp-std/std",
 	"log/std",
 ]
-try-runtime = [
-	"frame-system/try-runtime",
-	"frame-support/try-runtime",
-]
+try-runtime = ["frame-support/try-runtime"]

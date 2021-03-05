@@ -71,9 +71,4 @@ runtime-benchmarks = [
 	"sp-election-providers/runtime-benchmarks",
 	"rand_chacha",
 ]
-try-runtime = [
-	"frame-system/try-runtime",
-	"frame-support/try-runtime",
-	"pallet-session/try-runtime",
-	"pallet-authorship/try-runtime",
-]
+try-runtime = ["frame-support/try-runtime"]

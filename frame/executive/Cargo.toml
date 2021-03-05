@@ -47,7 +47,4 @@ std = [
 	"sp-tracing/std",
 	"sp-std/std",
 ]
-try-runtime = [
-	"frame-system/try-runtime",
-	"frame-support/try-runtime",
-]
+try-runtime = ["frame-support/try-runtime"]

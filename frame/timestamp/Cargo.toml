@@ -47,7 +47,4 @@ std = [
 	"log/std",
 ]
 runtime-benchmarks = ["frame-benchmarking", "sp-io"]
-try-runtime = [
-	"frame-system/try-runtime",
-	"frame-support/try-runtime",
-]
+try-runtime = ["frame-support/try-runtime"]
