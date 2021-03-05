@@ -85,7 +85,7 @@ pub trait Config: frame_system::Config {
 	type Currency: ReservableCurrency<Self::AccountId>;
 
 	/// Something that provides randomness in the runtime.
-	type Randomness: Randomness<Self::Hash>;
+	type Randomness: Randomness<Self::Hash, Self::BlockNumber>;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
@@ -444,7 +444,7 @@ impl<T: Config> Module<T> {
 	// You should call this function with different seed values until the random
 	// number lies within `u32::MAX - u32::MAX % n`.
 	fn generate_random_number(seed: u32) -> u32 {
-		let random_seed = T::Randomness::random(&(T::ModuleId::get(), seed).encode());
+		let (random_seed, _) = T::Randomness::random(&(T::ModuleId::get(), seed).encode());
 		let random_number = <u32>::decode(&mut random_seed.as_ref())
 			.expect("secure hashes should always be bigger than u32; qed");
 		random_number
