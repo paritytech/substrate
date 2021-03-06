@@ -14,7 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 jsonrpsee-http-client = { version = "0.2.0-alpha", default-features = false, features = ["tokio02"] }
-# Needed by `jsonrpsee-proc-macros`
+# Needed by jsonrpsee-proc-macros: https://github.com/paritytech/jsonrpsee/issues/214
 jsonrpsee-types = "0.2.0-alpha"
 jsonrpsee-proc-macros = "0.2.0-alpha"
 
