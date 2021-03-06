@@ -176,7 +176,7 @@ impl Default for OnlineConfig {
 impl OnlineConfig {
 	/// Return a new http rpc client.
 	fn rpc(&self) -> HttpClient {
-		HttpClient::new(self.uri.clone(), HttpConfig { max_request_body_size: u32::MAX })
+		HttpClient::new(&self.uri, HttpConfig { max_request_body_size: u32::MAX })
 			.expect("valid HTTP url; qed")
 	}
 }
