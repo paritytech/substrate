@@ -238,8 +238,6 @@ pub struct DestroyWitness {
 	approvals: u32,
 }
 
-// TODO: transaction to alter `is_sufficient`.
-
 #[frame_support::pallet]
 pub mod pallet {
 	use frame_support::{
@@ -422,7 +420,7 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Issue a new class of fungible assets from a public origin.
 		///
-		/// This new asset class has no assets initially.
+		/// This new asset class has no assets initially and its owner is the origin.
 		///
 		/// The origin must be Signed and the sender must have sufficient funds free.
 		///
@@ -432,11 +430,8 @@ pub mod pallet {
 		/// Parameters:
 		/// - `id`: The identifier of the new asset. This must not be currently in use to identify
 		/// an existing asset.
-		/// - `owner`: The owner of this class of assets. The owner has full superuser permissions
-		/// over this asset, but may later change and configure the permissions using `transfer_ownership`
-		/// and `set_team`.
-		/// - `max_zombies`: The total number of accounts which may hold assets in this class yet
-		/// have no existential deposit.
+		/// - `admin`: The admin of this class of assets. The admin is the initial address of each
+		/// member of the asset class's admin team.
 		/// - `min_balance`: The minimum balance of this new asset that any single account must
 		/// have. If an account's balance is reduced below this, then it collapses to zero.
 		///
@@ -868,7 +863,7 @@ pub mod pallet {
 		///
 		/// Origin must be Signed and the sender should be the Owner of the asset `id`.
 		///
-		/// - `id`: The identifier of the asset to be frozen.
+		/// - `id`: The identifier of the asset.
 		/// - `owner`: The new Owner of this asset.
 		///
 		/// Emits `OwnerChanged`.
@@ -1098,6 +1093,28 @@ pub mod pallet {
 			})
 		}
 
+		/// Alter the attributes of a given asset.
+		///
+		/// Origin must be `ForceOrigin`.
+		///
+		/// - `id`: The identifier of the asset.
+		/// - `owner`: The new Owner of this asset.
+		/// - `issuer`: The new Issuer of this asset.
+		/// - `admin`: The new Admin of this asset.
+		/// - `freezer`: The new Freezer of this asset.
+		/// - `min_balance`: The minimum balance of this new asset that any single account must
+		/// have. If an account's balance is reduced below this, then it collapses to zero.
+		/// - `is_sufficient`: Whether a non-zero balance of this asset is deposit of sufficient
+		/// value to account for the state bloat associated with its balance storage. If set to
+		/// `true`, then non-zero balances may be stored without a `consumer` reference (and thus
+		/// an ED in the Balances pallet or whatever else is used to control user-account state
+		/// growth).
+		/// - `is_frozen`: Whether this asset class is frozen except for permissioned/admin
+		/// instructions.
+		///
+		/// Emits `AssetStatusChanged` with the identity of the asset.
+		///
+		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::force_asset_status())]
 		pub(super) fn force_asset_status(
 			origin: OriginFor<T>,
@@ -1128,6 +1145,26 @@ pub mod pallet {
 			})
 		}
 
+		/// Approve an amount of asset for transfer by a delegated third-party account.
+		///
+		/// Origin must be Signed.
+		///
+		/// Ensures that `ApprovalDeposit` worth of `Currency` is reserved from signing account
+		/// for the purpose of holding the approval. If some non-zero amount of assets is already
+		/// approved from signing account to `delegate`, then it is topped up or unreserved to
+		/// meet the right value.
+		///
+		/// NOTE: The signing account does not need to own `amount` of assets at the point of
+		/// making this call.
+		///
+		/// - `id`: The identifier of the asset.
+		/// - `delegate`: The account to delegate permission to transfer asset.
+		/// - `amount`: The amount of asset that may be transferred by `delegate`. If there is
+		/// already an approval in place, then this acts additively.
+		///
+		/// Emits `ApprovedTransfer` on success.
+		///
+		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::approve_transfer())]
 		pub(super) fn approve_transfer(
 			origin: OriginFor<T>,
@@ -1155,6 +1192,19 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		/// Cancel all of some asset approved for delegated transfer by a third-party account.
+		///
+		/// Origin must be Signed and there must be an approval in place between signer and
+		/// `delegate`.
+		///
+		/// Unreserves any deposit previously reserved by `approve_transfer` for the approval.
+		///
+		/// - `id`: The identifier of the asset.
+		/// - `delegate`: The account delegated permission to transfer asset.
+		///
+		/// Emits `ApprovalCancelled` on success.
+		///
+		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::cancel_approval())]
 		pub(super) fn cancel_approval(
 			origin: OriginFor<T>,
@@ -1171,6 +1221,19 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		/// Cancel all of some asset approved for delegated transfer by a third-party account.
+		///
+		/// Origin must be either ForceOrigin or Signed origin with the signer being the Admin
+		/// account of the asset `id`.
+		///
+		/// Unreserves any deposit previously reserved by `approve_transfer` for the approval.
+		///
+		/// - `id`: The identifier of the asset.
+		/// - `delegate`: The account delegated permission to transfer asset.
+		///
+		/// Emits `ApprovalCancelled` on success.
+		///
+		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::force_cancel_approval())]
 		pub(super) fn force_cancel_approval(
 			origin: OriginFor<T>,
@@ -1198,6 +1261,24 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		/// Transfer some asset balance from a previously delegated account to some third-party
+		/// account.
+		///
+		/// Origin must be Signed and there must be an approval in place by the `owner` to the
+		/// signer.
+		///
+		/// If the entire amount approved for transfer is transferred, then any deposit previously
+		/// reserved by `approve_transfer` is unreserved.
+		///
+		/// - `id`: The identifier of the asset.
+		/// - `owner`: The account which previously approved for a transfer of at least `amount` and
+		/// from which the asset balance will be withdrawn.
+		/// - `destination`: The account to which the asset balance of `amount` will be transferred.
+		/// - `amount`: The amount of assets to transfer.
+		///
+		/// Emits `TransferredApproved` on success.
+		///
+		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::transfer_approved())]
 		pub(super) fn transfer_approved(
 			origin: OriginFor<T>,
