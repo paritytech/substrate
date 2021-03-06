@@ -107,7 +107,6 @@
 use std::{
 	fs,
 	path::{Path, PathBuf},
-	sync::Arc,
 };
 use log::*;
 use sp_core::{hashing::twox_128};
@@ -160,10 +159,6 @@ pub struct OfflineConfig {
 pub struct OnlineConfig {
 	/// The HTTP uri to use.
 	pub uri: String,
-	/// JSONRPC HTTP Client.
-	//
-	// NOTE: Arc is used here because `HttpClient` doesn't implement `Clone`.
-	pub rpc: Arc<HttpClient>,
 	/// The block number at which to connect. Will be latest finalized head if not provided.
 	pub at: Option<Hash>,
 	/// An optional cache file to WRITE to, not for reading. Not cached if set to `None`.
@@ -174,18 +169,15 @@ pub struct OnlineConfig {
 
 impl Default for OnlineConfig {
 	fn default() -> Self {
-		Self {
-			uri: TARGET.to_owned(),
-			rpc: Arc::new(
-				HttpClient::new(
-					TARGET,
-					HttpConfig { max_request_body_size: u32::MAX }
-				).expect("valid HTTP url; qed")
-			),
-			at: None,
-			cache: None,
-			modules: Default::default(),
-		}
+		Self { uri: TARGET.to_owned(), at: None, cache: None, modules: Default::default() }
+	}
+}
+
+impl OnlineConfig {
+	/// Return a new http rpc client.
+	fn rpc(&self) -> HttpClient {
+		HttpClient::new(self.uri.clone(), HttpConfig { max_request_body_size: u32::MAX })
+			.expect("valid HTTP url; qed")
 	}
 }
 
@@ -248,9 +240,10 @@ impl Builder {
 impl Builder {
 	async fn rpc_get_head(&self) -> Result<Hash, &'static str> {
 		trace!(target: LOG_TARGET, "rpc: finalized_head");
-		RpcApi::finalized_head(&*self.as_online().rpc)
-			.await
-			.map_err(|_| "rpc finalized_head failed.")
+		RpcApi::finalized_head(&self.as_online().rpc()).await.map_err(|e| {
+			error!("Error = {:?}", e);
+			"rpc finalized_head failed."
+			})
 	}
 
 	/// Relay the request to `state_getPairs` rpc endpoint.
@@ -262,9 +255,10 @@ impl Builder {
 		at: Hash,
 	) -> Result<Vec<KeyPair>, &'static str> {
 		trace!(target: LOG_TARGET, "rpc: storage_pairs: {:?} / {:?}", prefix, at);
-		RpcApi::storage_pairs(&*self.as_online().rpc, prefix, Some(at))
-			.await
-			.map_err(|_| "rpc finalized_head failed")
+		RpcApi::storage_pairs(&self.as_online().rpc(), prefix, Some(at)).await.map_err(|e| {
+			error!("Error = {:?}", e);
+			"rpc storage_pairs failed"
+			})
 	}
 }
 
@@ -318,8 +312,11 @@ impl Builder {
 	}
 
 	async fn init_remote_client(&mut self) -> Result<(), &'static str> {
-		let at = self.rpc_get_head().await?;
-		self.as_online_mut().at = Some(at);
+		info!(target: LOG_TARGET, "initializing remote client to {:?}", self.as_online().uri);
+		if self.as_online().at.is_none() {
+			let at = self.rpc_get_head().await?;
+			self.as_online_mut().at = Some(at);
+		}
 		Ok(())
 	}
 
