@@ -41,3 +41,4 @@ std = [
 	"sp-runtime/std",
 	"sp-state-machine",
 ]
+try-runtime = ["frame-support/try-runtime"]
