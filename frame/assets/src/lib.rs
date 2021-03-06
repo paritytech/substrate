@@ -28,6 +28,7 @@
 //! * Asset Transferal
 //! * Asset Freezing
 //! * Asset Destruction (Burning)
+//! * Delegated Asset Transfers ("Approval API")
 //!
 //! To use it in your runtime, you need to implement the assets [`Config`].
 //!
@@ -53,8 +54,10 @@
 //! * **Non-fungible asset**: An asset for which each unit has unique characteristics.
 //! * **Owner**: An account ID uniquely privileged to be able to destroy a particular asset class,
 //!   or to set the Issuer, Freezer or Admin of that asset class.
-//! * **Zombie**: An account which has a balance of some assets in this pallet, but no other
-//!   footprint on-chain, in particular no account managed in the `frame_system` pallet.
+//! * **Approval**: The act of allowing an account the permission to transfer some
+//!   balance of asset from the approving account into some third-party destination account.
+//! * **Sufficiency**: The idea of a minimum-balance of an asset being sufficient to allow the
+//!   account's existence on the system without requiring any other existential-deposit.
 //!
 //! ### Goals
 //!
@@ -62,7 +65,8 @@
 //!
 //! * Issue a new assets in a permissioned or permissionless way, if permissionless, then with a
 //!   deposit required.
-//! * Allow accounts to hold these assets without otherwise existing on-chain (*zombies*).
+//! * Allow accounts to be delegated the ability to transfer assets without otherwise existing
+//!   on-chain (*approvals*).
 //! * Move assets between accounts.
 //! * Update the asset's total supply.
 //! * Allow administrative activities by specially privileged accounts including freezing account
@@ -74,11 +78,20 @@
 //!
 //! * `create`: Creates a new asset class, taking the required deposit.
 //! * `transfer`: Transfer sender's assets to another account.
+//! * `set_metadata`: Set the metadata of an asset class.
+//! * `clear_metadata`: Remove the metadata of an asset class.
+//! * `approve_transfer`: Create or increase an delegated transfer.
+//! * `cancel_approval`: Rescind a previous approval.
+//! * `transfer_approved`: Transfer third-party's assets to another account.
 //!
 //! ### Permissioned Functions
 //!
 //! * `force_create`: Creates a new asset class without taking any deposit.
 //! * `force_destroy`: Destroys an asset class.
+//! * `force_set_metadata`: Set the metadata of an asset class.
+//! * `force_clear_metadata`: Remove the metadata of an asset class.
+//! * `force_asset_status`: Alter an asset class's attributes.
+//! * `force_cancel_approval`: Rescind a previous approval.
 //!
 //! ### Privileged Functions
 //! * `destroy`: Destroys an entire asset class; called by the asset class's Owner.
