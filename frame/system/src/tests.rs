@@ -19,10 +19,7 @@ use crate::*;
 use mock::{*, Origin};
 use sp_core::H256;
 use sp_runtime::{DispatchError, DispatchErrorWithPostInfo, traits::{Header, BlakeTwo256}};
-use frame_support::{
-	weights::WithPostDispatchInfo,
-	dispatch::PostDispatchInfo,
-};
+use frame_support::{assert_noop, weights::WithPostDispatchInfo, dispatch::PostDispatchInfo};
 
 #[test]
 fn origin_works() {
@@ -37,7 +34,13 @@ fn stored_map_works() {
 		assert!(System::insert(&0, 42).is_ok());
 		assert!(!System::is_provider_required(&0));
 
-		assert_eq!(Account::<Test>::get(0), AccountInfo { nonce: 0, providers: 1, consumers: 0, data: 42 });
+		assert_eq!(Account::<Test>::get(0), AccountInfo {
+			nonce: 0,
+			providers: 1,
+			consumers: 0,
+			sufficients: 0,
+			data: 42,
+		});
 
 		assert!(System::inc_consumers(&0).is_ok());
 		assert!(System::is_provider_required(&0));
@@ -51,6 +54,98 @@ fn stored_map_works() {
 		assert!(KILLED.with(|r| r.borrow().is_empty()));
 		assert!(System::remove(&0).is_ok());
 		assert_eq!(KILLED.with(|r| r.borrow().clone()), vec![0u64]);
+	});
+}
+
+#[test]
+fn provider_ref_handover_to_self_sufficient_ref_works() {
+	new_test_ext().execute_with(|| {
+		assert_eq!(System::inc_providers(&0), IncRefStatus::Created);
+		System::inc_account_nonce(&0);
+		assert_eq!(System::account_nonce(&0), 1);
+
+		// a second reference coming and going doesn't change anything.
+		assert_eq!(System::inc_sufficients(&0), IncRefStatus::Existed);
+		assert_eq!(System::dec_sufficients(&0), DecRefStatus::Exists);
+		assert_eq!(System::account_nonce(&0), 1);
+
+		// a provider reference coming and going doesn't change anything.
+		assert_eq!(System::inc_providers(&0), IncRefStatus::Existed);
+		assert_eq!(System::dec_providers(&0).unwrap(), DecRefStatus::Exists);
+		assert_eq!(System::account_nonce(&0), 1);
+
+		// decreasing the providers with a self-sufficient present should not delete the account
+		assert_eq!(System::inc_sufficients(&0), IncRefStatus::Existed);
+		assert_eq!(System::dec_providers(&0).unwrap(), DecRefStatus::Exists);
+		assert_eq!(System::account_nonce(&0), 1);
+
+		// decreasing the sufficients should delete the account
+		assert_eq!(System::dec_sufficients(&0), DecRefStatus::Reaped);
+		assert_eq!(System::account_nonce(&0), 0);
+	});
+}
+
+#[test]
+fn self_sufficient_ref_handover_to_provider_ref_works() {
+	new_test_ext().execute_with(|| {
+		assert_eq!(System::inc_sufficients(&0), IncRefStatus::Created);
+		System::inc_account_nonce(&0);
+		assert_eq!(System::account_nonce(&0), 1);
+
+		// a second reference coming and going doesn't change anything.
+		assert_eq!(System::inc_providers(&0), IncRefStatus::Existed);
+		assert_eq!(System::dec_providers(&0).unwrap(), DecRefStatus::Exists);
+		assert_eq!(System::account_nonce(&0), 1);
+
+		// a sufficient reference coming and going doesn't change anything.
+		assert_eq!(System::inc_sufficients(&0), IncRefStatus::Existed);
+		assert_eq!(System::dec_sufficients(&0), DecRefStatus::Exists);
+		assert_eq!(System::account_nonce(&0), 1);
+
+		// decreasing the sufficients with a provider present should not delete the account
+		assert_eq!(System::inc_providers(&0), IncRefStatus::Existed);
+		assert_eq!(System::dec_sufficients(&0), DecRefStatus::Exists);
+		assert_eq!(System::account_nonce(&0), 1);
+
+		// decreasing the providers should delete the account
+		assert_eq!(System::dec_providers(&0).unwrap(), DecRefStatus::Reaped);
+		assert_eq!(System::account_nonce(&0), 0);
+	});
+}
+
+#[test]
+fn sufficient_cannot_support_consumer() {
+	new_test_ext().execute_with(|| {
+		assert_eq!(System::inc_sufficients(&0), IncRefStatus::Created);
+		System::inc_account_nonce(&0);
+		assert_eq!(System::account_nonce(&0), 1);
+		assert_noop!(System::inc_consumers(&0), IncRefError::NoProviders);
+
+		assert_eq!(System::inc_providers(&0), IncRefStatus::Existed);
+		assert!(System::inc_consumers(&0).is_ok());
+		assert_noop!(System::dec_providers(&0), DecRefError::ConsumerRemaining);
+	});
+}
+
+#[test]
+fn provider_required_to_support_consumer() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(System::inc_consumers(&0), IncRefError::NoProviders);
+
+		assert_eq!(System::inc_providers(&0), IncRefStatus::Created);
+		System::inc_account_nonce(&0);
+		assert_eq!(System::account_nonce(&0), 1);
+
+		assert_eq!(System::inc_providers(&0), IncRefStatus::Existed);
+		assert_eq!(System::dec_providers(&0).unwrap(), DecRefStatus::Exists);
+		assert_eq!(System::account_nonce(&0), 1);
+
+		assert!(System::inc_consumers(&0).is_ok());
+		assert_noop!(System::dec_providers(&0), DecRefError::ConsumerRemaining);
+
+		System::dec_consumers(&0);
+		assert_eq!(System::dec_providers(&0).unwrap(), DecRefStatus::Reaped);
+		assert_eq!(System::account_nonce(&0), 0);
 	});
 }
 
@@ -71,7 +166,7 @@ fn deposit_event_should_work() {
 			vec![
 				EventRecord {
 					phase: Phase::Finalization,
-					event: SysEvent::CodeUpdated,
+					event: SysEvent::CodeUpdated.into(),
 					topics: vec![],
 				}
 			]
@@ -99,17 +194,17 @@ fn deposit_event_should_work() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: SysEvent::NewAccount(32),
+					event: SysEvent::NewAccount(32).into(),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: SysEvent::KilledAccount(42),
+					event: SysEvent::KilledAccount(42).into(),
 					topics: vec![]
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: SysEvent::ExtrinsicSuccess(Default::default()),
+					event: SysEvent::ExtrinsicSuccess(Default::default()).into(),
 					topics: vec![]
 				},
 				EventRecord {
@@ -117,12 +212,12 @@ fn deposit_event_should_work() {
 					event: SysEvent::ExtrinsicFailed(
 						DispatchError::BadOrigin.into(),
 						Default::default()
-					),
+					).into(),
 					topics: vec![]
 				},
 				EventRecord {
 					phase: Phase::Finalization,
-					event: SysEvent::NewAccount(3),
+					event: SysEvent::NewAccount(3).into(),
 					topics: vec![]
 				},
 			]
@@ -173,7 +268,7 @@ fn deposit_event_uses_actual_weight() {
 							weight: 300,
 							.. Default::default()
 						},
-					),
+					).into(),
 					topics: vec![]
 				},
 				EventRecord {
@@ -183,7 +278,7 @@ fn deposit_event_uses_actual_weight() {
 							weight: 1000,
 							.. Default::default()
 						},
-					),
+					).into(),
 					topics: vec![]
 				},
 				EventRecord {
@@ -193,7 +288,7 @@ fn deposit_event_uses_actual_weight() {
 							weight: 1000,
 							.. Default::default()
 						},
-					),
+					).into(),
 					topics: vec![]
 				},
 				EventRecord {
@@ -204,7 +299,7 @@ fn deposit_event_uses_actual_weight() {
 							weight: 999,
 							.. Default::default()
 						},
-					),
+					).into(),
 					topics: vec![]
 				},
 			]
@@ -232,9 +327,9 @@ fn deposit_event_topics() {
 		];
 
 		// We deposit a few events with different sets of topics.
-		System::deposit_event_indexed(&topics[0..3], SysEvent::NewAccount(1));
-		System::deposit_event_indexed(&topics[0..1], SysEvent::NewAccount(2));
-		System::deposit_event_indexed(&topics[1..2], SysEvent::NewAccount(3));
+		System::deposit_event_indexed(&topics[0..3], SysEvent::NewAccount(1).into());
+		System::deposit_event_indexed(&topics[0..1], SysEvent::NewAccount(2).into());
+		System::deposit_event_indexed(&topics[1..2], SysEvent::NewAccount(3).into());
 
 		System::finalize();
 
@@ -244,17 +339,17 @@ fn deposit_event_topics() {
 			vec![
 				EventRecord {
 					phase: Phase::Finalization,
-					event: SysEvent::NewAccount(1),
+					event: SysEvent::NewAccount(1).into(),
 					topics: topics[0..3].to_vec(),
 				},
 				EventRecord {
 					phase: Phase::Finalization,
-					event: SysEvent::NewAccount(2),
+					event: SysEvent::NewAccount(2).into(),
 					topics: topics[0..1].to_vec(),
 				},
 				EventRecord {
 					phase: Phase::Finalization,
-					event: SysEvent::NewAccount(3),
+					event: SysEvent::NewAccount(3).into(),
 					topics: topics[1..2].to_vec(),
 				}
 			]
@@ -375,7 +470,7 @@ fn set_code_with_real_wasm_blob() {
 			System::events(),
 			vec![EventRecord {
 				phase: Phase::Initialization,
-				event: SysEvent::CodeUpdated,
+				event: SysEvent::CodeUpdated.into(),
 				topics: vec![],
 			}],
 		);
@@ -403,7 +498,7 @@ fn events_not_emitted_during_genesis() {
 	new_test_ext().execute_with(|| {
 		// Block Number is zero at genesis
 		assert!(System::block_number().is_zero());
-		let mut account_data = AccountInfo { nonce: 0, consumers: 0, providers: 0, data: 0 };
+		let mut account_data = AccountInfo::default();
 		System::on_created_account(Default::default(), &mut account_data);
 		assert!(System::events().is_empty());
 		// Events will be emitted starting on block 1

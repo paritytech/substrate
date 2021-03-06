@@ -62,7 +62,7 @@ mod debug_helper {
 			let mut val = v.borrow_mut();
 			*val += 1;
 			if *val > 10 {
-				crate::debug::warn!(
+				log::warn!(
 					"Detected with_transaction with nest level {}. Nested usage of with_transaction is not recommended.",
 					*val
 				);
@@ -315,7 +315,7 @@ pub trait IterableStorageMap<K: FullEncode, V: FullCodec>: StorageMap<K, V> {
 	/// By returning `None` from `f` for an element, you'll remove it from the map.
 	///
 	/// NOTE: If a value fail to decode because storage is corrupted then it is skipped.
-	fn translate<O: Decode, F: Fn(K, O) -> Option<V>>(f: F);
+	fn translate<O: Decode, F: FnMut(K, O) -> Option<V>>(f: F);
 }
 
 /// A strongly-typed double map in storage whose secondary keys and values can be iterated over.
@@ -352,7 +352,7 @@ pub trait IterableStorageDoubleMap<
 	/// By returning `None` from `f` for an element, you'll remove it from the map.
 	///
 	/// NOTE: If a value fail to decode because storage is corrupted then it is skipped.
-	fn translate<O: Decode, F: Fn(K1, K2, O) -> Option<V>>(f: F);
+	fn translate<O: Decode, F: FnMut(K1, K2, O) -> Option<V>>(f: F);
 }
 
 /// An implementation of a map with a two keys.
@@ -532,9 +532,9 @@ impl<T> Iterator for PrefixIterator<T> {
 					let raw_value = match unhashed::get_raw(&self.previous_key) {
 						Some(raw_value) => raw_value,
 						None => {
-							crate::debug::error!(
+							log::error!(
 								"next_key returned a key with no value at {:?}",
-								self.previous_key
+								self.previous_key,
 							);
 							continue
 						}
@@ -546,9 +546,10 @@ impl<T> Iterator for PrefixIterator<T> {
 					let item = match (self.closure)(raw_key_without_prefix, &raw_value[..]) {
 						Ok(item) => item,
 						Err(e) => {
-							crate::debug::error!(
+							log::error!(
 								"(key, value) failed to decode at {:?}: {:?}",
-								self.previous_key, e
+								self.previous_key,
+								e,
 							);
 							continue
 						}
@@ -614,7 +615,7 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 	/// # Usage
 	///
 	/// This would typically be called inside the module implementation of on_runtime_upgrade.
-	fn translate_values<OldValue: Decode, F: Fn(OldValue) -> Option<Value>>(f: F) {
+	fn translate_values<OldValue: Decode, F: FnMut(OldValue) -> Option<Value>>(mut f: F) {
 		let prefix = Self::final_prefix();
 		let mut previous_key = prefix.clone().to_vec();
 		while let Some(next) = sp_io::storage::next_key(&previous_key)
@@ -628,9 +629,9 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 					None => unhashed::kill(&previous_key),
 				},
 				None => {
-					crate::debug::error!(
+					log::error!(
 						"old key failed to decode at {:?}",
-						previous_key
+						previous_key,
 					);
 					continue
 				},

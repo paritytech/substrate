@@ -370,7 +370,7 @@ pub(super) struct NeighborPacket<N> {
 /// A versioned neighbor packet.
 #[derive(Debug, Encode, Decode)]
 pub(super) enum VersionedNeighborPacket<N> {
-	#[codec(index = "1")]
+	#[codec(index = 1)]
 	V1(NeighborPacket<N>),
 }
 
@@ -563,12 +563,10 @@ impl<N: Ord> Peers<N> {
 	}
 
 	fn authorities(&self) -> usize {
-		// Note that our sentry and our validator are neither authorities nor non-authorities.
 		self.inner.iter().filter(|(_, info)| matches!(info.roles, ObservedRole::Authority)).count()
 	}
 
 	fn non_authorities(&self) -> usize {
-		// Note that our sentry and our validator are neither authorities nor non-authorities.
 		self.inner
 			.iter()
 			.filter(|(_, info)| matches!(info.roles, ObservedRole::Full | ObservedRole::Light))
@@ -665,8 +663,7 @@ impl CatchUpConfig {
 		match self {
 			CatchUpConfig::Disabled => false,
 			CatchUpConfig::Enabled { only_from_authorities, .. } => match peer.roles {
-				ObservedRole::Authority | ObservedRole::OurSentry |
-				ObservedRole::OurGuardedAuthority => true,
+				ObservedRole::Authority => true,
 				_ => !only_from_authorities
 			}
 		}
@@ -1158,7 +1155,6 @@ impl<Block: BlockT> Inner<Block> {
 		}
 
 		match peer.roles {
-			ObservedRole::OurGuardedAuthority | ObservedRole::OurSentry => true,
 			ObservedRole::Authority => {
 				let authorities = self.peers.authorities();
 
@@ -1214,7 +1210,6 @@ impl<Block: BlockT> Inner<Block> {
 		};
 
 		match peer.roles {
-			ObservedRole::OurSentry | ObservedRole::OurGuardedAuthority => true,
 			ObservedRole::Authority => {
 				let authorities = self.peers.authorities();
 
@@ -1415,7 +1410,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 				}
 				Err(e) => {
 					message_name = None;
-					debug!(target: "afg", "Error decoding message: {}", e.what());
+					debug!(target: "afg", "Error decoding message: {}", e);
 					telemetry!(CONSENSUS_DEBUG; "afg.err_decoding_msg"; "" => "");
 
 					let len = std::cmp::min(i32::max_value() as usize, data.len()) as i32;

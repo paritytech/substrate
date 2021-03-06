@@ -32,25 +32,20 @@ use tokio::runtime::{Runtime, Handle};
 use sp_keyring::Ed25519Keyring;
 use sc_client_api::backend::TransactionFor;
 use sp_blockchain::Result;
-use sp_api::{ApiRef, StorageProof, ProvideRuntimeApi};
+use sp_api::{ApiRef, ProvideRuntimeApi};
 use substrate_test_runtime_client::runtime::BlockNumber;
 use sp_consensus::{
 	BlockOrigin, ForkChoiceStrategy, ImportedAux, BlockImportParams, ImportResult, BlockImport,
 	import_queue::BoxJustificationImport,
 };
 use std::{collections::{HashMap, HashSet}, pin::Pin};
-use parity_scale_codec::Decode;
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT, HashFor};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_runtime::generic::{BlockId, DigestItem};
 use sp_core::H256;
 use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 use sp_finality_grandpa::{GRANDPA_ENGINE_ID, AuthorityList, EquivocationProof, GrandpaApi, OpaqueKeyOwnershipProof};
-use sp_state_machine::{InMemoryBackend, prove_read, read_proof_check};
 
 use authorities::AuthoritySet;
-use finality_proof::{
-	AuthoritySetForFinalityProver, AuthoritySetForFinalityChecker,
-};
 use sc_block_builder::BlockBuilderProvider;
 use sc_consensus::LongestChain;
 use sc_keystore::LocalKeystore;
@@ -179,8 +174,6 @@ impl ProvideRuntimeApi<Block> for TestApi {
 
 sp_api::mock_impl_runtime_apis! {
 	impl GrandpaApi<Block> for RuntimeApi {
-		type Error = sp_blockchain::Error;
-
 		fn grandpa_authorities(&self) -> AuthorityList {
 			self.inner.genesis_authorities.clone()
 		}
@@ -204,43 +197,6 @@ sp_api::mock_impl_runtime_apis! {
 impl GenesisAuthoritySetProvider<Block> for TestApi {
 	fn get(&self) -> Result<AuthorityList> {
 		Ok(self.genesis_authorities.clone())
-	}
-}
-
-impl AuthoritySetForFinalityProver<Block> for TestApi {
-	fn authorities(&self, _block: &BlockId<Block>) -> Result<AuthorityList> {
-		Ok(self.genesis_authorities.clone())
-	}
-
-	fn prove_authorities(&self, block: &BlockId<Block>) -> Result<StorageProof> {
-		let authorities = self.authorities(block)?;
-		let backend = <InMemoryBackend<HashFor<Block>>>::from(vec![
-			(None, vec![(b"authorities".to_vec(), Some(authorities.encode()))])
-		]);
-		let proof = prove_read(backend, vec![b"authorities"])
-			.expect("failure proving read from in-memory storage backend");
-		Ok(proof)
-	}
-}
-
-impl AuthoritySetForFinalityChecker<Block> for TestApi {
-	fn check_authorities_proof(
-		&self,
-		_hash: <Block as BlockT>::Hash,
-		header: <Block as BlockT>::Header,
-		proof: StorageProof,
-	) -> Result<AuthorityList> {
-		let results = read_proof_check::<HashFor<Block>, _>(
-			*header.state_root(), proof, vec![b"authorities"]
-		)
-			.expect("failure checking read proof for authorities");
-		let encoded = results.get(&b"authorities"[..])
-			.expect("returned map must contain all proof keys")
-			.as_ref()
-			.expect("authorities in proof is None");
-		let authorities = Decode::decode(&mut &encoded[..])
-			.expect("failure decoding authorities read from proof");
-		Ok(authorities)
 	}
 }
 
@@ -1399,7 +1355,7 @@ where
 
 #[test]
 fn grandpa_environment_respects_voting_rules() {
-	use finality_grandpa::Chain;
+	use finality_grandpa::voter::Environment;
 
 	let peers = &[Ed25519Keyring::Alice];
 	let voters = make_ids(peers);
@@ -1434,25 +1390,25 @@ fn grandpa_environment_respects_voting_rules() {
 
 	// the unrestricted environment should just return the best block
 	assert_eq!(
-		unrestricted_env.best_chain_containing(
+		futures::executor::block_on(unrestricted_env.best_chain_containing(
 			peer.client().info().finalized_hash
-		).unwrap().1,
+		)).unwrap().unwrap().1,
 		21,
 	);
 
 	// both the other environments should return block 16, which is 3/4 of the
 	// way in the unfinalized chain
 	assert_eq!(
-		three_quarters_env.best_chain_containing(
+		futures::executor::block_on(three_quarters_env.best_chain_containing(
 			peer.client().info().finalized_hash
-		).unwrap().1,
+		)).unwrap().unwrap().1,
 		16,
 	);
 
 	assert_eq!(
-		default_env.best_chain_containing(
+		futures::executor::block_on(default_env.best_chain_containing(
 			peer.client().info().finalized_hash
-		).unwrap().1,
+		)).unwrap().unwrap().1,
 		16,
 	);
 
@@ -1461,18 +1417,18 @@ fn grandpa_environment_respects_voting_rules() {
 
 	// the 3/4 environment should propose block 21 for voting
 	assert_eq!(
-		three_quarters_env.best_chain_containing(
+		futures::executor::block_on(three_quarters_env.best_chain_containing(
 			peer.client().info().finalized_hash
-		).unwrap().1,
+		)).unwrap().unwrap().1,
 		21,
 	);
 
 	// while the default environment will always still make sure we don't vote
 	// on the best block (2 behind)
 	assert_eq!(
-		default_env.best_chain_containing(
+		futures::executor::block_on(default_env.best_chain_containing(
 			peer.client().info().finalized_hash
-		).unwrap().1,
+		)).unwrap().unwrap().1,
 		19,
 	);
 
@@ -1483,9 +1439,9 @@ fn grandpa_environment_respects_voting_rules() {
 	// best block, there's a hard rule that we can't cast any votes lower than
 	// the given base (#21).
 	assert_eq!(
-		default_env.best_chain_containing(
+		futures::executor::block_on(default_env.best_chain_containing(
 			peer.client().info().finalized_hash
-		).unwrap().1,
+		)).unwrap().unwrap().1,
 		21,
 	);
 }

@@ -19,23 +19,26 @@
 
 #![cfg(test)]
 
-use crate::{Config, Module, GenesisConfig};
+use crate as pallet_aura;
 use sp_consensus_aura::ed25519::AuthorityId;
-use sp_runtime::{
-	traits::IdentityLookup,
-	testing::{Header, UintAuthorityId},
-};
-use frame_support::{impl_outer_origin, parameter_types};
-use sp_io;
+use sp_runtime::{traits::IdentityLookup, testing::{Header, UintAuthorityId}};
+use frame_support::{parameter_types, traits::GenesisBuild};
 use sp_core::H256;
 
-impl_outer_origin!{
-	pub enum Origin for Test where system = frame_system {}
-}
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
 
-// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct Test;
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
+		Aura: pallet_aura::{Module, Call, Storage, Config<T>},
+	}
+);
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
@@ -52,16 +55,16 @@ impl frame_system::Config for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = ();
+	type Call = Call;
 	type Hash = H256;
 	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = ();
+	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
-	type PalletInfo = ();
+	type PalletInfo = PalletInfo;
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
@@ -76,16 +79,14 @@ impl pallet_timestamp::Config for Test {
 	type WeightInfo = ();
 }
 
-impl Config for Test {
+impl pallet_aura::Config for Test {
 	type AuthorityId = AuthorityId;
 }
 
 pub fn new_test_ext(authorities: Vec<u64>) -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	GenesisConfig::<Test>{
+	pallet_aura::GenesisConfig::<Test>{
 		authorities: authorities.into_iter().map(|a| UintAuthorityId(a).to_public_key()).collect(),
 	}.assimilate_storage(&mut t).unwrap();
 	t.into()
 }
-
-pub type Aura = Module<Test>;

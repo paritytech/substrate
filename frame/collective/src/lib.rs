@@ -40,7 +40,7 @@
 //! If there are not, or if no prime is set, then the motion is dropped without being executed.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![recursion_limit="128"]
+#![recursion_limit = "128"]
 
 use sp_std::{prelude::*, result};
 use sp_core::u32_trait::Value as U32;
@@ -49,7 +49,7 @@ use sp_runtime::{RuntimeDebug, traits::Hash};
 
 use frame_support::{
 	codec::{Decode, Encode},
-	debug, decl_error, decl_event, decl_module, decl_storage,
+	decl_error, decl_event, decl_module, decl_storage,
 	dispatch::{
 		DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable, Parameter,
 		PostDispatchInfo,
@@ -320,19 +320,21 @@ decl_module! {
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			if new_members.len() > T::MaxMembers::get() as usize {
-				debug::error!(
-					"New members count exceeds maximum amount of members expected. (expected: {}, actual: {})",
+				log::error!(
+					target: "runtime::collective",
+					"New members count ({}) exceeds maximum amount of members expected ({}).",
+					new_members.len(),
 					T::MaxMembers::get(),
-					new_members.len()
 				);
 			}
 
 			let old = Members::<T, I>::get();
 			if old.len() > old_count as usize {
-				debug::warn!(
-					"Wrong count used to estimate set_members weight. (expected: {}, actual: {})",
+				log::warn!(
+					target: "runtime::collective",
+					"Wrong count used to estimate set_members weight. expected ({}) vs actual ({})",
 					old_count,
-					old.len()
+					old.len(),
 				);
 			}
 			let mut new_members = new_members;
@@ -811,10 +813,11 @@ impl<T: Config<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
 		new: &[T::AccountId],
 	) {
 		if new.len() > T::MaxMembers::get() as usize {
-			debug::error!(
-				"New members count exceeds maximum amount of members expected. (expected: {}, actual: {})",
+			log::error!(
+				target: "runtime::collective",
+				"New members count ({}) exceeds maximum amount of members expected ({}).",
+				new.len(),
 				T::MaxMembers::get(),
-				new.len()
 			);
 		}
 		// remove accounts from all current voting in motions.
@@ -839,6 +842,10 @@ impl<T: Config<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
 
 	fn set_prime(prime: Option<T::AccountId>) {
 		Prime::<T, I>::set(prime);
+	}
+
+	fn get_prime() -> Option<T::AccountId> {
+		Prime::<T, I>::get()
 	}
 }
 
@@ -961,7 +968,7 @@ mod tests {
 	use hex_literal::hex;
 	use sp_core::H256;
 	use sp_runtime::{
-		traits::{BlakeTwo256, IdentityLookup, Block as BlockT}, testing::Header,
+		traits::{BlakeTwo256, IdentityLookup}, testing::Header,
 		BuildStorage,
 	};
 	use crate as collective;
@@ -991,7 +998,7 @@ mod tests {
 		type Event = Event;
 		type BlockHashCount = BlockHashCount;
 		type Version = ();
-		type PalletInfo = ();
+		type PalletInfo = PalletInfo;
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
