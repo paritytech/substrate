@@ -388,7 +388,7 @@ pub mod pallet {
 		/// the approved `delegate`.
 		/// \[id, owner, delegate, destination\]
 		TransferredApproved(T::AssetId, T::AccountId, T::AccountId, T::AccountId, T::Balance),
-		/// An aset has had its attributes changed by the `Force` origin.
+		/// An asset has had its attributes changed by the `Force` origin.
 		/// \[id\]
 		AssetStatusChanged(T::AssetId),
 	}
@@ -1397,7 +1397,7 @@ impl<T: Config> Pallet<T> {
 			Approvals::<T>::remove_prefix(&id);
 			Self::deposit_event(Event::Destroyed(id));
 
-			// TODO: could use postinfo to reflect the actual number of accounts/sufficient/approvals
+			// NOTE: could use postinfo to reflect the actual number of accounts/sufficient/approvals
 			Ok(())
 		})
 	}
