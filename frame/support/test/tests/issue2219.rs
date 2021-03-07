@@ -185,9 +185,9 @@ frame_support::construct_runtime!(
 #[test]
 fn create_genesis_config() {
 	GenesisConfig {
-		module: Some(module::GenesisConfig {
+		module: module::GenesisConfig {
 			request_life_time: 0,
 			enable_storage_role: true,
-		})
+		}
 	};
 }

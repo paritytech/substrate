@@ -1245,7 +1245,7 @@ mod tests {
 		pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
 			MEMBERS.with(|m| *m.borrow_mut() = self.genesis_members.iter().map(|(m, _)| m.clone()).collect::<Vec<_>>());
 			let mut ext: sp_io::TestExternalities = GenesisConfig {
-				pallet_balances: Some(pallet_balances::GenesisConfig::<Test>{
+				pallet_balances: pallet_balances::GenesisConfig::<Test>{
 					balances: vec![
 						(1, 10 * self.balance_factor),
 						(2, 20 * self.balance_factor),
@@ -1254,10 +1254,10 @@ mod tests {
 						(5, 50 * self.balance_factor),
 						(6, 60 * self.balance_factor)
 					],
-				}),
-				elections_phragmen: Some(elections_phragmen::GenesisConfig::<Test> {
+				},
+				elections_phragmen: elections_phragmen::GenesisConfig::<Test> {
 					members: self.genesis_members
-				}),
+				},
 			}.build_storage().unwrap().into();
 			ext.execute_with(pre_conditions);
 			ext.execute_with(test);
