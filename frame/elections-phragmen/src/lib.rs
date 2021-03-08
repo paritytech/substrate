@@ -1080,11 +1080,16 @@ mod tests {
 		type BlockHashCount = BlockHashCount;
 		type Version = ();
 		type PalletInfo = PalletInfo;
-		type AccountData = pallet_balances::AccountData<u64>;
-		type OnNewAccount = ();
-		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
-	type SS58Prefix = ();
+		type SS58Prefix = ();
+		type AccountStorage = Accounts;
+	}
+
+	impl pallet_accounts::Config for Test {
+		type Event = Event;
+		type OnKilledAccount = ();
+		type OnNewAccount = ();
+		type AccountData = pallet_balances::AccountData<u64>;
 	}
 
 	parameter_types! {
@@ -1096,7 +1101,8 @@ mod tests {
 		type Event = Event;
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
-		type AccountStore = frame_system::Module<Test>;
+		type AccountStore = Accounts;
+		type ReferencedAccount = Accounts;
 		type MaxLocks = ();
 		type WeightInfo = ();
 	}
@@ -1188,6 +1194,7 @@ mod tests {
 			UncheckedExtrinsic = UncheckedExtrinsic
 		{
 			System: frame_system::{Module, Call, Event<T>},
+			Accounts: pallet_accounts::{Module, Call, Storage, Event<T>},
 			Balances: pallet_balances::{Module, Call, Event<T>, Config<T>},
 			Elections: elections_phragmen::{Module, Call, Event<T>, Config<T>},
 		}

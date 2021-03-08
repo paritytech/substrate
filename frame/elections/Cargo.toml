@@ -24,6 +24,7 @@ frame-system = { version = "3.0.0", default-features = false, path = "../system"
 
 [dev-dependencies]
 hex-literal = "0.3.1"
+pallet-accounts = { version = "3.0.0", path = "../accounts" }
 pallet-balances = { version = "3.0.0", path = "../balances" }
 
 [features]
