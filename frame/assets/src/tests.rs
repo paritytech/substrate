@@ -379,16 +379,6 @@ fn transferring_amount_more_than_available_balance_should_not_work() {
 }
 
 #[test]
-fn transferring_less_than_one_unit_should_not_work() {
-	new_test_ext().execute_with(|| {
-		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
-		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
-		assert_eq!(Assets::balance(0, 1), 100);
-		assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 0), Error::<Test>::AmountZero);
-	});
-}
-
-#[test]
 fn transferring_more_units_than_total_supply_should_not_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));

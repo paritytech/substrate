@@ -254,7 +254,7 @@ pub struct DestroyWitness {
 #[frame_support::pallet]
 pub mod pallet {
 	use frame_support::{
-		dispatch::DispatchResultWithPostInfo,
+		dispatch::DispatchResult,
 		pallet_prelude::*,
 	};
 	use frame_system::pallet_prelude::*;
@@ -395,8 +395,6 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// Transfer amount should be non-zero.
-		AmountZero,
 		/// Account balance must be greater than or equal to the transfer amount.
 		BalanceLow,
 		/// Balance should be non-zero.
@@ -454,7 +452,7 @@ pub mod pallet {
 			#[pallet::compact] id: T::AssetId,
 			admin: <T::Lookup as StaticLookup>::Source,
 			min_balance: T::Balance,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let owner = ensure_signed(origin)?;
 			let admin = T::Lookup::lookup(admin)?;
 
@@ -479,7 +477,7 @@ pub mod pallet {
 				is_frozen: false,
 			});
 			Self::deposit_event(Event::Created(id, owner, admin));
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Issue a new class of fungible assets from a privileged origin.
@@ -510,7 +508,7 @@ pub mod pallet {
 			owner: <T::Lookup as StaticLookup>::Source,
 			is_sufficient: bool,
 			#[pallet::compact] min_balance: T::Balance,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
 
@@ -532,7 +530,7 @@ pub mod pallet {
 				is_frozen: false,
 			});
 			Self::deposit_event(Event::ForceCreated(id, owner));
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Destroy a class of fungible assets owned by the sender.
@@ -558,9 +556,9 @@ pub mod pallet {
 			#[pallet::compact] id: T::AssetId,
 			// TODO: make work
 			/*#[pallet::compact]*/ witness: DestroyWitness,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let check_owner = ensure_signed(origin)?;
-			Ok(Self::do_destroy(id, witness, Some(check_owner))?.into())
+			Ok(Self::do_destroy(id, witness, Some(check_owner))?)
 		}
 
 		/// Destroy a class of fungible assets.
@@ -586,9 +584,9 @@ pub mod pallet {
 			#[pallet::compact] id: T::AssetId,
 			// TODO: make work
 			/*#[pallet::compact]*/ witness: DestroyWitness,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
-			Ok(Self::do_destroy(id, witness, None)?.into())
+			Ok(Self::do_destroy(id, witness, None)?)
 		}
 
 		/// Mint assets of a particular class.
@@ -609,7 +607,7 @@ pub mod pallet {
 			#[pallet::compact] id: T::AssetId,
 			beneficiary: <T::Lookup as StaticLookup>::Source,
 			#[pallet::compact] amount: T::Balance
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
 
@@ -619,17 +617,17 @@ pub mod pallet {
 				ensure!(&origin == &details.issuer, Error::<T>::NoPermission);
 				details.supply = details.supply.checked_add(&amount).ok_or(Error::<T>::Overflow)?;
 
-				Account::<T>::try_mutate(id, &beneficiary, |t| -> DispatchResultWithPostInfo {
+				Account::<T>::try_mutate(id, &beneficiary, |t| -> DispatchResult {
 					let new_balance = t.balance.saturating_add(amount);
 					ensure!(new_balance >= details.min_balance, Error::<T>::BalanceLow);
 					if t.balance.is_zero() {
 						t.sufficient = Self::new_account(&beneficiary, details)?;
 					}
 					t.balance = new_balance;
-					Ok(().into())
+					Ok(())
 				})?;
 				Self::deposit_event(Event::Issued(id, beneficiary, amount));
-				Ok(().into())
+				Ok(())
 			})
 		}
 
@@ -654,7 +652,7 @@ pub mod pallet {
 			#[pallet::compact] id: T::AssetId,
 			who: <T::Lookup as StaticLookup>::Source,
 			#[pallet::compact] amount: T::Balance
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let who = T::Lookup::lookup(who)?;
 
@@ -683,7 +681,7 @@ pub mod pallet {
 				d.supply = d.supply.saturating_sub(burned);
 
 				Self::deposit_event(Event::Burned(id, who, burned));
-				Ok(().into())
+				Ok(())
 			})
 		}
 
@@ -711,13 +709,13 @@ pub mod pallet {
 			#[pallet::compact] id: T::AssetId,
 			target: <T::Lookup as StaticLookup>::Source,
 			#[pallet::compact] amount: T::Balance
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(target)?;
 
 			Self::do_transfer(id, &origin, &dest, amount, None)?;
 			Self::deposit_event(Event::Transferred(id, origin, dest, amount));
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Move some assets from one account to another.
@@ -746,14 +744,14 @@ pub mod pallet {
 			source: <T::Lookup as StaticLookup>::Source,
 			dest: <T::Lookup as StaticLookup>::Source,
 			#[pallet::compact] amount: T::Balance,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let source = T::Lookup::lookup(source)?;
 			let dest = T::Lookup::lookup(dest)?;
 
 			Self::do_transfer(id, &source, &dest, amount, Some(origin))?;
 			Self::deposit_event(Event::Transferred(id, source, dest, amount));
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Disallow further unprivileged transfers from an account.
@@ -771,7 +769,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
 			who: <T::Lookup as StaticLookup>::Source
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
 			let d = Asset::<T>::get(id).ok_or(Error::<T>::Unknown)?;
@@ -782,7 +780,7 @@ pub mod pallet {
 			Account::<T>::mutate(id, &who, |a| a.is_frozen = true);
 
 			Self::deposit_event(Event::<T>::Frozen(id, who));
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Allow unprivileged transfers from an account again.
@@ -801,7 +799,7 @@ pub mod pallet {
 			#[pallet::compact]
 			id: T::AssetId,
 			who: <T::Lookup as StaticLookup>::Source
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
 			let details = Asset::<T>::get(id).ok_or(Error::<T>::Unknown)?;
@@ -812,7 +810,7 @@ pub mod pallet {
 			Account::<T>::mutate(id, &who, |a| a.is_frozen = false);
 
 			Self::deposit_event(Event::<T>::Thawed(id, who));
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Disallow further unprivileged transfers for the asset class.
@@ -828,7 +826,7 @@ pub mod pallet {
 		pub(super) fn freeze_asset(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
 			Asset::<T>::try_mutate(id, |maybe_details| {
@@ -838,7 +836,7 @@ pub mod pallet {
 				d.is_frozen = true;
 
 				Self::deposit_event(Event::<T>::AssetFrozen(id));
-				Ok(().into())
+				Ok(())
 			})
 		}
 
@@ -855,7 +853,7 @@ pub mod pallet {
 		pub(super) fn thaw_asset(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
 			Asset::<T>::try_mutate(id, |maybe_details| {
@@ -865,7 +863,7 @@ pub mod pallet {
 				d.is_frozen = false;
 
 				Self::deposit_event(Event::<T>::AssetThawed(id));
-				Ok(().into())
+				Ok(())
 			})
 		}
 
@@ -884,14 +882,14 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
 			owner: <T::Lookup as StaticLookup>::Source,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
 
 			Asset::<T>::try_mutate(id, |maybe_details| {
 				let details = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
 				ensure!(&origin == &details.owner, Error::<T>::NoPermission);
-				if details.owner == owner { return Ok(().into()) }
+				if details.owner == owner { return Ok(()) }
 
 				let metadata_deposit = Metadata::<T>::get(id).deposit;
 				let deposit = details.deposit + metadata_deposit;
@@ -902,7 +900,7 @@ pub mod pallet {
 				details.owner = owner.clone();
 
 				Self::deposit_event(Event::OwnerChanged(id, owner));
-				Ok(().into())
+				Ok(())
 			})
 		}
 
@@ -925,7 +923,7 @@ pub mod pallet {
 			issuer: <T::Lookup as StaticLookup>::Source,
 			admin: <T::Lookup as StaticLookup>::Source,
 			freezer: <T::Lookup as StaticLookup>::Source,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let issuer = T::Lookup::lookup(issuer)?;
 			let admin = T::Lookup::lookup(admin)?;
@@ -940,7 +938,7 @@ pub mod pallet {
 				details.freezer = freezer.clone();
 
 				Self::deposit_event(Event::TeamChanged(id, issuer, admin, freezer));
-				Ok(().into())
+				Ok(())
 			})
 		}
 
@@ -967,7 +965,7 @@ pub mod pallet {
 			name: Vec<u8>,
 			symbol: Vec<u8>,
 			decimals: u8,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
 			ensure!(name.len() <= T::StringLimit::get() as usize, Error::<T>::BadMetadata);
@@ -999,7 +997,7 @@ pub mod pallet {
 				});
 
 				Self::deposit_event(Event::MetadataSet(id, name, symbol, decimals, false));
-				Ok(().into())
+				Ok(())
 			})
 		}
 
@@ -1018,7 +1016,7 @@ pub mod pallet {
 		pub(super) fn clear_metadata(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
 			let d = Asset::<T>::get(id).ok_or(Error::<T>::Unknown)?;
@@ -1028,7 +1026,7 @@ pub mod pallet {
 				let deposit = metadata.take().ok_or(Error::<T>::Unknown)?.deposit;
 				T::Currency::unreserve(&d.owner, deposit);
 				Self::deposit_event(Event::MetadataCleared(id));
-				Ok(().into())
+				Ok(())
 			})
 		}
 
@@ -1054,7 +1052,7 @@ pub mod pallet {
 			symbol: Vec<u8>,
 			decimals: u8,
 			is_frozen: bool,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 
 			ensure!(name.len() <= T::StringLimit::get() as usize, Error::<T>::BadMetadata);
@@ -1072,7 +1070,7 @@ pub mod pallet {
 				});
 
 				Self::deposit_event(Event::MetadataSet(id, name, symbol, decimals, is_frozen));
-				Ok(().into())
+				Ok(())
 			})
 		}
 
@@ -1091,7 +1089,7 @@ pub mod pallet {
 		pub(super) fn force_clear_metadata(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 
 			let d = Asset::<T>::get(id).ok_or(Error::<T>::Unknown)?;
@@ -1099,7 +1097,7 @@ pub mod pallet {
 				let deposit = metadata.take().ok_or(Error::<T>::Unknown)?.deposit;
 				T::Currency::unreserve(&d.owner, deposit);
 				Self::deposit_event(Event::MetadataCleared(id));
-				Ok(().into())
+				Ok(())
 			})
 		}
 
@@ -1136,7 +1134,7 @@ pub mod pallet {
 			#[pallet::compact] min_balance: T::Balance,
 			is_sufficient: bool,
 			is_frozen: bool,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 
 			Asset::<T>::try_mutate(id, |maybe_asset| {
@@ -1151,7 +1149,7 @@ pub mod pallet {
 				*maybe_asset = Some(asset);
 
 				Self::deposit_event(Event::AssetStatusChanged(id));
-				Ok(().into())
+				Ok(())
 			})
 		}
 
@@ -1181,7 +1179,7 @@ pub mod pallet {
 			#[pallet::compact] id: T::AssetId,
 			delegate: <T::Lookup as StaticLookup>::Source,
 			#[pallet::compact] amount: T::Balance,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let owner = ensure_signed(origin)?;
 			let delegate = T::Lookup::lookup(delegate)?;
 
@@ -1199,7 +1197,7 @@ pub mod pallet {
 			})?;
 			Self::deposit_event(Event::ApprovedTransfer(id, key.owner, key.delegate, amount));
 
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Cancel all of some asset approved for delegated transfer by a third-party account.
@@ -1220,7 +1218,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
 			delegate: <T::Lookup as StaticLookup>::Source,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let owner = ensure_signed(origin)?;
 			let delegate = T::Lookup::lookup(delegate)?;
 			let key = ApprovalKey { owner, delegate };
@@ -1228,7 +1226,7 @@ pub mod pallet {
 			T::Currency::unreserve(&key.owner, approval.deposit);
 
 			Self::deposit_event(Event::ApprovalCancelled(id, key.owner, key.delegate));
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Cancel all of some asset approved for delegated transfer by a third-party account.
@@ -1250,7 +1248,7 @@ pub mod pallet {
 			#[pallet::compact] id: T::AssetId,
 			owner: <T::Lookup as StaticLookup>::Source,
 			delegate: <T::Lookup as StaticLookup>::Source,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::ForceOrigin::try_origin(origin)
 				.map(|_| ())
 				.or_else(|origin| -> DispatchResult {
@@ -1268,7 +1266,7 @@ pub mod pallet {
 			T::Currency::unreserve(&key.owner, approval.deposit);
 
 			Self::deposit_event(Event::ApprovalCancelled(id, key.owner, key.delegate));
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Transfer some asset balance from a previously delegated account to some third-party
@@ -1296,7 +1294,7 @@ pub mod pallet {
 			owner: <T::Lookup as StaticLookup>::Source,
 			destination: <T::Lookup as StaticLookup>::Source,
 			#[pallet::compact] amount: T::Balance,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let delegate = ensure_signed(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
 			let destination = T::Lookup::lookup(destination)?;
@@ -1318,7 +1316,7 @@ pub mod pallet {
 			})?;
 			let event = Event::TransferredApproved(id, key.owner, key.delegate, destination, amount);
 			Self::deposit_event(event);
-			Ok(().into())
+			Ok(())
 		}
 	}
 }
