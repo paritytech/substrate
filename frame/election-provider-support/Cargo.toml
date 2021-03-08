@@ -1,5 +1,5 @@
 [package]
-name = "election-provider-support" # TODO: rename to a prefix with frame-
+name = "frame-election-provider-support"
 version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -17,8 +17,8 @@ codec = { package = "parity-scale-codec", version = "2.0.0", default-features = 
 sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
 sp-arithmetic = { version = "3.0.0", default-features = false, path = "../../primitives/arithmetic" }
 sp-npos-elections = { version = "3.0.0", default-features = false, path = "../../primitives/npos-elections" }
-frame-support = { version = "3.0.0", default-feature = false, path = "../support" }
-frame-system = { version = "3.0.0", default-feature = false, path = "../system" }
+frame-support = { version = "3.0.0", default-features = false, path = "../support" }
+frame-system = { version = "3.0.0", default-features = false, path = "../system" }
 
 [dev-dependencies]
 sp-npos-elections = { version = "3.0.0", path = "../../primitives/npos-elections" }
@@ -26,7 +26,6 @@ sp-runtime = { version = "3.0.0", path = "../../primitives/runtime" }
 
 [features]
 default = ["std"]
-runtime-benchmarks = []
 std = [
 	"codec/std",
 	"sp-std/std",
@@ -35,3 +34,4 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 ]
+runtime-benchmarks = []

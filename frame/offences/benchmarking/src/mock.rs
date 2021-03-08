@@ -29,7 +29,7 @@ use sp_runtime::{
 	traits::IdentityLookup,
 	testing::{Header, UintAuthorityId},
 };
-use election_provider_support::onchain;
+use frame_election_provider_support::onchain;
 use pallet_session::historical as pallet_session_historical;
 
 type AccountId = u64;

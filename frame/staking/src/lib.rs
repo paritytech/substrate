@@ -331,7 +331,7 @@ use sp_npos_elections::{
 	to_supports, EvaluateSupport, seq_phragmen, generate_solution_type, is_score_better, Supports,
 	VoteWeight, CompactSolution, PerThing128,
 };
-use election_provider_support::{ElectionProvider, data_provider};
+use frame_election_provider_support::{ElectionProvider, data_provider};
 pub use weights::WeightInfo;
 
 const STAKING_ID: LockIdentifier = *b"staking ";
@@ -798,7 +798,7 @@ pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
 	type CurrencyToVote: CurrencyToVote<BalanceOf<Self>>;
 
 	/// Something that provides the election functionality.
-	type ElectionProvider: election_provider_support::ElectionProvider<
+	type ElectionProvider: frame_election_provider_support::ElectionProvider<
 		Self::AccountId,
 		Self::BlockNumber,
 		// we only accept an election provider that has staking as data provider.
@@ -3335,7 +3335,7 @@ impl<T: Config> Module<T> {
 	}
 }
 
-impl<T: Config> election_provider_support::ElectionDataProvider<T::AccountId, T::BlockNumber>
+impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::AccountId, T::BlockNumber>
 	for Module<T>
 {
 	fn desired_targets() -> data_provider::Result<(u32, Weight)> {

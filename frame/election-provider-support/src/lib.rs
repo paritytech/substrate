@@ -78,7 +78,7 @@
 //! ## Example
 //!
 //! ```rust
-//! # use election_provider_support::{*, data_provider};
+//! # use frame_election_provider_support::{*, data_provider};
 //! # use sp_npos_elections::{Support, Assignment};
 //! # use frame_support::weights::Weight;
 //!
