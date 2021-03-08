@@ -1045,7 +1045,7 @@ pub mod pallet {
 		///
 		/// Emits `MetadataSet`.
 		///
-		/// Weight: `O(1)`
+		/// Weight: `O(N + S)` where N and S are the length of the name and symbol respectively.
 		#[pallet::weight(T::WeightInfo::force_set_metadata(name.len() as u32, symbol.len() as u32))]
 		pub(super) fn force_set_metadata(
 			origin: OriginFor<T>,
