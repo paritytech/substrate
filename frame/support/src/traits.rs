@@ -2061,7 +2061,7 @@ pub trait Hooks<BlockNumber> {
 	/// The block is being finalized. Implement to have something happen.
 	fn on_finalize(_n: BlockNumber) {}
 
-	/// The block is being finalized. Implement to have something happen based on remaining weight.
+	/// The block is being finalized. Implement to have something happen using the remaining weight.
 	fn on_idle(
 		_n: BlockNumber,
 		_remaining_weight: crate::weights::Weight
