@@ -22,6 +22,10 @@ use crate::{Error, mock::*};
 use frame_support::{assert_ok, assert_noop, traits::Currency};
 use pallet_balances::Error as BalancesError;
 
+fn last_event() -> mock::Event {
+	frame_system::Module::<Test>::events().pop().expect("Event expected").event
+}
+
 #[test]
 fn basic_minting_should_work() {
 	new_test_ext().execute_with(|| {
@@ -379,12 +383,16 @@ fn transferring_amount_more_than_available_balance_should_not_work() {
 }
 
 #[test]
-fn transferring_less_than_one_unit_should_not_work() {
+fn transferring_less_than_one_unit_is_fine() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
 		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 		assert_eq!(Assets::balance(0, 1), 100);
-		assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 0), Error::<Test>::AmountZero);
+		assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 0));
+		assert_eq!(
+			last_event(),
+			mock::Event::pallet_assets(crate::Event::Transferred(0, 1, 2, 0)),
+		);
 	});
 }
 
