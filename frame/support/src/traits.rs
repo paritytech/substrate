@@ -1523,7 +1523,7 @@ pub trait OnIdle<BlockNumber> {
 	/// Implement to have something happen if the remaining_weight is high enough.
 	///
 	/// NOTE: This function is called AFTER ALL extrinsics in a block are applied,
-	/// including inherent extrinsics.
+	/// but, before on_finalize. This includes inherent extrinsics.
 	fn on_idle(
 		_n: BlockNumber,
 		_remaining_weight: crate::weights::Weight
