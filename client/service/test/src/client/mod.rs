@@ -988,10 +988,13 @@ fn key_changes_works() {
 			None,
 			&StorageKey(key),
 		).unwrap();
-		match actual_result == expected_result {
-			true => (),
-			false => panic!(format!("Failed test {}: actual = {:?}, expected = {:?}",
-			                        index, actual_result, expected_result)),
+		if actual_result != expected_result {
+			panic!(
+				"Failed test {}: actual = {:?}, expected = {:?}",
+				index,
+				actual_result,
+				expected_result,
+			);
 		}
 	}
 }
@@ -1327,7 +1330,9 @@ fn doesnt_import_blocks_that_revert_finality() {
 
 	let import_err = client.import(BlockOrigin::Own, b3).err().unwrap();
 	let expected_err = ConsensusError::ClientImport(
-		sp_blockchain::Error::NotInFinalizedChain.to_string()
+		sp_blockchain::Error::RuntimeApiError(
+			sp_api::ApiError::Application(Box::new(sp_blockchain::Error::NotInFinalizedChain))
+		).to_string()
 	);
 
 	assert_eq!(

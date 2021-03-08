@@ -23,7 +23,13 @@ use testing_utils::*;
 
 use sp_runtime::traits::One;
 use frame_system::RawOrigin;
-pub use frame_benchmarking::{benchmarks, account, whitelisted_caller, whitelist_account};
+pub use frame_benchmarking::{
+	benchmarks,
+	account,
+	whitelisted_caller,
+	whitelist_account,
+	impl_benchmark_test_suite,
+};
 const SEED: u32 = 0;
 const MAX_SPANS: u32 = 100;
 const MAX_VALIDATORS: u32 = 1000;
@@ -634,36 +640,10 @@ mod tests {
 			assert_ok!(closure_to_benchmark());
 		});
 	}
-
-	#[test]
-	fn test_benchmarks() {
-		ExtBuilder::default().has_stakers(true).build().execute_with(|| {
-			assert_ok!(test_benchmark_bond::<Test>());
-			assert_ok!(test_benchmark_bond_extra::<Test>());
-			assert_ok!(test_benchmark_unbond::<Test>());
-			assert_ok!(test_benchmark_withdraw_unbonded_update::<Test>());
-			assert_ok!(test_benchmark_withdraw_unbonded_kill::<Test>());
-			assert_ok!(test_benchmark_validate::<Test>());
-			assert_ok!(test_benchmark_kick::<Test>());
-			assert_ok!(test_benchmark_nominate::<Test>());
-			assert_ok!(test_benchmark_chill::<Test>());
-			assert_ok!(test_benchmark_set_payee::<Test>());
-			assert_ok!(test_benchmark_set_controller::<Test>());
-			assert_ok!(test_benchmark_set_validator_count::<Test>());
-			assert_ok!(test_benchmark_force_no_eras::<Test>());
-			assert_ok!(test_benchmark_force_new_era::<Test>());
-			assert_ok!(test_benchmark_force_new_era_always::<Test>());
-			assert_ok!(test_benchmark_set_invulnerables::<Test>());
-			assert_ok!(test_benchmark_force_unstake::<Test>());
-			assert_ok!(test_benchmark_cancel_deferred_slash::<Test>());
-			assert_ok!(test_benchmark_payout_stakers_dead_controller::<Test>());
-			assert_ok!(test_benchmark_payout_stakers_alive_staked::<Test>());
-			assert_ok!(test_benchmark_rebond::<Test>());
-			assert_ok!(test_benchmark_set_history_depth::<Test>());
-			assert_ok!(test_benchmark_reap_stash::<Test>());
-			assert_ok!(test_benchmark_new_era::<Test>());
-			assert_ok!(test_benchmark_do_slash::<Test>());
-			assert_ok!(test_benchmark_payout_all::<Test>());
-		});
-	}
 }
+
+impl_benchmark_test_suite!(
+	Staking,
+	crate::mock::ExtBuilder::default().has_stakers(true).build(),
+	crate::mock::Test,
+);

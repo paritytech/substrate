@@ -44,7 +44,8 @@
 //!
 //! ## Usage
 //!
-//! The default Substrate node template declares the [`Executive`](./struct.Executive.html) type in its library.
+//! The default Substrate node template declares the [`Executive`](./struct.Executive.html) type in
+//! its library.
 //!
 //! ### Example
 //!
@@ -118,25 +119,19 @@
 use sp_std::{prelude::*, marker::PhantomData};
 use frame_support::{
 	weights::{GetDispatchInfo, DispatchInfo, DispatchClass},
-	traits::{OnInitialize, OnFinalize, OnRuntimeUpgrade, OffchainWorker},
+	traits::{OnInitialize, OnFinalize, OnRuntimeUpgrade, OffchainWorker, ExecuteBlock},
 	dispatch::PostDispatchInfo,
 };
 use sp_runtime::{
 	generic::Digest, ApplyExtrinsicResult,
 	traits::{
 		self, Header, Zero, One, Checkable, Applyable, CheckEqual, ValidateUnsigned, NumberFor,
-		Block as BlockT, Dispatchable, Saturating,
+		Dispatchable, Saturating,
 	},
 	transaction_validity::{TransactionValidity, TransactionSource},
 };
 use codec::{Codec, Encode};
 use frame_system::DigestOf;
-
-/// Trait that can be used to execute a block.
-pub trait ExecuteBlock<Block: BlockT> {
-	/// Actually execute all transitions for `block`.
-	fn execute_block(block: Block);
-}
 
 pub type CheckedOf<E, C> = <E as Checkable<C>>::Checked;
 pub type CallOf<E, C> = <CheckedOf<E, C> as Applyable>::Call;
@@ -185,26 +180,58 @@ where
 }
 
 impl<
-	System: frame_system::Config,
-	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
-	Context: Default,
-	UnsignedValidator,
-	AllModules:
-		OnRuntimeUpgrade +
-		OnInitialize<System::BlockNumber> +
-		OnFinalize<System::BlockNumber> +
-		OffchainWorker<System::BlockNumber>,
-	COnRuntimeUpgrade: OnRuntimeUpgrade,
-> Executive<System, Block, Context, UnsignedValidator, AllModules, COnRuntimeUpgrade>
+		System: frame_system::Config,
+		Block: traits::Block<Header = System::Header, Hash = System::Hash>,
+		Context: Default,
+		UnsignedValidator,
+		AllModules: OnRuntimeUpgrade
+			+ OnInitialize<System::BlockNumber>
+			+ OnFinalize<System::BlockNumber>
+			+ OffchainWorker<System::BlockNumber>,
+		COnRuntimeUpgrade: OnRuntimeUpgrade,
+	> Executive<System, Block, Context, UnsignedValidator, AllModules, COnRuntimeUpgrade>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
-	CheckedOf<Block::Extrinsic, Context>:
-		Applyable +
-		GetDispatchInfo,
-	CallOf<Block::Extrinsic, Context>: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>,
+	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
+	CallOf<Block::Extrinsic, Context>:
+		Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
-	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
+	UnsignedValidator: ValidateUnsigned<Call = CallOf<Block::Extrinsic, Context>>,
 {
+	/// Execute all `OnRuntimeUpgrade` of this runtime, and return the aggregate weight.
+	pub fn execute_on_runtime_upgrade() -> frame_support::weights::Weight {
+		let mut weight = 0;
+		weight = weight.saturating_add(
+			<frame_system::Module<System> as OnRuntimeUpgrade>::on_runtime_upgrade(),
+		);
+		weight = weight.saturating_add(COnRuntimeUpgrade::on_runtime_upgrade());
+		weight = weight.saturating_add(<AllModules as OnRuntimeUpgrade>::on_runtime_upgrade());
+
+		weight
+	}
+
+	/// Execute all `OnRuntimeUpgrade` of this runtime, including the pre and post migration checks.
+	///
+	/// This should only be used for testing.
+	#[cfg(feature = "try-runtime")]
+	pub fn try_runtime_upgrade() -> Result<frame_support::weights::Weight, &'static str> {
+		<
+			(frame_system::Module::<System>, COnRuntimeUpgrade, AllModules)
+			as
+			OnRuntimeUpgrade
+		>::pre_upgrade()?;
+
+		let weight = Self::execute_on_runtime_upgrade();
+
+		<
+			(frame_system::Module::<System>, COnRuntimeUpgrade, AllModules)
+			as
+			OnRuntimeUpgrade
+		>::post_upgrade()?;
+
+		Ok(weight)
+	}
+
 	/// Start the execution of a particular block.
 	pub fn initialize_block(header: &System::Header) {
 		sp_io::init_tracing();
@@ -234,10 +261,7 @@ where
 	) {
 		let mut weight = 0;
 		if Self::runtime_upgraded() {
-			// System is not part of `AllModules`, so we need to call this manually.
-			weight = weight.saturating_add(<frame_system::Module::<System> as OnRuntimeUpgrade>::on_runtime_upgrade());
-			weight = weight.saturating_add(COnRuntimeUpgrade::on_runtime_upgrade());
-			weight = weight.saturating_add(<AllModules as OnRuntimeUpgrade>::on_runtime_upgrade());
+			weight = weight.saturating_add(Self::execute_on_runtime_upgrade());
 		}
 		<frame_system::Module<System>>::initialize(
 			block_number,
@@ -291,8 +315,8 @@ where
 	pub fn execute_block(block: Block) {
 		sp_io::init_tracing();
 		sp_tracing::within_span! {
-			sp_tracing::info_span!( "execute_block", ?block);
-		{
+			sp_tracing::info_span!("execute_block", ?block);
+
 			Self::initialize_block(block.header());
 
 			// any initial checks
@@ -310,7 +334,7 @@ where
 
 			// any final checks
 			Self::final_checks(&header);
-		} };
+		}
 	}
 
 	/// Execute given extrinsics and take care of post-extrinsics book-keeping.
@@ -320,7 +344,7 @@ where
 	) {
 		extrinsics.into_iter().for_each(|e| if let Err(e) = Self::apply_extrinsic(e) {
 			let err: &'static str = e.into();
-			panic!(err)
+			panic!("{}", err)
 		});
 
 		// post-extrinsics book-keeping
@@ -461,10 +485,6 @@ where
 		// as well.
 		frame_system::BlockHash::<System>::insert(header.number(), header.hash());
 
-		// Initialize logger, so the log messages are visible
-		// also when running WASM.
-		frame_support::debug::RuntimeLogger::init();
-
 		<AllModules as OffchainWorker<System::BlockNumber>>::offchain_worker(*header.number())
 	}
 }
@@ -476,7 +496,7 @@ mod tests {
 	use sp_core::H256;
 	use sp_runtime::{
 		generic::{Era, DigestItem}, DispatchError, testing::{Digest, Header, Block},
-		traits::{Header as HeaderT, BlakeTwo256, IdentityLookup},
+		traits::{Header as HeaderT, BlakeTwo256, IdentityLookup, Block as BlockT},
 		transaction_validity::{
 			InvalidTransaction, ValidTransaction, TransactionValidityError, UnknownTransaction
 		},
@@ -749,7 +769,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("1599922f15b2d5cf75e83370e29e13b96fdf799d917a5b6319736af292f21665").into(),
+					state_root: hex!("2c01e6f33d595793119823478b45b36978a8f65a731b5ae3fdfb6330b4cd4b11").into(),
 					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},

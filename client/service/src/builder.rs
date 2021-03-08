@@ -56,6 +56,7 @@ use sc_telemetry::{
 	telemetry,
 	ConnectionMessage,
 	TelemetryConnectionNotifier,
+	TelemetrySpan,
 	SUBSTRATE_INFO,
 };
 use sp_transaction_pool::MaintainedTransactionPool;
@@ -308,7 +309,7 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
-		TaskManager::new(config.task_executor.clone(), registry, config.telemetry_span.clone())?
+		TaskManager::new(config.task_executor.clone(), registry)?
 	};
 
 	let executor = NativeExecutor::<TExecDisp>::new(
@@ -377,7 +378,7 @@ pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 	let keystore_container = KeystoreContainer::new(&config.keystore)?;
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
-		TaskManager::new(config.task_executor.clone(), registry, config.telemetry_span.clone())?
+		TaskManager::new(config.task_executor.clone(), registry)?
 	};
 
 	let executor = NativeExecutor::<TExecDisp>::new(
@@ -491,6 +492,10 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	pub network_status_sinks: NetworkStatusSinks<TBl>,
 	/// A Sender for RPC requests.
 	pub system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
+	/// Telemetry span.
+	///
+	/// This span needs to be entered **before** calling [`spawn_tasks()`].
+	pub telemetry_span: Option<TelemetrySpan>,
 }
 
 /// Build a shared offchain workers instance.
@@ -542,14 +547,13 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		TCl: ProvideRuntimeApi<TBl> + HeaderMetadata<TBl, Error=sp_blockchain::Error> + Chain<TBl> +
 		BlockBackend<TBl> + BlockIdTo<TBl, Error=sp_blockchain::Error> + ProofProvider<TBl> +
 		HeaderBackend<TBl> + BlockchainEvents<TBl> + ExecutorProvider<TBl> + UsageProvider<TBl> +
-		StorageProvider<TBl, TBackend> + CallApiAt<TBl, Error=sp_blockchain::Error> +
+		StorageProvider<TBl, TBackend> + CallApiAt<TBl> +
 		Send + 'static,
 		<TCl as ProvideRuntimeApi<TBl>>::Api:
 			sp_api::Metadata<TBl> +
 			sc_offchain::OffchainWorkerApi<TBl> +
 			sp_transaction_pool::runtime_api::TaggedTransactionQueue<TBl> +
 			sp_session::SessionKeys<TBl> +
-			sp_api::ApiErrorExt<Error = sp_blockchain::Error> +
 			sp_api::ApiExt<TBl, StateBackend = TBackend::State>,
 		TBl: BlockT,
 		TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
@@ -570,6 +574,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		network,
 		network_status_sinks,
 		system_rpc_tx,
+		telemetry_span,
 	} = params;
 
 	let chain_info = client.usage_info().chain;
@@ -578,10 +583,11 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		client.clone(),
 		&BlockId::Hash(chain_info.best_hash),
 		config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default(),
-	)?;
+	).map_err(|e| Error::Application(Box::new(e)))?;
 
 	let telemetry_connection_notifier = init_telemetry(
 		&mut config,
+		telemetry_span,
 		network.clone(),
 		client.clone(),
 	);
@@ -682,10 +688,11 @@ async fn transaction_notifications<TBl, TExPool>(
 
 fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 	config: &mut Configuration,
+	telemetry_span: Option<TelemetrySpan>,
 	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
 	client: Arc<TCl>,
 ) -> Option<TelemetryConnectionNotifier> {
-	let telemetry_span = config.telemetry_span.clone()?;
+	let telemetry_span = telemetry_span?;
 	let endpoints = config.telemetry_endpoints.clone()?;
 	let genesis_hash = client.block_hash(Zero::zero()).ok().flatten().unwrap_or_default();
 	let connection_message = ConnectionMessage {
@@ -729,14 +736,14 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 		TBl: BlockT,
 		TCl: ProvideRuntimeApi<TBl> + BlockchainEvents<TBl> + HeaderBackend<TBl> +
 		HeaderMetadata<TBl, Error=sp_blockchain::Error> + ExecutorProvider<TBl> +
-		CallApiAt<TBl, Error=sp_blockchain::Error> + ProofProvider<TBl> +
+		CallApiAt<TBl> + ProofProvider<TBl> +
 		StorageProvider<TBl, TBackend> + BlockBackend<TBl> + Send + Sync + 'static,
 		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + 'static,
 		TBackend: sc_client_api::backend::Backend<TBl> + 'static,
 		TRpc: sc_rpc::RpcExtension<sc_rpc::Metadata>,
 		<TCl as ProvideRuntimeApi<TBl>>::Api:
 			sp_session::SessionKeys<TBl> +
-			sp_api::Metadata<TBl, Error = sp_blockchain::Error>,
+			sp_api::Metadata<TBl>,
 {
 	use sc_rpc::{chain, state, author, system, offchain};
 
@@ -904,6 +911,12 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 			Some(Box::new(move |fut| {
 				spawn_handle.spawn("libp2p-node", fut);
 			}))
+		},
+		transactions_handler_executor: {
+			let spawn_handle = Clone::clone(&spawn_handle);
+			Box::new(move |fut| {
+				spawn_handle.spawn("network-transactions-handler", fut);
+			})
 		},
 		network_config: config.network.clone(),
 		chain: client.clone(),

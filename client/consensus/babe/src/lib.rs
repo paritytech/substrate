@@ -102,6 +102,7 @@ use sc_client_api::{
 };
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use futures::channel::mpsc::{channel, Sender, Receiver};
+use futures::channel::oneshot;
 use retain_mut::RetainMut;
 
 use futures::prelude::*;
@@ -273,6 +274,8 @@ pub enum Error<B: BlockT> {
 	CheckInherents(String),
 	/// Client error
 	Client(sp_blockchain::Error),
+	/// Runtime Api error.
+	RuntimeApi(sp_api::ApiError),
 	/// Runtime error
 	Runtime(sp_inherents::Error),
 	/// Fork tree error
@@ -310,14 +313,14 @@ impl Config {
 	/// Either fetch the slot duration from disk or compute it from the genesis
 	/// state.
 	pub fn get_or_compute<B: BlockT, C>(client: &C) -> ClientResult<Self> where
-		C: AuxStore + ProvideRuntimeApi<B>, C::Api: BabeApi<B, Error = sp_blockchain::Error>,
+		C: AuxStore + ProvideRuntimeApi<B>, C::Api: BabeApi<B>,
 	{
 		trace!(target: "babe", "Getting slot duration");
 		match sc_consensus_slots::SlotDuration::get_or_compute(client, |a, b| {
-			let has_api_v1 = a.has_api_with::<dyn BabeApi<B, Error = sp_blockchain::Error>, _>(
+			let has_api_v1 = a.has_api_with::<dyn BabeApi<B>, _>(
 				&b, |v| v == 1,
 			)?;
-			let has_api_v2 = a.has_api_with::<dyn BabeApi<B, Error = sp_blockchain::Error>, _>(
+			let has_api_v2 = a.has_api_with::<dyn BabeApi<B>, _>(
 				&b, |v| v == 2,
 			)?;
 
@@ -326,7 +329,7 @@ impl Config {
 					Ok(a.configuration_before_version_2(b)?.into())
 				}
 			} else if has_api_v2 {
-				a.configuration(b)
+				a.configuration(b).map_err(Into::into)
 			} else {
 				Err(sp_blockchain::Error::VersionInvalid(
 					"Unsupported or invalid BabeApi version".to_string()
@@ -424,6 +427,8 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, BS, Error>(BabeParams {
 	CAW: CanAuthorWith<B> + Send + 'static,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
 {
+	const HANDLE_BUFFER_SIZE: usize = 1024;
+
 	let config = babe_link.config;
 	let slot_notification_sinks = Arc::new(Mutex::new(Vec::new()));
 
@@ -442,14 +447,14 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, BS, Error>(BabeParams {
 
 	register_babe_inherent_data_provider(&inherent_data_providers, config.slot_duration())?;
 	sc_consensus_uncles::register_uncles_inherent_data_provider(
-		client,
+		client.clone(),
 		select_chain.clone(),
 		&inherent_data_providers,
 	)?;
 
 	info!(target: "babe", "👶 Starting BABE Authorship worker");
 	let inner = sc_consensus_slots::start_slot_worker(
-		config.0,
+		config.0.clone(),
 		select_chain,
 		worker,
 		sync_oracle,
@@ -457,10 +462,85 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, BS, Error>(BabeParams {
 		babe_link.time_source,
 		can_author_with,
 	);
+
+	let (worker_tx, worker_rx) = channel(HANDLE_BUFFER_SIZE);
+
+	let answer_requests = answer_requests(worker_rx, config.0, client, babe_link.epoch_changes.clone());
 	Ok(BabeWorker {
-		inner: Box::pin(inner),
+		inner: Box::pin(future::join(inner, answer_requests).map(|_| ())),
 		slot_notification_sinks,
+		handle: BabeWorkerHandle(worker_tx),
 	})
+}
+
+async fn answer_requests<B: BlockT, C>(
+	mut request_rx: Receiver<BabeRequest<B>>,
+	genesis_config: sc_consensus_slots::SlotDuration<BabeGenesisConfiguration>,
+	client: Arc<C>,
+	epoch_changes: SharedEpochChanges<B, Epoch>,
+)
+	where C: ProvideRuntimeApi<B> + ProvideCache<B> + ProvideUncles<B> + BlockchainEvents<B>
+	+ HeaderBackend<B> + HeaderMetadata<B, Error = ClientError> + Send + Sync + 'static,
+{
+	while let Some(request) = request_rx.next().await {
+		match request {
+			BabeRequest::EpochForChild(parent_hash, parent_number, slot_number, response) => {
+				let lookup = || {
+					let epoch_changes =	epoch_changes.lock();
+					let epoch_descriptor = epoch_changes.epoch_descriptor_for_child_of(
+						descendent_query(&*client),
+						&parent_hash,
+						parent_number,
+						slot_number,
+					)
+						.map_err(|e| Error::<B>::ForkTree(Box::new(e)))?
+						.ok_or_else(|| Error::<B>::FetchEpoch(parent_hash))?;
+
+					let viable_epoch = epoch_changes.viable_epoch(
+						&epoch_descriptor,
+						|slot| Epoch::genesis(&genesis_config, slot)
+					).ok_or_else(|| Error::<B>::FetchEpoch(parent_hash))?;
+
+					Ok(sp_consensus_babe::Epoch {
+						epoch_index: viable_epoch.as_ref().epoch_index,
+						start_slot: viable_epoch.as_ref().start_slot,
+						duration: viable_epoch.as_ref().duration,
+						authorities: viable_epoch.as_ref().authorities.clone(),
+						randomness: viable_epoch.as_ref().randomness,
+					})
+				};
+
+				let _ = response.send(lookup());
+			}
+		}
+	}
+}
+
+/// Requests to the BABE service.
+#[non_exhaustive]
+pub enum BabeRequest<B: BlockT> {
+	/// Request the epoch that a child of the given block, with the given slot number would have.
+	///
+	/// The parent block is identified by its hash and number.
+	EpochForChild(
+		B::Hash,
+		NumberFor<B>,
+		Slot,
+		oneshot::Sender<Result<sp_consensus_babe::Epoch, Error<B>>>,
+	),
+}
+
+/// A handle to the BABE worker for issuing requests.
+#[derive(Clone)]
+pub struct BabeWorkerHandle<B: BlockT>(Sender<BabeRequest<B>>);
+
+impl<B: BlockT> BabeWorkerHandle<B> {
+	/// Send a request to the BABE service.
+	pub async fn send(&mut self, request: BabeRequest<B>) {
+		// Failure to send means that the service is down.
+		// This will manifest as the receiver of the request being dropped.
+		let _ = self.0.send(request).await;
+	}
 }
 
 /// Worker for Babe which implements `Future<Output=()>`. This must be polled.
@@ -468,6 +548,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, BS, Error>(BabeParams {
 pub struct BabeWorker<B: BlockT> {
 	inner: Pin<Box<dyn futures::Future<Output=()> + Send + 'static>>,
 	slot_notification_sinks: SlotNotificationSinks<B>,
+	handle: BabeWorkerHandle<B>,
 }
 
 impl<B: BlockT> BabeWorker<B> {
@@ -481,6 +562,11 @@ impl<B: BlockT> BabeWorker<B> {
 		let (sink, stream) = channel(CHANNEL_BUFFER_SIZE);
 		self.slot_notification_sinks.lock().push(sink);
 		stream
+	}
+
+	/// Get a handle to the worker.
+	pub fn handle(&self) -> BabeWorkerHandle<B> {
+		self.handle.clone()
 	}
 }
 
@@ -647,6 +733,9 @@ where
 			)
 			.map_err(|e| sp_consensus::Error::CannotSign(
 				public.clone(), e.to_string(),
+			))?
+			.ok_or_else(|| sp_consensus::Error::CannotSign(
+				public.clone(), "Could not find key in keystore.".into(),
 			))?;
 			let signature: AuthoritySignature = signature.clone().try_into()
 				.map_err(|_| sp_consensus::Error::InvalidSignature(
@@ -846,8 +935,7 @@ impl<Block, Client, SelectChain, CAW> BabeVerifier<Block, Client, SelectChain, C
 where
 	Block: BlockT,
 	Client: AuxStore + HeaderBackend<Block> + HeaderMetadata<Block> + ProvideRuntimeApi<Block>,
-	Client::Api: BlockBuilderApi<Block, Error = sp_blockchain::Error>
-		+ BabeApi<Block, Error = sp_blockchain::Error>,
+	Client::Api: BlockBuilderApi<Block> + BabeApi<Block>,
 	SelectChain: sp_consensus::SelectChain<Block>,
 	CAW: CanAuthorWith<Block>,
 {
@@ -871,7 +959,7 @@ where
 			&block_id,
 			block,
 			inherent_data,
-		).map_err(Error::Client)?;
+		).map_err(Error::RuntimeApi)?;
 
 		if !inherent_res.ok() {
 			inherent_res
@@ -934,7 +1022,7 @@ where
 			self.client
 				.runtime_api()
 				.generate_key_ownership_proof(block_id, slot, equivocation_proof.offender.clone())
-				.map_err(Error::Client)
+				.map_err(Error::RuntimeApi)
 		};
 
 		let parent_id = BlockId::Hash(*header.parent_hash());
@@ -957,7 +1045,7 @@ where
 				equivocation_proof,
 				key_owner_proof,
 			)
-			.map_err(Error::Client)?;
+			.map_err(Error::RuntimeApi)?;
 
 		info!(target: "babe", "Submitted equivocation report for author {:?}", author);
 
@@ -971,7 +1059,7 @@ where
 	Block: BlockT,
 	Client: HeaderMetadata<Block, Error = sp_blockchain::Error> + HeaderBackend<Block> + ProvideRuntimeApi<Block>
 		+ Send + Sync + AuxStore + ProvideCache<Block>,
-	Client::Api: BlockBuilderApi<Block, Error = sp_blockchain::Error> + BabeApi<Block, Error = sp_blockchain::Error>,
+	Client::Api: BlockBuilderApi<Block> + BabeApi<Block>,
 	SelectChain: sp_consensus::SelectChain<Block>,
 	CAW: CanAuthorWith<Block> + Send + Sync,
 {
@@ -1490,7 +1578,7 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, Inner, CAW>(
 	client: Arc<Client>,
 	select_chain: SelectChain,
 	inherent_data_providers: InherentDataProviders,
-	spawner: &impl sp_core::traits::SpawnNamed,
+	spawner: &impl sp_core::traits::SpawnEssentialNamed,
 	registry: Option<&Registry>,
 	can_author_with: CAW,
 ) -> ClientResult<DefaultImportQueue<Block, Client>> where
@@ -1498,7 +1586,7 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, Inner, CAW>(
 		+ Send + Sync + 'static,
 	Client: ProvideRuntimeApi<Block> + ProvideCache<Block> + Send + Sync + AuxStore + 'static,
 	Client: HeaderBackend<Block> + HeaderMetadata<Block, Error = sp_blockchain::Error>,
-	Client::Api: BlockBuilderApi<Block> + BabeApi<Block> + ApiExt<Block, Error = sp_blockchain::Error>,
+	Client::Api: BlockBuilderApi<Block> + BabeApi<Block> + ApiExt<Block>,
 	SelectChain: sp_consensus::SelectChain<Block> + 'static,
 	CAW: CanAuthorWith<Block> + Send + Sync + 'static,
 {

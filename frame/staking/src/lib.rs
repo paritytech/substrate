@@ -317,7 +317,10 @@ use sp_staking::{
 };
 #[cfg(feature = "std")]
 use sp_runtime::{Serialize, Deserialize};
-use frame_system::{self as system, ensure_signed, ensure_root, offchain::SendTransactionTypes};
+use frame_system::{
+	self as system, ensure_signed, ensure_root,
+	offchain::SendTransactionTypes,
+};
 use sp_election_providers::{ElectionProvider, VoteWeight, Supports};
 pub use weights::WeightInfo;
 
@@ -328,7 +331,7 @@ pub(crate) const LOG_TARGET: &'static str = "runtime::staking";
 #[macro_export]
 macro_rules! log {
 	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
-		frame_support::debug::$level!(
+		log::$level!(
 			target: crate::LOG_TARGET,
 			concat!("💸 ", $patter) $(, $values)*
 		)
@@ -1099,7 +1102,6 @@ pub mod migrations {
 		pub fn migrate<T: V6Config>() -> Weight {
 			if StorageVersion::get() == Releases::V5_0_0 {
 				log!(info, "Migrating staking to Releases::V6_0_0");
-				StorageVersion::put(Releases::V6_0_0);
 
 				SnapshotValidators::<T>::kill();
 				SnapshotNominators::<T>::kill();
@@ -1107,8 +1109,9 @@ pub mod migrations {
 				QueuedScore::<T>::kill();
 				EraElectionStatus::<T>::kill();
 				IsCurrentSessionFinal::<T>::kill();
-			}
 
+				StorageVersion::put(Releases::V6_0_0);
+			}
 			T::DbWeight::get().writes(6)
 		}
 		// TODO: TODO: companion to call this, also, this needs some consideration: When will this
@@ -1484,7 +1487,7 @@ decl_module! {
 				ledger = ledger.consolidate_unlocked(current_era)
 			}
 
-			let post_info_weight = if ledger.unlocking.is_empty() && ledger.active <= T::Currency::minimum_balance() {
+			let post_info_weight = if ledger.unlocking.is_empty() && ledger.active < T::Currency::minimum_balance() {
 				// This account must have called `unbond()` with some value that caused the active
 				// portion to fall below existential deposit + will have no more unlocking chunks
 				// left. We can now safely remove all staking-related information.
@@ -2414,7 +2417,7 @@ impl<T: Config> Module<T> {
 	/// Assumes storage is upgraded before calling.
 	///
 	/// This is called:
-	/// - after a `withdraw_unbond()` call that frees all of a stash's bonded balance.
+	/// - after a `withdraw_unbonded()` call that frees all of a stash's bonded balance.
 	/// - through `reap_stash()` if the balance has fallen to zero (through slashing).
 	fn kill_stash(stash: &T::AccountId, num_slashing_spans: u32) -> DispatchResult {
 		let controller = <Bonded<T>>::get(stash).ok_or(Error::<T>::NotStash)?;
@@ -2500,11 +2503,6 @@ impl<T: Config> Module<T> {
 		exposure: Exposure<T::AccountId, BalanceOf<T>>,
 	) {
 		<ErasStakers<T>>::insert(&current_era, &controller, &exposure);
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	pub fn put_election_status(status: ElectionStatus::<T::BlockNumber>) {
-		<EraElectionStatus<T>>::put(status);
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
@@ -2623,30 +2621,30 @@ impl<T: Config> sp_election_providers::ElectionDataProvider<T::AccountId, T::Blo
 /// some session can lag in between the newest session planned and the latest session started.
 impl<T: Config> pallet_session::SessionManager<T::AccountId> for Module<T> {
 	fn new_session(new_index: SessionIndex) -> Option<Vec<T::AccountId>> {
-		frame_support::debug::native::trace!(
-			target: LOG_TARGET,
-			"[{}] planning new_session({})",
+		log!(
+			trace,
+			"[{:?}] planning new_session({})",
 			<frame_system::Module<T>>::block_number(),
-			new_index
+			new_index,
 		);
 		CurrentPlannedSession::put(new_index);
 		Self::new_session(new_index)
 	}
 	fn start_session(start_index: SessionIndex) {
-		frame_support::debug::native::trace!(
-			target: LOG_TARGET,
-			"[{}] starting start_session({})",
+		log!(
+			trace,
+			"[{:?}] starting start_session({})",
 			<frame_system::Module<T>>::block_number(),
-			start_index
+			start_index,
 		);
 		Self::start_session(start_index)
 	}
 	fn end_session(end_index: SessionIndex) {
-		frame_support::debug::native::trace!(
-			target: LOG_TARGET,
-			"[{}] ending end_session({})",
+		log!(
+			trace,
+			"[{:?}] ending end_session({})",
 			<frame_system::Module<T>>::block_number(),
-			end_index
+			end_index,
 		);
 		Self::end_session(end_index)
 	}

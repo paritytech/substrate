@@ -25,7 +25,7 @@ use sp_std::prelude::*;
 use sp_std::vec;
 
 use frame_system::{RawOrigin, Module as System, Config as SystemConfig};
-use frame_benchmarking::{benchmarks, account};
+use frame_benchmarking::{benchmarks, account, impl_benchmark_test_suite};
 use frame_support::traits::{Currency, OnInitialize, ValidatorSet, ValidatorSetWithIdentification};
 
 use sp_runtime::{Perbill, traits::{Convert, StaticLookup, Saturating, UniqueSaturatedInto}};
@@ -40,7 +40,7 @@ use pallet_session::historical::{Config as HistoricalConfig, IdentificationTuple
 use pallet_session::{Config as SessionConfig, SessionManager};
 use pallet_staking::{
 	Module as Staking, Config as StakingConfig, RewardDestination, ValidatorPrefs,
-	Exposure, IndividualExposure, ElectionStatus, MAX_NOMINATIONS, Event as StakingEvent
+	Exposure, IndividualExposure, MAX_NOMINATIONS, Event as StakingEvent
 };
 
 const SEED: u32 = 0;
@@ -227,7 +227,7 @@ fn check_events<T: Config, I: Iterator<Item = <T as SystemConfig>::Event>>(expec
 	}
 
 	if !length_mismatch.is_empty() {
-		panic!(length_mismatch);
+		panic!("{}", length_mismatch);
 	}
 }
 
@@ -386,8 +386,6 @@ benchmarks! {
 		let o = 10;
 		let n = 100;
 
-		Staking::<T>::put_election_status(ElectionStatus::Closed);
-
 		let mut deferred_offences = vec![];
 		let offenders = make_offenders::<T>(o, n)?.0;
 		let offence_details = offenders.into_iter()
@@ -420,19 +418,8 @@ benchmarks! {
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::mock::{new_test_ext, Test};
-	use frame_support::assert_ok;
-
-	#[test]
-	fn test_benchmarks() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_report_offence_im_online::<Test>());
-			assert_ok!(test_benchmark_report_offence_grandpa::<Test>());
-			assert_ok!(test_benchmark_report_offence_babe::<Test>());
-			assert_ok!(test_benchmark_on_initialize::<Test>());
-		});
-	}
-}
+impl_benchmark_test_suite!(
+	Module,
+	crate::mock::new_test_ext(),
+	crate::mock::Test,
+);
