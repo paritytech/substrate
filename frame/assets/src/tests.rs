@@ -272,6 +272,19 @@ fn transferring_amount_below_available_balance_should_work() {
 }
 
 #[test]
+fn transferring_enough_to_kill_source_when_keep_alive_should_fail() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 10));
+		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+		assert_eq!(Assets::balance(0, 1), 100);
+		assert_noop!(Assets::transfer_keep_alive(Origin::signed(1), 0, 2, 91), Error::<Test>::WouldDie);
+		assert_ok!(Assets::transfer_keep_alive(Origin::signed(1), 0, 2, 90));
+		assert_eq!(Assets::balance(0, 1), 10);
+		assert_eq!(Assets::balance(0, 2), 90);
+	});
+}
+
+#[test]
 fn transferring_frozen_user_should_not_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));

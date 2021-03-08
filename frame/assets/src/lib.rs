@@ -78,6 +78,7 @@
 //!
 //! * `create`: Creates a new asset class, taking the required deposit.
 //! * `transfer`: Transfer sender's assets to another account.
+//! * `transfer_keep_alive`: Transfer sender's assets to another account, keeping the sender alive.
 //! * `set_metadata`: Set the metadata of an asset class.
 //! * `clear_metadata`: Remove the metadata of an asset class.
 //! * `approve_transfer`: Create or increase an delegated transfer.
@@ -419,6 +420,8 @@ pub mod pallet {
 		BadMetadata,
 		/// No approval exists that would allow the transfer.
 		Unapproved,
+		/// The source account would not survive the transfer and it needs to stay alive.
+		WouldDie,
 	}
 
 	#[pallet::hooks]
@@ -711,7 +714,40 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(target)?;
 
-			Self::do_transfer(id, &origin, &dest, amount, None)?;
+			Self::do_transfer(id, &origin, &dest, amount, None, false)?;
+			Self::deposit_event(Event::Transferred(id, origin, dest, amount));
+			Ok(())
+		}
+
+		/// Move some assets from the sender account to another, keeping the sender account alive.
+		///
+		/// Origin must be Signed.
+		///
+		/// - `id`: The identifier of the asset to have some amount transferred.
+		/// - `target`: The account to be credited.
+		/// - `amount`: The amount by which the sender's balance of assets should be reduced and
+		/// `target`'s balance increased. The amount actually transferred may be slightly greater in
+		/// the case that the transfer would otherwise take the sender balance above zero but below
+		/// the minimum balance. Must be greater than zero.
+		///
+		/// Emits `Transferred` with the actual amount transferred. If this takes the source balance
+		/// to below the minimum for the asset, then the amount transferred is increased to take it
+		/// to zero.
+		///
+		/// Weight: `O(1)`
+		/// Modes: Pre-existence of `target`; Post-existence of sender; Prior & post zombie-status
+		/// of sender; Account pre-existence of `target`.
+		#[pallet::weight(T::WeightInfo::transfer())]
+		pub(super) fn transfer_keep_alive(
+			origin: OriginFor<T>,
+			#[pallet::compact] id: T::AssetId,
+			target: <T::Lookup as StaticLookup>::Source,
+			#[pallet::compact] amount: T::Balance
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			let dest = T::Lookup::lookup(target)?;
+
+			Self::do_transfer(id, &origin, &dest, amount, None, true)?;
 			Self::deposit_event(Event::Transferred(id, origin, dest, amount));
 			Ok(())
 		}
@@ -747,7 +783,7 @@ pub mod pallet {
 			let source = T::Lookup::lookup(source)?;
 			let dest = T::Lookup::lookup(dest)?;
 
-			Self::do_transfer(id, &source, &dest, amount, Some(origin))?;
+			Self::do_transfer(id, &source, &dest, amount, Some(origin), false)?;
 			Self::deposit_event(Event::Transferred(id, source, dest, amount));
 			Ok(())
 		}
@@ -1302,7 +1338,7 @@ pub mod pallet {
 				let mut approved = maybe_approved.take().ok_or(Error::<T>::Unapproved)?;
 				let remaining = approved.amount.checked_sub(&amount).ok_or(Error::<T>::Unapproved)?;
 
-				Self::do_transfer(id, &key.owner, &destination, amount, None)?;
+				Self::do_transfer(id, &key.owner, &destination, amount, None, false)?;
 
 				if remaining.is_zero() {
 					T::Currency::unreserve(&key.owner, approved.deposit);
@@ -1370,6 +1406,7 @@ impl<T: Config> Pallet<T> {
 		dest: &T::AccountId,
 		amount: T::Balance,
 		maybe_need_admin: Option<T::AccountId>,
+		keep_alive: bool,
 	) -> DispatchResult {
 		let mut source_account = Account::<T>::get(id, source);
 		ensure!(!source_account.is_frozen, Error::<T>::Frozen);
@@ -1391,6 +1428,7 @@ impl<T: Config> Pallet<T> {
 
 			let mut amount = amount;
 			if source_account.balance < details.min_balance {
+				ensure!(!keep_alive, Error::<T>::WouldDie);
 				amount += source_account.balance;
 				source_account.balance = Zero::zero();
 			}

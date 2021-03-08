@@ -185,6 +185,18 @@ benchmarks! {
 		assert_last_event::<T>(Event::Transferred(Default::default(), caller, target, amount).into());
 	}
 
+	transfer_keep_alive {
+		let mint_amount = T::Balance::from(200u32);
+		let amount = T::Balance::from(100u32);
+		let (caller, caller_lookup) = create_default_minted_asset::<T>(true, mint_amount);
+		let target: T::AccountId = account("target", 0, SEED);
+		let target_lookup = T::Lookup::unlookup(target.clone());
+	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), target_lookup, amount)
+	verify {
+		assert!(frame_system::Module::<T>::account_exists(&caller));
+		assert_last_event::<T>(Event::Transferred(Default::default(), caller, target, amount).into());
+	}
+
 	force_transfer {
 		let amount = T::Balance::from(100u32);
 		let (caller, caller_lookup) = create_default_minted_asset::<T>(true, amount);
