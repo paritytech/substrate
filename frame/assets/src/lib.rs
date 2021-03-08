@@ -737,7 +737,7 @@ pub mod pallet {
 		/// Weight: `O(1)`
 		/// Modes: Pre-existence of `target`; Post-existence of sender; Prior & post zombie-status
 		/// of sender; Account pre-existence of `target`.
-		#[pallet::weight(T::WeightInfo::transfer())]
+		#[pallet::weight(T::WeightInfo::transfer_keep_alive())]
 		pub(super) fn transfer_keep_alive(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,

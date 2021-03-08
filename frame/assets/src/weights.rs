@@ -50,6 +50,7 @@ pub trait WeightInfo {
 	fn mint() -> Weight;
 	fn burn() -> Weight;
 	fn transfer() -> Weight;
+	fn transfer_keep_alive() -> Weight;
 	fn force_transfer() -> Weight;
 	fn freeze() -> Weight;
 	fn thaw() -> Weight;
@@ -108,6 +109,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	fn transfer() -> Weight {
+		(71_531_000 as Weight)
+			.saturating_add(T::DbWeight::get().reads(4 as Weight))
+			.saturating_add(T::DbWeight::get().writes(4 as Weight))
+	}
+	fn transfer_keep_alive() -> Weight {
 		(71_531_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
@@ -242,6 +248,11 @@ impl WeightInfo for () {
 		(71_531_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
+	}
+	fn transfer_keep_alive() -> Weight {
+		(71_531_000 as Weight)
+			.saturating_add(T::DbWeight::get().reads(4 as Weight))
+			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
 	fn force_transfer() -> Weight {
 		(71_711_000 as Weight)
