@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pallet::Def;
+use crate::pallet::{Def, parse::helper::get_doc_literals};
 
 /// * Add derive trait on Pallet
 /// * Implement GetPalletVersion on Pallet
@@ -49,6 +49,15 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 				#frame_support::sp_std::marker::PhantomData<(#type_use_gen)>
 			);
 		}
+	}
+
+	if get_doc_literals(&pallet_item.attrs).is_empty() {
+		pallet_item.attrs.push(syn::parse_quote!(
+			#[doc = r"
+			The [pallet](https://substrate.dev/docs/en/knowledgebase/runtime/pallets) implementing
+			the on-chain logic.
+			"]
+		));
 	}
 
 	pallet_item.attrs.push(syn::parse_quote!(
