@@ -393,9 +393,6 @@ pub mod pallet {
 		AssetStatusChanged(T::AssetId),
 	}
 
-	#[deprecated(note = "use `Event` instead")]
-	pub type RawEvent<T> = Event<T>;
-
 	#[pallet::error]
 	pub enum Error<T> {
 		/// Transfer amount should be non-zero.
@@ -1409,8 +1406,6 @@ impl<T: Config> Pallet<T> {
 		amount: T::Balance,
 		maybe_need_admin: Option<T::AccountId>,
 	) -> DispatchResult {
-		ensure!(!amount.is_zero(), Error::<T>::AmountZero);
-
 		let mut source_account = Account::<T>::get(id, source);
 		ensure!(!source_account.is_frozen, Error::<T>::Frozen);
 
@@ -1425,7 +1420,7 @@ impl<T: Config> Pallet<T> {
 				ensure!(&need_admin == &details.admin, Error::<T>::NoPermission);
 			}
 
-			if dest == source {
+			if dest == source || amount.is_zero() {
 				return Ok(())
 			}
 

@@ -146,8 +146,8 @@ benchmarks! {
 	}
 
 	destroy {
-		let c in 0 .. 5_0;//00;
-		let s in 0 .. 5_0;//00;
+		let c in 0 .. 5_000;
+		let s in 0 .. 5_000;
 		let a in 0 .. 5_00;
 		let (caller, _) = create_default_asset::<T>(true);
 		add_consumers::<T>(caller.clone(), c);
@@ -160,8 +160,8 @@ benchmarks! {
 	}
 
 	force_destroy {
-		let c in 0 .. 5_0;//00;
-		let s in 0 .. 5_0;//00;
+		let c in 0 .. 5_000;
+		let s in 0 .. 5_000;
 		let a in 0 .. 5_00;
 		let (caller, _) = create_default_asset::<T>(true);
 		add_consumers::<T>(caller.clone(), c);
@@ -271,16 +271,7 @@ benchmarks! {
 			account("target", 2, SEED),
 		).into());
 	}
-/*
-	set_max_zombies {
-		let (caller, _) = create_default_asset::<T>(10);
-		let max_zombies: u32 = 100;
-		T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T>::max_value());
-	}: _(SystemOrigin::Signed(caller), Default::default(), max_zombies)
-	verify {
-		assert_last_event::<T>(Event::MaxZombiesChanged(Default::default(), max_zombies).into());
-	}
-*/
+
 	set_metadata {
 		let n in 0 .. T::StringLimit::get();
 		let s in 0 .. T::StringLimit::get();
