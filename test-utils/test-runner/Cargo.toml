@@ -55,15 +55,3 @@ tokio = { version = "0.2", features = ["full"] }
 jsonrpc-core-client = { version = "15.1", features = ["ws"] }
 jsonrpc-core = "15.1"
 tokio-compat = { version = "0.1.6", features = ["rt-full"] }
-
-[dev-dependencies]
-node-runtime = { path = "../../bin/node/runtime", version = "2.0.1" }
-node-primitives = { path = "../../bin/node/primitives", version = "2.0.0" }
-node-cli = { path = "../../bin/node/cli", version = "2.0.0" }
-
-sc-consensus-babe = { path = "../../client/consensus/babe", version = "0.9.0" }
-sc-consensus = { path = "../../client/consensus/common", version = "0.9.0" }
-sc-finality-grandpa = { path = "../../client/finality-grandpa", version = "0.9.0" }
-sp-consensus-babe = { path = "../../primitives/consensus/babe", version = "0.9.0" }
-pallet-transaction-payment = { path = "../../frame/transaction-payment", version = "3.0.0" }
-pallet-sudo = { path = "../../frame/sudo", version = "3.0.0" }
