@@ -41,6 +41,8 @@ pub struct CallDef {
 	pub methods: Vec<CallVariantDef>,
 	/// The span of the pallet::call attribute.
 	pub attr_span: proc_macro2::Span,
+	/// Docs, specified on the impl Block.
+	pub docs: Vec<syn::Lit>,
 }
 
 /// Definition of dispatchable typically: `#[weight...] fn foo(origin .., param1: ...) -> ..`
@@ -228,6 +230,7 @@ impl CallDef {
 			instances,
 			methods,
 			where_clause: item.generics.where_clause.clone(),
+			docs: helper::get_doc_literals(&item.attrs),
 		})
 	}
 }
