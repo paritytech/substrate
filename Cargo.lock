@@ -4175,37 +4175,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "node-e2e-tests"
-version = "0.1.0"
-dependencies = [
- "frame-support",
- "frame-system",
- "node-cli",
- "node-primitives",
- "node-runtime",
- "pallet-balances",
- "pallet-sudo",
- "pallet-transaction-payment",
- "rand 0.8.3",
- "sc-client-api",
- "sc-consensus",
- "sc-consensus-babe",
- "sc-consensus-manual-seal",
- "sc-executor",
- "sc-finality-grandpa",
- "sc-informant",
- "sc-network",
- "sc-service",
- "sp-api",
- "sp-consensus-babe",
- "sp-inherents",
- "sp-keyring",
- "sp-keystore",
- "sp-runtime",
- "test-runner",
-]
-
-[[package]]
 name = "node-executor"
 version = "2.0.0"
 dependencies = [
@@ -9924,6 +9893,37 @@ dependencies = [
  "sp-wasm-interface",
  "tokio 0.2.25",
  "tokio-compat",
+]
+
+[[package]]
+name = "test-runner-example"
+version = "0.1.0"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "node-cli",
+ "node-primitives",
+ "node-runtime",
+ "pallet-balances",
+ "pallet-sudo",
+ "pallet-transaction-payment",
+ "rand 0.8.3",
+ "sc-client-api",
+ "sc-consensus",
+ "sc-consensus-babe",
+ "sc-consensus-manual-seal",
+ "sc-executor",
+ "sc-finality-grandpa",
+ "sc-informant",
+ "sc-network",
+ "sc-service",
+ "sp-api",
+ "sp-consensus-babe",
+ "sp-inherents",
+ "sp-keyring",
+ "sp-keystore",
+ "sp-runtime",
+ "test-runner",
 ]
 
 [[package]]
