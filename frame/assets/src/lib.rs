@@ -555,8 +555,7 @@ pub mod pallet {
 		pub(super) fn destroy(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			// TODO: make work
-			/*#[pallet::compact]*/ witness: DestroyWitness,
+			witness: DestroyWitness,
 		) -> DispatchResult {
 			let maybe_check_owner = match T::ForceOrigin::try_origin(origin) {
 				Ok(_) => None,
