@@ -550,7 +550,7 @@ pub mod pallet {
 		/// - `c = (witness.accounts - witness.sufficients)`
 		/// - `s = witness.sufficients`
 		/// - `a = witness.approvals`
-		#[pallet::weight(T::WeightInfo::force_destroy(
+		#[pallet::weight(T::WeightInfo::destroy(
 			witness.accounts.saturating_sub(witness.sufficients),
  			witness.sufficients,
  			witness.approvals,
