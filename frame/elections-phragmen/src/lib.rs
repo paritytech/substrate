@@ -1245,7 +1245,7 @@ mod tests {
 		pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
 			MEMBERS.with(|m| *m.borrow_mut() = self.genesis_members.iter().map(|(m, _)| m.clone()).collect::<Vec<_>>());
 			let mut ext: sp_io::TestExternalities = GenesisConfig {
-				pallet_balances: Some(pallet_balances::GenesisConfig::<Test>{
+				pallet_balances: pallet_balances::GenesisConfig::<Test>{
 					balances: vec![
 						(1, 10 * self.balance_factor),
 						(2, 20 * self.balance_factor),
@@ -1254,10 +1254,10 @@ mod tests {
 						(5, 50 * self.balance_factor),
 						(6, 60 * self.balance_factor)
 					],
-				}),
-				elections_phragmen: Some(elections_phragmen::GenesisConfig::<Test> {
+				},
+				elections_phragmen: elections_phragmen::GenesisConfig::<Test> {
 					members: self.genesis_members
-				}),
+				},
 			}.build_storage().unwrap().into();
 			ext.execute_with(pre_conditions);
 			ext.execute_with(test);
@@ -2427,17 +2427,14 @@ mod tests {
 
 			// no replacement yet.
 			let unwrapped_error = Elections::remove_member(Origin::root(), 4, true).unwrap_err();
-			matches!(
+			assert!(matches!(
 				unwrapped_error.error,
 				DispatchError::Module {
 					message: Some("InvalidReplacement"),
 					..
 				}
-			);
-			matches!(
-				unwrapped_error.post_info.actual_weight,
-				Some(x) if x < <Test as frame_system::Config>::BlockWeights::get().max_block
-			);
+			));
+			assert!(unwrapped_error.post_info.actual_weight.is_some());
 		});
 
 		ExtBuilder::default().desired_runners_up(1).build_and_execute(|| {
@@ -2456,17 +2453,14 @@ mod tests {
 
 			// there is a replacement! and this one needs a weight refund.
 			let unwrapped_error = Elections::remove_member(Origin::root(), 4, false).unwrap_err();
-			matches!(
+			assert!(matches!(
 				unwrapped_error.error,
 				DispatchError::Module {
 					message: Some("InvalidReplacement"),
 					..
 				}
-			);
-			matches!(
-				unwrapped_error.post_info.actual_weight,
-				Some(x) if x < <Test as frame_system::Config>::BlockWeights::get().max_block
-			);
+			));
+			assert!(unwrapped_error.post_info.actual_weight.is_some());
 		});
 	}
 

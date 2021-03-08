@@ -1181,7 +1181,7 @@ impl_runtime_apis! {
 		}
 
 		fn execute_block(block: Block) {
-			Executive::execute_block(block)
+			Executive::execute_block(block);
 		}
 
 		fn initialize_block(header: &<Block as BlockT>::Header) {
@@ -1406,7 +1406,6 @@ impl_runtime_apis! {
 	#[cfg(feature = "try-runtime")]
 	impl frame_try_runtime::TryRuntime<Block> for Runtime {
 		fn on_runtime_upgrade() -> Result<(Weight, Weight), sp_runtime::RuntimeString> {
-			frame_support::debug::RuntimeLogger::init();
 			let weight = Executive::try_runtime_upgrade()?;
 			Ok((weight, RuntimeBlockWeights::get().max_block))
 		}

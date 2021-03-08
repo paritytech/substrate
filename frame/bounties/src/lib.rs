@@ -895,7 +895,9 @@ decl_module! {
 			let subcurator = T::Lookup::lookup(subcurator)?;
 
 			// Ensure parent bounty is Active & get status of curator
-			let (master_curator, _) = Self::ensure_bounty_active(bounty_id, false)?;
+			let (master_curator, _) = Self::ensure_bounty_exist(bounty_id, false)
+				.map(|rval| rval.unwrap_or((Default::default(), Default::default())))
+				.map_err(|err| err)?;
 
 			// Mutate the Subbounty instance
 			SubBounties::<T>::try_mutate_exists(
@@ -979,8 +981,8 @@ decl_module! {
 		) {
 			let signer = ensure_signed(origin)?;
 
-			// Ensure parent bounty is Active
-			let _ = Self::ensure_bounty_active(bounty_id, false)?;
+			// Ensure parent bounty exist & active
+			let _ = Self::ensure_bounty_exist(bounty_id, false)?;
 
 			// Mutate Subbounty
 			SubBounties::<T>::try_mutate_exists(bounty_id, subbounty_id,
@@ -1057,11 +1059,13 @@ decl_module! {
 				.map(Some)
 				.or_else(|_| T::RejectOrigin::ensure_origin(origin).map(|_| None))?;
 
-			// Ensure parent bounty is Active & get status of curator
-			let (master_curator, update_due) = Self::ensure_bounty_active(
+			// Ensure parent bounty exist & active, get active status info
+			let (master_curator, update_due) = Self::ensure_bounty_exist(
 				bounty_id,
 				maybe_sender.is_none(),
-			)?;
+			).map(|rval|
+				rval.unwrap_or((Default::default(), Default::default())),
+			).map_err(|err| err)?;
 
 			// Ensure subbounty is in expected state
 			SubBounties::<T>::try_mutate_exists(
@@ -1190,8 +1194,8 @@ decl_module! {
 			let signer = ensure_signed(origin)?;
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
 
-			// Ensure parent bounty is Active
-			let _ = Self::ensure_bounty_active(bounty_id, false)?;
+			// Ensure parent bounty exist & active,
+			let _ = Self::ensure_bounty_exist(bounty_id, false)?;
 
 			// Ensure subbounty is in expected state
 			SubBounties::<T>::try_mutate_exists(
@@ -1369,11 +1373,14 @@ decl_module! {
 				.map(Some)
 				.or_else(|_| T::RejectOrigin::ensure_origin(origin).map(|_| None))?;
 
-			// Ensure parent bounty is Active
-			let (master_curator, _) = Self::ensure_bounty_active(
+			// Ensure parent bounty exist & active,
+			let (master_curator, _) = Self::ensure_bounty_exist(
 				bounty_id,
 				maybe_sender.is_none(),
-			)?;
+			)
+			.map(|rval|
+				rval.unwrap_or((Default::default(),Default::default()))
+			).map_err(|err| err)?;
 
 			ensure!(
 				maybe_sender.map_or(
@@ -1443,22 +1450,21 @@ impl<T: Config> Module<T> {
 		Ok(())
 	}
 
-	fn ensure_bounty_active(
+	fn ensure_bounty_exist(
 		bounty_id: BountyIndex,
 		is_reject_origin: bool,
-	) -> Result<(T::AccountId, T::BlockNumber), DispatchError> {
+	) -> Result<Option<(T::AccountId, T::BlockNumber)>, DispatchError> {
 
 		let bounty = Self::bounties(&bounty_id).ok_or(Error::<T>::InvalidIndex)?;
 
 		if let BountyStatus::Active { curator, update_due } = bounty.status {
-			Ok((curator, update_due))
+			Ok(Some((curator, update_due)))
 		} else {
 			if is_reject_origin {
 				// If call originates from T::RejectOrigin
-				// state check on parent bounty is ignored,
-				// and execution is forced with dummy object
-				// This object is not to get used by the caller.
-				Ok((Default::default(), Default::default()))
+				// ignore state check on parent bounty,
+				// and force execution.
+				Ok(None)
 			} else {
 				Err(Error::<T>::UnexpectedStatus.into())
 			}
@@ -1476,7 +1482,6 @@ impl<T: Config> Module<T> {
 			curator_deposit: 0u32.into(),
 			status: SubBountyStatus::Added,
 		};
-
 		SubBounties::<T>::insert(bounty_id, subbounty_id, &subbounty);
 		BountyDescriptions::insert(subbounty_id, description);
 		Self::deposit_event(RawEvent::SubBountyAdded(bounty_id, subbounty_id));

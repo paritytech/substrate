@@ -262,9 +262,9 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_runtime_upgrade() -> frame_support::weights::Weight {
-			if !UpgradedToDualRefCount::<T>::get() {
-				UpgradedToDualRefCount::<T>::put(true);
-				migrations::migrate_to_dual_ref_count::<T>()
+			if !UpgradedToTripleRefCount::<T>::get() {
+				UpgradedToTripleRefCount::<T>::put(true);
+				migrations::migrate_to_triple_ref_count::<T>()
 			} else {
 				0
 			}
@@ -594,10 +594,10 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type UpgradedToU32RefCount<T: Config> = StorageValue<_, bool, ValueQuery>;
 
-	/// True if we have upgraded so that AccountInfo contains two types of `RefCount`. False
+	/// True if we have upgraded so that AccountInfo contains three types of `RefCount`. False
 	/// (default) if not.
 	#[pallet::storage]
-	pub(super) type UpgradedToDualRefCount<T: Config> = StorageValue<_, bool, ValueQuery>;
+	pub(super) type UpgradedToTripleRefCount<T: Config> = StorageValue<_, bool, ValueQuery>;
 
 	/// The execution phase of the block.
 	#[pallet::storage]
@@ -627,7 +627,7 @@ pub mod pallet {
 			<ParentHash<T>>::put::<T::Hash>(hash69());
 			<LastRuntimeUpgrade<T>>::put(LastRuntimeUpgradeInfo::from(T::Version::get()));
 			<UpgradedToU32RefCount<T>>::put(true);
-			<UpgradedToDualRefCount<T>>::put(true);
+			<UpgradedToTripleRefCount<T>>::put(true);
 
 			sp_io::storage::set(well_known_keys::CODE, &self.code);
 			sp_io::storage::set(well_known_keys::EXTRINSIC_INDEX, &0u32.encode());
@@ -642,16 +642,29 @@ mod migrations {
 	use super::*;
 
 	#[allow(dead_code)]
+	/// Migrate from unique `u8` reference counting to triple `u32` reference counting.
 	pub fn migrate_all<T: Config>() -> frame_support::weights::Weight {
 		Account::<T>::translate::<(T::Index, u8, T::AccountData), _>(|_key, (nonce, rc, data)|
-			Some(AccountInfo { nonce, consumers: rc as RefCount, providers: 1, data })
+			Some(AccountInfo { nonce, consumers: rc as RefCount, providers: 1, sufficients: 0, data })
 		);
 		T::BlockWeights::get().max_block
 	}
 
+	#[allow(dead_code)]
+	/// Migrate from unique `u32` reference counting to triple `u32` reference counting.
 	pub fn migrate_to_dual_ref_count<T: Config>() -> frame_support::weights::Weight {
-		Account::<T>::translate::<(T::Index, RefCount, T::AccountData), _>(|_key, (nonce, rc, data)|
-			Some(AccountInfo { nonce, consumers: rc as RefCount, providers: 1, data })
+		Account::<T>::translate::<(T::Index, RefCount, T::AccountData), _>(|_key, (nonce, consumers, data)|
+			Some(AccountInfo { nonce, consumers, providers: 1, sufficients: 0, data })
+		);
+		T::BlockWeights::get().max_block
+	}
+
+	/// Migrate from dual `u32` reference counting to triple `u32` reference counting.
+	pub fn migrate_to_triple_ref_count<T: Config>() -> frame_support::weights::Weight {
+		Account::<T>::translate::<(T::Index, RefCount, RefCount, T::AccountData), _>(
+			|_key, (nonce, consumers, providers, data)| {
+				Some(AccountInfo { nonce, consumers, providers, sufficients: 0, data })
+			}
 		);
 		T::BlockWeights::get().max_block
 	}
@@ -762,8 +775,11 @@ pub struct AccountInfo<Index, AccountData> {
 	/// cannot be reaped until this is zero.
 	pub consumers: RefCount,
 	/// The number of other modules that allow this account to exist. The account may not be reaped
-	/// until this is zero.
+	/// until this and `sufficients` are both zero.
 	pub providers: RefCount,
+	/// The number of modules that allow this account to exist for their own purposes only. The
+	/// account may not be reaped until this and `providers` are both zero.
+	pub sufficients: RefCount,
 	/// The additional data that belongs to this account. Used to store the balance(s) in a lot of
 	/// chains.
 	pub data: AccountData,
@@ -974,8 +990,8 @@ pub enum RefStatus {
 	Unreferenced,
 }
 
-/// Some resultant status relevant to incrementing a provider reference.
-#[derive(RuntimeDebug)]
+/// Some resultant status relevant to incrementing a provider/self-sufficient reference.
+#[derive(Eq, PartialEq, RuntimeDebug)]
 pub enum IncRefStatus {
 	/// Account was created.
 	Created,
@@ -983,8 +999,8 @@ pub enum IncRefStatus {
 	Existed,
 }
 
-/// Some resultant status relevant to decrementing a provider reference.
-#[derive(RuntimeDebug)]
+/// Some resultant status relevant to decrementing a provider/self-sufficient reference.
+#[derive(Eq, PartialEq, RuntimeDebug)]
 pub enum DecRefStatus {
 	/// Account was destroyed.
 	Reaped,
@@ -993,14 +1009,14 @@ pub enum DecRefStatus {
 }
 
 /// Some resultant status relevant to decrementing a provider reference.
-#[derive(RuntimeDebug)]
+#[derive(Eq, PartialEq, RuntimeDebug)]
 pub enum DecRefError {
 	/// Account cannot have the last provider reference removed while there is a consumer.
 	ConsumerRemaining,
 }
 
-/// Some resultant status relevant to incrementing a provider reference.
-#[derive(RuntimeDebug)]
+/// Some resultant status relevant to incrementing a consumer reference.
+#[derive(Eq, PartialEq, RuntimeDebug)]
 pub enum IncRefError {
 	/// Account cannot introduce a consumer while there are no providers.
 	NoProviders,
@@ -1036,11 +1052,9 @@ impl<T: Config> Module<T> {
 		!Self::is_provider_required(who)
 	}
 
-	/// Increment the reference counter on an account.
-	///
-	/// The account `who`'s `providers` must be non-zero or this will return an error.
+	/// Increment the provider reference counter on an account.
 	pub fn inc_providers(who: &T::AccountId) -> IncRefStatus {
-		Account::<T>::mutate(who, |a| if a.providers == 0 {
+		Account::<T>::mutate(who, |a| if a.providers == 0 && a.sufficients == 0 {
 			// Account is being created.
 			a.providers = 1;
 			Self::on_created_account(who.clone(), a);
@@ -1051,30 +1065,34 @@ impl<T: Config> Module<T> {
 		})
 	}
 
-	/// Decrement the reference counter on an account. This *MUST* only be done once for every time
-	/// you called `inc_consumers` on `who`.
+	/// Decrement the provider reference counter on an account.
+	///
+	/// This *MUST* only be done once for every time you called `inc_providers` on `who`.
 	pub fn dec_providers(who: &T::AccountId) -> Result<DecRefStatus, DecRefError> {
 		Account::<T>::try_mutate_exists(who, |maybe_account| {
 			if let Some(mut account) = maybe_account.take() {
-				match (account.providers, account.consumers) {
-					(0, _) => {
-						// Logic error - cannot decrement beyond zero and no item should
-						// exist with zero providers.
-						log::error!(
-							target: "runtime::system",
-							"Logic error: Unexpected underflow in reducing provider",
-						);
-						Ok(DecRefStatus::Reaped)
-					},
-					(1, 0) => {
+				if account.providers == 0 {
+					// Logic error - cannot decrement beyond zero.
+					log::error!(
+						target: "runtime::system",
+						"Logic error: Unexpected underflow in reducing provider",
+					);
+					account.providers = 1;
+				}
+				match (account.providers, account.consumers, account.sufficients) {
+					(1, 0, 0) => {
+						// No providers left (and no consumers) and no sufficients. Account dead.
+
 						Module::<T>::on_killed_account(who.clone());
 						Ok(DecRefStatus::Reaped)
 					}
-					(1, _) => {
+					(1, c, _) if c > 0 => {
 						// Cannot remove last provider if there are consumers.
 						Err(DecRefError::ConsumerRemaining)
 					}
-					(x, _) => {
+					(x, _, _) => {
+						// Account will continue to exist as there is either > 1 provider or
+						// > 0 sufficients.
 						account.providers = x - 1;
 						*maybe_account = Some(account);
 						Ok(DecRefStatus::Exists)
@@ -1090,9 +1108,67 @@ impl<T: Config> Module<T> {
 		})
 	}
 
-	/// The number of outstanding references for the account `who`.
+	/// Increment the self-sufficient reference counter on an account.
+	pub fn inc_sufficients(who: &T::AccountId) -> IncRefStatus {
+		Account::<T>::mutate(who, |a| if a.providers + a.sufficients == 0 {
+			// Account is being created.
+			a.sufficients = 1;
+			Self::on_created_account(who.clone(), a);
+			IncRefStatus::Created
+		} else {
+			a.sufficients = a.sufficients.saturating_add(1);
+			IncRefStatus::Existed
+		})
+	}
+
+	/// Decrement the sufficients reference counter on an account.
+	///
+	/// This *MUST* only be done once for every time you called `inc_sufficients` on `who`.
+	pub fn dec_sufficients(who: &T::AccountId) -> DecRefStatus {
+		Account::<T>::mutate_exists(who, |maybe_account| {
+			if let Some(mut account) = maybe_account.take() {
+				if account.sufficients == 0 {
+					// Logic error - cannot decrement beyond zero.
+					log::error!(
+						target: "runtime::system",
+						"Logic error: Unexpected underflow in reducing sufficients",
+					);
+				}
+				match (account.sufficients, account.providers) {
+					(0, 0) | (1, 0) => {
+						Module::<T>::on_killed_account(who.clone());
+						DecRefStatus::Reaped
+					}
+					(x, _) => {
+						account.sufficients = x - 1;
+						*maybe_account = Some(account);
+						DecRefStatus::Exists
+					}
+				}
+			} else {
+				log::error!(
+					target: "runtime::system",
+					"Logic error: Account already dead when reducing provider",
+				);
+				DecRefStatus::Reaped
+			}
+		})
+	}
+
+	/// The number of outstanding provider references for the account `who`.
 	pub fn providers(who: &T::AccountId) -> RefCount {
 		Account::<T>::get(who).providers
+	}
+
+	/// The number of outstanding sufficient references for the account `who`.
+	pub fn sufficients(who: &T::AccountId) -> RefCount {
+		Account::<T>::get(who).sufficients
+	}
+
+	/// The number of outstanding provider and sufficient references for the account `who`.
+	pub fn reference_count(who: &T::AccountId) -> RefCount {
+		let a = Account::<T>::get(who);
+		a.providers + a.sufficients
 	}
 
 	/// Increment the reference counter on an account.
@@ -1448,6 +1524,19 @@ impl<T: Config> HandleLifetime<T::AccountId> for Provider<T> {
 			.or_else(|e| match e {
 				DecRefError::ConsumerRemaining => Err(StoredMapError::ConsumerRemaining),
 			})
+	}
+}
+
+/// Event handler which registers a self-sufficient when created.
+pub struct SelfSufficient<T>(PhantomData<T>);
+impl<T: Config> HandleLifetime<T::AccountId> for SelfSufficient<T> {
+	fn created(t: &T::AccountId) -> Result<(), StoredMapError> {
+		Module::<T>::inc_sufficients(t);
+		Ok(())
+	}
+	fn killed(t: &T::AccountId) -> Result<(), StoredMapError> {
+		Module::<T>::dec_sufficients(t);
+		Ok(())
 	}
 }
 
