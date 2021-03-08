@@ -32,11 +32,11 @@
 
 use frame_support::{traits::Get, weights::Weight};
 use sp_std::marker::PhantomData;
-use crate::WeightInfoTrait;
+use crate::WeightInfo;
 
 /// Weight functions for pallet_example.
 pub struct WeightInfo<T>(PhantomData<T>);
-impl<T: frame_system::Config> WeightInfoTrait for WeightInfo<T> {
+impl<T: frame_system::Config> WeightInfo for WeightInfo<T> {
 	fn accumulate_dummy(_b: u32, ) -> Weight {
 		(2_065_526_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))

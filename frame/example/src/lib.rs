@@ -332,7 +332,7 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 	use super::*;
 
-	pub trait WeightInfoTrait {
+	pub trait WeightInfo {
 		fn accumulate_dummy(_b: u32, ) -> Weight;
 		fn set_dummy(_b: u32, ) -> Weight;
 		fn another_set_dummy(b: u32, ) -> Weight;
