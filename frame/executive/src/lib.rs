@@ -598,6 +598,7 @@ mod tests {
 			UncheckedExtrinsic = TestUncheckedExtrinsic
 		{
 			System: frame_system::{Module, Call, Config, Storage, Event<T>},
+			Accounts: pallet_accounts::{Module, Call, Storage, Event<T>},
 			Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
 			Custom: custom::{Module, Call, ValidateUnsigned},
 		}
@@ -634,9 +635,16 @@ mod tests {
 		type BlockHashCount = BlockHashCount;
 		type Version = RuntimeVersion;
 		type PalletInfo = PalletInfo;
-		type AccountStorage = System;
+		type AccountStorage = Accounts;
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
+	}
+
+	impl pallet_accounts::Config for Runtime {
+		type Event = Event;
+		type OnKilledAccount = ();
+		type OnNewAccount = ();
+		type AccountData = pallet_balances::AccountData<u64>;
 	}
 
 	type Balance = u64;
@@ -648,7 +656,8 @@ mod tests {
 		type Event = Event;
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
-		type AccountStore = Balances;
+		type AccountStore = Accounts;
+		type ReferencedAccount = Accounts;
 		type MaxLocks = ();
 		type WeightInfo = ();
 	}
@@ -767,7 +776,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("2c01e6f33d595793119823478b45b36978a8f65a731b5ae3fdfb6330b4cd4b11").into(),
+					state_root: hex!("b7d31cf177f0cc54bbc5c437d63123829643b2ac63895df9edc151b6ef446874").into(),
 					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},

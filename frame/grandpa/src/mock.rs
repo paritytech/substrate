@@ -52,6 +52,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		Accounts: pallet_accounts::{Module, Call, Storage, Event<T>},
 		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
 		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
 		Staking: pallet_staking::{Module, Call, Config<T>, Storage, Event<T>, ValidateUnsigned},
@@ -92,11 +93,16 @@ impl frame_system::Config for Test {
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
 	type PalletInfo = PalletInfo;
-	type AccountData = pallet_balances::AccountData<u128>;
-	type OnNewAccount = ();
-	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type AccountStorage = Accounts;
+}
+
+impl pallet_accounts::Config for Test {
+	type Event = Event;
+	type OnKilledAccount = ();
+	type OnNewAccount = ();
+	type AccountData = pallet_balances::AccountData<u128>;
 }
 
 impl<C> frame_system::offchain::SendTransactionTypes<C> for Test
@@ -125,6 +131,7 @@ impl pallet_session::Config for Test {
 	type Keys = TestSessionKeys;
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 	type WeightInfo = ();
+	type ReferencedAccount = Accounts;
 }
 
 impl pallet_session::historical::Config for Test {
@@ -153,7 +160,8 @@ impl pallet_balances::Config for Test {
 	type DustRemoval = ();
 	type Event = Event;
 	type ExistentialDeposit = ExistentialDeposit;
-	type AccountStore = System;
+	type AccountStore = Accounts;
+	type ReferencedAccount = Accounts;
 	type WeightInfo = ();
 }
 
@@ -221,6 +229,7 @@ impl pallet_staking::Config for Test {
 	type OffchainSolutionWeightLimit = ();
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type WeightInfo = ();
+	type ReferencedAccount = Accounts;
 }
 
 parameter_types! {

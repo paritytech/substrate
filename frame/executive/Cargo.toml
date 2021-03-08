@@ -27,8 +27,9 @@ sp-core = { version = "3.0.0", default-features = false, path = "../../primitive
 hex-literal = "0.3.1"
 sp-core = { version = "3.0.0", path = "../../primitives/core" }
 sp-io ={ version = "3.0.0", path = "../../primitives/io" }
-pallet-indices = { version = "3.0.0", path = "../indices" }
+pallet-accounts = { version = "3.0.0", path = "../accounts" }
 pallet-balances = { version = "3.0.0", path = "../balances" }
+pallet-indices = { version = "3.0.0", path = "../indices" }
 pallet-transaction-payment = { version = "3.0.0", path = "../transaction-payment" }
 sp-version = { version = "3.0.0", path = "../../primitives/version" }
 

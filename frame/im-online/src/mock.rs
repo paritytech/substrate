@@ -41,6 +41,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		Accounts: pallet_accounts::{Module, Call, Storage, Event<T>},
 		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
 		ImOnline: imonline::{Module, Call, Storage, Config<T>, Event<T>},
 		Historical: pallet_session_historical::{Module},
@@ -131,9 +132,16 @@ impl frame_system::Config for Runtime {
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
 	type PalletInfo = PalletInfo;
-	type AccountStorage = System;
+	type AccountStorage = Accounts;
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+}
+
+impl pallet_accounts::Config for Runtime {
+	type Event = Event;
+	type OnKilledAccount = ();
+	type OnNewAccount = ();
+	type AccountData = ();
 }
 
 parameter_types! {
@@ -156,6 +164,7 @@ impl pallet_session::Config for Runtime {
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 	type WeightInfo = ();
+	type ReferencedAccount = Accounts;
 }
 
 impl pallet_session::historical::Config for Runtime {
