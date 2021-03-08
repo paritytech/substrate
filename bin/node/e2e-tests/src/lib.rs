@@ -243,7 +243,7 @@ mod tests {
     use frame_system::{Call, Pallet};
 
     #[test]
-    fn runtime_upgrade() {
+    fn test_runner() {
         let mut node = Node::<NodeTemplateChainInfo>::new().unwrap();
         // seals blocks
         node.seal_blocks(1);

@@ -1553,7 +1553,7 @@ pub trait OnGenesis {
 	fn on_genesis() {}
 }
 
-/// Prefix to be used (optionally) for implementing [`OnRuntimeUpgrade::storage_key`].
+/// Prefix to be used (optionally) for implementing [`OnRuntimeUpgradeHelpersExt::storage_key`].
 #[cfg(feature = "try-runtime")]
 pub const ON_RUNTIME_UPGRADE_PREFIX: &[u8] = b"__ON_RUNTIME_UPGRADE__";
 
@@ -1563,7 +1563,7 @@ pub trait OnRuntimeUpgradeHelpersExt {
 	/// Generate a storage key unique to this runtime upgrade.
 	///
 	/// This can be used to communicate data from pre-upgrade to post-upgrade state and check
-	/// them. See [`set_temp_storage`] and [`get_temp_storage`].
+	/// them. See [`Self::set_temp_storage`] and [`Self::get_temp_storage`].
 	#[cfg(feature = "try-runtime")]
 	fn storage_key(ident: &str) -> [u8; 32] {
 		let prefix = sp_io::hashing::twox_128(ON_RUNTIME_UPGRADE_PREFIX);
@@ -1576,7 +1576,7 @@ pub trait OnRuntimeUpgradeHelpersExt {
 		final_key
 	}
 
-	/// Get temporary storage data written by [`set_temp_storage`].
+	/// Get temporary storage data written by [`Self::set_temp_storage`].
 	///
 	/// Returns `None` if either the data is unavailable or un-decodable.
 	///
@@ -1588,7 +1588,7 @@ pub trait OnRuntimeUpgradeHelpersExt {
 	}
 
 	/// Write some temporary data to a specific storage that can be read (potentially in
-	/// post-upgrade hook) via [`get_temp_storage`].
+	/// post-upgrade hook) via [`Self::get_temp_storage`].
 	///
 	/// A `at` storage identifier must be provided to indicate where the storage is being written
 	/// to.
@@ -1623,13 +1623,13 @@ pub trait OnRuntimeUpgrade {
 	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<(), &'static str>;
+	fn pre_upgrade() -> Result<(), &'static str> { Ok(()) }
 
 	/// Execute some post-checks after a runtime upgrade.
 	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade() -> Result<(), &'static str>;
+	fn post_upgrade() -> Result<(), &'static str> { Ok(()) }
 }
 
 #[impl_for_tuples(30)]
@@ -2237,12 +2237,10 @@ pub trait ExecuteBlock<Block: BlockT> {
 	///
 	/// This will execute all extrinsics in the block and check that the resulting header is correct.
 	///
-	/// Returns the result header.
-	///
 	/// # Panic
 	///
 	/// Panics when an extrinsics panics or the resulting header doesn't match the expected header.
-	fn execute_block(block: Block) -> Block::Header;
+	fn execute_block(block: Block);
 }
 
 #[cfg(test)]
