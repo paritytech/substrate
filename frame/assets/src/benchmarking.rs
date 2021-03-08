@@ -159,20 +159,6 @@ benchmarks! {
 		assert_last_event::<T>(Event::Destroyed(Default::default()).into());
 	}
 
-	force_destroy {
-		let c in 0 .. 5_000;
-		let s in 0 .. 5_000;
-		let a in 0 .. 5_00;
-		let (caller, _) = create_default_asset::<T>(true);
-		add_consumers::<T>(caller.clone(), c);
-		add_sufficients::<T>(caller.clone(), s);
-		add_approvals::<T>(caller.clone(), a);
-		let witness = Asset::<T>::get(T::AssetId::default()).unwrap().destroy_witness();
-	}: _(SystemOrigin::Root, Default::default(), witness)
-	verify {
-		assert_last_event::<T>(Event::Destroyed(Default::default()).into());
-	}
-
 	mint {
 		let (caller, caller_lookup) = create_default_asset::<T>(true);
 		let amount = T::Balance::from(100u32);

@@ -87,7 +87,6 @@
 //! ### Permissioned Functions
 //!
 //! * `force_create`: Creates a new asset class without taking any deposit.
-//! * `force_destroy`: Destroys an asset class.
 //! * `force_set_metadata`: Set the metadata of an asset class.
 //! * `force_clear_metadata`: Remove the metadata of an asset class.
 //! * `force_asset_status`: Alter an asset class's attributes.
@@ -279,7 +278,8 @@ pub mod pallet {
 		/// The currency mechanism.
 		type Currency: ReservableCurrency<Self::AccountId>;
 
-		/// The origin which may forcibly create or destroy an asset.
+		/// The origin which may forcibly create or destroy an asset or otherwise alter privileged
+		/// attributes.
 		type ForceOrigin: EnsureOrigin<Self::Origin>;
 
 		/// The basic amount of funds that must be reserved for an asset.
@@ -533,9 +533,10 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Destroy a class of fungible assets owned by the sender.
+		/// Destroy a class of fungible assets.
 		///
-		/// The origin must be Signed and the sender must be the owner of the asset `id`.
+		/// The origin must conform to `ForceOrigin` or must be Signed and the sender must be the
+		/// owner of the asset `id`.
 		///
 		/// - `id`: The identifier of the asset to be destroyed. This must identify an existing
 		/// asset.
@@ -557,36 +558,34 @@ pub mod pallet {
 			// TODO: make work
 			/*#[pallet::compact]*/ witness: DestroyWitness,
 		) -> DispatchResult {
-			let check_owner = ensure_signed(origin)?;
-			Ok(Self::do_destroy(id, witness, Some(check_owner))?)
-		}
+			let maybe_check_owner = match T::ForceOrigin::try_origin(origin) {
+				Ok(_) => None,
+				Err(origin) => Some(ensure_signed(origin)?),
+			};
+			Asset::<T>::try_mutate_exists(id, |maybe_details| {
+				let mut details = maybe_details.take().ok_or(Error::<T>::Unknown)?;
+				if let Some(check_owner) = maybe_check_owner {
+					ensure!(details.owner == check_owner, Error::<T>::NoPermission);
+				}
+				ensure!(details.accounts == witness.accounts, Error::<T>::BadWitness);
+				ensure!(details.sufficients == witness.sufficients, Error::<T>::BadWitness);
+				ensure!(details.approvals == witness.approvals, Error::<T>::BadWitness);
 
-		/// Destroy a class of fungible assets.
-		///
-		/// The origin must conform to `ForceOrigin`.
-		///
-		/// - `id`: The identifier of the asset to be destroyed. This must identify an existing
-		/// asset.
-		///
-		/// Emits `Destroyed` event when successful.
-		///
-		/// Weight: `O(c + p + a)` where:
-		/// - `c = (witness.accounts - witness.sufficients)`
-		/// - `s = witness.sufficients`
-		/// - `a = witness.approvals`
-		#[pallet::weight(T::WeightInfo::force_destroy(
-			witness.accounts.saturating_sub(witness.sufficients),
- 			witness.sufficients,
- 			witness.approvals,
- 		))]
-		pub(super) fn force_destroy(
-			origin: OriginFor<T>,
-			#[pallet::compact] id: T::AssetId,
-			// TODO: make work
-			/*#[pallet::compact]*/ witness: DestroyWitness,
-		) -> DispatchResult {
-			T::ForceOrigin::ensure_origin(origin)?;
-			Ok(Self::do_destroy(id, witness, None)?)
+				for (who, v) in Account::<T>::drain_prefix(id) {
+					Self::dead_account(&who, &mut details, v.sufficient);
+				}
+				debug_assert_eq!(details.accounts, 0);
+				debug_assert_eq!(details.sufficients, 0);
+
+				let metadata = Metadata::<T>::take(&id);
+				T::Currency::unreserve(&details.owner, details.deposit.saturating_add(metadata.deposit));
+
+				Approvals::<T>::remove_prefix(&id);
+				Self::deposit_event(Event::Destroyed(id));
+
+				// NOTE: could use postinfo to reflect the actual number of accounts/sufficient/approvals
+				Ok(())
+			})
 		}
 
 		/// Mint assets of a particular class.
@@ -1364,37 +1363,6 @@ impl<T: Config> Pallet<T> {
 			frame_system::Module::<T>::dec_consumers(who);
 		}
 		d.accounts = d.accounts.saturating_sub(1);
-	}
-
-	fn do_destroy(
-		id: T::AssetId,
-		witness: DestroyWitness,
-		maybe_check_owner: Option<T::AccountId>,
-	) -> DispatchResult {
-		Asset::<T>::try_mutate_exists(id, |maybe_details| {
-			let mut details = maybe_details.take().ok_or(Error::<T>::Unknown)?;
-			if let Some(check_owner) = maybe_check_owner {
-				ensure!(details.owner == check_owner, Error::<T>::NoPermission);
-			}
-			ensure!(details.accounts == witness.accounts, Error::<T>::BadWitness);
-			ensure!(details.sufficients == witness.sufficients, Error::<T>::BadWitness);
-			ensure!(details.approvals == witness.approvals, Error::<T>::BadWitness);
-
-			for (who, v) in Account::<T>::drain_prefix(id) {
-				Self::dead_account(&who, &mut details, v.sufficient);
-			}
-			debug_assert_eq!(details.accounts, 0);
-			debug_assert_eq!(details.sufficients, 0);
-
-			let metadata = Metadata::<T>::take(&id);
-			T::Currency::unreserve(&details.owner, details.deposit.saturating_add(metadata.deposit));
-
-			Approvals::<T>::remove_prefix(&id);
-			Self::deposit_event(Event::Destroyed(id));
-
-			// NOTE: could use postinfo to reflect the actual number of accounts/sufficient/approvals
-			Ok(())
-		})
 	}
 
 	fn do_transfer(

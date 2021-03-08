@@ -165,7 +165,7 @@ fn lifecycle_should_work() {
 		assert_eq!(Account::<Test>::iter_prefix(0).count(), 2);
 
 		let w = Asset::<Test>::get(0).unwrap().destroy_witness();
-		assert_ok!(Assets::force_destroy(Origin::root(), 0, w));
+		assert_ok!(Assets::destroy(Origin::root(), 0, w));
 		assert_eq!(Balances::reserved_balance(&1), 0);
 
 		assert!(!Asset::<Test>::contains_key(0));
@@ -182,7 +182,6 @@ fn destroy_with_bad_witness_should_not_work() {
 		let w = Asset::<Test>::get(0).unwrap().destroy_witness();
 		assert_ok!(Assets::mint(Origin::signed(1), 0, 10, 100));
 		assert_noop!(Assets::destroy(Origin::signed(1), 0, w), Error::<Test>::BadWitness);
-		assert_noop!(Assets::force_destroy(Origin::root(), 0, w), Error::<Test>::BadWitness);
 	});
 }
 
