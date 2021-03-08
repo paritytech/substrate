@@ -241,6 +241,13 @@ impl multi_phase::weights::WeightInfo for DualMockWeightInfo {
 			<() as multi_phase::weights::WeightInfo>::on_initialize_open_unsigned_without_snapshot()
 		}
 	}
+	fn elect_queued() -> Weight {
+		if MockWeightInfo::get() {
+			Zero::zero()
+		} else {
+			<() as multi_phase::weights::WeightInfo>::elect_queued()
+		}
+	}
 	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight {
 		if MockWeightInfo::get() {
 			// 10 base

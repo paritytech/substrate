@@ -252,7 +252,7 @@ pub trait ElectionProvider<AccountId, BlockNumber> {
 
 	/// Elect a new set of winners.
 	///
-	/// The result is returned in a target major format, namely as vector of  supports.
+	/// The result is returned in a target major format, namely as vector of supports.
 	fn elect() -> Result<(Supports<AccountId>, Weight), Self::Error>;
 }
 

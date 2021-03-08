@@ -202,6 +202,10 @@
 //! dependency from staking and the compact solution type. It should be generated at runtime, there
 //! it should be encoded how many votes each nominators have. Essentially translate
 //! <https://github.com/paritytech/substrate/pull/7929> to this pallet.
+//!
+//! **More accurate weight for error cases**: Both `ElectionDataProvider` and `ElectionProvider`
+//! assume no weight is consumed in their functions, when operations fail with `Err`. This can
+//! clearly be improved.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -1067,7 +1071,11 @@ impl<T: Config> Pallet<T> {
 						.map_err(Into::into),
 					FallbackStrategy::Nothing => Err(ElectionError::NoFallbackConfigured),
 				},
-				|ReadySolution { supports, compute, .. }| Ok((supports, 0, compute)),
+				|ReadySolution { supports, compute, .. }| Ok((
+					supports,
+					T::WeightInfo::elect_queued(),
+					compute
+				)),
 			)
 			.map(|(supports, weight, compute)| {
 				Self::deposit_event(Event::ElectionFinalized(Some(compute)));

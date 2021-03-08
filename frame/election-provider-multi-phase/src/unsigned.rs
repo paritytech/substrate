@@ -413,6 +413,9 @@ mod max_weight {
 		fn on_initialize_open_unsigned_with_snapshot() -> Weight {
 			unreachable!()
 		}
+		fn elect_queued() -> Weight {
+			0
+		}
 		fn on_initialize_open_unsigned_without_snapshot() -> Weight {
 			unreachable!()
 		}

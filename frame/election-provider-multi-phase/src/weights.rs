@@ -35,7 +35,6 @@
 // --output=./frame/election-provider-multi-phase/src/weights.rs
 // --template=./.maintain/frame-weight-template.hbs
 
-
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
@@ -48,8 +47,9 @@ pub trait WeightInfo {
 	fn on_initialize_open_signed() -> Weight;
 	fn on_initialize_open_unsigned_with_snapshot() -> Weight;
 	fn on_initialize_open_unsigned_without_snapshot() -> Weight;
-	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32, ) -> Weight;
-	fn feasibility_check(v: u32, t: u32, a: u32, d: u32, ) -> Weight;
+	fn elect_queued() -> Weight;
+	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight;
+	fn feasibility_check(v: u32, t: u32, a: u32, d: u32) -> Weight;
 }
 
 /// Weights for pallet_election_provider_multi_phase using the Substrate node and recommended hardware.
@@ -74,7 +74,10 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
-	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32, ) -> Weight {
+	fn elect_queued() -> Weight {
+		0
+	}
+	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight {
 		(0 as Weight)
 			// Standard Error: 23_000
 			.saturating_add((4_171_000 as Weight).saturating_mul(v as Weight))
@@ -122,7 +125,10 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
-	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32, ) -> Weight {
+	fn elect_queued() -> Weight {
+		0
+	}
+	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight {
 		(0 as Weight)
 			// Standard Error: 23_000
 			.saturating_add((4_171_000 as Weight).saturating_mul(v as Weight))
