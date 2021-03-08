@@ -53,9 +53,8 @@ use sp_std::{cmp::Ordering, vec::Vec};
 /// Storage key used to store the persistent offchain worker status.
 pub(crate) const OFFCHAIN_HEAD_DB: &[u8] = b"parity/multi-phase-unsigned-election";
 
-/// The repeat threshold of the offchain worker. This means we won't run the offchain worker twice
-/// within a window of 5 blocks.
-pub(crate) const OFFCHAIN_REPEAT: u32 = 5;
+/// Storage key used to cache the solution `call`.
+pub(crate) const OFFCHAIN_CACHED_CALL: &[u8] = b"parity/multi-phase-unsigned-election/call";
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum MinerError {
@@ -69,6 +68,8 @@ pub enum MinerError {
 	PreDispatchChecksFailed,
 	/// The solution generated from the miner is not feasible.
 	Feasibility(FeasibilityError),
+	/// Something went wrong fetching the lock.
+	Lock(&'static str),
 }
 
 impl From<sp_npos_elections::Error> for MinerError {
@@ -83,15 +84,48 @@ impl From<FeasibilityError> for MinerError {
 	}
 }
 
+/// Save a given call into OCW storage.
+fn save_solution<T: Config>(call: &Call<T>) {
+	let storage = StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL);
+	storage.set(&call);
+}
+
+/// Get a saved solution from OCW storage if it exists.
+fn restore_solution<T: Config>() -> Option<Call<T>> {
+	StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL).get().flatten()
+}
+
 impl<T: Config> Pallet<T> {
-	/// Mine a new solution, and submit it back to the chain as an unsigned transaction.
-	pub fn mine_check_and_submit() -> Result<(), MinerError> {
+	/// Attempt to restore a solution from cache. Otherwise, compute it fresh. Either way, submit.
+	pub fn restore_or_compute_then_submit() -> Result<(), MinerError> {
+		let call = match restore_solution() {
+			Some(call) => call,
+			None => {
+				let call = Self::mine_call()?;
+				save_solution(&call);
+				call
+			},
+		};
+		Self::submit_call(call)
+	}
+
+	/// Mine a new solution, cache it, and submit it back to the chain as an unsigned transaction.
+	pub fn mine_check_save_submit() -> Result<(), MinerError> {
+		let call = Self::mine_call()?;
+		save_solution(&call);
+		Self::submit_call(call)
+	}
+
+	/// Mine a new solution as a call. Performs all checks.
+	fn mine_call() -> Result<Call<T>, MinerError> {
 		let iters = Self::get_balancing_iters();
 		// get the solution, with a load of checks to ensure if submitted, IT IS ABSOLUTELY VALID.
 		let (raw_solution, witness) = Self::mine_and_check(iters)?;
+		Ok(Call::submit_unsigned(raw_solution, witness))
+	}
 
-		let call = Call::submit_unsigned(raw_solution, witness).into();
-		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call)
+	fn submit_call(call: Call<T>) -> Result<(), MinerError> {
+		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into())
 			.map_err(|_| MinerError::PoolSubmissionFailed)
 	}
 
@@ -171,7 +205,7 @@ impl<T: Config> Pallet<T> {
 			.map_err::<MinerError, _>(Into::into)?;
 		sp_npos_elections::reduce(&mut staked);
 
-		// convert back to ration and make compact.
+		// convert back to ratio and make compact.
 		let ratio = assignment_staked_to_ratio_normalized(staked)?;
 		let compact = <CompactOf<T>>::from_assignment(ratio, &voter_index, &target_index)?;
 
@@ -351,12 +385,11 @@ impl<T: Config> Pallet<T> {
 	/// not.
 	///
 	/// This essentially makes sure that we don't run on previous blocks in case of a re-org, and we
-	/// don't run twice within a window of length [`OFFCHAIN_REPEAT`].
+	/// don't run twice within a window of length `threshold`.
 	///
 	/// Returns `Ok(())` if offchain worker should happen, `Err(reason)` otherwise.
-	pub(crate) fn try_acquire_offchain_lock(now: T::BlockNumber) -> Result<(), &'static str> {
+	pub(crate) fn try_acquire_offchain_lock(now: T::BlockNumber, threshold: T::BlockNumber) -> Result<(), MinerError> {
 		let storage = StorageValueRef::persistent(&OFFCHAIN_HEAD_DB);
-		let threshold = T::BlockNumber::from(OFFCHAIN_REPEAT);
 
 		let mutate_stat =
 			storage.mutate::<_, &'static str, _>(|maybe_head: Option<Option<T::BlockNumber>>| {
@@ -380,9 +413,9 @@ impl<T: Config> Pallet<T> {
 			// all good
 			Ok(Ok(_)) => Ok(()),
 			// failed to write.
-			Ok(Err(_)) => Err("failed to write to offchain db."),
+			Ok(Err(_)) => Err(MinerError::Lock("failed to write to offchain db.")),
 			// fork etc.
-			Err(why) => Err(why),
+			Err(why) => Err(MinerError::Lock(why)),
 		}
 	}
 
