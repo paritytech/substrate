@@ -134,7 +134,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// If you want an unchecked solution, use [`Pallet::mine_solution`].
 	/// If you want a checked solution and submit it at the same time, use
-	/// [`Pallet::mine_check_and_submit`].
+	/// [`Pallet::mine_check_save_submit`].
 	pub fn mine_and_check(
 		iters: usize,
 	) -> Result<(RawSolution<CompactOf<T>>, SolutionOrSnapshotSize), MinerError> {
@@ -543,25 +543,12 @@ mod max_weight {
 mod tests {
 	use super::*;
 	use crate::{
-		mock::{
-			roll_to,
-			roll_to_with_ocw,
-			witness,
-			Call as OuterCall,
-			ExtBuilder,
-			Extrinsic,
-			MinerMaxWeight,
-			MultiPhase,
-			Origin,
-			Runtime,
-			TestCompact,
-		},
-		CurrentPhase,
-		InvalidTransaction,
-		Phase,
-		QueuedSolution,
-		TransactionSource,
+		CurrentPhase, InvalidTransaction, Phase, QueuedSolution, TransactionSource,
 		TransactionValidityError,
+		mock::{
+			BlockNumber, Call as OuterCall, ExtBuilder, Extrinsic, MinerMaxWeight, MultiPhase,
+			Origin, Runtime, TestCompact, roll_to, roll_to_with_ocw, witness,
+		},
 	};
 	use frame_benchmarking::Zero;
 	use frame_support::{assert_noop, assert_ok, dispatch::Dispatchable, traits::OffchainWorker};
@@ -805,7 +792,7 @@ mod tests {
 
 			// mine seq_phragmen solution with 2 iters.
 			assert_eq!(
-				MultiPhase::mine_check_and_submit().unwrap_err(),
+				MultiPhase::mine_check_save_submit().unwrap_err(),
 				MinerError::PreDispatchChecksFailed,
 			);
 		})
@@ -882,30 +869,42 @@ mod tests {
 
 	#[test]
 	fn ocw_check_prevent_duplicate() {
+		const OFFCHAIN_REPEAT: BlockNumber = 5;
+
 		let (mut ext, _) = ExtBuilder::default().build_offchainify(0);
 		ext.execute_with(|| {
 			roll_to(25);
 			assert!(MultiPhase::current_phase().is_unsigned());
 
 			// first execution -- okay.
-			assert!(MultiPhase::try_acquire_offchain_lock(25).is_ok());
+			assert!(MultiPhase::try_acquire_offchain_lock(25, OFFCHAIN_REPEAT.into()).is_ok());
 
 			// next block: rejected.
-			assert!(MultiPhase::try_acquire_offchain_lock(26).is_err());
+			assert!(MultiPhase::try_acquire_offchain_lock(26, OFFCHAIN_REPEAT.into()).is_err());
 
 			// allowed after `OFFCHAIN_REPEAT`
-			assert!(MultiPhase::try_acquire_offchain_lock((26 + OFFCHAIN_REPEAT).into()).is_ok());
+			assert!(MultiPhase::try_acquire_offchain_lock(
+				(26 + OFFCHAIN_REPEAT).into(),
+				OFFCHAIN_REPEAT.into()
+			)
+			.is_ok());
 
 			// a fork like situation: re-execute last 3.
-			assert!(
-				MultiPhase::try_acquire_offchain_lock((26 + OFFCHAIN_REPEAT - 3).into()).is_err()
-			);
-			assert!(
-				MultiPhase::try_acquire_offchain_lock((26 + OFFCHAIN_REPEAT - 2).into()).is_err()
-			);
-			assert!(
-				MultiPhase::try_acquire_offchain_lock((26 + OFFCHAIN_REPEAT - 1).into()).is_err()
-			);
+			assert!(MultiPhase::try_acquire_offchain_lock(
+				(26 + OFFCHAIN_REPEAT - 3).into(),
+				OFFCHAIN_REPEAT.into()
+			)
+			.is_err());
+			assert!(MultiPhase::try_acquire_offchain_lock(
+				(26 + OFFCHAIN_REPEAT - 2).into(),
+				OFFCHAIN_REPEAT.into()
+			)
+			.is_err());
+			assert!(MultiPhase::try_acquire_offchain_lock(
+				(26 + OFFCHAIN_REPEAT - 1).into(),
+				OFFCHAIN_REPEAT.into()
+			)
+			.is_err());
 		})
 	}
 
