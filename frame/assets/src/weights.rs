@@ -251,8 +251,8 @@ impl WeightInfo for () {
 	}
 	fn transfer_keep_alive() -> Weight {
 		(71_531_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(4 as Weight))
+			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
 	}
 	fn force_transfer() -> Weight {
 		(71_711_000 as Weight)
