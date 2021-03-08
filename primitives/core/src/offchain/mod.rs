@@ -29,8 +29,8 @@ pub mod storage;
 #[cfg(feature = "std")]
 pub mod testing;
 
-/// Persistent storage prefix used by the Offchain Worker API to
-pub const STORAGE_PREFIX : &'static [u8] = b"storage";
+/// Persistent storage prefix used by the Offchain Worker API when creating a DB key.
+pub const STORAGE_PREFIX : &[u8] = b"storage";
 
 /// Offchain DB persistent (non-fork-aware) storage.
 pub trait OffchainStorage: Clone + Send + Sync {
