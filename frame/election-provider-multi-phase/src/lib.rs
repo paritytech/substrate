@@ -629,7 +629,7 @@ pub mod pallet {
 						log!(info, "resubmit OCW output at {:?}: {:?}", now, resubmit_output);
 					}
 				}
-				_ => {},
+				_ => {}
 			}
 		}
 

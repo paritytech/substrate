@@ -104,7 +104,7 @@ impl<T: Config> Pallet<T> {
 				let call = Self::mine_call()?;
 				save_solution(&call);
 				call
-			},
+			}
 		};
 		Self::submit_call(call)
 	}
@@ -388,7 +388,10 @@ impl<T: Config> Pallet<T> {
 	/// don't run twice within a window of length `threshold`.
 	///
 	/// Returns `Ok(())` if offchain worker should happen, `Err(reason)` otherwise.
-	pub(crate) fn try_acquire_offchain_lock(now: T::BlockNumber, threshold: T::BlockNumber) -> Result<(), MinerError> {
+	pub(crate) fn try_acquire_offchain_lock(
+		now: T::BlockNumber,
+		threshold: T::BlockNumber,
+	) -> Result<(), MinerError> {
 		let storage = StorageValueRef::persistent(&OFFCHAIN_HEAD_DB);
 
 		let mutate_stat =
