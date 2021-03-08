@@ -74,7 +74,7 @@ pub use sp_consensus_babe::{
 	},
 };
 pub use sp_consensus::SyncOracle;
-pub use sc_consensus_slots::SlotPortion;
+pub use sc_consensus_slots::SlotProportion;
 use std::{
 	collections::HashMap, sync::Arc, u64, pin::Pin, time::{Instant, Duration},
 	any::Any, borrow::Cow, convert::TryInto,
@@ -396,12 +396,12 @@ pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW, BS> {
 	/// Checks if the current native implementation can author with a runtime at a given block.
 	pub can_author_with: CAW,
 
-	/// The portion of the slot dedicated to proposing.
+	/// The proportion of the slot dedicated to proposing.
 	///
-	/// The block proposing will be limited to this portion of the slot from the starting of the slot.
-	/// However, the proposing can still take longer when there is some lenience factor applied,
+	/// The block proposing will be limited to this proportion of the slot from the starting of the
+	/// slot. However, the proposing can still take longer when there is some lenience factor applied,
 	/// because there were no blocks produced for some slots.
-	pub slot_portion_proposing: SlotPortion,
+	pub block_proposal_slot_portion: SlotProportion,
 }
 
 /// Start the babe worker.
@@ -417,7 +417,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, BS, Error>(BabeParams {
 	backoff_authoring_blocks,
 	babe_link,
 	can_author_with,
-	slot_portion_proposing,
+	block_proposal_slot_portion,
 }: BabeParams<B, C, E, I, SO, SC, CAW, BS>) -> Result<
 	BabeWorker<B>,
 	sp_consensus::Error,
@@ -452,7 +452,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, BS, Error>(BabeParams {
 		epoch_changes: babe_link.epoch_changes.clone(),
 		slot_notification_sinks: slot_notification_sinks.clone(),
 		config: config.clone(),
-		slot_portion_proposing,
+		block_proposal_slot_portion,
 	};
 
 	register_babe_inherent_data_provider(&inherent_data_providers, config.slot_duration())?;
@@ -607,7 +607,7 @@ struct BabeSlotWorker<B: BlockT, C, E, I, SO, BS> {
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 	slot_notification_sinks: SlotNotificationSinks<B>,
 	config: Config,
-	slot_portion_proposing: SlotPortion,
+	block_proposal_slot_portion: SlotProportion,
 }
 
 impl<B, C, E, I, Error, SO, BS> sc_consensus_slots::SimpleSlotWorker<B>
@@ -803,7 +803,7 @@ where
 		parent_head: &B::Header,
 		slot_info: &SlotInfo,
 	) -> std::time::Duration {
-		let max_proposing = slot_info.duration.mul_f32(self.slot_portion_proposing.get());
+		let max_proposing = slot_info.duration.mul_f32(self.block_proposal_slot_portion.get());
 
 		let slot_remaining = slot_info.ends_at
 			.checked_duration_since(Instant::now())

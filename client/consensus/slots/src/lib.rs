@@ -554,11 +554,11 @@ impl<T: Clone + Send + Sync + 'static> SlotDuration<T> {
 	}
 }
 
-/// A unit type wrapper to express the portion of a slot.
-pub struct SlotPortion(f32);
+/// A unit type wrapper to express the proportion of a slot.
+pub struct SlotProportion(f32);
 
-impl SlotPortion {
-	/// Create a new portion.
+impl SlotProportion {
+	/// Create a new proportion.
 	///
 	/// The given value `inner` should be in the range `[0,1]`. If the value is not in the required
 	/// range, it is clamped into the range.

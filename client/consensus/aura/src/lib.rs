@@ -69,7 +69,7 @@ pub use sp_consensus_aura::{
 };
 pub use sp_consensus::SyncOracle;
 pub use import_queue::{ImportQueueParams, import_queue, AuraBlockImport, CheckForEquivocation};
-pub use sc_consensus_slots::SlotPortion;
+pub use sc_consensus_slots::SlotProportion;
 
 type AuthorityId<P> = <P as Pair>::Public;
 
@@ -143,12 +143,12 @@ pub struct StartAuraParams<C, SC, I, PF, SO, BS, CAW> {
 	pub keystore: SyncCryptoStorePtr,
 	/// Can we author a block with this node?
 	pub can_author_with: CAW,
-	/// The portion of the slot dedicated to proposing.
+	/// The proportion of the slot dedicated to proposing.
 	///
-	/// The block proposing will be limited to this portion of the slot from the starting of the slot.
-	/// However, the proposing can still take longer when there is some lenience factor applied,
+	/// The block proposing will be limited to this proportion of the slot from the starting of the
+	/// slot. However, the proposing can still take longer when there is some lenience factor applied,
 	/// because there were no blocks produced for some slots.
-	pub slot_portion_proposing: SlotPortion,
+	pub block_proposal_slot_portion: SlotProportion,
 }
 
 /// Start the aura worker. The returned future should be run in a futures executor.
@@ -165,7 +165,7 @@ pub fn start_aura<P, B, C, SC, PF, I, SO, CAW, BS, Error>(
 		backoff_authoring_blocks,
 		keystore,
 		can_author_with,
-		slot_portion_proposing,
+		block_proposal_slot_portion,
 	}: StartAuraParams<C, SC, I, PF, SO, BS, CAW>,
 ) -> Result<impl Future<Output = ()>, sp_consensus::Error> where
 	B: BlockT,
@@ -192,7 +192,7 @@ pub fn start_aura<P, B, C, SC, PF, I, SO, CAW, BS, Error>(
 		force_authoring,
 		backoff_authoring_blocks,
 		_key_type: PhantomData::<P>,
-		slot_portion_proposing,
+		block_proposal_slot_portion,
 	};
 	register_aura_inherent_data_provider(
 		&inherent_data_providers,
@@ -217,7 +217,7 @@ struct AuraWorker<C, E, I, P, SO, BS> {
 	sync_oracle: SO,
 	force_authoring: bool,
 	backoff_authoring_blocks: Option<BS>,
-	slot_portion_proposing: SlotPortion,
+	block_proposal_slot_portion: SlotProportion,
 	_key_type: PhantomData<P>,
 }
 
@@ -376,7 +376,7 @@ where
 		head: &B::Header,
 		slot_info: &SlotInfo,
 	) -> std::time::Duration {
-		let max_proposing = slot_info.duration.mul_f32(self.slot_portion_proposing.get());
+		let max_proposing = slot_info.duration.mul_f32(self.block_proposal_slot_portion.get());
 
 		let slot_remaining = slot_info.ends_at
 			.checked_duration_since(std::time::Instant::now())
@@ -669,7 +669,7 @@ mod tests {
 				backoff_authoring_blocks: Some(BackoffAuthoringOnFinalizedHeadLagging::default()),
 				keystore,
 				can_author_with: sp_consensus::AlwaysCanAuthor,
-				slot_portion_proposing: SlotPortion::new(0.5),
+				block_proposal_slot_portion: SlotProportion::new(0.5),
 			}).expect("Starts aura"));
 		}
 
@@ -730,7 +730,7 @@ mod tests {
 			force_authoring: false,
 			backoff_authoring_blocks: Some(BackoffAuthoringOnFinalizedHeadLagging::default()),
 			_key_type: PhantomData::<AuthorityPair>,
-			slot_portion_proposing: SlotPortion::new(0.5),
+			block_proposal_slot_portion: SlotProportion::new(0.5),
 		};
 
 		let head = Header::new(
@@ -778,7 +778,7 @@ mod tests {
 			force_authoring: false,
 			backoff_authoring_blocks: Option::<()>::None,
 			_key_type: PhantomData::<AuthorityPair>,
-			slot_portion_proposing: SlotPortion::new(0.5),
+			block_proposal_slot_portion: SlotProportion::new(0.5),
 		};
 
 		let head = client.header(&BlockId::Number(0)).unwrap().unwrap();
