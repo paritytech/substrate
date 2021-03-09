@@ -574,7 +574,7 @@ pub mod pallet {
 
 			match current_phase {
 				Phase::Off if remaining <= signed_deadline && remaining > unsigned_deadline => {
-					// NOTE: if signed-phase length is zero, second part will fail.
+					// NOTE: if signed-phase length is zero, second part of the if-condition fails.
 					match Self::on_initialize_open_signed() {
 						Ok(snap_weight) => {
 							log!(info, "Starting signed phase round {}.", Self::round());
