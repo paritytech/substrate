@@ -268,18 +268,23 @@
 #![recursion_limit = "128"]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(any(feature = "runtime-benchmarks", test))]
-pub mod benchmarking;
 #[cfg(test)]
 mod mock;
-#[cfg(any(feature = "runtime-benchmarks", test))]
-pub mod testing_utils;
 #[cfg(test)]
 mod tests;
+#[cfg(any(feature = "runtime-benchmarks", test))]
+pub mod benchmarking;
+#[cfg(any(feature = "runtime-benchmarks", test))]
+pub mod testing_utils;
 
-pub mod inflation;
 pub mod slashing;
+pub mod inflation;
 pub mod weights;
+
+#[doc(hidden)]
+pub use sp_std;
+#[doc(hidden)]
+pub use frame_support;
 
 use sp_std::{
 	result,
@@ -333,7 +338,7 @@ macro_rules! log {
 	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
 		log::$level!(
 			target: crate::LOG_TARGET,
-			concat!("💸 ", $patter) $(, $values)*
+			concat!("[{:?}] 💸 ", $patter), <frame_system::Pallet<T>>::block_number() $(, $values)*
 		)
 	};
 }
@@ -1012,90 +1017,51 @@ decl_storage! {
 pub mod migrations {
 	use super::*;
 
-	pub mod v5 {
-		use super::*;
-
-		#[derive(Decode)]
-		struct OldValidatorPrefs {
-			#[codec(compact)]
-			pub commission: Perbill,
-		}
-		impl OldValidatorPrefs {
-			fn upgraded(self) -> ValidatorPrefs {
-				ValidatorPrefs { commission: self.commission, ..Default::default() }
-			}
-		}
-		pub fn migrate_to_blockable<T: Config>() -> frame_support::weights::Weight {
-			Validators::<T>::translate::<OldValidatorPrefs, _>(|_, p| Some(p.upgraded()));
-			ErasValidatorPrefs::<T>::translate::<OldValidatorPrefs, _>(|_, _, p| {
-				Some(p.upgraded())
-			});
-			T::BlockWeights::get().max_block
-		}
-	}
-
 	pub mod v6 {
 		use super::*;
 		use frame_support::{traits::Get, weights::Weight, pallet_prelude::*};
 
-		struct __SnapshotValidators<T>(sp_std::marker::PhantomData<T>);
-		impl<T: V6Config> frame_support::traits::StorageInstance for __SnapshotValidators<T> {
-			fn pallet_prefix() -> &'static str {
-				T::PalletPrefix::get()
-			}
-			const STORAGE_PREFIX: &'static str = "SnapshotValidators";
-		}
-		type SnapshotValidators<T> = StorageValue<__SnapshotValidators<T>, (), ValueQuery>;
-		// NOTE: value type ain't matter, we just set it to () here.
-
-		struct __SnapshotNominators<T>(sp_std::marker::PhantomData<T>);
-		impl<T: V6Config> frame_support::traits::StorageInstance for __SnapshotNominators<T> {
-			fn pallet_prefix() -> &'static str {
-				T::PalletPrefix::get()
-			}
-			const STORAGE_PREFIX: &'static str = "SnapshotNominators";
-		}
-		type SnapshotNominators<T> = StorageValue<__SnapshotNominators<T>, (), ValueQuery>;
-
-		struct __QueuedElected<T>(sp_std::marker::PhantomData<T>);
-		impl<T: V6Config> frame_support::traits::StorageInstance for __QueuedElected<T> {
-			fn pallet_prefix() -> &'static str {
-				T::PalletPrefix::get()
-			}
-			const STORAGE_PREFIX: &'static str = "QueuedElected";
-		}
-		type QueuedElected<T> = StorageValue<__QueuedElected<T>, (), ValueQuery>;
-
-		struct __QueuedScore<T>(sp_std::marker::PhantomData<T>);
-		impl<T: V6Config> frame_support::traits::StorageInstance for __QueuedScore<T> {
-			fn pallet_prefix() -> &'static str {
-				T::PalletPrefix::get()
-			}
-			const STORAGE_PREFIX: &'static str = "QueuedScore";
-		}
-		type QueuedScore<T> = StorageValue<__QueuedScore<T>, (), ValueQuery>;
-
-		struct __EraElectionStatus<T>(sp_std::marker::PhantomData<T>);
-		impl<T: V6Config> frame_support::traits::StorageInstance for __EraElectionStatus<T> {
-			fn pallet_prefix() -> &'static str {
-				T::PalletPrefix::get()
-			}
-			const STORAGE_PREFIX: &'static str = "EraElectionStatus";
-		}
-		type EraElectionStatus<T> = StorageValue<__EraElectionStatus<T>, (), ValueQuery>;
-
-		struct __IsCurrentSessionFinal<T>(sp_std::marker::PhantomData<T>);
-		impl<T: V6Config> frame_support::traits::StorageInstance for __IsCurrentSessionFinal<T> {
-			fn pallet_prefix() -> &'static str {
-				T::PalletPrefix::get()
-			}
-			const STORAGE_PREFIX: &'static str = "IsCurrentSessionFinal";
-		}
-		type IsCurrentSessionFinal<T> = StorageValue<__IsCurrentSessionFinal<T>, (), ValueQuery>;
-
 		pub trait V6Config: crate::Config {
 			/// The storage prefix of the pallet set by the outer runtime declaration.
 			type PalletPrefix: Get<&'static str>;
+		}
+
+		// TODO: complete this
+		macro_rules! generate_storage_types {
+			($name:ident<T: $trait:tt> => Map<$key:ty, $value:ty>) => {
+				unreachable!()
+			};
+			($name:ident<T: $trait:tt> => Value<$value:ty>) => {
+				paste::paste! {
+					struct [<$name Instance>]<T>($crate::sp_std::marker::PhantomData<T>);
+					impl<T: $trait> $crate::frame_support::traits::StorageInstance for [<$name Instance>]<T> {
+						fn pallet_prefix() -> &'static str {
+							T::PalletPrefix::get()
+						}
+						const STORAGE_PREFIX: &'static str = stringify!($name);
+					}
+					type $name<T> = StorageValue<[<$name Instance>]<T>, $value, ValueQuery>;
+				}
+			}
+		}
+
+		// NOTE: value type ain't matter, we just set it to () here.
+		generate_storage_types!(SnapshotValidators<T: V6Config> => Value<()>);
+		generate_storage_types!(SnapshotNominators<T: V6Config> => Value<()>);
+		generate_storage_types!(QueuedElected<T: V6Config> => Value<()>);
+		generate_storage_types!(QueuedScore<T: V6Config> => Value<()>);
+		generate_storage_types!(EraElectionStatus<T: V6Config> => Value<()>);
+		generate_storage_types!(IsCurrentSessionFinal<T: V6Config> => Value<()>);
+
+		/// check to execute prior to migration.
+		pub fn pre_migration<T: V6Config>() -> Result<(), &'static str> {
+			ensure!(SnapshotValidators::<T>::exists(), "SnapshotValidators storage item not found!");
+			ensure!(SnapshotNominators::<T>::exists(), "SnapshotNominators storage item not found!");
+			ensure!(QueuedElected::<T>::exists(), "QueuedElected storage item not found!");
+			ensure!(QueuedScore::<T>::exists(), "QueuedScore storage item not found!");
+			ensure!(EraElectionStatus::<T>::exists(), "EraElectionStatus storage item not found!");
+			ensure!(IsCurrentSessionFinal::<T>::exists(), "IsCurrentSessionFinal storage item not found!");
+			Ok(())
 		}
 
 		/// Migrate storage to v6.
@@ -1222,17 +1188,6 @@ decl_module! {
 		type Error = Error<T>;
 
 		fn deposit_event() = default;
-
-		fn on_runtime_upgrade() -> frame_support::weights::Weight {
-			if StorageVersion::get() == Releases::V4_0_0 {
-				log!(info, "Migrating staking to Releases::V5_0_0");
-
-				StorageVersion::put(Releases::V5_0_0);
-				migrations::v5::migrate_to_blockable::<T>()
-			} else {
-				0
-			}
-		}
 
 		fn on_finalize() {
 			// Set the start of the first era.
@@ -2621,31 +2576,16 @@ impl<T: Config> sp_election_providers::ElectionDataProvider<T::AccountId, T::Blo
 /// some session can lag in between the newest session planned and the latest session started.
 impl<T: Config> pallet_session::SessionManager<T::AccountId> for Module<T> {
 	fn new_session(new_index: SessionIndex) -> Option<Vec<T::AccountId>> {
-		log!(
-			trace,
-			"[{:?}] planning new_session({})",
-			<frame_system::Module<T>>::block_number(),
-			new_index,
-		);
+		log!(trace, "planning new_session({})", new_index);
 		CurrentPlannedSession::put(new_index);
 		Self::new_session(new_index)
 	}
 	fn start_session(start_index: SessionIndex) {
-		log!(
-			trace,
-			"[{:?}] starting start_session({})",
-			<frame_system::Module<T>>::block_number(),
-			start_index,
-		);
+		log!(trace, "starting start_session({})", start_index);
 		Self::start_session(start_index)
 	}
 	fn end_session(end_index: SessionIndex) {
-		log!(
-			trace,
-			"[{:?}] ending end_session({})",
-			<frame_system::Module<T>>::block_number(),
-			end_index,
-		);
+		log!(trace, "ending end_session({})", end_index);
 		Self::end_session(end_index)
 	}
 }

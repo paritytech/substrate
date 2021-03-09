@@ -28,6 +28,7 @@ pallet-session = { version = "3.0.0", default-features = false, features = ["his
 pallet-authorship = { version = "3.0.0", default-features = false, path = "../authorship" }
 sp-application-crypto = { version = "3.0.0", default-features = false, path = "../../primitives/application-crypto" }
 log = { version = "0.4.14", default-features = false }
+paste = "1.0"
 sp-election-providers = { version = "3.0.0", default-features = false, path = "../../primitives/election-providers" }
 
 # Optional imports for benchmarking
