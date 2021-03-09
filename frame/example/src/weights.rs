@@ -30,7 +30,7 @@
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{traits::Get, weights::Weight};
+use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
 use sp_std::marker::PhantomData;
 use crate::WeightInfo;
 
@@ -51,6 +51,29 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			// Standard Error: 62_000
 			.saturating_add((20_000 as Weight).saturating_mul(b as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+	}
+	fn sort_vector(x: u32, ) -> Weight {
+		(123_304_000 as Weight)
+			// Standard Error: 0
+			.saturating_add((5_000 as Weight).saturating_mul(x as Weight))
+	}
+}
+
+impl WeightInfo for () {
+	fn accumulate_dummy(_b: u32, ) -> Weight {
+		(2_065_526_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+	}
+	fn set_dummy(_b: u32, ) -> Weight {
+		(229_850_000 as Weight)
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+	}
+	fn another_set_dummy(b: u32, ) -> Weight {
+		(228_835_000 as Weight)
+			// Standard Error: 62_000
+			.saturating_add((20_000 as Weight).saturating_mul(b as Weight))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	fn sort_vector(x: u32, ) -> Weight {
 		(123_304_000 as Weight)

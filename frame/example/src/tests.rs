@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 mod tests {
-	use super::*;
+	use crate::*;
 
 	use frame_support::{
 		assert_ok, parameter_types,
@@ -76,6 +76,7 @@ mod tests {
 	}
 	impl Config for Test {
 		type Event = Event;
+		type WeightInfo = ();
 	}
 
 	// This function basically just builds a genesis storage key/value store according to
@@ -83,14 +84,14 @@ mod tests {
 	pub fn new_test_ext() -> sp_io::TestExternalities {
 		let t = GenesisConfig {
 			// We use default for brevity, but you can configure as desired if needed.
-			frame_system: Some(Default::default()),
-			pallet_balances: Some(Default::default()),
-			pallet_example: Some(pallet_example::GenesisConfig {
+			frame_system: Default::default(),
+			pallet_balances: Default::default(),
+			pallet_example: pallet_example::GenesisConfig {
 				dummy: 42,
 				// we configure the map with (key, value) pairs.
 				bar: vec![(1, 2), (2, 3)],
 				foo: 24,
-			}),
+			},
 		}.build_storage().unwrap();
 		t.into()
 	}
@@ -148,13 +149,15 @@ mod tests {
 	fn weights_work() {
 		// must have a defined weight.
 		let default_call = <pallet_example::Call<Test>>::accumulate_dummy(10);
-		let info = default_call.get_dispatch_info();
+		let info1 = default_call.get_dispatch_info();
 		// aka. `let info = <Call<Test> as GetDispatchInfo>::get_dispatch_info(&default_call);`
-		assert_eq!(info.weight, 0);
+		assert!(info1.weight > 0);
 
-		// must have a custom weight of `100 * arg = 2000`
+
+		// `set_dummy` is simpler than `accumulate_dummy`, and the weight
+		//   should be less.
 		let custom_call = <pallet_example::Call<Test>>::set_dummy(20);
-		let info = custom_call.get_dispatch_info();
-		assert_eq!(info.weight, 2000);
+		let info2 = custom_call.get_dispatch_info();
+		assert!(info1.weight > info2.weight);
 	}
 }
