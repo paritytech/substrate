@@ -128,15 +128,14 @@
 //!     }
 //!
 //!     impl<T: Config> ElectionProvider<AccountId, BlockNumber> for GenericElectionProvider<T> {
-//!         type Error = ();
+//!         type Error = &'static str;
 //!         type DataProvider = T::DataProvider;
 //!
-//!         fn elect() -> Result<Supports<AccountId>, Self::Error> {
+//!         fn elect() -> Result<(Supports<AccountId>, Weight), Self::Error> {
 //!             Self::DataProvider::targets(None)
-//!                 .map_err(|_| ())
-//! 				.and_then(|(t, _)| {
-//! 					t.first().map(|winner| vec![(*winner, Support::default())])
-//! 						.ok_or(())
+//!                 .map_err(|_| "failed to elect")
+//!                 .map(|(t, weight)| {
+//!						(vec![(t[0], Support::default())], weight)
 //! 				})
 //!         }
 //!     }
