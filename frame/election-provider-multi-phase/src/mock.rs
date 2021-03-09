@@ -311,11 +311,12 @@ impl ElectionDataProvider<AccountId, u64> for StakingMock {
 	fn voters(
 		maybe_max_len: Option<usize>,
 	) -> data_provider::Result<(Vec<(AccountId, VoteWeight, Vec<AccountId>)>, Weight)> {
-		if maybe_max_len.map_or(false, |max_len| Voters::get().len() > max_len) {
+		let voters = Voters::get();
+		if maybe_max_len.map_or(false, |max_len| voters.len() > max_len) {
 			return Err("Voters too big");
 		}
 
-		Ok((Voters::get(), 0))
+		Ok((voters, 0))
 	}
 	fn desired_targets() -> data_provider::Result<(u32, Weight)> {
 		Ok((DesiredTargets::get(), 0))
