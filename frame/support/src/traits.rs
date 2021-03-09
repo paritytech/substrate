@@ -1518,6 +1518,10 @@ pub trait OnFinalize<BlockNumber> {
 	fn on_finalize(_n: BlockNumber) {}
 }
 
+/// The block's on idle trait
+///
+/// Implementing this lets you express what should happen for your pallet
+/// before on finalize and based on if a remaining weight threshold is met.
 pub trait OnIdle<BlockNumber> {
 	/// The block is being finalized.
 	/// Implement to have something happen if the remaining_weight is high enough.
@@ -2061,7 +2065,10 @@ pub trait Hooks<BlockNumber> {
 	/// The block is being finalized. Implement to have something happen.
 	fn on_finalize(_n: BlockNumber) {}
 
-	/// The block is being finalized. Implement to have something happen using the remaining weight.
+	/// This will be run when the block is being finalized (before on finalize).
+	/// Implement to have something happen using the remaining weight.
+	/// Returns the weight used, passes it to the next on idle hook if exists.
+	/// Will not fire if the remaining weight is below 0.
 	fn on_idle(
 		_n: BlockNumber,
 		_remaining_weight: crate::weights::Weight

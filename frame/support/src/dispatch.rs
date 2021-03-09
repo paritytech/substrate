@@ -302,7 +302,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 ///
 /// * `on_idle`: Executes at the end of a block. Passes a remaining weight to provide a threshold
 /// for when to execute non vital functions. Using this function will implement the
-/// [`OnIdle`] trait.
+/// [`OnIdle`](./traits/trait.OnIdle.html) trait.
 /// Function signature is:
 ///   * `fn on_idle(n: BlockNumber, remaining_weight: Weight) -> frame_support::weights::Weight`
 ///
