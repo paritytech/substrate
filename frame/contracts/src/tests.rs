@@ -479,7 +479,7 @@ fn instantiate_and_call_and_deposit_event() {
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::frame_system(frame_system::Event::NewAccount(ALICE.clone())),
+					event: Event::pallet_accounts(pallet_accounts::Event::NewAccount(ALICE.clone())),
 					topics: vec![],
 				},
 				EventRecord {
@@ -491,7 +491,7 @@ fn instantiate_and_call_and_deposit_event() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::frame_system(frame_system::Event::NewAccount(addr.clone())),
+					event: Event::pallet_accounts(pallet_accounts::Event::NewAccount(addr.clone())),
 					topics: vec![],
 				},
 				EventRecord {
@@ -1208,7 +1208,7 @@ fn restoration(
 			let mut events = vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::frame_system(frame_system::Event::NewAccount(ALICE)),
+					event: Event::pallet_accounts(pallet_accounts::Event::NewAccount(ALICE)),
 					topics: vec![],
 				},
 				EventRecord {
@@ -1220,7 +1220,7 @@ fn restoration(
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::frame_system(frame_system::Event::NewAccount(addr_bob.clone())),
+					event: Event::pallet_accounts(pallet_accounts::Event::NewAccount(addr_bob.clone())),
 					topics: vec![],
 				},
 				EventRecord {
@@ -1269,7 +1269,7 @@ fn restoration(
 				events.extend([
 					EventRecord {
 						phase: Phase::Initialization,
-						event: Event::frame_system(frame_system::Event::NewAccount(addr_dummy.clone())),
+						event: Event::pallet_accounts(pallet_accounts::Event::NewAccount(addr_dummy.clone())),
 						topics: vec![],
 					},
 					EventRecord {
@@ -1421,7 +1421,7 @@ fn restoration(
 							},
 							EventRecord {
 								phase: Phase::Initialization,
-								event: Event::frame_system(frame_system::Event::NewAccount(CHARLIE)),
+								event: Event::pallet_accounts(pallet_accounts::Event::NewAccount(CHARLIE)),
 								topics: vec![],
 							},
 							EventRecord {
@@ -1431,7 +1431,7 @@ fn restoration(
 							},
 							EventRecord {
 								phase: Phase::Initialization,
-								event: Event::frame_system(frame_system::Event::NewAccount(addr_django.clone())),
+								event: Event::pallet_accounts(pallet_accounts::Event::NewAccount(addr_django.clone())),
 								topics: vec![],
 							},
 							EventRecord {
@@ -1494,7 +1494,7 @@ fn restoration(
 					},
 					EventRecord {
 						phase: Phase::Initialization,
-						event: Event::frame_system(system::Event::KilledAccount(addr_django.clone())),
+						event: Event::pallet_accounts(pallet_accounts::Event::KilledAccount(addr_django.clone())),
 						topics: vec![],
 					},
 					EventRecord {
@@ -1727,8 +1727,8 @@ fn self_destruct_works() {
 			pretty_assertions::assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::frame_system(
-						frame_system::Event::KilledAccount(addr.clone())
+					event: Event::pallet_accounts(
+						pallet_accounts::Event::KilledAccount(addr.clone())
 					),
 					topics: vec![],
 				},
