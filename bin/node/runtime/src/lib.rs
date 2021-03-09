@@ -1073,7 +1073,7 @@ impl pallet_gilt::Config for Runtime {
 
 impl pallet_example::Config for Runtime {
 	type Event = Event;
-	type WeightInfo = pallet_example::weights::WeightInfo<Runtime>;
+	type WeightInfo = pallet_example::weights::SubstrateWeight<Runtime>;
 }
 
 construct_runtime!(

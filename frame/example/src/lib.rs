@@ -321,7 +321,7 @@ pub use pallet::*;
 mod tests;
 mod benchmarking;
 pub mod weights;
-pub use weights::WeightInfo;
+pub use weights::SubstrateWeight;
 
 // Definition of the pallet logic, to be aggregated at runtime definition through
 // `construct_runtime`.
@@ -348,7 +348,7 @@ pub mod pallet {
 	pub trait Config: pallet_balances::Config + frame_system::Config {
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
-		type WeightInfo: WeightInfoTrait;
+		type WeightInfo: WeightInfo;
 	}
 
 	// Simple declaration of the `Pallet` type. It is placeholder we use to implement traits and
@@ -468,7 +468,9 @@ pub mod pallet {
 		// difficulty) of the transaction and the latter demonstrates the [`DispatchClass`] of the
 		// call. A higher weight means a larger transaction (less of which can be placed in a
 		// single block).
-		#[pallet::weight(<T as pallet::Config>::WeightInfo::accumulate_dummy(0))]
+		#[pallet::weight(
+			<T as pallet::Config>::WeightInfo::accumulate_dummy(0)
+		)]
 		pub(super) fn accumulate_dummy(
 			origin: OriginFor<T>,
 			increase_by: T::Balance
@@ -509,8 +511,9 @@ pub mod pallet {
 		// calls to be executed - we don't need to care why. Because it's privileged, we can
 		// assume it's a one-off operation and substantial processing/storage/memory can be used
 		// without worrying about gameability or attack scenarios.
-		#[pallet::weight(<T as pallet::Config>::WeightInfo::another_set_dummy(
-			(*new_value).saturated_into()))]
+		#[pallet::weight(
+			<T as pallet::Config>::WeightInfo::set_dummy((*new_value).saturated_into())
+		)]
 		fn set_dummy(
 			origin: OriginFor<T>,
 			#[pallet::compact] new_value: T::Balance,
