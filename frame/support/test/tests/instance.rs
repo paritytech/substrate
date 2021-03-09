@@ -291,26 +291,26 @@ pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, 
 
 fn new_test_ext() -> sp_io::TestExternalities {
 	GenesisConfig{
-		module1_Instance1: Some(module1::GenesisConfig {
+		module1_Instance1: module1::GenesisConfig {
 			value: 3,
 			test: 2,
-		}),
-		module1_Instance2: Some(module1::GenesisConfig {
+		},
+		module1_Instance2: module1::GenesisConfig {
 			value: 4,
 			test: 5,
-		}),
-		module2: Some(module2::GenesisConfig {
+		},
+		module2: module2::GenesisConfig {
 			value: 4,
 			map: vec![(0, 0)],
 			double_map: vec![(0, 0, 0)],
-		}),
-		module2_Instance1: Some(module2::GenesisConfig {
+		},
+		module2_Instance1: module2::GenesisConfig {
 			value: 4,
 			map: vec![(0, 0)],
 			double_map: vec![(0, 0, 0)],
-		}),
-		module2_Instance2: None,
-		module2_Instance3: None,
+		},
+		module2_Instance2: Default::default(),
+		module2_Instance3: Default::default(),
 	}.build_storage().unwrap().into()
 }
 
