@@ -1524,10 +1524,12 @@ pub trait OnFinalize<BlockNumber> {
 /// before on finalize and based on if a remaining weight threshold is met.
 pub trait OnIdle<BlockNumber> {
 	/// The block is being finalized.
-	/// Implement to have something happen if the remaining_weight is high enough.
+	/// Implement to have something happen in case there if left over weight.
+	/// Check the passed `remaining_weight` to make sure it is high enough to allow for
+	/// your pallet's extra computation.
 	///
-	/// NOTE: This function is called AFTER ALL extrinsics in a block are applied,
-	/// but, before on_finalize. This includes inherent extrinsics.
+	/// NOTE: This function is called AFTER ALL extrinsics - including inherent extrinsics -
+	/// in a block are applied but before `on_finalize` is executed.
 	fn on_idle(
 		_n: BlockNumber,
 		_remaining_weight: crate::weights::Weight
