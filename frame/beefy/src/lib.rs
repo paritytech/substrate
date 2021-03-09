@@ -96,6 +96,14 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+	/// Return the current active BEEFY validator set.
+	pub fn validator_set() -> ValidatorSet<T::AuthorityId> {
+		ValidatorSet::<T::AuthorityId> {
+			validators: Self::authorities(),
+			id: Self::validator_set_id(),
+		}
+	}
+
 	fn change_authorities(new: Vec<T::AuthorityId>, queued: Vec<T::AuthorityId>) {
 		// As in GRANDPA, we trigger a validator set change only if the the validator
 		// set has actually changed.

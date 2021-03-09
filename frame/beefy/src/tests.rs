@@ -103,3 +103,39 @@ fn session_change_updates_next_authorities() {
 		assert_eq!(want[3], next_authorities[1]);
 	});
 }
+
+#[test]
+fn validator_set_at_genesis() {
+	let want = vec![mock_beefy_id(1), mock_beefy_id(2)];
+
+	new_test_ext(vec![1, 2, 3, 4]).execute_with(|| {
+		let vs = Beefy::validator_set();
+
+		assert_eq!(vs.id, 0u64);
+		assert_eq!(vs.validators[0], want[0]);
+		assert_eq!(vs.validators[1], want[1]);
+	});
+}
+
+#[test]
+fn validator_set_updates_work() {
+	let want = vec![mock_beefy_id(1), mock_beefy_id(2), mock_beefy_id(3), mock_beefy_id(4)];
+
+	new_test_ext(vec![1, 2, 3, 4]).execute_with(|| {
+		init_block(1);
+
+		let vs = Beefy::validator_set();
+
+		assert_eq!(vs.id, 0u64);
+		assert_eq!(want[0], vs.validators[0]);
+		assert_eq!(want[1], vs.validators[1]);
+
+		init_block(2);
+
+		let vs = Beefy::validator_set();
+
+		assert_eq!(vs.id, 1u64);
+		assert_eq!(want[2], vs.validators[0]);
+		assert_eq!(want[3], vs.validators[1]);
+	});
+}

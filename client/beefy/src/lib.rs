@@ -111,12 +111,13 @@ pub async fn start_beefy_gadget<Block, Pair, Backend, Client, Network, SyncOracl
 	);
 
 	let at = BlockId::hash(client.info().best_hash);
-	let authorities = client
+	let validator_set = client
 		.runtime_api()
-		.authorities(&at)
+		.validator_set(&at)
 		.expect("Failed to get BEEFY authorities");
 
-	let local_id = match authorities
+	let local_id = match validator_set
+		.validators
 		.iter()
 		.find(|id| SyncCryptoStore::has_keys(&*key_store, &[(id.to_raw_vec(), KEY_TYPE)]))
 	{
@@ -136,7 +137,7 @@ pub async fn start_beefy_gadget<Block, Pair, Backend, Client, Network, SyncOracl
 	let worker = worker::BeefyWorker::<_, Pair::Public, Pair::Signature, _>::new(
 		local_id,
 		key_store,
-		authorities,
+		validator_set.validators,
 		client.finality_notification_stream(),
 		gossip_engine,
 		signed_commitment_sender,
