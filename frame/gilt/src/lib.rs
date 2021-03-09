@@ -109,6 +109,10 @@ pub mod pallet {
 		/// over freezing period).
 		type Surplus: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
+		/// The issuance to ignore. This is subtracted from the `Currency`'s `total_issuance` to get
+		/// the issuance by which we inflate or deflate the gilt.
+		type IgnoredIssuance: Get<BalanceOf<Self>>;
+
 		/// Number of duration queues in total. This sets the maximum duration supported, which is
 		/// this value multiplied by `Period`.
 		#[pallet::constant]
@@ -191,7 +195,9 @@ pub mod pallet {
 	/// The way of determining the net issuance (i.e. after factoring in all maturing frozen funds)
 	/// is:
 	///
-	/// `total_issuance - frozen + proportion * total_issuance`
+	/// `issuance - frozen + proportion * issuance`
+	///
+	/// where `issuance = total_issuance - IgnoredIssuance`
 	#[derive(Clone, Eq, PartialEq, Default, Encode, Decode, RuntimeDebug)]
 	pub struct ActiveGiltsTotal<Balance> {
 		/// The total amount of funds held in reserve for all active gilts.
@@ -440,7 +446,7 @@ pub mod pallet {
 			Active::<T>::remove(index);
 
 			// Multiply the proportion it is by the total issued.
-			let total_issuance = T::Currency::total_issuance();
+			let total_issuance = T::Currency::total_issuance().saturating_sub(T::IgnoredIssuance::get());
 			ActiveTotal::<T>::mutate(|totals| {
 				let nongilt_issuance: u128 = total_issuance.saturating_sub(totals.frozen)
 					.saturated_into();
@@ -490,7 +496,7 @@ pub mod pallet {
 			if totals.proportion < totals.target {
 				let missing = totals.target.saturating_sub(totals.proportion);
 
-				let total_issuance = T::Currency::total_issuance();
+				let total_issuance = T::Currency::total_issuance().saturating_sub(T::IgnoredIssuance::get());
 				let nongilt_issuance: u128 = total_issuance.saturating_sub(totals.frozen)
 					.saturated_into();
 				let effective_issuance = totals.proportion.left_from_one()
@@ -515,7 +521,7 @@ pub mod pallet {
 			amount: BalanceOf<T>,
 			max_bids: u32,
 		) -> (u32, u32) {
-			let total_issuance = T::Currency::total_issuance();
+			let total_issuance = T::Currency::total_issuance().saturating_sub(T::IgnoredIssuance::get());
 			let mut remaining = amount;
 			let mut bids_taken = 0;
 			let mut queues_hit = 0;

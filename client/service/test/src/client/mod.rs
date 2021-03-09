@@ -988,12 +988,13 @@ fn key_changes_works() {
 			None,
 			&StorageKey(key),
 		).unwrap();
-		match actual_result == expected_result {
-			true => (),
-			false => panic!(
+		if actual_result != expected_result {
+			panic!(
 				"Failed test {}: actual = {:?}, expected = {:?}",
-				index, actual_result, expected_result,
-			),
+				index,
+				actual_result,
+				expected_result,
+			);
 		}
 	}
 }
