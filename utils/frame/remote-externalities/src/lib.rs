@@ -101,9 +101,6 @@
 //! }
 //! ```
 
-// jsonrpsee_proc_macros generates faulty warnings: https://github.com/paritytech/jsonrpsee/issues/106
-#![allow(dead_code)]
-
 use std::{
 	fs,
 	path::{Path, PathBuf},
