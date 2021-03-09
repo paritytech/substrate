@@ -124,6 +124,8 @@ use frame_system::{self as system, ensure_signed};
 
 pub use weights::WeightInfo;
 
+pub mod migrations_4_0_0;
+
 type BalanceOf<T> = pallet_treasury::BalanceOf<T>;
 
 type PositiveImbalanceOf<T> = pallet_treasury::PositiveImbalanceOf<T>;
@@ -896,7 +898,7 @@ decl_module! {
 
 			// Ensure parent bounty is Active & get status of curator
 			let (master_curator, _) = Self::ensure_bounty_exist(bounty_id, false)
-				.map(|rval| rval.unwrap_or((Default::default(), Default::default())))
+				.map(|rval| rval.unwrap_or((T::AccountId::default(), Zero::zero())))
 				.map_err(|err| err)?;
 
 			// Mutate the Subbounty instance
@@ -1064,7 +1066,7 @@ decl_module! {
 				bounty_id,
 				maybe_sender.is_none(),
 			).map(|rval|
-				rval.unwrap_or((Default::default(), Default::default())),
+				rval.unwrap_or((T::AccountId::default(), Zero::zero())),
 			).map_err(|err| err)?;
 
 			// Ensure subbounty is in expected state
@@ -1379,7 +1381,7 @@ decl_module! {
 				maybe_sender.is_none(),
 			)
 			.map(|rval|
-				rval.unwrap_or((Default::default(),Default::default()))
+				rval.unwrap_or((T::AccountId::default(), Zero::zero())),
 			).map_err(|err| err)?;
 
 			ensure!(
