@@ -206,7 +206,6 @@ impl<B: BlockT> BlockRequestHandler<B> {
 
 		let result = if reputation_changes.is_empty() {
 			let block_response = self.get_block_response(
-				&mut reputation_changes,
 				attributes,
 				from_block_id,
 				direction,
@@ -229,7 +228,6 @@ impl<B: BlockT> BlockRequestHandler<B> {
 
 	fn get_block_response(
 		&self,
-		reputation_changes: &mut Vec<ReputationChange>,
 		attributes: BlockAttributes,
 		mut block_id: BlockId<B>,
 		direction: Direction,
