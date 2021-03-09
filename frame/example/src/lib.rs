@@ -255,8 +255,10 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::prelude::*;
-use sp_std::marker::PhantomData;
+use sp_std::{
+	prelude::*,
+	marker::PhantomData
+};
 use frame_support::{
 	dispatch::DispatchResult, traits::IsSubType,
 	weights::{DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee, Pays},
@@ -321,7 +323,7 @@ pub use pallet::*;
 mod tests;
 mod benchmarking;
 pub mod weights;
-pub use weights::SubstrateWeight;
+pub use weights::*;
 
 // Definition of the pallet logic, to be aggregated at runtime definition through
 // `construct_runtime`.
@@ -331,13 +333,6 @@ pub mod pallet {
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 	use super::*;
-
-	pub trait WeightInfo {
-		fn accumulate_dummy(_b: u32, ) -> Weight;
-		fn set_dummy(_b: u32, ) -> Weight;
-		fn another_set_dummy(b: u32, ) -> Weight;
-		fn sort_vector(x: u32, ) -> Weight;
-	}
 
 	/// Our pallet's configuration trait. All our types and constants go in here. If the
 	/// pallet is dependent on specific other pallets, then their configuration traits
