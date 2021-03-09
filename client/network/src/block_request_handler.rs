@@ -37,7 +37,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::hash::{Hasher, Hash};
 
-const LOG_TARGET: &str = "block-request-handler";
+const LOG_TARGET: &str = "sync";
 const MAX_BLOCKS_IN_RESPONSE: usize = 128;
 const MAX_BODY_BYTES: usize = 8 * 1024 * 1024;
 const MAX_NUMBER_OF_SAME_REQUESTS_PER_PEER: usize = 2;
