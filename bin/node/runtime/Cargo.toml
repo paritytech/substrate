@@ -58,7 +58,6 @@ pallet-contracts-rpc-runtime-api = { version = "3.0.0", default-features = false
 pallet-democracy = { version = "3.0.0", default-features = false, path = "../../../frame/democracy" }
 pallet-election-provider-multi-phase = { version = "3.0.0", default-features = false, path = "../../../frame/election-provider-multi-phase" }
 pallet-elections-phragmen = { version = "3.0.0", default-features = false, path = "../../../frame/elections-phragmen" }
-pallet-example = { version = "3.0.0", default-features = false, path = "../../../frame/example" }
 pallet-gilt = { version = "3.0.0", default-features = false, path = "../../../frame/gilt" }
 pallet-grandpa = { version = "3.0.0", default-features = false, path = "../../../frame/grandpa" }
 pallet-im-online = { version = "3.0.0", default-features = false, path = "../../../frame/im-online" }

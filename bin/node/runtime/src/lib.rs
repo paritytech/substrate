@@ -1071,11 +1071,6 @@ impl pallet_gilt::Config for Runtime {
 	type WeightInfo = pallet_gilt::weights::SubstrateWeight<Runtime>;
 }
 
-impl pallet_example::Config for Runtime {
-	type Event = Event;
-	type WeightInfo = pallet_example::weights::SubstrateWeight<Runtime>;
-}
-
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -1120,7 +1115,6 @@ construct_runtime!(
 		Mmr: pallet_mmr::{Module, Storage},
 		Lottery: pallet_lottery::{Module, Call, Storage, Event<T>},
 		Gilt: pallet_gilt::{Module, Call, Storage, Event<T>, Config},
-		Example: pallet_example::{Module, Call, Storage, Event<T>},
 	}
 );
 
@@ -1459,7 +1453,6 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, pallet_democracy, Democracy);
 			add_benchmark!(params, batches, pallet_election_provider_multi_phase, ElectionProviderMultiPhase);
 			add_benchmark!(params, batches, pallet_elections_phragmen, Elections);
-			add_benchmark!(params, batches, pallet_example, Example);
 			add_benchmark!(params, batches, pallet_gilt, Gilt);
 			add_benchmark!(params, batches, pallet_grandpa, Grandpa);
 			add_benchmark!(params, batches, pallet_identity, Identity);
