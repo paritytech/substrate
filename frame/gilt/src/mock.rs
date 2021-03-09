@@ -21,7 +21,7 @@ use crate as pallet_gilt;
 
 use frame_support::{
 	parameter_types, ord_parameter_types,
-	traits::{OnInitialize, OnFinalize, GenesisBuild, Get, Currency},
+	traits::{OnInitialize, OnFinalize, GenesisBuild, Currency},
 };
 use sp_core::H256;
 use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
@@ -87,6 +87,7 @@ impl pallet_balances::Config for Test {
 }
 
 parameter_types! {
+	pub IgnoredIssuance: u64 = Balances::total_balance(&0); // Account zero is ignored.
 	pub const QueueCount: u32 = 3;
 	pub const MaxQueueLen: u32 = 3;
 	pub const FifoQueueLen: u32 = 1;
@@ -97,14 +98,6 @@ parameter_types! {
 }
 ord_parameter_types! {
 	pub const One: u64 = 1;
-}
-
-pub struct IgnoredIssuance;
-impl Get<u64> for IgnoredIssuance {
-	fn get() -> u64 {
-		// Account zero is ignored.
-		Balances::total_balance(&0)
-	}
 }
 
 impl pallet_gilt::Config for Test {
