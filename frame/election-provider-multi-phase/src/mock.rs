@@ -301,11 +301,13 @@ pub struct ExtBuilder {}
 pub struct StakingMock;
 impl ElectionDataProvider<AccountId, u64> for StakingMock {
 	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<AccountId>, Weight)> {
-		if maybe_max_len.map_or(false, |max_len| Targets::get().len() > max_len) {
+		let targets = Targets::get();
+
+		if maybe_max_len.map_or(false, |max_len| targets.len() > max_len) {
 			return Err("Targets too big");
 		}
 
-		Ok((Targets::get(), 0))
+		Ok((targets, 0))
 	}
 
 	fn voters(
