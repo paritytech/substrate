@@ -864,12 +864,13 @@ pub mod migrations {
 	use super::*;
 	use frame_support::pallet_prelude::{ValueQuery, StorageValue};
 
-	pub trait HasPalletPrefix: Config {
+	/// Something that can return the storage prefix of the `Babe` pallet.
+	pub trait BabePalletPrefix: Config {
 		fn pallet_prefix() -> &'static str;
 	}
 
 	struct __OldNextEpochConfig<T>(sp_std::marker::PhantomData<T>);
-	impl<T: HasPalletPrefix> frame_support::traits::StorageInstance for __OldNextEpochConfig<T> {
+	impl<T: BabePalletPrefix> frame_support::traits::StorageInstance for __OldNextEpochConfig<T> {
 		fn pallet_prefix() -> &'static str { T::pallet_prefix() }
 		const STORAGE_PREFIX: &'static str = "NextEpochConfig";
 	}
@@ -878,7 +879,9 @@ pub mod migrations {
 		__OldNextEpochConfig<T>, Option<NextConfigDescriptor>, ValueQuery
 	>;
 
-	pub fn add_epoch_configuration<T: HasPalletPrefix>(
+	/// A storage migration that adds the current epoch configuration for Babe
+	/// to storage.
+	pub fn add_epoch_configuration<T: BabePalletPrefix>(
 		epoch_config: BabeEpochConfiguration,
 	) -> Weight {
 		let mut writes = 0;

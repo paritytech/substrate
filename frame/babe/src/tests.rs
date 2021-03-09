@@ -844,9 +844,9 @@ fn add_epoch_configurations_migration_works() {
 		put_storage_value, get_storage_value,
 	};
 
-	impl crate::migrations::HasPalletPrefix for Test {
+	impl crate::migrations::BabePalletPrefix for Test {
 		fn pallet_prefix() -> &'static str {
-			"BabeApi"
+			"Babe"
 		}
 	}
 
@@ -857,14 +857,14 @@ fn add_epoch_configurations_migration_works() {
 		};
 
 		put_storage_value(
-			b"BabeApi",
+			b"Babe",
 			b"NextEpochConfig",
 			&[],
 			Some(next_config_descriptor.clone())
 		);
 
 		assert!(get_storage_value::<Option<NextConfigDescriptor>>(
-			b"BabeApi",
+			b"Babe",
 			b"NextEpochConfig",
 			&[],
 		).is_some());
@@ -879,7 +879,7 @@ fn add_epoch_configurations_migration_works() {
 		);
 
 		assert!(get_storage_value::<Option<NextConfigDescriptor>>(
-			b"BabeApi",
+			b"Babe",
 			b"NextEpochConfig",
 			&[],
 		).is_none());
