@@ -69,6 +69,7 @@ pub use sp_consensus_aura::{
 };
 pub use sp_consensus::SyncOracle;
 pub use import_queue::{ImportQueueParams, import_queue, AuraBlockImport, CheckForEquivocation};
+pub use sc_consensus_slots::SlotProportion;
 
 type AuthorityId<P> = <P as Pair>::Public;
 
@@ -142,6 +143,12 @@ pub struct StartAuraParams<C, SC, I, PF, SO, BS, CAW> {
 	pub keystore: SyncCryptoStorePtr,
 	/// Can we author a block with this node?
 	pub can_author_with: CAW,
+	/// The proportion of the slot dedicated to proposing.
+	///
+	/// The block proposing will be limited to this proportion of the slot from the starting of the
+	/// slot. However, the proposing can still take longer when there is some lenience factor applied,
+	/// because there were no blocks produced for some slots.
+	pub block_proposal_slot_portion: SlotProportion,
 }
 
 /// Start the aura worker. The returned future should be run in a futures executor.
@@ -158,6 +165,7 @@ pub fn start_aura<P, B, C, SC, PF, I, SO, CAW, BS, Error>(
 		backoff_authoring_blocks,
 		keystore,
 		can_author_with,
+		block_proposal_slot_portion,
 	}: StartAuraParams<C, SC, I, PF, SO, BS, CAW>,
 ) -> Result<impl Future<Output = ()>, sp_consensus::Error> where
 	B: BlockT,
@@ -184,6 +192,7 @@ pub fn start_aura<P, B, C, SC, PF, I, SO, CAW, BS, Error>(
 		force_authoring,
 		backoff_authoring_blocks,
 		_key_type: PhantomData::<P>,
+		block_proposal_slot_portion,
 	};
 	register_aura_inherent_data_provider(
 		&inherent_data_providers,
@@ -208,6 +217,7 @@ struct AuraWorker<C, E, I, P, SO, BS> {
 	sync_oracle: SO,
 	force_authoring: bool,
 	backoff_authoring_blocks: Option<BS>,
+	block_proposal_slot_portion: SlotProportion,
 	_key_type: PhantomData<P>,
 }
 
@@ -365,11 +375,22 @@ where
 		&self,
 		head: &B::Header,
 		slot_info: &SlotInfo,
-	) -> Option<std::time::Duration> {
-		let slot_remaining = self.slot_remaining_duration(slot_info);
+	) -> std::time::Duration {
+		let max_proposing = slot_info.duration.mul_f32(self.block_proposal_slot_portion.get());
+
+		let slot_remaining = slot_info.ends_at
+			.checked_duration_since(std::time::Instant::now())
+			.unwrap_or_default();
+
+		let slot_remaining = std::cmp::min(slot_remaining, max_proposing);
+
+		// If parent is genesis block, we don't require any lenience factor.
+		if head.number().is_zero() {
+			return slot_remaining
+		}
 
 		let parent_slot = match find_pre_digest::<B, P::Signature>(head) {
-			Err(_) => return Some(slot_remaining),
+			Err(_) => return slot_remaining,
 			Ok(d) => d,
 		};
 
@@ -383,9 +404,9 @@ where
 				slot_lenience.as_secs(),
 			);
 
-			Some(slot_remaining + slot_lenience)
+			slot_remaining + slot_lenience
 		} else {
-			Some(slot_remaining)
+			slot_remaining
 		}
 	}
 }
@@ -648,6 +669,7 @@ mod tests {
 				backoff_authoring_blocks: Some(BackoffAuthoringOnFinalizedHeadLagging::default()),
 				keystore,
 				can_author_with: sp_consensus::AlwaysCanAuthor,
+				block_proposal_slot_portion: SlotProportion::new(0.5),
 			}).expect("Starts aura"));
 		}
 
@@ -708,6 +730,7 @@ mod tests {
 			force_authoring: false,
 			backoff_authoring_blocks: Some(BackoffAuthoringOnFinalizedHeadLagging::default()),
 			_key_type: PhantomData::<AuthorityPair>,
+			block_proposal_slot_portion: SlotProportion::new(0.5),
 		};
 
 		let head = Header::new(
@@ -755,6 +778,7 @@ mod tests {
 			force_authoring: false,
 			backoff_authoring_blocks: Option::<()>::None,
 			_key_type: PhantomData::<AuthorityPair>,
+			block_proposal_slot_portion: SlotProportion::new(0.5),
 		};
 
 		let head = client.header(&BlockId::Number(0)).unwrap().unwrap();
@@ -766,7 +790,7 @@ mod tests {
 				timestamp: 0,
 				ends_at: Instant::now() + Duration::from_secs(100),
 				inherent_data: InherentData::new(),
-				duration: 1000,
+				duration: Duration::from_millis(1000),
 			},
 		)).unwrap();
 
