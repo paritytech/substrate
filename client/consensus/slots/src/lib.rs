@@ -621,7 +621,8 @@ pub fn slot_lenience_linear(parent_slot: Slot, slot_info: &SlotInfo) -> Option<D
 		None
 	} else {
 		let slot_lenience = std::cmp::min(skipped_slots, BACKOFF_CAP);
-		Some(slot_info.duration.mul_f64(slot_lenience as f64))
+		// We cap `slot_lenience` to `20`, so it should always fit into an `u32`.
+		Some(slot_info.duration * (slot_lenience as u32))
 	}
 }
 
