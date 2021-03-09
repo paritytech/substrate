@@ -281,13 +281,20 @@ benchmarks! {
 				StakingEvent::<T>::Slash(stash, BalanceOf::<T>::from(slash_amount))
 			))
 			.collect::<Vec<_>>();
+
 		let reward_events = reporters.into_iter()
-			.flat_map(|reporter| vec![
-				frame_system::Event::<T>::NewAccount(reporter.clone()).into(),
-				<T as BalancesConfig>::Event::from(
-					pallet_balances::Event::<T>::Endowed(reporter, (reward_amount / r).into())
-				).into()
-			]);
+			.flat_map(|reporter| {
+				let accounts_event: <T as pallet_accounts::Config>::Event
+					= pallet_accounts::Event::NewAccount(reporter.clone()).into();
+				let new_account_event: <T as frame_system::Config>::Event = accounts_event.into();
+
+				vec![
+					new_account_event,
+					<T as BalancesConfig>::Event::from(
+						pallet_balances::Event::<T>::Endowed(reporter, (reward_amount / r).into())
+					).into()
+				]
+			});
 
 		// rewards are applied after first offender and it's nominators
 		let slash_rest = slash_events.split_off(1 + n as usize);
