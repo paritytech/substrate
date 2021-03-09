@@ -101,6 +101,9 @@
 //! }
 //! ```
 
+// jsonrpsee_proc_macros generates faulty warnings: https://github.com/paritytech/jsonrpsee/issues/106
+#![allow(dead_code)]
+
 use std::{
 	fs,
 	path::{Path, PathBuf},
@@ -112,18 +115,24 @@ use sp_core::{
 	hexdisplay::HexDisplay,
 	storage::{StorageKey, StorageData},
 };
-use futures::{
-	compat::Future01CompatExt,
-	TryFutureExt,
-};
 use codec::{Encode, Decode};
+use jsonrpsee_http_client::{HttpClient, HttpConfig};
 
 type KeyPair = (StorageKey, StorageData);
-type Number = u32;
 type Hash = sp_core::H256;
 // TODO: make these two generic.
 
-const LOG_TARGET: &'static str = "remote-ext";
+const LOG_TARGET: &str = "remote-ext";
+const TARGET: &str = "http://localhost:9933";
+
+jsonrpsee_proc_macros::rpc_client_api! {
+	RpcApi {
+		#[rpc(method = "state_getPairs", positional_params)]
+		fn storage_pairs(prefix: StorageKey, hash: Option<Hash>) -> Vec<(StorageKey, StorageData)>;
+		#[rpc(method = "chain_getFinalizedHead")]
+		fn finalized_head() -> Hash;
+	}
+}
 
 /// The execution mode.
 #[derive(Clone)]
@@ -160,12 +169,15 @@ pub struct OnlineConfig {
 
 impl Default for OnlineConfig {
 	fn default() -> Self {
-		Self {
-			uri: "http://localhost:9933".into(),
-			at: None,
-			cache: None,
-			modules: Default::default(),
-		}
+		Self { uri: TARGET.to_owned(), at: None, cache: None, modules: Default::default() }
+	}
+}
+
+impl OnlineConfig {
+	/// Return a new http rpc client.
+	fn rpc(&self) -> HttpClient {
+		HttpClient::new(&self.uri, HttpConfig { max_request_body_size: u32::MAX })
+			.expect("valid HTTP url; qed")
 	}
 }
 
@@ -202,12 +214,7 @@ impl Default for Builder {
 	fn default() -> Self {
 		Self {
 			inject: Default::default(),
-			mode: Mode::Online(OnlineConfig {
-				at: None,
-				uri: "http://localhost:9933".into(),
-				cache: None,
-				modules: Default::default(),
-			}),
+			mode: Mode::Online(OnlineConfig::default())
 		}
 	}
 }
@@ -232,14 +239,11 @@ impl Builder {
 // RPC methods
 impl Builder {
 	async fn rpc_get_head(&self) -> Result<Hash, &'static str> {
-		let uri = self.as_online().uri.clone();
 		trace!(target: LOG_TARGET, "rpc: finalized_head");
-		let client: sc_rpc_api::chain::ChainClient<Number, Hash, (), ()> =
-			jsonrpc_core_client::transports::http::connect(&uri)
-				.compat()
-				.map_err(|_| "client initialization failed")
-				.await?;
-		client.finalized_head().compat().map_err(|_| "rpc finalized_head failed.").await
+		RpcApi::finalized_head(&self.as_online().rpc()).await.map_err(|e| {
+			error!("Error = {:?}", e);
+			"rpc finalized_head failed."
+			})
 	}
 
 	/// Relay the request to `state_getPairs` rpc endpoint.
@@ -250,18 +254,11 @@ impl Builder {
 		prefix: StorageKey,
 		at: Hash,
 	) -> Result<Vec<KeyPair>, &'static str> {
-		let uri = self.as_online().uri.clone();
 		trace!(target: LOG_TARGET, "rpc: storage_pairs: {:?} / {:?}", prefix, at);
-		let client: sc_rpc_api::state::StateClient<Hash> =
-			jsonrpc_core_client::transports::http::connect(&uri)
-				.compat()
-				.map_err(|_| "client initialization failed")
-				.await?;
-		client
-			.storage_pairs(prefix, Some(at))
-			.compat()
-			.map_err(|_| "rpc finalized_head failed.")
-			.await
+		RpcApi::storage_pairs(&self.as_online().rpc(), prefix, Some(at)).await.map_err(|e| {
+			error!("Error = {:?}", e);
+			"rpc storage_pairs failed"
+			})
 	}
 }
 
@@ -315,8 +312,11 @@ impl Builder {
 	}
 
 	async fn init_remote_client(&mut self) -> Result<(), &'static str> {
-		let at = self.rpc_get_head().await?;
-		self.as_online_mut().at = Some(at);
+		info!(target: LOG_TARGET, "initializing remote client to {:?}", self.as_online().uri);
+		if self.as_online().at.is_none() {
+			let at = self.rpc_get_head().await?;
+			self.as_online_mut().at = Some(at);
+		}
 		Ok(())
 	}
 
