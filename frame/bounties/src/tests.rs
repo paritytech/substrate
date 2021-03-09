@@ -3861,7 +3861,6 @@ fn subbounty_extend_expiry_works() {
 	});
 }
 
-
 #[test]
 fn test_bounty_subbounty_extn_storage_migration() {
 	use sp_storage::Storage;
@@ -3917,15 +3916,94 @@ fn test_bounty_subbounty_extn_storage_migration() {
 
 	sp_io::TestExternalities::new(storage_inst).execute_with(|| {
 
-		println!("Bounties {} count",
-			pallet_bounties::Bounties::<Test>::iter().count(),
+		Bounties::migrate_bounty_for_subbounty_extn();
+
+		// Test Bounty Inst 1
+		assert_eq!(
+			pallet_bounties::Bounties::<Test>::get(10),
+			Some(Bounty {
+				proposer: 1,
+				value: 50,
+				fee: 2,
+				curator_deposit: 5,
+				bond: 10,
+				status: BountyStatus::Funded,
+				active_subbounty_count: 0,
+			})
 		);
+
+		// Test Bounty Inst 2
+		assert_eq!(
+			pallet_bounties::Bounties::<Test>::get(20),
+			Some(Bounty {
+				proposer: 4,
+				value: 100,
+				fee: 3,
+				curator_deposit: 10,
+				bond: 10,
+				status: BountyStatus::Approved,
+				active_subbounty_count: 0,
+			})
+		);
+	});
+}
+
+#[test]
+fn test_bounty_subbounty_extn_storage_migration_v2() {
+	use sp_storage::Storage;
+
+	let mut storage_inst = Storage::default();
+
+	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+	pub struct OldBounty<AccountId, Balance, BlockNumber> {
+		/// The account proposing it.
+		proposer: AccountId,
+		/// The (total) amount that should be paid if the bounty is rewarded.
+		value: Balance,
+		/// The curator fee. Included in value.
+		fee: Balance,
+		/// The deposit of curator.
+		curator_deposit: Balance,
+		/// The amount held on deposit (reserved) for making this proposal.
+		bond: Balance,
+		/// The status of this bounty.
+		status: BountyStatus<AccountId, BlockNumber>,
+	}
+
+	let old_bounty_inst1 = OldBounty::<u128, u64, u32> {
+		proposer: 1,
+		value: 50,
+		fee: 2,
+		curator_deposit: 5,
+		bond: 10,
+		status: BountyStatus::Funded,
+	};
+
+	let old_bounty_inst2 = OldBounty::<u128, u64, u32> {
+		proposer: 4,
+		value: 100,
+		fee: 3,
+		curator_deposit: 10,
+		bond: 10,
+		status: BountyStatus::Approved,
+	};
+
+	let data = vec![
+		(
+			pallet_bounties::Bounties::<Test>::hashed_key_for(10),
+			old_bounty_inst1.encode().to_vec()
+		),
+		(
+			pallet_bounties::Bounties::<Test>::hashed_key_for(20),
+			old_bounty_inst2.encode().to_vec()
+		),
+	];
+
+	storage_inst.top = data.into_iter().collect();
+
+	sp_io::TestExternalities::new(storage_inst).execute_with(|| {
 
 		migrations_4_0_0::migrate_bounty_to_support_subbounty::<Test>();
-
-		println!("Bounties {} count",
-			pallet_bounties::Bounties::<Test>::iter().count(),
-		);
 
 		// Test Bounty Inst 1
 		assert_eq!(

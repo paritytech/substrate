@@ -63,6 +63,22 @@ pub enum BountyStatus<AccountId, BlockNumber> {
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct OldBounty<AccountId, Balance, BlockNumber> {
+	/// The account proposing it.
+	proposer: AccountId,
+	/// The (total) amount that should be paid if the bounty is rewarded.
+	value: Balance,
+	/// The curator fee. Included in value.
+	fee: Balance,
+	/// The deposit of curator.
+	curator_deposit: Balance,
+	/// The amount held on deposit (reserved) for making this proposal.
+	bond: Balance,
+	/// The status of this bounty.
+	status: BountyStatus<AccountId, BlockNumber>,
+}
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct Bounty<AccountId, Balance, BlockNumber> {
 	/// The account proposing it.
 	proposer: AccountId,
@@ -134,7 +150,7 @@ pub fn apply<T: V2ToV3>( ) -> Weight {
 
 /// Migrate to support subbounty extn
 pub fn migrate_bounty_to_support_subbounty<T: V2ToV3>() {
-	<Bounties<T>>::translate::<Option<Bounty<T::AccountId, T::Balance, T::BlockNumber>>, _>(
+	<Bounties<T>>::translate::<Option<OldBounty<T::AccountId, T::Balance, T::BlockNumber>>, _>(
 		|_index, maybe_bounties| {
 			let bounties = maybe_bounties.unwrap();
 			Some(Some(Bounty {
