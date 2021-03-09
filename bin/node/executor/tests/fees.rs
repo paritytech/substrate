@@ -125,7 +125,7 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 }
 
 fn new_account_info(free_dollars: u128) -> Vec<u8> {
-	frame_system::AccountInfo {
+	pallet_accounts::AccountInfo {
 		nonce: 0u32,
 		consumers: 0,
 		providers: 0,

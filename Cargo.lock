@@ -4052,6 +4052,7 @@ dependencies = [
  "node-primitives",
  "node-runtime",
  "node-testing",
+ "pallet-accounts",
  "pallet-balances",
  "pallet-contracts",
  "pallet-grandpa",

@@ -26,7 +26,8 @@ use sp_runtime::{
 	traits::Hash as HashT,
 	transaction_validity::InvalidTransaction,
 };
-use frame_system::{self, EventRecord, Phase, AccountInfo};
+use frame_system::{self, EventRecord, Phase};
+use pallet_accounts::AccountInfo;
 
 use node_runtime::{
 	Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
