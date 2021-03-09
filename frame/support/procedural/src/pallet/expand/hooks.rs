@@ -69,13 +69,13 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 		{
 			fn on_idle(
 				n: <T as #frame_system::Config>::BlockNumber,
-				_remaining_weight: #frame_support::weights::Weight
+				remaining_weight: #frame_support::weights::Weight
 			) -> #frame_support::weights::Weight {
 				<
 					Self as #frame_support::traits::Hooks<
 						<T as #frame_system::Config>::BlockNumber
 					>
-				>::on_idle(n, _remaining_weight)
+				>::on_idle(n, remaining_weight)
 			}
 		}
 
