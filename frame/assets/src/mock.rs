@@ -34,6 +34,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		Accounts: pallet_accounts::{Module, Call, Storage, Event<T>},
 		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
 		Assets: pallet_assets::{Module, Call, Storage, Event<T>},
 	}
@@ -60,11 +61,16 @@ impl frame_system::Config for Test {
 	type DbWeight = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;
-	type AccountData = pallet_balances::AccountData<u64>;
-	type OnNewAccount = ();
-	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type AccountStorage = Accounts;
+}
+
+impl pallet_accounts::Config for Test {
+	type Event = Event;
+	type OnKilledAccount = ();
+	type OnNewAccount = ();
+	type AccountData = pallet_balances::AccountData<u64>;
 }
 
 parameter_types! {
@@ -76,7 +82,8 @@ impl pallet_balances::Config for Test {
 	type DustRemoval = ();
 	type Event = Event;
 	type ExistentialDeposit = ExistentialDeposit;
-	type AccountStore = System;
+	type AccountStore = Accounts;
+	type ReferencedAccount = Accounts;
 	type WeightInfo = ();
 	type MaxLocks = ();
 }
@@ -100,6 +107,7 @@ impl Config for Test {
 	type MetadataDepositPerByte = MetadataDepositPerByte;
 	type ApprovalDeposit = ApprovalDeposit;
 	type StringLimit = StringLimit;
+	type ReferencedAccount = Accounts;
 	type WeightInfo = ();
 }
 
