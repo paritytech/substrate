@@ -27,6 +27,8 @@ mod keyword {
 	syn::custom_keyword!(T);
 	syn::custom_keyword!(Pallet);
 	syn::custom_keyword!(origin);
+	syn::custom_keyword!(DispatchResult);
+	syn::custom_keyword!(DispatchResultWithPostInfo);
 }
 
 /// A usage of instance, either the trait `Config` has been used with instance or without instance.
@@ -595,4 +597,27 @@ pub fn check_type_value_gen(
 		.map(|mut i| { i.span = span; i });
 
 	Ok(i)
+}
+
+/// Check the keyword `DispatchResultWithPostInfo` or `DispatchResult`.
+pub fn check_pallet_call_return_type(
+	type_: &syn::Type,
+) -> syn::Result<()> {
+	pub struct Checker;
+	impl syn::parse::Parse for Checker {
+		fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+			let lookahead = input.lookahead1();
+			if lookahead.peek(keyword::DispatchResultWithPostInfo) {
+				input.parse::<keyword::DispatchResultWithPostInfo>()?;
+				Ok(Self)
+			} else if lookahead.peek(keyword::DispatchResult) {
+				input.parse::<keyword::DispatchResult>()?;
+				Ok(Self)
+			} else {
+				Err(lookahead.error())
+			}
+		}
+	}
+
+	syn::parse2::<Checker>(type_.to_token_stream()).map(|_| ())
 }

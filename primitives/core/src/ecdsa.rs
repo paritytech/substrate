@@ -487,7 +487,7 @@ impl TraitPair for Pair {
 		let message = secp256k1::Message::parse(&blake2_256(message.as_ref()));
 		let sig: (_, _) = match sig.try_into() { Ok(x) => x, _ => return false };
 		match secp256k1::recover(&message, &sig.0, &sig.1) {
-			Ok(actual) => &pubkey.0[..] == &actual.serialize_compressed()[..],
+			Ok(actual) => pubkey.0[..] == actual.serialize_compressed()[..],
 			_ => false,
 		}
 	}
@@ -525,7 +525,7 @@ impl Pair {
 	#[cfg(feature = "std")]
 	pub fn from_legacy_string(s: &str, password_override: Option<&str>) -> Pair {
 		Self::from_string(s, password_override).unwrap_or_else(|_| {
-			let mut padded_seed: Seed = [' ' as u8; 32];
+			let mut padded_seed: Seed = [b' '; 32];
 			let len = s.len().min(32);
 			padded_seed[..len].copy_from_slice(&s.as_bytes()[..len]);
 			Self::from_seed(&padded_seed)

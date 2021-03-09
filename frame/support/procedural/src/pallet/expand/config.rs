@@ -15,30 +15,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Benchmarks for the MMR pallet.
+use crate::pallet::{Def, parse::helper::get_doc_literals};
 
-#![cfg_attr(not(feature = "std"), no_std)]
-
-use crate::*;
-use frame_support::traits::OnInitialize;
-use frame_benchmarking::{benchmarks, impl_benchmark_test_suite};
-
-benchmarks! {
-	on_initialize {
-		let x in 1 .. 1_000;
-
-		let leaves = x as u64;
-	}: {
-		for b in 0..leaves {
-			Module::<T>::on_initialize((b as u32).into());
+/// * Generate default rust doc
+pub fn expand_config(def: &mut Def) -> proc_macro2::TokenStream {
+	let config = &def.config;
+	let config_item = {
+		let item = &mut def.item.content.as_mut().expect("Checked by def parser").1[config.index];
+		if let syn::Item::Trait(item) = item {
+			item
+		} else {
+			unreachable!("Checked by config parser")
 		}
-	} verify {
-		assert_eq!(crate::NumberOfLeaves::<DefaultInstance>::get(), leaves);
-	}
-}
+	};
 
-impl_benchmark_test_suite!(
-	Module,
-	crate::tests::new_test_ext(),
-	crate::mock::Test,
-);
+	if get_doc_literals(&config_item.attrs).is_empty() {
+		config_item.attrs.push(syn::parse_quote!(
+			#[doc = r"
+			Configuration trait of this pallet.
+
+			Implement this type for a runtime in order to customize this pallet.
+			"]
+		));
+	}
+
+	Default::default()
+}
