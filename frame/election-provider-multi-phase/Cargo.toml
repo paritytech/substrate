@@ -16,6 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 static_assertions = "1.1.0"
 serde = { version = "1.0.101", optional = true }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+log = { version = "0.4.14", default-features = false }
 
 frame-support = { version = "3.0.0", default-features = false, path = "../support" }
 frame-system = { version = "3.0.0", default-features = false, path = "../system" }
@@ -49,6 +50,7 @@ default = ["std"]
 std = [
 	"serde",
 	"codec/std",
+	"log/std",
 
 	"frame-support/std",
 	"frame-system/std",
@@ -59,6 +61,7 @@ std = [
 	"sp-npos-elections/std",
 	"sp-arithmetic/std",
 	"sp-election-providers/std",
+	"log/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking",
