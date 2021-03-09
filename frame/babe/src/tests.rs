@@ -844,6 +844,12 @@ fn add_epoch_configurations_migration_works() {
 		put_storage_value, get_storage_value,
 	};
 
+	impl crate::migrations::HasPalletPrefix for Test {
+		fn pallet_prefix() -> &'static str {
+			"BabeApi"
+		}
+	}
+
 	new_test_ext(1).execute_with(|| {
 		let next_config_descriptor = NextConfigDescriptor::V1 {
 			c: (3, 4),

@@ -864,23 +864,27 @@ pub mod migrations {
 	use super::*;
 	use frame_support::pallet_prelude::{ValueQuery, StorageValue};
 
-	struct __OldNextEpochConfig;
-	impl frame_support::traits::StorageInstance for __OldNextEpochConfig {
-		fn pallet_prefix() -> &'static str { "BabeApi" }
+	pub trait HasPalletPrefix: Config {
+		fn pallet_prefix() -> &'static str;
+	}
+
+	struct __OldNextEpochConfig<T>(sp_std::marker::PhantomData<T>);
+	impl<T: HasPalletPrefix> frame_support::traits::StorageInstance for __OldNextEpochConfig<T> {
+		fn pallet_prefix() -> &'static str { T::pallet_prefix() }
 		const STORAGE_PREFIX: &'static str = "NextEpochConfig";
 	}
 
-	type OldNextEpochConfig = StorageValue<
-		__OldNextEpochConfig, Option<NextConfigDescriptor>, ValueQuery
+	type OldNextEpochConfig<T> = StorageValue<
+		__OldNextEpochConfig<T>, Option<NextConfigDescriptor>, ValueQuery
 	>;
 
-	pub fn add_epoch_configuration<T: Config>(
+	pub fn add_epoch_configuration<T: HasPalletPrefix>(
 		epoch_config: BabeEpochConfiguration,
 	) -> Weight {
 		let mut writes = 0;
 		let mut reads = 0;
 
-		if let Some(pending_change) = OldNextEpochConfig::get() {
+		if let Some(pending_change) = OldNextEpochConfig::<T>::get() {
 			PendingEpochConfigChange::put(pending_change);
 
 			writes += 1;
@@ -888,7 +892,7 @@ pub mod migrations {
 
 		reads += 1;
 
-		OldNextEpochConfig::kill();
+		OldNextEpochConfig::<T>::kill();
 
 		EpochConfig::put(epoch_config.clone());
 		NextEpochConfig::put(epoch_config);
