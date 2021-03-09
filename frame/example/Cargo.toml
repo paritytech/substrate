@@ -25,8 +25,8 @@ sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/
 frame-benchmarking = { version = "3.1.0", default-features = false, path = "../benchmarking", optional = true }
 
 [dev-dependencies]
-sp-core = { version = "3.0.0", path = "../../primitives/core" }
-pallet-accounts = { version = "3.0.0", path = "../accounts" }
+sp-core = { version = "3.0.0", default-features = false, path = "../../primitives/core" }
+pallet-accounts = { version = "3.0.0", default-features = false, path = "../accounts" }
 
 [features]
 default = ["std"]

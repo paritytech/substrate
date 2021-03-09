@@ -144,8 +144,8 @@ fn transaction_fee_is_correct() {
 	//   - 1 milli-dot based on current polkadot runtime.
 	// (this baed on assigning 0.1 CENT to the cheapest tx with `weight = 100`)
 	let mut t = new_test_ext(compact_code_unwrap(), false);
-	t.insert(<frame_system::Account<Runtime>>::hashed_key_for(alice()), new_account_info(100));
-	t.insert(<frame_system::Account<Runtime>>::hashed_key_for(bob()), new_account_info(10));
+	t.insert(<pallet_accounts::Account<Runtime>>::hashed_key_for(alice()), new_account_info(100));
+	t.insert(<pallet_accounts::Account<Runtime>>::hashed_key_for(bob()), new_account_info(10));
 	t.insert(
 		<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec(),
 		(110 * DOLLARS).encode()
