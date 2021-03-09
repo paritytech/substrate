@@ -15,37 +15,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Test environment for Gilt pallet.
+//! Test environment for Assets pallet.
 
-use crate as pallet_gilt;
+use super::*;
+use crate as pallet_assets;
 
-use frame_support::{
-	parameter_types, ord_parameter_types, traits::{OnInitialize, OnFinalize, GenesisBuild},
-};
 use sp_core::H256;
 use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+use frame_support::{parameter_types, construct_runtime};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
-// Configure a mock runtime to test the pallet.
-frame_support::construct_runtime!(
+construct_runtime!(
 	pub enum Test where
 		Block = Block,
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Balances: pallet_balances::{Module, Call, Config<T>, Storage, Event<T>},
-		Gilt: pallet_gilt::{Module, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
+		Assets: pallet_assets::{Module, Call, Storage, Event<T>},
 	}
 );
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const SS58Prefix: u8 = 42;
 }
-
 impl frame_system::Config for Test {
 	type BaseCallFilter = ();
 	type BlockWeights = ();
@@ -68,7 +64,7 @@ impl frame_system::Config for Test {
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
-	type SS58Prefix = SS58Prefix;
+	type SS58Prefix = ();
 }
 
 parameter_types! {
@@ -86,53 +82,31 @@ impl pallet_balances::Config for Test {
 }
 
 parameter_types! {
-	pub const QueueCount: u32 = 3;
-	pub const MaxQueueLen: u32 = 3;
-	pub const FifoQueueLen: u32 = 1;
-	pub const Period: u64 = 3;
-	pub const MinFreeze: u64 = 2;
-	pub const IntakePeriod: u64 = 2;
-	pub const MaxIntakeBids: u32 = 2;
-}
-ord_parameter_types! {
-	pub const One: u64 = 1;
+	pub const AssetDeposit: u64 = 1;
+	pub const ApprovalDeposit: u64 = 1;
+	pub const StringLimit: u32 = 50;
+	pub const MetadataDepositBase: u64 = 1;
+	pub const MetadataDepositPerByte: u64 = 1;
 }
 
-impl pallet_gilt::Config for Test {
+impl Config for Test {
 	type Event = Event;
+	type Balance = u64;
+	type AssetId = u32;
 	type Currency = Balances;
-	type AdminOrigin = frame_system::EnsureSignedBy<One, Self::AccountId>;
-	type Deficit = ();
-	type Surplus = ();
-	type QueueCount = QueueCount;
-	type MaxQueueLen = MaxQueueLen;
-	type FifoQueueLen = FifoQueueLen;
-	type Period = Period;
-	type MinFreeze = MinFreeze;
-	type IntakePeriod = IntakePeriod;
-	type MaxIntakeBids = MaxIntakeBids;
+	type ForceOrigin = frame_system::EnsureRoot<u64>;
+	type AssetDeposit = AssetDeposit;
+	type MetadataDepositBase = MetadataDepositBase;
+	type MetadataDepositPerByte = MetadataDepositPerByte;
+	type ApprovalDeposit = ApprovalDeposit;
+	type StringLimit = StringLimit;
 	type WeightInfo = ();
 }
 
-// This function basically just builds a genesis storage key/value store according to
-// our desired mockup.
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	pallet_balances::GenesisConfig::<Test>{
-		balances: vec![(1, 100), (2, 100), (3, 100), (4, 100)],
-	}.assimilate_storage(&mut t).unwrap();
-	GenesisBuild::<Test>::assimilate_storage(&crate::GenesisConfig, &mut t).unwrap();
-	t.into()
-}
+pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
+	let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
-pub fn run_to_block(n: u64) {
-	while System::block_number() < n {
-		Gilt::on_finalize(System::block_number());
-		Balances::on_finalize(System::block_number());
-		System::on_finalize(System::block_number());
-		System::set_block_number(System::block_number() + 1);
-		System::on_initialize(System::block_number());
-		Balances::on_initialize(System::block_number());
-		Gilt::on_initialize(System::block_number());
-	}
+	let mut ext = sp_io::TestExternalities::new(t);
+	ext.execute_with(|| System::set_block_number(1));
+	ext
 }
