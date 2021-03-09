@@ -169,7 +169,7 @@ fn block_with_size(time: u64, nonce: u32, size: usize) -> (Vec<u8>, Hash) {
 fn panic_execution_with_foreign_code_gives_error() {
 	let mut t = new_test_ext(bloaty_code_unwrap(), false);
 	t.insert(
-		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
+		<pallet_accounts::Account<Runtime>>::hashed_key_for(alice()),
 		(69u128, 0u32, 0u128, 0u128, 0u128).encode()
 	);
 	t.insert(<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec(), 69_u128.encode());
@@ -198,7 +198,7 @@ fn panic_execution_with_foreign_code_gives_error() {
 fn bad_extrinsic_with_native_equivalent_code_gives_error() {
 	let mut t = new_test_ext(compact_code_unwrap(), false);
 	t.insert(
-		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
+		<pallet_accounts::Account<Runtime>>::hashed_key_for(alice()),
 		(0u32, 0u32, 0u32, 69u128, 0u128, 0u128, 0u128).encode()
 	);
 	t.insert(<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec(), 69_u128.encode());
@@ -227,14 +227,14 @@ fn bad_extrinsic_with_native_equivalent_code_gives_error() {
 fn successful_execution_with_native_equivalent_code_gives_ok() {
 	let mut t = new_test_ext(compact_code_unwrap(), false);
 	t.insert(
-		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
+		<pallet_accounts::Account<Runtime>>::hashed_key_for(alice()),
 		AccountInfo::<<Runtime as frame_system::Config>::Index, _> {
 			data: (111 * DOLLARS, 0u128, 0u128, 0u128),
 			.. Default::default()
 		}.encode(),
 	);
 	t.insert(
-		<frame_system::Account<Runtime>>::hashed_key_for(bob()),
+		<pallet_accounts::Account<Runtime>>::hashed_key_for(bob()),
 		AccountInfo::<<Runtime as frame_system::Config>::Index, _> {
 			data: (0 * DOLLARS, 0u128, 0u128, 0u128),
 			.. Default::default()
@@ -276,14 +276,14 @@ fn successful_execution_with_native_equivalent_code_gives_ok() {
 fn successful_execution_with_foreign_code_gives_ok() {
 	let mut t = new_test_ext(bloaty_code_unwrap(), false);
 	t.insert(
-		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
+		<pallet_accounts::Account<Runtime>>::hashed_key_for(alice()),
 		AccountInfo::<<Runtime as frame_system::Config>::Index, _> {
 			data: (111 * DOLLARS, 0u128, 0u128, 0u128),
 			.. Default::default()
 		}.encode(),
 	);
 	t.insert(
-		<frame_system::Account<Runtime>>::hashed_key_for(bob()),
+		<pallet_accounts::Account<Runtime>>::hashed_key_for(bob()),
 		AccountInfo::<<Runtime as frame_system::Config>::Index, _> {
 			data: (0 * DOLLARS, 0u128, 0u128, 0u128),
 			.. Default::default()
@@ -716,7 +716,7 @@ fn native_big_block_import_fails_on_fallback() {
 fn panic_execution_gives_error() {
 	let mut t = new_test_ext(bloaty_code_unwrap(), false);
 	t.insert(
-		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
+		<pallet_accounts::Account<Runtime>>::hashed_key_for(alice()),
 		AccountInfo::<<Runtime as frame_system::Config>::Index, _> {
 			data: (0 * DOLLARS, 0u128, 0u128, 0u128),
 			.. Default::default()
@@ -748,14 +748,14 @@ fn panic_execution_gives_error() {
 fn successful_execution_gives_ok() {
 	let mut t = new_test_ext(compact_code_unwrap(), false);
 	t.insert(
-		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
+		<pallet_accounts::Account<Runtime>>::hashed_key_for(alice()),
 		AccountInfo::<<Runtime as frame_system::Config>::Index, _> {
 			data: (111 * DOLLARS, 0u128, 0u128, 0u128),
 			.. Default::default()
 		}.encode(),
 	);
 	t.insert(
-		<frame_system::Account<Runtime>>::hashed_key_for(bob()),
+		<pallet_accounts::Account<Runtime>>::hashed_key_for(bob()),
 		AccountInfo::<<Runtime as frame_system::Config>::Index, _> {
 			data: (0 * DOLLARS, 0u128, 0u128, 0u128),
 			.. Default::default()
