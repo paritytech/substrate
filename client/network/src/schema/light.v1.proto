@@ -94,7 +94,6 @@ message RemoteReadChildRequest {
 	repeated bytes keys = 6;
 }
 
-
 // Remote header request.
 message RemoteHeaderRequest {
 	// Block number to request header for.

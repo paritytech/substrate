@@ -294,9 +294,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 			for x in iterator {
 				let (key, value) = x?;
 
-				if !key.starts_with(prefix) {
-					break;
-				}
+				debug_assert!(key.starts_with(prefix));
 
 				if !f(&key, &value) {
 					break;

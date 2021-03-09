@@ -95,6 +95,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 
 	/// Iterate on storage starting at key, for a given prefix and child trie.
 	/// Aborts as soon as `f` returns false.
+	/// Warning, this fail first error when usual iteration skip errors.
 	fn apply_to_key_values_while<F: FnMut(&[u8], &[u8]) -> bool>(
 		&self,
 		child_info: Option<&ChildInfo>,
@@ -105,7 +106,6 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 
 	/// Retrieve all entries keys of child storage and call `f` for each of those keys.
 	/// Aborts as soon as `f` returns false.
-	/// TODO default impl from `apply_to_child_keys_while`
 	fn apply_to_child_keys_while<F: FnMut(&[u8]) -> bool>(
 		&self,
 		child_info: &ChildInfo,
@@ -114,20 +114,17 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 
 	/// Retrieve all entries keys which start with the given prefix and
 	/// call `f` for each of those keys.
-	/// TODO default impl from `apply_to_child_keys_while`
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], mut f: F) {
 		self.for_key_values_with_prefix(prefix, |k, _v| f(k))
 	}
 
 	/// Retrieve all entries keys and values of which start with the given prefix and
 	/// call `f` for each of those keys.
-	/// TODO default impl from `apply_to_child_keys_while`
 	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F);
 
 
 	/// Retrieve all child entries keys which start with the given prefix and
 	/// call `f` for each of those keys.
-	/// TODO default impl from `apply_to_child_keys_while`
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
 		&self,
 		child_info: &ChildInfo,

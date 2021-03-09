@@ -762,7 +762,6 @@ impl<B: Block> Request<B> {
 				schema::v1::light::request::Request::RemoteReadChildRequest(r)
 			}
 			Request::ReadRange { request, .. } => {
-				// TODO check if need a v2 schema??
 				let r = schema::v1::light::RemoteReadRangeRequest {
 					block: request.block.encode(),
 					child_trie_key: request.child_trie_key.clone()
