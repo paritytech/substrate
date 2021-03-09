@@ -104,7 +104,6 @@ mod tests {
 	use super::*;
 	use sp_io::TestExternalities;
 	use sp_core::offchain::{
-		OffchainWorkerExt,
 		OffchainDbExt,
 		testing,
 	};
@@ -113,8 +112,7 @@ mod tests {
 	fn should_set_and_get() {
 		let (offchain, state) = testing::TestOffchainExt::new();
 		let mut t = TestExternalities::default();
-		t.register_extension(OffchainDbExt::new(offchain.clone()));
-		t.register_extension(OffchainWorkerExt::new(offchain));
+		t.register_extension(OffchainDbExt::new(offchain));
 
 		t.execute_with(|| {
 			let val = StorageValue::persistent(b"testval");
@@ -136,8 +134,7 @@ mod tests {
 	fn should_mutate() {
 		let (offchain, state) = testing::TestOffchainExt::new();
 		let mut t = TestExternalities::default();
-		t.register_extension(OffchainDbExt::new(offchain.clone()));
-		t.register_extension(OffchainWorkerExt::new(offchain));
+		t.register_extension(OffchainDbExt::new(offchain));
 
 		t.execute_with(|| {
 			let val = StorageValue::persistent(b"testval");

@@ -378,7 +378,7 @@ impl FullLeaf for OpaqueLeaf {
 /// This structure serves merely to avoid passing raw `Vec<u8>` around.
 /// It must be `Vec<u8>`-encoding compatible.
 ///
-/// It is different from [OpaqueLeaf], because it does implement `Codec`
+/// It is different from [`OpaqueLeaf`], because it does implement `Codec`
 /// and the encoding has to match raw `Vec<u8>` encoding.
 #[derive(codec::Encode, codec::Decode, RuntimeDebug, PartialEq, Eq)]
 pub struct EncodableOpaqueLeaf(pub Vec<u8>);

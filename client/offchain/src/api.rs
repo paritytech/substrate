@@ -26,7 +26,6 @@ use std::{
 
 use crate::NetworkProvider;
 use futures::Future;
-use log::error;
 use sc_network::{PeerId, Multiaddr};
 use codec::{Encode, Decode};
 use sp_core::OpaquePeerId;
@@ -48,7 +47,8 @@ mod http_dummy;
 mod timestamp;
 
 fn unavailable_yet<R: Default>(name: &str) -> R {
-	error!(
+	log::error!(
+		target: "sc_offchain",
 		"The {:?} API is not available for offchain workers yet. Follow \
 		https://github.com/paritytech/substrate/issues/1458 for details", name
 	);
@@ -67,7 +67,7 @@ pub struct Db<Storage> {
 impl<Storage: OffchainStorage> Db<Storage> {
 	/// Create new instance of Offchain DB.
 	pub fn new(persistent: Storage) -> Self {
-		Self { persistent, }
+		Self { persistent }
 	}
 
 	/// Create new instance of Offchain DB, backed by given backend.
@@ -86,7 +86,10 @@ impl<Storage: OffchainStorage> Db<Storage> {
 
 impl<Storage: OffchainStorage> offchain::DbExternalities for Db<Storage> {
 	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]) {
-		log::debug!("{:?}: Write: {:?} <= {:?}", kind, hex::encode(key), hex::encode(value));
+		log::debug!(
+			target: "sc_offchain",
+			"{:?}: Write: {:?} <= {:?}", kind, hex::encode(key), hex::encode(value)
+		);
 		match kind {
 			StorageKind::PERSISTENT => self.persistent.set(STORAGE_PREFIX, key, value),
 			StorageKind::LOCAL => unavailable_yet(LOCAL_DB),
@@ -94,7 +97,10 @@ impl<Storage: OffchainStorage> offchain::DbExternalities for Db<Storage> {
 	}
 
 	fn local_storage_clear(&mut self, kind: StorageKind, key: &[u8]) {
-		log::debug!("{:?}: Clear: {:?}", kind, hex::encode(key));
+		log::debug!(
+			target: "sc_offchain",
+			"{:?}: Clear: {:?}", kind, hex::encode(key)
+		);
 		match kind {
 			StorageKind::PERSISTENT => self.persistent.remove(STORAGE_PREFIX, key),
 			StorageKind::LOCAL => unavailable_yet(LOCAL_DB),
@@ -109,6 +115,7 @@ impl<Storage: OffchainStorage> offchain::DbExternalities for Db<Storage> {
 		new_value: &[u8],
 	) -> bool {
 		log::debug!(
+			target: "sc_offchain",
 			"{:?}: CAS: {:?} <= {:?} vs {:?}",
 			kind,
 			hex::encode(key),
@@ -129,6 +136,7 @@ impl<Storage: OffchainStorage> offchain::DbExternalities for Db<Storage> {
 			StorageKind::LOCAL => unavailable_yet(LOCAL_DB),
 		};
 		log::debug!(
+			target: "sc_offchain",
 			"{:?}: Read: {:?} => {:?}",
 			kind,
 			hex::encode(key),
