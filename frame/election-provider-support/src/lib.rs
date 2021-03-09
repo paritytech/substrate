@@ -103,7 +103,9 @@
 //!         fn desired_targets() -> data_provider::Result<(u32, Weight)> {
 //!             Ok((1, 0))
 //!         }
-//!         fn voters(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<(AccountId, VoteWeight, Vec<AccountId>)>, Weight)> {
+//!         fn voters(maybe_max_len: Option<usize>)
+//!         -> data_provider::Result<(Vec<(AccountId, VoteWeight, Vec<AccountId>)>, Weight)>
+//!         {
 //!             Ok((Default::default(), 0))
 //!         }
 //!         fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<AccountId>, Weight)> {
