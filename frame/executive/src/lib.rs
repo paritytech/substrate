@@ -313,10 +313,9 @@ where
 			"Parent hash should be valid.",
 		);
 
-		assert!(
-			System::check_inherent_position(block).is_ok(),
-			"Invalid inherent position.",
-		);
+		if let Err(i) = System::check_inherent_position(block) {
+			panic!("Invalid inherent position for extrinsic at index {}", i);
+		}
 	}
 
 	/// Actually execute all transitions for `block`.

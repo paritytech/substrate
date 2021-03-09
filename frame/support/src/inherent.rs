@@ -170,14 +170,14 @@ macro_rules! impl_outer_inherent {
 		}
 
 		impl $crate::traits::InherentPositionCheck<$block> for $runtime {
-			fn check_inherent_position(block: &$block) -> Result<(), ()> {
+			fn check_inherent_position(block: &$block) -> Result<(), u32> {
 				use $crate::inherent::ProvideInherent;
 				use $crate::traits::{IsSubType, ExtrinsicCall};
 				use $crate::sp_runtime::traits::Block as _;
 
 				let mut checking_for_inherents = true;
 
-				for xt in block.extrinsics() {
+				for (i, xt) in block.extrinsics().iter().enumerate() {
 					let is_signed = $crate::inherent::Extrinsic::is_signed(xt).unwrap_or(false);
 
 					let is_inherent = if is_signed {
@@ -200,7 +200,7 @@ macro_rules! impl_outer_inherent {
 						(true, true) => (),
 						(true, false) => checking_for_inherents = false,
 						// Invalid inherent position found.
-						(false, true) => return Err(()),
+						(false, true) => return Err(i as u32),
 						(false, false) => (),
 					}
 				}
@@ -454,7 +454,7 @@ mod tests {
 			],
 		);
 
-		assert!(Runtime::check_inherent_position(&block).is_err());
+		assert_eq!(Runtime::check_inherent_position(&block).err().unwrap(), 2);
 
 		let block = Block::new(
 			Header::new_from_number(1),
@@ -466,6 +466,6 @@ mod tests {
 			],
 		);
 
-		assert!(Runtime::check_inherent_position(&block).is_err());
+		assert_eq!(Runtime::check_inherent_position(&block).err().unwrap(), 2);
 	}
 }

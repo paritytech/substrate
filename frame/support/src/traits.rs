@@ -2233,7 +2233,9 @@ pub trait GetPalletVersion {
 /// This is typically implemented on runtime, through `construct_runtime!`.
 pub trait InherentPositionCheck<Block> {
 	/// Check the position of inherents in a block.
-	fn check_inherent_position(block: &Block) -> Result<(), ()>;
+	///
+	/// On error return the index of the inherent with invalid position (counting from 0).
+	fn check_inherent_position(block: &Block) -> Result<(), u32>;
 }
 
 /// An extrinsic on which we can get access to call.
