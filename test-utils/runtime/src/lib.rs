@@ -500,7 +500,9 @@ parameter_types! {
 
 impl pallet_accounts::Config for Runtime {
 	type Event = Event;
-	type AccountStorage = System;
+	type OnKilledAccount = ();
+	type OnNewAccount = ();
+	type AccountData = ();
 }
 
 impl frame_system::Config for Runtime {

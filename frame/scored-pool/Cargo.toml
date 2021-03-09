@@ -22,6 +22,7 @@ frame-support = { version = "3.0.0", default-features = false, path = "../suppor
 frame-system = { version = "3.0.0", default-features = false, path = "../system" }
 
 [dev-dependencies]
+pallet-accounts = { version = "3.0.0", path = "../accounts" }
 pallet-balances = { version = "3.0.0", path = "../balances" }
 sp-core = { version = "3.0.0", path = "../../primitives/core" }
 

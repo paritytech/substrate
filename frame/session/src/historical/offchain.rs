@@ -140,10 +140,10 @@ mod tests {
 	use super::super::{onchain, Module};
 	use super::*;
 	use crate::mock::{
-		force_new_session, set_next_validators, Session, System, Test, NEXT_VALIDATORS,
+		force_new_session, set_next_validators, Session, System, Test, NEXT_VALIDATORS, Accounts,
 	};
 	use codec::Encode;
-	use frame_support::traits::{KeyOwnerProofSystem, OnInitialize};
+	use frame_support::traits::{KeyOwnerProofSystem, OnInitialize, ReferencedAccount};
 	use sp_core::crypto::key_types::DUMMY;
 	use sp_core::offchain::{
 		testing::TestOffchainExt,
@@ -166,7 +166,7 @@ mod tests {
 		);
 		BasicExternalities::execute_with_storage(&mut t, || {
 			for (ref k, ..) in &keys {
-				frame_system::Module::<Test>::inc_providers(k);
+				Accounts::inc_providers(k);
 			}
 		});
 

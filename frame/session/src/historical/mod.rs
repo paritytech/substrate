@@ -344,9 +344,9 @@ pub(crate) mod tests {
 	use sp_runtime::testing::UintAuthorityId;
 	use crate::mock::{
 		NEXT_VALIDATORS, force_new_session,
-		set_next_validators, Test, System, Session,
+		set_next_validators, Test, System, Session, Accounts,
 	};
-	use frame_support::traits::{KeyOwnerProofSystem, OnInitialize};
+	use frame_support::traits::{KeyOwnerProofSystem, OnInitialize, ReferencedAccount};
 	use frame_support::BasicExternalities;
 
 	type Historical = Module<Test>;
@@ -358,7 +358,7 @@ pub(crate) mod tests {
 		);
 		BasicExternalities::execute_with_storage(&mut t, || {
 			for (ref k, ..) in &keys {
-				frame_system::Module::<Test>::inc_providers(k);
+				Accounts::inc_providers(k);
 			}
 		});
 		crate::GenesisConfig::<Test> { keys }.assimilate_storage(&mut t).unwrap();

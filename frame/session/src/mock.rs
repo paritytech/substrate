@@ -79,6 +79,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		Accounts: pallet_accounts::{Module, Call, Storage, Event<T>},
 		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
 		Historical: pallet_session_historical::{Module},
 	}
@@ -92,6 +93,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		Accounts: pallet_accounts::{Module, Call, Storage, Event<T>},
 		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
 	}
 );
@@ -210,11 +212,11 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	);
 	BasicExternalities::execute_with_storage(&mut t, || {
 		for (ref k, ..) in &keys {
-			frame_system::Module::<Test>::inc_providers(k);
+			Accounts::inc_providers(k);
 		}
-		frame_system::Module::<Test>::inc_providers(&4);
+		Accounts::inc_providers(&4);
 		// An additional identity that we use.
-		frame_system::Module::<Test>::inc_providers(&69);
+		Accounts::inc_providers(&69);
 	});
 	pallet_session::GenesisConfig::<Test> { keys }.assimilate_storage(&mut t).unwrap();
 	sp_io::TestExternalities::new(t)
@@ -250,6 +252,13 @@ impl frame_system::Config for Test {
 	type SS58Prefix = ();
 }
 
+impl pallet_accounts::Config for Test {
+	type Event = Event;
+	type OnKilledAccount = ();
+	type OnNewAccount = ();
+	type AccountData = ();
+}
+
 impl pallet_timestamp::Config for Test {
 	type Moment = u64;
 	type OnTimestampSet = ();
@@ -275,6 +284,7 @@ impl Config for Test {
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 	type NextSessionRotation = ();
 	type WeightInfo = ();
+	type ReferencedAccount = Accounts;
 }
 
 #[cfg(feature = "historical")]

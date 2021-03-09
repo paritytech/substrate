@@ -25,6 +25,7 @@ sp-core = { version = "3.0.0", path = "../../primitives/core", default-features 
 
 [dev-dependencies]
 serde_json = "1.0.41"
+pallet-accounts = { version = "3.0.0", path = "../accounts" }
 pallet-balances = { version = "3.0.0", path = "../balances" }
 sp-storage = { version = "3.0.0", path = "../../primitives/storage" }
 

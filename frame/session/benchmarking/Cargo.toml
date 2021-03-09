@@ -30,6 +30,7 @@ sp-core = { version = "3.0.0", path = "../../../primitives/core" }
 pallet-staking-reward-curve = { version = "3.0.0", path = "../../staking/reward-curve" }
 sp-io ={ version = "3.0.0", path = "../../../primitives/io" }
 pallet-timestamp = { version = "3.0.0", path = "../../timestamp" }
+pallet-accounts = { version = "3.0.0", path = "../../accounts" }
 pallet-balances = { version = "3.0.0", path = "../../balances" }
 sp-election-providers = { version = "3.0.0", path = "../../../primitives/election-providers" }
 

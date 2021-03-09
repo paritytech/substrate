@@ -26,7 +26,7 @@ use mock::{
 	SESSION_CHANGED, TEST_SESSION_CHANGED, authorities, force_new_session,
 	set_next_validators, set_session_length, session_changed, Origin, System, Session,
 	reset_before_session_end_called, before_session_end_called, new_test_ext,
-	PreUpgradeMockSessionKeys,
+	PreUpgradeMockSessionKeys, Accounts,
 };
 
 fn initialize_block(block: u64) {
@@ -61,9 +61,9 @@ fn keys_cleared_on_kill() {
 		let id = DUMMY;
 		assert_eq!(Session::key_owner(id, UintAuthorityId(1).get_raw(id)), Some(1));
 
-		assert!(System::is_provider_required(&1));
+		assert!(Accounts::is_provider_required(&1));
 		assert_ok!(Session::purge_keys(Origin::signed(1)));
-		assert!(!System::is_provider_required(&1));
+		assert!(!Accounts::is_provider_required(&1));
 
 		assert_eq!(Session::load_keys(&1), None);
 		assert_eq!(Session::key_owner(id, UintAuthorityId(1).get_raw(id)), None);
