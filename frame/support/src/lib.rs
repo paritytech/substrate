@@ -1229,6 +1229,8 @@ pub mod pallet_prelude {
 /// NOTE: OnRuntimeUpgrade is implemented with `Hooks::on_runtime_upgrade` and some additional
 /// logic. E.g. logic to write pallet version into storage.
 ///
+/// NOTE: The macro also add some tracing logic when implementing above traits.
+///
 /// # Call: `#[pallet::call]` mandatory
 ///
 /// Implementation of pallet dispatchables.
