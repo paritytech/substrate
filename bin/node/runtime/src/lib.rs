@@ -1046,6 +1046,7 @@ impl pallet_assets::Config for Runtime {
 }
 
 parameter_types! {
+	pub IgnoredIssuance: Balance = Treasury::pot();
 	pub const QueueCount: u32 = 300;
 	pub const MaxQueueLen: u32 = 1000;
 	pub const FifoQueueLen: u32 = 500;
@@ -1061,6 +1062,7 @@ impl pallet_gilt::Config for Runtime {
 	type AdminOrigin = frame_system::EnsureRoot<AccountId>;
 	type Deficit = ();
 	type Surplus = ();
+	type IgnoredIssuance = IgnoredIssuance;
 	type QueueCount = QueueCount;
 	type MaxQueueLen = MaxQueueLen;
 	type FifoQueueLen = FifoQueueLen;
