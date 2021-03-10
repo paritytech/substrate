@@ -2837,6 +2837,67 @@ dependencies = [
 ]
 
 [[package]]
+name = "jsonrpsee-http-client"
+version = "0.2.0-alpha"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "124797a4ea7430d0675db78e065e53316e3f1a3cbf0ee4d6dbdd42db7b08e193"
+dependencies = [
+ "async-trait",
+ "futures 0.3.12",
+ "hyper 0.13.9",
+ "jsonrpsee-types",
+ "jsonrpsee-utils",
+ "log",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "unicase",
+ "url 2.2.0",
+]
+
+[[package]]
+name = "jsonrpsee-proc-macros"
+version = "0.2.0-alpha.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3cb3f732ccbeafd15cefb59c7c7b5ac6c553c2653613b63e5e7feb7f06a219e9"
+dependencies = [
+ "Inflector",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "jsonrpsee-types"
+version = "0.2.0-alpha.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a8cd20c190e75dc56f7543b9d5713c3186351b301b5507ea6b85d8c403aac78"
+dependencies = [
+ "async-trait",
+ "futures 0.3.12",
+ "log",
+ "serde",
+ "serde_json",
+ "smallvec 1.6.1",
+ "thiserror",
+]
+
+[[package]]
+name = "jsonrpsee-utils"
+version = "0.2.0-alpha"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c0e45394ec3175a767c3c5bac584560e6ad9b56ebd73216c85ec8bab49619244"
+dependencies = [
+ "futures 0.3.12",
+ "globset",
+ "hyper 0.13.9",
+ "jsonrpsee-types",
+ "lazy_static",
+ "log",
+ "unicase",
+]
+
+[[package]]
 name = "keccak"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6475,16 +6536,14 @@ version = "0.9.0"
 dependencies = [
  "async-std",
  "env_logger 0.8.2",
- "futures 0.3.12",
  "hex-literal",
- "jsonrpc-core-client",
+ "jsonrpsee-http-client",
+ "jsonrpsee-proc-macros",
+ "jsonrpsee-types",
  "log",
  "parity-scale-codec",
- "sc-rpc",
- "sc-rpc-api",
  "sp-core",
  "sp-io",
- "tokio 0.1.22",
 ]
 
 [[package]]
