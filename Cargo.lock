@@ -1814,7 +1814,7 @@ dependencies = [
 
 [[package]]
 name = "frame-support-test"
-version = "2.0.1"
+version = "3.0.0"
 dependencies = [
  "frame-metadata",
  "frame-support",
@@ -4112,6 +4112,7 @@ dependencies = [
  "node-primitives",
  "node-runtime",
  "pallet-contracts-rpc",
+ "pallet-mmr-rpc",
  "pallet-transaction-payment-rpc",
  "sc-chain-spec",
  "sc-client-api",
@@ -4982,6 +4983,7 @@ version = "3.0.0"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
+ "frame-support-test",
  "frame-system",
  "pallet-balances",
  "parity-scale-codec",
@@ -5039,6 +5041,24 @@ dependencies = [
  "sp-core",
  "sp-runtime",
  "sp-std",
+]
+
+[[package]]
+name = "pallet-mmr-rpc"
+version = "3.0.0"
+dependencies = [
+ "jsonrpc-core",
+ "jsonrpc-core-client",
+ "jsonrpc-derive",
+ "pallet-mmr-primitives",
+ "parity-scale-codec",
+ "serde",
+ "serde_json",
+ "sp-api",
+ "sp-blockchain",
+ "sp-core",
+ "sp-rpc",
+ "sp-runtime",
 ]
 
 [[package]]
@@ -5259,6 +5279,7 @@ name = "pallet-society"
 version = "3.0.0"
 dependencies = [
  "frame-support",
+ "frame-support-test",
  "frame-system",
  "pallet-balances",
  "parity-scale-codec",
@@ -7548,6 +7569,7 @@ dependencies = [
  "fnv",
  "futures 0.3.12",
  "futures-timer 3.0.2",
+ "hex",
  "hyper 0.13.9",
  "hyper-rustls",
  "lazy_static",
@@ -9336,6 +9358,7 @@ dependencies = [
  "sc-consensus",
  "sc-executor",
  "sc-light",
+ "sc-offchain",
  "sc-service",
  "serde",
  "serde_json",

@@ -24,13 +24,13 @@
 use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
-	traits::{FindAuthor, Get, KeyOwnerProofSystem, OneSessionHandler, Randomness as RandomnessT},
+	traits::{FindAuthor, Get, KeyOwnerProofSystem, OneSessionHandler},
 	weights::{Pays, Weight},
 };
 use sp_application_crypto::Public;
 use sp_runtime::{
 	generic::DigestItem,
-	traits::{Hash, IsMember, One, SaturatedConversion, Saturating, Zero},
+	traits::{IsMember, One, SaturatedConversion, Saturating, Zero},
 	ConsensusEngineId, KeyTypeId,
 };
 use sp_session::{GetSessionNumber, GetValidatorCount};
@@ -46,8 +46,9 @@ use sp_consensus_vrf::schnorrkel;
 
 pub use sp_consensus_babe::{AuthorityId, PUBLIC_KEY_LENGTH, RANDOMNESS_LENGTH, VRF_OUTPUT_LENGTH};
 
-mod equivocation;
 mod default_weights;
+mod equivocation;
+mod randomness;
 
 #[cfg(any(feature = "runtime-benchmarks", test))]
 mod benchmarking;
@@ -57,6 +58,9 @@ mod mock;
 mod tests;
 
 pub use equivocation::{BabeEquivocationOffence, EquivocationHandler, HandleEquivocation};
+pub use randomness::{
+	CurrentBlockRandomness, RandomnessFromOneEpochAgo, RandomnessFromTwoEpochsAgo,
+};
 
 pub use pallet::*;
 
@@ -264,6 +268,14 @@ pub mod pallet {
 	#[pallet::getter(fn author_vrf_randomness)]
 	pub(super) type AuthorVrfRandomness<T: Config> = StorageValue<_, MaybeRandomness, ValueQuery>;
 
+	/// The block numbers when the last and current epoch have started, respectively `N-1` and
+	/// `N`.
+	/// NOTE: We track this is in order to annotate the block number when a given pool of
+	/// entropy was fixed (i.e. it was known to chain observers). Since epochs are defined in
+	/// slots, which may be skipped, the block numbers may not line up with the slot numbers.
+	#[pallet::storage]
+	pub(super) type EpochStart<T: Config> = StorageValue<_, (T::BlockNumber, T::BlockNumber), ValueQuery>;
+
 	/// How late the current block is compared to its parent.
 	///
 	/// This entry is populated as part of block execution and is cleaned up
@@ -398,31 +410,6 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config> RandomnessT<<T as frame_system::Config>::Hash> for Pallet<T> {
-	/// Some BABE blocks have VRF outputs where the block producer has exactly one bit of influence,
-	/// either they make the block or they do not make the block and thus someone else makes the
-	/// next block. Yet, this randomness is not fresh in all BABE blocks.
-	///
-	/// If that is an insufficient security guarantee then two things can be used to improve this
-	/// randomness:
-	///
-	/// - Name, in advance, the block number whose random value will be used; ensure your module
-	///   retains a buffer of previous random values for its subject and then index into these in
-	///   order to obviate the ability of your user to look up the parent hash and choose when to
-	///   transact based upon it.
-	/// - Require your user to first commit to an additional value by first posting its hash.
-	///   Require them to reveal the value to determine the final result, hashing it with the
-	///   output of this random function. This reduces the ability of a cabal of block producers
-	///   from conspiring against individuals.
-	fn random(subject: &[u8]) -> T::Hash {
-		let mut subject = subject.to_vec();
-		subject.reserve(VRF_OUTPUT_LENGTH);
-		subject.extend_from_slice(&Self::randomness()[..]);
-
-		<T as frame_system::Config>::Hashing::hash(&subject[..])
-	}
-}
-
 /// A BABE public key
 pub type BabeKey = [u8; PUBLIC_KEY_LENGTH];
 
@@ -546,6 +533,12 @@ impl<T: Config> Pallet<T> {
 
 		// Update the next epoch authorities.
 		NextAuthorities::<T>::put(&next_authorities);
+
+		// Update the start blocks of the previous and new current epoch.
+		<EpochStart<T>>::mutate(|(previous_epoch_start_block, current_epoch_start_block)| {
+			*previous_epoch_start_block = sp_std::mem::take(current_epoch_start_block);
+			*current_epoch_start_block = <frame_system::Module<T>>::block_number();
+		});
 
 		// After we update the current epoch, we signal the *next* epoch change
 		// so that nodes can track changes.
