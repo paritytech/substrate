@@ -740,6 +740,8 @@ where
 	}
 
 	fn random(&self, subject: &[u8]) -> SeedOf<T> {
+		// TODO: change API to expose randomness freshness
+		// https://github.com/paritytech/substrate/issues/8297
 		T::Randomness::random(subject).0
 	}
 
