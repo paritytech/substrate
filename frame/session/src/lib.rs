@@ -174,11 +174,17 @@ impl<
 
 		if now > offset {
 			let current = (now - offset) % period.clone();
-
-			// NOTE: when this is called on the last block of the session we will return 0% since we
-			// make the assumption that the session has already been rotated (or will rotate). This
-			// is consistent with the results from `estimate_next_session_rotation` below.
-			Some(Percent::from_rational_approximation(current, period))
+			if current.is_zero() {
+				// we wrap around the modulus on the last block of the session, so this should be
+				// 100% progress. this means that we never return 0%, as the next block will already
+				// have some progress in the follow-up session.
+				Some(Percent::from_percent(100))
+			} else {
+				Some(Percent::from_rational_approximation(
+					current.clone(),
+					period.clone(),
+				))
+			}
 		} else {
 			Some(Percent::from_rational_approximation(now, offset))
 		}

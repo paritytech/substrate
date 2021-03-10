@@ -253,7 +253,6 @@ fn session_changed_flag_works() {
 
 #[test]
 fn periodic_session_works() {
-
 	frame_support::parameter_types! {
 		const Period: u64 = 10;
 		const Offset: u64 = 3;
@@ -264,21 +263,35 @@ fn periodic_session_works() {
 	for i in 0u64..3 {
 		assert!(!P::should_end_session(i));
 		assert_eq!(P::estimate_next_session_rotation(i).unwrap(), 3);
+		assert!(P::estimate_current_session_progress(i).unwrap() < Percent::from_percent(100));
 	}
 
 	assert!(P::should_end_session(3u64));
 	assert_eq!(P::estimate_next_session_rotation(3u64).unwrap(), 3);
+	assert_eq!(
+		P::estimate_current_session_progress(3u64).unwrap(),
+		Percent::from_percent(100)
+	);
 
 	for i in (1u64..10).map(|i| 3 + i) {
 		assert!(!P::should_end_session(i));
 		assert_eq!(P::estimate_next_session_rotation(i).unwrap(), 13);
+		assert!(P::estimate_current_session_progress(i).unwrap() < Percent::from_percent(100));
 	}
 
 	assert!(P::should_end_session(13u64));
 	assert_eq!(P::estimate_next_session_rotation(13u64).unwrap(), 23);
+	assert_eq!(
+		P::estimate_current_session_progress(13u64).unwrap(),
+		Percent::from_percent(100)
+	);
 
 	assert!(!P::should_end_session(14u64));
 	assert_eq!(P::estimate_next_session_rotation(14u64).unwrap(), 23);
+	assert_eq!(
+		P::estimate_current_session_progress(14u64).unwrap(),
+		Percent::from_percent(10)
+	);
 }
 
 #[test]
