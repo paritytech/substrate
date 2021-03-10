@@ -148,7 +148,8 @@ impl<Storage: OffchainStorage> offchain::DbExternalities for Db<Storage> {
 
 /// Asynchronous offchain API.
 ///
-/// NOTE this is done to prevent recursive calls into the runtime (which are not supported currently).
+/// NOTE this is done to prevent recursive calls into the runtime
+/// (which are not supported currently).
 pub(crate) struct Api {
 	/// A provider for substrate networking.
 	network_provider: Arc<dyn NetworkProvider + Send + Sync>,
