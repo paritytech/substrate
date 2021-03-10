@@ -1220,7 +1220,7 @@ impl_runtime_apis! {
 		}
 
 		fn random_seed() -> <Block as BlockT>::Hash {
-			RandomnessCollectiveFlip::random_seed()
+			pallet_babe::RandomnessFromOneEpochAgo::<Runtime>::random_seed().0
 		}
 	}
 

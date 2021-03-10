@@ -350,6 +350,31 @@ fn can_fetch_current_and_next_epoch_data() {
 }
 
 #[test]
+fn tracks_block_numbers_when_current_and_previous_epoch_started() {
+	new_test_ext(5).execute_with(|| {
+		// an epoch is 3 slots therefore at block 8 we should be in epoch #3
+		// with the previous epochs having the following blocks:
+		// epoch 1 - [1, 2, 3]
+		// epoch 2 - [4, 5, 6]
+		// epoch 3 - [7, 8, 9]
+		progress_to_block(8);
+
+		let (last_epoch, current_epoch) = EpochStart::<Test>::get();
+
+		assert_eq!(last_epoch, 4);
+		assert_eq!(current_epoch, 7);
+
+		// once we reach block 10 we switch to epoch #4
+		progress_to_block(10);
+
+		let (last_epoch, current_epoch) = EpochStart::<Test>::get();
+
+		assert_eq!(last_epoch, 7);
+		assert_eq!(current_epoch, 10);
+	});
+}
+
+#[test]
 fn report_equivocation_current_session_works() {
 	let (pairs, mut ext) = new_test_ext_with_pairs(3);
 

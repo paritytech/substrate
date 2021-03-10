@@ -23,13 +23,13 @@ use sp_std::{prelude::*, result, marker::PhantomData, ops::Div, fmt::Debug};
 use codec::{FullCodec, Codec, Encode, Decode, EncodeLike};
 use sp_core::u32_trait::Value as U32;
 use sp_runtime::{
-	RuntimeAppPublic, RuntimeDebug, BoundToRuntimeAppPublic,
-	ConsensusEngineId, DispatchResult, DispatchError,
 	traits::{
-		MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput, Bounded, Zero,
-		BadOrigin, AtLeast32BitUnsigned, Convert, UniqueSaturatedFrom, UniqueSaturatedInto,
-		SaturatedConversion, StoredMapError, Block as BlockT,
+		AtLeast32Bit, AtLeast32BitUnsigned, BadOrigin, Block as BlockT, Bounded, Convert,
+		MaybeSerializeDeserialize, SaturatedConversion, Saturating, StoredMapError,
+		UniqueSaturatedFrom, UniqueSaturatedInto, Zero,
 	},
+	BoundToRuntimeAppPublic, ConsensusEngineId, DispatchError, DispatchResult, RuntimeAppPublic,
+	RuntimeDebug,
 };
 use sp_staking::SessionIndex;
 use crate::dispatch::Parameter;
@@ -1413,35 +1413,39 @@ impl<T> InitializeMembers<T> for () {
 	fn initialize_members(_: &[T]) {}
 }
 
-// A trait that is able to provide randomness.
-pub trait Randomness<Output> {
-	/// Get a "random" value
+/// A trait that is able to provide randomness.
+///
+/// Being a deterministic blockchain, real randomness is difficult to come by, different
+/// implementations of this trait will provide different security guarantees. At best,
+/// this will be randomness which was hard to predict a long time ago, but that has become
+/// easy to predict recently.
+pub trait Randomness<Output, BlockNumber> {
+	/// Get the most recently determined random seed, along with the time in the past
+	/// since when it was determinable by chain observers.
 	///
-	/// Being a deterministic blockchain, real randomness is difficult to come by. This gives you
-	/// something that approximates it. At best, this will be randomness which was
-	/// hard to predict a long time ago, but that has become easy to predict recently.
+	/// `subject` is a context identifier and allows you to get a different result to
+	/// other callers of this function; use it like `random(&b"my context"[..])`.
 	///
-	/// `subject` is a context identifier and allows you to get a
-	/// different result to other callers of this function; use it like
-	/// `random(&b"my context"[..])`.
-	fn random(subject: &[u8]) -> Output;
+	/// NOTE: The returned seed should only be used to distinguish commitments made before
+	/// the returned block number. If the block number is too early (i.e. commitments were
+	/// made afterwards), then ensure no further commitments may be made and repeatedly
+	/// call this on later blocks until the block number returned is later than the latest
+	/// commitment.
+	fn random(subject: &[u8]) -> (Output, BlockNumber);
 
 	/// Get the basic random seed.
 	///
-	/// In general you won't want to use this, but rather `Self::random` which allows you to give a
-	/// subject for the random result and whose value will be independently low-influence random
-	/// from any other such seeds.
-	fn random_seed() -> Output {
+	/// In general you won't want to use this, but rather `Self::random` which allows
+	/// you to give a subject for the random result and whose value will be
+	/// independently low-influence random from any other such seeds.
+	///
+	/// NOTE: The returned seed should only be used to distinguish commitments made before
+	/// the returned block number. If the block number is too early (i.e. commitments were
+	/// made afterwards), then ensure no further commitments may be made and repeatedly
+	/// call this on later blocks until the block number returned is later than the latest
+	/// commitment.
+	fn random_seed() -> (Output, BlockNumber) {
 		Self::random(&[][..])
-	}
-}
-
-/// Provides an implementation of [`Randomness`] that should only be used in tests!
-pub struct TestRandomness;
-
-impl<Output: Decode + Default> Randomness<Output> for TestRandomness {
-	fn random(subject: &[u8]) -> Output {
-		Output::decode(&mut TrailingZeroInput::new(subject)).unwrap_or_default()
 	}
 }
 

@@ -1814,7 +1814,7 @@ dependencies = [
 
 [[package]]
 name = "frame-support-test"
-version = "2.0.1"
+version = "3.0.0"
 dependencies = [
  "frame-metadata",
  "frame-support",
@@ -4983,6 +4983,7 @@ version = "3.0.0"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
+ "frame-support-test",
  "frame-system",
  "pallet-balances",
  "parity-scale-codec",
@@ -5278,6 +5279,7 @@ name = "pallet-society"
 version = "3.0.0"
 dependencies = [
  "frame-support",
+ "frame-support-test",
  "frame-system",
  "pallet-balances",
  "parity-scale-codec",
