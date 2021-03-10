@@ -479,7 +479,7 @@
 			"website": "https://crust.network"
 		},
 		{
-			"prefix": 1024,
+			"prefix": 128,
 			"network": "clover",
 			"displayName": "Clover Finance",
 			"symbols": ["CLV"],

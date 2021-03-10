@@ -587,7 +587,7 @@ ss58_address_format!(
 	CrustAccount =>
 		(66, "crust", "Crust Network, standard account (*25519).")
 	CloverAccount =>
-		(1024, "clover", "Clover Finance, standard account (*25519).")
+		(128, "clover", "Clover Finance, standard account (*25519).")
 	// Note: 16384 and above are reserved.
 
 );
