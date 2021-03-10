@@ -1228,7 +1228,7 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic(expected = "Invalid inherent position.")]
+	#[should_panic(expected = "Invalid inherent position for extrinsic at index 1")]
 	fn invalid_inherent_position_fail() {
 		let xt1 = TestXt::new(Call::Balances(BalancesCall::transfer(33, 0)), sign_extra(1, 0, 0));
 		let xt2 = TestXt::new(Call::Custom(custom::Call::inherent_call()), None);
