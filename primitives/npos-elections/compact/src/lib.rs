@@ -197,17 +197,16 @@ fn struct_def(
 			fn unique_targets(&self) -> Vec<Self::Target> {
 				// NOTE: this implementation returns the targets sorted, but we don't use it yet per
 				// se, nor is the API enforcing it.
-				let mut all_targets: Vec<Self::Target> = Vec::with_capacity(self.average_edge_count());
+				use sp_std::collections::btree_set::BTreeSet;
+
+				let mut all_targets: BTreeSet<Self::Target> = BTreeSet::new();
 				let mut maybe_insert_target = |t: Self::Target| {
-					match all_targets.binary_search(&t) {
-						Ok(_) => (),
-						Err(pos) => all_targets.insert(pos, t)
-					}
+					all_targets.insert(t);
 				};
 
 				#unique_targets_impl
 
-				all_targets
+				all_targets.into_iter().collect()
 			}
 
 			fn remove_voter(&mut self, to_remove: Self::Voter) -> bool {
