@@ -4112,6 +4112,7 @@ dependencies = [
  "node-primitives",
  "node-runtime",
  "pallet-contracts-rpc",
+ "pallet-mmr-rpc",
  "pallet-transaction-payment-rpc",
  "sc-chain-spec",
  "sc-client-api",
@@ -5039,6 +5040,24 @@ dependencies = [
  "sp-core",
  "sp-runtime",
  "sp-std",
+]
+
+[[package]]
+name = "pallet-mmr-rpc"
+version = "3.0.0"
+dependencies = [
+ "jsonrpc-core",
+ "jsonrpc-core-client",
+ "jsonrpc-derive",
+ "pallet-mmr-primitives",
+ "parity-scale-codec",
+ "serde",
+ "serde_json",
+ "sp-api",
+ "sp-blockchain",
+ "sp-core",
+ "sp-rpc",
+ "sp-runtime",
 ]
 
 [[package]]
@@ -7548,6 +7567,7 @@ dependencies = [
  "fnv",
  "futures 0.3.12",
  "futures-timer 3.0.2",
+ "hex",
  "hyper 0.13.9",
  "hyper-rustls",
  "lazy_static",
@@ -9336,6 +9356,7 @@ dependencies = [
  "sc-consensus",
  "sc-executor",
  "sc-light",
+ "sc-offchain",
  "sc-service",
  "serde",
  "serde_json",
