@@ -42,7 +42,8 @@ use sp_timestamp::OnTimestampSet;
 
 use sp_consensus_babe::{
 	digests::{NextConfigDescriptor, NextEpochDescriptor, PreDigest},
-	BabeAuthorityWeight, ConsensusLog, Epoch, EquivocationProof, Slot, BABE_ENGINE_ID,
+	BabeAuthorityWeight, BabeEpochConfiguration, ConsensusLog, Epoch,
+	EquivocationProof, Slot, BABE_ENGINE_ID,
 };
 use sp_consensus_vrf::schnorrkel;
 
@@ -187,8 +188,8 @@ decl_storage! {
 		// variable to its underlying value.
 		pub Randomness get(fn randomness): schnorrkel::Randomness;
 
-		/// Next epoch configuration, if changed.
-		NextEpochConfig: Option<NextConfigDescriptor>;
+		/// Pending epoch configuration change that will be applied when the next epoch is enacted.
+		PendingEpochConfigChange: Option<NextConfigDescriptor>;
 
 		/// Next epoch randomness.
 		NextRandomness: schnorrkel::Randomness;
@@ -225,10 +226,21 @@ decl_storage! {
 		/// on block finalization. Querying this storage entry outside of block
 		/// execution context should always yield zero.
 		Lateness get(fn lateness): T::BlockNumber;
+
+		/// The configuration for the current epoch. Should never be `None` as it is initialized in genesis.
+		EpochConfig: Option<BabeEpochConfiguration>;
+
+		/// The configuration for the next epoch, `None` if the config will not change
+		/// (you can fallback to `EpochConfig` instead in that case).
+		NextEpochConfig: Option<BabeEpochConfiguration>;
 	}
 	add_extra_genesis {
 		config(authorities): Vec<(AuthorityId, BabeAuthorityWeight)>;
-		build(|config| Module::<T>::initialize_authorities(&config.authorities))
+		config(epoch_config): Option<BabeEpochConfiguration>;
+		build(|config| {
+			Module::<T>::initialize_authorities(&config.authorities);
+			EpochConfig::put(config.epoch_config.clone().expect("epoch_config must not be None"));
+		})
 	}
 }
 
@@ -326,7 +338,7 @@ decl_module! {
 			config: NextConfigDescriptor,
 		) {
 			ensure_root(origin)?;
-			NextEpochConfig::put(config);
+			PendingEpochConfigChange::put(config);
 		}
 	}
 }
@@ -490,8 +502,16 @@ impl<T: Config> Module<T> {
 		};
 		Self::deposit_consensus(ConsensusLog::NextEpochData(next_epoch));
 
-		if let Some(next_config) = NextEpochConfig::take() {
-			Self::deposit_consensus(ConsensusLog::NextConfigData(next_config));
+		if let Some(next_config) = NextEpochConfig::get() {
+			EpochConfig::put(next_config);
+		}
+
+		if let Some(pending_epoch_config_change) = PendingEpochConfigChange::take() {
+			let next_epoch_config: BabeEpochConfiguration =
+				pending_epoch_config_change.clone().into();
+			NextEpochConfig::put(next_epoch_config);
+
+			Self::deposit_consensus(ConsensusLog::NextConfigData(pending_epoch_config_change));
 		}
 	}
 
@@ -510,6 +530,7 @@ impl<T: Config> Module<T> {
 			duration: T::EpochDuration::get(),
 			authorities: Self::authorities(),
 			randomness: Self::randomness(),
+			config: EpochConfig::get().expect("EpochConfig is initialized in genesis; we never `take` or `kill` it; qed"),
 		}
 	}
 
@@ -527,6 +548,9 @@ impl<T: Config> Module<T> {
 			duration: T::EpochDuration::get(),
 			authorities: NextAuthorities::get(),
 			randomness: NextRandomness::get(),
+			config: NextEpochConfig::get().unwrap_or_else(|| {
+				EpochConfig::get().expect("EpochConfig is initialized in genesis; we never `take` or `kill` it; qed")
+			}),
 		}
 	}
 
@@ -834,4 +858,50 @@ fn compute_randomness(
 	}
 
 	sp_io::hashing::blake2_256(&s)
+}
+
+pub mod migrations {
+	use super::*;
+	use frame_support::pallet_prelude::{ValueQuery, StorageValue};
+
+	/// Something that can return the storage prefix of the `Babe` pallet.
+	pub trait BabePalletPrefix: Config {
+		fn pallet_prefix() -> &'static str;
+	}
+
+	struct __OldNextEpochConfig<T>(sp_std::marker::PhantomData<T>);
+	impl<T: BabePalletPrefix> frame_support::traits::StorageInstance for __OldNextEpochConfig<T> {
+		fn pallet_prefix() -> &'static str { T::pallet_prefix() }
+		const STORAGE_PREFIX: &'static str = "NextEpochConfig";
+	}
+
+	type OldNextEpochConfig<T> = StorageValue<
+		__OldNextEpochConfig<T>, Option<NextConfigDescriptor>, ValueQuery
+	>;
+
+	/// A storage migration that adds the current epoch configuration for Babe
+	/// to storage.
+	pub fn add_epoch_configuration<T: BabePalletPrefix>(
+		epoch_config: BabeEpochConfiguration,
+	) -> Weight {
+		let mut writes = 0;
+		let mut reads = 0;
+
+		if let Some(pending_change) = OldNextEpochConfig::<T>::get() {
+			PendingEpochConfigChange::put(pending_change);
+
+			writes += 1;
+		}
+
+		reads += 1;
+
+		OldNextEpochConfig::<T>::kill();
+
+		EpochConfig::put(epoch_config.clone());
+		NextEpochConfig::put(epoch_config);
+
+		writes += 3;
+
+		T::DbWeight::get().writes(writes) + T::DbWeight::get().reads(reads)
+	}
 }

@@ -119,6 +119,13 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	transaction_version: 2,
 };
 
+/// The BABE epoch configuration at genesis.
+pub const BABE_GENESIS_EPOCH_CONFIG: sp_consensus_babe::BabeEpochConfiguration =
+	sp_consensus_babe::BabeEpochConfiguration {
+		c: PRIMARY_PROBABILITY,
+		allowed_slots: sp_consensus_babe::AllowedSlots::PrimaryAndSecondaryPlainSlots
+	};
+
 /// Native version.
 #[cfg(any(feature = "std", test))]
 pub fn native_version() -> NativeVersion {
@@ -1015,9 +1022,9 @@ parameter_types! {
 impl pallet_lottery::Config for Runtime {
 	type ModuleId = LotteryModuleId;
 	type Call = Call;
-	type Event = Event;
 	type Currency = Balances;
 	type Randomness = RandomnessCollectiveFlip;
+	type Event = Event;
 	type ManagerOrigin = EnsureRoot<AccountId>;
 	type MaxCalls = MaxCalls;
 	type ValidateCall = Lottery;
@@ -1026,8 +1033,8 @@ impl pallet_lottery::Config for Runtime {
 }
 
 parameter_types! {
-	pub const AssetDepositBase: Balance = 100 * DOLLARS;
-	pub const AssetDepositPerZombie: Balance = 1 * DOLLARS;
+	pub const AssetDeposit: Balance = 100 * DOLLARS;
+	pub const ApprovalDeposit: Balance = 1 * DOLLARS;
 	pub const StringLimit: u32 = 50;
 	pub const MetadataDepositBase: Balance = 10 * DOLLARS;
 	pub const MetadataDepositPerByte: Balance = 1 * DOLLARS;
@@ -1039,15 +1046,16 @@ impl pallet_assets::Config for Runtime {
 	type AssetId = u32;
 	type Currency = Balances;
 	type ForceOrigin = EnsureRoot<AccountId>;
-	type AssetDepositBase = AssetDepositBase;
-	type AssetDepositPerZombie = AssetDepositPerZombie;
-	type StringLimit = StringLimit;
+	type AssetDeposit = AssetDeposit;
 	type MetadataDepositBase = MetadataDepositBase;
 	type MetadataDepositPerByte = MetadataDepositPerByte;
+	type ApprovalDeposit = ApprovalDeposit;
+	type StringLimit = StringLimit;
 	type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
 }
 
 parameter_types! {
+	pub IgnoredIssuance: Balance = Treasury::pot();
 	pub const QueueCount: u32 = 300;
 	pub const MaxQueueLen: u32 = 1000;
 	pub const FifoQueueLen: u32 = 500;
@@ -1063,6 +1071,7 @@ impl pallet_gilt::Config for Runtime {
 	type AdminOrigin = frame_system::EnsureRoot<AccountId>;
 	type Deficit = ();
 	type Surplus = ();
+	type IgnoredIssuance = IgnoredIssuance;
 	type QueueCount = QueueCount;
 	type MaxQueueLen = MaxQueueLen;
 	type FifoQueueLen = FifoQueueLen;
@@ -1274,10 +1283,10 @@ impl_runtime_apis! {
 			sp_consensus_babe::BabeGenesisConfiguration {
 				slot_duration: Babe::slot_duration(),
 				epoch_length: EpochDuration::get(),
-				c: PRIMARY_PROBABILITY,
+				c: BABE_GENESIS_EPOCH_CONFIG.c,
 				genesis_authorities: Babe::authorities(),
 				randomness: Babe::randomness(),
-				allowed_slots: sp_consensus_babe::AllowedSlots::PrimaryAndSecondaryPlainSlots,
+				allowed_slots: BABE_GENESIS_EPOCH_CONFIG.allowed_slots,
 			}
 		}
 
@@ -1406,7 +1415,6 @@ impl_runtime_apis! {
 	#[cfg(feature = "try-runtime")]
 	impl frame_try_runtime::TryRuntime<Block> for Runtime {
 		fn on_runtime_upgrade() -> Result<(Weight, Weight), sp_runtime::RuntimeString> {
-			frame_support::debug::RuntimeLogger::init();
 			let weight = Executive::try_runtime_upgrade()?;
 			Ok((weight, RuntimeBlockWeights::get().max_block))
 		}

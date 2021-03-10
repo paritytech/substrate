@@ -431,6 +431,7 @@ fn run_one_test(
 			babe_link: data.link.clone(),
 			keystore,
 			can_author_with: sp_consensus::AlwaysCanAuthor,
+			block_proposal_slot_portion: SlotProportion::new(0.5),
 		}).expect("Starts babe"));
 	}
 	futures::executor::block_on(future::select(

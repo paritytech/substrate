@@ -234,4 +234,5 @@ try-runtime = [
 	"pallet-society/try-runtime",
 	"pallet-recovery/try-runtime",
 	"pallet-vesting/try-runtime",
+	"pallet-gilt/try-runtime",
 ]
