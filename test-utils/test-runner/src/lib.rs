@@ -370,7 +370,7 @@ pub trait ChainInfo: Sized {
 
 	type SignedExtras: SignedExtension;
 
-	/// construct the node configuration
+	/// construct the node configuration.
 	fn configuration(task_executor: TaskExecutor) -> Configuration;
 
 	/// Signed extras, this function is caled in an externalities provided environment.
