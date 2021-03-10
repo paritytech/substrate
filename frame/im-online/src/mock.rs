@@ -183,9 +183,9 @@ parameter_types! {
 impl Config for Runtime {
 	type AuthorityId = UintAuthorityId;
 	type Event = Event;
-	type ReportUnresponsiveness = OffenceHandler;
 	type ValidatorSet = Historical;
-	type SessionDuration = Period;
+	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
+	type ReportUnresponsiveness = OffenceHandler;
 	type UnsignedPriority = UnsignedPriority;
 	type WeightInfo = ();
 }
