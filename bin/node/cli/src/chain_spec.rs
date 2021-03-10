@@ -305,6 +305,7 @@ pub fn testnet_genesis(
 		},
 		pallet_babe: BabeConfig {
 			authorities: vec![],
+			epoch_config: Some(node_runtime::BABE_GENESIS_EPOCH_CONFIG),
 		},
 		pallet_im_online: ImOnlineConfig {
 			keys: vec![],
