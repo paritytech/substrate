@@ -25,7 +25,7 @@ use frame_support::{
 };
 use mock::*;
 use pallet_session::ShouldEndSession;
-use sp_consensus_babe::{AllowedSlots, Slot};
+use sp_consensus_babe::{AllowedSlots, Slot, BabeEpochConfiguration};
 use sp_core::crypto::Pair;
 
 const EMPTY_RANDOMNESS: [u8; 32] = [
@@ -231,11 +231,31 @@ fn can_enact_next_config() {
 		assert_eq!(Babe::epoch_index(), 0);
 		go_to_block(2, 7);
 
+		let current_config = BabeEpochConfiguration {
+			c: (0, 4),
+			allowed_slots: sp_consensus_babe::AllowedSlots::PrimarySlots,
+		};
+
+		let next_config = BabeEpochConfiguration {
+			c: (1, 4),
+			allowed_slots: sp_consensus_babe::AllowedSlots::PrimarySlots,
+		};
+
+		let next_next_config = BabeEpochConfiguration {
+			c: (2, 4),
+			allowed_slots: sp_consensus_babe::AllowedSlots::PrimarySlots,
+		};
+
+		EpochConfig::put(current_config);
+		NextEpochConfig::put(next_config.clone());
+
+		assert_eq!(NextEpochConfig::get(), Some(next_config.clone()));
+
 		Babe::plan_config_change(
 			Origin::root(),
 			NextConfigDescriptor::V1 {
-				c: (1, 4),
-				allowed_slots: AllowedSlots::PrimarySlots,
+				c: next_next_config.c,
+				allowed_slots: next_next_config.allowed_slots,
 			},
 		).unwrap();
 
@@ -243,10 +263,13 @@ fn can_enact_next_config() {
 		Babe::on_finalize(9);
 		let header = System::finalize();
 
+		assert_eq!(EpochConfig::get(), Some(next_config));
+		assert_eq!(NextEpochConfig::get(), Some(next_next_config.clone()));
+
 		let consensus_log = sp_consensus_babe::ConsensusLog::NextConfigData(
-			sp_consensus_babe::digests::NextConfigDescriptor::V1 {
-				c: (1, 4),
-				allowed_slots: AllowedSlots::PrimarySlots,
+			NextConfigDescriptor::V1 {
+				c: next_next_config.c,
+				allowed_slots: next_next_config.allowed_slots,
 			}
 		);
 		let consensus_digest = DigestItem::Consensus(BABE_ENGINE_ID, consensus_log.encode());
@@ -291,6 +314,11 @@ fn only_root_can_enact_config_change() {
 #[test]
 fn can_fetch_current_and_next_epoch_data() {
 	new_test_ext(5).execute_with(|| {
+		EpochConfig::put(BabeEpochConfiguration {
+			c: (1, 4),
+			allowed_slots: sp_consensus_babe::AllowedSlots::PrimarySlots,
+		});
+
 		// genesis authorities should be used for the first and second epoch
 		assert_eq!(
 			Babe::current_epoch().authorities,
@@ -318,6 +346,31 @@ fn can_fetch_current_and_next_epoch_data() {
 
 		// but in this case the authorities stay the same
 		assert!(current_epoch.authorities == next_epoch.authorities);
+	});
+}
+
+#[test]
+fn tracks_block_numbers_when_current_and_previous_epoch_started() {
+	new_test_ext(5).execute_with(|| {
+		// an epoch is 3 slots therefore at block 8 we should be in epoch #3
+		// with the previous epochs having the following blocks:
+		// epoch 1 - [1, 2, 3]
+		// epoch 2 - [4, 5, 6]
+		// epoch 3 - [7, 8, 9]
+		progress_to_block(8);
+
+		let (last_epoch, current_epoch) = EpochStart::<Test>::get();
+
+		assert_eq!(last_epoch, 4);
+		assert_eq!(current_epoch, 7);
+
+		// once we reach block 10 we switch to epoch #4
+		progress_to_block(10);
+
+		let (last_epoch, current_epoch) = EpochStart::<Test>::get();
+
+		assert_eq!(last_epoch, 7);
+		assert_eq!(current_epoch, 10);
 	});
 }
 
@@ -808,4 +861,55 @@ fn valid_equivocation_reports_dont_pay_fees() {
 		assert!(post_info.actual_weight.is_none());
 		assert_eq!(post_info.pays_fee, Pays::Yes);
 	})
+}
+
+#[test]
+fn add_epoch_configurations_migration_works() {
+	use frame_support::storage::migration::{
+		put_storage_value, get_storage_value,
+	};
+
+	impl crate::migrations::BabePalletPrefix for Test {
+		fn pallet_prefix() -> &'static str {
+			"Babe"
+		}
+	}
+
+	new_test_ext(1).execute_with(|| {
+		let next_config_descriptor = NextConfigDescriptor::V1 {
+			c: (3, 4),
+			allowed_slots: AllowedSlots::PrimarySlots
+		};
+
+		put_storage_value(
+			b"Babe",
+			b"NextEpochConfig",
+			&[],
+			Some(next_config_descriptor.clone())
+		);
+
+		assert!(get_storage_value::<Option<NextConfigDescriptor>>(
+			b"Babe",
+			b"NextEpochConfig",
+			&[],
+		).is_some());
+
+		let current_epoch = BabeEpochConfiguration {
+			c: (1, 4),
+			allowed_slots: sp_consensus_babe::AllowedSlots::PrimarySlots,
+		};
+
+		crate::migrations::add_epoch_configuration::<Test>(
+			current_epoch.clone()
+		);
+
+		assert!(get_storage_value::<Option<NextConfigDescriptor>>(
+			b"Babe",
+			b"NextEpochConfig",
+			&[],
+		).is_none());
+
+		assert_eq!(EpochConfig::get(), Some(current_epoch));
+		assert_eq!(PendingEpochConfigChange::get(), Some(next_config_descriptor));
+	});
 }

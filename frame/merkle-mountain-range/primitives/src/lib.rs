@@ -360,6 +360,11 @@ impl OpaqueLeaf {
 	pub fn from_encoded_leaf(encoded_leaf: Vec<u8>) -> Self {
 		OpaqueLeaf(encoded_leaf)
 	}
+
+	/// Attempt to decode the leaf into expected concrete type.
+	pub fn try_decode<T: codec::Decode>(&self) -> Option<T> {
+		codec::Decode::decode(&mut &*self.0).ok()
+	}
 }
 
 impl FullLeaf for OpaqueLeaf {
@@ -368,18 +373,49 @@ impl FullLeaf for OpaqueLeaf {
 	}
 }
 
+/// A type-safe wrapper for the concrete leaf type.
+///
+/// This structure serves merely to avoid passing raw `Vec<u8>` around.
+/// It must be `Vec<u8>`-encoding compatible.
+///
+/// It is different from [`OpaqueLeaf`], because it does implement `Codec`
+/// and the encoding has to match raw `Vec<u8>` encoding.
+#[derive(codec::Encode, codec::Decode, RuntimeDebug, PartialEq, Eq)]
+pub struct EncodableOpaqueLeaf(pub Vec<u8>);
+
+impl EncodableOpaqueLeaf {
+	/// Convert a concrete leaf into encodable opaque version.
+	pub fn from_leaf<T: FullLeaf>(leaf: &T) -> Self {
+		let opaque = OpaqueLeaf::from_leaf(leaf);
+		Self::from_opaque_leaf(opaque)
+	}
+
+	/// Given an opaque leaf, make it encodable.
+	pub fn from_opaque_leaf(opaque: OpaqueLeaf) -> Self {
+		Self(opaque.0)
+	}
+
+	/// Try to convert into a [OpaqueLeaf].
+	pub fn into_opaque_leaf(self) -> OpaqueLeaf {
+		// wrap into `OpaqueLeaf` type
+		OpaqueLeaf::from_encoded_leaf(self.0)
+	}
+}
+
 sp_api::decl_runtime_apis! {
 	/// API to interact with MMR pallet.
-	pub trait MmrApi<Leaf: codec::Codec, Hash: codec::Codec> {
+	pub trait MmrApi<Hash: codec::Codec> {
 		/// Generate MMR proof for a leaf under given index.
-		fn generate_proof(leaf_index: u64) -> Result<(Leaf, Proof<Hash>), Error>;
+		#[skip_initialize_block]
+		fn generate_proof(leaf_index: u64) -> Result<(EncodableOpaqueLeaf, Proof<Hash>), Error>;
 
 		/// Verify MMR proof against on-chain MMR.
 		///
 		/// Note this function will use on-chain MMR root hash and check if the proof
 		/// matches the hash.
 		/// See [Self::verify_proof_stateless] for a stateless verifier.
-		fn verify_proof(leaf: Leaf, proof: Proof<Hash>) -> Result<(), Error>;
+		#[skip_initialize_block]
+		fn verify_proof(leaf: EncodableOpaqueLeaf, proof: Proof<Hash>) -> Result<(), Error>;
 
 		/// Verify MMR proof against given root hash.
 		///
@@ -387,7 +423,8 @@ sp_api::decl_runtime_apis! {
 		/// proof is verified against given MMR root hash.
 		///
 		/// The leaf data is expected to be encoded in it's compact form.
-		fn verify_proof_stateless(root: Hash, leaf: Vec<u8>, proof: Proof<Hash>)
+		#[skip_initialize_block]
+		fn verify_proof_stateless(root: Hash, leaf: EncodableOpaqueLeaf, proof: Proof<Hash>)
 			-> Result<(), Error>;
 	}
 }
@@ -535,7 +572,7 @@ mod tests {
 	}
 
 	#[test]
-	fn opaque_leaves_should_be_scale_compatible_with_concrete_ones() {
+	fn opaque_leaves_should_be_full_leaf_compatible() {
 		// given
 		let a = Test::Data("Hello World!".into());
 		let b = Test::Data("".into());
@@ -563,5 +600,37 @@ mod tests {
 			encoded_compact,
 			opaque,
 		);
+	}
+
+	#[test]
+	fn encode_opaque_leaf_should_be_scale_compatible() {
+		use codec::Encode;
+
+		// given
+		let a = Test::Data("Hello World!".into());
+		let case1 = EncodableOpaqueLeaf::from_leaf(&a);
+		let case2 = EncodableOpaqueLeaf::from_opaque_leaf(OpaqueLeaf(a.encode()));
+		let case3 = a.encode().encode();
+
+		// when
+		let encoded = vec![&case1, &case2]
+			.into_iter()
+			.map(|x| x.encode())
+			.collect::<Vec<_>>();
+		let decoded = vec![&*encoded[0], &*encoded[1], &*case3]
+			.into_iter()
+			.map(|x| EncodableOpaqueLeaf::decode(&mut &*x))
+			.collect::<Vec<_>>();
+
+		// then
+		assert_eq!(case1, case2);
+		assert_eq!(encoded[0], encoded[1]);
+		// then encoding should also match double-encoded leaf.
+		assert_eq!(encoded[0], case3);
+
+		assert_eq!(decoded[0], decoded[1]);
+		assert_eq!(decoded[1], decoded[2]);
+		assert_eq!(decoded[0], Ok(case2));
+		assert_eq!(decoded[1], Ok(case1));
 	}
 }

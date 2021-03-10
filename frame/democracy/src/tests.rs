@@ -236,7 +236,7 @@ fn set_balance_proposal_hash_and_note(value: u64) -> H256 {
 	match Democracy::note_preimage(Origin::signed(6), p) {
 		Ok(_) => (),
 		Err(x) if x == Error::<Test>::DuplicatePreimage.into() => (),
-		Err(x) => panic!(x),
+		Err(x) => panic!("{:?}", x),
 	}
 	h
 }

@@ -24,9 +24,9 @@ use codec::{FullCodec, Codec, Encode, Decode, EncodeLike};
 use sp_core::u32_trait::Value as U32;
 use sp_runtime::{
 	traits::{
-		AtLeast32Bit, AtLeast32BitUnsigned, BadOrigin, Convert, MaybeSerializeDeserialize,
-		SaturatedConversion, Saturating, StoredMapError, TrailingZeroInput, UniqueSaturatedFrom,
-		UniqueSaturatedInto, Zero,
+		AtLeast32Bit, AtLeast32BitUnsigned, Block as BlockT, BadOrigin, Convert,
+		MaybeSerializeDeserialize, SaturatedConversion, Saturating, StoredMapError,
+		UniqueSaturatedFrom, UniqueSaturatedInto, Zero,
 	},
 	BoundToRuntimeAppPublic, ConsensusEngineId, DispatchError, DispatchResult, Percent,
 	RuntimeAppPublic, RuntimeDebug,
@@ -1443,35 +1443,39 @@ impl<T> InitializeMembers<T> for () {
 	fn initialize_members(_: &[T]) {}
 }
 
-// A trait that is able to provide randomness.
-pub trait Randomness<Output> {
-	/// Get a "random" value
+/// A trait that is able to provide randomness.
+///
+/// Being a deterministic blockchain, real randomness is difficult to come by, different
+/// implementations of this trait will provide different security guarantees. At best,
+/// this will be randomness which was hard to predict a long time ago, but that has become
+/// easy to predict recently.
+pub trait Randomness<Output, BlockNumber> {
+	/// Get the most recently determined random seed, along with the time in the past
+	/// since when it was determinable by chain observers.
 	///
-	/// Being a deterministic blockchain, real randomness is difficult to come by. This gives you
-	/// something that approximates it. At best, this will be randomness which was
-	/// hard to predict a long time ago, but that has become easy to predict recently.
+	/// `subject` is a context identifier and allows you to get a different result to
+	/// other callers of this function; use it like `random(&b"my context"[..])`.
 	///
-	/// `subject` is a context identifier and allows you to get a
-	/// different result to other callers of this function; use it like
-	/// `random(&b"my context"[..])`.
-	fn random(subject: &[u8]) -> Output;
+	/// NOTE: The returned seed should only be used to distinguish commitments made before
+	/// the returned block number. If the block number is too early (i.e. commitments were
+	/// made afterwards), then ensure no further commitments may be made and repeatedly
+	/// call this on later blocks until the block number returned is later than the latest
+	/// commitment.
+	fn random(subject: &[u8]) -> (Output, BlockNumber);
 
 	/// Get the basic random seed.
 	///
-	/// In general you won't want to use this, but rather `Self::random` which allows you to give a
-	/// subject for the random result and whose value will be independently low-influence random
-	/// from any other such seeds.
-	fn random_seed() -> Output {
+	/// In general you won't want to use this, but rather `Self::random` which allows
+	/// you to give a subject for the random result and whose value will be
+	/// independently low-influence random from any other such seeds.
+	///
+	/// NOTE: The returned seed should only be used to distinguish commitments made before
+	/// the returned block number. If the block number is too early (i.e. commitments were
+	/// made afterwards), then ensure no further commitments may be made and repeatedly
+	/// call this on later blocks until the block number returned is later than the latest
+	/// commitment.
+	fn random_seed() -> (Output, BlockNumber) {
 		Self::random(&[][..])
-	}
-}
-
-/// Provides an implementation of [`Randomness`] that should only be used in tests!
-pub struct TestRandomness;
-
-impl<Output: Decode + Default> Randomness<Output> for TestRandomness {
-	fn random(subject: &[u8]) -> Output {
-		Output::decode(&mut TrailingZeroInput::new(subject)).unwrap_or_default()
 	}
 }
 
@@ -1583,7 +1587,7 @@ pub trait OnGenesis {
 	fn on_genesis() {}
 }
 
-/// Prefix to be used (optionally) for implementing [`OnRuntimeUpgrade::storage_key`].
+/// Prefix to be used (optionally) for implementing [`OnRuntimeUpgradeHelpersExt::storage_key`].
 #[cfg(feature = "try-runtime")]
 pub const ON_RUNTIME_UPGRADE_PREFIX: &[u8] = b"__ON_RUNTIME_UPGRADE__";
 
@@ -1593,7 +1597,7 @@ pub trait OnRuntimeUpgradeHelpersExt {
 	/// Generate a storage key unique to this runtime upgrade.
 	///
 	/// This can be used to communicate data from pre-upgrade to post-upgrade state and check
-	/// them. See [`set_temp_storage`] and [`get_temp_storage`].
+	/// them. See [`Self::set_temp_storage`] and [`Self::get_temp_storage`].
 	#[cfg(feature = "try-runtime")]
 	fn storage_key(ident: &str) -> [u8; 32] {
 		let prefix = sp_io::hashing::twox_128(ON_RUNTIME_UPGRADE_PREFIX);
@@ -1606,7 +1610,7 @@ pub trait OnRuntimeUpgradeHelpersExt {
 		final_key
 	}
 
-	/// Get temporary storage data written by [`set_temp_storage`].
+	/// Get temporary storage data written by [`Self::set_temp_storage`].
 	///
 	/// Returns `None` if either the data is unavailable or un-decodable.
 	///
@@ -1618,7 +1622,7 @@ pub trait OnRuntimeUpgradeHelpersExt {
 	}
 
 	/// Write some temporary data to a specific storage that can be read (potentially in
-	/// post-upgrade hook) via [`get_temp_storage`].
+	/// post-upgrade hook) via [`Self::get_temp_storage`].
 	///
 	/// A `at` storage identifier must be provided to indicate where the storage is being written
 	/// to.
@@ -1653,13 +1657,13 @@ pub trait OnRuntimeUpgrade {
 	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<(), &'static str>;
+	fn pre_upgrade() -> Result<(), &'static str> { Ok(()) }
 
 	/// Execute some post-checks after a runtime upgrade.
 	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade() -> Result<(), &'static str>;
+	fn post_upgrade() -> Result<(), &'static str> { Ok(()) }
 }
 
 #[impl_for_tuples(30)]
@@ -2256,6 +2260,21 @@ pub trait GetPalletVersion {
 	/// If there was no previous version of the pallet stored in the state,
 	/// this function returns `None`.
 	fn storage_version() -> Option<PalletVersion>;
+}
+
+/// Something that can execute a given block.
+///
+/// Executing a block means that all extrinsics in a given block will be executed and the resulting
+/// header will be checked against the header of the given block.
+pub trait ExecuteBlock<Block: BlockT> {
+	/// Execute the given `block`.
+	///
+	/// This will execute all extrinsics in the block and check that the resulting header is correct.
+	///
+	/// # Panic
+	///
+	/// Panics when an extrinsics panics or the resulting header doesn't match the expected header.
+	fn execute_block(block: Block);
 }
 
 #[cfg(test)]

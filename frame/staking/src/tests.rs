@@ -2917,7 +2917,7 @@ mod offchain_election {
 	use parking_lot::RwLock;
 	use sp_core::offchain::{
 		testing::{PoolState, TestOffchainExt, TestTransactionPoolExt},
-		OffchainExt, TransactionPoolExt,
+		OffchainWorkerExt, TransactionPoolExt, OffchainDbExt,
 	};
 	use sp_io::TestExternalities;
 	use sp_npos_elections::StakedAssignment;
@@ -2960,7 +2960,8 @@ mod offchain_election {
 		seed[0..4].copy_from_slice(&iterations.to_le_bytes());
 		offchain_state.write().seed = seed;
 
-		ext.register_extension(OffchainExt::new(offchain));
+		ext.register_extension(OffchainDbExt::new(offchain.clone()));
+		ext.register_extension(OffchainWorkerExt::new(offchain));
 		ext.register_extension(TransactionPoolExt::new(pool));
 
 		pool_state
