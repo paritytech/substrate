@@ -490,7 +490,8 @@ impl<
 	}
 }
 
-/// Something that can estimate at which block the next session rotation will happen.
+/// Something that can estimate at which block the next session rotation will happen (i.e. a new
+/// session starts).
 ///
 /// The accuracy of the estimates is dependent on the specific implementation, but in order to get
 /// the best estimate possible these methods should be called throughout the duration of the session
@@ -543,14 +544,16 @@ impl<BlockNumber: Zero> EstimateNextSessionRotation<BlockNumber> for () {
 	}
 }
 
-/// Something that can estimate at which block the next `new_session` will be triggered, i.e. when
-/// we will try to fetch new validators. For example, if we are using a staking module this would be
-/// the block when the session module would ask staking what the next validator set will be, as such
-/// this must always be implemented by the session module.
+/// Something that can estimate at which block scheduling of the next session will happen (i.e when
+/// we will try to fetch new validators).
 ///
-/// With `pallet-session` fetching the new validators happens when we rotate sessions but different
-/// implementations of session could have different logic, still any estimate coming from here should
-/// always be lower or equal to the estimates for next session rotates.
+/// This only refers to the point when we fetch the next session details and not when we enact them
+/// (for enactment there's `EstimateNextSessionRotation`). With `pallet-session` this should be
+/// triggered whenever `SessionManager::new_session` is called.
+///
+/// For example, if we are using a staking module this would be the block when the session module
+/// would ask staking what the next validator set will be, as such this must always be implemented
+/// by the session module.
 pub trait EstimateNextNewSession<BlockNumber> {
 	/// Return the average length of a session.
 	///
