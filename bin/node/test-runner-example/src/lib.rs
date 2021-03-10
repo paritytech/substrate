@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -231,7 +231,7 @@ impl ChainInfo for NodeTemplateChainInfo {
 
     fn dispatch_with_root(call: <Self::Runtime as frame_system::Config>::Call, node: &mut Node<Self>) {
         let alice = MultiSigner::from(Alice.public()).into_account();
-        let call = pallet_sudo::Call::sudo(Box::new(call)); // :D
+        let call = pallet_sudo::Call::sudo(Box::new(call));
         node.submit_extrinsic(call, alice);
         node.seal_blocks(1);
     }
@@ -240,7 +240,6 @@ impl ChainInfo for NodeTemplateChainInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use frame_system::{Call, Pallet};
 
     #[test]
     fn test_runner() {
@@ -249,10 +248,10 @@ mod tests {
         node.seal_blocks(1);
         // submit extrinsics
         let alice = MultiSigner::from(Alice.public()).into_account();
-        node.submit_extrinsic(Call::remark((b"hello world").to_vec()), alice);
+        node.submit_extrinsic(frame_system::Call::remark((b"hello world").to_vec()), alice);
 
-        // look ma, i can read state
-        let _events = node.with_state(|| Pallet::<node_runtime::Runtime>::events());
+        // look ma, I can read state.
+        let _events = node.with_state(|| frame_system::Pallet::<node_runtime::Runtime>::events());
         // get access to the underlying client.
         let _client = node.client();
     }

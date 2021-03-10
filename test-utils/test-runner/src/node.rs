@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -84,7 +84,7 @@ pub struct Node<T: ChainInfo> {
 type EventRecord<T> = frame_system::EventRecord<<T as frame_system::Config>::Event, <T as frame_system::Config>::Hash>;
 
 impl<T: ChainInfo> Node<T> {
-	/// Starts a node with the manual-seal authorship,
+	/// Starts a node with the manual-seal authorship.
 	pub fn new() -> Result<Self, sc_service::Error>
 	where
 		<T::RuntimeApi as ConstructRuntimeApi<T::Block, TFullClient<T::Block, T::RuntimeApi, T::Executor>>>::RuntimeApi:
@@ -345,7 +345,7 @@ impl<T: ChainInfo> Node<T> {
 		}
 	}
 
-	/// Create a new jsonrpc client using the jsonrpc-core-client local transport
+	/// Create a new jsonrpc client using the jsonrpc-core-client local transport.
 	pub fn rpc_client<C>(&self) -> C
 	where
 		C: From<RpcChannel> + 'static,
@@ -357,12 +357,12 @@ impl<T: ChainInfo> Node<T> {
 		client
 	}
 
-	/// Revert count number of blocks from the chain
+	/// Revert count number of blocks from the chain.
 	pub fn revert_blocks(&self, count: NumberFor<T::Block>) {
 		self.backend.revert(count, true).expect("Failed to revert blocks: ");
 	}
 
-	/// Revert all blocks added since creation of the node
+	/// Revert all blocks added since creation of the node.
 	pub fn clean(&self) {
 		// if a db path was specified, revert all blocks we've added
 		if let Some(_) = base_path() {
@@ -371,7 +371,7 @@ impl<T: ChainInfo> Node<T> {
 		}
 	}
 
-	/// Performs a runtime upgrade given a wasm blob
+	/// Performs a runtime upgrade given a wasm blob.
 	pub fn upgrade_runtime(&mut self, wasm: Vec<u8>)
 		where
 			<T::Runtime as frame_system::Config>::Call: From<frame_system::Call<T::Runtime>>

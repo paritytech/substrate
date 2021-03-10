@@ -6,7 +6,7 @@ members = [
 	"bin/node/bench",
 	"bin/node/browser-testing",
 	"bin/node/cli",
-    "bin/node/test-runner-example",
+	"bin/node/test-runner-example",
 	"bin/node/executor",
 	"bin/node/primitives",
 	"bin/node/rpc",
