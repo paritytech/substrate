@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,6 +23,10 @@ use frame_support::weights::{
 };
 
 impl crate::WeightInfo for () {
+	fn plan_config_change() -> Weight {
+		DbWeight::get().writes(1)
+	}
+
 	fn report_equivocation(validator_count: u32) -> Weight {
 		// we take the validator set count from the membership proof to
 		// calculate the weight but we set a floor of 100 validators.

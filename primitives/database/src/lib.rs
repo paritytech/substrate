@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -114,6 +114,11 @@ pub trait Database<H: Clone>: Send + Sync {
 	/// Retrieve the value previously stored against `key` or `None` if
 	/// `key` is not currently in the database.
 	fn get(&self, col: ColumnId, key: &[u8]) -> Option<Vec<u8>>;
+
+	/// Check if the value exists in the database without retrieving it.
+	fn contains(&self, col: ColumnId, key: &[u8]) -> bool {
+		self.get(col, key).is_some()
+	}
 
 	/// Call `f` with the value previously stored against `key`.
 	///

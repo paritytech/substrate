@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,7 +22,7 @@
 use super::*;
 
 use frame_system::RawOrigin;
-use frame_benchmarking::{benchmarks_instance, account};
+use frame_benchmarking::{benchmarks_instance, account, impl_benchmark_test_suite};
 use frame_support::traits::OnInitialize;
 
 use crate::Module as Treasury;
@@ -59,14 +59,13 @@ fn create_approved_proposals<T: Config<I>, I: Instance>(n: u32) -> Result<(), &'
 	Ok(())
 }
 
-fn setup_pod_account<T: Config<I>, I: Instance>() {
+fn setup_pot_account<T: Config<I>, I: Instance>() {
 	let pot_account = Treasury::<T, I>::account_id();
 	let value = T::Currency::minimum_balance().saturating_mul(1_000_000_000u32.into());
 	let _ = T::Currency::make_free_balance_be(&pot_account, value);
 }
 
 benchmarks_instance! {
-	_ { }
 
 	propose_spend {
 		let (caller, value, beneficiary_lookup) = setup_proposal::<T, _>(SEED);
@@ -97,26 +96,15 @@ benchmarks_instance! {
 
 	on_initialize_proposals {
 		let p in 0 .. 100;
-		setup_pod_account::<T, _>();
+		setup_pot_account::<T, _>();
 		create_approved_proposals::<T, _>(p)?;
 	}: {
 		Treasury::<T, _>::on_initialize(T::BlockNumber::zero());
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::tests::{new_test_ext, Test};
-	use frame_support::assert_ok;
-
-	#[test]
-	fn test_benchmarks() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_propose_spend::<Test>());
-			assert_ok!(test_benchmark_reject_proposal::<Test>());
-			assert_ok!(test_benchmark_approve_proposal::<Test>());
-			assert_ok!(test_benchmark_on_initialize_proposals::<Test>());
-		});
-	}
-}
+impl_benchmark_test_suite!(
+	Treasury,
+	crate::tests::new_test_ext(),
+	crate::tests::Test,
+);

@@ -1,6 +1,6 @@
 [package]
 name = "sc-chain-spec-derive"
-version = "2.0.0"
+version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
@@ -18,6 +18,6 @@ proc-macro = true
 proc-macro-crate = "0.1.4"
 proc-macro2 = "1.0.6"
 quote = "1.0.3"
-syn = "1.0.7"
+syn = "1.0.58"
 
 [dev-dependencies]

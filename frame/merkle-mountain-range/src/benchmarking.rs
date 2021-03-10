@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,12 +21,9 @@
 
 use crate::*;
 use frame_support::traits::OnInitialize;
-use frame_benchmarking::benchmarks;
-use sp_std::prelude::*;
+use frame_benchmarking::{benchmarks, impl_benchmark_test_suite};
 
 benchmarks! {
-	_ {	}
-
 	on_initialize {
 		let x in 1 .. 1_000;
 
@@ -40,17 +37,8 @@ benchmarks! {
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::mock::*;
-	use crate::tests::new_test_ext;
-	use frame_support::assert_ok;
-
-	#[test]
-	fn test_benchmarks() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_on_initialize::<Test>());
-		})
-	}
-}
+impl_benchmark_test_suite!(
+	Module,
+	crate::tests::new_test_ext(),
+	crate::mock::Test,
+);

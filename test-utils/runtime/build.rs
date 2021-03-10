@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,5 +26,13 @@ fn main() {
 		// depend on the stack-size.
 		.append_to_rust_flags("-Clink-arg=-zstack-size=1048576")
 		.import_memory()
-		.build()
+		.build();
+
+	WasmBuilder::new()
+		.with_current_project()
+		.export_heap_base()
+		.import_memory()
+		.set_file_name("wasm_binary_logging_disabled.rs")
+		.enable_feature("disable-logging")
+		.build();
 }

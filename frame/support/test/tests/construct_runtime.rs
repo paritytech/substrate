@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,7 +21,7 @@
 
 #![recursion_limit="128"]
 
-use sp_runtime::{generic, traits::{BlakeTwo256, Block as _, Verify}, DispatchError};
+use sp_runtime::{generic, traits::{BlakeTwo256, Verify}, DispatchError};
 use sp_core::{H256, sr25519};
 use sp_std::cell::RefCell;
 use frame_support::traits::PalletInfo as _;

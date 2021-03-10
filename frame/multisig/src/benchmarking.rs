@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,7 +21,7 @@
 
 use super::*;
 use frame_system::RawOrigin;
-use frame_benchmarking::{benchmarks, account};
+use frame_benchmarking::{benchmarks, account, impl_benchmark_test_suite};
 use sp_runtime::traits::Bounded;
 use core::convert::TryInto;
 
@@ -48,8 +48,6 @@ fn setup_multi<T: Config>(s: u32, z: u32)
 }
 
 benchmarks! {
-	_ { }
-
 	as_multi_threshold_1 {
 		// Transaction Length
 		let z in 0 .. 10_000;
@@ -300,25 +298,8 @@ benchmarks! {
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::tests::{new_test_ext, Test};
-	use frame_support::assert_ok;
-
-	#[test]
-	fn test_benchmarks() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_as_multi_threshold_1::<Test>());
-			assert_ok!(test_benchmark_as_multi_create::<Test>());
-			assert_ok!(test_benchmark_as_multi_create_store::<Test>());
-			assert_ok!(test_benchmark_as_multi_approve::<Test>());
-			assert_ok!(test_benchmark_as_multi_approve_store::<Test>());
-			assert_ok!(test_benchmark_as_multi_complete::<Test>());
-			assert_ok!(test_benchmark_approve_as_multi_create::<Test>());
-			assert_ok!(test_benchmark_approve_as_multi_approve::<Test>());
-			assert_ok!(test_benchmark_approve_as_multi_complete::<Test>());
-			assert_ok!(test_benchmark_cancel_as_multi::<Test>());
-		});
-	}
-}
+impl_benchmark_test_suite!(
+	Multisig,
+	crate::tests::new_test_ext(),
+	crate::tests::Test,
+);

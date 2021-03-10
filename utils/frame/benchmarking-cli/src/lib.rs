@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -71,6 +71,13 @@ pub struct BenchmarkCmd {
 	/// Path to Handlebars template file used for outputting benchmark results. (Optional)
 	#[structopt(long)]
 	pub template: Option<std::path::PathBuf>,
+
+	/// Which analysis function to use when outputting benchmarks:
+	/// * min-squares (default)
+	/// * median-slopes
+	/// * max (max of min squares and median slopes for each value)
+	#[structopt(long)]
+	pub output_analysis: Option<String>,
 
 	/// Set the heap pages while running benchmarks.
 	#[structopt(long)]

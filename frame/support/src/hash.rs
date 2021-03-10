@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -102,7 +102,7 @@ impl StorageHasher for Twox64Concat {
 impl ReversibleStorageHasher for Twox64Concat {
 	fn reverse(x: &[u8]) -> &[u8] {
 		if x.len() < 8 {
-			crate::debug::error!("Invalid reverse: hash length too short");
+			log::error!("Invalid reverse: hash length too short");
 			return &[]
 		}
 		&x[8..]
@@ -125,7 +125,7 @@ impl StorageHasher for Blake2_128Concat {
 impl ReversibleStorageHasher for Blake2_128Concat {
 	fn reverse(x: &[u8]) -> &[u8] {
 		if x.len() < 16 {
-			crate::debug::error!("Invalid reverse: hash length too short");
+			log::error!("Invalid reverse: hash length too short");
 			return &[]
 		}
 		&x[16..]

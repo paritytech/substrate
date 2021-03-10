@@ -14,20 +14,27 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 honggfuzz = "0.5"
-codec = { package = "parity-scale-codec", version = "1.3.1", default-features = false, features = ["derive"] }
-pallet-staking = { version = "2.0.0", path = "..", features = ["runtime-benchmarks"] }
-pallet-staking-reward-curve = { version = "2.0.0",  path = "../reward-curve" }
-pallet-session = { version = "2.0.0", path = "../../session" }
-pallet-indices = { version = "2.0.0", path = "../../indices" }
-pallet-balances = { version = "2.0.0", path = "../../balances" }
-pallet-timestamp = { version = "2.0.0", path = "../../timestamp" }
-frame-system = { version = "2.0.0", path = "../../system" }
-frame-support = { version = "2.0.0", path = "../../support" }
-sp-std = { version = "2.0.0", path = "../../../primitives/std" }
-sp-io ={ version = "2.0.0", path = "../../../primitives/io" }
-sp-core = { version = "2.0.0", path = "../../../primitives/core" }
-sp-npos-elections = { version = "2.0.0", path = "../../../primitives/npos-elections" }
-sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+pallet-staking = { version = "3.0.0", path = "..", features = ["runtime-benchmarks"] }
+pallet-staking-reward-curve = { version = "3.0.0",  path = "../reward-curve" }
+pallet-session = { version = "3.0.0", path = "../../session" }
+pallet-indices = { version = "3.0.0", path = "../../indices" }
+pallet-balances = { version = "3.0.0", path = "../../balances" }
+pallet-timestamp = { version = "3.0.0", path = "../../timestamp" }
+frame-system = { version = "3.0.0", path = "../../system" }
+frame-support = { version = "3.0.0", path = "../../support" }
+sp-std = { version = "3.0.0", path = "../../../primitives/std" }
+sp-io ={ version = "3.0.0", path = "../../../primitives/io" }
+sp-core = { version = "3.0.0", path = "../../../primitives/core" }
+sp-npos-elections = { version = "3.0.0", path = "../../../primitives/npos-elections" }
+sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
+sp-election-providers = { version = "3.0.0", path = "../../../primitives/election-providers" }
+serde = "1.0.101"
+
+[features]
+# Note feature std is required so that impl_opaque_keys derive serde.
+default = ["std"]
+std = []
 
 [[bin]]
 name = "submit_solution"

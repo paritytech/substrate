@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -246,11 +246,9 @@
 //!
 
 mod behaviour;
-mod block_requests;
 mod chain;
 mod peer_info;
 mod discovery;
-mod light_client_handler;
 mod on_demand_layer;
 mod protocol;
 mod request_responses;
@@ -259,17 +257,21 @@ mod service;
 mod transport;
 mod utils;
 
+pub mod block_request_handler;
+pub mod bitswap;
+pub mod light_client_requests;
 pub mod config;
 pub mod error;
 pub mod gossip;
 pub mod network_state;
+pub mod transactions;
 
 #[doc(inline)]
 pub use libp2p::{multiaddr, Multiaddr, PeerId};
 pub use protocol::{event::{DhtEvent, Event, ObservedRole}, sync::SyncState, PeerInfo};
 pub use service::{
 	NetworkService, NetworkWorker, RequestFailure, OutboundFailure, NotificationSender,
-	NotificationSenderReady,
+	NotificationSenderReady, IfDisconnected,
 };
 
 pub use sc_peerset::ReputationChange;

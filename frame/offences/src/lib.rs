@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,9 +27,7 @@ mod tests;
 
 use sp_std::vec::Vec;
 use frame_support::{
-	decl_module, decl_event, decl_storage, Parameter, debug,
-	traits::Get,
-	weights::Weight,
+	decl_module, decl_event, decl_storage, Parameter, traits::Get, weights::Weight,
 };
 use sp_runtime::{traits::{Hash, Zero}, Perbill};
 use sp_staking::{
@@ -141,9 +139,10 @@ decl_module! {
 								false
 							},
 							Err(_) => {
-								debug::native::error!(
-									target: "pallet-offences",
-									"re-submitting a deferred slash returned Err at {}. This should not happen with pallet-staking",
+								log::error!(
+									target: "runtime::offences",
+									"re-submitting a deferred slash returned Err at {:?}. \
+									 This should not happen with pallet-staking",
 									now,
 								);
 								true

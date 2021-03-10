@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -132,7 +132,7 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 		&mut self,
 		_child_info: &ChildInfo,
 		_limit: Option<u32>,
-	) -> bool {
+	) -> (bool, u32) {
 		unimplemented!("kill_child_storage is not supported in ReadOnlyExternalities")
 	}
 
@@ -155,8 +155,6 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 	) {
 		unimplemented!("storage_append is not supported in ReadOnlyExternalities")
 	}
-
-	fn chain_id(&self) -> u64 { 42 }
 
 	fn storage_root(&mut self) -> Vec<u8> {
 		unimplemented!("storage_root is not supported in ReadOnlyExternalities")

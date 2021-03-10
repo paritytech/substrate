@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -24,12 +24,12 @@
 //! Canonicalization window tracks a tree of blocks identified by header hash. The in-memory
 //! overlay allows to get any node that was inserted in any of the blocks within the window.
 //! The tree is journaled to the backing database and rebuilt on startup.
-//! Canonicalization function selects one root from the top of the tree and discards all other roots and
-//! their subtrees.
+//! Canonicalization function selects one root from the top of the tree and discards all other roots
+//! and their subtrees.
 //!
 //! # Pruning.
-//! See `RefWindow` for pruning algorithm details. `StateDb` prunes on each canonicalization until pruning
-//! constraints are satisfied.
+//! See `RefWindow` for pruning algorithm details. `StateDb` prunes on each canonicalization until
+//! pruning constraints are satisfied.
 
 mod noncanonical;
 mod pruning;
@@ -107,7 +107,7 @@ impl<E: fmt::Debug> fmt::Debug for Error<E> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
 			Error::Db(e) => e.fmt(f),
-			Error::Decoding(e) => write!(f, "Error decoding sliceable value: {}", e.what()),
+			Error::Decoding(e) => write!(f, "Error decoding sliceable value: {}", e),
 			Error::InvalidBlock => write!(f, "Trying to canonicalize invalid block"),
 			Error::InvalidBlockNumber => write!(f, "Trying to insert block with invalid number"),
 			Error::InvalidParent => write!(f, "Trying to insert block with unknown parent"),

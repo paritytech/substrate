@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -84,7 +84,7 @@ mod tests {
 	impl frame_support_test::Config for TraitImpl {
 		type Origin = u32;
 		type BlockNumber = u32;
-		type PalletInfo = ();
+		type PalletInfo = frame_support_test::PanicPalletInfo;
 		type DbWeight = ();
 	}
 
@@ -441,7 +441,7 @@ mod test2 {
 	impl frame_support_test::Config for TraitImpl {
 		type Origin = u32;
 		type BlockNumber = u32;
-		type PalletInfo = ();
+		type PalletInfo = frame_support_test::PanicPalletInfo;
 		type DbWeight = ();
 	}
 
@@ -469,7 +469,7 @@ mod test3 {
 	impl frame_support_test::Config for TraitImpl {
 		type Origin = u32;
 		type BlockNumber = u32;
-		type PalletInfo = ();
+		type PalletInfo = frame_support_test::PanicPalletInfo;
 		type DbWeight = ();
 	}
 
@@ -514,7 +514,7 @@ mod test_append_and_len {
 	impl frame_support_test::Config for Test {
 		type Origin = u32;
 		type BlockNumber = u32;
-		type PalletInfo = ();
+		type PalletInfo = frame_support_test::PanicPalletInfo;
 		type DbWeight = ();
 	}
 

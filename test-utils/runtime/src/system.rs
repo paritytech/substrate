@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -147,7 +147,7 @@ fn execute_block_with_state_root_handler(block: &mut Block, mode: Mode) {
 /// The block executor.
 pub struct BlockExecutor;
 
-impl frame_executive::ExecuteBlock<Block> for BlockExecutor {
+impl frame_support::traits::ExecuteBlock<Block> for BlockExecutor {
 	fn execute_block(block: Block) {
 		execute_block(block);
 	}
@@ -261,6 +261,14 @@ fn execute_transaction_backend(utx: &Extrinsic, extrinsic_index: u32) -> ApplyEx
 			execute_storage_change(key, value.as_ref().map(|v| &**v)),
 		Extrinsic::ChangesTrieConfigUpdate(ref new_config) =>
 			execute_changes_trie_config_update(new_config.clone()),
+		Extrinsic::OffchainIndexSet(key, value) => {
+			sp_io::offchain_index::set(&key, &value);
+			Ok(Ok(()))
+		},
+		Extrinsic::OffchainIndexClear(key) => {
+			sp_io::offchain_index::clear(&key);
+			Ok(Ok(()))
+		}
 	}
 }
 
@@ -399,7 +407,7 @@ mod tests {
 
 	#[test]
 	fn block_import_works_native() {
-		block_import_works(|b, ext| ext.execute_with(|| execute_block(b)));
+		block_import_works(|b, ext| ext.execute_with(|| { execute_block(b); }));
 	}
 
 	#[test]
@@ -499,7 +507,7 @@ mod tests {
 
 	#[test]
 	fn block_import_with_transaction_works_native() {
-		block_import_with_transaction_works(|b, ext| ext.execute_with(|| execute_block(b)));
+		block_import_with_transaction_works(|b, ext| ext.execute_with(|| { execute_block(b); }));
 	}
 
 	#[test]

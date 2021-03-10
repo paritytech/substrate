@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,7 +22,7 @@ mod mmr;
 use crate::primitives::FullLeaf;
 use sp_runtime::traits;
 
-pub use self::mmr::{Mmr, Error};
+pub use self::mmr::{Mmr, verify_leaf_proof};
 
 /// Node type for runtime `T`.
 pub type NodeOf<T, I, L> = Node<<T as crate::Config<I>>::Hashing, L>;

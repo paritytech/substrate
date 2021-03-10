@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -59,6 +59,9 @@ pub enum Error {
 
 	#[error("Transaction couldn't enter the pool because of the limit")]
 	ImmediatelyDropped,
+
+	#[error("Transaction cannot be propagated and the local node does not author blocks")]
+	Unactionable,
 
 	#[from(ignore)]
 	#[error("{0}")]

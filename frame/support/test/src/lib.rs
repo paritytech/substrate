@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -40,4 +40,16 @@ pub trait Config: 'static {
 frame_support::decl_module! {
 	/// Some test module
 	pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {}
+}
+
+/// A PalletInfo implementation which just panics.
+pub struct PanicPalletInfo;
+
+impl frame_support::traits::PalletInfo for PanicPalletInfo {
+	fn index<P: 'static>() -> Option<usize> {
+		unimplemented!("PanicPalletInfo mustn't be triggered by tests");
+	}
+	fn name<P: 'static>() -> Option<&'static str> {
+		unimplemented!("PanicPalletInfo mustn't be triggered by tests");
+	}
 }

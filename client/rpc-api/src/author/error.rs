@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -99,6 +99,9 @@ const POOL_CYCLE_DETECTED: i64 = POOL_INVALID_TX + 5;
 const POOL_IMMEDIATELY_DROPPED: i64 = POOL_INVALID_TX + 6;
 /// The key type crypto is not known.
 const UNSUPPORTED_KEY_TYPE: i64 = POOL_INVALID_TX + 7;
+/// The transaction was not included to the pool since it is unactionable,
+/// it is not propagable and the local node does not author blocks.
+const POOL_UNACTIONABLE: i64 = POOL_INVALID_TX + 8;
 
 impl From<Error> for rpc::Error {
 	fn from(e: Error) -> Self {
@@ -157,6 +160,14 @@ impl From<Error> for rpc::Error {
 				code: rpc::ErrorCode::ServerError(POOL_IMMEDIATELY_DROPPED),
 				message: "Immediately Dropped".into(),
 				data: Some("The transaction couldn't enter the pool because of the limit".into()),
+			},
+			Error::Pool(PoolError::Unactionable) => rpc::Error {
+				code: rpc::ErrorCode::ServerError(POOL_UNACTIONABLE),
+				message: "Unactionable".into(),
+				data: Some(
+					"The transaction is unactionable since it is not propagable and \
+					 the local node does not author blocks".into(),
+				),
 			},
 			Error::UnsupportedKeyType => rpc::Error {
 				code: rpc::ErrorCode::ServerError(UNSUPPORTED_KEY_TYPE),

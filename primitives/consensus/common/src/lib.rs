@@ -1,18 +1,19 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
-// This file is part of Substrate Consensus Common.
+// This file is part of Substrate.
 
-// Substrate Demo is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate Consensus Common is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate Consensus Common.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Common utilities for building and using consensus engines in substrate.
 //!
@@ -35,7 +36,7 @@ use sp_runtime::{
 	generic::BlockId, traits::{Block as BlockT, DigestFor, NumberFor, HashFor},
 };
 use futures::prelude::*;
-pub use sp_inherents::InherentData;
+use sp_state_machine::StorageProof;
 
 pub mod block_validation;
 pub mod offline_tracker;
@@ -54,6 +55,7 @@ pub use block_import::{
 pub use select_chain::SelectChain;
 pub use sp_state_machine::Backend as StateBackend;
 pub use import_queue::DefaultImportQueue;
+pub use sp_inherents::InherentData;
 
 /// Block status.
 #[derive(Debug, PartialEq, Eq)]
@@ -88,53 +90,81 @@ pub trait Environment<B: BlockT> {
 }
 
 /// A proposal that is created by a [`Proposer`].
-pub struct Proposal<Block: BlockT, Transaction> {
+pub struct Proposal<Block: BlockT, Transaction, Proof> {
 	/// The block that was build.
 	pub block: Block,
-	/// Optional proof that was recorded while building the block.
-	pub proof: Option<sp_state_machine::StorageProof>,
+	/// Proof that was recorded while building the block.
+	pub proof: Proof,
 	/// The storage changes while building this block.
 	pub storage_changes: sp_state_machine::StorageChanges<Transaction, HashFor<Block>, NumberFor<Block>>,
 }
 
-/// Used as parameter to [`Proposer`] to tell the requirement on recording a proof.
+/// Error that is returned when [`ProofRecording`] requested to record a proof,
+/// but no proof was recorded.
+#[derive(Debug, thiserror::Error)]
+#[error("Proof should be recorded, but no proof was provided.")]
+pub struct NoProofRecorded;
+
+/// A trait to express the state of proof recording on type system level.
 ///
-/// When `RecordProof::Yes` is given, all accessed trie nodes should be saved. These recorded
-/// trie nodes can be used by a third party to proof this proposal without having access to the
-/// full storage.
-#[derive(Copy, Clone, PartialEq)]
-pub enum RecordProof {
-	/// `Yes`, record a proof.
-	Yes,
-	/// `No`, don't record any proof.
-	No,
+/// This is used by [`Proposer`] to signal if proof recording is enabled. This can be used by
+/// downstream users of the [`Proposer`] trait to enforce that proof recording is activated when
+/// required. The only two implementations of this trait are [`DisableProofRecording`] and
+/// [`EnableProofRecording`].
+///
+/// This trait is sealed and can not be implemented outside of this crate!
+pub trait ProofRecording: Send + Sync + private::Sealed + 'static {
+	/// The proof type that will be used internally.
+	type Proof: Send + Sync + 'static;
+	/// Is proof recording enabled?
+	const ENABLED: bool;
+	/// Convert the given `storage_proof` into [`Self::Proof`].
+	///
+	/// Internally Substrate uses `Option<StorageProof>` to express the both states of proof
+	/// recording (for now) and as [`Self::Proof`] is some different type, we need to provide a
+	/// function to convert this value.
+	///
+	/// If the proof recording was requested, but `None` is given, this will return
+	/// `Err(NoProofRecorded)`.
+	fn into_proof(storage_proof: Option<StorageProof>) -> Result<Self::Proof, NoProofRecorded>;
 }
 
-impl RecordProof {
-	/// Returns if `Self` == `Yes`.
-	pub fn yes(&self) -> bool {
-		match self {
-			Self::Yes => true,
-			Self::No => false,
-		}
+/// Express that proof recording is disabled.
+///
+/// For more information see [`ProofRecording`].
+pub struct DisableProofRecording;
+
+impl ProofRecording for DisableProofRecording {
+	type Proof = ();
+	const ENABLED: bool = false;
+
+	fn into_proof(_: Option<StorageProof>) -> Result<Self::Proof, NoProofRecorded> {
+		Ok(())
 	}
 }
 
-/// Will return [`RecordProof::No`] as default value.
-impl Default for RecordProof {
-	fn default() -> Self {
-		Self::No
+/// Express that proof recording is enabled.
+///
+/// For more information see [`ProofRecording`].
+pub struct EnableProofRecording;
+
+impl ProofRecording for EnableProofRecording {
+	type Proof = sp_state_machine::StorageProof;
+	const ENABLED: bool = true;
+
+	fn into_proof(proof: Option<StorageProof>) -> Result<Self::Proof, NoProofRecorded> {
+		proof.ok_or_else(|| NoProofRecorded)
 	}
 }
 
-impl From<bool> for RecordProof {
-	fn from(val: bool) -> Self {
-		if val {
-			Self::Yes
-		} else {
-			Self::No
-		}
-	}
+/// Provides `Sealed` trait to prevent implementing trait [`ProofRecording`] outside of this crate.
+mod private {
+	/// Special trait that prevents the implementation of [`super::ProofRecording`] outside of this
+	/// crate.
+	pub trait Sealed {}
+
+	impl Sealed for super::DisableProofRecording {}
+	impl Sealed for super::EnableProofRecording {}
 }
 
 /// Logic for a proposer.
@@ -149,8 +179,16 @@ pub trait Proposer<B: BlockT> {
 	/// The transaction type used by the backend.
 	type Transaction: Default + Send + 'static;
 	/// Future that resolves to a committed proposal with an optional proof.
-	type Proposal: Future<Output = Result<Proposal<B, Self::Transaction>, Self::Error>> +
-		Send + Unpin + 'static;
+	type Proposal:
+		Future<Output = Result<Proposal<B, Self::Transaction, Self::Proof>, Self::Error>>
+		+ Send
+		+ Unpin
+		+ 'static;
+	/// The supported proof recording by the implementator of this trait. See [`ProofRecording`]
+	/// for more information.
+	type ProofRecording: self::ProofRecording<Proof = Self::Proof> + Send + Sync + 'static;
+	/// The proof type used by [`Self::ProofRecording`].
+	type Proof: Send + Sync + 'static;
 
 	/// Create a proposal.
 	///
@@ -166,7 +204,6 @@ pub trait Proposer<B: BlockT> {
 		inherent_data: InherentData,
 		inherent_digests: DigestFor<B>,
 		max_duration: Duration,
-		record_proof: RecordProof,
 	) -> Self::Proposal;
 }
 

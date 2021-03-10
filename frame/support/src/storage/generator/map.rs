@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -162,7 +162,7 @@ impl<
 		iterator
 	}
 
-	fn translate<O: Decode, F: Fn(K, O) -> Option<V>>(f: F) {
+	fn translate<O: Decode, F: FnMut(K, O) -> Option<V>>(mut f: F) {
 		let prefix = G::prefix_hash();
 		let mut previous_key = prefix.clone();
 		while let Some(next) = sp_io::storage::next_key(&previous_key)
@@ -172,7 +172,7 @@ impl<
 			let value = match unhashed::get::<O>(&previous_key) {
 				Some(value) => value,
 				None => {
-					crate::debug::error!("Invalid translate: fail to decode old value");
+					log::error!("Invalid translate: fail to decode old value");
 					continue
 				},
 			};
@@ -181,7 +181,7 @@ impl<
 			let key = match K::decode(&mut key_material) {
 				Ok(key) => key,
 				Err(_) => {
-					crate::debug::error!("Invalid translate: fail to decode key");
+					log::error!("Invalid translate: fail to decode key");
 					continue
 				},
 			};
@@ -224,6 +224,10 @@ impl<K: FullEncode, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V>
 
 	fn get<KeyArg: EncodeLike<K>>(key: KeyArg) -> Self::Query {
 		G::from_optional_value_to_query(unhashed::get(Self::storage_map_final_key(key).as_ref()))
+	}
+
+	fn try_get<KeyArg: EncodeLike<K>>(key: KeyArg) -> Result<V, ()> {
+		unhashed::get(Self::storage_map_final_key(key).as_ref()).ok_or(())
 	}
 
 	fn insert<KeyArg: EncodeLike<K>, ValArg: EncodeLike<V>>(key: KeyArg, val: ValArg) {

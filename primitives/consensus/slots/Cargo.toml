@@ -1,6 +1,6 @@
 [package]
 name = "sp-consensus-slots"
-version = "0.8.0"
+version = "0.9.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Primitives for slots-based consensus"
 edition = "2018"
@@ -13,12 +13,14 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "1.3.0", default-features = false, features = ["derive"] }
-sp-runtime = { version = "2.0.0", default-features = false, path = "../../runtime" }
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+sp-runtime = { version = "3.0.0", default-features = false, path = "../../runtime" }
+sp-arithmetic = { version = "3.0.0", default-features = false, path = "../../arithmetic" }
 
 [features]
 default = ["std"]
 std = [
 	"codec/std",
 	"sp-runtime/std",
+	"sp-arithmetic/std",
 ]

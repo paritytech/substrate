@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,7 +21,7 @@
 
 use super::*;
 use frame_system::{RawOrigin, EventRecord};
-use frame_benchmarking::{benchmarks, account, whitelisted_caller};
+use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
 
 const SEED: u32 = 0;
 
@@ -34,8 +34,6 @@ fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
 }
 
 benchmarks! {
-	_ { }
-
 	batch {
 		let c in 0 .. 1000;
 		let mut calls: Vec<<T as Config>::Call> = Vec::new();
@@ -71,18 +69,8 @@ benchmarks! {
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::tests::{new_test_ext, Test};
-	use frame_support::assert_ok;
-
-	#[test]
-	fn test_benchmarks() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_batch::<Test>());
-			assert_ok!(test_benchmark_as_derivative::<Test>());
-			assert_ok!(test_benchmark_batch_all::<Test>());
-		});
-	}
-}
+impl_benchmark_test_suite!(
+	Module,
+	crate::tests::new_test_ext(),
+	crate::tests::Test,
+);
