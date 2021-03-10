@@ -1,0 +1,534 @@
+// This file is part of Substrate.
+// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+
+// SPDX-License-Identifier: Apache-2.0
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use sp_std::prelude::*;
+use crate::weights::Weight;
+use codec::{Encode, Decode};
+use sp_runtime::traits::Zero;
+use sp_runtime::RuntimeDebug;
+
+const LOG_TARGET: &'static str = "runtime::task_executor";
+
+/// A task that can be stored in storage and executed at some later time.
+///
+/// This trait itself does not make any assumptions about *when* the task is executed. As far as
+/// this trait is concerned, it can be now, all at once. It can be executed as mandatory work in
+/// `on_initialize` or `on_finalize`, or in some other low priority circumstance (e.g. on_idle).
+///
+/// If the type implementing this trait is generic over `<T: Config>` then one needs to derive
+/// [`CloneNoBound`], [`PartialEqNoBound`], [`EqNoBound`], [`RuntimeDebugNoBound`], as opposed to
+/// their normal counterparts, and implement `Default` manually. This is to prevent `T` to be
+/// bounded to these traits.
+pub trait RuntimeTask:
+	Sized + Clone + Default + Encode + Decode + PartialEq + Eq + sp_std::fmt::Debug
+{
+	/// Execute the task while consuming self. The task must not most consume more than `max_weight`
+	/// under any circumstance. Consuming *less* than `max_weight` is allowed.
+	///
+	/// A tuple is returned, where the items are as follows:
+	///   1. Option<Self>, where `None` means that this task is now complete (and shall not be kept
+	///      in storage anymore), and `Some(_)` indicating that this task is not yet complete, and
+	///      should be executed at a later time.
+	///   2. The actual amount of weight that was consumed. Must always be less than `max_weight`.
+	///      parameter.
+	///
+	/// It is critically important for a task to only return a non-zero consumed weight **ONLY if it
+	/// _actually did something_**. If a positive weight is returned, then an executor could
+	/// interpret this as a task that could use another execution slot, and continue the execution
+	/// potentially for numerous iterations.
+	fn execute(self, max_weight: Weight) -> (Option<Self>, Weight);
+
+	/// The leftover weight that this task expects to execute, if any.
+	#[cfg(test)]
+	fn leftover(&self) -> Weight;
+}
+
+/// Common trait for a executor that is stored as a storage item.
+pub trait StoredExecutor<Task: RuntimeTask> {
+	/// Execute all tasks based on an unspecified strategy, consuming at most `max_weight` and
+	/// returning the actual amount of weight consumed.
+	///
+	/// The returned weight must take into account the cost of internal operations of the
+	/// implementation, such as scheduling, as well.
+	// TODO: while the work that this does itself is pretty negligible, must benchmark it anyhow and
+	// take it into account.
+	fn execute(&mut self, max_weight: Weight) -> Weight;
+
+	/// Create a new (empty) instance of [`Self`].
+	fn new() -> Self;
+
+	/// Add a new task to the internal state.
+	fn add_task(&mut self, task: Task);
+
+	/// Remove all tasks, without executing any of them.
+	fn clear(&mut self);
+
+	/// Remove a single task.
+	fn remove(&mut self, task: Task);
+
+	/// Returns the number of current tasks.
+	fn count(&self) -> usize;
+
+	/// Return a vector of all tasks.
+	#[cfg(test)]
+	fn tasks(&self) -> Vec<Task>;
+}
+
+/// An executor that tries to execute as many tasks as possible in multiple passes over all of them.
+///
+/// A user may create an instance of this struct, add tasks to it (each of which must implement
+///	[`RuntimeTask`]), place it in storage, and execute tasks via the [`execute`] method.
+///
+/// This executor is opinionated, and cane be potentially re-implemented with different strategies.
+/// Namely, the assumption is that tasks are heterogenous, meaning that each might require different
+/// weight or be in different stage of execution. See [`execute`] for more info.
+///
+/// Furthermore, this executor assumes that tasks are heterogenous, meaning that if they are being
+/// iterated and once of them fails to finish (i.e. return `Some(_)` in [`RuntimeTask::execute`]),
+/// we do not assume that the rest of the tasks will also fail. Therefore, we always make a full
+/// pass over the tasks, to make sure any of them can use any leftover weight. Once is a pass is
+/// done without any of the tasks consuming any weight, then we conclude that this execution is
+/// done.
+///
+/// # WARNING
+///
+/// This implementation is prone to the _weight leaking_ explained in [`RuntimeTask::execute`].
+/// Namely, if a task keep consuming a little amount of weight in each execution, this executor will
+/// assume that it still has work to do, and will indefinitely executor a second pass for it.
+#[derive(Encode, Decode, Default, RuntimeDebug)]
+pub struct MultiPassExecutor<Task: RuntimeTask> {
+	/// The queue of tasks.
+	pub(crate) tasks: Vec<Task>,
+}
+
+impl<Task: RuntimeTask> StoredExecutor<Task> for MultiPassExecutor<Task> {
+	fn new() -> Self {
+		Self { tasks: vec![] }
+	}
+
+	fn add_task(&mut self, task: Task) {
+		self.tasks.push(task)
+	}
+
+	fn clear(&mut self) {
+		self.tasks.clear()
+	}
+
+	fn remove(&mut self, task: Task) {
+		let maybe_index = self.tasks.iter().position(|t| t == &task);
+		if let Some(index) = maybe_index {
+			self.tasks.remove(index);
+		}
+	}
+
+	fn count(&self) -> usize {
+		self.tasks.len()
+	}
+
+	#[cfg(test)]
+	fn tasks(&self) -> Vec<Task> {
+		self.tasks.clone()
+	}
+
+	fn execute(&mut self, max_weight: Weight) -> Weight {
+		// NOTE: we can optimize this a bit: if we make a pass and 8/10 of the tasks do nothing, we
+		// should mark them and not re-execute them in the next pass. Need to store Vec<(Task,
+		// bool)> for this.
+		if max_weight.is_zero() {
+			return 0;
+		}
+
+		let mut leftover_weight = max_weight;
+		loop {
+			let (next_tasks, consumed) = single_pass::<Task>(self.tasks.as_ref(), leftover_weight);
+			self.tasks = next_tasks;
+			leftover_weight = leftover_weight.saturating_sub(consumed);
+
+			if leftover_weight.is_zero() || consumed.is_zero() {
+				// if we run out, or there's nothing to consume the weight, we're done.
+				break;
+			}
+		}
+
+		max_weight.saturating_sub(leftover_weight)
+	}
+}
+
+/// An executor that only tries to execute a single pass on a given list of tasks in each
+/// execution.
+///
+/// This is a much more conservative variation of the [`MultiPassExecutor`].
+#[derive(Encode, Decode, Default, RuntimeDebug)]
+pub struct SinglePassExecutor<Task: RuntimeTask> {
+	/// The queue of tasks.
+	pub(crate) tasks: Vec<Task>,
+}
+
+impl<Task: RuntimeTask> StoredExecutor<Task> for SinglePassExecutor<Task> {
+	fn new() -> Self {
+		Self { tasks: vec![] }
+	}
+
+	fn add_task(&mut self, task: Task) {
+		self.tasks.push(task)
+	}
+
+	fn clear(&mut self) {
+		self.tasks.clear()
+	}
+
+	fn remove(&mut self, task: Task) {
+		let maybe_index = self.tasks.iter().position(|t| t == &task);
+		if let Some(index) = maybe_index {
+			self.tasks.remove(index);
+		}
+	}
+
+	fn count(&self) -> usize {
+		self.tasks.len()
+	}
+
+	#[cfg(test)]
+	fn tasks(&self) -> Vec<Task> {
+		self.tasks.clone()
+	}
+
+	fn execute(&mut self, max_weight: Weight) -> Weight {
+		let (next_tasks, consumed) = single_pass::<Task>(self.tasks.as_ref(), max_weight);
+		self.tasks = next_tasks;
+		consumed
+	}
+}
+
+/// Make a single pass over some tasks, returning a new set of tasks that remain un-finished, along
+/// the consumed weight.
+///
+/// This is useful for different scheduling strategies.
+pub(crate) fn single_pass<T: RuntimeTask>(tasks: &[T], max_weight: Weight) -> (Vec<T>, Weight) {
+	// just a tiny optimization for this edge case
+	if tasks.is_empty() || max_weight.is_zero() {
+		return (tasks.to_vec(), Zero::zero());
+	}
+
+	// to be easily executed in a runtime storage mutate call.
+	let mut leftover_weight = max_weight;
+
+	// We take an approach which is more fair, but needs to consume a few more cycles: we
+	// iterate over all tasks in each execution. Even if while executing task `t` we ran out of
+	// resources, as long as there are any leftover weight, some of the upcoming tasks might be
+	// able to consume that. This is pointless if tasks are homogenous, nonetheless we can't
+	// make that assumption. Only assumption is that no task needs to consume `0` weight, for in
+	// this case it wouldn't have been delegated to the executor in the first place.
+
+	let next_tasks = tasks
+		.iter()
+		.cloned()
+		.filter_map(|task| {
+			if leftover_weight.is_zero() {
+				return Some(task);
+			}
+
+			let (maybe_leftover_task, consumed) = task.execute(leftover_weight);
+			leftover_weight = leftover_weight.saturating_sub(consumed);
+			maybe_leftover_task
+		})
+		.collect::<Vec<_>>();
+
+	log::debug!(
+		target: LOG_TARGET,
+		"executed a single pass.\nPrev tasks = {:?}\nNext tasks = {:?}",
+		tasks,
+		next_tasks,
+	);
+
+	(next_tasks, max_weight.saturating_sub(leftover_weight))
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[derive(Clone, Encode, Decode, Default, PartialEq, Eq, Debug)]
+	struct Task {
+		weight: Weight,
+		half: u8,
+		greedy: bool,
+	}
+
+	struct TaskBuilder {
+		half: u8,
+		greedy: bool,
+	}
+
+	impl Default for TaskBuilder {
+		fn default() -> Self {
+			Self { half: 0, greedy: true }
+		}
+	}
+
+	impl TaskBuilder {
+		fn half(mut self, half: u8) -> Self {
+			self.half = half;
+			self
+		}
+
+		fn greedy(mut self, greedy: bool) -> Self {
+			self.greedy = greedy;
+			self
+		}
+
+		fn build(self, weight: Weight) -> Task {
+			Task { weight, greedy: self.greedy, half: self.half }
+		}
+	}
+
+	impl Task {
+		/// Should be called after `self.weight` has been reduce to reflect the update of an
+		/// execution, to determine of this task should live or not.
+		fn maybe_destroy(self) -> Option<Self> {
+			if self.weight > 0 {
+				Some(self)
+			} else {
+				None
+			}
+		}
+
+		/// Should consume `amount` of `Self`'s weight, capping it at `max_weight`.
+		fn consume(mut self, amount: Weight, max_weight: Weight) -> (Option<Self>, Weight) {
+			println!("Consuming {:?} with {} from {}", &self, amount, max_weight);
+			let consumed = if self.greedy {
+				if amount > max_weight {
+					// we are greedy and we need more than max_weight, consume all of it.
+					self.weight -= max_weight;
+					max_weight
+				} else {
+					// we are greedy and max_weight is enough. Destroy self.
+					self.weight -= amount;
+					amount
+				}
+			} else {
+				if amount > max_weight {
+					// we are not greedy and max_weight is not enough, thus noop.
+					0
+				} else {
+					// we are not greedy and max_weight is enough, thus destroy self.
+					self.weight -= amount;
+					amount
+				}
+			};
+
+			(self.maybe_destroy(), consumed)
+		}
+	}
+
+	impl RuntimeTask for Task {
+		fn execute(mut self, max_weight: Weight) -> (Option<Self>, Weight) {
+			println!("++ Execute {:?} by {}", &self, max_weight);
+			let weight_needed = self.weight;
+			match self.half {
+				0 => {
+					// at this point we try and consume as much as possible.
+					self.consume(weight_needed, max_weight)
+				}
+				_ => {
+					// try and consume either half of your needed weight, or all of the available,
+					// if it is less.
+					self.half -= 1;
+					self.consume(weight_needed / 2, max_weight)
+				}
+			}
+		}
+
+		fn leftover(&self) -> Weight {
+			self.weight
+		}
+	}
+
+	fn remaining_weights_of<T: RuntimeTask, E: StoredExecutor<T>>(executor: &E) -> Vec<Weight> {
+		executor.tasks().iter().map(|t| t.leftover()).collect::<Vec<_>>()
+	}
+
+	#[test]
+	fn single_pass_less_weight_than_than_single_task() {
+		// execute a series of tasks with less weight per block for single task.
+		let mut executor = SinglePassExecutor::<Task>::new();
+		executor.add_task(TaskBuilder::default().build(10));
+		executor.add_task(TaskBuilder::default().build(10));
+		executor.add_task(TaskBuilder::default().build(10));
+		assert_eq!(remaining_weights_of(&executor), vec![10, 10, 10]);
+
+		assert_eq!(executor.execute(7), 7);
+		assert_eq!(remaining_weights_of(&executor), vec![3, 10, 10]);
+
+		assert_eq!(executor.execute(7), 7);
+		assert_eq!(remaining_weights_of(&executor), vec![6, 10]);
+
+		assert_eq!(executor.execute(7), 7);
+		assert_eq!(remaining_weights_of(&executor), vec![9]);
+
+		assert_eq!(executor.execute(7), 7);
+		assert_eq!(remaining_weights_of(&executor), vec![2]);
+
+		assert_eq!(executor.execute(7), 2);
+		assert_eq!(remaining_weights_of(&executor), Vec::<Weight>::new());
+
+		// noop
+		assert_eq!(executor.execute(7), 0);
+	}
+
+	#[test]
+	fn single_pass_more_weight_than_than_single_task() {
+		// execute a series of tasks with less weight per block for single task.
+		let mut executor = SinglePassExecutor::<Task>::new();
+		executor.add_task(TaskBuilder::default().build(10));
+		executor.add_task(TaskBuilder::default().build(10));
+		executor.add_task(TaskBuilder::default().build(10));
+		assert_eq!(remaining_weights_of(&executor), vec![10, 10, 10]);
+
+		assert_eq!(executor.execute(12), 12);
+		assert_eq!(remaining_weights_of(&executor), vec![8, 10]);
+
+		assert_eq!(executor.execute(12), 12);
+		assert_eq!(remaining_weights_of(&executor), vec![6]);
+
+		assert_eq!(executor.execute(12), 6);
+		assert_eq!(remaining_weights_of(&executor), Vec::<Weight>::new());
+
+		// noop
+		assert_eq!(executor.execute(12), 0);
+	}
+
+	#[test]
+	fn single_pass_equal_weight_to_single_task() {
+		// execute a series of tasks with less weight per block for single task.
+		let mut executor = SinglePassExecutor::<Task>::new();
+		executor.add_task(TaskBuilder::default().build(10));
+		executor.add_task(TaskBuilder::default().build(10));
+		executor.add_task(TaskBuilder::default().build(10));
+		assert_eq!(remaining_weights_of(&executor), vec![10, 10, 10]);
+
+		assert_eq!(executor.execute(10), 10);
+		assert_eq!(remaining_weights_of(&executor), vec![10, 10]);
+
+		assert_eq!(executor.execute(10), 10);
+		assert_eq!(remaining_weights_of(&executor), vec![10]);
+
+		assert_eq!(executor.execute(10), 10);
+		assert_eq!(remaining_weights_of(&executor), Vec::<Weight>::new());
+
+		// noop
+		assert_eq!(executor.execute(10), 0);
+	}
+
+	#[test]
+	fn multi_pass_execution_basic() {
+		// equal
+		{
+			let mut executor = MultiPassExecutor::<Task>::new();
+			executor.add_task(TaskBuilder::default().build(10));
+			executor.add_task(TaskBuilder::default().build(10));
+			executor.add_task(TaskBuilder::default().build(10));
+
+			executor.execute(30);
+			assert_eq!(remaining_weights_of(&executor), Vec::<Weight>::new());
+		}
+
+		// more
+		{
+			let mut executor = MultiPassExecutor::<Task>::new();
+			executor.add_task(TaskBuilder::default().build(10));
+			executor.add_task(TaskBuilder::default().build(10));
+			executor.add_task(TaskBuilder::default().build(10));
+
+			executor.execute(33);
+			assert_eq!(remaining_weights_of(&executor), Vec::<Weight>::new());
+		}
+
+		// less
+		{
+			let mut executor = MultiPassExecutor::<Task>::new();
+			executor.add_task(TaskBuilder::default().build(10));
+			executor.add_task(TaskBuilder::default().build(10));
+			executor.add_task(TaskBuilder::default().build(10));
+
+			executor.execute(27);
+			assert_eq!(remaining_weights_of(&executor), vec![3]);
+		}
+	}
+
+	#[test]
+	fn multi_step_simple() {
+		let _ = env_logger::try_init();
+		let mut executor = MultiPassExecutor::<Task>::new();
+		executor.add_task(TaskBuilder::default().half(1).build(10));
+		executor.add_task(TaskBuilder::default().half(1).build(10));
+		executor.add_task(TaskBuilder::default().half(1).build(10));
+
+		// first, each task will eat up 5, 15 in total. Then, one of them drains the last 2.
+		assert_eq!(executor.execute(17), 17);
+		assert_eq!(remaining_weights_of(&executor), vec![3, 5, 5]);
+	}
+
+	#[test]
+	fn multi_step_where_additional_pass_is_useful() {
+		let _ = env_logger::try_init();
+		let mut executor = MultiPassExecutor::<Task>::new();
+		executor.add_task(TaskBuilder::default().half(1).greedy(false).build(30));
+		executor.add_task(TaskBuilder::default().half(1).greedy(false).build(20));
+		executor.add_task(TaskBuilder::default().half(1).greedy(false).build(10));
+
+		// first batch, we consume 15 + 10 + 5 = 30. Second round, only the last one can use the
+		// remaining 5. 1 unit is unused.
+		assert_eq!(executor.execute(36), 35);
+		assert_eq!(remaining_weights_of(&executor), vec![15, 10]);
+	}
+
+	#[test]
+	fn empty_executor_is_noop() {
+		fn with_executor<E: StoredExecutor<Task>>(mut executor: E) {
+			assert_eq!(remaining_weights_of(&executor), Vec::<Weight>::new());
+
+			assert_eq!(executor.execute(0), 0);
+			assert_eq!(remaining_weights_of(&executor), Vec::<Weight>::new());
+
+			assert_eq!(executor.execute(0), 0);
+			assert_eq!(remaining_weights_of(&executor), Vec::<Weight>::new());
+		}
+
+		with_executor(MultiPassExecutor::<Task>::new());
+		with_executor(SinglePassExecutor::<Task>::new());
+	}
+
+	#[test]
+	fn no_weight_allowed_is_noop() {
+		fn with_executor<E: StoredExecutor<Task>>(mut executor: E) {
+			executor.add_task(TaskBuilder::default().build(10));
+			executor.add_task(TaskBuilder::default().build(10));
+			executor.add_task(TaskBuilder::default().build(10));
+			assert_eq!(remaining_weights_of(&executor), vec![10, 10, 10]);
+
+			assert_eq!(executor.execute(0), 0);
+			assert_eq!(remaining_weights_of(&executor), vec![10, 10, 10]);
+
+			assert_eq!(executor.execute(0), 0);
+			assert_eq!(remaining_weights_of(&executor), vec![10, 10, 10]);
+		}
+
+		with_executor(MultiPassExecutor::<Task>::new());
+		with_executor(SinglePassExecutor::<Task>::new());
+	}
+}

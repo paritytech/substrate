@@ -277,12 +277,10 @@ pub mod testing_utils;
 #[cfg(any(feature = "runtime-benchmarks", test))]
 pub mod benchmarking;
 
-pub mod slashing;
-pub mod offchain_election;
 pub mod inflation;
+pub mod offchain_election;
+pub mod slashing;
 pub mod weights;
-
-mod scheduler;
 
 use sp_std::{
 	result,
@@ -912,62 +910,75 @@ impl Default for Releases {
 	}
 }
 
-use frame_support::{CloneNoBound, PartialEqNoBound, EqNoBound, RuntimeDebugNoBound};
+use frame_support::{CloneNoBound, PartialEqNoBound, EqNoBound, RuntimeDebugNoBound, executor::{self, StoredExecutor}};
+
+/// A task that needs to be stored and executed per slashed validator.
 #[derive(Encode, Decode, CloneNoBound, PartialEqNoBound, EqNoBound, RuntimeDebugNoBound)]
-pub struct ChillTaskFull<T: Config> {
+pub struct SlashTask<T: Config> {
+	/// The slashed validator.
 	slashed: T::AccountId,
+	/// The last iterated key of their nominators.
 	last_key: Vec<u8>,
 }
 
-impl<T: Config> Default for ChillTaskFull<T> where T::AccountId: Default {
+impl<T: Config> Default for SlashTask<T>
+where
+	T::AccountId: Default,
+{
 	fn default() -> Self {
-		Self {
-			slashed: Default::default(),
-			last_key: vec![],
-		}
+		Self { slashed: Default::default(), last_key: Default::default() }
 	}
 }
 
-impl<T: Config> scheduler::RuntimeTask for ChillTaskFull<T> {
+impl<T: Config> executor::RuntimeTask for SlashTask<T> {
 	fn execute(mut self, max_weight: Weight) -> (Option<Self>, Weight) {
 		let weight_per_iteration = <T as frame_system::Config>::DbWeight::get().reads_writes(1, 1);
 		let max_iterations = max_weight / weight_per_iteration;
 		let mut iterated: Weight = 0;
+		let mut needs_more_iterations = false;
 
 		while let Some(next_key) = sp_io::storage::next_key(self.last_key.as_ref()) {
 			if iterated > max_iterations {
+				// we will brake out because a `next_key` exist, but we no longer have weight. This
+				// task is not done yet.
+				needs_more_iterations = true;
 				break;
 			}
 
-			let mut next_nominations: Nominations<T::AccountId> =
-				frame_support::storage::unhashed::get(&next_key).unwrap();
-			// TODO: 4 cases need to be considered: 1- a key is added before the current
-			// cursor: don't care. 2- a key is removed after the current cursor: don't care.
-			// 3- a key is added after the current cursor: worth having a test, but no
-			// biggie.  4- a key is removed after the current cursor: worth having a test,
-			// but no biggie. 5- the current key is deleted: then the next_key must be
-			// updated.
+			// defensive-only: all nominations should be decodable. Not much that we can do if
+			// otherwise.
+			if let Some(mut next_nominations) =
+				frame_support::storage::unhashed::get::<Nominations<T::AccountId>>(&next_key)
+			{
+				// TODO: 4 cases need to be considered: 1- a key is added before the current
+				// cursor: don't care. 2- a key is removed after the current cursor: don't care.
+				// 3- a key is added after the current cursor: worth having a test, but no
+				// biggie.  4- a key is removed after the current cursor: worth having a test,
+				// but no biggie. 5- the current key is deleted: then the next_key must be
+				// updated.
 
-			next_nominations.targets.iter_mut().for_each(|(target, active)| {
-				if target == &self.slashed {
-					*active = false;
-				}
-			});
+				next_nominations.targets.iter_mut().for_each(|(target, active)| {
+					if target == &self.slashed {
+						*active = false;
+					}
+				});
 
-			frame_support::storage::unhashed::put(&next_key, &next_nominations);
+				frame_support::storage::unhashed::put(&next_key, &next_nominations);
 
-			iterated = iterated.saturating_add(1);
-			self.last_key = next_key;
+				iterated = iterated.saturating_add(1);
+				self.last_key = next_key;
+			} else {
+				log!(error, "an un-decodable nomination detected during SlashTask.");
+			}
 		}
 
-		let consumed_weight = weight_per_iteration.saturating_mul(iterated);
-		// to avoid any edge cases, we simply check one last time if there is any further keys to
-		// work on:
-		let leftover_task = if sp_io::storage::next_key(self.last_key.as_ref()).is_some() {
-			Some(self)
-		} else {
-			None
-		};
+		let mut consumed_weight = weight_per_iteration.saturating_mul(iterated);
+		// we are guaranteed that `max_iterations * weight_per_iter <= max_weight`, given `iterated
+		// <= max_iterations`, thus `consumed_weight <= max_weight`.
+		debug_assert!(iterated <= max_iterations);
+		debug_assert!(consumed_weight <= max_weight);
+
+		let leftover_task = if needs_more_iterations { Some(self) } else { None };
 
 		(leftover_task, consumed_weight)
 	}
@@ -1130,7 +1141,7 @@ decl_storage! {
 		EarliestUnappliedSlash: Option<EraIndex>;
 
 		/// Task scheduler for chill tasks
-		NominatorChillTasks: scheduler::RuntimeTaskScheduler<ChillTaskFull<T>>;
+		SlashTaskExecutor: executor::MultiPassExecutor<SlashTask<T>>;
 
 		/// Snapshot of validators at the beginning of the current election window. This should only
 		/// have a value when [`EraElectionStatus`] == `ElectionStatus::Open(_)`.
@@ -1461,7 +1472,7 @@ decl_module! {
 			// Additional read from `on_finalize`
 			add_weight(1, 0, 0);
 
-			let _weight = <NominatorChillTasks<T>>::mutate(|task_scheduler| task_scheduler.execute(1000));
+			let _weight = <SlashTaskExecutor<T>>::mutate(|e| e.execute(1000));
 
 			consumed_weight
 		}

@@ -1474,9 +1474,9 @@ dependencies = [
 
 [[package]]
 name = "env_logger"
-version = "0.8.2"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f26ecb66b4bdca6c1409b40fb255eefc2bd4f6d135dab3c3124f80ffa2a9661e"
+checksum = "17392a012ea30ef05a610aa97dfb49496e71c9f676b27879922ea5bdf60d9d3f"
 dependencies = [
  "atty",
  "humantime 2.1.0",
@@ -1744,6 +1744,7 @@ name = "frame-support"
 version = "3.0.0"
 dependencies = [
  "bitflags",
+ "env_logger 0.8.3",
  "frame-metadata",
  "frame-support-procedural",
  "frame-system",
@@ -4880,7 +4881,7 @@ name = "pallet-mmr"
 version = "3.0.0"
 dependencies = [
  "ckb-merkle-mountain-range",
- "env_logger 0.8.2",
+ "env_logger 0.8.3",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -6058,7 +6059,7 @@ version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "588f6378e4dd99458b60ec275b4477add41ce4fa9f64dcba6f15adccb19b50d6"
 dependencies = [
- "env_logger 0.8.2",
+ "env_logger 0.8.3",
  "log",
  "rand 0.8.3",
 ]
@@ -6391,7 +6392,7 @@ version = "0.9.0"
 dependencies = [
  "async-std",
  "bincode",
- "env_logger 0.8.2",
+ "env_logger 0.8.3",
  "futures 0.1.30",
  "hex-literal",
  "jsonrpc-core-client",
