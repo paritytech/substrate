@@ -74,6 +74,7 @@ pub use sp_consensus_babe::{
 	},
 };
 pub use sp_consensus::SyncOracle;
+pub use sc_consensus_slots::SlotProportion;
 use std::{
 	collections::HashMap, sync::Arc, u64, pin::Pin, time::{Instant, Duration},
 	any::Any, borrow::Cow, convert::TryInto,
@@ -395,6 +396,13 @@ pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW, BS> {
 	/// Checks if the current native implementation can author with a runtime at a given block.
 	pub can_author_with: CAW,
 
+	/// The proportion of the slot dedicated to proposing.
+	///
+	/// The block proposing will be limited to this proportion of the slot from the starting of the
+	/// slot. However, the proposing can still take longer when there is some lenience factor applied,
+	/// because there were no blocks produced for some slots.
+	pub block_proposal_slot_portion: SlotProportion,
+
 	/// Handle use to report telemetries.
 	pub telemetry: Option<TelemetryHandle>,
 }
@@ -412,6 +420,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, BS, Error>(BabeParams {
 	backoff_authoring_blocks,
 	babe_link,
 	can_author_with,
+	block_proposal_slot_portion,
 	telemetry,
 }: BabeParams<B, C, E, I, SO, SC, CAW, BS>) -> Result<
 	BabeWorker<B>,
@@ -448,6 +457,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, BS, Error>(BabeParams {
 		epoch_changes: babe_link.epoch_changes.clone(),
 		slot_notification_sinks: slot_notification_sinks.clone(),
 		config: config.clone(),
+		block_proposal_slot_portion,
 		telemetry,
 	};
 
@@ -603,6 +613,7 @@ struct BabeSlotWorker<B: BlockT, C, E, I, SO, BS> {
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 	slot_notification_sinks: SlotNotificationSinks<B>,
 	config: Config,
+	block_proposal_slot_portion: SlotProportion,
 	telemetry: Option<TelemetryHandle>,
 }
 
@@ -802,16 +813,22 @@ where
 		&self,
 		parent_head: &B::Header,
 		slot_info: &SlotInfo,
-	) -> Option<std::time::Duration> {
-		let slot_remaining = self.slot_remaining_duration(slot_info);
+	) -> std::time::Duration {
+		let max_proposing = slot_info.duration.mul_f32(self.block_proposal_slot_portion.get());
+
+		let slot_remaining = slot_info.ends_at
+			.checked_duration_since(Instant::now())
+			.unwrap_or_default();
+
+		let slot_remaining = std::cmp::min(slot_remaining, max_proposing);
 
 		// If parent is genesis block, we don't require any lenience factor.
 		if parent_head.number().is_zero() {
-			return Some(slot_remaining)
+			return slot_remaining
 		}
 
 		let parent_slot = match find_pre_digest::<B>(parent_head) {
-			Err(_) => return Some(slot_remaining),
+			Err(_) => return slot_remaining,
 			Ok(d) => d.slot(),
 		};
 
@@ -825,9 +842,9 @@ where
 				slot_lenience.as_secs(),
 			);
 
-			Some(slot_remaining + slot_lenience)
+			slot_remaining + slot_lenience
 		} else {
-			Some(slot_remaining)
+			slot_remaining
 		}
 	}
 }
