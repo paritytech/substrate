@@ -517,6 +517,7 @@ async fn answer_requests<B: BlockT, C>(
 						duration: viable_epoch.as_ref().duration,
 						authorities: viable_epoch.as_ref().authorities.clone(),
 						randomness: viable_epoch.as_ref().randomness,
+						config: viable_epoch.as_ref().config.clone(),
 					})
 				};
 
