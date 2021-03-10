@@ -25,7 +25,7 @@ use frame_support::{traits::Randomness as RandomnessT, StorageValue};
 use sp_runtime::traits::Hash;
 
 /// Randomness usable by consensus protocols that **depend** upon finality and take action
-/// based upon on-chain commitments made three epochs ago.
+/// based upon on-chain commitments made during the epoch before the previous epoch.
 ///
 /// An off-chain consensus protocol requires randomness be finalized before usage, but one
 /// extra epoch delay beyond `RandomnessFromOneEpochAgo` suffices, under the assumption
@@ -53,7 +53,7 @@ use sp_runtime::traits::Hash;
 pub struct RandomnessFromTwoEpochsAgo<T>(sp_std::marker::PhantomData<T>);
 
 /// Randomness usable by on-chain code that **does not depend** upon finality and takes
-/// action based upon on-chain commitments made two epochs ago.
+/// action based upon on-chain commitments made during the previous epoch.
 ///
 /// All randomness is relative to commitments to any other inputs to the computation: If
 /// Alice samples randomness near perfectly using radioactive decay, but then afterwards
