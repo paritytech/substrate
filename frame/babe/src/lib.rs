@@ -29,7 +29,7 @@ use frame_support::{
 	weights::{Pays, Weight},
 	Parameter,
 };
-use frame_system::{ensure_none, ensure_signed};
+use frame_system::{ensure_none, ensure_root, ensure_signed};
 use sp_application_crypto::Public;
 use sp_runtime::{
 	generic::DigestItem,
@@ -42,7 +42,8 @@ use sp_timestamp::OnTimestampSet;
 
 use sp_consensus_babe::{
 	digests::{NextConfigDescriptor, NextEpochDescriptor, PreDigest},
-	BabeAuthorityWeight, ConsensusLog, Epoch, EquivocationProof, Slot, BABE_ENGINE_ID,
+	BabeAuthorityWeight, BabeEpochConfiguration, ConsensusLog, Epoch,
+	EquivocationProof, Slot, BABE_ENGINE_ID,
 };
 use sp_consensus_vrf::schnorrkel;
 
@@ -108,6 +109,7 @@ pub trait Config: pallet_timestamp::Config {
 }
 
 pub trait WeightInfo {
+	fn plan_config_change() -> Weight;
 	fn report_equivocation(validator_count: u32) -> Weight;
 }
 
@@ -186,8 +188,8 @@ decl_storage! {
 		// variable to its underlying value.
 		pub Randomness get(fn randomness): schnorrkel::Randomness;
 
-		/// Next epoch configuration, if changed.
-		NextEpochConfig: Option<NextConfigDescriptor>;
+		/// Pending epoch configuration change that will be applied when the next epoch is enacted.
+		PendingEpochConfigChange: Option<NextConfigDescriptor>;
 
 		/// Next epoch randomness.
 		NextRandomness: schnorrkel::Randomness;
@@ -224,10 +226,21 @@ decl_storage! {
 		/// on block finalization. Querying this storage entry outside of block
 		/// execution context should always yield zero.
 		Lateness get(fn lateness): T::BlockNumber;
+
+		/// The configuration for the current epoch. Should never be `None` as it is initialized in genesis.
+		EpochConfig: Option<BabeEpochConfiguration>;
+
+		/// The configuration for the next epoch, `None` if the config will not change
+		/// (you can fallback to `EpochConfig` instead in that case).
+		NextEpochConfig: Option<BabeEpochConfiguration>;
 	}
 	add_extra_genesis {
 		config(authorities): Vec<(AuthorityId, BabeAuthorityWeight)>;
-		build(|config| Module::<T>::initialize_authorities(&config.authorities))
+		config(epoch_config): Option<BabeEpochConfiguration>;
+		build(|config| {
+			Module::<T>::initialize_authorities(&config.authorities);
+			EpochConfig::put(config.epoch_config.clone().expect("epoch_config must not be None"));
+		})
 	}
 }
 
@@ -313,6 +326,19 @@ decl_module! {
 				equivocation_proof,
 				key_owner_proof,
 			)
+		}
+
+		/// Plan an epoch config change. The epoch config change is recorded and will be enacted on
+		/// the next call to `enact_epoch_change`. The config will be activated one epoch after.
+		/// Multiple calls to this method will replace any existing planned config change that had
+		/// not been enacted yet.
+		#[weight = <T as Config>::WeightInfo::plan_config_change()]
+		fn plan_config_change(
+			origin,
+			config: NextConfigDescriptor,
+		) {
+			ensure_root(origin)?;
+			PendingEpochConfigChange::put(config);
 		}
 	}
 }
@@ -413,12 +439,14 @@ impl<T: Config> Module<T> {
 	/// In other word, this is only accurate if no slots are missed. Given missed slots, the slot
 	/// number will grow while the block number will not. Hence, the result can be interpreted as an
 	/// upper bound.
-	// -------------- IMPORTANT NOTE --------------
+	//
+	// ## IMPORTANT NOTE
+	//
 	// This implementation is linked to how [`should_epoch_change`] is working. This might need to
 	// be updated accordingly, if the underlying mechanics of slot and epochs change.
 	//
-	// WEIGHT NOTE: This function is tied to the weight of `EstimateNextSessionRotation`. If you update
-	// this function, you must also update the corresponding weight.
+	// WEIGHT NOTE: This function is tied to the weight of `EstimateNextSessionRotation`. If you
+	// update this function, you must also update the corresponding weight.
 	pub fn next_expected_epoch_change(now: T::BlockNumber) -> Option<T::BlockNumber> {
 		let next_slot = Self::current_epoch_start().saturating_add(T::EpochDuration::get());
 		next_slot
@@ -428,15 +456,6 @@ impl<T: Config> Module<T> {
 				let blocks_remaining: T::BlockNumber = slots_remaining.saturated_into();
 				now.saturating_add(blocks_remaining)
 			})
-	}
-
-	/// Plan an epoch config change. The epoch config change is recorded and will be enacted on the
-	/// next call to `enact_epoch_change`. The config will be activated one epoch after. Multiple calls to this
-	/// method will replace any existing planned config change that had not been enacted yet.
-	pub fn plan_config_change(
-		config: NextConfigDescriptor,
-	) {
-		NextEpochConfig::put(config);
 	}
 
 	/// DANGEROUS: Enact an epoch change. Should be done on every block where `should_epoch_change` has returned `true`,
@@ -483,8 +502,16 @@ impl<T: Config> Module<T> {
 		};
 		Self::deposit_consensus(ConsensusLog::NextEpochData(next_epoch));
 
-		if let Some(next_config) = NextEpochConfig::take() {
-			Self::deposit_consensus(ConsensusLog::NextConfigData(next_config));
+		if let Some(next_config) = NextEpochConfig::get() {
+			EpochConfig::put(next_config);
+		}
+
+		if let Some(pending_epoch_config_change) = PendingEpochConfigChange::take() {
+			let next_epoch_config: BabeEpochConfiguration =
+				pending_epoch_config_change.clone().into();
+			NextEpochConfig::put(next_epoch_config);
+
+			Self::deposit_consensus(ConsensusLog::NextConfigData(pending_epoch_config_change));
 		}
 	}
 
@@ -503,6 +530,7 @@ impl<T: Config> Module<T> {
 			duration: T::EpochDuration::get(),
 			authorities: Self::authorities(),
 			randomness: Self::randomness(),
+			config: EpochConfig::get().expect("EpochConfig is initialized in genesis; we never `take` or `kill` it; qed"),
 		}
 	}
 
@@ -520,6 +548,9 @@ impl<T: Config> Module<T> {
 			duration: T::EpochDuration::get(),
 			authorities: NextAuthorities::get(),
 			randomness: NextRandomness::get(),
+			config: NextEpochConfig::get().unwrap_or_else(|| {
+				EpochConfig::get().expect("EpochConfig is initialized in genesis; we never `take` or `kill` it; qed")
+			}),
 		}
 	}
 
@@ -754,6 +785,10 @@ impl<T: Config> OnTimestampSet<T::Moment> for Module<T> {
 }
 
 impl<T: Config> frame_support::traits::EstimateNextSessionRotation<T::BlockNumber> for Module<T> {
+	fn average_session_length() -> T::BlockNumber {
+		T::EpochDuration::get().saturated_into()
+	}
+
 	fn estimate_next_session_rotation(now: T::BlockNumber) -> Option<T::BlockNumber> {
 		Self::next_expected_epoch_change(now)
 	}
@@ -823,4 +858,50 @@ fn compute_randomness(
 	}
 
 	sp_io::hashing::blake2_256(&s)
+}
+
+pub mod migrations {
+	use super::*;
+	use frame_support::pallet_prelude::{ValueQuery, StorageValue};
+
+	/// Something that can return the storage prefix of the `Babe` pallet.
+	pub trait BabePalletPrefix: Config {
+		fn pallet_prefix() -> &'static str;
+	}
+
+	struct __OldNextEpochConfig<T>(sp_std::marker::PhantomData<T>);
+	impl<T: BabePalletPrefix> frame_support::traits::StorageInstance for __OldNextEpochConfig<T> {
+		fn pallet_prefix() -> &'static str { T::pallet_prefix() }
+		const STORAGE_PREFIX: &'static str = "NextEpochConfig";
+	}
+
+	type OldNextEpochConfig<T> = StorageValue<
+		__OldNextEpochConfig<T>, Option<NextConfigDescriptor>, ValueQuery
+	>;
+
+	/// A storage migration that adds the current epoch configuration for Babe
+	/// to storage.
+	pub fn add_epoch_configuration<T: BabePalletPrefix>(
+		epoch_config: BabeEpochConfiguration,
+	) -> Weight {
+		let mut writes = 0;
+		let mut reads = 0;
+
+		if let Some(pending_change) = OldNextEpochConfig::<T>::get() {
+			PendingEpochConfigChange::put(pending_change);
+
+			writes += 1;
+		}
+
+		reads += 1;
+
+		OldNextEpochConfig::<T>::kill();
+
+		EpochConfig::put(epoch_config.clone());
+		NextEpochConfig::put(epoch_config);
+
+		writes += 3;
+
+		T::DbWeight::get().writes(writes) + T::DbWeight::get().reads(reads)
+	}
 }

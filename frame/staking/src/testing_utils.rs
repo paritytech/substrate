@@ -247,7 +247,7 @@ pub fn get_weak_solution<T: Config>(
 		);
 
 		let support_map =
-			to_support_map::<T::AccountId>(winners.as_slice(), staked.as_slice()).unwrap();
+			to_supports::<T::AccountId>(winners.as_slice(), staked.as_slice()).unwrap();
 		support_map.evaluate()
 	};
 

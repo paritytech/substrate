@@ -82,7 +82,7 @@ macro_rules! impl_outer_config {
 			#[serde(deny_unknown_fields)]
 			pub struct $main {
 				$(
-					pub [< $snake $(_ $instance )? >]: Option<$config>,
+					pub [< $snake $(_ $instance )? >]: $config,
 				)*
 			}
 			#[cfg(any(feature = "std", test))]
@@ -92,15 +92,13 @@ macro_rules! impl_outer_config {
 					storage: &mut $crate::sp_runtime::Storage,
 				) -> std::result::Result<(), String> {
 					$(
-						if let Some(ref extra) = self.[< $snake $(_ $instance )? >] {
-							$crate::impl_outer_config! {
-								@CALL_FN
-								$concrete;
-								$snake;
-								$( $instance )?;
-								extra;
-								storage;
-							}
+						$crate::impl_outer_config! {
+							@CALL_FN
+							$concrete;
+							$snake;
+							$( $instance )?;
+							&self.[< $snake $(_ $instance )? >];
+							storage;
 						}
 					)*
 
@@ -117,7 +115,7 @@ macro_rules! impl_outer_config {
 		$runtime:ident;
 		$module:ident;
 		$instance:ident;
-		$extra:ident;
+		$extra:expr;
 		$storage:ident;
 	) => {
 		$crate::sp_runtime::BuildModuleGenesisStorage::<$runtime, $module::$instance>::build_module_genesis_storage(
@@ -129,7 +127,7 @@ macro_rules! impl_outer_config {
 		$runtime:ident;
 		$module:ident;
 		;
-		$extra:ident;
+		$extra:expr;
 		$storage:ident;
 	) => {
 		$crate::sp_runtime::BuildModuleGenesisStorage::

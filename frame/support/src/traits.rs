@@ -26,9 +26,9 @@ use sp_runtime::{
 	RuntimeAppPublic, RuntimeDebug, BoundToRuntimeAppPublic,
 	ConsensusEngineId, DispatchResult, DispatchError,
 	traits::{
-	MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput, Bounded, Zero,
-	BadOrigin, AtLeast32BitUnsigned, Convert, UniqueSaturatedFrom, UniqueSaturatedInto,
-	SaturatedConversion, StoredMapError,
+		MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput, Bounded, Zero,
+		BadOrigin, AtLeast32BitUnsigned, Convert, UniqueSaturatedFrom, UniqueSaturatedInto,
+		SaturatedConversion, StoredMapError, Block as BlockT,
 	},
 };
 use sp_staking::SessionIndex;
@@ -490,10 +490,16 @@ impl<
 	}
 }
 
-/// Something that can estimate at which block the next session rotation will happen. This should
-/// be the same logical unit that dictates `ShouldEndSession` to the session module. No Assumptions
-/// are made about the scheduling of the sessions.
+/// Something that can estimate at which block the next session rotation will happen.
+///
+/// This should be the same logical unit that dictates `ShouldEndSession` to the session module. No
+/// Assumptions are made about the scheduling of the sessions.
 pub trait EstimateNextSessionRotation<BlockNumber> {
+	/// Return the average length of a session.
+	///
+	/// This may or may not be accurate.
+	fn average_session_length() -> BlockNumber;
+
 	/// Return the block number at which the next session rotation is estimated to happen.
 	///
 	/// None should be returned if the estimation fails to come to an answer
@@ -503,7 +509,11 @@ pub trait EstimateNextSessionRotation<BlockNumber> {
 	fn weight(now: BlockNumber) -> Weight;
 }
 
-impl<BlockNumber: Bounded> EstimateNextSessionRotation<BlockNumber> for () {
+impl<BlockNumber: Bounded + Default> EstimateNextSessionRotation<BlockNumber> for () {
+	fn average_session_length() -> BlockNumber {
+		Default::default()
+	}
+
 	fn estimate_next_session_rotation(_: BlockNumber) -> Option<BlockNumber> {
 		Default::default()
 	}
@@ -513,9 +523,15 @@ impl<BlockNumber: Bounded> EstimateNextSessionRotation<BlockNumber> for () {
 	}
 }
 
-/// Something that can estimate at which block the next `new_session` will be triggered. This must
-/// always be implemented by the session module.
+/// Something that can estimate at which block the next `new_session` will be triggered.
+///
+/// This must always be implemented by the session module.
 pub trait EstimateNextNewSession<BlockNumber> {
+	/// Return the average length of a session.
+	///
+	/// This may or may not be accurate.
+	fn average_session_length() -> BlockNumber;
+
 	/// Return the block number at which the next new session is estimated to happen.
 	fn estimate_next_new_session(now: BlockNumber) -> Option<BlockNumber>;
 
@@ -523,7 +539,11 @@ pub trait EstimateNextNewSession<BlockNumber> {
 	fn weight(now: BlockNumber) -> Weight;
 }
 
-impl<BlockNumber: Bounded> EstimateNextNewSession<BlockNumber> for () {
+impl<BlockNumber: Bounded + Default> EstimateNextNewSession<BlockNumber> for () {
+	fn average_session_length() -> BlockNumber {
+		Default::default()
+	}
+
 	fn estimate_next_new_session(_: BlockNumber) -> Option<BlockNumber> {
 		Default::default()
 	}
@@ -1533,6 +1553,54 @@ pub trait OnGenesis {
 	fn on_genesis() {}
 }
 
+/// Prefix to be used (optionally) for implementing [`OnRuntimeUpgradeHelpersExt::storage_key`].
+#[cfg(feature = "try-runtime")]
+pub const ON_RUNTIME_UPGRADE_PREFIX: &[u8] = b"__ON_RUNTIME_UPGRADE__";
+
+/// Some helper functions for [`OnRuntimeUpgrade`] during `try-runtime` testing.
+#[cfg(feature = "try-runtime")]
+pub trait OnRuntimeUpgradeHelpersExt {
+	/// Generate a storage key unique to this runtime upgrade.
+	///
+	/// This can be used to communicate data from pre-upgrade to post-upgrade state and check
+	/// them. See [`Self::set_temp_storage`] and [`Self::get_temp_storage`].
+	#[cfg(feature = "try-runtime")]
+	fn storage_key(ident: &str) -> [u8; 32] {
+		let prefix = sp_io::hashing::twox_128(ON_RUNTIME_UPGRADE_PREFIX);
+		let ident = sp_io::hashing::twox_128(ident.as_bytes());
+
+		let mut final_key = [0u8; 32];
+		final_key[..16].copy_from_slice(&prefix);
+		final_key[16..].copy_from_slice(&ident);
+
+		final_key
+	}
+
+	/// Get temporary storage data written by [`Self::set_temp_storage`].
+	///
+	/// Returns `None` if either the data is unavailable or un-decodable.
+	///
+	/// A `at` storage identifier must be provided to indicate where the storage is being read from.
+	#[cfg(feature = "try-runtime")]
+	fn get_temp_storage<T: Decode>(at: &str) -> Option<T> {
+		sp_io::storage::get(&Self::storage_key(at))
+			.and_then(|bytes| Decode::decode(&mut &*bytes).ok())
+	}
+
+	/// Write some temporary data to a specific storage that can be read (potentially in
+	/// post-upgrade hook) via [`Self::get_temp_storage`].
+	///
+	/// A `at` storage identifier must be provided to indicate where the storage is being written
+	/// to.
+	#[cfg(feature = "try-runtime")]
+	fn set_temp_storage<T: Encode>(data: T, at: &str) {
+		sp_io::storage::set(&Self::storage_key(at), &data.encode());
+	}
+}
+
+#[cfg(feature = "try-runtime")]
+impl<U: OnRuntimeUpgrade> OnRuntimeUpgradeHelpersExt for U {}
+
 /// The runtime upgrade trait.
 ///
 /// Implementing this lets you express what should happen when the runtime upgrades,
@@ -1555,17 +1623,13 @@ pub trait OnRuntimeUpgrade {
 	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<(), &'static str> {
-		Ok(())
-	}
+	fn pre_upgrade() -> Result<(), &'static str> { Ok(()) }
 
 	/// Execute some post-checks after a runtime upgrade.
 	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade() -> Result<(), &'static str> {
-		Ok(())
-	}
+	fn post_upgrade() -> Result<(), &'static str> { Ok(()) }
 }
 
 #[impl_for_tuples(30)]
@@ -1992,6 +2056,22 @@ pub trait Hooks<BlockNumber> {
 	/// Return the non-negotiable weight consumed for runtime upgrade.
 	fn on_runtime_upgrade() -> crate::weights::Weight { 0 }
 
+	/// Execute some pre-checks prior to a runtime upgrade.
+	///
+	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<(), &'static str> {
+		Ok(())
+	}
+
+	/// Execute some post-checks after a runtime upgrade.
+	///
+	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade() -> Result<(), &'static str> {
+		Ok(())
+	}
+
 	/// Implementing this function on a module allows you to perform long-running tasks
 	/// that make (by default) validators generate transactions that feed results
 	/// of those long-running computations back on chain.
@@ -2146,6 +2226,21 @@ pub trait GetPalletVersion {
 	/// If there was no previous version of the pallet stored in the state,
 	/// this function returns `None`.
 	fn storage_version() -> Option<PalletVersion>;
+}
+
+/// Something that can execute a given block.
+///
+/// Executing a block means that all extrinsics in a given block will be executed and the resulting
+/// header will be checked against the header of the given block.
+pub trait ExecuteBlock<Block: BlockT> {
+	/// Execute the given `block`.
+	///
+	/// This will execute all extrinsics in the block and check that the resulting header is correct.
+	///
+	/// # Panic
+	///
+	/// Panics when an extrinsics panics or the resulting header doesn't match the expected header.
+	fn execute_block(block: Block);
 }
 
 #[cfg(test)]

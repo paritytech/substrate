@@ -28,7 +28,7 @@ use frame_support::{
 use sp_core::H256;
 use sp_io;
 use sp_npos_elections::{
-	to_support_map, EvaluateSupport, reduce, ExtendedBalance, StakedAssignment, ElectionScore,
+	to_supports, reduce, ExtendedBalance, StakedAssignment, ElectionScore, EvaluateSupport,
 };
 use sp_runtime::{
 	curve::PiecewiseLinear,
@@ -37,6 +37,7 @@ use sp_runtime::{
 };
 use sp_staking::offence::{OffenceDetails, OnOffenceHandler};
 use std::{cell::RefCell, collections::HashSet};
+use sp_election_providers::onchain;
 
 pub const INIT_TIMESTAMP: u64 = 30_000;
 pub const BLOCK_TIME: u64 = 1000;
@@ -239,6 +240,12 @@ impl OnUnbalanced<NegativeImbalanceOf<Test>> for RewardRemainderMock {
 	}
 }
 
+impl onchain::Config for Test {
+	type AccountId = AccountId;
+	type BlockNumber = BlockNumber;
+	type Accuracy = Perbill;
+	type DataProvider = Staking;
+}
 impl Config for Test {
 	type Currency = Balances;
 	type UnixTime = Timestamp;
@@ -261,6 +268,7 @@ impl Config for Test {
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type UnsignedPriority = UnsignedPriority;
 	type OffchainSolutionWeightLimit = OffchainSolutionWeightLimit;
+	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type WeightInfo = ();
 }
 
@@ -760,7 +768,7 @@ pub(crate) fn add_slash(who: &AccountId) {
 	on_offence_now(
 		&[
 			OffenceDetails {
-				offender: (who.clone(), Staking::eras_stakers(Staking::active_era().unwrap().index, who.clone())),
+				offender: (who.clone(), Staking::eras_stakers(active_era(), who.clone())),
 				reporters: vec![],
 			},
 		],
@@ -841,7 +849,7 @@ pub(crate) fn horrible_npos_solution(
 	let score = {
 		let (_, _, better_score) = prepare_submission_with(true, true, 0, |_| {});
 
-		let support = to_support_map::<AccountId>(&winners, &staked_assignment).unwrap();
+		let support = to_supports::<AccountId>(&winners, &staked_assignment).unwrap();
 		let score = support.evaluate();
 
 		assert!(sp_npos_elections::is_score_better::<Perbill>(
@@ -941,7 +949,7 @@ pub(crate) fn prepare_submission_with(
 			Staking::slashable_balance_of_fn(),
 		);
 
-		let support_map = to_support_map::<AccountId>(
+		let support_map = to_supports(
 			winners.as_slice(),
 			staked.as_slice(),
 		).unwrap();
@@ -962,9 +970,8 @@ pub(crate) fn prepare_submission_with(
 
 /// Make all validator and nominator request their payment
 pub(crate) fn make_all_reward_payment(era: EraIndex) {
-	let validators_with_reward = ErasRewardPoints::<Test>::get(era).individual.keys()
-		.cloned()
-		.collect::<Vec<_>>();
+	let validators_with_reward =
+		ErasRewardPoints::<Test>::get(era).individual.keys().cloned().collect::<Vec<_>>();
 
 	// reward validators
 	for validator_controller in validators_with_reward.iter().filter_map(Staking::bonded) {
@@ -988,10 +995,10 @@ macro_rules! assert_session_era {
 			$session,
 		);
 		assert_eq!(
-			Staking::active_era().unwrap().index,
+			Staking::current_era().unwrap(),
 			$era,
-			"wrong active era {} != {}",
-			Staking::active_era().unwrap().index,
+			"wrong current era {} != {}",
+			Staking::current_era().unwrap(),
 			$era,
 		);
 	};
