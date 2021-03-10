@@ -46,6 +46,8 @@ pub enum MinerError {
 	PreDispatchChecksFailed,
 	/// The solution generated from the miner is not feasible.
 	Feasibility(FeasibilityError),
+	/// There are no more voters to remove to trim the solution.
+	NoMoreVoters,
 }
 
 impl From<sp_npos_elections::Error> for MinerError {
@@ -166,6 +168,11 @@ impl<T: Config> Pallet<T> {
 			maximum_allowed_voters,
 		);
 		let compact = Self::trim_compact(maximum_allowed_voters, compact, &voter_index)?;
+		let compact = Self::trim_compact_for_length(
+			T::MinerMaxLength::get(),
+			compact,
+			&voter_index,
+		)?;
 
 		// re-calc score.
 		let winners = sp_npos_elections::to_without_backing(winners);
@@ -250,6 +257,54 @@ impl<T: Config> Pallet<T> {
 				Ok(compact)
 			}
 		}
+	}
+
+	/// Greedily reduce the size of the solution to fit into the block w.r.t length.
+	///
+	/// The length of the solution is largely a function of the number of voters. The number of
+	/// winners cannot be changed, and the `ElectionSize` is a proxy for the total number of stakers.
+	///
+	/// Thus, to reduce the solution size, we need to strip voters.
+	///
+	/// Note that this solution is already computed, and winners are elected based on the merit of
+	/// the total stake in the system. Nevertheless, some of the voters may be removed here.
+	///
+	/// The score must be computed **after** this step. If this step reduces the score too much,
+	/// then the solution must be discarded.
+	pub fn trim_compact_for_length(
+		max_allowed_length: u32,
+		mut compact: CompactOf<T>,
+		voter_index: impl Fn(&T::AccountId) -> Option<CompactVoterIndexOf<T>>,
+	) -> Result<CompactOf<T>, MinerError> {
+		// grab all voters and sort them by least stake.
+		let RoundSnapshot { voters, .. } =
+			Self::snapshot().ok_or(MinerError::SnapshotUnAvailable)?;
+		let mut voters_sorted = voters
+			.into_iter()
+			.map(|(who, stake, _)| (who.clone(), stake))
+			.collect::<Vec<_>>();
+		voters_sorted.sort_by_key(|(_, y)| *y);
+		voters_sorted.reverse();
+
+		// we run through the reduction process twice: once using the size_hint function, and once
+		// by actually encoding the data. Given a well-behaved size_hint implementation, this will
+		// only actually encode once. Given a misbehaving size_hint implementation, this still ensures
+		// that we accurately trim the solution.
+		let size_fns: [Box<dyn Fn(&CompactOf<T>) -> u32>; 2] = [
+			Box::new(|compact: &CompactOf<T>| compact.size_hint().saturated_into()),
+			Box::new(|compact: &CompactOf<T>| {
+				let encoded = compact.encode();
+				encoded.len().saturated_into()
+			}),
+		];
+		for size_fn in size_fns.iter() {
+			while size_fn(&compact) > max_allowed_length {
+				let (smallest_stake_voter, _) = voters_sorted.pop().ok_or(MinerError::NoMoreVoters)?;
+				let index = voter_index(&smallest_stake_voter).ok_or(MinerError::SnapshotUnAvailable)?;
+				compact.remove_voter(index);
+			}
+		}
+		Ok(compact)
 	}
 
 	/// Find the maximum `len` that a compact can have in order to fit into the block weight.
