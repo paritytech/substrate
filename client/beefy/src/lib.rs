@@ -16,9 +16,9 @@
 
 use std::{convert::TryFrom, fmt::Debug, sync::Arc};
 
-use {codec::Codec, log::info};
+use codec::Codec;
 
-use beefy_primitives::{BeefyApi, KEY_TYPE};
+use beefy_primitives::BeefyApi;
 
 use {
 	sc_client_api::{Backend as BackendT, BlockchainEvents, Finalizer},
@@ -30,10 +30,10 @@ use {
 
 use {
 	sp_api::{BlockId, ProvideRuntimeApi},
-	sp_application_crypto::{AppPublic, Public},
+	sp_application_crypto::AppPublic,
 	sp_blockchain::HeaderBackend,
 	sp_consensus::SyncOracle as SyncOracleT,
-	sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr},
+	sp_keystore::SyncCryptoStorePtr,
 	sp_runtime::traits::{Block as BlockT, Zero},
 };
 
@@ -111,40 +111,23 @@ pub async fn start_beefy_gadget<Block, Pair, Backend, Client, Network, SyncOracl
 	);
 
 	let at = BlockId::hash(client.info().best_hash);
+
 	let validator_set = client
 		.runtime_api()
 		.validator_set(&at)
-		.expect("Failed to get BEEFY authorities");
-
-	let local_id = match validator_set
-		.validators
-		.iter()
-		.find(|id| SyncCryptoStore::has_keys(&*key_store, &[(id.to_raw_vec(), KEY_TYPE)]))
-	{
-		Some(id) => {
-			info!(target: "beefy", "🥩 Starting BEEFY worker with local id: {:?}", id);
-			worker::BeefyId::Validator(id.clone())
-		}
-		None => {
-			info!(target: "beefy", "🥩 No local id found, BEEFY worker will be gossip only.");
-			worker::BeefyId::None
-		}
-	};
+		.expect("Failed to get BEEFY validator set");
 
 	let best_finalized_block = client.info().finalized_number;
 	let best_block_voted_on = Zero::zero();
 
 	let worker = worker::BeefyWorker::<_, Pair::Public, Pair::Signature, _>::new(
-		local_id,
+		validator_set,
 		key_store,
-		validator_set.validators,
 		client.finality_notification_stream(),
 		gossip_engine,
 		signed_commitment_sender,
 		best_finalized_block,
 		best_block_voted_on,
-		// TODO #95
-		Some(0),
 	);
 
 	worker.run().await

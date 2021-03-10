@@ -54,13 +54,8 @@ struct VoteMessage<Hash, Number, Id, Signature> {
 	signature: Signature,
 }
 
-pub(crate) enum BeefyId<Id> {
-	Validator(Id),
-	None,
-}
-
 pub(crate) struct BeefyWorker<Block: BlockT, Id, Signature, FinalityNotifications> {
-	local_id: BeefyId<Id>,
+	local_id: Option<Id>,
 	key_store: SyncCryptoStorePtr,
 	min_interval: u32,
 	rounds: round::Rounds<MmrRootHash, NumberFor<Block>, Id, Signature>,
@@ -69,36 +64,49 @@ pub(crate) struct BeefyWorker<Block: BlockT, Id, Signature, FinalityNotification
 	signed_commitment_sender: notification::BeefySignedCommitmentSender<Block, Signature>,
 	best_finalized_block: NumberFor<Block>,
 	best_block_voted_on: NumberFor<Block>,
-	validator_set_id: Option<ValidatorSetId>,
+	validator_set_id: ValidatorSetId,
 }
 
 impl<Block, Id, Signature, FinalityNotifications> BeefyWorker<Block, Id, Signature, FinalityNotifications>
 where
 	Block: BlockT,
+	Id: Public + Debug,
 {
-	#[allow(clippy::too_many_arguments)]
 	pub(crate) fn new(
-		local_id: BeefyId<Id>,
+		validator_set: ValidatorSet<Id>,
 		key_store: SyncCryptoStorePtr,
-		authorities: Vec<Id>,
 		finality_notifications: FinalityNotifications,
 		gossip_engine: GossipEngine<Block>,
 		signed_commitment_sender: notification::BeefySignedCommitmentSender<Block, Signature>,
 		best_finalized_block: NumberFor<Block>,
 		best_block_voted_on: NumberFor<Block>,
-		validator_set_id: Option<ValidatorSetId>,
 	) -> Self {
+		let local_id = match validator_set
+			.validators
+			.iter()
+			.find(|id| SyncCryptoStore::has_keys(&*key_store, &[(id.to_raw_vec(), KEY_TYPE)]))
+		{
+			Some(id) => {
+				info!(target: "beefy", "🥩 Starting BEEFY worker with local id: {:?}", id);
+				Some(id.clone())
+			}
+			None => {
+				info!(target: "beefy", "🥩 No local id found, BEEFY worker will be gossip only.");
+				None
+			}
+		};
+
 		BeefyWorker {
 			local_id,
 			key_store,
 			min_interval: 2,
-			rounds: round::Rounds::new(authorities),
+			rounds: round::Rounds::new(validator_set.validators),
 			finality_notifications,
 			gossip_engine: Arc::new(Mutex::new(gossip_engine)),
 			signed_commitment_sender,
 			best_finalized_block,
 			best_block_voted_on,
-			validator_set_id,
+			validator_set_id: validator_set.id,
 		}
 	}
 }
@@ -115,7 +123,7 @@ where
 		use sp_runtime::SaturatedConversion;
 
 		// we only vote as a validator
-		if let BeefyId::None = self.local_id {
+		if self.local_id.is_none() {
 			return false;
 		}
 
@@ -153,7 +161,7 @@ where
 		debug!(target: "beefy", "🥩 Finality notification: {:?}", notification);
 
 		if self.should_vote_on(*notification.header.number()) {
-			let local_id = if let BeefyId::Validator(id) = &self.local_id {
+			let local_id = if let Some(id) = &self.local_id {
 				id
 			} else {
 				warn!(target: "beefy", "🥩 Missing validator id - can't vote for: {:?}", notification.header.hash());
@@ -169,20 +177,13 @@ where
 
 			if let Some(new) = find_authorities_change::<Block, Id>(&notification.header) {
 				debug!(target: "beefy", "🥩 New validator set: {:?}", new);
-				self.validator_set_id = Some(new.id);
-			};
-
-			let current_set_id = if let Some(set_id) = self.validator_set_id {
-				set_id
-			} else {
-				warn!(target: "beefy", "🥩 Unknown validator set id - can't vote for: {:?}", notification.header.hash());
-				return;
+				self.validator_set_id = new.id;
 			};
 
 			let commitment = Commitment {
 				payload: mmr_root,
 				block_number: notification.header.number(),
-				validator_set_id: current_set_id,
+				validator_set_id: self.validator_set_id,
 			};
 
 			let signature = match self.sign_commitment(local_id, commitment.encode().as_ref()) {
@@ -225,9 +226,7 @@ where
 				let commitment = Commitment {
 					payload: round.0,
 					block_number: round.1,
-					validator_set_id: self
-						.validator_set_id
-						.expect("We voted only in case of a valid validator_set_id; qed"),
+					validator_set_id: self.validator_set_id,
 				};
 
 				let signed_commitment = SignedCommitment { commitment, signatures };
