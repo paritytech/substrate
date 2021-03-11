@@ -1520,8 +1520,8 @@ pub trait OnFinalize<BlockNumber> {
 
 /// The block's on idle trait.
 ///
-/// Implementing this lets you express what should happen for your pallet
-/// before on finalization, on_finalize hook, and based on if a remaining weight threshold is met.
+/// Implementing this lets you express what should happen for your pallet before
+/// block finalization (see `on_finalize` hook) in case any remaining weight is left.
 pub trait OnIdle<BlockNumber> {
 	/// The block is being finalized.
 	/// Implement to have something happen in case there if left over weight.
