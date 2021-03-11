@@ -34,7 +34,7 @@ use sp_core::{
 use log::warn;
 use codec::Encode;
 use sp_externalities::{Extensions, Extension, TaskId,
-	WorkerResult, WorkerDeclaration, AsyncExternalities};
+	WorkerResult, AsyncExternalities};
 
 /// Simple Map-based Externalities impl.
 #[derive(Debug)]
@@ -306,11 +306,11 @@ impl Externalities for BasicExternalities {
 		unimplemented!("Transactions are not supported by BasicExternalities");
 	}
 
-	fn storage_rollback_transaction(&mut self) -> Result<Vec<TaskId>, ()> {
+	fn storage_rollback_transaction(&mut self) -> Result<(), ()> {
 		unimplemented!("Transactions are not supported by BasicExternalities");
 	}
 
-	fn storage_commit_transaction(&mut self) -> Result<Vec<TaskId>, ()> {
+	fn storage_commit_transaction(&mut self) -> Result<(), ()> {
 		unimplemented!("Transactions are not supported by BasicExternalities");
 	}
 
@@ -337,7 +337,6 @@ impl Externalities for BasicExternalities {
 	fn get_worker_externalities(
 		&mut self,
 		_worker_id: u64,
-		_declaration: WorkerDeclaration,
 	) -> Box<dyn AsyncExternalities> {
 		unimplemented!("Workers are not supported by BasicExternalities");
 	}

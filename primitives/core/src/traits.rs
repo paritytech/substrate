@@ -29,7 +29,7 @@ use sp_std::{
 };
 use dyn_clone::DynClone;
 
-pub use sp_externalities::{Externalities, ExternalitiesExt, AsyncExternalities, WorkerResult, WorkerDeclaration};
+pub use sp_externalities::{Externalities, ExternalitiesExt, AsyncExternalities, WorkerResult};
 
 /// Code execution engine.
 #[cfg(feature = "std")]
@@ -207,7 +207,6 @@ pub trait RuntimeSpawn: Send {
 		&self,
 		func: fn(Vec<u8>) -> Vec<u8>,
 		data: Vec<u8>,
-		declaration: WorkerDeclaration,
 		calling_ext: &mut dyn Externalities,
 	) -> u64;
 
@@ -220,7 +219,6 @@ pub trait RuntimeSpawn: Send {
 		dispatcher_ref: u32,
 		func: u32,
 		payload: Vec<u8>,
-		declaration: WorkerDeclaration,
 		ext: &mut dyn Externalities,
 	) -> u64;
 

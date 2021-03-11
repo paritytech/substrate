@@ -227,23 +227,13 @@ pub trait Externalities: ExtensionStore {
 	///
 	/// Any changes made during that storage transaction are discarded. Returns an error when
 	/// no transaction is open that can be closed.
-	///
-	/// Return possible task ids of tasks that will not be in synch with the thread to allow
-	/// early kill.
-	/// FIXME: returned `TaskID` is only relevant for future feature of #7687 to invalidate
-	/// workers that will not be in sync.
-	fn storage_rollback_transaction(&mut self) -> Result<Vec<TaskId>, ()>;
+	fn storage_rollback_transaction(&mut self) -> Result<(), ()>;
 
 	/// Commit the last transaction started by `storage_start_transaction`.
 	///
 	/// Any changes made during that storage transaction are committed. Returns an error when
 	/// no transaction is open that can be closed.
-	///
-	/// Return possible task ids of tasks that will not be in synch with the thread to allow
-	/// early kill.
-	/// FIXME: returned `TaskID` is only relevant for future feature of #7687 to invalidate
-	/// workers that will not be in sync.
-	fn storage_commit_transaction(&mut self) -> Result<Vec<TaskId>, ()>;
+	fn storage_commit_transaction(&mut self) -> Result<(), ()>;
 
 	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	/// Benchmarking related functionality and shouldn't be used anywhere else!
@@ -293,7 +283,6 @@ pub trait Externalities: ExtensionStore {
 	fn get_worker_externalities(
 		&mut self,
 		worker_id: u64,
-		declaration: WorkerDeclaration,
 	) -> Box<dyn AsyncExternalities>;
 
 	/// Resolve worker result does update externality state
@@ -311,38 +300,7 @@ pub trait Externalities: ExtensionStore {
 }
 
 /// Substrate externalities that can be use within a worker context.
-pub trait AsyncExternalities: Externalities + Send {
-	/// Extract changes made to state by this worker.
-	fn extract_delta(&mut self) -> Option<StateDelta>;
-
-	/// After execution, we call back async externalities to check
-	/// produce worker result.
-	fn extract_state(&mut self) -> AsyncExternalitiesPostExecution;
-}
-
-/// State of async externality of a child worker after 'join' is called.
-pub enum AsyncExternalitiesPostExecution {
-	/// Some condition fails and the state is invalid.
-	/// With an invalid state we consider that worker
-	/// execution, even if it did finish is invalid.
-	/// Therefore 'join' implementation should never
-	/// return result when externality is in this state.
-	Invalid,
-
-	/// Assuming that child worker state is valid, we can
-	/// return the result to the parent worker on 'join'.
-	Valid,
-
-	/// This requires to check the result against
-	/// parent worker externalities with `resolve_worker_result`.
-	NeedResolve,
-
-	/// Optimistic worker state accesses to be checked
-	/// against other worker results.
-	/// This can result in 'join' returning an invalid
-	/// result.
-	Optimistic(AccessLog),
-}
+pub trait AsyncExternalities: Externalities + Send { }
 
 /// Result from worker execution.
 ///
@@ -354,13 +312,7 @@ pub enum WorkerResult {
 	/// call that is guaranted to be valid
 	/// at this point.
 	/// eg. a stateless worker.
-	Valid(Vec<u8>, Option<StateDelta>),
-	/// Result that require to be checked against
-	/// its parent externality state.
-	CallAt(Vec<u8>, Option<StateDelta>, TaskId),
-	/// Optimistic strategy call reply, it contains
-	/// a log of accessed keys during child execution.
-	Optimistic(Vec<u8>, Option<StateDelta>, TaskId, AccessLog),
+	Valid(Vec<u8>),
 	/// A worker execution that is not valid.
 	/// For instance when asumption on state
 	/// are required.
@@ -374,107 +326,11 @@ pub enum WorkerResult {
 	HardPanic,
 }
 
-/// Changes to state made by a worker.
-///
-/// At this point this is only a placeholder.
-/// FIXME: Complete the code to record access
-/// in state machine (see https://github.com/paritytech/substrate/pull/7687).
-#[derive(codec::Encode, codec::Decode)]
-pub struct StateDelta;
-
-impl Default for StateDelta {
-	fn default() -> Self {
-		StateDelta
-	}
-}
-
-impl StateDelta {
-	/// Does state delta contain change.
-	pub fn is_empty(&self) -> bool {
-		// FIXME: Complete when actual worker backend with write.
-		true
-	}
-}
-
-/// Log of a given worker call.
-///
-/// At this point this is only a placeholder.
-/// FIXME: Complete the code to record access
-/// in state machine (see https://github.com/paritytech/substrate/pull/7687).
-#[derive(codec::Encode, codec::Decode, Default)]
-pub struct AccessLog;
-
 /// A unique identifier type for a child worker.
 /// This is not unique between nested worker (unique
 /// id with nested support would be an array of u64, but
 /// not needed).
 pub type TaskId = u64;
-
-/// Differents workers execution mode.
-/// Internally defining the worker type can result in differents `AsyncExt` externality.
-#[derive(Debug)]
-#[repr(u8)]
-pub enum WorkerType {
-	/// Worker panic on state access from externalities.
-	Stateless = 0,
-}
-
-impl Default for WorkerType {
-	fn default() -> Self {
-		WorkerType::Stateless
-	}
-}
-
-impl WorkerType {
-	/// Similar purpose as `TryFrom<u8>`.
-	pub fn from_u8(kind: u8) -> Option<WorkerType> {
-		Some(match kind {
-			0 => WorkerType::Stateless,
-			_ => return None,
-		})
-	}
-
-	/// Depending on concurrency management strategy
-	/// we may need to resolve the result against
-	/// parent externalities.
-	pub fn need_resolve(&self) -> bool {
-		match *self {
-			WorkerType::Stateless => false,
-		}
-	}
-
-	/// Panic if spawning a child worker of a given type is not possible
-	/// regarding current parent worker.
-	/// Eg: spawning a worker with state from a worker without state
-	/// is fundamentally wrong.
-	pub fn guard_compatible_child_workers(&self, kind: WorkerType) {
-		match kind {
-			// A stateless worker is always spawnable.
-			WorkerType::Stateless => (),
-		}
-	}
-}
-
-/// Enum wrapping `WorkerType` to include additional
-/// information.
-///
-/// FIXME: at this point this is mainly a place holder.
-/// In https://github.com/paritytech/substrate/pull/7687
-/// it is mainly use to attach state access assumption.
-#[derive(Debug, Clone, codec::Encode, codec::Decode)]
-pub enum WorkerDeclaration {
-	/// Declaration for `WorkerType::Stateless`, no content.
-	Stateless,
-}
-
-impl WorkerDeclaration {
-	/// Extract type from declaration.
-	pub fn get_type(&self) -> WorkerType {
-		match self {
-			WorkerDeclaration::Stateless => WorkerType::Stateless,
-		}
-	}
-}
 
 /// Extension for the [`Externalities`] trait.
 pub trait ExternalitiesExt {

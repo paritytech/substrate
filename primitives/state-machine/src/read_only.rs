@@ -28,7 +28,7 @@ use sp_core::{
 	traits::Externalities, Blake2Hasher,
 };
 use codec::Encode;
-use sp_externalities::{TaskId, WorkerResult, WorkerDeclaration, AsyncExternalities};
+use sp_externalities::{TaskId, WorkerResult, AsyncExternalities};
 
 /// Trait for inspecting state in any backend.
 ///
@@ -176,11 +176,11 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 		unimplemented!("Transactions are not supported by ReadOnlyExternalities");
 	}
 
-	fn storage_rollback_transaction(&mut self) -> Result<Vec<TaskId>, ()> {
+	fn storage_rollback_transaction(&mut self) -> Result<(), ()> {
 		unimplemented!("Transactions are not supported by ReadOnlyExternalities");
 	}
 
-	fn storage_commit_transaction(&mut self) -> Result<Vec<TaskId>, ()> {
+	fn storage_commit_transaction(&mut self) -> Result<(), ()> {
 		unimplemented!("Transactions are not supported by ReadOnlyExternalities");
 	}
 
@@ -207,29 +207,15 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 	fn get_worker_externalities(
 		&mut self,
 		worker_id: u64,
-		declaration: WorkerDeclaration,
 	) -> Box<dyn AsyncExternalities> {
 		Box::new(crate::async_ext::new_child_worker_async_ext(
 			worker_id,
-			declaration,
-			None, // No current overlay state since read only.
 		))
 	}
 
 	fn resolve_worker_result(&mut self, state_update: WorkerResult) -> Option<Vec<u8>> {
 		match state_update {
-			WorkerResult::CallAt(result, None, ..)
-			| WorkerResult::Optimistic(result, None, ..)
-			| WorkerResult::Valid(result, None, ..) => Some(result),
-			WorkerResult::CallAt(result, Some(delta), ..)
-			| WorkerResult::Optimistic(result, Some(delta), ..)
-			| WorkerResult::Valid(result, Some(delta), ..) => {
-				if delta.is_empty() {
-					Some(result)
-				} else {
-					unimplemented!("Storing change is not supported in ReadOnlyExternalities");
-				}
-			},
+			WorkerResult::Valid(result) => Some(result),
 			WorkerResult::Invalid => None,
 			WorkerResult::RuntimePanic => {
 				panic!("Runtime panic from a worker.")

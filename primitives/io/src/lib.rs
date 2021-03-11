@@ -61,7 +61,7 @@ use sp_runtime_interface::pass_by::{PassBy, PassByCodec};
 
 use codec::{Encode, Decode};
 
-use sp_externalities::{ExternalitiesExt, Externalities, WorkerDeclaration};
+use sp_externalities::{ExternalitiesExt, Externalities};
 
 #[cfg(feature = "std")]
 mod batch_verifier;
@@ -195,18 +195,8 @@ pub trait Storage {
 	///
 	/// Will panic if there is no open transaction.
 	fn rollback_transaction(&mut self) {
-		let to_drop_tasks = self.storage_rollback_transaction()
+		self.storage_rollback_transaction()
 			.expect("No open transaction that can be rolled back.");
-		if to_drop_tasks.len() > 0 {
-			sp_externalities::externalities_and_extension::<RuntimeSpawnExt, _, _>(
-				*self,
-				|ext, runtime_spawn| {
-					for task in to_drop_tasks.into_iter() {
-						runtime_spawn.dismiss(task, ext)
-					}
-				}
-			);
-		}
 	}
 
 	/// Commit the last transaction started by `start_transaction`.
@@ -217,18 +207,8 @@ pub trait Storage {
 	///
 	/// Will panic if there is no open transaction.
 	fn commit_transaction(&mut self) {
-		let to_drop_tasks = self.storage_commit_transaction()
+		self.storage_commit_transaction()
 			.expect("No open transaction that can be committed.");
-		if to_drop_tasks.len() > 0 {
-			sp_externalities::externalities_and_extension::<RuntimeSpawnExt, _, _>(
-				*self,
-				|ext, runtime_spawn| {
-					for task in to_drop_tasks.into_iter() {
-						runtime_spawn.dismiss(task, ext)
-					}
-				}
-			);
-		}
 	}
 }
 
@@ -1341,11 +1321,6 @@ pub trait Sandbox {
 	}
 }
 
-/// Cast declaration to sp_io crossing.
-pub fn task_declaration(declaration: WorkerDeclaration) -> Crossing<WorkerDeclaration> {
-	Crossing(declaration)
-}
-
 /// Wasm host functions for managing tasks.
 ///
 /// This should not be used directly. Use `sp_tasks` for running parallel tasks instead.
@@ -1372,10 +1347,9 @@ pub trait RuntimeTasks {
 		dispatcher_ref: u32,
 		entry: u32,
 		payload: Vec<u8>,
-		declaration: Crossing<WorkerDeclaration>,
 	) -> u64 {
 		sp_externalities::externalities_and_extension::<RuntimeSpawnExt, _, _>(*self, |ext, spawn| {
-			spawn.spawn_call(dispatcher_ref, entry, payload, declaration.into_inner(), ext)
+			spawn.spawn_call(dispatcher_ref, entry, payload, ext)
 		}).expect("Cannot spawn without dynamic runtime dispatcher (RuntimeSpawnExt)")
 	}
 

@@ -18,7 +18,6 @@
 
 //! Externalities for workers.
 
-use crate::overlayed_changes::OverlayedChanges;
 use sp_std::{
 	boxed::Box,
 	any::{TypeId, Any},
@@ -27,17 +26,14 @@ use sp_std::{
 use sp_core::{
 	storage::{ChildInfo, TrackedStorageKey},
 };
-use sp_externalities::{Externalities, TaskId, AsyncExternalitiesPostExecution,
-	WorkerResult, WorkerDeclaration, WorkerType, AsyncExternalities};
+use sp_externalities::{Externalities, TaskId,
+	WorkerResult, AsyncExternalities};
 use crate::{StorageValue, StorageKey};
 
 /// Async view on state machine Ext.
 /// It contains its own set of state and rules,
 /// and returns its changes on `join`.
 pub struct AsyncExt {
-	kind: WorkerType,
-	// Actually unused at this point, is for write variant.
-	overlay: OverlayedChanges,
 	spawn_id: TaskId,
 }
 
@@ -45,52 +41,16 @@ pub struct AsyncExt {
 impl std::fmt::Debug for AsyncExt
 {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "AsyncExt {:?} at {:?}", self.kind, self.spawn_id)
+		write!(f, "AsyncExt {:?}", self.spawn_id)
 	}
 }
 
 /// Obtain externality for a child worker.
 pub fn new_child_worker_async_ext(
 	worker_id: u64,
-	declaration: WorkerDeclaration,
-	parent_overlay: Option<&mut OverlayedChanges>,
 ) -> AsyncExt {
-	let mut result = match &declaration {
-		WorkerDeclaration::Stateless => {
-			// early exit, stateless do not need
-			// to know about backend or current overlay.
-			return AsyncExt {
-				kind: WorkerType::Stateless,
-				overlay: Default::default(),
-				spawn_id: worker_id,
-			}
-		},
-		#[allow(unreachable_patterns)] // FIXME only for future async ext with state.
-		_ => {
-			AsyncExt {
-				kind: declaration.get_type(),
-				overlay: Default::default(),
-				spawn_id: worker_id,
-			}
-		},
-	};
-	parent_overlay.map(|overlay| {
-		result.overlay = overlay.child_worker_overlay();
-		overlay.declare_worker_in_parent(worker_id, declaration.clone());
-	});
-	result.overlay.set_worker_declaration(declaration);
-	result
-}
-
-impl AsyncExt {
-	/// Check if externality can write.
-	/// This does not indicate that a given write will
-	/// be allowend or will not result in an invalid
-	/// worker execution.
-	pub fn write_access(&self) -> bool {
-		match self.kind {
-			WorkerType::Stateless => false,
-		}
+	AsyncExt {
+		spawn_id: worker_id,
 	}
 }
 
@@ -201,11 +161,11 @@ impl Externalities for AsyncExt {
 		panic!("`storage_start_transaction`: should not be used in read only worker externalities!");
 	}
 
-	fn storage_rollback_transaction(&mut self) -> Result<Vec<TaskId>, ()> {
+	fn storage_rollback_transaction(&mut self) -> Result<(), ()> {
 		panic!("`storage_rollback_transaction`: should not be used in read only worker externalities!");
 	}
 
-	fn storage_commit_transaction(&mut self) -> Result<Vec<TaskId>, ()> {
+	fn storage_commit_transaction(&mut self) -> Result<(), ()> {
 		panic!("`storage_commit_transaction`: should not be used in read only worker externalities!");
 	}
 
@@ -232,22 +192,27 @@ impl Externalities for AsyncExt {
 	fn get_worker_externalities(
 		&mut self,
 		worker_id: u64,
-		declaration: WorkerDeclaration,
 	) -> Box<dyn AsyncExternalities> {
-		self.kind.guard_compatible_child_workers(declaration.get_type());
 		Box::new(crate::async_ext::new_child_worker_async_ext(
 			worker_id,
-			declaration,
-			Some(&mut self.overlay),
 		))
 	}
 	
-	fn resolve_worker_result(&mut self, state_update: WorkerResult) -> Option<Vec<u8>> {
-		self.overlay.resolve_worker_result(state_update)
+	fn resolve_worker_result(&mut self, result: WorkerResult) -> Option<Vec<u8>> {
+		match result {
+			WorkerResult::Valid(result) => Some(result),
+			WorkerResult::Invalid => None,
+			WorkerResult::RuntimePanic => {
+				panic!("Runtime panic from a worker.")
+			},
+			WorkerResult::HardPanic => {
+				panic!("Panic running a worker.")
+			},
+		}
 	}
 
-	fn dismiss_worker(&mut self, id: TaskId) {
-		self.overlay.dismiss_worker(id)
+	fn dismiss_worker(&mut self, _id: TaskId) {
+		// No worker persistence currently.
 	}
 }
 
@@ -269,25 +234,4 @@ impl sp_externalities::ExtensionStore for AsyncExt {
 	}
 }
 
-impl AsyncExternalities for AsyncExt {
-	fn extract_delta(&mut self) -> Option<sp_externalities::StateDelta> {
-		if self.write_access() {
-			Some(self.overlay.extract_delta())
-		} else {
-			None
-		}
-	}
-
-	fn extract_state(&mut self) -> AsyncExternalitiesPostExecution {
-		if !self.kind.need_resolve() {
-			return AsyncExternalitiesPostExecution::Valid;
-		}
-		if self.overlay.did_fail() {
-			return AsyncExternalitiesPostExecution::Invalid;
-		}
-		if let Some(optimistic) = self.overlay.extract_access_log() {
-			return AsyncExternalitiesPostExecution::Optimistic(optimistic);
-		}
-		AsyncExternalitiesPostExecution::NeedResolve
-	}
-}
+impl AsyncExternalities for AsyncExt { }

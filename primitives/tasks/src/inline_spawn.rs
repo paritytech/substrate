@@ -22,10 +22,9 @@
 //! As a minimal implementation it can run in no_std (with alloc), but do not
 //! actually spawn threads, all execution is done inline in the parent thread.
 
-use crate::{new_inline_only_externalities, Crossing};
+use crate::new_inline_only_externalities;
 use sp_core::traits::RuntimeSpawn;
-use sp_externalities::{WorkerResult, WorkerDeclaration, Externalities, AsyncExternalities,
-	AsyncExternalitiesPostExecution};
+use sp_externalities::{WorkerResult, Externalities, AsyncExternalities};
 use sp_std::rc::Rc;
 use sp_std::cell::RefCell;
 use sp_std::collections::btree_map::BTreeMap;
@@ -249,7 +248,6 @@ pub fn process_task_inline<
 >(
 	task: Task,
 	ext: Box<dyn AsyncExternalities>,
-	handle: u64,
 	runtime_ext: Box<dyn RuntimeSpawn>,
 	#[cfg(feature = "std")]
 	instance_ref: I,
@@ -258,7 +256,6 @@ pub fn process_task_inline<
 		process_task_inline_inner::<(), I>(
 			task,
 			ext,
-			handle,
 			runtime_ext,
 			instance_ref,
 		)
@@ -267,7 +264,6 @@ pub fn process_task_inline<
 		process_task_inline_inner::<()>(
 			task,
 			ext,
-			handle,
 			runtime_ext,
 		)
 	}
@@ -282,7 +278,6 @@ fn process_task_inline_inner<
 >(
 	task: Task,
 	ext: Box<dyn AsyncExternalities>,
-	handle: u64,
 	runtime_ext: Box<dyn RuntimeSpawn>,
 	#[cfg(feature = "std")]
 	instance_ref: I,
@@ -313,11 +308,11 @@ fn process_task_inline_inner<
 
 	#[cfg(feature = "std")]
 	{
-		process_task_inner::<HostLocal, _>(task, async_ext, handle, instance_ref)
+		process_task_inner::<HostLocal, _>(task, async_ext, instance_ref)
 	}
 	#[cfg(not(feature = "std"))]
 	{
-		process_task_inner::<HostLocal>(task, async_ext, handle)
+		process_task_inner::<HostLocal>(task, async_ext)
 	}
 }
 
@@ -329,7 +324,6 @@ pub fn process_task<
 >(
 	task: Task,
 	async_ext: crate::AsyncExternalities,
-	handle: u64,
 	#[cfg(feature = "std")]
 	instance_ref: I,
 ) -> WorkerResult {
@@ -337,7 +331,6 @@ pub fn process_task<
 		process_task_inner::<(),_>(
 			task,
 			async_ext,
-			handle,
 			instance_ref,
 		)
 	}
@@ -345,7 +338,6 @@ pub fn process_task<
 		process_task_inner::<()>(
 			task,
 			async_ext,
-			handle,
 		)
 	}
 }
@@ -358,7 +350,6 @@ fn process_task_inner<
 >(
 	task: Task,
 	mut async_ext: crate::AsyncExternalities,
-	handle: u64,
 	#[cfg(feature = "std")]
 	instance_ref: I,
 ) -> WorkerResult {
@@ -429,20 +420,7 @@ fn process_task_inner<
 			}
 		},
 	};
-	match async_ext.extract_state() {
-		AsyncExternalitiesPostExecution::Invalid => {
-			WorkerResult::Invalid
-		},
-		AsyncExternalitiesPostExecution::NeedResolve => {
-			WorkerResult::CallAt(result, async_ext.extract_delta(), handle)
-		},
-		AsyncExternalitiesPostExecution::Valid => {
-			WorkerResult::Valid(result, async_ext.extract_delta())
-		},
-		AsyncExternalitiesPostExecution::Optimistic(access) => {
-			WorkerResult::Optimistic(result, async_ext.extract_delta(), handle, access)
-		},
-	}
+	WorkerResult::Valid(result)
 }
 
 impl RuntimeInstanceSpawn {
@@ -476,12 +454,11 @@ impl RuntimeInstanceSpawn {
 	fn spawn_call_inner(
 		&mut self,
 		task: Task,
-		declaration: WorkerDeclaration,
 		calling_ext: &mut dyn Externalities,
 	) -> u64 {
 		let handle = self.counter;
 		self.counter += 1;
-		let ext = calling_ext.get_worker_externalities(handle, declaration);
+		let ext = calling_ext.get_worker_externalities(handle);
 
 		self.tasks.insert(handle, PendingTask {task, ext});
 
@@ -493,11 +470,10 @@ impl RuntimeInstanceSpawn {
 		&mut self,
 		func: fn(Vec<u8>) -> Vec<u8>,
 		data: Vec<u8>,
-		declaration: WorkerDeclaration,
 		calling_ext: &mut dyn Externalities,
 	) -> u64 {
 		let task = Task::Native(NativeTask { func, data });
-		self.spawn_call_inner(task, declaration, calling_ext)
+		self.spawn_call_inner(task, calling_ext)
 	}
 
 	/// Base implementation for `RuntimeSpawn` method.
@@ -506,11 +482,10 @@ impl RuntimeInstanceSpawn {
 		dispatcher_ref: u32,
 		func: u32,
 		data: Vec<u8>,
-		declaration: WorkerDeclaration,
 		calling_ext: &mut dyn Externalities,
 	) -> u64 {
 		let task = Task::Wasm(WasmTask { dispatcher_ref, func, data });
-		self.spawn_call_inner(task, declaration, calling_ext)
+		self.spawn_call_inner(task, calling_ext)
 	}
 }
 
@@ -575,10 +550,9 @@ impl RuntimeSpawn for RuntimeInstanceSpawnSend {
 		&self,
 		func: fn(Vec<u8>) -> Vec<u8>,
 		data: Vec<u8>,
-		declaration: WorkerDeclaration,
 		calling_ext: &mut dyn Externalities,
 	) -> u64 {
-		self.0.lock().spawn_call_native(func, data, declaration, calling_ext)
+		self.0.lock().spawn_call_native(func, data, calling_ext)
 	}
 
 	fn spawn_call(
@@ -586,10 +560,9 @@ impl RuntimeSpawn for RuntimeInstanceSpawnSend {
 		dispatcher_ref: u32,
 		func: u32,
 		data: Vec<u8>,
-		declaration: WorkerDeclaration,
 		calling_ext: &mut dyn Externalities,
 	) -> u64 {
-		self.0.lock().spawn_call(dispatcher_ref, func, data, declaration, calling_ext)
+		self.0.lock().spawn_call(dispatcher_ref, func, data, calling_ext)
 	}
 
 	fn join(&self, handle: u64, calling_ext: &mut dyn Externalities) -> Option<Vec<u8>> {
@@ -603,7 +576,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawnSend {
 						module: &*module,
 					};
 
-					process_task_inline(task.task, task.ext, handle, nested, instance_ref)
+					process_task_inline(task.task, task.ext, nested, instance_ref)
 				}
 			},
 			// handle has been removed due to dismiss or
@@ -656,10 +629,9 @@ pub mod hosted_runtime {
 			&self,
 			func: fn(Vec<u8>) -> Vec<u8>,
 			data: Vec<u8>,
-			declaration: WorkerDeclaration,
 			calling_ext: &mut dyn Externalities,
 		) -> u64 {
-			self.0.borrow_mut().spawn_call_native(func, data, declaration, calling_ext)
+			self.0.borrow_mut().spawn_call_native(func, data, calling_ext)
 		}
 
 		fn spawn_call(
@@ -667,10 +639,9 @@ pub mod hosted_runtime {
 			dispatcher_ref: u32,
 			func: u32,
 			data: Vec<u8>,
-			declaration: WorkerDeclaration,
 			calling_ext: &mut dyn Externalities,
 		) -> u64 {
-			self.0.borrow_mut().spawn_call(dispatcher_ref, func, data, declaration, calling_ext)
+			self.0.borrow_mut().spawn_call(dispatcher_ref, func, data, calling_ext)
 		}
 
 		fn join(&self, handle: u64, calling_ext: &mut dyn Externalities) -> Option<Vec<u8>> {
@@ -691,13 +662,12 @@ pub mod hosted_runtime {
 						process_task_inline_inner::<HostLocal, _>(
 							task.task,
 							task.ext,
-							handle,
 							nested,
 							instance_ref,
 						)
 					}
 					#[cfg(not(feature = "std"))]
-					process_task_inline_inner::<HostLocal>(task.task, task.ext, handle, nested)
+					process_task_inline_inner::<HostLocal>(task.task, task.ext, nested)
 				},
 				// handle has been removed due to dismiss or
 				// invalid externality condition.
@@ -748,10 +718,9 @@ pub mod hosted_runtime {
 		dispatcher_ref: u32,
 		entry: u32,
 		payload: Vec<u8>,
-		declaration: Crossing<WorkerDeclaration>,
 	) -> u64 {
 		sp_externalities::with_externalities_and_extension::<RuntimeSpawnExt, _, _>(|ext, runtime_spawn| {
-			runtime_spawn.spawn_call(dispatcher_ref, entry, payload, declaration.into_inner(), ext)
+			runtime_spawn.spawn_call(dispatcher_ref, entry, payload, ext)
 		}).unwrap()
 	}
 

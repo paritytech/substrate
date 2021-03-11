@@ -23,13 +23,12 @@
 //! NOTE: When using in actual runtime, make sure you don't produce unbounded parallelism.
 //! So this is bad example to use it:
 //! ```rust
-//!    use sp_tasks::WorkerDeclaration;
 //!    fn my_parallel_computator(data: Vec<u8>) -> Vec<u8> {
 //!        unimplemented!()
 //!    }
 //!    fn test(dynamic_variable: i32) {
 //!        for _ in 0..dynamic_variable {
-//!            sp_tasks::spawn(my_parallel_computator, vec![], WorkerDeclaration::Stateless);
+//!            sp_tasks::spawn(my_parallel_computator, vec![]);
 //!        }
 //!    }
 //! ```
@@ -37,7 +36,6 @@
 //! While this is a good example:
 //! ```rust
 //!    use codec::Encode;
-//!    use sp_tasks::WorkerDeclaration;
 //!    static STATIC_VARIABLE: i32 = 4;
 //!
 //!    fn my_parallel_computator(data: Vec<u8>) -> Vec<u8> {
@@ -48,7 +46,6 @@
 //!        let parallel_tasks = (0..STATIC_VARIABLE).map(|idx| sp_tasks::spawn(
 //!            my_parallel_computator,
 //!            computation_payload.chunks(10).nth(idx as _).encode(),
-//!            WorkerDeclaration::Stateless,
 //!        ));
 //!    }
 //! ```
@@ -74,7 +71,7 @@ pub use async_externalities::new_async_externalities;
 #[cfg(feature = "std")]
 pub use crate::pool_spawn::with_externalities_safe;
 pub use async_externalities::{new_inline_only_externalities, AsyncExternalities};
-pub use sp_externalities::{WorkerResult, WorkerDeclaration};
+pub use sp_externalities::WorkerResult;
 pub use sp_io::Crossing;
 use sp_std::vec::Vec;
 
@@ -109,14 +106,12 @@ pub fn set_capacity(capacity: u32) {
 mod inner {
 	use sp_externalities::{Externalities, ExternalitiesExt as _};
 	use sp_core::traits::RuntimeSpawnExt;
-	use crate::WorkerDeclaration;
 	use super::DataJoinHandle;
 
 	/// Spawn new runtime task (native).
 	pub fn spawn(
 		entry_point: fn(Vec<u8>) -> Vec<u8>,
 		data: Vec<u8>,
-		declaration: WorkerDeclaration,
 	) -> DataJoinHandle {
 		let handle = sp_externalities::with_externalities(|mut ext|{
 			let ext_unsafe = ext as *mut dyn Externalities;
@@ -127,7 +122,7 @@ mod inner {
 			let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
 			// TODO could wrap ext_unsafe in a ext struct that filter calls to extension of
 			// a given id, to make this safer.
-			let result = runtime_spawn.spawn_call_native(entry_point, data, declaration, ext_unsafe);
+			let result = runtime_spawn.spawn_call_native(entry_point, data, ext_unsafe);
 			std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::AcqRel);
 			// Not necessary (same lifetime as runtime_spawn), but shows intent to keep
 			// ext alive as long as ext_unsafe is in scope.
@@ -143,7 +138,6 @@ mod inner {
 mod inner {
 	use core::mem;
 	use sp_std::prelude::*;
-	use crate::WorkerDeclaration;
 	use super::DataJoinHandle;
 
 	/// Dispatch wrapper for wasm blob.
@@ -170,7 +164,6 @@ mod inner {
 	pub fn spawn(
 		entry_point: fn(Vec<u8>) -> Vec<u8>,
 		payload: Vec<u8>,
-		declaration: WorkerDeclaration,
 	) -> DataJoinHandle {
 		let func_ptr: usize = unsafe { mem::transmute(entry_point) };
 
@@ -178,7 +171,6 @@ mod inner {
 			dispatch_wrapper as usize as _,
 			func_ptr as u32,
 			payload,
-			sp_io::task_declaration(declaration),
 		);
 		DataJoinHandle { handle }
 	}
@@ -215,7 +207,7 @@ mod tests {
 	#[test]
 	fn basic() {
 		test_externalities().execute_with(|| {
-			let a1 = spawn(async_runner, vec![5, 2, 1], WorkerDeclaration::Stateless).join();
+			let a1 = spawn(async_runner, vec![5, 2, 1]).join();
 			assert_eq!(a1, Some(vec![1, 2, 5]));
 		})
 	}
@@ -223,7 +215,7 @@ mod tests {
 	#[test]
 	fn panicking() {
 		let res = test_externalities().execute_with_safe(||{
-			spawn(async_panicker, vec![5, 2, 1], WorkerDeclaration::Stateless).join();
+			spawn(async_panicker, vec![5, 2, 1]).join();
 		});
 
 		assert!(res.unwrap_err().contains("Closure panicked"));
@@ -243,7 +235,7 @@ mod tests {
 						3 * running_val + 1
 					};
 					data.push(running_val as u8);
-					(spawn(async_runner, data.clone(), WorkerDeclaration::Stateless), data.clone())
+					(spawn(async_runner, data.clone()), data.clone())
 				}
 			).collect::<Vec<_>>();
 

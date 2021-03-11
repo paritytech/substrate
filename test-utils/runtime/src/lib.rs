@@ -31,7 +31,6 @@ use sp_application_crypto::{ed25519, sr25519, ecdsa, RuntimeAppPublic};
 use trie_db::{TrieMut, Trie};
 use sp_trie::{PrefixedMemoryDB, StorageProof};
 use sp_trie::trie_types::{TrieDB, TrieDBMut};
-use sp_tasks::WorkerDeclaration;
 use sp_api::{decl_runtime_apis, impl_runtime_apis};
 use sp_runtime::{
 	create_runtime_str, impl_opaque_keys,
@@ -1261,7 +1260,7 @@ fn test_witness(proof: StorageProof, root: crate::Hash) {
 
 	sp_externalities::set_and_run_with_externalities(&mut ext, || {
 		sp_tasks::set_capacity(4);
-		let handle = sp_tasks::spawn(worker_test, Vec::new(), WorkerDeclaration::Stateless);
+		let handle = sp_tasks::spawn(worker_test, Vec::new());
 		let res = handle.join().expect("expected result for task");
 		assert!(res.get(0) == Some(&42));
 	});

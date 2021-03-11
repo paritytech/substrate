@@ -25,8 +25,6 @@ use sp_runtime::{print, traits::{BlakeTwo256, Hash}};
 use sp_core::{ed25519, sr25519};
 #[cfg(not(feature = "std"))]
 use sp_sandbox::Value;
-#[cfg(not(feature = "std"))]
-use sp_tasks::WorkerDeclaration;
 
 extern "C" {
 	#[allow(dead_code)]
@@ -325,7 +323,7 @@ sp_core::wasm_export_functions! {
 
 	fn test_inline() {
 		let data = vec![1u8, 2u8];
-		let data_new = sp_tasks::spawn(tasks::incrementer, data, WorkerDeclaration::Stateless).join();
+		let data_new = sp_tasks::spawn(tasks::incrementer, data).join();
 
 		assert_eq!(data_new, Some(vec![2u8, 3u8]));
 	}
@@ -333,34 +331,33 @@ sp_core::wasm_export_functions! {
 	fn test_spawn() {
 		sp_tasks::set_capacity(1);
 		let data = vec![1u8, 2u8];
-		let data_new = sp_tasks::spawn(tasks::incrementer, data, WorkerDeclaration::Stateless).join();
+		let data_new = sp_tasks::spawn(tasks::incrementer, data).join();
 
 		assert_eq!(data_new, Some(vec![2u8, 3u8]));
 	}
 
 	fn test_nested_spawn() {
 		let data = vec![7u8, 13u8];
-		let data_new = sp_tasks::spawn(tasks::parallel_incrementer, data, WorkerDeclaration::Stateless).join();
+		let data_new = sp_tasks::spawn(tasks::parallel_incrementer, data).join();
 
 		assert_eq!(data_new, Some(vec![10u8, 16u8]));
 
 		sp_tasks::set_capacity(2);
 		let data = vec![7u8, 13u8];
-		let data_new = sp_tasks::spawn(tasks::parallel_incrementer, data, WorkerDeclaration::Stateless).join();
+		let data_new = sp_tasks::spawn(tasks::parallel_incrementer, data).join();
 
 		assert_eq!(data_new, Some(vec![10u8, 16u8]));
 	}
 
 	fn test_panic_in_spawned() {
 		sp_tasks::set_capacity(1);
-		sp_tasks::spawn(tasks::panicker, vec![], WorkerDeclaration::Stateless).join();
+		sp_tasks::spawn(tasks::panicker, vec![]).join();
 	}
 }
 
 #[cfg(not(feature = "std"))]
 mod tasks {
 	use sp_std::prelude::*;
-	use super::WorkerDeclaration;
 
 	pub fn incrementer(data: Vec<u8>) -> Vec<u8> {
 	   data.into_iter().map(|v| v + 1).collect()
@@ -372,7 +369,7 @@ mod tasks {
 
 	pub fn parallel_incrementer(data: Vec<u8>) -> Vec<u8> {
 	   let first = data.into_iter().map(|v| v + 2).collect::<Vec<_>>();
-	   let second = sp_tasks::spawn(incrementer, first, WorkerDeclaration::Stateless).join();
+	   let second = sp_tasks::spawn(incrementer, first).join();
 	   second.unwrap()
 	}
 }

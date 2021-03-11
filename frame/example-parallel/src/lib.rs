@@ -141,7 +141,6 @@ fn validate_participants_parallel(event_id: &[u8], participants: &[EnlistedParti
 	let handle = sp_tasks::spawn(
 		spawn_verify,
 		async_payload,
-		sp_tasks::WorkerDeclaration::Stateless,
 	);
 	let mut result = true;
 

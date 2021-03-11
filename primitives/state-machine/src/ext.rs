@@ -29,7 +29,7 @@ use sp_core::{
 use sp_trie::{trie_types::Layout, empty_child_trie_root};
 use sp_externalities::{
 	Externalities, Extensions, Extension, ExtensionStore, TaskId,
-	WorkerResult, WorkerDeclaration, AsyncExternalities,
+	WorkerResult, AsyncExternalities,
 };
 use codec::{Decode, Encode, EncodeAppend};
 
@@ -115,7 +115,6 @@ pub struct Ext<'a, H, N, B>
 	/// Dummy usage of N arg.
 	_phantom: sp_std::marker::PhantomData<N>,
 }
-
 
 impl<'a, H, N, B> Ext<'a, H, N, B>
 	where
@@ -621,12 +620,12 @@ where
 		self.overlay.start_transaction()
 	}
 
-	fn storage_rollback_transaction(&mut self) -> Result<Vec<TaskId>, ()> {
+	fn storage_rollback_transaction(&mut self) -> Result<(), ()> {
 		self.mark_dirty();
 		self.overlay.rollback_transaction().map_err(|_| ())
 	}
 
-	fn storage_commit_transaction(&mut self) -> Result<Vec<TaskId>, ()> {
+	fn storage_commit_transaction(&mut self) -> Result<(), ()> {
 		self.overlay.commit_transaction().map_err(|_| ())
 	}
 
@@ -690,21 +689,26 @@ where
 	fn get_worker_externalities(
 		&mut self,
 		worker_id: u64,
-		declaration: WorkerDeclaration,
 	) -> Box<dyn AsyncExternalities> {
 		Box::new(crate::async_ext::new_child_worker_async_ext(
 			worker_id,
-			declaration,
-			Some(&mut self.overlay),
 		))
 	}
 
 	fn resolve_worker_result(&mut self, state_update: WorkerResult) -> Option<Vec<u8>> {
-		self.overlay.resolve_worker_result(state_update)
+		match state_update {
+			WorkerResult::Valid(result) => Some(result),
+			WorkerResult::Invalid => None,
+			WorkerResult::RuntimePanic => {
+				panic!("Runtime panic from a worker.")
+			},
+			WorkerResult::HardPanic => {
+				panic!("Panic running a worker.")
+			},
+		}
 	}
 
-	fn dismiss_worker(&mut self, id: TaskId) {
-		self.overlay.dismiss_worker(id);
+	fn dismiss_worker(&mut self, _id: TaskId) {
 	}
 }
 
