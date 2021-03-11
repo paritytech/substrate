@@ -896,7 +896,7 @@ decl_module! {
 			let signer = ensure_signed(origin)?;
 			let subcurator = T::Lookup::lookup(subcurator)?;
 
-			// Ensure parent bounty is Active & get status of curator
+			// Ensure parent bounty exist & get master curator or default if none
 			let (master_curator, _) = Self::ensure_bounty_exist(bounty_id, false)
 				.map(|rval| rval.unwrap_or((T::AccountId::default(), Zero::zero())))
 				.map_err(|err| err)?;
