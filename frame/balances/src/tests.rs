@@ -788,14 +788,14 @@ macro_rules! decl_tests {
 					// Slashed completed in full
 					assert_eq!(Balances::slash(&1, 950), (NegativeImbalance::new(950), 0));
 					// Account is killed
-					assert!(!System::account_exists(&1));
+					assert!(!Accounts::account_exists(&1));
 
 					// SCENARIO: Over-slash will kill account, and report missing slash amount.
 					assert_ok!(Balances::set_balance(Origin::root(), 1, 1_000, 0));
 					// Slashed full free_balance, and reports 300 not slashed
 					assert_eq!(Balances::slash(&1, 1_300), (NegativeImbalance::new(1000), 300));
 					// Account is dead
-					assert!(!System::account_exists(&1));
+					assert!(!Accounts::account_exists(&1));
 
 					// SCENARIO: Over-slash can take from reserved, but keep alive.
 					assert_ok!(Balances::set_balance(Origin::root(), 1, 1_000, 400));
@@ -809,14 +809,14 @@ macro_rules! decl_tests {
 					// Slashed full free_balance and 300 of reserved balance
 					assert_eq!(Balances::slash(&1, 1_300), (NegativeImbalance::new(1300), 0));
 					// Account is dead because 50 reserved balance is not enough to keep alive
-					assert!(!System::account_exists(&1));
+					assert!(!Accounts::account_exists(&1));
 
 					// SCENARIO: Over-slash can take as much as possible from reserved, kill, and report missing amount.
 					assert_ok!(Balances::set_balance(Origin::root(), 1, 1_000, 250));
 					// Slashed full free_balance and 300 of reserved balance
 					assert_eq!(Balances::slash(&1, 1_300), (NegativeImbalance::new(1250), 50));
 					// Account is super dead
-					assert!(!System::account_exists(&1));
+					assert!(!Accounts::account_exists(&1));
 
 					/* User will now have a reference counter on them, keeping them alive in these scenarios */
 
@@ -888,14 +888,14 @@ macro_rules! decl_tests {
 					// Slashed completed in full
 					assert_eq!(Balances::slash_reserved(&1, 1_000), (NegativeImbalance::new(1_000), 0));
 					// Account is dead
-					assert!(!System::account_exists(&1));
+					assert!(!Accounts::account_exists(&1));
 
 					// SCENARIO: Over-slash would kill account, and reports left over slash.
 					assert_ok!(Balances::set_balance(Origin::root(), 1, 50, 1_000));
 					// Slashed completed in full
 					assert_eq!(Balances::slash_reserved(&1, 1_300), (NegativeImbalance::new(1_000), 300));
 					// Account is dead
-					assert!(!System::account_exists(&1));
+					assert!(!Accounts::account_exists(&1));
 
 					// SCENARIO: Over-slash does not take from free balance.
 					assert_ok!(Balances::set_balance(Origin::root(), 1, 300, 1_000));

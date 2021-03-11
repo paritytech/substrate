@@ -26,8 +26,12 @@ use frame_system::RawOrigin as SystemOrigin;
 use frame_benchmarking::{
 	benchmarks, account, whitelisted_caller, whitelist_account, impl_benchmark_test_suite
 };
-use frame_support::traits::Get;
-use frame_support::{traits::EnsureOrigin, dispatch::UnfilteredDispatchable};
+use frame_support::{
+	traits::{
+		Get, EnsureOrigin, BasicAccount,
+	},
+	dispatch::UnfilteredDispatchable,
+};
 
 use crate::Module as Assets;
 
@@ -193,7 +197,7 @@ benchmarks! {
 		let target_lookup = T::Lookup::unlookup(target.clone());
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), target_lookup, amount)
 	verify {
-		assert!(frame_system::Module::<T>::account_exists(&caller));
+		assert!(T::ReferencedAccount::account_exists(&caller));
 		assert_last_event::<T>(Event::Transferred(Default::default(), caller, target, amount).into());
 	}
 
