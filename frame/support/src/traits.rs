@@ -1524,7 +1524,7 @@ pub trait OnFinalize<BlockNumber> {
 /// block finalization (see `on_finalize` hook) in case any remaining weight is left.
 pub trait OnIdle<BlockNumber> {
 	/// The block is being finalized.
-	/// Implement to have something happen in case there if left over weight.
+	/// Implement to have something happen in case there is leftover weight.
 	/// Check the passed `remaining_weight` to make sure it is high enough to allow for
 	/// your pallet's extra computation.
 	///
