@@ -25,7 +25,7 @@ use crate::{
 	backend::Backend,
 	stats::StateMachineStats,
 };
-use sp_std::{vec::Vec, any::{TypeId, Any}, boxed::Box, fmt::Debug};
+use sp_std::{vec::Vec, any::{TypeId, Any}, boxed::Box};
 use self::changeset::OverlayedChangeSet;
 
 #[cfg(feature = "std")]
@@ -47,7 +47,7 @@ use sp_core::storage::{well_known_keys::EXTRINSIC_INDEX, ChildInfo};
 use sp_core::offchain::OffchainOverlayedChange;
 use hash_db::Hasher;
 use crate::DefaultError;
-use sp_externalities::{Extensions, Extension, TaskId};
+use sp_externalities::{Extensions, Extension};
 
 pub use self::changeset::{OverlayedValue, NoOpenTransaction, AlreadyInRuntime, NotInRuntime};
 
@@ -272,7 +272,7 @@ impl OverlayedChanges {
 	/// Set a new value for the specified key.
 	///
 	/// Can be rolled back or committed when called inside a transaction.
-	pub fn set_storage(&mut self, key: StorageKey, val: Option<StorageValue>) {
+	pub(crate) fn set_storage(&mut self, key: StorageKey, val: Option<StorageValue>) {
 		let size_write = val.as_ref().map(|x| x.len() as u64).unwrap_or(0);
 		self.stats.tally_write_overlay(size_write);
 		self.top.set(key, val, self.extrinsic_index());
@@ -283,7 +283,7 @@ impl OverlayedChanges {
 	/// `None` can be used to delete a value specified by the given key.
 	///
 	/// Can be rolled back or committed when called inside a transaction.
-	pub fn set_child_storage(
+	pub(crate) fn set_child_storage(
 		&mut self,
 		child_info: &ChildInfo,
 		key: StorageKey,
@@ -308,7 +308,7 @@ impl OverlayedChanges {
 	/// Clear child storage of given storage key.
 	///
 	/// Can be rolled back or committed when called inside a transaction.
-	pub fn clear_child_storage(
+	pub(crate) fn clear_child_storage(
 		&mut self,
 		child_info: &ChildInfo,
 	) {
@@ -329,14 +329,14 @@ impl OverlayedChanges {
 	/// Removes all key-value pairs which keys share the given prefix.
 	///
 	/// Can be rolled back or committed when called inside a transaction.
-	pub fn clear_prefix(&mut self, prefix: &[u8]) {
+	pub(crate) fn clear_prefix(&mut self, prefix: &[u8]) {
 		self.top.clear_where(|key, _| key.starts_with(prefix), self.extrinsic_index());
 	}
 
 	/// Removes all key-value pairs which keys share the given prefix.
 	///
 	/// Can be rolled back or committed when called inside a transaction
-	pub fn clear_child_prefix(
+	pub(crate) fn clear_child_prefix(
 		&mut self,
 		child_info: &ChildInfo,
 		prefix: &[u8],
@@ -364,11 +364,6 @@ impl OverlayedChanges {
 		self.top.transaction_depth()
 	}
 
-	/// A worker was dissmissed.
-	///
-	/// Update internal state relative to this worker.
-	pub fn dismiss_worker(&mut self, _id: TaskId) { }
-
 	/// Start a new nested transaction.
 	///
 	/// This allows to either commit or roll back all changes that where made while this
@@ -388,7 +383,6 @@ impl OverlayedChanges {
 	///
 	/// Any changes made during that transaction are discarded. Returns an error if
 	/// there is no open transaction that can be rolled back.
-	#[must_use]
 	pub fn rollback_transaction(&mut self) -> Result<(), NoOpenTransaction> {
 		self.top.rollback_transaction()?;
 		retain_map(&mut self.children, |_, (changeset, _)| {
@@ -405,7 +399,6 @@ impl OverlayedChanges {
 	///
 	/// Any changes made during that transaction are committed. Returns an error if there
 	/// is no open transaction that can be committed.
-	#[must_use]
 	pub fn commit_transaction(&mut self) -> Result<(), NoOpenTransaction> {
 		self.top.commit_transaction()?;
 		for (_, (changeset, _)) in self.children.iter_mut() {
