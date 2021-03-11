@@ -1118,7 +1118,43 @@ define_env!(Env, <E: Ext>,
 	// space at `out_ptr` is less than the size of the value a trap is triggered.
 	//
 	// The data is encoded as T::Hash.
+	//
+	// # Deprecation
+	//
+	// This function is deprecated. Users should migrate to the version in the "seal1" module.
 	[seal0] seal_random(ctx, subject_ptr: u32, subject_len: u32, out_ptr: u32, out_len_ptr: u32) => {
+		ctx.charge_gas(RuntimeToken::Random)?;
+		if subject_len > ctx.ext.schedule().limits.subject_len {
+			Err(Error::<E::T>::RandomSubjectTooLong)?;
+		}
+		let subject_buf = ctx.read_sandbox_memory(subject_ptr, subject_len)?;
+		Ok(ctx.write_sandbox_output(
+			out_ptr, out_len_ptr, &ctx.ext.random(&subject_buf).0.encode(), false, already_charged
+		)?)
+	},
+
+	// Stores a random number for the current block and the given subject into the supplied buffer.
+	//
+	// The value is stored to linear memory at the address pointed to by `out_ptr`.
+	// `out_len_ptr` must point to a u32 value that describes the available space at
+	// `out_ptr`. This call overwrites it with the size of the value. If the available
+	// space at `out_ptr` is less than the size of the value a trap is triggered.
+	//
+	// The data is encoded as (T::Hash, T::BlockNumber).
+	//
+	// # Changes from v0
+	//
+	// In addition to the seed it returns the block number since which it was determinable
+	// by chain observers.
+	//
+	// # Note
+	//
+	// The returned seed should only be used to distinguish commitments made before
+	// the returned block number. If the block number is too early (i.e. commitments were
+	// made afterwards), then ensure no further commitments may be made and repeatedly
+	// call this on later blocks until the block number returned is later than the latest
+	// commitment.
+	[seal1] seal_random(ctx, subject_ptr: u32, subject_len: u32, out_ptr: u32, out_len_ptr: u32) => {
 		ctx.charge_gas(RuntimeToken::Random)?;
 		if subject_len > ctx.ext.schedule().limits.subject_len {
 			Err(Error::<E::T>::RandomSubjectTooLong)?;
