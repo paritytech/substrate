@@ -2067,11 +2067,11 @@ pub trait Hooks<BlockNumber> {
 	/// The block is being finalized. Implement to have something happen.
 	fn on_finalize(_n: BlockNumber) {}
 
-	/// This will be run when the block is being finalized (before on finalize).
+	/// This will be run when the block is being finalized (before `on_finalize`).
 	/// Implement to have something happen using the remaining weight.
-	/// Will not fire if the remaining weight is below 0.
-	/// Returns the weight used, subtracts it from current weight used,
-	/// passes result to the next on idle hook if exists.
+	/// Will not fire if the remaining weight is 0.
+	/// Return the weight used, the hook will subtract it from current weight used
+	/// and pass the result to the next `on_idle` hook if it exists.
 	fn on_idle(
 		_n: BlockNumber,
 		_remaining_weight: crate::weights::Weight
