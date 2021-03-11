@@ -1522,6 +1522,38 @@ pub trait OnFinalize<BlockNumber> {
 	fn on_finalize(_n: BlockNumber) {}
 }
 
+/// The block's on idle trait.
+///
+/// Implementing this lets you express what should happen for your pallet before
+/// block finalization (see `on_finalize` hook) in case any remaining weight is left.
+pub trait OnIdle<BlockNumber> {
+	/// The block is being finalized.
+	/// Implement to have something happen in case there is leftover weight.
+	/// Check the passed `remaining_weight` to make sure it is high enough to allow for
+	/// your pallet's extra computation.
+	///
+	/// NOTE: This function is called AFTER ALL extrinsics - including inherent extrinsics -
+	/// in a block are applied but before `on_finalize` is executed.
+	fn on_idle(
+		_n: BlockNumber,
+		_remaining_weight: crate::weights::Weight
+	) -> crate::weights::Weight {
+		0
+	}
+}
+
+#[impl_for_tuples(30)]
+impl<BlockNumber: Clone> OnIdle<BlockNumber> for Tuple {
+	fn on_idle(n: BlockNumber,  remaining_weight: crate::weights::Weight) -> crate::weights::Weight {
+		let mut weight = 0;
+		for_tuples!( #(
+			let adjusted_remaining_weight = remaining_weight.saturating_sub(weight);
+			weight = weight.saturating_add(Tuple::on_idle(n.clone(),  adjusted_remaining_weight));
+		)* );
+		weight
+	}
+}
+
 /// The block initialization trait.
 ///
 /// Implementing this lets you express what should happen for your pallet when the block is
@@ -1539,9 +1571,9 @@ pub trait OnInitialize<BlockNumber> {
 
 #[impl_for_tuples(30)]
 impl<BlockNumber: Clone> OnInitialize<BlockNumber> for Tuple {
-	fn on_initialize(_n: BlockNumber) -> crate::weights::Weight {
+	fn on_initialize(n: BlockNumber) -> crate::weights::Weight {
 		let mut weight = 0;
-		for_tuples!( #( weight = weight.saturating_add(Tuple::on_initialize(_n.clone())); )* );
+		for_tuples!( #( weight = weight.saturating_add(Tuple::on_initialize(n.clone())); )* );
 		weight
 	}
 }
@@ -2038,6 +2070,18 @@ pub trait IsSubType<T> {
 pub trait Hooks<BlockNumber> {
 	/// The block is being finalized. Implement to have something happen.
 	fn on_finalize(_n: BlockNumber) {}
+
+	/// This will be run when the block is being finalized (before `on_finalize`).
+	/// Implement to have something happen using the remaining weight.
+	/// Will not fire if the remaining weight is 0.
+	/// Return the weight used, the hook will subtract it from current weight used
+	/// and pass the result to the next `on_idle` hook if it exists.
+	fn on_idle(
+		_n: BlockNumber,
+		_remaining_weight: crate::weights::Weight
+	) -> crate::weights::Weight {
+		0
+	}
 
 	/// The block is being initialized. Implement to have something happen.
 	///
