@@ -202,7 +202,11 @@ macro_rules! define_env {
 					AsRef<[u8]>
 		{
 			fn impls<F: FnMut(&[u8], &[u8], $crate::wasm::env_def::HostFunc<E>)>(f: &mut F) {
-				register_func!(f, < E: $seal_ty > ; $( $module $name ( $ctx $( , $names : $params )* ) $( -> $returns)* => $body )* );
+				register_func!(
+					f,
+					< E: $seal_ty > ;
+					$( $module $name ( $ctx $( , $names : $params )* ) $( -> $returns)* => $body )*
+				);
 			}
 		}
 	};

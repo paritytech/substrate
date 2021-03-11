@@ -1312,8 +1312,13 @@ define_env!(Env, <E: Ext>,
 	// - topics_len - the length of the topics buffer. Pass 0 if you want to pass an empty vector.
 	// - data_ptr - a pointer to a raw data buffer which will saved along the event.
 	// - data_len - the length of the data buffer.
-	[seal0] seal_deposit_event(ctx, topics_ptr: u32, topics_len: u32, data_ptr: u32, data_len: u32) => {
-
+	[seal0] seal_deposit_event(
+		ctx,
+		topics_ptr: u32,
+		topics_len: u32,
+		data_ptr: u32,
+		data_len: u32
+	) => {
 		fn has_duplicates<T: Ord>(items: &mut Vec<T>) -> bool {
 			// # Warning
 			//
