@@ -178,23 +178,23 @@ pub mod pallet {
 	/// Current epoch index.
 	#[pallet::storage]
 	#[pallet::getter(fn epoch_index)]
-	pub type EpochIndex<T: Config> = StorageValue<_, u64, ValueQuery>;
+	pub type EpochIndex<T> = StorageValue<_, u64, ValueQuery>;
 
 	/// Current epoch authorities.
 	#[pallet::storage]
 	#[pallet::getter(fn authorities)]
-	pub type Authorities<T: Config> = StorageValue<_, Vec<(AuthorityId, BabeAuthorityWeight)>, ValueQuery>;
+	pub type Authorities<T> = StorageValue<_, Vec<(AuthorityId, BabeAuthorityWeight)>, ValueQuery>;
 
 	/// The slot at which the first epoch actually started. This is 0
 	/// until the first block of the chain.
 	#[pallet::storage]
 	#[pallet::getter(fn genesis_slot)]
-	pub type GenesisSlot<T: Config> = StorageValue<_, Slot, ValueQuery>;
+	pub type GenesisSlot<T> = StorageValue<_, Slot, ValueQuery>;
 
 	/// Current slot number.
 	#[pallet::storage]
 	#[pallet::getter(fn current_slot)]
-	pub type CurrentSlot<T: Config> = StorageValue<_, Slot, ValueQuery>;
+	pub type CurrentSlot<T> = StorageValue<_, Slot, ValueQuery>;
 
 	/// The epoch randomness for the *current* epoch.
 	///
@@ -211,23 +211,19 @@ pub mod pallet {
 	// variable to its underlying value.
 	#[pallet::storage]
 	#[pallet::getter(fn randomness)]
-	pub type Randomness<T: Config> = StorageValue<_, schnorrkel::Randomness, ValueQuery>;
+	pub type Randomness<T> = StorageValue<_, schnorrkel::Randomness, ValueQuery>;
 
 	/// Pending epoch configuration change that will be applied when the next epoch is enacted.
 	#[pallet::storage]
-	pub(super) type PendingEpochConfigChange<T: Config> = StorageValue<_, NextConfigDescriptor>;
+	pub(super) type PendingEpochConfigChange<T> = StorageValue<_, NextConfigDescriptor>;
 
 	/// Next epoch randomness.
 	#[pallet::storage]
-	pub(super) type NextRandomness<T: Config> = StorageValue<
-		_,
-		schnorrkel::Randomness,
-		ValueQuery,
-	>;
+	pub(super) type NextRandomness<T> = StorageValue<_, schnorrkel::Randomness, ValueQuery>;
 
 	/// Next epoch authorities.
 	#[pallet::storage]
-	pub(super) type NextAuthorities<T: Config> = StorageValue<
+	pub(super) type NextAuthorities<T> = StorageValue<
 		_,
 		Vec<(AuthorityId, BabeAuthorityWeight)>,
 		ValueQuery,
@@ -243,11 +239,11 @@ pub mod pallet {
 	/// We reset all segments and return to `0` at the beginning of every
 	/// epoch.
 	#[pallet::storage]
-	pub(super) type SegmentIndex<T: Config> = StorageValue<_, u32, ValueQuery>;
+	pub(super) type SegmentIndex<T> = StorageValue<_, u32, ValueQuery>;
 
 	/// TWOX-NOTE: `SegmentIndex` is an increasing integer, so this is okay.
 	#[pallet::storage]
-	pub(super) type UnderConstruction<T: Config> = StorageMap<
+	pub(super) type UnderConstruction<T> = StorageMap<
 		_,
 		Twox64Concat,
 		u32,
@@ -259,14 +255,14 @@ pub mod pallet {
 	/// if per-block initialization has already been called for current block.
 	#[pallet::storage]
 	#[pallet::getter(fn initialized)]
-	pub(super) type Initialized<T: Config> = StorageValue<_, MaybeRandomness>;
+	pub(super) type Initialized<T> = StorageValue<_, MaybeRandomness>;
 
 	/// Temporary value (cleared at block finalization) that includes the VRF output generated
 	/// at this block. This field should always be populated during block processing unless
 	/// secondary plain slots are enabled (which don't contain a VRF output).
 	#[pallet::storage]
 	#[pallet::getter(fn author_vrf_randomness)]
-	pub(super) type AuthorVrfRandomness<T: Config> = StorageValue<_, MaybeRandomness, ValueQuery>;
+	pub(super) type AuthorVrfRandomness<T> = StorageValue<_, MaybeRandomness, ValueQuery>;
 
 	/// The block numbers when the last and current epoch have started, respectively `N-1` and
 	/// `N`.
@@ -274,7 +270,11 @@ pub mod pallet {
 	/// entropy was fixed (i.e. it was known to chain observers). Since epochs are defined in
 	/// slots, which may be skipped, the block numbers may not line up with the slot numbers.
 	#[pallet::storage]
-	pub(super) type EpochStart<T: Config> = StorageValue<_, (T::BlockNumber, T::BlockNumber), ValueQuery>;
+	pub(super) type EpochStart<T: Config> = StorageValue<
+		_,
+		(T::BlockNumber, T::BlockNumber),
+		ValueQuery,
+	>;
 
 	/// How late the current block is compared to its parent.
 	///
@@ -287,12 +287,12 @@ pub mod pallet {
 
 	/// The configuration for the current epoch. Should never be `None` as it is initialized in genesis.
 	#[pallet::storage]
-	pub(super) type EpochConfig<T: Config> = StorageValue<_, BabeEpochConfiguration>;
+	pub(super) type EpochConfig<T> = StorageValue<_, BabeEpochConfiguration>;
 
 	/// The configuration for the next epoch, `None` if the config will not change
 	/// (you can fallback to `EpochConfig` instead in that case).
 	#[pallet::storage]
-	pub(super) type NextEpochConfig<T: Config> = StorageValue<_, BabeEpochConfiguration>;
+	pub(super) type NextEpochConfig<T> = StorageValue<_, BabeEpochConfiguration>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
