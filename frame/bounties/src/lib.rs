@@ -1376,13 +1376,12 @@ decl_module! {
 				.or_else(|_| T::RejectOrigin::ensure_origin(origin).map(|_| None))?;
 
 			// Ensure parent bounty exist & active,
-			let (master_curator, _) = Self::ensure_bounty_exist(
+			let master_curator = Self::ensure_bounty_exist(
 				bounty_id,
 				maybe_sender.is_none(),
 			)
-			.map(|rval|
-				rval.unwrap_or((T::AccountId::default(), Zero::zero())),
-			).map_err(|err| err)?;
+			.map(|rval| rval.map(|v| v.0).unwrap_or(T::AccountId::default()))
+			.map_err(|err| err)?;
 
 			ensure!(
 				maybe_sender.map_or(
