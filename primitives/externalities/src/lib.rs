@@ -230,7 +230,7 @@ pub trait Externalities: ExtensionStore {
 	///
 	/// Return possible task ids of tasks that will not be in synch with the thread to allow
 	/// early kill.
-	/// FIXME: returned `TaskID` is only relevant for future feature of #7687 to invaldate
+	/// FIXME: returned `TaskID` is only relevant for future feature of #7687 to invalidate
 	/// workers that will not be in sync.
 	fn storage_rollback_transaction(&mut self) -> Result<Vec<TaskId>, ()>;
 
@@ -241,7 +241,7 @@ pub trait Externalities: ExtensionStore {
 	///
 	/// Return possible task ids of tasks that will not be in synch with the thread to allow
 	/// early kill.
-	/// FIXME: returned `TaskID` is only relevant for future feature of #7687 to invaldate
+	/// FIXME: returned `TaskID` is only relevant for future feature of #7687 to invalidate
 	/// workers that will not be in sync.
 	fn storage_commit_transaction(&mut self) -> Result<Vec<TaskId>, ()>;
 
@@ -289,7 +289,7 @@ pub trait Externalities: ExtensionStore {
 	/// Adds new storage keys to the DB tracking whitelist.
 	fn set_whitelist(&mut self, new: Vec<TrackedStorageKey>);
 
-	/// Get externalities to use with a future worker.
+	/// Get externalities to use from within a child worker.
 	fn get_worker_externalities(
 		&mut self,
 		worker_id: u64,

@@ -238,8 +238,8 @@ pub struct RunCmd {
 	#[structopt(long, conflicts_with = "base-path")]
 	pub tmp: bool,
 
-	/// Maximum number of WS RPC server connections.
-	/// No limit when not set.
+	/// Maximum number of simultaneous workers for runtime.
+	/// No limit if undefined.
 	#[structopt(long = "runtime-worker-limit")]
 	pub worker_limit: Option<usize>,
 }

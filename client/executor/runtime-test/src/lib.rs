@@ -26,7 +26,7 @@ use sp_core::{ed25519, sr25519};
 #[cfg(not(feature = "std"))]
 use sp_sandbox::Value;
 #[cfg(not(feature = "std"))]
-use sp_tasks::{WorkerDeclaration};
+use sp_tasks::WorkerDeclaration;
 
 extern "C" {
 	#[allow(dead_code)]

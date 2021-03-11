@@ -28,9 +28,9 @@
 //!        unimplemented!()
 //!    }
 //!    fn test(dynamic_variable: i32) {
-//!       for _ in 0..dynamic_variable {
-//!					sp_tasks::spawn(my_parallel_computator, vec![], WorkerDeclaration::Stateless);
-//!				}
+//!        for _ in 0..dynamic_variable {
+//!            sp_tasks::spawn(my_parallel_computator, vec![], WorkerDeclaration::Stateless);
+//!        }
 //!    }
 //! ```
 //!

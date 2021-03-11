@@ -20,6 +20,7 @@ sp-io = { version = "3.0.0", path = "../../primitives/io" }
 sp-core = { version = "3.0.0", path = "../../primitives/core" }
 sp-tasks = { version = "3.0.0", path = "../../primitives/tasks" }
 sp-trie = { version = "3.0.0", path = "../../primitives/trie" }
+sp-serializer = { version = "3.0.0", path = "../../primitives/serializer" }
 sp-version = { version = "3.0.0", path = "../../primitives/version" }
 sp-panic-handler = { version = "3.0.0", path = "../../primitives/panic-handler" }
 wasmi = "0.6.2"
@@ -35,7 +36,6 @@ sc-executor-wasmtime = { version = "0.9.0", path = "wasmtime", optional = true }
 parking_lot = "0.11.1"
 log = "0.4.8"
 libsecp256k1 = "0.3.4"
-sp-serializer = { version = "3.0.0", path = "../../primitives/serializer" }
 
 [dev-dependencies]
 assert_matches = "1.3.0"
@@ -54,8 +54,7 @@ paste = "1.0"
 [features]
 default = [ "std" ]
 # This crate does not have `no_std` support, we just require this for tests
-std = [
-]
+std = []
 wasm-extern-trace = []
 wasmtime = [
 	"sc-executor-wasmtime",

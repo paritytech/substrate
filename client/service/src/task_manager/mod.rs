@@ -43,17 +43,17 @@ mod tests;
 /// A shared tasks limit to use with
 /// spawn task handle.
 #[derive(Clone)]
-pub struct TaskLimits(Arc<Option<AtomicUsize>>);
+pub struct TaskLimit(Arc<Option<AtomicUsize>>);
 
-impl TaskLimits {
+impl TaskLimit {
 	/// Initalize limiter as a sized
 	/// pool, 'None' for no limit.
 	pub fn new(max_running: Option<usize>) -> Self {
-		TaskLimits(Arc::new(max_running.map(|max| AtomicUsize::new(max))))
+		TaskLimit(Arc::new(max_running.map(|max| AtomicUsize::new(max))))
 	}
 }
 
-impl sp_core::traits::SpawnLimit for TaskLimits {
+impl sp_core::traits::SpawnLimit for TaskLimit {
 	fn try_reserve(&self, number_of_tasks: usize) -> usize {
 		if let Some(limit) = self.0.as_ref() {
 			let old = limit.fetch_update(
@@ -79,7 +79,7 @@ impl sp_core::traits::SpawnLimit for TaskLimits {
 pub struct SpawnTaskHandle {
 	on_exit: exit_future::Exit,
 	executor: TaskExecutor,
-	limiter: TaskLimits,
+	limiter: TaskLimit,
 	metrics: Option<Metrics>,
 	task_notifier: TracingUnboundedSender<JoinFuture>,
 }
@@ -277,8 +277,8 @@ pub struct TaskManager {
 	executor: TaskExecutor,
 	/// Indicator of task limit to use when using the manager.
 	/// Currently it is only use for workers and is more or less
-	/// a runtime worker pool limits.
-	limiter: TaskLimits,
+	/// a runtime worker pool limit.
+	limiter: TaskLimit,
 	/// Prometheus metric where to report the polling times.
 	metrics: Option<Metrics>,
 	/// Send a signal when a spawned essential task has concluded. The next time
@@ -322,7 +322,7 @@ impl TaskManager {
 			TaskType::Async,
 		);
 
-		let limiter = TaskLimits::new(worker_pool_size);
+		let limiter = TaskLimit::new(worker_pool_size);
 
 		Ok(Self {
 			on_exit,

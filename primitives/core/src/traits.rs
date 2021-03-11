@@ -229,20 +229,18 @@ pub trait RuntimeSpawn: Send {
 
 	/// Stop the previous created runtime instance invocation.
 	///
-	/// After calling `dismiss`, `join` would only result in `None`,
-	/// but there is no guaranty the running process is actually stopped.
-	/// Note that `dismiss` can be more expensive than `join`, as
-	/// it can involve spawning again the worker, when `join` just
-	/// release it.
+	/// This only guarantee that next call to join with this handle
+	/// will return `None`.
+	/// Client can handle this as he can (for instance worker
+	/// can not always be stopped).
 	fn dismiss(&self, handle: u64, calling_ext: &mut dyn Externalities);
 
-	/// Change the number of runtime runing in the pool.
+	/// Possibly change the number of runtime runing in the pool.
 	/// Note that this should only increase capacity (default value
 	/// being 0).
-	/// Also notice that this capacity increase may be noops when the
-	/// client limit the number of concurrent threads, but this is
-	/// not consensus critical, just a way to indicate a cost for
-	/// the runtime.
+	/// This capacity increase is optional from the client side, and
+	/// client can limit the number of concurrent threads, as this is
+	/// not consensus critical.
 	fn set_capacity(&self, capacity: u32);
 }
 
@@ -251,9 +249,7 @@ sp_externalities::decl_extension! {
 	pub struct RuntimeSpawnExt(Box<dyn RuntimeSpawn>);
 }
 
-/// Remote handle for a future, dropping it
-/// should do as much as supported to remove
-/// thread from its thread pool.
+/// Remote handle for a future.
 pub type TaskHandle = Box<dyn TaskHandleTrait>;
 
 /// Alias of the future type to use with `SpawnedNamed` trait.
@@ -291,8 +287,8 @@ dyn_clone::clone_trait_object!(SpawnLimit);
 
 /// Handle over a spawn named future.
 pub trait TaskHandleTrait: Send {
-	/// Associated future can be dropped
-	/// and remove from pool if a pool is used.
+	/// Indicate to the scheduler that task can
+	/// be dropped.
 	fn dismiss(&mut self);
 }
 

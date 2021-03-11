@@ -346,20 +346,6 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 						);
 
 						used_native = true;
-	/* Last head TODO check the Pr where removed!!
-						let res = with_externalities_safe(
-							&mut **ext,
-							move || {
-								// Here module is in theory not use, but we still pass it because
-								// it is just a reference counted.
-								RuntimeInstanceSpawn::register_on_externalities(module.clone());
-								(call)()
-							}
-						).and_then(|r| r
-							.map(NativeOrEncoded::Native)
-							.map_err(|s| Error::ApiError(s))
-						);
-	*/
 						let res = with_externalities_safe(&mut **ext, move || (call)())
 							.and_then(|r| r
 								.map(NativeOrEncoded::Native)
