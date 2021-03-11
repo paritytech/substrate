@@ -782,7 +782,11 @@ impl<T: Config> frame_support::traits::EstimateNextSessionRotation<T::BlockNumbe
 	}
 
 	fn estimate_current_session_progress(_now: T::BlockNumber) -> Option<Percent> {
-		let elapsed = CurrentSlot::get().saturating_sub(Self::current_epoch_start());
+		// NOTE: we add one since we consider the current slot has already elapsed, for
+		// estimate purposes this is the most useful as we want the last block in the
+		// session to return progress of 100% (0% is never returned).
+		let elapsed = CurrentSlot::get().saturating_sub(Self::current_epoch_start()) + 1;
+
 		Some(Percent::from_rational_approximation(
 			*elapsed,
 			T::EpochDuration::get(),

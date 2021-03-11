@@ -260,7 +260,7 @@ impl Config for Test {
 pub fn go_to_block(n: u64, s: u64) {
 	use frame_support::traits::OnFinalize;
 
-	System::on_finalize(System::block_number());
+	Babe::on_finalize(System::block_number());
 	Session::on_finalize(System::block_number());
 	Staking::on_finalize(System::block_number());
 
@@ -274,14 +274,8 @@ pub fn go_to_block(n: u64, s: u64) {
 	let pre_digest = make_secondary_plain_pre_digest(0, s.into());
 
 	System::initialize(&n, &parent_hash, &pre_digest, InitKind::Full);
-	System::set_block_number(n);
-	Timestamp::set_timestamp(n);
 
-	if s > 1 {
-		CurrentSlot::put(Slot::from(s));
-	}
-
-	System::on_initialize(n);
+	Babe::on_initialize(n);
 	Session::on_initialize(n);
 	Staking::on_initialize(n);
 }
