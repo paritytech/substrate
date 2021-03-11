@@ -117,7 +117,7 @@ pub mod weights;
 use sp_std::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
 use codec::Decode;
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, Convert, Member, OpaqueKeys, Zero},
+	traits::{AtLeast32BitUnsigned, Convert, Member, One, OpaqueKeys, Zero},
 	KeyTypeId, Perbill, Percent, RuntimeAppPublic,
 };
 use sp_staking::SessionIndex;
@@ -172,21 +172,20 @@ impl<
 		let offset = Offset::get();
 		let period = Period::get();
 
-		if now > offset {
-			let current = (now - offset) % period.clone();
-			if current.is_zero() {
-				// we wrap around the modulus on the last block of the session, so this should be
-				// 100% progress. this means that we never return 0%, as the next block will already
-				// have some progress in the follow-up session.
-				Some(Percent::from_percent(100))
-			} else {
-				Some(Percent::from_rational_approximation(
-					current.clone(),
-					period.clone(),
-				))
-			}
+		// NOTE: we add one since we assume that the current block has already elapsed,
+		// i.e. when evaluating the last block in the session the progress should be 100%
+		// (0% is never returned).
+		if now >= offset {
+			let current = (now - offset) % period.clone() + One::one();
+			Some(Percent::from_rational_approximation(
+				current.clone(),
+				period.clone(),
+			))
 		} else {
-			Some(Percent::from_rational_approximation(now, offset))
+			Some(Percent::from_rational_approximation(
+				now + One::one(),
+				offset,
+			))
 		}
 	}
 

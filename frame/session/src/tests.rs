@@ -260,37 +260,62 @@ fn periodic_session_works() {
 
 	type P = PeriodicSessions<Period, Offset>;
 
+	// make sure that offset phase behaves correctly
 	for i in 0u64..3 {
 		assert!(!P::should_end_session(i));
 		assert_eq!(P::estimate_next_session_rotation(i).unwrap(), 3);
-		assert!(P::estimate_current_session_progress(i).unwrap() < Percent::from_percent(100));
+
+		// the last block of the session (i.e. the one before session rotation)
+		// should have progress 100%.
+		if P::estimate_next_session_rotation(i).unwrap() - 1 == i {
+			assert_eq!(
+				P::estimate_current_session_progress(i).unwrap(),
+				Percent::from_percent(100)
+			);
+		} else {
+			assert!(P::estimate_current_session_progress(i).unwrap() < Percent::from_percent(100));
+		}
 	}
 
+	// we end the session at block #3 and we consider this block the first one
+	// from the next session. since we're past the offset phase it represents
+	// 1/10 of progress.
 	assert!(P::should_end_session(3u64));
 	assert_eq!(P::estimate_next_session_rotation(3u64).unwrap(), 3);
 	assert_eq!(
 		P::estimate_current_session_progress(3u64).unwrap(),
-		Percent::from_percent(100)
+		Percent::from_percent(10),
 	);
 
 	for i in (1u64..10).map(|i| 3 + i) {
 		assert!(!P::should_end_session(i));
 		assert_eq!(P::estimate_next_session_rotation(i).unwrap(), 13);
-		assert!(P::estimate_current_session_progress(i).unwrap() < Percent::from_percent(100));
+
+		// as with the offset phase the last block of the session must have 100%
+		// progress.
+		if P::estimate_next_session_rotation(i).unwrap() - 1 == i {
+			assert_eq!(
+				P::estimate_current_session_progress(i).unwrap(),
+				Percent::from_percent(100)
+			);
+		} else {
+			assert!(P::estimate_current_session_progress(i).unwrap() < Percent::from_percent(100));
+		}
 	}
 
+	// the new session starts and we proceed in 1/10 increments.
 	assert!(P::should_end_session(13u64));
 	assert_eq!(P::estimate_next_session_rotation(13u64).unwrap(), 23);
 	assert_eq!(
 		P::estimate_current_session_progress(13u64).unwrap(),
-		Percent::from_percent(100)
+		Percent::from_percent(10)
 	);
 
 	assert!(!P::should_end_session(14u64));
 	assert_eq!(P::estimate_next_session_rotation(14u64).unwrap(), 23);
 	assert_eq!(
 		P::estimate_current_session_progress(14u64).unwrap(),
-		Percent::from_percent(10)
+		Percent::from_percent(20)
 	);
 }
 
