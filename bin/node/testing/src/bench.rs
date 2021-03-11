@@ -260,15 +260,11 @@ impl TaskExecutor {
 }
 
 impl SpawnNamed for TaskExecutor {
-	fn spawn(&self, _: &'static str, future: BoxFuture<'static, ()>) {
-		self.pool.spawn_ok(future);
-	}
-
 	fn spawn_blocking(&self, _: &'static str, future: BoxFuture<'static, ()>) {
 		self.pool.spawn_ok(future);
 	}
 
-	fn spawn_with_handle(
+	fn spawn(
 		&self,
 		_name: &'static str,
 		future: BoxFuture<'static, ()>,
@@ -277,7 +273,6 @@ impl SpawnNamed for TaskExecutor {
 		// no dismiss
 		None
 	}
-
 }
 
 impl SpawnLimiter for TaskExecutor {

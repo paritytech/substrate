@@ -177,17 +177,14 @@ impl sp_core::traits::SpawnNamed for SpawnTaskHandle {
 		self.spawn_blocking(name, future);
 	}
 
-	fn spawn(&self, name: &'static str, future: BoxFuture<'static, ()>) {
-		self.spawn(name, future);
-	}
-
-	fn spawn_with_handle(
+	fn spawn(
 		&self,
 		name: &'static str,
 		future: BoxFuture<'static, ()>,
 	) -> Option<sp_core::traits::DismissHandle> {
-		// This is not using pool, and no way to abort task either.
-		self.spawn_with_handle(name, future)
+		self.spawn(name, future);
+		// Not using pool, returned handle is of no use.
+		None
 	}
 }
 

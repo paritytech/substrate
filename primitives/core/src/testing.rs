@@ -149,11 +149,7 @@ impl crate::traits::SpawnNamed for TaskExecutor {
 		self.0.spawn_ok(future);
 	}
 
-	fn spawn(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
-		self.0.spawn_ok(future);
-	}
-
-	fn spawn_with_handle(
+	fn spawn(
 		&self,
 		_name: &'static str,
 		future: futures::future::BoxFuture<'static, ()>,

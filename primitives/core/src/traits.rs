@@ -275,15 +275,10 @@ pub trait SpawnNamed: SpawnLimiter + Clone + Send + Sync {
 	fn spawn_blocking(&self, name: &'static str, future: BoxFuture);
 
 	/// Spawn the given non-blocking future.
+	/// The handle optionally allows to signal that the task can be dismiss.
 	///
 	/// The given `name` is used to identify the future in tracing.
-	fn spawn(&self, name: &'static str, future: BoxFuture);
-
-	/// Spawn the given non-blocking future if possible, returns a handle.
-	/// The handle allow to signal that the task can be dismiss.
-	///
-	/// The given `name` is used to identify the future in tracing.
-	fn spawn_with_handle(
+	fn spawn(
 		&self,
 		name: &'static str,
 		future: BoxFuture,
@@ -320,16 +315,12 @@ impl SpawnNamed for Box<dyn SpawnNamed> {
 		(**self).spawn_blocking(name, future)
 	}
 
-	fn spawn(&self, name: &'static str, future: BoxFuture) {
-		(**self).spawn(name, future)
-	}
-
-	fn spawn_with_handle(
+	fn spawn(
 		&self,
 		name: &'static str,
 		future: BoxFuture,
 	) -> Option<DismissHandle> {
-		(**self).spawn_with_handle(name, future)
+		(**self).spawn(name, future)
 	}
 }
 

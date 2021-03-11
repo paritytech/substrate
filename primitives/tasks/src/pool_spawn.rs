@@ -299,7 +299,7 @@ impl RuntimeInstanceSpawn {
 		let module = AssertUnwindSafe(module);
 		let dismiss_handles = self.dismiss_handles.clone();
 		let thread_id = dismiss_handles.new_thread_id(&self.counter);
-		let thread_handle = self.spawn_with_handle(
+		let thread_handle = self.spawn(
 			"executor-extra-runtime-instance",
 			Box::pin(async move {
 			let task_receiver = task_receiver.clone();
@@ -386,16 +386,16 @@ impl RuntimeInstanceSpawn {
 	}
 
 	#[cfg(feature = "abort-future")]
-	fn spawn_with_handle(
+	fn spawn(
 		&self,
 		name: &'static str,
 		future: BoxFuture,
 	) -> Option<DismissHandle> {
-		self.scheduler.spawn_with_handle(name, future)
+		self.scheduler.spawn(name, future)
 	}
 
 	#[cfg(not(feature = "abort-future"))]
-	fn spawn_with_handle(
+	fn spawn(
 		&self,
 		name: &'static str,
 		future: BoxFuture,
