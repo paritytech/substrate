@@ -247,9 +247,6 @@ where
 		.map_err(|_| ClientError::JustificationDecode)?;
 	justification.verify(current_set_id, &current_authorities)?;
 
-	use sc_telemetry::{telemetry, CONSENSUS_INFO};
-	telemetry!(CONSENSUS_INFO; "afg.finality_proof_ok";
-		"finalized_header_hash" => ?proof.block);
 	Ok(proof)
 }
 

@@ -368,6 +368,7 @@ mod tests {
 			None,
 			Box::new(TaskExecutor::new()),
 			None,
+			None,
 			Default::default(),
 		).expect("Creates a client");
 
