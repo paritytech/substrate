@@ -1061,7 +1061,7 @@ decl_module! {
 				.map(Some)
 				.or_else(|_| T::RejectOrigin::ensure_origin(origin).map(|_| None))?;
 
-			// Ensure parent bounty exist & active, get active status info
+			// Ensure parent bounty exist, get active status info or use default.
 			let (master_curator, update_due) = Self::ensure_bounty_exist(
 				bounty_id,
 				maybe_sender.is_none(),
