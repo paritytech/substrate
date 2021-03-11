@@ -90,7 +90,7 @@ use sp_runtime::{
 use sp_api::{ProvideRuntimeApi, NumberFor};
 use parking_lot::Mutex;
 use sp_inherents::{InherentDataProviders, InherentData};
-use sc_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG};
+use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_TRACE, CONSENSUS_DEBUG};
 use sp_consensus::{
 	BlockImport, Environment, Proposer, BlockCheckParams,
 	ForkChoiceStrategy, BlockImportParams, BlockOrigin, Error as ConsensusError,
@@ -402,6 +402,9 @@ pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW, BS> {
 	/// slot. However, the proposing can still take longer when there is some lenience factor applied,
 	/// because there were no blocks produced for some slots.
 	pub block_proposal_slot_portion: SlotProportion,
+
+	/// Handle use to report telemetries.
+	pub telemetry: Option<TelemetryHandle>,
 }
 
 /// Start the babe worker.
@@ -418,13 +421,15 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, BS, Error>(BabeParams {
 	babe_link,
 	can_author_with,
 	block_proposal_slot_portion,
+	telemetry,
 }: BabeParams<B, C, E, I, SO, SC, CAW, BS>) -> Result<
 	BabeWorker<B>,
 	sp_consensus::Error,
 > where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + ProvideCache<B> + ProvideUncles<B> + BlockchainEvents<B>
-		+ HeaderBackend<B> + HeaderMetadata<B, Error = ClientError> + Send + Sync + 'static,
+		+ HeaderBackend<B> + HeaderMetadata<B, Error = ClientError>
+		+ Send + Sync + 'static,
 	C::Api: BabeApi<B>,
 	SC: SelectChain<B> + 'static,
 	E: Environment<B, Error = Error> + Send + Sync + 'static,
@@ -453,6 +458,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, BS, Error>(BabeParams {
 		slot_notification_sinks: slot_notification_sinks.clone(),
 		config: config.clone(),
 		block_proposal_slot_portion,
+		telemetry,
 	};
 
 	register_babe_inherent_data_provider(&inherent_data_providers, config.slot_duration())?;
@@ -609,6 +615,7 @@ struct BabeSlotWorker<B: BlockT, C, E, I, SO, BS> {
 	slot_notification_sinks: SlotNotificationSinks<B>,
 	config: Config,
 	block_proposal_slot_portion: SlotProportion,
+	telemetry: Option<TelemetryHandle>,
 }
 
 impl<B, C, E, I, Error, SO, BS> sc_consensus_slots::SimpleSlotWorker<B>
@@ -799,6 +806,10 @@ where
 		}))
 	}
 
+	fn telemetry(&self) -> Option<TelemetryHandle> {
+		self.telemetry.clone()
+	}
+
 	fn proposing_remaining_duration(
 		&self,
 		parent_head: &B::Header,
@@ -947,6 +958,7 @@ pub struct BabeVerifier<Block: BlockT, Client, SelectChain, CAW> {
 	epoch_changes: SharedEpochChanges<Block, Epoch>,
 	time_source: TimeSource,
 	can_author_with: CAW,
+	telemetry: Option<TelemetryHandle>,
 }
 
 impl<Block, Client, SelectChain, CAW> BabeVerifier<Block, Client, SelectChain, CAW>
@@ -1174,6 +1186,7 @@ where
 
 				trace!(target: "babe", "Checked {:?}; importing.", pre_header);
 				telemetry!(
+					self.telemetry;
 					CONSENSUS_TRACE;
 					"babe.checked_and_importing";
 					"pre_header" => ?pre_header);
@@ -1192,7 +1205,10 @@ where
 			}
 			CheckedHeader::Deferred(a, b) => {
 				debug!(target: "babe", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
-				telemetry!(CONSENSUS_DEBUG; "babe.header_too_far_in_future";
+				telemetry!(
+					self.telemetry;
+					CONSENSUS_DEBUG;
+					"babe.header_too_far_in_future";
 					"hash" => ?hash, "a" => ?a, "b" => ?b
 				);
 				Err(Error::<Block>::TooFarInFuture(hash).into())
@@ -1599,11 +1615,13 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, Inner, CAW>(
 	spawner: &impl sp_core::traits::SpawnEssentialNamed,
 	registry: Option<&Registry>,
 	can_author_with: CAW,
+	telemetry: Option<TelemetryHandle>,
 ) -> ClientResult<DefaultImportQueue<Block, Client>> where
 	Inner: BlockImport<Block, Error = ConsensusError, Transaction = sp_api::TransactionFor<Client, Block>>
 		+ Send + Sync + 'static,
-	Client: ProvideRuntimeApi<Block> + ProvideCache<Block> + Send + Sync + AuxStore + 'static,
-	Client: HeaderBackend<Block> + HeaderMetadata<Block, Error = sp_blockchain::Error>,
+	Client: ProvideRuntimeApi<Block> + ProvideCache<Block> + HeaderBackend<Block>
+		+ HeaderMetadata<Block, Error = sp_blockchain::Error> + AuxStore
+		+ Send + Sync + 'static,
 	Client::Api: BlockBuilderApi<Block> + BabeApi<Block> + ApiExt<Block>,
 	SelectChain: sp_consensus::SelectChain<Block> + 'static,
 	CAW: CanAuthorWith<Block> + Send + Sync + 'static,
@@ -1611,13 +1629,14 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, Inner, CAW>(
 	register_babe_inherent_data_provider(&inherent_data_providers, babe_link.config.slot_duration)?;
 
 	let verifier = BabeVerifier {
-		client,
 		select_chain,
 		inherent_data_providers,
 		config: babe_link.config,
 		epoch_changes: babe_link.epoch_changes,
 		time_source: babe_link.time_source,
 		can_author_with,
+		telemetry,
+		client,
 	};
 
 	Ok(BasicQueue::new(

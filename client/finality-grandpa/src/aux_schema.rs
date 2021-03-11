@@ -137,7 +137,7 @@ struct V2AuthoritySet<H, N> {
 }
 
 pub(crate) fn load_decode<B: AuxStore, T: Decode>(
-	backend: &B, 
+	backend: &B,
 	key: &[u8]
 ) -> ClientResult<Option<T>> {
 	match backend.get_aux(key)? {
