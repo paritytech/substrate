@@ -17,6 +17,7 @@
 
 use syn::spanned::Spanned;
 use quote::ToTokens;
+use proc_macro2::TokenStream;
 
 /// List of additional token to be used for parsing.
 mod keyword {
@@ -47,7 +48,7 @@ pub trait MutItemAttrs {
 }
 
 /// Take the first pallet attribute (e.g. attribute like `#[pallet..]`) and decode it to `Attr`
-pub fn take_first_item_attr<Attr>(item: &mut impl MutItemAttrs) -> syn::Result<Option<Attr>> where
+pub fn take_first_item_pallet_attr<Attr>(item: &mut impl MutItemAttrs) -> syn::Result<Option<Attr>> where
 	Attr: syn::parse::Parse,
 {
 	let attrs = if let Some(attrs) = item.mut_item_attrs() {
@@ -69,16 +70,27 @@ pub fn take_first_item_attr<Attr>(item: &mut impl MutItemAttrs) -> syn::Result<O
 }
 
 /// Take all the pallet attributes (e.g. attribute like `#[pallet..]`) and decode them to `Attr`
-pub fn take_item_attrs<Attr>(item: &mut impl MutItemAttrs) -> syn::Result<Vec<Attr>> where
+pub fn take_item_pallet_attrs<Attr>(item: &mut impl MutItemAttrs) -> syn::Result<Vec<Attr>> where
 	Attr: syn::parse::Parse,
 {
 	let mut pallet_attrs = Vec::new();
 
-	while let Some(attr) = take_first_item_attr(item)? {
+	while let Some(attr) = take_first_item_pallet_attr(item)? {
 		pallet_attrs.push(attr)
 	}
 
 	Ok(pallet_attrs)
+}
+
+/// Get all the cfg attributes (e.g. attribute like `#[cfg..]`) and decode them to `Attr`
+pub fn get_item_cfg_attrs(attrs: &Vec<syn::Attribute>) -> syn::Result<Vec<TokenStream>> {
+	Ok(attrs.iter().filter_map(|attr| -> Option<TokenStream> {
+		if attr.path.segments.first().map_or(false, |segment| segment.ident == "cfg") {
+			syn::parse2(attr.into_token_stream()).ok()
+		} else {
+			None
+		}
+	}).collect::<Vec<_>>())
 }
 
 impl MutItemAttrs for syn::Item {
