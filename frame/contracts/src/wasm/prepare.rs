@@ -491,7 +491,7 @@ pub mod benchmarking {
 	use parity_wasm::elements::FunctionType;
 
 	impl ImportSatisfyCheck for () {
-		fn can_satisfy(_name: &[u8], _func_type: &FunctionType) -> bool {
+		fn can_satisfy(_module: &[u8], _name: &[u8], _func_type: &FunctionType) -> bool {
 			true
 		}
 	}
