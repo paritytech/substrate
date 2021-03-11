@@ -50,7 +50,7 @@ use node_runtime::{
 	AccountId,
 	Signature,
 };
-use sp_core::{ExecutionContext, blake2_256, traits::{SpawnNamed, SpawnLimiter, TaskHandle},
+use sp_core::{ExecutionContext, blake2_256, traits::{SpawnNamed, SpawnLimit, TaskHandle},
 	Pair, Public, sr25519, ed25519};
 use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder;
@@ -275,7 +275,7 @@ impl SpawnNamed for TaskExecutor {
 	}
 }
 
-impl SpawnLimiter for TaskExecutor {
+impl SpawnLimit for TaskExecutor {
 	fn try_reserve(&self, number_of_tasks: usize) -> usize {
 		// no shared limit on tests
 		number_of_tasks

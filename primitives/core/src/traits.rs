@@ -27,6 +27,7 @@ use sp_std::{
 	boxed::Box,
 	vec::Vec,
 };
+use dyn_clone::DynClone;
 
 pub use sp_externalities::{Externalities, ExternalitiesExt, AsyncExternalities, WorkerResult, WorkerDeclaration};
 
@@ -250,14 +251,6 @@ sp_externalities::decl_extension! {
 	pub struct RuntimeSpawnExt(Box<dyn RuntimeSpawn>);
 }
 
-/// Hacky trait to trick `SpawnNamed` trait
-/// to exists in no_std but without actual
-/// `Clone` feature.
-/// This could be remove when/if dyn_cloneable crate
-/// become no_std.
-#[cfg(not(feature = "std"))]
-pub trait Clone { }
-
 /// Remote handle for a future, dropping it
 /// should do as much as supported to remove
 /// thread from its thread pool.
@@ -267,8 +260,7 @@ pub type TaskHandle = Box<dyn TaskHandleTrait>;
 pub type BoxFuture = futures::future::BoxFuture<'static, ()>;
 
 /// Something that can spawn tasks (blocking and non-blocking) with an assigned name.
-#[cfg_attr(feature = "std", dyn_clonable::clonable)]
-pub trait SpawnNamed: SpawnLimiter + Clone + Send + Sync {
+pub trait SpawnNamed: SpawnLimit + DynClone + Send + Sync {
 	/// Spawn the given blocking future.
 	///
 	/// The given `name` is used to identify the future in tracing.
@@ -284,11 +276,10 @@ pub trait SpawnNamed: SpawnLimiter + Clone + Send + Sync {
 		future: BoxFuture,
 	) -> Option<TaskHandle>;
 }
+dyn_clone::clone_trait_object!(SpawnNamed);
 
-/// A trait to share number of task limit.
 /// This can be use to implement shared pool.
-#[cfg_attr(feature = "std", dyn_clonable::clonable)]
-pub trait SpawnLimiter: Clone + Send + Sync {
+pub trait SpawnLimit: DynClone + Send + Sync {
 	/// Ask for a given number of tasks, return the
 	/// actual number reserved.
 	fn try_reserve(&self, number_of_tasks: usize) -> usize;
@@ -296,6 +287,7 @@ pub trait SpawnLimiter: Clone + Send + Sync {
 	/// Release a given number of task.
 	fn release(&self, number_of_tasks: usize);
 }
+dyn_clone::clone_trait_object!(SpawnLimit);
 
 /// Handle over a spawn named future.
 pub trait TaskHandleTrait: Send {
@@ -304,11 +296,6 @@ pub trait TaskHandleTrait: Send {
 	fn dismiss(&mut self);
 }
 
-#[cfg(not(feature = "std"))]
-impl Clone for Box<dyn SpawnNamed> { }
-
-#[cfg(not(feature = "std"))]
-impl Clone for Box<dyn SpawnLimiter> { }
 
 impl SpawnNamed for Box<dyn SpawnNamed> {
 	fn spawn_blocking(&self, name: &'static str, future: BoxFuture) {
@@ -324,8 +311,7 @@ impl SpawnNamed for Box<dyn SpawnNamed> {
 	}
 }
 
-
-impl SpawnLimiter for Box<dyn SpawnNamed> {
+impl SpawnLimit for Box<dyn SpawnNamed> {
 	fn try_reserve(&self, number_of_tasks: usize) -> usize {
 		(**self).try_reserve(number_of_tasks)
 	}
@@ -338,8 +324,7 @@ impl SpawnLimiter for Box<dyn SpawnNamed> {
 /// Something that can spawn essential tasks (blocking and non-blocking) with an assigned name.
 ///
 /// Essential tasks are special tasks that should take down the node when they end.
-#[cfg_attr(feature = "std", dyn_clonable::clonable)]
-pub trait SpawnEssentialNamed: Clone + Send + Sync {
+pub trait SpawnEssentialNamed: DynClone + Send + Sync {
 	/// Spawn the given blocking future.
 	///
 	/// The given `name` is used to identify the future in tracing.
@@ -349,6 +334,7 @@ pub trait SpawnEssentialNamed: Clone + Send + Sync {
 	/// The given `name` is used to identify the future in tracing.
 	fn spawn_essential(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>);
 }
+dyn_clone::clone_trait_object!(SpawnEssentialNamed);
 
 #[cfg(feature = "std")]
 impl SpawnEssentialNamed for Box<dyn SpawnEssentialNamed> {

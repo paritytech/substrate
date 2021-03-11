@@ -28,7 +28,7 @@ use std::{
 use sp_core::{
 	traits::{
 		Externalities, AsyncExternalities,
-		RuntimeSpawnExt, RuntimeSpawn, TaskHandle, BoxFuture, SpawnLimiter,
+		RuntimeSpawnExt, RuntimeSpawn, TaskHandle, BoxFuture, SpawnLimit,
 	},
 };
 use log::trace;
@@ -172,7 +172,7 @@ pub struct RuntimeInstanceSpawnInfo {
 	// of this struct
 	nb_runing: usize,
 	capacity: usize,
-	limiter: Box<dyn sp_core::traits::SpawnNamed>,
+	shared_limit: Box<dyn sp_core::traits::SpawnNamed>,
 }
 
 enum PendingTask {
@@ -190,12 +190,12 @@ struct RemoteTask {
 impl RuntimeInstanceSpawnInfo {
 	fn new(
 		capacity: usize,
-		limiter: Box<dyn sp_core::traits::SpawnNamed>,
+		shared_limit: Box<dyn sp_core::traits::SpawnNamed>,
 	) -> Self {
 		RuntimeInstanceSpawnInfo {
 			nb_runing: 0,
 			capacity,
-			limiter,
+			shared_limit,
 		}
 	}
 
@@ -220,7 +220,7 @@ impl RuntimeInstanceSpawnInfo {
 		let capacity: usize = capacity as usize;
 		if capacity > self.capacity {
 			let needed = capacity - self.capacity;
-			let reserved = self.limiter.try_reserve(needed);
+			let reserved = self.shared_limit.try_reserve(needed);
 			self.capacity += reserved;
 		}
 	}
@@ -228,7 +228,7 @@ impl RuntimeInstanceSpawnInfo {
 
 impl Drop for RuntimeInstanceSpawnInfo {
 	fn drop(&mut self) {
-		self.limiter.release(self.capacity);
+		self.shared_limit.release(self.capacity);
 		self.capacity = 0;
 	}
 }

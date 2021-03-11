@@ -53,7 +53,7 @@ impl TaskLimits {
 	}
 }
 
-impl sp_core::traits::SpawnLimiter for TaskLimits {
+impl sp_core::traits::SpawnLimit for TaskLimits {
 	fn try_reserve(&self, number_of_tasks: usize) -> usize {
 		if let Some(limit) = self.0.as_ref() {
 			let old = limit.fetch_update(
@@ -188,7 +188,7 @@ impl sp_core::traits::SpawnNamed for SpawnTaskHandle {
 	}
 }
 
-impl sp_core::traits::SpawnLimiter for SpawnTaskHandle {
+impl sp_core::traits::SpawnLimit for SpawnTaskHandle {
 	fn try_reserve(&self, number_of_tasks: usize) -> usize {
 		self.limiter.try_reserve(number_of_tasks)
 	}

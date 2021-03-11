@@ -164,7 +164,7 @@ impl crate::traits::SpawnNamed for TaskExecutor {
 }
 
 #[cfg(feature = "std")]
-impl crate::traits::SpawnLimiter for TaskExecutor {
+impl crate::traits::SpawnLimit for TaskExecutor {
 	fn try_reserve(&self, number_of_tasks: usize) -> usize {
 		// using a thread pool in backend there is no use to apply a limit
 		number_of_tasks
