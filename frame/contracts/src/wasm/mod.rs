@@ -192,8 +192,8 @@ where
 
 		let mut imports = sp_sandbox::EnvironmentDefinitionBuilder::new();
 		imports.add_memory(self::prepare::IMPORT_MODULE_MEMORY, "memory", memory.clone());
-		runtime::Env::impls(&mut |name, func_ptr| {
-			imports.add_host_func(self::prepare::IMPORT_MODULE_FN, name, func_ptr);
+		runtime::Env::impls(&mut |module, name, func_ptr| {
+			imports.add_host_func(module, name, func_ptr);
 		});
 
 		let mut runtime = Runtime::new(
