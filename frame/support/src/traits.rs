@@ -508,18 +508,12 @@ pub trait EstimateNextSessionRotation<BlockNumber> {
 	/// Return an estimate of the current session progress.
 	///
 	/// None should be returned if the estimation fails to come to an answer.
-	fn estimate_current_session_progress(now: BlockNumber) -> Option<Percent>;
+	fn estimate_current_session_progress(now: BlockNumber) -> (Option<Percent>, Weight);
 
 	/// Return the block number at which the next session rotation is estimated to happen.
 	///
 	/// None should be returned if the estimation fails to come to an answer.
-	fn estimate_next_session_rotation(now: BlockNumber) -> Option<BlockNumber>;
-
-	/// Return the weight of calling `estimate_current_session_progress`.
-	fn estimate_current_session_progress_weight(now: BlockNumber) -> Weight;
-
-	/// Return the weight of calling `estimate_next_session_rotation`.
-	fn estimate_next_session_rotation_weight(now: BlockNumber) -> Weight;
+	fn estimate_next_session_rotation(now: BlockNumber) -> (Option<BlockNumber>, Weight);
 }
 
 impl<BlockNumber: Zero> EstimateNextSessionRotation<BlockNumber> for () {
@@ -527,20 +521,12 @@ impl<BlockNumber: Zero> EstimateNextSessionRotation<BlockNumber> for () {
 		Zero::zero()
 	}
 
-	fn estimate_current_session_progress(_: BlockNumber) -> Option<Percent> {
-		None
+	fn estimate_current_session_progress(_: BlockNumber) -> (Option<Percent>, Weight) {
+		(None, Zero::zero())
 	}
 
-	fn estimate_next_session_rotation(_: BlockNumber) -> Option<BlockNumber> {
-		None
-	}
-
-	fn estimate_current_session_progress_weight(_: BlockNumber) -> Weight {
-		Zero::zero()
-	}
-
-	fn estimate_next_session_rotation_weight(_: BlockNumber) -> Weight {
-		Zero::zero()
+	fn estimate_next_session_rotation(_: BlockNumber) -> (Option<BlockNumber>, Weight) {
+		(None, Zero::zero())
 	}
 }
 
@@ -563,10 +549,7 @@ pub trait EstimateNextNewSession<BlockNumber> {
 	/// Return the block number at which the next new session is estimated to happen.
 	///
 	/// None should be returned if the estimation fails to come to an answer.
-	fn estimate_next_new_session(now: BlockNumber) -> Option<BlockNumber>;
-
-	/// Return the weight of calling `estimate_next_new_session`.
-	fn estimate_next_new_session_weight(now: BlockNumber) -> Weight;
+	fn estimate_next_new_session(_: BlockNumber) -> (Option<BlockNumber>, Weight);
 }
 
 impl<BlockNumber: Zero> EstimateNextNewSession<BlockNumber> for () {
@@ -574,12 +557,8 @@ impl<BlockNumber: Zero> EstimateNextNewSession<BlockNumber> for () {
 		Zero::zero()
 	}
 
-	fn estimate_next_new_session(_: BlockNumber) -> Option<BlockNumber> {
-		None
-	}
-
-	fn estimate_next_new_session_weight(_: BlockNumber) -> Weight {
-		Zero::zero()
+	fn estimate_next_new_session(_: BlockNumber) -> (Option<BlockNumber>, Weight) {
+		(None, Zero::zero())
 	}
 }
 

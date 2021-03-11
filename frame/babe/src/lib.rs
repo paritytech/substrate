@@ -781,32 +781,25 @@ impl<T: Config> frame_support::traits::EstimateNextSessionRotation<T::BlockNumbe
 		T::EpochDuration::get().saturated_into()
 	}
 
-	fn estimate_current_session_progress(_now: T::BlockNumber) -> Option<Percent> {
-		// NOTE: we add one since we consider the current slot has already elapsed, for
-		// estimate purposes this is the most useful as we want the last block in the
-		// session to return progress of 100% (0% is never returned).
+	fn estimate_current_session_progress(_now: T::BlockNumber) -> (Option<Percent>, Weight) {
 		let elapsed = CurrentSlot::get().saturating_sub(Self::current_epoch_start()) + 1;
 
-		Some(Percent::from_rational_approximation(
-			*elapsed,
-			T::EpochDuration::get(),
-		))
+		(
+			Some(Percent::from_rational_approximation(
+				*elapsed,
+				T::EpochDuration::get(),
+			)),
+			// Read: Current Slot, Epoch Index, Genesis Slot
+			T::DbWeight::get().reads(3),
+		)
 	}
 
-	fn estimate_next_session_rotation(now: T::BlockNumber) -> Option<T::BlockNumber> {
-		Self::next_expected_epoch_change(now)
-	}
-
-	// The validity of this weight depends on the implementation of `estimate_next_session_rotation`
-	fn estimate_next_session_rotation_weight(_now: T::BlockNumber) -> Weight {
-		// Read: Current Slot, Epoch Index, Genesis Slot
-		T::DbWeight::get().reads(3)
-	}
-
-	// The validity of this weight depends on the implementation of `estimate_current_session_progress`
-	fn estimate_current_session_progress_weight(_now: T::BlockNumber) -> Weight {
-		// Read: Current Slot, Epoch Index, Genesis Slot
-		T::DbWeight::get().reads(3)
+	fn estimate_next_session_rotation(now: T::BlockNumber) -> (Option<T::BlockNumber>, Weight) {
+		(
+			Self::next_expected_epoch_change(now),
+			// Read: Current Slot, Epoch Index, Genesis Slot
+			T::DbWeight::get().reads(3),
+		)
 	}
 }
 

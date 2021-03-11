@@ -230,23 +230,23 @@ fn can_estimate_current_epoch_progress() {
 		for i in 1u64..4 {
 			progress_to_block(i);
 
-			assert_eq!(Babe::estimate_next_session_rotation(i).unwrap(), 4);
+			assert_eq!(Babe::estimate_next_session_rotation(i).0.unwrap(), 4);
 
 			// the last block of the epoch must have 100% progress.
-			if Babe::estimate_next_session_rotation(i).unwrap() - 1 == i {
+			if Babe::estimate_next_session_rotation(i).0.unwrap() - 1 == i {
 				assert_eq!(
-					Babe::estimate_current_session_progress(i).unwrap(),
+					Babe::estimate_current_session_progress(i).0.unwrap(),
 					Percent::from_percent(100)
 				);
 			} else {
-				assert!(Babe::estimate_current_session_progress(i).unwrap() < Percent::from_percent(100));
+				assert!(Babe::estimate_current_session_progress(i).0.unwrap() < Percent::from_percent(100));
 			}
 		}
 
 		// the first block of the new epoch counts towards the epoch progress as well
 		progress_to_block(4);
 		assert_eq!(
-			Babe::estimate_current_session_progress(4).unwrap(),
+			Babe::estimate_current_session_progress(4).0.unwrap(),
 			Percent::from_percent(33),
 		);
 	})

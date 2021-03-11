@@ -168,14 +168,14 @@ impl<
 		Period::get()
 	}
 
-	fn estimate_current_session_progress(now: BlockNumber) -> Option<Percent> {
+	fn estimate_current_session_progress(now: BlockNumber) -> (Option<Percent>, Weight) {
 		let offset = Offset::get();
 		let period = Period::get();
 
 		// NOTE: we add one since we assume that the current block has already elapsed,
 		// i.e. when evaluating the last block in the session the progress should be 100%
 		// (0% is never returned).
-		if now >= offset {
+		let progress = if now >= offset {
 			let current = (now - offset) % period.clone() + One::one();
 			Some(Percent::from_rational_approximation(
 				current.clone(),
@@ -186,10 +186,16 @@ impl<
 				now + One::one(),
 				offset,
 			))
-		}
+		};
+
+		// Weight note: `estimate_current_session_progress` has no storage reads and trivial
+		// computational overhead. There should be no risk to the chain having this weight value be
+		// zero for now. However, this value of zero was not properly calculated, and so it would be
+		// reasonable to come back here and properly calculate the weight of this function.
+		(progress, Zero::zero())
 	}
 
-	fn estimate_next_session_rotation(now: BlockNumber) -> Option<BlockNumber> {
+	fn estimate_next_session_rotation(now: BlockNumber) -> (Option<BlockNumber>, Weight) {
 		let offset = Offset::get();
 		let period = Period::get();
 
@@ -208,23 +214,11 @@ impl<
 			offset
 		};
 
-		Some(next_session)
-	}
-
-	fn estimate_current_session_progress_weight(_now: BlockNumber) -> Weight {
-		// Weight note: `estimate_current_session_progress` has no storage reads and trivial
-		// computational overhead. There should be no risk to the chain having this weight value be
-		// zero for now. However, this value of zero was not properly calculated, and so it would be
-		// reasonable to come back here and properly calculate the weight of this function.
-		Zero::zero()
-	}
-
-	fn estimate_next_session_rotation_weight(_now: BlockNumber) -> Weight {
 		// Weight note: `estimate_next_session_rotation` has no storage reads and trivial
 		// computational overhead. There should be no risk to the chain having this weight value be
 		// zero for now. However, this value of zero was not properly calculated, and so it would be
 		// reasonable to come back here and properly calculate the weight of this function.
-		Zero::zero()
+		(Some(next_session), Zero::zero())
 	}
 }
 
@@ -872,11 +866,7 @@ impl<T: Config> EstimateNextNewSession<T::BlockNumber> for Module<T> {
 
 	/// This session module always calls new_session and next_session at the same time, hence we
 	/// do a simple proxy and pass the function to next rotation.
-	fn estimate_next_new_session(now: T::BlockNumber) -> Option<T::BlockNumber> {
+	fn estimate_next_new_session(now: T::BlockNumber) -> (Option<T::BlockNumber>, Weight) {
 		T::NextSessionRotation::estimate_next_session_rotation(now)
-	}
-
-	fn estimate_next_new_session_weight(now: T::BlockNumber) -> Weight {
-		T::NextSessionRotation::estimate_next_session_rotation_weight(now)
 	}
 }

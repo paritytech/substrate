@@ -483,7 +483,7 @@ impl<T: Config> Module<T> {
 	) -> OffchainResult<T, impl Iterator<Item = OffchainResult<T, ()>>> {
 		const HALF_SESSION: Percent = Percent::from_percent(50);
 
-		let too_early = if let Some(progress) =
+		let too_early = if let (Some(progress), _) =
 			T::NextSessionRotation::estimate_current_session_progress(block_number)
 		{
 			// we try to get an estimate of the current session progress first since it
