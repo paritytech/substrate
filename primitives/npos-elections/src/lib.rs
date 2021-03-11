@@ -340,7 +340,6 @@ impl<AccountId: IdentifierT> Voter<AccountId> {
 		Self { who, ..Default::default() }
 	}
 
-
 	/// Returns `true` if `self` votes for `target`.
 	///
 	/// Note that this does not take into account if `target` is elected (i.e. is *active*) or not.
