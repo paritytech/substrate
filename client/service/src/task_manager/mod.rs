@@ -181,7 +181,7 @@ impl sp_core::traits::SpawnNamed for SpawnTaskHandle {
 		&self,
 		name: &'static str,
 		future: BoxFuture<'static, ()>,
-	) -> Option<sp_core::traits::DismissHandle> {
+	) -> Option<sp_core::traits::TaskHandle> {
 		self.spawn(name, future);
 		// Not using pool, returned handle is of no use.
 		None

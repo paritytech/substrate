@@ -28,7 +28,7 @@ use std::{
 use sp_core::{
 	traits::{
 		Externalities, AsyncExternalities,
-		RuntimeSpawnExt, RuntimeSpawn, DismissHandle, BoxFuture, SpawnLimiter,
+		RuntimeSpawnExt, RuntimeSpawn, TaskHandle, BoxFuture, SpawnLimiter,
 	},
 };
 use log::trace;
@@ -82,40 +82,40 @@ pub struct RuntimeInstanceSpawn {
 	task_receiver: Arc<parking_lot::Mutex<mpsc::Receiver<RemoteTask>>>,
 	task_sender: mpsc::Sender<RemoteTask>,
 	recursive_level: usize,
-	dismiss_handles: dismiss_handle::DismissHandles,
+	task_handles: task_handle::TaskHandles,
 }
 
 #[cfg(all(feature = "abort-future", feature = "std"))]
-mod dismiss_handle {
+mod task_handle {
 	use super::*;
 	use std::collections::BTreeMap;
 
 	#[derive(Default, Clone)]
-	pub(super) struct DismissHandles(Arc<parking_lot::Mutex<DismissHandlesInner>>);
+	pub(super) struct TaskHandles(Arc<parking_lot::Mutex<TaskHandlesInner>>);
 
-	struct DismissHandlesInner {
+	struct TaskHandlesInner {
 		/// threads handle with associated pthread.
-		running: BTreeMap<u64, Option<DismissHandle>>,
+		running: BTreeMap<u64, Option<TaskHandle>>,
 		/// worker mapping with their thread ids.
 		workers: BTreeMap<u64, u64>,
 	}
 
-	impl Default for DismissHandlesInner {
+	impl Default for TaskHandlesInner {
 		fn default() -> Self {
-			DismissHandlesInner {
+			TaskHandlesInner {
 				running: BTreeMap::new(),
 				workers: BTreeMap::new(),
 			}
 		}
 	}
 
-	impl DismissHandles {
+	impl TaskHandles {
 		pub(super) fn new_thread_id(&self, counter: &Arc<AtomicU64>) -> u64 {
 			let thread_id = counter.fetch_add(1, Ordering::Relaxed);
 			self.0.lock().running.insert(thread_id, None);
 			thread_id
 		}
-		pub(super) fn register_new_thread(&self, handle: DismissHandle, thread_id: u64) {
+		pub(super) fn register_new_thread(&self, handle: TaskHandle, thread_id: u64) {
 			self.0.lock().running.insert(thread_id, Some(handle));
 		}
 		pub(super) fn drop_new_thread(&self, thread_id: u64) {
@@ -142,17 +142,17 @@ mod dismiss_handle {
 }
 
 #[cfg(not(all(feature = "abort-future", feature = "std")))]
-mod dismiss_handle {
+mod task_handle {
 	use super::*;
 
 	#[derive(Default, Clone)]
-	pub(super) struct DismissHandles;
+	pub(super) struct TaskHandles;
 
-	impl DismissHandles {
+	impl TaskHandles {
 		pub(super) fn new_thread_id(&self, _counter: &Arc<AtomicU64>) -> u64 {
 			0
 		}
-		pub(super) fn register_new_thread(&self, _handle: DismissHandle, _thread_id: u64) {
+		pub(super) fn register_new_thread(&self, _handle: TaskHandle, _thread_id: u64) {
 		}
 		pub(super) fn drop_new_thread(&self, _thread_id: u64) {
 		}
@@ -248,7 +248,7 @@ impl RuntimeInstanceSpawn {
 			counter: Default::default(),
 			tasks: Default::default(),
 			recursive_level: self.recursive_level + 1,
-			dismiss_handles: Default::default(),
+			task_handles: Default::default(),
 
 			module: self.module.clone(),
 			infos: self.infos.clone(),
@@ -297,8 +297,8 @@ impl RuntimeInstanceSpawn {
 		let infos = self.infos.clone();
 		let runtime_spawn = Box::new(self.nested_instance());
 		let module = AssertUnwindSafe(module);
-		let dismiss_handles = self.dismiss_handles.clone();
-		let thread_id = dismiss_handles.new_thread_id(&self.counter);
+		let task_handles = self.task_handles.clone();
+		let thread_id = task_handles.new_thread_id(&self.counter);
 		let thread_handle = self.spawn(
 			"executor-extra-runtime-instance",
 			Box::pin(async move {
@@ -308,7 +308,7 @@ impl RuntimeInstanceSpawn {
 				let task_receiver_locked = task_receiver.lock();
 				task_receiver_locked.recv()
 			} {
-				dismiss_handles.register_worker(handle, thread_id);
+				task_handles.register_worker(handle, thread_id);
 				let async_ext = || {
 					let async_ext = match new_async_externalities(scheduler.clone(), ext) {
 						Ok(val) => val,
@@ -368,7 +368,7 @@ impl RuntimeInstanceSpawn {
 					end = true;
 				}
 				if end {
-					dismiss_handles.finished_worker(handle);
+					task_handles.finished_worker(handle);
 					infos.lock().finished();
 					return;
 				}
@@ -377,10 +377,10 @@ impl RuntimeInstanceSpawn {
 			infos.lock().finished();
 		}));
 		if let Some(thread_handle) = thread_handle {
-			self.dismiss_handles.register_new_thread(thread_handle, thread_id);
+			self.task_handles.register_new_thread(thread_handle, thread_id);
 			true
 		} else {
-			self.dismiss_handles.drop_new_thread(thread_id);
+			self.task_handles.drop_new_thread(thread_id);
 			false
 		}
 	}
@@ -390,7 +390,7 @@ impl RuntimeInstanceSpawn {
 		&self,
 		name: &'static str,
 		future: BoxFuture,
-	) -> Option<DismissHandle> {
+	) -> Option<TaskHandle> {
 		self.scheduler.spawn(name, future)
 	}
 
@@ -399,7 +399,7 @@ impl RuntimeInstanceSpawn {
 		&self,
 		name: &'static str,
 		future: BoxFuture,
-	) -> Option<DismissHandle> {
+	) -> Option<TaskHandle> {
 		self.scheduler.spawn(name, future);
 		None
 	}
@@ -482,7 +482,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 
 	fn dismiss(&self, handle: u64, calling_ext: &mut dyn Externalities) {
 		calling_ext.dismiss_worker(handle);
-		self.dismiss_handles.dismiss_thread(handle);
+		self.task_handles.dismiss_thread(handle);
 		self.tasks.lock().remove(&handle);
 	}
 
@@ -512,7 +512,7 @@ impl RuntimeInstanceSpawn {
 			task_sender,
 			instance: Arc::new(parking_lot::Mutex::new(None)),
 			recursive_level: 0,
-			dismiss_handles: Default::default(),
+			task_handles: Default::default(),
 		}
 	}
 

@@ -261,7 +261,7 @@ pub trait Clone { }
 /// Remote handle for a future, dropping it
 /// should do as much as supported to remove
 /// thread from its thread pool.
-pub type DismissHandle = Box<dyn DismissHandleTrait>;
+pub type TaskHandle = Box<dyn TaskHandleTrait>;
 
 /// Alias of the future type to use with `SpawnedNamed` trait.
 pub type BoxFuture = futures::future::BoxFuture<'static, ()>;
@@ -282,7 +282,7 @@ pub trait SpawnNamed: SpawnLimiter + Clone + Send + Sync {
 		&self,
 		name: &'static str,
 		future: BoxFuture,
-	) -> Option<DismissHandle>;
+	) -> Option<TaskHandle>;
 }
 
 /// A trait to share number of task limit.
@@ -298,7 +298,7 @@ pub trait SpawnLimiter: Clone + Send + Sync {
 }
 
 /// Handle over a spawn named future.
-pub trait DismissHandleTrait: Send {
+pub trait TaskHandleTrait: Send {
 	/// Associated future can be dropped
 	/// and remove from pool if a pool is used.
 	fn dismiss(&mut self);
@@ -319,7 +319,7 @@ impl SpawnNamed for Box<dyn SpawnNamed> {
 		&self,
 		name: &'static str,
 		future: BoxFuture,
-	) -> Option<DismissHandle> {
+	) -> Option<TaskHandle> {
 		(**self).spawn(name, future)
 	}
 }

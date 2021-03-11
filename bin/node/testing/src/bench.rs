@@ -50,7 +50,7 @@ use node_runtime::{
 	AccountId,
 	Signature,
 };
-use sp_core::{ExecutionContext, blake2_256, traits::{SpawnNamed, SpawnLimiter, DismissHandle},
+use sp_core::{ExecutionContext, blake2_256, traits::{SpawnNamed, SpawnLimiter, TaskHandle},
 	Pair, Public, sr25519, ed25519};
 use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder;
@@ -268,7 +268,7 @@ impl SpawnNamed for TaskExecutor {
 		&self,
 		_name: &'static str,
 		future: BoxFuture<'static, ()>,
-	) -> Option<DismissHandle> {
+	) -> Option<TaskHandle> {
 		self.pool.spawn_ok(future);
 		// no dismiss
 		None
