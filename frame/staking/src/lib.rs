@@ -780,6 +780,36 @@ impl<T: Config> SessionInterface<<T as frame_system::Config>::AccountId> for T w
 	}
 }
 
+pub trait EraPayout<Balance> {
+	fn era_payout(
+		total_staked: Balance,
+		total_issuance: Balance,
+		era_duration_millis: u64,
+	) -> (Balance, Balance);
+}
+
+pub struct ConvertCurve<T>(sp_std::marker::PhantomData<T>);
+impl<
+	Balance: AtLeast32BitUnsigned + Clone,
+	T: Get<&'static PiecewiseLinear<'static>>,
+> EraPayout<Balance> for ConvertCurve<T> {
+	fn era_payout(
+		total_staked: Balance,
+		total_issuance: Balance,
+		era_duration_millis: u64,
+	) -> (Balance, Balance) {
+		let (validator_payout, max_payout) = inflation::compute_total_payout(
+			&T::get(),
+			total_staked,
+			total_issuance,
+			// Duration of era; more than u64::MAX is rewarded as u64::MAX.
+			era_duration_millis,
+		);
+		let rest = max_payout.saturating_sub(validator_payout.clone());
+		(validator_payout, rest)
+	}
+}
+
 pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
 	/// The staking balance.
 	type Currency: LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>;
@@ -836,9 +866,9 @@ pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
 	/// Interface for interacting with a session module.
 	type SessionInterface: self::SessionInterface<Self::AccountId>;
 
-	/// The NPoS reward curve used to define yearly inflation.
+	/// The payout for validators and the system for the current era.
 	/// See [Era payout](./index.html#era-payout).
-	type RewardCurve: Get<&'static PiecewiseLinear<'static>>;
+	type EraPayout: EraPayout<BalanceOf<Self>>;
 
 	/// Something that can estimate the next session change, accurately or as a best effort guess.
 	type NextNewSession: EstimateNextNewSession<Self::BlockNumber>;
@@ -2831,15 +2861,10 @@ impl<T: Config> Module<T> {
 		if let Some(active_era_start) = active_era.start {
 			let now_as_millis_u64 = T::UnixTime::now().as_millis().saturated_into::<u64>();
 
-			let era_duration = now_as_millis_u64 - active_era_start;
-			let (validator_payout, max_payout) = inflation::compute_total_payout(
-				&T::RewardCurve::get(),
-				Self::eras_total_stake(&active_era.index),
-				T::Currency::total_issuance(),
-				// Duration of era; more than u64::MAX is rewarded as u64::MAX.
-				era_duration.saturated_into::<u64>(),
-			);
-			let rest = max_payout.saturating_sub(validator_payout);
+			let era_duration = (now_as_millis_u64 - active_era_start).saturated_into::<u64>();
+			let staked = Self::eras_total_stake(&active_era.index);
+			let issuance = T::Currency::total_issuance();
+			let (validator_payout, rest) = T::EraPayout::era_payout(staked, issuance, era_duration);
 
 			Self::deposit_event(RawEvent::EraPayout(active_era.index, validator_payout, rest));
 
