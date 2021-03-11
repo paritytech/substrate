@@ -1196,7 +1196,7 @@ decl_module! {
 			let signer = ensure_signed(origin)?;
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
 
-			// Ensure parent bounty exist & active,
+			// Ensure parent bounty exist,
 			let _ = Self::ensure_bounty_exist(bounty_id, false)?;
 
 			// Ensure subbounty is in expected state
