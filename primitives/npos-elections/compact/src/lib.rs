@@ -119,14 +119,14 @@ fn struct_def(
 		let name = field_name_for(1);
 		// NOTE: we use the visibility of the struct for the fields as well.. could be made better.
 		quote!(
-			#vis #name: Vec<(#voter_type, #target_type)>,
+			#vis #name: _npos::sp_std::prelude::Vec<(#voter_type, #target_type)>,
 		)
 	};
 
 	let doubles = {
 		let name = field_name_for(2);
 		quote!(
-			#vis #name: Vec<(#voter_type, (#target_type, #weight_type), #target_type)>,
+			#vis #name: _npos::sp_std::prelude::Vec<(#voter_type, (#target_type, #weight_type), #target_type)>,
 		)
 	};
 
@@ -135,7 +135,7 @@ fn struct_def(
 			let field_name = field_name_for(c);
 			let array_len = c - 1;
 			quote!(
-				#vis #field_name: Vec<(
+				#vis #field_name: _npos::sp_std::prelude::Vec<(
 					#voter_type,
 					[(#target_type, #weight_type); #array_len],
 					#target_type
@@ -194,10 +194,10 @@ fn struct_def(
 				all_edges
 			}
 
-			fn unique_targets(&self) -> Vec<Self::Target> {
+			fn unique_targets(&self) -> _npos::sp_std::prelude::Vec<Self::Target> {
 				// NOTE: this implementation returns the targets sorted, but we don't use it yet per
 				// se, nor is the API enforcing it.
-				use sp_std::collections::btree_set::BTreeSet;
+				use _npos::sp_std::collections::btree_set::BTreeSet;
 
 				let mut all_targets: BTreeSet<Self::Target> = BTreeSet::new();
 				let mut maybe_insert_target = |t: Self::Target| {
@@ -215,7 +215,7 @@ fn struct_def(
 			}
 
 			fn from_assignment<FV, FT, A>(
-				assignments: Vec<_npos::Assignment<A, #weight_type>>,
+				assignments: _npos::sp_std::prelude::Vec<_npos::Assignment<A, #weight_type>>,
 				index_of_voter: FV,
 				index_of_target: FT,
 			) -> Result<Self, _npos::Error>
@@ -242,8 +242,8 @@ fn struct_def(
 				self,
 				voter_at: impl Fn(Self::Voter) -> Option<A>,
 				target_at: impl Fn(Self::Target) -> Option<A>,
-			) -> Result<Vec<_npos::Assignment<A, #weight_type>>, _npos::Error> {
-				let mut assignments: Vec<_npos::Assignment<A, #weight_type>> = Default::default();
+			) -> Result<_npos::sp_std::prelude::Vec<_npos::Assignment<A, #weight_type>>, _npos::Error> {
+				let mut assignments: _npos::sp_std::prelude::Vec<_npos::Assignment<A, #weight_type>> = Default::default();
 				#into_impl
 				Ok(assignments)
 			}
