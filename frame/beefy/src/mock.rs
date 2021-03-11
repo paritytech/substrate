@@ -14,17 +14,21 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+// construct_runtime requires this
+#![allow(clippy::from_over_into)]
+
 use std::vec;
 
-use frame_support::{parameter_types, sp_io::TestExternalities, BasicExternalities};
-
-use sp_core::H256;
-use sp_runtime::{
-	app_crypto::ecdsa::Public,
-	impl_opaque_keys,
-	testing::Header,
-	traits::{BlakeTwo256, ConvertInto, IdentityLookup, OpaqueKeys},
-	Perbill,
+use {
+	frame_support::{construct_runtime, parameter_types, sp_io::TestExternalities, BasicExternalities},
+	sp_core::H256,
+	sp_runtime::{
+		app_crypto::ecdsa::Public,
+		impl_opaque_keys,
+		testing::Header,
+		traits::{BlakeTwo256, ConvertInto, IdentityLookup, OpaqueKeys},
+		Perbill,
+	},
 };
 
 use crate as pallet_beefy;
@@ -40,7 +44,7 @@ impl_opaque_keys! {
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
-frame_support::construct_runtime!(
+construct_runtime!(
 	pub enum Test where
 		Block = Block,
 		NodeBlock = Block,
