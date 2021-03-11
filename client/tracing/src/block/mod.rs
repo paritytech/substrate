@@ -60,8 +60,6 @@ impl BlockSubscriber {
 			.split(',')
 			.map(|s| crate::parse_target(s))
 			.collect();
-
-		log!(target: "BLOCKTRACE", log::Level::Trace, "Specified trace targets: {:#?}", targets);
 		// Ensure that WASM traces are always enabled
 		// Filtering happens when decoding the actual target / level
 		targets.push((WASM_TRACE_IDENTIFIER.to_owned(), Level::TRACE));
@@ -104,7 +102,8 @@ impl Subscriber for BlockSubscriber {
 			exited: vec![],
 			values: Values::default(),
 		};
-		log!(target: "BLOCKTRACE", log::Level::Trace, "span id: {:#?}, span name: {}, span target: {}",
+		// doesn't do anything
+		log::info!("\nspan id: {:#?}, span name: {}, span target: {}\n",
 			id, attrs.metadata().name().to_owned(), attrs.metadata().target().to_owned()
 		);
 		let id = Id::from_u64(id);
@@ -115,6 +114,8 @@ impl Subscriber for BlockSubscriber {
 	fn record(&self, span: &Id, values: &Record<'_>) {
 		let mut span_data = self.spans.lock();
 		if let Some(s) = span_data.get_mut(span) {
+			// doesn't do anything
+			log::info!("record span: {:#?}\n", s.values);
 			values.record(&mut s.values);
 		}
 	}
@@ -137,13 +138,15 @@ impl Subscriber for BlockSubscriber {
 			values: values.into(),
 			parent_id,
 		};
-		log!(target: "BLOCKTRACE", log::Level::Trace, "trace event {:#?}", trace_event);
+		// doesn't do anything
+		log::info!("trace event: {:#?}\n", event);
 		self.events.lock().push(trace_event);
 	}
 
 	fn enter(&self, id: &Id) {
 		self.current_span.enter(id.clone());
-		log!(target: "BLOCKTRACE", log::Level::Trace, "trace current span {:#?}", self.current_span);
+		// doesn't do anything
+		log::info!("trace current span {:#?}", self.current_span);
 		let mut span_data = self.spans.lock();
 		if let Some(span) = span_data.get_mut(&id) {
 			span.entered.push(Instant::now() - self.timestamp);
@@ -151,6 +154,8 @@ impl Subscriber for BlockSubscriber {
 	}
 
 	fn exit(&self, span: &Id) {
+		// doesn't do anything
+		log::info!("exit span: {:#?}\n", span);
 		if let Some(s) = self.spans.lock().get_mut(span) {
 			self.current_span.exit();
 			s.exited.push(Instant::now() - self.timestamp)
@@ -200,6 +205,7 @@ impl<Block, Client> BlockExecutor<Block, Client>
 		let sub = BlockSubscriber::new(targets, spans, events);
 		let dispatch = Dispatch::new(sub);
 
+		log::info!("\ntrace_block span\n");
 		if let Err(e) = dispatcher::with_default(&dispatch, || {
 			let span = tracing::info_span!(
 				target: TRACE_TARGET,
@@ -218,7 +224,7 @@ impl<Block, Client> BlockExecutor<Block, Client>
 			.map(|(_, s)| s.into())
 			.into_iter()
 			.map(|s| {
-				log!(target: "BLOCKTRACE", log::Level::Trace, "Span in unfiltered array {:#?}", s);
+				// log::info!("Span in unfiltered array {:#?}", s);
 				s
 			})
 			// First filter out any spans that were never entered
