@@ -19,6 +19,7 @@
 use futures::{Sink, SinkExt};
 use std::fmt;
 use std::io::Write;
+use log::LevelFilter;
 
 /// Base db path gotten from env
 pub fn base_path() -> Option<String> {
@@ -26,30 +27,15 @@ pub fn base_path() -> Option<String> {
 }
 
 /// Builds the global logger.
-pub fn logger<LogSink>(executor: tokio::runtime::Handle, log_sink: LogSink)
+pub fn logger<S>(
+	log_targets: Vec<(&'static str, LevelFilter)>,
+	executor: tokio::runtime::Handle,
+	log_sink: S,
+)
 where
-	LogSink: Sink<String> + Clone + Unpin + Send + Sync + 'static,
-	LogSink::Error: Send + Sync + fmt::Debug,
+	S: Sink<String> + Clone + Unpin + Send + Sync + 'static,
+	S::Error: Send + Sync + fmt::Debug,
 {
-	let ignore = [
-		"yamux",
-		"multistream_select",
-		"libp2p",
-		"jsonrpc_client_transports",
-		"sc_network",
-		"tokio_reactor",
-		"parity-db",
-		"sub-libp2p",
-		"sync",
-		"peerset",
-		"ws",
-		"sc_network",
-		"sc_service",
-		"sc_basic_authorship",
-		"telemetry-logger",
-		"sc_peerset",
-		"rpc",
-	];
 	let mut builder = env_logger::builder();
 	builder.format(move |buf: &mut env_logger::fmt::Formatter, record: &log::Record| {
 		let entry = format!("{} {} {}", record.level(), record.target(), record.args());
@@ -62,12 +48,9 @@ where
 		res
 	});
 	builder.write_style(env_logger::WriteStyle::Always);
-	builder.filter_level(log::LevelFilter::Debug);
-	builder.filter_module("runtime", log::LevelFilter::Trace);
-	builder.filter_module("babe", log::LevelFilter::Info);
-	builder.filter_module("sc_service", log::LevelFilter::Trace);
-	for module in &ignore {
-		builder.filter_module(module, log::LevelFilter::Off);
+
+	for (module, level) in log_targets {
+		builder.filter_module(module, level);
 	}
 	let _ = builder.is_test(true).try_init();
 }

@@ -26,19 +26,7 @@
 //! -   Runtime Upgrades
 //! -   Pallets and general runtime functionality.
 //!
-//! This works by running a full node with a ManualSeal-BABE™ hybrid consensus for block authoring.
-//!
-//! The test runner provides two apis of note
-//!
-//! -   `seal_blocks(count: u32)`
-//!     <br/>
-//!
-//!     This tells manual seal authorship task running on the node to author `count` number of blocks, including any transactions in the transaction pool in those blocks.
-//!
-//! -   `submit_extrinsic<T: frame_system::Config>(call: Impl Into<T::Call>, from: T::AccountId)`
-//!     <br/>
-//!
-//!     Providing a `Call` and an `AccountId`, creates an `UncheckedExtrinsic` with an empty signature and sends to the node to be included in future block.
+//! This works by running a full node with a Manual Seal-BABE™ hybrid consensus for block authoring.
 //!
 //! <h2>Note</h2>
 //! The running node has no signature verification, which allows us author extrinsics for any account on chain.
@@ -49,11 +37,11 @@
 //!
 //!
 //! ```rust
-//! use test_runner::{Node, ChainInfo, SignatureVerificationOverride, base_path};
+//! use test_runner::{Node, ChainInfo, SignatureVerificationOverride, base_path, NodeConfig};
 //! use sc_finality_grandpa::GrandpaBlockImport;
 //! use sc_service::{
 //!     TFullBackend, TFullClient, Configuration, TaskManager, new_full_parts, BasePath,
-//!     DatabaseConfig, KeepBlocks, TransactionStorageMode, TaskExecutor, ChainSpec, Role,
+//!     DatabaseConfig, KeepBlocks, TransactionStorageMode, ChainSpec, Role,
 //!     config::{NetworkConfiguration, KeystoreConfig},
 //! };
 //! use std::sync::Arc;
@@ -88,9 +76,9 @@
 //!     /// Provide an Executor type for the runtime
 //!     type Executor = Executor;
 //!     /// Provide the runtime itself
-//!     type Runtime = node_runeimt::Runtime;
+//!     type Runtime = node_runtime::Runtime;
 //!     /// A touch of runtime api
-//!     type RuntimeApi = node_runeimt::RuntimeApi;
+//!     type RuntimeApi = node_runtime::RuntimeApi;
 //!     /// A pinch of SelectChain implementation
 //!     type SelectChain = sc_consensus::LongestChain<TFullBackend<Self::Block>, Self::Block>;
 //!     /// A slice of concrete BlockImport type
@@ -102,97 +90,6 @@
 //!     >;
 //!     /// and a dash of SignedExtensions
 //! 	type SignedExtras = node_runtime::SignedExtra;
-//!
-//!     /// Load the chain spec for your runtime here.
-//! 	fn configuration(task_executor: TaskExecutor) -> Configuration {
-//! 		let mut chain_spec = development_config();
-//! 		let base_path = if let Some(base) = base_path() {
-//! 			BasePath::new(base)
-//! 		} else {
-//! 			BasePath::new_temp_dir().expect("couldn't create a temp dir")
-//! 		};
-//! 		let root_path = base_path.path().to_path_buf().join("chains").join(chain_spec.id());
-//!
-//! 		let key_seed = Alice.to_seed();
-//! 		let storage = chain_spec
-//! 			.as_storage_builder()
-//! 			.build_storage()
-//! 			.expect("could not build storage");
-//!
-//! 		chain_spec.set_storage(storage);
-//!
-//! 		let mut network_config = NetworkConfiguration::new(
-//! 			format!("Test Node for: {}", key_seed),
-//! 			"network/test/0.1",
-//! 			Default::default(),
-//! 			None,
-//! 		);
-//! 		let informant_output_format = OutputFormat { enable_color: false };
-//!
-//! 		network_config.allow_non_globals_in_dht = true;
-//!
-//! 		network_config
-//! 			.listen_addresses
-//! 			.push(multiaddr::Protocol::Memory(rand::random()).into());
-//!
-//! 		network_config.transport = TransportConfig::MemoryOnly;
-//!
-//! 		Configuration {
-//! 			impl_name: "test-node".to_string(),
-//! 			impl_version: "0.1".to_string(),
-//! 			role: Role::Authority,
-//! 			task_executor,
-//! 			transaction_pool: Default::default(),
-//! 			network: network_config,
-//! 			keystore: KeystoreConfig::Path {
-//! 				path: root_path.join("key"),
-//! 				password: None,
-//! 			},
-//! 			database: DatabaseConfig::RocksDb {
-//! 				path: root_path.join("db"),
-//! 				cache_size: 128,
-//! 			},
-//! 			state_cache_size: 16777216,
-//! 			state_cache_child_ratio: None,
-//! 			chain_spec: Box::new(chain_spec),
-//! 			wasm_method: WasmExecutionMethod::Interpreted,
-//! 			// NOTE: we enforce the use of the wasm runtime to make use of the signature overrides
-//! 			execution_strategies: ExecutionStrategies {
-//! 				syncing: sc_client_api::ExecutionStrategy::AlwaysWasm,
-//! 				importing: sc_client_api::ExecutionStrategy::AlwaysWasm,
-//! 				block_construction: sc_client_api::ExecutionStrategy::AlwaysWasm,
-//! 				offchain_worker: sc_client_api::ExecutionStrategy::AlwaysWasm,
-//! 				other: sc_client_api::ExecutionStrategy::AlwaysWasm,
-//! 			},
-//! 			rpc_http: None,
-//! 			rpc_ws: None,
-//! 			rpc_ipc: None,
-//! 			rpc_ws_max_connections: None,
-//! 			rpc_cors: None,
-//! 			rpc_methods: Default::default(),
-//! 			prometheus_config: None,
-//! 			telemetry_endpoints: None,
-//! 			telemetry_external_transport: None,
-//! 			default_heap_pages: None,
-//! 			offchain_worker: Default::default(),
-//! 			force_authoring: false,
-//! 			disable_grandpa: false,
-//! 			dev_key_seed: Some(key_seed),
-//! 			tracing_targets: None,
-//! 			tracing_receiver: Default::default(),
-//! 			max_runtime_instances: 8,
-//! 			announce_block: true,
-//! 			base_path: Some(base_path),
-//! 			wasm_runtime_overrides: None,
-//! 			informant_output_format,
-//! 			disable_log_reloading: false,
-//! 			keystore_remote: None,
-//! 			keep_blocks: KeepBlocks::All,
-//! 			state_pruning: Default::default(),
-//! 			transaction_storage: TransactionStorageMode::BlockBody,
-//! 			telemetry_handle: Default::default(),
-//! 		}
-//! 	}
 //!
 //!     /// Create your signed extras here.
 //! 	fn signed_extras(
@@ -280,7 +177,8 @@
 //!
 //! 	fn dispatch_with_root(call: <Self::Runtime as frame_system::Config>::Call, node: &mut Node<Self>) {
 //!         let alice = MultiSigner::from(Alice.public()).into_account();
-//!         let call = pallet_sudo::Call::sudo(Box::new(call)); // :D
+//! 		// for chains that support sudo, otherwise, you'd have to use pallet-democracy here.
+//!         let call = pallet_sudo::Call::sudo(Box::new(call));
 //!         node.submit_extrinsic(call, alice);
 //!         node.seal_blocks(1);
 //!     }
@@ -291,7 +189,18 @@
 //! #[test]
 //! fn simple_balances_test() {
 //! 	// given
-//! 	let mut node = Node::<Requirements>::new().unwrap();
+//! 	let config = NodeConfig {
+//!			execution_strategies: ExecutionStrategies {
+//!				syncing: sc_client_api::ExecutionStrategy::NativeWhenPossible,
+//!				importing: sc_client_api::ExecutionStrategy::NativeWhenPossible,
+//!				block_construction: sc_client_api::ExecutionStrategy::NativeWhenPossible,
+//!				offchain_worker: sc_client_api::ExecutionStrategy::NativeWhenPossible,
+//!				other: sc_client_api::ExecutionStrategy::NativeWhenPossible,
+//! 		},
+//! 		chain_spec: development_config(),
+//! 		log_targets: vec![],
+//! 	};
+//! 	let mut node = Node::<Requirements>::new(config).unwrap();
 //!
 //! 	type Balances = pallet_balances::Module<node_runtime::Runtime>;
 //!
@@ -323,7 +232,7 @@
 
 use manual_seal::consensus::ConsensusDataProvider;
 use sc_executor::NativeExecutionDispatch;
-use sc_service::{Configuration, TFullBackend, TFullClient, TaskManager, TaskExecutor};
+use sc_service::{Configuration, TFullBackend, TFullClient, TaskManager};
 use sp_api::{ConstructRuntimeApi, TransactionFor};
 use sp_consensus::{BlockImport, SelectChain};
 use sp_inherents::InherentDataProviders;
@@ -368,10 +277,8 @@ pub trait ChainInfo: Sized {
 			Transaction = TransactionFor<TFullClient<Self::Block, Self::RuntimeApi, Self::Executor>, Self::Block>,
 		> + 'static;
 
+	/// The signed extras required by the runtime
 	type SignedExtras: SignedExtension;
-
-	/// construct the node configuration.
-	fn configuration(task_executor: TaskExecutor) -> Configuration;
 
 	/// Signed extras, this function is caled in an externalities provided environment.
 	fn signed_extras(from: <Self::Runtime as frame_system::Config>::AccountId) -> Self::SignedExtras;
