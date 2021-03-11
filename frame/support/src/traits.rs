@@ -2291,6 +2291,13 @@ pub trait ExecuteBlock<Block: BlockT> {
 	fn execute_block(block: Block);
 }
 
+/// A trait which is called when the timestamp is set in the runtime.
+#[impl_trait_for_tuples::impl_for_tuples(30)]
+pub trait OnTimestampSet<Moment> {
+	/// Called when the timestamp is set.
+	fn on_timestamp_set(moment: Moment);
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;

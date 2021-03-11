@@ -4546,7 +4546,6 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
- "sp-timestamp",
 ]
 
 [[package]]
@@ -4611,7 +4610,6 @@ dependencies = [
  "sp-session",
  "sp-staking",
  "sp-std",
- "sp-timestamp",
 ]
 
 [[package]]
@@ -9042,7 +9040,6 @@ dependencies = [
 name = "sp-timestamp"
 version = "3.0.0"
 dependencies = [
- "impl-trait-for-tuples",
  "parity-scale-codec",
  "sp-api",
  "sp-inherents",
