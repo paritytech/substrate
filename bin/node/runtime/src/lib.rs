@@ -489,7 +489,7 @@ impl pallet_staking::Config for Runtime {
 		pallet_collective::EnsureProportionAtLeast<_3, _4, AccountId, CouncilCollective>
 	>;
 	type SessionInterface = Self;
-	type RewardCurve = RewardCurve;
+	type EraPayout = pallet_staking::ConvertCurve<RewardCurve>;
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type ElectionLookahead = ElectionLookahead;
