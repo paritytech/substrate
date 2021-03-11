@@ -26,11 +26,9 @@ use sp_inherents::InherentDataProviders;
 use sc_consensus_babe::BabeBlockImport;
 use sp_keystore::SyncCryptoStorePtr;
 use sp_keyring::sr25519::Keyring::Alice;
-use node_cli::chain_spec::development_config;
 use sp_consensus_babe::AuthorityId;
 use sc_consensus_manual_seal::{ConsensusDataProvider, consensus::babe::BabeConsensusDataProvider};
 use sp_runtime::{traits::IdentifyAccount, MultiSigner, generic::Era};
-use sc_client_api::execution_extensions::ExecutionStrategies;
 
 type BlockImport<B, BE, C, SC> = BabeBlockImport<B, C, GrandpaBlockImport<BE, B, C, SC>>;
 
@@ -145,6 +143,8 @@ mod tests {
     use super::*;
     use test_runner::NodeConfig;
     use log::LevelFilter;
+    use sc_client_api::execution_extensions::ExecutionStrategies;
+    use node_cli::chain_spec::development_config;
 
     #[test]
     fn test_runner() {
@@ -155,32 +155,32 @@ mod tests {
 				block_construction: sc_client_api::ExecutionStrategy::AlwaysWasm,
 				offchain_worker: sc_client_api::ExecutionStrategy::AlwaysWasm,
 				other: sc_client_api::ExecutionStrategy::AlwaysWasm,
-		},
-		chain_spec: Box::new(development_config()),
-		log_targets: vec![
-            ("yamux", LevelFilter::Off),
-            ("multistream_select", LevelFilter::Off),
-            ("libp2p", LevelFilter::Off),
-            ("jsonrpc_client_transports", LevelFilter::Off),
-            ("sc_network", LevelFilter::Off),
-            ("tokio_reactor", LevelFilter::Off),
-            ("parity-db", LevelFilter::Off),
-            ("sub-libp2p", LevelFilter::Off),
-            ("sync", LevelFilter::Off),
-            ("peerset", LevelFilter::Off),
-            ("ws", LevelFilter::Off),
-            ("sc_network", LevelFilter::Off),
-            ("sc_service", LevelFilter::Off),
-            ("sc_basic_authorship", LevelFilter::Off),
-            ("telemetry-logger", LevelFilter::Off),
-            ("sc_peerset", LevelFilter::Off),
-            ("rpc", LevelFilter::Off),
+		    },
+            chain_spec: Box::new(development_config()),
+            log_targets: vec![
+                ("yamux", LevelFilter::Off),
+                ("multistream_select", LevelFilter::Off),
+                ("libp2p", LevelFilter::Off),
+                ("jsonrpc_client_transports", LevelFilter::Off),
+                ("sc_network", LevelFilter::Off),
+                ("tokio_reactor", LevelFilter::Off),
+                ("parity-db", LevelFilter::Off),
+                ("sub-libp2p", LevelFilter::Off),
+                ("sync", LevelFilter::Off),
+                ("peerset", LevelFilter::Off),
+                ("ws", LevelFilter::Off),
+                ("sc_network", LevelFilter::Off),
+                ("sc_service", LevelFilter::Off),
+                ("sc_basic_authorship", LevelFilter::Off),
+                ("telemetry-logger", LevelFilter::Off),
+                ("sc_peerset", LevelFilter::Off),
+                ("rpc", LevelFilter::Off),
 
-            ("runtime", LevelFilter::Trace),
-            ("babe", LevelFilter::Debug)
-        ],
-	};
-	let mut node = Node::<NodeTemplateChainInfo>::new(config).unwrap();
+                ("runtime", LevelFilter::Trace),
+                ("babe", LevelFilter::Debug)
+            ],
+	    };
+	    let mut node = Node::<NodeTemplateChainInfo>::new(config).unwrap();
         // seals blocks
         node.seal_blocks(1);
         // submit extrinsics

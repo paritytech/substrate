@@ -20,7 +20,6 @@ use std::sync::Arc;
 
 use futures::{FutureExt, SinkExt, channel::{mpsc, oneshot}};
 use jsonrpc_core::MetaIoHandler;
-use jsonrpc_core_client::{transports::local, RpcChannel};
 use manual_seal::{run_manual_seal, EngineCommand, ManualSealParams};
 use sc_cli::build_runtime;
 use sc_client_api::{
@@ -60,8 +59,6 @@ use sc_executor::WasmExecutionMethod;
 pub struct Node<T: ChainInfo> {
 	/// rpc handler for communicating with the node over rpc.
 	rpc_handler: Arc<MetaIoHandler<sc_rpc::Metadata, sc_rpc_server::RpcMiddleware>>,
-	/// tokio-compat runtime
-	_compat_runtime: tokio_compat::runtime::Runtime,
 	/// Stream of log lines
 	log_stream: mpsc::UnboundedReceiver<String>,
 	/// node tokio runtime
@@ -118,7 +115,6 @@ impl<T: ChainInfo> Node<T> {
 				+ ApiExt<T::Block, StateBackend = <TFullBackend<T::Block> as Backend<T::Block>>::State>,
 	{
 		let NodeConfig { log_targets, mut chain_spec, execution_strategies } = node_config;
-		let compat_runtime = tokio_compat::runtime::Runtime::new().unwrap();
 		let tokio_runtime = build_runtime().unwrap();
 
 		// unbounded logs, should be fine, test is shortlived.
@@ -311,7 +307,6 @@ impl<T: ChainInfo> Node<T> {
 			rpc_handler,
 			_task_manager: Some(task_manager),
 			_runtime: tokio_runtime,
-			_compat_runtime: compat_runtime,
 			client,
 			pool: transaction_pool,
 			backend,
@@ -393,8 +388,8 @@ impl<T: ChainInfo> Node<T> {
 		.expect("UncheckedExtrinsic::new() always returns Some");
 		let at = self.client.info().best_hash;
 
-		self._compat_runtime
-			.block_on_std(
+		self._runtime
+			.block_on(
 				self.pool.submit_one(&BlockId::Hash(at), TransactionSource::Local, ext.into()),
 			)
 			.unwrap()
@@ -422,7 +417,7 @@ impl<T: ChainInfo> Node<T> {
 
 	/// Instructs manual seal to seal new, possibly empty blocks.
 	pub fn seal_blocks(&mut self, num: usize) {
-		let (tokio, sink) = (&mut self._compat_runtime, &mut self.manual_seal_command_sink);
+		let (tokio, sink) = (&mut self._runtime, &mut self.manual_seal_command_sink);
 
 		for count in 0..num {
 			let (sender, future_block) = oneshot::channel();
@@ -433,7 +428,7 @@ impl<T: ChainInfo> Node<T> {
 				sender: Some(sender),
 			});
 
-			tokio.block_on_std(async {
+			tokio.block_on(async {
 				const ERROR: &'static str = "manual-seal authorship task is shutting down";
 				future.await.expect(ERROR);
 
@@ -443,18 +438,6 @@ impl<T: ChainInfo> Node<T> {
 				}
 			});
 		}
-	}
-
-	/// Create a new jsonrpc client using the jsonrpc-core-client local transport.
-	pub fn rpc_client<C>(&self) -> C
-	where
-		C: From<RpcChannel> + 'static,
-	{
-		use futures01::Future;
-		let rpc_handler = self.rpc_handler.clone();
-		let (client, fut) = local::connect_with_middleware::<C, _, _, _>(rpc_handler);
-		self._compat_runtime.spawn(fut.map_err(|_| ()));
-		client
 	}
 
 	/// Revert count number of blocks from the chain.
