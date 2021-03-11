@@ -56,6 +56,7 @@ use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 use sp_inherents::{InherentDataProviders, InherentData};
 use sp_timestamp::{TimestampInherentData, InherentType as TimestampInherent};
 use sc_consensus_slots::{SlotInfo, SlotCompatible, StorageChanges, BackoffAuthoringBlocksStrategy};
+use sc_telemetry::TelemetryHandle;
 use sp_consensus_slots::Slot;
 
 mod import_queue;
@@ -149,6 +150,8 @@ pub struct StartAuraParams<C, SC, I, PF, SO, BS, CAW> {
 	/// slot. However, the proposing can still take longer when there is some lenience factor applied,
 	/// because there were no blocks produced for some slots.
 	pub block_proposal_slot_portion: SlotProportion,
+	/// Telemetry instance used to report telemetry metrics.
+	pub telemetry: Option<TelemetryHandle>,
 }
 
 /// Start the aura worker. The returned future should be run in a futures executor.
@@ -166,6 +169,7 @@ pub fn start_aura<P, B, C, SC, PF, I, SO, CAW, BS, Error>(
 		keystore,
 		can_author_with,
 		block_proposal_slot_portion,
+		telemetry,
 	}: StartAuraParams<C, SC, I, PF, SO, BS, CAW>,
 ) -> Result<impl Future<Output = ()>, sp_consensus::Error> where
 	B: BlockT,
@@ -184,13 +188,14 @@ pub fn start_aura<P, B, C, SC, PF, I, SO, CAW, BS, Error>(
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
 {
 	let worker = AuraWorker {
-		client,
+		client: client.clone(),
 		block_import: Arc::new(Mutex::new(block_import)),
 		env,
 		keystore,
 		sync_oracle: sync_oracle.clone(),
 		force_authoring,
 		backoff_authoring_blocks,
+		telemetry,
 		_key_type: PhantomData::<P>,
 		block_proposal_slot_portion,
 	};
@@ -218,6 +223,7 @@ struct AuraWorker<C, E, I, P, SO, BS> {
 	force_authoring: bool,
 	backoff_authoring_blocks: Option<BS>,
 	block_proposal_slot_portion: SlotProportion,
+	telemetry: Option<TelemetryHandle>,
 	_key_type: PhantomData<P>,
 }
 
@@ -369,6 +375,10 @@ where
 		Box::pin(self.env.init(block).map_err(|e| {
 			sp_consensus::Error::ClientImport(format!("{:?}", e)).into()
 		}))
+	}
+
+	fn telemetry(&self) -> Option<TelemetryHandle> {
+		self.telemetry.clone()
 	}
 
 	fn proposing_remaining_duration(
@@ -595,6 +605,7 @@ mod tests {
 						inherent_data_providers,
 						AlwaysCanAuthor,
 						CheckForEquivocation::Yes,
+						None,
 					)
 				},
 				PeersClient::Light(_, _) => unreachable!("No (yet) tests for light client + Aura"),
@@ -670,6 +681,7 @@ mod tests {
 				keystore,
 				can_author_with: sp_consensus::AlwaysCanAuthor,
 				block_proposal_slot_portion: SlotProportion::new(0.5),
+				telemetry: None,
 			}).expect("Starts aura"));
 		}
 
@@ -729,6 +741,7 @@ mod tests {
 			sync_oracle: DummyOracle.clone(),
 			force_authoring: false,
 			backoff_authoring_blocks: Some(BackoffAuthoringOnFinalizedHeadLagging::default()),
+			telemetry: None,
 			_key_type: PhantomData::<AuthorityPair>,
 			block_proposal_slot_portion: SlotProportion::new(0.5),
 		};
@@ -777,6 +790,7 @@ mod tests {
 			sync_oracle: DummyOracle.clone(),
 			force_authoring: false,
 			backoff_authoring_blocks: Option::<()>::None,
+			telemetry: None,
 			_key_type: PhantomData::<AuthorityPair>,
 			block_proposal_slot_portion: SlotProportion::new(0.5),
 		};

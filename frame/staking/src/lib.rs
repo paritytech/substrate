@@ -2740,8 +2740,8 @@ impl<T: Config> Module<T> {
 		// write new results.
 		<QueuedElected<T>>::put(ElectionResult {
 			elected_stashes: winners,
-			compute,
 			exposures,
+			compute,
 		});
 		QueuedScore::put(submitted_score);
 

@@ -16,7 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 derive_more = { version = "0.99.2", optional = true }
 log = { version = "0.4.8", optional = true }
-parking_lot = { version = "0.10.2", optional = true }
+parking_lot = { version = "0.11.1", optional = true }
 thiserror = { version = "1.0.21", optional = true }
 ambassador = "0.2.1"
 sp-core = { version = "3.0.0", default-features = false, path = "../core" }

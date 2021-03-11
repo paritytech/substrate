@@ -267,7 +267,6 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 		prometheus_config: None,
 		telemetry_endpoints: None,
 		telemetry_external_transport: None,
-		telemetry_handle: None,
 		default_heap_pages: None,
 		offchain_worker: Default::default(),
 		force_authoring: false,
