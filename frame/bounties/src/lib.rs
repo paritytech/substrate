@@ -983,7 +983,7 @@ decl_module! {
 		) {
 			let signer = ensure_signed(origin)?;
 
-			// Ensure parent bounty exist & active
+			// Ensure parent bounty exist
 			let _ = Self::ensure_bounty_exist(bounty_id, false)?;
 
 			// Mutate Subbounty
