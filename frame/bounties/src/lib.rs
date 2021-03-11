@@ -897,8 +897,8 @@ decl_module! {
 			let subcurator = T::Lookup::lookup(subcurator)?;
 
 			// Ensure parent bounty exist & get master curator or default if none
-			let (master_curator, _) = Self::ensure_bounty_exist(bounty_id, false)
-				.map(|rval| rval.unwrap_or((T::AccountId::default(), Zero::zero())))
+			let master_curator = Self::ensure_bounty_exist(bounty_id, false)
+				.map(|rval| rval.map(|v| v.0).unwrap_or(T::AccountId::default()))
 				.map_err(|err| err)?;
 
 			// Mutate the Subbounty instance
