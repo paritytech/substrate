@@ -107,6 +107,7 @@ members = [
 	"frame/staking",
 	"frame/staking/fuzzer",
 	"frame/staking/reward-curve",
+	"frame/staking/reward-fn",
 	"frame/sudo",
 	"frame/support",
 	"frame/support/procedural",
