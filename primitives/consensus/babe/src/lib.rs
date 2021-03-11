@@ -30,6 +30,8 @@ pub use sp_consensus_vrf::schnorrkel::{
 
 use codec::{Decode, Encode};
 #[cfg(feature = "std")]
+use serde::{Serialize, Deserialize};
+#[cfg(feature = "std")]
 use sp_keystore::vrf::{VRFTranscriptData, VRFTranscriptValue};
 use sp_runtime::{traits::Header, ConsensusEngineId, RuntimeDebug};
 use sp_std::vec::Vec;
@@ -216,6 +218,7 @@ pub struct BabeGenesisConfiguration {
 
 /// Types of allowed slots.
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum AllowedSlots {
 	/// Only allow primary slots.
 	PrimarySlots,
@@ -248,6 +251,7 @@ impl sp_consensus::SlotData for BabeGenesisConfiguration {
 
 /// Configuration data used by the BABE consensus engine.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct BabeEpochConfiguration {
 	/// A constant value that is used in the threshold calculation formula.
 	/// Expressed as a rational where the first member of the tuple is the
@@ -362,6 +366,8 @@ pub struct Epoch {
 	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 	/// Randomness for this epoch.
 	pub randomness: [u8; VRF_OUTPUT_LENGTH],
+	/// Configuration of the epoch.
+	pub config: BabeEpochConfiguration,
 }
 
 sp_api::decl_runtime_apis! {
