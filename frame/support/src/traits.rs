@@ -23,13 +23,13 @@ use sp_std::{prelude::*, result, marker::PhantomData, ops::Div, fmt::Debug};
 use codec::{FullCodec, Codec, Encode, Decode, EncodeLike};
 use sp_core::u32_trait::Value as U32;
 use sp_runtime::{
-	RuntimeAppPublic, RuntimeDebug, BoundToRuntimeAppPublic,
-	ConsensusEngineId, DispatchResult, DispatchError,
 	traits::{
-		MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput, Bounded, Zero,
-		BadOrigin, AtLeast32BitUnsigned, Convert, UniqueSaturatedFrom, UniqueSaturatedInto,
-		SaturatedConversion, StoredMapError, Block as BlockT,
+		AtLeast32Bit, AtLeast32BitUnsigned, BadOrigin, Block as BlockT, Bounded, Convert,
+		MaybeSerializeDeserialize, SaturatedConversion, Saturating, StoredMapError,
+		UniqueSaturatedFrom, UniqueSaturatedInto, Zero,
 	},
+	BoundToRuntimeAppPublic, ConsensusEngineId, DispatchError, DispatchResult, RuntimeAppPublic,
+	RuntimeDebug,
 };
 use sp_staking::SessionIndex;
 use crate::dispatch::Parameter;
@@ -1413,35 +1413,39 @@ impl<T> InitializeMembers<T> for () {
 	fn initialize_members(_: &[T]) {}
 }
 
-// A trait that is able to provide randomness.
-pub trait Randomness<Output> {
-	/// Get a "random" value
+/// A trait that is able to provide randomness.
+///
+/// Being a deterministic blockchain, real randomness is difficult to come by, different
+/// implementations of this trait will provide different security guarantees. At best,
+/// this will be randomness which was hard to predict a long time ago, but that has become
+/// easy to predict recently.
+pub trait Randomness<Output, BlockNumber> {
+	/// Get the most recently determined random seed, along with the time in the past
+	/// since when it was determinable by chain observers.
 	///
-	/// Being a deterministic blockchain, real randomness is difficult to come by. This gives you
-	/// something that approximates it. At best, this will be randomness which was
-	/// hard to predict a long time ago, but that has become easy to predict recently.
+	/// `subject` is a context identifier and allows you to get a different result to
+	/// other callers of this function; use it like `random(&b"my context"[..])`.
 	///
-	/// `subject` is a context identifier and allows you to get a
-	/// different result to other callers of this function; use it like
-	/// `random(&b"my context"[..])`.
-	fn random(subject: &[u8]) -> Output;
+	/// NOTE: The returned seed should only be used to distinguish commitments made before
+	/// the returned block number. If the block number is too early (i.e. commitments were
+	/// made afterwards), then ensure no further commitments may be made and repeatedly
+	/// call this on later blocks until the block number returned is later than the latest
+	/// commitment.
+	fn random(subject: &[u8]) -> (Output, BlockNumber);
 
 	/// Get the basic random seed.
 	///
-	/// In general you won't want to use this, but rather `Self::random` which allows you to give a
-	/// subject for the random result and whose value will be independently low-influence random
-	/// from any other such seeds.
-	fn random_seed() -> Output {
+	/// In general you won't want to use this, but rather `Self::random` which allows
+	/// you to give a subject for the random result and whose value will be
+	/// independently low-influence random from any other such seeds.
+	///
+	/// NOTE: The returned seed should only be used to distinguish commitments made before
+	/// the returned block number. If the block number is too early (i.e. commitments were
+	/// made afterwards), then ensure no further commitments may be made and repeatedly
+	/// call this on later blocks until the block number returned is later than the latest
+	/// commitment.
+	fn random_seed() -> (Output, BlockNumber) {
 		Self::random(&[][..])
-	}
-}
-
-/// Provides an implementation of [`Randomness`] that should only be used in tests!
-pub struct TestRandomness;
-
-impl<Output: Decode + Default> Randomness<Output> for TestRandomness {
-	fn random(subject: &[u8]) -> Output {
-		Output::decode(&mut TrailingZeroInput::new(subject)).unwrap_or_default()
 	}
 }
 
@@ -1518,6 +1522,38 @@ pub trait OnFinalize<BlockNumber> {
 	fn on_finalize(_n: BlockNumber) {}
 }
 
+/// The block's on idle trait.
+///
+/// Implementing this lets you express what should happen for your pallet before
+/// block finalization (see `on_finalize` hook) in case any remaining weight is left.
+pub trait OnIdle<BlockNumber> {
+	/// The block is being finalized.
+	/// Implement to have something happen in case there is leftover weight.
+	/// Check the passed `remaining_weight` to make sure it is high enough to allow for
+	/// your pallet's extra computation.
+	///
+	/// NOTE: This function is called AFTER ALL extrinsics - including inherent extrinsics -
+	/// in a block are applied but before `on_finalize` is executed.
+	fn on_idle(
+		_n: BlockNumber,
+		_remaining_weight: crate::weights::Weight
+	) -> crate::weights::Weight {
+		0
+	}
+}
+
+#[impl_for_tuples(30)]
+impl<BlockNumber: Clone> OnIdle<BlockNumber> for Tuple {
+	fn on_idle(n: BlockNumber,  remaining_weight: crate::weights::Weight) -> crate::weights::Weight {
+		let mut weight = 0;
+		for_tuples!( #(
+			let adjusted_remaining_weight = remaining_weight.saturating_sub(weight);
+			weight = weight.saturating_add(Tuple::on_idle(n.clone(),  adjusted_remaining_weight));
+		)* );
+		weight
+	}
+}
+
 /// The block initialization trait.
 ///
 /// Implementing this lets you express what should happen for your pallet when the block is
@@ -1535,9 +1571,9 @@ pub trait OnInitialize<BlockNumber> {
 
 #[impl_for_tuples(30)]
 impl<BlockNumber: Clone> OnInitialize<BlockNumber> for Tuple {
-	fn on_initialize(_n: BlockNumber) -> crate::weights::Weight {
+	fn on_initialize(n: BlockNumber) -> crate::weights::Weight {
 		let mut weight = 0;
-		for_tuples!( #( weight = weight.saturating_add(Tuple::on_initialize(_n.clone())); )* );
+		for_tuples!( #( weight = weight.saturating_add(Tuple::on_initialize(n.clone())); )* );
 		weight
 	}
 }
@@ -2034,6 +2070,18 @@ pub trait IsSubType<T> {
 pub trait Hooks<BlockNumber> {
 	/// The block is being finalized. Implement to have something happen.
 	fn on_finalize(_n: BlockNumber) {}
+
+	/// This will be run when the block is being finalized (before `on_finalize`).
+	/// Implement to have something happen using the remaining weight.
+	/// Will not fire if the remaining weight is 0.
+	/// Return the weight used, the hook will subtract it from current weight used
+	/// and pass the result to the next `on_idle` hook if it exists.
+	fn on_idle(
+		_n: BlockNumber,
+		_remaining_weight: crate::weights::Weight
+	) -> crate::weights::Weight {
+		0
+	}
 
 	/// The block is being initialized. Implement to have something happen.
 	///

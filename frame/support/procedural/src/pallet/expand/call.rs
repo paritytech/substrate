@@ -70,7 +70,17 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			.collect::<Vec<_>>()
 	});
 
+	let default_docs = [syn::parse_quote!(
+		r"Contains one variant per dispatchable that can be called by an extrinsic."
+	)];
+	let docs = if def.call.docs.is_empty() {
+		&default_docs[..]
+	} else {
+		&def.call.docs[..]
+	};
+
 	quote::quote_spanned!(def.call.attr_span =>
+		#( #[doc = #docs] )*
 		#[derive(
 			#frame_support::RuntimeDebugNoBound,
 			#frame_support::CloneNoBound,
@@ -87,7 +97,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 				#frame_support::sp_std::marker::PhantomData<(#type_use_gen,)>,
 				#frame_support::Never,
 			),
-			#( #fn_name( #( #args_compact_attr #args_type ),* ), )*
+			#( #( #[doc = #fn_doc] )* #fn_name( #( #args_compact_attr #args_type ),* ), )*
 		}
 
 		impl<#type_impl_gen> #frame_support::dispatch::GetDispatchInfo
