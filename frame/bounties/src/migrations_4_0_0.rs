@@ -15,20 +15,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Migrations to version [`3.0.0`], as denoted by the changelog.
-
-use sp_std::if_std;
+//! Migrations to version [`4.0.0`], as denoted by the changelog.
 
 use codec::{Encode, Decode, FullCodec};
 use sp_std::prelude::*;
 use frame_support::{
-	RuntimeDebug, weights::Weight, Twox64Concat,
+	weights::Weight, Twox64Concat,
 	storage::types::{StorageMap},
-	traits::{GetPalletVersion, PalletVersion},
+	traits::{PalletVersion},
+	crate_to_pallet_version,
+};
+
+use sp_runtime::{
+	RuntimeDebug
 };
 
 /// An index of a bounty. Just a `u32`.
 pub type BountyIndex = u32;
+
+/// Trait to implement to give information about types used for migration
+pub trait V3ToV4: frame_system::Config + pallet_treasury::Config {
+
+	type Balance: 'static + FullCodec + Copy;
+
+}
 
 /// The status of a bounty proposal.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -96,25 +106,13 @@ pub struct Bounty<AccountId, Balance, BlockNumber> {
 	active_subbounty_count: BountyIndex,
 }
 
-/// Trait to implement to give information about types used for migration
-pub trait V2ToV3 {
-
-	type Module: GetPalletVersion;
-
-	type AccountId: 'static + FullCodec;
-
-	type Balance: 'static + FullCodec + Copy;
-
-	type BlockNumber: 'static + FullCodec + Copy;
-}
-
 struct __Bounties;
 impl frame_support::traits::StorageInstance for __Bounties {
 	fn pallet_prefix() -> &'static str { "Treasury" }
 	const STORAGE_PREFIX: &'static str = "Bounties";
 }
 #[allow(type_alias_bounds)]
-type Bounties<T: V2ToV3> = StorageMap<__Bounties, Twox64Concat, BountyIndex, Option<Bounty<T::AccountId, T::Balance, T::BlockNumber>>>;
+type Bounties<T: V3ToV4> = StorageMap<__Bounties, Twox64Concat, BountyIndex, Bounty<T::AccountId, T::Balance, T::BlockNumber>>;
 
 /// Apply all of the migrations from 3_0_0 to 4_0_0.
 ///
@@ -125,35 +123,35 @@ type Bounties<T: V2ToV3> = StorageMap<__Bounties, Twox64Concat, BountyIndex, Opt
 ///
 /// Be aware that this migration is intended to be used only for the mentioned versions. Use
 /// with care and run at your own risk.
-pub fn apply<T: V2ToV3>( ) -> Weight {
-	let maybe_storage_version = <T::Module as GetPalletVersion>::storage_version();
+pub fn apply<T: V3ToV4>( ) -> Weight {
+
+	let maybe_storage_version = crate_to_pallet_version!();
+
 	log::info!(
 		target: "runtime::pallet-bounties",
 		"Running migration for pallet-bounties with storage version {:?}",
 		maybe_storage_version,
 	);
-	match maybe_storage_version {
-		Some(storage_version) if storage_version <= PalletVersion::new(2, 0, 0) => {
-			migrate_bounty_to_support_subbounty::<T>();
-			Weight::max_value()
-		}
-		_ => {
-			log::warn!(
-				target: "runtime::pallet-bounties",
-				"Attempted to apply migration to V3 but failed because storage version is {:?}",
-				maybe_storage_version,
-			);
-			0
-		},
+
+	if maybe_storage_version <= PalletVersion::new(4, 0, 0) {
+		migrate_bounty_to_support_subbounty::<T>();
+		Weight::max_value()
+	} else {
+		log::warn!(
+			target: "runtime::pallet-bounties",
+			"Attempted to apply migration to V4 but failed because storage version is {:?}",
+			maybe_storage_version,
+		);
+		0
 	}
 }
 
 /// Migrate to support subbounty extn
-pub fn migrate_bounty_to_support_subbounty<T: V2ToV3>() {
-	<Bounties<T>>::translate::<Option<OldBounty<T::AccountId, T::Balance, T::BlockNumber>>, _>(
-		|_index, maybe_bounties| {
-			let bounties = maybe_bounties.unwrap();
-			Some(Some(Bounty {
+fn migrate_bounty_to_support_subbounty<T: V3ToV4>() {
+
+	<Bounties<T>>::translate::<OldBounty<T::AccountId, T::Balance, T::BlockNumber>, _>(
+		|_index, bounties| {
+			Some(Bounty {
 				proposer: bounties.proposer,
 				value: bounties.value,
 				fee: bounties.fee,
@@ -161,7 +159,7 @@ pub fn migrate_bounty_to_support_subbounty<T: V2ToV3>() {
 				bond: bounties.bond,
 				status: bounties.status,
 				active_subbounty_count: 0,
-			}))
+			})
 		},
 	);
 
@@ -170,10 +168,4 @@ pub fn migrate_bounty_to_support_subbounty<T: V2ToV3>() {
 		"migrated {} Bounties",
 		<Bounties<T>>::iter().count(),
 	);
-
-	if_std! {
-		println!("migrated {} Bounties",
-			<Bounties<T>>::iter().count(),
-		);
-	}
 }

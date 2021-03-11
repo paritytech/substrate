@@ -1560,45 +1560,6 @@ impl<T: Config> Module<T> {
 			}
 		)
 	}
-
-	pub fn migrate_bounty_for_subbounty_extn() {
-
-		#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-		pub struct OldBounty<AccountId, Balance, BlockNumber> {
-			/// The account proposing it.
-			proposer: AccountId,
-			/// The (total) amount that should be paid if the bounty is rewarded.
-			value: Balance,
-			/// The curator fee. Included in value.
-			fee: Balance,
-			/// The deposit of curator.
-			curator_deposit: Balance,
-			/// The amount held on deposit (reserved) for making this proposal.
-			bond: Balance,
-			/// The status of this bounty.
-			status: BountyStatus<AccountId, BlockNumber>,
-		}
-
-		use frame_support::{Twox64Concat, migration::StorageKeyIterator};
-
-		for (bounty_index, old_bounty) in StorageKeyIterator::<
-			BountyIndex,
-			OldBounty<T::AccountId, BalanceOf<T>, T::BlockNumber>,
-			Twox64Concat,
-		>::new(b"Treasury", b"Bounties").drain()
-		{
-			let new_bounty = Bounty {
-				proposer: old_bounty.proposer,
-				value: old_bounty.value,
-				fee: old_bounty.fee,
-				curator_deposit: old_bounty.curator_deposit,
-				bond: old_bounty.bond,
-				status: old_bounty.status,
-				active_subbounty_count: 0,
-			};
-			Bounties::<T>::insert(bounty_index, new_bounty)
-		}
-	}
 }
 
 impl<T: Config> pallet_treasury::SpendFunds<T> for Module<T> {
