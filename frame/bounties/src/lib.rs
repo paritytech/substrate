@@ -896,10 +896,11 @@ decl_module! {
 			let signer = ensure_signed(origin)?;
 			let subcurator = T::Lookup::lookup(subcurator)?;
 
-			// Ensure parent bounty exist & get master curator or default if none
-			let master_curator = Self::ensure_bounty_exist(bounty_id, false)
-				.map(|rval| rval.map(|v| v.0).unwrap_or(T::AccountId::default()))
+			// Ensure parent bounty exist & get master curator
+			let maybe_master_curator = Self::ensure_bounty_exist(bounty_id, false)
+				.map(|rval| rval.map(|v| v.0))
 				.map_err(|err| err)?;
+
 
 			// Mutate the Subbounty instance
 			SubBounties::<T>::try_mutate_exists(
@@ -912,6 +913,7 @@ decl_module! {
 						.ok_or(Error::<T>::InvalidIndex)?;
 
 					// Ensure sure caller is curator
+					let master_curator = maybe_master_curator.ok_or(Error::<T>::RequireCurator)?;
 					ensure!(signer == master_curator, Error::<T>::RequireCurator);
 
 					// Ensure subbounty is in expected state
@@ -1061,12 +1063,10 @@ decl_module! {
 				.map(Some)
 				.or_else(|_| T::RejectOrigin::ensure_origin(origin).map(|_| None))?;
 
-			// Ensure parent bounty exist, get active status info or use default.
-			let (master_curator, update_due) = Self::ensure_bounty_exist(
+			// Ensure parent bounty exist, get active status info.
+			let maybe_bounty_active_status = Self::ensure_bounty_exist(
 				bounty_id,
 				maybe_sender.is_none(),
-			).map(|rval|
-				rval.unwrap_or((T::AccountId::default(), Zero::zero())),
 			).map_err(|err| err)?;
 
 			// Ensure subbounty is in expected state
@@ -1101,7 +1101,8 @@ decl_module! {
 							ensure!(
 								maybe_sender.map_or(
 									true,
-									|sender| sender == *subcurator || sender == master_curator
+									|sender| sender == *subcurator ||
+										sender == maybe_bounty_active_status.unwrap().0
 								),
 								BadOrigin,
 							);
@@ -1125,7 +1126,7 @@ decl_module! {
 											subbounty.curator_deposit,
 										);
 										// Continue to change bounty status below...
-									} else if sender == master_curator {
+									} else if sender == maybe_bounty_active_status.as_ref().unwrap().0 {
 										// looks like subcurator is inactive,
 										// slash the subcurator deposit.
 										slash_curator(subcurator, &mut subbounty.curator_deposit);
@@ -1135,7 +1136,7 @@ decl_module! {
 										// looks like subcurator is inactive,
 										// slash the subcurator deposit.
 										let block_number = system::Module::<T>::block_number();
-										if update_due < block_number {
+										if block_number > maybe_bounty_active_status.as_ref().unwrap().1 {
 											slash_curator(
 												subcurator,
 												&mut subbounty.curator_deposit,
@@ -1153,7 +1154,7 @@ decl_module! {
 							ensure!(
 								maybe_sender.map_or(
 									true,
-									|sender| sender == master_curator,
+									|sender| sender == maybe_bounty_active_status.unwrap().0,
 								),
 								BadOrigin,
 							);

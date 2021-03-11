@@ -34,10 +34,8 @@ use sp_runtime::{
 pub type BountyIndex = u32;
 
 /// Trait to implement to give information about types used for migration
-pub trait V3ToV4: frame_system::Config + pallet_treasury::Config {
-
+pub trait V3ToV4: frame_system::Config {
 	type Balance: 'static + FullCodec + Copy;
-
 }
 
 /// The status of a bounty proposal.
