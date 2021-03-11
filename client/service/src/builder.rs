@@ -39,7 +39,7 @@ use futures::{
 	channel::oneshot,
 };
 use sc_keystore::LocalKeystore;
-use log::{info, warn};
+use log::info;
 use sc_network::config::{Role, OnDemand};
 use sc_network::NetworkService;
 use sc_network::block_request_handler::{self, BlockRequestHandler};
@@ -338,13 +338,17 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 			transaction_storage: config.transaction_storage.clone(),
 		};
 
+
+		let backend = new_db_backend(db_config)?;
+
 		let extensions = sc_client_api::execution_extensions::ExecutionExtensions::new(
 			config.execution_strategies.clone(),
 			Some(keystore_container.sync_keystore()),
+			sc_offchain::OffchainDb::factory_from_backend(&*backend),
 		);
 
-		new_client(
-			db_config,
+		let client = new_client(
+			backend.clone(),
 			executor,
 			chain_spec.as_storage_builder(),
 			fork_blocks,
@@ -357,7 +361,9 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 				offchain_indexing_api: config.offchain_worker.indexing_enabled,
 				wasm_runtime_overrides: config.wasm_runtime_overrides.clone(),
 			},
-		)?
+		)?;
+
+		(client, backend)
 	};
 
 	Ok((
@@ -420,9 +426,20 @@ pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 	Ok((client, backend, keystore_container, task_manager, on_demand))
 }
 
-/// Create an instance of db-backed client.
-pub fn new_client<E, Block, RA>(
+/// Create an instance of default DB-backend backend.
+pub fn new_db_backend<Block>(
 	settings: DatabaseSettings,
+) -> Result<Arc<Backend<Block>>, sp_blockchain::Error> where
+	Block: BlockT,
+{
+	const CANONICALIZATION_DELAY: u64 = 4096;
+
+	Ok(Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?))
+}
+
+/// Create an instance of client backed by given backend.
+pub fn new_client<E, Block, RA>(
+	backend: Arc<Backend<Block>>,
 	executor: E,
 	genesis_storage: &dyn BuildStorage,
 	fork_blocks: ForkBlocks<Block>,
@@ -431,38 +448,30 @@ pub fn new_client<E, Block, RA>(
 	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
 	config: ClientConfig,
-) -> Result<(
+) -> Result<
 	crate::client::Client<
 		Backend<Block>,
 		crate::client::LocalCallExecutor<Backend<Block>, E>,
 		Block,
 		RA,
 	>,
-	Arc<Backend<Block>>,
-),
 	sp_blockchain::Error,
 >
 	where
 		Block: BlockT,
 		E: CodeExecutor + RuntimeInfo,
 {
-	const CANONICALIZATION_DELAY: u64 = 4096;
-
-	let backend = Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?);
 	let executor = crate::client::LocalCallExecutor::new(backend.clone(), executor, spawn_handle, config.clone())?;
-	Ok((
-		crate::client::Client::new(
-			backend.clone(),
-			executor,
-			genesis_storage,
-			fork_blocks,
-			bad_blocks,
-			execution_extensions,
-			prometheus_registry,
-			config,
-		)?,
+	Ok(crate::client::Client::new(
 		backend,
-	))
+		executor,
+		genesis_storage,
+		fork_blocks,
+		bad_blocks,
+		execution_extensions,
+		prometheus_registry,
+		config,
+	)?)
 }
 
 /// Parameters to pass into `build`.
@@ -499,28 +508,18 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 }
 
 /// Build a shared offchain workers instance.
-pub fn build_offchain_workers<TBl, TBackend, TCl>(
+pub fn build_offchain_workers<TBl, TCl>(
 	config: &Configuration,
-	backend: Arc<TBackend>,
 	spawn_handle: SpawnTaskHandle,
 	client: Arc<TCl>,
 	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
-) -> Option<Arc<sc_offchain::OffchainWorkers<TCl, TBackend::OffchainStorage, TBl>>>
+) -> Option<Arc<sc_offchain::OffchainWorkers<TCl, TBl>>>
 	where
-		TBl: BlockT, TBackend: sc_client_api::Backend<TBl>,
-		<TBackend as sc_client_api::Backend<TBl>>::OffchainStorage: 'static,
+		TBl: BlockT,
 		TCl: Send + Sync + ProvideRuntimeApi<TBl> + BlockchainEvents<TBl> + 'static,
 		<TCl as ProvideRuntimeApi<TBl>>::Api: sc_offchain::OffchainWorkerApi<TBl>,
 {
-	let offchain_workers = match backend.offchain_storage() {
-		Some(db) => {
-			Some(Arc::new(sc_offchain::OffchainWorkers::new(client.clone(), db)))
-		},
-		None => {
-			warn!("Offchain workers disabled, due to lack of offchain storage support in backend.");
-			None
-		},
-	};
+	let offchain_workers = Some(Arc::new(sc_offchain::OffchainWorkers::new(client.clone())));
 
 	// Inform the offchain worker about new imported blocks
 	if let Some(offchain) = offchain_workers.clone() {
