@@ -227,7 +227,7 @@ fn check_events<T: Config, I: Iterator<Item = <T as SystemConfig>::Event>>(expec
 	}
 
 	if !length_mismatch.is_empty() {
-		panic!(length_mismatch);
+		panic!("{}", length_mismatch);
 	}
 }
 

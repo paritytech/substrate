@@ -72,6 +72,13 @@ pub struct BenchmarkCmd {
 	#[structopt(long)]
 	pub template: Option<std::path::PathBuf>,
 
+	/// Which analysis function to use when outputting benchmarks:
+	/// * min-squares (default)
+	/// * median-slopes
+	/// * max (max of min squares and median slopes for each value)
+	#[structopt(long)]
+	pub output_analysis: Option<String>,
+
 	/// Set the heap pages while running benchmarks.
 	#[structopt(long)]
 	pub heap_pages: Option<u64>,

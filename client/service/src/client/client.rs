@@ -52,7 +52,7 @@ use sp_state_machine::{
 use sc_executor::RuntimeVersion;
 use sp_consensus::{
 	Error as ConsensusError, BlockStatus, BlockImportParams, BlockCheckParams,
-	ImportResult, BlockOrigin, ForkChoiceStrategy, RecordProof,
+	ImportResult, BlockOrigin, ForkChoiceStrategy,
 };
 use sp_blockchain::{
 	self as blockchain,
@@ -66,7 +66,7 @@ use sp_api::{
 	CallApiAt, ConstructRuntimeApi, Core as CoreApi, ApiExt, ApiRef, ProvideRuntimeApi,
 	CallApiAtParams,
 };
-use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
+use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider, RecordProof};
 use sc_client_api::{
 	backend::{
 		self, BlockImportOperation, PrunableStateChangesTrieStorage,
@@ -205,7 +205,11 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 		B: backend::LocalBackend<Block> + 'static,
 {
 	let call_executor = LocalCallExecutor::new(backend.clone(), executor, spawn_handle, config.clone())?;
-	let extensions = ExecutionExtensions::new(Default::default(), keystore);
+	let extensions = ExecutionExtensions::new(
+		Default::default(),
+		keystore,
+		sc_offchain::OffchainDb::factory_from_backend(&*backend),
+	);
 	Client::new(
 		backend,
 		call_executor,

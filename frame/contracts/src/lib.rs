@@ -151,7 +151,7 @@ pub mod pallet {
 		type Time: Time;
 
 		/// The generator used to supply randomness to contracts through `seal_random`.
-		type Randomness: Randomness<Self::Hash>;
+		type Randomness: Randomness<Self::Hash, Self::BlockNumber>;
 
 		/// The currency in which fees are paid and contract balances are held.
 		type Currency: Currency<Self::AccountId>;
@@ -837,6 +837,8 @@ pub struct RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
 	pub deduct_block: BlockNumber,
 	/// Last block child storage has been written.
 	pub last_write: Option<BlockNumber>,
+	/// This field is reserved for future evolution of format.
+	pub _reserved: Option<()>,
 }
 
 impl<CodeHash, Balance, BlockNumber> RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
