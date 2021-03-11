@@ -94,14 +94,19 @@ impl ChainInfo for NodeTemplateChainInfo {
         sc_service::Error,
     > {
         let (client, backend, keystore, task_manager) =
-            new_full_parts::<Self::Block, Self::RuntimeApi, Self::Executor>(config)?;
+            new_full_parts::<Self::Block, Self::RuntimeApi, Self::Executor>(config, None)?;
         let client = Arc::new(client);
 
         let inherent_providers = InherentDataProviders::new();
         let select_chain = sc_consensus::LongestChain::new(backend.clone());
 
         let (grandpa_block_import, ..) =
-            grandpa::block_import(client.clone(), &(client.clone() as Arc<_>), select_chain.clone())?;
+            grandpa::block_import(
+                client.clone(), 
+                &(client.clone() as Arc<_>),
+                select_chain.clone(),
+                None
+            )?;
 
         let (block_import, babe_link) = sc_consensus_babe::block_import(
             sc_consensus_babe::Config::get_or_compute(&*client)?,

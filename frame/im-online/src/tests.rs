@@ -23,7 +23,8 @@ use super::*;
 use crate::mock::*;
 use sp_core::OpaquePeerId;
 use sp_core::offchain::{
-	OffchainExt,
+	OffchainDbExt,
+	OffchainWorkerExt,
 	TransactionPoolExt,
 	testing::{TestOffchainExt, TestTransactionPoolExt},
 };
@@ -205,7 +206,8 @@ fn should_generate_heartbeats() {
 	let mut ext = new_test_ext();
 	let (offchain, _state) = TestOffchainExt::new();
 	let (pool, state) = TestTransactionPoolExt::new();
-	ext.register_extension(OffchainExt::new(offchain));
+	ext.register_extension(OffchainDbExt::new(offchain.clone()));
+	ext.register_extension(OffchainWorkerExt::new(offchain));
 	ext.register_extension(TransactionPoolExt::new(pool));
 
 	ext.execute_with(|| {
@@ -310,7 +312,8 @@ fn should_not_send_a_report_if_already_online() {
 	let mut ext = new_test_ext();
 	let (offchain, _state) = TestOffchainExt::new();
 	let (pool, pool_state) = TestTransactionPoolExt::new();
-	ext.register_extension(OffchainExt::new(offchain));
+	ext.register_extension(OffchainDbExt::new(offchain.clone()));
+	ext.register_extension(OffchainWorkerExt::new(offchain));
 	ext.register_extension(TransactionPoolExt::new(pool));
 
 	ext.execute_with(|| {

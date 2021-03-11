@@ -120,6 +120,7 @@ impl TestNetFactory for GrandpaTestNet {
 					client.clone(),
 					&self.test_config,
 					LongestChain::new(backend.clone()),
+					None,
 				).expect("Could not create block import for fresh peer.");
 				let justification_import = Box::new(import.clone());
 				(
@@ -252,13 +253,14 @@ fn initialize_grandpa(
 				name: Some(format!("peer#{}", peer_id)),
 				is_authority: true,
 				observer_enabled: true,
+				telemetry: None,
 			},
 			link,
 			network: net_service,
-			telemetry_on_connect: None,
 			voting_rule: (),
 			prometheus_registry: None,
 			shared_voter_state: SharedVoterState::empty(),
+			telemetry: None,
 		};
 		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 
@@ -395,13 +397,14 @@ fn finalize_3_voters_1_full_observer() {
 				name: Some(format!("peer#{}", peer_id)),
 				is_authority: true,
 				observer_enabled: true,
+				telemetry: None,
 			},
 			link: link,
 			network: net_service,
-			telemetry_on_connect: None,
 			voting_rule: (),
 			prometheus_registry: None,
 			shared_voter_state: SharedVoterState::empty(),
+			telemetry: None,
 		};
 
 		run_grandpa_voter(grandpa_params).expect("all in order with client and network")
@@ -488,13 +491,14 @@ fn transition_3_voters_twice_1_full_observer() {
 				name: Some(format!("peer#{}", peer_id)),
 				is_authority: true,
 				observer_enabled: true,
+				telemetry: None,
 			},
 			link,
 			network: net_service,
-			telemetry_on_connect: None,
 			voting_rule: (),
 			prometheus_registry: None,
 			shared_voter_state: SharedVoterState::empty(),
+			telemetry: None,
 		};
 
 		voters.push(run_grandpa_voter(grandpa_params).expect("all in order with client and network"));
@@ -921,6 +925,7 @@ fn voter_persists_its_votes() {
 			name: Some(format!("peer#{}", 1)),
 			is_authority: true,
 			observer_enabled: true,
+			telemetry: None,
 		};
 
 		let set_state = {
@@ -938,6 +943,7 @@ fn voter_persists_its_votes() {
 			net.peers[1].network_service().clone(),
 			config.clone(),
 			set_state,
+			None,
 			None,
 		)
 	};
@@ -964,13 +970,14 @@ fn voter_persists_its_votes() {
 				name: Some(format!("peer#{}", 0)),
 				is_authority: true,
 				observer_enabled: true,
+				telemetry: None,
 			},
 			link,
 			network: net_service,
-			telemetry_on_connect: None,
 			voting_rule: VotingRulesBuilder::default().build(),
 			prometheus_registry: None,
 			shared_voter_state: SharedVoterState::empty(),
+			telemetry: None,
 		};
 
 		run_grandpa_voter(grandpa_params).expect("all in order with client and network")
@@ -1006,13 +1013,14 @@ fn voter_persists_its_votes() {
 				name: Some(format!("peer#{}", 0)),
 				is_authority: true,
 				observer_enabled: true,
+				telemetry: None,
 			},
 			link,
 			network: net_service,
-			telemetry_on_connect: None,
 			voting_rule: VotingRulesBuilder::default().build(),
 			prometheus_registry: None,
 			shared_voter_state: SharedVoterState::empty(),
+			telemetry: None,
 		};
 
 		run_grandpa_voter(grandpa_params)
@@ -1165,6 +1173,7 @@ fn finalize_3_voters_1_light_observer() {
 			name: Some("observer".to_string()),
 			is_authority: false,
 			observer_enabled: true,
+			telemetry: None,
 		},
 		net.peers[3].data.lock().take().expect("link initialized at startup; qed"),
 		net.peers[3].network_service().clone(),
@@ -1206,13 +1215,14 @@ fn voter_catches_up_to_latest_round_when_behind() {
 				name: Some(format!("peer#{}", peer_id)),
 				is_authority: true,
 				observer_enabled: true,
+				telemetry: None,
 			},
 			link,
 			network: net.lock().peer(peer_id).network_service().clone(),
-			telemetry_on_connect: None,
 			voting_rule: (),
 			prometheus_registry: None,
 			shared_voter_state: SharedVoterState::empty(),
+			telemetry: None,
 		};
 
 		Box::pin(run_grandpa_voter(grandpa_params).expect("all in order with client and network"))
@@ -1328,12 +1338,14 @@ where
 		name: None,
 		is_authority: true,
 		observer_enabled: true,
+		telemetry: None,
 	};
 
 	let network = NetworkBridge::new(
 		network_service.clone(),
 		config.clone(),
 		set_state.clone(),
+		None,
 		None,
 	);
 
@@ -1349,6 +1361,7 @@ where
 		voting_rule,
 		metrics: None,
 		justification_sender: None,
+		telemetry: None,
 		_phantom: PhantomData,
 	}
 }

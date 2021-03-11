@@ -207,7 +207,6 @@ impl<T: ChainInfo> Node<T> {
 			keep_blocks: KeepBlocks::All,
 			state_pruning: Default::default(),
 			transaction_storage: TransactionStorageMode::BlockBody,
-			telemetry_handle: Default::default(),
 		};
 
 		let (
@@ -246,7 +245,7 @@ impl<T: ChainInfo> Node<T> {
 		};
 
 		sc_service::build_offchain_workers(
-			&config, backend.clone(),
+			&config,
 			task_manager.spawn_handle(),
 			client.clone(),
 			network.clone(),
@@ -258,12 +257,13 @@ impl<T: ChainInfo> Node<T> {
 			client.clone(),
 			transaction_pool.clone(),
 			config.prometheus_registry(),
+			None
 		);
 
 		// Channel for the rpc handler to communicate with the authorship task.
 		let (command_sink, commands_stream) = mpsc::channel(10);
 
-		let (rpc_handlers, _) = {
+		let rpc_handlers = {
 			let params = SpawnTasksParams {
 				config,
 				client: client.clone(),
@@ -277,7 +277,7 @@ impl<T: ChainInfo> Node<T> {
 				network,
 				network_status_sinks,
 				system_rpc_tx,
-				telemetry_span: None
+				telemetry: None
 			};
 			spawn_tasks(params)?
 		};

@@ -25,7 +25,6 @@ use futures::select;
 use futures::{future, future::FutureExt, Future};
 use log::info;
 use sc_service::{Configuration, TaskType, TaskManager};
-use sc_telemetry::{TelemetryHandle, TelemetryWorker};
 use sp_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
 use std::marker::PhantomData;
 use sc_service::Error as ServiceError;
@@ -115,7 +114,6 @@ where
 pub struct Runner<C: SubstrateCli> {
 	config: Configuration,
 	tokio_runtime: tokio::runtime::Runtime,
-	telemetry_worker: TelemetryWorker,
 	phantom: PhantomData<C>,
 }
 
@@ -124,7 +122,6 @@ impl<C: SubstrateCli> Runner<C> {
 	pub fn new<T: CliConfiguration>(
 		cli: &C,
 		command: &T,
-		telemetry_worker: TelemetryWorker,
 	) -> Result<Runner<C>> {
 		let tokio_runtime = build_runtime()?;
 		let runtime_handle = tokio_runtime.handle().clone();
@@ -138,16 +135,12 @@ impl<C: SubstrateCli> Runner<C> {
 			}
 		};
 
-		let telemetry_handle = telemetry_worker.handle();
-
 		Ok(Runner {
 			config: command.create_configuration(
 				cli,
 				task_executor.into(),
-				Some(telemetry_handle),
 			)?,
 			tokio_runtime,
-			telemetry_worker,
 			phantom: PhantomData,
 		})
 	}
@@ -197,7 +190,6 @@ impl<C: SubstrateCli> Runner<C> {
 	{
 		self.print_node_infos();
 		let mut task_manager = self.tokio_runtime.block_on(initialize(self.config))?;
-		task_manager.spawn_handle().spawn("telemetry_worker", self.telemetry_worker.run());
 		let res = self.tokio_runtime.block_on(main(task_manager.future().fuse()));
 		self.tokio_runtime.block_on(task_manager.clean_shutdown());
 		Ok(res?)
@@ -235,12 +227,5 @@ impl<C: SubstrateCli> Runner<C> {
 	/// Get a mutable reference to the node Configuration
 	pub fn config_mut(&mut self) -> &mut Configuration {
 		&mut self.config
-	}
-
-	/// Get a new [`TelemetryHandle`].
-	///
-	/// This is used when you want to register with the [`TelemetryWorker`].
-	pub fn telemetry_handle(&self) -> TelemetryHandle {
-		self.telemetry_worker.handle()
 	}
 }

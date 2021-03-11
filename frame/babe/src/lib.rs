@@ -25,7 +25,7 @@ use codec::{Decode, Encode};
 use frame_support::{
 	decl_error, decl_module, decl_storage,
 	dispatch::DispatchResultWithPostInfo,
-	traits::{FindAuthor, Get, KeyOwnerProofSystem, OneSessionHandler, Randomness as RandomnessT},
+	traits::{FindAuthor, Get, KeyOwnerProofSystem, OneSessionHandler},
 	weights::{Pays, Weight},
 	Parameter,
 };
@@ -33,7 +33,7 @@ use frame_system::{ensure_none, ensure_root, ensure_signed};
 use sp_application_crypto::Public;
 use sp_runtime::{
 	generic::DigestItem,
-	traits::{Hash, IsMember, One, SaturatedConversion, Saturating, Zero},
+	traits::{IsMember, One, SaturatedConversion, Saturating, Zero},
 	ConsensusEngineId, KeyTypeId,
 };
 use sp_session::{GetSessionNumber, GetValidatorCount};
@@ -42,14 +42,16 @@ use sp_timestamp::OnTimestampSet;
 
 use sp_consensus_babe::{
 	digests::{NextConfigDescriptor, NextEpochDescriptor, PreDigest},
-	BabeAuthorityWeight, ConsensusLog, Epoch, EquivocationProof, Slot, BABE_ENGINE_ID,
+	BabeAuthorityWeight, BabeEpochConfiguration, ConsensusLog, Epoch,
+	EquivocationProof, Slot, BABE_ENGINE_ID,
 };
 use sp_consensus_vrf::schnorrkel;
 
 pub use sp_consensus_babe::{AuthorityId, PUBLIC_KEY_LENGTH, RANDOMNESS_LENGTH, VRF_OUTPUT_LENGTH};
 
-mod equivocation;
 mod default_weights;
+mod equivocation;
+mod randomness;
 
 #[cfg(any(feature = "runtime-benchmarks", test))]
 mod benchmarking;
@@ -59,6 +61,9 @@ mod mock;
 mod tests;
 
 pub use equivocation::{BabeEquivocationOffence, EquivocationHandler, HandleEquivocation};
+pub use randomness::{
+	CurrentBlockRandomness, RandomnessFromOneEpochAgo, RandomnessFromTwoEpochsAgo,
+};
 
 pub trait Config: pallet_timestamp::Config {
 	/// The amount of time, in slots, that each epoch should last.
@@ -187,8 +192,8 @@ decl_storage! {
 		// variable to its underlying value.
 		pub Randomness get(fn randomness): schnorrkel::Randomness;
 
-		/// Next epoch configuration, if changed.
-		NextEpochConfig: Option<NextConfigDescriptor>;
+		/// Pending epoch configuration change that will be applied when the next epoch is enacted.
+		PendingEpochConfigChange: Option<NextConfigDescriptor>;
 
 		/// Next epoch randomness.
 		NextRandomness: schnorrkel::Randomness;
@@ -219,16 +224,34 @@ decl_storage! {
 		/// secondary plain slots are enabled (which don't contain a VRF output).
 		AuthorVrfRandomness get(fn author_vrf_randomness): MaybeRandomness;
 
+		/// The block numbers when the last and current epoch have started, respectively `N-1` and
+		/// `N`.
+		/// NOTE: We track this is in order to annotate the block number when a given pool of
+		/// entropy was fixed (i.e. it was known to chain observers). Since epochs are defined in
+		/// slots, which may be skipped, the block numbers may not line up with the slot numbers.
+		EpochStart: (T::BlockNumber, T::BlockNumber);
+
 		/// How late the current block is compared to its parent.
 		///
 		/// This entry is populated as part of block execution and is cleaned up
 		/// on block finalization. Querying this storage entry outside of block
 		/// execution context should always yield zero.
 		Lateness get(fn lateness): T::BlockNumber;
+
+		/// The configuration for the current epoch. Should never be `None` as it is initialized in genesis.
+		EpochConfig: Option<BabeEpochConfiguration>;
+
+		/// The configuration for the next epoch, `None` if the config will not change
+		/// (you can fallback to `EpochConfig` instead in that case).
+		NextEpochConfig: Option<BabeEpochConfiguration>;
 	}
 	add_extra_genesis {
 		config(authorities): Vec<(AuthorityId, BabeAuthorityWeight)>;
-		build(|config| Module::<T>::initialize_authorities(&config.authorities))
+		config(epoch_config): Option<BabeEpochConfiguration>;
+		build(|config| {
+			Module::<T>::initialize_authorities(&config.authorities);
+			EpochConfig::put(config.epoch_config.clone().expect("epoch_config must not be None"));
+		})
 	}
 }
 
@@ -326,33 +349,8 @@ decl_module! {
 			config: NextConfigDescriptor,
 		) {
 			ensure_root(origin)?;
-			NextEpochConfig::put(config);
+			PendingEpochConfigChange::put(config);
 		}
-	}
-}
-
-impl<T: Config> RandomnessT<<T as frame_system::Config>::Hash> for Module<T> {
-	/// Some BABE blocks have VRF outputs where the block producer has exactly one bit of influence,
-	/// either they make the block or they do not make the block and thus someone else makes the
-	/// next block. Yet, this randomness is not fresh in all BABE blocks.
-	///
-	/// If that is an insufficient security guarantee then two things can be used to improve this
-	/// randomness:
-	///
-	/// - Name, in advance, the block number whose random value will be used; ensure your module
-	///   retains a buffer of previous random values for its subject and then index into these in
-	///   order to obviate the ability of your user to look up the parent hash and choose when to
-	///   transact based upon it.
-	/// - Require your user to first commit to an additional value by first posting its hash.
-	///   Require them to reveal the value to determine the final result, hashing it with the
-	///   output of this random function. This reduces the ability of a cabal of block producers
-	///   from conspiring against individuals.
-	fn random(subject: &[u8]) -> T::Hash {
-		let mut subject = subject.to_vec();
-		subject.reserve(VRF_OUTPUT_LENGTH);
-		subject.extend_from_slice(&Self::randomness()[..]);
-
-		<T as frame_system::Config>::Hashing::hash(&subject[..])
 	}
 }
 
@@ -480,6 +478,12 @@ impl<T: Config> Module<T> {
 		// Update the next epoch authorities.
 		NextAuthorities::put(&next_authorities);
 
+		// Update the start blocks of the previous and new current epoch.
+		<EpochStart<T>>::mutate(|(previous_epoch_start_block, current_epoch_start_block)| {
+			*previous_epoch_start_block = sp_std::mem::take(current_epoch_start_block);
+			*current_epoch_start_block = <frame_system::Module<T>>::block_number();
+		});
+
 		// After we update the current epoch, we signal the *next* epoch change
 		// so that nodes can track changes.
 		let next_randomness = NextRandomness::get();
@@ -490,8 +494,16 @@ impl<T: Config> Module<T> {
 		};
 		Self::deposit_consensus(ConsensusLog::NextEpochData(next_epoch));
 
-		if let Some(next_config) = NextEpochConfig::take() {
-			Self::deposit_consensus(ConsensusLog::NextConfigData(next_config));
+		if let Some(next_config) = NextEpochConfig::get() {
+			EpochConfig::put(next_config);
+		}
+
+		if let Some(pending_epoch_config_change) = PendingEpochConfigChange::take() {
+			let next_epoch_config: BabeEpochConfiguration =
+				pending_epoch_config_change.clone().into();
+			NextEpochConfig::put(next_epoch_config);
+
+			Self::deposit_consensus(ConsensusLog::NextConfigData(pending_epoch_config_change));
 		}
 	}
 
@@ -510,6 +522,7 @@ impl<T: Config> Module<T> {
 			duration: T::EpochDuration::get(),
 			authorities: Self::authorities(),
 			randomness: Self::randomness(),
+			config: EpochConfig::get().expect("EpochConfig is initialized in genesis; we never `take` or `kill` it; qed"),
 		}
 	}
 
@@ -527,6 +540,9 @@ impl<T: Config> Module<T> {
 			duration: T::EpochDuration::get(),
 			authorities: NextAuthorities::get(),
 			randomness: NextRandomness::get(),
+			config: NextEpochConfig::get().unwrap_or_else(|| {
+				EpochConfig::get().expect("EpochConfig is initialized in genesis; we never `take` or `kill` it; qed")
+			}),
 		}
 	}
 
@@ -834,4 +850,50 @@ fn compute_randomness(
 	}
 
 	sp_io::hashing::blake2_256(&s)
+}
+
+pub mod migrations {
+	use super::*;
+	use frame_support::pallet_prelude::{ValueQuery, StorageValue};
+
+	/// Something that can return the storage prefix of the `Babe` pallet.
+	pub trait BabePalletPrefix: Config {
+		fn pallet_prefix() -> &'static str;
+	}
+
+	struct __OldNextEpochConfig<T>(sp_std::marker::PhantomData<T>);
+	impl<T: BabePalletPrefix> frame_support::traits::StorageInstance for __OldNextEpochConfig<T> {
+		fn pallet_prefix() -> &'static str { T::pallet_prefix() }
+		const STORAGE_PREFIX: &'static str = "NextEpochConfig";
+	}
+
+	type OldNextEpochConfig<T> = StorageValue<
+		__OldNextEpochConfig<T>, Option<NextConfigDescriptor>, ValueQuery
+	>;
+
+	/// A storage migration that adds the current epoch configuration for Babe
+	/// to storage.
+	pub fn add_epoch_configuration<T: BabePalletPrefix>(
+		epoch_config: BabeEpochConfiguration,
+	) -> Weight {
+		let mut writes = 0;
+		let mut reads = 0;
+
+		if let Some(pending_change) = OldNextEpochConfig::<T>::get() {
+			PendingEpochConfigChange::put(pending_change);
+
+			writes += 1;
+		}
+
+		reads += 1;
+
+		OldNextEpochConfig::<T>::kill();
+
+		EpochConfig::put(epoch_config.clone());
+		NextEpochConfig::put(epoch_config);
+
+		writes += 3;
+
+		T::DbWeight::get().writes(writes) + T::DbWeight::get().reads(reads)
+	}
 }

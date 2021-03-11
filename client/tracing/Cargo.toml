@@ -30,7 +30,6 @@ tracing-core = "0.1.17"
 tracing-log = "0.1.1"
 tracing-subscriber = "0.2.15"
 sp-tracing = { version = "3.0.0", path = "../../primitives/tracing" }
-sc-telemetry = { version = "3.0.0", path = "../telemetry" }
 sc-tracing-proc-macro = { version = "3.0.0", path = "./proc-macro" }
 
 [target.'cfg(target_os = "unknown")'.dependencies]
