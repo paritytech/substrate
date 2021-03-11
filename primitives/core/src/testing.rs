@@ -186,6 +186,15 @@ impl crate::traits::TaskHandleTrait for Handle {
 }
 
 #[cfg(feature = "std")]
+impl Drop for Handle {
+	fn drop(&mut self) {
+		// avoid dropping thread when we don't
+		// use the handle.
+		self.0.take().map(|inner| inner.forget());
+	}
+}
+
+#[cfg(feature = "std")]
 impl crate::traits::SpawnEssentialNamed for TaskExecutor {
 	fn spawn_essential_blocking(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
 		self.0.spawn_ok(future);
