@@ -22,7 +22,7 @@
 use super::*;
 
 use frame_support::{
-	assert_ok, assert_noop, parameter_types, assert_err_ignore_postinfo,
+	assert_ok, assert_noop, parameter_types, assert_err_ignore_postinfo, decl_module,
 	weights::{Weight, Pays},
 	dispatch::{DispatchError, DispatchErrorWithPostInfo, Dispatchable},
 	traits::Filter,
@@ -35,7 +35,8 @@ use crate as utility;
 // example module to test behaviors.
 pub mod example {
 	use super::*;
-	use frame_support::dispatch::WithPostDispatchInfo;
+	use frame_system::ensure_signed;
+	use frame_support::dispatch::{DispatchResultWithPostInfo, WithPostDispatchInfo};
 	pub trait Config: frame_system::Config { }
 
 	decl_module! {
