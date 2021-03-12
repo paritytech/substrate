@@ -464,7 +464,7 @@ pub mod pallet {
 		// call. A higher weight means a larger transaction (less of which can be placed in a
 		// single block).
 		#[pallet::weight(
-			<T as pallet::Config>::WeightInfo::accumulate_dummy(0)
+			<T as pallet::Config>::WeightInfo::accumulate_dummy((*increase_by).saturated_into())
 		)]
 		pub(super) fn accumulate_dummy(
 			origin: OriginFor<T>,
