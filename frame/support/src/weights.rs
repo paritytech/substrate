@@ -131,7 +131,7 @@
 use serde::{Serialize, Deserialize};
 use codec::{Encode, Decode};
 use sp_runtime::{
-	RuntimeDebug,
+	RuntimeDebug, PerThing,
 	traits::SignedExtension,
 	generic::{CheckedExtrinsic, UncheckedExtrinsic},
 };
