@@ -52,7 +52,7 @@ else
   exit 1
 fi
 
-if has_runtime_changes origin/master "${CI_COMMIT_SHA}"; then
+if has_runtime_changes origin/master "${GITHUB_SHA}"; then
   echo "[+] Runtime changes detected. Checking audit (D) labels"
   if ensure_labels "${audit_labels[@]}";  then
     echo "[+] Release audit label detected. All is well."

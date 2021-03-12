@@ -108,8 +108,7 @@ has_runtime_changes() {
   from=$1
   to=$2
   if git diff --name-only "${from}...${to}" \
-    | grep -v -e '^primitives/sr-arithmetic/fuzzer' \
-    | grep -q -e '^bin/node/src/runtime' -e '^frame/' -e '^primitives/sr-'
+    | grep -q -e '^frame/' -e '^primitives/'
   then
     return 0
   else
