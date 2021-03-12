@@ -48,6 +48,7 @@ use sp_core::OpaquePeerId as PeerId;
 use sp_std::{
 	collections::btree_set::BTreeSet,
 	iter::FromIterator,
+	prelude::*,
 };
 pub use pallet::*;
 pub use weights::WeightInfo;
