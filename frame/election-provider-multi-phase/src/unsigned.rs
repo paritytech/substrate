@@ -925,4 +925,26 @@ mod tests {
 			assert!(matches!(call, OuterCall::MultiPhase(Call::submit_unsigned(_, _))));
 		})
 	}
+
+	#[test]
+	fn trim_compact_for_length_does_not_modify_when_short_enough() {
+		let RawSolution { mut compact, .. } = raw_solution();
+		let encoded_len = compact.encode().len() as u32;
+		let compact_clone = compact.clone();
+
+		compact = MultiPhase::trim_compact_for_length(
+			encoded_len,
+			compact,
+			// helpers::voter_index_fn_linear appears to need an input we don't have
+			unimplemented!("how can I generate the voter index fn?"),
+		).unwrap();
+
+		assert_eq!(compact, compact_clone);
+	}
+
+	// TODO: trim_compact_for_length_modifies_when_too_long
+	// as above, but must trim at least 1 voter (contains >1 voter to start)
+
+	// TODO: trim_compact_for_length_errs_when_cannot_compact_enough
+	// as above, but returns an error
 }
