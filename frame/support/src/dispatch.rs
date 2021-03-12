@@ -300,6 +300,12 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 ///   * `fn on_initialize(n: BlockNumber) -> frame_support::weights::Weight` or
 ///   * `fn on_initialize() -> frame_support::weights::Weight`
 ///
+/// * `on_idle`: Executes at the end of a block. Passes a remaining weight to provide a threshold
+/// for when to execute non vital functions. Using this function will implement the
+/// [`OnIdle`](./traits/trait.OnIdle.html) trait.
+/// Function signature is:
+///   * `fn on_idle(n: BlockNumber, remaining_weight: Weight) -> frame_support::weights::Weight`
+///
 /// * `on_finalize`: Executes at the end of a block. Using this function will
 /// implement the [`OnFinalize`](./traits/trait.OnFinalize.html) trait.
 /// Function signature can be either:
@@ -332,6 +338,7 @@ macro_rules! decl_module {
 			>
 			for enum $call_type where origin: $origin_type, system = frame_system
 			{ $( $where_ty: $where_bound ),* }
+			{}
 			{}
 			{}
 			{}
@@ -375,6 +382,7 @@ macro_rules! decl_module {
 			{}
 			{}
 			{}
+			{}
 			[]
 			$($t)*
 		);
@@ -389,6 +397,7 @@ macro_rules! decl_module {
 		{}
 		{ $( $on_initialize:tt )* }
 		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
@@ -407,6 +416,7 @@ macro_rules! decl_module {
 			{ $vis fn deposit_event() = default; }
 			{ $( $on_initialize )* }
 			{ $( $on_runtime_upgrade )* }
+			{ $( $on_idle )* }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
 			{ $( $constants )* }
@@ -424,6 +434,7 @@ macro_rules! decl_module {
 		{}
 		{ $( $on_initialize:tt )* }
 		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
@@ -449,6 +460,7 @@ macro_rules! decl_module {
 		{ $( $deposit_event:tt )+ }
 		{ $( $on_initialize:tt )* }
 		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
@@ -470,6 +482,7 @@ macro_rules! decl_module {
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
 		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_idle:tt )* }
 		{}
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
@@ -488,6 +501,7 @@ macro_rules! decl_module {
 			{ $( $deposit_event )* }
 			{ $( $on_initialize )* }
 			{ $( $on_runtime_upgrade )* }
+			{ $( $on_idle )* }
 			{
 				fn on_finalize( $( $param_name : $param ),* ) { $( $impl )* }
 			}
@@ -508,6 +522,7 @@ macro_rules! decl_module {
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
 		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_idle:tt )* }
 		{}
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
@@ -535,6 +550,7 @@ macro_rules! decl_module {
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
 		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )+ }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
@@ -548,6 +564,72 @@ macro_rules! decl_module {
 	) => {
 		compile_error!("`on_finalize` can only be passed once as input.");
 	};
+
+	// Add on_idle
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?>
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $other_where_bounds:tt )* }
+		{ $( $deposit_event:tt )* }
+		{ $( $on_initialize:tt )* }
+		{ $( $on_runtime_upgrade:tt )* }
+		{}
+		{ $( $on_finalize:tt )* }
+		{ $( $offchain:tt )* }
+		{ $( $constants:tt )* }
+		{ $( $error_type:tt )* }
+		{ $( $integrity_test:tt )* }
+		[ $( $dispatchables:tt )* ]
+		$(#[doc = $doc_attr:tt])*
+		fn on_idle($param_name1:ident : $param1:ty, $param_name2:ident: $param2:ty $(,)? ) -> $return:ty { $( $impl:tt )* }
+		$($rest:tt)*
+	) => {
+		$crate::decl_module!(@normalize
+			$(#[$attr])*
+			pub struct $mod_type<$trait_instance: $trait_name$(<I>, I: $instantiable $(= $module_default_instance)?)?>
+			for enum $call_type where origin: $origin_type, system = $system
+			{ $( $other_where_bounds )* }
+			{ $( $deposit_event )* }
+			{ $( $on_initialize )* }
+			{ $( $on_runtime_upgrade )* }
+			{
+				fn on_idle( $param_name1: $param1, $param_name2: $param2 ) -> $return { $( $impl )* }
+			}
+			{ $( $on_finalize:tt )* }
+			{ $( $offchain )* }
+			{ $( $constants )* }
+			{ $( $error_type )* }
+			{ $( $integrity_test)* }
+			[ $( $dispatchables )* ]
+			$($rest)*
+		);
+	};
+	// compile_error for invalid on_idle function signature in decl_module
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<
+			$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?
+		>
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $other_where_bounds:tt )* }
+		{ $( $deposit_event:tt )* }
+		{ $( $on_initialize:tt )* }
+		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_finalize:tt )* }
+		{ $( $offchain:tt )* }
+		{ $( $constants:tt )* }
+		{ $( $error_type:tt )* }
+		{ $( $integrity_test:tt )* }
+		[ $( $dispatchables:tt )* ]
+		$(#[doc = $doc_attr:tt])*
+		$(#[weight = $weight:expr])?
+		fn on_idle
+		$($rest:tt)*
+	) => {
+		compile_error!("`on_idle` method is reserved and syntax doesn't match expected syntax.");
+	};
+
 	// compile_error on_runtime_upgrade, without a given weight removed syntax.
 	(@normalize
 		$(#[$attr:meta])*
@@ -559,6 +641,7 @@ macro_rules! decl_module {
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
 		{}
+		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
@@ -584,6 +667,7 @@ macro_rules! decl_module {
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
 		{}
+		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
@@ -611,6 +695,7 @@ macro_rules! decl_module {
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
 		{}
+		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
@@ -631,6 +716,7 @@ macro_rules! decl_module {
 			{
 				fn on_runtime_upgrade( $( $param_name : $param ),* ) -> $return { $( $impl )* }
 			}
+			{ $( $on_idle )* }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
 			{ $( $constants )* }
@@ -651,6 +737,7 @@ macro_rules! decl_module {
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
 		{ $( $on_runtime_upgrade:tt )+ }
+		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
@@ -674,6 +761,7 @@ macro_rules! decl_module {
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
 		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
@@ -692,6 +780,7 @@ macro_rules! decl_module {
 			{ $( $deposit_event )* }
 			{ $( $on_initialize )* }
 			{ $( $on_runtime_upgrade )* }
+			{ $( $on_idle )* }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
 			{ $( $constants )* }
@@ -715,6 +804,7 @@ macro_rules! decl_module {
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
 		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
@@ -738,6 +828,7 @@ macro_rules! decl_module {
 		{ $( $deposit_event:tt )* }
 		{}
 		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
@@ -763,6 +854,7 @@ macro_rules! decl_module {
 		{ $( $deposit_event:tt )* }
 		{}
 		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
@@ -790,6 +882,7 @@ macro_rules! decl_module {
 		{ $( $deposit_event:tt )* }
 		{}
 		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
@@ -810,6 +903,7 @@ macro_rules! decl_module {
 				fn on_initialize( $( $param_name : $param ),* ) -> $return { $( $impl )* }
 			}
 			{ $( $on_runtime_upgrade )* }
+			{ $( $on_idle )* }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
 			{ $( $constants )* }
@@ -830,6 +924,7 @@ macro_rules! decl_module {
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )+ }
 		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
@@ -853,6 +948,7 @@ macro_rules! decl_module {
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
 		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ }
 		{ $( $constants:tt )* }
@@ -873,6 +969,7 @@ macro_rules! decl_module {
 			{ $( $deposit_event )* }
 			{ $( $on_initialize )* }
 			{ $( $on_runtime_upgrade )* }
+			{ $( $on_idle )* }
 			{ $( $on_finalize )* }
 			{ fn offchain_worker( $( $param_name : $param ),* ) { $( $impl )* } }
 			{ $( $constants )* }
@@ -893,6 +990,7 @@ macro_rules! decl_module {
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
 		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )+ }
 		{ $( $constants:tt )* }
@@ -917,6 +1015,7 @@ macro_rules! decl_module {
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
 		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
@@ -938,6 +1037,7 @@ macro_rules! decl_module {
 			{ $( $deposit_event )* }
 			{ $( $on_initialize )* }
 			{ $( $on_runtime_upgrade )* }
+			{ $( $on_idle )* }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
 			{
@@ -964,6 +1064,7 @@ macro_rules! decl_module {
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
 		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
@@ -984,6 +1085,7 @@ macro_rules! decl_module {
 			{ $( $deposit_event )* }
 			{ $( $on_initialize )* }
 			{ $( $on_runtime_upgrade )* }
+			{ $( $on_idle )* }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
 			{ $( $constants )* }
@@ -1005,6 +1107,7 @@ macro_rules! decl_module {
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
 		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
@@ -1023,6 +1126,7 @@ macro_rules! decl_module {
 			{ $( $deposit_event )* }
 			{ $( $on_initialize )* }
 			{ $( $on_runtime_upgrade )* }
+			{ $( $on_idle )* }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
 			{ $( $constants )* }
@@ -1045,6 +1149,7 @@ macro_rules! decl_module {
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
 		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
@@ -1069,6 +1174,7 @@ macro_rules! decl_module {
 			{ $( $deposit_event )* }
 			{ $( $on_initialize )* }
 			{ $( $on_runtime_upgrade )* }
+			{ $( $on_idle )* }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
 			{ $( $constants )* }
@@ -1099,6 +1205,7 @@ macro_rules! decl_module {
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
 		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
@@ -1127,6 +1234,7 @@ macro_rules! decl_module {
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
 		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
@@ -1155,6 +1263,7 @@ macro_rules! decl_module {
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
 		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
@@ -1183,6 +1292,7 @@ macro_rules! decl_module {
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
 		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
@@ -1212,6 +1322,7 @@ macro_rules! decl_module {
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
 		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
@@ -1229,6 +1340,7 @@ macro_rules! decl_module {
 			{ $( $deposit_event )* }
 			{ $( $on_initialize )* }
 			{ $( $on_runtime_upgrade )* }
+			{ $( $on_idle )* }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
 			{ $( $constants )* }
@@ -1485,6 +1597,35 @@ macro_rules! decl_module {
 		}
 	};
 
+	(@impl_on_idle
+		{ $system:ident }
+		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
+		{ $( $other_where_bounds:tt )* }
+		fn on_idle($param1:ident : $param1_ty:ty, $param2:ident: $param2_ty:ty) -> $return:ty { $( $impl:tt )* }
+	) => {
+		impl<$trait_instance: $system::Config + $trait_name$(<I>, $instance: $instantiable)?>
+			$crate::traits::OnIdle<<$trait_instance as $system::Config>::BlockNumber>
+			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
+		{
+			fn on_idle($param1: $param1_ty, $param2: $param2_ty) -> $return {
+				$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!("on_idle"));
+				{ $( $impl )* }
+			}
+		}
+	};
+
+	(@impl_on_idle
+		{ $system:ident }
+		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
+		{ $( $other_where_bounds:tt )* }
+	) => {
+		impl<$trait_instance: $system::Config + $trait_name$(<I>, $instance: $instantiable)?>
+			$crate::traits::OnIdle<<$trait_instance as $system::Config>::BlockNumber>
+			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
+		{
+		}
+	};
+
 	(@impl_offchain
 		{ $system:ident }
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
@@ -1700,6 +1841,7 @@ macro_rules! decl_module {
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialize:tt )* }
 		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_idle:tt )* }
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
@@ -1739,6 +1881,14 @@ macro_rules! decl_module {
 			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>;
 			{ $( $other_where_bounds )* }
 			$( $on_finalize )*
+		}
+
+		$crate::decl_module! {
+			@impl_on_idle
+			{ $system }
+			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>;
+			{ $( $other_where_bounds )* }
+			$( $on_idle )*
 		}
 
 		$crate::decl_module! {
@@ -2415,6 +2565,9 @@ macro_rules! __check_reserved_fn_name {
 	(on_runtime_upgrade $( $rest:ident )*) => {
 		$crate::__check_reserved_fn_name!(@compile_error on_runtime_upgrade);
 	};
+	(on_idle $( $rest:ident )*) => {
+		$crate::__check_reserved_fn_name!(@compile_error on_idle);
+	};
 	(on_finalize $( $rest:ident )*) => {
 		$crate::__check_reserved_fn_name!(@compile_error on_finalize);
 	};
@@ -2459,7 +2612,7 @@ mod tests {
 	use super::*;
 	use crate::weights::{DispatchInfo, DispatchClass, Pays, RuntimeDbWeight};
 	use crate::traits::{
-		CallMetadata, GetCallMetadata, GetCallName, OnInitialize, OnFinalize, OnRuntimeUpgrade,
+		CallMetadata, GetCallMetadata, GetCallName, OnInitialize, OnFinalize, OnIdle, OnRuntimeUpgrade,
 		IntegrityTest, Get, PalletInfo,
 	};
 
@@ -2522,6 +2675,10 @@ mod tests {
 			fn operational(_origin) { unreachable!() }
 
 			fn on_initialize(n: T::BlockNumber,) -> Weight { if n.into() == 42 { panic!("on_initialize") } 7 }
+			fn on_idle(n: T::BlockNumber, remaining_weight: Weight,) -> Weight {
+				if n.into() == 42 || remaining_weight == 42  { panic!("on_idle") }
+				7
+			}
 			fn on_finalize(n: T::BlockNumber,) { if n.into() == 42 { panic!("on_finalize") } }
 			fn on_runtime_upgrade() -> Weight { 10 }
 			fn offchain_worker() {}
@@ -2685,6 +2842,23 @@ mod tests {
 	#[test]
 	fn on_initialize_should_work_2() {
 		assert_eq!(<Module<TraitImpl> as OnInitialize<u32>>::on_initialize(10), 7);
+	}
+
+	#[test]
+	#[should_panic(expected = "on_idle")]
+	fn on_idle_should_work_1() {
+		<Module<TraitImpl> as OnIdle<u32>>::on_idle(42, 9);
+	}
+
+	#[test]
+	#[should_panic(expected = "on_idle")]
+	fn on_idle_should_work_2() {
+		<Module<TraitImpl> as OnIdle<u32>>::on_idle(9, 42);
+	}
+
+	#[test]
+	fn on_idle_should_work_3() {
+		assert_eq!(<Module<TraitImpl> as OnIdle<u32>>::on_idle(10, 11), 7);
 	}
 
 	#[test]
