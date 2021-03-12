@@ -19,14 +19,14 @@
 
 use super::*;
 use codec::Decode;
-use frame_support::{traits::OnInitialize, assert_ok};
+use frame_support::{traits::OnInitialize, assert_ok, assert_noop};
 use sp_core::crypto::key_types::DUMMY;
 use sp_runtime::testing::UintAuthorityId;
 use mock::{
 	SESSION_CHANGED, TEST_SESSION_CHANGED, authorities, force_new_session,
 	set_next_validators, set_session_length, session_changed, Origin, System, Session,
 	reset_before_session_end_called, before_session_end_called, new_test_ext,
-	PreUpgradeMockSessionKeys,
+	PreUpgradeMockSessionKeys, Test,
 };
 
 fn initialize_block(block: u64) {
@@ -181,11 +181,13 @@ fn duplicates_are_not_allowed() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		Session::on_initialize(1);
-		assert!(Session::set_keys(Origin::signed(4), UintAuthorityId(1).into(), vec![]).is_err());
-		assert!(Session::set_keys(Origin::signed(1), UintAuthorityId(10).into(), vec![]).is_ok());
 
+		let e = Error::<Test>::DuplicatedKey;
+		assert_noop!(Session::set_keys(Origin::signed(4), UintAuthorityId(1).into(), vec![]), e);
+
+		assert_ok!(Session::set_keys(Origin::signed(1), UintAuthorityId(10).into(), vec![]));
 		// is fine now that 1 has migrated off.
-		assert!(Session::set_keys(Origin::signed(4), UintAuthorityId(1).into(), vec![]).is_ok());
+		assert_ok!(Session::set_keys(Origin::signed(4), UintAuthorityId(1).into(), vec![]));
 	});
 }
 
