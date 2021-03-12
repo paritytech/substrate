@@ -1082,10 +1082,6 @@ pub mod migrations {
 			}
 			T::DbWeight::get().writes(6)
 		}
-		// TODO: TODO: companion to call this, also, this needs some consideration: When will this
-		// runtime land? if it happens very close to an epoch change?
-		// TODO: notify jacogr that this limitation no longer exists.
-		// TODO: tx-version shall be bump.
 	}
 }
 
@@ -2287,11 +2283,11 @@ impl<T: Config> Module<T> {
 					.for_each(|(nominator, stake)| {
 						if nominator == validator {
 						own = own.saturating_add(stake);
-					} else {
-						others.push(IndividualExposure { who: nominator, value: stake });
-					}
-					total = total.saturating_add(stake);
-				});
+						} else {
+							others.push(IndividualExposure { who: nominator, value: stake });
+						}
+						total = total.saturating_add(stake);
+					});
 
 			let exposure = Exposure { own, others, total };
 
@@ -2804,8 +2800,6 @@ where
 	}
 
 	fn can_report() -> bool {
-		// TODO: follow up or a PR on top of this: remove this API now. No need for it anymore.
-		// Needs some small migrations in offences as well, so maybe do it separate.
 		true
 	}
 }
