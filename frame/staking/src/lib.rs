@@ -840,8 +840,11 @@ pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
 	/// See [Era payout](./index.html#era-payout).
 	type RewardCurve: Get<&'static PiecewiseLinear<'static>>;
 
+	/// The task executor of this pallet.
 	///
-	type TaskExecutor: executor::StoredExecutor<Task = SlashTask<Self>>
+	/// The type of the task, the weight quota and executor can all be configured from the runtime.
+	type TaskExecutor:
+		executor::StoredExecutor<Task = SlashTask<Self>>
 		+ frame_support::dispatch::Parameter
 		+ Default;
 

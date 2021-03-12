@@ -184,6 +184,7 @@ impl pallet_staking::Config for Test {
 	type MinSolutionScoreBump = ();
 	type OffchainSolutionWeightLimit = ();
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
+	type TaskExecutor = frame_support::executor::SinglePassExecutor<pallet_staking::SlashTask<Self>>;
 	type WeightInfo = ();
 }
 

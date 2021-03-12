@@ -165,7 +165,7 @@ impl StoredExecutor for () {
 /// Namely, if a task keep consuming a little amount of weight in each execution, this executor will
 /// assume that it still has work to do, and will indefinitely executor a second pass for it.
 #[derive(Encode, Decode, RuntimeDebugNoBound, PartialEqNoBound, EqNoBound, CloneNoBound)]
-pub struct MultiPassExecutor<Task: RuntimeTask, Quota: Get<Weight>> {
+pub struct MultiPassExecutor<Task: RuntimeTask, Quota: Get<Weight> = ()> {
 	/// The queue of tasks.
 	pub(crate) tasks: Vec<Task>,
 	_marker: sp_std::marker::PhantomData<Quota>,
@@ -241,7 +241,7 @@ impl<Task: RuntimeTask, Quota: Get<Weight>> StoredExecutor for MultiPassExecutor
 /// This is a much more conservative variation of the [`MultiPassExecutor`], and arguable more
 /// suitable for homogenous tasks.
 #[derive(Encode, Decode, RuntimeDebugNoBound, PartialEqNoBound, EqNoBound, CloneNoBound)]
-pub struct SinglePassExecutor<Task: RuntimeTask, Quota: Get<Weight>> {
+pub struct SinglePassExecutor<Task: RuntimeTask, Quota: Get<Weight> = ()> {
 	/// The queue of tasks.
 	pub(crate) tasks: Vec<Task>,
 	_marker: sp_std::marker::PhantomData<Quota>,

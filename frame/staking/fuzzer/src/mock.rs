@@ -190,5 +190,6 @@ impl pallet_staking::Config for Test {
 	type UnsignedPriority = ();
 	type OffchainSolutionWeightLimit = ();
 	type WeightInfo = ();
+	type TaskExecutor = frame_support::executor::SinglePassExecutor<pallet_staking::SlashTask<Self>>;
 	type ElectionProvider = MockElectionProvider;
 }
