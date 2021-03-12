@@ -20,6 +20,7 @@ use serde::{Serialize, Deserialize};
 
 use sp_std::{ops, fmt, prelude::*, convert::TryInto};
 use codec::{Encode, CompactAs};
+use num_traits::Pow;
 use crate::traits::{
 	SaturatedConversion, UniqueSaturatedInto, Saturating, BaseArithmetic, Bounded, Zero, Unsigned,
 	One,
@@ -561,37 +562,13 @@ macro_rules! implement_per_thing {
 			/// Saturating multiply. Compute `self * rhs`, saturating at the numeric bounds instead of
 			/// overflowing. This operation is lossy.
 			fn saturating_mul(self, rhs: Self) -> Self {
-				let a = self.0 as $upper_type;
-				let b = rhs.0 as $upper_type;
-				let m = <$upper_type>::from($max);
-				let parts = a * b / m;
-				// This will always fit into $type.
-				Self::from_parts(parts as $type)
+				self * rhs
 			}
 
 			/// Saturating exponentiation. Computes `self.pow(exp)`, saturating at the numeric
 			/// bounds instead of overflowing. This operation is lossy.
 			fn saturating_pow(self, exp: usize) -> Self {
-				if self.is_zero() || self.is_one() {
-					self
-				} else {
-					let p = <$name as PerThing>::Upper::from(self.deconstruct());
-					let q = <$name as PerThing>::Upper::from(Self::ACCURACY);
-					let mut s = Self::one();
-					for _ in 0..exp {
-						if s.is_zero() {
-							break;
-						} else {
-							// x^2 always fits in Self::Upper if x fits in Self::Inner.
-							// Verified by a test.
-							s = Self::from_rational_approximation(
-								<$name as PerThing>::Upper::from(s.deconstruct()) * p,
-								q * q,
-							);
-						}
-					}
-					s
-				}
+				self.pow(exp)
 			}
 		}
 
@@ -614,6 +591,41 @@ macro_rules! implement_per_thing {
 
 			fn max_value() -> Self {
 				<Self as PerThing>::one()
+			}
+		}
+
+		impl ops::Mul for $name {
+			type Output = Self;
+
+			fn mul(self, rhs: Self) -> Self::Output {
+				let a = self.0 as $upper_type;
+				let b = rhs.0 as $upper_type;
+				let m = <$upper_type>::from($max);
+				let parts = a * b / m;
+				// This will always fit into $type.
+				Self::from_parts(parts as $type)
+			}
+		}
+
+		impl Pow<usize> for $name {
+			type Output = Self;
+
+			fn pow(self, exp: usize) -> Self::Output {
+				if exp == 0 || self.is_one() {
+					return Self::one()
+				}
+				let mut result = self;
+				let mut exp = exp - 1;
+				while exp > 0 && !result.is_zero() {
+					if exp % 2 == 0 {
+						result = result.square();
+						exp /= 2;
+					} else {
+						result = result * self;
+						exp -= 1;
+					}
+				}
+				result
 			}
 		}
 
