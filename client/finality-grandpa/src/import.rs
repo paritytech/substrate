@@ -24,6 +24,7 @@ use parking_lot::RwLockWriteGuard;
 
 use sp_blockchain::{BlockStatus, well_known_cache_keys};
 use sc_client_api::{backend::Backend, utils::is_descendent_of};
+use sc_telemetry::TelemetryHandle;
 use sp_utils::mpsc::TracingUnboundedSender;
 use sp_api::TransactionFor;
 
@@ -62,6 +63,7 @@ pub struct GrandpaBlockImport<Backend, Block: BlockT, Client, SC> {
 	send_voter_commands: TracingUnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
 	authority_set_hard_forks: HashMap<Block::Hash, PendingChange<Block::Hash, NumberFor<Block>>>,
 	justification_sender: GrandpaJustificationSender<Block>,
+	telemetry: Option<TelemetryHandle>,
 	_phantom: PhantomData<Backend>,
 }
 
@@ -76,6 +78,7 @@ impl<Backend, Block: BlockT, Client, SC: Clone> Clone for
 			send_voter_commands: self.send_voter_commands.clone(),
 			authority_set_hard_forks: self.authority_set_hard_forks.clone(),
 			justification_sender: self.justification_sender.clone(),
+			telemetry: self.telemetry.clone(),
 			_phantom: PhantomData,
 		}
 	}
@@ -338,7 +341,13 @@ where
 		let applied_changes = {
 			let forced_change_set = guard
 				.as_mut()
-				.apply_forced_changes(hash, number, &is_descendent_of, initial_sync)
+				.apply_forced_changes(
+					hash,
+					number,
+					&is_descendent_of,
+					initial_sync,
+					self.telemetry.clone(),
+				)
 				.map_err(|e| ConsensusError::ClientImport(e.to_string()))
 				.map_err(ConsensusError::from)?;
 
@@ -355,8 +364,11 @@ where
 					let canon_hash =
 						self.inner.header(BlockId::Number(canon_number))
 							.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
-							.expect("the given block number is less or equal than the current best finalized number; \
-									 current best finalized number must exist in chain; qed.")
+							.expect(
+								"the given block number is less or equal than the current best
+								finalized number; current best finalized number must exist in
+								chain; qed."
+							)
 							.hash();
 
 					NewAuthoritySet {
@@ -557,6 +569,7 @@ impl<Backend, Block: BlockT, Client, SC> GrandpaBlockImport<Backend, Block, Clie
 		send_voter_commands: TracingUnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
 		authority_set_hard_forks: Vec<(SetId, PendingChange<Block::Hash, NumberFor<Block>>)>,
 		justification_sender: GrandpaJustificationSender<Block>,
+		telemetry: Option<TelemetryHandle>,
 	) -> GrandpaBlockImport<Backend, Block, Client, SC> {
 		// check for and apply any forced authority set hard fork that applies
 		// to the *current* authority set.
@@ -600,6 +613,7 @@ impl<Backend, Block: BlockT, Client, SC> GrandpaBlockImport<Backend, Block, Clie
 			send_voter_commands,
 			authority_set_hard_forks,
 			justification_sender,
+			telemetry,
 			_phantom: PhantomData,
 		}
 	}
@@ -644,6 +658,7 @@ where
 			justification.into(),
 			initial_sync,
 			Some(&self.justification_sender),
+			self.telemetry.clone(),
 		);
 
 		match result {

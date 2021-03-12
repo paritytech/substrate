@@ -39,12 +39,13 @@
 
 use sp_std::prelude::*;
 use codec::{Encode, Decode};
-use frame_support::{Parameter, traits::{Get, FindAuthor, OneSessionHandler}, ConsensusEngineId};
+use frame_support::{
+	Parameter, traits::{Get, FindAuthor, OneSessionHandler, OnTimestampSet}, ConsensusEngineId,
+};
 use sp_runtime::{
 	RuntimeAppPublic,
 	traits::{SaturatedConversion, Saturating, Zero, Member, IsMember}, generic::DigestItem,
 };
-use sp_timestamp::OnTimestampSet;
 use sp_consensus_aura::{AURA_ENGINE_ID, ConsensusLog, AuthorityIndex, Slot};
 
 mod mock;

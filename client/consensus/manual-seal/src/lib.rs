@@ -300,6 +300,7 @@ mod tests {
 			client.clone(),
 			pool.clone(),
 			None,
+			None,
 		);
 		// this test checks that blocks are created as soon as transactions are imported into the pool.
 		let (sender, receiver) = futures::channel::oneshot::channel();
@@ -370,6 +371,7 @@ mod tests {
 			spawner.clone(),
 			client.clone(),
 			pool.clone(),
+			None,
 			None,
 		);
 		// this test checks that blocks are created as soon as an engine command is sent over the stream.
@@ -445,6 +447,7 @@ mod tests {
 			spawner.clone(),
 			client.clone(),
 			pool.clone(),
+			None,
 			None,
 		);
 		// this test checks that blocks are created as soon as an engine command is sent over the stream.
