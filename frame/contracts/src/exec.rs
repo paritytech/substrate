@@ -1744,7 +1744,6 @@ mod tests {
 			exec_success()
 		});
 
-		// This one tests passing the input data into a contract via call.
 		ExtBuilder::default().build().execute_with(|| {
 			let subsistence = Contracts::<Test>::subsistence_threshold();
 			let schedule = Contracts::current_schedule();
@@ -1752,7 +1751,6 @@ mod tests {
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 			set_balance(&ALICE, subsistence * 10);
 			place_contract(&BOB, code_hash);
-
 			ctx.call(
 				BOB,
 				0,
@@ -1794,7 +1792,6 @@ mod tests {
 			exec_success()
 		});
 
-		// This one tests passing the input data into a contract via call.
 		ExtBuilder::default().build().execute_with(|| {
 			let subsistence = Contracts::<Test>::subsistence_threshold();
 			let schedule = Contracts::current_schedule();
