@@ -41,9 +41,11 @@ pub fn duration_now() -> Duration {
 }
 
 /// Returns the duration until the next slot, based on current duration since
-pub fn time_until_next(now: Duration, slot_duration: u64) -> Duration {
-	let remaining_full_millis = slot_duration - (now.as_millis() as u64 % slot_duration) - 1;
-	Duration::from_millis(remaining_full_millis)
+pub fn time_until_next(now: Duration, slot_duration: Duration) -> Duration {
+	let remaining_full_millis = slot_duration.as_millis()
+		- (now.as_millis() % slot_duration.as_millis())
+		- 1;
+	Duration::from_millis(remaining_full_millis as u64)
 }
 
 /// Information about a slot.
@@ -57,7 +59,7 @@ pub struct SlotInfo<B: BlockT> {
 	/// The inherent data.
 	pub inherent_data: InherentData,
 	/// Slot duration.
-	pub duration: u64,
+	pub duration: Duration,
 	/// The chain header this slot is based on.
 	pub chain_head: B::Header,
 }
@@ -65,7 +67,7 @@ pub struct SlotInfo<B: BlockT> {
 /// A stream that returns every time there is a new slot.
 pub(crate) struct Slots<Block, C, IDP> {
 	last_slot: Slot,
-	slot_duration: u64,
+	slot_duration: Duration,
 	inner_delay: Option<Delay>,
 	inherent_data_providers: IDP,
 	client: C,
@@ -81,7 +83,7 @@ impl<Block, C, IDP> Slots<Block, C, IDP> {
 	) -> Self {
 		Slots {
 			last_slot: 0.into(),
-			slot_duration,
+			slot_duration: Duration::from_millis(slot_duration),
 			inner_delay: None,
 			inherent_data_providers,
 			client,

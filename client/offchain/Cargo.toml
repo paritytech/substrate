@@ -14,23 +14,24 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 bytes = "0.5"
-sc-client-api = { version = "3.0.0", path = "../api" }
-sp-api = { version = "3.0.0", path = "../../primitives/api" }
+codec = { package = "parity-scale-codec", version = "2.0.0", features = ["derive"] }
+hex = "0.4"
 fnv = "1.0.6"
 futures = "0.3.9"
 futures-timer = "3.0.1"
 log = "0.4.8"
-threadpool = "1.7"
 num_cpus = "1.10"
-sp-offchain = { version = "3.0.0", path = "../../primitives/offchain" }
-codec = { package = "parity-scale-codec", version = "2.0.0", features = ["derive"] }
 parking_lot = "0.11.1"
-sp-core = { version = "3.0.0", path = "../../primitives/core" }
 rand = "0.7.2"
+sc-client-api = { version = "3.0.0", path = "../api" }
+sc-keystore = { version = "3.0.0", path = "../keystore" }
+sc-network = { version = "0.9.0", path = "../network" }
+sp-api = { version = "3.0.0", path = "../../primitives/api" }
+sp-core = { version = "3.0.0", path = "../../primitives/core" }
+sp-offchain = { version = "3.0.0", path = "../../primitives/offchain" }
 sp-runtime = { version = "3.0.0", path = "../../primitives/runtime" }
 sp-utils = { version = "3.0.0", path = "../../primitives/utils" }
-sc-network = { version = "0.9.0", path = "../network" }
-sc-keystore = { version = "3.0.0", path = "../keystore" }
+threadpool = "1.7"
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
 hyper = "0.13.9"

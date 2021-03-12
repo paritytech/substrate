@@ -89,6 +89,7 @@ members = [
 	"frame/membership",
 	"frame/merkle-mountain-range",
 	"frame/merkle-mountain-range/primitives",
+	"frame/merkle-mountain-range/rpc",
 	"frame/metadata",
 	"frame/multisig",
 	"frame/nicks",
