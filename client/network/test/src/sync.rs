@@ -935,3 +935,47 @@ fn continue_to_sync_after_some_block_announcement_verifications_failed() {
 	net.block_until_sync();
 	assert!(net.peer(1).has_block(&block_hash));
 }
+
+/// When being spammed by the same request of a peer, we ban this peer. However, we should only ban
+/// this peer if the request was successful. In the case of a justification request for example,
+/// we ask our peers multiple times until we got the requested justification. This test ensures that
+/// asking for the same justification multiple times doesn't ban a peer.
+#[test]
+fn multiple_requests_are_accepted_as_long_as_they_are_not_fulfilled() {
+	sp_tracing::try_init_simple();
+	let mut net = JustificationTestNet::new(2);
+	net.peer(0).push_blocks(10, false);
+	net.block_until_sync();
+
+	// there's currently no justification for block #10
+	assert_eq!(net.peer(0).client().justification(&BlockId::Number(10)).unwrap(), None);
+	assert_eq!(net.peer(1).client().justification(&BlockId::Number(10)).unwrap(), None);
+
+	let h1 = net.peer(1).client().header(&BlockId::Number(10)).unwrap().unwrap();
+
+	// Let's assume block 10 was finalized, but we still need the justification from the network.
+	net.peer(1).request_justification(&h1.hash().into(), 10);
+
+	// Let's build some more blocks and wait always for the network to have synced them
+	for _ in 0..5 {
+		// We need to sleep 10 seconds as this is the time we wait between sending a new
+		// justification request.
+		std::thread::sleep(std::time::Duration::from_secs(10));
+		net.peer(0).push_blocks(1, false);
+		net.block_until_sync();
+		assert_eq!(1, net.peer(0).num_peers());
+	}
+
+	// Finalize the block and make the justification available.
+	net.peer(0).client().finalize_block(BlockId::Number(10), Some(Vec::new()), true).unwrap();
+
+	block_on(futures::future::poll_fn::<(), _>(|cx| {
+		net.poll(cx);
+
+		if net.peer(1).client().justification(&BlockId::Number(10)).unwrap() != Some(Vec::new()) {
+			return Poll::Pending;
+		}
+
+		Poll::Ready(())
+	}));
+}
