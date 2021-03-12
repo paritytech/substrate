@@ -1888,8 +1888,7 @@ fn bond_with_duplicate_vote_should_be_ignored_by_election_provider_elected() {
 			assert_ok!(Staking::bond(Origin::signed(3), 4, 1000, RewardDestination::Controller));
 			assert_ok!(Staking::nominate(Origin::signed(4), vec![21, 31]));
 
-			// winners should be 21 and 31. Otherwise this election is taking duplicates into
-			// account.
+			// winners should be 21 and 11.
 			let supports = <Test as Config>::ElectionProvider::elect().unwrap();
 			assert_eq!(
 				supports,

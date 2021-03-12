@@ -273,9 +273,9 @@ mod mock;
 #[cfg(test)]
 mod tests;
 #[cfg(any(feature = "runtime-benchmarks", test))]
-pub mod benchmarking;
-#[cfg(any(feature = "runtime-benchmarks", test))]
 pub mod testing_utils;
+#[cfg(any(feature = "runtime-benchmarks", test))]
+pub mod benchmarking;
 
 pub mod slashing;
 pub mod inflation;
@@ -1028,7 +1028,7 @@ pub mod migrations {
 			type PalletPrefix: Get<&'static str>;
 		}
 
-		// TODO: complete this
+		// TODO: maybe move this to frame-support in a follow up?
 		macro_rules! generate_storage_types {
 			($name:ident<T: $trait:tt> => Map<$key:ty, $value:ty>) => {
 				unreachable!()
@@ -2124,11 +2124,15 @@ impl<T: Config> Module<T> {
 				.unwrap_or(0); // Must never happen.
 
 			match ForceEra::get() {
+				// Will set to default again, which is `NorForcing`.
 				Forcing::ForceNew => ForceEra::kill(),
+				// Short circuit to `new_era`.
 				Forcing::ForceAlways => (),
+				// Only go to `new_era` if deadline reached.
 				Forcing::NotForcing if era_length >= T::SessionsPerEra::get() => (),
 				_ => {
-					// TODO: triple check this piece.
+					// either `Forcing::ForceNone`,
+					// or `Forcing::NotForcing if era_length >= T::SessionsPerEra::get()`.
 					return None
 				},
 			}
@@ -2319,7 +2323,7 @@ impl<T: Config> Module<T> {
 			return Err(());
 		}
 
-		// Populate Stakers and write slot stake.
+		// Populate stakers, exposures, and the snapshot of validator prefs.
 		let mut total_stake: BalanceOf<T> = Zero::zero();
 		exposures.into_iter().for_each(|(stash, exposure)| {
 			total_stake = total_stake.saturating_add(exposure.total);
@@ -2800,6 +2804,7 @@ where
 	}
 
 	fn can_report() -> bool {
+		// TODO: https://github.com/paritytech/substrate/issues/8343
 		true
 	}
 }
