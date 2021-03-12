@@ -509,7 +509,7 @@ impl pallet_staking::Config for Runtime {
 	// a single extrinsic.
 	type OffchainSolutionWeightLimit = OffchainSolutionWeightLimit;
 	type ElectionProvider = ElectionProviderMultiPhase;
-	type TaskExecutor = frame_support::executor::SinglePassExecutor<pallet_staking::SlashTask<Self>, SlashTaskWeight>
+	type TaskExecutor = frame_support::executor::SinglePassExecutor<pallet_staking::SlashTask<Self>, SlashTaskWeight>;
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Runtime>;
 }
 

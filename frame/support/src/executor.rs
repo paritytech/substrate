@@ -442,7 +442,7 @@ mod tests {
 	fn single_pass_less_weight_than_than_single_task() {
 		// execute a series of tasks with less weight per block for single task.
 		Quota::set(10);
-		let mut executor = SinglePassExecutor::<Task, Quote>::new();
+		let mut executor = SinglePassExecutor::<Task, Quota>::new();
 		executor.add_task(TaskBuilder::default().build(10));
 		executor.add_task(TaskBuilder::default().build(10));
 		executor.add_task(TaskBuilder::default().build(10));
@@ -470,79 +470,84 @@ mod tests {
 	#[test]
 	fn single_pass_more_weight_than_than_single_task() {
 		// execute a series of tasks with less weight per block for single task.
-		let mut executor = SinglePassExecutor::<Task>::new();
+		let mut executor = SinglePassExecutor::<Task, Quota>::new();
 		executor.add_task(TaskBuilder::default().build(10));
 		executor.add_task(TaskBuilder::default().build(10));
 		executor.add_task(TaskBuilder::default().build(10));
 		assert_eq!(remaining_weights_of(&executor), vec![10, 10, 10]);
 
-		assert_eq!(executor.execute(12), 12);
+		Quota::set(12);
+		assert_eq!(executor.execute(), 12);
 		assert_eq!(remaining_weights_of(&executor), vec![8, 10]);
 
-		assert_eq!(executor.execute(12), 12);
+		assert_eq!(executor.execute(), 12);
 		assert_eq!(remaining_weights_of(&executor), vec![6]);
 
-		assert_eq!(executor.execute(12), 6);
+		assert_eq!(executor.execute(), 6);
 		assert_eq!(remaining_weights_of(&executor), Vec::<Weight>::new());
 
 		// noop
-		assert_eq!(executor.execute(12), 0);
+		assert_eq!(executor.execute(), 0);
 	}
 
 	#[test]
 	fn single_pass_equal_weight_to_single_task() {
 		// execute a series of tasks with less weight per block for single task.
-		let mut executor = SinglePassExecutor::<Task>::new();
+		let mut executor = SinglePassExecutor::<Task, Quota>::new();
 		executor.add_task(TaskBuilder::default().build(10));
 		executor.add_task(TaskBuilder::default().build(10));
 		executor.add_task(TaskBuilder::default().build(10));
 		assert_eq!(remaining_weights_of(&executor), vec![10, 10, 10]);
 
-		assert_eq!(executor.execute(10), 10);
+		Quota::set(12);
+		assert_eq!(executor.execute(), 10);
 		assert_eq!(remaining_weights_of(&executor), vec![10, 10]);
 
-		assert_eq!(executor.execute(10), 10);
+		assert_eq!(executor.execute(), 10);
 		assert_eq!(remaining_weights_of(&executor), vec![10]);
 
-		assert_eq!(executor.execute(10), 10);
+		assert_eq!(executor.execute(), 10);
 		assert_eq!(remaining_weights_of(&executor), Vec::<Weight>::new());
 
 		// noop
-		assert_eq!(executor.execute(10), 0);
+		assert_eq!(executor.execute(), 0);
 	}
 
 	#[test]
 	fn multi_pass_execution_basic() {
 		// equal
 		{
-			let mut executor = MultiPassExecutor::<Task>::new();
+			let mut executor = MultiPassExecutor::<Task, Quota>::new();
 			executor.add_task(TaskBuilder::default().build(10));
 			executor.add_task(TaskBuilder::default().build(10));
 			executor.add_task(TaskBuilder::default().build(10));
 
-			executor.execute(30);
+			Quota::set(30);
+			executor.execute();
 			assert_eq!(remaining_weights_of(&executor), Vec::<Weight>::new());
 		}
 
 		// more
 		{
-			let mut executor = MultiPassExecutor::<Task>::new();
+			let mut executor = MultiPassExecutor::<Task, Quota>::new();
 			executor.add_task(TaskBuilder::default().build(10));
 			executor.add_task(TaskBuilder::default().build(10));
 			executor.add_task(TaskBuilder::default().build(10));
 
-			executor.execute(33);
+			Quota::set(33);
+			executor.execute();
 			assert_eq!(remaining_weights_of(&executor), Vec::<Weight>::new());
 		}
 
 		// less
 		{
-			let mut executor = MultiPassExecutor::<Task>::new();
+			let mut executor = MultiPassExecutor::<Task, Quota>::new();
 			executor.add_task(TaskBuilder::default().build(10));
 			executor.add_task(TaskBuilder::default().build(10));
 			executor.add_task(TaskBuilder::default().build(10));
 
-			executor.execute(27);
+			Quota::set(27);
+			executor.execute();
 			assert_eq!(remaining_weights_of(&executor), vec![3]);
 		}
 	}
@@ -550,27 +555,29 @@ mod tests {
 	#[test]
 	fn multi_step_simple() {
 		let _ = env_logger::try_init();
-		let mut executor = MultiPassExecutor::<Task>::new();
+		let mut executor = MultiPassExecutor::<Task, Quota>::new();
 		executor.add_task(TaskBuilder::default().half(1).build(10));
 		executor.add_task(TaskBuilder::default().half(1).build(10));
 		executor.add_task(TaskBuilder::default().half(1).build(10));
 
 		// first, each task will eat up 5, 15 in total. Then, one of them drains the last 2.
-		assert_eq!(executor.execute(17), 17);
+		Quota::set(17);
+		assert_eq!(executor.execute(), 17);
 		assert_eq!(remaining_weights_of(&executor), vec![3, 5, 5]);
 	}
 
 	#[test]
 	fn multi_step_where_additional_pass_is_useful() {
 		let _ = env_logger::try_init();
-		let mut executor = MultiPassExecutor::<Task>::new();
+		let mut executor = MultiPassExecutor::<Task, Quota>::new();
 		executor.add_task(TaskBuilder::default().half(1).greedy(false).build(30));
 		executor.add_task(TaskBuilder::default().half(1).greedy(false).build(20));
 		executor.add_task(TaskBuilder::default().half(1).greedy(false).build(10));
 
 		// first batch, we consume 15 + 10 + 5 = 30. Second round, only the last one can use the
 		// remaining 5. 1 unit is unused.
-		assert_eq!(executor.execute(36), 35);
+		Quota::set(36);
+		assert_eq!(executor.execute(), 35);
 		assert_eq!(remaining_weights_of(&executor), vec![15, 10]);
 	}
 
@@ -579,15 +586,16 @@ mod tests {
 		fn with_executor<E: StoredExecutor<Task = Task>>(mut executor: E) {
 			assert_eq!(remaining_weights_of(&executor), Vec::<Weight>::new());
 
-			assert_eq!(executor.execute(0), 0);
+			Quota::set(0);
+			assert_eq!(executor.execute(), 0);
 			assert_eq!(remaining_weights_of(&executor), Vec::<Weight>::new());
 
-			assert_eq!(executor.execute(0), 0);
+			assert_eq!(executor.execute(), 0);
 			assert_eq!(remaining_weights_of(&executor), Vec::<Weight>::new());
 		}
 
-		with_executor(MultiPassExecutor::<Task>::new());
-		with_executor(SinglePassExecutor::<Task>::new());
+		with_executor(MultiPassExecutor::<Task, Quota>::new());
+		with_executor(SinglePassExecutor::<Task, Quota>::new());
 	}
 
 	#[test]
@@ -598,14 +606,15 @@ mod tests {
 			executor.add_task(TaskBuilder::default().build(10));
 			assert_eq!(remaining_weights_of(&executor), vec![10, 10, 10]);
 
-			assert_eq!(executor.execute(0), 0);
+			Quota::set(0);
+			assert_eq!(executor.execute(), 0);
 			assert_eq!(remaining_weights_of(&executor), vec![10, 10, 10]);
 
-			assert_eq!(executor.execute(0), 0);
+			assert_eq!(executor.execute(), 0);
 			assert_eq!(remaining_weights_of(&executor), vec![10, 10, 10]);
 		}
 
-		with_executor(MultiPassExecutor::<Task>::new());
-		with_executor(SinglePassExecutor::<Task>::new());
+		with_executor(MultiPassExecutor::<Task, Quota>::new());
+		with_executor(SinglePassExecutor::<Task, Quota>::new());
 	}
 }
