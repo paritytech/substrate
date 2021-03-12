@@ -65,7 +65,7 @@ pub struct RentParams<T: Config> {
 	rent_fraction: Perbill,
 	/// See crate [`AliveContractInfo::storage_size`].
 	storage_size: u32,
-	/// See crate [`Executable::code_len()`].
+	/// See crate [`Executable::aggregate_code_len()`].
 	code_size: u32,
 	/// See crate [`Executable::refcount()`].
 	code_refcount: u32,
@@ -93,7 +93,7 @@ where
 			rent_allowance: contract.rent_allowance,
 			rent_fraction: T::RentFraction::get(),
 			storage_size: contract.storage_size,
-			code_size: executable.code_len().saturating_add(executable.original_code_len()),
+			code_size: executable.aggregate_code_len(),
 			code_refcount: executable.refcount(),
 			_reserved: None,
 		}
@@ -336,6 +336,7 @@ pub trait Executable<T: Config>: Sized {
 	/// The storage that is occupied by the instrumented executable and its pristine source.
 	///
 	/// The returned size is already divided by the number of users who share the code.
+	/// This is essentially `aggregate_code_len() / refcount()`.
 	///
 	/// # Note
 	///
@@ -347,8 +348,8 @@ pub trait Executable<T: Config>: Sized {
 	/// Size of the instrumented code in bytes.
 	fn code_len(&self) -> u32;
 
-	/// Size of the original code in bytes.
-	fn original_code_len(&self) -> u32;
+	/// Sum of instrumented and pristine code len.
+	fn aggregate_code_len(&self) -> u32;
 
 	// The number of contracts using this executable.
 	fn refcount(&self) -> u32;
@@ -1111,7 +1112,7 @@ mod tests {
 			0
 		}
 
-		fn original_code_len(&self) -> u32 {
+		fn aggregate_code_len(&self) -> u32 {
 			0
 		}
 

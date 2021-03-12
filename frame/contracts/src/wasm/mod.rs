@@ -224,7 +224,7 @@ where
 	fn occupied_storage(&self) -> u32 {
 		// We disregard the size of the struct itself as the size is completely
 		// dominated by the code size.
-		let len = self.original_code_len.saturating_add(self.code.len() as u32);
+		let len = self.aggregate_code_len();
 		len.checked_div(self.refcount as u32).unwrap_or(len)
 	}
 
@@ -232,8 +232,8 @@ where
 		self.code.len() as u32
 	}
 
-	fn original_code_len(&self) -> u32 {
-		self.original_code_len
+	fn aggregate_code_len(&self) -> u32 {
+		self.original_code_len.saturating_add(self.code_len())
 	}
 
 	fn refcount(&self) -> u32 {
