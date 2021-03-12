@@ -152,9 +152,9 @@ impl StoredExecutor for () {
 /// Namely, the assumption is that tasks are heterogenous, meaning that each might require different
 /// weight or be in different stage of execution. See [`execute`] for more info.
 ///
-/// Furthermore, this executor assumes that tasks are heterogenous, meaning that if they are being
-/// iterated and once of them fails to finish (i.e. return `Some(_)` in [`RuntimeTask::execute`]),
-/// we do not assume that the rest of the tasks will also fail. Therefore, we always make a full
+/// From the tasks being heterogenous follows that if they are being iterated and one of them
+/// fails to finish (i.e. return `Some(_)` in [`RuntimeTask::execute`]), we do **not** assume
+/// that the rest of the tasks will also fail. Therefore, we always make a full
 /// pass over the tasks, to make sure any of them can use any leftover weight. Once is a pass is
 /// done without any of the tasks consuming any weight, then we conclude that this execution is
 /// done.
