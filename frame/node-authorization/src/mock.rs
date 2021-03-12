@@ -20,7 +20,10 @@
 use super::*;
 use crate as pallet_node_authorization;
 
-use frame_support::{parameter_types, ord_parameter_types};
+use frame_support::{
+	parameter_types, ord_parameter_types,
+	traits::GenesisBuild,
+};
 use frame_system::EnsureSignedBy;
 use sp_core::H256;
 use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
@@ -90,7 +93,7 @@ impl Config for Test {
 	type WeightInfo = ();
 }
 
-fn test_node(id: u8) -> PeerId {
+pub fn test_node(id: u8) -> PeerId {
 	PeerId(vec![id])
 }
 

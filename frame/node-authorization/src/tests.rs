@@ -22,10 +22,6 @@ use crate::mock::*;
 use frame_support::{assert_ok, assert_noop};
 use sp_runtime::traits::BadOrigin;
 
-fn test_node(id: u8) -> PeerId {
-	PeerId(vec![id])
-}
-
 #[test]
 fn add_well_known_node_works() {
 	new_test_ext().execute_with(|| {
@@ -46,7 +42,7 @@ fn add_well_known_node_works() {
 			NodeAuthorization::add_well_known_node(Origin::signed(1), test_node(15), 15)
 		);
 		assert_eq!(
-			WellKnownNodes::get(),
+			WellKnownNodes::<Test>::get(),
 			BTreeSet::from_iter(vec![test_node(10), test_node(15), test_node(20), test_node(30)])
 		);
 		assert_eq!(Owners::<Test>::get(test_node(10)), 10);
@@ -77,21 +73,21 @@ fn remove_well_known_node_works() {
 			Error::<Test>::NotExist
 		);
 
-		AdditionalConnections::insert(
+		AdditionalConnections::<Test>::insert(
 			test_node(20),
 			BTreeSet::from_iter(vec![test_node(40)])
 		);
-		assert!(AdditionalConnections::contains_key(test_node(20)));
+		assert!(AdditionalConnections::<Test>::contains_key(test_node(20)));
 
 		assert_ok!(
 			NodeAuthorization::remove_well_known_node(Origin::signed(2), test_node(20))
 		);
 		assert_eq!(
-			WellKnownNodes::get(),
+			WellKnownNodes::<Test>::get(),
 			BTreeSet::from_iter(vec![test_node(10), test_node(30)])
 		);
 		assert!(!Owners::<Test>::contains_key(test_node(20)));
-		assert!(!AdditionalConnections::contains_key(test_node(20)));
+		assert!(!AdditionalConnections::<Test>::contains_key(test_node(20)));
 	});
 }
 
@@ -123,7 +119,7 @@ fn swap_well_known_node_works() {
 			)
 		);
 		assert_eq!(
-			WellKnownNodes::get(),
+			WellKnownNodes::<Test>::get(),
 			BTreeSet::from_iter(vec![test_node(10), test_node(20), test_node(30)])
 		);
 
@@ -140,7 +136,7 @@ fn swap_well_known_node_works() {
 			Error::<Test>::AlreadyJoined
 		);
 
-		AdditionalConnections::insert(
+		AdditionalConnections::<Test>::insert(
 			test_node(20),
 			BTreeSet::from_iter(vec![test_node(15)])
 		);
@@ -150,14 +146,14 @@ fn swap_well_known_node_works() {
 			)
 		);
 		assert_eq!(
-			WellKnownNodes::get(),
+			WellKnownNodes::<Test>::get(),
 			BTreeSet::from_iter(vec![test_node(5), test_node(10), test_node(30)])
 		);
 		assert!(!Owners::<Test>::contains_key(test_node(20)));
 		assert_eq!(Owners::<Test>::get(test_node(5)), 20);
-		assert!(!AdditionalConnections::contains_key(test_node(20)));
+		assert!(!AdditionalConnections::<Test>::contains_key(test_node(20)));
 		assert_eq!(
-			AdditionalConnections::get(test_node(5)),
+			AdditionalConnections::<Test>::get(test_node(5)),
 			BTreeSet::from_iter(vec![test_node(15)])
 		);
 	});
@@ -193,7 +189,7 @@ fn reset_well_known_nodes_works() {
 			)
 		);
 		assert_eq!(
-			WellKnownNodes::get(),
+			WellKnownNodes::<Test>::get(),
 			BTreeSet::from_iter(vec![test_node(5), test_node(15), test_node(20)])
 		);
 		assert_eq!(Owners::<Test>::get(test_node(5)), 5);
@@ -242,13 +238,13 @@ fn remove_claim_works() {
 		);
 
 		Owners::<Test>::insert(test_node(15), 15);
-		AdditionalConnections::insert(
+		AdditionalConnections::<Test>::insert(
 			test_node(15),
 			BTreeSet::from_iter(vec![test_node(20)])
 		);
 		assert_ok!(NodeAuthorization::remove_claim(Origin::signed(15), test_node(15)));
 		assert!(!Owners::<Test>::contains_key(test_node(15)));
-		assert!(!AdditionalConnections::contains_key(test_node(15)));
+		assert!(!AdditionalConnections::<Test>::contains_key(test_node(15)));
 	});
 }
 
@@ -305,7 +301,7 @@ fn add_connections_works() {
 			)
 		);
 		assert_eq!(
-			AdditionalConnections::get(test_node(20)),
+			AdditionalConnections::<Test>::get(test_node(20)),
 			BTreeSet::from_iter(vec![test_node(5), test_node(15), test_node(25)])
 		);
 	});
@@ -334,7 +330,7 @@ fn remove_connections_works() {
 			Error::<Test>::NotOwner
 		);
 
-		AdditionalConnections::insert(
+		AdditionalConnections::<Test>::insert(
 			test_node(20),
 			BTreeSet::from_iter(vec![test_node(5), test_node(15), test_node(25)])
 		);
@@ -346,7 +342,7 @@ fn remove_connections_works() {
 			)
 		);
 		assert_eq!(
-			AdditionalConnections::get(test_node(20)),
+			AdditionalConnections::<Test>::get(test_node(20)),
 			BTreeSet::from_iter(vec![test_node(25)])
 		);
 	});
@@ -355,7 +351,7 @@ fn remove_connections_works() {
 #[test]
 fn get_authorized_nodes_works() {
 	new_test_ext().execute_with(|| {
-		AdditionalConnections::insert(
+		AdditionalConnections::<Test>::insert(
 			test_node(20),
 			BTreeSet::from_iter(vec![test_node(5), test_node(15), test_node(25)])
 		);
