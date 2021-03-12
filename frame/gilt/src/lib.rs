@@ -483,6 +483,25 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
+		/// Get the target amount of Gilts that we're aiming for.
+		pub fn target() -> Perquintill {
+			ActiveTotal::<T>::get().target
+		}
+
+		/// Returns the amount of `Currency::total_issuance()` which is actually in gilts, and the
+		/// amount that that portion represents.
+		pub fn issuance() -> (BalanceOf<T>, BalanceOf<T>) {
+			let totals = ActiveTotal::<T>::get();
+
+			let total_issuance = T::Currency::total_issuance();
+			let nongilt_issuance: u128 = total_issuance.saturating_sub(totals.frozen)
+				.saturated_into();
+			let effective_issuance = totals.proportion.left_from_one()
+				.saturating_reciprocal_mul(nongilt_issuance);
+
+			(totals.frozen, effective_issuance)
+		}
+
 		/// Attempt to enlarge our gilt-set from bids in order to satisfy our desired target amount
 		/// of funds frozen into gilts.
 		pub fn pursue_target(max_bids: u32) -> Weight {
