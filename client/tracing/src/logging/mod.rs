@@ -29,8 +29,9 @@ mod layers;
 pub use directives::*;
 pub use sc_tracing_proc_macro::*;
 
+use futures::prelude::*;
 use std::io;
-use tracing::Subscriber;
+use tracing::{Instrument, Subscriber};
 use tracing_subscriber::{
 	filter::LevelFilter,
 	fmt::time::ChronoLocal,
@@ -287,6 +288,20 @@ impl LoggerBuilder {
 			}
 		}
 	}
+}
+
+/// Add a prefix to every log that occurs inside the future provided.
+///
+/// See [`prefix_logs_with`] for more details.
+pub fn prefix_future_logs_with<T>(
+	prefix: &str,
+	f: impl Future<Output = T>,
+) -> impl Future<Output = T> {
+	let span = tracing::info_span!(
+		PREFIX_LOG_SPAN,
+		name = prefix,
+	);
+	f.instrument(span)
 }
 
 #[cfg(test)]

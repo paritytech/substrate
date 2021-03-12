@@ -51,6 +51,8 @@ use sp_tracing::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
 #[doc(hidden)]
 pub use tracing;
 
+pub use tracing::Instrument;
+
 const ZERO_DURATION: Duration = Duration::from_nanos(0);
 
 /// Responsible for assigning ids to new spans, which are not re-used.
