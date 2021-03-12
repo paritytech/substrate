@@ -103,7 +103,7 @@ pub trait StoredExecutor {
 	/// Remove all tasks, without executing any of them.
 	fn clear(&mut self);
 
-	/// Remove a single task.
+	/// Removes the first task that is equal to `task`.
 	fn remove(&mut self, task: Self::Task);
 
 	/// Returns the number of current tasks.
