@@ -7,9 +7,6 @@ source "$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )/../com
 repo="$GITHUB_REPOSITORY"
 pr="$GITHUB_PR"
 
-# TODO: remove before merging
-env
-
 ensure_labels() {
   for label in "$@"; do
     if has_label "$repo" "$pr" "$label"; then
