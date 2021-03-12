@@ -452,6 +452,15 @@
 			"website": "https://neatcoin.org"
 		},
 		{
+			"prefix": 52,
+			"network": "legends",
+			"displayName": "Legends Tech",
+			"symbols": ["LGS"],
+			"decimals": [14],
+			"standardAccount": "*25519",
+			"website": "https://piglegends.pot-game.tech"
+		},
+		{
 			"prefix": 63,
 			"network": "hydradx",
 			"displayName": "HydraDX",
