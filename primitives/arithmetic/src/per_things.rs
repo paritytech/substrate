@@ -18,7 +18,7 @@
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 
-use sp_std::{ops, fmt, prelude::*, convert::TryInto};
+use sp_std::{ops, fmt, prelude::*, convert::{TryFrom, TryInto}};
 use codec::{Encode, CompactAs};
 use num_traits::Pow;
 use crate::traits::{
@@ -657,6 +657,13 @@ macro_rules! implement_per_thing {
 			type Output = N;
 			fn mul(self, b: N) -> Self::Output {
 				overflow_prune_mul::<N, Self>(b, self.deconstruct(), Rounding::Nearest)
+			}
+		}
+
+		impl<N> ops::Div<N> for $name where $type: TryFrom<N> {
+			type Output = Self;
+			fn div(self, b: N) -> Self::Output {
+				<$type>::try_from(b).map_or(Self::zero(), |d| Self::from_parts(self.0 / d))
 			}
 		}
 
