@@ -441,7 +441,7 @@ mod tests {
 	#[test]
 	fn single_pass_less_weight_than_than_single_task() {
 		// execute a series of tasks with less weight per block for single task.
-		Quota::set(10);
+		Quota::set(7);
 		let mut executor = SinglePassExecutor::<Task, Quota>::new();
 		executor.add_task(TaskBuilder::default().build(10));
 		executor.add_task(TaskBuilder::default().build(10));
@@ -499,7 +499,7 @@ mod tests {
 		executor.add_task(TaskBuilder::default().build(10));
 		assert_eq!(remaining_weights_of(&executor), vec![10, 10, 10]);
 
-		Quota::set(12);
+		Quota::set(10);
 		assert_eq!(executor.execute(), 10);
 		assert_eq!(remaining_weights_of(&executor), vec![10, 10]);
 
