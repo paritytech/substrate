@@ -38,9 +38,7 @@ git log -n1 release
 
 
 boldprint "check if the wasm sources changed"
-if ! git diff --name-only origin/master...${CI_COMMIT_SHA} \
-	| grep -v -e '^primitives/sr-arithmetic/fuzzer' \
-	| grep -q -e '^bin/node/src/runtime' -e '^frame/' -e '^primitives/sr-'
+if ! has_runtime_changes origin/master "${CI_COMMIT_SHA}"
 then
 	boldcat <<-EOT
 

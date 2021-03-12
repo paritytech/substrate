@@ -30,6 +30,12 @@ criticality_labels=(
   'C9-critical'
 )
 
+audit_labels=(
+  'D1-audited👍'
+  'D5-nicetohaveaudit⚠️ '
+  'D9-needsaudit👮'
+)
+
 echo "[+] Checking release notes (B) labels"
 if ensure_labels "${releasenotes_labels[@]}";  then
   echo "[+] Release notes label detected. All is well."
@@ -44,6 +50,16 @@ if ensure_labels "${criticality_labels[@]}";  then
 else
   echo "[!] Release criticality label not detected. Please add one of: ${criticality_labels[*]}"
   exit 1
+fi
+
+if has_runtime_changes ; then
+  echo "[+] Runtime changes detected. Checking audit (D) labels"
+  if ensure_labels "${criticality_labels[@]}";  then
+    echo "[+] Release criticality label detected. All is well."
+  else
+    echo "[!] Release criticality label not detected. Please add one of: ${criticality_labels[*]}"
+    exit 1
+  fi
 fi
 
 exit 0
