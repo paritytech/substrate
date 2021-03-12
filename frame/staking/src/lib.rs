@@ -1047,7 +1047,7 @@ pub mod migrations {
 			}
 		}
 
-		// NOTE: value type ain't matter, we just set it to () here.
+		// NOTE: value type doesn't matter, we just set it to () here.
 		generate_storage_types!(SnapshotValidators<T: V6Config> => Value<()>);
 		generate_storage_types!(SnapshotNominators<T: V6Config> => Value<()>);
 		generate_storage_types!(QueuedElected<T: V6Config> => Value<()>);
