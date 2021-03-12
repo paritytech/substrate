@@ -25,7 +25,7 @@ pub fn get<T: Decode + Sized>(key: &[u8]) -> Option<T> {
 	sp_io::storage::get(key).and_then(|val| {
 		Decode::decode(&mut &val[..]).map(Some).unwrap_or_else(|_| {
 			// TODO #3700: error should be handleable.
-			runtime_print!("ERROR: Corrupted state at {:?}", key);
+			crate::runtime_print!("ERROR: Corrupted state at {:?}", key);
 			None
 		})
 	})

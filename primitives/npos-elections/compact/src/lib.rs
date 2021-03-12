@@ -19,9 +19,9 @@
 
 use proc_macro::TokenStream;
 use proc_macro2::{TokenStream as TokenStream2, Span, Ident};
-use proc_macro_crate::crate_name;
+use proc_macro_crate::{crate_name, FoundCrate};
 use quote::quote;
-use syn::{parse::{Parse, ParseStream, Result}};
+use syn::parse::{Parse, ParseStream, Result};
 
 mod assignment;
 mod codec;
@@ -348,18 +348,13 @@ fn unique_targets_impl(count: usize) -> TokenStream2 {
 }
 
 fn imports() -> Result<TokenStream2> {
-	if std::env::var("CARGO_PKG_NAME").unwrap() == "sp-npos-elections" {
-		Ok(quote! {
-			use crate as _npos;
-		})
-	} else {
-		match crate_name("sp-npos-elections") {
-			Ok(sp_npos_elections) => {
-				let ident = syn::Ident::new(&sp_npos_elections, Span::call_site());
-				Ok(quote!( extern crate #ident as _npos; ))
-			},
-			Err(e) => Err(syn::Error::new(Span::call_site(), &e)),
-		}
+	match crate_name("sp-npos-elections") {
+		Ok(FoundCrate::Itself) => Ok(quote! { use crate as _npos; }),
+		Ok(FoundCrate::Name(sp_npos_elections)) => {
+			let ident = syn::Ident::new(&sp_npos_elections, Span::call_site());
+			Ok(quote!( extern crate #ident as _npos; ))
+		},
+		Err(e) => Err(syn::Error::new(Span::call_site(), e)),
 	}
 }
 

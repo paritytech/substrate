@@ -68,6 +68,9 @@ pub struct Params<B: BlockT, H: ExHashT> {
 	/// default.
 	pub executor: Option<Box<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send>>,
 
+	/// How to spawn the background task dedicated to the transactions handler.
+	pub transactions_handler_executor: Box<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send>,
+
 	/// Network layer configuration.
 	pub network_config: NetworkConfiguration,
 
@@ -106,18 +109,19 @@ pub struct Params<B: BlockT, H: ExHashT> {
 	/// protocol name. In addition all of [`RequestResponseConfig`] is used to handle incoming block
 	/// requests, if enabled.
 	///
-	/// Can be constructed either via [`block_request_handler::generate_protocol_config`] allowing
-	/// outgoing but not incoming requests, or constructed via
-	/// [`block_request_handler::BlockRequestHandler::new`] allowing both outgoing and incoming
-	/// requests.
+	/// Can be constructed either via [`crate::block_request_handler::generate_protocol_config`]
+	/// allowing outgoing but not incoming requests, or constructed via
+	/// [`crate::block_request_handler::BlockRequestHandler::new`] allowing both outgoing and
+	/// incoming requests.
 	pub block_request_protocol_config: RequestResponseConfig,
 
 	/// Request response configuration for the light client request protocol.
 	///
-	/// Can be constructed either via [`light_client_requests::generate_protocol_config`] allowing
-	/// outgoing but not incoming requests, or constructed via
-	/// [`light_client_requests::handler::LightClientRequestHandler::new`] allowing both outgoing
-	/// and incoming requests.
+	/// Can be constructed either via
+	/// [`crate::light_client_requests::generate_protocol_config`] allowing outgoing but not
+	/// incoming requests, or constructed via
+	/// [`crate::light_client_requests::handler::LightClientRequestHandler::new`] allowing
+	/// both outgoing and incoming requests.
 	pub light_client_request_protocol_config: RequestResponseConfig,
 }
 

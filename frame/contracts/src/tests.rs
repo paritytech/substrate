@@ -17,13 +17,15 @@
 
 use crate::{
 	BalanceOf, ContractInfo, ContractInfoOf, Module,
-	RawAliveContractInfo, RawEvent, Config, Schedule, gas::Gas,
-	Error, RuntimeReturnCode, storage::Storage,
+	RawAliveContractInfo, Config, Schedule,
+	Error, storage::Storage,
 	chain_extension::{
 		Result as ExtensionResult, Environment, ChainExtension, Ext, SysConfig, RetVal,
 		UncheckedFrom, InitState, ReturnFlags,
 	},
 	exec::{AccountIdOf, Executable}, wasm::PrefabWasmModule,
+	weights::WeightInfo,
+	wasm::ReturnCode as RuntimeReturnCode,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
@@ -35,8 +37,8 @@ use sp_runtime::{
 use sp_io::hashing::blake2_256;
 use frame_support::{
 	assert_ok, assert_err, assert_err_ignore_postinfo,
-	parameter_types, StorageMap, assert_storage_noop,
-	traits::{Currency, ReservableCurrency, OnInitialize},
+	parameter_types, assert_storage_noop,
+	traits::{Currency, ReservableCurrency, OnInitialize, GenesisBuild},
 	weights::{Weight, PostDispatchInfo, DispatchClass, constants::WEIGHT_PER_SECOND},
 	dispatch::DispatchErrorWithPostInfo,
 	storage::child,
@@ -72,7 +74,7 @@ pub mod test_utils {
 		exec::{StorageKey, AccountIdOf},
 		Module as Contracts,
 	};
-	use frame_support::{StorageMap, traits::Currency};
+	use frame_support::traits::Currency;
 
 	pub fn set_storage(addr: &AccountIdOf<Test>, key: &StorageKey, value: Option<Vec<u8>>) {
 		let contract_info = <ContractInfoOf::<Test>>::get(&addr).unwrap().get_alive().unwrap();
@@ -250,6 +252,7 @@ parameter_types! {
 	pub const MaxValueSize: u32 = 16_384;
 	pub const DeletionQueueDepth: u32 = 1024;
 	pub const DeletionWeightLimit: Weight = 500_000_000_000;
+	pub const MaxCodeSize: u32 = 2 * 1024;
 }
 
 parameter_types! {
@@ -282,6 +285,7 @@ impl Config for Test {
 	type ChainExtension = TestExtension;
 	type DeletionQueueDepth = DeletionQueueDepth;
 	type DeletionWeightLimit = DeletionWeightLimit;
+	type MaxCodeSize = MaxCodeSize;
 }
 
 pub const ALICE: AccountId32 = AccountId32::new([1u8; 32]);
@@ -289,7 +293,7 @@ pub const BOB: AccountId32 = AccountId32::new([2u8; 32]);
 pub const CHARLIE: AccountId32 = AccountId32::new([3u8; 32]);
 pub const DJANGO: AccountId32 = AccountId32::new([4u8; 32]);
 
-const GAS_LIMIT: Gas = 10_000_000_000;
+const GAS_LIMIT: Weight = 10_000_000_000;
 
 pub struct ExtBuilder {
 	existential_deposit: u64,
@@ -350,7 +354,7 @@ where
 fn calling_plain_account_fails() {
 	ExtBuilder::default().build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 100_000_000);
-		let base_cost = <<Test as crate::Config>::WeightInfo as crate::WeightInfo>::call();
+		let base_cost = <<Test as Config>::WeightInfo as WeightInfo>::call(0);
 
 		assert_eq!(
 			Contracts::call(Origin::signed(ALICE), BOB, 0, GAS_LIMIT, Vec::new()),
@@ -388,6 +392,7 @@ fn account_removal_does_not_remove_storage() {
 				rent_allowance: 40,
 				rent_payed: 0,
 				last_write: None,
+				_reserved: None,
 			});
 			let _ = Balances::deposit_creating(&ALICE, 110);
 			ContractInfoOf::<Test>::insert(ALICE, &alice_contract_info);
@@ -403,6 +408,7 @@ fn account_removal_does_not_remove_storage() {
 				rent_allowance: 40,
 				rent_payed: 0,
 				last_write: None,
+				_reserved: None,
 			});
 			let _ = Balances::deposit_creating(&BOB, 110);
 			ContractInfoOf::<Test>::insert(BOB, &bob_contract_info);
@@ -498,19 +504,19 @@ fn instantiate_and_call_and_deposit_event() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::pallet_contracts(RawEvent::CodeStored(code_hash.into())),
+					event: Event::pallet_contracts(crate::Event::CodeStored(code_hash.into())),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
 					event: Event::pallet_contracts(
-						RawEvent::ContractEmitted(addr.clone(), vec![1, 2, 3, 4])
+						crate::Event::ContractEmitted(addr.clone(), vec![1, 2, 3, 4])
 					),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::pallet_contracts(RawEvent::Instantiated(ALICE, addr.clone())),
+					event: Event::pallet_contracts(crate::Event::Instantiated(ALICE, addr.clone())),
 					topics: vec![],
 				},
 			]);
@@ -1227,12 +1233,16 @@ fn restoration(
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::pallet_contracts(RawEvent::CodeStored(set_rent_code_hash.into())),
+					event: Event::pallet_contracts(
+						crate::Event::CodeStored(set_rent_code_hash.into())
+					),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::pallet_contracts(RawEvent::Instantiated(ALICE, addr_bob.clone())),
+					event: Event::pallet_contracts(
+						crate::Event::Instantiated(ALICE, addr_bob.clone())
+					),
 					topics: vec![],
 				},
 			];
@@ -1272,7 +1282,9 @@ fn restoration(
 					},
 					EventRecord {
 						phase: Phase::Initialization,
-						event: Event::pallet_contracts(RawEvent::Instantiated(ALICE, addr_dummy.clone())),
+						event: Event::pallet_contracts(
+							crate::Event::Instantiated(ALICE, addr_dummy.clone())
+						),
 						topics: vec![],
 					},
 				].iter().cloned());
@@ -1398,7 +1410,7 @@ fn restoration(
 						assert_eq!(System::events(), vec![
 							EventRecord {
 								phase: Phase::Initialization,
-								event: Event::pallet_contracts(RawEvent::Evicted(addr_bob)),
+								event: Event::pallet_contracts(crate::Event::Evicted(addr_bob)),
 								topics: vec![],
 							},
 							EventRecord {
@@ -1430,12 +1442,16 @@ fn restoration(
 							},
 							EventRecord {
 								phase: Phase::Initialization,
-								event: Event::pallet_contracts(RawEvent::CodeStored(restoration_code_hash)),
+								event: Event::pallet_contracts(
+									crate::Event::CodeStored(restoration_code_hash)
+								),
 								topics: vec![],
 							},
 							EventRecord {
 								phase: Phase::Initialization,
-								event: Event::pallet_contracts(RawEvent::Instantiated(CHARLIE, addr_django.clone())),
+								event: Event::pallet_contracts(
+									crate::Event::Instantiated(CHARLIE, addr_django.clone())
+								),
 								topics: vec![],
 							},
 
@@ -1467,7 +1483,7 @@ fn restoration(
 				assert_eq!(System::events(), vec![
 					EventRecord {
 						phase: Phase::Initialization,
-						event: Event::pallet_contracts(RawEvent::CodeRemoved(restoration_code_hash)),
+						event: Event::pallet_contracts(crate::Event::CodeRemoved(restoration_code_hash)),
 						topics: vec![],
 					},
 					EventRecord {
@@ -1478,7 +1494,9 @@ fn restoration(
 					EventRecord {
 						phase: Phase::Initialization,
 						event: Event::pallet_contracts(
-							RawEvent::Restored(addr_django, addr_bob, bob_contract.code_hash, 50)
+							crate::Event::Restored(
+								addr_django, addr_bob, bob_contract.code_hash, 50
+							)
 						),
 						topics: vec![],
 					},
@@ -1717,13 +1735,13 @@ fn self_destruct_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::pallet_contracts(RawEvent::CodeRemoved(code_hash)),
+					event: Event::pallet_contracts(crate::Event::CodeRemoved(code_hash)),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
 					event: Event::pallet_contracts(
-						RawEvent::Terminated(addr.clone(), DJANGO)
+						crate::Event::Terminated(addr.clone(), DJANGO)
 					),
 					topics: vec![],
 				},
@@ -2432,7 +2450,7 @@ fn lazy_removal_does_no_run_on_full_block() {
 		// Run the lazy removal without any limit so that all keys would be removed if there
 		// had been some weight left in the block.
 		let weight_used = Contracts::on_initialize(Weight::max_value());
-		let base = <<Test as crate::Config>::WeightInfo as crate::WeightInfo>::on_initialize();
+		let base = <<Test as Config>::WeightInfo as WeightInfo>::on_initialize();
 		assert_eq!(weight_used, base);
 
 		// All the keys are still in place
@@ -2715,5 +2733,71 @@ fn refcounter() {
 		// all code should be gone
 		assert_matches!(crate::PristineCode::<Test>::get(code_hash), None);
 		assert_matches!(crate::CodeStorage::<Test>::get(code_hash), None);
+	});
+}
+
+
+#[test]
+fn reinstrument_does_charge() {
+	let (wasm, code_hash) = compile_module::<Test>("return_with_data").unwrap();
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let subsistence = Module::<Test>::subsistence_threshold();
+		let zero = 0u32.to_le_bytes().encode();
+		let code_len = wasm.len() as u32;
+
+		assert_ok!(Contracts::instantiate_with_code(
+			Origin::signed(ALICE),
+			subsistence * 100,
+			GAS_LIMIT,
+			wasm,
+			zero.clone(),
+			vec![],
+		));
+
+		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
+
+		// Call the contract two times without reinstrument
+
+		let result0 = Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			zero.clone(),
+		);
+		assert!(result0.exec_result.unwrap().is_success());
+
+		let result1 = Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			zero.clone(),
+		);
+		assert!(result1.exec_result.unwrap().is_success());
+
+		// They should match because both where called with the same schedule.
+		assert_eq!(result0.gas_consumed, result1.gas_consumed);
+
+		// Update the schedule version but keep the rest the same
+		crate::CurrentSchedule::mutate(|old: &mut Schedule<Test>| {
+			old.version += 1;
+		});
+
+		// This call should trigger reinstrumentation
+		let result2 = Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			zero.clone(),
+		);
+		assert!(result2.exec_result.unwrap().is_success());
+		assert!(result2.gas_consumed > result1.gas_consumed);
+		assert_eq!(
+			result2.gas_consumed,
+			result1.gas_consumed + <Test as Config>::WeightInfo::instrument(code_len / 1024),
+		);
 	});
 }

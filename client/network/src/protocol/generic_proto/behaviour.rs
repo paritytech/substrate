@@ -16,10 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::config::ProtocolId;
 use crate::protocol::generic_proto::{
-	handler::{NotificationsSink, NotifsHandlerProto, NotifsHandlerOut, NotifsHandlerIn},
-	upgrade::RegisteredProtocol
+	handler::{NotificationsSink, NotifsHandlerProto, NotifsHandlerOut, NotifsHandlerIn}
 };
 
 use bytes::BytesMut;
@@ -97,9 +95,6 @@ use wasm_timer::Instant;
 /// accommodates for any number of connections.
 ///
 pub struct GenericProto {
-	/// Legacy protocol to open with peers. Never modified.
-	legacy_protocol: RegisteredProtocol,
-
 	/// Notification protocols. Entries are only ever added and not removed.
 	/// Contains, for each protocol, the protocol name and the message to send as part of the
 	/// initial handshake.
@@ -346,14 +341,6 @@ pub enum GenericProtoOut {
 		set_id: sc_peerset::SetId,
 	},
 
-	/// Receives a message on the legacy substream.
-	LegacyMessage {
-		/// Id of the peer the message came from.
-		peer_id: PeerId,
-		/// Message that has been received.
-		message: BytesMut,
-	},
-
 	/// Receives a message on a custom protocol substream.
 	///
 	/// Also concerns received notifications for the notifications API.
@@ -370,9 +357,6 @@ pub enum GenericProtoOut {
 impl GenericProto {
 	/// Creates a `CustomProtos`.
 	pub fn new(
-		protocol: impl Into<ProtocolId>,
-		versions: &[u8],
-		handshake_message: Vec<u8>,
 		peerset: sc_peerset::Peerset,
 		notif_protocols: impl Iterator<Item = (Cow<'static, str>, Vec<u8>, u64)>,
 	) -> Self {
@@ -382,11 +366,7 @@ impl GenericProto {
 
 		assert!(!notif_protocols.is_empty());
 
-		let legacy_handshake_message = Arc::new(RwLock::new(handshake_message));
-		let legacy_protocol = RegisteredProtocol::new(protocol, versions, legacy_handshake_message);
-
 		GenericProto {
-			legacy_protocol,
 			notif_protocols,
 			peerset,
 			peers: FnvHashMap::default(),
@@ -410,14 +390,6 @@ impl GenericProto {
 			log::error!(target: "sub-libp2p", "Unknown handshake change set: {:?}", set_id);
 			debug_assert!(false);
 		}
-	}
-
-	/// Modifies the handshake of the legacy protocol.
-	pub fn set_legacy_handshake_message(
-		&mut self,
-		handshake_message: impl Into<Vec<u8>>
-	) {
-		*self.legacy_protocol.handshake_message().write() = handshake_message.into();
 	}
 
 	/// Returns the number of discovered nodes that we keep in memory.
@@ -1046,10 +1018,7 @@ impl NetworkBehaviour for GenericProto {
 	type OutEvent = GenericProtoOut;
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {
-		NotifsHandlerProto::new(
-			self.legacy_protocol.clone(),
-			self.notif_protocols.clone(),
-		)
+		NotifsHandlerProto::new(self.notif_protocols.clone())
 	}
 
 	fn addresses_of_peer(&mut self, _: &PeerId) -> Vec<Multiaddr> {
@@ -1467,13 +1436,14 @@ impl NetworkBehaviour for GenericProto {
 							if let ConnectionState::Closed = *connec_state {
 								*connec_state = ConnectionState::OpenDesiredByRemote;
 							} else {
-								// Connections in `OpeningThenClosing` state are in a Closed phase,
-								// and as such can emit `OpenDesiredByRemote` messages.
-								// Since an `Open` and a `Close` messages have already been sent,
+								// Connections in `OpeningThenClosing` and `Closing` state can be
+								// in a Closed phase, and as such can emit `OpenDesiredByRemote`
+								// messages.
+								// Since an `Open` and/or a `Close` message have already been sent,
 								// there is nothing much that can be done about this anyway.
 								debug_assert!(matches!(
 									connec_state,
-									ConnectionState::OpeningThenClosing
+									ConnectionState::OpeningThenClosing | ConnectionState::Closing
 								));
 							}
 						} else {
@@ -1502,13 +1472,15 @@ impl NetworkBehaviour for GenericProto {
 								});
 								*connec_state = ConnectionState::Opening;
 							} else {
-								// Connections in `OpeningThenClosing` and `Opening` are in a Closed
-								// phase, and as such can emit `OpenDesiredByRemote` messages.
+								// Connections in `OpeningThenClosing`, `Opening`, and `Closing`
+								// state can be in a Closed phase, and as such can emit
+								// `OpenDesiredByRemote` messages.
 								// Since an `Open` message haS already been sent, there is nothing
 								// more to do.
 								debug_assert!(matches!(
 									connec_state,
-									ConnectionState::OpenDesiredByRemote | ConnectionState::Opening
+									ConnectionState::OpenDesiredByRemote |
+									ConnectionState::Closing | ConnectionState::Opening
 								));
 							}
 						} else {
@@ -1544,12 +1516,13 @@ impl NetworkBehaviour for GenericProto {
 								*entry.into_mut() = PeerState::Incoming { connections, backoff_until };
 
 							} else {
-								// Connections in `OpeningThenClosing` are in a Closed phase, and
-								// as such can emit `OpenDesiredByRemote` messages.
+								// Connections in `OpeningThenClosing` and `Closing` state can be
+								// in a Closed phase, and as such can emit `OpenDesiredByRemote`
+								// messages.
 								// We ignore them.
 								debug_assert!(matches!(
 									connec_state,
-									ConnectionState::OpeningThenClosing
+									ConnectionState::OpeningThenClosing | ConnectionState::Closing
 								));
 								*entry.into_mut() = PeerState::Disabled { connections, backoff_until };
 							}
@@ -1578,12 +1551,13 @@ impl NetworkBehaviour for GenericProto {
 								*entry.into_mut() = PeerState::Enabled { connections };
 
 							} else {
-								// Connections in `OpeningThenClosing` are in a Closed phase, and
-								// as such can emit `OpenDesiredByRemote` messages.
+								// Connections in `OpeningThenClosing` and `Closing` state can be
+								// in a Closed phase, and as such can emit `OpenDesiredByRemote`
+								// messages.
 								// We ignore them.
 								debug_assert!(matches!(
 									connec_state,
-									ConnectionState::OpeningThenClosing
+									ConnectionState::OpeningThenClosing | ConnectionState::Closing
 								));
 								*entry.into_mut() = PeerState::DisabledPendingEnable {
 									connections,
@@ -1785,6 +1759,7 @@ impl NetworkBehaviour for GenericProto {
 						}
 					},
 
+					Some(PeerState::Incoming { connections, .. }) |
 					Some(PeerState::DisabledPendingEnable { connections, .. }) |
 					Some(PeerState::Disabled { connections, .. }) => {
 						if let Some((_, connec_state)) = connections.iter_mut().find(|(c, s)|
@@ -1856,36 +1831,29 @@ impl NetworkBehaviour for GenericProto {
 							*entry.into_mut() = PeerState::Enabled { connections };
 						}
 					},
-					PeerState::Disabled { mut connections, backoff_until } => {
-						if let Some((_, connec_state)) = connections.iter_mut().find(|(c, s)|
-							*c == connection && matches!(s, ConnectionState::OpeningThenClosing))
-						{
-							*connec_state = ConnectionState::Closing;
-						} else {
-							error!(target: "sub-libp2p",
-								"OpenResultErr: State mismatch in the custom protos handler");
-							debug_assert!(false);
-						}
-
-						*entry.into_mut() = PeerState::Disabled { connections, backoff_until };
-					},
-					PeerState::DisabledPendingEnable { mut connections, timer, timer_deadline } => {
-						if let Some((_, connec_state)) = connections.iter_mut().find(|(c, s)|
-							*c == connection && matches!(s, ConnectionState::OpeningThenClosing))
-						{
-							*connec_state = ConnectionState::Closing;
-						} else {
-							error!(target: "sub-libp2p",
-								"OpenResultErr: State mismatch in the custom protos handler");
-							debug_assert!(false);
-						}
-
-						*entry.into_mut() = PeerState::DisabledPendingEnable {
-							connections,
-							timer,
-							timer_deadline,
+					mut state @ PeerState::Incoming { .. } |
+					mut state @ PeerState::DisabledPendingEnable { .. } |
+					mut state @ PeerState::Disabled { .. } => {
+						match &mut state {
+							PeerState::Incoming { connections, .. } |
+							PeerState::Disabled { connections, .. } |
+							PeerState::DisabledPendingEnable { connections, .. } => {
+								if let Some((_, connec_state)) = connections.iter_mut().find(|(c, s)|
+									*c == connection && matches!(s, ConnectionState::OpeningThenClosing))
+								{
+									*connec_state = ConnectionState::Closing;
+								} else {
+									error!(target: "sub-libp2p",
+										"OpenResultErr: State mismatch in the custom protos handler");
+									debug_assert!(false);
+								}
+							},
+							_ => unreachable!("Match branches are the same as the one on which we
+							enter this block; qed"),
 						};
-					},
+
+						*entry.into_mut() = state;
+					}
 					state => {
 						error!(target: "sub-libp2p",
 							"Unexpected state in the custom protos handler: {:?}",
@@ -1893,25 +1861,6 @@ impl NetworkBehaviour for GenericProto {
 						debug_assert!(false);
 					}
 				};
-			}
-
-			NotifsHandlerOut::CustomMessage { message } => {
-				if self.is_open(&source, sc_peerset::SetId::from(0)) {  // TODO: using set 0 here is hacky
-					trace!(target: "sub-libp2p", "Handler({:?}) => Message", source);
-					trace!(target: "sub-libp2p", "External API <= Message({:?})", source);
-					let event = GenericProtoOut::LegacyMessage {
-						peer_id: source,
-						message,
-					};
-
-					self.events.push_back(NetworkBehaviourAction::GenerateEvent(event));
-				} else {
-					trace!(
-						target: "sub-libp2p",
-						"Handler({:?}) => Post-close message. Dropping message.",
-						source,
-					);
-				}
 			}
 
 			NotifsHandlerOut::Notification { protocol_index, message } => {

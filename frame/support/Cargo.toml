@@ -13,7 +13,6 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-log = "0.4"
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 frame-metadata = { version = "13.0.0", default-features = false, path = "../metadata" }
@@ -32,13 +31,12 @@ sp-state-machine = { version = "0.9.0", optional = true, path = "../../primitive
 bitflags = "1.2"
 impl-trait-for-tuples = "0.2.1"
 smallvec = "1.4.1"
+log = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]
 pretty_assertions = "0.6.1"
 frame-system = { version = "3.0.0", path = "../system" }
 parity-util-mem = { version = "0.9.0", default-features = false, features = ["primitive-types"] }
-substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
-sp-api = { version = "3.0.0", default-features = false, path = "../../primitives/api" }
 
 [features]
 default = ["std"]
@@ -56,7 +54,7 @@ std = [
 	"sp-staking/std",
 	"sp-state-machine",
 	"frame-support-procedural/std",
+	"log/std",
 ]
-nightly = []
-strict = []
 runtime-benchmarks = []
+try-runtime = []
