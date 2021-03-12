@@ -84,7 +84,7 @@ mod multiplier_tests {
 		let t1 = v * (s/m - ss/m);
 		let t2 = v.powi(2) * (s/m - ss/m).powi(2) / 2.0;
 		let next_float = previous_float * (1.0 + t1 + t2);
-		Multiplier::from_fraction(next_float)
+		Multiplier::from_float(next_float)
 	}
 
 	fn run_with_system_weight<F>(w: Weight, assertions: F) where F: Fn() -> () {

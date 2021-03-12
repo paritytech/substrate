@@ -964,13 +964,13 @@ mod tests {
 			smallvec![
 				WeightToFeeCoefficient {
 					coeff_integer: 0,
-					coeff_frac: Perbill::from_fraction(0.5),
+					coeff_frac: Perbill::from_float(0.5),
 					negative: false,
 					degree: 3
 				},
 				WeightToFeeCoefficient {
 					coeff_integer: 2,
-					coeff_frac: Perbill::from_rational_approximation(1u32, 3u32),
+					coeff_frac: Perbill::from_rational(1u32, 3u32),
 					negative: false,
 					degree: 2
 				},

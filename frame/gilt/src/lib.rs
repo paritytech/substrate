@@ -592,7 +592,7 @@ pub mod pallet {
 									.saturating_reciprocal_mul(nongilt_issuance);
 								let n = amount;
 								let d = effective_issuance;
-								let proportion = Perquintill::from_rational_approximation(n, d);
+								let proportion = Perquintill::from_rational(n, d);
 								let who = bid.who;
 								let index = totals.index;
 								totals.frozen += bid.amount;

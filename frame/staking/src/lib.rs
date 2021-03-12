@@ -2440,7 +2440,7 @@ impl<T: Config> Module<T> {
 
 		// This is the fraction of the total reward that the validator and the
 		// nominators will get.
-		let validator_total_reward_part = Perbill::from_rational_approximation(
+		let validator_total_reward_part = Perbill::from_rational(
 			validator_reward_points,
 			total_reward_points,
 		);
@@ -2455,7 +2455,7 @@ impl<T: Config> Module<T> {
 
 		let validator_leftover_payout = validator_total_payout - validator_commission_payout;
 		// Now let's calculate how this is split to the validator.
-		let validator_exposure_part = Perbill::from_rational_approximation(
+		let validator_exposure_part = Perbill::from_rational(
 			exposure.own,
 			exposure.total,
 		);
@@ -2472,7 +2472,7 @@ impl<T: Config> Module<T> {
 		// Lets now calculate how this is split to the nominators.
 		// Reward only the clipped exposures. Note this is not necessarily sorted.
 		for nominator in exposure.others.iter() {
-			let nominator_exposure_part = Perbill::from_rational_approximation(
+			let nominator_exposure_part = Perbill::from_rational(
 				nominator.value,
 				exposure.total,
 			);

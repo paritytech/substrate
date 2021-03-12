@@ -283,7 +283,7 @@ fn slack<AccountId: IdentifierT>(voter: &Voter<AccountId>, t: Threshold) -> Exte
 		let candidate = edge.candidate.borrow();
 		if candidate.elected {
 			let extra =
-				Perbill::one().min(Perbill::from_rational_approximation(t, candidate.backed_stake))
+				Perbill::one().min(Perbill::from_rational(t, candidate.backed_stake))
 				* edge.weight;
 			acc.saturating_add(extra)
 		} else {

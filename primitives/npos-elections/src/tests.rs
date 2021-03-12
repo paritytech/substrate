@@ -1095,7 +1095,7 @@ mod score {
 			is_score_better(
 				claim.clone(),
 				initial.clone(),
-				Perbill::from_rational_approximation(1u32, 10_000),
+				Perbill::from_rational(1u32, 10_000),
 			),
 			true,
 		);
@@ -1104,7 +1104,7 @@ mod score {
 			is_score_better(
 				claim.clone(),
 				initial.clone(),
-				Perbill::from_rational_approximation(2u32, 10_000),
+				Perbill::from_rational(2u32, 10_000),
 			),
 			true,
 		);
@@ -1113,7 +1113,7 @@ mod score {
 			is_score_better(
 				claim.clone(),
 				initial.clone(),
-				Perbill::from_rational_approximation(3u32, 10_000),
+				Perbill::from_rational(3u32, 10_000),
 			),
 			true,
 		);
@@ -1122,7 +1122,7 @@ mod score {
 			is_score_better(
 				claim.clone(),
 				initial.clone(),
-				Perbill::from_rational_approximation(4u32, 10_000),
+				Perbill::from_rational(4u32, 10_000),
 			),
 			true,
 		);
@@ -1131,7 +1131,7 @@ mod score {
 			is_score_better(
 				claim.clone(),
 				initial.clone(),
-				Perbill::from_rational_approximation(5u32, 10_000),
+				Perbill::from_rational(5u32, 10_000),
 			),
 			false,
 		);
