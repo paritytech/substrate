@@ -1910,7 +1910,10 @@ decl_module! {
 			ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
 			ensure!(targets.len() <= MAX_NOMINATIONS, Error::<T>::TooManyTargets);
 
-			let old = Nominators::<T>::get(stash).map_or_else(Vec::new, |x| x.targets.into_iter().map(|(x, _)| x).collect::<Vec<_>>());
+			let old = Nominators::<T>::get(stash).map_or_else(
+				Vec::new,
+				|x| x.targets.into_iter().map(|(x, _)| x).collect::<Vec<_>>(),
+			);
 
 			let targets = targets.into_iter()
 				.map(|t| T::Lookup::lookup(t).map_err(DispatchError::from))

@@ -243,7 +243,7 @@ benchmarks! {
 
 		// all nominators now should be nominating our validator...
 		for n in nominator_stashes.iter() {
-			assert!(Nominators::<T>::get(n).unwrap().targets.iter().map(|(t, _)| t).collect::<Vec<_>>().contains(&&stash));
+			assert!(Nominators::<T>::get(n).unwrap().targets.iter().any(|(t, _)| t == &stash));
 		}
 
 		// we need the unlookuped version of the nominator stash for the kick.
