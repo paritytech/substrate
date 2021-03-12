@@ -3381,6 +3381,7 @@ mod offchain_election {
 
 				// a good solution
 				let (compact, winners, score) = prepare_submission_with(true, true, 2, |_| {});
+				dbg!(<Nominators<Test>>::iter().collect::<Vec<_>>());
 				assert_ok!(submit_solution(
 					Origin::signed(10),
 					winners,
@@ -3991,86 +3992,6 @@ mod offchain_election {
 						score,
 					),
 					Error::<Test>::OffchainElectionBogusNomination,
-				);
-			})
-	}
-
-	#[test]
-	fn nomination_slash_filter_is_checked() {
-		// If a nominator has voted for someone who has been recently slashed, that particular
-		// nomination should be disabled for the upcoming election. A solution must respect this
-		// rule.
-		ExtBuilder::default()
-			.offchain_election_ext()
-			.validator_count(4)
-			.has_stakers(false)
-			.build()
-			.execute_with(|| {
-				build_offchain_election_test_ext();
-
-				// finalize the round with fallback. This is needed since all nominator submission
-				// are in era zero and we want this one to pass with no problems.
-				run_to_block(15);
-
-				// go to the next session to trigger mock::start_era and bump the active era
-				run_to_block(20);
-
-				// slash 10. This must happen outside of the election window.
-				let offender_expo = Staking::eras_stakers(Staking::active_era().unwrap().index, 11);
-				on_offence_now(
-					&[OffenceDetails {
-						offender: (11, offender_expo.clone()),
-						reporters: vec![],
-					}],
-					&[Perbill::from_percent(50)],
-				);
-
-				// validate 10 again for the next round. But this guy will not have the votes that
-				// it should have had from 1 and 2.
-				assert_ok!(Staking::validate(
-					Origin::signed(10),
-					Default::default()
-				));
-
-				// open the election window and create snapshots.
-				run_to_block(32);
-
-				// a solution that has been prepared after the slash.
-				let (compact, winners, score) = prepare_submission_with(true, false, 0, |a| {
-					// no one is allowed to vote for 10, except for itself.
-					a.into_iter()
-						.filter(|s| s.who != 11)
-						.for_each(|s|
-							assert!(s.distribution.iter().find(|(t, _)| *t == 11).is_none())
-						);
-				});
-
-				// can be submitted.
-				assert_ok!(submit_solution(
-					Origin::signed(10),
-					winners,
-					compact,
-					score,
-				));
-
-				// a wrong solution.
-				let (compact, winners, score) = prepare_submission_with(true, false, 0, |a| {
-					// add back the vote that has been filtered out.
-					a.push(StakedAssignment {
-						who: 1,
-						distribution: vec![(11, 100)]
-					});
-				});
-
-				// is rejected.
-				assert_noop!(
-					submit_solution(
-						Origin::signed(10),
-						winners,
-						compact,
-						score,
-					),
-					Error::<Test>::OffchainElectionSlashedNomination,
 				);
 			})
 	}
@@ -4709,7 +4630,11 @@ fn on_initialize_weight_is_correct() {
 		assert_eq!(Validators::<Test>::iter().count(), 0);
 		assert_eq!(Nominators::<Test>::iter().count(), 0);
 		// When this pallet has nothing, we do 4 reads each block
-		let base_weight = <Test as frame_system::Config>::DbWeight::get().reads(4);
+		let mut base_weight = <Test as frame_system::Config>::DbWeight::get().reads(4);
+		// and 1 read+write even if there are no tasks to be executed. // TODO: well.. this is kind of a
+		// waste. Ideally, if the task was not abstract, we could do decode_len, but we can bake
+		// decode_len into `StoredTask` I presume.
+		base_weight = base_weight + <Test as frame_system::Config>::DbWeight::get().reads_writes(1, 1);
 		assert_eq!(base_weight, Staking::on_initialize(0));
 	});
 
@@ -4731,7 +4656,9 @@ fn on_initialize_weight_is_correct() {
 		// With 4 validators and 5 nominator, we should increase weight by:
 		// - (4 + 5) reads
 		// - 3 Writes
-		let final_weight = <Test as frame_system::Config>::DbWeight::get().reads_writes(4 + 9, 3);
+		let mut final_weight = <Test as frame_system::Config>::DbWeight::get().reads_writes(4 + 9, 3);
+		// and the weight for task checking.
+		final_weight = final_weight + <Test as frame_system::Config>::DbWeight::get().reads_writes(1, 1);
 		assert_eq!(final_weight, Staking::on_initialize(System::block_number()));
 	});
 }
@@ -5031,7 +4958,7 @@ mod election_data_provider {
 	}
 
 	#[test]
-	fn voters_exclude_slashed() {
+	fn voters_exclude_inactive() {
 		ExtBuilder::default().build().execute_with(|| {
 			assert_eq!(Staking::nominators(101).unwrap().targets, vec![(11, true), (21, true)]);
 			assert_eq!(
@@ -5043,11 +4970,11 @@ mod election_data_provider {
 				vec![11, 21]
 			);
 
-			start_active_era(1);
-			add_slash(&11);
+			<Nominators<Test>>::mutate(101, |maybe_nom| {
+				maybe_nom.as_mut().unwrap().targets[0].1 = false
+			});
 
 			// 11 is gone.
-			start_active_era(2);
 			assert_eq!(
 				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters()
 					.iter()
@@ -5102,5 +5029,242 @@ mod election_data_provider {
 				RawEvent::StakingElection(ElectionCompute::OnChain)
 			);
 		})
+	}
+}
+
+#[test]
+fn re_nomination_actives_votes() {
+	ExtBuilder::default().build().execute_with(|| {
+		<Nominators<Test>>::mutate(101, |maybe_nom| {
+			maybe_nom.as_mut().unwrap().targets[0].1 = false
+		});
+		assert_eq!(Staking::nominators(101).unwrap().targets, vec![(11, false), (21, true)]);
+
+		// resubmit and it is back
+		assert_ok!(Staking::nominate(Origin::signed(100), vec![11, 21]));
+		assert_eq!(Staking::nominators(101).unwrap().targets, vec![(11, true), (21, true)]);
+	})
+}
+
+mod slash_task_executor {
+	use super::*;
+	use frame_support::storage::generator::StorageMap;
+	use frame_support::executor::StoredExecutor;
+
+	#[test]
+	fn wrong_starting_key_is_noop() {
+		ExtBuilder::default().build().execute_with(|| {
+			// a task with wrong starting key.
+			let wrong_key = <Validators<Test>>::prefix_hash();
+			let task = SlashTask::<Test> {
+				slashed: 11,
+				prefix: <Nominators<Test>>::prefix_hash(),
+				last_key: wrong_key,
+			};
+
+			<SlashTaskExecutor<Test>>::mutate(|e| e.add_task(task));
+			assert_eq!(Staking::slash_task_executor().count(), 1);
+
+			let prev_nominators = <Nominators<Test>>::iter().collect::<Vec<_>>();
+			<SlashTaskExecutor<Test>>::mutate(|e| e.execute());
+
+			// task removed, nothing else notable changed.
+			assert_eq!(Staking::slash_task_executor().count(), 0);
+			assert_eq!(<Nominators<Test>>::iter().collect::<Vec<_>>(), prev_nominators);
+		})
+	}
+
+	#[test]
+	fn storage_prefix_next_key_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			// when building a task for slashing events, we expect calling next key on
+			// `prefix_hash()` of `<Nominators<T>>` to yield the key of the first nominator. This
+			// test ensures that this assumption is help by frame-support.
+			let base_nominators_key = <Nominators<Test>>::prefix_hash();
+			let (first_nominator, _) = <Nominators<Test>>::iter().collect::<Vec<_>>()[0];
+			let first_nominator_key = <Nominators<Test>>::storage_map_final_key(first_nominator);
+			assert_eq!(
+				sp_io::storage::next_key(&base_nominators_key).unwrap(),
+				first_nominator_key
+			);
+			assert!(matches!(
+				frame_support::storage::unhashed::get::<Nominations<AccountId>>(
+					&first_nominator_key
+				),
+				Some(_),
+			));
+
+			// when having just one nominator,
+			assert_eq!(<Nominators<Test>>::iter().count(), 1);
+			// calling next_key on that nominator again will give a key which is no longer
+			// decodable.
+			let next_key = sp_io::storage::next_key(&first_nominator_key).unwrap();
+			assert!(matches!(
+				frame_support::storage::unhashed::get::<Nominations<AccountId>>(&next_key),
+				None,
+			));
+		})
+	}
+
+	#[test]
+	fn basic_task_work() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(<Nominators<Test>>::iter().count(), 1);
+			run_to_block(1);
+			assert_eq!(Staking::slash_task_executor().count(), 0);
+			add_slash(&11);
+
+			// task is added after slash.
+			assert_eq!(Staking::slash_task_executor().count(), 1);
+			assert_eq!(
+				Staking::slash_task_executor().tasks(),
+				vec![SlashTask {
+					slashed: 11,
+					last_key: <Nominators<Test>>::prefix_hash(),
+					prefix: <Nominators<Test>>::prefix_hash()
+				}]
+			);
+
+			// but nothing is executed. Both votes are `true`.
+			assert_eq!(
+				<Nominators<Test>>::iter().map(|(who, n)| (who, n.targets)).collect::<Vec<_>>(),
+				vec![(101, vec![(11, true), (21, true)])],
+			);
+
+			// next block, all of them are executed.
+			run_to_block(2);
+
+			assert_eq!(Staking::slash_task_executor().count(), 0);
+			assert_eq!(
+				<Nominators<Test>>::iter().map(|(who, n)| (who, n.targets)).collect::<Vec<_>>(),
+				vec![(101, vec![(11, false), (21, true)])],
+			);
+		});
+	}
+
+	#[test]
+	fn execute_over_multiple_blocks() {
+		ExtBuilder::default()
+			.slash_task_weight(
+				<Test as frame_system::Config>::DbWeight::get().reads_writes(1, 1) * 3,
+			)
+			// we allow 10 iterations per execution.
+			.build_and_execute(|| {
+				let count_applied_tasks = || {
+					// those who are still actively voting for 11.
+					let unapplied =
+						<Nominators<Test>>::iter().filter(|(_, n)| n.targets[0].1).count();
+					// those who got chilled.
+					let applied =
+						<Nominators<Test>>::iter().filter(|(_, n)| !n.targets[0].1).count();
+
+					// assert on the fly that the votes for 21 never change
+					assert!(<Nominators<Test>>::iter().all(|(_, n)| n.targets[1].1));
+
+					(applied, unapplied)
+				};
+
+				// remove the default nominator in a rather harsh way.
+				<Nominators<Test>>::remove(101);
+				assert_eq!(<Nominators<Test>>::iter().count(), 0);
+
+				// bond 10 fresh nominators, all voting for 11
+				(0..10).for_each(|n| bond_nominator(1000 + n, 2000 + n, 100, vec![11, 21]));
+
+				assert_eq!(Staking::slash_task_executor().count(), 0);
+				run_to_block(1);
+				add_slash(&11);
+				assert_eq!(Staking::slash_task_executor().count(), 1);
+
+				// 3 votes chilled
+				run_to_block(2);
+				assert_eq!(count_applied_tasks(), (3, 7));
+
+				// 3 votes chilled
+				run_to_block(3);
+				assert_eq!(count_applied_tasks(), (6, 4));
+
+				// 3 votes chilled
+				run_to_block(4);
+				assert_eq!(count_applied_tasks(), (9, 1));
+				assert_eq!(Staking::slash_task_executor().count(), 1);
+
+				// 3 votes chilled
+				run_to_block(5);
+				assert_eq!(count_applied_tasks(), (10, 0));
+				assert_eq!(Staking::slash_task_executor().count(), 0);
+			})
+	}
+
+	#[test]
+	fn overlapping_slash() {
+		ExtBuilder::default()
+			.slash_task_weight(
+				<Test as frame_system::Config>::DbWeight::get().reads_writes(1, 1) * 3,
+			)
+			// we allow 10 iterations per execution.
+			.build_and_execute(|| {
+				let count_applied_chilled_for_validator_index = |at: usize| {
+					// those who got chilled.
+					let applied =
+						<Nominators<Test>>::iter().filter(|(_, n)| !n.targets[at].1).count();
+					// those who are still actively voting for 11.
+					let unapplied =
+						<Nominators<Test>>::iter().filter(|(_, n)| n.targets[at].1).count();
+
+					(applied, unapplied)
+				};
+
+				// remove the default nominator in a rather harsh way.
+				<Nominators<Test>>::remove(101);
+				assert_eq!(<Nominators<Test>>::iter().count(), 0);
+
+				// bond 10 fresh nominators, all voting for 11
+				(0..10).for_each(|n| bond_nominator(1000 + n, 2000 + n, 100, vec![11, 21]));
+
+				assert_eq!(Staking::slash_task_executor().count(), 0);
+				run_to_block(1);
+				add_slash(&11);
+				assert_eq!(Staking::slash_task_executor().count(), 1);
+				assert_eq!(count_applied_chilled_for_validator_index(0), (0, 10));
+
+				// 3 votes chilled
+				run_to_block(2);
+				assert_eq!(count_applied_chilled_for_validator_index(0), (3, 7));
+
+				// 3 votes chilled
+				run_to_block(3);
+				assert_eq!(count_applied_chilled_for_validator_index(0), (6, 4));
+
+				// a new slash coming!
+				add_slash(&21);
+				assert_eq!(Staking::slash_task_executor().count(), 2);
+
+				// 3 votes chilled from the first task, none from the second.
+				run_to_block(4);
+				assert_eq!(count_applied_chilled_for_validator_index(0), (9, 1));
+				assert_eq!(count_applied_chilled_for_validator_index(1), (0, 10));
+				assert_eq!(Staking::slash_task_executor().count(), 2);
+
+				// 1 votes chilled form the first task and removed, 2 task chilled form the second.
+				run_to_block(5);
+				assert_eq!(count_applied_chilled_for_validator_index(0), (10, 0));
+				assert_eq!(count_applied_chilled_for_validator_index(1), (2, 8));
+				assert_eq!(Staking::slash_task_executor().count(), 1);
+
+				// second task progresses as normal.
+				run_to_block(6);
+				assert_eq!(count_applied_chilled_for_validator_index(1), (5, 5));
+				assert_eq!(Staking::slash_task_executor().count(), 1);
+
+				run_to_block(7);
+				assert_eq!(count_applied_chilled_for_validator_index(1), (8, 2));
+				assert_eq!(Staking::slash_task_executor().count(), 1);
+
+				// all done.
+				run_to_block(8);
+				assert_eq!(count_applied_chilled_for_validator_index(1), (10, 0));
+				assert_eq!(Staking::slash_task_executor().count(), 0);
+			})
 	}
 }

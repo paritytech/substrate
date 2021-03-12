@@ -223,6 +223,7 @@ parameter_types! {
 	pub const UnsignedPriority: u64 = 1 << 20;
 	pub const MinSolutionScoreBump: Perbill = Perbill::zero();
 	pub OffchainSolutionWeightLimit: Weight = BlockWeights::get().max_block;
+	pub static SlashTaskWeight: Weight = <Test as frame_system::Config>::DbWeight::get().reads_writes(1, 1) * 4;
 }
 
 thread_local! {
@@ -269,6 +270,7 @@ impl Config for Test {
 	type UnsignedPriority = UnsignedPriority;
 	type OffchainSolutionWeightLimit = OffchainSolutionWeightLimit;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
+	type TaskExecutor = executor::MultiPassExecutor<SlashTask<Self>, SlashTaskWeight>;
 	type WeightInfo = ();
 }
 
@@ -365,6 +367,10 @@ impl ExtBuilder {
 	}
 	pub fn max_offchain_iterations(self, iterations: u32) -> Self {
 		MAX_ITERATIONS.with(|v| *v.borrow_mut() = iterations);
+		self
+	}
+	pub fn slash_task_weight(self, weight: Weight) -> Self {
+		SlashTaskWeight::set(weight);
 		self
 	}
 	pub fn offchain_election_ext(self) -> Self {

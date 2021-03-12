@@ -16,10 +16,10 @@
 // limitations under the License.
 
 use sp_std::prelude::*;
-use crate::weights::Weight;
+use crate::{weights::Weight, traits::Get};
 use codec::{Encode, Decode};
 use sp_runtime::traits::Zero;
-use sp_runtime::RuntimeDebug;
+use crate::{RuntimeDebugNoBound, PartialEqNoBound, EqNoBound, CloneNoBound};
 
 const LOG_TARGET: &'static str = "runtime::task_executor";
 
@@ -57,35 +57,90 @@ pub trait RuntimeTask:
 	fn leftover(&self) -> Weight;
 }
 
+#[cfg(any(test, feature = "std"))]
+impl RuntimeTask for () {
+	fn execute(self, _: Weight) -> (Option<Self>, Weight) {
+		(None, 0)
+	}
+	#[cfg(test)]
+	fn leftover(&self) -> Weight {
+		0
+	}
+}
+
 /// Common trait for a executor that is stored as a storage item.
-pub trait StoredExecutor<Task: RuntimeTask> {
-	/// Execute all tasks based on an unspecified strategy, consuming at most `max_weight` and
+pub trait StoredExecutor {
+	/// The task type used by this executor.
+	type Task: RuntimeTask;
+
+	/// Something that can define how much weight quote this executor is allowed to use per
+	/// execution.
+	type Quota: Get<Weight>;
+
+	/// Execute all tasks based on an unspecified strategy, consuming at most `Self::Quota` and
 	/// returning the actual amount of weight consumed.
 	///
 	/// The returned weight must take into account the cost of internal operations of the
-	/// implementation, such as scheduling, as well.
+	/// implementation, such as scheduling, as well. But, it DOES NOT take into account any
+	/// potential storage operations that needed to be performed to fetch `Self` from storage.
+	///
+	/// A  sensible patter of using an implementation of this trait is therefore:
+	///
+	/// ```ignore
+	/// let mut consumed = <StorageItemExecutor<T>>::mutate(|e| e.execute());
+	/// consumed += <weight of 1 read and write for the mutate call above>;
+	/// ```
 	// TODO: while the work that this does itself is pretty negligible, must benchmark it anyhow and
 	// take it into account.
-	fn execute(&mut self, max_weight: Weight) -> Weight;
+	fn execute(&mut self) -> Weight;
 
 	/// Create a new (empty) instance of [`Self`].
 	fn new() -> Self;
 
 	/// Add a new task to the internal state.
-	fn add_task(&mut self, task: Task);
+	fn add_task(&mut self, task: Self::Task);
 
 	/// Remove all tasks, without executing any of them.
 	fn clear(&mut self);
 
 	/// Remove a single task.
-	fn remove(&mut self, task: Task);
+	fn remove(&mut self, task: Self::Task);
 
 	/// Returns the number of current tasks.
 	fn count(&self) -> usize;
 
 	/// Return a vector of all tasks.
-	#[cfg(test)]
-	fn tasks(&self) -> Vec<Task>;
+	#[cfg(any(test, feature = "std"))]
+	fn tasks(&self) -> Vec<Self::Task>;
+	// TODO: providing an iter() might also be good.
+}
+
+#[cfg(any(test, feature = "std"))]
+impl StoredExecutor for () {
+	type Task = ();
+	type Quota = ();
+
+	fn execute(&mut self) -> Weight {
+		unreachable!()
+	}
+	fn new() -> Self {
+		unreachable!()
+	}
+	fn add_task(&mut self, _: Self::Task) {
+		unreachable!()
+	}
+	fn clear(&mut self) {
+		unreachable!()
+	}
+	fn remove(&mut self, _: Self::Task) {
+		unreachable!()
+	}
+	fn count(&self) -> usize {
+		unreachable!()
+	}
+	fn tasks(&self) -> Vec<Self::Task> {
+		unreachable!()
+	}
 }
 
 /// An executor that tries to execute as many tasks as possible in multiple passes over all of them.
@@ -109,15 +164,26 @@ pub trait StoredExecutor<Task: RuntimeTask> {
 /// This implementation is prone to the _weight leaking_ explained in [`RuntimeTask::execute`].
 /// Namely, if a task keep consuming a little amount of weight in each execution, this executor will
 /// assume that it still has work to do, and will indefinitely executor a second pass for it.
-#[derive(Encode, Decode, Default, RuntimeDebug)]
-pub struct MultiPassExecutor<Task: RuntimeTask> {
+#[derive(Encode, Decode, RuntimeDebugNoBound, PartialEqNoBound, EqNoBound, CloneNoBound)]
+pub struct MultiPassExecutor<Task: RuntimeTask, Quota: Get<Weight>> {
 	/// The queue of tasks.
 	pub(crate) tasks: Vec<Task>,
+	_marker: sp_std::marker::PhantomData<Quota>,
 }
 
-impl<Task: RuntimeTask> StoredExecutor<Task> for MultiPassExecutor<Task> {
+// TODO: can't we just have a DefaultNoBound as well? then we can ditch this.
+impl<Task: RuntimeTask, Quota: Get<Weight>> Default for MultiPassExecutor<Task, Quota> {
+	fn default() -> Self {
+		Self { tasks: vec![], _marker: sp_std::marker::PhantomData }
+	}
+}
+
+impl<Task: RuntimeTask, Quota: Get<Weight>> StoredExecutor for MultiPassExecutor<Task, Quota> {
+	type Task = Task;
+	type Quota = Quota;
+
 	fn new() -> Self {
-		Self { tasks: vec![] }
+		Self { tasks: vec![], _marker: Default::default() }
 	}
 
 	fn add_task(&mut self, task: Task) {
@@ -139,12 +205,13 @@ impl<Task: RuntimeTask> StoredExecutor<Task> for MultiPassExecutor<Task> {
 		self.tasks.len()
 	}
 
-	#[cfg(test)]
+	#[cfg(any(test, feature = "std"))]
 	fn tasks(&self) -> Vec<Task> {
 		self.tasks.clone()
 	}
 
-	fn execute(&mut self, max_weight: Weight) -> Weight {
+	fn execute(&mut self) -> Weight {
+		let max_weight = Self::Quota::get();
 		// NOTE: we can optimize this a bit: if we make a pass and 8/10 of the tasks do nothing, we
 		// should mark them and not re-execute them in the next pass. Need to store Vec<(Task,
 		// bool)> for this.
@@ -171,16 +238,27 @@ impl<Task: RuntimeTask> StoredExecutor<Task> for MultiPassExecutor<Task> {
 /// An executor that only tries to execute a single pass on a given list of tasks in each
 /// execution.
 ///
-/// This is a much more conservative variation of the [`MultiPassExecutor`].
-#[derive(Encode, Decode, Default, RuntimeDebug)]
-pub struct SinglePassExecutor<Task: RuntimeTask> {
+/// This is a much more conservative variation of the [`MultiPassExecutor`], and arguable more
+/// suitable for homogenous tasks.
+#[derive(Encode, Decode, RuntimeDebugNoBound, PartialEqNoBound, EqNoBound, CloneNoBound)]
+pub struct SinglePassExecutor<Task: RuntimeTask, Quota: Get<Weight>> {
 	/// The queue of tasks.
 	pub(crate) tasks: Vec<Task>,
+	_marker: sp_std::marker::PhantomData<Quota>,
 }
 
-impl<Task: RuntimeTask> StoredExecutor<Task> for SinglePassExecutor<Task> {
+impl<Task: RuntimeTask, Quota: Get<Weight>> Default for SinglePassExecutor<Task, Quota> {
+	fn default() -> Self {
+		Self { tasks: vec![], _marker: sp_std::marker::PhantomData }
+	}
+}
+
+impl<Task: RuntimeTask, Quota: Get<Weight>> StoredExecutor for SinglePassExecutor<Task, Quota> {
+	type Task = Task;
+	type Quota = Quota;
+
 	fn new() -> Self {
-		Self { tasks: vec![] }
+		Self { tasks: vec![], _marker: Default::default() }
 	}
 
 	fn add_task(&mut self, task: Task) {
@@ -202,12 +280,13 @@ impl<Task: RuntimeTask> StoredExecutor<Task> for SinglePassExecutor<Task> {
 		self.tasks.len()
 	}
 
-	#[cfg(test)]
+	#[cfg(any(test, feature = "std"))]
 	fn tasks(&self) -> Vec<Task> {
 		self.tasks.clone()
 	}
 
-	fn execute(&mut self, max_weight: Weight) -> Weight {
+	fn execute(&mut self) -> Weight {
+		let max_weight = Self::Quota::get();
 		let (next_tasks, consumed) = single_pass::<Task>(self.tasks.as_ref(), max_weight);
 		self.tasks = next_tasks;
 		consumed
@@ -224,16 +303,7 @@ pub(crate) fn single_pass<T: RuntimeTask>(tasks: &[T], max_weight: Weight) -> (V
 		return (tasks.to_vec(), Zero::zero());
 	}
 
-	// to be easily executed in a runtime storage mutate call.
 	let mut leftover_weight = max_weight;
-
-	// We take an approach which is more fair, but needs to consume a few more cycles: we
-	// iterate over all tasks in each execution. Even if while executing task `t` we ran out of
-	// resources, as long as there are any leftover weight, some of the upcoming tasks might be
-	// able to consume that. This is pointless if tasks are homogenous, nonetheless we can't
-	// make that assumption. Only assumption is that no task needs to consume `0` weight, for in
-	// this case it wouldn't have been delegated to the executor in the first place.
-
 	let next_tasks = tasks
 		.iter()
 		.cloned()
@@ -358,36 +428,43 @@ mod tests {
 		}
 	}
 
-	fn remaining_weights_of<T: RuntimeTask, E: StoredExecutor<T>>(executor: &E) -> Vec<Weight> {
+	fn remaining_weights_of<T: RuntimeTask, E: StoredExecutor<Task = T>>(
+		executor: &E,
+	) -> Vec<Weight> {
 		executor.tasks().iter().map(|t| t.leftover()).collect::<Vec<_>>()
+	}
+
+	frame_support::parameter_types! {
+		static Quota: Weight = 10;
 	}
 
 	#[test]
 	fn single_pass_less_weight_than_than_single_task() {
 		// execute a series of tasks with less weight per block for single task.
-		let mut executor = SinglePassExecutor::<Task>::new();
+		Quota::set(10);
+		let mut executor = SinglePassExecutor::<Task, Quote>::new();
 		executor.add_task(TaskBuilder::default().build(10));
 		executor.add_task(TaskBuilder::default().build(10));
 		executor.add_task(TaskBuilder::default().build(10));
 		assert_eq!(remaining_weights_of(&executor), vec![10, 10, 10]);
 
-		assert_eq!(executor.execute(7), 7);
+		assert_eq!(executor.execute(), 7);
 		assert_eq!(remaining_weights_of(&executor), vec![3, 10, 10]);
 
-		assert_eq!(executor.execute(7), 7);
+		assert_eq!(executor.execute(), 7);
 		assert_eq!(remaining_weights_of(&executor), vec![6, 10]);
 
-		assert_eq!(executor.execute(7), 7);
+		assert_eq!(executor.execute(), 7);
 		assert_eq!(remaining_weights_of(&executor), vec![9]);
 
-		assert_eq!(executor.execute(7), 7);
+		assert_eq!(executor.execute(), 7);
 		assert_eq!(remaining_weights_of(&executor), vec![2]);
 
-		assert_eq!(executor.execute(7), 2);
+		assert_eq!(executor.execute(), 2);
 		assert_eq!(remaining_weights_of(&executor), Vec::<Weight>::new());
 
 		// noop
-		assert_eq!(executor.execute(7), 0);
+		assert_eq!(executor.execute(), 0);
 	}
 
 	#[test]
@@ -499,7 +576,7 @@ mod tests {
 
 	#[test]
 	fn empty_executor_is_noop() {
-		fn with_executor<E: StoredExecutor<Task>>(mut executor: E) {
+		fn with_executor<E: StoredExecutor<Task = Task>>(mut executor: E) {
 			assert_eq!(remaining_weights_of(&executor), Vec::<Weight>::new());
 
 			assert_eq!(executor.execute(0), 0);
@@ -515,7 +592,7 @@ mod tests {
 
 	#[test]
 	fn no_weight_allowed_is_noop() {
-		fn with_executor<E: StoredExecutor<Task>>(mut executor: E) {
+		fn with_executor<E: StoredExecutor<Task = Task>>(mut executor: E) {
 			executor.add_task(TaskBuilder::default().build(10));
 			executor.add_task(TaskBuilder::default().build(10));
 			executor.add_task(TaskBuilder::default().build(10));

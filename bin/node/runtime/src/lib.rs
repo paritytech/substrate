@@ -476,6 +476,7 @@ parameter_types! {
 		.get(DispatchClass::Normal)
 		.max_extrinsic.expect("Normal extrinsics have a weight limit configured; qed")
 		.saturating_sub(BlockExecutionWeight::get());
+	pub SlashTaskWeight: Weight = RuntimeBlockWeights::get().max_block / 2;
 }
 
 impl pallet_staking::Config for Runtime {
@@ -508,6 +509,7 @@ impl pallet_staking::Config for Runtime {
 	// a single extrinsic.
 	type OffchainSolutionWeightLimit = OffchainSolutionWeightLimit;
 	type ElectionProvider = ElectionProviderMultiPhase;
+	type TaskExecutor = frame_support::executor::SinglePassExecutor<pallet_staking::SlashTask<Self>, SlashTaskWeight>
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Runtime>;
 }
 

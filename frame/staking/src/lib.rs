@@ -840,6 +840,11 @@ pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
 	/// See [Era payout](./index.html#era-payout).
 	type RewardCurve: Get<&'static PiecewiseLinear<'static>>;
 
+	///
+	type TaskExecutor: executor::StoredExecutor<Task = SlashTask<Self>>
+		+ frame_support::dispatch::Parameter
+		+ Default;
+
 	/// Something that can estimate the next session change, accurately or as a best effort guess.
 	type NextNewSession: EstimateNextNewSession<Self::BlockNumber>;
 
@@ -931,8 +936,26 @@ use frame_support::{CloneNoBound, PartialEqNoBound, EqNoBound, RuntimeDebugNoBou
 pub struct SlashTask<T: Config> {
 	/// The slashed validator.
 	slashed: T::AccountId,
+	/// The prefix that must be maintained for all keys.
+	prefix: Vec<u8>,
 	/// The last iterated key of their nominators.
 	last_key: Vec<u8>,
+}
+
+impl<T: Config> SlashTask<T> {
+	/// Creates a new instance of `Self` with proper prefix and `last_key`.
+	///
+	/// Will always create a task that begins from the first nominator and iterates all of them. If,
+	/// for whatever reason, one needs to start mid-way from a specific key, then create `Self`
+	/// manually.
+	fn new(slashed: T::AccountId) -> Self {
+		use frame_support::storage::generator::StorageMap;
+		Self {
+			slashed,
+			prefix: <Nominators<T>>::prefix_hash(),
+			last_key: <Nominators<T>>::prefix_hash(),
+		}
+	}
 }
 
 impl<T: Config> Default for SlashTask<T>
@@ -940,7 +963,11 @@ where
 	T::AccountId: Default,
 {
 	fn default() -> Self {
-		Self { slashed: Default::default(), last_key: Default::default() }
+		Self {
+			slashed: Default::default(),
+			last_key: Default::default(),
+			prefix: Default::default(),
+		}
 	}
 }
 
@@ -950,43 +977,58 @@ impl<T: Config> executor::RuntimeTask for SlashTask<T> {
 		let max_iterations = max_weight / weight_per_iteration;
 		let mut iterated: Weight = 0;
 		let mut needs_more_iterations = false;
+		log!(
+			debug,
+			"executing SlashTask with {} cap, resulting in {} iterations at most.",
+			max_weight,
+			max_iterations
+		);
 
 		while let Some(next_key) = sp_io::storage::next_key(self.last_key.as_ref()) {
-			if iterated > max_iterations {
+			if !next_key.starts_with(&self.prefix) {
+				// The keys are done. Break
+				break;
+			}
+
+			log!(trace, "[{}] next-key = {:?} ", iterated, next_key);
+			match frame_support::storage::unhashed::get::<Nominations<T::AccountId>>(&next_key) {
+				Some(mut next_nominations) => {
+					next_nominations.targets.iter_mut().for_each(|(target, active)| {
+						if target == &self.slashed {
+							*active = false;
+						}
+					});
+
+					frame_support::storage::unhashed::put(&next_key, &next_nominations);
+
+					iterated = iterated.saturating_add(1);
+					self.last_key = next_key;
+				}
+				None => {
+					// we end up here on the last nominator, of a corrupt data. Better to log it.
+					log!(warn, "an un-decodable nomination detected during SlashTask.");
+					break;
+				}
+			};
+
+			if iterated >= max_iterations {
 				// we will brake out because a `next_key` exist, but we no longer have weight. This
 				// task is not done yet.
 				needs_more_iterations = true;
 				break;
 			}
 
-			// defensive-only: all nominations should be decodable. Not much that we can do if
-			// otherwise.
-			if let Some(mut next_nominations) =
-				frame_support::storage::unhashed::get::<Nominations<T::AccountId>>(&next_key)
-			{
-				// TODO: 4 cases need to be considered: 1- a key is added before the current
-				// cursor: don't care. 2- a key is removed after the current cursor: don't care.
-				// 3- a key is added after the current cursor: worth having a test, but no
-				// biggie.  4- a key is removed after the current cursor: worth having a test,
-				// but no biggie. 5- the current key is deleted: then the next_key must be
-				// updated.
-
-				next_nominations.targets.iter_mut().for_each(|(target, active)| {
-					if target == &self.slashed {
-						*active = false;
-					}
-				});
-
-				frame_support::storage::unhashed::put(&next_key, &next_nominations);
-
-				iterated = iterated.saturating_add(1);
-				self.last_key = next_key;
-			} else {
-				log!(error, "an un-decodable nomination detected during SlashTask.");
-			}
+			// TODO: 4 cases need to be considered: 1- a key is added before the current
+			// cursor: don't care. 2- a key is removed after the current cursor: don't care.
+			// 3- a key is added after the current cursor: worth having a test, but no
+			// biggie.  4- a key is removed after the current cursor: worth having a test,
+			// but no biggie. 5- the current key is deleted: then the next_key must be
+			// updated.
+			// TODO: also need a test to ensure that this iterates over all nominators, skipping
+			// the first one seems likely.
 		}
 
-		let mut consumed_weight = weight_per_iteration.saturating_mul(iterated);
+		let consumed_weight = weight_per_iteration.saturating_mul(iterated);
 		// we are guaranteed that `max_iterations * weight_per_iter <= max_weight`, given `iterated
 		// <= max_iterations`, thus `consumed_weight <= max_weight`.
 		debug_assert!(iterated <= max_iterations);
@@ -1155,7 +1197,7 @@ decl_storage! {
 		EarliestUnappliedSlash: Option<EraIndex>;
 
 		/// Task scheduler for chill tasks
-		SlashTaskExecutor: executor::MultiPassExecutor<SlashTask<T>>;
+		SlashTaskExecutor get(fn slash_task_executor): T::TaskExecutor;
 
 		/// The last planned session scheduled by the session pallet.
 		///
@@ -1288,7 +1330,8 @@ pub mod migrations {
 				suppressed: nomination.suppressed,
 				submitted_in: nomination.submitted_in,
 			})
-			// TODO: any reason to keep the submitted_in around? I don't think so.
+			// TODO: any reason to keep the submitted_in around? I don't think so. Remove it now or
+			// in a later migration.
 		});
 
 		T::BlockWeights::get().max_block
@@ -1503,7 +1546,9 @@ decl_module! {
 			// Additional read from `on_finalize`
 			add_weight(1, 0, 0);
 
-			let _weight = <SlashTaskExecutor<T>>::mutate(|e| e.execute(1000));
+			let task_weight = <SlashTaskExecutor<T>>::mutate(|e| e.execute());
+			// The additional weight of reading the tasks, and writing back the result.
+			add_weight(1, 1, task_weight);
 
 			consumed_weight
 		}
@@ -2801,9 +2846,8 @@ impl<T: Config> Module<T> {
 				// nominator correct. Un-compacting assures this by definition.
 
 				for (t, _) in distribution {
-					// each target in the provided distribution must be actually nominated by the
-					// nominator after the last non-zero slash.
-					if nomination.targets.iter().find(|&(tt, _)| tt == t).map_or(false, |(_, active)| *active) {
+					// if target is non-existent, or is inactive, then this is a bad nomination.
+					if nomination.targets.iter().find(|&(tt, _)| tt == t).map_or(true, |(_, active)| !active) {
 						return Err(Error::<T>::OffchainElectionBogusNomination.into());
 					}
 				}
@@ -3420,7 +3464,7 @@ impl<T: Config> Module<T> {
 		}
 
 		for (nominator, nominations) in <Nominators<T>>::iter() {
-			let Nominations { submitted_in, targets: full_targets, suppressed: _ } = nominations;
+			let Nominations { targets: full_targets, suppressed: _, submitted_in: _ } = nominations;
 
 			// just filter out those who are not active.
 			let targets = full_targets
@@ -3703,7 +3747,12 @@ where
 				continue
 			}
 
-			// TODO: add a task to `NominatorChillTasks`.
+			// if this is a non-zero slash, schedule tasks to chill their nominations.
+			if !slash_fraction.is_zero() {
+				let task = SlashTask::new(stash.clone());
+				<SlashTaskExecutor<T>>::mutate(|e| e.add_task(task));
+			}
+
 			let unapplied = slashing::compute_slash::<T>(slashing::SlashParams {
 				stash,
 				slash: *slash_fraction,
