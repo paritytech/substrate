@@ -119,7 +119,7 @@
 use sp_std::{prelude::*, marker::PhantomData};
 use frame_support::{
 	weights::{GetDispatchInfo, DispatchInfo, DispatchClass},
-	traits::{OnInitialize, OnFinalize, OnRuntimeUpgrade, OffchainWorker, ExecuteBlock},
+	traits::{OnInitialize, OnIdle, OnFinalize, OnRuntimeUpgrade, OffchainWorker, ExecuteBlock},
 	dispatch::PostDispatchInfo,
 };
 use sp_runtime::{
@@ -160,6 +160,7 @@ impl<
 	AllModules:
 		OnRuntimeUpgrade +
 		OnInitialize<System::BlockNumber> +
+		OnIdle<System::BlockNumber> +
 		OnFinalize<System::BlockNumber> +
 		OffchainWorker<System::BlockNumber>,
 	COnRuntimeUpgrade: OnRuntimeUpgrade,
@@ -186,6 +187,7 @@ impl<
 		UnsignedValidator,
 		AllModules: OnRuntimeUpgrade
 			+ OnInitialize<System::BlockNumber>
+			+ OnIdle<System::BlockNumber>
 			+ OnFinalize<System::BlockNumber>
 			+ OffchainWorker<System::BlockNumber>,
 		COnRuntimeUpgrade: OnRuntimeUpgrade,
@@ -349,8 +351,8 @@ where
 
 		// post-extrinsics book-keeping
 		<frame_system::Module<System>>::note_finished_extrinsics();
-		<frame_system::Module<System> as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
-		<AllModules as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
+
+		Self::idle_and_finalize_hook(block_number);
 	}
 
 	/// Finalize the block - it is up the caller to ensure that all header fields are valid
@@ -360,10 +362,34 @@ where
 		sp_tracing::enter_span!( sp_tracing::Level::TRACE, "finalize_block" );
 		<frame_system::Module<System>>::note_finished_extrinsics();
 		let block_number = <frame_system::Module<System>>::block_number();
-		<frame_system::Module<System> as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
-		<AllModules as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
+
+		Self::idle_and_finalize_hook(block_number);
 
 		<frame_system::Module<System>>::finalize()
+	}
+
+	fn idle_and_finalize_hook(block_number: NumberFor<Block>) {
+		let weight =  <frame_system::Module<System>>::block_weight();
+		let max_weight =  <System::BlockWeights as frame_support::traits::Get<_>>::get().max_block;
+		let mut remaining_weight = max_weight.saturating_sub(weight.total());
+
+		if remaining_weight > 0 {
+			let mut used_weight =
+                <frame_system::Module<System> as OnIdle<System::BlockNumber>>::on_idle(
+                    block_number,
+                    remaining_weight
+                );
+			remaining_weight = remaining_weight.saturating_sub(used_weight);
+			used_weight = <AllModules as OnIdle<System::BlockNumber>>::on_idle(
+                block_number,
+                remaining_weight
+            )
+            .saturating_add(used_weight);
+			<frame_system::Module::<System>>::register_extra_weight_unchecked(used_weight, DispatchClass::Mandatory);
+		}
+
+		<frame_system::Module<System> as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
+		<AllModules as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
 	}
 
 	/// Apply extrinsic outside of the block execution function.
@@ -552,6 +578,11 @@ mod tests {
 				// one with block number arg and one without
 				fn on_initialize(n: T::BlockNumber) -> Weight {
 					println!("on_initialize({})", n);
+					175
+				}
+
+				fn on_idle(n: T::BlockNumber, remaining_weight: Weight) -> Weight {
+					println!("on_idle{}, {})", n, remaining_weight);
 					175
 				}
 
@@ -769,7 +800,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("2c01e6f33d595793119823478b45b36978a8f65a731b5ae3fdfb6330b4cd4b11").into(),
+					state_root: hex!("6e70de4fa07bac443dc7f8a812c8a0c941aacfa892bb373c5899f7d511d4c25b").into(),
 					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -1006,10 +1037,11 @@ mod tests {
 		new_test_ext(1).execute_with(|| {
 
 			Executive::initialize_block(&Header::new_from_number(1));
+			Executive::finalize_block();
 			// NOTE: might need updates over time if new weights are introduced.
 			// For now it only accounts for the base block execution weight and
 			// the `on_initialize` weight defined in the custom test module.
-			assert_eq!(<frame_system::Module<Runtime>>::block_weight().total(), 175 + 10);
+			assert_eq!(<frame_system::Module<Runtime>>::block_weight().total(), 175 + 175  + 10);
 		})
 	}
 

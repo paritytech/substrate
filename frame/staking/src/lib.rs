@@ -436,6 +436,8 @@ pub enum RewardDestination<AccountId> {
 	Controller,
 	/// Pay into a specified account.
 	Account(AccountId),
+	/// Receive no reward.
+	None,
 }
 
 impl<AccountId> Default for RewardDestination<AccountId> {
@@ -2106,7 +2108,8 @@ impl<T: Config> Module<T> {
 				}),
 			RewardDestination::Account(dest_account) => {
 				Some(T::Currency::deposit_creating(&dest_account, amount))
-			}
+			},
+			RewardDestination::None => None,
 		}
 	}
 
@@ -2534,6 +2537,7 @@ impl<T: Config> sp_election_providers::ElectionDataProvider<T::AccountId, T::Blo
 		let session_length = T::NextNewSession::average_session_length();
 
 		let until_this_session_end = T::NextNewSession::estimate_next_new_session(now)
+			.0
 			.unwrap_or_default()
 			.saturating_sub(now);
 

@@ -29,16 +29,16 @@ mod layers;
 pub use directives::*;
 pub use sc_tracing_proc_macro::*;
 
-use sc_telemetry::{ExtTransport, TelemetryWorker};
 use std::io;
 use tracing::Subscriber;
 use tracing_subscriber::{
+	filter::LevelFilter,
 	fmt::time::ChronoLocal,
 	fmt::{
 		format, FormatEvent, FormatFields, Formatter, Layer as FmtLayer, MakeWriter,
 		SubscriberBuilder,
 	},
-	layer::{self, SubscriberExt}, filter::LevelFilter,
+	layer::{self, SubscriberExt},
 	registry::LookupSpan,
 	EnvFilter, FmtSubscriber, Layer, Registry,
 };
@@ -75,8 +75,6 @@ fn prepare_subscriber<N, E, F, W>(
 	directives: &str,
 	profiling_targets: Option<&str>,
 	force_colors: Option<bool>,
-	telemetry_buffer_size: Option<usize>,
-	telemetry_external_transport: Option<ExtTransport>,
 	builder_hook: impl Fn(
 		SubscriberBuilder<
 			format::DefaultFields,
@@ -85,7 +83,7 @@ fn prepare_subscriber<N, E, F, W>(
 			fn() -> std::io::Stderr,
 		>,
 	) -> SubscriberBuilder<N, E, F, W>,
-) -> Result<(impl Subscriber + for<'a> LookupSpan<'a>, TelemetryWorker)>
+) -> Result<impl Subscriber + for<'a> LookupSpan<'a>>
 where
 	N: for<'writer> FormatFields<'writer> + 'static,
 	E: FormatEvent<Registry, N> + 'static,
@@ -130,10 +128,9 @@ where
 
 	if let Some(profiling_targets) = profiling_targets {
 		env_filter = parse_user_directives(env_filter, profiling_targets)?;
-		env_filter = env_filter
-			.add_directive(
-				parse_default_directive("sc_tracing=trace").expect("provided directive is valid")
-			);
+		env_filter = env_filter.add_directive(
+			parse_default_directive("sc_tracing=trace").expect("provided directive is valid"),
+		);
 	}
 
 	let max_level_hint = Layer::<FmtSubscriber>::max_level_hint(&env_filter);
@@ -164,8 +161,6 @@ where
 		"%Y-%m-%d %H:%M:%S%.3f".to_string()
 	});
 
-	let (telemetry_layer, telemetry_worker) =
-		sc_telemetry::TelemetryLayer::new(telemetry_buffer_size, telemetry_external_transport)?;
 	let event_format = EventFormat {
 		timer,
 		display_target: !simple,
@@ -187,20 +182,18 @@ where
 	#[cfg(not(target_os = "unknown"))]
 	let builder = builder_hook(builder);
 
-	let subscriber = builder.finish().with(PrefixLayer).with(telemetry_layer);
+	let subscriber = builder.finish().with(PrefixLayer);
 
 	#[cfg(target_os = "unknown")]
 	let subscriber = subscriber.with(ConsoleLogLayer::new(event_format));
 
-	Ok((subscriber, telemetry_worker))
+	Ok(subscriber)
 }
 
 /// A builder that is used to initialize the global logger.
 pub struct LoggerBuilder {
 	directives: String,
 	profiling: Option<(crate::TracingReceiver, String)>,
-	telemetry_buffer_size: Option<usize>,
-	telemetry_external_transport: Option<ExtTransport>,
 	log_reloading: bool,
 	force_colors: Option<bool>,
 }
@@ -211,8 +204,6 @@ impl LoggerBuilder {
 		Self {
 			directives: directives.into(),
 			profiling: None,
-			telemetry_buffer_size: None,
-			telemetry_external_transport: None,
 			log_reloading: true,
 			force_colors: None,
 		}
@@ -234,18 +225,6 @@ impl LoggerBuilder {
 		self
 	}
 
-	/// Set a custom buffer size for the telemetry.
-	pub fn with_telemetry_buffer_size(&mut self, buffer_size: usize) -> &mut Self {
-		self.telemetry_buffer_size = Some(buffer_size);
-		self
-	}
-
-	/// Set a custom network transport (used for the telemetry).
-	pub fn with_transport(&mut self, transport: ExtTransport) -> &mut Self {
-		self.telemetry_external_transport = Some(transport);
-		self
-	}
-
 	/// Force enable/disable colors.
 	pub fn with_colors(&mut self, enable: bool) -> &mut Self {
 		self.force_colors = Some(enable);
@@ -255,64 +234,56 @@ impl LoggerBuilder {
 	/// Initialize the global logger
 	///
 	/// This sets various global logging and tracing instances and thus may only be called once.
-	pub fn init(self) -> Result<TelemetryWorker> {
+	pub fn init(self) -> Result<()> {
 		if let Some((tracing_receiver, profiling_targets)) = self.profiling {
 			if self.log_reloading {
-				let (subscriber, telemetry_worker) = prepare_subscriber(
+				let subscriber = prepare_subscriber(
 					&self.directives,
 					Some(&profiling_targets),
 					self.force_colors,
-					self.telemetry_buffer_size,
-					self.telemetry_external_transport,
 					|builder| enable_log_reloading!(builder),
 				)?;
 				let profiling = crate::ProfilingLayer::new(tracing_receiver, &profiling_targets);
 
 				tracing::subscriber::set_global_default(subscriber.with(profiling))?;
 
-				Ok(telemetry_worker)
+				Ok(())
 			} else {
-				let (subscriber, telemetry_worker) = prepare_subscriber(
+				let subscriber = prepare_subscriber(
 					&self.directives,
 					Some(&profiling_targets),
 					self.force_colors,
-					self.telemetry_buffer_size,
-					self.telemetry_external_transport,
 					|builder| builder,
 				)?;
 				let profiling = crate::ProfilingLayer::new(tracing_receiver, &profiling_targets);
 
 				tracing::subscriber::set_global_default(subscriber.with(profiling))?;
 
-				Ok(telemetry_worker)
+				Ok(())
 			}
 		} else {
 			if self.log_reloading {
-				let (subscriber, telemetry_worker) = prepare_subscriber(
+				let subscriber = prepare_subscriber(
 					&self.directives,
 					None,
 					self.force_colors,
-					self.telemetry_buffer_size,
-					self.telemetry_external_transport,
 					|builder| enable_log_reloading!(builder),
 				)?;
 
 				tracing::subscriber::set_global_default(subscriber)?;
 
-				Ok(telemetry_worker)
+				Ok(())
 			} else {
-				let (subscriber, telemetry_worker) = prepare_subscriber(
+				let subscriber = prepare_subscriber(
 					&self.directives,
 					None,
 					self.force_colors,
-					self.telemetry_buffer_size,
-					self.telemetry_external_transport,
 					|builder| builder,
 				)?;
 
 				tracing::subscriber::set_global_default(subscriber)?;
 
-				Ok(telemetry_worker)
+				Ok(())
 			}
 		}
 	}
@@ -335,7 +306,8 @@ mod tests {
 	#[test]
 	fn test_logger_filters() {
 		if env::var("RUN_TEST_LOGGER_FILTERS").is_ok() {
-			let test_directives = "afg=debug,sync=trace,client=warn,telemetry,something-with-dash=error";
+			let test_directives =
+				"afg=debug,sync=trace,client=warn,telemetry,something-with-dash=error";
 			init_logger(&test_directives);
 
 			tracing::dispatcher::get_default(|dispatcher| {

@@ -139,7 +139,7 @@ fn claim_secondary_slot(
 		return None;
 	}
 
-	let expected_author = super::authorship::secondary_slot_author(
+	let expected_author = secondary_slot_author(
 		slot,
 		authorities,
 		*randomness,
@@ -148,7 +148,7 @@ fn claim_secondary_slot(
 	for (authority_id, authority_index) in keys {
 		if authority_id == expected_author {
 			let pre_digest = if author_secondary_vrf {
-				let transcript_data = super::authorship::make_transcript_data(
+				let transcript_data = make_transcript_data(
 					randomness,
 					slot,
 					*epoch_index,
@@ -243,12 +243,12 @@ fn claim_primary_slot(
 	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
 
 	for (authority_id, authority_index) in keys {
-		let transcript = super::authorship::make_transcript(
+		let transcript = make_transcript(
 			randomness,
 			slot,
 			*epoch_index
 		);
-		let transcript_data = super::authorship::make_transcript_data(
+		let transcript_data = make_transcript_data(
 			randomness,
 			slot,
 			*epoch_index
@@ -257,7 +257,7 @@ fn claim_primary_slot(
 		//
 		// We already checked that authorities contains `key.public()`, so it can't
 		// be empty.  Therefore, this division in `calculate_threshold` is safe.
-		let threshold = super::authorship::calculate_primary_threshold(c, authorities, *authority_index);
+		let threshold = calculate_primary_threshold(c, authorities, *authority_index);
 
 		let result = SyncCryptoStore::sr25519_vrf_sign(
 			&**keystore,
@@ -271,7 +271,7 @@ fn claim_primary_slot(
 				Ok(inout) => inout,
 				Err(_) => continue,
 			};
-			if super::authorship::check_primary_threshold(&inout, threshold) {
+			if check_primary_threshold(&inout, threshold) {
 				let pre_digest = PreDigest::Primary(PrimaryPreDigest {
 					slot,
 					vrf_output: VRFOutput(signature.output),
