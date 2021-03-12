@@ -509,7 +509,8 @@ macro_rules! implement_per_thing {
 			}
 
 			/// See [`PerThing::from_rational`].
-			pub fn from_rational<N>(p: N, q: N) -> Self
+			#[deprecated = "Use `PerThing::from_rational` instead"]
+			pub fn from_rational_approximation<N>(p: N, q: N) -> Self
 				where N: Clone + Ord + TryInto<$type> +
 					TryInto<$upper_type> + ops::Div<N, Output=N> + ops::Rem<N, Output=N> +
 					ops::Add<N, Output=N> + Unsigned,
