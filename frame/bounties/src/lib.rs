@@ -909,7 +909,7 @@ decl_module! {
 						.as_mut()
 						.ok_or(Error::<T>::InvalidIndex)?;
 
-					// Ensure sure caller is curator
+					// Ensure caller is curator
 					ensure!(
 						maybe_bounty_active_status.map_or(false, |v| v.0 == signer),
 						Error::<T>::RequireCurator,
@@ -1101,7 +1101,7 @@ decl_module! {
 								maybe_sender.map_or(
 									true,
 									|sender| sender == *subcurator ||
-										maybe_bounty_active_status.map(|v| v.0 == sender).unwrap()
+										maybe_bounty_active_status.map_or(false, |v| v.0 == sender)
 								),
 								BadOrigin,
 							);
@@ -1162,7 +1162,7 @@ decl_module! {
 							ensure!(
 								maybe_sender.map_or(
 									true,
-									|sender| maybe_bounty_active_status.map(|v| v.0 == sender).unwrap(),
+									|sender| maybe_bounty_active_status.map_or(true, |v| v.0 == sender),
 								),
 								BadOrigin,
 							);
