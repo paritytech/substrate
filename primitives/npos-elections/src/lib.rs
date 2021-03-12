@@ -18,11 +18,12 @@
 //! - [`seq_phragmen`]: Implements the Phragmén Sequential Method. An un-ranked, relatively fast
 //!   election method that ensures PJR, but does not provide a constant factor approximation of the
 //!   maximin problem.
-//! - [`phragmms()`]: Implements a hybrid approach inspired by Phragmén which is executed faster but
-//!   it can achieve a constant factor approximation of the maximin problem, similar to that of the
-//!   MMS algorithm.
-//! - [`balance`]: Implements the star balancing algorithm. This iterative process can push a
-//!   solution toward being more `balances`, which in turn can increase its score.
+//! - [`phragmms`](phragmms::phragmms): Implements a hybrid approach inspired by Phragmén which is
+//!   executed faster but it can achieve a constant factor approximation of the maximin problem,
+//!   similar to that of the MMS algorithm.
+//! - [`balance`](balancing::balance): Implements the star balancing algorithm. This iterative
+//!   process can push a solution toward being more "balanced", which in turn can increase its
+//!   score.
 //!
 //! ### Terminology
 //!
@@ -98,18 +99,20 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-mod phragmen;
-mod balancing;
-mod phragmms;
-mod node;
-mod reduce;
-mod helpers;
+pub mod phragmen;
+pub mod balancing;
+pub mod phragmms;
+pub mod node;
+pub mod reduce;
+pub mod helpers;
+pub mod pjr;
 
 pub use reduce::reduce;
 pub use helpers::*;
 pub use phragmen::*;
 pub use phragmms::*;
 pub use balancing::*;
+pub use pjr::*;
 
 // re-export the compact macro, with the dependencies of the macro.
 #[doc(hidden)]
@@ -282,6 +285,12 @@ pub struct Candidate<AccountId> {
 	round: usize,
 }
 
+impl<AccountId> Candidate<AccountId> {
+	pub fn to_ptr(self) -> CandidatePtr<AccountId> {
+		Rc::new(RefCell::new(self))
+	}
+}
+
 /// A vote being casted by a [`Voter`] to a [`Candidate`] is an `Edge`.
 #[derive(Clone, Default)]
 pub struct Edge<AccountId> {
@@ -326,6 +335,18 @@ impl<A: IdentifierT> std::fmt::Debug for Voter<A> {
 }
 
 impl<AccountId: IdentifierT> Voter<AccountId> {
+	/// Create a new `Voter`.
+	pub fn new(who: AccountId) -> Self {
+		Self { who, ..Default::default() }
+	}
+
+	/// Returns `true` if `self` votes for `target`.
+	///
+	/// Note that this does not take into account if `target` is elected (i.e. is *active*) or not.
+	pub fn votes_for(&self, target: &AccountId) -> bool {
+		self.edges.iter().any(|e| &e.who == target)
+	}
+
 	/// Returns none if this voter does not have any non-zero distributions.
 	///
 	/// Note that this might create _un-normalized_ assignments, due to accuracy loss of `P`. Call
@@ -400,6 +421,12 @@ impl<AccountId: IdentifierT> Voter<AccountId> {
 				candidate.backed_stake = candidate.backed_stake.saturating_add(edge.weight);
 			}
 		})
+	}
+
+	/// This voter's budget
+	#[inline]
+	pub fn budget(&self) -> ExtendedBalance {
+		self.budget
 	}
 }
 
@@ -734,7 +761,7 @@ pub fn is_score_better<P: PerThing>(this: ElectionScore, that: ElectionScore, ep
 /// This will perform some cleanup that are most often important:
 /// - It drops any votes that are pointing to non-candidates.
 /// - It drops duplicate targets within a voter.
-pub(crate) fn setup_inputs<AccountId: IdentifierT>(
+pub fn setup_inputs<AccountId: IdentifierT>(
 	initial_candidates: Vec<AccountId>,
 	initial_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
 ) -> (Vec<CandidatePtr<AccountId>>, Vec<Voter<AccountId>>) {
@@ -746,7 +773,7 @@ pub(crate) fn setup_inputs<AccountId: IdentifierT>(
 		.enumerate()
 		.map(|(idx, who)| {
 			c_idx_cache.insert(who.clone(), idx);
-			Rc::new(RefCell::new(Candidate { who, ..Default::default() }))
+			Candidate { who, ..Default::default() }.to_ptr()
 		})
 		.collect::<Vec<CandidatePtr<AccountId>>>();
 
