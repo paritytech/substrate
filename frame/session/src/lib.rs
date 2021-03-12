@@ -719,11 +719,11 @@ impl<T: Config> Module<T> {
 		let who = T::ValidatorIdOf::convert(account.clone())
 			.ok_or(Error::<T>::NoAssociatedValidatorId)?;
 
-		frame_system::Module::<T>::inc_consumers(&account).map_err(|_| Error::<T>::NoAccount)?;
+		ensure!(frame_system::Module::<T>::providers(&account) > 0, Error::<T>::NoAccount);
 		let old_keys = Self::inner_set_keys(&who, keys)?;
-		if old_keys.is_some() {
-			let _ = frame_system::Module::<T>::dec_consumers(&account);
-			// ^^^ Defensive only; Consumers were incremented just before, so should never fail.
+		if old_keys.is_none() {
+			let _ = frame_system::Module::<T>::inc_consumers(&account);
+			// ^^ Defensive only: we already ensured that the account has a provider
 		}
 
 		Ok(())
