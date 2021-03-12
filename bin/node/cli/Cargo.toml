@@ -105,6 +105,7 @@ try-runtime-cli = { version = "0.9.0", optional = true, path = "../../../utils/f
 wasm-bindgen = { version = "0.2.57", optional = true }
 wasm-bindgen-futures = { version = "0.4.18", optional = true }
 browser-utils = { package = "substrate-browser-utils", path = "../../../utils/browser", optional = true, version = "0.9.0"}
+libp2p-wasm-ext = { version = "0.27", features = ["websocket"], optional = true }
 
 [target.'cfg(target_arch="x86_64")'.dependencies]
 node-executor = { version = "2.0.0", path = "../executor", features = [ "wasmtime" ] }
@@ -148,6 +149,7 @@ browser = [
 	"browser-utils",
 	"wasm-bindgen",
 	"wasm-bindgen-futures",
+	"libp2p-wasm-ext",
 ]
 cli = [
 	"node-executor/wasmi-errno",

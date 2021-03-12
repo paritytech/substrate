@@ -25,7 +25,7 @@ use codec::{Decode, Encode};
 use frame_support::{
 	decl_error, decl_module, decl_storage,
 	dispatch::DispatchResultWithPostInfo,
-	traits::{FindAuthor, Get, KeyOwnerProofSystem, OneSessionHandler},
+	traits::{FindAuthor, Get, KeyOwnerProofSystem, OneSessionHandler, OnTimestampSet},
 	weights::{Pays, Weight},
 	Parameter,
 };
@@ -38,7 +38,6 @@ use sp_runtime::{
 };
 use sp_session::{GetSessionNumber, GetValidatorCount};
 use sp_std::prelude::*;
-use sp_timestamp::OnTimestampSet;
 
 use sp_consensus_babe::{
 	digests::{NextConfigDescriptor, NextEpochDescriptor, PreDigest},

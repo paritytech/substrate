@@ -1223,7 +1223,7 @@ pub mod pallet_prelude {
 ///
 /// ### Macro expansion:
 ///
-/// The macro implements the traits `OnInitialize`, `OnFinalize`, `OnRuntimeUpgrade`,
+/// The macro implements the traits `OnInitialize`, `OnIdle`, `OnFinalize`, `OnRuntimeUpgrade`,
 /// `OffchainWorker`, `IntegrityTest` using `Hooks` implementation.
 ///
 /// NOTE: OnRuntimeUpgrade is implemented with `Hooks::on_runtime_upgrade` and some additional

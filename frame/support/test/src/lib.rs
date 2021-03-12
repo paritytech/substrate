@@ -54,7 +54,7 @@ impl frame_support::traits::PalletInfo for PanicPalletInfo {
 	}
 }
 
-/// Provides an implementation of [`Randomness`] that should only be used in tests!
+/// Provides an implementation of [`frame_support::traits::Randomness`] that should only be used in tests!
 pub struct TestRandomness<T>(sp_std::marker::PhantomData<T>);
 
 impl<Output: codec::Decode + Default, T> frame_support::traits::Randomness<Output, T::BlockNumber>
