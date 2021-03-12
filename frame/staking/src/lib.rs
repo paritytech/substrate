@@ -2935,13 +2935,15 @@ impl<T: Config> Module<T> {
 			// emit event
 			Self::deposit_event(RawEvent::StakingElection(compute));
 
-			log!(
-				info,
-				"new validator set of size {:?} has been elected via {:?} for staring era {:?}",
-				elected_stashes.len(),
-				compute,
-				current_era,
-			);
+			if current_era > 0 {
+				log!(
+					info,
+					"new validator set of size {:?} has been elected via {:?} for staring era {:?}",
+					elected_stashes.len(),
+					compute,
+					current_era,
+				);
+			}
 
 			Some(elected_stashes)
 		} else {
@@ -3178,9 +3180,11 @@ impl<T: Config> Module<T> {
 	/// Enact and process the election using the `ElectionProvider` type.
 	///
 	/// This will also process the election, as noted in [`process_election`].
-	fn enact_election(_current_era: EraIndex) -> Option<Vec<T::AccountId>> {
+	fn enact_election(current_era: EraIndex) -> Option<Vec<T::AccountId>> {
 		let _outcome = T::ElectionProvider::elect().map(|_| ());
-		log!(debug, "Experimental election provider outputted {:?}", _outcome);
+		if current_era > 0 {
+			log!(debug, "Experimental election provider outputted {:?}", _outcome);
+		}
 		// TWO_PHASE_NOTE: This code path shall not return anything for now. Later on, redirect the
 		// results to `process_election`.
 		None
@@ -3407,31 +3411,37 @@ impl<T: Config> sp_election_providers::ElectionDataProvider<T::AccountId, T::Blo
 /// some session can lag in between the newest session planned and the latest session started.
 impl<T: Config> pallet_session::SessionManager<T::AccountId> for Module<T> {
 	fn new_session(new_index: SessionIndex) -> Option<Vec<T::AccountId>> {
-		log!(
-			trace,
-			"[{:?}] planning new_session({})",
-			<frame_system::Module<T>>::block_number(),
-			new_index,
-		);
+		if new_index > 1 {
+			log!(
+				trace,
+				"[{:?}] planning new_session({})",
+				<frame_system::Module<T>>::block_number(),
+				new_index,
+			);
+		}
 		CurrentPlannedSession::put(new_index);
 		Self::new_session(new_index)
 	}
 	fn start_session(start_index: SessionIndex) {
-		log!(
-			trace,
-			"[{:?}] starting start_session({})",
-			<frame_system::Module<T>>::block_number(),
-			start_index,
-		);
+		if start_index > 0 {
+			log!(
+				trace,
+				"[{:?}] starting start_session({})",
+				<frame_system::Module<T>>::block_number(),
+				start_index,
+			);
+		}
 		Self::start_session(start_index)
 	}
 	fn end_session(end_index: SessionIndex) {
-		log!(
-			trace,
-			"[{:?}] ending end_session({})",
-			<frame_system::Module<T>>::block_number(),
-			end_index,
-		);
+		if end_index > 0 {
+			log!(
+				trace,
+				"[{:?}] ending end_session({})",
+				<frame_system::Module<T>>::block_number(),
+				end_index,
+			);
+		}
 		Self::end_session(end_index)
 	}
 }

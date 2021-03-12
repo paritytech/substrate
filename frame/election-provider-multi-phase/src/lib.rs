@@ -1024,7 +1024,9 @@ impl<T: Config> Pallet<T> {
 			})
 			.map_err(|err| {
 				Self::deposit_event(Event::ElectionFinalized(None));
-				log!(warn, "Failed to finalize election round. reason {:?}", err);
+				if !<frame_system::Pallet<T>>::block_number().is_zero() {
+					log!(warn, "Failed to finalize election round. reason {:?}", err);
+				}
 				err
 			})
 	}
