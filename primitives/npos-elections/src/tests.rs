@@ -22,7 +22,7 @@ use crate::{
 	to_support_map, to_supports, Assignment, ElectionResult, ExtendedBalance, StakedAssignment,
 	Support, Voter, EvaluateSupport,
 };
-use sp_arithmetic::{PerU16, Perbill, Percent, Permill};
+use sp_arithmetic::{PerU16, Perbill, Percent, Permill, PerThing};
 use substrate_test_utils::assert_eq_uvec;
 
 #[test]
