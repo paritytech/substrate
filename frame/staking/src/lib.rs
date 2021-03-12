@@ -1365,7 +1365,10 @@ decl_module! {
 				// either current session final based on the plan, or we're forcing.
 				(Self::is_current_session_final() || Self::will_era_be_forced())
 			{
-				if let Some(next_session_change) = T::NextNewSession::estimate_next_new_session(now) {
+				let (maybe_next_session_change, estimate_next_new_session_weight) =
+					T::NextNewSession::estimate_next_new_session(now);
+
+				if let Some(next_session_change) = maybe_next_session_change {
 					if let Some(remaining) = next_session_change.checked_sub(&now) {
 						if remaining <= T::ElectionLookahead::get() && !remaining.is_zero() {
 							// create snapshot.
@@ -1387,7 +1390,7 @@ decl_module! {
 				} else {
 					log!(warn, "Estimating next session change failed.");
 				}
-				add_weight(0, 0, T::NextNewSession::weight(now))
+				add_weight(0, 0, estimate_next_new_session_weight)
 			}
 			// For `era_election_status`, `is_current_session_final`, `will_era_be_forced`
 			add_weight(3, 0, 0);
@@ -3365,6 +3368,7 @@ impl<T: Config> sp_election_providers::ElectionDataProvider<T::AccountId, T::Blo
 		let session_length = T::NextNewSession::average_session_length();
 
 		let until_this_session_end = T::NextNewSession::estimate_next_new_session(now)
+			.0
 			.unwrap_or_default()
 			.saturating_sub(now);
 
