@@ -72,9 +72,11 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// The maximum number of well known nodes that are allowed to set
+		#[pallet::constant]
 		type MaxWellKnownNodes: Get<u32>;
 
 		/// The maximum length in bytes of PeerId
+		#[pallet::constant]
 		type MaxPeerIdLength: Get<u32>;
 
 		/// The origin which can add a well known node.
