@@ -9,10 +9,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - name: Check labels
-        run: bash ${{ github.workspace }}/.maintain/github/check_labels.sh
         with:
           fetch-depth: 0
+      - name: Check labels
+        run: bash ${{ github.workspace }}/.maintain/github/check_labels.sh
         env:
           GITHUB_PR: ${{ github.event.pull_request.number }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
