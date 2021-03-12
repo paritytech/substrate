@@ -666,7 +666,7 @@ decl_module! {
 		/// be able to make calls on behalf of the recovered account.
 		///
 		/// Parameters:
-		/// - `account`: The recovered account you are able to call on-behalf-of.
+		/// - `account`: The recovered account on whose behalf you are able to call.
 		///
 		/// # <weight>
 		/// - One storage mutation to check account is recovered by `who`. O(1)
