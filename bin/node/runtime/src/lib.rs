@@ -1066,6 +1066,7 @@ parameter_types! {
 impl pallet_gilt::Config for Runtime {
 	type Event = Event;
 	type Currency = Balances;
+	type CurrencyBalance = Balance;
 	type AdminOrigin = frame_system::EnsureRoot<AccountId>;
 	type Deficit = ();
 	type Surplus = ();
