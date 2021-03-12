@@ -54,10 +54,10 @@ fi
 
 if has_runtime_changes ; then
   echo "[+] Runtime changes detected. Checking audit (D) labels"
-  if ensure_labels "${criticality_labels[@]}";  then
-    echo "[+] Release criticality label detected. All is well."
+  if ensure_labels "${audit_labels[@]}";  then
+    echo "[+] Release audit label detected. All is well."
   else
-    echo "[!] Release criticality label not detected. Please add one of: ${criticality_labels[*]}"
+    echo "[!] Release audit label not detected. Please add one of: ${audit_labels[*]}"
     exit 1
   fi
 fi
