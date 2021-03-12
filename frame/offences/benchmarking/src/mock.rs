@@ -186,7 +186,7 @@ impl pallet_im_online::Config for Test {
 	type AuthorityId = UintAuthorityId;
 	type Event = Event;
 	type ValidatorSet = Historical;
-	type SessionDuration = Period;
+	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 	type ReportUnresponsiveness = Offences;
 	type UnsignedPriority = ();
 	type WeightInfo = ();

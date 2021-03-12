@@ -813,7 +813,6 @@ impl pallet_sudo::Config for Runtime {
 }
 
 parameter_types! {
-	pub const SessionDuration: BlockNumber = EPOCH_DURATION_IN_SLOTS as _;
 	pub const ImOnlineUnsignedPriority: TransactionPriority = TransactionPriority::max_value();
 	/// We prioritize im-online heartbeats over election solution submission.
 	pub const StakingUnsignedPriority: TransactionPriority = TransactionPriority::max_value() / 2;
@@ -880,8 +879,8 @@ impl<C> frame_system::offchain::SendTransactionTypes<C> for Runtime where
 impl pallet_im_online::Config for Runtime {
 	type AuthorityId = ImOnlineId;
 	type Event = Event;
+	type NextSessionRotation = Babe;
 	type ValidatorSet = Historical;
-	type SessionDuration = SessionDuration;
 	type ReportUnresponsiveness = Offences;
 	type UnsignedPriority = ImOnlineUnsignedPriority;
 	type WeightInfo = pallet_im_online::weights::SubstrateWeight<Runtime>;

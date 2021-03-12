@@ -2736,7 +2736,6 @@ fn refcounter() {
 	});
 }
 
-
 #[test]
 fn reinstrument_does_charge() {
 	let (wasm, code_hash) = compile_module::<Test>("return_with_data").unwrap();
