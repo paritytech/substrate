@@ -45,10 +45,10 @@ fn add_well_known_node_works() {
 			WellKnownNodes::<Test>::get(),
 			BTreeSet::from_iter(vec![test_node(10), test_node(15), test_node(20), test_node(30)])
 		);
-		assert_eq!(Owners::<Test>::get(test_node(10)), 10);
-		assert_eq!(Owners::<Test>::get(test_node(20)), 20);
-		assert_eq!(Owners::<Test>::get(test_node(30)), 30);
-		assert_eq!(Owners::<Test>::get(test_node(15)), 15);
+		assert_eq!(Owners::<Test>::get(test_node(10)), Some(10));
+		assert_eq!(Owners::<Test>::get(test_node(20)), Some(20));
+		assert_eq!(Owners::<Test>::get(test_node(30)), Some(30));
+		assert_eq!(Owners::<Test>::get(test_node(15)), Some(15));
 
 		assert_noop!(
 			NodeAuthorization::add_well_known_node(Origin::signed(1), test_node(25), 25),
@@ -150,7 +150,7 @@ fn swap_well_known_node_works() {
 			BTreeSet::from_iter(vec![test_node(5), test_node(10), test_node(30)])
 		);
 		assert!(!Owners::<Test>::contains_key(test_node(20)));
-		assert_eq!(Owners::<Test>::get(test_node(5)), 20);
+		assert_eq!(Owners::<Test>::get(test_node(5)), Some(20));
 		assert!(!AdditionalConnections::<Test>::contains_key(test_node(20)));
 		assert_eq!(
 			AdditionalConnections::<Test>::get(test_node(5)),
@@ -192,9 +192,9 @@ fn reset_well_known_nodes_works() {
 			WellKnownNodes::<Test>::get(),
 			BTreeSet::from_iter(vec![test_node(5), test_node(15), test_node(20)])
 		);
-		assert_eq!(Owners::<Test>::get(test_node(5)), 5);
-		assert_eq!(Owners::<Test>::get(test_node(15)), 15);
-		assert_eq!(Owners::<Test>::get(test_node(20)), 20);
+		assert_eq!(Owners::<Test>::get(test_node(5)), Some(5));
+		assert_eq!(Owners::<Test>::get(test_node(15)), Some(15));
+		assert_eq!(Owners::<Test>::get(test_node(20)), Some(20));
 	});
 }
 
@@ -211,7 +211,7 @@ fn claim_node_works() {
 		);
 
 		assert_ok!(NodeAuthorization::claim_node(Origin::signed(15), test_node(15)));
-		assert_eq!(Owners::<Test>::get(test_node(15)), 15);
+		assert_eq!(Owners::<Test>::get(test_node(15)), Some(15));
 	});
 }
 
@@ -266,7 +266,7 @@ fn transfer_node_works() {
 		);
 
 		assert_ok!(NodeAuthorization::transfer_node(Origin::signed(20), test_node(20), 15));
-		assert_eq!(Owners::<Test>::get(test_node(20)), 15);
+		assert_eq!(Owners::<Test>::get(test_node(20)), Some(15));
 	});
 }
 

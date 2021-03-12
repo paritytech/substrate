@@ -108,7 +108,6 @@ pub mod pallet {
 		Blake2_128Concat,
 		PeerId,
 		T::AccountId,
-		ValueQuery,
 	>;
 
 	/// The additional adapative connections of each node.
@@ -354,8 +353,8 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 
 			ensure!(node.0.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
-			ensure!(Owners::<T>::contains_key(&node), Error::<T>::NotClaimed);
-			ensure!(Owners::<T>::get(&node) == sender, Error::<T>::NotOwner);
+			let owner = Owners::<T>::get(&node).ok_or(Error::<T>::NotClaimed)?;
+			ensure!(owner == sender, Error::<T>::NotOwner);
 			ensure!(!WellKnownNodes::<T>::get().contains(&node), Error::<T>::PermissionDenied);
 
 			Owners::<T>::remove(&node);
@@ -378,8 +377,8 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 
 			ensure!(node.0.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
-			ensure!(Owners::<T>::contains_key(&node), Error::<T>::NotClaimed);
-			ensure!(Owners::<T>::get(&node) == sender, Error::<T>::NotOwner);
+			let pre_owner = Owners::<T>::get(&node).ok_or(Error::<T>::NotClaimed)?;
+			ensure!(pre_owner == sender, Error::<T>::NotOwner);
 
 			Owners::<T>::insert(&node, &owner);
 
@@ -400,8 +399,8 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 
 			ensure!(node.0.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
-			ensure!(Owners::<T>::contains_key(&node), Error::<T>::NotClaimed);
-			ensure!(Owners::<T>::get(&node) == sender, Error::<T>::NotOwner);
+			let owner = Owners::<T>::get(&node).ok_or(Error::<T>::NotClaimed)?;
+			ensure!(owner == sender, Error::<T>::NotOwner);
 
 			let mut nodes = AdditionalConnections::<T>::get(&node);
 
@@ -431,8 +430,8 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 
 			ensure!(node.0.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
-			ensure!(Owners::<T>::contains_key(&node), Error::<T>::NotClaimed);
-			ensure!(Owners::<T>::get(&node) == sender, Error::<T>::NotOwner);
+			let owner = Owners::<T>::get(&node).ok_or(Error::<T>::NotClaimed)?;
+			ensure!(owner == sender, Error::<T>::NotOwner);
 
 			let mut nodes = AdditionalConnections::<T>::get(&node);
 
