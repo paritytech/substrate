@@ -36,7 +36,7 @@ use crate::{
 };
 use sp_std::{rc::Rc, vec::Vec};
 use sp_std::collections::btree_map::BTreeMap;
-use sp_arithmetic::{traits::Zero, Perbill, PerThing};
+use sp_arithmetic::{traits::Zero, Perbill};
 /// The type used as the threshold.
 ///
 /// Just some reading sugar; Must always be same as [`ExtendedBalance`];
