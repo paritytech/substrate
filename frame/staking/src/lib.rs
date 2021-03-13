@@ -1057,12 +1057,14 @@ pub mod migrations {
 
 		/// check to execute prior to migration.
 		pub fn pre_migration<T: V6Config>() -> Result<(), &'static str> {
-			ensure!(SnapshotValidators::<T>::exists(), "SnapshotValidators storage item not found!");
-			ensure!(SnapshotNominators::<T>::exists(), "SnapshotNominators storage item not found!");
-			ensure!(QueuedElected::<T>::exists(), "QueuedElected storage item not found!");
-			ensure!(QueuedScore::<T>::exists(), "QueuedScore storage item not found!");
-			ensure!(EraElectionStatus::<T>::exists(), "EraElectionStatus storage item not found!");
-			ensure!(IsCurrentSessionFinal::<T>::exists(), "IsCurrentSessionFinal storage item not found!");
+			// these may or may not exist.
+			log!(info, "SnapshotValidators.exits()? {:?}", SnapshotValidators::<T>::exists());
+			log!(info, "SnapshotNominators.exits()? {:?}", SnapshotNominators::<T>::exists());
+			log!(info, "QueuedElected.exits()? {:?}", QueuedElected::<T>::exists());
+			log!(info, "QueuedScore.exits()? {:?}", QueuedScore::<T>::exists());
+			// these must exist.
+			assert!(IsCurrentSessionFinal::<T>::exists(), "IsCurrentSessionFinal storage item not found!");
+			assert!(EraElectionStatus::<T>::exists(), "EraElectionStatus storage item not found!");
 			Ok(())
 		}
 
@@ -1080,7 +1082,7 @@ pub mod migrations {
 
 				StorageVersion::put(Releases::V6_0_0);
 			}
-			T::DbWeight::get().writes(6)
+			T::DbWeight::get().writes(6 + 1)
 		}
 	}
 }
