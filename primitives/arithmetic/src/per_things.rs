@@ -33,18 +33,6 @@ pub type InnerOf<P> = <P as PerThing>::Inner;
 /// Get the upper type of a `PerThing`.
 pub type UpperOf<P> = <P as PerThing>::Upper;
 
-/// Non-overflow multiplication.
-///
-/// This is tailored to be used with a balance type.
-/*
-impl<N> ops::Mul<N> for $name where
-	N: Clone + UniqueSaturatedInto<$type> + ops::Rem<N, Output=N>
-	+ ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N> + Unsigned,
-	$type: Into<N>
-impl<N> ops::Div<N> for $name where $type: TryFrom<N>
- */
-
-
 /// Something that implements a fixed point ration with an arbitrary granularity `X`, as _parts per
 /// `X`_.
 pub trait PerThing:
