@@ -81,7 +81,7 @@ use sp_std::prelude::*;
 use sp_std::convert::TryInto;
 use sp_runtime::{
 	offchain::storage::StorageValueRef,
-	traits::{AtLeast32BitUnsigned, Convert, Member},
+	traits::{AtLeast32BitUnsigned, Convert, Member, Saturating},
 	transaction_validity::{
 		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
 		ValidTransaction,
@@ -100,11 +100,7 @@ use frame_support::{
 	},
 	Parameter,
 };
-use frame_system::ensure_none;
-use frame_system::offchain::{
-	SendTransactionTypes,
-	SubmitTransaction,
-};
+use frame_system::{ensure_none, offchain::{SendTransactionTypes, SubmitTransaction}};
 pub use weights::WeightInfo;
 
 pub mod sr25519 {

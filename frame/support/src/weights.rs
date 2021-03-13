@@ -130,11 +130,8 @@
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use codec::{Encode, Decode};
-use sp_runtime::{
-	RuntimeDebug, PerThing,
-	traits::SignedExtension,
-	generic::{CheckedExtrinsic, UncheckedExtrinsic},
-};
+use sp_runtime::{RuntimeDebug, traits::SignedExtension};
+use sp_runtime::generic::{CheckedExtrinsic, UncheckedExtrinsic};
 use crate::dispatch::{DispatchErrorWithPostInfo, DispatchResultWithPostInfo, DispatchError};
 use sp_runtime::traits::SaturatedConversion;
 use sp_arithmetic::{Perbill, traits::{BaseArithmetic, Saturating, Unsigned}};
@@ -818,6 +815,7 @@ impl PerDispatchClass<Weight> {
 mod tests {
 	use crate::{decl_module, parameter_types, traits::Get};
 	use super::*;
+	use sp_runtime::PerThing;
 
 	pub trait Config: 'static {
 		type Origin;

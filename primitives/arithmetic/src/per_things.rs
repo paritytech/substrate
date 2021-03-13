@@ -519,6 +519,16 @@ macro_rules! implement_per_thing {
 				<Self as PerThing>::from_rational(p, q)
 			}
 
+			/// See [`PerThing::from_rational`].
+			pub fn from_rational<N>(p: N, q: N) -> Self
+				where N: Clone + Ord + TryInto<$type> +
+					TryInto<$upper_type> + ops::Div<N, Output=N> + ops::Rem<N, Output=N> +
+					ops::Add<N, Output=N> + Unsigned,
+					$type: Into<N>,
+			{
+				<Self as PerThing>::from_rational(p, q)
+			}
+
 			/// See [`PerThing::mul_floor`].
 			pub fn mul_floor<N>(self, b: N) -> N
 				where
