@@ -1128,8 +1128,7 @@ decl_module! {
 										// Continue to change bounty status below...
 									} else if maybe_bounty_active_status
 										.as_ref()
-										.map(|v| v.0 == sender)
-										.unwrap()
+										.expect("Invalid Parent Bounty Status").0 == sender
 									{
 										// looks like subcurator is inactive,
 										// slash the subcurator deposit.
@@ -1142,8 +1141,7 @@ decl_module! {
 										let block_number = system::Module::<T>::block_number();
 										if maybe_bounty_active_status
 											.as_ref()
-											.map(|v| v.1 < block_number)
-											.unwrap()
+											.expect("Invalid Parent Bounty Status").1 < block_number
 										{
 											slash_curator(
 												subcurator,
