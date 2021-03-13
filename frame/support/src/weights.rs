@@ -815,7 +815,6 @@ impl PerDispatchClass<Weight> {
 mod tests {
 	use crate::{decl_module, parameter_types, traits::Get};
 	use super::*;
-	use sp_runtime::PerThing;
 
 	pub trait Config: 'static {
 		type Origin;

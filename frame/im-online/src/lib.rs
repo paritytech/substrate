@@ -86,7 +86,7 @@ use sp_runtime::{
 		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
 		ValidTransaction,
 	},
-	Perbill, Percent, RuntimeDebug, PerThing,
+	Perbill, Percent, RuntimeDebug,
 };
 use sp_staking::{
 	SessionIndex,
