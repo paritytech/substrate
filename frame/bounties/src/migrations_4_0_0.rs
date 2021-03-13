@@ -110,7 +110,12 @@ impl frame_support::traits::StorageInstance for __Bounties {
 	const STORAGE_PREFIX: &'static str = "Bounties";
 }
 #[allow(type_alias_bounds)]
-type Bounties<T: V3ToV4> = StorageMap<__Bounties, Twox64Concat, BountyIndex, Bounty<T::AccountId, T::Balance, T::BlockNumber>>;
+type Bounties<T: V3ToV4> = StorageMap<
+								__Bounties,
+								Twox64Concat,
+								BountyIndex,
+								Bounty<T::AccountId, T::Balance, T::BlockNumber>
+							>;
 
 /// Apply all of the migrations from 3_0_0 to 4_0_0.
 ///
