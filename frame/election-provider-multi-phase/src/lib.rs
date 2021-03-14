@@ -205,7 +205,8 @@
 //!
 //! **More accurate weight for error cases**: Both `ElectionDataProvider` and `ElectionProvider`
 //! assume no weight is consumed in their functions, when operations fail with `Err`. This can
-//! clearly be improved.
+//! clearly be improved, but not a priority as we generally expect snapshot creation to fail only
+//! due to extreme circumstances.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -535,8 +536,7 @@ pub mod pallet {
 		/// this values, based on [`WeightInfo::submit_unsigned`].
 		type MinerMaxWeight: Get<Weight>;
 
-		/// Something that will provide the election data. This pallet constrain the data provider
-		/// to return its weight as additional data for accurate metering.
+		/// Something that will provide the election data.
 		type DataProvider: ElectionDataProvider<Self::AccountId, Self::BlockNumber>;
 
 		/// The compact solution type
@@ -592,11 +592,10 @@ pub mod pallet {
 				Phase::Signed | Phase::Off
 					if remaining <= unsigned_deadline && remaining > Zero::zero() =>
 				{
-					// followed by signed or not?
+					// determine if followed by signed or not.
 					let (need_snapshot, enabled, signed_weight) = if current_phase == Phase::Signed {
 						// followed by a signed phase: close the signed phase, no need for snapshot.
-						// TWO_PHASE_NOTE: later on once we have signed phase, this should return
-						// something else.
+						// TODO: proper weight https://github.com/paritytech/substrate/pull/7910.
 						(false, true, Weight::zero())
 					} else {
 						// no signed phase: create a new snapshot, definitely `enable` the unsigned

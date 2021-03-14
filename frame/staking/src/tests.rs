@@ -5083,6 +5083,7 @@ mod election_data_provider {
 	fn respects_len_limits() {
 		ExtBuilder::default().build().execute_with(|| {
 			assert_eq!(Staking::voters(Some(1)).unwrap_err(), "Voter snapshot too big");
+			assert_eq!(Staking::targets(Some(1)).unwrap_err(), "Target snapshot too big");
 		});
 	}
 
