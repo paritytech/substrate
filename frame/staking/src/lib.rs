@@ -1028,10 +1028,11 @@ pub mod migrations {
 			type PalletPrefix: Get<&'static str>;
 		}
 
-		// TODO: maybe move this to frame-support in a follow up?
 		macro_rules! generate_storage_types {
 			($name:ident<T: $trait:tt> => Map<$key:ty, $value:ty>) => {
-				unreachable!()
+				// NOTE: just demonstrating what could be done here, maybe we can move this to
+				// frame-support so that other can use as well.
+				compile_error!("unreachable!")
 			};
 			($name:ident<T: $trait:tt> => Value<$value:ty>) => {
 				paste::paste! {
