@@ -3438,7 +3438,6 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 		});
 
 		voters.into_iter().for_each(|(v, s, t)| {
-			use sp_std::convert::TryFrom;
 			let stake = <BalanceOf<T>>::try_from(s).unwrap_or_else(|_| {
 				panic!("cannot convert a VoteWeight into BalanceOf, benchmark needs reconfiguring.")
 			});
