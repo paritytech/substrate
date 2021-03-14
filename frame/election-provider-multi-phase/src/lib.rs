@@ -1019,12 +1019,14 @@ impl<T: Config> Pallet<T> {
 			)
 			.map(|(supports, compute)| {
 				Self::deposit_event(Event::ElectionFinalized(Some(compute)));
-				log!(info, "Finalized election round with compute {:?}.", compute);
+				if Self::round() != 1 {
+					log!(info, "Finalized election round with compute {:?}.", compute);
+				}
 				supports
 			})
 			.map_err(|err| {
 				Self::deposit_event(Event::ElectionFinalized(None));
-				if !<frame_system::Pallet<T>>::block_number().is_zero() {
+				if Self::round() != 1 {
 					log!(warn, "Failed to finalize election round. reason {:?}", err);
 				}
 				err
