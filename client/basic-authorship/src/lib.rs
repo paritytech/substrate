@@ -45,6 +45,7 @@
 //!		client.clone(),
 //!		txpool.clone(),
 //!		None,
+//!		None,
 //!	);
 //!
 //! // From this factory, we create a `Proposer`.

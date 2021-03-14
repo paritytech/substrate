@@ -352,7 +352,7 @@ impl<B, I, C, S, Algorithm, CAW> BlockImport<B> for PowBlockImport<B, I, C, S, A
 				check_block.clone(),
 				BlockId::Hash(parent_hash),
 				inherent_data,
-				timestamp_now
+				*timestamp_now,
 			)?;
 
 			block.body = Some(check_block.deconstruct().1);

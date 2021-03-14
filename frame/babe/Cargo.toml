@@ -29,7 +29,6 @@ sp-runtime = { version = "3.0.0", default-features = false, path = "../../primit
 sp-session = { version = "3.0.0", default-features = false, path = "../../primitives/session" }
 sp-staking = { version = "3.0.0", default-features = false, path = "../../primitives/staking" }
 sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
-sp-timestamp = { version = "3.0.0", default-features = false, path = "../../primitives/timestamp" }
 log = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]
@@ -59,7 +58,6 @@ std = [
 	"sp-session/std",
 	"sp-staking/std",
 	"sp-std/std",
-	"sp-timestamp/std",
 	"log/std",
 ]
 runtime-benchmarks = ["frame-benchmarking"]
