@@ -289,6 +289,7 @@ use sp_std::{
 	convert::{TryInto, From},
 	mem::size_of,
 };
+use fixed::types::I20F12;
 use codec::{HasCompact, Encode, Decode};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
@@ -1293,6 +1294,10 @@ decl_error! {
 		TooManyTargets,
 		/// A nomination target was supplied that was blocked or otherwise not a validator.
 		BadTarget,
+		/// damping validators count is less than the minimum validators count
+		LessThanMinValidatorsCount,
+		/// damping validators count is greater than the maximum validators count
+		GreaterThanMaxValidatorsCount,
 	}
 }
 
@@ -1897,6 +1902,71 @@ decl_module! {
 		fn scale_validator_count(origin, factor: Percent) {
 			ensure_root(origin)?;
 			ValidatorCount::mutate(|n| *n += factor * *n);
+		}
+
+		/// Modify the target validator count based on the staking participation.
+		///
+		/// The dispatch origin must be Root.
+		///
+		/// # <weight>
+		/// Same as [`set_validator_count`].
+		/// # </weight>
+		#[weight = T::WeightInfo::set_validator_count()]
+		fn dynamic_damping_validator_count(origin) {
+			ensure_root(origin)?;
+			let validators_count: u32 = Self::validator_count();
+			let current_era = Self::current_era().unwrap_or(0);
+			let validators = <Validators<T>>::iter().map(|(v, _)| v).collect::<Vec<_>>();
+			let mut exposures: Vec<_> = validators.into_iter().map(|v| {
+				let exposure = Self::eras_stakers(current_era, &v);
+				exposure.total.saturated_into::<u64>()
+			}).collect();
+			// bottom 1% and 2% of validators 
+			// get global average, sum for first bottom 1% exposures and sum for first bottom 2% exposures
+			let factor = I20F12::from_num(validators_count) / 100;
+			let one_percent_validators = factor.ceil().to_num::<i32>();
+			let two_percent_validators = 2 * factor.ceil().to_num::<i32>();
+			// sort exposures
+			exposures.sort_by(|a, b| a.cmp(&b).reverse());
+			// global average
+			let mut total_exposure: u64 = 0;
+			let mut bottom_one_percent_validators_exposure: u64 = 0;
+			let mut bottom_two_percent_validators_exposure: u64 = 0;
+			let mut i = 0;
+			let mut j = 0;
+			for exp in exposures.into_iter(){
+				total_exposure += exp;
+				if i <= one_percent_validators {
+					bottom_one_percent_validators_exposure += exp;
+					i += 1;
+				}
+				if j <= two_percent_validators {
+					bottom_two_percent_validators_exposure += exp;
+					j += 1;
+				}
+			};
+			let global_average = total_exposure / validators_count as u64;
+			let one_percent_average_stake = bottom_one_percent_validators_exposure / one_percent_validators as u64;
+			let two_percent_average_stake = bottom_two_percent_validators_exposure / two_percent_validators as u64;
+
+			let mut final_count = Self::minimum_validator_count();
+			if (one_percent_average_stake as f64) > (0.4 * global_average as f64) {
+				final_count = std::cmp::min(
+					MAX_VALIDATORS.try_into().unwrap(), 
+					validators_count + (one_percent_validators as u32)
+				);
+			}
+			
+			if (two_percent_average_stake as f64) < (0.2 * global_average as f64){
+				final_count = std::cmp::max(
+					Self::minimum_validator_count(), 
+					validators_count - (one_percent_validators as u32)
+				);
+			}
+			ensure!(final_count >= Self::minimum_validator_count(), Error::<T>::LessThanMinValidatorsCount);
+			ensure!(final_count <= MAX_VALIDATORS as u32, Error::<T>::GreaterThanMaxValidatorsCount);
+			// assert abs|final_count - current_count| == 1% 
+			ValidatorCount::put(final_count);
 		}
 
 		/// Force there to be no new eras indefinitely.

@@ -1760,6 +1760,7 @@ fn bond_with_little_staked_value_bounded() {
 		.build()
 		.execute_with(|| {
 			// setup
+			Staking::dynamic_damping_validator_count(Origin::signed(1));
 			assert_ok!(Staking::chill(Origin::signed(30)));
 			assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
 			let init_balance_2 = Balances::free_balance(&2);
