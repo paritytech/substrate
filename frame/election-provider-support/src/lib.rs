@@ -135,7 +135,7 @@
 //!             Self::DataProvider::targets(None)
 //!                 .map_err(|_| "failed to elect")
 //!                 .map(|(t, weight)| {
-//!						(vec![(t[0], Support::default())], weight)
+//! 						(vec![(t[0], Support::default())], weight)
 //! 				})
 //!         }
 //!     }
@@ -217,6 +217,7 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	fn put_snapshot(
 		_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
 		_targets: Vec<AccountId>,
+		_target_stake: Option<VoteWeight>,
 	) {
 	}
 }

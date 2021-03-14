@@ -3413,15 +3413,46 @@ impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::Account
 	fn put_snapshot(
 		voters: Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
 		targets: Vec<T::AccountId>,
+		target_stake: Option<VoteWeight>,
 	) {
+		use sp_std::convert::TryFrom;
 		targets.into_iter().for_each(|v| {
+			let stake: BalanceOf<T> = target_stake
+				.and_then(|w| <BalanceOf<T>>::try_from(w).ok())
+				.unwrap_or(T::Currency::minimum_balance() * 100u32.into());
+			<Bonded<T>>::insert(v.clone(), v.clone());
+			<Ledger<T>>::insert(
+				v.clone(),
+				StakingLedger {
+					stash: v.clone(),
+					active: stake,
+					total: stake,
+					unlocking: vec![],
+					claimed_rewards: vec![],
+				},
+			);
 			<Validators<T>>::insert(
 				v,
 				ValidatorPrefs { commission: Perbill::zero(), blocked: false },
 			);
 		});
 
-		voters.into_iter().for_each(|(v, _s, t)| {
+		voters.into_iter().for_each(|(v, s, t)| {
+			use sp_std::convert::TryFrom;
+			let stake = <BalanceOf<T>>::try_from(s).unwrap_or_else(|_| {
+				panic!("cannot convert a VoteWeight into BalanceOf, benchmark needs reconfiguring.")
+			});
+			<Bonded<T>>::insert(v.clone(), v.clone());
+			<Ledger<T>>::insert(
+				v.clone(),
+				StakingLedger {
+					stash: v.clone(),
+					active: stake,
+					total: stake,
+					unlocking: vec![],
+					claimed_rewards: vec![],
+				},
+			);
 			<Nominators<T>>::insert(
 				v,
 				Nominations { targets: t, submitted_in: 0, suppressed: false },

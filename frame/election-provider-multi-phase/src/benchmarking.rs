@@ -28,7 +28,7 @@ use sp_arithmetic::traits::One;
 use sp_runtime::InnerOf;
 use sp_std::convert::TryInto;
 
-const SEED: u32 = 0;
+const SEED: u32 = 999;
 
 /// Creates a **valid** solution with exactly the given size.
 ///
@@ -56,7 +56,7 @@ fn solution_with_size<T: Config>(
 	let targets: Vec<T::AccountId> =
 		(0..size.targets).map(|i| frame_benchmarking::account("Targets", i, SEED)).collect();
 
-	let mut rng = SmallRng::seed_from_u64(999u64);
+	let mut rng = SmallRng::seed_from_u64(SEED as u64);
 
 	// decide who are the winners.
 	let winners = targets
@@ -108,8 +108,9 @@ fn solution_with_size<T: Config>(
 	<DesiredTargets<T>>::put(desired_targets);
 	<Snapshot<T>>::put(RoundSnapshot { voters: all_voters.clone(), targets: targets.clone() });
 
-	// write the snapshot to staking or whoever is the data provider.
-	T::DataProvider::put_snapshot(all_voters.clone(), targets.clone());
+	// write the snapshot to staking or whoever is the data provider, in case it is needed further
+	// down the road.
+	T::DataProvider::put_snapshot(all_voters.clone(), targets.clone(), Some(stake));
 
 	let cache = helpers::generate_voter_cache::<T>(&all_voters);
 	let stake_of = helpers::stake_of_fn::<T>(&all_voters, &cache);
@@ -137,6 +138,8 @@ fn solution_with_size<T: Config>(
 		<CompactOf<T>>::from_assignment(assignments, &voter_index, &target_index).unwrap();
 	let score = compact.clone().score(&winners, stake_of, voter_at, target_at).unwrap();
 	let round = <MultiPhase<T>>::round();
+
+	assert!(score[0] > 0, "score is zero, this probably means that the stakes are not set.");
 	RawSolution { compact, score, round }
 }
 

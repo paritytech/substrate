@@ -327,6 +327,16 @@ impl ElectionDataProvider<AccountId, u64> for StakingMock {
 	fn next_election_prediction(now: u64) -> u64 {
 		now + EpochLength::get() - now % EpochLength::get()
 	}
+
+	#[cfg(any(feature = "runtime-benchmarks", test))]
+	fn put_snapshot(
+		voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
+		targets: Vec<AccountId>,
+		_target_stake: Option<VoteWeight>,
+	) {
+		Targets::set(targets);
+		Voters::set(voters);
+	}
 }
 
 impl ExtBuilder {

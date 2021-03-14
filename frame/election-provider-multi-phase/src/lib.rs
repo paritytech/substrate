@@ -207,6 +207,10 @@
 //! assume no weight is consumed in their functions, when operations fail with `Err`. This can
 //! clearly be improved, but not a priority as we generally expect snapshot creation to fail only
 //! due to extreme circumstances.
+//!
+//! **Take into account the encode/decode weight in benchmarks.** Currently, we only take into
+//! account the weight of encode/decode in the `submit_unsigned` given its priority. Nonetheless,
+//! all operations on the solution and the snapshot are worthy of taking this into account.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -916,7 +920,6 @@ impl<T: Config> Pallet<T> {
 		let target_limit = <CompactTargetIndexOf<T>>::max_value().saturated_into::<usize>();
 		let voter_limit = <CompactVoterIndexOf<T>>::max_value().saturated_into::<usize>();
 
-		// if any of them don't exist, create all of them. This is a bit conservative.
 		let (targets, w1) =
 			T::DataProvider::targets(Some(target_limit)).map_err(ElectionError::DataProvider)?;
 		let (voters, w2) =
