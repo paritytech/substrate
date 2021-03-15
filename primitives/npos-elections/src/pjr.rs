@@ -396,6 +396,15 @@ mod tests {
 		voter
 	}
 
+	fn assert_core_failure<AccountId: IdentifierT>(
+		candidates: &[CandidatePtr<AccountId>],
+		voters: &[Voter<AccountId>],
+		t: Threshold,
+	) {
+		let counter_example = pjr_check_core(candidates, voters, t).unwrap_err();
+		assert!(validate_pjr_challenge_core(counter_example, candidates, voters, t));
+	}
+
 	#[test]
 	fn slack_works() {
 		let voter = setup_voter(10, vec![(1, 10, true), (2, 20, true)]);
@@ -469,9 +478,9 @@ mod tests {
 
 		// fyi. this is not PJR, obviously because the votes of 3 can bump the stake a lot but they
 		// are being ignored.
-		assert!(pjr_check_core(&candidates, &voters, 1).is_err());
-		assert!(pjr_check_core(&candidates, &voters, 10).is_err());
-		assert!(pjr_check_core(&candidates, &voters, 20).is_err());
+		assert_core_failure(&candidates, &voters, 1);
+		assert_core_failure(&candidates, &voters, 10);
+		assert_core_failure(&candidates, &voters, 20);
 	}
 
 	// These next tests ensure that the threshold phase change property holds for us, but that's not their real purpose.
