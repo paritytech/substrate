@@ -988,10 +988,13 @@ fn key_changes_works() {
 			None,
 			&StorageKey(key),
 		).unwrap();
-		match actual_result == expected_result {
-			true => (),
-			false => panic!(format!("Failed test {}: actual = {:?}, expected = {:?}",
-			                        index, actual_result, expected_result)),
+		if actual_result != expected_result {
+			panic!(
+				"Failed test {}: actual = {:?}, expected = {:?}",
+				index,
+				actual_result,
+				expected_result,
+			);
 		}
 	}
 }
@@ -1739,6 +1742,7 @@ fn cleans_up_closed_notification_sinks_on_block_import() {
 		>(
 			substrate_test_runtime_client::new_native_executor(),
 			&substrate_test_runtime_client::GenesisParameters::default().genesis_storage(),
+			None,
 			None,
 			None,
 			Box::new(TaskExecutor::new()),

@@ -165,6 +165,14 @@ pub mod pallet {
 
 			Ok(().into())
 		}
+
+		// Test for DispatchResult return type
+		#[pallet::weight(1)]
+		fn foo_no_post_info(
+			_origin: OriginFor<T>,
+		) -> DispatchResult {
+			Ok(())
+		}
 	}
 
 	#[pallet::error]
@@ -429,7 +437,7 @@ fn call_expand() {
 	assert_eq!(call_foo.get_call_name(), "foo");
 	assert_eq!(
 		pallet::Call::<Runtime>::get_call_names(),
-		&["foo", "foo_transactional"],
+		&["foo", "foo_transactional", "foo_no_post_info"],
 	);
 }
 
@@ -672,6 +680,11 @@ fn metadata() {
 				documentation: DecodeDifferent::Decoded(vec![
 					" Doc comment put in metadata".to_string(),
 				]),
+			},
+			FunctionMetadata {
+				name: DecodeDifferent::Decoded("foo_no_post_info".to_string()),
+				arguments: DecodeDifferent::Decoded(vec![]),
+				documentation: DecodeDifferent::Decoded(vec![]),
 			},
 		])),
 		event: Some(DecodeDifferent::Decoded(vec![

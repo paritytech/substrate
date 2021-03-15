@@ -30,8 +30,7 @@ use sp_io::hashing::blake2_256;
 use sp_runtime::traits::{Bounded, Saturating, Zero};
 use sp_core::crypto::UncheckedFrom;
 use frame_support::{
-	dispatch::DispatchResult,
-	debug,
+	dispatch::{DispatchError, DispatchResult},
 	storage::child::{self, KillChildStorageResult},
 	traits::Get,
 	weights::Weight,
@@ -163,7 +162,7 @@ where
 		account: &AccountIdOf<T>,
 		trie_id: TrieId,
 		ch: CodeHash<T>,
-	) -> DispatchResult {
+	) -> Result<AliveContractInfo<T>, DispatchError> {
 		<ContractInfoOf<T>>::try_mutate(account, |existing| {
 			if existing.is_some() {
 				return Err(Error::<T>::DuplicateContract.into());
@@ -182,11 +181,12 @@ where
 				rent_payed: <BalanceOf<T>>::zero(),
 				pair_count: 0,
 				last_write: None,
+				_reserved: None,
 			};
 
-			*existing = Some(contract.into());
+			*existing = Some(contract.clone().into());
 
-			Ok(())
+			Ok(contract)
 		})
 	}
 
@@ -270,7 +270,8 @@ where
 				match outcome {
 					// This should not happen as our budget was large enough to remove all keys.
 					KillChildStorageResult::SomeRemaining(_) => {
-						debug::error!(
+						log::error!(
+							target: "runtime::contracts",
 							"After deletion keys are remaining in this child trie: {:?}",
 							removed.trie_id,
 						);

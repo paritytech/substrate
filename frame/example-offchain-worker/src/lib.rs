@@ -49,7 +49,7 @@ use frame_system::{
 		SignedPayload, SigningTypes, Signer, SubmitTransaction,
 	}
 };
-use frame_support::{debug, traits::Get};
+use frame_support::traits::Get;
 use sp_core::crypto::KeyTypeId;
 use sp_runtime::{
 	RuntimeDebug,
@@ -153,28 +153,25 @@ pub mod pallet {
 		/// so the code should be able to handle that.
 		/// You can use `Local Storage` API to coordinate runs of the worker.
 		fn offchain_worker(block_number: T::BlockNumber) {
-			// It's a good idea to add logs to your offchain workers.
-			// Using the `frame_support::debug` module you have access to the same API exposed by
-			// the `log` crate.
 			// Note that having logs compiled to WASM may cause the size of the blob to increase
 			// significantly. You can use `RuntimeDebug` custom derive to hide details of the types
-			// in WASM or use `debug::native` namespace to produce logs only when the worker is
-			// running natively.
-			debug::native::info!("Hello World from offchain workers!");
+			// in WASM. The `sp-api` crate also provides a feature `disable-logging` to disable
+			// all logging and thus, remove any logging from the WASM.
+			log::info!("Hello World from offchain workers!");
 
 			// Since off-chain workers are just part of the runtime code, they have direct access
 			// to the storage and other included pallets.
 			//
 			// We can easily import `frame_system` and retrieve a block hash of the parent block.
 			let parent_hash = <system::Pallet<T>>::block_hash(block_number - 1u32.into());
-			debug::debug!("Current block: {:?} (parent hash: {:?})", block_number, parent_hash);
+			log::debug!("Current block: {:?} (parent hash: {:?})", block_number, parent_hash);
 
 			// It's a good practice to keep `fn offchain_worker()` function minimal, and move most
 			// of the code to separate `impl` block.
 			// Here we call a helper function to calculate current average price.
 			// This function reads storage entries of the current state.
 			let average: Option<u32> = Self::average_price();
-			debug::debug!("Current price: {:?}", average);
+			log::debug!("Current price: {:?}", average);
 
 			// For this example we are going to send both signed and unsigned transactions
 			// depending on the block number.
@@ -188,7 +185,7 @@ pub mod pallet {
 				TransactionType::None => Ok(()),
 			};
 			if let Err(e) = res {
-				debug::error!("Error: {}", e);
+				log::error!("Error: {}", e);
 			}
 		}
 	}
@@ -446,8 +443,8 @@ impl<T: Config> Pallet<T> {
 
 		for (acc, res) in &results {
 			match res {
-				Ok(()) => debug::info!("[{:?}] Submitted price of {} cents", acc.id, price),
-				Err(e) => debug::error!("[{:?}] Failed to submit transaction: {:?}", acc.id, e),
+				Ok(()) => log::info!("[{:?}] Submitted price of {} cents", acc.id, price),
+				Err(e) => log::error!("[{:?}] Failed to submit transaction: {:?}", acc.id, e),
 			}
 		}
 
@@ -582,7 +579,7 @@ impl<T: Config> Pallet<T> {
 			.map_err(|_| http::Error::DeadlineReached)??;
 		// Let's check the status code before we proceed to reading the response.
 		if response.code != 200 {
-			debug::warn!("Unexpected status code: {}", response.code);
+			log::warn!("Unexpected status code: {}", response.code);
 			return Err(http::Error::Unknown);
 		}
 
@@ -593,19 +590,19 @@ impl<T: Config> Pallet<T> {
 
 		// Create a str slice from the body.
 		let body_str = sp_std::str::from_utf8(&body).map_err(|_| {
-			debug::warn!("No UTF8 body");
+			log::warn!("No UTF8 body");
 			http::Error::Unknown
 		})?;
 
 		let price = match Self::parse_price(body_str) {
 			Some(price) => Ok(price),
 			None => {
-				debug::warn!("Unable to extract price from the response: {:?}", body_str);
+				log::warn!("Unable to extract price from the response: {:?}", body_str);
 				Err(http::Error::Unknown)
 			}
 		}?;
 
-		debug::warn!("Got price: {} cents", price);
+		log::warn!("Got price: {} cents", price);
 
 		Ok(price)
 	}
@@ -634,7 +631,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Add new price to the list.
 	fn add_price(who: T::AccountId, price: u32) {
-		debug::info!("Adding to the average: {}", price);
+		log::info!("Adding to the average: {}", price);
 		<Prices<T>>::mutate(|prices| {
 			const MAX_LEN: usize = 64;
 
@@ -647,7 +644,7 @@ impl<T: Config> Pallet<T> {
 
 		let average = Self::average_price()
 			.expect("The average is not empty, because it was just mutated; qed");
-		debug::info!("Current average price is: {}", average);
+		log::info!("Current average price is: {}", average);
 		// here we are raising the NewPrice event
 		Self::deposit_event(Event::NewPrice(price, who));
 	}

@@ -80,6 +80,11 @@ pub trait PerThing:
 		Self::from_rational_approximation::<Self::Upper>(p * p, q * q)
 	}
 
+	/// Return the part left when `self` is saturating-subtracted from `Self::one()`.
+	fn left_from_one(self) -> Self {
+		Self::one().saturating_sub(self)
+	}
+
 	/// Multiplication that always rounds down to a whole number. The standard `Mul` rounds to the
 	/// nearest whole number.
 	///
@@ -302,13 +307,13 @@ where
 		// Round up if the fractional part of the result is non-zero.
 		Rounding::Up => if rem_mul_upper % denom_upper > 0.into() {
 			// `rem * numer / denom` is less than `numer`, so this will not overflow.
-			rem_mul_div_inner = rem_mul_div_inner + 1.into();
+			rem_mul_div_inner += 1.into();
 		},
 		// Round up if the fractional part of the result is greater than a half. An exact half is
 		// rounded down.
 		Rounding::Nearest => if rem_mul_upper % denom_upper > denom_upper / 2.into() {
 			// `rem * numer / denom` is less than `numer`, so this will not overflow.
-			rem_mul_div_inner = rem_mul_div_inner + 1.into();
+			rem_mul_div_inner += 1.into();
 		},
 	}
 	rem_mul_div_inner.into()

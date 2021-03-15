@@ -22,8 +22,9 @@ use crate as pallet_lottery;
 
 use frame_support::{
 	parameter_types,
-	traits::{OnInitialize, OnFinalize, TestRandomness},
+	traits::{OnFinalize, OnInitialize},
 };
+use frame_support_test::TestRandomness;
 use sp_core::H256;
 use sp_runtime::{
 	Perbill,
@@ -103,7 +104,7 @@ impl Config for Test {
 	type ModuleId = LotteryModuleId;
 	type Call = Call;
 	type Currency = Balances;
-	type Randomness = TestRandomness;
+	type Randomness = TestRandomness<Self>;
 	type Event = Event;
 	type ManagerOrigin = EnsureRoot<u64>;
 	type MaxCalls = MaxCalls;

@@ -30,6 +30,19 @@
 //! api, the [`ApiExt`] trait, the [`CallApiAt`] trait and the [`ConstructRuntimeApi`] trait.
 //!
 //! On a meta level this implies, the client calls the generated API from the client perspective.
+//!
+//!
+//! # Logging
+//!
+//! Substrate supports logging from the runtime in native and in wasm. For that purpose it provides
+//! the [`RuntimeLogger`](sp_runtime::runtime_logger::RuntimeLogger). This runtime logger is
+//! automatically enabled for each call into the runtime through the runtime api. As logging
+//! introduces extra code that isn't actually required for the logic of your runtime and also
+//! increases the final wasm blob size, it is recommended to disable the logging for on-chain
+//! wasm blobs. This can be done by enabling the `disable-logging` feature of this crate. Be aware
+//! that this feature instructs `log` and `tracing` to disable logging at compile time by setting
+//! the `max_level_off` feature for these crates. So, you should not enable this feature for a
+//! native build as otherwise the node will not output any log messages.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -384,6 +397,12 @@ pub trait ConstructRuntimeApi<Block: BlockT, C: CallApiAt<Block>> {
 
 	/// Construct an instance of the runtime api.
 	fn construct_runtime_api<'a>(call: &'a C) -> ApiRef<'a, Self::RuntimeApi>;
+}
+
+/// Init the [`RuntimeLogger`](sp_runtime::runtime_logger::RuntimeLogger).
+pub fn init_runtime_logger() {
+	#[cfg(not(feature = "disable-logging"))]
+	sp_runtime::runtime_logger::RuntimeLogger::init();
 }
 
 /// An error describing which API call failed.
