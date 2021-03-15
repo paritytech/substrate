@@ -441,7 +441,7 @@ pub trait ProvideInherent {
 		Ok(())
 	}
 
-	/// Return whereas the call is an inherent call.
+	/// Return whether the call is an inherent call.
 	///
 	/// NOTE: Signed extrinsics are not inherent, but signed extrinsic with the given call variant
 	/// can be dispatched.
