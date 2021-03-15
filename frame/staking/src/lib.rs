@@ -3131,7 +3131,7 @@ impl<T: Config> Module<T> {
 		let elected_stashes = exposures.iter().cloned().map(|(x, _)| x).collect::<Vec<_>>();
 
 		if (elected_stashes.len() as u32) <= Self::minimum_validator_count() {
-			if current_era != 0 {
+			if current_era > 0 {
 				log!(
 					warn,
 					"chain does not have enough staking candidates to operate for era {:?}",
