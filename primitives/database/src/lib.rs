@@ -91,7 +91,7 @@ pub trait Database<H: Clone + AsRef<[u8]>>: Send + Sync {
 		self.get(col, key).is_some()
 	}
 
-	/// Check value size in the database without retrieving it.
+	/// Check value size in the database possibly without retrieving it.
 	fn value_size(&self, col: ColumnId, key: &[u8]) -> Option<usize> {
 		self.get(col, key).map(|v| v.len())
 	}
