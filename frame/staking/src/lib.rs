@@ -333,7 +333,13 @@ use sp_npos_elections::{
 	VoteWeight, CompactSolution, PerThing128,
 };
 use sp_election_providers::ElectionProvider;
+use frame_support::parameter_types;
 pub use weights::WeightInfo;
+
+parameter_types! {
+	// enable/disable dynamic validator damping
+	pub const DynamicDamping: bool = true;
+}
 
 const STAKING_ID: LockIdentifier = *b"staking ";
 pub(crate) const LOG_TARGET: &'static str = "runtime::staking";
@@ -792,6 +798,11 @@ pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
 	/// It is guaranteed to start being called from the first `on_finalize`. Thus value at genesis
 	/// is not used.
 	type UnixTime: UnixTime;
+
+	/// This flag is ued to enable/disable the dynamic damping of the validator set 
+	/// 
+	/// It is managed by calling `dynamic_damping_validator_count`
+	type DynamicDamping: Get<bool>;
 
 	/// Convert a balance into a number used for election calculation. This must fit into a `u64`
 	/// but is allowed to be sensibly lossy. The `u64` is used to communicate with the
@@ -1329,6 +1340,9 @@ decl_module! {
 		///
 		/// If set to 0, balance_solution will not be executed at all.
 		const MaxIterations: u32 = T::MaxIterations::get();
+
+		/// If it is true, it will enable the dynamic validator set damping 
+		const DynamicDamping: bool = T::DynamicDamping::get();
 
 		/// The threshold of improvement that should be provided for a new solution to be accepted.
 		const MinSolutionScoreBump: Perbill = T::MinSolutionScoreBump::get();
@@ -1904,71 +1918,6 @@ decl_module! {
 			ValidatorCount::mutate(|n| *n += factor * *n);
 		}
 
-		/// Modify the target validator count based on the staking participation.
-		///
-		/// The dispatch origin must be Root.
-		///
-		/// # <weight>
-		/// Same as [`set_validator_count`].
-		/// # </weight>
-		#[weight = T::WeightInfo::set_validator_count()]
-		fn dynamic_damping_validator_count(origin) {
-			ensure_root(origin)?;
-			let validators_count: u32 = Self::validator_count();
-			let current_era = Self::current_era().unwrap_or(0);
-			let validators = <Validators<T>>::iter().map(|(v, _)| v).collect::<Vec<_>>();
-			let mut exposures: Vec<_> = validators.into_iter().map(|v| {
-				let exposure = Self::eras_stakers(current_era, &v);
-				exposure.total.saturated_into::<u64>()
-			}).collect();
-			// bottom 1% and 2% of validators 
-			// get global average, sum for first bottom 1% exposures and sum for first bottom 2% exposures
-			let factor = I20F12::from_num(validators_count) / 100;
-			let one_percent_validators = factor.ceil().to_num::<i32>();
-			let two_percent_validators = 2 * factor.ceil().to_num::<i32>();
-			// sort exposures
-			exposures.sort_by(|a, b| a.cmp(&b).reverse());
-			// global average
-			let mut total_exposure: u64 = 0;
-			let mut bottom_one_percent_validators_exposure: u64 = 0;
-			let mut bottom_two_percent_validators_exposure: u64 = 0;
-			let mut i = 0;
-			let mut j = 0;
-			for exp in exposures.into_iter(){
-				total_exposure += exp;
-				if i <= one_percent_validators {
-					bottom_one_percent_validators_exposure += exp;
-					i += 1;
-				}
-				if j <= two_percent_validators {
-					bottom_two_percent_validators_exposure += exp;
-					j += 1;
-				}
-			};
-			let global_average = total_exposure / validators_count as u64;
-			let one_percent_average_stake = bottom_one_percent_validators_exposure / one_percent_validators as u64;
-			let two_percent_average_stake = bottom_two_percent_validators_exposure / two_percent_validators as u64;
-
-			let mut final_count = Self::minimum_validator_count();
-			if (one_percent_average_stake as f64) > (0.4 * global_average as f64) {
-				final_count = std::cmp::min(
-					MAX_VALIDATORS.try_into().unwrap(), 
-					validators_count + (one_percent_validators as u32)
-				);
-			}
-			
-			if (two_percent_average_stake as f64) < (0.2 * global_average as f64){
-				final_count = std::cmp::max(
-					Self::minimum_validator_count(), 
-					validators_count - (one_percent_validators as u32)
-				);
-			}
-			ensure!(final_count >= Self::minimum_validator_count(), Error::<T>::LessThanMinValidatorsCount);
-			ensure!(final_count <= MAX_VALIDATORS as u32, Error::<T>::GreaterThanMaxValidatorsCount);
-			// assert abs|final_count - current_count| == 1% 
-			ValidatorCount::put(final_count);
-		}
-
 		/// Force there to be no new eras indefinitely.
 		///
 		/// The dispatch origin must be Root.
@@ -2438,6 +2387,60 @@ impl<T: Config> Module<T> {
 		<SnapshotNominators<T>>::kill();
 	}
 
+	/// Modify the target validator count based on the staking participation.
+	fn dynamic_damping_validator_count() {
+		let validators_count: u32 = Self::validator_count();
+		let current_era = Self::current_era().unwrap_or(0);
+		let validators = <Validators<T>>::iter().map(|(v, _)| v).collect::<Vec<_>>();
+		let mut exposures: Vec<_> = validators.into_iter().map(|v| {
+			let exposure = Self::eras_stakers(current_era, &v);
+			exposure.total.saturated_into::<u64>()
+		}).collect();
+		// bottom 1% and 2% of validators 
+		// get global average, sum for first bottom 1% exposures and sum for first bottom 2% exposures
+		let factor = I20F12::from_num(validators_count) / 100;
+		let one_percent_validators = factor.ceil().to_num::<i32>();
+		let two_percent_validators = 2 * factor.ceil().to_num::<i32>();
+		// sort exposures
+		exposures.sort_by(|a, b| a.cmp(&b).reverse());
+		// global average
+		let mut total_exposure: u64 = 0;
+		let mut bottom_one_percent_validators_exposure: u64 = 0;
+		let mut bottom_two_percent_validators_exposure: u64 = 0;
+		let mut i = 0;
+		let mut j = 0;
+		for exp in exposures.into_iter(){
+			total_exposure += exp;
+			if i <= one_percent_validators {
+				bottom_one_percent_validators_exposure += exp;
+				i += 1;
+			}
+			if j <= two_percent_validators {
+				bottom_two_percent_validators_exposure += exp;
+				j += 1;
+			}
+		};
+		let global_average = total_exposure / validators_count as u64;
+		let one_percent_average_stake = bottom_one_percent_validators_exposure / one_percent_validators as u64;
+		let two_percent_average_stake = bottom_two_percent_validators_exposure / two_percent_validators as u64;
+		let mut final_count = Self::minimum_validator_count();
+		
+		if (one_percent_average_stake as f64) > (0.4 * global_average as f64) {
+			final_count = std::cmp::min(
+				MAX_VALIDATORS.try_into().unwrap(), 
+				validators_count + (one_percent_validators as u32)
+			);
+		}
+				
+		if (two_percent_average_stake as f64) < (0.2 * global_average as f64){
+			final_count = std::cmp::max(
+				Self::minimum_validator_count(), 
+				validators_count - (one_percent_validators as u32)
+			);
+		}
+		ValidatorCount::put(final_count);
+	}
+
 	fn do_payout_stakers(validator_stash: T::AccountId, era: EraIndex) -> DispatchResult {
 		// Validate input data
 		let current_era = CurrentEra::get().ok_or(Error::<T>::InvalidEraToReward)?;
@@ -2583,7 +2586,6 @@ impl<T: Config> Module<T> {
 	fn new_session(session_index: SessionIndex) -> Option<Vec<T::AccountId>> {
 		if let Some(current_era) = Self::current_era() {
 			// Initial era has been set.
-
 			let current_era_start_session_index = Self::eras_start_session_index(current_era)
 				.unwrap_or_else(|| {
 					frame_support::print("Error: start_session_index must be set for current_era");
@@ -2609,7 +2611,10 @@ impl<T: Config> Module<T> {
 					return None
 				},
 			}
-
+			// if dynamic damping is enabled
+			if T::DynamicDamping::get() {
+				Self::dynamic_damping_validator_count();
+			}
 			// new era.
 			Self::new_era(session_index)
 		} else {
@@ -2943,7 +2948,6 @@ impl<T: Config> Module<T> {
 		let maybe_new_validators = Self::select_and_update_validators(current_era);
 		// TWO_PHASE_NOTE: use this later on.
 		let _unused_new_validators = Self::enact_election(current_era);
-
 		maybe_new_validators
 	}
 

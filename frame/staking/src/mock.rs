@@ -222,6 +222,7 @@ parameter_types! {
 	pub const MaxNominatorRewardedPerValidator: u32 = 64;
 	pub const UnsignedPriority: u64 = 1 << 20;
 	pub const MinSolutionScoreBump: Perbill = Perbill::zero();
+	pub const DynamicDamping: bool = true;
 	pub OffchainSolutionWeightLimit: Weight = BlockWeights::get().max_block;
 }
 
@@ -264,6 +265,7 @@ impl Config for Test {
 	type ElectionLookahead = ElectionLookahead;
 	type Call = Call;
 	type MaxIterations = MaxIterations;
+	type DynamicDamping = DynamicDamping;
 	type MinSolutionScoreBump = MinSolutionScoreBump;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type UnsignedPriority = UnsignedPriority;
