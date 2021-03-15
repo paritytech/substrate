@@ -656,13 +656,10 @@ fn deploying_wasm_contract_should_work() {
 	).0.unwrap();
 
 	t.execute_with(|| {
-		// Verify that the contract constructor worked well and code of TRANSFER contract is actually deployed.
-		assert_eq!(
-			&pallet_contracts::ContractInfoOf::<Runtime>::get(addr)
-				.and_then(|c| c.get_alive())
-				.unwrap()
-				.code_hash,
-			&transfer_ch
+		// Verify that the contract does exist by querying some of its storage items
+		// It does not matter that the storage item itself does not exist.
+		assert!(
+			&pallet_contracts::Pallet::<Runtime>::get_storage(addr, Default::default()).is_ok()
 		);
 	});
 }
