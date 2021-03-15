@@ -42,12 +42,13 @@ use sp_api::{ProvideRuntimeApi, ApiRef};
 use sp_arithmetic::traits::BaseArithmetic;
 use sp_consensus::{BlockImport, Proposer, SyncOracle, SelectChain, CanAuthorWith, SlotData};
 use sp_consensus_slots::Slot;
-use sp_inherents::{InherentData, InherentDataProvider, CreateInherentDataProviders};
+use sp_inherents::CreateInherentDataProviders;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header, HashFor, NumberFor}
 };
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
+use sp_timestamp::Timestamp;
 
 /// The changes that need to applied to the storage to create the state for a block.
 ///
@@ -418,53 +419,29 @@ impl<B: BlockT, T: SimpleSlotWorker<B>> SlotWorker<B, <T::Proposer as Proposer<B
 /// Slot specific extension that the inherent data provider needs to implement.
 pub trait InherentDataProviderExt {
 	/// The current timestamp that will be found in the [`InherentData`].
-	///
-	/// This timestamp should be the duration since the UNIX epoch.
-	fn timestamp(&self) -> Duration;
+	fn timestamp(&self) -> Timestamp;
+
 	/// The current slot that will be found in the [`InherentData`].
 	fn slot(&self) -> Slot;
 }
 
-pub struct SlotsInherentDataProviders<P> {
-	timestamp: Duration,
-	slot: Slot,
-	wrapped: P,
-}
-
-impl<P> SlotsInherentDataProviders<P> {
-	pub fn new(timestamp: Duration, slot: Slot, wrapped: P) -> Self {
-		Self {
-			timestamp,
-			slot,
-			wrapped,
-		}
-	}
-}
-
-impl<P> sp_inherents::InherentDataProvider for SlotsInherentDataProviders<P>
-where
-	P: sp_inherents::InherentDataProvider,
-{
-	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), sp_inherents::Error> {
-		self.wrapped.provide_inherent_data(inherent_data)
-	}
-
-	fn try_handle_error(
-		&self,
-		identifier: &sp_inherents::InherentIdentifier,
-		error: &[u8],
-	) -> sp_inherents::TryHandleErrorResult {
-		self.wrapped.try_handle_error(identifier, error)
-	}
-}
-
-impl<P> InherentDataProviderExt for SlotsInherentDataProviders<P> {
-	fn timestamp(&self) -> Duration {
-		self.timestamp
+impl<T, S, P> InherentDataProviderExt for (T, S, P) where T: Deref<Target = Timestamp>, S: Deref<Target = Slot> {
+	fn timestamp(&self) -> Timestamp {
+		*self.0.deref()
 	}
 
 	fn slot(&self) -> Slot {
-		self.slot
+		*self.1.deref()
+	}
+}
+
+impl<T, S> InherentDataProviderExt for (T, S) where T: Deref<Target = Timestamp>, S: Deref<Target = Slot> {
+	fn timestamp(&self) -> Timestamp {
+		*self.0.deref()
+	}
+
+	fn slot(&self) -> Slot {
+		*self.1.deref()
 	}
 }
 

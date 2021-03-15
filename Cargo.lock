@@ -7181,6 +7181,7 @@ version = "0.9.0"
 dependencies = [
  "futures 0.3.12",
  "futures-timer 3.0.2",
+ "impl-trait-for-tuples",
  "log",
  "parity-scale-codec",
  "parking_lot 0.11.1",
@@ -7196,6 +7197,7 @@ dependencies = [
  "sp-inherents",
  "sp-runtime",
  "sp-state-machine",
+ "sp-timestamp",
  "sp-trie",
  "substrate-test-runtime-client",
  "thiserror",

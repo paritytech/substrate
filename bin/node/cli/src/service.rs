@@ -121,18 +121,11 @@ pub fn new_partial(
 
 			let slot =
 				sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_duration(
-					timestamp.timestamp(),
+					timestamp.timestamp().as_duration(),
 					slot_duration,
 				);
 
-			let current_timestamp = timestamp.timestamp();
-			let current_slot = slot.slot();
-
-			Ok(sc_consensus_slots::SlotsInherentDataProviders::new(
-				current_timestamp,
-				current_slot,
-				(timestamp, slot),
-			))
+			Ok((timestamp, slot))
 		},
 		&task_manager.spawn_essential_handle(),
 		config.prometheus_registry(),
@@ -324,18 +317,11 @@ pub fn new_full_base(
 
 					let slot =
 						sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_duration(
-							timestamp.timestamp(),
+							timestamp.timestamp().as_duration(),
 							slot_duration,
 						);
 
-					let current_timestamp = timestamp.timestamp();
-					let current_slot = slot.slot();
-
-					Ok(sc_consensus_slots::SlotsInherentDataProviders::new(
-						current_timestamp,
-						current_slot,
-						(uncles, timestamp, slot),
-					))
+					Ok((timestamp, slot, uncles))
 				}
 			},
 			force_authoring,
@@ -510,18 +496,11 @@ pub fn new_light_base(
 
 			let slot =
 				sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_duration(
-					timestamp.timestamp(),
+					timestamp.timestamp().as_duration(),
 					slot_duration,
 				);
 
-			let current_timestamp = timestamp.timestamp();
-			let current_slot = slot.slot();
-
-			Ok(sc_consensus_slots::SlotsInherentDataProviders::new(
-				current_timestamp,
-				current_slot,
-				(timestamp, slot),
-			))
+			Ok((timestamp, slot))
 		},
 		&task_manager.spawn_essential_handle(),
 		config.prometheus_registry(),

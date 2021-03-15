@@ -78,6 +78,15 @@ impl InherentDataProvider {
 }
 
 #[cfg(feature = "std")]
+impl sp_std::ops::Deref for InherentDataProvider {
+	type Target = InherentType;
+
+	fn deref(&self) -> &Self::Target {
+		&self.slot
+	}
+}
+
+#[cfg(feature = "std")]
 impl sp_inherents::InherentDataProvider for InherentDataProvider {
 	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), Error> {
 		inherent_data.put_data(INHERENT_IDENTIFIER, &self.slot)

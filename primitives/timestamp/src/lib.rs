@@ -21,8 +21,8 @@
 
 use codec::{Encode, Decode};
 use sp_inherents::{InherentIdentifier, IsFatalError, InherentData};
-
 use sp_runtime::RuntimeString;
+use sp_std::time::Duration;
 
 /// The identifier for the `timestamp` inherent.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"timstap0";
@@ -40,6 +40,16 @@ impl Timestamp {
 	/// Create new `Self`.
 	pub const fn new(inner: u64) -> Self {
 		Self(inner)
+	}
+
+	/// Returns as [`Duration`].
+	pub fn as_duration(self) -> Duration {
+		Duration::from_millis(self.0)
+	}
+
+	/// Checked subtraction that returns `None` on an underflow.
+	pub fn checked_sub(self, other: Self) -> Option<Self> {
+		self.0.checked_sub(other.0).map(Self)
 	}
 }
 
@@ -98,8 +108,8 @@ impl From<Timestamp> for u64 {
 	}
 }
 
-impl From<sp_std::time::Duration> for Timestamp {
-	fn from(duration: sp_std::time::Duration) -> Self {
+impl From<Duration> for Timestamp {
+	fn from(duration: Duration) -> Self {
 		Timestamp(duration.as_millis() as u64)
 	}
 }
@@ -166,8 +176,8 @@ fn current_timestamp() -> std::time::Duration {
 /// Provide duration since unix epoch in millisecond for timestamp inherent.
 #[cfg(feature = "std")]
 pub struct InherentDataProvider {
-	max_drift: std::time::Duration,
-	timestamp: std::time::Duration,
+	max_drift: InherentType,
+	timestamp: InherentType,
 }
 
 #[cfg(feature = "std")]
@@ -175,8 +185,8 @@ impl InherentDataProvider {
 	/// Create `Self` while using the system time to get the timestamp.
 	pub fn from_system_time() -> Self {
 		Self {
-			max_drift: std::time::Duration::from_secs(60),
-			timestamp: current_timestamp(),
+			max_drift: std::time::Duration::from_secs(60).into(),
+			timestamp: current_timestamp().into(),
 		}
 	}
 
@@ -188,13 +198,22 @@ impl InherentDataProvider {
 	/// plus the maximum drift is smaller than the timestamp in the block, the block will be rejected
 	/// as being too far in the future.
 	pub fn with_max_drift(mut self, max_drift: std::time::Duration) -> Self {
-		self.max_drift = max_drift;
+		self.max_drift = max_drift.into();
 		self
 	}
 
 	/// Returns the timestamp of this inherent data provider.
-	pub fn timestamp(&self) -> std::time::Duration {
+	pub fn timestamp(&self) -> InherentType {
 		self.timestamp
+	}
+}
+
+#[cfg(feature = "std")]
+impl sp_std::ops::Deref for InherentDataProvider {
+	type Target = InherentType;
+
+	fn deref(&self) -> &Self::Target {
+		&self.timestamp
 	}
 }
 
@@ -221,7 +240,6 @@ impl sp_inherents::InherentDataProvider for InherentDataProvider {
 				let max_drift = self.max_drift;
 				let timestamp = self.timestamp;
 				let fut = async move {
-					let valid = std::time::Duration::from_millis(*valid);
 					// halt import until timestamp is valid.
 					// reject when too far ahead.
 					if valid > timestamp + max_drift {
@@ -232,10 +250,10 @@ impl sp_inherents::InherentDataProvider for InherentDataProvider {
 					log::info!(
 						target: "timestamp",
 						"halting for block {} milliseconds in the future",
-						diff.as_millis(),
+						diff.0,
 					);
 
-					futures_timer::Delay::new(diff).await;
+					futures_timer::Delay::new(diff.as_duration()).await;
 
 					Ok(())
 				};

@@ -22,11 +22,10 @@
 
 use super::{Slot, InherentDataProviderExt};
 use sp_consensus::{Error, SelectChain};
-use futures::{prelude::*, task::Context, task::Poll};
 use sp_inherents::{InherentData, CreateInherentDataProviders, InherentDataProvider};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 
-use std::{pin::Pin, time::{Duration, Instant}};
+use std::time::{Duration, Instant};
 use futures_timer::Delay;
 
 /// Returns current duration since unix epoch.
@@ -139,7 +138,7 @@ where
 			let inherent_data = inherent_data_providers.create_inherent_data()?;
 
 			// reschedule delay for next slot.
-			let ends_in = time_until_next(timestamp, self.slot_duration);
+			let ends_in = time_until_next(timestamp.as_duration(), self.slot_duration);
 			let ends_at = Instant::now() + ends_in;
 			self.inner_delay = Some(Delay::new(ends_in));
 
@@ -150,7 +149,7 @@ where
 				break Ok(SlotInfo {
 					slot,
 					duration: self.slot_duration,
-					timestamp,
+					timestamp: timestamp.as_duration(),
 					ends_at,
 					inherent_data,
 					chain_head,
