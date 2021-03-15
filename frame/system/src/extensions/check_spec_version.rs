@@ -24,7 +24,7 @@ use sp_runtime::{
 };
 
 /// Ensure the runtime version registered in the transaction is the same as at present.
-#[derive(Encode, Decode, Clone, Eq, PartialEq, ::scale_info::TypeInfo)]
+#[derive(Encode, Decode, Clone, Eq, PartialEq, scale_info::TypeInfo)]
 pub struct CheckSpecVersion<T: Config + TypeInfo + Send + Sync>(sp_std::marker::PhantomData<T>);
 
 impl<T: Config + TypeInfo + Send + Sync> sp_std::fmt::Debug for CheckSpecVersion<T> {

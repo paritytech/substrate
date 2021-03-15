@@ -868,8 +868,8 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 	/// *exactly* one identifier.
 	///
 	/// This method provides a default implementation that returns `vec![SELF::IDENTIFIER]`.
-	fn identifier() -> Vec<(&'static str, ::scale_info::MetaType)> {
-		sp_std::vec![(Self::IDENTIFIER, ::scale_info::meta_type::<Self>())]
+	fn identifier() -> Vec<(&'static str, scale_info::MetaType)> {
+		sp_std::vec![(Self::IDENTIFIER, scale_info::meta_type::<Self>())]
 	}
 }
 
@@ -933,7 +933,7 @@ impl<AccountId, Call: Dispatchable> SignedExtension for Tuple {
 		Ok(())
 	}
 
-	fn identifier() -> Vec<(&'static str, ::scale_info::MetaType)> {
+	fn identifier() -> Vec<(&'static str, scale_info::MetaType)> {
 		let mut ids = Vec::new();
 		for_tuples!( #( ids.extend(Tuple::identifier()); )* );
 		ids

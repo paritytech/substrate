@@ -199,7 +199,7 @@ pub trait PaysFee<T> {
 }
 
 /// Explicit enum to denote if a transaction pays fee or not.
-#[derive(Clone, Copy, Eq, PartialEq, RuntimeDebug, Encode, Decode, ::scale_info::TypeInfo)]
+#[derive(Clone, Copy, Eq, PartialEq, RuntimeDebug, Encode, Decode, scale_info::TypeInfo)]
 pub enum Pays {
 	/// Transactor will pay related fees.
 	Yes,
@@ -219,7 +219,7 @@ impl Default for Pays {
 /// [DispatchClass::all] and [DispatchClass::non_mandatory] helper functions.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, ::scale_info::TypeInfo)]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, scale_info::TypeInfo)]
 pub enum DispatchClass {
 	/// A normal dispatch.
 	Normal,
@@ -304,7 +304,7 @@ pub mod priority {
 }
 
 /// A bundle of static information collected from the `#[weight = $x]` attributes.
-#[derive(Clone, Copy, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode, ::scale_info::TypeInfo)]
+#[derive(Clone, Copy, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode, scale_info::TypeInfo)]
 pub struct DispatchInfo {
 	/// Weight of this transaction.
 	pub weight: Weight,

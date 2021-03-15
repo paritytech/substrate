@@ -27,7 +27,7 @@ use sp_runtime::{
 #[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 pub struct CheckGenesis<T: Config + TypeInfo + Send + Sync>(sp_std::marker::PhantomData<T>);
 
-impl<T: Config + Send + Sync + ::scale_info::TypeInfo> sp_std::fmt::Debug for CheckGenesis<T> {
+impl<T: Config + Send + Sync + scale_info::TypeInfo> sp_std::fmt::Debug for CheckGenesis<T> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(f, "CheckGenesis")

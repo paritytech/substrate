@@ -688,7 +688,7 @@ pub trait Public:
 }
 
 /// An opaque 32-byte cryptographic identifier.
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Default, Encode, Decode, ::scale_info::TypeInfo)]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Default, Encode, Decode, scale_info::TypeInfo)]
 #[cfg_attr(feature = "std", derive(Hash))]
 pub struct AccountId32([u8; 32]);
 

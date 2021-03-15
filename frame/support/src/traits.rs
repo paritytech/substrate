@@ -1129,7 +1129,7 @@ pub trait Currency<AccountId> {
 }
 
 /// Status of funds.
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, ::scale_info::TypeInfo)]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, scale_info::TypeInfo)]
 pub enum BalanceStatus {
 	/// Funds are free, as corresponding to `free` item in Balances.
 	Free,
