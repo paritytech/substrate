@@ -90,6 +90,7 @@ mod wasm;
 mod rent;
 mod benchmarking;
 mod schedule;
+mod migration;
 
 pub mod chain_extension;
 pub mod weights;
@@ -265,6 +266,10 @@ pub mod pallet {
 			Storage::<T>::process_deletion_queue_batch(weight_limit)
 				.saturating_add(T::WeightInfo::on_initialize())
 		}
+
+		fn on_runtime_upgrade() -> Weight {
+			migration::migrate::<T>()
+		}
 	}
 
 	#[pallet::call]
@@ -275,14 +280,17 @@ pub mod pallet {
 	{
 		/// Updates the schedule for metering contracts.
 		///
-		/// The schedule must have a greater version than the stored schedule.
+		/// The schedule's version cannot be less than the version of the stored schedule.
+		/// If a schedule does not change the instruction weights the version does not
+		/// need to be increased. Therefore we allow storing a schedule that has the same
+		/// version as the stored one.
 		#[pallet::weight(T::WeightInfo::update_schedule())]
 		pub fn update_schedule(
 			origin: OriginFor<T>,
 			schedule: Schedule<T>
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			if <Module<T>>::current_schedule().version >= schedule.version {
+			if <Module<T>>::current_schedule().version > schedule.version {
 				Err(Error::<T>::InvalidScheduleVersion)?
 			}
 			Self::deposit_event(Event::ScheduleUpdated(schedule.version));

@@ -54,7 +54,7 @@ use sp_api::ProvideRuntimeApi;
 use sp_core::crypto::Pair;
 use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 use sp_inherents::{InherentDataProviders, InherentData};
-use sp_timestamp::{TimestampInherentData, InherentType as TimestampInherent};
+use sp_timestamp::TimestampInherentData;
 use sc_consensus_slots::{SlotInfo, SlotCompatible, StorageChanges, BackoffAuthoringBlocksStrategy};
 use sc_telemetry::TelemetryHandle;
 use sp_consensus_slots::Slot;
@@ -111,12 +111,12 @@ impl SlotCompatible for AuraSlotCompatible {
 	fn extract_timestamp_and_slot(
 		&self,
 		data: &InherentData,
-	) -> Result<(TimestampInherent, AuraInherent, std::time::Duration), sp_consensus::Error> {
+	) -> Result<(u64, AuraInherent, std::time::Duration), sp_consensus::Error> {
 		data.timestamp_inherent_data()
 			.and_then(|t| data.aura_inherent_data().map(|a| (t, a)))
 			.map_err(Into::into)
 			.map_err(sp_consensus::Error::InherentData)
-			.map(|(x, y)| (x, y, Default::default()))
+			.map(|(x, y)| (*x, y, Default::default()))
 	}
 }
 
