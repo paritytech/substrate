@@ -145,12 +145,8 @@ pub fn pjr_check_core<AccountId: IdentifierT>(
 	let maybe_max_pre_score = unelected.map(|c| (pre_score(Rc::clone(c), voters, t), c.borrow().who.clone())).max();
 	// if unelected is empty then the solution is indeed PJR.
 	match maybe_max_pre_score {
-		None => Ok(()),
-		Some((max_pre_score, counter_example)) => if max_pre_score < t {
-			Ok(())
-		} else {
-			Err(counter_example)
-		}
+		Some((max_pre_score, counter_example)) if max_pre_score >= t => Err(counter_example),
+		_ => Ok(()),
 	}
 }
 
