@@ -124,7 +124,7 @@ use frame_system::{self as system, ensure_signed};
 
 pub use weights::WeightInfo;
 
-pub mod migrations_4_0_0;
+pub mod subbounty_migration;
 
 type BalanceOf<T> = pallet_treasury::BalanceOf<T>;
 

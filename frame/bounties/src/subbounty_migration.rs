@@ -22,7 +22,6 @@ use sp_std::prelude::*;
 use frame_support::{
 	weights::Weight, Twox64Concat,
 	storage::types::{StorageMap},
-	traits::{PalletVersion},
 	crate_to_pallet_version,
 };
 
@@ -34,7 +33,12 @@ use sp_runtime::{
 pub type BountyIndex = u32;
 
 /// Trait to implement to give information about types used for migration
-pub trait V3ToV4: frame_system::Config {
+pub trait SubBountyMigration {
+
+	type AccountId: 'static + FullCodec;
+
+	type BlockNumber: 'static + FullCodec;
+
 	type Balance: 'static + FullCodec + Copy;
 }
 
@@ -104,29 +108,28 @@ pub struct Bounty<AccountId, Balance, BlockNumber> {
 	active_subbounty_count: BountyIndex,
 }
 
-struct __Bounties;
-impl frame_support::traits::StorageInstance for __Bounties {
+struct StorageMigrationBounties;
+impl frame_support::traits::StorageInstance for StorageMigrationBounties {
 	fn pallet_prefix() -> &'static str { "Treasury" }
 	const STORAGE_PREFIX: &'static str = "Bounties";
 }
 #[allow(type_alias_bounds)]
-type Bounties<T: V3ToV4> = StorageMap<
-								__Bounties,
-								Twox64Concat,
-								BountyIndex,
-								Bounty<T::AccountId, T::Balance, T::BlockNumber>
-							>;
+type Bounties<T: SubBountyMigration> = StorageMap<
+	StorageMigrationBounties,
+	Twox64Concat,
+	BountyIndex,
+	Bounty<T::AccountId, T::Balance, T::BlockNumber>
+>;
 
-/// Apply all of the migrations from 3_0_0 to 4_0_0.
+/// Apply all of the migrations for SubbountyExtn.
 ///
 /// ### Warning
 ///
-/// This code will **ONLY** check that the storage version is less than or equal to 2_0_0.
-/// Further check might be needed at the user runtime.
+/// No storage version check, Maybe need check at runtime.
 ///
 /// Be aware that this migration is intended to be used only for the mentioned versions. Use
 /// with care and run at your own risk.
-pub fn apply<T: V3ToV4>( ) -> Weight {
+pub fn apply<T: SubBountyMigration>( ) -> Weight {
 
 	let maybe_storage_version = crate_to_pallet_version!();
 
@@ -136,21 +139,12 @@ pub fn apply<T: V3ToV4>( ) -> Weight {
 		maybe_storage_version,
 	);
 
-	if maybe_storage_version <= PalletVersion::new(4, 0, 0) {
-		migrate_bounty_to_support_subbounty::<T>();
-		Weight::max_value()
-	} else {
-		log::warn!(
-			target: "runtime::pallet-bounties",
-			"Attempted to apply migration to V4 but failed because storage version is {:?}",
-			maybe_storage_version,
-		);
-		0
-	}
+	migrate_bounty_to_support_subbounty::<T>();
+	Weight::max_value()
 }
 
 /// Migrate to support subbounty extn
-fn migrate_bounty_to_support_subbounty<T: V3ToV4>() {
+fn migrate_bounty_to_support_subbounty<T: SubBountyMigration>() {
 
 	<Bounties<T>>::translate::<OldBounty<T::AccountId, T::Balance, T::BlockNumber>, _>(
 		|_index, bounties| {

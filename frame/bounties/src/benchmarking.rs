@@ -343,6 +343,9 @@ benchmarks! {
 		bm_setup.subbounty_value,
 		bm_setup.reason
 	)
+	verify {
+		assert_last_event::<T>(RawEvent::SubBountyAdded(0, 1).into())
+	}
 
 	propose_subcurator {
 		setup_pot_account::<T>();

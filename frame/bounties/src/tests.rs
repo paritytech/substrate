@@ -143,7 +143,9 @@ impl Config for Test {
 	type WeightInfo = ();
 }
 
-impl migrations_4_0_0::V3ToV4 for Test {
+impl subbounty_migration::SubBountyMigration for Test {
+	type AccountId = u128;
+	type BlockNumber = u64;
 	type Balance = u64;
 }
 
@@ -1546,6 +1548,8 @@ fn subbounty_award_claim_subbounty_works() {
 
 		// subbounty-2
 		assert_ok!(Bounties::award_subbounty(Origin::signed(6),0,2,8));
+
+		assert_eq!(last_event(), RawEvent::SubBountyAwarded(0, 2, 8));
 
 		assert_eq!(Bounties::subbounties(0,2).unwrap().status,
 			SubBountyStatus::PendingPayout {
@@ -3087,6 +3091,8 @@ fn subbounty_root_origin_force_test_close_subbounty_when_master_curator_unassign
 
 		assert_ok!(Bounties::claim_subbounty(Origin::signed(7),0,2));
 
+		assert_eq!(last_event(), RawEvent::SubBountyClaimed(0, 2, 8, 7));
+
 		// Subcurator of subbounty-2 deposit got unreserved.
 		assert_eq!(Balances::free_balance(6), 12);
 		assert_eq!(Balances::reserved_balance(6), 0);
@@ -3913,7 +3919,7 @@ fn test_bounty_subbounty_extn_storage_migration() {
 
 	sp_io::TestExternalities::new(storage_inst).execute_with(|| {
 
-		migrations_4_0_0::apply::<Test>();
+		subbounty_migration::apply::<Test>();
 
 		// Test Bounty Inst 1
 		assert_eq!(
