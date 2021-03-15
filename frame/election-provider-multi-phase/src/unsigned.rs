@@ -929,7 +929,7 @@ mod tests {
 
 	#[test]
 	fn trim_compact_for_length_does_not_modify_when_short_enough() {
-		let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
+		let (mut ext, _) = ExtBuilder::default().build_offchainify(0);
 		ext.execute_with(|| {
 			roll_to(25);
 
@@ -950,8 +950,29 @@ mod tests {
 		});
 	}
 
-	// TODO: trim_compact_for_length_modifies_when_too_long
-	// as above, but must trim at least 1 voter (contains >1 voter to start)
+	#[test]
+	fn trim_compact_for_length_modifies_when_too_long() {
+		let (mut ext, _) = ExtBuilder::default().build_offchainify(0);
+		ext.execute_with(|| {
+			roll_to(25);
+
+			let RoundSnapshot { voters, ..} =
+				MultiPhase::snapshot().unwrap();
+
+			let RawSolution { mut compact, .. } = raw_solution();
+			let encoded_len = compact.encode().len() as u32;
+			let compact_clone = compact.clone();
+
+			compact = MultiPhase::trim_compact_for_length(
+				encoded_len - 1,
+				compact,
+				voter_index_fn_linear::<Runtime>(&voters),
+			).unwrap();
+
+			assert_ne!(compact, compact_clone);
+			assert!((compact.encode().len() as u32) < encoded_len);
+		});
+	}
 
 	// TODO: trim_compact_for_length_errs_when_cannot_compact_enough
 	// as above, but returns an error
