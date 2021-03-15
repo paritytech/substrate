@@ -2388,28 +2388,23 @@ impl<T: Config> Module<T> {
 	}
 
 	/// Modify the target validator count based on the staking participation.
-	fn dynamic_damping_validator_count() {
+	fn dynamic_damping_validator_count(
+		exposures: Vec<u64>
+	) {
 		let validators_count: u32 = Self::validator_count();
-		let current_era = Self::current_era().unwrap_or(0);
-		let validators = <Validators<T>>::iter().map(|(v, _)| v).collect::<Vec<_>>();
-		let mut exposures: Vec<_> = validators.into_iter().map(|v| {
-			let exposure = Self::eras_stakers(current_era, &v);
-			exposure.total.saturated_into::<u64>()
-		}).collect();
-		// bottom 1% and 2% of validators 
-		// get global average, sum for first bottom 1% exposures and sum for first bottom 2% exposures
+		let mut expos = exposures;
 		let factor = I20F12::from_num(validators_count) / 100;
 		let one_percent_validators = factor.ceil().to_num::<i32>();
 		let two_percent_validators = 2 * factor.ceil().to_num::<i32>();
 		// sort exposures
-		exposures.sort_by(|a, b| a.cmp(&b).reverse());
+		expos.sort_by(|a, b| a.cmp(&b).reverse());
 		// global average
 		let mut total_exposure: u64 = 0;
 		let mut bottom_one_percent_validators_exposure: u64 = 0;
 		let mut bottom_two_percent_validators_exposure: u64 = 0;
 		let mut i = 0;
 		let mut j = 0;
-		for exp in exposures.into_iter(){
+		for exp in expos.into_iter(){
 			total_exposure += exp;
 			if i <= one_percent_validators {
 				bottom_one_percent_validators_exposure += exp;
@@ -2423,8 +2418,8 @@ impl<T: Config> Module<T> {
 		let global_average = total_exposure / validators_count as u64;
 		let one_percent_average_stake = bottom_one_percent_validators_exposure / one_percent_validators as u64;
 		let two_percent_average_stake = bottom_two_percent_validators_exposure / two_percent_validators as u64;
-		let mut final_count = Self::minimum_validator_count();
-		
+		//init final count
+		let mut final_count = validators_count;
 		if (one_percent_average_stake as f64) > (0.4 * global_average as f64) {
 			final_count = std::cmp::min(
 				MAX_VALIDATORS.try_into().unwrap(), 
@@ -2610,10 +2605,6 @@ impl<T: Config> Module<T> {
 					}
 					return None
 				},
-			}
-			// if dynamic damping is enabled
-			if T::DynamicDamping::get() {
-				Self::dynamic_damping_validator_count();
 			}
 			// new era.
 			Self::new_era(session_index)
@@ -2987,10 +2978,11 @@ impl<T: Config> Module<T> {
 
 			// Populate Stakers and write slot stake.
 			let mut total_stake: BalanceOf<T> = Zero::zero();
+			let mut expos: Vec<u64> = Vec::new();
 			exposures.into_iter().for_each(|(stash, exposure)| {
 				total_stake = total_stake.saturating_add(exposure.total);
 				<ErasStakers<T>>::insert(current_era, &stash, &exposure);
-
+				expos.push(exposure.total.saturated_into::<u64>());
 				let mut exposure_clipped = exposure;
 				let clipped_max_len = T::MaxNominatorRewardedPerValidator::get() as usize;
 				if exposure_clipped.others.len() > clipped_max_len {
@@ -3002,7 +2994,10 @@ impl<T: Config> Module<T> {
 
 			// Insert current era staking information
 			<ErasTotalStake<T>>::insert(&current_era, total_stake);
-
+			// if dynamic damping is enabled
+			if T::DynamicDamping::get() {
+				Self::dynamic_damping_validator_count(expos);
+			}
 			// collect the pref of all winners
 			for stash in &elected_stashes {
 				let pref = Self::validators(stash);
