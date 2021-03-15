@@ -1084,7 +1084,7 @@ impl<T: Config> Pallet<T> {
 				if Self::round() != 1 {
 					log!(info, "Finalized election round with compute {:?}.", compute);
 				}
-				supports
+				(supports, weight)
 			})
 			.map_err(|err| {
 				Self::deposit_event(Event::ElectionFinalized(None));
@@ -1195,13 +1195,13 @@ mod feasibility_check {
 				.compact
 				.votes1
 				.iter_mut()
-				.filter(|(_, t)| *t == 3 as TargetIndex)
+				.filter(|(_, t)| *t == TargetIndex::from(3u16))
 				.for_each(|(_, t)| *t += 1);
 			solution.compact.votes2.iter_mut().for_each(|(_, (t0, _), t1)| {
-				if *t0 == 3 as TargetIndex {
+				if *t0 == TargetIndex::from(3u16) {
 					*t0 += 1
 				};
-				if *t1 == 3 as TargetIndex {
+				if *t1 == TargetIndex::from(3u16) {
 					*t1 += 1
 				};
 			});
