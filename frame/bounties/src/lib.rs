@@ -1141,7 +1141,7 @@ decl_module! {
 										let block_number = system::Module::<T>::block_number();
 										if maybe_bounty_active_status
 											.as_ref()
-											.expect("Invalid Parent Bounty Status").1 < block_number
+											.expect("Status is none iff origin is none; qed").1 < block_number
 										{
 											slash_curator(
 												subcurator,
