@@ -238,7 +238,7 @@ pub struct AssetMetadata<DepositBalance> {
 }
 
 /// Witness data for the destroy transactions.
-#[derive(Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
+#[derive(Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, scale_info::TypeInfo)]
 pub struct DestroyWitness {
 	/// The number of accounts holding the asset.
 	#[codec(compact)]

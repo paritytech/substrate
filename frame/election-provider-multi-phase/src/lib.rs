@@ -343,7 +343,7 @@ pub enum FallbackStrategy {
 }
 
 /// The type of `Computation` that provided this election data.
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, scale_info::TypeInfo)]
 pub enum ElectionCompute {
 	/// Election was computed on-chain.
 	OnChain,
@@ -365,7 +365,7 @@ impl Default for ElectionCompute {
 ///
 /// Such a solution should never become effective in anyway before being checked by the
 /// `Pallet::feasibility_check`
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, scale_info::TypeInfo)]
 pub struct RawSolution<C> {
 	/// Compact election edges.
 	compact: C,
@@ -415,7 +415,7 @@ pub struct RoundSnapshot<A> {
 /// This is stored automatically on-chain, and it contains the **size of the entire snapshot**.
 /// This is also used in dispatchables as weight witness data and should **only contain the size of
 /// the presented solution**, not the entire snapshot.
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, Default)]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, Default, scale_info::TypeInfo)]
 pub struct SolutionOrSnapshotSize {
 	/// The length of voters.
 	#[codec(compact)]
@@ -535,7 +535,8 @@ pub mod pallet {
 			+ Eq
 			+ Clone
 			+ sp_std::fmt::Debug
-			+ CompactSolution;
+			+ CompactSolution
+			+ scale_info::TypeInfo;
 
 		/// Accuracy used for fallback on-chain election.
 		type OnChainAccuracy: PerThing128;
