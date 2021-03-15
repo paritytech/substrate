@@ -519,8 +519,8 @@ impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
 		}
 
 		let grandpa_justification = justifications
-			.map(|just| just.into_justification(GRANDPA_ENGINE_ID))
-			.flatten();
+			.and_then(|just| just.into_justification(GRANDPA_ENGINE_ID));
+
 		match grandpa_justification {
 			Some(justification) => {
 				let import_res = self.import_justification(

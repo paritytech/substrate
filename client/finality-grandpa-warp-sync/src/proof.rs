@@ -110,8 +110,7 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 
 			let justification = backend
 				.justifications(BlockId::Number(*last_block))?
-				.map(|just| just.into_justification(GRANDPA_ENGINE_ID))
-				.flatten()
+				.and_then(|just| just.into_justification(GRANDPA_ENGINE_ID))
 				.expect(
 					"header is last in set and contains standard change signal; \
 					must have justification; \
@@ -176,7 +175,7 @@ mod tests {
 	use sp_blockchain::HeaderBackend;
 	use sp_consensus::BlockOrigin;
 	use sp_finality_grandpa::GRANDPA_ENGINE_ID;
-    use sp_keyring::Ed25519Keyring;
+	use sp_keyring::Ed25519Keyring;
 	use sp_runtime::{generic::BlockId, traits::Header as _};
 	use std::sync::Arc;
 	use substrate_test_runtime_client::{

@@ -282,21 +282,21 @@ impl<B: BlockT> BlockRequestHandler<B> {
 			};
 
 			// TODO: In a follow up PR tracked by https://github.com/paritytech/substrate/issues/8172
-			// we want to send/receive all Justifications if possible.
+			// we want to send/receive all justifications.
 			// For now we keep compatibility by selecting precisely the GRANDPA one, and not just
 			// the first one. When sending we could have just taken the first one, since we don't
 			// expect there to be any other kind currently, but when receiving we need to add the
 			// engine ID tag.
 			// The ID tag is hardcoded here to avoid depending on the GRANDPA crate, and will be
 			// removed when resolving the above issue.
-			let justification = justifications.map(|just| just.into_justification(*b"FRNK"));
+			let justification = justifications.and_then(|just| just.into_justification(*b"FRNK"));
 
 			let is_empty_justification = justification
 				.as_ref()
-				.map(|j| j.as_ref().map(|j| j.is_empty()).unwrap_or(false))
+				.map(|j| j.is_empty())
 				.unwrap_or(false);
 
-			let justification = justification.unwrap_or_default().unwrap_or_default();
+			let justification = justification.unwrap_or_default();
 
 			let body = if get_body {
 				match self.client.block_body(&BlockId::Hash(hash))? {

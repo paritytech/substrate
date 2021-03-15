@@ -190,18 +190,10 @@ where
 	// Get the Justification stored at the last block of the set
 	let last_block_for_set_id = BlockId::Number(last_block_for_set);
 	let justification =
-		if let Some(justifications) = blockchain.justifications(last_block_for_set_id)? {
-			if let Some(grandpa_justification) = justifications.into_justification(GRANDPA_ENGINE_ID) {
-				grandpa_justification
-			} else {
-				trace!(
-					target: "afg",
-					"Justification found, but none for GRANDPA, \
-					when making finality proof for {}. Returning empty proof.",
-					block,
-				);
-				return Ok(None);
-			}
+		if let Some(grandpa_justification) = blockchain.justifications(last_block_for_set_id)?
+			.and_then(|justifications| justifications.into_justification(GRANDPA_ENGINE_ID))
+		{
+			grandpa_justification
 		} else {
 			trace!(
 				target: "afg",
