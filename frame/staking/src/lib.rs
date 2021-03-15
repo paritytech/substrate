@@ -3182,7 +3182,7 @@ impl<T: Config> Module<T> {
 	/// Enact and process the election using the `ElectionProvider` type.
 	///
 	/// This will also process the election, as noted in [`process_election`].
-	fn enact_election(current_era: EraIndex) -> Option<Vec<T::AccountId>> {
+	fn enact_election(_current_era: EraIndex) -> Option<Vec<T::AccountId>> {
 		let _outcome = T::ElectionProvider::elect().map(|_| ());
 		log!(debug, "Experimental election provider outputted {:?}", _outcome);
 		// TWO_PHASE_NOTE: This code path shall not return anything for now. Later on, redirect the
