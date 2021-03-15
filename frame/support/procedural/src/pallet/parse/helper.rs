@@ -17,7 +17,6 @@
 
 use syn::spanned::Spanned;
 use quote::ToTokens;
-use proc_macro2::TokenStream;
 
 /// List of additional token to be used for parsing.
 mod keyword {
@@ -83,10 +82,10 @@ pub fn take_item_pallet_attrs<Attr>(item: &mut impl MutItemAttrs) -> syn::Result
 }
 
 /// Get all the cfg attributes (e.g. attribute like `#[cfg..]`) and decode them to `Attr`
-pub fn get_item_cfg_attrs(attrs: &Vec<syn::Attribute>) -> syn::Result<Vec<TokenStream>> {
-	Ok(attrs.iter().filter_map(|attr| -> Option<TokenStream> {
+pub fn get_item_cfg_attrs(attrs: &Vec<syn::Attribute>) -> syn::Result<Vec<syn::Attribute>> {
+	Ok(attrs.iter().filter_map(|attr| -> Option<syn::Attribute> {
 		if attr.path.segments.first().map_or(false, |segment| segment.ident == "cfg") {
-			syn::parse2(attr.into_token_stream()).ok()
+			Some(attr.clone())
 		} else {
 			None
 		}

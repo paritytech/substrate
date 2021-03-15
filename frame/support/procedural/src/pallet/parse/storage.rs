@@ -92,7 +92,7 @@ pub struct StorageDef {
 	/// The span of the pallet::storage attribute.
 	pub attr_span: proc_macro2::Span,
 	/// The `cfg` attributes.
-	pub cfg_attrs: Vec<proc_macro2::TokenStream>,
+	pub cfg_attrs: Vec<syn::Attribute>,
 }
 
 /// In `Foo<A, B, C>` retrieve the argument at given position, i.e. A is argument at position 0.
@@ -134,7 +134,7 @@ impl StorageDef {
 		}
 		let getter = attrs.pop().map(|attr| attr.getter);
 
-		let cfg_attrs: Vec<proc_macro2::TokenStream> = helper::get_item_cfg_attrs(&item.attrs)?;
+		let cfg_attrs: Vec<syn::Attribute> = helper::get_item_cfg_attrs(&item.attrs)?;
 
 		let mut instances = vec![];
 		instances.push(helper::check_type_def_gen(&item.generics, item.ident.span())?);
