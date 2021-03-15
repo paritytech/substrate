@@ -1054,15 +1054,15 @@ mod tests {
 
 	pub fn new_test_ext() -> sp_io::TestExternalities {
 		let mut ext: sp_io::TestExternalities = GenesisConfig {
-			collective_Instance1: Some(collective::GenesisConfig {
+			collective_Instance1: collective::GenesisConfig {
 				members: vec![1, 2, 3],
 				phantom: Default::default(),
-			}),
-			collective_Instance2: Some(collective::GenesisConfig {
+			},
+			collective_Instance2: collective::GenesisConfig {
 				members: vec![1, 2, 3, 4, 5],
 				phantom: Default::default(),
-			}),
-			collective: None,
+			},
+			collective: Default::default(),
 		}.build_storage().unwrap().into();
 		ext.execute_with(|| System::set_block_number(1));
 		ext

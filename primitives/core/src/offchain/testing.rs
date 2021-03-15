@@ -244,44 +244,6 @@ impl offchain::Externalities for TestOffchainExt {
 		self.0.read().seed
 	}
 
-	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]) {
-		let mut state = self.0.write();
-		match kind {
-			StorageKind::LOCAL => state.local_storage.set(b"", key, value),
-			StorageKind::PERSISTENT => state.persistent_storage.set(b"", key, value),
-		};
-	}
-
-	fn local_storage_clear(&mut self, kind: StorageKind, key: &[u8]) {
-		let mut state = self.0.write();
-		match kind {
-			StorageKind::LOCAL => state.local_storage.remove(b"", key),
-			StorageKind::PERSISTENT => state.persistent_storage.remove(b"", key),
-		};
-	}
-
-	fn local_storage_compare_and_set(
-		&mut self,
-		kind: StorageKind,
-		key: &[u8],
-		old_value: Option<&[u8]>,
-		new_value: &[u8]
-	) -> bool {
-		let mut state = self.0.write();
-		match kind {
-			StorageKind::LOCAL => state.local_storage.compare_and_set(b"", key, old_value, new_value),
-			StorageKind::PERSISTENT => state.persistent_storage.compare_and_set(b"", key, old_value, new_value),
-		}
-	}
-
-	fn local_storage_get(&mut self, kind: StorageKind, key: &[u8]) -> Option<Vec<u8>> {
-		let state = self.0.read();
-		match kind {
-			StorageKind::LOCAL => state.local_storage.get(TestPersistentOffchainDB::PREFIX, key),
-			StorageKind::PERSISTENT => state.persistent_storage.get(key),
-		}
-	}
-
 	fn http_request_start(&mut self, method: &str, uri: &str, meta: &[u8]) -> Result<RequestId, ()> {
 		let mut state = self.0.write();
 		let id = RequestId(state.requests.len() as u16);
@@ -390,6 +352,48 @@ impl offchain::Externalities for TestOffchainExt {
 
 	fn set_authorized_nodes(&mut self, _nodes: Vec<OpaquePeerId>, _authorized_only: bool) {
 		unimplemented!()
+	}
+}
+
+impl offchain::DbExternalities for TestOffchainExt {
+	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]) {
+		let mut state = self.0.write();
+		match kind {
+			StorageKind::LOCAL => state.local_storage.set(b"", key, value),
+			StorageKind::PERSISTENT => state.persistent_storage.set(b"", key, value),
+		};
+	}
+
+	fn local_storage_clear(&mut self, kind: StorageKind, key: &[u8]) {
+		let mut state = self.0.write();
+		match kind {
+			StorageKind::LOCAL => state.local_storage.remove(b"", key),
+			StorageKind::PERSISTENT => state.persistent_storage.remove(b"", key),
+		};
+	}
+
+	fn local_storage_compare_and_set(
+		&mut self,
+		kind: StorageKind,
+		key: &[u8],
+		old_value: Option<&[u8]>,
+		new_value: &[u8]
+	) -> bool {
+		let mut state = self.0.write();
+		match kind {
+			StorageKind::LOCAL => state.local_storage
+				.compare_and_set(b"", key, old_value, new_value),
+			StorageKind::PERSISTENT => state.persistent_storage
+				.compare_and_set(b"", key, old_value, new_value),
+		}
+	}
+
+	fn local_storage_get(&mut self, kind: StorageKind, key: &[u8]) -> Option<Vec<u8>> {
+		let state = self.0.read();
+		match kind {
+			StorageKind::LOCAL => state.local_storage.get(TestPersistentOffchainDB::PREFIX, key),
+			StorageKind::PERSISTENT => state.persistent_storage.get(key),
+		}
 	}
 }
 
