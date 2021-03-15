@@ -20,7 +20,6 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use sp_std::prelude::*;
 use frame_system::RawOrigin;
 use frame_support::{ensure, traits::OnFinalize};
 use frame_benchmarking::{benchmarks, TrackedStorageKey, impl_benchmark_test_suite};

@@ -22,7 +22,7 @@ mod log;
 use log::log2;
 use proc_macro::TokenStream;
 use proc_macro2::{TokenStream as TokenStream2, Span};
-use proc_macro_crate::crate_name;
+use proc_macro_crate::{crate_name, FoundCrate};
 use quote::{quote, ToTokens};
 use std::convert::TryInto;
 use syn::parse::{Parse, ParseStream};
@@ -82,11 +82,12 @@ pub fn build(input: TokenStream) -> TokenStream {
 	let test_module = generate_test_module(&input);
 
 	let imports = match crate_name("sp-runtime") {
-		Ok(sp_runtime) => {
+		Ok(FoundCrate::Itself) => quote!( extern crate sp_runtime as _sp_runtime; ),
+		Ok(FoundCrate::Name(sp_runtime)) => {
 			let ident = syn::Ident::new(&sp_runtime, Span::call_site());
 			quote!( extern crate #ident as _sp_runtime; )
 		},
-		Err(e) => syn::Error::new(Span::call_site(), &e).to_compile_error(),
+		Err(e) => syn::Error::new(Span::call_site(), e).to_compile_error(),
 	};
 
 	let const_name = input.ident;

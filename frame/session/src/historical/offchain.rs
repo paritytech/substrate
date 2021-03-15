@@ -147,7 +147,8 @@ mod tests {
 	use sp_core::crypto::key_types::DUMMY;
 	use sp_core::offchain::{
 		testing::TestOffchainExt,
-		OffchainExt,
+		OffchainDbExt,
+		OffchainWorkerExt,
 		StorageKind,
 	};
 
@@ -181,7 +182,8 @@ mod tests {
 		seed[0..4].copy_from_slice(&ITERATIONS.to_le_bytes());
 		offchain_state.write().seed = seed;
 
-		ext.register_extension(OffchainExt::new(offchain));
+		ext.register_extension(OffchainDbExt::new(offchain.clone()));
+		ext.register_extension(OffchainWorkerExt::new(offchain));
 		ext
 	}
 

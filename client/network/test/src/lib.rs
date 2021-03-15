@@ -727,7 +727,11 @@ pub trait TestNetFactory: Sized {
 		let protocol_id = ProtocolId::from("test-protocol-name");
 
 		let block_request_protocol_config = {
-			let (handler, protocol_config) = BlockRequestHandler::new(&protocol_id, client.clone());
+			let (handler, protocol_config) = BlockRequestHandler::new(
+				&protocol_id,
+				client.clone(),
+				50,
+			);
 			self.spawn_task(handler.run().boxed());
 			protocol_config
 		};
