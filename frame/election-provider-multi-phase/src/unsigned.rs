@@ -167,8 +167,8 @@ impl<T: Config> Pallet<T> {
 			compact.voter_count(),
 			maximum_allowed_voters,
 		);
-		let compact = Self::trim_compact(maximum_allowed_voters, compact, &voter_index)?;
-		let compact = Self::trim_compact_for_length(
+		let compact = Self::trim_compact_weight(maximum_allowed_voters, compact, &voter_index)?;
+		let compact = Self::trim_compact_length(
 			T::MinerMaxLength::get(),
 			compact,
 			&voter_index,
@@ -215,7 +215,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Indeed, the score must be computed **after** this step. If this step reduces the score too
 	/// much or remove a winner, then the solution must be discarded **after** this step.
-	pub fn trim_compact<FN>(
+	pub fn trim_compact_weight<FN>(
 		maximum_allowed_voters: u32,
 		mut compact: CompactOf<T>,
 		voter_index: FN,
@@ -271,7 +271,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// The score must be computed **after** this step. If this step reduces the score too much,
 	/// then the solution must be discarded.
-	pub fn trim_compact_for_length(
+	pub fn trim_compact_length(
 		max_allowed_length: u32,
 		mut compact: CompactOf<T>,
 		voter_index: impl Fn(&T::AccountId) -> Option<CompactVoterIndexOf<T>>,
@@ -928,7 +928,7 @@ mod tests {
 	}
 
 	#[test]
-	fn trim_compact_for_length_does_not_modify_when_short_enough() {
+	fn trim_compact_length_does_not_modify_when_short_enough() {
 		let (mut ext, _) = ExtBuilder::default().build_offchainify(0);
 		ext.execute_with(|| {
 			roll_to(25);
@@ -940,7 +940,7 @@ mod tests {
 			let encoded_len = compact.encode().len() as u32;
 			let compact_clone = compact.clone();
 
-			compact = MultiPhase::trim_compact_for_length(
+			compact = MultiPhase::trim_compact_length(
 				encoded_len,
 				compact,
 				voter_index_fn_linear::<Runtime>(&voters),
@@ -951,7 +951,7 @@ mod tests {
 	}
 
 	#[test]
-	fn trim_compact_for_length_modifies_when_too_long() {
+	fn trim_compact_length_modifies_when_too_long() {
 		let (mut ext, _) = ExtBuilder::default().build_offchainify(0);
 		ext.execute_with(|| {
 			roll_to(25);
@@ -963,7 +963,7 @@ mod tests {
 			let encoded_len = compact.encode().len() as u32;
 			let compact_clone = compact.clone();
 
-			compact = MultiPhase::trim_compact_for_length(
+			compact = MultiPhase::trim_compact_length(
 				encoded_len - 1,
 				compact,
 				voter_index_fn_linear::<Runtime>(&voters),
