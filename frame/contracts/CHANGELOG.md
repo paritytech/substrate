@@ -20,6 +20,7 @@ In other words: Upgrading this pallet will not break pre-existing contracts.
 
 ### Added
 
+- Make storage and fields of `Schedule` private to the crate.
 - Add `seal_rent_params` contract callable function.
 
 ## [v3.0.0] 2021-02-25
