@@ -118,7 +118,7 @@ pub enum IndexOperation {
 	Insert {
 		/// Extrinsic index in the current block.
 		extrinsic: u32,
-		/// Data offset in the extrincis.
+		/// Data offset in the extrinsic.
 		offset: u32,
 	},
 	/// Renew existing transaction storage.
