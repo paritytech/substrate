@@ -1451,7 +1451,7 @@ impl<T: Config> Module<T> {
 				Err(err) => {
 					log::trace!(
 						target: "runtime::system", 
-						"failed extrinsic at {:?} => {:?}", 
+						"Extrinsic failed at block({}): {:?}", 
 						Self::block_number(), 
 						err,
 					);
