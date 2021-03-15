@@ -11,6 +11,10 @@ Follow the [instructions](https://github.com/Cerebellum-Network/validator-instru
 
 ## Build the node
 1. [Install `Docker`](https://docs.docker.com/get-docker/).
+1. Run the following command to update submodules.
+   ```
+	git submodule update --init --recursive
+	```
 1. Run the following command to build the node.
    ```
    docker build .
