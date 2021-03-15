@@ -77,15 +77,15 @@ fn migrate_2_to_3<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> sp_b
 	let db = Database::open(&db_cfg, db_path).map_err(db_err)?;
 
 	// Get all the keys we need to update
-	let keys: Vec<_> = db.iter(columns::JUSTIFICATION).map(|entry| entry.0).collect();
+	let keys: Vec<_> = db.iter(columns::JUSTIFICATIONS).map(|entry| entry.0).collect();
 
 	// Read and update each entry
 	let mut transaction = db.transaction();
 	for key in keys {
-		if let Some(justification) = db.get(columns::JUSTIFICATION, &key).map_err(db_err)? {
+		if let Some(justification) = db.get(columns::JUSTIFICATIONS, &key).map_err(db_err)? {
 			// Tag each Justification with the hardcoded ID for GRANDPA. Avoid the dependency on the GRANDPA crate
 			let justifications = sp_runtime::Justifications::from((*b"FRNK", justification));
-			transaction.put_vec(columns::JUSTIFICATION, &key, justifications.encode());
+			transaction.put_vec(columns::JUSTIFICATIONS, &key, justifications.encode());
 		}
 	}
 	db.write(transaction).map_err(db_err)?;

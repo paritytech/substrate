@@ -61,7 +61,7 @@ use sc_client_api::{
 };
 use sp_blockchain::{
 	Result as ClientResult, Error as ClientError,
-	well_known_cache_keys, HeaderBackend,
+	well_known_cache_keys, Backend as _, HeaderBackend,
 };
 use codec::{Decode, Encode};
 use hash_db::Prefix;
@@ -352,7 +352,7 @@ pub(crate) mod columns {
 	pub const KEY_LOOKUP: u32 = 3;
 	pub const HEADER: u32 = 4;
 	pub const BODY: u32 = 5;
-	pub const JUSTIFICATION: u32 = 6;
+	pub const JUSTIFICATIONS: u32 = 6;
 	pub const CHANGES_TRIE: u32 = 7;
 	pub const AUX: u32 = 8;
 	/// Offchain workers local storage
@@ -537,7 +537,7 @@ impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<B
 	}
 
 	fn justifications(&self, id: BlockId<Block>) -> ClientResult<Option<Justifications>> {
-		match read_db(&*self.db, columns::KEY_LOOKUP, columns::JUSTIFICATION, id)? {
+		match read_db(&*self.db, columns::KEY_LOOKUP, columns::JUSTIFICATIONS, id)? {
 			Some(justification) => match Decode::decode(&mut &justification[..]) {
 				Ok(justification) => Ok(Some(justification)),
 				Err(err) => return Err(sp_blockchain::Error::Backend(
@@ -1131,7 +1131,7 @@ impl<Block: BlockT> Backend<Block> {
 
 		if let Some(justification) = justification {
 			transaction.set_from_vec(
-				columns::JUSTIFICATION,
+				columns::JUSTIFICATIONS,
 				&utils::number_and_hash_to_lookup_key(number, hash)?,
 				Justifications::from(justification).encode(),
 			);
@@ -1242,8 +1242,8 @@ impl<Block: BlockT> Backend<Block> {
 					},
 				}
 			}
-			if let Some(justification) = pending_block.justifications {
-				transaction.set_from_vec(columns::JUSTIFICATION, &lookup_key, justification.encode());
+			if let Some(justifications) = pending_block.justifications {
+				transaction.set_from_vec(columns::JUSTIFICATIONS, &lookup_key, justifications.encode());
 			}
 
 			if number.is_zero() {
@@ -1690,7 +1690,6 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			return Err(ClientError::NotInFinalizedChain);
 		}
 
-		use sp_blockchain::Backend;
 		let justifications =
 			if let Some(mut stored_justifications) = self.blockchain.justifications(block)? {
 				if !stored_justifications.append(justification) {
@@ -1704,7 +1703,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			};
 
 		transaction.set_from_vec(
-			columns::JUSTIFICATION,
+			columns::JUSTIFICATIONS,
 			&utils::number_and_hash_to_lookup_key(number, hash)?,
 			justifications.encode(),
 		);
