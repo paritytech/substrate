@@ -782,12 +782,27 @@ impl<T: Config> SessionInterface<<T as frame_system::Config>::AccountId> for T w
 	}
 }
 
+/// Handler for determining how much of a balance should be paid out on the current era.
 pub trait EraPayout<Balance> {
+	/// Determine the payout for this era.
+	///
+	/// Returns the amount to be paid to stakers in this era, as well as whatever else should be
+	/// paid out ("the rest").
 	fn era_payout(
 		total_staked: Balance,
 		total_issuance: Balance,
 		era_duration_millis: u64,
 	) -> (Balance, Balance);
+}
+
+impl<Balance: Default> EraPayout<Balance> for () {
+	fn era_payout(
+		_total_staked: Balance,
+		_total_issuance: Balance,
+		_era_duration_millis: u64,
+	) -> (Balance, Balance) {
+		(Default::default(), Default::default())
+	}
 }
 
 pub struct ConvertCurve<T>(sp_std::marker::PhantomData<T>);
