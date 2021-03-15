@@ -274,6 +274,12 @@ impl<T: Config> Pallet<T> {
 		mut compact: CompactOf<T>,
 		voter_index: impl Fn(&T::AccountId) -> Option<CompactVoterIndexOf<T>>,
 	) -> Result<CompactOf<T>, MinerError> {
+		// short-circuit to avoid getting the voters if possible
+		// this involves a redundant encoding, but that should hopefully be relatively cheap
+		if (compact.encode().len().saturated_into::<u32>()) < max_allowed_length {
+			return Ok(compact);
+		}
+
 		// grab all voters and sort them by least stake.
 		let RoundSnapshot { voters, .. } =
 			Self::snapshot().ok_or(MinerError::SnapshotUnAvailable)?;
