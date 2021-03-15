@@ -1771,9 +1771,9 @@ fn subbounty_close_subbounty_at_state_approved_works() {
 		// ===Call close_subbounty===
 
 		// Subbounty-1
-		// TODO :: Have to recheck, Unable to close subbounty by root.
-		// assert_ok!(Bounties::close_subbounty(Origin::root(), 0, 1));
 		assert_ok!(Bounties::close_subbounty(Origin::signed(4), 0, 1));
+
+		assert_eq!(last_event(), RawEvent::SubBountyCanceled(0, 1));
 
 		// As expected fund reserved for subbounty moved back to parent bounty
 		assert_eq!(Balances::free_balance(Bounties::bounty_account_id(1)), 0);
@@ -1791,6 +1791,8 @@ fn subbounty_close_subbounty_at_state_approved_works() {
 
 		// Subbounty-2
 		assert_ok!(Bounties::close_subbounty(Origin::signed(4), 0, 2));
+
+		assert_eq!(last_event(), RawEvent::SubBountyCanceled(0, 2));
 
 		// Subcurator or proposer of subbounty is slashed & lost deposit of 90
 		assert_eq!(Balances::free_balance(4), 199);
