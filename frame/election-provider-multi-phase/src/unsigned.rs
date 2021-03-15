@@ -541,6 +541,7 @@ mod tests {
 		Call, *,
 	};
 	use frame_support::{dispatch::Dispatchable, traits::OffchainWorker};
+	use helpers::voter_index_fn_linear;
 	use mock::Call as OuterCall;
 	use sp_election_providers::Assignment;
 	use sp_runtime::{traits::ValidateUnsigned, PerU16};
@@ -928,18 +929,25 @@ mod tests {
 
 	#[test]
 	fn trim_compact_for_length_does_not_modify_when_short_enough() {
-		let RawSolution { mut compact, .. } = raw_solution();
-		let encoded_len = compact.encode().len() as u32;
-		let compact_clone = compact.clone();
+		let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
+		ext.execute_with(|| {
+			roll_to(25);
 
-		compact = MultiPhase::trim_compact_for_length(
-			encoded_len,
-			compact,
-			// helpers::voter_index_fn_linear appears to need an input we don't have
-			unimplemented!("how can I generate the voter index fn?"),
-		).unwrap();
+			let RoundSnapshot { voters, ..} =
+				MultiPhase::snapshot().unwrap();
 
-		assert_eq!(compact, compact_clone);
+			let RawSolution { mut compact, .. } = raw_solution();
+			let encoded_len = compact.encode().len() as u32;
+			let compact_clone = compact.clone();
+
+			compact = MultiPhase::trim_compact_for_length(
+				encoded_len,
+				compact,
+				voter_index_fn_linear::<Runtime>(&voters),
+			).unwrap();
+
+			assert_eq!(compact, compact_clone);
+		});
 	}
 
 	// TODO: trim_compact_for_length_modifies_when_too_long
