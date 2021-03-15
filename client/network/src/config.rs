@@ -68,6 +68,9 @@ pub struct Params<B: BlockT, H: ExHashT> {
 	/// default.
 	pub executor: Option<Box<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send>>,
 
+	/// How to spawn the background task dedicated to the transactions handler.
+	pub transactions_handler_executor: Box<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send>,
+
 	/// Network layer configuration.
 	pub network_config: NetworkConfiguration,
 
@@ -106,18 +109,19 @@ pub struct Params<B: BlockT, H: ExHashT> {
 	/// protocol name. In addition all of [`RequestResponseConfig`] is used to handle incoming block
 	/// requests, if enabled.
 	///
-	/// Can be constructed either via [`block_request_handler::generate_protocol_config`] allowing
-	/// outgoing but not incoming requests, or constructed via
-	/// [`block_request_handler::BlockRequestHandler::new`] allowing both outgoing and incoming
-	/// requests.
+	/// Can be constructed either via [`crate::block_request_handler::generate_protocol_config`]
+	/// allowing outgoing but not incoming requests, or constructed via
+	/// [`crate::block_request_handler::BlockRequestHandler::new`] allowing both outgoing and
+	/// incoming requests.
 	pub block_request_protocol_config: RequestResponseConfig,
 
 	/// Request response configuration for the light client request protocol.
 	///
-	/// Can be constructed either via [`light_client_requests::generate_protocol_config`] allowing
-	/// outgoing but not incoming requests, or constructed via
-	/// [`light_client_requests::handler::LightClientRequestHandler::new`] allowing both outgoing
-	/// and incoming requests.
+	/// Can be constructed either via
+	/// [`crate::light_client_requests::generate_protocol_config`] allowing outgoing but not
+	/// incoming requests, or constructed via
+	/// [`crate::light_client_requests::handler::LightClientRequestHandler::new`] allowing
+	/// both outgoing and incoming requests.
 	pub light_client_request_protocol_config: RequestResponseConfig,
 }
 
@@ -128,30 +132,14 @@ pub enum Role {
 	Full,
 	/// Regular light node.
 	Light,
-	/// Sentry node that guards an authority. Will be reported as "authority" on the wire protocol.
-	Sentry {
-		/// Address and identity of the validator nodes that we're guarding.
-		///
-		/// The nodes will be granted some priviledged status.
-		validators: Vec<MultiaddrWithPeerId>,
-	},
 	/// Actual authority.
-	Authority {
-		/// List of public addresses and identities of our sentry nodes.
-		sentry_nodes: Vec<MultiaddrWithPeerId>,
-	}
+	Authority,
 }
 
 impl Role {
 	/// True for `Role::Authority`
 	pub fn is_authority(&self) -> bool {
 		matches!(self, Role::Authority { .. })
-	}
-
-	/// True for `Role::Authority` and `Role::Sentry` since they're both
-	/// announced as having the authority role to the network.
-	pub fn is_network_authority(&self) -> bool {
-		matches!(self, Role::Authority { .. } | Role::Sentry { .. })
 	}
 }
 
@@ -160,7 +148,6 @@ impl fmt::Display for Role {
 		match self {
 			Role::Full => write!(f, "FULL"),
 			Role::Light => write!(f, "LIGHT"),
-			Role::Sentry { .. } => write!(f, "SENTRY"),
 			Role::Authority { .. } => write!(f, "AUTHORITY"),
 		}
 	}

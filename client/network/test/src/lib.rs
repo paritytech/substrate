@@ -727,7 +727,11 @@ pub trait TestNetFactory: Sized {
 		let protocol_id = ProtocolId::from("test-protocol-name");
 
 		let block_request_protocol_config = {
-			let (handler, protocol_config) = BlockRequestHandler::new(&protocol_id, client.clone());
+			let (handler, protocol_config) = BlockRequestHandler::new(
+				&protocol_id,
+				client.clone(),
+				50,
+			);
 			self.spawn_task(handler.run().boxed());
 			protocol_config
 		};
@@ -741,6 +745,7 @@ pub trait TestNetFactory: Sized {
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: Role::Full,
 			executor: None,
+			transactions_handler_executor: Box::new(|task| { async_std::task::spawn(task); }),
 			network_config,
 			chain: client.clone(),
 			on_demand: None,
@@ -831,6 +836,7 @@ pub trait TestNetFactory: Sized {
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: Role::Light,
 			executor: None,
+			transactions_handler_executor: Box::new(|task| { async_std::task::spawn(task); }),
 			network_config,
 			chain: client.clone(),
 			on_demand: None,

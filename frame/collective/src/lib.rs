@@ -49,7 +49,7 @@ use sp_runtime::{RuntimeDebug, traits::Hash};
 
 use frame_support::{
 	codec::{Decode, Encode},
-	debug, decl_error, decl_event, decl_module, decl_storage,
+	decl_error, decl_event, decl_module, decl_storage,
 	dispatch::{
 		DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable, Parameter,
 		PostDispatchInfo,
@@ -320,19 +320,21 @@ decl_module! {
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			if new_members.len() > T::MaxMembers::get() as usize {
-				debug::error!(
-					"New members count exceeds maximum amount of members expected. (expected: {}, actual: {})",
+				log::error!(
+					target: "runtime::collective",
+					"New members count ({}) exceeds maximum amount of members expected ({}).",
+					new_members.len(),
 					T::MaxMembers::get(),
-					new_members.len()
 				);
 			}
 
 			let old = Members::<T, I>::get();
 			if old.len() > old_count as usize {
-				debug::warn!(
-					"Wrong count used to estimate set_members weight. (expected: {}, actual: {})",
+				log::warn!(
+					target: "runtime::collective",
+					"Wrong count used to estimate set_members weight. expected ({}) vs actual ({})",
 					old_count,
-					old.len()
+					old.len(),
 				);
 			}
 			let mut new_members = new_members;
@@ -811,10 +813,11 @@ impl<T: Config<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
 		new: &[T::AccountId],
 	) {
 		if new.len() > T::MaxMembers::get() as usize {
-			debug::error!(
-				"New members count exceeds maximum amount of members expected. (expected: {}, actual: {})",
+			log::error!(
+				target: "runtime::collective",
+				"New members count ({}) exceeds maximum amount of members expected ({}).",
+				new.len(),
 				T::MaxMembers::get(),
-				new.len()
 			);
 		}
 		// remove accounts from all current voting in motions.
@@ -1051,15 +1054,15 @@ mod tests {
 
 	pub fn new_test_ext() -> sp_io::TestExternalities {
 		let mut ext: sp_io::TestExternalities = GenesisConfig {
-			collective_Instance1: Some(collective::GenesisConfig {
+			collective_Instance1: collective::GenesisConfig {
 				members: vec![1, 2, 3],
 				phantom: Default::default(),
-			}),
-			collective_Instance2: Some(collective::GenesisConfig {
+			},
+			collective_Instance2: collective::GenesisConfig {
 				members: vec![1, 2, 3, 4, 5],
 				phantom: Default::default(),
-			}),
-			collective: None,
+			},
+			collective: Default::default(),
 		}.build_storage().unwrap().into();
 		ext.execute_with(|| System::set_block_number(1));
 		ext

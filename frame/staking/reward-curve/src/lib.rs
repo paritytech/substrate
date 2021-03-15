@@ -22,7 +22,7 @@ mod log;
 use log::log2;
 use proc_macro::TokenStream;
 use proc_macro2::{TokenStream as TokenStream2, Span};
-use proc_macro_crate::crate_name;
+use proc_macro_crate::{crate_name, FoundCrate};
 use quote::{quote, ToTokens};
 use std::convert::TryInto;
 use syn::parse::{Parse, ParseStream};
@@ -82,11 +82,12 @@ pub fn build(input: TokenStream) -> TokenStream {
 	let test_module = generate_test_module(&input);
 
 	let imports = match crate_name("sp-runtime") {
-		Ok(sp_runtime) => {
+		Ok(FoundCrate::Itself) => quote!( extern crate sp_runtime as _sp_runtime; ),
+		Ok(FoundCrate::Name(sp_runtime)) => {
 			let ident = syn::Ident::new(&sp_runtime, Span::call_site());
 			quote!( extern crate #ident as _sp_runtime; )
 		},
-		Err(e) => syn::Error::new(Span::call_site(), &e).to_compile_error(),
+		Err(e) => syn::Error::new(Span::call_site(), e).to_compile_error(),
 	};
 
 	let const_name = input.ident;
@@ -353,13 +354,13 @@ fn generate_piecewise_linear(points: Vec<(u32, u32)>) -> TokenStream2 {
 		.unwrap_or(1_000_000_000);
 
 	for (x, y) in points {
-		let error = || panic!(format!(
+		let error = || panic!(
 			"Generated reward curve approximation doesn't fit into [0, 1] -> [0, 1] \
 			because of point:
 			x = {:07} per million
 			y = {:07} per million",
 			x, y
-		));
+		);
 
 		let x_perbill = x.checked_mul(1_000).unwrap_or_else(error);
 		let y_perbill = y.checked_mul(1_000).unwrap_or_else(error);
@@ -420,14 +421,14 @@ fn generate_test_module(input: &INposInput) -> TokenStream2 {
 							/ float_res as u64
 						) as u32;
 						if err > #precision {
-							panic!(format!("\n\
+							panic!("\n\
 								Generated reward curve approximation differ from real one:\n\t\
 								for i = {} and base = {}, f(i/base) * base = {},\n\t\
 								but approximation = {},\n\t\
 								err = {:07} millionth,\n\t\
 								try increase the number of segment: {} or the test_error: {}.\n",
 								i, base, float_res, int_res, err, #max_piece_count, #precision
-							));
+							);
 						}
 					}
 				}

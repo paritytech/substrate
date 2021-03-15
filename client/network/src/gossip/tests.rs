@@ -99,6 +99,7 @@ fn build_test_full_node(network_config: config::NetworkConfiguration)
 		let (handler, protocol_config) = BlockRequestHandler::new(
 			&protocol_id,
 			client.clone(),
+			50,
 		);
 		async_std::task::spawn(handler.run().boxed());
 		protocol_config
@@ -116,6 +117,7 @@ fn build_test_full_node(network_config: config::NetworkConfiguration)
 	let worker = NetworkWorker::new(config::Params {
 		role: config::Role::Full,
 		executor: None,
+		transactions_handler_executor: Box::new(|task| { async_std::task::spawn(task); }),
 		network_config,
 		chain: client.clone(),
 		on_demand: None,

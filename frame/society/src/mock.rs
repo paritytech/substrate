@@ -22,8 +22,9 @@ use crate as pallet_society;
 
 use frame_support::{
 	parameter_types, ord_parameter_types,
-	traits::{OnInitialize, OnFinalize, TestRandomness},
+	traits::{OnInitialize, OnFinalize},
 };
+use frame_support_test::TestRandomness;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -104,7 +105,7 @@ impl pallet_balances::Config for Test {
 impl Config for Test {
 	type Event = Event;
 	type Currency = pallet_balances::Module<Self>;
-	type Randomness = TestRandomness;
+	type Randomness = TestRandomness<Self>;
 	type CandidateDeposit = CandidateDeposit;
 	type WrongSideDeduction = WrongSideDeduction;
 	type MaxStrikes = MaxStrikes;

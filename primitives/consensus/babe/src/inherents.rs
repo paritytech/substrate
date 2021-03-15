@@ -52,6 +52,7 @@ impl BabeInherentData for InherentData {
 }
 
 /// Provides the slot duration inherent data for BABE.
+// TODO: Remove in the future. https://github.com/paritytech/substrate/issues/8029
 #[cfg(feature = "std")]
 pub struct InherentDataProvider {
 	slot_duration: u64,
@@ -82,7 +83,7 @@ impl ProvideInherentData for InherentDataProvider {
 
 	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), Error> {
 		let timestamp = inherent_data.timestamp_inherent_data()?;
-		let slot = timestamp / self.slot_duration;
+		let slot = *timestamp / self.slot_duration;
 		inherent_data.put_data(INHERENT_IDENTIFIER, &slot)
 	}
 
