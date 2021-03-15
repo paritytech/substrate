@@ -306,18 +306,18 @@ impl<Block: BlockT> Blockchain<Block> {
 			.get_mut(&hash)
 			.expect("hash was fetched from a block in the db; qed");
 
-		let block_justification = match block {
+		let block_justifications = match block {
 			StoredBlock::Header(_, ref mut j) | StoredBlock::Full(_, ref mut j) => j
 		};
 
-		if let Some(stored_justifications) = block_justification {
+		if let Some(stored_justifications) = block_justifications {
 			if !stored_justifications.append(justification) {
 				return Err(sp_blockchain::Error::BadJustification(
 					"Duplicate consensus engine ID".into()
 				));
 			}
 		} else {
-			*block_justification = Some(Justifications::from(justification));
+			*block_justifications = Some(Justifications::from(justification));
 		};
 
 		Ok(())
@@ -836,7 +836,7 @@ mod tests {
 	}
 
 	#[test]
-	fn append_and_retreive_justifications() {
+	fn append_and_retrieve_justifications() {
 		let blockchain = test_blockchain();
 		let last_finalized = blockchain.last_finalized().unwrap();
 		let block = BlockId::Hash(last_finalized);

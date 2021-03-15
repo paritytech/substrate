@@ -253,7 +253,7 @@ fn sync_justifications() {
 	assert_eq!(net.peer(1).client().justifications(&BlockId::Number(10)).unwrap(), None);
 
 	// we finalize block #10, #15 and #20 for peer 0 with a justification
-	let just = (*b"FRNK", Vec::new());
+	let just = (*b"TEST", Vec::new());
 	net.peer(0).client().finalize_block(BlockId::Number(10), Some(just.clone()), true).unwrap();
 	net.peer(0).client().finalize_block(BlockId::Number(15), Some(just.clone()), true).unwrap();
 	net.peer(0).client().finalize_block(BlockId::Number(20), Some(just.clone()), true).unwrap();
@@ -275,7 +275,7 @@ fn sync_justifications() {
 				.peer(0)
 				.client()
 				.justifications(&BlockId::Number(height))
-				.unwrap() != Some(Justifications::from((*b"FRNK", Vec::new())))
+				.unwrap() != Some(Justifications::from((*b"TEST", Vec::new())))
 			{
 				return Poll::Pending;
 			}
@@ -283,7 +283,7 @@ fn sync_justifications() {
 				.peer(1)
 				.client()
 				.justifications(&BlockId::Number(height))
-				.unwrap() != Some(Justifications::from((*b"FRNK", Vec::new())))
+				.unwrap() != Some(Justifications::from((*b"TEST", Vec::new())))
 			{
 				return Poll::Pending;
 			}
@@ -307,7 +307,7 @@ fn sync_justifications_across_forks() {
 	// for both and finalize the small fork instead.
 	net.block_until_sync();
 
-	let just = (*b"FRNK", Vec::new());
+	let just = (*b"TEST", Vec::new());
 	net.peer(0).client().finalize_block(BlockId::Hash(f1_best), Some(just), true).unwrap();
 
 	net.peer(1).request_justification(&f1_best, 10);
@@ -320,12 +320,12 @@ fn sync_justifications_across_forks() {
 			.peer(0)
 			.client()
 			.justifications(&BlockId::Number(10))
-			.unwrap() == Some(Justifications::from((*b"FRNK", Vec::new())))
+			.unwrap() == Some(Justifications::from((*b"TEST", Vec::new())))
 			&& net
 				.peer(1)
 				.client()
 				.justifications(&BlockId::Number(10))
-				.unwrap() == Some(Justifications::from((*b"FRNK", Vec::new())))
+				.unwrap() == Some(Justifications::from((*b"TEST", Vec::new())))
 		{
 			Poll::Ready(())
 		} else {
@@ -717,7 +717,7 @@ fn can_sync_to_peers_with_wrong_common_block() {
 	net.block_until_connected();
 
 	// both peers re-org to the same fork without notifying each other
-	let just = Some((*b"FRNK", Vec::new()));
+	let just = Some((*b"TEST", Vec::new()));
 	net.peer(0).client().finalize_block(BlockId::Hash(fork_hash), just.clone(), true).unwrap();
 	net.peer(1).client().finalize_block(BlockId::Hash(fork_hash), just, true).unwrap();
 	let final_hash = net.peer(0).push_blocks(1, false);

@@ -286,7 +286,7 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 		&mut self,
 		header: Block::Header,
 		_body: Option<Vec<Block::Extrinsic>>,
-		_justification: Option<Justifications>,
+		_justifications: Option<Justifications>,
 		state: NewBlockState,
 	) -> ClientResult<()> {
 		self.leaf_state = state;

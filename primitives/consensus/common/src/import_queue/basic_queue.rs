@@ -444,7 +444,7 @@ mod tests {
 			&mut self,
 			origin: BlockOrigin,
 			header: Header,
-			_justification: Option<Justifications>,
+			_justifications: Option<Justifications>,
 			_body: Option<Vec<Extrinsic>>,
 		) -> Result<(BlockImportParams<Block, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 			Ok((BlockImportParams::new(origin, header), None))
@@ -556,13 +556,11 @@ mod tests {
 
 		let mut import_justification = || {
 			let hash = Hash::random();
-			const ENGINE_ID: sp_runtime::ConsensusEngineId = *b"TEST";
-
 			block_on(finality_sender.send(worker_messages::ImportJustification(
 				libp2p::PeerId::random(),
 				hash,
 				1,
-				(ENGINE_ID, Vec::new()),
+				(*b"TEST", Vec::new()),
 			)))
 			.unwrap();
 

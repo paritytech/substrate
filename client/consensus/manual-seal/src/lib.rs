@@ -50,8 +50,6 @@ pub use self::{
 use sp_api::{ProvideRuntimeApi, TransactionFor};
 
 /// The `ConsensusEngineId` of Manual Seal.
-// We should consider creating a new crate primitives/manual-seal for this, if it ends up being used
-// outside of this crate.
 pub const MANUAL_SEAL_ENGINE_ID: ConsensusEngineId = [b'm', b'a', b'n', b'l'];
 
 /// The verifier for the manual seal engine; instantly finalizes.

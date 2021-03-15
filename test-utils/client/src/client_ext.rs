@@ -51,15 +51,14 @@ pub trait ClientBlockImportExt<Block: BlockT>: Sized {
 	fn import_as_best(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError>;
 
 	/// Import a block and finalize it.
-	fn import_as_final(&mut self, origin: BlockOrigin, block: Block)
-		-> Result<(), ConsensusError>;
+	fn import_as_final(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError>;
 
-	/// Import block with justification, finalizes block.
+	/// Import block with justification(s), finalizes block.
 	fn import_justified(
 		&mut self,
 		origin: BlockOrigin,
 		block: Block,
-		justifications: Justifications
+		justifications: Justifications,
 	) -> Result<(), ConsensusError>;
 }
 

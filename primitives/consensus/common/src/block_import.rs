@@ -128,7 +128,7 @@ pub struct BlockImportParams<Block: BlockT, Transaction> {
 	/// re-executed in a runtime that checks digest equivalence -- the
 	/// post-runtime digests are pushed back on after.
 	pub header: Block::Header,
-	/// Justification provided for this block from the outside.
+	/// Justification(s) provided for this block from the outside.
 	pub justifications: Option<Justifications>,
 	/// Digest items that have been added after the runtime for external
 	/// work, like a consensus signature.

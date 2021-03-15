@@ -68,7 +68,7 @@ pub struct IncomingBlock<B: BlockT> {
 	pub header: Option<<B as BlockT>::Header>,
 	/// Block body if requested.
 	pub body: Option<Vec<<B as BlockT>::Extrinsic>>,
-	/// Justification if requested.
+	/// Justification(s) if requested.
 	pub justifications: Option<Justifications>,
 	/// The peer, we received this from
 	pub origin: Option<Origin>,
@@ -182,8 +182,8 @@ pub(crate) fn import_single_block_metered<B: BlockT, V: Verifier<B>, Transaction
 ) -> Result<BlockImportResult<NumberFor<B>>, BlockImportError> {
 	let peer = block.origin;
 
-	let (header, justification) = match (block.header, block.justifications) {
-		(Some(header), justification) => (header, justification),
+	let (header, justifications) = match (block.header, block.justifications) {
+		(Some(header), justifications) => (header, justifications),
 		(None, _) => {
 			if let Some(ref peer) = peer {
 				debug!(target: "sync", "Header {} was not provided by {} ", block.hash, peer);
@@ -238,7 +238,7 @@ pub(crate) fn import_single_block_metered<B: BlockT, V: Verifier<B>, Transaction
 	}
 
 	let started = wasm_timer::Instant::now();
-	let (mut import_block, maybe_keys) = verifier.verify(block_origin, header, justification, block.body)
+	let (mut import_block, maybe_keys) = verifier.verify(block_origin, header, justifications, block.body)
 		.map_err(|msg| {
 			if let Some(ref peer) = peer {
 				trace!(target: "sync", "Verifying {}({}) from {} failed: {}", number, hash, peer, msg);
