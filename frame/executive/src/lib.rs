@@ -121,7 +121,7 @@ use frame_support::{
 	weights::{GetDispatchInfo, DispatchInfo, DispatchClass},
 	traits::{
 		OnInitialize, OnFinalize, OnRuntimeUpgrade, OffchainWorker, ExecuteBlock,
-		InherentPositionCheck,
+		EnsureInherentsAreFirst,
 	},
 	dispatch::PostDispatchInfo,
 };
@@ -156,7 +156,7 @@ pub struct Executive<System, Block, Context, UnsignedValidator, AllModules, OnRu
 );
 
 impl<
-	System: frame_system::Config + InherentPositionCheck<Block>,
+	System: frame_system::Config + EnsureInherentsAreFirst<Block>,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Context: Default,
 	UnsignedValidator,
@@ -183,7 +183,7 @@ where
 }
 
 impl<
-		System: frame_system::Config + InherentPositionCheck<Block>,
+		System: frame_system::Config + EnsureInherentsAreFirst<Block>,
 		Block: traits::Block<Header = System::Header, Hash = System::Hash>,
 		Context: Default,
 		UnsignedValidator,
@@ -313,7 +313,7 @@ where
 			"Parent hash should be valid.",
 		);
 
-		if let Err(i) = System::check_inherent_position(block) {
+		if let Err(i) = System::ensure_inherents_are_first(block) {
 			panic!("Invalid inherent position for extrinsic at index {}", i);
 		}
 	}

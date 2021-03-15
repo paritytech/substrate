@@ -169,13 +169,13 @@ macro_rules! impl_outer_inherent {
 			}
 		}
 
-		impl $crate::traits::InherentPositionCheck<$block> for $runtime {
-			fn check_inherent_position(block: &$block) -> Result<(), u32> {
+		impl $crate::traits::EnsureInherentsAreFirst<$block> for $runtime {
+			fn ensure_inherents_are_first(block: &$block) -> Result<(), u32> {
 				use $crate::inherent::ProvideInherent;
 				use $crate::traits::{IsSubType, ExtrinsicCall};
 				use $crate::sp_runtime::traits::Block as _;
 
-				let mut checking_for_inherents = true;
+				let mut first_signed_observed = false;
 
 				for (i, xt) in block.extrinsics().iter().enumerate() {
 					let is_signed = $crate::inherent::Extrinsic::is_signed(xt).unwrap_or(false);
@@ -196,12 +196,12 @@ macro_rules! impl_outer_inherent {
 						is_inherent
 					};
 
-					match (checking_for_inherents, is_inherent) {
-						(true, true) => (),
-						(true, false) => checking_for_inherents = false,
-						// Invalid inherent position found.
-						(false, true) => return Err(i as u32),
-						(false, false) => (),
+					if !is_inherent {
+						first_signed_observed = true;
+					}
+
+					if first_signed_observed && is_inherent {
+						return Err(i as u32)
 					}
 				}
 
@@ -277,7 +277,7 @@ mod tests {
 			match call {
 				CallTest::OptionalInherent(true) => Ok(()),
 				CallTest::OptionalInherent(false) => Err(().into()),
-				_ => Ok(())
+				_ => unreachable!("other calls are not inherents"),
 			}
 		}
 
@@ -427,7 +427,7 @@ mod tests {
 
 	#[test]
 	fn inherent_first_works() {
-		use crate::traits::InherentPositionCheck;
+		use crate::traits::EnsureInherentsAreFirst;
 		let block = Block::new(
 			Header::new_from_number(1),
 			vec![
@@ -438,12 +438,12 @@ mod tests {
 			],
 		);
 
-		assert!(Runtime::check_inherent_position(&block).is_ok());
+		assert!(Runtime::ensure_inherents_are_first(&block).is_ok());
 	}
 
 	#[test]
 	fn inherent_cannot_be_placed_after_non_inherent() {
-		use crate::traits::InherentPositionCheck;
+		use crate::traits::EnsureInherentsAreFirst;
 		let block = Block::new(
 			Header::new_from_number(1),
 			vec![
@@ -454,7 +454,7 @@ mod tests {
 			],
 		);
 
-		assert_eq!(Runtime::check_inherent_position(&block).err().unwrap(), 2);
+		assert_eq!(Runtime::ensure_inherents_are_first(&block).err().unwrap(), 2);
 
 		let block = Block::new(
 			Header::new_from_number(1),
@@ -466,6 +466,6 @@ mod tests {
 			],
 		);
 
-		assert_eq!(Runtime::check_inherent_position(&block).err().unwrap(), 2);
+		assert_eq!(Runtime::ensure_inherents_are_first(&block).err().unwrap(), 2);
 	}
 }

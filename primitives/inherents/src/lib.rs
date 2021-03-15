@@ -448,8 +448,9 @@ pub trait ProvideInherent {
 	///
 	/// # Warning
 	///
-	/// Pallets with unsigned transactions **must ensure** that no unsigned transaction call
-	/// is an inherent call.
+	/// In FRAME, inherent are enforced to be before other extrinsics, for this reason,
+	/// pallets with unsigned transactions **must ensure** that no unsigned transaction call
+	/// is an inherent call, when implementing `ValidateUnsigned::validate_unsigned`.
 	/// Otherwise block producer can produce invalid blocks by including them after non inherent.
 	fn is_inherent(call: &Self::Call) -> bool;
 }

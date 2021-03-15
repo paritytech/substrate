@@ -2228,14 +2228,14 @@ pub trait GetPalletVersion {
 	fn storage_version() -> Option<PalletVersion>;
 }
 
-/// A trait to check the position of inherent in a block.
+/// A trait to ensure the inherent are before non-inherent in a block.
 ///
 /// This is typically implemented on runtime, through `construct_runtime!`.
-pub trait InherentPositionCheck<Block> {
-	/// Check the position of inherents in a block.
+pub trait EnsureInherentsAreFirst<Block> {
+	/// Ensure the position of inherent is correct, i.e. they are before non-inherents.
 	///
 	/// On error return the index of the inherent with invalid position (counting from 0).
-	fn check_inherent_position(block: &Block) -> Result<(), u32>;
+	fn ensure_inherents_are_first(block: &Block) -> Result<(), u32>;
 }
 
 /// An extrinsic on which we can get access to call.
