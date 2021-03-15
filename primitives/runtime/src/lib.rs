@@ -96,26 +96,30 @@ pub use either::Either;
 /// the block itself would allow swapping justifications to change the block's hash
 /// (and thus fork the chain). Sending a `Justification` alongside a block instead
 /// bypasses this problem.
-/// Each Justifications comes encoded, and together with an ID tag since we might have multiple
-/// Justifications per block.
+///
+/// Each justification is provided as an encoded blob, and is tagged with an ID
+/// to identify the consensus engine that generated the proof (we might have
+/// multiple justifications from different engines for the same block).
 pub type Justification = (ConsensusEngineId, EncodedJustification);
 
-/// The Justification specific to a consensus engine, and encoded.
+/// The encoded justification specific to a consensus engine.
 pub type EncodedJustification = Vec<u8>;
 
-/// Collection of Justifications, since we might have more than one stored per block.
+/// Collection of justifications for a given block, multiple justifications may
+/// be provided by different consensus engines for the same block.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct Justifications(Vec<Justification>);
 
 impl Justifications {
-	/// Return an iterator over the Justifications.
+	/// Return an iterator over the justifications.
 	pub fn iter(&self) -> impl Iterator<Item = &Justification> {
 		self.0.iter()
 	}
 
-	/// Append a justification. Returns false if a Justification with the same ConsensusEngineId
-	/// already exists, in which case the Justification is not inserted.
+	/// Append a justification. Returns false if a justification with the same
+	/// `ConsensusEngineId` already exists, in which case the justification is
+	/// not inserted.
 	pub fn append(&mut self, justification: Justification) -> bool {
 		if self.get(justification.0).is_some() {
 			return false;
@@ -124,12 +128,14 @@ impl Justifications {
 		true
 	}
 
-	/// Return the encoded Justification for the given consensus engine, if it exists.
+	/// Return the encoded justification for the given consensus engine, if it
+	/// exists.
 	pub fn get(&self, engine_id: ConsensusEngineId) -> Option<&EncodedJustification> {
 		self.iter().find(|j| j.0 == engine_id).map(|j| &j.1)
 	}
 
-	/// Return the encoded Justification
+	/// Return a copy of the encoded justification for the given consensus
+	/// engine, if it exists.
 	pub fn into_justification(self, engine_id: ConsensusEngineId) -> Option<EncodedJustification> {
 		self.into_iter().find(|j| j.0 == engine_id).map(|j| j.1)
 	}
