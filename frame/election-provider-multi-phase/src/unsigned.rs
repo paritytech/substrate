@@ -973,7 +973,4 @@ mod tests {
 			assert!((compact.encode().len() as u32) < encoded_len);
 		});
 	}
-
-	// TODO: trim_compact_for_length_errs_when_cannot_compact_enough
-	// as above, but returns an error
 }
