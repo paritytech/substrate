@@ -516,14 +516,14 @@ pub mod pallet {
 			let totals = ActiveTotal::<T>::get();
 
 			let total_issuance = T::Currency::total_issuance();
-			let nongilt_issuance = total_issuance.saturating_sub(totals.frozen);
-			let effective_issuance = totals.proportion.left_from_one()
+			let non_gilt = total_issuance.saturating_sub(totals.frozen);
+			let effective = totals.proportion.left_from_one()
 				.saturating_reciprocal_mul(nongilt_issuance);
 
 			IssuanceInfo {
 				reserved: totals.frozen,
-				non_gilt: nongilt_issuance,
-				effective: effective_issuance,
+				non_gilt,
+				effective,
 			}
 		}
 
