@@ -380,6 +380,18 @@ generate_solution_type!(
 	pub struct CompactAssignments::<NominatorIndex, ValidatorIndex, OffchainAccuracy>(16)
 );
 
+impl scale_info::TypeInfo for CompactAssignments {
+	type Identity = Self;
+
+	fn type_info() -> scale_info::Type<scale_info::form::MetaForm> {
+		// todo [AJ] possibly provide custom TypeInfo impl in generate_solution_type
+		// see https://github.com/polkadot-js/api/blob/d0a08dadd9be5a094d8cd02cc163b9de497154bd/packages/types/src/interfaces/staking/definitions.ts#L18
+		scale_info::Type::builder()
+			.path(scale_info::Path::new("CompactAssignments", module_path!()))
+			.composite(scale_info::build::Fields::unit())
+	}
+}
+
 /// Accuracy used for on-chain election.
 pub type ChainAccuracy = Perbill;
 
