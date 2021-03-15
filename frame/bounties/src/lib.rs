@@ -1128,7 +1128,7 @@ decl_module! {
 										// Continue to change bounty status below...
 									} else if maybe_bounty_active_status
 										.as_ref()
-										.expect("Invalid Parent Bounty Status").0 == sender
+										.expect("Status is none iff origin is none; qed").0 == sender
 									{
 										// looks like subcurator is inactive,
 										// slash the subcurator deposit.
