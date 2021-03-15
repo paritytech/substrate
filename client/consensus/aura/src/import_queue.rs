@@ -45,7 +45,7 @@ use sp_api::ProvideRuntimeApi;
 use sp_core::crypto::Pair;
 use sp_inherents::{InherentDataProviders, InherentData};
 use sp_timestamp::InherentError as TIError;
-use sc_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_INFO};
+use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_INFO};
 use sc_consensus_slots::{CheckedHeader, SlotCompatible, check_equivocation};
 use sp_consensus_slots::Slot;
 use sp_api::ApiExt;
@@ -129,6 +129,7 @@ pub struct AuraVerifier<C, P, CAW> {
 	inherent_data_providers: InherentDataProviders,
 	can_author_with: CAW,
 	check_for_equivocation: CheckForEquivocation,
+	telemetry: Option<TelemetryHandle>,
 }
 
 impl<C, P, CAW> AuraVerifier<C, P, CAW> {
@@ -137,12 +138,14 @@ impl<C, P, CAW> AuraVerifier<C, P, CAW> {
 		inherent_data_providers: InherentDataProviders,
 		can_author_with: CAW,
 		check_for_equivocation: CheckForEquivocation,
+		telemetry: Option<TelemetryHandle>,
 	) -> Self {
 		Self {
 			client,
 			inherent_data_providers,
 			can_author_with,
 			check_for_equivocation,
+			telemetry,
 			phantom: PhantomData,
 		}
 	}
@@ -197,7 +200,10 @@ impl<C, P, CAW> AuraVerifier<C, P, CAW> where
 							"halting for block {} seconds in the future",
 							diff
 						);
-						telemetry!(CONSENSUS_INFO; "aura.halting_for_future_block";
+						telemetry!(
+							self.telemetry;
+							CONSENSUS_INFO;
+							"aura.halting_for_future_block";
 							"diff" => ?diff
 						);
 						thread::sleep(Duration::from_secs(diff));
@@ -287,7 +293,12 @@ impl<B: BlockT, C, P, CAW> Verifier<B> for AuraVerifier<C, P, CAW> where
 				}
 
 				trace!(target: "aura", "Checked {:?}; importing.", pre_header);
-				telemetry!(CONSENSUS_TRACE; "aura.checked_and_importing"; "pre_header" => ?pre_header);
+				telemetry!(
+					self.telemetry;
+					CONSENSUS_TRACE;
+					"aura.checked_and_importing";
+					"pre_header" => ?pre_header,
+				);
 
 				// Look for an authorities-change log.
 				let maybe_keys = pre_header.digest()
@@ -314,8 +325,13 @@ impl<B: BlockT, C, P, CAW> Verifier<B> for AuraVerifier<C, P, CAW> where
 			}
 			CheckedHeader::Deferred(a, b) => {
 				debug!(target: "aura", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
-				telemetry!(CONSENSUS_DEBUG; "aura.header_too_far_in_future";
-					"hash" => ?hash, "a" => ?a, "b" => ?b
+				telemetry!(
+					self.telemetry;
+					CONSENSUS_DEBUG;
+					"aura.header_too_far_in_future";
+					"hash" => ?hash,
+					"a" => ?a,
+					"b" => ?b,
 				);
 				Err(format!("Header {:?} rejected: too far in the future", hash))
 			}
@@ -485,6 +501,8 @@ pub struct ImportQueueParams<'a, Block, I, C, S, CAW> {
 	pub check_for_equivocation: CheckForEquivocation,
 	/// The duration of one slot.
 	pub slot_duration: SlotDuration,
+	/// Telemetry instance used to report telemetry metrics.
+	pub telemetry: Option<TelemetryHandle>,
 }
 
 /// Start an import queue for the Aura consensus algorithm.
@@ -499,6 +517,7 @@ pub fn import_queue<'a, P, Block, I, C, S, CAW>(
 		can_author_with,
 		check_for_equivocation,
 		slot_duration,
+		telemetry,
 	}: ImportQueueParams<'a, Block, I, C, S, CAW>
 ) -> Result<DefaultImportQueue<Block, C>, sp_consensus::Error> where
 	Block: BlockT,
@@ -530,6 +549,7 @@ pub fn import_queue<'a, P, Block, I, C, S, CAW>(
 		inherent_data_providers,
 		can_author_with,
 		check_for_equivocation,
+		telemetry,
 	);
 
 	Ok(BasicQueue::new(

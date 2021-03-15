@@ -20,12 +20,12 @@
 use super::{Call, *};
 use frame_support::{
 	assert_err, assert_ok,
-	traits::{Currency, OnFinalize},
+	traits::{Currency, EstimateNextSessionRotation, OnFinalize},
 	weights::{GetDispatchInfo, Pays},
 };
 use mock::*;
 use pallet_session::ShouldEndSession;
-use sp_consensus_babe::{AllowedSlots, Slot, BabeEpochConfiguration};
+use sp_consensus_babe::{AllowedSlots, BabeEpochConfiguration, Slot};
 use sp_core::crypto::Pair;
 
 const EMPTY_RANDOMNESS: [u8; 32] = [
@@ -221,6 +221,38 @@ fn can_predict_next_epoch_change() {
 }
 
 #[test]
+fn can_estimate_current_epoch_progress() {
+	new_test_ext(1).execute_with(|| {
+		assert_eq!(<Test as Config>::EpochDuration::get(), 3);
+
+		// with BABE the genesis block is not part of any epoch, the first epoch starts at block #1,
+		// therefore its last block should be #3
+		for i in 1u64..4 {
+			progress_to_block(i);
+
+			assert_eq!(Babe::estimate_next_session_rotation(i).0.unwrap(), 4);
+
+			// the last block of the epoch must have 100% progress.
+			if Babe::estimate_next_session_rotation(i).0.unwrap() - 1 == i {
+				assert_eq!(
+					Babe::estimate_current_session_progress(i).0.unwrap(),
+					Percent::from_percent(100)
+				);
+			} else {
+				assert!(Babe::estimate_current_session_progress(i).0.unwrap() < Percent::from_percent(100));
+			}
+		}
+
+		// the first block of the new epoch counts towards the epoch progress as well
+		progress_to_block(4);
+		assert_eq!(
+			Babe::estimate_current_session_progress(4).0.unwrap(),
+			Percent::from_percent(33),
+		);
+	})
+}
+
+#[test]
 fn can_enact_next_config() {
 	new_test_ext(1).execute_with(|| {
 		assert_eq!(<Test as Config>::EpochDuration::get(), 3);
@@ -346,6 +378,31 @@ fn can_fetch_current_and_next_epoch_data() {
 
 		// but in this case the authorities stay the same
 		assert!(current_epoch.authorities == next_epoch.authorities);
+	});
+}
+
+#[test]
+fn tracks_block_numbers_when_current_and_previous_epoch_started() {
+	new_test_ext(5).execute_with(|| {
+		// an epoch is 3 slots therefore at block 8 we should be in epoch #3
+		// with the previous epochs having the following blocks:
+		// epoch 1 - [1, 2, 3]
+		// epoch 2 - [4, 5, 6]
+		// epoch 3 - [7, 8, 9]
+		progress_to_block(8);
+
+		let (last_epoch, current_epoch) = EpochStart::<Test>::get();
+
+		assert_eq!(last_epoch, 4);
+		assert_eq!(current_epoch, 7);
+
+		// once we reach block 10 we switch to epoch #4
+		progress_to_block(10);
+
+		let (last_epoch, current_epoch) = EpochStart::<Test>::get();
+
+		assert_eq!(last_epoch, 7);
+		assert_eq!(current_epoch, 10);
 	});
 }
 

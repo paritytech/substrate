@@ -47,7 +47,7 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header, HashFor, NumberFor}
 };
-use sc_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
+use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
 
 /// The changes that need to applied to the storage to create the state for a block.
 ///
@@ -180,6 +180,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	/// Returns a `Proposer` to author on top of the given block.
 	fn proposer(&mut self, block: &B::Header) -> Self::CreateProposer;
 
+	/// Returns a [`TelemetryHandle`] if any.
+	fn telemetry(&self) -> Option<TelemetryHandle>;
+
 	/// Remaining duration for proposing.
 	fn proposing_remaining_duration(
 		&self,
@@ -197,6 +200,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		<Self::Proposer as Proposer<B>>::Proposal: Unpin + Send + 'static,
 	{
 		let (timestamp, slot) = (slot_info.timestamp, slot_info.slot);
+		let telemetry = self.telemetry();
 
 		let proposing_remaining_duration = self.proposing_remaining_duration(&chain_head, &slot_info);
 
@@ -219,7 +223,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				warn!("Unable to fetch epoch data at block {:?}: {:?}", chain_head.hash(), err);
 
 				telemetry!(
-					CONSENSUS_WARN; "slots.unable_fetching_authorities";
+					telemetry;
+					CONSENSUS_WARN;
+					"slots.unable_fetching_authorities";
 					"slot" => ?chain_head.hash(),
 					"err" => ?err,
 				);
@@ -238,6 +244,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		{
 			debug!(target: self.logging_target(), "Skipping proposal slot. Waiting for the network.");
 			telemetry!(
+				telemetry;
 				CONSENSUS_DEBUG;
 				"slots.skipping_proposal_slot";
 				"authorities_len" => authorities_len,
@@ -263,24 +270,29 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		);
 
 		telemetry!(
+			telemetry;
 			CONSENSUS_DEBUG;
 			"slots.starting_authorship";
 			"slot_num" => *slot,
 			"timestamp" => timestamp,
 		);
 
-		let awaiting_proposer = self.proposer(&chain_head).map_err(move |err| {
-			warn!("Unable to author block in slot {:?}: {:?}", slot, err);
+		let awaiting_proposer = {
+			let telemetry = telemetry.clone();
+			self.proposer(&chain_head).map_err(move |err| {
+				warn!("Unable to author block in slot {:?}: {:?}", slot, err);
 
-			telemetry!(
-				CONSENSUS_WARN;
-				"slots.unable_authoring_block";
-				"slot" => *slot,
-				"err" => ?err
-			);
+				telemetry!(
+					telemetry;
+					CONSENSUS_WARN;
+					"slots.unable_authoring_block";
+					"slot" => *slot,
+					"err" => ?err
+				);
 
-			err
-		});
+				err
+			})
+		};
 
 		let logs = self.pre_digest_data(slot, &claim);
 
@@ -295,7 +307,8 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			proposing_remaining_duration.mul_f32(0.98),
 		).map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e))));
 
-		let proposal_work =
+		let proposal_work = {
+			let telemetry = telemetry.clone();
 			futures::future::select(proposing, proposing_remaining).map(move |v| match v {
 				Either::Left((b, _)) => b.map(|b| (b, claim)),
 				Either::Right(_) => {
@@ -307,6 +320,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 					#[cfg(build_type="debug")]
 					info!("👉 Recompile your node in `--release` mode to mitigate this problem.");
 					telemetry!(
+						telemetry;
 						CONSENSUS_INFO;
 						"slots.discarding_proposal_took_too_long";
 						"slot" => *slot,
@@ -314,7 +328,8 @@ pub trait SimpleSlotWorker<B: BlockT> {
 
 					Err(sp_consensus::Error::ClientImport("Timeout in the Slots proposer".into()))
 				},
-			});
+			})
+		};
 
 		let block_import_params_maker = self.block_import_params();
 		let block_import = self.block_import();
@@ -343,7 +358,10 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				header_hash,
 			);
 
-			telemetry!(CONSENSUS_INFO; "slots.pre_sealed_block";
+			telemetry!(
+				telemetry;
+				CONSENSUS_INFO;
+				"slots.pre_sealed_block";
 				"header_num" => ?header_num,
 				"hash_now" => ?block_import_params.post_hash(),
 				"hash_previously" => ?header_hash,
@@ -359,7 +377,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				);
 
 				telemetry!(
-					CONSENSUS_WARN; "slots.err_with_block_built_on";
+					telemetry;
+					CONSENSUS_WARN;
+					"slots.err_with_block_built_on";
 					"hash" => ?parent_hash,
 					"err" => ?err,
 				);
@@ -449,7 +469,8 @@ where
 				Either::Right(future::ready(Ok(())))
 			} else {
 				Either::Left(
-					worker.on_slot(chain_head, slot_info).then(|_| future::ready(Ok(())))
+					worker.on_slot(chain_head, slot_info)
+						.then(|_| future::ready(Ok(())))
 				)
 			}
 		}).then(|res| {
