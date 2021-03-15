@@ -14,28 +14,20 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{convert::TryFrom, fmt::Debug, sync::Arc};
-
-use codec::Codec;
-
 use beefy_primitives::BeefyApi;
-
-use {
-	sc_client_api::{Backend as BackendT, BlockchainEvents, Finalizer},
-	sc_network_gossip::{
-		GossipEngine, Network as GossipNetwork, ValidationResult as GossipValidationResult,
-		Validator as GossipValidator, ValidatorContext as GossipValidatorContext,
-	},
+use codec::Codec;
+use sc_client_api::{Backend as BackendT, BlockchainEvents, Finalizer};
+use sc_network_gossip::{
+	GossipEngine, Network as GossipNetwork, ValidationResult as GossipValidationResult, Validator as GossipValidator,
+	ValidatorContext as GossipValidatorContext,
 };
-
-use {
-	sp_api::{BlockId, ProvideRuntimeApi},
-	sp_application_crypto::AppPublic,
-	sp_blockchain::HeaderBackend,
-	sp_consensus::SyncOracle as SyncOracleT,
-	sp_keystore::SyncCryptoStorePtr,
-	sp_runtime::traits::{Block as BlockT, Zero},
-};
+use sp_api::{BlockId, ProvideRuntimeApi};
+use sp_application_crypto::AppPublic;
+use sp_blockchain::HeaderBackend;
+use sp_consensus::SyncOracle as SyncOracleT;
+use sp_keystore::SyncCryptoStorePtr;
+use sp_runtime::traits::{Block as BlockT, Zero};
+use std::{convert::TryFrom, fmt::Debug, sync::Arc};
 
 mod error;
 mod round;

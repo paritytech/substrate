@@ -18,21 +18,21 @@
 
 #![warn(missing_docs)]
 
+use beefy_gadget::notification::BeefySignedCommitmentStream;
 use codec::Encode;
 use futures::{StreamExt, TryStreamExt};
 use jsonrpc_core::futures::{
-	future::Executor as Executor01, future::Future as Future01, sink::Sink as Sink01, stream::Stream as Stream01,
+	future::{Executor as Executor01, Future as Future01},
+	sink::Sink as Sink01,
+	stream::Stream as Stream01,
 };
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{manager::SubscriptionManager, typed::Subscriber, SubscriptionId};
 use log::warn;
+use sp_runtime::traits::Block as BlockT;
 use std::sync::Arc;
 
 mod notification;
-
-use sp_runtime::traits::Block as BlockT;
-
-use beefy_gadget::notification::BeefySignedCommitmentStream;
 
 /// Provides RPC methods for interacting with BEEFY.
 #[allow(clippy::needless_return)]

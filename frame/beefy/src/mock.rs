@@ -19,16 +19,14 @@
 
 use std::vec;
 
-use {
-	frame_support::{construct_runtime, parameter_types, sp_io::TestExternalities, BasicExternalities},
-	sp_core::H256,
-	sp_runtime::{
-		app_crypto::ecdsa::Public,
-		impl_opaque_keys,
-		testing::Header,
-		traits::{BlakeTwo256, ConvertInto, IdentityLookup, OpaqueKeys},
-		Perbill,
-	},
+use frame_support::{construct_runtime, parameter_types, sp_io::TestExternalities, BasicExternalities};
+use sp_core::H256;
+use sp_runtime::{
+	app_crypto::ecdsa::Public,
+	impl_opaque_keys,
+	testing::Header,
+	traits::{BlakeTwo256, ConvertInto, IdentityLookup, OpaqueKeys},
+	Perbill,
 };
 
 use crate as pallet_beefy;

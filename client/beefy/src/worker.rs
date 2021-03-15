@@ -14,34 +14,25 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{convert::TryInto, fmt::Debug, sync::Arc};
-
-use {
-	codec::{Codec, Decode, Encode},
-	futures::{future, FutureExt, Stream, StreamExt},
-	hex::ToHex,
-	log::{debug, error, info, trace, warn},
-	parking_lot::Mutex,
-};
-
 use beefy_primitives::{
 	Commitment, ConsensusLog, MmrRootHash, SignedCommitment, ValidatorSet, ValidatorSetId, BEEFY_ENGINE_ID, KEY_TYPE,
 };
-
-use {
-	sc_client_api::FinalityNotification,
-	sc_network_gossip::GossipEngine,
-	sp_application_crypto::Public,
-	sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr},
-	sp_runtime::{
-		generic::OpaqueDigestItemId,
-		traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor},
-	},
+use codec::{Codec, Decode, Encode};
+use futures::{future, FutureExt, Stream, StreamExt};
+use hex::ToHex;
+use log::{debug, error, info, trace, warn};
+use parking_lot::Mutex;
+use sc_client_api::FinalityNotification;
+use sc_network_gossip::GossipEngine;
+use sp_application_crypto::Public;
+use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+use sp_runtime::{
+	generic::OpaqueDigestItemId,
+	traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor},
 };
+use std::{convert::TryInto, fmt::Debug, sync::Arc};
 
-use crate::error;
-use crate::notification;
-use crate::round;
+use crate::{error, notification, round};
 
 pub(crate) fn topic<Block: BlockT>() -> Block::Hash {
 	<<Block::Header as HeaderT>::Hashing as HashT>::hash(b"beefy")
@@ -119,8 +110,7 @@ where
 	FinalityNotifications: Stream<Item = FinalityNotification<Block>> + Unpin,
 {
 	fn should_vote_on(&self, number: NumberFor<Block>) -> bool {
-		use sp_runtime::traits::Saturating;
-		use sp_runtime::SaturatedConversion;
+		use sp_runtime::{traits::Saturating, SaturatedConversion};
 
 		// we only vote as a validator
 		if self.local_id.is_none() {
