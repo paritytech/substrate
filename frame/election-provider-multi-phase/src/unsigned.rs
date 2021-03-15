@@ -262,9 +262,7 @@ impl<T: Config> Pallet<T> {
 	/// Greedily reduce the size of the solution to fit into the block w.r.t length.
 	///
 	/// The length of the solution is largely a function of the number of voters. The number of
-	/// winners cannot be changed, and the `ElectionSize` is a proxy for the total number of stakers.
-	///
-	/// Thus, to reduce the solution size, we need to strip voters.
+	/// winners cannot be changed. Thus, to reduce the solution size, we need to strip voters.
 	///
 	/// Note that this solution is already computed, and winners are elected based on the merit of
 	/// the total stake in the system. Nevertheless, some of the voters may be removed here.
