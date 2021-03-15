@@ -129,7 +129,7 @@ impl<S, Block> BlockchainBackend<Block> for Blockchain<S> where Block: BlockT, S
 		Err(ClientError::NotAvailableOnLightClient)
 	}
 
-	fn transaction(
+	fn indexed_transaction(
 		&self,
 		_hash: &Block::Hash,
 	) -> ClientResult<Option<Vec<u8>>> {

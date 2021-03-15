@@ -32,7 +32,8 @@ pub type ColumnId = u32;
 pub enum Change<H> {
 	Set(ColumnId, Vec<u8>, Vec<u8>),
 	Remove(ColumnId, Vec<u8>),
-	Store(ColumnId, H, Option<Vec<u8>>),
+	Store(ColumnId, H, Vec<u8>),
+	Reference(ColumnId, H),
 	Release(ColumnId, H),
 }
 
@@ -59,13 +60,17 @@ impl<H> Transaction<H> {
 		self.0.push(Change::Remove(col, key.to_vec()))
 	}
 	/// Store the `preimage` of `hash` into the database, so that it may be looked up later with
-	/// `Database::lookup`. This may be called multiple times, but `Database::lookup` but subsequent
+	/// `Database::get`. This may be called multiple times, but subsequent
 	/// calls will ignore `preimage` and simply increase the number of references on `hash`.
-	pub fn store(&mut self, col: ColumnId, hash: H, preimage: Option<Vec<u8>>) {
+	pub fn store(&mut self, col: ColumnId, hash: H, preimage: Vec<u8>) {
 		self.0.push(Change::Store(col, hash, preimage))
 	}
+	/// Increase the number of references for `hash` in the database.
+	pub fn reference(&mut self, col: ColumnId, hash: H) {
+		self.0.push(Change::Reference(col, hash))
+	}
 	/// Release the preimage of `hash` from the database. An equal number of these to the number of
-	/// corresponding `store`s must have been given before it is legal for `Database::lookup` to
+	/// corresponding `store`s must have been given before it is legal for `Database::get` to
 	/// be unable to provide the preimage.
 	pub fn release(&mut self, col: ColumnId, hash: H) {
 		self.0.push(Change::Release(col, hash))

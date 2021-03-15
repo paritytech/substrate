@@ -256,7 +256,7 @@ impl<B: BlockT> NetworkBehaviour for Bitswap<B> {
 			}
 			let mut hash = B::Hash::default();
 			hash.as_mut().copy_from_slice(&cid.hash().digest()[0..32]);
-			let transaction = match self.client.transaction(&hash) {
+			let transaction = match self.client.indexed_transaction(&hash) {
 				Ok(ex) => ex,
 				Err(e) => {
 					error!(target: LOG_TARGET, "Error retrieving transaction {}: {}", hash, e);

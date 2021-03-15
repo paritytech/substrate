@@ -519,7 +519,7 @@ impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<B
 							Ok(index) => {
 								let extrinsics: ClientResult<Vec<Block::Extrinsic>> = index.into_iter().map(
 									|(hash, mut data)| {
-										if let Some(mut t) = self.transaction(&hash)? {
+										if let Some(mut t) = self.indexed_transaction(&hash)? {
 											data.append(&mut t);
 										}
 										Block::Extrinsic::decode(&mut data.as_slice())
@@ -569,11 +569,11 @@ impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<B
 		children::read_children(&*self.db, columns::META, meta_keys::CHILDREN_PREFIX, parent_hash)
 	}
 
-	fn transaction(&self, hash: &Block::Hash) -> ClientResult<Option<Vec<u8>>> {
+	fn indexed_transaction(&self, hash: &Block::Hash) -> ClientResult<Option<Vec<u8>>> {
 		Ok(self.db.get(columns::TRANSACTION, hash.as_ref()))
 	}
 
-	fn have_transaction(&self, hash: &Block::Hash) -> ClientResult<bool> {
+	fn have_indexed_transaction(&self, hash: &Block::Hash) -> ClientResult<bool> {
 		Ok(self.db.contains(columns::TRANSACTION, hash.as_ref()))
 	}
 }
@@ -1605,7 +1605,7 @@ fn apply_index_ops<Block: BlockT>(
 		let extrinsic = extrinsic.encode();
 		if let Some(hash) = renewed_map.get(&(index as u32)) {
 			// Bump ref counter
-			transaction.store(columns::TRANSACTION, DbHash::from_slice(hash.as_ref()), None);
+			transaction.reference(columns::TRANSACTION, DbHash::from_slice(hash.as_ref()));
 			extrinsic_headers.push((hash.clone(), extrinsic));
 			continue;
 		}
@@ -1617,7 +1617,7 @@ fn apply_index_ops<Block: BlockT>(
 		transaction.store(
 			columns::TRANSACTION,
 			DbHash::from_slice(hash.as_ref()),
-			Some(extrinsic[offset..].to_vec())
+			extrinsic[offset..].to_vec(),
 		);
 		extrinsic_headers.push((DbHash::from_slice(&hash.as_ref()), extrinsic[..offset].to_vec()));
 	}
@@ -2030,7 +2030,7 @@ pub(crate) mod tests {
 		changes: Option<Vec<(Vec<u8>, Vec<u8>)>>,
 		extrinsics_root: H256,
 		body: Vec<ExtrinsicWrapper<u64>>,
-		transaction_inex: Option<Vec<IndexOperation>>,
+		transaction_index: Option<Vec<IndexOperation>>,
 	) -> H256 {
 		use sp_runtime::testing::Digest;
 
@@ -2058,7 +2058,7 @@ pub(crate) mod tests {
 		let mut op = backend.begin_operation().unwrap();
 		backend.begin_state_operation(&mut op, block_id).unwrap();
 		op.set_block_data(header, Some(body), None, NewBlockState::Best).unwrap();
-		if let Some(index) = transaction_inex {
+		if let Some(index) = transaction_index {
 			op.update_transaction_index(index).unwrap();
 		}
 		op.update_changes_trie((changes_trie_update, ChangesTrieCacheAction::Clear)).unwrap();
@@ -2778,9 +2778,9 @@ pub(crate) mod tests {
 			backend.commit_operation(op).unwrap();
 			let bc = backend.blockchain();
 			if i < 6 {
-				assert!(bc.transaction(&x1_hash).unwrap().is_some());
+				assert!(bc.indexed_transaction(&x1_hash).unwrap().is_some());
 			} else {
-				assert!(bc.transaction(&x1_hash).unwrap().is_none());
+				assert!(bc.indexed_transaction(&x1_hash).unwrap().is_none());
 			}
 		}
 	}

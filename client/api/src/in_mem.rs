@@ -387,7 +387,7 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 		unimplemented!()
 	}
 
-	fn transaction(
+	fn indexed_transaction(
 		&self,
 		_hash: &Block::Hash,
 	) -> sp_blockchain::Result<Option<Vec<u8>>> {

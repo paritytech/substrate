@@ -218,14 +218,14 @@ pub trait Backend<Block: BlockT>: HeaderBackend<Block> + HeaderMetadata<Block, E
 
 	/// Get single indexed transaction by content hash. Note that this will only fetch transactions
 	/// that are indexed by the runtime with `storage_index_transaction`.
-	fn transaction(
+	fn indexed_transaction(
 		&self,
 		hash: &Block::Hash,
 	) -> Result<Option<Vec<u8>>>;
 
 	/// Check if indexed transaction exists.
-	fn have_transaction(&self, hash: &Block::Hash) -> Result<bool> {
-		Ok(self.transaction(hash)?.is_some())
+	fn have_indexed_transaction(&self, hash: &Block::Hash) -> Result<bool> {
+		Ok(self.indexed_transaction(hash)?.is_some())
 	}
 }
 

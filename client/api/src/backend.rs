@@ -203,7 +203,7 @@ pub trait BlockImportOperation<Block: BlockT> {
 
 	/// Add a transaction index operation.
 	fn update_transaction_index(&mut self, _index: Vec<IndexOperation>) -> sp_blockchain::Result<()>{
-		Ok(())
+		unimplemented!("update_transaction_index is not implemented");
 	}
 }
 

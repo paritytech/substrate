@@ -1947,12 +1947,12 @@ impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 		self.backend.blockchain().hash(number)
 	}
 
-	fn transaction(&self, hash: &Block::Hash) -> sp_blockchain::Result<Option<Vec<u8>>> {
-		self.backend.blockchain().transaction(hash)
+	fn indexed_transaction(&self, hash: &Block::Hash) -> sp_blockchain::Result<Option<Vec<u8>>> {
+		self.backend.blockchain().indexed_transaction(hash)
 	}
 
-	fn have_transaction(&self, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
-		self.backend.blockchain().have_transaction(hash)
+	fn have_indexed_transaction(&self, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
+		self.backend.blockchain().have_indexed_transaction(hash)
 	}
 }
 

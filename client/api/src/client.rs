@@ -98,14 +98,14 @@ pub trait BlockBackend<Block: BlockT> {
 
 	/// Get single indexed transaction by content hash. Note that this will only fetch transactions
 	/// that are indexed by the runtime with `storage_index_transaction`.
-	fn transaction(
+	fn indexed_transaction(
 		&self,
 		hash: &Block::Hash,
 	) -> sp_blockchain::Result<Option<Vec<u8>>>;
 
 	/// Check if transaction index exists.
-	fn have_transaction(&self, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
-		Ok(self.transaction(hash)?.is_some())
+	fn have_indexed_transaction(&self, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
+		Ok(self.indexed_transaction(hash)?.is_some())
 	}
 }
 
