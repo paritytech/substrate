@@ -18,12 +18,9 @@
 
 //! Module implementing the logic for verifying and importing AuRa blocks.
 
-use crate::{
-	AuthorityId, find_pre_digest, slot_author, aura_err, Error, SlotDuration, authorities,
-};
+use crate::{AuthorityId, find_pre_digest, slot_author, aura_err, Error, authorities};
 use std::{
-	sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash, fmt::Debug,
-	collections::HashMap,
+	sync::Arc, marker::PhantomData, hash::Hash, fmt::Debug, collections::HashMap,
 };
 use log::{debug, info, trace};
 use prometheus_endpoint::Registry;
@@ -42,9 +39,8 @@ use sp_runtime::{generic::{BlockId, OpaqueDigestItemId}, Justification};
 use sp_runtime::traits::{Block as BlockT, Header, DigestItemFor, Zero};
 use sp_api::ProvideRuntimeApi;
 use sp_core::crypto::Pair;
-use sp_inherents::{CreateInherentDataProviders, InherentDataProvider as _, InherentData};
-use sp_timestamp::InherentError as TIError;
-use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_INFO};
+use sp_inherents::{CreateInherentDataProviders, InherentDataProvider as _};
+use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_TRACE, CONSENSUS_DEBUG};
 use sc_consensus_slots::{CheckedHeader, check_equivocation, InherentDataProviderExt};
 use sp_consensus_slots::Slot;
 use sp_api::ApiExt;
@@ -487,8 +483,6 @@ pub struct ImportQueueParams<'a, Block, I, C, S, CAW, CIDP> {
 	pub can_author_with: CAW,
 	/// Should we check for equivocation?
 	pub check_for_equivocation: CheckForEquivocation,
-	/// The duration of one slot.
-	pub slot_duration: SlotDuration,
 	/// Telemetry instance used to report telemetry metrics.
 	pub telemetry: Option<TelemetryHandle>,
 }
@@ -504,7 +498,6 @@ pub fn import_queue<'a, P, Block, I, C, S, CAW, CIDP>(
 		registry,
 		can_author_with,
 		check_for_equivocation,
-		slot_duration,
 		telemetry,
 	}: ImportQueueParams<'a, Block, I, C, S, CAW, CIDP>
 ) -> Result<DefaultImportQueue<Block, C>, sp_consensus::Error> where

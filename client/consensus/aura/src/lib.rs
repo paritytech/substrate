@@ -43,7 +43,7 @@ use codec::{Encode, Decode, Codec};
 
 use sp_consensus::{
 	BlockImport, Environment, Proposer, CanAuthorWith, ForkChoiceStrategy, BlockImportParams,
-	BlockOrigin, Error as ConsensusError, SelectChain, SlotData,
+	BlockOrigin, Error as ConsensusError, SelectChain,
 };
 use sc_client_api::{backend::AuxStore, BlockOf};
 use sp_blockchain::{Result as CResult, well_known_cache_keys, ProvideCache, HeaderBackend};
@@ -54,7 +54,7 @@ use sp_runtime::traits::{Block as BlockT, Header, DigestItemFor, Zero, Member};
 use sp_api::ProvideRuntimeApi;
 use sp_core::crypto::Pair;
 use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
-use sp_inherents::{CreateInherentDataProviders, InherentDataProvider as _};
+use sp_inherents::CreateInherentDataProviders;
 use sc_telemetry::TelemetryHandle;
 use sc_consensus_slots::{
 	SlotInfo, BackoffAuthoringBlocksStrategy, InherentDataProviderExt, StorageChanges,

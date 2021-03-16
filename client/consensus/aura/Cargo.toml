@@ -34,7 +34,6 @@ sp-version = { version = "3.0.0", path = "../../../primitives/version" }
 sc-consensus-slots = { version = "0.9.0", path = "../slots" }
 sp-api = { version = "3.0.0", path = "../../../primitives/api" }
 sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
-sp-timestamp = { version = "3.0.0", path = "../../../primitives/timestamp" }
 sp-keystore = { version = "0.9.0", path = "../../../primitives/keystore" }
 sc-telemetry = { version = "3.0.0", path = "../../telemetry" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.9.0"}
