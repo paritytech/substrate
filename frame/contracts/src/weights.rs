@@ -63,6 +63,7 @@ pub trait WeightInfo {
 	fn seal_rent_allowance(r: u32, ) -> Weight;
 	fn seal_block_number(r: u32, ) -> Weight;
 	fn seal_now(r: u32, ) -> Weight;
+	fn seal_rent_params(r: u32, ) -> Weight;
 	fn seal_weight_to_fee(r: u32, ) -> Weight;
 	fn seal_gas(r: u32, ) -> Weight;
 	fn seal_input(r: u32, ) -> Weight;
@@ -152,271 +153,277 @@ pub trait WeightInfo {
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn on_initialize() -> Weight {
-		(3_733_000 as Weight)
+		(3_850_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 	}
 	fn on_initialize_per_trie_key(k: u32, ) -> Weight {
-		(49_569_000 as Weight)
+		(52_925_000 as Weight)
 			// Standard Error: 5_000
-			.saturating_add((2_295_000 as Weight).saturating_mul(k as Weight))
+			.saturating_add((2_297_000 as Weight).saturating_mul(k as Weight))
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(k as Weight)))
 	}
 	fn on_initialize_per_queue_item(q: u32, ) -> Weight {
-		(358_064_000 as Weight)
-			// Standard Error: 143_000
-			.saturating_add((140_992_000 as Weight).saturating_mul(q as Weight))
+		(434_698_000 as Weight)
+			// Standard Error: 210_000
+			.saturating_add((166_559_000 as Weight).saturating_mul(q as Weight))
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	fn instrument(c: u32, ) -> Weight {
-		(44_198_000 as Weight)
-			// Standard Error: 188_000
-			.saturating_add((125_833_000 as Weight).saturating_mul(c as Weight))
+		(29_918_000 as Weight)
+			// Standard Error: 185_000
+			.saturating_add((123_774_000 as Weight).saturating_mul(c as Weight))
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	fn update_schedule() -> Weight {
-		(29_190_000 as Weight)
+		(29_795_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	fn instantiate_with_code(c: u32, s: u32, ) -> Weight {
-		(180_015_000 as Weight)
-			// Standard Error: 197_000
-			.saturating_add((167_480_000 as Weight).saturating_mul(c as Weight))
-			// Standard Error: 12_000
-			.saturating_add((2_581_000 as Weight).saturating_mul(s as Weight))
+		(225_834_000 as Weight)
+			// Standard Error: 144_000
+			.saturating_add((165_632_000 as Weight).saturating_mul(c as Weight))
+			// Standard Error: 9_000
+			.saturating_add((2_563_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(T::DbWeight::get().reads(6 as Weight))
 			.saturating_add(T::DbWeight::get().writes(5 as Weight))
 	}
 	fn instantiate(c: u32, s: u32, ) -> Weight {
-		(180_996_000 as Weight)
-			// Standard Error: 14_000
-			.saturating_add((8_684_000 as Weight).saturating_mul(c as Weight))
+		(190_482_000 as Weight)
+			// Standard Error: 12_000
+			.saturating_add((8_724_000 as Weight).saturating_mul(c as Weight))
 			// Standard Error: 1_000
-			.saturating_add((2_518_000 as Weight).saturating_mul(s as Weight))
+			.saturating_add((2_512_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(T::DbWeight::get().reads(6 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
 	fn call(c: u32, ) -> Weight {
-		(184_326_000 as Weight)
+		(195_414_000 as Weight)
 			// Standard Error: 2_000
 			.saturating_add((3_920_000 as Weight).saturating_mul(c as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	fn claim_surcharge(c: u32, ) -> Weight {
-		(303_270_000 as Weight)
-			// Standard Error: 5_000
-			.saturating_add((5_108_000 as Weight).saturating_mul(c as Weight))
+		(336_867_000 as Weight)
+			// Standard Error: 10_000
+			.saturating_add((5_262_000 as Weight).saturating_mul(c as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
 	fn seal_caller(r: u32, ) -> Weight {
-		(128_965_000 as Weight)
-			// Standard Error: 130_000
-			.saturating_add((270_123_000 as Weight).saturating_mul(r as Weight))
+		(143_935_000 as Weight)
+			// Standard Error: 128_000
+			.saturating_add((266_876_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 	}
 	fn seal_address(r: u32, ) -> Weight {
-		(137_748_000 as Weight)
-			// Standard Error: 184_000
-			.saturating_add((270_103_000 as Weight).saturating_mul(r as Weight))
+		(150_342_000 as Weight)
+			// Standard Error: 127_000
+			.saturating_add((266_051_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 	}
 	fn seal_gas_left(r: u32, ) -> Weight {
-		(118_784_000 as Weight)
-			// Standard Error: 234_000
-			.saturating_add((264_467_000 as Weight).saturating_mul(r as Weight))
+		(144_833_000 as Weight)
+			// Standard Error: 124_000
+			.saturating_add((259_279_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 	}
 	fn seal_balance(r: u32, ) -> Weight {
-		(146_072_000 as Weight)
-			// Standard Error: 207_000
-			.saturating_add((573_282_000 as Weight).saturating_mul(r as Weight))
+		(152_032_000 as Weight)
+			// Standard Error: 218_000
+			.saturating_add((573_038_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 	}
 	fn seal_value_transferred(r: u32, ) -> Weight {
-		(133_857_000 as Weight)
-			// Standard Error: 151_000
-			.saturating_add((263_110_000 as Weight).saturating_mul(r as Weight))
+		(148_831_000 as Weight)
+			// Standard Error: 147_000
+			.saturating_add((260_718_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 	}
 	fn seal_minimum_balance(r: u32, ) -> Weight {
-		(130_447_000 as Weight)
-			// Standard Error: 125_000
-			.saturating_add((265_565_000 as Weight).saturating_mul(r as Weight))
+		(142_925_000 as Weight)
+			// Standard Error: 130_000
+			.saturating_add((260_426_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 	}
 	fn seal_tombstone_deposit(r: u32, ) -> Weight {
-		(116_232_000 as Weight)
-			// Standard Error: 327_000
-			.saturating_add((265_728_000 as Weight).saturating_mul(r as Weight))
+		(143_151_000 as Weight)
+			// Standard Error: 119_000
+			.saturating_add((260_964_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 	}
 	fn seal_rent_allowance(r: u32, ) -> Weight {
-		(175_561_000 as Weight)
-			// Standard Error: 292_000
-			.saturating_add((604_373_000 as Weight).saturating_mul(r as Weight))
+		(155_126_000 as Weight)
+			// Standard Error: 225_000
+			.saturating_add((599_056_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 	}
 	fn seal_block_number(r: u32, ) -> Weight {
-		(133_961_000 as Weight)
-			// Standard Error: 150_000
-			.saturating_add((262_329_000 as Weight).saturating_mul(r as Weight))
+		(144_566_000 as Weight)
+			// Standard Error: 110_000
+			.saturating_add((257_620_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 	}
 	fn seal_now(r: u32, ) -> Weight {
-		(128_662_000 as Weight)
-			// Standard Error: 150_000
-			.saturating_add((263_234_000 as Weight).saturating_mul(r as Weight))
+		(147_274_000 as Weight)
+			// Standard Error: 115_000
+			.saturating_add((258_627_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(T::DbWeight::get().reads(5 as Weight))
+	}
+	fn seal_rent_params(r: u32, ) -> Weight {
+		(168_575_000 as Weight)
+			// Standard Error: 394_000
+			.saturating_add((397_754_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 	}
 	fn seal_weight_to_fee(r: u32, ) -> Weight {
-		(142_580_000 as Weight)
-			// Standard Error: 205_000
-			.saturating_add((505_378_000 as Weight).saturating_mul(r as Weight))
+		(148_102_000 as Weight)
+			// Standard Error: 201_000
+			.saturating_add((537_088_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(6 as Weight))
 	}
 	fn seal_gas(r: u32, ) -> Weight {
-		(116_346_000 as Weight)
-			// Standard Error: 86_000
-			.saturating_add((124_599_000 as Weight).saturating_mul(r as Weight))
+		(125_122_000 as Weight)
+			// Standard Error: 89_000
+			.saturating_add((122_350_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 	}
 	fn seal_input(r: u32, ) -> Weight {
-		(124_679_000 as Weight)
-			// Standard Error: 81_000
-			.saturating_add((7_310_000 as Weight).saturating_mul(r as Weight))
+		(137_334_000 as Weight)
+			// Standard Error: 99_000
+			.saturating_add((7_359_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 	}
 	fn seal_input_per_kb(n: u32, ) -> Weight {
-		(136_069_000 as Weight)
+		(145_094_000 as Weight)
 			// Standard Error: 0
-			.saturating_add((274_000 as Weight).saturating_mul(n as Weight))
+			.saturating_add((283_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 	}
 	fn seal_return(r: u32, ) -> Weight {
-		(118_807_000 as Weight)
-			// Standard Error: 66_000
-			.saturating_add((4_740_000 as Weight).saturating_mul(r as Weight))
+		(127_544_000 as Weight)
+			// Standard Error: 138_000
+			.saturating_add((4_640_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 	}
 	fn seal_return_per_kb(n: u32, ) -> Weight {
-		(127_702_000 as Weight)
+		(137_517_000 as Weight)
 			// Standard Error: 0
-			.saturating_add((784_000 as Weight).saturating_mul(n as Weight))
+			.saturating_add((783_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 	}
 	fn seal_terminate(r: u32, ) -> Weight {
-		(124_847_000 as Weight)
-			// Standard Error: 87_000
-			.saturating_add((107_679_000 as Weight).saturating_mul(r as Weight))
+		(138_292_000 as Weight)
+			// Standard Error: 689_000
+			.saturating_add((111_698_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().reads((2 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(T::DbWeight::get().writes((5 as Weight).saturating_mul(r as Weight)))
 	}
 	fn seal_terminate_per_code_kb(c: u32, ) -> Weight {
-		(237_115_000 as Weight)
-			// Standard Error: 6_000
-			.saturating_add((8_556_000 as Weight).saturating_mul(c as Weight))
+		(263_507_000 as Weight)
+			// Standard Error: 12_000
+			.saturating_add((8_409_000 as Weight).saturating_mul(c as Weight))
 			.saturating_add(T::DbWeight::get().reads(7 as Weight))
 			.saturating_add(T::DbWeight::get().writes(5 as Weight))
 	}
 	fn seal_restore_to(r: u32, ) -> Weight {
-		(217_959_000 as Weight)
-			// Standard Error: 455_000
-			.saturating_add((134_528_000 as Weight).saturating_mul(r as Weight))
+		(232_291_000 as Weight)
+			// Standard Error: 301_000
+			.saturating_add((136_379_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().reads((4 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(T::DbWeight::get().writes((6 as Weight).saturating_mul(r as Weight)))
 	}
 	fn seal_restore_to_per_code_kb_delta(c: u32, t: u32, d: u32, ) -> Weight {
 		(0 as Weight)
-			// Standard Error: 151_000
-			.saturating_add((9_061_000 as Weight).saturating_mul(c as Weight))
-			// Standard Error: 151_000
-			.saturating_add((4_807_000 as Weight).saturating_mul(t as Weight))
-			// Standard Error: 1_331_000
-			.saturating_add((3_736_196_000 as Weight).saturating_mul(d as Weight))
+			// Standard Error: 162_000
+			.saturating_add((8_619_000 as Weight).saturating_mul(c as Weight))
+			// Standard Error: 162_000
+			.saturating_add((4_877_000 as Weight).saturating_mul(t as Weight))
+			// Standard Error: 1_433_000
+			.saturating_add((3_762_810_000 as Weight).saturating_mul(d as Weight))
 			.saturating_add(T::DbWeight::get().reads(8 as Weight))
 			.saturating_add(T::DbWeight::get().reads((100 as Weight).saturating_mul(d as Weight)))
 			.saturating_add(T::DbWeight::get().writes(7 as Weight))
 			.saturating_add(T::DbWeight::get().writes((100 as Weight).saturating_mul(d as Weight)))
 	}
 	fn seal_random(r: u32, ) -> Weight {
-		(134_143_000 as Weight)
-			// Standard Error: 233_000
-			.saturating_add((643_555_000 as Weight).saturating_mul(r as Weight))
+		(153_634_000 as Weight)
+			// Standard Error: 267_000
+			.saturating_add((650_160_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(6 as Weight))
 	}
 	fn seal_deposit_event(r: u32, ) -> Weight {
-		(142_838_000 as Weight)
-			// Standard Error: 367_000
-			.saturating_add((937_126_000 as Weight).saturating_mul(r as Weight))
+		(137_080_000 as Weight)
+			// Standard Error: 1_009_000
+			.saturating_add((949_228_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 	}
 	fn seal_deposit_event_per_topic_and_kb(t: u32, n: u32, ) -> Weight {
-		(1_210_711_000 as Weight)
-			// Standard Error: 2_124_000
-			.saturating_add((594_541_000 as Weight).saturating_mul(t as Weight))
-			// Standard Error: 418_000
-			.saturating_add((251_068_000 as Weight).saturating_mul(n as Weight))
+		(1_259_129_000 as Weight)
+			// Standard Error: 2_542_000
+			.saturating_add((609_859_000 as Weight).saturating_mul(t as Weight))
+			// Standard Error: 501_000
+			.saturating_add((249_496_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().reads((100 as Weight).saturating_mul(t as Weight)))
 			.saturating_add(T::DbWeight::get().writes((100 as Weight).saturating_mul(t as Weight)))
 	}
 	fn seal_set_rent_allowance(r: u32, ) -> Weight {
-		(144_533_000 as Weight)
-			// Standard Error: 220_000
-			.saturating_add((714_590_000 as Weight).saturating_mul(r as Weight))
+		(170_417_000 as Weight)
+			// Standard Error: 434_000
+			.saturating_add((721_511_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	fn seal_set_storage(r: u32, ) -> Weight {
-		(406_366_000 as Weight)
-			// Standard Error: 3_533_000
-			.saturating_add((16_167_082_000 as Weight).saturating_mul(r as Weight))
+		(1_870_542_000 as Weight)
+			// Standard Error: 26_871_000
+			.saturating_add((18_312_239_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().reads((100 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes((100 as Weight).saturating_mul(r as Weight)))
 	}
 	fn seal_set_storage_per_kb(n: u32, ) -> Weight {
-		(1_739_590_000 as Weight)
-			// Standard Error: 390_000
-			.saturating_add((74_815_000 as Weight).saturating_mul(n as Weight))
+		(1_763_732_000 as Weight)
+			// Standard Error: 258_000
+			.saturating_add((74_848_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(T::DbWeight::get().reads(6 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	fn seal_clear_storage(r: u32, ) -> Weight {
 		(0 as Weight)
-			// Standard Error: 2_284_000
-			.saturating_add((2_281_347_000 as Weight).saturating_mul(r as Weight))
+			// Standard Error: 2_745_000
+			.saturating_add((2_316_433_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().reads((100 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes((100 as Weight).saturating_mul(r as Weight)))
 	}
 	fn seal_get_storage(r: u32, ) -> Weight {
-		(81_889_000 as Weight)
-			// Standard Error: 1_171_000
-			.saturating_add((930_704_000 as Weight).saturating_mul(r as Weight))
+		(87_218_000 as Weight)
+			// Standard Error: 745_000
+			.saturating_add((948_121_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().reads((100 as Weight).saturating_mul(r as Weight)))
 	}
 	fn seal_get_storage_per_kb(n: u32, ) -> Weight {
-		(709_323_000 as Weight)
-			// Standard Error: 391_000
-			.saturating_add((155_689_000 as Weight).saturating_mul(n as Weight))
+		(719_050_000 as Weight)
+			// Standard Error: 266_000
+			.saturating_add((154_812_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(T::DbWeight::get().reads(6 as Weight))
 	}
 	fn seal_transfer(r: u32, ) -> Weight {
-		(0 as Weight)
-			// Standard Error: 1_846_000
-			.saturating_add((5_566_275_000 as Weight).saturating_mul(r as Weight))
+		(19_439_000 as Weight)
+			// Standard Error: 2_468_000
+			.saturating_add((5_674_822_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().reads((100 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
@@ -424,619 +431,625 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	}
 	fn seal_call(r: u32, ) -> Weight {
 		(0 as Weight)
-			// Standard Error: 4_823_000
-			.saturating_add((10_461_861_000 as Weight).saturating_mul(r as Weight))
+			// Standard Error: 7_465_000
+			.saturating_add((11_066_530_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(6 as Weight))
 			.saturating_add(T::DbWeight::get().reads((200 as Weight).saturating_mul(r as Weight)))
 	}
 	fn seal_call_per_code_transfer_input_output_kb(c: u32, t: u32, i: u32, o: u32, ) -> Weight {
-		(9_686_594_000 as Weight)
-			// Standard Error: 473_000
-			.saturating_add((393_132_000 as Weight).saturating_mul(c as Weight))
-			// Standard Error: 197_094_000
-			.saturating_add((4_957_181_000 as Weight).saturating_mul(t as Weight))
-			// Standard Error: 62_000
-			.saturating_add((59_974_000 as Weight).saturating_mul(i as Weight))
-			// Standard Error: 66_000
-			.saturating_add((83_027_000 as Weight).saturating_mul(o as Weight))
+		(9_916_288_000 as Weight)
+			// Standard Error: 552_000
+			.saturating_add((397_842_000 as Weight).saturating_mul(c as Weight))
+			// Standard Error: 229_902_000
+			.saturating_add((5_243_673_000 as Weight).saturating_mul(t as Weight))
+			// Standard Error: 72_000
+			.saturating_add((59_737_000 as Weight).saturating_mul(i as Weight))
+			// Standard Error: 77_000
+			.saturating_add((82_259_000 as Weight).saturating_mul(o as Weight))
 			.saturating_add(T::DbWeight::get().reads(206 as Weight))
 			.saturating_add(T::DbWeight::get().writes((101 as Weight).saturating_mul(t as Weight)))
 	}
 	fn seal_instantiate(r: u32, ) -> Weight {
 		(0 as Weight)
-			// Standard Error: 34_133_000
-			.saturating_add((21_407_630_000 as Weight).saturating_mul(r as Weight))
+			// Standard Error: 32_016_000
+			.saturating_add((22_206_489_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(6 as Weight))
 			.saturating_add(T::DbWeight::get().reads((300 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes((300 as Weight).saturating_mul(r as Weight)))
 	}
 	fn seal_instantiate_per_code_input_output_salt_kb(c: u32, i: u32, o: u32, s: u32, ) -> Weight {
-		(9_705_322_000 as Weight)
-			// Standard Error: 674_000
-			.saturating_add((879_118_000 as Weight).saturating_mul(c as Weight))
-			// Standard Error: 95_000
-			.saturating_add((63_025_000 as Weight).saturating_mul(i as Weight))
-			// Standard Error: 95_000
-			.saturating_add((87_633_000 as Weight).saturating_mul(o as Weight))
-			// Standard Error: 95_000
-			.saturating_add((311_987_000 as Weight).saturating_mul(s as Weight))
+		(9_991_947_000 as Weight)
+			// Standard Error: 637_000
+			.saturating_add((881_981_000 as Weight).saturating_mul(c as Weight))
+			// Standard Error: 90_000
+			.saturating_add((63_638_000 as Weight).saturating_mul(i as Weight))
+			// Standard Error: 90_000
+			.saturating_add((87_288_000 as Weight).saturating_mul(o as Weight))
+			// Standard Error: 90_000
+			.saturating_add((311_808_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(T::DbWeight::get().reads(207 as Weight))
 			.saturating_add(T::DbWeight::get().writes(203 as Weight))
 	}
 	fn seal_hash_sha2_256(r: u32, ) -> Weight {
-		(125_486_000 as Weight)
-			// Standard Error: 266_000
-			.saturating_add((240_913_000 as Weight).saturating_mul(r as Weight))
+		(132_452_000 as Weight)
+			// Standard Error: 227_000
+			.saturating_add((239_671_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 	}
 	fn seal_hash_sha2_256_per_kb(n: u32, ) -> Weight {
-		(636_153_000 as Weight)
-			// Standard Error: 47_000
-			.saturating_add((429_541_000 as Weight).saturating_mul(n as Weight))
+		(756_802_000 as Weight)
+			// Standard Error: 48_000
+			.saturating_add((429_454_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 	}
 	fn seal_hash_keccak_256(r: u32, ) -> Weight {
-		(131_768_000 as Weight)
-			// Standard Error: 176_000
-			.saturating_add((256_946_000 as Weight).saturating_mul(r as Weight))
+		(139_440_000 as Weight)
+			// Standard Error: 128_000
+			.saturating_add((249_514_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 	}
 	fn seal_hash_keccak_256_per_kb(n: u32, ) -> Weight {
-		(647_777_000 as Weight)
-			// Standard Error: 29_000
-			.saturating_add((344_145_000 as Weight).saturating_mul(n as Weight))
+		(658_595_000 as Weight)
+			// Standard Error: 35_000
+			.saturating_add((343_814_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 	}
 	fn seal_hash_blake2_256(r: u32, ) -> Weight {
-		(130_042_000 as Weight)
-			// Standard Error: 158_000
-			.saturating_add((225_474_000 as Weight).saturating_mul(r as Weight))
+		(138_124_000 as Weight)
+			// Standard Error: 140_000
+			.saturating_add((223_189_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 	}
 	fn seal_hash_blake2_256_per_kb(n: u32, ) -> Weight {
-		(638_275_000 as Weight)
-			// Standard Error: 30_000
-			.saturating_add((159_832_000 as Weight).saturating_mul(n as Weight))
+		(689_667_000 as Weight)
+			// Standard Error: 41_000
+			.saturating_add((160_006_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 	}
 	fn seal_hash_blake2_128(r: u32, ) -> Weight {
-		(126_632_000 as Weight)
-			// Standard Error: 143_000
-			.saturating_add((225_612_000 as Weight).saturating_mul(r as Weight))
+		(140_225_000 as Weight)
+			// Standard Error: 156_000
+			.saturating_add((223_696_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 	}
 	fn seal_hash_blake2_128_per_kb(n: u32, ) -> Weight {
-		(656_936_000 as Weight)
-			// Standard Error: 35_000
-			.saturating_add((159_763_000 as Weight).saturating_mul(n as Weight))
+		(693_756_000 as Weight)
+			// Standard Error: 40_000
+			.saturating_add((159_996_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 	}
 	fn instr_i64const(r: u32, ) -> Weight {
-		(25_205_000 as Weight)
-			// Standard Error: 26_000
-			.saturating_add((3_311_000 as Weight).saturating_mul(r as Weight))
+		(24_250_000 as Weight)
+			// Standard Error: 14_000
+			.saturating_add((3_134_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64load(r: u32, ) -> Weight {
-		(27_394_000 as Weight)
-			// Standard Error: 28_000
-			.saturating_add((159_123_000 as Weight).saturating_mul(r as Weight))
+		(26_509_000 as Weight)
+			// Standard Error: 27_000
+			.saturating_add((161_556_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64store(r: u32, ) -> Weight {
-		(27_398_000 as Weight)
-			// Standard Error: 57_000
-			.saturating_add((229_775_000 as Weight).saturating_mul(r as Weight))
+		(26_499_000 as Weight)
+			// Standard Error: 59_000
+			.saturating_add((233_755_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_select(r: u32, ) -> Weight {
-		(25_212_000 as Weight)
-			// Standard Error: 22_000
-			.saturating_add((12_291_000 as Weight).saturating_mul(r as Weight))
+		(24_175_000 as Weight)
+			// Standard Error: 16_000
+			.saturating_add((12_450_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_if(r: u32, ) -> Weight {
-		(25_116_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((12_146_000 as Weight).saturating_mul(r as Weight))
+		(24_219_000 as Weight)
+			// Standard Error: 26_000
+			.saturating_add((12_058_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_br(r: u32, ) -> Weight {
-		(25_119_000 as Weight)
-			// Standard Error: 19_000
-			.saturating_add((6_608_000 as Weight).saturating_mul(r as Weight))
+		(24_146_000 as Weight)
+			// Standard Error: 20_000
+			.saturating_add((6_017_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_br_if(r: u32, ) -> Weight {
-		(25_146_000 as Weight)
-			// Standard Error: 23_000
-			.saturating_add((14_017_000 as Weight).saturating_mul(r as Weight))
+		(24_229_000 as Weight)
+			// Standard Error: 24_000
+			.saturating_add((13_726_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_br_table(r: u32, ) -> Weight {
-		(25_192_000 as Weight)
-			// Standard Error: 21_000
-			.saturating_add((15_460_000 as Weight).saturating_mul(r as Weight))
+		(24_219_000 as Weight)
+			// Standard Error: 27_000
+			.saturating_add((15_115_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_br_table_per_entry(e: u32, ) -> Weight {
-		(37_079_000 as Weight)
+		(34_981_000 as Weight)
 			// Standard Error: 1_000
-			.saturating_add((160_000 as Weight).saturating_mul(e as Weight))
+			.saturating_add((156_000 as Weight).saturating_mul(e as Weight))
 	}
 	fn instr_call(r: u32, ) -> Weight {
-		(25_599_000 as Weight)
-			// Standard Error: 201_000
-			.saturating_add((99_705_000 as Weight).saturating_mul(r as Weight))
+		(24_599_000 as Weight)
+			// Standard Error: 102_000
+			.saturating_add((95_771_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_call_indirect(r: u32, ) -> Weight {
-		(33_236_000 as Weight)
-			// Standard Error: 368_000
-			.saturating_add((199_753_000 as Weight).saturating_mul(r as Weight))
+		(32_584_000 as Weight)
+			// Standard Error: 176_000
+			.saturating_add((193_216_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_call_indirect_per_param(p: u32, ) -> Weight {
-		(247_488_000 as Weight)
+		(240_739_000 as Weight)
 			// Standard Error: 6_000
-			.saturating_add((3_374_000 as Weight).saturating_mul(p as Weight))
+			.saturating_add((3_407_000 as Weight).saturating_mul(p as Weight))
 	}
 	fn instr_local_get(r: u32, ) -> Weight {
-		(44_133_000 as Weight)
-			// Standard Error: 20_000
-			.saturating_add((3_235_000 as Weight).saturating_mul(r as Weight))
+		(41_963_000 as Weight)
+			// Standard Error: 15_000
+			.saturating_add((3_110_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_local_set(r: u32, ) -> Weight {
-		(44_107_000 as Weight)
-			// Standard Error: 20_000
-			.saturating_add((3_486_000 as Weight).saturating_mul(r as Weight))
+		(41_956_000 as Weight)
+			// Standard Error: 9_000
+			.saturating_add((3_460_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_local_tee(r: u32, ) -> Weight {
-		(44_116_000 as Weight)
-			// Standard Error: 23_000
-			.saturating_add((4_757_000 as Weight).saturating_mul(r as Weight))
+		(42_002_000 as Weight)
+			// Standard Error: 20_000
+			.saturating_add((4_591_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_global_get(r: u32, ) -> Weight {
-		(28_712_000 as Weight)
-			// Standard Error: 29_000
-			.saturating_add((7_659_000 as Weight).saturating_mul(r as Weight))
+		(27_646_000 as Weight)
+			// Standard Error: 23_000
+			.saturating_add((7_821_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_global_set(r: u32, ) -> Weight {
-		(28_624_000 as Weight)
-			// Standard Error: 25_000
-			.saturating_add((11_841_000 as Weight).saturating_mul(r as Weight))
+		(27_615_000 as Weight)
+			// Standard Error: 27_000
+			.saturating_add((11_807_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_memory_current(r: u32, ) -> Weight {
-		(27_445_000 as Weight)
-			// Standard Error: 18_000
-			.saturating_add((3_487_000 as Weight).saturating_mul(r as Weight))
+		(27_106_000 as Weight)
+			// Standard Error: 78_000
+			.saturating_add((2_952_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_memory_grow(r: u32, ) -> Weight {
-		(26_016_000 as Weight)
-			// Standard Error: 4_230_000
-			.saturating_add((2_300_044_000 as Weight).saturating_mul(r as Weight))
+		(24_956_000 as Weight)
+			// Standard Error: 3_541_000
+			.saturating_add((2_332_414_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64clz(r: u32, ) -> Weight {
-		(25_227_000 as Weight)
-			// Standard Error: 29_000
-			.saturating_add((5_341_000 as Weight).saturating_mul(r as Weight))
+		(24_183_000 as Weight)
+			// Standard Error: 18_000
+			.saturating_add((5_166_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64ctz(r: u32, ) -> Weight {
-		(25_163_000 as Weight)
-			// Standard Error: 26_000
-			.saturating_add((5_355_000 as Weight).saturating_mul(r as Weight))
+		(24_142_000 as Weight)
+			// Standard Error: 17_000
+			.saturating_add((5_146_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64popcnt(r: u32, ) -> Weight {
-		(25_204_000 as Weight)
-			// Standard Error: 29_000
-			.saturating_add((5_930_000 as Weight).saturating_mul(r as Weight))
+		(24_161_000 as Weight)
+			// Standard Error: 23_000
+			.saturating_add((5_807_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64eqz(r: u32, ) -> Weight {
-		(25_177_000 as Weight)
-			// Standard Error: 21_000
-			.saturating_add((5_457_000 as Weight).saturating_mul(r as Weight))
+		(24_167_000 as Weight)
+			// Standard Error: 24_000
+			.saturating_add((5_288_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64extendsi32(r: u32, ) -> Weight {
-		(25_206_000 as Weight)
-			// Standard Error: 19_000
-			.saturating_add((5_229_000 as Weight).saturating_mul(r as Weight))
+		(24_252_000 as Weight)
+			// Standard Error: 9_000
+			.saturating_add((5_091_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64extendui32(r: u32, ) -> Weight {
-		(25_165_000 as Weight)
-			// Standard Error: 17_000
-			.saturating_add((5_301_000 as Weight).saturating_mul(r as Weight))
+		(24_243_000 as Weight)
+			// Standard Error: 16_000
+			.saturating_add((5_076_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i32wrapi64(r: u32, ) -> Weight {
-		(25_184_000 as Weight)
-			// Standard Error: 28_000
-			.saturating_add((5_356_000 as Weight).saturating_mul(r as Weight))
+		(24_227_000 as Weight)
+			// Standard Error: 15_000
+			.saturating_add((5_135_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64eq(r: u32, ) -> Weight {
-		(25_195_000 as Weight)
-			// Standard Error: 48_000
-			.saturating_add((7_406_000 as Weight).saturating_mul(r as Weight))
+		(24_278_000 as Weight)
+			// Standard Error: 15_000
+			.saturating_add((7_124_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64ne(r: u32, ) -> Weight {
-		(25_192_000 as Weight)
+		(24_254_000 as Weight)
 			// Standard Error: 19_000
-			.saturating_add((7_303_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add((7_067_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64lts(r: u32, ) -> Weight {
-		(25_165_000 as Weight)
-			// Standard Error: 34_000
-			.saturating_add((7_247_000 as Weight).saturating_mul(r as Weight))
+		(24_220_000 as Weight)
+			// Standard Error: 14_000
+			.saturating_add((7_122_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64ltu(r: u32, ) -> Weight {
-		(25_152_000 as Weight)
-			// Standard Error: 46_000
-			.saturating_add((7_464_000 as Weight).saturating_mul(r as Weight))
+		(24_221_000 as Weight)
+			// Standard Error: 19_000
+			.saturating_add((7_221_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64gts(r: u32, ) -> Weight {
-		(25_140_000 as Weight)
-			// Standard Error: 27_000
-			.saturating_add((7_308_000 as Weight).saturating_mul(r as Weight))
+		(24_259_000 as Weight)
+			// Standard Error: 13_000
+			.saturating_add((7_135_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64gtu(r: u32, ) -> Weight {
-		(25_723_000 as Weight)
-			// Standard Error: 29_000
-			.saturating_add((6_846_000 as Weight).saturating_mul(r as Weight))
+		(24_245_000 as Weight)
+			// Standard Error: 10_000
+			.saturating_add((7_193_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64les(r: u32, ) -> Weight {
-		(25_201_000 as Weight)
-			// Standard Error: 20_000
-			.saturating_add((7_226_000 as Weight).saturating_mul(r as Weight))
+		(24_289_000 as Weight)
+			// Standard Error: 22_000
+			.saturating_add((7_023_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64leu(r: u32, ) -> Weight {
-		(25_192_000 as Weight)
-			// Standard Error: 24_000
-			.saturating_add((7_143_000 as Weight).saturating_mul(r as Weight))
+		(24_239_000 as Weight)
+			// Standard Error: 21_000
+			.saturating_add((7_065_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64ges(r: u32, ) -> Weight {
-		(25_146_000 as Weight)
-			// Standard Error: 37_000
-			.saturating_add((7_451_000 as Weight).saturating_mul(r as Weight))
+		(24_256_000 as Weight)
+			// Standard Error: 13_000
+			.saturating_add((7_119_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64geu(r: u32, ) -> Weight {
-		(25_193_000 as Weight)
-			// Standard Error: 30_000
-			.saturating_add((7_391_000 as Weight).saturating_mul(r as Weight))
+		(24_240_000 as Weight)
+			// Standard Error: 18_000
+			.saturating_add((7_225_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64add(r: u32, ) -> Weight {
-		(25_192_000 as Weight)
-			// Standard Error: 30_000
-			.saturating_add((7_214_000 as Weight).saturating_mul(r as Weight))
+		(24_266_000 as Weight)
+			// Standard Error: 24_000
+			.saturating_add((6_996_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64sub(r: u32, ) -> Weight {
-		(25_221_000 as Weight)
-			// Standard Error: 34_000
-			.saturating_add((7_168_000 as Weight).saturating_mul(r as Weight))
+		(24_265_000 as Weight)
+			// Standard Error: 17_000
+			.saturating_add((6_974_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64mul(r: u32, ) -> Weight {
-		(25_221_000 as Weight)
-			// Standard Error: 28_000
-			.saturating_add((7_200_000 as Weight).saturating_mul(r as Weight))
+		(24_232_000 as Weight)
+			// Standard Error: 15_000
+			.saturating_add((7_103_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64divs(r: u32, ) -> Weight {
-		(25_229_000 as Weight)
-			// Standard Error: 32_000
-			.saturating_add((13_066_000 as Weight).saturating_mul(r as Weight))
+		(24_245_000 as Weight)
+			// Standard Error: 20_000
+			.saturating_add((12_915_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64divu(r: u32, ) -> Weight {
-		(25_210_000 as Weight)
-			// Standard Error: 28_000
-			.saturating_add((12_314_000 as Weight).saturating_mul(r as Weight))
+		(24_177_000 as Weight)
+			// Standard Error: 21_000
+			.saturating_add((12_232_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64rems(r: u32, ) -> Weight {
-		(25_186_000 as Weight)
-			// Standard Error: 24_000
-			.saturating_add((13_055_000 as Weight).saturating_mul(r as Weight))
+		(24_171_000 as Weight)
+			// Standard Error: 15_000
+			.saturating_add((12_939_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64remu(r: u32, ) -> Weight {
-		(25_162_000 as Weight)
-			// Standard Error: 25_000
-			.saturating_add((12_327_000 as Weight).saturating_mul(r as Weight))
+		(24_788_000 as Weight)
+			// Standard Error: 22_000
+			.saturating_add((11_657_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64and(r: u32, ) -> Weight {
-		(25_191_000 as Weight)
-			// Standard Error: 24_000
-			.saturating_add((7_153_000 as Weight).saturating_mul(r as Weight))
+		(24_252_000 as Weight)
+			// Standard Error: 19_000
+			.saturating_add((7_003_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64or(r: u32, ) -> Weight {
-		(25_184_000 as Weight)
-			// Standard Error: 23_000
-			.saturating_add((7_120_000 as Weight).saturating_mul(r as Weight))
+		(24_263_000 as Weight)
+			// Standard Error: 12_000
+			.saturating_add((7_005_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64xor(r: u32, ) -> Weight {
-		(25_129_000 as Weight)
-			// Standard Error: 31_000
-			.saturating_add((7_247_000 as Weight).saturating_mul(r as Weight))
+		(24_239_000 as Weight)
+			// Standard Error: 17_000
+			.saturating_add((7_020_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64shl(r: u32, ) -> Weight {
-		(25_156_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((7_333_000 as Weight).saturating_mul(r as Weight))
+		(24_212_000 as Weight)
+			// Standard Error: 13_000
+			.saturating_add((7_172_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64shrs(r: u32, ) -> Weight {
-		(25_159_000 as Weight)
-			// Standard Error: 25_000
-			.saturating_add((7_415_000 as Weight).saturating_mul(r as Weight))
+		(24_220_000 as Weight)
+			// Standard Error: 27_000
+			.saturating_add((7_246_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64shru(r: u32, ) -> Weight {
-		(25_181_000 as Weight)
-			// Standard Error: 25_000
-			.saturating_add((7_265_000 as Weight).saturating_mul(r as Weight))
+		(24_213_000 as Weight)
+			// Standard Error: 14_000
+			.saturating_add((7_191_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64rotl(r: u32, ) -> Weight {
-		(25_165_000 as Weight)
-			// Standard Error: 17_000
-			.saturating_add((7_443_000 as Weight).saturating_mul(r as Weight))
+		(24_221_000 as Weight)
+			// Standard Error: 18_000
+			.saturating_add((7_192_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64rotr(r: u32, ) -> Weight {
-		(25_103_000 as Weight)
-			// Standard Error: 44_000
-			.saturating_add((7_463_000 as Weight).saturating_mul(r as Weight))
+		(24_235_000 as Weight)
+			// Standard Error: 12_000
+			.saturating_add((7_106_000 as Weight).saturating_mul(r as Weight))
 	}
 }
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
 	fn on_initialize() -> Weight {
-		(3_733_000 as Weight)
+		(3_850_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 	}
 	fn on_initialize_per_trie_key(k: u32, ) -> Weight {
-		(49_569_000 as Weight)
+		(52_925_000 as Weight)
 			// Standard Error: 5_000
-			.saturating_add((2_295_000 as Weight).saturating_mul(k as Weight))
+			.saturating_add((2_297_000 as Weight).saturating_mul(k as Weight))
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(k as Weight)))
 	}
 	fn on_initialize_per_queue_item(q: u32, ) -> Weight {
-		(358_064_000 as Weight)
-			// Standard Error: 143_000
-			.saturating_add((140_992_000 as Weight).saturating_mul(q as Weight))
+		(434_698_000 as Weight)
+			// Standard Error: 210_000
+			.saturating_add((166_559_000 as Weight).saturating_mul(q as Weight))
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	fn instrument(c: u32, ) -> Weight {
-		(44_198_000 as Weight)
-			// Standard Error: 188_000
-			.saturating_add((125_833_000 as Weight).saturating_mul(c as Weight))
+		(29_918_000 as Weight)
+			// Standard Error: 185_000
+			.saturating_add((123_774_000 as Weight).saturating_mul(c as Weight))
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	fn update_schedule() -> Weight {
-		(29_190_000 as Weight)
+		(29_795_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	fn instantiate_with_code(c: u32, s: u32, ) -> Weight {
-		(180_015_000 as Weight)
-			// Standard Error: 197_000
-			.saturating_add((167_480_000 as Weight).saturating_mul(c as Weight))
-			// Standard Error: 12_000
-			.saturating_add((2_581_000 as Weight).saturating_mul(s as Weight))
+		(225_834_000 as Weight)
+			// Standard Error: 144_000
+			.saturating_add((165_632_000 as Weight).saturating_mul(c as Weight))
+			// Standard Error: 9_000
+			.saturating_add((2_563_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(RocksDbWeight::get().reads(6 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
 	}
 	fn instantiate(c: u32, s: u32, ) -> Weight {
-		(180_996_000 as Weight)
-			// Standard Error: 14_000
-			.saturating_add((8_684_000 as Weight).saturating_mul(c as Weight))
+		(190_482_000 as Weight)
+			// Standard Error: 12_000
+			.saturating_add((8_724_000 as Weight).saturating_mul(c as Weight))
 			// Standard Error: 1_000
-			.saturating_add((2_518_000 as Weight).saturating_mul(s as Weight))
+			.saturating_add((2_512_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(RocksDbWeight::get().reads(6 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
 	}
 	fn call(c: u32, ) -> Weight {
-		(184_326_000 as Weight)
+		(195_414_000 as Weight)
 			// Standard Error: 2_000
 			.saturating_add((3_920_000 as Weight).saturating_mul(c as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
 	fn claim_surcharge(c: u32, ) -> Weight {
-		(303_270_000 as Weight)
-			// Standard Error: 5_000
-			.saturating_add((5_108_000 as Weight).saturating_mul(c as Weight))
+		(336_867_000 as Weight)
+			// Standard Error: 10_000
+			.saturating_add((5_262_000 as Weight).saturating_mul(c as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
 	}
 	fn seal_caller(r: u32, ) -> Weight {
-		(128_965_000 as Weight)
-			// Standard Error: 130_000
-			.saturating_add((270_123_000 as Weight).saturating_mul(r as Weight))
+		(143_935_000 as Weight)
+			// Standard Error: 128_000
+			.saturating_add((266_876_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 	}
 	fn seal_address(r: u32, ) -> Weight {
-		(137_748_000 as Weight)
-			// Standard Error: 184_000
-			.saturating_add((270_103_000 as Weight).saturating_mul(r as Weight))
+		(150_342_000 as Weight)
+			// Standard Error: 127_000
+			.saturating_add((266_051_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 	}
 	fn seal_gas_left(r: u32, ) -> Weight {
-		(118_784_000 as Weight)
-			// Standard Error: 234_000
-			.saturating_add((264_467_000 as Weight).saturating_mul(r as Weight))
+		(144_833_000 as Weight)
+			// Standard Error: 124_000
+			.saturating_add((259_279_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 	}
 	fn seal_balance(r: u32, ) -> Weight {
-		(146_072_000 as Weight)
-			// Standard Error: 207_000
-			.saturating_add((573_282_000 as Weight).saturating_mul(r as Weight))
+		(152_032_000 as Weight)
+			// Standard Error: 218_000
+			.saturating_add((573_038_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 	}
 	fn seal_value_transferred(r: u32, ) -> Weight {
-		(133_857_000 as Weight)
-			// Standard Error: 151_000
-			.saturating_add((263_110_000 as Weight).saturating_mul(r as Weight))
+		(148_831_000 as Weight)
+			// Standard Error: 147_000
+			.saturating_add((260_718_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 	}
 	fn seal_minimum_balance(r: u32, ) -> Weight {
-		(130_447_000 as Weight)
-			// Standard Error: 125_000
-			.saturating_add((265_565_000 as Weight).saturating_mul(r as Weight))
+		(142_925_000 as Weight)
+			// Standard Error: 130_000
+			.saturating_add((260_426_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 	}
 	fn seal_tombstone_deposit(r: u32, ) -> Weight {
-		(116_232_000 as Weight)
-			// Standard Error: 327_000
-			.saturating_add((265_728_000 as Weight).saturating_mul(r as Weight))
+		(143_151_000 as Weight)
+			// Standard Error: 119_000
+			.saturating_add((260_964_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 	}
 	fn seal_rent_allowance(r: u32, ) -> Weight {
-		(175_561_000 as Weight)
-			// Standard Error: 292_000
-			.saturating_add((604_373_000 as Weight).saturating_mul(r as Weight))
+		(155_126_000 as Weight)
+			// Standard Error: 225_000
+			.saturating_add((599_056_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 	}
 	fn seal_block_number(r: u32, ) -> Weight {
-		(133_961_000 as Weight)
-			// Standard Error: 150_000
-			.saturating_add((262_329_000 as Weight).saturating_mul(r as Weight))
+		(144_566_000 as Weight)
+			// Standard Error: 110_000
+			.saturating_add((257_620_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 	}
 	fn seal_now(r: u32, ) -> Weight {
-		(128_662_000 as Weight)
-			// Standard Error: 150_000
-			.saturating_add((263_234_000 as Weight).saturating_mul(r as Weight))
+		(147_274_000 as Weight)
+			// Standard Error: 115_000
+			.saturating_add((258_627_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
+	}
+	fn seal_rent_params(r: u32, ) -> Weight {
+		(168_575_000 as Weight)
+			// Standard Error: 394_000
+			.saturating_add((397_754_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 	}
 	fn seal_weight_to_fee(r: u32, ) -> Weight {
-		(142_580_000 as Weight)
-			// Standard Error: 205_000
-			.saturating_add((505_378_000 as Weight).saturating_mul(r as Weight))
+		(148_102_000 as Weight)
+			// Standard Error: 201_000
+			.saturating_add((537_088_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(6 as Weight))
 	}
 	fn seal_gas(r: u32, ) -> Weight {
-		(116_346_000 as Weight)
-			// Standard Error: 86_000
-			.saturating_add((124_599_000 as Weight).saturating_mul(r as Weight))
+		(125_122_000 as Weight)
+			// Standard Error: 89_000
+			.saturating_add((122_350_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 	}
 	fn seal_input(r: u32, ) -> Weight {
-		(124_679_000 as Weight)
-			// Standard Error: 81_000
-			.saturating_add((7_310_000 as Weight).saturating_mul(r as Weight))
+		(137_334_000 as Weight)
+			// Standard Error: 99_000
+			.saturating_add((7_359_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 	}
 	fn seal_input_per_kb(n: u32, ) -> Weight {
-		(136_069_000 as Weight)
+		(145_094_000 as Weight)
 			// Standard Error: 0
-			.saturating_add((274_000 as Weight).saturating_mul(n as Weight))
+			.saturating_add((283_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 	}
 	fn seal_return(r: u32, ) -> Weight {
-		(118_807_000 as Weight)
-			// Standard Error: 66_000
-			.saturating_add((4_740_000 as Weight).saturating_mul(r as Weight))
+		(127_544_000 as Weight)
+			// Standard Error: 138_000
+			.saturating_add((4_640_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 	}
 	fn seal_return_per_kb(n: u32, ) -> Weight {
-		(127_702_000 as Weight)
+		(137_517_000 as Weight)
 			// Standard Error: 0
-			.saturating_add((784_000 as Weight).saturating_mul(n as Weight))
+			.saturating_add((783_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 	}
 	fn seal_terminate(r: u32, ) -> Weight {
-		(124_847_000 as Weight)
-			// Standard Error: 87_000
-			.saturating_add((107_679_000 as Weight).saturating_mul(r as Weight))
+		(138_292_000 as Weight)
+			// Standard Error: 689_000
+			.saturating_add((111_698_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((2 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(RocksDbWeight::get().writes((5 as Weight).saturating_mul(r as Weight)))
 	}
 	fn seal_terminate_per_code_kb(c: u32, ) -> Weight {
-		(237_115_000 as Weight)
-			// Standard Error: 6_000
-			.saturating_add((8_556_000 as Weight).saturating_mul(c as Weight))
+		(263_507_000 as Weight)
+			// Standard Error: 12_000
+			.saturating_add((8_409_000 as Weight).saturating_mul(c as Weight))
 			.saturating_add(RocksDbWeight::get().reads(7 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
 	}
 	fn seal_restore_to(r: u32, ) -> Weight {
-		(217_959_000 as Weight)
-			// Standard Error: 455_000
-			.saturating_add((134_528_000 as Weight).saturating_mul(r as Weight))
+		(232_291_000 as Weight)
+			// Standard Error: 301_000
+			.saturating_add((136_379_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((4 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(RocksDbWeight::get().writes((6 as Weight).saturating_mul(r as Weight)))
 	}
 	fn seal_restore_to_per_code_kb_delta(c: u32, t: u32, d: u32, ) -> Weight {
 		(0 as Weight)
-			// Standard Error: 151_000
-			.saturating_add((9_061_000 as Weight).saturating_mul(c as Weight))
-			// Standard Error: 151_000
-			.saturating_add((4_807_000 as Weight).saturating_mul(t as Weight))
-			// Standard Error: 1_331_000
-			.saturating_add((3_736_196_000 as Weight).saturating_mul(d as Weight))
+			// Standard Error: 162_000
+			.saturating_add((8_619_000 as Weight).saturating_mul(c as Weight))
+			// Standard Error: 162_000
+			.saturating_add((4_877_000 as Weight).saturating_mul(t as Weight))
+			// Standard Error: 1_433_000
+			.saturating_add((3_762_810_000 as Weight).saturating_mul(d as Weight))
 			.saturating_add(RocksDbWeight::get().reads(8 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((100 as Weight).saturating_mul(d as Weight)))
 			.saturating_add(RocksDbWeight::get().writes(7 as Weight))
 			.saturating_add(RocksDbWeight::get().writes((100 as Weight).saturating_mul(d as Weight)))
 	}
 	fn seal_random(r: u32, ) -> Weight {
-		(134_143_000 as Weight)
-			// Standard Error: 233_000
-			.saturating_add((643_555_000 as Weight).saturating_mul(r as Weight))
+		(153_634_000 as Weight)
+			// Standard Error: 267_000
+			.saturating_add((650_160_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(6 as Weight))
 	}
 	fn seal_deposit_event(r: u32, ) -> Weight {
-		(142_838_000 as Weight)
-			// Standard Error: 367_000
-			.saturating_add((937_126_000 as Weight).saturating_mul(r as Weight))
+		(137_080_000 as Weight)
+			// Standard Error: 1_009_000
+			.saturating_add((949_228_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 	}
 	fn seal_deposit_event_per_topic_and_kb(t: u32, n: u32, ) -> Weight {
-		(1_210_711_000 as Weight)
-			// Standard Error: 2_124_000
-			.saturating_add((594_541_000 as Weight).saturating_mul(t as Weight))
-			// Standard Error: 418_000
-			.saturating_add((251_068_000 as Weight).saturating_mul(n as Weight))
+		(1_259_129_000 as Weight)
+			// Standard Error: 2_542_000
+			.saturating_add((609_859_000 as Weight).saturating_mul(t as Weight))
+			// Standard Error: 501_000
+			.saturating_add((249_496_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((100 as Weight).saturating_mul(t as Weight)))
 			.saturating_add(RocksDbWeight::get().writes((100 as Weight).saturating_mul(t as Weight)))
 	}
 	fn seal_set_rent_allowance(r: u32, ) -> Weight {
-		(144_533_000 as Weight)
-			// Standard Error: 220_000
-			.saturating_add((714_590_000 as Weight).saturating_mul(r as Weight))
+		(170_417_000 as Weight)
+			// Standard Error: 434_000
+			.saturating_add((721_511_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	fn seal_set_storage(r: u32, ) -> Weight {
-		(406_366_000 as Weight)
-			// Standard Error: 3_533_000
-			.saturating_add((16_167_082_000 as Weight).saturating_mul(r as Weight))
+		(1_870_542_000 as Weight)
+			// Standard Error: 26_871_000
+			.saturating_add((18_312_239_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((100 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes((100 as Weight).saturating_mul(r as Weight)))
 	}
 	fn seal_set_storage_per_kb(n: u32, ) -> Weight {
-		(1_739_590_000 as Weight)
-			// Standard Error: 390_000
-			.saturating_add((74_815_000 as Weight).saturating_mul(n as Weight))
+		(1_763_732_000 as Weight)
+			// Standard Error: 258_000
+			.saturating_add((74_848_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(RocksDbWeight::get().reads(6 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
 	fn seal_clear_storage(r: u32, ) -> Weight {
 		(0 as Weight)
-			// Standard Error: 2_284_000
-			.saturating_add((2_281_347_000 as Weight).saturating_mul(r as Weight))
+			// Standard Error: 2_745_000
+			.saturating_add((2_316_433_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((100 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes((100 as Weight).saturating_mul(r as Weight)))
 	}
 	fn seal_get_storage(r: u32, ) -> Weight {
-		(81_889_000 as Weight)
-			// Standard Error: 1_171_000
-			.saturating_add((930_704_000 as Weight).saturating_mul(r as Weight))
+		(87_218_000 as Weight)
+			// Standard Error: 745_000
+			.saturating_add((948_121_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((100 as Weight).saturating_mul(r as Weight)))
 	}
 	fn seal_get_storage_per_kb(n: u32, ) -> Weight {
-		(709_323_000 as Weight)
-			// Standard Error: 391_000
-			.saturating_add((155_689_000 as Weight).saturating_mul(n as Weight))
+		(719_050_000 as Weight)
+			// Standard Error: 266_000
+			.saturating_add((154_812_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(RocksDbWeight::get().reads(6 as Weight))
 	}
 	fn seal_transfer(r: u32, ) -> Weight {
-		(0 as Weight)
-			// Standard Error: 1_846_000
-			.saturating_add((5_566_275_000 as Weight).saturating_mul(r as Weight))
+		(19_439_000 as Weight)
+			// Standard Error: 2_468_000
+			.saturating_add((5_674_822_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((100 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
@@ -1044,347 +1057,347 @@ impl WeightInfo for () {
 	}
 	fn seal_call(r: u32, ) -> Weight {
 		(0 as Weight)
-			// Standard Error: 4_823_000
-			.saturating_add((10_461_861_000 as Weight).saturating_mul(r as Weight))
+			// Standard Error: 7_465_000
+			.saturating_add((11_066_530_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(6 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((200 as Weight).saturating_mul(r as Weight)))
 	}
 	fn seal_call_per_code_transfer_input_output_kb(c: u32, t: u32, i: u32, o: u32, ) -> Weight {
-		(9_686_594_000 as Weight)
-			// Standard Error: 473_000
-			.saturating_add((393_132_000 as Weight).saturating_mul(c as Weight))
-			// Standard Error: 197_094_000
-			.saturating_add((4_957_181_000 as Weight).saturating_mul(t as Weight))
-			// Standard Error: 62_000
-			.saturating_add((59_974_000 as Weight).saturating_mul(i as Weight))
-			// Standard Error: 66_000
-			.saturating_add((83_027_000 as Weight).saturating_mul(o as Weight))
+		(9_916_288_000 as Weight)
+			// Standard Error: 552_000
+			.saturating_add((397_842_000 as Weight).saturating_mul(c as Weight))
+			// Standard Error: 229_902_000
+			.saturating_add((5_243_673_000 as Weight).saturating_mul(t as Weight))
+			// Standard Error: 72_000
+			.saturating_add((59_737_000 as Weight).saturating_mul(i as Weight))
+			// Standard Error: 77_000
+			.saturating_add((82_259_000 as Weight).saturating_mul(o as Weight))
 			.saturating_add(RocksDbWeight::get().reads(206 as Weight))
 			.saturating_add(RocksDbWeight::get().writes((101 as Weight).saturating_mul(t as Weight)))
 	}
 	fn seal_instantiate(r: u32, ) -> Weight {
 		(0 as Weight)
-			// Standard Error: 34_133_000
-			.saturating_add((21_407_630_000 as Weight).saturating_mul(r as Weight))
+			// Standard Error: 32_016_000
+			.saturating_add((22_206_489_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(6 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((300 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes((300 as Weight).saturating_mul(r as Weight)))
 	}
 	fn seal_instantiate_per_code_input_output_salt_kb(c: u32, i: u32, o: u32, s: u32, ) -> Weight {
-		(9_705_322_000 as Weight)
-			// Standard Error: 674_000
-			.saturating_add((879_118_000 as Weight).saturating_mul(c as Weight))
-			// Standard Error: 95_000
-			.saturating_add((63_025_000 as Weight).saturating_mul(i as Weight))
-			// Standard Error: 95_000
-			.saturating_add((87_633_000 as Weight).saturating_mul(o as Weight))
-			// Standard Error: 95_000
-			.saturating_add((311_987_000 as Weight).saturating_mul(s as Weight))
+		(9_991_947_000 as Weight)
+			// Standard Error: 637_000
+			.saturating_add((881_981_000 as Weight).saturating_mul(c as Weight))
+			// Standard Error: 90_000
+			.saturating_add((63_638_000 as Weight).saturating_mul(i as Weight))
+			// Standard Error: 90_000
+			.saturating_add((87_288_000 as Weight).saturating_mul(o as Weight))
+			// Standard Error: 90_000
+			.saturating_add((311_808_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(RocksDbWeight::get().reads(207 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(203 as Weight))
 	}
 	fn seal_hash_sha2_256(r: u32, ) -> Weight {
-		(125_486_000 as Weight)
-			// Standard Error: 266_000
-			.saturating_add((240_913_000 as Weight).saturating_mul(r as Weight))
+		(132_452_000 as Weight)
+			// Standard Error: 227_000
+			.saturating_add((239_671_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 	}
 	fn seal_hash_sha2_256_per_kb(n: u32, ) -> Weight {
-		(636_153_000 as Weight)
-			// Standard Error: 47_000
-			.saturating_add((429_541_000 as Weight).saturating_mul(n as Weight))
+		(756_802_000 as Weight)
+			// Standard Error: 48_000
+			.saturating_add((429_454_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 	}
 	fn seal_hash_keccak_256(r: u32, ) -> Weight {
-		(131_768_000 as Weight)
-			// Standard Error: 176_000
-			.saturating_add((256_946_000 as Weight).saturating_mul(r as Weight))
+		(139_440_000 as Weight)
+			// Standard Error: 128_000
+			.saturating_add((249_514_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 	}
 	fn seal_hash_keccak_256_per_kb(n: u32, ) -> Weight {
-		(647_777_000 as Weight)
-			// Standard Error: 29_000
-			.saturating_add((344_145_000 as Weight).saturating_mul(n as Weight))
+		(658_595_000 as Weight)
+			// Standard Error: 35_000
+			.saturating_add((343_814_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 	}
 	fn seal_hash_blake2_256(r: u32, ) -> Weight {
-		(130_042_000 as Weight)
-			// Standard Error: 158_000
-			.saturating_add((225_474_000 as Weight).saturating_mul(r as Weight))
+		(138_124_000 as Weight)
+			// Standard Error: 140_000
+			.saturating_add((223_189_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 	}
 	fn seal_hash_blake2_256_per_kb(n: u32, ) -> Weight {
-		(638_275_000 as Weight)
-			// Standard Error: 30_000
-			.saturating_add((159_832_000 as Weight).saturating_mul(n as Weight))
+		(689_667_000 as Weight)
+			// Standard Error: 41_000
+			.saturating_add((160_006_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 	}
 	fn seal_hash_blake2_128(r: u32, ) -> Weight {
-		(126_632_000 as Weight)
-			// Standard Error: 143_000
-			.saturating_add((225_612_000 as Weight).saturating_mul(r as Weight))
+		(140_225_000 as Weight)
+			// Standard Error: 156_000
+			.saturating_add((223_696_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 	}
 	fn seal_hash_blake2_128_per_kb(n: u32, ) -> Weight {
-		(656_936_000 as Weight)
-			// Standard Error: 35_000
-			.saturating_add((159_763_000 as Weight).saturating_mul(n as Weight))
+		(693_756_000 as Weight)
+			// Standard Error: 40_000
+			.saturating_add((159_996_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 	}
 	fn instr_i64const(r: u32, ) -> Weight {
-		(25_205_000 as Weight)
-			// Standard Error: 26_000
-			.saturating_add((3_311_000 as Weight).saturating_mul(r as Weight))
+		(24_250_000 as Weight)
+			// Standard Error: 14_000
+			.saturating_add((3_134_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64load(r: u32, ) -> Weight {
-		(27_394_000 as Weight)
-			// Standard Error: 28_000
-			.saturating_add((159_123_000 as Weight).saturating_mul(r as Weight))
+		(26_509_000 as Weight)
+			// Standard Error: 27_000
+			.saturating_add((161_556_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64store(r: u32, ) -> Weight {
-		(27_398_000 as Weight)
-			// Standard Error: 57_000
-			.saturating_add((229_775_000 as Weight).saturating_mul(r as Weight))
+		(26_499_000 as Weight)
+			// Standard Error: 59_000
+			.saturating_add((233_755_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_select(r: u32, ) -> Weight {
-		(25_212_000 as Weight)
-			// Standard Error: 22_000
-			.saturating_add((12_291_000 as Weight).saturating_mul(r as Weight))
+		(24_175_000 as Weight)
+			// Standard Error: 16_000
+			.saturating_add((12_450_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_if(r: u32, ) -> Weight {
-		(25_116_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((12_146_000 as Weight).saturating_mul(r as Weight))
+		(24_219_000 as Weight)
+			// Standard Error: 26_000
+			.saturating_add((12_058_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_br(r: u32, ) -> Weight {
-		(25_119_000 as Weight)
-			// Standard Error: 19_000
-			.saturating_add((6_608_000 as Weight).saturating_mul(r as Weight))
+		(24_146_000 as Weight)
+			// Standard Error: 20_000
+			.saturating_add((6_017_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_br_if(r: u32, ) -> Weight {
-		(25_146_000 as Weight)
-			// Standard Error: 23_000
-			.saturating_add((14_017_000 as Weight).saturating_mul(r as Weight))
+		(24_229_000 as Weight)
+			// Standard Error: 24_000
+			.saturating_add((13_726_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_br_table(r: u32, ) -> Weight {
-		(25_192_000 as Weight)
-			// Standard Error: 21_000
-			.saturating_add((15_460_000 as Weight).saturating_mul(r as Weight))
+		(24_219_000 as Weight)
+			// Standard Error: 27_000
+			.saturating_add((15_115_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_br_table_per_entry(e: u32, ) -> Weight {
-		(37_079_000 as Weight)
+		(34_981_000 as Weight)
 			// Standard Error: 1_000
-			.saturating_add((160_000 as Weight).saturating_mul(e as Weight))
+			.saturating_add((156_000 as Weight).saturating_mul(e as Weight))
 	}
 	fn instr_call(r: u32, ) -> Weight {
-		(25_599_000 as Weight)
-			// Standard Error: 201_000
-			.saturating_add((99_705_000 as Weight).saturating_mul(r as Weight))
+		(24_599_000 as Weight)
+			// Standard Error: 102_000
+			.saturating_add((95_771_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_call_indirect(r: u32, ) -> Weight {
-		(33_236_000 as Weight)
-			// Standard Error: 368_000
-			.saturating_add((199_753_000 as Weight).saturating_mul(r as Weight))
+		(32_584_000 as Weight)
+			// Standard Error: 176_000
+			.saturating_add((193_216_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_call_indirect_per_param(p: u32, ) -> Weight {
-		(247_488_000 as Weight)
+		(240_739_000 as Weight)
 			// Standard Error: 6_000
-			.saturating_add((3_374_000 as Weight).saturating_mul(p as Weight))
+			.saturating_add((3_407_000 as Weight).saturating_mul(p as Weight))
 	}
 	fn instr_local_get(r: u32, ) -> Weight {
-		(44_133_000 as Weight)
-			// Standard Error: 20_000
-			.saturating_add((3_235_000 as Weight).saturating_mul(r as Weight))
+		(41_963_000 as Weight)
+			// Standard Error: 15_000
+			.saturating_add((3_110_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_local_set(r: u32, ) -> Weight {
-		(44_107_000 as Weight)
-			// Standard Error: 20_000
-			.saturating_add((3_486_000 as Weight).saturating_mul(r as Weight))
+		(41_956_000 as Weight)
+			// Standard Error: 9_000
+			.saturating_add((3_460_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_local_tee(r: u32, ) -> Weight {
-		(44_116_000 as Weight)
-			// Standard Error: 23_000
-			.saturating_add((4_757_000 as Weight).saturating_mul(r as Weight))
+		(42_002_000 as Weight)
+			// Standard Error: 20_000
+			.saturating_add((4_591_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_global_get(r: u32, ) -> Weight {
-		(28_712_000 as Weight)
-			// Standard Error: 29_000
-			.saturating_add((7_659_000 as Weight).saturating_mul(r as Weight))
+		(27_646_000 as Weight)
+			// Standard Error: 23_000
+			.saturating_add((7_821_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_global_set(r: u32, ) -> Weight {
-		(28_624_000 as Weight)
-			// Standard Error: 25_000
-			.saturating_add((11_841_000 as Weight).saturating_mul(r as Weight))
+		(27_615_000 as Weight)
+			// Standard Error: 27_000
+			.saturating_add((11_807_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_memory_current(r: u32, ) -> Weight {
-		(27_445_000 as Weight)
-			// Standard Error: 18_000
-			.saturating_add((3_487_000 as Weight).saturating_mul(r as Weight))
+		(27_106_000 as Weight)
+			// Standard Error: 78_000
+			.saturating_add((2_952_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_memory_grow(r: u32, ) -> Weight {
-		(26_016_000 as Weight)
-			// Standard Error: 4_230_000
-			.saturating_add((2_300_044_000 as Weight).saturating_mul(r as Weight))
+		(24_956_000 as Weight)
+			// Standard Error: 3_541_000
+			.saturating_add((2_332_414_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64clz(r: u32, ) -> Weight {
-		(25_227_000 as Weight)
-			// Standard Error: 29_000
-			.saturating_add((5_341_000 as Weight).saturating_mul(r as Weight))
+		(24_183_000 as Weight)
+			// Standard Error: 18_000
+			.saturating_add((5_166_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64ctz(r: u32, ) -> Weight {
-		(25_163_000 as Weight)
-			// Standard Error: 26_000
-			.saturating_add((5_355_000 as Weight).saturating_mul(r as Weight))
+		(24_142_000 as Weight)
+			// Standard Error: 17_000
+			.saturating_add((5_146_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64popcnt(r: u32, ) -> Weight {
-		(25_204_000 as Weight)
-			// Standard Error: 29_000
-			.saturating_add((5_930_000 as Weight).saturating_mul(r as Weight))
+		(24_161_000 as Weight)
+			// Standard Error: 23_000
+			.saturating_add((5_807_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64eqz(r: u32, ) -> Weight {
-		(25_177_000 as Weight)
-			// Standard Error: 21_000
-			.saturating_add((5_457_000 as Weight).saturating_mul(r as Weight))
+		(24_167_000 as Weight)
+			// Standard Error: 24_000
+			.saturating_add((5_288_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64extendsi32(r: u32, ) -> Weight {
-		(25_206_000 as Weight)
-			// Standard Error: 19_000
-			.saturating_add((5_229_000 as Weight).saturating_mul(r as Weight))
+		(24_252_000 as Weight)
+			// Standard Error: 9_000
+			.saturating_add((5_091_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64extendui32(r: u32, ) -> Weight {
-		(25_165_000 as Weight)
-			// Standard Error: 17_000
-			.saturating_add((5_301_000 as Weight).saturating_mul(r as Weight))
+		(24_243_000 as Weight)
+			// Standard Error: 16_000
+			.saturating_add((5_076_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i32wrapi64(r: u32, ) -> Weight {
-		(25_184_000 as Weight)
-			// Standard Error: 28_000
-			.saturating_add((5_356_000 as Weight).saturating_mul(r as Weight))
+		(24_227_000 as Weight)
+			// Standard Error: 15_000
+			.saturating_add((5_135_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64eq(r: u32, ) -> Weight {
-		(25_195_000 as Weight)
-			// Standard Error: 48_000
-			.saturating_add((7_406_000 as Weight).saturating_mul(r as Weight))
+		(24_278_000 as Weight)
+			// Standard Error: 15_000
+			.saturating_add((7_124_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64ne(r: u32, ) -> Weight {
-		(25_192_000 as Weight)
+		(24_254_000 as Weight)
 			// Standard Error: 19_000
-			.saturating_add((7_303_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add((7_067_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64lts(r: u32, ) -> Weight {
-		(25_165_000 as Weight)
-			// Standard Error: 34_000
-			.saturating_add((7_247_000 as Weight).saturating_mul(r as Weight))
+		(24_220_000 as Weight)
+			// Standard Error: 14_000
+			.saturating_add((7_122_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64ltu(r: u32, ) -> Weight {
-		(25_152_000 as Weight)
-			// Standard Error: 46_000
-			.saturating_add((7_464_000 as Weight).saturating_mul(r as Weight))
+		(24_221_000 as Weight)
+			// Standard Error: 19_000
+			.saturating_add((7_221_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64gts(r: u32, ) -> Weight {
-		(25_140_000 as Weight)
-			// Standard Error: 27_000
-			.saturating_add((7_308_000 as Weight).saturating_mul(r as Weight))
+		(24_259_000 as Weight)
+			// Standard Error: 13_000
+			.saturating_add((7_135_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64gtu(r: u32, ) -> Weight {
-		(25_723_000 as Weight)
-			// Standard Error: 29_000
-			.saturating_add((6_846_000 as Weight).saturating_mul(r as Weight))
+		(24_245_000 as Weight)
+			// Standard Error: 10_000
+			.saturating_add((7_193_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64les(r: u32, ) -> Weight {
-		(25_201_000 as Weight)
-			// Standard Error: 20_000
-			.saturating_add((7_226_000 as Weight).saturating_mul(r as Weight))
+		(24_289_000 as Weight)
+			// Standard Error: 22_000
+			.saturating_add((7_023_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64leu(r: u32, ) -> Weight {
-		(25_192_000 as Weight)
-			// Standard Error: 24_000
-			.saturating_add((7_143_000 as Weight).saturating_mul(r as Weight))
+		(24_239_000 as Weight)
+			// Standard Error: 21_000
+			.saturating_add((7_065_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64ges(r: u32, ) -> Weight {
-		(25_146_000 as Weight)
-			// Standard Error: 37_000
-			.saturating_add((7_451_000 as Weight).saturating_mul(r as Weight))
+		(24_256_000 as Weight)
+			// Standard Error: 13_000
+			.saturating_add((7_119_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64geu(r: u32, ) -> Weight {
-		(25_193_000 as Weight)
-			// Standard Error: 30_000
-			.saturating_add((7_391_000 as Weight).saturating_mul(r as Weight))
+		(24_240_000 as Weight)
+			// Standard Error: 18_000
+			.saturating_add((7_225_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64add(r: u32, ) -> Weight {
-		(25_192_000 as Weight)
-			// Standard Error: 30_000
-			.saturating_add((7_214_000 as Weight).saturating_mul(r as Weight))
+		(24_266_000 as Weight)
+			// Standard Error: 24_000
+			.saturating_add((6_996_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64sub(r: u32, ) -> Weight {
-		(25_221_000 as Weight)
-			// Standard Error: 34_000
-			.saturating_add((7_168_000 as Weight).saturating_mul(r as Weight))
+		(24_265_000 as Weight)
+			// Standard Error: 17_000
+			.saturating_add((6_974_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64mul(r: u32, ) -> Weight {
-		(25_221_000 as Weight)
-			// Standard Error: 28_000
-			.saturating_add((7_200_000 as Weight).saturating_mul(r as Weight))
+		(24_232_000 as Weight)
+			// Standard Error: 15_000
+			.saturating_add((7_103_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64divs(r: u32, ) -> Weight {
-		(25_229_000 as Weight)
-			// Standard Error: 32_000
-			.saturating_add((13_066_000 as Weight).saturating_mul(r as Weight))
+		(24_245_000 as Weight)
+			// Standard Error: 20_000
+			.saturating_add((12_915_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64divu(r: u32, ) -> Weight {
-		(25_210_000 as Weight)
-			// Standard Error: 28_000
-			.saturating_add((12_314_000 as Weight).saturating_mul(r as Weight))
+		(24_177_000 as Weight)
+			// Standard Error: 21_000
+			.saturating_add((12_232_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64rems(r: u32, ) -> Weight {
-		(25_186_000 as Weight)
-			// Standard Error: 24_000
-			.saturating_add((13_055_000 as Weight).saturating_mul(r as Weight))
+		(24_171_000 as Weight)
+			// Standard Error: 15_000
+			.saturating_add((12_939_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64remu(r: u32, ) -> Weight {
-		(25_162_000 as Weight)
-			// Standard Error: 25_000
-			.saturating_add((12_327_000 as Weight).saturating_mul(r as Weight))
+		(24_788_000 as Weight)
+			// Standard Error: 22_000
+			.saturating_add((11_657_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64and(r: u32, ) -> Weight {
-		(25_191_000 as Weight)
-			// Standard Error: 24_000
-			.saturating_add((7_153_000 as Weight).saturating_mul(r as Weight))
+		(24_252_000 as Weight)
+			// Standard Error: 19_000
+			.saturating_add((7_003_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64or(r: u32, ) -> Weight {
-		(25_184_000 as Weight)
-			// Standard Error: 23_000
-			.saturating_add((7_120_000 as Weight).saturating_mul(r as Weight))
+		(24_263_000 as Weight)
+			// Standard Error: 12_000
+			.saturating_add((7_005_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64xor(r: u32, ) -> Weight {
-		(25_129_000 as Weight)
-			// Standard Error: 31_000
-			.saturating_add((7_247_000 as Weight).saturating_mul(r as Weight))
+		(24_239_000 as Weight)
+			// Standard Error: 17_000
+			.saturating_add((7_020_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64shl(r: u32, ) -> Weight {
-		(25_156_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((7_333_000 as Weight).saturating_mul(r as Weight))
+		(24_212_000 as Weight)
+			// Standard Error: 13_000
+			.saturating_add((7_172_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64shrs(r: u32, ) -> Weight {
-		(25_159_000 as Weight)
-			// Standard Error: 25_000
-			.saturating_add((7_415_000 as Weight).saturating_mul(r as Weight))
+		(24_220_000 as Weight)
+			// Standard Error: 27_000
+			.saturating_add((7_246_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64shru(r: u32, ) -> Weight {
-		(25_181_000 as Weight)
-			// Standard Error: 25_000
-			.saturating_add((7_265_000 as Weight).saturating_mul(r as Weight))
+		(24_213_000 as Weight)
+			// Standard Error: 14_000
+			.saturating_add((7_191_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64rotl(r: u32, ) -> Weight {
-		(25_165_000 as Weight)
-			// Standard Error: 17_000
-			.saturating_add((7_443_000 as Weight).saturating_mul(r as Weight))
+		(24_221_000 as Weight)
+			// Standard Error: 18_000
+			.saturating_add((7_192_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64rotr(r: u32, ) -> Weight {
-		(25_103_000 as Weight)
-			// Standard Error: 44_000
-			.saturating_add((7_463_000 as Weight).saturating_mul(r as Weight))
+		(24_235_000 as Weight)
+			// Standard Error: 12_000
+			.saturating_add((7_106_000 as Weight).saturating_mul(r as Weight))
 	}
 }
