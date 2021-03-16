@@ -482,7 +482,7 @@ fn decl_all_pallets<'a>(
 		#[allow(dead_code)]
 		pub type AllModules = ( #all_pallets );
 		/// All modules included in the runtime as a nested tuple of types.
-		#[deprecated(note = "use `AllModulesWithSystem` instead")]
+		#[deprecated(note = "use `AllPalletsWithSystem` instead")]
 		#[allow(dead_code)]
 		pub type AllModulesWithSystem = ( #all_pallets_with_system );
 	)
