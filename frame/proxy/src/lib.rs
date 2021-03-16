@@ -380,7 +380,11 @@ pub mod pallet {
 		/// - P: the number of proxies the user has.
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::announce(T::MaxPending::get(), T::MaxProxies::get().into()))]
-		pub(super) fn announce(origin: OriginFor<T>, real: T::AccountId, call_hash: CallHashOf<T>) -> DispatchResultWithPostInfo{
+		pub(super) fn announce(
+			origin: OriginFor<T>,
+			real: T::AccountId,
+			call_hash: CallHashOf<T>
+		) -> DispatchResultWithPostInfo{
 			let who = ensure_signed(origin)?;
 			Proxies::<T>::get(&real).0.into_iter()
 				.find(|x| &x.delegate == &who)
@@ -425,9 +429,14 @@ pub mod pallet {
 		/// - A: the number of announcements made.
 		/// - P: the number of proxies the user has.
 		/// # </weight>
-		#[pallet::weight(T::WeightInfo::remove_announcement(T::MaxPending::get(), T::MaxProxies::get().into()))]
-		pub(super) fn remove_announcement(origin: OriginFor<T>, real: T::AccountId, call_hash: CallHashOf<T>)
-		-> DispatchResultWithPostInfo {
+		#[pallet::weight(
+			T::WeightInfo::remove_announcement(T::MaxPending::get(), T::MaxProxies::get().into())
+		)]
+		pub(super) fn remove_announcement(
+			origin: OriginFor<T>,
+			real: T::AccountId,
+			call_hash: CallHashOf<T>
+		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			Self::edit_announcements(&who, |ann| ann.real != real || ann.call_hash != call_hash)?;
 
@@ -450,9 +459,14 @@ pub mod pallet {
 		/// - A: the number of announcements made.
 		/// - P: the number of proxies the user has.
 		/// # </weight>
-		#[pallet::weight(T::WeightInfo::reject_announcement(T::MaxPending::get(), T::MaxProxies::get().into()))]
-		pub(super) fn reject_announcement(origin: OriginFor<T>, delegate: T::AccountId, call_hash: CallHashOf<T>)
-		-> DispatchResultWithPostInfo {
+		#[pallet::weight(
+			T::WeightInfo::reject_announcement(T::MaxPending::get(), T::MaxProxies::get().into())
+		)]
+		pub(super) fn reject_announcement(
+			origin: OriginFor<T>,
+			delegate: T::AccountId,
+			call_hash: CallHashOf<T>
+		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			Self::edit_announcements(&delegate, |ann| ann.real != who || ann.call_hash != call_hash)?;
 
