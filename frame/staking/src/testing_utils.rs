@@ -376,7 +376,7 @@ pub fn create_assignments_for_offchain<T: Config>(
 	),
 	&'static str
 > {
-	let ratio = OffchainAccuracy::from_rational_approximation(1, MAX_NOMINATIONS);
+	let ratio = OffchainAccuracy::from_rational(1, MAX_NOMINATIONS);
 	let assignments: Vec<Assignment<T::AccountId, OffchainAccuracy>> = <Nominators<T>>::iter()
 		.take(num_assignments as usize)
 		.map(|(n, t)| Assignment {

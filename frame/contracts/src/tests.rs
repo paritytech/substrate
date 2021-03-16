@@ -246,7 +246,7 @@ parameter_types! {
 	pub const DepositPerContract: u64 = 8 * DepositPerStorageByte::get();
 	pub const DepositPerStorageByte: u64 = 10_000;
 	pub const DepositPerStorageItem: u64 = 10_000;
-	pub RentFraction: Perbill = Perbill::from_rational_approximation(4u32, 10_000u32);
+	pub RentFraction: Perbill = Perbill::from_rational(4u32, 10_000u32);
 	pub const SurchargeReward: u64 = 500_000;
 	pub const MaxDepth: u32 = 100;
 	pub const MaxValueSize: u32 = 16_384;
