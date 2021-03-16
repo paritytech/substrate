@@ -18,7 +18,7 @@
 //! Two phase election pallet benchmarking.
 
 use super::*;
-use crate::Module as MultiPhase;
+use crate::Pallet as MultiPhase;
 
 pub use frame_benchmarking::{account, benchmarks, whitelist_account, whitelisted_caller};
 use frame_support::{assert_ok, traits::OnInitialize};

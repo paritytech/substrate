@@ -51,14 +51,14 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
-		Historical: pallet_session_historical::{Module},
-		Offences: pallet_offences::{Module, Call, Storage, Event},
-		Babe: pallet_babe::{Module, Call, Storage, Config, ValidateUnsigned},
-		Staking: pallet_staking::{Module, Call, Storage, Config<T>, Event<T>},
-		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
-		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Historical: pallet_session_historical::{Pallet},
+		Offences: pallet_offences::{Pallet, Call, Storage, Event},
+		Babe: pallet_babe::{Pallet, Call, Storage, Config, ValidateUnsigned},
+		Staking: pallet_staking::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
+		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
 	}
 );
 
@@ -203,7 +203,7 @@ impl pallet_staking::Config for Test {
 	type SlashDeferDuration = SlashDeferDuration;
 	type SlashCancelOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type SessionInterface = Self;
-	type UnixTime = pallet_timestamp::Module<Test>;
+	type UnixTime = pallet_timestamp::Pallet<Test>;
 	type RewardCurve = RewardCurve;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type NextNewSession = Session;

@@ -24,7 +24,7 @@ mod mock;
 use sp_std::prelude::*;
 use sp_std::vec;
 
-use frame_system::{RawOrigin, Module as System, Config as SystemConfig};
+use frame_system::{RawOrigin, Pallet as System, Config as SystemConfig};
 use frame_benchmarking::{benchmarks, account, impl_benchmark_test_suite};
 use frame_support::traits::{Currency, OnInitialize, ValidatorSet, ValidatorSetWithIdentification};
 

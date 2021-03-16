@@ -453,9 +453,9 @@ mod tests {
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
-			System: frame_system::{Module, Call, Config, Storage, Event<T>},
+			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 			NodeAuthorization: pallet_node_authorization::{
-				Module, Call, Storage, Config<T>, Event<T>,
+				Pallet, Call, Storage, Config<T>, Event<T>,
 			},
 		}
 	);

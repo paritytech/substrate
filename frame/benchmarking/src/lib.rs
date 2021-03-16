@@ -744,8 +744,8 @@ macro_rules! impl_benchmark {
 						>::instance(&selected_benchmark, c, verify)?;
 
 						// Set the block number to at least 1 so events are deposited.
-						if $crate::Zero::is_zero(&frame_system::Module::<T>::block_number()) {
-							frame_system::Module::<T>::set_block_number(1u32.into());
+						if $crate::Zero::is_zero(&frame_system::Pallet::<T>::block_number()) {
+							frame_system::Pallet::<T>::set_block_number(1u32.into());
 						}
 
 						// Commit the externalities to the database, flushing the DB cache.
@@ -915,8 +915,8 @@ macro_rules! impl_benchmark_test {
 					>::instance(&selected_benchmark, &c, true)?;
 
 					// Set the block number to at least 1 so events are deposited.
-					if $crate::Zero::is_zero(&frame_system::Module::<T>::block_number()) {
-						frame_system::Module::<T>::set_block_number(1u32.into());
+					if $crate::Zero::is_zero(&frame_system::Pallet::<T>::block_number()) {
+						frame_system::Pallet::<T>::set_block_number(1u32.into());
 					}
 
 					// Run execution + verification

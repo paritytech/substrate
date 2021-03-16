@@ -420,7 +420,7 @@ decl_module! {
 			let announcement = Announcement {
 				real: real.clone(),
 				call_hash: call_hash.clone(),
-				height: system::Module::<T>::block_number(),
+				height: system::Pallet::<T>::block_number(),
 			};
 
 			Announcements::<T>::try_mutate(&who, |(ref mut pending, ref mut deposit)| {
@@ -517,7 +517,7 @@ decl_module! {
 			let def = Self::find_proxy(&real, &delegate, force_proxy_type)?;
 
 			let call_hash = T::CallHasher::hash_of(&call);
-			let now = system::Module::<T>::block_number();
+			let now = system::Pallet::<T>::block_number();
 			Self::edit_announcements(&delegate, |ann|
 				ann.real != real || ann.call_hash != call_hash || now.saturating_sub(ann.height) < def.delay
 			).map_err(|_| Error::<T>::Unannounced)?;
@@ -547,8 +547,8 @@ impl<T: Config> Module<T> {
 		maybe_when: Option<(T::BlockNumber, u32)>,
 	) -> T::AccountId {
 		let (height, ext_index) = maybe_when.unwrap_or_else(|| (
-			system::Module::<T>::block_number(),
-			system::Module::<T>::extrinsic_index().unwrap_or_default()
+			system::Pallet::<T>::block_number(),
+			system::Pallet::<T>::extrinsic_index().unwrap_or_default()
 		));
 		let entropy = (b"modlpy/proxy____", who, height, ext_index, proxy_type, index)
 			.using_encoded(blake2_256);

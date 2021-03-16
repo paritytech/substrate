@@ -480,7 +480,7 @@ impl<T: Config> Module<T> {
 		// Update the start blocks of the previous and new current epoch.
 		<EpochStart<T>>::mutate(|(previous_epoch_start_block, current_epoch_start_block)| {
 			*previous_epoch_start_block = sp_std::mem::take(current_epoch_start_block);
-			*current_epoch_start_block = <frame_system::Module<T>>::block_number();
+			*current_epoch_start_block = <frame_system::Pallet<T>>::block_number();
 		});
 
 		// After we update the current epoch, we signal the *next* epoch change
@@ -560,7 +560,7 @@ impl<T: Config> Module<T> {
 
 	fn deposit_consensus<U: Encode>(new: U) {
 		let log: DigestItem<T::Hash> = DigestItem::Consensus(BABE_ENGINE_ID, new.encode());
-		<frame_system::Module<T>>::deposit_log(log.into())
+		<frame_system::Pallet<T>>::deposit_log(log.into())
 	}
 
 	fn deposit_randomness(randomness: &schnorrkel::Randomness) {
@@ -586,7 +586,7 @@ impl<T: Config> Module<T> {
 			return;
 		}
 
-		let maybe_pre_digest: Option<PreDigest> = <frame_system::Module<T>>::digest()
+		let maybe_pre_digest: Option<PreDigest> = <frame_system::Pallet<T>>::digest()
 			.logs
 			.iter()
 			.filter_map(|s| s.as_pre_runtime())

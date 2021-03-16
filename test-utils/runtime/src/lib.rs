@@ -451,10 +451,10 @@ impl From<frame_system::Event<Runtime>> for Event {
 impl frame_support::traits::PalletInfo for Runtime {
 	fn index<P: 'static>() -> Option<usize> {
 		let type_id = sp_std::any::TypeId::of::<P>();
-		if type_id == sp_std::any::TypeId::of::<system::Module<Runtime>>() {
+		if type_id == sp_std::any::TypeId::of::<system::Pallet<Runtime>>() {
 			return Some(0)
 		}
-		if type_id == sp_std::any::TypeId::of::<pallet_timestamp::Module<Runtime>>() {
+		if type_id == sp_std::any::TypeId::of::<pallet_timestamp::Pallet<Runtime>>() {
 			return Some(1)
 		}
 		if type_id == sp_std::any::TypeId::of::<pallet_babe::Module<Runtime>>() {
@@ -465,10 +465,10 @@ impl frame_support::traits::PalletInfo for Runtime {
 	}
 	fn name<P: 'static>() -> Option<&'static str> {
 		let type_id = sp_std::any::TypeId::of::<P>();
-		if type_id == sp_std::any::TypeId::of::<system::Module<Runtime>>() {
+		if type_id == sp_std::any::TypeId::of::<system::Pallet<Runtime>>() {
 			return Some("System")
 		}
-		if type_id == sp_std::any::TypeId::of::<pallet_timestamp::Module<Runtime>>() {
+		if type_id == sp_std::any::TypeId::of::<pallet_timestamp::Pallet<Runtime>>() {
 			return Some("Timestamp")
 		}
 		if type_id == sp_std::any::TypeId::of::<pallet_babe::Module<Runtime>>() {

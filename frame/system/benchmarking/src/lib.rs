@@ -30,7 +30,7 @@ use frame_support::{
 	traits::Get,
 	weights::DispatchClass,
 };
-use frame_system::{Module as System, Call, RawOrigin, DigestItemOf};
+use frame_system::{Pallet as System, Call, RawOrigin, DigestItemOf};
 
 mod mock;
 

@@ -24,7 +24,7 @@ use frame_support::{
 	IterableStorageMap,
 	traits::{Currency, Get, EnsureOrigin, OnInitialize, UnfilteredDispatchable, schedule::DispatchTime},
 };
-use frame_system::{RawOrigin, Module as System, self, EventRecord};
+use frame_system::{RawOrigin, Pallet as System, self, EventRecord};
 use sp_runtime::traits::{Bounded, One};
 
 use crate::Module as Democracy;
