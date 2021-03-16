@@ -281,11 +281,6 @@ pub mod slashing;
 pub mod inflation;
 pub mod weights;
 
-#[doc(hidden)]
-pub use sp_std;
-#[doc(hidden)]
-pub use frame_support;
-
 use sp_std::{
 	result,
 	prelude::*,
@@ -1080,8 +1075,8 @@ pub mod migrations {
 			};
 			($name:ident<T: $trait:tt> => Value<$value:ty>) => {
 				paste::paste! {
-					struct [<$name Instance>]<T>($crate::sp_std::marker::PhantomData<T>);
-					impl<T: $trait> $crate::frame_support::traits::StorageInstance for [<$name Instance>]<T> {
+					struct [<$name Instance>]<T>(sp_std::marker::PhantomData<T>);
+					impl<T: $trait> frame_support::traits::StorageInstance for [<$name Instance>]<T> {
 						fn pallet_prefix() -> &'static str {
 							T::PalletPrefix::get()
 						}
@@ -2161,7 +2156,7 @@ impl<T: Config> Module<T> {
 				.unwrap_or(0); // Must never happen.
 
 			match ForceEra::get() {
-				// Will set to default again, which is `NorForcing`.
+				// Will set to default again, which is `NotForcing`.
 				Forcing::ForceNew => ForceEra::kill(),
 				// Short circuit to `new_era`.
 				Forcing::ForceAlways => (),
@@ -2401,7 +2396,10 @@ impl<T: Config> Module<T> {
 		T::ElectionProvider::elect()
 			.map_err(|e| log!(warn, "election provider failed due to {:?}", e))
 			.and_then(|(r, w)| {
-				<frame_system::Pallet<T>>::register_extra_weight_unchecked(w, frame_support::weights::DispatchClass::Mandatory);
+				<frame_system::Pallet<T>>::register_extra_weight_unchecked(
+					w,
+					frame_support::weights::DispatchClass::Mandatory,
+				);
 				Self::process_election(r, current_era)
 			})
 			.ok()

@@ -142,7 +142,7 @@ pub fn create_validators_with_nominators_for_era<T: Config>(
 	}
 
 	let to_nominate = to_nominate.unwrap_or(validators_stash.len() as u32) as usize;
-	let validator_choosen = validators_stash[0..to_nominate].to_vec();
+	let validator_chosen = validators_stash[0..to_nominate].to_vec();
 
 	// Create nominators
 	for j in 0 .. nominators {
@@ -154,7 +154,7 @@ pub fn create_validators_with_nominators_for_era<T: Config>(
 		)?;
 
 		// Have them randomly validate
-		let mut available_validators = validator_choosen.clone();
+		let mut available_validators = validator_chosen.clone();
 		let mut selected_validators: Vec<<T::Lookup as StaticLookup>::Source> =
 			Vec::with_capacity(edge_per_nominator);
 
@@ -168,18 +168,10 @@ pub fn create_validators_with_nominators_for_era<T: Config>(
 
 	ValidatorCount::put(validators);
 
-	Ok(validator_choosen)
+	Ok(validator_chosen)
 }
 
-/// get the active era.
+/// get the current era.
 pub fn current_era<T: Config>() -> EraIndex {
 	<Module<T>>::current_era().unwrap_or(0)
-}
-
-/// initialize the first era.
-pub fn init_active_era() {
-	ActiveEra::put(ActiveEraInfo {
-		index: 1,
-		start: None,
-	})
 }
