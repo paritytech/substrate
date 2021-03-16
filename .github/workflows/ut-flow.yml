@@ -1,0 +1,15 @@
+name: 'Automation test CI flow'
+on:
+  pull_request:
+    branches: [dev-cere]
+    types: [opened]
+jobs:
+  execute-automation-ut:
+    runs-on: 'ubuntu-18.04'
+    steps:
+      - uses: actions/checkout@v2
+      - name: 'Checkout submodules'
+        run: 'git submodule update --init --recursive'
+      - name: 'Install rust environment then test'
+        run: |
+          docker build . --no-cache -f Dockerfile.UT
