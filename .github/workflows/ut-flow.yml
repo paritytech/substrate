@@ -2,7 +2,7 @@ name: 'Automation test CI flow'
 on:
   pull_request:
     branches: [dev-cere]
-    types: [opened]
+    types: [opened, edited]
 jobs:
   execute-automation-ut:
     runs-on: 'ubuntu-18.04'
