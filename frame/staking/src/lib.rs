@@ -2399,25 +2399,23 @@ impl<T: Config> Module<T> {
 		// sort exposures
 		expos.sort_by(|a, b| a.cmp(&b).reverse());
 		// global average
-		let mut total_exposure: u64 = 0;
-		let mut bottom_one_percent_validators_exposure: u64 = 0;
-		let mut bottom_two_percent_validators_exposure: u64 = 0;
+		let mut total_exposure: i64 = 0;
+		let mut bottom_one_percent_validators_exposure: i64 = 0;
+		let mut bottom_two_percent_validators_exposure: i64 = 0;
 		let mut i = 0;
-		let mut j = 0;
 		for exp in expos.into_iter(){
-			total_exposure += exp;
+			total_exposure += exp as i64;
 			if i <= one_percent_validators {
-				bottom_one_percent_validators_exposure += exp;
-				i += 1;
+				bottom_one_percent_validators_exposure += exp as i64;
 			}
-			if j <= two_percent_validators {
-				bottom_two_percent_validators_exposure += exp;
-				j += 1;
+			if i <= two_percent_validators {
+				bottom_two_percent_validators_exposure += exp as i64;
 			}
+			i += 1;
 		};
-		let global_average = total_exposure / validators_count as u64;
-		let one_percent_average_stake = bottom_one_percent_validators_exposure / one_percent_validators as u64;
-		let two_percent_average_stake = bottom_two_percent_validators_exposure / two_percent_validators as u64;
+		let global_average = (I20F12::from_num(total_exposure) / validators_count as i32).ceil().to_num::<i32>();
+		let one_percent_average_stake = (I20F12::from_num(bottom_one_percent_validators_exposure) / one_percent_validators as i32).ceil().to_num::<i32>();
+		let two_percent_average_stake = (I20F12::from_num(bottom_two_percent_validators_exposure) / two_percent_validators as i32).ceil().to_num::<i32>();
 		//init final count
 		let mut final_count = validators_count;
 		if (one_percent_average_stake as f64) > (0.4 * global_average as f64) {
@@ -2426,7 +2424,7 @@ impl<T: Config> Module<T> {
 				validators_count + (one_percent_validators as u32)
 			);
 		}
-				
+					
 		if (two_percent_average_stake as f64) < (0.2 * global_average as f64){
 			final_count = std::cmp::max(
 				Self::minimum_validator_count(), 
