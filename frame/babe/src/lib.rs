@@ -784,7 +784,7 @@ impl<T: Config> frame_support::traits::EstimateNextSessionRotation<T::BlockNumbe
 		let elapsed = CurrentSlot::get().saturating_sub(Self::current_epoch_start()) + 1;
 
 		(
-			Some(Percent::from_rational_approximation(
+			Some(Percent::from_rational(
 				*elapsed,
 				T::EpochDuration::get(),
 			)),

@@ -371,7 +371,7 @@ impl<AccountId: IdentifierT> Voter<AccountId> {
 			.edges
 			.into_iter()
 			.filter_map(|e| {
-				let per_thing = P::from_rational_approximation(e.weight, budget);
+				let per_thing = P::from_rational(e.weight, budget);
 			// trim zero edges.
 			if per_thing.is_zero() { None } else { Some((e.who, per_thing)) }
 		}).collect::<Vec<_>>();
@@ -551,7 +551,7 @@ impl<AccountId> StakedAssignment<AccountId> {
 		let distribution = self.distribution
 			.into_iter()
 			.filter_map(|(target, w)| {
-				let per_thing = P::from_rational_approximation(w, stake);
+				let per_thing = P::from_rational(w, stake);
 				if per_thing == Bounded::min_value() {
 					None
 				} else {
