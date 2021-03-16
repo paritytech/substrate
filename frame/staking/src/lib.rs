@@ -2266,6 +2266,211 @@ impl<T: Config> Module<T> {
 		maybe_new_validators
 	}
 
+	/// Remove all the storage items associated with the election.
+	fn close_election_window() {
+		// Close window.
+		<EraElectionStatus<T>>::put(ElectionStatus::Closed);
+		// Kill snapshots.
+		Self::kill_stakers_snapshot();
+		// Don't track final session.
+		IsCurrentSessionFinal::put(false);
+	}
+
+	/// Select the new validator set at the end of the era.
+	///
+	/// Runs [`try_do_phragmen`] and updates the following storage items:
+	/// - [`EraElectionStatus`]: with `None`.
+	/// - [`ErasStakers`]: with the new staker set.
+	/// - [`ErasStakersClipped`].
+	/// - [`ErasValidatorPrefs`].
+	/// - [`ErasTotalStake`]: with the new total stake.
+	/// - [`SnapshotValidators`] and [`SnapshotNominators`] are both removed.
+	///
+	/// Internally, [`QueuedElected`], snapshots and [`QueuedScore`] are also consumed.
+	///
+	/// If the election has been successful, It passes the new set upwards.
+	///
+	/// This should only be called at the end of an era.
+	fn select_and_update_validators(current_era: EraIndex) -> Option<Vec<T::AccountId>> {
+		if let Some(ElectionResult::<T::AccountId, BalanceOf<T>> {
+			elected_stashes,
+			exposures,
+			compute,
+		}) = Self::try_do_election() {
+			// Totally close the election round and data.
+			Self::close_election_window();
+
+			// Populate Stakers and write slot stake.
+			let mut total_stake: BalanceOf<T> = Zero::zero();
+			exposures.into_iter().for_each(|(stash, exposure)| {
+				total_stake = total_stake.saturating_add(exposure.total);
+				<ErasStakers<T>>::insert(current_era, &stash, &exposure);
+
+				let mut exposure_clipped = exposure;
+				let clipped_max_len = T::MaxNominatorRewardedPerValidator::get() as usize;
+				if exposure_clipped.others.len() > clipped_max_len {
+					exposure_clipped.others.sort_by(|a, b| a.value.cmp(&b.value).reverse());
+					exposure_clipped.others.truncate(clipped_max_len);
+				}
+				<ErasStakersClipped<T>>::insert(&current_era, &stash, exposure_clipped);
+			});
+
+			// Insert current era staking information
+			<ErasTotalStake<T>>::insert(&current_era, total_stake);
+
+			// collect the pref of all winners
+			for stash in &elected_stashes {
+				let pref = Self::validators(stash);
+				<ErasValidatorPrefs<T>>::insert(&current_era, stash, pref);
+			}
+
+			// emit event
+			Self::deposit_event(RawEvent::StakingElection(compute));
+
+			if current_era > 0 {
+				log!(
+					info,
+					"new validator set of size {:?} has been elected via {:?} for staring era {:?}",
+					elected_stashes.len(),
+					compute,
+					current_era,
+				);
+			}
+
+			Some(elected_stashes)
+		} else {
+			None
+		}
+	}
+
+	/// Select a new validator set from the assembled stakers and their role preferences. It tries
+	/// first to peek into [`QueuedElected`]. Otherwise, it runs a new on-chain phragmen election.
+	///
+	/// If [`QueuedElected`] and [`QueuedScore`] exists, they are both removed. No further storage
+	/// is updated.
+	fn try_do_election() -> Option<ElectionResult<T::AccountId, BalanceOf<T>>> {
+		// an election result from either a stored submission or locally executed one.
+		let next_result = <QueuedElected<T>>::take().or_else(||
+			Self::do_on_chain_phragmen()
+		);
+
+		// either way, kill this. We remove it here to make sure it always has the exact same
+		// lifetime as `QueuedElected`.
+		QueuedScore::kill();
+
+		next_result
+	}
+
+	/// Execute election and return the new results. The edge weights are processed into support
+	/// values.
+	///
+	/// This is basically a wrapper around [`Self::do_phragmen`] which translates
+	/// `PrimitiveElectionResult` into `ElectionResult`.
+	///
+	/// No storage item is updated.
+	pub fn do_on_chain_phragmen() -> Option<ElectionResult<T::AccountId, BalanceOf<T>>> {
+		if let Some(phragmen_result) = Self::do_phragmen::<ChainAccuracy>(0) {
+			let elected_stashes = phragmen_result.winners.iter()
+				.map(|(s, _)| s.clone())
+				.collect::<Vec<T::AccountId>>();
+			let assignments = phragmen_result.assignments;
+
+			let staked_assignments = sp_npos_elections::assignment_ratio_to_staked(
+				assignments,
+				Self::slashable_balance_of_fn(),
+			);
+
+			let supports = to_supports(
+				&elected_stashes,
+				&staked_assignments,
+			)
+			.map_err(|_|
+				log!(
+					error,
+					"on-chain phragmen is failing due to a problem in the result. This must be a bug."
+				)
+			)
+			.ok()?;
+
+			// collect exposures
+			let exposures = Self::collect_exposures(supports);
+
+			// In order to keep the property required by `on_session_ending` that we must return the
+			// new validator set even if it's the same as the old, as long as any underlying
+			// economic conditions have changed, we don't attempt to do any optimization where we
+			// compare against the prior set.
+			Some(ElectionResult::<T::AccountId, BalanceOf<T>> {
+				elected_stashes,
+				exposures,
+				compute: ElectionCompute::OnChain,
+			})
+		} else {
+			// There were not enough candidates for even our minimal level of functionality. This is
+			// bad. We should probably disable all functionality except for block production and let
+			// the chain keep producing blocks until we can decide on a sufficiently substantial
+			// set. TODO: #2494
+			None
+		}
+	}
+
+	/// Execute phragmen election and return the new results. No post-processing is applied and the
+	/// raw edge weights are returned.
+	///
+	/// Self votes are added and nominations before the most recent slashing span are ignored.
+	///
+	/// No storage item is updated.
+	pub fn do_phragmen<Accuracy: PerThing128>(
+		iterations: usize,
+	) -> Option<PrimitiveElectionResult<T::AccountId, Accuracy>> {
+		let weight_of = Self::slashable_balance_of_fn();
+		let mut all_nominators: Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> = Vec::new();
+		let mut all_validators = Vec::new();
+		for (validator, _) in <Validators<T>>::iter() {
+			// append self vote
+			let self_vote = (validator.clone(), weight_of(&validator), vec![validator.clone()]);
+			all_nominators.push(self_vote);
+			all_validators.push(validator);
+		}
+
+		let nominator_votes = <Nominators<T>>::iter().map(|(nominator, nominations)| {
+			let Nominations { submitted_in, mut targets, suppressed: _ } = nominations;
+
+			// Filter out nomination targets which were nominated before the most recent
+			// slashing span.
+			targets.retain(|stash| {
+				<Self as Store>::SlashingSpans::get(&stash).map_or(
+					true,
+					|spans| submitted_in >= spans.last_nonzero_slash(),
+				)
+			});
+
+			(nominator, targets)
+		});
+		all_nominators.extend(nominator_votes.map(|(n, ns)| {
+			let s = weight_of(&n);
+			(n, s, ns)
+		}));
+
+		if all_validators.len() < Self::minimum_validator_count().max(1) as usize {
+			// If we don't have enough candidates, nothing to do.
+			log!(
+				warn,
+				"chain does not have enough staking candidates to operate. Era {:?}.",
+				Self::current_era()
+			);
+			None
+		} else {
+			seq_phragmen::<_, Accuracy>(
+				Self::validator_count() as usize,
+				all_validators,
+				all_nominators,
+				Some((iterations, 0)), // exactly run `iterations` rounds.
+			)
+			.map_err(|err| log!(error, "Call to seq-phragmen failed due to {:?}", err))
+			.ok()
+		}
+	}
+
 	/// Consume a set of [`Supports`] from [`sp_npos_elections`] and collect them into a
 	/// [`Exposure`].
 	fn collect_exposures(
@@ -2318,11 +2523,13 @@ impl<T: Config> Module<T> {
 		let elected_stashes = exposures.iter().cloned().map(|(x, _)| x).collect::<Vec<_>>();
 
 		if (elected_stashes.len() as u32) <= Self::minimum_validator_count() {
-			log!(
-				warn,
-				"chain does not have enough staking candidates to operate for era {:?}",
-				current_era,
-			);
+			if current_era > 0 {
+				log!(
+					warn,
+					"chain does not have enough staking candidates to operate for era {:?}",
+					current_era,
+				);
+			}
 			return Err(());
 		}
 
