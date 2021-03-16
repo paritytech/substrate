@@ -622,6 +622,8 @@ pub mod pallet {
 							// not much we can do about this at this point.
 							log!(warn, "failed to open unsigned phase due to {:?}", why);
 							T::WeightInfo::on_initialize_nothing()
+							// NOTE: ^^ The trait specifies that this is a noop in terms of weight
+							// in case of error.
 						}
 					}
 				}
@@ -906,7 +908,7 @@ impl<T: Config> Pallet<T> {
 
 		<CurrentPhase<T>>::put(Phase::Unsigned((enabled, now)));
 		Self::deposit_event(Event::UnsignedPhaseStarted(Self::round()));
-		Ok(weight)
+		Ok(weight.saturating_add(T::DbWeight::get().writes(1)))
 	}
 
 	/// Creates the snapshot. Writes new data to:
