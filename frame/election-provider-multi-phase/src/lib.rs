@@ -617,8 +617,7 @@ pub mod pallet {
 				}
 				Phase::Unsigned((true, opened)) if opened < now => {
 					if !<QueuedSolution<T>>::exists() {
-						// as long as there is no feasible solution, keep trying to submit ours
-						//
+						// as long as there is no feasible solution, keep trying to submit ours.
 						// the offchain_lock prevents us from spamming submissions too often.
 						let resubmit_output = Self::try_acquire_offchain_lock(now, threshold)
 							.and_then(|_| Self::restore_or_compute_then_submit());

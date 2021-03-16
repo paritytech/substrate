@@ -925,7 +925,6 @@ mod tests {
 
 			// creates, caches, submits without expecting previous cache value
 			MultiPhase::offchain_worker(25);
-			dbg!(&pool.read().transactions.len());
 			assert_eq!(pool.read().transactions.len(), 1);
 			// assume that the tx has been processed
 			pool.try_write().unwrap().transactions.clear();
@@ -933,7 +932,6 @@ mod tests {
 
 			// locked, but also, has previously cached.
 			MultiPhase::offchain_worker(26);
-			dbg!(&pool.read().transactions.len());
 			assert!(pool.read().transactions.len().is_zero());
 		})
 	}
