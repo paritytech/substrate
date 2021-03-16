@@ -93,7 +93,7 @@ pub struct Announcement<AccountId, Hash, BlockNumber> {
 pub mod pallet {
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use super::{ *, DispatchResult };
+	use super::{*, DispatchResult};
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
