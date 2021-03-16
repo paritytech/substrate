@@ -570,7 +570,7 @@ pub mod pallet {
 		ValueQuery
 	>;
 
-    /// The announcements made by the proxy (key).
+	/// The announcements made by the proxy (key).
 	#[pallet::storage]
 	#[pallet::getter(fn announcements)]
 	pub type Announcements<T: Config> = StorageMap<
