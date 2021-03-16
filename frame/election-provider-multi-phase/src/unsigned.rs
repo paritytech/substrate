@@ -99,10 +99,23 @@ impl<T: Config> Pallet<T> {
 
 	/// Mine a new solution as a call. Performs all checks.
 	fn mine_call() -> Result<Call<T>, MinerError> {
+		use codec::Encode;
+
 		let iters = Self::get_balancing_iters();
 		// get the solution, with a load of checks to ensure if submitted, IT IS ABSOLUTELY VALID.
 		let (raw_solution, witness) = Self::mine_and_check(iters)?;
-		Ok(Call::submit_unsigned(raw_solution, witness))
+
+		let score = raw_solution.score.clone();
+		let call: Call<T> = Call::submit_unsigned(raw_solution, witness).into();
+
+		log!(
+			info,
+			"mined a solution with score {:?} and size {}",
+			score,
+			call.using_encoded(|b| b.len())
+		);
+
+		Ok(call)
 	}
 
 	fn submit_call(call: Call<T>) -> Result<(), MinerError> {
@@ -454,6 +467,9 @@ mod max_weight {
 		fn on_initialize_open_unsigned_with_snapshot() -> Weight {
 			unreachable!()
 		}
+		fn elect_queued() -> Weight {
+			0
+		}
 		fn on_initialize_open_unsigned_without_snapshot() -> Weight {
 			unreachable!()
 		}
@@ -533,7 +549,7 @@ mod tests {
 	};
 	use frame_benchmarking::Zero;
 	use frame_support::{assert_noop, assert_ok, dispatch::Dispatchable, traits::OffchainWorker};
-	use sp_election_providers::Assignment;
+	use frame_election_provider_support::Assignment;
 	use sp_runtime::{traits::ValidateUnsigned, PerU16};
 
 	#[test]

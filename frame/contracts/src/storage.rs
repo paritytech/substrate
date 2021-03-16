@@ -30,7 +30,7 @@ use sp_io::hashing::blake2_256;
 use sp_runtime::traits::{Bounded, Saturating, Zero};
 use sp_core::crypto::UncheckedFrom;
 use frame_support::{
-	dispatch::DispatchResult,
+	dispatch::{DispatchError, DispatchResult},
 	storage::child::{self, KillChildStorageResult},
 	traits::Get,
 	weights::Weight,
@@ -162,7 +162,7 @@ where
 		account: &AccountIdOf<T>,
 		trie_id: TrieId,
 		ch: CodeHash<T>,
-	) -> DispatchResult {
+	) -> Result<AliveContractInfo<T>, DispatchError> {
 		<ContractInfoOf<T>>::try_mutate(account, |existing| {
 			if existing.is_some() {
 				return Err(Error::<T>::DuplicateContract.into());
@@ -184,9 +184,9 @@ where
 				_reserved: None,
 			};
 
-			*existing = Some(contract.into());
+			*existing = Some(contract.clone().into());
 
-			Ok(())
+			Ok(contract)
 		})
 	}
 
