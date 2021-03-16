@@ -4,7 +4,7 @@ on:
     branches: [dev-cere]
     types: [opened, synchronize, edited]
 jobs:
-  execute-automation-ut:
+  run-tests:
     runs-on: 'ubuntu-18.04'
     steps:
       - uses: actions/checkout@v2
