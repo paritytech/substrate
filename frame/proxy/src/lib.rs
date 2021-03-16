@@ -59,6 +59,8 @@ use frame_system::{self as system};
 use frame_support::dispatch::DispatchError;
 pub use weights::WeightInfo;
 
+pub use pallet::*;
+
 type CallHashOf<T> = <<T as Config>::CallHasher as Hash>::Output;
 
 type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
@@ -86,8 +88,6 @@ pub struct Announcement<AccountId, Hash, BlockNumber> {
 	/// The height at which the announcement was made.
 	height: BlockNumber,
 }
-
-pub use pallet::*;
 
 #[frame_support::pallet]
 pub mod pallet {
