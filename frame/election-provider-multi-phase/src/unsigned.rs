@@ -371,8 +371,8 @@ impl<T: Config> Pallet<T> {
 	/// Returns `Ok(())` if offchain worker should happen, `Err(reason)` otherwise.
 	pub(crate) fn try_acquire_offchain_lock(
 		now: T::BlockNumber,
-		threshold: T::BlockNumber,
 	) -> Result<(), MinerError> {
+		let threshold = T::OffchainRepeat::get();
 		let storage = StorageValueRef::persistent(&OFFCHAIN_HEAD_DB);
 
 		let mutate_stat =
@@ -527,7 +527,7 @@ mod tests {
 		CurrentPhase, InvalidTransaction, Phase, QueuedSolution, TransactionSource,
 		TransactionValidityError,
 		mock::{
-			BlockNumber, Call as OuterCall, ExtBuilder, Extrinsic, MinerMaxWeight, MultiPhase,
+			Call as OuterCall, ExtBuilder, Extrinsic, MinerMaxWeight, MultiPhase,
 			Origin, Runtime, TestCompact, roll_to, roll_to_with_ocw, witness,
 		},
 	};
@@ -850,42 +850,26 @@ mod tests {
 
 	#[test]
 	fn ocw_check_prevent_duplicate() {
-		const OFFCHAIN_REPEAT: BlockNumber = 5;
-
 		let (mut ext, _) = ExtBuilder::default().build_offchainify(0);
 		ext.execute_with(|| {
+			let offchain_repeat = <Runtime as Config>::OffchainRepeat::get();
+
 			roll_to(25);
 			assert!(MultiPhase::current_phase().is_unsigned());
 
 			// first execution -- okay.
-			assert!(MultiPhase::try_acquire_offchain_lock(25, OFFCHAIN_REPEAT.into()).is_ok());
+			assert!(MultiPhase::try_acquire_offchain_lock(25).is_ok());
 
 			// next block: rejected.
-			assert!(MultiPhase::try_acquire_offchain_lock(26, OFFCHAIN_REPEAT.into()).is_err());
+			assert!(MultiPhase::try_acquire_offchain_lock(26).is_err());
 
 			// allowed after `OFFCHAIN_REPEAT`
-			assert!(MultiPhase::try_acquire_offchain_lock(
-				(26 + OFFCHAIN_REPEAT).into(),
-				OFFCHAIN_REPEAT.into()
-			)
-			.is_ok());
+			assert!(MultiPhase::try_acquire_offchain_lock((26 + offchain_repeat).into()).is_ok());
 
 			// a fork like situation: re-execute last 3.
-			assert!(MultiPhase::try_acquire_offchain_lock(
-				(26 + OFFCHAIN_REPEAT - 3).into(),
-				OFFCHAIN_REPEAT.into()
-			)
-			.is_err());
-			assert!(MultiPhase::try_acquire_offchain_lock(
-				(26 + OFFCHAIN_REPEAT - 2).into(),
-				OFFCHAIN_REPEAT.into()
-			)
-			.is_err());
-			assert!(MultiPhase::try_acquire_offchain_lock(
-				(26 + OFFCHAIN_REPEAT - 1).into(),
-				OFFCHAIN_REPEAT.into()
-			)
-			.is_err());
+			assert!(MultiPhase::try_acquire_offchain_lock((26 + offchain_repeat - 3).into()).is_err());
+			assert!(MultiPhase::try_acquire_offchain_lock((26 + offchain_repeat - 2).into()).is_err());
+			assert!(MultiPhase::try_acquire_offchain_lock((26 + offchain_repeat - 1).into()).is_err());
 		})
 	}
 

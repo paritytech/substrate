@@ -607,11 +607,10 @@ pub mod pallet {
 		}
 
 		fn offchain_worker(now: T::BlockNumber) {
-			let threshold = T::OffchainRepeat::get();
 			match Self::current_phase() {
 				Phase::Unsigned((true, opened)) if opened == now => {
 					// mine a new solution, cache it, and attempt to submit it
-					let initial_output = Self::try_acquire_offchain_lock(now, threshold)
+					let initial_output = Self::try_acquire_offchain_lock(now)
 						.and_then(|_| Self::mine_check_save_submit());
 					log!(info, "initial OCW output at {:?}: {:?}", now, initial_output);
 				}
@@ -619,7 +618,7 @@ pub mod pallet {
 					if !<QueuedSolution<T>>::exists() {
 						// as long as there is no feasible solution, keep trying to submit ours.
 						// the offchain_lock prevents us from spamming submissions too often.
-						let resubmit_output = Self::try_acquire_offchain_lock(now, threshold)
+						let resubmit_output = Self::try_acquire_offchain_lock(now)
 							.and_then(|_| Self::restore_or_compute_then_submit());
 						log!(info, "resubmit OCW output at {:?}: {:?}", now, resubmit_output);
 					}
