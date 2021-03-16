@@ -15,12 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Mock file for session benchmarking.
+//! Mock file for staking fuzzing.
 
-#![cfg(test)]
-
-use sp_runtime::traits::IdentityLookup;
-use frame_election_provider_support::onchain;
 use frame_support::parameter_types;
 
 type AccountId = u64;
@@ -39,7 +35,8 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
-		Staking: pallet_staking::{Module, Call, Config<T>, Storage, Event<T>},
+		Staking: pallet_staking::{Module, Call, Config<T>, Storage, Event<T>, ValidateUnsigned},
+		Indices: pallet_indices::{Module, Call, Storage, Config<T>, Event<T>},
 		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
 	}
 );
@@ -56,7 +53,7 @@ impl frame_system::Config for Test {
 	type Hash = sp_core::H256;
 	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = AccountId;
-	type Lookup = IdentityLookup<Self::AccountId>;
+	type Lookup = Indices;
 	type Header = sp_runtime::testing::Header;
 	type Event = Event;
 	type BlockHashCount = ();
@@ -80,7 +77,13 @@ impl pallet_balances::Config for Test {
 	type AccountStore = System;
 	type WeightInfo = ();
 }
-
+impl pallet_indices::Config for Test {
+	type AccountIndex = AccountIndex;
+	type Event = Event;
+	type Currency = Balances;
+	type Deposit = ();
+	type WeightInfo = ();
+}
 parameter_types! {
 	pub const MinimumPeriod: u64 = 5;
 }
@@ -141,7 +144,7 @@ pallet_staking_reward_curve::build! {
 parameter_types! {
 	pub const RewardCurve: &'static sp_runtime::curve::PiecewiseLinear<'static> = &I_NPOS;
 	pub const MaxNominatorRewardedPerValidator: u32 = 64;
-	pub const UnsignedPriority: u64 = 1 << 20;
+	pub const MaxIterations: u32 = 20;
 }
 
 pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
@@ -154,12 +157,19 @@ where
 	type Extrinsic = Extrinsic;
 }
 
-impl onchain::Config for Test {
-	type AccountId = AccountId;
-	type BlockNumber = BlockNumber;
-	type BlockWeights = ();
-	type Accuracy = sp_runtime::Perbill;
-	type DataProvider = Staking;
+pub struct MockElectionProvider;
+impl frame_election_provider_support::ElectionProvider<AccountId, BlockNumber>
+	for MockElectionProvider
+{
+	type Error = ();
+	type DataProvider = pallet_staking::Module<Test>;
+
+	fn elect() -> Result<
+		(sp_npos_elections::Supports<AccountId>, frame_support::weights::Weight),
+		Self::Error
+	> {
+		Err(())
+	}
 }
 
 impl pallet_staking::Config for Test {
@@ -177,14 +187,13 @@ impl pallet_staking::Config for Test {
 	type SessionInterface = Self;
 	type EraPayout = pallet_staking::ConvertCurve<RewardCurve>;
 	type NextNewSession = Session;
+	type ElectionLookahead = ();
+	type Call = Call;
+	type MaxIterations = MaxIterations;
+	type MinSolutionScoreBump = ();
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
-	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
+	type UnsignedPriority = ();
+	type OffchainSolutionWeightLimit = ();
 	type WeightInfo = ();
-}
-
-impl crate::Config for Test {}
-
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	sp_io::TestExternalities::new(t)
+	type ElectionProvider = MockElectionProvider;
 }

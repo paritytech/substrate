@@ -24,7 +24,6 @@ use frame_benchmarking::account;
 use frame_system::RawOrigin;
 use sp_io::hashing::blake2_256;
 use rand_chacha::{rand_core::{RngCore, SeedableRng}, ChaChaRng};
-use sp_npos_elections::*;
 
 const SEED: u32 = 0;
 
@@ -115,7 +114,7 @@ pub fn create_validators<T: Config>(
 /// - `to_nominate`: if `Some(n)`, only the first `n` bonded validator are voted upon. Else, all of
 ///   them are considered and `edge_per_nominator` random validators are voted for.
 ///
-/// Return the validators choosen to be nominated.
+/// Return the validators chosen to be nominated.
 pub fn create_validators_with_nominators_for_era<T: Config>(
 	validators: u32,
 	nominators: u32,
@@ -183,34 +182,4 @@ pub fn init_active_era() {
 		index: 1,
 		start: None,
 	})
-}
-
-/// Create random assignments for the given list of winners. Each assignment will have
-/// MAX_NOMINATIONS edges.
-pub fn create_assignments_for_offchain<T: Config>(
-	num_assignments: u32,
-	winners: Vec<<T::Lookup as StaticLookup>::Source>,
-) -> Result<
-	(
-		Vec<(T::AccountId, ExtendedBalance)>,
-		Vec<Assignment<T::AccountId, OffchainAccuracy>>,
-	),
-	&'static str
-> {
-	let ratio = OffchainAccuracy::from_rational_approximation(1, MAX_NOMINATIONS);
-	let assignments: Vec<Assignment<T::AccountId, OffchainAccuracy>> = <Nominators<T>>::iter()
-		.take(num_assignments as usize)
-		.map(|(n, t)| Assignment {
-			who: n,
-			distribution: t.targets.iter().map(|v| (v.clone(), ratio)).collect(),
-		})
-		.collect();
-
-	ensure!(assignments.len() == num_assignments as usize, "must bench for `a` assignments");
-
-	let winners = winners.into_iter().map(|v| {
-		(<T::Lookup as StaticLookup>::lookup(v).unwrap(), 0)
-	}).collect();
-
-	Ok((winners, assignments))
 }

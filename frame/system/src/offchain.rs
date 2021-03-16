@@ -38,10 +38,10 @@
 //!
 //! To be able to use signing, the following trait should be implemented:
 //!
-//! - [`AppCrypto`](./trait.AppCrypto.html): where an application-specific key
-//!   is defined and can be used by this module's helpers for signing.
-//! - [`CreateSignedTransaction`](./trait.CreateSignedTransaction.html): where
-//!   the manner in which the transaction is constructed is defined.
+//! - [`AppCrypto`](./trait.AppCrypto.html): where an application-specific key is defined and can be
+//!   used by this module's helpers for signing.
+//! - [`CreateSignedTransaction`](./trait.CreateSignedTransaction.html): where the manner in which
+//!   the transaction is constructed is defined.
 //!
 //! #### Submit an unsigned transaction with a signed payload
 //!
@@ -53,7 +53,6 @@
 //! #### Submit a signed transaction
 //!
 //! [`Signer`](./struct.Signer.html) can be used to sign/verify payloads
-//!
 
 #![warn(missing_docs)]
 
@@ -473,7 +472,7 @@ pub trait SendTransactionTypes<LocalCall> {
 	/// The runtime's call type.
 	///
 	/// This has additional bound to be able to be created from pallet-local `Call` types.
-	type OverarchingCall: From<LocalCall>;
+	type OverarchingCall: From<LocalCall> + codec::Encode;
 }
 
 /// Create signed transaction.

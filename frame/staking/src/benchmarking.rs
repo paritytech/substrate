@@ -24,12 +24,9 @@ use testing_utils::*;
 use sp_runtime::traits::One;
 use frame_system::RawOrigin;
 pub use frame_benchmarking::{
-	benchmarks,
-	account,
-	whitelisted_caller,
-	whitelist_account,
-	impl_benchmark_test_suite,
+	benchmarks, account, whitelisted_caller, whitelist_account, impl_benchmark_test_suite,
 };
+
 const SEED: u32 = 0;
 const MAX_SPANS: u32 = 100;
 const MAX_VALIDATORS: u32 = 1000;

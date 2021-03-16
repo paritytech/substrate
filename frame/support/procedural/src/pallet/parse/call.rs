@@ -172,7 +172,7 @@ impl CallDef {
 				}
 
 				let mut call_var_attrs: Vec<FunctionAttr> =
-					helper::take_item_attrs(&mut method.attrs)?;
+					helper::take_item_pallet_attrs(&mut method.attrs)?;
 
 				if call_var_attrs.len() != 1 {
 					let msg = if call_var_attrs.is_empty() {
@@ -193,7 +193,7 @@ impl CallDef {
 					};
 
 					let arg_attrs: Vec<ArgAttrIsCompact> =
-						helper::take_item_attrs(&mut arg.attrs)?;
+						helper::take_item_pallet_attrs(&mut arg.attrs)?;
 
 					if arg_attrs.len() > 1 {
 						let msg = "Invalid pallet::call, argument has too many attributes";
