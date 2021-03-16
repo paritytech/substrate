@@ -302,6 +302,9 @@ pub type TryHandleErrorResult =
 /// Something that provides inherent data.
 #[cfg(feature = "std")]
 pub trait InherentDataProvider {
+	/// Convenience function for creating [`InherentData`].
+	///
+	/// Basically maps around [`Self::provide_inherent_data`].
 	fn create_inherent_data(&self) -> Result<InherentData, Error> {
 		let mut inherent_data = InherentData::new();
 		self.provide_inherent_data(&mut inherent_data)?;
@@ -336,7 +339,7 @@ impl InherentDataProvider for Tuple {
 		&self,
 		identifier: &InherentIdentifier,
 		error: &[u8],
-	) -> Option<std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), Box<dyn std::error::Error + Send + Sync>>> + Send>>> {
+	) -> TryHandleErrorResult {
 		for_tuples!( #(
 			if let Some(e) = Tuple.try_handle_error(identifier, error) { return Some(e) }
 		)* );
