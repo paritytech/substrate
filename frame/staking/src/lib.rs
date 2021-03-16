@@ -1062,66 +1062,54 @@ pub mod migrations {
 		use super::*;
 		use frame_support::{traits::Get, weights::Weight, pallet_prelude::*};
 
-		pub trait V6Config: crate::Config {
-			/// The storage prefix of the pallet set by the outer runtime declaration.
-			type PalletPrefix: Get<&'static str>;
-		}
-
 		macro_rules! generate_storage_types {
-			($name:ident<T: $trait:tt> => Map<$key:ty, $value:ty>) => {
-				// NOTE: just demonstrating what could be done here, maybe we can move this to
-				// frame-support so that other can use as well.
-				compile_error!("unreachable!")
-			};
-			($name:ident<T: $trait:tt> => Value<$value:ty>) => {
+			($name:ident => Value<$value:ty>) => {
 				paste::paste! {
-					struct [<$name Instance>]<T>(sp_std::marker::PhantomData<T>);
-					impl<T: $trait> frame_support::traits::StorageInstance for [<$name Instance>]<T> {
+					struct [<$name Instance>];
+					impl frame_support::traits::StorageInstance for [<$name Instance>] {
 						fn pallet_prefix() -> &'static str {
-							T::PalletPrefix::get()
+							"Staking"
 						}
 						const STORAGE_PREFIX: &'static str = stringify!($name);
 					}
-					type $name<T> = StorageValue<[<$name Instance>]<T>, $value, ValueQuery>;
+					type $name = StorageValue<[<$name Instance>], $value, ValueQuery>;
 				}
 			}
 		}
 
 		// NOTE: value type doesn't matter, we just set it to () here.
-		generate_storage_types!(SnapshotValidators<T: V6Config> => Value<()>);
-		generate_storage_types!(SnapshotNominators<T: V6Config> => Value<()>);
-		generate_storage_types!(QueuedElected<T: V6Config> => Value<()>);
-		generate_storage_types!(QueuedScore<T: V6Config> => Value<()>);
-		generate_storage_types!(EraElectionStatus<T: V6Config> => Value<()>);
-		generate_storage_types!(IsCurrentSessionFinal<T: V6Config> => Value<()>);
+		generate_storage_types!(SnapshotValidators => Value<()>);
+		generate_storage_types!(SnapshotNominators => Value<()>);
+		generate_storage_types!(QueuedElected => Value<()>);
+		generate_storage_types!(QueuedScore => Value<()>);
+		generate_storage_types!(EraElectionStatus => Value<()>);
+		generate_storage_types!(IsCurrentSessionFinal => Value<()>);
 
 		/// check to execute prior to migration.
-		pub fn pre_migration<T: V6Config>() -> Result<(), &'static str> {
+		pub fn pre_migrate<T: Config>() -> Result<(), &'static str> {
 			// these may or may not exist.
-			log!(info, "SnapshotValidators.exits()? {:?}", SnapshotValidators::<T>::exists());
-			log!(info, "SnapshotNominators.exits()? {:?}", SnapshotNominators::<T>::exists());
-			log!(info, "QueuedElected.exits()? {:?}", QueuedElected::<T>::exists());
-			log!(info, "QueuedScore.exits()? {:?}", QueuedScore::<T>::exists());
+			log!(info, "SnapshotValidators.exits()? {:?}", SnapshotValidators::exists());
+			log!(info, "SnapshotNominators.exits()? {:?}", SnapshotNominators::exists());
+			log!(info, "QueuedElected.exits()? {:?}", QueuedElected::exists());
+			log!(info, "QueuedScore.exits()? {:?}", QueuedScore::exists());
 			// these must exist.
-			assert!(IsCurrentSessionFinal::<T>::exists(), "IsCurrentSessionFinal storage item not found!");
-			assert!(EraElectionStatus::<T>::exists(), "EraElectionStatus storage item not found!");
+			assert!(IsCurrentSessionFinal::exists(), "IsCurrentSessionFinal storage item not found!");
+			assert!(EraElectionStatus::exists(), "EraElectionStatus storage item not found!");
 			Ok(())
 		}
 
 		/// Migrate storage to v6.
-		pub fn migrate<T: V6Config>() -> Weight {
-			if StorageVersion::get() == Releases::V5_0_0 {
-				log!(info, "Migrating staking to Releases::V6_0_0");
+		pub fn migrate<T: Config>() -> Weight {
+			log!(info, "Migrating staking to Releases::V6_0_0");
 
-				SnapshotValidators::<T>::kill();
-				SnapshotNominators::<T>::kill();
-				QueuedElected::<T>::kill();
-				QueuedScore::<T>::kill();
-				EraElectionStatus::<T>::kill();
-				IsCurrentSessionFinal::<T>::kill();
+			SnapshotValidators::kill();
+			SnapshotNominators::kill();
+			QueuedElected::kill();
+			QueuedScore::kill();
+			EraElectionStatus::kill();
+			IsCurrentSessionFinal::kill();
 
-				StorageVersion::put(Releases::V6_0_0);
-			}
+			StorageVersion::put(Releases::V6_0_0);
 			T::DbWeight::get().writes(6 + 1)
 		}
 	}
@@ -1260,6 +1248,14 @@ decl_module! {
 				.checked_mul(<OffchainAccuracy>::one().deconstruct().try_into().unwrap())
 				.is_some()
 			);
+		}
+
+		fn on_runtime_upgrade() -> Weight {
+			if StorageVersion::get() == Releases::V5_0_0 {
+				migrations::v6::migrate::<T>()
+			} else {
+				T::DbWeight::get().reads(1)
+			}
 		}
 
 		/// Take the origin account as a stash and lock up `value` of its balance. `controller` will
@@ -2320,8 +2316,7 @@ impl<T: Config> Module<T> {
 						total = total.saturating_add(stake);
 					});
 
-			let exposure = Exposure { own, others, total };
-
+				let exposure = Exposure { own, others, total };
 				(validator, exposure)
 			})
 			.collect::<Vec<(T::AccountId, Exposure<_, _>)>>()
@@ -2379,12 +2374,14 @@ impl<T: Config> Module<T> {
 		// emit event
 		Self::deposit_event(RawEvent::StakingElection);
 
-		log!(
-			info,
-			"new validator set of size {:?} has been processed for era {:?}",
-			elected_stashes.len(),
-			current_era,
-		);
+		if current_era > 0 {
+			log!(
+				info,
+				"new validator set of size {:?} has been processed for era {:?}",
+				elected_stashes.len(),
+				current_era,
+			);
+		}
 
 		Ok(elected_stashes)
 	}
@@ -2395,12 +2392,12 @@ impl<T: Config> Module<T> {
 	fn enact_election(current_era: EraIndex) -> Option<Vec<T::AccountId>> {
 		T::ElectionProvider::elect()
 			.map_err(|e| log!(warn, "election provider failed due to {:?}", e))
-			.and_then(|(r, w)| {
+			.and_then(|(res, weight)| {
 				<frame_system::Pallet<T>>::register_extra_weight_unchecked(
-					w,
+					weight,
 					frame_support::weights::DispatchClass::Mandatory,
 				);
-				Self::process_election(r, current_era)
+				Self::process_election(res, current_era)
 			})
 			.ok()
 	}
