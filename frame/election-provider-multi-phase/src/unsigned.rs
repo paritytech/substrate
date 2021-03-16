@@ -17,35 +17,16 @@
 
 //! The unsigned phase implementation.
 
-use crate::{
-	helpers,
-	Call,
-	CompactAccuracyOf,
-	CompactOf,
-	CompactVoterIndexOf,
-	Config,
-	ElectionCompute,
-	Error,
-	FeasibilityError,
-	Pallet,
-	RawSolution,
-	ReadySolution,
-	RoundSnapshot,
-	SolutionOrSnapshotSize,
-	Weight,
-	WeightInfo,
+use crate::{helpers, Call, CompactAccuracyOf, CompactOf, CompactVoterIndexOf, Config,
+	ElectionCompute, Error, FeasibilityError, Pallet, RawSolution, ReadySolution, RoundSnapshot,
+	SolutionOrSnapshotSize, Weight, WeightInfo,
 };
 use codec::Decode;
 use frame_support::{dispatch::DispatchResult, ensure, traits::Get};
 use frame_system::offchain::SubmitTransaction;
 use sp_arithmetic::Perbill;
-use sp_npos_elections::{
-	assignment_ratio_to_staked_normalized,
-	assignment_staked_to_ratio_normalized,
-	is_score_better,
-	seq_phragmen,
-	CompactSolution,
-	ElectionResult,
+use sp_npos_elections::{assignment_ratio_to_staked_normalized, assignment_staked_to_ratio_normalized,
+	is_score_better, seq_phragmen, CompactSolution, ElectionResult,
 };
 use sp_runtime::{offchain::storage::StorageValueRef, traits::TrailingZeroInput};
 use sp_std::{cmp::Ordering, vec::Vec};
