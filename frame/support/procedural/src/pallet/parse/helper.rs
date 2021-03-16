@@ -82,14 +82,14 @@ pub fn take_item_pallet_attrs<Attr>(item: &mut impl MutItemAttrs) -> syn::Result
 }
 
 /// Get all the cfg attributes (e.g. attribute like `#[cfg..]`) and decode them to `Attr`
-pub fn get_item_cfg_attrs(attrs: &Vec<syn::Attribute>) -> syn::Result<Vec<syn::Attribute>> {
-	Ok(attrs.iter().filter_map(|attr| -> Option<syn::Attribute> {
+pub fn get_item_cfg_attrs(attrs: &[syn::Attribute]) -> Vec<syn::Attribute> {
+	attrs.iter().filter_map(|attr|  {
 		if attr.path.segments.first().map_or(false, |segment| segment.ident == "cfg") {
 			Some(attr.clone())
 		} else {
 			None
 		}
-	}).collect::<Vec<_>>())
+	}).collect::<Vec<_>>()
 }
 
 impl MutItemAttrs for syn::Item {
