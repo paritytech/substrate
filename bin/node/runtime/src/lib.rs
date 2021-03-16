@@ -1434,8 +1434,8 @@ impl_runtime_apis! {
 			// Trying to add benchmarks directly to the Session Pallet caused cyclic dependency
 			// issues. To get around that, we separated the Session benchmarks into its own crate,
 			// which is why we need these two lines below.
-			use pallet_session_benchmarking::Module as SessionBench;
-			use pallet_offences_benchmarking::Module as OffencesBench;
+			use pallet_session_benchmarking::Pallet as SessionBench;
+			use pallet_offences_benchmarking::Pallet as OffencesBench;
 			use frame_system_benchmarking::Pallet as SystemBench;
 
 			impl pallet_session_benchmarking::Config for Runtime {}

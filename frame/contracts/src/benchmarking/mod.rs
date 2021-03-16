@@ -23,7 +23,7 @@ mod code;
 mod sandbox;
 
 use crate::{
-	*, Module as Contracts,
+	*, Pallet as Contracts,
 	exec::StorageKey,
 	rent::Rent,
 	schedule::{API_BENCHMARK_BATCH_SIZE, INSTR_BENCHMARK_BATCH_SIZE},

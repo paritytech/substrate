@@ -133,7 +133,7 @@ mod benchmarks {
 	use crate::{BenchmarkingSetup, BenchmarkParameter, account};
 
 	// Additional used internally by the benchmark macro.
-	use super::pallet_test::{Call, Config, Module};
+	use super::pallet_test::{Call, Config, Pallet};
 
 	crate::benchmarks!{
 		where_clause {

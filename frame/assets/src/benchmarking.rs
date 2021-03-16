@@ -29,7 +29,7 @@ use frame_benchmarking::{
 use frame_support::traits::Get;
 use frame_support::{traits::EnsureOrigin, dispatch::UnfilteredDispatchable};
 
-use crate::Module as Assets;
+use crate::Pallet as Assets;
 
 const SEED: u32 = 0;
 

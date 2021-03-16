@@ -50,7 +50,7 @@ const MAX_OFFENDERS: u32 = 100;
 const MAX_NOMINATORS: u32 = 100;
 const MAX_DEFERRED_OFFENCES: u32 = 100;
 
-pub struct Module<T: Config>(Offences<T>);
+pub struct Pallet<T: Config>(Offences<T>);
 
 pub trait Config:
 	SessionConfig
@@ -421,7 +421,7 @@ benchmarks! {
 }
 
 impl_benchmark_test_suite!(
-	Module,
+	Pallet,
 	crate::mock::new_test_ext(),
 	crate::mock::Test,
 );

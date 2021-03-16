@@ -34,7 +34,7 @@ use frame_system::{Pallet as System, Call, RawOrigin, DigestItemOf};
 
 mod mock;
 
-pub struct Module<T: Config>(System<T>);
+pub struct Pallet<T: Config>(System<T>);
 pub trait Config: frame_system::Config {}
 
 benchmarks! {
@@ -145,7 +145,7 @@ benchmarks! {
 }
 
 impl_benchmark_test_suite!(
-	Module,
+	Pallet,
 	crate::mock::new_test_ext(),
 	crate::mock::Test,
 );

@@ -676,7 +676,7 @@ macro_rules! impl_benchmark {
 		( $( $name_extra:ident ),* )
 	) => {
 		impl<T: Config $(<$instance>, $instance: $instance_bound )? >
-			$crate::Benchmarking<$crate::BenchmarkResults> for Module<T $(, $instance)? >
+			$crate::Benchmarking<$crate::BenchmarkResults> for Pallet<T $(, $instance)? >
 			where T: frame_system::Config, $( $where_clause )*
 		{
 			fn benchmarks(extra: bool) -> $crate::Vec<&'static [u8]> {
@@ -961,7 +961,7 @@ macro_rules! impl_benchmark_test {
 /// When called in `pallet_example` as
 ///
 /// ```rust,ignore
-/// impl_benchmark_test_suite!(Module, crate::tests::new_test_ext(), crate::tests::Test);
+/// impl_benchmark_test_suite!(Pallet, crate::tests::new_test_ext(), crate::tests::Test);
 /// ```
 ///
 /// It expands to the equivalent of:
@@ -1019,11 +1019,11 @@ macro_rules! impl_benchmark_test {
 /// }
 ///
 /// mod tests {
-/// 	// because of macro syntax limitations, neither Module nor benches can be paths, but both have
+/// 	// because of macro syntax limitations, neither Pallet nor benches can be paths, but both have
 /// 	// to be idents in the scope of `impl_benchmark_test_suite`.
-/// 	use crate::{benches, Module};
+/// 	use crate::{benches, Pallet};
 ///
-/// 	impl_benchmark_test_suite!(Module, new_test_ext(), Test, benchmarks_path = benches);
+/// 	impl_benchmark_test_suite!(Pallet, new_test_ext(), Test, benchmarks_path = benches);
 ///
 /// 	// new_test_ext and the Test item are defined later in this module
 /// }
