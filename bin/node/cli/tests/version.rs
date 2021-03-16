@@ -28,7 +28,7 @@ fn expected_regex() -> Regex {
 #[test]
 fn version_is_full() {
 	let expected = expected_regex();
-	let output = Command::new(cargo_bin("substrate"))
+	let output = Command::new(cargo_bin("cere"))
 		.args(&["--version"])
 		.output()
 		.unwrap();

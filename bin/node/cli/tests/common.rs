@@ -48,7 +48,7 @@ pub fn wait_for(child: &mut Child, secs: usize) -> Option<ExitStatus> {
 
 /// Run the node for a while (30 seconds)
 pub fn run_dev_node_for_a_while(base_path: &Path) {
-	let mut cmd = Command::new(cargo_bin("substrate"));
+	let mut cmd = Command::new(cargo_bin("cere"));
 
 	let mut cmd = cmd
 		.args(&["--dev"])
