@@ -78,6 +78,8 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 			let gen = &def.type_use_generics(storage.attr_span);
 			let full_ident = quote::quote_spanned!(storage.attr_span => #ident<#gen> );
 
+			let cfg_attrs = &storage.cfg_attrs;
+
 			let metadata_trait = match &storage.metadata {
 				Metadata::Value { .. } => quote::quote_spanned!(storage.attr_span =>
 					#frame_support::storage::types::StorageValueMetadata
@@ -128,7 +130,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 			};
 
 			quote::quote_spanned!(storage.attr_span =>
-				#frame_support::metadata::StorageEntryMetadata {
+				#(#cfg_attrs)* #frame_support::metadata::StorageEntryMetadata {
 					name: #frame_support::metadata::DecodeDifferent::Encode(
 						<#full_ident as #metadata_trait>::NAME
 					),
@@ -159,6 +161,8 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 			let type_use_gen = &def.type_use_generics(storage.attr_span);
 			let full_ident = quote::quote_spanned!(storage.attr_span => #ident<#gen> );
 
+			let cfg_attrs = &storage.cfg_attrs;
+
 			match &storage.metadata {
 				Metadata::Value { value } => {
 					let query = match storage.query_kind.as_ref().expect("Checked by def") {
@@ -168,6 +172,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						QueryKind::ValueQuery => quote::quote!(#value),
 					};
 					quote::quote_spanned!(storage.attr_span =>
+						#(#cfg_attrs)*
 						impl<#type_impl_gen> #pallet_ident<#type_use_gen> #completed_where_clause {
 							#( #docs )*
 							pub fn #getter() -> #query {
@@ -186,6 +191,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						QueryKind::ValueQuery => quote::quote!(#value),
 					};
 					quote::quote_spanned!(storage.attr_span =>
+						#(#cfg_attrs)*
 						impl<#type_impl_gen> #pallet_ident<#type_use_gen> #completed_where_clause {
 							#( #docs )*
 							pub fn #getter<KArg>(k: KArg) -> #query where
@@ -206,6 +212,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						QueryKind::ValueQuery => quote::quote!(#value),
 					};
 					quote::quote_spanned!(storage.attr_span =>
+						#(#cfg_attrs)*
 						impl<#type_impl_gen> #pallet_ident<#type_use_gen> #completed_where_clause {
 							#( #docs )*
 							pub fn #getter<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> #query where
@@ -233,10 +240,14 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 		let prefix_struct_const = storage_def.ident.to_string();
 		let config_where_clause = &def.config.where_clause;
 
+		let cfg_attrs = &storage_def.cfg_attrs;
+
 		quote::quote_spanned!(storage_def.attr_span =>
+			#(#cfg_attrs)*
 			#prefix_struct_vis struct #prefix_struct_ident<#type_use_gen>(
 				core::marker::PhantomData<(#type_use_gen,)>
 			);
+			#(#cfg_attrs)*
 			impl<#type_impl_gen> #frame_support::traits::StorageInstance
 				for #prefix_struct_ident<#type_use_gen>
 				#config_where_clause

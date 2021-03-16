@@ -97,7 +97,7 @@ pub mod weights;
 
 use sp_std::{result, cmp};
 use sp_inherents::InherentData;
-use frame_support::traits::{Time, UnixTime};
+use frame_support::traits::{Time, UnixTime, OnTimestampSet};
 use sp_runtime::{
 	RuntimeString,
 	traits::{
@@ -106,7 +106,6 @@ use sp_runtime::{
 };
 use sp_timestamp::{
 	InherentError, INHERENT_IDENTIFIER, InherentType,
-	OnTimestampSet,
 };
 pub use weights::WeightInfo;
 
@@ -214,16 +213,17 @@ pub mod pallet {
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 		fn create_inherent(data: &InherentData) -> Option<Self::Call> {
-			let data: T::Moment = extract_inherent_data(data)
-				.expect("Gets and decodes timestamp inherent data")
-				.saturated_into();
+			let inherent_data = extract_inherent_data(data)
+				.expect("Gets and decodes timestamp inherent data");
+			let data = (*inherent_data).saturated_into::<T::Moment>();
 
 			let next_time = cmp::max(data, Self::now() + T::MinimumPeriod::get());
 			Some(Call::set(next_time.into()))
 		}
 
 		fn check_inherent(call: &Self::Call, data: &InherentData) -> result::Result<(), Self::Error> {
-			const MAX_TIMESTAMP_DRIFT_MILLIS: u64 = 30 * 1000;
+			const MAX_TIMESTAMP_DRIFT_MILLIS: sp_timestamp::Timestamp =
+				sp_timestamp::Timestamp::new(30 * 1000);
 
 			let t: u64 = match call {
 				Call::set(ref t) => t.clone().saturated_into::<u64>(),
@@ -233,10 +233,10 @@ pub mod pallet {
 			let data = extract_inherent_data(data).map_err(|e| InherentError::Other(e))?;
 
 			let minimum = (Self::now() + T::MinimumPeriod::get()).saturated_into::<u64>();
-			if t > data + MAX_TIMESTAMP_DRIFT_MILLIS {
+			if t > *(data + MAX_TIMESTAMP_DRIFT_MILLIS) {
 				Err(InherentError::Other("Timestamp too far in future to accept".into()))
 			} else if t < minimum {
-				Err(InherentError::ValidAtTimestamp(minimum))
+				Err(InherentError::ValidAtTimestamp(minimum.into()))
 			} else {
 				Ok(())
 			}

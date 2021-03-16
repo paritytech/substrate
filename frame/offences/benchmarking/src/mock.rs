@@ -29,7 +29,7 @@ use sp_runtime::{
 	traits::IdentityLookup,
 	testing::{Header, UintAuthorityId},
 };
-use sp_election_providers::onchain;
+use frame_election_provider_support::onchain;
 use pallet_session::historical as pallet_session_historical;
 
 type AccountId = u64;
@@ -152,6 +152,7 @@ pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
 impl onchain::Config for Test {
 	type AccountId = AccountId;
 	type BlockNumber = BlockNumber;
+	type BlockWeights = ();
 	type Accuracy = Perbill;
 	type DataProvider = Staking;
 }
@@ -186,7 +187,7 @@ impl pallet_im_online::Config for Test {
 	type AuthorityId = UintAuthorityId;
 	type Event = Event;
 	type ValidatorSet = Historical;
-	type SessionDuration = Period;
+	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 	type ReportUnresponsiveness = Offences;
 	type UnsignedPriority = ();
 	type WeightInfo = ();
