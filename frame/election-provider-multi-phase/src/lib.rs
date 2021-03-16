@@ -1231,7 +1231,7 @@ mod feasibility_check {
 					.compact
 					.votes1
 					.iter_mut()
-					.filter(|(v, _)| *v == 7 as VoterIndex)
+					.filter(|(v, _)| *v == VoterIndex::from(7u32))
 					.map(|(v, _)| *v = 8)
 					.count() > 0
 			);
