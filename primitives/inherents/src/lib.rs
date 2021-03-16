@@ -424,7 +424,7 @@ pub trait ProvideInherent {
 	/// - `Err(_)` indicates that this function failed and further operations should be aborted.
 	///
 	/// NOTE: If inherent is required then the runtime asserts that the block contains at least
-	/// one call for which:
+	/// one inherent for which:
 	/// * type is [`Self::Call`],
 	/// * [`Self::is_inherent`] returns true.
 	fn is_inherent_required(_: &InherentData) -> Result<Option<Self::Error>, Self::Error> { Ok(None) }
