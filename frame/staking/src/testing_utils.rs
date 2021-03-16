@@ -23,8 +23,10 @@ use crate::Module as Staking;
 use frame_benchmarking::account;
 use frame_system::RawOrigin;
 use sp_io::hashing::blake2_256;
-use rand_chacha::{rand_core::{RngCore, SeedableRng}, ChaChaRng};
-use sp_npos_elections::*;
+use rand_chacha::{
+	rand_core::{RngCore, SeedableRng},
+	ChaChaRng,
+};
 
 const SEED: u32 = 0;
 
@@ -183,34 +185,4 @@ pub fn init_active_era() {
 		index: 1,
 		start: None,
 	})
-}
-
-/// Create random assignments for the given list of winners. Each assignment will have
-/// MAX_NOMINATIONS edges.
-pub fn create_assignments_for_offchain<T: Config>(
-	num_assignments: u32,
-	winners: Vec<<T::Lookup as StaticLookup>::Source>,
-) -> Result<
-	(
-		Vec<(T::AccountId, ExtendedBalance)>,
-		Vec<Assignment<T::AccountId, OffchainAccuracy>>,
-	),
-	&'static str
-> {
-	let ratio = OffchainAccuracy::from_rational_approximation(1, MAX_NOMINATIONS);
-	let assignments: Vec<Assignment<T::AccountId, OffchainAccuracy>> = <Nominators<T>>::iter()
-		.take(num_assignments as usize)
-		.map(|(n, t)| Assignment {
-			who: n,
-			distribution: t.targets.iter().map(|v| (v.clone(), ratio)).collect(),
-		})
-		.collect();
-
-	ensure!(assignments.len() == num_assignments as usize, "must bench for `a` assignments");
-
-	let winners = winners.into_iter().map(|v| {
-		(<T::Lookup as StaticLookup>::lookup(v).unwrap(), 0)
-	}).collect();
-
-	Ok((winners, assignments))
 }

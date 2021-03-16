@@ -112,6 +112,7 @@ mod tests {
 		pub struct DataProvider;
 
 		impl ElectionDataProvider<AccountId, BlockNumber> for DataProvider {
+			const MAXIMUM_VOTES_PER_VOTER: u32 = 2;
 			fn voters() -> Vec<(AccountId, VoteWeight, Vec<AccountId>)> {
 				vec![
 					(1, 10, vec![10, 20]),

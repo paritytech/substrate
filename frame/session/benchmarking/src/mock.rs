@@ -162,6 +162,7 @@ impl onchain::Config for Test {
 }
 
 impl pallet_staking::Config for Test {
+	const MAX_NOMINATIONS: u32 = 16;
 	type Currency = Balances;
 	type UnixTime = pallet_timestamp::Module<Self>;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;

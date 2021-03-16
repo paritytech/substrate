@@ -207,16 +207,20 @@ benchmarks! {
 	kick {
 		// scenario: we want to kick `k` nominators from nominating us (we are a validator).
 		// we'll assume that `k` is under 128 for the purposes of determining the slope.
-		// each nominator should have `MAX_NOMINATIONS` validators nominated, and our validator
+		// each nominator should have `T::MAX_NOMINATIONS` validators nominated, and our validator
 		// should be somewhere in there.
 		let k in 1 .. 128;
 
-		// these are the other validators; there are `MAX_NOMINATIONS - 1` of them, so there are a
-		// total of `MAX_NOMINATIONS` validators in the system.
-		let rest_of_validators = create_validators::<T>(MAX_NOMINATIONS as u32 - 1, 100)?;
+		// these are the other validators; there are `T::MAX_NOMINATIONS - 1` of them, so
+		// there are a total of `T::MAX_NOMINATIONS` validators in the system.
+		let rest_of_validators = create_validators::<T>(T::MAX_NOMINATIONS - 1, 100)?;
 
 		// this is the validator that will be kicking.
-		let (stash, controller) = create_stash_controller::<T>(MAX_NOMINATIONS as u32 - 1, 100, Default::default())?;
+		let (stash, controller) = create_stash_controller::<T>(
+			T::MAX_NOMINATIONS - 1,
+			100,
+			Default::default(),
+		)?;
 		let stash_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(stash.clone());
 
 		// they start validating.
@@ -227,7 +231,11 @@ benchmarks! {
 		let mut nominator_stashes = Vec::with_capacity(k as usize);
 		for i in 0 .. k {
 			// create a nominator stash.
-			let (n_stash, n_controller) = create_stash_controller::<T>(MAX_NOMINATIONS as u32 + i, 100, Default::default())?;
+			let (n_stash, n_controller) = create_stash_controller::<T>(
+				T::MAX_NOMINATIONS + i,
+				100,
+				Default::default(),
+			)?;
 
 			// bake the nominations; we first clone them from the rest of the validators.
 			let mut nominations = rest_of_validators.clone();
@@ -259,9 +267,9 @@ benchmarks! {
 		}
 	}
 
-	// Worst case scenario, MAX_NOMINATIONS
+	// Worst case scenario, T::MAX_NOMINATIONS
 	nominate {
-		let n in 1 .. MAX_NOMINATIONS as u32;
+		let n in 1 .. T::MAX_NOMINATIONS;
 		let (stash, controller) = create_stash_controller::<T>(n + 1, 100, Default::default())?;
 		let validators = create_validators::<T>(n, 100)?;
 		whitelist_account!(controller);
@@ -470,7 +478,13 @@ benchmarks! {
 		let v in 1 .. 10;
 		let n in 1 .. 100;
 
-		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false, None)?;
+		create_validators_with_nominators_for_era::<T>(
+			v,
+			n,
+			<T as Config>::MAX_NOMINATIONS as usize,
+			false,
+			None,
+		)?;
 		let session_index = SessionIndex::one();
 	}: {
 		let validators = Staking::<T>::new_era(session_index).ok_or("`new_era` failed")?;
@@ -481,7 +495,13 @@ benchmarks! {
 	payout_all {
 		let v in 1 .. 10;
 		let n in 1 .. 100;
-		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false, None)?;
+		create_validators_with_nominators_for_era::<T>(
+			v,
+			n,
+			<T as Config>::MAX_NOMINATIONS as usize,
+			false,
+			None,
+		)?;
 		// Start a new Era
 		let new_validators = Staking::<T>::new_era(SessionIndex::one()).unwrap();
 		assert!(new_validators.len() == v as usize);
@@ -556,8 +576,13 @@ mod tests {
 			let v = 10;
 			let n = 100;
 
-			create_validators_with_nominators_for_era::<Test>(v, n, MAX_NOMINATIONS, false, None)
-				.unwrap();
+			create_validators_with_nominators_for_era::<Test>(
+				v,
+				n,
+				<Test as Config>::MAX_NOMINATIONS as usize,
+				false,
+				None,
+			).unwrap();
 
 			let count_validators = Validators::<Test>::iter().count();
 			let count_nominators = Nominators::<Test>::iter().count();
