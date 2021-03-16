@@ -40,7 +40,7 @@ use sp_runtime::{
 };
 use sp_staking::SessionIndex;
 use pallet_session::historical as pallet_session_historical;
-use sp_election_providers::onchain;
+use frame_election_provider_support::onchain;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -193,6 +193,7 @@ parameter_types! {
 impl onchain::Config for Test {
 	type AccountId = <Self as frame_system::Config>::AccountId;
 	type BlockNumber = <Self as frame_system::Config>::BlockNumber;
+	type BlockWeights = ();
 	type Accuracy = Perbill;
 	type DataProvider = Staking;
 }

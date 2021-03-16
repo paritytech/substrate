@@ -31,7 +31,7 @@ use sp_core::{
 	},
 	H256,
 };
-use sp_election_providers::ElectionDataProvider;
+use frame_election_provider_support::{ElectionDataProvider, data_provider};
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, seq_phragmen, to_supports, to_without_backing,
 	CompactSolution, ElectionResult, EvaluateSupport,
@@ -60,10 +60,12 @@ frame_support::construct_runtime!(
 
 pub(crate) type Balance = u64;
 pub(crate) type AccountId = u64;
+pub(crate) type VoterIndex = u32;
+pub(crate) type TargetIndex = u16;
 
 sp_npos_elections::generate_solution_type!(
 	#[compact]
-	pub struct TestCompact::<u32, u16, PerU16>(16)
+	pub struct TestCompact::<VoterIndex, TargetIndex, PerU16>(16)
 );
 
 /// All events of this pallet.
@@ -239,6 +241,13 @@ impl multi_phase::weights::WeightInfo for DualMockWeightInfo {
 			<() as multi_phase::weights::WeightInfo>::on_initialize_open_unsigned_without_snapshot()
 		}
 	}
+	fn elect_queued() -> Weight {
+		if MockWeightInfo::get() {
+			Zero::zero()
+		} else {
+			<() as multi_phase::weights::WeightInfo>::elect_queued()
+		}
+	}
 	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight {
 		if MockWeightInfo::get() {
 			// 10 base
@@ -291,17 +300,42 @@ pub struct ExtBuilder {}
 
 pub struct StakingMock;
 impl ElectionDataProvider<AccountId, u64> for StakingMock {
-	fn targets() -> Vec<AccountId> {
-		Targets::get()
+	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<AccountId>, Weight)> {
+		let targets = Targets::get();
+
+		if maybe_max_len.map_or(false, |max_len| targets.len() > max_len) {
+			return Err("Targets too big");
+		}
+
+		Ok((targets, 0))
 	}
-	fn voters() -> Vec<(AccountId, VoteWeight, Vec<AccountId>)> {
-		Voters::get()
+
+	fn voters(
+		maybe_max_len: Option<usize>,
+	) -> data_provider::Result<(Vec<(AccountId, VoteWeight, Vec<AccountId>)>, Weight)> {
+		let voters = Voters::get();
+		if maybe_max_len.map_or(false, |max_len| voters.len() > max_len) {
+			return Err("Voters too big");
+		}
+
+		Ok((voters, 0))
 	}
-	fn desired_targets() -> u32 {
-		DesiredTargets::get()
+	fn desired_targets() -> data_provider::Result<(u32, Weight)> {
+		Ok((DesiredTargets::get(), 0))
 	}
+
 	fn next_election_prediction(now: u64) -> u64 {
 		now + EpochLength::get() - now % EpochLength::get()
+	}
+
+	#[cfg(any(feature = "runtime-benchmarks", test))]
+	fn put_snapshot(
+		voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
+		targets: Vec<AccountId>,
+		_target_stake: Option<VoteWeight>,
+	) {
+		Targets::set(targets);
+		Voters::set(voters);
 	}
 }
 
@@ -319,7 +353,7 @@ impl ExtBuilder {
 		<UnsignedPhase>::set(unsigned);
 		self
 	}
-	pub fn fallabck(self, fallback: FallbackStrategy) -> Self {
+	pub fn fallback(self, fallback: FallbackStrategy) -> Self {
 		<Fallback>::set(fallback);
 		self
 	}

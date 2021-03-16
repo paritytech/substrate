@@ -331,7 +331,7 @@ use sp_npos_elections::{
 	to_supports, EvaluateSupport, seq_phragmen, generate_solution_type, is_score_better, Supports,
 	VoteWeight, CompactSolution, PerThing128,
 };
-use sp_election_providers::ElectionProvider;
+use frame_election_provider_support::{ElectionProvider, data_provider};
 pub use weights::WeightInfo;
 
 const STAKING_ID: LockIdentifier = *b"staking ";
@@ -800,7 +800,7 @@ pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
 	type CurrencyToVote: CurrencyToVote<BalanceOf<Self>>;
 
 	/// Something that provides the election functionality.
-	type ElectionProvider: sp_election_providers::ElectionProvider<
+	type ElectionProvider: frame_election_provider_support::ElectionProvider<
 		Self::AccountId,
 		Self::BlockNumber,
 		// we only accept an election provider that has staking as data provider.
@@ -3345,19 +3345,45 @@ impl<T: Config> Module<T> {
 	}
 }
 
-impl<T: Config> sp_election_providers::ElectionDataProvider<T::AccountId, T::BlockNumber>
+impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::AccountId, T::BlockNumber>
 	for Module<T>
 {
-	fn desired_targets() -> u32 {
-		Self::validator_count()
+	fn desired_targets() -> data_provider::Result<(u32, Weight)> {
+		Ok((Self::validator_count(), <T as frame_system::Config>::DbWeight::get().reads(1)))
 	}
 
-	fn voters() -> Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> {
-		Self::get_npos_voters()
+	fn voters(
+		maybe_max_len: Option<usize>,
+	) -> data_provider::Result<(Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>, Weight)> {
+		// NOTE: reading these counts already needs to iterate a lot of storage keys, but they get
+		// cached. This is okay for the case of `Ok(_)`, but bad for `Err(_)`, as the trait does not
+		// report weight in failures.
+		let nominator_count = <Nominators<T>>::iter().count();
+		let validator_count = <Validators<T>>::iter().count();
+		let voter_count = nominator_count.saturating_add(validator_count);
+
+		if maybe_max_len.map_or(false, |max_len| voter_count > max_len) {
+			return Err("Voter snapshot too big");
+		}
+
+		let slashing_span_count = <SlashingSpans<T>>::iter().count();
+		let weight = T::WeightInfo::get_npos_voters(
+			nominator_count as u32,
+			validator_count as u32,
+			slashing_span_count as u32,
+		);
+		Ok((Self::get_npos_voters(), weight))
 	}
 
-	fn targets() -> Vec<T::AccountId> {
-		Self::get_npos_targets()
+	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<T::AccountId>, Weight)> {
+		let target_count = <Validators<T>>::iter().count();
+
+		if maybe_max_len.map_or(false, |max_len| target_count > max_len) {
+			return Err("Target snapshot too big");
+		}
+
+		let weight = <T as frame_system::Config>::DbWeight::get().reads(target_count as u64);
+		Ok((Self::get_npos_targets(), weight))
 	}
 
 	fn next_election_prediction(now: T::BlockNumber) -> T::BlockNumber {
@@ -3391,15 +3417,45 @@ impl<T: Config> sp_election_providers::ElectionDataProvider<T::AccountId, T::Blo
 	fn put_snapshot(
 		voters: Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
 		targets: Vec<T::AccountId>,
+		target_stake: Option<VoteWeight>,
 	) {
+		use sp_std::convert::TryFrom;
 		targets.into_iter().for_each(|v| {
+			let stake: BalanceOf<T> = target_stake
+				.and_then(|w| <BalanceOf<T>>::try_from(w).ok())
+				.unwrap_or(T::Currency::minimum_balance() * 100u32.into());
+			<Bonded<T>>::insert(v.clone(), v.clone());
+			<Ledger<T>>::insert(
+				v.clone(),
+				StakingLedger {
+					stash: v.clone(),
+					active: stake,
+					total: stake,
+					unlocking: vec![],
+					claimed_rewards: vec![],
+				},
+			);
 			<Validators<T>>::insert(
 				v,
 				ValidatorPrefs { commission: Perbill::zero(), blocked: false },
 			);
 		});
 
-		voters.into_iter().for_each(|(v, _s, t)| {
+		voters.into_iter().for_each(|(v, s, t)| {
+			let stake = <BalanceOf<T>>::try_from(s).unwrap_or_else(|_| {
+				panic!("cannot convert a VoteWeight into BalanceOf, benchmark needs reconfiguring.")
+			});
+			<Bonded<T>>::insert(v.clone(), v.clone());
+			<Ledger<T>>::insert(
+				v.clone(),
+				StakingLedger {
+					stash: v.clone(),
+					active: stake,
+					total: stake,
+					unlocking: vec![],
+					claimed_rewards: vec![],
+				},
+			);
 			<Nominators<T>>::insert(
 				v,
 				Nominations { targets: t, submitted_in: 0, suppressed: false },

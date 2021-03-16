@@ -5019,12 +5019,14 @@ fn do_not_die_when_active_is_ed() {
 
 mod election_data_provider {
 	use super::*;
-	use sp_election_providers::ElectionDataProvider;
+	use frame_election_provider_support::ElectionDataProvider;
 
 	#[test]
 	fn voters_include_self_vote() {
 		ExtBuilder::default().nominate(false).build().execute_with(|| {
-			assert!(<Validators<Test>>::iter().map(|(x, _)| x).all(|v| Staking::voters()
+			assert!(<Validators<Test>>::iter().map(|(x, _)| x).all(|v| Staking::voters(None)
+				.unwrap()
+				.0
 				.into_iter()
 				.find(|(w, _, t)| { v == *w && t[0] == *w })
 				.is_some()))
@@ -5036,7 +5038,9 @@ mod election_data_provider {
 		ExtBuilder::default().build().execute_with(|| {
 			assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
 			assert_eq!(
-				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters()
+				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(None)
+					.unwrap()
+					.0
 					.iter()
 					.find(|x| x.0 == 101)
 					.unwrap()
@@ -5050,7 +5054,9 @@ mod election_data_provider {
 			// 11 is gone.
 			start_active_era(2);
 			assert_eq!(
-				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters()
+				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(None)
+					.unwrap()
+					.0
 					.iter()
 					.find(|x| x.0 == 101)
 					.unwrap()
@@ -5061,7 +5067,9 @@ mod election_data_provider {
 			// resubmit and it is back
 			assert_ok!(Staking::nominate(Origin::signed(100), vec![11, 21]));
 			assert_eq!(
-				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters()
+				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(None)
+					.unwrap()
+					.0
 					.iter()
 					.find(|x| x.0 == 101)
 					.unwrap()
@@ -5069,6 +5077,14 @@ mod election_data_provider {
 				vec![11, 21]
 			);
 		})
+	}
+
+	#[test]
+	fn respects_len_limits() {
+		ExtBuilder::default().build().execute_with(|| {
+			assert_eq!(Staking::voters(Some(1)).unwrap_err(), "Voter snapshot too big");
+			assert_eq!(Staking::targets(Some(1)).unwrap_err(), "Target snapshot too big");
+		});
 	}
 
 	#[test]
