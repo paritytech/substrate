@@ -112,10 +112,10 @@ pub fn create_validators<T: Config>(
 /// - `nominators`: number of bonded nominators.
 /// - `edge_per_nominator`: number of edge (vote) per nominator.
 /// - `randomize_stake`: whether to randomize the stakes.
-/// - `to_nominate`: if `Some(n)`, only the first `n` bonded validator are voted upon.
-///    Else, all of them are considered and `edge_per_nominator` random validators are voted for.
+/// - `to_nominate`: if `Some(n)`, only the first `n` bonded validator are voted upon. Else, all of
+///   them are considered and `edge_per_nominator` random validators are voted for.
 ///
-/// Return the validators choosen to be nominated.
+/// Return the validators chosen to be nominated.
 pub fn create_validators_with_nominators_for_era<T: Config>(
 	validators: u32,
 	nominators: u32,
@@ -376,7 +376,7 @@ pub fn create_assignments_for_offchain<T: Config>(
 	),
 	&'static str
 > {
-	let ratio = OffchainAccuracy::from_rational_approximation(1, MAX_NOMINATIONS);
+	let ratio = OffchainAccuracy::from_rational(1, MAX_NOMINATIONS);
 	let assignments: Vec<Assignment<T::AccountId, OffchainAccuracy>> = <Nominators<T>>::iter()
 		.take(num_assignments as usize)
 		.map(|(n, t)| Assignment {

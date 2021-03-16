@@ -26,7 +26,7 @@ sp-std = { version = "3.0.0", default-features = false, path = "../../primitives
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-npos-elections = { version = "3.0.0", default-features = false, path = "../../primitives/npos-elections" }
 sp-arithmetic = { version = "3.0.0", default-features = false, path = "../../primitives/arithmetic" }
-sp-election-providers = { version = "3.0.0", default-features = false, path = "../../primitives/election-providers" }
+frame-election-provider-support = { version = "3.0.0", default-features = false, path = "../election-provider-support" }
 
 # Optional imports for benchmarking
 frame-benchmarking = { version = "3.1.0", default-features = false, path = "../benchmarking", optional = true }
@@ -41,9 +41,9 @@ substrate-test-utils = { version = "3.0.0", path = "../../test-utils" }
 sp-io = { version = "3.0.0", path = "../../primitives/io" }
 sp-core = { version = "3.0.0", path = "../../primitives/core" }
 sp-tracing = { version = "3.0.0", path = "../../primitives/tracing" }
-sp-election-providers = { version = "3.0.0", features = ["runtime-benchmarks"], path = "../../primitives/election-providers" }
+frame-election-provider-support = { version = "3.0.0", features = ["runtime-benchmarks"], path = "../election-provider-support" }
 pallet-balances = { version = "3.0.0", path = "../balances" }
-frame-benchmarking = { path = "../benchmarking" , version = "3.1.0"}
+frame-benchmarking = { version = "3.1.0", path = "../benchmarking" }
 
 [features]
 default = ["std"]
@@ -60,7 +60,7 @@ std = [
 	"sp-runtime/std",
 	"sp-npos-elections/std",
 	"sp-arithmetic/std",
-	"sp-election-providers/std",
+	"frame-election-provider-support/std",
 	"log/std",
 ]
 runtime-benchmarks = [

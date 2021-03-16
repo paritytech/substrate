@@ -100,11 +100,7 @@ use frame_support::{
 	},
 	Parameter,
 };
-use frame_system::ensure_none;
-use frame_system::offchain::{
-	SendTransactionTypes,
-	SubmitTransaction,
-};
+use frame_system::{ensure_none, offchain::{SendTransactionTypes, SubmitTransaction}};
 pub use weights::WeightInfo;
 
 pub mod sr25519 {
@@ -813,7 +809,7 @@ impl<Offender: Clone> Offence<Offender> for UnresponsivenessOffence<Offender> {
 		// basically, 10% can be offline with no slash, but after that, it linearly climbs up to 7%
 		// when 13/30 are offline (around 5% when 1/3 are offline).
 		if let Some(threshold) = offenders.checked_sub(validator_set_count / 10 + 1) {
-			let x = Perbill::from_rational_approximation(3 * threshold, validator_set_count);
+			let x = Perbill::from_rational(3 * threshold, validator_set_count);
 			x.saturating_mul(Perbill::from_percent(7))
 		} else {
 			Perbill::default()

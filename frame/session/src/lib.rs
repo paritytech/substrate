@@ -177,12 +177,12 @@ impl<
 		// (0% is never returned).
 		let progress = if now >= offset {
 			let current = (now - offset) % period.clone() + One::one();
-			Some(Percent::from_rational_approximation(
+			Some(Percent::from_rational(
 				current.clone(),
 				period.clone(),
 			))
 		} else {
-			Some(Percent::from_rational_approximation(
+			Some(Percent::from_rational(
 				now + One::one(),
 				offset,
 			))
