@@ -27,7 +27,7 @@ use frame_support::{
 use frame_system::{RawOrigin, Pallet as System, self, EventRecord};
 use sp_runtime::traits::{Bounded, One};
 
-use crate::Module as Democracy;
+use crate::Pallet as Democracy;
 
 const SEED: u32 = 0;
 const MAX_REFERENDUMS: u32 = 99;

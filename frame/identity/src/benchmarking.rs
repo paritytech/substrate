@@ -25,7 +25,7 @@ use frame_system::{EventRecord, RawOrigin};
 use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
 use sp_runtime::traits::Bounded;
 
-use crate::Module as Identity;
+use crate::Pallet as Identity;
 
 const SEED: u32 = 0;
 
