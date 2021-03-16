@@ -1858,6 +1858,8 @@ macro_rules! decl_module {
 			$(<I>, $instance: $instantiable $( = $module_default_instance)?)?
 		>($crate::sp_std::marker::PhantomData<($trait_instance, $( $instance)?)>) where
 			$( $other_where_bounds )*;
+		/// The `Pallet` alias, to make `decl_module` compatible with new pallet attribute macro.
+		pub type Pallet<$trait_instance> = $mod_type<$trait_instance>;
 
 		$crate::decl_module! {
 			@impl_on_initialize
