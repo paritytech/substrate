@@ -63,6 +63,28 @@ pub struct SlotInfo<B: BlockT> {
 	pub chain_head: B::Header,
 }
 
+impl<B: BlockT> SlotInfo<B> {
+	/// Create a new [`SlotInfo`].
+	///
+	/// `ends_at` is calculated using `timestamp` and `duration`.
+	pub fn new(
+		slot: Slot,
+		timestamp: Duration,
+		inherent_data: InherentData,
+		duration: Duration,
+		chain_head: B::Header,
+	) -> Self {
+		Self {
+			slot,
+			timestamp,
+			inherent_data,
+			duration,
+			chain_head,
+			ends_at: time_until_next(timestamp, duration),
+		}
+	}
+}
+
 /// A stream that returns every time there is a new slot.
 pub(crate) struct Slots<Block, C, IDP> {
 	last_slot: Slot,
@@ -98,6 +120,7 @@ where
 	IDP: CreateInherentDataProviders<Block, ()>,
 	IDP::InherentDataProviders: crate::InherentDataProviderExt,
 {
+	/// Returns a future that fires when the next slot starts.
 	pub async fn next_slot(&mut self) -> Result<SlotInfo<Block>, Error> {
 		loop {
 			self.inner_delay = match self.inner_delay.take() {
@@ -146,14 +169,13 @@ where
 			if slot > self.last_slot {
 				self.last_slot = slot;
 
-				break Ok(SlotInfo {
+				break Ok(SlotInfo::new(
 					slot,
-					duration: self.slot_duration,
-					timestamp: timestamp.as_duration(),
-					ends_at,
+					self.slot_duration,
+					timestamp.as_duration(),
 					inherent_data,
 					chain_head,
-				})
+				))
 			}
 		}
 	}
