@@ -134,7 +134,7 @@ impl StorageDef {
 		}
 		let getter = attrs.pop().map(|attr| attr.getter);
 
-		let cfg_attrs: Vec<syn::Attribute> = helper::get_item_cfg_attrs(&item.attrs)?;
+		let cfg_attrs = helper::get_item_cfg_attrs(&item.attrs);
 
 		let mut instances = vec![];
 		instances.push(helper::check_type_def_gen(&item.generics, item.ident.span())?);
