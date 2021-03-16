@@ -57,7 +57,7 @@ fn test_regex_matches_properly() {
 	let expected = expected_regex();
 
 	let captures = expected
-		.captures("substrate 2.0.0-da487d19d-x86_64-linux-gnu")
+		.captures("cere 2.0.0-da487d19d-x86_64-linux-gnu")
 		.unwrap();
 	assert_eq!(&captures[1], "2.0.0");
 	assert_eq!(&captures[2], "da487d19d");
@@ -66,7 +66,7 @@ fn test_regex_matches_properly() {
 	assert_eq!(captures.get(5).map(|x| x.as_str()), Some("gnu"));
 
 	let captures = expected
-		.captures("substrate 2.0.0-alpha.5-da487d19d-x86_64-linux-gnu")
+		.captures("cere 2.0.0-alpha.5-da487d19d-x86_64-linux-gnu")
 		.unwrap();
 	assert_eq!(&captures[1], "2.0.0-alpha.5");
 	assert_eq!(&captures[2], "da487d19d");
@@ -75,7 +75,7 @@ fn test_regex_matches_properly() {
 	assert_eq!(captures.get(5).map(|x| x.as_str()), Some("gnu"));
 
 	let captures = expected
-		.captures("substrate 2.0.0-alpha.5-da487d19d-x86_64-linux")
+		.captures("cere 2.0.0-alpha.5-da487d19d-x86_64-linux")
 		.unwrap();
 	assert_eq!(&captures[1], "2.0.0-alpha.5");
 	assert_eq!(&captures[2], "da487d19d");
