@@ -289,7 +289,6 @@ use sp_std::{
 	convert::{TryInto, From},
 	mem::size_of,
 };
-use fixed::types::I20F12;
 use codec::{HasCompact, Encode, Decode};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
@@ -2389,46 +2388,45 @@ impl<T: Config> Module<T> {
 
 	/// Modify the target validator count based on the staking participation.
 	fn dynamic_damping_validator_count(
-		exposures: Vec<u64>
+		exposures: Vec<<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance>
 	) {
-		let validators_count: u32 = Self::validator_count();
 		let mut expos = exposures;
-		let factor = I20F12::from_num(validators_count) / 100;
-		let one_percent_validators = factor.ceil().to_num::<i32>();
-		let two_percent_validators = 2 * factor.ceil().to_num::<i32>();
+		let one_percent = Percent::from_percent(Self::validator_count().try_into().unwrap()).mul_ceil(1u64);
+		let two_percent = one_percent.saturating_mul(2u64);
 		// sort exposures
 		expos.sort_by(|a, b| a.cmp(&b).reverse());
 		// global average
-		let mut total_exposure: i64 = 0;
-		let mut bottom_one_percent_validators_exposure: i64 = 0;
-		let mut bottom_two_percent_validators_exposure: i64 = 0;
+		let mut total_exposure:BalanceOf<T> = Zero::zero();
+		let mut bottom_one_percent_exposure: BalanceOf<T> = Zero::zero();
+		let mut bottom_two_percent_exposure: BalanceOf<T> = Zero::zero();
 		let mut i = 0;
-		for exp in expos.into_iter(){
-			total_exposure += exp as i64;
-			if i <= one_percent_validators {
-				bottom_one_percent_validators_exposure += exp as i64;
+	
+		for expo in expos.into_iter(){
+			total_exposure = total_exposure.saturating_add(expo);
+			if i <= one_percent {
+				bottom_one_percent_exposure = bottom_one_percent_exposure.saturating_add(expo);
 			}
-			if i <= two_percent_validators {
-				bottom_two_percent_validators_exposure += exp as i64;
+			if i <= two_percent {
+				bottom_two_percent_exposure += bottom_two_percent_exposure.saturating_add(expo);
 			}
 			i += 1;
 		};
-		let global_average = (I20F12::from_num(total_exposure) / validators_count as i32).ceil().to_num::<i32>();
-		let one_percent_average_stake = (I20F12::from_num(bottom_one_percent_validators_exposure) / one_percent_validators as i32).ceil().to_num::<i32>();
-		let two_percent_average_stake = (I20F12::from_num(bottom_two_percent_validators_exposure) / two_percent_validators as i32).ceil().to_num::<i32>();
-		//init final count
-		let mut final_count = validators_count;
-		if (one_percent_average_stake as f64) > (0.4 * global_average as f64) {
+		let global_average = total_exposure / ((Self::validator_count()).saturated_into());
+		let one_percent_average_stake = bottom_one_percent_exposure / (one_percent.saturated_into());
+		let two_percent_average_stake = bottom_two_percent_exposure / (two_percent.saturated_into());
+		// //init final count
+		let mut final_count = Self::validator_count();
+		if one_percent_average_stake > (Percent::from_percent(40).mul_ceil(global_average)) {
 			final_count = std::cmp::min(
 				MAX_VALIDATORS.try_into().unwrap(), 
-				validators_count + (one_percent_validators as u32)
+				(Self::validator_count() as u32) + (one_percent as u32)
 			);
 		}
 					
-		if (two_percent_average_stake as f64) < (0.2 * global_average as f64){
+		if two_percent_average_stake < (Percent::from_percent(20).mul_ceil(global_average)){
 			final_count = std::cmp::max(
-				Self::minimum_validator_count(), 
-				validators_count - (one_percent_validators as u32)
+				Self::minimum_validator_count(),
+				(Self::validator_count() as u32) - (one_percent as u32)
 			);
 		}
 		ValidatorCount::put(final_count);
@@ -2976,11 +2974,11 @@ impl<T: Config> Module<T> {
 
 			// Populate Stakers and write slot stake.
 			let mut total_stake: BalanceOf<T> = Zero::zero();
-			let mut expos: Vec<u64> = Vec::new();
+			let mut expos: Vec<BalanceOf<T>> = Vec::new();
 			exposures.into_iter().for_each(|(stash, exposure)| {
 				total_stake = total_stake.saturating_add(exposure.total);
 				<ErasStakers<T>>::insert(current_era, &stash, &exposure);
-				expos.push(exposure.total.saturated_into::<u64>());
+				expos.push(exposure.total);
 				let mut exposure_clipped = exposure;
 				let clipped_max_len = T::MaxNominatorRewardedPerValidator::get() as usize;
 				if exposure_clipped.others.len() > clipped_max_len {

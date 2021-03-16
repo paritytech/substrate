@@ -127,17 +127,12 @@ fn basic_setup_works() {
 			},
 		);
 
+		// initial total stake = 1125 + 1375
 		assert_eq!(Staking::eras_total_stake(Staking::active_era().unwrap().index), 2500);
 
-		// initial total stake = 1125 + 1375
-		// total_stake = 2500
-		// global_average = 2500/2 = 1250
-		// one_percent_average_stake = 1125/1 = 1125
-		// 1125 > 0.4 * 1250 : True!
-		// final_validator_count max(Max_Validators, validator_count + 1)
-		// final_validator_count = 3
+
 		// The number of validators required.
-		assert_eq!(Staking::validator_count(), 3);
+		assert_eq!(Staking::validator_count(), 2);
 
 		// Initial Era and session
 		assert_eq!(Staking::active_era().unwrap().index, 0);
@@ -148,48 +143,6 @@ fn basic_setup_works() {
 
 		// New era is not being forced
 		assert_eq!(Staking::force_era(), Forcing::NotForcing);
-	});
-}
-
-#[test]
-fn dynamic_damping_not_gt_nor_lt_global_average_works() {
-	ExtBuilder::default()
-		.minimum_validator_count(7)
-		.validator_count(8)
-		.num_validators(8)
-		.build()
-		.execute_with(|| {
-		// bottom 1% avg stake > 0.4 global avg stake --> False
-		// bottom 2% avg stake < 0.2 gloabel avg stake --> False
-		// so final_count = validator_count = 8
-		assert_eq!(Staking::validator_count(), 8);
-	});
-}
-
-
-#[test]
-fn dynamic_damping_gt_0_4_percent_global_average_works() {
-	ExtBuilder::default()
-		.minimum_validator_count(1)
-		.validator_count(4)
-		.num_validators(4)
-		.build()
-		.execute_with(|| {
-		// final_count = min(max_validators_count , 4 + 1)
-		assert_eq!(Staking::validator_count(), 5);
-	});
-}
-
-#[test]
-fn dynamic_damping_lt_0_2_percent_global_average_works() {
-	ExtBuilder::default()
-		.minimum_validator_count(2)
-		.validator_count(3)
-		.num_validators(2)
-		.build()
-		.execute_with(|| {
-		// final_count = max(min_validators_count , 3-1)
-		assert_eq!(Staking::validator_count(), 2);
 	});
 }
 
@@ -444,7 +397,7 @@ fn less_than_needed_candidates_works() {
 		.num_validators(3)
 		.build()
 		.execute_with(|| {
-			assert_eq!(Staking::validator_count(), 5);
+			assert_eq!(Staking::validator_count(), 4);
 			assert_eq!(Staking::minimum_validator_count(), 1);
 			assert_eq_uvec!(validator_controllers(), vec![30, 20, 10]);
 
@@ -531,7 +484,7 @@ fn nominating_and_rewards_should_work() {
 			mock::start_active_era(1);
 
 			// 10 and 20 have more votes, they will be chosen.
-			assert_eq_uvec!(validator_controllers(), vec![20, 10, 30]);
+			assert_eq_uvec!(validator_controllers(), vec![20, 10]);
 
 			// OLD validators must have already received some rewards.
 			mock::make_all_reward_payment(0);
@@ -541,26 +494,26 @@ fn nominating_and_rewards_should_work() {
 			// ------ check the staked value of all parties.
 
 			// 30 and 40 are not chosen anymore
-			assert_eq!(ErasStakers::<Test>::iter_prefix_values(Staking::active_era().unwrap().index).count(), 3);
+			assert_eq!(ErasStakers::<Test>::iter_prefix_values(Staking::active_era().unwrap().index).count(), 2);
 			assert_eq!(
 				Staking::eras_stakers(Staking::active_era().unwrap().index, 11),
 				Exposure {
-					total: 1000 + 687,
+					total: 1000 + 800,
 					own: 1000,
 					others: vec![
 						IndividualExposure { who: 3, value: 400 },
-						IndividualExposure { who: 1, value: 287 },
+						IndividualExposure { who: 1, value: 400 },
 					]
 				},
 			);
 			assert_eq!(
 				Staking::eras_stakers(Staking::active_era().unwrap().index, 21),
 				Exposure {
-					total: 1000 + 1028,
+					total: 1000 + 1200,
 					own: 1000,
 					others: vec![
 						IndividualExposure { who: 3, value: 600 },
-						IndividualExposure { who: 1, value: 428 },
+						IndividualExposure { who: 1, value: 600 },
 					]
 				},
 			);
@@ -1893,9 +1846,9 @@ fn bond_with_duplicate_vote_should_be_ignored_by_npos_election() {
 			} = Staking::do_phragmen::<Perbill>(0).unwrap();
 			let winners = sp_npos_elections::to_without_backing(winners);
 
-			assert_eq!(winners, vec![31, 21, 11]);
-			// only distribution to 21 and 31, 11 because the dynamic damping 
-			assert_eq!(assignments.iter().find(|a| a.who == 1).unwrap().distribution.len(), 3);
+			assert_eq!(winners, vec![31, 21]);
+			// only distribution to 21 and 31.
+			assert_eq!(assignments.iter().find(|a| a.who == 1).unwrap().distribution.len(), 2);
 		});
 }
 
@@ -1940,9 +1893,9 @@ fn bond_with_duplicate_vote_should_be_ignored_by_npos_election_elected() {
 			} = Staking::do_phragmen::<Perbill>(0).unwrap();
 
 			let winners = sp_npos_elections::to_without_backing(winners);
-			assert_eq!(winners, vec![21, 11, 31]);
+			assert_eq!(winners, vec![21, 11]);
 			// only distribution to 21 and 31.
-			assert_eq!(assignments.iter().find(|a| a.who == 1).unwrap().distribution.len(), 3);
+			assert_eq!(assignments.iter().find(|a| a.who == 1).unwrap().distribution.len(), 2);
 		});
 }
 
@@ -1955,7 +1908,7 @@ fn new_era_elects_correct_number_of_validators() {
 		.validator_count(1)
 		.build()
 		.execute_with(|| {
-			assert_eq!(Staking::validator_count(), 2);
+			assert_eq!(Staking::validator_count(), 1);
 			assert_eq!(validator_controllers().len(), 1);
 
 			Session::on_initialize(System::block_number());
@@ -1979,9 +1932,9 @@ fn phragmen_should_not_overflow() {
 		bond_nominator(7, 6, Votes::max_value() as Balance, vec![3, 5]);
 		bond_nominator(9, 8, Votes::max_value() as Balance, vec![3, 5]);
 
-		mock::start_active_era(1); // changes the validators count to 3
+		mock::start_active_era(1);
 
-		assert_eq_uvec!(validator_controllers(), vec![4, 2, 30]);
+		assert_eq_uvec!(validator_controllers(), vec![4, 2]);
 
 		// We can safely convert back to values within [u64, u128].
 		assert!(Staking::eras_stakers(active_era(), 3).total > Votes::max_value() as Balance);
