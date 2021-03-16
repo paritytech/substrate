@@ -1014,6 +1014,10 @@ impl<T: Config<I>, I: 'static> Currency<T::AccountId> for Pallet<T, I> where
 		Self::account(who).free
 	}
 
+	fn usable_balance_for(who: &T::AccountId, reasons: WithdrawReasons) -> Self::Balance {
+		Self::account(who).usable(reasons.into())
+	}
+
 	// Ensure that an account can withdraw from their free balance given any existing withdrawal
 	// restrictions like locks and vesting balance.
 	// Is a no-op if amount to be withdrawn is zero.

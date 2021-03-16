@@ -1013,6 +1013,9 @@ pub trait Currency<AccountId> {
 	/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
 	fn free_balance(who: &AccountId) -> Self::Balance;
 
+	/// Usable balance for doing a certain operation.
+	fn usable_balance_for(who: &AccountId, reasons: WithdrawReasons) -> Self::Balance;
+
 	/// Returns `Ok` iff the account is able to make a withdrawal of the given amount
 	/// for the given reason. Basically, it's just a dry-run of `withdraw`.
 	///
