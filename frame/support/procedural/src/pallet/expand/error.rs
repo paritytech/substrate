@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pallet::Def;
+use crate::pallet::{Def, parse::helper::get_doc_literals};
 
 /// * impl various trait on Error
 /// * impl ModuleErrorMetadata for Error
@@ -73,6 +73,15 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 	};
 
 	error_item.variants.insert(0, phantom_variant);
+
+	if get_doc_literals(&error_item.attrs).is_empty() {
+		error_item.attrs.push(syn::parse_quote!(
+			#[doc = r"
+			Custom [dispatch errors](https://substrate.dev/docs/en/knowledgebase/runtime/errors)
+			of this pallet.
+			"]
+		));
+	}
 
 	quote::quote_spanned!(error.attr_span =>
 		impl<#type_impl_gen> #frame_support::sp_std::fmt::Debug for #error_ident<#type_use_gen>

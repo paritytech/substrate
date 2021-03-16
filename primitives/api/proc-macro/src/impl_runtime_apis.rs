@@ -162,6 +162,7 @@ fn generate_dispatch_function(impls: &[ItemImpl]) -> Result<TokenStream> {
 fn generate_wasm_interface(impls: &[ItemImpl]) -> Result<TokenStream> {
 	let input = Ident::new("input", Span::call_site());
 	let c = generate_crate_access(HIDDEN_INCLUDES_ID);
+
 	let impl_calls = generate_impl_calls(impls, &input)?
 		.into_iter()
 		.map(|(trait_, fn_name, impl_, attrs)| {
@@ -182,6 +183,8 @@ fn generate_wasm_interface(impls: &[ItemImpl]) -> Result<TokenStream> {
 							#c::slice::from_raw_parts(input_data, input_len)
 						}
 					};
+
+					#c::init_runtime_logger();
 
 					let output = { #impl_ };
 					#c::to_substrate_wasm_fn_return_value(&output)
@@ -234,16 +237,6 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 		{}
 
 		#[cfg(any(feature = "std", test))]
-		impl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block>> #crate_::ApiErrorExt
-			for RuntimeApiImpl<Block, C>
-				where
-					// Rust bug: https://github.com/rust-lang/rust/issues/24159
-					C::StateBackend: #crate_::StateBackend<#crate_::HashFor<Block>>,
-		{
-			type Error = C::Error;
-		}
-
-		#[cfg(any(feature = "std", test))]
 		impl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block>> #crate_::ApiExt<Block> for
 			RuntimeApiImpl<Block, C>
 				where
@@ -269,16 +262,20 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 			fn has_api<A: #crate_::RuntimeApiInfo + ?Sized>(
 				&self,
 				at: &#crate_::BlockId<Block>,
-			) -> std::result::Result<bool, C::Error> where Self: Sized {
-				self.call.runtime_version_at(at).map(|v| v.has_api_with(&A::ID, |v| v == A::VERSION))
+			) -> std::result::Result<bool, #crate_::ApiError> where Self: Sized {
+				self.call
+					.runtime_version_at(at)
+					.map(|v| v.has_api_with(&A::ID, |v| v == A::VERSION))
 			}
 
 			fn has_api_with<A: #crate_::RuntimeApiInfo + ?Sized, P: Fn(u32) -> bool>(
 				&self,
 				at: &#crate_::BlockId<Block>,
 				pred: P,
-			) -> std::result::Result<bool, C::Error> where Self: Sized {
-				self.call.runtime_version_at(at).map(|v| v.has_api_with(&A::ID, pred))
+			) -> std::result::Result<bool, #crate_::ApiError> where Self: Sized {
+				self.call
+					.runtime_version_at(at)
+					.map(|v| v.has_api_with(&A::ID, pred))
 			}
 
 			fn record_proof(&mut self) {
@@ -306,7 +303,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				>>,
 				parent_hash: Block::Hash,
 			) -> std::result::Result<
-				#crate_::StorageChanges<Self::StateBackend, Block>,
+				#crate_::StorageChanges<C::StateBackend, Block>,
 				String
 			> where Self: Sized {
 				self.initialized_block.borrow_mut().take();
@@ -513,7 +510,7 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 
 			// Generate the correct return type.
 			input.sig.output = parse_quote!(
-				-> std::result::Result<#crate_::NativeOrEncoded<#ret_type>, RuntimeApiImplCall::Error>
+				-> std::result::Result<#crate_::NativeOrEncoded<#ret_type>, #crate_::ApiError>
 			);
 
 			// Generate the new method implementation that calls into the runtime.
@@ -554,7 +551,7 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 			)
 		};
 
-		let mut input =	fold::fold_impl_item_method(self, input);
+		let mut input = fold::fold_impl_item_method(self, input);
 		// We need to set the block, after we modified the rest of the ast, otherwise we would
 		// modify our generated block as well.
 		input.block = block;

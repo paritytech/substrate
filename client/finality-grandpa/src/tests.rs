@@ -120,6 +120,7 @@ impl TestNetFactory for GrandpaTestNet {
 					client.clone(),
 					&self.test_config,
 					LongestChain::new(backend.clone()),
+					None,
 				).expect("Could not create block import for fresh peer.");
 				let justification_import = Box::new(import.clone());
 				(
@@ -174,8 +175,6 @@ impl ProvideRuntimeApi<Block> for TestApi {
 
 sp_api::mock_impl_runtime_apis! {
 	impl GrandpaApi<Block> for RuntimeApi {
-		type Error = sp_blockchain::Error;
-
 		fn grandpa_authorities(&self) -> AuthorityList {
 			self.inner.genesis_authorities.clone()
 		}
@@ -254,13 +253,14 @@ fn initialize_grandpa(
 				name: Some(format!("peer#{}", peer_id)),
 				is_authority: true,
 				observer_enabled: true,
+				telemetry: None,
 			},
 			link,
 			network: net_service,
-			telemetry_on_connect: None,
 			voting_rule: (),
 			prometheus_registry: None,
 			shared_voter_state: SharedVoterState::empty(),
+			telemetry: None,
 		};
 		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 
@@ -397,13 +397,14 @@ fn finalize_3_voters_1_full_observer() {
 				name: Some(format!("peer#{}", peer_id)),
 				is_authority: true,
 				observer_enabled: true,
+				telemetry: None,
 			},
 			link: link,
 			network: net_service,
-			telemetry_on_connect: None,
 			voting_rule: (),
 			prometheus_registry: None,
 			shared_voter_state: SharedVoterState::empty(),
+			telemetry: None,
 		};
 
 		run_grandpa_voter(grandpa_params).expect("all in order with client and network")
@@ -490,13 +491,14 @@ fn transition_3_voters_twice_1_full_observer() {
 				name: Some(format!("peer#{}", peer_id)),
 				is_authority: true,
 				observer_enabled: true,
+				telemetry: None,
 			},
 			link,
 			network: net_service,
-			telemetry_on_connect: None,
 			voting_rule: (),
 			prometheus_registry: None,
 			shared_voter_state: SharedVoterState::empty(),
+			telemetry: None,
 		};
 
 		voters.push(run_grandpa_voter(grandpa_params).expect("all in order with client and network"));
@@ -923,6 +925,7 @@ fn voter_persists_its_votes() {
 			name: Some(format!("peer#{}", 1)),
 			is_authority: true,
 			observer_enabled: true,
+			telemetry: None,
 		};
 
 		let set_state = {
@@ -940,6 +943,7 @@ fn voter_persists_its_votes() {
 			net.peers[1].network_service().clone(),
 			config.clone(),
 			set_state,
+			None,
 			None,
 		)
 	};
@@ -966,13 +970,14 @@ fn voter_persists_its_votes() {
 				name: Some(format!("peer#{}", 0)),
 				is_authority: true,
 				observer_enabled: true,
+				telemetry: None,
 			},
 			link,
 			network: net_service,
-			telemetry_on_connect: None,
 			voting_rule: VotingRulesBuilder::default().build(),
 			prometheus_registry: None,
 			shared_voter_state: SharedVoterState::empty(),
+			telemetry: None,
 		};
 
 		run_grandpa_voter(grandpa_params).expect("all in order with client and network")
@@ -1008,13 +1013,14 @@ fn voter_persists_its_votes() {
 				name: Some(format!("peer#{}", 0)),
 				is_authority: true,
 				observer_enabled: true,
+				telemetry: None,
 			},
 			link,
 			network: net_service,
-			telemetry_on_connect: None,
 			voting_rule: VotingRulesBuilder::default().build(),
 			prometheus_registry: None,
 			shared_voter_state: SharedVoterState::empty(),
+			telemetry: None,
 		};
 
 		run_grandpa_voter(grandpa_params)
@@ -1167,6 +1173,7 @@ fn finalize_3_voters_1_light_observer() {
 			name: Some("observer".to_string()),
 			is_authority: false,
 			observer_enabled: true,
+			telemetry: None,
 		},
 		net.peers[3].data.lock().take().expect("link initialized at startup; qed"),
 		net.peers[3].network_service().clone(),
@@ -1208,13 +1215,14 @@ fn voter_catches_up_to_latest_round_when_behind() {
 				name: Some(format!("peer#{}", peer_id)),
 				is_authority: true,
 				observer_enabled: true,
+				telemetry: None,
 			},
 			link,
 			network: net.lock().peer(peer_id).network_service().clone(),
-			telemetry_on_connect: None,
 			voting_rule: (),
 			prometheus_registry: None,
 			shared_voter_state: SharedVoterState::empty(),
+			telemetry: None,
 		};
 
 		Box::pin(run_grandpa_voter(grandpa_params).expect("all in order with client and network"))
@@ -1330,12 +1338,14 @@ where
 		name: None,
 		is_authority: true,
 		observer_enabled: true,
+		telemetry: None,
 	};
 
 	let network = NetworkBridge::new(
 		network_service.clone(),
 		config.clone(),
 		set_state.clone(),
+		None,
 		None,
 	);
 
@@ -1351,13 +1361,14 @@ where
 		voting_rule,
 		metrics: None,
 		justification_sender: None,
+		telemetry: None,
 		_phantom: PhantomData,
 	}
 }
 
 #[test]
 fn grandpa_environment_respects_voting_rules() {
-	use finality_grandpa::Chain;
+	use finality_grandpa::voter::Environment;
 
 	let peers = &[Ed25519Keyring::Alice];
 	let voters = make_ids(peers);
@@ -1392,25 +1403,25 @@ fn grandpa_environment_respects_voting_rules() {
 
 	// the unrestricted environment should just return the best block
 	assert_eq!(
-		unrestricted_env.best_chain_containing(
+		futures::executor::block_on(unrestricted_env.best_chain_containing(
 			peer.client().info().finalized_hash
-		).unwrap().1,
+		)).unwrap().unwrap().1,
 		21,
 	);
 
 	// both the other environments should return block 16, which is 3/4 of the
 	// way in the unfinalized chain
 	assert_eq!(
-		three_quarters_env.best_chain_containing(
+		futures::executor::block_on(three_quarters_env.best_chain_containing(
 			peer.client().info().finalized_hash
-		).unwrap().1,
+		)).unwrap().unwrap().1,
 		16,
 	);
 
 	assert_eq!(
-		default_env.best_chain_containing(
+		futures::executor::block_on(default_env.best_chain_containing(
 			peer.client().info().finalized_hash
-		).unwrap().1,
+		)).unwrap().unwrap().1,
 		16,
 	);
 
@@ -1419,18 +1430,18 @@ fn grandpa_environment_respects_voting_rules() {
 
 	// the 3/4 environment should propose block 21 for voting
 	assert_eq!(
-		three_quarters_env.best_chain_containing(
+		futures::executor::block_on(three_quarters_env.best_chain_containing(
 			peer.client().info().finalized_hash
-		).unwrap().1,
+		)).unwrap().unwrap().1,
 		21,
 	);
 
 	// while the default environment will always still make sure we don't vote
 	// on the best block (2 behind)
 	assert_eq!(
-		default_env.best_chain_containing(
+		futures::executor::block_on(default_env.best_chain_containing(
 			peer.client().info().finalized_hash
-		).unwrap().1,
+		)).unwrap().unwrap().1,
 		19,
 	);
 
@@ -1441,9 +1452,9 @@ fn grandpa_environment_respects_voting_rules() {
 	// best block, there's a hard rule that we can't cast any votes lower than
 	// the given base (#21).
 	assert_eq!(
-		default_env.best_chain_containing(
+		futures::executor::block_on(default_env.best_chain_containing(
 			peer.client().info().finalized_hash
-		).unwrap().1,
+		)).unwrap().unwrap().1,
 		21,
 	);
 }

@@ -264,6 +264,7 @@ pub mod config;
 pub mod error;
 pub mod gossip;
 pub mod network_state;
+pub mod transactions;
 
 use std::{
 	collections::HashMap,

@@ -728,7 +728,12 @@ pub trait TestNetFactory: Sized {
 		let verified_blocks = Arc::new(VerifiedBlocks::new(client.clone()));
 
 		let block_request_protocol_config = {
-			let (handler, protocol_config) = BlockRequestHandler::new(&protocol_id, client.clone(), verified_blocks.clone());
+			let (handler, protocol_config) = BlockRequestHandler::new(
+				&protocol_id,
+				client.clone(),
+				50,
+				verified_blocks.clone(),
+			);
 			self.spawn_task(handler.run().boxed());
 			protocol_config
 		};
@@ -742,6 +747,7 @@ pub trait TestNetFactory: Sized {
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: Role::Full,
 			executor: None,
+			transactions_handler_executor: Box::new(|task| { async_std::task::spawn(task); }),
 			network_config,
 			chain: client.clone(),
 			on_demand: None,
@@ -834,6 +840,7 @@ pub trait TestNetFactory: Sized {
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: Role::Light,
 			executor: None,
+			transactions_handler_executor: Box::new(|task| { async_std::task::spawn(task); }),
 			network_config,
 			chain: client.clone(),
 			on_demand: None,
