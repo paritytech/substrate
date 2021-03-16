@@ -260,7 +260,7 @@ impl Config for Test {
 	type SlashCancelOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type BondingDuration = BondingDuration;
 	type SessionInterface = Self;
-	type RewardCurve = RewardCurve;
+	type EraPayout = ConvertCurve<RewardCurve>;
 	type NextNewSession = Session;
 	type ElectionLookahead = ElectionLookahead;
 	type Call = Call;
@@ -670,25 +670,22 @@ pub(crate) fn start_active_era(era_index: EraIndex) {
 }
 
 pub(crate) fn current_total_payout_for_duration(duration: u64) -> Balance {
-	let reward = inflation::compute_total_payout(
-		<Test as Config>::RewardCurve::get(),
+	let (payout, _rest) = <Test as Config>::EraPayout::era_payout(
 		Staking::eras_total_stake(active_era()),
 		Balances::total_issuance(),
 		duration,
-	)
-	.0;
-	assert!(reward > 0);
-	reward
+	);
+	assert!(payout > 0);
+	payout
 }
 
 pub(crate) fn maximum_payout_for_duration(duration: u64) -> Balance {
-	inflation::compute_total_payout(
-		<Test as Config>::RewardCurve::get(),
-		0,
+	let (payout, rest) = <Test as Config>::EraPayout::era_payout(
+		Staking::eras_total_stake(active_era()),
 		Balances::total_issuance(),
 		duration,
-	)
-	.1
+	);
+	payout + rest
 }
 
 /// Time it takes to finish a session.
