@@ -19,7 +19,7 @@
 //! Uncles functionality for Substrate.
 
 use sc_client_api::ProvideUncles;
-use sp_runtime::{traits::{Block as BlockT, BlockIdTo}, generic::BlockId};
+use sp_runtime::{traits::Block as BlockT, generic::BlockId};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error<B: BlockT> {

@@ -67,6 +67,13 @@ impl<H> InherentDataProvider<H> {
 	pub fn new(uncles: Vec<H>) -> Self {
 		InherentDataProvider { uncles }
 	}
+
+	/// Create a new instance that is usable for checking inherents.
+	///
+	/// This will always return an empty vec of uncles.
+	pub fn check_inherents() -> Self {
+		Self { uncles: Vec::new() }
+	}
 }
 
 #[cfg(feature = "std")]

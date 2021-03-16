@@ -4021,6 +4021,7 @@ dependencies = [
  "serde_json",
  "soketto",
  "sp-authority-discovery",
+ "sp-authorship",
  "sp-consensus",
  "sp-consensus-babe",
  "sp-core",
