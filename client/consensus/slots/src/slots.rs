@@ -80,7 +80,7 @@ impl<B: BlockT> SlotInfo<B> {
 			inherent_data,
 			duration,
 			chain_head,
-			ends_at: time_until_next(timestamp, duration),
+			ends_at: Instant::now() + time_until_next(timestamp, duration),
 		}
 	}
 }
@@ -162,7 +162,6 @@ where
 
 			// reschedule delay for next slot.
 			let ends_in = time_until_next(timestamp.as_duration(), self.slot_duration);
-			let ends_at = Instant::now() + ends_in;
 			self.inner_delay = Some(Delay::new(ends_in));
 
 			// never yield the same slot twice.
@@ -172,8 +171,8 @@ where
 				break Ok(SlotInfo::new(
 					slot,
 					self.slot_duration,
-					timestamp.as_duration(),
 					inherent_data,
+					timestamp.as_duration(),
 					chain_head,
 				))
 			}
