@@ -20,12 +20,15 @@
 use crate::{ElectionDataProvider, ElectionProvider};
 use sp_npos_elections::*;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
+use frame_support::{traits::Get, weights::Weight};
 
 /// Errors of the on-chain election.
 #[derive(Eq, PartialEq, Debug)]
 pub enum Error {
 	/// An internal error in the NPoS elections crate.
 	NposElections(sp_npos_elections::Error),
+	/// Errors from the data provider.
+	DataProvider(&'static str),
 }
 
 impl From<sp_npos_elections::Error> for Error {
@@ -40,13 +43,20 @@ impl From<sp_npos_elections::Error> for Error {
 ///
 /// ### Warning
 ///
-/// This can be very expensive to run frequently on-chain. Use with care.
+/// This can be very expensive to run frequently on-chain. Use with care. Moreover, this
+/// implementation ignores the additional data of the election data provider and gives no insight on
+/// how much weight was consumed.
+///
+/// Finally, this implementation does not impose any limits on the number of voters and targets that
+/// are provided.
 pub struct OnChainSequentialPhragmen<T: Config>(PhantomData<T>);
 
 /// Configuration trait of [`OnChainSequentialPhragmen`].
 ///
 /// Note that this is similar to a pallet traits, but [`OnChainSequentialPhragmen`] is not a pallet.
 pub trait Config {
+	/// The block limits.
+	type BlockWeights: Get<frame_system::limits::BlockWeights>;
 	/// The account identifier type.
 	type AccountId: IdentifierT;
 	/// The block number type.
@@ -61,10 +71,11 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequen
 	type Error = Error;
 	type DataProvider = T::DataProvider;
 
-	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
-		let voters = Self::DataProvider::voters();
-		let targets = Self::DataProvider::targets();
-		let desired_targets = Self::DataProvider::desired_targets() as usize;
+	fn elect() -> Result<(Supports<T::AccountId>, Weight), Self::Error> {
+		let (voters, _) = Self::DataProvider::voters(None).map_err(Error::DataProvider)?;
+		let (targets, _) = Self::DataProvider::targets(None).map_err(Error::DataProvider)?;
+		let (desired_targets, _) =
+			Self::DataProvider::desired_targets().map_err(Error::DataProvider)?;
 
 		let mut stake_map: BTreeMap<T::AccountId, VoteWeight> = BTreeMap::new();
 
@@ -77,13 +88,13 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for OnChainSequen
 		};
 
 		let ElectionResult { winners, assignments } =
-			seq_phragmen::<_, T::Accuracy>(desired_targets, targets, voters, None)
+			seq_phragmen::<_, T::Accuracy>(desired_targets as usize, targets, voters, None)
 				.map_err(Error::from)?;
 
 		let staked = assignment_ratio_to_staked_normalized(assignments, &stake_of)?;
 		let winners = to_without_backing(winners);
 
-		to_supports(&winners, &staked).map_err(Error::from)
+		to_supports(&winners, &staked).map_err(Error::from).map(|s| (s, T::BlockWeights::get().max_block))
 	}
 }
 
@@ -92,12 +103,13 @@ mod tests {
 	use super::*;
 	use sp_npos_elections::Support;
 	use sp_runtime::Perbill;
+	use frame_support::weights::Weight;
 
 	type AccountId = u64;
 	type BlockNumber = u32;
-
 	struct Runtime;
 	impl Config for Runtime {
+		type BlockWeights = ();
 		type AccountId = AccountId;
 		type BlockNumber = BlockNumber;
 		type Accuracy = Perbill;
@@ -108,24 +120,23 @@ mod tests {
 
 	mod mock_data_provider {
 		use super::*;
+		use crate::data_provider;
 
 		pub struct DataProvider;
 
 		impl ElectionDataProvider<AccountId, BlockNumber> for DataProvider {
-			fn voters() -> Vec<(AccountId, VoteWeight, Vec<AccountId>)> {
-				vec![
-					(1, 10, vec![10, 20]),
-					(2, 20, vec![30, 20]),
-					(3, 30, vec![10, 30]),
-				]
+			fn voters(
+				_: Option<usize>,
+			) -> data_provider::Result<(Vec<(AccountId, VoteWeight, Vec<AccountId>)>, Weight)> {
+				Ok((vec![(1, 10, vec![10, 20]), (2, 20, vec![30, 20]), (3, 30, vec![10, 30])], 0))
 			}
 
-			fn targets() -> Vec<AccountId> {
-				vec![10, 20, 30]
+			fn targets(_: Option<usize>) -> data_provider::Result<(Vec<AccountId>, Weight)> {
+				Ok((vec![10, 20, 30], 0))
 			}
 
-			fn desired_targets() -> u32 {
-				2
+			fn desired_targets() -> data_provider::Result<(u32, Weight)> {
+				Ok((2, 0))
 			}
 
 			fn next_election_prediction(_: BlockNumber) -> BlockNumber {
@@ -137,7 +148,7 @@ mod tests {
 	#[test]
 	fn onchain_seq_phragmen_works() {
 		assert_eq!(
-			OnChainPhragmen::elect().unwrap(),
+			OnChainPhragmen::elect().unwrap().0,
 			vec![
 				(
 					10,

@@ -142,10 +142,22 @@ pub trait CompactSolution: Sized {
 	const LIMIT: usize;
 
 	/// The voter type. Needs to be an index (convert to usize).
-	type Voter: UniqueSaturatedInto<usize> + TryInto<usize> + TryFrom<usize> + Debug + Copy + Clone;
+	type Voter: UniqueSaturatedInto<usize>
+		+ TryInto<usize>
+		+ TryFrom<usize>
+		+ Debug
+		+ Copy
+		+ Clone
+		+ Bounded;
 
 	/// The target type. Needs to be an index (convert to usize).
-	type Target: UniqueSaturatedInto<usize> + TryInto<usize> + TryFrom<usize> + Debug + Copy + Clone;
+	type Target: UniqueSaturatedInto<usize>
+		+ TryInto<usize>
+		+ TryFrom<usize>
+		+ Debug
+		+ Copy
+		+ Clone
+		+ Bounded;
 
 	/// The weight/accuracy type of each vote.
 	type Accuracy: PerThing128;

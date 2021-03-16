@@ -158,11 +158,16 @@ where
 }
 
 pub struct MockElectionProvider;
-impl sp_election_providers::ElectionProvider<AccountId, BlockNumber> for MockElectionProvider {
+impl frame_election_provider_support::ElectionProvider<AccountId, BlockNumber>
+	for MockElectionProvider
+{
 	type Error = ();
 	type DataProvider = pallet_staking::Module<Test>;
 
-	fn elect() -> Result<sp_npos_elections::Supports<AccountId>, Self::Error> {
+	fn elect() -> Result<
+		(sp_npos_elections::Supports<AccountId>, frame_support::weights::Weight),
+		Self::Error
+	> {
 		Err(())
 	}
 }
