@@ -102,7 +102,7 @@ impl ChainInfo for NodeTemplateChainInfo {
 
         let (grandpa_block_import, ..) =
             grandpa::block_import(
-                client.clone(), 
+                client.clone(),
                 &(client.clone() as Arc<_>),
                 select_chain.clone(),
                 None
