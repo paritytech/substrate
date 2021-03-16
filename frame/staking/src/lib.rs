@@ -443,6 +443,8 @@ pub enum RewardDestination<AccountId> {
 	Controller,
 	/// Pay into a specified account.
 	Account(AccountId),
+	/// Receive no reward.
+	None,
 }
 
 impl<AccountId> Default for RewardDestination<AccountId> {
@@ -1363,7 +1365,10 @@ decl_module! {
 				// either current session final based on the plan, or we're forcing.
 				(Self::is_current_session_final() || Self::will_era_be_forced())
 			{
-				if let Some(next_session_change) = T::NextNewSession::estimate_next_new_session(now) {
+				let (maybe_next_session_change, estimate_next_new_session_weight) =
+					T::NextNewSession::estimate_next_new_session(now);
+
+				if let Some(next_session_change) = maybe_next_session_change {
 					if let Some(remaining) = next_session_change.checked_sub(&now) {
 						if remaining <= T::ElectionLookahead::get() && !remaining.is_zero() {
 							// create snapshot.
@@ -1385,7 +1390,7 @@ decl_module! {
 				} else {
 					log!(warn, "Estimating next session change failed.");
 				}
-				add_weight(0, 0, T::NextNewSession::weight(now))
+				add_weight(0, 0, estimate_next_new_session_weight)
 			}
 			// For `era_election_status`, `is_current_session_final`, `will_era_be_forced`
 			add_weight(3, 0, 0);
@@ -2499,7 +2504,8 @@ impl<T: Config> Module<T> {
 				}),
 			RewardDestination::Account(dest_account) => {
 				Some(T::Currency::deposit_creating(&dest_account, amount))
-			}
+			},
+			RewardDestination::None => None,
 		}
 	}
 
@@ -2740,8 +2746,8 @@ impl<T: Config> Module<T> {
 		// write new results.
 		<QueuedElected<T>>::put(ElectionResult {
 			elected_stashes: winners,
-			compute,
 			exposures,
+			compute,
 		});
 		QueuedScore::put(submitted_score);
 
@@ -2932,13 +2938,15 @@ impl<T: Config> Module<T> {
 			// emit event
 			Self::deposit_event(RawEvent::StakingElection(compute));
 
-			log!(
-				info,
-				"new validator set of size {:?} has been elected via {:?} for staring era {:?}",
-				elected_stashes.len(),
-				compute,
-				current_era,
-			);
+			if current_era > 0 {
+				log!(
+					info,
+					"new validator set of size {:?} has been elected via {:?} for staring era {:?}",
+					elected_stashes.len(),
+					compute,
+					current_era,
+				);
+			}
 
 			Some(elected_stashes)
 		} else {
@@ -3126,11 +3134,13 @@ impl<T: Config> Module<T> {
 		let elected_stashes = exposures.iter().cloned().map(|(x, _)| x).collect::<Vec<_>>();
 
 		if (elected_stashes.len() as u32) <= Self::minimum_validator_count() {
-			log!(
-				warn,
-				"chain does not have enough staking candidates to operate for era {:?}",
-				current_era,
-			);
+			if current_era > 0 {
+				log!(
+					warn,
+					"chain does not have enough staking candidates to operate for era {:?}",
+					current_era,
+				);
+			}
 			return Err(());
 		}
 
@@ -3362,6 +3372,7 @@ impl<T: Config> sp_election_providers::ElectionDataProvider<T::AccountId, T::Blo
 		let session_length = T::NextNewSession::average_session_length();
 
 		let until_this_session_end = T::NextNewSession::estimate_next_new_session(now)
+			.0
 			.unwrap_or_default()
 			.saturating_sub(now);
 

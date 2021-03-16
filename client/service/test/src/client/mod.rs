@@ -1744,6 +1744,7 @@ fn cleans_up_closed_notification_sinks_on_block_import() {
 			&substrate_test_runtime_client::GenesisParameters::default().genesis_storage(),
 			None,
 			None,
+			None,
 			Box::new(TaskExecutor::new()),
 			Default::default(),
 		)

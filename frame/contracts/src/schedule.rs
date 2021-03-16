@@ -45,6 +45,14 @@ pub const INSTR_BENCHMARK_BATCH_SIZE: u32 = 1_000;
 #[derive(Clone, Encode, Decode, PartialEq, Eq, ScheduleDebug)]
 pub struct Schedule<T: Config> {
 	/// Version of the schedule.
+	///
+	/// # Note
+	///
+	/// Must be incremented whenever the [`self.instruction_weights`] are changed. The
+	/// reason is that changes to instruction weights require a re-instrumentation
+	/// of all contracts which are triggered by a version comparison on call.
+	/// Changes to other parts of the schedule should not increment the version in
+	/// order to avoid unnecessary re-instrumentations.
 	pub version: u32,
 
 	/// Whether the `seal_println` function is allowed to be used contracts.
@@ -62,6 +70,11 @@ pub struct Schedule<T: Config> {
 }
 
 /// Describes the upper limits on various metrics.
+///
+/// # Note
+///
+/// The values in this struct should only ever be increased for a deployed chain. The reason
+/// is that decreasing those values will break existing contracts which are above the new limits.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq, RuntimeDebug)]
 pub struct Limits {
@@ -188,6 +201,7 @@ pub struct InstructionWeights<T: Config> {
 	pub i64rotl: u32,
 	pub i64rotr: u32,
 	/// The type parameter is used in the default implementation.
+	#[codec(skip)]
 	pub _phantom: PhantomData<T>,
 }
 
@@ -348,7 +362,11 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight per byte hashed by `seal_hash_blake2_128`.
 	pub hash_blake2_128_per_byte: Weight,
 
+	/// Weight of calling `seal_rent_params`.
+	pub rent_params: Weight,
+
 	/// The type parameter is used in the default implementation.
+	#[codec(skip)]
 	pub _phantom: PhantomData<T>
 }
 
@@ -572,6 +590,7 @@ impl<T: Config> Default for HostFnWeights<T> {
 			hash_blake2_256_per_byte: cost_byte_batched!(seal_hash_blake2_256_per_kb),
 			hash_blake2_128: cost_batched!(seal_hash_blake2_128),
 			hash_blake2_128_per_byte: cost_byte_batched!(seal_hash_blake2_128_per_kb),
+			rent_params: cost_batched!(seal_rent_params),
 			_phantom: PhantomData,
 		}
 	}
