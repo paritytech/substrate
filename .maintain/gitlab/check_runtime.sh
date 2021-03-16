@@ -8,12 +8,13 @@
 
 set -e # fail on any error
 
-
+#shellcheck source=../common/lib.sh
+. "$(dirname "${0}")/../common/lib.sh"
 
 VERSIONS_FILE="bin/node/runtime/src/lib.rs"
 
-boldprint () { printf "|\n| \033[1m${@}\033[0m\n|\n" ; }
-boldcat () { printf "|\n"; while read l; do printf "| \033[1m${l}\033[0m\n"; done; printf "|\n" ; }
+boldprint () { printf "|\n| \033[1m%s\033[0m\n|\n" "${@}"; }
+boldcat () { printf "|\n"; while read -r l; do printf "| \033[1m%s\033[0m\n" "${l}"; done; printf "|\n" ; }
 
 github_label () {
 	echo
@@ -23,7 +24,7 @@ github_label () {
 		-F "ref=master" \
 		-F "variables[LABEL]=${1}" \
 		-F "variables[PRNO]=${CI_COMMIT_REF_NAME}" \
-		${GITLAB_API}/projects/${GITHUB_API_PROJECT}/trigger/pipeline
+		"${GITLAB_API}/projects/${GITHUB_API_PROJECT}/trigger/pipeline"
 }
 
 
@@ -31,16 +32,14 @@ boldprint "latest 10 commits of ${CI_COMMIT_REF_NAME}"
 git log --graph --oneline --decorate=short -n 10
 
 boldprint "make sure the master branch and release tag are available in shallow clones"
-git fetch --depth=${GIT_DEPTH:-100} origin master
-git fetch --depth=${GIT_DEPTH:-100} origin release
+git fetch --depth="${GIT_DEPTH:-100}" origin master
+git fetch --depth="${GIT_DEPTH:-100}" origin release
 git tag -f release FETCH_HEAD
 git log -n1 release
 
 
 boldprint "check if the wasm sources changed"
-if ! git diff --name-only origin/master...${CI_COMMIT_SHA} \
-	| grep -v -e '^primitives/sr-arithmetic/fuzzer' \
-	| grep -q -e '^bin/node/src/runtime' -e '^frame/' -e '^primitives/sr-'
+if ! has_runtime_changes origin/master "${CI_COMMIT_SHA}"
 then
 	boldcat <<-EOT
 
@@ -57,9 +56,9 @@ fi
 # consensus-critical logic that has changed. the runtime wasm blobs must be
 # rebuilt.
 
-add_spec_version="$(git diff tags/release...${CI_COMMIT_SHA} ${VERSIONS_FILE} \
+add_spec_version="$(git diff "tags/release...${CI_COMMIT_SHA}" "${VERSIONS_FILE}" \
 	| sed -n -r "s/^\+[[:space:]]+spec_version: +([0-9]+),$/\1/p")"
-sub_spec_version="$(git diff tags/release...${CI_COMMIT_SHA} ${VERSIONS_FILE} \
+sub_spec_version="$(git diff "tags/release...${CI_COMMIT_SHA}" "${VERSIONS_FILE}" \
 	| sed -n -r "s/^\-[[:space:]]+spec_version: +([0-9]+),$/\1/p")"
 
 
@@ -82,9 +81,9 @@ else
 	# check for impl_version updates: if only the impl versions changed, we assume
 	# there is no consensus-critical logic that has changed.
 
-	add_impl_version="$(git diff tags/release...${CI_COMMIT_SHA} ${VERSIONS_FILE} \
+	add_impl_version="$(git diff "tags/release...${CI_COMMIT_SHA}" "${VERSIONS_FILE}" \
 		| sed -n -r 's/^\+[[:space:]]+impl_version: +([0-9]+),$/\1/p')"
-	sub_impl_version="$(git diff tags/release...${CI_COMMIT_SHA} ${VERSIONS_FILE} \
+	sub_impl_version="$(git diff "tags/release...${CI_COMMIT_SHA}" "${VERSIONS_FILE}" \
 		| sed -n -r 's/^\-[[:space:]]+impl_version: +([0-9]+),$/\1/p')"
 
 
