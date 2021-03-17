@@ -27,7 +27,7 @@ use sp_runtime::{
 };
 use frame_system::InitKind;
 use frame_support::{
-	parameter_types, StorageValue,
+	parameter_types,
 	traits::{KeyOwnerProofSystem, OnInitialize},
 	weights::Weight,
 };
@@ -451,7 +451,7 @@ pub fn generate_equivocation_proof(
 	use sp_consensus_babe::digests::CompatibleDigestItem;
 
 	let current_block = System::block_number();
-	let current_slot = CurrentSlot::get();
+	let current_slot = CurrentSlot::<Test>::get();
 
 	let make_header = || {
 		let parent_hash = System::parent_hash();
