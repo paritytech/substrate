@@ -910,10 +910,47 @@ mod tests {
 			// assume that the tx has been processed
 			pool.try_write().unwrap().transactions.clear();
 
-
 			// locked, but also, has previously cached.
 			MultiPhase::offchain_worker(26);
 			assert!(pool.read().transactions.len().is_zero());
+		})
+	}
+
+	#[test]
+	fn ocw_resubmits_after_offchain_repeat() {
+		let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
+		ext.execute_with(|| {
+			const BLOCK: u64 = 25;
+			let block_plus = |delta: i32| ((BLOCK as i32) + delta) as u64;
+			let offchain_repeat = <Runtime as Config>::OffchainRepeat::get();
+
+			roll_to(BLOCK);
+			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, BLOCK)));
+
+			// we must clear the offchain storage to ensure the offchain execution check doesn't get
+			// in the way.
+			let mut storage = StorageValueRef::persistent(&OFFCHAIN_HEAD_DB);
+
+			MultiPhase::offchain_worker(block_plus(-1));
+			assert!(pool.read().transactions.len().is_zero());
+			storage.clear();
+
+			// creates, caches, submits without expecting previous cache value
+			MultiPhase::offchain_worker(BLOCK);
+			assert_eq!(pool.read().transactions.len(), 1);
+			let tx_cache = pool.read().transactions[0].clone();
+			// assume that the tx has been processed
+			pool.try_write().unwrap().transactions.clear();
+
+			// attempts to resubmit the tx after the threshold has expired
+			// note that we have to add 1: the semantics forbid resubmission at
+			// BLOCK + offchain_repeat
+			MultiPhase::offchain_worker(block_plus(1 + offchain_repeat as i32));
+			assert_eq!(pool.read().transactions.len(), 1);
+
+			// resubmitted tx is identical to first submission
+			let tx = &pool.read().transactions[0];
+			assert_eq!(&tx_cache, tx);
 		})
 	}
 
