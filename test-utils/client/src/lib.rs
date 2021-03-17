@@ -229,6 +229,7 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 				sc_offchain::OffchainDb::factory_from_backend(&*self.backend),
 			),
 			None,
+			None,
 			ClientConfig {
 				offchain_indexing_api: self.enable_offchain_indexing_api,
 				..Default::default()

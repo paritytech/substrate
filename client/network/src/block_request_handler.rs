@@ -72,13 +72,14 @@ pub(crate) fn generate_protocol_name(protocol_id: &ProtocolId) -> String {
 	s
 }
 
-/// The key for [`BlockRequestHandler::seen_requests`].
-#[derive(Eq, PartialEq)]
+/// The key of [`BlockRequestHandler::seen_requests`].
+#[derive(Eq, PartialEq, Clone)]
 struct SeenRequestsKey<B: BlockT> {
 	peer: PeerId,
 	from: BlockId<B>,
 	max_blocks: usize,
 	direction: Direction,
+	attributes: BlockAttributes,
 }
 
 impl<B: BlockT> Hash for SeenRequestsKey<B> {
@@ -86,12 +87,21 @@ impl<B: BlockT> Hash for SeenRequestsKey<B> {
 		self.peer.hash(state);
 		self.max_blocks.hash(state);
 		self.direction.hash(state);
+		self.attributes.hash(state);
 
 		match self.from {
 			BlockId::Hash(h) => h.hash(state),
 			BlockId::Number(n) => n.hash(state),
 		}
 	}
+}
+
+/// The value of [`BlockRequestHandler::seen_requests`].
+enum SeenRequestsValue {
+	/// First time we have seen the request.
+	First,
+	/// We have fulfilled the request `n` times.
+	Fulfilled(usize),
 }
 
 /// Handler for incoming block requests from a remote peer.
@@ -101,7 +111,7 @@ pub struct BlockRequestHandler<B: BlockT> {
 	/// Maps from request to number of times we have seen this request.
 	///
 	/// This is used to check if a peer is spamming us with the same request.
-	seen_requests: LruCache<SeenRequestsKey<B>, usize>,
+	seen_requests: LruCache<SeenRequestsKey<B>, SeenRequestsValue>,
 }
 
 impl<B: BlockT> BlockRequestHandler<B> {
@@ -173,36 +183,42 @@ impl<B: BlockT> BlockRequestHandler<B> {
 		let direction = Direction::from_i32(request.direction)
 			.ok_or(HandleRequestError::ParseDirection)?;
 
+		let attributes = BlockAttributes::from_be_u32(request.fields)?;
+
 		let key = SeenRequestsKey {
 			peer: *peer,
 			max_blocks,
 			direction,
 			from: from_block_id.clone(),
+			attributes,
 		};
 
 		let mut reputation_changes = Vec::new();
 
-		if let Some(requests) = self.seen_requests.get_mut(&key) {
-			*requests = requests.saturating_add(1);
+		match self.seen_requests.get_mut(&key) {
+			Some(SeenRequestsValue::First) => {},
+			Some(SeenRequestsValue::Fulfilled(ref mut requests)) => {
+				*requests = requests.saturating_add(1);
 
-			if *requests > MAX_NUMBER_OF_SAME_REQUESTS_PER_PEER {
-				reputation_changes.push(rep::SAME_REQUEST);
+				if *requests > MAX_NUMBER_OF_SAME_REQUESTS_PER_PEER {
+					reputation_changes.push(rep::SAME_REQUEST);
+				}
+			},
+			None => {
+				self.seen_requests.put(key.clone(), SeenRequestsValue::First);
 			}
-		} else {
-			self.seen_requests.put(key, 1);
 		}
 
 		debug!(
 			target: LOG_TARGET,
 			"Handling block request from {}: Starting at `{:?}` with maximum blocks \
-			 of `{}` and direction `{:?}`.",
+			 of `{}`, direction `{:?}` and attributes `{:?}`.",
 			peer,
 			from_block_id,
 			max_blocks,
 			direction,
+			attributes,
 		);
-
-		let attributes = BlockAttributes::from_be_u32(request.fields)?;
 
 		let result = if reputation_changes.is_empty() {
 			let block_response = self.get_block_response(
@@ -211,6 +227,21 @@ impl<B: BlockT> BlockRequestHandler<B> {
 				direction,
 				max_blocks,
 			)?;
+
+			// If any of the blocks contains nay data, we can consider it as successful request.
+			if block_response
+				.blocks
+				.iter()
+				.any(|b| !b.header.is_empty() || !b.body.is_empty() || b.is_empty_justification)
+			{
+				if let Some(value) = self.seen_requests.get_mut(&key) {
+					// If this is the first time we have processed this request, we need to change
+					// it to `Fulfilled`.
+					if let SeenRequestsValue::First = value {
+						*value = SeenRequestsValue::Fulfilled(1);
+					}
+				}
+			}
 
 			let mut data = Vec::with_capacity(block_response.encoded_len());
 			block_response.encode(&mut data)?;

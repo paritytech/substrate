@@ -22,6 +22,7 @@ use std::sync::Arc;
 
 use sc_executor::RuntimeInfo;
 use sp_core::traits::{CodeExecutor, SpawnNamed};
+use sc_telemetry::TelemetryHandle;
 use sp_runtime::BuildStorage;
 use sp_runtime::traits::{Block as BlockT, HashFor};
 use sp_blockchain::Result as ClientResult;
@@ -31,7 +32,6 @@ use super::{call_executor::LocalCallExecutor, client::{Client, ClientConfig}};
 use sc_client_api::light::Storage as BlockchainStorage;
 use sc_light::{Backend, GenesisCallExecutor};
 
-
 /// Create an instance of light client.
 pub fn new_light<B, S, RA, E>(
 	backend: Arc<Backend<S, HashFor<B>>>,
@@ -39,6 +39,7 @@ pub fn new_light<B, S, RA, E>(
 	code_executor: E,
 	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
+	telemetry: Option<TelemetryHandle>,
 ) -> ClientResult<
 		Client<
 			Backend<S, HashFor<B>>,
@@ -70,6 +71,7 @@ pub fn new_light<B, S, RA, E>(
 		Default::default(),
 		Default::default(),
 		prometheus_registry,
+		telemetry,
 		ClientConfig::default(),
 	)
 }
