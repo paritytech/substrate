@@ -1110,6 +1110,7 @@ pub mod migrations {
 			IsCurrentSessionFinal::kill();
 
 			StorageVersion::put(Releases::V6_0_0);
+			log!(info, "Done.");
 			T::DbWeight::get().writes(6 + 1)
 		}
 	}
