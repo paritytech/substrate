@@ -1138,7 +1138,8 @@ fn local_authority_id(
 		Some(keystore) => voters
 			.iter()
 			.find(|(p, _)| {
-				SyncCryptoStore::has_keys(&**keystore, &[(p.to_raw_vec(), AuthorityId::ID)])
+				!SyncCryptoStore::has_keys(&**keystore, &[(p.to_raw_vec(),
+					AuthorityId::ID)]).is_empty()
 			})
 			.map(|(p, _)| p.clone()),
 		None => None,

@@ -114,8 +114,9 @@ pub trait CryptoStore: Send + Sync {
 
 	/// Checks if the private keys for the given public key and key type combinations exist.
 	///
-	/// Returns `true` iff all private keys could be found.
-	async fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool;
+	/// Returns the indices of the matching keys in `public_keys`. Call `is_empty()` on the returned
+	/// list to check if no keys match.
+	async fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> Vec<usize>;
 
 	/// Sign with key
 	///
@@ -274,8 +275,9 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 
 	/// Checks if the private keys for the given public key and key type combinations exist.
 	///
-	/// Returns `true` iff all private keys could be found.
-	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool;
+	/// Returns the indices of the matching keys in `public_keys`. Call `is_empty()` on the returned
+	/// list to check if no keys match.
+	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> Vec<usize>;
 
 	/// Sign with key
 	///

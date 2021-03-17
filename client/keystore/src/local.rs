@@ -113,7 +113,7 @@ impl CryptoStore for LocalKeystore {
 		SyncCryptoStore::insert_unknown(self, id, suri, public)
 	}
 
-	async fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
+	async fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> Vec<usize> {
 		SyncCryptoStore::has_keys(self, public_keys)
 	}
 
@@ -277,9 +277,13 @@ impl SyncCryptoStore for LocalKeystore {
 		self.0.write().insert_unknown(key_type, suri, public).map_err(|_| ())
 	}
 
-	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
-		public_keys.iter()
-			.all(|(p, t)| self.0.read().key_phrase_by_type(&p, *t).ok().flatten().is_some())
+	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> Vec<usize> {
+		public_keys.iter().enumerate().fold(Vec::new(), |mut idxs, (i, (p, t))| {
+			if self.0.read().key_phrase_by_type(&p, *t).ok().flatten().is_some() {
+				idxs.push(i);
+			}
+			idxs
+		})
 	}
 
 	fn sr25519_vrf_sign(
@@ -570,9 +574,13 @@ mod tests {
 
 		let key: ed25519::AppPair = store.0.write().generate().unwrap();
 		let key2 = ed25519::Pair::generate().0;
+		let key3: ed25519::AppPair = store.0.write().generate().unwrap();
 
 		assert!(
-			!SyncCryptoStore::has_keys(&store, &[(key2.public().to_vec(), ed25519::AppPublic::ID)])
+			SyncCryptoStore::has_keys(
+				&store,
+				&[(key2.public().to_vec(), ed25519::AppPublic::ID)]
+			).is_empty()
 		);
 
 		assert!(
@@ -582,11 +590,18 @@ mod tests {
 					(key2.public().to_vec(), ed25519::AppPublic::ID),
 					(key.public().to_raw_vec(), ed25519::AppPublic::ID),
 				],
-			)
+			).is_empty()
 		);
 
-		assert!(
-			SyncCryptoStore::has_keys(&store, &[(key.public().to_raw_vec(), ed25519::AppPublic::ID)])
+		assert_eq!(vec![0, 2],
+			SyncCryptoStore::has_keys(
+				&store,
+				&[
+					(key.public().to_raw_vec(), ed25519::AppPublic::ID),
+					(key2.public().to_raw_vec(), ed25519::AppPublic::ID),
+					(key3.public().to_raw_vec(), ed25519::AppPublic::ID)
+				]
+			)
 		);
 	}
 

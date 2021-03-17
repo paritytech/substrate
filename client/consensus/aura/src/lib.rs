@@ -349,10 +349,10 @@ where
 	) -> Option<Self::Claim> {
 		let expected_author = slot_author::<P>(slot, epoch_data);
 		expected_author.and_then(|p| {
-			if SyncCryptoStore::has_keys(
+			if !SyncCryptoStore::has_keys(
 				&*self.keystore,
 				&[(p.to_raw_vec(), sp_application_crypto::key_types::AURA)],
-			) {
+			).is_empty() {
 				Some(p.clone())
 			} else {
 				None
