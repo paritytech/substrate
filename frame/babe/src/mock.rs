@@ -37,7 +37,7 @@ use sp_consensus_babe::{AuthorityId, AuthorityPair, Slot};
 use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
 use sp_staking::SessionIndex;
 use pallet_staking::EraIndex;
-use sp_election_providers::onchain;
+use frame_election_provider_support::onchain;
 use pallet_session::historical as pallet_session_historical;
 
 type DummyValidatorId = u64;
@@ -187,6 +187,7 @@ parameter_types! {
 impl onchain::Config for Test {
 	type AccountId = <Self as frame_system::Config>::AccountId;
 	type BlockNumber = <Self as frame_system::Config>::BlockNumber;
+	type BlockWeights = ();
 	type Accuracy = Perbill;
 	type DataProvider = Staking;
 }
@@ -204,7 +205,7 @@ impl pallet_staking::Config for Test {
 	type SlashCancelOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type SessionInterface = Self;
 	type UnixTime = pallet_timestamp::Module<Test>;
-	type RewardCurve = RewardCurve;
+	type EraPayout = pallet_staking::ConvertCurve<RewardCurve>;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type NextNewSession = Session;
 	type ElectionLookahead = ElectionLookahead;
