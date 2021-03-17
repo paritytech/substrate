@@ -32,7 +32,7 @@ use sp_state_machine::{
 	Backend as StateBackend, TrieBackend, InMemoryBackend, ChangesTrieTransaction,
 	StorageCollection, ChildStorageCollection,
 };
-use sp_runtime::{generic::BlockId, Justification, Storage};
+use sp_runtime::{generic::BlockId, Justification, Justifications, Storage};
 use sp_runtime::traits::{Block as BlockT, NumberFor, Zero, Header, HashFor};
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use sc_client_api::{
@@ -199,6 +199,14 @@ impl<S, Block> ClientBackend<Block> for Backend<S, HashFor<Block>>
 		self.blockchain.storage().finalize_header(block)
 	}
 
+	fn append_justification(
+		&self,
+		_block: BlockId<Block>,
+		_justification: Justification,
+	) -> ClientResult<()> {
+		Ok(())
+	}
+
 	fn blockchain(&self) -> &Blockchain<S> {
 		&self.blockchain
 	}
@@ -278,7 +286,7 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 		&mut self,
 		header: Block::Header,
 		_body: Option<Vec<Block::Extrinsic>>,
-		_justification: Option<Justification>,
+		_justifications: Option<Justifications>,
 		state: NewBlockState,
 	) -> ClientResult<()> {
 		self.leaf_state = state;
@@ -356,7 +364,7 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 	fn mark_finalized(
 		&mut self,
 		block: BlockId<Block>,
-		_justification: Option<Justification>,
+		_justifications: Option<Justification>,
 	) -> ClientResult<()> {
 		self.finalized_blocks.push(block);
 		Ok(())

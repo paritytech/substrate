@@ -22,7 +22,7 @@ use std::sync::Arc;
 use std::collections::{HashMap, HashSet};
 use sp_core::ChangesTrieConfigurationRange;
 use sp_core::offchain::OffchainStorage;
-use sp_runtime::{generic::BlockId, Justification, Storage};
+use sp_runtime::{generic::BlockId, Justification, Justifications, Storage};
 use sp_runtime::traits::{Block as BlockT, NumberFor, HashFor};
 use sp_state_machine::{
 	ChangesTrieState, ChangesTrieStorage as StateChangesTrieStorage, ChangesTrieTransaction,
@@ -148,7 +148,7 @@ pub trait BlockImportOperation<Block: BlockT> {
 		&mut self,
 		header: Block::Header,
 		body: Option<Vec<Block::Extrinsic>>,
-		justification: Option<Justification>,
+		justifications: Option<Justifications>,
 		state: NewBlockState,
 	) -> sp_blockchain::Result<()>;
 
@@ -197,6 +197,7 @@ pub trait BlockImportOperation<Block: BlockT> {
 		id: BlockId<Block>,
 		justification: Option<Justification>,
 	) -> sp_blockchain::Result<()>;
+
 	/// Mark a block as new head. If both block import and set head are specified, set head
 	/// overrides block import's best block rule.
 	fn mark_head(&mut self, id: BlockId<Block>) -> sp_blockchain::Result<()>;
@@ -230,7 +231,6 @@ pub trait Finalizer<Block: BlockT, B: Backend<Block>> {
 		notify: bool,
 	) -> sp_blockchain::Result<()>;
 
-
 	/// Finalize a block.
 	///
 	/// This will implicitly finalize all blocks up to it and
@@ -250,7 +250,6 @@ pub trait Finalizer<Block: BlockT, B: Backend<Block>> {
 		justification: Option<Justification>,
 		notify: bool,
 	) -> sp_blockchain::Result<()>;
-
 }
 
 /// Provides access to an auxiliary database.
@@ -430,6 +429,15 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 		&self,
 		block: BlockId<Block>,
 		justification: Option<Justification>,
+	) -> sp_blockchain::Result<()>;
+
+	/// Append justification to the block with the given Id.
+	///
+	/// This should only be called for blocks that are already finalized.
+	fn append_justification(
+		&self,
+		block: BlockId<Block>,
+		justification: Justification,
 	) -> sp_blockchain::Result<()>;
 
 	/// Returns reference to blockchain backend.

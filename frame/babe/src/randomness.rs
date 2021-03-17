@@ -21,7 +21,7 @@
 use super::{
 	AuthorVrfRandomness, Config, EpochStart, NextRandomness, Randomness, VRF_OUTPUT_LENGTH,
 };
-use frame_support::{traits::Randomness as RandomnessT, StorageValue};
+use frame_support::{traits::Randomness as RandomnessT};
 use sp_runtime::traits::Hash;
 
 /// Randomness usable by consensus protocols that **depend** upon finality and take action
@@ -117,7 +117,7 @@ impl<T: Config> RandomnessT<T::Hash, T::BlockNumber> for RandomnessFromTwoEpochs
 	fn random(subject: &[u8]) -> (T::Hash, T::BlockNumber) {
 		let mut subject = subject.to_vec();
 		subject.reserve(VRF_OUTPUT_LENGTH);
-		subject.extend_from_slice(&Randomness::get()[..]);
+		subject.extend_from_slice(&Randomness::<T>::get()[..]);
 
 		(T::Hashing::hash(&subject[..]), EpochStart::<T>::get().0)
 	}
@@ -127,7 +127,7 @@ impl<T: Config> RandomnessT<T::Hash, T::BlockNumber> for RandomnessFromOneEpochA
 	fn random(subject: &[u8]) -> (T::Hash, T::BlockNumber) {
 		let mut subject = subject.to_vec();
 		subject.reserve(VRF_OUTPUT_LENGTH);
-		subject.extend_from_slice(&NextRandomness::get()[..]);
+		subject.extend_from_slice(&NextRandomness::<T>::get()[..]);
 
 		(T::Hashing::hash(&subject[..]), EpochStart::<T>::get().1)
 	}
@@ -135,7 +135,7 @@ impl<T: Config> RandomnessT<T::Hash, T::BlockNumber> for RandomnessFromOneEpochA
 
 impl<T: Config> RandomnessT<Option<T::Hash>, T::BlockNumber> for CurrentBlockRandomness<T> {
 	fn random(subject: &[u8]) -> (Option<T::Hash>, T::BlockNumber) {
-		let random = AuthorVrfRandomness::get().map(|random| {
+		let random = AuthorVrfRandomness::<T>::get().map(|random| {
 			let mut subject = subject.to_vec();
 			subject.reserve(VRF_OUTPUT_LENGTH);
 			subject.extend_from_slice(&random);
