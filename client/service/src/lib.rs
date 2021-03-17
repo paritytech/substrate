@@ -389,10 +389,13 @@ mod waiting {
 #[cfg(not(target_os = "unknown"))]
 fn start_rpc_servers<
 	H: FnMut(sc_rpc::DenyUnsafe, sc_rpc_server::RpcMiddleware)
-	-> sc_rpc_server::RpcHandler<sc_rpc::Metadata>
+	-> sc_rpc_server::RpcHandler<sc_rpc::Metadata>,
+	R: FnMut(sc_rpc::DenyUnsafe) -> jsonrpsee_ws_server::RpcModule,
+
 >(
 	config: &Configuration,
 	mut gen_handler: H,
+	mut gen_rpc_module: R,
 	rpc_metrics: sc_rpc_server::RpcMetrics,
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
 	fn maybe_start_server<T, F>(address: Option<SocketAddr>, mut start: F) -> Result<Option<T>, io::Error>
@@ -410,6 +413,27 @@ fn start_rpc_servers<
 				}
 			) ).transpose()
 		}
+
+	let module = gen_rpc_module(sc_rpc::DenyUnsafe::Yes);
+	let rpsee_addr = config.rpc_ws.map(|mut addr| {
+		let port = addr.port() + 1;
+		addr.set_port(port);
+		addr
+	}).unwrap_or_else(|| "127.0.0.1:9945".parse().unwrap());
+
+	std::thread::spawn(move || {
+		use jsonrpsee_ws_server::WsServer;
+
+		let rt = tokio::runtime::Runtime::new().unwrap();
+
+		rt.block_on(async {
+			let mut server = WsServer::new(rpsee_addr).await.unwrap();
+
+			server.register_module(module).unwrap();
+
+			server.start().await;
+		});
+	});
 
 	fn deny_unsafe(addr: &SocketAddr, methods: &RpcMethods) -> sc_rpc::DenyUnsafe {
 		let is_exposed_addr = !addr.ip().is_loopback();

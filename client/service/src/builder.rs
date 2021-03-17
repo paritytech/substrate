@@ -75,6 +75,7 @@ use sc_client_api::{
 	execution_extensions::ExecutionExtensions
 };
 use sp_blockchain::{HeaderMetadata, HeaderBackend};
+use jsonrpsee_ws_server::{RpcModule, RpcContextModule};
 
 /// A utility trait for building an RPC extension given a `DenyUnsafe` instance.
 /// This is useful since at service definition time we don't know whether the
@@ -653,8 +654,14 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		on_demand.clone(), remote_blockchain.clone(), &*rpc_extensions_builder,
 		backend.offchain_storage(), system_rpc_tx.clone()
 	);
+
+	// jsonrpsee RPC
+	let gen_rpc_module = |deny_unsafe: sc_rpc::DenyUnsafe| {
+		gen_rpc_module(deny_unsafe, task_manager.spawn_handle(), client.clone(), on_demand.clone(), remote_blockchain.clone())
+	};
+
 	let rpc_metrics = sc_rpc_server::RpcMetrics::new(config.prometheus_registry())?;
-	let rpc = start_rpc_servers(&config, gen_handler, rpc_metrics.clone())?;
+	let rpc = start_rpc_servers(&config, gen_handler, gen_rpc_module, rpc_metrics.clone())?;
 	// This is used internally, so don't restrict access to unsafe RPC
 	let rpc_handlers = RpcHandlers(Arc::new(gen_handler(
 		sc_rpc::DenyUnsafe::No,
@@ -725,6 +732,70 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 	telemetry.start_telemetry(connection_message)?;
 
 	Ok(telemetry.handle())
+}
+
+// Maciej: This is very WIP, mocking the original `gen_handler`. All of the `jsonrpsee`
+// specific logic should be merged back to `gen_handler` down the road.
+fn gen_rpc_module<TBl, TBackend, TCl>(
+	deny_unsafe: sc_rpc::DenyUnsafe,
+	spawn_handle: SpawnTaskHandle,
+	client: Arc<TCl>,
+	on_demand: Option<Arc<OnDemand<TBl>>>,
+	remote_blockchain: Option<Arc<dyn RemoteBlockchain<TBl>>>,
+) -> RpcModule
+	where
+		TBl: BlockT,
+		TCl: ProvideRuntimeApi<TBl> + BlockchainEvents<TBl> + HeaderBackend<TBl> +
+		HeaderMetadata<TBl, Error=sp_blockchain::Error> + ExecutorProvider<TBl> +
+		CallApiAt<TBl> + ProofProvider<TBl> +
+		StorageProvider<TBl, TBackend> + BlockBackend<TBl> + Send + Sync + 'static,
+		TBackend: sc_client_api::backend::Backend<TBl> + 'static,
+		<TCl as ProvideRuntimeApi<TBl>>::Api:
+			sp_session::SessionKeys<TBl> +
+			sp_api::Metadata<TBl>,
+{
+	let task_executor = sc_rpc::SubscriptionTaskExecutor::new(spawn_handle);
+	let subscriptions = SubscriptionManager::new(Arc::new(task_executor.clone()));
+
+	let (chain, _state, _child_state) = if let (Some(remote_blockchain), Some(on_demand)) =
+		(remote_blockchain, on_demand) {
+		// Light clients
+		let chain = sc_rpc::chain::new_light(
+			client.clone(),
+			subscriptions.clone(),
+			remote_blockchain.clone(),
+			on_demand.clone(),
+		);
+		let (state, child_state) = sc_rpc::state::new_light(
+			client.clone(),
+			subscriptions.clone(),
+			remote_blockchain.clone(),
+			on_demand,
+			deny_unsafe,
+		);
+		(chain, state, child_state)
+
+	} else {
+		// Full nodes
+		let chain = sc_rpc::chain::new_full(client.clone(), subscriptions.clone());
+		let (state, child_state) = sc_rpc::state::new_full(
+			client.clone(),
+			subscriptions.clone(),
+			deny_unsafe,
+		);
+		(chain, state, child_state)
+	};
+	let mut chain_module = RpcContextModule::new(chain);
+
+	chain_module.register_method("chain_getBlockHash", |params, chain| {
+		use sc_rpc::chain::ChainApi;
+
+		let hash = chain.block_hash(params.one()?).unwrap();
+
+		Ok(hash)
+	}).unwrap();
+
+	chain_module.into_module()
 }
 
 fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
