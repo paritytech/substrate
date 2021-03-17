@@ -97,7 +97,7 @@ sp_api::decl_runtime_apis! {
 /// Aura slot duration.
 ///
 /// Internally stored as milliseconds.
-#[derive(sp_runtime::RuntimeDebug, Encode, Decode, PartialEq, Clone)]
+#[derive(sp_runtime::RuntimeDebug, Encode, Decode, PartialEq, Clone, Copy)]
 pub struct SlotDuration(u64);
 
 impl SlotDuration {
