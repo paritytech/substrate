@@ -56,10 +56,10 @@ pub fn generate_voter_cache<T: Config>(
 /// The snapshot must be the same is the one used to create `cache`.
 pub fn voter_index_fn<T: Config>(
 	cache: &BTreeMap<T::AccountId, usize>,
-) -> Box<dyn Fn(&T::AccountId) -> Option<CompactVoterIndexOf<T>> + '_> {
-	Box::new(move |who| {
+) -> impl Fn(&T::AccountId) -> Option<CompactVoterIndexOf<T>> + '_ {
+	move |who| {
 		cache.get(who).and_then(|i| <usize as TryInto<CompactVoterIndexOf<T>>>::try_into(*i).ok())
-	})
+	}
 }
 
 /// Same as [`voter_index_fn`], but the returning index is converted into usize, if possible.
@@ -69,8 +69,8 @@ pub fn voter_index_fn<T: Config>(
 /// The snapshot must be the same is the one used to create `cache`.
 pub fn voter_index_fn_usize<T: Config>(
 	cache: &BTreeMap<T::AccountId, usize>,
-) -> Box<dyn Fn(&T::AccountId) -> Option<usize> + '_> {
-	Box::new(move |who| cache.get(who).cloned())
+) -> impl Fn(&T::AccountId) -> Option<usize> + '_ {
+	move |who| cache.get(who).cloned()
 }
 
 /// A non-optimized, linear version of [`voter_index_fn`] that does not need a cache and does a
@@ -82,13 +82,13 @@ pub fn voter_index_fn_usize<T: Config>(
 #[cfg(test)]
 pub fn voter_index_fn_linear<T: Config>(
 	snapshot: &Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
-) -> Box<dyn Fn(&T::AccountId) -> Option<CompactVoterIndexOf<T>> + '_> {
-	Box::new(move |who| {
+) -> impl Fn(&T::AccountId) -> Option<CompactVoterIndexOf<T>> + '_ {
+	move |who| {
 		snapshot
 			.iter()
 			.position(|(x, _, _)| x == who)
 			.and_then(|i| <usize as TryInto<CompactVoterIndexOf<T>>>::try_into(i).ok())
-	})
+	}
 }
 
 /// Create a function the returns the index to a target in the snapshot.
@@ -100,14 +100,14 @@ pub fn voter_index_fn_linear<T: Config>(
 /// in `O(log n)`.
 pub fn target_index_fn<T: Config>(
 	snapshot: &Vec<T::AccountId>,
-) -> Box<dyn '_ + Fn(&T::AccountId) -> Option<CompactTargetIndexOf<T>>> {
+) -> impl '_ + Fn(&T::AccountId) -> Option<CompactTargetIndexOf<T>> {
 	let cache: BTreeMap<_, _> =
 		snapshot.iter().enumerate().map(|(idx, account_id)| (account_id, idx)).collect();
-	Box::new(move |who| {
+	move |who| {
 		cache
 			.get(who)
 			.and_then(|i| <usize as TryInto<CompactTargetIndexOf<T>>>::try_into(*i).ok())
-	})
+	}
 }
 
 /// Create a function the returns the index to a target in the snapshot.
@@ -120,37 +120,37 @@ pub fn target_index_fn<T: Config>(
 #[cfg(test)]
 pub fn target_index_fn_linear<T: Config>(
 	snapshot: &Vec<T::AccountId>,
-) -> Box<dyn Fn(&T::AccountId) -> Option<CompactTargetIndexOf<T>> + '_> {
-	Box::new(move |who| {
+) -> impl Fn(&T::AccountId) -> Option<CompactTargetIndexOf<T>> + '_ {
+	move |who| {
 		snapshot
 			.iter()
 			.position(|x| x == who)
 			.and_then(|i| <usize as TryInto<CompactTargetIndexOf<T>>>::try_into(i).ok())
-	})
+	}
 }
 
 /// Create a function that can map a voter index ([`CompactVoterIndexOf`]) to the actual voter
 /// account using a linearly indexible snapshot.
 pub fn voter_at_fn<T: Config>(
 	snapshot: &Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
-) -> Box<dyn Fn(CompactVoterIndexOf<T>) -> Option<T::AccountId> + '_> {
-	Box::new(move |i| {
+) -> impl Fn(CompactVoterIndexOf<T>) -> Option<T::AccountId> + '_ {
+	move |i| {
 		<CompactVoterIndexOf<T> as TryInto<usize>>::try_into(i)
 			.ok()
 			.and_then(|i| snapshot.get(i).map(|(x, _, _)| x).cloned())
-	})
+	}
 }
 
 /// Create a function that can map a target index ([`CompactTargetIndexOf`]) to the actual target
 /// account using a linearly indexible snapshot.
 pub fn target_at_fn<T: Config>(
 	snapshot: &Vec<T::AccountId>,
-) -> Box<dyn Fn(CompactTargetIndexOf<T>) -> Option<T::AccountId> + '_> {
-	Box::new(move |i| {
+) -> impl Fn(CompactTargetIndexOf<T>) -> Option<T::AccountId> + '_ {
+	move |i| {
 		<CompactTargetIndexOf<T> as TryInto<usize>>::try_into(i)
 			.ok()
 			.and_then(|i| snapshot.get(i).cloned())
-	})
+	}
 }
 
 /// Create a function to get the stake of a voter.
@@ -159,10 +159,10 @@ pub fn target_at_fn<T: Config>(
 #[cfg(test)]
 pub fn stake_of_fn_linear<T: Config>(
 	snapshot: &Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
-) -> Box<dyn Fn(&T::AccountId) -> VoteWeight + '_> {
-	Box::new(move |who| {
+) -> impl Fn(&T::AccountId) -> VoteWeight + '_ {
+	move |who| {
 		snapshot.iter().find(|(x, _, _)| x == who).map(|(_, x, _)| *x).unwrap_or_default()
-	})
+	}
 }
 
 /// Create a function to get the stake of a voter.
@@ -174,12 +174,12 @@ pub fn stake_of_fn_linear<T: Config>(
 pub fn stake_of_fn<'a, T: Config>(
 	snapshot: &'a Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
 	cache: &'a BTreeMap<T::AccountId, usize>,
-) -> Box<dyn Fn(&T::AccountId) -> VoteWeight + 'a> {
-	Box::new(move |who| {
+) -> impl Fn(&T::AccountId) -> VoteWeight + 'a {
+	move |who| {
 		if let Some(index) = cache.get(who) {
 			snapshot.get(*index).map(|(_, x, _)| x).cloned().unwrap_or_default()
 		} else {
 			0
 		}
-	})
+	}
 }
