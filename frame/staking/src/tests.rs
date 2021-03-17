@@ -132,7 +132,7 @@ fn basic_setup_works() {
 
 
 		// The number of validators required.
-		assert_eq!(Staking::validator_count(), 2);
+		assert_eq!(Staking::validator_count(), 3);
 
 		// Initial Era and session
 		assert_eq!(Staking::active_era().unwrap().index, 0);

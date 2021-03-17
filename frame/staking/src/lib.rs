@@ -2391,8 +2391,12 @@ impl<T: Config> Module<T> {
 		exposures: Vec<<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance>
 	) {
 		let mut expos = exposures;
-		let one_percent = Percent::from_percent(Self::validator_count().try_into().unwrap()).mul_ceil(1u64);
-		let two_percent = one_percent.saturating_mul(2u64);
+		let one_percent = Perbill::from_rational_approximation(
+			Self::validator_count(), 
+			100
+		).mul_ceil(1u32); // make sure to at lest ceiled to 1
+		
+		let two_percent = one_percent.saturating_mul(2);
 		// sort exposures
 		expos.sort_by(|a, b| a.cmp(&b).reverse());
 		// global average
@@ -2404,32 +2408,52 @@ impl<T: Config> Module<T> {
 		for expo in expos.into_iter(){
 			total_exposure = total_exposure.saturating_add(expo);
 			if i <= one_percent {
-				bottom_one_percent_exposure = bottom_one_percent_exposure.saturating_add(expo);
+				bottom_one_percent_exposure = 
+				bottom_one_percent_exposure.saturating_add(expo);
 			}
 			if i <= two_percent {
-				bottom_two_percent_exposure += bottom_two_percent_exposure.saturating_add(expo);
+				bottom_two_percent_exposure += 
+				bottom_two_percent_exposure.saturating_add(expo);
 			}
 			i += 1;
 		};
-		let global_average = total_exposure / ((Self::validator_count()).saturated_into());
-		let one_percent_average_stake = bottom_one_percent_exposure / (one_percent.saturated_into());
-		let two_percent_average_stake = bottom_two_percent_exposure / (two_percent.saturated_into());
-		// //init final count
+
+		let global_average = Perbill::from_rational_approximation(
+			total_exposure,
+			(Self::validator_count()).saturated_into()
+		);
+		let one_percent_average_stake = Perbill::from_rational_approximation(
+			bottom_one_percent_exposure,
+			one_percent.saturated_into()
+		);
+
+		let two_percent_average_stake = Perbill::from_rational_approximation(
+			bottom_two_percent_exposure,
+			two_percent.saturated_into()
+		);
+		//init final count
 		let mut final_count = Self::validator_count();
-		if one_percent_average_stake > (Percent::from_percent(40).mul_ceil(global_average)) {
+		let forty_percent = Perbill::from_rational_approximation(
+			40 as u32, 
+			100 as u32
+		);
+		let twinty_percent = Perbill::from_rational_approximation(
+			20 as u32, 
+			100 as u32
+		);
+		if one_percent_average_stake > global_average.saturating_mul(forty_percent){
 			final_count = std::cmp::min(
-				MAX_VALIDATORS.try_into().unwrap(), 
-				(Self::validator_count() as u32) + (one_percent as u32)
+				MAX_VALIDATORS.try_into().unwrap(),
+				Self::validator_count().saturating_add(one_percent)
 			);
 		}
-					
-		if two_percent_average_stake < (Percent::from_percent(20).mul_ceil(global_average)){
+		if two_percent_average_stake < global_average.saturating_mul(twinty_percent){
 			final_count = std::cmp::max(
 				Self::minimum_validator_count(),
-				(Self::validator_count() as u32) - (one_percent as u32)
+				Self::validator_count().saturating_sub(one_percent)
 			);
 		}
-		ValidatorCount::put(final_count);
+		ValidatorCount::put(final_count)
 	}
 
 	fn do_payout_stakers(validator_stash: T::AccountId, era: EraIndex) -> DispatchResult {
@@ -2974,11 +2998,11 @@ impl<T: Config> Module<T> {
 
 			// Populate Stakers and write slot stake.
 			let mut total_stake: BalanceOf<T> = Zero::zero();
-			let mut expos: Vec<BalanceOf<T>> = Vec::new();
+			let mut total_exposures: Vec<BalanceOf<T>> = Vec::new();
 			exposures.into_iter().for_each(|(stash, exposure)| {
 				total_stake = total_stake.saturating_add(exposure.total);
 				<ErasStakers<T>>::insert(current_era, &stash, &exposure);
-				expos.push(exposure.total);
+				total_exposures.push(exposure.total);
 				let mut exposure_clipped = exposure;
 				let clipped_max_len = T::MaxNominatorRewardedPerValidator::get() as usize;
 				if exposure_clipped.others.len() > clipped_max_len {
@@ -2992,7 +3016,7 @@ impl<T: Config> Module<T> {
 			<ErasTotalStake<T>>::insert(&current_era, total_stake);
 			// if dynamic damping is enabled
 			if T::DynamicDamping::get() {
-				Self::dynamic_damping_validator_count(expos);
+				Self::dynamic_damping_validator_count(total_exposures);
 			}
 			// collect the pref of all winners
 			for stash in &elected_stashes {
