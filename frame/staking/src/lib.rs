@@ -2443,7 +2443,7 @@ impl<T: Config> Module<T> {
 		);
 		if one_percent_average_stake > global_average.saturating_mul(forty_percent){
 			final_count = std::cmp::min(
-				MAX_VALIDATORS.try_into().unwrap(),
+				MAX_VALIDATORS.saturated_into(),
 				Self::validator_count().saturating_add(one_percent)
 			);
 		}
