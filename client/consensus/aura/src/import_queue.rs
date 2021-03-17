@@ -39,7 +39,7 @@ use sp_consensus::{
 use sc_client_api::{backend::AuxStore, BlockOf};
 use sp_blockchain::{well_known_cache_keys::{self, Id as CacheKeyId}, ProvideCache, HeaderBackend};
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
-use sp_runtime::{generic::{BlockId, OpaqueDigestItemId}, Justification};
+use sp_runtime::{generic::{BlockId, OpaqueDigestItemId}, Justifications};
 use sp_runtime::traits::{Block as BlockT, Header, DigestItemFor, Zero};
 use sp_api::ProvideRuntimeApi;
 use sp_core::crypto::Pair;
@@ -238,7 +238,7 @@ impl<B: BlockT, C, P, CAW> Verifier<B> for AuraVerifier<C, P, CAW> where
 		&mut self,
 		origin: BlockOrigin,
 		header: B::Header,
-		justification: Option<Justification>,
+		justifications: Option<Justifications>,
 		mut body: Option<Vec<B::Extrinsic>>,
 	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		let mut inherent_data = self.inherent_data_providers
@@ -317,7 +317,7 @@ impl<B: BlockT, C, P, CAW> Verifier<B> for AuraVerifier<C, P, CAW> where
 				let mut import_block = BlockImportParams::new(origin, pre_header);
 				import_block.post_digests.push(seal);
 				import_block.body = body;
-				import_block.justification = justification;
+				import_block.justifications = justifications;
 				import_block.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 				import_block.post_hash = Some(hash);
 

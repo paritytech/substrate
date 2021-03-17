@@ -41,7 +41,7 @@ use sc_telemetry::{
 	SUBSTRATE_INFO,
 };
 use sp_runtime::{
-	Justification, BuildStorage,
+	Justification, Justifications, BuildStorage,
 	generic::{BlockId, SignedBlock, DigestItem},
 	traits::{
 		Block as BlockT, Header as HeaderT, Zero, NumberFor,
@@ -625,7 +625,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let BlockImportParams {
 			origin,
 			header,
-			justification,
+			justifications,
 			post_digests,
 			body,
 			storage_changes,
@@ -637,7 +637,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			..
 		} = import_block;
 
-		assert!(justification.is_some() && finalized || justification.is_none());
+		assert!(justifications.is_some() && finalized || justifications.is_none());
 
 		if !intermediates.is_empty() {
 			return Err(Error::IncompletePipeline)
@@ -665,7 +665,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			origin,
 			hash,
 			import_headers,
-			justification,
+			justifications,
 			body,
 			storage_changes,
 			new_cache,
@@ -704,7 +704,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		origin: BlockOrigin,
 		hash: Block::Hash,
 		import_headers: PrePostHeader<Block::Header>,
-		justification: Option<Justification>,
+		justifications: Option<Justifications>,
 		body: Option<Vec<Block::Extrinsic>>,
 		storage_changes: Option<sp_api::StorageChanges<backend::StateBackendFor<B, Block>, Block>>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
@@ -820,7 +820,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		operation.op.set_block_data(
 			import_headers.post().clone(),
 			body,
-			justification,
+			justifications,
 			leaf_state,
 		)?;
 
@@ -1926,9 +1926,9 @@ impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 	}
 
 	fn block(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<SignedBlock<Block>>> {
-		Ok(match (self.header(id)?, self.body(id)?, self.justification(id)?) {
-			(Some(header), Some(extrinsics), justification) =>
-				Some(SignedBlock { block: Block::new(header, extrinsics), justification }),
+		Ok(match (self.header(id)?, self.body(id)?, self.justifications(id)?) {
+			(Some(header), Some(extrinsics), justifications) =>
+				Some(SignedBlock { block: Block::new(header, extrinsics), justifications }),
 			_ => None,
 		})
 	}
@@ -1937,8 +1937,8 @@ impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 		Client::block_status(self, id)
 	}
 
-	fn justification(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justification>> {
-		self.backend.blockchain().justification(*id)
+	fn justifications(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justifications>> {
+		self.backend.blockchain().justifications(*id)
 	}
 
 	fn block_hash(&self, number: NumberFor<Block>) -> sp_blockchain::Result<Option<Block::Hash>> {

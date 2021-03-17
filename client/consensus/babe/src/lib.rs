@@ -84,7 +84,7 @@ use sp_core::crypto::Public;
 use sp_application_crypto::AppKey;
 use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 use sp_runtime::{
-	generic::{BlockId, OpaqueDigestItemId}, Justification,
+	generic::{BlockId, OpaqueDigestItemId}, Justifications,
 	traits::{Block as BlockT, Header, DigestItemFor, Zero},
 };
 use sp_api::{ProvideRuntimeApi, NumberFor};
@@ -1097,15 +1097,15 @@ where
 		&mut self,
 		origin: BlockOrigin,
 		header: Block::Header,
-		justification: Option<Justification>,
+		justifications: Option<Justifications>,
 		mut body: Option<Vec<Block::Extrinsic>>,
 	) -> Result<(BlockImportParams<Block, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		trace!(
 			target: "babe",
-			"Verifying origin: {:?} header: {:?} justification: {:?} body: {:?}",
+			"Verifying origin: {:?} header: {:?} justification(s): {:?} body: {:?}",
 			origin,
 			header,
-			justification,
+			justifications,
 			body,
 		);
 
@@ -1194,7 +1194,7 @@ where
 				let mut import_block = BlockImportParams::new(origin, pre_header);
 				import_block.post_digests.push(verified_info.seal);
 				import_block.body = body;
-				import_block.justification = justification;
+				import_block.justifications = justifications;
 				import_block.intermediates.insert(
 					Cow::from(INTERMEDIATE_KEY),
 					Box::new(BabeIntermediate::<Block> { epoch_descriptor }) as Box<dyn Any>,

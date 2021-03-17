@@ -43,9 +43,10 @@ use sp_consensus::{
 	block_validation::BlockAnnounceValidator,
 	import_queue::{BlockImportResult, BlockImportError, IncomingBlock, Origin}
 };
-use sp_runtime::{generic::BlockId, Justification};
-use sp_runtime::traits::{
-	Block as BlockT, Header as HeaderT, NumberFor, Zero, CheckedSub
+use sp_runtime::{
+	Justifications,
+	generic::BlockId,
+	traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero, CheckedSub},
 };
 use sp_arithmetic::traits::SaturatedConversion;
 use sync::{ChainSync, SyncState};
@@ -612,8 +613,8 @@ impl<B: BlockT> Protocol<B> {
 		if request.fields == message::BlockAttributes::JUSTIFICATION {
 			match self.sync.on_block_justification(peer_id, block_response) {
 				Ok(sync::OnBlockJustification::Nothing) => CustomMessageOutcome::None,
-				Ok(sync::OnBlockJustification::Import { peer, hash, number, justification }) =>
-					CustomMessageOutcome::JustificationImport(peer, hash, number, justification),
+				Ok(sync::OnBlockJustification::Import { peer, hash, number, justifications }) =>
+					CustomMessageOutcome::JustificationImport(peer, hash, number, justifications),
 				Err(sync::BadPeer(id, repu)) => {
 					self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
 					self.peerset_handle.report_peer(id, repu);
@@ -1134,7 +1135,7 @@ fn prepare_block_request<B: BlockT>(
 #[must_use]
 pub enum CustomMessageOutcome<B: BlockT> {
 	BlockImport(BlockOrigin, Vec<IncomingBlock<B>>),
-	JustificationImport(Origin, B::Hash, NumberFor<B>, Justification),
+	JustificationImport(Origin, B::Hash, NumberFor<B>, Justifications),
 	/// Notification protocols have been opened with a remote.
 	NotificationStreamOpened {
 		remote: PeerId,
