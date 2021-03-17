@@ -130,7 +130,8 @@ pub mod pallet {
 		/// The amount of currency needed per proxy added.
 		///
 		/// This is held for adding 32 bytes plus an instance of `ProxyType` more into a pre-existing
-		/// storage value.
+		/// storage value. Thus, when configuring `ProxyDepositFactor` one should take into account
+		/// `32 + proxy_type.encode().len()` bytes of data.
 		#[pallet::constant]
 		type ProxyDepositFactor: Get<BalanceOf<Self>>;
 
