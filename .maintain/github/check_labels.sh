@@ -32,6 +32,7 @@ criticality_labels=(
 )
 
 audit_labels=(
+  'D1-trivial'
   'D1-audited👍'
   'D5-nicetohaveaudit⚠️'
   'D9-needsaudit👮'
