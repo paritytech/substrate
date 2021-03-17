@@ -2388,7 +2388,7 @@ impl<T: Config> Module<T> {
 
 	/// Modify the target validator count based on the staking participation.
 	fn dynamic_damping_validator_count(
-		exposures: Vec<<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance>
+		exposures: Vec<BalanceOf<T>>
 	) {
 		let mut expos = exposures;
 		let one_percent = Perbill::from_rational_approximation(
