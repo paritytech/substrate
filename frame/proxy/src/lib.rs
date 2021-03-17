@@ -584,7 +584,7 @@ pub mod pallet {
 
 }
 
-impl<T: Config> Module<T> {
+impl<T: Config> Pallet<T> {
 
 	/// Calculate the address of an anonymous account.
 	///

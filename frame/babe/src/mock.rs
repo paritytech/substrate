@@ -104,7 +104,7 @@ where
 
 impl_opaque_keys! {
 	pub struct MockSessionKeys {
-		pub babe_authority: super::Module<Test>,
+		pub babe_authority: super::Pallet<Test>,
 	}
 }
 

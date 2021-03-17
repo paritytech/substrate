@@ -23,7 +23,7 @@ use super::*;
 use frame_system::{RawOrigin, EventRecord};
 use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
 use sp_runtime::traits::Bounded;
-use crate::Module as Proxy;
+use crate::Pallet as Proxy;
 
 const SEED: u32 = 0;
 
@@ -219,7 +219,7 @@ benchmarks! {
 		0
 	)
 	verify {
-		let anon_account = Module::<T>::anonymous_account(&caller, &T::ProxyType::default(), 0, None);
+		let anon_account = Pallet::<T>::anonymous_account(&caller, &T::ProxyType::default(), 0, None);
 		assert_last_event::<T>(Event::AnonymousCreated(
 			anon_account,
 			caller,
@@ -233,7 +233,7 @@ benchmarks! {
 
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
-		Module::<T>::anonymous(
+		Pallet::<T>::anonymous(
 			RawOrigin::Signed(whitelisted_caller()).into(),
 			T::ProxyType::default(),
 			T::BlockNumber::zero(),
@@ -241,7 +241,7 @@ benchmarks! {
 		)?;
 		let height = system::Pallet::<T>::block_number();
 		let ext_index = system::Pallet::<T>::extrinsic_index().unwrap_or(0);
-		let anon = Module::<T>::anonymous_account(&caller, &T::ProxyType::default(), 0, None);
+		let anon = Pallet::<T>::anonymous_account(&caller, &T::ProxyType::default(), 0, None);
 
 		add_proxies::<T>(p, Some(anon.clone()))?;
 		ensure!(Proxies::<T>::contains_key(&anon), "anon proxy not created");
