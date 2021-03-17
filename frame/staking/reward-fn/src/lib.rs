@@ -122,7 +122,7 @@ const LN2: Perquintill = Perquintill::from_parts(0_693_147_180_559_945_309);
 
 /// Compute `2^((x_ideal - x) / d)` using taylor serie.
 ///
-/// x must be striclty more than x_ideal.
+/// x must be strictly more than x_ideal.
 ///
 /// result is expressed in billionth.
 fn compute_taylor_serie_part(p: &INPoSParam) -> BigUint {
