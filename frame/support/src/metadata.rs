@@ -58,7 +58,7 @@ pub use frame_metadata::{
 ///
 /// struct Runtime;
 /// frame_support::impl_runtime_metadata! {
-///     for Runtime with modules where Extrinsic = UncheckedExtrinsic
+///     for Runtime with pallets where Extrinsic = UncheckedExtrinsic
 ///         module0::Module as Module0 { index 0 } with,
 ///         module1::Module as Module1 { index 1 } with,
 ///         module2::Module as Module2 { index 2 } with Storage,
