@@ -202,7 +202,7 @@ pub trait BlockImportOperation<Block: BlockT> {
 	fn mark_head(&mut self, id: BlockId<Block>) -> sp_blockchain::Result<()>;
 
 	/// Add a transaction index operation.
-	fn update_transaction_index(&mut self, _index: Vec<IndexOperation>) -> sp_blockchain::Result<()>;
+	fn update_transaction_index(&mut self, index: Vec<IndexOperation>) -> sp_blockchain::Result<()>;
 }
 
 /// Interface for performing operations on the backend.

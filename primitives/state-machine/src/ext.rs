@@ -588,7 +588,7 @@ where
 		&mut self,
 		index: u32,
 		hash: &[u8],
-		size: u32
+		size: u32,
 	) -> Result<(), ()> {
 		trace!(
 			target: "state",
