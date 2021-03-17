@@ -345,8 +345,8 @@ impl Config {
 		}
 	}
 
-	/// Get the inner slot duration, in milliseconds.
-	pub fn slot_duration(&self) -> u64 {
+	/// Get the inner slot duration
+	pub fn slot_duration(&self) -> Duration {
 		self.0.slot_duration()
 	}
 }
@@ -919,13 +919,13 @@ impl SlotCompatible for TimeSource {
 	fn extract_timestamp_and_slot(
 		&self,
 		data: &InherentData,
-	) -> Result<(u64, Slot, std::time::Duration), sp_consensus::Error> {
+	) -> Result<(sp_timestamp::Timestamp, Slot, std::time::Duration), sp_consensus::Error> {
 		trace!(target: "babe", "extract timestamp");
 		data.timestamp_inherent_data()
 			.and_then(|t| data.babe_inherent_data().map(|a| (t, a)))
 			.map_err(Into::into)
 			.map_err(sp_consensus::Error::InherentData)
-			.map(|(x, y)| (*x, y, self.0.lock().0.take().unwrap_or_default()))
+			.map(|(x, y)| (x, y, self.0.lock().0.take().unwrap_or_default()))
 	}
 }
 
@@ -1220,7 +1220,7 @@ where
 /// Register the babe inherent data provider, if not registered already.
 pub fn register_babe_inherent_data_provider(
 	inherent_data_providers: &InherentDataProviders,
-	slot_duration: u64,
+	slot_duration: Duration,
 ) -> Result<(), sp_consensus::Error> {
 	debug!(target: "babe", "Registering");
 	if !inherent_data_providers.has_provider(&sp_consensus_babe::inherents::INHERENT_IDENTIFIER) {
@@ -1626,7 +1626,7 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, Inner, CAW>(
 	SelectChain: sp_consensus::SelectChain<Block> + 'static,
 	CAW: CanAuthorWith<Block> + Send + Sync + 'static,
 {
-	register_babe_inherent_data_provider(&inherent_data_providers, babe_link.config.slot_duration)?;
+	register_babe_inherent_data_provider(&inherent_data_providers, babe_link.config.slot_duration())?;
 
 	let verifier = BabeVerifier {
 		select_chain,
