@@ -52,7 +52,7 @@ pub struct SlotInfo {
 	/// The slot number.
 	pub slot: Slot,
 	/// Current timestamp.
-	pub timestamp: u64,
+	pub timestamp: sp_timestamp::Timestamp,
 	/// The instant at which the slot ends.
 	pub ends_at: Instant,
 	/// The inherent data.
@@ -73,13 +73,13 @@ pub(crate) struct Slots<SC> {
 impl<SC> Slots<SC> {
 	/// Create a new `Slots` stream.
 	pub fn new(
-		slot_duration: u64,
+		slot_duration: Duration,
 		inherent_data_providers: InherentDataProviders,
 		timestamp_extractor: SC,
 	) -> Self {
 		Slots {
 			last_slot: 0.into(),
-			slot_duration: Duration::from_millis(slot_duration),
+			slot_duration,
 			inner_delay: None,
 			inherent_data_providers,
 			timestamp_extractor,
@@ -122,7 +122,7 @@ impl<SC: SlotCompatible> Stream for Slots<SC> {
 			};
 			// reschedule delay for next slot.
 			let ends_in = offset +
-				time_until_next(Duration::from_millis(timestamp), slot_duration);
+				time_until_next(timestamp.as_duration(), slot_duration);
 			let ends_at = Instant::now() + ends_in;
 			self.inner_delay = Some(Delay::new(ends_in));
 

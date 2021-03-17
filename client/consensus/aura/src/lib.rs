@@ -75,7 +75,7 @@ pub use sc_consensus_slots::SlotProportion;
 type AuthorityId<P> = <P as Pair>::Public;
 
 /// Slot duration type for Aura.
-pub type SlotDuration = sc_consensus_slots::SlotDuration<u64>;
+pub type SlotDuration = sc_consensus_slots::SlotDuration<sp_consensus_aura::SlotDuration>;
 
 /// Get type of `SlotDuration` for Aura.
 pub fn slot_duration<A, B, C>(client: &C) -> CResult<SlotDuration> where
@@ -111,12 +111,12 @@ impl SlotCompatible for AuraSlotCompatible {
 	fn extract_timestamp_and_slot(
 		&self,
 		data: &InherentData,
-	) -> Result<(u64, AuraInherent, std::time::Duration), sp_consensus::Error> {
+	) -> Result<(sp_timestamp::Timestamp, AuraInherent, std::time::Duration), sp_consensus::Error> {
 		data.timestamp_inherent_data()
 			.and_then(|t| data.aura_inherent_data().map(|a| (t, a)))
 			.map_err(Into::into)
 			.map_err(sp_consensus::Error::InherentData)
-			.map(|(x, y)| (*x, y, Default::default()))
+			.map(|(x, y)| (x, y, Default::default()))
 	}
 }
 
@@ -477,7 +477,7 @@ fn find_pre_digest<B: BlockT, Signature: Codec>(header: &B::Header) -> Result<Sl
 /// Register the aura inherent data provider, if not registered already.
 fn register_aura_inherent_data_provider(
 	inherent_data_providers: &InherentDataProviders,
-	slot_duration: u64,
+	slot_duration: std::time::Duration,
 ) -> Result<(), sp_consensus::Error> {
 	if !inherent_data_providers.has_provider(&INHERENT_IDENTIFIER) {
 		inherent_data_providers
@@ -596,10 +596,10 @@ mod tests {
 					let inherent_data_providers = InherentDataProviders::new();
 					register_aura_inherent_data_provider(
 						&inherent_data_providers,
-						slot_duration.get()
+						slot_duration.slot_duration()
 					).expect("Registers aura inherent data provider");
 
-					assert_eq!(slot_duration.get(), SLOT_DURATION);
+					assert_eq!(slot_duration.slot_duration().as_millis() as u64, SLOT_DURATION);
 					import_queue::AuraVerifier::new(
 						client,
 						inherent_data_providers,
@@ -665,7 +665,7 @@ mod tests {
 
 			let inherent_data_providers = InherentDataProviders::new();
 			register_aura_inherent_data_provider(
-				&inherent_data_providers, slot_duration.get()
+				&inherent_data_providers, slot_duration.slot_duration()
 			).expect("Registers aura inherent data provider");
 
 			aura_futures.push(start_aura::<AuthorityPair, _, _, _, _, _, _, _, _, _>(StartAuraParams {
@@ -801,7 +801,7 @@ mod tests {
 			head,
 			SlotInfo {
 				slot: 0.into(),
-				timestamp: 0,
+				timestamp: 0.into(),
 				ends_at: Instant::now() + Duration::from_secs(100),
 				inherent_data: InherentData::new(),
 				duration: Duration::from_millis(1000),
