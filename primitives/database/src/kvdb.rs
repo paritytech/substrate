@@ -59,7 +59,7 @@ impl<D: KeyValueDB, H: Clone + AsRef<[u8]>> Database<H> for DbAdapter<D> {
 										format!("Unexpected counter len {}", data.len())))
 								))
 							}
-							&mut counter_data.copy_from_slice(&data);
+							counter_data.copy_from_slice(&data);
 							let mut counter = u32::from_le_bytes(counter_data);
 							counter += 1;
 							tx.put(col, &counter_key, &counter.to_le_bytes());
@@ -83,7 +83,7 @@ impl<D: KeyValueDB, H: Clone + AsRef<[u8]>> Database<H> for DbAdapter<D> {
 											format!("Unexpected counter {}", data.len())))
 							))
 						}
-						&mut counter_data.copy_from_slice(&data);
+						counter_data.copy_from_slice(&data);
 						let mut counter = u32::from_le_bytes(counter_data);
 						counter += 1;
 						tx.put(col, &counter_key, &counter.to_le_bytes());
@@ -101,7 +101,7 @@ impl<D: KeyValueDB, H: Clone + AsRef<[u8]>> Database<H> for DbAdapter<D> {
 									format!("Unexpected counter {}", data.len())))
 							))
 						}
-						&mut counter_data.copy_from_slice(&data);
+						counter_data.copy_from_slice(&data);
 						let mut counter = u32::from_le_bytes(counter_data);
 						counter -= 1;
 						if counter == 0 {
