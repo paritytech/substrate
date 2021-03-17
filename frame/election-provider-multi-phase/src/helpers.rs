@@ -79,6 +79,7 @@ pub fn voter_index_fn_usize<T: Config>(
 /// ## Warning
 ///
 /// Not meant to be used in production.
+#[cfg(test)]
 pub fn voter_index_fn_linear<T: Config>(
 	snapshot: &Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
 ) -> Box<dyn Fn(&T::AccountId) -> Option<CompactVoterIndexOf<T>> + '_> {
@@ -92,7 +93,31 @@ pub fn voter_index_fn_linear<T: Config>(
 
 /// Create a function the returns the index a targets in the snapshot.
 ///
-/// The returning index type is the same as the one defined in `T::CompactSolution::Target`.
+/// The returned index type is the same as the one defined in `T::CompactSolution::Target`.
+///
+/// Note: to the extent possible, the returned function should be cached and reused. Producing that
+/// function requires a `O(n log n)` data transform. Each invocation of that function completes
+/// in `O(log n)`.
+pub fn target_index_fn<T: Config>(
+	snapshot: &Vec<T::AccountId>,
+) -> Box<dyn '_ + Fn(&T::AccountId) -> Option<CompactTargetIndexOf<T>>> {
+	let cache: BTreeMap<_, _> =
+		snapshot.iter().enumerate().map(|(idx, account_id)| (account_id, idx)).collect();
+	Box::new(move |who| {
+		cache
+			.get(who)
+			.and_then(|i| <usize as TryInto<CompactTargetIndexOf<T>>>::try_into(*i).ok())
+	})
+}
+
+/// Create a function the returns the index a targets in the snapshot.
+///
+/// The returned index type is the same as the one defined in `T::CompactSolution::Target`.
+///
+/// ## Warning
+///
+/// Not meant to be used in production.
+#[cfg(test)]
 pub fn target_index_fn_linear<T: Config>(
 	snapshot: &Vec<T::AccountId>,
 ) -> Box<dyn Fn(&T::AccountId) -> Option<CompactTargetIndexOf<T>> + '_> {
@@ -131,6 +156,7 @@ pub fn target_at_fn<T: Config>(
 /// Create a function to get the stake of a voter.
 ///
 /// This is not optimized and uses a linear search.
+#[cfg(test)]
 pub fn stake_of_fn_linear<T: Config>(
 	snapshot: &Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
 ) -> Box<dyn Fn(&T::AccountId) -> VoteWeight + '_> {
