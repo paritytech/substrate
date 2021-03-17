@@ -61,6 +61,26 @@ pub struct SlotInfo {
 	pub duration: Duration,
 }
 
+impl SlotInfo {
+	/// Create a new [`SlotInfo`].
+	///
+	/// `ends_at` is calculated using `timestamp` and `duration`.
+	pub fn new(
+		slot: Slot,
+		timestamp: sp_timestamp::Timestamp,
+		inherent_data: InherentData,
+		duration: Duration,
+	) -> Self {
+		Self {
+			slot,
+			timestamp,
+			inherent_data,
+			duration,
+			ends_at: Instant::now() + time_until_next(timestamp.as_duration(), duration),
+		}
+	}
+}
+
 /// A stream that returns every time there is a new slot.
 pub(crate) struct Slots<SC> {
 	last_slot: Slot,
@@ -123,20 +143,18 @@ impl<SC: SlotCompatible> Stream for Slots<SC> {
 			// reschedule delay for next slot.
 			let ends_in = offset +
 				time_until_next(timestamp.as_duration(), slot_duration);
-			let ends_at = Instant::now() + ends_in;
 			self.inner_delay = Some(Delay::new(ends_in));
 
 			// never yield the same slot twice.
 			if slot > self.last_slot {
 				self.last_slot = slot;
 
-				break Poll::Ready(Some(Ok(SlotInfo {
+				break Poll::Ready(Some(Ok(SlotInfo::new(
 					slot,
-					duration: self.slot_duration,
 					timestamp,
-					ends_at,
 					inherent_data,
-				})))
+					self.slot_duration,
+				))))
 			}
 		}
 	}
