@@ -121,7 +121,7 @@ pub fn new_partial(
 
 				let slot =
 					sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_duration(
-						timestamp.timestamp().as_duration(),
+						*timestamp,
 						slot_duration,
 					);
 
@@ -321,7 +321,7 @@ pub fn new_full_base(
 
 					let slot =
 						sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_duration(
-							timestamp.timestamp().as_duration(),
+							*timestamp,
 							slot_duration,
 						);
 
@@ -499,7 +499,7 @@ pub fn new_light_base(
 
 			let slot =
 				sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_duration(
-					timestamp.timestamp().as_duration(),
+					*timestamp,
 					slot_duration,
 				);
 

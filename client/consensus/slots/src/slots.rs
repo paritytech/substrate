@@ -52,7 +52,7 @@ pub struct SlotInfo<B: BlockT> {
 	/// The slot number.
 	pub slot: Slot,
 	/// Current timestamp.
-	pub timestamp: Duration,
+	pub timestamp: sp_timestamp::Timestamp,
 	/// The instant at which the slot ends.
 	pub ends_at: Instant,
 	/// The inherent data.
@@ -69,7 +69,7 @@ impl<B: BlockT> SlotInfo<B> {
 	/// `ends_at` is calculated using `timestamp` and `duration`.
 	pub fn new(
 		slot: Slot,
-		timestamp: Duration,
+		timestamp: sp_timestamp::Timestamp,
 		inherent_data: InherentData,
 		duration: Duration,
 		chain_head: B::Header,
@@ -80,7 +80,7 @@ impl<B: BlockT> SlotInfo<B> {
 			inherent_data,
 			duration,
 			chain_head,
-			ends_at: Instant::now() + time_until_next(timestamp, duration),
+			ends_at: Instant::now() + time_until_next(timestamp.as_duration(), duration),
 		}
 	}
 }
@@ -98,13 +98,13 @@ pub(crate) struct Slots<Block, C, IDP> {
 impl<Block, C, IDP> Slots<Block, C, IDP> {
 	/// Create a new `Slots` stream.
 	pub fn new(
-		slot_duration: u64,
+		slot_duration: Duration,
 		inherent_data_providers: IDP,
 		client: C,
 	) -> Self {
 		Slots {
 			last_slot: 0.into(),
-			slot_duration: Duration::from_millis(slot_duration),
+			slot_duration,
 			inner_delay: None,
 			inherent_data_providers,
 			client,
@@ -132,7 +132,7 @@ where
 				Some(d) => Some(d),
 			};
 
-			if let Some(ref mut inner_delay) = self.inner_delay {
+			if let Some(inner_delay) = self.inner_delay.take() {
 				inner_delay.await;
 			}
 
@@ -170,9 +170,9 @@ where
 
 				break Ok(SlotInfo::new(
 					slot,
-					self.slot_duration,
+					timestamp,
 					inherent_data,
-					timestamp.as_duration(),
+					self.slot_duration,
 					chain_head,
 				))
 			}

@@ -1,7 +1,6 @@
 //! Service and ServiceFactory implementation. Specialized wrapper over substrate service.
 
-use std::sync::Arc;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 use sc_client_api::{ExecutorProvider, RemoteBackend};
 use node_template_runtime::{self, opaque::Block, RuntimeApi};
 use sc_service::{error::Error as ServiceError, Configuration, TaskManager};
@@ -12,6 +11,7 @@ use sc_consensus_aura::{ImportQueueParams, StartAuraParams, SlotProportion};
 use sc_finality_grandpa::SharedVoterState;
 use sc_keystore::LocalKeystore;
 use sc_telemetry::{Telemetry, TelemetryWorker};
+use sp_consensus::SlotData;
 
 // Our native executor instance.
 native_executor_instance!(
@@ -88,7 +88,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		grandpa_block_import.clone(), client.clone(),
 	);
 
-	let slot_duration = sc_consensus_aura::slot_duration(&*client)?;
+	let slot_duration = sc_consensus_aura::slot_duration(&*client)?.slot_duration();
 
 	let import_queue = sc_consensus_aura::import_queue::<AuraPair, _, _, _, _, _, _>(
 		ImportQueueParams {
@@ -100,8 +100,8 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 
 				let slot =
 					sp_consensus_aura::inherents::InherentDataProvider::from_timestamp_and_duration(
-						timestamp.timestamp().as_duration(),
-						*slot_duration,
+						*timestamp,
+						slot_duration,
 					);
 
 				Ok((timestamp, slot))
@@ -228,6 +228,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 			sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone());
 
 		let slot_duration = sc_consensus_aura::slot_duration(&*client)?;
+		let raw_slot_duration = slot_duration.slot_duration();
 
 		let aura = sc_consensus_aura::start_aura::<AuraPair, _, _, _, _, _, _, _, _, _, _>(
 			StartAuraParams {
@@ -241,8 +242,8 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 
 					let slot =
 						sp_consensus_aura::inherents::InherentDataProvider::from_timestamp_and_duration(
-							timestamp.timestamp().as_duration(),
-							*slot_duration,
+							*timestamp,
+							raw_slot_duration,
 						);
 
 					Ok((timestamp, slot))
@@ -357,7 +358,7 @@ pub fn new_light(mut config: Configuration) -> Result<TaskManager, ServiceError>
 		client.clone(),
 	);
 
-	let slot_duration = sc_consensus_aura::slot_duration(&*client)?;
+	let slot_duration = sc_consensus_aura::slot_duration(&*client)?.slot_duration();
 
 	let import_queue = sc_consensus_aura::import_queue::<AuraPair, _, _, _, _, _, _>(
 		ImportQueueParams {
@@ -369,8 +370,8 @@ pub fn new_light(mut config: Configuration) -> Result<TaskManager, ServiceError>
 
 				let slot =
 					sp_consensus_aura::inherents::InherentDataProvider::from_timestamp_and_duration(
-						timestamp.timestamp().as_duration(),
-						*slot_duration,
+						*timestamp,
+						slot_duration,
 					);
 
 				Ok((timestamp, slot))

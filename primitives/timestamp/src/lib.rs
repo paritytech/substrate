@@ -42,7 +42,7 @@ impl Timestamp {
 		Self(inner)
 	}
 
-	/// Returns as [`Duration`].
+	/// Returns `self` as [`Duration`].
 	pub fn as_duration(self) -> Duration {
 		Duration::from_millis(self.0)
 	}

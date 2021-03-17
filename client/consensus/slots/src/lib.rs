@@ -269,7 +269,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			target: self.logging_target(),
 			"Starting authorship at slot {}; timestamp = {}",
 			slot,
-			timestamp.as_secs(),
+			*timestamp,
 		);
 
 		telemetry!(
@@ -277,7 +277,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			CONSENSUS_DEBUG;
 			"slots.starting_authorship";
 			"slot_num" => *slot,
-			"timestamp" => timestamp.as_secs(),
+			"timestamp" => *timestamp,
 		);
 
 		let awaiting_proposer = {
@@ -538,10 +538,7 @@ impl<T> Deref for SlotDuration<T> {
 }
 
 impl<T: SlotData> SlotData for SlotDuration<T> {
-	/// Get the slot duration in milliseconds.
-	fn slot_duration(&self) -> u64
-		where T: SlotData,
-	{
+	fn slot_duration(&self) -> std::time::Duration {
 		self.0.slot_duration()
 	}
 
@@ -586,7 +583,7 @@ impl<T: Clone + Send + Sync + 'static> SlotDuration<T> {
 			}
 		}?;
 
-		if slot_duration.slot_duration() == 0u64 {
+		if slot_duration.slot_duration() == Default::default() {
 			return Err(sp_blockchain::Error::Application(Box::new(Error::SlotDurationInvalid(slot_duration))))
 		}
 

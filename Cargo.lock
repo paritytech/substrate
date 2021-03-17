@@ -8563,6 +8563,7 @@ dependencies = [
  "parity-scale-codec",
  "sp-api",
  "sp-application-crypto",
+ "sp-consensus",
  "sp-consensus-slots",
  "sp-inherents",
  "sp-runtime",
@@ -8587,6 +8588,7 @@ dependencies = [
  "sp-keystore",
  "sp-runtime",
  "sp-std",
+ "sp-timestamp",
 ]
 
 [[package]]

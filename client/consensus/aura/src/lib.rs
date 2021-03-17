@@ -77,7 +77,7 @@ pub use sc_consensus_slots::SlotProportion;
 type AuthorityId<P> = <P as Pair>::Public;
 
 /// Slot duration type for Aura.
-pub type SlotDuration = sc_consensus_slots::SlotDuration<u64>;
+pub type SlotDuration = sc_consensus_slots::SlotDuration<sp_consensus_aura::SlotDuration>;
 
 /// Get type of `SlotDuration` for Aura.
 pub fn slot_duration<A, B, C>(client: &C) -> CResult<SlotDuration> where
@@ -147,7 +147,7 @@ pub fn start_aura<P, B, C, SC, PF, I, SO, CAW, BS, Error, IDP>(
 		client,
 		select_chain,
 		block_import,
-		proposer_factory: env,
+		proposer_factory,
 		sync_oracle,
 		inherent_data_providers,
 		force_authoring,
@@ -175,18 +175,17 @@ pub fn start_aura<P, B, C, SC, PF, I, SO, CAW, BS, Error, IDP>(
 	IDP: CreateInherentDataProviders<B, ()> + Send,
 	IDP::InherentDataProviders: InherentDataProviderExt + Send,
 {
-	let worker = AuraWorker {
+	let worker = build_aura_worker::<P, _, _, _, _, _, _, _>(BuildAuraWorkerParams {
 		client: client.clone(),
-		block_import: Arc::new(Mutex::new(block_import)),
-		env,
+		block_import,
+		proposer_factory,
 		keystore,
 		sync_oracle: sync_oracle.clone(),
 		force_authoring,
 		backoff_authoring_blocks,
 		telemetry,
-		_key_type: PhantomData::<P>,
 		block_proposal_slot_portion,
-	};
+	});
 
 	Ok(sc_consensus_slots::start_slot_worker(
 		slot_duration,
@@ -198,25 +197,53 @@ pub fn start_aura<P, B, C, SC, PF, I, SO, CAW, BS, Error, IDP>(
 	))
 }
 
-/// Build and return the aura worker.
+/// Parameters of [`build_aura_worker`].
+pub struct BuildAuraWorkerParams<C, I, PF, SO, BS> {
+	/// The client to interact with the chain.
+	pub client: Arc<C>,
+	/// The block import.
+	pub block_import: I,
+	/// The proposer factory to build proposer instances.
+	pub proposer_factory: PF,
+	/// The sync oracle that can give us the current sync status.
+	pub sync_oracle: SO,
+	/// Should we force the authoring of blocks?
+	pub force_authoring: bool,
+	/// The backoff strategy when we miss slots.
+	pub backoff_authoring_blocks: Option<BS>,
+	/// The keystore used by the node.
+	pub keystore: SyncCryptoStorePtr,
+	/// The proportion of the slot dedicated to proposing.
+	///
+	/// The block proposing will be limited to this proportion of the slot from the starting of the
+	/// slot. However, the proposing can still take longer when there is some lenience factor applied,
+	/// because there were no blocks produced for some slots.
+	pub block_proposal_slot_portion: SlotProportion,
+	/// Telemetry instance used to report telemetry metrics.
+	pub telemetry: Option<TelemetryHandle>,
+}
+
+/// Build the aura worker.
 ///
-/// The caller is responsible for running the returned worker.
-pub fn build_aura_worker<B, C, E, I, P, SO, BS, Error>(
-	client: Arc<C>,
-	block_import: I,
-	env: E,
-	sync_oracle: SO,
-	force_authoring: bool,
-	backoff_authoring_blocks: Option<BS>,
-	keystore: SyncCryptoStorePtr,
-	telemetry: Option<TelemetryHandle>,
-	block_proposal_slot_portion: SlotProportion,
-) -> impl sc_consensus_slots::SlotWorker<B, <E::Proposer as Proposer<B>>::Proof> where
+/// The caller is responsible for running this worker, otherwise it will do nothing.
+pub fn build_aura_worker<P, B, C, PF, I, SO, BS, Error>(
+	BuildAuraWorkerParams {
+		client,
+		block_import,
+		proposer_factory,
+		sync_oracle,
+		backoff_authoring_blocks,
+		keystore,
+		block_proposal_slot_portion,
+		telemetry,
+		force_authoring,
+	}: BuildAuraWorkerParams<C, I, PF, SO, BS>,
+) -> impl sc_consensus_slots::SlotWorker<B, <PF::Proposer as Proposer<B>>::Proof> where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + AuxStore + HeaderBackend<B> + Send + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
-	E: Environment<B, Error = Error> + Send + Sync + 'static,
-	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
+	PF: Environment<B, Error = Error> + Send + Sync + 'static,
+	PF::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	P: Pair + Send + Sync,
 	P::Public: AppPublic + Hash + Member + Encode + Decode,
 	P::Signature: TryFrom<Vec<u8>> + Hash + Member + Encode + Decode,
@@ -228,7 +255,7 @@ pub fn build_aura_worker<B, C, E, I, P, SO, BS, Error>(
 	AuraWorker {
 		client,
 		block_import: Arc::new(Mutex::new(block_import)),
-		env,
+		env: proposer_factory,
 		keystore,
 		sync_oracle,
 		force_authoring,
@@ -604,7 +631,7 @@ mod tests {
 					let slot_duration = slot_duration(&*client).expect("slot duration available");
 					let inherent_data_providers = InherentDataProviders::new();
 
-					assert_eq!(slot_duration.get(), SLOT_DURATION);
+					assert_eq!(slot_duration.slot_duration().as_millis() as u64, SLOT_DURATION);
 					import_queue::AuraVerifier::new(
 						client,
 						inherent_data_providers,
@@ -803,7 +830,7 @@ mod tests {
 			head,
 			SlotInfo {
 				slot: 0.into(),
-				timestamp: 0,
+				timestamp: 0.into(),
 				ends_at: Instant::now() + Duration::from_secs(100),
 				inherent_data: InherentData::new(),
 				duration: Duration::from_millis(1000),

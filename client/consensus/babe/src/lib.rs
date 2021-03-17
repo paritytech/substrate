@@ -85,7 +85,7 @@ use sp_application_crypto::AppKey;
 use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 use sp_runtime::{
 	generic::{BlockId, OpaqueDigestItemId}, Justification,
-	traits::{Block as BlockT, Header, DigestItemFor, Zero, SaturatedConversion},
+	traits::{Block as BlockT, Header, DigestItemFor, Zero},
 };
 use sp_api::{ProvideRuntimeApi, NumberFor};
 use parking_lot::Mutex;
@@ -347,8 +347,8 @@ impl Config {
 		}
 	}
 
-	/// Get the inner slot duration, in milliseconds.
-	pub fn slot_duration(&self) -> u64 {
+	/// Get the inner slot duration
+	pub fn slot_duration(&self) -> Duration {
 		self.0.slot_duration()
 	}
 }
@@ -1205,15 +1205,6 @@ where
 			}
 		}
 	}
-}
-
-pub fn create_inherent_data_provider<B, C>(
-	timestamp: Duration,
-	slot_duration: u64,
-) -> sp_consensus_babe::inherents::InherentDataProvider {
-	let timestamp: u64 = timestamp.as_millis().saturated_into();
-
-	sp_consensus_babe::inherents::InherentDataProvider::new((timestamp / slot_duration).into())
 }
 
 /// A block-import handler for BABE.
