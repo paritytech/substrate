@@ -91,7 +91,7 @@ pub fn voter_index_fn_linear<T: Config>(
 	})
 }
 
-/// Create a function the returns the index a targets in the snapshot.
+/// Create a function the returns the index to a target in the snapshot.
 ///
 /// The returned index type is the same as the one defined in `T::CompactSolution::Target`.
 ///
@@ -110,7 +110,7 @@ pub fn target_index_fn<T: Config>(
 	})
 }
 
-/// Create a function the returns the index a targets in the snapshot.
+/// Create a function the returns the index to a target in the snapshot.
 ///
 /// The returned index type is the same as the one defined in `T::CompactSolution::Target`.
 ///
