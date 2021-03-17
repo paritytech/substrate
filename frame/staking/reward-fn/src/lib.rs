@@ -108,7 +108,7 @@ pub fn compute_inflation<P: PerThing>(
 
 /// Internal struct holding parameter info alongside other cached value.
 ///
-/// All expressed in billionth
+/// All expressed in part from `accuracy`
 struct INPoSParam {
 	ln2_div_d: BigUint,
 	x_ideal: BigUint,
@@ -124,7 +124,7 @@ const LN2: Perquintill = Perquintill::from_parts(0_693_147_180_559_945_309);
 ///
 /// x must be strictly more than x_ideal.
 ///
-/// result is expressed in billionth.
+/// result is expressed with accuracy `INPoSParam.accuracy`
 fn compute_taylor_serie_part(p: &INPoSParam) -> BigUint {
 	// The last computed taylor term.
 	let mut last_taylor_term = p.accuracy.clone();
@@ -177,7 +177,7 @@ fn compute_taylor_serie_part(p: &INPoSParam) -> BigUint {
 ///
 /// `((x - x_ideal) * ln(2) / d)^k / k! == previous_term * (x - x_ideal) * ln(2) / d / k`
 ///
-/// `previous_taylor_term` and result are expressed in billionth.
+/// `previous_taylor_term` and result are expressed with accuracy `INPoSParam.accuracy`
 fn compute_taylor_term(k: u32, previous_taylor_term: &BigUint, p: &INPoSParam) -> BigUint {
 	let x_minus_x_ideal = p.x.clone().sub(&p.x_ideal)
 		// NOTE: Should never happen, as x must be more than x_ideal
