@@ -100,11 +100,7 @@ use frame_support::{
 	},
 	Parameter,
 };
-use frame_system::ensure_none;
-use frame_system::offchain::{
-	SendTransactionTypes,
-	SubmitTransaction,
-};
+use frame_system::{ensure_none, offchain::{SendTransactionTypes, SubmitTransaction}};
 pub use weights::WeightInfo;
 
 pub mod sr25519 {
@@ -672,7 +668,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Module<T> {
 		// Tell the offchain worker to start making the next session's heartbeats.
 		// Since we consider producing blocks as being online,
 		// the heartbeat is deferred a bit to prevent spamming.
-		let block_number = <frame_system::Module<T>>::block_number();
+		let block_number = <frame_system::Pallet<T>>::block_number();
 		let half_session = T::NextSessionRotation::average_session_length() / 2u32.into();
 		<HeartbeatAfter<T>>::put(block_number + half_session);
 
@@ -813,7 +809,7 @@ impl<Offender: Clone> Offence<Offender> for UnresponsivenessOffence<Offender> {
 		// basically, 10% can be offline with no slash, but after that, it linearly climbs up to 7%
 		// when 13/30 are offline (around 5% when 1/3 are offline).
 		if let Some(threshold) = offenders.checked_sub(validator_set_count / 10 + 1) {
-			let x = Perbill::from_rational_approximation(3 * threshold, validator_set_count);
+			let x = Perbill::from_rational(3 * threshold, validator_set_count);
 			x.saturating_mul(Perbill::from_percent(7))
 		} else {
 			Perbill::default()

@@ -84,7 +84,7 @@ use sp_core::crypto::Public;
 use sp_application_crypto::AppKey;
 use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 use sp_runtime::{
-	generic::{BlockId, OpaqueDigestItemId}, Justification,
+	generic::{BlockId, OpaqueDigestItemId}, Justifications,
 	traits::{Block as BlockT, Header, DigestItemFor, Zero},
 };
 use sp_api::{ProvideRuntimeApi, NumberFor};
@@ -345,8 +345,8 @@ impl Config {
 		}
 	}
 
-	/// Get the inner slot duration, in milliseconds.
-	pub fn slot_duration(&self) -> u64 {
+	/// Get the inner slot duration
+	pub fn slot_duration(&self) -> Duration {
 		self.0.slot_duration()
 	}
 }
@@ -919,13 +919,13 @@ impl SlotCompatible for TimeSource {
 	fn extract_timestamp_and_slot(
 		&self,
 		data: &InherentData,
-	) -> Result<(u64, Slot, std::time::Duration), sp_consensus::Error> {
+	) -> Result<(sp_timestamp::Timestamp, Slot, std::time::Duration), sp_consensus::Error> {
 		trace!(target: "babe", "extract timestamp");
 		data.timestamp_inherent_data()
 			.and_then(|t| data.babe_inherent_data().map(|a| (t, a)))
 			.map_err(Into::into)
 			.map_err(sp_consensus::Error::InherentData)
-			.map(|(x, y)| (*x, y, self.0.lock().0.take().unwrap_or_default()))
+			.map(|(x, y)| (x, y, self.0.lock().0.take().unwrap_or_default()))
 	}
 }
 
@@ -1097,15 +1097,15 @@ where
 		&mut self,
 		origin: BlockOrigin,
 		header: Block::Header,
-		justification: Option<Justification>,
+		justifications: Option<Justifications>,
 		mut body: Option<Vec<Block::Extrinsic>>,
 	) -> Result<(BlockImportParams<Block, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		trace!(
 			target: "babe",
-			"Verifying origin: {:?} header: {:?} justification: {:?} body: {:?}",
+			"Verifying origin: {:?} header: {:?} justification(s): {:?} body: {:?}",
 			origin,
 			header,
-			justification,
+			justifications,
 			body,
 		);
 
@@ -1194,7 +1194,7 @@ where
 				let mut import_block = BlockImportParams::new(origin, pre_header);
 				import_block.post_digests.push(verified_info.seal);
 				import_block.body = body;
-				import_block.justification = justification;
+				import_block.justifications = justifications;
 				import_block.intermediates.insert(
 					Cow::from(INTERMEDIATE_KEY),
 					Box::new(BabeIntermediate::<Block> { epoch_descriptor }) as Box<dyn Any>,
@@ -1220,7 +1220,7 @@ where
 /// Register the babe inherent data provider, if not registered already.
 pub fn register_babe_inherent_data_provider(
 	inherent_data_providers: &InherentDataProviders,
-	slot_duration: u64,
+	slot_duration: Duration,
 ) -> Result<(), sp_consensus::Error> {
 	debug!(target: "babe", "Registering");
 	if !inherent_data_providers.has_provider(&sp_consensus_babe::inherents::INHERENT_IDENTIFIER) {
@@ -1626,7 +1626,7 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, Inner, CAW>(
 	SelectChain: sp_consensus::SelectChain<Block> + 'static,
 	CAW: CanAuthorWith<Block> + Send + Sync + 'static,
 {
-	register_babe_inherent_data_provider(&inherent_data_providers, babe_link.config.slot_duration)?;
+	register_babe_inherent_data_provider(&inherent_data_providers, babe_link.config.slot_duration())?;
 
 	let verifier = BabeVerifier {
 		select_chain,
