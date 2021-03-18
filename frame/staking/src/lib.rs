@@ -2403,7 +2403,7 @@ impl<T: Config> Module<T> {
 			total_exposure = total_exposure.saturating_add(expo);
 			if i <= one_percent {
 				bottom_one_percent_exposure = 
-				bottom_one_percent_exposure.saturating_add(expo);
+					bottom_one_percent_exposure.saturating_add(expo);
 			}
 			if i <= two_percent {
 				bottom_two_percent_exposure += 
