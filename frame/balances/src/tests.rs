@@ -692,7 +692,7 @@ macro_rules! decl_tests {
 					);
 
 					System::set_block_number(3);
-					let _ = Balances::unreserve(&1, 5);
+					assert!(Balances::unreserve(&1, 5).is_zero());
 
 					assert_eq!(
 						last_event(),
@@ -700,7 +700,7 @@ macro_rules! decl_tests {
 					);
 
 					System::set_block_number(4);
-					let _ = Balances::unreserve(&1, 6);
+					assert_eq!(Balances::unreserve(&1, 6), 1);
 
 					// should only unreserve 5
 					assert_eq!(

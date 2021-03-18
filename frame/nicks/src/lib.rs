@@ -179,7 +179,8 @@ decl_module! {
 
 			let deposit = <NameOf<T>>::take(&sender).ok_or(Error::<T>::Unnamed)?.1;
 
-			let _ = T::Currency::unreserve(&sender, deposit.clone());
+			let err_amount = T::Currency::unreserve(&sender, deposit.clone());
+			debug_assert!(err_amount.is_zero());
 
 			Self::deposit_event(RawEvent::NameCleared(sender, deposit));
 		}

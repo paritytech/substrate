@@ -377,7 +377,8 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 						<Proposals<T, I>>::remove(index);
 
 						// return their deposit.
-						let _ = T::Currency::unreserve(&p.proposer, p.bond);
+						let err_amount = T::Currency::unreserve(&p.proposer, p.bond);
+						debug_assert!(err_amount.is_zero());
 
 						// provide the allocation.
 						imbalance.subsume(T::Currency::deposit_creating(&p.beneficiary, p.value));

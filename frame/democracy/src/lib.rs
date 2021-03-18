@@ -1541,7 +1541,8 @@ impl<T: Config> Module<T> {
 		let preimage = <Preimages<T>>::take(&proposal_hash);
 		if let Some(PreimageStatus::Available { data, provider, deposit, .. }) = preimage {
 			if let Ok(proposal) = T::Proposal::decode(&mut &data[..]) {
-				let _ = T::Currency::unreserve(&provider, deposit);
+				let err_amount = T::Currency::unreserve(&provider, deposit);
+				debug_assert!(err_amount.is_zero());
 				Self::deposit_event(RawEvent::PreimageUsed(proposal_hash, provider, deposit));
 
 				let ok = proposal.dispatch(frame_system::RawOrigin::Root.into()).is_ok();
