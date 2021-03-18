@@ -109,8 +109,8 @@ mod tests {
 			NodeBlock = TestBlock,
 			UncheckedExtrinsic = TestUncheckedExtrinsic
 		{
-			System: frame_system::{Module, Call, Config, Storage, Event<T>},
-			PalletTest: pallet_test::{Module, Call, Storage, Event<T>, Config, ValidateUnsigned, Inherent},
+			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+			PalletTest: pallet_test::{Pallet, Call, Storage, Event<T>, Config, ValidateUnsigned, Inherent},
 		}
 	);
 

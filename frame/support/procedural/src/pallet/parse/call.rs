@@ -21,7 +21,6 @@ use syn::spanned::Spanned;
 
 /// List of additional token to be used for parsing.
 mod keyword {
-	syn::custom_keyword!(DispatchResultWithPostInfo);
 	syn::custom_keyword!(Call);
 	syn::custom_keyword!(OriginFor);
 	syn::custom_keyword!(weight);
@@ -42,6 +41,8 @@ pub struct CallDef {
 	pub methods: Vec<CallVariantDef>,
 	/// The span of the pallet::call attribute.
 	pub attr_span: proc_macro2::Span,
+	/// Docs, specified on the impl Block.
+	pub docs: Vec<syn::Lit>,
 }
 
 /// Definition of dispatchable typically: `#[weight...] fn foo(origin .., param1: ...) -> ..`
@@ -163,7 +164,7 @@ impl CallDef {
 				}
 
 				if let syn::ReturnType::Type(_, type_) = &method.sig.output {
-					syn::parse2::<keyword::DispatchResultWithPostInfo>(type_.to_token_stream())?;
+					helper::check_pallet_call_return_type(type_)?;
 				} else {
 					let msg = "Invalid pallet::call, require return type \
 						DispatchResultWithPostInfo";
@@ -171,7 +172,7 @@ impl CallDef {
 				}
 
 				let mut call_var_attrs: Vec<FunctionAttr> =
-					helper::take_item_attrs(&mut method.attrs)?;
+					helper::take_item_pallet_attrs(&mut method.attrs)?;
 
 				if call_var_attrs.len() != 1 {
 					let msg = if call_var_attrs.is_empty() {
@@ -192,7 +193,7 @@ impl CallDef {
 					};
 
 					let arg_attrs: Vec<ArgAttrIsCompact> =
-						helper::take_item_attrs(&mut arg.attrs)?;
+						helper::take_item_pallet_attrs(&mut arg.attrs)?;
 
 					if arg_attrs.len() > 1 {
 						let msg = "Invalid pallet::call, argument has too many attributes";
@@ -229,6 +230,7 @@ impl CallDef {
 			instances,
 			methods,
 			where_clause: item.generics.where_clause.clone(),
+			docs: helper::get_doc_literals(&item.attrs),
 		})
 	}
 }

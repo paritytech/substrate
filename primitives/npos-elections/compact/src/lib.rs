@@ -19,9 +19,9 @@
 
 use proc_macro::TokenStream;
 use proc_macro2::{TokenStream as TokenStream2, Span, Ident};
-use proc_macro_crate::crate_name;
+use proc_macro_crate::{crate_name, FoundCrate};
 use quote::quote;
-use syn::{parse::{Parse, ParseStream, Result}};
+use syn::parse::{Parse, ParseStream, Result};
 
 mod assignment;
 mod codec;
@@ -119,14 +119,14 @@ fn struct_def(
 		let name = field_name_for(1);
 		// NOTE: we use the visibility of the struct for the fields as well.. could be made better.
 		quote!(
-			#vis #name: Vec<(#voter_type, #target_type)>,
+			#vis #name: _npos::sp_std::prelude::Vec<(#voter_type, #target_type)>,
 		)
 	};
 
 	let doubles = {
 		let name = field_name_for(2);
 		quote!(
-			#vis #name: Vec<(#voter_type, (#target_type, #weight_type), #target_type)>,
+			#vis #name: _npos::sp_std::prelude::Vec<(#voter_type, (#target_type, #weight_type), #target_type)>,
 		)
 	};
 
@@ -135,7 +135,7 @@ fn struct_def(
 			let field_name = field_name_for(c);
 			let array_len = c - 1;
 			quote!(
-				#vis #field_name: Vec<(
+				#vis #field_name: _npos::sp_std::prelude::Vec<(
 					#voter_type,
 					[(#target_type, #weight_type); #array_len],
 					#target_type
@@ -194,20 +194,19 @@ fn struct_def(
 				all_edges
 			}
 
-			fn unique_targets(&self) -> Vec<Self::Target> {
+			fn unique_targets(&self) -> _npos::sp_std::prelude::Vec<Self::Target> {
 				// NOTE: this implementation returns the targets sorted, but we don't use it yet per
 				// se, nor is the API enforcing it.
-				let mut all_targets: Vec<Self::Target> = Vec::with_capacity(self.average_edge_count());
+				use _npos::sp_std::collections::btree_set::BTreeSet;
+
+				let mut all_targets: BTreeSet<Self::Target> = BTreeSet::new();
 				let mut maybe_insert_target = |t: Self::Target| {
-					match all_targets.binary_search(&t) {
-						Ok(_) => (),
-						Err(pos) => all_targets.insert(pos, t)
-					}
+					all_targets.insert(t);
 				};
 
 				#unique_targets_impl
 
-				all_targets
+				all_targets.into_iter().collect()
 			}
 
 			fn remove_voter(&mut self, to_remove: Self::Voter) -> bool {
@@ -216,7 +215,7 @@ fn struct_def(
 			}
 
 			fn from_assignment<FV, FT, A>(
-				assignments: Vec<_npos::Assignment<A, #weight_type>>,
+				assignments: _npos::sp_std::prelude::Vec<_npos::Assignment<A, #weight_type>>,
 				index_of_voter: FV,
 				index_of_target: FT,
 			) -> Result<Self, _npos::Error>
@@ -243,8 +242,8 @@ fn struct_def(
 				self,
 				voter_at: impl Fn(Self::Voter) -> Option<A>,
 				target_at: impl Fn(Self::Target) -> Option<A>,
-			) -> Result<Vec<_npos::Assignment<A, #weight_type>>, _npos::Error> {
-				let mut assignments: Vec<_npos::Assignment<A, #weight_type>> = Default::default();
+			) -> Result<_npos::sp_std::prelude::Vec<_npos::Assignment<A, #weight_type>>, _npos::Error> {
+				let mut assignments: _npos::sp_std::prelude::Vec<_npos::Assignment<A, #weight_type>> = Default::default();
 				#into_impl
 				Ok(assignments)
 			}
@@ -348,18 +347,13 @@ fn unique_targets_impl(count: usize) -> TokenStream2 {
 }
 
 fn imports() -> Result<TokenStream2> {
-	if std::env::var("CARGO_PKG_NAME").unwrap() == "sp-npos-elections" {
-		Ok(quote! {
-			use crate as _npos;
-		})
-	} else {
-		match crate_name("sp-npos-elections") {
-			Ok(sp_npos_elections) => {
-				let ident = syn::Ident::new(&sp_npos_elections, Span::call_site());
-				Ok(quote!( extern crate #ident as _npos; ))
-			},
-			Err(e) => Err(syn::Error::new(Span::call_site(), &e)),
-		}
+	match crate_name("sp-npos-elections") {
+		Ok(FoundCrate::Itself) => Ok(quote! { use crate as _npos; }),
+		Ok(FoundCrate::Name(sp_npos_elections)) => {
+			let ident = syn::Ident::new(&sp_npos_elections, Span::call_site());
+			Ok(quote!( extern crate #ident as _npos; ))
+		},
+		Err(e) => Err(syn::Error::new(Span::call_site(), e)),
 	}
 }
 

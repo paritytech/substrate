@@ -25,13 +25,13 @@ use codec::Decode;
 use frame_support::{traits::Get, weights::Weight, IterableStorageMap};
 use frame_system::offchain::SubmitTransaction;
 use sp_npos_elections::{
-	to_support_map, EvaluateSupport, reduce, Assignment, ElectionResult, ElectionScore,
+	to_supports, EvaluateSupport, reduce, Assignment, ElectionResult, ElectionScore,
 	ExtendedBalance, CompactSolution,
 };
 use sp_runtime::{
 	offchain::storage::StorageValueRef, traits::TrailingZeroInput, RuntimeDebug,
 };
-use sp_std::{convert::TryInto, prelude::*};
+use sp_std::{convert::TryInto, prelude::*, collections::btree_map::BTreeMap};
 
 /// Error types related to the offchain election machinery.
 #[derive(RuntimeDebug)]
@@ -127,7 +127,7 @@ pub(crate) fn compute_offchain_election<T: Config>() -> Result<(), OffchainElect
 
 	crate::log!(
 		info,
-		"💸 prepared a seq-phragmen solution with {} balancing iterations and score {:?}",
+		"prepared a seq-phragmen solution with {} balancing iterations and score {:?}",
 		iters,
 		score,
 	);
@@ -284,7 +284,7 @@ where
 				if compact.remove_voter(index) {
 					crate::log!(
 						trace,
-						"💸 removed a voter at index {} with stake {:?} from compact to reduce the size",
+						"removed a voter at index {} with stake {:?} from compact to reduce the size",
 						index,
 						_stake,
 					);
@@ -297,19 +297,17 @@ where
 			}
 
 			crate::log!(
-					warn,
-					"💸 {} nominators out of {} had to be removed from compact solution due to size limits.",
-					removed,
-					compact.voter_count() + removed,
-				);
+				warn,
+				"{} nominators out of {} had to be removed from compact solution due to size \
+				 limits.",
+				removed,
+				compact.voter_count() + removed,
+			);
 			Ok(compact)
 		}
 		_ => {
 			// nada, return as-is
-			crate::log!(
-				info,
-				"💸 Compact solution did not get trimmed due to block weight limits.",
-			);
+			crate::log!(info, "Compact solution did not get trimmed due to block weight limits.",);
 			Ok(compact)
 		}
 	}
@@ -333,18 +331,22 @@ pub fn prepare_submission<T: Config>(
 	let snapshot_nominators =
 		<Module<T>>::snapshot_nominators().ok_or(OffchainElectionError::SnapshotUnavailable)?;
 
+	// indexing caches
+	let nominator_indices: BTreeMap<_, _> =
+		snapshot_nominators.iter().enumerate().map(|(idx, account_id)| (account_id, idx)).collect();
+	let validator_indices: BTreeMap<_, _> =
+		snapshot_validators.iter().enumerate().map(|(idx, account_id)| (account_id, idx)).collect();
+
 	// all helper closures that we'd ever need.
 	let nominator_index = |a: &T::AccountId| -> Option<NominatorIndex> {
-		snapshot_nominators
-			.iter()
-			.position(|x| x == a)
-			.and_then(|i| <usize as TryInto<NominatorIndex>>::try_into(i).ok())
+		nominator_indices
+			.get(a)
+			.and_then(|i| <usize as TryInto<NominatorIndex>>::try_into(*i).ok())
 	};
 	let validator_index = |a: &T::AccountId| -> Option<ValidatorIndex> {
-		snapshot_validators
-			.iter()
-			.position(|x| x == a)
-			.and_then(|i| <usize as TryInto<ValidatorIndex>>::try_into(i).ok())
+		validator_indices
+			.get(a)
+			.and_then(|i| <usize as TryInto<ValidatorIndex>>::try_into(*i).ok())
 	};
 	let nominator_at = |i: NominatorIndex| -> Option<T::AccountId> {
 		snapshot_nominators.get(i as usize).cloned()
@@ -390,13 +392,16 @@ pub fn prepare_submission<T: Config>(
 	let maximum_allowed_voters =
 		maximum_compact_len::<T::WeightInfo>(winners.len() as u32, size, maximum_weight);
 
-	crate::log!(debug, "💸 Maximum weight = {:?} // current weight = {:?} // maximum voters = {:?} // current votes = {:?}",
+	crate::log!(
+		debug,
+		"Maximum weight = {:?} // current weight = {:?} // maximum voters = {:?} // current votes \
+		 = {:?}",
 		maximum_weight,
 		T::WeightInfo::submit_solution_better(
-				size.validators.into(),
-				size.nominators.into(),
-				compact.voter_count() as u32,
-				winners.len() as u32,
+			size.validators.into(),
+			size.nominators.into(),
+			compact.voter_count() as u32,
+			winners.len() as u32,
 		),
 		maximum_allowed_voters,
 		compact.voter_count(),
@@ -415,7 +420,7 @@ pub fn prepare_submission<T: Config>(
 			<Module<T>>::slashable_balance_of_fn(),
 		);
 
-		let support_map = to_support_map::<T::AccountId>(&winners, &staked)
+		let support_map = to_supports::<T::AccountId>(&winners, &staked)
 			.map_err(|_| OffchainElectionError::ElectionFailed)?;
 		support_map.evaluate()
 	};
@@ -518,6 +523,12 @@ mod test {
 			(0 * v + 0 * n + 1000 * a + 0 * w) as Weight
 		}
 		fn kick(w: u32) -> Weight {
+			unimplemented!()
+		}
+		fn get_npos_voters(v: u32, n: u32, s: u32) -> Weight {
+			unimplemented!()
+		}
+		fn get_npos_targets(v: u32) -> Weight {
 			unimplemented!()
 		}
 	}

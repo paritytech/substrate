@@ -37,9 +37,9 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
-		Multisig: pallet_multisig::{Module, Call, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Multisig: pallet_multisig::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -124,7 +124,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 }
 
 fn last_event() -> Event {
-	system::Module::<Test>::events().pop().map(|e| e.event).expect("Event expected")
+	system::Pallet::<Test>::events().pop().map(|e| e.event).expect("Event expected")
 }
 
 fn expect_event<E: Into<Event>>(e: E) {
@@ -531,7 +531,7 @@ fn weight_check_works() {
 
 		assert_noop!(
 			Multisig::as_multi(Origin::signed(2), 2, vec![1, 3], Some(now()), data, false, 0),
-			Error::<Test>::WeightTooLow,
+			Error::<Test>::MaxWeightTooLow,
 		);
 	});
 }
