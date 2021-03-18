@@ -7548,6 +7548,7 @@ dependencies = [
  "sp-runtime",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
+ "tracing",
  "wasm-timer",
 ]
 
