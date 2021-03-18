@@ -792,7 +792,7 @@ pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
 	/// is not used.
 	type UnixTime: UnixTime;
 
-	/// This flag is ued to enable/disable the dynamic damping of the validator set 
+	/// This flag is ued to enable/disable the dynamic damping of the validator set.
 	/// 
 	/// It is managed by calling `dynamic_damping_validator_count`
 	type DynamicDamping: Get<bool>;
