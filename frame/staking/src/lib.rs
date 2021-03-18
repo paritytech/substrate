@@ -2442,7 +2442,7 @@ impl<T: Config> Module<T> {
 				Self::validator_count().saturating_add(one_percent)
 			);
 		}
-		if two_percent_average_stake < global_average.saturating_mul(twinty_percent){
+		if two_percent_average_stake < global_average.saturating_mul(twinty_percent) {
 			final_count = std::cmp::max(
 				Self::minimum_validator_count(),
 				Self::validator_count().saturating_sub(one_percent)
