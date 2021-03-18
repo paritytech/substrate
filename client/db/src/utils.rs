@@ -484,7 +484,6 @@ impl<I1: codec::Input, I2: codec::Input> codec::Input for JoinInput<I1, I2> {
 	}
 }
 
-
 #[cfg(test)]
 mod tests {
 	use super::*;

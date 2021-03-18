@@ -108,6 +108,15 @@ const DB_HASH_LEN: usize = 32;
 /// Hash type that this backend uses for the database.
 pub type DbHash = sp_core::H256;
 
+/// This is used as block body when storage-chain mode is enabled.
+#[derive(Debug, Encode, Decode)]
+struct ExtrinsicHeader {
+	/// Hash of the indexed part
+	indexed_hash: DbHash, // Zero hash if there's no indexed data
+	/// The rest of the data.
+	data: Vec<u8>,
+}
+
 /// A reference tracking state.
 ///
 /// It makes sure that the hash we are using stays pinned in storage
@@ -505,41 +514,47 @@ impl<Block: BlockT> sc_client_api::blockchain::HeaderBackend<Block> for Blockcha
 
 impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<Block> {
 	fn body(&self, id: BlockId<Block>) -> ClientResult<Option<Vec<Block::Extrinsic>>> {
-		match read_db(&*self.db, columns::KEY_LOOKUP, columns::BODY, id)? {
-			Some(body) => {
-				match self.transaction_storage {
-					TransactionStorageMode::BlockBody => match Decode::decode(&mut &body[..]) {
-						Ok(body) => Ok(Some(body)),
-						Err(err) => return Err(sp_blockchain::Error::Backend(
-							format!("Error decoding body: {}", err)
-						)),
-					},
-					TransactionStorageMode::StorageChain => {
-						match Vec::<(Block::Hash, Vec<u8>)>::decode(&mut &body[..]) {
-							Ok(index) => {
-								let extrinsics: ClientResult<Vec<Block::Extrinsic>> = index.into_iter().map(
-									|(hash, data)| {
-										let decode_result = if let Some(t) = self.indexed_transaction(&hash)? {
+		let body = match read_db(&*self.db, columns::KEY_LOOKUP, columns::BODY, id)? {
+			Some(body) => body,
+			None => return Ok(None),
+		};
+		match self.transaction_storage {
+			TransactionStorageMode::BlockBody => match Decode::decode(&mut &body[..]) {
+				Ok(body) => Ok(Some(body)),
+				Err(err) => return Err(sp_blockchain::Error::Backend(
+					format!("Error decoding body: {}", err)
+				)),
+			},
+			TransactionStorageMode::StorageChain => {
+				match Vec::<ExtrinsicHeader>::decode(&mut &body[..]) {
+					Ok(index) => {
+						let extrinsics: ClientResult<Vec<Block::Extrinsic>> = index.into_iter().map(
+							| ExtrinsicHeader { indexed_hash, data } | {
+								let decode_result = if indexed_hash != Default::default() {
+									match self.db.get(columns::TRANSACTION, indexed_hash.as_ref()) {
+										Some(t) => {
 											let mut input = utils::join_input(data.as_ref(), t.as_ref());
 											Block::Extrinsic::decode(&mut input)
-										} else {
-											Block::Extrinsic::decode(&mut data.as_ref())
-										};
-										decode_result.map_err(|err| sp_blockchain::Error::Backend(
-											format!("Error decoding extrinsic: {}", err))
+										},
+										None => return Err(sp_blockchain::Error::Backend(
+											format!("Missing indexed transaction {:?}", indexed_hash))
 										)
 									}
-								).collect();
-								Ok(Some(extrinsics?))
+								} else {
+									Block::Extrinsic::decode(&mut data.as_ref())
+								};
+								decode_result.map_err(|err| sp_blockchain::Error::Backend(
+									format!("Error decoding extrinsic: {}", err))
+								)
 							}
-							Err(err) => return Err(sp_blockchain::Error::Backend(
-								format!("Error decoding body list: {}", err)
-							)),
-						}
+						).collect();
+						Ok(Some(extrinsics?))
 					}
+					Err(err) => return Err(sp_blockchain::Error::Backend(
+						format!("Error decoding body list: {}", err)
+					)),
 				}
 			}
-			None => Ok(None),
 		}
 	}
 
@@ -1511,21 +1526,25 @@ impl<Block: BlockT> Backend<Block> {
 				let number = finalized.saturating_sub(keep.into());
 				self.prune_block(transaction, BlockId::<Block>::number(number))?;
 			}
-		}
-		// Also discard all blocks from displaced branches
-		for h in displaced.leaves() {
-			let mut number = finalized;
-			let mut hash = h.clone();
-			// Follow displaced chains up to finality point
-			while self.blockchain.hash(number)? != Some(hash.clone()) {
-				let id = BlockId::<Block>::hash(hash.clone());
-				match self.blockchain.header(id)? {
-					Some(header) => {
-						self.prune_block(transaction, id)?;
-						number = header.number().saturating_sub(One::one());
-						hash = header.parent_hash().clone();
-					},
-					None => break,
+
+			// Also discard all blocks from displaced branches
+			for h in displaced.leaves() {
+				let mut number = finalized;
+				let mut hash = h.clone();
+				// Follow displaced chains back until we reach a finalized block.
+				// Since leaves are discarded due to finality, they can't have parents
+				// that are canonical, but not yet finalized. So we stop deletig as soon as
+				// we reach canonical chain.
+				while self.blockchain.hash(number)? != Some(hash.clone()) {
+					let id = BlockId::<Block>::hash(hash.clone());
+					match self.blockchain.header(id)? {
+						Some(header) => {
+							self.prune_block(transaction, id)?;
+							number = header.number().saturating_sub(One::one());
+							hash = header.parent_hash().clone();
+						},
+						None => break,
+					}
 				}
 			}
 		}
@@ -1550,10 +1569,15 @@ impl<Block: BlockT> Backend<Block> {
 				match self.transaction_storage {
 					TransactionStorageMode::BlockBody => {},
 					TransactionStorageMode::StorageChain => {
-						match Vec::<(Block::Hash, Vec<u8>)>::decode(&mut &body[..]) {
+						match Vec::<ExtrinsicHeader>::decode(&mut &body[..]) {
 							Ok(body) => {
-								for (h, _) in body {
-									transaction.release(columns::TRANSACTION, DbHash::from_slice(h.as_ref()));
+								for ExtrinsicHeader { indexed_hash, .. } in body {
+									if indexed_hash != Default::default() {
+										transaction.release(
+											columns::TRANSACTION,
+											indexed_hash,
+										);
+									}
 								}
 							}
 							Err(err) => return Err(sp_blockchain::Error::Backend(
@@ -1590,7 +1614,7 @@ fn apply_index_ops<Block: BlockT>(
 	body: Vec<Block::Extrinsic>,
 	ops: Vec<IndexOperation>,
 ) -> Vec<u8> {
-	let mut extrinsic_headers = Vec::with_capacity(body.len());
+	let mut extrinsic_headers: Vec<ExtrinsicHeader> = Vec::with_capacity(body.len());
 	let mut index_map = HashMap::new();
 	let mut renewed_map = HashMap::new();
 	for op in ops {
@@ -1605,23 +1629,37 @@ fn apply_index_ops<Block: BlockT>(
 	}
 	for (index, extrinsic) in body.into_iter().enumerate() {
 		let extrinsic = extrinsic.encode();
-		if let Some(hash) = renewed_map.get(&(index as u32)) {
+		let extrinsic_header = if let Some(hash) = renewed_map.get(&(index as u32)) {
 			// Bump ref counter
 			transaction.reference(columns::TRANSACTION, DbHash::from_slice(hash.as_ref()));
-			extrinsic_headers.push((hash.clone(), extrinsic));
-			continue;
-		}
-		let offset = match index_map.get(&(index as u32)) {
-			Some(offset) if *offset as usize <= extrinsic.len() => *offset as usize,
-			_ => extrinsic.len(),
+			ExtrinsicHeader {
+				indexed_hash: hash.clone(),
+				data: extrinsic,
+			}
+		} else {
+			match index_map.get(&(index as u32)) {
+				Some(offset) if *offset as usize <= extrinsic.len() => {
+					let offset = *offset as usize;
+					let hash = HashFor::<Block>::hash(&extrinsic[offset..]);
+					transaction.store(
+						columns::TRANSACTION,
+						DbHash::from_slice(hash.as_ref()),
+						extrinsic[offset..].to_vec(),
+					);
+					ExtrinsicHeader {
+						indexed_hash: DbHash::from_slice(hash.as_ref()),
+						data: extrinsic[..offset].to_vec(),
+					}
+				},
+				_ => {
+					ExtrinsicHeader {
+						indexed_hash: Default::default(),
+						data: extrinsic,
+					}
+				}
+			}
 		};
-		let hash = HashFor::<Block>::hash(&extrinsic[offset..]);
-		transaction.store(
-			columns::TRANSACTION,
-			DbHash::from_slice(hash.as_ref()),
-			extrinsic[offset..].to_vec(),
-		);
-		extrinsic_headers.push((DbHash::from_slice(&hash.as_ref()), extrinsic[..offset].to_vec()));
+		extrinsic_headers.push(extrinsic_header);
 	}
 	debug!(
 		target: "db",
@@ -2747,17 +2785,17 @@ pub(crate) mod tests {
 		let mut blocks = Vec::new();
 		let mut prev_hash = Default::default();
 		let x1 = ExtrinsicWrapper::from(0u64).encode();
-		let x1_hash = <HashFor::<Block> as sp_core::Hasher>::hash(x1.as_slice());
+		let x1_hash = <HashFor::<Block> as sp_core::Hasher>::hash(&x1[1..]);
 		for i in 0 .. 10 {
 			let mut index = Vec::new();
 			if i == 0 {
-				index.push(IndexOperation::Insert { extrinsic: 0, offset: 0 });
+				index.push(IndexOperation::Insert { extrinsic: 0, offset: 1 });
 			} else if i < 5 {
 				// keep renewing 1st
 				index.push(IndexOperation::Renew {
 					extrinsic: 0,
 					hash: x1_hash.as_ref().to_vec(),
-					size: x1.len() as u32,
+					size: (x1.len() - 1) as u32,
 				});
 			} // else stop renewing
 			let hash = insert_block(
