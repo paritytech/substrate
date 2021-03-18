@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,14 +15,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Test utilities
+//! Test environment for node-authorization pallet.
 
-#![cfg(test)]
+use super::*;
+use crate as pallet_node_authorization;
 
-use sp_runtime::testing::Header;
+use frame_support::{
+	parameter_types, ord_parameter_types,
+	traits::GenesisBuild,
+};
+use frame_system::EnsureSignedBy;
 use sp_core::H256;
-use frame_support::parameter_types;
-use crate::{self as pallet_indices, Config};
+use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -34,72 +38,69 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		Indices: pallet_indices::{Pallet, Call, Storage, Config<T>, Event<T>},
+		NodeAuthorization: pallet_node_authorization::{
+			Pallet, Call, Storage, Config<T>, Event<T>,
+		},
 	}
 );
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(1024);
 }
-
 impl frame_system::Config for Test {
 	type BaseCallFilter = ();
+	type DbWeight = ();
 	type BlockWeights = ();
 	type BlockLength = ();
-	type DbWeight = ();
 	type Origin = Origin;
-	type Call = Call;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
-	type Hashing = ::sp_runtime::traits::BlakeTwo256;
+	type Call = Call;
+	type Hashing = BlakeTwo256;
 	type AccountId = u64;
-	type Lookup = Indices;
+	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
 	type PalletInfo = PalletInfo;
-	type AccountData = pallet_balances::AccountData<u64>;
+	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 }
 
+ord_parameter_types! {
+	pub const One: u64 = 1;
+	pub const Two: u64 = 2;
+	pub const Three: u64 = 3;
+	pub const Four: u64 = 4;
+}
 parameter_types! {
-	pub const ExistentialDeposit: u64 = 1;
+	pub const MaxWellKnownNodes: u32 = 4;
+	pub const MaxPeerIdLength: u32 = 2;
 }
-
-impl pallet_balances::Config for Test {
-	type MaxLocks = ();
-	type Balance = u64;
-	type DustRemoval = ();
-	type Event = Event;
-	type ExistentialDeposit = ExistentialDeposit;
-	type AccountStore = System;
-	type WeightInfo = ();
-}
-
-parameter_types! {
-	pub const Deposit: u64 = 1;
-}
-
 impl Config for Test {
-	type AccountIndex = u64;
-	type Currency = Balances;
-	type Deposit = Deposit;
 	type Event = Event;
+	type MaxWellKnownNodes = MaxWellKnownNodes;
+	type MaxPeerIdLength = MaxPeerIdLength;
+	type AddOrigin = EnsureSignedBy<One, u64>;
+	type RemoveOrigin = EnsureSignedBy<Two, u64>;
+	type SwapOrigin = EnsureSignedBy<Three, u64>;
+	type ResetOrigin = EnsureSignedBy<Four, u64>;
 	type WeightInfo = ();
+}
+
+pub fn test_node(id: u8) -> PeerId {
+	PeerId(vec![id])
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	pallet_balances::GenesisConfig::<Test>{
-		balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],
+	pallet_node_authorization::GenesisConfig::<Test> {
+		nodes: vec![(test_node(10), 10), (test_node(20), 20), (test_node(30), 30)],
 	}.assimilate_storage(&mut t).unwrap();
 	t.into()
 }
