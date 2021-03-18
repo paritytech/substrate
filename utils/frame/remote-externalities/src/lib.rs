@@ -103,7 +103,6 @@
 
 use std::{
 	fs,
-    fmt::Debug,
 	path::{Path, PathBuf},
 };
 use log::*;
@@ -116,42 +115,35 @@ use sp_core::{
 use codec::{Encode, Decode};
 use jsonrpsee_http_client::{HttpClient, HttpConfig};
 
-use sp_runtime::traits::{
-        CheckEqual,
-        SimpleBitOps, Member, MaybeDisplay,
-        MaybeSerializeDeserialize, MaybeMallocSizeOf,
+use sp_runtime::{
+	generic::BlockId,
+    traits::{
+		Block as BlockT, NumberFor,
+    }
 };
-use frame_support::Parameter;
 
 // TODO: Make KeyPair generic
 type KeyPair = (StorageKey, StorageData);
-
-// Helper trait to reduce code duplication
-pub trait RuntimeHash: Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + SimpleBitOps + Ord
-        + Default + Copy + CheckEqual + sp_std::hash::Hash + AsRef<[u8]> + AsMut<[u8]> + MaybeMallocSizeOf {}
-
-// implement the helper trait for each type,
-// that already implements all traits the helper trait is built from
-impl<T: Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + SimpleBitOps + Ord
-        + Default + Copy + CheckEqual + sp_std::hash::Hash + AsRef<[u8]> + AsMut<[u8]> + MaybeMallocSizeOf> RuntimeHash for T {}
 
 const LOG_TARGET: &str = "remote-ext";
 const TARGET: &str = "http://localhost:9933";
 
 jsonrpsee_proc_macros::rpc_client_api! {
-	RpcApi<Hash: RuntimeHash> {
+	RpcApi<B: BlockT> {
 		#[rpc(method = "state_getPairs", positional_params)]
-		fn storage_pairs(prefix: StorageKey, hash: Option<Hash>) -> Vec<(StorageKey, StorageData)>;
+		fn storage_pairs(prefix: StorageKey, hash: Option<B::Hash>) -> Vec<(StorageKey, StorageData)>;
 		#[rpc(method = "chain_getFinalizedHead")]
-		fn finalized_head() -> Hash;
+		fn finalized_head() -> B::Hash;
+		#[rpc(method = "chain_getBlockHash")]
+		fn block_hash(number: NumberFor<B>) -> B::Hash;
 	}
 }
 
 /// The execution mode.
 #[derive(Clone)]
-pub enum Mode<Hash: RuntimeHash> {
+pub enum Mode<B: BlockT> {
 	/// Online.
-	Online(OnlineConfig<Hash>),
+	Online(OnlineConfig<B>),
 	/// Offline. Uses a cached file and needs not any client config.
 	Offline(OfflineConfig),
 }
@@ -169,24 +161,24 @@ pub struct OfflineConfig {
 ///
 /// A cache config may be present and will be written to in that case.
 #[derive(Clone)]
-pub struct OnlineConfig<Hash: RuntimeHash> {
+pub struct OnlineConfig<B: BlockT> {
 	/// The HTTP uri to use.
 	pub uri: String,
 	/// The block number at which to connect. Will be latest finalized head if not provided.
-	pub at: Option<Hash>,
+	pub at: Option<BlockId<B>>,
 	/// An optional cache file to WRITE to, not for reading. Not cached if set to `None`.
 	pub cache: Option<CacheConfig>,
 	/// The modules to scrape. If empty, entire chain state will be scraped.
 	pub modules: Vec<String>,
 }
 
-impl<Hash: RuntimeHash> Default for OnlineConfig<Hash> {
+impl<B: BlockT> Default for OnlineConfig<B> {
 	fn default() -> Self {
 		Self { uri: TARGET.to_owned(), at: None, cache: None, modules: Default::default() }
 	}
 }
 
-impl<Hash: RuntimeHash> OnlineConfig<Hash> {
+impl<B: BlockT> OnlineConfig<B> {
 	/// Return a new http rpc client.
 	fn rpc(&self) -> HttpClient {
 		HttpClient::new(&self.uri, HttpConfig { max_request_body_size: u32::MAX })
@@ -218,32 +210,30 @@ impl CacheConfig {
 }
 
 /// Builder for remote-externalities.
-pub struct Builder<Hash: RuntimeHash = sp_core::H256> {
+pub struct Builder<B: BlockT> {
 	inject: Vec<KeyPair>,
-	mode: Mode<Hash>,
-        _hash: std::marker::PhantomData<Hash>,
+	mode: Mode<B>,
 }
 
-impl<Hash: RuntimeHash> Default for Builder<Hash> {
+impl<B: BlockT> Default for Builder<B> {
 	fn default() -> Self {
 		Self {
 			inject: Default::default(),
 			mode: Mode::Online(OnlineConfig::default()),
-                        _hash: Default::default(),
 		}
 	}
 }
 
 // Mode methods
-impl<Hash: RuntimeHash> Builder<Hash> {
-	fn as_online(&self) -> &OnlineConfig<Hash> {
+impl<B: BlockT> Builder<B> {
+	fn as_online(&self) -> &OnlineConfig<B> {
 		match &self.mode {
 			Mode::Online(config) => &config,
 			_ => panic!("Unexpected mode: Online"),
 		}
 	}
 
-	fn as_online_mut(&mut self) -> &mut OnlineConfig<Hash> {
+	fn as_online_mut(&mut self) -> &mut OnlineConfig<B> {
 		match &mut self.mode {
 			Mode::Online(config) => config,
 			_ => panic!("Unexpected mode: Online"),
@@ -252,10 +242,10 @@ impl<Hash: RuntimeHash> Builder<Hash> {
 }
 
 // RPC methods
-impl<Hash: RuntimeHash> Builder<Hash> {
-	async fn rpc_get_head(&self) -> Result<Hash, &'static str> {
+impl<B: BlockT> Builder<B> {
+	async fn rpc_get_head(&self) -> Result<B::Hash, &'static str> {
 		trace!(target: LOG_TARGET, "rpc: finalized_head");
-		RpcApi::<Hash>::finalized_head(&self.as_online().rpc()).await.map_err(|e| {
+		RpcApi::<B>::finalized_head(&self.as_online().rpc()).await.map_err(|e| {
 			error!("Error = {:?}", e);
 			"rpc finalized_head failed."
 			})
@@ -267,18 +257,30 @@ impl<Hash: RuntimeHash> Builder<Hash> {
 	async fn rpc_get_pairs(
 		&self,
 		prefix: StorageKey,
-		at: Hash,
+		at: B::Hash,
 	) -> Result<Vec<KeyPair>, &'static str> {
 		trace!(target: LOG_TARGET, "rpc: storage_pairs: {:?} / {:?}", prefix, at);
-		RpcApi::<Hash>::storage_pairs(&self.as_online().rpc(), prefix, Some(at)).await.map_err(|e| {
+		RpcApi::<B>::storage_pairs(&self.as_online().rpc(), prefix, Some(at)).await.map_err(|e| {
 			error!("Error = {:?}", e);
 			"rpc storage_pairs failed"
+			})
+	}
+
+	/// Relay the request to `chain_getBlockHash` rpc endpoint.
+	async fn rpc_get_hash(
+		&self,
+		number: NumberFor<B>,
+	) -> Result<B::Hash, &'static str> {
+		trace!(target: LOG_TARGET, "rpc: block_hash: {:?}", number);
+		RpcApi::<B>::block_hash(&self.as_online().rpc(), number).await.map_err(|e| {
+			error!("Error = {:?}", e);
+			"rpc block_hash failed"
 			})
 	}
 }
 
 // Internal methods
-impl<Hash: RuntimeHash> Builder<Hash> {
+impl<B: BlockT> Builder<B> {
 	/// Save the given data as cache.
 	fn save_cache(&self, data: &[KeyPair], path: &Path) -> Result<(), &'static str> {
 		info!(target: LOG_TARGET, "writing to cache file {:?}", path);
@@ -291,6 +293,13 @@ impl<Hash: RuntimeHash> Builder<Hash> {
 		info!(target: LOG_TARGET, "scraping keypairs from cache {:?}", path,);
 		let bytes = fs::read(path).map_err(|_| "fs::read failed.")?;
 		Decode::decode(&mut &*bytes).map_err(|_| "decode failed")
+	}
+
+	async fn block_id_to_hash(&self, block_id: BlockId<B>) -> Result<B::Hash, &'static str> {
+		Ok(match block_id {
+			BlockId::Hash(hash) => hash,
+			BlockId::Number(number) => self.rpc_get_hash(number).await?,
+		})
 	}
 
 	/// Build `Self` from a network node denoted by `uri`.
@@ -307,7 +316,7 @@ impl<Hash: RuntimeHash> Builder<Hash> {
 			let mut filtered_kv = vec![];
 			for f in config.modules.iter() {
 				let hashed_prefix = StorageKey(twox_128(f.as_bytes()).to_vec());
-				let module_kv = self.rpc_get_pairs(hashed_prefix.clone(), at).await?;
+				let module_kv = self.rpc_get_pairs(hashed_prefix.clone(), self.block_id_to_hash(at).await?).await?;
 				info!(
 					target: LOG_TARGET,
 					"downloaded data for module {} (count: {} / prefix: {:?}).",
@@ -320,7 +329,7 @@ impl<Hash: RuntimeHash> Builder<Hash> {
 			filtered_kv
 		} else {
 			info!(target: LOG_TARGET, "downloading data for all modules.");
-			self.rpc_get_pairs(StorageKey(vec![]), at).await?.into_iter().collect::<Vec<_>>()
+			self.rpc_get_pairs(StorageKey(vec![]), self.block_id_to_hash(at).await?).await?.into_iter().collect::<Vec<_>>()
 		};
 
 		Ok(keys_and_values)
@@ -330,7 +339,7 @@ impl<Hash: RuntimeHash> Builder<Hash> {
 		info!(target: LOG_TARGET, "initializing remote client to {:?}", self.as_online().uri);
 		if self.as_online().at.is_none() {
 			let at = self.rpc_get_head().await?;
-			self.as_online_mut().at = Some(at);
+			self.as_online_mut().at = Some(BlockId::Hash(at));
 		}
 		Ok(())
 	}
@@ -359,7 +368,7 @@ impl<Hash: RuntimeHash> Builder<Hash> {
 }
 
 // Public methods
-impl<Hash: RuntimeHash> Builder<Hash> {
+impl<B: BlockT> Builder<B> {
 	/// Create a new builder.
 	pub fn new() -> Self {
 		Default::default()
@@ -374,7 +383,7 @@ impl<Hash: RuntimeHash> Builder<Hash> {
 	}
 
 	/// Configure a cache to be used.
-	pub fn mode(mut self, mode: Mode<Hash>) -> Self {
+	pub fn mode(mut self, mode: Mode<B>) -> Self {
 		self.mode = mode;
 		self
 	}

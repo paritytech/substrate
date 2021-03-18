@@ -20,15 +20,12 @@
 use parity_scale_codec::Decode;
 use std::{fmt::Debug, path::PathBuf, str::FromStr};
 use sc_service::Configuration;
-use sc_cli::{CliConfiguration, ExecutionStrategy, WasmExecutionMethod};
+use sc_cli::{BlockNumberOrHash, CliConfiguration, ExecutionStrategy, WasmExecutionMethod};
 use sc_executor::NativeExecutor;
 use sc_service::NativeExecutionDispatch;
 use sp_state_machine::StateMachine;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use sp_core::storage::{StorageData, StorageKey, well_known_keys};
-
-// TODO: allow usage of different hashes in cli
-pub type Hash = sp_core::H256;
 
 /// Various commands to try out the new runtime, over configurable states.
 ///
@@ -65,7 +62,6 @@ pub struct TryRuntimeCmd {
 	pub state: State,
 }
 
-
 /// The state to use for a migration dry-run.
 #[derive(Debug, structopt::StructOpt)]
 pub enum State {
@@ -82,8 +78,8 @@ pub enum State {
 		cache_file: Option<CacheParams>,
 
 		/// The block number at which to connect. Will be latest finalized head if not provided.
-		#[structopt(short, long)]
-		block_number: Option<Hash>,
+		#[structopt(short, long, multiple = false)]
+		block_number: Option<BlockNumberOrHash>,
 
 		/// The modules to scrape. If empty, entire chain state will be scraped.
 		#[structopt(short, long, require_delimiter = true)]
@@ -136,6 +132,10 @@ impl TryRuntimeCmd {
 	pub async fn run<B, ExecDispatch>(&self, config: Configuration) -> sc_cli::Result<()>
 	where
 		B: BlockT,
+		B::Hash: FromStr,
+		<B::Hash as FromStr>::Err: std::fmt::Debug,
+		NumberFor<B>: FromStr,
+		<NumberFor<B> as FromStr>::Err: std::fmt::Debug,
 		ExecDispatch: NativeExecutionDispatch + 'static,
 	{
 		let spec = config.chain_spec;
@@ -166,17 +166,27 @@ impl TryRuntimeCmd {
 		let ext = {
 			use remote_externalities::{Builder, Mode, CacheConfig, OfflineConfig, OnlineConfig};
 			let builder = match &self.state {
-				State::Snap { cache_params: CacheParams { file_name, directory } } => Builder::<Hash>::new().mode(Mode::Offline(OfflineConfig {
+				State::Snap {
+					cache_params: CacheParams { file_name, directory }
+				} => Builder::<B>::new().mode(Mode::Offline(OfflineConfig {
 					cache: CacheConfig { name: file_name.into(), directory: directory.into(), ..Default::default() },
 				})),
-				State::Live { url, cache_file, block_number, modules } => Builder::<Hash>::new().mode(Mode::Online(OnlineConfig {
+				State::Live {
+					url,
+					cache_file,
+					block_number,
+					modules
+				} => Builder::<B>::new().mode(Mode::Online(OnlineConfig {
 					uri: url.into(),
 					cache: cache_file.as_ref().map(|c| CacheConfig {
 						name: c.file_name.clone(),
 						directory: c.directory.clone(),
 					}),
 					modules: modules.clone().unwrap_or(Vec::new()),
-					at: block_number.to_owned(),
+					at: match block_number {
+						Some(b) => Some(b.parse::<B>()?),
+						None => None,
+					},
 					..Default::default()
 				})),
 			};
