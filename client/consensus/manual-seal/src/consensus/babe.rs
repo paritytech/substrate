@@ -90,7 +90,7 @@ impl<B, C> BabeConsensusDataProvider<B, C>
 		let timestamp_provider = SlotTimestampProvider::new(client.clone())?;
 
 		provider.register_provider(timestamp_provider)?;
-		register_babe_inherent_data_provider(provider, config.slot_duration)?;
+		register_babe_inherent_data_provider(provider, config.slot_duration())?;
 
 		Ok(Self {
 			config,
