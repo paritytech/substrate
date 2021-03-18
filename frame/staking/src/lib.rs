@@ -2433,8 +2433,8 @@ impl<T: Config> Module<T> {
 			100u32
 		);
 		let twinty_percent = Perbill::from_rational_approximation(
-			20 as u32, 
-			100 as u32
+			20u32, 
+			100u32
 		);
 		if one_percent_average_stake > global_average.saturating_mul(forty_percent){
 			final_count = std::cmp::min(
