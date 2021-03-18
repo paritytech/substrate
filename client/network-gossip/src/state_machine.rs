@@ -500,7 +500,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 		tracing::trace!(
 			target: "gossip",
-			%who,
+			to = %who,
 			protocol = %self.protocol,
 			?message,
 			"Sending direct message",
