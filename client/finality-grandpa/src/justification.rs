@@ -195,6 +195,11 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 
 		Ok(())
 	}
+
+	/// The target block number and hash that this justifications proves finality for.
+	pub fn target(&self) -> (NumberFor<Block>, Block::Hash) {
+		(self.commit.target_number, self.commit.target_hash)
+	}
 }
 
 /// A utility trait implementing `finality_grandpa::Chain` using a given set of headers.
