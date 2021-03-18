@@ -103,10 +103,11 @@
 
 use std::{
 	fs,
+    fmt::Debug,
 	path::{Path, PathBuf},
 };
 use log::*;
-use sp_core::{hashing::twox_128};
+use sp_core::hashing::twox_128;
 pub use sp_io::TestExternalities;
 use sp_core::{
 	hexdisplay::HexDisplay,
@@ -115,15 +116,30 @@ use sp_core::{
 use codec::{Encode, Decode};
 use jsonrpsee_http_client::{HttpClient, HttpConfig};
 
+use sp_runtime::traits::{
+        CheckEqual,
+        SimpleBitOps, Member, MaybeDisplay,
+        MaybeSerializeDeserialize, MaybeMallocSizeOf,
+};
+use frame_support::Parameter;
+
+// TODO: Make KeyPair generic
 type KeyPair = (StorageKey, StorageData);
-type Hash = sp_core::H256;
-// TODO: make these two generic.
+
+// Helper trait to reduce code duplication
+pub trait RuntimeHash: Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + SimpleBitOps + Ord
+        + Default + Copy + CheckEqual + sp_std::hash::Hash + AsRef<[u8]> + AsMut<[u8]> + MaybeMallocSizeOf {}
+
+// implement the helper trait for each type,
+// that already implements all traits the helper trait is built from
+impl<T: Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + SimpleBitOps + Ord
+        + Default + Copy + CheckEqual + sp_std::hash::Hash + AsRef<[u8]> + AsMut<[u8]> + MaybeMallocSizeOf> RuntimeHash for T {}
 
 const LOG_TARGET: &str = "remote-ext";
 const TARGET: &str = "http://localhost:9933";
 
 jsonrpsee_proc_macros::rpc_client_api! {
-	RpcApi {
+	RpcApi<Hash: RuntimeHash> {
 		#[rpc(method = "state_getPairs", positional_params)]
 		fn storage_pairs(prefix: StorageKey, hash: Option<Hash>) -> Vec<(StorageKey, StorageData)>;
 		#[rpc(method = "chain_getFinalizedHead")]
@@ -133,9 +149,9 @@ jsonrpsee_proc_macros::rpc_client_api! {
 
 /// The execution mode.
 #[derive(Clone)]
-pub enum Mode {
+pub enum Mode<Hash: RuntimeHash> {
 	/// Online.
-	Online(OnlineConfig),
+	Online(OnlineConfig<Hash>),
 	/// Offline. Uses a cached file and needs not any client config.
 	Offline(OfflineConfig),
 }
@@ -153,7 +169,7 @@ pub struct OfflineConfig {
 ///
 /// A cache config may be present and will be written to in that case.
 #[derive(Clone)]
-pub struct OnlineConfig {
+pub struct OnlineConfig<Hash: RuntimeHash> {
 	/// The HTTP uri to use.
 	pub uri: String,
 	/// The block number at which to connect. Will be latest finalized head if not provided.
@@ -164,13 +180,13 @@ pub struct OnlineConfig {
 	pub modules: Vec<String>,
 }
 
-impl Default for OnlineConfig {
+impl<Hash: RuntimeHash> Default for OnlineConfig<Hash> {
 	fn default() -> Self {
 		Self { uri: TARGET.to_owned(), at: None, cache: None, modules: Default::default() }
 	}
 }
 
-impl OnlineConfig {
+impl<Hash: RuntimeHash> OnlineConfig<Hash> {
 	/// Return a new http rpc client.
 	fn rpc(&self) -> HttpClient {
 		HttpClient::new(&self.uri, HttpConfig { max_request_body_size: u32::MAX })
@@ -202,30 +218,32 @@ impl CacheConfig {
 }
 
 /// Builder for remote-externalities.
-pub struct Builder {
+pub struct Builder<Hash: RuntimeHash = sp_core::H256> {
 	inject: Vec<KeyPair>,
-	mode: Mode,
+	mode: Mode<Hash>,
+        _hash: std::marker::PhantomData<Hash>,
 }
 
-impl Default for Builder {
+impl<Hash: RuntimeHash> Default for Builder<Hash> {
 	fn default() -> Self {
 		Self {
 			inject: Default::default(),
-			mode: Mode::Online(OnlineConfig::default())
+			mode: Mode::Online(OnlineConfig::default()),
+                        _hash: Default::default(),
 		}
 	}
 }
 
 // Mode methods
-impl Builder {
-	fn as_online(&self) -> &OnlineConfig {
+impl<Hash: RuntimeHash> Builder<Hash> {
+	fn as_online(&self) -> &OnlineConfig<Hash> {
 		match &self.mode {
 			Mode::Online(config) => &config,
 			_ => panic!("Unexpected mode: Online"),
 		}
 	}
 
-	fn as_online_mut(&mut self) -> &mut OnlineConfig {
+	fn as_online_mut(&mut self) -> &mut OnlineConfig<Hash> {
 		match &mut self.mode {
 			Mode::Online(config) => config,
 			_ => panic!("Unexpected mode: Online"),
@@ -234,10 +252,10 @@ impl Builder {
 }
 
 // RPC methods
-impl Builder {
+impl<Hash: RuntimeHash> Builder<Hash> {
 	async fn rpc_get_head(&self) -> Result<Hash, &'static str> {
 		trace!(target: LOG_TARGET, "rpc: finalized_head");
-		RpcApi::finalized_head(&self.as_online().rpc()).await.map_err(|e| {
+		RpcApi::<Hash>::finalized_head(&self.as_online().rpc()).await.map_err(|e| {
 			error!("Error = {:?}", e);
 			"rpc finalized_head failed."
 			})
@@ -252,7 +270,7 @@ impl Builder {
 		at: Hash,
 	) -> Result<Vec<KeyPair>, &'static str> {
 		trace!(target: LOG_TARGET, "rpc: storage_pairs: {:?} / {:?}", prefix, at);
-		RpcApi::storage_pairs(&self.as_online().rpc(), prefix, Some(at)).await.map_err(|e| {
+		RpcApi::<Hash>::storage_pairs(&self.as_online().rpc(), prefix, Some(at)).await.map_err(|e| {
 			error!("Error = {:?}", e);
 			"rpc storage_pairs failed"
 			})
@@ -260,7 +278,7 @@ impl Builder {
 }
 
 // Internal methods
-impl Builder {
+impl<Hash: RuntimeHash> Builder<Hash> {
 	/// Save the given data as cache.
 	fn save_cache(&self, data: &[KeyPair], path: &Path) -> Result<(), &'static str> {
 		info!(target: LOG_TARGET, "writing to cache file {:?}", path);
@@ -341,7 +359,7 @@ impl Builder {
 }
 
 // Public methods
-impl Builder {
+impl<Hash: RuntimeHash> Builder<Hash> {
 	/// Create a new builder.
 	pub fn new() -> Self {
 		Default::default()
@@ -356,7 +374,7 @@ impl Builder {
 	}
 
 	/// Configure a cache to be used.
-	pub fn mode(mut self, mode: Mode) -> Self {
+	pub fn mode(mut self, mode: Mode<Hash>) -> Self {
 		self.mode = mode;
 		self
 	}
@@ -379,6 +397,7 @@ impl Builder {
 #[cfg(test)]
 mod tests {
 	use super::*;
+        type Hash = sp_core::H256;
 
 	fn init_logger() {
 		let _ = env_logger::Builder::from_default_env()
@@ -390,7 +409,7 @@ mod tests {
 	#[async_std::test]
 	async fn can_build_one_pallet() {
 		init_logger();
-		Builder::new()
+		Builder::<Hash>::new()
 			.mode(Mode::Online(OnlineConfig {
 				modules: vec!["Proxy".into()],
 				..Default::default()
@@ -404,7 +423,7 @@ mod tests {
 	#[async_std::test]
 	async fn can_load_cache() {
 		init_logger();
-		Builder::new()
+		Builder::<Hash>::new()
 			.mode(Mode::Offline(OfflineConfig {
 				cache: CacheConfig { name: "proxy_test".into(), ..Default::default() },
 			}))
@@ -417,7 +436,7 @@ mod tests {
 	#[async_std::test]
 	async fn can_create_cache() {
 		init_logger();
-		Builder::new()
+		Builder::<Hash>::new()
 			.mode(Mode::Online(OnlineConfig {
 				cache: Some(CacheConfig {
 					name: "test_cache_to_remove.bin".into(),
@@ -447,6 +466,6 @@ mod tests {
 	#[async_std::test]
 	async fn can_build_all() {
 		init_logger();
-		Builder::new().build().await.unwrap().execute_with(|| {});
+		Builder::<Hash>::new().build().await.unwrap().execute_with(|| {});
 	}
 }
