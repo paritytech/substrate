@@ -1375,11 +1375,11 @@ macro_rules! decl_module {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?> $module<$trait_instance $(, $instance)?>
 			where $( $other_where_bounds )*
 		{
-			/// Deposits an event using `frame_system::Module::deposit_event`.
+			/// Deposits an event using `frame_system::Pallet::deposit_event`.
 			$vis fn deposit_event(
 				event: impl Into<< $trait_instance as $trait_name $(<$instance>)? >::Event>
 			) {
-				<$system::Module<$trait_instance>>::deposit_event(event.into())
+				<$system::Pallet<$trait_instance>>::deposit_event(event.into())
 			}
 		}
 	};
@@ -1858,6 +1858,11 @@ macro_rules! decl_module {
 			$(<I>, $instance: $instantiable $( = $module_default_instance)?)?
 		>($crate::sp_std::marker::PhantomData<($trait_instance, $( $instance)?)>) where
 			$( $other_where_bounds )*;
+
+		/// Type alias to `Module`, to be used by `construct_runtime`.
+		#[allow(dead_code)]
+		pub type Pallet<$trait_instance $(, $instance $( = $module_default_instance)?)?>
+			= $mod_type<$trait_instance $(, $instance)?>;
 
 		$crate::decl_module! {
 			@impl_on_initialize

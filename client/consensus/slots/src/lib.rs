@@ -274,7 +274,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			CONSENSUS_DEBUG;
 			"slots.starting_authorship";
 			"slot_num" => *slot,
-			"timestamp" => timestamp,
+			"timestamp" => *timestamp,
 		);
 
 		let awaiting_proposer = {
@@ -408,7 +408,7 @@ pub trait SlotCompatible {
 	fn extract_timestamp_and_slot(
 		&self,
 		inherent: &InherentData,
-	) -> Result<(u64, Slot, std::time::Duration), sp_consensus::Error>;
+	) -> Result<(sp_timestamp::Timestamp, Slot, std::time::Duration), sp_consensus::Error>;
 }
 
 /// Start a new slot worker.
@@ -514,10 +514,7 @@ impl<T> Deref for SlotDuration<T> {
 }
 
 impl<T: SlotData> SlotData for SlotDuration<T> {
-	/// Get the slot duration in milliseconds.
-	fn slot_duration(&self) -> u64
-		where T: SlotData,
-	{
+	fn slot_duration(&self) -> std::time::Duration {
 		self.0.slot_duration()
 	}
 
@@ -562,7 +559,7 @@ impl<T: Clone + Send + Sync + 'static> SlotDuration<T> {
 			}
 		}?;
 
-		if slot_duration.slot_duration() == 0u64 {
+		if slot_duration.slot_duration() == Default::default() {
 			return Err(sp_blockchain::Error::Application(Box::new(Error::SlotDurationInvalid(slot_duration))))
 		}
 

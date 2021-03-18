@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use codec::{Encode, Decode};
-use crate::{Config, Module, BlockHash};
+use crate::{Config, Pallet, BlockHash};
 use scale_info::TypeInfo;
 use sp_runtime::{
 	generic::Era,
@@ -63,7 +63,7 @@ impl<T: Config + TypeInfo + Send + Sync> SignedExtension for CheckMortality<T> {
 		_info: &DispatchInfoOf<Self::Call>,
 		_len: usize,
 	) -> TransactionValidity {
-		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
+		let current_u64 = <Pallet<T>>::block_number().saturated_into::<u64>();
 		let valid_till = self.0.death(current_u64);
 		Ok(ValidTransaction {
 			longevity: valid_till.saturating_sub(current_u64),
@@ -72,12 +72,12 @@ impl<T: Config + TypeInfo + Send + Sync> SignedExtension for CheckMortality<T> {
 	}
 
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
-		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
+		let current_u64 = <Pallet<T>>::block_number().saturated_into::<u64>();
 		let n = self.0.birth(current_u64).saturated_into::<T::BlockNumber>();
 		if !<BlockHash<T>>::contains_key(n) {
 			Err(InvalidTransaction::AncientBirthBlock.into())
 		} else {
-			Ok(<Module<T>>::block_hash(n))
+			Ok(<Pallet<T>>::block_hash(n))
 		}
 	}
 }

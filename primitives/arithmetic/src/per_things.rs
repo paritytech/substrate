@@ -18,8 +18,9 @@
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 
-use sp_std::{ops, fmt, prelude::*, convert::TryInto};
+use sp_std::{ops, fmt, prelude::*, convert::{TryFrom, TryInto}};
 use codec::{Encode, CompactAs};
+use num_traits::Pow;
 use crate::traits::{
 	SaturatedConversion, UniqueSaturatedInto, Saturating, BaseArithmetic, Bounded, Zero, Unsigned,
 	One,
@@ -36,6 +37,7 @@ pub type UpperOf<P> = <P as PerThing>::Upper;
 /// `X`_.
 pub trait PerThing:
 	Sized + Saturating + Copy + Default + Eq + PartialEq + Ord + PartialOrd + Bounded + fmt::Debug
+	+ ops::Div<Output=Self> + ops::Mul<Output=Self> + Pow<usize, Output=Self>
 {
 	/// The data type used to build this per-thingy.
 	type Inner: BaseArithmetic + Unsigned + Copy + Into<u128> + fmt::Debug;
@@ -70,14 +72,14 @@ pub trait PerThing:
 	fn from_percent(x: Self::Inner) -> Self {
 		let a: Self::Inner = x.min(100.into());
 		let b: Self::Inner = 100.into();
-		Self::from_rational_approximation::<Self::Inner>(a, b)
+		Self::from_rational::<Self::Inner>(a, b)
 	}
 
 	/// Return the product of multiplication of this value by itself.
 	fn square(self) -> Self {
 		let p = Self::Upper::from(self.deconstruct());
 		let q = Self::Upper::from(Self::ACCURACY);
-		Self::from_rational_approximation::<Self::Upper>(p * p, q * q)
+		Self::from_rational::<Self::Upper>(p * p, q * q)
 	}
 
 	/// Return the part left when `self` is saturating-subtracted from `Self::one()`.
@@ -204,7 +206,12 @@ pub trait PerThing:
 
 	/// Converts a fraction into `Self`.
 	#[cfg(feature = "std")]
-	fn from_fraction(x: f64) -> Self;
+	fn from_float(x: f64) -> Self;
+
+	/// Same as `Self::from_float`.
+	#[deprecated = "Use from_float instead"]
+	#[cfg(feature = "std")]
+	fn from_fraction(x: f64) -> Self { Self::from_float(x) }
 
 	/// Approximate the fraction `p/q` into a per-thing fraction. This will never overflow.
 	///
@@ -219,16 +226,28 @@ pub trait PerThing:
 	/// # fn main () {
 	/// // 989/100 is technically closer to 99%.
 	/// assert_eq!(
-	/// 		Percent::from_rational_approximation(989u64, 1000),
+	/// 		Percent::from_rational(989u64, 1000),
 	/// 		Percent::from_parts(98),
 	/// 	);
 	/// # }
 	/// ```
-	fn from_rational_approximation<N>(p: N, q: N) -> Self
+	fn from_rational<N>(p: N, q: N) -> Self
 	where
 		N: Clone + Ord + TryInto<Self::Inner> + TryInto<Self::Upper> +
 			ops::Div<N, Output=N> + ops::Rem<N, Output=N> + ops::Add<N, Output=N> + Unsigned,
 		Self::Inner: Into<N>;
+
+	/// Same as `Self::from_rational`.
+	#[deprecated = "Use from_rational instead"]
+	fn from_rational_approximation<N>(p: N, q: N) -> Self
+		where
+			N: Clone + Ord + TryInto<Self::Inner> + TryInto<Self::Upper>
+			+ ops::Div<N, Output=N> + ops::Rem<N, Output=N> + ops::Add<N, Output=N> + Unsigned
+			+ Zero + One,
+			Self::Inner: Into<N>,
+	{
+		Self::from_rational(p, q)
+	}
 }
 
 /// The rounding method to use.
@@ -369,11 +388,11 @@ macro_rules! implement_per_thing {
 
 			/// NOTE: saturate to 0 or 1 if x is beyond `[0, 1]`
 			#[cfg(feature = "std")]
-			fn from_fraction(x: f64) -> Self {
+			fn from_float(x: f64) -> Self {
 				Self::from_parts((x.max(0.).min(1.) * $max as f64) as Self::Inner)
 			}
 
-			fn from_rational_approximation<N>(p: N, q: N) -> Self
+			fn from_rational<N>(p: N, q: N) -> Self
 			where
 				N: Clone + Ord + TryInto<Self::Inner> + TryInto<Self::Upper>
 				 + ops::Div<N, Output=N> + ops::Rem<N, Output=N> + ops::Add<N, Output=N> + Unsigned
@@ -471,20 +490,31 @@ macro_rules! implement_per_thing {
 				PerThing::square(self)
 			}
 
-			/// See [`PerThing::from_fraction`].
+			/// See [`PerThing::from_float`].
 			#[cfg(feature = "std")]
-			pub fn from_fraction(x: f64) -> Self {
-				<Self as PerThing>::from_fraction(x)
+			pub fn from_float(x: f64) -> Self {
+				<Self as PerThing>::from_float(x)
 			}
 
-			/// See [`PerThing::from_rational_approximation`].
+			/// See [`PerThing::from_rational`].
+			#[deprecated = "Use `PerThing::from_rational` instead"]
 			pub fn from_rational_approximation<N>(p: N, q: N) -> Self
 				where N: Clone + Ord + TryInto<$type> +
 					TryInto<$upper_type> + ops::Div<N, Output=N> + ops::Rem<N, Output=N> +
 					ops::Add<N, Output=N> + Unsigned,
 					$type: Into<N>,
 			{
-				<Self as PerThing>::from_rational_approximation(p, q)
+				<Self as PerThing>::from_rational(p, q)
+			}
+
+			/// See [`PerThing::from_rational`].
+			pub fn from_rational<N>(p: N, q: N) -> Self
+				where N: Clone + Ord + TryInto<$type> +
+					TryInto<$upper_type> + ops::Div<N, Output=N> + ops::Rem<N, Output=N> +
+					ops::Add<N, Output=N> + Unsigned,
+					$type: Into<N>,
+			{
+				<Self as PerThing>::from_rational(p, q)
 			}
 
 			/// See [`PerThing::mul_floor`].
@@ -561,37 +591,13 @@ macro_rules! implement_per_thing {
 			/// Saturating multiply. Compute `self * rhs`, saturating at the numeric bounds instead of
 			/// overflowing. This operation is lossy.
 			fn saturating_mul(self, rhs: Self) -> Self {
-				let a = self.0 as $upper_type;
-				let b = rhs.0 as $upper_type;
-				let m = <$upper_type>::from($max);
-				let parts = a * b / m;
-				// This will always fit into $type.
-				Self::from_parts(parts as $type)
+				self * rhs
 			}
 
 			/// Saturating exponentiation. Computes `self.pow(exp)`, saturating at the numeric
 			/// bounds instead of overflowing. This operation is lossy.
 			fn saturating_pow(self, exp: usize) -> Self {
-				if self.is_zero() || self.is_one() {
-					self
-				} else {
-					let p = <$name as PerThing>::Upper::from(self.deconstruct());
-					let q = <$name as PerThing>::Upper::from(Self::ACCURACY);
-					let mut s = Self::one();
-					for _ in 0..exp {
-						if s.is_zero() {
-							break;
-						} else {
-							// x^2 always fits in Self::Upper if x fits in Self::Inner.
-							// Verified by a test.
-							s = Self::from_rational_approximation(
-								<$name as PerThing>::Upper::from(s.deconstruct()) * p,
-								q * q,
-							);
-						}
-					}
-					s
-				}
+				self.pow(exp)
 			}
 		}
 
@@ -607,7 +613,7 @@ macro_rules! implement_per_thing {
 			}
 		}
 
-		impl crate::traits::Bounded for $name {
+		impl Bounded for $name {
 			fn min_value() -> Self {
 				<Self as PerThing>::zero()
 			}
@@ -617,13 +623,48 @@ macro_rules! implement_per_thing {
 			}
 		}
 
+		impl ops::Mul for $name {
+			type Output = Self;
+
+			fn mul(self, rhs: Self) -> Self::Output {
+				let a = self.0 as $upper_type;
+				let b = rhs.0 as $upper_type;
+				let m = <$upper_type>::from($max);
+				let parts = a * b / m;
+				// This will always fit into $type.
+				Self::from_parts(parts as $type)
+			}
+		}
+
+		impl Pow<usize> for $name {
+			type Output = Self;
+
+			fn pow(self, exp: usize) -> Self::Output {
+				if exp == 0 || self.is_one() {
+					return Self::one()
+				}
+				let mut result = self;
+				let mut exp = exp - 1;
+				while exp > 0 && !result.is_zero() {
+					if exp % 2 == 0 {
+						result = result.square();
+						exp /= 2;
+					} else {
+						result = result * self;
+						exp -= 1;
+					}
+				}
+				result
+			}
+		}
+
 		impl ops::Div for $name {
 			type Output = Self;
 
 			fn div(self, rhs: Self) -> Self::Output {
 				let p = self.0;
 				let q = rhs.0;
-				Self::from_rational_approximation(p, q)
+				Self::from_rational(p, q)
 			}
 		}
 
@@ -648,6 +689,13 @@ macro_rules! implement_per_thing {
 			}
 		}
 
+		impl<N> ops::Div<N> for $name where $type: TryFrom<N> {
+			type Output = Self;
+			fn div(self, b: N) -> Self::Output {
+				<$type>::try_from(b).map_or(Self::zero(), |d| Self::from_parts(self.0 / d))
+			}
+		}
+
 		#[cfg(test)]
 		mod $test_mod {
 			use codec::{Encode, Decode};
@@ -657,13 +705,13 @@ macro_rules! implement_per_thing {
 			#[test]
 			fn macro_expanded_correctly() {
 				// needed for the `from_percent` to work. UPDATE: this is no longer needed; yet note
-				// that tests that use percentage or fractions such as $name::from_fraction(0.2) to
+				// that tests that use percentage or fractions such as $name::from_float(0.2) to
 				// create values will most likely be inaccurate when used with per_things that are
 				// not multiples of 100.
 				// assert!($max >= 100);
 				// assert!($max % 100 == 0);
 
-				// needed for `from_rational_approximation`
+				// needed for `from_rational`
 				assert!(2 * ($max as $upper_type) < <$upper_type>::max_value());
 				assert!(<$upper_type>::from($max) < <$upper_type>::max_value());
 
@@ -737,11 +785,11 @@ macro_rules! implement_per_thing {
 				assert_eq!($name::from_percent(100), $name::from_parts($max));
 				assert_eq!($name::from_percent(200), $name::from_parts($max));
 
-				assert_eq!($name::from_fraction(0.0), $name::from_parts(Zero::zero()));
-				assert_eq!($name::from_fraction(0.1), $name::from_parts($max / 10));
-				assert_eq!($name::from_fraction(1.0), $name::from_parts($max));
-				assert_eq!($name::from_fraction(2.0), $name::from_parts($max));
-				assert_eq!($name::from_fraction(-1.0), $name::from_parts(Zero::zero()));
+				assert_eq!($name::from_float(0.0), $name::from_parts(Zero::zero()));
+				assert_eq!($name::from_float(0.1), $name::from_parts($max / 10));
+				assert_eq!($name::from_float(1.0), $name::from_parts($max));
+				assert_eq!($name::from_float(2.0), $name::from_parts($max));
+				assert_eq!($name::from_float(-1.0), $name::from_parts(Zero::zero()));
 			}
 
 			#[test]
@@ -763,7 +811,7 @@ macro_rules! implement_per_thing {
 				($num_type:tt) => {
 					// multiplication from all sort of from_percent
 					assert_eq!(
-						$name::from_fraction(1.0) * $num_type::max_value(),
+						$name::from_float(1.0) * $num_type::max_value(),
 						$num_type::max_value()
 					);
 					if $max % 100 == 0 {
@@ -773,7 +821,7 @@ macro_rules! implement_per_thing {
 							1,
 						);
 						assert_eq!(
-							$name::from_fraction(0.5) * $num_type::max_value(),
+							$name::from_float(0.5) * $num_type::max_value(),
 							$num_type::max_value() / 2,
 						);
 						assert_eq_error_rate!(
@@ -783,30 +831,30 @@ macro_rules! implement_per_thing {
 						);
 					} else {
 						assert_eq!(
-							$name::from_fraction(0.99) * <$num_type>::max_value(),
+							$name::from_float(0.99) * <$num_type>::max_value(),
 							(
 								(
-									u256ify!($name::from_fraction(0.99).0) *
+									u256ify!($name::from_float(0.99).0) *
 									u256ify!(<$num_type>::max_value()) /
 									u256ify!($max)
 								).as_u128()
 							) as $num_type,
 						);
 						assert_eq!(
-							$name::from_fraction(0.50) * <$num_type>::max_value(),
+							$name::from_float(0.50) * <$num_type>::max_value(),
 							(
 								(
-									u256ify!($name::from_fraction(0.50).0) *
+									u256ify!($name::from_float(0.50).0) *
 									u256ify!(<$num_type>::max_value()) /
 									u256ify!($max)
 								).as_u128()
 							) as $num_type,
 						);
 						assert_eq!(
-							$name::from_fraction(0.01) * <$num_type>::max_value(),
+							$name::from_float(0.01) * <$num_type>::max_value(),
 							(
 								(
-									u256ify!($name::from_fraction(0.01).0) *
+									u256ify!($name::from_float(0.01).0) *
 									u256ify!(<$num_type>::max_value()) /
 									u256ify!($max)
 								).as_u128()
@@ -814,7 +862,7 @@ macro_rules! implement_per_thing {
 						);
 					}
 
-					assert_eq!($name::from_fraction(0.0) * $num_type::max_value(), 0);
+					assert_eq!($name::from_float(0.0) * $num_type::max_value(), 0);
 
 					// // multiplication with bounds
 					assert_eq!($name::one() * $num_type::max_value(), $num_type::max_value());
@@ -828,7 +876,7 @@ macro_rules! implement_per_thing {
 
 				// accuracy test
 				assert_eq!(
-					$name::from_rational_approximation(1 as $type, 3) * 30 as $type,
+					$name::from_rational(1 as $type, 3) * 30 as $type,
 					10,
 				);
 
@@ -837,10 +885,10 @@ macro_rules! implement_per_thing {
 
 			#[test]
 			fn per_thing_mul_rounds_to_nearest_number() {
-				assert_eq!($name::from_fraction(0.33) * 10u64, 3);
-				assert_eq!($name::from_fraction(0.34) * 10u64, 3);
-				assert_eq!($name::from_fraction(0.35) * 10u64, 3);
-				assert_eq!($name::from_fraction(0.36) * 10u64, 4);
+				assert_eq!($name::from_float(0.33) * 10u64, 3);
+				assert_eq!($name::from_float(0.34) * 10u64, 3);
+				assert_eq!($name::from_float(0.35) * 10u64, 3);
+				assert_eq!($name::from_float(0.36) * 10u64, 4);
 			}
 
 			#[test]
@@ -858,33 +906,33 @@ macro_rules! implement_per_thing {
 				($num_type:tt) => {
 					// within accuracy boundary
 					assert_eq!(
-						$name::from_rational_approximation(1 as $num_type, 0),
+						$name::from_rational(1 as $num_type, 0),
 						$name::one(),
 					);
 					assert_eq!(
-						$name::from_rational_approximation(1 as $num_type, 1),
+						$name::from_rational(1 as $num_type, 1),
 						$name::one(),
 					);
 					assert_eq_error_rate!(
-						$name::from_rational_approximation(1 as $num_type, 3).0,
+						$name::from_rational(1 as $num_type, 3).0,
 						$name::from_parts($max / 3).0,
 						2
 					);
 					assert_eq!(
-						$name::from_rational_approximation(1 as $num_type, 10),
-						$name::from_fraction(0.10),
+						$name::from_rational(1 as $num_type, 10),
+						$name::from_float(0.10),
 					);
 					assert_eq!(
-						$name::from_rational_approximation(1 as $num_type, 4),
-						$name::from_fraction(0.25),
+						$name::from_rational(1 as $num_type, 4),
+						$name::from_float(0.25),
 					);
 					assert_eq!(
-						$name::from_rational_approximation(1 as $num_type, 4),
-						$name::from_rational_approximation(2 as $num_type, 8),
+						$name::from_rational(1 as $num_type, 4),
+						$name::from_rational(2 as $num_type, 8),
 					);
 					// no accurate anymore but won't overflow.
 					assert_eq_error_rate!(
-						$name::from_rational_approximation(
+						$name::from_rational(
 							$num_type::max_value() - 1,
 							$num_type::max_value()
 						).0 as $upper_type,
@@ -892,7 +940,7 @@ macro_rules! implement_per_thing {
 						2,
 					);
 					assert_eq_error_rate!(
-						$name::from_rational_approximation(
+						$name::from_rational(
 							$num_type::max_value() / 3,
 							$num_type::max_value()
 						).0 as $upper_type,
@@ -900,7 +948,7 @@ macro_rules! implement_per_thing {
 						2,
 					);
 					assert_eq!(
-						$name::from_rational_approximation(1, $num_type::max_value()),
+						$name::from_rational(1, $num_type::max_value()),
 						$name::zero(),
 					);
 				};
@@ -914,28 +962,28 @@ macro_rules! implement_per_thing {
 
 				// almost at the edge
 				assert_eq!(
-					$name::from_rational_approximation(max_value - 1, max_value + 1),
+					$name::from_rational(max_value - 1, max_value + 1),
 					$name::from_parts($max - 2),
 				);
 				assert_eq!(
-					$name::from_rational_approximation(1, $max - 1),
+					$name::from_rational(1, $max - 1),
 					$name::from_parts(1),
 				);
 				assert_eq!(
-					$name::from_rational_approximation(1, $max),
+					$name::from_rational(1, $max),
 					$name::from_parts(1),
 				);
 				assert_eq!(
-					$name::from_rational_approximation(2, 2 * max_value - 1),
+					$name::from_rational(2, 2 * max_value - 1),
 					$name::from_parts(1),
 				);
 				assert_eq!(
-					$name::from_rational_approximation(1, max_value + 1),
+					$name::from_rational(1, max_value + 1),
 					$name::zero(),
 				);
 				assert_eq!(
-					$name::from_rational_approximation(3 * max_value / 2, 3 * max_value),
-					$name::from_fraction(0.5),
+					$name::from_rational(3 * max_value / 2, 3 * max_value),
+					$name::from_float(0.5),
 				);
 
 				$(per_thing_from_rationale_approx_test!($test_units);)*
@@ -943,66 +991,66 @@ macro_rules! implement_per_thing {
 
 			#[test]
 			fn per_things_mul_operates_in_output_type() {
-				// assert_eq!($name::from_fraction(0.5) * 100u32, 50u32);
-				assert_eq!($name::from_fraction(0.5) * 100u64, 50u64);
-				assert_eq!($name::from_fraction(0.5) * 100u128, 50u128);
+				// assert_eq!($name::from_float(0.5) * 100u32, 50u32);
+				assert_eq!($name::from_float(0.5) * 100u64, 50u64);
+				assert_eq!($name::from_float(0.5) * 100u128, 50u128);
 			}
 
 			#[test]
 			fn per_thing_saturating_op_works() {
 				assert_eq_error_rate!(
-					$name::from_fraction(0.5).saturating_add($name::from_fraction(0.4)).0 as $upper_type,
-					$name::from_fraction(0.9).0 as $upper_type,
+					$name::from_float(0.5).saturating_add($name::from_float(0.4)).0 as $upper_type,
+					$name::from_float(0.9).0 as $upper_type,
 					2,
 				);
 				assert_eq_error_rate!(
-					$name::from_fraction(0.5).saturating_add($name::from_fraction(0.5)).0 as $upper_type,
+					$name::from_float(0.5).saturating_add($name::from_float(0.5)).0 as $upper_type,
 					$name::one().0 as $upper_type,
 					2,
 				);
 				assert_eq!(
-					$name::from_fraction(0.6).saturating_add($name::from_fraction(0.5)),
+					$name::from_float(0.6).saturating_add($name::from_float(0.5)),
 					$name::one(),
 				);
 
 				assert_eq_error_rate!(
-					$name::from_fraction(0.6).saturating_sub($name::from_fraction(0.5)).0 as $upper_type,
-					$name::from_fraction(0.1).0 as $upper_type,
+					$name::from_float(0.6).saturating_sub($name::from_float(0.5)).0 as $upper_type,
+					$name::from_float(0.1).0 as $upper_type,
 					2,
 				);
 				assert_eq!(
-					$name::from_fraction(0.6).saturating_sub($name::from_fraction(0.6)),
-					$name::from_fraction(0.0),
+					$name::from_float(0.6).saturating_sub($name::from_float(0.6)),
+					$name::from_float(0.0),
 				);
 				assert_eq!(
-					$name::from_fraction(0.6).saturating_sub($name::from_fraction(0.7)),
-					$name::from_fraction(0.0),
+					$name::from_float(0.6).saturating_sub($name::from_float(0.7)),
+					$name::from_float(0.0),
 				);
 
 				assert_eq_error_rate!(
-					$name::from_fraction(0.5).saturating_mul($name::from_fraction(0.5)).0 as $upper_type,
-					$name::from_fraction(0.25).0 as $upper_type,
+					$name::from_float(0.5).saturating_mul($name::from_float(0.5)).0 as $upper_type,
+					$name::from_float(0.25).0 as $upper_type,
 					2,
 				);
 				assert_eq_error_rate!(
-					$name::from_fraction(0.2).saturating_mul($name::from_fraction(0.2)).0 as $upper_type,
-					$name::from_fraction(0.04).0 as $upper_type,
+					$name::from_float(0.2).saturating_mul($name::from_float(0.2)).0 as $upper_type,
+					$name::from_float(0.04).0 as $upper_type,
 					2,
 				);
 				assert_eq_error_rate!(
-					$name::from_fraction(0.1).saturating_mul($name::from_fraction(0.1)).0 as $upper_type,
-					$name::from_fraction(0.01).0 as $upper_type,
+					$name::from_float(0.1).saturating_mul($name::from_float(0.1)).0 as $upper_type,
+					$name::from_float(0.01).0 as $upper_type,
 					1,
 				);
 			}
 
 			#[test]
 			fn per_thing_square_works() {
-				assert_eq!($name::from_fraction(1.0).square(), $name::from_fraction(1.0));
-				assert_eq!($name::from_fraction(0.5).square(), $name::from_fraction(0.25));
-				assert_eq!($name::from_fraction(0.1).square(), $name::from_fraction(0.01));
+				assert_eq!($name::from_float(1.0).square(), $name::from_float(1.0));
+				assert_eq!($name::from_float(0.5).square(), $name::from_float(0.25));
+				assert_eq!($name::from_float(0.1).square(), $name::from_float(0.01));
 				assert_eq!(
-					$name::from_fraction(0.02).square(),
+					$name::from_float(0.02).square(),
 					$name::from_parts((4 * <$upper_type>::from($max) / 100 / 100) as $type)
 				);
 			}
@@ -1011,30 +1059,30 @@ macro_rules! implement_per_thing {
 			fn per_things_div_works() {
 				// normal
 				assert_eq_error_rate!(
-					($name::from_fraction(0.1) / $name::from_fraction(0.20)).0 as $upper_type,
-					$name::from_fraction(0.50).0 as $upper_type,
+					($name::from_float(0.1) / $name::from_float(0.20)).0 as $upper_type,
+					$name::from_float(0.50).0 as $upper_type,
 					2,
 				);
 				assert_eq_error_rate!(
-					($name::from_fraction(0.1) / $name::from_fraction(0.10)).0 as $upper_type,
-					$name::from_fraction(1.0).0 as $upper_type,
+					($name::from_float(0.1) / $name::from_float(0.10)).0 as $upper_type,
+					$name::from_float(1.0).0 as $upper_type,
 					2,
 				);
 				assert_eq_error_rate!(
-					($name::from_fraction(0.1) / $name::from_fraction(0.0)).0 as $upper_type,
-					$name::from_fraction(1.0).0 as $upper_type,
+					($name::from_float(0.1) / $name::from_float(0.0)).0 as $upper_type,
+					$name::from_float(1.0).0 as $upper_type,
 					2,
 				);
 
 				// will not overflow
 				assert_eq_error_rate!(
-					($name::from_fraction(0.10) / $name::from_fraction(0.05)).0 as $upper_type,
-					$name::from_fraction(1.0).0 as $upper_type,
+					($name::from_float(0.10) / $name::from_float(0.05)).0 as $upper_type,
+					$name::from_float(1.0).0 as $upper_type,
 					2,
 				);
 				assert_eq_error_rate!(
-					($name::from_fraction(1.0) / $name::from_fraction(0.5)).0 as $upper_type,
-					$name::from_fraction(1.0).0 as $upper_type,
+					($name::from_float(1.0) / $name::from_float(0.5)).0 as $upper_type,
+					$name::from_float(1.0).0 as $upper_type,
 					2,
 				);
 			}
