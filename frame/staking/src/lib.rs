@@ -794,7 +794,7 @@ pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
 
 	/// This flag is ued to enable/disable the dynamic damping of the validator set.
 	/// 
-	/// It is managed by calling `dynamic_damping_validator_count`
+	/// It is managed by calling `dynamic_damping_validator_count`.
 	type DynamicDamping: Get<bool>;
 
 	/// Convert a balance into a number used for election calculation. This must fit into a `u64`
