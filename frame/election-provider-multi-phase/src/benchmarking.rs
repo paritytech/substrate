@@ -115,7 +115,7 @@ fn solution_with_size<T: Config>(
 	let cache = helpers::generate_voter_cache::<T>(&all_voters);
 	let stake_of = helpers::stake_of_fn::<T>(&all_voters, &cache);
 	let voter_index = helpers::voter_index_fn::<T>(&cache);
-	let target_index = helpers::target_index_fn_linear::<T>(&targets);
+	let target_index = helpers::target_index_fn::<T>(&targets);
 	let voter_at = helpers::voter_at_fn::<T>(&all_voters);
 	let target_at = helpers::target_at_fn::<T>(&targets);
 
