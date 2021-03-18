@@ -457,7 +457,7 @@ impl frame_support::traits::PalletInfo for Runtime {
 		if type_id == sp_std::any::TypeId::of::<pallet_timestamp::Pallet<Runtime>>() {
 			return Some(1)
 		}
-		if type_id == sp_std::any::TypeId::of::<pallet_babe::Module<Runtime>>() {
+		if type_id == sp_std::any::TypeId::of::<pallet_babe::Pallet<Runtime>>() {
 			return Some(2)
 		}
 
@@ -471,7 +471,7 @@ impl frame_support::traits::PalletInfo for Runtime {
 		if type_id == sp_std::any::TypeId::of::<pallet_timestamp::Pallet<Runtime>>() {
 			return Some("Timestamp")
 		}
-		if type_id == sp_std::any::TypeId::of::<pallet_babe::Module<Runtime>>() {
+		if type_id == sp_std::any::TypeId::of::<pallet_babe::Pallet<Runtime>>() {
 			return Some("Babe")
 		}
 
@@ -779,21 +779,21 @@ cfg_if! {
 						c: (3, 10),
 						genesis_authorities: system::authorities()
 							.into_iter().map(|x|(x, 1)).collect(),
-						randomness: <pallet_babe::Module<Runtime>>::randomness(),
+						randomness: <pallet_babe::Pallet<Runtime>>::randomness(),
 						allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 					}
 				}
 
 				fn current_epoch_start() -> Slot {
-					<pallet_babe::Module<Runtime>>::current_epoch_start()
+					<pallet_babe::Pallet<Runtime>>::current_epoch_start()
 				}
 
 				fn current_epoch() -> sp_consensus_babe::Epoch {
-					<pallet_babe::Module<Runtime>>::current_epoch()
+					<pallet_babe::Pallet<Runtime>>::current_epoch()
 				}
 
 				fn next_epoch() -> sp_consensus_babe::Epoch {
-					<pallet_babe::Module<Runtime>>::next_epoch()
+					<pallet_babe::Pallet<Runtime>>::next_epoch()
 				}
 
 				fn submit_report_equivocation_unsigned_extrinsic(
@@ -1037,21 +1037,21 @@ cfg_if! {
 						c: (3, 10),
 						genesis_authorities: system::authorities()
 							.into_iter().map(|x|(x, 1)).collect(),
-						randomness: <pallet_babe::Module<Runtime>>::randomness(),
+						randomness: <pallet_babe::Pallet<Runtime>>::randomness(),
 						allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 					}
 				}
 
 				fn current_epoch_start() -> Slot {
-					<pallet_babe::Module<Runtime>>::current_epoch_start()
+					<pallet_babe::Pallet<Runtime>>::current_epoch_start()
 				}
 
 				fn current_epoch() -> sp_consensus_babe::Epoch {
-					<pallet_babe::Module<Runtime>>::current_epoch()
+					<pallet_babe::Pallet<Runtime>>::current_epoch()
 				}
 
 				fn next_epoch() -> sp_consensus_babe::Epoch {
-					<pallet_babe::Module<Runtime>>::next_epoch()
+					<pallet_babe::Pallet<Runtime>>::next_epoch()
 				}
 
 				fn submit_report_equivocation_unsigned_extrinsic(
