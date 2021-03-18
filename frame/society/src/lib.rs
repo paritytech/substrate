@@ -1411,7 +1411,8 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 					Self::bump_payout(winner, maturity, total_slash);
 				} else {
 					// Move the slashed amount back from payouts account to local treasury.
-					let res = T::Currency::transfer(&Self::payouts(), &Self::account_id(), total_slash, AllowDeath);
+					let res = T::Currency::transfer(&Self::payouts(), &Self::account_id(),
+						total_slash, AllowDeath);
 					debug_assert!(res.is_ok());
 				}
 			}
@@ -1423,7 +1424,8 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 
 				// this should never fail since we ensure we can afford the payouts in a previous
 				// block, but there's not much we can do to recover if it fails anyway.
-				let res = T::Currency::transfer(&Self::account_id(), &Self::payouts(), total_payouts, AllowDeath);
+				let res = T::Currency::transfer(&Self::account_id(), &Self::payouts(),
+					total_payouts, AllowDeath);
 				debug_assert!(res.is_ok());
 			}
 

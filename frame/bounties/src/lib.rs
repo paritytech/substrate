@@ -435,7 +435,8 @@ decl_module! {
 								} else {
 									// Else this is the curator, willingly giving up their role.
 									// Give back their deposit.
-									let err_amount = T::Currency::unreserve(&curator, bounty.curator_deposit);
+									let err_amount = T::Currency::unreserve(&curator,
+										bounty.curator_deposit);
 									debug_assert!(err_amount.is_zero());
 									// Continue to change bounty status below...
 								}
