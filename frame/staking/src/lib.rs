@@ -1218,6 +1218,14 @@ decl_module! {
 
 		fn deposit_event() = default;
 
+		fn on_runtime_upgrade() -> Weight {
+			if StorageVersion::get() == Releases::V5_0_0 {
+				migrations::v6::migrate::<T>()
+			} else {
+				T::DbWeight::get().reads(1)
+			}
+		}
+
 		fn on_finalize() {
 			// Set the start of the first era.
 			if let Some(mut active_era) = Self::active_era() {
@@ -1249,14 +1257,6 @@ decl_module! {
 				.checked_mul(<OffchainAccuracy>::one().deconstruct().try_into().unwrap())
 				.is_some()
 			);
-		}
-
-		fn on_runtime_upgrade() -> Weight {
-			if StorageVersion::get() == Releases::V5_0_0 {
-				migrations::v6::migrate::<T>()
-			} else {
-				T::DbWeight::get().reads(1)
-			}
 		}
 
 		/// Take the origin account as a stash and lock up `value` of its balance. `controller` will
