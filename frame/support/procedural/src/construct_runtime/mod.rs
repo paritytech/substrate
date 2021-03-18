@@ -331,7 +331,7 @@ fn decl_runtime_metadata<'a>(
 			)
 		})
 		.collect::<Vec<_>>();
-	let modules_tokens_vnext = modules_tokens.clone();
+	let pallets_tokens_vnext = pallets_tokens.clone();
 	quote!(
 		#scrate::impl_runtime_metadata!{
 			for #runtime with pallets where Extrinsic = #extrinsic
@@ -339,8 +339,8 @@ fn decl_runtime_metadata<'a>(
 		}
 
 		#scrate::impl_runtime_metadata_vnext!{
-			for #runtime with modules where Extrinsic = #extrinsic
-				#(#modules_tokens_vnext)*
+			for #runtime with pallets where Extrinsic = #extrinsic
+				#(#pallets_tokens_vnext)*
 		}
 	)
 }

@@ -20,7 +20,7 @@ pub use frame_metadata2;
 #[macro_export]
 macro_rules! impl_runtime_metadata_vnext {
 	(
-		for $runtime:ident with modules where Extrinsic = $ext:ident
+		for $runtime:ident with pallets where Extrinsic = $ext:ident
 			$( $rest:tt )*
 	) => {
 		impl $runtime {
