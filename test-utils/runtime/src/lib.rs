@@ -762,7 +762,10 @@ cfg_if! {
 			}
 
 			impl sp_consensus_aura::AuraApi<Block, AuraId> for Runtime {
-				fn slot_duration() -> u64 { 1000 }
+				fn slot_duration() -> sp_consensus_aura::SlotDuration {
+					sp_consensus_aura::SlotDuration::from_millis(1000)
+				}
+
 				fn authorities() -> Vec<AuraId> {
 					system::authorities().into_iter().map(|a| {
 						let authority: sr25519::Public = a.into();
@@ -1020,7 +1023,10 @@ cfg_if! {
 			}
 
 			impl sp_consensus_aura::AuraApi<Block, AuraId> for Runtime {
-				fn slot_duration() -> u64 { 1000 }
+				fn slot_duration() -> sp_consensus_aura::SlotDuration {
+					sp_consensus_aura::SlotDuration::from_millis(1000)
+				}
+
 				fn authorities() -> Vec<AuraId> {
 					system::authorities().into_iter().map(|a| {
 						let authority: sr25519::Public = a.into();
