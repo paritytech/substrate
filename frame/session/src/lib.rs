@@ -445,7 +445,7 @@ decl_storage! {
 				assert!(
 					frame_system::Pallet::<T>::inc_consumers(&account).is_ok(),
 					"Account ({:?}) does not exist at genesis to set key. Account not endowed?",
-					val,
+					account,
 				);
 			}
 
