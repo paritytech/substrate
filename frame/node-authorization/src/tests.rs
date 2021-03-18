@@ -356,7 +356,7 @@ fn get_authorized_nodes_works() {
 			BTreeSet::from_iter(vec![test_node(5), test_node(15), test_node(25)])
 		);
 
-		let mut authorized_nodes = Module::<Test>::get_authorized_nodes(&test_node(20));
+		let mut authorized_nodes = Pallet::<Test>::get_authorized_nodes(&test_node(20));
 		authorized_nodes.sort();
 		assert_eq!(
 			authorized_nodes,

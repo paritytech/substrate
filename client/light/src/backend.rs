@@ -30,7 +30,7 @@ use sp_core::storage::{well_known_keys, ChildInfo};
 use sp_core::offchain::storage::InMemOffchainStorage;
 use sp_state_machine::{
 	Backend as StateBackend, TrieBackend, InMemoryBackend, ChangesTrieTransaction,
-	StorageCollection, ChildStorageCollection,
+	StorageCollection, ChildStorageCollection, IndexOperation,
 };
 use sp_runtime::{generic::BlockId, Justification, Justifications, Storage};
 use sp_runtime::traits::{Block as BlockT, NumberFor, Zero, Header, HashFor};
@@ -372,6 +372,11 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 
 	fn mark_head(&mut self, block: BlockId<Block>) -> ClientResult<()> {
 		self.set_head = Some(block);
+		Ok(())
+	}
+
+	fn update_transaction_index(&mut self, _index: Vec<IndexOperation>) -> sp_blockchain::Result<()> {
+		// noop for the light client
 		Ok(())
 	}
 }

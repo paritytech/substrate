@@ -1304,7 +1304,7 @@ decl_module! {
 				Err(Error::<T>::InsufficientValue)?
 			}
 
-			system::Module::<T>::inc_consumers(&stash).map_err(|_| Error::<T>::BadState)?;
+			system::Pallet::<T>::inc_consumers(&stash).map_err(|_| Error::<T>::BadState)?;
 
 			// You're auto-bonded forever, here. We might improve this by only bonding when
 			// you actually validate/nominate and remove once you unbond __everything__.
@@ -2422,7 +2422,7 @@ impl<T: Config> Module<T> {
 		<Validators<T>>::remove(stash);
 		<Nominators<T>>::remove(stash);
 
-		system::Module::<T>::dec_consumers(stash);
+		system::Pallet::<T>::dec_consumers(stash);
 
 		Ok(())
 	}

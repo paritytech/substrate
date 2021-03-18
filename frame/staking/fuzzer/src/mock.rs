@@ -15,32 +15,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Mock file for offences benchmarking.
+//! Mock file for staking fuzzing.
 
-#![cfg(test)]
-
-use super::*;
-use frame_support::{
-	parameter_types,
-	weights::{Weight, constants::WEIGHT_PER_SECOND},
-};
-use frame_system as system;
-use sp_runtime::{
-	traits::IdentityLookup,
-	testing::{Header, UintAuthorityId},
-};
-use frame_election_provider_support::onchain;
-use pallet_session::historical as pallet_session_historical;
+use frame_support::parameter_types;
 
 type AccountId = u64;
 type AccountIndex = u32;
 type BlockNumber = u64;
 type Balance = u64;
 
-parameter_types! {
-	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(2 * WEIGHT_PER_SECOND);
-}
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
+
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>, ValidateUnsigned},
+		Indices: pallet_indices::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
+	}
+);
 
 impl frame_system::Config for Test {
 	type BaseCallFilter = ();
@@ -54,7 +53,7 @@ impl frame_system::Config for Test {
 	type Hash = sp_core::H256;
 	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = AccountId;
-	type Lookup = IdentityLookup<Self::AccountId>;
+	type Lookup = Indices;
 	type Header = sp_runtime::testing::Header;
 	type Event = Event;
 	type BlockHashCount = ();
@@ -78,7 +77,13 @@ impl pallet_balances::Config for Test {
 	type AccountStore = System;
 	type WeightInfo = ();
 }
-
+impl pallet_indices::Config for Test {
+	type AccountIndex = AccountIndex;
+	type Event = Event;
+	type Currency = Balances;
+	type Deposit = ();
+	type WeightInfo = ();
+}
 parameter_types! {
 	pub const MinimumPeriod: u64 = 5;
 }
@@ -114,16 +119,11 @@ impl pallet_session::SessionHandler<AccountId> for TestSessionHandler {
 	fn on_disabled(_: usize) {}
 }
 
-parameter_types! {
-	pub const Period: u64 = 1;
-	pub const Offset: u64 = 0;
-}
-
 impl pallet_session::Config for Test {
 	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Test, Staking>;
 	type Keys = SessionKeys;
-	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
-	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
+	type ShouldEndSession = pallet_session::PeriodicSessions<(), ()>;
+	type NextSessionRotation = pallet_session::PeriodicSessions<(), ()>;
 	type SessionHandler = TestSessionHandler;
 	type Event = Event;
 	type ValidatorId = AccountId;
@@ -131,7 +131,6 @@ impl pallet_session::Config for Test {
 	type DisabledValidatorsThreshold = ();
 	type WeightInfo = ();
 }
-
 pallet_staking_reward_curve::build! {
 	const I_NPOS: sp_runtime::curve::PiecewiseLinear<'static> = curve!(
 		min_inflation: 0_025_000,
@@ -145,16 +144,32 @@ pallet_staking_reward_curve::build! {
 parameter_types! {
 	pub const RewardCurve: &'static sp_runtime::curve::PiecewiseLinear<'static> = &I_NPOS;
 	pub const MaxNominatorRewardedPerValidator: u32 = 64;
+	pub const MaxIterations: u32 = 20;
 }
 
 pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
 
-impl onchain::Config for Test {
-	type AccountId = AccountId;
-	type BlockNumber = BlockNumber;
-	type BlockWeights = ();
-	type Accuracy = Perbill;
-	type DataProvider = Staking;
+impl<C> frame_system::offchain::SendTransactionTypes<C> for Test
+where
+	Call: From<C>,
+{
+	type OverarchingCall = Call;
+	type Extrinsic = Extrinsic;
+}
+
+pub struct MockElectionProvider;
+impl frame_election_provider_support::ElectionProvider<AccountId, BlockNumber>
+	for MockElectionProvider
+{
+	type Error = ();
+	type DataProvider = pallet_staking::Module<Test>;
+
+	fn elect() -> Result<
+		(sp_npos_elections::Supports<AccountId>, frame_support::weights::Weight),
+		Self::Error
+	> {
+		Err(())
+	}
 }
 
 impl pallet_staking::Config for Test {
@@ -172,59 +187,13 @@ impl pallet_staking::Config for Test {
 	type SessionInterface = Self;
 	type EraPayout = pallet_staking::ConvertCurve<RewardCurve>;
 	type NextNewSession = Session;
+	type ElectionLookahead = ();
+	type Call = Call;
+	type MaxIterations = MaxIterations;
+	type MinSolutionScoreBump = ();
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
-	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
-	type WeightInfo = ();
-}
-
-impl pallet_im_online::Config for Test {
-	type AuthorityId = UintAuthorityId;
-	type Event = Event;
-	type ValidatorSet = Historical;
-	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
-	type ReportUnresponsiveness = Offences;
 	type UnsignedPriority = ();
+	type OffchainSolutionWeightLimit = ();
 	type WeightInfo = ();
-}
-
-parameter_types! {
-	pub OffencesWeightSoftLimit: Weight = Perbill::from_percent(60) * BlockWeights::get().max_block;
-}
-
-impl pallet_offences::Config for Test {
-	type Event = Event;
-	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
-	type OnOffenceHandler = Staking;
-	type WeightSoftLimit = OffencesWeightSoftLimit;
-}
-
-impl<T> frame_system::offchain::SendTransactionTypes<T> for Test where Call: From<T> {
-	type Extrinsic = Extrinsic;
-	type OverarchingCall = Call;
-}
-
-impl crate::Config for Test {}
-
-pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, Call, u64, ()>;
-
-frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
-	{
-		System: system::{Pallet, Call, Event<T>},
-		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
-		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
-		ImOnline: pallet_im_online::{Pallet, Call, Storage, Event<T>, ValidateUnsigned, Config<T>},
-		Offences: pallet_offences::{Pallet, Call, Storage, Event},
-		Historical: pallet_session_historical::{Pallet},
-	}
-);
-
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	sp_io::TestExternalities::new(t)
+	type ElectionProvider = MockElectionProvider;
 }

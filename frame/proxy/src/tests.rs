@@ -38,10 +38,10 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
-		Proxy: proxy::{Module, Call, Storage, Event<T>},
-		Utility: pallet_utility::{Module, Call, Event},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Proxy: proxy::{Pallet, Call, Storage, Event<T>},
+		Utility: pallet_utility::{Pallet, Call, Event},
 	}
 );
 
@@ -164,7 +164,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 }
 
 fn last_event() -> Event {
-	system::Module::<Test>::events().pop().expect("Event expected").event
+	system::Pallet::<Test>::events().pop().expect("Event expected").event
 }
 
 fn expect_event<E: Into<Event>>(e: E) {
@@ -172,7 +172,7 @@ fn expect_event<E: Into<Event>>(e: E) {
 }
 
 fn last_events(n: usize) -> Vec<Event> {
-	system::Module::<Test>::events().into_iter().rev().take(n).rev().map(|e| e.event).collect()
+	system::Pallet::<Test>::events().into_iter().rev().take(n).rev().map(|e| e.event).collect()
 }
 
 fn expect_events(e: Vec<Event>) {
@@ -271,7 +271,7 @@ fn delayed_requires_pre_announcement() {
 		assert_noop!(Proxy::proxy_announced(Origin::signed(0), 2, 1, None, call.clone()), e);
 		let call_hash = BlakeTwo256::hash_of(&call);
 		assert_ok!(Proxy::announce(Origin::signed(2), 1, call_hash));
-		system::Module::<Test>::set_block_number(2);
+		system::Pallet::<Test>::set_block_number(2);
 		assert_ok!(Proxy::proxy_announced(Origin::signed(0), 2, 1, None, call.clone()));
 	});
 }
@@ -289,7 +289,7 @@ fn proxy_announced_removes_announcement_and_returns_deposit() {
 		let e = Error::<Test>::Unannounced;
 		assert_noop!(Proxy::proxy_announced(Origin::signed(0), 3, 1, None, call.clone()), e);
 
-		system::Module::<Test>::set_block_number(2);
+		system::Pallet::<Test>::set_block_number(2);
 		assert_ok!(Proxy::proxy_announced(Origin::signed(0), 3, 1, None, call.clone()));
 		assert_eq!(Announcements::<Test>::get(3), (vec![Announcement {
 			real: 2,

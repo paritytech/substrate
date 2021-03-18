@@ -52,9 +52,9 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: frame_system::{Module, Call, Event<T>, Config},
-		Balances: pallet_balances::{Module, Call, Event<T>, Config<T>},
-		MultiPhase: multi_phase::{Module, Call, Event<T>},
+		System: frame_system::{Pallet, Call, Event<T>, Config},
+		Balances: pallet_balances::{Pallet, Call, Event<T>, Config<T>},
+		MultiPhase: multi_phase::{Pallet, Call, Event<T>},
 	}
 );
 
