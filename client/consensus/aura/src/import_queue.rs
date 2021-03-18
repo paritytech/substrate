@@ -30,7 +30,7 @@ use log::{debug, info, trace};
 use prometheus_endpoint::Registry;
 use codec::{Encode, Decode, Codec};
 use sp_consensus::{
-	BlockImport, CanAuthorWith, ForkChoiceStrategy, BlockImportParams,
+	BlockImport, CanAuthorWith, ForkChoiceStrategy, BlockImportParams, SlotData,
 	BlockOrigin, Error as ConsensusError, BlockCheckParams, ImportResult,
 	import_queue::{
 		Verifier, BasicQueue, DefaultImportQueue, BoxJustificationImport,
@@ -284,7 +284,7 @@ impl<B: BlockT, C, P, CAW> Verifier<B> for AuraVerifier<C, P, CAW> where
 							block.clone(),
 							BlockId::Hash(parent_hash),
 							inherent_data,
-							timestamp_now,
+							*timestamp_now,
 						).map_err(|e| e.to_string())?;
 					}
 
@@ -541,7 +541,7 @@ pub fn import_queue<'a, P, Block, I, C, S, CAW>(
 	S: sp_core::traits::SpawnEssentialNamed,
 	CAW: CanAuthorWith<Block> + Send + Sync + 'static,
 {
-	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
+	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.slot_duration())?;
 	initialize_authorities_cache(&*client)?;
 
 	let verifier = AuraVerifier::<_, P, _>::new(
