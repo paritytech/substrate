@@ -145,7 +145,7 @@ impl<T: Config> Pallet<T> {
 		// closures.
 		let cache = helpers::generate_voter_cache::<T>(&voters);
 		let voter_index = helpers::voter_index_fn::<T>(&cache);
-		let target_index = helpers::target_index_fn_linear::<T>(&targets);
+		let target_index = helpers::target_index_fn::<T>(&targets);
 		let voter_at = helpers::voter_at_fn::<T>(&voters);
 		let target_at = helpers::target_at_fn::<T>(&targets);
 		let stake_of = helpers::stake_of_fn::<T>(&voters, &cache);
