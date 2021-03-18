@@ -449,33 +449,22 @@ impl DatabaseType {
 	}
 }
 
+pub(crate) struct JoinInput<'a, 'b>(&'a [u8], &'b [u8]);
 
-pub(crate) struct JoinInput<I1, I2>(I1, I2);
-
-pub(crate) fn join_input<I1: codec::Input, I2: codec::Input>(i1: I1, i2: I2) -> JoinInput<I1, I2> {
+pub(crate) fn join_input<'a, 'b>(i1: &'a[u8], i2: &'b [u8]) -> JoinInput<'a, 'b> {
 	JoinInput(i1, i2)
 }
 
-impl<I1: codec::Input, I2: codec::Input> codec::Input for JoinInput<I1, I2> {
+impl<'a, 'b> codec::Input for JoinInput<'a, 'b> {
 	fn remaining_len(&mut self) -> Result<Option<usize>, codec::Error> {
-		Ok(if let (Some(l1), Some(l2)) = (self.0.remaining_len()?, self.1.remaining_len()?) {
-			Some(l1 + l2)
-		} else {
-			None
-		})
+		Ok(Some(self.0.len() + self.1.len()))
 	}
 
 	fn read(&mut self, into: &mut [u8]) -> Result<(), codec::Error> {
 		let mut read = 0;
-		match self.0.remaining_len()? {
-			Some(l) if l == 0 => {},
-			Some(l) => {
-				read = std::cmp::min(l, into.len());
-				self.0.read(&mut into[..read])?;
-			}
-			None => {
-				return self.0.read(into)
-			}
+		if self.0.len() > 0 {
+			read = std::cmp::min(self.0.len(), into.len());
+			self.0.read(&mut into[..read])?;
 		}
 		if read < into.len() {
 			self.1.read(&mut into[read..])?;
