@@ -333,6 +333,7 @@ pub struct NetworkStatus<B: BlockT> {
 }
 
 /// Provides access to preimported blocks.
+///
 /// A preimported block is one that has been announced, checked and verified
 /// but not yet imported into the chain's backend.
 pub struct VerifiedBlocks<B: BlockT> {
@@ -395,16 +396,18 @@ impl<B: BlockT> VerifiedBlocks<B> {
 	fn preimported_block_body(&self, id: &BlockId<B>) -> Option<Vec<B::Extrinsic>> {
 		match id {
 			BlockId::Hash(h) => {
-				match self.blocks.read().get(h) {
-					Some((block, verified)) if *verified => Some(block.extrinsics().to_vec()),
-					_ => None,
-				}
+				self.blocks
+					.read()
+					.get(h)
+					.filter(|(_, v)| *v)
+					.map(|(b, _)| b.extrinsics().to_vec())
 			},
 			BlockId::Number(n) => {
-				match self.blocks.read().iter().filter(|(_, (b, _))| b.header().number() == n).next() {
-					Some((_, (b, verified))) if *verified => Some(b.extrinsics().to_vec()),
-					_ => None,
-				}
+				self.blocks
+					.read()
+					.iter()
+					.find(|(_, (b, v))| *v && b.header().number() == n)
+					.map(|(_, (b, _))| b.extrinsics().to_vec())
 			}
 		}
 	}
@@ -413,16 +416,14 @@ impl<B: BlockT> VerifiedBlocks<B> {
 	fn verify(&self, id: &BlockId<B>) {
 		match id {
 			BlockId::Hash(h) => {
-				match self.blocks.write().get_mut(h) {
-					Some((_, verified)) => *verified = true,
-					_ => return,
-				};
+				if let Some((_, verified)) = self.blocks.write().get_mut(h) {
+					*verified = true;
+				}
 			},
 			BlockId::Number(n) => {
-				match self.blocks.write().iter_mut().filter(|(_, (b, _))| b.header().number() == n).next() {
-					Some((_, (_, verified))) => *verified = true,
-					_ => return,
-				};
+				if let Some((_, (_, verified))) = self.blocks.write().iter_mut().find(|(_, (b, _))| b.header().number() == n) {
+					*verified = true;
+				}
 			}
 		}
 	}
