@@ -18,7 +18,7 @@
 //! `Structopt`-ready struct for `try-runtime`.
 
 use parity_scale_codec::Decode;
-use std::{fmt::Debug, str::FromStr};
+use std::{fmt::Debug, path::PathBuf, str::FromStr};
 use sc_service::Configuration;
 use sc_cli::{CliConfiguration, ExecutionStrategy, WasmExecutionMethod};
 use sc_executor::NativeExecutor;
@@ -26,6 +26,9 @@ use sc_service::NativeExecutionDispatch;
 use sp_state_machine::StateMachine;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use sp_core::storage::{StorageData, StorageKey, well_known_keys};
+
+// TODO: allow usage of different hashes in cli
+pub type Hash = sp_core::H256;
 
 /// Various commands to try out the new runtime, over configurable states.
 ///
@@ -36,10 +39,6 @@ pub struct TryRuntimeCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: sc_cli::SharedParams,
-
-	/// The state to use to run the migration. Should be a valid FILE or HTTP URI.
-	#[structopt(short, long, default_value = "http://localhost:9933")]
-	pub state: State,
 
 	/// The execution strategy that should be used for benchmarks
 	#[structopt(
@@ -60,31 +59,75 @@ pub struct TryRuntimeCmd {
 		default_value = "Interpreted"
 	)]
 	pub wasm_method: WasmExecutionMethod,
+
+	/// The state to use to run the migration.
+	#[structopt(subcommand)]
+	pub state: State,
 }
+
 
 /// The state to use for a migration dry-run.
-#[derive(Debug)]
+#[derive(Debug, structopt::StructOpt)]
 pub enum State {
-	/// A snapshot. Inner value is a file path.
-	Snap(String),
+	/// Use a snapshot as state to run the migration.
+	Snap {
+		#[structopt(flatten)]
+		cache_params: CacheParams,
+	},
 
-	/// A live chain. Inner value is the HTTP uri.
-	Live(String),
+	/// Use a live chain to run the migration.
+	Live {
+		/// An optional cache file to WRITE to. Not cached if set to `None`.
+		#[structopt(short, long)]
+		cache_file: Option<CacheParams>,
+
+		/// The block number at which to connect. Will be latest finalized head if not provided.
+		#[structopt(short, long)]
+		block_number: Option<Hash>,
+
+		/// The modules to scrape. If empty, entire chain state will be scraped.
+		#[structopt(short, long, require_delimiter = true)]
+		modules: Option<Vec<String>>,
+
+		/// The url to connect to.
+		#[structopt(default_value = "http://localhost:9933", parse(try_from_str = parse_url))]
+		url: String,
+	},
 }
 
-impl FromStr for State {
+fn parse_url(s: &str) -> Result<String, &'static str> {
+	match s.get(..7) {
+		// could use Url crate as well, but lets keep it simple for now.
+		Some("http://") => Ok(s.to_string()),
+		_ => Err("not a valid url"),
+	}
+}
+
+#[derive(Debug, structopt::StructOpt)]
+pub struct CacheParams {
+	/// The directory of the snapshot.
+	#[structopt(short, long, default_value = ".")]
+	directory: String,
+
+	/// The file name of the snapshot.
+	#[structopt(default_value = "CACHE")]
+	file_name: String,
+}
+
+impl FromStr for CacheParams {
 	type Err = &'static str;
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		match s.get(..7) {
-			// could use Url crate as well, but lets keep it simple for now.
-			Some("http://") => Ok(State::Live(s.to_string())),
-			Some("file://") => s
-				.split("//")
-				.collect::<Vec<_>>()
-				.get(1)
-				.map(|s| State::Snap(s.to_string()))
-				.ok_or("invalid file URI"),
-			_ => Err("invalid format. Must be a valid HTTP or File URI"),
+		let p: PathBuf = s.parse().map_err(|_| "invalid path")?;
+		let parent = p.parent();
+		let file_name = p.file_name();
+
+		match file_name {
+			Some(file_name) => Ok(Self {
+				// TODO: maybe don't use to_string_lossy here
+				directory: parent.map(|p| p.to_string_lossy().into()).unwrap_or(".".to_string()),
+				file_name: file_name.to_string_lossy().into()
+			}),
+			None => Err("invalid path"),
 		}
 	}
 }
@@ -123,11 +166,17 @@ impl TryRuntimeCmd {
 		let ext = {
 			use remote_externalities::{Builder, Mode, CacheConfig, OfflineConfig, OnlineConfig};
 			let builder = match &self.state {
-				State::Snap(file_path) => Builder::new().mode(Mode::Offline(OfflineConfig {
-					cache: CacheConfig { name: file_path.into(), ..Default::default() },
+				State::Snap { cache_params: CacheParams { file_name, directory } } => Builder::<Hash>::new().mode(Mode::Offline(OfflineConfig {
+					cache: CacheConfig { name: file_name.into(), directory: directory.into(), ..Default::default() },
 				})),
-				State::Live(http_uri) => Builder::new().mode(Mode::Online(OnlineConfig {
-					uri: http_uri.into(),
+				State::Live { url, cache_file, block_number, modules } => Builder::<Hash>::new().mode(Mode::Online(OnlineConfig {
+					uri: url.into(),
+					cache: cache_file.as_ref().map(|c| CacheConfig {
+						name: c.file_name.clone(),
+						directory: c.directory.clone(),
+					}),
+					modules: modules.clone().unwrap_or(Vec::new()),
+					at: block_number.to_owned(),
 					..Default::default()
 				})),
 			};
