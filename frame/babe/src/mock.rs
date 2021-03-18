@@ -27,7 +27,7 @@ use sp_runtime::{
 };
 use frame_system::InitKind;
 use frame_support::{
-	parameter_types, StorageValue,
+	parameter_types,
 	traits::{KeyOwnerProofSystem, OnInitialize},
 	weights::Weight,
 };
@@ -37,7 +37,7 @@ use sp_consensus_babe::{AuthorityId, AuthorityPair, Slot};
 use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
 use sp_staking::SessionIndex;
 use pallet_staking::EraIndex;
-use sp_election_providers::onchain;
+use frame_election_provider_support::onchain;
 use pallet_session::historical as pallet_session_historical;
 
 type DummyValidatorId = u64;
@@ -187,6 +187,7 @@ parameter_types! {
 impl onchain::Config for Test {
 	type AccountId = <Self as frame_system::Config>::AccountId;
 	type BlockNumber = <Self as frame_system::Config>::BlockNumber;
+	type BlockWeights = ();
 	type Accuracy = Perbill;
 	type DataProvider = Staking;
 }
@@ -204,7 +205,7 @@ impl pallet_staking::Config for Test {
 	type SlashCancelOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type SessionInterface = Self;
 	type UnixTime = pallet_timestamp::Module<Test>;
-	type RewardCurve = RewardCurve;
+	type EraPayout = pallet_staking::ConvertCurve<RewardCurve>;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type NextNewSession = Session;
 	type ElectionLookahead = ElectionLookahead;
@@ -260,7 +261,7 @@ impl Config for Test {
 pub fn go_to_block(n: u64, s: u64) {
 	use frame_support::traits::OnFinalize;
 
-	System::on_finalize(System::block_number());
+	Babe::on_finalize(System::block_number());
 	Session::on_finalize(System::block_number());
 	Staking::on_finalize(System::block_number());
 
@@ -274,14 +275,8 @@ pub fn go_to_block(n: u64, s: u64) {
 	let pre_digest = make_secondary_plain_pre_digest(0, s.into());
 
 	System::initialize(&n, &parent_hash, &pre_digest, InitKind::Full);
-	System::set_block_number(n);
-	Timestamp::set_timestamp(n);
 
-	if s > 1 {
-		CurrentSlot::put(Slot::from(s));
-	}
-
-	System::on_initialize(n);
+	Babe::on_initialize(n);
 	Session::on_initialize(n);
 	Staking::on_initialize(n);
 }
@@ -456,7 +451,7 @@ pub fn generate_equivocation_proof(
 	use sp_consensus_babe::digests::CompatibleDigestItem;
 
 	let current_block = System::block_number();
-	let current_slot = CurrentSlot::get();
+	let current_slot = CurrentSlot::<Test>::get();
 
 	let make_header = || {
 		let parent_hash = System::parent_hash();
