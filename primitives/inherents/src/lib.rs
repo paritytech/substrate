@@ -257,8 +257,10 @@ impl PartialEq for CheckInherentsResult {
 #[cfg(feature = "std")]
 #[async_trait::async_trait]
 pub trait CreateInherentDataProviders<Block: BlockT, ExtraArgs> {
+	/// The inherent data providers that will be created.
 	type InherentDataProviders: InherentDataProvider;
 
+	/// Create the inherent data providers at the given `parent` block using the given `extra_args`.
 	async fn create_inherent_data_providers(
 		&self,
 		parent: Block::Hash,
@@ -458,47 +460,29 @@ mod tests {
 	}
 
 	#[derive(Clone)]
-	struct TestInherentDataProvider {
-		registered: Arc<RwLock<bool>>,
-	}
-
-	impl TestInherentDataProvider {
-		fn new() -> Self {
-			let inst = Self {
-				registered: Default::default(),
-			};
-
-			// just make sure
-			assert!(!inst.is_registered());
-
-			inst
-		}
-
-		fn is_registered(&self) -> bool {
-			*self.registered.read()
-		}
-	}
+	struct TestInherentDataProvider;
 
 	const ERROR_TO_STRING: &str = "Found error!";
 
 	impl InherentDataProvider for TestInherentDataProvider {
-		type Error = Error;
-
 		fn provide_inherent_data(&self, data: &mut InherentData) -> Result<(), Error> {
 			data.put_data(TEST_INHERENT_0, &42)
 		}
 
-		fn try_decode_error(&self, _: &InherentIdentifier, _: &[u8]) -> Option<Self::Error> {
-			Some(ERROR_TO_STRING.into())
+		fn try_handle_error(
+			&self,
+			_: &InherentIdentifier,
+			_: &[u8],
+		) -> TryHandleErrorResult {
+			Some(Box::pin(async move { Err(Box::from(ERROR_TO_STRING)) }))
 		}
 	}
 
 	#[test]
-	fn create_inherent_data_from_all_providers() {
-		let provider = TestInherentDataProvider::new();
-		let providers = StackedInherentDataProvider::new(provider);
+	fn create_inherent_data() {
+		let provider = TestInherentDataProvider;
 
-		let inherent_data = providers.create_inherent_data().unwrap();
+		let inherent_data = provider.create_inherent_data().unwrap();
 
 		assert_eq!(
 			inherent_data.get_data::<u32>(&TEST_INHERENT_0).unwrap().unwrap(),
