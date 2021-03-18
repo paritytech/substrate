@@ -518,14 +518,16 @@ impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<B
 						match Vec::<(Block::Hash, Vec<u8>)>::decode(&mut &body[..]) {
 							Ok(index) => {
 								let extrinsics: ClientResult<Vec<Block::Extrinsic>> = index.into_iter().map(
-									|(hash, mut data)| {
-										if let Some(mut t) = self.indexed_transaction(&hash)? {
-											data.append(&mut t);
-										}
-										Block::Extrinsic::decode(&mut data.as_slice())
-											.map_err(|err| sp_blockchain::Error::Backend(
-													format!("Error decoding extrinsic: {}", err))
-											)
+									|(hash, data)| {
+										let decode_result = if let Some(t) = self.indexed_transaction(&hash)? {
+											let mut input = utils::join_input(data.as_ref(), t.as_ref());
+											Block::Extrinsic::decode(&mut input)
+										} else {
+											Block::Extrinsic::decode(&mut data.as_ref())
+										};
+										decode_result.map_err(|err| sp_blockchain::Error::Backend(
+											format!("Error decoding extrinsic: {}", err))
+										)
 									}
 								).collect();
 								Ok(Some(extrinsics?))
@@ -573,7 +575,7 @@ impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<B
 		Ok(self.db.get(columns::TRANSACTION, hash.as_ref()))
 	}
 
-	fn have_indexed_transaction(&self, hash: &Block::Hash) -> ClientResult<bool> {
+	fn has_indexed_transaction(&self, hash: &Block::Hash) -> ClientResult<bool> {
 		Ok(self.db.contains(columns::TRANSACTION, hash.as_ref()))
 	}
 }
@@ -1586,7 +1588,7 @@ fn apply_state_commit(transaction: &mut Transaction<DbHash>, commit: sc_state_db
 fn apply_index_ops<Block: BlockT>(
 	transaction: &mut Transaction<DbHash>,
 	body: Vec<Block::Extrinsic>,
-	ops: Vec<IndexOperation>
+	ops: Vec<IndexOperation>,
 ) -> Vec<u8> {
 	let mut extrinsic_headers = Vec::with_capacity(body.len());
 	let mut index_map = HashMap::new();

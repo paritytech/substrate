@@ -449,10 +449,47 @@ impl DatabaseType {
 	}
 }
 
+
+pub(crate) struct JoinInput<I1, I2>(I1, I2);
+
+pub(crate) fn join_input<I1: codec::Input, I2: codec::Input>(i1: I1, i2: I2) -> JoinInput<I1, I2> {
+	JoinInput(i1, i2)
+}
+
+impl<I1: codec::Input, I2: codec::Input> codec::Input for JoinInput<I1, I2> {
+	fn remaining_len(&mut self) -> Result<Option<usize>, codec::Error> {
+		Ok(if let (Some(l1), Some(l2)) = (self.0.remaining_len()?, self.1.remaining_len()?) {
+			Some(l1 + l2)
+		} else {
+			None
+		})
+	}
+
+	fn read(&mut self, into: &mut [u8]) -> Result<(), codec::Error> {
+		let mut read = 0;
+		match self.0.remaining_len()? {
+			Some(l) if l == 0 => {},
+			Some(l) => {
+				read = std::cmp::min(l, into.len());
+				self.0.read(&mut into[..read])?;
+			}
+			None => {
+				return self.0.read(into)
+			}
+		}
+		if read < into.len() {
+			self.1.read(&mut into[read..])?;
+		}
+		Ok(())
+	}
+}
+
+
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use sp_runtime::testing::{Block as RawBlock, ExtrinsicWrapper};
+	use codec::Input;
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
 
 	#[test]
@@ -468,5 +505,26 @@ mod tests {
 	fn database_type_as_str_works() {
 		assert_eq!(DatabaseType::Full.as_str(), "full");
 		assert_eq!(DatabaseType::Light.as_str(), "light");
+	}
+
+	#[test]
+	fn join_input_works() {
+		let buf1 = [1, 2, 3, 4];
+		let buf2 = [5, 6, 7, 8];
+		let mut test = [0, 0, 0];
+		let mut joined = join_input(buf1.as_ref(), buf2.as_ref());
+		assert_eq!(joined.remaining_len().unwrap(), Some(8));
+
+		joined.read(&mut test).unwrap();
+		assert_eq!(test, [1, 2, 3]);
+		assert_eq!(joined.remaining_len().unwrap(), Some(5));
+
+		joined.read(&mut test).unwrap();
+		assert_eq!(test, [4, 5, 6]);
+		assert_eq!(joined.remaining_len().unwrap(), Some(2));
+
+		joined.read(&mut test[0..2]).unwrap();
+		assert_eq!(test, [7, 8, 6]);
+		assert_eq!(joined.remaining_len().unwrap(), Some(0));
 	}
 }

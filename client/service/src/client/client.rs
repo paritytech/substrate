@@ -1951,8 +1951,8 @@ impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 		self.backend.blockchain().indexed_transaction(hash)
 	}
 
-	fn have_indexed_transaction(&self, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
-		self.backend.blockchain().have_indexed_transaction(hash)
+	fn has_indexed_transaction(&self, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
+		self.backend.blockchain().has_indexed_transaction(hash)
 	}
 }
 

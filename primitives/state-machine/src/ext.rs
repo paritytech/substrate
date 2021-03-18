@@ -568,7 +568,7 @@ where
 		}
 	}
 
-	fn storage_index_transaction(&mut self, index: u32, offset: u32) -> Result<(), ()>{
+	fn storage_index_transaction(&mut self, index: u32, offset: u32) {
 		trace!(
 			target: "state",
 			"{:04x}: IndexTransaction ({}): [{}..]",
@@ -580,16 +580,10 @@ where
 			extrinsic: index,
 			offset,
 		});
-		Ok(Default::default())
 	}
 
 	/// Renew existing piece of data storage.
-	fn storage_renew_transaction_index(
-		&mut self,
-		index: u32,
-		hash: &[u8],
-		size: u32,
-	) -> Result<(), ()> {
+	fn storage_renew_transaction_index(&mut self, index: u32, hash: &[u8], size: u32) {
 		trace!(
 			target: "state",
 			"{:04x}: RenewTransactionIndex ({}) {} bytes",
@@ -602,7 +596,6 @@ where
 			hash: hash.to_vec(),
 			size
 		});
-		Ok(())
 	}
 
 	#[cfg(not(feature = "std"))]
