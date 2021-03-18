@@ -2448,6 +2448,7 @@ impl<T: Config> Module<T> {
 				Self::validator_count().saturating_sub(one_percent)
 			);
 		}
+		
 		ValidatorCount::put(final_count)
 	}
 
