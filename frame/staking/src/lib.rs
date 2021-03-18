@@ -2407,7 +2407,7 @@ impl<T: Config> Module<T> {
 			}
 			if i <= two_percent {
 				bottom_two_percent_exposure += 
-				bottom_two_percent_exposure.saturating_add(expo);
+					bottom_two_percent_exposure.saturating_add(expo);
 			}
 			i += 1;
 		};
