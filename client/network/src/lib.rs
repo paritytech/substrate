@@ -351,7 +351,7 @@ impl<B: BlockT> VerifiedBlocks<B> {
 
 	/// Register a new block which has been announced
 	/// and downloaded from peers.
-	fn extend(&self, blocks: Vec<B>) {
+	fn register_downloaded_blocks(&self, blocks: Vec<B>) {
 		self.blocks.write().extend(blocks.into_iter().map(|b| (b.hash(), (b, false))));
 	}
 

@@ -1058,7 +1058,7 @@ impl<B: BlockT> ChainSync<B> {
 	}
 
 	pub fn register_preimport_blocks(&self, blocks: Vec<message::BlockData<B>>) {
-		self.verified_blocks.extend(blocks.clone().into_iter().filter_map(|b| {
+		self.verified_blocks.register_downloaded_blocks(blocks.clone().into_iter().filter_map(|b| {
 			match (b.header, b.body) {
 				(Some(header), Some(body)) => Some(B::new(header, body)),
 				_ => None,
