@@ -130,6 +130,7 @@ parameter_types! {
 	pub static Period: BlockNumber = 5;
 	pub static Offset: BlockNumber = 0;
 	pub static MaxIterations: u32 = 0;
+	pub static DynamicDamping: bool = false;
 }
 
 impl frame_system::Config for Test {
@@ -222,7 +223,6 @@ parameter_types! {
 	pub const MaxNominatorRewardedPerValidator: u32 = 64;
 	pub const UnsignedPriority: u64 = 1 << 20;
 	pub const MinSolutionScoreBump: Perbill = Perbill::zero();
-	pub const DynamicDamping: bool = true;
 	pub OffchainSolutionWeightLimit: Weight = BlockWeights::get().max_block;
 }
 
@@ -250,6 +250,7 @@ impl onchain::Config for Test {
 impl Config for Test {
 	type Currency = Balances;
 	type UnixTime = Timestamp;
+	type DynamicDamping = DynamicDamping;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type RewardRemainder = RewardRemainderMock;
 	type Event = Event;
@@ -265,7 +266,6 @@ impl Config for Test {
 	type ElectionLookahead = ElectionLookahead;
 	type Call = Call;
 	type MaxIterations = MaxIterations;
-	type DynamicDamping = DynamicDamping;
 	type MinSolutionScoreBump = MinSolutionScoreBump;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type UnsignedPriority = UnsignedPriority;
@@ -374,6 +374,10 @@ impl ExtBuilder {
 	}
 	pub fn initialize_first_session(mut self, init: bool) -> Self {
 		self.initialize_first_session = init;
+		self
+	}
+	pub fn dynamic_damping(self, enable: bool) -> Self {
+		DYNAMIC_DAMPING.with(|v| *v.borrow_mut() = enable);
 		self
 	}
 	pub fn offset(self, offset: BlockNumber) -> Self {

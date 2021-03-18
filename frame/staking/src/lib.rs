@@ -332,13 +332,7 @@ use sp_npos_elections::{
 	VoteWeight, CompactSolution, PerThing128,
 };
 use sp_election_providers::ElectionProvider;
-use frame_support::parameter_types;
 pub use weights::WeightInfo;
-
-parameter_types! {
-	// enable/disable dynamic validator damping
-	pub const DynamicDamping: bool = true;
-}
 
 const STAKING_ID: LockIdentifier = *b"staking ";
 pub(crate) const LOG_TARGET: &'static str = "runtime::staking";

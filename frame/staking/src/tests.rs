@@ -74,6 +74,23 @@ fn kill_stash_works() {
 }
 
 #[test]
+fn enable_dyanmic_damping_basic_setup_works() {
+	ExtBuilder::default()
+		.minimum_validator_count(1)
+		.validator_count(4)
+		.nominate(true)
+		.num_validators(3)
+		.dynamic_damping(true)
+		.build()
+		.execute_with(|| {
+		// The number of validators required.
+		// the new number due to dynamic enable should be
+		// final_count = min(MAX_VALIDATOR_COUNT , validator_count + 1) = 5
+		assert_eq!(Staking::validator_count(), 5);
+	});
+}
+
+#[test]
 fn basic_setup_works() {
 	// Verifies initial conditions of mock
 	ExtBuilder::default().build_and_execute(|| {
@@ -132,7 +149,7 @@ fn basic_setup_works() {
 
 
 		// The number of validators required.
-		assert_eq!(Staking::validator_count(), 3);
+		assert_eq!(Staking::validator_count(), 2);
 
 		// Initial Era and session
 		assert_eq!(Staking::active_era().unwrap().index, 0);
