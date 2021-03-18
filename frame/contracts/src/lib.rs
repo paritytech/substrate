@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Contract Module
+//! # Contract Pallet
 //!
 //! The Contract module provides functionality for the runtime to deploy and execute WebAssembly smart-contracts.
 //!
@@ -124,7 +124,7 @@ use frame_support::{
 	traits::{OnUnbalanced, Currency, Get, Time, Randomness},
 	weights::{Weight, PostDispatchInfo, WithPostDispatchInfo},
 };
-use frame_system::Module as System;
+use frame_system::Pallet as System;
 use pallet_contracts_primitives::{
 	RentProjectionResult, GetStorageResult, ContractAccessError, ContractExecResult,
 };
@@ -290,7 +290,7 @@ pub mod pallet {
 			schedule: Schedule<T>
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			if <Module<T>>::current_schedule().version > schedule.version {
+			if <Pallet<T>>::current_schedule().version > schedule.version {
 				Err(Error::<T>::InvalidScheduleVersion)?
 			}
 			Self::deposit_event(Event::ScheduleUpdated(schedule.version));
@@ -316,7 +316,7 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
 			let mut gas_meter = GasMeter::new(gas_limit);
-			let schedule = <Module<T>>::current_schedule();
+			let schedule = <Pallet<T>>::current_schedule();
 			let mut ctx = ExecutionContext::<T, PrefabWasmModule<T>>::top_level(origin, &schedule);
 			let (result, code_len) = match ctx.call(dest, value, &mut gas_meter, data) {
 				Ok((output, len)) => (Ok(output), len),
@@ -365,7 +365,7 @@ pub mod pallet {
 			let code_len = code.len() as u32;
 			ensure!(code_len <= T::MaxCodeSize::get(), Error::<T>::CodeTooLarge);
 			let mut gas_meter = GasMeter::new(gas_limit);
-			let schedule = <Module<T>>::current_schedule();
+			let schedule = <Pallet<T>>::current_schedule();
 			let executable = PrefabWasmModule::from_code(code, &schedule)?;
 			let code_len = executable.code_len();
 			ensure!(code_len <= T::MaxCodeSize::get(), Error::<T>::CodeTooLarge);
@@ -397,7 +397,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let origin = ensure_signed(origin)?;
 			let mut gas_meter = GasMeter::new(gas_limit);
-			let schedule = <Module<T>>::current_schedule();
+			let schedule = <Pallet<T>>::current_schedule();
 			let executable = PrefabWasmModule::from_storage(code_hash, &schedule, &mut gas_meter)?;
 			let mut ctx = ExecutionContext::<T, PrefabWasmModule<T>>::top_level(origin, &schedule);
 			let code_len = executable.code_len();
@@ -665,7 +665,7 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config> Module<T>
+impl<T: Config> Pallet<T>
 where
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
@@ -683,7 +683,7 @@ where
 		input_data: Vec<u8>,
 	) -> ContractExecResult {
 		let mut gas_meter = GasMeter::new(gas_limit);
-		let schedule = <Module<T>>::current_schedule();
+		let schedule = <Pallet<T>>::current_schedule();
 		let mut ctx = ExecutionContext::<T, PrefabWasmModule<T>>::top_level(origin, &schedule);
 		let result = ctx.call(dest, value, &mut gas_meter, input_data);
 		let gas_consumed = gas_meter.gas_spent();
@@ -746,7 +746,7 @@ where
 	/// Store code for benchmarks which does not check nor instrument the code.
 	#[cfg(feature = "runtime-benchmarks")]
 	fn store_code_raw(code: Vec<u8>) -> frame_support::dispatch::DispatchResult {
-		let schedule = <Module<T>>::current_schedule();
+		let schedule = <Pallet<T>>::current_schedule();
 		PrefabWasmModule::store_code_unchecked(code, &schedule)?;
 		Ok(())
 	}

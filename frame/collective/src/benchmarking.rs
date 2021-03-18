@@ -31,7 +31,7 @@ use sp_runtime::traits::Bounded;
 use sp_std::mem::size_of;
 
 use frame_system::Call as SystemCall;
-use frame_system::Module as System;
+use frame_system::Pallet as System;
 use crate::Module as Collective;
 
 const SEED: u32 = 0;

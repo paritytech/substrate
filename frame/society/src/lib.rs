@@ -793,7 +793,7 @@ decl_module! {
 
 			let mut payouts = <Payouts<T, I>>::get(&who);
 			if let Some((when, amount)) = payouts.first() {
-				if when <= &<system::Module<T>>::block_number() {
+				if when <= &<system::Pallet<T>>::block_number() {
 					T::Currency::transfer(&Self::payouts(), &who, *amount, AllowDeath)?;
 					payouts.remove(0);
 					if payouts.is_empty() {
@@ -981,7 +981,7 @@ decl_module! {
 						// Reduce next pot by payout
 						<Pot<T, I>>::put(pot - value);
 						// Add payout for new candidate
-						let maturity = <system::Module<T>>::block_number()
+						let maturity = <system::Pallet<T>>::block_number()
 							+ Self::lock_duration(Self::members().len() as u32);
 						Self::pay_accepted_candidate(&who, value, kind, maturity);
 					}
@@ -1324,7 +1324,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 			// critical issues or side-effects. This is auto-correcting as members fall out of society.
 			members.reserve(candidates.len());
 
-			let maturity = <system::Module<T>>::block_number()
+			let maturity = <system::Pallet<T>>::block_number()
 				+ Self::lock_duration(members.len() as u32);
 
 			let mut rewardees = Vec::new();

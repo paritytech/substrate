@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use crate::{
-	BalanceOf, ContractInfo, ContractInfoOf, Module,
+	BalanceOf, ContractInfo, ContractInfoOf, Pallet,
 	RawAliveContractInfo, Config, Schedule,
 	Error, storage::Storage,
 	chain_extension::{
@@ -57,11 +57,11 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
-		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
-		Randomness: pallet_randomness_collective_flip::{Module, Call, Storage},
-		Contracts: pallet_contracts::{Module, Call, Config<T>, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
+		Randomness: pallet_randomness_collective_flip::{Pallet, Call, Storage},
+		Contracts: pallet_contracts::{Pallet, Call, Config<T>, Storage, Event<T>},
 	}
 );
 
@@ -72,7 +72,7 @@ pub mod test_utils {
 		ContractInfoOf, CodeHash,
 		storage::Storage,
 		exec::{StorageKey, AccountIdOf},
-		Module as Contracts,
+		Pallet as Contracts,
 	};
 	use frame_support::traits::Currency;
 
@@ -457,7 +457,7 @@ fn instantiate_and_call_and_deposit_event() {
 		.build()
 		.execute_with(|| {
 			let _ = Balances::deposit_creating(&ALICE, 1_000_000);
-			let subsistence = Module::<Test>::subsistence_threshold();
+			let subsistence = Pallet::<Test>::subsistence_threshold();
 
 			// Check at the end to get hash on error easily
 			let creation = Contracts::instantiate_with_code(
@@ -572,7 +572,7 @@ fn deposit_event_max_value_limit() {
 #[test]
 fn run_out_of_gas() {
 	let (wasm, code_hash) = compile_module::<Test>("run_out_of_gas").unwrap();
-	let subsistence = Module::<Test>::subsistence_threshold();
+	let subsistence = Pallet::<Test>::subsistence_threshold();
 
 	ExtBuilder::default()
 		.existential_deposit(50)
@@ -908,7 +908,7 @@ fn removals(trigger_call: impl Fn(AccountIdOf<Test>) -> bool) {
 				.unwrap().get_alive().unwrap().rent_allowance;
 			let balance = Balances::free_balance(&addr);
 
-			let subsistence_threshold = Module::<Test>::subsistence_threshold();
+			let subsistence_threshold = Pallet::<Test>::subsistence_threshold();
 
 			// Trigger rent must have no effect
 			assert!(!trigger_call(addr.clone()));
@@ -997,7 +997,7 @@ fn removals(trigger_call: impl Fn(AccountIdOf<Test>) -> bool) {
 		.build()
 		.execute_with(|| {
 			// Create
-			let subsistence_threshold = Module::<Test>::subsistence_threshold();
+			let subsistence_threshold = Pallet::<Test>::subsistence_threshold();
 			let _ = Balances::deposit_creating(&ALICE, subsistence_threshold * 1000);
 			assert_ok!(Contracts::instantiate_with_code(
 				Origin::signed(ALICE),
@@ -1878,7 +1878,7 @@ fn crypto_hashes() {
 				// We offset data in the contract tables by 1.
 				let mut params = vec![(n + 1) as u8];
 				params.extend_from_slice(input);
-				let result = <Module<Test>>::bare_call(
+				let result = <Pallet<Test>>::bare_call(
 					ALICE,
 					addr.clone(),
 					0,
@@ -1896,7 +1896,7 @@ fn crypto_hashes() {
 fn transfer_return_code() {
 	let (wasm, code_hash) = compile_module::<Test>("transfer_return_code").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		let subsistence = Module::<Test>::subsistence_threshold();
+		let subsistence = Pallet::<Test>::subsistence_threshold();
 		let _ = Balances::deposit_creating(&ALICE, 1000 * subsistence);
 
 		assert_ok!(
@@ -1943,7 +1943,7 @@ fn call_return_code() {
 	let (caller_code, caller_hash) = compile_module::<Test>("call_return_code").unwrap();
 	let (callee_code, callee_hash) = compile_module::<Test>("ok_trap_revert").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		let subsistence = Module::<Test>::subsistence_threshold();
+		let subsistence = Pallet::<Test>::subsistence_threshold();
 		let _ = Balances::deposit_creating(&ALICE, 1000 * subsistence);
 		let _ = Balances::deposit_creating(&CHARLIE, 1000 * subsistence);
 
@@ -2036,7 +2036,7 @@ fn instantiate_return_code() {
 	let (caller_code, caller_hash) = compile_module::<Test>("instantiate_return_code").unwrap();
 	let (callee_code, callee_hash) = compile_module::<Test>("ok_trap_revert").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		let subsistence = Module::<Test>::subsistence_threshold();
+		let subsistence = Pallet::<Test>::subsistence_threshold();
 		let _ = Balances::deposit_creating(&ALICE, 1000 * subsistence);
 		let _ = Balances::deposit_creating(&CHARLIE, 1000 * subsistence);
 		let callee_hash = callee_hash.as_ref().to_vec();
@@ -2127,7 +2127,7 @@ fn instantiate_return_code() {
 fn disabled_chain_extension_wont_deploy() {
 	let (code, _hash) = compile_module::<Test>("chain_extension").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		let subsistence = Module::<Test>::subsistence_threshold();
+		let subsistence = Pallet::<Test>::subsistence_threshold();
 		let _ = Balances::deposit_creating(&ALICE, 1000 * subsistence);
 		TestExtension::disable();
 		assert_err_ignore_postinfo!(
@@ -2148,7 +2148,7 @@ fn disabled_chain_extension_wont_deploy() {
 fn disabled_chain_extension_errors_on_call() {
 	let (code, hash) = compile_module::<Test>("chain_extension").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		let subsistence = Module::<Test>::subsistence_threshold();
+		let subsistence = Pallet::<Test>::subsistence_threshold();
 		let _ = Balances::deposit_creating(&ALICE, 1000 * subsistence);
 		assert_ok!(
 			Contracts::instantiate_with_code(
@@ -2179,7 +2179,7 @@ fn disabled_chain_extension_errors_on_call() {
 fn chain_extension_works() {
 	let (code, hash) = compile_module::<Test>("chain_extension").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		let subsistence = Module::<Test>::subsistence_threshold();
+		let subsistence = Pallet::<Test>::subsistence_threshold();
 		let _ = Balances::deposit_creating(&ALICE, 1000 * subsistence);
 		assert_ok!(
 			Contracts::instantiate_with_code(
@@ -2248,7 +2248,7 @@ fn chain_extension_works() {
 fn lazy_removal_works() {
 	let (code, hash) = compile_module::<Test>("self_destruct").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		let subsistence = Module::<Test>::subsistence_threshold();
+		let subsistence = Pallet::<Test>::subsistence_threshold();
 		let _ = Balances::deposit_creating(&ALICE, 1000 * subsistence);
 
 		assert_ok!(
@@ -2308,7 +2308,7 @@ fn lazy_removal_partial_remove_works() {
 	let mut ext = ExtBuilder::default().existential_deposit(50).build();
 
 	let trie = ext.execute_with(|| {
-		let subsistence = Module::<Test>::subsistence_threshold();
+		let subsistence = Pallet::<Test>::subsistence_threshold();
 		let _ = Balances::deposit_creating(&ALICE, 1000 * subsistence);
 
 		assert_ok!(
@@ -2389,7 +2389,7 @@ fn lazy_removal_partial_remove_works() {
 fn lazy_removal_does_no_run_on_full_block() {
 	let (code, hash) = compile_module::<Test>("self_destruct").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		let subsistence = Module::<Test>::subsistence_threshold();
+		let subsistence = Pallet::<Test>::subsistence_threshold();
 		let _ = Balances::deposit_creating(&ALICE, 1000 * subsistence);
 
 		assert_ok!(
@@ -2473,7 +2473,7 @@ fn lazy_removal_does_no_run_on_full_block() {
 fn lazy_removal_does_not_use_all_weight() {
 	let (code, hash) = compile_module::<Test>("self_destruct").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		let subsistence = Module::<Test>::subsistence_threshold();
+		let subsistence = Pallet::<Test>::subsistence_threshold();
 		let _ = Balances::deposit_creating(&ALICE, 1000 * subsistence);
 
 		assert_ok!(
@@ -2543,7 +2543,7 @@ fn lazy_removal_does_not_use_all_weight() {
 fn deletion_queue_full() {
 	let (code, hash) = compile_module::<Test>("self_destruct").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		let subsistence = Module::<Test>::subsistence_threshold();
+		let subsistence = Pallet::<Test>::subsistence_threshold();
 		let _ = Balances::deposit_creating(&ALICE, 1000 * subsistence);
 
 		assert_ok!(
@@ -2669,7 +2669,7 @@ fn refcounter() {
 	let (wasm, code_hash) = compile_module::<Test>("self_destruct").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
-		let subsistence = Module::<Test>::subsistence_threshold();
+		let subsistence = Pallet::<Test>::subsistence_threshold();
 
 		// Create two contracts with the same code and check that they do in fact share it.
 		assert_ok!(Contracts::instantiate_with_code(
@@ -2741,7 +2741,7 @@ fn reinstrument_does_charge() {
 	let (wasm, code_hash) = compile_module::<Test>("return_with_data").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
-		let subsistence = Module::<Test>::subsistence_threshold();
+		let subsistence = Pallet::<Test>::subsistence_threshold();
 		let zero = 0u32.to_le_bytes().encode();
 		let code_len = wasm.len() as u32;
 

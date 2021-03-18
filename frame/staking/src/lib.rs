@@ -1552,7 +1552,7 @@ decl_module! {
 				Err(Error::<T>::InsufficientValue)?
 			}
 
-			system::Module::<T>::inc_consumers(&stash).map_err(|_| Error::<T>::BadState)?;
+			system::Pallet::<T>::inc_consumers(&stash).map_err(|_| Error::<T>::BadState)?;
 
 			// You're auto-bonded forever, here. We might improve this by only bonding when
 			// you actually validate/nominate and remove once you unbond __everything__.
@@ -3254,7 +3254,7 @@ impl<T: Config> Module<T> {
 		<Validators<T>>::remove(stash);
 		<Nominators<T>>::remove(stash);
 
-		system::Module::<T>::dec_consumers(stash);
+		system::Pallet::<T>::dec_consumers(stash);
 
 		Ok(())
 	}
@@ -3516,7 +3516,7 @@ impl<T: Config> pallet_session::SessionManager<T::AccountId> for Module<T> {
 		log!(
 			trace,
 			"[{:?}] planning new_session({})",
-			<frame_system::Module<T>>::block_number(),
+			<frame_system::Pallet<T>>::block_number(),
 			new_index,
 		);
 		CurrentPlannedSession::put(new_index);
@@ -3526,7 +3526,7 @@ impl<T: Config> pallet_session::SessionManager<T::AccountId> for Module<T> {
 		log!(
 			trace,
 			"[{:?}] starting start_session({})",
-			<frame_system::Module<T>>::block_number(),
+			<frame_system::Pallet<T>>::block_number(),
 			start_index,
 		);
 		Self::start_session(start_index)
@@ -3535,7 +3535,7 @@ impl<T: Config> pallet_session::SessionManager<T::AccountId> for Module<T> {
 		log!(
 			trace,
 			"[{:?}] ending end_session({})",
-			<frame_system::Module<T>>::block_number(),
+			<frame_system::Pallet<T>>::block_number(),
 			end_index,
 		);
 		Self::end_session(end_index)

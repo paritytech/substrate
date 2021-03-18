@@ -24,7 +24,7 @@ mod mock;
 use sp_std::prelude::*;
 use sp_std::vec;
 
-use frame_system::{RawOrigin, Module as System, Config as SystemConfig};
+use frame_system::{RawOrigin, Pallet as System, Config as SystemConfig};
 use frame_benchmarking::{benchmarks, account, impl_benchmark_test_suite};
 use frame_support::traits::{Currency, OnInitialize, ValidatorSet, ValidatorSetWithIdentification};
 
@@ -50,7 +50,7 @@ const MAX_OFFENDERS: u32 = 100;
 const MAX_NOMINATORS: u32 = 100;
 const MAX_DEFERRED_OFFENCES: u32 = 100;
 
-pub struct Module<T: Config>(Offences<T>);
+pub struct Pallet<T: Config>(Offences<T>);
 
 pub trait Config:
 	SessionConfig
@@ -421,7 +421,7 @@ benchmarks! {
 }
 
 impl_benchmark_test_suite!(
-	Module,
+	Pallet,
 	crate::mock::new_test_ext(),
 	crate::mock::Test,
 );

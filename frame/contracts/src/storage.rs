@@ -117,7 +117,7 @@ where
 			.and_then(|val| val.checked_add(new_value_len))
 			.ok_or_else(|| Error::<T>::StorageExhausted)?;
 
-		new_info.last_write = Some(<frame_system::Module<T>>::block_number());
+		new_info.last_write = Some(<frame_system::Pallet<T>>::block_number());
 		<ContractInfoOf<T>>::insert(&account, ContractInfo::Alive(new_info));
 
 		// Finally, perform the change on the storage.
@@ -176,7 +176,7 @@ where
 					// We want to charge rent for the first block in advance. Therefore we
 					// treat the contract as if it was created in the last block and then
 					// charge rent for it during instantiation.
-					<frame_system::Module<T>>::block_number().saturating_sub(1u32.into()),
+					<frame_system::Pallet<T>>::block_number().saturating_sub(1u32.into()),
 				rent_allowance: <BalanceOf<T>>::max_value(),
 				rent_payed: <BalanceOf<T>>::zero(),
 				pair_count: 0,

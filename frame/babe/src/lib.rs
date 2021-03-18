@@ -536,7 +536,7 @@ impl<T: Config> Pallet<T> {
 		// Update the start blocks of the previous and new current epoch.
 		<EpochStart<T>>::mutate(|(previous_epoch_start_block, current_epoch_start_block)| {
 			*previous_epoch_start_block = sp_std::mem::take(current_epoch_start_block);
-			*current_epoch_start_block = <frame_system::Module<T>>::block_number();
+			*current_epoch_start_block = <frame_system::Pallet<T>>::block_number();
 		});
 
 		// After we update the current epoch, we signal the *next* epoch change

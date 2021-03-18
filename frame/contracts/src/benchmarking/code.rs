@@ -25,7 +25,7 @@
 //! compiles it down into a `WasmModule` that can be used as a contract's code.
 
 use crate::Config;
-use crate::Module as Contracts;
+use crate::Pallet as Contracts;
 
 use parity_wasm::elements::{
 	Instruction, Instructions, FuncBody, ValueType, BlockType, Section, CustomSection,
