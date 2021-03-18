@@ -89,6 +89,7 @@ impl RuntimeBlob {
 
 	/// Consumes this runtime blob and serializes it.
 	pub fn serialize(self) -> Vec<u8> {
-		serialize(self.raw_module).unwrap()
+		serialize(self.raw_module)
+			.expect("serializing into a vec should succeed; qed")
 	}
 }
