@@ -24,7 +24,7 @@ use sp_blockchain::{Backend as BlockchainBackend, HeaderBackend};
 use sp_finality_grandpa::{AuthorityList, SetId, GRANDPA_ENGINE_ID};
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, NumberFor},
+	traits::{Block as BlockT, NumberFor, One},
 };
 
 use crate::HandleRequestError;
@@ -43,15 +43,21 @@ pub struct AuthoritySetChangeProof<Block: BlockT> {
 	pub justification: GrandpaJustification<Block>,
 }
 
+/// Represents the current state of the warp sync, namely whether it is considered
+/// finished, i.e. we have proved everything up until the latest authority set, or not.
+/// When the warp sync is finished we might optionally provide a justification for the
+/// latest finalized block, which should be checked against the latest authority set.
+#[derive(Debug, Decode, Encode)]
+pub enum WarpSyncFinished<Block: BlockT> {
+	Yes(Option<GrandpaJustification<Block>>),
+	No,
+}
+
 /// An accumulated proof of multiple authority set changes.
-///
-/// When the last authority set is reached `latest` should be populated with a
-/// justification for the latest finalized block (that should be checked against the
-/// latest authority set).
 #[derive(Decode, Encode)]
 pub struct WarpSyncProof<Block: BlockT> {
 	proofs: Vec<AuthoritySetChangeProof<Block>>,
-	latest: Option<GrandpaJustification<Block>>,
+	is_finished: WarpSyncFinished<Block>,
 }
 
 impl<Block: BlockT> WarpSyncProof<Block> {
@@ -130,30 +136,30 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 			});
 		}
 
-		let latest = if proof_limit_reached {
-			None
+		let is_finished = if proof_limit_reached {
+			WarpSyncFinished::No
 		} else {
-			// the best justification should always be available, in case we don't find
-			// one we fallback to returning the latest authority set change proof
-			// justification. it could also happen under normal operation that the best
-			// justification is the one the proves the last authority set change.
-			sc_finality_grandpa::best_justification(backend)?
-				.filter(|justification| {
-					// the existing best justification must be for a block equal or higher
-					// than the last authority set change. if we didn't prove any
-					// authority set change then we fallback to make sure it's higher or
-					// equal to the initial warp sync block.
+			let latest =
+				sc_finality_grandpa::best_justification(backend)?.filter(|justification| {
+					// the existing best justification must be for a block higher than the
+					// last authority set change. if we didn't prove any authority set
+					// change then we fallback to make sure it's higher or equal to the
+					// initial warp sync block.
 					let limit = proofs
 						.last()
-						.map(|proof| proof.justification.target().0)
+						.map(|proof| proof.justification.target().0 + One::one())
 						.unwrap_or(begin_number);
 
 					justification.target().0 >= limit
-				})
-				.or_else(|| proofs.last().map(|proof| proof.justification.clone()))
+				});
+
+			WarpSyncFinished::Yes(latest)
 		};
 
-		Ok(WarpSyncProof { proofs, latest })
+		Ok(WarpSyncProof {
+			proofs,
+			is_finished,
+		})
 	}
 
 	/// Verifies the warp sync proof starting at the given set id and with the given authorities.
@@ -185,7 +191,7 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 			current_set_id += 1;
 		}
 
-		if let Some(ref justification) = self.latest {
+		if let WarpSyncFinished::Yes(Some(ref justification)) = self.is_finished {
 			justification
 				.verify(current_set_id, &current_authorities)
 				.map_err(|err| HandleRequestError::InvalidProof(err.to_string()))?;
