@@ -334,7 +334,7 @@ pub fn create_runtime(
 				let module = wasmtime::Module::new(&engine, &blob.serialize())
 					.map_err(|e| WasmError::Other(format!("cannot create module: {}", e)))?;
 
-				(module, Some(data_segments_snapshot), Some(mutable_globals))
+				(module, Some(Arc::new(data_segments_snapshot)), Some(mutable_globals))
 			} else {
 				let module = wasmtime::Module::new(&engine, &blob.serialize())
 					.map_err(|e| WasmError::Other(format!("cannot create module: {}", e)))?;
@@ -352,7 +352,7 @@ pub fn create_runtime(
 	Ok(WasmtimeRuntime {
 		module: Arc::new(module),
 		mutable_globals,
-		data_segments_snapshot: data_segments_snapshot.map(Arc::new),
+		data_segments_snapshot,
 		config,
 		host_functions,
 		engine,

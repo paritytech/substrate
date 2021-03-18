@@ -29,7 +29,7 @@ pub struct RuntimeBlob {
 impl RuntimeBlob {
 	/// Create `RuntimeBlob` from the given wasm code.
 	///
-	/// Returns `None` if the wasm code cannot be deserialized.
+	/// Returns `Err` if the wasm code cannot be deserialized.
 	pub fn new(wasm_code: &[u8]) -> Result<Self, WasmError> {
 		let raw_module: RawModule = deserialize_buffer(wasm_code)
 			.map_err(|e| WasmError::Other(format!("cannot deserialize module: {:?}", e)))?;
@@ -37,8 +37,6 @@ impl RuntimeBlob {
 	}
 
 	/// Extract the data segments from the given wasm code.
-	///
-	/// Returns `Err` if the given wasm code cannot be deserialized.
 	pub(super) fn data_segments(&self) -> Vec<DataSegment> {
 		self.raw_module
 			.data_section()
@@ -63,7 +61,7 @@ impl RuntimeBlob {
 			.unwrap_or(0)
 	}
 
-	/// Make sure that the mutable globals are exported
+	/// Perform an instrumentation that makes sure that the mutable globals are exported.
 	pub fn expose_mutable_globals(&mut self) {
 		pwasm_utils::export_mutable_globals(&mut self.raw_module, "exported_internal_global");
 	}

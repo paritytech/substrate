@@ -28,11 +28,12 @@ struct SavedValue<Global> {
 
 /// An adapter for a wasm module instance that is focused on getting and setting globals.
 pub trait InstanceGlobals {
-	/// A handle to a global.
+	/// A handle to a global which can be used to get or set a global variable. This is supposed to
+	/// be a lightweight handle, like an index or an Rc-like smart-pointer, which is cheap to clone.
 	type Global: Clone;
 	/// Get a handle to a global by it's export name.
 	///
-	/// The export is guaranteed to exist, which points to a mutable global.
+	/// The requested export is must exist in the exported list, and it should be a mutable global.
 	fn get_global(&self, export_name: &str) -> Self::Global;
 	/// Get the current value of the global.
 	fn get_global_value(&self, global: &Self::Global) -> sp_wasm_interface::Value;
@@ -62,7 +63,7 @@ impl ExposedMutableGlobalsSet {
 	}
 }
 
-/// A snapshot of a global variables values. This snapshot can be used later for restoring the
+/// A snapshot of a global variables values. This snapshot can be later used for restoring the
 /// values to the preserved state.
 ///
 /// Technically, a snapshot stores only values of mutable global variables. This is because
