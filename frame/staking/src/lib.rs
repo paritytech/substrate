@@ -2394,7 +2394,7 @@ impl<T: Config> Module<T> {
 		// sort exposures
 		expos.sort_by(|a, b| a.cmp(&b).reverse());
 		// global average
-		let mut total_exposure:BalanceOf<T> = Zero::zero();
+		let mut total_exposure: BalanceOf<T> = Zero::zero();
 		let mut bottom_one_percent_exposure: BalanceOf<T> = Zero::zero();
 		let mut bottom_two_percent_exposure: BalanceOf<T> = Zero::zero();
 		let mut i = 0;
