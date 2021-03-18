@@ -2425,6 +2425,7 @@ impl<T: Config> Module<T> {
 			bottom_two_percent_exposure,
 			two_percent.saturated_into()
 		);
+		
 		//init final count
 		let mut final_count = Self::validator_count();
 		let forty_percent = Perbill::from_rational_approximation(
