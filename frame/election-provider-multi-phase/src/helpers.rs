@@ -100,7 +100,7 @@ pub fn voter_index_fn_linear<T: Config>(
 /// in `O(log n)`.
 pub fn target_index_fn<T: Config>(
 	snapshot: &Vec<T::AccountId>,
-) -> impl '_ + Fn(&T::AccountId) -> Option<CompactTargetIndexOf<T>> {
+) -> impl Fn(&T::AccountId) -> Option<CompactTargetIndexOf<T>> + '_ {
 	let cache: BTreeMap<_, _> =
 		snapshot.iter().enumerate().map(|(idx, account_id)| (account_id, idx)).collect();
 	move |who| {
