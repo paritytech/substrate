@@ -503,7 +503,7 @@ pub mod pallet {
 		///
 		/// Emits `ForceCreated` event when successful.
 		///
-		/// Weight: `O(1)`
+		/// Weight: `O(1)`		
 		#[pallet::weight(T::WeightInfo::force_create())]
 		pub(super) fn force_create(
 			origin: OriginFor<T>,
@@ -514,7 +514,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
-
+			
 			ensure!(!Asset::<T>::contains_key(id), Error::<T>::InUse);
 			ensure!(!min_balance.is_zero(), Error::<T>::MinBalanceZero);
 
