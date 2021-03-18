@@ -2428,8 +2428,8 @@ impl<T: Config> Module<T> {
 		//init final count
 		let mut final_count = Self::validator_count();
 		let forty_percent = Perbill::from_rational_approximation(
-			40 as u32, 
-			100 as u32
+			40u32, 
+			100u32
 		);
 		let twinty_percent = Perbill::from_rational_approximation(
 			20 as u32, 
