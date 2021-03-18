@@ -3698,9 +3698,43 @@ mod election_data_provider {
 	use frame_election_provider_support::ElectionDataProvider;
 
 	#[test]
+	fn targets_2sec_block() {
+		let mut validators = 1000;
+		while <Test as Config>::WeightInfo::get_npos_targets(validators)
+			< 2 * frame_support::weights::constants::WEIGHT_PER_SECOND
+		{
+			validators += 1;
+		}
+
+		println!("Can create a snapshot of {} validators in 2sec block", validators);
+	}
+
+	#[test]
+	fn voters_2sec_block() {
+		// we assume a network only wants up to 1000 validators in most cases, thus having 2000
+		// candidates is as high as it gets.
+		let validators = 2000;
+		// we assume the worse case: each validator also has a slashing span.
+		let slashing_spans = validators;
+		let mut nominators = 1000;
+
+		while <Test as Config>::WeightInfo::get_npos_voters(validators, nominators, slashing_spans)
+			< 2 * frame_support::weights::constants::WEIGHT_PER_SECOND
+		{
+			nominators += 1;
+		}
+
+		println!(
+			"Can create a snapshot of {} nominators [{} validators, each 1 slashing] in 2sec block",
+			nominators, validators
+		);
+	}
+
+	#[test]
 	fn voters_include_self_vote() {
 		ExtBuilder::default().nominate(false).build().execute_with(|| {
-			assert!(<Validators<Test>>::iter().map(|(x, _)| x).all(|v| Staking::voters(None)
+			assert!(<Validators<Test>>::iter().map(|(x, _)| x).all(|v| {
+				Staking::voters(None)
 				.unwrap()
 				.0
 				.into_iter()
