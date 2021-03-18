@@ -465,7 +465,7 @@ impl<T: Config> Module<T> {
 	}
 
 	fn resolve_time(when: DispatchTime<T::BlockNumber>) -> Result<T::BlockNumber, DispatchError> {
-		let now = frame_system::Module::<T>::block_number();
+		let now = frame_system::Pallet::<T>::block_number();
 
 		let when = match when {
 			DispatchTime::At(x) => x,
@@ -793,9 +793,9 @@ mod tests {
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
-			System: frame_system::{Module, Call, Config, Storage, Event<T>},
-			Logger: logger::{Module, Call, Event},
-			Scheduler: scheduler::{Module, Call, Storage, Event<T>},
+			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+			Logger: logger::{Pallet, Call, Event},
+			Scheduler: scheduler::{Pallet, Call, Storage, Event<T>},
 		}
 	);
 
