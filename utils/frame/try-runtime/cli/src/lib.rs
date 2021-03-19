@@ -20,7 +20,7 @@
 use parity_scale_codec::Decode;
 use std::{fmt::Debug, path::PathBuf, str::FromStr};
 use sc_service::Configuration;
-use sc_cli::{BlockNumberOrHash, CliConfiguration, ExecutionStrategy, WasmExecutionMethod};
+use sc_cli::{CliConfiguration, ExecutionStrategy, WasmExecutionMethod};
 use sc_executor::NativeExecutor;
 use sc_service::NativeExecutionDispatch;
 use sp_state_machine::StateMachine;
@@ -77,9 +77,10 @@ pub enum State {
 		#[structopt(short, long)]
 		cache_file: Option<CacheParams>,
 
-		/// The block number at which to connect. Can be either a number or a hash (staring with `0x`) Will be latest finalized head if not provided.
-		#[structopt(short, long, multiple = false)]
-		block_at: Option<BlockNumberOrHash>,
+		/// The block hash at which to connect.
+		/// Will be latest finalized head if not provided.
+		#[structopt(short, long, multiple = false, parse(try_from_str = parse_hash))]
+		block_at: Option<String>,
 
 		/// The modules to scrape. If empty, entire chain state will be scraped.
 		#[structopt(short, long, require_delimiter = true)]
@@ -91,11 +92,29 @@ pub enum State {
 	},
 }
 
+fn parse_hash(block_number: &str) -> Result<String, String> {
+	let block_number = if block_number.starts_with("0x") {
+		&block_number[2..]
+	} else {
+		block_number
+	};
+
+	if let Some(pos) = block_number.chars().position(|c| !c.is_ascii_hexdigit()) {
+		Err(format!(
+			"Expected block hash, found illegal hex character at position: {}",
+			2 + pos,
+		))
+	} else {
+		Ok(block_number.into())
+	}
+}
+
 fn parse_url(s: &str) -> Result<String, &'static str> {
-	match s.get(..7) {
+	if s.starts_with("http://") {
 		// could use Url crate as well, but lets keep it simple for now.
-		Some("http://") => Ok(s.to_string()),
-		_ => Err("not a valid url"),
+		Ok(s.to_string())
+	} else {
+		Err("not a valid url")
 	}
 }
 
@@ -169,7 +188,11 @@ impl TryRuntimeCmd {
 				State::Snap {
 					cache_params: CacheParams { file_name, directory }
 				} => Builder::<B>::new().mode(Mode::Offline(OfflineConfig {
-					cache: CacheConfig { name: file_name.into(), directory: directory.into(), ..Default::default() },
+					cache: CacheConfig {
+						name: file_name.into(),
+						directory: directory.into(),
+						..Default::default()
+					},
 				})),
 				State::Live {
 					url,
@@ -182,9 +205,9 @@ impl TryRuntimeCmd {
 						name: c.file_name.clone(),
 						directory: c.directory.clone(),
 					}),
-					modules: modules.clone().unwrap_or(Vec::new()),
+					modules: modules.clone().unwrap_or_default(),
 					at: match block_at {
-						Some(b) => Some(b.parse::<B>()?),
+						Some(b) => Some(b.parse().map_err(|e| format!("Could not parse hash: {:?}", e))?),
 						None => None,
 					},
 					..Default::default()

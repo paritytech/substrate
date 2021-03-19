@@ -115,10 +115,7 @@ use sp_core::{
 use codec::{Encode, Decode};
 use jsonrpsee_http_client::{HttpClient, HttpConfig};
 
-use sp_runtime::{
-	generic::BlockId,
-	traits::{Block as BlockT, NumberFor}
-};
+use sp_runtime::traits::Block as BlockT;
 
 // TODO: Make KeyPair generic
 type KeyPair = (StorageKey, StorageData);
@@ -132,8 +129,6 @@ jsonrpsee_proc_macros::rpc_client_api! {
 		fn storage_pairs(prefix: StorageKey, hash: Option<B::Hash>) -> Vec<(StorageKey, StorageData)>;
 		#[rpc(method = "chain_getFinalizedHead")]
 		fn finalized_head() -> B::Hash;
-		#[rpc(method = "chain_getBlockHash")]
-		fn block_hash(number: NumberFor<B>) -> B::Hash;
 	}
 }
 
@@ -163,7 +158,7 @@ pub struct OnlineConfig<B: BlockT> {
 	/// The HTTP uri to use.
 	pub uri: String,
 	/// The block number at which to connect. Will be latest finalized head if not provided.
-	pub at: Option<BlockId<B>>,
+	pub at: Option<B::Hash>,
 	/// An optional cache file to WRITE to, not for reading. Not cached if set to `None`.
 	pub cache: Option<CacheConfig>,
 	/// The modules to scrape. If empty, entire chain state will be scraped.
@@ -263,18 +258,6 @@ impl<B: BlockT> Builder<B> {
 			"rpc storage_pairs failed"
 			})
 	}
-
-	/// Relay the request to `chain_getBlockHash` rpc endpoint.
-	async fn rpc_get_hash(
-		&self,
-		number: NumberFor<B>,
-	) -> Result<B::Hash, &'static str> {
-		trace!(target: LOG_TARGET, "rpc: block_hash: {:?}", number);
-		RpcApi::<B>::block_hash(&self.as_online().rpc(), number).await.map_err(|e| {
-			error!("Error = {:?}", e);
-			"rpc block_hash failed"
-			})
-	}
 }
 
 // Internal methods
@@ -293,13 +276,6 @@ impl<B: BlockT> Builder<B> {
 		Decode::decode(&mut &*bytes).map_err(|_| "decode failed")
 	}
 
-	async fn block_id_to_hash(&self, block_id: BlockId<B>) -> Result<B::Hash, &'static str> {
-		Ok(match block_id {
-			BlockId::Hash(hash) => hash,
-			BlockId::Number(number) => self.rpc_get_hash(number).await?,
-		})
-	}
-
 	/// Build `Self` from a network node denoted by `uri`.
 	async fn load_remote(&self) -> Result<Vec<KeyPair>, &'static str> {
 		let config = self.as_online();
@@ -314,7 +290,7 @@ impl<B: BlockT> Builder<B> {
 			let mut filtered_kv = vec![];
 			for f in config.modules.iter() {
 				let hashed_prefix = StorageKey(twox_128(f.as_bytes()).to_vec());
-				let module_kv = self.rpc_get_pairs(hashed_prefix.clone(), self.block_id_to_hash(at).await?).await?;
+				let module_kv = self.rpc_get_pairs(hashed_prefix.clone(), at).await?;
 				info!(
 					target: LOG_TARGET,
 					"downloaded data for module {} (count: {} / prefix: {:?}).",
@@ -327,7 +303,7 @@ impl<B: BlockT> Builder<B> {
 			filtered_kv
 		} else {
 			info!(target: LOG_TARGET, "downloading data for all modules.");
-			self.rpc_get_pairs(StorageKey(vec![]), self.block_id_to_hash(at).await?).await?.into_iter().collect::<Vec<_>>()
+			self.rpc_get_pairs(StorageKey(vec![]), at).await?.into_iter().collect::<Vec<_>>()
 		};
 
 		Ok(keys_and_values)
@@ -337,7 +313,7 @@ impl<B: BlockT> Builder<B> {
 		info!(target: LOG_TARGET, "initializing remote client to {:?}", self.as_online().uri);
 		if self.as_online().at.is_none() {
 			let at = self.rpc_get_head().await?;
-			self.as_online_mut().at = Some(BlockId::Hash(at));
+			self.as_online_mut().at = Some(at);
 		}
 		Ok(())
 	}
