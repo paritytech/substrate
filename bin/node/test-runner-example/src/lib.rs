@@ -152,6 +152,7 @@ mod tests {
     use node_cli::chain_spec::development_config;
 
     #[test]
+    #[ignore]
     fn test_runner() {
         let config = NodeConfig {
 			execution_strategies: ExecutionStrategies {
