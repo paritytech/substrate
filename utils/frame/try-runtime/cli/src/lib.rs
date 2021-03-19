@@ -77,9 +77,9 @@ pub enum State {
 		#[structopt(short, long)]
 		cache_file: Option<CacheParams>,
 
-		/// The block number at which to connect. Will be latest finalized head if not provided.
+		/// The block number at which to connect. Can be either a number or a hash (staring with `0x`) Will be latest finalized head if not provided.
 		#[structopt(short, long, multiple = false)]
-		block_number: Option<BlockNumberOrHash>,
+		block_at: Option<BlockNumberOrHash>,
 
 		/// The modules to scrape. If empty, entire chain state will be scraped.
 		#[structopt(short, long, require_delimiter = true)]
@@ -174,7 +174,7 @@ impl TryRuntimeCmd {
 				State::Live {
 					url,
 					cache_file,
-					block_number,
+					block_at,
 					modules
 				} => Builder::<B>::new().mode(Mode::Online(OnlineConfig {
 					uri: url.into(),
@@ -183,7 +183,7 @@ impl TryRuntimeCmd {
 						directory: c.directory.clone(),
 					}),
 					modules: modules.clone().unwrap_or(Vec::new()),
-					at: match block_number {
+					at: match block_at {
 						Some(b) => Some(b.parse::<B>()?),
 						None => None,
 					},

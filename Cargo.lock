@@ -6578,7 +6578,6 @@ dependencies = [
 name = "remote-externalities"
 version = "0.9.0"
 dependencies = [
- "async-std",
  "env_logger 0.8.3",
  "hex-literal",
  "jsonrpsee-http-client",
@@ -6589,6 +6588,7 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
+ "tokio 0.2.25",
 ]
 
 [[package]]

@@ -406,7 +406,9 @@ impl<B: BlockT> Builder<B> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-        type Hash = sp_core::H256;
+	pub type Header = sp_runtime::generic::Header<u32, sp_runtime::traits::BlakeTwo256>;
+	pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
+	pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, (), (), ()>;
 
 	fn init_logger() {
 		let _ = env_logger::Builder::from_default_env()
@@ -415,10 +417,10 @@ mod tests {
 			.try_init();
 	}
 
-	#[async_std::test]
+	#[tokio::test]
 	async fn can_build_one_pallet() {
 		init_logger();
-		Builder::<Hash>::new()
+		Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
 				modules: vec!["Proxy".into()],
 				..Default::default()
@@ -429,10 +431,10 @@ mod tests {
 			.execute_with(|| {});
 	}
 
-	#[async_std::test]
+	#[tokio::test]
 	async fn can_load_cache() {
 		init_logger();
-		Builder::<Hash>::new()
+		Builder::<Block>::new()
 			.mode(Mode::Offline(OfflineConfig {
 				cache: CacheConfig { name: "proxy_test".into(), ..Default::default() },
 			}))
@@ -442,10 +444,10 @@ mod tests {
 			.execute_with(|| {});
 	}
 
-	#[async_std::test]
+	#[tokio::test]
 	async fn can_create_cache() {
 		init_logger();
-		Builder::<Hash>::new()
+		Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
 				cache: Some(CacheConfig {
 					name: "test_cache_to_remove.bin".into(),
@@ -472,9 +474,9 @@ mod tests {
 		}
 	}
 
-	#[async_std::test]
+	#[tokio::test]
 	async fn can_build_all() {
 		init_logger();
-		Builder::<Hash>::new().build().await.unwrap().execute_with(|| {});
+		Builder::<Block>::new().build().await.unwrap().execute_with(|| {});
 	}
 }
