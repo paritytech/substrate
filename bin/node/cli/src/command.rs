@@ -158,6 +158,7 @@ pub fn run() -> Result<()> {
 				let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
 				let task_manager = sc_service::TaskManager::new(
 					config.task_executor.clone(),
+					None,
 					registry,
 				).map_err(|e| sc_cli::Error::Service(sc_service::Error::Prometheus(e)))?;
 
