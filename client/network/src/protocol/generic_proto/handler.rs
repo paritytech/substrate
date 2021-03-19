@@ -798,7 +798,7 @@ impl ProtocolsHandler for NotifsHandler {
 					}
 				}
 				if flush_needed {
-					match Sink::poll_flush(Pin::new(out_substream.as_mut().unwrap()), cx) {
+					match Sink::poll_flush(Pin::new(out_substream.as_mut().expect("We already matched on `Some` pattern above; qed.")), cx) {
 						Poll::Pending | Poll::Ready(Ok(())) => {},
 						Poll::Ready(Err(_)) => {
 							*out_substream = None;
