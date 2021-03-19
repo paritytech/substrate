@@ -1,0 +1,25 @@
+[package]
+name = "pallet-staking-reward-fn"
+version = "3.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "Apache-2.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+description = "Reward function for FRAME staking pallet"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[lib]
+
+[dependencies]
+sp-arithmetic = { version = "3.0.0", default-features = false, path = "../../../primitives/arithmetic" }
+log = { version = "0.4.14", default-features = false }
+
+[features]
+default = ["std"]
+std = [
+	"sp-arithmetic/std",
+	"log/std",
+]

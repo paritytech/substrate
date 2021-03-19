@@ -60,9 +60,9 @@
 			"network": "plasm",
 			"displayName": "Plasm Network",
 			"symbols": ["PLM"],
-			"decimals": null,
+			"decimals": [15],
 			"standardAccount": "*25519",
-			"website": null
+			"website": "https://plasmnet.io"
 		},
 		{
 			"prefix": 6,
