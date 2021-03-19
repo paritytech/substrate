@@ -1063,12 +1063,12 @@ impl<B: BlockT> ChainSync<B> {
 	}
 
 	pub fn register_preimport_blocks(&self, blocks: Vec<message::BlockData<B>>) {
-		self.verified_blocks.register_downloaded_blocks(blocks.clone().into_iter().filter_map(|b| {
+		self.verified_blocks.register_downloaded_blocks(blocks.into_iter().filter_map(|b| {
 			match (b.header, b.body) {
 				(Some(header), Some(body)) => Some(B::new(header, body)),
 				_ => None,
 			}
-		}).collect());
+		}));
 	}
 	
 	/// A block has been checked/verified
@@ -1077,7 +1077,7 @@ impl<B: BlockT> ChainSync<B> {
 	/// announcement takes place, requests for the pre-imported block header
 	/// can be answered.
 	pub fn on_block_verified(&mut self, header: B::Header) {
-		self.verified_blocks.verify(&BlockId::Hash(header.hash()));
+		self.verified_blocks.block_verified(&BlockId::Hash(header.hash()));
 	}
 
 	/// A batch of blocks have been processed, with or without errors.

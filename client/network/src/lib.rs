@@ -352,7 +352,7 @@ impl<B: BlockT> VerifiedBlocks<B> {
 
 	/// Register a new block which has been announced
 	/// and downloaded from peers.
-	fn register_downloaded_blocks(&self, blocks: Vec<B>) {
+	fn register_downloaded_blocks(&self, blocks: impl Iterator<Item = B>) {
 		self.blocks.write().extend(blocks.into_iter().map(|b| (b.hash(), (b, false))));
 	}
 
@@ -360,14 +360,10 @@ impl<B: BlockT> VerifiedBlocks<B> {
 	/// This will try to fetch the imported block from the client's backend.
 	/// If not found, falls back to the preimported blocks.
 	fn header(&self, id: &BlockId<B>) -> sp_blockchain::Result<Option<<B as BlockT>::Header>> {
-		let mut header = self.client.header(*id)?;
-		if header.is_none() {
-			header = self.preimported_block_header(&*id);
-		}
-		Ok(header)
+		self.pre_imported_block_header(&*id).map(Ok).or_else(|| self.client.header(*id).transpose()).transpose()
 	}
 
-	fn preimported_block_header(&self, id: &BlockId<B>) -> Option<B::Header> {
+	fn pre_imported_block_header(&self, id: &BlockId<B>) -> Option<B::Header> {
 		match id {
 			BlockId::Hash(h) => {
 				match self.blocks.read().get(h) {
@@ -386,14 +382,10 @@ impl<B: BlockT> VerifiedBlocks<B> {
 
 	/// Fetch the body of a preimported block
 	fn body(&self, id: &BlockId<B>) -> sp_blockchain::Result<Option<Vec<<B>::Extrinsic>>> {
-		let mut body= self.client.block_body(id)?;
-		if body.is_none() {
-			body = self.preimported_block_body(&*id);
-		}
-		Ok(body)
+		self.pre_imported_block_body(&*id).map(Ok).or_else(|| self.client.block_body(id).transpose()).transpose()
 	}
 
-	fn preimported_block_body(&self, id: &BlockId<B>) -> Option<Vec<B::Extrinsic>> {
+	fn pre_imported_block_body(&self, id: &BlockId<B>) -> Option<Vec<B::Extrinsic>> {
 		match id {
 			BlockId::Hash(h) => {
 				self.blocks
@@ -413,7 +405,7 @@ impl<B: BlockT> VerifiedBlocks<B> {
 	}
 
 	/// Mark a block as verified
-	fn verify(&self, id: &BlockId<B>) {
+	fn block_verified(&self, id: &BlockId<B>) {
 		match id {
 			BlockId::Hash(h) => {
 				if let Some((_, verified)) = self.blocks.write().get_mut(h) {
