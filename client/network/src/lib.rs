@@ -342,7 +342,7 @@ pub struct VerifiedBlocks<B: BlockT> {
 }
 
 impl<B: BlockT> VerifiedBlocks<B> {
-	/// Returns VerifiedBlocks
+	/// Creates a new instance of [`VerifiedBlocks`].
 	pub fn new(client: Arc<dyn crate::chain::Client<B>>) -> Self {
 		Self {
 			client,
@@ -357,8 +357,9 @@ impl<B: BlockT> VerifiedBlocks<B> {
 	}
 
 	/// Fetch the header of a block.
-	/// This will try to fetch the imported block from the client's backend.
-	/// If not found, falls back to the preimported blocks.
+	///
+	/// This will try to fetch the imported block from pre-imported blocks.
+	/// If not found, falls back to the client's backend.
 	fn header(&self, id: &BlockId<B>) -> sp_blockchain::Result<Option<<B as BlockT>::Header>> {
 		self.pre_imported_block_header(&*id).map(Ok).or_else(|| self.client.header(*id).transpose()).transpose()
 	}

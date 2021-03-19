@@ -1062,6 +1062,11 @@ impl<B: BlockT> ChainSync<B> {
 		Ok(OnBlockJustification::Nothing)
 	}
 
+	/// Register downloaded blocks which have not been imported yet.
+	///
+	/// Pre-imported blocks are cached in order to announce them after
+	/// verification and to be able to provide them to peers who
+	/// receive the announcement and request the block data.
 	pub fn register_preimport_blocks(&self, blocks: Vec<message::BlockData<B>>) {
 		self.verified_blocks.register_downloaded_blocks(blocks.into_iter().filter_map(|b| {
 			match (b.header, b.body) {
@@ -1071,7 +1076,8 @@ impl<B: BlockT> ChainSync<B> {
 		}));
 	}
 	
-	/// A block has been checked/verified
+	/// A block has been checked/verified.
+	///
 	/// For sync, this means that the list of verified block headers should be
 	/// maintained between pre-import and import so that once the pre-import
 	/// announcement takes place, requests for the pre-imported block header

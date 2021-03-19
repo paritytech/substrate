@@ -751,6 +751,11 @@ impl<B: BlockT> Protocol<B> {
 		Ok(())
 	}
 
+	/// Announce a block which is not yet imported but has been verified.
+	///
+	/// Once a block passes verification and consensus checks, a
+	/// pre-imported block is announced to peers prior to executing
+	/// and importing the block.
 	pub fn announce_preimport_block(&mut self, header: B::Header) {
 		self.broadcast_header(header, false, None);
 	}
@@ -782,6 +787,10 @@ impl<B: BlockT> Protocol<B> {
 		self.broadcast_header(header, is_best, data);
 	}
 
+	/// Broadcast a block header to peers.
+	///
+	/// A block header is announced to peers before and after
+	/// the block is imported.
 	pub fn broadcast_header(&mut self, header: B::Header, is_best: bool, data: Option<Vec<u8>>) {
 		debug!(target: "sync", "Reannouncing block {:?} is_best: {}", header.hash(), is_best);
 		let data = data.or_else(|| self.block_announce_data_cache.get(&header.hash()).cloned()).unwrap_or_default();
