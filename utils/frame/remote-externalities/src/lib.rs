@@ -376,20 +376,43 @@ impl<B: BlockT> Builder<B> {
 	}
 }
 
-#[cfg(feature = "remote-test")]
 #[cfg(test)]
-mod tests {
-	use super::*;
-	use sp_runtime::testing::{H256 as Hash, Block as RawBlock, ExtrinsicWrapper};
+mod test_prelude {
+	pub use super::*;
+	pub use sp_runtime::testing::{H256 as Hash, Block as RawBlock, ExtrinsicWrapper};
 
-	type Block = RawBlock<ExtrinsicWrapper<Hash>>;
+	pub type Block = RawBlock<ExtrinsicWrapper<Hash>>;
 
-	fn init_logger() {
+	pub fn init_logger() {
 		let _ = env_logger::Builder::from_default_env()
 			.format_module_path(false)
 			.format_level(true)
 			.try_init();
 	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::test_prelude::*;
+
+	#[tokio::test]
+	async fn can_load_cache() {
+		init_logger();
+		Builder::<Block>::new()
+			.mode(Mode::Offline(OfflineConfig {
+				cache: CacheConfig { name: "test_data/proxy_test".into(), ..Default::default() },
+			}))
+			.build()
+			.await
+			.unwrap()
+			.execute_with(|| {});
+	}
+}
+
+#[cfg(feature = "remote-test")]
+#[cfg(test)]
+mod remote_tests {
+	use super::test_prelude::*;
 
 	#[tokio::test]
 	async fn can_build_one_pallet() {
@@ -398,19 +421,6 @@ mod tests {
 			.mode(Mode::Online(OnlineConfig {
 				modules: vec!["Proxy".into()],
 				..Default::default()
-			}))
-			.build()
-			.await
-			.unwrap()
-			.execute_with(|| {});
-	}
-
-	#[tokio::test]
-	async fn can_load_cache() {
-		init_logger();
-		Builder::<Block>::new()
-			.mode(Mode::Offline(OfflineConfig {
-				cache: CacheConfig { name: "proxy_test".into(), ..Default::default() },
 			}))
 			.build()
 			.await
