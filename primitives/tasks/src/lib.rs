@@ -64,6 +64,7 @@ pub mod wasm_runtime;
 #[cfg(feature = "std")]
 pub mod pool_spawn;
 pub mod inline_spawn;
+pub mod common;
 mod async_externalities;
 
 #[cfg(feature = "std")]

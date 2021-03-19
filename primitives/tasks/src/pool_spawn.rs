@@ -36,7 +36,7 @@ use sp_externalities::{ExternalitiesExt as _, WorkerResult, TaskId};
 use crate::{
 	new_async_externalities,
 	wasm_runtime::{WasmInstance, WasmModule}, error::Result,
-	inline_spawn::{
+	common::{
 		WasmTask, NativeTask, Task, PendingTask as InlineTask,
 		InlineInstantiateRef, instantiate_inline,
 	},
@@ -51,7 +51,7 @@ type PoolThreadId = u64;
 pub fn with_externalities_safe<F, U>(ext: &mut dyn Externalities, f: F) -> Result<U>
 	where F: UnwindSafe + FnOnce() -> U
 {
-	Ok(crate::inline_spawn::with_externalities_safe(ext, f)?)
+	Ok(crate::common::with_externalities_safe(ext, f)?)
 }
 
 struct InlineInstantiate<'a, 'b> {
@@ -59,7 +59,7 @@ struct InlineInstantiate<'a, 'b> {
 	guard: &'a mut parking_lot::MutexGuard<'b, Option<AssertUnwindSafe<Box<dyn WasmInstance>>>>,
 }
 
-impl<'a, 'b> crate::inline_spawn::LazyInstanciate<'a> for InlineInstantiate<'a, 'b> {
+impl<'a, 'b> crate::common::LazyInstanciate<'a> for InlineInstantiate<'a, 'b> {
 	fn instantiate(self) -> Option<&'a AssertUnwindSafe<Box<dyn WasmInstance>>> {
 		if self.guard.is_none() {
 			**self.guard = if let Some(instance) = instantiate_inline(self.module) {
@@ -346,7 +346,7 @@ impl RuntimeInstanceSpawn {
 						instance: &mut instance,
 					};
 
-					crate::inline_spawn::process_task(
+					crate::common::process_task(
 						task,
 						async_ext,
 						instance_ref,
@@ -360,7 +360,7 @@ impl RuntimeInstanceSpawn {
 					log::error!("Panic error in spawned task, dropping instance");
 					// Here we don't just shut all because panic will only transmit to parent
 					// if 'join' is call, if 'dismiss' is call then it is fine to ignore a panic.
-					instance = None; // will be lazilly re-instantiated
+					instance = None; // will be lazily re-instantiated
 				}
 				if let &WorkerResult::HardPanic = &result {
 					end = true;
