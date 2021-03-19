@@ -725,6 +725,7 @@ pub mod pallet {
 		pub fn submit_unsigned(
 			origin: OriginFor<T>,
 			solution: RawSolution<CompactOf<T>>,
+			round: u32,
 			witness: SolutionOrSnapshotSize,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
@@ -733,7 +734,7 @@ pub mod pallet {
 				 deprive validator from their authoring reward.";
 
 			// Check score being an improvement, phase, and desired targets.
-			Self::unsigned_pre_dispatch_checks(&solution).expect(error_message);
+			Self::unsigned_pre_dispatch_checks(&solution, round).expect(error_message);
 
 			// ensure witness was correct.
 			let SolutionOrSnapshotSize { voters, targets } =
@@ -786,6 +787,8 @@ pub mod pallet {
 		PreDispatchWrongWinnerCount,
 		/// Submission was too weak, score-wise.
 		PreDispatchWeakSubmission,
+		/// OCW submitted solution for wrong round
+		OcwCallWrongEra,
 	}
 
 	#[pallet::origin]
@@ -794,7 +797,7 @@ pub mod pallet {
 	impl<T: Config> ValidateUnsigned for Pallet<T> {
 		type Call = Call<T>;
 		fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-			if let Call::submit_unsigned(solution, _) = call {
+			if let Call::submit_unsigned(solution, round, _) = call {
 				// discard solution not coming from the local OCW.
 				match source {
 					TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ }
@@ -803,7 +806,7 @@ pub mod pallet {
 					}
 				}
 
-				let _ = Self::unsigned_pre_dispatch_checks(solution)
+				let _ = Self::unsigned_pre_dispatch_checks(solution, *round)
 					.map_err(|err| {
 						log!(error, "unsigned transaction validation failed due to {:?}", err);
 						err
@@ -831,8 +834,8 @@ pub mod pallet {
 		}
 
 		fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
-			if let Call::submit_unsigned(solution, _) = call {
-				Self::unsigned_pre_dispatch_checks(solution)
+			if let Call::submit_unsigned(solution, round, _) = call {
+				Self::unsigned_pre_dispatch_checks(solution, *round)
 					.map_err(dispatch_error_to_invalid)
 					.map_err(Into::into)
 			} else {
