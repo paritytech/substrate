@@ -39,7 +39,8 @@ use sp_core::{
 use log::trace;
 use sp_wasm_interface::{HostFunctions, Function};
 use sc_executor_common::wasm_runtime::{WasmInstance, WasmModule};
-use sp_tasks::pool_spawn::{with_externalities_safe, RuntimeInstanceSpawn};
+use sp_tasks::common::with_externalities_safe;
+use sp_tasks::pool_spawn::RuntimeInstanceSpawn;
 
 /// Default num of pages for the heap
 const DEFAULT_HEAP_PAGES: u64 = 1024;

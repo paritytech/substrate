@@ -57,6 +57,18 @@
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
+/// In no_std we skip log, this macro
+/// is a noops.
+#[cfg(not(feature = "std"))]
+macro_rules! log_error {
+	(target: $target:expr, $($arg:tt)+) => (
+		()
+	);
+	($($arg:tt)+) => (
+		()
+	);
+}
+
 #[cfg(feature = "std")]
 pub mod error;
 #[cfg(feature = "std")]
@@ -70,7 +82,7 @@ mod async_externalities;
 #[cfg(feature = "std")]
 pub use async_externalities::new_async_externalities;
 #[cfg(feature = "std")]
-pub use crate::pool_spawn::with_externalities_safe;
+pub use crate::common::with_externalities_safe;
 pub use async_externalities::{new_inline_only_externalities, AsyncExternalities};
 pub use sp_externalities::WorkerResult;
 pub use sp_io::Crossing;

@@ -21,7 +21,7 @@
 
 use std::{
 	collections::HashMap,
-	panic::{UnwindSafe, AssertUnwindSafe},
+	panic::AssertUnwindSafe,
 	sync::{Arc, atomic::{AtomicU64, Ordering}, mpsc},
 };
 
@@ -35,7 +35,7 @@ use log::trace;
 use sp_externalities::{ExternalitiesExt as _, WorkerResult, TaskId};
 use crate::{
 	new_async_externalities,
-	wasm_runtime::{WasmInstance, WasmModule}, error::Result,
+	wasm_runtime::{WasmInstance, WasmModule},
 	common::{
 		WasmTask, NativeTask, Task, PendingTask as InlineTask,
 		InlineInstantiateRef, instantiate_inline,
@@ -44,15 +44,6 @@ use crate::{
 
 /// Inner id for a thread in pool.
 type PoolThreadId = u64;
-
-/// Set up the externalities and safe calling environment to execute runtime calls.
-///
-/// If the inner closure panics, it will be caught and return an error.
-pub fn with_externalities_safe<F, U>(ext: &mut dyn Externalities, f: F) -> Result<U>
-	where F: UnwindSafe + FnOnce() -> U
-{
-	Ok(crate::common::with_externalities_safe(ext, f)?)
-}
 
 struct InlineInstantiate<'a, 'b> {
 	module: &'a Option<Arc<dyn WasmModule>>,

@@ -39,22 +39,14 @@ use parking_lot::Mutex;
 use std::panic::AssertUnwindSafe;
 #[cfg(feature = "std")]
 pub use log::error as log_error;
+#[cfg(feature = "std")]
 use crate::common::{
-	WasmTask, NativeTask, Task, PendingTask, LazyInstanciate,
-	InlineInstantiateRef, HostLocalFunction,
+	LazyInstanciate, InlineInstantiateRef,
 };
-
-/// In no_std we skip log, this macro
-/// is a noops.
-#[cfg(not(feature = "std"))]
-macro_rules! log_error {
-	(target: $target:expr, $($arg:tt)+) => (
-		()
-	);
-	($($arg:tt)+) => (
-		()
-	);
-}
+use crate::common::{
+	WasmTask, NativeTask, Task, PendingTask,
+	HostLocalFunction,
+};
 
 /// Helper inner struct to implement `RuntimeSpawn` extension.
 ///
