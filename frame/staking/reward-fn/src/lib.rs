@@ -15,6 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![cfg_attr(not(feature = "std"), no_std)]
+
 //! Useful function for inflation for nominated proof of stake.
 
 use sp_arithmetic::{Perquintill, PerThing, biguint::BigUint, traits::{Zero, SaturatedConversion}};
@@ -72,7 +74,7 @@ pub fn compute_inflation<P: PerThing>(
 		a.lstrip();
 		a
 	};
-	
+
 	let mut falloff = BigUint::from(falloff.deconstruct().into());
 	falloff.lstrip();
 
@@ -228,7 +230,7 @@ fn div_by_stripped(mut a: BigUint, b: &BigUint) -> BigUint {
 			.div_unit(100_000)
 			.div_unit(100_000)
 	}
-	
+
 	a.div(b, false)
 		.map(|res| res.0)
 		.unwrap_or_else(|| BigUint::zero())
