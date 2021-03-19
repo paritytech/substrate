@@ -292,7 +292,7 @@ pub trait Externalities: ExtensionStore {
 	/// Get externalities to use from within a child worker.
 	fn get_worker_externalities(
 		&mut self,
-		worker_id: u64,
+		worker_id: TaskId,
 	) -> Box<dyn AsyncExternalities>;
 
 	/// Resolve worker result does update externality state

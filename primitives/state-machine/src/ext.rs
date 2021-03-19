@@ -718,7 +718,7 @@ where
 
 	fn get_worker_externalities(
 		&mut self,
-		worker_id: u64,
+		worker_id: TaskId,
 	) -> Box<dyn AsyncExternalities> {
 		Box::new(crate::async_ext::new_child_worker_async_ext(
 			worker_id,

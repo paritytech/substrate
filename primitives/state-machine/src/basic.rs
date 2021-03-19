@@ -336,7 +336,7 @@ impl Externalities for BasicExternalities {
 
 	fn get_worker_externalities(
 		&mut self,
-		_worker_id: u64,
+		_worker_id: TaskId,
 	) -> Box<dyn AsyncExternalities> {
 		unimplemented!("Workers are not supported by BasicExternalities");
 	}

@@ -175,7 +175,7 @@ impl crate::traits::SpawnLimit for TaskExecutor {
 }
 
 #[cfg(feature = "std")]
-struct Handle(Option<futures::future::RemoteHandle<()>>);
+pub struct Handle(Option<futures::future::RemoteHandle<()>>);
 
 #[cfg(feature = "std")]
 impl crate::traits::TaskHandleTrait for Handle {
