@@ -241,7 +241,7 @@ impl<B: BlockT> Builder<B> {
 		RpcApi::<B>::finalized_head(&self.as_online().rpc()).await.map_err(|e| {
 			error!("Error = {:?}", e);
 			"rpc finalized_head failed."
-			})
+		})
 	}
 
 	/// Relay the request to `state_getPairs` rpc endpoint.
@@ -256,7 +256,7 @@ impl<B: BlockT> Builder<B> {
 		RpcApi::<B>::storage_pairs(&self.as_online().rpc(), prefix, Some(at)).await.map_err(|e| {
 			error!("Error = {:?}", e);
 			"rpc storage_pairs failed"
-			})
+		})
 	}
 }
 
