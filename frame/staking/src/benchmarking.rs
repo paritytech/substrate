@@ -93,8 +93,8 @@ pub fn create_validator_with_nominators<T: Config>(
 	// Start a new Era
 	let new_validators = Staking::<T>::new_era(SessionIndex::one()).unwrap();
 
-	assert!(new_validators.len() == 1);
-	assert!(new_validators[0] == v_stash, "Our validator was not selected!");
+	assert_eq!(new_validators.len(), 1);
+	assert_eq!(new_validators[0], v_stash, "Our validator was not selected!");
 
 	// Give Era Points
 	let reward = EraRewardPoints::<T::AccountId> {
