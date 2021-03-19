@@ -2392,7 +2392,11 @@ impl<T: Config> Module<T> {
 	/// This will also process the election, as noted in [`process_election`].
 	fn enact_election(current_era: EraIndex) -> Option<Vec<T::AccountId>> {
 		T::ElectionProvider::elect()
-			.map_err(|e| log!(warn, "election provider failed due to {:?}", e))
+			.map_err(|e| {
+				if current_era > 0 {
+					log!(warn, "election provider failed due to {:?}", e)
+				}
+			})
 			.and_then(|(res, weight)| {
 				<frame_system::Pallet<T>>::register_extra_weight_unchecked(
 					weight,
@@ -2521,13 +2525,17 @@ impl<T: Config> Module<T> {
 			all_voters.push(self_vote);
 		}
 
+		// collect all slashing spans into a BTreeMap for further queries.
+		let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
+
 		for (nominator, nominations) in <Nominators<T>>::iter() {
 			let Nominations { submitted_in, mut targets, suppressed: _ } = nominations;
 
 			// Filter out nomination targets which were nominated before the most recent
 			// slashing span.
 			targets.retain(|stash| {
-				Self::slashing_spans(&stash)
+				slashing_spans
+					.get(stash)
 					.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
 			});
 

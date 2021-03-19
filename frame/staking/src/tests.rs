@@ -3733,8 +3733,7 @@ mod election_data_provider {
 	#[test]
 	fn voters_include_self_vote() {
 		ExtBuilder::default().nominate(false).build().execute_with(|| {
-			assert!(<Validators<Test>>::iter().map(|(x, _)| x).all(|v| {
-				Staking::voters(None)
+			assert!(<Validators<Test>>::iter().map(|(x, _)| x).all(|v| Staking::voters(None)
 				.unwrap()
 				.0
 				.into_iter()

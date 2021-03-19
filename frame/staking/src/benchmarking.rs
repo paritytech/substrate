@@ -539,6 +539,39 @@ benchmarks! {
 		let balance_after = T::Currency::free_balance(&stash);
 		assert!(balance_before > balance_after);
 	}
+
+	get_npos_voters {
+		// number of validator intention.
+		let v in 200 .. 400;
+		// number of nominator intention.
+		let n in 200 .. 400;
+		// total number of slashing spans. Assigned to validators randomly.
+		let s in 1 .. 20;
+
+		let validators = create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false, None)?
+			.into_iter()
+			.map(|v| T::Lookup::lookup(v).unwrap())
+			.collect::<Vec<_>>();
+
+		(0..s).for_each(|index| {
+			add_slashing_spans::<T>(&validators[index as usize], 10);
+		});
+	}: {
+		let voters = <Staking<T>>::get_npos_voters();
+		assert_eq!(voters.len() as u32, v + n);
+	}
+
+	get_npos_targets {
+		// number of validator intention.
+		let v in 200 .. 400;
+		// number of nominator intention.
+		let n = 500;
+
+		let _ = create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false, None)?;
+	}: {
+		let targets = <Staking<T>>::get_npos_targets();
+		assert_eq!(targets.len() as u32, v);
+	}
 }
 
 #[cfg(test)]
