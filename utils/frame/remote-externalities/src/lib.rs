@@ -117,9 +117,7 @@ use jsonrpsee_http_client::{HttpClient, HttpConfig};
 
 use sp_runtime::{
 	generic::BlockId,
-    traits::{
-		Block as BlockT, NumberFor,
-    }
+	traits::{Block as BlockT, NumberFor}
 };
 
 // TODO: Make KeyPair generic
