@@ -41,9 +41,9 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
-		Society: pallet_society::{Module, Call, Storage, Event<T>, Config<T>},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Society: pallet_society::{Pallet, Call, Storage, Event<T>, Config<T>},
 	}
 );
 
@@ -104,7 +104,7 @@ impl pallet_balances::Config for Test {
 
 impl Config for Test {
 	type Event = Event;
-	type Currency = pallet_balances::Module<Self>;
+	type Currency = pallet_balances::Pallet<Self>;
 	type Randomness = TestRandomness<Self>;
 	type CandidateDeposit = CandidateDeposit;
 	type WrongSideDeduction = WrongSideDeduction;

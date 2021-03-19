@@ -1759,6 +1759,7 @@ impl NetworkBehaviour for GenericProto {
 						}
 					},
 
+					Some(PeerState::Incoming { connections, .. }) |
 					Some(PeerState::DisabledPendingEnable { connections, .. }) |
 					Some(PeerState::Disabled { connections, .. }) => {
 						if let Some((_, connec_state)) = connections.iter_mut().find(|(c, s)|
@@ -1830,36 +1831,29 @@ impl NetworkBehaviour for GenericProto {
 							*entry.into_mut() = PeerState::Enabled { connections };
 						}
 					},
-					PeerState::Disabled { mut connections, backoff_until } => {
-						if let Some((_, connec_state)) = connections.iter_mut().find(|(c, s)|
-							*c == connection && matches!(s, ConnectionState::OpeningThenClosing))
-						{
-							*connec_state = ConnectionState::Closing;
-						} else {
-							error!(target: "sub-libp2p",
-								"OpenResultErr: State mismatch in the custom protos handler");
-							debug_assert!(false);
-						}
-
-						*entry.into_mut() = PeerState::Disabled { connections, backoff_until };
-					},
-					PeerState::DisabledPendingEnable { mut connections, timer, timer_deadline } => {
-						if let Some((_, connec_state)) = connections.iter_mut().find(|(c, s)|
-							*c == connection && matches!(s, ConnectionState::OpeningThenClosing))
-						{
-							*connec_state = ConnectionState::Closing;
-						} else {
-							error!(target: "sub-libp2p",
-								"OpenResultErr: State mismatch in the custom protos handler");
-							debug_assert!(false);
-						}
-
-						*entry.into_mut() = PeerState::DisabledPendingEnable {
-							connections,
-							timer,
-							timer_deadline,
+					mut state @ PeerState::Incoming { .. } |
+					mut state @ PeerState::DisabledPendingEnable { .. } |
+					mut state @ PeerState::Disabled { .. } => {
+						match &mut state {
+							PeerState::Incoming { connections, .. } |
+							PeerState::Disabled { connections, .. } |
+							PeerState::DisabledPendingEnable { connections, .. } => {
+								if let Some((_, connec_state)) = connections.iter_mut().find(|(c, s)|
+									*c == connection && matches!(s, ConnectionState::OpeningThenClosing))
+								{
+									*connec_state = ConnectionState::Closing;
+								} else {
+									error!(target: "sub-libp2p",
+										"OpenResultErr: State mismatch in the custom protos handler");
+									debug_assert!(false);
+								}
+							},
+							_ => unreachable!("Match branches are the same as the one on which we
+							enter this block; qed"),
 						};
-					},
+
+						*entry.into_mut() = state;
+					}
 					state => {
 						error!(target: "sub-libp2p",
 							"Unexpected state in the custom protos handler: {:?}",
