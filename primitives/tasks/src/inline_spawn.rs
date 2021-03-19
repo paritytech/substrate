@@ -24,7 +24,7 @@
 
 use crate::new_inline_only_externalities;
 use sp_core::traits::RuntimeSpawn;
-use sp_externalities::{WorkerResult, Externalities, AsyncExternalities};
+use sp_externalities::{WorkerResult, Externalities, AsyncExternalities, TaskId};
 use sp_std::rc::Rc;
 use sp_std::cell::RefCell;
 use sp_std::collections::btree_map::BTreeMap;
@@ -80,9 +80,12 @@ impl HostLocalFunction for HostLocal {
 impl HostLocalFunction for () { }
 
 /// Helper inner struct to implement `RuntimeSpawn` extension.
+///
+/// It manages a `TaskId` current counter and keep trace
+/// of task pending for those ids.
 pub struct RuntimeInstanceSpawn {
-	tasks: BTreeMap<u64, PendingTask>,
-	counter: u64,
+	tasks: BTreeMap<TaskId, PendingTask>,
+	counter: TaskId,
 }
 
 #[cfg(feature = "std")]
@@ -445,7 +448,7 @@ impl RuntimeInstanceSpawn {
 	}
 
 	/// Base implementation for `RuntimeSpawn` method.
-	pub fn dismiss(&mut self, handle: u64) {
+	pub fn dismiss(&mut self, handle: TaskId) {
 		self.tasks.remove(&handle);
 	}
 }
@@ -455,7 +458,7 @@ impl RuntimeInstanceSpawn {
 		&mut self,
 		task: Task,
 		calling_ext: &mut dyn Externalities,
-	) -> u64 {
+	) -> TaskId {
 		let handle = self.counter;
 		self.counter += 1;
 		let ext = calling_ext.get_worker_externalities(handle);
@@ -471,7 +474,7 @@ impl RuntimeInstanceSpawn {
 		func: fn(Vec<u8>) -> Vec<u8>,
 		data: Vec<u8>,
 		calling_ext: &mut dyn Externalities,
-	) -> u64 {
+	) -> TaskId {
 		let task = Task::Native(NativeTask { func, data });
 		self.spawn_call_inner(task, calling_ext)
 	}
@@ -483,7 +486,7 @@ impl RuntimeInstanceSpawn {
 		func: u32,
 		data: Vec<u8>,
 		calling_ext: &mut dyn Externalities,
-	) -> u64 {
+	) -> TaskId {
 		let task = Task::Wasm(WasmTask { dispatcher_ref, func, data });
 		self.spawn_call_inner(task, calling_ext)
 	}
@@ -551,7 +554,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawnSend {
 		func: fn(Vec<u8>) -> Vec<u8>,
 		data: Vec<u8>,
 		calling_ext: &mut dyn Externalities,
-	) -> u64 {
+	) -> TaskId {
 		self.0.lock().spawn_call_native(func, data, calling_ext)
 	}
 
@@ -561,11 +564,11 @@ impl RuntimeSpawn for RuntimeInstanceSpawnSend {
 		func: u32,
 		data: Vec<u8>,
 		calling_ext: &mut dyn Externalities,
-	) -> u64 {
+	) -> TaskId {
 		self.0.lock().spawn_call(dispatcher_ref, func, data, calling_ext)
 	}
 
-	fn join(&self, handle: u64, calling_ext: &mut dyn Externalities) -> Option<Vec<u8>> {
+	fn join(&self, handle: TaskId, calling_ext: &mut dyn Externalities) -> Option<Vec<u8>> {
 		let nested = Box::new(self.nested_instance());
 		let worker_result = match self.0.lock().tasks.remove(&handle) {
 			Some(task) => {
@@ -587,7 +590,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawnSend {
 		calling_ext.resolve_worker_result(worker_result)
 	}
 
-	fn dismiss(&self, handle: u64, calling_ext: &mut dyn Externalities) {
+	fn dismiss(&self, handle: TaskId, calling_ext: &mut dyn Externalities) {
 		calling_ext.dismiss_worker(handle);
 		self.0.lock().dismiss(handle)
 	}
@@ -630,7 +633,7 @@ pub mod hosted_runtime {
 			func: fn(Vec<u8>) -> Vec<u8>,
 			data: Vec<u8>,
 			calling_ext: &mut dyn Externalities,
-		) -> u64 {
+		) -> TaskId {
 			self.0.borrow_mut().spawn_call_native(func, data, calling_ext)
 		}
 
@@ -640,11 +643,11 @@ pub mod hosted_runtime {
 			func: u32,
 			data: Vec<u8>,
 			calling_ext: &mut dyn Externalities,
-		) -> u64 {
+		) -> TaskId {
 			self.0.borrow_mut().spawn_call(dispatcher_ref, func, data, calling_ext)
 		}
 
-		fn join(&self, handle: u64, calling_ext: &mut dyn Externalities) -> Option<Vec<u8>> {
+		fn join(&self, handle: TaskId, calling_ext: &mut dyn Externalities) -> Option<Vec<u8>> {
 			let nested = Box::new(self.nested_instance());
 			let worker_result = match self.0.borrow_mut().tasks.remove(&handle) {
 				Some(task) => {
@@ -677,7 +680,7 @@ pub mod hosted_runtime {
 			calling_ext.resolve_worker_result(worker_result)
 		}
 
-		fn dismiss(&self, handle: u64, calling_ext: &mut dyn Externalities) {
+		fn dismiss(&self, handle: TaskId, calling_ext: &mut dyn Externalities) {
 			calling_ext.dismiss_worker(handle);
 			self.0.borrow_mut().dismiss(handle)
 		}
@@ -718,21 +721,21 @@ pub mod hosted_runtime {
 		dispatcher_ref: u32,
 		entry: u32,
 		payload: Vec<u8>,
-	) -> u64 {
+	) -> TaskId {
 		sp_externalities::with_externalities_and_extension::<RuntimeSpawnExt, _, _>(|ext, runtime_spawn| {
 			runtime_spawn.spawn_call(dispatcher_ref, entry, payload, ext)
 		}).unwrap()
 	}
 
 	/// Hosted runtime variant of sp_io `RuntimeTasks` `spawn`.
-	pub fn host_runtime_tasks_join(handle: u64) -> Option<Vec<u8>> {
+	pub fn host_runtime_tasks_join(handle: TaskId) -> Option<Vec<u8>> {
 		sp_externalities::with_externalities_and_extension::<RuntimeSpawnExt, _, _>(|ext, runtime_spawn| {
 			runtime_spawn.join(handle, ext)
 		}).unwrap()
 	}
 
 	/// Hosted runtime variant of sp_io `RuntimeTasks` `spawn`.
-	pub fn host_runtime_tasks_dismiss(handle: u64) {
+	pub fn host_runtime_tasks_dismiss(handle: TaskId) {
 		sp_externalities::with_externalities_and_extension::<RuntimeSpawnExt, _, _>(|ext, runtime_spawn| {
 			runtime_spawn.dismiss(handle, ext)
 		}).unwrap()

@@ -29,7 +29,8 @@ use sp_std::{
 };
 use dyn_clone::DynClone;
 
-pub use sp_externalities::{Externalities, ExternalitiesExt, AsyncExternalities, WorkerResult};
+pub use sp_externalities::{Externalities, ExternalitiesExt, AsyncExternalities,
+	WorkerResult, TaskId};
 
 /// Code execution engine.
 #[cfg(feature = "std")]
@@ -208,7 +209,7 @@ pub trait RuntimeSpawn: Send {
 		func: fn(Vec<u8>) -> Vec<u8>,
 		data: Vec<u8>,
 		calling_ext: &mut dyn Externalities,
-	) -> u64;
+	) -> TaskId;
 
 	/// Create new runtime instance and use dynamic dispatch to invoke with specified payload.
 	///
@@ -220,10 +221,10 @@ pub trait RuntimeSpawn: Send {
 		func: u32,
 		payload: Vec<u8>,
 		ext: &mut dyn Externalities,
-	) -> u64;
+	) -> TaskId;
 
 	/// Join the result of previously created runtime instance invocation.
-	fn join(&self, handle: u64, calling_ext: &mut dyn Externalities) -> Option<Vec<u8>>;
+	fn join(&self, handle: TaskId, calling_ext: &mut dyn Externalities) -> Option<Vec<u8>>;
 
 	/// Stop the previous created runtime instance invocation.
 	///
@@ -231,7 +232,7 @@ pub trait RuntimeSpawn: Send {
 	/// will return `None`.
 	/// Client can handle this as he can (for instance worker
 	/// can not always be stopped).
-	fn dismiss(&self, handle: u64, calling_ext: &mut dyn Externalities);
+	fn dismiss(&self, handle: TaskId, calling_ext: &mut dyn Externalities);
 
 	/// Possibly change the number of runtime runing in the pool.
 	/// Note that this should only increase capacity (default value

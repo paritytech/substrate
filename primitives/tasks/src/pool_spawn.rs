@@ -32,7 +32,7 @@ use sp_core::{
 	},
 };
 use log::trace;
-use sp_externalities::{ExternalitiesExt as _, WorkerResult};
+use sp_externalities::{ExternalitiesExt as _, WorkerResult, TaskId};
 use crate::{
 	new_async_externalities,
 	wasm_runtime::{WasmInstance, WasmModule}, error::Result,
@@ -41,6 +41,9 @@ use crate::{
 		InlineInstantiateRef, instantiate_inline,
 	},
 };
+
+/// Inner id for a thread in pool.
+type PoolThreadId = u64;
 
 /// Set up the externalities and safe calling environment to execute runtime calls.
 ///
@@ -75,7 +78,7 @@ impl<'a, 'b> crate::inline_spawn::LazyInstanciate<'a> for InlineInstantiate<'a, 
 pub struct RuntimeInstanceSpawn {
 	module: Option<Arc<dyn WasmModule>>,
 	instance: Arc<parking_lot::Mutex<Option<AssertUnwindSafe<Box<dyn WasmInstance>>>>>,
-	tasks: Arc<parking_lot::Mutex<HashMap<u64, PendingTask>>>,
+	tasks: Arc<parking_lot::Mutex<HashMap<TaskId, PendingTask>>>,
 	infos: Arc<parking_lot::Mutex<RuntimeInstanceSpawnInfo>>,
 	counter: Arc<AtomicU64>,
 	scheduler: Box<dyn sp_core::traits::SpawnNamed>,
@@ -94,10 +97,10 @@ mod task_handle {
 	pub(super) struct TaskHandles(Arc<parking_lot::Mutex<TaskHandlesInner>>);
 
 	struct TaskHandlesInner {
-		/// threads handle with associated pthread.
-		running: BTreeMap<u64, Option<TaskHandle>>,
-		/// worker mapping with their thread ids.
-		workers: BTreeMap<u64, u64>,
+		/// Threads handle with associated pthread.
+		running: BTreeMap<PoolThreadId, Option<TaskHandle>>,
+		/// Worker mapping with their thread ids.
+		workers: BTreeMap<TaskId, PoolThreadId>,
 	}
 
 	impl Default for TaskHandlesInner {
@@ -110,27 +113,27 @@ mod task_handle {
 	}
 
 	impl TaskHandles {
-		pub(super) fn new_thread_id(&self, counter: &Arc<AtomicU64>) -> u64 {
+		pub(super) fn new_thread_id(&self, counter: &Arc<AtomicU64>) -> PoolThreadId {
 			let thread_id = counter.fetch_add(1, Ordering::Relaxed);
 			self.0.lock().running.insert(thread_id, None);
 			thread_id
 		}
-		pub(super) fn register_new_thread(&self, handle: TaskHandle, thread_id: u64) {
+		pub(super) fn register_new_thread(&self, handle: TaskHandle, thread_id: PoolThreadId) {
 			self.0.lock().running.insert(thread_id, Some(handle));
 		}
-		pub(super) fn drop_new_thread(&self, thread_id: u64) {
+		pub(super) fn drop_new_thread(&self, thread_id: PoolThreadId) {
 			self.0.lock().running.remove(&thread_id);
 		}
-		pub(super) fn register_worker(&self, worker: u64, thread_id: u64) {
+		pub(super) fn register_worker(&self, worker: TaskId, thread_id: PoolThreadId) {
 			self.0.lock().workers.insert(worker, thread_id);
 		}
-		pub(super) fn finished_worker(&self, worker: u64) {
+		pub(super) fn finished_worker(&self, worker: TaskId) {
 			let mut lock = self.0.lock();
 			if let Some(pthread_id) = lock.workers.remove(&worker) {
 				lock.running.remove(&pthread_id);
 			}
 		}
-		pub(super) fn dismiss_thread(&self, worker: u64) {
+		pub(super) fn dismiss_thread(&self, worker: TaskId) {
 			let mut lock = self.0.lock();
 			if let Some(handle_id) = lock.workers.remove(&worker) {
 				if let Some(handle) = lock.running.remove(&handle_id) {
@@ -149,18 +152,18 @@ mod task_handle {
 	pub(super) struct TaskHandles;
 
 	impl TaskHandles {
-		pub(super) fn new_thread_id(&self, _counter: &Arc<AtomicU64>) -> u64 {
+		pub(super) fn new_thread_id(&self, _counter: &Arc<AtomicU64>) -> PoolThreadId {
 			0
 		}
-		pub(super) fn register_new_thread(&self, _handle: TaskHandle, _thread_id: u64) {
+		pub(super) fn register_new_thread(&self, _handle: TaskHandle, _thread_id: PoolThreadId) {
 		}
-		pub(super) fn drop_new_thread(&self, _thread_id: u64) {
+		pub(super) fn drop_new_thread(&self, _thread_id: PoolThreadId) {
 		}
-		pub(super) fn register_worker(&self, _worker: u64, _thread_id: u64) {
+		pub(super) fn register_worker(&self, _worker: TaskId, _thread_id: PoolThreadId) {
 		}
-		pub(super) fn finished_worker(&self, _worker: u64) {
+		pub(super) fn finished_worker(&self, _worker: TaskId) {
 		}
-		pub(super) fn dismiss_thread(&self, _worker: u64) {
+		pub(super) fn dismiss_thread(&self, _worker: TaskId) {
 		}
 	}
 }
@@ -181,7 +184,7 @@ enum PendingTask {
 }
 
 struct RemoteTask {
-	handle: u64,
+	handle: TaskId,
 	task: Task,
 	ext: Box<dyn AsyncExternalities>,
 	result_sender: mpsc::Sender<Option<WorkerResult>>,
@@ -260,7 +263,7 @@ impl RuntimeInstanceSpawn {
 
 	fn insert(
 		&self,
-		handle: u64,
+		handle: TaskId,
 		task: Task,
 		ext: Box<dyn AsyncExternalities>,
 	) {
@@ -409,7 +412,7 @@ impl RuntimeInstanceSpawn {
 		&self,
 		task: Task,
 		calling_ext: &mut dyn Externalities,
-	) -> u64 {
+	) -> TaskId {
 		let handle = self.counter.fetch_add(1, Ordering::Relaxed);
 		let ext = calling_ext.get_worker_externalities(handle);
 
@@ -425,7 +428,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 		func: fn(Vec<u8>) -> Vec<u8>,
 		data: Vec<u8>,
 		calling_ext: &mut dyn Externalities,
-	) -> u64 {
+	) -> TaskId {
 		let task = Task::Native(NativeTask { func, data });
 		self.spawn_call_inner(task, calling_ext)
 	}
@@ -436,12 +439,12 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 		func: u32,
 		data: Vec<u8>,
 		calling_ext: &mut dyn Externalities,
-	) -> u64 {
+	) -> TaskId {
 		let task = Task::Wasm(WasmTask { dispatcher_ref, func, data });
 		self.spawn_call_inner(task, calling_ext)
 	}
 
-	fn join(&self, handle: u64, calling_ext: &mut dyn Externalities) -> Option<Vec<u8>> {
+	fn join(&self, handle: TaskId, calling_ext: &mut dyn Externalities) -> Option<Vec<u8>> {
 		let task = self.tasks.lock().remove(&handle);
 		let worker_result = match task {
 			Some(PendingTask::Remote(receiver)) => match receiver.recv() {
@@ -475,7 +478,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 		calling_ext.resolve_worker_result(worker_result)
 	}
 
-	fn dismiss(&self, handle: u64, calling_ext: &mut dyn Externalities) {
+	fn dismiss(&self, handle: TaskId, calling_ext: &mut dyn Externalities) {
 		calling_ext.dismiss_worker(handle);
 		self.task_handles.dismiss_thread(handle);
 		self.tasks.lock().remove(&handle);
