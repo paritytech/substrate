@@ -181,7 +181,6 @@ mod tests {
                 ("telemetry-logger", LevelFilter::Off),
                 ("sc_peerset", LevelFilter::Off),
                 ("rpc", LevelFilter::Off),
-
                 ("runtime", LevelFilter::Trace),
                 ("babe", LevelFilter::Debug)
             ],

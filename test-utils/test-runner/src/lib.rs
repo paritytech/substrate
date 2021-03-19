@@ -51,7 +51,7 @@
 //! use sp_keyring::sr25519::Keyring::{Alice, Bob};
 //! use node_cli::chain_spec::development_config;
 //! use sp_consensus_babe::AuthorityId;
-//! use sc_consensus_manual_seal::{ConsensusDataProvider, consensus::babe::BabeConsensusDataProvider};
+//! use manual_seal::{ConsensusDataProvider, consensus::babe::BabeConsensusDataProvider};
 //! use sp_runtime::{traits::IdentifyAccount, MultiSigner, generic::Era};
 //! use sc_executor::WasmExecutionMethod;
 //! use sc_network::{multiaddr, config::TransportConfig};
