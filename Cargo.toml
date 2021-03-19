@@ -106,6 +106,7 @@ members = [
 	"frame/society",
 	"frame/staking",
 	"frame/staking/reward-curve",
+	"frame/staking/reward-fn",
 	"frame/sudo",
 	"frame/support",
 	"frame/support/procedural",
