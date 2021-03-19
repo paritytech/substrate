@@ -1,4 +1,4 @@
-name: 'Run tests'
+name: 'Run tests 2'
 on:
   pull_request:
     branches: [dev-cere]
@@ -12,16 +12,16 @@ jobs:
         run: 'git submodule update --init --recursive'
       - name: 'current disk space'
         run: df -Ph . | tail -1 | awk '{print $4}'
-      - name: 'clean up 1'
+      - name: 'Clean up 1'
         run: sudo rm -rf "/usr/local/share/boost"
-      - name: 'clean up 2'
+      - name: 'Clean up 2'
         run: sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-      - name: 'current disk space 2'
+      - name: 'Current disk space'
         run: df -Ph . | tail -1 | awk '{print $4}'
       - name: 'Run tests'
         run: |
-          docker build . --no-cache -f Dockerfile.tests
-      - name: 'current disk space'
+          docker build . --no-cache -f Dockerfile.tests-2
+      - name: 'Current disk space'
         run: df -Ph . | tail -1 | awk '{print $4}'
-      - name: 'disks space'
+      - name: 'Disks space'
         run: df -h
