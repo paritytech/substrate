@@ -1020,4 +1020,28 @@ mod tests {
 			assert!(matches!(call, OuterCall::MultiPhase(Call::submit_unsigned(..))));
 		})
 	}
+
+	#[test]
+	fn ocw_solution_must_have_correct_round() {
+		let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
+		ext.execute_with(|| {
+			roll_to_with_ocw(25);
+			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
+			// OCW must have submitted now
+			// now, before we check the call, update the round
+			<crate::Round<Runtime>>::mutate(|round| *round += 1);
+
+			let encoded = pool.read().transactions[0].clone();
+			let extrinsic = Extrinsic::decode(&mut &*encoded).unwrap();
+			let (solution, round) = match extrinsic.call {
+				OuterCall::MultiPhase(Call::submit_unsigned(solution, round, _)) => (solution, round),
+				_ => panic!("bad call: unexpected submission"),
+			};
+
+			assert_noop!(
+				MultiPhase::unsigned_pre_dispatch_checks(&solution, round),
+				Error::<Runtime>::OcwCallWrongEra,
+			);
+		})
+	}
 }
