@@ -446,7 +446,7 @@ pub mod pallet {
 			let gilt = Active::<T>::get(index).ok_or(Error::<T>::Unknown)?;
 			// If found, check the owner is `who`.
 			ensure!(gilt.who == who, Error::<T>::NotOwner);
-			let now = frame_system::Module::<T>::block_number();
+			let now = frame_system::Pallet::<T>::block_number();
 			ensure!(now >= gilt.expiry, Error::<T>::NotExpired);
 			// Remove it
 			Active::<T>::remove(index);
@@ -562,7 +562,7 @@ pub mod pallet {
 			let mut remaining = amount;
 			let mut bids_taken = 0;
 			let mut queues_hit = 0;
-			let now = frame_system::Module::<T>::block_number();
+			let now = frame_system::Pallet::<T>::block_number();
 
 			ActiveTotal::<T>::mutate(|totals| {
 				QueueTotals::<T>::mutate(|qs| {

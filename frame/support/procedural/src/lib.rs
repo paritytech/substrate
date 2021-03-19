@@ -192,7 +192,7 @@ use proc_macro::TokenStream;
 /// construct_runtime!(
 /// 	pub enum Runtime with ... {
 ///         ...,
-///         Example: example::{Module, Storage, ..., Config<T>},
+///         Example: example::{Pallet, Storage, ..., Config<T>},
 ///         ...,
 ///	}
 /// );
@@ -258,13 +258,13 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 ///         NodeBlock = runtime::Block,
 ///         UncheckedExtrinsic = UncheckedExtrinsic
 ///     {
-///         System: system::{Module, Call, Event<T>, Config<T>} = 0,
-///         Test: test::{Module, Call} = 1,
-///         Test2: test_with_long_module::{Module, Event<T>},
+///         System: system::{Pallet, Call, Event<T>, Config<T>} = 0,
+///         Test: test::{Pallet, Call} = 1,
+///         Test2: test_with_long_module::{Pallet, Event<T>},
 ///
 ///         // Module with instances
-///         Test3_Instance1: test3::<Instance1>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>},
-///         Test3_DefaultInstance: test3::{Module, Call, Storage, Event<T>, Config<T>, Origin<T>} = 4,
+///         Test3_Instance1: test3::<Instance1>::{Pallet, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>},
+///         Test3_DefaultInstance: test3::{Pallet, Call, Storage, Event<T>, Config<T>, Origin<T>} = 4,
 ///     }
 /// )
 /// ```
@@ -306,7 +306,7 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 /// # Type definitions
 ///
 /// * The macro generates a type alias for each pallet to their `Module` (or `Pallet`).
-///   E.g. `type System = frame_system::Module<Runtime>`
+///   E.g. `type System = frame_system::Pallet<Runtime>`
 #[proc_macro]
 pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	construct_runtime::construct_runtime(input)

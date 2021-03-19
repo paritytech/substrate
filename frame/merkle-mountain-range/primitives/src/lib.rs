@@ -51,10 +51,10 @@ impl LeafDataProvider for () {
 /// so that any point in time in the future we can receive a proof about some past
 /// blocks without using excessive on-chain storage.
 ///
-/// Hence we implement the [LeafDataProvider] for [frame_system::Module]. Since the
+/// Hence we implement the [LeafDataProvider] for [frame_system::Pallet]. Since the
 /// current block hash is not available (since the block is not finished yet),
 /// we use the `parent_hash` here along with parent block number.
-impl<T: frame_system::Config> LeafDataProvider for frame_system::Module<T> {
+impl<T: frame_system::Config> LeafDataProvider for frame_system::Pallet<T> {
 	type LeafData = (
 		<T as frame_system::Config>::BlockNumber,
 		<T as frame_system::Config>::Hash
