@@ -260,19 +260,33 @@ use sp_std::{
 	marker::PhantomData
 };
 use frame_support::{
-	dispatch::DispatchResult, traits::IsSubType,
+	runtime_print, dispatch::DispatchResult, traits::IsSubType,
 	weights::{DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee, Pays},
 };
 use frame_system::{ensure_signed};
 use codec::{Encode, Decode};
 use sp_runtime::{
 	traits::{
-		SignedExtension, Bounded, SaturatedConversion, DispatchInfoOf,
+		SignedExtension, Bounded, SaturatedConversion, DispatchInfoOf, Saturating
 	},
 	transaction_validity::{
 		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
 	},
 };
+
+// Re-export pallet items so that they can be accessed from the crate namespace.
+pub use pallet::*;
+
+#[cfg(test)]
+mod tests;
+
+mod benchmarking;
+pub mod weights;
+pub use weights::*;
+
+/// A type alias for the balance type from this pallet's point of view.
+type BalanceOf<T> = <T as pallet_balances::Config>::Balance;
+const MILLICENTS: u32 = 1_000_000_000;
 
 // A custom weight calculator tailored for the dispatch call `set_dummy()`. This actually examines
 // the arguments and makes a decision based upon them.
@@ -294,7 +308,9 @@ impl<T: pallet_balances::Config> WeighData<(&BalanceOf<T>,)> for WeightForSetDum
 {
 	fn weigh_data(&self, target: (&BalanceOf<T>,)) -> Weight {
 		let multiplier = self.0;
-		(*target.0 * multiplier).saturated_into::<Weight>()
+		// *target.0 is the amount passed into the extrinsic
+		let cents = *target.0 / <BalanceOf<T>>::from(MILLICENTS);
+		(cents * multiplier).saturated_into::<Weight>()
 	}
 }
 
@@ -313,17 +329,6 @@ impl<T: pallet_balances::Config> PaysFee<(&BalanceOf<T>,)> for WeightForSetDummy
 		Pays::Yes
 	}
 }
-
-/// A type alias for the balance type from this pallet's point of view.
-type BalanceOf<T> = <T as pallet_balances::Config>::Balance;
-
-// Re-export pallet items so that they can be accessed from the crate namespace.
-pub use pallet::*;
-
-mod tests;
-mod benchmarking;
-pub mod weights;
-pub use weights::*;
 
 // Definition of the pallet logic, to be aggregated at runtime definition through
 // `construct_runtime`.
@@ -463,13 +468,16 @@ pub mod pallet {
 		// difficulty) of the transaction and the latter demonstrates the [`DispatchClass`] of the
 		// call. A higher weight means a larger transaction (less of which can be placed in a
 		// single block).
+		//
+		// The weight for this extrinsic we rely on the auto-generated `WeightInfo` from the benchmark
+		// toolchain.
 		#[pallet::weight(
 			<T as pallet::Config>::WeightInfo::accumulate_dummy((*increase_by).saturated_into())
 		)]
 		pub(super) fn accumulate_dummy(
 			origin: OriginFor<T>,
 			increase_by: T::Balance
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let _sender = ensure_signed(origin)?;
 
@@ -488,15 +496,16 @@ pub mod pallet {
 
 			// Here's the new one of read and then modify the value.
 			<Dummy<T>>::mutate(|dummy| {
-				let new_dummy = dummy.map_or(increase_by, |dummy| dummy + increase_by);
+				// Using `saturating_add` instead of a regular `+` to avoid overflowing
+				let new_dummy = dummy.map_or(increase_by, |d| d.saturating_add(increase_by));
 				*dummy = Some(new_dummy);
 			});
 
 			// Let's deposit an event to let the outside world know this happened.
-			Self::deposit_event(Event::Dummy(increase_by));
+			Self::deposit_event(Event::AccumulateDummy(increase_by));
 
 			// All good, no refund.
-			Ok(().into())
+			Ok(())
 		}
 
 		/// A privileged call; in this case it resets our dummy value to something new.
@@ -506,19 +515,25 @@ pub mod pallet {
 		// calls to be executed - we don't need to care why. Because it's privileged, we can
 		// assume it's a one-off operation and substantial processing/storage/memory can be used
 		// without worrying about gameability or attack scenarios.
-		#[pallet::weight(
-			<T as pallet::Config>::WeightInfo::set_dummy((*new_value).saturated_into())
-		)]
-		fn set_dummy(
+		//
+		// The weight for this extrinsic we use our own weight object `WeightForSetDummy` to determine
+		// its weight
+		#[pallet::weight(WeightForSetDummy::<T>(<BalanceOf<T>>::from(100u32)))]
+		pub(super) fn set_dummy(
 			origin: OriginFor<T>,
 			#[pallet::compact] new_value: T::Balance,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			ensure_root(origin)?;
+
+			// TODO: add comment
+			runtime_print!("New value is now: {:?}", new_value);
+
 			// Put the new value into storage.
 			<Dummy<T>>::put(new_value);
+			Self::deposit_event(Event::SetDummy(new_value));
 
 			// All good, no refund.
-			Ok(().into())
+			Ok(())
 		}
 	}
 
@@ -532,7 +547,8 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		// Just a normal `enum`, here's a dummy event to ensure it compiles.
 		/// Dummy event, just here so there's a generic type that's used.
-		Dummy(BalanceOf<T>),
+		AccumulateDummy(BalanceOf<T>),
+		SetDummy(BalanceOf<T>),
 	}
 
 	// pallet::storage attributes allow for type-safe usage of the Substrate storage database,
@@ -563,7 +579,6 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn foo)]
 	pub(super) type Foo<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
-
 
 	// The genesis config type.
 	#[pallet::genesis_config]
@@ -612,7 +627,7 @@ impl<T: Config> Pallet<T> {
 		let prev = <Foo<T>>::get();
 		// Because Foo has 'default', the type of 'foo' in closure is the raw type instead of an Option<> type.
 		let result = <Foo<T>>::mutate(|foo| {
-			*foo = *foo + increase_by;
+			*foo = foo.saturating_add(increase_by);
 			*foo
 		});
 		assert!(prev + increase_by == result);

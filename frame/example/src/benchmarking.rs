@@ -27,6 +27,7 @@ benchmarks!{
 	// This will measure the execution time of `accumulate_dummy` for b in [1..1000] range.
 	accumulate_dummy {
 		let b in 1 .. 1000;
+		// The caller account is whitelisted for DB reads/write by the benchmarking macro.
 		let caller: T::AccountId = whitelisted_caller();
 	}: _(RawOrigin::Signed(caller), b.into())
 
@@ -34,11 +35,6 @@ benchmarks!{
 	set_dummy {
 		let b in 1 .. 1000;
 	}: _(RawOrigin::Root, b.into())
-
-	// This will measure the execution time of `set_dummy` for b in [1..10] range.
-	another_set_dummy {
-		let b in 1 .. 10;
-	}: set_dummy(RawOrigin::Root, b.into())
 
 	// This will measure the execution time of sorting a vector.
 	sort_vector {

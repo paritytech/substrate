@@ -17,8 +17,6 @@
 
 //! Tests for pallet-example.
 
-#![cfg(test)]
-
 use crate::*;
 use frame_support::{
 	assert_ok, parameter_types,
@@ -140,6 +138,15 @@ fn it_works_for_default_value() {
 		assert_eq!(Example::foo(), 24);
 		assert_ok!(Example::accumulate_foo(Origin::signed(1), 1));
 		assert_eq!(Example::foo(), 25);
+	});
+}
+
+#[test]
+fn set_dummy_works() {
+	new_test_ext().execute_with(|| {
+		let test_val = 133;
+		assert_ok!(Example::set_dummy(Origin::root(), test_val.into()));
+		assert_eq!(Example::dummy(), Some(test_val));
 	});
 }
 
