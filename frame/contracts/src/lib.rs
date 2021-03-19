@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Contract Module
+//! # Contract Pallet
 //!
 //! The Contract module provides functionality for the runtime to deploy and execute WebAssembly smart-contracts.
 //!
@@ -90,6 +90,7 @@ mod wasm;
 mod rent;
 mod benchmarking;
 mod schedule;
+mod migration;
 
 pub mod chain_extension;
 pub mod weights;
@@ -123,7 +124,7 @@ use frame_support::{
 	traits::{OnUnbalanced, Currency, Get, Time, Randomness},
 	weights::{Weight, PostDispatchInfo, WithPostDispatchInfo},
 };
-use frame_system::Module as System;
+use frame_system::Pallet as System;
 use pallet_contracts_primitives::{
 	RentProjectionResult, GetStorageResult, ContractAccessError, ContractExecResult,
 };
@@ -151,7 +152,7 @@ pub mod pallet {
 		type Time: Time;
 
 		/// The generator used to supply randomness to contracts through `seal_random`.
-		type Randomness: Randomness<Self::Hash>;
+		type Randomness: Randomness<Self::Hash, Self::BlockNumber>;
 
 		/// The currency in which fees are paid and contract balances are held.
 		type Currency: Currency<Self::AccountId>;
@@ -220,7 +221,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxValueSize: Get<u32>;
 
-		/// Used to answer contracts's queries regarding the current weight price. This is **not**
+		/// Used to answer contracts' queries regarding the current weight price. This is **not**
 		/// used to calculate the actual fee and is only for informational purposes.
 		type WeightPrice: Convert<Weight, BalanceOf<Self>>;
 
@@ -265,6 +266,10 @@ pub mod pallet {
 			Storage::<T>::process_deletion_queue_batch(weight_limit)
 				.saturating_add(T::WeightInfo::on_initialize())
 		}
+
+		fn on_runtime_upgrade() -> Weight {
+			migration::migrate::<T>()
+		}
 	}
 
 	#[pallet::call]
@@ -275,14 +280,17 @@ pub mod pallet {
 	{
 		/// Updates the schedule for metering contracts.
 		///
-		/// The schedule must have a greater version than the stored schedule.
+		/// The schedule's version cannot be less than the version of the stored schedule.
+		/// If a schedule does not change the instruction weights the version does not
+		/// need to be increased. Therefore we allow storing a schedule that has the same
+		/// version as the stored one.
 		#[pallet::weight(T::WeightInfo::update_schedule())]
 		pub fn update_schedule(
 			origin: OriginFor<T>,
 			schedule: Schedule<T>
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			if <Module<T>>::current_schedule().version >= schedule.version {
+			if <Pallet<T>>::current_schedule().version > schedule.version {
 				Err(Error::<T>::InvalidScheduleVersion)?
 			}
 			Self::deposit_event(Event::ScheduleUpdated(schedule.version));
@@ -308,7 +316,7 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
 			let mut gas_meter = GasMeter::new(gas_limit);
-			let schedule = <Module<T>>::current_schedule();
+			let schedule = <Pallet<T>>::current_schedule();
 			let mut ctx = ExecutionContext::<T, PrefabWasmModule<T>>::top_level(origin, &schedule);
 			let (result, code_len) = match ctx.call(dest, value, &mut gas_meter, data) {
 				Ok((output, len)) => (Ok(output), len),
@@ -357,7 +365,7 @@ pub mod pallet {
 			let code_len = code.len() as u32;
 			ensure!(code_len <= T::MaxCodeSize::get(), Error::<T>::CodeTooLarge);
 			let mut gas_meter = GasMeter::new(gas_limit);
-			let schedule = <Module<T>>::current_schedule();
+			let schedule = <Pallet<T>>::current_schedule();
 			let executable = PrefabWasmModule::from_code(code, &schedule)?;
 			let code_len = executable.code_len();
 			ensure!(code_len <= T::MaxCodeSize::get(), Error::<T>::CodeTooLarge);
@@ -389,7 +397,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let origin = ensure_signed(origin)?;
 			let mut gas_meter = GasMeter::new(gas_limit);
-			let schedule = <Module<T>>::current_schedule();
+			let schedule = <Pallet<T>>::current_schedule();
 			let executable = PrefabWasmModule::from_storage(code_hash, &schedule, &mut gas_meter)?;
 			let mut ctx = ExecutionContext::<T, PrefabWasmModule<T>>::top_level(origin, &schedule);
 			let code_len = executable.code_len();
@@ -657,7 +665,7 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config> Module<T>
+impl<T: Config> Pallet<T>
 where
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
@@ -675,7 +683,7 @@ where
 		input_data: Vec<u8>,
 	) -> ContractExecResult {
 		let mut gas_meter = GasMeter::new(gas_limit);
-		let schedule = <Module<T>>::current_schedule();
+		let schedule = <Pallet<T>>::current_schedule();
 		let mut ctx = ExecutionContext::<T, PrefabWasmModule<T>>::top_level(origin, &schedule);
 		let result = ctx.call(dest, value, &mut gas_meter, input_data);
 		let gas_consumed = gas_meter.gas_spent();
@@ -738,7 +746,7 @@ where
 	/// Store code for benchmarks which does not check nor instrument the code.
 	#[cfg(feature = "runtime-benchmarks")]
 	fn store_code_raw(code: Vec<u8>) -> frame_support::dispatch::DispatchResult {
-		let schedule = <Module<T>>::current_schedule();
+		let schedule = <Pallet<T>>::current_schedule();
 		PrefabWasmModule::store_code_unchecked(code, &schedule)?;
 		Ok(())
 	}

@@ -121,6 +121,7 @@ pub use crate::overlayed_changes::{
 	StorageChanges, StorageTransactionCache,
 	OffchainChangesCollection,
 	OffchainOverlayedChanges,
+	IndexOperation,
 };
 pub use crate::backend::Backend;
 pub use crate::trie_backend_essence::{TrieBackendStorage, Storage};

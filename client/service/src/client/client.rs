@@ -35,9 +35,13 @@ use sp_core::{
 };
 #[cfg(feature="test-helpers")]
 use sp_keystore::SyncCryptoStorePtr;
-use sc_telemetry::{telemetry, SUBSTRATE_INFO};
+use sc_telemetry::{
+	telemetry,
+	TelemetryHandle,
+	SUBSTRATE_INFO,
+};
 use sp_runtime::{
-	Justification, BuildStorage,
+	Justification, Justifications, BuildStorage,
 	generic::{BlockId, SignedBlock, DigestItem},
 	traits::{
 		Block as BlockT, Header as HeaderT, Zero, NumberFor,
@@ -116,6 +120,7 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	block_rules: BlockRules<Block>,
 	execution_extensions: ExecutionExtensions<Block>,
 	config: ClientConfig,
+	telemetry: Option<TelemetryHandle>,
 	_phantom: PhantomData<RA>,
 }
 
@@ -153,6 +158,7 @@ pub fn new_in_mem<E, Block, S, RA>(
 	genesis_storage: &S,
 	keystore: Option<SyncCryptoStorePtr>,
 	prometheus_registry: Option<Registry>,
+	telemetry: Option<TelemetryHandle>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	config: ClientConfig,
 ) -> sp_blockchain::Result<Client<
@@ -172,6 +178,7 @@ pub fn new_in_mem<E, Block, S, RA>(
 		keystore,
 		spawn_handle,
 		prometheus_registry,
+		telemetry,
 		config,
 	)
 }
@@ -197,6 +204,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 	keystore: Option<SyncCryptoStorePtr>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
+	telemetry: Option<TelemetryHandle>,
 	config: ClientConfig,
 ) -> sp_blockchain::Result<Client<B, LocalCallExecutor<B, E>, Block, RA>>
 	where
@@ -206,7 +214,11 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 		B: backend::LocalBackend<Block> + 'static,
 {
 	let call_executor = LocalCallExecutor::new(backend.clone(), executor, spawn_handle, config.clone())?;
-	let extensions = ExecutionExtensions::new(Default::default(), keystore);
+	let extensions = ExecutionExtensions::new(
+		Default::default(),
+		keystore,
+		sc_offchain::OffchainDb::factory_from_backend(&*backend),
+	);
 	Client::new(
 		backend,
 		call_executor,
@@ -215,6 +227,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 		Default::default(),
 		extensions,
 		prometheus_registry,
+		telemetry,
 		config,
 	)
 }
@@ -295,6 +308,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		bad_blocks: BadBlocks<Block>,
 		execution_extensions: ExecutionExtensions<Block>,
 		prometheus_registry: Option<Registry>,
+		telemetry: Option<TelemetryHandle>,
 		config: ClientConfig,
 	) -> sp_blockchain::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
@@ -327,6 +341,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			block_rules: BlockRules::new(fork_blocks, bad_blocks),
 			execution_extensions,
 			config,
+			telemetry,
 			_phantom: Default::default(),
 		})
 	}
@@ -611,7 +626,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let BlockImportParams {
 			origin,
 			header,
-			justification,
+			justifications,
 			post_digests,
 			body,
 			storage_changes,
@@ -623,7 +638,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			..
 		} = import_block;
 
-		assert!(justification.is_some() && finalized || justification.is_none());
+		assert!(justifications.is_some() && finalized || justifications.is_none());
 
 		if !intermediates.is_empty() {
 			return Err(Error::IncompletePipeline)
@@ -651,7 +666,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			origin,
 			hash,
 			import_headers,
-			justification,
+			justifications,
 			body,
 			storage_changes,
 			new_cache,
@@ -669,7 +684,10 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				if origin != BlockOrigin::NetworkInitialSync ||
 					rand::thread_rng().gen_bool(0.1)
 				{
-					telemetry!(SUBSTRATE_INFO; "block.import";
+					telemetry!(
+						self.telemetry;
+						SUBSTRATE_INFO;
+						"block.import";
 						"height" => height,
 						"best" => ?hash,
 						"origin" => ?origin
@@ -687,7 +705,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		origin: BlockOrigin,
 		hash: Block::Hash,
 		import_headers: PrePostHeader<Block::Header>,
-		justification: Option<Justification>,
+		justifications: Option<Justifications>,
 		body: Option<Vec<Block::Extrinsic>>,
 		storage_changes: Option<sp_api::StorageChanges<backend::StateBackendFor<B, Block>, Block>>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
@@ -750,6 +768,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 					offchain_sc,
 					tx, _,
 					changes_trie_tx,
+					tx_index,
 				) = storage_changes.into_inner();
 
 				if self.config.offchain_indexing_api {
@@ -758,6 +777,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 				operation.op.update_db_storage(tx)?;
 				operation.op.update_storage(main_sc.clone(), child_sc.clone())?;
+				operation.op.update_transaction_index(tx_index)?;
 
 				if let Some(changes_trie_transaction) = changes_trie_tx {
 					operation.op.update_changes_trie(changes_trie_transaction)?;
@@ -803,7 +823,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		operation.op.set_block_data(
 			import_headers.post().clone(),
 			body,
-			justification,
+			justifications,
 			leaf_state,
 		)?;
 
@@ -986,10 +1006,13 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			let header = self.header(&BlockId::Hash(*last))?
 				.expect(
 					"Header already known to exist in DB because it is \
-					 indicated in the tree route; qed"
+					indicated in the tree route; qed"
 				);
 
-			telemetry!(SUBSTRATE_INFO; "notify.finalized";
+			telemetry!(
+				self.telemetry;
+				SUBSTRATE_INFO;
+				"notify.finalized";
 				"height" => format!("{}", header.number()),
 				"best" => ?last,
 			);
@@ -999,7 +1022,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			let header = self.header(&BlockId::Hash(finalized_hash))?
 				.expect(
 					"Header already known to exist in DB because it is \
-					 indicated in the tree route; qed"
+					indicated in the tree route; qed"
 				);
 
 			let notification = FinalityNotification {
@@ -1919,9 +1942,9 @@ impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 	}
 
 	fn block(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<SignedBlock<Block>>> {
-		Ok(match (self.header(id)?, self.body(id)?, self.justification(id)?) {
-			(Some(header), Some(extrinsics), justification) =>
-				Some(SignedBlock { block: Block::new(header, extrinsics), justification }),
+		Ok(match (self.header(id)?, self.body(id)?, self.justifications(id)?) {
+			(Some(header), Some(extrinsics), justifications) =>
+				Some(SignedBlock { block: Block::new(header, extrinsics), justifications }),
 			_ => None,
 		})
 	}
@@ -1930,20 +1953,20 @@ impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 		Client::block_status(self, id)
 	}
 
-	fn justification(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justification>> {
-		self.backend.blockchain().justification(*id)
+	fn justifications(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justifications>> {
+		self.backend.blockchain().justifications(*id)
 	}
 
 	fn block_hash(&self, number: NumberFor<Block>) -> sp_blockchain::Result<Option<Block::Hash>> {
 		self.backend.blockchain().hash(number)
 	}
 
-	fn extrinsic(&self, hash: &Block::Hash) -> sp_blockchain::Result<Option<Block::Extrinsic>> {
-		self.backend.blockchain().extrinsic(hash)
+	fn indexed_transaction(&self, hash: &Block::Hash) -> sp_blockchain::Result<Option<Vec<u8>>> {
+		self.backend.blockchain().indexed_transaction(hash)
 	}
 
-	fn have_extrinsic(&self, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
-		self.backend.blockchain().have_extrinsic(hash)
+	fn has_indexed_transaction(&self, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
+		self.backend.blockchain().has_indexed_transaction(hash)
 	}
 }
 
@@ -2001,9 +2024,10 @@ impl<B, E, Block, RA> backend::AuxStore for &Client<B, E, Block, RA>
 }
 
 impl<BE, E, B, RA> sp_consensus::block_validation::Chain<B> for Client<BE, E, B, RA>
-	where BE: backend::Backend<B>,
-		  E: CallExecutor<B>,
-		  B: BlockT
+	where
+		BE: backend::Backend<B>,
+		E: CallExecutor<B>,
+		B: BlockT,
 {
 	fn block_status(
 		&self,

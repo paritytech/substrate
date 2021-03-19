@@ -27,6 +27,7 @@ frame-support = { version = "3.0.0", default-features = false, path = "../suppor
 frame-system = { version = "3.0.0", default-features = false, path = "../system" }
 pallet-authorship = { version = "3.0.0", default-features = false, path = "../authorship" }
 pallet-session = { version = "3.0.0", default-features = false, path = "../session" }
+log = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]
 frame-benchmarking = { version = "3.1.0", path = "../benchmarking" }
@@ -38,7 +39,7 @@ pallet-offences = { version = "3.0.0", path = "../offences" }
 pallet-staking = { version = "3.0.0", path = "../staking" }
 pallet-staking-reward-curve = { version = "3.0.0", path = "../staking/reward-curve" }
 pallet-timestamp = { version = "3.0.0", path = "../timestamp" }
-sp-election-providers = { version = "3.0.0", path = "../../primitives/election-providers" }
+frame-election-provider-support = { version = "3.0.0", path = "../election-provider-support" }
 
 [features]
 default = ["std"]
@@ -57,6 +58,7 @@ std = [
 	"frame-system/std",
 	"pallet-authorship/std",
 	"pallet-session/std",
+	"log/std",
 ]
 runtime-benchmarks = ["frame-benchmarking"]
 try-runtime = ["frame-support/try-runtime"]

@@ -26,6 +26,7 @@ frame-support = { version = "3.0.0", default-features = false, path = "../suppor
 frame-system = { version = "3.0.0", default-features = false, path = "../system" }
 sp-timestamp = { version = "3.0.0", default-features = false, path = "../../primitives/timestamp" }
 impl-trait-for-tuples = "0.2.1"
+log = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]
 sp-io ={ version = "3.0.0", path = "../../primitives/io" }
@@ -42,7 +43,8 @@ std = [
 	"frame-support/std",
 	"serde",
 	"frame-system/std",
-	"sp-timestamp/std"
+	"sp-timestamp/std",
+	"log/std",
 ]
 runtime-benchmarks = ["frame-benchmarking", "sp-io"]
 try-runtime = ["frame-support/try-runtime"]

@@ -18,7 +18,7 @@
 //! A module responsible for computing the right amount of weight and charging it.
 
 use crate::{
-	AliveContractInfo, BalanceOf, ContractInfo, ContractInfoOf, Module, Event,
+	AliveContractInfo, BalanceOf, ContractInfo, ContractInfoOf, Pallet, Event,
 	TombstoneContractInfo, Config, CodeHash, Error,
 	storage::Storage, wasm::PrefabWasmModule, exec::Executable,
 };
@@ -26,7 +26,6 @@ use sp_std::prelude::*;
 use sp_io::hashing::blake2_256;
 use sp_core::crypto::UncheckedFrom;
 use frame_support::{
-	debug,
 	storage::child,
 	traits::{Currency, ExistenceRequirement, Get, OnUnbalanced, WithdrawReasons},
 };
@@ -125,7 +124,7 @@ where
 		free_balance: &BalanceOf<T>,
 		contract: &AliveContractInfo<T>,
 	) -> Option<BalanceOf<T>> {
-		let subsistence_threshold = Module::<T>::subsistence_threshold();
+		let subsistence_threshold = Pallet::<T>::subsistence_threshold();
 		// Reserved balance contributes towards the subsistence threshold to stay consistent
 		// with the existential deposit where the reserved balance is also counted.
 		if *total_balance < subsistence_threshold {
@@ -183,9 +182,10 @@ where
 				// accidental loss of a contract. Ony `seal_terminate` can remove a
 				// contract without a tombstone. Therefore this case should be never
 				// hit.
-				debug::error!(
+				log::error!(
+					target: "runtime::contracts",
 					"Tombstoned a contract that is below the subsistence threshold: {:?}",
-					account
+					account,
 				);
 				0u32.into()
 			}
@@ -268,7 +268,7 @@ where
 				let tombstone_info = ContractInfo::Tombstone(tombstone);
 				<ContractInfoOf<T>>::insert(account, &tombstone_info);
 				code.drop_from_storage();
-				<Module<T>>::deposit_event(Event::Evicted(account.clone()));
+				<Pallet<T>>::deposit_event(Event::Evicted(account.clone()));
 				Ok(None)
 			}
 			(Verdict::Evict { amount: _ }, None) => {
@@ -298,7 +298,7 @@ where
 		contract: AliveContractInfo<T>,
 		code_size: u32,
 	) -> Result<Option<AliveContractInfo<T>>, DispatchError> {
-		let current_block_number = <frame_system::Module<T>>::block_number();
+		let current_block_number = <frame_system::Pallet<T>>::block_number();
 		let verdict = Self::consider_case(
 			account,
 			current_block_number,
@@ -333,7 +333,7 @@ where
 		};
 		let module = PrefabWasmModule::<T>::from_storage_noinstr(contract.code_hash)?;
 		let code_len = module.code_len();
-		let current_block_number = <frame_system::Module<T>>::block_number();
+		let current_block_number = <frame_system::Pallet<T>>::block_number();
 		let verdict = Self::consider_case(
 			account,
 			current_block_number,
@@ -384,7 +384,7 @@ where
 		let module = PrefabWasmModule::from_storage_noinstr(alive_contract_info.code_hash)
 			.map_err(|_| IsTombstone)?;
 		let code_size = module.occupied_storage();
-		let current_block_number = <frame_system::Module<T>>::block_number();
+		let current_block_number = <frame_system::Pallet<T>>::block_number();
 		let verdict = Self::consider_case(
 			account,
 			current_block_number,
@@ -465,7 +465,7 @@ where
 
 		let child_trie_info = origin_contract.child_trie_info();
 
-		let current_block = <frame_system::Module<T>>::block_number();
+		let current_block = <frame_system::Pallet<T>>::block_number();
 
 		if origin_contract.last_write == Some(current_block) {
 			return Err((Error::<T>::InvalidContractOrigin.into(), 0, 0));

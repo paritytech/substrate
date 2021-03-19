@@ -25,6 +25,12 @@ default-features = false
 version = "3.0.0"
 path = "../../../../frame/system"
 
+[dependencies.frame-benchmarking]
+default-features = false
+version = "3.1.0"
+path = "../../../../frame/benchmarking"
+optional = true
+
 [dev-dependencies]
 serde = { version = "1.0.101" }
 
@@ -43,12 +49,13 @@ default-features = false
 version = "3.0.0"
 path = "../../../../primitives/runtime"
 
-
 [features]
 default = ['std']
 std = [
 	'codec/std',
 	'frame-support/std',
-	'frame-system/std'
+	'frame-system/std',
+	'frame-benchmarking/std',
 ]
+runtime-benchmarks = ["frame-benchmarking"]
 try-runtime = ["frame-support/try-runtime"]

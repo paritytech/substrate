@@ -20,7 +20,8 @@
 use crate as pallet_gilt;
 
 use frame_support::{
-	parameter_types, ord_parameter_types, traits::{OnInitialize, OnFinalize, GenesisBuild},
+	parameter_types, ord_parameter_types,
+	traits::{OnInitialize, OnFinalize, GenesisBuild, Currency},
 };
 use sp_core::H256;
 use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
@@ -35,9 +36,9 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Balances: pallet_balances::{Module, Call, Config<T>, Storage, Event<T>},
-		Gilt: pallet_gilt::{Module, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Pallet, Call, Config<T>, Storage, Event<T>},
+		Gilt: pallet_gilt::{Pallet, Call, Config, Storage, Event<T>},
 	}
 );
 
@@ -50,7 +51,6 @@ impl frame_system::Config for Test {
 	type BaseCallFilter = ();
 	type BlockWeights = ();
 	type BlockLength = ();
-	type DbWeight = ();
 	type Origin = Origin;
 	type Call = Call;
 	type Index = u64;
@@ -62,6 +62,7 @@ impl frame_system::Config for Test {
 	type Header = Header;
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
+	type DbWeight = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
@@ -76,16 +77,17 @@ parameter_types! {
 }
 
 impl pallet_balances::Config for Test {
-	type MaxLocks = ();
 	type Balance = u64;
 	type DustRemoval = ();
 	type Event = Event;
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
 	type WeightInfo = ();
+	type MaxLocks = ();
 }
 
 parameter_types! {
+	pub IgnoredIssuance: u64 = Balances::total_balance(&0); // Account zero is ignored.
 	pub const QueueCount: u32 = 3;
 	pub const MaxQueueLen: u32 = 3;
 	pub const FifoQueueLen: u32 = 1;
@@ -101,9 +103,11 @@ ord_parameter_types! {
 impl pallet_gilt::Config for Test {
 	type Event = Event;
 	type Currency = Balances;
+	type CurrencyBalance = <Self as pallet_balances::Config>::Balance;
 	type AdminOrigin = frame_system::EnsureSignedBy<One, Self::AccountId>;
 	type Deficit = ();
 	type Surplus = ();
+	type IgnoredIssuance = IgnoredIssuance;
 	type QueueCount = QueueCount;
 	type MaxQueueLen = MaxQueueLen;
 	type FifoQueueLen = FifoQueueLen;

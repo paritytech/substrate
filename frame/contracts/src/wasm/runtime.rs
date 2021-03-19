@@ -215,6 +215,8 @@ pub enum RuntimeToken {
 	ChainExtension(u64),
 	/// Weight charged for copying data from the sandbox.
 	CopyIn(u32),
+	/// Weight of calling `seal_rent_params`.
+	RentParams,
 }
 
 impl<T: Config> Token<T> for RuntimeToken
@@ -283,6 +285,7 @@ where
 				.saturating_add(s.hash_blake2_128_per_byte.saturating_mul(len.into())),
 			ChainExtension(amount) => amount,
 			CopyIn(len) => s.return_per_byte.saturating_mul(len.into()),
+			RentParams => s.rent_params,
 		}
 	}
 }
@@ -292,24 +295,6 @@ where
 /// the beginning of the API entry point.
 fn already_charged(_: u32) -> Option<RuntimeToken> {
 	None
-}
-
-/// Finds duplicates in a given vector.
-///
-/// This function has complexity of O(n log n) and no additional memory is required, although
-/// the order of items is not preserved.
-fn has_duplicates<T: PartialEq + AsRef<[u8]>>(items: &mut Vec<T>) -> bool {
-	// Sort the vector
-	items.sort_by(|a, b| {
-		Ord::cmp(a.as_ref(), b.as_ref())
-	});
-	// And then find any two consecutive equal elements.
-	items.windows(2).any(|w| {
-		match w {
-			&[ref a, ref b] => a == b,
-			_ => false,
-		}
-	})
 }
 
 /// Can only be used for one call.
@@ -1295,6 +1280,22 @@ define_env!(Env, <E: Ext>,
 	// - data_ptr - a pointer to a raw data buffer which will saved along the event.
 	// - data_len - the length of the data buffer.
 	seal_deposit_event(ctx, topics_ptr: u32, topics_len: u32, data_ptr: u32, data_len: u32) => {
+
+		fn has_duplicates<T: Ord>(items: &mut Vec<T>) -> bool {
+			// # Warning
+			//
+			// Unstable sorts are non-deterministic across architectures. The usage here is OK
+			// because we are rejecting duplicates which removes the non determinism.
+			items.sort_unstable();
+			// Find any two consecutive equal elements.
+			items.windows(2).any(|w| {
+				match &w {
+					&[a, b] => a == b,
+					_ => false,
+				}
+			})
+		}
+
 		let num_topic = topics_len
 			.checked_div(sp_std::mem::size_of::<TopicOf<E::T>>() as u32)
 			.ok_or_else(|| "Zero sized topics are not allowed")?;
@@ -1317,6 +1318,8 @@ define_env!(Env, <E: Ext>,
 		}
 
 		// Check for duplicate topics. If there are any, then trap.
+		// Complexity O(n * log(n)) and no additional allocations.
+		// This also sorts the topics.
 		if has_duplicates(&mut topics) {
 			Err(Error::<E::T>::DuplicateTopics)?;
 		}
@@ -1512,5 +1515,26 @@ define_env!(Env, <E: Ext>,
 				data,
 			})),
 		}
+	},
+
+	// Stores the rent params into the supplied buffer.
+	//
+	// The value is stored to linear memory at the address pointed to by `out_ptr`.
+	// `out_len_ptr` must point to a u32 value that describes the available space at
+	// `out_ptr`. This call overwrites it with the size of the value. If the available
+	// space at `out_ptr` is less than the size of the value a trap is triggered.
+	//
+	// The data is encoded as [`crate::exec::RentParams`].
+	//
+	// # Note
+	//
+	// The returned information was collected and cached when the current contract call
+	// started execution. Any change to those values that happens due to actions of the
+	// current call or contracts that are called by this contract are not considered.
+	seal_rent_params(ctx, out_ptr: u32, out_len_ptr: u32) => {
+		ctx.charge_gas(RuntimeToken::RentParams)?;
+		Ok(ctx.write_sandbox_output(
+			out_ptr, out_len_ptr, &ctx.ext.rent_params().encode(), false, already_charged
+		)?)
 	},
 );
