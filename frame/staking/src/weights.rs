@@ -68,7 +68,6 @@ pub trait WeightInfo {
 	fn set_history_depth(e: u32, ) -> Weight;
 	fn reap_stash(s: u32, ) -> Weight;
 	fn new_era(v: u32, n: u32, ) -> Weight;
-	fn submit_solution_better(v: u32, n: u32, a: u32, w: u32, ) -> Weight;
 	fn get_npos_voters(v: u32, n: u32, s: u32, ) -> Weight;
 	fn get_npos_targets(v: u32, ) -> Weight;
 }
@@ -231,21 +230,6 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads((3 as Weight).saturating_mul(n as Weight)))
 			.saturating_add(T::DbWeight::get().writes(13 as Weight))
 			.saturating_add(T::DbWeight::get().writes((3 as Weight).saturating_mul(v as Weight)))
-	}
-	fn submit_solution_better(v: u32, n: u32, a: u32, w: u32, ) -> Weight {
-		(0 as Weight)
-			// Standard Error: 52_000
-			.saturating_add((1_460_000 as Weight).saturating_mul(v as Weight))
-			// Standard Error: 20_000
-			.saturating_add((754_000 as Weight).saturating_mul(n as Weight))
-			// Standard Error: 52_000
-			.saturating_add((74_798_000 as Weight).saturating_mul(a as Weight))
-			// Standard Error: 108_000
-			.saturating_add((8_108_000 as Weight).saturating_mul(w as Weight))
-			.saturating_add(T::DbWeight::get().reads(6 as Weight))
-			.saturating_add(T::DbWeight::get().reads((4 as Weight).saturating_mul(a as Weight)))
-			.saturating_add(T::DbWeight::get().reads((1 as Weight).saturating_mul(w as Weight)))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	fn get_npos_voters(v: u32, n: u32, s: u32, ) -> Weight {
 		(0 as Weight)
@@ -425,21 +409,6 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads((3 as Weight).saturating_mul(n as Weight)))
 			.saturating_add(RocksDbWeight::get().writes(13 as Weight))
 			.saturating_add(RocksDbWeight::get().writes((3 as Weight).saturating_mul(v as Weight)))
-	}
-	fn submit_solution_better(v: u32, n: u32, a: u32, w: u32, ) -> Weight {
-		(0 as Weight)
-			// Standard Error: 52_000
-			.saturating_add((1_460_000 as Weight).saturating_mul(v as Weight))
-			// Standard Error: 20_000
-			.saturating_add((754_000 as Weight).saturating_mul(n as Weight))
-			// Standard Error: 52_000
-			.saturating_add((74_798_000 as Weight).saturating_mul(a as Weight))
-			// Standard Error: 108_000
-			.saturating_add((8_108_000 as Weight).saturating_mul(w as Weight))
-			.saturating_add(RocksDbWeight::get().reads(6 as Weight))
-			.saturating_add(RocksDbWeight::get().reads((4 as Weight).saturating_mul(a as Weight)))
-			.saturating_add(RocksDbWeight::get().reads((1 as Weight).saturating_mul(w as Weight)))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
 	fn get_npos_voters(v: u32, n: u32, s: u32, ) -> Weight {
 		(0 as Weight)
