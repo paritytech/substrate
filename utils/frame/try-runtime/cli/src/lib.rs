@@ -114,7 +114,7 @@ fn parse_url(s: &str) -> Result<String, &'static str> {
 		// could use Url crate as well, but lets keep it simple for now.
 		Ok(s.to_string())
 	} else {
-		Err("not a valid url")
+		Err("not a valid HTTP url: must start with 'http://'")
 	}
 }
 
