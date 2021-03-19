@@ -24,7 +24,7 @@ use crate::{
 	utils::{interval, LruHashSet},
 };
 
-use bytes::{Bytes, BytesMut};
+use bytes::Bytes;
 use codec::{Decode, DecodeAll, Encode};
 use futures::{channel::oneshot, prelude::*};
 use generic_proto::{GenericProto, GenericProtoOut};
@@ -43,9 +43,10 @@ use sp_consensus::{
 	block_validation::BlockAnnounceValidator,
 	import_queue::{BlockImportResult, BlockImportError, IncomingBlock, Origin}
 };
-use sp_runtime::{generic::BlockId, Justification};
-use sp_runtime::traits::{
-	Block as BlockT, Header as HeaderT, NumberFor, Zero, CheckedSub
+use sp_runtime::{
+	Justifications,
+	generic::BlockId,
+	traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero, CheckedSub},
 };
 use sp_arithmetic::traits::SaturatedConversion;
 use sync::{ChainSync, SyncState};
@@ -74,11 +75,6 @@ const MAX_BLOCK_ANNOUNCE_SIZE: u64 = 1024 * 1024;
 /// Maximum size used for notifications in the block announce and transaction protocols.
 // Must be equal to `max(MAX_BLOCK_ANNOUNCE_SIZE, MAX_TRANSACTIONS_SIZE)`.
 pub(crate) const BLOCK_ANNOUNCES_TRANSACTIONS_SUBSTREAM_SIZE: u64 = 16 * 1024 * 1024;
-
-/// Current protocol version.
-pub(crate) const CURRENT_VERSION: u32 = 6;
-/// Lowest version we support
-pub(crate) const MIN_VERSION: u32 = 3;
 
 /// Identifier of the peerset for the block announces protocol.
 const HARDCODED_PEERSETS_SYNC: sc_peerset::SetId = sc_peerset::SetId::from(0);
@@ -254,26 +250,6 @@ impl<B: BlockT> BlockAnnouncesHandshake<B> {
 	}
 }
 
-/// Builds a SCALE-encoded "Status" message to send as handshake for the legacy protocol.
-fn build_status_message<B: BlockT>(
-	protocol_config: &ProtocolConfig,
-	best_number: NumberFor<B>,
-	best_hash: B::Hash,
-	genesis_hash: B::Hash,
-) -> Vec<u8> {
-	let status = message::generic::Status {
-		version: CURRENT_VERSION,
-		min_supported_version: MIN_VERSION,
-		genesis_hash,
-		roles: protocol_config.roles.into(),
-		best_number,
-		best_hash,
-		chain_status: Vec::new(), // TODO: find a way to make this backwards-compatible
-	};
-
-	Message::<B>::Status(status).encode()
-}
-
 impl<B: BlockT> Protocol<B> {
 	/// Create a new instance.
 	pub fn new(
@@ -375,8 +351,6 @@ impl<B: BlockT> Protocol<B> {
 		});
 
 		let behaviour = {
-			let versions = &((MIN_VERSION as u8)..=(CURRENT_VERSION as u8)).collect::<Vec<u8>>();
-
 			let best_number = info.best_number;
 			let best_hash = info.best_hash;
 			let genesis_hash = info.genesis_hash;
@@ -389,9 +363,6 @@ impl<B: BlockT> Protocol<B> {
 			).encode();
 
 			GenericProto::new(
-				protocol_id.clone(),
-				versions,
-				build_status_message::<B>(&config, best_number, best_hash, genesis_hash),
 				peerset,
 				iter::once((block_announces_protocol, block_announces_handshake, MAX_BLOCK_ANNOUNCE_SIZE))
 					.chain(network_config.extra_sets.iter()
@@ -511,9 +482,6 @@ impl<B: BlockT> Protocol<B> {
 
 		self.sync.update_chain_info(&hash, number);
 
-		self.behaviour.set_legacy_handshake_message(
-			build_status_message::<B>(&self.config, number, hash, self.genesis_hash),
-		);
 		self.behaviour.set_notif_protocol_handshake(
 			HARDCODED_PEERSETS_SYNC,
 			BlockAnnouncesHandshake::<B>::build(
@@ -537,64 +505,6 @@ impl<B: BlockT> Protocol<B> {
 	/// Returns information about all the peers we are connected to after the handshake message.
 	pub fn peers_info(&self) -> impl Iterator<Item = (&PeerId, &PeerInfo<B>)> {
 		self.peers.iter().map(|(id, peer)| (id, &peer.info))
-	}
-
-	fn on_custom_message(
-		&mut self,
-		who: PeerId,
-		data: BytesMut,
-	) -> CustomMessageOutcome<B> {
-		let message = match <Message<B> as Decode>::decode(&mut &data[..]) {
-			Ok(message) => message,
-			Err(err) => {
-				debug!(
-					target: "sync",
-					"Couldn't decode packet sent by {}: {:?}: {}",
-					who,
-					data,
-					err,
-				);
-				self.peerset_handle.report_peer(who, rep::BAD_MESSAGE);
-				return CustomMessageOutcome::None;
-			}
-		};
-
-		match message {
-			GenericMessage::Status(_) =>
-				debug!(target: "sub-libp2p", "Received unexpected Status"),
-			GenericMessage::BlockAnnounce(announce) =>
-				self.push_block_announce_validation(who.clone(), announce),
-			GenericMessage::Transactions(_) =>
-				warn!(target: "sub-libp2p", "Received unexpected Transactions"),
-			GenericMessage::BlockResponse(_) =>
-				warn!(target: "sub-libp2p", "Received unexpected BlockResponse"),
-			GenericMessage::RemoteCallResponse(_) =>
-				warn!(target: "sub-libp2p", "Received unexpected RemoteCallResponse"),
-			GenericMessage::RemoteReadResponse(_) =>
-				warn!(target: "sub-libp2p", "Received unexpected RemoteReadResponse"),
-			GenericMessage::RemoteHeaderResponse(_) =>
-				warn!(target: "sub-libp2p", "Received unexpected RemoteHeaderResponse"),
-			GenericMessage::RemoteChangesResponse(_) =>
-				warn!(target: "sub-libp2p", "Received unexpected RemoteChangesResponse"),
-			GenericMessage::BlockRequest(_) |
-			GenericMessage::RemoteReadChildRequest(_) |
-			GenericMessage::RemoteCallRequest(_) |
-			GenericMessage::RemoteReadRequest(_) |
-			GenericMessage::RemoteHeaderRequest(_) |
-			GenericMessage::RemoteChangesRequest(_) |
-			GenericMessage::Consensus(_) |
-			GenericMessage::ConsensusBatch(_) => {
-				debug!(
-					target: "sub-libp2p",
-					"Received no longer supported legacy request from {:?}",
-					who
-				);
-				self.behaviour.disconnect_peer(&who, HARDCODED_PEERSETS_SYNC);
-				self.peerset_handle.report_peer(who, rep::BAD_PROTOCOL);
-			},
-		}
-
-		CustomMessageOutcome::None
 	}
 
 	fn prepare_block_request(
@@ -703,8 +613,8 @@ impl<B: BlockT> Protocol<B> {
 		if request.fields == message::BlockAttributes::JUSTIFICATION {
 			match self.sync.on_block_justification(peer_id, block_response) {
 				Ok(sync::OnBlockJustification::Nothing) => CustomMessageOutcome::None,
-				Ok(sync::OnBlockJustification::Import { peer, hash, number, justification }) =>
-					CustomMessageOutcome::JustificationImport(peer, hash, number, justification),
+				Ok(sync::OnBlockJustification::Import { peer, hash, number, justifications }) =>
+					CustomMessageOutcome::JustificationImport(peer, hash, number, justifications),
 				Err(sync::BadPeer(id, repu)) => {
 					self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
 					self.peerset_handle.report_peer(id, repu);
@@ -1225,7 +1135,7 @@ fn prepare_block_request<B: BlockT>(
 #[must_use]
 pub enum CustomMessageOutcome<B: BlockT> {
 	BlockImport(BlockOrigin, Vec<IncomingBlock<B>>),
-	JustificationImport(Origin, B::Hash, NumberFor<B>, Justification),
+	JustificationImport(Origin, B::Hash, NumberFor<B>, Justifications),
 	/// Notification protocols have been opened with a remote.
 	NotificationStreamOpened {
 		remote: PeerId,
@@ -1545,13 +1455,6 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 						remote: peer_id,
 						protocol: self.notification_protocols[usize::from(set_id) - NUM_HARDCODED_PEERSETS].clone(),
 					}
-				}
-			},
-			GenericProtoOut::LegacyMessage { peer_id, message } => {
-				if self.peers.contains_key(&peer_id) {
-					self.on_custom_message(peer_id, message)
-				} else {
-					CustomMessageOutcome::None
 				}
 			},
 			GenericProtoOut::Notification { peer_id, set_id, message } =>
