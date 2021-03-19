@@ -406,18 +406,14 @@ impl<B: BlockT> VerifiedBlocks<B> {
 	}
 
 	/// Mark a block as verified
-	fn block_verified(&self, id: &BlockId<B>) {
-		match id {
-			BlockId::Hash(h) => {
-				if let Some((_, verified)) = self.blocks.write().get_mut(h) {
-					*verified = true;
-				}
-			},
-			BlockId::Number(n) => {
-				if let Some((_, (_, verified))) = self.blocks.write().iter_mut().find(|(_, (b, _))| b.header().number() == n) {
-					*verified = true;
-				}
-			}
+	fn block_verified(&self, hash: B::Hash) {
+		if let Some((_, verified)) = self.blocks.write().get_mut(&hash) {
+			*verified = true;
 		}
+	}
+
+	/// Remove the block from cache.
+	fn remove(&self, hash: B::Hash) {
+		self.blocks.write().remove(&hash);
 	}
 }

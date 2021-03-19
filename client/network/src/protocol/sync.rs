@@ -1083,7 +1083,15 @@ impl<B: BlockT> ChainSync<B> {
 	/// announcement takes place, requests for the pre-imported block header
 	/// can be answered.
 	pub fn on_block_verified(&mut self, header: B::Header) {
-		self.verified_blocks.block_verified(&BlockId::Hash(header.hash()));
+		self.verified_blocks.block_verified(header.hash());
+	}
+
+	/// A block has been imported.
+	///
+	/// Once a block is imported, this block should be removed
+	/// from the `verified_blocks` cache.`
+	pub fn on_block_imported(&mut self, header: B::Header) {
+		self.verified_blocks.remove(header.hash());
 	}
 
 	/// A batch of blocks have been processed, with or without errors.

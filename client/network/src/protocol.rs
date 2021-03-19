@@ -757,7 +757,8 @@ impl<B: BlockT> Protocol<B> {
 	/// pre-imported block is announced to peers prior to executing
 	/// and importing the block.
 	pub fn announce_preimport_block(&mut self, header: B::Header) {
-		self.broadcast_header(header, false, None);
+		let is_best = self.chain.info().best_hash == header.hash();
+		self.broadcast_header(header, is_best, None);
 	}
 
 	/// Make sure an important block is propagated to peers.
@@ -784,7 +785,8 @@ impl<B: BlockT> Protocol<B> {
 
 		let is_best = self.chain.info().best_hash == hash;
 
-		self.broadcast_header(header, is_best, data);
+		self.broadcast_header(header.clone(), is_best, data);
+		self.sync.on_block_imported(header);
 	}
 
 	/// Broadcast a block header to peers.
@@ -973,7 +975,8 @@ impl<B: BlockT> Protocol<B> {
 		self.sync.set_sync_fork_request(peers, hash, number)
 	}
 
-	/// A block has been checked and verified against consensus checks
+	/// A block has been checked and verified against consensus checks.
+	///
 	/// This is called before the block is executed to trigger announcing
 	/// this block to other peers to skip the cost of the the block execution latency
 	pub fn on_block_verified(&mut self, header: B::Header) {
