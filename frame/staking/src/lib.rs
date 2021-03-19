@@ -2170,6 +2170,7 @@ impl<T: Config> Module<T> {
 			Self::new_era(session_index)
 		} else {
 			// Set initial era
+			log!(debug, "Starting the first era.");
 			Self::new_era(session_index)
 		}
 	}
@@ -2287,40 +2288,22 @@ impl<T: Config> Module<T> {
 		maybe_new_validators
 	}
 
-	/// Consume a set of [`Supports`] from [`sp_npos_elections`] and collect them into a
-	/// [`Exposure`].
-	fn collect_exposures(
-		supports: Supports<T::AccountId>,
-	) -> Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)> {
-		let total_issuance = T::Currency::total_issuance();
-		let to_currency = |e: frame_election_provider_support::ExtendedBalance| {
-			T::CurrencyToVote::to_currency(e, total_issuance)
-		};
-
-		supports
-			.into_iter()
-			.map(|(validator, support)| {
-				// build `struct exposure` from `support`
-				let mut others = Vec::with_capacity(support.voters.len());
-				let mut own: BalanceOf<T> = Zero::zero();
-				let mut total: BalanceOf<T> = Zero::zero();
-				support
-					.voters
-					.into_iter()
-					.map(|(nominator, weight)| (nominator, to_currency(weight)))
-					.for_each(|(nominator, stake)| {
-						if nominator == validator {
-						own = own.saturating_add(stake);
-						} else {
-							others.push(IndividualExposure { who: nominator, value: stake });
-						}
-						total = total.saturating_add(stake);
-					});
-
-				let exposure = Exposure { own, others, total };
-				(validator, exposure)
+	/// Enact and process the election using the `ElectionProvider` type.
+	///
+	/// This will also process the election, as noted in [`process_election`].
+	fn enact_election(current_era: EraIndex) -> Option<Vec<T::AccountId>> {
+		T::ElectionProvider::elect()
+			.map_err(|e| {
+				log!(warn, "election provider failed due to {:?}", e)
 			})
-			.collect::<Vec<(T::AccountId, Exposure<_, _>)>>()
+			.and_then(|(res, weight)| {
+				<frame_system::Pallet<T>>::register_extra_weight_unchecked(
+					weight,
+					frame_support::weights::DispatchClass::Mandatory,
+				);
+				Self::process_election(res, current_era)
+			})
+			.ok()
 	}
 
 	/// Process the output of the election.
@@ -2337,7 +2320,8 @@ impl<T: Config> Module<T> {
 		let exposures = Self::collect_exposures(flat_supports);
 		let elected_stashes = exposures.iter().cloned().map(|(x, _)| x).collect::<Vec<_>>();
 
-		if (elected_stashes.len() as u32) < Self::minimum_validator_count() {
+		if (elected_stashes.len() as u32) < Self::minimum_validator_count().max(1) {
+			// Session will panic if we ever return an empty validator set, thus max(1) ^^.
 			if current_era > 0 {
 				log!(
 					warn,
@@ -2389,24 +2373,40 @@ impl<T: Config> Module<T> {
 		Ok(elected_stashes)
 	}
 
-	/// Enact and process the election using the `ElectionProvider` type.
-	///
-	/// This will also process the election, as noted in [`process_election`].
-	fn enact_election(current_era: EraIndex) -> Option<Vec<T::AccountId>> {
-		T::ElectionProvider::elect()
-			.map_err(|e| {
-				if current_era > 0 {
-					log!(warn, "election provider failed due to {:?}", e)
-				}
+	/// Consume a set of [`Supports`] from [`sp_npos_elections`] and collect them into a
+	/// [`Exposure`].
+	fn collect_exposures(
+		supports: Supports<T::AccountId>,
+	) -> Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)> {
+		let total_issuance = T::Currency::total_issuance();
+		let to_currency = |e: frame_election_provider_support::ExtendedBalance| {
+			T::CurrencyToVote::to_currency(e, total_issuance)
+		};
+
+		supports
+			.into_iter()
+			.map(|(validator, support)| {
+				// build `struct exposure` from `support`
+				let mut others = Vec::with_capacity(support.voters.len());
+				let mut own: BalanceOf<T> = Zero::zero();
+				let mut total: BalanceOf<T> = Zero::zero();
+				support
+					.voters
+					.into_iter()
+					.map(|(nominator, weight)| (nominator, to_currency(weight)))
+					.for_each(|(nominator, stake)| {
+						if nominator == validator {
+						own = own.saturating_add(stake);
+						} else {
+							others.push(IndividualExposure { who: nominator, value: stake });
+						}
+						total = total.saturating_add(stake);
+					});
+
+				let exposure = Exposure { own, others, total };
+				(validator, exposure)
 			})
-			.and_then(|(res, weight)| {
-				<frame_system::Pallet<T>>::register_extra_weight_unchecked(
-					weight,
-					frame_support::weights::DispatchClass::Mandatory,
-				);
-				Self::process_election(res, current_era)
-			})
-			.ok()
+			.collect::<Vec<(T::AccountId, Exposure<_, _>)>>()
 	}
 
 	/// Remove all associated data of a stash account from the staking system.
