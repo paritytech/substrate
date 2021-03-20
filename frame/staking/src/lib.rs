@@ -355,6 +355,7 @@ pub const MAX_NOMINATIONS: usize =
 	<CompactAssignments as sp_npos_elections::CompactSolution>::LIMIT;
 
 pub const MAX_UNLOCKING_CHUNKS: usize = 32;
+pub(crate) const MAX_VALIDATORS: usize = ValidatorIndex::max_value() as usize;
 
 /// Counter for the number of eras that have passed.
 pub type EraIndex = u32;
@@ -2006,7 +2007,7 @@ impl<T: Config> Module<T> {
 			Self::slashable_balance_of_vote_weight(who, issuance)
 		})
 	}
-	
+
 	fn do_payout_stakers(validator_stash: T::AccountId, era: EraIndex) -> DispatchResult {
 		// Validate input data
 		let current_era = CurrentEra::get().ok_or(Error::<T>::InvalidEraToReward)?;
@@ -2342,9 +2343,11 @@ impl<T: Config> Module<T> {
 
 		// Populate stakers, exposures, and the snapshot of validator prefs.
 		let mut total_stake: BalanceOf<T> = Zero::zero();
+		let mut total_exposures: Vec<BalanceOf<T>> = Vec::new();
 		exposures.into_iter().for_each(|(stash, exposure)| {
 			total_stake = total_stake.saturating_add(exposure.total);
 			<ErasStakers<T>>::insert(current_era, &stash, &exposure);
+			total_exposures.push(exposure.total);
 
 			let mut exposure_clipped = exposure;
 			let clipped_max_len = T::MaxNominatorRewardedPerValidator::get() as usize;
@@ -2357,6 +2360,22 @@ impl<T: Config> Module<T> {
 
 		// Insert current era staking information
 		<ErasTotalStake<T>>::insert(&current_era, total_stake);
+
+		// calculate the new validators count
+		let mut new_validators_count = Self::validator_count();
+		if T::EnableAutomaticValidatorUpdatePerEra::get(){
+				new_validators_count = T::AutomaticValidatorUpdatePerEra::convert(
+						(
+							Self::validator_count(),
+							total_exposures,
+							MAX_VALIDATORS.saturated_into(),
+							Self::minimum_validator_count(),
+							T::BottomXPercentOfValidators::get(),
+							T::BottomYPercentOfValidators::get()
+						)
+				);
+		}
+		ValidatorCount::put(new_validators_count);
 
 		// collect the pref of all winners
 		for stash in &elected_stashes {
