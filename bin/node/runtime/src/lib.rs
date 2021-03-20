@@ -470,6 +470,10 @@ parameter_types! {
 	pub const MaxNominatorRewardedPerValidator: u32 = 256;
 	pub const ElectionLookahead: BlockNumber = EPOCH_DURATION_IN_BLOCKS / 4;
 	pub const MaxIterations: u32 = 10;
+	// enable the below flag to allow dynamic damping of validator count per era.
+	pub const EnableAutomaticValidatorUpdatePerEra: bool = true;
+	pub const BottomXPercentOfValidators: u32 = 20;
+	pub const BottomYPercentOfValidators: u32 = 40;
 	// 0.05%. The higher the value, the more strict solution acceptance becomes.
 	pub MinSolutionScoreBump: Perbill = Perbill::from_rational_approximation(5u32, 10_000);
 	pub OffchainSolutionWeightLimit: Weight = RuntimeBlockWeights::get()
@@ -478,9 +482,96 @@ parameter_types! {
 		.saturating_sub(BlockExecutionWeight::get());
 }
 
+pub struct AutomaticValidatorUpdatePerEra;
+impl Convert<(u32, Vec<BalanceOf<T>>, u32, u32, u32, u32), u32> for AutomaticValidatorUpdatePerEra {
+	fn convert(
+		(
+			current_validator_count, 
+			exposures_totals, 
+			max_validator_count, 
+			min_validator_count,
+			bottom_x_percent_of_validators,
+			bottom_y_percent_of_validators
+		) : (u32, Vec<BalanceOf<T>>, u32, u32, u32, u32)
+	) -> u32 {
+		let mut expos_totals = exposures_totals;
+		let x_percent = Perbill::from_rational_approximation(
+			current_validator_count,
+			100
+		).mul_ceil(bottom_x_percent_of_validators); // make sure to ceil.
+
+		let y_percent = Perbill::from_rational_approximation(
+			current_validator_count,
+			100
+		).mul_ceil(bottom_y_percent_of_validators); // make sure to ceil.
+		// sort exposures
+		expos_totals.sort_by(|a, b| a.cmp(&b).reverse());
+		// global average
+		let mut total_exposure_sum: BalanceOf<T> = Zero::zero();
+		let mut bottom_x_percent_exposure: BalanceOf<T> = Zero::zero();
+		let mut bottom_y_percent_exposure: BalanceOf<T> = Zero::zero();
+		let mut i = 0;
+	
+		for expo in expos_totals.into_iter(){
+			total_exposure_sum = total_exposure_sum.saturating_add(expo);
+			if i <= x_percent {
+				bottom_x_percent_exposure = 
+					bottom_x_percent_exposure.saturating_add(expo);
+			}
+			if i <= y_percent {
+				bottom_y_percent_exposure += 
+					bottom_y_percent_exposure.saturating_add(expo);
+			}
+			i += 1;
+		};
+
+		let global_average = Perbill::from_rational_approximation(
+			total_exposure_sum,
+			current_validator_count.saturated_into()
+		);
+		let x_percent_average_stake = Perbill::from_rational_approximation(
+			bottom_x_percent_exposure,
+			x_percent.saturated_into()
+		);
+
+		let y_percent_average_stake = Perbill::from_rational_approximation(
+			bottom_y_percent_exposure,
+			y_percent.saturated_into()
+		);
+		
+		//init final count
+		let mut final_count = current_validator_count;
+		let x_percent_of_validators = Perbill::from_rational_approximation(
+			bottom_x_percent_of_validators,
+			100u32
+		);
+		let y_percent_of_validators = Perbill::from_rational_approximation(
+			bottom_y_percent_of_validators,
+			100u32
+		);
+		if x_percent_average_stake > global_average.saturating_mul(x_percent_of_validators) {
+			final_count = std::cmp::min(
+				max_validator_count,
+				current_validator_count.saturating_add(x_percent)
+			);
+		}
+		if y_percent_average_stake < global_average.saturating_mul(y_percent_of_validators) {
+			final_count = std::cmp::max(
+				min_validator_count,
+				current_validator_count.saturating_sub(x_percent)
+			);
+		}
+		final_count
+	}
+  }
+
 impl pallet_staking::Config for Runtime {
 	type Currency = Balances;
 	type UnixTime = Timestamp;
+	type AutomaticValidatorUpdatePerEra = AutomaticValidatorUpdatePerEra;
+	type EnableAutomaticValidatorUpdatePerEra = EnableAutomaticValidatorUpdatePerEra;
+	type BottomXPercentOfValidators = BottomXPercentOfValidators;
+	type BottomYPercentOfValidators = BottomYPercentOfValidators;
 	type CurrencyToVote = U128CurrencyToVote;
 	type RewardRemainder = Treasury;
 	type Event = Event;
