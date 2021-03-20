@@ -136,11 +136,10 @@ impl FromStr for CacheParams {
 		let parent = p.parent();
 		let file_name = p.file_name();
 
-		file_name.and_then(|file_name| Self {
+		file_name.and_then(|file_name| Some(Self {
 			directory: parent.map(|p| p.to_string_lossy().into()).unwrap_or(".".to_string()),
 			file_name: file_name.to_string_lossy().into()
-		}).ok_or("invalid path")
-		}
+		})).ok_or("invalid path")
 	}
 }
 
@@ -188,7 +187,6 @@ impl TryRuntimeCmd {
 					cache: CacheConfig {
 						name: file_name.into(),
 						directory: directory.into(),
-						..Default::default()
 					},
 				})),
 				State::Live {
