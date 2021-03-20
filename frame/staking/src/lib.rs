@@ -2433,7 +2433,7 @@ impl<T: Config> Module<T> {
 			40u32, 
 			100u32
 		);
-		let twinty_percent = Perbill::from_rational_approximation(
+		let twenty_percent = Perbill::from_rational_approximation(
 			20u32, 
 			100u32
 		);
