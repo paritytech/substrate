@@ -65,7 +65,7 @@ pub struct TryRuntimeCmd {
 /// The state to use for a migration dry-run.
 #[derive(Debug, structopt::StructOpt)]
 pub enum State {
-	/// Use a snapshot as state to run the migration.
+	/// Use a state snapshot as state to run the migration.
 	Snap {
 		#[structopt(flatten)]
 		snapshot_path: SnapshotPath,
@@ -73,7 +73,7 @@ pub enum State {
 
 	/// Use a live chain to run the migration.
 	Live {
-		/// An optional snapshot file to WRITE to. Not written if set to `None`.
+		/// An optional state snapshot file to WRITE to. Not written if set to `None`.
 		#[structopt(short, long)]
 		snapshot_path: Option<SnapshotPath>,
 
@@ -120,11 +120,11 @@ fn parse_url(s: &str) -> Result<String, &'static str> {
 
 #[derive(Debug, structopt::StructOpt)]
 pub struct SnapshotPath {
-	/// The directory of the snapshot.
+	/// The directory of the state snapshot.
 	#[structopt(short, long, default_value = ".")]
 	directory: String,
 
-	/// The file name of the snapshot.
+	/// The file name of the state snapshot.
 	#[structopt(default_value = "SNAPSHOT")]
 	file_name: String,
 }
@@ -184,7 +184,7 @@ impl TryRuntimeCmd {
 				State::Snap { snapshot_path } => {
 					let SnapshotPath { directory, file_name } = snapshot_path;
 					Builder::<B>::new().mode(Mode::Offline(OfflineConfig {
-						snapshot: SnapshotConfig {
+						state_snapshot: SnapshotConfig {
 							name: file_name.into(),
 							directory: directory.into(),
 						},
@@ -197,7 +197,7 @@ impl TryRuntimeCmd {
 					modules
 				} => Builder::<B>::new().mode(Mode::Online(OnlineConfig {
 					uri: url.into(),
-					snapshot: snapshot_path.as_ref().map(|c| SnapshotConfig {
+					state_snapshot: snapshot_path.as_ref().map(|c| SnapshotConfig {
 						name: c.file_name.clone(),
 						directory: c.directory.clone(),
 					}),

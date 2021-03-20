@@ -18,7 +18,7 @@
 //! # Remote Externalities
 //!
 //! An equivalent of `sp_io::TestExternalities` that can load its state from a remote substrate
-//! based chain, or a local snapshot file.
+//! based chain, or a local state snapshot file.
 //!
 //! #### Runtime to Test Against
 //!
@@ -137,37 +137,37 @@ jsonrpsee_proc_macros::rpc_client_api! {
 pub enum Mode<B: BlockT> {
 	/// Online.
 	Online(OnlineConfig<B>),
-	/// Offline. Uses a snapshot file and needs not any client config.
+	/// Offline. Uses a state snapshot file and needs not any client config.
 	Offline(OfflineConfig),
 }
 
 /// configuration of the online execution.
 ///
-/// A snapshot config must be present.
+/// A state snapshot config must be present.
 #[derive(Clone)]
 pub struct OfflineConfig {
-	/// The configuration of the snapshot file to use. It must be present.
-	pub snapshot: SnapshotConfig,
+	/// The configuration of the state snapshot file to use. It must be present.
+	pub state_snapshot: SnapshotConfig,
 }
 
 /// Configuration of the online execution.
 ///
-/// A snapshot config may be present and will be written to in that case.
+/// A state snapshot config may be present and will be written to in that case.
 #[derive(Clone)]
 pub struct OnlineConfig<B: BlockT> {
 	/// The HTTP uri to use.
 	pub uri: String,
 	/// The block number at which to connect. Will be latest finalized head if not provided.
 	pub at: Option<B::Hash>,
-	/// An optional snapshot file to WRITE to, not for reading. Not written if set to `None`.
-	pub snapshot: Option<SnapshotConfig>,
+	/// An optional state snapshot file to WRITE to, not for reading. Not written if set to `None`.
+	pub state_snapshot: Option<SnapshotConfig>,
 	/// The modules to scrape. If empty, entire chain state will be scraped.
 	pub modules: Vec<String>,
 }
 
 impl<B: BlockT> Default for OnlineConfig<B> {
 	fn default() -> Self {
-		Self { uri: TARGET.to_owned(), at: None, snapshot: None, modules: Default::default() }
+		Self { uri: TARGET.to_owned(), at: None, state_snapshot: None, modules: Default::default() }
 	}
 }
 
@@ -179,7 +179,7 @@ impl<B: BlockT> OnlineConfig<B> {
 	}
 }
 
-/// Configuration of the snapshot.
+/// Configuration of the state snapshot.
 #[derive(Clone)]
 pub struct SnapshotConfig {
 	// TODO: I could mix these two into one filed, but I think separate is better bc one can be
@@ -262,16 +262,16 @@ impl<B: BlockT> Builder<B> {
 
 // Internal methods
 impl<B: BlockT> Builder<B> {
-	/// Save the given data as snapshot.
-	fn save_snapshot(&self, data: &[KeyPair], path: &Path) -> Result<(), &'static str> {
-		info!(target: LOG_TARGET, "writing to snapshot file {:?}", path);
+	/// Save the given data as state snapshot.
+	fn save_state_snapshot(&self, data: &[KeyPair], path: &Path) -> Result<(), &'static str> {
+		info!(target: LOG_TARGET, "writing to state snapshot file {:?}", path);
 		fs::write(path, data.encode()).map_err(|_| "fs::write failed.")?;
 		Ok(())
 	}
 
-	/// initialize `Self` from snapshot. Panics if the file does not exist.
-	fn load_snapshot(&self, path: &Path) -> Result<Vec<KeyPair>, &'static str> {
-		info!(target: LOG_TARGET, "scraping keypairs from snapshot {:?}", path,);
+	/// initialize `Self` from state snapshot. Panics if the file does not exist.
+	fn load_state_snapshot(&self, path: &Path) -> Result<Vec<KeyPair>, &'static str> {
+		info!(target: LOG_TARGET, "scraping keypairs from state snapshot {:?}", path,);
 		let bytes = fs::read(path).map_err(|_| "fs::read failed.")?;
 		Decode::decode(&mut &*bytes).map_err(|_| "decode failed")
 	}
@@ -320,12 +320,12 @@ impl<B: BlockT> Builder<B> {
 
 	async fn pre_build(mut self) -> Result<Vec<KeyPair>, &'static str> {
 		let mut base_kv = match self.mode.clone() {
-			Mode::Offline(config) => self.load_snapshot(&config.snapshot.path())?,
+			Mode::Offline(config) => self.load_state_snapshot(&config.state_snapshot.path())?,
 			Mode::Online(config) => {
 				self.init_remote_client().await?;
 				let kp = self.load_remote().await?;
-				if let Some(c) = config.snapshot {
-					self.save_snapshot(&kp, &c.path())?;
+				if let Some(c) = config.state_snapshot {
+					self.save_state_snapshot(&kp, &c.path())?;
 				}
 				kp
 			}
@@ -356,7 +356,7 @@ impl<B: BlockT> Builder<B> {
 		self
 	}
 
-	/// Configure a snapshot to be used.
+	/// Configure a state snapshot to be used.
 	pub fn mode(mut self, mode: Mode<B>) -> Self {
 		self.mode = mode;
 		self
@@ -396,15 +396,15 @@ mod tests {
 	use super::test_prelude::*;
 
 	#[tokio::test]
-	async fn can_load_snapshot() {
+	async fn can_load_state_snapshot() {
 		init_logger();
 		Builder::<Block>::new()
 			.mode(Mode::Offline(OfflineConfig {
-				snapshot: SnapshotConfig { name: "test_data/proxy_test".into(), ..Default::default() },
+				state_snapshot: SnapshotConfig { name: "test_data/proxy_test".into(), ..Default::default() },
 			}))
 			.build()
 			.await
-			.expect("Can't read snapshot file")
+			.expect("Can't read state snapshot file")
 			.execute_with(|| {});
 	}
 }
@@ -428,11 +428,11 @@ mod remote_tests {
 	}
 
 	#[tokio::test]
-	async fn can_create_snapshot() {
+	async fn can_create_state_snapshot() {
 		init_logger();
 		Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
-				snapshot: Some(SnapshotConfig {
+				state_snapshot: Some(SnapshotConfig {
 					name: "test_snapshot_to_remove.bin".into(),
 					..Default::default()
 				}),
