@@ -148,9 +148,9 @@ impl TryRuntimeCmd {
 	where
 		B: BlockT,
 		B::Hash: FromStr,
-		<B::Hash as FromStr>::Err: std::fmt::Debug,
+		<B::Hash as FromStr>::Err: Debug,
 		NumberFor<B>: FromStr,
-		<NumberFor<B> as FromStr>::Err: std::fmt::Debug,
+		<NumberFor<B> as FromStr>::Err: Debug,
 		ExecDispatch: NativeExecutionDispatch + 'static,
 	{
 		let spec = config.chain_spec;
