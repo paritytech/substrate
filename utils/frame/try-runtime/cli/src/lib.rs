@@ -136,13 +136,10 @@ impl FromStr for CacheParams {
 		let parent = p.parent();
 		let file_name = p.file_name();
 
-		match file_name {
-			Some(file_name) => Ok(Self {
-				// TODO: maybe don't use to_string_lossy here
-				directory: parent.map(|p| p.to_string_lossy().into()).unwrap_or(".".to_string()),
-				file_name: file_name.to_string_lossy().into()
-			}),
-			None => Err("invalid path"),
+		file_name.and_then(|file_name| Self {
+			directory: parent.map(|p| p.to_string_lossy().into()).unwrap_or(".".to_string()),
+			file_name: file_name.to_string_lossy().into()
+		}).ok_or("invalid path")
 		}
 	}
 }
