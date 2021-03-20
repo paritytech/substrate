@@ -439,11 +439,11 @@ pub trait BlockNumberProvider {
 	///
 	/// In case of using crate `sp_runtime` without the crate `frame`
 	/// system, it is already implemented for
-	/// `frame_system::Module<T: Config>` as:
+	/// `frame_system::Pallet<T: Config>` as:
 	///
 	/// ```ignore
 	/// fn current_block_number() -> Self {
-	///     frame_system::Module<Config>::block_number()
+	///     frame_system::Pallet<Config>::block_number()
 	/// }
 	/// ```
 	/// .

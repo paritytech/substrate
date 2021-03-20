@@ -91,6 +91,8 @@ pub struct StorageDef {
 	pub where_clause: Option<syn::WhereClause>,
 	/// The span of the pallet::storage attribute.
 	pub attr_span: proc_macro2::Span,
+	/// The `cfg` attributes.
+	pub cfg_attrs: Vec<syn::Attribute>,
 }
 
 /// In `Foo<A, B, C>` retrieve the argument at given position, i.e. A is argument at position 0.
@@ -125,12 +127,14 @@ impl StorageDef {
 			return Err(syn::Error::new(item.span(), "Invalid pallet::storage, expected item type"));
 		};
 
-		let mut attrs: Vec<PalletStorageAttr> = helper::take_item_attrs(&mut item.attrs)?;
+		let mut attrs: Vec<PalletStorageAttr> = helper::take_item_pallet_attrs(&mut item.attrs)?;
 		if attrs.len() > 1 {
 			let msg = "Invalid pallet::storage, multiple argument pallet::getter found";
 			return Err(syn::Error::new(attrs[1].getter.span(), msg));
 		}
 		let getter = attrs.pop().map(|attr| attr.getter);
+
+		let cfg_attrs = helper::get_item_cfg_attrs(&item.attrs);
 
 		let mut instances = vec![];
 		instances.push(helper::check_type_def_gen(&item.generics, item.ident.span())?);
@@ -223,6 +227,7 @@ impl StorageDef {
 			getter,
 			query_kind,
 			where_clause,
+			cfg_attrs,
 		})
 	}
 }

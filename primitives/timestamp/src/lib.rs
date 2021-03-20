@@ -23,6 +23,7 @@ use codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use sp_inherents::ProvideInherentData;
 use sp_inherents::{InherentIdentifier, IsFatalError, InherentData};
+use sp_std::time::Duration;
 
 use sp_runtime::RuntimeString;
 
@@ -42,6 +43,11 @@ impl Timestamp {
 	/// Create new `Self`.
 	pub const fn new(inner: u64) -> Self {
 		Self(inner)
+	}
+
+	/// Returns `self` as [`Duration`].
+	pub fn as_duration(&self) -> Duration {
+		Duration::from_millis(self.0)
 	}
 }
 
@@ -100,8 +106,8 @@ impl From<Timestamp> for u64 {
 	}
 }
 
-impl From<sp_std::time::Duration> for Timestamp {
-	fn from(duration: sp_std::time::Duration) -> Self {
+impl From<Duration> for Timestamp {
+	fn from(duration: Duration) -> Self {
 		Timestamp(duration.as_millis() as u64)
 	}
 }
