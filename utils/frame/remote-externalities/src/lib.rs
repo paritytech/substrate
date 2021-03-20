@@ -378,12 +378,12 @@ impl<B: BlockT> Builder<B> {
 
 #[cfg(test)]
 mod test_prelude {
-	pub use super::*;
-	pub use sp_runtime::testing::{H256 as Hash, Block as RawBlock, ExtrinsicWrapper};
+	pub(crate) use super::*;
+	pub(crate) use sp_runtime::testing::{H256 as Hash, Block as RawBlock, ExtrinsicWrapper};
 
-	pub type Block = RawBlock<ExtrinsicWrapper<Hash>>;
+	pub(crate) type Block = RawBlock<ExtrinsicWrapper<Hash>>;
 
-	pub fn init_logger() {
+	pub(crate) fn init_logger() {
 		let _ = env_logger::Builder::from_default_env()
 			.format_module_path(false)
 			.format_level(true)
