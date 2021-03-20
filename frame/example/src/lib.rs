@@ -502,9 +502,8 @@ pub mod pallet {
 			// Here's the new one of read and then modify the value.
 			<Dummy<T>>::mutate(|dummy| {
 				// Using `saturating_add` instead of a regular `+` to avoid overflowing
-				// let new_dummy = dummy.map_or(increase_by, |d| d.saturating_add(increase_by));
-				// *dummy = Some(new_dummy);
-				*dummy = dummy.saturating_add(increase_by);
+				let new_dummy = dummy.map_or(increase_by, |d| d.saturating_add(increase_by));
+				*dummy = Some(new_dummy);
 			});
 
 			// Let's deposit an event to let the outside world know this happened.
@@ -538,7 +537,7 @@ pub mod pallet {
 			info!("New value is now: {:?}", new_value);
 
 			// Put the new value into storage.
-			<Dummy<T>>::set(new_value);
+			<Dummy<T>>::put(new_value);
 			Self::deposit_event(Event::SetDummy(new_value));
 
 			<Foo<T>>::set(<BalanceOf<T>>::from(33_000_000u32));
@@ -592,7 +591,7 @@ pub mod pallet {
 	// `fn getter_name() -> Type` for basic value items or
 	// `fn getter_name(key: KeyType) -> ValueType` for map items.
 	#[pallet::getter(fn dummy)]
-	pub(super) type Dummy<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
+	pub(super) type Dummy<T: Config> = StorageValue<_, T::Balance>;
 
 	// A map that has enumerable entries.
 	#[pallet::storage]
