@@ -130,7 +130,9 @@ parameter_types! {
 	pub static Period: BlockNumber = 5;
 	pub static Offset: BlockNumber = 0;
 	pub static MaxIterations: u32 = 0;
-	pub static DynamicDamping: bool = false;
+	pub static EnableAutomaticValidatorUpdatePerEra: bool = false;
+	pub static BottomXPercentOfValidators: u32 = 20;
+	pub static BottomYPercentOfValidators: u32 = 40;
 }
 
 impl frame_system::Config for Test {
@@ -241,6 +243,89 @@ impl OnUnbalanced<NegativeImbalanceOf<Test>> for RewardRemainderMock {
 	}
 }
 
+pub struct AutomaticValidatorUpdatePerEra;
+impl Convert<(u32, Vec<BalanceOf<Test>>, u32, u32, u32, u32), u32> for AutomaticValidatorUpdatePerEra {
+	fn convert(
+		(
+			current_validator_count, 
+			exposures_totals, 
+			max_validator_count, 
+			min_validator_count,
+			bottom_x_percent_of_validators,
+			bottom_y_percent_of_validators
+		) : (u32, Vec<BalanceOf<Test>>, u32, u32, u32, u32)
+	) -> u32 {
+		let mut expos_totals = exposures_totals;
+		let x_percent = Perbill::from_rational_approximation(
+			current_validator_count,
+			100
+		).mul_ceil(bottom_x_percent_of_validators); // make sure to ceil.
+
+		let y_percent = Perbill::from_rational_approximation(
+			current_validator_count,
+			100
+		).mul_ceil(bottom_y_percent_of_validators); // make sure to ceil.
+		// sort exposures
+		expos_totals.sort_by(|a, b| a.cmp(&b).reverse());
+		// global average
+		let mut total_exposure_sum: BalanceOf<Test> = Zero::zero();
+		let mut bottom_x_percent_exposure: BalanceOf<Test> = Zero::zero();
+		let mut bottom_y_percent_exposure: BalanceOf<Test> = Zero::zero();
+		let mut i = 0;
+	
+		for expo in expos_totals.into_iter(){
+			total_exposure_sum = total_exposure_sum.saturating_add(expo);
+			if i <= x_percent {
+				bottom_x_percent_exposure = 
+					bottom_x_percent_exposure.saturating_add(expo);
+			}
+			if i <= y_percent {
+				bottom_y_percent_exposure += 
+					bottom_y_percent_exposure.saturating_add(expo);
+			}
+			i += 1;
+		};
+
+		let global_average = Perbill::from_rational_approximation(
+			total_exposure_sum,
+			current_validator_count.saturated_into()
+		);
+		let x_percent_average_stake = Perbill::from_rational_approximation(
+			bottom_x_percent_exposure,
+			x_percent.saturated_into()
+		);
+
+		let y_percent_average_stake = Perbill::from_rational_approximation(
+			bottom_y_percent_exposure,
+			y_percent.saturated_into()
+		);
+		
+		//init final count
+		let mut final_count = current_validator_count;
+		let x_percent_of_validators = Perbill::from_rational_approximation(
+			bottom_x_percent_of_validators,
+			100u32
+		);
+		let y_percent_of_validators = Perbill::from_rational_approximation(
+			bottom_y_percent_of_validators,
+			100u32
+		);
+		if x_percent_average_stake > global_average.saturating_mul(x_percent_of_validators) {
+			final_count = std::cmp::min(
+				max_validator_count,
+				current_validator_count.saturating_add(x_percent)
+			);
+		}
+		if y_percent_average_stake < global_average.saturating_mul(y_percent_of_validators) {
+			final_count = std::cmp::max(
+				min_validator_count,
+				current_validator_count.saturating_sub(x_percent)
+			);
+		}
+		final_count
+	}
+  }
+
 impl onchain::Config for Test {
 	type AccountId = AccountId;
 	type BlockNumber = BlockNumber;
@@ -250,7 +335,10 @@ impl onchain::Config for Test {
 impl Config for Test {
 	type Currency = Balances;
 	type UnixTime = Timestamp;
-	type DynamicDamping = DynamicDamping;
+	type AutomaticValidatorUpdatePerEra = AutomaticValidatorUpdatePerEra;
+	type BottomXPercentOfValidators = BottomXPercentOfValidators;
+	type BottomYPercentOfValidators = BottomYPercentOfValidators;
+	type EnableAutomaticValidatorUpdatePerEra = EnableAutomaticValidatorUpdatePerEra;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type RewardRemainder = RewardRemainderMock;
 	type Event = Event;
@@ -376,8 +464,8 @@ impl ExtBuilder {
 		self.initialize_first_session = init;
 		self
 	}
-	pub fn dynamic_damping(self, enable: bool) -> Self {
-		DYNAMIC_DAMPING.with(|v| *v.borrow_mut() = enable);
+	pub fn enable_automatic_validator_update_per_era(self, enable: bool) -> Self {
+		ENABLE_AUTOMATIC_VALIDATOR_UPDATE_PER_ERA.with(|v| *v.borrow_mut() = enable);
 		self
 	}
 	pub fn offset(self, offset: BlockNumber) -> Self {

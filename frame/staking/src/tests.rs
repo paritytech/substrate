@@ -80,7 +80,7 @@ fn enable_dyanmic_damping_basic_setup_works() {
 		.validator_count(4)
 		.nominate(true)
 		.num_validators(3)
-		.dynamic_damping(true)
+		.enable_automatic_validator_update_per_era(true)
 		.build()
 		.execute_with(|| {
 		// The number of validators required.

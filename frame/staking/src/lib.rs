@@ -792,11 +792,16 @@ pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
 	/// is not used.
 	type UnixTime: UnixTime;
 
-	/// This flag is ued to enable/disable the dynamic damping of the validator set.
+	/// This flag is ued to automatically update the validator count per era
 	/// 
-	/// It is managed by calling `dynamic_damping_validator_count`.
-	type DynamicDamping: Get<bool>;
-
+	type EnableAutomaticValidatorUpdatePerEra: Get<bool>;
+	/// Convert current validator count to a new validator count 
+	/// giving the total exposures, min & max validators count, bottom x percent of 
+	/// validators and bottom y percent of validators.
+	type AutomaticValidatorUpdatePerEra: Convert<(u32, Vec<BalanceOf<Self>>, u32, u32, u32, u32), u32>;
+	type BottomXPercentOfValidators: Get<u32>;
+	type BottomYPercentOfValidators: Get<u32>;
+	
 	/// Convert a balance into a number used for election calculation. This must fit into a `u64`
 	/// but is allowed to be sensibly lossy. The `u64` is used to communicate with the
 	/// [`sp_npos_elections`] crate which accepts u64 numbers and does operations in 128.
@@ -1298,10 +1303,6 @@ decl_error! {
 		TooManyTargets,
 		/// A nomination target was supplied that was blocked or otherwise not a validator.
 		BadTarget,
-		/// damping validators count is less than the minimum validators count
-		LessThanMinValidatorsCount,
-		/// damping validators count is greater than the maximum validators count
-		GreaterThanMaxValidatorsCount,
 	}
 }
 
@@ -1333,9 +1334,6 @@ decl_module! {
 		///
 		/// If set to 0, balance_solution will not be executed at all.
 		const MaxIterations: u32 = T::MaxIterations::get();
-
-		/// If it is true, it will enable the dynamic validator set damping 
-		const DynamicDamping: bool = T::DynamicDamping::get();
 
 		/// The threshold of improvement that should be provided for a new solution to be accepted.
 		const MinSolutionScoreBump: Perbill = T::MinSolutionScoreBump::get();
@@ -2380,78 +2378,6 @@ impl<T: Config> Module<T> {
 		<SnapshotNominators<T>>::kill();
 	}
 
-	/// Modify the target validator count based on the staking participation.
-	fn dynamic_damping_validator_count(
-		exposures_totals: Vec<BalanceOf<T>>
-	) -> u32
-	{
-		let mut expos_totals = exposures_totals;
-		let one_percent = Perbill::from_rational_approximation(
-			Self::validator_count(), 
-			100
-		).mul_ceil(1u32); // make sure to at lest ceiled to 1
-		
-		let two_percent = one_percent.saturating_mul(2);
-		// sort exposures
-		expos_totals.sort_by(|a, b| a.cmp(&b).reverse());
-		// global average
-		let mut total_exposure_sum: BalanceOf<T> = Zero::zero();
-		let mut bottom_one_percent_exposure: BalanceOf<T> = Zero::zero();
-		let mut bottom_two_percent_exposure: BalanceOf<T> = Zero::zero();
-		let mut i = 0;
-	
-		for expo in expos_totals.into_iter(){
-			total_exposure_sum = total_exposure_sum.saturating_add(expo);
-			if i <= one_percent {
-				bottom_one_percent_exposure = 
-					bottom_one_percent_exposure.saturating_add(expo);
-			}
-			if i <= two_percent {
-				bottom_two_percent_exposure += 
-					bottom_two_percent_exposure.saturating_add(expo);
-			}
-			i += 1;
-		};
-
-		let global_average = Perbill::from_rational_approximation(
-			total_exposure_sum,
-			(Self::validator_count()).saturated_into()
-		);
-		let one_percent_average_stake = Perbill::from_rational_approximation(
-			bottom_one_percent_exposure,
-			one_percent.saturated_into()
-		);
-
-		let two_percent_average_stake = Perbill::from_rational_approximation(
-			bottom_two_percent_exposure,
-			two_percent.saturated_into()
-		);
-		
-		//init final count
-		let mut final_count = Self::validator_count();
-		let forty_percent = Perbill::from_rational_approximation(
-			40u32, 
-			100u32
-		);
-		let twinty_percent = Perbill::from_rational_approximation(
-			20u32, 
-			100u32
-		);
-		if one_percent_average_stake > global_average.saturating_mul(forty_percent) {
-			final_count = std::cmp::min(
-				MAX_VALIDATORS.saturated_into(),
-				Self::validator_count().saturating_add(one_percent)
-			);
-		}
-		if two_percent_average_stake < global_average.saturating_mul(twinty_percent) {
-			final_count = std::cmp::max(
-				Self::minimum_validator_count(),
-				Self::validator_count().saturating_sub(one_percent)
-			);
-		}
-		final_count
-	}
-
 	fn do_payout_stakers(validator_stash: T::AccountId, era: EraIndex) -> DispatchResult {
 		// Validate input data
 		let current_era = CurrentEra::get().ok_or(Error::<T>::InvalidEraToReward)?;
@@ -3010,14 +2936,24 @@ impl<T: Config> Module<T> {
 
 			// Insert current era staking information
 			<ErasTotalStake<T>>::insert(&current_era, total_stake);
-			// if dynamic damping is enabled
-			if T::DynamicDamping::get() {
-				ValidatorCount::put(
-					Self::dynamic_damping_validator_count(
-						total_exposures
+
+			// calculate the new validators count
+			let mut new_validators_count = Self::validator_count();
+			if T::EnableAutomaticValidatorUpdatePerEra::get(){
+				new_validators_count = T::AutomaticValidatorUpdatePerEra::convert(
+					(
+						Self::validator_count(),
+						total_exposures,
+						MAX_VALIDATORS.saturated_into(),
+						Self::minimum_validator_count(),
+						T::BottomXPercentOfValidators::get(),
+						T::BottomYPercentOfValidators::get()
 					)
 				);
 			}
+			
+			ValidatorCount::put(new_validators_count);
+
 			// collect the pref of all winners
 			for stash in &elected_stashes {
 				let pref = Self::validators(stash);
