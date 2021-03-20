@@ -67,7 +67,7 @@ where
 
 		(
 			Output::decode(&mut TrailingZeroInput::new(subject)).unwrap_or_default(),
-			frame_system::Module::<T>::block_number(),
+			frame_system::Pallet::<T>::block_number(),
 		)
 	}
 }
