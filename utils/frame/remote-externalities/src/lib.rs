@@ -409,8 +409,7 @@ mod tests {
 	}
 }
 
-#[cfg(feature = "remote-test")]
-#[cfg(test)]
+#[cfg(all(test, feature = "remote-test"))]
 mod remote_tests {
 	use super::test_prelude::*;
 
