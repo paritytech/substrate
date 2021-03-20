@@ -68,14 +68,14 @@ pub enum State {
 	/// Use a snapshot as state to run the migration.
 	Snap {
 		#[structopt(flatten)]
-		cache_params: CacheParams,
+		snapshot_path: SnapshotPath,
 	},
 
 	/// Use a live chain to run the migration.
 	Live {
-		/// An optional cache file to WRITE to. Not cached if set to `None`.
+		/// An optional snapshot file to WRITE to. Not written if set to `None`.
 		#[structopt(short, long)]
-		cache_file: Option<CacheParams>,
+		snapshot_path: Option<SnapshotPath>,
 
 		/// The block hash at which to connect.
 		/// Will be latest finalized head if not provided.
@@ -119,17 +119,17 @@ fn parse_url(s: &str) -> Result<String, &'static str> {
 }
 
 #[derive(Debug, structopt::StructOpt)]
-pub struct CacheParams {
+pub struct SnapshotPath {
 	/// The directory of the snapshot.
 	#[structopt(short, long, default_value = ".")]
 	directory: String,
 
 	/// The file name of the snapshot.
-	#[structopt(default_value = "CACHE")]
+	#[structopt(default_value = "SNAPSHOT")]
 	file_name: String,
 }
 
-impl FromStr for CacheParams {
+impl FromStr for SnapshotPath {
 	type Err = &'static str;
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		let p: PathBuf = s.parse().map_err(|_| "invalid path")?;
@@ -179,24 +179,25 @@ impl TryRuntimeCmd {
 		);
 
 		let ext = {
-			use remote_externalities::{Builder, Mode, CacheConfig, OfflineConfig, OnlineConfig};
+			use remote_externalities::{Builder, Mode, SnapshotConfig, OfflineConfig, OnlineConfig};
 			let builder = match &self.state {
-				State::Snap {
-					cache_params: CacheParams { file_name, directory }
-				} => Builder::<B>::new().mode(Mode::Offline(OfflineConfig {
-					cache: CacheConfig {
-						name: file_name.into(),
-						directory: directory.into(),
-					},
-				})),
+				State::Snap { snapshot_path } => {
+					let SnapshotPath { directory, file_name } = snapshot_path;
+					Builder::<B>::new().mode(Mode::Offline(OfflineConfig {
+						snapshot: SnapshotConfig {
+							name: file_name.into(),
+							directory: directory.into(),
+						},
+					}))
+				},
 				State::Live {
 					url,
-					cache_file,
+					snapshot_path,
 					block_at,
 					modules
 				} => Builder::<B>::new().mode(Mode::Online(OnlineConfig {
 					uri: url.into(),
-					cache: cache_file.as_ref().map(|c| CacheConfig {
+					snapshot: snapshot_path.as_ref().map(|c| SnapshotConfig {
 						name: c.file_name.clone(),
 						directory: c.directory.clone(),
 					}),
