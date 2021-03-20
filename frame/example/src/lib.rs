@@ -260,7 +260,7 @@ use sp_std::{
 	marker::PhantomData
 };
 use frame_support::{
-	runtime_print, dispatch::DispatchResult, traits::IsSubType,
+	dispatch::DispatchResult, traits::IsSubType,
 	weights::{DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee, Pays},
 };
 use frame_system::{ensure_signed};
@@ -273,6 +273,8 @@ use sp_runtime::{
 		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
 	},
 };
+
+use log::info;
 
 // Re-export pallet items so that they can be accessed from the crate namespace.
 pub use pallet::*;
@@ -346,6 +348,9 @@ pub mod pallet {
 	/// `frame_system::Config` should always be included.
 	#[pallet::config]
 	pub trait Config: pallet_balances::Config + frame_system::Config {
+		#[pallet::constant]
+		type MagicNumber: Get<Self::Balance>;
+
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		type WeightInfo: WeightInfo;
@@ -497,8 +502,9 @@ pub mod pallet {
 			// Here's the new one of read and then modify the value.
 			<Dummy<T>>::mutate(|dummy| {
 				// Using `saturating_add` instead of a regular `+` to avoid overflowing
-				let new_dummy = dummy.map_or(increase_by, |d| d.saturating_add(increase_by));
-				*dummy = Some(new_dummy);
+				// let new_dummy = dummy.map_or(increase_by, |d| d.saturating_add(increase_by));
+				// *dummy = Some(new_dummy);
+				*dummy = dummy.saturating_add(increase_by);
 			});
 
 			// Let's deposit an event to let the outside world know this happened.
@@ -523,18 +529,35 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] new_value: T::Balance,
 		) -> DispatchResult {
-			ensure_root(origin)?;
+			// ensure_root(origin)?;
+			let acct = ensure_signed(origin)?;
 
-			// TODO: add comment
-			runtime_print!("New value is now: {:?}", new_value);
+			// Print out log or debug message in the console via log::{error, warn, info, debug, trace},
+			// accepting format strings similar to `println!`.
+			// https://substrate.dev/rustdocs/v3.0.0/log/index.html
+			info!("New value is now: {:?}", new_value);
 
 			// Put the new value into storage.
-			<Dummy<T>>::put(new_value);
+			<Dummy<T>>::set(new_value);
 			Self::deposit_event(Event::SetDummy(new_value));
+
+			<Foo<T>>::set(<BalanceOf<T>>::from(33_000_000u32));
 
 			// All good, no refund.
 			Ok(())
 		}
+
+		#[pallet::weight(0)]
+	  pub(super) fn set_bar(
+			origin: OriginFor<T>,
+			#[pallet::compact] new_value: T::Balance,
+	  ) -> DispatchResult {
+	  	let acct = ensure_signed(origin)?;
+
+	  	<Bar<T>>::insert(acct.clone(), new_value);
+			Self::deposit_event(Event::SetBar(acct, new_value));
+			Ok(())
+	  }
 	}
 
 	/// Events are a simple means of reporting specific conditions and
@@ -549,6 +572,7 @@ pub mod pallet {
 		/// Dummy event, just here so there's a generic type that's used.
 		AccumulateDummy(BalanceOf<T>),
 		SetDummy(BalanceOf<T>),
+		SetBar(T::AccountId, BalanceOf<T>),
 	}
 
 	// pallet::storage attributes allow for type-safe usage of the Substrate storage database,
@@ -568,12 +592,12 @@ pub mod pallet {
 	// `fn getter_name() -> Type` for basic value items or
 	// `fn getter_name(key: KeyType) -> ValueType` for map items.
 	#[pallet::getter(fn dummy)]
-	pub(super) type Dummy<T: Config> = StorageValue<_, T::Balance>;
+	pub(super) type Dummy<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
 
 	// A map that has enumerable entries.
 	#[pallet::storage]
 	#[pallet::getter(fn bar)]
-	pub(super) type Bar<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, T::Balance, ValueQuery>;
+	pub(super) type Bar<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, T::Balance>;
 
 	// this one uses the query kind: `ValueQuery`, we'll demonstrate the usage of 'mutate' API.
 	#[pallet::storage]
@@ -667,54 +691,54 @@ impl<T: Config> Pallet<T> {
 // types defined in the runtime. Lookup `pub type SignedExtra = (...)` in `node/runtime` and
 // `node-template` for an example of this.
 
-/// A simple signed extension that checks for the `set_dummy` call. In that case, it increases the
-/// priority and prints some log.
-///
-/// Additionally, it drops any transaction with an encoded length higher than 200 bytes. No
-/// particular reason why, just to demonstrate the power of signed extensions.
-#[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct WatchDummy<T: Config + Send + Sync>(PhantomData<T>);
+// A simple signed extension that checks for the `set_dummy` call. In that case, it increases the
+// priority and prints some log.
+//
+// Additionally, it drops any transaction with an encoded length higher than 200 bytes. No
+// particular reason why, just to demonstrate the power of signed extensions.
+// #[derive(Encode, Decode, Clone, Eq, PartialEq)]
+// pub struct WatchDummy<T: Config + Send + Sync>(PhantomData<T>);
 
-impl<T: Config + Send + Sync> sp_std::fmt::Debug for WatchDummy<T> {
-	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		write!(f, "WatchDummy")
-	}
-}
+// impl<T: Config + Send + Sync> sp_std::fmt::Debug for WatchDummy<T> {
+// 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+// 		write!(f, "WatchDummy")
+// 	}
+// }
 
-impl<T: Config + Send + Sync> SignedExtension for WatchDummy<T>
-where
-	<T as frame_system::Config>::Call: IsSubType<Call<T>>,
-{
-	const IDENTIFIER: &'static str = "WatchDummy";
-	type AccountId = T::AccountId;
-	type Call = <T as frame_system::Config>::Call;
-	type AdditionalSigned = ();
-	type Pre = ();
+// impl<T: Config + Send + Sync> SignedExtension for WatchDummy<T>
+// where
+// 	<T as frame_system::Config>::Call: IsSubType<Call<T>>,
+// {
+// 	const IDENTIFIER: &'static str = "WatchDummy";
+// 	type AccountId = T::AccountId;
+// 	type Call = <T as frame_system::Config>::Call;
+// 	type AdditionalSigned = ();
+// 	type Pre = ();
 
-	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
+// 	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
 
-	fn validate(
-		&self,
-		_who: &Self::AccountId,
-		call: &Self::Call,
-		_info: &DispatchInfoOf<Self::Call>,
-		len: usize,
-	) -> TransactionValidity {
-		// if the transaction is too big, just drop it.
-		if len > 200 {
-			return InvalidTransaction::ExhaustsResources.into()
-		}
+// 	fn validate(
+// 		&self,
+// 		_who: &Self::AccountId,
+// 		call: &Self::Call,
+// 		_info: &DispatchInfoOf<Self::Call>,
+// 		len: usize,
+// 	) -> TransactionValidity {
+// 		// if the transaction is too big, just drop it.
+// 		if len > 200 {
+// 			return InvalidTransaction::ExhaustsResources.into()
+// 		}
 
-		// check for `set_dummy`
-		match call.is_sub_type() {
-			Some(Call::set_dummy(..)) => {
-				sp_runtime::print("set_dummy was received.");
+// 		// check for `set_dummy`
+// 		match call.is_sub_type() {
+// 			Some(Call::set_dummy(..)) => {
+// 				sp_runtime::print("set_dummy was received.");
 
-				let mut valid_tx = ValidTransaction::default();
-				valid_tx.priority = Bounded::max_value();
-				Ok(valid_tx)
-			}
-			_ => Ok(Default::default()),
-		}
-	}
-}
+// 				let mut valid_tx = ValidTransaction::default();
+// 				valid_tx.priority = Bounded::max_value();
+// 				Ok(valid_tx)
+// 			}
+// 			_ => Ok(Default::default()),
+// 		}
+// 	}
+// }
