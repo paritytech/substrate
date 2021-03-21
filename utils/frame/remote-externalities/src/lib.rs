@@ -117,7 +117,6 @@ use jsonrpsee_http_client::{HttpClient, HttpConfig};
 
 use sp_runtime::traits::Block as BlockT;
 
-// TODO: Make KeyPair generic
 type KeyPair = (StorageKey, StorageData);
 
 const LOG_TARGET: &str = "remote-ext";
