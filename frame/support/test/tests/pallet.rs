@@ -418,9 +418,9 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: frame_system::{Module, Call, Event<T>},
-		Example: pallet::{Module, Call, Event<T>, Config, Storage, Inherent, Origin<T>, ValidateUnsigned},
-		Example2: pallet2::{Module, Call, Event, Config<T>, Storage},
+		System: frame_system::{Pallet, Call, Event<T>},
+		Example: pallet::{Pallet, Call, Event<T>, Config, Storage, Inherent, Origin<T>, ValidateUnsigned},
+		Example2: pallet2::{Pallet, Call, Event, Config<T>, Storage},
 	}
 );
 
@@ -559,11 +559,11 @@ fn pallet_hooks_expand() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
 
-		assert_eq!(AllModules::on_initialize(1), 10);
-		AllModules::on_finalize(1);
+		assert_eq!(AllPallets::on_initialize(1), 10);
+		AllPallets::on_finalize(1);
 
 		assert_eq!(pallet::Pallet::<Runtime>::storage_version(), None);
-		assert_eq!(AllModules::on_runtime_upgrade(), 30);
+		assert_eq!(AllPallets::on_runtime_upgrade(), 30);
 		assert_eq!(
 			pallet::Pallet::<Runtime>::storage_version(),
 			Some(pallet::Pallet::<Runtime>::current_version()),

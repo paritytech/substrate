@@ -245,7 +245,7 @@ where
 mod tests {
 	use super::*;
 	use crate::{
-		CodeHash, BalanceOf, Error, Module as Contracts,
+		CodeHash, BalanceOf, Error, Pallet as Contracts,
 		exec::{Ext, StorageKey, AccountIdOf, Executable, RentParams},
 		gas::GasMeter,
 		tests::{Test, Call, ALICE, BOB},
