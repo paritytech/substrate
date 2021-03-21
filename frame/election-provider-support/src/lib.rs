@@ -168,7 +168,9 @@ use frame_support::weights::Weight;
 
 /// Re-export some type as they are used in the interface.
 pub use sp_arithmetic::PerThing;
-pub use sp_npos_elections::{Assignment, ExtendedBalance, PerThing128, Supports, VoteWeight};
+pub use sp_npos_elections::{
+	Assignment, ExtendedBalance, PerThing128, Supports, Support, VoteWeight
+};
 
 /// Types that are used by the data provider trait.
 pub mod data_provider {

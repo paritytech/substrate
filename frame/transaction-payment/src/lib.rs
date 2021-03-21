@@ -178,7 +178,7 @@ impl<T, S, V, M> Convert<Multiplier, Multiplier> for TargetedFeeAdjustment<T, S,
 		// the computed ratio is only among the normal class.
 		let normal_max_weight = weights.get(DispatchClass::Normal).max_total
 			.unwrap_or_else(|| weights.max_block);
-		let current_block_weight = <frame_system::Module<T>>::block_weight();
+		let current_block_weight = <frame_system::Pallet<T>>::block_weight();
 		let normal_block_weight = *current_block_weight
 			.get(DispatchClass::Normal)
 			.min(&normal_max_weight);
@@ -303,7 +303,7 @@ decl_module! {
 			target += addition;
 
 			sp_io::TestExternalities::new_empty().execute_with(|| {
-				<frame_system::Module<T>>::set_block_consumed_resources(target, 0);
+				<frame_system::Pallet<T>>::set_block_consumed_resources(target, 0);
 				let next = T::FeeMultiplierUpdate::convert(min_value);
 				assert!(next > min_value, "The minimum bound of the multiplier is too low. When \
 					block saturation is more than target by 1% and multiplier is minimal then \
@@ -630,9 +630,9 @@ mod tests {
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
-			System: system::{Module, Call, Config, Storage, Event<T>},
-			Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
-			TransactionPayment: pallet_transaction_payment::{Module, Storage},
+			System: system::{Pallet, Call, Config, Storage, Event<T>},
+			Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+			TransactionPayment: pallet_transaction_payment::{Pallet, Storage},
 		}
 	);
 

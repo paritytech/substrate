@@ -390,7 +390,7 @@ impl<T: Config> Module<T> {
 	/// Cannot be done when already paused.
 	pub fn schedule_pause(in_blocks: T::BlockNumber) -> DispatchResult {
 		if let StoredState::Live = <State<T>>::get() {
-			let scheduled_at = <frame_system::Module<T>>::block_number();
+			let scheduled_at = <frame_system::Pallet<T>>::block_number();
 			<State<T>>::put(StoredState::PendingPause {
 				delay: in_blocks,
 				scheduled_at,
@@ -405,7 +405,7 @@ impl<T: Config> Module<T> {
 	/// Schedule a resume of GRANDPA after pausing.
 	pub fn schedule_resume(in_blocks: T::BlockNumber) -> DispatchResult {
 		if let StoredState::Paused = <State<T>>::get() {
-			let scheduled_at = <frame_system::Module<T>>::block_number();
+			let scheduled_at = <frame_system::Pallet<T>>::block_number();
 			<State<T>>::put(StoredState::PendingResume {
 				delay: in_blocks,
 				scheduled_at,
@@ -437,7 +437,7 @@ impl<T: Config> Module<T> {
 		forced: Option<T::BlockNumber>,
 	) -> DispatchResult {
 		if !<PendingChange<T>>::exists() {
-			let scheduled_at = <frame_system::Module<T>>::block_number();
+			let scheduled_at = <frame_system::Pallet<T>>::block_number();
 
 			if let Some(_) = forced {
 				if Self::next_forced().map_or(false, |next| next > scheduled_at) {
@@ -465,7 +465,7 @@ impl<T: Config> Module<T> {
 	/// Deposit one of this module's logs.
 	fn deposit_log(log: ConsensusLog<T::BlockNumber>) {
 		let log: DigestItem<T::Hash> = DigestItem::Consensus(GRANDPA_ENGINE_ID, log.encode());
-		<frame_system::Module<T>>::deposit_log(log.into());
+		<frame_system::Pallet<T>>::deposit_log(log.into());
 	}
 
 	// Perform module initialization, abstracted so that it can be called either through genesis
