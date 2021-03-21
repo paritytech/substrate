@@ -12,7 +12,7 @@ Subkey is a commandline utility included with Substrate that generates or restor
 subkey generate
 ```
 
-Will output a mnemonic phrase and give you the seed, public key, and address of a new account. DO NOT SHARE your mnemonic or seed with ANYONE it will give them access to your funds. If someone is making a transfer to you they will only need your **Address**.
+Will output a secret phrase("mnemonic phrase") and give you the secret seed("Private Key"), public key("Account ID") and SS58 address("Public Address") of a new account. DO NOT SHARE your mnemonic phrase or secret seed with ANYONE it will give them access to your funds. If someone is making a transfer to you they will only need your **Public Address**.
 
 === Inspecting a key
 
