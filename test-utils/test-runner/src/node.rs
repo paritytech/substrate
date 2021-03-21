@@ -397,7 +397,7 @@ impl<T: ChainInfo> Node<T> {
 
 	/// Get the events of the most recently produced block
 	pub fn events(&self) -> Vec<EventRecord<T::Runtime>> {
-		self.with_state(|| frame_system::Module::<T::Runtime>::events())
+		self.with_state(|| frame_system::Pallet::<T::Runtime>::events())
 	}
 
 	/// Checks the node logs for a specific entry.
