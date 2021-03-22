@@ -119,8 +119,6 @@ decl_module! {
 		}
 
 		fn on_initialize(_block: T::BlockNumber) -> Weight {
-			// We do not want to go above the block limit and rather avoid lazy deletion
-			// in that case. This should only happen on runtime upgrades.
 			migration::migrate::<T>()
 		}
 	}
