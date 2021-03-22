@@ -299,24 +299,12 @@ impl<T: Config> Pallet<T> {
 		voters_sorted.sort_by_key(|(_, y)| *y);
 		voters_sorted.reverse();
 
-		// we run through the reduction process twice: once using the size_hint function, and once
-		// by actually encoding the data. Given a well-behaved size_hint implementation, this will
-		// only actually encode once. Given a misbehaving size_hint implementation, this still ensures
-		// that we accurately trim the solution.
-		let size_fns: [Box<dyn Fn(&CompactOf<T>) -> u32>; 2] = [
-			Box::new(|compact: &CompactOf<T>| compact.size_hint().saturated_into()),
-			Box::new(|compact: &CompactOf<T>| {
-				let encoded = compact.encode();
-				encoded.len().saturated_into()
-			}),
-		];
-		for size_fn in size_fns.iter() {
-			while size_fn(&compact) > max_allowed_length {
-				let (smallest_stake_voter, _) = voters_sorted.pop().ok_or(MinerError::NoMoreVoters)?;
-				let index = voter_index(&smallest_stake_voter).ok_or(MinerError::SnapshotUnAvailable)?;
-				compact.remove_voter(index);
-			}
+		while compact.encoded_size() > max_allowed_length.saturated_into() {
+			let (smallest_stake_voter, _) = voters_sorted.pop().ok_or(MinerError::NoMoreVoters)?;
+			let index = voter_index(&smallest_stake_voter).ok_or(MinerError::SnapshotUnAvailable)?;
+			compact.remove_voter(index);
 		}
+
 		Ok(compact)
 	}
 
