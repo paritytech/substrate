@@ -24,6 +24,7 @@
 
 mod mock;
 mod tests;
+mod migration;
 
 use sp_std::vec::Vec;
 use frame_support::{
@@ -84,10 +85,6 @@ decl_storage! {
 			map hasher(twox_64_concat) ReportIdOf<T>
 			=> Option<OffenceDetails<T::AccountId, T::IdentificationTuple>>;
 
-		/// Deferred reports that have been rejected by the offence handler and need to be submitted
-		/// at a later time.
-		DeferredOffences get(fn deferred_offences): Vec<DeferredOffenceOf<T>>;
-
 		/// A vector of reports of the same kind that happened at the same time slot.
 		ConcurrentReportsIndex:
 			double_map hasher(twox_64_concat) Kind, hasher(twox_64_concat) OpaqueTimeSlot
@@ -117,37 +114,14 @@ decl_module! {
 	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
 
-		fn on_initialize(now: T::BlockNumber) -> Weight {
-			let limit = T::WeightSoftLimit::get();
-			let mut consumed = Weight::zero();
+		fn on_runtime_upgrade() -> Weight {
+			migration::migrate::<T>()
+		}
 
-			<DeferredOffences<T>>::mutate(|deferred| {
-				deferred.retain(|(offences, perbill, session)| {
-					if consumed >= limit {
-						true
-					} else {
-						// keep those that fail to be reported again. An error log is emitted here; this
-						// should not happen if staking's `can_report` is implemented properly.
-						match T::OnOffenceHandler::on_offence(&offences, &perbill, *session) {
-							Ok(weight) => {
-								consumed += weight;
-								false
-							},
-							Err(_) => {
-								log::error!(
-									target: "runtime::offences",
-									"re-submitting a deferred slash returned Err at {:?}. \
-									 This should not happen with pallet-staking",
-									now,
-								);
-								true
-							},
-						}
-					}
-				})
-			});
-
-			consumed
+		fn on_initialize(_block: T::BlockNumber) -> Weight {
+			// We do not want to go above the block limit and rather avoid lazy deletion
+			// in that case. This should only happen on runtime upgrades.
+			migration::migrate::<T>()
 		}
 	}
 }
@@ -182,11 +156,11 @@ where
 		let slash_perbill: Vec<_> = (0..concurrent_offenders.len())
 			.map(|_| new_fraction.clone()).collect();
 
-		let applied = Self::report_or_store_offence(
+		let applied = T::OnOffenceHandler::on_offence(
 			&concurrent_offenders,
 			&slash_perbill,
 			offence.session_index(),
-		);
+		).is_ok();
 
 		// Deposit the event.
 		Self::deposit_event(Event::Offence(O::ID, time_slot.encode(), applied));
@@ -205,28 +179,6 @@ where
 }
 
 impl<T: Config> Module<T> {
-	/// Tries (without checking) to report an offence. Stores them in [`DeferredOffences`] in case
-	/// it fails. Returns false in case it has to store the offence.
-	fn report_or_store_offence(
-		concurrent_offenders: &[OffenceDetails<T::AccountId, T::IdentificationTuple>],
-		slash_perbill: &[Perbill],
-		session_index: SessionIndex,
-	) -> bool {
-		match T::OnOffenceHandler::on_offence(
-			&concurrent_offenders,
-			&slash_perbill,
-			session_index,
-		) {
-			Ok(_) => true,
-			Err(_) => {
-				<DeferredOffences<T>>::mutate(|d|
-					d.push((concurrent_offenders.to_vec(), slash_perbill.to_vec(), session_index))
-				);
-				false
-			}
-		}
-	}
-
 	/// Compute the ID for the given report properties.
 	///
 	/// The report id depends on the offence kind, time slot and the id of offender.
@@ -279,11 +231,6 @@ impl<T: Config> Module<T> {
 		} else {
 			None
 		}
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	pub fn set_deferred_offences(offences: Vec<DeferredOffenceOf<T>>) {
-		<DeferredOffences<T>>::put(offences);
 	}
 }
 
