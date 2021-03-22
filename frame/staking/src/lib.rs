@@ -2362,20 +2362,11 @@ impl<T: Config> Module<T> {
 		<ErasTotalStake<T>>::insert(&current_era, total_stake);
 
 		// calculate the new validators count
-		let mut new_validators_count = Self::validator_count();
-		if T::EnableAutomaticValidatorUpdatePerEra::get(){
-				new_validators_count = T::AutomaticValidatorUpdatePerEra::convert(
-						(
-							Self::validator_count(),
-							total_exposures,
-							MAX_VALIDATORS.saturated_into(),
-							Self::minimum_validator_count(),
-							T::BottomXPercentOfValidators::get(),
-							T::BottomYPercentOfValidators::get()
-						)
-				);
+		let current_validator_count = Self::validator_count();
+		let new_validators_count = T::AutomaticValidatorUpdatePerEra::convert((current_validator_count, total_exposures));
+		if new_validator_count != current_validator_count {
+			ValidatorCount::put(new_validators_count);
 		}
-		ValidatorCount::put(new_validators_count);
 
 		// collect the pref of all winners
 		for stash in &elected_stashes {
