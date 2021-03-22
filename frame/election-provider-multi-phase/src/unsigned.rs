@@ -104,10 +104,9 @@ impl<T: Config> Pallet<T> {
 		let iters = Self::get_balancing_iters();
 		// get the solution, with a load of checks to ensure if submitted, IT IS ABSOLUTELY VALID.
 		let (raw_solution, witness) = Self::mine_and_check(iters)?;
-		let round = Self::round();
 
 		let score = raw_solution.score.clone();
-		let call: Call<T> = Call::submit_unsigned(raw_solution, round, witness).into();
+		let call: Call<T> = Call::submit_unsigned(raw_solution, witness).into();
 
 		log!(
 			info,
@@ -134,10 +133,9 @@ impl<T: Config> Pallet<T> {
 		iters: usize,
 	) -> Result<(RawSolution<CompactOf<T>>, SolutionOrSnapshotSize), MinerError> {
 		let (raw_solution, witness) = Self::mine_solution(iters)?;
-		let current_round = Self::round();
 
 		// ensure that this will pass the pre-dispatch checks
-		Self::unsigned_pre_dispatch_checks(&raw_solution, current_round).map_err(|e| {
+		Self::unsigned_pre_dispatch_checks(&raw_solution).map_err(|e| {
 			log!(warn, "pre-dispatch-checks failed for mined solution: {:?}", e);
 			MinerError::PreDispatchChecksFailed
 		})?;
@@ -427,13 +425,12 @@ impl<T: Config> Pallet<T> {
 	/// code, so that we do less and less storage reads here.
 	pub(crate) fn unsigned_pre_dispatch_checks(
 		solution: &RawSolution<CompactOf<T>>,
-		round: u32,
 	) -> DispatchResult {
 		// ensure solution is timely. Don't panic yet. This is a cheap check.
 		ensure!(Self::current_phase().is_unsigned_open(), Error::<T>::PreDispatchEarlySubmission);
 
 		// ensure round is current
-		ensure!(Self::round() == round, Error::<T>::OcwCallWrongEra,);
+		ensure!(Self::round() == solution.round, Error::<T>::OcwCallWrongEra,);
 
 		// ensure correct number of winners.
 		ensure!(
@@ -562,7 +559,7 @@ mod tests {
 	fn validate_unsigned_retracts_wrong_phase() {
 		ExtBuilder::default().desired_targets(0).build_and_execute(|| {
 			let solution = RawSolution::<TestCompact> { score: [5, 0, 0], ..Default::default() };
-			let call = Call::submit_unsigned(solution.clone(), MultiPhase::round(), witness());
+			let call = Call::submit_unsigned(solution.clone(), witness());
 
 			// initial
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
@@ -622,7 +619,7 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_unsigned());
 
 			let solution = RawSolution::<TestCompact> { score: [5, 0, 0], ..Default::default() };
-			let call = Call::submit_unsigned(solution.clone(), MultiPhase::round(), witness());
+			let call = Call::submit_unsigned(solution.clone(), witness());
 
 			// initial
 			assert!(<MultiPhase as ValidateUnsigned>::validate_unsigned(
@@ -659,7 +656,7 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_unsigned());
 
 			let solution = RawSolution::<TestCompact> { score: [5, 0, 0], ..Default::default() };
-			let call = Call::submit_unsigned(solution.clone(), MultiPhase::round(), witness());
+			let call = Call::submit_unsigned(solution.clone(), witness());
 			assert_eq!(solution.compact.unique_targets().len(), 0);
 
 			// won't work anymore.
@@ -681,7 +678,7 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_unsigned());
 
 			let solution = RawSolution::<TestCompact> { score: [5, 0, 0], ..Default::default() };
-			let call = Call::submit_unsigned(solution.clone(), MultiPhase::round(), witness());
+			let call = Call::submit_unsigned(solution.clone(), witness());
 
 			assert_eq!(
 				<MultiPhase as ValidateUnsigned>::validate_unsigned(
@@ -707,7 +704,7 @@ mod tests {
 
 			// This is in itself an invalid BS solution.
 			let solution = RawSolution::<TestCompact> { score: [5, 0, 0], ..Default::default() };
-			let call = Call::submit_unsigned(solution.clone(), MultiPhase::round(), witness());
+			let call = Call::submit_unsigned(solution.clone(), witness());
 			let outer_call: OuterCall = call.into();
 			let _ = outer_call.dispatch(Origin::none());
 		})
@@ -727,7 +724,7 @@ mod tests {
 			let mut correct_witness = witness();
 			correct_witness.voters += 1;
 			correct_witness.targets -= 1;
-			let call = Call::submit_unsigned(solution.clone(), MultiPhase::round(), correct_witness);
+			let call = Call::submit_unsigned(solution.clone(), correct_witness);
 			let outer_call: OuterCall = call.into();
 			let _ = outer_call.dispatch(Origin::none());
 		})
@@ -748,7 +745,7 @@ mod tests {
 
 			// ensure this solution is valid.
 			assert!(MultiPhase::queued_solution().is_none());
-			assert_ok!(MultiPhase::submit_unsigned(Origin::none(), solution, MultiPhase::round(), witness));
+			assert_ok!(MultiPhase::submit_unsigned(Origin::none(), solution, witness));
 			assert!(MultiPhase::queued_solution().is_some());
 		})
 	}
@@ -823,9 +820,8 @@ mod tests {
 					}],
 				};
 				let (solution, witness) = MultiPhase::prepare_election_result(result).unwrap();
-				let round = MultiPhase::round();
-				assert_ok!(MultiPhase::unsigned_pre_dispatch_checks(&solution, round));
-				assert_ok!(MultiPhase::submit_unsigned(Origin::none(), solution, round, witness));
+				assert_ok!(MultiPhase::unsigned_pre_dispatch_checks(&solution));
+				assert_ok!(MultiPhase::submit_unsigned(Origin::none(), solution, witness));
 				assert_eq!(MultiPhase::queued_solution().unwrap().score[0], 10);
 
 				// trial 1: a solution who's score is only 2, i.e. 20% better in the first element.
@@ -844,7 +840,7 @@ mod tests {
 				// 12 is not 50% more than 10
 				assert_eq!(solution.score[0], 12);
 				assert_noop!(
-					MultiPhase::unsigned_pre_dispatch_checks(&solution, round),
+					MultiPhase::unsigned_pre_dispatch_checks(&solution),
 					Error::<Runtime>::PreDispatchWeakSubmission,
 				);
 				// submitting this will actually panic.
@@ -866,8 +862,8 @@ mod tests {
 				assert_eq!(solution.score[0], 17);
 
 				// and it is fine
-				assert_ok!(MultiPhase::unsigned_pre_dispatch_checks(&solution, round));
-				assert_ok!(MultiPhase::submit_unsigned(Origin::none(), solution, round, witness));
+				assert_ok!(MultiPhase::unsigned_pre_dispatch_checks(&solution));
+				assert_ok!(MultiPhase::submit_unsigned(Origin::none(), solution, witness));
 			})
 	}
 
@@ -1033,13 +1029,13 @@ mod tests {
 
 			let encoded = pool.read().transactions[0].clone();
 			let extrinsic = Extrinsic::decode(&mut &*encoded).unwrap();
-			let (solution, round) = match extrinsic.call {
-				OuterCall::MultiPhase(Call::submit_unsigned(solution, round, _)) => (solution, round),
+			let solution = match extrinsic.call {
+				OuterCall::MultiPhase(Call::submit_unsigned(solution, _)) => solution,
 				_ => panic!("bad call: unexpected submission"),
 			};
 
 			assert_noop!(
-				MultiPhase::unsigned_pre_dispatch_checks(&solution, round),
+				MultiPhase::unsigned_pre_dispatch_checks(&solution),
 				Error::<Runtime>::OcwCallWrongEra,
 			);
 		})
