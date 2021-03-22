@@ -80,7 +80,6 @@ fn enable_dyanmic_damping_basic_setup_works() {
 		.minimum_validator_count(1)
 		.validator_count(4)
 		.nominate(true)
-		.num_validators(3)
 		.enable_automatic_validator_update_per_era(true)
 		.build()
 		.execute_with(|| {
@@ -88,6 +87,38 @@ fn enable_dyanmic_damping_basic_setup_works() {
 		// the new number due to dynamic enable should be
 		// final_count = min(MAX_VALIDATOR_COUNT , validator_count + 1) = 5
 		assert_eq!(Staking::validator_count(), 5);
+		mock::start_active_era(1);
+		// validator_count = 5
+		// final_count = min(MAX_VALIDATOR_COUNT , validator_count + 1) = 6
+		assert_eq!(Staking::validator_count(), 6);
+	});
+}
+
+#[test]
+fn enable_dyanmic_damping_bottom_90_10_percents() {
+	ExtBuilder::default()
+		.minimum_validator_count(1)
+		.validator_count(8)
+		.nominate(true)
+		.enable_automatic_validator_update_per_era(true)
+		.bottom_x_percent_of_validators(90)
+		.bottom_y_percent_of_validators(10)
+		.build()
+		.execute_with(|| {
+		// x is 90% ~ 8 validators 
+		// y is 10% ~ 1 validator 
+		// curren is 8
+		// avg(8 validators --> total_avg) > 90% toal_avg --> final_count = current(8) + 8 = 16
+		assert_eq!(Staking::validator_count(), 16);
+		mock::start_active_era(1);
+		// x is (90% of 16) ~ 15
+		// y is (10% of 15) ~ 2
+		// current is 16
+		// avg(15 validators --> total_avg) > 90% toal_avg --> final_count = current(16) + 15 = 31
+		assert_eq!(Staking::validator_count(), 31);
+		mock::start_active_era(2);
+		// 28 + 31 = 59
+		assert_eq!(Staking::validator_count(), 59);
 	});
 }
 

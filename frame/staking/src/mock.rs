@@ -444,6 +444,14 @@ impl ExtBuilder {
 		ENABLE_AUTOMATIC_VALIDATOR_UPDATE_PER_ERA.with(|v| *v.borrow_mut() = enable);
 		self
 	}
+	pub fn bottom_x_percent_of_validators(self, new_percent: u32) -> Self {
+		BOTTOM_X_PERCENT_OF_VALIDATORS.with(|v| *v.borrow_mut() = new_percent);
+		self
+	}
+	pub fn bottom_y_percent_of_validators(self, new_percent: u32) -> Self {
+		BOTTOM_Y_PERCENT_OF_VALIDATORS.with(|v| *v.borrow_mut() = new_percent);
+		self
+	}
 	pub fn offset(self, offset: BlockNumber) -> Self {
 		OFFSET.with(|v| *v.borrow_mut() = offset);
 		self
