@@ -65,7 +65,7 @@ impl ChainInfo for NodeTemplateChainInfo {
 			frame_system::CheckTxVersion::<Self::Runtime>::new(),
 			frame_system::CheckGenesis::<Self::Runtime>::new(),
 			frame_system::CheckMortality::<Self::Runtime>::from(Era::Immortal),
-			frame_system::CheckNonce::<Self::Runtime>::from(frame_system::Module::<Self::Runtime>::account_nonce(from)),
+			frame_system::CheckNonce::<Self::Runtime>::from(frame_system::Pallet::<Self::Runtime>::account_nonce(from)),
 			frame_system::CheckWeight::<Self::Runtime>::new(),
 			pallet_transaction_payment::ChargeTransactionPayment::<Self::Runtime>::from(0),
 		)
