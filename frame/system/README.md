@@ -64,8 +64,8 @@ decl_module! {
 		#[weight = 0]
 		pub fn system_module_example(origin) -> dispatch::DispatchResult {
 			let _sender = ensure_signed(origin)?;
-			let _extrinsic_count = <system::Module<T>>::extrinsic_count();
-			let _parent_hash = <system::Module<T>>::parent_hash();
+			let _extrinsic_count = <system::Pallet<T>>::extrinsic_count();
+			let _parent_hash = <system::Pallet<T>>::parent_hash();
 			Ok(())
 		}
 	}

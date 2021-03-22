@@ -55,7 +55,7 @@ macro_rules! decl_tests {
 		}
 
 		fn last_event() -> Event {
-			system::Module::<Test>::events().pop().expect("Event expected").event
+			system::Pallet::<Test>::events().pop().expect("Event expected").event
 		}
 
 		#[test]

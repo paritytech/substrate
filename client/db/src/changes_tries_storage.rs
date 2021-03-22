@@ -955,7 +955,8 @@ mod tests {
 		let block0 = insert_header_with_configuration_change(&backend, 0, Default::default(), None, config0);
 		let config1 = Some(ChangesTrieConfiguration::new(2, 6));
 		let block1 = insert_header_with_configuration_change(&backend, 1, block0, changes(0), config1);
-		backend.finalize_block(BlockId::Number(1), Some(vec![42])).unwrap();
+		let just1 = Some((*b"TEST", vec![42]));
+		backend.finalize_block(BlockId::Number(1), just1).unwrap();
 		let config2 = Some(ChangesTrieConfiguration::new(2, 7));
 		let block2 = insert_header_with_configuration_change(&backend, 2, block1, changes(1), config2);
 		let config2_1 = Some(ChangesTrieConfiguration::new(2, 8));

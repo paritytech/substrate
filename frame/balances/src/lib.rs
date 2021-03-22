@@ -651,7 +651,7 @@ pub struct DustCleaner<T: Config<I>, I: 'static = ()>(Option<(T::AccountId, Nega
 impl<T: Config<I>, I: 'static> Drop for DustCleaner<T, I> {
 	fn drop(&mut self) {
 		if let Some((who, dust)) = self.0.take() {
-			Module::<T, I>::deposit_event(Event::DustLost(who, dust.peek()));
+			Pallet::<T, I>::deposit_event(Event::DustLost(who, dust.peek()));
 			T::DustRemoval::on_unbalanced(dust);
 		}
 	}
@@ -783,7 +783,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Update the account entry for `who`, given the locks.
 	fn update_locks(who: &T::AccountId, locks: &[BalanceLock<T::Balance>]) {
 		if locks.len() as u32 > T::MaxLocks::get() {
-			frame_support::debug::warn!(
+			log::warn!(
+				target: "runtime::balances",
 				"Warning: A user has more currency locks than expected. \
 				A runtime configuration adjustment may be needed."
 			);
@@ -817,7 +818,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					// No providers for the locks. This is impossible under normal circumstances
 					// since the funds that are under the lock will themselves be stored in the
 					// account and therefore will need a reference.
-					frame_support::debug::warn!(
+					log::warn!(
+						target: "runtime::balances",
 						"Warning: Attempt to introduce lock consumer reference, yet no providers. \
 						This is unexpected but should be safe."
 					);

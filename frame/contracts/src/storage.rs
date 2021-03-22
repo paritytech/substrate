@@ -30,8 +30,7 @@ use sp_io::hashing::blake2_256;
 use sp_runtime::traits::{Bounded, Saturating, Zero};
 use sp_core::crypto::UncheckedFrom;
 use frame_support::{
-	dispatch::DispatchResult,
-	debug,
+	dispatch::{DispatchError, DispatchResult},
 	storage::child::{self, KillChildStorageResult},
 	traits::Get,
 	weights::Weight,
@@ -118,7 +117,7 @@ where
 			.and_then(|val| val.checked_add(new_value_len))
 			.ok_or_else(|| Error::<T>::StorageExhausted)?;
 
-		new_info.last_write = Some(<frame_system::Module<T>>::block_number());
+		new_info.last_write = Some(<frame_system::Pallet<T>>::block_number());
 		<ContractInfoOf<T>>::insert(&account, ContractInfo::Alive(new_info));
 
 		// Finally, perform the change on the storage.
@@ -163,7 +162,7 @@ where
 		account: &AccountIdOf<T>,
 		trie_id: TrieId,
 		ch: CodeHash<T>,
-	) -> DispatchResult {
+	) -> Result<AliveContractInfo<T>, DispatchError> {
 		<ContractInfoOf<T>>::try_mutate(account, |existing| {
 			if existing.is_some() {
 				return Err(Error::<T>::DuplicateContract.into());
@@ -177,7 +176,7 @@ where
 					// We want to charge rent for the first block in advance. Therefore we
 					// treat the contract as if it was created in the last block and then
 					// charge rent for it during instantiation.
-					<frame_system::Module<T>>::block_number().saturating_sub(1u32.into()),
+					<frame_system::Pallet<T>>::block_number().saturating_sub(1u32.into()),
 				rent_allowance: <BalanceOf<T>>::max_value(),
 				rent_payed: <BalanceOf<T>>::zero(),
 				pair_count: 0,
@@ -185,9 +184,9 @@ where
 				_reserved: None,
 			};
 
-			*existing = Some(contract.into());
+			*existing = Some(contract.clone().into());
 
-			Ok(())
+			Ok(contract)
 		})
 	}
 
@@ -271,7 +270,8 @@ where
 				match outcome {
 					// This should not happen as our budget was large enough to remove all keys.
 					KillChildStorageResult::SomeRemaining(_) => {
-						debug::error!(
+						log::error!(
+							target: "runtime::contracts",
 							"After deletion keys are remaining in this child trie: {:?}",
 							removed.trie_id,
 						);

@@ -27,6 +27,8 @@ mod keyword {
 	syn::custom_keyword!(T);
 	syn::custom_keyword!(Pallet);
 	syn::custom_keyword!(origin);
+	syn::custom_keyword!(DispatchResult);
+	syn::custom_keyword!(DispatchResultWithPostInfo);
 }
 
 /// A usage of instance, either the trait `Config` has been used with instance or without instance.
@@ -45,7 +47,7 @@ pub trait MutItemAttrs {
 }
 
 /// Take the first pallet attribute (e.g. attribute like `#[pallet..]`) and decode it to `Attr`
-pub fn take_first_item_attr<Attr>(item: &mut impl MutItemAttrs) -> syn::Result<Option<Attr>> where
+pub fn take_first_item_pallet_attr<Attr>(item: &mut impl MutItemAttrs) -> syn::Result<Option<Attr>> where
 	Attr: syn::parse::Parse,
 {
 	let attrs = if let Some(attrs) = item.mut_item_attrs() {
@@ -67,16 +69,27 @@ pub fn take_first_item_attr<Attr>(item: &mut impl MutItemAttrs) -> syn::Result<O
 }
 
 /// Take all the pallet attributes (e.g. attribute like `#[pallet..]`) and decode them to `Attr`
-pub fn take_item_attrs<Attr>(item: &mut impl MutItemAttrs) -> syn::Result<Vec<Attr>> where
+pub fn take_item_pallet_attrs<Attr>(item: &mut impl MutItemAttrs) -> syn::Result<Vec<Attr>> where
 	Attr: syn::parse::Parse,
 {
 	let mut pallet_attrs = Vec::new();
 
-	while let Some(attr) = take_first_item_attr(item)? {
+	while let Some(attr) = take_first_item_pallet_attr(item)? {
 		pallet_attrs.push(attr)
 	}
 
 	Ok(pallet_attrs)
+}
+
+/// Get all the cfg attributes (e.g. attribute like `#[cfg..]`) and decode them to `Attr`
+pub fn get_item_cfg_attrs(attrs: &[syn::Attribute]) -> Vec<syn::Attribute> {
+	attrs.iter().filter_map(|attr|  {
+		if attr.path.segments.first().map_or(false, |segment| segment.ident == "cfg") {
+			Some(attr.clone())
+		} else {
+			None
+		}
+	}).collect::<Vec<_>>()
 }
 
 impl MutItemAttrs for syn::Item {
@@ -595,4 +608,27 @@ pub fn check_type_value_gen(
 		.map(|mut i| { i.span = span; i });
 
 	Ok(i)
+}
+
+/// Check the keyword `DispatchResultWithPostInfo` or `DispatchResult`.
+pub fn check_pallet_call_return_type(
+	type_: &syn::Type,
+) -> syn::Result<()> {
+	pub struct Checker;
+	impl syn::parse::Parse for Checker {
+		fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+			let lookahead = input.lookahead1();
+			if lookahead.peek(keyword::DispatchResultWithPostInfo) {
+				input.parse::<keyword::DispatchResultWithPostInfo>()?;
+				Ok(Self)
+			} else if lookahead.peek(keyword::DispatchResult) {
+				input.parse::<keyword::DispatchResult>()?;
+				Ok(Self)
+			} else {
+				Err(lookahead.error())
+			}
+		}
+	}
+
+	syn::parse2::<Checker>(type_.to_token_stream()).map(|_| ())
 }
