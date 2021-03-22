@@ -541,18 +541,27 @@ impl Peerset {
 		}
 
 		// Try to grab the next node to attempt to connect to.
-		while let Some(next) = self.data.highest_not_connected_peer(set_id.0) {
-			// Don't connect to nodes with an abysmal reputation.
-			if next.reputation() < BANNED_THRESHOLD {
-				break;
-			}
+		// Since `highest_not_connected_peer` is rather expensive to call, check beforehand
+		// whether we have an available slot.
+		while self.data.has_free_outgoing_slot(set_id.0) {
+			if let Some(next) = self.data.highest_not_connected_peer(set_id.0) {
+				// Don't connect to nodes with an abysmal reputation.
+				if next.reputation() < BANNED_THRESHOLD {
+					break;
+				}
 
-			match next.try_outgoing() {
-				Ok(conn) => self.message_queue.push_back(Message::Connect {
-					set_id,
-					peer_id: conn.into_peer_id()
-				}),
-				Err(_) => break,	// No more slots available.
+				match next.try_outgoing() {
+					Ok(conn) => self.message_queue.push_back(Message::Connect {
+						set_id,
+						peer_id: conn.into_peer_id()
+					}),
+					Err(_) => {
+						// This branch can only be entered if there is no free slot, which is
+						// checked above.
+						debug_assert!(false);
+						break;
+					}
+				}
 			}
 		}
 	}
