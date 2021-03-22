@@ -14,19 +14,29 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+//! BEEFY gadget specific errors
+//!
+//! Used for BEEFY gadget interal error handling only
+
 use std::fmt::Debug;
 
 use sp_core::crypto::Public;
 
-/// BEEFY gadget specific errors
-/// Note that this type is currently used for BEEFY gadget internal
-/// error handling only.
+/// Crypto related errors
 #[derive(Debug, thiserror::Error)]
-pub(crate) enum Error<Id: Public + Debug> {
+pub(crate) enum Crypto<Id: Public + Debug> {
 	/// Check signature error
 	#[error("Message signature {0} by {1:?} is invalid.")]
 	InvalidSignature(String, Id),
 	/// Sign commitment error
 	#[error("Failed to sign comitment using key: {0:?}. Reason: {1}")]
 	CannotSign(Id, String),
+}
+
+/// Lifecycle related errors
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum Lifecycle {
+	/// Can't fetch validator set from BEEFY pallet
+	#[error("Failed to fetch validator set: {0}")]
+	MissingValidatorSet(String),
 }
