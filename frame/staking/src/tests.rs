@@ -123,6 +123,27 @@ fn enable_dyanmic_damping_bottom_90_10_percents() {
 }
 
 #[test]
+fn enable_dyanmic_damping_bottom_0_100_percents() {
+	ExtBuilder::default()
+		.minimum_validator_count(1)
+		.validator_count(8)
+		.nominate(true)
+		.enable_automatic_validator_update_per_era(true)
+		.bottom_x_percent_of_validators(0)
+		.bottom_y_percent_of_validators(100)
+		.build()
+		.execute_with(|| {
+		// x is 0% ~ 0 validators 
+		// y is 100% ~ 8 validator 
+		// current is 8
+		// avg_stake(0 validators) > 0% toal_avg --> NO
+		// avg_stake(8 validators) < total_avg ---> NO
+		// then final_count stays the same = current count = 8
+		assert_eq!(Staking::validator_count(), 8);
+	});
+}
+
+#[test]
 fn basic_setup_works() {
 	// Verifies initial conditions of mock
 	ExtBuilder::default().build_and_execute(|| {
