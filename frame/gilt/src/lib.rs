@@ -102,7 +102,8 @@ pub mod pallet {
 		/// `From<u64>`.
 		type CurrencyBalance:
 			sp_runtime::traits::AtLeast32BitUnsigned + codec::FullCodec + Copy
-				+ MaybeSerializeDeserialize + sp_std::fmt::Debug + Default + From<u64>;
+				+ MaybeSerializeDeserialize + sp_std::fmt::Debug + Default + From<u64>
+				+ scale_info::TypeInfo;
 
 		/// Origin required for setting the target proportion to be under gilt.
 		type AdminOrigin: EnsureOrigin<Self::Origin>;
