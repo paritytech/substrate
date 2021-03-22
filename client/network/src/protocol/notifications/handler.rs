@@ -188,10 +188,10 @@ enum State {
 		/// We use two different channels in order to have two different channel sizes, but from
 		/// the receiving point of view, the two channels are the same.
 		/// The receivers are fused in case the user drops the [`NotificationsSink`] entirely.
-		notifications_sink_rx: stream::Select<
+		notifications_sink_rx: stream::Peekable<stream::Select<
 			stream::Fuse<mpsc::Receiver<NotificationsSinkMessage>>,
 			stream::Fuse<mpsc::Receiver<NotificationsSinkMessage>>
-		>,
+		>>,
 
 		/// Outbound substream that has been accepted by the remote.
 		///
@@ -552,7 +552,7 @@ impl ProtocolsHandler for NotifsHandler {
 				};
 
 				self.protocols[protocol_index].state = State::Open {
-					notifications_sink_rx: stream::select(async_rx.fuse(), sync_rx.fuse()),
+					notifications_sink_rx: stream::select(async_rx.fuse(), sync_rx.fuse()).peekable(),
 					out_substream: Some(substream),
 					in_substream: in_substream.take(),
 				};
@@ -723,30 +723,40 @@ impl ProtocolsHandler for NotifsHandler {
 				= &mut self.protocols[protocol_index].state
 			{
 				loop {
-					// Before we poll the notifications sink receiver, check that the substream
-					// is ready to accept a message.
+					// Only proceed with `out_substream.poll_ready_unpin` if there is an element
+					// available in `notifications_sink_rx`. This avoids waking up the task when
+					// a substream is ready to send if there isn't actually something to send.
+					match Pin::new(&mut *notifications_sink_rx).as_mut().poll_peek(cx) {
+						Poll::Ready(Some(&NotificationsSinkMessage::ForceClose)) => {
+							return Poll::Ready(
+								ProtocolsHandlerEvent::Close(NotifsHandlerError::SyncNotificationsClogged)
+							);
+						},
+						Poll::Ready(Some(&NotificationsSinkMessage::Notification { .. })) => {},
+						Poll::Ready(None) | Poll::Pending => break,
+					}
+
+					// Before we extract the element from `notifications_sink_rx`, check that the
+					// substream is ready to accept a message.
 					match out_substream.poll_ready_unpin(cx) {
 						Poll::Ready(_) => {},
 						Poll::Pending => break
 					}
 
-					// Now that all substreams are ready for a message, grab what to send.
+					// Now that the substream is ready for a message, grab what to send.
 					let message = match notifications_sink_rx.poll_next_unpin(cx) {
-						Poll::Ready(Some(msg)) => msg,
-						Poll::Ready(None) | Poll::Pending => break,
+						Poll::Ready(Some(NotificationsSinkMessage::Notification { message })) => message,
+						Poll::Ready(Some(NotificationsSinkMessage::ForceClose))
+						| Poll::Ready(None)
+						| Poll::Pending => {
+							// Should never be reached, as per `poll_peek` above.
+							debug_assert!(false);
+							break;
+						}
 					};
 
-					match message {
-						NotificationsSinkMessage::Notification { message } => {
-							let _ = out_substream.start_send_unpin(message);
-							// Note that flushing is performed later down this function.
-						}
-						NotificationsSinkMessage::ForceClose => {
-							return Poll::Ready(
-								ProtocolsHandlerEvent::Close(NotifsHandlerError::SyncNotificationsClogged)
-							);
-						}
-					}
+					let _ = out_substream.start_send_unpin(message);
+					// Note that flushing is performed later down this function.
 				}
 			}
 		}
