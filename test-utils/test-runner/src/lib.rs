@@ -36,7 +36,7 @@
 //! <h2>How do I Use this?</h2>
 //!
 //!
-//! ```rust
+//! ```no_run
 //! use test_runner::{Node, ChainInfo, SignatureVerificationOverride, base_path, NodeConfig};
 //! use sc_finality_grandpa::GrandpaBlockImport;
 //! use sc_service::{
