@@ -4133,6 +4133,7 @@ dependencies = [
  "frame-system",
  "parity-scale-codec",
  "pretty_assertions",
+ "scale-info",
  "sp-application-crypto",
  "sp-core",
  "sp-runtime",
@@ -8627,6 +8628,7 @@ name = "sp-consensus-aura"
 version = "0.9.0"
 dependencies = [
  "parity-scale-codec",
+ "scale-info",
  "sp-api",
  "sp-application-crypto",
  "sp-consensus",
