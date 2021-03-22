@@ -31,6 +31,8 @@ pub use sp_core::crypto::{KeyTypeId, CryptoTypeId, key_types};
 #[doc(hidden)]
 pub use codec;
 #[doc(hidden)]
+pub use scale_info;
+#[doc(hidden)]
 #[cfg(feature = "std")]
 pub use serde;
 #[doc(hidden)]
@@ -198,6 +200,7 @@ macro_rules! app_crypto_public_full_crypto {
 				$crate::codec::Encode,
 				$crate::codec::Decode,
 				$crate::RuntimeDebug,
+				$crate::scale_info::TypeInfo,
 			)]
 			#[derive(Hash)]
 			pub struct Public($public);

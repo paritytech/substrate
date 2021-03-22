@@ -22,7 +22,7 @@
 use codec::{Decode, Encode};
 
 /// Unit type wrapper that represents a slot.
-#[derive(Debug, Encode, Decode, Eq, Clone, Copy, Default, Ord)]
+#[derive(Debug, Encode, Decode, scale_info::TypeInfo, Eq, Clone, Copy, Default, Ord)]
 pub struct Slot(u64);
 
 impl core::ops::Deref for Slot {
@@ -96,7 +96,7 @@ impl From<Slot> for u64 {
 /// produces more than one block on the same slot. The proof of equivocation
 /// are the given distinct headers that were signed by the validator and which
 /// include the slot number.
-#[derive(Clone, Debug, Decode, Encode, PartialEq)]
+#[derive(Clone, Debug, Decode, Encode, PartialEq, scale_info::TypeInfo)]
 pub struct EquivocationProof<Header, Id> {
 	/// Returns the authority id of the equivocator.
 	pub offender: Id,
