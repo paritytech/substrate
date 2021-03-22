@@ -600,13 +600,13 @@ fn deploying_wasm_contract_should_work() {
 	let transfer_code = wat::parse_str(CODE_TRANSFER).unwrap();
 	let transfer_ch = <Runtime as frame_system::Config>::Hashing::hash(&transfer_code);
 
-	let addr = pallet_contracts::Module::<Runtime>::contract_address(
+	let addr = pallet_contracts::Pallet::<Runtime>::contract_address(
 		&charlie(),
 		&transfer_ch,
 		&[],
 	);
 
-	let subsistence = pallet_contracts::Module::<Runtime>::subsistence_threshold();
+	let subsistence = pallet_contracts::Pallet::<Runtime>::subsistence_threshold();
 
 	let time = 42 * 1000;
 	let b = construct_block(

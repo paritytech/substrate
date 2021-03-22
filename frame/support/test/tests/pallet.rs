@@ -217,6 +217,28 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type DoubleMap2<T> = StorageDoubleMap<_, Twox64Concat, u16, Blake2_128Concat, u32, u64>;
 
+	#[pallet::storage]
+	#[pallet::getter(fn conditional_value)]
+	#[cfg(feature = "conditional-storage")]
+	pub type ConditionalValue<T> = StorageValue<_, u32>;
+
+	#[cfg(feature = "conditional-storage")]
+	#[pallet::storage]
+	#[pallet::getter(fn conditional_map)]
+	pub type ConditionalMap<T> = StorageMap<_, Twox64Concat, u16, u32>;
+
+	#[cfg(feature = "conditional-storage")]
+	#[pallet::storage]
+	#[pallet::getter(fn conditional_double_map)]
+	pub type ConditionalDoubleMap<T> = StorageDoubleMap<
+		_,
+		Blake2_128Concat,
+		u8,
+		Twox64Concat,
+		u16,
+		u32,
+	>;
+
 	#[pallet::genesis_config]
 	#[derive(Default)]
 	pub struct GenesisConfig {
@@ -396,9 +418,9 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: frame_system::{Module, Call, Event<T>},
-		Example: pallet::{Module, Call, Event<T>, Config, Storage, Inherent, Origin<T>, ValidateUnsigned},
-		Example2: pallet2::{Module, Call, Event, Config<T>, Storage},
+		System: frame_system::{Pallet, Call, Event<T>},
+		Example: pallet::{Pallet, Call, Event<T>, Config, Storage, Inherent, Origin<T>, ValidateUnsigned},
+		Example2: pallet2::{Pallet, Call, Event, Config<T>, Storage},
 	}
 );
 
@@ -522,6 +544,13 @@ fn storage_expand() {
 		k.extend(2u32.using_encoded(blake2_128_concat));
 		assert_eq!(unhashed::get::<u64>(&k), Some(3u64));
 		assert_eq!(&k[..32], &<pallet::DoubleMap2<Runtime>>::final_prefix());
+
+		#[cfg(feature = "conditional-storage")]
+		{
+			pallet::ConditionalValue::<Runtime>::put(1);
+			pallet::ConditionalMap::<Runtime>::insert(1, 2);
+			pallet::ConditionalDoubleMap::<Runtime>::insert(1, 2, 3);
+		}
 	})
 }
 
@@ -530,11 +559,11 @@ fn pallet_hooks_expand() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
 
-		assert_eq!(AllModules::on_initialize(1), 10);
-		AllModules::on_finalize(1);
+		assert_eq!(AllPallets::on_initialize(1), 10);
+		AllPallets::on_finalize(1);
 
 		assert_eq!(pallet::Pallet::<Runtime>::storage_version(), None);
-		assert_eq!(AllModules::on_runtime_upgrade(), 30);
+		assert_eq!(AllPallets::on_runtime_upgrade(), 30);
 		assert_eq!(
 			pallet::Pallet::<Runtime>::storage_version(),
 			Some(pallet::Pallet::<Runtime>::current_version()),
@@ -642,6 +671,38 @@ fn metadata() {
 						key2: DecodeDifferent::Decoded("u32".to_string()),
 						hasher: StorageHasher::Twox64Concat,
 						key2_hasher: StorageHasher::Blake2_128Concat,
+					},
+					default: DecodeDifferent::Decoded(vec![0]),
+					documentation: DecodeDifferent::Decoded(vec![]),
+				},
+				#[cfg(feature = "conditional-storage")] StorageEntryMetadata {
+					name: DecodeDifferent::Decoded("ConditionalValue".to_string()),
+					modifier: StorageEntryModifier::Optional,
+					ty: StorageEntryType::Plain(DecodeDifferent::Decoded("u32".to_string())),
+					default: DecodeDifferent::Decoded(vec![0]),
+					documentation: DecodeDifferent::Decoded(vec![]),
+				},
+				#[cfg(feature = "conditional-storage")] StorageEntryMetadata {
+					name: DecodeDifferent::Decoded("ConditionalMap".to_string()),
+					modifier: StorageEntryModifier::Optional,
+					ty: StorageEntryType::Map {
+						key: DecodeDifferent::Decoded("u16".to_string()),
+						value: DecodeDifferent::Decoded("u32".to_string()),
+						hasher: StorageHasher::Twox64Concat,
+						unused: false,
+					},
+					default: DecodeDifferent::Decoded(vec![0]),
+					documentation: DecodeDifferent::Decoded(vec![]),
+				},
+				#[cfg(feature = "conditional-storage")] StorageEntryMetadata {
+					name: DecodeDifferent::Decoded("ConditionalDoubleMap".to_string()),
+					modifier: StorageEntryModifier::Optional,
+					ty: StorageEntryType::DoubleMap {
+						value: DecodeDifferent::Decoded("u32".to_string()),
+						key1: DecodeDifferent::Decoded("u8".to_string()),
+						key2: DecodeDifferent::Decoded("u16".to_string()),
+						hasher: StorageHasher::Blake2_128Concat,
+						key2_hasher: StorageHasher::Twox64Concat,
 					},
 					default: DecodeDifferent::Decoded(vec![0]),
 					documentation: DecodeDifferent::Decoded(vec![]),

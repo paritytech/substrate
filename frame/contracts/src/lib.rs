@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Contract Module
+//! # Contract Pallet
 //!
 //! The Contract module provides functionality for the runtime to deploy and execute WebAssembly smart-contracts.
 //!
@@ -123,7 +123,7 @@ use frame_support::{
 	traits::{OnUnbalanced, Currency, Get, Time, Randomness},
 	weights::{Weight, PostDispatchInfo, WithPostDispatchInfo},
 };
-use frame_system::Module as System;
+use frame_system::Pallet as System;
 use pallet_contracts_primitives::{
 	RentProjectionResult, GetStorageResult, ContractAccessError, ContractExecResult,
 };
@@ -216,7 +216,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxValueSize: Get<u32>;
 
-		/// Used to answer contracts's queries regarding the current weight price. This is **not**
+		/// Used to answer contracts' queries regarding the current weight price. This is **not**
 		/// used to calculate the actual fee and is only for informational purposes.
 		type WeightPrice: Convert<Weight, BalanceOf<Self>>;
 
@@ -284,7 +284,7 @@ pub mod pallet {
 			schedule: Schedule<T>
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			if schedule.version < <CurrentSchedule<T>>::get().version {
+			if <CurrentSchedule<T>>::get().version > schedule.version {
 				Err(Error::<T>::InvalidScheduleVersion)?
 			}
 			Self::deposit_event(Event::ScheduleUpdated(schedule.version));
@@ -659,7 +659,7 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config> Module<T>
+impl<T: Config> Pallet<T>
 where
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {

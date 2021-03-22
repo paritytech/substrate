@@ -36,9 +36,9 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Balances: pallet_balances::{Module, Call, Config<T>, Storage, Event<T>},
-		Gilt: pallet_gilt::{Module, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Pallet, Call, Config<T>, Storage, Event<T>},
+		Gilt: pallet_gilt::{Pallet, Call, Config, Storage, Event<T>},
 	}
 );
 
@@ -103,6 +103,7 @@ ord_parameter_types! {
 impl pallet_gilt::Config for Test {
 	type Event = Event;
 	type Currency = Balances;
+	type CurrencyBalance = <Self as pallet_balances::Config>::Balance;
 	type AdminOrigin = frame_system::EnsureSignedBy<One, Self::AccountId>;
 	type Deficit = ();
 	type Surplus = ();
