@@ -439,7 +439,7 @@ impl_outer_origin!{
 	pub enum Origin for Runtime where system = frame_system {}
 }
 
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, scale_info::TypeInfo)]
 pub struct Event;
 
 impl From<frame_system::Event<Runtime>> for Event {

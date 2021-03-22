@@ -115,6 +115,21 @@ impl<Number, Hash> Encode for Header<Number, Hash> where
 	}
 }
 
+impl<Number, Hash> scale_info::TypeInfo for Header<Number, Hash> where
+	Number: HasCompact + Copy + Into<U256> + TryFrom<U256> + 'static,
+	Hash: HashT,
+	Hash::Output: scale_info::TypeInfo,
+{
+	type Identity = Self;
+
+	fn type_info() -> scale_info::Type<scale_info::form::MetaForm> {
+		// todo [AJ] provide accurate custom TypeInfo impl
+		scale_info::Type::builder()
+			.path(scale_info::Path::new("Header", module_path!()))
+			.composite(scale_info::build::Fields::unit())
+	}
+}
+
 impl<Number, Hash> codec::EncodeLike for Header<Number, Hash> where
 	Number: HasCompact + Copy + Into<U256> + TryFrom<U256>,
 	Hash: HashT,
