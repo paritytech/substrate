@@ -88,7 +88,7 @@ pub use sp_runtime::{self, ConsensusEngineId, print, traits::Printable};
 pub const LOG_TARGET: &'static str = "runtime::frame-support";
 
 /// A type that cannot be instantiated.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, scale_info::TypeInfo)] // todo: [AJ] remove this TypeInfo derive once we support skip
 pub enum Never {}
 
 /// Create new implementations of the [`Get`](crate::traits::Get) trait.
