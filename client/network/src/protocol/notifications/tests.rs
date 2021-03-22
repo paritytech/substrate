@@ -18,7 +18,7 @@
 
 #![cfg(test)]
 
-use crate::protocol::generic_proto::{GenericProto, GenericProtoOut};
+use crate::protocol::notifications::{Notifications, NotificationsOut};
 
 use futures::prelude::*;
 use libp2p::{PeerId, Multiaddr, Transport};
@@ -80,7 +80,7 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 		});
 
 		let behaviour = CustomProtoWithAddr {
-			inner: GenericProto::new(peerset, iter::once(("/foo".into(), Vec::new(), 1024 * 1024))),
+			inner: Notifications::new(peerset, iter::once(("/foo".into(), Vec::new(), 1024 * 1024))),
 			addrs: addrs
 				.iter()
 				.enumerate()
@@ -110,12 +110,12 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 
 /// Wraps around the `CustomBehaviour` network behaviour, and adds hardcoded node addresses to it.
 struct CustomProtoWithAddr {
-	inner: GenericProto,
+	inner: Notifications,
 	addrs: Vec<(PeerId, Multiaddr)>,
 }
 
 impl std::ops::Deref for CustomProtoWithAddr {
-	type Target = GenericProto;
+	type Target = Notifications;
 
 	fn deref(&self) -> &Self::Target {
 		&self.inner
@@ -129,8 +129,8 @@ impl std::ops::DerefMut for CustomProtoWithAddr {
 }
 
 impl NetworkBehaviour for CustomProtoWithAddr {
-	type ProtocolsHandler = <GenericProto as NetworkBehaviour>::ProtocolsHandler;
-	type OutEvent = <GenericProto as NetworkBehaviour>::OutEvent;
+	type ProtocolsHandler = <Notifications as NetworkBehaviour>::ProtocolsHandler;
+	type OutEvent = <Notifications as NetworkBehaviour>::OutEvent;
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {
 		self.inner.new_handler()
@@ -240,7 +240,7 @@ fn reconnect_after_disconnect() {
 			};
 
 			match event {
-				future::Either::Left(GenericProtoOut::CustomProtocolOpen { .. }) => {
+				future::Either::Left(NotificationsOut::CustomProtocolOpen { .. }) => {
 					match service1_state {
 						ServiceState::NotConnected => {
 							service1_state = ServiceState::FirstConnec;
@@ -255,14 +255,14 @@ fn reconnect_after_disconnect() {
 						ServiceState::FirstConnec | ServiceState::ConnectedAgain => panic!(),
 					}
 				},
-				future::Either::Left(GenericProtoOut::CustomProtocolClosed { .. }) => {
+				future::Either::Left(NotificationsOut::CustomProtocolClosed { .. }) => {
 					match service1_state {
 						ServiceState::FirstConnec => service1_state = ServiceState::Disconnected,
 						ServiceState::ConnectedAgain| ServiceState::NotConnected |
 						ServiceState::Disconnected => panic!(),
 					}
 				},
-				future::Either::Right(GenericProtoOut::CustomProtocolOpen { .. }) => {
+				future::Either::Right(NotificationsOut::CustomProtocolOpen { .. }) => {
 					match service2_state {
 						ServiceState::NotConnected => {
 							service2_state = ServiceState::FirstConnec;
@@ -277,7 +277,7 @@ fn reconnect_after_disconnect() {
 						ServiceState::FirstConnec | ServiceState::ConnectedAgain => panic!(),
 					}
 				},
-				future::Either::Right(GenericProtoOut::CustomProtocolClosed { .. }) => {
+				future::Either::Right(NotificationsOut::CustomProtocolClosed { .. }) => {
 					match service2_state {
 						ServiceState::FirstConnec => service2_state = ServiceState::Disconnected,
 						ServiceState::ConnectedAgain| ServiceState::NotConnected |
@@ -310,8 +310,8 @@ fn reconnect_after_disconnect() {
 			};
 
 			match event {
-				GenericProtoOut::CustomProtocolOpen { .. } |
-				GenericProtoOut::CustomProtocolClosed { .. } => panic!(),
+				NotificationsOut::CustomProtocolOpen { .. } |
+				NotificationsOut::CustomProtocolClosed { .. } => panic!(),
 				_ => {}
 			}
 		}

@@ -19,10 +19,10 @@
 //! Implementation of libp2p's `NetworkBehaviour` trait that opens a single substream with the
 //! remote and then allows any communication with them.
 //!
-//! The `Protocol` struct uses `GenericProto` in order to open substreams with the rest of the
+//! The `Protocol` struct uses `Notifications` in order to open substreams with the rest of the
 //! network, then performs the Substrate protocol handling on top.
 
-pub use self::behaviour::{GenericProto, GenericProtoOut};
+pub use self::behaviour::{Notifications, NotificationsOut};
 pub use self::handler::{NotifsHandlerError, NotificationsSink, Ready};
 
 mod behaviour;
