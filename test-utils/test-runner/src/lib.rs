@@ -36,7 +36,7 @@
 //! <h2>How do I Use this?</h2>
 //!
 //!
-//! ```no_run
+//! ```rust,ignore
 //! use test_runner::{Node, ChainInfo, SignatureVerificationOverride, base_path, NodeConfig};
 //! use sc_finality_grandpa::GrandpaBlockImport;
 //! use sc_service::{
@@ -94,11 +94,8 @@
 //!     /// Create your signed extras here.
 //! 	fn signed_extras(
 //! 		from: <Self::Runtime as frame_system::Config>::AccountId,
-//! 	) -> Self::SignedExtension
-//! 	where
-//! 		S: StateProvider
-//! 	{
-//! 		let nonce = frame_system::Module::<Self::Runtime>::account_nonce(from);
+//! 	) -> Self::SignedExtension {
+//! 		let nonce = frame_system::Pallet::<Self::Runtime>::account_nonce(from);
 //!
 //! 		(
 //! 			frame_system::CheckSpecVersion::<Self::Runtime>::new(),
@@ -108,7 +105,6 @@
 //! 			frame_system::CheckNonce::<Self::Runtime>::from(nonce),
 //! 			frame_system::CheckWeight::<Self::Runtime>::new(),
 //! 			pallet_transaction_payment::ChargeTransactionPayment::<Self::Runtime>::from(0),
-//! 			polkadot_runtime_common::claims::PrevalidateAttests::<Self::Runtime>::new(),
 //! 		)
 //! 	}
 //!
@@ -197,12 +193,12 @@
 //!				offchain_worker: sc_client_api::ExecutionStrategy::NativeWhenPossible,
 //!				other: sc_client_api::ExecutionStrategy::NativeWhenPossible,
 //! 		},
-//! 		chain_spec: development_config(),
+//! 		chain_spec: Box::new(development_config()),
 //! 		log_targets: vec![],
 //! 	};
 //! 	let mut node = Node::<Requirements>::new(config).unwrap();
 //!
-//! 	type Balances = pallet_balances::Module<node_runtime::Runtime>;
+//! 	type Balances = pallet_balances::Pallet<node_runtime::Runtime>;
 //!
 //! 	let (alice, bob) = (Alice.pair(), Bob.pair());
 //! 	let (alice_account_id, bob_acount_id) = (
