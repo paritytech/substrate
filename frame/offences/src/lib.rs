@@ -230,6 +230,14 @@ impl<T: Config> Module<T> {
 			None
 		}
 	}
+
+	// TODO: Remove this when fix the the unit tests and benchmark
+	#[cfg(feature = "runtime-benchmarks")]
+	pub fn set_deferred_offences(_: Vec<DeferredOffenceOf<T>>) {}
+
+	pub fn deferred_offences() -> Vec<DeferredOffenceOf<T>> {
+		Vec::default()
+	}
 }
 
 struct TriageOutcome<T: Config> {
