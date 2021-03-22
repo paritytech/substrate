@@ -84,7 +84,7 @@ impl<T: Config> Pallet<T> {
 		let call = match restore_solution() {
 			Some(call) => call,
 			None => {
-				let call = Self::mine_call()?;
+				let call = Self::mine_checked_call()?;
 				save_solution(&call);
 				call
 			}
@@ -94,13 +94,13 @@ impl<T: Config> Pallet<T> {
 
 	/// Mine a new solution, cache it, and submit it back to the chain as an unsigned transaction.
 	pub fn mine_check_save_submit() -> Result<(), MinerError> {
-		let call = Self::mine_call()?;
+		let call = Self::mine_checked_call()?;
 		save_solution(&call);
 		Self::submit_call(call)
 	}
 
 	/// Mine a new solution as a call. Performs all checks.
-	fn mine_call() -> Result<Call<T>, MinerError> {
+	fn mine_checked_call() -> Result<Call<T>, MinerError> {
 		use codec::Encode;
 
 		let iters = Self::get_balancing_iters();
