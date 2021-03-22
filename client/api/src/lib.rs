@@ -38,6 +38,7 @@ pub use client::*;
 pub use light::*;
 pub use notifications::*;
 pub use proof_provider::*;
+pub use sp_blockchain::HeaderBackend;
 
 pub use sp_state_machine::{StorageProof, ExecutionStrategy};
 

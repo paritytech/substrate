@@ -118,8 +118,10 @@ pub enum IndexOperation {
 	Insert {
 		/// Extrinsic index in the current block.
 		extrinsic: u32,
-		/// Data offset in the extrinsic.
-		offset: u32,
+		/// Data content hash.
+		hash: Vec<u8>,
+		/// Indexed data size.
+		size: u32,
 	},
 	/// Renew existing transaction storage.
 	Renew {
@@ -127,8 +129,6 @@ pub enum IndexOperation {
 		extrinsic: u32,
 		/// Referenced index hash.
 		hash: Vec<u8>,
-		/// Expected data size.
-		size: u32,
 	}
 }
 

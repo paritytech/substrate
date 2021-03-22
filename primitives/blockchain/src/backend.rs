@@ -227,6 +227,8 @@ pub trait Backend<Block: BlockT>: HeaderBackend<Block> + HeaderMetadata<Block, E
 	fn has_indexed_transaction(&self, hash: &Block::Hash) -> Result<bool> {
 		Ok(self.indexed_transaction(hash)?.is_some())
 	}
+
+	fn block_indexed_body(&self, id: BlockId<Block>) -> Result<Option<Vec<Vec<u8>>>>;
 }
 
 /// Provides access to the optional cache.

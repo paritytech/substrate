@@ -109,6 +109,16 @@ pub trait BlockBackend<Block: BlockT> {
 	fn has_indexed_transaction(&self, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
 		Ok(self.indexed_transaction(hash)?.is_some())
 	}
+
+	/// Get all indexed transactions for a block,
+	/// including renewed transactions.
+	///
+	/// Note that this will only fetch transactions
+	/// that are indexed by the runtime with `storage_index_transaction`.
+	fn block_indexed_body(
+		&self,
+		id: &BlockId<Block>,
+	) -> sp_blockchain::Result<Option<Vec<Vec<u8>>>>;
 }
 
 /// Provide a list of potential uncle headers for a given block.
