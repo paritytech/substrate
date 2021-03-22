@@ -1114,6 +1114,12 @@ impl pallet_uniques::Config for Runtime {
 	type WeightInfo = pallet_uniques::weights::SubstrateWeight<Runtime>;
 }
 
+impl pallet_transaction_storage::Config for Runtime {
+	type Event = Event;
+	type Currency = Balances;
+	type Call = Call;
+}
+
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -1158,7 +1164,11 @@ construct_runtime!(
 		Mmr: pallet_mmr::{Pallet, Storage},
 		Lottery: pallet_lottery::{Pallet, Call, Storage, Event<T>},
 		Gilt: pallet_gilt::{Pallet, Call, Storage, Event<T>, Config},
+<<<<<<< HEAD
 		Uniques: pallet_uniques::{Pallet, Call, Storage, Event<T>},
+=======
+		TransactionStorage: pallet_transaction_storage::{Pallet, Call, Storage, Inherent, Event<T>},
+>>>>>>> 589fb673e6 (Transaction storage runtime module)
 	}
 );
 

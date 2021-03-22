@@ -1982,6 +1982,13 @@ impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 	fn has_indexed_transaction(&self, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
 		self.backend.blockchain().has_indexed_transaction(hash)
 	}
+
+	fn block_indexed_body(
+		&self,
+		id: &BlockId<Block>
+	) -> sp_blockchain::Result<Option<Vec<Vec<u8>>>> {
+		self.backend.blockchain().block_indexed_body(*id)
+	}
 }
 
 impl<B, E, Block, RA> backend::AuxStore for Client<B, E, Block, RA>

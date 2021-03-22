@@ -58,6 +58,10 @@ impl StorageProof {
 		StorageProofNodeIterator::new(self)
 	}
 
+	/// Convert into plain node vector.
+	pub fn into_nodes(self) -> Vec<Vec<u8>> {
+		self.trie_nodes
+	}
 	/// Creates a `MemoryDB` from `Self`.
 	pub fn into_memory_db<H: Hasher>(self) -> crate::MemoryDB<H> {
 		self.into()

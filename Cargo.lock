@@ -4377,6 +4377,7 @@ dependencies = [
  "pallet-tips",
  "pallet-transaction-payment",
  "pallet-transaction-payment-rpc-runtime-api",
+ "pallet-transaction-storage",
  "pallet-treasury",
  "pallet-uniques",
  "pallet-utility",
@@ -5600,6 +5601,24 @@ dependencies = [
  "parity-scale-codec",
  "sp-api",
  "sp-runtime",
+]
+
+[[package]]
+name = "pallet-transaction-storage"
+version = "3.0.0"
+dependencies = [
+ "frame-support",
+ "frame-support-test",
+ "frame-system",
+ "pallet-balances",
+ "parity-scale-codec",
+ "serde",
+ "sp-core",
+ "sp-inherents",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+ "sp-storage-proof",
 ]
 
 [[package]]
@@ -9239,6 +9258,21 @@ dependencies = [
  "serde",
  "sp-debug-derive",
  "sp-std",
+]
+
+[[package]]
+name = "sp-storage-proof"
+version = "3.0.0"
+dependencies = [
+ "log",
+ "parity-scale-codec",
+ "sc-client-api",
+ "sp-consensus",
+ "sp-core",
+ "sp-inherents",
+ "sp-runtime",
+ "sp-std",
+ "sp-trie",
 ]
 
 [[package]]
