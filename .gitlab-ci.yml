@@ -520,8 +520,8 @@ build-rust-doc:
     - buildah push --format=v2s2 "$IMAGE_NAME:$VERSION"
     - buildah push --format=v2s2 "$IMAGE_NAME:latest"
     # pass artifacts to the trigget-simnet job
-    - echo "VERSION=${VERSION}" > artifacts/${PRODUCT}/build.env
-    - echo "TRIGGERER=${CI_PROJECT_NAME}" >> artifacts/${PRODUCT}/build.env
+    - echo "VERSION=${VERSION}" > build.env
+    - echo "TRIGGERER=${CI_PROJECT_NAME}" >> build.env
   after_script:
     - buildah logout "$IMAGE_NAME"
 
