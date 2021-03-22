@@ -521,7 +521,6 @@ mod tests {
 	use super::*;
 	use crate::{exec::Ext, Limits};
 	use std::fmt;
-	use assert_matches::assert_matches;
 
 	impl fmt::Debug for PrefabWasmModule<crate::tests::Test> {
 		fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -568,7 +567,7 @@ mod tests {
 					.. Default::default()
 				};
 				let r = do_preparation::<env::Test, crate::tests::Test>(wasm, &schedule);
-				assert_matches!(r, $($expected)*);
+				assert_matches::assert_matches!(r, $($expected)*);
 			}
 		};
 	}
@@ -965,7 +964,7 @@ mod tests {
 			let mut schedule = Schedule::default();
 			schedule.enable_println = true;
 			let r = do_preparation::<env::Test, crate::tests::Test>(wasm, &schedule);
-			assert_matches!(r, Ok(_));
+			assert_matches::assert_matches!(r, Ok(_));
 		}
 	}
 
