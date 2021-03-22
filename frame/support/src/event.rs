@@ -129,6 +129,7 @@ macro_rules! decl_event {
 			Clone, PartialEq, Eq,
 			$crate::codec::Encode,
 			$crate::codec::Decode,
+			$crate::scale_info::TypeInfo,
 			$crate::RuntimeDebug,
 		)]
 		/// Events for this module.
@@ -464,6 +465,7 @@ macro_rules! impl_outer_event {
 				Clone, PartialEq, Eq,
 				$crate::codec::Encode,
 				$crate::codec::Decode,
+				$crate::scale_info::TypeInfo,
 				$crate::RuntimeDebug,
 			)]
 			$(#[$attr])*
