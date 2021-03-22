@@ -34,7 +34,7 @@ use sp_runtime::{offchain::storage::StorageValueRef, traits::TrailingZeroInput};
 use sp_std::{cmp::Ordering, vec::Vec};
 
 /// Storage key used to store the persistent offchain worker status.
-pub(crate) const OFFCHAIN_HEAD_DB: &[u8] = b"parity/multi-phase-unsigned-election";
+pub(crate) const OFFCHAIN_LOCK: &[u8] = b"parity/multi-phase-unsigned-election";
 
 /// Storage key used to cache the solution `call`.
 pub(crate) const OFFCHAIN_CACHED_CALL: &[u8] = b"parity/multi-phase-unsigned-election/call";
@@ -388,7 +388,7 @@ impl<T: Config> Pallet<T> {
 		now: T::BlockNumber,
 	) -> Result<(), MinerError> {
 		let threshold = T::OffchainRepeat::get();
-		let storage = StorageValueRef::persistent(&OFFCHAIN_HEAD_DB);
+		let storage = StorageValueRef::persistent(&OFFCHAIN_LOCK);
 
 		let mutate_stat =
 			storage.mutate::<_, &'static str, _>(|maybe_head: Option<Option<T::BlockNumber>>| {
@@ -903,7 +903,7 @@ mod tests {
 
 			// we must clear the offchain storage to ensure the offchain execution check doesn't get
 			// in the way.
-			let mut storage = StorageValueRef::persistent(&OFFCHAIN_HEAD_DB);
+			let mut storage = StorageValueRef::persistent(&OFFCHAIN_LOCK);
 
 			MultiPhase::offchain_worker(24);
 			assert!(pool.read().transactions.len().is_zero());
@@ -934,7 +934,7 @@ mod tests {
 
 			// we must clear the offchain storage to ensure the offchain execution check doesn't get
 			// in the way.
-			let mut storage = StorageValueRef::persistent(&OFFCHAIN_HEAD_DB);
+			let mut storage = StorageValueRef::persistent(&OFFCHAIN_LOCK);
 
 			MultiPhase::offchain_worker(block_plus(-1));
 			assert!(pool.read().transactions.len().is_zero());
@@ -972,7 +972,7 @@ mod tests {
 
 			// we must clear the offchain storage to ensure the offchain execution check doesn't get
 			// in the way.
-			let mut storage = StorageValueRef::persistent(&OFFCHAIN_HEAD_DB);
+			let mut storage = StorageValueRef::persistent(&OFFCHAIN_LOCK);
 
 			MultiPhase::offchain_worker(block_plus(-1));
 			assert!(pool.read().transactions.len().is_zero());
