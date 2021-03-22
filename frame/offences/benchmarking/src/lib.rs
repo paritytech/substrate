@@ -40,7 +40,7 @@ use pallet_session::historical::{Config as HistoricalConfig, IdentificationTuple
 use pallet_session::{Config as SessionConfig, SessionManager};
 use pallet_staking::{
 	Module as Staking, Config as StakingConfig, RewardDestination, ValidatorPrefs,
-	Exposure, IndividualExposure, ElectionStatus, MAX_NOMINATIONS, Event as StakingEvent
+	Exposure, IndividualExposure, MAX_NOMINATIONS, Event as StakingEvent
 };
 
 const SEED: u32 = 0;
@@ -385,8 +385,6 @@ benchmarks! {
 		let d in 1 .. MAX_DEFERRED_OFFENCES;
 		let o = 10;
 		let n = 100;
-
-		Staking::<T>::put_election_status(ElectionStatus::Closed);
 
 		let mut deferred_offences = vec![];
 		let offenders = make_offenders::<T>(o, n)?.0;
