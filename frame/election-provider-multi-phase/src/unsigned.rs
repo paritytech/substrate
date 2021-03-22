@@ -432,7 +432,7 @@ impl<T: Config> Pallet<T> {
 		ensure!(Self::current_phase().is_unsigned_open(), Error::<T>::PreDispatchEarlySubmission);
 
 		// ensure round is current
-		ensure!(Self::round() == solution.round, Error::<T>::OcwCallWrongEra,);
+		ensure!(Self::round() == solution.round, Error::<T>::OcwCallWrongEra);
 
 		// ensure correct number of winners.
 		ensure!(
