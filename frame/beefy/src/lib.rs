@@ -121,7 +121,7 @@ impl<T: Config> Pallet<T> {
 				})
 				.encode(),
 			);
-			<frame_system::Module<T>>::deposit_log(log);
+			<frame_system::Pallet<T>>::deposit_log(log);
 		}
 
 		<NextAuthorities<T>>::put(&queued);
@@ -144,11 +144,11 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
+impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Pallet<T> {
 	type Public = T::AuthorityId;
 }
 
-impl<T: Config> OneSessionHandler<T::AccountId> for Module<T> {
+impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 	type Key = T::AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)
@@ -177,11 +177,11 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Module<T> {
 			ConsensusLog::<T::AuthorityId>::OnDisabled(i as AuthorityIndex).encode(),
 		);
 
-		<frame_system::Module<T>>::deposit_log(log);
+		<frame_system::Pallet<T>>::deposit_log(log);
 	}
 }
 
-impl<T: Config> IsMember<T::AuthorityId> for Module<T> {
+impl<T: Config> IsMember<T::AuthorityId> for Pallet<T> {
 	fn is_member(authority_id: &T::AuthorityId) -> bool {
 		Self::authorities().iter().any(|id| id == authority_id)
 	}

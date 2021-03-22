@@ -35,7 +35,7 @@ pub use beefy_primitives::{ecdsa::AuthorityId as BeefyId, ConsensusLog, BEEFY_EN
 
 impl_opaque_keys! {
 	pub struct MockSessionKeys {
-		pub dummy: pallet_beefy::Module<Test>,
+		pub dummy: pallet_beefy::Pallet<Test>,
 	}
 }
 
@@ -48,9 +48,9 @@ construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Beefy: pallet_beefy::{Module, Call, Config<T>, Storage},
-		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Beefy: pallet_beefy::{Pallet, Call, Config<T>, Storage},
+		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
 	}
 );
 
@@ -151,7 +151,7 @@ pub fn new_test_ext_raw_authorities(authorities: Vec<(u64, BeefyId)>) -> TestExt
 
 	BasicExternalities::execute_with_storage(&mut t, || {
 		for (ref id, ..) in &session_keys {
-			frame_system::Module::<Test>::inc_providers(id);
+			frame_system::Pallet::<Test>::inc_providers(id);
 		}
 	});
 
