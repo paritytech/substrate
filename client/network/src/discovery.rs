@@ -61,7 +61,7 @@ use libp2p::kad::handler::KademliaHandlerProto;
 use libp2p::kad::QueryId;
 use libp2p::kad::record::{self, store::{MemoryStore, RecordStore}};
 #[cfg(not(target_os = "unknown"))]
-use libp2p::mdns::{Mdns, MdnsEvent};
+use libp2p::mdns::{Mdns, MdnsConfig, MdnsEvent};
 use libp2p::multiaddr::Protocol;
 use log::{debug, info, trace, warn};
 use std::{cmp, collections::{HashMap, HashSet, VecDeque}, io, num::NonZeroUsize, time::Duration};
@@ -220,7 +220,7 @@ impl DiscoveryConfig {
 			discovery_only_if_under_num,
 			#[cfg(not(target_os = "unknown"))]
 			mdns: if enable_mdns {
-				MdnsWrapper::Instantiating(Mdns::new().boxed())
+				MdnsWrapper::Instantiating(Mdns::new(MdnsConfig::default()).boxed())
 			} else {
 				MdnsWrapper::Disabled
 			},
