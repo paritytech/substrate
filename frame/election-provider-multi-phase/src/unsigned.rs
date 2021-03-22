@@ -53,6 +53,10 @@ pub enum MinerError {
 	Feasibility(FeasibilityError),
 	/// Something went wrong fetching the lock.
 	Lock(&'static str),
+	/// Cannot restore a solution that was not stored
+	NoStoredSolution,
+	/// Cached solution does not match the current round
+	SolutionOutOfDate,
 }
 
 impl From<sp_npos_elections::Error> for MinerError {
@@ -74,21 +78,33 @@ fn save_solution<T: Config>(call: &Call<T>) {
 }
 
 /// Get a saved solution from OCW storage if it exists.
-fn restore_solution<T: Config>() -> Option<Call<T>> {
-	StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL).get().flatten()
+fn restore_solution<T: Config>() -> Result<Call<T>, MinerError> {
+	StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL)
+		.get()
+		.flatten()
+		.ok_or(MinerError::NoStoredSolution)
 }
 
 impl<T: Config> Pallet<T> {
 	/// Attempt to restore a solution from cache. Otherwise, compute it fresh. Either way, submit.
 	pub fn restore_or_compute_then_submit() -> Result<(), MinerError> {
-		let call = match restore_solution() {
-			Some(call) => call,
-			None => {
+		let call = restore_solution::<T>()
+			.and_then(|call| {
+				// ensure the cached call is still current before submitting
+				let current_round = Self::round();
+				match &call {
+					Call::submit_unsigned(solution, _) if solution.round == current_round => {
+						Ok(call)
+					}
+					_ => Err(MinerError::SolutionOutOfDate),
+				}
+			})
+			.or_else::<MinerError, _>(|_| {
+				// if not present or cache invalidated, regenerate
 				let call = Self::mine_checked_call()?;
 				save_solution(&call);
-				call
-			}
-		};
+				Ok(call)
+			})?;
 		Self::submit_call(call)
 	}
 
