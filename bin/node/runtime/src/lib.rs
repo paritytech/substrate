@@ -500,14 +500,6 @@ impl pallet_staking::Config for Runtime {
 	type EraPayout = pallet_staking::ConvertCurve<RewardCurve>;
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
-	type ElectionLookahead = ElectionLookahead;
-	type Call = Call;
-	type MaxIterations = MaxIterations;
-	type MinSolutionScoreBump = MinSolutionScoreBump;
-	type UnsignedPriority = StakingUnsignedPriority;
-	// The unsigned solution weight targeted by the OCW. We set it to the maximum possible value of
-	// a single extrinsic.
-	type OffchainSolutionWeightLimit = OffchainSolutionWeightLimit;
 	type ElectionProvider = ElectionProviderMultiPhase;
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Runtime>;
 }
@@ -519,7 +511,7 @@ parameter_types! {
 
 	// fallback: no need to do on-chain phragmen initially.
 	pub const Fallback: pallet_election_provider_multi_phase::FallbackStrategy =
-		pallet_election_provider_multi_phase::FallbackStrategy::Nothing;
+		pallet_election_provider_multi_phase::FallbackStrategy::OnChain;
 
 	pub SolutionImprovementThreshold: Perbill = Perbill::from_rational(1u32, 10_000);
 
@@ -537,7 +529,7 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type Currency = Balances;
 	type SignedPhase = SignedPhase;
 	type UnsignedPhase = UnsignedPhase;
-	type SolutionImprovementThreshold = MinSolutionScoreBump;
+	type SolutionImprovementThreshold = SolutionImprovementThreshold;
 	type OffchainRepeat = OffchainRepeat;
 	type MinerMaxIterations = MinerMaxIterations;
 	type MinerMaxWeight = MinerMaxWeight;
@@ -1097,7 +1089,7 @@ construct_runtime!(
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		TransactionPayment: pallet_transaction_payment::{Pallet, Storage},
 		ElectionProviderMultiPhase: pallet_election_provider_multi_phase::{Pallet, Call, Storage, Event<T>, ValidateUnsigned},
-		Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>, ValidateUnsigned},
+		Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
 		Democracy: pallet_democracy::{Pallet, Call, Storage, Config, Event<T>},
 		Council: pallet_collective::<Instance1>::{Pallet, Call, Storage, Origin<T>, Event<T>, Config<T>},

@@ -16,13 +16,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Implementation of libp2p's `NetworkBehaviour` trait that opens a single substream with the
-//! remote and then allows any communication with them.
-//!
-//! The `Protocol` struct uses `GenericProto` in order to open substreams with the rest of the
-//! network, then performs the Substrate protocol handling on top.
+//! Implementation of libp2p's `NetworkBehaviour` trait that establishes communications and opens
+//! notifications substreams.
 
-pub use self::behaviour::{GenericProto, GenericProtoOut};
+pub use self::behaviour::{Notifications, NotificationsOut};
 pub use self::handler::{NotifsHandlerError, NotificationsSink, Ready};
 
 mod behaviour;
