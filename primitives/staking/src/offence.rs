@@ -160,12 +160,6 @@ pub trait OnOffenceHandler<Reporter, Offender, Res> {
 		slash_fraction: &[Perbill],
 		session: SessionIndex,
 	) -> Result<Res, ()>;
-
-	/// Can an offence be reported now or not. This is an method to short-circuit a call into
-	/// `on_offence`. Ideally, a correct implementation should return `false` if `on_offence` will
-	/// return `Err`. Nonetheless, this is up to the implementation and this trait cannot guarantee
-	/// it.
-	fn can_report() -> bool;
 }
 
 impl<Reporter, Offender, Res: Default> OnOffenceHandler<Reporter, Offender, Res> for () {
@@ -176,8 +170,6 @@ impl<Reporter, Offender, Res: Default> OnOffenceHandler<Reporter, Offender, Res>
 	) -> Result<Res, ()> {
 		Ok(Default::default())
 	}
-
-	fn can_report() -> bool { true }
 }
 
 /// A details about an offending authority for a particular kind of offence.

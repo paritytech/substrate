@@ -2791,10 +2791,6 @@ where
 		slash_fraction: &[Perbill],
 		slash_session: SessionIndex,
 	) -> Result<Weight, ()> {
-		if !Self::can_report() {
-			return Err(());
-		}
-
 		let reward_proportion = SlashRewardFraction::get();
 		let mut consumed_weight: Weight = 0;
 		let mut add_db_reads_writes = |reads, writes| {
@@ -2900,11 +2896,6 @@ where
 		}
 
 		Ok(consumed_weight)
-	}
-
-	fn can_report() -> bool {
-		// TODO: https://github.com/paritytech/substrate/issues/8343
-		true
 	}
 }
 

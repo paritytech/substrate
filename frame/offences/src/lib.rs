@@ -118,11 +118,6 @@ decl_module! {
 		fn deposit_event() = default;
 
 		fn on_initialize(now: T::BlockNumber) -> Weight {
-			// only decode storage if we can actually submit anything again.
-			if !T::OnOffenceHandler::can_report() {
-				return 0;
-			}
-
 			let limit = T::WeightSoftLimit::get();
 			let mut consumed = Weight::zero();
 
