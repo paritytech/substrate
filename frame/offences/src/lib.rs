@@ -227,13 +227,12 @@ impl<T: Config> Module<T> {
 		}
 	}
 
-	// TODO: Remove this when fix the the unit tests and benchmark
-	#[cfg(any(feature = "runtime-benchmarks", test))]
+	#[cfg(feature = "runtime-benchmarks")]
 	pub fn set_deferred_offences(offences: Vec<DeferredOffenceOf<T>>) {
 		migration::set_deferred_offences::<T>(offences);
 	}
 
-	#[cfg(any(feature = "runtime-benchmarks", test))]
+	#[cfg(feature = "runtime-benchmarks")]
 	pub fn deferred_offences() -> Vec<DeferredOffenceOf<T>> {
 		migration::get_deferred_offences::<T>()
 	}
