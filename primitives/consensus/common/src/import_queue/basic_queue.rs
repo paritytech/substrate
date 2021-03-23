@@ -18,7 +18,7 @@
 use std::{pin::Pin, time::Duration, marker::PhantomData};
 use futures::{prelude::*, task::Context, task::Poll};
 use futures_timer::Delay;
-use sp_runtime::{Justification, traits::{Block as BlockT, Header as HeaderT, NumberFor}};
+use sp_runtime::{Justification, Justifications, traits::{Block as BlockT, Header as HeaderT, NumberFor}};
 use sp_utils::mpsc::{TracingUnboundedSender, tracing_unbounded, TracingUnboundedReceiver};
 use prometheus_endpoint::Registry;
 
@@ -112,22 +112,24 @@ impl<B: BlockT, Transaction: Send> ImportQueue<B> for BasicQueue<B, Transaction>
 		}
 	}
 
-	fn import_justification(
+	fn import_justifications(
 		&mut self,
 		who: Origin,
 		hash: B::Hash,
 		number: NumberFor<B>,
-		justification: Justification,
+		justifications: Justifications,
 	) {
-		let res = self.justification_sender.unbounded_send(
-			worker_messages::ImportJustification(who, hash, number, justification),
-		);
-
-		if res.is_err() {
-			log::error!(
-				target: "sync",
-				"import_justification: Background import task is no longer alive"
+		for justification in justifications {
+			let res = self.justification_sender.unbounded_send(
+				worker_messages::ImportJustification(who, hash, number, justification),
 			);
+
+			if res.is_err() {
+				log::error!(
+					target: "sync",
+					"import_justification: Background import task is no longer alive"
+				);
+			}
 		}
 	}
 
@@ -281,7 +283,7 @@ impl<B: BlockT> BlockImportWorker<B> {
 		who: Origin,
 		hash: B::Hash,
 		number: NumberFor<B>,
-		justification: Justification
+		justification: Justification,
 	) {
 		let started = wasm_timer::Instant::now();
 		let success = self.justification_import.as_mut().map(|justification_import| {
@@ -442,7 +444,7 @@ mod tests {
 			&mut self,
 			origin: BlockOrigin,
 			header: Header,
-			_justification: Option<Justification>,
+			_justifications: Option<Justifications>,
 			_body: Option<Vec<Extrinsic>>,
 		) -> Result<(BlockImportParams<Block, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 			Ok((BlockImportParams::new(origin, header), None))
@@ -541,7 +543,7 @@ mod tests {
 					hash,
 					header: Some(header),
 					body: None,
-					justification: None,
+					justifications: None,
 					origin: None,
 					allow_missing_state: false,
 					import_existing: false,
@@ -554,12 +556,11 @@ mod tests {
 
 		let mut import_justification = || {
 			let hash = Hash::random();
-
 			block_on(finality_sender.send(worker_messages::ImportJustification(
 				libp2p::PeerId::random(),
 				hash,
 				1,
-				Vec::new(),
+				(*b"TEST", Vec::new()),
 			)))
 			.unwrap();
 

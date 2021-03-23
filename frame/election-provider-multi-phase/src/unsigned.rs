@@ -145,7 +145,7 @@ impl<T: Config> Pallet<T> {
 		// closures.
 		let cache = helpers::generate_voter_cache::<T>(&voters);
 		let voter_index = helpers::voter_index_fn::<T>(&cache);
-		let target_index = helpers::target_index_fn_linear::<T>(&targets);
+		let target_index = helpers::target_index_fn::<T>(&targets);
 		let voter_at = helpers::voter_at_fn::<T>(&voters);
 		let target_at = helpers::target_at_fn::<T>(&targets);
 		let stake_of = helpers::stake_of_fn::<T>(&voters, &cache);
@@ -737,7 +737,6 @@ mod tests {
 			roll_to(25);
 			assert!(MultiPhase::current_phase().is_unsigned());
 
-			// mine seq_phragmen solution with 2 iters.
 			assert_eq!(
 				MultiPhase::mine_check_and_submit().unwrap_err(),
 				MinerError::PreDispatchChecksFailed,
@@ -844,7 +843,7 @@ mod tests {
 	}
 
 	#[test]
-	fn ocw_only_runs_when_signed_open_now() {
+	fn ocw_only_runs_when_unsigned_open_now() {
 		let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
 		ext.execute_with(|| {
 			roll_to(25);

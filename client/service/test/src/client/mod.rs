@@ -36,8 +36,9 @@ use sc_client_db::{
 };
 use sc_block_builder::BlockBuilderProvider;
 use sc_service::client::{self, Client, LocalCallExecutor, new_in_mem};
-use sp_runtime::traits::{
-	BlakeTwo256, Block as BlockT, Header as HeaderT,
+use sp_runtime::{
+	ConsensusEngineId,
+	traits::{BlakeTwo256, Block as BlockT, Header as HeaderT},
 };
 use substrate_test_runtime::TestAPI;
 use sp_state_machine::backend::Backend as _;
@@ -51,11 +52,13 @@ use sp_consensus::{
 };
 use sp_storage::StorageKey;
 use sp_trie::{TrieConfiguration, trie_types::Layout};
-use sp_runtime::{generic::BlockId, DigestItem};
+use sp_runtime::{generic::BlockId, DigestItem, Justifications};
 use hex_literal::hex;
 
 mod light;
 mod db;
+
+const TEST_ENGINE_ID: ConsensusEngineId = *b"TEST";
 
 native_executor_instance!(
 	Executor,
@@ -1016,7 +1019,7 @@ fn import_with_justification() {
 	client.import(BlockOrigin::Own, a2.clone()).unwrap();
 
 	// A2 -> A3
-	let justification = vec![1, 2, 3];
+	let justification = Justifications::from((TEST_ENGINE_ID, vec![1, 2, 3]));
 	let a3 = client.new_block_at(
 		&BlockId::Hash(a2.hash()),
 		Default::default(),
@@ -1030,17 +1033,17 @@ fn import_with_justification() {
 	);
 
 	assert_eq!(
-		client.justification(&BlockId::Hash(a3.hash())).unwrap(),
+		client.justifications(&BlockId::Hash(a3.hash())).unwrap(),
 		Some(justification),
 	);
 
 	assert_eq!(
-		client.justification(&BlockId::Hash(a1.hash())).unwrap(),
+		client.justifications(&BlockId::Hash(a1.hash())).unwrap(),
 		None,
 	);
 
 	assert_eq!(
-		client.justification(&BlockId::Hash(a2.hash())).unwrap(),
+		client.justifications(&BlockId::Hash(a2.hash())).unwrap(),
 		None,
 	);
 }
@@ -1088,7 +1091,7 @@ fn importing_diverged_finalized_block_should_trigger_reorg() {
 	);
 
 	// importing B1 as finalized should trigger a re-org and set it as new best
-	let justification = vec![1, 2, 3];
+	let justification = Justifications::from((TEST_ENGINE_ID, vec![1, 2, 3]));
 	client.import_justified(BlockOrigin::Own, b1.clone(), justification).unwrap();
 
 	assert_eq!(

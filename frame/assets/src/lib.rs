@@ -1375,11 +1375,11 @@ impl<T: Config> Pallet<T> {
 	) -> Result<bool, DispatchError> {
 		let accounts = d.accounts.checked_add(1).ok_or(Error::<T>::Overflow)?;
 		let is_sufficient = if d.is_sufficient {
-			frame_system::Module::<T>::inc_sufficients(who);
+			frame_system::Pallet::<T>::inc_sufficients(who);
 			d.sufficients += 1;
 			true
 		} else {
-			frame_system::Module::<T>::inc_consumers(who).map_err(|_| Error::<T>::NoProvider)?;
+			frame_system::Pallet::<T>::inc_consumers(who).map_err(|_| Error::<T>::NoProvider)?;
 			false
 		};
 		d.accounts = accounts;
@@ -1393,9 +1393,9 @@ impl<T: Config> Pallet<T> {
 	) {
 		if sufficient {
 			d.sufficients = d.sufficients.saturating_sub(1);
-			frame_system::Module::<T>::dec_sufficients(who);
+			frame_system::Pallet::<T>::dec_sufficients(who);
 		} else {
-			frame_system::Module::<T>::dec_consumers(who);
+			frame_system::Pallet::<T>::dec_consumers(who);
 		}
 		d.accounts = d.accounts.saturating_sub(1);
 	}

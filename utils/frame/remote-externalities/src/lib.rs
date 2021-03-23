@@ -76,7 +76,7 @@
 //!             assert_eq!(
 //!                 // note: the hash corresponds to 3098546. We can check only the parent.
 //!                 // https://polkascan.io/kusama/block/3098546
-//!                 <frame_system::Module<Runtime>>::block_hash(3098545u32),
+//!                 <frame_system::Pallet<Runtime>>::block_hash(3098545u32),
 //!                 parent,
 //!             )
 //!         });

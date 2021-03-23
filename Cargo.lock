@@ -5109,7 +5109,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-node-authorization"
-version = "2.0.0"
+version = "3.0.0"
 dependencies = [
  "frame-support",
  "frame-system",
@@ -5323,6 +5323,7 @@ dependencies = [
  "pallet-timestamp",
  "parity-scale-codec",
  "parking_lot 0.11.1",
+ "paste 1.0.4",
  "rand_chacha 0.2.2",
  "serde",
  "sp-application-crypto",
@@ -5339,29 +5340,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-staking-fuzz"
-version = "0.0.0"
-dependencies = [
- "frame-election-provider-support",
- "frame-support",
- "frame-system",
- "honggfuzz",
- "pallet-balances",
- "pallet-indices",
- "pallet-session",
- "pallet-staking",
- "pallet-staking-reward-curve",
- "pallet-timestamp",
- "parity-scale-codec",
- "serde",
- "sp-core",
- "sp-io",
- "sp-npos-elections",
- "sp-runtime",
- "sp-std",
-]
-
-[[package]]
 name = "pallet-staking-reward-curve"
 version = "3.0.0"
 dependencies = [
@@ -5370,6 +5348,14 @@ dependencies = [
  "quote",
  "sp-runtime",
  "syn",
+]
+
+[[package]]
+name = "pallet-staking-reward-fn"
+version = "3.0.0"
+dependencies = [
+ "log",
+ "sp-arithmetic",
 ]
 
 [[package]]
@@ -7208,6 +7194,7 @@ dependencies = [
  "sp-inherents",
  "sp-runtime",
  "sp-state-machine",
+ "sp-timestamp",
  "sp-trie",
  "substrate-test-runtime-client",
  "thiserror",
@@ -7547,6 +7534,7 @@ dependencies = [
  "sp-runtime",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
+ "tracing",
  "wasm-timer",
 ]
 
@@ -8559,6 +8547,7 @@ dependencies = [
  "parity-scale-codec",
  "sp-api",
  "sp-application-crypto",
+ "sp-consensus",
  "sp-consensus-slots",
  "sp-inherents",
  "sp-runtime",

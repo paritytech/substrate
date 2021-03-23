@@ -20,7 +20,7 @@ use sc_finality_grandpa::{
 	find_scheduled_change, AuthoritySetChanges, BlockNumberOps, GrandpaJustification,
 };
 use sp_blockchain::Backend as BlockchainBackend;
-use sp_finality_grandpa::{AuthorityList, SetId};
+use sp_finality_grandpa::{AuthorityList, SetId, GRANDPA_ENGINE_ID};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, NumberFor},
@@ -108,11 +108,14 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 				break;
 			}
 
-			let justification = backend.justification(BlockId::Number(*last_block))?.expect(
-				"header is last in set and contains standard change signal; \
-				 must have justification; \
-				 qed.",
-			);
+			let justification = backend
+				.justifications(BlockId::Number(*last_block))?
+				.and_then(|just| just.into_justification(GRANDPA_ENGINE_ID))
+				.expect(
+					"header is last in set and contains standard change signal; \
+					must have justification; \
+					qed.",
+				);
 
 			let justification = GrandpaJustification::<Block>::decode(&mut &justification[..])?;
 
@@ -171,6 +174,7 @@ mod tests {
 	use sc_finality_grandpa::{AuthoritySetChanges, GrandpaJustification};
 	use sp_blockchain::HeaderBackend;
 	use sp_consensus::BlockOrigin;
+	use sp_finality_grandpa::GRANDPA_ENGINE_ID;
 	use sp_keyring::Ed25519Keyring;
 	use sp_runtime::{generic::BlockId, traits::Header as _};
 	use std::sync::Arc;
@@ -272,7 +276,10 @@ mod tests {
 				let justification = GrandpaJustification::from_commit(&client, 42, commit).unwrap();
 
 				client
-					.finalize_block(BlockId::Hash(target_hash), Some(justification.encode()))
+					.finalize_block(
+						BlockId::Hash(target_hash),
+						Some((GRANDPA_ENGINE_ID, justification.encode()))
+					)
 					.unwrap();
 
 				authority_set_changes.push((current_set_id, n));

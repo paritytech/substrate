@@ -52,7 +52,7 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 			&mut self,
 			origin: sp_consensus::BlockOrigin,
 			header: B::Header,
-			justification: Option<sp_runtime::Justification>,
+			justifications: Option<sp_runtime::Justifications>,
 			body: Option<Vec<B::Extrinsic>>,
 		) -> Result<
 			(
@@ -79,7 +79,7 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 			let mut import = sp_consensus::BlockImportParams::new(origin, header);
 			import.body = body;
 			import.finalized = self.0;
-			import.justification = justification;
+			import.justifications = justifications;
 			import.fork_choice = Some(sp_consensus::ForkChoiceStrategy::LongestChain);
 			Ok((import, maybe_keys))
 		}

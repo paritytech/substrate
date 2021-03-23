@@ -148,7 +148,7 @@ pub struct RemoteReadResponse {
 pub mod generic {
 	use bitflags::bitflags;
 	use codec::{Encode, Decode, Input, Output};
-	use sp_runtime::Justification;
+	use sp_runtime::EncodedJustification;
 	use super::{
 		RemoteReadResponse, Transactions, Direction,
 		RequestId, BlockAttributes, RemoteCallResponse, ConsensusEngineId,
@@ -233,7 +233,7 @@ pub mod generic {
 		/// Block message queue if requested.
 		pub message_queue: Option<Vec<u8>>,
 		/// Justification if requested.
-		pub justification: Option<Justification>,
+		pub justification: Option<EncodedJustification>,
 	}
 
 	/// Identifies starting point of a block sequence.

@@ -32,16 +32,9 @@ pub type ColumnId = u32;
 pub enum Change<H> {
 	Set(ColumnId, Vec<u8>, Vec<u8>),
 	Remove(ColumnId, Vec<u8>),
-	Store(H, Vec<u8>),
-	Release(H),
-}
-
-/// An alteration to the database that references the data.
-pub enum ChangeRef<'a, H> {
-	Set(ColumnId, &'a [u8], &'a [u8]),
-	Remove(ColumnId, &'a [u8]),
-	Store(H, &'a [u8]),
-	Release(H),
+	Store(ColumnId, H, Vec<u8>),
+	Reference(ColumnId, H),
+	Release(ColumnId, H),
 }
 
 /// A series of changes to the database that can be committed atomically. They do not take effect
@@ -67,49 +60,27 @@ impl<H> Transaction<H> {
 		self.0.push(Change::Remove(col, key.to_vec()))
 	}
 	/// Store the `preimage` of `hash` into the database, so that it may be looked up later with
-	/// `Database::lookup`. This may be called multiple times, but `Database::lookup` but subsequent
+	/// `Database::get`. This may be called multiple times, but subsequent
 	/// calls will ignore `preimage` and simply increase the number of references on `hash`.
-	pub fn store(&mut self, hash: H, preimage: &[u8]) {
-		self.0.push(Change::Store(hash, preimage.to_vec()))
+	pub fn store(&mut self, col: ColumnId, hash: H, preimage: Vec<u8>) {
+		self.0.push(Change::Store(col, hash, preimage))
+	}
+	/// Increase the number of references for `hash` in the database.
+	pub fn reference(&mut self, col: ColumnId, hash: H) {
+		self.0.push(Change::Reference(col, hash))
 	}
 	/// Release the preimage of `hash` from the database. An equal number of these to the number of
-	/// corresponding `store`s must have been given before it is legal for `Database::lookup` to
+	/// corresponding `store`s must have been given before it is legal for `Database::get` to
 	/// be unable to provide the preimage.
-	pub fn release(&mut self, hash: H) {
-		self.0.push(Change::Release(hash))
+	pub fn release(&mut self, col: ColumnId, hash: H) {
+		self.0.push(Change::Release(col, hash))
 	}
 }
 
-pub trait Database<H: Clone>: Send + Sync {
+pub trait Database<H: Clone + AsRef<[u8]>>: Send + Sync {
 	/// Commit the `transaction` to the database atomically. Any further calls to `get` or `lookup`
 	/// will reflect the new state.
-	fn commit(&self, transaction: Transaction<H>) -> error::Result<()> {
-		for change in transaction.0.into_iter() {
-			match change {
-				Change::Set(col, key, value) => self.set(col, &key, &value),
-				Change::Remove(col, key) => self.remove(col, &key),
-				Change::Store(hash, preimage) => self.store(&hash, &preimage),
-				Change::Release(hash) => self.release(&hash),
-			}?;
-		}
-
-		Ok(())
-	}
-
-	/// Commit the `transaction` to the database atomically. Any further calls to `get` or `lookup`
-	/// will reflect the new state.
-	fn commit_ref<'a>(&self, transaction: &mut dyn Iterator<Item=ChangeRef<'a, H>>) -> error::Result<()> {
-		let mut tx = Transaction::new();
-		for change in transaction {
-			match change {
-				ChangeRef::Set(col, key, value) => tx.set(col, key, value),
-				ChangeRef::Remove(col, key) => tx.remove(col, key),
-				ChangeRef::Store(hash, preimage) => tx.store(hash, preimage),
-				ChangeRef::Release(hash) => tx.release(hash),
-			}
-		}
-		self.commit(tx)
-	}
+	fn commit(&self, transaction: Transaction<H>) -> error::Result<()>;
 
 	/// Retrieve the value previously stored against `key` or `None` if
 	/// `key` is not currently in the database.
@@ -120,56 +91,17 @@ pub trait Database<H: Clone>: Send + Sync {
 		self.get(col, key).is_some()
 	}
 
+	/// Check value size in the database possibly without retrieving it.
+	fn value_size(&self, col: ColumnId, key: &[u8]) -> Option<usize> {
+		self.get(col, key).map(|v| v.len())
+	}
+
 	/// Call `f` with the value previously stored against `key`.
 	///
 	/// This may be faster than `get` since it doesn't allocate.
 	/// Use `with_get` helper function if you need `f` to return a value from `f`
 	fn with_get(&self, col: ColumnId, key: &[u8], f: &mut dyn FnMut(&[u8])) {
 		self.get(col, key).map(|v| f(&v));
-	}
-
-	/// Set the value of `key` in `col` to `value`, replacing anything that is there currently.
-	fn set(&self, col: ColumnId, key: &[u8], value: &[u8]) -> error::Result<()> {
-		let mut t = Transaction::new();
-		t.set(col, key, value);
-		self.commit(t)
-	}
-	/// Remove the value of `key` in `col`.
-	fn remove(&self, col: ColumnId, key: &[u8]) -> error::Result<()> {
-		let mut t = Transaction::new();
-		t.remove(col, key);
-		self.commit(t)
-	}
-
-	/// Retrieve the first preimage previously `store`d for `hash` or `None` if no preimage is
-	/// currently stored.
-	fn lookup(&self, hash: &H) -> Option<Vec<u8>>;
-
-	/// Call `f` with the preimage stored for `hash` and return the result, or `None` if no preimage
-	/// is currently stored.
-	///
-	/// This may be faster than `lookup` since it doesn't allocate.
-	/// Use `with_lookup` helper function if you need `f` to return a value from `f`
-	fn with_lookup(&self, hash: &H, f: &mut dyn FnMut(&[u8])) {
-		self.lookup(hash).map(|v| f(&v));
-	}
-
-	/// Store the `preimage` of `hash` into the database, so that it may be looked up later with
-	/// `Database::lookup`. This may be called multiple times, but `Database::lookup` but subsequent
-	/// calls will ignore `preimage` and simply increase the number of references on `hash`.
-	fn store(&self, hash: &H, preimage: &[u8]) -> error::Result<()> {
-		let mut t = Transaction::new();
-		t.store(hash.clone(), preimage);
-		self.commit(t)
-	}
-
-	/// Release the preimage of `hash` from the database. An equal number of these to the number of
-	/// corresponding `store`s must have been given before it is legal for `Database::lookup` to
-	/// be unable to provide the preimage.
-	fn release(&self, hash: &H) -> error::Result<()> {
-		let mut t = Transaction::new();
-		t.release(hash.clone());
-		self.commit(t)
 	}
 }
 
@@ -183,20 +115,13 @@ impl<H> std::fmt::Debug for dyn Database<H> {
 /// `key` is not currently in the database.
 ///
 /// This may be faster than `get` since it doesn't allocate.
-pub fn with_get<R, H: Clone>(db: &dyn Database<H>, col: ColumnId, key: &[u8], mut f: impl FnMut(&[u8]) -> R) -> Option<R> {
+pub fn with_get<R, H: Clone + AsRef<[u8]>>(
+	db: &dyn Database<H>,
+	col: ColumnId,
+	key: &[u8], mut f: impl FnMut(&[u8]) -> R
+) -> Option<R> {
 	let mut result: Option<R> = None;
 	let mut adapter = |k: &_| { result = Some(f(k)); };
 	db.with_get(col, key, &mut adapter);
-	result
-}
-
-/// Call `f` with the preimage stored for `hash` and return the result, or `None` if no preimage
-/// is currently stored.
-///
-/// This may be faster than `lookup` since it doesn't allocate.
-pub fn with_lookup<R, H: Clone>(db: &dyn Database<H>, hash: &H, mut f: impl FnMut(&[u8]) -> R) -> Option<R> {
-	let mut result: Option<R> = None;
-	let mut adapter = |k: &_| { result = Some(f(k)); };
-	db.with_lookup(hash, &mut adapter);
 	result
 }
