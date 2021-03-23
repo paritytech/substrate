@@ -19,8 +19,8 @@
 //!
 //! The Contract module provides functionality for the runtime to deploy and execute WebAssembly smart-contracts.
 //!
-//! - [`contract::Config`](./trait.Config.html)
-//! - [`Call`](./enum.Call.html)
+//! - [`Config`]
+//! - [`Call`]
 //!
 //! ## Overview
 //!
@@ -336,7 +336,7 @@ pub mod pallet {
 		/// * `gas_limit`: The gas limit enforced when executing the constructor.
 		/// * `code`: The contract code to deploy in raw bytes.
 		/// * `data`: The input data to pass to the contract constructor.
-		/// * `salt`: Used for the address derivation. See [`Self::contract_address`].
+		/// * `salt`: Used for the address derivation. See [`Pallet::contract_address`].
 		///
 		/// Instantiation is executed as follows:
 		///

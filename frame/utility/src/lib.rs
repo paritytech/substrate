@@ -18,8 +18,8 @@
 //! # Utility Module
 //! A stateless module with helpers for dispatch management which does no re-authentication.
 //!
-//! - [`utility::Config`](./trait.Config.html)
-//! - [`Call`](./enum.Call.html)
+//! - [`Config`]
+//! - [`Call`]
 //!
 //! ## Overview
 //!
@@ -48,9 +48,6 @@
 //!
 //! #### For pseudonymal dispatch
 //! * `as_derivative` - Dispatch a call from a derivative signed origin.
-//!
-//! [`Call`]: ./enum.Call.html
-//! [`Config`]: ./trait.Config.html
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
