@@ -139,14 +139,25 @@ use sp_runtime::{
 };
 use codec::{Encode, Decode, HasCompact};
 use frame_support::{ensure, dispatch::{DispatchError, DispatchResult}};
-use frame_support::traits::{Currency, ReservableCurrency, BalanceStatus::Reserved, Fungibles};
+use frame_support::traits::{
+	Currency, ReservableCurrency, BalanceStatus::Reserved, InspectFungibles, Fungibles,
+	WithdrawConsequence,
+};
 use frame_system::Config as SystemConfig;
 pub use weights::WeightInfo;
 pub use pallet::*;
 
-impl<T: Config> Fungibles<<T as SystemConfig>::AccountId> for Pallet<T> {
+impl<T: Config> InspectFungibles<<T as SystemConfig>::AccountId> for Pallet<T> {
 	type AssetId = T::AssetId;
 	type Balance = T::Balance;
+
+	fn total_issuance(asset: Self::AssetId) -> Self::Balance {
+		Asset::<T>::get(asset).map(|x| x.supply).unwrap_or_else(Zero::zero)
+	}
+
+	fn minimum_balance(asset: Self::AssetId) -> Self::Balance {
+		Asset::<T>::get(asset).map(|x| x.min_balance).unwrap_or_else(Zero::zero)
+	}
 
 	fn balance(
 		asset: Self::AssetId,
@@ -163,20 +174,30 @@ impl<T: Config> Fungibles<<T as SystemConfig>::AccountId> for Pallet<T> {
 		Pallet::<T>::can_deposit(asset, who, amount)
 	}
 
+	fn can_withdraw(
+		asset: Self::AssetId,
+		who: &<T as SystemConfig>::AccountId,
+		amount: Self::Balance,
+	) -> WithdrawConsequence<Self::Balance> {
+		Pallet::<T>::can_withdraw(asset, who, amount)
+	}
+}
+
+impl<T: Config> Fungibles<<T as SystemConfig>::AccountId> for Pallet<T> {
 	fn deposit(
 		asset: Self::AssetId,
-		who: <T as SystemConfig>::AccountId,
+		who: &<T as SystemConfig>::AccountId,
 		amount: Self::Balance,
 	) -> DispatchResult {
-		Pallet::<T>::increase_balance(asset, who, amount, None)
+		Pallet::<T>::increase_balance(asset, who.clone(), amount, None)
 	}
 
 	fn withdraw(
 		asset: Self::AssetId,
-		who: <T as SystemConfig>::AccountId,
+		who: &<T as SystemConfig>::AccountId,
 		amount: Self::Balance,
 	) -> DispatchResult {
-		Pallet::<T>::reduce_balance(asset, who, amount, None)
+		Pallet::<T>::reduce_balance(asset, who.clone(), amount, None)
 	}
 }
 
@@ -1395,6 +1416,28 @@ impl<T: Config> Pallet<T> {
 		}
 
 		true
+	}
+
+	fn can_withdraw(
+		id: T::AssetId,
+		who: &T::AccountId,
+		amount: T::Balance,
+	) -> WithdrawConsequence<T::Balance> {
+		let details = match Asset::<T>::get(id) {
+			Some(details) => details,
+			None => return WithdrawConsequence::Failed,
+		};
+		if details.supply.checked_sub(&amount).is_none() { return WithdrawConsequence::Failed }
+		let account = Account::<T>::get(id, who);
+		if let Some(rest) = account.balance.checked_sub(&amount) {
+			if rest < details.min_balance {
+				WithdrawConsequence::ReducedToZero(rest)
+			} else {
+				WithdrawConsequence::Success
+			}
+		} else {
+			WithdrawConsequence::Failed
+		}
 	}
 
 	fn increase_balance(
