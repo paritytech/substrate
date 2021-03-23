@@ -1136,15 +1136,12 @@ pub trait Fungibles<AccountId> {
 	type Balance: AtLeast32BitUnsigned + FullCodec + Copy + Default;
 	/// Get the `asset` balance of `who`.
 	fn balance(asset: Self::AssetId, who: &AccountId) -> Self::Balance;
-	/// Attempt to reduce the `asset` balance of `who` by `amount`.
-	fn withdraw(asset: Self::AssetId, who: &AccountId, amount: Self::Balance) -> DispatchResult;
 	/// Returns `true` if the `asset` balance of `who` may be increased by `amount`.
 	fn can_deposit(asset: Self::AssetId, who: &AccountId, amount: Self::Balance) -> bool;
 	/// Increase the `asset` balance of `who` by `amount`.
-	fn deposit(asset: Self::AssetId, who: &AccountId, amount: Self::Balance) -> DispatchResult;
-	/// Attempt to reduce the `asset` balance of `from` by `amount`, and if successful, increase the
-	/// `asset` balance of `to` be the same.
-	fn transfer(asset: Self::AssetId, from: &AccountId, to: &AccountId, amount: Self::Balance) -> DispatchResult;
+	fn deposit(asset: Self::AssetId, who: AccountId, amount: Self::Balance) -> DispatchResult;
+	/// Attempt to reduce the `asset` balance of `who` by `amount`.
+	fn withdraw(asset: Self::AssetId, who: AccountId, amount: Self::Balance) -> DispatchResult;
 }
 
 /// Status of funds.
