@@ -1397,7 +1397,12 @@ impl<T: Config> Pallet<T> {
 		true
 	}
 
-	fn increase_balance(id: T::AssetId, beneficiary: T::AccountId, amount: T::Balance, maybe_check_issuer: Option<T::AccountId>) -> DispatchResult {
+	fn increase_balance(
+		id: T::AssetId,
+		beneficiary: T::AccountId,
+		amount: T::Balance,
+		maybe_check_issuer: Option<T::AccountId>,
+	) -> DispatchResult {
 		Asset::<T>::try_mutate(id, |maybe_details| {
 			let details = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
 
@@ -1420,7 +1425,12 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	fn reduce_balance(id: T::AssetId, target: T::AccountId, amount: T::Balance, maybe_check_admin: Option<T::AccountId>) -> DispatchResult {
+	fn reduce_balance(
+		id: T::AssetId,
+		target: T::AccountId,
+		amount: T::Balance,
+		maybe_check_admin: Option<T::AccountId>,
+	) -> DispatchResult {
 		Asset::<T>::try_mutate(id, |maybe_details| {
 			let d = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
 			if let Some(check_admin) = maybe_check_admin {
