@@ -41,11 +41,12 @@ A PR needs to be reviewed and approved by project maintainers unless:
 . PRs must be tagged with their release notes requirements via the `B1-B9` labels.
 . PRs must be tagged with their release importance via the `C1-C9` labels.
 . PRs must be tagged with their audit requirements via the `D1-D9` labels.
+. PRs that must be backported to a stable branch must be tagged with https://github.com/paritytech/substrate/labels/E1-runtimemigration[`E0-patchthis`].
 . PRs that introduce runtime migrations must be tagged with https://github.com/paritytech/substrate/labels/E1-runtimemigration[`E1-runtimemigration`].
 . PRs that introduce irreversible database migrations must be tagged with https://github.com/paritytech/substrate/labels/E2-databasemigration[`E2-databasemigration`].
 . PRs that add host functions must be tagged with with https://github.com/paritytech/substrate/labels/E4-newhostfunctions[`E4-newhostfunctions`].
 . PRs that break the external API must be tagged with https://github.com/paritytech/substrate/labels/E5-breaksapi[`E5-breaksapi`].
-. PRs that materially change the FRAME/runtime semantics must be tagged with https://github.com/paritytech/substrate/labels/E6-breakssemantics[`E6-breakssemantics`].
+. PRs that materially change the FRAME/runtime semantics must be tagged with https://github.com/paritytech/substrate/labels/E6-transactionversion[`E6-transactionversion`].
 . PRs that change the mechanism for block authoring in a backwards-incompatible way must be tagged with https://github.com/paritytech/substrate/labels/E7-breaksauthoring[`E7-breaksauthoring`].
 . PRs that "break everything" must be tagged with https://github.com/paritytech/substrate/labels/E8-breakseverything[`E8-breakseverything`].
 . PRs that block a new release must be tagged with https://github.com/paritytech/substrate/labels/E9-blocker%20%E2%9B%94%EF%B8%8F[`E9-blocker`].
