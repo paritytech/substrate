@@ -349,6 +349,36 @@ macro_rules! __events_to_metadata {
 	}
 }
 
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __events_to_metadata_vnext {
+	(
+		$( $metadata:expr ),*;
+		$( #[doc = $doc_attr:tt] )*
+		$event:ident $( ( $( $param:path ),* $(,)? ) )*,
+		$( $rest:tt )*
+	) => {
+		$crate::__events_to_metadata_vnext!(
+			$( $metadata, )*
+			$crate::metadata::v13::EventMetadata {
+				name: stringify!($event),
+				arguments: $crate::scale_info::prelude::vec![
+					$( $( $crate::metadata::v13::TypeSpec::new::<$param>(stringify!($param)) ),* )*
+				],
+				documentation: $crate::scale_info::prelude::vec![
+					$( $doc_attr ),*
+				],
+			};
+			$( $rest )*
+		)
+	};
+	(
+		$( $metadata:expr ),*;
+	) => {
+		&[ $( $metadata ),* ]
+	}
+}
+
 /// Constructs an Event type for a runtime. This is usually called automatically by the
 /// construct_runtime macro.
 #[macro_export]
