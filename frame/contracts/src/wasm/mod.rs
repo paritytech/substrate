@@ -140,6 +140,12 @@ where
 	pub fn refcount(&self) -> u64 {
 		self.refcount
 	}
+
+	/// Decrement schedule_version by 1. Panics if it is already 0.
+	#[cfg(test)]
+	pub fn decrement_version(&mut self) {
+		self.schedule_version = self.schedule_version.checked_sub(1).unwrap();
+	}
 }
 
 impl<T: Config> Executable<T> for PrefabWasmModule<T>
@@ -297,6 +303,7 @@ mod tests {
 		schedule: Schedule<Test>,
 		rent_params: RentParams<Test>,
 		gas_meter: GasMeter<Test>,
+		debug_buffer: Vec<u8>,
 	}
 
 	impl Default for MockExt {
@@ -312,6 +319,7 @@ mod tests {
 				schedule: Default::default(),
 				rent_params: Default::default(),
 				gas_meter: GasMeter::new(10_000_000_000),
+				debug_buffer: Default::default(),
 			}
 		}
 	}
@@ -446,6 +454,10 @@ mod tests {
 		}
 		fn gas_meter(&mut self) -> &mut GasMeter<Self::T> {
 			&mut self.gas_meter
+		}
+		fn append_debug_buffer(&mut self, msg: &str) -> bool {
+			self.debug_buffer.extend(msg.as_bytes());
+			true
 		}
 	}
 
@@ -1845,4 +1857,71 @@ mod tests {
 		let rent_params = Bytes(<RentParams<Test>>::default().encode());
 		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::empty(), data: rent_params });
 	}
+
+	const CODE_DEBUG_MESSAGE: &str = r#"
+(module
+	(import "seal0" "seal_debug_message" (func $seal_debug_message (param i32 i32) (result i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(data (i32.const 0) "Hello World!")
+
+	(func (export "call")
+		(call $seal_debug_message
+			(i32.const 0)	;; Pointer to the text buffer
+			(i32.const 12)	;; The size of the buffer
+		)
+		drop
+	)
+
+	(func (export "deploy"))
+)
+"#;
+
+	#[test]
+	fn debug_message_works() {
+		let mut ext = MockExt::default();
+		execute(
+			CODE_DEBUG_MESSAGE,
+			vec![],
+			&mut ext,
+		).unwrap();
+
+		assert_eq!(std::str::from_utf8(&ext.debug_buffer).unwrap(), "Hello World!");
+	}
+
+	const CODE_DEBUG_MESSAGE_FAIL: &str = r#"
+	(module
+		(import "seal0" "seal_debug_message" (func $seal_debug_message (param i32 i32) (result i32)))
+		(import "env" "memory" (memory 1 1))
+
+		(data (i32.const 0) "\fc")
+
+		(func (export "call")
+			(call $seal_debug_message
+				(i32.const 0)	;; Pointer to the text buffer
+				(i32.const 1)	;; The size of the buffer
+			)
+			drop
+		)
+
+		(func (export "deploy"))
+	)
+	"#;
+
+		#[test]
+		fn debug_message_invalid_utf8_fails() {
+			let mut ext = MockExt::default();
+			let result = execute(
+				CODE_DEBUG_MESSAGE_FAIL,
+				vec![],
+				&mut ext,
+			);
+			assert_eq!(
+				result,
+				Err(ExecError {
+					error: Error::<Test>::DebugMessageInvalidUTF8.into(),
+					origin: ErrorOrigin::Caller,
+				})
+			);
+		}
 }

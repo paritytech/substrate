@@ -15,27 +15,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{Config, Weight, CurrentSchedule, Pallet, Schedule};
-use frame_support::traits::{GetPalletVersion, PalletVersion, Get};
+use crate::{Config, Weight, Pallet, Schedule};
+use frame_support::{
+	storage::StorageValue,
+	traits::{GetPalletVersion, PalletVersion, Get},
+};
 
 pub fn migrate<T: Config>() -> Weight {
 	let mut weight: Weight = 0;
 
 	match <Pallet<T>>::storage_version() {
-		// Replace the schedule with the new default and increment its version.
 		Some(version) if version == PalletVersion::new(3, 0, 0) => {
-			weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
-			let _ = <CurrentSchedule<T>>::translate::<u32, _>(|version| {
-				version.map(|version| Schedule {
-						version: version.saturating_add(1),
-						// Default limits were not decreased. Therefore it is OK to overwrite
-						// the schedule with the new defaults.
-						.. Default::default()
-					})
-			});
+			weight = weight.saturating_add(T::DbWeight::get().writes(1));
+			v3_0_0::CurrentSchedule::<T>::kill();
 		}
 		_ => (),
 	}
 
 	weight
+}
+
+mod v3_0_0 {
+	use super::*;
+
+	struct Pallet<T: Config>(sp_std::marker::PhantomData<T>);
+
+	frame_support::decl_storage! {
+		trait Store for Pallet<T: Config> as Contracts {
+			pub CurrentSchedule: Schedule<T>;
+		}
+	}
 }
