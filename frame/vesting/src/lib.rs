@@ -87,7 +87,7 @@ pub trait Config: frame_system::Config {
 const VESTING_ID: LockIdentifier = *b"vesting ";
 
 /// Struct to encode the vesting schedule of an individual account.
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
 pub struct VestingInfo<Balance, BlockNumber> {
 	/// Locked amount at genesis.
 	pub locked: Balance,

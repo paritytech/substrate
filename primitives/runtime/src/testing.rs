@@ -36,7 +36,7 @@ use crate::transaction_validity::{TransactionValidity, TransactionValidityError,
 /// 2. Can be converted to any `Public` key.
 /// 3. Implements `RuntimeAppPublic` so it can be used instead of regular application-specific
 ///    crypto.
-#[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug, Hash, Serialize, Deserialize, PartialOrd, Ord)]
+#[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug, Hash, Serialize, Deserialize, PartialOrd, Ord, scale_info::TypeInfo)]
 pub struct UintAuthorityId(pub u64);
 
 impl From<u64> for UintAuthorityId {

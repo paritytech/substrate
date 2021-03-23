@@ -181,7 +181,7 @@ impl TryFrom<u32> for HttpRequestStatus {
 
 /// A blob to hold information about the local node's network state
 /// without committing to its format.
-#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, PassByCodec)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, PassByCodec, scale_info::TypeInfo)]
 #[cfg_attr(feature = "std", derive(Default))]
 pub struct OpaqueNetworkState {
 	/// PeerId of the local node in SCALE encoded.
@@ -191,7 +191,7 @@ pub struct OpaqueNetworkState {
 }
 
 /// Simple blob to hold a `Multiaddr` without committing to its format.
-#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, PassByInner)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, PassByInner, scale_info::TypeInfo)]
 pub struct OpaqueMultiaddr(pub Vec<u8>);
 
 impl OpaqueMultiaddr {

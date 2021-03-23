@@ -101,7 +101,7 @@ pub trait Config: frame_system::Config {
 /// A global extrinsic index, formed as the extrinsic index within a block, together with that
 /// block's height. This allows a transaction in which a multisig operation of a particular
 /// composite was created to be uniquely identified.
-#[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug)]
+#[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug, scale_info::TypeInfo)]
 pub struct Timepoint<BlockNumber> {
 	/// The height of the chain at the point in time.
 	height: BlockNumber,
@@ -110,7 +110,7 @@ pub struct Timepoint<BlockNumber> {
 }
 
 /// An open multisig operation.
-#[derive(Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug, scale_info::TypeInfo)]
 pub struct Multisig<BlockNumber, Balance, AccountId> {
 	/// The extrinsic when the multisig operation was opened.
 	when: Timepoint<BlockNumber>,

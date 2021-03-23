@@ -211,7 +211,7 @@ pub type RegistrarIndex = u32;
 ///
 /// NOTE: Registrars may pay little attention to some fields. Registrars may want to make clear
 /// which fields their attestation is relevant for by off-chain means.
-#[derive(Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
+#[derive(Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, scale_info::TypeInfo)]
 pub enum Judgement<
 	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq
 > {
@@ -262,7 +262,7 @@ impl<
 /// The fields that we use to identify the owner of an account with. Each corresponds to a field
 /// in the `IdentityInfo` struct.
 #[repr(u64)]
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, BitFlags, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, BitFlags, RuntimeDebug, scale_info::TypeInfo)]
 pub enum IdentityField {
 	Display        = 0b0000000000000000000000000000000000000000000000000000000000000001,
 	Legal          = 0b0000000000000000000000000000000000000000000000000000000000000010,
@@ -359,7 +359,7 @@ pub struct IdentityInfo {
 ///
 /// NOTE: This is stored separately primarily to facilitate the addition of extra fields in a
 /// backwards compatible way through a specialized `Decode` impl.
-#[derive(Clone, Encode, Eq, PartialEq, RuntimeDebug)]
+#[derive(Clone, Encode, Eq, PartialEq, RuntimeDebug, scale_info::TypeInfo)]
 pub struct Registration<
 	Balance: Encode + Decode + Copy + Clone + Debug + Eq + PartialEq
 > {
@@ -394,7 +394,7 @@ impl<
 }
 
 /// Information concerning a registrar.
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, scale_info::TypeInfo)]
 pub struct RegistrarInfo<
 	Balance: Encode + Decode + Clone + Debug + Eq + PartialEq,
 	AccountId: Encode + Decode + Clone + Debug + Eq + PartialEq

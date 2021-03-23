@@ -23,7 +23,7 @@ use sp_runtime::{RuntimeDebug, traits::{Saturating, Zero}};
 use crate::{Conviction, ReferendumIndex, Delegations};
 
 /// A number of lock periods, plus a vote, one way or the other.
-#[derive(Copy, Clone, Eq, PartialEq, Default, RuntimeDebug)]
+#[derive(Copy, Clone, Eq, PartialEq, Default, RuntimeDebug, scale_info::TypeInfo)]
 pub struct Vote {
 	pub aye: bool,
 	pub conviction: Conviction,
@@ -49,7 +49,7 @@ impl Decode for Vote {
 }
 
 /// A vote for a referendum of a particular account.
-#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, RuntimeDebug)]
+#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, RuntimeDebug, scale_info::TypeInfo)]
 pub enum AccountVote<Balance> {
 	/// A standard vote, one-way (approve or reject) with a given amount of conviction.
 	Standard { vote: Vote, balance: Balance },
@@ -89,7 +89,7 @@ impl<Balance: Saturating> AccountVote<Balance> {
 }
 
 /// A "prior" lock, i.e. a lock for some now-forgotten reason.
-#[derive(Encode, Decode, Default, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, RuntimeDebug)]
+#[derive(Encode, Decode, Default, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, RuntimeDebug, scale_info::TypeInfo)]
 pub struct PriorLock<BlockNumber, Balance>(BlockNumber, Balance);
 
 impl<BlockNumber: Ord + Copy + Zero, Balance: Ord + Copy + Zero> PriorLock<BlockNumber, Balance> {
@@ -112,7 +112,7 @@ impl<BlockNumber: Ord + Copy + Zero, Balance: Ord + Copy + Zero> PriorLock<Block
 }
 
 /// An indicator for what an account is doing; it can either be delegating or voting.
-#[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug, scale_info::TypeInfo)]
 pub enum Voting<Balance, AccountId, BlockNumber> {
 	/// The account is voting directly. `delegations` is the total amount of post-conviction voting
 	/// weight that it controls from those that have delegated to it.

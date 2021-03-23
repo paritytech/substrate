@@ -9076,6 +9076,7 @@ name = "sp-session"
 version = "3.0.0"
 dependencies = [
  "parity-scale-codec",
+ "scale-info",
  "sp-api",
  "sp-core",
  "sp-runtime",

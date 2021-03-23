@@ -149,7 +149,7 @@ const INCLUDE_THRESHOLD: u32 = 3;
 /// This stores the block number at which heartbeat was requested and when the worker
 /// has actually managed to produce it.
 /// Note we store such status for every `authority_index` separately.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
 struct HeartbeatStatus<BlockNumber> {
 	/// An index of the session that we are supposed to send heartbeat for.
 	pub session_index: SessionIndex,
@@ -210,7 +210,7 @@ impl<BlockNumber: sp_std::fmt::Debug> sp_std::fmt::Debug for OffchainErr<BlockNu
 pub type AuthIndex = u32;
 
 /// Heartbeat which is sent/received.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
 pub struct Heartbeat<BlockNumber>
 	where BlockNumber: PartialEq + Eq + Decode + Encode,
 {
@@ -770,7 +770,7 @@ impl<T: Config> frame_support::unsigned::ValidateUnsigned for Module<T> {
 }
 
 /// An offence that is filed if a validator didn't send a heartbeat message.
-#[derive(RuntimeDebug)]
+#[derive(RuntimeDebug, scale_info::TypeInfo)]
 #[cfg_attr(feature = "std", derive(Clone, PartialEq, Eq))]
 pub struct UnresponsivenessOffence<Offender> {
 	/// The current session index in which we report the unresponsive validators.
