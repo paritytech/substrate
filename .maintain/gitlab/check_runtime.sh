@@ -63,7 +63,7 @@ sub_spec_version="$(git diff "tags/release...${CI_COMMIT_SHA}" "${VERSIONS_FILE}
 
 
 
-if [ "${add_spec_version}" == "${sub_spec_version}" ]
+if [ "${add_spec_version}" != "${sub_spec_version}" ]
 then
 
 	boldcat <<-EOT
