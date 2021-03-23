@@ -24,7 +24,7 @@ Follow the [instructions](https://github.com/Cerebellum-Network/validator-instru
  docker build .
 ```
 
-## Versioning strategy 
+## Versioning strategy
 
 The package must follow **Semantic Versioning** (SemVer).
 This strategy provides information on the type of changes introduced in a given version, compared to the previous one, in a unified format that automated tools can use.
@@ -34,6 +34,8 @@ The version is expressed as **MAJOR.MINOR.PATCH**.
 - MAJOR introduces one or more breaking changes.
 - MINOR introduces one or more backwards-compatible API changes.
 - PATCH only introduces bug fixes with no API changes.
+
+For more information, see "[Semantic Versioning](https://semver.org/)".
 
 |      Increment this value      |                                                                                                                                                                             Under these conditions                                                                                                                                                                             |                                                                                                                               Example                                                                                                                              |
 |:------------------------------|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
