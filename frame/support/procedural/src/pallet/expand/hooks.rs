@@ -55,6 +55,9 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			for #pallet_ident<#type_use_gen> #where_clause
 		{
 			fn on_finalize(n: <T as #frame_system::Config>::BlockNumber) {
+				#frame_support::sp_tracing::enter_span!(
+					#frame_support::sp_tracing::trace_span!("on_finalize")
+				);
 				<
 					Self as #frame_support::traits::Hooks<
 						<T as #frame_system::Config>::BlockNumber
@@ -86,6 +89,9 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			fn on_initialize(
 				n: <T as #frame_system::Config>::BlockNumber
 			) -> #frame_support::weights::Weight {
+				#frame_support::sp_tracing::enter_span!(
+					#frame_support::sp_tracing::trace_span!("on_initialize")
+				);
 				<
 					Self as #frame_support::traits::Hooks<
 						<T as #frame_system::Config>::BlockNumber
@@ -99,6 +105,10 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			for #pallet_ident<#type_use_gen> #where_clause
 		{
 			fn on_runtime_upgrade() -> #frame_support::weights::Weight {
+				#frame_support::sp_tracing::enter_span!(
+					#frame_support::sp_tracing::trace_span!("on_runtime_update")
+				);
+
 				// log info about the upgrade.
 				let new_storage_version = #frame_support::crate_to_pallet_version!();
 				let pallet_name = <

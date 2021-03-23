@@ -19,7 +19,8 @@
 //!
 //! The Contract module provides functionality for the runtime to deploy and execute WebAssembly smart-contracts.
 //!
-//! See [`pallet`] for more information.
+//! - [`Config`]
+//! - [`Call`]
 //!
 //! ## Overview
 //!

@@ -17,8 +17,8 @@
 
 //! # Society Module
 //!
-//! - [`society::Config`](./trait.Config.html)
-//! - [`Call`](./enum.Call.html)
+//! - [`Config`]
+//! - [`Call`]
 //!
 //! ## Overview
 //!
