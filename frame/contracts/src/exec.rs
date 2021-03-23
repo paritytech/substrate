@@ -243,7 +243,7 @@ pub trait Ext: sealing::Sealed {
 	fn tombstone_deposit(&self) -> BalanceOf<Self::T>;
 
 	/// Returns a random number for the current block with the given subject.
-	fn random(&self, subject: &[u8]) -> SeedOf<Self::T>;
+	fn random(&self, subject: &[u8]) -> (SeedOf<Self::T>, BlockNumberOf<Self::T>);
 
 	/// Deposit an event with the given topics.
 	///
@@ -845,10 +845,8 @@ where
 		self.value_transferred
 	}
 
-	fn random(&self, subject: &[u8]) -> SeedOf<T> {
-		// TODO: change API to expose randomness freshness
-		// https://github.com/paritytech/substrate/issues/8297
-		T::Randomness::random(subject).0
+	fn random(&self, subject: &[u8]) -> (SeedOf<T>, BlockNumberOf<T>) {
+		T::Randomness::random(subject)
 	}
 
 	fn now(&self) -> &MomentOf<T> {

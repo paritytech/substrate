@@ -20,7 +20,11 @@ In other words: Upgrading this pallet will not break pre-existing contracts.
 
 ### Added
 
+- Add new version of `seal_random` which exposes additional information.
+[1](https://github.com/paritytech/substrate/pull/8329)
+
 - Add `seal_rent_params` contract callable function.
+[1](https://github.com/paritytech/substrate/pull/8231)
 
 ## [v3.0.0] 2021-02-25
 
