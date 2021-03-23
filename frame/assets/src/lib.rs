@@ -163,7 +163,12 @@ impl<T: Config> Fungibles<T::AccountId> for Pallet<T> {
 		Pallet::<T>::increase_balance(asset, who, amount, None)
 	}
 
-	fn transfer(asset: Self::AssetId, from: &<T as Config>::AccountId, to: &<T as Config>::AccountId, amount: Self::Balance) -> DispatchResult {
+	fn transfer(
+		asset: Self::AssetId,
+		from: &<T as Config>::AccountId,
+		to: &<T as Config>::AccountId,
+		amount: Self::Balance,
+	) -> DispatchResult {
 		Pallet::<T>::do_transfer(asset, from, to, amount, None, false)
 	}
 }
