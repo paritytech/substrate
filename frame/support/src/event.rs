@@ -280,6 +280,7 @@ macro_rules! __decl_generic_event {
 			Clone, PartialEq, Eq,
 			$crate::codec::Encode,
 			$crate::codec::Decode,
+			$crate::scale_info::TypeInfo,
 			$crate::RuntimeDebug,
 		)]
 		/// Events for this module.

@@ -23,7 +23,7 @@ use codec::{Encode, Decode};
 use crate::types::Delegations;
 
 /// A value denoting the strength of conviction of a vote.
-#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, RuntimeDebug)]
+#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, RuntimeDebug, scale_info::TypeInfo)]
 pub enum Conviction {
 	/// 0.1x votes, unlocked.
 	None,

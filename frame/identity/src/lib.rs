@@ -140,7 +140,7 @@ pub trait Config: frame_system::Config {
 /// than 32-bytes then it will be truncated when encoding.
 ///
 /// Can also be `None`.
-#[derive(Clone, Eq, PartialEq, RuntimeDebug)]
+#[derive(Clone, Eq, PartialEq, RuntimeDebug, scale_info::TypeInfo)]
 pub enum Data {
 	/// No data here.
 	None,
@@ -290,12 +290,24 @@ impl Decode for IdentityFields {
 		Ok(Self(<BitFlags<IdentityField>>::from_bits(field as u64).map_err(|_| "invalid value")?))
 	}
 }
+impl scale_info::TypeInfo for IdentityFields {
+	type Identity = Self;
+
+	fn type_info() -> scale_info::Type<scale_info::form::MetaForm> {
+		scale_info::Type::builder()
+			.path(scale_info::Path::new("IdentityFields", module_path!()))
+			.composite(
+				scale_info::build::Fields::unnamed()
+					.field_of::<u64>("BitFlags<IdentityField>")
+			)
+	}
+}
 
 /// Information concerning the identity of the controller of an account.
 ///
 /// NOTE: This should be stored at the end of the storage item to facilitate the addition of extra
 /// fields in a backwards compatible way through a specialized `Decode` impl.
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, scale_info::TypeInfo)]
 #[cfg_attr(test, derive(Default))]
 pub struct IdentityInfo {
 	/// Additional fields of the identity that are not catered for with the struct's explicit
