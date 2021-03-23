@@ -79,7 +79,9 @@ pub fn compute_inflation<P: PerThing>(
 	falloff.lstrip();
 
 	let ln2 = {
-		let ln2 = P::from_rational(LN2.deconstruct().into(), Perquintill::ACCURACY.into());
+		/// `ln(2)` expressed in as perquintillionth.
+		const LN2: u64 = 0_693_147_180_559_945_309;
+		let ln2 = P::from_rational(LN2.into(), Perquintill::ACCURACY.into());
 		BigUint::from(ln2.deconstruct().into())
 	};
 
@@ -118,9 +120,6 @@ struct INPoSParam {
 	/// Must be stripped and have no leading zeros.
 	accuracy: BigUint,
 }
-
-/// `ln(2)` expressed in as perquintillionth.
-const LN2: Perquintill = Perquintill::from_parts(0_693_147_180_559_945_309);
 
 /// Compute `2^((x_ideal - x) / d)` using taylor serie.
 ///

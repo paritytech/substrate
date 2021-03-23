@@ -127,6 +127,14 @@ fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
 	assert_eq!(event, &system_event);
 }
 
+fn assert_event<T: Config>(generic_event: <T as Config>::Event) {
+	let system_event: <T as frame_system::Config>::Event = generic_event.into();
+	let events = frame_system::Pallet::<T>::events();
+	assert!(events.iter().any(|event_record| {
+		matches!(&event_record, frame_system::EventRecord { event, .. } if &system_event == event)
+	}));
+}
+
 benchmarks! {
 	create {
 		let caller: T::AccountId = whitelisted_caller();
@@ -383,7 +391,8 @@ benchmarks! {
 		let dest_lookup = T::Lookup::unlookup(dest.clone());
 	}: _(SystemOrigin::Signed(delegate.clone()), id, owner_lookup, dest_lookup, amount)
 	verify {
-		assert_last_event::<T>(Event::TransferredApproved(id, owner, delegate, dest, amount).into());
+		assert!(T::Currency::reserved_balance(&owner).is_zero());
+		assert_event::<T>(Event::Transferred(id, owner, dest, amount).into());
 	}
 
 	cancel_approval {
