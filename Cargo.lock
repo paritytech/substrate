@@ -7172,6 +7172,7 @@ dependencies = [
 name = "sc-consensus-pow"
 version = "0.9.0"
 dependencies = [
+ "async-trait",
  "derive_more",
  "futures 0.3.13",
  "futures-timer 3.0.2",
@@ -7187,7 +7188,6 @@ dependencies = [
  "sp-core",
  "sp-inherents",
  "sp-runtime",
- "sp-timestamp",
  "substrate-prometheus-endpoint",
 ]
 
