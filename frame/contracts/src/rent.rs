@@ -245,7 +245,6 @@ where
 		evictable_code: Option<PrefabWasmModule<T>>,
 	) -> Result<Option<AliveContractInfo<T>>, DispatchError> {
 		match (verdict, evictable_code) {
-			(Verdict::Exempt, _) => return Ok(Some(alive_contract_info)),
 			(Verdict::Evict { amount }, Some(code)) => {
 				// We need to remove the trie first because it is the only operation
 				// that can fail and this function is called without a storage
@@ -274,6 +273,14 @@ where
 			(Verdict::Evict { amount: _ }, None) => {
 				Ok(None)
 			}
+			(Verdict::Exempt, _) =>  {
+				let contract = ContractInfo::Alive(AliveContractInfo::<T> {
+					deduct_block: current_block_number,
+					..alive_contract_info
+				});
+				<ContractInfoOf<T>>::insert(account, &contract);
+				Ok(Some(contract.get_alive().expect("We just constructed it as alive. qed")))
+			},
 			(Verdict::Charge { amount }, _) => {
 				let contract = ContractInfo::Alive(AliveContractInfo::<T> {
 					rent_allowance: alive_contract_info.rent_allowance - amount.peek(),
