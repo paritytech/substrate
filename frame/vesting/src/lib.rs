@@ -314,7 +314,7 @@ impl<T: Config> Module<T> {
 	/// current unvested amount.
 	fn update_lock(who: T::AccountId) -> DispatchResult {
 		let vesting = Self::vesting(&who).ok_or(Error::<T>::NotVesting)?;
-		let now = <frame_system::Module<T>>::block_number();
+		let now = <frame_system::Pallet<T>>::block_number();
 		let locked_now = vesting.locked_at::<T::BlockNumberToBalance>(now);
 
 		if locked_now.is_zero() {
@@ -339,7 +339,7 @@ impl<T: Config> VestingSchedule<T::AccountId> for Module<T> where
 	/// Get the amount that is currently being vested and cannot be transferred out of this account.
 	fn vesting_balance(who: &T::AccountId) -> Option<BalanceOf<T>> {
 		if let Some(v) = Self::vesting(who) {
-			let now = <frame_system::Module<T>>::block_number();
+			let now = <frame_system::Pallet<T>>::block_number();
 			let locked_now = v.locked_at::<T::BlockNumberToBalance>(now);
 			Some(T::Currency::free_balance(who).min(locked_now))
 		} else {
@@ -408,9 +408,9 @@ mod tests {
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
-			System: frame_system::{Module, Call, Config, Storage, Event<T>},
-			Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
-			Vesting: pallet_vesting::{Module, Call, Storage, Event<T>, Config<T>},
+			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+			Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+			Vesting: pallet_vesting::{Pallet, Call, Storage, Event<T>, Config<T>},
 		}
 	);
 

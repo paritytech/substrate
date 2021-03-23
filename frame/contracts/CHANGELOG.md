@@ -16,7 +16,13 @@ The interface provided to smart contracts will adhere to semver with one excepti
 major version bumps will be backwards compatible with regard to already deployed contracts.
 In other words: Upgrading this pallet will not break pre-existing contracts.
 
-## [v3.0.0]
+## [Unreleased]
+
+### Added
+
+- Add `seal_rent_params` contract callable function.
+
+## [v3.0.0] 2021-02-25
 
 This version constitutes the first release that brings any stability guarantees (see above).
 

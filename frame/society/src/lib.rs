@@ -283,7 +283,7 @@ pub trait Config<I=DefaultInstance>: system::Config {
 	type Currency: ReservableCurrency<Self::AccountId>;
 
 	/// Something that provides randomness in the runtime.
-	type Randomness: Randomness<Self::Hash>;
+	type Randomness: Randomness<Self::Hash, Self::BlockNumber>;
 
 	/// The minimum amount of a deposit required for a bid to be made.
 	type CandidateDeposit: Get<BalanceOf<Self, I>>;
@@ -793,7 +793,7 @@ decl_module! {
 
 			let mut payouts = <Payouts<T, I>>::get(&who);
 			if let Some((when, amount)) = payouts.first() {
-				if when <= &<system::Module<T>>::block_number() {
+				if when <= &<system::Pallet<T>>::block_number() {
 					T::Currency::transfer(&Self::payouts(), &who, *amount, AllowDeath)?;
 					payouts.remove(0);
 					if payouts.is_empty() {
@@ -981,7 +981,7 @@ decl_module! {
 						// Reduce next pot by payout
 						<Pot<T, I>>::put(pot - value);
 						// Add payout for new candidate
-						let maturity = <system::Module<T>>::block_number()
+						let maturity = <system::Pallet<T>>::block_number()
 							+ Self::lock_duration(Self::members().len() as u32);
 						Self::pay_accepted_candidate(&who, value, kind, maturity);
 					}
@@ -1309,7 +1309,9 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 		let mut pot = <Pot<T, I>>::get();
 
 		// we'll need a random seed here.
-		let seed = T::Randomness::random(phrase);
+		// TODO: deal with randomness freshness
+		// https://github.com/paritytech/substrate/issues/8312
+		let (seed, _) = T::Randomness::random(phrase);
 		// seed needs to be guaranteed to be 32 bytes.
 		let seed = <[u8; 32]>::decode(&mut TrailingZeroInput::new(seed.as_ref()))
 			.expect("input is padded with zeroes; qed");
@@ -1322,7 +1324,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 			// critical issues or side-effects. This is auto-correcting as members fall out of society.
 			members.reserve(candidates.len());
 
-			let maturity = <system::Module<T>>::block_number()
+			let maturity = <system::Pallet<T>>::block_number()
 				+ Self::lock_duration(members.len() as u32);
 
 			let mut rewardees = Vec::new();
@@ -1565,7 +1567,9 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 				// Start a new defender rotation
 				let phrase = b"society_challenge";
 				// we'll need a random seed here.
-				let seed = T::Randomness::random(phrase);
+				// TODO: deal with randomness freshness
+				// https://github.com/paritytech/substrate/issues/8312
+				let (seed, _) = T::Randomness::random(phrase);
 				// seed needs to be guaranteed to be 32 bytes.
 				let seed = <[u8; 32]>::decode(&mut TrailingZeroInput::new(seed.as_ref()))
 					.expect("input is padded with zeroes; qed");

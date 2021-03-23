@@ -27,7 +27,6 @@ sc-informant = { version = "0.9.0", path = "../../client/informant" }
 sc-service = { version = "0.9.0", path = "../../client/service", default-features = false }
 sc-network = { path = "../../client/network", version = "0.9.0"}
 sc-chain-spec = { path = "../../client/chain-spec", version = "3.0.0"}
-sc-telemetry = { path = "../../client/telemetry", version = "3.0.0"}
 sc-tracing = { path = "../../client/tracing", version = "3.0.0"}
 
 # Imported just for the `wasm-bindgen` feature

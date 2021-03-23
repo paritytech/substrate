@@ -23,7 +23,7 @@ use frame_support::{assert_ok, assert_noop, traits::Currency};
 use pallet_balances::Error as BalancesError;
 
 fn last_event() -> mock::Event {
-	frame_system::Module::<Test>::events().pop().expect("Event expected").event
+	frame_system::Pallet::<Test>::events().pop().expect("Event expected").event
 }
 
 #[test]

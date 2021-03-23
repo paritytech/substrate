@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,16 +16,15 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Implementation of libp2p's `NetworkBehaviour` trait that opens a single substream with the
-//! remote and then allows any communication with them.
-//!
-//! The `Protocol` struct uses `GenericProto` in order to open substreams with the rest of the
-//! network, then performs the Substrate protocol handling on top.
+pub use self::collec::UpgradeCollec;
+pub use self::notifications::{
+	NotificationsIn,
+	NotificationsInSubstream,
+	NotificationsOut,
+	NotificationsOutSubstream,
+	NotificationsHandshakeError,
+	NotificationsOutError,
+};
 
-pub use self::behaviour::{GenericProto, GenericProtoOut};
-pub use self::handler::{NotifsHandlerError, NotificationsSink, Ready};
-
-mod behaviour;
-mod handler;
-mod upgrade;
-mod tests;
+mod collec;
+mod notifications;

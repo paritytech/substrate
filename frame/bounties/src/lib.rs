@@ -424,7 +424,7 @@ decl_module! {
 								// If the sender is not the curator, and the curator is inactive,
 								// slash the curator.
 								if sender != *curator {
-									let block_number = system::Module::<T>::block_number();
+									let block_number = system::Pallet::<T>::block_number();
 									if *update_due < block_number {
 										slash_curator(curator, &mut bounty.curator_deposit);
 										// Continue to change bounty status below...
@@ -479,7 +479,7 @@ decl_module! {
 						T::Currency::reserve(curator, deposit)?;
 						bounty.curator_deposit = deposit;
 
-						let update_due = system::Module::<T>::block_number() + T::BountyUpdatePeriod::get();
+						let update_due = system::Pallet::<T>::block_number() + T::BountyUpdatePeriod::get();
 						bounty.status = BountyStatus::Active { curator: curator.clone(), update_due };
 
 						Ok(())
@@ -518,7 +518,7 @@ decl_module! {
 				bounty.status = BountyStatus::PendingPayout {
 					curator: signer,
 					beneficiary: beneficiary.clone(),
-					unlock_at: system::Module::<T>::block_number() + T::BountyDepositPayoutDelay::get(),
+					unlock_at: system::Pallet::<T>::block_number() + T::BountyDepositPayoutDelay::get(),
 				};
 
 				Ok(())
@@ -543,7 +543,7 @@ decl_module! {
 			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let bounty = maybe_bounty.take().ok_or(Error::<T>::InvalidIndex)?;
 				if let BountyStatus::PendingPayout { curator, beneficiary, unlock_at } = bounty.status {
-					ensure!(system::Module::<T>::block_number() >= unlock_at, Error::<T>::Premature);
+					ensure!(system::Pallet::<T>::block_number() >= unlock_at, Error::<T>::Premature);
 					let bounty_account = Self::bounty_account_id(bounty_id);
 					let balance = T::Currency::free_balance(&bounty_account);
 					let fee = bounty.fee.min(balance); // just to be safe
@@ -649,7 +649,7 @@ decl_module! {
 				match bounty.status {
 					BountyStatus::Active { ref curator, ref mut update_due } => {
 						ensure!(*curator == signer, Error::<T>::RequireCurator);
-						*update_due = (system::Module::<T>::block_number() + T::BountyUpdatePeriod::get()).max(*update_due);
+						*update_due = (system::Pallet::<T>::block_number() + T::BountyUpdatePeriod::get()).max(*update_due);
 					},
 					_ => return Err(Error::<T>::UnexpectedStatus.into()),
 				}

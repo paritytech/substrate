@@ -23,7 +23,7 @@ mod code;
 mod sandbox;
 
 use crate::{
-	*, Module as Contracts,
+	*, Pallet as Contracts,
 	exec::StorageKey,
 	rent::Rent,
 	schedule::{API_BENCHMARK_BATCH_SIZE, INSTR_BENCHMARK_BATCH_SIZE},
@@ -37,7 +37,7 @@ use self::{
 	sandbox::Sandbox,
 };
 use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
-use frame_system::{Module as System, RawOrigin};
+use frame_system::{Pallet as System, RawOrigin};
 use parity_wasm::elements::{Instruction, ValueType, BlockType};
 use sp_runtime::traits::{Hash, Bounded, Zero};
 use sp_std::{default::Default, convert::{TryInto}, vec::Vec, vec};
@@ -529,6 +529,14 @@ benchmarks! {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
 			"seal_now", r * API_BENCHMARK_BATCH_SIZE
+		), vec![], Endow::Max)?;
+		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
+
+	seal_rent_params {
+		let r in 0 .. API_BENCHMARK_BATCHES;
+		let instance = Contract::<T>::new(WasmModule::getter(
+			"seal_rent_params", r * API_BENCHMARK_BATCH_SIZE
 		), vec![], Endow::Max)?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])

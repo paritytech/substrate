@@ -235,12 +235,12 @@ impl Verifier<TestBlock> for TestVerifier {
 		&mut self,
 		origin: BlockOrigin,
 		mut header: TestHeader,
-		justification: Option<Justification>,
+		justifications: Option<Justifications>,
 		body: Option<Vec<TestExtrinsic>>,
 	) -> Result<(BlockImportParams<TestBlock, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		// apply post-sealing mutations (i.e. stripping seal, if desired).
 		(self.mutator)(&mut header, Stage::PostSeal);
-		self.inner.verify(origin, header, justification, body)
+		self.inner.verify(origin, header, justifications, body)
 	}
 }
 
@@ -320,6 +320,7 @@ impl TestNetFactory for BabeTestNet {
 				epoch_changes: data.link.epoch_changes.clone(),
 				time_source: data.link.time_source.clone(),
 				can_author_with: AlwaysCanAuthor,
+				telemetry: None,
 			},
 			mutator: MUTATOR.with(|m| m.borrow().clone()),
 		}
@@ -431,6 +432,8 @@ fn run_one_test(
 			babe_link: data.link.clone(),
 			keystore,
 			can_author_with: sp_consensus::AlwaysCanAuthor,
+			block_proposal_slot_portion: SlotProportion::new(0.5),
+			telemetry: None,
 		}).expect("Starts babe"));
 	}
 	futures::executor::block_on(future::select(
