@@ -737,7 +737,6 @@ mod tests {
 			roll_to(25);
 			assert!(MultiPhase::current_phase().is_unsigned());
 
-			// mine seq_phragmen solution with 2 iters.
 			assert_eq!(
 				MultiPhase::mine_check_and_submit().unwrap_err(),
 				MinerError::PreDispatchChecksFailed,
@@ -844,7 +843,7 @@ mod tests {
 	}
 
 	#[test]
-	fn ocw_only_runs_when_signed_open_now() {
+	fn ocw_only_runs_when_unsigned_open_now() {
 		let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
 		ext.execute_with(|| {
 			roll_to(25);

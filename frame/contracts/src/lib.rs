@@ -221,7 +221,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxValueSize: Get<u32>;
 
-		/// Used to answer contracts's queries regarding the current weight price. This is **not**
+		/// Used to answer contracts' queries regarding the current weight price. This is **not**
 		/// used to calculate the actual fee and is only for informational purposes.
 		type WeightPrice: Convert<Weight, BalanceOf<Self>>;
 
