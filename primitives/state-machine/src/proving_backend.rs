@@ -145,7 +145,10 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 			backend: essence.backend_storage(),
 			proof_recorder,
 		};
-		ProvingBackend(TrieBackend::new(recorder, root))
+		ProvingBackend(TrieBackend::new(
+			recorder,
+			root,
+		))
 	}
 
 	/// Extracting the gathered unordered proof.
@@ -257,17 +260,17 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		self.0.child_keys(child_info, prefix)
 	}
 
-	fn storage_root<'b>(
+	fn storage_root(
 		&self,
-		delta: impl Iterator<Item=(&'b [u8], Option<&'b [u8]>)>,
+		delta: impl Iterator<Item=(impl AsRef<[u8]>, Option<impl AsRef<[u8]>>)>,
 	) -> (H::Out, Self::Transaction) where H::Out: Ord {
 		self.0.storage_root(delta)
 	}
 
-	fn child_storage_root<'b>(
+	fn child_storage_root(
 		&self,
 		child_info: &ChildInfo,
-		delta: impl Iterator<Item=(&'b [u8], Option<&'b [u8]>)>,
+		delta: impl Iterator<Item=(impl AsRef<[u8]>, Option<impl AsRef<[u8]>>)>,
 	) -> (H::Out, bool, Self::Transaction) where H::Out: Ord {
 		self.0.child_storage_root(child_info, delta)
 	}
@@ -291,7 +294,10 @@ where
 	let db = proof.into_memory_db();
 
 	if db.contains(&root, EMPTY_PREFIX) {
-		Ok(TrieBackend::new(db, root))
+		Ok(TrieBackend::new(
+			db,
+			root,
+		))
 	} else {
 		Err(Box::new(ExecutionError::InvalidProof))
 	}
@@ -302,6 +308,7 @@ mod tests {
 	use crate::InMemoryBackend;
 	use crate::trie_backend::tests::test_trie;
 	use super::*;
+	use crate::tests::empty_storage_iter;
 	use crate::proving_backend::create_proof_check_backend;
 	use sp_trie::PrefixedMemoryDB;
 	use sp_runtime::traits::BlakeTwo256;
@@ -343,8 +350,8 @@ mod tests {
 		assert_eq!(trie_backend.storage(b"key").unwrap(), proving_backend.storage(b"key").unwrap());
 		assert_eq!(trie_backend.pairs(), proving_backend.pairs());
 
-		let (trie_root, mut trie_mdb) = trie_backend.storage_root(::std::iter::empty());
-		let (proving_root, mut proving_mdb) = proving_backend.storage_root(::std::iter::empty());
+		let (trie_root, mut trie_mdb) = trie_backend.storage_root(empty_storage_iter());
+		let (proving_root, mut proving_mdb) = proving_backend.storage_root(empty_storage_iter());
 		assert_eq!(trie_root, proving_root);
 		assert_eq!(trie_mdb.drain(), proving_mdb.drain());
 	}
@@ -354,11 +361,11 @@ mod tests {
 		let contents = (0..64).map(|i| (vec![i], Some(vec![i]))).collect::<Vec<_>>();
 		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
 		let mut in_memory = in_memory.update(vec![(None, contents)]);
-		let in_memory_root = in_memory.storage_root(::std::iter::empty()).0;
+		let in_memory_root = in_memory.storage_root(empty_storage_iter()).0;
 		(0..64).for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i]));
 
 		let trie = in_memory.as_trie_backend().unwrap();
-		let trie_root = trie.storage_root(::std::iter::empty()).0;
+		let trie_root = trie.storage_root(empty_storage_iter()).0;
 		assert_eq!(in_memory_root, trie_root);
 		(0..64).for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i]));
 
@@ -388,8 +395,8 @@ mod tests {
 		let mut in_memory = in_memory.update(contents);
 		let child_storage_keys = vec![child_info_1.to_owned(), child_info_2.to_owned()];
 		let in_memory_root = in_memory.full_storage_root(
-			std::iter::empty(),
-			child_storage_keys.iter().map(|k|(k, std::iter::empty()))
+			empty_storage_iter(),
+			child_storage_keys.iter().map(|k|(k, empty_storage_iter()))
 		).0;
 		(0..64).for_each(|i| assert_eq!(
 			in_memory.storage(&[i]).unwrap().unwrap(),
@@ -405,7 +412,7 @@ mod tests {
 		));
 
 		let trie = in_memory.as_trie_backend().unwrap();
-		let trie_root = trie.storage_root(::std::iter::empty()).0;
+		let trie_root = trie.storage_root(empty_storage_iter()).0;
 		assert_eq!(in_memory_root, trie_root);
 		(0..64).for_each(|i| assert_eq!(
 			trie.storage(&[i]).unwrap().unwrap(),

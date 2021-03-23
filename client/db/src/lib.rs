@@ -44,6 +44,7 @@ mod utils;
 mod stats;
 #[cfg(feature = "with-parity-db")]
 mod parity_db;
+mod export_import;
 
 use std::sync::Arc;
 use std::path::{Path, PathBuf};
@@ -55,7 +56,8 @@ use log::{trace, debug, warn};
 
 use sc_client_api::{
 	UsageInfo, MemoryInfo, IoInfo, MemorySize,
-	backend::{NewBlockState, PrunableStateChangesTrieStorage, ProvideChtRoots},
+	backend::{NewBlockState, PrunableStateChangesTrieStorage, ProvideChtRoots,
+		SnapshotSyncComponent, SnapshotSync},
 	leaves::{LeafSet, FinalizationDisplaced}, cht,
 	utils::is_descendent_of,
 };
@@ -69,7 +71,7 @@ use sp_trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};
 use sp_database::Transaction;
 use sp_core::{Hasher, ChangesTrieConfiguration};
 use sp_core::offchain::OffchainOverlayedChange;
-use sp_core::storage::{well_known_keys, ChildInfo};
+use sp_core::storage::{well_known_keys, ChildInfo, ChildType, PrefixedStorageKey};
 use sp_arithmetic::traits::Saturating;
 use sp_runtime::{generic::{DigestItem, BlockId}, Justification, Justifications, Storage};
 use sp_runtime::traits::{
@@ -222,17 +224,17 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		self.state.for_child_keys_with_prefix(child_info, prefix, f)
 	}
 
-	fn storage_root<'a>(
+	fn storage_root(
 		&self,
-		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+		delta: impl Iterator<Item=(impl AsRef<[u8]>, Option<impl AsRef<[u8]>>)>,
 	) -> (B::Hash, Self::Transaction) where B::Hash: Ord {
 		self.state.storage_root(delta)
 	}
 
-	fn child_storage_root<'a>(
+	fn child_storage_root(
 		&self,
 		child_info: &ChildInfo,
-		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+		delta: impl Iterator<Item=(impl AsRef<[u8]>, Option<impl AsRef<[u8]>>)>,
 	) -> (B::Hash, bool, Self::Transaction) where B::Hash: Ord {
 		self.state.child_storage_root(child_info, delta)
 	}
@@ -401,29 +403,32 @@ fn cache_header<Hash: std::cmp::Eq + std::hash::Hash, Header>(
 }
 
 /// Block database
+#[derive(Clone)]
 pub struct BlockchainDb<Block: BlockT> {
 	db: Arc<dyn Database<DbHash>>,
 	meta: Arc<RwLock<Meta<NumberFor<Block>, Block::Hash>>>,
-	leaves: RwLock<LeafSet<Block::Hash, NumberFor<Block>>>,
+	leaves: Arc<RwLock<LeafSet<Block::Hash, NumberFor<Block>>>>,
 	header_metadata_cache: Arc<HeaderMetadataCache<Block>>,
-	header_cache: Mutex<LinkedHashMap<Block::Hash, Option<Block::Header>>>,
+	header_cache: Arc<Mutex<LinkedHashMap<Block::Hash, Option<Block::Header>>>>,
 	transaction_storage: TransactionStorageMode,
+	registered_snapshot_sync: Arc<RwLock<Vec<Box<dyn SnapshotSyncComponent<Block>>>>>,
 }
 
 impl<Block: BlockT> BlockchainDb<Block> {
 	fn new(
 		db: Arc<dyn Database<DbHash>>,
-		transaction_storage: TransactionStorageMode
+		transaction_storage: TransactionStorageMode,
 	) -> ClientResult<Self> {
 		let meta = read_meta::<Block>(&*db, columns::HEADER)?;
 		let leaves = LeafSet::read_from_db(&*db, columns::META, meta_keys::LEAF_PREFIX)?;
 		Ok(BlockchainDb {
 			db,
-			leaves: RwLock::new(leaves),
+			leaves: Arc::new(RwLock::new(leaves)),
 			meta: Arc::new(RwLock::new(meta)),
 			header_metadata_cache: Arc::new(HeaderMetadataCache::default()),
 			header_cache: Default::default(),
 			transaction_storage,
+			registered_snapshot_sync: Default::default(),
 		})
 	}
 
@@ -695,6 +700,7 @@ pub struct BlockImportOperation<Block: BlockT> {
 	set_head: Option<BlockId<Block>>,
 	commit_state: bool,
 	index_ops: Vec<IndexOperation>,
+	forced_import_finalized: bool,
 }
 
 impl<Block: BlockT> BlockImportOperation<Block> {
@@ -756,6 +762,40 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 		Ok(())
 	}
 
+	fn inject_finalized_state(
+		&mut self,
+		data: sp_database::StateIter,
+	) -> ClientResult<Block::Hash> {
+		let mut changes_trie_config: Option<ChangesTrieConfiguration> = None;
+		let empty_backend = sp_state_machine::prefixed_new_in_mem::<HashFor<Block>>();
+		let (root, transaction) = empty_backend.full_storage_root(
+			data.0.map(|(k, v)| {
+				if &k[..] == well_known_keys::CHANGES_TRIE_CONFIG {
+					changes_trie_config = Some(
+						Decode::decode(&mut &v[..])
+							.expect("changes trie configuration is encoded properly at genesis")
+					);
+				}
+				(k, Some(v))
+			}),
+			data.1.map(|(storage_key, child_content)| {
+				let prefixed_key = PrefixedStorageKey::new_ref(&storage_key);
+				let child_info = match ChildType::from_prefixed_key(prefixed_key) {
+					Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
+					None => panic!("Invalid child storage key for injected state"),
+				};
+				(child_info, child_content.map(|(k, v)| (k, Some(v))))
+			}),
+		);
+
+		self.db_updates = transaction;
+		self.changes_trie_config_update = Some(changes_trie_config);
+
+		self.forced_import_finalized = true;
+		self.commit_state = true;
+		Ok(root)
+	}
+
 	fn reset_storage(
 		&mut self,
 		storage: Storage,
@@ -785,6 +825,20 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 
 		self.db_updates = transaction;
 		self.changes_trie_config_update = Some(changes_trie_config);
+
+		let storage_top: StorageCollection = storage.top.into_iter()
+			.map(|(k, v)| (k, Some(v))).collect();
+		let mut storage_child = ChildStorageCollection::default();
+		for (_child_key, collection) in storage.children_default.into_iter() {
+			let child_key = collection.child_info.into_prefixed_storage_key()
+				.into_inner();
+			let storage: StorageCollection = collection.data.into_iter()
+				.map(|(k, v)| (k, Some(v))).collect();
+			storage_child.push((child_key, storage));
+		}
+		// feed cache and the historied db
+		self.update_storage(storage_top, storage_child)?;
+
 		self.commit_state = true;
 		Ok(root)
 	}
@@ -931,10 +985,11 @@ impl<T: Clone> FrozenForDuration<T> {
 ///
 /// Disk backend keeps data in a key-value store. In archive mode, trie nodes are kept from all blocks.
 /// Otherwise, trie nodes are kept only from some recent blocks.
+#[derive(Clone)]
 pub struct Backend<Block: BlockT> {
 	storage: Arc<StorageDb<Block>>,
 	offchain_storage: offchain::LocalStorage,
-	changes_tries_storage: DbChangesTrieStorage<Block>,
+	changes_tries_storage: Arc<DbChangesTrieStorage<Block>>,
 	blockchain: BlockchainDb<Block>,
 	canonicalization_delay: u64,
 	shared_cache: SharedCache<Block>,
@@ -942,7 +997,7 @@ pub struct Backend<Block: BlockT> {
 	is_archive: bool,
 	keep_blocks: KeepBlocks,
 	transaction_storage: TransactionStorageMode,
-	io_stats: FrozenForDuration<(kvdb::IoStats, StateUsageInfo)>,
+	io_stats: Arc<FrozenForDuration<(kvdb::IoStats, StateUsageInfo)>>,
 	state_usage: Arc<StateUsageStats>,
 }
 
@@ -967,7 +1022,7 @@ impl<Block: BlockT> Backend<Block> {
 
 	/// Create new memory-backed client backend for tests.
 	#[cfg(any(test, feature = "test-helpers"))]
-	fn new_test_with_tx_storage(
+	pub fn new_test_with_tx_storage(
 		keep_blocks: u32,
 		canonicalization_delay: u64,
 		transaction_storage: TransactionStorageMode,
@@ -1006,8 +1061,8 @@ impl<Block: BlockT> Backend<Block> {
 			prefix_keys: !config.source.supports_ref_counting(),
 		};
 		let offchain_storage = offchain::LocalStorage::new(db.clone());
-		let changes_tries_storage = DbChangesTrieStorage::new(
-			db,
+		let changes_tries_storage = Arc::new(DbChangesTrieStorage::new(
+			db.clone(),
 			blockchain.header_metadata_cache.clone(),
 			columns::META,
 			columns::CHANGES_TRIE,
@@ -1020,7 +1075,7 @@ impl<Block: BlockT> Backend<Block> {
 			} else {
 				Some(MIN_BLOCKS_TO_KEEP_CHANGES_TRIES_FOR)
 			},
-		)?;
+		)?);
 
 		Ok(Backend {
 			storage: Arc::new(storage_db),
@@ -1034,7 +1089,7 @@ impl<Block: BlockT> Backend<Block> {
 			),
 			import_lock: Default::default(),
 			is_archive: is_archive_pruning,
-			io_stats: FrozenForDuration::new(std::time::Duration::from_secs(1)),
+			io_stats: Arc::new(FrozenForDuration::new(std::time::Duration::from_secs(1))),
 			state_usage: Arc::new(StateUsageStats::new()),
 			keep_blocks: config.keep_blocks.clone(),
 			transaction_storage: config.transaction_storage.clone(),
@@ -1053,6 +1108,7 @@ impl<Block: BlockT> Backend<Block> {
 		transaction: &mut Transaction<DbHash>,
 		route_to: Block::Hash,
 		best_to: (NumberFor<Block>, Block::Hash),
+		forced_import_finalized: bool,
 	) -> ClientResult<(Vec<Block::Hash>, Vec<Block::Hash>)> {
 		let mut enacted = Vec::default();
 		let mut retracted = Vec::default();
@@ -1060,7 +1116,7 @@ impl<Block: BlockT> Backend<Block> {
 		let meta = self.blockchain.meta.read();
 
 		// cannot find tree route with empty DB.
-		if meta.best_hash != Default::default() {
+		if !forced_import_finalized && meta.best_hash != Default::default() {
 			let tree_route = sp_blockchain::tree_route(
 				&self.blockchain,
 				meta.best_hash,
@@ -1231,7 +1287,12 @@ impl<Block: BlockT> Backend<Block> {
 			let lookup_key = utils::number_and_hash_to_lookup_key(number, hash)?;
 
 			let (enacted, retracted) = if pending_block.leaf_state.is_best() {
-				self.set_head_with_transaction(&mut transaction, parent_hash, (number, hash))?
+				self.set_head_with_transaction(
+					&mut transaction,
+					parent_hash,
+					(number, hash),
+					operation.forced_import_finalized,
+				)?
 			} else {
 				(Default::default(), Default::default())
 			};
@@ -1275,6 +1336,7 @@ impl<Block: BlockT> Backend<Block> {
 				let mut bytes: u64 = 0;
 				let mut removal: u64 = 0;
 				let mut bytes_removal: u64 = 0;
+
 				for (mut key, (val, rc)) in operation.db_updates.drain() {
 					if !self.storage.prefix_keys {
 						// Strip prefix
@@ -1318,6 +1380,7 @@ impl<Block: BlockT> Backend<Block> {
 				}
 				self.state_usage.tally_writes(ops, bytes);
 				let number_u64 = number.saturated_into::<u64>();
+
 				let commit = self.storage.state_db.insert_block(
 					&hash,
 					number_u64,
@@ -1337,13 +1400,18 @@ impl<Block: BlockT> Backend<Block> {
 			let is_best = pending_block.leaf_state.is_best();
 			let changes_trie_updates = operation.changes_trie_updates;
 			let changes_trie_config_update = operation.changes_trie_config_update;
+			let parent_id = cache::ComplexBlockId::new(
+				*header.parent_hash(),
+				if number.is_zero() { Zero::zero() } else { number - One::one() },
+			);
+
+			if operation.forced_import_finalized {
+				self.changes_tries_storage.force_last_finalize(&parent_id);
+			}
 			changes_trie_cache_ops = Some(self.changes_tries_storage.commit(
 				&mut transaction,
 				changes_trie_updates,
-				cache::ComplexBlockId::new(
-					*header.parent_hash(),
-					if number.is_zero() { Zero::zero() } else { number - One::one() },
-				),
+				parent_id,
 				cache::ComplexBlockId::new(hash, number),
 				header,
 				finalized,
@@ -1410,7 +1478,8 @@ impl<Block: BlockT> Backend<Block> {
 				let (enacted, retracted) = self.set_head_with_transaction(
 					&mut transaction,
 					hash.clone(),
-					(number.clone(), hash.clone())
+					(number.clone(), hash.clone()),
+					operation.forced_import_finalized,
 				)?;
 				meta_updates.push((hash, *number, true, false));
 				Some((enacted, retracted))
@@ -1720,6 +1789,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			set_head: None,
 			commit_state: false,
 			index_ops: Default::default(),
+			forced_import_finalized: false,
 		})
 	}
 
@@ -1825,7 +1895,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	}
 
 	fn changes_trie_storage(&self) -> Option<&dyn PrunableStateChangesTrieStorage<Block>> {
-		Some(&self.changes_tries_storage)
+		Some(&*self.changes_tries_storage.as_ref())
 	}
 
 	fn offchain_storage(&self) -> Option<Self::OffchainStorage> {
@@ -2062,6 +2132,16 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	fn get_import_lock(&self) -> &RwLock<()> {
 		&*self.import_lock
 	}
+
+	fn snapshot_sync(&self) -> Box<dyn SnapshotSync<Block>> {
+		Box::new(export_import::ClientSnapshotSync {
+			backend: self.clone(),
+		})
+	}
+
+	fn register_sync(&self, sync: Box<dyn SnapshotSyncComponent<Block>>) {
+		self.blockchain.registered_snapshot_sync.write().push(sync);
+	}
 }
 
 impl<Block: BlockT> sc_client_api::backend::LocalBackend<Block> for Backend<Block> {}
@@ -2092,7 +2172,7 @@ pub(crate) mod tests {
 		{
 			let mut trie = TrieDBMut::<BlakeTwo256>::new(
 				&mut changes_trie_update,
-				&mut changes_root
+				&mut changes_root,
 			);
 			for (key, value) in changes {
 				trie.insert(&key, &value).unwrap();
@@ -2317,7 +2397,9 @@ pub(crate) mod tests {
 				extrinsics_root: Default::default(),
 			};
 
-			header.state_root = op.old_state.storage_root(std::iter::empty()).0.into();
+			let storage: Vec<(Vec<u8>, Option<Vec<u8>>)> = vec![];
+
+			header.state_root = op.old_state.storage_root(storage.into_iter()).0.into();
 			let hash = header.hash();
 
 			op.reset_storage(Storage {
@@ -2352,7 +2434,7 @@ pub(crate) mod tests {
 				extrinsics_root: Default::default(),
 			};
 
-			let storage: Vec<(_, _)> = vec![];
+			let storage: Vec<(Vec<u8>, Vec<u8>)> = vec![];
 
 			header.state_root = op.old_state.storage_root(storage
 				.iter()
@@ -2389,7 +2471,7 @@ pub(crate) mod tests {
 				extrinsics_root: Default::default(),
 			};
 
-			let storage: Vec<(_, _)> = vec![];
+			let storage: Vec<(Vec<u8>, Vec<u8>)> = vec![];
 
 			header.state_root = op.old_state.storage_root(storage
 				.iter()
@@ -2426,7 +2508,7 @@ pub(crate) mod tests {
 				extrinsics_root: Default::default(),
 			};
 
-			let storage: Vec<(_, _)> = vec![];
+			let storage: Vec<(Vec<u8>, Vec<u8>)> = vec![];
 
 			header.state_root = op.old_state.storage_root(storage
 				.iter()

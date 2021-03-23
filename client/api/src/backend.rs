@@ -34,13 +34,14 @@ use crate::{
 		Backend as BlockchainBackend, well_known_cache_keys
 	},
 	light::RemoteBlockchain,
-	UsageInfo,
+	UsageInfo, SnapshotConfig,
 };
 use sp_blockchain;
 use sp_consensus::BlockOrigin;
 use parking_lot::RwLock;
 
 pub use sp_state_machine::Backend as StateBackend;
+pub use sp_database::StateIter;
 use std::marker::PhantomData;
 
 /// Extracts the state backend type for the given backend.
@@ -161,6 +162,13 @@ pub trait BlockImportOperation<Block: BlockT> {
 		update: TransactionForSB<Self::State, Block>,
 	) -> sp_blockchain::Result<()>;
 
+	/// Inject storage data into the database for a given state.
+	/// Should only be use on a cleaned state (eg for state snapshot import).
+	fn inject_finalized_state(
+		&mut self,
+		data: StateIter,
+	) -> sp_blockchain::Result<Block::Hash>;
+
 	/// Inject storage data into the database replacing any existing data.
 	fn reset_storage(&mut self, storage: Storage) -> sp_blockchain::Result<Block::Hash>;
 
@@ -270,6 +278,38 @@ pub trait AuxStore {
 
 	/// Query auxiliary data from key-value store.
 	fn get_aux(&self, key: &[u8]) -> sp_blockchain::Result<Option<Vec<u8>>>;
+}
+
+impl<Aux: AuxStore> AuxStore for &Aux {
+	fn insert_aux<
+		'a,
+		'b: 'a,
+		'c: 'a,
+		I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
+		D: IntoIterator<Item=&'a &'b [u8]>,
+	>(&self, insert: I, delete: D) -> sp_blockchain::Result<()> {
+		(**self).insert_aux(insert, delete)
+	}
+
+	fn get_aux(&self, key: &[u8]) -> sp_blockchain::Result<Option<Vec<u8>>> {
+		(**self).get_aux(key)
+	}
+}
+
+impl<Aux: AuxStore> AuxStore for std::sync::Arc<Aux> {
+	fn insert_aux<
+		'a,
+		'b: 'a,
+		'c: 'a,
+		I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
+		D: IntoIterator<Item=&'a &'b [u8]>,
+	>(&self, insert: I, delete: D) -> sp_blockchain::Result<()> {
+		(**self).insert_aux(insert, delete)
+	}
+
+	fn get_aux(&self, key: &[u8]) -> sp_blockchain::Result<Option<Vec<u8>>> {
+		(**self).get_aux(key)
+	}
 }
 
 /// An `Iterator` that iterates keys in a given block under a prefix.
@@ -455,6 +495,13 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	/// Returns a handle to offchain storage.
 	fn offchain_storage(&self) -> Option<Self::OffchainStorage>;
 
+	/// Snapshot synching for this backend.
+	fn snapshot_sync(&self) -> Box<dyn SnapshotSync<Block>>;
+
+	/// Add a sync component to use with the snapshot synching
+	/// of his backend.
+	fn register_sync(&self, sync: Box<dyn SnapshotSyncComponent<Block>>);
+
 	/// Returns true if state for given block is available.
 	fn have_state_at(&self, hash: &Block::Hash, _number: NumberFor<Block>) -> bool {
 		self.state_at(BlockId::Hash(hash.clone())).is_ok()
@@ -498,6 +545,69 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	/// something that the import of a block would interfere with, e.g. importing
 	/// a new block or calculating the best head.
 	fn get_import_lock(&self) -> &RwLock<()>;
+}
+
+/// Common requirement for a `SnapshotSyncConsumer`.
+#[derive(Clone)]
+pub struct SnapshotSyncCommon<Block: BlockT> {
+	/// Headers needed to be in the chain but not in the block import
+	/// range.
+	pub additional_headers: Vec<(NumberFor<Block>, NumberFor<Block>)>,
+}
+
+/// Full implementation of snapshot export and import.
+pub trait SnapshotSync<Block: BlockT>: Send + Sync {
+	/// Write sync non state related persisting data.
+	fn export_sync(
+		&self,
+		out: &mut dyn std::io::Write,
+		range: SnapshotConfig<Block>,
+	) -> sp_blockchain::Result<()>;
+
+	/// Read head, this could be in a separate trait.
+	fn import_sync(
+		&self,
+		encoded: &mut dyn std::io::Read,
+	) -> sp_blockchain::Result<SnapshotConfig<Block>>;
+}
+
+/// Component that need to manage some export and import state
+/// when using snapshots.
+pub trait SnapshotSyncComponent<Block: BlockT>: Send + Sync {
+	/// Export state needed, except state that can be shared with
+	/// other component.
+	/// Return pointers to state that can be shared with others components.
+	fn export_sync_meta(
+		&self,
+		out: &mut dyn std::io::Write,
+		range: &SnapshotConfig<Block>,
+	) -> sp_blockchain::Result<SnapshotSyncCommon<Block>>;
+
+	/// Export state and return non imported content that is shared.
+	/// Note there is currently no callback with the shared content
+	/// because not use at this point, but will certainly be needed.
+	fn import_sync_meta(
+		&self,
+		encoded: &mut dyn std::io::Read,
+		range: &SnapshotConfig<Block>,
+	) -> sp_blockchain::Result<SnapshotSyncCommon<Block>>;
+}
+
+impl<Block: BlockT> SnapshotSync<Block> for () {
+	fn export_sync(
+		&self,
+		_out: &mut dyn std::io::Write,
+		_range: SnapshotConfig<Block>,
+	) -> sp_blockchain::Result<()> {
+		Err(sp_blockchain::Error::Backend("Unsuponted snapshot sync".to_string()))
+	}
+
+	fn import_sync(
+		&self,
+		_encoded: &mut dyn std::io::Read,
+	) -> sp_blockchain::Result<SnapshotConfig<Block>> {
+		Err(sp_blockchain::Error::Backend("Unsuponted snapshot sync".to_string()))
+	}
 }
 
 /// Changes trie storage that supports pruning.

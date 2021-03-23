@@ -451,14 +451,19 @@ type TestChecker = LightDataChecker<
 	DummyStorage,
 >;
 
+pub(crate) fn empty_storage_iter() -> std::iter::Empty<(Vec<u8>, Option<Vec<u8>>)> {
+	std::iter::empty()
+}
+
 fn prepare_for_read_proof_check() -> (TestChecker, Header, StorageProof, u32) {
 	// prepare remote client
 	let remote_client = substrate_test_runtime_client::new();
 	let remote_block_id = BlockId::Number(0);
 	let remote_block_hash = remote_client.block_hash(0).unwrap().unwrap();
 	let mut remote_block_header = remote_client.header(&remote_block_id).unwrap().unwrap();
+
 	remote_block_header.state_root = remote_client.state_at(&remote_block_id).unwrap()
-		.storage_root(::std::iter::empty()).0.into();
+		.storage_root(empty_storage_iter()).0.into();
 
 	// 'fetch' read proof from remote node
 	let heap_pages = remote_client.storage(&remote_block_id, &StorageKey(well_known_keys::HEAP_PAGES.to_vec()))
@@ -502,7 +507,7 @@ fn prepare_for_read_child_proof_check() -> (TestChecker, Header, StorageProof, V
 	let remote_block_hash = remote_client.block_hash(0).unwrap().unwrap();
 	let mut remote_block_header = remote_client.header(&remote_block_id).unwrap().unwrap();
 	remote_block_header.state_root = remote_client.state_at(&remote_block_id).unwrap()
-		.storage_root(::std::iter::empty()).0.into();
+		.storage_root(empty_storage_iter()).0.into();
 
 	// 'fetch' child read proof from remote node
 	let child_value = remote_client.child_storage(

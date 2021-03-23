@@ -28,6 +28,7 @@ use crate::{
 	UsageInfo, StorageKey, StorageValue, StorageCollection, ChildStorageCollection,
 };
 use sp_std::vec::Vec;
+use sp_std::borrow::Borrow;
 #[cfg(feature = "std")]
 use sp_core::traits::RuntimeCode;
 
@@ -124,18 +125,18 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	/// Calculate the storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit.
 	/// Does not include child storage updates.
-	fn storage_root<'a>(
+	fn storage_root(
 		&self,
-		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+		delta: impl Iterator<Item=(impl AsRef<[u8]>, Option<impl AsRef<[u8]>>)>,
 	) -> (H::Out, Self::Transaction) where H::Out: Ord;
 
 	/// Calculate the child storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit. The second argument
 	/// is true if child storage root equals default storage root.
-	fn child_storage_root<'a>(
+	fn child_storage_root(
 		&self,
 		child_info: &ChildInfo,
-		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+		delta: impl Iterator<Item=(impl AsRef<[u8]>, Option<impl AsRef<[u8]>>)>,
 	) -> (H::Out, bool, Self::Transaction) where H::Out: Ord;
 
 	/// Get all key/value pairs into a Vec.
@@ -167,12 +168,12 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	/// Calculate the storage root, with given delta over what is already stored
 	/// in the backend, and produce a "transaction" that can be used to commit.
 	/// Does include child storage updates.
-	fn full_storage_root<'a>(
+	fn full_storage_root(
 		&self,
-		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+		delta: impl Iterator<Item = (impl AsRef<[u8]>, Option<impl AsRef<[u8]>>)>,
 		child_deltas: impl Iterator<Item = (
-			&'a ChildInfo,
-			impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+			impl Borrow<ChildInfo>,
+			impl Iterator<Item = (impl AsRef<[u8]>, Option<impl AsRef<[u8]>>)>,
 		)>,
 	) -> (H::Out, Self::Transaction) where H::Out: Ord + Encode {
 		let mut txs: Self::Transaction = Default::default();
@@ -180,8 +181,8 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		// child first
 		for (child_info, child_delta) in child_deltas {
 			let (child_root, empty, child_txs) =
-				self.child_storage_root(&child_info, child_delta);
-			let prefixed_storage_key = child_info.prefixed_storage_key();
+				self.child_storage_root(child_info.borrow(), child_delta);
+			let prefixed_storage_key = child_info.borrow().prefixed_storage_key();
 			txs.consolidate(child_txs);
 			if empty {
 				child_roots.push((prefixed_storage_key.into_inner(), None));
@@ -189,14 +190,9 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 				child_roots.push((prefixed_storage_key.into_inner(), Some(child_root.encode())));
 			}
 		}
-		let (root, parent_txs) = self.storage_root(delta
-			.map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..])))
-			.chain(
-				child_roots
-					.iter()
-					.map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..])))
-			)
-		);
+		let delta = delta.map(|(k, v)| (ChainAdapt::A(k), v.map(|v| ChainAdapt::A(v))));
+		let child_roots = child_roots.into_iter().map(|(k, v)| (ChainAdapt::B(k), v.map(|v| ChainAdapt::B(v))));
+		let (root, parent_txs) = self.storage_root(delta.chain(child_roots));
 		txs.consolidate(parent_txs);
 		(root, txs)
 	}
@@ -297,17 +293,17 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 		(*self).for_child_keys_with_prefix(child_info, prefix, f)
 	}
 
-	fn storage_root<'b>(
+	fn storage_root(
 		&self,
-		delta: impl Iterator<Item=(&'b [u8], Option<&'b [u8]>)>,
+		delta: impl Iterator<Item=(impl AsRef<[u8]>, Option<impl AsRef<[u8]>>)>,
 	) -> (H::Out, Self::Transaction) where H::Out: Ord {
 		(*self).storage_root(delta)
 	}
 
-	fn child_storage_root<'b>(
+	fn child_storage_root(
 		&self,
 		child_info: &ChildInfo,
-		delta: impl Iterator<Item=(&'b [u8], Option<&'b [u8]>)>,
+		delta: impl Iterator<Item=(impl AsRef<[u8]>, Option<impl AsRef<[u8]>>)>,
 	) -> (H::Out, bool, Self::Transaction) where H::Out: Ord {
 		(*self).child_storage_root(child_info, delta)
 	}
@@ -410,11 +406,32 @@ impl<'a, B: Backend<H>, H: Hasher> BackendRuntimeCode<'a, B, H> where H::Out: En
 			.flatten()
 			.ok_or("`:code` hash not found")?
 			.encode();
+			#[cfg(feature = "std")]
 		let heap_pages = self.backend.storage(well_known_keys::HEAP_PAGES)
 			.ok()
 			.flatten()
 			.and_then(|d| Decode::decode(&mut &d[..]).ok());
 
 		Ok(RuntimeCode { code_fetcher: self, hash, heap_pages })
+	}
+}
+
+// Adapter for chain with two different implemnetation of AsRef.
+// Could use dyn type, but this is more straight forward.
+enum ChainAdapt<A, B> {
+	A(A),
+	B(B),
+}
+
+impl<A, B> AsRef<[u8]> for ChainAdapt<A, B>
+	where
+		A: AsRef<[u8]>,
+		B: AsRef<[u8]>,
+{
+	fn as_ref(&self) -> &[u8] {
+		match self {
+			ChainAdapt::A(a) => a.as_ref(),
+			ChainAdapt::B(b) => b.as_ref(),
+		}
 	}
 }

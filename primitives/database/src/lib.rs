@@ -125,3 +125,26 @@ pub fn with_get<R, H: Clone + AsRef<[u8]>>(
 	db.with_get(col, key, &mut adapter);
 	result
 }
+
+/// Full key value state iterator at a given state.
+/// First element is top state iterator, second element
+/// is children states iterator.
+pub type StateIter<'a> = (
+	ChildStateIter<'a>,
+	Box<dyn Iterator<Item = (Vec<u8>, ChildStateIter<'a>)> + 'a>,
+);
+
+/// Full key value state iterator at a given state,
+/// from a given parent state.
+pub type ChildStateIter<'a> = Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + 'a>;
+
+/// Delta key value state iterator at a given state.
+pub type StateIterDelta<'a> = Box<
+	dyn Iterator<Item = (Option<Vec<u8>>, ChildStateIterDelta<'a>)> + 'a,
+>;
+
+/// Delta key value state iterator at a given state,
+/// from a given parent state.
+pub type ChildStateIterDelta<'a> = Box<
+	dyn Iterator<Item = (Vec<u8>, Option<Vec<u8>>)> + 'a,
+>;

@@ -92,13 +92,21 @@ impl<Block: BlockT, Executor, G: GenesisInit> Default
 impl<Block: BlockT, Executor, G: GenesisInit> TestClientBuilder<Block, Executor, Backend<Block>, G> {
 	/// Create new `TestClientBuilder` with default backend.
 	pub fn with_default_backend() -> Self {
-		let backend = Arc::new(Backend::new_test(std::u32::MAX, std::u64::MAX));
+		let backend = Arc::new(Backend::new_test_with_tx_storage(
+			std::u32::MAX,
+			std::u64::MAX,
+			sc_client_db::TransactionStorageMode::BlockBody,
+		));
 		Self::with_backend(backend)
 	}
 
 	/// Create new `TestClientBuilder` with default backend and pruning window size
 	pub fn with_pruning_window(keep_blocks: u32) -> Self {
-		let backend = Arc::new(Backend::new_test(keep_blocks, 0));
+		let backend = Arc::new(Backend::new_test_with_tx_storage(
+			keep_blocks,
+			0,
+			sc_client_db::TransactionStorageMode::BlockBody,
+		));
 		Self::with_backend(backend)
 	}
 }

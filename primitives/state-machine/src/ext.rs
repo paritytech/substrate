@@ -525,7 +525,7 @@ where
 			root.encode()
 		} else {
 			let root = if let Some((changes, info)) = self.overlay.child_changes(storage_key) {
-				let delta = changes.map(|(k, v)| (k.as_ref(), v.value().map(AsRef::as_ref)));
+				let delta = changes.map(|(k, v)| (k, v.value()));
 				Some(self.backend.child_storage_root(info, delta))
 			} else {
 				None

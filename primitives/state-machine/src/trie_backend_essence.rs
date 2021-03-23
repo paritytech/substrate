@@ -214,8 +214,8 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		}
 	}
 
-	/// Execute given closure for all keys starting with prefix.
-	pub fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
+	/// Execute given closure for all key values starting with prefix.
+	pub fn for_child_key_values_with_prefix_owned<F: FnMut(Vec<u8>, Vec<u8>)>(
 		&self,
 		child_info: &ChildInfo,
 		prefix: &[u8],
@@ -230,15 +230,43 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		};
 		let mut root = H::Out::default();
 		root.as_mut().copy_from_slice(&root_vec);
-		self.keys_values_with_prefix_inner(&root, prefix, |k, _v| f(k), Some(child_info))
+		self.keys_values_with_prefix_inner(&root, prefix, |k, v| f(k, v), Some(child_info))
+	}
+
+	/// Execute given closure for all key values starting with prefix.
+	pub fn for_child_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(
+		&self,
+		child_info: &ChildInfo,
+		prefix: &[u8],
+		mut f: F,
+	) {
+		self.for_child_key_values_with_prefix_owned (
+			child_info,
+			prefix,
+			|key, value| f(&key, &value),
+		)
+	}
+
+	/// Execute given closure for all keys starting with prefix.
+	pub fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
+		&self,
+		child_info: &ChildInfo,
+		prefix: &[u8],
+		mut f: F,
+	) {
+		self.for_child_key_values_with_prefix (
+			child_info,
+			prefix,
+			|key, _value| f(key),
+		)
 	}
 
 	/// Execute given closure for all keys starting with prefix.
 	pub fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], mut f: F) {
-		self.keys_values_with_prefix_inner(&self.root, prefix, |k, _v| f(k), None)
+		self.keys_values_with_prefix_inner(&self.root, prefix, |k, _v| f(&k), None)
 	}
 
-	fn keys_values_with_prefix_inner<F: FnMut(&[u8], &[u8])>(
+	fn keys_values_with_prefix_inner<F: FnMut(Vec<u8>, Vec<u8>)>(
 		&self,
 		root: &H::Out,
 		prefix: &[u8],
@@ -253,7 +281,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 
 				debug_assert!(key.starts_with(prefix));
 
-				f(&key, &value);
+				f(key, value);
 			}
 
 			Ok(())
@@ -271,8 +299,13 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 	}
 
 	/// Execute given closure for all key and values starting with prefix.
-	pub fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
+	pub fn for_key_values_with_prefix_owned<F: FnMut(Vec<u8>, Vec<u8>)>(&self, prefix: &[u8], f: F) {
 		self.keys_values_with_prefix_inner(&self.root, prefix, f, None)
+	}
+
+	/// Execute given closure for all key and values starting with prefix.
+	pub fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], mut f: F) {
+		self.for_key_values_with_prefix_owned(prefix, |key, value| f(&key, &value))
 	}
 }
 

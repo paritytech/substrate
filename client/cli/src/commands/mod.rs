@@ -32,6 +32,7 @@ mod insert_key;
 mod inspect_node_key;
 mod inspect_key;
 mod key;
+mod snapshot_cmd;
 pub mod utils;
 
 pub use self::{
@@ -52,4 +53,6 @@ pub use self::{
 	verify::VerifyCmd,
 	revert_cmd::RevertCmd,
 	run_cmd::RunCmd,
+	snapshot_cmd::SnapshotImportCmd,
+	snapshot_cmd::SnapshotExportCmd,
 };

@@ -136,6 +136,71 @@ impl<'a> ExportImportRevertExecutor<'a> {
 		let _ = fs::remove_dir_all(&self.db_path);
 	}
 
+	/// Runs the `snapshot-export` command.
+	fn run_snapshot_export(&mut self) -> u64 {
+		// hardcoded
+		let arguments: Vec<&str> = vec![
+			"snapshot-export",
+			"--dev",
+			"-d",
+			self.base_path.path().to_str().unwrap(),
+			"--pruning=archive",
+			"--log=info",
+			self.exported_blocks_file.to_str().unwrap(),
+		];
+		let output = Command::new(cargo_bin("substrate"))
+			.args(&arguments)
+			.output()
+			.unwrap();
+
+		let metadata = fs::metadata(&self.exported_blocks_file).unwrap();
+		assert!(metadata.len() > 0, "file exported_blocks should not be empty");
+
+		let _ = fs::remove_dir_all(&self.db_path);
+
+		let logged_output = String::from_utf8_lossy(&output.stderr).to_string();
+
+		// Using regex to find out how many block we exported.
+		let re = Regex::new(r"Export using .* to: (?P<exported_block>\d*)").unwrap();
+		let caps = re.captures(&logged_output).unwrap();
+
+		// Last imported is 3 block ahead of last finalized.
+		let last_exported = caps["exported_block"].parse::<u64>().unwrap();
+
+		// Making sure no error were logged.
+		assert!(!contains_error(&logged_output), "expected not to error but error'd!");
+		assert!(output.status.success());
+
+		last_exported
+	}
+
+	/// Runs the `snapshot-import` command.
+	fn run_snapshot_import(&mut self, dir: &TempDir) {
+		// hardcoded
+		let arguments: Vec<&str> = vec![
+			"snapshot-import",
+			"--dev",
+			"-d",
+			dir.path().to_str().unwrap(),
+			//	Not runing archive so state_db need to be initialize
+			"--pruning=256",
+			"--log=info",
+			self.exported_blocks_file.to_str().unwrap(),
+		];
+		let output = Command::new(cargo_bin("substrate"))
+			.args(&arguments)
+			.output()
+			.unwrap();
+
+		let logged_output = String::from_utf8_lossy(&output.stderr).to_string();
+
+		let _ = fs::remove_dir_all(&self.db_path);
+
+		// Making sure no error were logged.
+		assert!(!contains_error(&logged_output), "expected not to error but error'd!");
+		assert!(output.status.success());
+	}
+
 	/// Runs the `import-blocks` command, asserting that an error was found or
 	/// not depending on `expected_to_fail`.
 	fn run_import(&mut self, fmt_opt: FormatOpt, expected_to_fail: bool) {
@@ -185,6 +250,15 @@ impl<'a> ExportImportRevertExecutor<'a> {
 		self.run_import(import_fmt, expected_to_fail);
 		self.run_revert();
 	}
+
+	/// Helper function that runs the snapshot scenario.
+	fn run_snapshot(&mut self) -> (TempDir, u64) {
+		let last_exported = self.run_snapshot_export();
+		let dir = TempDir::new_in(self.base_path.clone()).unwrap();
+		self.run_snapshot_import(&dir);
+		(dir, last_exported)
+	}
+
 }
 
 #[test]
@@ -209,4 +283,43 @@ fn export_import_revert() {
 	executor.run(FormatOpt::Json, FormatOpt::Json, false);
 	// JSON and binary should fail.
 	executor.run(FormatOpt::Json, FormatOpt::Binary, true);
+}
+
+#[test]
+fn export_import_snapshot() {
+	let base_path = tempdir().expect("could not create a temp dir");
+	let exported_blocks_file = base_path.path().join("exported_snapshot");
+	let db_path = base_path.path().join("db");
+
+	common::run_dev_node_for_a_while(base_path.path());
+
+	let mut executor = ExportImportRevertExecutor::new(
+		&base_path,
+		&exported_blocks_file,
+		&db_path,
+	);
+
+	// Binary and binary should work.
+	let (import_dir, last_exported) = executor.run_snapshot();
+
+	common::run_dev_node_for_a_while_with_args(import_dir.path(), vec![
+		"--pruning=256",
+		"--unsafe-pruning",
+	]);
+
+	// getting last block from inspect command,
+	// getting it from regexp on out would be better.
+	let mut i = last_exported + 1;
+	while Command::new(cargo_bin("substrate"))
+		.args(&["inspect", "--dev", "--pruning=256", "--unsafe-pruning", "-d"])
+		.arg(import_dir.path())
+		.args(&["block", format!("{}", i).as_str()])
+		.status()
+		.unwrap()
+		.success() {
+			i += 1;
+	}
+
+	// should have more than a block in in the run for a while delay.
+	assert!(i > last_exported + 1);
 }

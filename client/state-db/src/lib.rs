@@ -522,6 +522,15 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf> StateDb<BlockHash
 	pub fn memory_info(&self) -> StateDbMemoryInfo {
 		self.db.read().memory_info()
 	}
+
+	/// On imported snapshot set it as last canonical.
+	pub fn last_canonical_base(
+		&self,
+		hash: &BlockHash,
+		number: u64,
+	) {
+		self.db.write().non_canonical.imported_last_canonical(hash, number)
+	}
 }
 
 #[cfg(test)]

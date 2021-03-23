@@ -81,4 +81,10 @@ pub enum Subcommand {
 
 	/// Revert the chain to a previous state.
 	Revert(sc_cli::RevertCmd),
+
+	/// Experimental: import a snapshot.
+	SnapshotImport(sc_cli::SnapshotImportCmd),
+
+	/// Experimental: export a snapshot.
+	SnapshotExport(sc_cli::SnapshotExportCmd),
 }

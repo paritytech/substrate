@@ -21,7 +21,7 @@ use crate::{warn, debug};
 use hash_db::Hasher;
 use sp_trie::{Trie, delta_trie_root, empty_child_trie_root, child_delta_trie_root};
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
-use sp_core::storage::{ChildInfo, ChildType};
+use sp_core::storage::{ChildInfo, ChildType, PrefixedStorageKey, well_known_keys};
 use codec::{Codec, Decode};
 use crate::{
 	StorageKey, StorageValue, Backend,
@@ -168,9 +168,9 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		collect_all().map_err(|e| debug!(target: "trie", "Error extracting trie keys: {}", e)).unwrap_or_default()
 	}
 
-	fn storage_root<'a>(
+	fn storage_root(
 		&self,
-		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+		delta: impl Iterator<Item=(impl AsRef<[u8]>, Option<impl AsRef<[u8]>>)>,
 	) -> (H::Out, Self::Transaction) where H::Out: Ord {
 		let mut write_overlay = S::Overlay::default();
 		let mut root = *self.essence.root();
@@ -190,10 +190,10 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		(root, write_overlay)
 	}
 
-	fn child_storage_root<'a>(
+	fn child_storage_root(
 		&self,
 		child_info: &ChildInfo,
-		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+		delta: impl Iterator<Item=(impl AsRef<[u8]>, Option<impl AsRef<[u8]>>)>,
 	) -> (H::Out, bool, Self::Transaction) where H::Out: Ord {
 		let default_root = match child_info.child_type() {
 			ChildType::ParentKeyId => empty_child_trie_root::<Layout<H>>()
@@ -247,6 +247,44 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 	}
 }
 
+impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where
+	H::Out: Ord + Codec,
+{
+	/// Visit the full state.
+	pub fn for_key_values<F: FnMut(Option<&ChildInfo>, Vec<u8>, Vec<u8>)>(
+		&self,
+		mut f: F,
+	) -> Result<(), crate::DefaultError> {
+		let essence = &self.essence;
+
+		essence.for_key_values_with_prefix_owned(&[], |key, value| f(None, key, value));
+
+		// using next api to avoid lock when accessing storage
+		// (RwLock on double read from same thread).
+		let mut previous = PrefixedStorageKey::new(Vec::new());
+		while let Some(key) = essence.next_storage_key(&previous)? {
+			if key.starts_with(well_known_keys::CHILD_STORAGE_KEY_PREFIX) {
+				previous = PrefixedStorageKey::new(key);
+				match ChildType::from_prefixed_key(&previous) {
+					Some((ChildType::ParentKeyId, storage_key)) => {
+						let child_info = ChildInfo::new_default(storage_key);
+						essence.for_child_key_values_with_prefix_owned(
+							&child_info,
+							&[],
+							|key, value| f(Some(&child_info), key, value),
+						);
+					},
+					_ => return Err(crate::default_error("Invalid child trie type in state")),
+				}
+			} else {
+				break;
+			}
+		}
+
+		Ok(())
+	}
+}
+
 #[cfg(test)]
 pub mod tests {
 	use std::{collections::HashSet, iter};
@@ -255,6 +293,7 @@ pub mod tests {
 	use sp_trie::{TrieMut, PrefixedMemoryDB, trie_types::TrieDBMut, KeySpacedDBMut};
 	use sp_runtime::traits::BlakeTwo256;
 	use super::*;
+	use crate::tests::empty_storage_iter;
 
 	const CHILD_KEY_1: &[u8] = b"sub1";
 
@@ -325,12 +364,12 @@ pub mod tests {
 
 	#[test]
 	fn storage_root_is_non_default() {
-		assert!(test_trie().storage_root(iter::empty()).0 != H256::repeat_byte(0));
+		assert!(test_trie().storage_root(empty_storage_iter()).0 != H256::repeat_byte(0));
 	}
 
 	#[test]
 	fn storage_root_transaction_is_empty() {
-		assert!(test_trie().storage_root(iter::empty()).1.drain().is_empty());
+		assert!(test_trie().storage_root(empty_storage_iter()).1.drain().is_empty());
 	}
 
 	#[test]
@@ -339,7 +378,7 @@ pub mod tests {
 			iter::once((&b"new-key"[..], Some(&b"new-value"[..]))),
 		);
 		assert!(!tx.drain().is_empty());
-		assert!(new_root != test_trie().storage_root(iter::empty()).0);
+		assert!(new_root != test_trie().storage_root(empty_storage_iter()).0);
 	}
 
 	#[test]

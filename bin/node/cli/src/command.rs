@@ -149,6 +149,22 @@ pub fn run() -> Result<()> {
 				Ok((cmd.run(client, backend), task_manager))
 			})
 		},
+		Some(Subcommand::SnapshotImport(cmd)) => {
+			let runner = cli.create_runner(cmd)?;
+			runner.async_run(|config| {
+				let PartialComponents { backend, task_manager, ..}
+					= new_partial(&config)?;
+				Ok((cmd.run(backend, config.database), task_manager))
+			})
+		},
+		Some(Subcommand::SnapshotExport(cmd)) => {
+			let runner = cli.create_runner(cmd)?;
+			runner.async_run(|config| {
+				let PartialComponents { backend, task_manager, ..}
+					= new_partial(&config)?;
+				Ok((cmd.run(backend, config.database), task_manager))
+			})
+		},
 		#[cfg(feature = "try-runtime")]
 		Some(Subcommand::TryRuntime(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
@@ -163,6 +179,6 @@ pub fn run() -> Result<()> {
 
 				Ok((cmd.run::<Block, Executor>(config), task_manager))
 			})
-		}
+		},
 	}
 }

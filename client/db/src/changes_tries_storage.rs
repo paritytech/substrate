@@ -19,7 +19,7 @@
 //! DB-backed changes tries storage.
 
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
+use std::sync::{Arc, atomic::{AtomicU32, Ordering}};
 use hash_db::Prefix;
 use codec::{Decode, Encode};
 use parking_lot::RwLock;
@@ -87,7 +87,8 @@ pub struct DbChangesTrieStorage<Block: BlockT> {
 	header_column: u32,
 	meta: Arc<RwLock<Meta<NumberFor<Block>, Block::Hash>>>,
 	tries_meta: RwLock<ChangesTriesMeta<Block>>,
-	min_blocks_to_keep: Option<u32>,
+	// Note that inner mutability is only use for test here.
+	min_blocks_to_keep: Option<AtomicU32>,
 	/// The cache stores all ever existing changes tries configurations.
 	cache: DbCacheSync<Block>,
 	/// Build cache is a map of block => set of storage keys changed at this block.
@@ -137,7 +138,7 @@ impl<Block: BlockT> DbChangesTrieStorage<Block> {
 			key_lookup_column,
 			header_column,
 			meta,
-			min_blocks_to_keep,
+			min_blocks_to_keep: min_blocks_to_keep.map(|number| AtomicU32::new(number)),
 			cache: DbCacheSync(RwLock::new(DbCache::new(
 				db.clone(),
 				header_metadata_cache,
@@ -206,6 +207,16 @@ impl<Block: BlockT> DbChangesTrieStorage<Block> {
 				)?
 				.into_ops(),
 		}).with_new_config(Some(new_configuration)))
+	}
+
+	/// Force last finalize to a certain header without further checks.
+	/// This allows importing from a trusted source without checking
+	/// history.
+	pub fn force_last_finalize(
+		&self,
+		parent_block: &ComplexBlockId<Block>,
+	) {
+		self.cache.0.write().force_last_finalize(parent_block);
 	}
 
 	/// Called when block is finalized.
@@ -293,8 +304,8 @@ impl<Block: BlockT> DbChangesTrieStorage<Block> {
 		cache_tx: Option<&DbChangesTrieStorageTransaction<Block>>,
 	) -> ClientResult<()> {
 		// never prune on archive nodes
-		let min_blocks_to_keep = match self.min_blocks_to_keep {
-			Some(min_blocks_to_keep) => min_blocks_to_keep,
+		let min_blocks_to_keep = match self.min_blocks_to_keep.as_ref() {
+			Some(min_blocks_to_keep) => min_blocks_to_keep.load(Ordering::Relaxed),
 			None => return Ok(()),
 		};
 
@@ -675,8 +686,9 @@ mod tests {
 
 	#[test]
 	fn changes_tries_are_pruned_on_finalization() {
-		let mut backend = Backend::<Block>::new_test(1000, 100);
-		backend.changes_tries_storage.min_blocks_to_keep = Some(8);
+		let backend = Backend::<Block>::new_test(1000, 100);
+		backend.changes_tries_storage.min_blocks_to_keep.as_ref()
+			.map(|min| min.store(8, Ordering::Relaxed));
 
 		let parent_hash = |number| {
 			if number == 0 {
@@ -886,8 +898,9 @@ mod tests {
 
 	#[test]
 	fn test_finalize_several_configuration_change_blocks_in_single_operation() {
-		let mut backend = Backend::<Block>::new_test(10, 10);
-		backend.changes_tries_storage.min_blocks_to_keep = Some(8);
+		let backend = Backend::<Block>::new_test(10, 10);
+		backend.changes_tries_storage.min_blocks_to_keep.as_ref()
+			.map(|min| min.store(8, Ordering::Relaxed));
 
 		let configs = (0..=7).map(|i| Some(ChangesTrieConfiguration::new(2, i))).collect::<Vec<_>>();
 

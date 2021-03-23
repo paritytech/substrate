@@ -133,10 +133,10 @@ impl<B: BlockT> BenchmarkingState<B> {
 		state.reopen()?;
 		let child_delta = genesis.children_default.iter().map(|(_storage_key, child_content)| (
 			&child_content.child_info,
-			child_content.data.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
+			child_content.data.iter().map(|(k, v)| (k, Some(v))),
 		));
 		let (root, transaction): (B::Hash, _) = state.state.borrow_mut().as_mut().unwrap().full_storage_root(
-			genesis.top.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
+			genesis.top.iter().map(|(k, v)| (k, Some(v))),
 			child_delta,
 		);
 		state.genesis = transaction.clone().drain();
@@ -155,9 +155,12 @@ impl<B: BlockT> BenchmarkingState<B> {
 		self.db.set(Some(db.clone()));
 		let storage_db = Arc::new(StorageDb::<B> { db, _block: Default::default() });
 		*self.state.borrow_mut() = Some(State::new(
-			DbState::<B>::new(storage_db, self.root.get()),
+			DbState::<B>::new(
+				storage_db,
+				self.root.get(),
+			),
 			self.shared_cache.clone(),
-			None
+			None,
 		));
 		Ok(())
 	}
@@ -370,18 +373,17 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 			state.for_child_keys_with_prefix(child_info, prefix, f)
 		}
 	}
-
-	fn storage_root<'a>(
+	fn storage_root(
 		&self,
-		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+		delta: impl Iterator<Item=(impl AsRef<[u8]>, Option<impl AsRef<[u8]>>)>,
 	) -> (B::Hash, Self::Transaction) where B::Hash: Ord {
 		self.state.borrow().as_ref().map_or(Default::default(), |s| s.storage_root(delta))
 	}
 
-	fn child_storage_root<'a>(
+	fn child_storage_root(
 		&self,
 		child_info: &ChildInfo,
-		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+		delta: impl Iterator<Item=(impl AsRef<[u8]>, Option<impl AsRef<[u8]>>)>,
 	) -> (B::Hash, bool, Self::Transaction) where B::Hash: Ord {
 		self.state.borrow().as_ref().map_or(Default::default(), |s| s.child_storage_root(child_info, delta))
 	}

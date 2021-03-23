@@ -99,7 +99,8 @@ use sp_consensus::{
 use sp_consensus_babe::inherents::BabeInherentData;
 use sp_timestamp::TimestampInherentData;
 use sc_client_api::{
-	backend::AuxStore, BlockchainEvents, ProvideUncles,
+	backend::AuxStore, BlockchainEvents, ProvideUncles, SnapshotSyncComponent,
+	SnapshotConfig, SnapshotSyncCommon,
 };
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use futures::channel::mpsc::{channel, Sender, Receiver};
@@ -121,7 +122,7 @@ use sp_blockchain::{
 	HeaderBackend, ProvideCache, HeaderMetadata
 };
 use schnorrkel::SignatureError;
-use codec::{Encode, Decode};
+use codec::{Encode, Decode, IoReader};
 use sp_api::ApiExt;
 use sp_consensus_slots::Slot;
 
@@ -1685,3 +1686,104 @@ pub mod test_helpers {
 		).map(|(digest, _)| digest)
 	}
 }
+
+struct SyncBackend<Block: BlockT, Aux>(SharedEpochChanges<Block, Epoch>, Aux);
+
+/// Strategy for snapshot syncing babe.
+pub fn sync_backend<Block: BlockT, Aux: AuxStore + Send + Sync + 'static>(
+	epoch_changes: SharedEpochChanges<Block, Epoch>,
+	aux: Aux,
+) -> Box<dyn SnapshotSyncComponent<Block>> {
+	Box::new(SyncBackend(epoch_changes, aux))
+}
+
+impl<Block, Aux> SnapshotSyncComponent<Block> for SyncBackend<Block, Aux>
+	where
+		Block: BlockT,
+		Aux: AuxStore + Send + Sync + 'static,
+{
+	fn export_sync_meta(
+		&self,
+		mut out: &mut dyn std::io::Write,
+		range: &SnapshotConfig<Block>,
+	) -> sp_blockchain::Result<SnapshotSyncCommon<Block>> {
+		let to = range.to.clone();
+		let to_hash = range.to_hash.clone();
+		// version
+		out.write(&[0u8]).map_err(|e|
+			sp_blockchain::Error::Backend(format!("Snapshot export errror: {:?}", e)),
+		)?;
+
+		let mut epoch = self.0.lock().clone();
+		epoch.prune_unfinalized(to);
+
+		let weight: sp_consensus_babe::BabeBlockWeight = crate::aux_schema::load_block_weight(&self.1, to_hash)?
+			.ok_or_else(|| sp_blockchain::Error::Backend(format!("No babe weight at: {:?}", to_hash)))?;
+
+		epoch.encode_to(&mut out);
+		weight.encode_to(&mut out);
+		to_hash.encode_to(&mut out);
+
+		use sp_runtime::traits::Saturating;
+		let from = range.from.saturating_sub(HEADER_RANGE.into());
+		Ok(SnapshotSyncCommon {
+			additional_headers: vec![(from, range.to)],
+		})
+	}
+
+	fn import_sync_meta(
+		&self,
+		encoded: &mut dyn std::io::Read,
+		range: &SnapshotConfig<Block>,
+	) -> sp_blockchain::Result<SnapshotSyncCommon<Block>> {
+		let mut buf = [0];
+		// version
+		encoded.read_exact(&mut buf[..1]).map_err(|e|
+			sp_blockchain::Error::Backend(format!("Snapshot import error: {:?}", e)),
+		)?;
+		match buf[0] {
+			b if b == 0 => (),
+			_ => return Err(sp_blockchain::Error::Backend("Invalid snapshot version.".into())),
+		}
+		let mut reader = IoReader(encoded);
+		*self.0.lock() = Decode::decode(&mut reader).map_err(|e|
+			sp_blockchain::Error::Backend(format!("Snapshot import error: {:?}", e)),
+		)?;
+
+		// persist set (maybe also need weight here).
+		crate::aux_schema::write_epoch_changes::<Block, _, _>(
+			&*self.0.lock(),
+			|values| (
+				self.1.insert_aux(values, &[]).unwrap()
+			)
+		);
+		let total_weight: sp_consensus_babe::BabeBlockWeight = Decode::decode(&mut reader).map_err(|e|
+			sp_blockchain::Error::Backend(format!("Snapshot import error: {:?}", e)),
+		)?;
+		let last_hash: Block::Hash = Decode::decode(&mut reader).map_err(|e|
+			sp_blockchain::Error::Backend(format!("Snapshot import error: {:?}", e)),
+		)?;
+		crate::aux_schema::write_block_weight::<Block::Hash, _, _>(
+			last_hash,
+			total_weight,
+			|values| {
+				let values: Vec<(&[u8], &[u8])> = values.iter()
+					.map(|(k, v)| (k.as_slice(), *v)).collect();
+				self.1.insert_aux(values.as_slice(), &[]).unwrap()
+			},
+		);
+
+		use sp_runtime::traits::Saturating;
+		let from = range.from.saturating_sub(HEADER_RANGE.into());
+		Ok(SnapshotSyncCommon {
+			additional_headers: vec![(from, range.to)],
+		})
+	}
+}
+
+// This is an indicative range, it can probably be lowered by a large factor.
+// It is related to `ForkTree` algorithms and pruning and finalisation chain asumption.
+// Changes would require analysing those and maybe doing some change (existing code generally
+// assume all headers exists).
+// But at this point it is not a very big overhead.
+const HEADER_RANGE: u32 = 10_000;

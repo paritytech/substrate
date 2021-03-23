@@ -29,6 +29,7 @@ pub mod light;
 pub mod leaves;
 pub mod notifications;
 pub mod proof_provider;
+pub mod export_import;
 
 pub use sp_blockchain as blockchain;
 pub use backend::*;
@@ -38,8 +39,10 @@ pub use client::*;
 pub use light::*;
 pub use notifications::*;
 pub use proof_provider::*;
+pub use export_import::*;
 
 pub use sp_state_machine::{StorageProof, ExecutionStrategy};
+pub use sp_database::error::DatabaseError;
 
 /// Usage Information Provider interface
 ///

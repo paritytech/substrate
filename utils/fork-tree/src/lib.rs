@@ -166,6 +166,22 @@ impl<H, N, V> ForkTree<H, N, V> where
 
 		Ok(RemovedIterator { stack: removed })
 	}
+
+	/// Remove all blocks past a given block height.
+	pub fn prune_after(&mut self, number: &N) -> impl Iterator<Item=(H, N, V)> {
+		let mut removed = Vec::new();
+		let mut to_rem = Vec::new();
+		for (ix, root) in self.roots.iter_mut().enumerate() {
+			if root.prune_after(number, &mut removed) {
+				to_rem.push(ix);
+			}
+		}
+		for ix in to_rem.into_iter().rev() {
+			let node = self.roots.remove(ix);
+			removed.push((node.hash, node.number, node.data));
+		}
+		removed.into_iter()
+	}
 }
 
 impl<H, N, V> ForkTree<H, N, V> where
@@ -869,6 +885,24 @@ mod node_implementation {
 					}
 					Ok(FindOutcome::Found(cur))
 				},
+			}
+		}
+
+		pub(crate) fn prune_after(&mut self, number: &N, acc: &mut Vec<(H, N, V)>) -> bool {
+			let mut to_rem = Vec::new();
+			for (ix, node) in self.children.iter_mut().enumerate() {
+				if node.prune_after(number, acc) {
+					to_rem.push(ix);
+				}
+			}
+			for ix in to_rem.into_iter().rev() {
+				let node = self.children.remove(ix);
+				acc.push((node.hash, node.number, node.data));
+			}
+			if &self.number > number {
+				return true;
+			} else {
+				return false;
 			}
 		}
 	}

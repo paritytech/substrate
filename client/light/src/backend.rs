@@ -38,7 +38,7 @@ use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use sc_client_api::{
 	backend::{
 		AuxStore, Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState,
-		PrunableStateChangesTrieStorage,
+		PrunableStateChangesTrieStorage, SnapshotSyncComponent, SnapshotSync,
 	},
 	blockchain::{
 		HeaderBackend as BlockchainHeaderBackend, well_known_cache_keys,
@@ -249,6 +249,14 @@ impl<S, Block> ClientBackend<Block> for Backend<S, HashFor<Block>>
 	fn get_import_lock(&self) -> &RwLock<()> {
 		&self.import_lock
 	}
+
+	fn snapshot_sync(&self) -> Box<dyn SnapshotSync<Block>> {
+		// specific rpc for light.
+		Box::new(())
+	}
+
+	fn register_sync(&self, _sync: Box<dyn SnapshotSyncComponent<Block>>) {
+	}
 }
 
 impl<S, Block> RemoteBackend<Block> for Backend<S, HashFor<Block>>
@@ -314,6 +322,13 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 		Ok(())
 	}
 
+	fn inject_finalized_state(
+		&mut self,
+		_data: sc_client_api::backend::StateIter,
+	) -> sp_blockchain::Result<Block::Hash> {
+		unimplemented!("Already existing ways to sync light db")
+	}
+
 	fn reset_storage(&mut self, input: Storage) -> ClientResult<Block::Hash> {
 		check_genesis_storage(&input)?;
 
@@ -328,10 +343,11 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 		let mut storage: HashMap<Option<ChildInfo>, _> = HashMap::new();
 		storage.insert(None, input.top);
 
+		let empty: fn () -> std::iter::Empty<(Vec<u8>, Option<Vec<u8>>)> = Default::default;
 		// create a list of children keys to re-compute roots for
 		let child_delta = input.children_default
 			.iter()
-			.map(|(_storage_key, storage_child)| (&storage_child.child_info, std::iter::empty()));
+			.map(|(_storage_key, storage_child)| (&storage_child.child_info, empty()));
 
 		// make sure to persist the child storage
 		for (_child_key, storage_child) in input.children_default.clone() {
@@ -339,7 +355,7 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 		}
 
 		let storage_update = InMemoryBackend::from(storage);
-		let (storage_root, _) = storage_update.full_storage_root(std::iter::empty(), child_delta);
+		let (storage_root, _) = storage_update.full_storage_root(empty(), child_delta);
 		self.storage_update = Some(storage_update);
 
 		Ok(storage_root)
@@ -479,9 +495,9 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		}
 	}
 
-	fn storage_root<'a>(
+	fn storage_root(
 		&self,
-		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+		delta: impl Iterator<Item=(impl AsRef<[u8]>, Option<impl AsRef<[u8]>>)>,
 	) -> (H::Out, Self::Transaction) where H::Out: Ord {
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) =>
@@ -490,10 +506,10 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		}
 	}
 
-	fn child_storage_root<'a>(
+	fn child_storage_root(
 		&self,
 		child_info: &ChildInfo,
-		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+		delta: impl Iterator<Item=(impl AsRef<[u8]>, Option<impl AsRef<[u8]>>)>,
 	) -> (H::Out, bool, Self::Transaction) where H::Out: Ord {
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) => {

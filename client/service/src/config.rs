@@ -20,7 +20,7 @@
 
 pub use sc_client_db::{
 	Database, PruningMode, DatabaseSettingsSrc as DatabaseConfig,
-	KeepBlocks, TransactionStorageMode
+	KeepBlocks, TransactionStorageMode,
 };
 pub use sc_network::Multiaddr;
 pub use sc_network::config::{ExtTransport, MultiaddrWithPeerId, NetworkConfiguration, Role, NodeKeyConfig};

@@ -1986,29 +1986,6 @@ impl<B, E, Block, RA> backend::AuxStore for Client<B, E, Block, RA>
 	}
 }
 
-impl<B, E, Block, RA> backend::AuxStore for &Client<B, E, Block, RA>
-	where
-		B: backend::Backend<Block>,
-		E: CallExecutor<Block>,
-		Block: BlockT,
-		Client<B, E, Block, RA>: ProvideRuntimeApi<Block>,
-		<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api: CoreApi<Block>,
-{
-	fn insert_aux<
-		'a,
-		'b: 'a,
-		'c: 'a,
-		I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
-		D: IntoIterator<Item=&'a &'b [u8]>,
-	>(&self, insert: I, delete: D) -> sp_blockchain::Result<()> {
-		(**self).insert_aux(insert, delete)
-	}
-
-	fn get_aux(&self, key: &[u8]) -> sp_blockchain::Result<Option<Vec<u8>>> {
-		(**self).get_aux(key)
-	}
-}
-
 impl<BE, E, B, RA> sp_consensus::block_validation::Chain<B> for Client<BE, E, B, RA>
 	where
 		BE: backend::Backend<B>,

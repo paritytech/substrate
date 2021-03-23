@@ -179,21 +179,21 @@ pub fn delta_trie_root<L: TrieConfiguration, I, A, B, DB, V>(
 	delta: I
 ) -> Result<TrieHash<L>, Box<TrieError<L>>> where
 	I: IntoIterator<Item = (A, B)>,
-	A: Borrow<[u8]>,
+	A: AsRef<[u8]>,
 	B: Borrow<Option<V>>,
-	V: Borrow<[u8]>,
+	V: AsRef<[u8]>,
 	DB: hash_db::HashDB<L::Hash, trie_db::DBValue>,
 {
 	{
 		let mut trie = TrieDBMut::<L>::from_existing(db, &mut root)?;
 
 		let mut delta = delta.into_iter().collect::<Vec<_>>();
-		delta.sort_by(|l, r| l.0.borrow().cmp(r.0.borrow()));
+		delta.sort_by(|l, r| l.0.as_ref().cmp(r.0.as_ref()));
 
 		for (key, change) in delta {
 			match change.borrow() {
-				Some(val) => trie.insert(key.borrow(), val.borrow())?,
-				None => trie.remove(key.borrow())?,
+				Some(val) => trie.insert(key.as_ref(), val.as_ref())?,
+				None => trie.remove(key.as_ref())?,
 			};
 		}
 	}
@@ -242,7 +242,7 @@ pub fn child_trie_root<L: TrieConfiguration, I, A, B>(
 	where
 		I: IntoIterator<Item = (A, B)>,
 		A: AsRef<[u8]> + Ord,
-		B: AsRef<[u8]>,
+		B: AsRef<[u8]> + Clone,
 {
 	L::trie_root(input)
 }
@@ -257,9 +257,9 @@ pub fn child_delta_trie_root<L: TrieConfiguration, I, A, B, DB, RD, V>(
 ) -> Result<<L::Hash as Hasher>::Out, Box<TrieError<L>>>
 	where
 		I: IntoIterator<Item = (A, B)>,
-		A: Borrow<[u8]>,
+		A: AsRef<[u8]>,
 		B: Borrow<Option<V>>,
-		V: Borrow<[u8]>,
+		V: AsRef<[u8]>,
 		RD: AsRef<[u8]>,
 		DB: hash_db::HashDB<L::Hash, trie_db::DBValue>
 {

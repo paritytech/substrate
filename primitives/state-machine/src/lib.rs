@@ -21,7 +21,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub mod backend;
-#[cfg(feature = "std")]
 mod in_memory_backend;
 #[cfg(feature = "std")]
 mod changes_trie;
@@ -115,6 +114,17 @@ impl sp_std::fmt::Display for DefaultError {
 	}
 }
 
+#[cfg(not(feature = "std"))]
+fn default_error(err: &str) -> DefaultError {
+	DefaultError
+}
+
+#[cfg(feature = "std")]
+fn default_error(err: &str) -> DefaultError {
+	err.to_string()
+}
+
+pub use crate::in_memory_backend::{new_in_mem, prefixed_new_in_mem};
 pub use crate::overlayed_changes::{
 	OverlayedChanges, StorageKey, StorageValue,
 	StorageCollection, ChildStorageCollection,
@@ -164,7 +174,6 @@ mod std_reexport {
 		create_proof_check_backend, ProofRecorder, ProvingBackend, ProvingBackendRecorder,
 	};
 	pub use crate::error::{Error, ExecutionError};
-	pub use crate::in_memory_backend::new_in_mem;
 }
 
 #[cfg(feature = "std")]
@@ -859,6 +868,43 @@ mod execution {
 	}
 }
 
+/// Simple key value backend support.
+pub mod kv_backend {
+	use sp_core::storage::ChildInfo;
+	use sp_std::vec::Vec;
+
+	/// KVBackend trait.
+	/// Will be use when we do not need to use an actual trie structure
+	/// (content must be trusted).
+	pub trait KVBackend: Send + Sync {
+		/// When true we check use this backend value instead of the trie
+		/// values.
+		fn use_as_primary(&self) -> bool {
+			false
+		}
+
+		/// When true we check that the value from this backend
+		/// is the same as the value from the trie backend.
+		fn assert_value(&self) -> bool {
+			false
+		}
+
+		/// Access to this backend value for a given key.
+		fn storage(
+			&self,
+			child: Option<&ChildInfo>,
+			key: &[u8],
+		) -> Result<Option<Vec<u8>>, crate::DefaultError>;
+
+		/// Access next storage element.
+		fn next_storage(
+			&self,
+			child: Option<&ChildInfo>,
+			key: &[u8],
+		) -> Result<Option<(Vec<u8>, Vec<u8>)>, crate::DefaultError>;
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use std::collections::BTreeMap;
@@ -878,6 +924,9 @@ mod tests {
 	};
 	use crate::execution::CallResult;
 
+	pub(crate) fn empty_storage_iter() -> std::iter::Empty<(Vec<u8>, Option<Vec<u8>>)> {
+		std::iter::empty()
+	}
 
 	#[derive(Clone)]
 	struct DummyCodeExecutor {
@@ -1058,7 +1107,7 @@ mod tests {
 
 		// fetch execution proof from 'remote' full node
 		let remote_backend = trie_backend::tests::test_trie();
-		let remote_root = remote_backend.storage_root(std::iter::empty()).0;
+		let remote_root = remote_backend.storage_root(empty_storage_iter()).0;
 		let (remote_result, remote_proof) = prove_execution::<_, _, u64, _, _>(
 			remote_backend,
 			&mut Default::default(),
@@ -1410,7 +1459,7 @@ mod tests {
 		let child_info = &child_info;
 		// fetch read proof from 'remote' full node
 		let remote_backend = trie_backend::tests::test_trie();
-		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
+		let remote_root = remote_backend.storage_root(empty_storage_iter()).0;
 		let remote_proof = prove_read(remote_backend, &[b"value2"]).unwrap();
  		// check proof locally
 		let local_result1 = read_proof_check::<BlakeTwo256, _>(
@@ -1431,7 +1480,7 @@ mod tests {
 		assert_eq!(local_result2, false);
 		// on child trie
 		let remote_backend = trie_backend::tests::test_trie();
-		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
+		let remote_root = remote_backend.storage_root(empty_storage_iter()).0;
 		let remote_proof = prove_child_read(
 			remote_backend,
 			child_info,

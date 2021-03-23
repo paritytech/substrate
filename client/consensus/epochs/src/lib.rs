@@ -423,6 +423,21 @@ impl<Hash, Number, E: Epoch> EpochChanges<Hash, Number, E> where
 		Ok(())
 	}
 
+	/// Prune out unfinalized epochs, except for the one containing the last
+	/// finalized block.
+	pub fn prune_unfinalized(
+		&mut self,
+		number: Number,
+	) {
+		let removed = self.inner.prune_after(
+			&number,
+		);
+
+		for (hash, number, _) in removed {
+			self.epochs.remove(&(hash, number));
+		}
+	}
+
 	/// Get a reference to an epoch with given identifier.
 	pub fn epoch(&self, id: &EpochIdentifier<Hash, Number>) -> Option<&E> {
 		self.epochs.get(&(id.hash, id.number))

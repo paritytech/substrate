@@ -48,12 +48,22 @@ pub fn wait_for(child: &mut Child, secs: usize) -> Option<ExitStatus> {
 
 /// Run the node for a while (30 seconds)
 pub fn run_dev_node_for_a_while(base_path: &Path) {
+	run_dev_node_for_a_while_with_args(base_path, std::iter::empty::<&std::ffi::OsStr>())
+}
+
+/// Run the node for a while (30 seconds), with args.
+pub fn run_dev_node_for_a_while_with_args<I, S>(base_path: &Path, args: I)
+	where
+    I: IntoIterator<Item = S>,
+    S: AsRef<std::ffi::OsStr>,
+{
 	let mut cmd = Command::new(cargo_bin("substrate"));
 
 	let mut cmd = cmd
 		.args(&["--dev"])
 		.arg("-d")
 		.arg(base_path)
+		.args(args)
 		.spawn()
 		.unwrap();
 

@@ -580,6 +580,13 @@ impl<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> ListCache<Block, T, S> 
 
 		Ok(None)
 	}
+
+	pub(crate) fn force_last_finalize(
+		&mut self,
+		parent_block: &ComplexBlockId<Block>,
+	) {
+		self.best_finalized_block = parent_block.clone();
+	}
 }
 
 impl<Block: BlockT, T: CacheItemT> Fork<Block, T> {

@@ -87,6 +87,8 @@ pub fn new_partial(
 
 	let select_chain = sc_consensus::LongestChain::new(backend.clone());
 
+	use sc_client_api::Backend;
+
 	let transaction_pool = sc_transaction_pool::BasicPool::new_full(
 		config.transaction_pool.clone(),
 		config.role.is_authority().into(),
@@ -101,6 +103,7 @@ pub fn new_partial(
 		select_chain.clone(),
 		telemetry.as_ref().map(|x| x.handle()),
 	)?;
+	backend.register_sync(grandpa::sync_backend(grandpa_link.shared_authority_set().clone(), client.clone()));
 	let justification_import = grandpa_block_import.clone();
 
 	let (block_import, babe_link) = sc_consensus_babe::block_import(
@@ -141,6 +144,7 @@ pub fn new_partial(
 
 		let babe_config = babe_link.config().clone();
 		let shared_epoch_changes = babe_link.epoch_changes().clone();
+		backend.register_sync(sc_consensus_babe::sync_backend(shared_epoch_changes.clone(), client.clone()));
 
 		let client = client.clone();
 		let pool = transaction_pool.clone();

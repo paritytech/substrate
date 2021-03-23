@@ -222,6 +222,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 					front_block_number,
 					front_block_number + self.levels.len() as u64,
 				);
+
 				return Err(Error::InvalidBlockNumber);
 			}
 			// check for valid parent if inserting on second level or higher
@@ -505,6 +506,17 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 				};
 			}
 		}
+	}
+
+	/// On imported snapshot set it as last canonical.
+	pub fn imported_last_canonical(
+		&mut self,
+		hash: &BlockHash,
+		number: u64,
+	) {
+		let last_canonicalized = (hash.clone(), number);
+		let encoded = last_canonicalized.encode();
+		self.last_canonicalized = Some(last_canonicalized);
 	}
 }
 

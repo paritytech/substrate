@@ -62,11 +62,11 @@ use futures::{
 };
 use log::{debug, error, info};
 use sc_client_api::{
-	backend::{AuxStore, Backend},
-	LockImportRun, BlockchainEvents, CallExecutor,
+	backend::{AuxStore, Backend, SnapshotSyncComponent, SnapshotSyncCommon},
+	LockImportRun, BlockchainEvents, CallExecutor, SnapshotConfig,
 	ExecutionStrategy, Finalizer, TransactionFor, ExecutorProvider,
 };
-use parity_scale_codec::{Decode, Encode};
+use parity_scale_codec::{Decode, Encode, IoReader};
 use prometheus_endpoint::{PrometheusError, Registry};
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::{HeaderBackend, Error as ClientError, HeaderMetadata};
@@ -1143,3 +1143,81 @@ fn local_authority_id(
 		None => None,
 	}
 }
+
+struct SyncBackend<Block: BlockT, Aux>(SharedAuthoritySet<Block::Hash, NumberFor<Block>>, Aux);
+
+/// Strategy for snapshot syncing babe.
+pub fn sync_backend<Block: BlockT, Aux: AuxStore + Send + Sync + 'static>(
+	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
+	aux: Aux,
+) -> Box<dyn SnapshotSyncComponent<Block>> {
+	Box::new(SyncBackend(authority_set, aux))
+}
+
+impl<Block, Aux> SnapshotSyncComponent<Block> for SyncBackend<Block, Aux>
+	where
+		Block: BlockT,
+		Aux: AuxStore + Send + Sync + 'static,
+{
+	fn export_sync_meta(
+		&self,
+		mut out: &mut dyn std::io::Write,
+		range: &SnapshotConfig<Block>,
+	) -> sp_blockchain::Result<SnapshotSyncCommon<Block>> {
+		// version
+		out.write(&[0u8]).map_err(|e|
+			sp_blockchain::Error::Backend(format!("Snapshot export errror: {:?}", e)),
+		)?;
+
+		// writing whole set (could limit to range in the future).
+		self.0.inner().read().encode_to(&mut out);
+
+		use sp_runtime::traits::Saturating;
+		let from = range.from.saturating_sub(HEADER_RANGE.into());
+		Ok(SnapshotSyncCommon {
+			additional_headers: vec![(from, range.to)],
+		})
+	}
+
+	fn import_sync_meta(
+		&self,
+		encoded: &mut dyn std::io::Read,
+		range: &SnapshotConfig<Block>,
+	) -> sp_blockchain::Result<SnapshotSyncCommon<Block>> {
+		let mut buf = [0];
+		// version
+		encoded.read_exact(&mut buf[..1]).map_err(|e|
+			sp_blockchain::Error::Backend(format!("Snapshot import error: {:?}", e)),
+		)?;
+		match buf[0] {
+			b if b == 0 => (),
+			_ => return Err(sp_blockchain::Error::Backend("Invalid snapshot version.".into())),
+		}
+		let mut reader = IoReader(encoded);
+		*self.0.inner().write() = Decode::decode(&mut reader).map_err(|e|
+			sp_blockchain::Error::Backend(format!("Snapshot import error: {:?}", e)),
+		)?;
+
+		// persist set.
+		crate::aux_schema::update_authority_set::<Block, _, _>(
+			&*self.0.inner().write(),
+			None,
+			|values| (
+				self.1.insert_aux(values, &[]).unwrap()
+			)
+		);
+
+		use sp_runtime::traits::Saturating;
+		let from = range.from.saturating_sub(HEADER_RANGE.into());
+		Ok(SnapshotSyncCommon {
+			additional_headers: vec![(from, range.to)],
+		})
+	}
+}
+
+// This is an indicative range, it can probably be lowered by a large factor.
+// It is related to `ForkTree` algorithms and pruning and finalisation chain asumption.
+// Changes would require analysing those and maybe doing some change (existing code generally
+// assume all headers exists).
+// But at this point it is not a very big overhead.
+const HEADER_RANGE: u32 = 10_000;

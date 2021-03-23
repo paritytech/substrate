@@ -99,3 +99,9 @@ impl std::convert::From<crypto::PublicError> for Error {
 		Error::InvalidUri(e)
 	}
 }
+
+impl std::convert::From<sc_client_api::DatabaseError> for Error {
+	fn from(e: sc_client_api::DatabaseError) -> Error {
+		e.0.into()
+	}
+}
