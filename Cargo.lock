@@ -5279,6 +5279,7 @@ dependencies = [
  "frame-system",
  "log",
  "parity-scale-codec",
+ "scale-info",
  "serde",
  "sp-core",
  "sp-io",
@@ -8063,8 +8064,7 @@ dependencies = [
 [[package]]
 name = "scale-info"
 version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bdd819984fe6ce661ebed1f451c0848d301a05ff56b8a4b0ae420de7dca046ea"
+source = "git+https://github.com/paritytech/scale-info?branch=master#22c430a6872631e56d2641f9f04d3ef8f472d43e"
 dependencies = [
  "cfg-if 1.0.0",
  "derive_more",
@@ -8075,10 +8075,9 @@ dependencies = [
 [[package]]
 name = "scale-info-derive"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e321c3d4ef7d3a90b0b4eda276d4215c6cbf3d59f66a9934e7866a48dcaa29b3"
+source = "git+https://github.com/paritytech/scale-info?branch=master#22c430a6872631e56d2641f9f04d3ef8f472d43e"
 dependencies = [
- "proc-macro-crate 0.1.5",
+ "proc-macro-crate 1.0.0",
  "proc-macro2",
  "quote",
  "syn",
