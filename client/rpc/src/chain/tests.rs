@@ -72,7 +72,7 @@ fn should_return_a_block() {
 	// Genesis block is not justified
 	assert_matches!(
 		api.block(Some(client.genesis_hash()).into()).wait(),
-		Ok(Some(SignedBlock { justification: None, .. }))
+		Ok(Some(SignedBlock { justifications: None, .. }))
 	);
 
 	assert_matches!(

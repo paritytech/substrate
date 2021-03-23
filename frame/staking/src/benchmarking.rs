@@ -24,12 +24,9 @@ use testing_utils::*;
 use sp_runtime::traits::One;
 use frame_system::RawOrigin;
 pub use frame_benchmarking::{
-	benchmarks,
-	account,
-	whitelisted_caller,
-	whitelist_account,
-	impl_benchmark_test_suite,
+	benchmarks, account, whitelisted_caller, whitelist_account, impl_benchmark_test_suite,
 };
+
 const SEED: u32 = 0;
 const MAX_SPANS: u32 = 100;
 const MAX_VALIDATORS: u32 = 1000;
@@ -96,8 +93,8 @@ pub fn create_validator_with_nominators<T: Config>(
 	// Start a new Era
 	let new_validators = Staking::<T>::new_era(SessionIndex::one()).unwrap();
 
-	assert!(new_validators.len() == 1);
-	assert!(new_validators[0] == v_stash, "Our validator was not selected!");
+	assert_eq!(new_validators.len(), 1);
+	assert_eq!(new_validators[0], v_stash, "Our validator was not selected!");
 
 	// Give Era Points
 	let reward = EraRewardPoints::<T::AccountId> {
@@ -561,6 +558,39 @@ benchmarks! {
 	} verify {
 		let balance_after = T::Currency::free_balance(&stash);
 		assert!(balance_before > balance_after);
+	}
+
+	get_npos_voters {
+		// number of validator intention.
+		let v in 200 .. 400;
+		// number of nominator intention.
+		let n in 200 .. 400;
+		// total number of slashing spans. Assigned to validators randomly.
+		let s in 1 .. 20;
+
+		let validators = create_validators_with_nominators_for_era::<T>(v, n, T::MAX_NOMINATIONS as usize, false, None)?
+			.into_iter()
+			.map(|v| T::Lookup::lookup(v).unwrap())
+			.collect::<Vec<_>>();
+
+		(0..s).for_each(|index| {
+			add_slashing_spans::<T>(&validators[index as usize], 10);
+		});
+	}: {
+		let voters = <Staking<T>>::get_npos_voters();
+		assert_eq!(voters.len() as u32, v + n);
+	}
+
+	get_npos_targets {
+		// number of validator intention.
+		let v in 200 .. 400;
+		// number of nominator intention.
+		let n = 500;
+
+		let _ = create_validators_with_nominators_for_era::<T>(v, n, T::MAX_NOMINATIONS as usize, false, None)?;
+	}: {
+		let targets = <Staking<T>>::get_npos_targets();
+		assert_eq!(targets.len() as u32, v);
 	}
 }
 

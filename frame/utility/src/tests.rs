@@ -75,10 +75,10 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
-		Utility: utility::{Module, Call, Event},
-		Example: example::{Module, Call},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Utility: utility::{Pallet, Call, Event},
+		Example: example::{Pallet, Call},
 	}
 );
 
@@ -170,7 +170,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 }
 
 fn last_event() -> Event {
-	frame_system::Module::<Test>::events().pop().map(|e| e.event).expect("Event expected")
+	frame_system::Pallet::<Test>::events().pop().map(|e| e.event).expect("Event expected")
 }
 
 fn expect_event<E: Into<Event>>(e: E) {

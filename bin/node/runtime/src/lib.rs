@@ -114,7 +114,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
 	spec_version: 265,
-	impl_version: 0,
+	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 2,
 };
@@ -379,7 +379,7 @@ impl pallet_balances::Config for Runtime {
 	type DustRemoval = ();
 	type Event = Event;
 	type ExistentialDeposit = ExistentialDeposit;
-	type AccountStore = frame_system::Module<Runtime>;
+	type AccountStore = frame_system::Pallet<Runtime>;
 	type WeightInfo = pallet_balances::weights::SubstrateWeight<Runtime>;
 }
 
@@ -490,7 +490,7 @@ impl pallet_staking::Config for Runtime {
 		pallet_collective::EnsureProportionAtLeast<_3, _4, AccountId, CouncilCollective>
 	>;
 	type SessionInterface = Self;
-	type RewardCurve = RewardCurve;
+	type EraPayout = pallet_staking::ConvertCurve<RewardCurve>;
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type ElectionProvider = ElectionProviderMultiPhase;
@@ -504,9 +504,9 @@ parameter_types! {
 
 	// fallback: no need to do on-chain phragmen initially.
 	pub const Fallback: pallet_election_provider_multi_phase::FallbackStrategy =
-		pallet_election_provider_multi_phase::FallbackStrategy::Nothing;
+		pallet_election_provider_multi_phase::FallbackStrategy::OnChain;
 
-	pub SolutionImprovementThreshold: Perbill = Perbill::from_rational_approximation(1u32, 10_000);
+	pub SolutionImprovementThreshold: Perbill = Perbill::from_rational(1u32, 10_000);
 
 	// miner configs
 	pub const MultiPhaseUnsignedPriority: TransactionPriority = StakingUnsignedPriority::get() - 1u64;
@@ -759,7 +759,7 @@ parameter_types! {
 	pub const DepositPerContract: Balance = TombstoneDeposit::get();
 	pub const DepositPerStorageByte: Balance = deposit(0, 1);
 	pub const DepositPerStorageItem: Balance = deposit(1, 0);
-	pub RentFraction: Perbill = Perbill::from_rational_approximation(1u32, 30 * DAYS);
+	pub RentFraction: Perbill = Perbill::from_rational(1u32, 30 * DAYS);
 	pub const SurchargeReward: Balance = 150 * MILLICENTS;
 	pub const SignedClaimHandicap: u32 = 2;
 	pub const MaxDepth: u32 = 32;
@@ -997,7 +997,7 @@ impl pallet_mmr::Config for Runtime {
 	const INDEXING_PREFIX: &'static [u8] = b"mmr";
 	type Hashing = <Runtime as frame_system::Config>::Hashing;
 	type Hash = <Runtime as frame_system::Config>::Hash;
-	type LeafData = frame_system::Module<Self>;
+	type LeafData = frame_system::Pallet<Self>;
 	type OnNewRoot = ();
 	type WeightInfo = ();
 }
@@ -1057,6 +1057,7 @@ parameter_types! {
 impl pallet_gilt::Config for Runtime {
 	type Event = Event;
 	type Currency = Balances;
+	type CurrencyBalance = Balance;
 	type AdminOrigin = frame_system::EnsureRoot<AccountId>;
 	type Deficit = ();
 	type Surplus = ();
@@ -1077,44 +1078,44 @@ construct_runtime!(
 		NodeBlock = node_primitives::Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Utility: pallet_utility::{Module, Call, Event},
-		Babe: pallet_babe::{Module, Call, Storage, Config, ValidateUnsigned},
-		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
-		Authorship: pallet_authorship::{Module, Call, Storage, Inherent},
-		Indices: pallet_indices::{Module, Call, Storage, Config<T>, Event<T>},
-		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
-		TransactionPayment: pallet_transaction_payment::{Module, Storage},
-		ElectionProviderMultiPhase: pallet_election_provider_multi_phase::{Module, Call, Storage, Event<T>, ValidateUnsigned},
-		Staking: pallet_staking::{Module, Call, Config<T>, Storage, Event<T>},
-		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
-		Democracy: pallet_democracy::{Module, Call, Storage, Config, Event<T>},
-		Council: pallet_collective::<Instance1>::{Module, Call, Storage, Origin<T>, Event<T>, Config<T>},
-		TechnicalCommittee: pallet_collective::<Instance2>::{Module, Call, Storage, Origin<T>, Event<T>, Config<T>},
-		Elections: pallet_elections_phragmen::{Module, Call, Storage, Event<T>, Config<T>},
-		TechnicalMembership: pallet_membership::<Instance1>::{Module, Call, Storage, Event<T>, Config<T>},
-		Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event, ValidateUnsigned},
-		Treasury: pallet_treasury::{Module, Call, Storage, Config, Event<T>},
-		Contracts: pallet_contracts::{Module, Call, Config<T>, Storage, Event<T>},
-		Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
-		ImOnline: pallet_im_online::{Module, Call, Storage, Event<T>, ValidateUnsigned, Config<T>},
-		AuthorityDiscovery: pallet_authority_discovery::{Module, Call, Config},
-		Offences: pallet_offences::{Module, Call, Storage, Event},
-		Historical: pallet_session_historical::{Module},
-		RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Module, Call, Storage},
-		Identity: pallet_identity::{Module, Call, Storage, Event<T>},
-		Society: pallet_society::{Module, Call, Storage, Event<T>, Config<T>},
-		Recovery: pallet_recovery::{Module, Call, Storage, Event<T>},
-		Vesting: pallet_vesting::{Module, Call, Storage, Event<T>, Config<T>},
-		Scheduler: pallet_scheduler::{Module, Call, Storage, Event<T>},
-		Proxy: pallet_proxy::{Module, Call, Storage, Event<T>},
-		Multisig: pallet_multisig::{Module, Call, Storage, Event<T>},
-		Bounties: pallet_bounties::{Module, Call, Storage, Event<T>},
-		Tips: pallet_tips::{Module, Call, Storage, Event<T>},
-		Assets: pallet_assets::{Module, Call, Storage, Event<T>},
-		Mmr: pallet_mmr::{Module, Storage},
-		Lottery: pallet_lottery::{Module, Call, Storage, Event<T>},
-		Gilt: pallet_gilt::{Module, Call, Storage, Event<T>, Config},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Utility: pallet_utility::{Pallet, Call, Event},
+		Babe: pallet_babe::{Pallet, Call, Storage, Config, ValidateUnsigned},
+		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
+		Authorship: pallet_authorship::{Pallet, Call, Storage, Inherent},
+		Indices: pallet_indices::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		TransactionPayment: pallet_transaction_payment::{Pallet, Storage},
+		ElectionProviderMultiPhase: pallet_election_provider_multi_phase::{Pallet, Call, Storage, Event<T>, ValidateUnsigned},
+		Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
+		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
+		Democracy: pallet_democracy::{Pallet, Call, Storage, Config, Event<T>},
+		Council: pallet_collective::<Instance1>::{Pallet, Call, Storage, Origin<T>, Event<T>, Config<T>},
+		TechnicalCommittee: pallet_collective::<Instance2>::{Pallet, Call, Storage, Origin<T>, Event<T>, Config<T>},
+		Elections: pallet_elections_phragmen::{Pallet, Call, Storage, Event<T>, Config<T>},
+		TechnicalMembership: pallet_membership::<Instance1>::{Pallet, Call, Storage, Event<T>, Config<T>},
+		Grandpa: pallet_grandpa::{Pallet, Call, Storage, Config, Event, ValidateUnsigned},
+		Treasury: pallet_treasury::{Pallet, Call, Storage, Config, Event<T>},
+		Contracts: pallet_contracts::{Pallet, Call, Config<T>, Storage, Event<T>},
+		Sudo: pallet_sudo::{Pallet, Call, Config<T>, Storage, Event<T>},
+		ImOnline: pallet_im_online::{Pallet, Call, Storage, Event<T>, ValidateUnsigned, Config<T>},
+		AuthorityDiscovery: pallet_authority_discovery::{Pallet, Call, Config},
+		Offences: pallet_offences::{Pallet, Call, Storage, Event},
+		Historical: pallet_session_historical::{Pallet},
+		RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Pallet, Call, Storage},
+		Identity: pallet_identity::{Pallet, Call, Storage, Event<T>},
+		Society: pallet_society::{Pallet, Call, Storage, Event<T>, Config<T>},
+		Recovery: pallet_recovery::{Pallet, Call, Storage, Event<T>},
+		Vesting: pallet_vesting::{Pallet, Call, Storage, Event<T>, Config<T>},
+		Scheduler: pallet_scheduler::{Pallet, Call, Storage, Event<T>},
+		Proxy: pallet_proxy::{Pallet, Call, Storage, Event<T>},
+		Multisig: pallet_multisig::{Pallet, Call, Storage, Event<T>},
+		Bounties: pallet_bounties::{Pallet, Call, Storage, Event<T>},
+		Tips: pallet_tips::{Pallet, Call, Storage, Event<T>},
+		Assets: pallet_assets::{Pallet, Call, Storage, Event<T>},
+		Mmr: pallet_mmr::{Pallet, Storage},
+		Lottery: pallet_lottery::{Pallet, Call, Storage, Event<T>},
+		Gilt: pallet_gilt::{Pallet, Call, Storage, Event<T>, Config},
 	}
 );
 
@@ -1154,7 +1155,7 @@ pub type Executive = frame_executive::Executive<
 	Block,
 	frame_system::ChainContext<Runtime>,
 	Runtime,
-	AllModules,
+	AllPallets,
 	(),
 >;
 
@@ -1426,9 +1427,9 @@ impl_runtime_apis! {
 			// Trying to add benchmarks directly to the Session Pallet caused cyclic dependency
 			// issues. To get around that, we separated the Session benchmarks into its own crate,
 			// which is why we need these two lines below.
-			use pallet_session_benchmarking::Module as SessionBench;
-			use pallet_offences_benchmarking::Module as OffencesBench;
-			use frame_system_benchmarking::Module as SystemBench;
+			use pallet_session_benchmarking::Pallet as SessionBench;
+			use pallet_offences_benchmarking::Pallet as OffencesBench;
+			use frame_system_benchmarking::Pallet as SystemBench;
 
 			impl pallet_session_benchmarking::Config for Runtime {}
 			impl pallet_offences_benchmarking::Config for Runtime {}

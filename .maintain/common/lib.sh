@@ -82,7 +82,7 @@ has_label(){
 
 # Formats a message into a JSON string for posting to Matrix
 # message: 'any plaintext message'
-# formatted_message: '<strong>optional message formatted in <em>html</em></strong>' 
+# formatted_message: '<strong>optional message formatted in <em>html</em></strong>'
 # Usage: structure_message $content $formatted_content (optional)
 structure_message() {
   if [ -z "$2" ]; then
@@ -100,4 +100,18 @@ structure_message() {
 # Usage: send_message $body (json formatted) $room_id $access_token
 send_message() {
 curl -XPOST -d "$1" "https://matrix.parity.io/_matrix/client/r0/rooms/$2/send/m.room.message?access_token=$3"
+}
+
+# Check for runtime changes between two commits. This is defined as any changes
+# to bin/node/src/runtime, frame/ and primitives/sr_* trees.
+has_runtime_changes() {
+  from=$1
+  to=$2
+  if git diff --name-only "${from}...${to}" \
+    | grep -q -e '^frame/' -e '^primitives/'
+  then
+    return 0
+  else
+    return 1
+  fi
 }

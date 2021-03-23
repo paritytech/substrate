@@ -135,9 +135,9 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: system::{Module, Call, Event<T>},
-		Balances: pallet_balances::{Module, Call, Event<T>, Config<T>},
-		Elections: elections::{Module, Call, Event<T>, Config<T>},
+		System: system::{Pallet, Call, Event<T>},
+		Balances: pallet_balances::{Pallet, Call, Event<T>, Config<T>},
+		Elections: elections::{Pallet, Call, Event<T>, Config<T>},
 	}
 );
 

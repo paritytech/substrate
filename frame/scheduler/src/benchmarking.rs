@@ -26,7 +26,7 @@ use frame_support::{ensure, traits::OnInitialize};
 use frame_benchmarking::{benchmarks, impl_benchmark_test_suite};
 
 use crate::Module as Scheduler;
-use frame_system::Module as System;
+use frame_system::Pallet as System;
 
 const BLOCK_NUMBER: u32 = 2;
 

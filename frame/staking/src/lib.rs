@@ -320,7 +320,7 @@ use frame_system::{
 	self as system, ensure_signed, ensure_root,
 	offchain::SendTransactionTypes,
 };
-use sp_election_providers::{ElectionProvider, VoteWeight, Supports};
+use frame_election_provider_support::{ElectionProvider, VoteWeight, Supports, data_provider};
 pub use weights::WeightInfo;
 
 const STAKING_ID: LockIdentifier = *b"staking ";
@@ -681,6 +681,53 @@ impl<T: Config> SessionInterface<<T as frame_system::Config>::AccountId> for T w
 	}
 }
 
+/// Handler for determining how much of a balance should be paid out on the current era.
+pub trait EraPayout<Balance> {
+	/// Determine the payout for this era.
+	///
+	/// Returns the amount to be paid to stakers in this era, as well as whatever else should be
+	/// paid out ("the rest").
+	fn era_payout(
+		total_staked: Balance,
+		total_issuance: Balance,
+		era_duration_millis: u64,
+	) -> (Balance, Balance);
+}
+
+impl<Balance: Default> EraPayout<Balance> for () {
+	fn era_payout(
+		_total_staked: Balance,
+		_total_issuance: Balance,
+		_era_duration_millis: u64,
+	) -> (Balance, Balance) {
+		(Default::default(), Default::default())
+	}
+}
+
+/// Adaptor to turn a `PiecewiseLinear` curve definition into an `EraPayout` impl, used for
+/// backwards compatibility.
+pub struct ConvertCurve<T>(sp_std::marker::PhantomData<T>);
+impl<
+	Balance: AtLeast32BitUnsigned + Clone,
+	T: Get<&'static PiecewiseLinear<'static>>,
+> EraPayout<Balance> for ConvertCurve<T> {
+	fn era_payout(
+		total_staked: Balance,
+		total_issuance: Balance,
+		era_duration_millis: u64,
+	) -> (Balance, Balance) {
+		let (validator_payout, max_payout) = inflation::compute_total_payout(
+			&T::get(),
+			total_staked,
+			total_issuance,
+			// Duration of era; more than u64::MAX is rewarded as u64::MAX.
+			era_duration_millis,
+		);
+		let rest = max_payout.saturating_sub(validator_payout.clone());
+		(validator_payout, rest)
+	}
+}
+
 pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
 	/// The staking balance.
 	type Currency: LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>;
@@ -699,7 +746,7 @@ pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
 	type CurrencyToVote: CurrencyToVote<BalanceOf<Self>>;
 
 	/// Something that provides the election functionality.
-	type ElectionProvider: sp_election_providers::ElectionProvider<
+	type ElectionProvider: frame_election_provider_support::ElectionProvider<
 		Self::AccountId,
 		Self::BlockNumber,
 		// we only accept an election provider that has staking as data provider.
@@ -740,9 +787,9 @@ pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
 	/// Interface for interacting with a session module.
 	type SessionInterface: self::SessionInterface<Self::AccountId>;
 
-	/// The NPoS reward curve used to define yearly inflation.
+	/// The payout for validators and the system for the current era.
 	/// See [Era payout](./index.html#era-payout).
-	type RewardCurve: Get<&'static PiecewiseLinear<'static>>;
+	type EraPayout: EraPayout<BalanceOf<Self>>;
 
 	/// Something that can estimate the next session change, accurately or as a best effort guess.
 	type NextNewSession: EstimateNextNewSession<Self::BlockNumber>;
@@ -960,7 +1007,7 @@ decl_storage! {
 		/// True if network has been upgraded to this version.
 		/// Storage version of the pallet.
 		///
-		/// This is set to v5.0.0 for new networks.
+		/// This is set to v6.0.0 for new networks.
 		StorageVersion build(|_: &GenesisConfig<T>| Releases::V6_0_0): Releases;
 	}
 	add_extra_genesis {
@@ -1004,66 +1051,55 @@ pub mod migrations {
 		use super::*;
 		use frame_support::{traits::Get, weights::Weight, pallet_prelude::*};
 
-		pub trait V6Config: crate::Config {
-			/// The storage prefix of the pallet set by the outer runtime declaration.
-			type PalletPrefix: Get<&'static str>;
-		}
-
 		macro_rules! generate_storage_types {
-			($name:ident<T: $trait:tt> => Map<$key:ty, $value:ty>) => {
-				// NOTE: just demonstrating what could be done here, maybe we can move this to
-				// frame-support so that other can use as well.
-				compile_error!("unreachable!")
-			};
-			($name:ident<T: $trait:tt> => Value<$value:ty>) => {
+			($name:ident => Value<$value:ty>) => {
 				paste::paste! {
-					struct [<$name Instance>]<T>($crate::sp_std::marker::PhantomData<T>);
-					impl<T: $trait> $crate::frame_support::traits::StorageInstance for [<$name Instance>]<T> {
+					struct [<$name Instance>];
+					impl frame_support::traits::StorageInstance for [<$name Instance>] {
 						fn pallet_prefix() -> &'static str {
-							T::PalletPrefix::get()
+							"Staking"
 						}
 						const STORAGE_PREFIX: &'static str = stringify!($name);
 					}
-					type $name<T> = StorageValue<[<$name Instance>]<T>, $value, ValueQuery>;
+					type $name = StorageValue<[<$name Instance>], $value, ValueQuery>;
 				}
 			}
 		}
 
 		// NOTE: value type doesn't matter, we just set it to () here.
-		generate_storage_types!(SnapshotValidators<T: V6Config> => Value<()>);
-		generate_storage_types!(SnapshotNominators<T: V6Config> => Value<()>);
-		generate_storage_types!(QueuedElected<T: V6Config> => Value<()>);
-		generate_storage_types!(QueuedScore<T: V6Config> => Value<()>);
-		generate_storage_types!(EraElectionStatus<T: V6Config> => Value<()>);
-		generate_storage_types!(IsCurrentSessionFinal<T: V6Config> => Value<()>);
+		generate_storage_types!(SnapshotValidators => Value<()>);
+		generate_storage_types!(SnapshotNominators => Value<()>);
+		generate_storage_types!(QueuedElected => Value<()>);
+		generate_storage_types!(QueuedScore => Value<()>);
+		generate_storage_types!(EraElectionStatus => Value<()>);
+		generate_storage_types!(IsCurrentSessionFinal => Value<()>);
 
 		/// check to execute prior to migration.
-		pub fn pre_migration<T: V6Config>() -> Result<(), &'static str> {
+		pub fn pre_migrate<T: Config>() -> Result<(), &'static str> {
 			// these may or may not exist.
-			log!(info, "SnapshotValidators.exits()? {:?}", SnapshotValidators::<T>::exists());
-			log!(info, "SnapshotNominators.exits()? {:?}", SnapshotNominators::<T>::exists());
-			log!(info, "QueuedElected.exits()? {:?}", QueuedElected::<T>::exists());
-			log!(info, "QueuedScore.exits()? {:?}", QueuedScore::<T>::exists());
+			log!(info, "SnapshotValidators.exits()? {:?}", SnapshotValidators::exists());
+			log!(info, "SnapshotNominators.exits()? {:?}", SnapshotNominators::exists());
+			log!(info, "QueuedElected.exits()? {:?}", QueuedElected::exists());
+			log!(info, "QueuedScore.exits()? {:?}", QueuedScore::exists());
 			// these must exist.
-			assert!(IsCurrentSessionFinal::<T>::exists(), "IsCurrentSessionFinal storage item not found!");
-			assert!(EraElectionStatus::<T>::exists(), "EraElectionStatus storage item not found!");
+			assert!(IsCurrentSessionFinal::exists(), "IsCurrentSessionFinal storage item not found!");
+			assert!(EraElectionStatus::exists(), "EraElectionStatus storage item not found!");
 			Ok(())
 		}
 
 		/// Migrate storage to v6.
-		pub fn migrate<T: V6Config>() -> Weight {
-			if StorageVersion::get() == Releases::V5_0_0 {
-				log!(info, "Migrating staking to Releases::V6_0_0");
+		pub fn migrate<T: Config>() -> Weight {
+			log!(info, "Migrating staking to Releases::V6_0_0");
 
-				SnapshotValidators::<T>::kill();
-				SnapshotNominators::<T>::kill();
-				QueuedElected::<T>::kill();
-				QueuedScore::<T>::kill();
-				EraElectionStatus::<T>::kill();
-				IsCurrentSessionFinal::<T>::kill();
+			SnapshotValidators::kill();
+			SnapshotNominators::kill();
+			QueuedElected::kill();
+			QueuedScore::kill();
+			EraElectionStatus::kill();
+			IsCurrentSessionFinal::kill();
 
-				StorageVersion::put(Releases::V6_0_0);
-			}
+			StorageVersion::put(Releases::V6_0_0);
+			log!(info, "Done.");
 			T::DbWeight::get().writes(6 + 1)
 		}
 	}
@@ -1174,6 +1210,14 @@ decl_module! {
 
 		fn deposit_event() = default;
 
+		fn on_runtime_upgrade() -> Weight {
+			if StorageVersion::get() == Releases::V5_0_0 {
+				migrations::v6::migrate::<T>()
+			} else {
+				T::DbWeight::get().reads(1)
+			}
+		}
+
 		fn on_finalize() {
 			// Set the start of the first era.
 			if let Some(mut active_era) = Self::active_era() {
@@ -1243,7 +1287,7 @@ decl_module! {
 				Err(Error::<T>::InsufficientValue)?
 			}
 
-			system::Module::<T>::inc_consumers(&stash).map_err(|_| Error::<T>::BadState)?;
+			system::Pallet::<T>::inc_consumers(&stash).map_err(|_| Error::<T>::BadState)?;
 
 			// You're auto-bonded forever, here. We might improve this by only bonding when
 			// you actually validate/nominate and remove once you unbond __everything__.
@@ -1981,7 +2025,7 @@ impl<T: Config> Module<T> {
 
 		// This is the fraction of the total reward that the validator and the
 		// nominators will get.
-		let validator_total_reward_part = Perbill::from_rational_approximation(
+		let validator_total_reward_part = Perbill::from_rational(
 			validator_reward_points,
 			total_reward_points,
 		);
@@ -1996,7 +2040,7 @@ impl<T: Config> Module<T> {
 
 		let validator_leftover_payout = validator_total_payout - validator_commission_payout;
 		// Now let's calculate how this is split to the validator.
-		let validator_exposure_part = Perbill::from_rational_approximation(
+		let validator_exposure_part = Perbill::from_rational(
 			exposure.own,
 			exposure.total,
 		);
@@ -2013,7 +2057,7 @@ impl<T: Config> Module<T> {
 		// Lets now calculate how this is split to the nominators.
 		// Reward only the clipped exposures. Note this is not necessarily sorted.
 		for nominator in exposure.others.iter() {
-			let nominator_exposure_part = Perbill::from_rational_approximation(
+			let nominator_exposure_part = Perbill::from_rational(
 				nominator.value,
 				exposure.total,
 			);
@@ -2109,6 +2153,7 @@ impl<T: Config> Module<T> {
 			Self::new_era(session_index)
 		} else {
 			// Set initial era
+			log!(debug, "Starting the first era.");
 			Self::new_era(session_index)
 		}
 	}
@@ -2193,15 +2238,10 @@ impl<T: Config> Module<T> {
 		if let Some(active_era_start) = active_era.start {
 			let now_as_millis_u64 = T::UnixTime::now().as_millis().saturated_into::<u64>();
 
-			let era_duration = now_as_millis_u64 - active_era_start;
-			let (validator_payout, max_payout) = inflation::compute_total_payout(
-				&T::RewardCurve::get(),
-				Self::eras_total_stake(&active_era.index),
-				T::Currency::total_issuance(),
-				// Duration of era; more than u64::MAX is rewarded as u64::MAX.
-				era_duration.saturated_into::<u64>(),
-			);
-			let rest = max_payout.saturating_sub(validator_payout);
+			let era_duration = (now_as_millis_u64 - active_era_start).saturated_into::<u64>();
+			let staked = Self::eras_total_stake(&active_era.index);
+			let issuance = T::Currency::total_issuance();
+			let (validator_payout, rest) = T::EraPayout::era_payout(staked, issuance, era_duration);
 
 			Self::deposit_event(RawEvent::EraPayout(active_era.index, validator_payout, rest));
 
@@ -2231,41 +2271,22 @@ impl<T: Config> Module<T> {
 		maybe_new_validators
 	}
 
-	/// Consume a set of [`Supports`] and collect them into a
-	/// [`Exposure`].
-	fn collect_exposures(
-		supports: Supports<T::AccountId>,
-	) -> Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)> {
-		let total_issuance = T::Currency::total_issuance();
-		let to_currency = |e: sp_election_providers::ExtendedBalance| {
-			T::CurrencyToVote::to_currency(e, total_issuance)
-		};
-
-		supports
-			.into_iter()
-			.map(|(validator, support)| {
-				// build `struct exposure` from `support`
-				let mut others = Vec::with_capacity(support.voters.len());
-				let mut own: BalanceOf<T> = Zero::zero();
-				let mut total: BalanceOf<T> = Zero::zero();
-				support
-					.voters
-					.into_iter()
-					.map(|(nominator, weight)| (nominator, to_currency(weight)))
-					.for_each(|(nominator, stake)| {
-						if nominator == validator {
-						own = own.saturating_add(stake);
-						} else {
-							others.push(IndividualExposure { who: nominator, value: stake });
-						}
-						total = total.saturating_add(stake);
-					});
-
-			let exposure = Exposure { own, others, total };
-
-				(validator, exposure)
+	/// Enact and process the election using the `ElectionProvider` type.
+	///
+	/// This will also process the election, as noted in [`process_election`].
+	fn enact_election(current_era: EraIndex) -> Option<Vec<T::AccountId>> {
+		T::ElectionProvider::elect()
+			.map_err(|e| {
+				log!(warn, "election provider failed due to {:?}", e)
 			})
-			.collect::<Vec<(T::AccountId, Exposure<_, _>)>>()
+			.and_then(|(res, weight)| {
+				<frame_system::Pallet<T>>::register_extra_weight_unchecked(
+					weight,
+					frame_support::weights::DispatchClass::Mandatory,
+				);
+				Self::process_election(res, current_era)
+			})
+			.ok()
 	}
 
 	/// Process the output of the election.
@@ -2276,18 +2297,21 @@ impl<T: Config> Module<T> {
 	/// Returns `Err(())` if less than [`MinimumValidatorCount`] validators have been elected, `Ok`
 	/// otherwise.
 	pub fn process_election(
-		flat_supports: sp_election_providers::Supports<T::AccountId>,
+		flat_supports: frame_election_provider_support::Supports<T::AccountId>,
 		current_era: EraIndex,
 	) -> Result<Vec<T::AccountId>, ()> {
 		let exposures = Self::collect_exposures(flat_supports);
 		let elected_stashes = exposures.iter().cloned().map(|(x, _)| x).collect::<Vec<_>>();
 
-		if (elected_stashes.len() as u32) <= Self::minimum_validator_count() {
+		if (elected_stashes.len() as u32) < Self::minimum_validator_count().max(1) {
+			// Session will panic if we ever return an empty validator set, thus max(1) ^^.
 			if current_era > 0 {
 				log!(
 					warn,
-					"chain does not have enough staking candidates to operate for era {:?}",
+					"chain does not have enough staking candidates to operate for era {:?} ({} elected, minimum is {})",
 					current_era,
+					elected_stashes.len(),
+					Self::minimum_validator_count(),
 				);
 			}
 			return Err(());
@@ -2320,24 +2344,52 @@ impl<T: Config> Module<T> {
 		// emit event
 		Self::deposit_event(RawEvent::StakingElection);
 
-		log!(
-			info,
-			"new validator set of size {:?} has been processed for era {:?}",
-			elected_stashes.len(),
-			current_era,
-		);
+		if current_era > 0 {
+			log!(
+				info,
+				"new validator set of size {:?} has been processed for era {:?}",
+				elected_stashes.len(),
+				current_era,
+			);
+		}
 
 		Ok(elected_stashes)
 	}
 
-	/// Enact and process the election using the `ElectionProvider` type.
-	///
-	/// This will also process the election, as noted in [`process_election`].
-	fn enact_election(current_era: EraIndex) -> Option<Vec<T::AccountId>> {
-		T::ElectionProvider::elect()
-			.map_err(|e| log!(warn, "election provider failed due to {:?}", e))
-			.and_then(|r| Self::process_election(r, current_era))
-			.ok()
+	/// Consume a set of [`Supports`] from [`sp_npos_elections`] and collect them into a
+	/// [`Exposure`].
+	fn collect_exposures(
+		supports: Supports<T::AccountId>,
+	) -> Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)> {
+		let total_issuance = T::Currency::total_issuance();
+		let to_currency = |e: frame_election_provider_support::ExtendedBalance| {
+			T::CurrencyToVote::to_currency(e, total_issuance)
+		};
+
+		supports
+			.into_iter()
+			.map(|(validator, support)| {
+				// build `struct exposure` from `support`
+				let mut others = Vec::with_capacity(support.voters.len());
+				let mut own: BalanceOf<T> = Zero::zero();
+				let mut total: BalanceOf<T> = Zero::zero();
+				support
+					.voters
+					.into_iter()
+					.map(|(nominator, weight)| (nominator, to_currency(weight)))
+					.for_each(|(nominator, stake)| {
+						if nominator == validator {
+						own = own.saturating_add(stake);
+						} else {
+							others.push(IndividualExposure { who: nominator, value: stake });
+						}
+						total = total.saturating_add(stake);
+					});
+
+				let exposure = Exposure { own, others, total };
+				(validator, exposure)
+			})
+			.collect::<Vec<(T::AccountId, Exposure<_, _>)>>()
 	}
 
 	/// Remove all associated data of a stash account from the staking system.
@@ -2359,7 +2411,7 @@ impl<T: Config> Module<T> {
 		<Validators<T>>::remove(stash);
 		<Nominators<T>>::remove(stash);
 
-		system::Module::<T>::dec_consumers(stash);
+		system::Pallet::<T>::dec_consumers(stash);
 
 		Ok(())
 	}
@@ -2458,13 +2510,17 @@ impl<T: Config> Module<T> {
 			all_voters.push(self_vote);
 		}
 
+		// collect all slashing spans into a BTreeMap for further queries.
+		let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
+
 		for (nominator, nominations) in <Nominators<T>>::iter() {
 			let Nominations { submitted_in, mut targets, suppressed: _ } = nominations;
 
 			// Filter out nomination targets which were nominated before the most recent
 			// slashing span.
 			targets.retain(|stash| {
-				Self::slashing_spans(&stash)
+				slashing_spans
+					.get(stash)
 					.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
 			});
 
@@ -2480,20 +2536,46 @@ impl<T: Config> Module<T> {
 	}
 }
 
-impl<T: Config> sp_election_providers::ElectionDataProvider<T::AccountId, T::BlockNumber>
+impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::AccountId, T::BlockNumber>
 	for Module<T>
 {
 	const MAXIMUM_VOTES_PER_VOTER: u32 = T::MAX_NOMINATIONS;
-	fn desired_targets() -> u32 {
-		Self::validator_count()
+	fn desired_targets() -> data_provider::Result<(u32, Weight)> {
+		Ok((Self::validator_count(), <T as frame_system::Config>::DbWeight::get().reads(1)))
 	}
 
-	fn voters() -> Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> {
-		Self::get_npos_voters()
+	fn voters(
+		maybe_max_len: Option<usize>,
+	) -> data_provider::Result<(Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>, Weight)> {
+		// NOTE: reading these counts already needs to iterate a lot of storage keys, but they get
+		// cached. This is okay for the case of `Ok(_)`, but bad for `Err(_)`, as the trait does not
+		// report weight in failures.
+		let nominator_count = <Nominators<T>>::iter().count();
+		let validator_count = <Validators<T>>::iter().count();
+		let voter_count = nominator_count.saturating_add(validator_count);
+
+		if maybe_max_len.map_or(false, |max_len| voter_count > max_len) {
+			return Err("Voter snapshot too big");
+		}
+
+		let slashing_span_count = <SlashingSpans<T>>::iter().count();
+		let weight = T::WeightInfo::get_npos_voters(
+			nominator_count as u32,
+			validator_count as u32,
+			slashing_span_count as u32,
+		);
+		Ok((Self::get_npos_voters(), weight))
 	}
 
-	fn targets() -> Vec<T::AccountId> {
-		Self::get_npos_targets()
+	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<T::AccountId>, Weight)> {
+		let target_count = <Validators<T>>::iter().count();
+
+		if maybe_max_len.map_or(false, |max_len| target_count > max_len) {
+			return Err("Target snapshot too big");
+		}
+
+		let weight = <T as frame_system::Config>::DbWeight::get().reads(target_count as u64);
+		Ok((Self::get_npos_targets(), weight))
 	}
 
 	fn next_election_prediction(now: T::BlockNumber) -> T::BlockNumber {
@@ -2527,15 +2609,45 @@ impl<T: Config> sp_election_providers::ElectionDataProvider<T::AccountId, T::Blo
 	fn put_snapshot(
 		voters: Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
 		targets: Vec<T::AccountId>,
+		target_stake: Option<VoteWeight>,
 	) {
+		use sp_std::convert::TryFrom;
 		targets.into_iter().for_each(|v| {
+			let stake: BalanceOf<T> = target_stake
+				.and_then(|w| <BalanceOf<T>>::try_from(w).ok())
+				.unwrap_or(T::Currency::minimum_balance() * 100u32.into());
+			<Bonded<T>>::insert(v.clone(), v.clone());
+			<Ledger<T>>::insert(
+				v.clone(),
+				StakingLedger {
+					stash: v.clone(),
+					active: stake,
+					total: stake,
+					unlocking: vec![],
+					claimed_rewards: vec![],
+				},
+			);
 			<Validators<T>>::insert(
 				v,
 				ValidatorPrefs { commission: Perbill::zero(), blocked: false },
 			);
 		});
 
-		voters.into_iter().for_each(|(v, _s, t)| {
+		voters.into_iter().for_each(|(v, s, t)| {
+			let stake = <BalanceOf<T>>::try_from(s).unwrap_or_else(|_| {
+				panic!("cannot convert a VoteWeight into BalanceOf, benchmark needs reconfiguring.")
+			});
+			<Bonded<T>>::insert(v.clone(), v.clone());
+			<Ledger<T>>::insert(
+				v.clone(),
+				StakingLedger {
+					stash: v.clone(),
+					active: stake,
+					total: stake,
+					unlocking: vec![],
+					claimed_rewards: vec![],
+				},
+			);
 			<Nominators<T>>::insert(
 				v,
 				Nominations { targets: t, submitted_in: 0, suppressed: false },

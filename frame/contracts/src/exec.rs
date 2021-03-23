@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use crate::{
-	CodeHash, Event, Config, Module as Contracts,
+	CodeHash, Event, Config, Pallet as Contracts,
 	TrieId, BalanceOf, ContractInfo, gas::GasMeter, rent::Rent, storage::{self, Storage},
 	Error, ContractInfoOf, Schedule, AliveContractInfo,
 };
@@ -243,7 +243,7 @@ pub trait Ext: sealing::Sealed {
 	fn tombstone_deposit(&self) -> BalanceOf<Self::T>;
 
 	/// Returns a random number for the current block with the given subject.
-	fn random(&self, subject: &[u8]) -> SeedOf<Self::T>;
+	fn random(&self, subject: &[u8]) -> (SeedOf<Self::T>, BlockNumberOf<Self::T>);
 
 	/// Deposit an event with the given topics.
 	///
@@ -384,7 +384,7 @@ where
 			depth: 0,
 			schedule,
 			timestamp: T::Time::now(),
-			block_number: <frame_system::Module<T>>::block_number(),
+			block_number: <frame_system::Pallet<T>>::block_number(),
 			_phantom: Default::default(),
 		}
 	}
@@ -845,10 +845,8 @@ where
 		self.value_transferred
 	}
 
-	fn random(&self, subject: &[u8]) -> SeedOf<T> {
-		// TODO: change API to expose randomness freshness
-		// https://github.com/paritytech/substrate/issues/8297
-		T::Randomness::random(subject).0
+	fn random(&self, subject: &[u8]) -> (SeedOf<T>, BlockNumberOf<T>) {
+		T::Randomness::random(subject)
 	}
 
 	fn now(&self) -> &MomentOf<T> {
@@ -909,7 +907,7 @@ fn deposit_event<T: Config>(
 	topics: Vec<T::Hash>,
 	event: Event<T>,
 ) {
-	<frame_system::Module<T>>::deposit_event_indexed(
+	<frame_system::Pallet<T>>::deposit_event_indexed(
 		&*topics,
 		<T as Config>::Event::from(event).into(),
 	)
@@ -961,7 +959,7 @@ mod tests {
 	}
 
 	fn events() -> Vec<Event<Test>> {
-		<frame_system::Module<Test>>::events()
+		<frame_system::Pallet<Test>>::events()
 			.into_iter()
 			.filter_map(|meta| match meta.event {
 				MetaEvent::pallet_contracts(contract_event) => Some(contract_event),

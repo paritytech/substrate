@@ -23,10 +23,7 @@ use crate::Module as Staking;
 use frame_benchmarking::account;
 use frame_system::RawOrigin;
 use sp_io::hashing::blake2_256;
-use rand_chacha::{
-	rand_core::{RngCore, SeedableRng},
-	ChaChaRng,
-};
+use rand_chacha::{rand_core::{RngCore, SeedableRng}, ChaChaRng};
 
 const SEED: u32 = 0;
 
@@ -117,7 +114,7 @@ pub fn create_validators<T: Config>(
 /// - `to_nominate`: if `Some(n)`, only the first `n` bonded validator are voted upon. Else, all of
 ///   them are considered and `edge_per_nominator` random validators are voted for.
 ///
-/// Return the validators choosen to be nominated.
+/// Return the validators chosen to be nominated.
 pub fn create_validators_with_nominators_for_era<T: Config>(
 	validators: u32,
 	nominators: u32,
@@ -145,7 +142,7 @@ pub fn create_validators_with_nominators_for_era<T: Config>(
 	}
 
 	let to_nominate = to_nominate.unwrap_or(validators_stash.len() as u32) as usize;
-	let validator_choosen = validators_stash[0..to_nominate].to_vec();
+	let validator_chosen = validators_stash[0..to_nominate].to_vec();
 
 	// Create nominators
 	for j in 0 .. nominators {
@@ -157,7 +154,7 @@ pub fn create_validators_with_nominators_for_era<T: Config>(
 		)?;
 
 		// Have them randomly validate
-		let mut available_validators = validator_choosen.clone();
+		let mut available_validators = validator_chosen.clone();
 		let mut selected_validators: Vec<<T::Lookup as StaticLookup>::Source> =
 			Vec::with_capacity(edge_per_nominator);
 
@@ -171,18 +168,10 @@ pub fn create_validators_with_nominators_for_era<T: Config>(
 
 	ValidatorCount::put(validators);
 
-	Ok(validator_choosen)
+	Ok(validator_chosen)
 }
 
-/// get the active era.
+/// get the current era.
 pub fn current_era<T: Config>() -> EraIndex {
 	<Module<T>>::current_era().unwrap_or(0)
-}
-
-/// initialize the first era.
-pub fn init_active_era() {
-	ActiveEra::put(ActiveEraInfo {
-		index: 1,
-		start: None,
-	})
 }

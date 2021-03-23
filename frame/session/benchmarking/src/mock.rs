@@ -20,7 +20,7 @@
 #![cfg(test)]
 
 use sp_runtime::traits::IdentityLookup;
-use sp_election_providers::onchain;
+use frame_election_provider_support::onchain;
 use frame_support::parameter_types;
 
 type AccountId = u64;
@@ -37,10 +37,10 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
-		Staking: pallet_staking::{Module, Call, Config<T>, Storage, Event<T>},
-		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
+		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
 	}
 );
 
@@ -157,6 +157,7 @@ where
 impl onchain::Config for Test {
 	type AccountId = AccountId;
 	type BlockNumber = BlockNumber;
+	type BlockWeights = ();
 	type Accuracy = sp_runtime::Perbill;
 	type DataProvider = Staking;
 }
@@ -164,7 +165,7 @@ impl onchain::Config for Test {
 impl pallet_staking::Config for Test {
 	const MAX_NOMINATIONS: u32 = 16;
 	type Currency = Balances;
-	type UnixTime = pallet_timestamp::Module<Self>;
+	type UnixTime = pallet_timestamp::Pallet<Self>;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type RewardRemainder = ();
 	type Event = Event;
@@ -175,7 +176,7 @@ impl pallet_staking::Config for Test {
 	type SlashCancelOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type BondingDuration = ();
 	type SessionInterface = Self;
-	type RewardCurve = RewardCurve;
+	type EraPayout = pallet_staking::ConvertCurve<RewardCurve>;
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;

@@ -34,7 +34,7 @@ use sp_runtime::{
 };
 use sp_staking::offence::{OffenceDetails, OnOffenceHandler};
 use std::{cell::RefCell, collections::HashSet};
-use sp_election_providers::onchain;
+use frame_election_provider_support::onchain;
 
 pub const INIT_TIMESTAMP: u64 = 30_000;
 pub const BLOCK_TIME: u64 = 1000;
@@ -95,11 +95,11 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
-		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
-		Staking: staking::{Module, Call, Config<T>, Storage, Event<T>},
-		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Staking: staking::{Pallet, Call, Config<T>, Storage, Event<T>},
+		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
 	}
 );
 
@@ -235,6 +235,7 @@ impl OnUnbalanced<NegativeImbalanceOf<Test>> for RewardRemainderMock {
 impl onchain::Config for Test {
 	type AccountId = AccountId;
 	type BlockNumber = BlockNumber;
+	type BlockWeights = BlockWeights;
 	type Accuracy = Perbill;
 	type DataProvider = Staking;
 }
@@ -252,7 +253,7 @@ impl Config for Test {
 	type SlashCancelOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type BondingDuration = BondingDuration;
 	type SessionInterface = Self;
-	type RewardCurve = RewardCurve;
+	type EraPayout = ConvertCurve<RewardCurve>;
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
@@ -645,25 +646,22 @@ pub(crate) fn start_active_era(era_index: EraIndex) {
 }
 
 pub(crate) fn current_total_payout_for_duration(duration: u64) -> Balance {
-	let reward = inflation::compute_total_payout(
-		<Test as Config>::RewardCurve::get(),
+	let (payout, _rest) = <Test as Config>::EraPayout::era_payout(
 		Staking::eras_total_stake(active_era()),
 		Balances::total_issuance(),
 		duration,
-	)
-	.0;
-	assert!(reward > 0);
-	reward
+	);
+	assert!(payout > 0);
+	payout
 }
 
 pub(crate) fn maximum_payout_for_duration(duration: u64) -> Balance {
-	inflation::compute_total_payout(
-		<Test as Config>::RewardCurve::get(),
-		0,
+	let (payout, rest) = <Test as Config>::EraPayout::era_payout(
+		Staking::eras_total_stake(active_era()),
 		Balances::total_issuance(),
 		duration,
-	)
-	.1
+	);
+	payout + rest
 }
 
 /// Time it takes to finish a session.

@@ -41,10 +41,10 @@ use sp_runtime::traits::{One, StaticLookup};
 
 const MAX_VALIDATORS: u32 = 1000;
 
-pub struct Module<T: Config>(pallet_session::Module<T>);
+pub struct Pallet<T: Config>(pallet_session::Module<T>);
 pub trait Config: pallet_session::Config + pallet_session::historical::Config + pallet_staking::Config {}
 
-impl<T: Config> OnInitialize<T::BlockNumber> for Module<T> {
+impl<T: Config> OnInitialize<T::BlockNumber> for Pallet<T> {
 	fn on_initialize(n: T::BlockNumber) -> frame_support::weights::Weight {
 		pallet_session::Module::<T>::on_initialize(n)
 	}
@@ -157,7 +157,7 @@ fn check_membership_proof_setup<T: Config>(
 		Session::<T>::set_keys(RawOrigin::Signed(controller).into(), keys, proof).unwrap();
 	}
 
-	Module::<T>::on_initialize(T::BlockNumber::one());
+	Pallet::<T>::on_initialize(T::BlockNumber::one());
 
 	// skip sessions until the new validator set is enacted
 	while Session::<T>::validators().len() < n as usize {
@@ -170,7 +170,7 @@ fn check_membership_proof_setup<T: Config>(
 }
 
 impl_benchmark_test_suite!(
-	Module,
+	Pallet,
 	crate::mock::new_test_ext(),
 	crate::mock::Test,
 	extra = false,
