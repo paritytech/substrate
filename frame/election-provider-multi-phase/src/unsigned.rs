@@ -285,7 +285,7 @@ impl<T: Config> Pallet<T> {
 	) -> Result<CompactOf<T>, MinerError> {
 		// short-circuit to avoid getting the voters if possible
 		// this involves a redundant encoding, but that should hopefully be relatively cheap
-		if (compact.encode().len().saturated_into::<u32>()) < max_allowed_length {
+		if (compact.encoded_size().saturated_into::<u32>()) <= max_allowed_length {
 			return Ok(compact);
 		}
 
