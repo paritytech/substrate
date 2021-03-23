@@ -115,11 +115,7 @@ decl_module! {
 		fn deposit_event() = default;
 
 		fn on_runtime_upgrade() -> Weight {
-			migration::migrate::<T>()
-		}
-
-		fn on_initialize(_block: T::BlockNumber) -> Weight {
-			migration::migrate::<T>()
+			migration::remove_deferred_storage::<T>()
 		}
 	}
 }
@@ -154,14 +150,14 @@ where
 		let slash_perbill: Vec<_> = (0..concurrent_offenders.len())
 			.map(|_| new_fraction.clone()).collect();
 
-		let applied = T::OnOffenceHandler::on_offence(
+		T::OnOffenceHandler::on_offence(
 			&concurrent_offenders,
 			&slash_perbill,
 			offence.session_index(),
-		).is_ok();
+		);
 
 		// Deposit the event.
-		Self::deposit_event(Event::Offence(O::ID, time_slot.encode(), applied));
+		Self::deposit_event(Event::Offence(O::ID, time_slot.encode(), true));
 
 		Ok(())
 	}

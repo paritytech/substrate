@@ -159,7 +159,7 @@ pub trait OnOffenceHandler<Reporter, Offender, Res> {
 		offenders: &[OffenceDetails<Reporter, Offender>],
 		slash_fraction: &[Perbill],
 		session: SessionIndex,
-	) -> Result<Res, ()>;
+	) -> Res;
 }
 
 impl<Reporter, Offender, Res: Default> OnOffenceHandler<Reporter, Offender, Res> for () {
@@ -167,8 +167,8 @@ impl<Reporter, Offender, Res: Default> OnOffenceHandler<Reporter, Offender, Res>
 		_offenders: &[OffenceDetails<Reporter, Offender>],
 		_slash_fraction: &[Perbill],
 		_session: SessionIndex,
-	) -> Result<Res, ()> {
-		Ok(Default::default())
+	) -> Res {
+		Default::default()
 	}
 }
 

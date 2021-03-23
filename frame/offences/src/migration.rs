@@ -18,7 +18,6 @@
 use super::*;
 
 mod deprecated {
-    // use crate::Config;
     use crate::{Config, Perbill, OffenceDetails, SessionIndex};
     use frame_support::{decl_module, decl_storage};
     use sp_std::prelude::*;
@@ -42,41 +41,16 @@ mod deprecated {
     }
 }
 
-pub fn migrate<T: Config>() -> Weight {
+pub fn remove_deferred_storage<T: Config>() -> Weight {
     if !deprecated::DeferredOffences::<T>::exists() {
         return 0
     }
 
-    let limit = T::WeightSoftLimit::get();
     let mut consumed = Weight::zero();
-
-    <deprecated::DeferredOffences<T>>::mutate(|deferred| {
-        deferred.retain(|(offences, perbill, session)| {
-            if consumed >= limit {
-                true
-            } else {
-                // keep those that fail to be reported again. An error log is emitted here; this
-                // should not happen if staking's `can_report` is implemented properly.
-                match T::OnOffenceHandler::on_offence(&offences, &perbill, *session) {
-                    Ok(weight) => {
-                        consumed += weight;
-                        false
-                    },
-                    Err(_) => {
-                        log::error!(
-                            target: "runtime::offences",
-                            "re-submitting a deferred slash returned Err at Runtime Upgrade. \
-									 This should not happen with pallet-staking",
-                        );
-                        true
-                    },
-                }
-            }
-        })
-    });
-
-    if <deprecated::DeferredOffences<T>>::get().len() == 0 {
-        <deprecated::DeferredOffences<T>>::kill();
+    let deferred = <deprecated::DeferredOffences<T>>::take();
+    for (offences, perbill, session) in deferred.iter() {
+        let weight = T::OnOffenceHandler::on_offence(&offences, &perbill, *session);
+        consumed += weight;
     }
 
     consumed

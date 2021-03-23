@@ -25,7 +25,6 @@ use crate::mock::{
 	offence_reports,
 };
 use sp_runtime::Perbill;
-use frame_support::traits::OnInitialize;
 use frame_system::{EventRecord, Phase};
 
 #[test]

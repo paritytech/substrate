@@ -50,12 +50,12 @@ impl<Reporter, Offender>
 		_offenders: &[OffenceDetails<Reporter, Offender>],
 		slash_fraction: &[Perbill],
 		_offence_session: SessionIndex,
-	) -> Result<Weight, ()> {
+	) -> Weight {
 		ON_OFFENCE_PERBILL.with(|f| {
 			*f.borrow_mut() = slash_fraction.to_vec();
 		});
 
-		Ok(OFFENCE_WEIGHT.with(|w| *w.borrow()))
+		OFFENCE_WEIGHT.with(|w| *w.borrow())
 	}
 }
 
@@ -63,10 +63,6 @@ pub fn with_on_offence_fractions<R, F: FnOnce(&mut Vec<Perbill>) -> R>(f: F) -> 
 	ON_OFFENCE_PERBILL.with(|fractions| {
 		f(&mut *fractions.borrow_mut())
 	})
-}
-
-pub fn set_offence_weight(new: Weight) {
-	OFFENCE_WEIGHT.with(|w| *w.borrow_mut() = new);
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
