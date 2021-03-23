@@ -59,7 +59,7 @@ pub fn compute_inflation<P: PerThing>(
 	ideal_stake: P,
 	falloff: P,
 ) -> P {
-	if stake <= ideal_stake {
+	if stake < ideal_stake {
 		// ideal_stake is more than 0 because it is strictly more than stake
 		return stake / ideal_stake
 	}
