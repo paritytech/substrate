@@ -18,9 +18,13 @@
 //! The traits for dealing with a single fungible token class and any associated types.
 
 use super::*;
+mod balanced;
+mod imbalance;
+//pub use balanced::{Balanced, Unbalanced};
+pub use imbalance::{Imbalance, HandleImbalanceDrop, DebtOf, CreditOf};
 
 /// Trait for providing balance-inspection access to a fungible asset.
-pub trait InspectFungible<AccountId> {
+pub trait Inspect<AccountId> {
 	/// Scalar type for representing balance of an account.
 	type Balance: AtLeast32BitUnsigned + FullCodec + Copy + Default;
 	/// The total amount of issuance in the system.
@@ -37,7 +41,7 @@ pub trait InspectFungible<AccountId> {
 }
 
 /// Trait for providing an ERC-20 style fungible asset.
-pub trait Fungible<AccountId>: InspectFungible<AccountId> {
+pub trait Mutate<AccountId>: Inspect<AccountId> {
 	/// Increase the balance of `who` by `amount`.
 	fn deposit(who: &AccountId, amount: Self::Balance) -> DispatchResult;
 	/// Attempt to reduce the balance of `who` by `amount`.
@@ -45,7 +49,7 @@ pub trait Fungible<AccountId>: InspectFungible<AccountId> {
 }
 
 /// Trait for providing a fungible asset which can only be transferred.
-pub trait TransferFungible<AccountId>: InspectFungible<AccountId> {
+pub trait Transfer<AccountId>: Inspect<AccountId> {
 	/// Transfer funds from one account into another.
 	fn transfer(
 		source: &AccountId,
@@ -55,7 +59,7 @@ pub trait TransferFungible<AccountId>: InspectFungible<AccountId> {
 }
 
 /// Trait for providing a fungible asset which can be reserved.
-pub trait ReserveFungible<AccountId>: InspectFungible<AccountId> {
+pub trait Reserve<AccountId>: Inspect<AccountId> {
 	/// Amount of funds held in reserve by `who`.
 	fn reserved_balance(who: &AccountId) -> Self::Balance;
 	/// Amount of funds held in total by `who`.
@@ -75,7 +79,7 @@ pub trait ReserveFungible<AccountId>: InspectFungible<AccountId> {
 		status: BalanceStatus,
 	) -> DispatchResult;
 }
-
+/*
 pub struct AssetOf<
 	F: InspectFungibles<AccountId>,
 	A: Get<<F as InspectFungibles<AccountId>>::AssetId>,
@@ -87,7 +91,7 @@ impl<
 	F: InspectFungibles<AccountId>,
 	A: Get<<F as InspectFungibles<AccountId>>::AssetId>,
 	AccountId,
-> InspectFungible<AccountId> for AssetOf<F, A, AccountId> {
+> Inspect<AccountId> for AssetOf<F, A, AccountId> {
 	type Balance = <F as InspectFungibles<AccountId>>::Balance;
 	fn total_issuance() -> Self::Balance {
 		<F as InspectFungibles<AccountId>>::total_issuance(A::get())
@@ -105,12 +109,11 @@ impl<
 		<F as InspectFungibles<AccountId>>::can_withdraw(A::get(), who, amount)
 	}
 }
-
 impl<
 	F: Fungibles<AccountId>,
 	A: Get<<F as InspectFungibles<AccountId>>::AssetId>,
 	AccountId,
-> Fungible<AccountId> for AssetOf<F, A, AccountId> {
+> Mutate<AccountId> for AssetOf<F, A, AccountId> {
 	fn deposit(who: &AccountId, amount: Self::Balance) -> DispatchResult {
 		<F as Fungibles<AccountId>>::deposit(A::get(), who, amount)
 	}
@@ -155,3 +158,4 @@ impl<
 		<F as ReserveFungibles<AccountId>>::repatriate_reserved(A::get(), who, amount, status)
 	}
 }
+*/

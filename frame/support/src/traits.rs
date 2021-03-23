@@ -40,10 +40,46 @@ use impl_trait_for_tuples::impl_for_tuples;
 
 mod fungibles;
 mod fungible;
-pub use fungible::{InspectFungible, Fungible, TransferFungible, ReserveFungible, AssetOf};
-pub use fungibles::{
-	InspectFungibles, Fungibles, TransferFungibles, ReserveFungibles, WithdrawConsequence
+pub use fungible::{
+	Inspect as InspectFungible, Mutate as MutateFungible, Transfer as TransferFungible, Reserve as ReserveFungible,
+	//AssetOf,
 };
+pub use fungibles::{
+	InspectFungibles, Fungibles, TransferFungibles, ReserveFungibles,
+	BalancedFungibles, UnbalancedFungibles,
+};
+
+/// Return type used when we need to return one of two imbalances each in the opposite direction.
+pub enum UnderOver<A, B> {
+	/// There is no imbalance.
+	Exact,
+	/// An imbalance of the same type as the `Self` on which the return function was called.
+	Under(A),
+	/// An imbalance of the opposite type to the `Self` on which the return function was called.
+	Over(B),
+}
+
+impl<A, B> UnderOver<A, B> {
+	pub fn try_drop(self) -> Result<(), Self> {
+		if let Self::Exact = self {
+			Ok(())
+		} else {
+			Err(self)
+		}
+	}
+}
+
+/// One of a number of consequences of withdrawing a fungible from an account.
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub enum WithdrawConsequence<Balance> {
+	/// Withdraw could not happen.
+	Failed,
+	/// Account balance would reduce to zero, potentially destroying it. The parameter is the
+	/// amount of balance which is destroyed.
+	ReducedToZero(Balance),
+	/// Account continued in existence.
+	Success,
+}
 
 /// Re-expected for the macro.
 #[doc(hidden)]
