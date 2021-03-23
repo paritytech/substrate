@@ -375,15 +375,16 @@ benchmarks! {
 		let delegate: T::AccountId = account("delegate", 0, SEED);
 		whitelist_account!(delegate);
 		let delegate_lookup = T::Lookup::unlookup(delegate.clone());
-		let amount = 100u32.into();
+		let amount = 100u32;
 		let origin = SystemOrigin::Signed(owner.clone()).into();
-		Assets::<T>::approve_transfer(origin, id, delegate_lookup.clone(), amount)?;
+		Assets::<T>::approve_transfer(origin, id, delegate_lookup.clone(), amount.into())?;
 
 		let dest: T::AccountId = account("dest", 0, SEED);
 		let dest_lookup = T::Lookup::unlookup(dest.clone());
-	}: _(SystemOrigin::Signed(delegate.clone()), id, owner_lookup, dest_lookup, amount)
+		let xfer_amount = (amount - 1).into();
+	}: _(SystemOrigin::Signed(delegate.clone()), id, owner_lookup, dest_lookup, xfer_amount)
 	verify {
-		assert_last_event::<T>(Event::TransferredApproved(id, owner, delegate, dest, amount).into());
+		assert_last_event::<T>(Event::Transferred(id, owner, dest, xfer_amount).into());
 	}
 
 	cancel_approval {
