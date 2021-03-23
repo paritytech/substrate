@@ -94,6 +94,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			#frame_support::PartialEqNoBound,
 			#frame_support::codec::Encode,
 			#frame_support::codec::Decode,
+			#frame_support::scale_info::TypeInfo,
 		)]
 		#[allow(non_camel_case_types)]
 		pub enum #call_ident<#type_decl_bounded_gen> #where_clause {

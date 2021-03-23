@@ -33,6 +33,7 @@ std = [
 	"log",
 	"serde",
 	"codec/std",
+	"scale-info/std",
 	"grandpa/std",
 	"sp-api/std",
 	"sp-application-crypto/std",

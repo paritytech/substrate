@@ -268,4 +268,5 @@ panic = "unwind"
 [patch.crates-io]
 parity-util-mem = { git = "https://github.com/paritytech/parity-common" }
 primitive-types = { git = "https://github.com/paritytech/parity-common" }
-scale-info = { git = "https://github.com/paritytech/scale-info", branch = "master", default-features = false, features = ["derive"] }
+scale-info = { git = "https://github.com/paritytech/scale-info", branch = "master" }
+finality-grandpa = { git = "https://github.com/paritytech/finality-grandpa", branch = "aj-scale-info" }

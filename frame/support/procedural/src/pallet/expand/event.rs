@@ -121,6 +121,7 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 			#frame_support::RuntimeDebugNoBound,
 			#frame_support::codec::Encode,
 			#frame_support::codec::Decode,
+			#frame_support::scale_info::TypeInfo,
 		)]
 	));
 

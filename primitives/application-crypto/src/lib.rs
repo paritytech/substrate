@@ -404,6 +404,7 @@ macro_rules! app_crypto_signature_full_crypto {
 				$crate::codec::Encode,
 				$crate::codec::Decode,
 				$crate::RuntimeDebug,
+				$crate::scale_info::TypeInfo,
 			)]
 			#[derive(Hash)]
 			pub struct Signature($sig);
@@ -437,6 +438,7 @@ macro_rules! app_crypto_signature_not_full_crypto {
 			#[derive(Clone, Default, Eq, PartialEq,
 				$crate::codec::Encode,
 				$crate::codec::Decode,
+				$crate::scale_info::TypeInfo,
 				$crate::RuntimeDebug,
 			)]
 			pub struct Signature($sig);

@@ -1608,8 +1608,7 @@ dependencies = [
 [[package]]
 name = "finality-grandpa"
 version = "0.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c6447e2f8178843749e8c8003206def83ec124a7859475395777a28b5338647c"
+source = "git+https://github.com/paritytech/finality-grandpa?branch=aj-scale-info#3d7babf1e43ab630189c2488f3e99c075f0944f4"
 dependencies = [
  "either",
  "futures 0.3.13",
@@ -1619,6 +1618,7 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.11.1",
  "rand 0.8.3",
+ "scale-info",
 ]
 
 [[package]]
@@ -5232,6 +5232,7 @@ dependencies = [
  "pallet-balances",
  "pallet-utility",
  "parity-scale-codec",
+ "scale-info",
  "serde",
  "sp-core",
  "sp-io",

@@ -26,6 +26,8 @@
 
 #[doc(hidden)]
 pub use codec;
+#[doc(hidden)]
+pub use scale_info;
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use serde;
