@@ -668,7 +668,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Module<T> {
 		// Tell the offchain worker to start making the next session's heartbeats.
 		// Since we consider producing blocks as being online,
 		// the heartbeat is deferred a bit to prevent spamming.
-		let block_number = <frame_system::Module<T>>::block_number();
+		let block_number = <frame_system::Pallet<T>>::block_number();
 		let half_session = T::NextSessionRotation::average_session_length() / 2u32.into();
 		<HeartbeatAfter<T>>::put(block_number + half_session);
 

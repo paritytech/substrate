@@ -78,9 +78,9 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
-		Historical: pallet_session_historical::{Module},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
+		Historical: pallet_session_historical::{Pallet},
 	}
 );
 
@@ -91,8 +91,8 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
 	}
 );
 
@@ -210,11 +210,11 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	);
 	BasicExternalities::execute_with_storage(&mut t, || {
 		for (ref k, ..) in &keys {
-			frame_system::Module::<Test>::inc_providers(k);
+			frame_system::Pallet::<Test>::inc_providers(k);
 		}
-		frame_system::Module::<Test>::inc_providers(&4);
+		frame_system::Pallet::<Test>::inc_providers(&4);
 		// An additional identity that we use.
-		frame_system::Module::<Test>::inc_providers(&69);
+		frame_system::Pallet::<Test>::inc_providers(&69);
 	});
 	pallet_session::GenesisConfig::<Test> { keys }.assimilate_storage(&mut t).unwrap();
 	sp_io::TestExternalities::new(t)

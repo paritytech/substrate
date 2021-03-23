@@ -1366,7 +1366,7 @@ define_env!(Env, <E: Ext>,
 	seal_println(ctx, str_ptr: u32, str_len: u32) => {
 		let data = ctx.read_sandbox_memory(str_ptr, str_len)?;
 		if let Ok(utf8) = core::str::from_utf8(&data) {
-			sp_runtime::print(utf8);
+			log::info!(target: "runtime::contracts", "seal_println: {}", utf8);
 		}
 		Ok(())
 	},

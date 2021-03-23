@@ -76,7 +76,7 @@ fn block_number_to_index<T: Config>(block_number: T::BlockNumber) -> usize {
 decl_module! {
 	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		fn on_initialize(block_number: T::BlockNumber) -> Weight {
-			let parent_hash = <frame_system::Module<T>>::parent_hash();
+			let parent_hash = <frame_system::Pallet<T>>::parent_hash();
 
 			<RandomMaterial<T>>::mutate(|ref mut values| if values.len() < RANDOM_MATERIAL_LEN as usize {
 				values.push(parent_hash)
@@ -111,7 +111,7 @@ impl<T: Config> Randomness<T::Hash, T::BlockNumber> for Module<T> {
 	/// and mean that all bits of the resulting value are entirely manipulatable by the author of
 	/// the parent block, who can determine the value of `parent_hash`.
 	fn random(subject: &[u8]) -> (T::Hash, T::BlockNumber) {
-		let block_number = <frame_system::Module<T>>::block_number();
+		let block_number = <frame_system::Pallet<T>>::block_number();
 		let index = block_number_to_index::<T>(block_number);
 
 		let hash_series = <RandomMaterial<T>>::get();
@@ -157,8 +157,8 @@ mod tests {
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
-			System: frame_system::{Module, Call, Config, Storage, Event<T>},
-			CollectiveFlip: pallet_randomness_collective_flip::{Module, Call, Storage},
+			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+			CollectiveFlip: pallet_randomness_collective_flip::{Pallet, Call, Storage},
 		}
 	);
 

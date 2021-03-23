@@ -451,7 +451,7 @@ impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
 		let pending_changes = self.make_authorities_changes(&mut block, hash, initial_sync)?;
 
 		// we don't want to finalize on `inner.import_block`
-		let mut justification = block.justification.take();
+		let mut justifications = block.justifications.take();
 		let import_result = (&*self.inner).import_block(block, new_cache);
 
 		let mut imported_aux = {
@@ -513,17 +513,20 @@ impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
 				// need to apply first, drop any justification that might have been provided with
 				// the block to make sure we request them from `sync` which will ensure they'll be
 				// applied in-order.
-				justification.take();
+				justifications.take();
 			},
 			_ => {},
 		}
 
-		match justification {
+		let grandpa_justification = justifications
+			.and_then(|just| just.into_justification(GRANDPA_ENGINE_ID));
+
+		match grandpa_justification {
 			Some(justification) => {
 				let import_res = self.import_justification(
 					hash,
 					number,
-					justification,
+					(GRANDPA_ENGINE_ID, justification),
 					needs_justification,
 					initial_sync,
 				);
@@ -637,8 +640,14 @@ where
 		enacts_change: bool,
 		initial_sync: bool,
 	) -> Result<(), ConsensusError> {
+		if justification.0 != GRANDPA_ENGINE_ID {
+			return Err(ConsensusError::ClientImport(
+				"GRANDPA can only import GRANDPA Justifications.".into(),
+			));
+		}
+
 		let justification = GrandpaJustification::decode_and_verify_finalizes(
-			&justification,
+			&justification.1,
 			(hash, number),
 			self.authority_set.set_id(),
 			&self.authority_set.current_authorities(),

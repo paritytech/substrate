@@ -63,7 +63,7 @@ use sp_core::H256;
 use sc_network::config::ProtocolConfig;
 use sp_runtime::generic::{BlockId, OpaqueDigestItemId};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use sp_runtime::Justification;
+use sp_runtime::{Justification, Justifications};
 use substrate_test_runtime_client::{self, AccountKeyring};
 use sc_service::client::Client;
 pub use sc_network::config::EmptyTransactionPool;
@@ -109,7 +109,7 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 		&mut self,
 		origin: BlockOrigin,
 		header: B::Header,
-		justification: Option<Justification>,
+		justifications: Option<Justifications>,
 		body: Option<Vec<B::Extrinsic>>
 	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		let maybe_keys = header.digest()
@@ -120,7 +120,7 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 		let mut import = BlockImportParams::new(origin, header);
 		import.body = body;
 		import.finalized = self.finalized;
-		import.justification = justification;
+		import.justifications = justifications;
 		import.fork_choice = Some(self.fork_choice.clone());
 
 		Ok((import, maybe_keys))
@@ -184,10 +184,10 @@ impl PeersClient {
 		}
 	}
 
-	pub fn justification(&self, block: &BlockId<Block>) -> ClientResult<Option<Justification>> {
+	pub fn justifications(&self, block: &BlockId<Block>) -> ClientResult<Option<Justifications>> {
 		match *self {
-			PeersClient::Full(ref client, ref _backend) => client.justification(block),
-			PeersClient::Light(ref client, ref _backend) => client.justification(block),
+			PeersClient::Full(ref client, ref _backend) => client.justifications(block),
+			PeersClient::Light(ref client, ref _backend) => client.justifications(block),
 		}
 	}
 
@@ -577,11 +577,11 @@ impl<B: BlockT> Verifier<B> for VerifierAdapter<B> {
 		&mut self,
 		origin: BlockOrigin,
 		header: B::Header,
-		justification: Option<Justification>,
+		justifications: Option<Justifications>,
 		body: Option<Vec<B::Extrinsic>>
 	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		let hash = header.hash();
-		self.verifier.lock().verify(origin, header, justification, body).map_err(|e| {
+		self.verifier.lock().verify(origin, header, justifications, body).map_err(|e| {
 			self.failed_verifications.lock().insert(hash, e.clone());
 			e
 		})
