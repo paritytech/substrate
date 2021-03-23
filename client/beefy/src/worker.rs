@@ -115,7 +115,7 @@ where
 	///
 	/// For this reason, BEEFY worker initialization completes only after a finality
 	/// notification has been received. Such a notifcation is basically an indication
-	/// that an on-chain BEEFY pallet is available.
+	/// that an on-chain BEEFY pallet may be available.
 	pub(crate) fn new(
 		client: Arc<C>,
 		key_store: SyncCryptoStorePtr,
@@ -131,7 +131,7 @@ where
 			finality_notifications: client.finality_notification_stream(),
 			gossip_engine: Arc::new(Mutex::new(gossip_engine)),
 			signed_commitment_sender,
-			best_finalized_block: client.info().finalized_number,
+			best_finalized_block: Zero::zero(),
 			best_block_voted_on: Zero::zero(),
 			validator_set_id: 0,
 			client,
@@ -168,6 +168,11 @@ where
 
 		self.local_id = local_id;
 		self.rounds = round::Rounds::new(validator_set.validators.clone());
+
+		// we are actually interested in the best finalized block with the BEEFY pallet
+		// being available on-chain. That is why we set `best_finalized_block` here and
+		// not as part of `new()` already.
+		self.best_finalized_block = self.client.info().finalized_number;
 
 		debug!(target: "beefy", "🥩 Validator set with id {} initialized", validator_set.id);
 
@@ -325,9 +330,9 @@ where
 							match self.init_validator_set() {
 								Ok(()) => (),
 								Err(err) => {
-									// we don't treat this as an error here because there really is
-									// nothing a node operator could do in order to remedy the error.
-									info!(target: "beefy", "🥩 Init validator set failed: {:?}", err);
+									// this is not treated as an error here because there really is
+									// nothing a node operator could do in order to remedy the root cause.
+									debug!(target: "beefy", "🥩 Init validator set failed: {:?}", err);
 								}
 							}
 						}
