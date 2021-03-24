@@ -144,6 +144,34 @@ fn enable_dyanmic_damping_bottom_0_100_percents() {
 }
 
 #[test]
+fn enable_dyanmic_damping_basic_80_20_works() {
+	ExtBuilder::default()
+		.minimum_validator_count(1)
+		.validator_count(10)
+		.nominate(true)
+		.enable_automatic_validator_update_per_era(true)
+		.build()
+		.execute_with(|| {
+		// It requires to update the balances setup in order to have the third case as follows:
+		// For example total_stakes = [0, 0, 0, 0, 0, 0, 0, 0, 1, 1]
+		
+		// First condition: x_percent_average_stake > global_average.saturating_mul(x_percent_of_validators)
+		// global_avg = 2/10 -> ~ 1
+		// x_avg = 	0/8 = 0
+		// 0 > 1 * 8 --> False
+		
+		// The second condition:
+		// y_percent_average_stake < global_average.saturating_mul(y_percent_of_validators)
+		// but giving that that the total_stakes are sorted, it implies that 
+		// this condition can be statisfied as shown below:
+		// global_avg = 2/10 -> ~ 1
+		// the y_avg of the last 20 % --> ( 1 + 1 ) / 2 ~= 1
+		// 1 < 1 * 2  --> True
+		// final_validator_count = max(1 , 10-1) = 9
+	});
+}
+
+#[test]
 fn basic_setup_works() {
 	// Verifies initial conditions of mock
 	ExtBuilder::default().build_and_execute(|| {
