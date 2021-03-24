@@ -19,15 +19,21 @@
 //! requiring atomic balanced operations.
 
 use super::*;
-
 use sp_std::marker::PhantomData;
 use sp_runtime::traits::Zero;
 use super::super::Imbalance as ImbalanceT;
 use crate::traits::misc::{SameOrOther, TryDrop};
 use crate::dispatch::{DispatchResult, DispatchError};
 
+/// A fungible token class where any creation and deletion of tokens is semi-explicit and where the
+/// total supply is maintained automatically.
+///
+/// This is auto-implemented when a token class has `Unbalanced` implemented.
 pub trait Balanced<AccountId>: Inspect<AccountId> {
+	/// The type for managing what happens when an instance of `Debt` is dropped without being used.
 	type OnDropDebt: HandleImbalanceDrop<Self::Balance>;
+	/// The type for managing what happens when an instance of `Credit` is dropped without being
+	/// used.
 	type OnDropCredit: HandleImbalanceDrop<Self::Balance>;
 
 	/// Reduce the total issuance by `amount` and return the according imbalance. The imbalance will
@@ -134,6 +140,14 @@ pub trait Balanced<AccountId>: Inspect<AccountId> {
 	}
 }
 
+/// A fungible token class where the balance can be set arbitrarily.
+///
+/// **WARNING**
+/// Do not use this directly unless you want trouble, since it allows you to alter account balances
+/// without keeping the issuance up to date. It has no safeguards against accidentally creating
+/// token imbalances in your system leading to accidental imflation or deflation. It's really just
+/// for the underlying datatype to implement so the user gets the much safer `Balanced` trait to
+/// use.
 pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 	/// Set the balance of `who` to `amount`. If this cannot be done for some reason (e.g.
 	/// because the account cannot be created or an overflow) then an `Err` is returned.
@@ -244,6 +258,8 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 	}
 }
 
+/// Simple handler for an imbalance drop which increases the total issuance of the system by the
+/// imbalance amount. Used for leftover debt.
 pub struct IncreaseIssuance<AccountId, U>(PhantomData<(AccountId, U)>);
 impl<AccountId, U: Unbalanced<AccountId>> HandleImbalanceDrop<U::Balance>
 	for IncreaseIssuance<AccountId, U>
@@ -253,6 +269,8 @@ impl<AccountId, U: Unbalanced<AccountId>> HandleImbalanceDrop<U::Balance>
 	}
 }
 
+/// Simple handler for an imbalance drop which decreases the total issuance of the system by the
+/// imbalance amount. Used for leftover credit.
 pub struct DecreaseIssuance<AccountId, U>(PhantomData<(AccountId, U)>);
 impl<AccountId, U: Unbalanced<AccountId>> HandleImbalanceDrop<U::Balance>
 	for DecreaseIssuance<AccountId, U>
@@ -262,24 +280,36 @@ impl<AccountId, U: Unbalanced<AccountId>> HandleImbalanceDrop<U::Balance>
 	}
 }
 
+/// An imbalance type which uses `DecreaseIssuance` to deal with anything `Drop`ed.
+///
+/// Basically means that funds in someone's account have been removed and not yet placed anywhere
+/// else. If it gets dropped, then those funds will be assumed to be "burned" and the total supply
+/// will be accordingly decreased to ensure it equals the sum of the balances of all accounts.
 type Credit<AccountId, U> = Imbalance<
 	<U as Inspect<AccountId>>::Balance,
 	DecreaseIssuance<AccountId, U>,
 	IncreaseIssuance<AccountId, U>,
 >;
 
+/// An imbalance type which uses `IncreaseIssuance` to deal with anything `Drop`ed.
+///
+/// Basically means that there are funds in someone's account whose origin is as yet unaccounted
+/// for. If it gets dropped, then those funds will be assumed to be "minted" and the total supply
+/// will be accordingly increased to ensure it equals the sum of the balances of all accounts.
 type Debt<AccountId, U> = Imbalance<
 	<U as Inspect<AccountId>>::Balance,
 	IncreaseIssuance<AccountId, U>,
 	DecreaseIssuance<AccountId, U>,
 >;
 
+/// Create some `Credit` item. Only for internal use.
 fn credit<AccountId, U: Unbalanced<AccountId>>(
 	amount: U::Balance,
 ) -> Credit<AccountId, U> {
 	Imbalance::new(amount)
 }
 
+/// Create some `Debt` item. Only for internal use.
 fn debt<AccountId, U: Unbalanced<AccountId>>(
 	amount: U::Balance,
 ) -> Debt<AccountId, U> {

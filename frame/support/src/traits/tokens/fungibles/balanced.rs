@@ -25,6 +25,10 @@ use sp_arithmetic::traits::Saturating;
 use crate::dispatch::{DispatchError, DispatchResult};
 use crate::traits::misc::{SameOrOther, TryDrop};
 
+/// A fungible token class where any creation and deletion of tokens is semi-explicit and where the
+/// total supply is maintained automatically.
+///
+/// This is auto-implemented when a token class has `Unbalanced` implemented.
 pub trait Balanced<AccountId>: Inspect<AccountId> {
 	type OnDropDebt: HandleImbalanceDrop<Self::AssetId, Self::Balance>;
 	type OnDropCredit: HandleImbalanceDrop<Self::AssetId, Self::Balance>;
@@ -255,6 +259,8 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 	}
 }
 
+/// Simple handler for an imbalance drop which increases the total issuance of the system by the
+/// imbalance amount. Used for leftover debt.
 pub struct IncreaseIssuance<AccountId, U>(PhantomData<(AccountId, U)>);
 impl<AccountId, U: Unbalanced<AccountId>> HandleImbalanceDrop<U::AssetId, U::Balance>
 	for IncreaseIssuance<AccountId, U>
@@ -264,6 +270,8 @@ impl<AccountId, U: Unbalanced<AccountId>> HandleImbalanceDrop<U::AssetId, U::Bal
 	}
 }
 
+/// Simple handler for an imbalance drop which decreases the total issuance of the system by the
+/// imbalance amount. Used for leftover credit.
 pub struct DecreaseIssuance<AccountId, U>(PhantomData<(AccountId, U)>);
 impl<AccountId, U: Unbalanced<AccountId>> HandleImbalanceDrop<U::AssetId, U::Balance>
 	for DecreaseIssuance<AccountId, U>
@@ -273,6 +281,11 @@ impl<AccountId, U: Unbalanced<AccountId>> HandleImbalanceDrop<U::AssetId, U::Bal
 	}
 }
 
+/// An imbalance type which uses `DecreaseIssuance` to deal with anything `Drop`ed.
+///
+/// Basically means that funds in someone's account have been removed and not yet placed anywhere
+/// else. If it gets dropped, then those funds will be assumed to be "burned" and the total supply
+/// will be accordingly decreased to ensure it equals the sum of the balances of all accounts.
 type Credit<AccountId, U> = Imbalance<
 	<U as Inspect<AccountId>>::AssetId,
 	<U as Inspect<AccountId>>::Balance,
@@ -280,6 +293,11 @@ type Credit<AccountId, U> = Imbalance<
 	IncreaseIssuance<AccountId, U>,
 >;
 
+/// An imbalance type which uses `IncreaseIssuance` to deal with anything `Drop`ed.
+///
+/// Basically means that there are funds in someone's account whose origin is as yet unaccounted
+/// for. If it gets dropped, then those funds will be assumed to be "minted" and the total supply
+/// will be accordingly increased to ensure it equals the sum of the balances of all accounts.
 type Debt<AccountId, U> = Imbalance<
 	<U as Inspect<AccountId>>::AssetId,
 	<U as Inspect<AccountId>>::Balance,
@@ -287,6 +305,7 @@ type Debt<AccountId, U> = Imbalance<
 	DecreaseIssuance<AccountId, U>,
 >;
 
+/// Create some `Credit` item. Only for internal use.
 fn credit<AccountId, U: Unbalanced<AccountId>>(
 	asset: U::AssetId,
 	amount: U::Balance,
@@ -294,6 +313,7 @@ fn credit<AccountId, U: Unbalanced<AccountId>>(
 	Imbalance::new(asset, amount)
 }
 
+/// Create some `Debt` item. Only for internal use.
 fn debt<AccountId, U: Unbalanced<AccountId>>(
 	asset: U::AssetId,
 	amount: U::Balance,

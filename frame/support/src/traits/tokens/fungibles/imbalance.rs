@@ -25,10 +25,17 @@ use super::fungibles::{AssetId, Balance};
 use super::balanced::Balanced;
 use crate::traits::misc::{TryDrop, SameOrOther};
 
+/// Handler for when an imbalance gets dropped. This could handle either a credit (negative) or
+/// debt (positive) imbalance.
 pub trait HandleImbalanceDrop<AssetId, Balance> {
 	fn handle(asset: AssetId, amount: Balance);
 }
 
+/// An imbalance in the system, representing a divergence of recorded token supply from the sum of
+/// the balances of all accounts. This is `must_use` in order to ensure it gets handled (placing
+/// into an account, settling from an account or altering the supply).
+///
+/// Importantly, it has a special `Drop` impl, and cannot be created outside of this module.
 #[must_use]
 pub struct Imbalance<
 	A: AssetId,

@@ -24,11 +24,11 @@ use crate::traits::misc::SameOrOther;
 use super::super::imbalance::Imbalance;
 
 /// Either a positive or a negative imbalance.
-pub enum SignedImbalance<B, P: Imbalance<B>>{
+pub enum SignedImbalance<B, PositiveImbalance: Imbalance<B>>{
 	/// A positive imbalance (funds have been created but none destroyed).
-	Positive(P),
+	Positive(PositiveImbalance),
 	/// A negative imbalance (funds have been destroyed but none created).
-	Negative(P::Opposite),
+	Negative(PositiveImbalance::Opposite),
 }
 
 impl<
@@ -36,10 +36,12 @@ impl<
 	N: Imbalance<B, Opposite=P>,
 	B: AtLeast32BitUnsigned + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default,
 > SignedImbalance<B, P> {
+	/// Create a `Positive` instance of `Self` whose value is zero.
 	pub fn zero() -> Self {
 		SignedImbalance::Positive(P::zero())
 	}
 
+	/// Drop `Self` if and only if it is equal to zero. Return `Err` with `Self` if not.
 	pub fn drop_zero(self) -> Result<(), Self> {
 		match self {
 			SignedImbalance::Positive(x) => x.drop_zero().map_err(SignedImbalance::Positive),
