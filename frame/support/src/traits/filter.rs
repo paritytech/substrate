@@ -190,7 +190,7 @@ pub trait IntegrityTest {
 }
 
 #[cfg(test)]
-mod test_impl_filter_stack {
+pub mod test_impl_filter_stack {
 	use super::*;
 
 	pub struct IsCallable;
@@ -199,8 +199,8 @@ mod test_impl_filter_stack {
 		fn filter(x: &u32) -> bool { x % 2 == 0 }
 	}
 	impl_filter_stack!(
-		crate::traits::test_impl_filter_stack::IsCallable,
-		crate::traits::test_impl_filter_stack::BaseFilter,
+		crate::traits::filter::test_impl_filter_stack::IsCallable,
+		crate::traits::filter::test_impl_filter_stack::BaseFilter,
 		u32,
 		is_callable
 	);

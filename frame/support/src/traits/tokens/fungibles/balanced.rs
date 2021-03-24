@@ -20,7 +20,7 @@
 
 use super::*;
 use sp_std::marker::PhantomData;
-use sp_runtime::traits::Zero;
+use sp_runtime::{TokenError, traits::Zero};
 use sp_arithmetic::traits::Saturating;
 use crate::dispatch::{DispatchError, DispatchResult};
 use crate::traits::misc::{SameOrOther, TryDrop};
@@ -167,7 +167,7 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 	{
 		let old_balance = Self::balance(asset, who);
 		let (mut new_balance, mut amount) = if old_balance < amount {
-			return Err(DispatchError::Other("BalanceLow"));
+			Err(TokenError::NoFunds)?
 		} else {
 			(old_balance - amount, amount)
 		};
@@ -227,7 +227,7 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 		let old_balance = Self::balance(asset, who);
 		let new_balance = old_balance.saturating_add(amount);
 		if new_balance < Self::minimum_balance(asset) {
-			return Err(DispatchError::Other("AmountTooLow"))
+			Err(TokenError::BelowMinimum)?
 		}
 		if old_balance != new_balance {
 			Self::set_balance(asset, who, new_balance)?;

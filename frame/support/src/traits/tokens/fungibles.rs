@@ -18,7 +18,6 @@
 //! The traits for sets of fungible tokens and any associated types.
 
 use super::*;
-use sp_runtime::traits::Zero;
 use crate::dispatch::{DispatchError, DispatchResult};
 use super::misc::{AssetId, Balance};
 
@@ -40,7 +39,8 @@ pub trait Inspect<AccountId> {
 	/// Get the `asset` balance of `who`.
 	fn balance(asset: Self::AssetId, who: &AccountId) -> Self::Balance;
 	/// Returns `true` if the `asset` balance of `who` may be increased by `amount`.
-	fn can_deposit(asset: Self::AssetId, who: &AccountId, amount: Self::Balance) -> bool;
+	fn can_deposit(asset: Self::AssetId, who: &AccountId, amount: Self::Balance)
+		-> DepositConsequence;
 	/// Returns `Failed` if the `asset` balance of `who` may not be decreased by `amount`, otherwise
 	/// the consequence.
 	fn can_withdraw(
@@ -81,34 +81,24 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 		-> Result<Self::Balance, DispatchError>;
 
 	/// Transfer funds from one account into another.
-	///
-	/// This isn't really meant to
 	fn transfer(
 		asset: Self::AssetId,
 		source: &AccountId,
 		dest: &AccountId,
 		amount: Self::Balance,
 	) -> Result<Self::Balance, DispatchError> {
-		let extra = match Self::can_withdraw(asset, &source, amount) {
-			WithdrawConsequence::Failed => return Err(DispatchError::Other("Cannot withdraw")),
-			WithdrawConsequence::ReducedToZero(extra) => extra,
-			WithdrawConsequence::Success => Zero::zero(),
-		};
-		if !Self::can_deposit(asset, &dest, amount + extra) {
-			return Err(DispatchError::Other("Cannot deposit"))
-		}
+		let extra = Self::can_withdraw(asset, &source, amount).into_result()?;
+		Self::can_deposit(asset, &dest, amount + extra).into_result()?;
 		let actual = Self::withdraw(asset, source, amount)?;
 		debug_assert!(actual == amount + extra, "can_withdraw must agree with withdraw; qed");
 		match Self::deposit(asset, dest, actual) {
 			Ok(_) => Ok(actual),
-			Err(_) => {
+			Err(err) => {
 				debug_assert!(false, "can_deposit returned true previously; qed");
 				// attempt to return the funds back to source
-				let result = Self::deposit(asset, source, actual);
-				if result.is_err() {
-					debug_assert!(false, "withdraw funds previously; qed");
-				}
-				return Err(DispatchError::Other("Cannot deposit"))
+				let revert = Self::deposit(asset, source, actual);
+				debug_assert!(revert.is_ok(), "withdrew funds previously; qed");
+				Err(err)
 			}
 		}
 	}

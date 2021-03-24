@@ -140,8 +140,9 @@ use sp_runtime::{
 use codec::{Encode, Decode, HasCompact};
 use frame_support::{ensure, dispatch::{DispatchError, DispatchResult}};
 use frame_support::traits::{Currency, ReservableCurrency, BalanceStatus::Reserved};
-use frame_support::traits::tokens::{WithdrawConsequence, fungibles};
+use frame_support::traits::tokens::{WithdrawConsequence, DepositConsequence, fungibles};
 use frame_system::Config as SystemConfig;
+
 pub use weights::WeightInfo;
 pub use pallet::*;
 
@@ -168,7 +169,7 @@ impl<T: Config> fungibles::Inspect<<T as SystemConfig>::AccountId> for Pallet<T>
 		asset: Self::AssetId,
 		who: &<T as SystemConfig>::AccountId,
 		amount: Self::Balance,
-	) -> bool {
+	) -> DepositConsequence {
 		Pallet::<T>::can_deposit(asset, who, amount)
 	}
 
@@ -1399,21 +1400,31 @@ impl<T: Config> Pallet<T> {
 		d.accounts = d.accounts.saturating_sub(1);
 	}
 
-	fn can_deposit(id: T::AssetId, who: &T::AccountId, amount: T::Balance) -> bool {
+	fn can_deposit(id: T::AssetId, who: &T::AccountId, amount: T::Balance) -> DepositConsequence {
 		let details = match Asset::<T>::get(id) {
 			Some(details) => details,
-			None => return false,
+			None => return DepositConsequence::UnknownAsset,
 		};
-		if details.supply.checked_add(&amount).is_none() { return false }
+		if details.supply.checked_add(&amount).is_none() {
+			return DepositConsequence::Overflow
+		}
 		let account = Account::<T>::get(id, who);
-		if account.balance.checked_add(&amount).is_none() { return false }
+		if account.balance.checked_add(&amount).is_none() {
+			return DepositConsequence::Overflow
+		}
 		if account.balance.is_zero() {
-			if amount < details.min_balance { return false }
-			if !details.is_sufficient && frame_system::Pallet::<T>::providers(who) == 0 { return false }
-			if details.is_sufficient && details.sufficients.checked_add(1).is_none() { return false }
+			if amount < details.min_balance {
+				return DepositConsequence::BelowMinimum
+			}
+			if !details.is_sufficient && frame_system::Pallet::<T>::providers(who) == 0 {
+				return DepositConsequence::CannotCreate
+			}
+			if details.is_sufficient && details.sufficients.checked_add(1).is_none() {
+				return DepositConsequence::Overflow
+			}
 		}
 
-		true
+		DepositConsequence::Success
 	}
 
 	fn can_withdraw(
@@ -1423,18 +1434,22 @@ impl<T: Config> Pallet<T> {
 	) -> WithdrawConsequence<T::Balance> {
 		let details = match Asset::<T>::get(id) {
 			Some(details) => details,
-			None => return WithdrawConsequence::Failed,
+			None => return WithdrawConsequence::UnknownAsset,
 		};
-		if details.supply.checked_sub(&amount).is_none() { return WithdrawConsequence::Failed }
+		if details.supply.checked_sub(&amount).is_none() {
+			return WithdrawConsequence::Underflow
+		}
 		let account = Account::<T>::get(id, who);
 		if let Some(rest) = account.balance.checked_sub(&amount) {
 			if rest < details.min_balance {
 				WithdrawConsequence::ReducedToZero(rest)
 			} else {
+				// NOTE: this assumes (correctly) that the token won't be a provider. If that ever
+				// changes, this will need to change.
 				WithdrawConsequence::Success
 			}
 		} else {
-			WithdrawConsequence::Failed
+			WithdrawConsequence::NoFunds
 		}
 	}
 

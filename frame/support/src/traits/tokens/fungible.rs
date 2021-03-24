@@ -21,7 +21,7 @@ use super::*;
 use sp_runtime::traits::Saturating;
 use crate::traits::misc::Get;
 use crate::dispatch::{DispatchResult, DispatchError};
-use super::misc::{WithdrawConsequence, Balance};
+use super::misc::{DepositConsequence, WithdrawConsequence, Balance};
 
 mod balanced;
 mod imbalance;
@@ -39,7 +39,7 @@ pub trait Inspect<AccountId> {
 	/// Get the balance of `who`.
 	fn balance(who: &AccountId) -> Self::Balance;
 	/// Returns `true` if the balance of `who` may be increased by `amount`.
-	fn can_deposit(who: &AccountId, amount: Self::Balance) -> bool;
+	fn can_deposit(who: &AccountId, amount: Self::Balance) -> DepositConsequence;
 	/// Returns `Failed` if the balance of `who` may not be decreased by `amount`, otherwise
 	/// the consequence.
 	fn can_withdraw(who: &AccountId, amount: Self::Balance) -> WithdrawConsequence<Self::Balance>;
@@ -108,7 +108,7 @@ impl<
 	fn balance(who: &AccountId) -> Self::Balance {
 		<F as fungibles::Inspect<AccountId>>::balance(A::get(), who)
 	}
-	fn can_deposit(who: &AccountId, amount: Self::Balance) -> bool {
+	fn can_deposit(who: &AccountId, amount: Self::Balance) -> DepositConsequence {
 		<F as fungibles::Inspect<AccountId>>::can_deposit(A::get(), who, amount)
 	}
 	fn can_withdraw(who: &AccountId, amount: Self::Balance) -> WithdrawConsequence<Self::Balance> {
