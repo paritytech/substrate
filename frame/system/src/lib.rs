@@ -175,25 +175,25 @@ pub mod pallet {
 		/// with a sender account.
 		type Index:
 			Parameter + Member + MaybeSerializeDeserialize + Debug + Default + MaybeDisplay + AtLeast32Bit
-			+ Copy + scale_info::TypeInfo; // todo [AJ] add TypeInfo bound to `Parameter`
+			+ Copy;
 
 		/// The block number type used by the runtime.
 		type BlockNumber:
 			Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay +
 			AtLeast32BitUnsigned + Default + Bounded + Copy + sp_std::hash::Hash +
-			sp_std::str::FromStr + MaybeMallocSizeOf + scale_info::TypeInfo;
+			sp_std::str::FromStr + MaybeMallocSizeOf;
 
 		/// The output of the `Hashing` function.
 		type Hash:
 			Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + SimpleBitOps + Ord
-			+ Default + Copy + CheckEqual + sp_std::hash::Hash + AsRef<[u8]> + AsMut<[u8]> + MaybeMallocSizeOf + scale_info::TypeInfo;
+			+ Default + Copy + CheckEqual + sp_std::hash::Hash + AsRef<[u8]> + AsMut<[u8]> + MaybeMallocSizeOf;
 
 		/// The hashing system (algorithm) being used in the runtime (e.g. Blake2).
 		type Hashing: Hash<Output=Self::Hash>;
 
 		/// The user account identifier type for the runtime.
 		type AccountId: Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + Ord
-			+ Default + scale_info::TypeInfo;
+			+ Default;
 
 		/// Converting trait to take a source type and convert to `AccountId`.
 		///
