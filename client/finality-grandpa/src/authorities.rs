@@ -150,7 +150,6 @@ impl<H, N> SharedAuthoritySet<H, N> {
 		}
 
 		debug_assert!(!guard.locked);
-		guard.locked = true;
 
 		MutexGuard::map(guard, |i| &mut i.authority_set)
 	}
@@ -161,6 +160,10 @@ impl<H, N> SharedAuthoritySet<H, N> {
 		if guard.locked {
 			self.cond_var.wait(&mut guard);
 		}
+
+		debug_assert!(!guard.locked);
+		guard.locked = true;
+
 		InnerLocked {
 			inner: guard,
 			shared_authority_set: Some(self.clone()),

@@ -17,6 +17,11 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Collection of common consensus specific implementations
+
+use std::sync::Arc;
+use parking_lot::{Mutex, MappedMutexGuard, Condvar, MutexGuard};
+
 mod longest_chain;
+pub mod shared_data;
 
 pub use longest_chain::LongestChain;
