@@ -1,32 +1,32 @@
-name: 'Build and push Docker image'
+name: Build and push image to ECR
 on:
   push:
     branches:
-      - 'dev-cere'
+      - cere-master
+      
 env:
-  ECR_REPOSITORY: 'crb-substrate-testnet-node'
-  IMAGE_TAG: ${{ github.run_number }}-${{ github.sha }}
+  ECR_REPOSITORY: crb-substrate-testnet-node
 jobs:
   build-and-push:
-    runs-on: 'ubuntu-latest'
+    runs-on: ubuntu-18.04
     steps:
-      - name: 'Checkout repository'
-        uses: 'actions/checkout@v1'
-      - name: 'Checkout submodules'
-        run: 'git submodule update --init --recursive'
-      - name: 'Configure AWS credentials'
-        uses: 'aws-actions/configure-aws-credentials@v1'
+      - name: Checkout repository
+        uses: actions/checkout@v1
+      - name: Checkout submodules
+        run: git submodule update --init --recursive
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: 'us-west-2'
-      - name: 'Login to Amazon ECR'
-        id: 'login-ecr'
-        uses: 'aws-actions/amazon-ecr-login@v1'
-      - name: 'Build and push image'
+          aws-region: us-west-2
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+      - name: Build and push image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
-          docker build . -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker build . -t $ECR_REGISTRY/$ECR_REPOSITORY:$GITHUB_SHA
+          echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$GITHUB_SHA"
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$GITHUB_SHA
