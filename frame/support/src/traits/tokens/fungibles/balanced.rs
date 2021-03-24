@@ -19,6 +19,11 @@
 //! requiring atomic balanced operations.
 
 use super::*;
+use sp_std::marker::PhantomData;
+use sp_runtime::traits::Zero;
+use sp_arithmetic::traits::Saturating;
+use crate::dispatch::{DispatchError, DispatchResult};
+use crate::traits::misc::{SameOrOther, TryDrop};
 
 pub trait Balanced<AccountId>: Inspect<AccountId> {
 	type OnDropDebt: HandleImbalanceDrop<Self::AssetId, Self::Balance>;
@@ -118,7 +123,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> {
 		who: &AccountId,
 		debt: DebtOf<AccountId, Self>,
 		//TODO: liveness: ExistenceRequirement,
-	) -> result::Result<CreditOf<AccountId, Self>, DebtOf<AccountId, Self>> {
+	) -> Result<CreditOf<AccountId, Self>, DebtOf<AccountId, Self>> {
 		let amount = debt.peek();
 		let asset = debt.asset();
 		let credit = match Self::withdraw(asset, who, amount) {
@@ -126,9 +131,9 @@ pub trait Balanced<AccountId>: Inspect<AccountId> {
 			Ok(d) => d,
 		};
 		match credit.offset(debt) {
-			Ok(UnderOver::Exact) => Ok(CreditOf::<AccountId, Self>::zero(asset)),
-			Ok(UnderOver::Under(dust)) => Ok(dust),
-			Ok(UnderOver::Over(rest)) => {
+			Ok(SameOrOther::None) => Ok(CreditOf::<AccountId, Self>::zero(asset)),
+			Ok(SameOrOther::Same(dust)) => Ok(dust),
+			Ok(SameOrOther::Other(rest)) => {
 				debug_assert!(false, "ok withdraw return must be at least debt value; qed");
 				Err(rest)
 			}

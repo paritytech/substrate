@@ -15,12 +15,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! The imbalance type and it's associates, which handles keeps everything adding up properly with
+//! The imbalance type and its associates, which handles keeps everything adding up properly with
 //! unbalanced operations.
 
 use super::*;
-use super::fungibles::Balance;
+use sp_std::marker::PhantomData;
+use sp_runtime::traits::Zero;
+use super::misc::Balance;
 use super::balanced::Balanced;
+use crate::traits::misc::{TryDrop, SameOrOther};
+use super::super::Imbalance as ImbalanceT;
 
 pub trait HandleImbalanceDrop<Balance> {
 	fn handle(amount: Balance);
@@ -52,7 +56,7 @@ impl<
 	B: Balance,
 	OnDrop: HandleImbalanceDrop<B>,
 	OppositeOnDrop: HandleImbalanceDrop<B>,
-> super::TryDrop for Imbalance<B, OnDrop, OppositeOnDrop> {
+> TryDrop for Imbalance<B, OnDrop, OppositeOnDrop> {
 	/// Drop an instance cleanly. Only works if its value represents "no-operation".
 	fn try_drop(self) -> Result<(), Self> {
 		self.drop_zero()
@@ -64,15 +68,23 @@ impl<
 	OnDrop: HandleImbalanceDrop<B>,
 	OppositeOnDrop: HandleImbalanceDrop<B>,
 > Imbalance<B, OnDrop, OppositeOnDrop> {
-	pub fn zero() -> Self {
-		Self { amount: Zero::zero(), _phantom: PhantomData }
-	}
-
 	pub(crate) fn new(amount: B) -> Self {
 		Self { amount, _phantom: PhantomData }
 	}
+}
 
-	pub fn drop_zero(self) -> Result<(), Self> {
+impl<
+	B: Balance,
+	OnDrop: HandleImbalanceDrop<B>,
+	OppositeOnDrop: HandleImbalanceDrop<B>,
+> ImbalanceT<B> for Imbalance<B, OnDrop, OppositeOnDrop> {
+	type Opposite = Imbalance<B, OppositeOnDrop, OnDrop>;
+
+	fn zero() -> Self {
+		Self { amount: Zero::zero(), _phantom: PhantomData }
+	}
+
+	fn drop_zero(self) -> Result<(), Self> {
 		if self.amount.is_zero() {
 			sp_std::mem::forget(self);
 			Ok(())
@@ -81,36 +93,36 @@ impl<
 		}
 	}
 
-	pub fn split(self, amount: B) -> (Self, Self) {
+	fn split(self, amount: B) -> (Self, Self) {
 		let first = self.amount.min(amount);
 		let second = self.amount - first;
 		sp_std::mem::forget(self);
 		(Imbalance::new(first), Imbalance::new(second))
 	}
-	pub fn merge(mut self, other: Self) -> Self {
+	fn merge(mut self, other: Self) -> Self {
 		self.amount = self.amount.saturating_add(other.amount);
 		sp_std::mem::forget(other);
 		self
 	}
-	pub fn subsume(&mut self, other: Self) {
+	fn subsume(&mut self, other: Self) {
 		self.amount = self.amount.saturating_add(other.amount);
 		sp_std::mem::forget(other);
 	}
-	pub fn offset(self, other: Imbalance<B, OppositeOnDrop, OnDrop>)
-		-> UnderOver<Self, Imbalance<B, OppositeOnDrop, OnDrop>>
+	fn offset(self, other: Imbalance<B, OppositeOnDrop, OnDrop>)
+		-> SameOrOther<Self, Imbalance<B, OppositeOnDrop, OnDrop>>
 	{
 		let (a, b) = (self.amount, other.amount);
 		sp_std::mem::forget((self, other));
 
 		if a == b {
-			UnderOver::Exact
+			SameOrOther::None
 		} else if a > b {
-			UnderOver::Under(Imbalance::new(a - b))
+			SameOrOther::Same(Imbalance::new(a - b))
 		} else {
-			UnderOver::Over(Imbalance::<B, OppositeOnDrop, OnDrop>::new(b - a))
+			SameOrOther::Other(Imbalance::<B, OppositeOnDrop, OnDrop>::new(b - a))
 		}
 	}
-	pub fn peek(&self) -> B {
+	fn peek(&self) -> B {
 		self.amount
 	}
 }

@@ -15,11 +15,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! The imbalance type and it's associates, which handles keeps everything adding up properly with
+//! The imbalance type and its associates, which handles keeps everything adding up properly with
 //! unbalanced operations.
 
 use super::*;
+use sp_std::marker::PhantomData;
+use sp_runtime::traits::Zero;
 use super::fungibles::{AssetId, Balance};
+use super::balanced::Balanced;
+use crate::traits::misc::{TryDrop, SameOrOther};
 
 pub trait HandleImbalanceDrop<AssetId, Balance> {
 	fn handle(asset: AssetId, amount: Balance);
@@ -55,7 +59,7 @@ impl<
 	B: Balance,
 	OnDrop: HandleImbalanceDrop<A, B>,
 	OppositeOnDrop: HandleImbalanceDrop<A, B>,
-> super::TryDrop for Imbalance<A, B, OnDrop, OppositeOnDrop> {
+> TryDrop for Imbalance<A, B, OnDrop, OppositeOnDrop> {
 	/// Drop an instance cleanly. Only works if its value represents "no-operation".
 	fn try_drop(self) -> Result<(), Self> {
 		self.drop_zero()
@@ -111,7 +115,7 @@ impl<
 		}
 	}
 	pub fn offset(self, other: Imbalance<A, B, OppositeOnDrop, OnDrop>) -> Result<
-		UnderOver<Self, Imbalance<A, B, OppositeOnDrop, OnDrop>>,
+		SameOrOther<Self, Imbalance<A, B, OppositeOnDrop, OnDrop>>,
 		(Self, Imbalance<A, B, OppositeOnDrop, OnDrop>),
 	> {
 		if self.asset == other.asset {
@@ -120,11 +124,11 @@ impl<
 			sp_std::mem::forget((self, other));
 
 			if a == b {
-				Ok(UnderOver::Exact)
+				Ok(SameOrOther::None)
 			} else if a > b {
-				Ok(UnderOver::Under(Imbalance::new(asset, a - b)))
+				Ok(SameOrOther::Same(Imbalance::new(asset, a - b)))
 			} else {
-				Ok(UnderOver::Over(Imbalance::<A, B, OppositeOnDrop, OnDrop>::new(asset, b - a)))
+				Ok(SameOrOther::Other(Imbalance::<A, B, OppositeOnDrop, OnDrop>::new(asset, b - a)))
 			}
 		} else {
 			Err((self, other))

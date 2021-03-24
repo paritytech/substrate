@@ -18,16 +18,14 @@
 //! The traits for sets of fungible tokens and any associated types.
 
 use super::*;
+use sp_runtime::traits::Zero;
+use crate::dispatch::{DispatchError, DispatchResult};
+use super::misc::{AssetId, Balance};
+
 mod balanced;
-mod imbalance;
 pub use balanced::{Balanced, Unbalanced};
+mod imbalance;
 pub use imbalance::{Imbalance, HandleImbalanceDrop, DebtOf, CreditOf};
-
-pub trait AssetId: FullCodec + Copy + Default + Eq + PartialEq {}
-impl<T: FullCodec + Copy + Default + Eq + PartialEq> AssetId for T {}
-
-pub trait Balance: AtLeast32BitUnsigned + FullCodec + Copy + Default {}
-impl<T: AtLeast32BitUnsigned + FullCodec + Copy + Default> Balance for T {}
 
 /// Trait for providing balance-inspection access to a set of named fungible assets.
 pub trait Inspect<AccountId> {
@@ -54,24 +52,65 @@ pub trait Inspect<AccountId> {
 
 /// Trait for providing a set of named fungible assets which can be created and destroyed.
 pub trait Mutate<AccountId>: Inspect<AccountId> {
-	/// Increase the `asset` balance of `who` by `amount`.
+	/// Attempt to increase the `asset` balance of `who` by `amount`.
+	///
+	/// If not possible then don't do anything. Possible reasons for failure include:
+	/// - Minimum balance not met.
+	/// - Account cannot be created (e.g. because there is no provider reference and/or the asset
+	///   isn't considered worth anything).
+	///
+	/// Since this is an operation which should be possible to take alone, if successful it will
+	/// increase the overall supply of the underlying token.
 	fn deposit(asset: Self::AssetId, who: &AccountId, amount: Self::Balance) -> DispatchResult;
+
 	/// Attempt to reduce the `asset` balance of `who` by `amount`.
-	fn withdraw(asset: Self::AssetId, who: &AccountId, amount: Self::Balance) -> DispatchResult;
+	///
+	/// If not possible then don't do anything. Possible reasons for failure include:
+	/// - Less funds in the account than `amount`
+	/// - Liquidity requirements (locks, reservations) prevent the funds from being removed
+	/// - Operation would require destroying the account and it is required to stay alive (e.g.
+	///   because it's providing a needed provider reference).
+	///
+	/// Since this is an operation which should be possible to take alone, if successful it will
+	/// reduce the overall supply of the underlying token.
+	///
+	/// Due to minimum balance requirements, it's possible that the amount withdrawn could be up to
+	/// `Self::minimum_balance() - 1` more than the `amount`. The total amount withdrawn is returned
+	/// in an `Ok` result. This may be safely ignored if you don't mind the overall supply reducing.
+	fn withdraw(asset: Self::AssetId, who: &AccountId, amount: Self::Balance)
+		-> Result<Self::Balance, DispatchError>;
+
 	/// Transfer funds from one account into another.
+	///
+	/// This isn't really meant to
 	fn transfer(
 		asset: Self::AssetId,
 		source: &AccountId,
 		dest: &AccountId,
 		amount: Self::Balance,
-	) -> DispatchResult {
-		if !Self::can_deposit(asset, &dest, amount) {
+	) -> Result<Self::Balance, DispatchError> {
+		let extra = match Self::can_withdraw(asset, &source, amount) {
+			WithdrawConsequence::Failed => return Err(DispatchError::Other("Cannot withdraw")),
+			WithdrawConsequence::ReducedToZero(extra) => extra,
+			WithdrawConsequence::Success => Zero::zero(),
+		};
+		if !Self::can_deposit(asset, &dest, amount + extra) {
 			return Err(DispatchError::Other("Cannot deposit"))
 		}
-		Self::withdraw(asset, source, amount)?;
-		let result = Self::deposit(asset, dest, amount);
-		debug_assert!(result.is_ok(), "can_deposit returned true for a failing deposit!");
-		result
+		let actual = Self::withdraw(asset, source, amount)?;
+		debug_assert!(actual == amount + extra, "can_withdraw must agree with withdraw; qed");
+		match Self::deposit(asset, dest, actual) {
+			Ok(_) => Ok(actual),
+			Err(_) => {
+				debug_assert!(false, "can_deposit returned true previously; qed");
+				// attempt to return the funds back to source
+				let result = Self::deposit(asset, source, actual);
+				if result.is_err() {
+					debug_assert!(false, "withdraw funds previously; qed");
+				}
+				return Err(DispatchError::Other("Cannot deposit"))
+			}
+		}
 	}
 }
 

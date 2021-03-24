@@ -18,6 +18,11 @@
 //! The traits for dealing with a single fungible token class and any associated types.
 
 use super::*;
+use sp_runtime::traits::Saturating;
+use crate::traits::misc::Get;
+use crate::dispatch::{DispatchResult, DispatchError};
+use super::misc::{WithdrawConsequence, Balance};
+
 mod balanced;
 mod imbalance;
 pub use balanced::{Balanced, Unbalanced};
@@ -26,7 +31,7 @@ pub use imbalance::{Imbalance, HandleImbalanceDrop, DebtOf, CreditOf};
 /// Trait for providing balance-inspection access to a fungible asset.
 pub trait Inspect<AccountId> {
 	/// Scalar type for representing balance of an account.
-	type Balance: AtLeast32BitUnsigned + FullCodec + Copy + Default;
+	type Balance: Balance;
 	/// The total amount of issuance in the system.
 	fn total_issuance() -> Self::Balance;
 	/// The minimum balance any single account may have.
@@ -45,7 +50,7 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 	/// Increase the balance of `who` by `amount`.
 	fn deposit(who: &AccountId, amount: Self::Balance) -> DispatchResult;
 	/// Attempt to reduce the balance of `who` by `amount`.
-	fn withdraw(who: &AccountId, amount: Self::Balance) -> DispatchResult;
+	fn withdraw(who: &AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError>;
 }
 
 /// Trait for providing a fungible asset which can only be transferred.
@@ -87,6 +92,7 @@ pub struct ItemOf<
 >(
 	sp_std::marker::PhantomData<(F, A, AccountId)>
 );
+
 impl<
 	F: fungibles::Inspect<AccountId>,
 	A: Get<<F as fungibles::Inspect<AccountId>>::AssetId>,
@@ -109,6 +115,7 @@ impl<
 		<F as fungibles::Inspect<AccountId>>::can_withdraw(A::get(), who, amount)
 	}
 }
+
 impl<
 	F: fungibles::Mutate<AccountId>,
 	A: Get<<F as fungibles::Inspect<AccountId>>::AssetId>,
@@ -117,24 +124,26 @@ impl<
 	fn deposit(who: &AccountId, amount: Self::Balance) -> DispatchResult {
 		<F as fungibles::Mutate<AccountId>>::deposit(A::get(), who, amount)
 	}
-	fn withdraw(who: &AccountId, amount: Self::Balance) -> DispatchResult {
+	fn withdraw(who: &AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError> {
 		<F as fungibles::Mutate<AccountId>>::withdraw(A::get(), who, amount)
 	}
 }
+
 impl<
 	F: fungibles::Transfer<AccountId>,
 	A: Get<<F as fungibles::Inspect<AccountId>>::AssetId>,
 	AccountId,
-> TransferFungible<AccountId> for ItemOf<F, A, AccountId> {
+> Transfer<AccountId> for ItemOf<F, A, AccountId> {
 	fn transfer(source: &AccountId, dest: &AccountId, amount: Self::Balance) -> DispatchResult {
 		<F as fungibles::Transfer<AccountId>>::transfer(A::get(), source, dest, amount)
 	}
 }
+
 impl<
 	F: fungibles::Reserve<AccountId>,
 	A: Get<<F as fungibles::Inspect<AccountId>>::AssetId>,
 	AccountId,
-> ReserveFungible<AccountId> for ItemOf<F, A, AccountId> {
+> Reserve<AccountId> for ItemOf<F, A, AccountId> {
 	fn reserved_balance(who: &AccountId) -> Self::Balance {
 		<F as fungibles::Reserve<AccountId>>::reserved_balance(A::get(), who)
 	}
