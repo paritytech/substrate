@@ -452,7 +452,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, BS, Error, IDP>(BabeParams {
 
 	let worker = BabeSlotWorker {
 		client: client.clone(),
-		block_import: Arc::new(Mutex::new(block_import)),
+		block_import,
 		env,
 		sync_oracle: sync_oracle.clone(),
 		force_authoring,
@@ -601,7 +601,7 @@ type SlotNotificationSinks<B> = Arc<
 
 struct BabeSlotWorker<B: BlockT, C, E, I, SO, BS> {
 	client: Arc<C>,
-	block_import: Arc<Mutex<I>>,
+	block_import: I,
 	env: E,
 	sync_oracle: SO,
 	force_authoring: bool,
@@ -643,8 +643,8 @@ where
 		"babe"
 	}
 
-	fn block_import(&self) -> Arc<Mutex<Self::BlockImport>> {
-		self.block_import.clone()
+	fn block_import(&mut self) -> &mut Self::BlockImport {
+		&mut self.block_import
 	}
 
 	fn epoch_data(
@@ -764,7 +764,7 @@ where
 			import_block.storage_changes = Some(storage_changes);
 			import_block.intermediates.insert(
 				Cow::from(INTERMEDIATE_KEY),
-				Box::new(BabeIntermediate::<B> { epoch_descriptor }) as Box<dyn Any>,
+				Box::new(BabeIntermediate::<B> { epoch_descriptor }) as Box<_>,
 			);
 
 			Ok(import_block)
@@ -1187,7 +1187,7 @@ where
 				import_block.justification = justification;
 				import_block.intermediates.insert(
 					Cow::from(INTERMEDIATE_KEY),
-					Box::new(BabeIntermediate::<Block> { epoch_descriptor }) as Box<dyn Any>,
+					Box::new(BabeIntermediate::<Block> { epoch_descriptor }) as Box<_>,
 				);
 				import_block.post_hash = Some(hash);
 
@@ -1249,6 +1249,7 @@ impl<Block: BlockT, Client, I> BabeBlockImport<Block, Client, I> {
 	}
 }
 
+#[async_trait::async_trait]
 impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client, Inner> where
 	Block: BlockT,
 	Inner: BlockImport<Block, Transaction = sp_api::TransactionFor<Client, Block>> + Send + Sync,
@@ -1260,7 +1261,7 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 	type Error = ConsensusError;
 	type Transaction = sp_api::TransactionFor<Client, Block>;
 
-	fn import_block(
+	async fn import_block(
 		&mut self,
 		mut block: BlockImportParams<Block, Self::Transaction>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
@@ -1480,7 +1481,7 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 			}))
 		};
 
-		let import_result = self.inner.import_block(block, new_cache);
+		let import_result = self.inner.import_block(block, new_cache).await;
 
 		// revert to the original epoch changes in case there's an error
 		// importing the block
@@ -1493,11 +1494,11 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 		import_result.map_err(Into::into)
 	}
 
-	fn check_block(
+	async fn check_block(
 		&mut self,
 		block: BlockCheckParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
-		self.inner.check_block(block).map_err(Into::into)
+		self.inner.check_block(block).await.map_err(Into::into)
 	}
 }
 
