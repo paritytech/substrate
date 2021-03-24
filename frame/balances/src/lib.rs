@@ -682,6 +682,78 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
+	fn deposit_consequence(
+		_who: &T::AccountId,
+		amount: T::Balance,
+		account: &AccountData<T::Balance>,
+	) -> DepositConsequence {
+		if amount.is_zero() { return DepositConsequence::Success }
+
+		if TotalIssuance::<T, I>::get().checked_add(&amount).is_none() {
+			return DepositConsequence::Overflow
+		}
+
+		let new_total_balance = match account.total().checked_add(&amount) {
+			Some(x) => x,
+			None => return DepositConsequence::Overflow,
+		};
+
+		if new_total_balance < T::ExistentialDeposit::get() {
+			return DepositConsequence::BelowMinimum
+		}
+
+		// NOTE: We assume that we are a provider, so don't need to do any checks in the
+		// case of account creation.
+
+		DepositConsequence::Success
+	}
+
+	fn withdraw_consequence(
+		who: &T::AccountId,
+		amount: T::Balance,
+		account: &AccountData<T::Balance>,
+	) -> WithdrawConsequence<T::Balance> {
+		if amount.is_zero() { return WithdrawConsequence::Success }
+
+		if TotalIssuance::<T, I>::get().checked_sub(&amount).is_none() {
+			return WithdrawConsequence::Underflow
+		}
+
+		let new_total_balance = match account.total().checked_sub(&amount) {
+			Some(x) => x,
+			None => return WithdrawConsequence::NoFunds,
+		};
+
+		// Provider restriction - total account balance cannot be reduced to zero if it cannot
+		// sustain the loss of a provider reference.
+		// NOTE: This assumes that the pallet is a provider (which is true). Is this ever changes,
+		// then this will need to adapt accordingly.
+		let ed = T::ExistentialDeposit::get();
+		let success = if new_total_balance < ed {
+			if frame_system::Pallet::<T>::can_dec_provider(who) {
+				WithdrawConsequence::ReducedToZero(new_total_balance)
+			} else {
+				return WithdrawConsequence::WouldDie
+			}
+		} else {
+			WithdrawConsequence::Success
+		};
+
+		// Enough free funds to have them be reduced.
+		let new_free_balance = match account.free.checked_sub(&amount) {
+			Some(b) => b,
+			None => return WithdrawConsequence::NoFunds,
+		};
+
+		// Eventual free funds must be no less than the frozen balance.
+		let min_balance = account.frozen(Reasons::All);
+		if new_free_balance < min_balance {
+			return WithdrawConsequence::Frozen
+		}
+
+		success
+	}
+
 	/// Mutate an account to some new value, or delete it entirely with `None`. Will enforce
 	/// `ExistentialDeposit` law, annulling the account as needed.
 	///
@@ -814,73 +886,60 @@ impl<T: Config<I>, I: 'static> fungible::Inspect<T::AccountId> for Pallet<T, I> 
 		T::ExistentialDeposit::get()
 	}
 	fn balance(who: &T::AccountId) -> Self::Balance {
-		Self::account(who).free
+		Self::account(who).total()
 	}
 	fn can_deposit(who: &T::AccountId, amount: Self::Balance) -> DepositConsequence {
-		if amount.is_zero() { return DepositConsequence::Success }
-
-		if TotalIssuance::<T, I>::get().checked_add(&amount).is_none() {
-			return DepositConsequence::Overflow
-		}
-
-		let account = Self::account(who);
-
-		let new_total_balance = match account.total().checked_add(&amount) {
-			Some(x) => x,
-			None => return DepositConsequence::Overflow,
-		};
-
-		if new_total_balance < T::ExistentialDeposit::get() {
-			return DepositConsequence::BelowMinimum
-		}
-
-		// NOTE: We assume that we are a provider, so don't need to do any checks in the
-		// case of account creation.
-
-		DepositConsequence::Success
+		Self::deposit_consequence(who, amount, &Self::account(who))
 	}
 	fn can_withdraw(who: &T::AccountId, amount: Self::Balance) -> WithdrawConsequence<Self::Balance> {
-		if amount.is_zero() { return WithdrawConsequence::Success }
+		Self::withdraw_consequence(who, amount, &Self::account(who))
+	}
+}
 
-		if TotalIssuance::<T, I>::get().checked_sub(&amount).is_none() {
-			return WithdrawConsequence::Underflow
-		}
+impl<T: Config<I>, I: 'static> fungible::Mutate<T::AccountId> for Pallet<T, I> {
+	fn deposit(who: &T::AccountId, amount: Self::Balance) -> DispatchResult {
+		if amount.is_zero() { return Ok(()) }
+		Self::try_mutate_account(who, |account, _is_new| -> DispatchResult {
+			Self::deposit_consequence(who, amount, &account).into_result()?;
+			account.free += amount;
+			Ok(())
+		})?;
+		TotalIssuance::<T, I>::mutate(|t| *t += amount);
+		Ok(())
+	}
 
-		let account = Self::account(who);
+	fn withdraw(who: &T::AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError> {
+		if amount.is_zero() { return Ok(Self::Balance::zero()); }
 
-		let new_total_balance = match account.total().checked_sub(&amount) {
-			Some(x) => x,
-			None => return WithdrawConsequence::NoFunds,
-		};
+		let actual = Self::try_mutate_account(who, |account, _is_new| -> Result<T::Balance, DispatchError> {
+			let extra = Self::withdraw_consequence(who, amount, &account).into_result()?;
+			let actual = amount + extra;
+			account.free -= actual;
+			Ok(actual)
+		})?;
+		TotalIssuance::<T, I>::mutate(|t| *t -= actual);
+		Ok(actual)
+	}
+}
 
-		// Provider restriction - total account balance cannot be reduced to zero if it cannot
-		// sustain the loss of a provider reference.
-		// NOTE: This assumes that the pallet is a provider (which is true). Is this ever changes,
-		// then this will need to adapt accordingly.
-		let ed = T::ExistentialDeposit::get();
-		let success = if new_total_balance < ed {
-			if frame_system::Pallet::<T>::can_dec_provider(who) {
-				WithdrawConsequence::ReducedToZero(new_total_balance)
-			} else {
-				return WithdrawConsequence::WouldDie
-			}
-		} else {
-			WithdrawConsequence::Success
-		};
+impl<T: Config<I>, I: 'static> fungible::Transfer<T::AccountId> for Pallet<T, I> {
+	fn transfer(
+		source: &T::AccountId,
+		dest: &T::AccountId,
+		amount: T::Balance,
+	) -> Result<T::Balance, DispatchError> {
+		<Self as fungible::Mutate::<T::AccountId>>::transfer(source, dest, amount)
+	}
+}
 
-		// Enough free funds to have them be reduced.
-		let new_free_balance = match account.free.checked_sub(&amount) {
-			Some(b) => b,
-			None => return WithdrawConsequence::NoFunds,
-		};
+impl<T: Config<I>, I: 'static> fungible::Unbalanced<T::AccountId> for Pallet<T, I> {
+	fn set_balance(who: &T::AccountId, amount: Self::Balance) -> DispatchResult {
+		Self::mutate_account(who, |account| account.free = amount)?;
+		Ok(())
+	}
 
-		// Eventual free funds must be no less than the frozen balance.
-		let min_balance = Self::account(who).frozen(Reasons::All);
-		if new_free_balance < min_balance {
-			return WithdrawConsequence::Frozen
-		}
-
-		success
+	fn set_total_issuance(amount: Self::Balance) {
+		TotalIssuance::<T, I>::mutate(|t| *t = amount);
 	}
 }
 

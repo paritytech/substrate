@@ -200,6 +200,17 @@ impl<T: Config> fungibles::Mutate<<T as SystemConfig>::AccountId> for Pallet<T> 
 	}
 }
 
+impl<T: Config> fungibles::Transfer<T::AccountId> for Pallet<T> {
+	fn transfer(
+		asset: Self::AssetId,
+		source: &T::AccountId,
+		dest: &T::AccountId,
+		amount: T::Balance,
+	) -> Result<T::Balance, DispatchError> {
+		<Self as fungibles::Mutate::<T::AccountId>>::transfer(asset, source, dest, amount)
+	}
+}
+
 type DepositBalanceOf<T> = <<T as Config>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]

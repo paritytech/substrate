@@ -112,7 +112,7 @@ pub trait Transfer<AccountId>: Inspect<AccountId> {
 		source: &AccountId,
 		dest: &AccountId,
 		amount: Self::Balance,
-	) -> DispatchResult;
+	) -> Result<Self::Balance, DispatchError>;
 }
 
 /// Trait for providing a set of named fungible assets which can be reserved.

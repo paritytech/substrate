@@ -51,6 +51,27 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 	fn deposit(who: &AccountId, amount: Self::Balance) -> DispatchResult;
 	/// Attempt to reduce the balance of `who` by `amount`.
 	fn withdraw(who: &AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError>;
+	/// Transfer funds from one account into another.
+	fn transfer(
+		source: &AccountId,
+		dest: &AccountId,
+		amount: Self::Balance,
+	) -> Result<Self::Balance, DispatchError> {
+		let extra = Self::can_withdraw(&source, amount).into_result()?;
+		Self::can_deposit(&dest, amount + extra).into_result()?;
+		let actual = Self::withdraw(source, amount)?;
+		debug_assert!(actual == amount + extra, "can_withdraw must agree with withdraw; qed");
+		match Self::deposit(dest, actual) {
+			Ok(_) => Ok(actual),
+			Err(err) => {
+				debug_assert!(false, "can_deposit returned true previously; qed");
+				// attempt to return the funds back to source
+				let revert = Self::deposit(source, actual);
+				debug_assert!(revert.is_ok(), "withdrew funds previously; qed");
+				Err(err)
+			}
+		}
+	}
 }
 
 /// Trait for providing a fungible asset which can only be transferred.
@@ -60,7 +81,7 @@ pub trait Transfer<AccountId>: Inspect<AccountId> {
 		source: &AccountId,
 		dest: &AccountId,
 		amount: Self::Balance,
-	) -> DispatchResult;
+	) -> Result<Self::Balance, DispatchError>;
 }
 
 /// Trait for providing a fungible asset which can be reserved.
@@ -134,7 +155,9 @@ impl<
 	A: Get<<F as fungibles::Inspect<AccountId>>::AssetId>,
 	AccountId,
 > Transfer<AccountId> for ItemOf<F, A, AccountId> {
-	fn transfer(source: &AccountId, dest: &AccountId, amount: Self::Balance) -> DispatchResult {
+	fn transfer(source: &AccountId, dest: &AccountId, amount: Self::Balance)
+		-> Result<Self::Balance, DispatchError>
+	{
 		<F as fungibles::Transfer<AccountId>>::transfer(A::get(), source, dest, amount)
 	}
 }
