@@ -358,6 +358,10 @@ impl<A, B, Block, C, PR> Proposer<B, Block, C, A, PR>
 
 		self.transaction_pool.remove_invalid(&unqueue_invalid);
 
+		if self.transaction_pool.status().is_empty() {
+			return Err(sp_blockchain::Error::TransactionPoolNotReady)
+		}
+
 		let (block, storage_changes, proof) = block_builder.build()?.into_inner();
 
 		self.metrics.report(
