@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{pin::Pin, time::Duration, collections::HashMap, any::Any, borrow::Cow};
+use std::{pin::Pin, time::Duration, collections::HashMap, borrow::Cow};
 use sc_client_api::ImportNotifications;
 use sp_runtime::{DigestItem, traits::Block as BlockT, generic::BlockId};
 use sp_consensus::{Proposal, BlockOrigin, BlockImportParams, import_queue::BoxBlockImport};

@@ -36,10 +36,10 @@ mod worker;
 pub use crate::worker::{MiningWorker, MiningMetadata, MiningBuild};
 
 use std::{
-	sync::Arc, any::Any, borrow::Cow, collections::HashMap, marker::PhantomData,
+	sync::Arc, borrow::Cow, collections::HashMap, marker::PhantomData,
 	cmp::Ordering, time::Duration,
 };
-use futures::{prelude::*, future::Either};
+use futures::{Future, StreamExt};
 use parking_lot::Mutex;
 use sc_client_api::{BlockOf, backend::AuxStore, BlockchainEvents};
 use sp_blockchain::{HeaderBackend, ProvideCache, well_known_cache_keys::Id as CacheKeyId};
@@ -49,7 +49,7 @@ use sp_runtime::generic::{BlockId, Digest, DigestItem};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_api::ProvideRuntimeApi;
 use sp_consensus_pow::{Seal, TotalDifficulty, POW_ENGINE_ID};
-use sp_inherents::{CreateInherentDataProviders, InherentDataProvider, InherentData};
+use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};
 use sp_consensus::{
 	BlockImportParams, BlockOrigin, ForkChoiceStrategy, SyncOracle, Environment, Proposer,
 	SelectChain, Error as ConsensusError, CanAuthorWith, BlockImport, BlockCheckParams, ImportResult,
@@ -91,7 +91,12 @@ pub enum Error<B: BlockT> {
 	#[display(fmt = "Creating inherents failed: {}", _0)]
 	CreateInherents(sp_inherents::Error),
 	#[display(fmt = "Checking inherents failed: {}", _0)]
-	CheckInherents(String),
+	CheckInherents(Box<dyn std::error::Error + Send + Sync>),
+	#[display(
+		fmt = "Checking inherents unknown error for identifier: {:?}",
+		"String::from_utf8_lossy(_0)",
+	)]
+	CheckInherentsUnknownError(sp_inherents::InherentIdentifier),
 	#[display(fmt = "Multiple pre-runtime digests")]
 	MultiplePreRuntimeDigests,
 	Client(sp_blockchain::Error),
@@ -234,6 +239,7 @@ impl<B, I, C, S, Algorithm, CAW, CIDP> PowBlockImport<B, I, C, S, Algorithm, CAW
 	Algorithm: PowAlgorithm<B>,
 	CAW: CanAuthorWith<B>,
 	CIDP: CreateInherentDataProviders<B, ()>,
+	CIDP::InherentDataProviders: Send,
 {
 	/// Create a new block import suitable to be used in PoW
 	pub fn new(
@@ -262,8 +268,6 @@ impl<B, I, C, S, Algorithm, CAW, CIDP> PowBlockImport<B, I, C, S, Algorithm, CAW
 		block_id: BlockId<B>,
 		inherent_data_providers: CIDP::InherentDataProviders,
 	) -> Result<(), Error<B>> {
-		const MAX_TIMESTAMP_DRIFT_SECS: u64 = 60;
-
 		if *block.header().number() < self.check_inherents_after {
 			return Ok(())
 		}
@@ -278,7 +282,8 @@ impl<B, I, C, S, Algorithm, CAW, CIDP> PowBlockImport<B, I, C, S, Algorithm, CAW
 			return Ok(())
 		}
 
-		let inherent_data = inherent_data_providers.create_inherent_data()?;
+		let inherent_data = inherent_data_providers.create_inherent_data()
+			.map_err(|e| Error::CreateInherents(e))?;
 
 		let inherent_res = self.client.runtime_api().check_inherents(
 			&block_id,
@@ -289,14 +294,14 @@ impl<B, I, C, S, Algorithm, CAW, CIDP> PowBlockImport<B, I, C, S, Algorithm, CAW
 		if !inherent_res.ok() {
 			for (identifier, error) in inherent_res.into_errors() {
 				if let Some(res) = inherent_data_providers.try_handle_error(&identifier, &error) {
-					res.await?;
+					res.await.map_err(Error::CheckInherents)?;
 				} else {
-					//yheah
+					return Err(Error::CheckInherentsUnknownError(identifier))
 				}
 			}
-		} else {
-			Ok(())
 		}
+
+		Ok(())
 	}
 }
 
@@ -310,10 +315,11 @@ where
 	S: SelectChain<B>,
 	C: ProvideRuntimeApi<B> + Send + Sync + HeaderBackend<B> + AuxStore + ProvideCache<B> + BlockOf,
 	C::Api: BlockBuilderApi<B>,
-	Algorithm: PowAlgorithm<B> + Send,
-	Algorithm::Difficulty: 'static,
-	CAW: CanAuthorWith<B> + Send,
+	Algorithm: PowAlgorithm<B> + Send + Sync,
+	Algorithm::Difficulty: 'static + Send,
+	CAW: CanAuthorWith<B> + Send + Sync,
 	CIDP: CreateInherentDataProviders<B, ()> + Send + Sync,
+	CIDP::InherentDataProviders: Send,
 {
 	type Error = ConsensusError;
 	type Transaction = sp_api::TransactionFor<C, B>;
@@ -494,6 +500,7 @@ pub fn import_queue<B, Transaction, Algorithm>(
 	B: BlockT,
 	Transaction: Send + Sync + 'static,
 	Algorithm: PowAlgorithm<B> + Clone + Send + Sync + 'static,
+	Algorithm::Difficulty: Send,
 {
 	let verifier = PowVerifier::new(algorithm);
 
@@ -543,7 +550,7 @@ pub fn start_mining_worker<Block, C, S, Algorithm, E, SO, CAW, CIDP>(
 	CAW: CanAuthorWith<Block> + Clone + Send + 'static,
 	CIDP: CreateInherentDataProviders<Block, ()>,
 {
-	let timer = UntilImportedOrTimeout::new(client.import_notification_stream(), timeout);
+	let mut timer = UntilImportedOrTimeout::new(client.import_notification_stream(), timeout);
 	let worker = Arc::new(Mutex::new(MiningWorker::<Block, Algorithm, C, _> {
 		build: None,
 		algorithm: algorithm.clone(),
@@ -551,124 +558,139 @@ pub fn start_mining_worker<Block, C, S, Algorithm, E, SO, CAW, CIDP>(
 	}));
 	let worker_ret = worker.clone();
 
-	let task = timer.for_each(move |()| async move {
-		let worker = worker.clone();
+	let task = async move {
+		loop {
+			if timer.next().await.is_none() {
+				break;
+			}
 
-		if sync_oracle.is_major_syncing() {
-			debug!(target: "pow", "Skipping proposal due to sync.");
-			worker.lock().on_major_syncing();
-			return;
-		}
-
-		let best_header = match select_chain.best_chain() {
-			Ok(x) => x,
-			Err(err) => {
-				warn!(
-					target: "pow",
-					"Unable to pull new block for authoring. \
-					 Select best chain error: {:?}",
-					err
-				);
+			if sync_oracle.is_major_syncing() {
+				debug!(target: "pow", "Skipping proposal due to sync.");
+				worker.lock().on_major_syncing();
 				return;
-			},
-		};
-		let best_hash = best_header.hash();
+			}
 
-		if let Err(err) = can_author_with.can_author_with(&BlockId::Hash(best_hash)) {
-			warn!(
-				target: "pow",
-				"Skipping proposal `can_author_with` returned: {} \
-				 Probably a node update is required!",
-				err,
-			);
-			return;
-		}
+			let best_header = match select_chain.best_chain() {
+				Ok(x) => x,
+				Err(err) => {
+					warn!(
+						target: "pow",
+						"Unable to pull new block for authoring. \
+						 Select best chain error: {:?}",
+						err
+					);
+					return;
+				},
+			};
+			let best_hash = best_header.hash();
 
-		if worker.lock().best_hash() == Some(best_hash) {
-			return;
-		}
-
-		// The worker is locked for the duration of the whole proposing period. Within this period,
-		// the mining target is outdated and useless anyway.
-
-		let difficulty = match algorithm.difficulty(best_hash) {
-			Ok(x) => x,
-			Err(err) => {
+			if let Err(err) = can_author_with.can_author_with(&BlockId::Hash(best_hash)) {
 				warn!(
 					target: "pow",
-					"Unable to propose new block for authoring. \
-					 Fetch difficulty failed: {:?}",
+					"Skipping proposal `can_author_with` returned: {} \
+					 Probably a node update is required!",
 					err,
 				);
 				return;
-			},
-		};
+			}
 
-		let inherent_data_providers =
-			match create_inherent_data_providers.create_inherent_data_providers(best_hash, ()).await {
+			if worker.lock().best_hash() == Some(best_hash) {
+				return;
+			}
+
+			// The worker is locked for the duration of the whole proposing period. Within this period,
+			// the mining target is outdated and useless anyway.
+
+			let difficulty = match algorithm.difficulty(best_hash) {
 				Ok(x) => x,
 				Err(err) => {
 					warn!(
 						target: "pow",
 						"Unable to propose new block for authoring. \
-						 Creating inherent data providers failed: {:?}",
+						 Fetch difficulty failed: {:?}",
 						err,
 					);
 					return;
 				},
 			};
 
-		let inherent_data = inherent_data_providers.create_inherent_data();
+			let inherent_data_providers =
+				match create_inherent_data_providers.create_inherent_data_providers(best_hash, ()).await {
+					Ok(x) => x,
+					Err(err) => {
+						warn!(
+							target: "pow",
+							"Unable to propose new block for authoring. \
+							 Creating inherent data providers failed: {:?}",
+							err,
+						);
+						return;
+					},
+				};
 
-		let mut inherent_digest = Digest::<Block::Hash>::default();
-		if let Some(pre_runtime) = &pre_runtime {
-			inherent_digest.push(DigestItem::PreRuntime(POW_ENGINE_ID, pre_runtime.to_vec()));
+			let inherent_data = match inherent_data_providers.create_inherent_data() {
+				Ok(r) => r,
+				Err(e) => {
+					warn!(
+						target: "pow",
+						"Unable to propose new block for authoring. \
+						 Creating inherent data failed: {:?}",
+						e,
+					);
+					return;
+				},
+			};
+
+			let mut inherent_digest = Digest::<Block::Hash>::default();
+			if let Some(pre_runtime) = &pre_runtime {
+				inherent_digest.push(DigestItem::PreRuntime(POW_ENGINE_ID, pre_runtime.to_vec()));
+			}
+
+			let pre_runtime = pre_runtime.clone();
+
+			let proposer = match env.init(&best_header).await {
+				Ok(x) => x,
+				Err(err) => {
+					warn!(
+						target: "pow",
+						"Unable to propose new block for authoring. \
+						 Creating proposer failed: {:?}",
+						err,
+					);
+					return
+				},
+			};
+
+			let proposal = match proposer.propose(
+				inherent_data,
+				inherent_digest,
+				build_time.clone(),
+			).await {
+				Ok(x) => x,
+				Err(err) => {
+					warn!(
+						target: "pow",
+						"Unable to propose new block for authoring. \
+						 Creating proposal failed: {:?}",
+						err,
+					);
+					return
+				},
+			};
+
+			let build = MiningBuild::<Block, Algorithm, C, _> {
+				metadata: MiningMetadata {
+					best_hash,
+					pre_hash: proposal.block.header().hash(),
+					pre_runtime: pre_runtime.clone(),
+					difficulty,
+				},
+				proposal,
+			};
+
+			worker.lock().on_build(build);
 		}
-
-		let pre_runtime = pre_runtime.clone();
-
-		let proposer = match env.init(&best_header).await {
-			Ok(x) => x,
-			Err(err) => {
-				warn!(
-					target: "pow",
-					"Unable to propose new block for authoring. \
-					 Creating proposer failed: {:?}",
-					err,
-				);
-				return
-			},
-		};
-
-		let proposal = match proposer.propose(
-			inherent_data,
-			inherent_digest,
-			build_time.clone(),
-		).await {
-			Ok(x) => x,
-			Err(err) => {
-				warn!(
-					target: "pow",
-					"Unable to propose new block for authoring. \
-					 Creating proposal failed: {:?}",
-					err,
-				);
-				return
-			},
-		};
-
-		let build = MiningBuild::<Block, Algorithm, C, _> {
-			metadata: MiningMetadata {
-				best_hash,
-				pre_hash: proposal.block.header().hash(),
-				pre_runtime: pre_runtime.clone(),
-				difficulty,
-			},
-			proposal,
-		};
-
-		worker.lock().on_build(build);
-	});
+	};
 
 	(worker_ret, task)
 }

@@ -303,7 +303,7 @@ pub type TryHandleErrorResult =
 
 /// Something that provides inherent data.
 #[cfg(feature = "std")]
-pub trait InherentDataProvider {
+pub trait InherentDataProvider: Send + Sync {
 	/// Convenience function for creating [`InherentData`].
 	///
 	/// Basically maps around [`Self::provide_inherent_data`].
@@ -331,7 +331,7 @@ pub trait InherentDataProvider {
 #[cfg(feature = "std")]
 #[impl_trait_for_tuples::impl_for_tuples(10)]
 impl InherentDataProvider for Tuple {
-	for_tuples!( where #( Tuple: Send + Send )* );
+	for_tuples!( where #( Tuple: Send + Sync )* );
 	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), Error> {
 		for_tuples!( #( Tuple.provide_inherent_data(inherent_data)?; )* );
 		Ok(())
