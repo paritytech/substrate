@@ -19,7 +19,7 @@
 //! Utilities for dealing with authorities, authority sets, and handoffs.
 
 use fork_tree::ForkTree;
-use parking_lot::RwLock;
+use parking_lot::{Mutex, MappedMutexGuard, Condvar, MutexGuard};
 use finality_grandpa::voter_set::VoterSet;
 use parity_scale_codec::{Encode, Decode};
 use log::debug;
@@ -68,21 +68,103 @@ impl<N, E: std::error::Error> From<E> for Error<N, E> {
 	}
 }
 
+struct Inner<H, N> {
+	authority_set: AuthoritySet<H, N>,
+	locked: bool,
+}
+
+pub(crate) struct InnerLocked2<H, N> {
+	shared_authority_set: SharedAuthoritySet<H, N>,
+}
+
+impl<H, N> InnerLocked2<H, N> {
+	pub fn upgrade(&mut self) -> MappedMutexGuard<AuthoritySet<H, N>> {
+		MutexGuard::map(self.shared_authority_set.inner.lock(), |i| &mut i.authority_set)
+	}
+}
+
+impl<H, N> Drop for InnerLocked2<H, N> {
+	fn drop(&mut self) {
+		let mut inner = self.shared_authority_set.inner.lock();
+		inner.locked = false;
+		self.shared_authority_set.cond_var.notify_all();
+	}
+}
+
+pub(crate) struct InnerLocked<'a, H, N> {
+	inner: MutexGuard<'a, Inner<H, N>>,
+	shared_authority_set: Option<SharedAuthoritySet<H, N>>,
+}
+
+impl<'a, H, N> InnerLocked<'a, H, N> {
+	pub fn release_lock(mut self) -> InnerLocked2<H, N> {
+		InnerLocked2 { shared_authority_set: self.shared_authority_set.take().unwrap() }
+	}
+}
+
+impl<'a, H, N> Drop for InnerLocked<'a, H, N> {
+	fn drop(&mut self) {
+		if let Some(authority_set) = self.shared_authority_set.take() {
+			self.inner.locked = false;
+			authority_set.cond_var.notify_all();
+		}
+	}
+}
+
+impl<'a, H, N> std::ops::Deref for InnerLocked<'a, H, N> {
+	type Target = AuthoritySet<H, N>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.inner.authority_set
+	}
+}
+
+impl<'a, H, N> std::ops::DerefMut for InnerLocked<'a, H, N> {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.inner.authority_set
+	}
+}
+
 /// A shared authority set.
 pub struct SharedAuthoritySet<H, N> {
-	inner: Arc<RwLock<AuthoritySet<H, N>>>,
+	inner: Arc<Mutex<Inner<H, N>>>,
+	cond_var: Arc<Condvar>,
 }
 
 impl<H, N> Clone for SharedAuthoritySet<H, N> {
 	fn clone(&self) -> Self {
-		SharedAuthoritySet { inner: self.inner.clone() }
+		SharedAuthoritySet {
+			inner: self.inner.clone(),
+			cond_var: self.cond_var.clone(),
+		}
 	}
 }
 
 impl<H, N> SharedAuthoritySet<H, N> {
 	/// Acquire a reference to the inner read-write lock.
-	pub(crate) fn inner(&self) -> &RwLock<AuthoritySet<H, N>> {
-		&*self.inner
+	pub(crate) fn inner(&self) -> MappedMutexGuard<AuthoritySet<H, N>> {
+		let mut guard = self.inner.lock();
+
+		if guard.locked {
+			self.cond_var.wait(&mut guard);
+		}
+
+		debug_assert!(!guard.locked);
+		guard.locked = true;
+
+		MutexGuard::map(guard, |i| &mut i.authority_set)
+	}
+
+	pub(crate) fn inner_locked(&self) -> InnerLocked<H, N> {
+		let mut guard = self.inner.lock();
+
+		if guard.locked {
+			self.cond_var.wait(&mut guard);
+		}
+		InnerLocked {
+			inner: guard,
+			shared_authority_set: Some(self.clone()),
+		}
 	}
 }
 
@@ -93,17 +175,17 @@ where N: Add<Output=N> + Ord + Clone + Debug,
 	/// Get the earliest limit-block number that's higher or equal to the given
 	/// min number, if any.
 	pub(crate) fn current_limit(&self, min: N) -> Option<N> {
-		self.inner.read().current_limit(min)
+		self.inner().current_limit(min)
 	}
 
 	/// Get the current set ID. This is incremented every time the set changes.
 	pub fn set_id(&self) -> u64 {
-		self.inner.read().set_id
+		self.inner().set_id
 	}
 
 	/// Get the current authorities and their weights (for the current set ID).
 	pub fn current_authorities(&self) -> VoterSet<AuthorityId> {
-		VoterSet::new(self.inner.read().current_authorities.iter().cloned()).expect(
+		VoterSet::new(self.inner().current_authorities.iter().cloned()).expect(
 			"current_authorities is non-empty and weights are non-zero; \
 			 constructor and all mutating operations on `AuthoritySet` ensure this; \
 			 qed.",
@@ -112,18 +194,21 @@ where N: Add<Output=N> + Ord + Clone + Debug,
 
 	/// Clone the inner `AuthoritySet`.
 	pub fn clone_inner(&self) -> AuthoritySet<H, N> {
-		self.inner.read().clone()
+		self.inner().clone()
 	}
 
 	/// Clone the inner `AuthoritySetChanges`.
 	pub fn authority_set_changes(&self) -> AuthoritySetChanges<N> {
-		self.inner.read().authority_set_changes.clone()
+		self.inner().authority_set_changes.clone()
 	}
 }
 
 impl<H, N> From<AuthoritySet<H, N>> for SharedAuthoritySet<H, N> {
 	fn from(set: AuthoritySet<H, N>) -> Self {
-		SharedAuthoritySet { inner: Arc::new(RwLock::new(set)) }
+		SharedAuthoritySet {
+			inner: Arc::new(Mutex::new(Inner { authority_set: set, locked: false })),
+			cond_var: Default::default(),
+		}
 	}
 }
 
