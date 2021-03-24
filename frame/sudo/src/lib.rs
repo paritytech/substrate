@@ -287,11 +287,7 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-			{
-				let data = & self . key; let v : & T::AccountId = data;<Key<T,>
-			as frame_support::storage::StorageValue<T::AccountId>>::put::
-			<& T::AccountId>(v);
-			}
+			<Key<T>>::put(&self.key);
 		}
 	}
 }
