@@ -1624,7 +1624,6 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 		pot: BalanceOf<T, I>,
 	) -> Vec<Bid<T::AccountId, BalanceOf<T, I>>> {
 		let max_members = MaxMembers::<I>::get() as usize;
-		// No more than 10 will be returned.
 		let mut max_selections: usize =
 			(T::MaxCandidateIntake::get() as usize).min(max_members.saturating_sub(members_len));
 
