@@ -44,6 +44,7 @@ use sp_runtime::{
 
 use crate::{
 	error::{self},
+	metrics::Metrics,
 	notification, round, Client,
 };
 
@@ -93,6 +94,7 @@ where
 	best_block_voted_on: NumberFor<B>,
 	validator_set_id: ValidatorSetId,
 	client: Arc<C>,
+	metrics: Option<Metrics>,
 	_backend: PhantomData<BE>,
 	_pair: PhantomData<P>,
 }
@@ -121,6 +123,7 @@ where
 		key_store: SyncCryptoStorePtr,
 		signed_commitment_sender: notification::BeefySignedCommitmentSender<B, S>,
 		gossip_engine: GossipEngine<B>,
+		metrics: Option<Metrics>,
 	) -> Self {
 		BeefyWorker {
 			state: State::New,
@@ -135,6 +138,7 @@ where
 			best_block_voted_on: Zero::zero(),
 			validator_set_id: 0,
 			client,
+			metrics,
 			_backend: PhantomData,
 			_pair: PhantomData,
 		}
@@ -240,16 +244,21 @@ where
 				return;
 			};
 
+			if let Some(new) = find_authorities_change::<B, P::Public>(&notification.header) {
+				debug!(target: "beefy", "🥩 New validator set: {:?}", new);
+
+				if let Some(metrics) = self.metrics.as_ref() {
+					metrics.beefy_validator_set_id.set(new.id);
+				}
+
+				self.validator_set_id = new.id;
+			};
+
 			let mmr_root = if let Some(hash) = find_mmr_root_digest::<B, P::Public>(&notification.header) {
 				hash
 			} else {
 				warn!(target: "beefy", "🥩 No MMR root digest found for: {:?}", notification.header.hash());
 				return;
-			};
-
-			if let Some(new) = find_authorities_change::<B, P::Public>(&notification.header) {
-				debug!(target: "beefy", "🥩 New validator set: {:?}", new);
-				self.validator_set_id = new.id;
 			};
 
 			let commitment = Commitment {
@@ -279,6 +288,10 @@ where
 				.gossip_message(topic::<B>(), message.encode(), false);
 
 			debug!(target: "beefy", "🥩 Sent vote message: {:?}", message);
+
+			if let Some(metrics) = self.metrics.as_ref() {
+				metrics.beefy_gadget_votes.inc();
+			}
 
 			self.handle_vote(
 				(message.commitment.payload, *message.commitment.block_number),

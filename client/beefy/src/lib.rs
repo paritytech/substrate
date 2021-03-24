@@ -18,6 +18,8 @@ use std::{convert::TryFrom, fmt::Debug, sync::Arc};
 
 use beefy_primitives::BeefyApi;
 use codec::Codec;
+use log::debug;
+use prometheus::Registry;
 
 use sc_client_api::{Backend, BlockchainEvents, Finalizer};
 use sc_network_gossip::{
@@ -33,6 +35,7 @@ use sp_keystore::SyncCryptoStorePtr;
 use sp_runtime::traits::Block;
 
 mod error;
+mod metrics;
 mod round;
 mod worker;
 
@@ -113,6 +116,7 @@ pub async fn start_beefy_gadget<B, P, BE, C, N, SO>(
 	network: N,
 	signed_commitment_sender: notification::BeefySignedCommitmentSender<B, P::Signature>,
 	_sync_oracle: SO,
+	prometheus_registry: Option<Registry>,
 ) where
 	B: Block,
 	P: sp_core::Pair,
@@ -133,11 +137,26 @@ pub async fn start_beefy_gadget<B, P, BE, C, N, SO>(
 		None,
 	);
 
+	let metrics = prometheus_registry
+		.as_ref()
+		.map(metrics::Metrics::register)
+		.and_then(|result| match result {
+			Ok(metrics) => {
+				debug!(target: "beefy", "🥩 Registered metrics");
+				Some(metrics)
+			}
+			Err(err) => {
+				debug!(target: "beefy", "🥩 Failed to register metrics: {:?}", err);
+				None
+			}
+		});
+
 	let worker = worker::BeefyWorker::<_, P::Signature, _, BE, P>::new(
 		client.clone(),
 		key_store,
 		signed_commitment_sender,
 		gossip_engine,
+		metrics,
 	);
 
 	worker.run().await
