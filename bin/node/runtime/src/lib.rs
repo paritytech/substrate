@@ -519,7 +519,7 @@ parameter_types! {
 
 sp_npos_elections::generate_solution_type!(
 	#[compact]
-	pub struct NposSolution16::<u32, u16, sp_runtime::PerU16>(16)
+	pub struct NposCompactSolution16::<u32, u16, sp_runtime::PerU16>(16)
 	// -------------------- ^^ <NominatorIndex, ValidatorIndex, Accuracy>
 );
 
@@ -534,7 +534,7 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type MinerTxPriority = MultiPhaseUnsignedPriority;
 	type DataProvider = Staking;
 	type OnChainAccuracy = Perbill;
-	type CompactSolution = NposSolution16;
+	type CompactSolution = NposCompactSolution16;
 	type Fallback = Fallback;
 	type WeightInfo = pallet_election_provider_multi_phase::weights::SubstrateWeight<Runtime>;
 	type BenchmarkingConfig = ();

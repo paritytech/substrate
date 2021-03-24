@@ -285,7 +285,6 @@ use sp_std::{
 	prelude::*,
 	collections::btree_map::BTreeMap,
 	convert::From,
-	mem::size_of,
 };
 use codec::{HasCompact, Encode, Decode};
 use frame_support::{
