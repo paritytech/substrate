@@ -162,9 +162,13 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			) -> #frame_support::dispatch::DispatchResultWithPostInfo {
 				match self {
 					#(
-						Self::#fn_name( #( #args_name, )* ) =>
+						Self::#fn_name( #( #args_name, )* ) => {
+							#frame_support::sp_tracing::enter_span!(
+								#frame_support::sp_tracing::trace_span!(stringify!(#fn_name))
+							);
 							<#pallet_ident<#type_use_gen>>::#fn_name(origin, #( #args_name, )* )
-								.map(Into::into).map_err(Into::into),
+								.map(Into::into).map_err(Into::into)
+						},
 					)*
 					Self::__Ignore(_, _) => {
 						let _ = origin; // Use origin for empty Call enum

@@ -18,10 +18,11 @@
 //! Environment definition of the wasm smart-contract runtime.
 
 use crate::{
-	HostFnWeights, Config, CodeHash, BalanceOf, Error,
+	Config, CodeHash, BalanceOf, Error,
 	exec::{Ext, StorageKey, TopicOf},
 	gas::{GasMeter, Token, ChargedAmount},
 	wasm::env_def::ConvertibleToWasm,
+	schedule::HostFnWeights,
 };
 use parity_wasm::elements::ValueType;
 use frame_support::{dispatch::DispatchError, ensure, traits::Get, weights::Weight};

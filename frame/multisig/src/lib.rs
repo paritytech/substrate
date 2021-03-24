@@ -18,8 +18,8 @@
 //! # Multisig Module
 //! A module for doing multisig dispatch.
 //!
-//! - [`multisig::Config`](./trait.Config.html)
-//! - [`Call`](./enum.Call.html)
+//! - [`Config`]
+//! - [`Call`]
 //!
 //! ## Overview
 //!

@@ -610,6 +610,8 @@ pub struct FullPeerConfig {
 	///
 	/// If `None`, it will be connected to all other peers.
 	pub connect_to_peers: Option<Vec<usize>>,
+	/// Whether the full peer should have the authority role.
+	pub is_authority: bool,
 }
 
 pub trait TestNetFactory: Sized {
@@ -743,7 +745,7 @@ pub trait TestNetFactory: Sized {
 		};
 
 		let network = NetworkWorker::new(sc_network::config::Params {
-			role: Role::Full,
+			role: if config.is_authority { Role::Authority } else { Role::Full },
 			executor: None,
 			transactions_handler_executor: Box::new(|task| { async_std::task::spawn(task); }),
 			network_config,
