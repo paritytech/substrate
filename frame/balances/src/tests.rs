@@ -684,7 +684,7 @@ macro_rules! decl_tests {
 					let _ = Balances::deposit_creating(&1, 100);
 
 					System::set_block_number(2);
-					let _ = Balances::reserve(&1, 10);
+					assert_ok!(Balances::reserve(&1, 10));
 
 					assert_eq!(
 						last_event(),

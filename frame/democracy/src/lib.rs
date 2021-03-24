@@ -1010,7 +1010,8 @@ decl_module! {
 			ensure!(now >= since + voting + additional, Error::<T>::TooEarly);
 			ensure!(expiry.map_or(true, |e| now > e), Error::<T>::Imminent);
 
-			let _ = T::Currency::repatriate_reserved(&provider, &who, deposit, BalanceStatus::Free);
+			let res = T::Currency::repatriate_reserved(&provider, &who, deposit, BalanceStatus::Free);
+			debug_assert!(res.is_ok());
 			<Preimages<T>>::remove(&proposal_hash);
 			Self::deposit_event(RawEvent::PreimageReaped(proposal_hash, provider, deposit, who));
 		}
