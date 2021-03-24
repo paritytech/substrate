@@ -154,7 +154,7 @@ macro_rules! decl_event {
 			#[allow(dead_code)]
 			#[doc(hidden)]
 			pub fn metadata_vnext() -> $crate::scale_info::prelude::vec::Vec<$crate::metadata::v13::EventMetadata> {
-				$crate::scale_info::prelude::vec![]
+				$crate::__events_to_metadata_vnext!(; $( $events )* )
 			}
 		}
 	}
@@ -306,11 +306,10 @@ macro_rules! __decl_generic_event {
 				$crate::__events_to_metadata!(; $( $events )* )
 			}
 
-			/// Metadata vnext only supported by new frame support macros
 			#[allow(dead_code)]
 			#[doc(hidden)]
 			pub fn metadata_vnext() -> $crate::scale_info::prelude::vec::Vec<$crate::metadata::v13::EventMetadata> {
-				$crate::scale_info::prelude::vec![]
+				$crate::__events_to_metadata_vnext!(; $( $events )* )
 			}
 		}
 	};
@@ -375,7 +374,7 @@ macro_rules! __events_to_metadata_vnext {
 	(
 		$( $metadata:expr ),*;
 	) => {
-		&[ $( $metadata ),* ]
+		$crate::scale_info::prelude::vec![ $( $metadata ),* ]
 	}
 }
 
