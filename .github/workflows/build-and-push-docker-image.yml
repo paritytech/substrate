@@ -2,10 +2,10 @@ name: Build and push image to ECR
 on:
   push:
     branches:
-      - cere-master
+      - master-cere
       
 env:
-  ECR_REPOSITORY: crb-substrate-testnet-node
+  ECR_REPOSITORY: pos-network-node
 jobs:
   build-and-push:
     runs-on: ubuntu-18.04
