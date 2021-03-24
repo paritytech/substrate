@@ -24,12 +24,12 @@
 //!
 //! ## Overview
 //!
-//! This module extends accounts based on the `Currency` trait to have smart-contract functionality. It can
-//! be used with other modules that implement accounts based on `Currency`. These "smart-contract accounts"
+//! This module extends accounts based on the [`Currency`] trait to have smart-contract functionality. It can
+//! be used with other modules that implement accounts based on [`Currency`]. These "smart-contract accounts"
 //! have the ability to instantiate smart-contracts and make calls to other contract and non-contract accounts.
 //!
-//! The smart-contract code is stored once in a `code_cache`, and later retrievable via its `code_hash`.
-//! This means that multiple smart-contracts can be instantiated from the same `code_cache`, without replicating
+//! The smart-contract code is stored once in a code cache, and later retrievable via its hash.
+//! This means that multiple smart-contracts can be instantiated from the same hash, without replicating
 //! the code each time.
 //!
 //! When a smart-contract is called, its associated code is retrieved via the code hash and gets executed.
@@ -59,12 +59,17 @@
 //!
 //! ### Dispatchable functions
 //!
-//! * `instantiate_with_code` - Deploys a new contract from the supplied wasm binary, optionally transferring
-//! some balance. This instantiates a new smart contract account and calls its contract deploy
-//! handler to initialize the contract.
-//! * `instantiate` - The same as `instantiate_with_code` but instead of uploading new code an
-//! existing `code_hash` is supplied.
-//! * `call` - Makes a call to an account, optionally transferring some balance.
+//! * [`Pallet::update_schedule`] -
+//! ([Root Origin](https://substrate.dev/docs/en/knowledgebase/runtime/origin) Only) -
+//! Set a new [`Schedule`].
+//! * [`Pallet::instantiate_with_code`] - Deploys a new contract from the supplied wasm binary,
+//! optionally transferring
+//! some balance. This instantiates a new smart contract account with the supplied code and
+//! calls its constructor to initialize the contract.
+//! * [`Pallet::instantiate`] - The same as `instantiate_with_code` but instead of uploading new
+//! code an existing `code_hash` is supplied.
+//! * [`Pallet::call`] - Makes a call to an account, optionally transferring some balance.
+//! * [`Pallet::claim_surcharge`] - Evict a contract that cannot pay rent anymore.
 //!
 //! ## Usage
 //!
@@ -98,29 +103,24 @@ pub mod weights;
 #[cfg(test)]
 mod tests;
 
-pub use crate::{
-	wasm::PrefabWasmModule,
-	schedule::{Schedule, HostFnWeights, InstructionWeights, Limits},
-	pallet::*,
-};
+pub use crate::{pallet::*, schedule::Schedule};
 use crate::{
 	gas::GasMeter,
 	exec::{ExecutionContext, Executable},
 	rent::Rent,
-	storage::{Storage, DeletedContract},
+	storage::{Storage, DeletedContract, ContractInfo, AliveContractInfo, TombstoneContractInfo},
 	weights::WeightInfo,
+	wasm::PrefabWasmModule,
 };
 use sp_core::crypto::UncheckedFrom;
-use sp_std::{prelude::*, marker::PhantomData, fmt::Debug};
-use codec::{Codec, Encode, Decode};
+use sp_std::prelude::*;
 use sp_runtime::{
 	traits::{
-		Hash, StaticLookup, MaybeSerializeDeserialize, Member, Convert, Saturating, Zero,
+		Hash, StaticLookup, Convert, Saturating, Zero,
 	},
-	RuntimeDebug, Perbill,
+	Perbill,
 };
 use frame_support::{
-	storage::child::ChildInfo,
 	traits::{OnUnbalanced, Currency, Get, Time, Randomness},
 	weights::{Weight, PostDispatchInfo, WithPostDispatchInfo},
 };
@@ -129,16 +129,12 @@ use pallet_contracts_primitives::{
 	RentProjectionResult, GetStorageResult, ContractAccessError, ContractExecResult,
 };
 
-pub type CodeHash<T> = <T as frame_system::Config>::Hash;
-pub type TrieId = Vec<u8>;
-pub type BalanceOf<T> =
+type CodeHash<T> = <T as frame_system::Config>::Hash;
+type TrieId = Vec<u8>;
+type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-pub type NegativeImbalanceOf<T> =
+type NegativeImbalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
-pub type AliveContractInfo<T> =
-	RawAliveContractInfo<CodeHash<T>, BalanceOf<T>, <T as frame_system::Config>::BlockNumber>;
-pub type TombstoneContractInfo<T> =
-	RawTombstoneContractInfo<<T as frame_system::Config>::Hash, <T as frame_system::Config>::Hashing>;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -248,7 +244,6 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::hooks]
@@ -290,7 +285,7 @@ pub mod pallet {
 			schedule: Schedule<T>
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			if <Pallet<T>>::current_schedule().version > schedule.version {
+			if <CurrentSchedule<T>>::get().version > schedule.version {
 				Err(Error::<T>::InvalidScheduleVersion)?
 			}
 			Self::deposit_event(Event::ScheduleUpdated(schedule.version));
@@ -316,7 +311,7 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
 			let mut gas_meter = GasMeter::new(gas_limit);
-			let schedule = <Pallet<T>>::current_schedule();
+			let schedule = <CurrentSchedule<T>>::get();
 			let mut ctx = ExecutionContext::<T, PrefabWasmModule<T>>::top_level(origin, &schedule);
 			let (result, code_len) = match ctx.call(dest, value, &mut gas_meter, data) {
 				Ok((output, len)) => (Ok(output), len),
@@ -365,7 +360,7 @@ pub mod pallet {
 			let code_len = code.len() as u32;
 			ensure!(code_len <= T::MaxCodeSize::get(), Error::<T>::CodeTooLarge);
 			let mut gas_meter = GasMeter::new(gas_limit);
-			let schedule = <Pallet<T>>::current_schedule();
+			let schedule = <CurrentSchedule<T>>::get();
 			let executable = PrefabWasmModule::from_code(code, &schedule)?;
 			let code_len = executable.code_len();
 			ensure!(code_len <= T::MaxCodeSize::get(), Error::<T>::CodeTooLarge);
@@ -397,7 +392,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let origin = ensure_signed(origin)?;
 			let mut gas_meter = GasMeter::new(gas_limit);
-			let schedule = <Pallet<T>>::current_schedule();
+			let schedule = <CurrentSchedule<T>>::get();
 			let executable = PrefabWasmModule::from_storage(code_hash, &schedule, &mut gas_meter)?;
 			let mut ctx = ExecutionContext::<T, PrefabWasmModule<T>>::top_level(origin, &schedule);
 			let code_len = executable.code_len();
@@ -614,33 +609,33 @@ pub mod pallet {
 
 	/// Current cost schedule for contracts.
 	#[pallet::storage]
-	#[pallet::getter(fn current_schedule)]
-	pub(super) type CurrentSchedule<T: Config> = StorageValue<_, Schedule<T>, ValueQuery>;
+	pub(crate) type CurrentSchedule<T: Config> = StorageValue<_, Schedule<T>, ValueQuery>;
 
 	/// A mapping from an original code hash to the original code, untouched by instrumentation.
 	#[pallet::storage]
-	pub type PristineCode<T: Config> = StorageMap<_, Identity, CodeHash<T>, Vec<u8>>;
+	pub(crate) type PristineCode<T: Config> = StorageMap<_, Identity, CodeHash<T>, Vec<u8>>;
 
 	/// A mapping between an original code hash and instrumented wasm code, ready for execution.
 	#[pallet::storage]
-	pub type CodeStorage<T: Config> = StorageMap<_, Identity, CodeHash<T>, PrefabWasmModule<T>>;
+	pub(crate) type CodeStorage<T: Config> = StorageMap<_, Identity, CodeHash<T>, PrefabWasmModule<T>>;
 
 	/// The subtrie counter.
 	#[pallet::storage]
-	pub type AccountCounter<T: Config> = StorageValue<_, u64, ValueQuery>;
+	pub(crate) type AccountCounter<T: Config> = StorageValue<_, u64, ValueQuery>;
 
 	/// The code associated with a given account.
 	///
 	/// TWOX-NOTE: SAFE since `AccountId` is a secure hash.
 	#[pallet::storage]
-	pub type ContractInfoOf<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, ContractInfo<T>>;
+	pub(crate) type ContractInfoOf<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, ContractInfo<T>>;
 
 	/// Evicted contracts that await child trie deletion.
 	///
 	/// Child trie deletion is a heavy operation depending on the amount of storage items
 	/// stored in said trie. Therefore this operation is performed lazily in `on_initialize`.
 	#[pallet::storage]
-	pub type DeletionQueue<T: Config> = StorageValue<_, Vec<DeletedContract>, ValueQuery>;
+	pub(crate) type DeletionQueue<T: Config> = StorageValue<_, Vec<DeletedContract>, ValueQuery>;
+
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -683,7 +678,7 @@ where
 		input_data: Vec<u8>,
 	) -> ContractExecResult {
 		let mut gas_meter = GasMeter::new(gas_limit);
-		let schedule = <Pallet<T>>::current_schedule();
+		let schedule = <CurrentSchedule<T>>::get();
 		let mut ctx = ExecutionContext::<T, PrefabWasmModule<T>>::top_level(origin, &schedule);
 		let result = ctx.call(dest, value, &mut gas_meter, input_data);
 		let gas_consumed = gas_meter.gas_spent();
@@ -743,10 +738,24 @@ where
 		T::Currency::minimum_balance().saturating_add(T::TombstoneDeposit::get())
 	}
 
+	/// The in-memory size in bytes of the data structure associated with each contract.
+	///
+	/// The data structure is also put into storage for each contract. The in-storage size
+	/// is never larger than the in-memory representation and usually smaller due to compact
+	/// encoding and lack of padding.
+	///
+	/// # Note
+	///
+	/// This returns the in-memory size because the in-storage size (SCALE encoded) cannot
+	/// be efficiently determined. Treat this as an upper bound of the in-storage size.
+	pub fn contract_info_size() -> u32 {
+		sp_std::mem::size_of::<ContractInfo<T>>() as u32
+	}
+
 	/// Store code for benchmarks which does not check nor instrument the code.
 	#[cfg(feature = "runtime-benchmarks")]
 	fn store_code_raw(code: Vec<u8>) -> frame_support::dispatch::DispatchResult {
-		let schedule = <Pallet<T>>::current_schedule();
+		let schedule = <CurrentSchedule<T>>::get();
 		PrefabWasmModule::store_code_unchecked(code, &schedule)?;
 		Ok(())
 	}
@@ -758,129 +767,5 @@ where
 		schedule: &Schedule<T>
 	) -> frame_support::dispatch::DispatchResult {
 		self::wasm::reinstrument(module, schedule)
-	}
-}
-
-/// Information for managing an account and its sub trie abstraction.
-/// This is the required info to cache for an account
-#[derive(Encode, Decode, RuntimeDebug)]
-pub enum ContractInfo<T: Config> {
-	Alive(AliveContractInfo<T>),
-	Tombstone(TombstoneContractInfo<T>),
-}
-
-impl<T: Config> ContractInfo<T> {
-	/// If contract is alive then return some alive info
-	pub fn get_alive(self) -> Option<AliveContractInfo<T>> {
-		if let ContractInfo::Alive(alive) = self {
-			Some(alive)
-		} else {
-			None
-		}
-	}
-	/// If contract is alive then return some reference to alive info
-	pub fn as_alive(&self) -> Option<&AliveContractInfo<T>> {
-		if let ContractInfo::Alive(ref alive) = self {
-			Some(alive)
-		} else {
-			None
-		}
-	}
-	/// If contract is alive then return some mutable reference to alive info
-	pub fn as_alive_mut(&mut self) -> Option<&mut AliveContractInfo<T>> {
-		if let ContractInfo::Alive(ref mut alive) = self {
-			Some(alive)
-		} else {
-			None
-		}
-	}
-
-	/// If contract is tombstone then return some tombstone info
-	pub fn get_tombstone(self) -> Option<TombstoneContractInfo<T>> {
-		if let ContractInfo::Tombstone(tombstone) = self {
-			Some(tombstone)
-		} else {
-			None
-		}
-	}
-	/// If contract is tombstone then return some reference to tombstone info
-	pub fn as_tombstone(&self) -> Option<&TombstoneContractInfo<T>> {
-		if let ContractInfo::Tombstone(ref tombstone) = self {
-			Some(tombstone)
-		} else {
-			None
-		}
-	}
-	/// If contract is tombstone then return some mutable reference to tombstone info
-	pub fn as_tombstone_mut(&mut self) -> Option<&mut TombstoneContractInfo<T>> {
-		if let ContractInfo::Tombstone(ref mut tombstone) = self {
-			Some(tombstone)
-		} else {
-			None
-		}
-	}
-}
-
-/// Information for managing an account and its sub trie abstraction.
-/// This is the required info to cache for an account.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
-	/// Unique ID for the subtree encoded as a bytes vector.
-	pub trie_id: TrieId,
-	/// The total number of bytes used by this contract.
-	///
-	/// It is a sum of each key-value pair stored by this contract.
-	pub storage_size: u32,
-	/// The total number of key-value pairs in storage of this contract.
-	pub pair_count: u32,
-	/// The code associated with a given account.
-	pub code_hash: CodeHash,
-	/// Pay rent at most up to this value.
-	pub rent_allowance: Balance,
-	/// The amount of rent that was payed by the contract over its whole lifetime.
-	///
-	/// A restored contract starts with a value of zero just like a new contract.
-	pub rent_payed: Balance,
-	/// Last block rent has been payed.
-	pub deduct_block: BlockNumber,
-	/// Last block child storage has been written.
-	pub last_write: Option<BlockNumber>,
-	/// This field is reserved for future evolution of format.
-	pub _reserved: Option<()>,
-}
-
-impl<CodeHash, Balance, BlockNumber> RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
-	/// Associated child trie unique id is built from the hash part of the trie id.
-	pub fn child_trie_info(&self) -> ChildInfo {
-		child_trie_info(&self.trie_id[..])
-	}
-}
-
-/// Associated child trie unique id is built from the hash part of the trie id.
-pub(crate) fn child_trie_info(trie_id: &[u8]) -> ChildInfo {
-	ChildInfo::new_default(trie_id)
-}
-
-#[derive(Encode, Decode, PartialEq, Eq, RuntimeDebug)]
-pub struct RawTombstoneContractInfo<H, Hasher>(H, PhantomData<Hasher>);
-
-impl<H, Hasher> RawTombstoneContractInfo<H, Hasher>
-where
-	H: Member + MaybeSerializeDeserialize+ Debug
-		+ AsRef<[u8]> + AsMut<[u8]> + Copy + Default
-		+ sp_std::hash::Hash + Codec,
-	Hasher: Hash<Output=H>,
-{
-	fn new(storage_root: &[u8], code_hash: H) -> Self {
-		let mut buf = Vec::new();
-		storage_root.using_encoded(|encoded| buf.extend_from_slice(encoded));
-		buf.extend_from_slice(code_hash.as_ref());
-		RawTombstoneContractInfo(<Hasher as Hash>::hash(&buf[..]), PhantomData)
-	}
-}
-
-impl<T: Config> From<AliveContractInfo<T>> for ContractInfo<T> {
-	fn from(alive_info: AliveContractInfo<T>) -> Self {
-		Self::Alive(alive_info)
 	}
 }
