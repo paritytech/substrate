@@ -24,7 +24,7 @@ mod mock;
 use sp_std::prelude::*;
 use sp_std::vec;
 
-use frame_system::{RawOrigin, Module as System, Config as SystemConfig};
+use frame_system::{RawOrigin, Pallet as System, Config as SystemConfig};
 use frame_benchmarking::{benchmarks, account, impl_benchmark_test_suite};
 use frame_support::traits::{Currency, OnInitialize, ValidatorSet, ValidatorSetWithIdentification};
 
@@ -40,7 +40,7 @@ use pallet_session::historical::{Config as HistoricalConfig, IdentificationTuple
 use pallet_session::{Config as SessionConfig, SessionManager};
 use pallet_staking::{
 	Module as Staking, Config as StakingConfig, RewardDestination, ValidatorPrefs,
-	Exposure, IndividualExposure, ElectionStatus, MAX_NOMINATIONS, Event as StakingEvent
+	Exposure, IndividualExposure, MAX_NOMINATIONS, Event as StakingEvent
 };
 
 const SEED: u32 = 0;
@@ -50,7 +50,7 @@ const MAX_OFFENDERS: u32 = 100;
 const MAX_NOMINATORS: u32 = 100;
 const MAX_DEFERRED_OFFENCES: u32 = 100;
 
-pub struct Module<T: Config>(Offences<T>);
+pub struct Pallet<T: Config>(Offences<T>);
 
 pub trait Config:
 	SessionConfig
@@ -386,8 +386,6 @@ benchmarks! {
 		let o = 10;
 		let n = 100;
 
-		Staking::<T>::put_election_status(ElectionStatus::Closed);
-
 		let mut deferred_offences = vec![];
 		let offenders = make_offenders::<T>(o, n)?.0;
 		let offence_details = offenders.into_iter()
@@ -421,7 +419,7 @@ benchmarks! {
 }
 
 impl_benchmark_test_suite!(
-	Module,
+	Pallet,
 	crate::mock::new_test_ext(),
 	crate::mock::Test,
 );

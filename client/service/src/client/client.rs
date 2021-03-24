@@ -767,6 +767,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 					offchain_sc,
 					tx, _,
 					changes_trie_tx,
+					tx_index,
 				) = storage_changes.into_inner();
 
 				if self.config.offchain_indexing_api {
@@ -775,6 +776,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 				operation.op.update_db_storage(tx)?;
 				operation.op.update_storage(main_sc.clone(), child_sc.clone())?;
+				operation.op.update_transaction_index(tx_index)?;
 
 				if let Some(changes_trie_transaction) = changes_trie_tx {
 					operation.op.update_changes_trie(changes_trie_transaction)?;
@@ -1945,12 +1947,12 @@ impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 		self.backend.blockchain().hash(number)
 	}
 
-	fn extrinsic(&self, hash: &Block::Hash) -> sp_blockchain::Result<Option<Block::Extrinsic>> {
-		self.backend.blockchain().extrinsic(hash)
+	fn indexed_transaction(&self, hash: &Block::Hash) -> sp_blockchain::Result<Option<Vec<u8>>> {
+		self.backend.blockchain().indexed_transaction(hash)
 	}
 
-	fn have_extrinsic(&self, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
-		self.backend.blockchain().have_extrinsic(hash)
+	fn has_indexed_transaction(&self, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
+		self.backend.blockchain().has_indexed_transaction(hash)
 	}
 }
 

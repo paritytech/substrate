@@ -143,6 +143,6 @@ impl<T: Config> RandomnessT<Option<T::Hash>, T::BlockNumber> for CurrentBlockRan
 			T::Hashing::hash(&subject[..])
 		});
 
-		(random, <frame_system::Module<T>>::block_number())
+		(random, <frame_system::Pallet<T>>::block_number())
 	}
 }

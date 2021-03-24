@@ -82,9 +82,9 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Sudo: sudo::{Module, Call, Config<T>, Storage, Event<T>},
-		Logger: logger::{Module, Call, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Sudo: sudo::{Pallet, Call, Config<T>, Storage, Event<T>},
+		Logger: logger::{Pallet, Call, Storage, Event<T>},
 	}
 );
 

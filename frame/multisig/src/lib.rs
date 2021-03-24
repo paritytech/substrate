@@ -18,8 +18,8 @@
 //! # Multisig Module
 //! A module for doing multisig dispatch.
 //!
-//! - [`multisig::Config`](./trait.Config.html)
-//! - [`Call`](./enum.Call.html)
+//! - [`Config`]
+//! - [`Call`]
 //!
 //! ## Overview
 //!
@@ -638,8 +638,8 @@ impl<T: Config> Module<T> {
 	/// The current `Timepoint`.
 	pub fn timepoint() -> Timepoint<T::BlockNumber> {
 		Timepoint {
-			height: <system::Module<T>>::block_number(),
-			index: <system::Module<T>>::extrinsic_index().unwrap_or_default(),
+			height: <system::Pallet<T>>::block_number(),
+			index: <system::Pallet<T>>::extrinsic_index().unwrap_or_default(),
 		}
 	}
 

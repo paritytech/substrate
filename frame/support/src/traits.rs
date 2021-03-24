@@ -1128,6 +1128,22 @@ pub trait Currency<AccountId> {
 	) -> SignedImbalance<Self::Balance, Self::PositiveImbalance>;
 }
 
+/// Trait for providing an ERC-20 style set of named fungible assets.
+pub trait Fungibles<AccountId> {
+	/// Means of identifying one asset class from another.
+	type AssetId: FullCodec + Copy + Default;
+	/// Scalar type for storing balance of an account.
+	type Balance: AtLeast32BitUnsigned + FullCodec + Copy + Default;
+	/// Get the `asset` balance of `who`.
+	fn balance(asset: Self::AssetId, who: &AccountId) -> Self::Balance;
+	/// Returns `true` if the `asset` balance of `who` may be increased by `amount`.
+	fn can_deposit(asset: Self::AssetId, who: &AccountId, amount: Self::Balance) -> bool;
+	/// Increase the `asset` balance of `who` by `amount`.
+	fn deposit(asset: Self::AssetId, who: AccountId, amount: Self::Balance) -> DispatchResult;
+	/// Attempt to reduce the `asset` balance of `who` by `amount`.
+	fn withdraw(asset: Self::AssetId, who: AccountId, amount: Self::Balance) -> DispatchResult;
+}
+
 /// Status of funds.
 #[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
 pub enum BalanceStatus {

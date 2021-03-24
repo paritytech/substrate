@@ -30,7 +30,7 @@ use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, NumberFor, Ha
 use sp_runtime::{Justification, Justifications, Storage};
 use sp_state_machine::{
 	ChangesTrieTransaction, InMemoryBackend, Backend as StateBackend, StorageCollection,
-	ChildStorageCollection,
+	ChildStorageCollection, IndexOperation,
 };
 use sp_blockchain::{CachedHeaderMetadata, HeaderMetadata};
 
@@ -415,10 +415,10 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 		unimplemented!()
 	}
 
-	fn extrinsic(
+	fn indexed_transaction(
 		&self,
 		_hash: &Block::Hash,
-	) -> sp_blockchain::Result<Option<<Block as BlockT>::Extrinsic>> {
+	) -> sp_blockchain::Result<Option<Vec<u8>>> {
 		unimplemented!("Not supported by the in-mem backend.")
 	}
 }
@@ -611,6 +611,10 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 	fn mark_head(&mut self, block: BlockId<Block>) -> sp_blockchain::Result<()> {
 		assert!(self.pending_block.is_none(), "Only one set block per operation is allowed");
 		self.set_head = Some(block);
+		Ok(())
+	}
+
+	fn update_transaction_index(&mut self, _index: Vec<IndexOperation>) -> sp_blockchain::Result<()> {
 		Ok(())
 	}
 }
