@@ -239,7 +239,6 @@ impl<B, I, C, S, Algorithm, CAW, CIDP> PowBlockImport<B, I, C, S, Algorithm, CAW
 	Algorithm: PowAlgorithm<B>,
 	CAW: CanAuthorWith<B>,
 	CIDP: CreateInherentDataProviders<B, ()>,
-	CIDP::InherentDataProviders: Send,
 {
 	/// Create a new block import suitable to be used in PoW
 	pub fn new(
@@ -319,7 +318,6 @@ where
 	Algorithm::Difficulty: 'static + Send,
 	CAW: CanAuthorWith<B> + Send + Sync,
 	CIDP: CreateInherentDataProviders<B, ()> + Send + Sync,
-	CIDP::InherentDataProviders: Send,
 {
 	type Error = ConsensusError;
 	type Transaction = sp_api::TransactionFor<C, B>;
