@@ -364,7 +364,11 @@ pub type RewardPoint = u32;
 // Note: Maximum nomination limit is set here -- 16.
 sp_npos_elections::generate_solution_type!(
 	#[compact]
-	pub struct CompactAssignments::<NominatorIndex, ValidatorIndex, OffchainAccuracy>(16)
+	pub struct CompactAssignments::<
+		VoterIndex = NominatorIndex,
+		CandidateIndex = ValidatorIndex,
+		Accuracy = OffchainAccuracy,
+	>(16)
 );
 
 /// Accuracy used for off-chain election. This better be small.

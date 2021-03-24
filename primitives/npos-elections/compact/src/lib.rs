@@ -53,7 +53,12 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 /// type, `u8` target type and `Perbill` accuracy with maximum of 8 edges per voter.
 ///
 /// ```ignore
-/// generate_solution_type!(pub struct TestSolution<u16, u8, Perbill>::(8))
+/// # use sp_npos_elections_compact::generate_solution_type;
+/// generate_solution_type!(pub struct TestSolution::<
+/// 	VoterIndex = u16,
+/// 	CandidateIndex = u8,
+/// 	Accuracy = Perbill,
+/// >(8));
 /// ```
 ///
 /// The given struct provides function to convert from/to Assignment:
@@ -66,10 +71,11 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 /// for numbers will be used, similar to how `parity-scale-codec`'s `Compact` works.
 ///
 /// ```ignore
+/// # use sp_npos_elections_compact::generate_solution_type;
 /// generate_solution_type!(
 ///     #[compact]
-///     pub struct TestSolutionCompact<u16, u8, Perbill>::(8)
-/// )
+///     pub struct TestSolutionCompact::<VoterIndex = u16, CandidateIndex = u8, Accuracy = Perbill>(8)
+/// );
 /// ```
 #[proc_macro]
 pub fn generate_solution_type(item: TokenStream) -> TokenStream {
@@ -386,7 +392,7 @@ fn check_compact_attr(input: ParseStream) -> Result<bool> {
 	}
 }
 
-/// #[compact] pub struct CompactName::<u32, u32, u32>()
+/// #[compact] pub struct CompactName::<VoterIndex = u32, CandidateIndex = u32, Accuracy = u32>()
 impl Parse for SolutionDef {
 	fn parse(input: ParseStream) -> syn::Result<Self> {
 		// optional #[compact]
@@ -405,9 +411,22 @@ impl Parse for SolutionDef {
 			return Err(syn_err("Must provide 3 generic args."))
 		}
 
-		let mut types: Vec<syn::Type> = generics.args.iter().map(|t|
+		let expected_types = ["VoterIndex", "CandidateIndex", "Accuracy"];
+
+		let mut types: Vec<syn::Type> = generics.args.iter().zip(expected_types.iter()).map(|(t, expected)|
 			match t {
-				syn::GenericArgument::Type(ty) => Ok(ty.clone()),
+				syn::GenericArgument::Type(ty) => {
+					// this is now an error
+					Err(syn::Error::new_spanned(ty, format!("Expected binding: `{} = ...`", expected)))
+				},
+				syn::GenericArgument::Binding(syn::Binding{ident, ty, ..}) => {
+					// check that we have the right keyword for this position in the argument list
+					if ident == expected {
+						Ok(ty.clone())
+					} else {
+						Err(syn::Error::new_spanned(ident, format!("Expected `{}`", expected)))
+					}
+				}
 				_ => Err(syn_err("Wrong type of generic provided. Must be a `type`.")),
 			}
 		).collect::<Result<_>>()?;
