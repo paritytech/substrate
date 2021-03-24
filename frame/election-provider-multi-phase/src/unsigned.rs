@@ -976,4 +976,28 @@ mod tests {
 			assert!((compact.encode().len() as u32) < encoded_len);
 		});
 	}
+
+	// all the other solution-generation functions end up delegating to `mine_solution`, so if we
+	// demonstrate that `mine_solution` solutions are all trimmed to an acceptable length, then
+	// we know that higher-level functions will all also have short-enough solutions.
+	#[test]
+	fn mine_solution_solutions_always_within_acceptable_length() {
+		let (mut ext, _) = ExtBuilder::default().build_offchainify(0);
+		ext.execute_with(|| {
+			roll_to(25);
+
+			// how long would the default solution be?
+			let solution = MultiPhase::mine_solution(0).unwrap();
+			let max_length = <Runtime as Config>::MinerMaxLength::get();
+			let solution_size = solution.0.compact.encoded_size();
+			assert!(solution_size <= max_length as usize);
+
+			// now set the max size to less than the actual size and regenerate
+			<Runtime as Config>::MinerMaxLength::set(solution_size as u32 - 1);
+			let solution = MultiPhase::mine_solution(0).unwrap();
+			let max_length = <Runtime as Config>::MinerMaxLength::get();
+			let solution_size = solution.0.compact.encoded_size();
+			assert!(solution_size <= max_length as usize);
+		});
+	}
 }
