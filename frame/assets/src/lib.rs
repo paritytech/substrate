@@ -1495,8 +1495,6 @@ impl<T: Config> Pallet<T> {
 				Account::<T>::try_mutate(id, &dest, |a| -> DispatchResult {
 					let new_balance = a.balance.saturating_add(amount);
 
-					// This is impossible since `new_balance > amount > min_balance`, but we can
-					// handle it, so we do.
 					ensure!(new_balance >= details.min_balance, Error::<T>::BalanceLow);
 
 					if a.balance.is_zero() {
