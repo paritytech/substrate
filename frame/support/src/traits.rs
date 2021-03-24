@@ -30,23 +30,32 @@ pub use tokens::fungibles::{
 	Reserve as ReserveFungibles, Balanced as BalancedFungibles, Unbalanced as UnbalancedFungibles,
 };
 pub use tokens::currency::{
-	Currency, LockIdentifier, LockableCurrency, ReservableCurrency,
+	Currency, LockIdentifier, LockableCurrency, ReservableCurrency, VestingSchedule,
 };
-pub use tokens::imbalance::Imbalance;
+pub use tokens::imbalance::{Imbalance, OnUnbalanced, SignedImbalance};
+pub use tokens::{ExistenceRequirement, WithdrawReasons, BalanceStatus};
+
 mod members;
 pub use members::{Contains, ContainsLengthBound, InitializeMembers, ChangeMembers};
+
 mod validation;
 pub use validation::{
 	ValidatorSet, ValidatorSetWithIdentification, OneSessionHandler, FindAuthor, VerifySeal,
-	EstimateNextNewSession, EstimateNextSessionRotation, KeyOwnerProofSystem,
+	EstimateNextNewSession, EstimateNextSessionRotation, KeyOwnerProofSystem, ValidatorRegistration,
+	Lateness,
 };
+
 mod filter;
-pub use filter::{Filter, FilterStack, ClearFilterGuard, InstanceFilter};
+pub use filter::{
+	Filter, FilterStack, FilterStackGuard, ClearFilterGuard, InstanceFilter, IntegrityTest,
+};
+
 mod misc;
 pub use misc::{
 	Len, Get, GetDefault, HandleLifetime, TryDrop, Time, UnixTime, IsType, IsSubType, ExecuteBlock,
-	SameOrOther,
+	SameOrOther, OnNewAccount, OnKilledAccount, OffchainWorker,
 };
+
 mod stored_map;
 pub use stored_map::{StoredMap, StorageMapShim};
 mod randomness;
@@ -54,12 +63,12 @@ pub use randomness::Randomness;
 
 mod metadata;
 pub use metadata::{
-	CallMetadata, GetCallMetadata, GetCallName, PalletInfo, PalletVersion,
-	PALLET_VERSION_STORAGE_KEY_POSTFIX, GetPalletVersion,
+	CallMetadata, GetCallMetadata, GetCallName, PalletInfo, PalletVersion, GetPalletVersion,
+	PALLET_VERSION_STORAGE_KEY_POSTFIX,
 };
 
 mod hooks;
-pub use hooks::{Hooks, OnGenesis, OnInitialize, OnFinalize, OnIdle, OnRuntimeUpgrade};
+pub use hooks::{Hooks, OnGenesis, OnInitialize, OnFinalize, OnIdle, OnRuntimeUpgrade, OnTimestampSet};
 #[cfg(feature = "try-runtime")]
 pub use hooks::{OnRuntimeUpgradeHelpersExt, ON_RUNTIME_UPGRADE_PREFIX};
 #[cfg(feature = "std")]
@@ -71,3 +80,6 @@ pub use storage::{Instance, StorageInstance};
 
 mod dispatch;
 pub use dispatch::{EnsureOrigin, OriginTrait, UnfilteredDispatchable};
+
+mod voting;
+pub use voting::{CurrencyToVote, SaturatingCurrencyToVote, U128CurrencyToVote};

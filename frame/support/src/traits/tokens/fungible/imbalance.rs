@@ -67,6 +67,16 @@ impl<
 	B: Balance,
 	OnDrop: HandleImbalanceDrop<B>,
 	OppositeOnDrop: HandleImbalanceDrop<B>,
+> Default for Imbalance<B, OnDrop, OppositeOnDrop> {
+	fn default() -> Self {
+		Self::zero()
+	}
+}
+
+impl<
+	B: Balance,
+	OnDrop: HandleImbalanceDrop<B>,
+	OppositeOnDrop: HandleImbalanceDrop<B>,
 > Imbalance<B, OnDrop, OppositeOnDrop> {
 	pub(crate) fn new(amount: B) -> Self {
 		Self { amount, _phantom: PhantomData }

@@ -58,7 +58,7 @@ pub use on_unbalanced::OnUnbalanced;
 ///
 /// You can always retrieve the raw balance value using `peek`.
 #[must_use]
-pub trait Imbalance<Balance>: Sized + TryDrop {
+pub trait Imbalance<Balance>: Sized + TryDrop + Default {
 	/// The oppositely imbalanced type. They come in pairs.
 	type Opposite: Imbalance<Balance>;
 

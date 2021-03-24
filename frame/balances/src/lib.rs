@@ -810,6 +810,7 @@ mod imbalances {
 		TryDrop, RuntimeDebug,
 	};
 	use sp_std::mem;
+	use frame_support::traits::SameOrOther;
 
 	/// Opaque, move-only struct with private fields that serves as a token denoting that
 	/// funds have been created without any equal and opposite accounting.
@@ -843,6 +844,12 @@ mod imbalances {
 		}
 	}
 
+	impl<T: Config<I>, I: 'static> Default for PositiveImbalance<T, I> {
+		fn default() -> Self {
+			Self::zero()
+		}
+	}
+
 	impl<T: Config<I>, I: 'static> Imbalance<T::Balance> for PositiveImbalance<T, I> {
 		type Opposite = NegativeImbalance<T, I>;
 
@@ -873,14 +880,16 @@ mod imbalances {
 			self.0 = self.0.saturating_add(other.0);
 			mem::forget(other);
 		}
-		fn offset(self, other: Self::Opposite) -> result::Result<Self, Self::Opposite> {
+		fn offset(self, other: Self::Opposite) -> SameOrOther<Self, Self::Opposite> {
 			let (a, b) = (self.0, other.0);
 			mem::forget((self, other));
 
-			if a >= b {
-				Ok(Self(a - b))
+			if a > b {
+				SameOrOther::Same(Self(a - b))
+			} else if b > a {
+				SameOrOther::Other(NegativeImbalance::new(b - a))
 			} else {
-				Err(NegativeImbalance::new(b - a))
+				SameOrOther::None
 			}
 		}
 		fn peek(&self) -> T::Balance {
@@ -891,6 +900,12 @@ mod imbalances {
 	impl<T: Config<I>, I: 'static> TryDrop for NegativeImbalance<T, I> {
 		fn try_drop(self) -> result::Result<(), Self> {
 			self.drop_zero()
+		}
+	}
+
+	impl<T: Config<I>, I: 'static> Default for NegativeImbalance<T, I> {
+		fn default() -> Self {
+			Self::zero()
 		}
 	}
 
@@ -924,14 +939,16 @@ mod imbalances {
 			self.0 = self.0.saturating_add(other.0);
 			mem::forget(other);
 		}
-		fn offset(self, other: Self::Opposite) -> result::Result<Self, Self::Opposite> {
+		fn offset(self, other: Self::Opposite) -> SameOrOther<Self, Self::Opposite> {
 			let (a, b) = (self.0, other.0);
 			mem::forget((self, other));
 
-			if a >= b {
-				Ok(Self(a - b))
+			if a > b {
+				SameOrOther::Same(Self(a - b))
+			} else if b > a {
+				SameOrOther::Other(PositiveImbalance::new(b - a))
 			} else {
-				Err(PositiveImbalance::new(b - a))
+				SameOrOther::None
 			}
 		}
 		fn peek(&self) -> T::Balance {

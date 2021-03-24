@@ -139,15 +139,13 @@ use sp_runtime::{
 };
 use codec::{Encode, Decode, HasCompact};
 use frame_support::{ensure, dispatch::{DispatchError, DispatchResult}};
-use frame_support::traits::{
-	Currency, ReservableCurrency, BalanceStatus::Reserved, InspectFungibles, Fungibles,
-	WithdrawConsequence,
-};
+use frame_support::traits::{Currency, ReservableCurrency, BalanceStatus::Reserved};
+use frame_support::traits::tokens::{WithdrawConsequence, fungibles};
 use frame_system::Config as SystemConfig;
 pub use weights::WeightInfo;
 pub use pallet::*;
 
-impl<T: Config> InspectFungibles<<T as SystemConfig>::AccountId> for Pallet<T> {
+impl<T: Config> fungibles::Inspect<<T as SystemConfig>::AccountId> for Pallet<T> {
 	type AssetId = T::AssetId;
 	type Balance = T::Balance;
 
@@ -183,7 +181,7 @@ impl<T: Config> InspectFungibles<<T as SystemConfig>::AccountId> for Pallet<T> {
 	}
 }
 
-impl<T: Config> Fungibles<<T as SystemConfig>::AccountId> for Pallet<T> {
+impl<T: Config> fungibles::Mutate<<T as SystemConfig>::AccountId> for Pallet<T> {
 	fn deposit(
 		asset: Self::AssetId,
 		who: &<T as SystemConfig>::AccountId,
@@ -196,7 +194,7 @@ impl<T: Config> Fungibles<<T as SystemConfig>::AccountId> for Pallet<T> {
 		asset: Self::AssetId,
 		who: &<T as SystemConfig>::AccountId,
 		amount: Self::Balance,
-	) -> DispatchResult {
+	) -> Result<Self::Balance, DispatchError> {
 		Pallet::<T>::reduce_balance(asset, who.clone(), amount, None)
 	}
 }
@@ -692,7 +690,7 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let who = T::Lookup::lookup(who)?;
 
-			Self::reduce_balance(id, who, amount, Some(origin))
+			Self::reduce_balance(id, who, amount, Some(origin)).map(|_| ())
 		}
 
 		/// Move some assets from the sender account to another.
@@ -1473,7 +1471,7 @@ impl<T: Config> Pallet<T> {
 		target: T::AccountId,
 		amount: T::Balance,
 		maybe_check_admin: Option<T::AccountId>,
-	) -> DispatchResult {
+	) -> Result<T::Balance, DispatchError> {
 		Asset::<T>::try_mutate(id, |maybe_details| {
 			let d = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
 			if let Some(check_admin) = maybe_check_admin {
@@ -1501,7 +1499,7 @@ impl<T: Config> Pallet<T> {
 			d.supply = d.supply.saturating_sub(burned);
 
 			Self::deposit_event(Event::Burned(id, target, burned));
-			Ok(())
+			Ok(burned)
 		})
 	}
 
