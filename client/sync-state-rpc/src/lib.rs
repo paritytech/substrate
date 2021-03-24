@@ -94,7 +94,7 @@ impl<TBl, TCl> SyncStateRpcHandler<TBl, TCl>
 			chain_spec, client, shared_authority_set, shared_epoch_changes, deny_unsafe,
 		}
 	}
-	
+
 	fn build_sync_state(&self) -> Result<sc_chain_spec::LightSyncState<TBl>, Error<TBl>> {
 		let finalized_hash = self.client.info().finalized_hash;
 		let finalized_header = self.client.header(BlockId::Hash(finalized_hash))?
