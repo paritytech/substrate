@@ -17,6 +17,8 @@
 
 //! Traits for dealing with the idea of membership.
 
+use sp_std::prelude::*;
+
 /// A trait for querying whether a type can be said to "contain" a value.
 pub trait Contains<T: Ord> {
 	/// Return `true` if this "contains" the given value `t`.

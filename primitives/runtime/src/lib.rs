@@ -548,6 +548,8 @@ pub enum TokenError {
 	CannotCreate,
 	/// The asset in question is unknown.
 	UnknownAsset,
+	/// Funds exist but are frozen.
+	Frozen,
 	/// An underflow would occur.
 	Underflow,
 	/// An overflow would occur.
@@ -562,6 +564,7 @@ impl From<TokenError> for &'static str {
 			TokenError::BelowMinimum => "Account cannot exist with the funds that would be given",
 			TokenError::CannotCreate => "Account cannot be created",
 			TokenError::UnknownAsset => "The asset in question is unknown",
+			TokenError::Frozen => "Funds exist but are frozen",
 			TokenError::Underflow => "An underflow would occur",
 			TokenError::Overflow => "An overflow would occur",
 		}
