@@ -62,9 +62,6 @@ pub fn set_deferred_offences<T: Config>(offences: Vec<DeferredOffenceOf<T>>) {
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-pub fn get_deferred_offences<T: Config>() -> Vec<DeferredOffenceOf<T>> {
-    if !deprecated::DeferredOffences::<T>::exists() {
-        return Default::default()
-    }
-    <deprecated::DeferredOffences::<T>>::get()
+pub fn get_deferred_offences<T: Config>() -> Option<Vec<DeferredOffenceOf<T>>> {
+    <deprecated::DeferredOffences::<T>>::try_get().ok()
 }

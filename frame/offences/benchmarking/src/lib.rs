@@ -396,13 +396,13 @@ benchmarks! {
 		}
 
 		Offences::<T>::set_deferred_offences(deferred_offences);
-		assert!(!Offences::<T>::deferred_offences().is_empty());
+		assert!(!Offences::<T>::deferred_offences().is_none());
 	}: {
 		Offences::<T>::on_runtime_upgrade();
 	}
 	verify {
 		// make sure that all deferred offences were reported with Ok status.
-		assert!(Offences::<T>::deferred_offences().is_empty());
+		assert!(Offences::<T>::deferred_offences().is_none());
 		assert_eq!(
 			System::<T>::event_count(), d * (0
 			+ o // offenders slashed

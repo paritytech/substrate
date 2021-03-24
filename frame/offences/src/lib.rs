@@ -169,6 +169,8 @@ where
 
 		!any_unknown
 	}
+
+
 }
 
 impl<T: Config> Module<T> {
@@ -232,7 +234,7 @@ impl<T: Config> Module<T> {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	pub fn deferred_offences() -> Vec<DeferredOffenceOf<T>> {
+	pub fn deferred_offences() -> Option<Vec<DeferredOffenceOf<T>>> {
 		migration::get_deferred_offences::<T>()
 	}
 }
