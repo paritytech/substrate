@@ -15,15 +15,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Utility Module
-//! A stateless module with helpers for dispatch management which does no re-authentication.
+//! # Utility Pallet
+//! A stateless pallet with helpers for dispatch management which does no re-authentication.
 //!
 //! - [`Config`]
 //! - [`Call`]
 //!
 //! ## Overview
 //!
-//! This module contains two basic pieces of functionality:
+//! This pallet contains two basic pieces of functionality:
 //! - Batch dispatch: A stateless operation, allowing any origin to execute multiple calls in a
 //!   single dispatch. This can be useful to amalgamate proposals, combining `set_code` with
 //!   corresponding `set_storage`s, for efficient multiple payouts with just a single signature
@@ -34,9 +34,9 @@
 //!   need multiple distinct accounts (e.g. as controllers for many staking accounts), but where
 //!   it's perfectly fine to have each of them controlled by the same underlying keypair.
 //!   Derivative accounts are, for the purposes of proxy filtering considered exactly the same as
-//!   the oigin and are thus hampered with the origin's filters.
+//!   the origin and are thus hampered with the origin's filters.
 //!
-//! Since proxy filters are respected in all dispatches of this module, it should never need to be
+//! Since proxy filters are respected in all dispatches of this pallet, it should never need to be
 //! filtered by any proxy.
 //!
 //! ## Interface
@@ -60,36 +60,45 @@ use sp_std::prelude::*;
 use codec::{Encode, Decode};
 use sp_core::TypeId;
 use sp_io::hashing::blake2_256;
-use frame_support::{decl_module, decl_event, decl_storage, Parameter, transactional};
 use frame_support::{
-	traits::{OriginTrait, UnfilteredDispatchable, Get},
-	weights::{Weight, GetDispatchInfo, DispatchClass, extract_actual_weight},
-	dispatch::{PostDispatchInfo, DispatchResultWithPostInfo},
+	transactional,
+	traits::{OriginTrait, UnfilteredDispatchable},
+	weights::{GetDispatchInfo, extract_actual_weight},
+	dispatch::PostDispatchInfo,
 };
-use frame_system::{ensure_signed, ensure_root};
-use sp_runtime::{DispatchError, traits::Dispatchable};
+use sp_runtime::traits::Dispatchable;
 pub use weights::WeightInfo;
 
-/// Configuration trait.
-pub trait Config: frame_system::Config {
-	/// The overarching event type.
-	type Event: From<Event> + Into<<Self as frame_system::Config>::Event>;
+pub use pallet::*;
 
-	/// The overarching call type.
-	type Call: Parameter + Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo>
-		+ GetDispatchInfo + From<frame_system::Call<Self>>
-		+ UnfilteredDispatchable<Origin=Self::Origin>;
+#[frame_support::pallet]
+pub mod pallet {
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
+	use super::*;
 
-	/// Weight information for extrinsics in this pallet.
-	type WeightInfo: WeightInfo;
-}
+	#[pallet::pallet]
+	#[pallet::generate_store(pub(super) trait Store)]
+	pub struct Pallet<T>(_);
 
-decl_storage! {
-	trait Store for Module<T: Config> as Utility {}
-}
 
-decl_event! {
-	/// Events type.
+	/// Configuration trait.
+	#[pallet::config]
+	pub trait Config: frame_system::Config {
+		/// The overarching event type.
+		type Event: From<Event> + IsType<<Self as frame_system::Config>::Event>;
+
+		/// The overarching call type.
+		type Call: Parameter + Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo>
+			+ GetDispatchInfo + From<frame_system::Call<Self>>
+			+ UnfilteredDispatchable<Origin=Self::Origin>;
+
+		/// Weight information for extrinsics in this pallet.
+		type WeightInfo: WeightInfo;
+	}
+
+	#[pallet::event]
+	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event {
 		/// Batch of dispatches did not complete fully. Index of first failing dispatch given, as
 		/// well as the error. \[index, error\]
@@ -97,21 +106,12 @@ decl_event! {
 		/// Batch of dispatches completed fully with no error.
 		BatchCompleted,
 	}
-}
 
-/// A module identifier. These are per module and should be stored in a registry somewhere.
-#[derive(Clone, Copy, Eq, PartialEq, Encode, Decode)]
-struct IndexedUtilityModuleId(u16);
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
 
-impl TypeId for IndexedUtilityModuleId {
-	const TYPE_ID: [u8; 4] = *b"suba";
-}
-
-decl_module! {
-	pub struct Module<T: Config> for enum Call where origin: T::Origin {
-		/// Deposit one of this module's events by using the default implementation.
-		fn deposit_event() = default;
-
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {
 		/// Send a batch of dispatch calls.
 		///
 		/// May be called from any origin.
@@ -130,7 +130,7 @@ decl_module! {
 		/// `BatchInterrupted` event is deposited, along with the number of successful calls made
 		/// and the error of the failed call. If all were successful, then the `BatchCompleted`
 		/// event is deposited.
-		#[weight = {
+		#[pallet::weight({
 			let dispatch_infos = calls.iter().map(|call| call.get_dispatch_info()).collect::<Vec<_>>();
 			let dispatch_weight = dispatch_infos.iter()
 				.map(|di| di.weight)
@@ -147,8 +147,11 @@ decl_module! {
 				}
 			};
 			(dispatch_weight, dispatch_class)
-		}]
-		fn batch(origin, calls: Vec<<T as Config>::Call>) -> DispatchResultWithPostInfo {
+		})]
+		pub fn batch(
+			origin: OriginFor<T>,
+			calls: Vec<<T as Config>::Call>,
+		) -> DispatchResultWithPostInfo {
 			let is_root = ensure_root(origin.clone()).is_ok();
 			let calls_len = calls.len();
 			// Track the actual weight of each of the batch calls.
@@ -189,7 +192,7 @@ decl_module! {
 		/// NOTE: Prior to version *12, this was called `as_limited_sub`.
 		///
 		/// The dispatch origin for this call must be _Signed_.
-		#[weight = {
+		#[pallet::weight({
 			let dispatch_info = call.get_dispatch_info();
 			(
 				T::WeightInfo::as_derivative()
@@ -198,8 +201,12 @@ decl_module! {
 					.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
 				dispatch_info.class,
 			)
-		}]
-		fn as_derivative(origin, index: u16, call: Box<<T as Config>::Call>) -> DispatchResultWithPostInfo {
+		})]
+		pub fn as_derivative(
+			origin: OriginFor<T>,
+			index: u16,
+			call: Box<<T as Config>::Call>,
+		) -> DispatchResultWithPostInfo {
 			let mut origin = origin;
 			let who = ensure_signed(origin.clone())?;
 			let pseudonym = Self::derivative_account_id(who, index);
@@ -229,7 +236,7 @@ decl_module! {
 		/// # <weight>
 		/// - Complexity: O(C) where C is the number of calls to be batched.
 		/// # </weight>
-		#[weight = {
+		#[pallet::weight({
 			let dispatch_infos = calls.iter().map(|call| call.get_dispatch_info()).collect::<Vec<_>>();
 			let dispatch_weight = dispatch_infos.iter()
 				.map(|di| di.weight)
@@ -246,9 +253,12 @@ decl_module! {
 				}
 			};
 			(dispatch_weight, dispatch_class)
-		}]
+		})]
 		#[transactional]
-		fn batch_all(origin, calls: Vec<<T as Config>::Call>) -> DispatchResultWithPostInfo {
+		pub fn batch_all(
+			origin: OriginFor<T>,
+			calls: Vec<<T as Config>::Call>,
+		) -> DispatchResultWithPostInfo {
 			let is_root = ensure_root(origin.clone()).is_ok();
 			let calls_len = calls.len();
 			// Track the actual weight of each of the batch calls.
@@ -276,9 +286,18 @@ decl_module! {
 			Ok(Some(base_weight + weight).into())
 		}
 	}
+
 }
 
-impl<T: Config> Module<T> {
+/// A pallet identifier. These are per pallet and should be stored in a registry somewhere.
+#[derive(Clone, Copy, Eq, PartialEq, Encode, Decode)]
+struct IndexedUtilityPalletId(u16);
+
+impl TypeId for IndexedUtilityPalletId {
+	const TYPE_ID: [u8; 4] = *b"suba";
+}
+
+impl<T: Config> Pallet<T> {
 	/// Derive a derivative account ID from the owner account and the sub-account index.
 	pub fn derivative_account_id(who: T::AccountId, index: u16) -> T::AccountId {
 		let entropy = (b"modlpy/utilisuba", who, index).using_encoded(blake2_256);
