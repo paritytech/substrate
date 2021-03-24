@@ -91,19 +91,16 @@ use sp_std::prelude::*;
 use sp_runtime::{DispatchResult, traits::StaticLookup};
 
 use frame_support::{
-	Parameter, ensure,
+	weights::GetDispatchInfo,
+	traits::UnfilteredDispatchable,
 };
-use frame_support::{
-	weights::{Weight, GetDispatchInfo, Pays},
-	traits::{UnfilteredDispatchable, Get},
-	dispatch::DispatchResultWithPostInfo,
-};
-use frame_system::ensure_signed;
 
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
+
+pub use pallet::*;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -143,7 +140,7 @@ pub mod pallet {
 			let dispatch_info = call.get_dispatch_info();
 			(dispatch_info.weight.saturating_add(10_000), dispatch_info.class)
 		})]
-		fn sudo(
+		pub(crate) fn sudo(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::Call>
 		) -> DispatchResultWithPostInfo {
@@ -168,7 +165,7 @@ pub mod pallet {
 		/// - The weight of this call is defined by the caller.
 		/// # </weight>
 		#[pallet::weight((*_weight, call.get_dispatch_info().class))]
-		fn sudo_unchecked_weight(
+		pub(crate) fn sudo_unchecked_weight(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::Call>,
 			_weight: Weight
@@ -193,7 +190,7 @@ pub mod pallet {
 		/// - One DB change.
 		/// # </weight>
 		#[pallet::weight(0)]
-		fn set_key(
+		pub(crate) fn set_key(
 			origin: OriginFor<T>,
 			new: <T::Lookup as StaticLookup>::Source
 		) -> DispatchResultWithPostInfo {
@@ -229,7 +226,7 @@ pub mod pallet {
 				dispatch_info.class,
 			)
 		})]
-		fn sudo_as(
+		pub(crate) fn sudo_as(
 			origin: OriginFor<T>,
 			who: <T::Lookup as StaticLookup>::Source,
 			call: Box<<T as Config>::Call>
