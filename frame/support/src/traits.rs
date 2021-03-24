@@ -38,15 +38,16 @@ use crate::weights::Weight;
 use bitflags::bitflags;
 use impl_trait_for_tuples::impl_for_tuples;
 
-mod fungibles;
-mod fungible;
+pub mod fungible;
 pub use fungible::{
-	Inspect as InspectFungible, Mutate as MutateFungible, Transfer as TransferFungible, Reserve as ReserveFungible,
-	//AssetOf,
+	Inspect as InspectFungible, Mutate as MutateFungible, Transfer as TransferFungible,
+	Reserve as ReserveFungible, Balanced as BalancedFungible, Unbalanced as UnbalancedFungible,
+	ItemOf,
 };
+pub mod fungibles;
 pub use fungibles::{
-	InspectFungibles, Fungibles, TransferFungibles, ReserveFungibles,
-	BalancedFungibles, UnbalancedFungibles,
+	Inspect as InspectFungibles, Mutate as MutateFungibles, Transfer as TransferFungibles,
+	Reserve as ReserveFungibles, Balanced as BalancedFungibles, Unbalanced as UnbalancedFungibles,
 };
 
 /// Return type used when we need to return one of two imbalances each in the opposite direction.

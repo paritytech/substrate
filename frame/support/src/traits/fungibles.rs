@@ -20,7 +20,7 @@
 use super::*;
 mod balanced;
 mod imbalance;
-pub use balanced::{BalancedFungibles, UnbalancedFungibles};
+pub use balanced::{Balanced, Unbalanced};
 pub use imbalance::{Imbalance, HandleImbalanceDrop, DebtOf, CreditOf};
 
 pub trait AssetId: FullCodec + Copy + Default + Eq + PartialEq {}
@@ -30,7 +30,7 @@ pub trait Balance: AtLeast32BitUnsigned + FullCodec + Copy + Default {}
 impl<T: AtLeast32BitUnsigned + FullCodec + Copy + Default> Balance for T {}
 
 /// Trait for providing balance-inspection access to a set of named fungible assets.
-pub trait InspectFungibles<AccountId> {
+pub trait Inspect<AccountId> {
 	/// Means of identifying one asset class from another.
 	type AssetId: AssetId;
 	/// Scalar type for representing balance of an account.
@@ -53,7 +53,7 @@ pub trait InspectFungibles<AccountId> {
 }
 
 /// Trait for providing a set of named fungible assets which can be created and destroyed.
-pub trait Fungibles<AccountId>: InspectFungibles<AccountId> {
+pub trait Mutate<AccountId>: Inspect<AccountId> {
 	/// Increase the `asset` balance of `who` by `amount`.
 	fn deposit(asset: Self::AssetId, who: &AccountId, amount: Self::Balance) -> DispatchResult;
 	/// Attempt to reduce the `asset` balance of `who` by `amount`.
@@ -76,7 +76,7 @@ pub trait Fungibles<AccountId>: InspectFungibles<AccountId> {
 }
 
 /// Trait for providing a set of named fungible assets which can only be transferred.
-pub trait TransferFungibles<AccountId>: InspectFungibles<AccountId> {
+pub trait Transfer<AccountId>: Inspect<AccountId> {
 	/// Transfer funds from one account into another.
 	fn transfer(
 		asset: Self::AssetId,
@@ -87,7 +87,7 @@ pub trait TransferFungibles<AccountId>: InspectFungibles<AccountId> {
 }
 
 /// Trait for providing a set of named fungible assets which can be reserved.
-pub trait ReserveFungibles<AccountId>: InspectFungibles<AccountId> {
+pub trait Reserve<AccountId>: Inspect<AccountId> {
 	/// Amount of funds held in reserve.
 	fn reserved_balance(asset: Self::AssetId, who: &AccountId) -> Self::Balance;
 

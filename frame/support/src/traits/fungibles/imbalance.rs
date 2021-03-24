@@ -141,18 +141,18 @@ impl<
 
 /// Imbalance implying that the total_issuance value is less than the sum of all account balances.
 pub type DebtOf<AccountId, B> = Imbalance<
-	<B as InspectFungibles<AccountId>>::AssetId,
-	<B as InspectFungibles<AccountId>>::Balance,
+	<B as Inspect<AccountId>>::AssetId,
+	<B as Inspect<AccountId>>::Balance,
 	// This will generally be implemented by increasing the total_issuance value.
-	<B as BalancedFungibles<AccountId>>::OnDropDebt,
-	<B as BalancedFungibles<AccountId>>::OnDropCredit,
+	<B as Balanced<AccountId>>::OnDropDebt,
+	<B as Balanced<AccountId>>::OnDropCredit,
 >;
 
 /// Imbalance implying that the total_issuance value is greater than the sum of all account balances.
 pub type CreditOf<AccountId, B> = Imbalance<
-	<B as InspectFungibles<AccountId>>::AssetId,
-	<B as InspectFungibles<AccountId>>::Balance,
+	<B as Inspect<AccountId>>::AssetId,
+	<B as Inspect<AccountId>>::Balance,
 	// This will generally be implemented by decreasing the total_issuance value.
-	<B as BalancedFungibles<AccountId>>::OnDropCredit,
-	<B as BalancedFungibles<AccountId>>::OnDropDebt,
+	<B as Balanced<AccountId>>::OnDropCredit,
+	<B as Balanced<AccountId>>::OnDropDebt,
 >;

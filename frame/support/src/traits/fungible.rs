@@ -20,7 +20,7 @@
 use super::*;
 mod balanced;
 mod imbalance;
-//pub use balanced::{Balanced, Unbalanced};
+pub use balanced::{Balanced, Unbalanced};
 pub use imbalance::{Imbalance, HandleImbalanceDrop, DebtOf, CreditOf};
 
 /// Trait for providing balance-inspection access to a fungible asset.
@@ -79,83 +79,108 @@ pub trait Reserve<AccountId>: Inspect<AccountId> {
 		status: BalanceStatus,
 	) -> DispatchResult;
 }
-/*
-pub struct AssetOf<
-	F: InspectFungibles<AccountId>,
-	A: Get<<F as InspectFungibles<AccountId>>::AssetId>,
+
+pub struct ItemOf<
+	F: fungibles::Inspect<AccountId>,
+	A: Get<<F as fungibles::Inspect<AccountId>>::AssetId>,
 	AccountId,
 >(
 	sp_std::marker::PhantomData<(F, A, AccountId)>
 );
 impl<
-	F: InspectFungibles<AccountId>,
-	A: Get<<F as InspectFungibles<AccountId>>::AssetId>,
+	F: fungibles::Inspect<AccountId>,
+	A: Get<<F as fungibles::Inspect<AccountId>>::AssetId>,
 	AccountId,
-> Inspect<AccountId> for AssetOf<F, A, AccountId> {
-	type Balance = <F as InspectFungibles<AccountId>>::Balance;
+> Inspect<AccountId> for ItemOf<F, A, AccountId> {
+	type Balance = <F as fungibles::Inspect<AccountId>>::Balance;
 	fn total_issuance() -> Self::Balance {
-		<F as InspectFungibles<AccountId>>::total_issuance(A::get())
+		<F as fungibles::Inspect<AccountId>>::total_issuance(A::get())
 	}
 	fn minimum_balance() -> Self::Balance {
-		<F as InspectFungibles<AccountId>>::minimum_balance(A::get())
+		<F as fungibles::Inspect<AccountId>>::minimum_balance(A::get())
 	}
 	fn balance(who: &AccountId) -> Self::Balance {
-		<F as InspectFungibles<AccountId>>::balance(A::get(), who)
+		<F as fungibles::Inspect<AccountId>>::balance(A::get(), who)
 	}
 	fn can_deposit(who: &AccountId, amount: Self::Balance) -> bool {
-		<F as InspectFungibles<AccountId>>::can_deposit(A::get(), who, amount)
+		<F as fungibles::Inspect<AccountId>>::can_deposit(A::get(), who, amount)
 	}
 	fn can_withdraw(who: &AccountId, amount: Self::Balance) -> WithdrawConsequence<Self::Balance> {
-		<F as InspectFungibles<AccountId>>::can_withdraw(A::get(), who, amount)
+		<F as fungibles::Inspect<AccountId>>::can_withdraw(A::get(), who, amount)
 	}
 }
 impl<
-	F: Fungibles<AccountId>,
-	A: Get<<F as InspectFungibles<AccountId>>::AssetId>,
+	F: fungibles::Mutate<AccountId>,
+	A: Get<<F as fungibles::Inspect<AccountId>>::AssetId>,
 	AccountId,
-> Mutate<AccountId> for AssetOf<F, A, AccountId> {
+> Mutate<AccountId> for ItemOf<F, A, AccountId> {
 	fn deposit(who: &AccountId, amount: Self::Balance) -> DispatchResult {
-		<F as Fungibles<AccountId>>::deposit(A::get(), who, amount)
+		<F as fungibles::Mutate<AccountId>>::deposit(A::get(), who, amount)
 	}
 	fn withdraw(who: &AccountId, amount: Self::Balance) -> DispatchResult {
-		<F as Fungibles<AccountId>>::withdraw(A::get(), who, amount)
+		<F as fungibles::Mutate<AccountId>>::withdraw(A::get(), who, amount)
 	}
 }
 impl<
-	F: TransferFungibles<AccountId>,
-	A: Get<<F as InspectFungibles<AccountId>>::AssetId>,
+	F: fungibles::Transfer<AccountId>,
+	A: Get<<F as fungibles::Inspect<AccountId>>::AssetId>,
 	AccountId,
-> TransferFungible<AccountId> for AssetOf<F, A, AccountId> {
+> TransferFungible<AccountId> for ItemOf<F, A, AccountId> {
 	fn transfer(source: &AccountId, dest: &AccountId, amount: Self::Balance) -> DispatchResult {
-		<F as TransferFungibles<AccountId>>::transfer(A::get(), source, dest, amount)
+		<F as fungibles::Transfer<AccountId>>::transfer(A::get(), source, dest, amount)
 	}
 }
 impl<
-	F: ReserveFungibles<AccountId>,
-	A: Get<<F as InspectFungibles<AccountId>>::AssetId>,
+	F: fungibles::Reserve<AccountId>,
+	A: Get<<F as fungibles::Inspect<AccountId>>::AssetId>,
 	AccountId,
-> ReserveFungible<AccountId> for AssetOf<F, A, AccountId> {
+> ReserveFungible<AccountId> for ItemOf<F, A, AccountId> {
 	fn reserved_balance(who: &AccountId) -> Self::Balance {
-		<F as ReserveFungibles<AccountId>>::reserved_balance(A::get(), who)
+		<F as fungibles::Reserve<AccountId>>::reserved_balance(A::get(), who)
 	}
 	fn total_balance(who: &AccountId) -> Self::Balance {
-		<F as ReserveFungibles<AccountId>>::total_balance(A::get(), who)
+		<F as fungibles::Reserve<AccountId>>::total_balance(A::get(), who)
 	}
 	fn can_reserve(who: &AccountId, amount: Self::Balance) -> bool {
-		<F as ReserveFungibles<AccountId>>::can_reserve(A::get(), who, amount)
+		<F as fungibles::Reserve<AccountId>>::can_reserve(A::get(), who, amount)
 	}
 	fn reserve(who: &AccountId, amount: Self::Balance) -> DispatchResult {
-		<F as ReserveFungibles<AccountId>>::reserve(A::get(), who, amount)
+		<F as fungibles::Reserve<AccountId>>::reserve(A::get(), who, amount)
 	}
 	fn unreserve(who: &AccountId, amount: Self::Balance) -> DispatchResult {
-		<F as ReserveFungibles<AccountId>>::unreserve(A::get(), who, amount)
+		<F as fungibles::Reserve<AccountId>>::unreserve(A::get(), who, amount)
 	}
 	fn repatriate_reserved(
 		who: &AccountId,
 		amount: Self::Balance,
 		status: BalanceStatus,
 	) -> DispatchResult {
-		<F as ReserveFungibles<AccountId>>::repatriate_reserved(A::get(), who, amount, status)
+		<F as fungibles::Reserve<AccountId>>::repatriate_reserved(A::get(), who, amount, status)
 	}
 }
-*/
+
+impl<
+	F: fungibles::Unbalanced<AccountId>,
+	A: Get<<F as fungibles::Inspect<AccountId>>::AssetId>,
+	AccountId,
+> Unbalanced<AccountId> for ItemOf<F, A, AccountId> {
+	fn set_balance(who: &AccountId, amount: Self::Balance) -> DispatchResult {
+		<F as fungibles::Unbalanced<AccountId>>::set_balance(A::get(), who, amount)
+	}
+	fn set_total_issuance(amount: Self::Balance) -> () {
+		<F as fungibles::Unbalanced<AccountId>>::set_total_issuance(A::get(), amount)
+	}
+	fn decrease_balance(who: &AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError> {
+		<F as fungibles::Unbalanced<AccountId>>::decrease_balance(A::get(), who, amount)
+	}
+	fn decrease_balance_at_most(who: &AccountId, amount: Self::Balance) -> Self::Balance {
+		<F as fungibles::Unbalanced<AccountId>>::decrease_balance_at_most(A::get(), who, amount)
+	}
+	fn increase_balance(who: &AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError> {
+		<F as fungibles::Unbalanced<AccountId>>::increase_balance(A::get(), who, amount)
+	}
+	fn increase_balance_at_most(who: &AccountId, amount: Self::Balance) -> Self::Balance {
+		<F as fungibles::Unbalanced<AccountId>>::increase_balance_at_most(A::get(), who, amount)
+	}
+}
+

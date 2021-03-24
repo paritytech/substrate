@@ -20,7 +20,7 @@
 
 use super::*;
 
-pub trait BalancedFungibles<AccountId>: InspectFungibles<AccountId> {
+pub trait Balanced<AccountId>: Inspect<AccountId> {
 	type OnDropDebt: HandleImbalanceDrop<Self::AssetId, Self::Balance>;
 	type OnDropCredit: HandleImbalanceDrop<Self::AssetId, Self::Balance>;
 
@@ -140,7 +140,7 @@ pub trait BalancedFungibles<AccountId>: InspectFungibles<AccountId> {
 	}
 }
 
-pub trait UnbalancedFungibles<AccountId>: InspectFungibles<AccountId> {
+pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 	/// Set the `asset` balance of `who` to `amount`. If this cannot be done for some reason (e.g.
 	/// because the account cannot be created or an overflow) then an `Err` is returned.
 	fn set_balance(asset: Self::AssetId, who: &AccountId, amount: Self::Balance) -> DispatchResult;
@@ -251,7 +251,7 @@ pub trait UnbalancedFungibles<AccountId>: InspectFungibles<AccountId> {
 }
 
 pub struct IncreaseIssuance<AccountId, U>(PhantomData<(AccountId, U)>);
-impl<AccountId, U: UnbalancedFungibles<AccountId>> HandleImbalanceDrop<U::AssetId, U::Balance>
+impl<AccountId, U: Unbalanced<AccountId>> HandleImbalanceDrop<U::AssetId, U::Balance>
 	for IncreaseIssuance<AccountId, U>
 {
 	fn handle(asset: U::AssetId, amount: U::Balance) {
@@ -260,7 +260,7 @@ impl<AccountId, U: UnbalancedFungibles<AccountId>> HandleImbalanceDrop<U::AssetI
 }
 
 pub struct DecreaseIssuance<AccountId, U>(PhantomData<(AccountId, U)>);
-impl<AccountId, U: UnbalancedFungibles<AccountId>> HandleImbalanceDrop<U::AssetId, U::Balance>
+impl<AccountId, U: Unbalanced<AccountId>> HandleImbalanceDrop<U::AssetId, U::Balance>
 	for DecreaseIssuance<AccountId, U>
 {
 	fn handle(asset: U::AssetId, amount: U::Balance) {
@@ -269,34 +269,34 @@ impl<AccountId, U: UnbalancedFungibles<AccountId>> HandleImbalanceDrop<U::AssetI
 }
 
 type Credit<AccountId, U> = Imbalance<
-	<U as InspectFungibles<AccountId>>::AssetId,
-	<U as InspectFungibles<AccountId>>::Balance,
+	<U as Inspect<AccountId>>::AssetId,
+	<U as Inspect<AccountId>>::Balance,
 	DecreaseIssuance<AccountId, U>,
 	IncreaseIssuance<AccountId, U>,
 >;
 
 type Debt<AccountId, U> = Imbalance<
-	<U as InspectFungibles<AccountId>>::AssetId,
-	<U as InspectFungibles<AccountId>>::Balance,
+	<U as Inspect<AccountId>>::AssetId,
+	<U as Inspect<AccountId>>::Balance,
 	IncreaseIssuance<AccountId, U>,
 	DecreaseIssuance<AccountId, U>,
 >;
 
-fn credit<AccountId, U: UnbalancedFungibles<AccountId>>(
+fn credit<AccountId, U: Unbalanced<AccountId>>(
 	asset: U::AssetId,
 	amount: U::Balance,
 ) -> Credit<AccountId, U> {
 	Imbalance::new(asset, amount)
 }
 
-fn debt<AccountId, U: UnbalancedFungibles<AccountId>>(
+fn debt<AccountId, U: Unbalanced<AccountId>>(
 	asset: U::AssetId,
 	amount: U::Balance,
 ) -> Debt<AccountId, U> {
 	Imbalance::new(asset, amount)
 }
 
-impl<AccountId, U: UnbalancedFungibles<AccountId>> BalancedFungibles<AccountId> for U {
+impl<AccountId, U: Unbalanced<AccountId>> Balanced<AccountId> for U {
 	type OnDropCredit = DecreaseIssuance<AccountId, U>;
 	type OnDropDebt = IncreaseIssuance<AccountId, U>;
 	fn rescind(asset: Self::AssetId, amount: Self::Balance) -> Debt<AccountId, Self> {
