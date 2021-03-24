@@ -472,7 +472,7 @@ parameter_types! {
 
 impl pallet_staking::Config for Runtime {
 	const MAX_NOMINATIONS: u32 =
-		<NposSolution16 as sp_npos_elections::CompactSolution>::LIMIT as u32;
+		<NposCompactSolution16 as sp_npos_elections::CompactSolution>::LIMIT as u32;
 	type Currency = Balances;
 	type UnixTime = Timestamp;
 	type CurrencyToVote = U128CurrencyToVote;

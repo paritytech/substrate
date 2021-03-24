@@ -280,12 +280,13 @@ pub mod slashing;
 pub mod inflation;
 pub mod weights;
 
-#[doc(hidden)]
-pub use sp_std;
-#[doc(hidden)]
-pub use frame_support;
-
-use sp_std::{result, prelude::*, collections::btree_map::BTreeMap, convert::From, mem::size_of};
+use sp_std::{
+	result,
+	prelude::*,
+	collections::btree_map::BTreeMap,
+	convert::From,
+	mem::size_of,
+};
 use codec::{HasCompact, Encode, Decode};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
@@ -335,18 +336,6 @@ macro_rules! log {
 		)
 	};
 }
-
-/// Data type used to index nominators in the compact type
-pub type NominatorIndex = u32;
-
-/// Data type used to index validators in the compact type.
-pub type ValidatorIndex = u16;
-
-// Ensure the size of both ValidatorIndex and NominatorIndex. They both need to be well below usize.
-static_assertions::const_assert!(size_of::<ValidatorIndex>() <= size_of::<usize>());
-static_assertions::const_assert!(size_of::<NominatorIndex>() <= size_of::<usize>());
-static_assertions::const_assert!(size_of::<ValidatorIndex>() <= size_of::<u32>());
-static_assertions::const_assert!(size_of::<NominatorIndex>() <= size_of::<u32>());
 
 pub const MAX_UNLOCKING_CHUNKS: usize = 32;
 
@@ -2135,7 +2124,7 @@ impl<T: Config> Module<T> {
 				.unwrap_or(0); // Must never happen.
 
 			match ForceEra::get() {
-				// Will set to default again, which is `NorForcing`.
+				// Will set to default again, which is `NotForcing`.
 				Forcing::ForceNew => ForceEra::kill(),
 				// Short circuit to `new_era`.
 				Forcing::ForceAlways => (),

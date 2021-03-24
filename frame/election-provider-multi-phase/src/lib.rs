@@ -681,6 +681,9 @@ pub mod pallet {
 
 			// We only accept data provider who's maximum votes per voter matches our
 			// `T::CompactSolution`'s `LIMIT`.
+			//
+			// NOTE that this pallet does not really need to enforce this in runtime. The compact
+			// solution cannot represent any voters more than `LIMIT` anyhow.
 			assert_eq!(
 				<T::DataProvider as ElectionDataProvider<T::AccountId, T::BlockNumber>>::MAXIMUM_VOTES_PER_VOTER,
 				<CompactOf<T> as CompactSolution>::LIMIT as u32,
