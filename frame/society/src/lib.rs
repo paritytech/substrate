@@ -272,7 +272,7 @@ type BalanceOf<T, I> = <<T as Config<I>>::Currency as Currency<<T as system::Con
 type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
 
 /// The module's configuration trait.
-pub trait Config<I=DefaultInstance>: system::Config {
+pub trait Config<I = DefaultInstance>: system::Config {
 	/// The overarching event type.
 	type Event: From<Event<Self, I>> + Into<<Self as system::Config>::Event>;
 
@@ -316,6 +316,9 @@ pub trait Config<I=DefaultInstance>: system::Config {
 
 	/// The number of blocks between membership challenges.
 	type ChallengePeriod: Get<Self::BlockNumber>;
+
+	/// The maximum number of candidates that we accept per round.
+	type MaxCandidateIntake: Get<u32>;
 }
 
 /// A vote by a member on a candidate application.
@@ -496,6 +499,9 @@ decl_module! {
 
 		/// The societies's module id
 		const ModuleId: ModuleId = T::ModuleId::get();
+
+		/// Maximum candidate intake per round.
+		const MaxCandidateIntake: u32 = T::MaxCandidateIntake::get();
 
 		// Used for handling module events.
 		fn deposit_event() = default;
@@ -1615,11 +1621,11 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 	/// May be empty.
 	pub fn take_selected(
 		members_len: usize,
-		pot: BalanceOf<T, I>
+		pot: BalanceOf<T, I>,
 	) -> Vec<Bid<T::AccountId, BalanceOf<T, I>>> {
 		let max_members = MaxMembers::<I>::get() as usize;
-		// No more than 10 will be returned.
-		let mut max_selections: usize = 10.min(max_members.saturating_sub(members_len));
+		let mut max_selections: usize =
+			(T::MaxCandidateIntake::get() as usize).min(max_members.saturating_sub(members_len));
 
 		if max_selections > 0 {
 			// Get the number of left-most bidders whose bids add up to less than `pot`.
