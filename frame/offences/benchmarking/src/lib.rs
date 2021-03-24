@@ -396,7 +396,8 @@ benchmarks! {
 		}
 
 		Offences::<T>::set_deferred_offences(deferred_offences);
-		assert!(!Offences::<T>::deferred_offences().is_none());
+		assert_eq!(Offences::<T>::deferred_offences().unwrap().len(), d as usize);
+		assert_eq!(System::<T>::event_count(), 0);
 	}: {
 		Offences::<T>::on_runtime_upgrade();
 	}
