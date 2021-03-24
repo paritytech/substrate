@@ -301,7 +301,6 @@ benchmarks! {
 					pallet_offences::Event::Offence(
 						UnresponsivenessOffence::<T>::ID,
 						0_u32.to_le_bytes().to_vec(),
-						true
 					)
 				).into()))
 		);

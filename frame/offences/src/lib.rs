@@ -103,10 +103,9 @@ decl_storage! {
 decl_event!(
 	pub enum Event {
 		/// There is an offence reported of the given `kind` happened at the `session_index` and
-		/// (kind-specific) time slot. This event is not deposited for duplicate slashes. last
-		/// element indicates of the offence was applied (true) or queued (false)
-		/// \[kind, timeslot, applied\].
-		Offence(Kind, OpaqueTimeSlot, bool),
+		/// (kind-specific) time slot. This event is not deposited for duplicate slashes.
+		/// \[kind, timeslot\].
+		Offence(Kind, OpaqueTimeSlot),
 	}
 );
 
@@ -157,7 +156,7 @@ where
 		);
 
 		// Deposit the event.
-		Self::deposit_event(Event::Offence(O::ID, time_slot.encode(), true));
+		Self::deposit_event(Event::Offence(O::ID, time_slot.encode()));
 
 		Ok(())
 	}
