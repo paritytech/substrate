@@ -686,7 +686,7 @@ where
 		ContractExecResult {
 			result: result.map(|r| r.0).map_err(|r| r.0.error),
 			gas_consumed,
-			debug_message: String::new(),
+			debug_message: Bytes(Vec::new()),
 		}
 	}
 
@@ -721,7 +721,7 @@ where
 			Err(error) => return ContractInstantiateResult {
 				result: Err(error.into()),
 				gas_consumed: gas_meter.gas_spent(),
-				debug_message: String::new(),
+				debug_message: Bytes(Vec::new()),
 			}
 		};
 		let result = ctx.instantiate(endowment, &mut gas_meter, executable, data, &salt)
@@ -742,7 +742,7 @@ where
 		ContractInstantiateResult {
 			result: result.map_err(|e| e.error),
 			gas_consumed: gas_meter.gas_spent(),
-			debug_message: String::new(),
+			debug_message: Bytes(Vec::new()),
 		}
 	}
 

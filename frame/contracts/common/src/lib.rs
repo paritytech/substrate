@@ -40,11 +40,15 @@ pub struct ContractResult<T> {
 	/// An optional debug message. This message is only non-empty when explicitly requested
 	/// by the code that calls into the contract.
 	///
+	/// The contained bytes are valid UTF-8. This is not declared as `String` because
+	/// this type is not allowed within the runtime. A client should decode them in order
+	/// to present the message to its users.
+	///
 	/// # Note
 	///
 	/// The debug message is never generated during on-chain execution. It is reserved for
 	/// RPC calls.
-	pub debug_message: String,
+	pub debug_message: Bytes,
 	/// The execution result of the wasm code.
 	pub result: T,
 }
