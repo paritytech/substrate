@@ -645,10 +645,12 @@ impl<Hash, Number, E: Epoch> EpochChanges<Hash, Number, E> where
 }
 
 /// Type alias to produce the epoch-changes tree from a block type.
-pub type EpochChangesFor<Block, Epoch> = EpochChanges<<Block as BlockT>::Hash, NumberFor<Block>, Epoch>;
+pub type EpochChangesFor<Block, Epoch> =
+	EpochChanges<<Block as BlockT>::Hash, NumberFor<Block>, Epoch>;
 
 /// A shared epoch changes tree.
-pub type SharedEpochChanges<Block, Epoch> = Arc<Mutex<EpochChangesFor<Block, Epoch>>>;
+pub type SharedEpochChanges<Block, Epoch> =
+	sc_consensus::shared_data::SharedData<EpochChangesFor<Block, Epoch>>;
 
 #[cfg(test)]
 mod tests {

@@ -79,18 +79,19 @@ pub fn load_epoch_changes<Block: BlockT, B: AuxStore>(
 		},
 	};
 
-	let epoch_changes = Arc::new(Mutex::new(maybe_epoch_changes.unwrap_or_else(|| {
-		info!(target: "babe",
-			  "👶 Creating empty BABE epoch changes on what appears to be first startup."
+	let epoch_changes = SharedEpochChanges::<Block, Epoch>::new(maybe_epoch_changes.unwrap_or_else(|| {
+		info!(
+			target: "babe",
+			"👶 Creating empty BABE epoch changes on what appears to be first startup.",
 		);
 		EpochChangesFor::<Block, Epoch>::default()
-	})));
+	}));
 
 	// rebalance the tree after deserialization. this isn't strictly necessary
 	// since the tree is now rebalanced on every update operation. but since the
 	// tree wasn't rebalanced initially it's useful to temporarily leave it here
 	// to avoid having to wait until an import for rebalancing.
-	epoch_changes.lock().rebalance();
+	epoch_changes.shared_data().rebalance();
 
 	Ok(epoch_changes)
 }

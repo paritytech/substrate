@@ -502,7 +502,7 @@ async fn answer_requests<B: BlockT, C>(
 		match request {
 			BabeRequest::EpochForChild(parent_hash, parent_number, slot_number, response) => {
 				let lookup = || {
-					let epoch_changes =	epoch_changes.lock();
+					let epoch_changes = epoch_changes.shared_data();
 					let epoch_descriptor = epoch_changes.epoch_descriptor_for_child_of(
 						descendent_query(&*client),
 						&parent_hash,
@@ -656,7 +656,7 @@ where
 		parent: &B::Header,
 		slot: Slot,
 	) -> Result<Self::EpochData, ConsensusError> {
-		self.epoch_changes.lock().epoch_descriptor_for_child_of(
+		self.epoch_changes.shared_data().epoch_descriptor_for_child_of(
 			descendent_query(&*self.client),
 			&parent.hash(),
 			parent.number().clone(),
@@ -667,7 +667,8 @@ where
 	}
 
 	fn authorities_len(&self, epoch_descriptor: &Self::EpochData) -> Option<usize> {
-		self.epoch_changes.lock()
+		self.epoch_changes
+			.shared_data()
 			.viable_epoch(&epoch_descriptor, |slot| Epoch::genesis(&self.config, slot))
 			.map(|epoch| epoch.as_ref().authorities.len())
 	}
@@ -681,7 +682,7 @@ where
 		debug!(target: "babe", "Attempting to claim slot {}", slot);
 		let s = authorship::claim_slot(
 			slot,
-			self.epoch_changes.lock().viable_epoch(
+			self.epoch_changes.shared_data().viable_epoch(
 				&epoch_descriptor,
 				|slot| Epoch::genesis(&self.config, slot)
 			)?.as_ref(),
@@ -1125,7 +1126,7 @@ where
 			.map_err(Error::<Block>::FetchParentHeader)?;
 
 		let pre_digest = find_pre_digest::<Block>(&header)?;
-		let epoch_changes = self.epoch_changes.lock();
+		let epoch_changes = self.epoch_changes.shared_data();
 		let epoch_descriptor = epoch_changes.epoch_descriptor_for_child_of(
 			descendent_query(&*self.client),
 			&parent_hash,
@@ -1329,182 +1330,189 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 			);
 		}
 
-		let mut epoch_changes = self.epoch_changes.lock();
-
-		// check if there's any epoch change expected to happen at this slot.
-		// `epoch` is the epoch to verify the block under, and `first_in_epoch` is true
-		// if this is the first block in its chain for that epoch.
-		//
-		// also provides the total weight of the chain, including the imported block.
-		let (epoch_descriptor, first_in_epoch, parent_weight) = {
-			let parent_weight = if *parent_header.number() == Zero::zero() {
-				0
-			} else {
-				aux_schema::load_block_weight(&*self.client, parent_hash)
-					.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
-					.ok_or_else(|| ConsensusError::ClientImport(
-						babe_err(Error::<Block>::ParentBlockNoAssociatedWeight(hash)).into()
-					))?
-			};
-
-			let intermediate = block.take_intermediate::<BabeIntermediate<Block>>(
-				INTERMEDIATE_KEY
-			)?;
-
-			let epoch_descriptor = intermediate.epoch_descriptor;
-			let first_in_epoch = parent_slot < epoch_descriptor.start_slot();
-			(epoch_descriptor, first_in_epoch, parent_weight)
-		};
-
-		let total_weight = parent_weight + pre_digest.added_weight();
-
-		// search for this all the time so we can reject unexpected announcements.
-		let next_epoch_digest = find_next_epoch_digest::<Block>(&block.header)
-			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?;
-		let next_config_digest = find_next_config_digest::<Block>(&block.header)
-			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?;
-
-		match (first_in_epoch, next_epoch_digest.is_some(), next_config_digest.is_some()) {
-			(true, true, _) => {},
-			(false, false, false) => {},
-			(false, false, true) => {
-				return Err(
-					ConsensusError::ClientImport(
-						babe_err(Error::<Block>::UnexpectedConfigChange).into(),
-					)
-				)
-			},
-			(true, false, _) => {
-				return Err(
-					ConsensusError::ClientImport(
-						babe_err(Error::<Block>::ExpectedEpochChange(hash, slot)).into(),
-					)
-				)
-			},
-			(false, true, _) => {
-				return Err(
-					ConsensusError::ClientImport(
-						babe_err(Error::<Block>::UnexpectedEpochChange).into(),
-					)
-				)
-			},
-		}
-
 		// if there's a pending epoch we'll save the previous epoch changes here
 		// this way we can revert it if there's any error
 		let mut old_epoch_changes = None;
 
-		let info = self.client.info();
+		// Use an extra scope to make the compiler happy, because otherwise he complains about the
+		// mutex, even if we dropped it...
+		let mut epoch_changes = {
+			let mut epoch_changes = self.epoch_changes.shared_data_locked();
 
-		if let Some(next_epoch_descriptor) = next_epoch_digest {
-			old_epoch_changes = Some(epoch_changes.clone());
+			// check if there's any epoch change expected to happen at this slot.
+			// `epoch` is the epoch to verify the block under, and `first_in_epoch` is true
+			// if this is the first block in its chain for that epoch.
+			//
+			// also provides the total weight of the chain, including the imported block.
+			let (epoch_descriptor, first_in_epoch, parent_weight) = {
+				let parent_weight = if *parent_header.number() == Zero::zero() {
+					0
+				} else {
+					aux_schema::load_block_weight(&*self.client, parent_hash)
+						.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
+					.ok_or_else(|| ConsensusError::ClientImport(
+						babe_err(Error::<Block>::ParentBlockNoAssociatedWeight(hash)).into()
+					))?
+				};
 
-			let viable_epoch = epoch_changes.viable_epoch(
-				&epoch_descriptor,
-				|slot| Epoch::genesis(&self.config, slot)
-			).ok_or_else(|| {
-				ConsensusError::ClientImport(Error::<Block>::FetchEpoch(parent_hash).into())
-			})?;
-
-			let epoch_config = next_config_digest.map(Into::into).unwrap_or_else(
-				|| viable_epoch.as_ref().config.clone()
-			);
-
-			// restrict info logging during initial sync to avoid spam
-			let log_level = if block.origin == BlockOrigin::NetworkInitialSync {
-				log::Level::Debug
-			} else {
-				log::Level::Info
-			};
-
-			log!(target: "babe",
-				log_level,
-				"👶 New epoch {} launching at block {} (block slot {} >= start slot {}).",
-				viable_epoch.as_ref().epoch_index,
-				hash,
-				slot,
-				viable_epoch.as_ref().start_slot,
-			);
-
-			let next_epoch = viable_epoch.increment((next_epoch_descriptor, epoch_config));
-
-			log!(target: "babe",
-				log_level,
-				"👶 Next epoch starts at slot {}",
-				next_epoch.as_ref().start_slot,
-			);
-
-			// prune the tree of epochs not part of the finalized chain or
-			// that are not live anymore, and then track the given epoch change
-			// in the tree.
-			// NOTE: it is important that these operations are done in this
-			// order, otherwise if pruning after import the `is_descendent_of`
-			// used by pruning may not know about the block that is being
-			// imported.
-			let prune_and_import = || {
-				prune_finalized(
-					self.client.clone(),
-					&mut epoch_changes,
+				let intermediate = block.take_intermediate::<BabeIntermediate<Block>>(
+					INTERMEDIATE_KEY
 				)?;
 
-				epoch_changes.import(
-					descendent_query(&*self.client),
-					hash,
-					number,
-					*block.header.parent_hash(),
-					next_epoch,
-				).map_err(|e| ConsensusError::ClientImport(format!("{:?}", e)))?;
-
-				Ok(())
+				let epoch_descriptor = intermediate.epoch_descriptor;
+				let first_in_epoch = parent_slot < epoch_descriptor.start_slot();
+				(epoch_descriptor, first_in_epoch, parent_weight)
 			};
 
-			if let Err(e) = prune_and_import() {
-				debug!(target: "babe", "Failed to launch next epoch: {:?}", e);
-				*epoch_changes = old_epoch_changes.expect("set `Some` above and not taken; qed");
-				return Err(e);
+			let total_weight = parent_weight + pre_digest.added_weight();
+
+			// search for this all the time so we can reject unexpected announcements.
+			let next_epoch_digest = find_next_epoch_digest::<Block>(&block.header)
+				.map_err(|e| ConsensusError::ClientImport(e.to_string()))?;
+			let next_config_digest = find_next_config_digest::<Block>(&block.header)
+				.map_err(|e| ConsensusError::ClientImport(e.to_string()))?;
+
+			match (first_in_epoch, next_epoch_digest.is_some(), next_config_digest.is_some()) {
+				(true, true, _) => {},
+				(false, false, false) => {},
+				(false, false, true) => {
+					return Err(
+						ConsensusError::ClientImport(
+							babe_err(Error::<Block>::UnexpectedConfigChange).into(),
+						)
+					)
+				},
+				(true, false, _) => {
+					return Err(
+						ConsensusError::ClientImport(
+							babe_err(Error::<Block>::ExpectedEpochChange(hash, slot)).into(),
+						)
+					)
+				},
+				(false, true, _) => {
+					return Err(
+						ConsensusError::ClientImport(
+							babe_err(Error::<Block>::UnexpectedEpochChange).into(),
+						)
+					)
+				},
 			}
 
-			crate::aux_schema::write_epoch_changes::<Block, _, _>(
-				&*epoch_changes,
-				|insert| block.auxiliary.extend(
-					insert.iter().map(|(k, v)| (k.to_vec(), Some(v.to_vec())))
-				)
+			let info = self.client.info();
+
+			if let Some(next_epoch_descriptor) = next_epoch_digest {
+				old_epoch_changes = Some((*epoch_changes).clone());
+
+				let viable_epoch = epoch_changes.viable_epoch(
+					&epoch_descriptor,
+					|slot| Epoch::genesis(&self.config, slot)
+				).ok_or_else(|| {
+					ConsensusError::ClientImport(Error::<Block>::FetchEpoch(parent_hash).into())
+				})?;
+
+				let epoch_config = next_config_digest.map(Into::into).unwrap_or_else(
+					|| viable_epoch.as_ref().config.clone()
+				);
+
+				// restrict info logging during initial sync to avoid spam
+				let log_level = if block.origin == BlockOrigin::NetworkInitialSync {
+					log::Level::Debug
+				} else {
+					log::Level::Info
+				};
+
+				log!(target: "babe",
+					 log_level,
+					 "👶 New epoch {} launching at block {} (block slot {} >= start slot {}).",
+					 viable_epoch.as_ref().epoch_index,
+					 hash,
+					 slot,
+					 viable_epoch.as_ref().start_slot,
+				);
+
+				let next_epoch = viable_epoch.increment((next_epoch_descriptor, epoch_config));
+
+				log!(target: "babe",
+					 log_level,
+					 "👶 Next epoch starts at slot {}",
+					 next_epoch.as_ref().start_slot,
+				);
+
+				// prune the tree of epochs not part of the finalized chain or
+				// that are not live anymore, and then track the given epoch change
+				// in the tree.
+				// NOTE: it is important that these operations are done in this
+				// order, otherwise if pruning after import the `is_descendent_of`
+				// used by pruning may not know about the block that is being
+				// imported.
+				let prune_and_import = || {
+					prune_finalized(
+						self.client.clone(),
+						&mut epoch_changes,
+					)?;
+
+					epoch_changes.import(
+						descendent_query(&*self.client),
+						hash,
+						number,
+						*block.header.parent_hash(),
+						next_epoch,
+					).map_err(|e| ConsensusError::ClientImport(format!("{:?}", e)))?;
+
+					Ok(())
+				};
+
+				if let Err(e) = prune_and_import() {
+					debug!(target: "babe", "Failed to launch next epoch: {:?}", e);
+					*epoch_changes = old_epoch_changes.expect("set `Some` above and not taken; qed");
+					return Err(e);
+				}
+
+				crate::aux_schema::write_epoch_changes::<Block, _, _>(
+					&*epoch_changes,
+					|insert| block.auxiliary.extend(
+						insert.iter().map(|(k, v)| (k.to_vec(), Some(v.to_vec())))
+					)
+				);
+			}
+
+			aux_schema::write_block_weight(
+				hash,
+				total_weight,
+				|values| block.auxiliary.extend(
+					values.iter().map(|(k, v)| (k.to_vec(), Some(v.to_vec())))
+				),
 			);
-		}
 
-		aux_schema::write_block_weight(
-			hash,
-			total_weight,
-			|values| block.auxiliary.extend(
-				values.iter().map(|(k, v)| (k.to_vec(), Some(v.to_vec())))
-			),
-		);
+			// The fork choice rule is that we pick the heaviest chain (i.e.
+			// more primary blocks), if there's a tie we go with the longest
+			// chain.
+			block.fork_choice = {
+				let (last_best, last_best_number) = (info.best_hash, info.best_number);
 
-		// The fork choice rule is that we pick the heaviest chain (i.e.
-		// more primary blocks), if there's a tie we go with the longest
-		// chain.
-		block.fork_choice = {
-			let (last_best, last_best_number) = (info.best_hash, info.best_number);
-
-			let last_best_weight = if &last_best == block.header.parent_hash() {
-				// the parent=genesis case is already covered for loading parent weight,
-				// so we don't need to cover again here.
-				parent_weight
-			} else {
-				aux_schema::load_block_weight(&*self.client, last_best)
-					.map_err(|e| ConsensusError::ChainLookup(format!("{:?}", e)))?
+				let last_best_weight = if &last_best == block.header.parent_hash() {
+					// the parent=genesis case is already covered for loading parent weight,
+					// so we don't need to cover again here.
+					parent_weight
+				} else {
+					aux_schema::load_block_weight(&*self.client, last_best)
+						.map_err(|e| ConsensusError::ChainLookup(format!("{:?}", e)))?
 					.ok_or_else(
 						|| ConsensusError::ChainLookup("No block weight for parent header.".to_string())
 					)?
+				};
+
+				Some(ForkChoiceStrategy::Custom(if total_weight > last_best_weight {
+					true
+				} else if total_weight == last_best_weight {
+					number > last_best_number
+				} else {
+					false
+				}))
 			};
 
-			Some(ForkChoiceStrategy::Custom(if total_weight > last_best_weight {
-				true
-			} else if total_weight == last_best_weight {
-				number > last_best_number
-			} else {
-				false
-			}))
+			// Release the mutex, but it stays locked
+			epoch_changes.release_mutex()
 		};
 
 		let import_result = self.inner.import_block(block, new_cache).await;
@@ -1513,7 +1521,7 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 		// importing the block
 		if import_result.is_err() {
 			if let Some(old_epoch_changes) = old_epoch_changes {
-				*epoch_changes = old_epoch_changes;
+				*epoch_changes.upgrade() = old_epoch_changes;
 			}
 		}
 
@@ -1584,7 +1592,7 @@ pub fn block_import<Client, Block: BlockT, I>(
 	// startup rather than waiting until importing the next epoch change block.
 	prune_finalized(
 		client.clone(),
-		&mut epoch_changes.lock(),
+		&mut epoch_changes.shared_data(),
 	)?;
 
 	let import = BabeBlockImport::new(
