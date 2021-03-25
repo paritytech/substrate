@@ -177,7 +177,7 @@ pub mod pallet {
 		pub(crate) fn sudo_unchecked_weight(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::Call>,
-			_weight: Weight
+			_weight: Weight,
 		) -> DispatchResultWithPostInfo {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
