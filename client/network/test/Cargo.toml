@@ -34,3 +34,4 @@ substrate-test-runtime = { version = "2.0.0", path = "../../../test-utils/runtim
 tempfile = "3.1.0"
 sp-tracing = { version = "3.0.0", path = "../../../primitives/tracing" }
 sc-service = { version = "0.9.0", default-features = false, features = ["test-helpers"],  path = "../../service" }
+async-trait = "0.1.42"

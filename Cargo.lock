@@ -7127,6 +7127,7 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.11.1",
  "sc-client-api",
+ "sc-consensus",
  "sp-blockchain",
  "sp-runtime",
 ]
@@ -7561,6 +7562,7 @@ name = "sc-network-test"
 version = "0.8.0"
 dependencies = [
  "async-std",
+ "async-trait",
  "futures 0.3.13",
  "futures-timer 3.0.2",
  "libp2p",
@@ -7741,6 +7743,7 @@ name = "sc-service"
 version = "0.9.0"
 dependencies = [
  "async-std",
+ "async-trait",
  "directories",
  "exit-future",
  "futures 0.1.31",
@@ -9361,6 +9364,7 @@ dependencies = [
 name = "substrate-test-client"
 version = "2.0.1"
 dependencies = [
+ "async-trait",
  "futures 0.1.31",
  "futures 0.3.13",
  "hash-db",

@@ -28,6 +28,7 @@ use sc_network_test::{
 use sc_network::config::ProtocolConfig;
 use parking_lot::{RwLock, Mutex};
 use futures_timer::Delay;
+use futures::executor::block_on;
 use tokio::runtime::{Runtime, Handle};
 use sp_keyring::Ed25519Keyring;
 use sc_client_api::backend::TransactionFor;
@@ -43,7 +44,9 @@ use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_runtime::generic::{BlockId, DigestItem};
 use sp_core::H256;
 use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
-use sp_finality_grandpa::{GRANDPA_ENGINE_ID, AuthorityList, EquivocationProof, GrandpaApi, OpaqueKeyOwnershipProof};
+use sp_finality_grandpa::{
+	GRANDPA_ENGINE_ID, AuthorityList, EquivocationProof, GrandpaApi, OpaqueKeyOwnershipProof,
+};
 
 use authorities::AuthoritySet;
 use sc_block_builder::BlockBuilderProvider;
@@ -54,7 +57,13 @@ use sp_application_crypto::key_types::GRANDPA;
 type TestLinkHalf =
 	LinkHalf<Block, PeersFullClient, LongestChain<substrate_test_runtime_client::Backend, Block>>;
 type PeerData = Mutex<Option<TestLinkHalf>>;
-type GrandpaPeer = Peer<PeerData>;
+type GrandpaPeer = Peer<PeerData, PassThroughVerifier, GrandpaBlockImport>;
+type GrandpaBlockImport = crate::GrandpaBlockImport<
+	substrate_test_runtime_client::Backend,
+	Block,
+	PeersFullClient,
+	LongestChain<substrate_test_runtime_client::Backend, Block>
+>;
 
 struct GrandpaTestNet {
 	peers: Vec<GrandpaPeer>,
@@ -77,6 +86,7 @@ impl GrandpaTestNet {
 impl TestNetFactory for GrandpaTestNet {
 	type Verifier = PassThroughVerifier;
 	type PeerData = PeerData;
+	type BlockImport = GrandpaBlockImport;
 
 	/// Create new test network with peers and given config.
 	fn from_config(_config: &ProtocolConfig) -> Self {
@@ -107,9 +117,9 @@ impl TestNetFactory for GrandpaTestNet {
 		PassThroughVerifier::new(false) // use non-instant finality.
 	}
 
-	fn make_block_import<Transaction>(&self, client: PeersClient)
+	fn make_block_import(&self, client: PeersClient)
 		-> (
-			BlockImportAdapter<Transaction>,
+			BlockImportAdapter<Self::BlockImport>,
 			Option<BoxJustificationImport<Block>>,
 			PeerData,
 		)
@@ -124,7 +134,7 @@ impl TestNetFactory for GrandpaTestNet {
 				).expect("Could not create block import for fresh peer.");
 				let justification_import = Box::new(import.clone());
 				(
-					BlockImportAdapter::new_full(import),
+					BlockImportAdapter::new(import),
 					Some(justification_import),
 					Mutex::new(Some(link)),
 				)
@@ -801,11 +811,7 @@ fn allows_reimporting_change_blocks() {
 	let mut net = GrandpaTestNet::new(api.clone(), 3);
 
 	let client = net.peer(0).client().clone();
-	let (mut block_import, ..) = net.make_block_import::<
-		TransactionFor<substrate_test_runtime_client::Backend, Block>
-	>(
-		client.clone(),
-	);
+	let (mut block_import, ..) = net.make_block_import(client.clone());
 
 	let full_client = client.as_full().unwrap();
 	let builder = full_client.new_block_at(&BlockId::Number(0), Default::default(), false).unwrap();
@@ -825,7 +831,7 @@ fn allows_reimporting_change_blocks() {
 	};
 
 	assert_eq!(
-		block_import.import_block(block(), HashMap::new()).unwrap(),
+		block_on(block_import.import_block(block(), HashMap::new())).unwrap(),
 		ImportResult::Imported(ImportedAux {
 			needs_justification: true,
 			clear_justification_requests: false,
@@ -836,7 +842,7 @@ fn allows_reimporting_change_blocks() {
 	);
 
 	assert_eq!(
-		block_import.import_block(block(), HashMap::new()).unwrap(),
+		block_on(block_import.import_block(block(), HashMap::new())).unwrap(),
 		ImportResult::AlreadyInChain
 	);
 }
@@ -850,11 +856,7 @@ fn test_bad_justification() {
 	let mut net = GrandpaTestNet::new(api.clone(), 3);
 
 	let client = net.peer(0).client().clone();
-	let (mut block_import, ..) = net.make_block_import::<
-		TransactionFor<substrate_test_runtime_client::Backend, Block>
-	>(
-		client.clone(),
-	);
+	let (mut block_import, ..) = net.make_block_import(client.clone());
 
 	let full_client = client.as_full().expect("only full clients are used in test");
 	let builder = full_client.new_block_at(&BlockId::Number(0), Default::default(), false).unwrap();
@@ -876,7 +878,7 @@ fn test_bad_justification() {
 	};
 
 	assert_eq!(
-		block_import.import_block(block(), HashMap::new()).unwrap(),
+		block_on(block_import.import_block(block(), HashMap::new())).unwrap(),
 		ImportResult::Imported(ImportedAux {
 			needs_justification: true,
 			clear_justification_requests: false,
@@ -887,7 +889,7 @@ fn test_bad_justification() {
 	);
 
 	assert_eq!(
-		block_import.import_block(block(), HashMap::new()).unwrap(),
+		block_on(block_import.import_block(block(), HashMap::new())).unwrap(),
 		ImportResult::AlreadyInChain
 	);
 }
@@ -931,9 +933,7 @@ fn voter_persists_its_votes() {
 		let set_state = {
 			let bob_client = net.peer(1).client().clone();
 			let (_, _, link) = net
-				.make_block_import::<
-					TransactionFor<substrate_test_runtime_client::Backend, Block>
-				>(bob_client);
+				.make_block_import(bob_client);
 			let LinkHalf { persistent_data, .. } = link.lock().take().unwrap();
 			let PersistentData { set_state, .. } = persistent_data;
 			set_state
@@ -1000,9 +1000,7 @@ fn voter_persists_its_votes() {
 		let alice_client = net.peer(0).client().clone();
 
 		let (_block_import, _, link) = net
-			.make_block_import::<
-				TransactionFor<substrate_test_runtime_client::Backend, Block>
-			>(alice_client);
+			.make_block_import(alice_client);
 		let link = link.lock().take().unwrap();
 
 		let grandpa_params = GrandpaParams {
@@ -1403,7 +1401,7 @@ fn grandpa_environment_respects_voting_rules() {
 
 	// the unrestricted environment should just return the best block
 	assert_eq!(
-		futures::executor::block_on(unrestricted_env.best_chain_containing(
+		block_on(unrestricted_env.best_chain_containing(
 			peer.client().info().finalized_hash
 		)).unwrap().unwrap().1,
 		21,
@@ -1412,14 +1410,14 @@ fn grandpa_environment_respects_voting_rules() {
 	// both the other environments should return block 16, which is 3/4 of the
 	// way in the unfinalized chain
 	assert_eq!(
-		futures::executor::block_on(three_quarters_env.best_chain_containing(
+		block_on(three_quarters_env.best_chain_containing(
 			peer.client().info().finalized_hash
 		)).unwrap().unwrap().1,
 		16,
 	);
 
 	assert_eq!(
-		futures::executor::block_on(default_env.best_chain_containing(
+		block_on(default_env.best_chain_containing(
 			peer.client().info().finalized_hash
 		)).unwrap().unwrap().1,
 		16,
@@ -1430,7 +1428,7 @@ fn grandpa_environment_respects_voting_rules() {
 
 	// the 3/4 environment should propose block 21 for voting
 	assert_eq!(
-		futures::executor::block_on(three_quarters_env.best_chain_containing(
+		block_on(three_quarters_env.best_chain_containing(
 			peer.client().info().finalized_hash
 		)).unwrap().unwrap().1,
 		21,
@@ -1439,7 +1437,7 @@ fn grandpa_environment_respects_voting_rules() {
 	// while the default environment will always still make sure we don't vote
 	// on the best block (2 behind)
 	assert_eq!(
-		futures::executor::block_on(default_env.best_chain_containing(
+		block_on(default_env.best_chain_containing(
 			peer.client().info().finalized_hash
 		)).unwrap().unwrap().1,
 		19,
@@ -1452,7 +1450,7 @@ fn grandpa_environment_respects_voting_rules() {
 	// best block, there's a hard rule that we can't cast any votes lower than
 	// the given base (#21).
 	assert_eq!(
-		futures::executor::block_on(default_env.best_chain_containing(
+		block_on(default_env.best_chain_containing(
 			peer.client().info().finalized_hash
 		)).unwrap().unwrap().1,
 		21,
@@ -1538,9 +1536,7 @@ fn imports_justification_for_regular_blocks_on_import() {
 	let mut net = GrandpaTestNet::new(api.clone(), 1);
 
 	let client = net.peer(0).client().clone();
-	let (mut block_import, ..) = net.make_block_import::<
-		TransactionFor<substrate_test_runtime_client::Backend, Block>
-	>(client.clone());
+	let (mut block_import, ..) = net.make_block_import(client.clone());
 
 	let full_client = client.as_full().expect("only full clients are used in test");
 	let builder = full_client.new_block_at(&BlockId::Number(0), Default::default(), false).unwrap();
@@ -1588,7 +1584,7 @@ fn imports_justification_for_regular_blocks_on_import() {
 	import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
 	assert_eq!(
-		block_import.import_block(import, HashMap::new()).unwrap(),
+		block_on(block_import.import_block(import, HashMap::new())).unwrap(),
 		ImportResult::Imported(ImportedAux {
 			needs_justification: false,
 			clear_justification_requests: false,
