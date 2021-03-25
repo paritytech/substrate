@@ -18,9 +18,6 @@
 
 //! Collection of common consensus specific implementations
 
-use std::sync::Arc;
-use parking_lot::{Mutex, MappedMutexGuard, Condvar, MutexGuard};
-
 mod longest_chain;
 pub mod shared_data;
 
