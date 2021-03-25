@@ -62,7 +62,7 @@ pub fn beefy_peers_set_config() -> sc_network::config::NonDefaultSetConfig {
 /// has to satisfy. Ideally that should actually be a trait alias. Unfortunately as
 /// of today, Rust does not allow a type alias to be used as a trait bound. Tracking
 /// issue is <https://github.com/rust-lang/rust/issues/41517>.
-pub(crate) trait Client<B, BE, P>:
+pub trait Client<B, BE, P>:
 	BlockchainEvents<B> + HeaderBackend<B> + Finalizer<B, BE> + ProvideRuntimeApi<B> + Send + Sync
 where
 	B: Block,
@@ -107,9 +107,7 @@ where
 
 /// Start the BEEFY gadget.
 ///
-/// This is a thin shim around running and awaiting a BEEFY worker. The [`Client`]
-/// convenience trait is not used here on purpose. We don't want to leak it into the
-/// public interface of the BEEFY gadget.
+/// This is a thin shim around running and awaiting a BEEFY worker.
 pub async fn start_beefy_gadget<B, P, BE, C, N, SO>(
 	client: Arc<C>,
 	key_store: SyncCryptoStorePtr,
@@ -123,7 +121,7 @@ pub async fn start_beefy_gadget<B, P, BE, C, N, SO>(
 	P::Public: AppPublic + Codec,
 	P::Signature: Clone + Codec + Debug + PartialEq + TryFrom<Vec<u8>>,
 	BE: Backend<B>,
-	C: BlockchainEvents<B> + HeaderBackend<B> + Finalizer<B, BE> + ProvideRuntimeApi<B> + Send + Sync,
+	C: Client<B, BE, P>,
 	C::Api: BeefyApi<B, P::Public>,
 	N: GossipNetwork<B> + Clone + Send + 'static,
 	SO: SyncOracleT + Send + 'static,
