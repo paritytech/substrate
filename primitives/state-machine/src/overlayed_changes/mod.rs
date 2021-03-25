@@ -520,6 +520,11 @@ impl OverlayedChanges {
 		self.children.get(key).map(|(overlay, info)| (overlay.changes(), info))
 	}
 
+	/// Get an list of all index operations.
+	pub fn transaction_index_ops(&self) -> &[IndexOperation] {
+		&self.transaction_index_ops
+	}
+
 	/// Convert this instance with all changes into a [`StorageChanges`] instance.
 	#[cfg(feature = "std")]
 	pub fn into_storage_changes<
