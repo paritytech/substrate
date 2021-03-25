@@ -19,17 +19,17 @@
 //! Utilities for dealing with authorities, authority sets, and handoffs.
 
 use fork_tree::ForkTree;
-use parking_lot::{Mutex, MappedMutexGuard, Condvar, MutexGuard};
+use parking_lot::MappedMutexGuard;
 use finality_grandpa::voter_set::VoterSet;
 use parity_scale_codec::{Encode, Decode};
 use log::debug;
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_INFO};
 use sp_finality_grandpa::{AuthorityId, AuthorityList};
+use sc_consensus::shared_data::{SharedData, SharedDataLocked};
 
 use std::cmp::Ord;
 use std::fmt::Debug;
 use std::ops::Add;
-use std::sync::Arc;
 
 /// Error type returned on operations on the `AuthoritySet`.
 #[derive(Debug, derive_more::Display)]
@@ -68,106 +68,32 @@ impl<N, E: std::error::Error> From<E> for Error<N, E> {
 	}
 }
 
-struct Inner<H, N> {
-	authority_set: AuthoritySet<H, N>,
-	locked: bool,
-}
-
-pub(crate) struct InnerLocked2<H, N> {
-	shared_authority_set: SharedAuthoritySet<H, N>,
-}
-
-impl<H, N> InnerLocked2<H, N> {
-	pub fn upgrade(&mut self) -> MappedMutexGuard<AuthoritySet<H, N>> {
-		MutexGuard::map(self.shared_authority_set.inner.lock(), |i| &mut i.authority_set)
-	}
-}
-
-impl<H, N> Drop for InnerLocked2<H, N> {
-	fn drop(&mut self) {
-		let mut inner = self.shared_authority_set.inner.lock();
-		inner.locked = false;
-		self.shared_authority_set.cond_var.notify_all();
-	}
-}
-
-pub(crate) struct InnerLocked<'a, H, N> {
-	inner: MutexGuard<'a, Inner<H, N>>,
-	shared_authority_set: Option<SharedAuthoritySet<H, N>>,
-}
-
-impl<'a, H, N> InnerLocked<'a, H, N> {
-	pub fn release_lock(mut self) -> InnerLocked2<H, N> {
-		InnerLocked2 { shared_authority_set: self.shared_authority_set.take().unwrap() }
-	}
-}
-
-impl<'a, H, N> Drop for InnerLocked<'a, H, N> {
-	fn drop(&mut self) {
-		if let Some(authority_set) = self.shared_authority_set.take() {
-			self.inner.locked = false;
-			authority_set.cond_var.notify_all();
-		}
-	}
-}
-
-impl<'a, H, N> std::ops::Deref for InnerLocked<'a, H, N> {
-	type Target = AuthoritySet<H, N>;
-
-	fn deref(&self) -> &Self::Target {
-		&self.inner.authority_set
-	}
-}
-
-impl<'a, H, N> std::ops::DerefMut for InnerLocked<'a, H, N> {
-	fn deref_mut(&mut self) -> &mut Self::Target {
-		&mut self.inner.authority_set
-	}
-}
-
 /// A shared authority set.
 pub struct SharedAuthoritySet<H, N> {
-	inner: Arc<Mutex<Inner<H, N>>>,
-	cond_var: Arc<Condvar>,
+	inner: SharedData<AuthoritySet<H, N>>,
 }
 
 impl<H, N> Clone for SharedAuthoritySet<H, N> {
 	fn clone(&self) -> Self {
 		SharedAuthoritySet {
 			inner: self.inner.clone(),
-			cond_var: self.cond_var.clone(),
 		}
 	}
 }
 
 impl<H, N> SharedAuthoritySet<H, N> {
-	/// Acquire a reference to the inner read-write lock.
+	/// Returns access to the [`AuthoritySet`].
 	pub(crate) fn inner(&self) -> MappedMutexGuard<AuthoritySet<H, N>> {
-		let mut guard = self.inner.lock();
-
-		if guard.locked {
-			self.cond_var.wait(&mut guard);
-		}
-
-		debug_assert!(!guard.locked);
-
-		MutexGuard::map(guard, |i| &mut i.authority_set)
+		self.inner.shared_data()
 	}
 
-	pub(crate) fn inner_locked(&self) -> InnerLocked<H, N> {
-		let mut guard = self.inner.lock();
-
-		if guard.locked {
-			self.cond_var.wait(&mut guard);
-		}
-
-		debug_assert!(!guard.locked);
-		guard.locked = true;
-
-		InnerLocked {
-			inner: guard,
-			shared_authority_set: Some(self.clone()),
-		}
+	/// Returns access to the [`AuthoritySet`] and locks it.
+	///
+	/// For more information see [`SharedDataLocked`].
+	pub(crate) fn inner_locked(
+		&self,
+	) -> SharedDataLocked<AuthoritySet<H, N>> {
+		self.inner.shared_data_locked()
 	}
 }
 
@@ -209,8 +135,7 @@ where N: Add<Output=N> + Ord + Clone + Debug,
 impl<H, N> From<AuthoritySet<H, N>> for SharedAuthoritySet<H, N> {
 	fn from(set: AuthoritySet<H, N>) -> Self {
 		SharedAuthoritySet {
-			inner: Arc::new(Mutex::new(Inner { authority_set: set, locked: false })),
-			cond_var: Default::default(),
+			inner: SharedData::new(set),
 		}
 	}
 }
