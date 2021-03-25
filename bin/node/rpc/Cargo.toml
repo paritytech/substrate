@@ -15,6 +15,7 @@ jsonrpc-core = "15.1.0"
 node-primitives = { version = "2.0.0", path = "../primitives" }
 node-runtime = { version = "2.0.0", path = "../runtime" }
 pallet-contracts-rpc = { version = "3.0.0", path = "../../../frame/contracts/rpc/" }
+pallet-mmr-rpc = { version = "3.0.0", path = "../../../frame/merkle-mountain-range/rpc/" }
 pallet-transaction-payment-rpc = { version = "3.0.0", path = "../../../frame/transaction-payment/rpc/" }
 sc-client-api = { version = "3.0.0", path = "../../../client/api" }
 sc-consensus-babe = { version = "0.9.0", path = "../../../client/consensus/babe" }

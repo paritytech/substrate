@@ -21,11 +21,17 @@ mod writer;
 use sc_cli::{ExecutionStrategy, WasmExecutionMethod};
 use std::fmt::Debug;
 
+// Add a more relaxed parsing for pallet names by allowing pallet directory names with `-` to be used
+// like crate names with `_`
+fn parse_pallet_name(pallet: &str) -> String {
+	pallet.replace("-", "_")
+}
+
 /// The `benchmark` command used to benchmark FRAME Pallets.
 #[derive(Debug, structopt::StructOpt)]
 pub struct BenchmarkCmd {
 	/// Select a FRAME Pallet to benchmark, or `*` for all (in which case `extrinsic` must be `*`).
-	#[structopt(short, long)]
+	#[structopt(short, long, parse(from_str = parse_pallet_name))]
 	pub pallet: String,
 
 	/// Select an extrinsic inside the pallet to benchmark, or `*` for all.

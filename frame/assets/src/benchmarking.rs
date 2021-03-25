@@ -29,7 +29,7 @@ use frame_benchmarking::{
 use frame_support::traits::Get;
 use frame_support::{traits::EnsureOrigin, dispatch::UnfilteredDispatchable};
 
-use crate::Module as Assets;
+use crate::Pallet as Assets;
 
 const SEED: u32 = 0;
 
@@ -120,11 +120,19 @@ fn add_approvals<T: Config>(minter: T::AccountId, n: u32) {
 }
 
 fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
-	let events = frame_system::Module::<T>::events();
+	let events = frame_system::Pallet::<T>::events();
 	let system_event: <T as frame_system::Config>::Event = generic_event.into();
 	// compare to the last event record
 	let frame_system::EventRecord { event, .. } = &events[events.len() - 1];
 	assert_eq!(event, &system_event);
+}
+
+fn assert_event<T: Config>(generic_event: <T as Config>::Event) {
+	let system_event: <T as frame_system::Config>::Event = generic_event.into();
+	let events = frame_system::Pallet::<T>::events();
+	assert!(events.iter().any(|event_record| {
+		matches!(&event_record, frame_system::EventRecord { event, .. } if &system_event == event)
+	}));
 }
 
 benchmarks! {
@@ -193,7 +201,7 @@ benchmarks! {
 		let target_lookup = T::Lookup::unlookup(target.clone());
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), target_lookup, amount)
 	verify {
-		assert!(frame_system::Module::<T>::account_exists(&caller));
+		assert!(frame_system::Pallet::<T>::account_exists(&caller));
 		assert_last_event::<T>(Event::Transferred(Default::default(), caller, target, amount).into());
 	}
 
@@ -383,7 +391,8 @@ benchmarks! {
 		let dest_lookup = T::Lookup::unlookup(dest.clone());
 	}: _(SystemOrigin::Signed(delegate.clone()), id, owner_lookup, dest_lookup, amount)
 	verify {
-		assert_last_event::<T>(Event::TransferredApproved(id, owner, delegate, dest, amount).into());
+		assert!(T::Currency::reserved_balance(&owner).is_zero());
+		assert_event::<T>(Event::Transferred(id, owner, dest, amount).into());
 	}
 
 	cancel_approval {

@@ -600,13 +600,13 @@ fn deploying_wasm_contract_should_work() {
 	let transfer_code = wat::parse_str(CODE_TRANSFER).unwrap();
 	let transfer_ch = <Runtime as frame_system::Config>::Hashing::hash(&transfer_code);
 
-	let addr = pallet_contracts::Module::<Runtime>::contract_address(
+	let addr = pallet_contracts::Pallet::<Runtime>::contract_address(
 		&charlie(),
 		&transfer_ch,
 		&[],
 	);
 
-	let subsistence = pallet_contracts::Module::<Runtime>::subsistence_threshold();
+	let subsistence = pallet_contracts::Pallet::<Runtime>::subsistence_threshold();
 
 	let time = 42 * 1000;
 	let b = construct_block(
@@ -656,13 +656,10 @@ fn deploying_wasm_contract_should_work() {
 	).0.unwrap();
 
 	t.execute_with(|| {
-		// Verify that the contract constructor worked well and code of TRANSFER contract is actually deployed.
-		assert_eq!(
-			&pallet_contracts::ContractInfoOf::<Runtime>::get(addr)
-				.and_then(|c| c.get_alive())
-				.unwrap()
-				.code_hash,
-			&transfer_ch
+		// Verify that the contract does exist by querying some of its storage items
+		// It does not matter that the storage item itself does not exist.
+		assert!(
+			&pallet_contracts::Pallet::<Runtime>::get_storage(addr, Default::default()).is_ok()
 		);
 	});
 }

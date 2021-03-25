@@ -23,7 +23,7 @@ use parking_lot::RwLock;
 use finality_grandpa::voter_set::VoterSet;
 use parity_scale_codec::{Encode, Decode};
 use log::debug;
-use sc_telemetry::{telemetry, CONSENSUS_INFO};
+use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_INFO};
 use sp_finality_grandpa::{AuthorityId, AuthorityList};
 
 use std::cmp::Ord;
@@ -43,8 +43,8 @@ pub enum Error<N, E> {
 	#[display(fmt = "Multiple pending forced authority set changes are not allowed.")]
 	MultiplePendingForcedAuthoritySetChanges,
 	#[display(
-		fmt = "A pending forced authority set change could not be applied since it must be applied after \
-		 the pending standard change at #{}",
+		fmt = "A pending forced authority set change could not be applied since it must be applied \
+		after the pending standard change at #{}",
 		_0
 	)]
 	ForcedAuthoritySetChangeDependencyUnsatisfied(N),
@@ -278,9 +278,13 @@ where
 		let hash = pending.canon_hash.clone();
 		let number = pending.canon_height.clone();
 
-		debug!(target: "afg", "Inserting potential standard set change signaled at block {:?} \
-							   (delayed by {:?} blocks).",
-			   (&number, &hash), pending.delay);
+		debug!(
+			target: "afg",
+			"Inserting potential standard set change signaled at block {:?} (delayed by {:?}
+			blocks).",
+			(&number, &hash),
+			pending.delay,
+		);
 
 		self.pending_standard_changes.import(
 			hash,
@@ -289,8 +293,10 @@ where
 			is_descendent_of,
 		)?;
 
-		debug!(target: "afg", "There are now {} alternatives for the next pending standard change (roots), \
-							   and a total of {} pending standard changes (across all forks).",
+		debug!(
+			target: "afg",
+			"There are now {} alternatives for the next pending standard change (roots), and a
+			total of {} pending standard changes (across all forks).",
 			self.pending_standard_changes.roots().count(),
 			self.pending_standard_changes.iter().count(),
 		);
@@ -326,9 +332,12 @@ where
 			))
 			.unwrap_or_else(|i| i);
 
-		debug!(target: "afg", "Inserting potential forced set change at block {:?} \
-							   (delayed by {:?} blocks).",
-			   (&pending.canon_height, &pending.canon_hash), pending.delay);
+		debug!(
+			target: "afg",
+			"Inserting potential forced set change at block {:?} (delayed by {:?} blocks).",
+			(&pending.canon_height, &pending.canon_hash),
+			pending.delay,
+		);
 
 		self.pending_forced_changes.insert(idx, pending);
 
@@ -409,6 +418,7 @@ where
 		best_number: N,
 		is_descendent_of: &F,
 		initial_sync: bool,
+		telemetry: Option<TelemetryHandle>,
 	) -> Result<Option<(N, Self)>, Error<N, E>>
 	where
 		F: Fn(&H, &H) -> Result<bool, E>,
@@ -461,6 +471,7 @@ where
 				);
 
 				telemetry!(
+					telemetry;
 					CONSENSUS_INFO;
 					"afg.applying_forced_authority_set_change";
 					"block" => ?change.canon_height
@@ -505,6 +516,7 @@ where
 		finalized_number: N,
 		is_descendent_of: &F,
 		initial_sync: bool,
+		telemetry: Option<&TelemetryHandle>,
 	) -> Result<Status<H, N>, Error<N, E>>
 	where
 		F: Fn(&H, &H) -> Result<bool, E>,
@@ -544,7 +556,10 @@ where
 						"👴 Applying authority set change scheduled at block #{:?}",
 						change.canon_height,
 					);
-					telemetry!(CONSENSUS_INFO; "afg.applying_scheduled_authority_set_change";
+					telemetry!(
+						telemetry;
+						CONSENSUS_INFO;
+						"afg.applying_scheduled_authority_set_change";
 						"block" => ?change.canon_height
 					);
 
@@ -894,6 +909,7 @@ mod tests {
 				_ => unreachable!(),
 			}),
 			false,
+			None,
 		).unwrap();
 
 		assert!(status.changed);
@@ -913,6 +929,7 @@ mod tests {
 				_ => unreachable!(),
 			}),
 			false,
+			None,
 		).unwrap();
 
 		assert!(status.changed);
@@ -971,7 +988,7 @@ mod tests {
 
 		// trying to finalize past `change_c` without finalizing `change_a` first
 		assert!(matches!(
-			authorities.apply_standard_changes("hash_d", 40, &is_descendent_of, false),
+			authorities.apply_standard_changes("hash_d", 40, &is_descendent_of, false, None),
 			Err(Error::ForkTree(fork_tree::Error::UnfinalizedAncestor))
 		));
 		assert_eq!(authorities.authority_set_changes, AuthoritySetChanges::empty());
@@ -981,6 +998,7 @@ mod tests {
 			15,
 			&is_descendent_of,
 			false,
+			None,
 		).unwrap();
 
 		assert!(status.changed);
@@ -996,6 +1014,7 @@ mod tests {
 			40,
 			&is_descendent_of,
 			false,
+			None,
 		).unwrap();
 
 		assert!(status.changed);
@@ -1138,7 +1157,7 @@ mod tests {
 		// too early and there's no forced changes to apply.
 		assert!(
 			authorities
-				.apply_forced_changes("hash_a10", 10, &static_is_descendent_of(true), false)
+				.apply_forced_changes("hash_a10", 10, &static_is_descendent_of(true), false, None)
 				.unwrap()
 				.is_none()
 		);
@@ -1146,7 +1165,7 @@ mod tests {
 		// too late.
 		assert!(
 			authorities
-				.apply_forced_changes("hash_a16", 16, &is_descendent_of_a, false)
+				.apply_forced_changes("hash_a16", 16, &is_descendent_of_a, false, None)
 				.unwrap()
 				.is_none()
 		);
@@ -1154,7 +1173,7 @@ mod tests {
 		// on time -- chooses the right change for this fork.
 		assert_eq!(
 			authorities
-				.apply_forced_changes("hash_a15", 15, &is_descendent_of_a, false)
+				.apply_forced_changes("hash_a15", 15, &is_descendent_of_a, false, None)
 				.unwrap()
 				.unwrap(),
 			(
@@ -1202,7 +1221,7 @@ mod tests {
 		// it should be enacted at the same block that signaled it
 		assert!(
 			authorities
-				.apply_forced_changes("hash_a", 5, &static_is_descendent_of(false), false)
+				.apply_forced_changes("hash_a", 5, &static_is_descendent_of(false), false, None)
 				.unwrap()
 				.is_some()
 		);
@@ -1269,27 +1288,27 @@ mod tests {
 		// the forced change cannot be applied since the pending changes it depends on
 		// have not been applied yet.
 		assert!(matches!(
-			authorities.apply_forced_changes("hash_d45", 45, &static_is_descendent_of(true), false),
+			authorities.apply_forced_changes("hash_d45", 45, &static_is_descendent_of(true), false, None),
 			Err(Error::ForcedAuthoritySetChangeDependencyUnsatisfied(15))
 		));
 		assert_eq!(authorities.authority_set_changes, AuthoritySetChanges::empty());
 
 		// we apply the first pending standard change at #15
 		authorities
-			.apply_standard_changes("hash_a15", 15, &static_is_descendent_of(true), false)
+			.apply_standard_changes("hash_a15", 15, &static_is_descendent_of(true), false, None)
 			.unwrap();
 		assert_eq!(authorities.authority_set_changes, AuthoritySetChanges(vec![(0, 15)]));
 
 		// but the forced change still depends on the next standard change
 		assert!(matches!(
-			authorities.apply_forced_changes("hash_d", 45, &static_is_descendent_of(true), false),
+			authorities.apply_forced_changes("hash_d", 45, &static_is_descendent_of(true), false, None),
 			Err(Error::ForcedAuthoritySetChangeDependencyUnsatisfied(20))
 		));
 		assert_eq!(authorities.authority_set_changes, AuthoritySetChanges(vec![(0, 15)]));
 
 		// we apply the pending standard change at #20
 		authorities
-			.apply_standard_changes("hash_b", 20, &static_is_descendent_of(true), false)
+			.apply_standard_changes("hash_b", 20, &static_is_descendent_of(true), false, None)
 			.unwrap();
 		assert_eq!(authorities.authority_set_changes, AuthoritySetChanges(vec![(0, 15), (1, 20)]));
 
@@ -1298,7 +1317,7 @@ mod tests {
 		// at #35. subsequent forced changes on the same branch must be kept
 		assert_eq!(
 			authorities
-				.apply_forced_changes("hash_d", 45, &static_is_descendent_of(true), false)
+				.apply_forced_changes("hash_d", 45, &static_is_descendent_of(true), false, None)
 				.unwrap()
 				.unwrap(),
 			(
@@ -1395,7 +1414,7 @@ mod tests {
 
 		// we apply the change at A0 which should prune it and the fork at B
 		authorities
-			.apply_standard_changes("hash_a0", 5, &is_descendent_of, false)
+			.apply_standard_changes("hash_a0", 5, &is_descendent_of, false, None)
 			.unwrap();
 
 		// the next change is now at A1 (#10)
@@ -1583,14 +1602,14 @@ mod tests {
 		// applying the standard change at A should not prune anything
 		// other then the change that was applied
 		authorities
-			.apply_standard_changes("A", 5, &is_descendent_of, false)
+			.apply_standard_changes("A", 5, &is_descendent_of, false, None)
 			.unwrap();
 
 		assert_eq!(authorities.pending_changes().count(), 6);
 
 		// same for B
 		authorities
-			.apply_standard_changes("B", 10, &is_descendent_of, false)
+			.apply_standard_changes("B", 10, &is_descendent_of, false, None)
 			.unwrap();
 
 		assert_eq!(authorities.pending_changes().count(), 5);
@@ -1599,7 +1618,7 @@ mod tests {
 
 		// finalizing C2 should clear all forced changes
 		authorities
-			.apply_standard_changes("C2", 15, &is_descendent_of, false)
+			.apply_standard_changes("C2", 15, &is_descendent_of, false, None)
 			.unwrap();
 
 		assert_eq!(authorities.pending_forced_changes.len(), 0);
@@ -1607,7 +1626,7 @@ mod tests {
 		// finalizing C0 should clear all forced changes but D
 		let mut authorities = authorities2;
 		authorities
-			.apply_standard_changes("C0", 15, &is_descendent_of, false)
+			.apply_standard_changes("C0", 15, &is_descendent_of, false, None)
 			.unwrap();
 
 		assert_eq!(authorities.pending_forced_changes.len(), 1);
