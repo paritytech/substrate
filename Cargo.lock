@@ -4300,7 +4300,6 @@ dependencies = [
  "pallet-democracy",
  "pallet-election-provider-multi-phase",
  "pallet-elections-phragmen",
- "pallet-example",
  "pallet-gilt",
  "pallet-grandpa",
  "pallet-identity",
