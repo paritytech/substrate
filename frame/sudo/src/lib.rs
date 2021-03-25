@@ -52,22 +52,33 @@
 //! This is an example of a pallet that exposes a privileged function:
 //!
 //! ```
-//! use frame_support::{decl_module, dispatch};
-//! use frame_system::ensure_root;
 //!
-//! pub trait Config: frame_system::Config {}
+//! #[frame_support::pallet]
+//! pub mod logger {
+//! 	use frame_support::pallet_prelude::*;
+//! 	use frame_system::pallet_prelude::*;
+//! 	use super::*;
 //!
-//! decl_module! {
-//!     pub struct Module<T: Config> for enum Call where origin: T::Origin {
-//! 		#[pallet::weight = 0]
-//!         pub fn privileged_function(origin) -> dispatch::DispatchResult {
+//! 	#[pallet::config]
+//! 	pub trait Config: frame_system::Config {}
+//!
+//! 	#[pallet::pallet]
+//! 	pub struct Pallet<T>(PhantomData<T>);
+//!
+//! 	#[pallet::hooks]
+//! 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+//!
+//! 	#[pallet::call]
+//! 	impl<T: Config> Pallet<T> {
+//! 		#[pallet::weight(0)]
+//!         pub fn privileged_function(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 //!             ensure_root(origin)?;
 //!
 //!             // do something...
 //!
-//!             Ok(())
+//!             Ok(().into())
 //!         }
-//!     }
+//! 	}
 //! }
 //! # fn main() {}
 //! ```
