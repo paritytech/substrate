@@ -324,7 +324,8 @@ decl_module! {
 						let winning_number = Self::choose_winner(ticket_count);
 						let winner = Tickets::<T>::get(winning_number).unwrap_or(lottery_account);
 						// Not much we can do if this fails...
-						let _ = T::Currency::transfer(&Self::account_id(), &winner, lottery_balance, KeepAlive);
+						let res = T::Currency::transfer(&Self::account_id(), &winner, lottery_balance, KeepAlive);
+						debug_assert!(res.is_ok());
 
 						Self::deposit_event(RawEvent::Winner(winner, lottery_balance));
 

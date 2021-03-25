@@ -240,6 +240,7 @@ impl onchain::Config for Test {
 	type DataProvider = Staking;
 }
 impl Config for Test {
+	const MAX_NOMINATIONS: u32 = 16;
 	type Currency = Balances;
 	type UnixTime = Timestamp;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
