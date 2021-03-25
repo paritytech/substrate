@@ -268,6 +268,27 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type StoragePeriod<T: Config> = StorageValue<_, T::BlockNumber>;
 
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config> {
+		pub byte_fee: BalanceOf<T>,
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config> Default for GenesisConfig<T> {
+		fn default() -> Self {
+			Self {
+				byte_fee: 10u32.into(),
+			}
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+		fn build(&self) {
+			<ByteFee<T>>::put(&self.byte_fee);
+		}
+	}
+
 	#[pallet::inherent]
 	impl<T: Config> ProvideInherent for Pallet<T> {
 		type Call = Call<T>;
@@ -326,7 +347,7 @@ mod tests {
 		{
 			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 			Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-			TransactionStorage: pallet_transaction_storage::{Pallet, Call, Storage, Inherent, Event<T>},
+			TransactionStorage: pallet_transaction_storage::{Pallet, Call, Storage, Config<T>, Inherent, Event<T>},
 		}
 	);
 
@@ -384,11 +405,18 @@ mod tests {
 			// We use default for brevity, but you can configure as desired if needed.
 			frame_system: Default::default(),
 			pallet_balances: Default::default(),
+			pallet_transaction_storage: pallet_transaction_storage::GenesisConfig::default(),
 		}.build_storage().unwrap();
 		t.into()
 	}
 
 	#[test]
-	fn weights_work() {
+	fn stores_transaction() {
+		let mut ext = new_test_ext();
+		let data = vec![1u8, 2u8, 3u8];
+		ext.execute_with(|| {
+			assert_ok!(TransactionStorage::store(Origin::signed(1), data));
+		});
+		assert!(ext.overlayed_changes().transaction_index_ops().len() == 1);
 	}
 }
