@@ -67,6 +67,9 @@ enum Stage {
 
 type Mutator = Arc<dyn Fn(&mut TestHeader, Stage) + Send + Sync>;
 
+type BabeBlockImport =
+	PanickingBlockImport<crate::BabeBlockImport<TestBlock, TestClient, TestClient>>;
+
 #[derive(Clone)]
 struct DummyFactory {
 	client: Arc<TestClient>,
@@ -210,8 +213,10 @@ impl<B: BlockImport<TestBlock>> BlockImport<TestBlock> for PanickingBlockImport<
 	}
 }
 
+type BabePeer = Peer<Option<PeerData>, TestVerifier, BabeBlockImport>;
+
 pub struct BabeTestNet {
-	peers: Vec<Peer<Option<PeerData>>>,
+	peers: Vec<BabePeer>,
 }
 
 type TestHeader = <TestBlock as BlockT>::Header;
@@ -326,17 +331,17 @@ impl TestNetFactory for BabeTestNet {
 		}
 	}
 
-	fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData> {
+	fn peer(&mut self, i: usize) -> &mut BabePeer {
 		trace!(target: "babe", "Retrieving a peer");
 		&mut self.peers[i]
 	}
 
-	fn peers(&self) -> &Vec<Peer<Self::PeerData>> {
+	fn peers(&self) -> &Vec<BabePeer> {
 		trace!(target: "babe", "Retrieving peers");
 		&self.peers
 	}
 
-	fn mut_peers<F: FnOnce(&mut Vec<Peer<Self::PeerData>>)>(
+	fn mut_peers<F: FnOnce(&mut Vec<BabePeer>)>(
 		&mut self,
 		closure: F,
 	) {
@@ -623,7 +628,7 @@ fn propose_and_import_block<Transaction>(
 	import.body = Some(block.extrinsics);
 	import.intermediates.insert(
 		Cow::from(INTERMEDIATE_KEY),
-		Box::new(BabeIntermediate::<TestBlock> { epoch_descriptor }) as Box<dyn Any>,
+		Box::new(BabeIntermediate::<TestBlock> { epoch_descriptor }) as Box<_>,
 	);
 	import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 	let import_result = block_import.import_block(import, Default::default()).unwrap();
