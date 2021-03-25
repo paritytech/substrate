@@ -128,18 +128,51 @@ pub trait InspectReserve<AccountId>: Inspect<AccountId> {
 }
 
 /// Trait for mutating a set of named fungible assets which can be reserved.
-pub trait MutateReserve<AccountId>: Inspect<AccountId> {
+pub trait MutateReserve<AccountId>: InspectReserve<AccountId> + Transfer<AccountId> {
 	/// Reserve some funds in an account.
 	fn reserve(asset: Self::AssetId, who: &AccountId, amount: Self::Balance) -> DispatchResult;
 
 	/// Unreserve some funds in an account.
-	fn unreserve(asset: Self::AssetId, who: &AccountId, amount: Self::Balance) -> DispatchResult;
+	fn unreserve(asset: Self::AssetId, who: &AccountId, amount: Self::Balance)
+		-> Result<Self::Balance, DispatchError>;
 
-	/// Transfer reserved funds into another account.
+	/// Transfer reserved funds into another account. Done on a best-effort basis.
 	fn repatriate_reserved(
 		asset: Self::AssetId,
-		who: &AccountId,
+		source: &AccountId,
+		dest: &AccountId,
 		amount: Self::Balance,
-		status: BalanceStatus,
-	) -> DispatchResult;
+	) -> Result<Self::Balance, DispatchError> {
+		// Done on a best-effort basis. Basically just a slash + transfer
+		let actual = Self::unreserve(asset, source, amount)?;
+		let actual = <Self as fungibles::Transfer<AccountId>>::transfer(asset, source, dest, actual)?;
+		Ok(actual)
+	}
+}
+
+/// Trait for mutating one of several types of fungible assets which can be reserved.
+pub trait BalancedReserve<AccountId>: Balanced<AccountId> + MutateReserve<AccountId> {
+	/// Unreserve and slash some funds in an account.
+	///
+	/// The resulting imbalance is the first item of the tuple returned.
+	///
+	/// As much funds up to `amount` will be deducted as possible. If this is less than `amount`,
+	/// then a non-zero second item will be returned.
+	fn slash_reserved(asset: Self::AssetId, who: &AccountId, amount: Self::Balance)
+		-> (CreditOf<AccountId, Self>, Self::Balance);
+}
+
+impl<
+	AccountId,
+	T: Balanced<AccountId> + MutateReserve<AccountId>,
+> BalancedReserve<AccountId> for T {
+	fn slash_reserved(asset: Self::AssetId, who: &AccountId, amount: Self::Balance)
+		-> (CreditOf<AccountId, Self>, Self::Balance)
+	{
+		let actual = match Self::unreserve(asset, who, amount) {
+			Ok(x) => x,
+			Err(_) => return (Imbalance::zero(asset), amount),
+		};
+		<Self as fungibles::Balanced<AccountId>>::slash(asset, who, actual)
+	}
 }

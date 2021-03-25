@@ -876,7 +876,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 }
 
 use frame_support::traits::tokens::{
-	fungible, DepositConsequence, WithdrawConsequence, BalanceStatus
+	fungible, DepositConsequence, WithdrawConsequence
 };
 
 impl<T: Config<I>, I: 'static> fungible::Inspect<T::AccountId> for Pallet<T, I> {
@@ -956,7 +956,7 @@ impl<T: Config<I>, I: 'static> fungible::InspectReserve<T::AccountId> for Pallet
 	fn can_reserve(who: &T::AccountId, amount: T::Balance) -> bool {
 		let a = Self::account(who);
 		let min_balance = T::ExistentialDeposit::get().max(a.frozen(Reasons::All));
-		if a.reserved.checked_add(amount).is_none() { return false }
+		if a.reserved.checked_add(&amount).is_none() { return false }
 		// We require it to be min_balance + amount to ensure that the full reserved funds may be
 		// slashed without compromising locked funds or destroying the account.
 		let required_free = match min_balance.checked_add(&amount) {
@@ -967,7 +967,8 @@ impl<T: Config<I>, I: 'static> fungible::InspectReserve<T::AccountId> for Pallet
 	}
 }
 impl<T: Config<I>, I: 'static> fungible::MutateReserve<T::AccountId> for Pallet<T, I> {
-	fn reserve(who: &AccountId, amount: Self::Balance) -> DispatchResult {
+	fn reserve(who: &T::AccountId, amount: Self::Balance) -> DispatchResult {
+		if amount.is_zero() { return Ok(()) }
 		ensure!(Self::can_reserve(who, amount), Error::<T, I>::InsufficientBalance);
 		Self::mutate_account(who, |a| {
 			a.free -= amount;
@@ -975,34 +976,18 @@ impl<T: Config<I>, I: 'static> fungible::MutateReserve<T::AccountId> for Pallet<
 		})?;
 		Ok(())
 	}
-	fn unreserve(who: &AccountId, amount: Self::Balance) -> T::Balance {
+	fn unreserve(who: &T::AccountId, amount: Self::Balance) -> Result<T::Balance, DispatchError> {
+		if amount.is_zero() { return Ok(amount) }
 		// Done on a best-effort basis.
-		Self::mutate_account(who, |a| {
+		let actual = Self::mutate_account(who, |a| {
 			let new_free = a.free.saturating_add(amount.min(a.reserved));
 			let actual = new_free - a.free;
 			// ^^^ Guaranteed to be <= amount and <= a.reserved
 			a.free = new_free;
 			a.reserved = a.reserved.saturating_sub(actual.clone());
 			actual
-		}).unwrap_or(Zero::zero())
-	}
-	fn repatriate_reserved(
-		who: &AccountId,
-		amount: Self::Balance,
-		status: BalanceStatus,
-	) -> Result<T::Balance, DispatchError> {
-		// Done on a best-effort basis.
-		// We assume that we're a provider (which is correct). If this is relaxed, then this code
-		// should be adapted.
-		let can_die = frame_system::Pallet::<T>::can_dec_provider(who);
-		Self::mutate_account(who, |a| {
-			if can_die {
-
-			}
-			a.free -= amount;
-			a.reserved += amount;
 		})?;
-		todo!();
+		Ok(actual)
 	}
 }
 

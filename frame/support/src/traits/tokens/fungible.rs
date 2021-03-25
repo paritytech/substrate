@@ -97,23 +97,30 @@ pub trait InspectReserve<AccountId>: Inspect<AccountId> {
 }
 
 /// Trait for mutating a fungible asset which can be reserved.
-pub trait MutateReserve<AccountId>: Inspect<AccountId> {
+pub trait MutateReserve<AccountId>: InspectReserve<AccountId> + Transfer<AccountId> {
 	/// Reserve some funds in an account.
 	fn reserve(who: &AccountId, amount: Self::Balance) -> DispatchResult;
 	/// Unreserve up to `amount` funds in an account.
 	///
 	/// The actual amount unreserved is returned with `Ok`.
-	fn unreserve(who: &AccountId, amount: Self::Balance) -> DispatchResult/*Result<Self::Balance, DispatchError>*/;
+	fn unreserve(who: &AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError>;
 	/// Transfer up to `amount` funds into another account on a best-effort basis.
 	///
 	/// The actual amount transferred is returned with `Ok`.
 	fn repatriate_reserved(
-		who: &AccountId,
+		source: &AccountId,
+		dest: &AccountId,
 		amount: Self::Balance,
-		status: BalanceStatus,
-	) -> DispatchResult/*Result<Self::Balance, DispatchError>*/;
+	) -> Result<Self::Balance, DispatchError> {
+		// Done on a best-effort basis. Basically just a slash + transfer
+		let actual = Self::unreserve(source, amount)?;
+		let actual = <Self as fungible::Transfer<AccountId>>::transfer(source, dest, actual)?;
+		Ok(actual)
+	}
+}
 
-/*
+/// Trait for mutating a fungible asset which can be reserved.
+pub trait BalancedReserve<AccountId>: Balanced<AccountId> + MutateReserve<AccountId> {
 	/// Unreserve and slash some funds in an account.
 	///
 	/// The resulting imbalance is the first item of the tuple returned.
@@ -121,15 +128,30 @@ pub trait MutateReserve<AccountId>: Inspect<AccountId> {
 	/// As much funds up to `amount` will be deducted as possible. If this is less than `amount`,
 	/// then a non-zero second item will be returned.
 	fn slash_reserved(who: &AccountId, amount: Self::Balance)
-		-> (CreditOf<AccountId, Self>, Self::Balance)
-		where Self: Balanced<AccountId>
-	{
-
-	}
-*/
+		-> (CreditOf<AccountId, Self>, Self::Balance);
 }
 
-// TODO: For assets, implement reserve as an additional `frozen` balance indicator.
+impl<
+	AccountId,
+	T: Balanced<AccountId> + MutateReserve<AccountId>,
+> BalancedReserve<AccountId> for T {
+	fn slash_reserved(who: &AccountId, amount: Self::Balance)
+		-> (CreditOf<AccountId, Self>, Self::Balance)
+	{
+		let actual = match Self::unreserve(who, amount) {
+			Ok(x) => x,
+			Err(_) => return (Imbalance::default(), amount),
+		};
+		<Self as fungible::Balanced<AccountId>>::slash(who, actual)
+	}
+}
+
+// TODO: For assets:
+//   - One main balance.
+//   - Also `frozen` balance.
+//   - Reserves & locks both named.
+//   - `frozen = ED + SUM(reserves) + MAX(locks)`
+//   - Nothing may reduce balance below `frozen`.
 
 pub struct ItemOf<
 	F: fungibles::Inspect<AccountId>,
@@ -211,15 +233,15 @@ impl<
 	fn reserve(who: &AccountId, amount: Self::Balance) -> DispatchResult {
 		<F as fungibles::MutateReserve<AccountId>>::reserve(A::get(), who, amount)
 	}
-	fn unreserve(who: &AccountId, amount: Self::Balance) -> DispatchResult {
+	fn unreserve(who: &AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError> {
 		<F as fungibles::MutateReserve<AccountId>>::unreserve(A::get(), who, amount)
 	}
 	fn repatriate_reserved(
-		who: &AccountId,
+		source: &AccountId,
+		dest: &AccountId,
 		amount: Self::Balance,
-		status: BalanceStatus,
-	) -> DispatchResult {
-		<F as fungibles::MutateReserve<AccountId>>::repatriate_reserved(A::get(), who, amount, status)
+	) -> Result<Self::Balance, DispatchError> {
+		<F as fungibles::MutateReserve<AccountId>>::repatriate_reserved(A::get(), source, dest, amount)
 	}
 }
 
