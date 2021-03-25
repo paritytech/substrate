@@ -3431,13 +3431,13 @@ fn payout_stakers_handles_weight_refund() {
 		start_active_era(5);
 		// We now have `max_nom_rewarded` nominators actively nominating our validator.
 
-		// Reward the validator so we can collect for everyone in the next era
+		// Reward the validator so we can collect for everyone in the next era.
 		Staking::reward_by_ids(vec![(11, 1)]);
 
 		/* Era 6 */
 		start_active_era(6);
 
-		// Collect payouts when the validator had `half_max_nom_rewarded` nominators
+		// Collect payouts when the validator had `half_max_nom_rewarded` nominators.
 		let call = TestRuntimeCall::Staking(StakingCall::payout_stakers(11, 5));
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(20));

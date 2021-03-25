@@ -2079,7 +2079,7 @@ impl<T: Config> Module<T> {
 		);
 		let validator_staking_payout = validator_exposure_part * validator_leftover_payout;
 
-		// Track the number of payouts in order to track the actual weight
+		// Track the number of payouts in order to track the actual weight.
 		let mut payout_count: u32 = 0;
 
 		// We can now make total validator payout:
