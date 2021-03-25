@@ -356,7 +356,6 @@ fn can_fetch_current_and_next_epoch_data() {
 			Babe::current_epoch().authorities,
 			Babe::next_epoch().authorities,
 		);
-
 		// 1 era = 3 epochs
 		// 1 epoch = 3 slots
 		// Eras start from 0.

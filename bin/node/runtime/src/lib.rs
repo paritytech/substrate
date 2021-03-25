@@ -744,11 +744,11 @@ impl pallet_tips::Config for Runtime {
 }
 
 parameter_types! {
-	pub const TombstoneDeposit: Balance = deposit(
+	pub TombstoneDeposit: Balance = deposit(
 		1,
-		sp_std::mem::size_of::<pallet_contracts::ContractInfo<Runtime>>() as u32
+		<pallet_contracts::Pallet<Runtime>>::contract_info_size(),
 	);
-	pub const DepositPerContract: Balance = TombstoneDeposit::get();
+	pub DepositPerContract: Balance = TombstoneDeposit::get();
 	pub const DepositPerStorageByte: Balance = deposit(0, 1);
 	pub const DepositPerStorageItem: Balance = deposit(1, 0);
 	pub RentFraction: Perbill = Perbill::from_rational(1u32, 30 * DAYS);
@@ -953,6 +953,7 @@ parameter_types! {
 	pub const PeriodSpend: Balance = 500 * DOLLARS;
 	pub const MaxLockDuration: BlockNumber = 36 * 30 * DAYS;
 	pub const ChallengePeriod: BlockNumber = 7 * DAYS;
+	pub const MaxCandidateIntake: u32 = 10;
 	pub const SocietyModuleId: ModuleId = ModuleId(*b"py/socie");
 }
 
@@ -970,6 +971,7 @@ impl pallet_society::Config for Runtime {
 	type MaxLockDuration = MaxLockDuration;
 	type FounderSetOrigin = pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>;
 	type SuspensionJudgementOrigin = pallet_society::EnsureFounder<Runtime>;
+	type MaxCandidateIntake = MaxCandidateIntake;
 	type ChallengePeriod = ChallengePeriod;
 }
 
