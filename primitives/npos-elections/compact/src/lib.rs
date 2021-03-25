@@ -52,8 +52,9 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 /// For example, the following generates a public struct with name `TestSolution` with `u16` voter
 /// type, `u8` target type and `Perbill` accuracy with maximum of 8 edges per voter.
 ///
-/// ```ignore
+/// ```
 /// # use sp_npos_elections_compact::generate_solution_type;
+/// # use sp_arithmetic::per_things::Perbill;
 /// generate_solution_type!(pub struct TestSolution::<
 /// 	VoterIndex = u16,
 /// 	CandidateIndex = u8,
@@ -70,8 +71,9 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 /// lead to many 0s in the solution. If prefixed with `#[compact]`, then a custom compact encoding
 /// for numbers will be used, similar to how `parity-scale-codec`'s `Compact` works.
 ///
-/// ```ignore
+/// ```
 /// # use sp_npos_elections_compact::generate_solution_type;
+/// # use sp_arithmetic::per_things::Perbill;
 /// generate_solution_type!(
 ///     #[compact]
 ///     pub struct TestSolutionCompact::<VoterIndex = u16, CandidateIndex = u8, Accuracy = Perbill>(8)
