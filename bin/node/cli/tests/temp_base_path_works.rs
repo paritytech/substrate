@@ -33,7 +33,7 @@ pub mod common;
 
 #[test]
 fn temp_base_path_works() {
-	let mut cmd = Command::new(cargo_bin("substrate"));
+	let mut cmd = Command::new(cargo_bin("cere"));
 
 	let mut cmd = cmd
 		.args(&["--dev", "--tmp"])

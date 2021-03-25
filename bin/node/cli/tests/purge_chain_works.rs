@@ -29,7 +29,7 @@ fn purge_chain_works() {
 
 	common::run_dev_node_for_a_while(base_path.path());
 
-	let status = Command::new(cargo_bin("substrate"))
+	let status = Command::new(cargo_bin("cere"))
 		.args(&["purge-chain", "--dev", "-d"])
 		.arg(base_path.path())
 		.arg("-y")
