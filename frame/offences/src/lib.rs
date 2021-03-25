@@ -43,13 +43,6 @@ type OpaqueTimeSlot = Vec<u8>;
 /// A type alias for a report identifier.
 type ReportIdOf<T> = <T as frame_system::Config>::Hash;
 
-/// Type of data stored as a deferred offence
-pub type DeferredOffenceOf<T> = (
-	Vec<OffenceDetails<<T as frame_system::Config>::AccountId, <T as Config>::IdentificationTuple>>,
-	Vec<Perbill>,
-	SessionIndex,
-);
-
 pub trait WeightInfo {
 	fn report_offence_im_online(r: u32, o: u32, n: u32, ) -> Weight;
 	fn report_offence_grandpa(r: u32, n: u32, ) -> Weight;
