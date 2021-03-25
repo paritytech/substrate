@@ -763,7 +763,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			);
 		}
 		// No way this can fail since we do not alter the existential balances.
-		let _ = Self::mutate_account(who, |b| {
+		let res = Self::mutate_account(who, |b| {
 			b.misc_frozen = Zero::zero();
 			b.fee_frozen = Zero::zero();
 			for l in locks.iter() {
@@ -775,6 +775,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				}
 			}
 		});
+		debug_assert!(res.is_ok());
 
 		let existed = Locks::<T, I>::contains_key(who);
 		if locks.is_empty() {

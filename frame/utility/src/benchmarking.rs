@@ -70,7 +70,7 @@ benchmarks! {
 }
 
 impl_benchmark_test_suite!(
-	Module,
+	Pallet,
 	crate::tests::new_test_ext(),
 	crate::tests::Test,
 );

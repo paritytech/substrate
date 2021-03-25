@@ -17,8 +17,8 @@
 
 //! # Recovery Pallet
 //!
-//! - [`recovery::Config`](./trait.Config.html)
-//! - [`Call`](./enum.Call.html)
+//! - [`Config`]
+//! - [`Call`]
 //!
 //! ## Overview
 //!

@@ -665,7 +665,7 @@ impl<B: BlockT> Protocol<B> {
 		if status.genesis_hash != self.genesis_hash {
 			log!(
 				target: "sync",
-				if self.important_peers.contains(&who) { Level::Warn } else { Level::Trace },
+				if self.important_peers.contains(&who) { Level::Warn } else { Level::Debug },
 				"Peer is on different chain (our genesis: {} theirs: {})",
 				self.genesis_hash, status.genesis_hash
 			);
