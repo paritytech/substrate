@@ -30,7 +30,7 @@ use sp_std::vec::Vec;
 use frame_support::{
 	decl_module, decl_event, decl_storage, Parameter, traits::Get, weights::Weight,
 };
-use sp_runtime::{traits::{Hash, Zero}, Perbill};
+use sp_runtime::{traits::Hash, Perbill};
 use sp_staking::{
 	SessionIndex,
 	offence::{Offence, ReportOffence, Kind, OnOffenceHandler, OffenceDetails, OffenceError},

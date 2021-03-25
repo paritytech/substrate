@@ -43,17 +43,17 @@ mod deprecated {
 
 pub fn remove_deferred_storage<T: Config>() -> Weight {
     if !deprecated::DeferredOffences::<T>::exists() {
-        return 0
+        return T::DbWeight::get().reads(1)
     }
 
-    let mut consumed = Weight::zero();
+    let mut weight = T::DbWeight::get().reads_writes(2, 1);
     let deferred = <deprecated::DeferredOffences<T>>::take();
     for (offences, perbill, session) in deferred.iter() {
-        let weight = T::OnOffenceHandler::on_offence(&offences, &perbill, *session);
-        consumed += weight;
+        let consumed = T::OnOffenceHandler::on_offence(&offences, &perbill, *session);
+        weight = weight.saturating_add(consumed);
     }
 
-    consumed
+    weight
 }
 
 #[cfg(feature = "runtime-benchmarks")]
