@@ -20,13 +20,13 @@ use std::{sync::Arc, collections::HashMap};
 
 use log::debug;
 use parity_scale_codec::Encode;
-use parking_lot::RwLockWriteGuard;
 
 use sp_blockchain::{BlockStatus, well_known_cache_keys};
 use sc_client_api::{backend::Backend, utils::is_descendent_of};
 use sc_telemetry::TelemetryHandle;
 use sp_utils::mpsc::TracingUnboundedSender;
 use sp_api::TransactionFor;
+use sc_consensus::shared_data::{SharedDataLockedUpgradable, SharedDataLocked};
 
 use sp_consensus::{
 	BlockImport, Error as ConsensusError,
@@ -160,7 +160,7 @@ impl<H, N> AppliedChanges<H, N> {
 struct PendingSetChanges<Block: BlockT> {
 	just_in_case: Option<(
 		AuthoritySet<Block::Hash, NumberFor<Block>>,
-		crate::authorities::InnerLocked2<Block::Hash, NumberFor<Block>>,
+		SharedDataLockedUpgradable<AuthoritySet<Block::Hash, NumberFor<Block>>>,
 	)>,
 	applied_changes: AppliedChanges<Block::Hash, NumberFor<Block>>,
 	do_pause: bool,
@@ -168,7 +168,7 @@ struct PendingSetChanges<Block: BlockT> {
 
 impl<Block: BlockT> PendingSetChanges<Block> {
 	// revert the pending set change explicitly.
-	fn revert(self) { }
+	fn revert(self) {}
 
 	fn defuse(mut self) -> (AppliedChanges<Block::Hash, NumberFor<Block>>, bool) {
 		self.just_in_case = None;
@@ -271,7 +271,7 @@ where
 		// the old authority set on error or panic.
 		struct InnerGuard<'a, H, N> {
 			old: Option<AuthoritySet<H, N>>,
-			guard: Option<crate::authorities::InnerLocked<'a, H, N>>,
+			guard: Option<SharedDataLocked<'a, AuthoritySet<H, N>>>,
 		}
 
 		impl<'a, H, N> InnerGuard<'a, H, N> {
@@ -286,7 +286,9 @@ where
 				}
 			}
 
-			fn consume(mut self) -> Option<(AuthoritySet<H, N>, crate::authorities::InnerLocked<'a, H, N>)> {
+			fn consume(
+				mut self,
+			) -> Option<(AuthoritySet<H, N>, SharedDataLocked<'a, AuthoritySet<H, N>>)> {
 				if let Some(old) = self.old.take() {
 					Some((
 						old,
@@ -416,7 +418,7 @@ where
 			);
 		}
 
-		let just_in_case = just_in_case.map(|(o, i)| (o, i.release_lock()));
+		let just_in_case = just_in_case.map(|(o, i)| (o, i.release_mutex()));
 
 		Ok(PendingSetChanges { just_in_case, applied_changes, do_pause })
 	}
