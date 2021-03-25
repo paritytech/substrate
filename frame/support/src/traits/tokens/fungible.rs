@@ -84,8 +84,8 @@ pub trait Transfer<AccountId>: Inspect<AccountId> {
 	) -> Result<Self::Balance, DispatchError>;
 }
 
-/// Trait for providing a fungible asset which can be reserved.
-pub trait Reserve<AccountId>: Inspect<AccountId> {
+/// Trait for inspecting a fungible asset which can be reserved.
+pub trait InspectReserve<AccountId>: Inspect<AccountId> {
 	/// Amount of funds held in reserve by `who`.
 	fn reserved_balance(who: &AccountId) -> Self::Balance;
 	/// Amount of funds held in total by `who`.
@@ -94,17 +94,42 @@ pub trait Reserve<AccountId>: Inspect<AccountId> {
 	}
 	/// Check to see if some `amount` of funds may be reserved on the account of `who`.
 	fn can_reserve(who: &AccountId, amount: Self::Balance) -> bool;
+}
+
+/// Trait for mutating a fungible asset which can be reserved.
+pub trait MutateReserve<AccountId>: Inspect<AccountId> {
 	/// Reserve some funds in an account.
 	fn reserve(who: &AccountId, amount: Self::Balance) -> DispatchResult;
-	/// Unreserve some funds in an account.
-	fn unreserve(who: &AccountId, amount: Self::Balance) -> DispatchResult;
-	/// Transfer reserved funds into another account.
+	/// Unreserve up to `amount` funds in an account.
+	///
+	/// The actual amount unreserved is returned with `Ok`.
+	fn unreserve(who: &AccountId, amount: Self::Balance) -> DispatchResult/*Result<Self::Balance, DispatchError>*/;
+	/// Transfer up to `amount` funds into another account on a best-effort basis.
+	///
+	/// The actual amount transferred is returned with `Ok`.
 	fn repatriate_reserved(
 		who: &AccountId,
 		amount: Self::Balance,
 		status: BalanceStatus,
-	) -> DispatchResult;
+	) -> DispatchResult/*Result<Self::Balance, DispatchError>*/;
+
+/*
+	/// Unreserve and slash some funds in an account.
+	///
+	/// The resulting imbalance is the first item of the tuple returned.
+	///
+	/// As much funds up to `amount` will be deducted as possible. If this is less than `amount`,
+	/// then a non-zero second item will be returned.
+	fn slash_reserved(who: &AccountId, amount: Self::Balance)
+		-> (CreditOf<AccountId, Self>, Self::Balance)
+		where Self: Balanced<AccountId>
+	{
+
+	}
+*/
 }
+
+// TODO: For assets, implement reserve as an additional `frozen` balance indicator.
 
 pub struct ItemOf<
 	F: fungibles::Inspect<AccountId>,
@@ -163,31 +188,38 @@ impl<
 }
 
 impl<
-	F: fungibles::Reserve<AccountId>,
+	F: fungibles::InspectReserve<AccountId>,
 	A: Get<<F as fungibles::Inspect<AccountId>>::AssetId>,
 	AccountId,
-> Reserve<AccountId> for ItemOf<F, A, AccountId> {
+> InspectReserve<AccountId> for ItemOf<F, A, AccountId> {
 	fn reserved_balance(who: &AccountId) -> Self::Balance {
-		<F as fungibles::Reserve<AccountId>>::reserved_balance(A::get(), who)
+		<F as fungibles::InspectReserve<AccountId>>::reserved_balance(A::get(), who)
 	}
 	fn total_balance(who: &AccountId) -> Self::Balance {
-		<F as fungibles::Reserve<AccountId>>::total_balance(A::get(), who)
+		<F as fungibles::InspectReserve<AccountId>>::total_balance(A::get(), who)
 	}
 	fn can_reserve(who: &AccountId, amount: Self::Balance) -> bool {
-		<F as fungibles::Reserve<AccountId>>::can_reserve(A::get(), who, amount)
+		<F as fungibles::InspectReserve<AccountId>>::can_reserve(A::get(), who, amount)
 	}
+}
+
+impl<
+	F: fungibles::MutateReserve<AccountId>,
+	A: Get<<F as fungibles::Inspect<AccountId>>::AssetId>,
+	AccountId,
+> MutateReserve<AccountId> for ItemOf<F, A, AccountId> {
 	fn reserve(who: &AccountId, amount: Self::Balance) -> DispatchResult {
-		<F as fungibles::Reserve<AccountId>>::reserve(A::get(), who, amount)
+		<F as fungibles::MutateReserve<AccountId>>::reserve(A::get(), who, amount)
 	}
 	fn unreserve(who: &AccountId, amount: Self::Balance) -> DispatchResult {
-		<F as fungibles::Reserve<AccountId>>::unreserve(A::get(), who, amount)
+		<F as fungibles::MutateReserve<AccountId>>::unreserve(A::get(), who, amount)
 	}
 	fn repatriate_reserved(
 		who: &AccountId,
 		amount: Self::Balance,
 		status: BalanceStatus,
 	) -> DispatchResult {
-		<F as fungibles::Reserve<AccountId>>::repatriate_reserved(A::get(), who, amount, status)
+		<F as fungibles::MutateReserve<AccountId>>::repatriate_reserved(A::get(), who, amount, status)
 	}
 }
 

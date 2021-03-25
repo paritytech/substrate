@@ -115,8 +115,8 @@ pub trait Transfer<AccountId>: Inspect<AccountId> {
 	) -> Result<Self::Balance, DispatchError>;
 }
 
-/// Trait for providing a set of named fungible assets which can be reserved.
-pub trait Reserve<AccountId>: Inspect<AccountId> {
+/// Trait for inspecting a set of named fungible assets which can be reserved.
+pub trait InspectReserve<AccountId>: Inspect<AccountId> {
 	/// Amount of funds held in reserve.
 	fn reserved_balance(asset: Self::AssetId, who: &AccountId) -> Self::Balance;
 
@@ -125,7 +125,10 @@ pub trait Reserve<AccountId>: Inspect<AccountId> {
 
 	/// Check to see if some `amount` of `asset` may be reserved on the account of `who`.
 	fn can_reserve(asset: Self::AssetId, who: &AccountId, amount: Self::Balance) -> bool;
+}
 
+/// Trait for mutating a set of named fungible assets which can be reserved.
+pub trait MutateReserve<AccountId>: Inspect<AccountId> {
 	/// Reserve some funds in an account.
 	fn reserve(asset: Self::AssetId, who: &AccountId, amount: Self::Balance) -> DispatchResult;
 

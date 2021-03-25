@@ -942,7 +942,24 @@ impl<T: Config<I>, I: 'static> fungible::Unbalanced<T::AccountId> for Pallet<T, 
 		TotalIssuance::<T, I>::mutate(|t| *t = amount);
 	}
 }
+/*
+pub trait ReserveInspect<AccountId>: Inspect<AccountId> {
+	fn reserved_balance(who: &AccountId) -> Self::Balance {
 
+	}
+	fn total_balance(who: &AccountId) -> Self::Balance {
+		Self::reserved_balance(who).saturating_add(Self::balance(who))
+	}
+	fn can_reserve(who: &AccountId, amount: Self::Balance) -> bool;
+	fn reserve(who: &AccountId, amount: Self::Balance) -> DispatchResult;
+	fn unreserve(who: &AccountId, amount: Self::Balance) -> DispatchResult;
+	fn repatriate_reserved(
+		who: &AccountId,
+		amount: Self::Balance,
+		status: BalanceStatus,
+	) -> DispatchResult;
+}
+*/
 // wrapping these imbalances in a private module is necessary to ensure absolute privacy
 // of the inner member.
 mod imbalances {

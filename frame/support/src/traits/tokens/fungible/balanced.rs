@@ -61,8 +61,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> {
 		(Self::rescind(amount), Self::issue(amount))
 	}
 
-	/// Deducts up to `value` from the combined balance of `who`, preferring to deduct from the
-	/// free balance. This function cannot fail.
+	/// Deducts up to `value` from the combined balance of `who`. This function cannot fail.
 	///
 	/// The resulting imbalance is the first item of the tuple returned.
 	///
