@@ -2001,13 +2001,9 @@ impl<T: Config> Module<T> {
 		let current_era = CurrentEra::get().ok_or(
 			Error::<T>::InvalidEraToReward.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
 		)?;
-		ensure!(
-			era <= current_era,
-			Error::<T>::InvalidEraToReward.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
-		);
 		let history_depth = Self::history_depth();
 		ensure!(
-			era >= current_era.saturating_sub(history_depth),
+			era <= current_era && era >= current_era.saturating_sub(history_depth),
 			Error::<T>::InvalidEraToReward.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
 		);
 

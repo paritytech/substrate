@@ -3360,7 +3360,13 @@ fn payout_stakers_handles_weight_refund() {
 	// calculate weight.
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
 		let max_nom_rewarded = <Test as Config>::MaxNominatorRewardedPerValidator::get();
-		let half_max_nom_rewarded = max_nom_rewarded.checked_div(2).unwrap();
+		// Make sure the configured value is meaningful for our use.
+		assert!(max_nom_rewarded >= 4);
+		let half_max_nom_rewarded = max_nom_rewarded / 2;
+		// Sanity check our max and half max nominator quantities.
+		assert!(half_max_nom_rewarded > 0);
+		assert!(max_nom_rewarded > half_max_nom_rewarded);
+
 		// We add 1 to account for the payout ops to the validator
 		let max_nom_rewarded_weight
 			= <Test as Config>::WeightInfo::payout_stakers_alive_staked(max_nom_rewarded +1);
@@ -3371,7 +3377,7 @@ fn payout_stakers_handles_weight_refund() {
 		let balance = 1000;
 		bond_validator(11, 10, balance);
 
-		/* Era 1*/
+		/* Era 1 */
 		start_active_era(1);
 
 		// Reward just the validator.
