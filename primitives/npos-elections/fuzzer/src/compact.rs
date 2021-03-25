@@ -6,7 +6,7 @@ use sp_runtime::codec::{Encode, Error};
 fn main() {
 	generate_solution_type!(#[compact] pub struct InnerTestSolutionCompact::<
 		VoterIndex = u32,
-		CandidateIndex = u32,
+		TargetIndex = u32,
 		Accuracy = Percent,
 	>(16));
 	loop {

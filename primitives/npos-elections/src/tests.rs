@@ -1150,7 +1150,7 @@ mod solution_type {
 
 	generate_solution_type!(pub struct TestSolutionCompact::<
 		VoterIndex = u32,
-		CandidateIndex = u8,
+		TargetIndex = u8,
 		Accuracy = TestAccuracy,
 	>(16));
 
@@ -1162,7 +1162,7 @@ mod solution_type {
 		use sp_arithmetic::Percent;
 		generate_solution_type!(
 			#[compact]
-			struct InnerTestSolutionCompact::<VoterIndex = u32, CandidateIndex = u8, Accuracy = Percent>(12)
+			struct InnerTestSolutionCompact::<VoterIndex = u32, TargetIndex = u8, Accuracy = Percent>(12)
 		);
 	}
 
@@ -1172,7 +1172,7 @@ mod solution_type {
 		let without_compact = {
 			generate_solution_type!(pub struct InnerTestSolution::<
 				VoterIndex = u32,
-				CandidateIndex = u32,
+				TargetIndex = u32,
 				Accuracy = Percent,
 			>(16));
 			let compact = InnerTestSolution {
@@ -1190,7 +1190,7 @@ mod solution_type {
 		let with_compact = {
 			generate_solution_type!(#[compact] pub struct InnerTestSolutionCompact::<
 				VoterIndex = u32,
-				CandidateIndex = u32,
+				TargetIndex = u32,
 				Accuracy = Percent,
 			>(16));
 			let compact = InnerTestSolutionCompact {

@@ -57,7 +57,7 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 /// # use sp_arithmetic::per_things::Perbill;
 /// generate_solution_type!(pub struct TestSolution::<
 /// 	VoterIndex = u16,
-/// 	CandidateIndex = u8,
+/// 	TargetIndex = u8,
 /// 	Accuracy = Perbill,
 /// >(8));
 /// ```
@@ -76,7 +76,7 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 /// # use sp_arithmetic::per_things::Perbill;
 /// generate_solution_type!(
 ///     #[compact]
-///     pub struct TestSolutionCompact::<VoterIndex = u16, CandidateIndex = u8, Accuracy = Perbill>(8)
+///     pub struct TestSolutionCompact::<VoterIndex = u16, TargetIndex = u8, Accuracy = Perbill>(8)
 /// );
 /// ```
 #[proc_macro]
@@ -394,7 +394,7 @@ fn check_compact_attr(input: ParseStream) -> Result<bool> {
 	}
 }
 
-/// #[compact] pub struct CompactName::<VoterIndex = u32, CandidateIndex = u32, Accuracy = u32>()
+/// #[compact] pub struct CompactName::<VoterIndex = u32, TargetIndex = u32, Accuracy = u32>()
 impl Parse for SolutionDef {
 	fn parse(input: ParseStream) -> syn::Result<Self> {
 		// optional #[compact]
@@ -413,7 +413,7 @@ impl Parse for SolutionDef {
 			return Err(syn_err("Must provide 3 generic args."))
 		}
 
-		let expected_types = ["VoterIndex", "CandidateIndex", "Accuracy"];
+		let expected_types = ["VoterIndex", "TargetIndex", "Accuracy"];
 
 		let mut types: Vec<syn::Type> = generics.args.iter().zip(expected_types.iter()).map(|(t, expected)|
 			match t {
