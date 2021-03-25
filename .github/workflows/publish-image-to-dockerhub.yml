@@ -1,0 +1,46 @@
+name: Publish image to DockerHub
+on:
+  release:
+    types:
+      - published
+
+env:
+  ECR_REPOSITORY: pos-network-node
+  DOCKERHUB_REPOSITORY: cerebellumnetwork
+  PACKAGE_NAME: pos-node
+jobs:
+  build-and-push:
+    runs-on: ubuntu-18.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      - name: Checkout submodules
+        run: git submodule update --init --recursive
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+      - name: Pull image from ECR and change name
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          docker pull $ECR_REGISTRY/$ECR_REPOSITORY:$GITHUB_SHA
+          docker image tag $ECR_REGISTRY/$ECR_REPOSITORY:$GITHUB_SHA $DOCKERHUB_REPOSITORY/$PACKAGE_NAME:${GITHUB_REF##*/}
+          docker image tag $ECR_REGISTRY/$ECR_REPOSITORY:$GITHUB_SHA $DOCKERHUB_REPOSITORY/$PACKAGE_NAME:latest
+      - name: Login to DockerHub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Publish image to DockerHub
+        id: docker_publish
+        run: |
+          docker push $DOCKERHUB_REPOSITORY/$PACKAGE_NAME:${GITHUB_REF##*/}
+          docker push $DOCKERHUB_REPOSITORY/$PACKAGE_NAME:latest
+      - name: Image digest
+        run: echo ${{ steps.docker_publish.outputs.digest }}
