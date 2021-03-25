@@ -493,3 +493,27 @@ fn set_metadata_should_work() {
 }
 
 // TODO: tests for force_set_metadata, force_clear_metadata, force_asset_status
+
+#[test]
+fn imbalances_should_work() {
+	use frame_support::traits::tokens::fungibles::Balanced;
+
+	new_test_ext().execute_with(|| {
+		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
+
+		let imb = Assets::issue(0, 100);
+		assert_eq!(Assets::total_supply(0), 100);
+		assert_eq!(imb.peek(), 100);
+
+		let (imb1, imb2) = imb.split(30);
+		assert_eq!(imb1.peek(), 30);
+		assert_eq!(imb2.peek(), 70);
+
+		drop(imb2);
+		assert_eq!(Assets::total_supply(0), 30);
+
+		Assets::resolve(&1, imb1);
+		assert_eq!(Assets::balance(0, 1), 30);
+		assert_eq!(Assets::total_supply(0), 30);
+	});
+}

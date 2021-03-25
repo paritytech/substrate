@@ -194,7 +194,7 @@ impl<T: Config> fungibles::Mutate<<T as SystemConfig>::AccountId> for Pallet<T> 
 		who: &<T as SystemConfig>::AccountId,
 		amount: Self::Balance,
 	) -> DispatchResult {
-		Pallet::<T>::do_mint(asset, who, amount, None)
+		Self::do_mint(asset, who, amount, None)
 	}
 
 	fn burn_from(
@@ -202,7 +202,7 @@ impl<T: Config> fungibles::Mutate<<T as SystemConfig>::AccountId> for Pallet<T> 
 		who: &<T as SystemConfig>::AccountId,
 		amount: Self::Balance,
 	) -> Result<Self::Balance, DispatchError> {
-		Pallet::<T>::do_burn(asset, who, amount, None, false, Respect, false)
+		Self::do_burn(asset, who, amount, None, false, Respect, false)
 	}
 
 	fn slash(
@@ -210,7 +210,7 @@ impl<T: Config> fungibles::Mutate<<T as SystemConfig>::AccountId> for Pallet<T> 
 		who: &<T as SystemConfig>::AccountId,
 		amount: Self::Balance,
 	) -> Result<Self::Balance, DispatchError> {
-		Pallet::<T>::do_burn(asset, who, amount, None, false, Respect, true)
+		Self::do_burn(asset, who, amount, None, false, Respect, true)
 	}
 }
 
@@ -221,7 +221,34 @@ impl<T: Config> fungibles::Transfer<T::AccountId> for Pallet<T> {
 		dest: &T::AccountId,
 		amount: T::Balance,
 	) -> Result<T::Balance, DispatchError> {
-		Pallet::<T>::do_transfer(asset, source, dest, amount, None, false, Respect, false, false)
+		Self::do_transfer(asset, source, dest, amount, None, false, Respect, false, false)
+	}
+}
+
+impl<T: Config> fungibles::Unbalanced<T::AccountId> for Pallet<T> {
+	fn set_balance(_: Self::AssetId, _: &T::AccountId, _: Self::Balance) -> DispatchResult {
+		unreachable!();
+	}
+	fn set_total_issuance(id: T::AssetId, amount: Self::Balance) {
+		Asset::<T>::mutate_exists(id, |maybe_asset| if let Some(ref mut asset) = maybe_asset {
+			asset.supply = amount
+		});
+	}
+	fn decrease_balance(asset: T::AssetId, who: &T::AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError> {
+		Self::decrease_balance(asset, who, amount, false, Respect, false, |_, _|Ok(()))
+	}
+	fn decrease_balance_at_most(asset: T::AssetId, who: &T::AccountId, amount: Self::Balance) -> Self::Balance {
+		Self::decrease_balance(asset, who, amount, false, Respect, true, |_, _|Ok(())).unwrap_or(Zero::zero())
+	}
+	fn increase_balance(asset: T::AssetId, who: &T::AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError> {
+		Self::increase_balance(asset, who, amount, |_|Ok(()))?;
+		Ok(amount)
+	}
+	fn increase_balance_at_most(asset: T::AssetId, who: &T::AccountId, amount: Self::Balance) -> Self::Balance {
+		match Self::increase_balance(asset, who, amount, |_|Ok(())) {
+			Ok(_) => amount,
+			Err(_) => Zero::zero(),
+		}
 	}
 }
 
@@ -370,6 +397,7 @@ pub enum RespectFrozen {
 }
 
 use RespectFrozen::*;
+use sp_runtime::traits::Bounded;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -1675,14 +1703,31 @@ impl<T: Config> Pallet<T> {
 		amount: T::Balance,
 		maybe_check_issuer: Option<T::AccountId>,
 	) -> DispatchResult {
+		Self::increase_balance(id, beneficiary, amount, |details| -> DispatchResult {
+			if let Some(check_issuer) = maybe_check_issuer {
+				ensure!(&check_issuer == &details.issuer, Error::<T>::NoPermission);
+			}
+			debug_assert!(T::Balance::max_value() - details.supply >= amount, "checked in prep; qed");
+			details.supply = details.supply.saturating_add(amount);
+			Ok(())
+		})?;
+		Self::deposit_event(Event::Issued(id, beneficiary.clone(), amount));
+		Ok(())
+	}
+
+	fn increase_balance(
+		id: T::AssetId,
+		beneficiary: &T::AccountId,
+		amount: T::Balance,
+		check: impl FnOnce(&mut AssetDetails<T::Balance, T::AccountId, DepositBalanceOf<T>>) -> DispatchResult,
+	) -> DispatchResult {
+		if amount.is_zero() { return Ok(()) }
+
 		Self::can_increase(id, beneficiary, amount).into_result()?;
 		Asset::<T>::try_mutate(id, |maybe_details| -> DispatchResult {
 			let details = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
 
-			if let Some(check_issuer) = maybe_check_issuer {
-				ensure!(&check_issuer == &details.issuer, Error::<T>::NoPermission);
-			}
-			details.supply = details.supply.checked_add(&amount).ok_or(Error::<T>::Overflow)?;
+			check(details)?;
 
 			Account::<T>::try_mutate(id, beneficiary, |t| -> DispatchResult {
 				let new_balance = t.balance.saturating_add(amount);
@@ -1695,7 +1740,6 @@ impl<T: Config> Pallet<T> {
 			})?;
 			Ok(())
 		})?;
-		Self::deposit_event(Event::Issued(id, beneficiary.clone(), amount));
 		Ok(())
 	}
 
@@ -1709,20 +1753,52 @@ impl<T: Config> Pallet<T> {
 		respect_frozen: RespectFrozen,
 		best_effort: bool,
 	) -> Result<T::Balance, DispatchError> {
-		if amount.is_zero() {
-			Self::deposit_event(Event::Burned(id, target.clone(), amount));
-			return Ok(amount)
-		}
+		let actual = Self::decrease_balance(
+			id,
+			target,
+			amount,
+			keep_alive,
+			respect_frozen,
+			best_effort,
+			|actual, details| {
+				// Check admin rights.
+				if let Some(check_admin) = maybe_check_admin {
+					ensure!(&check_admin == &details.admin, Error::<T>::NoPermission);
+				}
+
+				debug_assert!(details.supply >= actual, "checked in prep; qed");
+				details.supply = details.supply.saturating_sub(actual);
+
+				Ok(())
+			},
+		)?;
+		Self::deposit_event(Event::Burned(id, target.clone(), actual));
+		Ok(actual)
+	}
+
+	// Reduces balance on a best-effort basis.
+	//
+	// Returns an error (in which case nothing happened) or the amount by which the balance was
+	// reduced.
+	//
+	// LOW-LEVEL: Does not attempt to maintain supply or emit events.
+	fn decrease_balance(
+		id: T::AssetId,
+		target: &T::AccountId,
+		amount: T::Balance,
+		keep_alive: bool,
+		respect_frozen: RespectFrozen,
+		best_effort: bool,
+		check: impl FnOnce(T::Balance, &mut AssetDetails<T::Balance, T::AccountId, DepositBalanceOf<T>>) -> DispatchResult,
+	) -> Result<T::Balance, DispatchError> {
+		if amount.is_zero() { return Ok(amount) }
 
 		let (actual, melted) = Self::prep_debit(id, target, amount, keep_alive, respect_frozen, best_effort)?;
 
 		Asset::<T>::try_mutate(id, |maybe_details| -> DispatchResult {
 			let details = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
 
-			// Check admin rights.
-			if let Some(check_admin) = maybe_check_admin {
-				ensure!(&check_admin == &details.admin, Error::<T>::NoPermission);
-			}
+			check(actual, details)?;
 
 			Account::<T>::try_mutate_exists(id, target, |maybe_account| -> DispatchResult {
 				let mut account = maybe_account.take().unwrap_or_default();
@@ -1740,8 +1816,6 @@ impl<T: Config> Pallet<T> {
 				Ok(())
 			})?;
 
-			debug_assert!(details.supply >= actual, "checked in prep; qed");
-			details.supply = details.supply.saturating_sub(actual);
 			Ok(())
 		})?;
 
@@ -1749,7 +1823,6 @@ impl<T: Config> Pallet<T> {
 			T::Freezer::melted(id, target, arg)
 		}
 
-		Self::deposit_event(Event::Burned(id, target.clone(), actual));
 		Ok(actual)
 	}
 
