@@ -129,9 +129,9 @@ pub trait OnRuntimeUpgradeHelpersExt {
 	///
 	/// A `at` storage identifier must be provided to indicate where the storage is being read from.
 	#[cfg(feature = "try-runtime")]
-	fn get_temp_storage<T: Decode>(at: &str) -> Option<T> {
+	fn get_temp_storage<T: codec::Decode>(at: &str) -> Option<T> {
 		sp_io::storage::get(&Self::storage_key(at))
-			.and_then(|bytes| Decode::decode(&mut &*bytes).ok())
+			.and_then(|bytes| codec::Decode::decode(&mut &*bytes).ok())
 	}
 
 	/// Write some temporary data to a specific storage that can be read (potentially in
@@ -140,7 +140,7 @@ pub trait OnRuntimeUpgradeHelpersExt {
 	/// A `at` storage identifier must be provided to indicate where the storage is being written
 	/// to.
 	#[cfg(feature = "try-runtime")]
-	fn set_temp_storage<T: Encode>(data: T, at: &str) {
+	fn set_temp_storage<T: codec::Encode>(data: T, at: &str) {
 		sp_io::storage::set(&Self::storage_key(at), &data.encode());
 	}
 }
