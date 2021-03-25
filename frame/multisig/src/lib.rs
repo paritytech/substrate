@@ -436,7 +436,8 @@ decl_module! {
 			ensure!(m.when == timepoint, Error::<T>::WrongTimepoint);
 			ensure!(m.depositor == who, Error::<T>::NotOwner);
 
-			let _ = T::Currency::unreserve(&m.depositor, m.deposit);
+			let err_amount = T::Currency::unreserve(&m.depositor, m.deposit);
+			debug_assert!(err_amount.is_zero());
 			<Multisigs<T>>::remove(&id, &call_hash);
 			Self::clear_call(&call_hash);
 
