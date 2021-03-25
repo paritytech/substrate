@@ -23,8 +23,7 @@ mod block_import;
 mod sync;
 
 use std::{
-	borrow::Cow, collections::HashMap, pin::Pin, sync::Arc, marker::PhantomData,
-	task::{Poll, Context as FutureContext}
+	borrow::Cow, collections::HashMap, pin::Pin, sync::Arc, task::{Poll, Context as FutureContext}
 };
 
 use libp2p::build_multiaddr;
@@ -64,7 +63,7 @@ use sc_network::config::ProtocolConfig;
 use sp_runtime::generic::{BlockId, OpaqueDigestItemId};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use sp_runtime::{Justification, Justifications};
-use substrate_test_runtime_client::{self, AccountKeyring};
+use substrate_test_runtime_client::AccountKeyring;
 use sc_service::client::Client;
 pub use sc_network::config::EmptyTransactionPool;
 pub use substrate_test_runtime_client::runtime::{Block, Extrinsic, Hash, Transfer};
@@ -608,6 +607,15 @@ impl<B: BlockT, V: Verifier<B>> Verifier<B> for VerifierAdapter<B, V> {
 	}
 }
 
+impl<B: BlockT, Verifier> Clone for VerifierAdapter<B, Verifier> where Verifier: Clone {
+	fn clone(&self) -> Self {
+		Self {
+			verifier: self.verifier.clone(),
+			failed_verifications: self.failed_verifications.clone(),
+		}
+	}
+}
+
 impl<B: BlockT, Verifier> VerifierAdapter<B, Verifier> {
 	fn new(verifier: Verifier) -> Self {
 		VerifierAdapter {
@@ -706,6 +714,7 @@ pub trait TestNetFactory: Sized where <Self::BlockImport as BlockImport<Block>>:
 			&Default::default(),
 			&data,
 		);
+		let verifier = VerifierAdapter::new(verifier);
 
 		let import_queue = Box::new(BasicQueue::new(
 			verifier.clone(),
@@ -799,7 +808,7 @@ pub trait TestNetFactory: Sized where <Self::BlockImport as BlockImport<Block>>:
 				imported_blocks_stream,
 				finality_notification_stream,
 				block_import,
-				verifier: VerifierAdapter::new(verifier.clone()),
+				verifier,
 				network,
 				listen_addr,
 			});
@@ -821,6 +830,7 @@ pub trait TestNetFactory: Sized where <Self::BlockImport as BlockImport<Block>>:
 			&Default::default(),
 			&data,
 		);
+		let verifier = VerifierAdapter::new(verifier);
 
 		let import_queue = Box::new(BasicQueue::new(
 			verifier.clone(),
@@ -877,7 +887,7 @@ pub trait TestNetFactory: Sized where <Self::BlockImport as BlockImport<Block>>:
 
 			peers.push(Peer {
 				data,
-				verifier: VerifierAdapter::new(verifier.clone()),
+				verifier,
 				select_chain: None,
 				backend: None,
 				block_import,

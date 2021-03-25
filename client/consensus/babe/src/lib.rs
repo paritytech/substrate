@@ -76,8 +76,8 @@ pub use sp_consensus_babe::{
 pub use sp_consensus::SyncOracle;
 pub use sc_consensus_slots::SlotProportion;
 use std::{
-	collections::HashMap, sync::Arc, u64, pin::Pin, time::{Instant, Duration},
-	borrow::Cow, convert::TryInto,
+	collections::HashMap, sync::Arc, u64, pin::Pin, borrow::Cow, convert::TryInto,
+	time::{Duration, Instant},
 };
 use sp_consensus::{ImportResult, CanAuthorWith, import_queue::BoxJustificationImport};
 use sp_core::crypto::Public;
@@ -1191,7 +1191,8 @@ where
 					self.telemetry;
 					CONSENSUS_TRACE;
 					"babe.checked_and_importing";
-					"pre_header" => ?pre_header);
+					"pre_header" => ?pre_header,
+				);
 
 				let mut import_block = BlockImportParams::new(origin, pre_header);
 				import_block.post_digests.push(verified_info.seal);

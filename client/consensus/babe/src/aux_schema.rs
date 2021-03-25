@@ -188,7 +188,7 @@ mod test {
 		).unwrap();
 
 		assert!(
-			epoch_changes.lock()
+			epoch_changes.shared_data()
 				.tree()
 				.iter()
 				.map(|(_, _, epoch)| epoch.clone())
@@ -200,7 +200,7 @@ mod test {
 		); // PersistedEpochHeader does not implement Debug, so we use assert! directly.
 
 		write_epoch_changes::<TestBlock, _, _>(
-			&epoch_changes.lock(),
+			&epoch_changes.shared_data(),
 			|values| {
 				client.insert_aux(values, &[]).unwrap();
 			},
