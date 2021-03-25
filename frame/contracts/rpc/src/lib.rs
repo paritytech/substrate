@@ -385,7 +385,7 @@ mod tests {
 		}
 		test(r#"{
 			"gasConsumed": 5000,
-			"debugMessage": "helpOk",
+			"debugMessage": "0x68656c704f6b",
 			"result": {
 			  "Ok": {
 				"flags": 5,
@@ -395,7 +395,7 @@ mod tests {
 		}"#);
 		test(r#"{
 			"gasConsumed": 3400,
-			"debugMessage": "helpErr",
+			"debugMessage": "0x68656c70457272",
 			"result": {
 			  "Err": "BadOrigin"
 			}
@@ -410,22 +410,22 @@ mod tests {
 			assert_eq!(actual, trim(expected).as_str());
 		}
 		test(r#"{
-			"gasConsumed":5000,
-			"debugMessage":"helpOk",
-			"result":{
-			   "Ok":{
-				  "result":{
-					 "flags":5,
-					 "data":"0x1234"
+			"gasConsumed": 5000,
+			"debugMessage": "0x68656c704f6b",
+			"result": {
+			   "Ok": {
+				  "result": {
+					 "flags": 5,
+					 "data": "0x1234"
 				  },
-				  "accountId":"5CiPP",
-				  "rentProjection":null
+				  "accountId": "5CiPP",
+				  "rentProjection": null
 			   }
 			}
 		}"#);
 		test(r#"{
 			"gasConsumed": 3400,
-			"debugMessage": "helpErr",
+			"debugMessage": "0x68656c70457272",
 			"result": {
 			  "Err": "BadOrigin"
 			}
