@@ -3356,8 +3356,8 @@ fn payout_stakers_handles_basic_errors() {
 
 #[test]
 fn payout_stakers_handles_weight_refund() {
-	// N.B. this test relies on the assumption that `payout_stakers_alive_staked` is solely used to
-	// calculate weight.
+	// Note: this test relies on the assumption that `payout_stakers_alive_staked` is solely used by
+	// `payout_stakers` to calculate the weight of each payout op.
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
 		let max_nom_rewarded = <Test as Config>::MaxNominatorRewardedPerValidator::get();
 		// Make sure the configured value is meaningful for our use.
@@ -3373,6 +3373,10 @@ fn payout_stakers_handles_weight_refund() {
 		let half_max_nom_rewarded_weight
 			= <Test as Config>::WeightInfo::payout_stakers_alive_staked(half_max_nom_rewarded + 1);
 		let zero_payouts_weight = <Test as Config>::WeightInfo::payout_stakers_alive_staked(0);
+		assert!(zero_payouts_weight > 0);
+		assert!(half_max_nom_rewarded_weight > zero_payouts_weight);
+		assert!(max_nom_rewarded_weight > half_max_nom_rewarded_weight);
+
 
 		let balance = 1000;
 		bond_validator(11, 10, balance);
