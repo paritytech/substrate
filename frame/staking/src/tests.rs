@@ -3377,7 +3377,6 @@ fn payout_stakers_handles_weight_refund() {
 		assert!(half_max_nom_rewarded_weight > zero_payouts_weight);
 		assert!(max_nom_rewarded_weight > half_max_nom_rewarded_weight);
 
-
 		let balance = 1000;
 		bond_validator(11, 10, balance);
 
