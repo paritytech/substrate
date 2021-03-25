@@ -92,9 +92,9 @@
 //!
 //! ### Module Information
 //!
-//! - [`election_sp_phragmen::Config`](./trait.Config.html)
-//! - [`Call`](./enum.Call.html)
-//! - [`Module`](./struct.Module.html)
+//! - [`Config`]
+//! - [`Call`]
+//! - [`Module`]
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -704,8 +704,9 @@ impl<T: Config> Module<T> {
 				} else {
 					// overlap. This can never happen. If so, it seems like our intended replacement
 					// is already a member, so not much more to do.
-					frame_support::debug::error!(
-						"pallet-elections-phragmen: a member seems to also be a runner-up."
+					log::error!(
+						target: "runtime::elections-phragmen",
+						"A member seems to also be a runner-up.",
 					);
 				}
 				next_best
@@ -998,7 +999,11 @@ impl<T: Config> Module<T> {
 			Self::deposit_event(RawEvent::NewTerm(new_members_sorted_by_id));
 			ElectionRounds::mutate(|v| *v += 1);
 		}).map_err(|e| {
-			frame_support::debug::error!("elections-phragmen: failed to run election [{:?}].", e);
+			log::error!(
+				target: "runtime::elections-phragmen",
+				"Failed to run election [{:?}].",
+				e,
+			);
 			Self::deposit_event(RawEvent::ElectionError);
 		});
 
@@ -1091,7 +1096,7 @@ mod tests {
 		type Event = Event;
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
-		type AccountStore = frame_system::Module<Test>;
+		type AccountStore = frame_system::Pallet<Test>;
 		type MaxLocks = ();
 		type WeightInfo = ();
 	}
@@ -1182,9 +1187,9 @@ mod tests {
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic
 		{
-			System: frame_system::{Module, Call, Event<T>},
-			Balances: pallet_balances::{Module, Call, Event<T>, Config<T>},
-			Elections: elections_phragmen::{Module, Call, Event<T>, Config<T>},
+			System: frame_system::{Pallet, Call, Event<T>},
+			Balances: pallet_balances::{Pallet, Call, Event<T>, Config<T>},
+			Elections: elections_phragmen::{Pallet, Call, Event<T>, Config<T>},
 		}
 	);
 
@@ -1240,7 +1245,7 @@ mod tests {
 		pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
 			MEMBERS.with(|m| *m.borrow_mut() = self.genesis_members.iter().map(|(m, _)| m.clone()).collect::<Vec<_>>());
 			let mut ext: sp_io::TestExternalities = GenesisConfig {
-				pallet_balances: Some(pallet_balances::GenesisConfig::<Test>{
+				pallet_balances: pallet_balances::GenesisConfig::<Test>{
 					balances: vec![
 						(1, 10 * self.balance_factor),
 						(2, 20 * self.balance_factor),
@@ -1249,10 +1254,10 @@ mod tests {
 						(5, 50 * self.balance_factor),
 						(6, 60 * self.balance_factor)
 					],
-				}),
-				elections_phragmen: Some(elections_phragmen::GenesisConfig::<Test> {
+				},
+				elections_phragmen: elections_phragmen::GenesisConfig::<Test> {
 					members: self.genesis_members
-				}),
+				},
 			}.build_storage().unwrap().into();
 			ext.execute_with(pre_conditions);
 			ext.execute_with(test);
@@ -2422,17 +2427,14 @@ mod tests {
 
 			// no replacement yet.
 			let unwrapped_error = Elections::remove_member(Origin::root(), 4, true).unwrap_err();
-			matches!(
+			assert!(matches!(
 				unwrapped_error.error,
 				DispatchError::Module {
 					message: Some("InvalidReplacement"),
 					..
 				}
-			);
-			matches!(
-				unwrapped_error.post_info.actual_weight,
-				Some(x) if x < <Test as frame_system::Config>::BlockWeights::get().max_block
-			);
+			));
+			assert!(unwrapped_error.post_info.actual_weight.is_some());
 		});
 
 		ExtBuilder::default().desired_runners_up(1).build_and_execute(|| {
@@ -2451,17 +2453,14 @@ mod tests {
 
 			// there is a replacement! and this one needs a weight refund.
 			let unwrapped_error = Elections::remove_member(Origin::root(), 4, false).unwrap_err();
-			matches!(
+			assert!(matches!(
 				unwrapped_error.error,
 				DispatchError::Module {
 					message: Some("InvalidReplacement"),
 					..
 				}
-			);
-			matches!(
-				unwrapped_error.post_info.actual_weight,
-				Some(x) if x < <Test as frame_system::Config>::BlockWeights::get().max_block
-			);
+			));
+			assert!(unwrapped_error.post_info.actual_weight.is_some());
 		});
 	}
 

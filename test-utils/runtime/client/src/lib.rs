@@ -92,6 +92,7 @@ pub struct GenesisParameters {
 	changes_trie_config: Option<ChangesTrieConfiguration>,
 	heap_pages_override: Option<u64>,
 	extra_storage: Storage,
+	wasm_code: Option<Vec<u8>>,
 }
 
 impl GenesisParameters {
@@ -113,6 +114,11 @@ impl GenesisParameters {
 			self.extra_storage.clone(),
 		)
 	}
+
+	/// Set the wasm code that should be used at genesis.
+	pub fn set_wasm_code(&mut self, code: Vec<u8>) {
+		self.wasm_code = Some(code);
+	}
 }
 
 impl substrate_test_client::GenesisInit for GenesisParameters {
@@ -120,6 +126,10 @@ impl substrate_test_client::GenesisInit for GenesisParameters {
 		use codec::Encode;
 
 		let mut storage = self.genesis_config().genesis_map();
+
+		if let Some(ref code) = self.wasm_code {
+			storage.top.insert(sp_core::storage::well_known_keys::CODE.to_vec(), code.clone());
+		}
 
 		let child_roots = storage.children_default.iter().map(|(_sk, child_content)| {
 			let state_root = <<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(

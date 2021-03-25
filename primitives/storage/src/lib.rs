@@ -29,7 +29,7 @@ use codec::{Encode, Decode};
 
 /// Storage key.
 #[derive(PartialEq, Eq, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Hash, PartialOrd, Ord, Clone))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Hash, PartialOrd, Ord, Clone, Encode, Decode))]
 pub struct StorageKey(
 	#[cfg_attr(feature = "std", serde(with = "impl_serde::serialize"))] pub Vec<u8>,
 );
@@ -107,7 +107,7 @@ impl PrefixedStorageKey {
 
 /// Storage data associated to a [`StorageKey`].
 #[derive(PartialEq, Eq, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Hash, PartialOrd, Ord, Clone))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Hash, PartialOrd, Ord, Clone, Encode, Decode))]
 pub struct StorageData(
 	#[cfg_attr(feature = "std", serde(with="impl_serde::serialize"))]
 	pub Vec<u8>,

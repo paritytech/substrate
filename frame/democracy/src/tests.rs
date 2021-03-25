@@ -60,10 +60,10 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
-		Scheduler: pallet_scheduler::{Module, Call, Storage, Config, Event<T>},
-		Democracy: pallet_democracy::{Module, Call, Storage, Config, Event<T>},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Scheduler: pallet_scheduler::{Pallet, Call, Storage, Config, Event<T>},
+		Democracy: pallet_democracy::{Pallet, Call, Storage, Config, Event<T>},
 	}
 );
 
@@ -161,7 +161,7 @@ impl Contains<u64> for OneToFive {
 impl Config for Test {
 	type Proposal = Call;
 	type Event = Event;
-	type Currency = pallet_balances::Module<Self>;
+	type Currency = pallet_balances::Pallet<Self>;
 	type EnactmentPeriod = EnactmentPeriod;
 	type LaunchPeriod = LaunchPeriod;
 	type VotingPeriod = VotingPeriod;
@@ -236,7 +236,7 @@ fn set_balance_proposal_hash_and_note(value: u64) -> H256 {
 	match Democracy::note_preimage(Origin::signed(6), p) {
 		Ok(_) => (),
 		Err(x) if x == Error::<Test>::DuplicatePreimage.into() => (),
-		Err(x) => panic!(x),
+		Err(x) => panic!("{:?}", x),
 	}
 	h
 }

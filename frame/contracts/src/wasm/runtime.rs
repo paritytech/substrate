@@ -18,10 +18,11 @@
 //! Environment definition of the wasm smart-contract runtime.
 
 use crate::{
-	HostFnWeights, Config, CodeHash, BalanceOf, Error,
+	Config, CodeHash, BalanceOf, Error,
 	exec::{Ext, StorageKey, TopicOf},
 	gas::{GasMeter, Token, ChargedAmount},
 	wasm::env_def::ConvertibleToWasm,
+	schedule::HostFnWeights,
 };
 use parity_wasm::elements::ValueType;
 use frame_support::{dispatch::DispatchError, ensure, traits::Get, weights::Weight};
@@ -173,7 +174,7 @@ pub enum RuntimeToken {
 	RestoreToSurchargeCodeSize{caller_code: u32, tombstone_code: u32},
 	/// Weight of calling `seal_random`. It includes the weight for copying the subject.
 	Random,
-	/// Weight of calling `seal_reposit_event` with the given number of topics and event size.
+	/// Weight of calling `seal_deposit_event` with the given number of topics and event size.
 	DepositEvent{num_topic: u32, len: u32},
 	/// Weight of calling `seal_set_rent_allowance`.
 	SetRentAllowance,
@@ -215,6 +216,8 @@ pub enum RuntimeToken {
 	ChainExtension(u64),
 	/// Weight charged for copying data from the sandbox.
 	CopyIn(u32),
+	/// Weight of calling `seal_rent_params`.
+	RentParams,
 }
 
 impl<T: Config> Token<T> for RuntimeToken
@@ -283,6 +286,7 @@ where
 				.saturating_add(s.hash_blake2_128_per_byte.saturating_mul(len.into())),
 			ChainExtension(amount) => amount,
 			CopyIn(len) => s.return_per_byte.saturating_mul(len.into()),
+			RentParams => s.rent_params,
 		}
 	}
 }
@@ -292,24 +296,6 @@ where
 /// the beginning of the API entry point.
 fn already_charged(_: u32) -> Option<RuntimeToken> {
 	None
-}
-
-/// Finds duplicates in a given vector.
-///
-/// This function has complexity of O(n log n) and no additional memory is required, although
-/// the order of items is not preserved.
-fn has_duplicates<T: PartialEq + AsRef<[u8]>>(items: &mut Vec<T>) -> bool {
-	// Sort the vector
-	items.sort_by(|a, b| {
-		Ord::cmp(a.as_ref(), b.as_ref())
-	});
-	// And then find any two consecutive equal elements.
-	items.windows(2).any(|w| {
-		match w {
-			&[ref a, ref b] => a == b,
-			_ => false,
-		}
-	})
 }
 
 /// Can only be used for one call.
@@ -644,7 +630,7 @@ define_env!(Env, <E: Ext>,
 	// This call is supposed to be called only by instrumentation injected code.
 	//
 	// - amount: How much gas is used.
-	gas(ctx, amount: u32) => {
+	[seal0] gas(ctx, amount: u32) => {
 		ctx.charge_gas(RuntimeToken::MeteringBlock(amount))?;
 		Ok(())
 	},
@@ -664,7 +650,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// - If value length exceeds the configured maximum value length of a storage entry.
 	// - Upon trying to set an empty storage entry (value length is 0).
-	seal_set_storage(ctx, key_ptr: u32, value_ptr: u32, value_len: u32) => {
+	[seal0] seal_set_storage(ctx, key_ptr: u32, value_ptr: u32, value_len: u32) => {
 		ctx.charge_gas(RuntimeToken::SetStorage(value_len))?;
 		if value_len > ctx.ext.max_value_size() {
 			Err(Error::<E::T>::ValueTooLarge)?;
@@ -680,7 +666,7 @@ define_env!(Env, <E: Ext>,
 	// # Parameters
 	//
 	// - `key_ptr`: pointer into the linear memory where the location to clear the value is placed.
-	seal_clear_storage(ctx, key_ptr: u32) => {
+	[seal0] seal_clear_storage(ctx, key_ptr: u32) => {
 		ctx.charge_gas(RuntimeToken::ClearStorage)?;
 		let mut key: StorageKey = [0; 32];
 		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
@@ -699,7 +685,7 @@ define_env!(Env, <E: Ext>,
 	// # Errors
 	//
 	// `ReturnCode::KeyNotFound`
-	seal_get_storage(ctx, key_ptr: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
+	[seal0] seal_get_storage(ctx, key_ptr: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
 		ctx.charge_gas(RuntimeToken::GetStorageBase)?;
 		let mut key: StorageKey = [0; 32];
 		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
@@ -728,7 +714,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// `ReturnCode::BelowSubsistenceThreshold`
 	// `ReturnCode::TransferFailed`
-	seal_transfer(
+	[seal0] seal_transfer(
 		ctx,
 		account_ptr: u32,
 		account_len: u32,
@@ -782,7 +768,7 @@ define_env!(Env, <E: Ext>,
 	// `ReturnCode::BelowSubsistenceThreshold`
 	// `ReturnCode::TransferFailed`
 	// `ReturnCode::NotCallable`
-	seal_call(
+	[seal0] seal_call(
 		ctx,
 		callee_ptr: u32,
 		callee_len: u32,
@@ -846,8 +832,8 @@ define_env!(Env, <E: Ext>,
 	// length to `output_len_ptr`. The copy of the output buffer and address can be skipped by
 	// supplying the sentinel value of `u32::max_value()` to `output_ptr` or `address_ptr`.
 	//
-	// After running the constructor it is verfied that the contract account holds at
-	// least the subsistence threshold. If that is not the case the instantion fails and
+	// After running the constructor it is verified that the contract account holds at
+	// least the subsistence threshold. If that is not the case the instantiation fails and
 	// the contract is not created.
 	//
 	// # Parameters
@@ -866,7 +852,7 @@ define_env!(Env, <E: Ext>,
 	// - output_ptr: a pointer where the output buffer is copied to.
 	// - output_len_ptr: in-out pointer to where the length of the buffer is read from
 	//   and the actual length is written to.
-	// - salt_ptr: Pointer to raw bytes used for address deriviation. See `fn contract_address`.
+	// - salt_ptr: Pointer to raw bytes used for address derivation. See `fn contract_address`.
 	// - salt_len: length in bytes of the supplied salt.
 	//
 	// # Errors
@@ -883,7 +869,7 @@ define_env!(Env, <E: Ext>,
 	// `ReturnCode::TransferFailed`
 	// `ReturnCode::NewContractNotFunded`
 	// `ReturnCode::CodeNotFound`
-	seal_instantiate(
+	[seal0] seal_instantiate(
 		ctx,
 		code_hash_ptr: u32,
 		code_hash_len: u32,
@@ -956,7 +942,7 @@ define_env!(Env, <E: Ext>,
 	// which is considered fatal and results in a trap + rollback.
 	//
 	// - beneficiary_ptr: a pointer to the address of the beneficiary account where all
-	//   where all remaining funds of the caller are transfered.
+	//   where all remaining funds of the caller are transferred.
 	//   Should be decodable as an `T::AccountId`. Traps otherwise.
 	// - beneficiary_len: length of the address buffer.
 	//
@@ -965,7 +951,7 @@ define_env!(Env, <E: Ext>,
 	// - The contract is live i.e is already on the call stack.
 	// - Failed to send the balance to the beneficiary.
 	// - The deletion queue is full.
-	seal_terminate(
+	[seal0] seal_terminate(
 		ctx,
 		beneficiary_ptr: u32,
 		beneficiary_len: u32
@@ -996,7 +982,7 @@ define_env!(Env, <E: Ext>,
 	// # Note
 	//
 	// This function can only be called once. Calling it multiple times will trigger a trap.
-	seal_input(ctx, out_ptr: u32, out_len_ptr: u32) => {
+	[seal0] seal_input(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		ctx.charge_gas(RuntimeToken::InputBase)?;
 		if let Some(input) = ctx.input_data.take() {
 			ctx.write_sandbox_output(out_ptr, out_len_ptr, &input, false, |len| {
@@ -1010,7 +996,7 @@ define_env!(Env, <E: Ext>,
 
 	// Cease contract execution and save a data buffer as a result of the execution.
 	//
-	// This function never retuns as it stops execution of the caller.
+	// This function never returns as it stops execution of the caller.
 	// This is the only way to return a data buffer to the caller. Returning from
 	// execution without calling this function is equivalent to calling:
 	// ```
@@ -1025,7 +1011,7 @@ define_env!(Env, <E: Ext>,
 	// --- msb ---
 	//
 	// Using a reserved bit triggers a trap.
-	seal_return(ctx, flags: u32, data_ptr: u32, data_len: u32) => {
+	[seal0] seal_return(ctx, flags: u32, data_ptr: u32, data_len: u32) => {
 		ctx.charge_gas(RuntimeToken::Return(data_len))?;
 		Err(TrapReason::Return(ReturnData {
 			flags,
@@ -1043,7 +1029,7 @@ define_env!(Env, <E: Ext>,
 	// If this is a top-level call (i.e. initiated by an extrinsic) the origin address of the
 	// extrinsic will be returned. Otherwise, if this call is initiated by another contract then the
 	// address of the contract will be returned. The value is encoded as T::AccountId.
-	seal_caller(ctx, out_ptr: u32, out_len_ptr: u32) => {
+	[seal0] seal_caller(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		ctx.charge_gas(RuntimeToken::Caller)?;
 		Ok(ctx.write_sandbox_output(
 			out_ptr, out_len_ptr, &ctx.ext.caller().encode(), false, already_charged
@@ -1056,7 +1042,7 @@ define_env!(Env, <E: Ext>,
 	// `out_len_ptr` must point to a u32 value that describes the available space at
 	// `out_ptr`. This call overwrites it with the size of the value. If the available
 	// space at `out_ptr` is less than the size of the value a trap is triggered.
-	seal_address(ctx, out_ptr: u32, out_len_ptr: u32) => {
+	[seal0] seal_address(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		ctx.charge_gas(RuntimeToken::Address)?;
 		Ok(ctx.write_sandbox_output(
 			out_ptr, out_len_ptr, &ctx.ext.address().encode(), false, already_charged
@@ -1076,7 +1062,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// It is recommended to avoid specifying very small values for `gas` as the prices for a single
 	// gas can be smaller than one.
-	seal_weight_to_fee(ctx, gas: u64, out_ptr: u32, out_len_ptr: u32) => {
+	[seal0] seal_weight_to_fee(ctx, gas: u64, out_ptr: u32, out_len_ptr: u32) => {
 		ctx.charge_gas(RuntimeToken::WeightToFee)?;
 		Ok(ctx.write_sandbox_output(
 			out_ptr, out_len_ptr, &ctx.ext.get_weight_price(gas).encode(), false, already_charged
@@ -1091,7 +1077,7 @@ define_env!(Env, <E: Ext>,
 	// space at `out_ptr` is less than the size of the value a trap is triggered.
 	//
 	// The data is encoded as Gas.
-	seal_gas_left(ctx, out_ptr: u32, out_len_ptr: u32) => {
+	[seal0] seal_gas_left(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		ctx.charge_gas(RuntimeToken::GasLeft)?;
 		Ok(ctx.write_sandbox_output(
 			out_ptr, out_len_ptr, &ctx.gas_meter.gas_left().encode(), false, already_charged
@@ -1106,7 +1092,7 @@ define_env!(Env, <E: Ext>,
 	// space at `out_ptr` is less than the size of the value a trap is triggered.
 	//
 	// The data is encoded as T::Balance.
-	seal_balance(ctx, out_ptr: u32, out_len_ptr: u32) => {
+	[seal0] seal_balance(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		ctx.charge_gas(RuntimeToken::Balance)?;
 		Ok(ctx.write_sandbox_output(
 			out_ptr, out_len_ptr, &ctx.ext.balance().encode(), false, already_charged
@@ -1121,7 +1107,7 @@ define_env!(Env, <E: Ext>,
 	// space at `out_ptr` is less than the size of the value a trap is triggered.
 	//
 	// The data is encoded as T::Balance.
-	seal_value_transferred(ctx, out_ptr: u32, out_len_ptr: u32) => {
+	[seal0] seal_value_transferred(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		ctx.charge_gas(RuntimeToken::ValueTransferred)?;
 		Ok(ctx.write_sandbox_output(
 			out_ptr, out_len_ptr, &ctx.ext.value_transferred().encode(), false, already_charged
@@ -1136,7 +1122,43 @@ define_env!(Env, <E: Ext>,
 	// space at `out_ptr` is less than the size of the value a trap is triggered.
 	//
 	// The data is encoded as T::Hash.
-	seal_random(ctx, subject_ptr: u32, subject_len: u32, out_ptr: u32, out_len_ptr: u32) => {
+	//
+	// # Deprecation
+	//
+	// This function is deprecated. Users should migrate to the version in the "seal1" module.
+	[seal0] seal_random(ctx, subject_ptr: u32, subject_len: u32, out_ptr: u32, out_len_ptr: u32) => {
+		ctx.charge_gas(RuntimeToken::Random)?;
+		if subject_len > ctx.ext.schedule().limits.subject_len {
+			Err(Error::<E::T>::RandomSubjectTooLong)?;
+		}
+		let subject_buf = ctx.read_sandbox_memory(subject_ptr, subject_len)?;
+		Ok(ctx.write_sandbox_output(
+			out_ptr, out_len_ptr, &ctx.ext.random(&subject_buf).0.encode(), false, already_charged
+		)?)
+	},
+
+	// Stores a random number for the current block and the given subject into the supplied buffer.
+	//
+	// The value is stored to linear memory at the address pointed to by `out_ptr`.
+	// `out_len_ptr` must point to a u32 value that describes the available space at
+	// `out_ptr`. This call overwrites it with the size of the value. If the available
+	// space at `out_ptr` is less than the size of the value a trap is triggered.
+	//
+	// The data is encoded as (T::Hash, T::BlockNumber).
+	//
+	// # Changes from v0
+	//
+	// In addition to the seed it returns the block number since which it was determinable
+	// by chain observers.
+	//
+	// # Note
+	//
+	// The returned seed should only be used to distinguish commitments made before
+	// the returned block number. If the block number is too early (i.e. commitments were
+	// made afterwards), then ensure no further commitments may be made and repeatedly
+	// call this on later blocks until the block number returned is later than the latest
+	// commitment.
+	[seal1] seal_random(ctx, subject_ptr: u32, subject_len: u32, out_ptr: u32, out_len_ptr: u32) => {
 		ctx.charge_gas(RuntimeToken::Random)?;
 		if subject_len > ctx.ext.schedule().limits.subject_len {
 			Err(Error::<E::T>::RandomSubjectTooLong)?;
@@ -1153,7 +1175,7 @@ define_env!(Env, <E: Ext>,
 	// `out_len_ptr` must point to a u32 value that describes the available space at
 	// `out_ptr`. This call overwrites it with the size of the value. If the available
 	// space at `out_ptr` is less than the size of the value a trap is triggered.
-	seal_now(ctx, out_ptr: u32, out_len_ptr: u32) => {
+	[seal0] seal_now(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		ctx.charge_gas(RuntimeToken::Now)?;
 		Ok(ctx.write_sandbox_output(
 			out_ptr, out_len_ptr, &ctx.ext.now().encode(), false, already_charged
@@ -1163,7 +1185,7 @@ define_env!(Env, <E: Ext>,
 	// Stores the minimum balance (a.k.a. existential deposit) into the supplied buffer.
 	//
 	// The data is encoded as T::Balance.
-	seal_minimum_balance(ctx, out_ptr: u32, out_len_ptr: u32) => {
+	[seal0] seal_minimum_balance(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		ctx.charge_gas(RuntimeToken::MinimumBalance)?;
 		Ok(ctx.write_sandbox_output(
 			out_ptr, out_len_ptr, &ctx.ext.minimum_balance().encode(), false, already_charged
@@ -1185,7 +1207,7 @@ define_env!(Env, <E: Ext>,
 	// a contract to leave a tombstone the balance of the contract must not go
 	// below the sum of existential deposit and the tombstone deposit. The sum
 	// is commonly referred as subsistence threshold in code.
-	seal_tombstone_deposit(ctx, out_ptr: u32, out_len_ptr: u32) => {
+	[seal0] seal_tombstone_deposit(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		ctx.charge_gas(RuntimeToken::TombstoneDeposit)?;
 		Ok(ctx.write_sandbox_output(
 			out_ptr, out_len_ptr, &ctx.ext.tombstone_deposit().encode(), false, already_charged
@@ -1197,7 +1219,7 @@ define_env!(Env, <E: Ext>,
 	// This function will compute a tombstone hash from the caller's storage and the given code hash
 	// and if the hash matches the hash found in the tombstone at the specified address - kill
 	// the caller contract and restore the destination contract and set the specified `rent_allowance`.
-	// All caller's funds are transfered to the destination.
+	// All caller's funds are transferred to the destination.
 	//
 	// The tombstone hash is derived as `hash(code_hash, storage_root_hash)`. In order to match
 	// this hash to its own hash the restorer must make its storage equal to the one of the
@@ -1223,7 +1245,7 @@ define_env!(Env, <E: Ext>,
 	// - Tombstone hashes do not match.
 	// - The calling contract is already present on the call stack.
 	// - The supplied code_hash does not exist on-chain.
-	seal_restore_to(
+	[seal0] seal_restore_to(
 		ctx,
 		dest_ptr: u32,
 		dest_len: u32,
@@ -1294,7 +1316,28 @@ define_env!(Env, <E: Ext>,
 	// - topics_len - the length of the topics buffer. Pass 0 if you want to pass an empty vector.
 	// - data_ptr - a pointer to a raw data buffer which will saved along the event.
 	// - data_len - the length of the data buffer.
-	seal_deposit_event(ctx, topics_ptr: u32, topics_len: u32, data_ptr: u32, data_len: u32) => {
+	[seal0] seal_deposit_event(
+		ctx,
+		topics_ptr: u32,
+		topics_len: u32,
+		data_ptr: u32,
+		data_len: u32
+	) => {
+		fn has_duplicates<T: Ord>(items: &mut Vec<T>) -> bool {
+			// # Warning
+			//
+			// Unstable sorts are non-deterministic across architectures. The usage here is OK
+			// because we are rejecting duplicates which removes the non determinism.
+			items.sort_unstable();
+			// Find any two consecutive equal elements.
+			items.windows(2).any(|w| {
+				match &w {
+					&[a, b] => a == b,
+					_ => false,
+				}
+			})
+		}
+
 		let num_topic = topics_len
 			.checked_div(sp_std::mem::size_of::<TopicOf<E::T>>() as u32)
 			.ok_or_else(|| "Zero sized topics are not allowed")?;
@@ -1317,6 +1360,8 @@ define_env!(Env, <E: Ext>,
 		}
 
 		// Check for duplicate topics. If there are any, then trap.
+		// Complexity O(n * log(n)) and no additional allocations.
+		// This also sorts the topics.
 		if has_duplicates(&mut topics) {
 			Err(Error::<E::T>::DuplicateTopics)?;
 		}
@@ -1333,7 +1378,7 @@ define_env!(Env, <E: Ext>,
 	// - value_ptr: a pointer to the buffer with value, how much to allow for rent
 	//   Should be decodable as a `T::Balance`. Traps otherwise.
 	// - value_len: length of the value buffer.
-	seal_set_rent_allowance(ctx, value_ptr: u32, value_len: u32) => {
+	[seal0] seal_set_rent_allowance(ctx, value_ptr: u32, value_len: u32) => {
 		ctx.charge_gas(RuntimeToken::SetRentAllowance)?;
 		let value: BalanceOf<<E as Ext>::T> =
 			ctx.read_sandbox_memory_as(value_ptr, value_len)?;
@@ -1350,7 +1395,7 @@ define_env!(Env, <E: Ext>,
 	// space at `out_ptr` is less than the size of the value a trap is triggered.
 	//
 	// The data is encoded as T::Balance.
-	seal_rent_allowance(ctx, out_ptr: u32, out_len_ptr: u32) => {
+	[seal0] seal_rent_allowance(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		ctx.charge_gas(RuntimeToken::RentAllowance)?;
 		Ok(ctx.write_sandbox_output(
 			out_ptr, out_len_ptr, &ctx.ext.rent_allowance().encode(), false, already_charged
@@ -1360,10 +1405,10 @@ define_env!(Env, <E: Ext>,
 	// Prints utf8 encoded string from the data buffer.
 	// Only available on `--dev` chains.
 	// This function may be removed at any time, superseded by a more general contract debugging feature.
-	seal_println(ctx, str_ptr: u32, str_len: u32) => {
+	[seal0] seal_println(ctx, str_ptr: u32, str_len: u32) => {
 		let data = ctx.read_sandbox_memory(str_ptr, str_len)?;
 		if let Ok(utf8) = core::str::from_utf8(&data) {
-			sp_runtime::print(utf8);
+			log::info!(target: "runtime::contracts", "seal_println: {}", utf8);
 		}
 		Ok(())
 	},
@@ -1374,7 +1419,7 @@ define_env!(Env, <E: Ext>,
 	// `out_len_ptr` must point to a u32 value that describes the available space at
 	// `out_ptr`. This call overwrites it with the size of the value. If the available
 	// space at `out_ptr` is less than the size of the value a trap is triggered.
-	seal_block_number(ctx, out_ptr: u32, out_len_ptr: u32) => {
+	[seal0] seal_block_number(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		ctx.charge_gas(RuntimeToken::BlockNumber)?;
 		Ok(ctx.write_sandbox_output(
 			out_ptr, out_len_ptr, &ctx.ext.block_number().encode(), false, already_charged
@@ -1401,7 +1446,7 @@ define_env!(Env, <E: Ext>,
 	// - `output_ptr`: the pointer into the linear memory where the output
 	//                 data is placed. The function will write the result
 	//                 directly into this buffer.
-	seal_hash_sha2_256(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
+	[seal0] seal_hash_sha2_256(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
 		ctx.charge_gas(RuntimeToken::HashSha256(input_len))?;
 		Ok(ctx.compute_hash_on_intermediate_buffer(sha2_256, input_ptr, input_len, output_ptr)?)
 	},
@@ -1426,7 +1471,7 @@ define_env!(Env, <E: Ext>,
 	// - `output_ptr`: the pointer into the linear memory where the output
 	//                 data is placed. The function will write the result
 	//                 directly into this buffer.
-	seal_hash_keccak_256(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
+	[seal0] seal_hash_keccak_256(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
 		ctx.charge_gas(RuntimeToken::HashKeccak256(input_len))?;
 		Ok(ctx.compute_hash_on_intermediate_buffer(keccak_256, input_ptr, input_len, output_ptr)?)
 	},
@@ -1451,7 +1496,7 @@ define_env!(Env, <E: Ext>,
 	// - `output_ptr`: the pointer into the linear memory where the output
 	//                 data is placed. The function will write the result
 	//                 directly into this buffer.
-	seal_hash_blake2_256(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
+	[seal0] seal_hash_blake2_256(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
 		ctx.charge_gas(RuntimeToken::HashBlake256(input_len))?;
 		Ok(ctx.compute_hash_on_intermediate_buffer(blake2_256, input_ptr, input_len, output_ptr)?)
 	},
@@ -1476,7 +1521,7 @@ define_env!(Env, <E: Ext>,
 	// - `output_ptr`: the pointer into the linear memory where the output
 	//                 data is placed. The function will write the result
 	//                 directly into this buffer.
-	seal_hash_blake2_128(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
+	[seal0] seal_hash_blake2_128(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
 		ctx.charge_gas(RuntimeToken::HashBlake128(input_len))?;
 		Ok(ctx.compute_hash_on_intermediate_buffer(blake2_128, input_ptr, input_len, output_ptr)?)
 	},
@@ -1492,7 +1537,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// If no chain extension exists the contract will trap with the `NoChainExtension`
 	// module error.
-	seal_call_chain_extension(
+	[seal0] seal_call_chain_extension(
 		ctx,
 		func_id: u32,
 		input_ptr: u32,
@@ -1512,5 +1557,26 @@ define_env!(Env, <E: Ext>,
 				data,
 			})),
 		}
+	},
+
+	// Stores the rent params into the supplied buffer.
+	//
+	// The value is stored to linear memory at the address pointed to by `out_ptr`.
+	// `out_len_ptr` must point to a u32 value that describes the available space at
+	// `out_ptr`. This call overwrites it with the size of the value. If the available
+	// space at `out_ptr` is less than the size of the value a trap is triggered.
+	//
+	// The data is encoded as [`crate::exec::RentParams`].
+	//
+	// # Note
+	//
+	// The returned information was collected and cached when the current contract call
+	// started execution. Any change to those values that happens due to actions of the
+	// current call or contracts that are called by this contract are not considered.
+	[seal0] seal_rent_params(ctx, out_ptr: u32, out_len_ptr: u32) => {
+		ctx.charge_gas(RuntimeToken::RentParams)?;
+		Ok(ctx.write_sandbox_output(
+			out_ptr, out_len_ptr, &ctx.ext.rent_params().encode(), false, already_charged
+		)?)
 	},
 );

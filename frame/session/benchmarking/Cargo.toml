@@ -17,7 +17,7 @@ sp-session = { version = "3.0.0", default-features = false, path = "../../../pri
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-std = { version = "3.0.0", default-features = false, path = "../../../primitives/std" }
 frame-system = { version = "3.0.0", default-features = false, path = "../../system" }
-frame-benchmarking = { version = "3.0.0", default-features = false, path = "../../benchmarking" }
+frame-benchmarking = { version = "3.1.0", default-features = false, path = "../../benchmarking" }
 frame-support = { version = "3.0.0", default-features = false, path = "../../support" }
 pallet-staking = { version = "3.0.0", default-features = false, features = ["runtime-benchmarks"], path = "../../staking" }
 pallet-session = { version = "3.0.0", default-features = false, path = "../../session" }
@@ -31,14 +31,14 @@ pallet-staking-reward-curve = { version = "3.0.0", path = "../../staking/reward-
 sp-io ={ version = "3.0.0", path = "../../../primitives/io" }
 pallet-timestamp = { version = "3.0.0", path = "../../timestamp" }
 pallet-balances = { version = "3.0.0", path = "../../balances" }
-sp-election-providers = { version = "3.0.0", path = "../../../primitives/election-providers" }
+frame-election-provider-support = { version = "3.0.0", path = "../../election-provider-support" }
 
 [features]
 default = ["std"]
 std = [
 	"sp-std/std",
 	"sp-session/std",
-	"sp-election-providers/std",
+	"frame-election-provider-support/std",
 	"sp-runtime/std",
 	"frame-system/std",
 	"frame-benchmarking/std",

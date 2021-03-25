@@ -108,7 +108,7 @@ parameter_types! {
 }
 impl pallet_treasury::Config for Test {
 	type ModuleId = TreasuryModuleId;
-	type Currency = pallet_balances::Module<Test>;
+	type Currency = pallet_balances::Pallet<Test>;
 	type ApproveOrigin = frame_system::EnsureRoot<u128>;
 	type RejectOrigin = frame_system::EnsureRoot<u128>;
 	type Event = Event;
@@ -146,10 +146,10 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Storage, Config, Event<T>},
-		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
-		Treasury: pallet_treasury::{Module, Call, Storage, Config<T>, Event<T>},
-		Tips: pallet_tips::{Module, Call, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Treasury: pallet_treasury::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Tips: pallet_tips::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -173,7 +173,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 }
 
 fn last_event() -> Event {
-	system::Module::<Test>::events().pop().expect("Event expected").event
+	system::Pallet::<Test>::events().pop().expect("Event expected").event
 }
 
 #[test]

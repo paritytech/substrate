@@ -60,9 +60,9 @@
 			"network": "plasm",
 			"displayName": "Plasm Network",
 			"symbols": ["PLM"],
-			"decimals": null,
+			"decimals": [15],
 			"standardAccount": "*25519",
-			"website": null
+			"website": "https://plasmnet.io"
 		},
 		{
 			"prefix": 6,
@@ -450,6 +450,15 @@
 			"decimals": [12],
 			"standardAccount": "*25519",
 			"website": "https://neatcoin.org"
+		},
+		{
+			"prefix": 63,
+			"network": "hydradx",
+			"displayName": "HydraDX",
+			"symbols": ["HDX"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://hydradx.io"
 		},
 		{
 			"prefix": 65,

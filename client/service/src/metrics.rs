@@ -21,7 +21,7 @@ use std::{convert::TryFrom, time::SystemTime};
 use crate::{NetworkStatus, NetworkState, NetworkStatusSinks, config::Configuration};
 use futures_timer::Delay;
 use prometheus_endpoint::{register, Gauge, U64, Registry, PrometheusError, Opts, GaugeVec};
-use sc_telemetry::{telemetry, SUBSTRATE_INFO};
+use sc_telemetry::{telemetry, TelemetryHandle, SUBSTRATE_INFO};
 use sp_api::ProvideRuntimeApi;
 use sp_runtime::traits::{NumberFor, Block, SaturatedConversion, UniqueSaturatedInto};
 use sp_transaction_pool::{PoolStatus, MaintainedTransactionPool};
@@ -112,23 +112,26 @@ pub struct MetricsService {
 	last_update: Instant,
 	last_total_bytes_inbound: u64,
 	last_total_bytes_outbound: u64,
+	telemetry: Option<TelemetryHandle>,
 }
 
 impl MetricsService {
 	/// Creates a `MetricsService` that only sends information
 	/// to the telemetry.
-	pub fn new() -> Self {
+	pub fn new(telemetry: Option<TelemetryHandle>) -> Self {
 		MetricsService {
 			metrics: None,
 			last_total_bytes_inbound: 0,
 			last_total_bytes_outbound: 0,
 			last_update: Instant::now(),
+			telemetry,
 		}
 	}
 
 	/// Creates a `MetricsService` that sends metrics
 	/// to prometheus alongside the telemetry.
 	pub fn with_prometheus(
+		telemetry: Option<TelemetryHandle>,
 		registry: &Registry,
 		config: &Configuration,
 	) -> Result<Self, PrometheusError> {
@@ -149,6 +152,7 @@ impl MetricsService {
 			last_total_bytes_inbound: 0,
 			last_total_bytes_outbound: 0,
 			last_update: Instant::now(),
+			telemetry,
 		})
 	}
 
@@ -245,6 +249,7 @@ impl MetricsService {
 
 		// Update/send metrics that are always available.
 		telemetry!(
+			self.telemetry;
 			SUBSTRATE_INFO;
 			"system.interval";
 			"height" => best_number,
@@ -307,6 +312,7 @@ impl MetricsService {
 				};
 
 			telemetry!(
+				self.telemetry;
 				SUBSTRATE_INFO;
 				"system.interval";
 				"peers" => num_peers,
@@ -328,6 +334,7 @@ impl MetricsService {
 		// Send network state information, if any.
 		if let Some(net_state) = net_state {
 			telemetry!(
+				self.telemetry;
 				SUBSTRATE_INFO;
 				"system.network_state";
 				"state" => net_state,

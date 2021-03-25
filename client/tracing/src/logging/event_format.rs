@@ -62,10 +62,6 @@ where
 		S: Subscriber + for<'a> LookupSpan<'a>,
 		N: for<'a> FormatFields<'a> + 'static,
 	{
-		if event.metadata().target() == sc_telemetry::TELEMETRY_LOG_SPAN {
-			return Ok(());
-		}
-
 		let writer = &mut MaybeColorWriter::new(self.enable_color, writer);
 		let normalized_meta = event.normalized_metadata();
 		let meta = normalized_meta.as_ref().unwrap_or_else(|| event.metadata());

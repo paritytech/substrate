@@ -17,6 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use futures::{
+	executor::block_on,
 	prelude::*,
 	ready,
 	task::{Context, Poll},
@@ -47,7 +48,7 @@ pub(crate) fn initialize_transport(
 	// an external transport on desktop and the fallback is used all the time.
 	#[cfg(not(target_os = "unknown"))]
 	let transport = transport.or_transport({
-		let inner = libp2p::dns::DnsConfig::new(libp2p::tcp::TcpConfig::new())?;
+		let inner = block_on(libp2p::dns::DnsConfig::system(libp2p::tcp::TcpConfig::new()))?;
 		libp2p::websocket::framed::WsConfig::new(inner).and_then(|connec, _| {
 			let connec = connec
 				.with(|item| {

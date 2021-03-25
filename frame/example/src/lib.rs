@@ -758,9 +758,9 @@ mod tests {
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
-			System: frame_system::{Module, Call, Config, Storage, Event<T>},
-			Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
-			Example: pallet_example::{Module, Call, Storage, Config<T>, Event<T>},
+			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+			Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+			Example: pallet_example::{Pallet, Call, Storage, Config<T>, Event<T>},
 		}
 	);
 
@@ -814,14 +814,14 @@ mod tests {
 	pub fn new_test_ext() -> sp_io::TestExternalities {
 		let t = GenesisConfig {
 			// We use default for brevity, but you can configure as desired if needed.
-			frame_system: Some(Default::default()),
-			pallet_balances: Some(Default::default()),
-			pallet_example: Some(pallet_example::GenesisConfig {
+			frame_system: Default::default(),
+			pallet_balances: Default::default(),
+			pallet_example: pallet_example::GenesisConfig {
 				dummy: 42,
 				// we configure the map with (key, value) pairs.
 				bar: vec![(1, 2), (2, 3)],
 				foo: 24,
-			}),
+			},
 		}.build_storage().unwrap();
 		t.into()
 	}

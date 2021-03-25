@@ -35,10 +35,27 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 };
 
+<<<<<<< HEAD
 use crate::{
 	self as treasury,
 	Config,
 };
+=======
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
+
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Treasury: treasury::{Pallet, Call, Storage, Config, Event<T>},
+	}
+);
+>>>>>>> upstream/master
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
@@ -96,7 +113,7 @@ parameter_types! {
 }
 impl Config for Test {
 	type ModuleId = TreasuryModuleId;
-	type Currency = pallet_balances::Module<Test>;
+	type Currency = pallet_balances::Pallet<Test>;
 	type ApproveOrigin = frame_system::EnsureRoot<u128>;
 	type RejectOrigin = frame_system::EnsureRoot<u128>;
 	type Event = Event;
