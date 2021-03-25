@@ -495,6 +495,34 @@ fn set_metadata_should_work() {
 // TODO: tests for force_set_metadata, force_clear_metadata, force_asset_status
 
 #[test]
+fn freezer_should_work() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 10));
+		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+		assert_eq!(Assets::balance(0, 1), 100);
+
+
+		// freeze 50 of it.
+		set_frozen_balance(0, 1, 50);
+
+		assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 20));
+
+		assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 21), Error::<Test>::BalanceLow);
+
+		Balances::make_free_balance_be(&1, 100);
+		assert_ok!(Assets::approve_transfer(Origin::signed(1), 0, 2, 50));
+		assert_noop!(Assets::transfer_approved(Origin::signed(2), 0, 1, 2, 21), Error::<Test>::BalanceLow);
+
+		assert_ok!(Assets::force_transfer(Origin::signed(1), 0, 1, 2, 21));
+		assert_eq!(hooks(), vec![Hook::Melted(0, 1, 49)]);
+
+		clear_frozen_balance(0, 1);
+		assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
+		assert_eq!(hooks(), vec![Hook::Melted(0, 1, 49), Hook::Died(0, 1)]);
+	});
+}
+
+#[test]
 fn imbalances_should_work() {
 	use frame_support::traits::tokens::fungibles::Balanced;
 
@@ -512,7 +540,7 @@ fn imbalances_should_work() {
 		drop(imb2);
 		assert_eq!(Assets::total_supply(0), 30);
 
-		Assets::resolve(&1, imb1);
+		assert!(Assets::resolve(&1, imb1).is_ok());
 		assert_eq!(Assets::balance(0, 1), 30);
 		assert_eq!(Assets::total_supply(0), 30);
 	});

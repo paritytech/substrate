@@ -1906,7 +1906,7 @@ impl<T: Config> Pallet<T> {
 
 		// Notify of melting.
 		if let Some(arg) = melted {
-			T::Freezer::melted(id, &dest, arg)
+			T::Freezer::melted(id, &source, arg)
 		}
 
 		Self::deposit_event(Event::Transferred(id, source.clone(), dest.clone(), credit));
