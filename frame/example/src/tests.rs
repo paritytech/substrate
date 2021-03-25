@@ -20,7 +20,7 @@
 use crate::*;
 use frame_support::{
 	assert_ok, parameter_types,
-	weights::{DispatchInfo, GetDispatchInfo}, traits::{OnInitialize, OnFinalize}
+	weights::{DispatchInfo, GetDispatchInfo}, traits::OnInitialize
 };
 use sp_core::H256;
 // The testing primitives are very useful for avoiding having to work with signatures
@@ -42,9 +42,9 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
-		Example: pallet_example::{Module, Call, Storage, Config<T>, Event<T>},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Example: pallet_example::{Pallet, Call, Storage, Config<T>, Event<T>},
 	}
 );
 
@@ -89,7 +89,12 @@ impl pallet_balances::Config for Test {
 	type AccountStore = System;
 	type WeightInfo = ();
 }
+
+parameter_types! {
+	pub const MagicNumber: u64 = 1_000_000_000;
+}
 impl Config for Test {
+	type MagicNumber = MagicNumber;
 	type Event = Event;
 	type WeightInfo = ();
 }
@@ -115,20 +120,18 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 fn it_works_for_optional_value() {
 	new_test_ext().execute_with(|| {
 		// Check that GenesisBuilder works properly.
-		assert_eq!(Example::dummy(), Some(42));
+		let val1 = 42;
+		let val2 = 27;
+		assert_eq!(Example::dummy(), Some(val1));
 
 		// Check that accumulate works when we have Some value in Dummy already.
-		assert_ok!(Example::accumulate_dummy(Origin::signed(1), 27));
-		assert_eq!(Example::dummy(), Some(69));
-
-		// Check that finalizing the block removes Dummy from storage.
-		<Example as OnFinalize<u64>>::on_finalize(1);
-		assert_eq!(Example::dummy(), None);
+		assert_ok!(Example::accumulate_dummy(Origin::signed(1), val2));
+		assert_eq!(Example::dummy(), Some(val1 + val2));
 
 		// Check that accumulate works when we Dummy has None in it.
 		<Example as OnInitialize<u64>>::on_initialize(2);
-		assert_ok!(Example::accumulate_dummy(Origin::signed(1), 42));
-		assert_eq!(Example::dummy(), Some(42));
+		assert_ok!(Example::accumulate_dummy(Origin::signed(1), val1));
+		assert_eq!(Example::dummy(), Some(val1 + val2 + val1));
 	});
 }
 

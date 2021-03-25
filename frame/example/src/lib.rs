@@ -348,6 +348,7 @@ pub mod pallet {
 	/// `frame_system::Config` should always be included.
 	#[pallet::config]
 	pub trait Config: pallet_balances::Config + frame_system::Config {
+		// Setting a constant config parameter from the runtime
 		#[pallet::constant]
 		type MagicNumber: Get<Self::Balance>;
 
@@ -372,14 +373,12 @@ pub mod pallet {
 		fn on_initialize(_n: T::BlockNumber) -> Weight {
 			// Anything that needs to be done at the start of the block.
 			// We don't do anything here.
-
 			0
 		}
 
 		// `on_finalize` is executed at the end of block after all extrinsic are dispatched.
 		fn on_finalize(_n: T::BlockNumber) {
-			// We just kill our dummy storage item.
-			<Dummy<T>>::kill();
+			// Perform necessary data/state clean up here.
 		}
 
 		// A runtime code run after every block and have access to extended set of APIs.
@@ -388,7 +387,9 @@ pub mod pallet {
 		fn offchain_worker(_n: T::BlockNumber) {
 			// We don't do anything here.
 			// but we could dispatch extrinsic (transaction/unsigned/inherent) using
-			// sp_io::submit_extrinsic
+			// sp_io::submit_extrinsic.
+			// To see example on offchain worker, please refer to example-offchain-worker pallet
+		 	// accompanied in this repository.
 		}
 	}
 
@@ -528,8 +529,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] new_value: T::Balance,
 		) -> DispatchResult {
-			// ensure_root(origin)?;
-			let acct = ensure_signed(origin)?;
+			ensure_root(origin)?;
 
 			// Print out log or debug message in the console via log::{error, warn, info, debug, trace},
 			// accepting format strings similar to `println!`.
@@ -538,25 +538,12 @@ pub mod pallet {
 
 			// Put the new value into storage.
 			<Dummy<T>>::put(new_value);
-			Self::deposit_event(Event::SetDummy(new_value));
 
-			<Foo<T>>::set(<BalanceOf<T>>::from(33_000_000u32));
+			Self::deposit_event(Event::SetDummy(new_value));
 
 			// All good, no refund.
 			Ok(())
 		}
-
-		#[pallet::weight(0)]
-	  pub(super) fn set_bar(
-			origin: OriginFor<T>,
-			#[pallet::compact] new_value: T::Balance,
-	  ) -> DispatchResult {
-	  	let acct = ensure_signed(origin)?;
-
-	  	<Bar<T>>::insert(acct.clone(), new_value);
-			Self::deposit_event(Event::SetBar(acct, new_value));
-			Ok(())
-	  }
 	}
 
 	/// Events are a simple means of reporting specific conditions and
@@ -695,49 +682,49 @@ impl<T: Config> Pallet<T> {
 //
 // Additionally, it drops any transaction with an encoded length higher than 200 bytes. No
 // particular reason why, just to demonstrate the power of signed extensions.
-// #[derive(Encode, Decode, Clone, Eq, PartialEq)]
-// pub struct WatchDummy<T: Config + Send + Sync>(PhantomData<T>);
+#[derive(Encode, Decode, Clone, Eq, PartialEq)]
+pub struct WatchDummy<T: Config + Send + Sync>(PhantomData<T>);
 
-// impl<T: Config + Send + Sync> sp_std::fmt::Debug for WatchDummy<T> {
-// 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-// 		write!(f, "WatchDummy")
-// 	}
-// }
+impl<T: Config + Send + Sync> sp_std::fmt::Debug for WatchDummy<T> {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+		write!(f, "WatchDummy")
+	}
+}
 
-// impl<T: Config + Send + Sync> SignedExtension for WatchDummy<T>
-// where
-// 	<T as frame_system::Config>::Call: IsSubType<Call<T>>,
-// {
-// 	const IDENTIFIER: &'static str = "WatchDummy";
-// 	type AccountId = T::AccountId;
-// 	type Call = <T as frame_system::Config>::Call;
-// 	type AdditionalSigned = ();
-// 	type Pre = ();
+impl<T: Config + Send + Sync> SignedExtension for WatchDummy<T>
+where
+	<T as frame_system::Config>::Call: IsSubType<Call<T>>,
+{
+	const IDENTIFIER: &'static str = "WatchDummy";
+	type AccountId = T::AccountId;
+	type Call = <T as frame_system::Config>::Call;
+	type AdditionalSigned = ();
+	type Pre = ();
 
-// 	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
+	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
 
-// 	fn validate(
-// 		&self,
-// 		_who: &Self::AccountId,
-// 		call: &Self::Call,
-// 		_info: &DispatchInfoOf<Self::Call>,
-// 		len: usize,
-// 	) -> TransactionValidity {
-// 		// if the transaction is too big, just drop it.
-// 		if len > 200 {
-// 			return InvalidTransaction::ExhaustsResources.into()
-// 		}
+	fn validate(
+		&self,
+		_who: &Self::AccountId,
+		call: &Self::Call,
+		_info: &DispatchInfoOf<Self::Call>,
+		len: usize,
+	) -> TransactionValidity {
+		// if the transaction is too big, just drop it.
+		if len > 200 {
+			return InvalidTransaction::ExhaustsResources.into()
+		}
 
-// 		// check for `set_dummy`
-// 		match call.is_sub_type() {
-// 			Some(Call::set_dummy(..)) => {
-// 				sp_runtime::print("set_dummy was received.");
+		// check for `set_dummy`
+		match call.is_sub_type() {
+			Some(Call::set_dummy(..)) => {
+				sp_runtime::print("set_dummy was received.");
 
-// 				let mut valid_tx = ValidTransaction::default();
-// 				valid_tx.priority = Bounded::max_value();
-// 				Ok(valid_tx)
-// 			}
-// 			_ => Ok(Default::default()),
-// 		}
-// 	}
-// }
+				let mut valid_tx = ValidTransaction::default();
+				valid_tx.priority = Bounded::max_value();
+				Ok(valid_tx)
+			}
+			_ => Ok(Default::default()),
+		}
+	}
+}
