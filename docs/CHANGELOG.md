@@ -66,7 +66,6 @@ Runtime
 Client
 ------
 
-* Remove OnOffenceHandler::can_report (#8414)
 * Remove backwards-compatibility networking hack (#8068)
 * Extend SS58 network identifiers (#8039)
 * Update dependencies ahead of next release (#8015)
