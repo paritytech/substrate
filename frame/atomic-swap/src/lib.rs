@@ -17,7 +17,7 @@
 
 //! # Atomic Swap
 //!
-//! A module for atomically sending funds.
+//! A pallet for atomically sending funds.
 //!
 //! - [`Config`]
 //! - [`Call`]
@@ -25,7 +25,7 @@
 //!
 //! ## Overview
 //!
-//! A module for atomically sending funds from an origin to a target. A proof
+//! A pallet for atomically sending funds from an origin to a target. A proof
 //! is used to allow the target to approve (claim) the swap. If the swap is not
 //! claimed within a specified duration of time, the sender may cancel it.
 //!
