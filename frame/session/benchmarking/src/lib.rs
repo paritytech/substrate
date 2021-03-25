@@ -35,7 +35,7 @@ use frame_system::RawOrigin;
 use pallet_session::{historical::Module as Historical, Module as Session, *};
 use pallet_staking::{
 	benchmarking::create_validator_with_nominators, testing_utils::create_validators,
-	MAX_NOMINATIONS, RewardDestination,
+	RewardDestination,
 };
 use sp_runtime::traits::{One, StaticLookup};
 
@@ -52,10 +52,10 @@ impl<T: Config> OnInitialize<T::BlockNumber> for Pallet<T> {
 
 benchmarks! {
 	set_keys {
-		let n = MAX_NOMINATIONS as u32;
+		let n = <T as pallet_staking::Config>::MAX_NOMINATIONS;
 		let (v_stash, _) = create_validator_with_nominators::<T>(
 			n,
-			MAX_NOMINATIONS as u32,
+			<T as pallet_staking::Config>::MAX_NOMINATIONS,
 			false,
 			RewardDestination::Staked,
 		)?;
@@ -68,10 +68,10 @@ benchmarks! {
 	}: _(RawOrigin::Signed(v_controller), keys, proof)
 
 	purge_keys {
-		let n = MAX_NOMINATIONS as u32;
+		let n = <T as pallet_staking::Config>::MAX_NOMINATIONS;
 		let (v_stash, _) = create_validator_with_nominators::<T>(
 			n,
-			MAX_NOMINATIONS as u32,
+			<T as pallet_staking::Config>::MAX_NOMINATIONS,
 			false,
 			RewardDestination::Staked
 		)?;
