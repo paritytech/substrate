@@ -291,7 +291,7 @@ use codec::{HasCompact, Encode, Decode};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
 	weights::{
-		Weight,
+		Weight, WithPostDispatchInfo,
 		constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS},
 	},
 	storage::IterableStorageMap,
@@ -1831,8 +1831,8 @@ decl_module! {
 		///   NOTE: weights are assuming that payouts are made to alive stash account (Staked).
 		///   Paying even a dead controller is cheaper weight-wise. We don't do any refunds here.
 		/// # </weight>
-		#[weight = T::WeightInfo::payout_stakers_alive_staked(T::MaxNominatorRewardedPerValidator::get())]
-		fn payout_stakers(origin, validator_stash: T::AccountId, era: EraIndex) -> DispatchResult {
+		#[weight = T::WeightInfo::payout_stakers_alive_staked(T::MaxNominatorRewardedPerValidator::get() + 1)]
+		fn payout_stakers(origin, validator_stash: T::AccountId, era: EraIndex) -> DispatchResultWithPostInfo {
 			ensure_signed(origin)?;
 			Self::do_payout_stakers(validator_stash, era)
 		}
@@ -1996,24 +1996,39 @@ impl<T: Config> Module<T> {
 		})
 	}
 
-	fn do_payout_stakers(validator_stash: T::AccountId, era: EraIndex) -> DispatchResult {
+	fn do_payout_stakers(validator_stash: T::AccountId, era: EraIndex) -> DispatchResultWithPostInfo {
 		// Validate input data
-		let current_era = CurrentEra::get().ok_or(Error::<T>::InvalidEraToReward)?;
-		ensure!(era <= current_era, Error::<T>::InvalidEraToReward);
+		let current_era = CurrentEra::get().ok_or(
+			Error::<T>::InvalidEraToReward.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
+		)?;
+		ensure!(
+			era <= current_era,
+			Error::<T>::InvalidEraToReward.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
+		);
 		let history_depth = Self::history_depth();
-		ensure!(era >= current_era.saturating_sub(history_depth), Error::<T>::InvalidEraToReward);
+		ensure!(
+			era >= current_era.saturating_sub(history_depth),
+			Error::<T>::InvalidEraToReward.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
+		);
 
 		// Note: if era has no reward to be claimed, era may be future. better not to update
 		// `ledger.claimed_rewards` in this case.
 		let era_payout = <ErasValidatorReward<T>>::get(&era)
-			.ok_or_else(|| Error::<T>::InvalidEraToReward)?;
+			.ok_or_else(||
+				Error::<T>::InvalidEraToReward
+					.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
+			)?;
 
-		let controller = Self::bonded(&validator_stash).ok_or(Error::<T>::NotStash)?;
+		let controller = Self::bonded(&validator_stash).ok_or(
+			Error::<T>::NotStash.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
+		)?;
 		let mut ledger = <Ledger<T>>::get(&controller).ok_or_else(|| Error::<T>::NotController)?;
 
 		ledger.claimed_rewards.retain(|&x| x >= current_era.saturating_sub(history_depth));
 		match ledger.claimed_rewards.binary_search(&era) {
-			Ok(_) => Err(Error::<T>::AlreadyClaimed)?,
+			Ok(_) => Err(
+				Error::<T>::AlreadyClaimed.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
+			)?,
 			Err(pos) => ledger.claimed_rewards.insert(pos, era),
 		}
 
@@ -2037,7 +2052,9 @@ impl<T: Config> Module<T> {
 			.unwrap_or_else(|| Zero::zero());
 
 		// Nothing to do if they have no reward points.
-		if validator_reward_points.is_zero() { return Ok(())}
+		if validator_reward_points.is_zero() {
+			return Ok(Some(T::WeightInfo::payout_stakers_alive_staked(0)).into())
+		}
 
 		// This is the fraction of the total reward that the validator and the
 		// nominators will get.
@@ -2062,11 +2079,15 @@ impl<T: Config> Module<T> {
 		);
 		let validator_staking_payout = validator_exposure_part * validator_leftover_payout;
 
+		// Track the number of payouts in order to track the actual weight
+		let mut payout_count: u32 = 0;
+
 		// We can now make total validator payout:
 		if let Some(imbalance) = Self::make_payout(
 			&ledger.stash,
 			validator_staking_payout + validator_commission_payout
 		) {
+			payout_count += 1;
 			Self::deposit_event(RawEvent::Reward(ledger.stash, imbalance.peek()));
 		}
 
@@ -2081,11 +2102,13 @@ impl<T: Config> Module<T> {
 			let nominator_reward: BalanceOf<T> = nominator_exposure_part * validator_leftover_payout;
 			// We can now make nominator payout:
 			if let Some(imbalance) = Self::make_payout(&nominator.who, nominator_reward) {
+				// Note: this logic does not count payouts for `RewardDestination::None`.
+				payout_count += 1;
 				Self::deposit_event(RawEvent::Reward(nominator.who.clone(), imbalance.peek()));
 			}
 		}
 
-		Ok(())
+		Ok(Some(T::WeightInfo::payout_stakers_alive_staked(payout_count)).into())
 	}
 
 	/// Update the ledger for a controller.
