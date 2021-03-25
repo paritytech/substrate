@@ -101,7 +101,6 @@ bitflags! {
 
 /// Output of a contract call or instantiation which ran to completion.
 #[derive(PartialEq, Eq, Encode, Decode, RuntimeDebug)]
-#[cfg_attr(not(feature = "std"), derive(Encode, Decode))]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 pub struct ExecReturnValue {
