@@ -67,4 +67,10 @@ benchmarks!{
 	}
 }
 
+// This line generates test cases for benchmarking, and could be run by:
+//   `cargo test -p pallet-example --all-features`, you will see an additional line of:
+//   `test benchmarking::benchmark_tests::test_benchmarks ... ok` in the result.
+//
+// The line generates three steps per benchmark, with repeat=1 and the three steps are
+//   [low, mid, high] of the range.
 impl_benchmark_test_suite!(Pallet, crate::tests::new_test_ext(), crate::tests::Test);
