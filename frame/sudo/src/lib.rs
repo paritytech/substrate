@@ -85,7 +85,7 @@
 //!
 //! ## Genesis Config
 //!
-//! The Sudo pallet depends on the [`GenesisConfig`](./struct.GenesisConfig.html).
+//! The Sudo pallet depends on the [`GenesisConfig`].
 //! You need to set an initial superuser account as the sudo `key`.
 //!
 //! ## Related Pallets
