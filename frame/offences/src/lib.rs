@@ -225,16 +225,6 @@ impl<T: Config> Module<T> {
 			None
 		}
 	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	pub fn set_deferred_offences(offences: Vec<DeferredOffenceOf<T>>) {
-		migration::set_deferred_offences::<T>(offences);
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	pub fn deferred_offences() -> Option<Vec<DeferredOffenceOf<T>>> {
-		migration::get_deferred_offences::<T>()
-	}
 }
 
 struct TriageOutcome<T: Config> {

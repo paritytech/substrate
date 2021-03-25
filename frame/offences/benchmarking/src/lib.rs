@@ -26,10 +26,10 @@ use sp_std::vec;
 
 use frame_system::{RawOrigin, Pallet as System, Config as SystemConfig};
 use frame_benchmarking::{benchmarks, account, impl_benchmark_test_suite};
-use frame_support::traits::{Currency, OnRuntimeUpgrade, ValidatorSet, ValidatorSetWithIdentification};
+use frame_support::traits::{Currency, ValidatorSet, ValidatorSetWithIdentification};
 
 use sp_runtime::{Perbill, traits::{Convert, StaticLookup, Saturating, UniqueSaturatedInto}};
-use sp_staking::offence::{ReportOffence, Offence, OffenceDetails};
+use sp_staking::offence::{ReportOffence, Offence};
 
 use pallet_balances::Config as BalancesConfig;
 use pallet_babe::BabeEquivocationOffence;
@@ -48,7 +48,6 @@ const SEED: u32 = 0;
 const MAX_REPORTERS: u32 = 100;
 const MAX_OFFENDERS: u32 = 100;
 const MAX_NOMINATORS: u32 = 100;
-const MAX_DEFERRED_OFFENCES: u32 = 100;
 
 pub struct Pallet<T: Config>(Offences<T>);
 
@@ -372,43 +371,6 @@ benchmarks! {
 			+ 1 // offenders slashed
 			+ n // nominators slashed
 		);
-	}
-
-	on_runtime_upgrade {
-		let d in 1 .. MAX_DEFERRED_OFFENCES;
-		let o = 10;
-		let n = 100;
-
-		let mut deferred_offences = vec![];
-		let offenders = make_offenders::<T>(o, n)?.0;
-		let offence_details = offenders.into_iter()
-			.map(|offender| OffenceDetails {
-				offender: T::convert(offender),
-				reporters: vec![],
-			})
-			.collect::<Vec<_>>();
-
-		for i in 0 .. d {
-			let fractions = offence_details.iter()
-				.map(|_| Perbill::from_percent(100 * (i + 1) / MAX_DEFERRED_OFFENCES))
-				.collect::<Vec<_>>();
-			deferred_offences.push((offence_details.clone(), fractions.clone(), 0u32));
-		}
-
-		Offences::<T>::set_deferred_offences(deferred_offences);
-		assert_eq!(Offences::<T>::deferred_offences().unwrap().len(), d as usize);
-		assert_eq!(System::<T>::event_count(), 0);
-	}: {
-		Offences::<T>::on_runtime_upgrade();
-	}
-	verify {
-		// make sure that all deferred offences were reported with Ok status.
-		assert!(Offences::<T>::deferred_offences().is_none());
-		assert_eq!(
-			System::<T>::event_count(), d * (0
-			+ o // offenders slashed
-			+ o * n // nominators slashed
-		));
 	}
 }
 

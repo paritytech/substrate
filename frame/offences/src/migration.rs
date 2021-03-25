@@ -55,13 +55,3 @@ pub fn remove_deferred_storage<T: Config>() -> Weight {
 
     weight
 }
-
-#[cfg(feature = "runtime-benchmarks")]
-pub fn set_deferred_offences<T: Config>(offences: Vec<DeferredOffenceOf<T>>) {
-    <deprecated::DeferredOffences::<T>>::put(offences);
-}
-
-#[cfg(feature = "runtime-benchmarks")]
-pub fn get_deferred_offences<T: Config>() -> Option<Vec<DeferredOffenceOf<T>>> {
-    <deprecated::DeferredOffences::<T>>::try_get().ok()
-}
