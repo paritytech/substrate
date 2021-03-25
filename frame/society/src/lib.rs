@@ -590,7 +590,8 @@ decl_module! {
 					// no reason that either should fail.
 					match b.remove(pos).kind {
 						BidKind::Deposit(deposit) => {
-							let _ = T::Currency::unreserve(&who, deposit);
+							let err_amount = T::Currency::unreserve(&who, deposit);
+							debug_assert!(err_amount.is_zero());
 						}
 						BidKind::Vouch(voucher, _) => {
 							<Vouching<T, I>>::remove(&voucher);
@@ -1241,7 +1242,8 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 			let Bid { who: popped, kind, .. } = bids.pop().expect("b.len() > 1000; qed");
 			match kind {
 				BidKind::Deposit(deposit) => {
-					let _ = T::Currency::unreserve(&popped, deposit);
+					let err_amount = T::Currency::unreserve(&popped, deposit);
+					debug_assert!(err_amount.is_zero());
 				}
 				BidKind::Vouch(voucher, _) => {
 					<Vouching<T, I>>::remove(&voucher);
@@ -1408,7 +1410,8 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 					Self::bump_payout(winner, maturity, total_slash);
 				} else {
 					// Move the slashed amount back from payouts account to local treasury.
-					let _ = T::Currency::transfer(&Self::payouts(), &Self::account_id(), total_slash, AllowDeath);
+					let res = T::Currency::transfer(&Self::payouts(), &Self::account_id(), total_slash, AllowDeath);
+					debug_assert!(res.is_ok());
 				}
 			}
 
@@ -1419,7 +1422,8 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 
 				// this should never fail since we ensure we can afford the payouts in a previous
 				// block, but there's not much we can do to recover if it fails anyway.
-				let _ = T::Currency::transfer(&Self::account_id(), &Self::payouts(), total_payouts, AllowDeath);
+				let res = T::Currency::transfer(&Self::account_id(), &Self::payouts(), total_payouts, AllowDeath);
+				debug_assert!(res.is_ok());
 			}
 
 			// if at least one candidate was accepted...
@@ -1520,7 +1524,8 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 			BidKind::Deposit(deposit) => {
 				// In the case that a normal deposit bid is accepted we unreserve
 				// the deposit.
-				let _ = T::Currency::unreserve(candidate, deposit);
+				let err_amount = T::Currency::unreserve(candidate, deposit);
+				debug_assert!(err_amount.is_zero());
 				value
 			}
 			BidKind::Vouch(voucher, tip) => {

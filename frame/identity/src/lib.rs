@@ -598,7 +598,8 @@ decl_module! {
 				T::Currency::reserve(&sender, id.deposit - old_deposit)?;
 			}
 			if old_deposit > id.deposit {
-				let _ = T::Currency::unreserve(&sender, old_deposit - id.deposit);
+				let err_amount = T::Currency::unreserve(&sender, old_deposit - id.deposit);
+				debug_assert!(err_amount.is_zero());
 			}
 
 			let judgements = id.judgements.len();
@@ -655,7 +656,8 @@ decl_module! {
 			if old_deposit < new_deposit {
 				T::Currency::reserve(&sender, new_deposit - old_deposit)?;
 			} else if old_deposit > new_deposit {
-				let _ = T::Currency::unreserve(&sender, old_deposit - new_deposit);
+				let err_amount = T::Currency::unreserve(&sender, old_deposit - new_deposit);
+				debug_assert!(err_amount.is_zero());
 			}
 			// do nothing if they're equal.
 
@@ -713,7 +715,8 @@ decl_module! {
 				<SuperOf<T>>::remove(sub);
 			}
 
-			let _ = T::Currency::unreserve(&sender, deposit.clone());
+			let err_amount = T::Currency::unreserve(&sender, deposit.clone());
+			debug_assert!(err_amount.is_zero());
 
 			Self::deposit_event(RawEvent::IdentityCleared(sender, deposit));
 
@@ -819,7 +822,8 @@ decl_module! {
 				Err(Error::<T>::JudgementGiven)?
 			};
 
-			let _ = T::Currency::unreserve(&sender, fee);
+			let err_amount = T::Currency::unreserve(&sender, fee);
+			debug_assert!(err_amount.is_zero());
 			let judgements = id.judgements.len();
 			let extra_fields = id.info.additional.len();
 			<IdentityOf<T>>::insert(&sender, id);
@@ -1095,7 +1099,8 @@ decl_module! {
 				sub_ids.retain(|x| x != &sub);
 				let deposit = T::SubAccountDeposit::get().min(*subs_deposit);
 				*subs_deposit -= deposit;
-				let _ = T::Currency::unreserve(&sender, deposit);
+				let err_amount = T::Currency::unreserve(&sender, deposit);
+				debug_assert!(err_amount.is_zero());
 				Self::deposit_event(RawEvent::SubIdentityRemoved(sub, sender, deposit));
 			});
 		}
