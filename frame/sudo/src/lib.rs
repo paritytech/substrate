@@ -151,7 +151,7 @@ pub mod pallet {
 		})]
 		pub(crate) fn sudo(
 			origin: OriginFor<T>,
-			call: Box<<T as Config>::Call>
+			call: Box<<T as Config>::Call>,
 		) -> DispatchResultWithPostInfo {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
