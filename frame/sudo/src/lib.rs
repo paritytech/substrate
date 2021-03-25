@@ -201,7 +201,7 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub(crate) fn set_key(
 			origin: OriginFor<T>,
-			new: <T::Lookup as StaticLookup>::Source
+			new: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResultWithPostInfo {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
