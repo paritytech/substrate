@@ -277,7 +277,7 @@ decl_module! {
 				ensure!(lottery.is_none(), Error::<T>::InProgress);
 				let index = LotteryIndex::get();
 				let new_index = index.checked_add(1).ok_or(Error::<T>::Overflow)?;
-				let start = frame_system::Module::<T>::block_number();
+				let start = frame_system::Pallet::<T>::block_number();
 				// Use new_index to more easily track everything with the current state.
 				*lottery = Some(LotteryConfig {
 					price,
@@ -324,7 +324,8 @@ decl_module! {
 						let winning_number = Self::choose_winner(ticket_count);
 						let winner = Tickets::<T>::get(winning_number).unwrap_or(lottery_account);
 						// Not much we can do if this fails...
-						let _ = T::Currency::transfer(&Self::account_id(), &winner, lottery_balance, KeepAlive);
+						let res = T::Currency::transfer(&Self::account_id(), &winner, lottery_balance, KeepAlive);
+						debug_assert!(res.is_ok());
 
 						Self::deposit_event(RawEvent::Winner(winner, lottery_balance));
 
@@ -392,7 +393,7 @@ impl<T: Config> Module<T> {
 	fn do_buy_ticket(caller: &T::AccountId, call: &<T as Config>::Call) -> DispatchResult {
 		// Check the call is valid lottery
 		let config = Lottery::<T>::get().ok_or(Error::<T>::NotConfigured)?;
-		let block_number = frame_system::Module::<T>::block_number();
+		let block_number = frame_system::Pallet::<T>::block_number();
 		ensure!(block_number < config.start.saturating_add(config.length), Error::<T>::AlreadyEnded);
 		ensure!(T::ValidateCall::validate_call(call), Error::<T>::InvalidCall);
 		let call_index = Self::call_to_index(call)?;

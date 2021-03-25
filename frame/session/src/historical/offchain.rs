@@ -28,7 +28,7 @@
 use sp_runtime::{offchain::storage::StorageValueRef, KeyTypeId};
 use sp_session::MembershipProof;
 
-use super::super::{Module as SessionModule, SessionIndex};
+use super::super::{Pallet as SessionModule, SessionIndex};
 use super::{IdentificationTuple, ProvingTrie, Config};
 
 use super::shared;
@@ -167,7 +167,7 @@ mod tests {
 		);
 		BasicExternalities::execute_with_storage(&mut t, || {
 			for (ref k, ..) in &keys {
-				frame_system::Module::<Test>::inc_providers(k);
+				frame_system::Pallet::<Test>::inc_providers(k);
 			}
 		});
 

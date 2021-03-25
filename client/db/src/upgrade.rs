@@ -23,17 +23,19 @@ use std::io::{Read, Write, ErrorKind};
 use std::path::{Path, PathBuf};
 
 use sp_runtime::traits::Block as BlockT;
-use crate::utils::DatabaseType;
+use crate::{columns, utils::DatabaseType};
 use kvdb_rocksdb::{Database, DatabaseConfig};
+use codec::Encode;
 
 /// Version file name.
 const VERSION_FILE_NAME: &'static str = "db_version";
 
 /// Current db version.
-const CURRENT_VERSION: u32 = 2;
+const CURRENT_VERSION: u32 = 3;
 
 /// Number of columns in v1.
 const V1_NUM_COLUMNS: u32 = 11;
+const V2_NUM_COLUMNS: u32 = 12;
 
 /// Upgrade database to current version.
 pub fn upgrade_db<Block: BlockT>(db_path: &Path, db_type: DatabaseType) -> sp_blockchain::Result<()> {
@@ -42,7 +44,11 @@ pub fn upgrade_db<Block: BlockT>(db_path: &Path, db_type: DatabaseType) -> sp_bl
 		let db_version = current_version(db_path)?;
 		match db_version {
 			0 => Err(sp_blockchain::Error::Backend(format!("Unsupported database version: {}", db_version)))?,
-			1 => migrate_1_to_2::<Block>(db_path, db_type)?,
+			1 => {
+				migrate_1_to_2::<Block>(db_path, db_type)?;
+				migrate_2_to_3::<Block>(db_path, db_type)?
+			},
+			2 => migrate_2_to_3::<Block>(db_path, db_type)?,
 			CURRENT_VERSION => (),
 			_ => Err(sp_blockchain::Error::Backend(format!("Future database version: {}", db_version)))?,
 		}
@@ -60,6 +66,31 @@ fn migrate_1_to_2<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> sp_b
 	let db_cfg = DatabaseConfig::with_columns(V1_NUM_COLUMNS);
 	let db = Database::open(&db_cfg, db_path).map_err(db_err)?;
 	db.add_column().map_err(db_err)
+}
+
+/// Migration from version2 to version3:
+/// - The format of the stored Justification changed to support multiple Justifications.
+fn migrate_2_to_3<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> sp_blockchain::Result<()> {
+	let db_path = db_path.to_str()
+		.ok_or_else(|| sp_blockchain::Error::Backend("Invalid database path".into()))?;
+	let db_cfg = DatabaseConfig::with_columns(V2_NUM_COLUMNS);
+	let db = Database::open(&db_cfg, db_path).map_err(db_err)?;
+
+	// Get all the keys we need to update
+	let keys: Vec<_> = db.iter(columns::JUSTIFICATIONS).map(|entry| entry.0).collect();
+
+	// Read and update each entry
+	let mut transaction = db.transaction();
+	for key in keys {
+		if let Some(justification) = db.get(columns::JUSTIFICATIONS, &key).map_err(db_err)? {
+			// Tag each Justification with the hardcoded ID for GRANDPA. Avoid the dependency on the GRANDPA crate
+			let justifications = sp_runtime::Justifications::from((*b"FRNK", justification));
+			transaction.put_vec(columns::JUSTIFICATIONS, &key, justifications.encode());
+		}
+	}
+	db.write(transaction).map_err(db_err)?;
+
+	Ok(())
 }
 
 /// Reads current database version from the file at given path.
@@ -141,8 +172,8 @@ mod tests {
 	}
 
 	#[test]
-	fn upgrade_from_1_to_2_works() {
-		for version_from_file in &[None, Some(1)] {
+	fn upgrade_to_3_works() {
+		for version_from_file in &[None, Some(1), Some(2)] {
 			let db_dir = tempfile::TempDir::new().unwrap();
 			let db_path = db_dir.path();
 			create_db(db_path, *version_from_file);

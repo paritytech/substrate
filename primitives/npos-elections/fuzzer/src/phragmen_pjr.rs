@@ -112,7 +112,7 @@ fn iteration(mut candidate_count: usize, mut voter_count: usize, seed: u64) {
 	let threshold = standard_threshold(rounds, voters.iter().map(|voter| voter.budget()));
 
 	assert!(
-		pjr_check_core(&candidates, &voters, threshold),
+		pjr_check_core(&candidates, &voters, threshold).is_ok(),
 		"unbalanced sequential phragmen must satisfy PJR",
 	);
 }

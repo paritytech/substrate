@@ -376,7 +376,7 @@ macro_rules! implement_fixed {
 			}
 
 			#[cfg(any(feature = "std", test))]
-			pub fn from_fraction(x: f64) -> Self {
+			pub fn from_float(x: f64) -> Self {
 				Self((x * (<Self as FixedPointNumber>::DIV as f64)) as $inner_type)
 			}
 

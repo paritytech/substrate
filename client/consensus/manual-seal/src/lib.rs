@@ -27,7 +27,7 @@ use sp_consensus::{
 };
 use sp_blockchain::HeaderBackend;
 use sp_inherents::InherentDataProviders;
-use sp_runtime::{traits::Block as BlockT, Justification};
+use sp_runtime::{traits::Block as BlockT, Justifications, ConsensusEngineId};
 use sc_client_api::backend::{Backend as ClientBackend, Finalizer};
 use sc_transaction_pool::txpool;
 use std::{sync::Arc, marker::PhantomData};
@@ -49,6 +49,9 @@ pub use self::{
 };
 use sp_api::{ProvideRuntimeApi, TransactionFor};
 
+/// The `ConsensusEngineId` of Manual Seal.
+pub const MANUAL_SEAL_ENGINE_ID: ConsensusEngineId = [b'm', b'a', b'n', b'l'];
+
 /// The verifier for the manual seal engine; instantly finalizes.
 struct ManualSealVerifier;
 
@@ -57,11 +60,11 @@ impl<B: BlockT> Verifier<B> for ManualSealVerifier {
 		&mut self,
 		origin: BlockOrigin,
 		header: B::Header,
-		justification: Option<Justification>,
+		justifications: Option<Justifications>,
 		body: Option<Vec<B::Extrinsic>>,
 	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		let mut import_params = BlockImportParams::new(origin, header);
-		import_params.justification = justification;
+		import_params.justifications = justifications;
 		import_params.body = body;
 		import_params.finalized = false;
 		import_params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
@@ -193,6 +196,7 @@ pub async fn run_manual_seal<B, BI, CB, E, C, A, SC, CS>(
 				).await;
 			}
 			EngineCommand::FinalizeBlock { hash, sender, justification } => {
+				let justification = justification.map(|j| (MANUAL_SEAL_ENGINE_ID, j));
 				finalize_block(
 					FinalizeBlockParams {
 						hash,

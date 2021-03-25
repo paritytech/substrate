@@ -27,7 +27,7 @@ use crate::{
 use bytes::Bytes;
 use codec::{Decode, DecodeAll, Encode};
 use futures::{channel::oneshot, prelude::*};
-use generic_proto::{GenericProto, GenericProtoOut};
+use notifications::{Notifications, NotificationsOut};
 use libp2p::core::{ConnectedPoint, connection::{ConnectionId, ListenerId}};
 use libp2p::request_response::OutboundFailure;
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
@@ -43,9 +43,10 @@ use sp_consensus::{
 	block_validation::BlockAnnounceValidator,
 	import_queue::{BlockImportResult, BlockImportError, IncomingBlock, Origin}
 };
-use sp_runtime::{generic::BlockId, Justification};
-use sp_runtime::traits::{
-	Block as BlockT, Header as HeaderT, NumberFor, Zero, CheckedSub
+use sp_runtime::{
+	Justifications,
+	generic::BlockId,
+	traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero, CheckedSub},
 };
 use sp_arithmetic::traits::SaturatedConversion;
 use sync::{ChainSync, SyncState};
@@ -55,13 +56,13 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use std::{io, iter, num::NonZeroUsize, pin::Pin, task::Poll, time};
 
-mod generic_proto;
+mod notifications;
 
 pub mod message;
 pub mod event;
 pub mod sync;
 
-pub use generic_proto::{NotificationsSink, Ready, NotifsHandlerError};
+pub use notifications::{NotificationsSink, Ready, NotifsHandlerError};
 
 /// Interval at which we perform time based maintenance
 const TICK_TIMEOUT: time::Duration = time::Duration::from_millis(1100);
@@ -160,7 +161,7 @@ pub struct Protocol<B: BlockT> {
 	/// Used to report reputation changes.
 	peerset_handle: sc_peerset::PeersetHandle,
 	/// Handles opening the unique substream and sending and receiving raw messages.
-	behaviour: GenericProto,
+	behaviour: Notifications,
 	/// List of notifications protocols that have been registered.
 	notification_protocols: Vec<Cow<'static, str>>,
 	/// If we receive a new "substream open" event that contains an invalid handshake, we ask the
@@ -361,7 +362,7 @@ impl<B: BlockT> Protocol<B> {
 				genesis_hash,
 			).encode();
 
-			GenericProto::new(
+			Notifications::new(
 				peerset,
 				iter::once((block_announces_protocol, block_announces_handshake, MAX_BLOCK_ANNOUNCE_SIZE))
 					.chain(network_config.extra_sets.iter()
@@ -612,8 +613,8 @@ impl<B: BlockT> Protocol<B> {
 		if request.fields == message::BlockAttributes::JUSTIFICATION {
 			match self.sync.on_block_justification(peer_id, block_response) {
 				Ok(sync::OnBlockJustification::Nothing) => CustomMessageOutcome::None,
-				Ok(sync::OnBlockJustification::Import { peer, hash, number, justification }) =>
-					CustomMessageOutcome::JustificationImport(peer, hash, number, justification),
+				Ok(sync::OnBlockJustification::Import { peer, hash, number, justifications }) =>
+					CustomMessageOutcome::JustificationImport(peer, hash, number, justifications),
 				Err(sync::BadPeer(id, repu)) => {
 					self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
 					self.peerset_handle.report_peer(id, repu);
@@ -664,7 +665,7 @@ impl<B: BlockT> Protocol<B> {
 		if status.genesis_hash != self.genesis_hash {
 			log!(
 				target: "sync",
-				if self.important_peers.contains(&who) { Level::Warn } else { Level::Trace },
+				if self.important_peers.contains(&who) { Level::Warn } else { Level::Debug },
 				"Peer is on different chain (our genesis: {} theirs: {})",
 				self.genesis_hash, status.genesis_hash
 			);
@@ -1134,7 +1135,7 @@ fn prepare_block_request<B: BlockT>(
 #[must_use]
 pub enum CustomMessageOutcome<B: BlockT> {
 	BlockImport(BlockOrigin, Vec<IncomingBlock<B>>),
-	JustificationImport(Origin, B::Hash, NumberFor<B>, Justification),
+	JustificationImport(Origin, B::Hash, NumberFor<B>, Justifications),
 	/// Notification protocols have been opened with a remote.
 	NotificationStreamOpened {
 		remote: PeerId,
@@ -1168,7 +1169,7 @@ pub enum CustomMessageOutcome<B: BlockT> {
 }
 
 impl<B: BlockT> NetworkBehaviour for Protocol<B> {
-	type ProtocolsHandler = <GenericProto as NetworkBehaviour>::ProtocolsHandler;
+	type ProtocolsHandler = <Notifications as NetworkBehaviour>::ProtocolsHandler;
 	type OutEvent = CustomMessageOutcome<B>;
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {
@@ -1331,7 +1332,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		};
 
 		let outcome = match event {
-			GenericProtoOut::CustomProtocolOpen { peer_id, set_id, received_handshake, notifications_sink, .. } => {
+			NotificationsOut::CustomProtocolOpen { peer_id, set_id, received_handshake, notifications_sink, .. } => {
 				// Set number 0 is hardcoded the default set of peers we sync from.
 				if set_id == HARDCODED_PEERSETS_SYNC {
 					// `received_handshake` can be either a `Status` message if received from the
@@ -1418,7 +1419,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 					}
 				}
 			}
-			GenericProtoOut::CustomProtocolReplaced { peer_id, notifications_sink, set_id } => {
+			NotificationsOut::CustomProtocolReplaced { peer_id, notifications_sink, set_id } => {
 				if set_id == HARDCODED_PEERSETS_SYNC {
 					CustomMessageOutcome::None
 				} else if self.bad_handshake_substreams.contains(&(peer_id.clone(), set_id)) {
@@ -1431,7 +1432,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 					}
 				}
 			},
-			GenericProtoOut::CustomProtocolClosed { peer_id, set_id } => {
+			NotificationsOut::CustomProtocolClosed { peer_id, set_id } => {
 				// Set number 0 is hardcoded the default set of peers we sync from.
 				if set_id == HARDCODED_PEERSETS_SYNC {
 					if self.on_sync_peer_disconnected(peer_id.clone()).is_ok() {
@@ -1456,7 +1457,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 					}
 				}
 			},
-			GenericProtoOut::Notification { peer_id, set_id, message } =>
+			NotificationsOut::Notification { peer_id, set_id, message } =>
 				match set_id {
 					HARDCODED_PEERSETS_SYNC if self.peers.contains_key(&peer_id) => {
 						if let Ok(announce) = message::BlockAnnounce::decode(&mut message.as_ref()) {

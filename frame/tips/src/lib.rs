@@ -291,7 +291,8 @@ decl_module! {
 			Reasons::<T>::remove(&tip.reason);
 			Tips::<T>::remove(&hash);
 			if !tip.deposit.is_zero() {
-				let _ = T::Currency::unreserve(&who, tip.deposit);
+				let err_amount = T::Currency::unreserve(&who, tip.deposit);
+				debug_assert!(err_amount.is_zero());
 			}
 			Self::deposit_event(RawEvent::TipRetracted(hash));
 		}
@@ -401,7 +402,7 @@ decl_module! {
 
 			let tip = Tips::<T>::get(hash).ok_or(Error::<T>::UnknownTip)?;
 			let n = tip.closes.as_ref().ok_or(Error::<T>::StillOpen)?;
-			ensure!(system::Module::<T>::block_number() >= *n, Error::<T>::Premature);
+			ensure!(system::Pallet::<T>::block_number() >= *n, Error::<T>::Premature);
 			// closed.
 			Reasons::<T>::remove(&tip.reason);
 			Tips::<T>::remove(hash);
@@ -463,7 +464,7 @@ impl<T: Config> Module<T> {
 		Self::retain_active_tips(&mut tip.tips);
 		let threshold = (T::Tippers::count() + 1) / 2;
 		if tip.tips.len() >= threshold && tip.closes.is_none() {
-			tip.closes = Some(system::Module::<T>::block_number() + T::TipCountdown::get());
+			tip.closes = Some(system::Pallet::<T>::block_number() + T::TipCountdown::get());
 			true
 		} else {
 			false
@@ -505,7 +506,8 @@ impl<T: Config> Module<T> {
 
 		let mut payout = tips[tips.len() / 2].1.min(max_payout);
 		if !tip.deposit.is_zero() {
-			let _ = T::Currency::unreserve(&tip.finder, tip.deposit);
+			let err_amount = T::Currency::unreserve(&tip.finder, tip.deposit);
+			debug_assert!(err_amount.is_zero());
 		}
 
 		if tip.finders_fee && tip.finder != tip.who {
@@ -514,11 +516,13 @@ impl<T: Config> Module<T> {
 			payout -= finders_fee;
 			// this should go through given we checked it's at most the free balance, but still
 			// we only make a best-effort.
-			let _ = T::Currency::transfer(&treasury, &tip.finder, finders_fee, KeepAlive);
+			let res = T::Currency::transfer(&treasury, &tip.finder, finders_fee, KeepAlive);
+			debug_assert!(res.is_ok());
 		}
 
 		// same as above: best-effort only.
-		let _ = T::Currency::transfer(&treasury, &tip.who, payout, KeepAlive);
+		let res = T::Currency::transfer(&treasury, &tip.who, payout, KeepAlive);
+		debug_assert!(res.is_ok());
 		Self::deposit_event(RawEvent::TipClosed(hash, tip.who, payout));
 	}
 
