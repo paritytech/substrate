@@ -63,10 +63,11 @@ pub fn build_transport(
 		let desktop_trans = tcp::TcpConfig::new().nodelay(true);
 		let desktop_trans = websocket::WsConfig::new(desktop_trans.clone())
 			.or_transport(desktop_trans);
-		OptionalTransport::some(if let Ok(dns) = dns::DnsConfig::new(desktop_trans.clone()) {
+		let dns_init = futures::executor::block_on(dns::DnsConfig::system(desktop_trans.clone()));
+		OptionalTransport::some(if let Ok(dns) = dns_init {
 			EitherTransport::Left(dns)
 		} else {
-			EitherTransport::Right(desktop_trans.map_err(dns::DnsErr::Underlying))
+			EitherTransport::Right(desktop_trans.map_err(dns::DnsErr::Transport))
 		})
 	} else {
 		OptionalTransport::none()

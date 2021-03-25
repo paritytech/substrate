@@ -450,7 +450,7 @@ pub type DispatchResult = sp_std::result::Result<(), DispatchError>;
 pub type DispatchResultWithInfo<T> = sp_std::result::Result<T, DispatchErrorWithPostInfo<T>>;
 
 /// Reason why a dispatch call failed.
-#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, RuntimeDebug)]
+#[derive(Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum DispatchError {
 	/// Some error occurred.
@@ -586,6 +586,27 @@ impl<T> traits::Printable for DispatchErrorWithPostInfo<T> where
 		self.error.print();
 		"PostInfo: ".print();
 		self.post_info.print();
+	}
+}
+
+impl PartialEq for DispatchError {
+	fn eq(&self, other: &Self) -> bool {
+		use DispatchError::*;
+
+		match (self, other) {
+			(CannotLookup, CannotLookup) |
+			(BadOrigin, BadOrigin) |
+			(ConsumerRemaining, ConsumerRemaining) |
+			(NoProviders, NoProviders) => true,
+
+			(Other(l), Other(r)) => l == r,
+			(
+				Module { index: index_l, error: error_l, .. },
+				Module { index: index_r, error: error_r, .. },
+			) => (index_l == index_r) && (error_l == error_r),
+
+			_ => false,
+		}
 	}
 }
 
@@ -823,6 +844,38 @@ mod tests {
 				error: 2,
 				message: None,
 			},
+		);
+	}
+
+	#[test]
+	fn dispatch_error_equality() {
+		use DispatchError::*;
+
+		let variants = vec![
+			Other("foo"),
+			Other("bar"),
+			CannotLookup,
+			BadOrigin,
+			Module { index: 1, error: 1, message: None },
+			Module { index: 1, error: 2, message: None },
+			Module { index: 2, error: 1, message: None },
+			ConsumerRemaining,
+			NoProviders,
+		];
+		for (i, variant) in variants.iter().enumerate() {
+			for (j, other_variant) in variants.iter().enumerate() {
+				if i == j {
+					assert_eq!(variant, other_variant);
+				} else {
+					assert_ne!(variant, other_variant);
+				}
+			}
+		}
+
+		// Ignores `message` field in `Module` variant.
+		assert_eq!(
+			Module { index: 1, error: 1, message: Some("foo") },
+			Module { index: 1, error: 1, message: None},
 		);
 	}
 

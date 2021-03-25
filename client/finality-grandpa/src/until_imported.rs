@@ -987,7 +987,7 @@ mod tests {
 		threads_pool.spawn_ok(until_imported.into_future().map(|_| ()));
 
 		// assert that we will make sync requests
-		let assert = futures::future::poll_fn(|_| {
+		let assert = futures::future::poll_fn(|ctx| {
 			let block_sync_requests = block_sync_requester.requests.lock();
 
 			// we request blocks targeted by the precommits that aren't imported
@@ -996,6 +996,11 @@ mod tests {
 			{
 				return Poll::Ready(());
 			}
+
+			// NOTE: nothing in this function is future-aware (i.e nothing gets registered to wake
+			// up this future), we manually wake up this task to avoid having to wait until the
+			// timeout below triggers.
+			ctx.waker().wake_by_ref();
 
 			Poll::Pending
 		});
