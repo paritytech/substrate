@@ -284,8 +284,7 @@ use sp_std::{
 	result,
 	prelude::*,
 	collections::btree_map::BTreeMap,
-	convert::{TryInto, From},
-	mem::size_of,
+	convert::From,
 };
 use codec::{HasCompact, Encode, Decode};
 use frame_support::{
@@ -303,7 +302,7 @@ use frame_support::{
 };
 use pallet_session::historical;
 use sp_runtime::{
-	Percent, Perbill, PerU16, RuntimeDebug, DispatchError,
+	Percent, Perbill, RuntimeDebug, DispatchError,
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, StaticLookup, CheckedSub, Saturating, SaturatedConversion,
@@ -337,22 +336,6 @@ macro_rules! log {
 	};
 }
 
-/// Data type used to index nominators in the compact type
-pub type NominatorIndex = u32;
-
-/// Data type used to index validators in the compact type.
-pub type ValidatorIndex = u16;
-
-// Ensure the size of both ValidatorIndex and NominatorIndex. They both need to be well below usize.
-static_assertions::const_assert!(size_of::<ValidatorIndex>() <= size_of::<usize>());
-static_assertions::const_assert!(size_of::<NominatorIndex>() <= size_of::<usize>());
-static_assertions::const_assert!(size_of::<ValidatorIndex>() <= size_of::<u32>());
-static_assertions::const_assert!(size_of::<NominatorIndex>() <= size_of::<u32>());
-
-/// Maximum number of stakers that can be stored in a snapshot.
-pub const MAX_NOMINATIONS: usize =
-	<CompactAssignments as sp_npos_elections::CompactSolution>::LIMIT;
-
 pub const MAX_UNLOCKING_CHUNKS: usize = 32;
 
 /// Counter for the number of eras that have passed.
@@ -360,15 +343,6 @@ pub type EraIndex = u32;
 
 /// Counter for the number of "reward" points earned by a given validator.
 pub type RewardPoint = u32;
-
-// Note: Maximum nomination limit is set here -- 16.
-sp_npos_elections::generate_solution_type!(
-	#[compact]
-	pub struct CompactAssignments::<NominatorIndex, ValidatorIndex, OffchainAccuracy>(16)
-);
-
-/// Accuracy used for off-chain election. This better be small.
-pub type OffchainAccuracy = PerU16;
 
 /// The balance type of this module.
 pub type BalanceOf<T> =
@@ -765,6 +739,9 @@ pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
 		// we only accept an election provider that has staking as data provider.
 		DataProvider = Module<Self>,
 	>;
+
+	/// Maximum number of nominations per nominator.
+	const MAX_NOMINATIONS: u32;
 
 	/// Tokens have been minted and are unused for validator-reward.
 	/// See [Era payout](./index.html#era-payout).
@@ -1213,6 +1190,9 @@ decl_module! {
 		/// their reward. This used to limit the i/o cost for the nominator payout.
 		const MaxNominatorRewardedPerValidator: u32 = T::MaxNominatorRewardedPerValidator::get();
 
+		/// Maximum number of nominations per nominator.
+		const MaxNominations: u32 = T::MAX_NOMINATIONS;
+
 		type Error = Error<T>;
 
 		fn deposit_event() = default;
@@ -1246,15 +1226,6 @@ decl_module! {
 					T::SlashDeferDuration::get(),
 					T::BondingDuration::get(),
 				)
-			);
-
-			use sp_runtime::UpperOf;
-			// 1. Maximum sum of Vec<OffchainAccuracy> must fit into `UpperOf<OffchainAccuracy>`.
-			assert!(
-				<usize as TryInto<UpperOf<OffchainAccuracy>>>::try_into(MAX_NOMINATIONS)
-				.unwrap()
-				.checked_mul(<OffchainAccuracy>::one().deconstruct().try_into().unwrap())
-				.is_some()
 			);
 		}
 
@@ -1547,7 +1518,7 @@ decl_module! {
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = &ledger.stash;
 			ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
-			ensure!(targets.len() <= MAX_NOMINATIONS, Error::<T>::TooManyTargets);
+			ensure!(targets.len() <= T::MAX_NOMINATIONS as usize, Error::<T>::TooManyTargets);
 
 			let old = Nominators::<T>::get(stash).map_or_else(Vec::new, |x| x.targets);
 
@@ -2313,7 +2284,7 @@ impl<T: Config> Module<T> {
 	/// Returns `Err(())` if less than [`MinimumValidatorCount`] validators have been elected, `Ok`
 	/// otherwise.
 	pub fn process_election(
-		flat_supports: sp_npos_elections::Supports<T::AccountId>,
+		flat_supports: frame_election_provider_support::Supports<T::AccountId>,
 		current_era: EraIndex,
 	) -> Result<Vec<T::AccountId>, ()> {
 		let exposures = Self::collect_exposures(flat_supports);
@@ -2554,6 +2525,7 @@ impl<T: Config> Module<T> {
 impl<T: Config> frame_election_provider_support::ElectionDataProvider<T::AccountId, T::BlockNumber>
 	for Module<T>
 {
+	const MAXIMUM_VOTES_PER_VOTER: u32 = T::MAX_NOMINATIONS;
 	fn desired_targets() -> data_provider::Result<(u32, Weight)> {
 		Ok((Self::validator_count(), <T as frame_system::Config>::DbWeight::get().reads(1)))
 	}

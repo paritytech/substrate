@@ -36,6 +36,7 @@ sp-keyring = { version = "3.0.0", optional = true, path = "../../../primitives/k
 sp-session = { version = "3.0.0", default-features = false, path = "../../../primitives/session" }
 sp-transaction-pool = { version = "3.0.0", default-features = false, path = "../../../primitives/transaction-pool" }
 sp-version = { version = "3.0.0", default-features = false, path = "../../../primitives/version" }
+sp-npos-elections = { version = "3.0.0", default-features = false, path = "../../../primitives/npos-elections" }
 
 # frame dependencies
 frame-executive = { version = "3.0.0", default-features = false, path = "../../../frame/executive" }
@@ -159,6 +160,7 @@ std = [
 	"pallet-vesting/std",
 	"log/std",
 	"frame-try-runtime/std",
+	"sp-npos-elections/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking",
