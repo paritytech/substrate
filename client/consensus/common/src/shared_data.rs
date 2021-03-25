@@ -132,7 +132,7 @@ struct SharedDataInner<T> {
 /// # Example
 ///
 /// ```
-///# use sc_consensus::SharedData;
+///# use sc_consensus::shared_data::SharedData;
 ///
 /// let shared_data = SharedData::new(String::from("hello world"));
 ///
@@ -201,7 +201,7 @@ impl<T> SharedData<T> {
 	pub fn shared_data(&self) -> MappedMutexGuard<T> {
 		let mut guard = self.inner.lock();
 
-		if guard.locked {
+		while guard.locked {
 			self.cond_var.wait(&mut guard);
 		}
 
@@ -221,7 +221,7 @@ impl<T> SharedData<T> {
 	pub fn shared_data_locked(&self) -> SharedDataLocked<T> {
 		let mut guard = self.inner.lock();
 
-		if guard.locked {
+		while guard.locked {
 			self.cond_var.wait(&mut guard);
 		}
 
@@ -231,6 +231,41 @@ impl<T> SharedData<T> {
 		SharedDataLocked {
 			inner: guard,
 			shared_data: Some(self.clone()),
+		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn shared_data_locking_works() {
+		const THREADS: u32 = 100;
+		let shared_data = SharedData::new(0u32);
+
+		let lock = shared_data.shared_data_locked();
+
+		for i in 0..THREADS {
+			let data = shared_data.clone();
+			std::thread::spawn(move || {
+				if i % 2 == 1 {
+					*data.shared_data() += 1;
+				} else {
+					let mut lock = data.shared_data_locked().release_mutex();
+					// Give the other threads some time to wake up
+					std::thread::sleep(std::time::Duration::from_millis(10));
+					*lock.upgrade() += 1;
+				}
+			});
+		}
+
+		let lock = lock.release_mutex();
+		std::thread::sleep(std::time::Duration::from_millis(100));
+		drop(lock);
+
+		while *shared_data.shared_data() < THREADS {
+			std::thread::sleep(std::time::Duration::from_millis(100));
 		}
 	}
 }
