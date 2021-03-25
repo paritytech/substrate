@@ -9340,6 +9340,7 @@ dependencies = [
  "sp-arithmetic",
  "sp-npos-elections",
  "syn",
+ "trybuild",
 ]
 
 [[package]]

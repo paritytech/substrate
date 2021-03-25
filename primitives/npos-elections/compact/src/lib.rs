@@ -457,3 +457,12 @@ impl Parse for SolutionDef {
 fn field_name_for(n: usize) -> Ident {
 	Ident::new(&format!("{}{}", PREFIX, n), Span::call_site())
 }
+
+#[cfg(test)]
+mod tests {
+	#[test]
+	fn ui_fail() {
+		let cases = trybuild::TestCases::new();
+		cases.compile_fail("tests/ui/fail/*.rs");
+	}
+}
