@@ -18,8 +18,6 @@
 
 //! Schema for BABE epoch changes in the aux-db.
 
-use std::sync::Arc;
-use parking_lot::Mutex;
 use log::info;
 use codec::{Decode, Encode};
 

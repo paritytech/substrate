@@ -76,8 +76,7 @@ pub use sp_consensus_babe::{
 pub use sp_consensus::SyncOracle;
 pub use sc_consensus_slots::SlotProportion;
 use std::{
-	collections::HashMap, sync::Arc, u64, pin::Pin, any::Any, borrow::Cow, convert::TryInto,
-	time::Duration,
+	collections::HashMap, sync::Arc, u64, pin::Pin, borrow::Cow, convert::TryInto, time::Duration,
 };
 use sp_consensus::{ImportResult, CanAuthorWith, import_queue::BoxJustificationImport};
 use sp_core::crypto::Public;
