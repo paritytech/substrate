@@ -199,7 +199,7 @@ fn non_providing_should_work() {
 		assert_ok!(Assets::mint(Origin::signed(1), 0, 0, 100));
 
 		// Cannot mint into account 2 since it doesn't (yet) exist...
-		assert_noop!(Assets::mint(Origin::signed(1), 0, 1, 100), Error::<Test>::NoProvider);// TODO: Should be CannotCreate
+		assert_noop!(Assets::mint(Origin::signed(1), 0, 1, 100), TokenError::CannotCreate);
 		// ...or transfer...
 		assert_noop!(Assets::transfer(Origin::signed(0), 0, 1, 50), TokenError::CannotCreate);
 		// ...or force-transfer
@@ -220,7 +220,7 @@ fn min_balance_should_work() {
 		assert_eq!(Asset::<Test>::get(0).unwrap().accounts, 1);
 
 		// Cannot create a new account with a balance that is below minimum...
-		assert_noop!(Assets::mint(Origin::signed(1), 0, 2, 9), Error::<Test>::BalanceLow);// TODO: Should be BelowMinimum
+		assert_noop!(Assets::mint(Origin::signed(1), 0, 2, 9), TokenError::BelowMinimum);
 		assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 9), TokenError::BelowMinimum);
 		assert_noop!(Assets::force_transfer(Origin::signed(1), 0, 1, 2, 9), TokenError::BelowMinimum);
 

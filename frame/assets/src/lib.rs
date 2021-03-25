@@ -132,8 +132,7 @@ mod tests;
 
 use sp_std::prelude::*;
 use sp_runtime::{
-	RuntimeDebug,
-	traits::{
+	RuntimeDebug, TokenError, traits::{
 		AtLeast32BitUnsigned, Zero, StaticLookup, Saturating, CheckedSub, CheckedAdd,
 	}
 };
@@ -1676,6 +1675,7 @@ impl<T: Config> Pallet<T> {
 		amount: T::Balance,
 		maybe_check_issuer: Option<T::AccountId>,
 	) -> DispatchResult {
+		Self::can_increase(id, beneficiary, amount).into_result()?;
 		Asset::<T>::try_mutate(id, |maybe_details| -> DispatchResult {
 			let details = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
 
@@ -1686,7 +1686,7 @@ impl<T: Config> Pallet<T> {
 
 			Account::<T>::try_mutate(id, beneficiary, |t| -> DispatchResult {
 				let new_balance = t.balance.saturating_add(amount);
-				ensure!(new_balance >= details.min_balance, Error::<T>::BalanceLow);
+				ensure!(new_balance >= details.min_balance, TokenError::BelowMinimum);
 				if t.balance.is_zero() {
 					t.sufficient = Self::new_account(beneficiary, details)?;
 				}
