@@ -100,6 +100,7 @@ impl Config for Test {
 	type MetadataDepositPerByte = MetadataDepositPerByte;
 	type ApprovalDeposit = ApprovalDeposit;
 	type StringLimit = StringLimit;
+	type Freezer = ();
 	type WeightInfo = ();
 }
 

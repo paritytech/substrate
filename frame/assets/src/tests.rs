@@ -19,6 +19,7 @@
 
 use super::*;
 use crate::{Error, mock::*};
+use sp_runtime::TokenError;
 use frame_support::{assert_ok, assert_noop, traits::Currency};
 use pallet_balances::Error as BalancesError;
 
@@ -198,11 +199,11 @@ fn non_providing_should_work() {
 		assert_ok!(Assets::mint(Origin::signed(1), 0, 0, 100));
 
 		// Cannot mint into account 2 since it doesn't (yet) exist...
-		assert_noop!(Assets::mint(Origin::signed(1), 0, 1, 100), Error::<Test>::NoProvider);
+		assert_noop!(Assets::mint(Origin::signed(1), 0, 1, 100), Error::<Test>::NoProvider);// TODO: Should be CannotCreate
 		// ...or transfer...
-		assert_noop!(Assets::transfer(Origin::signed(0), 0, 1, 50), Error::<Test>::NoProvider);
+		assert_noop!(Assets::transfer(Origin::signed(0), 0, 1, 50), TokenError::CannotCreate);
 		// ...or force-transfer
-		assert_noop!(Assets::force_transfer(Origin::signed(1), 0, 0, 1, 50), Error::<Test>::NoProvider);
+		assert_noop!(Assets::force_transfer(Origin::signed(1), 0, 0, 1, 50), TokenError::CannotCreate);
 
 		Balances::make_free_balance_be(&1, 100);
 		Balances::make_free_balance_be(&2, 100);
@@ -219,12 +220,11 @@ fn min_balance_should_work() {
 		assert_eq!(Asset::<Test>::get(0).unwrap().accounts, 1);
 
 		// Cannot create a new account with a balance that is below minimum...
-		assert_noop!(Assets::mint(Origin::signed(1), 0, 2, 9), Error::<Test>::BalanceLow);
-		assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 9), Error::<Test>::BalanceLow);
-		assert_noop!(Assets::force_transfer(Origin::signed(1), 0, 1, 2, 9), Error::<Test>::BalanceLow);
+		assert_noop!(Assets::mint(Origin::signed(1), 0, 2, 9), Error::<Test>::BalanceLow);// TODO: Should be BelowMinimum
+		assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 9), TokenError::BelowMinimum);
+		assert_noop!(Assets::force_transfer(Origin::signed(1), 0, 1, 2, 9), TokenError::BelowMinimum);
 
 		// When deducting from an account to below minimum, it should be reaped.
-
 		assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 91));
 		assert!(Assets::balance(0, 1).is_zero());
 		assert_eq!(Assets::balance(0, 2), 100);
@@ -277,7 +277,7 @@ fn transferring_enough_to_kill_source_when_keep_alive_should_fail() {
 		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 10));
 		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 		assert_eq!(Assets::balance(0, 1), 100);
-		assert_noop!(Assets::transfer_keep_alive(Origin::signed(1), 0, 2, 91), Error::<Test>::WouldDie);
+		assert_noop!(Assets::transfer_keep_alive(Origin::signed(1), 0, 2, 91), Error::<Test>::BalanceLow);
 		assert_ok!(Assets::transfer_keep_alive(Origin::signed(1), 0, 2, 90));
 		assert_eq!(Assets::balance(0, 1), 10);
 		assert_eq!(Assets::balance(0, 2), 90);
@@ -430,12 +430,14 @@ fn burning_asset_balance_with_positive_balance_should_work() {
 }
 
 #[test]
-fn burning_asset_balance_with_zero_balance_should_not_work() {
+fn burning_asset_balance_with_zero_balance_does_nothing() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
 		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 		assert_eq!(Assets::balance(0, 2), 0);
-		assert_noop!(Assets::burn(Origin::signed(1), 0, 2, u64::max_value()), Error::<Test>::BalanceZero);
+		assert_ok!(Assets::burn(Origin::signed(1), 0, 2, u64::max_value()));
+		assert_eq!(Assets::balance(0, 2), 0);
+		assert_eq!(Assets::total_supply(0), 100);
 	});
 }
 

@@ -900,7 +900,7 @@ impl<T: Config<I>, I: 'static> fungible::Inspect<T::AccountId> for Pallet<T, I> 
 }
 
 impl<T: Config<I>, I: 'static> fungible::Mutate<T::AccountId> for Pallet<T, I> {
-	fn deposit(who: &T::AccountId, amount: Self::Balance) -> DispatchResult {
+	fn mint_into(who: &T::AccountId, amount: Self::Balance) -> DispatchResult {
 		if amount.is_zero() { return Ok(()) }
 		Self::try_mutate_account(who, |account, _is_new| -> DispatchResult {
 			Self::deposit_consequence(who, amount, &account).into_result()?;
@@ -911,9 +911,8 @@ impl<T: Config<I>, I: 'static> fungible::Mutate<T::AccountId> for Pallet<T, I> {
 		Ok(())
 	}
 
-	fn withdraw(who: &T::AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError> {
+	fn burn_from(who: &T::AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError> {
 		if amount.is_zero() { return Ok(Self::Balance::zero()); }
-
 		let actual = Self::try_mutate_account(who, |account, _is_new| -> Result<T::Balance, DispatchError> {
 			let extra = Self::withdraw_consequence(who, amount, &account).into_result()?;
 			let actual = amount + extra;
@@ -931,7 +930,7 @@ impl<T: Config<I>, I: 'static> fungible::Transfer<T::AccountId> for Pallet<T, I>
 		dest: &T::AccountId,
 		amount: T::Balance,
 	) -> Result<T::Balance, DispatchError> {
-		<Self as fungible::Mutate::<T::AccountId>>::transfer(source, dest, amount)
+		<Self as fungible::Mutate::<T::AccountId>>::teleport(source, dest, amount)
 	}
 }
 

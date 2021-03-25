@@ -158,6 +158,13 @@ impl<T: Config> fungibles::Inspect<<T as SystemConfig>::AccountId> for Pallet<T>
 		Asset::<T>::get(asset).map(|x| x.min_balance).unwrap_or_else(Zero::zero)
 	}
 
+	fn withdrawable_balance(
+		asset: Self::AssetId,
+		who: &<T as SystemConfig>::AccountId,
+	) -> Self::Balance {
+		Pallet::<T>::decreasable_balance(asset, who, false, Respect).unwrap_or(Zero::zero())
+	}
+
 	fn balance(
 		asset: Self::AssetId,
 		who: &<T as SystemConfig>::AccountId,
@@ -170,7 +177,7 @@ impl<T: Config> fungibles::Inspect<<T as SystemConfig>::AccountId> for Pallet<T>
 		who: &<T as SystemConfig>::AccountId,
 		amount: Self::Balance,
 	) -> DepositConsequence {
-		Pallet::<T>::can_deposit(asset, who, amount)
+		Pallet::<T>::can_increase(asset, who, amount)
 	}
 
 	fn can_withdraw(
@@ -178,25 +185,33 @@ impl<T: Config> fungibles::Inspect<<T as SystemConfig>::AccountId> for Pallet<T>
 		who: &<T as SystemConfig>::AccountId,
 		amount: Self::Balance,
 	) -> WithdrawConsequence<Self::Balance> {
-		Pallet::<T>::can_withdraw(asset, who, amount)
+		Pallet::<T>::can_decrease(asset, who, amount, false, Respect).0
 	}
 }
 
 impl<T: Config> fungibles::Mutate<<T as SystemConfig>::AccountId> for Pallet<T> {
-	fn deposit(
+	fn mint_into(
 		asset: Self::AssetId,
 		who: &<T as SystemConfig>::AccountId,
 		amount: Self::Balance,
 	) -> DispatchResult {
-		Pallet::<T>::increase_balance(asset, who.clone(), amount, None)
+		Pallet::<T>::do_mint(asset, who, amount, None)
 	}
 
-	fn withdraw(
+	fn burn_from(
 		asset: Self::AssetId,
 		who: &<T as SystemConfig>::AccountId,
 		amount: Self::Balance,
 	) -> Result<Self::Balance, DispatchError> {
-		Pallet::<T>::reduce_balance(asset, who.clone(), amount, None)
+		Pallet::<T>::do_burn(asset, who, amount, None, false, Respect, false)
+	}
+
+	fn slash(
+		asset: Self::AssetId,
+		who: &<T as SystemConfig>::AccountId,
+		amount: Self::Balance,
+	) -> Result<Self::Balance, DispatchError> {
+		Pallet::<T>::do_burn(asset, who, amount, None, false, Respect, true)
 	}
 }
 
@@ -207,7 +222,7 @@ impl<T: Config> fungibles::Transfer<T::AccountId> for Pallet<T> {
 		dest: &T::AccountId,
 		amount: T::Balance,
 	) -> Result<T::Balance, DispatchError> {
-		<Self as fungibles::Mutate::<T::AccountId>>::transfer(asset, source, dest, amount)
+		Pallet::<T>::do_transfer(asset, source, dest, amount, None, false, Respect, false, false)
 	}
 }
 
@@ -315,6 +330,48 @@ pub struct DestroyWitness {
 	approvals: u32,
 }
 
+/// Trait for allowing a minimum balance on the account to be specified, beyond the
+/// `minimum_balance` of the asset. This is additive - the `minimum_balance` of the asset must be
+/// met *and then* anything here in addition.
+pub trait FrozenBalance<AssetId, AccountId, Balance> {
+	/// Return the frozen balance. Under normal behaviour, this amount should always be
+	/// withdrawable.
+	///
+	/// In reality, the balance of every account must be at least the sum of this (if `Some`) and
+	/// the asset's minimum_balance, since there may be complications to destroying an asset's
+	/// account completely.
+	///
+	/// If `None` is returned, then nothing special is enforced.
+	///
+	/// If any operation ever breaks this requirement (which will only happen through some sort of
+	/// privileged intervention), then `melted` is called to do any cleanup.
+	fn frozen_balance(asset: AssetId, who: &AccountId) -> Option<Balance>;
+
+	/// Called when a balance falls below the frozen_balance due to a privileged operations Whatever
+	/// cleanup that is possible to do should be done in order to avoid a bad state.
+	fn melted(asset: AssetId, who: &AccountId, amount_left_frozen: Balance);
+
+	/// Called when an account has been removed.
+	fn died(asset: AssetId, who: &AccountId);
+}
+
+impl<AssetId, AccountId, Balance> FrozenBalance<AssetId, AccountId, Balance> for () {
+	fn frozen_balance(_: AssetId, _: &AccountId) -> Option<Balance> { None }
+	fn melted(_: AssetId, _: &AccountId, _: Balance) {}
+	fn died(_: AssetId, _: &AccountId) {}
+}
+
+/// Whether to respect the frozen balance or not.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum RespectFrozen {
+	/// Do respect it. `Freezer::melted` will not be called.
+	Respect,
+	/// Don't respect it; in this case `Freezer::melted` may be called.
+	Ignore,
+}
+
+use RespectFrozen::*;
+
 #[frame_support::pallet]
 pub mod pallet {
 	use frame_support::{
@@ -362,6 +419,10 @@ pub mod pallet {
 
 		/// The maximum length of a name or symbol stored on-chain.
 		type StringLimit: Get<u32>;
+
+		/// A hook to allow a per-asset, per-account minimum balance to be enforced. This must be
+		/// respected in all permissionless operations.
+		type Freezer: FrozenBalance<Self::AssetId, Self::AccountId, Self::Balance>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -637,7 +698,7 @@ pub mod pallet {
 				ensure!(details.approvals == witness.approvals, Error::<T>::BadWitness);
 
 				for (who, v) in Account::<T>::drain_prefix(id) {
-					Self::dead_account(&who, &mut details, v.sufficient);
+					Self::dead_account(id, &who, &mut details, v.sufficient);
 				}
 				debug_assert_eq!(details.accounts, 0);
 				debug_assert_eq!(details.sufficients, 0);
@@ -674,7 +735,9 @@ pub mod pallet {
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
-			Self::increase_balance(id, beneficiary, amount, Some(origin))
+			Self::do_mint(id, &beneficiary, amount, Some(origin))?;
+			Self::deposit_event(Event::Issued(id, beneficiary, amount));
+			Ok(())
 		}
 
 		/// Reduce the balance of `who` by as much as possible up to `amount` assets of `id`.
@@ -702,7 +765,9 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let who = T::Lookup::lookup(who)?;
 
-			Self::reduce_balance(id, who, amount, Some(origin)).map(|_| ())
+			let burned = Self::do_burn(id, &who, amount, Some(origin), false, Ignore, true)?;
+			Self::deposit_event(Event::Burned(id, who, burned));
+			Ok(())
 		}
 
 		/// Move some assets from the sender account to another.
@@ -733,7 +798,7 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(target)?;
 
-			Self::do_transfer(id, origin, dest, amount, None, false)
+			Self::do_transfer(id, &origin, &dest, amount, None, false, Respect, false, false).map(|_| ())
 		}
 
 		/// Move some assets from the sender account to another, keeping the sender account alive.
@@ -761,10 +826,10 @@ pub mod pallet {
 			target: <T::Lookup as StaticLookup>::Source,
 			#[pallet::compact] amount: T::Balance
 		) -> DispatchResult {
-			let origin = ensure_signed(origin)?;
+			let source = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(target)?;
 
-			Self::do_transfer(id, origin, dest, amount, None, true)
+			Self::do_transfer(id, &source, &dest, amount, None, true, Respect, false, false).map(|_| ())
 		}
 
 		/// Move some assets from one account to another.
@@ -798,7 +863,7 @@ pub mod pallet {
 			let source = T::Lookup::lookup(source)?;
 			let dest = T::Lookup::lookup(dest)?;
 
-			Self::do_transfer(id, source, dest, amount, Some(origin), false)
+			Self::do_transfer(id, &source, &dest, amount, Some(origin), false, Ignore, false, false).map(|_| ())
 		}
 
 		/// Disallow further unprivileged transfers from an account.
@@ -1351,7 +1416,7 @@ pub mod pallet {
 				let mut approved = maybe_approved.take().ok_or(Error::<T>::Unapproved)?;
 				let remaining = approved.amount.checked_sub(&amount).ok_or(Error::<T>::Unapproved)?;
 
-				Self::do_transfer(id, key.owner.clone(), destination, amount, None, false)?;
+				Self::do_transfer(id, &key.owner, &destination, amount, None, false, Respect, false, false)?;
 
 				if remaining.is_zero() {
 					T::Currency::unreserve(&key.owner, approved.deposit);
@@ -1398,6 +1463,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn dead_account(
+		what: T::AssetId,
 		who: &T::AccountId,
 		d: &mut AssetDetails<T::Balance, T::AccountId, DepositBalanceOf<T>>,
 		sufficient: bool,
@@ -1409,9 +1475,10 @@ impl<T: Config> Pallet<T> {
 			frame_system::Pallet::<T>::dec_consumers(who);
 		}
 		d.accounts = d.accounts.saturating_sub(1);
+		T::Freezer::died(what, who)
 	}
 
-	fn can_deposit(id: T::AssetId, who: &T::AccountId, amount: T::Balance) -> DepositConsequence {
+	fn can_increase(id: T::AssetId, who: &T::AccountId, amount: T::Balance) -> DepositConsequence {
 		let details = match Asset::<T>::get(id) {
 			Some(details) => details,
 			None => return DepositConsequence::UnknownAsset,
@@ -1438,39 +1505,178 @@ impl<T: Config> Pallet<T> {
 		DepositConsequence::Success
 	}
 
-	fn can_withdraw(
+	// The consequence of a withdraw. The second item in the return indicates the parameter that
+	// should be used for the `melted` notification, if one needs to be sent.
+	fn can_decrease(
 		id: T::AssetId,
 		who: &T::AccountId,
 		amount: T::Balance,
-	) -> WithdrawConsequence<T::Balance> {
+		keep_alive: bool,
+		respect_frozen: RespectFrozen,
+	) -> (WithdrawConsequence<T::Balance>, Option<T::Balance>) {
 		let details = match Asset::<T>::get(id) {
 			Some(details) => details,
-			None => return WithdrawConsequence::UnknownAsset,
+			None => return (WithdrawConsequence::UnknownAsset, None),
 		};
 		if details.supply.checked_sub(&amount).is_none() {
-			return WithdrawConsequence::Underflow
+			return (WithdrawConsequence::Underflow, None)
+		}
+		if details.is_frozen {
+			return (WithdrawConsequence::Frozen, None)
 		}
 		let account = Account::<T>::get(id, who);
+		if account.is_frozen {
+			return (WithdrawConsequence::Frozen, None)
+		}
 		if let Some(rest) = account.balance.checked_sub(&amount) {
+			let maybe_new_frozen = if let Some(frozen) = T::Freezer::frozen_balance(id, who) {
+				let required_balance = match frozen.checked_add(&details.min_balance) {
+					Some(x) => x,
+					None => return (WithdrawConsequence::Overflow, None),
+				};
+				if rest < required_balance {
+					if let Respect = respect_frozen {
+						return (WithdrawConsequence::Frozen, None)
+					} else {
+						Some(rest.saturating_sub(details.min_balance))
+					}
+				} else {
+					None
+				}
+			} else {
+				None
+			};
+
 			if rest < details.min_balance {
-				WithdrawConsequence::ReducedToZero(rest)
+				if keep_alive {
+					(WithdrawConsequence::WouldDie, None)
+				} else {
+					(WithdrawConsequence::ReducedToZero(rest), maybe_new_frozen)
+				}
 			} else {
 				// NOTE: this assumes (correctly) that the token won't be a provider. If that ever
 				// changes, this will need to change.
-				WithdrawConsequence::Success
+				(WithdrawConsequence::Success, maybe_new_frozen)
 			}
 		} else {
-			WithdrawConsequence::NoFunds
+			(WithdrawConsequence::NoFunds, None)
 		}
 	}
 
-	fn increase_balance(
+	// Maximum `amount` that can be passed into `can_withdraw` to result in a WithdrawConsequence
+	// of Success.
+	fn decreasable_balance(
 		id: T::AssetId,
-		beneficiary: T::AccountId,
+		who: &T::AccountId,
+		keep_alive: bool,
+		respect_frozen: RespectFrozen,
+	) -> Result<T::Balance, Error<T>> {
+		let details = match Asset::<T>::get(id) {
+			Some(details) => details,
+			None => return Err(Error::<T>::Unknown),
+		};
+		ensure!(!details.is_frozen, Error::<T>::Frozen);
+
+		let account = Account::<T>::get(id, who);
+		ensure!(!account.is_frozen, Error::<T>::Frozen);
+
+		let amount = match (keep_alive, respect_frozen, T::Freezer::frozen_balance(id, who)) {
+			(_, Respect, Some(frozen)) => {
+				// Frozen balance that we respect: account CANNOT be deleted
+				let required = frozen.checked_add(&details.min_balance).ok_or(Error::<T>::Overflow)?;
+				account.balance.saturating_sub(required)
+			}
+			(true, _, _) => {
+				account.balance.saturating_sub(details.min_balance)
+			}
+			(_, _, _maybe_frozen) => {
+				// No frozen balance or not respecting it: account can be deleted. If f.is_some(),
+				// a notification via `melted` is required.
+
+				// NOTE: this assumes (correctly) that the token won't be a provider. If that ever
+				// changes, this will need to change.
+
+				account.balance
+			}
+		};
+		Ok(amount.min(details.supply))
+	}
+
+	/// Make preparatory checks for debiting some funds from an account. Flags indicate requirements
+	/// of the debit.
+	///
+	/// - `amount`: The amount desired to be debited. The actual amount returned for debit may be
+	///   less (in the case of `best_effort` being `true`) or greater by up to the minimum balance
+	///   less one.
+	/// - `keep_alive`: Require that `target` must stay alive.
+	/// - `respect_frozen`: Respect any freezes on the account or token (or not).
+	/// - `best_effort`: The debit amount may be less than `amount`.
+	///
+	/// On success, the amount which should be debited (this will always be at least `amount` unless
+	/// `best_effort` is `true`) together with an optional value indicating the argument which must
+	/// be passed into the `melted` function of the `T::Freezer` if `Some`.
+	///
+	/// If no valid debit can be made then return an `Err`.
+	fn prep_debit(
+		id: T::AssetId,
+		target: &T::AccountId,
+		amount: T::Balance,
+		keep_alive: bool,
+		respect_frozen: RespectFrozen,
+		best_effort: bool,
+	) -> Result<(T::Balance, Option<T::Balance>), DispatchError> {
+		let actual = Self::decreasable_balance(id, target, keep_alive, respect_frozen)?.min(amount);
+		ensure!(best_effort || actual >= amount, Error::<T>::BalanceLow);
+
+		let (conseq, melted) = Self::can_decrease(id, target, actual, keep_alive, respect_frozen);
+		let actual = match conseq.into_result() {
+			Ok(dust) => actual.saturating_add(dust), //< guaranteed by decreasable_balance
+			Err(e) => {
+				debug_assert!(false, "passed from decreasable_balance; qed");
+				return Err(e.into())
+			}
+		};
+
+		Ok((actual, melted))
+	}
+
+	/// Make preparatory checks for crediting some funds from an account. Flags indicate
+	/// requirements of the credit.
+	///
+	/// - `amount`: The amount desired to be credited.
+	/// - `debit`: The amount by which some other account has been debited. If this is greater than
+	///   `amount`, then the `burn_dust` parameter takes effect.
+	/// - `burn_dust`: Indicates that in the case of debit being greater than amount, the additional
+	///   (dust) value should be burned, rather than credited.
+	///
+	/// On success, the amount which should be credited (this will always be at least `amount`)
+	/// together with an optional value indicating the value which should be burned. The latter
+	/// will always be `None` as long as `burn_dust` is `false` or `debit` is no greater than
+	/// `amount`.
+	///
+	/// If no valid credit can be made then return an `Err`.
+	fn prep_credit(
+		id: T::AssetId,
+		dest: &T::AccountId,
+		amount: T::Balance,
+		debit: T::Balance,
+		burn_dust: bool,
+	) -> Result<(T::Balance, Option<T::Balance>), DispatchError> {
+		let (credit, maybe_burn) = match (burn_dust, debit.checked_sub(&amount)) {
+			(true, Some(dust)) => (amount, Some(dust)),
+			_ => (debit, None),
+		};
+		Self::can_increase(id, &dest, credit).into_result()?;
+		Ok((credit, maybe_burn))
+	}
+
+	fn do_mint(
+		id: T::AssetId,
+		beneficiary: &T::AccountId,
 		amount: T::Balance,
 		maybe_check_issuer: Option<T::AccountId>,
 	) -> DispatchResult {
-		Asset::<T>::try_mutate(id, |maybe_details| {
+		Asset::<T>::try_mutate(id, |maybe_details| -> DispatchResult {
 			let details = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
 
 			if let Some(check_issuer) = maybe_check_issuer {
@@ -1478,109 +1684,159 @@ impl<T: Config> Pallet<T> {
 			}
 			details.supply = details.supply.checked_add(&amount).ok_or(Error::<T>::Overflow)?;
 
-			Account::<T>::try_mutate(id, &beneficiary, |t| -> DispatchResult {
+			Account::<T>::try_mutate(id, beneficiary, |t| -> DispatchResult {
 				let new_balance = t.balance.saturating_add(amount);
 				ensure!(new_balance >= details.min_balance, Error::<T>::BalanceLow);
 				if t.balance.is_zero() {
-					t.sufficient = Self::new_account(&beneficiary, details)?;
+					t.sufficient = Self::new_account(beneficiary, details)?;
 				}
 				t.balance = new_balance;
 				Ok(())
 			})?;
-			Self::deposit_event(Event::Issued(id, beneficiary, amount));
 			Ok(())
-		})
+		})?;
+		Self::deposit_event(Event::Issued(id, beneficiary.clone(), amount));
+		Ok(())
 	}
 
-	fn reduce_balance(
+	// Reduces balance on a best-effort basis.
+	fn do_burn(
 		id: T::AssetId,
-		target: T::AccountId,
+		target: &T::AccountId,
 		amount: T::Balance,
 		maybe_check_admin: Option<T::AccountId>,
+		keep_alive: bool,
+		respect_frozen: RespectFrozen,
+		best_effort: bool,
 	) -> Result<T::Balance, DispatchError> {
-		Asset::<T>::try_mutate(id, |maybe_details| {
-			let d = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
+		if amount.is_zero() {
+			Self::deposit_event(Event::Burned(id, target.clone(), amount));
+			return Ok(amount)
+		}
+
+		let (actual, melted) = Self::prep_debit(id, target, amount, keep_alive, respect_frozen, best_effort)?;
+
+		Asset::<T>::try_mutate(id, |maybe_details| -> DispatchResult {
+			let details = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
+
+			// Check admin rights.
 			if let Some(check_admin) = maybe_check_admin {
-				ensure!(&check_admin == &d.admin, Error::<T>::NoPermission);
+				ensure!(&check_admin == &details.admin, Error::<T>::NoPermission);
 			}
 
-			let burned = Account::<T>::try_mutate_exists(
-				id,
-				&target,
-				|maybe_account| -> Result<T::Balance, DispatchError> {
-					let mut account = maybe_account.take().ok_or(Error::<T>::BalanceZero)?;
-					let mut burned = amount.min(account.balance);
-					account.balance -= burned;
-					*maybe_account = if account.balance < d.min_balance {
-						burned += account.balance;
-						Self::dead_account(&target, d, account.sufficient);
-						None
-					} else {
-						Some(account)
-					};
-					Ok(burned)
-				}
-			)?;
+			Account::<T>::try_mutate_exists(id, target, |maybe_account| -> DispatchResult {
+				let mut account = maybe_account.take().unwrap_or_default();
+				debug_assert!(account.balance >= actual, "checked in prep; qed");
 
-			d.supply = d.supply.saturating_sub(burned);
+				// Make the debit.
+				account.balance = account.balance.saturating_sub(actual);
+				*maybe_account = if account.balance < details.min_balance {
+					debug_assert!(account.balance.is_zero(), "checked in prep; qed");
+					Self::dead_account(id, target, details, account.sufficient);
+					None
+				} else {
+					Some(account)
+				};
+				Ok(())
+			})?;
 
-			Self::deposit_event(Event::Burned(id, target, burned));
-			Ok(burned)
-		})
+			debug_assert!(details.supply >= actual, "checked in prep; qed");
+			details.supply = details.supply.saturating_sub(actual);
+			Ok(())
+		})?;
+
+		if let Some(arg) = melted {
+			T::Freezer::melted(id, target, arg)
+		}
+
+		Self::deposit_event(Event::Burned(id, target.clone(), actual));
+		Ok(actual)
 	}
 
+	/// Returns the actual amount transferred; will never be less than `amount`; might be slightly
+	/// more unless `burn_dust` is `true`.
+	///
+	/// Will fail if the amount transferred is so small that it cannot create the destination due
+	/// to minimum balance requirements.
 	fn do_transfer(
 		id: T::AssetId,
-		source: T::AccountId,
-		dest: T::AccountId,
+		source: &T::AccountId,
+		dest: &T::AccountId,
 		amount: T::Balance,
 		maybe_need_admin: Option<T::AccountId>,
 		keep_alive: bool,
-	) -> DispatchResult {
+		respect_frozen: RespectFrozen,
+		best_effort: bool,
+		burn_dust: bool,
+	) -> Result<T::Balance, DispatchError> {
+		// Early exist if no-op.
+		if amount.is_zero() {
+			Self::deposit_event(Event::Transferred(id, source.clone(), dest.clone(), amount));
+			return Ok(amount)
+		}
+
+		// Figure out the debit and credit, together with side-effects.
+		let (debit, melted) = Self::prep_debit(id, &source, amount, keep_alive, respect_frozen, best_effort)?;
+		let (credit, maybe_burn) = Self::prep_credit(id, &dest, amount, debit, burn_dust)?;
+
 		let mut source_account = Account::<T>::get(id, &source);
-		ensure!(!source_account.is_frozen, Error::<T>::Frozen);
 
-		source_account.balance = source_account.balance.checked_sub(&amount)
-			.ok_or(Error::<T>::BalanceLow)?;
-
-		Asset::<T>::try_mutate(id, |maybe_details| {
+		Asset::<T>::try_mutate(id, |maybe_details| -> DispatchResult {
 			let details = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
-			ensure!(!details.is_frozen, Error::<T>::Frozen);
 
+			// Check admin rights.
 			if let Some(need_admin) = maybe_need_admin {
 				ensure!(&need_admin == &details.admin, Error::<T>::NoPermission);
 			}
 
-			if dest != source && !amount.is_zero() {
-				let mut amount = amount;
-				if source_account.balance < details.min_balance {
-					ensure!(!keep_alive, Error::<T>::WouldDie);
-					amount += source_account.balance;
-					source_account.balance = Zero::zero();
-				}
-
-				Account::<T>::try_mutate(id, &dest, |a| -> DispatchResult {
-					let new_balance = a.balance.saturating_add(amount);
-
-					ensure!(new_balance >= details.min_balance, Error::<T>::BalanceLow);
-
-					if a.balance.is_zero() {
-						a.sufficient = Self::new_account(&dest, details)?;
-					}
-					a.balance = new_balance;
-					Ok(())
-				})?;
-
-				if source_account.balance.is_zero() {
-					Self::dead_account(&source, details, source_account.sufficient);
-					Account::<T>::remove(id, &source);
-				} else {
-					Account::<T>::insert(id, &source, &source_account)
-				}
+			// Skip if source == dest
+			if source == dest {
+				return Ok(())
 			}
 
-			Self::deposit_event(Event::Transferred(id, source, dest, amount));
+			// Burn any dust if needed.
+			if let Some(burn) = maybe_burn {
+				// Debit dust from supply; this will not saturate since it's already checked in prep.
+				debug_assert!(details.supply >= burn, "checked in prep; qed");
+				details.supply = details.supply.saturating_sub(burn);
+			}
+
+			// Debit balance from source; this will not saturate since it's already checked in prep.
+			debug_assert!(source_account.balance >= debit, "checked in prep; qed");
+			source_account.balance = source_account.balance.saturating_sub(debit);
+
+			Account::<T>::try_mutate(id, &dest, |a| -> DispatchResult {
+				// Calculate new balance; this will not saturate since it's already checked in prep.
+				debug_assert!(a.balance.checked_add(&credit).is_some(), "checked in prep; qed");
+				let new_balance = a.balance.saturating_add(credit);
+
+				// Create a new account if there wasn't one already.
+				if a.balance.is_zero() {
+					a.sufficient = Self::new_account(&dest, details)?;
+				}
+
+				a.balance = new_balance;
+				Ok(())
+			})?;
+
+			// Remove source account if it's now dead.
+			if source_account.balance < details.min_balance {
+				debug_assert!(source_account.balance.is_zero(), "checked in prep; qed");
+				Self::dead_account(id, &source, details, source_account.sufficient);
+				Account::<T>::remove(id, &source);
+			} else {
+				Account::<T>::insert(id, &source, &source_account)
+			}
+
 			Ok(())
-		})
+		})?;
+
+		// Notify of melting.
+		if let Some(arg) = melted {
+			T::Freezer::melted(id, &dest, arg)
+		}
+
+		Self::deposit_event(Event::Transferred(id, source.clone(), dest.clone(), credit));
+		Ok(credit)
 	}
 }

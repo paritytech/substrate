@@ -30,17 +30,26 @@ pub use imbalance::{Imbalance, HandleImbalanceDrop, DebtOf, CreditOf};
 pub trait Inspect<AccountId> {
 	/// Means of identifying one asset class from another.
 	type AssetId: AssetId;
+
 	/// Scalar type for representing balance of an account.
 	type Balance: Balance;
+
 	/// The total amount of issuance in the system.
 	fn total_issuance(asset: Self::AssetId) -> Self::Balance;
+
 	/// The minimum balance any single account may have.
 	fn minimum_balance(asset: Self::AssetId) -> Self::Balance;
+
 	/// Get the `asset` balance of `who`.
 	fn balance(asset: Self::AssetId, who: &AccountId) -> Self::Balance;
+
+	/// Get the maximum amount of `asset` that `who` can withdraw/transfer successfully.
+	fn withdrawable_balance(asset: Self::AssetId, who: &AccountId) -> Self::Balance { Self::balance(asset, who) }
+
 	/// Returns `true` if the `asset` balance of `who` may be increased by `amount`.
 	fn can_deposit(asset: Self::AssetId, who: &AccountId, amount: Self::Balance)
 		-> DepositConsequence;
+
 	/// Returns `Failed` if the `asset` balance of `who` may not be decreased by `amount`, otherwise
 	/// the consequence.
 	fn can_withdraw(
@@ -61,7 +70,7 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 	///
 	/// Since this is an operation which should be possible to take alone, if successful it will
 	/// increase the overall supply of the underlying token.
-	fn deposit(asset: Self::AssetId, who: &AccountId, amount: Self::Balance) -> DispatchResult;
+	fn mint_into(asset: Self::AssetId, who: &AccountId, amount: Self::Balance) -> DispatchResult;
 
 	/// Attempt to reduce the `asset` balance of `who` by `amount`.
 	///
@@ -77,11 +86,25 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 	/// Due to minimum balance requirements, it's possible that the amount withdrawn could be up to
 	/// `Self::minimum_balance() - 1` more than the `amount`. The total amount withdrawn is returned
 	/// in an `Ok` result. This may be safely ignored if you don't mind the overall supply reducing.
-	fn withdraw(asset: Self::AssetId, who: &AccountId, amount: Self::Balance)
+	fn burn_from(asset: Self::AssetId, who: &AccountId, amount: Self::Balance)
 		-> Result<Self::Balance, DispatchError>;
 
-	/// Transfer funds from one account into another.
-	fn transfer(
+	/// Attempt to reduce the `asset` balance of `who` by as much as possible up to `amount`, and
+	/// possibly slightly more due to minimum_balance requirements. If no decrease is possible then
+	/// an `Err` is returned and nothing is changed. If successful, the amount of tokens reduced is
+	/// returned.
+	///
+	/// The default implementation just uses `withdraw` along with `withdrawable_balance` to ensure
+	/// that is doesn't fail.
+	fn slash(asset: Self::AssetId, who: &AccountId, amount: Self::Balance)
+		-> Result<Self::Balance, DispatchError>
+	{
+		Self::burn_from(asset, who, Self::withdrawable_balance(asset, who).min(amount))
+	}
+
+	/// Transfer funds from one account into another. The default implementation uses `mint_into`
+	/// and `burn_from` and may generate unwanted events.
+	fn teleport(
 		asset: Self::AssetId,
 		source: &AccountId,
 		dest: &AccountId,
@@ -89,14 +112,14 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 	) -> Result<Self::Balance, DispatchError> {
 		let extra = Self::can_withdraw(asset, &source, amount).into_result()?;
 		Self::can_deposit(asset, &dest, amount + extra).into_result()?;
-		let actual = Self::withdraw(asset, source, amount)?;
+		let actual = Self::burn_from(asset, source, amount)?;
 		debug_assert!(actual == amount + extra, "can_withdraw must agree with withdraw; qed");
-		match Self::deposit(asset, dest, actual) {
+		match Self::mint_into(asset, dest, actual) {
 			Ok(_) => Ok(actual),
 			Err(err) => {
 				debug_assert!(false, "can_deposit returned true previously; qed");
 				// attempt to return the funds back to source
-				let revert = Self::deposit(asset, source, actual);
+				let revert = Self::mint_into(asset, source, actual);
 				debug_assert!(revert.is_ok(), "withdrew funds previously; qed");
 				Err(err)
 			}
