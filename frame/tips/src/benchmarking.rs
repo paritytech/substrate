@@ -33,7 +33,7 @@ use frame_support::{
 };
 use sp_runtime::{traits::{Saturating}};
 
-use crate::Module as TipsMod;
+use crate::Pallet as TipsMod;
 
 const SEED: u32 = 0;
 
