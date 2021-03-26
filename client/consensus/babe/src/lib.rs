@@ -438,7 +438,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, BS, Error>(BabeParams {
 		+ Sync + 'static,
 	Error: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
 	SO: SyncOracle + Send + Sync + Clone + 'static,
-	CAW: CanAuthorWith<B> + Send + 'static,
+	CAW: CanAuthorWith<B> + Send + Sync + 'static,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
 {
 	const HANDLE_BUFFER_SIZE: usize = 1024;
