@@ -48,7 +48,7 @@ substrate-frame-rpc-system = { version = "3.0.0", path = "../../../utils/frame/r
 pallet-transaction-payment-rpc = { version = "3.0.0", path = "../../../frame/transaction-payment/rpc/" }
 
 # These dependencies are used for runtime benchmarking
-frame-benchmarking = { version = "3.0.0", path = "../../../frame/benchmarking" }
+frame-benchmarking = { version = "3.1.0", path = "../../../frame/benchmarking" }
 frame-benchmarking-cli = { version = "3.0.0", path = "../../../utils/frame/benchmarking-cli" }
 
 node-template-runtime = { version = "2.0.0", path = "../runtime" }

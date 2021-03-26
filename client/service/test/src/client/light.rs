@@ -28,8 +28,9 @@ use sc_light::{
 };
 use std::sync::Arc;
 use sp_runtime::{
-	traits::{BlakeTwo256, HashFor, NumberFor},
-	generic::BlockId, traits::{Block as _, Header as HeaderT}, Digest,
+	generic::BlockId,
+	traits::{BlakeTwo256, Block as _, HashFor, Header as HeaderT, NumberFor},
+	Digest, Justifications,
 };
 use std::collections::HashMap;
 use parking_lot::Mutex;
@@ -377,7 +378,7 @@ fn execution_proof_is_generated_and_checked() {
 		remote_client.import_justified(
 			BlockOrigin::Own,
 			remote_client.new_block(digest).unwrap().build().unwrap().block,
-			Default::default(),
+			Justifications::from((*b"TEST", Default::default())),
 		).unwrap();
 	}
 
@@ -684,10 +685,13 @@ fn changes_proof_is_generated_and_checked_when_headers_are_not_pruned() {
 		}).unwrap();
 
 		// ..and ensure that result is the same as on remote node
-		match local_result == expected_result {
-			true => (),
-			false => panic!(format!("Failed test {}: local = {:?}, expected = {:?}",
-									index, local_result, expected_result)),
+		if local_result != expected_result {
+			panic!(
+				"Failed test {}: local = {:?}, expected = {:?}",
+				index,
+				local_result,
+				expected_result,
+			);
 		}
 	}
 }

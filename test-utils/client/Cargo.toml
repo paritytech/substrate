@@ -24,6 +24,7 @@ sc-client-db = { version = "0.9.0", features = ["test-helpers"], path = "../../c
 sc-consensus = { version = "0.9.0", path = "../../client/consensus/common" }
 sc-executor = { version = "0.9.0", path = "../../client/executor" }
 sc-light = { version = "3.0.0", path = "../../client/light" }
+sc-offchain = { version = "3.0.0", path = "../../client/offchain" }
 sc-service = { version = "0.9.0", default-features = false, features = ["test-helpers"],  path = "../../client/service" }
 sp-blockchain = { version = "3.0.0", path = "../../primitives/blockchain" }
 sp-consensus = { version = "0.9.0", path = "../../primitives/consensus/common" }

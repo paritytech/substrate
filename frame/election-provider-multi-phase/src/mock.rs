@@ -27,11 +27,11 @@ use parking_lot::RwLock;
 use sp_core::{
 	offchain::{
 		testing::{PoolState, TestOffchainExt, TestTransactionPoolExt},
-		OffchainExt, TransactionPoolExt,
+		OffchainDbExt, OffchainWorkerExt, TransactionPoolExt,
 	},
 	H256,
 };
-use sp_election_providers::ElectionDataProvider;
+use frame_election_provider_support::{ElectionDataProvider, data_provider};
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, seq_phragmen, to_supports, to_without_backing,
 	CompactSolution, ElectionResult, EvaluateSupport,
@@ -52,18 +52,20 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: frame_system::{Module, Call, Event<T>, Config},
-		Balances: pallet_balances::{Module, Call, Event<T>, Config<T>},
-		MultiPhase: multi_phase::{Module, Call, Event<T>},
+		System: frame_system::{Pallet, Call, Event<T>, Config},
+		Balances: pallet_balances::{Pallet, Call, Event<T>, Config<T>},
+		MultiPhase: multi_phase::{Pallet, Call, Event<T>},
 	}
 );
 
 pub(crate) type Balance = u64;
 pub(crate) type AccountId = u64;
+pub(crate) type VoterIndex = u32;
+pub(crate) type TargetIndex = u16;
 
 sp_npos_elections::generate_solution_type!(
 	#[compact]
-	pub struct TestCompact::<u32, u16, PerU16>(16)
+	pub struct TestCompact::<VoterIndex, TargetIndex, PerU16>(16)
 );
 
 /// All events of this pallet.
@@ -239,6 +241,13 @@ impl multi_phase::weights::WeightInfo for DualMockWeightInfo {
 			<() as multi_phase::weights::WeightInfo>::on_initialize_open_unsigned_without_snapshot()
 		}
 	}
+	fn elect_queued() -> Weight {
+		if MockWeightInfo::get() {
+			Zero::zero()
+		} else {
+			<() as multi_phase::weights::WeightInfo>::elect_queued()
+		}
+	}
 	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight {
 		if MockWeightInfo::get() {
 			// 10 base
@@ -291,17 +300,43 @@ pub struct ExtBuilder {}
 
 pub struct StakingMock;
 impl ElectionDataProvider<AccountId, u64> for StakingMock {
-	fn targets() -> Vec<AccountId> {
-		Targets::get()
+	const MAXIMUM_VOTES_PER_VOTER: u32 = <TestCompact as CompactSolution>::LIMIT as u32;
+	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<AccountId>, Weight)> {
+		let targets = Targets::get();
+
+		if maybe_max_len.map_or(false, |max_len| targets.len() > max_len) {
+			return Err("Targets too big");
+		}
+
+		Ok((targets, 0))
 	}
-	fn voters() -> Vec<(AccountId, VoteWeight, Vec<AccountId>)> {
-		Voters::get()
+
+	fn voters(
+		maybe_max_len: Option<usize>,
+	) -> data_provider::Result<(Vec<(AccountId, VoteWeight, Vec<AccountId>)>, Weight)> {
+		let voters = Voters::get();
+		if maybe_max_len.map_or(false, |max_len| voters.len() > max_len) {
+			return Err("Voters too big");
+		}
+
+		Ok((voters, 0))
 	}
-	fn desired_targets() -> u32 {
-		DesiredTargets::get()
+	fn desired_targets() -> data_provider::Result<(u32, Weight)> {
+		Ok((DesiredTargets::get(), 0))
 	}
+
 	fn next_election_prediction(now: u64) -> u64 {
 		now + EpochLength::get() - now % EpochLength::get()
+	}
+
+	#[cfg(any(feature = "runtime-benchmarks", test))]
+	fn put_snapshot(
+		voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
+		targets: Vec<AccountId>,
+		_target_stake: Option<VoteWeight>,
+	) {
+		Targets::set(targets);
+		Voters::set(voters);
 	}
 }
 
@@ -319,7 +354,7 @@ impl ExtBuilder {
 		<UnsignedPhase>::set(unsigned);
 		self
 	}
-	pub fn fallabck(self, fallback: FallbackStrategy) -> Self {
+	pub fn fallback(self, fallback: FallbackStrategy) -> Self {
 		<Fallback>::set(fallback);
 		self
 	}
@@ -369,7 +404,8 @@ impl ExtBuilder {
 		seed[0..4].copy_from_slice(&iters.to_le_bytes());
 		offchain_state.write().seed = seed;
 
-		ext.register_extension(OffchainExt::new(offchain));
+		ext.register_extension(OffchainDbExt::new(offchain.clone()));
+		ext.register_extension(OffchainWorkerExt::new(offchain));
 		ext.register_extension(TransactionPoolExt::new(pool));
 
 		(ext, pool_state)

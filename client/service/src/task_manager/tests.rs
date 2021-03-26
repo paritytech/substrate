@@ -20,14 +20,7 @@ use crate::config::TaskExecutor;
 use crate::task_manager::TaskManager;
 use futures::{future::FutureExt, pin_mut, select};
 use parking_lot::Mutex;
-use sc_telemetry::TelemetrySpan;
-use std::{any::Any, env, sync::Arc, time::Duration};
-use tracing::{event::Event, span::Id, subscriber::Subscriber};
-use tracing_subscriber::{
-	layer::{Context, SubscriberExt},
-	registry::LookupSpan,
-	Layer,
-};
+use std::{any::Any, sync::Arc, time::Duration};
 
 #[derive(Clone, Debug)]
 struct DropTester(Arc<Mutex<usize>>);
@@ -316,95 +309,4 @@ fn ensure_task_manager_future_continues_when_childs_not_essential_task_fails() {
 	assert_eq!(drop_tester, 4);
 	runtime.block_on(task_manager.clean_shutdown());
 	assert_eq!(drop_tester, 0);
-}
-
-struct TestLayer {
-	spans_found: Arc<Mutex<Option<Vec<Id>>>>,
-}
-
-impl<S> Layer<S> for TestLayer
-where
-	S: Subscriber + for<'a> LookupSpan<'a>,
-{
-	fn on_event(&self, _: &Event<'_>, ctx: Context<S>) {
-		let mut spans_found = self.spans_found.lock();
-
-		if spans_found.is_some() {
-			panic!("on_event called multiple times");
-		}
-
-		*spans_found = Some(ctx.scope().map(|x| x.id()).collect());
-	}
-}
-
-fn setup_subscriber() -> (
-	impl Subscriber + for<'a> LookupSpan<'a>,
-	Arc<Mutex<Option<Vec<Id>>>>,
-) {
-	let spans_found = Arc::new(Mutex::new(Default::default()));
-	let layer = TestLayer {
-		spans_found: spans_found.clone(),
-	};
-	let subscriber = tracing_subscriber::fmt().finish().with(layer);
-	(subscriber, spans_found)
-}
-
-/// This is not an actual test, it is used by the `telemetry_span_is_forwarded_to_task` test.
-/// The given test will call the test executable and only execute this one test that
-/// test that the telemetry span and the prefix span are forwarded correctly. This needs to be done
-/// in a separate process to avoid interfering with the other tests.
-#[test]
-fn subprocess_telemetry_span_is_forwarded_to_task() {
-	if env::var("SUBPROCESS_TEST").is_err() {
-		return;
-	}
-
-	let (subscriber, spans_found) = setup_subscriber();
-	tracing_log::LogTracer::init().unwrap();
-	let _sub_guard = tracing::subscriber::set_global_default(subscriber);
-
-	let mut runtime = tokio::runtime::Runtime::new().unwrap();
-
-	let prefix_span = tracing::info_span!("prefix");
-	let _enter_prefix_span = prefix_span.enter();
-
-	let telemetry_span = TelemetrySpan::new();
-	let _enter_telemetry_span = telemetry_span.enter();
-
-	let handle = runtime.handle().clone();
-	let task_executor = TaskExecutor::from(move |fut, _| handle.spawn(fut).map(|_| ()));
-	let task_manager = new_task_manager(task_executor);
-
-	let (sender, receiver) = futures::channel::oneshot::channel();
-
-	task_manager.spawn_handle().spawn(
-		"log-something",
-		async move {
-			log::info!("boo!");
-			sender.send(()).unwrap();
-		}
-		.boxed(),
-	);
-
-	runtime.block_on(receiver).unwrap();
-	runtime.block_on(task_manager.clean_shutdown());
-
-	let spans = spans_found.lock().take().unwrap();
-	assert_eq!(2, spans.len());
-
-	assert_eq!(spans[0], prefix_span.id().unwrap());
-	assert_eq!(spans[1], telemetry_span.span().id().unwrap());
-}
-
-#[test]
-fn telemetry_span_is_forwarded_to_task() {
-	let executable = env::current_exe().unwrap();
-	let output = std::process::Command::new(executable)
-		.env("SUBPROCESS_TEST", "1")
-		.args(&["--nocapture", "subprocess_telemetry_span_is_forwarded_to_task"])
-		.output()
-		.unwrap();
-	println!("{}", String::from_utf8(output.stdout).unwrap());
-	eprintln!("{}", String::from_utf8(output.stderr).unwrap());
-	assert!(output.status.success());
 }

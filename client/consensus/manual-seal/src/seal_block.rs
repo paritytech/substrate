@@ -123,8 +123,11 @@ pub async fn seal_block<B, BI, SC, C, E, P>(
 			Default::default()
 		};
 
-		let proposal = proposer.propose(id.clone(), digest, Duration::from_secs(MAX_PROPOSAL_DURATION), false.into())
-			.map_err(|err| Error::StringError(format!("{:?}", err))).await?;
+		let proposal = proposer.propose(
+			id.clone(),
+			digest,
+			Duration::from_secs(MAX_PROPOSAL_DURATION),
+		).map_err(|err| Error::StringError(format!("{:?}", err))).await?;
 
 		if proposal.block.extrinsics().len() == inherents_len && !create_empty {
 			return Err(Error::EmptyTransactionPool)

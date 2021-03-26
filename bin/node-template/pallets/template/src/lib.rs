@@ -2,7 +2,7 @@
 
 /// Edit this file to define custom logic or remove it if it is not needed.
 /// Learn more about FRAME and the core library of Substrate FRAME pallets:
-/// https://substrate.dev/docs/en/knowledgebase/runtime/frame
+/// <https://substrate.dev/docs/en/knowledgebase/runtime/frame>
 
 pub use pallet::*;
 
@@ -11,6 +11,9 @@ mod mock;
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -46,7 +49,7 @@ pub mod pallet {
 		/// parameters. [something, who]
 		SomethingStored(u32, T::AccountId),
 	}
-	
+
 	// Errors inform users that something went wrong.
 	#[pallet::error]
 	pub enum Error<T> {

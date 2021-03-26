@@ -101,7 +101,7 @@ pub(crate) fn calculate_max_score<AccountId: IdentifierT, P: PerThing>(
 		for edge in voter.edges.iter() {
 			let edge_candidate = edge.candidate.borrow();
 			if edge_candidate.elected {
-				let edge_contribution: ExtendedBalance = P::from_rational_approximation(
+				let edge_contribution: ExtendedBalance = P::from_rational(
 					edge.weight,
 					edge_candidate.backed_stake,
 				).deconstruct().into();

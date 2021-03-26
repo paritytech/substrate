@@ -44,7 +44,7 @@ use parking_lot::Mutex;
 use sc_client_api::{BlockOf, backend::AuxStore, BlockchainEvents};
 use sp_blockchain::{HeaderBackend, ProvideCache, well_known_cache_keys::Id as CacheKeyId};
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
-use sp_runtime::{Justification, RuntimeString};
+use sp_runtime::{Justifications, RuntimeString};
 use sp_runtime::generic::{BlockId, Digest, DigestItem};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_api::ProvideRuntimeApi;
@@ -52,8 +52,7 @@ use sp_consensus_pow::{Seal, TotalDifficulty, POW_ENGINE_ID};
 use sp_inherents::{InherentDataProviders, InherentData};
 use sp_consensus::{
 	BlockImportParams, BlockOrigin, ForkChoiceStrategy, SyncOracle, Environment, Proposer,
-	SelectChain, Error as ConsensusError, CanAuthorWith, RecordProof, BlockImport,
-	BlockCheckParams, ImportResult,
+	SelectChain, Error as ConsensusError, CanAuthorWith, BlockImport, BlockCheckParams, ImportResult,
 };
 use sp_consensus::import_queue::{
 	BoxBlockImport, BasicQueue, Verifier, BoxJustificationImport,
@@ -353,7 +352,7 @@ impl<B, I, C, S, Algorithm, CAW> BlockImport<B> for PowBlockImport<B, I, C, S, A
 				check_block.clone(),
 				BlockId::Hash(parent_hash),
 				inherent_data,
-				timestamp_now
+				*timestamp_now,
 			)?;
 
 			block.body = Some(check_block.deconstruct().1);
@@ -458,7 +457,7 @@ impl<B: BlockT, Algorithm> Verifier<B> for PowVerifier<B, Algorithm> where
 		&mut self,
 		origin: BlockOrigin,
 		header: B::Header,
-		justification: Option<Justification>,
+		justifications: Option<Justifications>,
 		body: Option<Vec<B::Extrinsic>>,
 	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		let hash = header.hash();
@@ -471,7 +470,7 @@ impl<B: BlockT, Algorithm> Verifier<B> for PowVerifier<B, Algorithm> where
 		let mut import_block = BlockImportParams::new(origin, checked_header);
 		import_block.post_digests.push(seal);
 		import_block.body = body;
-		import_block.justification = justification;
+		import_block.justifications = justifications;
 		import_block.intermediates.insert(
 			Cow::from(INTERMEDIATE_KEY),
 			Box::new(intermediate) as Box<dyn Any>
@@ -549,7 +548,10 @@ pub fn start_mining_worker<Block, C, S, Algorithm, E, SO, CAW>(
 	timeout: Duration,
 	build_time: Duration,
 	can_author_with: CAW,
-) -> (Arc<Mutex<MiningWorker<Block, Algorithm, C>>>, impl Future<Output = ()>) where
+) -> (
+	Arc<Mutex<MiningWorker<Block, Algorithm, C, <E::Proposer as Proposer<Block>>::Proof>>>,
+	impl Future<Output = ()>,
+) where
 	Block: BlockT,
 	C: ProvideRuntimeApi<Block> + BlockchainEvents<Block> + 'static,
 	S: SelectChain<Block> + 'static,
@@ -566,7 +568,7 @@ pub fn start_mining_worker<Block, C, S, Algorithm, E, SO, CAW>(
 	}
 
 	let timer = UntilImportedOrTimeout::new(client.import_notification_stream(), timeout);
-	let worker = Arc::new(Mutex::new(MiningWorker::<Block, Algorithm, C> {
+	let worker = Arc::new(Mutex::new(MiningWorker::<Block, Algorithm, C, _> {
 		build: None,
 		algorithm: algorithm.clone(),
 		block_import,
@@ -664,7 +666,6 @@ pub fn start_mining_worker<Block, C, S, Algorithm, E, SO, CAW>(
 				inherent_data,
 				inherent_digest,
 				build_time.clone(),
-				RecordProof::No,
 			).await {
 				Ok(x) => x,
 				Err(err) => {
@@ -678,7 +679,7 @@ pub fn start_mining_worker<Block, C, S, Algorithm, E, SO, CAW>(
 				},
 			};
 
-			let build = MiningBuild::<Block, Algorithm, C> {
+			let build = MiningBuild::<Block, Algorithm, C, _> {
 				metadata: MiningMetadata {
 					best_hash,
 					pre_hash: proposal.block.header().hash(),

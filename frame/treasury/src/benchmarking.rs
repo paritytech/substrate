@@ -27,7 +27,7 @@ use frame_support::{
 	ensure,
 	traits::{OnInitialize},
 };
-use crate::Module as Treasury;
+use crate::Pallet as Treasury;
 
 const SEED: u32 = 0;
 

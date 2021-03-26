@@ -40,9 +40,11 @@ pub fn duration_now() -> Duration {
 }
 
 /// Returns the duration until the next slot, based on current duration since
-pub fn time_until_next(now: Duration, slot_duration: u64) -> Duration {
-	let remaining_full_millis = slot_duration - (now.as_millis() as u64 % slot_duration) - 1;
-	Duration::from_millis(remaining_full_millis)
+pub fn time_until_next(now: Duration, slot_duration: Duration) -> Duration {
+	let remaining_full_millis = slot_duration.as_millis()
+		- (now.as_millis() % slot_duration.as_millis())
+		- 1;
+	Duration::from_millis(remaining_full_millis as u64)
 }
 
 /// Information about a slot.
@@ -50,19 +52,39 @@ pub struct SlotInfo {
 	/// The slot number.
 	pub slot: Slot,
 	/// Current timestamp.
-	pub timestamp: u64,
+	pub timestamp: sp_timestamp::Timestamp,
 	/// The instant at which the slot ends.
 	pub ends_at: Instant,
 	/// The inherent data.
 	pub inherent_data: InherentData,
 	/// Slot duration.
-	pub duration: u64,
+	pub duration: Duration,
+}
+
+impl SlotInfo {
+	/// Create a new [`SlotInfo`].
+	///
+	/// `ends_at` is calculated using `timestamp` and `duration`.
+	pub fn new(
+		slot: Slot,
+		timestamp: sp_timestamp::Timestamp,
+		inherent_data: InherentData,
+		duration: Duration,
+	) -> Self {
+		Self {
+			slot,
+			timestamp,
+			inherent_data,
+			duration,
+			ends_at: Instant::now() + time_until_next(timestamp.as_duration(), duration),
+		}
+	}
 }
 
 /// A stream that returns every time there is a new slot.
 pub(crate) struct Slots<SC> {
 	last_slot: Slot,
-	slot_duration: u64,
+	slot_duration: Duration,
 	inner_delay: Option<Delay>,
 	inherent_data_providers: InherentDataProviders,
 	timestamp_extractor: SC,
@@ -71,7 +93,7 @@ pub(crate) struct Slots<SC> {
 impl<SC> Slots<SC> {
 	/// Create a new `Slots` stream.
 	pub fn new(
-		slot_duration: u64,
+		slot_duration: Duration,
 		inherent_data_providers: InherentDataProviders,
 		timestamp_extractor: SC,
 	) -> Self {
@@ -120,21 +142,19 @@ impl<SC: SlotCompatible> Stream for Slots<SC> {
 			};
 			// reschedule delay for next slot.
 			let ends_in = offset +
-				time_until_next(Duration::from_millis(timestamp), slot_duration);
-			let ends_at = Instant::now() + ends_in;
+				time_until_next(timestamp.as_duration(), slot_duration);
 			self.inner_delay = Some(Delay::new(ends_in));
 
 			// never yield the same slot twice.
 			if slot > self.last_slot {
 				self.last_slot = slot;
 
-				break Poll::Ready(Some(Ok(SlotInfo {
+				break Poll::Ready(Some(Ok(SlotInfo::new(
 					slot,
-					duration: self.slot_duration,
 					timestamp,
-					ends_at,
 					inherent_data,
-				})))
+					self.slot_duration,
+				))))
 			}
 		}
 	}

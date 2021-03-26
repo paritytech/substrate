@@ -96,7 +96,7 @@ parameter_types! {
 }
 impl Config for Test {
 	type ModuleId = TreasuryModuleId;
-	type Currency = pallet_balances::Module<Test>;
+	type Currency = pallet_balances::Pallet<Test>;
 	type ApproveOrigin = frame_system::EnsureRoot<u128>;
 	type RejectOrigin = frame_system::EnsureRoot<u128>;
 	type Event = Event;
@@ -119,9 +119,9 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Storage, Config, Event<T>},
-		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
-		Treasury: treasury::{Module, Call, Storage, Config<T>, Event<T>},
+		System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Treasury: treasury::{Pallet, Call, Storage, Config<T>, Event<T>},
 	}
 );
 
