@@ -424,6 +424,7 @@ where
 	}
 }
 
+#[async_trait::async_trait]
 impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
 	for GrandpaBlockImport<BE, Block, Client, SC> where
 		NumberFor<Block>: finality_grandpa::BlockNumberOps,
@@ -432,11 +433,13 @@ impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
 		Client: crate::ClientForGrandpa<Block, BE>,
 		for<'a> &'a Client:
 			BlockImport<Block, Error = ConsensusError, Transaction = TransactionFor<Client, Block>>,
+		TransactionFor<Client, Block>: Send + 'static,
+		SC: Send,
 {
 	type Error = ConsensusError;
 	type Transaction = TransactionFor<Client, Block>;
 
-	fn import_block(
+	async fn import_block(
 		&mut self,
 		mut block: BlockImportParams<Block, Self::Transaction>,
 		new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
@@ -459,7 +462,7 @@ impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
 
 		// we don't want to finalize on `inner.import_block`
 		let mut justifications = block.justifications.take();
-		let import_result = (&*self.inner).import_block(block, new_cache);
+		let import_result = (&*self.inner).import_block(block, new_cache).await;
 
 		let mut imported_aux = {
 			match import_result {
@@ -563,11 +566,11 @@ impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
 		Ok(ImportResult::Imported(imported_aux))
 	}
 
-	fn check_block(
+	async fn check_block(
 		&mut self,
 		block: BlockCheckParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
-		self.inner.check_block(block)
+		self.inner.check_block(block).await
 	}
 }
 

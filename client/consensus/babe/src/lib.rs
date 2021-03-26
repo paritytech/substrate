@@ -77,7 +77,7 @@ pub use sp_consensus::SyncOracle;
 pub use sc_consensus_slots::SlotProportion;
 use std::{
 	collections::HashMap, sync::Arc, u64, pin::Pin, time::{Instant, Duration},
-	any::Any, borrow::Cow, convert::TryInto,
+	borrow::Cow, convert::TryInto,
 };
 use sp_consensus::{ImportResult, CanAuthorWith, import_queue::BoxJustificationImport};
 use sp_core::crypto::Public;
@@ -1084,6 +1084,7 @@ where
 	}
 }
 
+#[async_trait::async_trait]
 impl<Block, Client, SelectChain, CAW> Verifier<Block>
 	for BabeVerifier<Block, Client, SelectChain, CAW>
 where
@@ -1094,7 +1095,7 @@ where
 	SelectChain: sp_consensus::SelectChain<Block>,
 	CAW: CanAuthorWith<Block> + Send + Sync,
 {
-	fn verify(
+	async fn verify(
 		&mut self,
 		origin: BlockOrigin,
 		header: Block::Header,

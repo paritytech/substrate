@@ -32,12 +32,11 @@ pub use slots::SlotInfo;
 use slots::Slots;
 pub use aux_schema::{check_equivocation, MAX_SLOT_CAPACITY, PRUNING_BOUND};
 
-use std::{fmt::Debug, ops::Deref, sync::Arc, time::Duration};
+use std::{fmt::Debug, ops::Deref, time::Duration};
 use codec::{Decode, Encode};
 use futures::{future::Either, Future, TryFutureExt};
 use futures_timer::Delay;
 use log::{debug, error, info, warn};
-use parking_lot::Mutex;
 use sp_api::{ProvideRuntimeApi, ApiRef};
 use sp_arithmetic::traits::BaseArithmetic;
 use sp_consensus::{BlockImport, Proposer, SyncOracle, SelectChain, CanAuthorWith, SlotData};
@@ -110,7 +109,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	fn logging_target(&self) -> &'static str;
 
 	/// A handle to a `BlockImport`.
-	fn block_import(&self) -> Arc<Mutex<Self::BlockImport>>;
+	fn block_import(&mut self) -> &mut Self::BlockImport;
 
 	/// Returns the epoch data necessary for authoring. For time-dependent epochs,
 	/// use the provided slot number as a canonical source of time.
@@ -398,8 +397,8 @@ pub trait SimpleSlotWorker<B: BlockT> {
 
 		let header = block_import_params.post_header();
 		if let Err(err) = block_import
-			.lock()
 			.import_block(block_import_params, Default::default())
+			.await
 		{
 			warn!(
 				target: logging_target,

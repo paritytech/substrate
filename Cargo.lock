@@ -7157,6 +7157,7 @@ dependencies = [
 name = "sc-consensus-babe"
 version = "0.9.0"
 dependencies = [
+ "async-trait",
  "derive_more",
  "fork-tree",
  "futures 0.3.13",
@@ -7243,7 +7244,6 @@ version = "0.9.0"
 dependencies = [
  "fork-tree",
  "parity-scale-codec 2.0.1",
- "parking_lot 0.11.1",
  "sc-client-api",
  "sc-consensus",
  "sp-blockchain",
@@ -7320,7 +7320,6 @@ dependencies = [
  "futures-timer 3.0.2",
  "log",
  "parity-scale-codec 2.0.1",
- "parking_lot 0.11.1",
  "sc-client-api",
  "sc-telemetry",
  "sp-api",
@@ -7444,6 +7443,7 @@ name = "sc-finality-grandpa"
 version = "0.9.0"
 dependencies = [
  "assert_matches",
+ "async-trait",
  "derive_more",
  "dyn-clone",
  "finality-grandpa",

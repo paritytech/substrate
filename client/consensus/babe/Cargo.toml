@@ -53,6 +53,7 @@ merlin = "2.0"
 pdqselect = "0.1.0"
 derive_more = "0.99.2"
 retain_mut = "0.1.2"
+async-trait = "0.1.42"
 
 [dev-dependencies]
 sp-keyring = { version = "3.0.0", path = "../../../primitives/keyring" }

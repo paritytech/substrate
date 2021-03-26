@@ -1707,6 +1707,7 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for &Client<B, E, Block, 
 	<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api: CoreApi<Block> +
 		ApiExt<Block, StateBackend = B::State>,
 	RA: Sync + Send,
+	backend::TransactionFor<B, Block>: Send + 'static,
 {
 	type Error = ConsensusError;
 	type Transaction = backend::TransactionFor<B, Block>;
@@ -1809,6 +1810,7 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for Client<B, E, Block, R
 	<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block> +
 		ApiExt<Block, StateBackend = B::State>,
 	RA: Sync + Send,
+	backend::TransactionFor<B, Block>: Send + 'static,
 {
 	type Error = ConsensusError;
 	type Transaction = backend::TransactionFor<B, Block>;
