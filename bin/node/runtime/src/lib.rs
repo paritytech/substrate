@@ -514,10 +514,10 @@ parameter_types! {
 		.max_extrinsic.expect("Normal extrinsics have a weight limit configured; qed")
 		.saturating_sub(BlockExecutionWeight::get());
 	// Solution can occupy 90% of normal block size
-	pub MinerMaxLength: u32 = RuntimeBlockLength::get()
+	pub MinerMaxLength: u32 = Perbill::from_rational(9u32, 10) *
+		*RuntimeBlockLength::get()
 		.max
-		.get(DispatchClass::Normal)
-		.saturating_mul(9) / 10;
+		.get(DispatchClass::Normal);
 }
 
 impl pallet_election_provider_multi_phase::Config for Runtime {
