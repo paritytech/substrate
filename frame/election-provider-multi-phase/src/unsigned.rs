@@ -261,7 +261,7 @@ impl<T: Config> Pallet<T> {
 			}
 			_ => {
 				// nada, return as-is
-				log!(debug, "Didn't remove any voter for weight limits.");
+				log!(debug, "didn't remove any voter for weight limits.");
 				Ok(compact)
 			}
 		}
