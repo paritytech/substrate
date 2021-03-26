@@ -165,7 +165,7 @@ pub enum BlockImportError {
 
 /// Single block import function.
 pub async fn import_single_block<B: BlockT, V: Verifier<B>, Transaction: Send + 'static>(
-	import_handle: &mut dyn BlockImport<B, Transaction = Transaction, Error = ConsensusError>,
+	import_handle: &mut impl BlockImport<B, Transaction = Transaction, Error = ConsensusError>,
 	block_origin: BlockOrigin,
 	block: IncomingBlock<B>,
 	verifier: &mut V,
@@ -175,7 +175,7 @@ pub async fn import_single_block<B: BlockT, V: Verifier<B>, Transaction: Send + 
 
 /// Single block import function with metering.
 pub(crate) async fn import_single_block_metered<B: BlockT, V: Verifier<B>, Transaction: Send + 'static>(
-	import_handle: &mut dyn BlockImport<B, Transaction = Transaction, Error = ConsensusError>,
+	import_handle: &mut impl BlockImport<B, Transaction = Transaction, Error = ConsensusError>,
 	block_origin: BlockOrigin,
 	block: IncomingBlock<B>,
 	verifier: &mut V,
