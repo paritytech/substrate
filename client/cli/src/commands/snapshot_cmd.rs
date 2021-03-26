@@ -141,7 +141,7 @@ impl SnapshotExportCmd {
 			from_hash: default_block,
 		};
 
-		info!("Export using config : {:?}", range);
+		info!("Export using config : {:?}, chain info : {:?}", range, chain_info);
 		if let Some(path) = &self.output {
 			let mut out = std::fs::File::create(path)?;
 			backend.snapshot_sync().export_sync(&mut out, range)?;
