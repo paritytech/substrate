@@ -2075,6 +2075,7 @@ impl<T: Config> Module<T> {
 			}
 		}
 
+		debug_assert!(payout_count <= T::MaxNominatorRewardedPerValidator::get() +1);
 		Ok(Some(T::WeightInfo::payout_stakers_alive_staked(payout_count)).into())
 	}
 
