@@ -648,7 +648,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	}
 
 	/// Adds an address known to a node.
-	pub fn add_known_address(&mut self, peer_id: PeerId, addr: Multiaddr) {
+	pub fn add_known_address(&self, peer_id: PeerId, addr: Multiaddr) {
 		let _ = self
 			.to_worker
 			.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
