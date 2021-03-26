@@ -54,6 +54,7 @@ use sp_storage::StorageKey;
 use sp_trie::{TrieConfiguration, trie_types::Layout};
 use sp_runtime::{generic::BlockId, DigestItem, Justifications};
 use hex_literal::hex;
+use futures::executor::block_on;
 
 mod light;
 mod db;
@@ -363,7 +364,7 @@ fn block_builder_works_with_no_transactions() {
 
 	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 
-	client.import(BlockOrigin::Own, block).unwrap();
+	block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
 	assert_eq!(client.chain_info().best_number, 1);
 }
@@ -382,7 +383,7 @@ fn block_builder_works_with_transactions() {
 	}).unwrap();
 
 	let block = builder.build().unwrap().block;
-	client.import(BlockOrigin::Own, block).unwrap();
+	block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
 	assert_eq!(client.chain_info().best_number, 1);
 	assert_ne!(
@@ -428,7 +429,7 @@ fn block_builder_does_not_include_invalid() {
 	);
 
 	let block = builder.build().unwrap().block;
-	client.import(BlockOrigin::Own, block).unwrap();
+	block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
 	assert_eq!(client.chain_info().best_number, 1);
 	assert_ne!(
@@ -476,7 +477,7 @@ fn uncles_with_only_ancestors() {
 
 	// G -> A1
 	let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
-	client.import(BlockOrigin::Own, a1.clone()).unwrap();
+	block_on(client.import(BlockOrigin::Own, a1.clone())).unwrap();
 
 	// A1 -> A2
 	let a2 = client.new_block(Default::default()).unwrap().build().unwrap().block;
@@ -496,7 +497,7 @@ fn uncles_with_multiple_forks() {
 
 	// G -> A1
 	let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
-	client.import(BlockOrigin::Own, a1.clone()).unwrap();
+	block_on(client.import(BlockOrigin::Own, a1.clone())).unwrap();
 
 	// A1 -> A2
 	let a2 = client.new_block_at(
@@ -504,7 +505,7 @@ fn uncles_with_multiple_forks() {
 		Default::default(),
 		false,
 	).unwrap().build().unwrap().block;
-	client.import(BlockOrigin::Own, a2.clone()).unwrap();
+	block_on(client.import(BlockOrigin::Own, a2.clone())).unwrap();
 
 	// A2 -> A3
 	let a3 = client.new_block_at(
@@ -512,7 +513,7 @@ fn uncles_with_multiple_forks() {
 		Default::default(),
 		false,
 	).unwrap().build().unwrap().block;
-	client.import(BlockOrigin::Own, a3.clone()).unwrap();
+	block_on(client.import(BlockOrigin::Own, a3.clone())).unwrap();
 
 	// A3 -> A4
 	let a4 = client.new_block_at(
@@ -520,7 +521,7 @@ fn uncles_with_multiple_forks() {
 		Default::default(),
 		false,
 	).unwrap().build().unwrap().block;
-	client.import(BlockOrigin::Own, a4.clone()).unwrap();
+	block_on(client.import(BlockOrigin::Own, a4.clone())).unwrap();
 
 	// A4 -> A5
 	let a5 = client.new_block_at(
@@ -528,7 +529,7 @@ fn uncles_with_multiple_forks() {
 		Default::default(),
 		false,
 	).unwrap().build().unwrap().block;
-	client.import(BlockOrigin::Own, a5.clone()).unwrap();
+	block_on(client.import(BlockOrigin::Own, a5.clone())).unwrap();
 
 	// A1 -> B2
 	let mut builder = client.new_block_at(
@@ -544,7 +545,7 @@ fn uncles_with_multiple_forks() {
 		nonce: 0,
 	}).unwrap();
 	let b2 = builder.build().unwrap().block;
-	client.import(BlockOrigin::Own, b2.clone()).unwrap();
+	block_on(client.import(BlockOrigin::Own, b2.clone())).unwrap();
 
 	// B2 -> B3
 	let b3 = client.new_block_at(
@@ -552,7 +553,7 @@ fn uncles_with_multiple_forks() {
 		Default::default(),
 		false,
 	).unwrap().build().unwrap().block;
-	client.import(BlockOrigin::Own, b3.clone()).unwrap();
+	block_on(client.import(BlockOrigin::Own, b3.clone())).unwrap();
 
 	// B3 -> B4
 	let b4 = client.new_block_at(
@@ -560,7 +561,7 @@ fn uncles_with_multiple_forks() {
 		Default::default(),
 		false,
 	).unwrap().build().unwrap().block;
-	client.import(BlockOrigin::Own, b4.clone()).unwrap();
+	block_on(client.import(BlockOrigin::Own, b4.clone())).unwrap();
 
 	// // B2 -> C3
 	let mut builder = client.new_block_at(
@@ -576,7 +577,7 @@ fn uncles_with_multiple_forks() {
 		nonce: 1,
 	}).unwrap();
 	let c3 = builder.build().unwrap().block;
-	client.import(BlockOrigin::Own, c3.clone()).unwrap();
+	block_on(client.import(BlockOrigin::Own, c3.clone())).unwrap();
 
 	// A1 -> D2
 	let mut builder = client.new_block_at(
@@ -592,7 +593,7 @@ fn uncles_with_multiple_forks() {
 		nonce: 0,
 	}).unwrap();
 	let d2 = builder.build().unwrap().block;
-	client.import(BlockOrigin::Own, d2.clone()).unwrap();
+	block_on(client.import(BlockOrigin::Own, d2.clone())).unwrap();
 
 	let genesis_hash = client.chain_info().genesis_hash;
 
@@ -624,11 +625,11 @@ fn best_containing_on_longest_chain_with_single_chain_3_blocks() {
 
 	// G -> A1
 	let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
-	client.import(BlockOrigin::Own, a1.clone()).unwrap();
+	block_on(client.import(BlockOrigin::Own, a1.clone())).unwrap();
 
 	// A1 -> A2
 	let a2 = client.new_block(Default::default()).unwrap().build().unwrap().block;
-	client.import(BlockOrigin::Own, a2.clone()).unwrap();
+	block_on(client.import(BlockOrigin::Own, a2.clone())).unwrap();
 
 	let genesis_hash = client.chain_info().genesis_hash;
 
@@ -656,7 +657,7 @@ fn best_containing_on_longest_chain_with_multiple_forks() {
 		Default::default(),
 		false,
 	).unwrap().build().unwrap().block;
-	client.import(BlockOrigin::Own, a2.clone()).unwrap();
+	block_on(client.import(BlockOrigin::Own, a2.clone())).unwrap();
 
 	// A2 -> A3
 	let a3 = client.new_block_at(
@@ -664,7 +665,7 @@ fn best_containing_on_longest_chain_with_multiple_forks() {
 		Default::default(),
 		false,
 	).unwrap().build().unwrap().block;
-	client.import(BlockOrigin::Own, a3.clone()).unwrap();
+	block_on(client.import(BlockOrigin::Own, a3.clone())).unwrap();
 
 	// A3 -> A4
 	let a4 = client.new_block_at(
@@ -672,7 +673,7 @@ fn best_containing_on_longest_chain_with_multiple_forks() {
 		Default::default(),
 		false,
 	).unwrap().build().unwrap().block;
-	client.import(BlockOrigin::Own, a4.clone()).unwrap();
+	block_on(client.import(BlockOrigin::Own, a4.clone())).unwrap();
 
 	// A4 -> A5
 	let a5 = client.new_block_at(
@@ -680,7 +681,7 @@ fn best_containing_on_longest_chain_with_multiple_forks() {
 		Default::default(),
 		false,
 	).unwrap().build().unwrap().block;
-	client.import(BlockOrigin::Own, a5.clone()).unwrap();
+	block_on(client.import(BlockOrigin::Own, a5.clone())).unwrap();
 
 	// A1 -> B2
 	let mut builder = client.new_block_at(
@@ -696,7 +697,7 @@ fn best_containing_on_longest_chain_with_multiple_forks() {
 		nonce: 0,
 	}).unwrap();
 	let b2 = builder.build().unwrap().block;
-	client.import(BlockOrigin::Own, b2.clone()).unwrap();
+	block_on(client.import(BlockOrigin::Own, b2.clone())).unwrap();
 
 	// B2 -> B3
 	let b3 = client.new_block_at(
@@ -704,7 +705,7 @@ fn best_containing_on_longest_chain_with_multiple_forks() {
 		Default::default(),
 		false,
 	).unwrap().build().unwrap().block;
-	client.import(BlockOrigin::Own, b3.clone()).unwrap();
+	block_on(client.import(BlockOrigin::Own, b3.clone())).unwrap();
 
 	// B3 -> B4
 	let b4 = client.new_block_at(
@@ -712,7 +713,7 @@ fn best_containing_on_longest_chain_with_multiple_forks() {
 		Default::default(),
 		false,
 	).unwrap().build().unwrap().block;
-	client.import(BlockOrigin::Own, b4.clone()).unwrap();
+	block_on(client.import(BlockOrigin::Own, b4.clone())).unwrap();
 
 	// // B2 -> C3
 	let mut builder = client.new_block_at(
@@ -728,7 +729,7 @@ fn best_containing_on_longest_chain_with_multiple_forks() {
 		nonce: 1,
 	}).unwrap();
 	let c3 = builder.build().unwrap().block;
-	client.import(BlockOrigin::Own, c3.clone()).unwrap();
+	block_on(client.import(BlockOrigin::Own, c3.clone())).unwrap();
 
 	// A1 -> D2
 	let mut builder = client.new_block_at(
@@ -744,7 +745,7 @@ fn best_containing_on_longest_chain_with_multiple_forks() {
 		nonce: 0,
 	}).unwrap();
 	let d2 = builder.build().unwrap().block;
-	client.import(BlockOrigin::Own, d2.clone()).unwrap();
+	block_on(client.import(BlockOrigin::Own, d2.clone())).unwrap();
 
 	assert_eq!(client.chain_info().best_hash, a5.hash());
 
