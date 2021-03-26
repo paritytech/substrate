@@ -258,3 +258,6 @@ zeroize = { opt-level = 3 }
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
+
+[patch.'https://github.com/Zondax/tee-substrate-service']
+tee-keystore = { path = "../../remotee-signer/substrate/keystore" }

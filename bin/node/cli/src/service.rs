@@ -173,7 +173,7 @@ pub struct NewFullBase {
 }
 
 /// Creates a full service from the configuration.
-pub fn new_full_base(
+pub async fn new_full_base(
 	mut config: Configuration,
 	with_startup_data: impl FnOnce(
 		&sc_consensus_babe::BabeBlockImport<Block, FullClient, FullGrandpaBlockImport>,
@@ -185,12 +185,22 @@ pub fn new_full_base(
 		backend,
 		mut task_manager,
 		import_queue,
-		keystore_container,
+		mut keystore_container,
 		select_chain,
 		transaction_pool,
 		inherent_data_providers,
 		other: (rpc_extensions_builder, import_setup, rpc_setup),
 	} = new_partial(&config)?;
+
+	if let Some(uri) = &config.keystore_remote {
+		use tee_keystore::TEEKeystore;
+		let keystore = TEEKeystore::new(&uri)
+			.await
+			.map_err(|e| format!("Failed to connect to remote keystore: {:?}", e))
+			.map_err(ServiceError::Other)?;
+
+		keystore_container.set_remote_keystore(Arc::new(keystore));
+	}
 
 	let shared_voter_state = rpc_setup;
 
@@ -352,9 +362,9 @@ pub fn new_full_base(
 }
 
 /// Builds a new service for a full client.
-pub fn new_full(config: Configuration)
+pub async fn new_full(config: Configuration)
 -> Result<TaskManager, ServiceError> {
-	new_full_base(config, |_, _| ()).map(|NewFullBase { task_manager, .. }| {
+	new_full_base(config, |_, _| ()).await.map(|NewFullBase { task_manager, .. }| {
 		task_manager
 	})
 }
