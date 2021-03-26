@@ -29,12 +29,9 @@ use sp_std::prelude::*;
 use codec::Codec;
 use sp_runtime::MultiAddress;
 use sp_runtime::traits::{
-	StaticLookup, Member, LookupError, Zero, Saturating, AtLeast32Bit
+	StaticLookup, LookupError, Zero, Saturating, AtLeast32Bit
 };
-use frame_support::{Parameter, decl_module, decl_error, decl_event, decl_storage, ensure};
-use frame_support::dispatch::DispatchResult;
-use frame_support::traits::{Currency, ReservableCurrency, Get, BalanceStatus::Reserved};
-use frame_system::{ensure_signed, ensure_root};
+use frame_support::traits::{Currency, ReservableCurrency, BalanceStatus::Reserved};
 pub use weights::WeightInfo;
 
 type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
@@ -104,7 +101,7 @@ pub mod pallet {
 				*maybe_value = Some((who.clone(), T::Deposit::get(), false));
 				T::Currency::reserve(&who, T::Deposit::get())
 			})?;
-			Self::deposit_event(RawEvent::IndexAssigned(who, index));
+			Self::deposit_event(Event::IndexAssigned(who, index));
 			Ok(())
 		}
 
@@ -145,7 +142,7 @@ pub mod pallet {
 				*maybe_value = Some((new.clone(), amount.saturating_sub(lost), false));
 				Ok(())
 			})?;
-			Self::deposit_event(RawEvent::IndexAssigned(new, index));
+			Self::deposit_event(Event::IndexAssigned(new, index));
 			Ok(())
 		}
 
@@ -178,7 +175,7 @@ pub mod pallet {
 				T::Currency::unreserve(&who, amount);
 				Ok(())
 			})?;
-			Self::deposit_event(RawEvent::IndexFreed(index));
+			Self::deposit_event(Event::IndexFreed(index));
 			Ok(())
 		}
 
@@ -218,7 +215,7 @@ pub mod pallet {
 				}
 				*maybe_value = Some((new.clone(), Zero::zero(), freeze));
 			});
-			Self::deposit_event(RawEvent::IndexAssigned(new, index));
+			Self::deposit_event(Event::IndexAssigned(new, index));
 			Ok(())
 		}
 
@@ -251,7 +248,7 @@ pub mod pallet {
 				*maybe_value = Some((account, Zero::zero(), true));
 				Ok(())
 			})?;
-			Self::deposit_event(RawEvent::IndexFrozen(index, who));
+			Self::deposit_event(Event::IndexFrozen(index, who));
 			Ok(())
 		}
 	}
