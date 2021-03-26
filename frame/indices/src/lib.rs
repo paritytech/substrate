@@ -49,7 +49,7 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {
 		/// Type used for storing an account's index; implies the maximum number of accounts the system
 		/// can hold.
-		type AccountIndex: Parameter + Member + Codec + Default + AtLeast32Bit + Copy;
+		type AccountIndex: Parameter + Member + MaybeSerializeDeserialize + Codec + Default + AtLeast32Bit + Copy;
 
 		/// The currency trait.
 		type Currency: ReservableCurrency<Self::AccountId>;
@@ -309,7 +309,7 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			for (a, b) in &self.indices {
-				<Accounts<T>>::insert(a, (b, Zero::zero(), false))
+				<Accounts<T>>::insert(a, (b, <BalanceOf<T>>::zero(), false))
 			}
 		}
 	}
