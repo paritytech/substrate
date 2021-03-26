@@ -20,7 +20,7 @@
 
 use super::*;
 use sp_std::marker::PhantomData;
-use sp_runtime::{TokenError, traits::Zero};
+use sp_runtime::{TokenError, traits::{CheckedAdd, Zero}};
 use super::super::Imbalance as ImbalanceT;
 use crate::traits::misc::{SameOrOther, TryDrop};
 use crate::dispatch::{DispatchResult, DispatchError};
@@ -199,13 +199,13 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 		let mut r = Self::set_balance(who, new_balance);
 		if r.is_err() {
 			// Some error, probably because we tried to destroy an account which cannot be destroyed.
-			if amount > minimum_balance {
-				new_balance += minimum_balance;
+			if new_balance.is_zero() && amount >= minimum_balance {
+				new_balance = minimum_balance;
 				amount -= minimum_balance;
 				r = Self::set_balance(who, new_balance);
 			}
 			if r.is_err() {
-				// Still an error. Apparently it's not possibl to reduce at all.
+				// Still an error. Apparently it's not possible to reduce at all.
 				amount = Zero::zero();
 			}
 		}
@@ -221,7 +221,7 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 		-> Result<Self::Balance, DispatchError>
 	{
 		let old_balance = Self::balance(who);
-		let new_balance = old_balance.saturating_add(amount);
+		let new_balance = old_balance.checked_add(&amount).ok_or(TokenError::Overflow)?;
 		if new_balance < Self::minimum_balance() {
 			Err(TokenError::BelowMinimum)?
 		}
@@ -242,7 +242,7 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 	{
 		let old_balance = Self::balance(who);
 		let mut new_balance = old_balance.saturating_add(amount);
-		let mut amount = amount;
+		let mut amount = new_balance - old_balance;
 		if new_balance < Self::minimum_balance() {
 			new_balance = Zero::zero();
 			amount = Zero::zero();
@@ -317,12 +317,16 @@ impl<AccountId, U: Unbalanced<AccountId>> Balanced<AccountId> for U {
 	type OnDropCredit = DecreaseIssuance<AccountId, U>;
 	type OnDropDebt = IncreaseIssuance<AccountId, U>;
 	fn rescind(amount: Self::Balance) -> Debt<AccountId, Self> {
-		U::set_total_issuance(U::total_issuance().saturating_sub(amount));
-		debt(amount)
+		let old = U::total_issuance();
+		let new = old.saturating_sub(amount);
+		U::set_total_issuance(new);
+		debt(old - new)
 	}
 	fn issue(amount: Self::Balance) -> Credit<AccountId, Self> {
-		U::set_total_issuance(U::total_issuance().saturating_add(amount));
-		credit(amount)
+		let old = U::total_issuance();
+		let new = old.saturating_add(amount);
+		U::set_total_issuance(new);
+		credit(new - old)
 	}
 	fn slash(
 		who: &AccountId,
@@ -334,8 +338,8 @@ impl<AccountId, U: Unbalanced<AccountId>> Balanced<AccountId> for U {
 		//   removed without a problem.
 		// If slashed > amount, it means the account had more than amount in it, but not enough more
 		//   to push it over minimum_balance.
-		// If amount < slashed, it means the account didn't have enough in it to be reduced by
-		//   `slashed` without being destroyed.
+		// If slashed < amount, it means the account didn't have enough in it to be reduced by
+		//   `amount` without being destroyed.
 		(credit(slashed), amount.saturating_sub(slashed))
 	}
 	fn deposit(

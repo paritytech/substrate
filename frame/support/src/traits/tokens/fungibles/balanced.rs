@@ -20,7 +20,7 @@
 
 use super::*;
 use sp_std::marker::PhantomData;
-use sp_runtime::{TokenError, traits::Zero};
+use sp_runtime::{TokenError, traits::{Zero, CheckedAdd}};
 use sp_arithmetic::traits::Saturating;
 use crate::dispatch::{DispatchError, DispatchResult};
 use crate::traits::misc::{SameOrOther, TryDrop};
@@ -30,8 +30,11 @@ use crate::traits::misc::{SameOrOther, TryDrop};
 ///
 /// This is auto-implemented when a token class has `Unbalanced` implemented.
 pub trait Balanced<AccountId>: Inspect<AccountId> {
-	type OnDropDebt: HandleImbalanceDrop<Self::AssetId, Self::Balance>;
-	type OnDropCredit: HandleImbalanceDrop<Self::AssetId, Self::Balance>;
+	/// The type for managing what happens when an instance of `Debt` is dropped without being used.
+	type OnDropDebt: HandleImbalanceDrop<Self::Balance>;
+	/// The type for managing what happens when an instance of `Credit` is dropped without being
+	/// used.
+	type OnDropCredit: HandleImbalanceDrop<Self::Balance>;
 
 	/// Reduce the total issuance by `amount` and return the according imbalance. The imbalance will
 	/// typically be used to reduce an account by the same amount with e.g. `settle`.
@@ -149,6 +152,14 @@ pub trait Balanced<AccountId>: Inspect<AccountId> {
 	}
 }
 
+/// A fungible token class where the balance can be set arbitrarily.
+///
+/// **WARNING**
+/// Do not use this directly unless you want trouble, since it allows you to alter account balances
+/// without keeping the issuance up to date. It has no safeguards against accidentally creating
+/// token imbalances in your system leading to accidental imflation or deflation. It's really just
+/// for the underlying datatype to implement so the user gets the much safer `Balanced` trait to
+/// use.
 pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 	/// Set the `asset` balance of `who` to `amount`. If this cannot be done for some reason (e.g.
 	/// because the account cannot be created or an overflow) then an `Err` is returned.
@@ -203,13 +214,13 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 		let mut r = Self::set_balance(asset, who, new_balance);
 		if r.is_err() {
 			// Some error, probably because we tried to destroy an account which cannot be destroyed.
-			if amount > minimum_balance {
-				new_balance += minimum_balance;
+			if new_balance.is_zero() && amount >= minimum_balance {
+				new_balance = minimum_balance;
 				amount -= minimum_balance;
 				r = Self::set_balance(asset, who, new_balance);
 			}
 			if r.is_err() {
-				// Still an error. Apparently it's not possibl to reduce at all.
+				// Still an error. Apparently it's not possible to reduce at all.
 				amount = Zero::zero();
 			}
 		}
@@ -225,7 +236,7 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 		-> Result<Self::Balance, DispatchError>
 	{
 		let old_balance = Self::balance(asset, who);
-		let new_balance = old_balance.saturating_add(amount);
+		let new_balance = old_balance.checked_add(&amount).ok_or(TokenError::Overflow)?;
 		if new_balance < Self::minimum_balance(asset) {
 			Err(TokenError::BelowMinimum)?
 		}
@@ -246,7 +257,7 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 	{
 		let old_balance = Self::balance(asset, who);
 		let mut new_balance = old_balance.saturating_add(amount);
-		let mut amount = amount;
+		let mut amount = new_balance - old_balance;
 		if new_balance < Self::minimum_balance(asset) {
 			new_balance = Zero::zero();
 			amount = Zero::zero();
@@ -343,8 +354,8 @@ impl<AccountId, U: Unbalanced<AccountId>> Balanced<AccountId> for U {
 		//   removed without a problem.
 		// If slashed > amount, it means the account had more than amount in it, but not enough more
 		//   to push it over minimum_balance.
-		// If amount < slashed, it means the account didn't have enough in it to be reduced by
-		//   `slashed` without being destroyed.
+		// If slashed < amount, it means the account didn't have enough in it to be reduced by
+		//   `amount` without being destroyed.
 		(credit(asset, slashed), amount.saturating_sub(slashed))
 	}
 	fn deposit(

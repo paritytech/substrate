@@ -20,6 +20,7 @@
 use super::*;
 use crate::dispatch::{DispatchError, DispatchResult};
 use super::misc::{AssetId, Balance};
+use sp_runtime::traits::Saturating;
 
 mod balanced;
 pub use balanced::{Balanced, Unbalanced};
@@ -111,9 +112,9 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 		amount: Self::Balance,
 	) -> Result<Self::Balance, DispatchError> {
 		let extra = Self::can_withdraw(asset, &source, amount).into_result()?;
-		Self::can_deposit(asset, &dest, amount + extra).into_result()?;
+		Self::can_deposit(asset, &dest, amount.saturating_add(extra)).into_result()?;
 		let actual = Self::burn_from(asset, source, amount)?;
-		debug_assert!(actual == amount + extra, "can_withdraw must agree with withdraw; qed");
+		debug_assert!(actual == amount.saturating_add(extra), "can_withdraw must agree with withdraw; qed");
 		match Self::mint_into(asset, dest, actual) {
 			Ok(_) => Ok(actual),
 			Err(err) => {
