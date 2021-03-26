@@ -168,6 +168,7 @@ pub mod pallet {
 		type ProposalBond: Get<Permill>;
 
 		/// Minimum amount of funds that should be placed in a deposit for making a proposal.
+		#[pallet::constant]
 		type ProposalBondMinimum: Get<BalanceOf<Self, I>>;
 
 		/// Period between successive spends.
