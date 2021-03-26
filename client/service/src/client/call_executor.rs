@@ -34,6 +34,8 @@ use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
 use sc_client_api::{backend, call_executor::CallExecutor};
 use super::{client::ClientConfig, wasm_override::WasmOverride};
 
+use log::debug;
+
 /// Call executor that executes methods locally, querying all required
 /// data from local backend.
 pub struct LocalCallExecutor<B, E> {
@@ -81,15 +83,20 @@ where
 		Block: BlockT,
 		B: backend::Backend<Block>,
 	{
-		let code = self.wasm_override
+		let code = if let Some(d) = self.wasm_override
 			.as_ref()
 			.map::<sp_blockchain::Result<Option<RuntimeCode>>, _>(|o| {
 				let spec = self.runtime_version(id)?.spec_version;
 				Ok(o.get(&spec, onchain_code.heap_pages))
 			})
 			.transpose()?
-			.flatten()
-			.unwrap_or(onchain_code);
+			.flatten() {
+			debug!(target: "wasm_overrides", "using WASM override for block {}", id);
+			d
+		} else {
+			debug!(target: "wasm_overrides", "No WASM override available for block {}, using onchain code", id);
+			onchain_code
+		};
 
 		Ok(code)
 	}
