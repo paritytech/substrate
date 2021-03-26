@@ -171,6 +171,7 @@ pub mod pallet {
 		type ProposalBondMinimum: Get<BalanceOf<Self, I>>;
 
 		/// Period between successive spends.
+		#[pallet::constant]
 		type SpendPeriod: Get<Self::BlockNumber>;
 
 		/// Percentage of spare funds (if any) that are burnt per spend period.
