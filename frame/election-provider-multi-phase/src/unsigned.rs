@@ -170,8 +170,9 @@ impl<T: Config> Pallet<T> {
 		);
 		log!(
 			debug,
-			"miner: current compact solution voters = {}, maximum_allowed = {}",
+			"current compact solution voters = {}, snapshot = {:?}, maximum_allowed = {}",
 			compact.voter_count(),
+			size,
 			maximum_allowed_voters,
 		);
 		let compact = Self::trim_compact(maximum_allowed_voters, compact, &voter_index)?;
@@ -330,6 +331,7 @@ impl<T: Config> Pallet<T> {
 			voters.min(size.voters),
 			max_weight,
 		);
+		log!(debug, "maximum allowed voters would have been {}.", voters);
 		voters.min(size.voters)
 	}
 
