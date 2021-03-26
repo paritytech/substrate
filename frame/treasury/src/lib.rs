@@ -174,6 +174,7 @@ pub mod pallet {
 		type SpendPeriod: Get<Self::BlockNumber>;
 
 		/// Percentage of spare funds (if any) that are burnt per spend period.
+		#[pallet::constant]
 		type Burn: Get<Permill>;
 
 		/// Handler for the unbalanced decrease when treasury funds are burned.
