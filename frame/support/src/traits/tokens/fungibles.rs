@@ -20,6 +20,7 @@
 use super::*;
 use crate::dispatch::{DispatchError, DispatchResult};
 use super::misc::{AssetId, Balance};
+use sp_runtime::traits::Saturating;
 
 mod balanced;
 pub use balanced::{Balanced, Unbalanced};

@@ -20,7 +20,7 @@
 
 use super::*;
 use sp_std::marker::PhantomData;
-use sp_runtime::{TokenError, traits::Zero};
+use sp_runtime::{TokenError, traits::{CheckedAdd, Zero}};
 use super::super::Imbalance as ImbalanceT;
 use crate::traits::misc::{SameOrOther, TryDrop};
 use crate::dispatch::{DispatchResult, DispatchError};

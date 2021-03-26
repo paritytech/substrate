@@ -20,7 +20,7 @@
 
 use super::*;
 use sp_std::marker::PhantomData;
-use sp_runtime::{TokenError, traits::Zero};
+use sp_runtime::{TokenError, traits::{Zero, CheckedAdd}};
 use sp_arithmetic::traits::Saturating;
 use crate::dispatch::{DispatchError, DispatchResult};
 use crate::traits::misc::{SameOrOther, TryDrop};
