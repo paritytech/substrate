@@ -62,7 +62,7 @@ pub mod pallet {
 		type Deposit: Get<BalanceOf<Self>>;
 
 		/// The overarching event type.
-		type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
+		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -95,8 +95,8 @@ pub mod pallet {
 		/// -------------------
 		/// - DB Weight: 1 Read/Write (Accounts)
 		/// # </weight>
-		#[weight(T::WeightInfo::claim())]
-		fn claim(origin: OriginFor<T>, index: T::AccountIndex) -> DispatchResult {
+		#[pallet::weight(T::WeightInfo::claim())]
+		pub(crate) fn claim(origin: OriginFor<T>, index: T::AccountIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			Accounts::<T>::try_mutate(index, |maybe_value| {
@@ -128,8 +128,8 @@ pub mod pallet {
 		///    - Reads: Indices Accounts, System Account (recipient)
 		///    - Writes: Indices Accounts, System Account (recipient)
 		/// # </weight>
-		#[weight(T::WeightInfo::transfer())]
-		fn transfer(
+		#[pallet::weight(T::WeightInfo::transfer())]
+		pub(crate) fn transfer(
 			origin: OriginFor<T>,
 			new: T::AccountId,
 			index: T::AccountIndex,
@@ -167,8 +167,8 @@ pub mod pallet {
 		/// -------------------
 		/// - DB Weight: 1 Read/Write (Accounts)
 		/// # </weight>
-		#[weight(T::WeightInfo::free())]
-		fn free(origin: OriginFor<T>, index: T::AccountIndex) -> DispatchResult {
+		#[pallet::weight(T::WeightInfo::free())]
+		pub(crate) fn free(origin: OriginFor<T>, index: T::AccountIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			Accounts::<T>::try_mutate(index, |maybe_value| -> DispatchResult {
@@ -203,8 +203,8 @@ pub mod pallet {
 		///    - Reads: Indices Accounts, System Account (original owner)
 		///    - Writes: Indices Accounts, System Account (original owner)
 		/// # </weight>
-		#[weight(T::WeightInfo::force_transfer())]
-		fn force_transfer(
+		#[pallet::weight(T::WeightInfo::force_transfer())]
+		pub(crate) fn force_transfer(
 			origin: OriginFor<T>,
 			new: T::AccountId,
 			index: T::AccountIndex,
@@ -239,8 +239,8 @@ pub mod pallet {
 		/// -------------------
 		/// - DB Weight: 1 Read/Write (Accounts)
 		/// # </weight>
-		#[weight(T::WeightInfo::freeze())]
-		fn freeze(origin: OriginFor<T>, index: T::AccountIndex) -> DispatchResult {
+		#[pallet::weight(T::WeightInfo::freeze())]
+		pub(crate) fn freeze(origin: OriginFor<T>, index: T::AccountIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			Accounts::<T>::try_mutate(index, |maybe_value| -> DispatchResult {
@@ -259,7 +259,7 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	#[pallet::metadata(T::AccountId = "AccountId", T::AccountIndex = "AccountIndex")]
-	pub enum Event<T> {
+	pub enum Event<T: Config> {
 		/// A account index was assigned. \[index, who\]
 		IndexAssigned(T::AccountId, T::AccountIndex),
 		/// A account index has been freed up (unassigned). \[index\]
