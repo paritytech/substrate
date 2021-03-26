@@ -78,7 +78,6 @@ if [ -z "$(jq -r -e '.[].state | select(. == "APPROVED")' < companion_pr_reviews
 fi
 
 boldprint "polkadot pr #${pr_companion} state APPROVED"
-exit 0
 
 curl -H "${github_header}" -sS -o companion_pr.json \
   ${github_api_polkadot_pull_url}/${pr_companion}
@@ -99,3 +98,5 @@ else
   boldprint "polkadot pr #${pr_companion} not mergeable"
   exit 1
 fi
+
+exit 0
