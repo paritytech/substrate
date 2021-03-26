@@ -155,7 +155,7 @@ mod worker_messages {
 /// to be run.
 ///
 /// Returns when `block_import` ended.
-async fn block_import_process<B: BlockT, Transaction: Send>(
+async fn block_import_process<B: BlockT, Transaction: Send + 'static>(
 	mut block_import: BoxBlockImport<B, Transaction>,
 	mut verifier: impl Verifier<B>,
 	mut result_sender: BufferedLinkSender<B>,
@@ -195,7 +195,7 @@ struct BlockImportWorker<B: BlockT> {
 }
 
 impl<B: BlockT> BlockImportWorker<B> {
-	fn new<V: 'static + Verifier<B>, Transaction: Send>(
+	fn new<V: 'static + Verifier<B>, Transaction: Send + 'static>(
 		result_sender: BufferedLinkSender<B>,
 		verifier: V,
 		block_import: BoxBlockImport<B, Transaction>,
@@ -322,7 +322,7 @@ struct ImportManyBlocksResult<B: BlockT> {
 /// Import several blocks at once, returning import result for each block.
 ///
 /// This will yield after each imported block once, to ensure that other futures can be called as well.
-async fn import_many_blocks<B: BlockT, V: Verifier<B>, Transaction>(
+async fn import_many_blocks<B: BlockT, V: Verifier<B>, Transaction: Send + 'static>(
 	import_handle: &mut BoxBlockImport<B, Transaction>,
 	blocks_origin: BlockOrigin,
 	blocks: Vec<IncomingBlock<B>>,
@@ -371,7 +371,7 @@ async fn import_many_blocks<B: BlockT, V: Verifier<B>, Transaction>(
 				block,
 				verifier,
 				metrics.clone(),
-			)
+			).await
 		};
 
 		if let Some(metrics) = metrics.as_ref() {
