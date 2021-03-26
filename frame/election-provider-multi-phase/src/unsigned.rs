@@ -305,8 +305,6 @@ impl<T: Config> Pallet<T> {
 		let mut step = voters / 2;
 		let mut current_weight = weight_with(voters);
 
-		sp_std::if_std! { dbg!(voters, current_weight); }
-
 		while step > 0 {
 			match next_voters(current_weight, voters, step) {
 				// proceed with the binary search
