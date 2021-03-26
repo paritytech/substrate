@@ -17,15 +17,15 @@
 
 //! # Atomic Swap
 //!
-//! A module for atomically sending funds.
+//! A pallet for atomically sending funds.
 //!
-//! - [`atomic_swap::Config`](./trait.Config.html)
-//! - [`Call`](./enum.Call.html)
-//! - [`Module`](./struct.Module.html)
+//! - [`Config`]
+//! - [`Call`]
+//! - [`Pallet`]
 //!
 //! ## Overview
 //!
-//! A module for atomically sending funds from an origin to a target. A proof
+//! A pallet for atomically sending funds from an origin to a target. A proof
 //! is used to allow the target to approve (claim) the swap. If the swap is not
 //! claimed within a specified duration of time, the sender may cancel it.
 //!
@@ -33,9 +33,9 @@
 //!
 //! ### Dispatchable Functions
 //!
-//! * `create_swap` - called by a sender to register a new atomic swap
-//! * `claim_swap` - called by the target to approve a swap
-//! * `cancel_swap` - may be called by a sender after a specified duration
+//! * [`create_swap`](Call::create_swap) - called by a sender to register a new atomic swap
+//! * [`claim_swap`](Call::claim_swap) - called by the target to approve a swap
+//! * [`cancel_swap`](Call::cancel_swap) - may be called by a sender after a specified duration
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -45,17 +45,16 @@ mod tests;
 use sp_std::{prelude::*, marker::PhantomData, ops::{Deref, DerefMut}};
 use sp_io::hashing::blake2_256;
 use frame_support::{
-	Parameter, decl_module, decl_storage, decl_event, decl_error, ensure,
+	RuntimeDebugNoBound,
 	traits::{Get, Currency, ReservableCurrency, BalanceStatus},
 	weights::Weight,
 	dispatch::DispatchResult,
 };
-use frame_system::{self as system, ensure_signed};
 use codec::{Encode, Decode};
 use sp_runtime::RuntimeDebug;
 
 /// Pending atomic swap operation.
-#[derive(Clone, Eq, PartialEq, RuntimeDebug, Encode, Decode)]
+#[derive(Clone, Eq, PartialEq, RuntimeDebugNoBound, Encode, Decode)]
 pub struct PendingSwap<T: Config> {
 	/// Source of the swap.
 	pub source: T::AccountId,
@@ -135,35 +134,50 @@ impl<T: Config, AccountId, C> SwapAction<AccountId, T> for BalanceSwapAction<Acc
 	}
 }
 
-/// Atomic swap's pallet configuration trait.
-pub trait Config: frame_system::Config {
-	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
-	/// Swap action.
-	type SwapAction: SwapAction<Self::AccountId, Self> + Parameter;
-	/// Limit of proof size.
-	///
-	/// Atomic swap is only atomic if once the proof is revealed, both parties can submit the proofs
-	/// on-chain. If A is the one that generates the proof, then it requires that either:
-	/// - A's blockchain has the same proof length limit as B's blockchain.
-	/// - Or A's blockchain has shorter proof length limit as B's blockchain.
-	///
-	/// If B sees A is on a blockchain with larger proof length limit, then it should kindly refuse
-	/// to accept the atomic swap request if A generates the proof, and asks that B generates the
-	/// proof instead.
-	type ProofLimit: Get<u32>;
-}
+pub use pallet::*;
 
-decl_storage! {
-	trait Store for Module<T: Config> as AtomicSwap {
-		pub PendingSwaps: double_map
-			hasher(twox_64_concat) T::AccountId, hasher(blake2_128_concat) HashedProof
-			=> Option<PendingSwap<T>>;
+#[frame_support::pallet]
+pub mod pallet {
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
+	use super::*;
+
+	/// Atomic swap's pallet configuration trait.
+	#[pallet::config]
+	pub trait Config: frame_system::Config {
+		/// The overarching event type.
+		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		/// Swap action.
+		type SwapAction: SwapAction<Self::AccountId, Self> + Parameter;
+		/// Limit of proof size.
+		///
+		/// Atomic swap is only atomic if once the proof is revealed, both parties can submit the proofs
+		/// on-chain. If A is the one that generates the proof, then it requires that either:
+		/// - A's blockchain has the same proof length limit as B's blockchain.
+		/// - Or A's blockchain has shorter proof length limit as B's blockchain.
+		///
+		/// If B sees A is on a blockchain with larger proof length limit, then it should kindly refuse
+		/// to accept the atomic swap request if A generates the proof, and asks that B generates the
+		/// proof instead.
+		type ProofLimit: Get<u32>;
 	}
-}
 
-decl_error! {
-	pub enum Error for Module<T: Config> {
+	#[pallet::pallet]
+	#[pallet::generate_store(pub(super) trait Store)]
+	pub struct Pallet<T>(PhantomData<T>);
+
+	#[pallet::storage]
+	pub type PendingSwaps<T: Config> = StorageDoubleMap<_,
+		Twox64Concat, T::AccountId,
+		Blake2_128Concat, HashedProof,
+		PendingSwap<T>,
+	>;
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+
+	#[pallet::error]
+	pub enum Error<T> {
 		/// Swap already exists.
 		AlreadyExist,
 		/// Swap proof is invalid.
@@ -181,31 +195,27 @@ decl_error! {
 		/// Duration has not yet passed for the swap to be cancelled.
 		DurationNotPassed,
 	}
-}
 
-decl_event!(
 	/// Event of atomic swap pallet.
-	pub enum Event<T> where
-		AccountId = <T as system::Config>::AccountId,
-		PendingSwap = PendingSwap<T>,
-	{
+	#[pallet::event]
+	#[pallet::metadata(T::AccountId = "AccountId", PendingSwap<T> = "PendingSwap")]
+	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	pub enum Event<T: Config> {
 		/// Swap created. \[account, proof, swap\]
-		NewSwap(AccountId, HashedProof, PendingSwap),
+		NewSwap(T::AccountId, HashedProof, PendingSwap<T>),
 		/// Swap claimed. The last parameter indicates whether the execution succeeds.
 		/// \[account, proof, success\]
-		SwapClaimed(AccountId, HashedProof, bool),
+		SwapClaimed(T::AccountId, HashedProof, bool),
 		/// Swap cancelled. \[account, proof\]
-		SwapCancelled(AccountId, HashedProof),
+		SwapCancelled(T::AccountId, HashedProof),
 	}
-);
 
-decl_module! {
-	/// Module definition of atomic swap pallet.
-	pub struct Module<T: Config> for enum Call where origin: T::Origin {
-		type Error = Error<T>;
+	/// Old name generated by `decl_event`.
+	#[deprecated(note="use `Event` instead")]
+	pub type RawEvent<T> = Event<T>;
 
-		fn deposit_event() = default;
-
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {
 		/// Register a new atomic swap, declaring an intention to send funds from origin to target
 		/// on the current blockchain. The target can claim the fund using the revealed proof. If
 		/// the fund is not claimed after `duration` blocks, then the sender can cancel the swap.
@@ -218,14 +228,14 @@ decl_module! {
 		/// - `duration`: Locked duration of the atomic swap. For safety reasons, it is recommended
 		///   that the revealer uses a shorter duration than the counterparty, to prevent the
 		///   situation where the revealer reveals the proof too late around the end block.
-		#[weight = T::DbWeight::get().reads_writes(1, 1).saturating_add(40_000_000)]
-		fn create_swap(
-			origin,
+		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1).saturating_add(40_000_000))]
+		pub(crate) fn create_swap(
+			origin: OriginFor<T>,
 			target: T::AccountId,
 			hashed_proof: HashedProof,
 			action: T::SwapAction,
 			duration: T::BlockNumber,
-		) {
+		) -> DispatchResult {
 			let source = ensure_signed(origin)?;
 			ensure!(
 				!PendingSwaps::<T>::contains_key(&target, hashed_proof),
@@ -242,8 +252,10 @@ decl_module! {
 			PendingSwaps::<T>::insert(target.clone(), hashed_proof.clone(), swap.clone());
 
 			Self::deposit_event(
-				RawEvent::NewSwap(target, hashed_proof, swap)
+				Event::NewSwap(target, hashed_proof, swap)
 			);
+
+			Ok(())
 		}
 
 		/// Claim an atomic swap.
@@ -253,13 +265,14 @@ decl_module! {
 		/// - `proof`: Revealed proof of the claim.
 		/// - `action`: Action defined in the swap, it must match the entry in blockchain. Otherwise
 		///   the operation fails. This is used for weight calculation.
-		#[weight = T::DbWeight::get().reads_writes(1, 1)
-		  .saturating_add(40_000_000)
-		  .saturating_add((proof.len() as Weight).saturating_mul(100))
-		  .saturating_add(action.weight())
-		]
-		fn claim_swap(
-			origin,
+		#[pallet::weight(
+			T::DbWeight::get().reads_writes(1, 1)
+				.saturating_add(40_000_000)
+				.saturating_add((proof.len() as Weight).saturating_mul(100))
+				.saturating_add(action.weight())
+		)]
+		pub(crate) fn claim_swap(
+			origin: OriginFor<T>,
 			proof: Vec<u8>,
 			action: T::SwapAction,
 		) -> DispatchResult {
@@ -280,7 +293,7 @@ decl_module! {
 			PendingSwaps::<T>::remove(target.clone(), hashed_proof.clone());
 
 			Self::deposit_event(
-				RawEvent::SwapClaimed(target, hashed_proof, succeeded)
+				Event::SwapClaimed(target, hashed_proof, succeeded)
 			);
 
 			Ok(())
@@ -292,12 +305,12 @@ decl_module! {
 		///
 		/// - `target`: Target of the original atomic swap.
 		/// - `hashed_proof`: Hashed proof of the original atomic swap.
-		#[weight = T::DbWeight::get().reads_writes(1, 1).saturating_add(40_000_000)]
-		fn cancel_swap(
-			origin,
+		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1).saturating_add(40_000_000))]
+		pub(crate) fn cancel_swap(
+			origin: OriginFor<T>,
 			target: T::AccountId,
 			hashed_proof: HashedProof,
-		) {
+		) -> DispatchResult {
 			let source = ensure_signed(origin)?;
 
 			let swap = PendingSwaps::<T>::get(&target, hashed_proof)
@@ -315,8 +328,10 @@ decl_module! {
 			PendingSwaps::<T>::remove(&target, hashed_proof.clone());
 
 			Self::deposit_event(
-				RawEvent::SwapCancelled(target, hashed_proof)
+				Event::SwapCancelled(target, hashed_proof)
 			);
+
+			Ok(())
 		}
 	}
 }
