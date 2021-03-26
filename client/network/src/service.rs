@@ -647,6 +647,13 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			.unbounded_send(ServiceToWorkerMsg::SetReservedOnly(reserved_only));
 	}
 
+	/// Adds an address known to a node.
+	pub fn add_known_address(&mut self, peer_id: PeerId, addr: Multiaddr) {
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
+	}
+
 	/// Appends a notification to the buffer of pending outgoing notifications with the given peer.
 	/// Has no effect if the notifications channel with this protocol name is not open.
 	///
