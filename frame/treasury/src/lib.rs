@@ -225,7 +225,7 @@ pub mod pallet {
 			<ProposalCount<T, I>>::put(c + 1);
 			<Proposals<T, I>>::insert(
 				c,
-				Proposal::<T::AccountId, BalanceOf<T, I>>{
+				Proposal::<T::AccountId, BalanceOf<T, I>> {
 					proposer,
 					value,
 					beneficiary,
