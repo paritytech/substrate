@@ -46,7 +46,7 @@ frame_support::construct_runtime!(
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Bounties: pallet_bounties::{Pallet, Call, Storage, Event<T>},
-		Treasury: pallet_treasury::{Pallet, Call, Storage, Config, Event<T>},
+		Treasury: pallet_treasury::{Pallet, Call, Storage, Config<T>, Event<T>},
 	}
 );
 
@@ -140,7 +140,7 @@ impl Config for Test {
 	type WeightInfo = ();
 }
 
-type TreasuryError = pallet_treasury::Error::<Test, pallet_treasury::DefaultInstance>;
+type TreasuryError = pallet_treasury::Error::<Test, ()>;
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
@@ -148,7 +148,10 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		// Total issuance will be 200 with treasury account initialized at ED.
 		balances: vec![(0, 100), (1, 98), (2, 1)],
 	}.assimilate_storage(&mut t).unwrap();
-	pallet_treasury::GenesisConfig::default().assimilate_storage::<Test, _>(&mut t).unwrap();
+
+	pallet_treasury::GenesisConfig::<Test, _>::default()
+		.assimilate_storage(&mut t).unwrap();
+
 	t.into()
 }
 
@@ -262,7 +265,7 @@ fn reject_already_rejected_spend_proposal_fails() {
 fn reject_non_existent_spend_proposal_fails() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(Treasury::reject_proposal(Origin::root(), 0),
-		pallet_treasury::Error::<Test, pallet_treasury::DefaultInstance>::InvalidIndex);
+		pallet_treasury::Error::<Test, _>::InvalidIndex);
 	});
 }
 
@@ -890,7 +893,10 @@ fn genesis_funding_works() {
 		// Total issuance will be 200 with treasury account initialized with 100.
 		balances: vec![(0, 100), (Treasury::account_id(), initial_funding)],
 	}.assimilate_storage(&mut t).unwrap();
-	pallet_treasury::GenesisConfig::default().assimilate_storage::<Test, _>(&mut t).unwrap();
+
+	pallet_treasury::GenesisConfig::<Test, _>::default()
+		.assimilate_storage(&mut t).unwrap();
+
 	let mut t: sp_io::TestExternalities = t.into();
 
 	t.execute_with(|| {

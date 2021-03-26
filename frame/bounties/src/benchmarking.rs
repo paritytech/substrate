@@ -27,7 +27,7 @@ use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark
 use frame_support::traits::OnInitialize;
 
 use crate::Module as Bounties;
-use pallet_treasury::Module as Treasury;
+use pallet_treasury::Pallet as Treasury;
 
 const SEED: u32 = 0;
 
