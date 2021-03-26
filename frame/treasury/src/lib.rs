@@ -246,7 +246,7 @@ pub mod pallet {
 		)]
 		pub fn reject_proposal(
 			origin: OriginFor<T>,
-			#[pallet::compact] proposal_id: ProposalIndex
+			#[pallet::compact] proposal_id: ProposalIndex,
 		) -> DispatchResultWithPostInfo {
 			T::RejectOrigin::ensure_origin(origin)?;
 
