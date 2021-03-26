@@ -168,13 +168,16 @@ impl<T: Config> Pallet<T> {
 			size,
 			T::MinerMaxWeight::get(),
 		);
+
 		log!(
 			debug,
-			"current compact solution voters = {}, snapshot = {:?}, maximum_allowed = {}",
+			"initial solution voters = {}, snapshot = {:?}, maximum_allowed(capped) = {}",
 			compact.voter_count(),
 			size,
 			maximum_allowed_voters,
 		);
+
+		// trim weight.
 		let compact = Self::trim_compact(maximum_allowed_voters, compact, &voter_index)?;
 
 		// re-calc score.
@@ -253,10 +256,12 @@ impl<T: Config> Pallet<T> {
 					}
 				}
 
+				log!(debug, "removed {} voter to meet the max weight limit.", to_remove);
 				Ok(compact)
 			}
 			_ => {
 				// nada, return as-is
+				log!(debug, "Didn't remove any voter for weight limits.");
 				Ok(compact)
 			}
 		}
