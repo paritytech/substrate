@@ -165,6 +165,7 @@ pub mod pallet {
 
 		/// Fraction of a proposal's value that should be bonded in order to place the proposal.
 		/// An accepted proposal gets these back. A rejected proposal does not.
+		#[pallet::constant]
 		type ProposalBond: Get<Permill>;
 
 		/// Minimum amount of funds that should be placed in a deposit for making a proposal.
