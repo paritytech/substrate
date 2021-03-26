@@ -304,6 +304,9 @@ impl<T: Config> Pallet<T> {
 		// First binary-search the right amount of voters
 		let mut step = voters / 2;
 		let mut current_weight = weight_with(voters);
+
+		sp_std::if_std! { dbg!(voters, current_weight); }
+
 		while step > 0 {
 			match next_voters(current_weight, voters, step) {
 				// proceed with the binary search
@@ -330,14 +333,20 @@ impl<T: Config> Pallet<T> {
 			voters -= 1;
 		}
 
+		let final_decision = voters.min(size.voters);
 		debug_assert!(
-			weight_with(voters.min(size.voters)) <= max_weight,
+			weight_with(final_decision) <= max_weight,
 			"weight_with({}) <= {}",
-			voters.min(size.voters),
+			final_decision,
 			max_weight,
 		);
-		log!(debug, "maximum allowed voters would have been {}.", voters);
-		voters.min(size.voters)
+		debug_assert!(
+			weight_with(final_decision + 1) > max_weight,
+			"weight_with({} + 1) > {}",
+			final_decision,
+			max_weight,
+		);
+		final_decision
 	}
 
 	/// Checks if an execution of the offchain worker is permitted at the given block number, or
