@@ -56,27 +56,7 @@ fi
 boldprint "companion pr: #${pr_companion}"
 
 # check the status of that pull request - needs to be
-# mergable and approved
-
-curl -H "${github_header}" -sS -o companion_pr.json \
-  ${github_api_polkadot_pull_url}/${pr_companion}
-
-pr_head_sha=$(jq -r -e '.head.sha' < companion_pr.json)
-boldprint "Polkadot PR's HEAD SHA: $pr_head_sha"
-
-if jq -e .merged < companion_pr.json >/dev/null
-then
-  boldprint "polkadot pr #${pr_companion} already merged"
-  exit 0
-fi
-
-if jq -e '.mergeable' < companion_pr.json >/dev/null
-then
-  boldprint "polkadot pr #${pr_companion} mergeable"
-else
-  boldprint "polkadot pr #${pr_companion} not mergeable"
-  exit 1
-fi
+# approved and mergable
 
 curl -H "${github_header}" -sS -o companion_pr_reviews.json \
   ${github_api_polkadot_pull_url}/${pr_companion}/reviews
@@ -98,6 +78,25 @@ if [ -z "$(jq -r -e '.[].state | select(. == "APPROVED")' < companion_pr_reviews
 fi
 
 boldprint "polkadot pr #${pr_companion} state APPROVED"
+
+curl -H "${github_header}" -sS -o companion_pr.json \
+  ${github_api_polkadot_pull_url}/${pr_companion}
+
+pr_head_sha=$(jq -r -e '.head.sha' < companion_pr.json)
+boldprint "Polkadot PR's HEAD SHA: $pr_head_sha"
+
+if jq -e .merged < companion_pr.json >/dev/null
+then
+  boldprint "polkadot pr #${pr_companion} already merged"
+  exit 0
+fi
+
+if jq -e '.mergeable' < companion_pr.json >/dev/null
+then
+  boldprint "polkadot pr #${pr_companion} mergeable"
+else
+  boldprint "polkadot pr #${pr_companion} not mergeable"
+  exit 1
+fi
+
 exit 0
-
-
