@@ -668,7 +668,7 @@ pub trait StorageDecodeLength: private::Sealed + codec::DecodeLength {
 
 /// Provides `Sealed` trait to prevent implementing trait `StorageAppend` & `StorageDecodeLength`
 /// outside of this crate.
-mod private {
+pub(crate) mod private {
 	use super::*;
 
 	pub trait Sealed {}

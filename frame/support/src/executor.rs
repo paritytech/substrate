@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use sp_std::prelude::*;
-use crate::{weights::Weight, traits::Get};
+use crate::{weights::Weight, traits::Get, storage};
 use codec::{Encode, Decode};
 use sp_runtime::traits::Zero;
 use crate::{RuntimeDebugNoBound, PartialEqNoBound, EqNoBound, CloneNoBound};
@@ -34,7 +34,7 @@ const LOG_TARGET: &'static str = "runtime::task_executor";
 /// their normal counterparts, and implement `Default` manually. This is to prevent `T` to be
 /// bounded to these traits.
 pub trait RuntimeTask:
-	Sized + Clone + Default + Encode + Decode + PartialEq + Eq + sp_std::fmt::Debug
+	Sized + Clone + Default + Encode + Decode + PartialEq + Eq + sp_std::fmt::Debug + codec::EncodeLike
 {
 	/// Execute the task while consuming self. The task must not most consume more than `max_weight`
 	/// under any circumstance. Consuming *less* than `max_weight` is allowed.
@@ -69,7 +69,7 @@ impl RuntimeTask for () {
 }
 
 /// Common trait for a executor that is stored as a storage item.
-pub trait StoredExecutor {
+pub trait StoredExecutor: codec::FullCodec {
 	/// The task type used by this executor.
 	type Task: RuntimeTask;
 
@@ -293,6 +293,59 @@ impl<Task: RuntimeTask, Quota: Get<Weight>> StoredExecutor for SinglePassExecuto
 	}
 }
 
+macro_rules! impl_append_decode_len_shim {
+	($executor:ident) => {
+		// I broke the seal.. forgive me @bkchr.
+		impl<Task, Quota> storage::private::Sealed for $executor<Task, Quota>
+		where
+			Task: RuntimeTask,
+			Quota: Get<Weight>,
+		{}
+		impl<Task, Quota> storage::StorageAppend<Task> for $executor<Task, Quota>
+		where
+			Task: RuntimeTask,
+			Quota: Get<Weight>,
+		{}
+		impl<Task, Quota> storage::StorageDecodeLength for $executor<Task, Quota>
+		where
+			Task: RuntimeTask,
+			Quota: Get<Weight>,
+		{}
+		impl<Task, Quota> codec::DecodeLength for $executor<Task, Quota>
+		where
+			Task: RuntimeTask,
+			Quota: Get<Weight>,
+		{
+			fn len(mut self_encoded: &[u8]) -> Result<usize, codec::Error> {
+				use sp_std::convert::TryFrom;
+				// Single/Multi pass executor stored just a `Vec<Task>`, thus the length is at the
+				// beginning in `Compact` form.
+				usize::try_from(u32::from(codec::Compact::<u32>::decode(&mut self_encoded)?))
+					.map_err(|_| "Failed convert decoded size into usize.".into())
+			}
+		}
+	};
+}
+
+impl_append_decode_len_shim!(SinglePassExecutor);
+impl_append_decode_len_shim!(MultiPassExecutor);
+
+/// Aggregator trait to indicate an executor with task `Task` has `decode_len` and `append`.
+pub trait StorageValueShim<Task: RuntimeTask>:
+	codec::DecodeLength
+	+ storage::StorageDecodeLength
+	+ storage::private::Sealed
+	+ storage::StorageAppend<Task>
+{}
+
+impl<Task, S> StorageValueShim<Task> for S where
+	S: codec::DecodeLength
+		+ storage::StorageDecodeLength
+		+ storage::private::Sealed
+		+ storage::StorageAppend<Task>,
+	Task: RuntimeTask
+{}
+
 /// Make a single pass over some tasks, returning a new set of tasks that remain un-finished, along
 /// the consumed weight.
 ///
@@ -331,6 +384,10 @@ pub(crate) fn single_pass<T: RuntimeTask>(tasks: &[T], max_weight: Weight) -> (V
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	crate::parameter_types! {
+		static Quota: Weight = 10;
+	}
 
 	#[derive(Clone, Encode, Decode, Default, PartialEq, Eq, Debug)]
 	struct Task {
@@ -434,8 +491,37 @@ mod tests {
 		executor.tasks().iter().map(|t| t.leftover()).collect::<Vec<_>>()
 	}
 
-	frame_support::parameter_types! {
-		static Quota: Weight = 10;
+	#[test]
+	fn shim_works() {
+		macro_rules! shim_test {
+			($executor: ident) => {
+				sp_io::TestExternalities::default().execute_with(|| {
+					$executor::append(TaskBuilder::default().build(10));
+					$executor::append(TaskBuilder::default().build(20));
+
+					assert_eq!($executor::decode_len().unwrap(), 2);
+					$executor::append(TaskBuilder::default().build(30));
+					assert_eq!($executor::decode_len().unwrap(), 3);
+
+					// without the shim
+					assert_eq!($executor::get().unwrap().count(), 3);
+					assert_eq!(
+						remaining_weights_of(&$executor::get().unwrap()),
+						vec![10, 20, 30],
+					);
+				});
+			};
+		}
+		// a representation of a single-pass executor that is stored as a storage value.
+		crate::generate_storage_alias!(
+			DoNotCareAtAll, TestStoredSinglePassExecutor => Value<SinglePassExecutor<Task, Quota>>
+		);
+		crate::generate_storage_alias!(
+			DoNotCareAtAll, TestStoredSingleMultiExecutor => Value<MultiPassExecutor<Task, Quota>>
+		);
+
+		shim_test!(TestStoredSinglePassExecutor);
+		shim_test!(TestStoredSingleMultiExecutor);
 	}
 
 	#[test]

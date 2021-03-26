@@ -783,6 +783,7 @@ pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
 	/// The type of the task, the weight quota and executor can all be configured from the runtime.
 	type TaskExecutor:
 		executor::StoredExecutor<Task = SlashTask<Self>>
+		+ executor::StorageValueShim<SlashTask<Self>>
 		+ frame_support::dispatch::Parameter
 		+ Default;
 
@@ -839,9 +840,8 @@ impl Default for Releases {
 }
 
 use frame_support::{CloneNoBound, PartialEqNoBound, EqNoBound, RuntimeDebugNoBound, executor::{self, StoredExecutor}};
-
 /// A task that needs to be stored and executed per slashed validator.
-#[derive(Encode, Decode, CloneNoBound, PartialEqNoBound, EqNoBound, RuntimeDebugNoBound)]
+#[derive(Encode, Decode, CloneNoBound, PartialEqNoBound, EqNoBound)]
 pub struct SlashTask<T: Config> {
 	/// The slashed validator.
 	slashed: T::AccountId,
@@ -877,6 +877,18 @@ where
 			last_key: Default::default(),
 			prefix: Default::default(),
 		}
+	}
+}
+
+impl<T: Config> sp_std::fmt::Debug for SlashTask<T> {
+	#[cfg(feature = "std")]
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+		write!(f, "SlashTask({:?}, {:?})", self.slashed, sp_core::hexdisplay::HexDisplay::from(&self.last_key))
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+		write!(f, "SlashTask({:?}, {:?})", self.slashed, self.last_key)
 	}
 }
 
@@ -1355,13 +1367,21 @@ decl_module! {
 		fn deposit_event() = default;
 
 		fn on_initialize(_now: T::BlockNumber) -> Weight {
-			let task_weight = <SlashTaskExecutor<T>>::mutate(|e| e.execute());
-			// each execution of the executor must consume less weight than its quota.
-			debug_assert!(task_weight < <T::TaskExecutor as StoredExecutor>::Quota::get());
-			// The additional weight of reading the tasks, and writing back the result.
-			// TODO: add on-finalize weight.
-			T::DbWeight::get().reads_writes(1, 1).saturating_add(task_weight)
-
+			if <SlashTaskExecutor<T>>::decode_len().unwrap_or_default() > 0 {
+				let task_weight = <SlashTaskExecutor<T>>::mutate(|e| e.execute());
+				// each execution of the executor must consume less weight than its quota.
+				debug_assert!(
+					task_weight <= <T::TaskExecutor as StoredExecutor>::Quota::get(),
+					"expected a maximum weight consumption of {}, got {}",
+					task_weight,
+					<T::TaskExecutor as StoredExecutor>::Quota::get(),
+				);
+				// The additional weight of reading the tasks, and writing back the result.
+				// TODO: add on-finalize weight.
+				T::DbWeight::get().reads_writes(1, 1).saturating_add(task_weight)
+			} else {
+				T::DbWeight::get().reads(1)
+			}
 		}
 
 		fn on_runtime_upgrade() -> Weight {
@@ -2996,7 +3016,7 @@ where
 			// if this is a non-zero slash, schedule tasks to chill their nominations.
 			if !slash_fraction.is_zero() {
 				let task = SlashTask::new(stash.clone());
-				<SlashTaskExecutor<T>>::mutate(|e| e.add_task(task));
+				<SlashTaskExecutor<T>>::append(task);
 			}
 
 			let unapplied = slashing::compute_slash::<T>(slashing::SlashParams {
