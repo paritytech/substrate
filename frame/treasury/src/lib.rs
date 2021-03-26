@@ -145,6 +145,7 @@ pub mod pallet {
 	pub trait Config<I: 'static = ()>: frame_system::Config {
 
 		/// The treasury's module id, used for deriving its sovereign account ID.
+		#[pallet::constant]
 		type ModuleId: Get<ModuleId>;
 
 		/// The staking balance.
