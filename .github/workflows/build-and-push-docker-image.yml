@@ -3,7 +3,6 @@ on:
   push:
     branches:
       - dev-cere
-      
 env:
   ECR_REPOSITORY: pos-network-node
 jobs:

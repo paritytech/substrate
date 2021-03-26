@@ -23,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 -
 
+## [2.1.0-rc2] - 2021-03-26
+
+### Changed
+
+- Use rust `nightly` for build and tests running
+
 ## [2.1.0-rc1] - 2021-03-25
 
 ### Added
@@ -35,4 +41,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rename executable file
 - Update README file
 
+[2.1.0-rc2]: https://github.com/Cerebellum-Network/pos-network-node/compare/v2.1.0-rc2...v2.1.0-rc1
 [2.1.0-rc1]: https://github.com/Cerebellum-Network/pos-network-node/compare/v2.1.0-rc1...v2.0.1
