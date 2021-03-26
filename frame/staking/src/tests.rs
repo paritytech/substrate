@@ -3693,6 +3693,14 @@ fn do_not_die_when_active_is_ed() {
 		})
 }
 
+#[test]
+fn on_finalize_weight_is_nonzero() {
+	ExtBuilder::default().build_and_execute(|| {
+		let on_finalize_weight = <Test as frame_system::Config>::DbWeight::get().reads(1);
+		assert!(Staking::on_initialize(1) >= on_finalize_weight);
+	})
+}
+
 mod election_data_provider {
 	use super::*;
 	use frame_election_provider_support::ElectionDataProvider;
@@ -3830,3 +3838,4 @@ mod election_data_provider {
 		})
 	}
 }
+
