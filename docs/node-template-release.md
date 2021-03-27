@@ -24,3 +24,13 @@ by running the following command.
 `vX.Y.Z+A` (e.g. `v3.0.0+1`). The `X`(major), `Y`(minor), and `Z`(patch) version number should
 follow Substrate release version. The last digit is any significant fixes made in the Substrate
 Node Template apart from Substrate. When the Substrate version is updated, this digit is reset to 0.
+
+## Troubleshooting
+
+1. Running the script `./node-template-release.sh <output tar.gz file>`, after all tests passed
+	successfully, seeing the following error message:
+
+	```
+	thread 'main' panicked at 'Creates output file: Os { code: 2, kind: NotFound, message: "No such file or directory" }', src/main.rs:250:10
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+	```
