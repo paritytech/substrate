@@ -3367,14 +3367,13 @@ fn payout_stakers_handles_weight_refund() {
 		assert!(half_max_nom_rewarded > 0);
 		assert!(max_nom_rewarded > half_max_nom_rewarded);
 
-		// We add 1 to account for the payout ops to the validator
 		let max_nom_rewarded_weight
-			= <Test as Config>::WeightInfo::payout_stakers_alive_staked(max_nom_rewarded +1);
+			= <Test as Config>::WeightInfo::payout_stakers_alive_staked(max_nom_rewarded);
 		let half_max_nom_rewarded_weight
-			= <Test as Config>::WeightInfo::payout_stakers_alive_staked(half_max_nom_rewarded + 1);
-		let zero_payouts_weight = <Test as Config>::WeightInfo::payout_stakers_alive_staked(0);
-		assert!(zero_payouts_weight > 0);
-		assert!(half_max_nom_rewarded_weight > zero_payouts_weight);
+			= <Test as Config>::WeightInfo::payout_stakers_alive_staked(half_max_nom_rewarded);
+		let zero_nom_payouts_weight = <Test as Config>::WeightInfo::payout_stakers_alive_staked(0);
+		assert!(zero_nom_payouts_weight > 0);
+		assert!(half_max_nom_rewarded_weight > zero_nom_payouts_weight);
 		assert!(max_nom_rewarded_weight > half_max_nom_rewarded_weight);
 
 		let balance = 1000;
@@ -3402,7 +3401,7 @@ fn payout_stakers_handles_weight_refund() {
 		assert_ok!(result);
 		assert_eq!(
 			extract_actual_weight(&result, &info),
-			<Test as Config>::WeightInfo::payout_stakers_alive_staked(1)
+			zero_nom_payouts_weight
 		);
 
 		// The validator is not rewarded in this era; so there will be zero payouts to claim for this era.
@@ -3415,7 +3414,7 @@ fn payout_stakers_handles_weight_refund() {
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(20));
 		assert_ok!(result);
-		assert_eq!(extract_actual_weight(&result, &info), zero_payouts_weight);
+		assert_eq!(extract_actual_weight(&result, &info), zero_nom_payouts_weight);
 
 		// Reward the validator and its nominators.
 		Staking::reward_by_ids(vec![(11, 1)]);
@@ -3459,7 +3458,7 @@ fn payout_stakers_handles_weight_refund() {
 		let result = call.dispatch(Origin::signed(20));
 		assert!(result.is_err());
 		// When there is an error the consumed weight == weight when there are 0 payouts.
-		assert_eq!(extract_actual_weight(&result, &info), zero_payouts_weight);
+		assert_eq!(extract_actual_weight(&result, &info), zero_nom_payouts_weight);
 	});
 }
 

@@ -1802,7 +1802,7 @@ decl_module! {
 		///   NOTE: weights are assuming that payouts are made to alive stash account (Staked).
 		///   Paying even a dead controller is cheaper weight-wise. We don't do any refunds here.
 		/// # </weight>
-		#[weight = T::WeightInfo::payout_stakers_alive_staked(T::MaxNominatorRewardedPerValidator::get() + 1)]
+		#[weight = T::WeightInfo::payout_stakers_alive_staked(T::MaxNominatorRewardedPerValidator::get())]
 		fn payout_stakers(origin, validator_stash: T::AccountId, era: EraIndex) -> DispatchResultWithPostInfo {
 			ensure_signed(origin)?;
 			Self::do_payout_stakers(validator_stash, era)
@@ -2046,17 +2046,17 @@ impl<T: Config> Module<T> {
 		);
 		let validator_staking_payout = validator_exposure_part * validator_leftover_payout;
 
-		// Track the number of payouts in order to track the actual weight.
-		let mut payout_count: u32 = 0;
-
 		// We can now make total validator payout:
 		if let Some(imbalance) = Self::make_payout(
 			&ledger.stash,
 			validator_staking_payout + validator_commission_payout
 		) {
-			payout_count += 1;
 			Self::deposit_event(RawEvent::Reward(ledger.stash, imbalance.peek()));
 		}
+
+		// Track the number of payout ops to nominators. Note: `WeightInfo::payout_stakers_alive_staked`
+		// always assumes at least a validator is paid out, so we do not need to count their payout op.
+		let mut nominator_payout_count: u32 = 0;
 
 		// Lets now calculate how this is split to the nominators.
 		// Reward only the clipped exposures. Note this is not necessarily sorted.
@@ -2070,13 +2070,13 @@ impl<T: Config> Module<T> {
 			// We can now make nominator payout:
 			if let Some(imbalance) = Self::make_payout(&nominator.who, nominator_reward) {
 				// Note: this logic does not count payouts for `RewardDestination::None`.
-				payout_count += 1;
+				nominator_payout_count += 1;
 				Self::deposit_event(RawEvent::Reward(nominator.who.clone(), imbalance.peek()));
 			}
 		}
 
-		debug_assert!(payout_count <= T::MaxNominatorRewardedPerValidator::get() +1);
-		Ok(Some(T::WeightInfo::payout_stakers_alive_staked(payout_count)).into())
+		debug_assert!(nominator_payout_count <= T::MaxNominatorRewardedPerValidator::get());
+		Ok(Some(T::WeightInfo::payout_stakers_alive_staked(nominator_payout_count)).into())
 	}
 
 	/// Update the ledger for a controller.
