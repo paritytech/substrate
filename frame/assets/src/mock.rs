@@ -102,6 +102,7 @@ impl Config for Test {
 	type StringLimit = StringLimit;
 	type Freezer = TestFreezer;
 	type WeightInfo = ();
+	type Extra = ();
 }
 
 use std::cell::RefCell;
