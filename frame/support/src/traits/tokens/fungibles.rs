@@ -146,9 +146,6 @@ pub trait InspectReserve<AccountId>: Inspect<AccountId> {
 	/// Amount of funds held in reserve.
 	fn reserved_balance(asset: Self::AssetId, who: &AccountId) -> Self::Balance;
 
-	/// Amount of funds held in reserve.
-	fn total_balance(asset: Self::AssetId, who: &AccountId) -> Self::Balance;
-
 	/// Check to see if some `amount` of `asset` may be reserved on the account of `who`.
 	fn can_reserve(asset: Self::AssetId, who: &AccountId, amount: Self::Balance) -> bool;
 }

@@ -1355,9 +1355,128 @@ pub mod pallet {
 	}
 }
 
+use sp_runtime::traits::StoredMapError;
+use frame_support::traits::StoredMap;
+
+impl<T: Config> StoredMap<(T::AssetId, T::AccountId), T::Extra> for Pallet<T> {
+	fn get(id_who: &(T::AssetId, T::AccountId)) -> T::Extra {
+		let &(id, ref who) = id_who;
+		if Account::<T>::contains_key(id, who) {
+			Account::<T>::get(id, who).extra
+		} else {
+			Default::default()
+		}
+	}
+
+	fn try_mutate_exists<R, E: From<StoredMapError>>(
+		id_who: &(T::AssetId, T::AccountId),
+		f: impl FnOnce(&mut Option<T::Extra>) -> Result<R, E>,
+	) -> Result<R, E> {
+		let &(id, ref who) = id_who;
+		let mut maybe_extra = Some(Account::<T>::get(id, who).extra);
+		let r = f(&mut maybe_extra)?;
+		// They want to write some value or delete it.
+		// If the account existed and they want to write a value, then we write.
+		// If the account didn't exist and they want to delete it, then we let it pass.
+		// Otherwise, we fail.
+		Account::<T>::try_mutate_exists(id, who, |maybe_account| {
+			if let Some(extra) = maybe_extra {
+				// They want to write a value. Let this happen only if the account actually exists.
+				if let Some(ref mut account) = maybe_account {
+					account.extra = extra;
+				} else {
+					Err(StoredMapError::NoProviders)?;
+				}
+			} else {
+				// They want to delete it. Let this pass if the item never existed anyway.
+				ensure!(maybe_account.is_none(), StoredMapError::ConsumerRemaining);
+			}
+			Ok(r)
+		})
+	}
+}
+
+pub struct ExtraMutator<T: Config> {
+	id: T::AssetId,
+	who: T::AccountId,
+	original: T::Extra,
+	pending: Option<T::Extra>,
+}
+
+impl<T: Config> Drop for ExtraMutator<T> {
+	fn drop(&mut self) {
+		debug_assert!(self.commit().is_ok(), "attempt to write to non-existent asset account");
+	}
+}
+
+impl<T: Config> sp_std::ops::Deref for ExtraMutator<T> {
+	type Target = T::Extra;
+	fn deref(&self) -> &T::Extra {
+		match self.pending {
+			Some(ref value) => value,
+			None => &self.original,
+		}
+	}
+}
+
+impl<T: Config> sp_std::ops::DerefMut for ExtraMutator<T> {
+	fn deref_mut(&mut self) -> &mut T::Extra {
+		if self.pending.is_none() {
+			self.pending = Some(self.original.clone());
+		}
+		self.pending.as_mut().unwrap()
+	}
+}
+
+use sp_std::borrow::Borrow;
+
+impl<T: Config> ExtraMutator<T> {
+	pub fn commit(&mut self) -> Result<(), ()> {
+		if let Some(extra) = self.pending.take() {
+			Account::<T>::try_mutate_exists(self.id, self.who.borrow(), |maybe_account|
+				if let Some(ref mut account) = maybe_account {
+					account.extra = extra;
+					Ok(())
+				} else {
+					Err(())
+				}
+			)
+		} else {
+			Ok(())
+		}
+	}
+
+	pub fn revert(self) -> Result<(), ()> {
+		Account::<T>::try_mutate_exists(self.id, self.who.borrow(), |maybe_account|
+			if let Some(ref mut account) = maybe_account {
+				account.extra = self.original.clone();
+				Ok(())
+			} else {
+				Err(())
+			}
+		)
+	}
+}
+
 // The main implementation block for the module.
 impl<T: Config> Pallet<T> {
 	// Public immutables
+
+	/// Return the extra "sid-car" data for `id`/`who`, or `None` if the account doesn't exist.
+	pub fn adjust_extra(id: T::AssetId, who: impl sp_std::borrow::Borrow<T::AccountId>)
+		-> Option<ExtraMutator<T>>
+	{
+		if Account::<T>::contains_key(id, who.borrow()) {
+			Some(ExtraMutator::<T> {
+				id,
+				who: who.borrow().clone(),
+				original: Account::<T>::get(id, who.borrow()).extra,
+				pending: None,
+			})
+		} else {
+			None
+		}
+	}
 
 	/// Get the asset `id` balance of `who`.
 	pub fn balance(id: T::AssetId, who: impl sp_std::borrow::Borrow<T::AccountId>) -> T::Balance {
@@ -1898,7 +2017,7 @@ impl<T: Config> fungibles::Transfer<T::AccountId> for Pallet<T> {
 
 impl<T: Config> fungibles::Unbalanced<T::AccountId> for Pallet<T> {
 	fn set_balance(_: Self::AssetId, _: &T::AccountId, _: Self::Balance) -> DispatchResult {
-		unreachable!();
+		unreachable!("set_balance is not used if other functions are impl'd");
 	}
 	fn set_total_issuance(id: T::AssetId, amount: Self::Balance) {
 		Asset::<T>::mutate_exists(id, |maybe_asset| if let Some(ref mut asset) = maybe_asset {

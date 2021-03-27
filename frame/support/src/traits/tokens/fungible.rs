@@ -113,11 +113,6 @@ pub trait InspectReserve<AccountId>: Inspect<AccountId> {
 	/// Amount of funds held in reserve by `who`.
 	fn reserved_balance(who: &AccountId) -> Self::Balance;
 
-	/// Amount of funds held in total by `who`.
-	fn total_balance(who: &AccountId) -> Self::Balance {
-		Self::reserved_balance(who).saturating_add(Self::balance(who))
-	}
-
 	/// Check to see if some `amount` of funds may be reserved on the account of `who`.
 	fn can_reserve(who: &AccountId, amount: Self::Balance) -> bool;
 }
@@ -239,9 +234,6 @@ impl<
 > InspectReserve<AccountId> for ItemOf<F, A, AccountId> {
 	fn reserved_balance(who: &AccountId) -> Self::Balance {
 		<F as fungibles::InspectReserve<AccountId>>::reserved_balance(A::get(), who)
-	}
-	fn total_balance(who: &AccountId) -> Self::Balance {
-		<F as fungibles::InspectReserve<AccountId>>::total_balance(A::get(), who)
 	}
 	fn can_reserve(who: &AccountId, amount: Self::Balance) -> bool {
 		<F as fungibles::InspectReserve<AccountId>>::can_reserve(A::get(), who, amount)

@@ -949,9 +949,6 @@ impl<T: Config<I>, I: 'static> fungible::InspectReserve<T::AccountId> for Pallet
 	fn reserved_balance(who: &T::AccountId) -> T::Balance {
 		Self::account(who).reserved
 	}
-	fn total_balance(who: &T::AccountId) -> T::Balance {
-		Self::account(who).total()
-	}
 	fn can_reserve(who: &T::AccountId, amount: T::Balance) -> bool {
 		let a = Self::account(who);
 		let min_balance = T::ExistentialDeposit::get().max(a.frozen(Reasons::All));
