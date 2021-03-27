@@ -439,8 +439,9 @@ mod tests {
 	use sp_test_primitives::{Block, BlockNumber, Extrinsic, Hash, Header};
 	use std::collections::HashMap;
 
+	#[async_trait::async_trait]
 	impl Verifier<Block> for () {
-		fn verify(
+		async fn verify(
 			&mut self,
 			origin: BlockOrigin,
 			header: Header,
@@ -451,18 +452,19 @@ mod tests {
 		}
 	}
 
+	#[async_trait::async_trait]
 	impl BlockImport<Block> for () {
 		type Error = crate::Error;
 		type Transaction = Extrinsic;
 
-		fn check_block(
+		async fn check_block(
 			&mut self,
 			_block: BlockCheckParams<Block>,
 		) -> Result<ImportResult, Self::Error> {
 			Ok(ImportResult::imported(false))
 		}
 
-		fn import_block(
+		async fn import_block(
 			&mut self,
 			_block: BlockImportParams<Block, Self::Transaction>,
 			_cache: HashMap<CacheKeyId, Vec<u8>>,

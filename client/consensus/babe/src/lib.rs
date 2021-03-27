@@ -1680,7 +1680,7 @@ pub mod test_helpers {
 			HeaderMetadata<B, Error = ClientError>,
 		C::Api: BabeApi<B>,
 	{
-		let epoch_changes = link.epoch_changes.lock();
+		let epoch_changes = link.epoch_changes.shared_data();
 		let epoch = epoch_changes.epoch_data_for_child_of(
 			descendent_query(client),
 			&parent.hash(),
