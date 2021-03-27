@@ -217,7 +217,7 @@ pub struct AssetBalance<Balance, Extra> {
 	is_frozen: bool,
 	/// `true` if this balance gave the account a self-sufficient reference.
 	sufficient: bool,
-	/// Additional "side-car" data, in case some other pallet wants to use this storage item.
+	/// Additional "sidecar" data, in case some other pallet wants to use this storage item.
 	extra: Extra,
 }
 
