@@ -7116,6 +7116,7 @@ dependencies = [
 name = "sc-consensus-aura"
 version = "0.9.0"
 dependencies = [
+ "async-trait",
  "derive_more",
  "futures 0.3.13",
  "futures-timer 3.0.2",

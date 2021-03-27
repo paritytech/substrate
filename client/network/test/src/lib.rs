@@ -242,12 +242,12 @@ impl BlockImport<Block> for PeersClient {
 	}
 }
 
-pub struct Peer<D, Verifier, BlockImport> {
+pub struct Peer<D, BlockImport> {
 	pub data: D,
 	client: PeersClient,
 	/// We keep a copy of the verifier so that we can invoke it for locally-generated blocks,
 	/// instead of going through the import queue.
-	verifier: VerifierAdapter<Block, Verifier>,
+	verifier: VerifierAdapter<Block>,
 	/// We keep a copy of the block_import so that we can invoke it for locally-generated blocks,
 	/// instead of going through the import queue.
 	block_import: BlockImportAdapter<BlockImport>,
@@ -259,8 +259,7 @@ pub struct Peer<D, Verifier, BlockImport> {
 	listen_addr: Multiaddr,
 }
 
-impl<D, V, B> Peer<D, V, B> where
-	V: Verifier<Block>,
+impl<D, B> Peer<D, B> where
 	B: BlockImport<Block, Error = ConsensusError> + Send + Sync,
 	B::Transaction: Send,
 {
@@ -585,13 +584,13 @@ impl<I> BlockImport<Block> for BlockImportAdapter<I> where
 }
 
 /// Implements `Verifier` and keeps track of failed verifications.
-struct VerifierAdapter<B: BlockT, Verifier> {
-	verifier: Verifier,
+struct VerifierAdapter<B: BlockT> {
+	verifier: Arc<futures::lock::Mutex<Box<dyn Verifier<B>>>>,
 	failed_verifications: Arc<Mutex<HashMap<B::Hash, String>>>,
 }
 
 #[async_trait::async_trait]
-impl<B: BlockT, V: Verifier<B>> Verifier<B> for VerifierAdapter<B, V> {
+impl<B: BlockT> Verifier<B> for VerifierAdapter<B> {
 	async fn verify(
 		&mut self,
 		origin: BlockOrigin,
@@ -600,14 +599,14 @@ impl<B: BlockT, V: Verifier<B>> Verifier<B> for VerifierAdapter<B, V> {
 		body: Option<Vec<B::Extrinsic>>
 	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		let hash = header.hash();
-		self.verifier.verify(origin, header, justifications, body).await.map_err(|e| {
+		self.verifier.lock().await.verify(origin, header, justifications, body).await.map_err(|e| {
 			self.failed_verifications.lock().insert(hash, e.clone());
 			e
 		})
 	}
 }
 
-impl<B: BlockT, Verifier> Clone for VerifierAdapter<B, Verifier> where Verifier: Clone {
+impl<B: BlockT> Clone for VerifierAdapter<B> {
 	fn clone(&self) -> Self {
 		Self {
 			verifier: self.verifier.clone(),
@@ -616,10 +615,10 @@ impl<B: BlockT, Verifier> Clone for VerifierAdapter<B, Verifier> where Verifier:
 	}
 }
 
-impl<B: BlockT, Verifier> VerifierAdapter<B, Verifier> {
-	fn new(verifier: Verifier) -> Self {
+impl<B: BlockT> VerifierAdapter<B> {
+	fn new(verifier: impl Verifier<B> + 'static) -> Self {
 		VerifierAdapter {
-			verifier,
+			verifier: Arc::new(futures::lock::Mutex::new(Box::new(verifier))),
 			failed_verifications: Default::default(),
 		}
 	}
@@ -643,7 +642,7 @@ pub struct FullPeerConfig {
 }
 
 pub trait TestNetFactory: Sized where <Self::BlockImport as BlockImport<Block>>::Transaction: Send {
-	type Verifier: 'static + Verifier<Block> + Clone;
+	type Verifier: 'static + Verifier<Block>;
 	type BlockImport: BlockImport<Block, Error = ConsensusError> + Clone + Send + Sync + 'static;
 	type PeerData: Default;
 
@@ -657,9 +656,9 @@ pub trait TestNetFactory: Sized where <Self::BlockImport as BlockImport<Block>>:
 	) -> Self::Verifier;
 
 	/// Get reference to peer.
-	fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData, Self::Verifier, Self::BlockImport>;
-	fn peers(&self) -> &Vec<Peer<Self::PeerData, Self::Verifier, Self::BlockImport>>;
-	fn mut_peers<F: FnOnce(&mut Vec<Peer<Self::PeerData, Self::Verifier, Self::BlockImport>>)>(
+	fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData, Self::BlockImport>;
+	fn peers(&self) -> &Vec<Peer<Self::PeerData, Self::BlockImport>>;
+	fn mut_peers<F: FnOnce(&mut Vec<Peer<Self::PeerData, Self::BlockImport>>)>(
 		&mut self,
 		closure: F,
 	);
@@ -1012,7 +1011,7 @@ pub trait TestNetFactory: Sized where <Self::BlockImport as BlockImport<Block>>:
 }
 
 pub struct TestNet {
-	peers: Vec<Peer<(), PassThroughVerifier, PeersClient>>,
+	peers: Vec<Peer<(), PeersClient>>,
 	fork_choice: ForkChoiceStrategy,
 }
 
@@ -1055,15 +1054,15 @@ impl TestNetFactory for TestNet {
 		(client.as_block_import(), None, ())
 	}
 
-	fn peer(&mut self, i: usize) -> &mut Peer<(), Self::Verifier, Self::BlockImport> {
+	fn peer(&mut self, i: usize) -> &mut Peer<(), Self::BlockImport> {
 		&mut self.peers[i]
 	}
 
-	fn peers(&self) -> &Vec<Peer<(), Self::Verifier, Self::BlockImport>> {
+	fn peers(&self) -> &Vec<Peer<(), Self::BlockImport>> {
 		&self.peers
 	}
 
-	fn mut_peers<F: FnOnce(&mut Vec<Peer<(), Self::Verifier, Self::BlockImport>>)>(&mut self, closure: F) {
+	fn mut_peers<F: FnOnce(&mut Vec<Peer<(), Self::BlockImport>>)>(&mut self, closure: F) {
 		closure(&mut self.peers);
 	}
 }
@@ -1099,16 +1098,16 @@ impl TestNetFactory for JustificationTestNet {
 		self.0.make_verifier(client, config, peer_data)
 	}
 
-	fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData, Self::Verifier, Self::BlockImport> {
+	fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData, Self::BlockImport> {
 		self.0.peer(i)
 	}
 
-	fn peers(&self) -> &Vec<Peer<Self::PeerData, Self::Verifier, Self::BlockImport>> {
+	fn peers(&self) -> &Vec<Peer<Self::PeerData, Self::BlockImport>> {
 		self.0.peers()
 	}
 
 	fn mut_peers<F: FnOnce(
-		&mut Vec<Peer<Self::PeerData, Self::Verifier, Self::BlockImport>>,
+		&mut Vec<Peer<Self::PeerData, Self::BlockImport>>,
 	)>(&mut self, closure: F) {
 		self.0.mut_peers(closure)
 	}
