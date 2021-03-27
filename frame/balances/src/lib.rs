@@ -682,6 +682,78 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
+	fn deposit_consequence(
+		_who: &T::AccountId,
+		amount: T::Balance,
+		account: &AccountData<T::Balance>,
+	) -> DepositConsequence {
+		if amount.is_zero() { return DepositConsequence::Success }
+
+		if TotalIssuance::<T, I>::get().checked_add(&amount).is_none() {
+			return DepositConsequence::Overflow
+		}
+
+		let new_total_balance = match account.total().checked_add(&amount) {
+			Some(x) => x,
+			None => return DepositConsequence::Overflow,
+		};
+
+		if new_total_balance < T::ExistentialDeposit::get() {
+			return DepositConsequence::BelowMinimum
+		}
+
+		// NOTE: We assume that we are a provider, so don't need to do any checks in the
+		// case of account creation.
+
+		DepositConsequence::Success
+	}
+
+	fn withdraw_consequence(
+		who: &T::AccountId,
+		amount: T::Balance,
+		account: &AccountData<T::Balance>,
+	) -> WithdrawConsequence<T::Balance> {
+		if amount.is_zero() { return WithdrawConsequence::Success }
+
+		if TotalIssuance::<T, I>::get().checked_sub(&amount).is_none() {
+			return WithdrawConsequence::Underflow
+		}
+
+		let new_total_balance = match account.total().checked_sub(&amount) {
+			Some(x) => x,
+			None => return WithdrawConsequence::NoFunds,
+		};
+
+		// Provider restriction - total account balance cannot be reduced to zero if it cannot
+		// sustain the loss of a provider reference.
+		// NOTE: This assumes that the pallet is a provider (which is true). Is this ever changes,
+		// then this will need to adapt accordingly.
+		let ed = T::ExistentialDeposit::get();
+		let success = if new_total_balance < ed {
+			if frame_system::Pallet::<T>::can_dec_provider(who) {
+				WithdrawConsequence::ReducedToZero(new_total_balance)
+			} else {
+				return WithdrawConsequence::WouldDie
+			}
+		} else {
+			WithdrawConsequence::Success
+		};
+
+		// Enough free funds to have them be reduced.
+		let new_free_balance = match account.free.checked_sub(&amount) {
+			Some(b) => b,
+			None => return WithdrawConsequence::NoFunds,
+		};
+
+		// Eventual free funds must be no less than the frozen balance.
+		let min_balance = account.frozen(Reasons::All);
+		if new_free_balance < min_balance {
+			return WithdrawConsequence::Frozen
+		}
+
+		success
+	}
+
 	/// Mutate an account to some new value, or delete it entirely with `None`. Will enforce
 	/// `ExistentialDeposit` law, annulling the account as needed.
 	///
@@ -803,6 +875,75 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 }
 
+use frame_support::traits::tokens::{fungible, DepositConsequence, WithdrawConsequence};
+
+impl<T: Config<I>, I: 'static> fungible::Inspect<T::AccountId> for Pallet<T, I> {
+	type Balance = T::Balance;
+
+	fn total_issuance() -> Self::Balance {
+		TotalIssuance::<T, I>::get()
+	}
+	fn minimum_balance() -> Self::Balance {
+		T::ExistentialDeposit::get()
+	}
+	fn balance(who: &T::AccountId) -> Self::Balance {
+		Self::account(who).total()
+	}
+	fn can_deposit(who: &T::AccountId, amount: Self::Balance) -> DepositConsequence {
+		Self::deposit_consequence(who, amount, &Self::account(who))
+	}
+	fn can_withdraw(who: &T::AccountId, amount: Self::Balance) -> WithdrawConsequence<Self::Balance> {
+		Self::withdraw_consequence(who, amount, &Self::account(who))
+	}
+}
+
+impl<T: Config<I>, I: 'static> fungible::Mutate<T::AccountId> for Pallet<T, I> {
+	fn deposit(who: &T::AccountId, amount: Self::Balance) -> DispatchResult {
+		if amount.is_zero() { return Ok(()) }
+		Self::try_mutate_account(who, |account, _is_new| -> DispatchResult {
+			Self::deposit_consequence(who, amount, &account).into_result()?;
+			account.free += amount;
+			Ok(())
+		})?;
+		TotalIssuance::<T, I>::mutate(|t| *t += amount);
+		Ok(())
+	}
+
+	fn withdraw(who: &T::AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError> {
+		if amount.is_zero() { return Ok(Self::Balance::zero()); }
+
+		let actual = Self::try_mutate_account(who, |account, _is_new| -> Result<T::Balance, DispatchError> {
+			let extra = Self::withdraw_consequence(who, amount, &account).into_result()?;
+			let actual = amount + extra;
+			account.free -= actual;
+			Ok(actual)
+		})?;
+		TotalIssuance::<T, I>::mutate(|t| *t -= actual);
+		Ok(actual)
+	}
+}
+
+impl<T: Config<I>, I: 'static> fungible::Transfer<T::AccountId> for Pallet<T, I> {
+	fn transfer(
+		source: &T::AccountId,
+		dest: &T::AccountId,
+		amount: T::Balance,
+	) -> Result<T::Balance, DispatchError> {
+		<Self as fungible::Mutate::<T::AccountId>>::transfer(source, dest, amount)
+	}
+}
+
+impl<T: Config<I>, I: 'static> fungible::Unbalanced<T::AccountId> for Pallet<T, I> {
+	fn set_balance(who: &T::AccountId, amount: Self::Balance) -> DispatchResult {
+		Self::mutate_account(who, |account| account.free = amount)?;
+		Ok(())
+	}
+
+	fn set_total_issuance(amount: Self::Balance) {
+		TotalIssuance::<T, I>::mutate(|t| *t = amount);
+	}
+}
+
 // wrapping these imbalances in a private module is necessary to ensure absolute privacy
 // of the inner member.
 mod imbalances {
@@ -811,6 +952,7 @@ mod imbalances {
 		TryDrop, RuntimeDebug,
 	};
 	use sp_std::mem;
+	use frame_support::traits::SameOrOther;
 
 	/// Opaque, move-only struct with private fields that serves as a token denoting that
 	/// funds have been created without any equal and opposite accounting.
@@ -844,6 +986,12 @@ mod imbalances {
 		}
 	}
 
+	impl<T: Config<I>, I: 'static> Default for PositiveImbalance<T, I> {
+		fn default() -> Self {
+			Self::zero()
+		}
+	}
+
 	impl<T: Config<I>, I: 'static> Imbalance<T::Balance> for PositiveImbalance<T, I> {
 		type Opposite = NegativeImbalance<T, I>;
 
@@ -874,14 +1022,16 @@ mod imbalances {
 			self.0 = self.0.saturating_add(other.0);
 			mem::forget(other);
 		}
-		fn offset(self, other: Self::Opposite) -> result::Result<Self, Self::Opposite> {
+		fn offset(self, other: Self::Opposite) -> SameOrOther<Self, Self::Opposite> {
 			let (a, b) = (self.0, other.0);
 			mem::forget((self, other));
 
-			if a >= b {
-				Ok(Self(a - b))
+			if a > b {
+				SameOrOther::Same(Self(a - b))
+			} else if b > a {
+				SameOrOther::Other(NegativeImbalance::new(b - a))
 			} else {
-				Err(NegativeImbalance::new(b - a))
+				SameOrOther::None
 			}
 		}
 		fn peek(&self) -> T::Balance {
@@ -892,6 +1042,12 @@ mod imbalances {
 	impl<T: Config<I>, I: 'static> TryDrop for NegativeImbalance<T, I> {
 		fn try_drop(self) -> result::Result<(), Self> {
 			self.drop_zero()
+		}
+	}
+
+	impl<T: Config<I>, I: 'static> Default for NegativeImbalance<T, I> {
+		fn default() -> Self {
+			Self::zero()
 		}
 	}
 
@@ -925,14 +1081,16 @@ mod imbalances {
 			self.0 = self.0.saturating_add(other.0);
 			mem::forget(other);
 		}
-		fn offset(self, other: Self::Opposite) -> result::Result<Self, Self::Opposite> {
+		fn offset(self, other: Self::Opposite) -> SameOrOther<Self, Self::Opposite> {
 			let (a, b) = (self.0, other.0);
 			mem::forget((self, other));
 
-			if a >= b {
-				Ok(Self(a - b))
+			if a > b {
+				SameOrOther::Same(Self(a - b))
+			} else if b > a {
+				SameOrOther::Other(PositiveImbalance::new(b - a))
 			} else {
-				Err(PositiveImbalance::new(b - a))
+				SameOrOther::None
 			}
 		}
 		fn peek(&self) -> T::Balance {
