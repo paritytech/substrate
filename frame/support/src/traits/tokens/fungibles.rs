@@ -45,7 +45,9 @@ pub trait Inspect<AccountId> {
 	fn balance(asset: Self::AssetId, who: &AccountId) -> Self::Balance;
 
 	/// Get the maximum amount of `asset` that `who` can withdraw/transfer successfully.
-	fn withdrawable_balance(asset: Self::AssetId, who: &AccountId) -> Self::Balance { Self::balance(asset, who) }
+	fn withdrawable_balance(asset: Self::AssetId, who: &AccountId) -> Self::Balance {
+		Self::balance(asset, who)
+	}
 
 	/// Returns `true` if the `asset` balance of `who` may be increased by `amount`.
 	fn can_deposit(asset: Self::AssetId, who: &AccountId, amount: Self::Balance)

@@ -174,13 +174,8 @@ impl<
 	}
 }
 
-// TODO: For assets:
-//   - One main balance.
-//   - Also `frozen` balance.
-//   - Reserves & locks both named.
-//   - `frozen = ED + SUM(reserves) + MAX(locks)`
-//   - Nothing may reduce balance below `frozen`.
-
+/// Convert a `fungibles` trait implementation into a `fungible` trait implementation by identifying
+/// a single item.
 pub struct ItemOf<
 	F: fungibles::Inspect<AccountId>,
 	A: Get<<F as fungibles::Inspect<AccountId>>::AssetId>,

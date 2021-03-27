@@ -506,12 +506,12 @@ fn freezer_should_work() {
 		set_frozen_balance(0, 1, 50);
 
 		assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 20));
-
 		assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 21), Error::<Test>::BalanceLow);
 
 		Balances::make_free_balance_be(&1, 100);
 		assert_ok!(Assets::approve_transfer(Origin::signed(1), 0, 2, 50));
-		assert_noop!(Assets::transfer_approved(Origin::signed(2), 0, 1, 2, 21), Error::<Test>::BalanceLow);
+		let e = Error::<Test>::BalanceLow;
+		assert_noop!(Assets::transfer_approved(Origin::signed(2), 0, 1, 2, 21), e);
 
 		assert_ok!(Assets::force_transfer(Origin::signed(1), 0, 1, 2, 21));
 		assert_eq!(hooks(), vec![Hook::Melted(0, 1, 49)]);

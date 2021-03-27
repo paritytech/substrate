@@ -1686,11 +1686,15 @@ impl<T: Config> Pallet<T> {
 		keep_alive: bool,
 		respect_frozen: RespectFrozen,
 		best_effort: bool,
-		check: impl FnOnce(T::Balance, &mut AssetDetails<T::Balance, T::AccountId, DepositBalanceOf<T>>) -> DispatchResult,
+		check: impl FnOnce(
+			T::Balance,
+			&mut AssetDetails<T::Balance, T::AccountId, DepositBalanceOf<T>>,
+		) -> DispatchResult,
 	) -> Result<T::Balance, DispatchError> {
 		if amount.is_zero() { return Ok(amount) }
 
-		let (actual, melted) = Self::prep_debit(id, target, amount, keep_alive, respect_frozen, best_effort)?;
+		let (actual, melted) =
+			Self::prep_debit(id, target, amount, keep_alive, respect_frozen, best_effort)?;
 
 		Asset::<T>::try_mutate(id, |maybe_details| -> DispatchResult {
 			let details = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
@@ -1746,7 +1750,8 @@ impl<T: Config> Pallet<T> {
 		}
 
 		// Figure out the debit and credit, together with side-effects.
-		let (debit, melted) = Self::prep_debit(id, &source, amount, keep_alive, respect_frozen, best_effort)?;
+		let (debit, melted) =
+			Self::prep_debit(id, &source, amount, keep_alive, respect_frozen, best_effort)?;
 		let (credit, maybe_burn) = Self::prep_credit(id, &dest, amount, debit, burn_dust)?;
 
 		let mut source_account = Account::<T>::get(id, &source);
@@ -1900,17 +1905,26 @@ impl<T: Config> fungibles::Unbalanced<T::AccountId> for Pallet<T> {
 			asset.supply = amount
 		});
 	}
-	fn decrease_balance(asset: T::AssetId, who: &T::AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError> {
-		Self::decrease_balance(asset, who, amount, false, Respect, false, |_, _|Ok(()))
+	fn decrease_balance(asset: T::AssetId, who: &T::AccountId, amount: Self::Balance)
+		-> Result<Self::Balance, DispatchError>
+	{
+		Self::decrease_balance(asset, who, amount, false, Respect, false, |_, _| Ok(()))
 	}
-	fn decrease_balance_at_most(asset: T::AssetId, who: &T::AccountId, amount: Self::Balance) -> Self::Balance {
-		Self::decrease_balance(asset, who, amount, false, Respect, true, |_, _|Ok(())).unwrap_or(Zero::zero())
+	fn decrease_balance_at_most(asset: T::AssetId, who: &T::AccountId, amount: Self::Balance)
+		-> Self::Balance
+	{
+		Self::decrease_balance(asset, who, amount, false, Respect, true, |_, _| Ok(()))
+			.unwrap_or(Zero::zero())
 	}
-	fn increase_balance(asset: T::AssetId, who: &T::AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError> {
+	fn increase_balance(asset: T::AssetId, who: &T::AccountId, amount: Self::Balance)
+		-> Result<Self::Balance, DispatchError>
+	{
 		Self::increase_balance(asset, who, amount, |_|Ok(()))?;
 		Ok(amount)
 	}
-	fn increase_balance_at_most(asset: T::AssetId, who: &T::AccountId, amount: Self::Balance) -> Self::Balance {
+	fn increase_balance_at_most(asset: T::AssetId, who: &T::AccountId, amount: Self::Balance)
+		-> Self::Balance
+	{
 		match Self::increase_balance(asset, who, amount, |_|Ok(())) {
 			Ok(_) => amount,
 			Err(_) => Zero::zero(),
