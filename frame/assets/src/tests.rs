@@ -493,6 +493,7 @@ fn set_metadata_should_work() {
 }
 
 // TODO: tests for force_set_metadata, force_clear_metadata, force_asset_status
+// https://github.com/paritytech/substrate/issues/8470
 
 #[test]
 fn freezer_should_work() {
