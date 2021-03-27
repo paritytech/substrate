@@ -4171,6 +4171,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "futures 0.3.13",
  "node-primitives",
  "node-runtime",
  "node-testing",
@@ -7256,6 +7257,7 @@ name = "sc-consensus-manual-seal"
 version = "0.9.0"
 dependencies = [
  "assert_matches",
+ "async-trait",
  "derive_more",
  "futures 0.3.13",
  "jsonrpc-core",
@@ -9523,6 +9525,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "frame-system-rpc-runtime-api",
+ "futures 0.3.13",
  "log",
  "memory-db",
  "pallet-babe",
