@@ -147,7 +147,7 @@ pub trait MutateReserve<AccountId>: InspectReserve<AccountId> + Transfer<Account
 	}
 }
 
-/// Trait for mutating a fungible asset which can be reserved.
+/// Trait for slashing a fungible asset which can be reserved.
 pub trait BalancedReserve<AccountId>: Balanced<AccountId> + MutateReserve<AccountId> {
 	/// Unreserve and slash some funds in an account.
 	///
@@ -292,4 +292,3 @@ impl<
 		<F as fungibles::Unbalanced<AccountId>>::increase_balance_at_most(A::get(), who, amount)
 	}
 }
-
