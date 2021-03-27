@@ -3457,7 +3457,7 @@ fn payout_stakers_handles_weight_refund() {
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(20));
 		assert!(result.is_err());
-		// When there is an error the consumed weight == weight when there are 0 payouts.
+		// When there is an error the consumed weight == weight when there are 0 nominator payouts.
 		assert_eq!(extract_actual_weight(&result, &info), zero_nom_payouts_weight);
 	});
 }
