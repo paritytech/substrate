@@ -45,7 +45,7 @@ frame-benchmarking = { version = "3.1.0", default-features = false, path = "../.
 frame-system-benchmarking = { version = "3.0.0", default-features = false, path = "../../../frame/system/benchmarking", optional = true }
 hex-literal = { version = "0.3.1", optional = true }
 
-template = { version = "2.0.0", default-features = false, path = "../pallets/template", package = "pallet-template" }
+template = { version = "3.0.0", default-features = false, path = "../pallets/template", package = "pallet-template" }
 
 [build-dependencies]
 substrate-wasm-builder = { version = "4.0.0", path = "../../../utils/wasm-builder" }
