@@ -42,7 +42,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-        Treasury: pallet_treasury::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Treasury: pallet_treasury::{Pallet, Call, Storage, Config<T>, Event<T>},
 		TipsModTestInst: tips::{Pallet, Call, Storage, Event<T>},
 	}
 );
@@ -164,7 +164,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	pallet_treasury::GenesisConfig::<Test, _>::default()
 		.assimilate_storage(&mut t).unwrap();
 
-    t.into()
+	t.into()
 }
 
 fn last_event() -> RawEvent<u64, u128, H256> {
@@ -483,7 +483,7 @@ fn genesis_funding_works() {
 	pallet_treasury::GenesisConfig::<Test, _>::default()
 		.assimilate_storage(&mut t).unwrap();
 
-    let mut t: sp_io::TestExternalities = t.into();
+	let mut t: sp_io::TestExternalities = t.into();
 
 	t.execute_with(|| {
 		assert_eq!(Balances::free_balance(Treasury::account_id()), initial_funding);

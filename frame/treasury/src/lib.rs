@@ -410,7 +410,7 @@ impl<T: Config<I>, I: 'static>  Pallet<T, I> {
 		let mut total_weight: Weight = Zero::zero();
 
 		let mut budget_remaining = Self::pot();
-		Self::deposit_event(RawEvent::Spending(budget_remaining));
+		Self::deposit_event(Event::Spending(budget_remaining));
 		let account_id = Self::account_id();
 
 		let mut missed_any = false;
@@ -431,7 +431,7 @@ impl<T: Config<I>, I: 'static>  Pallet<T, I> {
 						// provide the allocation.
 						imbalance.subsume(T::Currency::deposit_creating(&p.beneficiary, p.value));
 
-						Self::deposit_event(RawEvent::Awarded(index, p.value, p.beneficiary));
+						Self::deposit_event(Event::Awarded(index, p.value, p.beneficiary));
 						false
 					} else {
 						missed_any = true;
@@ -457,7 +457,7 @@ impl<T: Config<I>, I: 'static>  Pallet<T, I> {
 			let (debit, credit) = T::Currency::pair(burn);
 			imbalance.subsume(debit);
 			T::BurnDestination::on_unbalanced(credit);
-			Self::deposit_event(RawEvent::Burnt(burn))
+			Self::deposit_event(Event::Burnt(burn))
 		}
 
 		// Must never be an error, but better to be safe.
@@ -475,7 +475,7 @@ impl<T: Config<I>, I: 'static>  Pallet<T, I> {
 			drop(problem);
 		}
 
-		Self::deposit_event(RawEvent::Rollover(budget_remaining));
+		Self::deposit_event(Event::Rollover(budget_remaining));
 
 		total_weight
 	}
@@ -497,6 +497,6 @@ impl<T: Config<I>, I: 'static> OnUnbalanced<NegativeImbalanceOf<T, I>> for Palle
 		// Must resolve into existing but better to be safe.
 		let _ = T::Currency::resolve_creating(&Self::account_id(), amount);
 
-		Self::deposit_event(RawEvent::Deposit(numeric_amount));
+		Self::deposit_event(Event::Deposit(numeric_amount));
 	}
 }
