@@ -133,7 +133,7 @@ mod tests;
 use sp_std::prelude::*;
 use sp_runtime::{
 	RuntimeDebug, TokenError, traits::{
-		AtLeast32BitUnsigned, Zero, StaticLookup, Saturating, CheckedSub, CheckedAdd,
+		AtLeast32BitUnsigned, Zero, StaticLookup, Saturating, CheckedSub, CheckedAdd, Bounded,
 	}
 };
 use codec::{Encode, Decode, HasCompact};
@@ -144,113 +144,6 @@ use frame_system::Config as SystemConfig;
 
 pub use weights::WeightInfo;
 pub use pallet::*;
-
-impl<T: Config> fungibles::Inspect<<T as SystemConfig>::AccountId> for Pallet<T> {
-	type AssetId = T::AssetId;
-	type Balance = T::Balance;
-
-	fn total_issuance(asset: Self::AssetId) -> Self::Balance {
-		Asset::<T>::get(asset).map(|x| x.supply).unwrap_or_else(Zero::zero)
-	}
-
-	fn minimum_balance(asset: Self::AssetId) -> Self::Balance {
-		Asset::<T>::get(asset).map(|x| x.min_balance).unwrap_or_else(Zero::zero)
-	}
-
-	fn withdrawable_balance(
-		asset: Self::AssetId,
-		who: &<T as SystemConfig>::AccountId,
-	) -> Self::Balance {
-		Pallet::<T>::decreasable_balance(asset, who, false, Respect).unwrap_or(Zero::zero())
-	}
-
-	fn balance(
-		asset: Self::AssetId,
-		who: &<T as SystemConfig>::AccountId,
-	) -> Self::Balance {
-		Pallet::<T>::balance(asset, who)
-	}
-
-	fn can_deposit(
-		asset: Self::AssetId,
-		who: &<T as SystemConfig>::AccountId,
-		amount: Self::Balance,
-	) -> DepositConsequence {
-		Pallet::<T>::can_increase(asset, who, amount)
-	}
-
-	fn can_withdraw(
-		asset: Self::AssetId,
-		who: &<T as SystemConfig>::AccountId,
-		amount: Self::Balance,
-	) -> WithdrawConsequence<Self::Balance> {
-		Pallet::<T>::can_decrease(asset, who, amount, false, Respect).0
-	}
-}
-
-impl<T: Config> fungibles::Mutate<<T as SystemConfig>::AccountId> for Pallet<T> {
-	fn mint_into(
-		asset: Self::AssetId,
-		who: &<T as SystemConfig>::AccountId,
-		amount: Self::Balance,
-	) -> DispatchResult {
-		Self::do_mint(asset, who, amount, None)
-	}
-
-	fn burn_from(
-		asset: Self::AssetId,
-		who: &<T as SystemConfig>::AccountId,
-		amount: Self::Balance,
-	) -> Result<Self::Balance, DispatchError> {
-		Self::do_burn(asset, who, amount, None, false, Respect, false)
-	}
-
-	fn slash(
-		asset: Self::AssetId,
-		who: &<T as SystemConfig>::AccountId,
-		amount: Self::Balance,
-	) -> Result<Self::Balance, DispatchError> {
-		Self::do_burn(asset, who, amount, None, false, Respect, true)
-	}
-}
-
-impl<T: Config> fungibles::Transfer<T::AccountId> for Pallet<T> {
-	fn transfer(
-		asset: Self::AssetId,
-		source: &T::AccountId,
-		dest: &T::AccountId,
-		amount: T::Balance,
-	) -> Result<T::Balance, DispatchError> {
-		Self::do_transfer(asset, source, dest, amount, None, false, Respect, false, false)
-	}
-}
-
-impl<T: Config> fungibles::Unbalanced<T::AccountId> for Pallet<T> {
-	fn set_balance(_: Self::AssetId, _: &T::AccountId, _: Self::Balance) -> DispatchResult {
-		unreachable!();
-	}
-	fn set_total_issuance(id: T::AssetId, amount: Self::Balance) {
-		Asset::<T>::mutate_exists(id, |maybe_asset| if let Some(ref mut asset) = maybe_asset {
-			asset.supply = amount
-		});
-	}
-	fn decrease_balance(asset: T::AssetId, who: &T::AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError> {
-		Self::decrease_balance(asset, who, amount, false, Respect, false, |_, _|Ok(()))
-	}
-	fn decrease_balance_at_most(asset: T::AssetId, who: &T::AccountId, amount: Self::Balance) -> Self::Balance {
-		Self::decrease_balance(asset, who, amount, false, Respect, true, |_, _|Ok(())).unwrap_or(Zero::zero())
-	}
-	fn increase_balance(asset: T::AssetId, who: &T::AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError> {
-		Self::increase_balance(asset, who, amount, |_|Ok(()))?;
-		Ok(amount)
-	}
-	fn increase_balance_at_most(asset: T::AssetId, who: &T::AccountId, amount: Self::Balance) -> Self::Balance {
-		match Self::increase_balance(asset, who, amount, |_|Ok(())) {
-			Ok(_) => amount,
-			Err(_) => Zero::zero(),
-		}
-	}
-}
 
 type DepositBalanceOf<T> = <<T as Config>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
 
@@ -317,13 +210,15 @@ pub struct Approval<Balance, DepositBalance> {
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default)]
-pub struct AssetBalance<Balance> {
+pub struct AssetBalance<Balance, Extra> {
 	/// The balance.
 	balance: Balance,
 	/// Whether the account is frozen.
 	is_frozen: bool,
 	/// `true` if this balance gave the account a self-sufficient reference.
 	sufficient: bool,
+	/// Additional "side-car" data, in case some other pallet wants to use this storage item.
+	extra: Extra,
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default)]
@@ -397,7 +292,6 @@ pub enum RespectFrozen {
 }
 
 use RespectFrozen::*;
-use sp_runtime::traits::Bounded;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -451,6 +345,9 @@ pub mod pallet {
 		/// respected in all permissionless operations.
 		type Freezer: FrozenBalance<Self::AssetId, Self::AccountId, Self::Balance>;
 
+		/// Additional data to be stored with an account's asset balance.
+		type Extra: Member + Parameter + Default;
+
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 	}
@@ -472,7 +369,7 @@ pub mod pallet {
 		T::AssetId,
 		Blake2_128Concat,
 		T::AccountId,
-		AssetBalance<T::Balance>,
+		AssetBalance<T::Balance, T::Extra>,
 		ValueQuery,
 	>;
 
@@ -1911,5 +1808,112 @@ impl<T: Config> Pallet<T> {
 
 		Self::deposit_event(Event::Transferred(id, source.clone(), dest.clone(), credit));
 		Ok(credit)
+	}
+}
+
+impl<T: Config> fungibles::Inspect<<T as SystemConfig>::AccountId> for Pallet<T> {
+	type AssetId = T::AssetId;
+	type Balance = T::Balance;
+
+	fn total_issuance(asset: Self::AssetId) -> Self::Balance {
+		Asset::<T>::get(asset).map(|x| x.supply).unwrap_or_else(Zero::zero)
+	}
+
+	fn minimum_balance(asset: Self::AssetId) -> Self::Balance {
+		Asset::<T>::get(asset).map(|x| x.min_balance).unwrap_or_else(Zero::zero)
+	}
+
+	fn withdrawable_balance(
+		asset: Self::AssetId,
+		who: &<T as SystemConfig>::AccountId,
+	) -> Self::Balance {
+		Pallet::<T>::decreasable_balance(asset, who, false, Respect).unwrap_or(Zero::zero())
+	}
+
+	fn balance(
+		asset: Self::AssetId,
+		who: &<T as SystemConfig>::AccountId,
+	) -> Self::Balance {
+		Pallet::<T>::balance(asset, who)
+	}
+
+	fn can_deposit(
+		asset: Self::AssetId,
+		who: &<T as SystemConfig>::AccountId,
+		amount: Self::Balance,
+	) -> DepositConsequence {
+		Pallet::<T>::can_increase(asset, who, amount)
+	}
+
+	fn can_withdraw(
+		asset: Self::AssetId,
+		who: &<T as SystemConfig>::AccountId,
+		amount: Self::Balance,
+	) -> WithdrawConsequence<Self::Balance> {
+		Pallet::<T>::can_decrease(asset, who, amount, false, Respect).0
+	}
+}
+
+impl<T: Config> fungibles::Mutate<<T as SystemConfig>::AccountId> for Pallet<T> {
+	fn mint_into(
+		asset: Self::AssetId,
+		who: &<T as SystemConfig>::AccountId,
+		amount: Self::Balance,
+	) -> DispatchResult {
+		Self::do_mint(asset, who, amount, None)
+	}
+
+	fn burn_from(
+		asset: Self::AssetId,
+		who: &<T as SystemConfig>::AccountId,
+		amount: Self::Balance,
+	) -> Result<Self::Balance, DispatchError> {
+		Self::do_burn(asset, who, amount, None, false, Respect, false)
+	}
+
+	fn slash(
+		asset: Self::AssetId,
+		who: &<T as SystemConfig>::AccountId,
+		amount: Self::Balance,
+	) -> Result<Self::Balance, DispatchError> {
+		Self::do_burn(asset, who, amount, None, false, Respect, true)
+	}
+}
+
+impl<T: Config> fungibles::Transfer<T::AccountId> for Pallet<T> {
+	fn transfer(
+		asset: Self::AssetId,
+		source: &T::AccountId,
+		dest: &T::AccountId,
+		amount: T::Balance,
+	) -> Result<T::Balance, DispatchError> {
+		Self::do_transfer(asset, source, dest, amount, None, false, Respect, false, false)
+	}
+}
+
+impl<T: Config> fungibles::Unbalanced<T::AccountId> for Pallet<T> {
+	fn set_balance(_: Self::AssetId, _: &T::AccountId, _: Self::Balance) -> DispatchResult {
+		unreachable!();
+	}
+	fn set_total_issuance(id: T::AssetId, amount: Self::Balance) {
+		Asset::<T>::mutate_exists(id, |maybe_asset| if let Some(ref mut asset) = maybe_asset {
+			asset.supply = amount
+		});
+	}
+	fn decrease_balance(asset: T::AssetId, who: &T::AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError> {
+		Self::decrease_balance(asset, who, amount, false, Respect, false, |_, _|Ok(()))
+	}
+	fn decrease_balance_at_most(asset: T::AssetId, who: &T::AccountId, amount: Self::Balance) -> Self::Balance {
+		Self::decrease_balance(asset, who, amount, false, Respect, true, |_, _|Ok(())).unwrap_or(Zero::zero())
+	}
+	fn increase_balance(asset: T::AssetId, who: &T::AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError> {
+		Self::increase_balance(asset, who, amount, |_|Ok(()))?;
+		Ok(amount)
+	}
+	fn increase_balance_at_most(asset: T::AssetId, who: &T::AccountId, amount: Self::Balance) -> Self::Balance {
+		match Self::increase_balance(asset, who, amount, |_|Ok(())) {
+			Ok(_) => amount,
+			Err(_) => Zero::zero(),
+		}
 	}
 }
