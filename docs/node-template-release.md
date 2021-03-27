@@ -18,19 +18,55 @@ by running the following command.
 	rsync -rvu . <destination node-template directory>/
 	```
 
-3. Commit the changes to a new branch in [Substrate Node Template](https://github.com/substrate-developer-hub/substrate-node-template), and make a PR.
+	The above command only copy all newly added and modified files from the source directory, but
+	not deleting files/directories that are removed in the source. So manually check and remove them
+	in the destination.
 
-4. Once the PR is merged, tag the merged commit in master branch with the version number
+3. There actually are three packages in Node Template, `node-template` (the node), `node-template-runtime`
+(the runtime), and `pallet-template`, and each has its own `Cargo.toml`. We need to manually update:
+
+	- `[package]` information `authors` updated to `Substrate DevHub <https://github.com/substrate-developer-hub>`.
+	- `[package]` information `repository`updated to
+	`https://github.com/substrate-developer-hub/substrate-node-template/`
+	- Each dependency is listed in expanded form and linked to a certain Substrate commit, such as:
+
+		```toml
+		[dev-dependencies.sp-core]
+		default-features = false
+		git = 'https://github.com/paritytech/substrate.git'
+		rev = 'c1fe59d060600a10eebb4ace277af1fee20bad17'
+		version = '3.0.0'
+		```
+
+		We will update each of them to the shortened form and linked to the
+		[crate registry](https://crates.io/). After confirming the versioned package is published in
+		crate, the above will become:
+
+		```toml
+		[dev-dependencies]
+		sp-core = { version = '3.0.0', default-features = false }
+		```
+
+	P.S: This step can be automated if we update `node-template-release` package in
+	`.maintain/node-template-release`.
+
+4. Once the three `Cargo.toml`s are updated, compile and confirm Node Template builds. Then
+commit the changes to a new branch in [Substrate Node Template](https://github.com/substrate-developer-hub/substrate-node-template), and make a PR.
+
+5. Once the PR is merged, tag the merged commit in master branch with the version number
 `vX.Y.Z+A` (e.g. `v3.0.0+1`). The `X`(major), `Y`(minor), and `Z`(patch) version number should
 follow Substrate release version. The last digit is any significant fixes made in the Substrate
 Node Template apart from Substrate. When the Substrate version is updated, this digit is reset to 0.
 
 ## Troubleshooting
 
-1. Running the script `./node-template-release.sh <output tar.gz file>`, after all tests passed
+- Running the script `./node-template-release.sh <output tar.gz file>`, after all tests passed
 	successfully, seeing the following error message:
 
 	```
 	thread 'main' panicked at 'Creates output file: Os { code: 2, kind: NotFound, message: "No such file or directory" }', src/main.rs:250:10
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 	```
+
+	This is likely due to that your output path is not a valid `tar.gz` filename or you don't have write
+	permission to the destination. Try with a simple output path such as `~/node-tpl.tar.gz`.
