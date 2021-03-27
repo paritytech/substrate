@@ -50,7 +50,6 @@ futures01 = { package = "futures", version = "0.1.29" }
 futures = { package = "futures", version = "0.3", features = ["compat"] }
 rand = "0.7"
 tokio = { version = "0.2", features = ["full"] }
-libp2p = "0.35.1"
 
 # Calling RPC
 jsonrpc-core = "15.1"
