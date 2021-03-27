@@ -135,7 +135,6 @@ where
 			if let Some(inner_delay) = self.inner_delay.take() {
 				inner_delay.await;
 			}
-
 			// timeout has fired.
 
 			let chain_head = match self.client.best_chain() {
@@ -179,5 +178,3 @@ where
 		}
 	}
 }
-
-impl<Block, C, IDP> Unpin for Slots<Block, C, IDP> {}

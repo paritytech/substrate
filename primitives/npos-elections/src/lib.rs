@@ -119,6 +119,8 @@ pub use pjr::*;
 pub use codec;
 #[doc(hidden)]
 pub use sp_arithmetic;
+#[doc(hidden)]
+pub use sp_std;
 
 /// Simple Extension trait to easily convert `None` from index closures to `Err`.
 ///

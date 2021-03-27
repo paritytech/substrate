@@ -24,7 +24,7 @@ use sp_consensus::{
 	BlockImportParams, BlockImport, BlockOrigin, Error as ConsensusError,
 	ForkChoiceStrategy,
 };
-use sp_runtime::Justification;
+use sp_runtime::{Justification, Justifications};
 use sp_runtime::traits::{Block as BlockT};
 use sp_runtime::generic::BlockId;
 use codec::alloc::collections::hash_map::HashMap;
@@ -55,12 +55,12 @@ pub trait ClientBlockImportExt<Block: BlockT>: Sized {
 	async fn import_as_final(&mut self, origin: BlockOrigin, block: Block)
 		-> Result<(), ConsensusError>;
 
-	/// Import block with justification, finalizes block.
+	/// Import block with justification(s), finalizes block.
 	async fn import_justified(
 		&mut self,
 		origin: BlockOrigin,
 		block: Block,
-		justification: Justification
+		justifications: Justifications,
 	) -> Result<(), ConsensusError>;
 }
 
@@ -136,11 +136,11 @@ impl<Block: BlockT, T, Transaction> ClientBlockImportExt<Block> for std::sync::A
 		&mut self,
 		origin: BlockOrigin,
 		block: Block,
-		justification: Justification,
+		justifications: Justifications,
 	) -> Result<(), ConsensusError> {
 		let (header, extrinsics) = block.deconstruct();
 		let mut import = BlockImportParams::new(origin, header);
-		import.justification = Some(justification);
+		import.justifications = Some(justifications);
 		import.body = Some(extrinsics);
 		import.finalized = true;
 		import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
@@ -202,11 +202,11 @@ impl<B, E, RA, Block: BlockT> ClientBlockImportExt<Block> for Client<B, E, Block
 		&mut self,
 		origin: BlockOrigin,
 		block: Block,
-		justification: Justification,
+		justifications: Justifications,
 	) -> Result<(), ConsensusError> {
 		let (header, extrinsics) = block.deconstruct();
 		let mut import = BlockImportParams::new(origin, header);
-		import.justification = Some(justification);
+		import.justifications = Some(justifications);
 		import.body = Some(extrinsics);
 		import.finalized = true;
 		import.fork_choice = Some(ForkChoiceStrategy::LongestChain);

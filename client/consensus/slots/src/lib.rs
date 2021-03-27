@@ -32,12 +32,11 @@ pub use slots::SlotInfo;
 use slots::Slots;
 pub use aux_schema::{check_equivocation, MAX_SLOT_CAPACITY, PRUNING_BOUND};
 
-use std::{fmt::Debug, ops::Deref, pin::Pin, sync::Arc, time::Duration};
+use std::{fmt::Debug, ops::Deref, time::Duration};
 use codec::{Decode, Encode};
-use futures::{prelude::*, future::{self, Either}};
+use futures::{future::Either, Future, TryFutureExt};
 use futures_timer::Delay;
 use log::{debug, error, info, warn};
-use parking_lot::Mutex;
 use sp_api::{ProvideRuntimeApi, ApiRef};
 use sp_arithmetic::traits::BaseArithmetic;
 use sp_consensus::{BlockImport, Proposer, SyncOracle, SelectChain, CanAuthorWith, SlotData};

@@ -83,7 +83,7 @@ use sp_core::crypto::Public;
 use sp_application_crypto::AppKey;
 use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 use sp_runtime::{
-	generic::{BlockId, OpaqueDigestItemId}, Justification,
+	generic::{BlockId, OpaqueDigestItemId}, Justifications,
 	traits::{Block as BlockT, Header, DigestItemFor, Zero},
 };
 use sp_api::{ProvideRuntimeApi, NumberFor};
@@ -1079,15 +1079,15 @@ where
 		&mut self,
 		origin: BlockOrigin,
 		header: Block::Header,
-		justification: Option<Justification>,
+		justifications: Option<Justifications>,
 		mut body: Option<Vec<Block::Extrinsic>>,
 	) -> Result<(BlockImportParams<Block, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		trace!(
 			target: "babe",
-			"Verifying origin: {:?} header: {:?} justification: {:?} body: {:?}",
+			"Verifying origin: {:?} header: {:?} justification(s): {:?} body: {:?}",
 			origin,
 			header,
-			justification,
+			justifications,
 			body,
 		);
 
@@ -1116,7 +1116,7 @@ where
 				parent_header_metadata.number,
 				pre_digest.slot(),
 			)
-												.map_err(|e| Error::<Block>::ForkTree(Box::new(e)))?
+			.map_err(|e| Error::<Block>::ForkTree(Box::new(e)))?
 			.ok_or_else(|| Error::<Block>::FetchEpoch(parent_hash))?;
 			let viable_epoch = epoch_changes.viable_epoch(
 				&epoch_descriptor,
@@ -1179,12 +1179,13 @@ where
 					self.telemetry;
 					CONSENSUS_TRACE;
 					"babe.checked_and_importing";
-					"pre_header" => ?pre_header);
+					"pre_header" => ?pre_header,
+				);
 
 				let mut import_block = BlockImportParams::new(origin, pre_header);
 				import_block.post_digests.push(verified_info.seal);
 				import_block.body = body;
-				import_block.justification = justification;
+				import_block.justifications = justifications;
 				import_block.intermediates.insert(
 					Cow::from(INTERMEDIATE_KEY),
 					Box::new(BabeIntermediate::<Block> { epoch_descriptor }) as Box<_>,
@@ -1650,7 +1651,7 @@ pub mod test_helpers {
 			HeaderMetadata<B, Error = ClientError>,
 		C::Api: BabeApi<B>,
 	{
-		let epoch_changes = link.epoch_changes.lock();
+		let epoch_changes = link.epoch_changes.shared_data();
 		let epoch = epoch_changes.epoch_data_for_child_of(
 			descendent_query(client),
 			&parent.hash(),

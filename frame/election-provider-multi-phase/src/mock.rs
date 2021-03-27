@@ -52,9 +52,9 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: frame_system::{Module, Call, Event<T>, Config},
-		Balances: pallet_balances::{Module, Call, Event<T>, Config<T>},
-		MultiPhase: multi_phase::{Module, Call, Event<T>},
+		System: frame_system::{Pallet, Call, Event<T>, Config},
+		Balances: pallet_balances::{Pallet, Call, Event<T>, Config<T>},
+		MultiPhase: multi_phase::{Pallet, Call, Event<T>},
 	}
 );
 
@@ -300,6 +300,7 @@ pub struct ExtBuilder {}
 
 pub struct StakingMock;
 impl ElectionDataProvider<AccountId, u64> for StakingMock {
+	const MAXIMUM_VOTES_PER_VOTER: u32 = <TestCompact as CompactSolution>::LIMIT as u32;
 	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<AccountId>, Weight)> {
 		let targets = Targets::get();
 

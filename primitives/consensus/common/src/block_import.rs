@@ -18,7 +18,7 @@
 //! Block import helpers.
 
 use sp_runtime::traits::{Block as BlockT, DigestItemFor, Header as HeaderT, NumberFor, HashFor};
-use sp_runtime::Justification;
+use sp_runtime::{Justification, Justifications};
 use serde::{Serialize, Deserialize};
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -128,8 +128,8 @@ pub struct BlockImportParams<Block: BlockT, Transaction> {
 	/// re-executed in a runtime that checks digest equivalence -- the
 	/// post-runtime digests are pushed back on after.
 	pub header: Block::Header,
-	/// Justification provided for this block from the outside.
-	pub justification: Option<Justification>,
+	/// Justification(s) provided for this block from the outside.
+	pub justifications: Option<Justifications>,
 	/// Digest items that have been added after the runtime for external
 	/// work, like a consensus signature.
 	pub post_digests: Vec<DigestItemFor<Block>>,
@@ -174,7 +174,7 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 	) -> Self {
 		Self {
 			origin, header,
-			justification: None,
+			justifications: None,
 			post_digests: Vec::new(),
 			body: None,
 			storage_changes: None,
@@ -219,7 +219,7 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 		BlockImportParams {
 			origin: self.origin,
 			header: self.header,
-			justification: self.justification,
+			justifications: self.justifications,
 			post_digests: self.post_digests,
 			body: self.body,
 			storage_changes: None,
@@ -269,7 +269,7 @@ pub trait BlockImport<B: BlockT> {
 	/// The error type.
 	type Error: std::error::Error + Send + 'static;
 	/// The transaction type used by the backend.
-	type Transaction;
+	type Transaction: Send + 'static;
 
 	/// Check block preconditions.
 	async fn check_block(
@@ -288,7 +288,10 @@ pub trait BlockImport<B: BlockT> {
 }
 
 #[async_trait::async_trait]
-impl<B: BlockT, Transaction: Send> BlockImport<B> for crate::import_queue::BoxBlockImport<B, Transaction> {
+impl<B: BlockT, Transaction> BlockImport<B> for crate::import_queue::BoxBlockImport<B, Transaction>
+	where
+		Transaction: Send + 'static,
+{
 	type Error = crate::error::Error;
 	type Transaction = Transaction;
 
@@ -313,10 +316,11 @@ impl<B: BlockT, Transaction: Send> BlockImport<B> for crate::import_queue::BoxBl
 }
 
 #[async_trait::async_trait]
-impl<B: BlockT, T, E: std::error::Error + Send + 'static, Transaction: Send + 'static> BlockImport<B> for Arc<T>
+impl<B: BlockT, T, E: std::error::Error + Send + 'static, Transaction> BlockImport<B> for Arc<T>
 	where
 		for<'r> &'r T: BlockImport<B, Error = E, Transaction = Transaction>,
 		T: Send + Sync,
+		Transaction: Send + 'static,
 {
 	type Error = E;
 	type Transaction = Transaction;

@@ -756,7 +756,7 @@ pub(crate) mod tests {
 	#[test]
 	fn finalized_ancient_headers_are_replaced_with_cht() {
 		fn insert_headers<F: Fn(&Hash, u64) -> Header>(header_producer: F) ->
-			(Arc<sp_database::MemDb<DbHash>>, LightStorage<Block>)
+			(Arc<sp_database::MemDb>, LightStorage<Block>)
 		{
 			let raw_db = Arc::new(sp_database::MemDb::default());
 			let db = LightStorage::from_kvdb(raw_db.clone()).unwrap();

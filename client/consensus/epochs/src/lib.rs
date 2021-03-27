@@ -20,8 +20,7 @@
 
 pub mod migration;
 
-use std::{sync::Arc, ops::Add, collections::BTreeMap, borrow::{Borrow, BorrowMut}};
-use parking_lot::Mutex;
+use std::{ops::Add, collections::BTreeMap, borrow::{Borrow, BorrowMut}};
 use codec::{Encode, Decode};
 use fork_tree::ForkTree;
 use sc_client_api::utils::is_descendent_of;

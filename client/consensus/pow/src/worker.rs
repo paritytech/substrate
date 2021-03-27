@@ -69,6 +69,7 @@ impl<Block, Algorithm, C, Proof> MiningWorker<Block, Algorithm, C, Proof> where
 	C: sp_api::ProvideRuntimeApi<Block>,
 	Algorithm: PowAlgorithm<Block>,
 	Algorithm::Difficulty: 'static + Send,
+	sp_api::TransactionFor<C, Block>: Send + 'static,
 {
 	/// Get the current best hash. `None` if the worker has just started or the client is doing
 	/// major syncing.
