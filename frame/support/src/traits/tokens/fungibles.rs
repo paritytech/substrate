@@ -169,7 +169,7 @@ pub trait MutateReserve<AccountId>: InspectReserve<AccountId> + Transfer<Account
 		dest: &AccountId,
 		amount: Self::Balance,
 	) -> Result<Self::Balance, DispatchError> {
-		// Done on a best-effort basis. Basically just a slash + transfer
+		// Done on a best-effort basis. Basically just a unreserve + transfer
 		let actual = Self::unreserve(asset, source, amount)?;
 		let actual = <Self as fungibles::Transfer<AccountId>>::transfer(asset, source, dest, actual)?;
 		Ok(actual)
