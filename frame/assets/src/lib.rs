@@ -139,14 +139,24 @@ use sp_runtime::{
 };
 use codec::{Encode, Decode, HasCompact};
 use frame_support::{ensure, dispatch::{DispatchError, DispatchResult}};
-use frame_support::traits::{Currency, ReservableCurrency, BalanceStatus::Reserved, Fungibles};
+use frame_support::traits::{Currency, ReservableCurrency, BalanceStatus::Reserved};
+use frame_support::traits::tokens::{WithdrawConsequence, DepositConsequence, fungibles};
 use frame_system::Config as SystemConfig;
+
 pub use weights::WeightInfo;
 pub use pallet::*;
 
-impl<T: Config> Fungibles<<T as SystemConfig>::AccountId> for Pallet<T> {
+impl<T: Config> fungibles::Inspect<<T as SystemConfig>::AccountId> for Pallet<T> {
 	type AssetId = T::AssetId;
 	type Balance = T::Balance;
+
+	fn total_issuance(asset: Self::AssetId) -> Self::Balance {
+		Asset::<T>::get(asset).map(|x| x.supply).unwrap_or_else(Zero::zero)
+	}
+
+	fn minimum_balance(asset: Self::AssetId) -> Self::Balance {
+		Asset::<T>::get(asset).map(|x| x.min_balance).unwrap_or_else(Zero::zero)
+	}
 
 	fn balance(
 		asset: Self::AssetId,
@@ -159,24 +169,45 @@ impl<T: Config> Fungibles<<T as SystemConfig>::AccountId> for Pallet<T> {
 		asset: Self::AssetId,
 		who: &<T as SystemConfig>::AccountId,
 		amount: Self::Balance,
-	) -> bool {
+	) -> DepositConsequence {
 		Pallet::<T>::can_deposit(asset, who, amount)
 	}
 
+	fn can_withdraw(
+		asset: Self::AssetId,
+		who: &<T as SystemConfig>::AccountId,
+		amount: Self::Balance,
+	) -> WithdrawConsequence<Self::Balance> {
+		Pallet::<T>::can_withdraw(asset, who, amount)
+	}
+}
+
+impl<T: Config> fungibles::Mutate<<T as SystemConfig>::AccountId> for Pallet<T> {
 	fn deposit(
 		asset: Self::AssetId,
-		who: <T as SystemConfig>::AccountId,
+		who: &<T as SystemConfig>::AccountId,
 		amount: Self::Balance,
 	) -> DispatchResult {
-		Pallet::<T>::increase_balance(asset, who, amount, None)
+		Pallet::<T>::increase_balance(asset, who.clone(), amount, None)
 	}
 
 	fn withdraw(
 		asset: Self::AssetId,
-		who: <T as SystemConfig>::AccountId,
+		who: &<T as SystemConfig>::AccountId,
 		amount: Self::Balance,
-	) -> DispatchResult {
-		Pallet::<T>::reduce_balance(asset, who, amount, None)
+	) -> Result<Self::Balance, DispatchError> {
+		Pallet::<T>::reduce_balance(asset, who.clone(), amount, None)
+	}
+}
+
+impl<T: Config> fungibles::Transfer<T::AccountId> for Pallet<T> {
+	fn transfer(
+		asset: Self::AssetId,
+		source: &T::AccountId,
+		dest: &T::AccountId,
+		amount: T::Balance,
+	) -> Result<T::Balance, DispatchError> {
+		<Self as fungibles::Mutate::<T::AccountId>>::transfer(asset, source, dest, amount)
 	}
 }
 
@@ -671,7 +702,7 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let who = T::Lookup::lookup(who)?;
 
-			Self::reduce_balance(id, who, amount, Some(origin))
+			Self::reduce_balance(id, who, amount, Some(origin)).map(|_| ())
 		}
 
 		/// Move some assets from the sender account to another.
@@ -1380,21 +1411,57 @@ impl<T: Config> Pallet<T> {
 		d.accounts = d.accounts.saturating_sub(1);
 	}
 
-	fn can_deposit(id: T::AssetId, who: &T::AccountId, amount: T::Balance) -> bool {
+	fn can_deposit(id: T::AssetId, who: &T::AccountId, amount: T::Balance) -> DepositConsequence {
 		let details = match Asset::<T>::get(id) {
 			Some(details) => details,
-			None => return false,
+			None => return DepositConsequence::UnknownAsset,
 		};
-		if details.supply.checked_add(&amount).is_none() { return false }
+		if details.supply.checked_add(&amount).is_none() {
+			return DepositConsequence::Overflow
+		}
 		let account = Account::<T>::get(id, who);
-		if account.balance.checked_add(&amount).is_none() { return false }
+		if account.balance.checked_add(&amount).is_none() {
+			return DepositConsequence::Overflow
+		}
 		if account.balance.is_zero() {
-			if amount < details.min_balance { return false }
-			if !details.is_sufficient && frame_system::Pallet::<T>::providers(who) == 0 { return false }
-			if details.is_sufficient && details.sufficients.checked_add(1).is_none() { return false }
+			if amount < details.min_balance {
+				return DepositConsequence::BelowMinimum
+			}
+			if !details.is_sufficient && frame_system::Pallet::<T>::providers(who) == 0 {
+				return DepositConsequence::CannotCreate
+			}
+			if details.is_sufficient && details.sufficients.checked_add(1).is_none() {
+				return DepositConsequence::Overflow
+			}
 		}
 
-		true
+		DepositConsequence::Success
+	}
+
+	fn can_withdraw(
+		id: T::AssetId,
+		who: &T::AccountId,
+		amount: T::Balance,
+	) -> WithdrawConsequence<T::Balance> {
+		let details = match Asset::<T>::get(id) {
+			Some(details) => details,
+			None => return WithdrawConsequence::UnknownAsset,
+		};
+		if details.supply.checked_sub(&amount).is_none() {
+			return WithdrawConsequence::Underflow
+		}
+		let account = Account::<T>::get(id, who);
+		if let Some(rest) = account.balance.checked_sub(&amount) {
+			if rest < details.min_balance {
+				WithdrawConsequence::ReducedToZero(rest)
+			} else {
+				// NOTE: this assumes (correctly) that the token won't be a provider. If that ever
+				// changes, this will need to change.
+				WithdrawConsequence::Success
+			}
+		} else {
+			WithdrawConsequence::NoFunds
+		}
 	}
 
 	fn increase_balance(
@@ -1430,7 +1497,7 @@ impl<T: Config> Pallet<T> {
 		target: T::AccountId,
 		amount: T::Balance,
 		maybe_check_admin: Option<T::AccountId>,
-	) -> DispatchResult {
+	) -> Result<T::Balance, DispatchError> {
 		Asset::<T>::try_mutate(id, |maybe_details| {
 			let d = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
 			if let Some(check_admin) = maybe_check_admin {
@@ -1458,7 +1525,7 @@ impl<T: Config> Pallet<T> {
 			d.supply = d.supply.saturating_sub(burned);
 
 			Self::deposit_event(Event::Burned(id, target, burned));
-			Ok(())
+			Ok(burned)
 		})
 	}
 
