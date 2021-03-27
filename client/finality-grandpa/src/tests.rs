@@ -31,7 +31,6 @@ use futures_timer::Delay;
 use futures::executor::block_on;
 use tokio::runtime::{Runtime, Handle};
 use sp_keyring::Ed25519Keyring;
-use sc_client_api::backend::TransactionFor;
 use sp_blockchain::Result;
 use sp_api::{ApiRef, ProvideRuntimeApi};
 use substrate_test_runtime_client::runtime::BlockNumber;
@@ -57,7 +56,7 @@ use sp_application_crypto::key_types::GRANDPA;
 type TestLinkHalf =
 	LinkHalf<Block, PeersFullClient, LongestChain<substrate_test_runtime_client::Backend, Block>>;
 type PeerData = Mutex<Option<TestLinkHalf>>;
-type GrandpaPeer = Peer<PeerData, PassThroughVerifier, GrandpaBlockImport>;
+type GrandpaPeer = Peer<PeerData, GrandpaBlockImport>;
 type GrandpaBlockImport = crate::GrandpaBlockImport<
 	substrate_test_runtime_client::Backend,
 	Block,

@@ -219,7 +219,7 @@ impl<B: BlockImport<TestBlock>> BlockImport<TestBlock> for PanickingBlockImport<
 	}
 }
 
-type BabePeer = Peer<Option<PeerData>, TestVerifier, BabeBlockImport>;
+type BabePeer = Peer<Option<PeerData>, BabeBlockImport>;
 
 pub struct BabeTestNet {
 	peers: Vec<BabePeer>,
@@ -233,11 +233,8 @@ type TestSelectChain = substrate_test_runtime_client::LongestChain<
 	TestBlock,
 >;
 
-#[derive(Clone)]
 pub struct TestVerifier {
-	inner: Arc<
-		futures::lock::Mutex<BabeVerifier<TestBlock, PeersFullClient, TestSelectChain, AlwaysCanAuthor>>
-	>,
+	inner: BabeVerifier<TestBlock, PeersFullClient, TestSelectChain, AlwaysCanAuthor>,
 	mutator: Mutator,
 }
 
@@ -255,7 +252,7 @@ impl Verifier<TestBlock> for TestVerifier {
 	) -> Result<(BlockImportParams<TestBlock, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		// apply post-sealing mutations (i.e. stripping seal, if desired).
 		(self.mutator)(&mut header, Stage::PostSeal);
-		self.inner.lock().await.verify(dbg!(origin), header, justifications, body).await
+		self.inner.verify(dbg!(origin), header, justifications, body).await
 	}
 }
 
@@ -328,7 +325,7 @@ impl TestNetFactory for BabeTestNet {
 		let (_, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
 
 		TestVerifier {
-			inner: Arc::new(futures::lock::Mutex::new(BabeVerifier {
+			inner: BabeVerifier {
 				client: client.clone(),
 				select_chain: longest_chain,
 				inherent_data_providers: data.inherent_data_providers.clone(),
@@ -337,7 +334,7 @@ impl TestNetFactory for BabeTestNet {
 				time_source: data.link.time_source.clone(),
 				can_author_with: AlwaysCanAuthor,
 				telemetry: None,
-			})),
+			},
 			mutator: MUTATOR.with(|m| m.borrow().clone()),
 		}
 	}
