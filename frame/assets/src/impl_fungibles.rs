@@ -43,7 +43,8 @@ impl<T: Config> fungibles::Inspect<<T as SystemConfig>::AccountId> for Pallet<T>
 		who: &<T as SystemConfig>::AccountId,
 		keep_alive: bool,
 	) -> Self::Balance {
-		Pallet::<T>::reducible_balance(asset, who, keep_alive).unwrap_or(Zero::zero())
+		let f = DecreaseFlags { keep_alive, ignore_freezer: false };
+		Pallet::<T>::reducible_balance(asset, who, f).unwrap_or(Zero::zero())
 	}
 
 	fn can_deposit(
@@ -59,7 +60,28 @@ impl<T: Config> fungibles::Inspect<<T as SystemConfig>::AccountId> for Pallet<T>
 		who: &<T as SystemConfig>::AccountId,
 		amount: Self::Balance,
 	) -> WithdrawConsequence<Self::Balance> {
-		Pallet::<T>::can_decrease(asset, who, amount, false)
+		let f = DecreaseFlags { keep_alive: false, ignore_freezer: false };
+		Pallet::<T>::can_decrease(asset, who, amount, f)
+	}
+}
+
+impl<T: Config> fungibles::InspectWithoutFreezer<<T as SystemConfig>::AccountId> for Pallet<T> {
+	fn reducible_balance(
+		asset: Self::AssetId,
+		who: &<T as SystemConfig>::AccountId,
+		keep_alive: bool,
+	) -> Self::Balance {
+		let f = DecreaseFlags { keep_alive, ignore_freezer: true };
+		Pallet::<T>::reducible_balance(asset, who, f).unwrap_or(Zero::zero())
+	}
+
+	fn can_withdraw(
+		asset: Self::AssetId,
+		who: &<T as SystemConfig>::AccountId,
+		amount: Self::Balance,
+	) -> WithdrawConsequence<Self::Balance> {
+		let f = DecreaseFlags { keep_alive: false, ignore_freezer: true };
+		Pallet::<T>::can_decrease(asset, who, amount, f)
 	}
 }
 
@@ -80,6 +102,7 @@ impl<T: Config> fungibles::Mutate<<T as SystemConfig>::AccountId> for Pallet<T> 
 		let f = DebitFlags {
 			keep_alive: false,
 			best_effort: false,
+			ignore_freezer: false,
 		};
 		Self::do_burn(asset, who, amount, None, f)
 	}
@@ -92,6 +115,7 @@ impl<T: Config> fungibles::Mutate<<T as SystemConfig>::AccountId> for Pallet<T> 
 		let f = DebitFlags {
 			keep_alive: false,
 			best_effort: true,
+			ignore_freezer: false,
 		};
 		Self::do_burn(asset, who, amount, None, f)
 	}
@@ -124,26 +148,26 @@ impl<T: Config> fungibles::Unbalanced<T::AccountId> for Pallet<T> {
 		});
 	}
 	fn decrease_balance(asset: T::AssetId, who: &T::AccountId, amount: Self::Balance)
-						-> Result<Self::Balance, DispatchError>
+		-> Result<Self::Balance, DispatchError>
 	{
-		let f = DebitFlags { keep_alive: false, best_effort: false };
+		let f = DebitFlags { keep_alive: false, best_effort: false, ignore_freezer: false };
 		Self::decrease_balance(asset, who, amount, f, |_, _| Ok(()))
 	}
 	fn decrease_balance_at_most(asset: T::AssetId, who: &T::AccountId, amount: Self::Balance)
-								-> Self::Balance
+		-> Self::Balance
 	{
-		let f = DebitFlags { keep_alive: false, best_effort: true };
+		let f = DebitFlags { keep_alive: false, best_effort: true, ignore_freezer: false };
 		Self::decrease_balance(asset, who, amount, f, |_, _| Ok(()))
 			.unwrap_or(Zero::zero())
 	}
 	fn increase_balance(asset: T::AssetId, who: &T::AccountId, amount: Self::Balance)
-						-> Result<Self::Balance, DispatchError>
+		-> Result<Self::Balance, DispatchError>
 	{
 		Self::increase_balance(asset, who, amount, |_| Ok(()))?;
 		Ok(amount)
 	}
 	fn increase_balance_at_most(asset: T::AssetId, who: &T::AccountId, amount: Self::Balance)
-								-> Self::Balance
+		-> Self::Balance
 	{
 		match Self::increase_balance(asset, who, amount, |_| Ok(())) {
 			Ok(()) => amount,

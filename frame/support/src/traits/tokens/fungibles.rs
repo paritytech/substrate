@@ -45,14 +45,39 @@ pub trait Inspect<AccountId> {
 	fn balance(asset: Self::AssetId, who: &AccountId) -> Self::Balance;
 
 	/// Get the maximum amount of `asset` that `who` can withdraw/transfer successfully.
-	fn reducible_balance(asset: Self::AssetId, who: &AccountId, keep_alive: bool) -> Self::Balance;
+	fn reducible_balance(
+		asset: Self::AssetId,
+		who: &AccountId,
+		keep_alive: bool,
+	) -> Self::Balance;
 
 	/// Returns `true` if the `asset` balance of `who` may be increased by `amount`.
-	fn can_deposit(asset: Self::AssetId, who: &AccountId, amount: Self::Balance)
-		-> DepositConsequence;
+	fn can_deposit(
+		asset: Self::AssetId,
+		who: &AccountId,
+		amount: Self::Balance,
+	) -> DepositConsequence;
 
 	/// Returns `Failed` if the `asset` balance of `who` may not be decreased by `amount`, otherwise
 	/// the consequence.
+	fn can_withdraw(
+		asset: Self::AssetId,
+		who: &AccountId,
+		amount: Self::Balance,
+	) -> WithdrawConsequence<Self::Balance>;
+}
+
+/// Trait for providing balance-inspection access to a set of named fungible assets, ignoring any
+/// per-balance freezing mechanism.
+pub trait InspectWithoutFreezer<AccountId>: Inspect<AccountId> {
+	/// Get the maximum amount of `asset` that `who` can withdraw/transfer successfully.
+	fn reducible_balance(
+		asset: Self::AssetId,
+		who: &AccountId,
+		keep_alive: bool,
+	) -> Self::Balance;
+
+	/// Returns `true` if the `asset` balance of `who` may be increased by `amount`.
 	fn can_withdraw(
 		asset: Self::AssetId,
 		who: &AccountId,
@@ -136,6 +161,7 @@ pub trait Transfer<AccountId>: Inspect<AccountId> {
 		source: &AccountId,
 		dest: &AccountId,
 		amount: Self::Balance,
+//TODO:		best_effort: bool,
 		keep_alive: bool,
 	) -> Result<Self::Balance, DispatchError>;
 }
@@ -150,7 +176,7 @@ pub trait InspectHold<AccountId>: Inspect<AccountId> {
 }
 
 /// Trait for mutating a set of named fungible assets which can be placed on hold.
-pub trait MutateHold<AccountId>: InspectHold<AccountId> + Transfer<AccountId> {
+pub trait MutateHold<AccountId>: Inspect<AccountId> {
 	/// Hold some funds in an account.
 	fn hold(asset: Self::AssetId, who: &AccountId, amount: Self::Balance) -> DispatchResult;
 
@@ -183,7 +209,7 @@ pub trait MutateHold<AccountId>: InspectHold<AccountId> + Transfer<AccountId> {
 }
 
 /// Trait for mutating one of several types of fungible assets which can be held.
-pub trait BalancedHold<AccountId>: Balanced<AccountId> + MutateHold<AccountId> {
+pub trait BalancedHold<AccountId>: Balanced<AccountId> {
 	/// Release and slash some funds in an account.
 	///
 	/// The resulting imbalance is the first item of the tuple returned.

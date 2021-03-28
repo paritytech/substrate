@@ -529,7 +529,6 @@ fn freezer_should_work() {
 		// and if we clear it, we can remove the account completely.
 		clear_frozen_balance(0, 1);
 		assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
-		assert_eq!(hooks(), vec![Hook::Died(0, 1)]);
 	});
 }
 

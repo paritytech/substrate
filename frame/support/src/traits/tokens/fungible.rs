@@ -53,6 +53,16 @@ pub trait Inspect<AccountId> {
 	fn can_withdraw(who: &AccountId, amount: Self::Balance) -> WithdrawConsequence<Self::Balance>;
 }
 
+/// Trait for providing balance-inspection access to a set of named fungible assets, ignoring any
+/// per-balance freezing mechanism.
+pub trait InspectWithoutFreezer<AccountId>: Inspect<AccountId> {
+	/// Get the maximum amount of `asset` that `who` can withdraw/transfer successfully.
+	fn reducible_balance(who: &AccountId, keep_alive: bool) -> Self::Balance;
+
+	/// Returns `true` if the `asset` balance of `who` may be increased by `amount`.
+	fn can_withdraw(who: &AccountId, amount: Self::Balance) -> WithdrawConsequence<Self::Balance>;
+}
+
 /// Trait for providing an ERC-20 style fungible asset.
 pub trait Mutate<AccountId>: Inspect<AccountId> {
 	/// Increase the balance of `who` by exactly `amount`, minting new tokens. If that isn't
@@ -119,7 +129,7 @@ pub trait InspectHold<AccountId>: Inspect<AccountId> {
 }
 
 /// Trait for mutating a fungible asset which can be reserved.
-pub trait MutateHold<AccountId>: InspectHold<AccountId> + Transfer<AccountId> {
+pub trait MutateHold<AccountId>: Inspect<AccountId> {
 	/// Hold some funds in an account.
 	fn hold(who: &AccountId, amount: Self::Balance) -> DispatchResult;
 
@@ -153,7 +163,7 @@ pub trait MutateHold<AccountId>: InspectHold<AccountId> + Transfer<AccountId> {
 }
 
 /// Trait for slashing a fungible asset which can be reserved.
-pub trait BalancedHold<AccountId>: Balanced<AccountId> + MutateHold<AccountId> {
+pub trait BalancedHold<AccountId>: Balanced<AccountId> {
 	/// Reduce the balance of some funds on hold in an account.
 	///
 	/// The resulting imbalance is the first item of the tuple returned.
@@ -212,6 +222,19 @@ impl<
 	}
 	fn can_withdraw(who: &AccountId, amount: Self::Balance) -> WithdrawConsequence<Self::Balance> {
 		<F as fungibles::Inspect<AccountId>>::can_withdraw(A::get(), who, amount)
+	}
+}
+
+impl<
+	F: fungibles::InspectWithoutFreezer<AccountId>,
+	A: Get<<F as fungibles::Inspect<AccountId>>::AssetId>,
+	AccountId,
+> InspectWithoutFreezer<AccountId> for ItemOf<F, A, AccountId> {
+	fn reducible_balance(who: &AccountId, keep_alive: bool) -> Self::Balance {
+		<F as fungibles::InspectWithoutFreezer<AccountId>>::reducible_balance(A::get(), who, keep_alive)
+	}
+	fn can_withdraw(who: &AccountId, amount: Self::Balance) -> WithdrawConsequence<Self::Balance> {
+		<F as fungibles::InspectWithoutFreezer<AccountId>>::can_withdraw(A::get(), who, amount)
 	}
 }
 

@@ -58,7 +58,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub(super) fn dead_account(
-		what: T::AssetId,
+		_what: T::AssetId,
 		who: &T::AccountId,
 		d: &mut AssetDetails<T::Balance, T::AccountId, DepositBalanceOf<T>>,
 		sufficient: bool,
@@ -70,7 +70,6 @@ impl<T: Config> Pallet<T> {
 			frame_system::Pallet::<T>::dec_consumers(who);
 		}
 		d.accounts = d.accounts.saturating_sub(1);
-		T::Freezer::died(what, who)
 	}
 
 	pub(super) fn can_increase(id: T::AssetId, who: &T::AccountId, amount: T::Balance) -> DepositConsequence {
@@ -105,7 +104,7 @@ impl<T: Config> Pallet<T> {
 		id: T::AssetId,
 		who: &T::AccountId,
 		amount: T::Balance,
-		keep_alive: bool,
+		f: DecreaseFlags,
 	) -> WithdrawConsequence<T::Balance> {
 		use WithdrawConsequence::*;
 		let details = match Asset::<T>::get(id) {
@@ -123,7 +122,7 @@ impl<T: Config> Pallet<T> {
 			return Frozen
 		}
 		if let Some(rest) = account.balance.checked_sub(&amount) {
-			if let Some(frozen) = T::Freezer::frozen_balance(id, who) {
+			if let (Some(frozen), false) = (T::Freezer::frozen_balance(id, who), f.ignore_freezer) {
 				match frozen.checked_add(&details.min_balance) {
 					Some(required) if rest < required => return Frozen,
 					None => return Overflow,
@@ -133,7 +132,7 @@ impl<T: Config> Pallet<T> {
 
 			let is_provider = false;
 			let is_required = is_provider && !frame_system::Pallet::<T>::can_dec_provider(who);
-			let must_keep_alive = keep_alive || is_required;
+			let must_keep_alive = f.keep_alive || is_required;
 
 			if rest < details.min_balance {
 				if must_keep_alive {
@@ -154,7 +153,7 @@ impl<T: Config> Pallet<T> {
 	pub(super) fn reducible_balance(
 		id: T::AssetId,
 		who: &T::AccountId,
-		keep_alive: bool,
+		f: DecreaseFlags,
 	) -> Result<T::Balance, Error<T>> {
 		let details = match Asset::<T>::get(id) {
 			Some(details) => details,
@@ -165,14 +164,14 @@ impl<T: Config> Pallet<T> {
 		let account = Account::<T>::get(id, who);
 		ensure!(!account.is_frozen, Error::<T>::Frozen);
 
-		let amount = if let Some(frozen) = T::Freezer::frozen_balance(id, who) {
+		let amount = if let (Some(frozen), false) = (T::Freezer::frozen_balance(id, who), f.ignore_freezer) {
 			// Frozen balance: account CANNOT be deleted
 			let required = frozen.checked_add(&details.min_balance).ok_or(Error::<T>::Overflow)?;
 			account.balance.saturating_sub(required)
 		} else {
 			let is_provider = false;
 			let is_required = is_provider && !frame_system::Pallet::<T>::can_dec_provider(who);
-			if keep_alive || is_required {
+			if f.keep_alive || is_required {
 				// We want to keep the account around.
 				account.balance.saturating_sub(details.min_balance)
 			} else {
@@ -204,11 +203,11 @@ impl<T: Config> Pallet<T> {
 		amount: T::Balance,
 		f: DebitFlags,
 	) -> Result<T::Balance, DispatchError> {
-		let actual = Self::reducible_balance(id, target, f.keep_alive)?
+		let actual = Self::reducible_balance(id, target, f.into())?
 			.min(amount);
 		ensure!(f.best_effort || actual >= amount, Error::<T>::BalanceLow);
 
-		let conseq = Self::can_decrease(id, target, actual, f.keep_alive);
+		let conseq = Self::can_decrease(id, target, actual, f.into());
 		let actual = match conseq.into_result() {
 			Ok(dust) => actual.saturating_add(dust), //< guaranteed by reducible_balance
 			Err(e) => {

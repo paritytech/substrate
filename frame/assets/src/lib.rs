@@ -146,9 +146,13 @@ use sp_runtime::{
 	}
 };
 use codec::{Encode, Decode, HasCompact};
-use frame_support::{ensure, dispatch::{DispatchError, DispatchResult}};
-use frame_support::traits::{Currency, ReservableCurrency, BalanceStatus::Reserved, StoredMap};
-use frame_support::traits::tokens::{WithdrawConsequence, DepositConsequence, fungibles};
+use frame_support::{
+	ensure, dispatch::{DispatchError, DispatchResult}, traits::{
+		Currency, ReservableCurrency, BalanceStatus::Reserved, StoredMap, tokens::{
+			WithdrawConsequence, DepositConsequence, fungibles, FrozenBalance,
+		},
+	},
+};
 use frame_system::Config as SystemConfig;
 
 pub use weights::WeightInfo;
@@ -550,7 +554,7 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let who = T::Lookup::lookup(who)?;
 
-			let f = DebitFlags { keep_alive: false, best_effort: true };
+			let f = DebitFlags { keep_alive: false, best_effort: true, ignore_freezer: false };
 			let burned = Self::do_burn(id, &who, amount, Some(origin), f)?;
 			Self::deposit_event(Event::Burned(id, who, burned));
 			Ok(())

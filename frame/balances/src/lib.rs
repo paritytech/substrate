@@ -954,7 +954,8 @@ impl<T: Config<I>, I: 'static> fungible::Inspect<T::AccountId> for Pallet<T, I> 
 	fn can_deposit(who: &T::AccountId, amount: Self::Balance) -> DepositConsequence {
 		Self::deposit_consequence(who, amount, &Self::account(who))
 	}
-	fn can_withdraw(who: &T::AccountId, amount: Self::Balance) -> WithdrawConsequence<Self::Balance> {
+	fn can_withdraw(who: &T::AccountId, amount: Self::Balance) -> WithdrawConsequence<Self::Balance>
+	{
 		Self::withdraw_consequence(who, amount, &Self::account(who))
 	}
 }

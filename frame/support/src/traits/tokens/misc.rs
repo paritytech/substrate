@@ -17,6 +17,7 @@
 
 //! Miscellaneous types.
 
+use sp_std::fmt::Debug;
 use codec::{Encode, Decode, FullCodec};
 use sp_core::RuntimeDebug;
 use sp_arithmetic::traits::{Zero, AtLeast32BitUnsigned};
@@ -123,6 +124,28 @@ pub enum BalanceStatus {
 	Reserved,
 }
 
+/// Trait for allowing a minimum balance on the account to be specified, beyond the
+/// `minimum_balance` of the asset. This is additive - the `minimum_balance` of the asset must be
+/// met *and then* anything here in addition.
+pub trait FrozenBalance<AssetId, AccountId, Balance> {
+	/// Return the frozen balance. Under normal behaviour, this amount should always be
+	/// withdrawable.
+	///
+	/// In reality, the balance of every account must be at least the sum of this (if `Some`) and
+	/// the asset's minimum_balance, since there may be complications to destroying an asset's
+	/// account completely.
+	///
+	/// If `None` is returned, then nothing special is enforced.
+	///
+	/// If any operation ever breaks this requirement (which will only happen through some sort of
+	/// privileged intervention), then `melted` is called to do any cleanup.
+	fn frozen_balance(asset: AssetId, who: &AccountId) -> Option<Balance>;
+}
+
+impl<AssetId, AccountId, Balance> FrozenBalance<AssetId, AccountId, Balance> for () {
+	fn frozen_balance(_: AssetId, _: &AccountId) -> Option<Balance> { None }
+}
+
 bitflags::bitflags! {
 	/// Reasons for moving funds out of an account.
 	#[derive(Encode, Decode)]
@@ -160,9 +183,9 @@ impl WithdrawReasons {
 }
 
 /// Simple amalgamation trait to collect together properties for an AssetId under one roof.
-pub trait AssetId: FullCodec + Copy + Default + Eq + PartialEq {}
-impl<T: FullCodec + Copy + Default + Eq + PartialEq> AssetId for T {}
+pub trait AssetId: FullCodec + Copy + Default + Eq + PartialEq + Debug {}
+impl<T: FullCodec + Copy + Default + Eq + PartialEq + Debug> AssetId for T {}
 
 /// Simple amalgamation trait to collect together properties for a Balance under one roof.
-pub trait Balance: AtLeast32BitUnsigned + FullCodec + Copy + Default {}
-impl<T: AtLeast32BitUnsigned + FullCodec + Copy + Default> Balance for T {}
+pub trait Balance: AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug {}
+impl<T: AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug> Balance for T {}
