@@ -81,7 +81,6 @@ impl<B, C> BabeConsensusDataProvider<B, C>
 		}
 
 		let config = Config::get_or_compute(&*client)?;
-		let timestamp_provider = SlotTimestampProvider::new(client.clone())?;
 
 		Ok(Self {
 			config,
@@ -245,8 +244,8 @@ pub struct SlotTimestampProvider {
 }
 
 impl SlotTimestampProvider {
-	/// create a new mocked time stamp provider.
-	fn new<B, C>(client: Arc<C>) -> Result<Self, Error>
+	/// Create a new mocked time stamp provider.
+	pub fn new<B, C>(client: Arc<C>) -> Result<Self, Error>
 		where
 			B: BlockT,
 			C: AuxStore + HeaderBackend<B> + ProvideRuntimeApi<B>,
