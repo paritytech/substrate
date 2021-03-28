@@ -40,9 +40,8 @@ use sp_runtime::{
 use codec::{Encode, Decode, HasCompact};
 use frame_support::{ensure, dispatch::{DispatchError, DispatchResult}};
 use frame_support::traits::{Currency, ReservableCurrency, BalanceStatus::Reserved, StoredMap};
-use frame_support::traits::tokens::{WithdrawConsequence, DepositConsequence, fungibles};
+use frame_support::traits::tokens::{WithdrawConsequence, DepositConsequence, fungibles, FrozenBalance};
 use frame_system::Config as SystemConfig;
-use pallet_assets::{Pallet as Assets, Config as AssetsConfig};
 
 //pub use weights::WeightInfo;
 pub use pallet::*;
@@ -69,9 +68,6 @@ pub mod pallet {
 		/// pallet will attempt to keep the account alive by retaining the `minimum_balance` *plus*
 		/// this number of funds in it.
 		pub(super) reserved: Balance,
-		/// The amount of funds that have melted (i.e. the account has been reduced despite them
-		/// being reserved.
-		pub(super) melted: Balance,
 	}
 
 	#[pallet::pallet]
@@ -101,10 +97,10 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// An asset has been reserved.
 		/// \[asset, who, amount\]
-		Reserved(AssetIdOf<T>, T::AccountId, BalanceOf<T>),
+		Held(AssetIdOf<T>, T::AccountId, BalanceOf<T>),
 		/// An asset has been unreserved.
 		/// \[asset, who, amount\]
-		Unreserved(AssetIdOf<T>, T::AccountId, BalanceOf<T>),
+		Released(AssetIdOf<T>, T::AccountId, BalanceOf<T>),
 	}
 
 	// No new errors?
@@ -127,17 +123,10 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 }
 
-impl<T: Config> pallet_assets::FrozenBalance<AssetIdOf<T>, T::AccountId, BalanceOf<T>> for Pallet<T> {
+impl<T: Config> FrozenBalance<AssetIdOf<T>, T::AccountId, BalanceOf<T>> for Pallet<T> {
 	fn frozen_balance(id: AssetIdOf<T>, who: &T::AccountId) -> Option<BalanceOf<T>> {
 		let f = T::Store::get(&(id, who.clone()));
 		if f.reserved.is_zero() { None } else { Some(f.reserved) }
-	}
-	fn melted(id: AssetIdOf<T>, who: &T::AccountId, amount: BalanceOf<T>) {
-		// Just bump melted balance, assuming that the account still exists.
-		let r = T::Store::mutate(&(id, who.clone()), |extra|
-			extra.melted = extra.melted.saturating_add(amount)
-		);
-		debug_assert!(r.is_ok(), "account should still exist when melted.");
 	}
 	fn died(_: AssetIdOf<T>, _: &T::AccountId) {
 		// Eventually need to remove lock named reserve/lock info.
@@ -156,8 +145,8 @@ impl<T: Config> fungibles::Inspect<<T as SystemConfig>::AccountId> for Pallet<T>
 	fn balance(asset: AssetIdOf<T>, who: &T::AccountId) -> BalanceOf<T> {
 		T::Assets::balance(asset, who)
 	}
-	fn withdrawable_balance(asset: AssetIdOf<T>, who: &T::AccountId) -> BalanceOf<T> {
-		T::Assets::withdrawable_balance(asset, who)
+	fn reducible_balance(asset: AssetIdOf<T>, who: &T::AccountId, keep_alive: bool) -> BalanceOf<T> {
+		T::Assets::reducible_balance(asset, who, keep_alive)
 	}
 	fn can_deposit(asset: AssetIdOf<T>, who: &T::AccountId, amount: BalanceOf<T>)
 		-> DepositConsequence
@@ -173,13 +162,55 @@ impl<T: Config> fungibles::Inspect<<T as SystemConfig>::AccountId> for Pallet<T>
 	}
 }
 
-impl<T: Config> fungibles::InspectReserve<<T as SystemConfig>::AccountId> for Pallet<T> {
-	fn reserved_balance(asset: AssetIdOf<T>, who: &T::AccountId) -> BalanceOf<T> {
+impl<T: Config> fungibles::InspectHold<<T as SystemConfig>::AccountId> for Pallet<T> {
+	fn balance_on_hold(asset: AssetIdOf<T>, who: &T::AccountId) -> BalanceOf<T> {
 		T::Store::get(&(asset, who.clone())).reserved
 	}
-	fn can_reserve(asset: AssetIdOf<T>, who: &T::AccountId, amount: BalanceOf<T>) -> bool {
+	fn can_hold(asset: AssetIdOf<T>, who: &T::AccountId, amount: BalanceOf<T>) -> bool {
 		// If we can withdraw without destroying the account, then we're good.
 		<Self as fungibles::Inspect<T::AccountId>>::can_withdraw(asset, who, amount) == WithdrawConsequence::Success
+	}
+}
+
+impl<T: Config> fungibles::MutateHold<<T as SystemConfig>::AccountId> for Pallet<T> {
+	fn hold(asset: AssetIdOf<T>, who: &T::AccountId, amount: BalanceOf<T>) -> DispatchResult {
+		use fungibles::InspectHold;
+		if !Self::can_hold(asset, who, amount) {
+			Err(TokenError::NoFunds)?
+		}
+		T::Store::mutate(
+			&(asset, who.clone()),
+			|extra| extra.reserved = extra.reserved.saturating_add(amount),
+		)?;
+		Ok(())
+	}
+
+	fn release(asset: AssetIdOf<T>, who: &T::AccountId, amount: BalanceOf<T>, best_effort: bool)
+		-> Result<BalanceOf<T>, DispatchError>
+	{
+		T::Store::try_mutate_exists(
+			&(asset, who.clone()),
+			|maybe_extra| if let Some(ref mut extra) = maybe_extra {
+				let old = extra.reserved;
+				extra.reserved = extra.reserved.saturating_sub(amount);
+				let actual = old - extra.reserved;
+				ensure!(best_effort || actual == amount, TokenError::NoFunds);
+				Ok(actual)
+			} else {
+				Err(TokenError::NoFunds)?
+			},
+		)
+	}
+
+	fn transfer_held(
+		asset: AssetIdOf<T>,
+		source: &T::AccountId,
+		dest: &T::AccountId,
+		amount: BalanceOf<T>,
+		best_effort: bool,
+		on_hold: bool,
+	) -> Result<BalanceOf<T>, DispatchError> {
+		todo!()
 	}
 }
 

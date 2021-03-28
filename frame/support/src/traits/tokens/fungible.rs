@@ -119,7 +119,7 @@ pub trait InspectHold<AccountId>: Inspect<AccountId> {
 }
 
 /// Trait for mutating a fungible asset which can be reserved.
-pub trait MutateHold<AccountId>: InspectHold<AccountId> + Transfer<AccountId> {
+pub trait MutateHold<AccountId>: Inspect<AccountId> {
 	/// Hold some funds in an account.
 	fn hold(who: &AccountId, amount: Self::Balance) -> DispatchResult;
 
@@ -153,7 +153,7 @@ pub trait MutateHold<AccountId>: InspectHold<AccountId> + Transfer<AccountId> {
 }
 
 /// Trait for slashing a fungible asset which can be reserved.
-pub trait BalancedHold<AccountId>: Balanced<AccountId> + MutateHold<AccountId> {
+pub trait BalancedHold<AccountId>: Balanced<AccountId> {
 	/// Reduce the balance of some funds on hold in an account.
 	///
 	/// The resulting imbalance is the first item of the tuple returned.

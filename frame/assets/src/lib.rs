@@ -146,9 +146,13 @@ use sp_runtime::{
 	}
 };
 use codec::{Encode, Decode, HasCompact};
-use frame_support::{ensure, dispatch::{DispatchError, DispatchResult}};
-use frame_support::traits::{Currency, ReservableCurrency, BalanceStatus::Reserved, StoredMap};
-use frame_support::traits::tokens::{WithdrawConsequence, DepositConsequence, fungibles};
+use frame_support::{
+	ensure, dispatch::{DispatchError, DispatchResult}, traits::{
+		Currency, ReservableCurrency, BalanceStatus::Reserved, StoredMap, tokens::{
+			WithdrawConsequence, DepositConsequence, fungibles, FrozenBalance,
+		},
+	},
+};
 use frame_system::Config as SystemConfig;
 
 pub use weights::WeightInfo;

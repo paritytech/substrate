@@ -125,32 +125,6 @@ pub struct DestroyWitness {
 	pub(super) approvals: u32,
 }
 
-/// Trait for allowing a minimum balance on the account to be specified, beyond the
-/// `minimum_balance` of the asset. This is additive - the `minimum_balance` of the asset must be
-/// met *and then* anything here in addition.
-pub trait FrozenBalance<AssetId, AccountId, Balance> {
-	/// Return the frozen balance. Under normal behaviour, this amount should always be
-	/// withdrawable.
-	///
-	/// In reality, the balance of every account must be at least the sum of this (if `Some`) and
-	/// the asset's minimum_balance, since there may be complications to destroying an asset's
-	/// account completely.
-	///
-	/// If `None` is returned, then nothing special is enforced.
-	///
-	/// If any operation ever breaks this requirement (which will only happen through some sort of
-	/// privileged intervention), then `melted` is called to do any cleanup.
-	fn frozen_balance(asset: AssetId, who: &AccountId) -> Option<Balance>;
-
-	/// Called when an account has been removed.
-	fn died(asset: AssetId, who: &AccountId);
-}
-
-impl<AssetId, AccountId, Balance> FrozenBalance<AssetId, AccountId, Balance> for () {
-	fn frozen_balance(_: AssetId, _: &AccountId) -> Option<Balance> { None }
-	fn died(_: AssetId, _: &AccountId) {}
-}
-
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub(super) struct TransferFlags {
 	/// The debited account must stay alive at the end of the operation; an error is returned if
