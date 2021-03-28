@@ -493,6 +493,7 @@ fn set_metadata_should_work() {
 }
 
 // TODO: tests for force_set_metadata, force_clear_metadata, force_asset_status
+// https://github.com/paritytech/substrate/issues/8470
 
 #[test]
 fn freezer_should_work() {
@@ -506,19 +507,29 @@ fn freezer_should_work() {
 		set_frozen_balance(0, 1, 50);
 
 		assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 20));
+		// cannot transfer another 21 away as this would take the non-frozen balance (30) to below
+		// the minimum balance (10).
 		assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 21), Error::<Test>::BalanceLow);
 
+		// create an approved transfer...
 		Balances::make_free_balance_be(&1, 100);
 		assert_ok!(Assets::approve_transfer(Origin::signed(1), 0, 2, 50));
 		let e = Error::<Test>::BalanceLow;
+		// ...but that wont work either:
 		assert_noop!(Assets::transfer_approved(Origin::signed(2), 0, 1, 2, 21), e);
+		// a force transfer won't work also.
+		let e = Error::<Test>::BalanceLow;
+		assert_noop!(Assets::force_transfer(Origin::signed(1), 0, 1, 2, 21), e);
 
+		// reduce it to only 49 frozen...
+		set_frozen_balance(0, 1, 49);
+		// ...and it's all good:
 		assert_ok!(Assets::force_transfer(Origin::signed(1), 0, 1, 2, 21));
-		assert_eq!(hooks(), vec![Hook::Melted(0, 1, 49)]);
 
+		// and if we clear it, we can remove the account completely.
 		clear_frozen_balance(0, 1);
 		assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
-		assert_eq!(hooks(), vec![Hook::Melted(0, 1, 49), Hook::Died(0, 1)]);
+		assert_eq!(hooks(), vec![Hook::Died(0, 1)]);
 	});
 }
 
