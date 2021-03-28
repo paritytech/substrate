@@ -8925,10 +8925,14 @@ dependencies = [
 name = "sp-npos-elections-compact"
 version = "3.0.0"
 dependencies = [
+ "parity-scale-codec 2.0.1",
  "proc-macro-crate 1.0.0",
  "proc-macro2",
  "quote",
+ "sp-arithmetic",
+ "sp-npos-elections",
  "syn",
+ "trybuild",
 ]
 
 [[package]]
