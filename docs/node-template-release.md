@@ -13,14 +13,17 @@ from. Assume you are in root directory of Substrate. Run:
 by running the following command.
 
 	```bash
+	# This is where the tar.gz file uncompressed
 	cd substrate-node-template
-	# Note the slash at the destination directory is important
-	rsync -rvu . <destination node-template directory>/
+	# rsync with force copying. Note the slash at the destination directory is important
+	rsync -avh * <destination node-template directory>/
+	# For dry-running add `-n` argument
+	# rsync -avhn * <destination node-template directory>/
 	```
 
-	The above command only copy all newly added and modified files from the source directory, but
-	not deleting files/directories that are removed in the source. So manually check and remove them
-	in the destination.
+	The above command only copy existing files from the source to destination, but not deleting
+	files/directories that are removed from the source. So manually check and remove them in the
+	destination.
 
 3. There actually are three packages in Node Template, `node-template` (the node), `node-template-runtime`
 (the runtime), and `pallet-template`, and each has its own `Cargo.toml`. We need to manually update:
