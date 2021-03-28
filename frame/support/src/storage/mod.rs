@@ -519,6 +519,14 @@ pub struct PrefixIterator<T> {
 	closure: fn(&[u8], &[u8]) -> Result<T, codec::Error>,
 }
 
+impl<T> PrefixIterator<T> {
+	/// Mutate this iterator into a draining iterator; items iterated are removed from storage.
+	pub fn drain(mut self) -> Self {
+		self.drain = true;
+		self
+	}
+}
+
 impl<T> Iterator for PrefixIterator<T> {
 	type Item = T;
 
