@@ -110,7 +110,6 @@ use std::collections::HashMap;
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub(crate) enum Hook {
-	Melted(u32, u64, u64),
 	Died(u32, u64),
 }
 thread_local! {
@@ -122,10 +121,6 @@ pub struct TestFreezer;
 impl FrozenBalance<u32, u64, u64> for TestFreezer {
 	fn frozen_balance(asset: u32, who: &u64) -> Option<u64> {
 		FROZEN.with(|f| f.borrow().get(&(asset, who.clone())).cloned())
-	}
-
-	fn melted(asset: u32, who: &u64, amount_left_frozen: u64) {
-		HOOKS.with(|h| h.borrow_mut().push(Hook::Melted(asset, who.clone(), amount_left_frozen)));
 	}
 
 	fn died(asset: u32, who: &u64) {
