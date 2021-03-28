@@ -519,8 +519,11 @@ parameter_types! {
 
 sp_npos_elections::generate_solution_type!(
 	#[compact]
-	pub struct NposCompactSolution16::<u32, u16, sp_runtime::PerU16>(16)
-	// -------------------- ^^ <NominatorIndex, ValidatorIndex, Accuracy>
+	pub struct NposCompactSolution16::<
+		VoterIndex = u32,
+		TargetIndex = u16,
+		Accuracy = sp_runtime::PerU16,
+	>(16)
 );
 
 impl pallet_election_provider_multi_phase::Config for Runtime {
