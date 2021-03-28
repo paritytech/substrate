@@ -39,7 +39,7 @@
 //! ### Terminology
 //!
 //! - **Existential Deposit:** The minimum balance required to create or keep an account open. This prevents
-//! "dust accounts" from filling storage. When the free plus the reserved balance (i.e. the total balance)
+//!   "dust accounts" from filling storage. When the free plus the reserved balance (i.e. the total balance)
 //!   fall below this, then the account is said to be dead; and it loses its functionality as well as any
 //!   prior history and all information on it is removed from the chain's state.
 //!   No account should ever have a total balance that is strictly between 0 and the existential
@@ -164,7 +164,8 @@ use frame_support::{
 		Currency, OnUnbalanced, TryDrop, StoredMap,
 		WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 		Imbalance, SignedImbalance, ReservableCurrency, Get, ExistenceRequirement::KeepAlive,
-		ExistenceRequirement::AllowDeath, BalanceStatus as Status,
+		ExistenceRequirement::AllowDeath,
+		tokens::{fungible, DepositConsequence, WithdrawConsequence, BalanceStatus as Status}
 	}
 };
 #[cfg(feature = "std")]
@@ -925,10 +926,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 }
 
-use frame_support::traits::tokens::{
-	fungible, DepositConsequence, WithdrawConsequence
-};
-
 impl<T: Config<I>, I: 'static> fungible::Inspect<T::AccountId> for Pallet<T, I> {
 	type Balance = T::Balance;
 
@@ -940,6 +937,19 @@ impl<T: Config<I>, I: 'static> fungible::Inspect<T::AccountId> for Pallet<T, I> 
 	}
 	fn balance(who: &T::AccountId) -> Self::Balance {
 		Self::account(who).total()
+	}
+	fn reducible_balance(who: &T::AccountId, keep_alive: bool) -> Self::Balance {
+		let a = Self::account(who);
+		// Liquid balance is what is neither reserved nor locked/frozen.
+		let liquid = a.free.saturating_sub(a.fee_frozen.max(a.misc_frozen));
+		if frame_system::Pallet::<T>::can_dec_provider(who) && !keep_alive {
+			liquid
+		} else {
+			// `must_remain_to_exist` is the part of liquid balance which must remain to keep total over
+			// ED.
+			let must_remain_to_exist = T::ExistentialDeposit::get().saturating_sub(a.total() - liquid);
+			liquid.saturating_sub(must_remain_to_exist)
+		}
 	}
 	fn can_deposit(who: &T::AccountId, amount: Self::Balance) -> DepositConsequence {
 		Self::deposit_consequence(who, amount, &Self::account(who))
@@ -979,8 +989,11 @@ impl<T: Config<I>, I: 'static> fungible::Transfer<T::AccountId> for Pallet<T, I>
 		source: &T::AccountId,
 		dest: &T::AccountId,
 		amount: T::Balance,
+		keep_alive: bool,
 	) -> Result<T::Balance, DispatchError> {
-		<Self as fungible::Mutate::<T::AccountId>>::teleport(source, dest, amount)
+		let er = if keep_alive { KeepAlive } else { AllowDeath };
+		<Self as Currency::<T::AccountId>>::transfer(source, dest, amount, er)
+			.map(|_| amount)
 	}
 }
 
@@ -995,14 +1008,11 @@ impl<T: Config<I>, I: 'static> fungible::Unbalanced<T::AccountId> for Pallet<T, 
 	}
 }
 
-impl<T: Config<I>, I: 'static> fungible::InspectReserve<T::AccountId> for Pallet<T, I> {
-	fn reserved_balance(who: &T::AccountId) -> T::Balance {
+impl<T: Config<I>, I: 'static> fungible::InspectHold<T::AccountId> for Pallet<T, I> {
+	fn balance_on_hold(who: &T::AccountId) -> T::Balance {
 		Self::account(who).reserved
 	}
-	fn total_balance(who: &T::AccountId) -> T::Balance {
-		Self::account(who).total()
-	}
-	fn can_reserve(who: &T::AccountId, amount: T::Balance) -> bool {
+	fn can_hold(who: &T::AccountId, amount: T::Balance) -> bool {
 		let a = Self::account(who);
 		let min_balance = T::ExistentialDeposit::get().max(a.frozen(Reasons::All));
 		if a.reserved.checked_add(&amount).is_none() { return false }
@@ -1015,8 +1025,8 @@ impl<T: Config<I>, I: 'static> fungible::InspectReserve<T::AccountId> for Pallet
 		a.free >= required_free
 	}
 }
-impl<T: Config<I>, I: 'static> fungible::MutateReserve<T::AccountId> for Pallet<T, I> {
-	fn reserve(who: &T::AccountId, amount: Self::Balance) -> DispatchResult {
+impl<T: Config<I>, I: 'static> fungible::MutateHold<T::AccountId> for Pallet<T, I> {
+	fn hold(who: &T::AccountId, amount: Self::Balance) -> DispatchResult {
 		if amount.is_zero() { return Ok(()) }
 		ensure!(Self::can_reserve(who, amount), Error::<T, I>::InsufficientBalance);
 		Self::mutate_account(who, |a| {
@@ -1025,7 +1035,7 @@ impl<T: Config<I>, I: 'static> fungible::MutateReserve<T::AccountId> for Pallet<
 		})?;
 		Ok(())
 	}
-	fn unreserve(who: &T::AccountId, amount: Self::Balance, best_effort: bool)
+	fn release(who: &T::AccountId, amount: Self::Balance, best_effort: bool)
 		-> Result<T::Balance, DispatchError>
 	{
 		if amount.is_zero() { return Ok(amount) }
@@ -1040,13 +1050,14 @@ impl<T: Config<I>, I: 'static> fungible::MutateReserve<T::AccountId> for Pallet<
 			Ok(actual)
 		})
 	}
-	fn transfer_reserved(
+	fn transfer_held(
 		source: &T::AccountId,
 		dest: &T::AccountId,
 		amount: Self::Balance,
 		best_effort: bool,
-		status: Status,
+		on_hold: bool,
 	) -> Result<Self::Balance, DispatchError> {
+		let status = if on_hold { Status::Reserved } else { Status::Free };
 		Self::do_transfer_reserved(source, dest, amount, best_effort, status)
 	}
 }

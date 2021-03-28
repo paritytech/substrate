@@ -282,17 +282,6 @@ impl<AssetId, AccountId, Balance> FrozenBalance<AssetId, AccountId, Balance> for
 	fn died(_: AssetId, _: &AccountId) {}
 }
 
-/// Whether to respect the frozen balance or not.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum RespectFrozen {
-	/// Do respect it. `Freezer::melted` will not be called.
-	Respect,
-	/// Don't respect it; in this case `Freezer::melted` may be called.
-	Ignore,
-}
-
-use RespectFrozen::*;
-
 #[frame_support::pallet]
 pub mod pallet {
 	use frame_support::{
@@ -689,7 +678,8 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let who = T::Lookup::lookup(who)?;
 
-			let burned = Self::do_burn(id, &who, amount, Some(origin), false, Ignore, true)?;
+			let f = DebitFlags { keep_alive: false, respect_freezer: false, best_effort: true };
+			let burned = Self::do_burn(id, &who, amount, Some(origin), f)?;
 			Self::deposit_event(Event::Burned(id, who, burned));
 			Ok(())
 		}
@@ -722,7 +712,13 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(target)?;
 
-			Self::do_transfer(id, &origin, &dest, amount, None, false, Respect, false, false).map(|_| ())
+			let f = TransferFlags {
+				keep_alive: false,
+				respect_freezer: true,
+				best_effort: false,
+				burn_dust: false
+			};
+			Self::do_transfer(id, &origin, &dest, amount, None, f).map(|_| ())
 		}
 
 		/// Move some assets from the sender account to another, keeping the sender account alive.
@@ -753,7 +749,13 @@ pub mod pallet {
 			let source = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(target)?;
 
-			Self::do_transfer(id, &source, &dest, amount, None, true, Respect, false, false).map(|_| ())
+			let f = TransferFlags {
+				keep_alive: true,
+				respect_freezer: true,
+				best_effort: false,
+				burn_dust: false
+			};
+			Self::do_transfer(id, &source, &dest, amount, None, f).map(|_| ())
 		}
 
 		/// Move some assets from one account to another.
@@ -787,7 +789,13 @@ pub mod pallet {
 			let source = T::Lookup::lookup(source)?;
 			let dest = T::Lookup::lookup(dest)?;
 
-			Self::do_transfer(id, &source, &dest, amount, Some(origin), false, Ignore, false, false).map(|_| ())
+			let f = TransferFlags {
+				keep_alive: false,
+				respect_freezer: false,
+				best_effort: false,
+				burn_dust: false
+			};
+			Self::do_transfer(id, &source, &dest, amount, Some(origin), f).map(|_| ())
 		}
 
 		/// Disallow further unprivileged transfers from an account.
@@ -1340,7 +1348,13 @@ pub mod pallet {
 				let mut approved = maybe_approved.take().ok_or(Error::<T>::Unapproved)?;
 				let remaining = approved.amount.checked_sub(&amount).ok_or(Error::<T>::Unapproved)?;
 
-				Self::do_transfer(id, &key.owner, &destination, amount, None, false, Respect, false, false)?;
+				let f = TransferFlags {
+					keep_alive: false,
+					respect_freezer: true,
+					best_effort: false,
+					burn_dust: false
+				};
+				Self::do_transfer(id, &key.owner, &destination, amount, None, f)?;
 
 				if remaining.is_zero() {
 					T::Currency::unreserve(&key.owner, approved.deposit);
@@ -1351,6 +1365,55 @@ pub mod pallet {
 				Ok(())
 			})?;
 			Ok(())
+		}
+	}
+}
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+struct TransferFlags {
+	keep_alive: bool,
+	respect_freezer: bool,
+	best_effort: bool,
+	burn_dust: bool,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+struct DebitFlags {
+	keep_alive: bool,
+	respect_freezer: bool,
+	best_effort: bool,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+struct DecreaseFlags {
+	keep_alive: bool,
+	respect_freezer: bool,
+}
+
+impl From<TransferFlags> for DebitFlags {
+	fn from(f: TransferFlags) -> Self {
+		Self {
+			keep_alive: f.keep_alive,
+			respect_freezer: f.respect_freezer,
+			best_effort: f.best_effort,
+		}
+	}
+}
+
+impl From<DebitFlags> for DecreaseFlags {
+	fn from(f: DebitFlags) -> Self {
+		Self {
+			keep_alive: f.keep_alive,
+			respect_freezer: f.respect_freezer,
+		}
+	}
+}
+
+impl From<TransferFlags> for DecreaseFlags {
+	fn from(f: TransferFlags) -> Self {
+		Self {
+			keep_alive: f.keep_alive,
+			respect_freezer: f.respect_freezer,
 		}
 	}
 }
@@ -1435,8 +1498,7 @@ impl<T: Config> Pallet<T> {
 		id: T::AssetId,
 		who: &T::AccountId,
 		amount: T::Balance,
-		keep_alive: bool,
-		respect_frozen: RespectFrozen,
+		f: DecreaseFlags,
 	) -> (WithdrawConsequence<T::Balance>, Option<T::Balance>) {
 		let details = match Asset::<T>::get(id) {
 			Some(details) => details,
@@ -1459,7 +1521,7 @@ impl<T: Config> Pallet<T> {
 					None => return (WithdrawConsequence::Overflow, None),
 				};
 				if rest < required_balance {
-					if let Respect = respect_frozen {
+					if f.respect_freezer {
 						return (WithdrawConsequence::Frozen, None)
 					} else {
 						Some(rest.saturating_sub(details.min_balance))
@@ -1472,7 +1534,7 @@ impl<T: Config> Pallet<T> {
 			};
 
 			if rest < details.min_balance {
-				if keep_alive {
+				if f.keep_alive {
 					(WithdrawConsequence::WouldDie, None)
 				} else {
 					(WithdrawConsequence::ReducedToZero(rest), maybe_new_frozen)
@@ -1489,11 +1551,10 @@ impl<T: Config> Pallet<T> {
 
 	// Maximum `amount` that can be passed into `can_withdraw` to result in a WithdrawConsequence
 	// of Success.
-	fn decreasable_balance(
+	fn reducible_balance(
 		id: T::AssetId,
 		who: &T::AccountId,
-		keep_alive: bool,
-		respect_frozen: RespectFrozen,
+		f: DecreaseFlags,
 	) -> Result<T::Balance, Error<T>> {
 		let details = match Asset::<T>::get(id) {
 			Some(details) => details,
@@ -1504,8 +1565,8 @@ impl<T: Config> Pallet<T> {
 		let account = Account::<T>::get(id, who);
 		ensure!(!account.is_frozen, Error::<T>::Frozen);
 
-		let amount = match (keep_alive, respect_frozen, T::Freezer::frozen_balance(id, who)) {
-			(_, Respect, Some(frozen)) => {
+		let amount = match (f.keep_alive, f.respect_freezer, T::Freezer::frozen_balance(id, who)) {
+			(_, true, Some(frozen)) => {
 				// Frozen balance that we respect: account CANNOT be deleted
 				let required = frozen.checked_add(&details.min_balance).ok_or(Error::<T>::Overflow)?;
 				account.balance.saturating_sub(required)
@@ -1533,7 +1594,7 @@ impl<T: Config> Pallet<T> {
 	///   less (in the case of `best_effort` being `true`) or greater by up to the minimum balance
 	///   less one.
 	/// - `keep_alive`: Require that `target` must stay alive.
-	/// - `respect_frozen`: Respect any freezes on the account or token (or not).
+	/// - `respect_freezer`: Respect any freezes on the account or token (or not).
 	/// - `best_effort`: The debit amount may be less than `amount`.
 	///
 	/// On success, the amount which should be debited (this will always be at least `amount` unless
@@ -1545,18 +1606,17 @@ impl<T: Config> Pallet<T> {
 		id: T::AssetId,
 		target: &T::AccountId,
 		amount: T::Balance,
-		keep_alive: bool,
-		respect_frozen: RespectFrozen,
-		best_effort: bool,
+		f: DebitFlags,
 	) -> Result<(T::Balance, Option<T::Balance>), DispatchError> {
-		let actual = Self::decreasable_balance(id, target, keep_alive, respect_frozen)?.min(amount);
-		ensure!(best_effort || actual >= amount, Error::<T>::BalanceLow);
+		let actual = Self::reducible_balance(id, target, f.into())?
+			.min(amount);
+		ensure!(f.best_effort || actual >= amount, Error::<T>::BalanceLow);
 
-		let (conseq, melted) = Self::can_decrease(id, target, actual, keep_alive, respect_frozen);
+		let (conseq, melted) = Self::can_decrease(id, target, actual, f.into());
 		let actual = match conseq.into_result() {
-			Ok(dust) => actual.saturating_add(dust), //< guaranteed by decreasable_balance
+			Ok(dust) => actual.saturating_add(dust), //< guaranteed by reducible_balance
 			Err(e) => {
-				debug_assert!(false, "passed from decreasable_balance; qed");
+				debug_assert!(false, "passed from reducible_balance; qed");
 				return Err(e.into())
 			}
 		};
@@ -1612,6 +1672,12 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
+	/// Increases the asset `id` balance of `beneficiary` by `amount`.
+	///
+	/// LOW-LEVEL: Does not alter the supply of asset or emit an event. Use `do_mint` if you need
+	/// that.
+	///
+	/// Will return an error or will increase the amount by exactly `amount`.
 	fn increase_balance(
 		id: T::AssetId,
 		beneficiary: &T::AccountId,
@@ -1646,29 +1712,19 @@ impl<T: Config> Pallet<T> {
 		target: &T::AccountId,
 		amount: T::Balance,
 		maybe_check_admin: Option<T::AccountId>,
-		keep_alive: bool,
-		respect_frozen: RespectFrozen,
-		best_effort: bool,
+		f: DebitFlags,
 	) -> Result<T::Balance, DispatchError> {
-		let actual = Self::decrease_balance(
-			id,
-			target,
-			amount,
-			keep_alive,
-			respect_frozen,
-			best_effort,
-			|actual, details| {
-				// Check admin rights.
-				if let Some(check_admin) = maybe_check_admin {
-					ensure!(&check_admin == &details.admin, Error::<T>::NoPermission);
-				}
+		let actual = Self::decrease_balance(id, target, amount, f, |actual, details| {
+			// Check admin rights.
+			if let Some(check_admin) = maybe_check_admin {
+				ensure!(&check_admin == &details.admin, Error::<T>::NoPermission);
+			}
 
-				debug_assert!(details.supply >= actual, "checked in prep; qed");
-				details.supply = details.supply.saturating_sub(actual);
+			debug_assert!(details.supply >= actual, "checked in prep; qed");
+			details.supply = details.supply.saturating_sub(actual);
 
-				Ok(())
-			},
-		)?;
+			Ok(())
+		})?;
 		Self::deposit_event(Event::Burned(id, target.clone(), actual));
 		Ok(actual)
 	}
@@ -1683,9 +1739,7 @@ impl<T: Config> Pallet<T> {
 		id: T::AssetId,
 		target: &T::AccountId,
 		amount: T::Balance,
-		keep_alive: bool,
-		respect_frozen: RespectFrozen,
-		best_effort: bool,
+		f: DebitFlags,
 		check: impl FnOnce(
 			T::Balance,
 			&mut AssetDetails<T::Balance, T::AccountId, DepositBalanceOf<T>>,
@@ -1693,8 +1747,7 @@ impl<T: Config> Pallet<T> {
 	) -> Result<T::Balance, DispatchError> {
 		if amount.is_zero() { return Ok(amount) }
 
-		let (actual, melted) =
-			Self::prep_debit(id, target, amount, keep_alive, respect_frozen, best_effort)?;
+		let (actual, melted) = Self::prep_debit(id, target, amount, f)?;
 
 		Asset::<T>::try_mutate(id, |maybe_details| -> DispatchResult {
 			let details = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
@@ -1738,10 +1791,7 @@ impl<T: Config> Pallet<T> {
 		dest: &T::AccountId,
 		amount: T::Balance,
 		maybe_need_admin: Option<T::AccountId>,
-		keep_alive: bool,
-		respect_frozen: RespectFrozen,
-		best_effort: bool,
-		burn_dust: bool,
+		f: TransferFlags,
 	) -> Result<T::Balance, DispatchError> {
 		// Early exist if no-op.
 		if amount.is_zero() {
@@ -1750,9 +1800,8 @@ impl<T: Config> Pallet<T> {
 		}
 
 		// Figure out the debit and credit, together with side-effects.
-		let (debit, melted) =
-			Self::prep_debit(id, &source, amount, keep_alive, respect_frozen, best_effort)?;
-		let (credit, maybe_burn) = Self::prep_credit(id, &dest, amount, debit, burn_dust)?;
+		let (debit, melted) = Self::prep_debit(id, &source, amount, f.into())?;
+		let (credit, maybe_burn) = Self::prep_credit(id, &dest, amount, debit, f.burn_dust)?;
 
 		let mut source_account = Account::<T>::get(id, &source);
 
@@ -1828,18 +1877,20 @@ impl<T: Config> fungibles::Inspect<<T as SystemConfig>::AccountId> for Pallet<T>
 		Asset::<T>::get(asset).map(|x| x.min_balance).unwrap_or_else(Zero::zero)
 	}
 
-	fn withdrawable_balance(
-		asset: Self::AssetId,
-		who: &<T as SystemConfig>::AccountId,
-	) -> Self::Balance {
-		Pallet::<T>::decreasable_balance(asset, who, false, Respect).unwrap_or(Zero::zero())
-	}
-
 	fn balance(
 		asset: Self::AssetId,
 		who: &<T as SystemConfig>::AccountId,
 	) -> Self::Balance {
 		Pallet::<T>::balance(asset, who)
+	}
+
+	fn reducible_balance(
+		asset: Self::AssetId,
+		who: &<T as SystemConfig>::AccountId,
+		keep_alive: bool,
+	) -> Self::Balance {
+		let f = DecreaseFlags { keep_alive, respect_freezer: true };
+		Pallet::<T>::reducible_balance(asset, who, f).unwrap_or(Zero::zero())
 	}
 
 	fn can_deposit(
@@ -1855,7 +1906,8 @@ impl<T: Config> fungibles::Inspect<<T as SystemConfig>::AccountId> for Pallet<T>
 		who: &<T as SystemConfig>::AccountId,
 		amount: Self::Balance,
 	) -> WithdrawConsequence<Self::Balance> {
-		Pallet::<T>::can_decrease(asset, who, amount, false, Respect).0
+		let f = DecreaseFlags { keep_alive: false, respect_freezer: true };
+		Pallet::<T>::can_decrease(asset, who, amount, f).0
 	}
 }
 
@@ -1873,7 +1925,12 @@ impl<T: Config> fungibles::Mutate<<T as SystemConfig>::AccountId> for Pallet<T> 
 		who: &<T as SystemConfig>::AccountId,
 		amount: Self::Balance,
 	) -> Result<Self::Balance, DispatchError> {
-		Self::do_burn(asset, who, amount, None, false, Respect, false)
+		let f = DebitFlags {
+			keep_alive: false,
+			respect_freezer: true,
+			best_effort: false,
+		};
+		Self::do_burn(asset, who, amount, None, f)
 	}
 
 	fn slash(
@@ -1881,7 +1938,12 @@ impl<T: Config> fungibles::Mutate<<T as SystemConfig>::AccountId> for Pallet<T> 
 		who: &<T as SystemConfig>::AccountId,
 		amount: Self::Balance,
 	) -> Result<Self::Balance, DispatchError> {
-		Self::do_burn(asset, who, amount, None, false, Respect, true)
+		let f = DebitFlags {
+			keep_alive: false,
+			respect_freezer: true,
+			best_effort: true,
+		};
+		Self::do_burn(asset, who, amount, None, f)
 	}
 }
 
@@ -1891,8 +1953,15 @@ impl<T: Config> fungibles::Transfer<T::AccountId> for Pallet<T> {
 		source: &T::AccountId,
 		dest: &T::AccountId,
 		amount: T::Balance,
+		keep_alive: bool,
 	) -> Result<T::Balance, DispatchError> {
-		Self::do_transfer(asset, source, dest, amount, None, false, Respect, false, false)
+		let f = TransferFlags {
+			keep_alive,
+			respect_freezer: true,
+			best_effort: false,
+			burn_dust: false
+		};
+		Self::do_transfer(asset, source, dest, amount, None, f)
 	}
 }
 
@@ -1908,25 +1977,27 @@ impl<T: Config> fungibles::Unbalanced<T::AccountId> for Pallet<T> {
 	fn decrease_balance(asset: T::AssetId, who: &T::AccountId, amount: Self::Balance)
 		-> Result<Self::Balance, DispatchError>
 	{
-		Self::decrease_balance(asset, who, amount, false, Respect, false, |_, _| Ok(()))
+		let f = DebitFlags { keep_alive: false, respect_freezer: true, best_effort: false };
+		Self::decrease_balance(asset, who, amount, f, |_, _| Ok(()))
 	}
 	fn decrease_balance_at_most(asset: T::AssetId, who: &T::AccountId, amount: Self::Balance)
 		-> Self::Balance
 	{
-		Self::decrease_balance(asset, who, amount, false, Respect, true, |_, _| Ok(()))
+		let f = DebitFlags { keep_alive: false, respect_freezer: true, best_effort: true };
+		Self::decrease_balance(asset, who, amount, f, |_, _| Ok(()))
 			.unwrap_or(Zero::zero())
 	}
 	fn increase_balance(asset: T::AssetId, who: &T::AccountId, amount: Self::Balance)
 		-> Result<Self::Balance, DispatchError>
 	{
-		Self::increase_balance(asset, who, amount, |_|Ok(()))?;
+		Self::increase_balance(asset, who, amount, |_| Ok(()))?;
 		Ok(amount)
 	}
 	fn increase_balance_at_most(asset: T::AssetId, who: &T::AccountId, amount: Self::Balance)
 		-> Self::Balance
 	{
-		match Self::increase_balance(asset, who, amount, |_|Ok(())) {
-			Ok(_) => amount,
+		match Self::increase_balance(asset, who, amount, |_| Ok(())) {
+			Ok(()) => amount,
 			Err(_) => Zero::zero(),
 		}
 	}
