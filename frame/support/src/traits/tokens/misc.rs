@@ -37,6 +37,9 @@ pub enum WithdrawConsequence<Balance> {
 	/// There has been an underflow in the system. This is indicative of a corrupt state and
 	/// likely unrecoverable.
 	Underflow,
+	/// There has been an overflow in the system. This is indicative of a corrupt state and
+	/// likely unrecoverable.
+	Overflow,
 	/// Not enough of the funds in the account are unavailable for withdrawal.
 	Frozen,
 	/// Account balance would reduce to zero, potentially destroying it. The parameter is the
@@ -56,6 +59,7 @@ impl<Balance: Zero> WithdrawConsequence<Balance> {
 			WouldDie => Err(TokenError::WouldDie),
 			UnknownAsset => Err(TokenError::UnknownAsset),
 			Underflow => Err(TokenError::Underflow),
+			Overflow => Err(TokenError::Overflow),
 			Frozen => Err(TokenError::Frozen),
 			ReducedToZero(result) => Ok(result),
 			Success => Ok(Zero::zero()),
