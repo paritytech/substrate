@@ -45,6 +45,7 @@ use frame_system::Config as SystemConfig;
 
 //pub use weights::WeightInfo;
 pub use pallet::*;
+use frame_benchmarking::frame_support::traits::fungibles::Inspect;
 
 type BalanceOf<T> = <<T as Config>::Assets as fungibles::Inspect<<T as SystemConfig>::AccountId>>::Balance;
 type AssetIdOf<T> = <<T as Config>::Assets as fungibles::Inspect<<T as SystemConfig>::AccountId>>::AssetId;
@@ -81,9 +82,7 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// The fungibles trait impl whose assets this reserves.
-		type Assets: fungibles::Transfer<Self::AccountId>
-			+ fungibles::Inspect<Self::AccountId>;
-			+ fungibles::InspectWithoutFreezer<Self::AccountId>;
+		type Assets: fungibles::Inspect<Self::AccountId>;
 
 		/// Place to store the fast-access freeze data for the given asset/account.
 		type Store: StoredMap<(AssetIdOf<Self>, Self::AccountId), FreezeData<BalanceOf<Self>>>;
@@ -121,17 +120,10 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {}
 }
 
-// The main implementation block for the module.
-impl<T: Config> Pallet<T> {
-}
-
 impl<T: Config> FrozenBalance<AssetIdOf<T>, T::AccountId, BalanceOf<T>> for Pallet<T> {
 	fn frozen_balance(id: AssetIdOf<T>, who: &T::AccountId) -> Option<BalanceOf<T>> {
 		let f = T::Store::get(&(id, who.clone()));
 		if f.reserved.is_zero() { None } else { Some(f.reserved) }
-	}
-	fn died(_: AssetIdOf<T>, _: &T::AccountId) {
-		// Eventually need to remove lock named reserve/lock info.
 	}
 }
 
@@ -164,8 +156,18 @@ impl<T: Config> fungibles::Inspect<<T as SystemConfig>::AccountId> for Pallet<T>
 	}
 }
 
-impl<T: Config> fungibles::Transfer<<T as SystemConfig>::AccountId> for Pallet<T> {
-
+impl<T: Config> fungibles::Transfer<<T as SystemConfig>::AccountId> for Pallet<T> where
+	T::Assets: fungibles::Transfer<T::AccountId>
+{
+	fn transfer(
+		asset: Self::AssetId,
+		source: &T::AccountId,
+		dest: &T::AccountId,
+		amount: Self::Balance,
+		keep_alive: bool,
+	) -> Result<Self::Balance, DispatchError> {
+		T::Assets::transfer(asset, source, dest, amount, keep_alive)
+	}
 }
 
 impl<T: Config> fungibles::InspectHold<<T as SystemConfig>::AccountId> for Pallet<T> {
@@ -178,7 +180,9 @@ impl<T: Config> fungibles::InspectHold<<T as SystemConfig>::AccountId> for Palle
 	}
 }
 
-impl<T: Config> fungibles::MutateHold<<T as SystemConfig>::AccountId> for Pallet<T> {
+impl<T: Config> fungibles::MutateHold<<T as SystemConfig>::AccountId> for Pallet<T> where
+	T::Assets: fungibles::Transfer<T::AccountId> + fungibles::InspectWithoutFreezer<T::AccountId>
+{
 	fn hold(asset: AssetIdOf<T>, who: &T::AccountId, amount: BalanceOf<T>) -> DispatchResult {
 		use fungibles::InspectHold;
 		if !Self::can_hold(asset, who, amount) {
@@ -216,40 +220,56 @@ impl<T: Config> fungibles::MutateHold<<T as SystemConfig>::AccountId> for Pallet
 		best_effort: bool,
 		on_hold: bool,
 	) -> Result<BalanceOf<T>, DispatchError> {
-		use fungibles::{InspectHold, InspectWithoutFreezer};
+		use fungibles::{InspectHold, Transfer, InspectWithoutFreezer};
 
 		// Can't create the account with just a chunk of held balance - there needs to already be
 		// the minimum deposit.
-		let min_balance = Self::min_balance(asset);
+		let min_balance = <Self as fungibles::Inspect<_>> ::minimum_balance(asset);
 		ensure!(!on_hold || Self::balance(asset, dest) < min_balance, TokenError::CannotCreate);
 
-
-		T::Store::try_mutate_exists(&(asset, who.clone()), |maybe_extra| {
+		let actual = T::Store::try_mutate_exists(
+			&(asset, source.clone()),
+			|maybe_extra| -> Result<BalanceOf<T>, DispatchError>
+		{
 			if let Some(ref mut extra) = maybe_extra {
-				// Figure out the most we can unreserve.
+				// Figure out the most we can unreserve and transfer.
 				let old = extra.reserved;
 				extra.reserved = extra.reserved.saturating_sub(amount);
 				let actual = old - extra.reserved;
 				ensure!(best_effort || actual == amount, TokenError::NoFunds);
 
+				// actual is how much we can unreserve. now we check that the balance actually
+				// exists in the account.
 				let balance_left = <Self as Inspect<_>>::balance(asset, source).saturating_sub(min_balance);
 				ensure!(balance_left >= actual, TokenError::NoFunds);
 
-				Self::can_deposit(asset, dest, actual).into_result()?;
+				// the balance for the reserved amount actually exists. now we check that it's
+				// possible to actually transfer it out. the only reason this would fail is if the
+				// asset class or account is completely frozen.
+				Self::can_withdraw(asset, dest, actual).into_result_keep_alive()?;
 
+				// all good. we should now be able to unreserve and transfer without any error.
 				Ok(actual)
 			} else {
 				Err(TokenError::NoFunds)?
 			}
-		});
+		})?;
 
-		let e = Self::transfer(asset, source, dest, amount, best_effort);
-		debug_assert!(e.is_ok(), "Checked that the ");
-
-		todo!();
-//		T::Store::
+		// `best_effort` is `false` here since we've already checked that it should go through in
+		// the previous logic. if it fails here, then it must be due to a logic error.
+		let result = Self::transfer(asset, source, dest, actual, false);
+		if result.is_ok() {
+			if on_hold {
+				let r = T::Store::mutate(
+					&(asset, dest.clone()),
+					|extra| extra.reserved = extra.reserved.saturating_add(actual),
+				);
+				debug_assert!(r.is_ok(), "account exists and funds transferred in; qed");
+				r?
+			}
+		} else {
+			debug_assert!(false, "can_withdraw was successful; qed");
+		}
+		result
 	}
 }
-
-//impl<T: Config> fungibles::MutateReserve<<T as SystemConfig>::AccountId> for Pallet<T> {
-//}

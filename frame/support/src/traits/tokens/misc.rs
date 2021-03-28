@@ -66,6 +66,21 @@ impl<Balance: Zero> WithdrawConsequence<Balance> {
 			Success => Ok(Zero::zero()),
 		}
 	}
+
+	/// Convert the type into a `Result` with `TokenError` as the error. An error will be returned
+	/// if the account were to be destroyed.
+	pub fn into_result_keep_alive(self) -> Result<(), TokenError> {
+		use WithdrawConsequence::*;
+		match self {
+			NoFunds => Err(TokenError::NoFunds),
+			WouldDie | ReducedToZero(_) => Err(TokenError::WouldDie),
+			UnknownAsset => Err(TokenError::UnknownAsset),
+			Underflow => Err(TokenError::Underflow),
+			Overflow => Err(TokenError::Overflow),
+			Frozen => Err(TokenError::Frozen),
+			Success => Ok(()),
+		}
+	}
 }
 
 /// One of a number of consequences of withdrawing a fungible from an account.
