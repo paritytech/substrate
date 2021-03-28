@@ -21,7 +21,7 @@ use super::*;
 use sp_runtime::traits::Saturating;
 use crate::traits::misc::Get;
 use crate::dispatch::{DispatchResult, DispatchError};
-use super::misc::{DepositConsequence, WithdrawConsequence, Balance};
+use super::misc::{DepositConsequence, WithdrawConsequence, Balance, BalanceStatus};
 
 mod balanced;
 mod imbalance;
@@ -130,21 +130,25 @@ pub trait MutateReserve<AccountId>: InspectReserve<AccountId> + Transfer<Account
 	/// Unreserve up to `amount` funds in an account.
 	///
 	/// The actual amount unreserved is returned with `Ok`.
-	fn unreserve(who: &AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError>;
-
-	/// Transfer up to `amount` funds into another account on a best-effort basis.
 	///
-	/// The actual amount transferred is returned with `Ok`.
-	fn repatriate_reserved(
+	/// If `best_effort` is `true`, then the amount actually unreserved and returned as the inner
+	/// value of `Ok` may be smaller than the `amount` passed.
+	fn unreserve(who: &AccountId, amount: Self::Balance, best_effort: bool)
+		-> Result<Self::Balance, DispatchError>;
+
+	/// Transfer reserved funds into a destination account.
+	///
+	/// If `status` is `Reserved`, then the destination account must already exist. If not, then it
+	/// must be creatable.
+	///
+	/// Default implementation is a reserve + transfer.
+	fn transfer_reserved(
 		source: &AccountId,
 		dest: &AccountId,
 		amount: Self::Balance,
-	) -> Result<Self::Balance, DispatchError> {
-		// Done on a best-effort basis. Basically just a slash + transfer
-		let actual = Self::unreserve(source, amount)?;
-		let actual = <Self as fungible::Transfer<AccountId>>::transfer(source, dest, actual)?;
-		Ok(actual)
-	}
+		best_effort: bool,
+		status: BalanceStatus,
+	) -> Result<Self::Balance, DispatchError>;
 }
 
 /// Trait for slashing a fungible asset which can be reserved.
@@ -166,7 +170,7 @@ impl<
 	fn slash_reserved(who: &AccountId, amount: Self::Balance)
 		-> (CreditOf<AccountId, Self>, Self::Balance)
 	{
-		let actual = match Self::unreserve(who, amount) {
+		let actual = match Self::unreserve(who, amount, true) {
 			Ok(x) => x,
 			Err(_) => return (Imbalance::default(), amount),
 		};
@@ -256,15 +260,26 @@ impl<
 	fn reserve(who: &AccountId, amount: Self::Balance) -> DispatchResult {
 		<F as fungibles::MutateReserve<AccountId>>::reserve(A::get(), who, amount)
 	}
-	fn unreserve(who: &AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError> {
-		<F as fungibles::MutateReserve<AccountId>>::unreserve(A::get(), who, amount)
+	fn unreserve(who: &AccountId, amount: Self::Balance, best_effort: bool)
+		-> Result<Self::Balance, DispatchError>
+	{
+		<F as fungibles::MutateReserve<AccountId>>::unreserve(A::get(), who, amount, best_effort)
 	}
-	fn repatriate_reserved(
+	fn transfer_reserved(
 		source: &AccountId,
 		dest: &AccountId,
 		amount: Self::Balance,
+		best_effort: bool,
+		status: BalanceStatus,
 	) -> Result<Self::Balance, DispatchError> {
-		<F as fungibles::MutateReserve<AccountId>>::repatriate_reserved(A::get(), source, dest, amount)
+		<F as fungibles::MutateReserve<AccountId>>::transfer_reserved(
+			A::get(),
+			source,
+			dest,
+			amount,
+			best_effort,
+			status,
+		)
 	}
 }
 

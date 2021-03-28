@@ -159,21 +159,26 @@ pub trait MutateReserve<AccountId>: InspectReserve<AccountId> + Transfer<Account
 	fn reserve(asset: Self::AssetId, who: &AccountId, amount: Self::Balance) -> DispatchResult;
 
 	/// Unreserve some funds in an account.
-	fn unreserve(asset: Self::AssetId, who: &AccountId, amount: Self::Balance)
+	///
+	/// If `best_effort` is `true`, then the amount actually unreserved and returned as the inner
+	/// value of `Ok` may be smaller than the `amount` passed.
+	fn unreserve(asset: Self::AssetId, who: &AccountId, amount: Self::Balance, best_effort: bool)
 		-> Result<Self::Balance, DispatchError>;
 
-	/// Transfer reserved funds into another account. Done on a best-effort basis.
-	fn repatriate_reserved(
+	/// Transfer reserved funds into a destination account.
+	///
+	/// If `status` is `Reserved`, then the destination account must already exist. If not, then it
+	/// must be creatable.
+	///
+	/// Default implementation is a reserve + transfer.
+	fn transfer_reserved(
 		asset: Self::AssetId,
 		source: &AccountId,
 		dest: &AccountId,
 		amount: Self::Balance,
-	) -> Result<Self::Balance, DispatchError> {
-		// Done on a best-effort basis. Basically just a unreserve + transfer
-		let actual = Self::unreserve(asset, source, amount)?;
-		let actual = <Self as fungibles::Transfer<AccountId>>::transfer(asset, source, dest, actual)?;
-		Ok(actual)
-	}
+		best_effort: bool,
+		status: BalanceStatus,
+	) -> Result<Self::Balance, DispatchError>;
 }
 
 /// Trait for mutating one of several types of fungible assets which can be reserved.
@@ -195,7 +200,7 @@ impl<
 	fn slash_reserved(asset: Self::AssetId, who: &AccountId, amount: Self::Balance)
 		-> (CreditOf<AccountId, Self>, Self::Balance)
 	{
-		let actual = match Self::unreserve(asset, who, amount) {
+		let actual = match Self::unreserve(asset, who, amount, true) {
 			Ok(x) => x,
 			Err(_) => return (Imbalance::zero(asset), amount),
 		};

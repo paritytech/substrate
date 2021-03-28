@@ -764,7 +764,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// the caller will do this.
 	pub fn mutate_account<R>(
 		who: &T::AccountId,
-		f: impl FnOnce(&mut AccountData<T::Balance>) -> R
+		f: impl FnOnce(&mut AccountData<T::Balance>) -> R,
 	) -> Result<R, StoredMapError> {
 		Self::try_mutate_account(who, |a, _| -> Result<R, StoredMapError> { Ok(f(a)) })
 	}
@@ -780,7 +780,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// the caller will do this.
 	fn try_mutate_account<R, E: From<StoredMapError>>(
 		who: &T::AccountId,
-		f: impl FnOnce(&mut AccountData<T::Balance>, bool) -> Result<R, E>
+		f: impl FnOnce(&mut AccountData<T::Balance>, bool) -> Result<R, E>,
 	) -> Result<R, E> {
 		Self::try_mutate_account_with_dust(who, f)
 			.map(|(result, dust_cleaner)| {
@@ -804,7 +804,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// the caller will do this.
 	fn try_mutate_account_with_dust<R, E: From<StoredMapError>>(
 		who: &T::AccountId,
-		f: impl FnOnce(&mut AccountData<T::Balance>, bool) -> Result<R, E>
+		f: impl FnOnce(&mut AccountData<T::Balance>, bool) -> Result<R, E>,
 	) -> Result<(R, DustCleaner<T, I>), E> {
 		let result = T::AccountStore::try_mutate_exists(who, |maybe_account| {
 			let is_new = maybe_account.is_none();
@@ -872,6 +872,56 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				}
 			}
 		}
+	}
+
+
+	/// Move the reserved balance of one account into the balance of another, according to `status`.
+	///
+	/// Is a no-op if:
+	/// - the value to be moved is zero; or
+	/// - the `slashed` id equal to `beneficiary` and the `status` is `Reserved`.
+	fn do_transfer_reserved(
+		slashed: &T::AccountId,
+		beneficiary: &T::AccountId,
+		value: T::Balance,
+		best_effort: bool,
+		status: Status,
+	) -> Result<T::Balance, DispatchError> {
+		if value.is_zero() { return Ok(Zero::zero()) }
+
+		if slashed == beneficiary {
+			return match status {
+				Status::Free => Ok(Self::unreserve(slashed, value)),
+				Status::Reserved => Ok(value.saturating_sub(Self::reserved_balance(slashed))),
+			};
+		}
+
+		let ((actual, _maybe_one_dust), _maybe_other_dust) = Self::try_mutate_account_with_dust(
+			beneficiary,
+			|to_account, is_new| -> Result<(T::Balance, DustCleaner<T, I>), DispatchError> {
+				ensure!(!is_new, Error::<T, I>::DeadAccount);
+				Self::try_mutate_account_with_dust(
+					slashed,
+					|from_account, _| -> Result<T::Balance, DispatchError> {
+						let actual = cmp::min(from_account.reserved, value);
+						ensure!(best_effort || actual == value, Error::<T, I>::InsufficientBalance);
+						match status {
+							Status::Free => to_account.free = to_account.free
+								.checked_add(&actual)
+								.ok_or(Error::<T, I>::Overflow)?,
+							Status::Reserved => to_account.reserved = to_account.reserved
+								.checked_add(&actual)
+								.ok_or(Error::<T, I>::Overflow)?,
+						}
+						from_account.reserved -= actual;
+						Ok(actual)
+					}
+				)
+			}
+		)?;
+
+		Self::deposit_event(Event::ReserveRepatriated(slashed.clone(), beneficiary.clone(), actual, status));
+		Ok(actual)
 	}
 }
 
@@ -975,18 +1025,29 @@ impl<T: Config<I>, I: 'static> fungible::MutateReserve<T::AccountId> for Pallet<
 		})?;
 		Ok(())
 	}
-	fn unreserve(who: &T::AccountId, amount: Self::Balance) -> Result<T::Balance, DispatchError> {
+	fn unreserve(who: &T::AccountId, amount: Self::Balance, best_effort: bool)
+		-> Result<T::Balance, DispatchError>
+	{
 		if amount.is_zero() { return Ok(amount) }
 		// Done on a best-effort basis.
-		let actual = Self::mutate_account(who, |a| {
+		Self::try_mutate_account(who, |a, _| {
 			let new_free = a.free.saturating_add(amount.min(a.reserved));
 			let actual = new_free - a.free;
+			ensure!(best_effort || actual == amount, Error::<T, I>::InsufficientBalance);
 			// ^^^ Guaranteed to be <= amount and <= a.reserved
 			a.free = new_free;
 			a.reserved = a.reserved.saturating_sub(actual.clone());
-			actual
-		})?;
-		Ok(actual)
+			Ok(actual)
+		})
+	}
+	fn transfer_reserved(
+		source: &T::AccountId,
+		dest: &T::AccountId,
+		amount: Self::Balance,
+		best_effort: bool,
+		status: Status,
+	) -> Result<Self::Balance, DispatchError> {
+		Self::do_transfer_reserved(source, dest, amount, best_effort, status)
 	}
 }
 
@@ -1567,40 +1628,8 @@ impl<T: Config<I>, I: 'static> ReservableCurrency<T::AccountId> for Pallet<T, I>
 		value: Self::Balance,
 		status: Status,
 	) -> Result<Self::Balance, DispatchError> {
-		if value.is_zero() { return Ok(Zero::zero()) }
-
-		if slashed == beneficiary {
-			return match status {
-				Status::Free => Ok(Self::unreserve(slashed, value)),
-				Status::Reserved => Ok(value.saturating_sub(Self::reserved_balance(slashed))),
-			};
-		}
-
-		let ((actual, _maybe_one_dust), _maybe_other_dust) = Self::try_mutate_account_with_dust(
-			beneficiary,
-			|to_account, is_new| -> Result<(Self::Balance, DustCleaner<T, I>), DispatchError> {
-				ensure!(!is_new, Error::<T, I>::DeadAccount);
-				Self::try_mutate_account_with_dust(
-					slashed,
-					|from_account, _| -> Result<Self::Balance, DispatchError> {
-						let actual = cmp::min(from_account.reserved, value);
-						match status {
-							Status::Free => to_account.free = to_account.free
-								.checked_add(&actual)
-								.ok_or(Error::<T, I>::Overflow)?,
-							Status::Reserved => to_account.reserved = to_account.reserved
-								.checked_add(&actual)
-								.ok_or(Error::<T, I>::Overflow)?,
-						}
-						from_account.reserved -= actual;
-						Ok(actual)
-					}
-				)
-			}
-		)?;
-
-		Self::deposit_event(Event::ReserveRepatriated(slashed.clone(), beneficiary.clone(), actual, status));
-		Ok(value - actual)
+		let actual = Self::do_transfer_reserved(slashed, beneficiary, value, true, status)?;
+		Ok(value.saturating_sub(actual))
 	}
 }
 
