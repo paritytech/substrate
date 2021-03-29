@@ -563,6 +563,7 @@ mod tests {
 	use sc_keystore::LocalKeystore;
 	use sp_application_crypto::key_types::AURA;
 	use sp_inherents::InherentData;
+	use sp_timestamp::InherentDataProvider as TimestampInherentDataProvider;
 
 	type Error = sp_blockchain::Error;
 
@@ -613,7 +614,11 @@ mod tests {
 		PeersFullClient,
 		AuthorityPair,
 		AlwaysCanAuthor,
-		Box<dyn CreateInherentDataProviders<TestBlock, (), InherentDataProviders = ()>>
+		Box<dyn CreateInherentDataProviders<
+			TestBlock,
+			(),
+			InherentDataProviders = (TimestampInherentDataProvider, InherentDataProvider)
+		>>
 	>;
 	type AuraPeer = Peer<(), PeersClient>;
 
@@ -643,7 +648,15 @@ mod tests {
 					assert_eq!(slot_duration.slot_duration().as_millis() as u64, SLOT_DURATION);
 					import_queue::AuraVerifier::new(
 						client,
-						Box::new(|_, _| async { Ok(()) }),
+						Box::new(|_, _| async {
+							let timestamp = TimestampInherentDataProvider::from_system_time();
+							let slot = InherentDataProvider::from_timestamp_and_duration(
+								*timestamp,
+								Duration::from_secs(6),
+							);
+
+							Ok((timestamp, slot))
+						}),
 						AlwaysCanAuthor,
 						CheckForEquivocation::Yes,
 						None,
@@ -719,7 +732,15 @@ mod tests {
 				client,
 				proposer_factory: environ,
 				sync_oracle: DummyOracle,
-				inherent_data_providers: |_, _| async { Ok(()) },
+				inherent_data_providers: |_, _| async {
+					let timestamp = TimestampInherentDataProvider::from_system_time();
+					let slot = InherentDataProvider::from_timestamp_and_duration(
+						*timestamp,
+						Duration::from_secs(6),
+					);
+
+					Ok((timestamp, slot))
+				},
 				force_authoring: false,
 				backoff_authoring_blocks: Some(BackoffAuthoringOnFinalizedHeadLagging::default()),
 				keystore,

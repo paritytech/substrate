@@ -7150,6 +7150,7 @@ dependencies = [
  "sp-keyring",
  "sp-keystore",
  "sp-runtime",
+ "sp-timestamp",
  "sp-tracing",
  "sp-version",
  "substrate-prometheus-endpoint",

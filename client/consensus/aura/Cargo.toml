@@ -42,6 +42,7 @@ async-trait = "0.1.42"
 getrandom = { version = "0.2", features = ["js"], optional = true }
 
 [dev-dependencies]
+sp-timestamp = { version = "3.0.0", path = "../../../primitives/timestamp" }
 sp-keyring = { version = "3.0.0", path = "../../../primitives/keyring" }
 sp-tracing = { version = "3.0.0", path = "../../../primitives/tracing" }
 sc-executor = { version = "0.9.0", path = "../../executor" }
