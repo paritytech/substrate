@@ -20,15 +20,8 @@
 //! NOTE: If you're looking for `parameter_types`, it has moved in to the top-level module.
 
 pub mod tokens;
-pub use tokens::fungible::{
-	Inspect as InspectFungible, Mutate as MutateFungible, Transfer as TransferFungible,
-	Reserve as ReserveFungible, Balanced as BalancedFungible, Unbalanced as UnbalancedFungible,
-	ItemOf,
-};
-pub use tokens::fungibles::{
-	Inspect as InspectFungibles, Mutate as MutateFungibles, Transfer as TransferFungibles,
-	Reserve as ReserveFungibles, Balanced as BalancedFungibles, Unbalanced as UnbalancedFungibles,
-};
+pub use tokens::fungible;
+pub use tokens::fungibles;
 pub use tokens::currency::{
 	Currency, LockIdentifier, LockableCurrency, ReservableCurrency, VestingSchedule,
 };
