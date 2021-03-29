@@ -438,7 +438,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, BS, Error>(BabeParams {
 		+ Sync + 'static,
 	Error: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
 	SO: SyncOracle + Send + Sync + Clone + 'static,
-	CAW: CanAuthorWith<B> + Send + 'static,
+	CAW: CanAuthorWith<B> + Send + Sync + 'static,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
 {
 	const HANDLE_BUFFER_SIZE: usize = 1024;
@@ -448,7 +448,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, BS, Error>(BabeParams {
 
 	let worker = BabeSlotWorker {
 		client: client.clone(),
-		block_import: Arc::new(Mutex::new(block_import)),
+		block_import,
 		env,
 		sync_oracle: sync_oracle.clone(),
 		force_authoring,
@@ -605,7 +605,7 @@ type SlotNotificationSinks<B> = Arc<
 
 struct BabeSlotWorker<B: BlockT, C, E, I, SO, BS> {
 	client: Arc<C>,
-	block_import: Arc<Mutex<I>>,
+	block_import: I,
 	env: E,
 	sync_oracle: SO,
 	force_authoring: bool,
@@ -647,8 +647,8 @@ where
 		"babe"
 	}
 
-	fn block_import(&self) -> Arc<Mutex<Self::BlockImport>> {
-		self.block_import.clone()
+	fn block_import(&mut self) -> &mut Self::BlockImport {
+		&mut self.block_import
 	}
 
 	fn epoch_data(
