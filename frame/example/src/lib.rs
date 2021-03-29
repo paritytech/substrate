@@ -273,7 +273,6 @@ use sp_runtime::{
 		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
 	},
 };
-
 use log::info;
 
 // Re-export pallet items so that they can be accessed from the crate namespace.
@@ -294,7 +293,7 @@ const MILLICENTS: u32 = 1_000_000_000;
 // the arguments and makes a decision based upon them.
 //
 // The `WeightData<T>` trait has access to the arguments of the dispatch that it wants to assign a
-// weight to. Nonetheless, the trait itself can not make any assumptions about what the generic type
+// weight to. Nonetheless, the trait itself cannot make any assumptions about what the generic type
 // of the arguments (`T`) is. Based on our needs, we could replace `T` with a more concrete type
 // while implementing the trait. The `pallet::weight` expects whatever implements `WeighData<T>` to
 // replace `T` with a tuple of the dispatch arguments. This is exactly how we will craft the
@@ -304,6 +303,13 @@ const MILLICENTS: u32 = 1_000_000_000;
 // - The final weight of each dispatch is calculated as the argument of the call multiplied by the
 //   parameter given to the `WeightForSetDummy`'s constructor.
 // - assigns a dispatch class `operational` if the argument of the call is more than 1000.
+//
+// More information can be read at:
+//   - https://substrate.dev/docs/en/knowledgebase/learn-substrate/weight
+//   - https://substrate.dev/docs/en/knowledgebase/runtime/fees#default-weight-annotations
+//
+// Manually configuring weight is an advanced operation and what you really need may well be
+//   fulfilled by running the benchmarking toolchain. Refer to `benchmarking.rs` file.
 struct WeightForSetDummy<T: pallet_balances::Config>(BalanceOf<T>);
 
 impl<T: pallet_balances::Config> WeighData<(&BalanceOf<T>,)> for WeightForSetDummy<T>
@@ -354,6 +360,8 @@ pub mod pallet {
 
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+
+		/// Type representing the weight of this pallet
 		type WeightInfo: WeightInfo;
 	}
 
