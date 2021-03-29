@@ -1,7 +1,5 @@
 name: 'Monthly pre-release'
-on:
-  push:
-    - "*"
+on: ['push']
 
 jobs:
   release:
