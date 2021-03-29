@@ -158,7 +158,7 @@ impl From<Justification> for Justifications {
 
 use traits::{Verify, Lazy};
 
-/// A module identifier. These are per module and should be stored in a registry somewhere.
+/// A pallet identifier. These are per pallet and should be stored in a registry somewhere.
 #[derive(Clone, Copy, Eq, PartialEq, Encode, Decode)]
 pub struct PalletId(pub [u8; 8]);
 
