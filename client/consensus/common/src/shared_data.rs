@@ -193,7 +193,7 @@ impl<T> SharedData<T> {
 	/// Acquire access to the shared data.
 	///
 	/// This will give mutable access to the shared data. After the returned mutex guard is dropped,
-	/// the shared data is accessable by other threads. So, this function should be used when
+	/// the shared data is accessible by other threads. So, this function should be used when
 	/// reading/writing of the shared data in a local context is required.
 	///
 	/// When requiring to lock shared data for some longer time, even with temporarily releasing the
