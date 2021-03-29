@@ -101,7 +101,8 @@ impl<T: Config> Pallet<T> {
 				let current_round = Self::round();
 				match &call {
 					Call::submit_unsigned(solution, _) if solution.round == current_round => {
-						Ok((call, solution.score.clone()))
+						let score = solution.score.clone();
+						Ok((call, score))
 					}
 					_ => Err(MinerError::SolutionOutOfDate),
 				}

@@ -232,7 +232,7 @@ use sp_runtime::{
 	traits::Bounded,
 };
 use sp_std::{
-	convert::{TryFrom, TryInto},
+	convert::TryInto,
 	prelude::*,
 };
 use sp_arithmetic::{
@@ -519,9 +519,7 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
-		type Event: From<Event<Self>> +
-			IsType<<Self as frame_system::Config>::Event> +
-			TryFrom<<Self as frame_system::Config>::Event>;
+		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event> + TryInto<Event<Self>>;
 
 		/// Currency type.
 		type Currency: ReservableCurrency<Self::AccountId> + Currency<Self::AccountId>;
@@ -669,13 +667,16 @@ pub mod pallet {
 			// after election finalization, clear OCW solution storage
 			if <frame_system::Pallet<T>>::events()
 				.into_iter()
-				.filter_map(|event_record| event_record.event.try_into().ok())
+				.filter_map(|event_record| {
+					let local_event = <T as Config>::Event::from(event_record.event);
+					local_event.try_into().ok()
+				})
 				.find(|event| {
 					matches!(event, Event::ElectionFinalized(_))
 				})
 				.is_some()
 			{
-				unsigned::kill_solution();
+				unsigned::kill_solution::<T>();
 			}
 		}
 
