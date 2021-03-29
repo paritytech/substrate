@@ -27,8 +27,8 @@ use frame_support::{dispatch::DispatchResult, ensure, traits::Get};
 use frame_system::offchain::SubmitTransaction;
 use sp_arithmetic::Perbill;
 use sp_npos_elections::{
-	assignment_ratio_to_staked_normalized, assignment_staked_to_ratio_normalized,
-	is_score_better, seq_phragmen, CompactSolution, ElectionResult,
+	CompactSolution, ElectionResult, ElectionScore, assignment_ratio_to_staked_normalized,
+	assignment_staked_to_ratio_normalized, is_score_better, seq_phragmen,
 };
 use sp_runtime::{offchain::storage::StorageValueRef, traits::TrailingZeroInput};
 use sp_std::{cmp::Ordering, vec::Vec};
@@ -73,21 +73,21 @@ impl From<FeasibilityError> for MinerError {
 
 /// Save a given call into OCW storage.
 fn save_solution<T: Config>(call: &Call<T>) {
-	let storage = StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL);
+	let storage = StorageValueRef::local(&OFFCHAIN_CACHED_CALL);
 	storage.set(&call);
 }
 
 /// Get a saved solution from OCW storage if it exists.
 fn restore_solution<T: Config>() -> Result<Call<T>, MinerError> {
-	StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL)
+	StorageValueRef::local(&OFFCHAIN_CACHED_CALL)
 		.get()
 		.flatten()
 		.ok_or(MinerError::NoStoredSolution)
 }
 
 /// Clear a saved solution from OCW storage.
-fn kill_solution<T: Config>() {
-	let mut storage = StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL);
+pub(super) fn kill_solution<T: Config>() {
+	let mut storage = StorageValueRef::local(&OFFCHAIN_CACHED_CALL);
 	storage.clear();
 }
 
@@ -95,31 +95,26 @@ impl<T: Config> Pallet<T> {
 	/// Attempt to restore a solution from cache. Otherwise, compute it fresh. Either way, submit
 	/// if our call's score is greater than that of the cached solution.
 	pub fn restore_or_compute_then_maybe_submit() -> Result<(), MinerError> {
-		let call = restore_solution::<T>()
+		let (call, score) = restore_solution::<T>()
 			.and_then(|call| {
 				// ensure the cached call is still current before submitting
 				let current_round = Self::round();
 				match &call {
 					Call::submit_unsigned(solution, _) if solution.round == current_round => {
-						Ok(call)
+						Ok((call, solution.score.clone()))
 					}
 					_ => Err(MinerError::SolutionOutOfDate),
 				}
 			})
 			.or_else::<MinerError, _>(|_| {
 				// if not present or cache invalidated, regenerate
-				let call = Self::mine_checked_call()?;
+				let (call, score) = Self::mine_checked_call()?;
 				save_solution(&call);
-				Ok(call)
+				Ok((call, score))
 			})?;
 
-		let call_score = match &call {
-			Call::submit_unsigned(solution, _) => solution.score.clone(),
-			_ => Default::default(),
-		};
-
 		if Self::queued_solution().map_or(true, |q: ReadySolution<_>| is_score_better::<Perbill>(
-			call_score,
+			score,
 			q.score,
 			T::SolutionImprovementThreshold::get()
 		)) {
@@ -131,13 +126,13 @@ impl<T: Config> Pallet<T> {
 
 	/// Mine a new solution, cache it, and submit it back to the chain as an unsigned transaction.
 	pub fn mine_check_save_submit() -> Result<(), MinerError> {
-		let call = Self::mine_checked_call()?;
+		let (call, _) = Self::mine_checked_call()?;
 		save_solution(&call);
 		Self::submit_call(call)
 	}
 
 	/// Mine a new solution as a call. Performs all checks.
-	fn mine_checked_call() -> Result<Call<T>, MinerError> {
+	fn mine_checked_call() -> Result<(Call<T>, ElectionScore), MinerError> {
 		use codec::Encode;
 
 		let iters = Self::get_balancing_iters();
@@ -154,7 +149,7 @@ impl<T: Config> Pallet<T> {
 			call.using_encoded(|b| b.len())
 		);
 
-		Ok(call)
+		Ok((call, score))
 	}
 
 	fn submit_call(call: Call<T>) -> Result<(), MinerError> {
@@ -1027,7 +1022,7 @@ mod tests {
 			// remove the cached submitted tx
 			// this ensures that when the resubmit window rolls around, we're ready to regenerate
 			// from scratch if necessary
-			let mut call_cache = StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL);
+			let mut call_cache = StorageValueRef::local(&OFFCHAIN_CACHED_CALL);
 			assert!(matches!(call_cache.get::<Vec<u8>>(), Some(Some(_call))));
 			call_cache.clear();
 
