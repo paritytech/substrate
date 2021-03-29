@@ -66,7 +66,7 @@ pub fn new_partial(
 	let telemetry = config.telemetry_endpoints.clone()
 		.filter(|x| !x.is_empty())
 		.map(|endpoints| -> Result<_, sc_telemetry::Error> {
-			let worker = TelemetryWorker::new(16)?;
+			let worker = TelemetryWorker::new(16, None)?;
 			let telemetry = worker.handle().new_telemetry(endpoints);
 			Ok((worker, telemetry))
 		})
@@ -414,7 +414,7 @@ pub fn new_light_base(
 			#[cfg(not(feature = "browser"))]
 			let transport = None;
 
-			let worker = TelemetryWorker::with_transport(16, transport)?;
+			let worker = TelemetryWorker::new(16, transport)?;
 			let telemetry = worker.handle().new_telemetry(endpoints);
 			Ok((worker, telemetry))
 		})
