@@ -168,12 +168,16 @@ impl<T: Config> Pallet<T> {
 			size,
 			T::MinerMaxWeight::get(),
 		);
+
 		log!(
 			debug,
-			"miner: current compact solution voters = {}, maximum_allowed = {}",
+			"initial solution voters = {}, snapshot = {:?}, maximum_allowed(capped) = {}",
 			compact.voter_count(),
+			size,
 			maximum_allowed_voters,
 		);
+
+		// trim weight.
 		let compact = Self::trim_compact(maximum_allowed_voters, compact, &voter_index)?;
 
 		// re-calc score.
@@ -252,10 +256,12 @@ impl<T: Config> Pallet<T> {
 					}
 				}
 
+				log!(debug, "removed {} voter to meet the max weight limit.", to_remove);
 				Ok(compact)
 			}
 			_ => {
 				// nada, return as-is
+				log!(debug, "didn't remove any voter for weight limits.");
 				Ok(compact)
 			}
 		}
@@ -298,6 +304,7 @@ impl<T: Config> Pallet<T> {
 		// First binary-search the right amount of voters
 		let mut step = voters / 2;
 		let mut current_weight = weight_with(voters);
+
 		while step > 0 {
 			match next_voters(current_weight, voters, step) {
 				// proceed with the binary search
@@ -324,13 +331,14 @@ impl<T: Config> Pallet<T> {
 			voters -= 1;
 		}
 
+		let final_decision = voters.min(size.voters);
 		debug_assert!(
-			weight_with(voters.min(size.voters)) <= max_weight,
+			weight_with(final_decision) <= max_weight,
 			"weight_with({}) <= {}",
-			voters.min(size.voters),
+			final_decision,
 			max_weight,
 		);
-		voters.min(size.voters)
+		final_decision
 	}
 
 	/// Checks if an execution of the offchain worker is permitted at the given block number, or
