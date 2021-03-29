@@ -160,9 +160,9 @@ use traits::{Verify, Lazy};
 
 /// A module identifier. These are per module and should be stored in a registry somewhere.
 #[derive(Clone, Copy, Eq, PartialEq, Encode, Decode)]
-pub struct ModuleId(pub [u8; 8]);
+pub struct PalletId(pub [u8; 8]);
 
-impl TypeId for ModuleId {
+impl TypeId for PalletId {
 	const TYPE_ID: [u8; 4] = *b"modl";
 }
 

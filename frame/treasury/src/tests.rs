@@ -29,7 +29,7 @@ use frame_support::{
 
 use sp_core::H256;
 use sp_runtime::{
-	ModuleId,
+	PalletId,
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
@@ -98,13 +98,13 @@ parameter_types! {
 	pub const ProposalBondMinimum: u64 = 1;
 	pub const SpendPeriod: u64 = 2;
 	pub const Burn: Permill = Permill::from_percent(50);
-	pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
+	pub const TreasuryModuleId: PalletId = PalletId(*b"py/trsry");
 	pub const BountyUpdatePeriod: u32 = 20;
 	pub const BountyCuratorDeposit: Permill = Permill::from_percent(50);
 	pub const BountyValueMinimum: u64 = 1;
 }
 impl Config for Test {
-	type ModuleId = TreasuryModuleId;
+	type PalletId = TreasuryModuleId;
 	type Currency = pallet_balances::Pallet<Test>;
 	type ApproveOrigin = frame_system::EnsureRoot<u128>;
 	type RejectOrigin = frame_system::EnsureRoot<u128>;

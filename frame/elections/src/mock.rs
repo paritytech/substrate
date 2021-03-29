@@ -122,7 +122,7 @@ impl elections::Config for Test {
 	type InactiveGracePeriod = InactiveGracePeriod;
 	type VotingPeriod = VotingPeriod;
 	type DecayRatio = DecayRatio;
-	type ModuleId = ElectionModuleId;
+	type PalletId = ElectionModuleId;
 }
 
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;

@@ -21,7 +21,7 @@ use sc_cli::{
 	Error, utils::print_from_uri, CryptoSchemeFlag,
 	OutputTypeFlag, KeystoreParams, with_crypto_scheme,
 };
-use sp_runtime::ModuleId;
+use sp_runtime::PalletId;
 use sp_runtime::traits::AccountIdConversion;
 use sp_core::crypto::{Ss58Codec, Ss58AddressFormat};
 use std::convert::{TryInto, TryFrom};
@@ -76,7 +76,7 @@ impl ModuleIdCmd {
 			.try_into()
 			.map_err(|_| "Cannot convert argument to moduleid: argument should be 8-character string")?;
 
-		let account_id: R::AccountId = ModuleId(id_fixed_array).into_account();
+		let account_id: R::AccountId = PalletId(id_fixed_array).into_account();
 
 		with_crypto_scheme!(
 			self.crypto_scheme.scheme,

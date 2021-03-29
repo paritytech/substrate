@@ -29,7 +29,7 @@ use frame_support::{
 
 use sp_core::H256;
 use sp_runtime::{
-	Perbill, ModuleId,
+	Perbill, PalletId,
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup, BadOrigin},
 };
@@ -102,11 +102,11 @@ parameter_types! {
 	pub const SpendPeriod: u64 = 2;
 	pub const Burn: Permill = Permill::from_percent(50);
 	pub const DataDepositPerByte: u64 = 1;
-	pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
+	pub const TreasuryModuleId: PalletId = PalletId(*b"py/trsry");
 }
 // impl pallet_treasury::Config for Test {
 impl pallet_treasury::Config for Test {
-	type ModuleId = TreasuryModuleId;
+	type PalletId = TreasuryModuleId;
 	type Currency = pallet_balances::Pallet<Test>;
 	type ApproveOrigin = frame_system::EnsureRoot<u128>;
 	type RejectOrigin = frame_system::EnsureRoot<u128>;
