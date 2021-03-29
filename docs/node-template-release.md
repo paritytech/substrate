@@ -50,7 +50,7 @@ by running the following command.
 	P.S: This step can be automated if we update `node-template-release` package in
 	`.maintain/node-template-release`.
 
-4. Once the three `Cargo.toml`s are updated, compile and confirm Node Template builds. Then
+4. Once the three `Cargo.toml`s are updated, compile and confirm that the Node Template builds. Then
 commit the changes to a new branch in [Substrate Node Template](https://github.com/substrate-developer-hub/substrate-node-template), and make a PR.
 
 	> Notice there are chances the code in Substrate Node Template works with the linked Substrate git
