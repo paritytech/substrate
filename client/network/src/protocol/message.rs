@@ -77,6 +77,10 @@ bitflags! {
 		const MESSAGE_QUEUE = 0b00001000;
 		/// Include a justification for the block.
 		const JUSTIFICATION = 0b00010000;
+		/// Include multiple justifications for the block. For backwards compatibility we request
+		/// both a single justification as well as the full container. The response contains either
+		/// (not both).
+		const JUSTIFICATIONS = 0b00100000;
 	}
 }
 
@@ -148,7 +152,7 @@ pub struct RemoteReadResponse {
 pub mod generic {
 	use bitflags::bitflags;
 	use codec::{Encode, Decode, Input, Output};
-	use sp_runtime::EncodedJustification;
+	use sp_runtime::{EncodedJustification, Justifications};
 	use super::{
 		RemoteReadResponse, Transactions, Direction,
 		RequestId, BlockAttributes, RemoteCallResponse, ConsensusEngineId,
@@ -234,6 +238,8 @@ pub mod generic {
 		pub message_queue: Option<Vec<u8>>,
 		/// Justification if requested.
 		pub justification: Option<EncodedJustification>,
+		/// Justifications if requested.
+		pub justifications: Option<Justifications>,
 	}
 
 	/// Identifies starting point of a block sequence.

@@ -56,5 +56,9 @@ message BlockData {
 	// doesn't make in possible to differentiate between a lack of justification and an empty
 	// justification.
 	bool is_empty_justification = 7; // optional, false if absent
+	// Justifications if requested.
+	// Unlike the case for single Justifications this will not be empty even if the contained
+	// Justifications itself are present but empty, since they contain the conensus engine ID.
+	bytes justifications = 8; // optional
 }
 

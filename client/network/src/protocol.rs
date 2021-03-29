@@ -578,6 +578,11 @@ impl<B: BlockT> Protocol<B> {
 				} else {
 					None
 				},
+				justifications: if !block_data.justifications.is_empty() {
+					Some(Decode::decode(&mut block_data.justifications.as_ref())?)
+				} else {
+					None
+				},
 			})
 		}).collect::<Result<Vec<_>, codec::Error>>();
 
@@ -610,7 +615,9 @@ impl<B: BlockT> Protocol<B> {
 			blocks_range(),
 		);
 
-		if request.fields == message::BlockAttributes::JUSTIFICATION {
+		if (message::BlockAttributes::JUSTIFICATION | message::BlockAttributes::JUSTIFICATIONS)
+			.contains(request.fields)
+		{
 			match self.sync.on_block_justification(peer_id, block_response) {
 				Ok(sync::OnBlockJustification::Nothing) => CustomMessageOutcome::None,
 				Ok(sync::OnBlockJustification::Import { peer, hash, number, justifications }) =>
@@ -906,6 +913,7 @@ impl<B: BlockT> Protocol<B> {
 						receipt: None,
 						message_queue: None,
 						justification: None,
+						justifications: None,
 					},
 				],
 			},
