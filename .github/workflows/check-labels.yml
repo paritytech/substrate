@@ -1,0 +1,21 @@
+name: Check labels
+
+on:
+  pull_request:
+    types: [labeled, opened, synchronize, unlabeled]
+
+jobs:
+  check-labels:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+      - name: Check labels
+        run: bash ${{ github.workspace }}/.maintain/github/check_labels.sh
+        env:
+          GITHUB_PR: ${{ github.event.pull_request.number }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}

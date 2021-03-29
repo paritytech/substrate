@@ -24,14 +24,7 @@
 use crate::sp_std::prelude::*;
 use codec::{Codec, Encode, Decode};
 pub use sp_core::storage::{ChildInfo, ChildType};
-
-/// The outcome of calling [`kill_storage`].
-pub enum KillOutcome {
-	/// No key remains in the child trie.
-	AllRemoved,
-	/// At least one key still resides in the child trie due to the supplied limit.
-	SomeRemaining,
-}
+pub use crate::sp_io::KillChildStorageResult;
 
 /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T: Decode + Sized>(
@@ -47,7 +40,11 @@ pub fn get<T: Decode + Sized>(
 			).and_then(|v| {
 				Decode::decode(&mut &v[..]).map(Some).unwrap_or_else(|_| {
 					// TODO #3700: error should be handleable.
-					runtime_print!("ERROR: Corrupted state in child trie at {:?}/{:?}", storage_key, key);
+					crate::runtime_print!(
+						"ERROR: Corrupted state in child trie at {:?}/{:?}",
+						storage_key,
+						key,
+					);
 					None
 				})
 			})
@@ -177,16 +174,12 @@ pub fn exists(
 pub fn kill_storage(
 	child_info: &ChildInfo,
 	limit: Option<u32>,
-) -> KillOutcome {
-	let all_removed = match child_info.child_type() {
+) -> KillChildStorageResult {
+	match child_info.child_type() {
 		ChildType::ParentKeyId => sp_io::default_child_storage::storage_kill(
 			child_info.storage_key(),
 			limit
 		),
-	};
-	match all_removed {
-		true => KillOutcome::AllRemoved,
-		false => KillOutcome::SomeRemaining,
 	}
 }
 

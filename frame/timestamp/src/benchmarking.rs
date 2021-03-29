@@ -20,12 +20,11 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use sp_std::prelude::*;
 use frame_system::RawOrigin;
 use frame_support::{ensure, traits::OnFinalize};
-use frame_benchmarking::{benchmarks, TrackedStorageKey};
+use frame_benchmarking::{benchmarks, TrackedStorageKey, impl_benchmark_test_suite};
 
-use crate::Module as Timestamp;
+use crate::Pallet as Timestamp;
 
 const MAX_TIME: u32 = 100;
 
@@ -33,7 +32,7 @@ benchmarks! {
 	set {
 		let t = MAX_TIME;
 		// Ignore write to `DidUpdate` since it transient.
-		let did_update_key = crate::DidUpdate::hashed_key().to_vec();
+		let did_update_key = crate::DidUpdate::<T>::hashed_key().to_vec();
 		frame_benchmarking::benchmarking::add_to_whitelist(TrackedStorageKey {
 			key: did_update_key,
 			has_been_read: false,
@@ -47,27 +46,18 @@ benchmarks! {
 	on_finalize {
 		let t = MAX_TIME;
 		Timestamp::<T>::set(RawOrigin::None.into(), t.into())?;
-		ensure!(DidUpdate::exists(), "Time was not set.");
+		ensure!(DidUpdate::<T>::exists(), "Time was not set.");
 		// Ignore read/write to `DidUpdate` since it is transient.
-		let did_update_key = crate::DidUpdate::hashed_key().to_vec();
+		let did_update_key = crate::DidUpdate::<T>::hashed_key().to_vec();
 		frame_benchmarking::benchmarking::add_to_whitelist(did_update_key.into());
 	}: { Timestamp::<T>::on_finalize(t.into()); }
 	verify {
-		ensure!(!DidUpdate::exists(), "Time was not removed.");
+		ensure!(!DidUpdate::<T>::exists(), "Time was not removed.");
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::tests::{new_test_ext, Test};
-	use frame_support::assert_ok;
-
-	#[test]
-	fn test_benchmarks() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_set::<Test>());
-			assert_ok!(test_benchmark_on_finalize::<Test>());
-		});
-	}
-}
+impl_benchmark_test_suite!(
+	Timestamp,
+	crate::tests::new_test_ext(),
+	crate::tests::Test,
+);

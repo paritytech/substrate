@@ -264,24 +264,24 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: system::{Module, Call, Event<T>},
+		System: system::{Pallet, Call, Event<T>},
 		Module1_1: module1::<Instance1>::{
-			Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
+			Pallet, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
 		},
 		Module1_2: module1::<Instance2>::{
-			Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
+			Pallet, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
 		},
-		Module2: module2::{Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent},
+		Module2: module2::{Pallet, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent},
 		Module2_1: module2::<Instance1>::{
-			Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
+			Pallet, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
 		},
 		Module2_2: module2::<Instance2>::{
-			Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
+			Pallet, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
 		},
 		Module2_3: module2::<Instance3>::{
-			Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
+			Pallet, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
 		},
-		Module3: module3::{Module, Call},
+		Module3: module3::{Pallet, Call},
 	}
 );
 
@@ -291,26 +291,26 @@ pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, 
 
 fn new_test_ext() -> sp_io::TestExternalities {
 	GenesisConfig{
-		module1_Instance1: Some(module1::GenesisConfig {
+		module1_Instance1: module1::GenesisConfig {
 			value: 3,
 			test: 2,
-		}),
-		module1_Instance2: Some(module1::GenesisConfig {
+		},
+		module1_Instance2: module1::GenesisConfig {
 			value: 4,
 			test: 5,
-		}),
-		module2: Some(module2::GenesisConfig {
+		},
+		module2: module2::GenesisConfig {
 			value: 4,
 			map: vec![(0, 0)],
 			double_map: vec![(0, 0, 0)],
-		}),
-		module2_Instance1: Some(module2::GenesisConfig {
+		},
+		module2_Instance1: module2::GenesisConfig {
 			value: 4,
 			map: vec![(0, 0)],
 			double_map: vec![(0, 0, 0)],
-		}),
-		module2_Instance2: None,
-		module2_Instance3: None,
+		},
+		module2_Instance2: Default::default(),
+		module2_Instance3: Default::default(),
 	}.build_storage().unwrap().into()
 }
 

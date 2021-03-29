@@ -706,8 +706,8 @@ fn report_equivocation_invalid_equivocation_proof() {
 #[test]
 fn report_equivocation_validate_unsigned_prevents_duplicates() {
 	use sp_runtime::transaction_validity::{
-		InvalidTransaction, TransactionLongevity, TransactionPriority, TransactionSource,
-		TransactionValidity, ValidTransaction,
+		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
+		ValidTransaction,
 	};
 
 	let authorities = test_authorities();
@@ -762,7 +762,7 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 				priority: TransactionPriority::max_value(),
 				requires: vec![],
 				provides: vec![("GrandpaEquivocation", tx_tag).encode()],
-				longevity: TransactionLongevity::max_value(),
+				longevity: ReportLongevity::get(),
 				propagate: false,
 			})
 		);

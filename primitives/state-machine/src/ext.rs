@@ -18,7 +18,7 @@
 //! Concrete externalities implementation.
 
 use crate::{
-	StorageKey, StorageValue, OverlayedChanges,
+	StorageKey, StorageValue, OverlayedChanges, IndexOperation,
 	backend::Backend, overlayed_changes::OverlayedExtensions,
 };
 use hash_db::Hasher;
@@ -391,7 +391,7 @@ where
 		&mut self,
 		child_info: &ChildInfo,
 		limit: Option<u32>,
-	) -> bool {
+	) -> (bool, u32) {
 		trace!(target: "state", "{:04x}: KillChild({})",
 			self.id,
 			HexDisplay::from(&child_info.storage_key()),
@@ -399,9 +399,9 @@ where
 		let _guard = guard();
 		self.mark_dirty();
 		self.overlay.clear_child_storage(child_info);
+		let mut num_deleted: u32 = 0;
 
 		if let Some(limit) = limit {
-			let mut num_deleted: u32 = 0;
 			let mut all_deleted = true;
 			self.backend.apply_to_child_keys_while(child_info, |key| {
 				if num_deleted == limit {
@@ -417,13 +417,14 @@ where
 				self.overlay.set_child_storage(child_info, key.to_vec(), None);
 				true
 			});
-			all_deleted
+			(all_deleted, num_deleted)
 		} else {
 			self.backend.apply_to_child_keys_while(child_info, |key| {
+				num_deleted = num_deleted.saturating_add(1);
 				self.overlay.set_child_storage(child_info, key.to_vec(), None);
 				true
 			});
-			true
+			(true, num_deleted)
 		}
 	}
 
@@ -567,6 +568,36 @@ where
 		}
 	}
 
+	fn storage_index_transaction(&mut self, index: u32, offset: u32) {
+		trace!(
+			target: "state",
+			"{:04x}: IndexTransaction ({}): [{}..]",
+			self.id,
+			index,
+			offset,
+		);
+		self.overlay.add_transaction_index(IndexOperation::Insert {
+			extrinsic: index,
+			offset,
+		});
+	}
+
+	/// Renew existing piece of data storage.
+	fn storage_renew_transaction_index(&mut self, index: u32, hash: &[u8], size: u32) {
+		trace!(
+			target: "state",
+			"{:04x}: RenewTransactionIndex ({}) {} bytes",
+			self.id,
+			HexDisplay::from(&hash),
+			size,
+		);
+		self.overlay.add_transaction_index(IndexOperation::Renew {
+			extrinsic: index,
+			hash: hash.to_vec(),
+			size
+		});
+	}
+
 	#[cfg(not(feature = "std"))]
 	fn storage_changes_root(&mut self, _parent_hash: &[u8]) -> Result<Option<Vec<u8>>, ()> {
 		Ok(None)
@@ -575,27 +606,41 @@ where
 	#[cfg(feature = "std")]
 	fn storage_changes_root(&mut self, parent_hash: &[u8]) -> Result<Option<Vec<u8>>, ()> {
 		let _guard = guard();
-		let root = self.overlay.changes_trie_root(
-			self.backend,
-			self.changes_trie_state.as_ref(),
-			Decode::decode(&mut &parent_hash[..]).map_err(|e|
-				trace!(
-					target: "state",
-					"Failed to decode changes root parent hash: {}",
-					e,
-				)
-			)?,
-			true,
-			self.storage_transaction_cache,
-		);
+		if let Some(ref root) = self.storage_transaction_cache.changes_trie_transaction_storage_root {
+			trace!(
+				target: "state",
+				"{:04x}: ChangesRoot({})(cached) {:?}",
+				self.id,
+				HexDisplay::from(&parent_hash),
+				root,
+			);
 
-		trace!(target: "state", "{:04x}: ChangesRoot({}) {:?}",
-			self.id,
-			HexDisplay::from(&parent_hash),
-			root,
-		);
+			Ok(Some(root.encode()))
+		} else {
+			let root = self.overlay.changes_trie_root(
+				self.backend,
+				self.changes_trie_state.as_ref(),
+				Decode::decode(&mut &parent_hash[..]).map_err(|e|
+					trace!(
+						target: "state",
+						"Failed to decode changes root parent hash: {}",
+						e,
+					)
+				)?,
+				true,
+				self.storage_transaction_cache,
+			);
 
-		root.map(|r| r.map(|o| o.encode()))
+			trace!(
+				target: "state",
+				"{:04x}: ChangesRoot({}) {:?}",
+				self.id,
+				HexDisplay::from(&parent_hash),
+				root,
+			);
+
+			root.map(|r| r.map(|o| o.encode()))
+		}
 	}
 
 	fn storage_start_transaction(&mut self) {

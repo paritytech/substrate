@@ -1,6 +1,6 @@
 [package]
 name = "sc-consensus-aura"
-version = "0.8.1"
+version = "0.9.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Aura consensus algorithm for substrate"
 edition = "2018"
@@ -13,42 +13,42 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-application-crypto = { version = "2.0.0", path = "../../../primitives/application-crypto" }
-sp-consensus-aura = { version = "0.8.0", path = "../../../primitives/consensus/aura" }
-sp-block-builder = { version = "2.0.0", path = "../../../primitives/block-builder" }
-sc-block-builder = { version = "0.8.0", path = "../../block-builder" }
-sc-client-api = { version = "2.0.0", path = "../../api" }
+sp-application-crypto = { version = "3.0.0", path = "../../../primitives/application-crypto" }
+sp-consensus-aura = { version = "0.9.0", path = "../../../primitives/consensus/aura" }
+sp-block-builder = { version = "3.0.0", path = "../../../primitives/block-builder" }
+sc-block-builder = { version = "0.9.0", path = "../../block-builder" }
+sc-client-api = { version = "3.0.0", path = "../../api" }
 codec = { package = "parity-scale-codec", version = "2.0.0" }
-sp-consensus = { version = "0.8.0", path = "../../../primitives/consensus/common" }
-sp-consensus-slots = { version = "0.8.0", path = "../../../primitives/consensus/slots" }
+sp-consensus = { version = "0.9.0", path = "../../../primitives/consensus/common" }
+sp-consensus-slots = { version = "0.9.0", path = "../../../primitives/consensus/slots" }
 derive_more = "0.99.2"
 futures = "0.3.9"
 futures-timer = "3.0.1"
-sp-inherents = { version = "2.0.0", path = "../../../primitives/inherents" }
+sp-inherents = { version = "3.0.0", path = "../../../primitives/inherents" }
 log = "0.4.8"
 parking_lot = "0.11.1"
-sp-core = { version = "2.0.0", path = "../../../primitives/core" }
-sp-blockchain = { version = "2.0.0", path = "../../../primitives/blockchain" }
-sp-io = { version = "2.0.0", path = "../../../primitives/io" }
-sp-version = { version = "2.0.0", path = "../../../primitives/version" }
-sc-consensus-slots = { version = "0.8.0", path = "../slots" }
-sp-api = { version = "2.0.0", path = "../../../primitives/api" }
-sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
-sp-timestamp = { version = "2.0.0", path = "../../../primitives/timestamp" }
-sp-keystore = { version = "0.8.0", path = "../../../primitives/keystore" }
-sc-telemetry = { version = "2.0.0", path = "../../telemetry" }
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.8.0"}
+sp-core = { version = "3.0.0", path = "../../../primitives/core" }
+sp-blockchain = { version = "3.0.0", path = "../../../primitives/blockchain" }
+sp-io = { version = "3.0.0", path = "../../../primitives/io" }
+sp-version = { version = "3.0.0", path = "../../../primitives/version" }
+sc-consensus-slots = { version = "0.9.0", path = "../slots" }
+sp-api = { version = "3.0.0", path = "../../../primitives/api" }
+sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
+sp-timestamp = { version = "3.0.0", path = "../../../primitives/timestamp" }
+sp-keystore = { version = "0.9.0", path = "../../../primitives/keystore" }
+sc-telemetry = { version = "3.0.0", path = "../../telemetry" }
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.9.0"}
 # We enable it only for web-wasm check
 # See https://docs.rs/getrandom/0.2.1/getrandom/#webassembly-support
 getrandom = { version = "0.2", features = ["js"], optional = true }
 
 [dev-dependencies]
-sp-keyring = { version = "2.0.0", path = "../../../primitives/keyring" }
-sp-tracing = { version = "2.0.0", path = "../../../primitives/tracing" }
-sc-executor = { version = "0.8.0", path = "../../executor" }
-sc-keystore = { version = "2.0.0", path = "../../keystore" }
-sc-network = { version = "0.8.0", path = "../../network" }
+sp-keyring = { version = "3.0.0", path = "../../../primitives/keyring" }
+sp-tracing = { version = "3.0.0", path = "../../../primitives/tracing" }
+sc-executor = { version = "0.9.0", path = "../../executor" }
+sc-keystore = { version = "3.0.0", path = "../../keystore" }
+sc-network = { version = "0.9.0", path = "../../network" }
 sc-network-test = { version = "0.8.0", path = "../../network/test" }
-sc-service = { version = "0.8.0", default-features = false, path = "../../service" }
+sc-service = { version = "0.9.0", default-features = false, path = "../../service" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
 tempfile = "3.1.0"

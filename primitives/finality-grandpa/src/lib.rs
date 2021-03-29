@@ -400,7 +400,7 @@ where
 		AuthorityId::ID,
 		&public.to_public_crypto_pair(),
 		&encoded[..],
-	).ok()?.try_into().ok()?;
+	).ok().flatten()?.try_into().ok()?;
 
 	Some(grandpa::SignedMessage {
 		message,

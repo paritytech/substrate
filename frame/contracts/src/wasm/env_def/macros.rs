@@ -20,13 +20,11 @@
 //!
 //! Most likely you should use `define_env` macro.
 
-#[macro_export]
 macro_rules! convert_args {
 	() => (vec![]);
 	( $( $t:ty ),* ) => ( vec![ $( { use $crate::wasm::env_def::ConvertibleToWasm; <$t>::VALUE_TYPE }, )* ] );
 }
 
-#[macro_export]
 macro_rules! gen_signature {
 	( ( $( $params: ty ),* ) ) => (
 		{
@@ -43,24 +41,25 @@ macro_rules! gen_signature {
 	);
 }
 
-#[macro_export]
 macro_rules! gen_signature_dispatch {
 	(
+		$needle_module:ident,
 		$needle_name:ident,
 		$needle_sig:ident ;
+		$module:ident,
 		$name:ident
-		( $ctx:ident $( , $names:ident : $params:ty )* ) $( -> $returns:ty )* , $($rest:tt)* ) => {
-		if stringify!($name).as_bytes() == $needle_name {
+		( $ctx:ident $( , $names:ident : $params:ty )* ) $( -> $returns:ty )* , $($rest:tt)*
+	) => {
+		if stringify!($module).as_bytes() == $needle_module && stringify!($name).as_bytes() == $needle_name {
 			let signature = gen_signature!( ( $( $params ),* ) $( -> $returns )* );
 			if $needle_sig == &signature {
 				return true;
 			}
 		} else {
-			gen_signature_dispatch!($needle_name, $needle_sig ; $($rest)*);
+			gen_signature_dispatch!($needle_module, $needle_name, $needle_sig ; $($rest)*);
 		}
 	};
-	( $needle_name:ident, $needle_sig:ident ; ) => {
-	};
+	( $needle_module:ident, $needle_name:ident, $needle_sig:ident ; ) => {};
 }
 
 /// Unmarshall arguments and then execute `body` expression and return its result.
@@ -102,7 +101,6 @@ where
 	f
 }
 
-#[macro_export]
 macro_rules! unmarshall_then_body_then_marshall {
 	( $args_iter:ident, $ctx:ident, ( $( $names:ident : $params:ty ),* ) -> $returns:ty => $body:tt ) => ({
 		let body = $crate::wasm::env_def::macros::constrain_closure::<
@@ -128,7 +126,6 @@ macro_rules! unmarshall_then_body_then_marshall {
 	})
 }
 
-#[macro_export]
 macro_rules! define_func {
 	( < E: $seal_ty:tt > $name:ident ( $ctx: ident $(, $names:ident : $params:ty)*) $(-> $returns:ty)* => $body:tt ) => {
 		fn $name< E: $seal_ty >(
@@ -152,15 +149,15 @@ macro_rules! define_func {
 	};
 }
 
-#[macro_export]
 macro_rules! register_func {
 	( $reg_cb:ident, < E: $seal_ty:tt > ; ) => {};
 
 	( $reg_cb:ident, < E: $seal_ty:tt > ;
-		$name:ident ( $ctx:ident $( , $names:ident : $params:ty )* )
+		$module:ident $name:ident ( $ctx:ident $( , $names:ident : $params:ty )* )
 		$( -> $returns:ty )* => $body:tt $($rest:tt)*
 	) => {
 		$reg_cb(
+			stringify!($module).as_bytes(),
 			stringify!($name).as_bytes(),
 			{
 				define_func!(
@@ -182,14 +179,17 @@ macro_rules! register_func {
 /// and reject the code if any imported function has a mismatched signature.
 macro_rules! define_env {
 	( $init_name:ident , < E: $seal_ty:tt > ,
-		$( $name:ident ( $ctx:ident $( , $names:ident : $params:ty )* )
+		$( [$module:ident] $name:ident ( $ctx:ident $( , $names:ident : $params:ty )* )
 			$( -> $returns:ty )* => $body:tt , )*
 	) => {
 		pub struct $init_name;
 
 		impl $crate::wasm::env_def::ImportSatisfyCheck for $init_name {
-			fn can_satisfy(name: &[u8], func_type: &parity_wasm::elements::FunctionType) -> bool {
-				gen_signature_dispatch!( name, func_type ; $( $name ( $ctx $(, $names : $params )* ) $( -> $returns )* , )* );
+			fn can_satisfy(module: &[u8], name: &[u8], func_type: &parity_wasm::elements::FunctionType) -> bool {
+				gen_signature_dispatch!(
+					module, name, func_type ;
+					$( $module, $name ( $ctx $(, $names : $params )* ) $( -> $returns )* , )*
+				);
 
 				return false;
 			}
@@ -201,8 +201,12 @@ macro_rules! define_env {
 				sp_core::crypto::UncheckedFrom<<E::T as frame_system::Config>::Hash> +
 					AsRef<[u8]>
 		{
-			fn impls<F: FnMut(&[u8], $crate::wasm::env_def::HostFunc<E>)>(f: &mut F) {
-				register_func!(f, < E: $seal_ty > ; $( $name ( $ctx $( , $names : $params )* ) $( -> $returns)* => $body )* );
+			fn impls<F: FnMut(&[u8], &[u8], $crate::wasm::env_def::HostFunc<E>)>(f: &mut F) {
+				register_func!(
+					f,
+					< E: $seal_ty > ;
+					$( $module $name ( $ctx $( , $names : $params )* ) $( -> $returns)* => $body )*
+				);
 			}
 		}
 	};
@@ -215,9 +219,9 @@ mod tests {
 	use sp_runtime::traits::Zero;
 	use sp_sandbox::{ReturnValue, Value};
 	use crate::{
+		Weight,
 		wasm::{Runtime, runtime::TrapReason, tests::MockExt},
 		exec::Ext,
-		gas::Gas,
 	};
 
 	struct TestRuntime {
@@ -282,7 +286,7 @@ mod tests {
 	#[test]
 	fn macro_define_func() {
 		define_func!( <E: Ext> seal_gas (_ctx, amount: u32) => {
-			let amount = Gas::from(amount);
+			let amount = Weight::from(amount);
 			if !amount.is_zero() {
 				Ok(())
 			} else {
@@ -333,8 +337,8 @@ mod tests {
 		use crate::wasm::env_def::ImportSatisfyCheck;
 
 		define_env!(Env, <E: Ext>,
-			seal_gas( _ctx, amount: u32 ) => {
-				let amount = Gas::from(amount);
+			[seal0] seal_gas( _ctx, amount: u32 ) => {
+				let amount = Weight::from(amount);
 				if !amount.is_zero() {
 					Ok(())
 				} else {
@@ -343,7 +347,11 @@ mod tests {
 			},
 		);
 
-		assert!(Env::can_satisfy(b"seal_gas", &FunctionType::new(vec![ValueType::I32], None)));
-		assert!(!Env::can_satisfy(b"not_exists", &FunctionType::new(vec![], None)));
+		assert!(
+			Env::can_satisfy(b"seal0", b"seal_gas",&FunctionType::new(vec![ValueType::I32], None))
+		);
+		assert!(
+			!Env::can_satisfy(b"seal0", b"not_exists", &FunctionType::new(vec![], None))
+		);
 	}
 }

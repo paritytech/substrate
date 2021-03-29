@@ -22,14 +22,22 @@
 //! restrictions that are taken into account by the GRANDPA environment when
 //! selecting a finality target to vote on.
 
+use std::future::Future;
 use std::sync::Arc;
+use std::pin::Pin;
+
+use dyn_clone::DynClone;
 
 use sc_client_api::blockchain::HeaderBackend;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header, NumberFor, One, Zero};
 
+/// A future returned by a `VotingRule` to restrict a given vote, if any restriction is necessary.
+pub type VotingRuleResult<Block> =
+	Pin<Box<dyn Future<Output = Option<(<Block as BlockT>::Hash, NumberFor<Block>)>> + Send + Sync>>;
+
 /// A trait for custom voting rules in GRANDPA.
-pub trait VotingRule<Block, B>: Send + Sync where
+pub trait VotingRule<Block, B>: DynClone + Send + Sync where
 	Block: BlockT,
 	B: HeaderBackend<Block>,
 {
@@ -47,11 +55,11 @@ pub trait VotingRule<Block, B>: Send + Sync where
 	/// execution of voting rules wherein `current_target <= best_target`.
 	fn restrict_vote(
 		&self,
-		backend: &B,
+		backend: Arc<B>,
 		base: &Block::Header,
 		best_target: &Block::Header,
 		current_target: &Block::Header,
-	) -> Option<(Block::Hash, NumberFor<Block>)>;
+	) -> VotingRuleResult<Block>;
 }
 
 impl<Block, B> VotingRule<Block, B> for () where
@@ -60,12 +68,12 @@ impl<Block, B> VotingRule<Block, B> for () where
 {
 	fn restrict_vote(
 		&self,
-		_backend: &B,
+		_backend: Arc<B>,
 		_base: &Block::Header,
 		_best_target: &Block::Header,
 		_current_target: &Block::Header,
-	) -> Option<(Block::Hash, NumberFor<Block>)> {
-		None
+	) -> VotingRuleResult<Block> {
+		Box::pin(async { None })
 	}
 }
 
@@ -80,15 +88,15 @@ impl<Block, B> VotingRule<Block, B> for BeforeBestBlockBy<NumberFor<Block>> wher
 {
 	fn restrict_vote(
 		&self,
-		backend: &B,
+		backend: Arc<B>,
 		_base: &Block::Header,
 		best_target: &Block::Header,
 		current_target: &Block::Header,
-	) -> Option<(Block::Hash, NumberFor<Block>)> {
+	) -> VotingRuleResult<Block> {
 		use sp_arithmetic::traits::Saturating;
 
 		if current_target.number().is_zero() {
-			return None;
+			return Box::pin(async { None });
 		}
 
 		// find the target number restricted by this rule
@@ -96,21 +104,24 @@ impl<Block, B> VotingRule<Block, B> for BeforeBestBlockBy<NumberFor<Block>> wher
 
 		// our current target is already lower than this rule would restrict
 		if target_number >= *current_target.number() {
-			return None;
+			return Box::pin(async { None });
 		}
 
+		let current_target = current_target.clone();
+
 		// find the block at the given target height
-		find_target(
-			backend,
-			target_number,
-			current_target,
-		)
+		Box::pin(std::future::ready(find_target(
+			&*backend,
+			target_number.clone(),
+			&current_target,
+		)))
 	}
 }
 
 /// A custom voting rule that limits votes towards 3/4 of the unfinalized chain,
 /// using the given `base` and `best_target` to figure where the 3/4 target
 /// should fall.
+#[derive(Clone)]
 pub struct ThreeQuartersOfTheUnfinalizedChain;
 
 impl<Block, B> VotingRule<Block, B> for ThreeQuartersOfTheUnfinalizedChain where
@@ -119,11 +130,11 @@ impl<Block, B> VotingRule<Block, B> for ThreeQuartersOfTheUnfinalizedChain where
 {
 	fn restrict_vote(
 		&self,
-		backend: &B,
+		backend: Arc<B>,
 		base: &Block::Header,
 		best_target: &Block::Header,
 		current_target: &Block::Header,
-	) -> Option<(Block::Hash, NumberFor<Block>)> {
+	) -> VotingRuleResult<Block> {
 		// target a vote towards 3/4 of the unfinalized chain (rounding up)
 		let target_number = {
 			let two = NumberFor::<Block>::one() + One::one();
@@ -138,15 +149,15 @@ impl<Block, B> VotingRule<Block, B> for ThreeQuartersOfTheUnfinalizedChain where
 
 		// our current target is already lower than this rule would restrict
 		if target_number >= *current_target.number() {
-			return None;
+			return Box::pin(async { None });
 		}
 
 		// find the block at the given target height
-		find_target(
-			backend,
+		Box::pin(std::future::ready(find_target(
+			&*backend,
 			target_number,
 			current_target,
-		)
+		)))
 	}
 }
 
@@ -195,37 +206,47 @@ impl<B, Block> Clone for VotingRules<B, Block> {
 
 impl<Block, B> VotingRule<Block, B> for VotingRules<Block, B> where
 	Block: BlockT,
-	B: HeaderBackend<Block>,
+	B: HeaderBackend<Block> + 'static,
 {
 	fn restrict_vote(
 		&self,
-		backend: &B,
+		backend: Arc<B>,
 		base: &Block::Header,
 		best_target: &Block::Header,
 		current_target: &Block::Header,
-	) -> Option<(Block::Hash, NumberFor<Block>)> {
-		let restricted_target = self.rules.iter().fold(
-			current_target.clone(),
-			|current_target, rule| {
-				rule.restrict_vote(
-					backend,
-					base,
-					best_target,
-					&current_target,
-				)
+	) -> VotingRuleResult<Block> {
+		let rules = self.rules.clone();
+		let base = base.clone();
+		let best_target = best_target.clone();
+		let current_target = current_target.clone();
+
+		Box::pin(async move {
+			let mut restricted_target = current_target.clone();
+
+			for rule in rules.iter() {
+				if let Some(header) = rule
+					.restrict_vote(backend.clone(), &base, &best_target, &restricted_target)
+					.await
+					.filter(|(_, restricted_number)| {
+						// NOTE: we can only restrict votes within the interval [base, target)
+						restricted_number >= base.number()
+							&& restricted_number < restricted_target.number()
+					})
 					.and_then(|(hash, _)| backend.header(BlockId::Hash(hash)).ok())
 					.and_then(std::convert::identity)
-					.unwrap_or(current_target)
-			},
-		);
+				{
+					restricted_target = header;
+				}
+			}
 
-		let restricted_hash = restricted_target.hash();
+			let restricted_hash = restricted_target.hash();
 
-		if restricted_hash != current_target.hash() {
-			Some((restricted_hash, *restricted_target.number()))
-		} else {
-			None
-		}
+			if restricted_hash != current_target.hash() {
+				Some((restricted_hash, *restricted_target.number()))
+			} else {
+				None
+			}
+		})
 	}
 }
 
@@ -237,7 +258,7 @@ pub struct VotingRulesBuilder<Block, B> {
 
 impl<Block, B> Default for VotingRulesBuilder<Block, B> where
 	Block: BlockT,
-	B: HeaderBackend<Block>,
+	B: HeaderBackend<Block> + 'static,
 {
 	fn default() -> Self {
 		VotingRulesBuilder::new()
@@ -248,7 +269,7 @@ impl<Block, B> Default for VotingRulesBuilder<Block, B> where
 
 impl<Block, B> VotingRulesBuilder<Block, B> where
 	Block: BlockT,
-	B: HeaderBackend<Block>,
+	B: HeaderBackend<Block> + 'static,
 {
 	/// Return a new voting rule builder using the given backend.
 	pub fn new() -> Self {
@@ -285,14 +306,109 @@ impl<Block, B> VotingRulesBuilder<Block, B> where
 impl<Block, B> VotingRule<Block, B> for Box<dyn VotingRule<Block, B>> where
 	Block: BlockT,
 	B: HeaderBackend<Block>,
+	Self: Clone,
 {
 	fn restrict_vote(
 		&self,
-		backend: &B,
+		backend: Arc<B>,
 		base: &Block::Header,
 		best_target: &Block::Header,
 		current_target: &Block::Header,
-	) -> Option<(Block::Hash, NumberFor<Block>)> {
+	) -> VotingRuleResult<Block> {
 		(**self).restrict_vote(backend, base, best_target, current_target)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use sc_block_builder::BlockBuilderProvider;
+	use sp_consensus::BlockOrigin;
+	use sp_runtime::traits::Header as _;
+
+	use substrate_test_runtime_client::{
+		runtime::{Block, Header},
+		Backend, Client, ClientBlockImportExt, DefaultTestClientBuilderExt, TestClientBuilder,
+		TestClientBuilderExt,
+	};
+
+	/// A mock voting rule that subtracts a static number of block from the `current_target`.
+	#[derive(Clone)]
+	struct Subtract(u64);
+	impl VotingRule<Block, Client<Backend>> for Subtract {
+		fn restrict_vote(
+			&self,
+			backend: Arc<Client<Backend>>,
+			_base: &Header,
+			_best_target: &Header,
+			current_target: &Header,
+		) -> VotingRuleResult<Block> {
+			let target_number = current_target.number() - self.0;
+			let res = backend
+				.hash(target_number)
+				.unwrap()
+				.map(|target_hash| (target_hash, target_number));
+
+			Box::pin(std::future::ready(res))
+		}
+	}
+
+	#[test]
+	fn multiple_voting_rules_cannot_restrict_past_base() {
+		// setup an aggregate voting rule composed of two voting rules
+		// where each subtracts 50 blocks from the current target
+		let rule = VotingRulesBuilder::new()
+			.add(Subtract(50))
+			.add(Subtract(50))
+			.build();
+
+		let mut client = Arc::new(TestClientBuilder::new().build());
+
+		for _ in 0..200 {
+			let block = client
+				.new_block(Default::default())
+				.unwrap()
+				.build()
+				.unwrap()
+				.block;
+
+			client.import(BlockOrigin::Own, block).unwrap();
+		}
+
+		let genesis = client
+			.header(&BlockId::Number(0u32.into()))
+			.unwrap()
+			.unwrap();
+
+		let best = client
+			.header(&BlockId::Hash(client.info().best_hash))
+			.unwrap()
+			.unwrap();
+
+		let (_, number) =
+			futures::executor::block_on(rule.restrict_vote(client.clone(), &genesis, &best, &best))
+				.unwrap();
+
+		// we apply both rules which should subtract 100 blocks from best block (#200)
+		// which means that we should be voting for block #100
+		assert_eq!(number, 100);
+
+		let block110 = client
+			.header(&BlockId::Number(110u32.into()))
+			.unwrap()
+			.unwrap();
+
+		let (_, number) = futures::executor::block_on(rule.restrict_vote(
+			client.clone(),
+			&block110,
+			&best,
+			&best,
+		))
+		.unwrap();
+
+		// base block is #110 while best block is #200, applying both rules would make
+		// would make the target block (#100) be lower than the base block, therefore
+		// only one of the rules is applied.
+		assert_eq!(number, 150);
 	}
 }

@@ -1,6 +1,6 @@
 [package]
 name = "sc-chain-spec"
-version = "2.0.1"
+version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
@@ -13,17 +13,17 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sc-chain-spec-derive = { version = "2.0.0", path = "./derive" }
+sc-chain-spec-derive = { version = "3.0.0", path = "./derive" }
 impl-trait-for-tuples = "0.2.1"
-sc-network = { version = "0.8.0", path = "../network" }
-sp-core = { version = "2.0.0", path = "../../primitives/core" }
+sc-network = { version = "0.9.0", path = "../network" }
+sp-core = { version = "3.0.0", path = "../../primitives/core" }
 serde = { version = "1.0.101", features = ["derive"] }
 serde_json = "1.0.41"
-sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
-sp-chain-spec = { version = "2.0.0", path = "../../primitives/chain-spec" }
-sc-telemetry = { version = "2.0.0", path = "../telemetry" }
+sp-runtime = { version = "3.0.0", path = "../../primitives/runtime" }
+sp-chain-spec = { version = "3.0.0", path = "../../primitives/chain-spec" }
+sc-telemetry = { version = "3.0.0", path = "../telemetry" }
 codec = { package = "parity-scale-codec", version = "2.0.0" }
-sc-consensus-babe = { version = "0.8.0-rc6", path = "../consensus/babe" }
-sp-consensus-babe = { version = "0.8.0-rc6", path = "../../primitives/consensus/babe" }
-sc-consensus-epochs = { version = "0.8.0-rc6", path = "../consensus/epochs" }
-sc-finality-grandpa = { version = "0.8.0-rc6", path = "../finality-grandpa" }
+sc-consensus-babe = { version = "0.9.0", path = "../consensus/babe" }
+sp-consensus-babe = { version = "0.9.0", path = "../../primitives/consensus/babe" }
+sc-consensus-epochs = { version = "0.9.0", path = "../consensus/epochs" }
+sc-finality-grandpa = { version = "0.9.0", path = "../finality-grandpa" }

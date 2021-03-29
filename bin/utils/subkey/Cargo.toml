@@ -8,13 +8,13 @@ homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 readme = "README.md"
 
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
 [[bin]]
 path = "src/main.rs"
 name = "subkey"
 
-[package.metadata.docs.rs]
-targets = ["x86_64-unknown-linux-gnu"]
-
 [dependencies]
-sc-cli = { version = "0.8.0", path = "../../../client/cli" }
+sc-cli = { version = "0.9.0", path = "../../../client/cli" }
 structopt = "0.3.14"

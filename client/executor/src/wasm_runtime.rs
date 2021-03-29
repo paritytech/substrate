@@ -414,7 +414,7 @@ mod tests {
 			authoring_version: 1,
 			spec_version: 1,
 			impl_version: 1,
-			apis: sp_api::create_apis_vec!([(Core::<Block, Error = ()>::ID, 1)]),
+			apis: sp_api::create_apis_vec!([(Core::<Block>::ID, 1)]),
 		};
 
 		let version = decode_version(&old_runtime_version.encode()).unwrap();
@@ -429,7 +429,7 @@ mod tests {
 			authoring_version: 1,
 			spec_version: 1,
 			impl_version: 1,
-			apis: sp_api::create_apis_vec!([(Core::<Block, Error = ()>::ID, 3)]),
+			apis: sp_api::create_apis_vec!([(Core::<Block>::ID, 3)]),
 		};
 
 		decode_version(&old_runtime_version.encode()).unwrap_err();
@@ -443,7 +443,7 @@ mod tests {
 			authoring_version: 1,
 			spec_version: 1,
 			impl_version: 1,
-			apis: sp_api::create_apis_vec!([(Core::<Block, Error = ()>::ID, 3)]),
+			apis: sp_api::create_apis_vec!([(Core::<Block>::ID, 3)]),
 			transaction_version: 3,
 		};
 

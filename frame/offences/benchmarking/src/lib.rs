@@ -24,11 +24,14 @@ mod mock;
 use sp_std::prelude::*;
 use sp_std::vec;
 
-use frame_system::{RawOrigin, Module as System, Config as SystemConfig};
-use frame_benchmarking::{benchmarks, account};
+use frame_system::{RawOrigin, Pallet as System, Config as SystemConfig};
+use frame_benchmarking::{benchmarks, account, impl_benchmark_test_suite};
 use frame_support::traits::{Currency, OnInitialize, ValidatorSet, ValidatorSetWithIdentification};
 
-use sp_runtime::{Perbill, traits::{Convert, StaticLookup, Saturating, UniqueSaturatedInto}};
+use sp_runtime::{
+	Perbill,
+	traits::{Convert, StaticLookup, Saturating, UniqueSaturatedInto},
+};
 use sp_staking::offence::{ReportOffence, Offence, OffenceDetails};
 
 use pallet_balances::Config as BalancesConfig;
@@ -39,8 +42,8 @@ use pallet_offences::{Config as OffencesConfig, Module as Offences};
 use pallet_session::historical::{Config as HistoricalConfig, IdentificationTuple};
 use pallet_session::{Config as SessionConfig, SessionManager};
 use pallet_staking::{
-	Module as Staking, Config as StakingConfig, RewardDestination, ValidatorPrefs,
-	Exposure, IndividualExposure, ElectionStatus, MAX_NOMINATIONS, Event as StakingEvent
+	Module as Staking, Config as StakingConfig, RewardDestination, ValidatorPrefs, Exposure,
+	IndividualExposure, Event as StakingEvent,
 };
 
 const SEED: u32 = 0;
@@ -50,7 +53,7 @@ const MAX_OFFENDERS: u32 = 100;
 const MAX_NOMINATORS: u32 = 100;
 const MAX_DEFERRED_OFFENCES: u32 = 100;
 
-pub struct Module<T: Config>(Offences<T>);
+pub struct Pallet<T: Config>(Offences<T>);
 
 pub trait Config:
 	SessionConfig
@@ -227,7 +230,7 @@ fn check_events<T: Config, I: Iterator<Item = <T as SystemConfig>::Event>>(expec
 	}
 
 	if !length_mismatch.is_empty() {
-		panic!(length_mismatch);
+		panic!("{}", length_mismatch);
 	}
 }
 
@@ -236,7 +239,7 @@ benchmarks! {
 		let r in 1 .. MAX_REPORTERS;
 		// we skip 1 offender, because in such case there is no slashing
 		let o in 2 .. MAX_OFFENDERS;
-		let n in 0 .. MAX_NOMINATORS.min(MAX_NOMINATIONS as u32);
+		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::MAX_NOMINATIONS);
 
 		// Make r reporters
 		let mut reporters = vec![];
@@ -310,7 +313,7 @@ benchmarks! {
 	}
 
 	report_offence_grandpa {
-		let n in 0 .. MAX_NOMINATORS.min(MAX_NOMINATIONS as u32);
+		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::MAX_NOMINATIONS);
 
 		// for grandpa equivocation reports the number of reporters
 		// and offenders is always 1
@@ -346,7 +349,7 @@ benchmarks! {
 	}
 
 	report_offence_babe {
-		let n in 0 .. MAX_NOMINATORS.min(MAX_NOMINATIONS as u32);
+		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::MAX_NOMINATIONS);
 
 		// for babe equivocation reports the number of reporters
 		// and offenders is always 1
@@ -386,8 +389,6 @@ benchmarks! {
 		let o = 10;
 		let n = 100;
 
-		Staking::<T>::put_election_status(ElectionStatus::Closed);
-
 		let mut deferred_offences = vec![];
 		let offenders = make_offenders::<T>(o, n)?.0;
 		let offence_details = offenders.into_iter()
@@ -420,19 +421,8 @@ benchmarks! {
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::mock::{new_test_ext, Test};
-	use frame_support::assert_ok;
-
-	#[test]
-	fn test_benchmarks() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_report_offence_im_online::<Test>());
-			assert_ok!(test_benchmark_report_offence_grandpa::<Test>());
-			assert_ok!(test_benchmark_report_offence_babe::<Test>());
-			assert_ok!(test_benchmark_on_initialize::<Test>());
-		});
-	}
-}
+impl_benchmark_test_suite!(
+	Pallet,
+	crate::mock::new_test_ext(),
+	crate::mock::Test,
+);

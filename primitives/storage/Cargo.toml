@@ -1,6 +1,6 @@
 [package]
 name = "sp-storage"
-version = "2.0.1"
+version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 description = "Storage related primitives"
@@ -14,11 +14,11 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-std = { version = "2.0.0", default-features = false, path = "../std" }
+sp-std = { version = "3.0.0", default-features = false, path = "../std" }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 impl-serde = { version = "0.3.1", optional = true }
 ref-cast = "1.0.0"
-sp-debug-derive = { version = "2.0.0", path = "../debug-derive" }
+sp-debug-derive = { version = "3.0.0", path = "../debug-derive" }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 
 [features]

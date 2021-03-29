@@ -18,14 +18,12 @@
 //! Hashing functions.
 //!
 //! This module is gated by `full-crypto` feature. If you intend to use any of the functions
-//! defined here within your runtime, you should most likely rather use [sp_io::hashing] instead,
+//! defined here within your runtime, you should most likely rather use `sp_io::hashing` instead,
 //! unless you know what you're doing. Using `sp_io` will be more performant, since instead of
 //! computing the hash in WASM it delegates that computation to the host client.
 
-use blake2_rfc;
 use sha2::{Digest, Sha256};
 use tiny_keccak::{Hasher, Keccak};
-use twox_hash;
 
 /// Do a Blake2 512-bit hash and place result in `dest`.
 pub fn blake2_512_into(data: &[u8], dest: &mut [u8; 64]) {

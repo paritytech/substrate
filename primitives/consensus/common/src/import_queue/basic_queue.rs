@@ -18,7 +18,7 @@
 use std::{pin::Pin, time::Duration, marker::PhantomData};
 use futures::{prelude::*, task::Context, task::Poll};
 use futures_timer::Delay;
-use sp_runtime::{Justification, traits::{Block as BlockT, Header as HeaderT, NumberFor}};
+use sp_runtime::{Justification, Justifications, traits::{Block as BlockT, Header as HeaderT, NumberFor}};
 use sp_utils::mpsc::{TracingUnboundedSender, tracing_unbounded, TracingUnboundedReceiver};
 use prometheus_endpoint::Registry;
 
@@ -62,7 +62,7 @@ impl<B: BlockT, Transaction: Send + 'static> BasicQueue<B, Transaction> {
 		verifier: V,
 		block_import: BoxBlockImport<B, Transaction>,
 		justification_import: Option<BoxJustificationImport<B>>,
-		spawner: &impl sp_core::traits::SpawnNamed,
+		spawner: &impl sp_core::traits::SpawnEssentialNamed,
 		prometheus_registry: Option<&Registry>,
 	) -> Self {
 		let (result_sender, result_port) = buffered_link::buffered_link();
@@ -83,7 +83,7 @@ impl<B: BlockT, Transaction: Send + 'static> BasicQueue<B, Transaction> {
 			metrics,
 		);
 
-		spawner.spawn_blocking("basic-block-import-worker", future.boxed());
+		spawner.spawn_essential_blocking("basic-block-import-worker", future.boxed());
 
 		Self {
 			justification_sender,
@@ -112,22 +112,24 @@ impl<B: BlockT, Transaction: Send> ImportQueue<B> for BasicQueue<B, Transaction>
 		}
 	}
 
-	fn import_justification(
+	fn import_justifications(
 		&mut self,
 		who: Origin,
 		hash: B::Hash,
 		number: NumberFor<B>,
-		justification: Justification,
+		justifications: Justifications,
 	) {
-		let res = self.justification_sender.unbounded_send(
-			worker_messages::ImportJustification(who, hash, number, justification),
-		);
-
-		if res.is_err() {
-			log::error!(
-				target: "sync",
-				"import_justification: Background import task is no longer alive"
+		for justification in justifications {
+			let res = self.justification_sender.unbounded_send(
+				worker_messages::ImportJustification(who, hash, number, justification),
 			);
+
+			if res.is_err() {
+				log::error!(
+					target: "sync",
+					"import_justification: Background import task is no longer alive"
+				);
+			}
 		}
 	}
 
@@ -164,7 +166,13 @@ async fn block_import_process<B: BlockT, Transaction: Send>(
 	loop {
 		let worker_messages::ImportBlocks(origin, blocks) = match block_import_receiver.next().await {
 			Some(blocks) => blocks,
-			None => return,
+			None => {
+				log::debug!(
+					target: "block-import",
+					"Stopping block import because the import channel was closed!",
+				);
+				return
+			},
 		};
 
 		let res = import_many_blocks(
@@ -236,6 +244,10 @@ impl<B: BlockT> BlockImportWorker<B> {
 				// If the results sender is closed, that means that the import queue is shutting
 				// down and we should end this future.
 				if worker.result_sender.is_closed() {
+					log::debug!(
+						target: "block-import",
+						"Stopping block import because result channel was closed!",
+					);
 					return;
 				}
 
@@ -244,7 +256,13 @@ impl<B: BlockT> BlockImportWorker<B> {
 					match justification {
 						Some(ImportJustification(who, hash, number, justification)) =>
 							worker.import_justification(who, hash, number, justification),
-						None => return,
+						None => {
+							log::debug!(
+								target: "block-import",
+								"Stopping block import because justification channel was closed!",
+							);
+							return
+						},
 					}
 				}
 
@@ -265,7 +283,7 @@ impl<B: BlockT> BlockImportWorker<B> {
 		who: Origin,
 		hash: B::Hash,
 		number: NumberFor<B>,
-		justification: Justification
+		justification: Justification,
 	) {
 		let started = wasm_timer::Instant::now();
 		let success = self.justification_import.as_mut().map(|justification_import| {
@@ -426,7 +444,7 @@ mod tests {
 			&mut self,
 			origin: BlockOrigin,
 			header: Header,
-			_justification: Option<Justification>,
+			_justifications: Option<Justifications>,
 			_body: Option<Vec<Extrinsic>>,
 		) -> Result<(BlockImportParams<Block, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 			Ok((BlockImportParams::new(origin, header), None))
@@ -525,7 +543,7 @@ mod tests {
 					hash,
 					header: Some(header),
 					body: None,
-					justification: None,
+					justifications: None,
 					origin: None,
 					allow_missing_state: false,
 					import_existing: false,
@@ -538,12 +556,11 @@ mod tests {
 
 		let mut import_justification = || {
 			let hash = Hash::random();
-
 			block_on(finality_sender.send(worker_messages::ImportJustification(
 				libp2p::PeerId::random(),
 				hash,
 				1,
-				Vec::new(),
+				(*b"TEST", Vec::new()),
 			)))
 			.unwrap();
 

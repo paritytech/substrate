@@ -23,7 +23,7 @@ use super::*;
 
 use frame_system::RawOrigin;
 use frame_support::traits::{OnInitialize, UnfilteredDispatchable};
-use frame_benchmarking::{benchmarks, account, whitelisted_caller};
+use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
 use sp_runtime::traits::{Bounded, Zero};
 
 use crate::Module as Lottery;
@@ -170,21 +170,8 @@ benchmarks! {
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::mock::{new_test_ext, Test};
-	use frame_support::assert_ok;
-
-	#[test]
-	fn test_benchmarks() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_buy_ticket::<Test>());
-			assert_ok!(test_benchmark_set_calls::<Test>());
-			assert_ok!(test_benchmark_start_lottery::<Test>());
-			assert_ok!(test_benchmark_stop_repeat::<Test>());
-			assert_ok!(test_benchmark_on_initialize_end::<Test>());
-			assert_ok!(test_benchmark_on_initialize_repeat::<Test>());
-		});
-	}
-}
+impl_benchmark_test_suite!(
+	Lottery,
+	crate::mock::new_test_ext(),
+	crate::mock::Test,
+);

@@ -1,6 +1,6 @@
 [package]
 name = "sc-executor-wasmtime"
-version = "0.8.1"
+version = "0.9.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
@@ -17,11 +17,11 @@ log = "0.4.8"
 scoped-tls = "1.0"
 parity-wasm = "0.41.0"
 codec = { package = "parity-scale-codec", version = "2.0.0" }
-sc-executor-common = { version = "0.8.0", path = "../common" }
-sp-wasm-interface = { version = "2.0.0", path = "../../../primitives/wasm-interface" }
-sp-runtime-interface = { version = "2.0.0", path = "../../../primitives/runtime-interface" }
-sp-core = { version = "2.0.0", path = "../../../primitives/core" }
-sp-allocator = { version = "2.0.0", path = "../../../primitives/allocator" }
+sc-executor-common = { version = "0.9.0", path = "../common" }
+sp-wasm-interface = { version = "3.0.0", path = "../../../primitives/wasm-interface" }
+sp-runtime-interface = { version = "3.0.0", path = "../../../primitives/runtime-interface" }
+sp-core = { version = "3.0.0", path = "../../../primitives/core" }
+sp-allocator = { version = "3.0.0", path = "../../../primitives/allocator" }
 wasmtime = "0.22"
 pwasm-utils = "0.14.0"
 
