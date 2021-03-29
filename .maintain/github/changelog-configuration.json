@@ -26,5 +26,5 @@
     "empty_template": "- no changes",
     "max_tags_to_fetch": 200,
     "max_pull_requests": 200,
-    "max_back_track_time_days": 30,
+    "max_back_track_time_days": 30
 }
