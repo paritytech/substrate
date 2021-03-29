@@ -35,7 +35,6 @@ use std::{
 };
 
 use futures::prelude::*;
-use parking_lot::Mutex;
 use log::{debug, trace};
 
 use codec::{Encode, Decode, Codec};
@@ -272,7 +271,7 @@ pub fn build_aura_worker<P, B, C, PF, I, SO, BS, Error>(
 {
 	AuraWorker {
 		client,
-		block_import: Arc::new(Mutex::new(block_import)),
+		block_import,
 		env: proposer_factory,
 		keystore,
 		sync_oracle,
@@ -286,7 +285,7 @@ pub fn build_aura_worker<P, B, C, PF, I, SO, BS, Error>(
 
 struct AuraWorker<C, E, I, P, SO, BS> {
 	client: Arc<C>,
-	block_import: Arc<Mutex<I>>,
+	block_import: I,
 	env: E,
 	keystore: SyncCryptoStorePtr,
 	sync_oracle: SO,
@@ -326,8 +325,8 @@ where
 		"aura"
 	}
 
-	fn block_import(&self) -> Arc<Mutex<Self::BlockImport>> {
-		self.block_import.clone()
+	fn block_import(&mut self) -> &mut Self::BlockImport {
+		&mut self.block_import
 	}
 
 	fn epoch_data(
@@ -805,7 +804,7 @@ mod tests {
 
 		let worker = AuraWorker {
 			client: client.clone(),
-			block_import: Arc::new(Mutex::new(client)),
+			block_import: client,
 			env: environ,
 			keystore: keystore.into(),
 			sync_oracle: DummyOracle.clone(),
@@ -854,7 +853,7 @@ mod tests {
 
 		let mut worker = AuraWorker {
 			client: client.clone(),
-			block_import: Arc::new(Mutex::new(client.clone())),
+			block_import: client.clone(),
 			env: environ,
 			keystore: keystore.into(),
 			sync_oracle: DummyOracle.clone(),

@@ -19,9 +19,9 @@
 //!
 //! The Timestamp pallet provides functionality to get and set the on-chain time.
 //!
-//! - [`timestamp::Config`](./trait.Config.html)
-//! - [`Call`](./enum.Call.html)
-//! - [`Pallet`](./struct.Pallet.html)
+//! - [`Config`]
+//! - [`Call`]
+//! - [`Pallet`]
 //!
 //! ## Overview
 //!

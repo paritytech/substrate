@@ -20,9 +20,9 @@
 //! The Session module allows validators to manage their session keys, provides a function for
 //! changing the session length, and handles session rotation.
 //!
-//! - [`session::Config`](./trait.Config.html)
-//! - [`Call`](./enum.Call.html)
-//! - [`Module`](./struct.Module.html)
+//! - [`Config`]
+//! - [`Call`]
+//! - [`Module`]
 //!
 //! ## Overview
 //!
@@ -442,7 +442,11 @@ decl_storage! {
 			for (account, val, keys) in config.keys.iter().cloned() {
 				<Module<T>>::inner_set_keys(&val, keys)
 					.expect("genesis config must not contain duplicates; qed");
-				assert!(frame_system::Pallet::<T>::inc_consumers(&account).is_ok());
+				assert!(
+					frame_system::Pallet::<T>::inc_consumers(&account).is_ok(),
+					"Account ({:?}) does not exist at genesis to set key. Account not endowed?",
+					account,
+				);
 			}
 
 			let initial_validators_0 = T::SessionManager::new_session(0)

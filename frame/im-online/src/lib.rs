@@ -30,9 +30,9 @@
 //! as the [NetworkState](../../client/offchain/struct.NetworkState.html).
 //! It is submitted as an Unsigned Transaction via off-chain workers.
 //!
-//! - [`im_online::Config`](./trait.Config.html)
-//! - [`Call`](./enum.Call.html)
-//! - [`Module`](./struct.Module.html)
+//! - [`Config`]
+//! - [`Call`]
+//! - [`Module`]
 //!
 //! ## Interface
 //!

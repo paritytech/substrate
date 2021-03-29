@@ -23,17 +23,8 @@
 //! wish to execute some duration prior to execution happens. In this case, the target account may
 //! reject the announcement and in doing so, veto the execution.
 //!
-//! - [`proxy::Config`](./trait.Config.html)
-//! - [`Call`](./enum.Call.html)
-//!
-//! ## Overview
-//!
-//! ## Interface
-//!
-//! ### Dispatchable Functions
-//!
-//! [`Call`]: ./enum.Call.html
-//! [`Config`]: ./trait.Config.html
+//! - [`Config`]
+//! - [`Call`]
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
