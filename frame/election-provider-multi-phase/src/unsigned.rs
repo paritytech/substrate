@@ -73,21 +73,21 @@ impl From<FeasibilityError> for MinerError {
 
 /// Save a given call into OCW storage.
 fn save_solution<T: Config>(call: &Call<T>) {
-	let storage = StorageValueRef::local(&OFFCHAIN_CACHED_CALL);
+	let storage = StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL);
 	storage.set(&call);
 }
 
 /// Get a saved solution from OCW storage if it exists.
 fn restore_solution<T: Config>() -> Result<Call<T>, MinerError> {
-	StorageValueRef::local(&OFFCHAIN_CACHED_CALL)
+	StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL)
 		.get()
 		.flatten()
 		.ok_or(MinerError::NoStoredSolution)
 }
 
 /// Clear a saved solution from OCW storage.
-pub(super) fn kill_solution<T: Config>() {
-	let mut storage = StorageValueRef::local(&OFFCHAIN_CACHED_CALL);
+fn kill_solution<T: Config>() {
+	let mut storage = StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL);
 	storage.clear();
 }
 
@@ -1027,7 +1027,7 @@ mod tests {
 			// remove the cached submitted tx
 			// this ensures that when the resubmit window rolls around, we're ready to regenerate
 			// from scratch if necessary
-			let mut call_cache = StorageValueRef::local(&OFFCHAIN_CACHED_CALL);
+			let mut call_cache = StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL);
 			assert!(matches!(call_cache.get::<Vec<u8>>(), Some(Some(_call))));
 			call_cache.clear();
 

@@ -282,6 +282,6 @@ frame_benchmarking::benchmarks! {
 
 impl_benchmark_test_suite!(
 	MultiPhase,
-	crate::mock::ExtBuilder::default().build_offchainify(0).0,
+	crate::mock::ExtBuilder::default().build(),
 	crate::mock::Runtime,
 );
