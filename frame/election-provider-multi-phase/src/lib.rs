@@ -1098,7 +1098,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn do_elect() -> Result<(Supports<T::AccountId>, Weight), ElectionError> {
-		<QueuedSolution<T>>::take()
+		let result = <QueuedSolution<T>>::take()
 			.map_or_else(
 				|| match T::Fallback::get() {
 					FallbackStrategy::OnChain => Self::onchain_fallback()
@@ -1125,7 +1125,9 @@ impl<T: Config> Pallet<T> {
 					log!(warn, "Failed to finalize election round. reason {:?}", err);
 				}
 				err
-			})
+			});
+		unsigned::kill_solution::<T>();
+		result
 	}
 }
 
@@ -1330,7 +1332,7 @@ mod tests {
 
 	#[test]
 	fn phase_rotation_works() {
-		ExtBuilder::default().build_and_execute(|| {
+		ExtBuilder::default().build_offchainify(0).0.execute_with(|| {
 			// 0 ------- 15 ------- 25 ------- 30 ------- ------- 45 ------- 55 ------- 60
 			//           |           |                            |           |
 			//         Signed      Unsigned                     Signed     Unsigned
@@ -1395,7 +1397,7 @@ mod tests {
 
 	#[test]
 	fn signed_phase_void() {
-		ExtBuilder::default().phases(0, 10).build_and_execute(|| {
+		ExtBuilder::default().phases(0, 10).build_offchainify(0).0.execute_with(|| {
 			roll_to(15);
 			assert!(MultiPhase::current_phase().is_off());
 
@@ -1418,7 +1420,7 @@ mod tests {
 
 	#[test]
 	fn unsigned_phase_void() {
-		ExtBuilder::default().phases(10, 0).build_and_execute(|| {
+		ExtBuilder::default().phases(10, 0).build_offchainify(0).0.execute_with(|| {
 			roll_to(15);
 			assert!(MultiPhase::current_phase().is_off());
 
@@ -1441,7 +1443,7 @@ mod tests {
 
 	#[test]
 	fn both_phases_void() {
-		ExtBuilder::default().phases(0, 0).build_and_execute(|| {
+		ExtBuilder::default().phases(0, 0).build_offchainify(0).0.execute_with(|| {
 			roll_to(15);
 			assert!(MultiPhase::current_phase().is_off());
 
@@ -1464,7 +1466,7 @@ mod tests {
 	#[test]
 	fn early_termination() {
 		// an early termination in the signed phase, with no queued solution.
-		ExtBuilder::default().build_and_execute(|| {
+		ExtBuilder::default().build_offchainify(0).0.execute_with(|| {
 			// signed phase started at block 15 and will end at 25.
 			roll_to(14);
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
@@ -1497,7 +1499,7 @@ mod tests {
 
 	#[test]
 	fn fallback_strategy_works() {
-		ExtBuilder::default().fallback(FallbackStrategy::OnChain).build_and_execute(|| {
+		ExtBuilder::default().fallback(FallbackStrategy::OnChain).build_offchainify(0).0.execute_with(|| {
 			roll_to(15);
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 
@@ -1516,7 +1518,7 @@ mod tests {
 			)
 		});
 
-		ExtBuilder::default().fallback(FallbackStrategy::Nothing).build_and_execute(|| {
+		ExtBuilder::default().fallback(FallbackStrategy::Nothing).build_offchainify(0).0.execute_with(|| {
 			roll_to(15);
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 
@@ -1530,7 +1532,7 @@ mod tests {
 
 	#[test]
 	fn snapshot_creation_fails_if_too_big() {
-		ExtBuilder::default().build_and_execute(|| {
+		ExtBuilder::default().build_offchainify(0).0.execute_with(|| {
 			Targets::set((0..(TargetIndex::max_value() as AccountId) + 1).collect::<Vec<_>>());
 
 			// signed phase failed to open.
