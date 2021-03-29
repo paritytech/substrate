@@ -15,14 +15,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Sudo Module
+//! # Sudo Pallet
 //!
 //! - [`Config`]
 //! - [`Call`]
 //!
 //! ## Overview
 //!
-//! The Sudo module allows for a single account (called the "sudo key")
+//! The Sudo pallet allows for a single account (called the "sudo key")
 //! to execute dispatchable functions that require a `Root` call
 //! or designate a new account to replace them as the sudo key.
 //! Only one account can be the sudo key at a time.
@@ -31,7 +31,7 @@
 //!
 //! ### Dispatchable Functions
 //!
-//! Only the sudo key can call the dispatchable functions from the Sudo module.
+//! Only the sudo key can call the dispatchable functions from the Sudo pallet.
 //!
 //! * `sudo` - Make a `Root` call to a dispatchable function.
 //! * `set_key` - Assign a new account to be the sudo key.
@@ -40,8 +40,8 @@
 //!
 //! ### Executing Privileged Functions
 //!
-//! The Sudo module itself is not intended to be used within other modules.
-//! Instead, you can build "privileged functions" (i.e. functions that require `Root` origin) in other modules.
+//! The Sudo pallet itself is not intended to be used within other pallets.
+//! Instead, you can build "privileged functions" (i.e. functions that require `Root` origin) in other pallets.
 //! You can execute these privileged functions by calling `sudo` with the sudo key account.
 //! Privileged functions cannot be directly executed via an extrinsic.
 //!
@@ -49,35 +49,46 @@
 //!
 //! ### Simple Code Snippet
 //!
-//! This is an example of a module that exposes a privileged function:
+//! This is an example of a pallet that exposes a privileged function:
 //!
 //! ```
-//! use frame_support::{decl_module, dispatch};
-//! use frame_system::ensure_root;
 //!
-//! pub trait Config: frame_system::Config {}
+//! #[frame_support::pallet]
+//! pub mod logger {
+//! 	use frame_support::pallet_prelude::*;
+//! 	use frame_system::pallet_prelude::*;
+//! 	use super::*;
 //!
-//! decl_module! {
-//!     pub struct Module<T: Config> for enum Call where origin: T::Origin {
-//! 		#[weight = 0]
-//!         pub fn privileged_function(origin) -> dispatch::DispatchResult {
+//! 	#[pallet::config]
+//! 	pub trait Config: frame_system::Config {}
+//!
+//! 	#[pallet::pallet]
+//! 	pub struct Pallet<T>(PhantomData<T>);
+//!
+//! 	#[pallet::hooks]
+//! 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+//!
+//! 	#[pallet::call]
+//! 	impl<T: Config> Pallet<T> {
+//! 		#[pallet::weight(0)]
+//!         pub fn privileged_function(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 //!             ensure_root(origin)?;
 //!
 //!             // do something...
 //!
-//!             Ok(())
+//!             Ok(().into())
 //!         }
-//!     }
+//! 	}
 //! }
 //! # fn main() {}
 //! ```
 //!
 //! ## Genesis Config
 //!
-//! The Sudo module depends on the [`GenesisConfig`](./struct.GenesisConfig.html).
+//! The Sudo pallet depends on the [`GenesisConfig`].
 //! You need to set an initial superuser account as the sudo `key`.
 //!
-//! ## Related Modules
+//! ## Related Pallets
 //!
 //! * [Democracy](../pallet_democracy/index.html)
 //!
@@ -89,35 +100,41 @@ use sp_std::prelude::*;
 use sp_runtime::{DispatchResult, traits::StaticLookup};
 
 use frame_support::{
-	Parameter, decl_module, decl_event, decl_storage, decl_error, ensure,
+	weights::GetDispatchInfo,
+	traits::UnfilteredDispatchable,
 };
-use frame_support::{
-	weights::{Weight, GetDispatchInfo, Pays},
-	traits::{UnfilteredDispatchable, Get},
-	dispatch::DispatchResultWithPostInfo,
-};
-use frame_system::ensure_signed;
 
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
 
-pub trait Config: frame_system::Config {
-	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
+pub use pallet::*;
 
-	/// A sudo-able call.
-	type Call: Parameter + UnfilteredDispatchable<Origin=Self::Origin> + GetDispatchInfo;
-}
+#[frame_support::pallet]
+pub mod pallet {
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
+	use super::{*, DispatchResult};
 
-decl_module! {
-	/// Sudo module declaration.
-	pub struct Module<T: Config> for enum Call where origin: T::Origin {
-		type Error = Error<T>;
+	#[pallet::config]
+	pub trait Config: frame_system::Config {
+		/// The overarching event type.
+		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
-		fn deposit_event() = default;
+		/// A sudo-able call.
+		type Call: Parameter + UnfilteredDispatchable<Origin=Self::Origin> + GetDispatchInfo;
+	}
 
+	#[pallet::pallet]
+	#[pallet::generate_store(pub(super) trait Store)]
+	pub struct Pallet<T>(PhantomData<T>);
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {
 		/// Authenticates the sudo key and dispatches a function call with `Root` origin.
 		///
 		/// The dispatch origin for this call must be _Signed_.
@@ -128,17 +145,20 @@ decl_module! {
 		/// - One DB write (event).
 		/// - Weight of derivative `call` execution + 10,000.
 		/// # </weight>
-		#[weight = {
+		#[pallet::weight({
 			let dispatch_info = call.get_dispatch_info();
 			(dispatch_info.weight.saturating_add(10_000), dispatch_info.class)
-		}]
-		fn sudo(origin, call: Box<<T as Config>::Call>) -> DispatchResultWithPostInfo {
+		})]
+		pub(crate) fn sudo(
+			origin: OriginFor<T>,
+			call: Box<<T as Config>::Call>,
+		) -> DispatchResultWithPostInfo {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
 			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
 
 			let res = call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
-			Self::deposit_event(RawEvent::Sudid(res.map(|_| ()).map_err(|e| e.error)));
+			Self::deposit_event(Event::Sudid(res.map(|_| ()).map_err(|e| e.error)));
 			// Sudo user does not pay a fee.
 			Ok(Pays::No.into())
 		}
@@ -153,14 +173,18 @@ decl_module! {
 		/// - O(1).
 		/// - The weight of this call is defined by the caller.
 		/// # </weight>
-		#[weight = (*_weight, call.get_dispatch_info().class)]
-		fn sudo_unchecked_weight(origin, call: Box<<T as Config>::Call>, _weight: Weight) -> DispatchResultWithPostInfo {
+		#[pallet::weight((*_weight, call.get_dispatch_info().class))]
+		pub(crate) fn sudo_unchecked_weight(
+			origin: OriginFor<T>,
+			call: Box<<T as Config>::Call>,
+			_weight: Weight,
+		) -> DispatchResultWithPostInfo {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
 			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
 
 			let res = call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
-			Self::deposit_event(RawEvent::Sudid(res.map(|_| ()).map_err(|e| e.error)));
+			Self::deposit_event(Event::Sudid(res.map(|_| ()).map_err(|e| e.error)));
 			// Sudo user does not pay a fee.
 			Ok(Pays::No.into())
 		}
@@ -174,14 +198,17 @@ decl_module! {
 		/// - Limited storage reads.
 		/// - One DB change.
 		/// # </weight>
-		#[weight = 0]
-		fn set_key(origin, new: <T::Lookup as StaticLookup>::Source) -> DispatchResultWithPostInfo {
+		#[pallet::weight(0)]
+		pub(crate) fn set_key(
+			origin: OriginFor<T>,
+			new: <T::Lookup as StaticLookup>::Source,
+		) -> DispatchResultWithPostInfo {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
 			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
 			let new = T::Lookup::lookup(new)?;
 
-			Self::deposit_event(RawEvent::KeyChanged(Self::key()));
+			Self::deposit_event(Event::KeyChanged(Self::key()));
 			<Key<T>>::put(new);
 			// Sudo user does not pay a fee.
 			Ok(Pays::No.into())
@@ -198,7 +225,7 @@ decl_module! {
 		/// - One DB write (event).
 		/// - Weight of derivative `call` execution + 10,000.
 		/// # </weight>
-		#[weight = {
+		#[pallet::weight({
 			let dispatch_info = call.get_dispatch_info();
 			(
 				dispatch_info.weight
@@ -207,8 +234,9 @@ decl_module! {
 					.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
 				dispatch_info.class,
 			)
-		}]
-		fn sudo_as(origin,
+		})]
+		pub(crate) fn sudo_as(
+			origin: OriginFor<T>,
 			who: <T::Lookup as StaticLookup>::Source,
 			call: Box<<T as Config>::Call>
 		) -> DispatchResultWithPostInfo {
@@ -220,35 +248,55 @@ decl_module! {
 
 			let res = call.dispatch_bypass_filter(frame_system::RawOrigin::Signed(who).into());
 
-			Self::deposit_event(RawEvent::SudoAsDone(res.map(|_| ()).map_err(|e| e.error)));
+			Self::deposit_event(Event::SudoAsDone(res.map(|_| ()).map_err(|e| e.error)));
 			// Sudo user does not pay a fee.
 			Ok(Pays::No.into())
 		}
 	}
-}
 
-decl_event!(
-	pub enum Event<T> where AccountId = <T as frame_system::Config>::AccountId {
+	#[pallet::event]
+	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	#[pallet::metadata(T::AccountId = "AccountId")]
+	pub enum Event<T: Config> {
 		/// A sudo just took place. \[result\]
 		Sudid(DispatchResult),
 		/// The \[sudoer\] just switched identity; the old key is supplied.
-		KeyChanged(AccountId),
+		KeyChanged(T::AccountId),
 		/// A sudo just took place. \[result\]
 		SudoAsDone(DispatchResult),
 	}
-);
 
-decl_storage! {
-	trait Store for Module<T: Config> as Sudo {
-		/// The `AccountId` of the sudo key.
-		Key get(fn key) config(): T::AccountId;
-	}
-}
-
-decl_error! {
-	/// Error for the Sudo module
-	pub enum Error for Module<T: Config> {
+	#[pallet::error]
+	/// Error for the Sudo pallet
+	pub enum Error<T> {
 		/// Sender must be the Sudo account
 		RequireSudo,
+	}
+
+	/// The `AccountId` of the sudo key.
+	#[pallet::storage]
+	#[pallet::getter(fn key)]
+	pub(super) type Key<T: Config> = StorageValue<_, T::AccountId, ValueQuery>;
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config> {
+		/// The `AccountId` of the sudo key.
+		pub key: T::AccountId,
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config> Default for GenesisConfig<T> {
+		fn default() -> Self {
+			Self {
+				key: Default::default(),
+			}
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+		fn build(&self) {
+			<Key<T>>::put(&self.key);
+		}
 	}
 }
