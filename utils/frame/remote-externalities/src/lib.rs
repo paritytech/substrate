@@ -181,23 +181,19 @@ impl<B: BlockT> OnlineConfig<B> {
 /// Configuration of the state snapshot.
 #[derive(Clone)]
 pub struct SnapshotConfig {
-	// TODO: I could mix these two into one filed, but I think separate is better bc one can be
-	// configurable while one not.
-	/// File name.
-	pub name: String,
-	/// Base directory.
-	pub directory: String,
+	/// The path to the snapshot file.
+	pub path: PathBuf,
+}
+
+impl SnapshotConfig {
+	pub fn new<P: Into<PathBuf>>(path: P) -> Self {
+		Self { path: path.into() }
+	}
 }
 
 impl Default for SnapshotConfig {
 	fn default() -> Self {
-		Self { name: "SNAPSHOT".into(), directory: ".".into() }
-	}
-}
-
-impl SnapshotConfig {
-	fn path(&self) -> PathBuf {
-		Path::new(&self.directory).join(self.name.clone())
+		Self { path: Path::new("SNAPSHOT").into() }
 	}
 }
 
@@ -319,12 +315,12 @@ impl<B: BlockT> Builder<B> {
 
 	async fn pre_build(mut self) -> Result<Vec<KeyPair>, &'static str> {
 		let mut base_kv = match self.mode.clone() {
-			Mode::Offline(config) => self.load_state_snapshot(&config.state_snapshot.path())?,
+			Mode::Offline(config) => self.load_state_snapshot(&config.state_snapshot.path)?,
 			Mode::Online(config) => {
 				self.init_remote_client().await?;
 				let kp = self.load_remote().await?;
 				if let Some(c) = config.state_snapshot {
-					self.save_state_snapshot(&kp, &c.path())?;
+					self.save_state_snapshot(&kp, &c.path)?;
 				}
 				kp
 			}
@@ -399,7 +395,7 @@ mod tests {
 		init_logger();
 		Builder::<Block>::new()
 			.mode(Mode::Offline(OfflineConfig {
-				state_snapshot: SnapshotConfig { name: "test_data/proxy_test".into(), ..Default::default() },
+				state_snapshot: SnapshotConfig { path: "test_data/proxy_test".into() },
 			}))
 			.build()
 			.await
