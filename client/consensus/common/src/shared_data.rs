@@ -53,7 +53,7 @@ impl<T> Drop for SharedDataLockedUpgradable<T> {
 
 /// Created by [`SharedData::shared_data_locked`].
 ///
-/// As long as this object isn't dropped, the shared data is hold in a mutex guard and the shared
+/// As long as this object isn't dropped, the shared data is held in a mutex guard and the shared
 /// data is tagged as locked. Access to the shared data is provided through [`Deref`] and
 /// [`DerefMut`]. The trick is to use [`Self::release_mutex`] to release the mutex, but still keep
 /// the shared data locked. This means every other thread trying to access the shared data in this
