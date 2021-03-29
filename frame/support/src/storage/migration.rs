@@ -24,6 +24,132 @@ use crate::hash::ReversibleStorageHasher;
 
 use super::PrefixIterator;
 
+#[deprecated(note="Please use the storage_iter or storage_iter_with_suffix functions instead")]
+/// Utility to iterate through raw items in storage.
+pub struct StorageIterator<T> {
+	prefix: Vec<u8>,
+	previous_key: Vec<u8>,
+	drain: bool,
+	_phantom: ::sp_std::marker::PhantomData<T>,
+}
+
+impl<T> StorageIterator<T> {
+	/// Construct iterator to iterate over map items in `module` for the map called `item`.
+	pub fn new(module: &[u8], item: &[u8]) -> Self {
+		Self::with_suffix(module, item, &[][..])
+	}
+
+	/// Construct iterator to iterate over map items in `module` for the map called `item`.
+	pub fn with_suffix(module: &[u8], item: &[u8], suffix: &[u8]) -> Self {
+		let mut prefix = Vec::new();
+		prefix.extend_from_slice(&Twox128::hash(module));
+		prefix.extend_from_slice(&Twox128::hash(item));
+		prefix.extend_from_slice(suffix);
+		let previous_key = prefix.clone();
+		Self { prefix, previous_key, drain: false, _phantom: Default::default() }
+	}
+
+	/// Mutate this iterator into a draining iterator; items iterated are removed from storage.
+	pub fn drain(mut self) -> Self {
+		self.drain = true;
+		self
+	}
+}
+
+#[deprecated(note="Please use the storage_key_iter or storage_key_iter_with_suffix functions instead")]
+/// Utility to iterate through raw items in storage.
+pub struct StorageKeyIterator<K, T, H: ReversibleStorageHasher> {
+	prefix: Vec<u8>,
+	previous_key: Vec<u8>,
+	drain: bool,
+	_phantom: ::sp_std::marker::PhantomData<(K, T, H)>,
+}
+
+impl<K, T, H: ReversibleStorageHasher> StorageKeyIterator<K, T, H> {
+	/// Construct iterator to iterate over map items in `module` for the map called `item`.
+	pub fn new(module: &[u8], item: &[u8]) -> Self {
+		Self::with_suffix(module, item, &[][..])
+	}
+
+	/// Construct iterator to iterate over map items in `module` for the map called `item`.
+	pub fn with_suffix(module: &[u8], item: &[u8], suffix: &[u8]) -> Self {
+		let mut prefix = Vec::new();
+		prefix.extend_from_slice(&Twox128::hash(module));
+		prefix.extend_from_slice(&Twox128::hash(item));
+		prefix.extend_from_slice(suffix);
+		let previous_key = prefix.clone();
+		Self { prefix, previous_key, drain: false, _phantom: Default::default() }
+	}
+
+	/// Mutate this iterator into a draining iterator; items iterated are removed from storage.
+	pub fn drain(mut self) -> Self {
+		self.drain = true;
+		self
+	}
+}
+
+impl<K: Decode + Sized, T: Decode + Sized, H: ReversibleStorageHasher> Iterator
+	for StorageKeyIterator<K, T, H>
+{
+	type Item = (K, T);
+
+	fn next(&mut self) -> Option<(K, T)> {
+		loop {
+			let maybe_next = sp_io::storage::next_key(&self.previous_key)
+				.filter(|n| n.starts_with(&self.prefix));
+			break match maybe_next {
+				Some(next) => {
+					self.previous_key = next.clone();
+					let mut key_material = H::reverse(&next[self.prefix.len()..]);
+					match K::decode(&mut key_material) {
+						Ok(key) => {
+							let maybe_value = frame_support::storage::unhashed::get::<T>(&next);
+							match maybe_value {
+								Some(value) => {
+									if self.drain {
+										frame_support::storage::unhashed::kill(&next);
+									}
+									Some((key, value))
+								}
+								None => continue,
+							}
+						}
+						Err(_) => continue,
+					}
+				}
+				None => None,
+			}
+		}
+	}
+}
+
+impl<T: Decode + Sized> Iterator for StorageIterator<T> {
+	type Item = (Vec<u8>, T);
+
+	fn next(&mut self) -> Option<(Vec<u8>, T)> {
+		loop {
+			let maybe_next = sp_io::storage::next_key(&self.previous_key)
+				.filter(|n| n.starts_with(&self.prefix));
+			break match maybe_next {
+				Some(next) => {
+					self.previous_key = next.clone();
+					let maybe_value = frame_support::storage::unhashed::get::<T>(&next);
+					match maybe_value {
+						Some(value) => {
+							if self.drain {
+								frame_support::storage::unhashed::kill(&next);
+							}
+							Some((self.previous_key[self.prefix.len()..].to_vec(), value))
+						}
+						None => continue,
+					}
+				}
+				None => None,
+			}
+		}
+	}
+}
+
 /// Construct iterator to iterate over map items in `module` for the map called `item`.
 pub fn storage_iter<T: Decode + Sized>(module: &[u8], item: &[u8]) -> PrefixIterator<(Vec<u8>, T)> {
 	storage_iter_with_suffix(module, item, &[][..])
