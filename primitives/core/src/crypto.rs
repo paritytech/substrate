@@ -588,6 +588,7 @@ ss58_address_format!(
 		(66, "crust", "Crust Network, standard account (*25519).")
 	SocialAccount =>
 		(252, "social-network", "Social Network, standard account (*25519).")
+	// Note: 16384 and above are reserved.
 );
 
 /// Set the default "version" (actually, this is a bit of a misnomer and the version byte is
