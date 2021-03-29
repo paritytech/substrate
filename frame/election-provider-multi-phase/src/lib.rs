@@ -651,13 +651,13 @@ pub mod pallet {
 					log!(info, "initial OCW output at {:?}: {:?}", now, initial_output);
 				}
 				Phase::Unsigned((true, opened)) if opened < now => {
-					if !<QueuedSolution<T>>::exists() {
-						// as long as there is no feasible solution, keep trying to submit ours.
-						// the offchain_lock prevents us from spamming submissions too often.
-						let resubmit_output = Self::try_acquire_offchain_lock(now)
-							.and_then(|_| Self::restore_or_compute_then_submit());
-						log!(info, "resubmit OCW output at {:?}: {:?}", now, resubmit_output);
-					}
+					// keep trying to submit solutions. worst case, we note that the stored solution
+					// is better than our cached/computed one, and decide not to submit after all.
+					//
+					// the offchain_lock prevents us from spamming submissions too often.
+					let resubmit_output = Self::try_acquire_offchain_lock(now)
+						.and_then(|_| Self::restore_or_compute_then_maybe_submit());
+					log!(info, "resubmit OCW output at {:?}: {:?}", now, resubmit_output);
 				}
 				_ => {}
 			}

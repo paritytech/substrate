@@ -86,8 +86,9 @@ fn restore_solution<T: Config>() -> Result<Call<T>, MinerError> {
 }
 
 impl<T: Config> Pallet<T> {
-	/// Attempt to restore a solution from cache. Otherwise, compute it fresh. Either way, submit.
-	pub fn restore_or_compute_then_submit() -> Result<(), MinerError> {
+	/// Attempt to restore a solution from cache. Otherwise, compute it fresh. Either way, submit
+	/// if our call's score is greater than that of the cached solution.
+	pub fn restore_or_compute_then_maybe_submit() -> Result<(), MinerError> {
 		let call = restore_solution::<T>()
 			.and_then(|call| {
 				// ensure the cached call is still current before submitting
@@ -105,7 +106,21 @@ impl<T: Config> Pallet<T> {
 				save_solution(&call);
 				Ok(call)
 			})?;
-		Self::submit_call(call)
+
+		let call_score = match &call {
+			Call::submit_unsigned(solution, _) => solution.score.clone(),
+			_ => Default::default(),
+		};
+
+		if Self::queued_solution().map_or(true, |q: ReadySolution<_>| is_score_better::<Perbill>(
+			call_score,
+			q.score,
+			T::SolutionImprovementThreshold::get()
+		)) {
+			Self::submit_call(call)
+		} else {
+			Ok(())
+		}
 	}
 
 	/// Mine a new solution, cache it, and submit it back to the chain as an unsigned transaction.
