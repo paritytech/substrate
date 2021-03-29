@@ -21,8 +21,8 @@ by running the following command.
 	# rsync -avhn * <destination node-template directory>/
 	```
 
-	The above command only copy existing files from the source to destination, but not deleting
-	files/directories that are removed from the source. So manually check and remove them in the
+	The above command only copies existing files from the source to the destination, but does not delete
+	files/directories that are removed from the source. So you need to manually check and remove them in the
 	destination.
 
 3. There actually are three packages in Node Template, `node-template` (the node), `node-template-runtime`
