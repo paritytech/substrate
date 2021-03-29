@@ -57,6 +57,8 @@ pub enum MinerError {
 	NoStoredSolution,
 	/// Cached solution does not match the current round
 	SolutionOutOfDate,
+	/// Failed to store a solution
+	FailedToStoreSolution,
 }
 
 impl From<sp_npos_elections::Error> for MinerError {
@@ -72,9 +74,13 @@ impl From<FeasibilityError> for MinerError {
 }
 
 /// Save a given call into OCW storage.
-fn save_solution<T: Config>(call: &Call<T>) {
+fn save_solution<T: Config>(call: &Call<T>) -> Result<(), MinerError> {
 	let storage = StorageValueRef::local(&OFFCHAIN_CACHED_CALL);
-	storage.set(&call);
+	match storage.mutate::<_, (), _>(|_| Ok(call.clone())) {
+		Ok(Ok(_)) => Ok(()),
+		Ok(Err(_)) => Err(MinerError::FailedToStoreSolution),
+		Err(_) => unreachable!("mutation function cannot fail; qed"),
+	}
 }
 
 /// Get a saved solution from OCW storage if it exists.
@@ -110,7 +116,7 @@ impl<T: Config> Pallet<T> {
 			.or_else::<MinerError, _>(|_| {
 				// if not present or cache invalidated, regenerate
 				let (call, score) = Self::mine_checked_call()?;
-				save_solution(&call);
+				save_solution(&call)?;
 				Ok((call, score))
 			})?;
 
@@ -128,7 +134,7 @@ impl<T: Config> Pallet<T> {
 	/// Mine a new solution, cache it, and submit it back to the chain as an unsigned transaction.
 	pub fn mine_check_save_submit() -> Result<(), MinerError> {
 		let (call, _) = Self::mine_checked_call()?;
-		save_solution(&call);
+		save_solution(&call)?;
 		Self::submit_call(call)
 	}
 
