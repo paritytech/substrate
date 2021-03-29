@@ -4953,11 +4953,12 @@ dependencies = [
 
 [[package]]
 name = "pallet-example"
-version = "2.0.0"
+version = "3.0.0"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "log",
  "pallet-balances",
  "parity-scale-codec 2.0.1",
  "serde",
