@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Provides the a generic wrapper around shared data. See [`SharedData`] for more information.
+//! Provides a generic wrapper around shared data. See [`SharedData`] for more information.
 
 use std::sync::Arc;
 use parking_lot::{Mutex, MappedMutexGuard, Condvar, MutexGuard};
