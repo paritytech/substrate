@@ -59,7 +59,7 @@ Purge the development chain's state:
 Start the development chain with detailed logging:
 
 ```bash
-RUST_LOG=debug RUST_BACKTRACE=1 ./target/release/node-template -lruntime=debug --dev
+RUST_BACKTRACE=1 ./target/release/node-template -ldebug --dev
 ```
 
 ### Multi-Node Local Testnet

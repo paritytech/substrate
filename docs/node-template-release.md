@@ -28,9 +28,6 @@ by running the following command.
 3. There actually are three packages in Node Template, `node-template` (the node), `node-template-runtime`
 (the runtime), and `pallet-template`, and each has its own `Cargo.toml`. We need to manually update:
 
-	- `[package]` information `authors` updated to `Substrate DevHub <https://github.com/substrate-developer-hub>`.
-	- `[package]` information `repository`updated to
-	`https://github.com/substrate-developer-hub/substrate-node-template/`
 	- Each dependency is listed in expanded form and linked to a certain Substrate commit, such as:
 
 		```toml
