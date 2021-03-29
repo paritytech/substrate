@@ -53,9 +53,9 @@ by running the following command.
 4. Once the three `Cargo.toml`s are updated, compile and confirm that the Node Template builds. Then
 commit the changes to a new branch in [Substrate Node Template](https://github.com/substrate-developer-hub/substrate-node-template), and make a PR.
 
-	> Notice there are chances the code in Substrate Node Template works with the linked Substrate git
-	commit, but not with published packages due to the latest unpublished (yet) features. In this case,
-	resume that section of Node Template to its previous version to ensure Node Template builds.
+	> Note that there is a chance the code in Substrate Node Template works with the linked Substrate git
+	commit but not with published packages due to the latest (as yet) unpublished features. In this case,
+	rollback that section of the Node Template to its previous version to ensure the Node Template builds.
 
 5. Once the PR is merged, tag the merged commit in master branch with the version number
 `vX.Y.Z+A` (e.g. `v3.0.0+1`). The `X`(major), `Y`(minor), and `Z`(patch) version number should
