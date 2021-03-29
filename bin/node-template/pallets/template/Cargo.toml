@@ -34,6 +34,4 @@ std = [
 ]
 
 runtime-benchmarks = ["frame-benchmarking"]
-# Note: frame-support `try-runtime` feature is released after v3.
-#   Uncomment the following line when `frame-support` version > `3.0.0`.
-# try-runtime = ["frame-support/try-runtime"]
+try-runtime = ["frame-support/try-runtime"]
