@@ -368,6 +368,15 @@ pub trait Executable<T: Config>: Sized {
 	/// The code hash of the executable.
 	fn code_hash(&self) -> &CodeHash<T>;
 
+	/// Size of the instrumented code in bytes.
+	fn code_len(&self) -> u32;
+
+	/// Sum of instrumented and pristine code len.
+	fn aggregate_code_len(&self) -> u32;
+
+	// The number of contracts using this executable.
+	fn refcount(&self) -> u32;
+
 	/// The storage that is occupied by the instrumented executable and its pristine source.
 	///
 	/// The returned size is already divided by the number of users who share the code.
@@ -378,16 +387,12 @@ pub trait Executable<T: Config>: Sized {
 	/// This works with the current in-memory value of refcount. When calling any contract
 	/// without refetching this from storage the result can be inaccurate as it might be
 	/// working with a stale value. Usually this inaccuracy is tolerable.
-	fn occupied_storage(&self) -> u32;
-
-	/// Size of the instrumented code in bytes.
-	fn code_len(&self) -> u32;
-
-	/// Sum of instrumented and pristine code len.
-	fn aggregate_code_len(&self) -> u32;
-
-	// The number of contracts using this executable.
-	fn refcount(&self) -> u32;
+	fn occupied_storage(&self) -> u32 {
+		// We disregard the size of the struct itself as the size is completely
+		// dominated by the code size.
+		let len = self.aggregate_code_len();
+		len.checked_div(self.refcount()).unwrap_or(len)
+	}
 }
 
 pub struct ExecutionContext<'a, T: Config + 'a, E> {
@@ -1139,10 +1144,6 @@ mod tests {
 
 		fn code_hash(&self) -> &CodeHash<Test> {
 			&self.code_hash
-		}
-
-		fn occupied_storage(&self) -> u32 {
-			0
 		}
 
 		fn code_len(&self) -> u32 {

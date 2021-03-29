@@ -220,13 +220,6 @@ where
 		&self.code_hash
 	}
 
-	fn occupied_storage(&self) -> u32 {
-		// We disregard the size of the struct itself as the size is completely
-		// dominated by the code size.
-		let len = self.aggregate_code_len();
-		len.checked_div(self.refcount as u32).unwrap_or(len)
-	}
-
 	fn code_len(&self) -> u32 {
 		self.code.len() as u32
 	}
