@@ -115,7 +115,7 @@ pub enum ExistenceRequirement {
 }
 
 /// Status of funds.
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, scale_info::TypeInfo)]
 pub enum BalanceStatus {
 	/// Funds are free, as corresponding to `free` item in Balances.
 	Free,
@@ -164,5 +164,5 @@ pub trait AssetId: FullCodec + Copy + Default + Eq + PartialEq {}
 impl<T: FullCodec + Copy + Default + Eq + PartialEq> AssetId for T {}
 
 /// Simple amalgamation trait to collect together properties for a Balance under one roof.
-pub trait Balance: AtLeast32BitUnsigned + FullCodec + Copy + Default {}
-impl<T: AtLeast32BitUnsigned + FullCodec + Copy + Default> Balance for T {}
+pub trait Balance: AtLeast32BitUnsigned + FullCodec + Copy + Default + scale_info::TypeInfo {}
+impl<T: AtLeast32BitUnsigned + FullCodec + Copy + Default + scale_info::TypeInfo> Balance for T {}
