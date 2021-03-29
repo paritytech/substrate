@@ -1206,8 +1206,8 @@ decl_module! {
 		}
 
 		fn on_initialize(_now: T::BlockNumber) -> Weight {
-			// just return the weight of the on_finalize
-			T::DbWeight::get().reads_writes(1, 1)
+			// just return the weight of the on_finalize.
+			T::DbWeight::get().reads(1)
 		}
 
 		fn on_finalize() {
