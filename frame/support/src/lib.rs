@@ -102,8 +102,8 @@ pub enum Never {}
 /// // generate a double map from `(u32, u32)` (with hasher `Twox64Concat`) to `Vec<u8>`
 /// generate_storage_alias!(
 ///		OtherPrefix, OtherStorageName => DoubleMap<
-/// 		(T::AccountId, u32),
-/// 		(T::AccountId, u32),
+/// 		(u32, u32),
+/// 		(u32, u32),
 /// 		Vec<u8>
 ///		>
 /// );
