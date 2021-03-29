@@ -104,7 +104,7 @@ impl<T: Config> Pallet<T> {
 		id: T::AssetId,
 		who: &T::AccountId,
 		amount: T::Balance,
-		f: DecreaseFlags,
+		f: DebitFlags,
 	) -> WithdrawConsequence<T::Balance> {
 		use WithdrawConsequence::*;
 		let details = match Asset::<T>::get(id) {
@@ -153,7 +153,7 @@ impl<T: Config> Pallet<T> {
 	pub(super) fn reducible_balance(
 		id: T::AssetId,
 		who: &T::AccountId,
-		f: DecreaseFlags,
+		f: DebitFlags,
 	) -> Result<T::Balance, Error<T>> {
 		let details = match Asset::<T>::get(id) {
 			Some(details) => details,
@@ -205,10 +205,10 @@ impl<T: Config> Pallet<T> {
 	) -> Result<T::Balance, DispatchError> {
 		let actual = Self::reducible_balance(id, target, f.into())?
 			.min(amount);
-		ensure!(f.best_effort || actual >= amount, Error::<T>::BalanceLow);
+		ensure!(actual >= amount, Error::<T>::BalanceLow);
 
 		let conseq = Self::can_decrease(id, target, actual, f.into());
-		let actual = match conseq.into_result() {
+		let actual = match conseq.into_result(false) {
 			Ok(dust) => actual.saturating_add(dust), //< guaranteed by reducible_balance
 			Err(e) => {
 				debug_assert!(false, "passed from reducible_balance; qed");
@@ -398,7 +398,7 @@ impl<T: Config> Pallet<T> {
 		dest: &T::AccountId,
 		amount: T::Balance,
 		maybe_need_admin: Option<T::AccountId>,
-		f: TransferFlags,
+		death: WhenDust,
 	) -> Result<T::Balance, DispatchError> {
 		// Early exist if no-op.
 		if amount.is_zero() {
@@ -407,8 +407,8 @@ impl<T: Config> Pallet<T> {
 		}
 
 		// Figure out the debit and credit, together with side-effects.
-		let debit = Self::prep_debit(id, &source, amount, f.into())?;
-		let (credit, maybe_burn) = Self::prep_credit(id, &dest, amount, debit, f.burn_dust)?;
+		let debit = Self::prep_debit(id, &source, amount, death.into())?;
+		let (credit, maybe_burn) = Self::prep_credit(id, &dest, amount, debit, death.dispose())?;
 
 		let mut source_account = Account::<T>::get(id, &source);
 

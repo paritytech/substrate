@@ -149,7 +149,7 @@ use codec::{Encode, Decode, HasCompact};
 use frame_support::{
 	ensure, dispatch::{DispatchError, DispatchResult}, traits::{
 		Currency, ReservableCurrency, BalanceStatus::Reserved, StoredMap, tokens::{
-			WithdrawConsequence, DepositConsequence, fungibles, FrozenBalance,
+			WithdrawConsequence, DepositConsequence, fungibles, FrozenBalance, WhenDust
 		},
 	},
 };
@@ -535,7 +535,7 @@ pub mod pallet {
 		///
 		/// Bails with `BalanceZero` if the `who` is already dead.
 		///
-		/// - `id`: The identifier of the asset to have some amount burned.
+		/// - `id`: The identifier of the asset to have some amount slashed.
 		/// - `who`: The account to be debited from.
 		/// - `amount`: The maximum amount by which `who`'s balance should be reduced.
 		///
@@ -544,8 +544,8 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		/// Modes: Post-existence of `who`; Pre & post Zombie-status of `who`.
-		#[pallet::weight(T::WeightInfo::burn())]
-		pub(super) fn burn(
+		#[pallet::weight(T::WeightInfo::slash())]
+		pub(super) fn slash(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
 			who: <T::Lookup as StaticLookup>::Source,
@@ -554,7 +554,8 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let who = T::Lookup::lookup(who)?;
 
-			let f = DebitFlags { keep_alive: false, best_effort: true, ignore_freezer: false };
+			let f = DebitFlags { keep_alive: false, ignore_freezer: false };
+			let amount = amount.min(Self::reducible_balance(id, &who, f)?);
 			let burned = Self::do_burn(id, &who, amount, Some(origin), f)?;
 			Self::deposit_event(Event::Burned(id, who, burned));
 			Ok(())
@@ -583,17 +584,12 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
 			target: <T::Lookup as StaticLookup>::Source,
-			#[pallet::compact] amount: T::Balance
+			#[pallet::compact] amount: T::Balance,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(target)?;
 
-			let f = TransferFlags {
-				keep_alive: false,
-				best_effort: false,
-				burn_dust: false
-			};
-			Self::do_transfer(id, &origin, &dest, amount, None, f).map(|_| ())
+			Self::do_transfer(id, &origin, &dest, amount, None, WhenDust::Credit).map(|_| ())
 		}
 
 		/// Move some assets from the sender account to another, keeping the sender account alive.
@@ -623,13 +619,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let source = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(target)?;
-
-			let f = TransferFlags {
-				keep_alive: true,
-				best_effort: false,
-				burn_dust: false
-			};
-			Self::do_transfer(id, &source, &dest, amount, None, f).map(|_| ())
+			Self::do_transfer(id, &source, &dest, amount, None, WhenDust::KeepAlive).map(|_| ())
 		}
 
 		/// Move some assets from one account to another.
@@ -662,13 +652,7 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let source = T::Lookup::lookup(source)?;
 			let dest = T::Lookup::lookup(dest)?;
-
-			let f = TransferFlags {
-				keep_alive: false,
-				best_effort: false,
-				burn_dust: false
-			};
-			Self::do_transfer(id, &source, &dest, amount, Some(origin), f).map(|_| ())
+			Self::do_transfer(id, &source, &dest, amount, Some(origin), WhenDust::Credit).map(|_| ())
 		}
 
 		/// Disallow further unprivileged transfers from an account.
@@ -1221,12 +1205,7 @@ pub mod pallet {
 				let mut approved = maybe_approved.take().ok_or(Error::<T>::Unapproved)?;
 				let remaining = approved.amount.checked_sub(&amount).ok_or(Error::<T>::Unapproved)?;
 
-				let f = TransferFlags {
-					keep_alive: false,
-					best_effort: false,
-					burn_dust: false
-				};
-				Self::do_transfer(id, &key.owner, &destination, amount, None, f)?;
+				Self::do_transfer(id, &key.owner, &destination, amount, None, WhenDust::Credit)?;
 
 				if remaining.is_zero() {
 					T::Currency::unreserve(&key.owner, approved.deposit);

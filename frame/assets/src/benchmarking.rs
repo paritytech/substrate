@@ -175,7 +175,7 @@ benchmarks! {
 		assert_last_event::<T>(Event::Issued(Default::default(), caller, amount).into());
 	}
 
-	burn {
+	slash {
 		let amount = T::Balance::from(100u32);
 		let (caller, caller_lookup) = create_default_minted_asset::<T>(true, amount);
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), caller_lookup, amount)

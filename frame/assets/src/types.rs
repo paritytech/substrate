@@ -126,56 +126,19 @@ pub struct DestroyWitness {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
-pub(super) struct TransferFlags {
-	/// The debited account must stay alive at the end of the operation; an error is returned if
-	/// this cannot be achieved legally.
-	pub(super) keep_alive: bool,
-	/// Less than the amount specified needs be debited by the operation for it to be considered
-	/// successful. If `false`, then the amount debited will always be at least the amount
-	/// specified.
-	pub(super) best_effort: bool,
-	/// Any additional funds debited (due to minimum balance requirements) should be burned rather
-	/// than credited to the destination account.
-	pub(super) burn_dust: bool,
-}
-
-#[derive(Copy, Clone, PartialEq, Eq)]
 pub(super) struct DebitFlags {
 	/// The debited account must stay alive at the end of the operation; an error is returned if
 	/// this cannot be achieved legally.
 	pub(super) keep_alive: bool,
-	/// Less than the amount specified needs be debited by the operation for it to be considered
-	/// successful. If `false`, then the amount debited will always be at least the amount
-	/// specified.
-	pub(super) best_effort: bool,
 	/// Ignore the freezer. Don't set this to true unless you actually are the underlying freezer.
 	pub(super) ignore_freezer: bool,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub(super) struct DecreaseFlags {
-	/// The debited account must stay alive at the end of the operation; an error is returned if
-	/// this cannot be achieved legally.
-	pub(super) keep_alive: bool,
-	/// Ignore the freezer. Don't set this to true unless you actually are the underlying freezer.
-	pub(super) ignore_freezer: bool,
-}
-
-impl From<TransferFlags> for DebitFlags {
-	fn from(f: TransferFlags) -> Self {
+impl From<WhenDust> for DebitFlags {
+	fn from(death: WhenDust) -> Self {
 		Self {
-			keep_alive: f.keep_alive,
-			best_effort: f.best_effort,
+			keep_alive: death.keep_alive(),
 			ignore_freezer: false,
-		}
-	}
-}
-
-impl From<DebitFlags> for DecreaseFlags {
-	fn from(f: DebitFlags) -> Self {
-		Self {
-			keep_alive: f.keep_alive,
-			ignore_freezer: f.ignore_freezer,
 		}
 	}
 }

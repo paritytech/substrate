@@ -96,7 +96,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> {
 		asset: Self::AssetId,
 		who: &AccountId,
 		value: Self::Balance,
-		//TODO: liveness: ExistenceRequirement,
+		keep_alive: bool,
 	) -> Result<CreditOf<AccountId, Self>, DispatchError>;
 
 	/// The balance of `who` is increased in order to counter `credit`. If the whole of `credit`
@@ -129,11 +129,11 @@ pub trait Balanced<AccountId>: Inspect<AccountId> {
 	fn settle(
 		who: &AccountId,
 		debt: DebtOf<AccountId, Self>,
-		//TODO: liveness: ExistenceRequirement,
+		keep_alive: bool,
 	) -> Result<CreditOf<AccountId, Self>, DebtOf<AccountId, Self>> {
 		let amount = debt.peek();
 		let asset = debt.asset();
-		let credit = match Self::withdraw(asset, who, amount) {
+		let credit = match Self::withdraw(asset, who, amount, keep_alive) {
 			Err(_) => return Err(debt),
 			Ok(d) => d,
 		};
@@ -163,6 +163,9 @@ pub trait Balanced<AccountId>: Inspect<AccountId> {
 pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 	/// Set the `asset` balance of `who` to `amount`. If this cannot be done for some reason (e.g.
 	/// because the account cannot be created or an overflow) then an `Err` is returned.
+	///
+	/// This only needs to be implemented if `decrease_balance` and `increase_balance` are left
+	/// to their default implementations.
 	fn set_balance(asset: Self::AssetId, who: &AccountId, amount: Self::Balance) -> DispatchResult;
 
 	/// Set the total issuance of `asset` to `amount`.
@@ -173,9 +176,10 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 	///
 	/// Minimum balance will be respected and the returned imbalance may be up to
 	/// `Self::minimum_balance() - 1` greater than `amount`.
-	fn decrease_balance(asset: Self::AssetId, who: &AccountId, amount: Self::Balance)
+	fn decrease_balance(asset: Self::AssetId, who: &AccountId, amount: Self::Balance, keep_alive: bool)
 		-> Result<Self::Balance, DispatchError>
 	{
+		Self::can_withdraw(asset, who, amount).into_result(keep_alive)?;
 		let old_balance = Self::balance(asset, who);
 		let (mut new_balance, mut amount) = if old_balance < amount {
 			Err(TokenError::NoFunds)?
@@ -191,49 +195,13 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 		Ok(amount)
 	}
 
-	/// Reduce the `asset` balance of `who` by the most that is possible, up to `amount`.
-	///
-	/// Minimum balance will be respected and the returned imbalance may be up to
-	/// `Self::minimum_balance() - 1` greater than `amount`.
-	///
-	/// Return the imbalance by which the account was reduced.
-	fn decrease_balance_at_most(asset: Self::AssetId, who: &AccountId, amount: Self::Balance)
-		-> Self::Balance
-	{
-		let old_balance = Self::balance(asset, who);
-		let (mut new_balance, mut amount) = if old_balance < amount {
-			(Zero::zero(), old_balance)
-		} else {
-			(old_balance - amount, amount)
-		};
-		let minimum_balance = Self::minimum_balance(asset);
-		if new_balance < minimum_balance {
-			amount = amount.saturating_add(new_balance);
-			new_balance = Zero::zero();
-		}
-		let mut r = Self::set_balance(asset, who, new_balance);
-		if r.is_err() {
-			// Some error, probably because we tried to destroy an account which cannot be destroyed.
-			if new_balance.is_zero() && amount >= minimum_balance {
-				new_balance = minimum_balance;
-				amount -= minimum_balance;
-				r = Self::set_balance(asset, who, new_balance);
-			}
-			if r.is_err() {
-				// Still an error. Apparently it's not possible to reduce at all.
-				amount = Zero::zero();
-			}
-		}
-		amount
-	}
-
 	/// Increase the `asset` balance of `who` by `amount`. If it cannot be increased by that amount
 	/// for some reason, return `Err` and don't increase it at all. If Ok, return the imbalance.
 	///
 	/// Minimum balance will be respected and an error will be returned if
 	/// `amount < Self::minimum_balance()` when the account of `who` is zero.
 	fn increase_balance(asset: Self::AssetId, who: &AccountId, amount: Self::Balance)
-		-> Result<Self::Balance, DispatchError>
+		-> Result<(), DispatchError>
 	{
 		let old_balance = Self::balance(asset, who);
 		let new_balance = old_balance.checked_add(&amount).ok_or(TokenError::Overflow)?;
@@ -243,30 +211,38 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 		if old_balance != new_balance {
 			Self::set_balance(asset, who, new_balance)?;
 		}
-		Ok(amount)
+		Ok(())
+	}
+
+	/// Reduce the `asset` balance of `who` by the most that is possible, up to `amount`.
+	///
+	/// Minimum balance will be respected and the returned amount may be up to
+	/// `Self::minimum_balance() - 1` greater than `amount`.
+	///
+	/// Return the amount by which the account was reduced.
+	///
+	/// NOTE: This contains a default implementation that should be sufficient in most
+	/// circumstances.
+	fn decrease_balance_at_most(asset: Self::AssetId, who: &AccountId, amount: Self::Balance, keep_alive: bool)
+		-> Self::Balance
+	{
+		let amount = amount.min(Self::reducible_balance(asset, who, keep_alive));
+		Self::decrease_balance(asset, who, amount, keep_alive).unwrap_or(Zero::zero())
 	}
 
 	/// Increase the `asset` balance of `who` by the most that is possible, up to `amount`.
 	///
-	/// Minimum balance will be respected and the returned imbalance will be zero in the case that
+	/// Minimum balance will be respected and the returned amount will be zero in the case that
 	/// `amount < Self::minimum_balance()`.
 	///
-	/// Return the imbalance by which the account was increased.
+	/// Return the amount by which the account was increased.
+	///
+	/// NOTE: This contains a default implementation that should be sufficient in most
+	/// circumstances.
 	fn increase_balance_at_most(asset: Self::AssetId, who: &AccountId, amount: Self::Balance)
 		-> Self::Balance
 	{
-		let old_balance = Self::balance(asset, who);
-		let mut new_balance = old_balance.saturating_add(amount);
-		let mut amount = new_balance - old_balance;
-		if new_balance < Self::minimum_balance(asset) {
-			new_balance = Zero::zero();
-			amount = Zero::zero();
-		}
-		if old_balance == new_balance || Self::set_balance(asset, who, new_balance).is_ok() {
-			amount
-		} else {
-			Zero::zero()
-		}
+		Self::increase_balance(asset, who, amount).map_or(Zero::zero(), |_| amount)
 	}
 }
 
@@ -348,7 +324,7 @@ impl<AccountId, U: Unbalanced<AccountId>> Balanced<AccountId> for U {
 		who: &AccountId,
 		amount: Self::Balance,
 	) -> (Credit<AccountId, Self>, Self::Balance) {
-		let slashed = U::decrease_balance_at_most(asset, who, amount);
+		let slashed = U::decrease_balance_at_most(asset, who, amount, false);
 		// `slashed` could be less than, greater than or equal to `amount`.
 		// If slashed == amount, it means the account had at least amount in it and it could all be
 		//   removed without a problem.
@@ -363,16 +339,16 @@ impl<AccountId, U: Unbalanced<AccountId>> Balanced<AccountId> for U {
 		who: &AccountId,
 		amount: Self::Balance
 	) -> Result<Debt<AccountId, Self>, DispatchError> {
-		let increase = U::increase_balance(asset, who, amount)?;
-		Ok(debt(asset, increase))
+		U::increase_balance(asset, who, amount)?;
+		Ok(debt(asset, amount))
 	}
 	fn withdraw(
 		asset: Self::AssetId,
 		who: &AccountId,
 		amount: Self::Balance,
-		//TODO: liveness: ExistenceRequirement,
+		keep_alive: bool,
 	) -> Result<Credit<AccountId, Self>, DispatchError> {
-		let decrease = U::decrease_balance(asset, who, amount)?;
+		let decrease = U::decrease_balance(asset, who, amount, keep_alive)?;
 		Ok(credit(asset, decrease))
 	}
 }

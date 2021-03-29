@@ -43,7 +43,7 @@ impl<T: Config> fungibles::Inspect<<T as SystemConfig>::AccountId> for Pallet<T>
 		who: &<T as SystemConfig>::AccountId,
 		keep_alive: bool,
 	) -> Self::Balance {
-		let f = DecreaseFlags { keep_alive, ignore_freezer: false };
+		let f = DebitFlags { keep_alive, ignore_freezer: false };
 		Pallet::<T>::reducible_balance(asset, who, f).unwrap_or(Zero::zero())
 	}
 
@@ -60,7 +60,7 @@ impl<T: Config> fungibles::Inspect<<T as SystemConfig>::AccountId> for Pallet<T>
 		who: &<T as SystemConfig>::AccountId,
 		amount: Self::Balance,
 	) -> WithdrawConsequence<Self::Balance> {
-		let f = DecreaseFlags { keep_alive: false, ignore_freezer: false };
+		let f = DebitFlags { keep_alive: false, ignore_freezer: false };
 		Pallet::<T>::can_decrease(asset, who, amount, f)
 	}
 }
@@ -71,7 +71,7 @@ impl<T: Config> fungibles::InspectWithoutFreezer<<T as SystemConfig>::AccountId>
 		who: &<T as SystemConfig>::AccountId,
 		keep_alive: bool,
 	) -> Self::Balance {
-		let f = DecreaseFlags { keep_alive, ignore_freezer: true };
+		let f = DebitFlags { keep_alive, ignore_freezer: true };
 		Pallet::<T>::reducible_balance(asset, who, f).unwrap_or(Zero::zero())
 	}
 
@@ -80,7 +80,7 @@ impl<T: Config> fungibles::InspectWithoutFreezer<<T as SystemConfig>::AccountId>
 		who: &<T as SystemConfig>::AccountId,
 		amount: Self::Balance,
 	) -> WithdrawConsequence<Self::Balance> {
-		let f = DecreaseFlags { keep_alive: false, ignore_freezer: true };
+		let f = DebitFlags { keep_alive: false, ignore_freezer: true };
 		Pallet::<T>::can_decrease(asset, who, amount, f)
 	}
 }
@@ -99,24 +99,7 @@ impl<T: Config> fungibles::Mutate<<T as SystemConfig>::AccountId> for Pallet<T> 
 		who: &<T as SystemConfig>::AccountId,
 		amount: Self::Balance,
 	) -> Result<Self::Balance, DispatchError> {
-		let f = DebitFlags {
-			keep_alive: false,
-			best_effort: false,
-			ignore_freezer: false,
-		};
-		Self::do_burn(asset, who, amount, None, f)
-	}
-
-	fn slash(
-		asset: Self::AssetId,
-		who: &<T as SystemConfig>::AccountId,
-		amount: Self::Balance,
-	) -> Result<Self::Balance, DispatchError> {
-		let f = DebitFlags {
-			keep_alive: false,
-			best_effort: true,
-			ignore_freezer: false,
-		};
+		let f = DebitFlags { keep_alive: false, ignore_freezer: false };
 		Self::do_burn(asset, who, amount, None, f)
 	}
 }
@@ -127,14 +110,9 @@ impl<T: Config> fungibles::Transfer<T::AccountId> for Pallet<T> {
 		source: &T::AccountId,
 		dest: &T::AccountId,
 		amount: T::Balance,
-		keep_alive: bool,
+		death: WhenDust,
 	) -> Result<T::Balance, DispatchError> {
-		let f = TransferFlags {
-			keep_alive,
-			best_effort: false,
-			burn_dust: false
-		};
-		Self::do_transfer(asset, source, dest, amount, None, f)
+		Self::do_transfer(asset, source, dest, amount, None, death)
 	}
 }
 
@@ -147,31 +125,15 @@ impl<T: Config> fungibles::Unbalanced<T::AccountId> for Pallet<T> {
 			asset.supply = amount
 		});
 	}
-	fn decrease_balance(asset: T::AssetId, who: &T::AccountId, amount: Self::Balance)
+	fn decrease_balance(asset: T::AssetId, who: &T::AccountId, amount: Self::Balance, keep_alive: bool)
 		-> Result<Self::Balance, DispatchError>
 	{
-		let f = DebitFlags { keep_alive: false, best_effort: false, ignore_freezer: false };
+		let f = DebitFlags { keep_alive, ignore_freezer: false };
 		Self::decrease_balance(asset, who, amount, f, |_, _| Ok(()))
-	}
-	fn decrease_balance_at_most(asset: T::AssetId, who: &T::AccountId, amount: Self::Balance)
-		-> Self::Balance
-	{
-		let f = DebitFlags { keep_alive: false, best_effort: true, ignore_freezer: false };
-		Self::decrease_balance(asset, who, amount, f, |_, _| Ok(()))
-			.unwrap_or(Zero::zero())
 	}
 	fn increase_balance(asset: T::AssetId, who: &T::AccountId, amount: Self::Balance)
-		-> Result<Self::Balance, DispatchError>
+		-> DispatchResult
 	{
-		Self::increase_balance(asset, who, amount, |_| Ok(()))?;
-		Ok(amount)
-	}
-	fn increase_balance_at_most(asset: T::AssetId, who: &T::AccountId, amount: Self::Balance)
-		-> Self::Balance
-	{
-		match Self::increase_balance(asset, who, amount, |_| Ok(())) {
-			Ok(()) => amount,
-			Err(_) => Zero::zero(),
-		}
+		Self::increase_balance(asset, who, amount, |_| Ok(()))
 	}
 }

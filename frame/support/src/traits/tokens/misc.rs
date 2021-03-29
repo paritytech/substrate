@@ -53,32 +53,17 @@ pub enum WithdrawConsequence<Balance> {
 impl<Balance: Zero> WithdrawConsequence<Balance> {
 	/// Convert the type into a `Result` with `TokenError` as the error or the additional `Balance`
 	/// by which the account will be reduced.
-	pub fn into_result(self) -> Result<Balance, TokenError> {
+	pub fn into_result(self, keep_alive: bool) -> Result<Balance, TokenError> {
 		use WithdrawConsequence::*;
 		match self {
-			NoFunds => Err(TokenError::NoFunds),
-			WouldDie => Err(TokenError::WouldDie),
-			UnknownAsset => Err(TokenError::UnknownAsset),
-			Underflow => Err(TokenError::Underflow),
-			Overflow => Err(TokenError::Overflow),
-			Frozen => Err(TokenError::Frozen),
-			ReducedToZero(result) => Ok(result),
 			Success => Ok(Zero::zero()),
-		}
-	}
-
-	/// Convert the type into a `Result` with `TokenError` as the error. An error will be returned
-	/// if the account were to be destroyed.
-	pub fn into_result_keep_alive(self) -> Result<(), TokenError> {
-		use WithdrawConsequence::*;
-		match self {
-			NoFunds => Err(TokenError::NoFunds),
+			ReducedToZero(result) if !keep_alive => Ok(result),
 			WouldDie | ReducedToZero(_) => Err(TokenError::WouldDie),
 			UnknownAsset => Err(TokenError::UnknownAsset),
 			Underflow => Err(TokenError::Underflow),
 			Overflow => Err(TokenError::Overflow),
 			Frozen => Err(TokenError::Frozen),
-			Success => Ok(()),
+			NoFunds => Err(TokenError::NoFunds),
 		}
 	}
 }
@@ -138,6 +123,28 @@ pub enum BalanceStatus {
 	/// Funds are reserved, as corresponding to `reserved` item in Balances.
 	Reserved,
 }
+
+/// When happens if/when a debited account has been reduced below the dust threshold (aka "minimum
+/// balance" or "existential deposit").
+#[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug)]
+pub enum WhenDust {
+	/// Operation must not result in the account going out of existence.
+	KeepAlive,
+	/// Any dust resulting from the deletion of the debited account should be disposed of.
+	Dispose,
+	/// Any dust resulting from the deletion of the debited account should be added to the
+	/// resulting credit.
+	Credit,
+}
+
+impl WhenDust {
+	/// Return `true` if the account balance should be disposed of should it fall below minimum.
+	pub fn dispose(self) -> bool { matches!(self, WhenDust::Dispose) }
+
+	/// Return `true` if the account balance should neve be allowed to fall below minimum.
+	pub fn keep_alive(self) -> bool { matches!(self, WhenDust::KeepAlive) }
+}
+
 
 /// Trait for allowing a minimum balance on the account to be specified, beyond the
 /// `minimum_balance` of the asset. This is additive - the `minimum_balance` of the asset must be

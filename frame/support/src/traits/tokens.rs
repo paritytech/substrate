@@ -24,6 +24,6 @@ pub mod imbalance;
 mod misc;
 pub use misc::{
 	WithdrawConsequence, DepositConsequence, ExistenceRequirement, BalanceStatus, WithdrawReasons,
-	FrozenBalance,
+	FrozenBalance, WhenDust,
 };
 pub use imbalance::Imbalance;
