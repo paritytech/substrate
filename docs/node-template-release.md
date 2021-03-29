@@ -2,7 +2,7 @@
 
 1. This release process has to be run in a github checkout Substrate directory with your work
 committed into `https://github.com/paritytech/substrate/`, because the build script will check
-the existence of your current git commit ID in the repository.
+the existence of your current git commit ID in the remote repository.
 
 	Assume you are in root directory of Substrate. Run:
 
@@ -30,7 +30,7 @@ by running the following command.
 3. There are actually three packages in the Node Template, `node-template` (the node),
 `node-template-runtime` (the runtime), and `pallet-template`, and each has its own `Cargo.toml`.
 Inside these three files, dependencies are listed in expanded form and linked to a certain git
-commit in Substrate repository, such as:
+commit in Substrate remote repository, such as:
 
 	```toml
 	[dev-dependencies.sp-core]
