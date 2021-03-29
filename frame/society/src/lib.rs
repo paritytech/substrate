@@ -272,7 +272,7 @@ type BalanceOf<T, I> = <<T as Config<I>>::Currency as Currency<<T as system::Con
 type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
 
 /// The module's configuration trait.
-pub trait Config<I=DefaultInstance>: system::Config {
+pub trait Config<I = DefaultInstance>: system::Config {
 	/// The overarching event type.
 	type Event: From<Event<Self, I>> + Into<<Self as system::Config>::Event>;
 
@@ -316,6 +316,9 @@ pub trait Config<I=DefaultInstance>: system::Config {
 
 	/// The number of blocks between membership challenges.
 	type ChallengePeriod: Get<Self::BlockNumber>;
+
+	/// The maximum number of candidates that we accept per round.
+	type MaxCandidateIntake: Get<u32>;
 }
 
 /// A vote by a member on a candidate application.
@@ -497,6 +500,9 @@ decl_module! {
 		/// The societies's module id
 		const ModuleId: ModuleId = T::ModuleId::get();
 
+		/// Maximum candidate intake per round.
+		const MaxCandidateIntake: u32 = T::MaxCandidateIntake::get();
+
 		// Used for handling module events.
 		fn deposit_event() = default;
 
@@ -584,7 +590,8 @@ decl_module! {
 					// no reason that either should fail.
 					match b.remove(pos).kind {
 						BidKind::Deposit(deposit) => {
-							let _ = T::Currency::unreserve(&who, deposit);
+							let err_amount = T::Currency::unreserve(&who, deposit);
+							debug_assert!(err_amount.is_zero());
 						}
 						BidKind::Vouch(voucher, _) => {
 							<Vouching<T, I>>::remove(&voucher);
@@ -1235,7 +1242,8 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 			let Bid { who: popped, kind, .. } = bids.pop().expect("b.len() > 1000; qed");
 			match kind {
 				BidKind::Deposit(deposit) => {
-					let _ = T::Currency::unreserve(&popped, deposit);
+					let err_amount = T::Currency::unreserve(&popped, deposit);
+					debug_assert!(err_amount.is_zero());
 				}
 				BidKind::Vouch(voucher, _) => {
 					<Vouching<T, I>>::remove(&voucher);
@@ -1402,7 +1410,8 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 					Self::bump_payout(winner, maturity, total_slash);
 				} else {
 					// Move the slashed amount back from payouts account to local treasury.
-					let _ = T::Currency::transfer(&Self::payouts(), &Self::account_id(), total_slash, AllowDeath);
+					let res = T::Currency::transfer(&Self::payouts(), &Self::account_id(), total_slash, AllowDeath);
+					debug_assert!(res.is_ok());
 				}
 			}
 
@@ -1413,7 +1422,8 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 
 				// this should never fail since we ensure we can afford the payouts in a previous
 				// block, but there's not much we can do to recover if it fails anyway.
-				let _ = T::Currency::transfer(&Self::account_id(), &Self::payouts(), total_payouts, AllowDeath);
+				let res = T::Currency::transfer(&Self::account_id(), &Self::payouts(), total_payouts, AllowDeath);
+				debug_assert!(res.is_ok());
 			}
 
 			// if at least one candidate was accepted...
@@ -1514,7 +1524,8 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 			BidKind::Deposit(deposit) => {
 				// In the case that a normal deposit bid is accepted we unreserve
 				// the deposit.
-				let _ = T::Currency::unreserve(candidate, deposit);
+				let err_amount = T::Currency::unreserve(candidate, deposit);
+				debug_assert!(err_amount.is_zero());
 				value
 			}
 			BidKind::Vouch(voucher, tip) => {
@@ -1615,11 +1626,11 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 	/// May be empty.
 	pub fn take_selected(
 		members_len: usize,
-		pot: BalanceOf<T, I>
+		pot: BalanceOf<T, I>,
 	) -> Vec<Bid<T::AccountId, BalanceOf<T, I>>> {
 		let max_members = MaxMembers::<I>::get() as usize;
-		// No more than 10 will be returned.
-		let mut max_selections: usize = 10.min(max_members.saturating_sub(members_len));
+		let mut max_selections: usize =
+			(T::MaxCandidateIntake::get() as usize).min(max_members.saturating_sub(members_len));
 
 		if max_selections > 0 {
 			// Get the number of left-most bidders whose bids add up to less than `pot`.
