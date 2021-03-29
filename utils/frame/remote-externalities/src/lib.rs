@@ -395,7 +395,7 @@ mod tests {
 		init_logger();
 		Builder::<Block>::new()
 			.mode(Mode::Offline(OfflineConfig {
-				state_snapshot: SnapshotConfig { name: "test_data/proxy_test".into(), ..Default::default() },
+				state_snapshot: SnapshotConfig { path: "test_data/proxy_test".into() },
 			}))
 			.build()
 			.await
