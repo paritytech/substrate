@@ -173,7 +173,7 @@ pub struct NewFullBase {
 }
 
 /// Creates a full service from the configuration.
-pub async fn new_full_base(
+pub fn new_full_base(
 	mut config: Configuration,
 	with_startup_data: impl FnOnce(
 		&sc_consensus_babe::BabeBlockImport<Block, FullClient, FullGrandpaBlockImport>,
@@ -194,8 +194,7 @@ pub async fn new_full_base(
 
 	if let Some(uri) = &config.keystore_remote {
 		use tee_keystore::TEEKeystore;
-		let keystore = TEEKeystore::new(&uri)
-			.await
+		let keystore = TEEKeystore::deferred(&uri)
 			.map_err(|e| format!("Failed to connect to remote keystore: {:?}", e))
 			.map_err(ServiceError::Other)?;
 
@@ -362,9 +361,9 @@ pub async fn new_full_base(
 }
 
 /// Builds a new service for a full client.
-pub async fn new_full(config: Configuration)
+pub fn new_full(config: Configuration)
 -> Result<TaskManager, ServiceError> {
-	new_full_base(config, |_, _| ()).await.map(|NewFullBase { task_manager, .. }| {
+	new_full_base(config, |_, _| ()).map(|NewFullBase { task_manager, .. }| {
 		task_manager
 	})
 }
