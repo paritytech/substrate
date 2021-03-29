@@ -9798,6 +9798,7 @@ dependencies = [
  "sp-keyring",
  "sp-keystore",
  "sp-runtime",
+ "sp-timestamp",
  "test-runner",
 ]
 

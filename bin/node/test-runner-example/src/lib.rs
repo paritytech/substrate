@@ -58,6 +58,10 @@ impl ChainInfo for NodeTemplateChainInfo {
 		Self::SelectChain,
 	>;
 	type SignedExtras = node_runtime::SignedExtra;
+	type InherentDataProviders = (
+		sp_timestamp::InherentDataProvider,
+		sp_consensus_babe::inherents::InherentDataProvider,
+	);
 
 	fn signed_extras(from: <Self::Runtime as frame_system::Config>::AccountId) -> Self::SignedExtras {
 		(
@@ -79,8 +83,11 @@ impl ChainInfo for NodeTemplateChainInfo {
 			Arc<TFullBackend<Self::Block>>,
 			SyncCryptoStorePtr,
 			TaskManager,
-			Box<CreateInherentDataProviders>,
-			Box<dyn CreateInherentDataProviders<Self::Block, ()>>,
+			Box<dyn CreateInherentDataProviders<
+				Self::Block,
+				(),
+				InherentDataProviders = Self::InherentDataProviders
+			>>,
 			Option<
 				Box<
 					dyn ConsensusDataProvider<
@@ -111,8 +118,9 @@ impl ChainInfo for NodeTemplateChainInfo {
 				None
 			)?;
 
+		let slot_duration = sc_consensus_babe::Config::get_or_compute(&*client)?;
 		let (block_import, babe_link) = sc_consensus_babe::block_import(
-			sc_consensus_babe::Config::get_or_compute(&*client)?,
+			slot_duration.clone(),
 			grandpa_block_import,
 			client.clone(),
 		)?;
@@ -130,7 +138,18 @@ impl ChainInfo for NodeTemplateChainInfo {
 			backend,
 			keystore.sync_keystore(),
 			task_manager,
-			inherent_providers,
+			Box::new(move |_, _| {
+				let slot_duration = slot_duration.clone();
+				async move {
+					let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
+					let slot = sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_duration(
+						*timestamp,
+						slot_duration.slot_duration(),
+					);
+
+					Ok((timestamp, slot))
+				}
+			}),
 			Some(Box::new(consensus_data_provider)),
 			select_chain,
 			block_import,

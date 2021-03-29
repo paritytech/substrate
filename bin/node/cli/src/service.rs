@@ -583,7 +583,7 @@ mod tests {
 	};
 	use node_primitives::{Block, DigestItem, Signature};
 	use node_runtime::{BalancesCall, Call, UncheckedExtrinsic, Address};
-	use node_runtime::constants::{currency::CENTS, time::SLOT_DURATION};
+	use node_runtime::constants::currency::CENTS;
 	use codec::Encode;
 	use sp_core::{
 		crypto::Pair as CryptoPair,
@@ -604,6 +604,7 @@ mod tests {
 	use sp_transaction_pool::{MaintainedTransactionPool, ChainEvent};
 	use sc_client_api::BlockBackend;
 	use sc_keystore::LocalKeystore;
+	use sp_inherents::InherentDataProvider;
 
 	type AccountPublic = <Signature as Verify>::Signer;
 
@@ -633,7 +634,7 @@ mod tests {
 			|config| {
 				let mut setup_handles = None;
 				let NewFullBase {
-					task_manager, inherent_data_providers, client, network, transaction_pool, ..
+					task_manager, client, network, transaction_pool, ..
 				} = new_full_base(config,
 					|
 						block_import: &sc_consensus_babe::BabeBlockImport<Block, _, _>,
@@ -646,17 +647,13 @@ mod tests {
 				let node = sc_service_test::TestNetComponents::new(
 					task_manager, client, network, transaction_pool
 				);
-				Ok((node, (inherent_data_providers, setup_handles.unwrap())))
+				Ok((node, setup_handles.unwrap()))
 			},
 			|config| {
 				let (keep_alive, _, client, network, transaction_pool) = new_light_base(config)?;
 				Ok(sc_service_test::TestNetComponents::new(keep_alive, client, network, transaction_pool))
 			},
-			|service, &mut (ref inherent_data_providers, (ref mut block_import, ref babe_link))| {
-				let mut inherent_data = inherent_data_providers
-					.create_inherent_data()
-					.expect("Creates inherent data.");
-
+			|service, &mut (ref mut block_import, ref babe_link)| {
 				let parent_id = BlockId::number(service.client().chain_info().best_number);
 				let parent_header = service.client().header(&parent_id).unwrap().unwrap();
 				let parent_hash = parent_header.hash();
@@ -691,7 +688,6 @@ mod tests {
 				// even though there's only one authority some slots might be empty,
 				// so we must keep trying the next slots until we can claim one.
 				let babe_pre_digest = loop {
-					inherent_data.replace_data(sp_timestamp::INHERENT_IDENTIFIER, &(slot * SLOT_DURATION));
 					if let Some(babe_pre_digest) = sc_consensus_babe::test_helpers::claim_slot(
 						slot.into(),
 						&parent_header,
@@ -704,6 +700,11 @@ mod tests {
 
 					slot += 1;
 				};
+
+				let inherent_data = (
+					sp_timestamp::InherentDataProvider::from_system_time(),
+					sp_consensus_babe::inherents::InherentDataProvider::new(slot.into()),
+				).create_inherent_data().expect("Creates inherent data");
 
 				digest.push(<DigestItem as CompatibleDigestItem>::babe_pre_digest(babe_pre_digest));
 

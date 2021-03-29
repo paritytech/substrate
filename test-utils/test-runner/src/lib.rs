@@ -297,7 +297,7 @@ pub trait ChainInfo: Sized {
 					Self::Block,
 					(),
 					InherentDataProviders = Self::InherentDataProviders
-				> + Send + Sync
+				>
 			>,
 			Option<
 				Box<
