@@ -17,9 +17,10 @@
 
 //! Stuff to do with the runtime's storage.
 
+use sp_core::storage::ChildInfo;
 use sp_std::prelude::*;
 use codec::{FullCodec, FullEncode, Encode, EncodeLike, Decode};
-use crate::hash::{Twox128, StorageHasher};
+use crate::hash::{Twox128, StorageHasher, ReversibleStorageHasher};
 use sp_runtime::generic::{Digest, DigestItem};
 pub use sp_runtime::TransactionOutcome;
 
@@ -533,6 +534,103 @@ impl<T> Iterator for PrefixIterator<T> {
 	fn next(&mut self) -> Option<Self::Item> {
 		loop {
 			let maybe_next = sp_io::storage::next_key(&self.previous_key)
+				.filter(|n| n.starts_with(&self.prefix));
+			break match maybe_next {
+				Some(next) => {
+					self.previous_key = next;
+					let raw_value = match unhashed::get_raw(&self.previous_key) {
+						Some(raw_value) => raw_value,
+						None => {
+							log::error!(
+								"next_key returned a key with no value at {:?}",
+								self.previous_key,
+							);
+							continue
+						}
+					};
+					if self.drain {
+						unhashed::kill(&self.previous_key)
+					}
+					let raw_key_without_prefix = &self.previous_key[self.prefix.len()..];
+					let item = match (self.closure)(raw_key_without_prefix, &raw_value[..]) {
+						Ok(item) => item,
+						Err(e) => {
+							log::error!(
+								"(key, value) failed to decode at {:?}: {:?}",
+								self.previous_key,
+								e,
+							);
+							continue
+						}
+					};
+
+					Some(item)
+				}
+				None => None,
+			}
+		}
+	}
+}
+
+/// Iterate over a prefix of a child trie and decode raw_key and raw_value into `T`.
+///
+/// If any decoding fails it skips the key and continues to the next one.
+pub struct ChildTriePrefixIterator<T> {
+	prefix: Vec<u8>,
+	/// Storage key of the child trie
+	storage_key: Vec<u8>,
+	previous_key: Vec<u8>,
+	/// If true then values are removed while iterating
+	drain: bool,
+	/// Function that takes `(raw_key_without_prefix, raw_value)` and decode `T`.
+	/// `raw_key_without_prefix` is the raw storage key without the prefix iterated on.
+	closure: fn(&[u8], &[u8]) -> Result<T, codec::Error>,
+}
+
+impl<T> ChildTriePrefixIterator<T> {
+	/// Mutate this iterator into a draining iterator; items iterated are removed from storage.
+	pub fn drain(mut self) -> Self {
+		self.drain = true;
+		self
+	}
+}
+
+impl<T: Decode + Sized> ChildTriePrefixIterator<(Vec<u8>, T)> {
+	/// Construct iterator to iterate over child trie items in `child_info` with the prefix `prefix`.
+	pub fn with_storage(child_info: &ChildInfo, prefix: &[u8]) -> Self {
+		let prefix = prefix.to_vec();
+		let previous_key = prefix.clone();
+		let closure = |raw_key_without_prefix: &[u8], raw_value: &[u8]| {
+			let value = T::decode(&mut &raw_value[..])?;
+			Ok((raw_key_without_prefix.to_vec(), value))
+		};
+
+		Self { prefix, storage_key: child_info.storage_key().to_vec(), previous_key, drain: false, closure }
+	}
+}
+
+impl<K: Decode + Sized, T: Decode + Sized> ChildTriePrefixIterator<(K, T)> {
+	/// Construct iterator to iterate over child trie items in `child_info` with the prefix `prefix`.
+	pub fn with_storage_key<H: ReversibleStorageHasher>(child_info: &ChildInfo, prefix: &[u8]) -> Self {
+		let prefix = prefix.to_vec();
+		let previous_key = prefix.clone();
+		let closure = |raw_key_without_prefix: &[u8], raw_value: &[u8]| {
+			let mut key_material = H::reverse(raw_key_without_prefix);
+			let key = K::decode(&mut key_material)?;
+			let value = T::decode(&mut &raw_value[..])?;
+			Ok((key, value))
+		};
+
+		Self { prefix, storage_key: child_info.storage_key().to_vec(), previous_key, drain: false, closure }
+	}
+}
+
+impl<T> Iterator for ChildTriePrefixIterator<T> {
+	type Item = T;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		loop {
+			let maybe_next = sp_io::default_child_storage::next_key(&self.storage_key, &self.previous_key)
 				.filter(|n| n.starts_with(&self.prefix));
 			break match maybe_next {
 				Some(next) => {
