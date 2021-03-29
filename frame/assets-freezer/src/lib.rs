@@ -21,44 +21,30 @@
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
-/*
-pub mod weights;
-#[cfg(feature = "runtime-benchmarks")]
-mod benchmarking;
-#[cfg(test)]
+
+/*#[cfg(test)]
 pub mod mock;
 #[cfg(test)]
-mod tests;
-*/
+mod tests;*/
+
 use sp_std::prelude::*;
-use sp_runtime::{
-	RuntimeDebug, TokenError, traits::{
-		AtLeast32BitUnsigned, Zero, StaticLookup, Saturating, CheckedSub, CheckedAdd,
-		StoredMapError,
-	}
-};
-use codec::{Encode, Decode, HasCompact};
+use sp_runtime::{TokenError, traits::{Zero, Saturating}};
 use frame_support::{ensure, dispatch::{DispatchError, DispatchResult}};
 use frame_support::traits::{
-	Currency, ReservableCurrency, BalanceStatus::Reserved, StoredMap, tokens::{
+	StoredMap, tokens::{
 		WithdrawConsequence, DepositConsequence, fungibles, FrozenBalance, WhenDust
 }};
 use frame_system::Config as SystemConfig;
 
 //pub use weights::WeightInfo;
 pub use pallet::*;
-use frame_benchmarking::frame_support::dispatch::result::Result::{Err, Ok};
-use frame_benchmarking::frame_support::traits::fungibles::{Unbalanced, Inspect};
 
 type BalanceOf<T> = <<T as Config>::Assets as fungibles::Inspect<<T as SystemConfig>::AccountId>>::Balance;
 type AssetIdOf<T> = <<T as Config>::Assets as fungibles::Inspect<<T as SystemConfig>::AccountId>>::AssetId;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_support::{
-		dispatch::DispatchResult,
-		pallet_prelude::*,
-	};
+	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 	use super::*;
 
@@ -89,9 +75,6 @@ pub mod pallet {
 
 		/// Place to store the fast-access freeze data for the given asset/account.
 		type Store: StoredMap<(AssetIdOf<Self>, Self::AccountId), FreezeData<BalanceOf<Self>>>;
-
-//		/// Weight information for extrinsics in this pallet.
-//		type WeightInfo: WeightInfo;
 	}
 
 	//
@@ -115,7 +98,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
 
-	// Only admin calls.
+	// No calls.
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {}
 }
@@ -247,6 +230,8 @@ impl<T: Config> fungibles::MutateHold<<T as SystemConfig>::AccountId> for Pallet
 			&(asset, who.clone()),
 			|extra| extra.reserved = extra.reserved.saturating_add(amount),
 		)?;
+
+		Self::deposit_event(Event::Held(asset, who.clone(), amount));
 		Ok(())
 	}
 
@@ -260,6 +245,9 @@ impl<T: Config> fungibles::MutateHold<<T as SystemConfig>::AccountId> for Pallet
 				extra.reserved = extra.reserved.saturating_sub(amount);
 				let actual = old - extra.reserved;
 				ensure!(best_effort || actual == amount, TokenError::NoFunds);
+
+				Self::deposit_event(Event::Released(asset, who.clone(), actual));
+
 				Ok(actual)
 			} else {
 				Err(TokenError::NoFunds)?
@@ -330,9 +318,9 @@ impl<T: Config> Pallet<T> {
 		amount: BalanceOf<T>,
 		best_effort: bool,
 	) -> Result<BalanceOf<T>, DispatchError> {
-		use fungibles::{InspectHold, Transfer, InspectWithoutFreezer};
+		use fungibles::Inspect;
 
-		let min_balance = <Self as fungibles::Inspect<_>>::minimum_balance(asset);
+		let min_balance = Self::minimum_balance(asset);
 
 		T::Store::try_mutate_exists(
 			&(asset, source.clone()),
@@ -347,14 +335,14 @@ impl<T: Config> Pallet<T> {
 
 				// actual is how much we can unreserve. now we check that the balance actually
 				// exists in the account.
-				let balance_left = <Self as fungibles::Inspect<_>>::balance(asset, source)
+				let balance_left = Self::balance(asset, source)
 					.saturating_sub(min_balance);
 				ensure!(balance_left >= actual, TokenError::NoFunds);
 
 				// the balance for the reserved amount actually exists. now we check that it's
 				// possible to actually transfer it out. practically, the only reason this would
 				// fail is if the asset class or account is completely frozen.
-				<Self as fungibles::Inspect<_>>::can_withdraw(asset, source, actual)
+				Self::can_withdraw(asset, source, actual)
 					.into_result(true)?;
 
 				// all good. we should now be able to unreserve and transfer without any error.
