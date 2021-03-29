@@ -1,8 +1,10 @@
-# Node Template Release Process
+# Substrate Node Template Release Process
 
-1. It has to be in a github checkout directory with your current work committed into
-`https://github.com/paritytech/substrate/`, because this is where the build script will check out
-from. Assume you are in root directory of Substrate. Run:
+1. This release process has to be run in a github checkout Substrate directory with your work
+committed into `https://github.com/paritytech/substrate/`, because the build script will check
+the existence of your current git commit ID in the repository.
+
+	Assume you are in root directory of Substrate. Run:
 
 	```bash
 	cd .maintain/
@@ -21,31 +23,31 @@ by running the following command.
 	# rsync -avhn * <destination node-template directory>/
 	```
 
-	The above command only copies existing files from the source to the destination, but does not delete
-	files/directories that are removed from the source. So you need to manually check and remove them in the
-	destination.
+	The above command only copies existing files from the source to the destination, but does not
+	delete files/directories that are removed from the source. So you need to manually check and
+	remove them in the destination.
 
-3. There actually are three packages in Node Template, `node-template` (the node), `node-template-runtime`
-(the runtime), and `pallet-template`, and each has its own `Cargo.toml`. We need to manually update:
+3. There are actually three packages in the Node Template, `node-template` (the node),
+`node-template-runtime` (the runtime), and `pallet-template`, and each has its own `Cargo.toml`.
+Inside these three files, dependencies are listed in expanded form and linked to a certain git
+commit in Substrate repository, such as:
 
-	- Each dependency is listed in expanded form and linked to a certain Substrate commit, such as:
+	```toml
+	[dev-dependencies.sp-core]
+	default-features = false
+	git = 'https://github.com/paritytech/substrate.git'
+	rev = 'c1fe59d060600a10eebb4ace277af1fee20bad17'
+	version = '3.0.0'
+	```
 
-		```toml
-		[dev-dependencies.sp-core]
-		default-features = false
-		git = 'https://github.com/paritytech/substrate.git'
-		rev = 'c1fe59d060600a10eebb4ace277af1fee20bad17'
-		version = '3.0.0'
-		```
+	We will update each of them to the shortened form and link them to the Rust
+	[crate registry](https://crates.io/). After confirming the versioned package is published in
+	the crate, the above will become:
 
-		We will update each of them to the shortened form and linked to the Rust
-		[crate registry](https://crates.io/). After confirming the versioned package is published in
-		the crate, the above will become:
-
-		```toml
-		[dev-dependencies]
-		sp-core = { version = '3.0.0', default-features = false }
-		```
+	```toml
+	[dev-dependencies]
+	sp-core = { version = '3.0.0', default-features = false }
+	```
 
 	P.S: This step can be automated if we update `node-template-release` package in
 	`.maintain/node-template-release`.
