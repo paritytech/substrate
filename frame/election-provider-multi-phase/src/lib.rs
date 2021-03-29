@@ -231,7 +231,10 @@ use sp_runtime::{
 	DispatchError, PerThing, Perbill, RuntimeDebug, SaturatedConversion,
 	traits::Bounded,
 };
-use sp_std::prelude::*;
+use sp_std::{
+	convert::{TryFrom, TryInto},
+	prelude::*,
+};
 use sp_arithmetic::{
 	UpperOf,
 	traits::{Zero, CheckedAdd},
@@ -516,7 +519,9 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type Event: From<Event<Self>> +
+			IsType<<Self as frame_system::Config>::Event> +
+			TryFrom<<Self as frame_system::Config>::Event>;
 
 		/// Currency type.
 		type Currency: ReservableCurrency<Self::AccountId> + Currency<Self::AccountId>;
@@ -660,6 +665,17 @@ pub mod pallet {
 					log!(info, "resubmit OCW output at {:?}: {:?}", now, resubmit_output);
 				}
 				_ => {}
+			}
+			// after election finalization, clear OCW solution storage
+			if <frame_system::Pallet<T>>::events()
+				.into_iter()
+				.filter_map(|event_record| event_record.event.try_into().ok())
+				.find(|event| {
+					matches!(event, Event::ElectionFinalized(_))
+				})
+				.is_some()
+			{
+				unsigned::kill_solution();
 			}
 		}
 
