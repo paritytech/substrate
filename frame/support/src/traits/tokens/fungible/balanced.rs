@@ -55,14 +55,11 @@ pub trait Balanced<AccountId>: Inspect<AccountId> {
 	///
 	/// This is just the same as burning and issuing the same amount and has no effect on the
 	/// total issuance.
-	fn pair(amount: Self::Balance)
-			-> (DebtOf<AccountId, Self>, CreditOf<AccountId, Self>)
-	{
+	fn pair(amount: Self::Balance) -> (DebtOf<AccountId, Self>, CreditOf<AccountId, Self>) {
 		(Self::rescind(amount), Self::issue(amount))
 	}
 
-	/// Deducts up to `value` from the combined balance of `who`, preferring to deduct from the
-	/// free balance. This function cannot fail.
+	/// Deducts up to `value` from the combined balance of `who`. This function cannot fail.
 	///
 	/// The resulting imbalance is the first item of the tuple returned.
 	///

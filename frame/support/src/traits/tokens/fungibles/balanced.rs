@@ -30,7 +30,10 @@ use crate::traits::misc::{SameOrOther, TryDrop};
 ///
 /// This is auto-implemented when a token class has `Unbalanced` implemented.
 pub trait Balanced<AccountId>: Inspect<AccountId> {
+	/// The type for managing what happens when an instance of `Debt` is dropped without being used.
 	type OnDropDebt: HandleImbalanceDrop<Self::AssetId, Self::Balance>;
+	/// The type for managing what happens when an instance of `Credit` is dropped without being
+	/// used.
 	type OnDropCredit: HandleImbalanceDrop<Self::AssetId, Self::Balance>;
 
 	/// Reduce the total issuance by `amount` and return the according imbalance. The imbalance will

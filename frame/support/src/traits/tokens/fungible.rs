@@ -32,14 +32,22 @@ pub use imbalance::{Imbalance, HandleImbalanceDrop, DebtOf, CreditOf};
 pub trait Inspect<AccountId> {
 	/// Scalar type for representing balance of an account.
 	type Balance: Balance;
+
 	/// The total amount of issuance in the system.
 	fn total_issuance() -> Self::Balance;
+
 	/// The minimum balance any single account may have.
 	fn minimum_balance() -> Self::Balance;
+
 	/// Get the balance of `who`.
 	fn balance(who: &AccountId) -> Self::Balance;
+
+	/// Get the maximum amount that `who` can withdraw/transfer successfully.
+	fn reducible_balance(who: &AccountId, keep_alive: bool) -> Self::Balance;
+
 	/// Returns `true` if the balance of `who` may be increased by `amount`.
 	fn can_deposit(who: &AccountId, amount: Self::Balance) -> DepositConsequence;
+
 	/// Returns `Failed` if the balance of `who` may not be decreased by `amount`, otherwise
 	/// the consequence.
 	fn can_withdraw(who: &AccountId, amount: Self::Balance) -> WithdrawConsequence<Self::Balance>;
@@ -47,26 +55,42 @@ pub trait Inspect<AccountId> {
 
 /// Trait for providing an ERC-20 style fungible asset.
 pub trait Mutate<AccountId>: Inspect<AccountId> {
-	/// Increase the balance of `who` by `amount`.
-	fn deposit(who: &AccountId, amount: Self::Balance) -> DispatchResult;
-	/// Attempt to reduce the balance of `who` by `amount`.
-	fn withdraw(who: &AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError>;
-	/// Transfer funds from one account into another.
-	fn transfer(
+	/// Increase the balance of `who` by exactly `amount`, minting new tokens. If that isn't
+	/// possible then an `Err` is returned and nothing is changed.
+	fn mint_into(who: &AccountId, amount: Self::Balance) -> DispatchResult;
+
+	/// Decrease the balance of `who` by at least `amount`, possibly slightly more in the case of
+	/// minimum_balance requirements, burning the tokens. If that isn't possible then an `Err` is
+	/// returned and nothing is changed. If successful, the amount of tokens reduced is returned.
+	fn burn_from(who: &AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError>;
+
+	/// Attempt to reduce the balance of `who` by as much as possible up to `amount`, and possibly
+	/// slightly more due to minimum_balance requirements. If no decrease is possible then an `Err`
+	/// is returned and nothing is changed. If successful, the amount of tokens reduced is returned.
+	///
+	/// The default implementation just uses `withdraw` along with `reducible_balance` to ensure
+	/// that is doesn't fail.
+	fn slash(who: &AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError> {
+		Self::burn_from(who, Self::reducible_balance(who, false).min(amount))
+	}
+
+	/// Transfer funds from one account into another. The default implementation uses `mint_into`
+	/// and `burn_from` and may generate unwanted events.
+	fn teleport(
 		source: &AccountId,
 		dest: &AccountId,
 		amount: Self::Balance,
 	) -> Result<Self::Balance, DispatchError> {
 		let extra = Self::can_withdraw(&source, amount).into_result()?;
 		Self::can_deposit(&dest, amount.saturating_add(extra)).into_result()?;
-		let actual = Self::withdraw(source, amount)?;
+		let actual = Self::burn_from(source, amount)?;
 		debug_assert!(actual == amount.saturating_add(extra), "can_withdraw must agree with withdraw; qed");
-		match Self::deposit(dest, actual) {
+		match Self::mint_into(dest, actual) {
 			Ok(_) => Ok(actual),
 			Err(err) => {
 				debug_assert!(false, "can_deposit returned true previously; qed");
 				// attempt to return the funds back to source
-				let revert = Self::deposit(source, actual);
+				let revert = Self::mint_into(source, actual);
 				debug_assert!(revert.is_ok(), "withdrew funds previously; qed");
 				Err(err)
 			}
@@ -81,31 +105,82 @@ pub trait Transfer<AccountId>: Inspect<AccountId> {
 		source: &AccountId,
 		dest: &AccountId,
 		amount: Self::Balance,
+		keep_alive: bool,
 	) -> Result<Self::Balance, DispatchError>;
 }
 
-/// Trait for providing a fungible asset which can be reserved.
-pub trait Reserve<AccountId>: Inspect<AccountId> {
+/// Trait for inspecting a fungible asset which can be reserved.
+pub trait InspectHold<AccountId>: Inspect<AccountId> {
 	/// Amount of funds held in reserve by `who`.
-	fn reserved_balance(who: &AccountId) -> Self::Balance;
-	/// Amount of funds held in total by `who`.
-	fn total_balance(who: &AccountId) -> Self::Balance {
-		Self::reserved_balance(who).saturating_add(Self::balance(who))
-	}
-	/// Check to see if some `amount` of funds may be reserved on the account of `who`.
-	fn can_reserve(who: &AccountId, amount: Self::Balance) -> bool;
-	/// Reserve some funds in an account.
-	fn reserve(who: &AccountId, amount: Self::Balance) -> DispatchResult;
-	/// Unreserve some funds in an account.
-	fn unreserve(who: &AccountId, amount: Self::Balance) -> DispatchResult;
-	/// Transfer reserved funds into another account.
-	fn repatriate_reserved(
-		who: &AccountId,
-		amount: Self::Balance,
-		status: BalanceStatus,
-	) -> DispatchResult;
+	fn balance_on_hold(who: &AccountId) -> Self::Balance;
+
+	/// Check to see if some `amount` of funds of `who` may be placed on hold.
+	fn can_hold(who: &AccountId, amount: Self::Balance) -> bool;
 }
 
+/// Trait for mutating a fungible asset which can be reserved.
+pub trait MutateHold<AccountId>: InspectHold<AccountId> + Transfer<AccountId> {
+	/// Hold some funds in an account.
+	fn hold(who: &AccountId, amount: Self::Balance) -> DispatchResult;
+
+	/// Release up to `amount` held funds in an account.
+	///
+	/// The actual amount released is returned with `Ok`.
+	///
+	/// If `best_effort` is `true`, then the amount actually unreserved and returned as the inner
+	/// value of `Ok` may be smaller than the `amount` passed.
+	fn release(who: &AccountId, amount: Self::Balance, best_effort: bool)
+		-> Result<Self::Balance, DispatchError>;
+
+	/// Transfer held funds into a destination account.
+	///
+	/// If `on_hold` is `true`, then the destination account must already exist and the assets
+	/// transferred will still be on hold in the destination account. If not, then the destination
+	/// account need not already exist, but must be creatable.
+	///
+	/// If `best_effort` is `true`, then an amount less than `amount` may be transferred without
+	/// error.
+	///
+	/// The actual amount transferred is returned, or `Err` in the case of error and nothing is
+	/// changed.
+	fn transfer_held(
+		source: &AccountId,
+		dest: &AccountId,
+		amount: Self::Balance,
+		best_effort: bool,
+		on_held: bool,
+	) -> Result<Self::Balance, DispatchError>;
+}
+
+/// Trait for slashing a fungible asset which can be reserved.
+pub trait BalancedHold<AccountId>: Balanced<AccountId> + MutateHold<AccountId> {
+	/// Reduce the balance of some funds on hold in an account.
+	///
+	/// The resulting imbalance is the first item of the tuple returned.
+	///
+	/// As much funds that are on hold up to `amount` will be deducted as possible. If this is less
+	/// than `amount`, then a non-zero second item will be returned.
+	fn slash_held(who: &AccountId, amount: Self::Balance)
+		-> (CreditOf<AccountId, Self>, Self::Balance);
+}
+
+impl<
+	AccountId,
+	T: Balanced<AccountId> + MutateHold<AccountId>,
+> BalancedHold<AccountId> for T {
+	fn slash_held(who: &AccountId, amount: Self::Balance)
+		-> (CreditOf<AccountId, Self>, Self::Balance)
+	{
+		let actual = match Self::release(who, amount, true) {
+			Ok(x) => x,
+			Err(_) => return (Imbalance::default(), amount),
+		};
+		<Self as fungible::Balanced<AccountId>>::slash(who, actual)
+	}
+}
+
+/// Convert a `fungibles` trait implementation into a `fungible` trait implementation by identifying
+/// a single item.
 pub struct ItemOf<
 	F: fungibles::Inspect<AccountId>,
 	A: Get<<F as fungibles::Inspect<AccountId>>::AssetId>,
@@ -129,6 +204,9 @@ impl<
 	fn balance(who: &AccountId) -> Self::Balance {
 		<F as fungibles::Inspect<AccountId>>::balance(A::get(), who)
 	}
+	fn reducible_balance(who: &AccountId, keep_alive: bool) -> Self::Balance {
+		<F as fungibles::Inspect<AccountId>>::reducible_balance(A::get(), who, keep_alive)
+	}
 	fn can_deposit(who: &AccountId, amount: Self::Balance) -> DepositConsequence {
 		<F as fungibles::Inspect<AccountId>>::can_deposit(A::get(), who, amount)
 	}
@@ -142,11 +220,11 @@ impl<
 	A: Get<<F as fungibles::Inspect<AccountId>>::AssetId>,
 	AccountId,
 > Mutate<AccountId> for ItemOf<F, A, AccountId> {
-	fn deposit(who: &AccountId, amount: Self::Balance) -> DispatchResult {
-		<F as fungibles::Mutate<AccountId>>::deposit(A::get(), who, amount)
+	fn mint_into(who: &AccountId, amount: Self::Balance) -> DispatchResult {
+		<F as fungibles::Mutate<AccountId>>::mint_into(A::get(), who, amount)
 	}
-	fn withdraw(who: &AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError> {
-		<F as fungibles::Mutate<AccountId>>::withdraw(A::get(), who, amount)
+	fn burn_from(who: &AccountId, amount: Self::Balance) -> Result<Self::Balance, DispatchError> {
+		<F as fungibles::Mutate<AccountId>>::burn_from(A::get(), who, amount)
 	}
 }
 
@@ -155,39 +233,54 @@ impl<
 	A: Get<<F as fungibles::Inspect<AccountId>>::AssetId>,
 	AccountId,
 > Transfer<AccountId> for ItemOf<F, A, AccountId> {
-	fn transfer(source: &AccountId, dest: &AccountId, amount: Self::Balance)
+	fn transfer(source: &AccountId, dest: &AccountId, amount: Self::Balance, keep_alive: bool)
 		-> Result<Self::Balance, DispatchError>
 	{
-		<F as fungibles::Transfer<AccountId>>::transfer(A::get(), source, dest, amount)
+		<F as fungibles::Transfer<AccountId>>::transfer(A::get(), source, dest, amount, keep_alive)
 	}
 }
 
 impl<
-	F: fungibles::Reserve<AccountId>,
+	F: fungibles::InspectHold<AccountId>,
 	A: Get<<F as fungibles::Inspect<AccountId>>::AssetId>,
 	AccountId,
-> Reserve<AccountId> for ItemOf<F, A, AccountId> {
-	fn reserved_balance(who: &AccountId) -> Self::Balance {
-		<F as fungibles::Reserve<AccountId>>::reserved_balance(A::get(), who)
+> InspectHold<AccountId> for ItemOf<F, A, AccountId> {
+	fn balance_on_hold(who: &AccountId) -> Self::Balance {
+		<F as fungibles::InspectHold<AccountId>>::balance_on_hold(A::get(), who)
 	}
-	fn total_balance(who: &AccountId) -> Self::Balance {
-		<F as fungibles::Reserve<AccountId>>::total_balance(A::get(), who)
+	fn can_hold(who: &AccountId, amount: Self::Balance) -> bool {
+		<F as fungibles::InspectHold<AccountId>>::can_hold(A::get(), who, amount)
 	}
-	fn can_reserve(who: &AccountId, amount: Self::Balance) -> bool {
-		<F as fungibles::Reserve<AccountId>>::can_reserve(A::get(), who, amount)
+}
+
+impl<
+	F: fungibles::MutateHold<AccountId>,
+	A: Get<<F as fungibles::Inspect<AccountId>>::AssetId>,
+	AccountId,
+> MutateHold<AccountId> for ItemOf<F, A, AccountId> {
+	fn hold(who: &AccountId, amount: Self::Balance) -> DispatchResult {
+		<F as fungibles::MutateHold<AccountId>>::hold(A::get(), who, amount)
 	}
-	fn reserve(who: &AccountId, amount: Self::Balance) -> DispatchResult {
-		<F as fungibles::Reserve<AccountId>>::reserve(A::get(), who, amount)
+	fn release(who: &AccountId, amount: Self::Balance, best_effort: bool)
+		-> Result<Self::Balance, DispatchError>
+	{
+		<F as fungibles::MutateHold<AccountId>>::release(A::get(), who, amount, best_effort)
 	}
-	fn unreserve(who: &AccountId, amount: Self::Balance) -> DispatchResult {
-		<F as fungibles::Reserve<AccountId>>::unreserve(A::get(), who, amount)
-	}
-	fn repatriate_reserved(
-		who: &AccountId,
+	fn transfer_held(
+		source: &AccountId,
+		dest: &AccountId,
 		amount: Self::Balance,
-		status: BalanceStatus,
-	) -> DispatchResult {
-		<F as fungibles::Reserve<AccountId>>::repatriate_reserved(A::get(), who, amount, status)
+		best_effort: bool,
+		on_hold: bool,
+	) -> Result<Self::Balance, DispatchError> {
+		<F as fungibles::MutateHold<AccountId>>::transfer_held(
+			A::get(),
+			source,
+			dest,
+			amount,
+			best_effort,
+			on_hold,
+		)
 	}
 }
 
@@ -215,4 +308,3 @@ impl<
 		<F as fungibles::Unbalanced<AccountId>>::increase_balance_at_most(A::get(), who, amount)
 	}
 }
-
