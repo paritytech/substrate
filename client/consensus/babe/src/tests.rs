@@ -419,7 +419,7 @@ fn run_one_test(
 			// that was produced locally.
 			client.import_notification_stream()
 				.take_while(move |n| future::ready(n.header.number() < &5 || {
-					if dbg!(n.origin) == BlockOrigin::Own {
+					if n.origin == BlockOrigin::Own {
 						got_own = true;
 					} else {
 						got_other = true;
