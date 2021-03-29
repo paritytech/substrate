@@ -87,7 +87,7 @@ pub const LOG_TARGET: &'static str = "runtime::frame-support";
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Never {}
 
-/// Generate a new type aliases for [`storage::types::value::StorageValue`],
+/// Generate a new type alias for [`storage::types::value::StorageValue`],
 /// [`storage::types::value::StorageMap`] and [`storage::types::value::StorageDoubleMap`].
 ///
 /// Useful for creating a *storage-like* struct for test and migrations.
