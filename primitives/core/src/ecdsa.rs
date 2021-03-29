@@ -52,18 +52,8 @@ pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"ecds");
 type Seed = [u8; 32];
 
 /// The ECDSA compressed public key.
-#[derive(Clone, Encode, Decode, PassByInner)]
+#[derive(Clone, Encode, Decode, PassByInner, scale_info::TypeInfo)]
 pub struct Public(pub [u8; 33]);
-
-// todo: remove this once https://github.com/paritytech/scale-info/pull/54 is merged, which
-// introduces const generics for arrays and should support a 33 element array.
-impl scale_info::TypeInfo for Public {
-	type Identity = Self;
-
-	fn type_info() -> scale_info::Type {
-		scale_info::TypeDefArray::new(33, scale_info::MetaType::new::<u8>()).into()
-	}
-}
 
 impl PartialOrd for Public {
 	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
@@ -237,18 +227,9 @@ impl sp_std::hash::Hash for Public {
 }
 
 /// A signature (a 512-bit value, plus 8 bits for recovery ID).
-#[derive(Encode, Decode, PassByInner)]
+#[derive(Encode, Decode, PassByInner, scale_info::TypeInfo)]
 pub struct Signature(pub [u8; 65]);
 
-// todo: remove this once https://github.com/paritytech/scale-info/pull/54 is merged, which
-// introduces const generics for arrays and should support a 65 element array.
-impl scale_info::TypeInfo for Signature {
-	type Identity = Self;
-
-	fn type_info() -> scale_info::Type {
-		scale_info::TypeDefArray::new(65, scale_info::MetaType::new::<u8>()).into()
-	}
-}
 impl sp_std::convert::TryFrom<&[u8]> for Signature {
 	type Error = ();
 
