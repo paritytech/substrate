@@ -38,9 +38,9 @@ by running the following command.
 		version = '3.0.0'
 		```
 
-		We will update each of them to the shortened form and linked to the
+		We will update each of them to the shortened form and linked to the Rust
 		[crate registry](https://crates.io/). After confirming the versioned package is published in
-		crate, the above will become:
+		the crate, the above will become:
 
 		```toml
 		[dev-dependencies]
