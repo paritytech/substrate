@@ -182,18 +182,6 @@ pub trait MutateHold<AccountId>: Inspect<AccountId> {
 	) -> Result<Self::Balance, DispatchError>;
 }
 
-/// Trait for slashing a fungible asset which can be reserved.
-pub trait BalancedHold<AccountId>: Balanced<AccountId> {
-	/// Reduce the balance of some funds on hold in an account.
-	///
-	/// The resulting imbalance is the first item of the tuple returned.
-	///
-	/// As much funds that are on hold up to `amount` will be deducted as possible. If this is less
-	/// than `amount`, then a non-zero second item will be returned.
-	fn slash_held(who: &AccountId, amount: Self::Balance, best_effort: bool)
-		-> Result<CreditOf<AccountId, Self>, DispatchError>;
-}
-
 /// Convert a `fungibles` trait implementation into a `fungible` trait implementation by identifying
 /// a single item.
 pub struct ItemOf<

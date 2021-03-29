@@ -137,6 +137,16 @@ pub trait Balanced<AccountId>: Inspect<AccountId> {
 	}
 }
 
+/// Trait for mutating one of several types of fungible assets which can be held.
+pub trait BalancedHold<AccountId>: Unbalanced<AccountId> {
+	/// Release and slash some as much funds on hold in an account up to `amount`.
+	///
+	/// The resulting imbalance is the first item of the tuple returned; the second is the
+	/// remainder, if any, from `amount`.
+	fn slash_held(who: &AccountId, amount: Self::Balance)
+		-> (Credit<AccountId, Self>, Self::Balance);
+}
+
 /// A fungible token class where the balance can be set arbitrarily.
 ///
 /// **WARNING**
@@ -145,7 +155,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> {
 /// token imbalances in your system leading to accidental imflation or deflation. It's really just
 /// for the underlying datatype to implement so the user gets the much safer `Balanced` trait to
 /// use.
-pub trait Unbalanced<AccountId>: Inspect<AccountId> {
+pub trait Unbalanced<AccountId>: Inspect<AccountId> + Sized {
 	/// Set the balance of `who` to `amount`. If this cannot be done for some reason (e.g.
 	/// because the account cannot be created or an overflow) then an `Err` is returned.
 	///
@@ -225,6 +235,23 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 	fn increase_balance_at_most(who: &AccountId, amount: Self::Balance) -> Self::Balance {
 		Self::increase_balance(who, amount).map_or(Zero::zero(), |_| amount)
 	}
+}
+
+/// A fungible token class capable of placing funds on hold where the balance can be changed
+/// arbitrarily.
+pub trait UnbalancedHold<AccountId>: Unbalanced<AccountId> {
+	/// Reduce the `asset` balance of `who` by `amount` from the funds on hold.
+	///
+	/// If successful, then the amount decreased is returned.
+	///
+	/// If `best_effort` is false then the amount reduced may be below the `amount` given.
+	///
+	/// If it cannot be validly reduced, return `Err` and do nothing.
+	fn decrease_balance_on_hold(
+		who: &AccountId,
+		amount: Self::Balance,
+		best_effort: bool,
+	) -> Result<Self::Balance, DispatchError>;
 }
 
 /// Simple handler for an imbalance drop which increases the total issuance of the system by the
@@ -329,5 +356,16 @@ impl<AccountId, U: Unbalanced<AccountId>> Balanced<AccountId> for U {
 		Self::can_withdraw(who, amount).into_result(keep_alive)?;
 		let decrease = U::decrease_balance(who, amount, keep_alive)?;
 		Ok(credit(decrease))
+	}
+}
+
+impl<AccountId, U: UnbalancedHold<AccountId>> BalancedHold<AccountId> for U {
+	fn slash_held(
+		who: &AccountId,
+		amount: Self::Balance,
+	) -> (Credit<AccountId, Self>, Self::Balance) {
+		let slashed = U::decrease_balance_on_hold(who, amount, true)
+			.unwrap_or(Zero::zero());
+		(credit(slashed), amount.saturating_sub(slashed))
 	}
 }

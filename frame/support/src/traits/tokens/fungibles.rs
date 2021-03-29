@@ -23,7 +23,7 @@ use super::misc::{AssetId, Balance, WhenDust};
 use sp_runtime::traits::Saturating;
 
 mod balanced;
-pub use balanced::{Balanced, Unbalanced};
+pub use balanced::{Balanced, Unbalanced, BalancedHold, UnbalancedHold};
 mod imbalance;
 pub use imbalance::{Imbalance, HandleImbalanceDrop, DebtOf, CreditOf};
 
@@ -226,16 +226,4 @@ pub trait MutateHold<AccountId>: Inspect<AccountId> {
 		best_effort: bool,
 		on_hold: bool,
 	) -> Result<Self::Balance, DispatchError>;
-}
-
-/// Trait for mutating one of several types of fungible assets which can be held.
-pub trait BalancedHold<AccountId>: Balanced<AccountId> {
-	/// Release and slash some funds in an account.
-	///
-	/// The resulting imbalance is the first item of the tuple returned.
-	///
-	/// As much funds up to `amount` will be deducted as possible. If this is less than `amount`,
-	/// then a non-zero second item will be returned.
-	fn slash_held(asset: Self::AssetId, who: &AccountId, amount: Self::Balance, best_effort: bool)
-		-> Result<CreditOf<AccountId, Self>, DispatchError>;
 }

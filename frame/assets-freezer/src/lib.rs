@@ -47,6 +47,8 @@ use frame_system::Config as SystemConfig;
 
 //pub use weights::WeightInfo;
 pub use pallet::*;
+use frame_benchmarking::frame_support::dispatch::result::Result::{Err, Ok};
+use frame_benchmarking::frame_support::traits::fungibles::{Unbalanced, Inspect};
 
 type BalanceOf<T> = <<T as Config>::Assets as fungibles::Inspect<<T as SystemConfig>::AccountId>>::Balance;
 type AssetIdOf<T> = <<T as Config>::Assets as fungibles::Inspect<<T as SystemConfig>::AccountId>>::AssetId;
@@ -105,12 +107,9 @@ pub mod pallet {
 		Released(AssetIdOf<T>, T::AccountId, BalanceOf<T>),
 	}
 
-	// No new errors?
+	// No new errors
 	#[pallet::error]
-	pub enum Error<T> {
-		/// The origin account is frozen.
-		Frozen,
-	}
+	pub enum Error<T> {}
 
 	// No hooks.
 	#[pallet::hooks]
@@ -118,9 +117,7 @@ pub mod pallet {
 
 	// Only admin calls.
 	#[pallet::call]
-	impl<T: Config> Pallet<T> {
-
-	}
+	impl<T: Config> Pallet<T> {}
 }
 
 impl<T: Config> FrozenBalance<AssetIdOf<T>, T::AccountId, BalanceOf<T>> for Pallet<T> {
@@ -167,10 +164,64 @@ impl<T: Config> fungibles::Transfer<<T as SystemConfig>::AccountId> for Pallet<T
 		source: &T::AccountId,
 		dest: &T::AccountId,
 		amount: Self::Balance,
-		best_effort: bool,
 		death: WhenDust,
 	) -> Result<Self::Balance, DispatchError> {
-		T::Assets::transfer(asset, source, dest, amount, best_effort, death)
+		T::Assets::transfer(asset, source, dest, amount, death)
+	}
+	fn transfer_best_effort(
+		asset: Self::AssetId,
+		source: &T::AccountId,
+		dest: &T::AccountId,
+		amount: Self::Balance,
+		death: WhenDust,
+	) -> Result<Self::Balance, DispatchError> {
+		T::Assets::transfer_best_effort(asset, source, dest, amount, death)
+	}
+}
+
+impl<T: Config> fungibles::Unbalanced<T::AccountId> for Pallet<T> where
+	T::Assets: fungibles::Unbalanced<T::AccountId>
+{
+	fn set_balance(asset: Self::AssetId, who: &T::AccountId, amount: Self::Balance)
+		-> DispatchResult
+	{
+		T::Assets::set_balance(asset, who, amount)
+	}
+
+	fn set_total_issuance(asset: Self::AssetId, amount: Self::Balance) {
+		T::Assets::set_total_issuance(asset, amount)
+	}
+
+	fn decrease_balance(
+		asset: Self::AssetId,
+		who: &T::AccountId,
+		amount: Self::Balance,
+		keep_alive: bool,
+	) -> Result<Self::Balance, DispatchError> {
+		T::Assets::decrease_balance(asset, who, amount, keep_alive)
+	}
+
+	fn increase_balance(asset: Self::AssetId, who: &T::AccountId, amount: Self::Balance)
+		-> Result<(), DispatchError>
+	{
+		T::Assets::increase_balance(asset, who, amount)
+	}
+
+	fn decrease_balance_at_most(
+		asset: Self::AssetId,
+		who: &T::AccountId,
+		amount: Self::Balance,
+		keep_alive: bool,
+	) -> Self::Balance {
+		T::Assets::decrease_balance_at_most(asset, who, amount, keep_alive)
+	}
+
+	fn increase_balance_at_most(
+		asset: Self::AssetId,
+		who: &T::AccountId,
+		amount: Self::Balance,
+	) -> Self::Balance {
+		T::Assets::increase_balance_at_most(asset, who, amount)
 	}
 }
 
@@ -224,15 +275,66 @@ impl<T: Config> fungibles::MutateHold<<T as SystemConfig>::AccountId> for Pallet
 		best_effort: bool,
 		on_hold: bool,
 	) -> Result<BalanceOf<T>, DispatchError> {
-		use fungibles::{InspectHold, Transfer, InspectWithoutFreezer};
-
 		// Can't create the account with just a chunk of held balance - there needs to already be
 		// the minimum deposit.
 		let min_balance = <Self as fungibles::Inspect<_>> ::minimum_balance(asset);
 		let dest_balance = <Self as fungibles::Inspect<_>>::balance(asset, dest);
 		ensure!(!on_hold || dest_balance >= min_balance, TokenError::CannotCreate);
 
-		let actual = T::Store::try_mutate_exists(
+		let actual = Self::decrease_on_hold(asset, source, amount, best_effort)?;
+
+		// `death` is `KeepAlive` here since we're only transferring funds that were on hold, for
+		// which there must be an additional min_balance, it should be impossible for the transfer
+		// to cause the account to be deleted.
+		use fungibles::Transfer;
+		let result = Self::transfer(asset, source, dest, actual, WhenDust::KeepAlive);
+		if result.is_ok() {
+			if on_hold {
+				let r = T::Store::mutate(
+					&(asset, dest.clone()),
+					|extra| extra.reserved = extra.reserved.saturating_add(actual),
+				);
+				debug_assert!(r.is_ok(), "account exists and funds transferred in; qed");
+				r?
+			}
+		} else {
+			debug_assert!(false, "can_withdraw was successful; qed");
+		}
+		result
+	}
+}
+
+impl<T: Config> fungibles::UnbalancedHold<<T as SystemConfig>::AccountId> for Pallet<T> where
+	T::Assets: fungibles::Unbalanced<T::AccountId>
+{
+	fn decrease_balance_on_hold(
+		asset: AssetIdOf<T>,
+		source: &T::AccountId,
+		amount: BalanceOf<T>,
+		best_effort: bool,
+	) -> Result<BalanceOf<T>, DispatchError> {
+		let actual = Self::decrease_on_hold(asset, source, amount, best_effort)?;
+		// The previous call's success guarantees the next will succeed.
+		<Self as fungibles::Unbalanced<_>>::decrease_balance(asset, source, actual, true)
+	}
+}
+
+impl<T: Config> Pallet<T> {
+	/// Reduce the amount we have on hold of an account in such a way to ensure that the balance
+	/// should be decreasable by the amount reduced.
+	///
+	/// NOTE: This won't alter the balance of the account.
+	fn decrease_on_hold(
+		asset: AssetIdOf<T>,
+		source: &T::AccountId,
+		amount: BalanceOf<T>,
+		best_effort: bool,
+	) -> Result<BalanceOf<T>, DispatchError> {
+		use fungibles::{InspectHold, Transfer, InspectWithoutFreezer};
+
+		let min_balance = <Self as fungibles::Inspect<_>>::minimum_balance(asset);
+
+		T::Store::try_mutate_exists(
 			&(asset, source.clone()),
 			|maybe_extra| -> Result<BalanceOf<T>, DispatchError>
 		{
@@ -250,9 +352,9 @@ impl<T: Config> fungibles::MutateHold<<T as SystemConfig>::AccountId> for Pallet
 				ensure!(balance_left >= actual, TokenError::NoFunds);
 
 				// the balance for the reserved amount actually exists. now we check that it's
-				// possible to actually transfer it out. the only reason this would fail is if the
-				// asset class or account is completely frozen.
-				<Self as fungibles::Inspect<_>>::can_withdraw(asset, dest, actual)
+				// possible to actually transfer it out. practically, the only reason this would
+				// fail is if the asset class or account is completely frozen.
+				<Self as fungibles::Inspect<_>>::can_withdraw(asset, source, actual)
 					.into_result(true)?;
 
 				// all good. we should now be able to unreserve and transfer without any error.
@@ -260,26 +362,6 @@ impl<T: Config> fungibles::MutateHold<<T as SystemConfig>::AccountId> for Pallet
 			} else {
 				Err(TokenError::NoFunds)?
 			}
-		})?;
-
-		// `best_effort` is `false` here since we've already checked that it should go through in
-		// the previous logic. if it fails here, then it must be due to a logic error.
-		// `death` is `KeepAlive` here since we're only transferring funds that were on hold, for
-		// which there must be an additional min_balance, it should be impossible for the transfer
-		// to cause the account to be deleted.
-		let result = Self::transfer(asset, source, dest, actual, true, WhenDust::KeepAlive);
-		if result.is_ok() {
-			if on_hold {
-				let r = T::Store::mutate(
-					&(asset, dest.clone()),
-					|extra| extra.reserved = extra.reserved.saturating_add(actual),
-				);
-				debug_assert!(r.is_ok(), "account exists and funds transferred in; qed");
-				r?
-			}
-		} else {
-			debug_assert!(false, "can_withdraw was successful; qed");
-		}
-		result
+		})
 	}
 }
