@@ -1,0 +1,30 @@
+{
+    "categories": [
+		{
+		  "title": "## ⛓️ Runtime",
+		  "labels": ["B7-runtimenoteworthy"]
+		},
+		{
+		  "title": "### 🔩 Runtime Migrations",
+		  "labels": ["D1-runtime-migration"]
+		},
+		{
+			"title": "## 🖥️ Client",
+			"labels": ["B5-clientnoteworthy"]
+		},
+		{
+			"title": "## 🚀 API Updates",
+			"labels": ["B3-apinoteworthy"]
+		}
+    ],
+    "ignore_labels": [
+      "B0-silent"
+    ],
+    "sort": "ASC",
+    "template": "# Changes since ${{FROM_TAG}}\n\n${{CHANGELOG}}",
+    "pr_template": "* ${{TITLE}} (#${{NUMBER}})",
+    "empty_template": "- no changes",
+    "max_tags_to_fetch": 200,
+    "max_pull_requests": 200,
+    "max_back_track_time_days": 30,
+}
