@@ -46,7 +46,7 @@ benchmarks!{
 
 	// This will measure the execution time of `accumulate_dummy` for b in [1..1000] range.
 	// The benchmark execution phase is shorthanded. When the name of the benchmark case is the same
-	//   as the extrinsic call. `_(...)` is used to represent the extrinsic name.
+	// as the extrinsic call. `_(...)` is used to represent the extrinsic name.
 	// The benchmark verification phase is omitted.
 	accumulate_dummy {
 		let b in 1 .. 1000;
