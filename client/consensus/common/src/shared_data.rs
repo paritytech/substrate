@@ -60,7 +60,7 @@ impl<T> Drop for SharedDataLockedUpgradable<T> {
 /// time will need to wait until this lock is freed.
 ///
 /// If this object is dropped without calling [`Self::release_mutex`], the lock will be dropped
-/// immediatley.
+/// immediately.
 #[must_use = "Shared data will be unlocked on drop!"]
 pub struct SharedDataLocked<'a, T> {
 	/// The current active mutex guard holding the inner data.
