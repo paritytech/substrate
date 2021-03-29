@@ -66,7 +66,7 @@ pub use sp_consensus_aura::{
 	ConsensusLog, AuraApi, AURA_ENGINE_ID, digests::CompatibleDigestItem,
 	inherents::{
 		InherentType as AuraInherent,
-		AuraInherentData, INHERENT_IDENTIFIER, InherentDataProvider,
+		INHERENT_IDENTIFIER, InherentDataProvider,
 	},
 };
 pub use sp_consensus::SyncOracle;
@@ -546,7 +546,7 @@ mod tests {
 	use super::*;
 	use sp_consensus::{
 		NoNetwork as DummyOracle, Proposal, AlwaysCanAuthor, DisableProofRecording,
-		import_queue::BoxJustificationImport,
+		import_queue::BoxJustificationImport, SlotData,
 	};
 	use sc_network_test::{Block as TestBlock, *};
 	use sp_runtime::traits::{Block as BlockT, DigestFor};
@@ -562,6 +562,7 @@ mod tests {
 	use substrate_test_runtime_client::{TestClient, runtime::{Header, H256}};
 	use sc_keystore::LocalKeystore;
 	use sp_application_crypto::key_types::AURA;
+	use sp_inherents::InherentData;
 
 	type Error = sp_blockchain::Error;
 
@@ -608,7 +609,12 @@ mod tests {
 
 	const SLOT_DURATION: u64 = 1000;
 
-	type AuraVerifier = import_queue::AuraVerifier<PeersFullClient, AuthorityPair, AlwaysCanAuthor>;
+	type AuraVerifier = import_queue::AuraVerifier<
+		PeersFullClient,
+		AuthorityPair,
+		AlwaysCanAuthor,
+		Box<dyn CreateInherentDataProviders<TestBlock, (), InherentDataProviders = ()>>
+	>;
 	type AuraPeer = Peer<(), PeersClient>;
 
 	pub struct AuraTestNet {
@@ -633,12 +639,11 @@ mod tests {
 			match client {
 				PeersClient::Full(client, _) => {
 					let slot_duration = slot_duration(&*client).expect("slot duration available");
-					let inherent_data_providers = InherentDataProviders::new();
 
 					assert_eq!(slot_duration.slot_duration().as_millis() as u64, SLOT_DURATION);
 					import_queue::AuraVerifier::new(
 						client,
-						inherent_data_providers,
+						Box::new(|_, _| async { Ok(()) }),
 						AlwaysCanAuthor,
 						CheckForEquivocation::Yes,
 						None,
@@ -707,16 +712,14 @@ mod tests {
 
 			let slot_duration = slot_duration(&*client).expect("slot duration available");
 
-			let inherent_data_providers = InherentDataProviders::new();
-
-			aura_futures.push(start_aura::<AuthorityPair, _, _, _, _, _, _, _, _, _>(StartAuraParams {
+			aura_futures.push(start_aura::<AuthorityPair, _, _, _, _, _, _, _, _, _, _>(StartAuraParams {
 				slot_duration,
 				block_import: client.clone(),
 				select_chain,
 				client,
 				proposer_factory: environ,
 				sync_oracle: DummyOracle,
-				inherent_data_providers,
+				inherent_data_providers: |_, _| async { Ok(()) },
 				force_authoring: false,
 				backoff_authoring_blocks: Some(BackoffAuthoringOnFinalizedHeadLagging::default()),
 				keystore,
@@ -839,13 +842,13 @@ mod tests {
 		let head = client.header(&BlockId::Number(0)).unwrap().unwrap();
 
 		let res = futures::executor::block_on(worker.on_slot(
-			head,
 			SlotInfo {
 				slot: 0.into(),
 				timestamp: 0.into(),
 				ends_at: Instant::now() + Duration::from_secs(100),
 				inherent_data: InherentData::new(),
 				duration: Duration::from_millis(1000),
+				chain_head: head,
 			},
 		)).unwrap();
 

@@ -161,7 +161,6 @@ impl<C, P, CAW, IDP> AuraVerifier<C, P, CAW, IDP> where
 		C: ProvideRuntimeApi<B>, C::Api: BlockBuilderApi<B>,
 		CAW: CanAuthorWith<B>,
 		IDP: CreateInherentDataProviders<B, ()>,
-		IDP::InherentDataProviders: InherentDataProviderExt + Send,
 	{
 		if let Err(e) = self.can_author_with.can_author_with(&block_id) {
 			debug!(
