@@ -23,6 +23,7 @@ sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
 lite-json = { version = "0.1", default-features = false }
+log = { version = "0.4.14", default-features = false }
 
 [features]
 default = ["std"]
@@ -37,4 +38,6 @@ std = [
 	"sp-keystore",
 	"sp-runtime/std",
 	"sp-std/std",
+	"log/std",
 ]
+try-runtime = ["frame-support/try-runtime"]

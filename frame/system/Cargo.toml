@@ -22,6 +22,7 @@ sp-runtime = { version = "3.0.0", default-features = false, path = "../../primit
 sp-version = { version = "3.0.0", default-features = false, path = "../../primitives/version" }
 frame-support = { version = "3.0.0", default-features = false, path = "../support" }
 impl-trait-for-tuples = "0.2.1"
+log = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]
 criterion = "0.3.3"
@@ -39,11 +40,13 @@ std = [
 	"frame-support/std",
 	"sp-runtime/std",
 	"sp-version/std",
+	"log/std",
 ]
 runtime-benchmarks = [
 	"sp-runtime/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
 ]
+try-runtime = ["frame-support/try-runtime"]
 
 [[bench]]
 name = "bench"

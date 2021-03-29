@@ -48,9 +48,9 @@ use sp_io::storage;
 use sp_runtime::{RuntimeDebug, traits::Hash};
 
 use frame_support::{
-	codec::{Decode, Encode}, debug,
+	codec::{Decode, Encode},
 	dispatch::{
-		DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable,
+		DispatchError, DispatchResultWithPostInfo, Dispatchable,
 		PostDispatchInfo,
 	},
 	ensure,
@@ -211,19 +211,21 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			if new_members.len() > T::MaxMembers::get() as usize {
-				debug::error!(
-					"New members count exceeds MAX members expected.(Expct: {}, Act: {})",
+				log::error!(
+					target: "runtime::collective",
+					"New members count ({}) exceeds maximum amount of members expected ({}).",
+					new_members.len(),
 					T::MaxMembers::get(),
-					new_members.len()
 				);
 			}
 
 			let old = Members::<T, I>::get();
 			if old.len() > old_count as usize {
-				debug::warn!(
-					"Wrong count used to estimate set_members weight.(Expct: {}, Act: {})",
+				log::warn!(
+					target: "runtime::collective",
+					"Wrong count used to estimate set_members weight. expected ({}) vs actual ({})",
 					old_count,
-					old.len()
+					old.len(),
 				);
 			}
 			let mut new_members = new_members;
@@ -335,7 +337,7 @@ pub mod pallet {
 
 				<ProposalCount<T, I>>::mutate(|i| *i += 1);
 				<ProposalOf<T, I>>::insert(proposal_hash, *proposal);
-				let end = system::Module::<T>::block_number() + T::MotionDuration::get();
+				let end = system::Pallet::<T>::block_number() + T::MotionDuration::get();
 				let votes = Votes { index, threshold, ayes: vec![who.clone()], nays: vec![], end };
 				<Voting<T, I>>::insert(proposal_hash, votes);
 
@@ -491,7 +493,7 @@ pub mod pallet {
 			}
 
 			// Only allow actual closing of the proposal after the voting period has ended.
-			ensure!(system::Module::<T>::block_number() >= voting.end, <Error<T, I>>::TooEarly);
+			ensure!(system::Pallet::<T>::block_number() >= voting.end, Error::<T, I>::TooEarly);
 
 			let prime_vote = Self::prime().map(|who| voting.ayes.iter().any(|a| a == &who));
 
@@ -801,10 +803,11 @@ impl<T: Config<I>, I: 'static> ChangeMembers<T::AccountId> for Pallet<T, I> {
 		new: &[T::AccountId],
 	) {
 		if new.len() > T::MaxMembers::get() as usize {
-			debug::error!(
-				"New members count exceeds maximum amount of members expected. (expected: {}, actual: {})",
+			log::error!(
+				target: "runtime::collective",
+				"New members count ({}) exceeds maximum amount of members expected ({}).",
+				new.len(),
 				T::MaxMembers::get(),
-				new.len()
 			);
 		}
 		// remove accounts from all current voting in motions.
@@ -1046,24 +1049,24 @@ mod tests {
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic
 		{
-			System: system::{Module, Call, Event<T>},
-			Collective: collective::<Instance1>::{Module, Call, Storage, Event<T>, Origin<T>, Config<T>},
-			CollectiveMajority: collective::<Instance2>::{Module, Call, Storage, Event<T>, Origin<T>, Config<T>},
-			DefaultCollective: collective::{Module, Call, Storage, Event<T>, Origin<T>, Config<T>},
+			System: system::{Pallet, Call, Event<T>},
+			Collective: collective::<Instance1>::{Pallet, Call, Event<T>, Origin<T>, Config<T>},
+			CollectiveMajority: collective::<Instance2>::{Pallet, Call, Event<T>, Origin<T>, Config<T>},
+			DefaultCollective: collective::{Pallet, Call, Event<T>, Origin<T>, Config<T>},
 		}
 	);
 
 	pub fn new_test_ext() -> sp_io::TestExternalities {
 		let mut ext: sp_io::TestExternalities = GenesisConfig {
-			collective_Instance1: Some(collective::GenesisConfig {
+			collective_Instance1: collective::GenesisConfig {
 				members: vec![1, 2, 3],
 				phantom: Default::default(),
-			}),
-			collective_Instance2: Some(collective::GenesisConfig {
+			},
+			collective_Instance2: collective::GenesisConfig {
 				members: vec![1, 2, 3, 4, 5],
 				phantom: Default::default(),
-			}),
-			collective: None,
+			},
+			collective: Default::default(),
 		}.build_storage().unwrap().into();
 		ext.execute_with(|| System::set_block_number(1));
 		ext
@@ -1103,10 +1106,10 @@ mod tests {
 
 			let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 			assert_eq!(System::events(), vec![
-				record(Event::collective_Instance1(RawEvent::Proposed(1, 0, hash.clone(), 3))),
-				record(Event::collective_Instance1(RawEvent::Voted(2, hash.clone(), true, 2, 0))),
-				record(Event::collective_Instance1(RawEvent::Closed(hash.clone(), 2, 1))),
-				record(Event::collective_Instance1(RawEvent::Disapproved(hash.clone())))
+				record(Event::collective_Instance1(collective::Event::Proposed(1, 0, hash.clone(), 3))),
+				record(Event::collective_Instance1(collective::Event::Voted(2, hash.clone(), true, 2, 0))),
+				record(Event::collective_Instance1(collective::Event::Closed(hash.clone(), 2, 1))),
+				record(Event::collective_Instance1(collective::Event::Disapproved(hash.clone())))
 			]);
 		});
 	}
@@ -1165,10 +1168,10 @@ mod tests {
 
 			let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 			assert_eq!(System::events(), vec![
-				record(Event::collective_Instance1(RawEvent::Proposed(1, 0, hash.clone(), 3))),
-				record(Event::collective_Instance1(RawEvent::Voted(2, hash.clone(), true, 2, 0))),
-				record(Event::collective_Instance1(RawEvent::Closed(hash.clone(), 2, 1))),
-				record(Event::collective_Instance1(RawEvent::Disapproved(hash.clone())))
+				record(Event::collective_Instance1(collective::Event::Proposed(1, 0, hash.clone(), 3))),
+				record(Event::collective_Instance1(collective::Event::Voted(2, hash.clone(), true, 2, 0))),
+				record(Event::collective_Instance1(collective::Event::Closed(hash.clone(), 2, 1))),
+				record(Event::collective_Instance1(collective::Event::Disapproved(hash.clone())))
 			]);
 		});
 	}
@@ -1190,11 +1193,11 @@ mod tests {
 
 			let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 			assert_eq!(System::events(), vec![
-				record(Event::collective_Instance1(RawEvent::Proposed(1, 0, hash.clone(), 3))),
-				record(Event::collective_Instance1(RawEvent::Voted(2, hash.clone(), true, 2, 0))),
-				record(Event::collective_Instance1(RawEvent::Closed(hash.clone(), 3, 0))),
-				record(Event::collective_Instance1(RawEvent::Approved(hash.clone()))),
-				record(Event::collective_Instance1(RawEvent::Executed(hash.clone(), Err(DispatchError::BadOrigin))))
+				record(Event::collective_Instance1(collective::Event::Proposed(1, 0, hash.clone(), 3))),
+				record(Event::collective_Instance1(collective::Event::Voted(2, hash.clone(), true, 2, 0))),
+				record(Event::collective_Instance1(collective::Event::Closed(hash.clone(), 3, 0))),
+				record(Event::collective_Instance1(collective::Event::Approved(hash.clone()))),
+				record(Event::collective_Instance1(collective::Event::Executed(hash.clone(), Err(DispatchError::BadOrigin))))
 			]);
 		});
 	}
@@ -1217,12 +1220,12 @@ mod tests {
 
 			let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 			assert_eq!(System::events(), vec![
-				record(Event::collective_Instance2(RawEvent::Proposed(1, 0, hash.clone(), 5))),
-				record(Event::collective_Instance2(RawEvent::Voted(2, hash.clone(), true, 2, 0))),
-				record(Event::collective_Instance2(RawEvent::Voted(3, hash.clone(), true, 3, 0))),
-				record(Event::collective_Instance2(RawEvent::Closed(hash.clone(), 5, 0))),
-				record(Event::collective_Instance2(RawEvent::Approved(hash.clone()))),
-				record(Event::collective_Instance2(RawEvent::Executed(hash.clone(), Err(DispatchError::BadOrigin))))
+				record(Event::collective_Instance2(collective::Event::Proposed(1, 0, hash.clone(), 5))),
+				record(Event::collective_Instance2(collective::Event::Voted(2, hash.clone(), true, 2, 0))),
+				record(Event::collective_Instance2(collective::Event::Voted(3, hash.clone(), true, 3, 0))),
+				record(Event::collective_Instance2(collective::Event::Closed(hash.clone(), 5, 0))),
+				record(Event::collective_Instance2(collective::Event::Approved(hash.clone()))),
+				record(Event::collective_Instance2(collective::Event::Executed(hash.clone(), Err(DispatchError::BadOrigin))))
 			]);
 		});
 	}
@@ -1317,7 +1320,7 @@ mod tests {
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::collective_Instance1(RawEvent::Proposed(
+					event: Event::collective_Instance1(collective::Event::Proposed(
 						1,
 						0,
 						hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(),
@@ -1445,7 +1448,7 @@ mod tests {
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::collective_Instance1(RawEvent::Proposed(
+					event: Event::collective_Instance1(collective::Event::Proposed(
 						1,
 						0,
 						hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(),
@@ -1455,7 +1458,7 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::collective_Instance1(RawEvent::Voted(
+					event: Event::collective_Instance1(collective::Event::Voted(
 						1,
 						hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(),
 						false,
@@ -1589,7 +1592,7 @@ mod tests {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: Event::collective_Instance1(
-						RawEvent::Proposed(
+						collective::Event::Proposed(
 							1,
 							0,
 							hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(),
@@ -1599,7 +1602,7 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::collective_Instance1(RawEvent::Voted(
+					event: Event::collective_Instance1(collective::Event::Voted(
 						2,
 						hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(),
 						false,
@@ -1610,14 +1613,14 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::collective_Instance1(RawEvent::Closed(
+					event: Event::collective_Instance1(collective::Event::Closed(
 						hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(), 1, 1,
 					)),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::collective_Instance1(RawEvent::Disapproved(
+					event: Event::collective_Instance1(collective::Event::Disapproved(
 						hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(),
 					)),
 					topics: vec![],
@@ -1640,7 +1643,7 @@ mod tests {
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::collective_Instance1(RawEvent::Proposed(
+					event: Event::collective_Instance1(collective::Event::Proposed(
 						1,
 						0,
 						hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(),
@@ -1650,7 +1653,7 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::collective_Instance1(RawEvent::Voted(
+					event: Event::collective_Instance1(collective::Event::Voted(
 						2,
 						hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(),
 						true,
@@ -1661,21 +1664,21 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::collective_Instance1(RawEvent::Closed(
+					event: Event::collective_Instance1(collective::Event::Closed(
 						hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(), 2, 0,
 					)),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::collective_Instance1(RawEvent::Approved(
+					event: Event::collective_Instance1(collective::Event::Approved(
 						hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(),
 					)),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::collective_Instance1(RawEvent::Executed(
+					event: Event::collective_Instance1(collective::Event::Executed(
 						hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(),
 						Err(DispatchError::BadOrigin),
 					)),
@@ -1727,10 +1730,11 @@ mod tests {
 			assert_ok!(Collective::disapprove_proposal(Origin::root(), hash.clone()));
 			let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 			assert_eq!(System::events(), vec![
-				record(Event::collective_Instance1(RawEvent::Proposed(1, 0, hash.clone(), 2))),
-				record(Event::collective_Instance1(RawEvent::Voted(2, hash.clone(), true, 2, 0))),
-				record(Event::collective_Instance1(RawEvent::Disapproved(hash.clone()))),
+				record(Event::collective_Instance1(collective::Event::Proposed(1, 0, hash.clone(), 2))),
+				record(Event::collective_Instance1(collective::Event::Voted(2, hash.clone(), true, 2, 0))),
+				record(Event::collective_Instance1(collective::Event::Disapproved(hash.clone()))),
 			]);
 		})
 	}
+
 }
