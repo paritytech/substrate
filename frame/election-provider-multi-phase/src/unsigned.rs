@@ -85,6 +85,12 @@ fn restore_solution<T: Config>() -> Result<Call<T>, MinerError> {
 		.ok_or(MinerError::NoStoredSolution)
 }
 
+/// Clear a saved solution from OCW storage.
+fn kill_solution<T: Config>() {
+	let mut storage = StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL);
+	storage.clear();
+}
+
 impl<T: Config> Pallet<T> {
 	/// Attempt to restore a solution from cache. Otherwise, compute it fresh. Either way, submit
 	/// if our call's score is greater than that of the cached solution.
@@ -153,7 +159,10 @@ impl<T: Config> Pallet<T> {
 
 	fn submit_call(call: Call<T>) -> Result<(), MinerError> {
 		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into())
-			.map_err(|_| MinerError::PoolSubmissionFailed)
+			.map_err(|_| {
+				kill_solution::<T>();
+				MinerError::PoolSubmissionFailed
+			})
 	}
 
 	/// Mine a new npos solution, with all the relevant checks to make sure that it will be accepted
