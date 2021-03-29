@@ -258,20 +258,32 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> + Sized {
 
 /// A fungible token class capable of placing funds on hold where the balance can be changed
 /// arbitrarily.
-pub trait UnbalancedHold<AccountId>: Unbalanced<AccountId> {
+pub trait UnbalancedHold<AccountId>: Unbalanced<AccountId> + InspectHold<AccountId> {
 	/// Reduce the `asset` balance of `who` by `amount` from the funds on hold.
 	///
-	/// If successful, then the amount decreased is returned.
-	///
-	/// If `best_effort` is false then the amount reduced may be below the `amount` given.
+	/// If successful, then the amount decreased is returned. This will be exactly `amount`.
 	///
 	/// If it cannot be validly reduced, return `Err` and do nothing.
 	fn decrease_balance_on_hold(
 		asset: Self::AssetId,
 		who: &AccountId,
 		amount: Self::Balance,
-		best_effort: bool,
 	) -> Result<Self::Balance, DispatchError>;
+
+	/// Reduce the `asset` balance of `who` by as much as possible up to at most `amount` from the
+	/// funds on hold.
+	///
+	/// If successful, then the amount decreased is returned.
+	///
+	/// If it cannot be validly reduced, return `Err` and do nothing.
+	fn decrease_balance_on_hold_at_most(
+		asset: Self::AssetId,
+		who: &AccountId,
+		amount: Self::Balance,
+	) -> Result<Self::Balance, DispatchError> {
+		let amount = amount.min(Self::reducible_balance_on_hold(asset, who));
+		Self::decrease_balance_on_hold(asset, who, amount)
+	}
 }
 
 /// Simple handler for an imbalance drop which increases the total issuance of the system by the
@@ -387,7 +399,7 @@ impl<AccountId, U: UnbalancedHold<AccountId>> BalancedHold<AccountId> for U {
 		who: &AccountId,
 		amount: Self::Balance,
 	) -> (Credit<AccountId, Self>, Self::Balance) {
-		let slashed = U::decrease_balance_on_hold(asset, who, amount, true)
+		let slashed = U::decrease_balance_on_hold_at_most(asset, who, amount)
 			.unwrap_or(Zero::zero());
 		(credit(asset, slashed), amount.saturating_sub(slashed))
 	}

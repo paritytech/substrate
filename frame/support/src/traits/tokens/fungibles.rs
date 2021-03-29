@@ -193,10 +193,25 @@ pub trait InspectHold<AccountId>: Inspect<AccountId> {
 
 	/// Check to see if some `amount` of `asset` may be held on the account of `who`.
 	fn can_hold(asset: Self::AssetId, who: &AccountId, amount: Self::Balance) -> bool;
+
+	/// Return the amount of `asset` which can be reduced of account `who` from the part of their
+	/// account balance on hold.
+	///
+	/// Generally, this should be the same as `balance_on_hold`, but if the account is frozen or
+	/// has somehow had its balance reduced below that which is on hold, then it may be less.
+	///
+	/// If your type implements `InspectWithoutFreezer`, then this can generally be
+	/// implemented very simply with:
+	///
+	/// ```nocompile
+	/// <Self as InspectWithoutFreezer<_>>::reducible_balance(asset, who, true)
+	///     .min(Self::balance_on_hold(asset, who))
+	/// ```
+	fn reducible_balance_on_hold(asset: Self::AssetId, who: &AccountId) -> Self::Balance;
 }
 
 /// Trait for mutating a set of named fungible assets which can be placed on hold.
-pub trait MutateHold<AccountId>: Inspect<AccountId> {
+pub trait MutateHold<AccountId>: InspectHold<AccountId> {
 	/// Hold some funds in an account.
 	fn hold(asset: Self::AssetId, who: &AccountId, amount: Self::Balance) -> DispatchResult;
 
@@ -207,14 +222,11 @@ pub trait MutateHold<AccountId>: Inspect<AccountId> {
 	fn release(asset: Self::AssetId, who: &AccountId, amount: Self::Balance, best_effort: bool)
 		-> Result<Self::Balance, DispatchError>;
 
-	/// Transfer held funds into a destination account.
+	/// Transfer exactly `amount` of `asset` from `source` account into `dest`.
 	///
 	/// If `on_hold` is `true`, then the destination account must already exist and the assets
 	/// transferred will still be on hold in the destination account. If not, then the destination
 	/// account need not already exist, but must be creatable.
-	///
-	/// If `best_effort` is `true`, then an amount less than `amount` may be transferred without
-	/// error.
 	///
 	/// The actual amount transferred is returned, or `Err` in the case of error and nothing is
 	/// changed.
@@ -223,7 +235,26 @@ pub trait MutateHold<AccountId>: Inspect<AccountId> {
 		source: &AccountId,
 		dest: &AccountId,
 		amount: Self::Balance,
-		best_effort: bool,
 		on_hold: bool,
 	) -> Result<Self::Balance, DispatchError>;
+
+	/// Transfer as much as possible of `asset` on hold in `source` account, up to `amount`, into
+	/// `dest` account.
+	///
+	/// If `on_hold` is `true`, then the destination account must already exist and the assets
+	/// transferred will still be on hold in the destination account. If not, then the destination
+	/// account need not already exist, but must be creatable.
+	///
+	/// The actual amount transferred is returned, or `Err` in the case of error and nothing is
+	/// changed.
+	fn transfer_best_effort_held(
+		asset: Self::AssetId,
+		source: &AccountId,
+		dest: &AccountId,
+		amount: Self::Balance,
+		on_hold: bool,
+	) -> Result<Self::Balance, DispatchError> {
+		let possible = Self::reducible_balance_on_hold(asset, source);
+		Self::transfer_held(asset, source, dest, amount.min(possible), on_hold)
+	}
 }
