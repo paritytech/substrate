@@ -23,7 +23,7 @@ use parking_lot::{Mutex, MappedMutexGuard, Condvar, MutexGuard};
 
 /// Created by [`SharedDataLocked::release_mutex`].
 ///
-/// As long as the object isn't dropped, the shared data is locked. Is it advised to drop this
+/// As long as the object isn't dropped, the shared data is locked. It is advised to drop this
 /// object when the shared data doesn't need to be locked anymore. To get access to the shared data
 /// [`Self::upgrade`] is provided.
 #[must_use = "Shared data will be unlocked on drop!"]
