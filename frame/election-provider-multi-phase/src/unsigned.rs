@@ -338,12 +338,6 @@ impl<T: Config> Pallet<T> {
 			final_decision,
 			max_weight,
 		);
-		debug_assert!(
-			weight_with(final_decision + 1) > max_weight,
-			"weight_with({} + 1) > {}",
-			final_decision,
-			max_weight,
-		);
 		final_decision
 	}
 
