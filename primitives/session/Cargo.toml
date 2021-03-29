@@ -1,6 +1,6 @@
 [package]
 name = "sp-session"
-version = "3.0.0"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -14,11 +14,11 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-sp-api = { version = "3.0.0", default-features = false, path = "../api" }
-sp-core = { version = "3.0.0", default-features = false, path = "../core" }
-sp-std = { version = "3.0.0", default-features = false, path = "../std" }
-sp-staking = { version = "3.0.0", default-features = false, path = "../staking" }
-sp-runtime = { version = "3.0.0", optional = true, path = "../runtime" }
+sp-api = { version = "4.0.0-dev", default-features = false, path = "../api" }
+sp-core = { version = "4.0.0-dev", default-features = false, path = "../core" }
+sp-std = { version = "4.0.0-dev", default-features = false, path = "../std" }
+sp-staking = { version = "4.0.0-dev", default-features = false, path = "../staking" }
+sp-runtime = { version = "4.0.0-dev", optional = true, path = "../runtime" }
 
 [features]
 default = [ "std" ]

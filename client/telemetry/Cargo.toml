@@ -1,6 +1,6 @@
 [package]
 name = "sc-telemetry"
-version = "3.0.0"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Telemetry utils"
 edition = "2018"
