@@ -576,9 +576,11 @@ impl<T> Iterator for PrefixIterator<T> {
 ///
 /// If any decoding fails it skips the key and continues to the next one.
 pub struct ChildTriePrefixIterator<T> {
+	/// The prefix iterated on
 	prefix: Vec<u8>,
 	/// Storage key of the child trie
 	storage_key: Vec<u8>,
+	/// The last key iterated on
 	previous_key: Vec<u8>,
 	/// If true then values are removed while iterating
 	drain: bool,
