@@ -26,7 +26,6 @@ serde = { version = "1.0.104", features = ["derive"] }
 sp-version = { version = "3.0.0", path = "../../../primitives/version" }
 sp-io = { version = "3.0.0", path = "../../../primitives/io" }
 sp-inherents = { version = "3.0.0", path = "../../../primitives/inherents" }
-sp-timestamp = { version = "3.0.0", path = "../../../primitives/timestamp" }
 sc-telemetry = { version = "3.0.0", path = "../../telemetry" }
 sc-keystore = { version = "3.0.0", path = "../../keystore" }
 sc-client-api = { version = "3.0.0", path = "../../api" }
@@ -56,6 +55,7 @@ retain_mut = "0.1.2"
 async-trait = "0.1.42"
 
 [dev-dependencies]
+sp-timestamp = { version = "3.0.0", path = "../../../primitives/timestamp" }
 sp-keyring = { version = "3.0.0", path = "../../../primitives/keyring" }
 sp-tracing = { version = "3.0.0", path = "../../../primitives/tracing" }
 sc-executor = { version = "0.9.0", path = "../../executor" }

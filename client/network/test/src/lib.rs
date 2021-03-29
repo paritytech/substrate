@@ -807,7 +807,7 @@ pub trait TestNetFactory: Sized where <Self::BlockImport as BlockImport<Block>>:
 				imported_blocks_stream,
 				finality_notification_stream,
 				block_import,
-				verifier: VerifierAdapter::new(verifier.clone()),
+				verifier,
 				network,
 				listen_addr,
 			});
@@ -886,7 +886,7 @@ pub trait TestNetFactory: Sized where <Self::BlockImport as BlockImport<Block>>:
 
 			peers.push(Peer {
 				data,
-				verifier: VerifierAdapter::new(verifier.clone()),
+				verifier,
 				select_chain: None,
 				backend: None,
 				block_import,
