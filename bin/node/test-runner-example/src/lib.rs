@@ -22,7 +22,7 @@ use test_runner::{Node, ChainInfo, SignatureVerificationOverride};
 use grandpa::GrandpaBlockImport;
 use sc_service::{TFullBackend, TFullClient, Configuration, TaskManager, new_full_parts};
 use std::sync::Arc;
-use sp_inherents::InherentDataProviders;
+use sp_inherents::CreateInherentDataProviders;
 use sc_consensus_babe::BabeBlockImport;
 use sp_keystore::SyncCryptoStorePtr;
 use sp_keyring::sr25519::Keyring::Alice;
@@ -79,7 +79,8 @@ impl ChainInfo for NodeTemplateChainInfo {
 			Arc<TFullBackend<Self::Block>>,
 			SyncCryptoStorePtr,
 			TaskManager,
-			InherentDataProviders,
+			Box<CreateInherentDataProviders>,
+			Box<dyn CreateInherentDataProviders<Self::Block, ()>>,
 			Option<
 				Box<
 					dyn ConsensusDataProvider<
@@ -100,7 +101,6 @@ impl ChainInfo for NodeTemplateChainInfo {
 			new_full_parts::<Self::Block, Self::RuntimeApi, Self::Executor>(config, None)?;
 		let client = Arc::new(client);
 
-		let inherent_providers = InherentDataProviders::new();
 		let select_chain = sc_consensus::LongestChain::new(backend.clone());
 
 		let (grandpa_block_import, ..) =
@@ -120,7 +120,6 @@ impl ChainInfo for NodeTemplateChainInfo {
 		let consensus_data_provider = BabeConsensusDataProvider::new(
 			client.clone(),
 			keystore.sync_keystore(),
-			&inherent_providers,
 			babe_link.epoch_changes().clone(),
 			vec![(AuthorityId::from(Alice.public()), 1000)],
 		)

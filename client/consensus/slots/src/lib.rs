@@ -44,7 +44,7 @@ use sp_consensus_slots::Slot;
 use sp_inherents::CreateInherentDataProviders;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, Header, HashFor, NumberFor}
+	traits::{Block as BlockT, Header as HeaderT, HashFor, NumberFor}
 };
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
 use sp_timestamp::Timestamp;
@@ -786,40 +786,47 @@ impl<N> BackoffAuthoringBlocksStrategy<N> for () {
 
 #[cfg(test)]
 mod test {
+	use super::*;
 	use std::time::{Duration, Instant};
-	use crate::{BackoffAuthoringOnFinalizedHeadLagging, BackoffAuthoringBlocksStrategy};
-	use substrate_test_runtime_client::runtime::Block;
+	use substrate_test_runtime_client::runtime::{Block, Header};
 	use sp_api::NumberFor;
 
 	const SLOT_DURATION: Duration = Duration::from_millis(6000);
 
-	fn slot(slot: u64) -> super::slots::SlotInfo {
+	fn slot(slot: u64) -> super::slots::SlotInfo<Block> {
 		super::slots::SlotInfo {
 			slot: slot.into(),
 			duration: SLOT_DURATION,
 			timestamp: Default::default(),
 			inherent_data: Default::default(),
 			ends_at: Instant::now(),
+			chain_head: Header::new(
+				1,
+				Default::default(),
+				Default::default(),
+				Default::default(),
+				Default::default(),
+			),
 		}
 	}
 
 	#[test]
 	fn linear_slot_lenience() {
 		// if no slots are skipped there should be no lenience
-		assert_eq!(super::slot_lenience_linear(1.into(), &slot(2)), None);
+		assert_eq!(super::slot_lenience_linear(1u64.into(), &slot(2)), None);
 
 		// otherwise the lenience is incremented linearly with
 		// the number of skipped slots.
 		for n in 3..=22 {
 			assert_eq!(
-				super::slot_lenience_linear(1.into(), &slot(n)),
+				super::slot_lenience_linear(1u64.into(), &slot(n)),
 				Some(SLOT_DURATION * (n - 2) as u32),
 			);
 		}
 
 		// but we cap it to a maximum of 20 slots
 		assert_eq!(
-			super::slot_lenience_linear(1.into(), &slot(23)),
+			super::slot_lenience_linear(1u64.into(), &slot(23)),
 			Some(SLOT_DURATION * 20),
 		);
 	}
@@ -827,24 +834,24 @@ mod test {
 	#[test]
 	fn exponential_slot_lenience() {
 		// if no slots are skipped there should be no lenience
-		assert_eq!(super::slot_lenience_exponential(1.into(), &slot(2)), None);
+		assert_eq!(super::slot_lenience_exponential(1u64.into(), &slot(2)), None);
 
 		// otherwise the lenience is incremented exponentially every two slots
 		for n in 3..=17 {
 			assert_eq!(
-				super::slot_lenience_exponential(1.into(), &slot(n)),
+				super::slot_lenience_exponential(1u64.into(), &slot(n)),
 				Some(SLOT_DURATION * 2u32.pow((n / 2 - 1) as u32)),
 			);
 		}
 
 		// but we cap it to a maximum of 14 slots
 		assert_eq!(
-			super::slot_lenience_exponential(1.into(), &slot(18)),
+			super::slot_lenience_exponential(1u64.into(), &slot(18)),
 			Some(SLOT_DURATION * 2u32.pow(7)),
 		);
 
 		assert_eq!(
-			super::slot_lenience_exponential(1.into(), &slot(19)),
+			super::slot_lenience_exponential(1u64.into(), &slot(19)),
 			Some(SLOT_DURATION * 2u32.pow(7)),
 		);
 	}

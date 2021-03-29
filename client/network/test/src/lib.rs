@@ -247,7 +247,7 @@ pub struct Peer<D, BlockImport> {
 	client: PeersClient,
 	/// We keep a copy of the verifier so that we can invoke it for locally-generated blocks,
 	/// instead of going through the import queue.
-	verifier: VerifierAdapter<Block, Verifier>,
+	verifier: VerifierAdapter<Block>,
 	/// We keep a copy of the block_import so that we can invoke it for locally-generated blocks,
 	/// instead of going through the import queue.
 	block_import: BlockImportAdapter<BlockImport>,

@@ -214,7 +214,7 @@ impl<T: ChainInfo> Node<T> {
 			backend,
 			keystore,
 			mut task_manager,
-			inherent_data_providers,
+			create_inherent_data_providers,
 			consensus_data_provider,
 			select_chain,
 			block_import,
@@ -291,7 +291,7 @@ impl<T: ChainInfo> Node<T> {
 			commands_stream,
 			select_chain,
 			consensus_data_provider,
-			inherent_data_providers,
+			create_inherent_data_providers,
 		});
 
 		// spawn the authorship task as an essential task.

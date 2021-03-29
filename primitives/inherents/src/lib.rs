@@ -289,6 +289,22 @@ where
 	}
 }
 
+#[cfg(feature = "std")]
+#[async_trait::async_trait]
+impl<Block: BlockT, ExtraArgs: Send, IDPS: InherentDataProvider>
+	CreateInherentDataProviders<Block, ExtraArgs>
+	for Box<dyn CreateInherentDataProviders<Block, ExtraArgs, InherentDataProviders = IDPS> + Send + Sync>
+{
+	type InherentDataProviders = IDPS;
+
+	async fn create_inherent_data_providers(
+		&self,
+		parent: Block::Hash,
+		extra_args: ExtraArgs,
+	) -> Result<Self::InherentDataProviders, Box<dyn std::error::Error + Send + Sync>> {
+		self.create_inherent_data_providers(parent, extra_args).await
+	}
+}
 
 /// Result of [`InherentDataProvider::try_handle_error`].
 #[cfg(feature = "std")]
