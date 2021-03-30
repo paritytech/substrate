@@ -401,7 +401,7 @@ where
 		);
 
 		// We skip the eviction in case one is in order.
-		// Evictions should only be perfomed by [`try_eviction`].
+		// Evictions should only be performed by [`try_eviction`].
 		let new_contract_info = Self::enact_verdict(
 			account, alive_contract_info, current_block_number, verdict, None,
 		);
