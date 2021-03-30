@@ -947,8 +947,7 @@ mod tests {
 		ext.execute_with(|| {
 			roll_to(25);
 
-			let RoundSnapshot { voters, ..} =
-				MultiPhase::snapshot().unwrap();
+			let RoundSnapshot { voters, ..} = MultiPhase::snapshot().unwrap();
 
 			let RawSolution { mut compact, .. } = raw_solution();
 			let encoded_len = compact.encode().len() as u32;
