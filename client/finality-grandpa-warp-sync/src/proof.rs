@@ -49,8 +49,8 @@ pub struct AuthoritySetChangeProof<Block: BlockT> {
 /// latest finalized block, which should be checked against the latest authority set.
 #[derive(Debug, Decode, Encode)]
 pub enum WarpSyncFinished<Block: BlockT> {
-	Yes(Option<GrandpaJustification<Block>>),
 	No,
+	Yes(Option<GrandpaJustification<Block>>),
 }
 
 /// An accumulated proof of multiple authority set changes.
