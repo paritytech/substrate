@@ -1026,6 +1026,9 @@ impl<T: Config<I>, I: 'static> fungible::InspectHold<T::AccountId> for Pallet<T,
 		};
 		a.free >= required_free
 	}
+	fn reducible_balance_on_hold(who: &T::AccountId) -> Self::Balance {
+		Self::balance_on_hold(who)
+	}
 }
 impl<T: Config<I>, I: 'static> fungible::MutateHold<T::AccountId> for Pallet<T, I> {
 	fn hold(who: &T::AccountId, amount: Self::Balance) -> DispatchResult {
@@ -1056,11 +1059,10 @@ impl<T: Config<I>, I: 'static> fungible::MutateHold<T::AccountId> for Pallet<T, 
 		source: &T::AccountId,
 		dest: &T::AccountId,
 		amount: Self::Balance,
-		best_effort: bool,
 		on_hold: bool,
 	) -> Result<Self::Balance, DispatchError> {
 		let status = if on_hold { Status::Reserved } else { Status::Free };
-		Self::do_transfer_reserved(source, dest, amount, best_effort, status)
+		Self::do_transfer_reserved(source, dest, amount, false, status)
 	}
 }
 
