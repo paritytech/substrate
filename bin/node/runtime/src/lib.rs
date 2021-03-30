@@ -526,6 +526,17 @@ sp_npos_elections::generate_solution_type!(
 	>(16)
 );
 
+// todo [AJ] probably need to generate custom TypeInfo in generate_solution_type!, see polkadot.js
+impl scale_info::TypeInfo for NposCompactSolution16 {
+	type Identity = ();
+
+	fn type_info() -> scale_info::Type<scale_info::form::MetaForm> {
+		scale_info::Type::builder()
+			.path(scale_info::Path::new("NposCompactSolution16", module_path!()))
+			.composite(scale_info::build::Fields::unit())
+	}
+}
+
 impl pallet_election_provider_multi_phase::Config for Runtime {
 	type Event = Event;
 	type Currency = Balances;
