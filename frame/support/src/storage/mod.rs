@@ -584,6 +584,8 @@ pub struct ChildTriePrefixIterator<T> {
 	previous_key: Vec<u8>,
 	/// If true then values are removed while iterating
 	drain: bool,
+	/// Whether or not the first key i.e. the prefix is fetched
+	prefix_fetched: bool,
 	/// Function that takes `(raw_key_without_prefix, raw_value)` and decode `T`.
 	/// `raw_key_without_prefix` is the raw storage key without the prefix iterated on.
 	closure: fn(&[u8], &[u8]) -> Result<T, codec::Error>,
@@ -595,11 +597,20 @@ impl<T> ChildTriePrefixIterator<T> {
 		self.drain = true;
 		self
 	}
+
+	/// Instruct the iterator to not skip the first key, i.e. the prefix.
+	pub fn fetch_prefix(mut self) -> Self {
+		self.prefix_fetched = false;
+		self
+	}
 }
 
 impl<T: Decode + Sized> ChildTriePrefixIterator<(Vec<u8>, T)> {
 	/// Construct iterator to iterate over child trie items in `child_info` with the prefix `prefix`.
-	pub fn with_storage(child_info: &ChildInfo, prefix: &[u8]) -> Self {
+	/// 
+	/// By default the value under `prefix` is not fetched. Call the `fetch_prefix` method to enable
+	/// fetching the prefix.
+	pub fn with_prefix(child_info: &ChildInfo, prefix: &[u8]) -> Self {
 		let prefix = prefix.to_vec();
 		let previous_key = prefix.clone();
 		let closure = |raw_key_without_prefix: &[u8], raw_value: &[u8]| {
@@ -607,13 +618,23 @@ impl<T: Decode + Sized> ChildTriePrefixIterator<(Vec<u8>, T)> {
 			Ok((raw_key_without_prefix.to_vec(), value))
 		};
 
-		Self { prefix, storage_key: child_info.storage_key().to_vec(), previous_key, drain: false, closure }
+		Self {
+			prefix,
+			storage_key: child_info.storage_key().to_vec(),
+			previous_key,
+			drain: false,
+			prefix_fetched: true,
+			closure,
+		}
 	}
 }
 
 impl<K: Decode + Sized, T: Decode + Sized> ChildTriePrefixIterator<(K, T)> {
 	/// Construct iterator to iterate over child trie items in `child_info` with the prefix `prefix`.
-	pub fn with_storage_key<H: ReversibleStorageHasher>(child_info: &ChildInfo, prefix: &[u8]) -> Self {
+	/// 
+	/// By default the value under `prefix` is not fetched. Call the `fetch_prefix` method to enable
+	/// fetching the prefix.
+	pub fn with_prefix_over_key<H: ReversibleStorageHasher>(child_info: &ChildInfo, prefix: &[u8]) -> Self {
 		let prefix = prefix.to_vec();
 		let previous_key = prefix.clone();
 		let closure = |raw_key_without_prefix: &[u8], raw_value: &[u8]| {
@@ -623,7 +644,14 @@ impl<K: Decode + Sized, T: Decode + Sized> ChildTriePrefixIterator<(K, T)> {
 			Ok((key, value))
 		};
 
-		Self { prefix, storage_key: child_info.storage_key().to_vec(), previous_key, drain: false, closure }
+		Self {
+			prefix,
+			storage_key: child_info.storage_key().to_vec(),
+			previous_key,
+			drain: false,
+			prefix_fetched: true,
+			closure,
+		 }
 	}
 }
 
@@ -632,8 +660,13 @@ impl<T> Iterator for ChildTriePrefixIterator<T> {
 
 	fn next(&mut self) -> Option<Self::Item> {
 		loop {
-			let maybe_next = sp_io::default_child_storage::next_key(&self.storage_key, &self.previous_key)
-				.filter(|n| n.starts_with(&self.prefix));
+			let maybe_next = if self.prefix_fetched {
+				sp_io::default_child_storage::next_key(&self.storage_key, &self.previous_key)
+					.filter(|n| n.starts_with(&self.prefix))
+			} else {
+				self.prefix_fetched = true;
+				Some(self.previous_key.clone())
+			};
 			break match maybe_next {
 				Some(next) => {
 					self.previous_key = next;
