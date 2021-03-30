@@ -335,7 +335,10 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> StaticLookup for Pallet<T> {
+impl<T: Config> StaticLookup for Pallet<T>
+where
+	<T::AccountIndex as codec::HasCompact>::Type: scale_info::TypeInfo // todo: [AJ] this is a result of the derived compact TypeInfo impl, can we get rid of it?
+{
 	type Source = MultiAddress<T::AccountId, T::AccountIndex>;
 	type Target = T::AccountId;
 
