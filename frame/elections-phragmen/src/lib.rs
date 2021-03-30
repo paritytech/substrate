@@ -119,7 +119,8 @@ mod benchmarking;
 pub mod weights;
 pub use weights::WeightInfo;
 
-pub mod migrations_3_0_0;
+/// All migrations.
+pub mod migrations;
 
 /// The maximum votes allowed per voter.
 pub const MAXIMUM_VOTE: usize = 16;
@@ -1050,7 +1051,7 @@ impl<T: Config> Pallet<T> {
 				"Failed to run election [{:?}].",
 				e,
 			);
-			Self::deposit_event(RawEvent::ElectionError);
+			Self::deposit_event(Event::ElectionError);
 		});
 
 		T::WeightInfo::election_phragmen(weight_candidates, weight_voters, weight_edges)
