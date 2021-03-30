@@ -266,6 +266,8 @@ impl multi_phase::weights::WeightInfo for DualMockWeightInfo {
 			Zero::zero()
 		} else {
 			<() as multi_phase::weights::WeightInfo>::submit(c)
+		}
+	}
 	fn elect_queued() -> Weight {
 		if MockWeightInfo::get() {
 			Zero::zero()

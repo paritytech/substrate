@@ -1262,7 +1262,14 @@ mod feasibility_check {
 	//! more. The best way to audit and review these tests is to try and come up with a solution
 	//! that is invalid, but gets through the system as valid.
 
-	use super::{mock::*, *};
+	use super::*;
+	use crate::{
+		mock::{
+			MultiPhase, Runtime, roll_to, TargetIndex, raw_solution, EpochLength, UnsignedPhase,
+			SignedPhase, VoterIndex, ExtBuilder,
+		},
+	};
+	use frame_support::assert_noop;
 
 	const COMPUTE: ElectionCompute = ElectionCompute::OnChain;
 
@@ -1429,7 +1436,14 @@ mod feasibility_check {
 
 #[cfg(test)]
 mod tests {
-	use super::{mock::*, Event, *};
+	use super::*;
+	use crate::{
+		Phase,
+		mock::{
+			ExtBuilder, MultiPhase, Runtime, roll_to, MockWeightInfo, AccountId, TargetIndex,
+			Targets, multi_phase_events, System,
+		},
+	};
 	use frame_election_provider_support::ElectionProvider;
 	use sp_npos_elections::Support;
 

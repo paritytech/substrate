@@ -19,7 +19,7 @@
 
 use super::*;
 use crate::Pallet as MultiPhase;
-use frame_benchmarking::impl_benchmark_test_suite;
+use frame_benchmarking::{account, impl_benchmark_test_suite};
 use frame_support::{assert_ok, traits::OnInitialize};
 use frame_system::RawOrigin;
 use rand::{prelude::SliceRandom, rngs::SmallRng, SeedableRng};

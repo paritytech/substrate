@@ -262,11 +262,15 @@ impl<T: Config> Pallet<T> {
 
 #[cfg(test)]
 mod tests {
-	use super::{
-		mock::{Origin, *},
-		Error, Phase, *,
+	use super::*;
+	use crate::{
+		Phase, Error,
+		mock::{
+			balances, ExtBuilder, MultiPhase, Origin, raw_solution, roll_to, Runtime,
+			SignedMaxSubmissions, SignedMaxWeight,
+		},
 	};
-	use frame_support::dispatch::DispatchResultWithPostInfo;
+	use frame_support::{dispatch::DispatchResultWithPostInfo, assert_noop, assert_ok};
 
 	fn submit_with_witness(
 		origin: Origin,
@@ -282,7 +286,7 @@ mod tests {
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
 			// create a temp snapshot only for this test.
-			MultiPhase::create_snapshot();
+			MultiPhase::create_snapshot().unwrap();
 			let solution = raw_solution();
 
 			assert_noop!(

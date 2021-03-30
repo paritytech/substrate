@@ -61,7 +61,6 @@ impl From<FeasibilityError> for MinerError {
 	}
 }
 
-
 impl<T: Config> Pallet<T> {
 	/// Mine a new solution, and submit it back to the chain as an unsigned transaction.
 	pub fn mine_check_and_submit() -> Result<(), MinerError> {
@@ -512,11 +511,16 @@ mod max_weight {
 
 #[cfg(test)]
 mod tests {
-	use super::{
-		mock::{Origin, *},
-		Call, *,
+	use super::*;
+	use crate::{
+		CurrentPhase, InvalidTransaction, Phase, QueuedSolution, TransactionSource,
+		TransactionValidityError,
+		mock::{
+			ExtBuilder, Extrinsic, MinerMaxWeight, MultiPhase, Origin, Runtime, TestCompact,
+			roll_to, roll_to_with_ocw, witness,
+		},
 	};
-	use frame_support::{dispatch::Dispatchable, traits::OffchainWorker};
+	use frame_support::{assert_noop, assert_ok, dispatch::Dispatchable, traits::OffchainWorker};
 	use mock::Call as OuterCall;
 	use frame_election_provider_support::Assignment;
 	use sp_runtime::{traits::ValidateUnsigned, PerU16};
