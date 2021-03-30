@@ -1019,7 +1019,7 @@ where
 					// set changed (not where the signal happened!) as the base.
 					let set_state = VoterSetState::live(
 						new.set_id,
-						&*self.env.authority_set.inner().read(),
+						&*self.env.authority_set.inner(),
 						(new.canon_hash, new.canon_number),
 					);
 

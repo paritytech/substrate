@@ -105,7 +105,7 @@ impl ChainInfo for NodeTemplateChainInfo {
 
 		network_config
 			.listen_addresses
-			.push(multiaddr::Protocol::Memory(rand::random()).into());
+			.push(multiaddr::Protocol::Memory(0).into());
 
 		network_config.transport = TransportConfig::MemoryOnly;
 

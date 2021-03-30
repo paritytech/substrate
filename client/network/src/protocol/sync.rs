@@ -2016,7 +2016,7 @@ mod test {
 		let mut new_blocks = |n| {
 			for _ in 0..n {
 				let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
-				client.import(BlockOrigin::Own, block.clone()).unwrap();
+				block_on(client.import(BlockOrigin::Own, block.clone())).unwrap();
 			}
 
 			let info = client.info();
@@ -2147,7 +2147,7 @@ mod test {
 
 		let block = block_builder.build().unwrap().block;
 
-		client.import(BlockOrigin::Own, block.clone()).unwrap();
+		block_on(client.import(BlockOrigin::Own, block.clone())).unwrap();
 		block
 	}
 
@@ -2188,7 +2188,7 @@ mod test {
 			let block = block_builder.build().unwrap().block;
 
 			if import {
-				client2.import(BlockOrigin::Own, block.clone()).unwrap();
+				block_on(client2.import(BlockOrigin::Own, block.clone())).unwrap();
 			}
 
 			block
@@ -2213,7 +2213,7 @@ mod test {
 		send_block_announce(block3_fork.header().clone(), &peer_id2, &mut sync);
 
 		// Import and tell sync that we now have the fork.
-		client.import(BlockOrigin::Own, block3_fork.clone()).unwrap();
+		block_on(client.import(BlockOrigin::Own, block3_fork.clone())).unwrap();
 		sync.update_chain_info(&block3_fork.hash(), 3);
 
 		let block4 = build_block_at(block3_fork.hash(), false);
@@ -2325,7 +2325,7 @@ mod test {
 
 			resp_blocks.into_iter()
 					.rev()
-					.for_each(|b| client.import_as_final(BlockOrigin::Own, b).unwrap());
+					.for_each(|b| block_on(client.import_as_final(BlockOrigin::Own, b)).unwrap());
 		}
 
 		// Let peer2 announce that it finished syncing
@@ -2388,7 +2388,7 @@ mod test {
 			let mut client = Arc::new(TestClientBuilder::new().build());
 			let fork_blocks = blocks[..MAX_BLOCKS_TO_LOOK_BACKWARDS as usize * 2]
 				.into_iter()
-				.inspect(|b| client.import(BlockOrigin::Own, (*b).clone()).unwrap())
+				.inspect(|b| block_on(client.import(BlockOrigin::Own, (*b).clone())).unwrap())
 				.cloned()
 				.collect::<Vec<_>>();
 
@@ -2492,7 +2492,7 @@ mod test {
 
 			resp_blocks.into_iter()
 				.rev()
-				.for_each(|b| client.import(BlockOrigin::Own, b).unwrap());
+				.for_each(|b| block_on(client.import(BlockOrigin::Own, b)).unwrap());
 		}
 
 		// Request the tip
