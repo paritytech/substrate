@@ -22,7 +22,7 @@ frame-system = { version = "3.0.0", default-features = false, path = "../system"
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
 
 [dev-dependencies]
-sp-core = { version = "3.0.0", path = "../../primitives/core" }
+sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
 
 [features]
 default = ["std"]

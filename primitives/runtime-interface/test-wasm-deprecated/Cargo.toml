@@ -16,7 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 sp-runtime-interface = { version = "3.0.0", default-features = false, path = "../" }
 sp-std = { version = "3.0.0", default-features = false, path = "../../std" }
 sp-io = { version = "4.0.0-dev", default-features = false, path = "../../io" }
-sp-core = { version = "3.0.0", default-features = false, path = "../../core" }
+sp-core = { version = "4.0.0-dev", default-features = false, path = "../../core" }
 
 [build-dependencies]
 substrate-wasm-builder = { version = "4.0.0", path = "../../../utils/wasm-builder" }

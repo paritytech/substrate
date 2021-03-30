@@ -22,7 +22,7 @@ serde = { version = "1.0.101", features = ["derive"] }
 wasm-timer = "0.2"
 sp-blockchain = { version = "3.0.0", path = "../../../primitives/blockchain" }
 sp-utils = { version = "3.0.0", path = "../../../primitives/utils" }
-sp-core = { version = "3.0.0", path = "../../../primitives/core" }
+sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
 sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
 sp-transaction-pool = { version = "3.0.0", path = "../../../primitives/transaction-pool" }
 parity-util-mem = { version = "0.9.0", default-features = false, features = ["primitive-types"] }

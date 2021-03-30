@@ -21,7 +21,7 @@ pallet-mmr-primitives = { version = "3.0.0", path = "../primitives" }
 serde = { version = "1.0.101", features = ["derive"] }
 sp-api = { version = "3.0.0", path = "../../../primitives/api" }
 sp-blockchain = { version = "3.0.0", path = "../../../primitives/blockchain" }
-sp-core = { version = "3.0.0", path = "../../../primitives/core" }
+sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
 sp-rpc = { version = "3.0.0", path = "../../../primitives/rpc" }
 sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
 

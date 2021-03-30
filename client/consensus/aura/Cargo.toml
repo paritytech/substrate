@@ -27,7 +27,7 @@ futures-timer = "3.0.1"
 sp-inherents = { version = "3.0.0", path = "../../../primitives/inherents" }
 log = "0.4.8"
 parking_lot = "0.11.1"
-sp-core = { version = "3.0.0", path = "../../../primitives/core" }
+sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
 sp-blockchain = { version = "3.0.0", path = "../../../primitives/blockchain" }
 sp-io = { version = "4.0.0-dev", path = "../../../primitives/io" }
 sp-version = { version = "3.0.0", path = "../../../primitives/version" }

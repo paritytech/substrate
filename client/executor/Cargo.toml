@@ -17,7 +17,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 derive_more = "0.99.2"
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
-sp-core = { version = "3.0.0", path = "../../primitives/core" }
+sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
 sp-tasks = { version = "3.0.0", path = "../../primitives/tasks" }
 sp-trie = { version = "3.0.0", path = "../../primitives/trie" }
 sp-serializer = { version = "3.0.0", path = "../../primitives/serializer" }

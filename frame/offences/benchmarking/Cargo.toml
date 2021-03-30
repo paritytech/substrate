@@ -33,7 +33,7 @@ frame-election-provider-support = { version = "3.0.0", default-features = false,
 pallet-staking-reward-curve = { version = "3.0.0", path = "../../staking/reward-curve" }
 pallet-timestamp = { version = "3.0.0", path = "../../timestamp" }
 serde = { version = "1.0.101" }
-sp-core = { version = "3.0.0", path = "../../../primitives/core" }
+sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
 sp-io = { version = "4.0.0-dev", path = "../../../primitives/io" }
 
 [features]

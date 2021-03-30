@@ -25,7 +25,7 @@ prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../..
 sc-client-api = { version = "3.0.0", path = "../api" }
 sc-transaction-graph = { version = "3.0.0", path = "./graph" }
 sp-api = { version = "3.0.0", path = "../../primitives/api" }
-sp-core = { version = "3.0.0", path = "../../primitives/core" }
+sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
 sp-tracing = { version = "3.0.0", path = "../../primitives/tracing" }
 sp-transaction-pool = { version = "3.0.0", path = "../../primitives/transaction-pool" }

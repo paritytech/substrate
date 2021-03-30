@@ -18,7 +18,7 @@ serde = { version = "1.0.101", optional = true, features = ["derive"] }
 sp-std = { version = "3.0.0", default-features = false, path = "../std" }
 sp-npos-elections-compact = { version = "3.0.0", path = "./compact" }
 sp-arithmetic = { version = "3.0.0", default-features = false, path = "../arithmetic" }
-sp-core = { version = "3.0.0", default-features = false, path = "../core" }
+sp-core = { version = "4.0.0-dev", default-features = false, path = "../core" }
 
 [dev-dependencies]
 substrate-test-utils = { version = "3.0.0", path = "../../test-utils" }

@@ -26,7 +26,7 @@ sp-api = { version = "3.0.0", path = "../../../../primitives/api" }
 sp-blockchain = { version = "3.0.0", path = "../../../../primitives/blockchain" }
 sp-runtime = { version = "4.0.0-dev", path = "../../../../primitives/runtime" }
 sp-externalities = { version = "0.9.0", path = "../../../../primitives/externalities" }
-sp-core = { version = "3.0.0", path = "../../../../primitives/core" }
+sp-core = { version = "4.0.0-dev", path = "../../../../primitives/core" }
 frame-try-runtime = { version = "0.9.0-dev", path = "../../../../frame/try-runtime" }
 
 remote-externalities = { version = "0.9.0", path = "../../remote-externalities" }

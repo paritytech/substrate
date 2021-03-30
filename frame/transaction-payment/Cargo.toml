@@ -21,7 +21,7 @@ frame-support = { version = "4.0.0-dev", default-features = false, path = "../su
 frame-system = { version = "3.0.0", default-features = false, path = "../system" }
 smallvec = "1.4.1"
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io", default-features = false }
-sp-core = { version = "3.0.0", path = "../../primitives/core", default-features = false }
+sp-core = { version = "4.0.0-dev", path = "../../primitives/core", default-features = false }
 
 [dev-dependencies]
 serde_json = "1.0.41"

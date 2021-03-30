@@ -22,7 +22,7 @@ jsonrpc-derive = "15.1.0"
 jsonrpc-pubsub = "15.1.0"
 log = "0.4.8"
 parking_lot = "0.11.1"
-sp-core = { version = "3.0.0", path = "../../primitives/core" }
+sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
 sp-version = { version = "3.0.0", path = "../../primitives/version" }
 sp-runtime = { path = "../../primitives/runtime" , version = "4.0.0-dev"}
 sp-chain-spec = { path = "../../primitives/chain-spec" , version = "3.0.0"}

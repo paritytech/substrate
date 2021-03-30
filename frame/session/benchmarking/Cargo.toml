@@ -26,7 +26,7 @@ rand = { version = "0.7.2", default-features = false }
 [dev-dependencies]
 serde = { version = "1.0.101" }
 codec = { package = "parity-scale-codec", version = "2.0.0", features = ["derive"] }
-sp-core = { version = "3.0.0", path = "../../../primitives/core" }
+sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
 pallet-staking-reward-curve = { version = "3.0.0", path = "../../staking/reward-curve" }
 sp-io ={ version = "4.0.0-dev", path = "../../../primitives/io" }
 pallet-timestamp = { version = "3.0.0", path = "../../timestamp" }

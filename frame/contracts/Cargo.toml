@@ -22,7 +22,7 @@ pallet-contracts-proc-macro = { version = "3.0.0", path = "proc-macro" }
 parity-wasm = { version = "0.41.0", default-features = false }
 pwasm-utils = { version = "0.16", default-features = false }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
-sp-core = { version = "3.0.0", default-features = false, path = "../../primitives/core" }
+sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
 sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
 sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }

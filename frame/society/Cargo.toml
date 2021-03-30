@@ -22,7 +22,7 @@ frame-system = { version = "3.0.0", default-features = false, path = "../system"
 rand_chacha = { version = "0.2", default-features = false }
 
 [dev-dependencies]
-sp-core = { version = "3.0.0", path = "../../primitives/core" }
+sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
 sp-io ={ version = "4.0.0-dev", path = "../../primitives/io" }
 frame-support-test = { version = "3.0.0", path = "../support/test" }
 pallet-balances = { version = "3.0.0", path = "../balances" }

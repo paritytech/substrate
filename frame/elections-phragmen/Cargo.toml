@@ -27,7 +27,7 @@ log = { version = "0.4.14", default-features = false }
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
 hex-literal = "0.3.1"
 pallet-balances = { version = "3.0.0", path = "../balances" }
-sp-core = { version = "3.0.0", path = "../../primitives/core" }
+sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
 substrate-test-utils = { version = "3.0.0", path = "../../test-utils" }
 
 [features]

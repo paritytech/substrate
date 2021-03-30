@@ -37,7 +37,7 @@ serde = { version = "1.0.101" }
 
 [dev-dependencies.sp-core]
 default-features = false
-version = "3.0.0"
+version = "4.0.0-dev"
 path = "../../../../primitives/core"
 
 [dev-dependencies.sp-io]

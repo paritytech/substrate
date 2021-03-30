@@ -24,7 +24,7 @@ frame-benchmarking = { version = "3.1.0", default-features = false, path = "../b
 [dev-dependencies]
 frame-support-test = { version = "3.0.0", path = "../support/test" }
 pallet-balances = { version = "3.0.0", path = "../balances" }
-sp-core = { version = "3.0.0", path = "../../primitives/core" }
+sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
 serde = { version = "1.0.101" }
 

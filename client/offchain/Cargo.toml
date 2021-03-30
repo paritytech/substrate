@@ -27,7 +27,7 @@ sc-client-api = { version = "3.0.0", path = "../api" }
 sc-keystore = { version = "3.0.0", path = "../keystore" }
 sc-network = { version = "0.9.0", path = "../network" }
 sp-api = { version = "3.0.0", path = "../../primitives/api" }
-sp-core = { version = "3.0.0", path = "../../primitives/core" }
+sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
 sp-offchain = { version = "3.0.0", path = "../../primitives/offchain" }
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
 sp-utils = { version = "3.0.0", path = "../../primitives/utils" }

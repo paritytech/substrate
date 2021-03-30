@@ -24,7 +24,7 @@ log = "0.4.11"
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 
 sp-io = { version = "4.0.0-dev", path = "../../../primitives/io" }
-sp-core = { version = "3.0.0", path = "../../../primitives/core" }
+sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
 sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
 
 [dev-dependencies]

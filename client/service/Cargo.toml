@@ -48,7 +48,7 @@ sp-externalities = { version = "0.9.0", path = "../../primitives/externalities" 
 sp-utils = { version = "3.0.0", path = "../../primitives/utils" }
 sp-version = { version = "3.0.0", path = "../../primitives/version" }
 sp-blockchain = { version = "3.0.0", path = "../../primitives/blockchain" }
-sp-core = { version = "3.0.0", path = "../../primitives/core" }
+sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
 sp-keystore = { version = "0.9.0", path = "../../primitives/keystore" }
 sp-session = { version = "3.0.0", path = "../../primitives/session" }
 sp-state-machine = { version = "0.9.0", path = "../../primitives/state-machine" }
