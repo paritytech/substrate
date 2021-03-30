@@ -46,7 +46,6 @@ frame-system = { version = "3.0.0", path = "../../frame/system" }
 env_logger = "0.7.1"
 log = "0.4.8"
 futures = { package = "futures", version = "0.3", features = ["compat"] }
-rand = "0.7"
 tokio = { version = "0.2", features = ["full"] }
 
 # Calling RPC
