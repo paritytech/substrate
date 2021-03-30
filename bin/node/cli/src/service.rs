@@ -534,7 +534,7 @@ pub fn new_light(
 
 #[cfg(test)]
 mod tests {
-	use std::{sync::Arc, borrow::Cow, any::Any, convert::TryInto};
+	use std::{sync::Arc, borrow::Cow, convert::TryInto};
 	use sc_consensus_babe::{CompatibleDigestItem, BabeIntermediate, INTERMEDIATE_KEY};
 	use sc_consensus_epochs::descendent_query;
 	use sp_consensus::{
@@ -648,14 +648,14 @@ mod tests {
 						&(slot * SLOT_DURATION),
 					);
 
-					let epoch_descriptor = babe_link.epoch_changes().lock().epoch_descriptor_for_child_of(
+					let epoch_descriptor = babe_link.epoch_changes().shared_data().epoch_descriptor_for_child_of(
 						descendent_query(&*service.client()),
 						&parent_hash,
 						parent_number,
 						slot.into(),
 					).unwrap().unwrap();
 
-					let epoch = babe_link.epoch_changes().lock().epoch_data(
+					let epoch = babe_link.epoch_changes().shared_data().epoch_data(
 						&epoch_descriptor,
 						|slot| sc_consensus_babe::Epoch::genesis(&babe_link.config(), slot),
 					).unwrap();
@@ -703,11 +703,11 @@ mod tests {
 				params.body = Some(new_body);
 				params.intermediates.insert(
 					Cow::from(INTERMEDIATE_KEY),
-					Box::new(BabeIntermediate::<Block> { epoch_descriptor }) as Box<dyn Any>,
+					Box::new(BabeIntermediate::<Block> { epoch_descriptor }) as Box<_>,
 				);
 				params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
-				block_import.import_block(params, Default::default())
+				futures::executor::block_on(block_import.import_block(params, Default::default()))
 					.expect("error importing test block");
 			},
 			|service, _| {

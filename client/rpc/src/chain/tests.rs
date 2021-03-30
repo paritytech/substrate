@@ -67,7 +67,7 @@ fn should_return_a_block() {
 
 	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 	let block_hash = block.hash();
-	client.import(BlockOrigin::Own, block).unwrap();
+	executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
 	// Genesis block is not justified
 	assert_matches!(
@@ -133,7 +133,7 @@ fn should_return_block_hash() {
 	);
 
 	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
-	client.import(BlockOrigin::Own, block.clone()).unwrap();
+	executor::block_on(client.import(BlockOrigin::Own, block.clone())).unwrap();
 
 	assert_matches!(
 		api.block_hash(Some(ListOrValue::Value(0u64.into())).into()),
@@ -167,7 +167,7 @@ fn should_return_finalized_hash() {
 
 	// import new block
 	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
-	client.import(BlockOrigin::Own, block).unwrap();
+	executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
 	// no finalization yet
 	assert_matches!(
 		api.finalized_head(),
@@ -199,7 +199,7 @@ fn should_notify_about_latest_block() {
 		));
 
 		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
-		client.import(BlockOrigin::Own, block).unwrap();
+		executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
 	}
 
 	// assert initial head sent.
@@ -229,7 +229,7 @@ fn should_notify_about_best_block() {
 		));
 
 		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
-		client.import(BlockOrigin::Own, block).unwrap();
+		executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
 	}
 
 	// assert initial head sent.
@@ -259,7 +259,7 @@ fn should_notify_about_finalized_block() {
 		));
 
 		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
-		client.import(BlockOrigin::Own, block).unwrap();
+		executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
 		client.finalize_block(BlockId::number(1), None).unwrap();
 	}
 
