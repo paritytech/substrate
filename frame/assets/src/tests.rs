@@ -593,7 +593,6 @@ fn force_metadata_should_work() {
 
 		//Error handles clearing non-existent asset class
 		assert_noop!(Assets::force_clear_metadata(Origin::root(), 1), Error::<Test>::Unknown);
-		
 	});
 }
 
@@ -628,4 +627,3 @@ fn force_asset_status_should_work(){
 	});
 
 }
-
