@@ -89,6 +89,8 @@ pub enum Error<E: fmt::Debug> {
 	InvalidParent,
 	/// Invalid pruning mode specified. Contains expected mode.
 	InvalidPruningMode(String),
+	/// Too many unfinalized sibling blocks inserted.
+	TooManySiblingBlocks,
 }
 
 /// Pinning error type.
@@ -112,6 +114,7 @@ impl<E: fmt::Debug> fmt::Debug for Error<E> {
 			Error::InvalidBlockNumber => write!(f, "Trying to insert block with invalid number"),
 			Error::InvalidParent => write!(f, "Trying to insert block with unknown parent"),
 			Error::InvalidPruningMode(e) => write!(f, "Expected pruning mode: {}", e),
+			Error::TooManySiblingBlocks => write!(f, "Too many sibling blocks inserted"),
 		}
 	}
 }
