@@ -943,7 +943,7 @@ mod tests {
 
 	#[test]
 	fn trim_compact_length_does_not_modify_when_short_enough() {
-		let (mut ext, _) = ExtBuilder::default().build_offchainify(0);
+		let mut ext = ExtBuilder::default().build();
 		ext.execute_with(|| {
 			roll_to(25);
 
@@ -965,7 +965,7 @@ mod tests {
 
 	#[test]
 	fn trim_compact_length_modifies_when_too_long() {
-		let (mut ext, _) = ExtBuilder::default().build_offchainify(0);
+		let mut ext = ExtBuilder::default().build();
 		ext.execute_with(|| {
 			roll_to(25);
 
@@ -992,7 +992,7 @@ mod tests {
 	// we know that higher-level functions will all also have short-enough solutions.
 	#[test]
 	fn mine_solution_solutions_always_within_acceptable_length() {
-		let (mut ext, _) = ExtBuilder::default().build_offchainify(0);
+		let mut ext = ExtBuilder::default().build();
 		ext.execute_with(|| {
 			roll_to(25);
 
