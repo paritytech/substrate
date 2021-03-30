@@ -34,7 +34,7 @@ frame-benchmarking = { version = "3.1.0", default-features = false, path = "../b
 rand_chacha = { version = "0.2", default-features = false, optional = true }
 
 [dev-dependencies]
-sp-storage = { version = "3.0.0", path = "../../primitives/storage" }
+sp-storage = { version = "4.0.0-dev", path = "../../primitives/storage" }
 sp-tracing = { version = "3.0.0", path = "../../primitives/tracing" }
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
 pallet-balances = { version = "3.0.0", path = "../balances" }

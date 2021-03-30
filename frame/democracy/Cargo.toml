@@ -26,7 +26,7 @@ frame-system = { version = "3.0.0", default-features = false, path = "../system"
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
 pallet-balances = { version = "3.0.0", path = "../balances" }
 pallet-scheduler = { version = "3.0.0", path = "../scheduler" }
-sp-storage = { version = "3.0.0", path = "../../primitives/storage" }
+sp-storage = { version = "4.0.0-dev", path = "../../primitives/storage" }
 substrate-test-utils = { version = "3.0.0", path = "../../test-utils" }
 hex-literal = "0.3.1"
 

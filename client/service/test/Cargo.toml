@@ -25,7 +25,7 @@ sp-api = { version = "3.0.0", path = "../../../primitives/api" }
 sp-state-machine = { version = "0.9.0", path = "../../../primitives/state-machine" }
 sp-externalities = { version = "0.9.0", path = "../../../primitives/externalities" }
 sp-trie = { version = "3.0.0", path = "../../../primitives/trie" }
-sp-storage = { version = "3.0.0", path = "../../../primitives/storage" }
+sp-storage = { version = "4.0.0-dev", path = "../../../primitives/storage" }
 sc-client-db = { version = "0.9.0", default-features = false, path = "../../db" }
 futures = { version = "0.3.1", features = ["compat"] }
 sc-service = { version = "0.9.0", default-features = false, features = ["test-helpers"], path = "../../service" }

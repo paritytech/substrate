@@ -14,7 +14,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-storage = { version = "3.0.0", path = "../storage", default-features = false }
+sp-storage = { version = "4.0.0-dev", path = "../storage", default-features = false }
 sp-std = { version = "3.0.0", path = "../std", default-features = false }
 environmental = { version = "1.1.2", default-features = false }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
