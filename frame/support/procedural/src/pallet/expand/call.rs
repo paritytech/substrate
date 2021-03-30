@@ -186,6 +186,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 
 		impl<#type_impl_gen> #pallet_ident<#type_use_gen> #where_clause {
 			#[doc(hidden)]
+			#[allow(dead_code)]
 			pub fn call_functions() -> &'static [#frame_support::dispatch::FunctionMetadata] {
 				&[ #(
 					#frame_support::dispatch::FunctionMetadata {
