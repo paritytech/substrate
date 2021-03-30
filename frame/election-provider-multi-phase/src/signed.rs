@@ -79,6 +79,8 @@ impl<T: Config> Pallet<T> {
 					desired_targets,
 				)
 			};
+			// the feasibility check itself has some weight
+			weight = weight.saturating_add(feasibility_weight);
 			match Self::feasibility_check(solution, ElectionCompute::Signed) {
 				Ok(ready_solution) => {
 					Self::finalize_signed_phase_accept_solution(
@@ -89,14 +91,11 @@ impl<T: Config> Pallet<T> {
 					);
 					found_solution = true;
 
-					weight = weight.saturating_add(feasibility_weight);
 					weight = weight
 						.saturating_add(T::WeightInfo::finalize_signed_phase_accept_solution());
 					break;
 				}
 				Err(_) => {
-					// we assume a worse case feasibility check happened anyhow.
-					weight = weight.saturating_add(feasibility_weight);
 					Self::finalize_signed_phase_reject_solution(&who, deposit);
 					weight = weight
 						.saturating_add(T::WeightInfo::finalize_signed_phase_reject_solution());
