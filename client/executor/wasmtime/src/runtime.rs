@@ -59,12 +59,17 @@ impl InstanceCreator {
 	}
 }
 
+/// Data required for creating instances with the fast instance reuse strategy.
+struct InstanceSnapshotData {
+	mutable_globals: ExposedMutableGlobalsSet,
+	data_segments_snapshot: Arc<DataSegmentsSnapshot>,
+}
+
 /// A `WasmModule` implementation using wasmtime to compile the runtime module to machine code
 /// and execute the compiled code.
 pub struct WasmtimeRuntime {
 	module: Arc<wasmtime::Module>,
-	mutable_globals: Option<ExposedMutableGlobalsSet>,
-	data_segments_snapshot: Option<Arc<DataSegmentsSnapshot>>,
+	snapshot_data: Option<InstanceSnapshotData>,
 	config: Config,
 	host_functions: Vec<&'static dyn Function>,
 	engine: Engine,
@@ -88,31 +93,21 @@ impl WasmModule for WasmtimeRuntime {
 			self.config.allow_missing_func_imports,
 		)?;
 
-		let strategy = if self.config.semantics.fast_instance_reuse {
+		let strategy = if let Some(ref snapshot_data) = self.snapshot_data {
 			let instance_wrapper =
 				InstanceWrapper::new(&store, &self.module, &imports, self.config.heap_pages)?;
 			let heap_base = instance_wrapper.extract_heap_base()?;
-
-			let mut_globals = self
-				.mutable_globals
-				.as_ref()
-				.expect("mutable_globals are Some when fast_instance_reuse is set; qed");
 
 			// This function panics if the instance was created from a runtime blob different from which
 			// the mutable globals were collected. Here, it is easy to see that there is only a single
 			// runtime blob and thus it's the same that was used for both creating the instance and
 			// collecting the mutable globals.
-			let globals_snapshot = GlobalsSnapshot::take(mut_globals, &instance_wrapper);
-
-			let data_segments_snapshot = self
-				.data_segments_snapshot
-				.clone()
-				.expect("data_segments_shanpshot is Some when fast_instance_reuse is set; qed");
+			let globals_snapshot = GlobalsSnapshot::take(&snapshot_data.mutable_globals, &instance_wrapper);
 
 			Strategy::FastInstanceReuse {
 				instance_wrapper: Rc::new(instance_wrapper),
 				globals_snapshot,
-				data_segments_snapshot,
+				data_segments_snapshot: snapshot_data.data_segments_snapshot.clone(),
 				heap_base,
 			}
 		} else {
@@ -281,7 +276,7 @@ pub enum CodeSupplyMode<'a> {
 	/// The runtime is instantiated using the given runtime blob.
 	Verbatim {
 		// Rationale to take the `RuntimeBlob` here is so that the client will be able to reuse
-		// the blob e.g. if they did a prevalidation. If they didn't they can `RuntimeBlob`
+		// the blob e.g. if they did a prevalidation. If they didn't they can pass a `RuntimeBlob`
 		// instance and it will be used anyway in most cases, because we are going to do at least
 		// some instrumentations for both anticipated paths: substrate execution and PVF execution.
 		//
@@ -320,7 +315,7 @@ pub fn create_runtime(
 
 	let engine = Engine::new(&wasmtime_config);
 
-	let (module, data_segments_snapshot, mutable_globals) = match code_supply_mode {
+	let (module, snapshot_data) = match code_supply_mode {
 		CodeSupplyMode::Verbatim { mut blob } => {
 			instrument(&mut blob, &config.semantics);
 
@@ -328,31 +323,34 @@ pub fn create_runtime(
 				let data_segments_snapshot = DataSegmentsSnapshot::take(&blob).map_err(|e| {
 					WasmError::Other(format!("cannot take data segments snapshot: {}", e))
 				})?;
+				let data_segments_snapshot = Arc::new(data_segments_snapshot);
 
 				let mutable_globals = ExposedMutableGlobalsSet::collect(&blob);
 
 				let module = wasmtime::Module::new(&engine, &blob.serialize())
 					.map_err(|e| WasmError::Other(format!("cannot create module: {}", e)))?;
 
-				(module, Some(Arc::new(data_segments_snapshot)), Some(mutable_globals))
+				(module, Some(InstanceSnapshotData {
+					data_segments_snapshot,
+					mutable_globals,
+				}))
 			} else {
 				let module = wasmtime::Module::new(&engine, &blob.serialize())
 					.map_err(|e| WasmError::Other(format!("cannot create module: {}", e)))?;
-				(module, None, None)
+				(module, None)
 			}
 		}
 		CodeSupplyMode::Artifact { compiled_artifact } => {
 			let module = wasmtime::Module::deserialize(&engine, compiled_artifact)
 				.map_err(|e| WasmError::Other(format!("cannot deserialize module: {}", e)))?;
 
-			(module, None, None)
+			(module, None)
 		}
 	};
 
 	Ok(WasmtimeRuntime {
 		module: Arc::new(module),
-		mutable_globals,
-		data_segments_snapshot,
+		snapshot_data,
 		config,
 		host_functions,
 		engine,
