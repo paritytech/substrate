@@ -625,5 +625,4 @@ fn force_asset_status_should_work(){
 		assert_eq!(Assets::balance(0, 2), 100);
 		assert_eq!(Assets::total_supply(0), 100);
 	});
-
 }
