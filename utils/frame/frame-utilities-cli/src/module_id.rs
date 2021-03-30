@@ -21,11 +21,11 @@ use sc_cli::{
 	Error, utils::print_from_uri, CryptoSchemeFlag,
 	OutputTypeFlag, KeystoreParams, with_crypto_scheme,
 };
-use sp_runtime::PalletId;
 use sp_runtime::traits::AccountIdConversion;
 use sp_core::crypto::{Ss58Codec, Ss58AddressFormat};
 use std::convert::{TryInto, TryFrom};
 use structopt::StructOpt;
+use frame_support::PalletId;
 
 /// The `moduleid` command
 #[derive(Debug, StructOpt)]

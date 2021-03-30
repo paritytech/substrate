@@ -66,14 +66,17 @@ pub mod weights;
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use sp_std::prelude::*;
-use frame_support::{decl_module, decl_storage, decl_event, ensure, print, decl_error};
+use frame_support::{decl_module, decl_storage, decl_event, ensure, print, decl_error, PalletId};
 use frame_support::traits::{
-	Currency, Get, Imbalance, OnUnbalanced, ExistenceRequirement::{KeepAlive},
+	Currency, Get, Imbalance, OnUnbalanced, ExistenceRequirement::KeepAlive,
 	ReservableCurrency, WithdrawReasons
 };
-use sp_runtime::{Permill, PalletId, RuntimeDebug, traits::{
-	Zero, StaticLookup, AccountIdConversion, Saturating
-}};
+use sp_runtime::{
+	Permill, RuntimeDebug,
+	traits::{
+		Zero, StaticLookup, AccountIdConversion, Saturating
+	}
+};
 use frame_support::weights::{Weight, DispatchClass};
 use frame_support::traits::{EnsureOrigin};
 use codec::{Encode, Decode};

@@ -56,7 +56,7 @@ pub mod weights;
 
 use sp_std::prelude::*;
 use sp_runtime::{
-	DispatchError, PalletId,
+	DispatchError,
 	traits::{AccountIdConversion, Saturating, Zero},
 };
 use frame_support::{
@@ -66,7 +66,7 @@ use frame_support::{
 		Currency, ReservableCurrency, Get, EnsureOrigin, ExistenceRequirement::KeepAlive, Randomness,
 	},
 };
-use frame_support::weights::Weight;
+use frame_support::{weights::Weight, PalletId};
 use frame_system::ensure_signed;
 use codec::{Encode, Decode};
 pub use weights::WeightInfo;
