@@ -1223,11 +1223,14 @@ pub mod pallet_prelude {
 ///
 /// ### Macro expansion:
 ///
-/// The macro implements the traits `OnInitialize`, `OnFinalize`, `OnRuntimeUpgrade`,
+/// The macro implements the traits `OnInitialize`, `OnIdle`, `OnFinalize`, `OnRuntimeUpgrade`,
 /// `OffchainWorker`, `IntegrityTest` using `Hooks` implementation.
 ///
 /// NOTE: OnRuntimeUpgrade is implemented with `Hooks::on_runtime_upgrade` and some additional
 /// logic. E.g. logic to write pallet version into storage.
+///
+/// NOTE: The macro also adds some tracing logic when implementing the above traits. The following
+///  hooks emit traces: `on_initialize`, `on_finalize` and `on_runtime_upgrade`.
 ///
 /// # Call: `#[pallet::call]` mandatory
 ///
@@ -1417,6 +1420,18 @@ pub mod pallet_prelude {
 /// #[pallet::getter(fn my_storage)]
 /// pub(super) type MyStorage<T> = StorageMap<_, Blake2_128Concat, u32, u32>;
 /// ```
+///
+/// The optional attributes `#[cfg(..)]` allow conditional compilation for the storage.
+///
+/// E.g:
+/// ```ignore
+/// #[cfg(feature = "my-feature")]
+/// #[pallet::storage]
+/// pub(super) type MyStorage<T> = StorageValue<_, u32>;
+/// ```
+///
+/// All the `cfg` attributes are automatically copied to the items generated for the storage, i.e. the
+/// getter, storage prefix, and the metadata element etc.
 ///
 /// NOTE: If the `QueryKind` generic parameter is still generic at this stage or is using some type
 /// alias then the generation of the getter might fail. In this case the getter can be implemented

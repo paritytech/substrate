@@ -84,7 +84,7 @@ use sp_core::crypto::Public;
 use sp_application_crypto::AppKey;
 use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 use sp_runtime::{
-	generic::{BlockId, OpaqueDigestItemId}, Justification,
+	generic::{BlockId, OpaqueDigestItemId}, Justifications,
 	traits::{Block as BlockT, Header, DigestItemFor, Zero},
 };
 use sp_api::{ProvideRuntimeApi, NumberFor};
@@ -97,7 +97,7 @@ use sp_consensus::{
 	SelectChain, SlotData, import_queue::{Verifier, BasicQueue, DefaultImportQueue, CacheKeyId},
 };
 use sp_consensus_babe::inherents::BabeInherentData;
-use sp_timestamp::{TimestampInherentData, InherentType as TimestampInherent};
+use sp_timestamp::TimestampInherentData;
 use sc_client_api::{
 	backend::AuxStore, BlockchainEvents, ProvideUncles,
 };
@@ -345,8 +345,8 @@ impl Config {
 		}
 	}
 
-	/// Get the inner slot duration, in milliseconds.
-	pub fn slot_duration(&self) -> u64 {
+	/// Get the inner slot duration
+	pub fn slot_duration(&self) -> Duration {
 		self.0.slot_duration()
 	}
 }
@@ -438,7 +438,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, BS, Error>(BabeParams {
 		+ Sync + 'static,
 	Error: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
 	SO: SyncOracle + Send + Sync + Clone + 'static,
-	CAW: CanAuthorWith<B> + Send + 'static,
+	CAW: CanAuthorWith<B> + Send + Sync + 'static,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
 {
 	const HANDLE_BUFFER_SIZE: usize = 1024;
@@ -448,7 +448,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, BS, Error>(BabeParams {
 
 	let worker = BabeSlotWorker {
 		client: client.clone(),
-		block_import: Arc::new(Mutex::new(block_import)),
+		block_import,
 		env,
 		sync_oracle: sync_oracle.clone(),
 		force_authoring,
@@ -605,7 +605,7 @@ type SlotNotificationSinks<B> = Arc<
 
 struct BabeSlotWorker<B: BlockT, C, E, I, SO, BS> {
 	client: Arc<C>,
-	block_import: Arc<Mutex<I>>,
+	block_import: I,
 	env: E,
 	sync_oracle: SO,
 	force_authoring: bool,
@@ -647,8 +647,8 @@ where
 		"babe"
 	}
 
-	fn block_import(&self) -> Arc<Mutex<Self::BlockImport>> {
-		self.block_import.clone()
+	fn block_import(&mut self) -> &mut Self::BlockImport {
+		&mut self.block_import
 	}
 
 	fn epoch_data(
@@ -919,7 +919,7 @@ impl SlotCompatible for TimeSource {
 	fn extract_timestamp_and_slot(
 		&self,
 		data: &InherentData,
-	) -> Result<(TimestampInherent, Slot, std::time::Duration), sp_consensus::Error> {
+	) -> Result<(sp_timestamp::Timestamp, Slot, std::time::Duration), sp_consensus::Error> {
 		trace!(target: "babe", "extract timestamp");
 		data.timestamp_inherent_data()
 			.and_then(|t| data.babe_inherent_data().map(|a| (t, a)))
@@ -1097,15 +1097,15 @@ where
 		&mut self,
 		origin: BlockOrigin,
 		header: Block::Header,
-		justification: Option<Justification>,
+		justifications: Option<Justifications>,
 		mut body: Option<Vec<Block::Extrinsic>>,
 	) -> Result<(BlockImportParams<Block, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		trace!(
 			target: "babe",
-			"Verifying origin: {:?} header: {:?} justification: {:?} body: {:?}",
+			"Verifying origin: {:?} header: {:?} justification(s): {:?} body: {:?}",
 			origin,
 			header,
-			justification,
+			justifications,
 			body,
 		);
 
@@ -1194,7 +1194,7 @@ where
 				let mut import_block = BlockImportParams::new(origin, pre_header);
 				import_block.post_digests.push(verified_info.seal);
 				import_block.body = body;
-				import_block.justification = justification;
+				import_block.justifications = justifications;
 				import_block.intermediates.insert(
 					Cow::from(INTERMEDIATE_KEY),
 					Box::new(BabeIntermediate::<Block> { epoch_descriptor }) as Box<dyn Any>,
@@ -1220,7 +1220,7 @@ where
 /// Register the babe inherent data provider, if not registered already.
 pub fn register_babe_inherent_data_provider(
 	inherent_data_providers: &InherentDataProviders,
-	slot_duration: u64,
+	slot_duration: Duration,
 ) -> Result<(), sp_consensus::Error> {
 	debug!(target: "babe", "Registering");
 	if !inherent_data_providers.has_provider(&sp_consensus_babe::inherents::INHERENT_IDENTIFIER) {
@@ -1626,7 +1626,7 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, Inner, CAW>(
 	SelectChain: sp_consensus::SelectChain<Block> + 'static,
 	CAW: CanAuthorWith<Block> + Send + Sync + 'static,
 {
-	register_babe_inherent_data_provider(&inherent_data_providers, babe_link.config.slot_duration)?;
+	register_babe_inherent_data_provider(&inherent_data_providers, babe_link.config.slot_duration())?;
 
 	let verifier = BabeVerifier {
 		select_chain,
@@ -1646,42 +1646,4 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, Inner, CAW>(
 		spawner,
 		registry,
 	))
-}
-
-/// BABE test helpers. Utility methods for manually authoring blocks.
-#[cfg(feature = "test-helpers")]
-pub mod test_helpers {
-	use super::*;
-
-	/// Try to claim the given slot and return a `BabePreDigest` if
-	/// successful.
-	pub fn claim_slot<B, C>(
-		slot: Slot,
-		parent: &B::Header,
-		client: &C,
-		keystore: SyncCryptoStorePtr,
-		link: &BabeLink<B>,
-	) -> Option<PreDigest> where
-		B: BlockT,
-		C: ProvideRuntimeApi<B> +
-			ProvideCache<B> +
-			HeaderBackend<B> +
-			HeaderMetadata<B, Error = ClientError>,
-		C::Api: BabeApi<B>,
-	{
-		let epoch_changes = link.epoch_changes.lock();
-		let epoch = epoch_changes.epoch_data_for_child_of(
-			descendent_query(client),
-			&parent.hash(),
-			parent.number().clone(),
-			slot,
-			|slot| Epoch::genesis(&link.config, slot),
-		).unwrap().unwrap();
-
-		authorship::claim_slot(
-			slot,
-			&epoch,
-			&keystore,
-		).map(|(digest, _)| digest)
-	}
 }

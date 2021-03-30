@@ -1022,7 +1022,7 @@ pub enum IncRefError {
 	NoProviders,
 }
 
-impl<T: Config> Module<T> {
+impl<T: Config> Pallet<T> {
 	pub fn account_exists(who: &T::AccountId) -> bool {
 		Account::<T>::contains_key(who)
 	}
@@ -1083,7 +1083,7 @@ impl<T: Config> Module<T> {
 					(1, 0, 0) => {
 						// No providers left (and no consumers) and no sufficients. Account dead.
 
-						Module::<T>::on_killed_account(who.clone());
+						Pallet::<T>::on_killed_account(who.clone());
 						Ok(DecRefStatus::Reaped)
 					}
 					(1, c, _) if c > 0 => {
@@ -1136,7 +1136,7 @@ impl<T: Config> Module<T> {
 				}
 				match (account.sufficients, account.providers) {
 					(0, 0) | (1, 0) => {
-						Module::<T>::on_killed_account(who.clone());
+						Pallet::<T>::on_killed_account(who.clone());
 						DecRefStatus::Reaped
 					}
 					(x, _) => {
@@ -1201,9 +1201,20 @@ impl<T: Config> Module<T> {
 		Account::<T>::get(who).consumers
 	}
 
-	/// True if the account has some outstanding references.
+	/// True if the account has some outstanding consumer references.
 	pub fn is_provider_required(who: &T::AccountId) -> bool {
 		Account::<T>::get(who).consumers != 0
+	}
+
+	/// True if the account has no outstanding consumer references or more than one provider.
+	pub fn can_dec_provider(who: &T::AccountId) -> bool {
+		let a = Account::<T>::get(who);
+		a.consumers == 0 || a.providers > 1
+	}
+
+	/// True if the account has at least one provider reference.
+	pub fn can_inc_consumer(who: &T::AccountId) -> bool {
+		Account::<T>::get(who).providers > 0
 	}
 
 	/// Deposits an event into this block's event record.
@@ -1449,7 +1460,12 @@ impl<T: Config> Module<T> {
 			match r {
 				Ok(_) => Event::ExtrinsicSuccess(info),
 				Err(err) => {
-					sp_runtime::print(err);
+					log::trace!(
+						target: "runtime::system",
+						"Extrinsic failed at block({:?}): {:?}",
+						Self::block_number(),
+						err,
+					);
 					Event::ExtrinsicFailed(err.error, info)
 				},
 			}
@@ -1515,11 +1531,11 @@ impl<T: Config> Module<T> {
 pub struct Provider<T>(PhantomData<T>);
 impl<T: Config> HandleLifetime<T::AccountId> for Provider<T> {
 	fn created(t: &T::AccountId) -> Result<(), StoredMapError> {
-		Module::<T>::inc_providers(t);
+		Pallet::<T>::inc_providers(t);
 		Ok(())
 	}
 	fn killed(t: &T::AccountId) -> Result<(), StoredMapError> {
-		Module::<T>::dec_providers(t)
+		Pallet::<T>::dec_providers(t)
 			.map(|_| ())
 			.or_else(|e| match e {
 				DecRefError::ConsumerRemaining => Err(StoredMapError::ConsumerRemaining),
@@ -1531,11 +1547,11 @@ impl<T: Config> HandleLifetime<T::AccountId> for Provider<T> {
 pub struct SelfSufficient<T>(PhantomData<T>);
 impl<T: Config> HandleLifetime<T::AccountId> for SelfSufficient<T> {
 	fn created(t: &T::AccountId) -> Result<(), StoredMapError> {
-		Module::<T>::inc_sufficients(t);
+		Pallet::<T>::inc_sufficients(t);
 		Ok(())
 	}
 	fn killed(t: &T::AccountId) -> Result<(), StoredMapError> {
-		Module::<T>::dec_sufficients(t);
+		Pallet::<T>::dec_sufficients(t);
 		Ok(())
 	}
 }
@@ -1544,13 +1560,13 @@ impl<T: Config> HandleLifetime<T::AccountId> for SelfSufficient<T> {
 pub struct Consumer<T>(PhantomData<T>);
 impl<T: Config> HandleLifetime<T::AccountId> for Consumer<T> {
 	fn created(t: &T::AccountId) -> Result<(), StoredMapError> {
-		Module::<T>::inc_consumers(t)
+		Pallet::<T>::inc_consumers(t)
 			.map_err(|e| match e {
 				IncRefError::NoProviders => StoredMapError::NoProviders
 			})
 	}
 	fn killed(t: &T::AccountId) -> Result<(), StoredMapError> {
-		Module::<T>::dec_consumers(t);
+		Pallet::<T>::dec_consumers(t);
 		Ok(())
 	}
 }

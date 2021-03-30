@@ -42,3 +42,4 @@ std = [
 	"sp-state-machine",
 ]
 try-runtime = ["frame-support/try-runtime"]
+conditional-storage = []
