@@ -31,9 +31,9 @@ sp-inherents = { version = "3.0.0", path = "../../../primitives/inherents" }
 sp-timestamp = { version = "3.0.0", path = "../../../primitives/timestamp" }
 futures = "0.3.9"
 futures-timer = "3.0.1"
-parking_lot = "0.11.1"
 log = "0.4.11"
 thiserror = "1.0.21"
+async-trait = "0.1.42"
 
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
