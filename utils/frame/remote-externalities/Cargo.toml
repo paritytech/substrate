@@ -1,6 +1,6 @@
 [package]
 name = "remote-externalities"
-version = "0.10.0-dev"
+version = "0.9.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -23,9 +23,9 @@ env_logger = "0.8.2"
 log = "0.4.11"
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 
-sp-io = { version = "4.0.0-dev", path = "../../../primitives/io" }
-sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
-sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
+sp-io = { version = "3.0.0", path = "../../../primitives/io" }
+sp-core = { version = "3.0.0", path = "../../../primitives/core" }
+sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
 
 [dev-dependencies]
 tokio = { version = "0.2", features = ["macros"] }
