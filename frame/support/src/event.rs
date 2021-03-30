@@ -299,7 +299,10 @@ macro_rules! __decl_generic_event {
 		impl<$( $generic_param ),* $(, $instance)? > From<RawEvent<$( $generic_param ),* $(, $instance)?>> for () {
 			fn from(_: RawEvent<$( $generic_param ),* $(, $instance)?>) -> () { () }
 		}
-		impl<$( $generic_param ),* $(, $instance)?> RawEvent<$( $generic_param ),* $(, $instance)?> {
+		impl<$( $generic_param ),* $(, $instance)?> RawEvent<$( $generic_param ),* $(, $instance)?>
+		where
+			$( $generic_param: $crate::scale_info::TypeInfo + 'static ),*
+		{
 			#[allow(dead_code)]
 			#[doc(hidden)]
 			pub fn metadata() -> &'static [$crate::event::EventMetadata] {
