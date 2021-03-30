@@ -31,15 +31,15 @@ use sp_runtime::{Perbill, RuntimeDebug, traits::Zero};
 ///
 /// This is just a wrapper around [`RawSolution`] and some additional info.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
-pub struct SignedSubmission<A, B: HasCompact, C> {
+pub struct SignedSubmission<AccountId, Balance: HasCompact, CompactSolution> {
 	/// Who submitted this solution.
-	pub(crate) who: A,
+	pub(crate) who: AccountId,
 	/// The deposit reserved for storing this solution.
-	pub(crate) deposit: B,
+	pub(crate) deposit: Balance,
 	/// The reward that should be given to this solution, if chosen the as the final one.
-	pub(crate) reward: B,
+	pub(crate) reward: Balance,
 	/// The raw solution itself.
-	pub(crate) solution: RawSolution<C>,
+	pub(crate) solution: RawSolution<CompactSolution>,
 }
 
 pub(crate) type BalanceOf<T> =
