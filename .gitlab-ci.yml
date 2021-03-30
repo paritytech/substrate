@@ -523,7 +523,7 @@ build-rust-doc:
     - buildah logout "$IMAGE_NAME"
     # pass artifacts to the trigget-simnet job
     - echo "IMAGE_NAME=${IMAGE_NAME}" > ./artifacts/$PRODUCT/build.env
-    - echo "VERSION=${VERSION}" >> ./artifacts/$PRODUCT/build.env
+    - echo "IMAGE_TAG=${VERSION}" >> ./artifacts/$PRODUCT/build.env
 
 publish-docker-substrate:
   stage:                           publish
