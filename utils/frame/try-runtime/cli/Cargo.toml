@@ -1,0 +1,32 @@
+[package]
+name = "try-runtime-cli"
+version = "0.9.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "Apache-2.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+description = "Cli command runtime testing and dry-running"
+readme = "README.md"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+log = "0.4.8"
+parity-scale-codec = { version = "2.0.0" }
+
+sc-service = { version = "0.9.0", default-features = false, path = "../../../../client/service" }
+sc-cli = { version = "0.9.0", path = "../../../../client/cli" }
+sc-executor = { path = "../../../../client/executor" }
+sc-client-api = { version = "3.0.0", path = "../../../../client/api" }
+structopt = "0.3.8"
+sp-state-machine = { version = "0.9.0", path = "../../../../primitives/state-machine" }
+sp-api = { version = "3.0.0", path = "../../../../primitives/api" }
+sp-blockchain = { version = "3.0.0", path = "../../../../primitives/blockchain" }
+sp-runtime = { version = "3.0.0", path = "../../../../primitives/runtime" }
+sp-externalities = { version = "0.9.0", path = "../../../../primitives/externalities" }
+sp-core = { version = "3.0.0", path = "../../../../primitives/core" }
+frame-try-runtime = { version = "0.9.0", path = "../../../../frame/try-runtime" }
+
+remote-externalities = { path = "../../remote-externalities" }

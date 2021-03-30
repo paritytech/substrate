@@ -132,7 +132,7 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 		&mut self,
 		_child_info: &ChildInfo,
 		_limit: Option<u32>,
-	) -> bool {
+	) -> (bool, u32) {
 		unimplemented!("kill_child_storage is not supported in ReadOnlyExternalities")
 	}
 

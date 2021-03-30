@@ -43,12 +43,12 @@ pub enum WasmLevel {
 
 impl From<&tracing_core::Level> for WasmLevel {
 	fn from(l: &tracing_core::Level) -> WasmLevel {
-		match l {
-			&tracing_core::Level::ERROR => WasmLevel::ERROR,
-			&tracing_core::Level::WARN => WasmLevel::WARN,
-			&tracing_core::Level::INFO => WasmLevel::INFO,
-			&tracing_core::Level::DEBUG => WasmLevel::DEBUG,
-			&tracing_core::Level::TRACE => WasmLevel::TRACE,
+		match *l {
+			tracing_core::Level::ERROR => WasmLevel::ERROR,
+			tracing_core::Level::WARN => WasmLevel::WARN,
+			tracing_core::Level::INFO => WasmLevel::INFO,
+			tracing_core::Level::DEBUG => WasmLevel::DEBUG,
+			tracing_core::Level::TRACE => WasmLevel::TRACE,
 		}
 	}
 }
@@ -129,7 +129,7 @@ impl From<u8> for WasmValue {
 
 impl From<&i8> for WasmValue {
 	fn from(inp: &i8) -> WasmValue {
-		WasmValue::I8(inp.clone())
+		WasmValue::I8(*inp)
 	}
 }
 
@@ -246,7 +246,7 @@ impl WasmFields {
 
 impl From<Vec<WasmFieldName>> for WasmFields {
 	fn from(v: Vec<WasmFieldName>) -> WasmFields {
-		WasmFields(v.into())
+		WasmFields(v)
 	}
 }
 
@@ -447,7 +447,7 @@ impl From<&tracing_core::Event<'_>> for WasmEntryAttributes {
 		WasmEntryAttributes {
 			parent_id: evt.parent().map(|id| id.into_u64()),
 			metadata: evt.metadata().into(),
-			fields: fields
+			fields
 		}
 	}
 }
@@ -459,7 +459,7 @@ impl From<&tracing_core::span::Attributes<'_>> for WasmEntryAttributes {
 		WasmEntryAttributes {
 			parent_id: attrs.parent().map(|id| id.into_u64()),
 			metadata: attrs.metadata().into(),
-			fields: fields
+			fields
 		}
 	}
 }
@@ -478,7 +478,6 @@ impl core::default::Default for WasmEntryAttributes {
 mod std_features {
 
 	use tracing_core::callsite;
-	use tracing;
 
 	/// Static entry use for wasm-originated metadata.
 	pub struct WasmCallsite;
@@ -488,13 +487,13 @@ mod std_features {
 	}
 	static CALLSITE: WasmCallsite =  WasmCallsite;
 	/// The identifier we are using to inject the wasm events in the generic `tracing` system
-	pub static WASM_TRACE_IDENTIFIER: &'static str = "wasm_tracing";
+	pub static WASM_TRACE_IDENTIFIER: &str = "wasm_tracing";
 	/// The fieldname for the wasm-originated name
-	pub static WASM_NAME_KEY: &'static str = "name";
+	pub static WASM_NAME_KEY: &str = "name";
 	/// The fieldname for the wasm-originated target
-	pub static WASM_TARGET_KEY: &'static str = "target";
+	pub static WASM_TARGET_KEY: &str = "target";
 	/// The the list of all static field names we construct from the given metadata
-	pub static GENERIC_FIELDS: &'static [&'static str] = &[WASM_TARGET_KEY, WASM_NAME_KEY,
+	pub static GENERIC_FIELDS: &[&str] = &[WASM_TARGET_KEY, WASM_NAME_KEY,
 		"file", "line", "module_path", "params"];
 
 	// Implementation Note:
@@ -592,7 +591,7 @@ mod std_features {
 			let metadata : &tracing_core::metadata::Metadata<'static> = (&a.metadata).into();
 
 			tracing::span::Span::child_of(
-				a.parent_id.map(|i|tracing_core::span::Id::from_u64(i)),
+				a.parent_id.map(tracing_core::span::Id::from_u64),
 				&metadata,
 				&tracing::valueset!{ metadata.fields(), target, name, file, line, module_path, ?params }
 			)
@@ -611,7 +610,7 @@ mod std_features {
 			let metadata : &tracing_core::metadata::Metadata<'static> = (&self.metadata).into();
 
 			tracing_core::Event::child_of(
-				self.parent_id.map(|i|tracing_core::span::Id::from_u64(i)),
+				self.parent_id.map(tracing_core::span::Id::from_u64),
 				&metadata,
 				&tracing::valueset!{ metadata.fields(), target, name, file, line, module_path, ?params }
 			)

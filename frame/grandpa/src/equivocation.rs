@@ -40,10 +40,7 @@
 use sp_std::prelude::*;
 
 use codec::{self as codec, Decode, Encode};
-use frame_support::{
-	debug,
-	traits::{Get, KeyOwnerProofSystem},
-};
+use frame_support::traits::{Get, KeyOwnerProofSystem};
 use sp_finality_grandpa::{EquivocationProof, RoundNumber, SetId};
 use sp_runtime::{
 	transaction_validity::{
@@ -174,8 +171,15 @@ where
 		let call = Call::report_equivocation_unsigned(equivocation_proof, key_owner_proof);
 
 		match SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into()) {
-			Ok(()) => debug::info!("Submitted GRANDPA equivocation report."),
-			Err(e) => debug::error!("Error submitting equivocation report: {:?}", e),
+			Ok(()) => log::info!(
+				target: "runtime::afg",
+				"Submitted GRANDPA equivocation report.",
+			),
+			Err(e) => log::error!(
+				target: "runtime::afg",
+				"Error submitting equivocation report: {:?}",
+				e,
+			),
 		}
 
 		Ok(())
@@ -207,8 +211,8 @@ impl<T: Config> frame_support::unsigned::ValidateUnsigned for Module<T> {
 			match source {
 				TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ }
 				_ => {
-					debug::warn!(
-						target: "afg",
+					log::warn!(
+						target: "runtime::afg",
 						"rejecting unsigned report equivocation transaction because it is not local/in-block."
 					);
 
@@ -354,7 +358,7 @@ impl<FullIdentification: Clone> Offence<FullIdentification>
 
 	fn slash_fraction(offenders_count: u32, validator_set_count: u32) -> Perbill {
 		// the formula is min((3k / n)^2, 1)
-		let x = Perbill::from_rational_approximation(3 * offenders_count, validator_set_count);
+		let x = Perbill::from_rational(3 * offenders_count, validator_set_count);
 		// _ ^ 2
 		x.square()
 	}

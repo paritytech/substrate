@@ -125,7 +125,7 @@ pub(crate) fn into_impl(count: usize, per_thing: syn::Type) -> TokenStream2 {
 						let target = target_at(*t_idx).or_invalid_index()?;
 						Ok((target, *p))
 					})
-					.collect::<Result<Vec<(A, #per_thing)>, _npos::Error>>()?;
+					.collect::<Result<_npos::sp_std::prelude::Vec<(A, #per_thing)>, _npos::Error>>()?;
 
 				if sum >= #per_thing::one() {
 					return Err(_npos::Error::CompactStakeOverflow);
