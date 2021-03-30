@@ -33,17 +33,20 @@ pub const OLD_PREFIX: &[u8] = b"PhragmenElection";
 ///
 /// The old storage prefix, `PhragmenElection` is hardcoded in the migration code.
 pub fn migrate<
-	T: frame_system::Config + GetPalletVersion,
+	T: frame_system::Config,
+	P: GetPalletVersion,
 	N: AsRef<str>,
 >(new_pallet_name: N) -> Weight {
-	let maybe_storage_version = <T as GetPalletVersion>::storage_version();
+	let maybe_storage_version = <P as GetPalletVersion>::storage_version();
 	log::info!(
 		target: "runtime::elections-phragmen",
 		"Running migration to v4 for elections-phragmen with storage version {:?}",
 		maybe_storage_version,
 	);
+
 	match maybe_storage_version {
 		Some(storage_version) if storage_version <= PalletVersion::new(3, 0, 0) => {
+			log::info!("new prefix: {}", new_pallet_name.as_ref());
 			frame_support::storage::migration::move_pallet(
 				OLD_PREFIX,
 				new_pallet_name.as_ref().as_bytes(),
@@ -65,11 +68,11 @@ pub fn migrate<
 /// [`frame_support::traits::OnRuntimeUpgrade::pre_upgrade`] for further testing.
 ///
 /// Panics if anything goes wrong.
-pub fn pre_migration<T: GetPalletVersion, N: AsRef<str>>(new: N) {
+pub fn pre_migration<P: GetPalletVersion, N: AsRef<str>>(new: N) {
 	// ensure some stuff exist in the old prefix.
 	assert!(sp_io::storage::next_key(OLD_PREFIX).is_some());
 	// ensure nothing is stored in the new prefix.
 	assert!(sp_io::storage::next_key(new.as_ref().as_bytes()).is_none());
 	// ensure storage version is 3.
-	assert!(<T as GetPalletVersion>::storage_version().unwrap().major == 3);
+	assert!(<P as GetPalletVersion>::storage_version().unwrap().major == 3);
 }
