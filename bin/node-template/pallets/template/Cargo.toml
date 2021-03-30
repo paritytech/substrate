@@ -1,11 +1,11 @@
 [package]
-authors = ['Anonymous']
+authors = ['Substrate DevHub <https://github.com/substrate-developer-hub>']
 edition = '2018'
 name = 'pallet-template'
-version = "2.0.0"
+version = "3.0.0"
 license = "Unlicense"
 homepage = "https://substrate.dev"
-repository = "https://github.com/paritytech/substrate/"
+repository = "https://github.com/substrate-developer-hub/substrate-node-template/"
 description = "FRAME pallet template for defining custom runtime logic."
 readme = "README.md"
 
@@ -14,40 +14,15 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-
-[dependencies.frame-support]
-default-features = false
-version = "3.0.0"
-path = "../../../../frame/support"
-
-[dependencies.frame-system]
-default-features = false
-version = "3.0.0"
-path = "../../../../frame/system"
-
-[dependencies.frame-benchmarking]
-default-features = false
-version = "3.1.0"
-path = "../../../../frame/benchmarking"
-optional = true
+frame-support = { default-features = false, version = "3.0.0", path = "../../../../frame/support" }
+frame-system = { default-features = false,  version = "3.0.0",  path = "../../../../frame/system" }
+frame-benchmarking = { default-features = false,  version = "3.1.0",  path = "../../../../frame/benchmarking", optional = true }
 
 [dev-dependencies]
-serde = { version = "1.0.101" }
-
-[dev-dependencies.sp-core]
-default-features = false
-version = "3.0.0"
-path = "../../../../primitives/core"
-
-[dev-dependencies.sp-io]
-default-features = false
-version = "3.0.0"
-path = "../../../../primitives/io"
-
-[dev-dependencies.sp-runtime]
-default-features = false
-version = "3.0.0"
-path = "../../../../primitives/runtime"
+serde = { version = "1.0.119" }
+sp-core = { default-features = false, version = "3.0.0", path = "../../../../primitives/core" }
+sp-io = { default-features = false, version = "3.0.0", path = "../../../../primitives/io" }
+sp-runtime = { default-features = false, version = "3.0.0", path = "../../../../primitives/runtime" }
 
 [features]
 default = ['std']
@@ -57,5 +32,6 @@ std = [
 	'frame-system/std',
 	'frame-benchmarking/std',
 ]
+
 runtime-benchmarks = ["frame-benchmarking"]
 try-runtime = ["frame-support/try-runtime"]
