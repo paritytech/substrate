@@ -24,12 +24,11 @@ use super::*;
 use std::cell::RefCell;
 use frame_support::{
 	assert_noop, assert_ok, parameter_types,
-	traits::OnInitialize,
+	traits::OnInitialize, PalletId
 };
 
 use sp_core::H256;
 use sp_runtime::{
-	PalletId,
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
