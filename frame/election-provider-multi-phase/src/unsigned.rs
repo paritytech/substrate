@@ -101,6 +101,11 @@ impl<T: Config> Pallet<T> {
 	/// Attempt to restore a solution from cache. Otherwise, compute it fresh. Either way, submit
 	/// if our call's score is greater than that of the cached solution.
 	pub fn restore_or_compute_then_maybe_submit() -> Result<(), MinerError> {
+		log!(
+			info,
+			"OCW attempting to restore or compute an unsigned solution for the current election"
+		);
+
 		let (call, score) = restore_solution::<T>()
 			.and_then(|call| {
 				// ensure the cached call is still current before submitting
@@ -108,6 +113,14 @@ impl<T: Config> Pallet<T> {
 				match &call {
 					Call::submit_unsigned(solution, _) if solution.round == current_round => {
 						let score = solution.score.clone();
+
+						log!(
+							debug,
+							"restored a cached call for round {} with score {:?}",
+							current_round,
+							score,
+						);
+
 						Ok((call, score))
 					}
 					_ => Err(MinerError::SolutionOutOfDate),
@@ -127,12 +140,22 @@ impl<T: Config> Pallet<T> {
 		)) {
 			Self::submit_call(call)
 		} else {
+			log!(
+				info,
+				"queued solution has better score than OCW mined solution; skipping submission"
+			);
+
 			Ok(())
 		}
 	}
 
 	/// Mine a new solution, cache it, and submit it back to the chain as an unsigned transaction.
 	pub fn mine_check_save_submit() -> Result<(), MinerError> {
+		log!(
+			info,
+			"OCW attempting to compute an unsigned solution for the current election"
+		);
+
 		let (call, _) = Self::mine_checked_call()?;
 		save_solution(&call)?;
 		Self::submit_call(call)
@@ -151,7 +174,7 @@ impl<T: Config> Pallet<T> {
 
 		log!(
 			info,
-			"mined a solution with score {:?} and size {}",
+			"OCW mined a solution with score {:?} and size {}",
 			score,
 			call.using_encoded(|b| b.len())
 		);
@@ -160,6 +183,11 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn submit_call(call: Call<T>) -> Result<(), MinerError> {
+		log!(
+			debug,
+			"OCW submitting a solution as an unsigned transaction",
+		);
+
 		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into())
 			.map_err(|_| {
 				kill_solution::<T>();
