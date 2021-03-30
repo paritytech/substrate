@@ -947,18 +947,21 @@ mod tests {
 		ext.execute_with(|| {
 			roll_to(25);
 
+			// given
 			let RoundSnapshot { voters, ..} = MultiPhase::snapshot().unwrap();
-
 			let RawSolution { mut compact, .. } = raw_solution();
 			let encoded_len = compact.encode().len() as u32;
 			let compact_clone = compact.clone();
 
+			// when
+			assert!(encoded_len < <Runtime as Config>::MinerMaxLength::get());
+
+			// then
 			compact = MultiPhase::trim_compact_length(
 				encoded_len,
 				compact,
 				voter_index_fn_linear::<Runtime>(&voters),
 			).unwrap();
-
 			assert_eq!(compact, compact_clone);
 		});
 	}
