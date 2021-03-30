@@ -39,7 +39,12 @@ use codec::{Encode, Decode};
 use sp_std::{collections::btree_map::{BTreeMap, IntoIter, Entry}, vec::Vec};
 
 #[cfg(feature = "std")]
-use sp_runtime::traits::Block as BlockT;
+mod client_side;
+mod runtime_side;
+
+#[cfg(feature = "std")]
+pub use client_side::*;
+pub use runtime_side::*;
 
 /// An error that can occur within the inherent data system.
 #[cfg(feature = "std")]
@@ -254,118 +259,6 @@ impl PartialEq for CheckInherentsResult {
 	}
 }
 
-#[cfg(feature = "std")]
-#[async_trait::async_trait]
-pub trait CreateInherentDataProviders<Block: BlockT, ExtraArgs>: Send + Sync {
-	/// The inherent data providers that will be created.
-	type InherentDataProviders: InherentDataProvider;
-
-	/// Create the inherent data providers at the given `parent` block using the given `extra_args`.
-	async fn create_inherent_data_providers(
-		&self,
-		parent: Block::Hash,
-		extra_args: ExtraArgs,
-	) -> Result<Self::InherentDataProviders, Box<dyn std::error::Error + Send + Sync>>;
-}
-
-#[cfg(feature = "std")]
-#[async_trait::async_trait]
-impl<F, Block, IDP, ExtraArgs, Fut> CreateInherentDataProviders<Block, ExtraArgs> for F
-where
-	Block: BlockT,
-	F: Fn(Block::Hash, ExtraArgs) -> Fut + Sync + Send,
-	Fut: std::future::Future<Output = Result<IDP, Box<dyn std::error::Error + Send + Sync>>> + Send + 'static,
-	IDP: InherentDataProvider + 'static,
-	ExtraArgs: Send + 'static,
-{
-	type InherentDataProviders = IDP;
-
-	async fn create_inherent_data_providers(
-		&self,
-		parent: Block::Hash,
-		extra_args: ExtraArgs,
-	) -> Result<Self::InherentDataProviders, Box<dyn std::error::Error + Send + Sync>> {
-		(*self)(parent, extra_args).await
-	}
-}
-
-#[cfg(feature = "std")]
-#[async_trait::async_trait]
-impl<Block: BlockT, ExtraArgs: Send, IDPS: InherentDataProvider>
-	CreateInherentDataProviders<Block, ExtraArgs>
-	for Box<dyn CreateInherentDataProviders<Block, ExtraArgs, InherentDataProviders = IDPS>>
-{
-	type InherentDataProviders = IDPS;
-
-	async fn create_inherent_data_providers(
-		&self,
-		parent: Block::Hash,
-		extra_args: ExtraArgs,
-	) -> Result<Self::InherentDataProviders, Box<dyn std::error::Error + Send + Sync>> {
-		(**self).create_inherent_data_providers(parent, extra_args).await
-	}
-}
-
-/// Result of [`InherentDataProvider::try_handle_error`].
-#[cfg(feature = "std")]
-pub type TryHandleErrorResult =
-	Option<
-		std::pin::Pin<
-			Box<
-				dyn std::future::Future<Output = Result<(), Box<dyn std::error::Error + Send + Sync>>> + Send
-			>
-		>
-	>;
-
-/// Something that provides inherent data.
-#[cfg(feature = "std")]
-pub trait InherentDataProvider: Send + Sync {
-	/// Convenience function for creating [`InherentData`].
-	///
-	/// Basically maps around [`Self::provide_inherent_data`].
-	fn create_inherent_data(&self) -> Result<InherentData, Error> {
-		let mut inherent_data = InherentData::new();
-		self.provide_inherent_data(&mut inherent_data)?;
-		Ok(inherent_data)
-	}
-
-	/// Provide inherent data that should be included in a block.
-	///
-	/// The data should be stored in the given `InherentData` structure.
-	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), Error>;
-
-	/// Convert the given encoded error to a string.
-	///
-	/// If the given error could not be decoded, `None` should be returned.
-	fn try_handle_error(
-		&self,
-		identifier: &InherentIdentifier,
-		error: &[u8],
-	) -> TryHandleErrorResult;
-}
-
-#[cfg(feature = "std")]
-#[impl_trait_for_tuples::impl_for_tuples(10)]
-impl InherentDataProvider for Tuple {
-	for_tuples!( where #( Tuple: Send + Sync )* );
-	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), Error> {
-		for_tuples!( #( Tuple.provide_inherent_data(inherent_data)?; )* );
-		Ok(())
-	}
-
-	fn try_handle_error(
-		&self,
-		identifier: &InherentIdentifier,
-		error: &[u8],
-	) -> TryHandleErrorResult {
-		for_tuples!( #(
-			if let Some(e) = Tuple.try_handle_error(identifier, error) { return Some(e) }
-		)* );
-
-		None
-	}
-}
-
 /// Did we encounter a fatal error while checking an inherent?
 ///
 /// A fatal error is everything that fails while checking an inherent error, e.g. the inherent
@@ -377,62 +270,6 @@ impl InherentDataProvider for Tuple {
 pub trait IsFatalError {
 	/// Is this a fatal error?
 	fn is_fatal_error(&self) -> bool;
-}
-
-/// Auxiliary to make any given error resolve to `is_fatal_error() == true`.
-#[derive(Encode)]
-pub struct MakeFatalError<E: codec::Encode>(E);
-
-impl<E: codec::Encode> From<E> for MakeFatalError<E> {
-	fn from(err: E) -> Self {
-		MakeFatalError(err)
-	}
-}
-
-impl<E: codec::Encode> IsFatalError for MakeFatalError<E> {
-	fn is_fatal_error(&self) -> bool {
-		true
-	}
-}
-
-/// A pallet that provides or verifies an inherent extrinsic.
-///
-/// The pallet may provide the inherent, verify an inherent, or both provide and verify.
-pub trait ProvideInherent {
-	/// The call type of the pallet.
-	type Call;
-	/// The error returned by `check_inherent`.
-	type Error: codec::Encode + IsFatalError;
-	/// The inherent identifier used by this inherent.
-	const INHERENT_IDENTIFIER: self::InherentIdentifier;
-
-	/// Create an inherent out of the given `InherentData`.
-	fn create_inherent(data: &InherentData) -> Option<Self::Call>;
-
-	/// Determines whether this inherent is required in this block.
-	///
-	/// - `Ok(None)` indicates that this inherent is not required in this block. The default
-	/// implementation returns this.
-	///
-	/// - `Ok(Some(e))` indicates that this inherent is required in this block. The
-	/// `impl_outer_inherent!`, will call this function from its `check_extrinsics`.
-	/// If the inherent is not present, it will return `e`.
-	///
-	/// - `Err(_)` indicates that this function failed and further operations should be aborted.
-	///
-	/// CAUTION: This check has a bug when used in pallets that also provide unsigned transactions.
-	/// See <https://github.com/paritytech/substrate/issues/6243> for details.
-	fn is_inherent_required(_: &InherentData) -> Result<Option<Self::Error>, Self::Error> { Ok(None) }
-
-	/// Check whether the given inherent is valid. Checking the inherent is optional and can be
-	/// omitted by using the default implementation.
-	///
-	/// When checking an inherent, the first parameter represents the inherent that is actually
-	/// included in the block by its author. Whereas the second parameter represents the inherent
-	/// data that the verifying node calculates.
-	fn check_inherent(_: &Self::Call, _: &InherentData) -> Result<(), Self::Error> {
-		Ok(())
-	}
 }
 
 #[cfg(test)]

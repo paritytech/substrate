@@ -86,6 +86,7 @@ impl sp_std::ops::Deref for InherentDataProvider {
 }
 
 #[cfg(feature = "std")]
+#[async_trait::async_trait]
 impl sp_inherents::InherentDataProvider for InherentDataProvider {
 	fn provide_inherent_data(
 		&self,
@@ -94,11 +95,11 @@ impl sp_inherents::InherentDataProvider for InherentDataProvider {
 		inherent_data.put_data(INHERENT_IDENTIFIER, &self.slot)
 	}
 
-	fn try_handle_error(
+	async fn try_handle_error(
 		&self,
 		identifier: &InherentIdentifier,
 		error: &[u8],
-	) -> sp_inherents::TryHandleErrorResult {
+	) -> Option<Result<(), Box<dyn std::error::Error + Send + Sync>>> {
 		use codec::Decode;
 
 		if *identifier != INHERENT_IDENTIFIER {
@@ -107,6 +108,6 @@ impl sp_inherents::InherentDataProvider for InherentDataProvider {
 
 		let error = sp_inherents::Error::decode(&mut &error[..]).ok()?;
 
-		Some(Box::pin(async move { Err(Box::new(error) as Box<_>) }))
+		Some(Err(Box::new(error) as Box<_>))
 	}
 }

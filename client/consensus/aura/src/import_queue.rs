@@ -180,8 +180,8 @@ impl<C, P, CAW, IDP> AuraVerifier<C, P, CAW, IDP> where
 
 		if !inherent_res.ok() {
 			for (i, e) in inherent_res.into_errors() {
-				match inherent_data_providers.try_handle_error(&i, &e) {
-					Some(fut) => fut.await.map_err(Error::Inherent)?,
+				match inherent_data_providers.try_handle_error(&i, &e).await {
+					Some(res) => res.map_err(Error::Inherent)?,
 					None => return Err(Error::UnknownInherentError(i)),
 				}
 			}

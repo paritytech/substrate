@@ -218,6 +218,7 @@ impl sp_std::ops::Deref for InherentDataProvider {
 }
 
 #[cfg(feature = "std")]
+#[async_trait::async_trait]
 impl sp_inherents::InherentDataProvider for InherentDataProvider {
 	fn provide_inherent_data(
 		&self,
@@ -226,11 +227,11 @@ impl sp_inherents::InherentDataProvider for InherentDataProvider {
 		inherent_data.put_data(INHERENT_IDENTIFIER, &InherentType::from(self.timestamp))
 	}
 
-	fn try_handle_error(
+	async fn try_handle_error(
 		&self,
 		identifier: &InherentIdentifier,
 		error: &[u8],
-	) -> sp_inherents::TryHandleErrorResult {
+	) -> Option<Result<(), Box<dyn std::error::Error + Send + Sync>>> {
 		if *identifier != INHERENT_IDENTIFIER {
 			return None
 		}
@@ -239,28 +240,25 @@ impl sp_inherents::InherentDataProvider for InherentDataProvider {
 			Some(InherentError::ValidAtTimestamp(valid)) => {
 				let max_drift = self.max_drift;
 				let timestamp = self.timestamp;
-				let fut = async move {
-					// halt import until timestamp is valid.
-					// reject when too far ahead.
-					if valid > timestamp + max_drift {
-						return Err(Box::from(String::from("Too far in future")))
-					}
+				// halt import until timestamp is valid.
+				// reject when too far ahead.
+				if valid > timestamp + max_drift {
+					return Some(Err(Box::from(String::from("Too far in future"))))
+				}
 
-					let diff = valid.checked_sub(timestamp).unwrap_or_default();
-					log::info!(
-						target: "timestamp",
-						"halting for block {} milliseconds in the future",
-						diff.0,
-					);
+				let diff = valid.checked_sub(timestamp).unwrap_or_default();
+				log::info!(
+					target: "timestamp",
+					"halting for block {} milliseconds in the future",
+					diff.0,
+				);
 
-					futures_timer::Delay::new(diff.as_duration()).await;
+				futures_timer::Delay::new(diff.as_duration()).await;
 
-					Ok(())
-				};
-				Some(Box::pin(fut))
+				Some(Ok(()))
 			},
 			Some(InherentError::Other(o)) => {
-				Some(Box::pin(async move { Err(Box::from(String::from(o))) }))
+				Some(Err(Box::from(String::from(o))))
 			},
 			None => None
 		}
