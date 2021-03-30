@@ -474,6 +474,8 @@ pub enum DispatchError {
 	ConsumerRemaining,
 	/// There are no providers so the account cannot be created.
 	NoProviders,
+	/// An error to do with tokens.
+	Token(TokenError),
 }
 
 /// Result of a `Dispatchable` which contains the `DispatchResult` and additional information about
@@ -532,6 +534,49 @@ impl From<crate::traits::StoredMapError> for DispatchError {
 	}
 }
 
+/// Description of what went wrong when trying to complete an operation on a token.
+#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub enum TokenError {
+	/// Funds are unavailable.
+	NoFunds,
+	/// Account that must exist would die.
+	WouldDie,
+	/// Account cannot exist with the funds that would be given.
+	BelowMinimum,
+	/// Account cannot be created.
+	CannotCreate,
+	/// The asset in question is unknown.
+	UnknownAsset,
+	/// Funds exist but are frozen.
+	Frozen,
+	/// An underflow would occur.
+	Underflow,
+	/// An overflow would occur.
+	Overflow,
+}
+
+impl From<TokenError> for &'static str {
+	fn from(e: TokenError) -> &'static str {
+		match e {
+			TokenError::NoFunds => "Funds are unavailable",
+			TokenError::WouldDie => "Account that must exist would die",
+			TokenError::BelowMinimum => "Account cannot exist with the funds that would be given",
+			TokenError::CannotCreate => "Account cannot be created",
+			TokenError::UnknownAsset => "The asset in question is unknown",
+			TokenError::Frozen => "Funds exist but are frozen",
+			TokenError::Underflow => "An underflow would occur",
+			TokenError::Overflow => "An overflow would occur",
+		}
+	}
+}
+
+impl From<TokenError> for DispatchError {
+	fn from(e: TokenError) -> DispatchError {
+		DispatchError::Token(e)
+	}
+}
+
 impl From<&'static str> for DispatchError {
 	fn from(err: &'static str) -> DispatchError {
 		DispatchError::Other(err)
@@ -547,6 +592,7 @@ impl From<DispatchError> for &'static str {
 			DispatchError::Module { message, .. } => message.unwrap_or("Unknown module error"),
 			DispatchError::ConsumerRemaining => "Consumer remaining",
 			DispatchError::NoProviders => "No providers",
+			DispatchError::Token(e) => e.into(),
 		}
 	}
 }
@@ -575,6 +621,10 @@ impl traits::Printable for DispatchError {
 			}
 			Self::ConsumerRemaining => "Consumer remaining".print(),
 			Self::NoProviders => "No providers".print(),
+			Self::Token(e) => {
+				"Token error: ".print();
+				<&'static str>::from(*e).print();
+			}
 		}
 	}
 }
@@ -599,7 +649,9 @@ impl PartialEq for DispatchError {
 			(ConsumerRemaining, ConsumerRemaining) |
 			(NoProviders, NoProviders) => true,
 
+			(Token(l), Token(r)) => l == r,
 			(Other(l), Other(r)) => l == r,
+
 			(
 				Module { index: index_l, error: error_l, .. },
 				Module { index: index_r, error: error_r, .. },

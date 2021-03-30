@@ -20,6 +20,9 @@ In other words: Upgrading this pallet will not break pre-existing contracts.
 
 ### Added
 
+- Make storage and fields of `Schedule` private to the crate.
+[1](https://github.com/paritytech/substrate/pull/8359)
+
 - Add new version of `seal_random` which exposes additional information.
 [1](https://github.com/paritytech/substrate/pull/8329)
 

@@ -519,7 +519,7 @@ pub mod benchmarking {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{exec::Ext, Limits};
+	use crate::{exec::Ext, schedule::Limits};
 	use std::fmt;
 
 	impl fmt::Debug for PrefabWasmModule<crate::tests::Test> {
