@@ -184,9 +184,9 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		fn on_runtime_upgrade() -> frame_support::weights::Weight {
-			if !UpgradedToTripleRefCount::<T, I>::get() {
-				UpgradedToTripleRefCount::<T, I>::put(true);
-				migrations::migrate_to_triple_ref_count::<T, I>()
+			if !UpgradedPalletPrefix::<T, I>::get() {
+				UpgradedPalletPrefix::<T, I>::put(true);
+				migrations::migrate_to_new_pallet_prefix::<T, I>()
 			} else {
 				0
 			}
@@ -671,7 +671,7 @@ pub mod pallet {
 	/// True if we have upgraded so that AccountInfo contains three types of `RefCount`. False
 	/// (default) if not.
 	#[pallet::storage]
-	pub(super) type UpgradedToTripleRefCount<T: Config<I>, I: 'static = ()> =
+	pub(super) type UpgradedPalletPrefix<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, bool, ValueQuery>;
 
 	#[pallet::genesis_config]
@@ -693,7 +693,7 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
 		fn build(&self) {
-			<UpgradedToTripleRefCount<T, I>>::put(false);
+			<UpgradedPalletPrefix<T, I>>::put(true);
 			Pallet::<T, I>::initialize_members(&self.members);
 		}
 	}
@@ -702,16 +702,22 @@ pub mod pallet {
 mod migrations {
 	use super::*;
 
-	pub fn migrate_to_triple_ref_count<T: Config<I>, I: 'static>() -> frame_support::weights::Weight {
+	pub fn migrate_to_new_pallet_prefix<T: Config<I>, I: 'static>() -> frame_support::weights::Weight {
 
 		let new_name = T::PalletInfo::name::<Pallet<T, I>>()
-			.expect("Fatal Error Invalid PalletInfo name");
-		move_storage_from_pallet(b"Proposals", b"Collective", new_name.as_bytes());
-		move_storage_from_pallet(b"ProposalOf", b"Collective", new_name.as_bytes());
-		move_storage_from_pallet(b"Voting", b"Collective", new_name.as_bytes());
-		move_storage_from_pallet(b"ProposalCount", b"Collective", new_name.as_bytes());
-		move_storage_from_pallet(b"Members", b"Collective", new_name.as_bytes());
-		move_storage_from_pallet(b"Prime", b"Collective", new_name.as_bytes());
+			.expect("Fatal Error Invalid PalletInfo name")
+			.as_bytes();
+
+		if new_name == b"Collective" {
+			return 0
+		}
+
+		move_storage_from_pallet(b"Proposals", b"Collective", new_name);
+		move_storage_from_pallet(b"ProposalOf", b"Collective", new_name);
+		move_storage_from_pallet(b"Voting", b"Collective", new_name);
+		move_storage_from_pallet(b"ProposalCount", b"Collective", new_name);
+		move_storage_from_pallet(b"Members", b"Collective", new_name);
+		move_storage_from_pallet(b"Prime", b"Collective", new_name);
 
 		T::BlockWeights::get().max_block
 	}
