@@ -21,7 +21,6 @@ use codec::{Encode, Decode, FullCodec};
 use sp_std::prelude::*;
 use frame_support::{
 	RuntimeDebug, weights::Weight, Twox64Concat,
-	storage::types::{StorageMap, StorageValue},
 	traits::{GetPalletVersion, PalletVersion},
 };
 
@@ -51,38 +50,21 @@ pub trait V2ToV3 {
 	type Balance: 'static + FullCodec + Copy;
 }
 
-struct __Candidates;
-impl frame_support::traits::StorageInstance for __Candidates {
-	fn pallet_prefix() -> &'static str { "PhragmenElection" }
-	const STORAGE_PREFIX: &'static str = "Candidates";
-}
-
-#[allow(type_alias_bounds)]
-type Candidates<T: V2ToV3> = StorageValue<__Candidates, Vec<(T::AccountId, T::Balance)>>;
-
-struct __Members;
-impl frame_support::traits::StorageInstance for __Members {
-	fn pallet_prefix() -> &'static str { "PhragmenElection" }
-	const STORAGE_PREFIX: &'static str = "Members";
-}
-#[allow(type_alias_bounds)]
-type Members<T: V2ToV3> = StorageValue<__Members, Vec<SeatHolder<T::AccountId, T::Balance>>>;
-
-struct __RunnersUp;
-impl frame_support::traits::StorageInstance for __RunnersUp {
-	fn pallet_prefix() -> &'static str { "PhragmenElection" }
-	const STORAGE_PREFIX: &'static str = "RunnersUp";
-}
-#[allow(type_alias_bounds)]
-type RunnersUp<T: V2ToV3> = StorageValue<__RunnersUp, Vec<SeatHolder<T::AccountId, T::Balance>>>;
-
-struct __Voting;
-impl frame_support::traits::StorageInstance for __Voting {
-	fn pallet_prefix() -> &'static str { "PhragmenElection" }
-	const STORAGE_PREFIX: &'static str = "Voting";
-}
-#[allow(type_alias_bounds)]
-type Voting<T: V2ToV3> = StorageMap<__Voting, Twox64Concat, T::AccountId, Voter<T::AccountId, T::Balance>>;
+frame_support::generate_storage_alias!(
+	PhragmenElection, Candidates<T: V2ToV3> => Value<Vec<(T::AccountId, T::Balance)>>
+);
+frame_support::generate_storage_alias!(
+	PhragmenElection, Members<T: V2ToV3> => Value<Vec<SeatHolder<T::AccountId, T::Balance>>>
+);
+frame_support::generate_storage_alias!(
+	PhragmenElection, RunnersUp<T: V2ToV3> => Value<Vec<SeatHolder<T::AccountId, T::Balance>>>
+);
+frame_support::generate_storage_alias!(
+	PhragmenElection, Voting<T: V2ToV3> => Map<
+		(Twox64Concat, T::AccountId),
+		Voter<T::AccountId, T::Balance>
+	>
+);
 
 /// Apply all of the migrations from 2_0_0 to 3_0_0.
 ///
