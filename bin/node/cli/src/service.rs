@@ -638,27 +638,34 @@ mod tests {
 					None,
 				);
 
-				let epoch_descriptor = babe_link.epoch_changes().lock().epoch_descriptor_for_child_of(
-					descendent_query(&*service.client()),
-					&parent_hash,
-					parent_number,
-					slot.into(),
-				).unwrap().unwrap();
-
 				let mut digest = Digest::<H256>::default();
 
 				// even though there's only one authority some slots might be empty,
 				// so we must keep trying the next slots until we can claim one.
-				let babe_pre_digest = loop {
-					inherent_data.replace_data(sp_timestamp::INHERENT_IDENTIFIER, &(slot * SLOT_DURATION));
-					if let Some(babe_pre_digest) = sc_consensus_babe::test_helpers::claim_slot(
+				let (babe_pre_digest, epoch_descriptor) = loop {
+					inherent_data.replace_data(
+						sp_timestamp::INHERENT_IDENTIFIER,
+						&(slot * SLOT_DURATION),
+					);
+
+					let epoch_descriptor = babe_link.epoch_changes().lock().epoch_descriptor_for_child_of(
+						descendent_query(&*service.client()),
+						&parent_hash,
+						parent_number,
 						slot.into(),
-						&parent_header,
-						&*service.client(),
-						keystore.clone(),
-						&babe_link,
-					) {
-						break babe_pre_digest;
+					).unwrap().unwrap();
+
+					let epoch = babe_link.epoch_changes().lock().epoch_data(
+						&epoch_descriptor,
+						|slot| sc_consensus_babe::Epoch::genesis(&babe_link.config(), slot),
+					).unwrap();
+
+					if let Some(babe_pre_digest) = sc_consensus_babe::authorship::claim_slot(
+						slot.into(),
+						&epoch,
+						&keystore,
+					).map(|(digest, _)| digest) {
+						break (babe_pre_digest, epoch_descriptor)
 					}
 
 					slot += 1;
