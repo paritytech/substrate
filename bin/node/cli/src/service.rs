@@ -193,10 +193,14 @@ pub fn new_full_base(
 	} = new_partial(&config)?;
 
 	if let Some(uri) = &config.keystore_remote {
-		use tee_keystore::TEEKeystore;
-		let keystore = TEEKeystore::deferred(&uri)
-			.map_err(|e| format!("Failed to connect to remote keystore: {:?}", e))
-			.map_err(ServiceError::Other)?;
+		//use tee_keystore::TEEKeystore;
+		//let keystore = TEEKeystore::deferred(&uri)
+		//	.map_err(|e| format!("Failed to connect to remote keystore: {:?}", e))
+		//	.map_err(ServiceError::Other)?;
+
+		//keystore_container.set_remote_keystore(Arc::new(keystore));
+		use substrate_example_tssrs::client::RemoteKeystore;
+		let keystore = RemoteKeystore::open(uri[6..].to_string(), None).map_err(ServiceError::Other)?;
 
 		keystore_container.set_remote_keystore(Arc::new(keystore));
 	}
@@ -341,11 +345,25 @@ pub fn new_full_base(
 			shared_voter_state,
 		};
 
+		let voter = {
+			let (tx, rx) = std::sync::mpsc::channel();
+
+			let task = async move {
+				let voter = grandpa::run_grandpa_voter(grandpa_config);
+
+				tx.send(voter).expect("not waiting for voter");
+			};
+
+			task_manager.spawn_handle().spawn_blocking("get-grandpa-voter", task);
+
+			rx.recv().expect("voter not sent")
+		};
+
 		// the GRANDPA voter task is considered infallible, i.e.
 		// if it fails we take down the service with it.
 		task_manager.spawn_essential_handle().spawn_blocking(
 			"grandpa-voter",
-			grandpa::run_grandpa_voter(grandpa_config)?
+			voter?
 		);
 	}
 
