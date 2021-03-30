@@ -42,7 +42,7 @@ sp-npos-elections = { version = "3.0.0", default-features = false, path = "../..
 # frame dependencies
 frame-executive = { version = "3.0.0", default-features = false, path = "../../../frame/executive" }
 frame-benchmarking = { version = "3.1.0", default-features = false, path = "../../../frame/benchmarking", optional = true }
-frame-support = { version = "3.0.0", default-features = false, path = "../../../frame/support" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../../../frame/support" }
 frame-system = { version = "3.0.0", default-features = false, path = "../../../frame/system" }
 frame-system-benchmarking = { version = "3.0.0", default-features = false, path = "../../../frame/system/benchmarking", optional = true }
 frame-system-rpc-runtime-api = { version = "3.0.0", default-features = false, path = "../../../frame/system/rpc/runtime-api/" }

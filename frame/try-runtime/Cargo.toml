@@ -19,7 +19,7 @@ sp-api = { version = "3.0.0", path = "../../primitives/api", default-features = 
 sp-std = { version = "3.0.0", path = "../../primitives/std" , default-features = false }
 sp-runtime = { version = "3.0.0", path = "../../primitives/runtime" , default-features = false }
 
-frame-support = { version = "3.0.0", path = "../support", default-features = false }
+frame-support = { version = "4.0.0-dev", path = "../support", default-features = false }
 
 [features]
 default = [ "std" ]

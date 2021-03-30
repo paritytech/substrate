@@ -18,7 +18,7 @@ sp-inherents = { version = "3.0.0", default-features = false, path = "../../prim
 sp-authorship = { version = "3.0.0", default-features = false, path = "../../primitives/authorship" }
 sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
-frame-support = { version = "3.0.0", default-features = false, path = "../support" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "3.0.0", default-features = false, path = "../system" }
 impl-trait-for-tuples = "0.2.1"
 

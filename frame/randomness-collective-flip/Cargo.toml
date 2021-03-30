@@ -16,7 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 safe-mix = { version = "1.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
-frame-support = { version = "3.0.0", default-features = false, path = "../support" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "3.0.0", default-features = false, path = "../system" }
 sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
 

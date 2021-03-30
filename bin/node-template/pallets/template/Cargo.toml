@@ -18,7 +18,7 @@ codec = { package = "parity-scale-codec", version = "2.0.0", default-features = 
 
 [dependencies.frame-support]
 default-features = false
-version = "3.0.0"
+version = "4.0.0-dev"
 path = "../../../../frame/support"
 
 [dependencies.frame-system]

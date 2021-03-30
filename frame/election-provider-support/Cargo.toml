@@ -17,7 +17,7 @@ codec = { package = "parity-scale-codec", version = "2.0.0", default-features = 
 sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
 sp-arithmetic = { version = "3.0.0", default-features = false, path = "../../primitives/arithmetic" }
 sp-npos-elections = { version = "3.0.0", default-features = false, path = "../../primitives/npos-elections" }
-frame-support = { version = "3.0.0", default-features = false, path = "../support" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "3.0.0", default-features = false, path = "../system" }
 
 [dev-dependencies]

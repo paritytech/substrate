@@ -18,7 +18,7 @@ codec = { package = "parity-scale-codec", version = "2.0.0", default-features = 
 sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
 frame-benchmarking = { version = "3.1.0", default-features = false, path = "../benchmarking", optional = true }
-frame-support = { version = "3.0.0", default-features = false, path = "../support" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "3.0.0", default-features = false, path = "../system" }
 log = { version = "0.4.14", default-features = false }
 

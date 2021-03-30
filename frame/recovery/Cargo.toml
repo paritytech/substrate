@@ -19,7 +19,7 @@ enumflags2 = { version = "0.6.2" }
 sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
-frame-support = { version = "3.0.0", default-features = false, path = "../support" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "3.0.0", default-features = false, path = "../system" }
 
 [dev-dependencies]

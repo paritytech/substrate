@@ -27,7 +27,7 @@ frame-benchmarking = { version = "3.1.0", path = "../../../frame/benchmarking" }
 
 [dev-dependencies]
 criterion = "0.3.0"
-frame-support = { version = "3.0.0", path = "../../../frame/support" }
+frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }
 frame-system = { version = "3.0.0", path = "../../../frame/system" }
 node-testing = { version = "2.0.0", path = "../testing" }
 pallet-balances = { version = "3.0.0", path = "../../../frame/balances" }
