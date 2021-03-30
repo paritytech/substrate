@@ -16,7 +16,7 @@ codec = { package = "parity-scale-codec", version = "2.0.0", default-features = 
 frame-system = { version = "3.0.0", default-features = false, path = "../../../frame/system" }
 sp-application-crypto = { version = "3.0.0", default-features = false, path = "../../../primitives/application-crypto" }
 sp-core = { version = "3.0.0", default-features = false, path = "../../../primitives/core" }
-sp-runtime = { version = "3.0.0", default-features = false, path = "../../../primitives/runtime" }
+sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/runtime" }
 
 [dev-dependencies]
 sp-serializer = { version = "3.0.0", path = "../../../primitives/serializer" }

@@ -25,7 +25,7 @@ sc-network = { version = "0.9.0", path = "../network" }
 sc-service = { version = "0.9.0", path = "../service" }
 sp-blockchain = { version = "3.0.0", path = "../../primitives/blockchain" }
 sp-finality-grandpa = { version = "3.0.0", path = "../../primitives/finality-grandpa" }
-sp-runtime = { version = "3.0.0", path = "../../primitives/runtime" }
+sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
 
 [dev-dependencies]
 finality-grandpa = { version = "0.14.0" }

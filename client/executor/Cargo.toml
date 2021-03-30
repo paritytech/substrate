@@ -16,7 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 derive_more = "0.99.2"
 codec = { package = "parity-scale-codec", version = "2.0.0" }
-sp-io = { version = "3.0.0", path = "../../primitives/io" }
+sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
 sp-core = { version = "3.0.0", path = "../../primitives/core" }
 sp-tasks = { version = "3.0.0", path = "../../primitives/tasks" }
 sp-trie = { version = "3.0.0", path = "../../primitives/trie" }
@@ -44,7 +44,7 @@ hex-literal = "0.3.1"
 sc-runtime-test = { version = "2.0.0", path = "runtime-test" }
 substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime" }
 sp-state-machine = { version = "0.9.0", path = "../../primitives/state-machine" }
-sp-runtime = { version = "3.0.0", path = "../../primitives/runtime" }
+sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
 sp-tracing = { version = "3.0.0", path = "../../primitives/tracing" }
 sc-tracing = { version = "3.0.0", path = "../tracing" }
 tracing = "0.1.25"

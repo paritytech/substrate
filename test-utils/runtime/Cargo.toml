@@ -25,12 +25,12 @@ sp-offchain = { path = "../../primitives/offchain", default-features = false, ve
 sp-core = { version = "3.0.0", default-features = false, path = "../../primitives/core" }
 sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
 sp-runtime-interface = { path = "../../primitives/runtime-interface", default-features = false, version = "3.0.0"}
-sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/io" }
+sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../frame/support" }
 sp-version = { version = "3.0.0", default-features = false, path = "../../primitives/version" }
 sp-session = { version = "3.0.0", default-features = false, path = "../../primitives/session" }
 sp-api = { version = "3.0.0", default-features = false, path = "../../primitives/api" }
-sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
 pallet-babe = { version = "3.0.0", default-features = false, path = "../../frame/babe" }
 frame-system = { version = "3.0.0", default-features = false, path = "../../frame/system" }
 frame-system-rpc-runtime-api = { version = "3.0.0", default-features = false, path = "../../frame/system/rpc/runtime-api" }

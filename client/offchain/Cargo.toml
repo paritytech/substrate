@@ -29,7 +29,7 @@ sc-network = { version = "0.9.0", path = "../network" }
 sp-api = { version = "3.0.0", path = "../../primitives/api" }
 sp-core = { version = "3.0.0", path = "../../primitives/core" }
 sp-offchain = { version = "3.0.0", path = "../../primitives/offchain" }
-sp-runtime = { version = "3.0.0", path = "../../primitives/runtime" }
+sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
 sp-utils = { version = "3.0.0", path = "../../primitives/utils" }
 threadpool = "1.7"
 

@@ -14,7 +14,7 @@ readme = "README.md"
 parking_lot = "0.11.1"
 lazy_static = "1.4.0"
 hash-db = "0.15.2"
-sp-runtime = { version = "3.0.0", path = "../../primitives/runtime" }
+sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
 sp-externalities = { version = "0.9.0", path = "../../primitives/externalities" }
 sp-blockchain = { version = "3.0.0", path = "../../primitives/blockchain" }
 sp-core = { version = "3.0.0", path = "../../primitives/core" }

@@ -26,11 +26,11 @@ node-executor = { version = "2.0.0", path = "../executor" }
 node-primitives = { version = "2.0.0", path = "../primitives" }
 node-runtime = { version = "2.0.0", path = "../runtime" }
 sp-core = { version = "3.0.0", path = "../../../primitives/core" }
-sp-io = { version = "3.0.0", path = "../../../primitives/io" }
+sp-io = { version = "4.0.0-dev", path = "../../../primitives/io" }
 frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }
 pallet-session = { version = "3.0.0", path = "../../../frame/session" }
 pallet-society = { version = "3.0.0", path = "../../../frame/society" }
-sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
+sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
 pallet-staking = { version = "3.0.0", path = "../../../frame/staking" }
 sc-executor = { version = "0.9.0", path = "../../../client/executor", features = ["wasmtime"] }
 sp-consensus = { version = "0.9.0", path = "../../../primitives/consensus/common" }

@@ -16,7 +16,7 @@ node-testing = { version = "2.0.0", path = "../testing" }
 node-runtime = { version = "2.0.0", path = "../runtime" }
 sc-cli = { version = "0.9.0", path = "../../../client/cli" }
 sc-client-api = { version = "3.0.0", path = "../../../client/api/" }
-sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
+sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
 sp-state-machine = { version = "0.9.0", path = "../../../primitives/state-machine" }
 serde = "1.0.101"
 serde_json = "1.0.41"

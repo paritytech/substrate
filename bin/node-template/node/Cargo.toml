@@ -35,7 +35,7 @@ sc-consensus = { version = "0.9.0", path = "../../../client/consensus/common" }
 sc-finality-grandpa = { version = "0.9.0", path = "../../../client/finality-grandpa" }
 sp-finality-grandpa = { version = "3.0.0", path = "../../../primitives/finality-grandpa" }
 sc-client-api = { version = "3.0.0", path = "../../../client/api" }
-sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
+sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
 
 # These dependencies are used for the node template's RPCs
 jsonrpc-core = "15.1.0"

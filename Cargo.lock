@@ -8857,7 +8857,7 @@ dependencies = [
 
 [[package]]
 name = "sp-io"
-version = "3.0.0"
+version = "4.0.0-dev"
 dependencies = [
  "futures 0.3.13",
  "hash-db",
@@ -8977,7 +8977,7 @@ dependencies = [
 
 [[package]]
 name = "sp-runtime"
-version = "3.0.0"
+version = "4.0.0-dev"
 dependencies = [
  "either",
  "hash256-std-hasher",

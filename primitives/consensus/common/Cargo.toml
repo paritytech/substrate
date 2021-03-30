@@ -25,7 +25,7 @@ futures = { version = "0.3.1", features = ["thread-pool"] }
 futures-timer = "3.0.1"
 sp-std = { version = "3.0.0", path = "../../std" }
 sp-version = { version = "3.0.0", path = "../../version" }
-sp-runtime = { version = "3.0.0", path = "../../runtime" }
+sp-runtime = { version = "4.0.0-dev", path = "../../runtime" }
 sp-utils = { version = "3.0.0", path = "../../utils" }
 sp-trie = { version = "3.0.0", path = "../../trie" }
 sp-api = { version = "3.0.0", path = "../../api" }

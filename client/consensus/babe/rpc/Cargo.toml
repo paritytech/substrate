@@ -21,7 +21,7 @@ jsonrpc-derive = "15.1.0"
 sp-consensus-babe = { version = "0.9.0", path = "../../../../primitives/consensus/babe" }
 serde = { version = "1.0.104", features=["derive"] }
 sp-blockchain = { version = "3.0.0", path = "../../../../primitives/blockchain" }
-sp-runtime = { version = "3.0.0", path = "../../../../primitives/runtime" }
+sp-runtime = { version = "4.0.0-dev", path = "../../../../primitives/runtime" }
 sc-consensus-epochs = { version = "0.9.0", path = "../../epochs" }
 futures = { version = "0.3.4", features = ["compat"] }
 derive_more = "0.99.2"

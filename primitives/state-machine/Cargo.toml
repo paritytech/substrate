@@ -32,7 +32,7 @@ sp-std = { version = "3.0.0", default-features = false, path = "../std" }
 
 [dev-dependencies]
 hex-literal = "0.3.1"
-sp-runtime = { version = "3.0.0", path = "../runtime" }
+sp-runtime = { version = "4.0.0-dev", path = "../runtime" }
 pretty_assertions = "0.6.1"
 
 [features]

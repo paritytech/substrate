@@ -30,7 +30,7 @@ sc-network = { version = "0.9.0", path = "../../../client/network" }
 sc-informant = { version = "0.9.0", path = "../../../client/informant" }
 sc-consensus = { version = "0.9.0", path = "../../../client/consensus/common" }
 
-sp-runtime = { path = "../../../primitives/runtime", version = "3.0.0" }
+sp-runtime = { path = "../../../primitives/runtime", version = "4.0.0-dev"}
 sp-keyring = { version = "3.0.0", path = "../../../primitives/keyring" }
 sp-api = { version = "3.0.0",  path = "../../../primitives/api" }
 sp-inherents = { version = "3.0.0", path = "../../../primitives/inherents" }

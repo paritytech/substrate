@@ -22,7 +22,7 @@ sp-application-crypto = { version = "3.0.0", path = "../../../primitives/applica
 sp-arithmetic = { version = "3.0.0", path = "../../../primitives/arithmetic" }
 sp-blockchain = { version = "3.0.0", path = "../../../primitives/blockchain" }
 sp-consensus-slots = { version = "0.9.0", path = "../../../primitives/consensus/slots" }
-sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
+sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
 sp-state-machine = { version = "0.9.0", path = "../../../primitives/state-machine" }
 sp-api = { version = "3.0.0", path = "../../../primitives/api" }
 sc-telemetry = { version = "3.0.0", path = "../../telemetry" }

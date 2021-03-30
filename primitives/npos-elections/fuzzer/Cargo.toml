@@ -19,7 +19,7 @@ honggfuzz = "0.5"
 rand = { version = "0.7.3", features = ["std", "small_rng"] }
 sp-arithmetic = { version = "3.0.0", path = "../../arithmetic" }
 sp-npos-elections = { version = "3.0.0", path = ".." }
-sp-runtime = { version = "3.0.0", path = "../../runtime" }
+sp-runtime = { version = "4.0.0-dev", path = "../../runtime" }
 sp-std = { version = "3.0.0", path = "../../std" }
 structopt = "0.3.21"
 

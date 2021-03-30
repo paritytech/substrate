@@ -24,7 +24,7 @@ num-rational = "0.2.2"
 num-traits = "0.2.8"
 serde = { version = "1.0.104", features = ["derive"] }
 sp-version = { version = "3.0.0", path = "../../../primitives/version" }
-sp-io = { version = "3.0.0", path = "../../../primitives/io" }
+sp-io = { version = "4.0.0-dev", path = "../../../primitives/io" }
 sp-inherents = { version = "3.0.0", path = "../../../primitives/inherents" }
 sp-timestamp = { version = "3.0.0", path = "../../../primitives/timestamp" }
 sc-telemetry = { version = "3.0.0", path = "../../telemetry" }
@@ -39,7 +39,7 @@ sp-consensus-slots = { version = "0.9.0", path = "../../../primitives/consensus/
 sp-consensus-vrf = { version = "0.9.0", path = "../../../primitives/consensus/vrf" }
 sc-consensus-uncles = { version = "0.9.0", path = "../uncles" }
 sc-consensus-slots = { version = "0.9.0", path = "../slots" }
-sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
+sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
 sp-utils = { version = "3.0.0", path = "../../../primitives/utils" }
 fork-tree = { version = "3.0.0", path = "../../../utils/fork-tree" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.9.0"}

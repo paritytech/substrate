@@ -22,7 +22,7 @@ frame-system = { version = "3.0.0", default-features = false, path = "../system"
 
 [dev-dependencies]
 sp-npos-elections = { version = "3.0.0", path = "../../primitives/npos-elections" }
-sp-runtime = { version = "3.0.0", path = "../../primitives/runtime" }
+sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
 
 [features]
 default = ["std"]

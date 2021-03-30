@@ -16,7 +16,7 @@ sp-api = { version = "3.0.0", path = "../" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
 sp-version = { version = "3.0.0", path = "../../version" }
 sp-tracing = { version = "3.0.0", path = "../../tracing" }
-sp-runtime = { version = "3.0.0", path = "../../runtime" }
+sp-runtime = { version = "4.0.0-dev", path = "../../runtime" }
 sp-blockchain = { version = "3.0.0", path = "../../blockchain" }
 sp-consensus = { version = "0.9.0", path = "../../consensus/common" }
 sc-block-builder = { version = "0.9.0", path = "../../../client/block-builder" }

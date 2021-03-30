@@ -1,6 +1,6 @@
 [package]
 name = "sp-runtime"
-version = "3.0.0"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -21,7 +21,7 @@ sp-core = { version = "3.0.0", default-features = false, path = "../core" }
 sp-application-crypto = { version = "3.0.0", default-features = false, path = "../application-crypto" }
 sp-arithmetic = { version = "3.0.0", default-features = false, path = "../arithmetic" }
 sp-std = { version = "3.0.0", default-features = false, path = "../std" }
-sp-io = { version = "3.0.0", default-features = false, path = "../io" }
+sp-io = { version = "4.0.0-dev", default-features = false, path = "../io" }
 log = { version = "0.4.14", default-features = false }
 paste = "1.0"
 rand = { version = "0.7.2", optional = true }

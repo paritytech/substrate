@@ -14,7 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 sp-session = { version = "3.0.0", default-features = false, path = "../../../primitives/session" }
-sp-runtime = { version = "3.0.0", default-features = false, path = "../../../primitives/runtime" }
+sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/runtime" }
 sp-std = { version = "3.0.0", default-features = false, path = "../../../primitives/std" }
 frame-system = { version = "3.0.0", default-features = false, path = "../../system" }
 frame-benchmarking = { version = "3.1.0", default-features = false, path = "../../benchmarking" }
@@ -28,7 +28,7 @@ serde = { version = "1.0.101" }
 codec = { package = "parity-scale-codec", version = "2.0.0", features = ["derive"] }
 sp-core = { version = "3.0.0", path = "../../../primitives/core" }
 pallet-staking-reward-curve = { version = "3.0.0", path = "../../staking/reward-curve" }
-sp-io ={ version = "3.0.0", path = "../../../primitives/io" }
+sp-io ={ version = "4.0.0-dev", path = "../../../primitives/io" }
 pallet-timestamp = { version = "3.0.0", path = "../../timestamp" }
 pallet-balances = { version = "3.0.0", path = "../../balances" }
 frame-election-provider-support = { version = "3.0.0", path = "../../election-provider-support" }
