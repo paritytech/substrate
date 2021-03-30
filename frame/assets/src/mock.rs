@@ -100,7 +100,42 @@ impl Config for Test {
 	type MetadataDepositPerByte = MetadataDepositPerByte;
 	type ApprovalDeposit = ApprovalDeposit;
 	type StringLimit = StringLimit;
+	type Freezer = TestFreezer;
 	type WeightInfo = ();
+	type Extra = ();
+}
+
+use std::cell::RefCell;
+use std::collections::HashMap;
+
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub(crate) enum Hook {
+	Died(u32, u64),
+}
+thread_local! {
+	static FROZEN: RefCell<HashMap<(u32, u64), u64>> = RefCell::new(Default::default());
+	static HOOKS: RefCell<Vec<Hook>> = RefCell::new(Default::default());
+}
+
+pub struct TestFreezer;
+impl FrozenBalance<u32, u64, u64> for TestFreezer {
+	fn frozen_balance(asset: u32, who: &u64) -> Option<u64> {
+		FROZEN.with(|f| f.borrow().get(&(asset, who.clone())).cloned())
+	}
+
+	fn died(asset: u32, who: &u64) {
+		HOOKS.with(|h| h.borrow_mut().push(Hook::Died(asset, who.clone())));
+	}
+}
+
+pub(crate) fn set_frozen_balance(asset: u32, who: u64, amount: u64) {
+	FROZEN.with(|f| f.borrow_mut().insert((asset, who), amount));
+}
+pub(crate) fn clear_frozen_balance(asset: u32, who: u64) {
+	FROZEN.with(|f| f.borrow_mut().remove(&(asset, who)));
+}
+pub(crate) fn hooks() -> Vec<Hook> {
+	HOOKS.with(|h| h.borrow().clone())
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {

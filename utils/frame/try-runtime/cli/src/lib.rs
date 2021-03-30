@@ -18,7 +18,7 @@
 //! `Structopt`-ready struct for `try-runtime`.
 
 use parity_scale_codec::Decode;
-use std::{fmt::Debug, str::FromStr};
+use std::{fmt::Debug, path::PathBuf, str::FromStr};
 use sc_service::Configuration;
 use sc_cli::{CliConfiguration, ExecutionStrategy, WasmExecutionMethod};
 use sc_executor::NativeExecutor;
@@ -36,10 +36,6 @@ pub struct TryRuntimeCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: sc_cli::SharedParams,
-
-	/// The state to use to run the migration. Should be a valid FILE or HTTP URI.
-	#[structopt(short, long, default_value = "http://localhost:9933")]
-	pub state: State,
 
 	/// The execution strategy that should be used for benchmarks
 	#[structopt(
@@ -60,32 +56,64 @@ pub struct TryRuntimeCmd {
 		default_value = "Interpreted"
 	)]
 	pub wasm_method: WasmExecutionMethod,
+
+	/// The state to use to run the migration.
+	#[structopt(subcommand)]
+	pub state: State,
 }
 
 /// The state to use for a migration dry-run.
-#[derive(Debug)]
+#[derive(Debug, structopt::StructOpt)]
 pub enum State {
-	/// A snapshot. Inner value is a file path.
-	Snap(String),
+	/// Use a state snapshot as state to run the migration.
+	Snap {
+		snapshot_path: PathBuf,
+	},
 
-	/// A live chain. Inner value is the HTTP uri.
-	Live(String),
+	/// Use a live chain to run the migration.
+	Live {
+		/// An optional state snapshot file to WRITE to. Not written if set to `None`.
+		#[structopt(short, long)]
+		snapshot_path: Option<PathBuf>,
+
+		/// The block hash at which to connect.
+		/// Will be latest finalized head if not provided.
+		#[structopt(short, long, multiple = false, parse(try_from_str = parse_hash))]
+		block_at: Option<String>,
+
+		/// The modules to scrape. If empty, entire chain state will be scraped.
+		#[structopt(short, long, require_delimiter = true)]
+		modules: Option<Vec<String>>,
+
+		/// The url to connect to.
+		#[structopt(default_value = "http://localhost:9933", parse(try_from_str = parse_url))]
+		url: String,
+	},
 }
 
-impl FromStr for State {
-	type Err = &'static str;
-	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		match s.get(..7) {
-			// could use Url crate as well, but lets keep it simple for now.
-			Some("http://") => Ok(State::Live(s.to_string())),
-			Some("file://") => s
-				.split("//")
-				.collect::<Vec<_>>()
-				.get(1)
-				.map(|s| State::Snap(s.to_string()))
-				.ok_or("invalid file URI"),
-			_ => Err("invalid format. Must be a valid HTTP or File URI"),
-		}
+fn parse_hash(block_number: &str) -> Result<String, String> {
+	let block_number = if block_number.starts_with("0x") {
+		&block_number[2..]
+	} else {
+		block_number
+	};
+
+	if let Some(pos) = block_number.chars().position(|c| !c.is_ascii_hexdigit()) {
+		Err(format!(
+			"Expected block hash, found illegal hex character at position: {}",
+			2 + pos,
+		))
+	} else {
+		Ok(block_number.into())
+	}
+}
+
+fn parse_url(s: &str) -> Result<String, &'static str> {
+	if s.starts_with("http://") {
+		// could use Url crate as well, but lets keep it simple for now.
+		Ok(s.to_string())
+	} else {
+		Err("not a valid HTTP url: must start with 'http://'")
 	}
 }
 
@@ -93,6 +121,10 @@ impl TryRuntimeCmd {
 	pub async fn run<B, ExecDispatch>(&self, config: Configuration) -> sc_cli::Result<()>
 	where
 		B: BlockT,
+		B::Hash: FromStr,
+		<B::Hash as FromStr>::Err: Debug,
+		NumberFor<B>: FromStr,
+		<NumberFor<B> as FromStr>::Err: Debug,
 		ExecDispatch: NativeExecutionDispatch + 'static,
 	{
 		let spec = config.chain_spec;
@@ -121,13 +153,26 @@ impl TryRuntimeCmd {
 		);
 
 		let ext = {
-			use remote_externalities::{Builder, Mode, CacheConfig, OfflineConfig, OnlineConfig};
+			use remote_externalities::{Builder, Mode, SnapshotConfig, OfflineConfig, OnlineConfig};
 			let builder = match &self.state {
-				State::Snap(file_path) => Builder::new().mode(Mode::Offline(OfflineConfig {
-					cache: CacheConfig { name: file_path.into(), ..Default::default() },
-				})),
-				State::Live(http_uri) => Builder::new().mode(Mode::Online(OnlineConfig {
-					uri: http_uri.into(),
+				State::Snap { snapshot_path } => {
+					Builder::<B>::new().mode(Mode::Offline(OfflineConfig {
+						state_snapshot: SnapshotConfig::new(snapshot_path),
+					}))
+				},
+				State::Live {
+					url,
+					snapshot_path,
+					block_at,
+					modules
+				} => Builder::<B>::new().mode(Mode::Online(OnlineConfig {
+					uri: url.into(),
+					state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
+					modules: modules.clone().unwrap_or_default(),
+					at: match block_at {
+						Some(b) => Some(b.parse().map_err(|e| format!("Could not parse hash: {:?}", e))?),
+						None => None,
+					},
 					..Default::default()
 				})),
 			};

@@ -129,10 +129,10 @@ impl<S, Block> BlockchainBackend<Block> for Blockchain<S> where Block: BlockT, S
 		Err(ClientError::NotAvailableOnLightClient)
 	}
 
-	fn extrinsic(
+	fn indexed_transaction(
 		&self,
 		_hash: &Block::Hash,
-	) -> ClientResult<Option<<Block as BlockT>::Extrinsic>> {
+	) -> ClientResult<Option<Vec<u8>>> {
 		Err(ClientError::NotAvailableOnLightClient)
 	}
 }

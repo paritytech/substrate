@@ -508,7 +508,7 @@ where
 			.best_chain()
 			.map_err(|e| Error::Blockchain(e.to_string()))?;
 
-		let authority_set = self.authority_set.inner().read();
+		let authority_set = self.authority_set.inner();
 
 		// block hash and number of the next pending authority set change in the
 		// given best chain.
@@ -1228,7 +1228,7 @@ where
 	// NOTE: lock must be held through writing to DB to avoid race. this lock
 	//       also implicitly synchronizes the check for last finalized number
 	//       below.
-	let mut authority_set = authority_set.inner().write();
+	let mut authority_set = authority_set.inner();
 
 	let status = client.info();
 

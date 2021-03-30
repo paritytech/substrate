@@ -17,8 +17,8 @@
 
 //! # Aura Module
 //!
-//! - [`aura::Config`](./trait.Config.html)
-//! - [`Module`](./struct.Module.html)
+//! - [`Config`]
+//! - [`Pallet`]
 //!
 //! ## Overview
 //!

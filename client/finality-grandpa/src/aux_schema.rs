@@ -621,7 +621,7 @@ mod test {
 		).unwrap();
 
 		assert_eq!(
-			*authority_set.inner().read(),
+			*authority_set.inner(),
 			AuthoritySet::new(
 				authorities.clone(),
 				set_id,
@@ -645,7 +645,7 @@ mod test {
 						votes: vec![],
 					},
 					set_id,
-					&*authority_set.inner().read(),
+					&*authority_set.inner(),
 				),
 				current_rounds,
 			},
@@ -717,7 +717,7 @@ mod test {
 		).unwrap();
 
 		assert_eq!(
-			*authority_set.inner().read(),
+			*authority_set.inner(),
 			AuthoritySet::new(
 				authorities.clone(),
 				set_id,
@@ -741,7 +741,7 @@ mod test {
 						votes: vec![],
 					},
 					set_id,
-					&*authority_set.inner().read(),
+					&*authority_set.inner(),
 				),
 				current_rounds,
 			},
@@ -810,7 +810,7 @@ mod test {
 		).unwrap();
 
 		assert_eq!(
-			*authority_set.inner().read(),
+			*authority_set.inner(),
 			AuthoritySet::new(
 				authorities.clone(),
 				set_id,
