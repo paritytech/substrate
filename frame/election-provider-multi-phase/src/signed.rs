@@ -26,6 +26,7 @@ use frame_support::traits::{Currency, Get, OnUnbalanced, ReservableCurrency};
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_npos_elections::{is_score_better, CompactSolution};
 use sp_runtime::{Perbill, RuntimeDebug, traits::Zero};
+use sp_std::cmp::Ordering;
 
 /// A raw, unchecked signed submission.
 ///
@@ -149,9 +150,13 @@ impl<T: Config> Pallet<T> {
 		T::SlashHandler::on_unbalanced(negative_imbalance);
 	}
 
-	/// Find a proper position in the queue for the signed queue, whilst maintaining the order of
-	/// solution quality. If insertion was successful, `Some(index)` is returned where index is the
+	/// Insert a solution into the queue while maintaining an ordering by solution quality.
+	///
+	/// If insertion was successful, `Some(index)` is returned where index is the
 	/// index of the newly inserted item.
+	///
+	/// Note: this function does _not_ maintain the invariant that `queue.len() <= T::SignedMaxSubmissions`.
+	/// Pruning must happen elsewhere.
 	///
 	/// Invariant: The returned index is always a valid index in `queue` and can safely be used to
 	/// inspect the newly inserted element.
@@ -161,45 +166,41 @@ impl<T: Config> Pallet<T> {
 		solution: RawSolution<CompactOf<T>>,
 		size: SolutionOrSnapshotSize,
 	) -> Option<usize> {
-		// from the last score, compare and see if the current one is better. If none, then the
-		// awarded index is 0.
-		let outcome = queue
-			.iter()
-			.enumerate()
-			.rev()
-			.find_map(|(i, s)| {
-				if is_score_better::<Perbill>(
-					solution.score,
-					s.solution.score,
-					T::SolutionImprovementThreshold::get(),
-				) {
-					Some(i + 1)
-				} else {
-					None
-				}
-			})
-			.or(Some(0))
-			.and_then(|at| {
-				if at == 0 && queue.len() as u32 >= T::SignedMaxSubmissions::get() {
-					// if this is worse than all, and the queue is full, don't bother.
-					None
-				} else {
-					// add to the designated spot. If the length is too much, remove one.
-					let reward = Self::reward_for(&solution);
-					let deposit = Self::deposit_for(&solution, size);
-					let submission =
-						SignedSubmission { who: who.clone(), deposit, reward, solution };
-					// Proof: `at` must always less than or equal queue.len() for this not to panic.
-					// It is either 0 (in which case `0 <= queue.len()`) or one of the queue indices
-					// + 1. The biggest queue index is `queue.len() - 1`, thus `at <= queue.len()`.
-					queue.insert(at, submission);
-					Some(at)
-				}
-			});
+		let threshold = T::SolutionImprovementThreshold::get();
+		// this insertion logic is a bit unusual in that a new solution which beats an existing
+		// solution by less than the threshold is sorted as "less" than the existing solution.
+		// this means that the produced ordering depends on the order of insertion, and that
+		// attempts to produce a total ordering using this comparitor are highly unstable.
+		//
+		// this ordering prioritizes earlier solutions over slightly better later ones.
+		let insertion_position = queue.binary_search_by(|s| {
+			if is_score_better::<Perbill>(
+				solution.score,
+				s.solution.score,
+				threshold,
+			) {
+				Ordering::Greater
+			} else {
+				Ordering::Less
+			}
+		}).expect_err("comparitor function never returns Ordering::Equal; qed");
 
-		// If the call site is sane and removes the weakest, then this must always be correct.
-		debug_assert!(queue.len() as u32 <= T::SignedMaxSubmissions::get() + 1);
-		outcome
+		let max_submissions = T::SignedMaxSubmissions::get();
+		// if this solution is the worst one so far and the queue is full, don't insert
+		if insertion_position == 0 && queue.len() as u32 >= max_submissions {
+			return None;
+		}
+
+		// add to the designated spot. If the length is too much, remove one.
+		let reward = Self::reward_for(&solution);
+		let deposit = Self::deposit_for(&solution, size);
+		let submission =
+			SignedSubmission { who: who.clone(), deposit, reward, solution };
+		queue.insert(insertion_position, submission);
+
+		// If the queue was within length when this function was called, then this must always be correct.
+		debug_assert!(queue.len() as u32 <= max_submissions + 1);
+		Some(insertion_position)
 	}
 
 	/// Removes the weakest element of the queue, namely the first one, should the length of the
