@@ -137,7 +137,7 @@ struct V2AuthoritySet<H, N> {
 }
 
 pub(crate) fn load_decode<B: AuxStore, T: Decode>(
-	backend: &B, 
+	backend: &B,
 	key: &[u8]
 ) -> ClientResult<Option<T>> {
 	match backend.get_aux(key)? {
@@ -592,7 +592,7 @@ mod test {
 		).unwrap();
 
 		assert_eq!(
-			*authority_set.inner().read(),
+			*authority_set.inner(),
 			AuthoritySet::new(
 				authorities.clone(),
 				set_id,
@@ -616,7 +616,7 @@ mod test {
 						votes: vec![],
 					},
 					set_id,
-					&*authority_set.inner().read(),
+					&*authority_set.inner(),
 				),
 				current_rounds,
 			},
@@ -688,7 +688,7 @@ mod test {
 		).unwrap();
 
 		assert_eq!(
-			*authority_set.inner().read(),
+			*authority_set.inner(),
 			AuthoritySet::new(
 				authorities.clone(),
 				set_id,
@@ -712,7 +712,7 @@ mod test {
 						votes: vec![],
 					},
 					set_id,
-					&*authority_set.inner().read(),
+					&*authority_set.inner(),
 				),
 				current_rounds,
 			},
@@ -781,7 +781,7 @@ mod test {
 		).unwrap();
 
 		assert_eq!(
-			*authority_set.inner().read(),
+			*authority_set.inner(),
 			AuthoritySet::new(
 				authorities.clone(),
 				set_id,

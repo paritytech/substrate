@@ -21,7 +21,7 @@ use codec::Encode;
 use sp_runtime::traits::Convert;
 
 use super::super::Config as SessionConfig;
-use super::super::{Module as SessionModule, SessionIndex};
+use super::super::{Pallet as SessionModule, SessionIndex};
 use super::Config as HistoricalConfig;
 
 use super::shared;

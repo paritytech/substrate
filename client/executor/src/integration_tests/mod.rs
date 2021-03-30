@@ -21,7 +21,7 @@ use codec::{Encode, Decode};
 use hex_literal::hex;
 use sp_core::{
 	blake2_128, blake2_256, ed25519, sr25519, map, Pair,
-	offchain::{OffchainExt, testing},
+	offchain::{OffchainWorkerExt, OffchainDbExt, testing},
 	traits::{Externalities, CallInWasm},
 };
 use sc_runtime_test::wasm_binary_unwrap;
@@ -468,7 +468,7 @@ test_wasm_execution!(offchain_index);
 fn offchain_index(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let (offchain, _state) = testing::TestOffchainExt::new();
-	ext.register_extension(OffchainExt::new(offchain));
+	ext.register_extension(OffchainWorkerExt::new(offchain));
 	call_in_wasm(
 		"test_offchain_index_set",
 		&[0],
@@ -487,7 +487,8 @@ test_wasm_execution!(offchain_local_storage_should_work);
 fn offchain_local_storage_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let (offchain, state) = testing::TestOffchainExt::new();
-	ext.register_extension(OffchainExt::new(offchain));
+	ext.register_extension(OffchainDbExt::new(offchain.clone()));
+	ext.register_extension(OffchainWorkerExt::new(offchain));
 	assert_eq!(
 		call_in_wasm(
 			"test_offchain_local_storage",
@@ -504,7 +505,7 @@ test_wasm_execution!(offchain_http_should_work);
 fn offchain_http_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let (offchain, state) = testing::TestOffchainExt::new();
-	ext.register_extension(OffchainExt::new(offchain));
+	ext.register_extension(OffchainWorkerExt::new(offchain));
 	state.write().expect_request(testing::PendingRequest {
 			method: "POST".into(),
 			uri: "http://localhost:12345".into(),

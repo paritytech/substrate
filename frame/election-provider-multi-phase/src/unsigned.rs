@@ -68,8 +68,17 @@ impl<T: Config> Pallet<T> {
 		let iters = Self::get_balancing_iters();
 		// get the solution, with a load of checks to ensure if submitted, IT IS ABSOLUTELY VALID.
 		let (raw_solution, witness) = Self::mine_and_check(iters)?;
+		let score = raw_solution.score.clone();
 
-		let call = Call::submit_unsigned(raw_solution, witness).into();
+		let call: <T as frame_system::offchain::SendTransactionTypes<Call<T>>>::OverarchingCall =
+			Call::submit_unsigned(raw_solution, witness).into();
+		log!(
+			info,
+			"mined a solution with score {:?} and size {}",
+			score,
+			call.using_encoded(|b| b.len())
+		);
+
 		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call)
 			.map_err(|_| MinerError::PoolSubmissionFailed)
 	}
@@ -138,7 +147,7 @@ impl<T: Config> Pallet<T> {
 		// closures.
 		let cache = helpers::generate_voter_cache::<T>(&voters);
 		let voter_index = helpers::voter_index_fn::<T>(&cache);
-		let target_index = helpers::target_index_fn_linear::<T>(&targets);
+		let target_index = helpers::target_index_fn::<T>(&targets);
 		let voter_at = helpers::voter_at_fn::<T>(&voters);
 		let target_at = helpers::target_at_fn::<T>(&targets);
 		let stake_of = helpers::stake_of_fn::<T>(&voters, &cache);
@@ -161,12 +170,16 @@ impl<T: Config> Pallet<T> {
 			size,
 			T::MinerMaxWeight::get(),
 		);
+
 		log!(
 			debug,
-			"miner: current compact solution voters = {}, maximum_allowed = {}",
+			"initial solution voters = {}, snapshot = {:?}, maximum_allowed(capped) = {}",
 			compact.voter_count(),
+			size,
 			maximum_allowed_voters,
 		);
+
+		// trim weight.
 		let compact = Self::trim_compact(maximum_allowed_voters, compact, &voter_index)?;
 
 		// re-calc score.
@@ -245,10 +258,12 @@ impl<T: Config> Pallet<T> {
 					}
 				}
 
+				log!(debug, "removed {} voter to meet the max weight limit.", to_remove);
 				Ok(compact)
 			}
 			_ => {
 				// nada, return as-is
+				log!(debug, "didn't remove any voter for weight limits.");
 				Ok(compact)
 			}
 		}
@@ -291,6 +306,7 @@ impl<T: Config> Pallet<T> {
 		// First binary-search the right amount of voters
 		let mut step = voters / 2;
 		let mut current_weight = weight_with(voters);
+
 		while step > 0 {
 			match next_voters(current_weight, voters, step) {
 				// proceed with the binary search
@@ -317,13 +333,14 @@ impl<T: Config> Pallet<T> {
 			voters -= 1;
 		}
 
+		let final_decision = voters.min(size.voters);
 		debug_assert!(
-			weight_with(voters.min(size.voters)) <= max_weight,
+			weight_with(final_decision) <= max_weight,
 			"weight_with({}) <= {}",
-			voters.min(size.voters),
+			final_decision,
 			max_weight,
 		);
-		voters.min(size.voters)
+		final_decision
 	}
 
 	/// Checks if an execution of the offchain worker is permitted at the given block number, or
@@ -415,6 +432,9 @@ mod max_weight {
 		fn on_initialize_open_unsigned_with_snapshot() -> Weight {
 			unreachable!()
 		}
+		fn elect_queued() -> Weight {
+			0
+		}
 		fn on_initialize_open_unsigned_without_snapshot() -> Weight {
 			unreachable!()
 		}
@@ -498,7 +518,7 @@ mod tests {
 	};
 	use frame_support::{dispatch::Dispatchable, traits::OffchainWorker};
 	use mock::Call as OuterCall;
-	use sp_election_providers::Assignment;
+	use frame_election_provider_support::Assignment;
 	use sp_runtime::{traits::ValidateUnsigned, PerU16};
 
 	#[test]
@@ -736,7 +756,6 @@ mod tests {
 			roll_to(25);
 			assert!(MultiPhase::current_phase().is_unsigned());
 
-			// mine seq_phragmen solution with 2 iters.
 			assert_eq!(
 				MultiPhase::mine_check_and_submit().unwrap_err(),
 				MinerError::PreDispatchChecksFailed,
@@ -843,7 +862,7 @@ mod tests {
 	}
 
 	#[test]
-	fn ocw_only_runs_when_signed_open_now() {
+	fn ocw_only_runs_when_unsigned_open_now() {
 		let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
 		ext.execute_with(|| {
 			roll_to(25);
