@@ -142,7 +142,7 @@ pub use pallet::*;
 
 /// Do something when we should be setting the code.
 pub trait SetCode {
-	/// Set the code to
+	/// Set the code to the given blob.
 	fn set_code(code: Vec<u8>);
 }
 
@@ -266,7 +266,8 @@ pub mod pallet {
 		#[pallet::constant]
 		type SS58Prefix: Get<u8>;
 
-		/// What to do if the user wants the code set to something.
+		/// What to do if the user wants the code set to something. Just use `()` unless you are in
+		/// cumulus.
 		type OnSetCode: SetCode;
 	}
 
