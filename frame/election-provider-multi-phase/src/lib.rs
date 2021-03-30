@@ -527,7 +527,7 @@ pub mod pallet {
 		/// this values, based on [`WeightInfo::submit_unsigned`].
 		type MinerMaxWeight: Get<Weight>;
 
-		/// Maximum number of singed submissions that can be queued.
+		/// Maximum number of signed submissions that can be queued.
 		#[pallet::constant]
 		type SignedMaxSubmissions: Get<u32>;
 		/// Maximum weight of a signed solution.

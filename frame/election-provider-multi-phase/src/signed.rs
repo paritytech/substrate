@@ -48,7 +48,7 @@ pub(crate) type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 >>::NegativeImbalance;
 
 impl<T: Config> Pallet<T> {
-	/// Finish the singed phase. Process the signed submissions from best to worse until a valid one
+	/// Finish the signed phase. Process the signed submissions from best to worse until a valid one
 	/// is found, rewarding the best one and slashing the invalid ones along the way.
 	///
 	/// Returns true if we have a good solution in the signed phase.
@@ -68,11 +68,12 @@ impl<T: Config> Pallet<T> {
 				let SolutionOrSnapshotSize { voters, targets } =
 					Self::snapshot_metadata().unwrap_or_default();
 				let desired_targets = Self::desired_targets().unwrap_or_default();
-				let v = voters;
-				let t = targets;
-				let a = active_voters;
-				let w = desired_targets;
-				T::WeightInfo::feasibility_check(v, t, a, w)
+				T::WeightInfo::feasibility_check(
+					voters, 
+					targets, 
+					active_voters, 
+					desired_targets,
+				)
 			};
 			match Self::feasibility_check(solution, ElectionCompute::Signed) {
 				Ok(ready_solution) => {
@@ -99,7 +100,7 @@ impl<T: Config> Pallet<T> {
 			}
 		}
 
-		// Any unprocessed solution is not pointless to even ponder upon. Feasible or malicious,
+		// Any unprocessed solution is pointless to even consider. Feasible or malicious,
 		// they didn't end up being used. Unreserve the bonds.
 		all_submission.into_iter().for_each(|not_processed| {
 			let SignedSubmission { who, deposit, .. } = not_processed;
