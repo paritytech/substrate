@@ -17,11 +17,15 @@
 
 //! The signed phase implementation.
 
-use super::*;
-use codec::{Encode, HasCompact};
+use crate::{
+	CompactOf, Config, ElectionCompute, Pallet, RawSolution, ReadySolution, SolutionOrSnapshotSize,
+	Weight, WeightInfo, QueuedSolution, SignedSubmissions,
+};
+use codec::{Encode, Decode, HasCompact};
+use frame_support::traits::{Currency, Get, OnUnbalanced, ReservableCurrency};
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_npos_elections::{is_score_better, CompactSolution};
-use sp_runtime::Perbill;
+use sp_runtime::{Perbill, RuntimeDebug, traits::Zero};
 
 /// A raw, unchecked signed submission.
 ///
@@ -69,9 +73,9 @@ impl<T: Config> Pallet<T> {
 					Self::snapshot_metadata().unwrap_or_default();
 				let desired_targets = Self::desired_targets().unwrap_or_default();
 				T::WeightInfo::feasibility_check(
-					voters, 
-					targets, 
-					active_voters, 
+					voters,
+					targets,
+					active_voters,
 					desired_targets,
 				)
 			};
