@@ -87,6 +87,14 @@ pub const LOG_TARGET: &'static str = "runtime::frame-support";
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Never {}
 
+/// A pallet identifier. These are per pallet and should be stored in a registry somewhere.
+#[derive(Clone, Copy, Eq, PartialEq, Encode, Decode)]
+pub struct PalletId(pub [u8; 8]);
+
+impl TypeId for PalletId {
+	const TYPE_ID: [u8; 4] = *b"modl";
+}
+
 /// Create new implementations of the [`Get`](crate::traits::Get) trait.
 ///
 /// The so-called parameter type can be created in four different ways:

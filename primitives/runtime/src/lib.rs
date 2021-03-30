@@ -158,14 +158,6 @@ impl From<Justification> for Justifications {
 
 use traits::{Verify, Lazy};
 
-/// A pallet identifier. These are per pallet and should be stored in a registry somewhere.
-#[derive(Clone, Copy, Eq, PartialEq, Encode, Decode)]
-pub struct PalletId(pub [u8; 8]);
-
-impl TypeId for PalletId {
-	const TYPE_ID: [u8; 4] = *b"modl";
-}
-
 #[cfg(feature = "std")]
 pub use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use crate::traits::IdentifyAccount;
