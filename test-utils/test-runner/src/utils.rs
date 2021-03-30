@@ -20,10 +20,15 @@ use futures::{Sink, SinkExt};
 use std::fmt;
 use std::io::Write;
 use log::LevelFilter;
+use sc_service::BasePath;
 
 /// Base db path gotten from env
-pub fn base_path() -> Option<String> {
-	std::env::var("DB_BASE_PATH").ok()
+pub fn base_path() -> BasePath {
+	if let Some(base) = std::env::var("DB_BASE_PATH").ok() {
+		BasePath::new(base)
+	} else {
+		BasePath::new_temp_dir().expect("couldn't create a temp dir")
+	}
 }
 
 /// Builds the global logger.
