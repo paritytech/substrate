@@ -125,7 +125,6 @@ where
 		writer: &mut dyn fmt::Write,
 		event: &Event,
 	) -> fmt::Result {
-		self.format_event_custom(CustomFmtContext::FmtContext(ctx), writer, event)?;
 		if self.dup_to_stdout && (
 			event.metadata().level() == &Level::INFO ||
 			event.metadata().level() == &Level::WARN ||
@@ -133,9 +132,12 @@ where
 		) {
 			let mut out = String::new();
 			self.format_event_custom(CustomFmtContext::FmtContext(ctx), &mut out, event)?;
+			writer.write_str(&out)?;
 			print!("{}", out);
+			Ok(())
+		} else {
+			self.format_event_custom(CustomFmtContext::FmtContext(ctx), writer, event)
 		}
-		Ok(())
 	}
 }
 
