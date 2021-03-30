@@ -121,7 +121,15 @@ impl TelemetryWorker {
 	/// Instantiate a new [`TelemetryWorker`] which can run in background.
 	///
 	/// Only one is needed per process.
-	pub fn new(buffer_size: usize, transport: Option<ExtTransport>) -> Result<Self> {
+	pub fn new(buffer_size: usize) -> Result<Self> {
+		Self::with_transport(buffer_size, None)
+	}
+
+	/// Instantiate a new [`TelemetryWorker`] with the given [`ExtTransport`]
+	/// which can run in background.
+	///
+	/// Only one is needed per process.
+	pub fn with_transport(buffer_size: usize, transport: Option<ExtTransport>) -> Result<Self> {
 		let transport = initialize_transport(transport)?;
 		let (message_sender, message_receiver) = mpsc::channel(buffer_size);
 		let (register_sender, register_receiver) = mpsc::unbounded();
