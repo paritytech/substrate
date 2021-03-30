@@ -1378,6 +1378,75 @@ fn rebond_works() {
 }
 
 #[test]
+fn calculate_new_validator_count_should_work() {
+	// validator count algorithm should work
+	ExtBuilder::default()
+		.minimum_validator_count(1)
+		.maximum_validator_count(1000)
+		.validator_count(200)
+		.num_validators(3)
+		.build()
+		.execute_with(|| {
+			// test vectors
+			let initial_balances_1 = vec![600, 600, 600, 600, 600, 600, 600];
+			let initial_balances_2 = vec![30, 120, 115, 105, 110, 1225, 2225];
+			let initial_balances_3 = vec![100, 120, 115, 105, 110, 1225, 1225];
+
+			let current_validator_count = 200;
+			let one_percent_count = Percent::from_percent(1) * current_validator_count;
+
+			// validator_count value should be increased by 1%
+			ValidatorCount::put(current_validator_count);
+			let new_validator_count_1 = Staking::calculate_new_validator_count(initial_balances_1);
+			assert_eq!(current_validator_count + one_percent_count, new_validator_count_1);
+
+			// validator_count value should be decreased by 1%
+			ValidatorCount::put(current_validator_count);
+			let new_validator_count_2 = Staking::calculate_new_validator_count(initial_balances_2);
+			assert_eq!(current_validator_count - one_percent_count, new_validator_count_2);
+
+			// validator_count value shouldn't be changed
+			ValidatorCount::put(current_validator_count);
+			let new_validator_count_3 = Staking::calculate_new_validator_count(initial_balances_3);
+			assert_eq!(current_validator_count, new_validator_count_3);
+		});
+}
+
+#[test]
+fn update_validator_count_works() {
+	// Make sure that at the end of era validator count is updated
+	ExtBuilder::default()
+		.minimum_validator_count(1)
+		.maximum_validator_count(200)
+		.validator_count(100)
+		.num_validators(8)
+		.validator_pool(true)
+		.nominate(false)
+		.build()
+		.execute_with(|| {
+			let current_validator_count = ValidatorCount::get();
+			assert_eq!(current_validator_count, 101);
+		});
+}
+
+#[test]
+fn update_validator_count_disabled() {
+	// Make sure that at the end of era validator count is not changed
+	ExtBuilder::default()
+		.minimum_validator_count(1)
+		.maximum_validator_count(0)
+		.validator_count(100)
+		.num_validators(8)
+		.validator_pool(true)
+		.nominate(false)
+		.build()
+		.execute_with(|| {
+			let current_validator_count = ValidatorCount::get();
+			assert_eq!(current_validator_count, 100);
+		});
+}
+
+#[test]
 fn rebond_is_fifo() {
 	// Rebond should proceed by reversing the most recent bond operations.
 	ExtBuilder::default()

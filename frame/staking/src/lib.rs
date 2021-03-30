@@ -941,6 +941,12 @@ decl_storage! {
 		/// Minimum number of staking participants before emergency conditions are imposed.
 		pub MinimumValidatorCount get(fn minimum_validator_count) config(): u32;
 
+		/// Maximum number of validators participated to produce blocks. 
+		/// 
+		/// If the value `maximum_validator_count > minimum_validator_count` at the end of
+		/// current era `validator_count` will be changed automatically,
+		pub MaximumValidatorCount get(fn maximum_validator_count) config(): u32;
+
 		/// Any validators that may never be slashed or forcibly kicked. It's a Vec since they're
 		/// easy to initialize and the performance hit is minimal (we expect no more than four
 		/// invulnerables) and restricted to testnets.
@@ -2907,8 +2913,10 @@ impl<T: Config> Module<T> {
 
 			// Populate Stakers and write slot stake.
 			let mut total_stake: BalanceOf<T> = Zero::zero();
+			let mut exposure_totals = Vec::<BalanceOf<T>>::new();
 			exposures.into_iter().for_each(|(stash, exposure)| {
 				total_stake = total_stake.saturating_add(exposure.total);
+				exposure_totals.push(exposure.total);
 				<ErasStakers<T>>::insert(current_era, &stash, &exposure);
 
 				let mut exposure_clipped = exposure;
@@ -2919,6 +2927,19 @@ impl<T: Config> Module<T> {
 				}
 				<ErasStakersClipped<T>>::insert(&current_era, &stash, exposure_clipped);
 			});
+
+			// make sure that the conditions are met for validator count calculation to take place
+			if MaximumValidatorCount::get() > MinimumValidatorCount::get() {
+				let new_validator_count = Self::calculate_new_validator_count(exposure_totals);
+				ValidatorCount::put(new_validator_count);
+
+				log!(
+					info,
+					"new validator count of {:?} has been set for staring era {:?}",
+					new_validator_count,
+					current_era,
+				);
+			}
 
 			// Insert current era staking information
 			<ErasTotalStake<T>>::insert(&current_era, total_stake);
@@ -2944,6 +2965,51 @@ impl<T: Config> Module<T> {
 		} else {
 			None
 		}
+	}
+
+	/// Calculates new validator count for the next era.
+	/// 
+	/// The number of valiators is always between the minimum and maximum number 
+	/// of desired validators.
+	fn calculate_new_validator_count(mut balances: Vec<BalanceOf<T>>) -> u32 {
+		if balances.is_empty() {
+			return 0;
+		}
+
+		let average = |values: &[BalanceOf<T>]| -> BalanceOf<T> {
+			// division by zero check
+			if values.is_empty() {
+				return BalanceOf::<T>::saturated_from(0_u32);
+			}
+
+			values.iter().fold(Zero::zero(), |total: BalanceOf<T>, value: &BalanceOf<T>| {
+				total.saturating_add(*value)
+			}) / BalanceOf::<T>::saturated_from(values.len())
+		};
+
+		let validator_count = Self::validator_count();
+		let one_percent_count = Percent::from_percent(1) * validator_count;
+		let global_average = average(&balances);
+		balances.sort();
+
+		let one_percent_average = average(&balances[0..(one_percent_count as usize)]);
+
+		// if the bottom %1 of validators have an average greater than 40% of the global average
+		if one_percent_average > Percent::from_percent(40) * global_average {
+			// increase validator count by 1%
+			return (validator_count + one_percent_count).min(MaximumValidatorCount::get())
+		} else {
+			let two_percent_count = one_percent_count.saturating_mul(2);
+			let two_percent_average = average(&balances[0..(two_percent_count as usize)]);
+
+			// if the bottom %2 of validators have an average below 20% of the global average
+			if two_percent_average < Percent::from_percent(20) * global_average {
+				// decrease validator count by 1%
+				return (validator_count - one_percent_count).max(MinimumValidatorCount::get())
+			}
+		}
+
+		return validator_count
 	}
 
 	/// Select a new validator set from the assembled stakers and their role preferences. It tries

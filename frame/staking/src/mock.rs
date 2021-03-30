@@ -287,6 +287,7 @@ pub struct ExtBuilder {
 	nominate: bool,
 	validator_count: u32,
 	minimum_validator_count: u32,
+	maximum_validator_count: u32,
 	fair: bool,
 	num_validators: Option<u32>,
 	invulnerables: Vec<AccountId>,
@@ -301,6 +302,7 @@ impl Default for ExtBuilder {
 			nominate: true,
 			validator_count: 2,
 			minimum_validator_count: 0,
+			maximum_validator_count: 2,
 			fair: true,
 			num_validators: None,
 			invulnerables: vec![],
@@ -329,6 +331,10 @@ impl ExtBuilder {
 	}
 	pub fn minimum_validator_count(mut self, count: u32) -> Self {
 		self.minimum_validator_count = count;
+		self
+	}
+	pub fn maximum_validator_count(mut self, count: u32) -> Self {
+		self.maximum_validator_count = count;
 		self
 	}
 	pub fn slash_defer_duration(self, eras: EraIndex) -> Self {
@@ -449,6 +455,7 @@ impl ExtBuilder {
 			stakers: stakers,
 			validator_count: self.validator_count,
 			minimum_validator_count: self.minimum_validator_count,
+			maximum_validator_count: self.maximum_validator_count,
 			invulnerables: self.invulnerables,
 			slash_reward_fraction: Perbill::from_percent(10),
 			..Default::default()
