@@ -1,6 +1,6 @@
 [package]
 name = "try-runtime-cli"
-version = "0.9.0"
+version = "0.9.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -27,6 +27,6 @@ sp-blockchain = { version = "3.0.0", path = "../../../../primitives/blockchain" 
 sp-runtime = { version = "3.0.0", path = "../../../../primitives/runtime" }
 sp-externalities = { version = "0.9.0", path = "../../../../primitives/externalities" }
 sp-core = { version = "3.0.0", path = "../../../../primitives/core" }
-frame-try-runtime = { version = "0.9.0", path = "../../../../frame/try-runtime" }
+frame-try-runtime = { version = "0.9.0-dev", path = "../../../../frame/try-runtime" }
 
 remote-externalities = { version = "0.9.0", path = "../../remote-externalities" }
