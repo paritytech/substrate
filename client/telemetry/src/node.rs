@@ -237,7 +237,7 @@ where
 			}
 		};
 
-		// The Dispatcher blocks when the Node sinks blocks. This is why it is important that the
+		// The Dispatcher blocks when the Node syncs blocks. This is why it is important that the
 		// Node sinks don't go into "Pending" state while waiting for reconnection but rather
 		// discard the excess of telemetry messages.
 		Poll::Ready(Ok(()))
@@ -262,7 +262,7 @@ where
 			// A new connection should be started as soon as possible.
 			NodeSocket::ReconnectNow => log::trace!(target: "telemetry", "Reconnecting"),
 			// Waiting before attempting to dial again.
-			NodeSocket::WaitingReconnect(_) => log::trace!(target: "telemetry", "Pausing before reconnect."),
+			NodeSocket::WaitingReconnect(_) => {}
 			// Temporary transition state.
 			NodeSocket::Poisoned => log::trace!(target: "telemetry", "Poisoned"),
 		}
