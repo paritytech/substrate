@@ -69,15 +69,33 @@ pub fn migrate<
 ///
 /// Panics if anything goes wrong.
 pub fn pre_migration<P: GetPalletVersion, N: AsRef<str>>(new: N) {
+	let new = new.as_ref();
+	log::info!("pre-migration elections-phragmen test with new = {}", new);
+
 	// ensure some stuff exist in the old prefix.
 	assert!(sp_io::storage::next_key(OLD_PREFIX).is_some());
 	// ensure nothing is stored in the new prefix.
 	assert!(
-		sp_io::storage::next_key(new.as_ref().as_bytes()).is_none(),
+		sp_io::storage::next_key(new.as_bytes()).map_or(
+			// either nothing is there
+			true,
+			// or we ensure that it has no common prefix with twox_128(new).
+			|next_key| !next_key.starts_with(&sp_io::hashing::twox_128(new.as_bytes()))
+		),
 		"unexpected next_key({}) = {:?}",
-		new.as_ref(),
-		sp_core::hexdisplay::HexDisplay::from(&sp_io::storage::next_key(new.as_ref().as_bytes()).unwrap())
+		new,
+		sp_core::hexdisplay::HexDisplay::from(&sp_io::storage::next_key(new.as_bytes()).unwrap())
 	);
 	// ensure storage version is 3.
 	assert!(<P as GetPalletVersion>::storage_version().unwrap().major == 3);
+}
+
+/// Some checks for after migration. This can be linked to
+/// [`frame_support::traits::OnRuntimeUpgrade::post_upgrade`] for further testing.
+///
+/// Panics if anything goes wrong.
+pub fn post_migration<P : GetPalletVersion>() {
+	log::info!("post-migration elections-phragmen");
+	// ensure we've been updated to v4 by the automatic write of crate version -> storage version.
+	assert!(<P as GetPalletVersion>::storage_version().unwrap().major == 4);
 }
