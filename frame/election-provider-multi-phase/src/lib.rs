@@ -632,11 +632,19 @@ pub mod pallet {
 				Phase::Signed | Phase::Off
 					if remaining <= unsigned_deadline && remaining > Zero::zero() =>
 				{
-					// determine if followed by signed or not.
+					// our needs vary according to whether or not the unsigned phase follows a signed phase
 					let (need_snapshot, enabled, signed_weight) = if current_phase == Phase::Signed {
-						// followed by a signed phase: close the signed phase, no need for snapshot.
-						// TODO: proper weight https://github.com/paritytech/substrate/pull/7910.
-						(false, true, Weight::zero())
+						// there was previously a signed phase: close the signed phase, no need for snapshot.
+						//
+						// Notes:
+						//
+						//   - If the signed phase produced a viable solution, we disable the unsigned
+						//     phase. We want to prioritize signed solutions whenever they're available.
+						//   - `Self::finalize_signed_phase()` also appears in `fn do_elect`. This is
+						//     a guard against the case that `elect` is called prematurely. This adds
+						//     a small amount of overhead, but that is unfortunately unavoidable.
+						let (success, weight) = Self::finalize_signed_phase();
+						(false, !success, weight)
 					} else {
 						// no signed phase: create a new snapshot, definitely `enable` the unsigned
 						// phase.
@@ -1194,6 +1202,13 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn do_elect() -> Result<(Supports<T::AccountId>, Weight), ElectionError> {
+		// We have to unconditionally try finalizing the signed phase here. There are only two
+		// possibilities:
+		//
+		// - signed phase was open, in which case this is essential for correct functioning of the system
+		// - signed phase was complete or not started, in which case finalization is idempotent and
+		//   inexpensive (1 read of an empty vector).
+		let (_, signed_finalize_weight) = Self::finalize_signed_phase();
 		<QueuedSolution<T>>::take()
 			.map_or_else(
 				|| match T::Fallback::get() {
@@ -1213,7 +1228,7 @@ impl<T: Config> Pallet<T> {
 				if Self::round() != 1 {
 					log!(info, "Finalized election round with compute {:?}.", compute);
 				}
-				(supports, weight)
+				(supports, weight.saturating_add(signed_finalize_weight))
 			})
 			.map_err(|err| {
 				Self::deposit_event(Event::ElectionFinalized(None));
@@ -1432,10 +1447,11 @@ mod tests {
 		Phase,
 		mock::{
 			ExtBuilder, MultiPhase, Runtime, roll_to, MockWeightInfo, AccountId, TargetIndex,
-			Targets, multi_phase_events, System,
+			Targets, multi_phase_events, System, SignedMaxSubmissions,
 		},
 	};
 	use frame_election_provider_support::ElectionProvider;
+	use frame_support::assert_ok;
 	use sp_npos_elections::Support;
 
 	#[test]
@@ -1596,6 +1612,43 @@ mod tests {
 					Event::ElectionFinalized(Some(ElectionCompute::OnChain))
 				],
 			);
+			// all storage items must be cleared.
+			assert_eq!(MultiPhase::round(), 2);
+			assert!(MultiPhase::snapshot().is_none());
+			assert!(MultiPhase::snapshot_metadata().is_none());
+			assert!(MultiPhase::desired_targets().is_none());
+			assert!(MultiPhase::queued_solution().is_none());
+			assert!(MultiPhase::signed_submissions().is_empty());
+		})
+	}
+
+	#[test]
+	fn early_termination_with_submissions() {
+		// an early termination in the signed phase, with no queued solution.
+		ExtBuilder::default().build_and_execute(|| {
+			// signed phase started at block 15 and will end at 25.
+			roll_to(14);
+			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+
+			roll_to(15);
+			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted(1)]);
+			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
+			assert_eq!(MultiPhase::round(), 1);
+
+			// fill the queue with signed submissions
+			for s in 0..SignedMaxSubmissions::get() {
+				let solution = RawSolution { score: [(5 + s).into(), 0, 0], ..Default::default() };
+				assert_ok!(MultiPhase::submit(
+					crate::mock::Origin::signed(99),
+					solution,
+					MultiPhase::signed_submissions().len() as u32
+				));
+			}
+
+			// an unexpected call to elect.
+			roll_to(20);
+			MultiPhase::elect().unwrap();
+
 			// all storage items must be cleared.
 			assert_eq!(MultiPhase::round(), 2);
 			assert!(MultiPhase::snapshot().is_none());
