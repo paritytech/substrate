@@ -237,7 +237,6 @@ where
 	/// Start the execution of a particular block.
 	pub fn initialize_block(header: &System::Header) {
 		sp_io::init_tracing();
-		log::info!("\ninit_block span 238\n");
 		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "init_block");
 		let digests = Self::extract_pre_digest(&header);
 		Self::initialize_block_impl(
@@ -317,7 +316,6 @@ where
 	/// Actually execute all transitions for `block`.
 	pub fn execute_block(block: Block) {
 		sp_io::init_tracing();
-		log::info!("\nexecute_block span 317\n");
 		sp_tracing::within_span! {
 			sp_tracing::info_span!("execute_block", ?block);
 
@@ -361,7 +359,6 @@ where
 	/// except state-root.
 	pub fn finalize_block() -> System::Header {
 		sp_io::init_tracing();
-		log::info!("\nfinalize_blocks span\n");
 		sp_tracing::enter_span!( sp_tracing::Level::TRACE, "finalize_block" );
 		<frame_system::Module<System>>::note_finished_extrinsics();
 		let block_number = <frame_system::Module<System>>::block_number();
@@ -412,7 +409,6 @@ where
 		encoded_len: usize,
 		to_note: Vec<u8>,
 	) -> ApplyExtrinsicResult {
-		log::info!("apply_extrinsic: {:#?}\n", &uxt);
 		sp_tracing::enter_span!(
 			sp_tracing::info_span!("apply_extrinsic",
 				ext=?sp_core::hexdisplay::HexDisplay::from(&uxt.encode()))
@@ -437,7 +433,6 @@ where
 	}
 
 	fn final_checks(header: &System::Header) {
-		log::info!("final checks span\n");
 		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "final_checks");
 		// remove temporaries
 		let new_header = <frame_system::Module<System>>::finalize();
