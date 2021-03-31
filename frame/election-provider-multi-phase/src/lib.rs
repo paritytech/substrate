@@ -766,7 +766,6 @@ pub mod pallet {
 			// defensive-only: if phase is signed, snapshot will exist.
 			let size = Self::snapshot_metadata().unwrap_or_default();
 
-			// NOTE: we compute this function once in `insert_submission` as well, could optimize.
 			ensure!(
 				Self::feasibility_weight_of(&solution, size) < T::SignedMaxWeight::get(),
 				Error::<T>::SignedTooMuchWeight,
@@ -781,12 +780,6 @@ pub mod pallet {
 			// Defensive -- index is valid.
 			let deposit = signed_submissions.get(index).map(|s| s.deposit).unwrap_or_default();
 			T::Currency::reserve(&who, deposit).map_err(|_| Error::<T>::SignedCannotPayDeposit)?;
-
-			// Remove the weakest, if needed.
-			if signed_submissions.len() as u32 > T::SignedMaxSubmissions::get() {
-				Self::remove_weakest(&mut signed_submissions);
-			}
-			debug_assert!(signed_submissions.len() as u32 <= T::SignedMaxSubmissions::get());
 
 			log!(
 				info,

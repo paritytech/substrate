@@ -155,8 +155,8 @@ impl<T: Config> Pallet<T> {
 	/// If insertion was successful, `Some(index)` is returned where index is the
 	/// index of the newly inserted item.
 	///
-	/// Note: this function does _not_ maintain the invariant that `queue.len() <= T::SignedMaxSubmissions`.
-	/// Pruning must happen elsewhere.
+	/// Note: this function maintains the invariant that `queue.len() <= T::SignedMaxSubmissions`.
+	/// In the event that insertion would violate that invariant, the weakest element is dropped.
 	///
 	/// Invariant: The returned index is always a valid index in `queue` and can safely be used to
 	/// inspect the newly inserted element.
@@ -173,7 +173,7 @@ impl<T: Config> Pallet<T> {
 		// attempts to produce a total ordering using this comparitor are highly unstable.
 		//
 		// this ordering prioritizes earlier solutions over slightly better later ones.
-		let insertion_position = queue.binary_search_by(|s| {
+		let mut insertion_position = queue.binary_search_by(|s| {
 			if is_score_better::<Perbill>(
 				solution.score,
 				s.solution.score,
@@ -200,6 +200,16 @@ impl<T: Config> Pallet<T> {
 
 		// If the queue was within length when this function was called, then this must always be correct.
 		debug_assert!(queue.len() as u32 <= max_submissions + 1);
+
+		// Remove the weakest, if needed.
+		if queue.len() as u32 > max_submissions {
+			Self::remove_weakest(queue);
+			insertion_position -= 1;
+			// this is sound because remove_weakest always removes the 0th item.
+			// if `insertion_position` was 0 and this could potentially have triggered, we've
+			// already short-circuited above.
+		}
+		debug_assert!(queue.len() as u32 <= max_submissions);
 		Some(insertion_position)
 	}
 
@@ -207,7 +217,7 @@ impl<T: Config> Pallet<T> {
 	/// queue be enough.
 	///
 	/// noop if the queue is empty. Bond of the removed solution is returned.
-	pub fn remove_weakest(
+	fn remove_weakest(
 		queue: &mut Vec<SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>>,
 	) {
 		if queue.len() > 0 {
@@ -625,7 +635,7 @@ mod tests {
 	}
 
 	#[test]
-	fn all_in_one_singed_submission_scenario() {
+	fn all_in_one_signed_submission_scenario() {
 		// a combination of:
 		// - good_solution_is_rewarded
 		// - bad_solution_is_slashed
