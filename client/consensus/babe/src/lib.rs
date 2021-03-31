@@ -971,8 +971,8 @@ where
 
 		if !inherent_res.ok() {
 			for (i, e) in inherent_res.into_errors() {
-				match inherent_data_providers.try_handle_error(&i, &e) {
-					Some(err) => err.await.map_err(|e| Error::CheckInherents(e))?,
+				match inherent_data_providers.try_handle_error(&i, &e).await {
+					Some(res) => res.map_err(|e| Error::CheckInherents(e))?,
 					None => return Err(Error::CheckInherentsUnhandled(i)),
 				}
 			}

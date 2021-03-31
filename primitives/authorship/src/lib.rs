@@ -77,22 +77,23 @@ impl<H> InherentDataProvider<H> {
 }
 
 #[cfg(feature = "std")]
+#[async_trait::async_trait]
 impl<H: HeaderT> sp_inherents::InherentDataProvider for InherentDataProvider<H> {
 	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), Error> {
 		inherent_data.put_data(INHERENT_IDENTIFIER, &self.uncles)
 	}
 
-	fn try_handle_error(
+	async fn try_handle_error(
 		&self,
 		identifier: &InherentIdentifier,
 		error: &[u8],
-	) -> sp_inherents::TryHandleErrorResult {
+	) -> Option<Result<(), Box<dyn std::error::Error + Send + Sync>>> {
 		if *identifier != INHERENT_IDENTIFIER {
 			return None
 		}
 
 		let error = InherentError::decode(&mut &error[..]).ok()?;
 
-		Some(Box::pin(async move { Err(Box::from(format!("{:?}", error))) }))
+		Some(Err(Box::from(format!("{:?}", error))))
 	}
 }

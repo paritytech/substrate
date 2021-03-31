@@ -92,22 +92,23 @@ impl sp_std::ops::Deref for InherentDataProvider {
 }
 
 #[cfg(feature = "std")]
+#[async_trait::async_trait]
 impl sp_inherents::InherentDataProvider for InherentDataProvider {
 	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), Error> {
 		inherent_data.put_data(INHERENT_IDENTIFIER, &self.slot)
 	}
 
-	fn try_handle_error(
+	async fn try_handle_error(
 		&self,
 		identifier: &InherentIdentifier,
 		error: &[u8],
-	) -> sp_inherents::TryHandleErrorResult {
+	) -> Option<Result<(), Box<dyn std::error::Error + Send + Sync>>> {
 		if identifier != &INHERENT_IDENTIFIER {
 			return None;
 		}
 
 		let error = Error::decode(&mut &error[..]).ok()?;
 
-		Some(Box::pin(async move { Err(Box::from(format!("{:?}", error))) }))
+		Some(Err(Box::from(format!("{:?}", error)) as Box<_>))
 	}
 }
