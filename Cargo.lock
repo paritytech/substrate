@@ -4579,6 +4579,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "futures 0.3.13",
  "node-primitives",
  "node-runtime",
  "node-testing",
@@ -4760,7 +4761,7 @@ dependencies = [
 
 [[package]]
 name = "node-template"
-version = "2.0.0"
+version = "3.0.0"
 dependencies = [
  "frame-benchmarking",
  "frame-benchmarking-cli",
@@ -4797,7 +4798,7 @@ dependencies = [
 
 [[package]]
 name = "node-template-runtime"
-version = "2.0.0"
+version = "3.0.0"
 dependencies = [
  "frame-benchmarking",
  "frame-executive",
@@ -5361,11 +5362,12 @@ dependencies = [
 
 [[package]]
 name = "pallet-example"
-version = "2.0.0"
+version = "3.0.0"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "log",
  "pallet-balances",
  "parity-scale-codec 2.0.1",
  "serde",
@@ -5889,7 +5891,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-template"
-version = "2.0.0"
+version = "3.0.0"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -7513,6 +7515,7 @@ dependencies = [
 name = "sc-consensus"
 version = "0.9.0"
 dependencies = [
+ "parking_lot 0.11.1",
  "sc-client-api",
  "sp-blockchain",
  "sp-consensus",
@@ -7523,6 +7526,7 @@ dependencies = [
 name = "sc-consensus-aura"
 version = "0.9.0"
 dependencies = [
+ "async-trait",
  "derive_more",
  "futures 0.3.13",
  "futures-timer 3.0.2",
@@ -7564,6 +7568,7 @@ dependencies = [
 name = "sc-consensus-babe"
 version = "0.9.0"
 dependencies = [
+ "async-trait",
  "derive_more",
  "fork-tree",
  "futures 0.3.13",
@@ -7650,8 +7655,8 @@ version = "0.9.0"
 dependencies = [
  "fork-tree",
  "parity-scale-codec 2.0.1",
- "parking_lot 0.11.1",
  "sc-client-api",
+ "sc-consensus",
  "sp-blockchain",
  "sp-runtime",
 ]
@@ -7661,6 +7666,7 @@ name = "sc-consensus-manual-seal"
 version = "0.9.0"
 dependencies = [
  "assert_matches",
+ "async-trait",
  "derive_more",
  "futures 0.3.13",
  "jsonrpc-core",
@@ -7698,6 +7704,7 @@ dependencies = [
 name = "sc-consensus-pow"
 version = "0.9.0"
 dependencies = [
+ "async-trait",
  "derive_more",
  "futures 0.3.13",
  "futures-timer 3.0.2",
@@ -7721,11 +7728,11 @@ dependencies = [
 name = "sc-consensus-slots"
 version = "0.9.0"
 dependencies = [
+ "async-trait",
  "futures 0.3.13",
  "futures-timer 3.0.2",
  "log",
  "parity-scale-codec 2.0.1",
- "parking_lot 0.11.1",
  "sc-client-api",
  "sc-telemetry",
  "sp-api",
@@ -7849,6 +7856,7 @@ name = "sc-finality-grandpa"
 version = "0.9.0"
 dependencies = [
  "assert_matches",
+ "async-trait",
  "derive_more",
  "dyn-clone",
  "finality-grandpa",
@@ -8087,6 +8095,7 @@ name = "sc-network-test"
 version = "0.8.0"
 dependencies = [
  "async-std",
+ "async-trait",
  "futures 0.3.13",
  "futures-timer 3.0.2",
  "libp2p 0.36.0",
@@ -8267,6 +8276,7 @@ name = "sc-service"
 version = "0.9.0"
 dependencies = [
  "async-std",
+ "async-trait",
  "directories",
  "exit-future",
  "futures 0.1.31",
@@ -9072,6 +9082,7 @@ dependencies = [
 name = "sp-consensus"
 version = "0.9.0"
 dependencies = [
+ "async-trait",
  "futures 0.3.13",
  "futures-timer 3.0.2",
  "libp2p 0.36.0",
@@ -9333,10 +9344,14 @@ dependencies = [
 name = "sp-npos-elections-compact"
 version = "3.0.0"
 dependencies = [
+ "parity-scale-codec 2.0.1",
  "proc-macro-crate 1.0.0",
  "proc-macro2",
  "quote",
+ "sp-arithmetic",
+ "sp-npos-elections",
  "syn",
+ "trybuild",
 ]
 
 [[package]]
@@ -9891,6 +9906,7 @@ dependencies = [
 name = "substrate-test-client"
 version = "2.0.1"
 dependencies = [
+ "async-trait",
  "futures 0.1.31",
  "futures 0.3.13",
  "hash-db",
@@ -9922,6 +9938,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "frame-system-rpc-runtime-api",
+ "futures 0.3.13",
  "log",
  "memory-db",
  "pallet-babe",
@@ -10120,7 +10137,6 @@ dependencies = [
  "futures 0.1.31",
  "futures 0.3.13",
  "jsonrpc-core",
- "libp2p 0.35.1",
  "log",
  "node-cli",
  "parity-scale-codec 1.3.7",

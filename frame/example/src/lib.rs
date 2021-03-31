@@ -255,28 +255,45 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::marker::PhantomData;
+use sp_std::{
+	prelude::*,
+	marker::PhantomData
+};
 use frame_support::{
 	dispatch::DispatchResult, traits::IsSubType,
 	weights::{DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee, Pays},
 };
-use sp_std::prelude::*;
 use frame_system::{ensure_signed};
 use codec::{Encode, Decode};
 use sp_runtime::{
 	traits::{
-		SignedExtension, Bounded, SaturatedConversion, DispatchInfoOf,
+		SignedExtension, Bounded, SaturatedConversion, DispatchInfoOf, Saturating
 	},
 	transaction_validity::{
 		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
 	},
 };
+use log::info;
+
+// Re-export pallet items so that they can be accessed from the crate namespace.
+pub use pallet::*;
+
+#[cfg(test)]
+mod tests;
+
+mod benchmarking;
+pub mod weights;
+pub use weights::*;
+
+/// A type alias for the balance type from this pallet's point of view.
+type BalanceOf<T> = <T as pallet_balances::Config>::Balance;
+const MILLICENTS: u32 = 1_000_000_000;
 
 // A custom weight calculator tailored for the dispatch call `set_dummy()`. This actually examines
 // the arguments and makes a decision based upon them.
 //
 // The `WeightData<T>` trait has access to the arguments of the dispatch that it wants to assign a
-// weight to. Nonetheless, the trait itself can not make any assumptions about what the generic type
+// weight to. Nonetheless, the trait itself cannot make any assumptions about what the generic type
 // of the arguments (`T`) is. Based on our needs, we could replace `T` with a more concrete type
 // while implementing the trait. The `pallet::weight` expects whatever implements `WeighData<T>` to
 // replace `T` with a tuple of the dispatch arguments. This is exactly how we will craft the
@@ -286,13 +303,22 @@ use sp_runtime::{
 // - The final weight of each dispatch is calculated as the argument of the call multiplied by the
 //   parameter given to the `WeightForSetDummy`'s constructor.
 // - assigns a dispatch class `operational` if the argument of the call is more than 1000.
+//
+// More information can be read at:
+//   - https://substrate.dev/docs/en/knowledgebase/learn-substrate/weight
+//   - https://substrate.dev/docs/en/knowledgebase/runtime/fees#default-weight-annotations
+//
+// Manually configuring weight is an advanced operation and what you really need may well be
+//   fulfilled by running the benchmarking toolchain. Refer to `benchmarking.rs` file.
 struct WeightForSetDummy<T: pallet_balances::Config>(BalanceOf<T>);
 
 impl<T: pallet_balances::Config> WeighData<(&BalanceOf<T>,)> for WeightForSetDummy<T>
 {
 	fn weigh_data(&self, target: (&BalanceOf<T>,)) -> Weight {
 		let multiplier = self.0;
-		(*target.0 * multiplier).saturated_into::<Weight>()
+		// *target.0 is the amount passed into the extrinsic
+		let cents = *target.0 / <BalanceOf<T>>::from(MILLICENTS);
+		(cents * multiplier).saturated_into::<Weight>()
 	}
 }
 
@@ -312,12 +338,6 @@ impl<T: pallet_balances::Config> PaysFee<(&BalanceOf<T>,)> for WeightForSetDummy
 	}
 }
 
-/// A type alias for the balance type from this pallet's point of view.
-type BalanceOf<T> = <T as pallet_balances::Config>::Balance;
-
-// Re-export pallet items so that they can be accessed from the crate namespace.
-pub use pallet::*;
-
 // Definition of the pallet logic, to be aggregated at runtime definition through
 // `construct_runtime`.
 #[frame_support::pallet]
@@ -334,8 +354,15 @@ pub mod pallet {
 	/// `frame_system::Config` should always be included.
 	#[pallet::config]
 	pub trait Config: pallet_balances::Config + frame_system::Config {
+		// Setting a constant config parameter from the runtime
+		#[pallet::constant]
+		type MagicNumber: Get<Self::Balance>;
+
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+
+		/// Type representing the weight of this pallet
+		type WeightInfo: WeightInfo;
 	}
 
 	// Simple declaration of the `Pallet` type. It is placeholder we use to implement traits and
@@ -354,14 +381,12 @@ pub mod pallet {
 		fn on_initialize(_n: T::BlockNumber) -> Weight {
 			// Anything that needs to be done at the start of the block.
 			// We don't do anything here.
-
 			0
 		}
 
 		// `on_finalize` is executed at the end of block after all extrinsic are dispatched.
 		fn on_finalize(_n: T::BlockNumber) {
-			// We just kill our dummy storage item.
-			<Dummy<T>>::kill();
+			// Perform necessary data/state clean up here.
 		}
 
 		// A runtime code run after every block and have access to extended set of APIs.
@@ -370,7 +395,9 @@ pub mod pallet {
 		fn offchain_worker(_n: T::BlockNumber) {
 			// We don't do anything here.
 			// but we could dispatch extrinsic (transaction/unsigned/inherent) using
-			// sp_io::submit_extrinsic
+			// sp_io::submit_extrinsic.
+			// To see example on offchain worker, please refer to example-offchain-worker pallet
+		 	// accompanied in this repository.
 		}
 	}
 
@@ -455,11 +482,16 @@ pub mod pallet {
 		// difficulty) of the transaction and the latter demonstrates the [`DispatchClass`] of the
 		// call. A higher weight means a larger transaction (less of which can be placed in a
 		// single block).
-		#[pallet::weight(0)]
+		//
+		// The weight for this extrinsic we rely on the auto-generated `WeightInfo` from the benchmark
+		// toolchain.
+		#[pallet::weight(
+			<T as pallet::Config>::WeightInfo::accumulate_dummy((*increase_by).saturated_into())
+		)]
 		pub(super) fn accumulate_dummy(
 			origin: OriginFor<T>,
 			increase_by: T::Balance
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let _sender = ensure_signed(origin)?;
 
@@ -478,15 +510,16 @@ pub mod pallet {
 
 			// Here's the new one of read and then modify the value.
 			<Dummy<T>>::mutate(|dummy| {
-				let new_dummy = dummy.map_or(increase_by, |dummy| dummy + increase_by);
+				// Using `saturating_add` instead of a regular `+` to avoid overflowing
+				let new_dummy = dummy.map_or(increase_by, |d| d.saturating_add(increase_by));
 				*dummy = Some(new_dummy);
 			});
 
 			// Let's deposit an event to let the outside world know this happened.
-			Self::deposit_event(Event::Dummy(increase_by));
+			Self::deposit_event(Event::AccumulateDummy(increase_by));
 
 			// All good, no refund.
-			Ok(().into())
+			Ok(())
 		}
 
 		/// A privileged call; in this case it resets our dummy value to something new.
@@ -496,17 +529,28 @@ pub mod pallet {
 		// calls to be executed - we don't need to care why. Because it's privileged, we can
 		// assume it's a one-off operation and substantial processing/storage/memory can be used
 		// without worrying about gameability or attack scenarios.
+		//
+		// The weight for this extrinsic we use our own weight object `WeightForSetDummy` to determine
+		// its weight
 		#[pallet::weight(WeightForSetDummy::<T>(<BalanceOf<T>>::from(100u32)))]
-		fn set_dummy(
+		pub(super) fn set_dummy(
 			origin: OriginFor<T>,
 			#[pallet::compact] new_value: T::Balance,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			ensure_root(origin)?;
+
+			// Print out log or debug message in the console via log::{error, warn, info, debug, trace},
+			// accepting format strings similar to `println!`.
+			// https://substrate.dev/rustdocs/v3.0.0/log/index.html
+			info!("New value is now: {:?}", new_value);
+
 			// Put the new value into storage.
 			<Dummy<T>>::put(new_value);
 
+			Self::deposit_event(Event::SetDummy(new_value));
+
 			// All good, no refund.
-			Ok(().into())
+			Ok(())
 		}
 	}
 
@@ -520,7 +564,9 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		// Just a normal `enum`, here's a dummy event to ensure it compiles.
 		/// Dummy event, just here so there's a generic type that's used.
-		Dummy(BalanceOf<T>),
+		AccumulateDummy(BalanceOf<T>),
+		SetDummy(BalanceOf<T>),
+		SetBar(T::AccountId, BalanceOf<T>),
 	}
 
 	// pallet::storage attributes allow for type-safe usage of the Substrate storage database,
@@ -545,13 +591,12 @@ pub mod pallet {
 	// A map that has enumerable entries.
 	#[pallet::storage]
 	#[pallet::getter(fn bar)]
-	pub(super) type Bar<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, T::Balance, ValueQuery>;
+	pub(super) type Bar<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, T::Balance>;
 
 	// this one uses the query kind: `ValueQuery`, we'll demonstrate the usage of 'mutate' API.
 	#[pallet::storage]
 	#[pallet::getter(fn foo)]
 	pub(super) type Foo<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
-
 
 	// The genesis config type.
 	#[pallet::genesis_config]
@@ -600,7 +645,7 @@ impl<T: Config> Pallet<T> {
 		let prev = <Foo<T>>::get();
 		// Because Foo has 'default', the type of 'foo' in closure is the raw type instead of an Option<> type.
 		let result = <Foo<T>>::mutate(|foo| {
-			*foo = *foo + increase_by;
+			*foo = foo.saturating_add(increase_by);
 			*foo
 		});
 		assert!(prev + increase_by == result);
@@ -640,11 +685,11 @@ impl<T: Config> Pallet<T> {
 // types defined in the runtime. Lookup `pub type SignedExtra = (...)` in `node/runtime` and
 // `node-template` for an example of this.
 
-/// A simple signed extension that checks for the `set_dummy` call. In that case, it increases the
-/// priority and prints some log.
-///
-/// Additionally, it drops any transaction with an encoded length higher than 200 bytes. No
-/// particular reason why, just to demonstrate the power of signed extensions.
+// A simple signed extension that checks for the `set_dummy` call. In that case, it increases the
+// priority and prints some log.
+//
+// Additionally, it drops any transaction with an encoded length higher than 200 bytes. No
+// particular reason why, just to demonstrate the power of signed extensions.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct WatchDummy<T: Config + Send + Sync>(PhantomData<T>);
 
@@ -689,203 +734,5 @@ where
 			}
 			_ => Ok(Default::default()),
 		}
-	}
-}
-
-#[cfg(feature = "runtime-benchmarks")]
-mod benchmarking {
-	use super::*;
-	use frame_benchmarking::{benchmarks, account, impl_benchmark_test_suite};
-	use frame_system::RawOrigin;
-
-	benchmarks!{
-		// This will measure the execution time of `accumulate_dummy` for b in [1..1000] range.
-		accumulate_dummy {
-			let b in 1 .. 1000;
-			let caller = account("caller", 0, 0);
-		}: _ (RawOrigin::Signed(caller), b.into())
-
-		// This will measure the execution time of `set_dummy` for b in [1..1000] range.
-		set_dummy {
-			let b in 1 .. 1000;
-		}: set_dummy (RawOrigin::Root, b.into())
-
-		// This will measure the execution time of `set_dummy` for b in [1..10] range.
-		another_set_dummy {
-			let b in 1 .. 10;
-		}: set_dummy (RawOrigin::Root, b.into())
-
-		// This will measure the execution time of sorting a vector.
-		sort_vector {
-			let x in 0 .. 10000;
-			let mut m = Vec::<u32>::new();
-			for i in (0..x).rev() {
-				m.push(i);
-			}
-		}: {
-			m.sort();
-		}
-	}
-
-	impl_benchmark_test_suite!(Pallet, crate::tests::new_test_ext(), crate::tests::Test);
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	use frame_support::{
-		assert_ok, parameter_types,
-		weights::{DispatchInfo, GetDispatchInfo}, traits::{OnInitialize, OnFinalize}
-	};
-	use sp_core::H256;
-	// The testing primitives are very useful for avoiding having to work with signatures
-	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
-	use sp_runtime::{
-		testing::Header, BuildStorage,
-		traits::{BlakeTwo256, IdentityLookup},
-	};
-	// Reexport crate as its pallet name for construct_runtime.
-	use crate as pallet_example;
-
-	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
-	type Block = frame_system::mocking::MockBlock<Test>;
-
-	// For testing the pallet, we construct a mock runtime.
-	frame_support::construct_runtime!(
-		pub enum Test where
-			Block = Block,
-			NodeBlock = Block,
-			UncheckedExtrinsic = UncheckedExtrinsic,
-		{
-			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-			Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-			Example: pallet_example::{Pallet, Call, Storage, Config<T>, Event<T>},
-		}
-	);
-
-	parameter_types! {
-		pub const BlockHashCount: u64 = 250;
-		pub BlockWeights: frame_system::limits::BlockWeights =
-			frame_system::limits::BlockWeights::simple_max(1024);
-	}
-	impl frame_system::Config for Test {
-		type BaseCallFilter = ();
-		type BlockWeights = ();
-		type BlockLength = ();
-		type DbWeight = ();
-		type Origin = Origin;
-		type Index = u64;
-		type BlockNumber = u64;
-		type Hash = H256;
-		type Call = Call;
-		type Hashing = BlakeTwo256;
-		type AccountId = u64;
-		type Lookup = IdentityLookup<Self::AccountId>;
-		type Header = Header;
-		type Event = Event;
-		type BlockHashCount = BlockHashCount;
-		type Version = ();
-		type PalletInfo = PalletInfo;
-		type AccountData = pallet_balances::AccountData<u64>;
-		type OnNewAccount = ();
-		type OnKilledAccount = ();
-		type SystemWeightInfo = ();
-		type SS58Prefix = ();
-	}
-	parameter_types! {
-		pub const ExistentialDeposit: u64 = 1;
-	}
-	impl pallet_balances::Config for Test {
-		type MaxLocks = ();
-		type Balance = u64;
-		type DustRemoval = ();
-		type Event = Event;
-		type ExistentialDeposit = ExistentialDeposit;
-		type AccountStore = System;
-		type WeightInfo = ();
-	}
-	impl Config for Test {
-		type Event = Event;
-	}
-
-	// This function basically just builds a genesis storage key/value store according to
-	// our desired mockup.
-	pub fn new_test_ext() -> sp_io::TestExternalities {
-		let t = GenesisConfig {
-			// We use default for brevity, but you can configure as desired if needed.
-			frame_system: Default::default(),
-			pallet_balances: Default::default(),
-			pallet_example: pallet_example::GenesisConfig {
-				dummy: 42,
-				// we configure the map with (key, value) pairs.
-				bar: vec![(1, 2), (2, 3)],
-				foo: 24,
-			},
-		}.build_storage().unwrap();
-		t.into()
-	}
-
-	#[test]
-	fn it_works_for_optional_value() {
-		new_test_ext().execute_with(|| {
-			// Check that GenesisBuilder works properly.
-			assert_eq!(Example::dummy(), Some(42));
-
-			// Check that accumulate works when we have Some value in Dummy already.
-			assert_ok!(Example::accumulate_dummy(Origin::signed(1), 27));
-			assert_eq!(Example::dummy(), Some(69));
-
-			// Check that finalizing the block removes Dummy from storage.
-			<Example as OnFinalize<u64>>::on_finalize(1);
-			assert_eq!(Example::dummy(), None);
-
-			// Check that accumulate works when we Dummy has None in it.
-			<Example as OnInitialize<u64>>::on_initialize(2);
-			assert_ok!(Example::accumulate_dummy(Origin::signed(1), 42));
-			assert_eq!(Example::dummy(), Some(42));
-		});
-	}
-
-	#[test]
-	fn it_works_for_default_value() {
-		new_test_ext().execute_with(|| {
-			assert_eq!(Example::foo(), 24);
-			assert_ok!(Example::accumulate_foo(Origin::signed(1), 1));
-			assert_eq!(Example::foo(), 25);
-		});
-	}
-
-	#[test]
-	fn signed_ext_watch_dummy_works() {
-		new_test_ext().execute_with(|| {
-			let call = <pallet_example::Call<Test>>::set_dummy(10).into();
-			let info = DispatchInfo::default();
-
-			assert_eq!(
-				WatchDummy::<Test>(PhantomData).validate(&1, &call, &info, 150)
-					.unwrap()
-					.priority,
-				u64::max_value(),
-			);
-			assert_eq!(
-				WatchDummy::<Test>(PhantomData).validate(&1, &call, &info, 250),
-				InvalidTransaction::ExhaustsResources.into(),
-			);
-		})
-	}
-
-	#[test]
-	fn weights_work() {
-		// must have a defined weight.
-		let default_call = <pallet_example::Call<Test>>::accumulate_dummy(10);
-		let info = default_call.get_dispatch_info();
-		// aka. `let info = <Call<Test> as GetDispatchInfo>::get_dispatch_info(&default_call);`
-		assert_eq!(info.weight, 0);
-
-		// must have a custom weight of `100 * arg = 2000`
-		let custom_call = <pallet_example::Call<Test>>::set_dummy(20);
-		let info = custom_call.get_dispatch_info();
-		assert_eq!(info.weight, 2000);
 	}
 }
