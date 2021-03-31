@@ -179,9 +179,9 @@ impl<T: Config> Pallet<T> {
 				s.solution.score,
 				threshold,
 			) {
-				Ordering::Greater
-			} else {
 				Ordering::Less
+			} else {
+				Ordering::Greater
 			}
 		}).expect_err("comparitor function never returns Ordering::Equal; qed");
 
