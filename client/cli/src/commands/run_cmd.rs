@@ -31,7 +31,7 @@ use sc_service::{
 	ChainSpec, Role,
 };
 use sc_telemetry::TelemetryEndpoints;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::{Ipv4Addr, SocketAddr};
 use structopt::StructOpt;
 
 /// The `run` command used to run a node.
@@ -398,10 +398,9 @@ impl CliConfiguration for RunCmd {
 	}
 
 	fn rpc_http(&self, default_listen_port: u16) -> Result<Option<SocketAddr>> {
-		let interface = rpc_interface(
+		let interface = self.rpc_methods.choose_rpc_interface(
 			self.rpc_external,
 			self.unsafe_rpc_external,
-			self.rpc_methods,
 			self.validator
 		)?;
 
@@ -413,10 +412,9 @@ impl CliConfiguration for RunCmd {
 	}
 
 	fn rpc_ws(&self, default_listen_port: u16) -> Result<Option<SocketAddr>> {
-		let interface = rpc_interface(
+		let interface = self.rpc_methods.choose_rpc_interface(
 			self.ws_external,
 			self.unsafe_ws_external,
-			self.rpc_methods,
 			self.validator,
 		)?;
 
@@ -464,36 +462,6 @@ pub fn is_node_name_valid(_name: &str) -> std::result::Result<(), &str> {
 	}
 
 	Ok(())
-}
-
-fn rpc_interface(
-	is_external: bool,
-	is_unsafe_external: bool,
-	rpc_methods: RpcMethods,
-	is_validator: bool,
-) -> Result<IpAddr> {
-	if is_external && is_validator && rpc_methods != RpcMethods::Unsafe {
-		return Err(Error::Input(
-			"--rpc-external and --ws-external options shouldn't be \
-		used if the node is running as a validator. Use `--unsafe-rpc-external` \
-		or `--rpc-methods=unsafe` if you understand the risks. See the options \
-		description for more information."
-				.to_owned(),
-		));
-	}
-
-	if is_external || is_unsafe_external {
-		if rpc_methods == RpcMethods::Unsafe {
-			log::warn!(
-				"It isn't safe to expose RPC publicly without a proxy server that filters \
-			available set of RPC methods."
-			);
-		}
-
-		Ok(Ipv4Addr::UNSPECIFIED.into())
-	} else {
-		Ok(Ipv4Addr::LOCALHOST.into())
-	}
 }
 
 #[derive(Debug)]

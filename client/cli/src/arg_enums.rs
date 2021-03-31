@@ -18,6 +18,8 @@
 // NOTE: we allow missing docs here because arg_enum! creates the function variants without doc
 #![allow(missing_docs)]
 
+use crate::error::{Error, Result};
+use std::net::{IpAddr, Ipv4Addr};
 use structopt::clap::arg_enum;
 
 arg_enum! {
@@ -163,6 +165,38 @@ impl Into<sc_service::config::RpcMethods> for RpcMethods {
 	}
 }
 
+impl RpcMethods {
+	pub fn choose_rpc_interface(
+		self,
+		is_external: bool,
+		is_unsafe_external: bool,
+		is_validator: bool,
+	) -> Result<IpAddr> {
+		if is_external && is_validator && self != RpcMethods::Unsafe {
+			return Err(Error::Input(
+				"--rpc-external and --ws-external options shouldn't be \
+			used if the node is running as a validator. Use `--unsafe-rpc-external` \
+			or `--rpc-methods=unsafe` if you understand the risks. See the options \
+			description for more information."
+					.to_owned(),
+			));
+		}
+
+		if is_external || is_unsafe_external {
+			if self == RpcMethods::Unsafe {
+				log::warn!(
+					"It isn't safe to expose RPC publicly without a proxy server that filters \
+				available set of RPC methods."
+				);
+			}
+
+			Ok(Ipv4Addr::UNSPECIFIED.into())
+		} else {
+			Ok(Ipv4Addr::LOCALHOST.into())
+		}
+	}
+}
+
 /// Database backend
 #[derive(Debug, Clone, Copy)]
 pub enum Database {
@@ -175,13 +209,13 @@ pub enum Database {
 impl std::str::FromStr for Database {
 	type Err = String;
 
-	fn from_str(s: &str) -> Result<Self, String> {
+	fn from_str(s: &str) -> std::result::Result<Self, String> {
 		if s.eq_ignore_ascii_case("rocksdb") {
 			Ok(Self::RocksDb)
 		} else if s.eq_ignore_ascii_case("paritydb-experimental") {
 			Ok(Self::ParityDb)
 		} else {
-			Err(format!("Unknwon variant `{}`, known variants: {:?}", s, Self::variants()))
+			Err(format!("Unknown variant `{}`, known variants: {:?}", s, Self::variants()))
 		}
 	}
 }
