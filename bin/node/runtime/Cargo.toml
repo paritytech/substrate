@@ -28,6 +28,7 @@ sp-inherents = { version = "2.0.0", default-features = false, path = "../../../p
 node-primitives = { version = "2.0.0", default-features = false, path = "../primitives" }
 sp-offchain = { version = "2.0.0", default-features = false, path = "../../../primitives/offchain" }
 sp-core = { version = "2.0.0", default-features = false, path = "../../../primitives/core" }
+sp-io = { version = "2.0.0", default-features = false, path = "../../../primitives/io" }
 sp-std = { version = "2.0.0", default-features = false, path = "../../../primitives/std" }
 sp-api = { version = "2.0.0", default-features = false, path = "../../../primitives/api" }
 sp-runtime = { version = "2.0.0", default-features = false, path = "../../../primitives/runtime" }
@@ -80,12 +81,12 @@ pallet-transaction-payment = { version = "2.0.0", default-features = false, path
 pallet-transaction-payment-rpc-runtime-api = { version = "2.0.0", default-features = false, path = "../../../frame/transaction-payment/rpc/runtime-api/" }
 pallet-vesting = { version = "2.0.0", default-features = false, path = "../../../frame/vesting" }
 pallet-cere-ddc = { version = "2.0.0", default-features = false, path = "../../../frame/ddc-pallet" }
+pallet-chainbridge = { version = "2.0.0", default-features = false, path = "../../../frame/chainbridge" }
+pallet-erc721 = { version = "2.0.0", default-features = false, path = "../../../frame/erc721" }
+pallet-erc20 = { version = "2.0.0", default-features = false, path = "../../../frame/erc20" }
 
 [build-dependencies]
 wasm-builder-runner = { version = "1.0.5", package = "substrate-wasm-builder-runner", path = "../../../utils/wasm-builder-runner" }
-
-[dev-dependencies]
-sp-io = { version = "2.0.0", path = "../../../primitives/io" }
 
 [features]
 default = ["std"]
@@ -107,6 +108,9 @@ std = [
 	"pallet-elections-phragmen/std",
 	"frame-executive/std",
 	"pallet-cere-ddc/std",
+	"pallet-chainbridge/std",
+	"pallet-erc721/std",
+	"pallet-erc20/std",
 	"pallet-finality-tracker/std",
 	"pallet-grandpa/std",
 	"pallet-im-online/std",
@@ -121,6 +125,7 @@ std = [
 	"pallet-offences/std",
 	"pallet-proxy/std",
 	"sp-core/std",
+	"sp-io/std",
 	"pallet-randomness-collective-flip/std",
 	"sp-std/std",
 	"serde",
