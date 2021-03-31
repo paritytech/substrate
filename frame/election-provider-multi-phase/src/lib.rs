@@ -1175,12 +1175,10 @@ impl<T: Config> Pallet<T> {
 	/// 3. Clear all snapshot data.
 	fn post_elect() {
 		// inc round
-		<Round<T>>::mutate(|r| *r = *r + 1);
+		<Round<T>>::mutate(|r| *r += 1);
 
 		// change phase
 		<CurrentPhase<T>>::put(Phase::Off);
-
-		// TODO: clean signed submissions: test case: call `elect` in the middle of the signed phase.
 
 		// kill snapshots
 		Self::kill_snapshot();
@@ -1444,8 +1442,8 @@ mod tests {
 	fn phase_rotation_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			// 0 ------- 15 ------- 25 ------- 30 ------- ------- 45 ------- 55 ------- 60
-			//           |           |                            |           |
-			//         Signed      Unsigned                     Signed     Unsigned
+			//           |           |          |                 |           |          |
+			//         Signed      Unsigned   Elect             Signed     Unsigned    Elect
 
 			assert_eq!(System::block_number(), 0);
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
@@ -1604,6 +1602,7 @@ mod tests {
 			assert!(MultiPhase::snapshot_metadata().is_none());
 			assert!(MultiPhase::desired_targets().is_none());
 			assert!(MultiPhase::queued_solution().is_none());
+			assert!(MultiPhase::signed_submissions().is_empty());
 		})
 	}
 
