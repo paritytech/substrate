@@ -24,7 +24,6 @@ use crate::hash::ReversibleStorageHasher;
 
 use super::PrefixIterator;
 
-#[deprecated(note="Please use the storage_iter or storage_iter_with_suffix functions instead")]
 /// Utility to iterate through raw items in storage.
 pub struct StorageIterator<T> {
 	prefix: Vec<u8>,
@@ -35,11 +34,14 @@ pub struct StorageIterator<T> {
 
 impl<T> StorageIterator<T> {
 	/// Construct iterator to iterate over map items in `module` for the map called `item`.
+	#[deprecated(note="Please use the storage_iter or storage_iter_with_suffix functions instead")]
 	pub fn new(module: &[u8], item: &[u8]) -> Self {
+		#[allow(deprecated)]
 		Self::with_suffix(module, item, &[][..])
 	}
 
 	/// Construct iterator to iterate over map items in `module` for the map called `item`.
+	#[deprecated(note="Please use the storage_iter or storage_iter_with_suffix functions instead")]
 	pub fn with_suffix(module: &[u8], item: &[u8], suffix: &[u8]) -> Self {
 		let mut prefix = Vec::new();
 		prefix.extend_from_slice(&Twox128::hash(module));
@@ -56,7 +58,6 @@ impl<T> StorageIterator<T> {
 	}
 }
 
-#[deprecated(note="Please use the storage_key_iter or storage_key_iter_with_suffix functions instead")]
 /// Utility to iterate through raw items in storage.
 pub struct StorageKeyIterator<K, T, H: ReversibleStorageHasher> {
 	prefix: Vec<u8>,
@@ -67,11 +68,14 @@ pub struct StorageKeyIterator<K, T, H: ReversibleStorageHasher> {
 
 impl<K, T, H: ReversibleStorageHasher> StorageKeyIterator<K, T, H> {
 	/// Construct iterator to iterate over map items in `module` for the map called `item`.
+	#[deprecated(note="please use the storage_key_iter or storage_key_iter_with_suffix functions instead")]
 	pub fn new(module: &[u8], item: &[u8]) -> Self {
+		#[allow(deprecated)]
 		Self::with_suffix(module, item, &[][..])
 	}
 
 	/// Construct iterator to iterate over map items in `module` for the map called `item`.
+	#[deprecated(note="please use the storage_key_iter or storage_key_iter_with_suffix functions instead")]
 	pub fn with_suffix(module: &[u8], item: &[u8], suffix: &[u8]) -> Self {
 		let mut prefix = Vec::new();
 		prefix.extend_from_slice(&Twox128::hash(module));

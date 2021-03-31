@@ -578,8 +578,8 @@ impl<T> Iterator for PrefixIterator<T> {
 pub struct ChildTriePrefixIterator<T> {
 	/// The prefix iterated on
 	prefix: Vec<u8>,
-	/// Storage key of the child trie
-	storage_key: Vec<u8>,
+	/// child info for child trie
+	child_info: ChildInfo,
 	/// The last key iterated on
 	previous_key: Vec<u8>,
 	/// If true then values are removed while iterating
@@ -601,6 +601,8 @@ impl<T> ChildTriePrefixIterator<T> {
 
 impl<T: Decode + Sized> ChildTriePrefixIterator<(Vec<u8>, T)> {
 	/// Construct iterator to iterate over child trie items in `child_info` with the prefix `prefix`.
+	///
+	/// NOTE: Iterator with [`Self::drain`] will remove any value who failed to decode
 	pub fn with_prefix(child_info: &ChildInfo, prefix: &[u8]) -> Self {
 		let prefix = prefix.to_vec();
 		let previous_key = prefix.clone();
@@ -611,7 +613,7 @@ impl<T: Decode + Sized> ChildTriePrefixIterator<(Vec<u8>, T)> {
 
 		Self {
 			prefix,
-			storage_key: child_info.storage_key().to_vec(),
+			child_info: child_info.clone(),
 			previous_key,
 			drain: false,
 			fetch_previous_key: true,
@@ -622,6 +624,8 @@ impl<T: Decode + Sized> ChildTriePrefixIterator<(Vec<u8>, T)> {
 
 impl<K: Decode + Sized, T: Decode + Sized> ChildTriePrefixIterator<(K, T)> {
 	/// Construct iterator to iterate over child trie items in `child_info` with the prefix `prefix`.
+	///
+	/// NOTE: Iterator with [`Self::drain`] will remove any key or value who failed to decode
 	pub fn with_prefix_over_key<H: ReversibleStorageHasher>(child_info: &ChildInfo, prefix: &[u8]) -> Self {
 		let prefix = prefix.to_vec();
 		let previous_key = prefix.clone();
@@ -634,7 +638,7 @@ impl<K: Decode + Sized, T: Decode + Sized> ChildTriePrefixIterator<(K, T)> {
 
 		Self {
 			prefix,
-			storage_key: child_info.storage_key().to_vec(),
+			child_info: child_info.clone(),
 			previous_key,
 			drain: false,
 			fetch_previous_key: true,
@@ -652,13 +656,16 @@ impl<T> Iterator for ChildTriePrefixIterator<T> {
 				self.fetch_previous_key = false;
 				Some(self.previous_key.clone())
 			} else {
-				sp_io::default_child_storage::next_key(&self.storage_key, &self.previous_key)
+				sp_io::default_child_storage::next_key(
+					&self.child_info.storage_key(),
+					&self.previous_key,
+				)
 					.filter(|n| n.starts_with(&self.prefix))
 			};
 			break match maybe_next {
 				Some(next) => {
 					self.previous_key = next;
-					let raw_value = match unhashed::get_raw(&self.previous_key) {
+					let raw_value = match child::get_raw(&self.child_info, &self.previous_key) {
 						Some(raw_value) => raw_value,
 						None => {
 							log::error!(
@@ -669,7 +676,7 @@ impl<T> Iterator for ChildTriePrefixIterator<T> {
 						}
 					};
 					if self.drain {
-						unhashed::kill(&self.previous_key)
+						child::kill(&self.child_info, &self.previous_key)
 					}
 					let raw_key_without_prefix = &self.previous_key[self.prefix.len()..];
 					let item = match (self.closure)(raw_key_without_prefix, &raw_value[..]) {
@@ -818,6 +825,7 @@ impl<Hash: Encode> StorageAppend<DigestItem<Hash>> for Digest<Hash> {}
 mod test {
 	use super::*;
 	use sp_core::hashing::twox_128;
+	use crate::hash::Identity;
 	use sp_io::TestExternalities;
 	use generator::StorageValue as _;
 
@@ -952,6 +960,80 @@ mod test {
 				require_transaction();
 				TransactionOutcome::Rollback(())
 			});
+		});
+	}
+
+	#[test]
+	fn child_trie_prefixed_map_works() {
+		TestExternalities::default().execute_with(|| {
+			let child_info_a = child::ChildInfo::new_default(b"a");
+			child::put(&child_info_a, &[1, 2, 3], &8u16);
+			child::put(&child_info_a, &[2], &8u16);
+			child::put(&child_info_a, &[2, 1, 3], &8u8);
+			child::put(&child_info_a, &[2, 2, 3], &8u16);
+			child::put(&child_info_a, &[3], &8u16);
+
+			assert_eq!(
+				ChildTriePrefixIterator::with_prefix(&child_info_a, &[2])
+					.collect::<Vec<(Vec<u8>, u16)>>(),
+				vec![
+					(vec![], 8),
+					(vec![2, 3], 8),
+				],
+			);
+
+			assert_eq!(
+				ChildTriePrefixIterator::with_prefix(&child_info_a, &[2])
+					.drain()
+					.collect::<Vec<(Vec<u8>, u16)>>(),
+				vec![
+					(vec![], 8),
+					(vec![2, 3], 8),
+				],
+			);
+
+			// The only remaining is the ones outside prefix
+			assert_eq!(
+				ChildTriePrefixIterator::with_prefix(&child_info_a, &[])
+					.collect::<Vec<(Vec<u8>, u8)>>(),
+				vec![
+					(vec![1, 2, 3], 8),
+					(vec![3], 8),
+				],
+			);
+
+			child::put(&child_info_a, &[1, 2, 3], &8u16);
+			child::put(&child_info_a, &[2], &8u16);
+			child::put(&child_info_a, &[2, 1, 3], &8u8);
+			child::put(&child_info_a, &[2, 2, 3], &8u16);
+			child::put(&child_info_a, &[3], &8u16);
+
+			assert_eq!(
+				ChildTriePrefixIterator::with_prefix_over_key::<Identity>(&child_info_a, &[2])
+					.collect::<Vec<(u16, u16)>>(),
+				vec![
+					(u16::decode(&mut &[2, 3][..]).unwrap(), 8),
+				],
+			);
+
+			assert_eq!(
+				ChildTriePrefixIterator::with_prefix_over_key::<Identity>(&child_info_a, &[2])
+					.drain()
+					.collect::<Vec<(u16, u16)>>(),
+				vec![
+					(u16::decode(&mut &[2, 3][..]).unwrap(), 8),
+				],
+			);
+
+			// The only remaining is the ones outside prefix
+			assert_eq!(
+				ChildTriePrefixIterator::with_prefix(&child_info_a, &[])
+					.collect::<Vec<(Vec<u8>, u8)>>(),
+				vec![
+					(vec![1, 2, 3], 8),
+					(vec![3], 8),
+				],
+			);
 		});
 	}
 }
