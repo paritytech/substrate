@@ -492,9 +492,6 @@ fn set_metadata_should_work() {
 	});
 }
 
-// TODO: tests for force_set_metadata, force_clear_metadata, force_asset_status
-// https://github.com/paritytech/substrate/issues/8470
-
 #[test]
 fn freezer_should_work() {
 	new_test_ext().execute_with(|| {
@@ -624,6 +621,7 @@ fn force_asset_status_should_work(){
 		);
 
 		//account drains to completion when funds dip below min_balance
+		assert_ok!(Assets::force_asset_status(Origin::root(), 0, 1, 1, 1, 1, 90, true, false));
 		assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
 		assert_eq!(Assets::balance(0, 1), 0);
 		assert_eq!(Assets::balance(0, 2), 101);
