@@ -556,6 +556,7 @@ fn imbalances_should_work() {
 		assert_eq!(Assets::total_supply(0), 30);
 	});
 }
+
 #[test]
 fn force_metadata_should_work() {
 	new_test_ext().execute_with(|| {
@@ -612,6 +613,10 @@ fn force_asset_status_should_work(){
 			DispatchError::Token(TokenError::BelowMinimum)
 		);
 
+		//give account asset so balance == min_balance 
+		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 1));
+		assert_eq!(Assets::balance(0, 1), 101);
+		
 		//force asset status will not execute for non-existent class
 		assert_noop!(
 			Assets::force_asset_status(Origin::root(), 1, 1, 1, 1, 1, 90, true, false),
@@ -622,7 +627,7 @@ fn force_asset_status_should_work(){
 		assert_ok!(Assets::force_asset_status(Origin::root(), 0, 1, 1, 1, 1, 90, true, false));
 		assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
 		assert_eq!(Assets::balance(0, 1), 0);
-		assert_eq!(Assets::balance(0, 2), 100);
-		assert_eq!(Assets::total_supply(0), 100);
+		assert_eq!(Assets::balance(0, 2), 101);
+		assert_eq!(Assets::total_supply(0), 101);
 	});
 }
