@@ -505,9 +505,10 @@ impl<B: BlockT> ChainSync<B> {
 		}
 	}
 
-	/// Number of active sync requests.
+	/// Number of active forks requests. This includes
+	/// requests that are pending or could be issued right away.
 	pub fn num_sync_requests(&self) -> usize {
-		self.fork_targets.len()
+		self.fork_targets.values().filter(|f| f.number <= self.best_queued_number).count()
 	}
 
 	/// Number of downloaded blocks.
@@ -1421,22 +1422,35 @@ impl<B: BlockT> ChainSync<B> {
 		&mut self,
 		pre_validation_result: PreValidateBlockAnnounce<B::Header>,
 	) -> PollBlockAnnounceValidation<B::Header> {
-		trace!(
-			target: "sync",
-			"Finished block announce validation: {:?}",
-			pre_validation_result,
-		);
-
 		let (announce, is_best, who) = match pre_validation_result {
 			PreValidateBlockAnnounce::Failure { who, disconnect } => {
+				debug!(
+					target: "sync",
+					"Failed announce validation: {:?}, disconnect: {}",
+					who,
+					disconnect,
+				);
 				return PollBlockAnnounceValidation::Failure { who, disconnect }
 			},
 			PreValidateBlockAnnounce::Process { announce, is_new_best, who } => {
 				(announce, is_new_best, who)
 			},
-			PreValidateBlockAnnounce::Error { .. } | PreValidateBlockAnnounce::Skip =>
-				return PollBlockAnnounceValidation::Skip,
+			PreValidateBlockAnnounce::Error { .. } | PreValidateBlockAnnounce::Skip => {
+				debug!(
+					target: "sync",
+					"Ignored announce validation",
+				);
+				return PollBlockAnnounceValidation::Skip
+			},
 		};
+
+		trace!(
+			target: "sync",
+			"Finished block announce validation: from {:?}: {:?}. local_best={}",
+			who,
+			announce.summary(),
+			is_best,
+		);
 
 		let number = *announce.header.number();
 		let hash = announce.header.hash();
@@ -1508,25 +1522,22 @@ impl<B: BlockT> ChainSync<B> {
 			return PollBlockAnnounceValidation::ImportHeader { is_best, announce, who }
 		}
 
-		if number <= self.best_queued_number {
-			trace!(
-				target: "sync",
-				"Added sync target for block announced from {}: {} {:?}",
-				who,
-				hash,
-				announce.header,
-			);
-			self.fork_targets
-				.entry(hash.clone())
-				.or_insert_with(|| ForkTarget {
-					number,
-					parent_hash: Some(*announce.header.parent_hash()),
-					peers: Default::default(),
-				})
-				.peers.insert(who.clone());
-		}
+		trace!(
+			target: "sync",
+			"Added sync target for block announced from {}: {} {:?}",
+			who,
+			hash,
+			announce.summary(),
+		);
+		self.fork_targets
+			.entry(hash.clone())
+			.or_insert_with(|| ForkTarget {
+				number,
+				parent_hash: Some(*announce.header.parent_hash()),
+				peers: Default::default(),
+			})
+			.peers.insert(who.clone());
 
-		trace!(target: "sync", "Announce validation result is nothing");
 		PollBlockAnnounceValidation::Nothing { is_best, who, announce }
 	}
 
