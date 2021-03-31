@@ -61,11 +61,16 @@ impl<T: Config> Pallet<T> {
 	/// This drains the [`SignedSubmissions`], potentially storing the best valid one in
 	/// [`QueuedSolution`].
 	pub fn finalize_signed_phase() -> (bool, Weight) {
-		let mut all_submission: Vec<SignedSubmission<_, _, _>> = <SignedSubmissions<T>>::take();
+		let mut all_submissions: Vec<SignedSubmission<_, _, _>> = <SignedSubmissions<T>>::take();
 		let mut found_solution = false;
 		let mut weight = T::DbWeight::get().reads(1);
 
-		while let Some(best) = all_submission.pop() {
+		// Reverse the ordering of submissions: previously it was ordered such that high-scoring
+		// solutions have low indices. Now, the code flows more cleanly if high-scoring solutions
+		// have high indices.
+		all_submissions.reverse();
+
+		while let Some(best) = all_submissions.pop() {
 			let SignedSubmission { solution, who, deposit, reward } = best;
 			let active_voters = solution.compact.voter_count() as u32;
 			let feasibility_weight = {
@@ -106,12 +111,12 @@ impl<T: Config> Pallet<T> {
 
 		// Any unprocessed solution is pointless to even consider. Feasible or malicious,
 		// they didn't end up being used. Unreserve the bonds.
-		all_submission.into_iter().for_each(|not_processed| {
+		for not_processed in all_submissions {
 			let SignedSubmission { who, deposit, .. } = not_processed;
 			let _remaining = T::Currency::unreserve(&who, deposit);
 			weight = weight.saturating_add(T::DbWeight::get().writes(1));
 			debug_assert!(_remaining.is_zero());
-		});
+		};
 
 		(found_solution, weight)
 	}
@@ -152,6 +157,8 @@ impl<T: Config> Pallet<T> {
 
 	/// Insert a solution into the queue while maintaining an ordering by solution quality.
 	///
+	/// Solutions are ordered in reverse: strong solutions have low indices.
+	///
 	/// If insertion was successful, `Some(index)` is returned where index is the
 	/// index of the newly inserted item.
 	///
@@ -166,28 +173,31 @@ impl<T: Config> Pallet<T> {
 		solution: RawSolution<CompactOf<T>>,
 		size: SolutionOrSnapshotSize,
 	) -> Option<usize> {
+		// Let's ensure that our input is valid.
+		let max_submissions = T::SignedMaxSubmissions::get();
+		debug_assert!(queue.len() as u32 <= max_submissions);
+
 		let threshold = T::SolutionImprovementThreshold::get();
 		// this insertion logic is a bit unusual in that a new solution which beats an existing
-		// solution by less than the threshold is sorted as "less" than the existing solution.
+		// solution by less than the threshold is sorted as "greater" than the existing solution.
 		// this means that the produced ordering depends on the order of insertion, and that
 		// attempts to produce a total ordering using this comparitor are highly unstable.
 		//
 		// this ordering prioritizes earlier solutions over slightly better later ones.
-		let mut insertion_position = queue.binary_search_by(|s| {
+		let insertion_position = queue.binary_search_by(|s| {
 			if is_score_better::<Perbill>(
 				solution.score,
 				s.solution.score,
 				threshold,
 			) {
-				Ordering::Less
-			} else {
 				Ordering::Greater
+			} else {
+				Ordering::Less
 			}
 		}).expect_err("comparitor function never returns Ordering::Equal; qed");
 
-		let max_submissions = T::SignedMaxSubmissions::get();
 		// if this solution is the worst one so far and the queue is full, don't insert
-		if insertion_position == 0 && queue.len() as u32 >= max_submissions {
+		if insertion_position == queue.len() && queue.len() as u32 >= max_submissions {
 			return None;
 		}
 
@@ -198,33 +208,17 @@ impl<T: Config> Pallet<T> {
 			SignedSubmission { who: who.clone(), deposit, reward, solution };
 		queue.insert(insertion_position, submission);
 
-		// If the queue was within length when this function was called, then this must always be correct.
-		debug_assert!(queue.len() as u32 <= max_submissions + 1);
-
-		// Remove the weakest, if needed.
+		// Remove the weakest if queue is overflowing.
+		// This doesn't adjust insertion_position: in the event that it might have, we'd have short-
+		// circuited above.
 		if queue.len() as u32 > max_submissions {
-			Self::remove_weakest(queue);
-			insertion_position -= 1;
-			// this is sound because remove_weakest always removes the 0th item.
-			// if `insertion_position` was 0 and this could potentially have triggered, we've
-			// already short-circuited above.
+			if let Some(SignedSubmission { who, deposit, .. }) = queue.pop() {
+				let _remainder = T::Currency::unreserve(&who, deposit);
+				debug_assert!(_remainder.is_zero());
+			}
 		}
 		debug_assert!(queue.len() as u32 <= max_submissions);
 		Some(insertion_position)
-	}
-
-	/// Removes the weakest element of the queue, namely the first one, should the length of the
-	/// queue be enough.
-	///
-	/// noop if the queue is empty. Bond of the removed solution is returned.
-	fn remove_weakest(
-		queue: &mut Vec<SignedSubmission<T::AccountId, BalanceOf<T>, CompactOf<T>>>,
-	) {
-		if queue.len() > 0 {
-			let SignedSubmission { who, deposit, .. } = queue.remove(0);
-			let _remainder = T::Currency::unreserve(&who, deposit);
-			debug_assert!(_remainder.is_zero());
-		}
 	}
 
 	/// The feasibility weight of the given raw solution.
@@ -483,7 +477,7 @@ mod tests {
 					.into_iter()
 					.map(|s| s.solution.score[0])
 					.collect::<Vec<_>>(),
-				vec![5, 6, 7, 8, 9]
+				vec![9, 8, 7, 6, 5]
 			);
 
 			// better.
@@ -496,7 +490,7 @@ mod tests {
 					.into_iter()
 					.map(|s| s.solution.score[0])
 					.collect::<Vec<_>>(),
-				vec![6, 7, 8, 9, 20]
+				vec![20, 9, 8, 7, 6]
 			);
 		})
 	}
@@ -521,7 +515,7 @@ mod tests {
 					.into_iter()
 					.map(|s| s.solution.score[0])
 					.collect::<Vec<_>>(),
-				vec![4, 6, 7, 8, 9]
+				vec![9, 8, 7, 6, 4],
 			);
 
 			// better.
@@ -534,7 +528,7 @@ mod tests {
 					.into_iter()
 					.map(|s| s.solution.score[0])
 					.collect::<Vec<_>>(),
-				vec![5, 6, 7, 8, 9]
+				vec![9, 8, 7, 6, 5],
 			);
 		})
 	}
@@ -579,7 +573,7 @@ mod tests {
 					.into_iter()
 					.map(|s| s.solution.score[0])
 					.collect::<Vec<_>>(),
-				vec![5, 6, 7]
+				vec![7, 6, 5]
 			);
 
 			// 5 is not accepted. This will only cause processing with no benefit.
@@ -610,27 +604,27 @@ mod tests {
 
 			let solution = RawSolution { score: [8, 0, 0], ..Default::default() };
 			assert_ok!(submit_with_witness(Origin::signed(99), solution));
-			assert_eq!(scores(), vec![5, 8]);
+			assert_eq!(scores(), vec![8, 5]);
 
 			let solution = RawSolution { score: [3, 0, 0], ..Default::default() };
 			assert_ok!(submit_with_witness(Origin::signed(99), solution));
-			assert_eq!(scores(), vec![3, 5, 8]);
+			assert_eq!(scores(), vec![8, 5, 3]);
 
 			let solution = RawSolution { score: [6, 0, 0], ..Default::default() };
 			assert_ok!(submit_with_witness(Origin::signed(99), solution));
-			assert_eq!(scores(), vec![5, 6, 8]);
+			assert_eq!(scores(), vec![8, 6, 5]);
 
 			let solution = RawSolution { score: [6, 0, 0], ..Default::default() };
 			assert_ok!(submit_with_witness(Origin::signed(99), solution));
-			assert_eq!(scores(), vec![6, 6, 8]);
+			assert_eq!(scores(), vec![8, 6, 6]);
 
 			let solution = RawSolution { score: [10, 0, 0], ..Default::default() };
 			assert_ok!(submit_with_witness(Origin::signed(99), solution));
-			assert_eq!(scores(), vec![6, 8, 10]);
+			assert_eq!(scores(), vec![10, 8, 6]);
 
 			let solution = RawSolution { score: [12, 0, 0], ..Default::default() };
 			assert_ok!(submit_with_witness(Origin::signed(99), solution));
-			assert_eq!(scores(), vec![8, 10, 12]);
+			assert_eq!(scores(), vec![12, 10, 8]);
 		})
 	}
 
@@ -663,7 +657,7 @@ mod tests {
 
 			assert_eq!(
 				MultiPhase::signed_submissions().iter().map(|x| x.who).collect::<Vec<_>>(),
-				vec![9999, 99, 999]
+				vec![999, 99, 9999]
 			);
 
 			// _some_ good solution was stored.
