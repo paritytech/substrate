@@ -58,6 +58,33 @@ impl<T> StorageIterator<T> {
 	}
 }
 
+impl<T: Decode + Sized> Iterator for StorageIterator<T> {
+	type Item = (Vec<u8>, T);
+
+	fn next(&mut self) -> Option<(Vec<u8>, T)> {
+		loop {
+			let maybe_next = sp_io::storage::next_key(&self.previous_key)
+				.filter(|n| n.starts_with(&self.prefix));
+			break match maybe_next {
+				Some(next) => {
+					self.previous_key = next.clone();
+					let maybe_value = frame_support::storage::unhashed::get::<T>(&next);
+					match maybe_value {
+						Some(value) => {
+							if self.drain {
+								frame_support::storage::unhashed::kill(&next);
+							}
+							Some((self.previous_key[self.prefix.len()..].to_vec(), value))
+						}
+						None => continue,
+					}
+				}
+				None => None,
+			}
+		}
+	}
+}
+
 /// Utility to iterate through raw items in storage.
 pub struct StorageKeyIterator<K, T, H: ReversibleStorageHasher> {
 	prefix: Vec<u8>,
@@ -119,33 +146,6 @@ impl<K: Decode + Sized, T: Decode + Sized, H: ReversibleStorageHasher> Iterator
 							}
 						}
 						Err(_) => continue,
-					}
-				}
-				None => None,
-			}
-		}
-	}
-}
-
-impl<T: Decode + Sized> Iterator for StorageIterator<T> {
-	type Item = (Vec<u8>, T);
-
-	fn next(&mut self) -> Option<(Vec<u8>, T)> {
-		loop {
-			let maybe_next = sp_io::storage::next_key(&self.previous_key)
-				.filter(|n| n.starts_with(&self.prefix));
-			break match maybe_next {
-				Some(next) => {
-					self.previous_key = next.clone();
-					let maybe_value = frame_support::storage::unhashed::get::<T>(&next);
-					match maybe_value {
-						Some(value) => {
-							if self.drain {
-								frame_support::storage::unhashed::kill(&next);
-							}
-							Some((self.previous_key[self.prefix.len()..].to_vec(), value))
-						}
-						None => continue,
 					}
 				}
 				None => None,
