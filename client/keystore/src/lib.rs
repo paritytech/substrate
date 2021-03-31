@@ -27,6 +27,12 @@ use sp_keystore::Error as TraitError;
 mod local;
 pub use local::LocalKeystore;
 
+/// Logging keystore implementation
+#[cfg(feature = "logging")]
+mod logger;
+#[cfg(feature = "logging")]
+pub use logger::TracingKeystore;
+
 /// Keystore error.
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
@@ -81,4 +87,3 @@ impl std::error::Error for Error {
 		}
 	}
 }
-
