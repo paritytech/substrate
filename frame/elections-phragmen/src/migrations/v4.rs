@@ -72,7 +72,12 @@ pub fn pre_migration<P: GetPalletVersion, N: AsRef<str>>(new: N) {
 	// ensure some stuff exist in the old prefix.
 	assert!(sp_io::storage::next_key(OLD_PREFIX).is_some());
 	// ensure nothing is stored in the new prefix.
-	assert!(sp_io::storage::next_key(new.as_ref().as_bytes()).is_none());
+	assert!(
+		sp_io::storage::next_key(new.as_ref().as_bytes()).is_none(),
+		"unexpected next_key({}) = {:?}",
+		new.as_ref(),
+		sp_core::hexdisplay::HexDisplay::from(&sp_io::storage::next_key(new.as_ref().as_bytes()).unwrap())
+	);
 	// ensure storage version is 3.
 	assert!(<P as GetPalletVersion>::storage_version().unwrap().major == 3);
 }
