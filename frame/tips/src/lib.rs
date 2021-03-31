@@ -155,20 +155,13 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 
 		fn on_runtime_upgrade() -> frame_support::weights::Weight {
-			if !UpgradedToTripleRefCount::<T>::get() {
-				UpgradedToTripleRefCount::<T>::put(true);
-				migrations::migrate_to_triple_ref_count::<T>()
+			if !UpgradedPalletPrefix::<T>::get() {
+				UpgradedPalletPrefix::<T>::put(true);
+				migrations::migrate_to_new_pallet_prefix::<T>()
 			} else {
 				0
 			}
 		}
-
-		fn integrity_test() {
-			T::BlockWeights::get()
-				.validate()
-				.expect("The weights are invalid.");
-		}
-
 	}
 
 	#[pallet::call]
@@ -446,7 +439,7 @@ pub mod pallet {
 	/// True if we have upgraded so that AccountInfo contains three types of `RefCount`. False
 	/// (default) if not.
 	#[pallet::storage]
-	pub(super) type UpgradedToTripleRefCount<T: Config> = StorageValue<_, bool, ValueQuery>;
+	pub(super) type UpgradedPalletPrefix<T: Config> = StorageValue<_, bool, ValueQuery>;
 
 	// TODO :: Have to recheck
 	// Since each pallet is has own storage
@@ -469,7 +462,7 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-			<UpgradedToTripleRefCount<T>>::put(false);
+			<UpgradedPalletPrefix<T>>::put(true);
 		}
 	}
 }
@@ -478,12 +471,14 @@ mod migrations {
 	use super::*;
 
 	/// Migrate from dual `u32` reference counting to triple `u32` reference counting.
-	pub fn migrate_to_triple_ref_count<T: Config>() -> frame_support::weights::Weight {
+	pub fn migrate_to_new_pallet_prefix<T: Config>() -> frame_support::weights::Weight {
 
 		let new_name = T::PalletInfo::name::<Pallet<T>>()
-			.expect("Fatal Error Invalid PalletInfo name");
-		move_storage_from_pallet(b"Tips", b"Treasury", new_name.as_bytes());
-		move_storage_from_pallet(b"Reasons", b"Treasury", new_name.as_bytes());
+			.expect("Fatal Error Invalid PalletInfo name")
+			.as_bytes();
+
+		move_storage_from_pallet(b"Tips", b"Treasury", new_name);
+		move_storage_from_pallet(b"Reasons", b"Treasury", new_name);
 
 		T::BlockWeights::get().max_block
 	}
