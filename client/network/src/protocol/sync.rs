@@ -1552,11 +1552,13 @@ impl<B: BlockT> ChainSync<B> {
 		debug!(target:"sync", "Restarted with {} ({})", self.best_queued_number, self.best_queued_hash);
 		let old_peers = std::mem::take(&mut self.peers);
 
-		old_peers.into_iter().filter_map(move |(id, p)| {
+		old_peers.into_iter().filter_map(move |(id, mut p)| {
 			// peers that were downloading justifications
 			// should be kept in that state.
 			match p.state {
 				PeerSyncState::DownloadingJustification(_) => {
+					// We make sure our commmon number is at least something we have.
+					p.common_number = info.best_number;
 					self.peers.insert(id, p);
 					return None;
 				}
@@ -2016,7 +2018,7 @@ mod test {
 		let mut new_blocks = |n| {
 			for _ in 0..n {
 				let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
-				client.import(BlockOrigin::Own, block.clone()).unwrap();
+				block_on(client.import(BlockOrigin::Own, block.clone())).unwrap();
 			}
 
 			let info = client.info();
@@ -2063,6 +2065,14 @@ mod test {
 		assert_eq!(
 			sync.peers.get(&peer_id3).unwrap().state,
 			PeerSyncState::DownloadingJustification(b1_hash),
+		);
+
+		// Set common block to something that we don't have (e.g. failed import)
+		sync.peers.get_mut(&peer_id3).unwrap().common_number = 100;
+		let _ = sync.restart().count();
+		assert_eq!(
+			sync.peers.get(&peer_id3).unwrap().common_number,
+			50
 		);
 	}
 
@@ -2147,7 +2157,7 @@ mod test {
 
 		let block = block_builder.build().unwrap().block;
 
-		client.import(BlockOrigin::Own, block.clone()).unwrap();
+		block_on(client.import(BlockOrigin::Own, block.clone())).unwrap();
 		block
 	}
 
@@ -2188,7 +2198,7 @@ mod test {
 			let block = block_builder.build().unwrap().block;
 
 			if import {
-				client2.import(BlockOrigin::Own, block.clone()).unwrap();
+				block_on(client2.import(BlockOrigin::Own, block.clone())).unwrap();
 			}
 
 			block
@@ -2213,7 +2223,7 @@ mod test {
 		send_block_announce(block3_fork.header().clone(), &peer_id2, &mut sync);
 
 		// Import and tell sync that we now have the fork.
-		client.import(BlockOrigin::Own, block3_fork.clone()).unwrap();
+		block_on(client.import(BlockOrigin::Own, block3_fork.clone())).unwrap();
 		sync.update_chain_info(&block3_fork.hash(), 3);
 
 		let block4 = build_block_at(block3_fork.hash(), false);
@@ -2325,7 +2335,7 @@ mod test {
 
 			resp_blocks.into_iter()
 					.rev()
-					.for_each(|b| client.import_as_final(BlockOrigin::Own, b).unwrap());
+					.for_each(|b| block_on(client.import_as_final(BlockOrigin::Own, b)).unwrap());
 		}
 
 		// Let peer2 announce that it finished syncing
@@ -2388,7 +2398,7 @@ mod test {
 			let mut client = Arc::new(TestClientBuilder::new().build());
 			let fork_blocks = blocks[..MAX_BLOCKS_TO_LOOK_BACKWARDS as usize * 2]
 				.into_iter()
-				.inspect(|b| client.import(BlockOrigin::Own, (*b).clone()).unwrap())
+				.inspect(|b| block_on(client.import(BlockOrigin::Own, (*b).clone())).unwrap())
 				.cloned()
 				.collect::<Vec<_>>();
 
@@ -2492,7 +2502,7 @@ mod test {
 
 			resp_blocks.into_iter()
 				.rev()
-				.for_each(|b| client.import(BlockOrigin::Own, b).unwrap());
+				.for_each(|b| block_on(client.import(BlockOrigin::Own, b)).unwrap());
 		}
 
 		// Request the tip

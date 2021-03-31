@@ -477,6 +477,15 @@
 			"decimals": [12],
 			"standardAccount": "*25519",
 			"website": "https://crust.network"
+		},
+		{
+			"prefix": 252,
+			"network": "social-network",
+			"displayName": "Social Network",
+			"symbols": ["NET"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://social.network"
 		}
 	]
 }
