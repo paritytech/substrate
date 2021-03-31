@@ -9695,7 +9695,6 @@ dependencies = [
  "futures 0.3.13",
  "jsonrpc-core",
  "log",
- "rand 0.7.3",
  "sc-basic-authorship",
  "sc-cli",
  "sc-client-api",
