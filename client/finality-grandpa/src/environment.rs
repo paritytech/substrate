@@ -55,7 +55,7 @@ use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
 use crate::voting_rule::VotingRule;
 use sp_finality_grandpa::{
-	AuthorityId, AuthoritySignature, Equivocation, EquivocationProof,
+	AuthorityId, AuthoritySignature, Equivocation, EquivocationProof, GRANDPA_ENGINE_ID,
 	GrandpaApi, RoundNumber, SetId,
 };
 use prometheus_endpoint::{register, Counter, Gauge, PrometheusError, U64};
@@ -508,7 +508,7 @@ where
 			.best_chain()
 			.map_err(|e| Error::Blockchain(e.to_string()))?;
 
-		let authority_set = self.authority_set.inner().read();
+		let authority_set = self.authority_set.inner();
 
 		// block hash and number of the next pending authority set change in the
 		// given best chain.
@@ -1228,7 +1228,7 @@ where
 	// NOTE: lock must be held through writing to DB to avoid race. this lock
 	//       also implicitly synchronizes the check for last finalized number
 	//       below.
-	let mut authority_set = authority_set.inner().write();
+	let mut authority_set = authority_set.inner();
 
 	let status = client.info();
 
@@ -1326,10 +1326,13 @@ where
 
 		// ideally some handle to a synchronization oracle would be used
 		// to avoid unconditionally notifying.
-		client.apply_finality(import_op, BlockId::Hash(hash), justification, true).map_err(|e| {
-			warn!(target: "afg", "Error applying finality to block {:?}: {:?}", (hash, number), e);
-			e
-		})?;
+		let justification = justification.map(|j| (GRANDPA_ENGINE_ID, j.clone()));
+		client
+			.apply_finality(import_op, BlockId::Hash(hash), justification, true)
+			.map_err(|e| {
+				warn!(target: "afg", "Error applying finality to block {:?}: {:?}", (hash, number), e);
+				e
+			})?;
 		telemetry!(
 			telemetry;
 			CONSENSUS_INFO;

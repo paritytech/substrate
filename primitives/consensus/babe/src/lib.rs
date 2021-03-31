@@ -242,8 +242,8 @@ impl AllowedSlots {
 
 #[cfg(feature = "std")]
 impl sp_consensus::SlotData for BabeGenesisConfiguration {
-	fn slot_duration(&self) -> u64 {
-		self.slot_duration
+	fn slot_duration(&self) -> std::time::Duration {
+		std::time::Duration::from_millis(self.slot_duration)
 	}
 
 	const SLOT_KEY: &'static [u8] = b"babe_configuration";

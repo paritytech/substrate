@@ -55,13 +55,13 @@ impl BabeInherentData for InherentData {
 // TODO: Remove in the future. https://github.com/paritytech/substrate/issues/8029
 #[cfg(feature = "std")]
 pub struct InherentDataProvider {
-	slot_duration: u64,
+	slot_duration: std::time::Duration,
 }
 
 #[cfg(feature = "std")]
 impl InherentDataProvider {
 	/// Constructs `Self`
-	pub fn new(slot_duration: u64) -> Self {
+	pub fn new(slot_duration: std::time::Duration) -> Self {
 		Self { slot_duration }
 	}
 }
@@ -83,7 +83,7 @@ impl ProvideInherentData for InherentDataProvider {
 
 	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), Error> {
 		let timestamp = inherent_data.timestamp_inherent_data()?;
-		let slot = *timestamp / self.slot_duration;
+		let slot = *timestamp / self.slot_duration.as_millis() as u64;
 		inherent_data.put_data(INHERENT_IDENTIFIER, &slot)
 	}
 

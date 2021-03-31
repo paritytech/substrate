@@ -1,13 +1,13 @@
 [package]
 name = "node-template"
-version = "2.0.0"
-authors = ["Anonymous"]
-description = "A new FRAME-based Substrate node, ready for hacking."
+version = "3.0.0"
+authors = ["Substrate DevHub <https://github.com/substrate-developer-hub>"]
+description = "A fresh FRAME-based Substrate node, ready for hacking."
 edition = "2018"
 license = "Unlicense"
 build = "build.rs"
 homepage = "https://substrate.dev"
-repository = "https://github.com/paritytech/substrate/"
+repository = "https://github.com/substrate-developer-hub/substrate-node-template/"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -51,7 +51,7 @@ pallet-transaction-payment-rpc = { version = "3.0.0", path = "../../../frame/tra
 frame-benchmarking = { version = "3.1.0", path = "../../../frame/benchmarking" }
 frame-benchmarking-cli = { version = "3.0.0", path = "../../../utils/frame/benchmarking-cli" }
 
-node-template-runtime = { version = "2.0.0", path = "../runtime" }
+node-template-runtime = { version = "3.0.0", path = "../runtime" }
 
 [build-dependencies]
 substrate-build-script-utils = { version = "3.0.0", path = "../../../utils/build-script-utils" }

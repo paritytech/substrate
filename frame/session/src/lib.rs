@@ -20,9 +20,9 @@
 //! The Session module allows validators to manage their session keys, provides a function for
 //! changing the session length, and handles session rotation.
 //!
-//! - [`session::Config`](./trait.Config.html)
-//! - [`Call`](./enum.Call.html)
-//! - [`Module`](./struct.Module.html)
+//! - [`Config`]
+//! - [`Call`]
+//! - [`Module`]
 //!
 //! ## Overview
 //!
@@ -177,12 +177,12 @@ impl<
 		// (0% is never returned).
 		let progress = if now >= offset {
 			let current = (now - offset) % period.clone() + One::one();
-			Some(Percent::from_rational_approximation(
+			Some(Percent::from_rational(
 				current.clone(),
 				period.clone(),
 			))
 		} else {
-			Some(Percent::from_rational_approximation(
+			Some(Percent::from_rational(
 				now + One::one(),
 				offset,
 			))
@@ -442,7 +442,11 @@ decl_storage! {
 			for (account, val, keys) in config.keys.iter().cloned() {
 				<Module<T>>::inner_set_keys(&val, keys)
 					.expect("genesis config must not contain duplicates; qed");
-				assert!(frame_system::Module::<T>::inc_consumers(&account).is_ok());
+				assert!(
+					frame_system::Pallet::<T>::inc_consumers(&account).is_ok(),
+					"Account ({:?}) does not exist at genesis to set key. Account not endowed?",
+					account,
+				);
 			}
 
 			let initial_validators_0 = T::SessionManager::new_session(0)
@@ -746,10 +750,10 @@ impl<T: Config> Module<T> {
 		let who = T::ValidatorIdOf::convert(account.clone())
 			.ok_or(Error::<T>::NoAssociatedValidatorId)?;
 
-		frame_system::Module::<T>::inc_consumers(&account).map_err(|_| Error::<T>::NoAccount)?;
+		frame_system::Pallet::<T>::inc_consumers(&account).map_err(|_| Error::<T>::NoAccount)?;
 		let old_keys = Self::inner_set_keys(&who, keys)?;
 		if old_keys.is_some() {
-			let _ = frame_system::Module::<T>::dec_consumers(&account);
+			let _ = frame_system::Pallet::<T>::dec_consumers(&account);
 			// ^^^ Defensive only; Consumers were incremented just before, so should never fail.
 		}
 
@@ -798,7 +802,7 @@ impl<T: Config> Module<T> {
 			let key_data = old_keys.get_raw(*id);
 			Self::clear_key_owner(*id, key_data);
 		}
-		frame_system::Module::<T>::dec_consumers(&account);
+		frame_system::Pallet::<T>::dec_consumers(&account);
 
 		Ok(())
 	}
