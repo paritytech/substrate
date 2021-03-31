@@ -166,7 +166,7 @@ impl Into<sc_service::config::RpcMethods> for RpcMethods {
 }
 
 impl RpcMethods {
-	/// Choose and RPC interface based on the RPC method chosen by the user and a few flags:
+	/// Choose an RPC interface based on the RPC method chosen by the user and a few flags:
 	/// `is_external`, `is_unsafe_external` and `is_validator`.
 	pub fn choose_rpc_interface(
 		self,
