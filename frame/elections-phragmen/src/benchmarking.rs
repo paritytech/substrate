@@ -25,7 +25,7 @@ use frame_system::RawOrigin;
 use frame_benchmarking::{benchmarks, account, impl_benchmark_test_suite};
 use frame_support::{dispatch::DispatchResultWithPostInfo, traits::OnInitialize};
 
-use crate::Module as Elections;
+use crate::Pallet as Elections;
 
 const BALANCE_FACTOR: u32 = 250;
 const MAX_VOTERS: u32 = 500;
