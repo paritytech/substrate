@@ -97,8 +97,8 @@ impl SnapshotImportCmd {
 		}
 
 		let mut file: Box<dyn std::io::Read + Send> = match &self.input {
-			Some(filename) => Box::new(std::fs::File::open(filename)?),
-			None => Box::new(std::io::stdin()),
+			Some(filename) => Box::new(zstd::Decoder::new(std::fs::File::open(filename)?)?),
+			None => Box::new(zstd::Decoder::new(std::io::stdin())?),
 		};
 
 		backend.snapshot_sync().import_sync(&mut file)?;
@@ -143,11 +143,15 @@ impl SnapshotExportCmd {
 
 		info!("Export using config : {:?}, chain info : {:?}", range, chain_info);
 		if let Some(path) = &self.output {
-			let mut out = std::fs::File::create(path)?;
+			let out = std::fs::File::create(path)?;
+			let mut out = zstd::Encoder::new(out, 3)?;
 			backend.snapshot_sync().export_sync(&mut out, range)?;
+			out.finish()?;
 		} else {
-			let mut out = std::io::stdout();
+			let out = std::io::stdout();
+			let mut out = zstd::Encoder::new(out, 3)?;
 			backend.snapshot_sync().export_sync(&mut out, range)?;
+			out.finish()?;
 		};
 
 		Ok(())

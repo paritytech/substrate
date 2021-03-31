@@ -515,7 +515,6 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		number: u64,
 	) {
 		let last_canonicalized = (hash.clone(), number);
-		let encoded = last_canonicalized.encode();
 		self.last_canonicalized = Some(last_canonicalized);
 	}
 }
