@@ -1552,11 +1552,13 @@ impl<B: BlockT> ChainSync<B> {
 		debug!(target:"sync", "Restarted with {} ({})", self.best_queued_number, self.best_queued_hash);
 		let old_peers = std::mem::take(&mut self.peers);
 
-		old_peers.into_iter().filter_map(move |(id, p)| {
+		old_peers.into_iter().filter_map(move |(id, mut p)| {
 			// peers that were downloading justifications
 			// should be kept in that state.
 			match p.state {
 				PeerSyncState::DownloadingJustification(_) => {
+					// We make sure our commmon number is at least something we have.
+					p.common_number = info.best_number;
 					self.peers.insert(id, p);
 					return None;
 				}
@@ -2063,6 +2065,14 @@ mod test {
 		assert_eq!(
 			sync.peers.get(&peer_id3).unwrap().state,
 			PeerSyncState::DownloadingJustification(b1_hash),
+		);
+
+		// Set common block to something that we don't have (e.g. failed import)
+		sync.peers.get_mut(&peer_id3).unwrap().common_number = 100;
+		let _ = sync.restart().count();
+		assert_eq!(
+			sync.peers.get(&peer_id3).unwrap().common_number,
+			50
 		);
 	}
 
