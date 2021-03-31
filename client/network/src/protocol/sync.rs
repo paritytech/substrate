@@ -505,8 +505,8 @@ impl<B: BlockT> ChainSync<B> {
 		}
 	}
 
-	/// Number of active forks requests. This inludes
-	/// request that are pending or can be issued right away.
+	/// Number of active forks requests. This includes
+	/// requests that are pending or could be issued right away.
 	pub fn num_sync_requests(&self) -> usize {
 		self.fork_targets.values().filter(|f| f.number <= self.best_queued_number).count()
 	}
@@ -1447,8 +1447,8 @@ impl<B: BlockT> ChainSync<B> {
 		trace!(
 			target: "sync",
 			"Finished block announce validation: from {:?}: {:?}. local_best={}",
-			announce.summary(),
 			who,
+			announce.summary(),
 			is_best,
 		);
 
