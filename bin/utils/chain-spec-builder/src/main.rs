@@ -218,7 +218,7 @@ fn print_seeds(
 	println!("{}", header.paint("Nominator seeds"));
 
 	for (n, seed) in nominator_seeds.iter().enumerate() {
-		println!("{} //{}", entry.paint(format!("nom-{}:", n)), seed,);
+		println!("{} //{}", entry.paint(format!("nom-{}:", n)), seed);
 	}
 
 	println!();
