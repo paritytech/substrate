@@ -624,7 +624,6 @@ fn force_asset_status_should_work(){
 		);
 
 		//account drains to completion when funds dip below min_balance
-		assert_ok!(Assets::force_asset_status(Origin::root(), 0, 1, 1, 1, 1, 90, true, false));
 		assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
 		assert_eq!(Assets::balance(0, 1), 0);
 		assert_eq!(Assets::balance(0, 2), 101);
