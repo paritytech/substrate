@@ -43,8 +43,7 @@ pub enum MinerError {
 	/// Submitting a transaction to the pool failed.
 	PoolSubmissionFailed,
 	/// The pre-dispatch checks failed for the mined solution.
-	// TODO: maybe wrap a DispatchError here to be able to clarify which one failed?
-	PreDispatchChecksFailed,
+	PreDispatchChecksFailed(DispatchError),
 	/// The solution generated from the miner is not feasible.
 	Feasibility(FeasibilityError),
 }
@@ -96,7 +95,7 @@ impl<T: Config> Pallet<T> {
 		// ensure that this will pass the pre-dispatch checks
 		Self::unsigned_pre_dispatch_checks(&raw_solution).map_err(|e| {
 			log!(warn, "pre-dispatch-checks failed for mined solution: {:?}", e);
-			MinerError::PreDispatchChecksFailed
+			MinerError::PreDispatchChecksFailed(e)
 		})?;
 
 		// ensure that this is a feasible solution
@@ -760,10 +759,10 @@ mod tests {
 			roll_to(25);
 			assert!(MultiPhase::current_phase().is_unsigned());
 
-			assert_eq!(
+			assert!(matches!(
 				MultiPhase::mine_check_and_submit().unwrap_err(),
-				MinerError::PreDispatchChecksFailed,
-			);
+				MinerError::PreDispatchChecksFailed(_),
+			));
 		})
 	}
 
