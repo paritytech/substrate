@@ -191,12 +191,6 @@ pub mod pallet {
 				0
 			}
 		}
-
-		fn integrity_test() {
-			T::BlockWeights::get()
-				.validate()
-				.expect("The weights are invalid.");
-		}
 	}
 
 	#[pallet::call]
