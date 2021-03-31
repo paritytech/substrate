@@ -262,21 +262,22 @@ frame_benchmarking::benchmarks! {
 	submit {
 		let c in 1 .. (T::SignedMaxSubmissions::get() - 1);
 
-		// the solution will be worse than all of them meaning the score need to be checked against all.
+		// the solution will be worse than all of them meaning the score need to be checked against ~ log2(c)
 		let solution = RawSolution { score: [(10_000_000u128 - 1).into(), 0, 0], ..Default::default() };
 
 		<CurrentPhase<T>>::put(Phase::Signed);
 		<Round<T>>::put(1);
 
-		for i in 0..c {
-			<SignedSubmissions<T>>::mutate(|queue| {
+		<SignedSubmissions<T>>::mutate(|queue| {
+			for i in 0..c {
 				let solution = RawSolution { score: [(10_000_000 + i).into(), 0, 0], ..Default::default() };
 				let signed_submission = SignedSubmission { solution, ..Default::default() };
-				// note: this is quite tricky: we know that the queue will stay sorted here. The
-				// last will be best.
 				queue.push(signed_submission);
-			})
-		}
+			}
+			// as of here, the queue is ordered worst-to-best.
+			// However, we have an invariant that it should be ordered best-to-worst
+			queue.reverse();
+		});
 
 		let caller = frame_benchmarking::whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller,  T::Currency::minimum_balance() * 10u32.into());
