@@ -479,6 +479,15 @@
 			"website": "https://crust.network"
 		},
 		{
+			"prefix": 73,
+			"network": "zeitgeist",
+			"displayName": "Zeitgeist",
+			"symbols": ["ZTG"],
+			"decimals": [10],
+			"standardAccount": "*25519",
+			"website": "https://zeitgeist.pm"
+		},
+		{
 			"prefix": 252,
 			"network": "social-network",
 			"displayName": "Social Network",
