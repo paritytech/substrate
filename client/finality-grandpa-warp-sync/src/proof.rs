@@ -34,7 +34,7 @@ const MAX_CHANGES_PER_WARP_SYNC_PROOF: usize = 256;
 
 /// A proof of an authority set change.
 #[derive(Decode, Encode)]
-pub struct AuthoritySetChangeProof<Block: BlockT> {
+pub struct WarpSyncFragment<Block: BlockT> {
 	/// The last block that the given authority set finalized. This block should contain a digest
 	/// signaling an authority set change from which we can fetch the next authority set.
 	pub header: Block::Header,
@@ -46,7 +46,7 @@ pub struct AuthoritySetChangeProof<Block: BlockT> {
 /// An accumulated proof of multiple authority set changes.
 #[derive(Decode, Encode)]
 pub struct WarpSyncProof<Block: BlockT> {
-	proofs: Vec<AuthoritySetChangeProof<Block>>,
+	proofs: Vec<WarpSyncFragment<Block>>,
 	is_finished: bool,
 }
 
@@ -120,7 +120,7 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 
 			let justification = GrandpaJustification::<Block>::decode(&mut &justification[..])?;
 
-			proofs.push(AuthoritySetChangeProof {
+			proofs.push(WarpSyncFragment {
 				header: header.clone(),
 				justification,
 			});
@@ -147,7 +147,7 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 				let header = blockchain.header(BlockId::Hash(latest_justification.target().1))?
 					.expect("header hash corresponds to a justification in db; must exist in db as well; qed.");
 
-				proofs.push(AuthoritySetChangeProof {
+				proofs.push(WarpSyncFragment {
 					header,
 					justification: latest_justification,
 				})
