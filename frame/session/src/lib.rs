@@ -819,7 +819,8 @@ impl<T: Config> Module<T> {
 		<NextKeys<T>>::insert(v, keys);
 	}
 
-	fn key_owner(id: KeyTypeId, key_data: &[u8]) -> Option<T::ValidatorId> {
+	/// Query the owner of a session key by returning the owner's validator ID.
+	pub fn key_owner(id: KeyTypeId, key_data: &[u8]) -> Option<T::ValidatorId> {
 		<KeyOwner<T>>::get((id, key_data))
 	}
 
