@@ -561,10 +561,10 @@ impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<B
 
 	fn justifications(&self, id: BlockId<Block>) -> ClientResult<Option<Justifications>> {
 		match read_db(&*self.db, columns::KEY_LOOKUP, columns::JUSTIFICATIONS, id)? {
-			Some(justification) => match Decode::decode(&mut &justification[..]) {
-				Ok(justification) => Ok(Some(justification)),
+			Some(justifications) => match Decode::decode(&mut &justifications[..]) {
+				Ok(justifications) => Ok(Some(justifications)),
 				Err(err) => return Err(sp_blockchain::Error::Backend(
-					format!("Error decoding justification: {}", err)
+					format!("Error decoding justifications: {}", err)
 				)),
 			}
 			None => Ok(None),

@@ -398,6 +398,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		let header = block_import_params.post_header();
 		if let Err(err) = block_import
 			.import_block(block_import_params, Default::default())
+			.await
 		{
 			warn!(
 				target: logging_target,
