@@ -281,7 +281,8 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Note that this solution is already computed, and winners are elected based on the merit of
 	/// the total stake in the system. Nevertheless, some of the voters may be removed here.
-	/// Sometimes, removing a voter can cause a validator to also be implicitely remoted, if
+	///
+	/// Sometimes, removing a voter can cause a validator to also be implicitly removed, if
 	/// that voter was the only backer of that winner. In such cases, this solution is invalid, which
 	/// will be caught prior to submission.
 	///
