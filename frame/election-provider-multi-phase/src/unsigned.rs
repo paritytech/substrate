@@ -110,7 +110,7 @@ impl<T: Config> Pallet<T> {
 	/// if our call's score is greater than that of the cached solution.
 	pub fn restore_or_compute_then_maybe_submit() -> Result<(), MinerError> {
 		log!(
-			info,
+			debug,
 			"OCW attempting to restore or compute an unsigned solution for the current election"
 		);
 
@@ -152,7 +152,7 @@ impl<T: Config> Pallet<T> {
 			Self::submit_call(call)
 		} else {
 			log!(
-				info,
+				debug,
 				"queued solution has better score than OCW mined solution; skipping submission"
 			);
 
@@ -163,7 +163,7 @@ impl<T: Config> Pallet<T> {
 	/// Mine a new solution, cache it, and submit it back to the chain as an unsigned transaction.
 	pub fn mine_check_save_submit() -> Result<(), MinerError> {
 		log!(
-			info,
+			debug,
 			"OCW attempting to compute an unsigned solution for the current election"
 		);
 
@@ -184,7 +184,7 @@ impl<T: Config> Pallet<T> {
 		let call: Call<T> = Call::submit_unsigned(raw_solution, witness).into();
 
 		log!(
-			info,
+			debug,
 			"OCW mined a solution with score {:?} and size {}",
 			score,
 			call.using_encoded(|b| b.len())
