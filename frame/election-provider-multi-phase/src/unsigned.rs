@@ -977,7 +977,7 @@ mod tests {
 				MultiPhase::snapshot().unwrap();
 
 			let RawSolution { mut compact, .. } = raw_solution();
-			let encoded_len = compact.encode().len() as u32;
+			let encoded_len = compact.encoded_size() as u32;
 			let compact_clone = compact.clone();
 
 			compact = MultiPhase::trim_compact_length(
@@ -988,6 +988,45 @@ mod tests {
 
 			assert_ne!(compact, compact_clone);
 			assert!((compact.encoded_size() as u32) < encoded_len);
+		});
+	}
+
+	#[test]
+	fn trim_compact_length_trims_lowest_stake() {
+		let mut ext = ExtBuilder::default().build();
+		ext.execute_with(|| {
+			roll_to(25);
+
+			let RoundSnapshot { voters, ..} =
+				MultiPhase::snapshot().unwrap();
+
+			let RawSolution { mut compact, .. } = raw_solution();
+			let encoded_len = compact.encoded_size() as u32;
+			let voter_count = compact.voter_count();
+			let min_stake_voter = voters.iter()
+				.map(|(id, weight, _)| (weight, id))
+				.min()
+				.map(|(_, id)| id)
+				.unwrap();
+
+
+			compact = MultiPhase::trim_compact_length(
+				encoded_len - 1,
+				compact,
+				voter_index_fn_linear::<Runtime>(&voters),
+			).unwrap();
+
+			assert_eq!(compact.voter_count(), voter_count - 1, "we must have removed exactly 1 voter");
+
+			let assignments = compact.into_assignment(
+				|voter| Some(voter as AccountId),
+				|target| Some(target as AccountId),
+			).unwrap();
+			assert!(
+				assignments.iter()
+					.all(|Assignment{ who, ..}| who != min_stake_voter),
+				"min_stake_voter must no longer be in the set of voters",
+			);
 		});
 	}
 
