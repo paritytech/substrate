@@ -120,14 +120,14 @@ impl<TBlock: BlockT, TBackend: Backend<TBlock>> GrandpaWarpSyncRequestHandler<TB
 	fn handle_request(
 		&self,
 		payload: Vec<u8>,
-		pending_response: oneshot::Sender<OutgoingResponse>
+		pending_response: oneshot::Sender<OutgoingResponse>,
 	) -> Result<(), HandleRequestError>
 		where NumberFor<TBlock>: sc_finality_grandpa::BlockNumberOps,
 	{
 		let request = Request::<TBlock>::decode(&mut &payload[..])?;
 
 		let proof = WarpSyncProof::generate(
-			self.backend.blockchain(),
+			&*self.backend,
 			request.begin,
 			&self.authority_set.authority_set_changes(),
 		)?;
