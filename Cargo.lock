@@ -7902,7 +7902,6 @@ dependencies = [
  "once_cell",
  "parking_lot 0.11.1",
  "regex",
- "rustc-hash",
  "sc-client-api",
  "sc-telemetry",
  "sc-tracing-proc-macro",
