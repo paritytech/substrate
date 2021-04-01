@@ -16,14 +16,15 @@
 
 use codec::{Decode, Encode};
 
+use sc_client_api::Backend as ClientBackend;
 use sc_finality_grandpa::{
 	find_scheduled_change, AuthoritySetChanges, BlockNumberOps, GrandpaJustification,
 };
-use sp_blockchain::Backend as BlockchainBackend;
+use sp_blockchain::{Backend as BlockchainBackend, HeaderBackend};
 use sp_finality_grandpa::{AuthorityList, SetId, GRANDPA_ENGINE_ID};
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, NumberFor},
+	traits::{Block as BlockT, NumberFor, One},
 };
 
 use crate::HandleRequestError;
@@ -42,11 +43,21 @@ pub struct AuthoritySetChangeProof<Block: BlockT> {
 	pub justification: GrandpaJustification<Block>,
 }
 
+/// Represents the current state of the warp sync, namely whether it is considered
+/// finished, i.e. we have proved everything up until the latest authority set, or not.
+/// When the warp sync is finished we might optionally provide a justification for the
+/// latest finalized block, which should be checked against the latest authority set.
+#[derive(Debug, Decode, Encode)]
+pub enum WarpSyncFinished<Block: BlockT> {
+	No,
+	Yes(Option<GrandpaJustification<Block>>),
+}
+
 /// An accumulated proof of multiple authority set changes.
 #[derive(Decode, Encode)]
 pub struct WarpSyncProof<Block: BlockT> {
 	proofs: Vec<AuthoritySetChangeProof<Block>>,
-	is_finished: bool,
+	is_finished: WarpSyncFinished<Block>,
 }
 
 impl<Block: BlockT> WarpSyncProof<Block> {
@@ -59,21 +70,22 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 		set_changes: &AuthoritySetChanges<NumberFor<Block>>,
 	) -> Result<WarpSyncProof<Block>, HandleRequestError>
 	where
-		Backend: BlockchainBackend<Block>,
+		Backend: ClientBackend<Block>,
 	{
 		// TODO: cache best response (i.e. the one with lowest begin_number)
+		let blockchain = backend.blockchain();
 
-		let begin_number = backend
+		let begin_number = blockchain
 			.block_number_from_id(&BlockId::Hash(begin))?
 			.ok_or_else(|| HandleRequestError::InvalidRequest("Missing start block".to_string()))?;
 
-		if begin_number > backend.info().finalized_number {
+		if begin_number > blockchain.info().finalized_number {
 			return Err(HandleRequestError::InvalidRequest(
 				"Start block is not finalized".to_string(),
 			));
 		}
 
-		let canon_hash = backend.hash(begin_number)?.expect(
+		let canon_hash = blockchain.hash(begin_number)?.expect(
 			"begin number is lower than finalized number; \
 			 all blocks below finalized number must have been imported; \
 			 qed.",
@@ -86,7 +98,6 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 		}
 
 		let mut proofs = Vec::new();
-
 		let mut proof_limit_reached = false;
 
 		for (_, last_block) in set_changes.iter_from(begin_number) {
@@ -95,7 +106,7 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 				break;
 			}
 
-			let header = backend.header(BlockId::Number(*last_block))?.expect(
+			let header = blockchain.header(BlockId::Number(*last_block))?.expect(
 				"header number comes from previously applied set changes; must exist in db; qed.",
 			);
 
@@ -108,7 +119,7 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 				break;
 			}
 
-			let justification = backend
+			let justification = blockchain
 				.justifications(BlockId::Number(*last_block))?
 				.and_then(|just| just.into_justification(GRANDPA_ENGINE_ID))
 				.expect(
@@ -125,9 +136,29 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 			});
 		}
 
+		let is_finished = if proof_limit_reached {
+			WarpSyncFinished::No
+		} else {
+			let latest =
+				sc_finality_grandpa::best_justification(backend)?.filter(|justification| {
+					// the existing best justification must be for a block higher than the
+					// last authority set change. if we didn't prove any authority set
+					// change then we fallback to make sure it's higher or equal to the
+					// initial warp sync block.
+					let limit = proofs
+						.last()
+						.map(|proof| proof.justification.target().0 + One::one())
+						.unwrap_or(begin_number);
+
+					justification.target().0 >= limit
+				});
+
+			WarpSyncFinished::Yes(latest)
+		};
+
 		Ok(WarpSyncProof {
 			proofs,
-			is_finished: !proof_limit_reached,
+			is_finished,
 		})
 	}
 
@@ -160,6 +191,12 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 			current_set_id += 1;
 		}
 
+		if let WarpSyncFinished::Yes(Some(ref justification)) = self.is_finished {
+			justification
+				.verify(current_set_id, &current_authorities)
+				.map_err(|err| HandleRequestError::InvalidProof(err.to_string()))?;
+		}
+
 		Ok((current_set_id, current_authorities))
 	}
 }
@@ -170,7 +207,6 @@ mod tests {
 	use codec::Encode;
 	use rand::prelude::*;
 	use sc_block_builder::BlockBuilderProvider;
-	use sc_client_api::Backend;
 	use sc_finality_grandpa::{AuthoritySetChanges, GrandpaJustification};
 	use sp_blockchain::HeaderBackend;
 	use sp_consensus::BlockOrigin;
@@ -295,8 +331,7 @@ mod tests {
 		let genesis_hash = client.hash(0).unwrap().unwrap();
 
 		let warp_sync_proof =
-			WarpSyncProof::generate(backend.blockchain(), genesis_hash, &authority_set_changes)
-				.unwrap();
+			WarpSyncProof::generate(&*backend, genesis_hash, &authority_set_changes).unwrap();
 
 		// verifying the proof should yield the last set id and authorities
 		let (new_set_id, new_authorities) = warp_sync_proof.verify(0, genesis_authorities).unwrap();
