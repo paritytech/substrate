@@ -92,7 +92,7 @@ fn restore_solution<T: Config>() -> Result<Call<T>, MinerError> {
 }
 
 /// Clear a saved solution from OCW storage.
-pub(super) fn kill_solution<T: Config>() {
+pub(super) fn kill_ocw_solution<T: Config>() {
 	let mut storage = StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL);
 	storage.clear();
 }
@@ -190,7 +190,7 @@ impl<T: Config> Pallet<T> {
 
 		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into())
 			.map_err(|_| {
-				kill_solution::<T>();
+				kill_ocw_solution::<T>();
 				MinerError::PoolSubmissionFailed
 			})
 	}

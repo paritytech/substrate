@@ -676,7 +676,7 @@ pub mod pallet {
 				})
 				.is_some()
 			{
-				unsigned::kill_solution::<T>();
+				unsigned::kill_ocw_solution::<T>();
 			}
 		}
 
