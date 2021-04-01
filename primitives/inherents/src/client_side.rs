@@ -18,6 +18,14 @@
 use crate::{InherentData, Error, InherentIdentifier};
 use sp_runtime::traits::Block as BlockT;
 
+/// Something that can create inherent data providers.
+///
+/// It is possible for the caller to provide custom arguments to the callee by setting the
+/// `ExtraArgs` generic parameter.
+///
+/// The crate already provides some convience implementations of this trait for
+/// `Box<dyn CreateInherentDataProviders>` and closures. So, it should not be required to implement
+/// this trait manually.
 #[async_trait::async_trait]
 pub trait CreateInherentDataProviders<Block: BlockT, ExtraArgs>: Send + Sync {
 	/// The inherent data providers that will be created.

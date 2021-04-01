@@ -15,21 +15,138 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Provides types and traits for creating and checking inherents.
+//! Substrate inherent extrinsics
 //!
-//! Each inherent is added to a produced block. Each runtime decides on which inherents it
-//! wants to attach to its blocks. All data that is required for the runtime to create the inherents
-//! is stored in the `InherentData`. This `InherentData` is constructed by the node and given to
-//! the runtime.
+//! Inherent extrinsics are extrinsics that are inherently added to each block. However, it is up to
+//! runtime implementation to require an inherent for each block or to make it optional. Inherents
+//! are mainly used to pass data from the block producer to the runtime. So, inherents require some
+//! part that is running on the client side and some part that is running on the runtime side. Any
+//! data that is required by an inherent is passed as [`InherentData`] from the client to the runtime
+//! when the inherents are constructed.
 //!
-//! Types that provide data for inherents, should implement `InherentDataProvider` and need to be
-//! registered at `InherentDataProviders`.
+//! The process of constructing and applying inherents is the following:
 //!
-//! In the runtime, modules need to implement `ProvideInherent` when they can create and/or check
-//! inherents. By implementing `ProvideInherent`, a module is not enforced to create an inherent.
-//! A module can also just check given inherents. For using a module as inherent provider, it needs
-//! to be registered by the `construct_runtime!` macro. The macro documentation gives more
-//! information on how that is done.
+//! 1. The block producer first creates the [`InherentData`] by using the inherent data providers
+//! that are created by [`CreateInherentDataProviders`].
+//!
+//! 2. The [`InherentData`] is passed to the `inherent_extrinsics` function of the `BlockBuilder`
+//! runtime api. This will call the runtime which will create all the inherents that should be
+//! applyed to the block.
+//!
+//! 3. Apply each inherent to the block like any normal extrinsic.
+//!
+//! On block import the inherents in the block are checked by calling the `check_inherents` runtime
+//! api. This will also pass an instance of [`InherentData`] which the runtime can use to validate
+//! all inherents. If some inherent data isn't required for validating an inherent, it can be
+//! obmitted when providing the inherent data providers for block import.
+//!
+//! # Providing inherent data
+//!
+//! To provide inherent data from the client side, [`InherentDataProvider`] should be implemented.
+//!
+//! ```
+//! use codec::Decode;
+//!
+//! // This needs to be unique for the runtime.
+//! const INHERENT_IDENTIFIER: sp_inherents::InherentIndentifier = *b"testinh0";
+//!
+//! /// Some custom inherent data provider
+//! struct InherentDataProvider;
+//!
+//! #[async_trait::async_trait]
+//! impl sp_inherents::InherentDataProvider for InherentDataProvider {
+//! 	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), sp_inherents::Error> {
+//! 		// We can insert any data that implements [`codec::Encode`].
+//! 		inherent_data.put_data(&INHERENT_IDENTIFIER, "hello")
+//! 	}
+//!
+//! 	/// When validating the inherents, the runtime implementation can throw errors. We support
+//! 	/// two error modes, fatal and non-fatal errors. A fatal error means that the block is invalid
+//! 	/// and this function here should return `Err(_)` to not import the block. Non-fatal errors
+//! 	/// are allowed to be handled here in this function and the function should return `Ok(())`
+//! 	/// if it could be handled. A non-fatal error is for example that a block is in the future
+//! 	/// from the point of view of the local node. In such a case the block import for example
+//! 	/// should be delayed until the block is valid.
+//! 	///
+//! 	/// If this functions returns `None`, it means that it is not responsible for this error or
+//! 	/// that the error could not be interpreted.
+//! 	async fn try_handle_error(
+//! 		&self,
+//! 		identifier: &InherentIdentifier,
+//! 		error: &[u8],
+//! 	) -> Option<Result<(), Box<dyn std::error::Error + Send + Sync>>> {
+//! 		// Check if this error belongs to us.
+//! 		if *identifier != INHERENT_IDENTIFIER {
+//! 			return None;
+//! 		}
+//!
+//! 		// For demonstration purposes we are using a `String` as error type. In real
+//! 		// implementations it is advised to not use `String`.
+//! 		Some(Err(Box::from(String::decode(&mut error[..]).ok()?) as Box<_>))
+//! 	}
+//! }
+//! ```
+//!
+//! In the service the relevant inherent data providers need to be passed the block production and
+//! the block import. As already highlighted above, the providers can be different between import
+//! and production.
+//!
+//! ```
+//! # sp_runtime::testing::ExtrinsicWrapper;
+//! # type sp_runtime::Block<ExtrinsicWrapper<()>>;
+//! # struct InherentDataProvider;
+//! # #[async_trait::async_trait]
+//! # impl sp_inherents::InherentDataProvider for InherentDataProvider {
+//! # 	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), sp_inherents::Error> {
+//! # 		inherent_data.put_data(&INHERENT_IDENTIFIER, "hello")
+//! # 	}
+//! # 	async fn try_handle_error(
+//! # 		&self,
+//! # 		identifier: &InherentIdentifier,
+//! # 		error: &[u8],
+//! # 	) -> Option<Result<(), Box<dyn std::error::Error + Send + Sync>>> {
+//! # 		None
+//! # 	}
+//! # }
+//!
+//! async fn cool_consensus_block_production(
+//! 	// The second parameter to the trait are parameters that depend on what the caller
+//! 	// can provide on extra data.
+//! 	_: impl sp_inherents::CreateInherentDataProviders<Block, ()>,
+//! ) {
+//! 	// do cool stuff
+//! }
+//!
+//! async fn cool_consensus_block_import(
+//! 	_: impl sp_inherents::CreateInherentDataProviders<Block, ()>,
+//! ) {
+//! 	// do cool stuff
+//! }
+//!
+//! async fn build_service(is_validator: bool) {
+//! 	// For block import we don't pass any inherent data provider, because our runtime
+//! 	// does not need any inherent data to validate the inherents.
+//! 	let block_import = cool_consensus_block_import(|_parent, ()| async { Ok(()) });
+//!
+//! 	let block_production = if is_validator {
+//! 		// For block production we want to provide our inherent data provider
+//! 		cool_consensus_block_production(|_parent, ()| {
+//!			Ok(InherentDataProvider)
+//! 		})
+//! 	} else {
+//! 		futures::future::pending()
+//! 	};
+//!
+//! 	futures::future::select(block_import, block_production).await;
+//! }
+//! ```
+//!
+//! # Creating the inherent
+//!
+//! As the inherents are created by the runtime, it depends on the runtime implementation on how
+//! to create the inherents. As already described above the client side passes the [`InherentData`]
+//! and expects the runtime to construct the inherents out of it. When validating the inherents,
+//! [`CheckInherentsResult`] is used to communicate the result client side.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
