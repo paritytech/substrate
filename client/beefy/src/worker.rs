@@ -22,8 +22,7 @@ use std::{
 };
 
 use beefy_primitives::{
-	BeefyApi, Commitment, ConsensusLog, MmrRootHash, SignedCommitment, ValidatorSet, ValidatorSetId, BEEFY_ENGINE_ID,
-	KEY_TYPE,
+	BeefyApi, Commitment, ConsensusLog, MmrRootHash, SignedCommitment, ValidatorSet, BEEFY_ENGINE_ID, KEY_TYPE,
 };
 use codec::{Codec, Decode, Encode};
 use futures::{future, FutureExt, StreamExt};
@@ -92,7 +91,6 @@ where
 	signed_commitment_sender: notification::BeefySignedCommitmentSender<B, S>,
 	best_finalized_block: NumberFor<B>,
 	best_block_voted_on: NumberFor<B>,
-	validator_set_id: ValidatorSetId,
 	client: Arc<C>,
 	metrics: Option<Metrics>,
 	_backend: PhantomData<BE>,
@@ -130,13 +128,12 @@ where
 			local_id: None,
 			key_store,
 			min_interval: 2,
-			rounds: round::Rounds::new(vec![]),
+			rounds: round::Rounds::new(ValidatorSet::empty()),
 			finality_notifications: client.finality_notification_stream(),
 			gossip_engine: Arc::new(Mutex::new(gossip_engine)),
 			signed_commitment_sender,
 			best_finalized_block: Zero::zero(),
 			best_block_voted_on: Zero::zero(),
-			validator_set_id: 0,
 			client,
 			metrics,
 			_backend: PhantomData,
@@ -171,7 +168,7 @@ where
 		};
 
 		self.local_id = local_id;
-		self.rounds = round::Rounds::new(validator_set.validators.clone());
+		self.rounds = round::Rounds::new(validator_set.clone());
 
 		// we are actually interested in the best finalized block with the BEEFY pallet
 		// being available on-chain. That is why we set `best_finalized_block` here and
@@ -251,7 +248,7 @@ where
 					metrics.beefy_validator_set_id.set(new.id);
 				}
 
-				self.validator_set_id = new.id;
+				self.rounds = round::Rounds::new(new);
 			};
 
 			let mmr_root = if let Some(hash) = find_mmr_root_digest::<B, P::Public>(&notification.header) {
@@ -264,7 +261,7 @@ where
 			let commitment = Commitment {
 				payload: mmr_root,
 				block_number: notification.header.number(),
-				validator_set_id: self.validator_set_id,
+				validator_set_id: self.rounds.validator_set_id(),
 			};
 
 			let signature = match self.sign_commitment(local_id, commitment.encode().as_ref()) {
@@ -311,7 +308,7 @@ where
 				let commitment = Commitment {
 					payload: round.0,
 					block_number: round.1,
-					validator_set_id: self.validator_set_id,
+					validator_set_id: self.rounds.validator_set_id(),
 				};
 
 				let signed_commitment = SignedCommitment { commitment, signatures };

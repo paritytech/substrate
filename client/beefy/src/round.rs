@@ -16,6 +16,8 @@
 
 use std::collections::BTreeMap;
 
+use beefy_primitives::{ValidatorSet, ValidatorSetId};
+
 struct RoundTracker<Id, Signature> {
 	votes: Vec<(Id, Signature)>,
 }
@@ -53,7 +55,7 @@ fn threshold(authorities: usize) -> usize {
 
 pub(crate) struct Rounds<Hash, Number, Id, Signature> {
 	rounds: BTreeMap<(Hash, Number), RoundTracker<Id, Signature>>,
-	authorities: Vec<Id>,
+	validator_set: ValidatorSet<Id>,
 }
 
 impl<Hash, Number, Id, Signature> Rounds<Hash, Number, Id, Signature>
@@ -61,10 +63,10 @@ where
 	Hash: Ord,
 	Number: Ord,
 {
-	pub(crate) fn new(authorities: Vec<Id>) -> Self {
+	pub(crate) fn new(validator_set: ValidatorSet<Id>) -> Self {
 		Rounds {
 			rounds: BTreeMap::new(),
-			authorities,
+			validator_set,
 		}
 	}
 }
@@ -76,6 +78,10 @@ where
 	Id: PartialEq,
 	Signature: Clone + PartialEq,
 {
+	pub(crate) fn validator_set_id(&self) -> ValidatorSetId {
+		self.validator_set.id
+	}
+
 	pub(crate) fn add_vote(&mut self, round: (Hash, Number), vote: (Id, Signature)) -> bool {
 		self.rounds.entry(round).or_default().add_vote(vote)
 	}
@@ -83,7 +89,7 @@ where
 	pub(crate) fn is_done(&self, round: &(Hash, Number)) -> bool {
 		self.rounds
 			.get(round)
-			.map(|tracker| tracker.is_done(threshold(self.authorities.len())))
+			.map(|tracker| tracker.is_done(threshold(self.validator_set.validators.len())))
 			.unwrap_or(false)
 	}
 
@@ -91,7 +97,8 @@ where
 		let signatures = self.rounds.remove(round)?.votes;
 
 		Some(
-			self.authorities
+			self.validator_set
+				.validators
 				.iter()
 				.map(|authority_id| {
 					signatures
