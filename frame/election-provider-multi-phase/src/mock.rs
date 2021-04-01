@@ -161,6 +161,7 @@ impl frame_system::Config for Runtime {
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
+	type OnSetCode = ();
 }
 
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);

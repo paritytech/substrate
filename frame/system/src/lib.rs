@@ -140,6 +140,18 @@ pub type ConsumedWeight = PerDispatchClass<Weight>;
 
 pub use pallet::*;
 
+/// Do something when we should be setting the code.
+pub trait SetCode {
+	/// Set the code to the given blob.
+	fn set_code(code: Vec<u8>);
+}
+
+impl SetCode for () {
+	fn set_code(code: Vec<u8>) {
+		storage::unhashed::put_raw(well_known_keys::CODE, &code);
+	}
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 	use crate::{*, pallet_prelude::*, self as frame_system};
@@ -253,6 +265,10 @@ pub mod pallet {
 		/// an identifier of the chain.
 		#[pallet::constant]
 		type SS58Prefix: Get<u8>;
+
+		/// What to do if the user wants the code set to something. Just use `()` unless you are in
+		/// cumulus.
+		type OnSetCode: SetCode;
 	}
 
 	#[pallet::pallet]
@@ -329,7 +345,7 @@ pub mod pallet {
 			ensure_root(origin)?;
 			Self::can_set_code(&code)?;
 
-			storage::unhashed::put_raw(well_known_keys::CODE, &code);
+			T::OnSetCode::set_code(code);
 			Self::deposit_event(Event::CodeUpdated);
 			Ok(().into())
 		}
@@ -348,7 +364,7 @@ pub mod pallet {
 			code: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			storage::unhashed::put_raw(well_known_keys::CODE, &code);
+			T::OnSetCode::set_code(code);
 			Self::deposit_event(Event::CodeUpdated);
 			Ok(().into())
 		}
