@@ -135,6 +135,7 @@ impl<TBlock: BlockT, TBackend: Backend<TBlock>> GrandpaWarpSyncRequestHandler<TB
 		pending_response.send(OutgoingResponse {
 			result: Ok(proof.encode()),
 			reputation_changes: Vec::new(),
+			sent_feedback: None,
 		}).map_err(|_| HandleRequestError::SendResponse)
 	}
 
