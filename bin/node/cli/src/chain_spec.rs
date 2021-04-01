@@ -295,16 +295,16 @@ pub fn testnet_genesis(
 			phantom: Default::default(),
 		},
 		pallet_contracts: ContractsConfig {
-			current_schedule: pallet_contracts::Schedule {
-				enable_println, // this should only be enabled on development chains
-				..Default::default()
-			},
+			// println should only be enabled on development chains
+			current_schedule: pallet_contracts::Schedule::default()
+				.enable_println(enable_println),
 		},
 		pallet_sudo: SudoConfig {
 			key: root_key,
 		},
 		pallet_babe: BabeConfig {
 			authorities: vec![],
+			epoch_config: Some(node_runtime::BABE_GENESIS_EPOCH_CONFIG),
 		},
 		pallet_im_online: ImOnlineConfig {
 			keys: vec![],
@@ -442,7 +442,7 @@ pub(crate) mod tests {
 				Ok(sc_service_test::TestNetComponents::new(task_manager, client, network, transaction_pool))
 			},
 			|config| {
-				let (keep_alive, _, _, client, network, transaction_pool) = new_light_base(config)?;
+				let (keep_alive, _, client, network, transaction_pool) = new_light_base(config)?;
 				Ok(sc_service_test::TestNetComponents::new(keep_alive, client, network, transaction_pool))
 			}
 		);

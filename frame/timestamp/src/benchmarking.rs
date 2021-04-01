@@ -24,7 +24,7 @@ use frame_system::RawOrigin;
 use frame_support::{ensure, traits::OnFinalize};
 use frame_benchmarking::{benchmarks, TrackedStorageKey, impl_benchmark_test_suite};
 
-use crate::Module as Timestamp;
+use crate::Pallet as Timestamp;
 
 const MAX_TIME: u32 = 100;
 

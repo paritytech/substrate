@@ -323,6 +323,30 @@ fn thaw_when_issuance_higher_works() {
 }
 
 #[test]
+fn thaw_with_ignored_issuance_works() {
+	new_test_ext().execute_with(|| {
+		run_to_block(1);
+		// Give account zero some balance.
+		Balances::make_free_balance_be(&0, 200);
+
+		assert_ok!(Gilt::place_bid(Origin::signed(1), 100, 1));
+		Gilt::enlarge(100, 1);
+
+		// Account zero transfers 50 into everyone else's accounts.
+		assert_ok!(Balances::transfer(Origin::signed(0), 2, 50));
+		assert_ok!(Balances::transfer(Origin::signed(0), 3, 50));
+		assert_ok!(Balances::transfer(Origin::signed(0), 4, 50));
+
+		run_to_block(4);
+		assert_ok!(Gilt::thaw(Origin::signed(1), 0));
+
+		// Account zero changes have been ignored.
+		assert_eq!(Balances::free_balance(1), 150);
+		assert_eq!(Balances::reserved_balance(1), 0);
+	});
+}
+
+#[test]
 fn thaw_when_issuance_lower_works() {
 	new_test_ext().execute_with(|| {
 		run_to_block(1);

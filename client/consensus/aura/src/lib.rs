@@ -35,7 +35,6 @@ use std::{
 };
 
 use futures::prelude::*;
-use parking_lot::Mutex;
 use log::{debug, trace};
 
 use codec::{Encode, Decode, Codec};
@@ -54,8 +53,9 @@ use sp_api::ProvideRuntimeApi;
 use sp_core::crypto::Pair;
 use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 use sp_inherents::{InherentDataProviders, InherentData};
-use sp_timestamp::{TimestampInherentData, InherentType as TimestampInherent};
+use sp_timestamp::TimestampInherentData;
 use sc_consensus_slots::{SlotInfo, SlotCompatible, StorageChanges, BackoffAuthoringBlocksStrategy};
+use sc_telemetry::TelemetryHandle;
 use sp_consensus_slots::Slot;
 
 mod import_queue;
@@ -69,11 +69,12 @@ pub use sp_consensus_aura::{
 };
 pub use sp_consensus::SyncOracle;
 pub use import_queue::{ImportQueueParams, import_queue, AuraBlockImport, CheckForEquivocation};
+pub use sc_consensus_slots::SlotProportion;
 
 type AuthorityId<P> = <P as Pair>::Public;
 
 /// Slot duration type for Aura.
-pub type SlotDuration = sc_consensus_slots::SlotDuration<u64>;
+pub type SlotDuration = sc_consensus_slots::SlotDuration<sp_consensus_aura::SlotDuration>;
 
 /// Get type of `SlotDuration` for Aura.
 pub fn slot_duration<A, B, C>(client: &C) -> CResult<SlotDuration> where
@@ -109,7 +110,7 @@ impl SlotCompatible for AuraSlotCompatible {
 	fn extract_timestamp_and_slot(
 		&self,
 		data: &InherentData,
-	) -> Result<(TimestampInherent, AuraInherent, std::time::Duration), sp_consensus::Error> {
+	) -> Result<(sp_timestamp::Timestamp, AuraInherent, std::time::Duration), sp_consensus::Error> {
 		data.timestamp_inherent_data()
 			.and_then(|t| data.aura_inherent_data().map(|a| (t, a)))
 			.map_err(Into::into)
@@ -142,6 +143,14 @@ pub struct StartAuraParams<C, SC, I, PF, SO, BS, CAW> {
 	pub keystore: SyncCryptoStorePtr,
 	/// Can we author a block with this node?
 	pub can_author_with: CAW,
+	/// The proportion of the slot dedicated to proposing.
+	///
+	/// The block proposing will be limited to this proportion of the slot from the starting of the
+	/// slot. However, the proposing can still take longer when there is some lenience factor applied,
+	/// because there were no blocks produced for some slots.
+	pub block_proposal_slot_portion: SlotProportion,
+	/// Telemetry instance used to report telemetry metrics.
+	pub telemetry: Option<TelemetryHandle>,
 }
 
 /// Start the aura worker. The returned future should be run in a futures executor.
@@ -151,13 +160,15 @@ pub fn start_aura<P, B, C, SC, PF, I, SO, CAW, BS, Error>(
 		client,
 		select_chain,
 		block_import,
-		proposer_factory: env,
+		proposer_factory,
 		sync_oracle,
 		inherent_data_providers,
 		force_authoring,
 		backoff_authoring_blocks,
 		keystore,
 		can_author_with,
+		block_proposal_slot_portion,
+		telemetry,
 	}: StartAuraParams<C, SC, I, PF, SO, BS, CAW>,
 ) -> Result<impl Future<Output = ()>, sp_consensus::Error> where
 	B: BlockT,
@@ -175,20 +186,23 @@ pub fn start_aura<P, B, C, SC, PF, I, SO, CAW, BS, Error>(
 	CAW: CanAuthorWith<B> + Send,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
 {
-	let worker = AuraWorker {
-		client,
-		block_import: Arc::new(Mutex::new(block_import)),
-		env,
+	let worker = build_aura_worker::<P, _, _, _, _, _, _, _>(BuildAuraWorkerParams {
+		client: client.clone(),
+		block_import,
+		proposer_factory,
 		keystore,
 		sync_oracle: sync_oracle.clone(),
 		force_authoring,
 		backoff_authoring_blocks,
-		_key_type: PhantomData::<P>,
-	};
+		telemetry,
+		block_proposal_slot_portion,
+	});
+
 	register_aura_inherent_data_provider(
 		&inherent_data_providers,
 		slot_duration.slot_duration()
 	)?;
+
 	Ok(sc_consensus_slots::start_slot_worker::<_, _, _, _, _, AuraSlotCompatible, _, _>(
 		slot_duration,
 		select_chain,
@@ -200,14 +214,85 @@ pub fn start_aura<P, B, C, SC, PF, I, SO, CAW, BS, Error>(
 	))
 }
 
+/// Parameters of [`build_aura_worker`].
+pub struct BuildAuraWorkerParams<C, I, PF, SO, BS> {
+	/// The client to interact with the chain.
+	pub client: Arc<C>,
+	/// The block import.
+	pub block_import: I,
+	/// The proposer factory to build proposer instances.
+	pub proposer_factory: PF,
+	/// The sync oracle that can give us the current sync status.
+	pub sync_oracle: SO,
+	/// Should we force the authoring of blocks?
+	pub force_authoring: bool,
+	/// The backoff strategy when we miss slots.
+	pub backoff_authoring_blocks: Option<BS>,
+	/// The keystore used by the node.
+	pub keystore: SyncCryptoStorePtr,
+	/// The proportion of the slot dedicated to proposing.
+	///
+	/// The block proposing will be limited to this proportion of the slot from the starting of the
+	/// slot. However, the proposing can still take longer when there is some lenience factor applied,
+	/// because there were no blocks produced for some slots.
+	pub block_proposal_slot_portion: SlotProportion,
+	/// Telemetry instance used to report telemetry metrics.
+	pub telemetry: Option<TelemetryHandle>,
+}
+
+/// Build the aura worker.
+///
+/// The caller is responsible for running this worker, otherwise it will do nothing.
+pub fn build_aura_worker<P, B, C, PF, I, SO, BS, Error>(
+	BuildAuraWorkerParams {
+		client,
+		block_import,
+		proposer_factory,
+		sync_oracle,
+		backoff_authoring_blocks,
+		keystore,
+		block_proposal_slot_portion,
+		telemetry,
+		force_authoring,
+	}: BuildAuraWorkerParams<C, I, PF, SO, BS>,
+) -> impl sc_consensus_slots::SlotWorker<B, <PF::Proposer as Proposer<B>>::Proof> where
+	B: BlockT,
+	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + AuxStore + HeaderBackend<B> + Send + Sync,
+	C::Api: AuraApi<B, AuthorityId<P>>,
+	PF: Environment<B, Error = Error> + Send + Sync + 'static,
+	PF::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
+	P: Pair + Send + Sync,
+	P::Public: AppPublic + Hash + Member + Encode + Decode,
+	P::Signature: TryFrom<Vec<u8>> + Hash + Member + Encode + Decode,
+	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
+	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
+	SO: SyncOracle + Send + Sync + Clone,
+	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
+{
+	AuraWorker {
+		client,
+		block_import,
+		env: proposer_factory,
+		keystore,
+		sync_oracle,
+		force_authoring,
+		backoff_authoring_blocks,
+		telemetry,
+		_key_type: PhantomData::<P>,
+		block_proposal_slot_portion,
+	}
+}
+
 struct AuraWorker<C, E, I, P, SO, BS> {
 	client: Arc<C>,
-	block_import: Arc<Mutex<I>>,
+	block_import: I,
 	env: E,
 	keystore: SyncCryptoStorePtr,
 	sync_oracle: SO,
 	force_authoring: bool,
 	backoff_authoring_blocks: Option<BS>,
+	block_proposal_slot_portion: SlotProportion,
+	telemetry: Option<TelemetryHandle>,
 	_key_type: PhantomData<P>,
 }
 
@@ -240,8 +325,8 @@ where
 		"aura"
 	}
 
-	fn block_import(&self) -> Arc<Mutex<Self::BlockImport>> {
-		self.block_import.clone()
+	fn block_import(&mut self) -> &mut Self::BlockImport {
+		&mut self.block_import
 	}
 
 	fn epoch_data(
@@ -361,15 +446,30 @@ where
 		}))
 	}
 
+	fn telemetry(&self) -> Option<TelemetryHandle> {
+		self.telemetry.clone()
+	}
+
 	fn proposing_remaining_duration(
 		&self,
 		head: &B::Header,
 		slot_info: &SlotInfo,
-	) -> Option<std::time::Duration> {
-		let slot_remaining = self.slot_remaining_duration(slot_info);
+	) -> std::time::Duration {
+		let max_proposing = slot_info.duration.mul_f32(self.block_proposal_slot_portion.get());
+
+		let slot_remaining = slot_info.ends_at
+			.checked_duration_since(std::time::Instant::now())
+			.unwrap_or_default();
+
+		let slot_remaining = std::cmp::min(slot_remaining, max_proposing);
+
+		// If parent is genesis block, we don't require any lenience factor.
+		if head.number().is_zero() {
+			return slot_remaining
+		}
 
 		let parent_slot = match find_pre_digest::<B, P::Signature>(head) {
-			Err(_) => return Some(slot_remaining),
+			Err(_) => return slot_remaining,
 			Ok(d) => d,
 		};
 
@@ -383,9 +483,9 @@ where
 				slot_lenience.as_secs(),
 			);
 
-			Some(slot_remaining + slot_lenience)
+			slot_remaining + slot_lenience
 		} else {
-			Some(slot_remaining)
+			slot_remaining
 		}
 	}
 }
@@ -446,7 +546,7 @@ fn find_pre_digest<B: BlockT, Signature: Codec>(header: &B::Header) -> Result<Sl
 /// Register the aura inherent data provider, if not registered already.
 fn register_aura_inherent_data_provider(
 	inherent_data_providers: &InherentDataProviders,
-	slot_duration: u64,
+	slot_duration: std::time::Duration,
 ) -> Result<(), sp_consensus::Error> {
 	if !inherent_data_providers.has_provider(&INHERENT_IDENTIFIER) {
 		inherent_data_providers
@@ -480,6 +580,7 @@ mod tests {
 	use super::*;
 	use sp_consensus::{
 		NoNetwork as DummyOracle, Proposal, AlwaysCanAuthor, DisableProofRecording,
+		import_queue::BoxJustificationImport,
 	};
 	use sc_network_test::{Block as TestBlock, *};
 	use sp_runtime::traits::{Block as BlockT, DigestFor};
@@ -541,13 +642,17 @@ mod tests {
 
 	const SLOT_DURATION: u64 = 1000;
 
+	type AuraVerifier = import_queue::AuraVerifier<PeersFullClient, AuthorityPair, AlwaysCanAuthor>;
+	type AuraPeer = Peer<(), PeersClient>;
+
 	pub struct AuraTestNet {
-		peers: Vec<Peer<()>>,
+		peers: Vec<AuraPeer>,
 	}
 
 	impl TestNetFactory for AuraTestNet {
-		type Verifier = import_queue::AuraVerifier<PeersFullClient, AuthorityPair, AlwaysCanAuthor>;
+		type Verifier = AuraVerifier;
 		type PeerData = ();
+		type BlockImport = PeersClient;
 
 		/// Create new test network with peers and given config.
 		fn from_config(_config: &ProtocolConfig) -> Self {
@@ -565,29 +670,38 @@ mod tests {
 					let inherent_data_providers = InherentDataProviders::new();
 					register_aura_inherent_data_provider(
 						&inherent_data_providers,
-						slot_duration.get()
+						slot_duration.slot_duration()
 					).expect("Registers aura inherent data provider");
 
-					assert_eq!(slot_duration.get(), SLOT_DURATION);
+					assert_eq!(slot_duration.slot_duration().as_millis() as u64, SLOT_DURATION);
 					import_queue::AuraVerifier::new(
 						client,
 						inherent_data_providers,
 						AlwaysCanAuthor,
 						CheckForEquivocation::Yes,
+						None,
 					)
 				},
 				PeersClient::Light(_, _) => unreachable!("No (yet) tests for light client + Aura"),
 			}
 		}
 
-		fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData> {
+		fn make_block_import(&self, client: PeersClient) -> (
+			BlockImportAdapter<Self::BlockImport>,
+			Option<BoxJustificationImport<Block>>,
+			Self::PeerData,
+		) {
+			(client.as_block_import(), None, ())
+		}
+
+		fn peer(&mut self, i: usize) -> &mut AuraPeer {
 			&mut self.peers[i]
 		}
 
-		fn peers(&self) -> &Vec<Peer<Self::PeerData>> {
+		fn peers(&self) -> &Vec<AuraPeer> {
 			&self.peers
 		}
-		fn mut_peers<F: FnOnce(&mut Vec<Peer<Self::PeerData>>)>(&mut self, closure: F) {
+		fn mut_peers<F: FnOnce(&mut Vec<AuraPeer>)>(&mut self, closure: F) {
 			closure(&mut self.peers);
 		}
 	}
@@ -633,7 +747,7 @@ mod tests {
 
 			let inherent_data_providers = InherentDataProviders::new();
 			register_aura_inherent_data_provider(
-				&inherent_data_providers, slot_duration.get()
+				&inherent_data_providers, slot_duration.slot_duration()
 			).expect("Registers aura inherent data provider");
 
 			aura_futures.push(start_aura::<AuthorityPair, _, _, _, _, _, _, _, _, _>(StartAuraParams {
@@ -648,6 +762,8 @@ mod tests {
 				backoff_authoring_blocks: Some(BackoffAuthoringOnFinalizedHeadLagging::default()),
 				keystore,
 				can_author_with: sp_consensus::AlwaysCanAuthor,
+				block_proposal_slot_portion: SlotProportion::new(0.5),
+				telemetry: None,
 			}).expect("Starts aura"));
 		}
 
@@ -701,13 +817,15 @@ mod tests {
 
 		let worker = AuraWorker {
 			client: client.clone(),
-			block_import: Arc::new(Mutex::new(client)),
+			block_import: client,
 			env: environ,
 			keystore: keystore.into(),
 			sync_oracle: DummyOracle.clone(),
 			force_authoring: false,
 			backoff_authoring_blocks: Some(BackoffAuthoringOnFinalizedHeadLagging::default()),
+			telemetry: None,
 			_key_type: PhantomData::<AuthorityPair>,
+			block_proposal_slot_portion: SlotProportion::new(0.5),
 		};
 
 		let head = Header::new(
@@ -748,13 +866,15 @@ mod tests {
 
 		let mut worker = AuraWorker {
 			client: client.clone(),
-			block_import: Arc::new(Mutex::new(client.clone())),
+			block_import: client.clone(),
 			env: environ,
 			keystore: keystore.into(),
 			sync_oracle: DummyOracle.clone(),
 			force_authoring: false,
 			backoff_authoring_blocks: Option::<()>::None,
+			telemetry: None,
 			_key_type: PhantomData::<AuthorityPair>,
+			block_proposal_slot_portion: SlotProportion::new(0.5),
 		};
 
 		let head = client.header(&BlockId::Number(0)).unwrap().unwrap();
@@ -763,10 +883,10 @@ mod tests {
 			head,
 			SlotInfo {
 				slot: 0.into(),
-				timestamp: 0,
+				timestamp: 0.into(),
 				ends_at: Instant::now() + Duration::from_secs(100),
 				inherent_data: InherentData::new(),
-				duration: 1000,
+				duration: Duration::from_millis(1000),
 			},
 		)).unwrap();
 

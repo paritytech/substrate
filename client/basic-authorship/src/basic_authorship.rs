@@ -32,7 +32,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, Hash as HashT, Header as HeaderT, DigestFor, BlakeTwo256},
 };
 use sp_transaction_pool::{TransactionPool, InPoolTransaction};
-use sc_telemetry::{telemetry, CONSENSUS_INFO};
+use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_INFO};
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sp_api::{ProvideRuntimeApi, ApiExt};
 use futures::{future, future::{Future, FutureExt}, channel::oneshot, select};
@@ -60,9 +60,10 @@ pub struct ProposerFactory<A, B, C, PR> {
 	transaction_pool: Arc<A>,
 	/// Prometheus Link,
 	metrics: PrometheusMetrics,
+	max_block_size: usize,
+	telemetry: Option<TelemetryHandle>,
 	/// phantom member to pin the `Backend`/`ProofRecording` type.
 	_phantom: PhantomData<(B, PR)>,
-	max_block_size: usize,
 }
 
 impl<A, B, C> ProposerFactory<A, B, C, DisableProofRecording> {
@@ -74,14 +75,16 @@ impl<A, B, C> ProposerFactory<A, B, C, DisableProofRecording> {
 		client: Arc<C>,
 		transaction_pool: Arc<A>,
 		prometheus: Option<&PrometheusRegistry>,
+		telemetry: Option<TelemetryHandle>,
 	) -> Self {
 		ProposerFactory {
 			spawn_handle: Box::new(spawn_handle),
-			client,
 			transaction_pool,
 			metrics: PrometheusMetrics::new(prometheus),
-			_phantom: PhantomData,
 			max_block_size: DEFAULT_MAX_BLOCK_SIZE,
+			telemetry,
+			client,
+			_phantom: PhantomData,
 		}
 	}
 }
@@ -95,14 +98,16 @@ impl<A, B, C> ProposerFactory<A, B, C, EnableProofRecording> {
 		client: Arc<C>,
 		transaction_pool: Arc<A>,
 		prometheus: Option<&PrometheusRegistry>,
+		telemetry: Option<TelemetryHandle>,
 	) -> Self {
 		ProposerFactory {
 			spawn_handle: Box::new(spawn_handle),
 			client,
 			transaction_pool,
 			metrics: PrometheusMetrics::new(prometheus),
-			_phantom: PhantomData,
 			max_block_size: DEFAULT_MAX_BLOCK_SIZE,
+			telemetry,
+			_phantom: PhantomData,
 		}
 	}
 }
@@ -147,8 +152,9 @@ impl<B, Block, C, A, PR> ProposerFactory<A, B, C, PR>
 			transaction_pool: self.transaction_pool.clone(),
 			now,
 			metrics: self.metrics.clone(),
-			_phantom: PhantomData,
 			max_block_size: self.max_block_size,
+			telemetry: self.telemetry.clone(),
+			_phantom: PhantomData,
 		};
 
 		proposer
@@ -189,8 +195,9 @@ pub struct Proposer<B, Block: BlockT, C, A: TransactionPool, PR> {
 	transaction_pool: Arc<A>,
 	now: Box<dyn Fn() -> time::Instant + Send + Sync>,
 	metrics: PrometheusMetrics,
-	_phantom: PhantomData<(B, PR)>,
 	max_block_size: usize,
+	telemetry: Option<TelemetryHandle>,
+	_phantom: PhantomData<(B, PR)>,
 }
 
 impl<A, B, Block, C, PR> sp_consensus::Proposer<Block> for
@@ -371,7 +378,10 @@ impl<A, B, Block, C, PR> Proposer<B, Block, C, A, PR>
 				.collect::<Vec<_>>()
 				.join(", ")
 		);
-		telemetry!(CONSENSUS_INFO; "prepared_block_for_proposing";
+		telemetry!(
+			self.telemetry;
+			CONSENSUS_INFO;
+			"prepared_block_for_proposing";
 			"number" => ?block.header().number(),
 			"hash" => ?<Block as BlockT>::Hash::from(block.header().hash()),
 		);
@@ -410,6 +420,7 @@ mod tests {
 	use sp_blockchain::HeaderBackend;
 	use sp_runtime::traits::NumberFor;
 	use sc_client_api::Backend;
+	use futures::executor::block_on;
 
 	const SOURCE: TransactionSource = TransactionSource::External;
 
@@ -444,11 +455,11 @@ mod tests {
 			client.clone(),
 		);
 
-		futures::executor::block_on(
+		block_on(
 			txpool.submit_at(&BlockId::number(0), SOURCE, vec![extrinsic(0), extrinsic(1)])
 		).unwrap();
 
-		futures::executor::block_on(
+		block_on(
 			txpool.maintain(chain_event(
 				client.header(&BlockId::Number(0u64))
 					.expect("header get error")
@@ -460,6 +471,7 @@ mod tests {
 			spawner.clone(),
 			client.clone(),
 			txpool.clone(),
+			None,
 			None,
 		);
 
@@ -481,7 +493,7 @@ mod tests {
 
 		// when
 		let deadline = time::Duration::from_secs(3);
-		let block = futures::executor::block_on(
+		let block = block_on(
 			proposer.propose(Default::default(), Default::default(), deadline)
 		).map(|r| r.block).unwrap();
 
@@ -508,6 +520,7 @@ mod tests {
 			client.clone(),
 			txpool.clone(),
 			None,
+			None,
 		);
 
 		let cell = Mutex::new((false, time::Instant::now()));
@@ -526,7 +539,7 @@ mod tests {
 		);
 
 		let deadline = time::Duration::from_secs(1);
-		futures::executor::block_on(
+		block_on(
 			proposer.propose(Default::default(), Default::default(), deadline)
 		).map(|r| r.block).unwrap();
 	}
@@ -547,11 +560,11 @@ mod tests {
 		let genesis_hash = client.info().best_hash;
 		let block_id = BlockId::Hash(genesis_hash);
 
-		futures::executor::block_on(
+		block_on(
 			txpool.submit_at(&BlockId::number(0), SOURCE, vec![extrinsic(0)]),
 		).unwrap();
 
-		futures::executor::block_on(
+		block_on(
 			txpool.maintain(chain_event(
 				client.header(&BlockId::Number(0u64))
 					.expect("header get error")
@@ -564,6 +577,7 @@ mod tests {
 			client.clone(),
 			txpool.clone(),
 			None,
+			None,
 		);
 
 		let proposer = proposer_factory.init_with_now(
@@ -572,7 +586,7 @@ mod tests {
 		);
 
 		let deadline = time::Duration::from_secs(9);
-		let proposal = futures::executor::block_on(
+		let proposal = block_on(
 			proposer.propose(Default::default(), Default::default(), deadline),
 		).unwrap();
 
@@ -612,7 +626,7 @@ mod tests {
 			client.clone(),
 		);
 
-		futures::executor::block_on(
+		block_on(
 			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
 				extrinsic(0),
 				extrinsic(1),
@@ -639,6 +653,7 @@ mod tests {
 			client.clone(),
 			txpool.clone(),
 			None,
+			None,
 		);
 		let mut propose_block = |
 			client: &TestClient,
@@ -653,7 +668,7 @@ mod tests {
 
 			// when
 			let deadline = time::Duration::from_secs(9);
-			let block = futures::executor::block_on(
+			let block = block_on(
 				proposer.propose(Default::default(), Default::default(), deadline)
 			).map(|r| r.block).unwrap();
 
@@ -665,7 +680,7 @@ mod tests {
 			block
 		};
 
-		futures::executor::block_on(
+		block_on(
 			txpool.maintain(chain_event(
 				client.header(&BlockId::Number(0u64))
 					.expect("header get error")
@@ -675,9 +690,9 @@ mod tests {
 
 		// let's create one block and import it
 		let block = propose_block(&client, 0, 2, 7);
-		client.import(BlockOrigin::Own, block).unwrap();
+		block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
-		futures::executor::block_on(
+		block_on(
 			txpool.maintain(chain_event(
 				client.header(&BlockId::Number(1))
 					.expect("header get error")
@@ -687,6 +702,6 @@ mod tests {
 
 		// now let's make sure that we can still make some progress
 		let block = propose_block(&client, 1, 2, 5);
-		client.import(BlockOrigin::Own, block).unwrap();
+		block_on(client.import(BlockOrigin::Own, block)).unwrap();
 	}
 }

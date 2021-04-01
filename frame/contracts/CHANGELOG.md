@@ -16,7 +16,20 @@ The interface provided to smart contracts will adhere to semver with one excepti
 major version bumps will be backwards compatible with regard to already deployed contracts.
 In other words: Upgrading this pallet will not break pre-existing contracts.
 
-## [v3.0.0]
+## [Unreleased]
+
+### Added
+
+- Make storage and fields of `Schedule` private to the crate.
+[1](https://github.com/paritytech/substrate/pull/8359)
+
+- Add new version of `seal_random` which exposes additional information.
+[1](https://github.com/paritytech/substrate/pull/8329)
+
+- Add `seal_rent_params` contract callable function.
+[1](https://github.com/paritytech/substrate/pull/8231)
+
+## [v3.0.0] 2021-02-25
 
 This version constitutes the first release that brings any stability guarantees (see above).
 
