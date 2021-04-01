@@ -9081,7 +9081,6 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "parking_lot 0.10.2",
- "rustc-hash",
  "serde",
  "serde_json",
  "slog",
