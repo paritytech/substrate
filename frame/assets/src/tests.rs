@@ -598,22 +598,26 @@ fn force_metadata_should_work() {
 fn force_asset_status_should_work(){
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&1, 10);
+		Balances::make_free_balance_be(&2, 10);
 		assert_ok!(Assets::create(Origin::signed(1), 0, 1, 30));
-		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 50));
+		assert_ok!(Assets::mint(Origin::signed(1), 0, 2, 150));
 
 		//force asset status to change min_balance > balance 
-		assert_ok!(Assets::force_asset_status(Origin::root(), 0, 1, 1, 1, 1, 101, true, false));
-		assert_eq!(Assets::balance(0, 1), 100);
-		//asset in practice becomes frozen until balance >= min_balance 
-		assert_noop!(
-			Assets::transfer(Origin::signed(1), 0, 2, 50),
-			DispatchError::Token(TokenError::BelowMinimum)
-		);
+		assert_ok!(Assets::force_asset_status(Origin::root(), 0, 1, 1, 1, 1, 100, true, false));
+		assert_eq!(Assets::balance(0, 1), 50);
 
-		//give account asset so balance == min_balance 
-		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 1));
-		assert_eq!(Assets::balance(0, 1), 101);
-		
+		//account can recieve assets for balance < min_balance
+		assert_ok!(Assets::transfer(Origin::signed(2), 0, 1, 1));
+		assert_eq!(Assets::balance(0, 1), 51);
+
+		//account on outbound transfer will cleanup for balance < min_balance
+		assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 1));
+		assert_eq!(Assets::balance(0,1), 0);
+
+		//won't create new account with balance below min_balance
+		assert_noop!(Assets::transfer(Origin::signed(2), 0, 3, 50), TokenError::BelowMinimum);
+
 		//force asset status will not execute for non-existent class
 		assert_noop!(
 			Assets::force_asset_status(Origin::root(), 1, 1, 1, 1, 1, 90, true, false),
@@ -621,10 +625,10 @@ fn force_asset_status_should_work(){
 		);
 
 		//account drains to completion when funds dip below min_balance
-		assert_ok!(Assets::force_asset_status(Origin::root(), 0, 1, 1, 1, 1, 90, true, false));
-		assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
-		assert_eq!(Assets::balance(0, 1), 0);
-		assert_eq!(Assets::balance(0, 2), 101);
-		assert_eq!(Assets::total_supply(0), 101);
+		assert_ok!(Assets::force_asset_status(Origin::root(), 0, 1, 1, 1, 1, 110, true, false));
+		assert_ok!(Assets::transfer(Origin::signed(2), 0, 1, 110));
+		assert_eq!(Assets::balance(0, 1), 200);
+		assert_eq!(Assets::balance(0, 2), 0);
+		assert_eq!(Assets::total_supply(0), 200);
 	});
 }
