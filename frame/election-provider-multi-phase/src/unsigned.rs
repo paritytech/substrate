@@ -79,7 +79,13 @@ fn save_solution<T: Config>(call: &Call<T>) -> Result<(), MinerError> {
 	match storage.mutate::<_, (), _>(|_| Ok(call.clone())) {
 		Ok(Ok(_)) => Ok(()),
 		Ok(Err(_)) => Err(MinerError::FailedToStoreSolution),
-		Err(_) => unreachable!("mutation function cannot fail; qed"),
+		Err(_) => {
+			// this branch should be unreachable according to the definition of `StorageValueRef::mutate`:
+			// that function should only ever `Err` if the closure we pass it return an error.
+			// however, for safety in case the definition changes, we do not optimize the branch away
+			// or panic.
+			Err(MinerError::FailedToStoreSolution)
+		},
 	}
 }
 
