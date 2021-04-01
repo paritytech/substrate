@@ -57,6 +57,8 @@ pub enum MinerError {
 	NoStoredSolution,
 	/// Cached solution does not match the current round.
 	SolutionOutOfDate,
+	/// Cached solution is not a `submit_unsigned` call.
+	SolutionCallInvalid,
 	/// Failed to store a solution.
 	FailedToStoreSolution,
 }
@@ -116,8 +118,8 @@ impl<T: Config> Pallet<T> {
 			.and_then(|call| {
 				// ensure the cached call is still current before submitting
 				let current_round = Self::round();
-				match &call {
-					Call::submit_unsigned(solution, _) if solution.round == current_round => {
+				if let Call::submit_unsigned(solution, _) = &call {
+					if solution.round == current_round {
 						let score = solution.score.clone();
 
 						log!(
@@ -128,8 +130,11 @@ impl<T: Config> Pallet<T> {
 						);
 
 						Ok((call, score))
+					} else {
+						Err(MinerError::SolutionOutOfDate)
 					}
-					_ => Err(MinerError::SolutionOutOfDate),
+				} else {
+					Err(MinerError::SolutionCallInvalid)
 				}
 			})
 			.or_else::<MinerError, _>(|_| {
