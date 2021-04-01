@@ -92,9 +92,9 @@
 //!
 //! ### Module Information
 //!
-//! - [`election_sp_phragmen::Config`](./trait.Config.html)
-//! - [`Call`](./enum.Call.html)
-//! - [`Module`](./struct.Module.html)
+//! - [`Config`]
+//! - [`Call`]
+//! - [`Module`]
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -1084,7 +1084,7 @@ mod tests {
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
-	type SS58Prefix = ();
+		type SS58Prefix = ();
 	}
 
 	parameter_types! {
@@ -1096,7 +1096,7 @@ mod tests {
 		type Event = Event;
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
-		type AccountStore = frame_system::Module<Test>;
+		type AccountStore = frame_system::Pallet<Test>;
 		type MaxLocks = ();
 		type WeightInfo = ();
 	}
@@ -1187,9 +1187,9 @@ mod tests {
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic
 		{
-			System: frame_system::{Module, Call, Event<T>},
-			Balances: pallet_balances::{Module, Call, Event<T>, Config<T>},
-			Elections: elections_phragmen::{Module, Call, Event<T>, Config<T>},
+			System: frame_system::{Pallet, Call, Event<T>},
+			Balances: pallet_balances::{Pallet, Call, Event<T>, Config<T>},
+			Elections: elections_phragmen::{Pallet, Call, Event<T>, Config<T>},
 		}
 	);
 
@@ -1308,7 +1308,6 @@ mod tests {
 	}
 
 	fn has_lock(who: &u64) -> u64 {
-		dbg!(Balances::locks(who));
 		Balances::locks(who)
 			.get(0)
 			.cloned()

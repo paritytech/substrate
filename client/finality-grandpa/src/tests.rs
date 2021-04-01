@@ -28,9 +28,9 @@ use sc_network_test::{
 use sc_network::config::ProtocolConfig;
 use parking_lot::{RwLock, Mutex};
 use futures_timer::Delay;
+use futures::executor::block_on;
 use tokio::runtime::{Runtime, Handle};
 use sp_keyring::Ed25519Keyring;
-use sc_client_api::backend::TransactionFor;
 use sp_blockchain::Result;
 use sp_api::{ApiRef, ProvideRuntimeApi};
 use substrate_test_runtime_client::runtime::BlockNumber;
@@ -39,11 +39,13 @@ use sp_consensus::{
 	import_queue::BoxJustificationImport,
 };
 use std::{collections::{HashMap, HashSet}, pin::Pin};
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
+use sp_runtime::{Justifications, traits::{Block as BlockT, Header as HeaderT}};
 use sp_runtime::generic::{BlockId, DigestItem};
 use sp_core::H256;
 use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
-use sp_finality_grandpa::{GRANDPA_ENGINE_ID, AuthorityList, EquivocationProof, GrandpaApi, OpaqueKeyOwnershipProof};
+use sp_finality_grandpa::{
+	GRANDPA_ENGINE_ID, AuthorityList, EquivocationProof, GrandpaApi, OpaqueKeyOwnershipProof,
+};
 
 use authorities::AuthoritySet;
 use sc_block_builder::BlockBuilderProvider;
@@ -54,7 +56,13 @@ use sp_application_crypto::key_types::GRANDPA;
 type TestLinkHalf =
 	LinkHalf<Block, PeersFullClient, LongestChain<substrate_test_runtime_client::Backend, Block>>;
 type PeerData = Mutex<Option<TestLinkHalf>>;
-type GrandpaPeer = Peer<PeerData>;
+type GrandpaPeer = Peer<PeerData, GrandpaBlockImport>;
+type GrandpaBlockImport = crate::GrandpaBlockImport<
+	substrate_test_runtime_client::Backend,
+	Block,
+	PeersFullClient,
+	LongestChain<substrate_test_runtime_client::Backend, Block>
+>;
 
 struct GrandpaTestNet {
 	peers: Vec<GrandpaPeer>,
@@ -62,21 +70,38 @@ struct GrandpaTestNet {
 }
 
 impl GrandpaTestNet {
-	fn new(test_config: TestApi, n_peers: usize) -> Self {
+	fn new(test_config: TestApi, n_authority: usize, n_full: usize) -> Self {
 		let mut net = GrandpaTestNet {
-			peers: Vec::with_capacity(n_peers),
+			peers: Vec::with_capacity(n_authority + n_full),
 			test_config,
 		};
-		for _ in 0..n_peers {
+
+		for _ in 0..n_authority {
+			net.add_authority_peer();
+		}
+
+		for _ in 0..n_full {
 			net.add_full_peer();
 		}
+
 		net
+	}
+}
+
+impl GrandpaTestNet {
+	fn add_authority_peer(&mut self) {
+		self.add_full_peer_with_config(FullPeerConfig {
+			notifications_protocols: vec![communication::GRANDPA_PROTOCOL_NAME.into()],
+			is_authority: true,
+			..Default::default()
+		})
 	}
 }
 
 impl TestNetFactory for GrandpaTestNet {
 	type Verifier = PassThroughVerifier;
 	type PeerData = PeerData;
+	type BlockImport = GrandpaBlockImport;
 
 	/// Create new test network with peers and given config.
 	fn from_config(_config: &ProtocolConfig) -> Self {
@@ -94,6 +119,7 @@ impl TestNetFactory for GrandpaTestNet {
 	fn add_full_peer(&mut self) {
 		self.add_full_peer_with_config(FullPeerConfig {
 			notifications_protocols: vec![communication::GRANDPA_PROTOCOL_NAME.into()],
+			is_authority: false,
 			..Default::default()
 		})
 	}
@@ -107,9 +133,9 @@ impl TestNetFactory for GrandpaTestNet {
 		PassThroughVerifier::new(false) // use non-instant finality.
 	}
 
-	fn make_block_import<Transaction>(&self, client: PeersClient)
+	fn make_block_import(&self, client: PeersClient)
 		-> (
-			BlockImportAdapter<Transaction>,
+			BlockImportAdapter<Self::BlockImport>,
 			Option<BoxJustificationImport<Block>>,
 			PeerData,
 		)
@@ -124,7 +150,7 @@ impl TestNetFactory for GrandpaTestNet {
 				).expect("Could not create block import for fresh peer.");
 				let justification_import = Box::new(import.clone());
 				(
-					BlockImportAdapter::new_full(import),
+					BlockImportAdapter::new(import),
 					Some(justification_import),
 					Mutex::new(Some(link)),
 				)
@@ -354,7 +380,7 @@ fn finalize_3_voters_no_observers() {
 	let peers = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let voters = make_ids(peers);
 
-	let mut net = GrandpaTestNet::new(TestApi::new(voters), 3);
+	let mut net = GrandpaTestNet::new(TestApi::new(voters), 3, 0);
 	runtime.spawn(initialize_grandpa(&mut net, peers));
 	net.peer(0).push_blocks(20, false);
 	net.block_until_sync();
@@ -369,7 +395,7 @@ fn finalize_3_voters_no_observers() {
 
 	// normally there's no justification for finalized blocks
 	assert!(
-		net.lock().peer(0).client().justification(&BlockId::Number(20)).unwrap().is_none(),
+		net.lock().peer(0).client().justifications(&BlockId::Number(20)).unwrap().is_none(),
 		"Extra justification for block#1",
 	);
 }
@@ -381,7 +407,7 @@ fn finalize_3_voters_1_full_observer() {
 	let peers = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let voters = make_ids(peers);
 
-	let mut net = GrandpaTestNet::new(TestApi::new(voters), 4);
+	let mut net = GrandpaTestNet::new(TestApi::new(voters), 3, 1);
 	runtime.spawn(initialize_grandpa(&mut net, peers));
 
 	runtime.spawn({
@@ -425,10 +451,19 @@ fn finalize_3_voters_1_full_observer() {
 	}
 
 	// wait for all finalized on each.
-	let wait_for = futures::future::join_all(finality_notifications)
-		.map(|_| ());
+	let wait_for = futures::future::join_all(finality_notifications).map(|_| ());
 
 	block_until_complete(wait_for, &net, &mut runtime);
+
+	// all peers should have stored the justification for the best finalized block #20
+	for peer_id in 0..4 {
+		let client = net.lock().peers[peer_id].client().as_full().unwrap();
+		let justification = crate::aux_schema::best_justification::<_, Block>(&*client)
+			.unwrap()
+			.unwrap();
+
+		assert_eq!(justification.commit.target_number, 20);
+	}
 }
 
 #[test]
@@ -464,7 +499,7 @@ fn transition_3_voters_twice_1_full_observer() {
 	let genesis_voters = make_ids(peers_a);
 
 	let api = TestApi::new(genesis_voters);
-	let net = Arc::new(Mutex::new(GrandpaTestNet::new(api, 8)));
+	let net = Arc::new(Mutex::new(GrandpaTestNet::new(api, 8, 1)));
 
 	let mut runtime = Runtime::new().unwrap();
 
@@ -602,7 +637,7 @@ fn justification_is_generated_periodically() {
 	let peers = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let voters = make_ids(peers);
 
-	let mut net = GrandpaTestNet::new(TestApi::new(voters), 3);
+	let mut net = GrandpaTestNet::new(TestApi::new(voters), 3, 0);
 	runtime.spawn(initialize_grandpa(&mut net, peers));
 	net.peer(0).push_blocks(32, false);
 	net.block_until_sync();
@@ -613,7 +648,7 @@ fn justification_is_generated_periodically() {
 	// when block#32 (justification_period) is finalized, justification
 	// is required => generated
 	for i in 0..3 {
-		assert!(net.lock().peer(i).client().justification(&BlockId::Number(32)).unwrap().is_some());
+		assert!(net.lock().peer(i).client().justifications(&BlockId::Number(32)).unwrap().is_some());
 	}
 }
 
@@ -626,7 +661,7 @@ fn sync_justifications_on_change_blocks() {
 
 	// 4 peers, 3 of them are authorities and participate in grandpa
 	let api = TestApi::new(voters);
-	let mut net = GrandpaTestNet::new(api, 4);
+	let mut net = GrandpaTestNet::new(api, 3, 1);
 	let voters = initialize_grandpa(&mut net, peers_a);
 
 	// add 20 blocks
@@ -658,12 +693,12 @@ fn sync_justifications_on_change_blocks() {
 	// the first 3 peers are grandpa voters and therefore have already finalized
 	// block 21 and stored a justification
 	for i in 0..3 {
-		assert!(net.lock().peer(i).client().justification(&BlockId::Number(21)).unwrap().is_some());
+		assert!(net.lock().peer(i).client().justifications(&BlockId::Number(21)).unwrap().is_some());
 	}
 
 	// the last peer should get the justification by syncing from other peers
 	futures::executor::block_on(futures::future::poll_fn(move |cx| {
-		if net.lock().peer(3).client().justification(&BlockId::Number(21)).unwrap().is_none() {
+		if net.lock().peer(3).client().justifications(&BlockId::Number(21)).unwrap().is_none() {
 			net.lock().poll(cx);
 			Poll::Pending
 		} else {
@@ -688,8 +723,10 @@ fn finalizes_multiple_pending_changes_in_order() {
 	let genesis_voters = make_ids(peers_a);
 
 	// 6 peers, 3 of them are authorities and participate in grandpa from genesis
+	// but all of them will be part of the voter set eventually so they should be
+	// all added to the network as authorities
 	let api = TestApi::new(genesis_voters);
-	let mut net = GrandpaTestNet::new(api, 6);
+	let mut net = GrandpaTestNet::new(api, 6, 0);
 	runtime.spawn(initialize_grandpa(&mut net, all_peers));
 
 	// add 20 blocks
@@ -749,7 +786,7 @@ fn force_change_to_new_set() {
 	let api = TestApi::new(make_ids(genesis_authorities));
 
 	let voters = make_ids(peers_a);
-	let mut net = GrandpaTestNet::new(api, 3);
+	let mut net = GrandpaTestNet::new(api, 3, 0);
 	let voters_future = initialize_grandpa(&mut net, peers_a);
 	let net = Arc::new(Mutex::new(net));
 
@@ -798,14 +835,10 @@ fn allows_reimporting_change_blocks() {
 	let peers_b = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob];
 	let voters = make_ids(peers_a);
 	let api = TestApi::new(voters);
-	let mut net = GrandpaTestNet::new(api.clone(), 3);
+	let mut net = GrandpaTestNet::new(api.clone(), 3, 0);
 
 	let client = net.peer(0).client().clone();
-	let (mut block_import, ..) = net.make_block_import::<
-		TransactionFor<substrate_test_runtime_client::Backend, Block>
-	>(
-		client.clone(),
-	);
+	let (mut block_import, ..) = net.make_block_import(client.clone());
 
 	let full_client = client.as_full().unwrap();
 	let builder = full_client.new_block_at(&BlockId::Number(0), Default::default(), false).unwrap();
@@ -825,7 +858,7 @@ fn allows_reimporting_change_blocks() {
 	};
 
 	assert_eq!(
-		block_import.import_block(block(), HashMap::new()).unwrap(),
+		block_on(block_import.import_block(block(), HashMap::new())).unwrap(),
 		ImportResult::Imported(ImportedAux {
 			needs_justification: true,
 			clear_justification_requests: false,
@@ -836,7 +869,7 @@ fn allows_reimporting_change_blocks() {
 	);
 
 	assert_eq!(
-		block_import.import_block(block(), HashMap::new()).unwrap(),
+		block_on(block_import.import_block(block(), HashMap::new())).unwrap(),
 		ImportResult::AlreadyInChain
 	);
 }
@@ -847,14 +880,10 @@ fn test_bad_justification() {
 	let peers_b = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob];
 	let voters = make_ids(peers_a);
 	let api = TestApi::new(voters);
-	let mut net = GrandpaTestNet::new(api.clone(), 3);
+	let mut net = GrandpaTestNet::new(api.clone(), 3, 0);
 
 	let client = net.peer(0).client().clone();
-	let (mut block_import, ..) = net.make_block_import::<
-		TransactionFor<substrate_test_runtime_client::Backend, Block>
-	>(
-		client.clone(),
-	);
+	let (mut block_import, ..) = net.make_block_import(client.clone());
 
 	let full_client = client.as_full().expect("only full clients are used in test");
 	let builder = full_client.new_block_at(&BlockId::Number(0), Default::default(), false).unwrap();
@@ -868,7 +897,7 @@ fn test_bad_justification() {
 	let block = || {
 		let block = block.clone();
 		let mut import = BlockImportParams::new(BlockOrigin::File, block.header);
-		import.justification = Some(Vec::new());
+		import.justifications = Some(Justifications::from((GRANDPA_ENGINE_ID, Vec::new())));
 		import.body = Some(block.extrinsics);
 		import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
@@ -876,7 +905,7 @@ fn test_bad_justification() {
 	};
 
 	assert_eq!(
-		block_import.import_block(block(), HashMap::new()).unwrap(),
+		block_on(block_import.import_block(block(), HashMap::new())).unwrap(),
 		ImportResult::Imported(ImportedAux {
 			needs_justification: true,
 			clear_justification_requests: false,
@@ -887,7 +916,7 @@ fn test_bad_justification() {
 	);
 
 	assert_eq!(
-		block_import.import_block(block(), HashMap::new()).unwrap(),
+		block_on(block_import.import_block(block(), HashMap::new())).unwrap(),
 		ImportResult::AlreadyInChain
 	);
 }
@@ -907,7 +936,7 @@ fn voter_persists_its_votes() {
 	let voters = make_ids(peers);
 
 	// alice has a chain with 20 blocks
-	let mut net = GrandpaTestNet::new(TestApi::new(voters.clone()), 2);
+	let mut net = GrandpaTestNet::new(TestApi::new(voters.clone()), 2, 0);
 
 	// create the communication layer for bob, but don't start any
 	// voter. instead we'll listen for the prevote that alice casts
@@ -931,9 +960,7 @@ fn voter_persists_its_votes() {
 		let set_state = {
 			let bob_client = net.peer(1).client().clone();
 			let (_, _, link) = net
-				.make_block_import::<
-					TransactionFor<substrate_test_runtime_client::Backend, Block>
-				>(bob_client);
+				.make_block_import(bob_client);
 			let LinkHalf { persistent_data, .. } = link.lock().take().unwrap();
 			let PersistentData { set_state, .. } = persistent_data;
 			set_state
@@ -992,7 +1019,7 @@ fn voter_persists_its_votes() {
 
 		// we add a new peer to the test network and we'll use
 		// the network service of this new peer
-		net.add_full_peer();
+		net.add_authority_peer();
 		let net_service = net.peers[2].network_service().clone();
 		// but we'll reuse the client from the first peer (alice_voter1)
 		// since we want to share the same database, so that we can
@@ -1000,9 +1027,7 @@ fn voter_persists_its_votes() {
 		let alice_client = net.peer(0).client().clone();
 
 		let (_block_import, _, link) = net
-			.make_block_import::<
-				TransactionFor<substrate_test_runtime_client::Backend, Block>
-			>(alice_client);
+			.make_block_import(alice_client);
 		let link = link.lock().take().unwrap();
 
 		let grandpa_params = GrandpaParams {
@@ -1163,7 +1188,7 @@ fn finalize_3_voters_1_light_observer() {
 	let authorities = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let voters = make_ids(authorities);
 
-	let mut net = GrandpaTestNet::new(TestApi::new(voters), 4);
+	let mut net = GrandpaTestNet::new(TestApi::new(voters), 3, 1);
 	let voters = initialize_grandpa(&mut net, authorities);
 	let observer = observer::run_grandpa_observer(
 		Config {
@@ -1201,7 +1226,7 @@ fn voter_catches_up_to_latest_round_when_behind() {
 	let peers = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob];
 	let voters = make_ids(peers);
 
-	let net = GrandpaTestNet::new(TestApi::new(voters), 2);
+	let net = GrandpaTestNet::new(TestApi::new(voters), 2, 0);
 
 	let net = Arc::new(Mutex::new(net));
 	let mut finality_notifications = Vec::new();
@@ -1269,7 +1294,7 @@ fn voter_catches_up_to_latest_round_when_behind() {
 		let runtime = runtime.handle().clone();
 
 		wait_for_finality.then(move |_| {
-			net.lock().add_full_peer();
+			net.lock().add_authority_peer();
 
 			let link = {
 				let net = net.lock();
@@ -1373,7 +1398,7 @@ fn grandpa_environment_respects_voting_rules() {
 	let peers = &[Ed25519Keyring::Alice];
 	let voters = make_ids(peers);
 
-	let mut net = GrandpaTestNet::new(TestApi::new(voters), 1);
+	let mut net = GrandpaTestNet::new(TestApi::new(voters), 1, 0);
 	let peer = net.peer(0);
 	let network_service = peer.network_service().clone();
 	let link = peer.data.lock().take().unwrap();
@@ -1403,7 +1428,7 @@ fn grandpa_environment_respects_voting_rules() {
 
 	// the unrestricted environment should just return the best block
 	assert_eq!(
-		futures::executor::block_on(unrestricted_env.best_chain_containing(
+		block_on(unrestricted_env.best_chain_containing(
 			peer.client().info().finalized_hash
 		)).unwrap().unwrap().1,
 		21,
@@ -1412,14 +1437,14 @@ fn grandpa_environment_respects_voting_rules() {
 	// both the other environments should return block 16, which is 3/4 of the
 	// way in the unfinalized chain
 	assert_eq!(
-		futures::executor::block_on(three_quarters_env.best_chain_containing(
+		block_on(three_quarters_env.best_chain_containing(
 			peer.client().info().finalized_hash
 		)).unwrap().unwrap().1,
 		16,
 	);
 
 	assert_eq!(
-		futures::executor::block_on(default_env.best_chain_containing(
+		block_on(default_env.best_chain_containing(
 			peer.client().info().finalized_hash
 		)).unwrap().unwrap().1,
 		16,
@@ -1430,7 +1455,7 @@ fn grandpa_environment_respects_voting_rules() {
 
 	// the 3/4 environment should propose block 21 for voting
 	assert_eq!(
-		futures::executor::block_on(three_quarters_env.best_chain_containing(
+		block_on(three_quarters_env.best_chain_containing(
 			peer.client().info().finalized_hash
 		)).unwrap().unwrap().1,
 		21,
@@ -1439,7 +1464,7 @@ fn grandpa_environment_respects_voting_rules() {
 	// while the default environment will always still make sure we don't vote
 	// on the best block (2 behind)
 	assert_eq!(
-		futures::executor::block_on(default_env.best_chain_containing(
+		block_on(default_env.best_chain_containing(
 			peer.client().info().finalized_hash
 		)).unwrap().unwrap().1,
 		19,
@@ -1452,7 +1477,7 @@ fn grandpa_environment_respects_voting_rules() {
 	// best block, there's a hard rule that we can't cast any votes lower than
 	// the given base (#21).
 	assert_eq!(
-		futures::executor::block_on(default_env.best_chain_containing(
+		block_on(default_env.best_chain_containing(
 			peer.client().info().finalized_hash
 		)).unwrap().unwrap().1,
 		21,
@@ -1466,7 +1491,7 @@ fn grandpa_environment_never_overwrites_round_voter_state() {
 	let peers = &[Ed25519Keyring::Alice];
 	let voters = make_ids(peers);
 
-	let mut net = GrandpaTestNet::new(TestApi::new(voters), 1);
+	let mut net = GrandpaTestNet::new(TestApi::new(voters), 1, 0);
 	let peer = net.peer(0);
 	let network_service = peer.network_service().clone();
 	let link = peer.data.lock().take().unwrap();
@@ -1535,12 +1560,10 @@ fn imports_justification_for_regular_blocks_on_import() {
 	let peers = &[Ed25519Keyring::Alice];
 	let voters = make_ids(peers);
 	let api = TestApi::new(voters);
-	let mut net = GrandpaTestNet::new(api.clone(), 1);
+	let mut net = GrandpaTestNet::new(api.clone(), 1, 0);
 
 	let client = net.peer(0).client().clone();
-	let (mut block_import, ..) = net.make_block_import::<
-		TransactionFor<substrate_test_runtime_client::Backend, Block>
-	>(client.clone());
+	let (mut block_import, ..) = net.make_block_import(client.clone());
 
 	let full_client = client.as_full().expect("only full clients are used in test");
 	let builder = full_client.new_block_at(&BlockId::Number(0), Default::default(), false).unwrap();
@@ -1583,12 +1606,12 @@ fn imports_justification_for_regular_blocks_on_import() {
 
 	// we import the block with justification attached
 	let mut import = BlockImportParams::new(BlockOrigin::File, block.header);
-	import.justification = Some(justification.encode());
+	import.justifications = Some((GRANDPA_ENGINE_ID, justification.encode()).into());
 	import.body = Some(block.extrinsics);
 	import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
 	assert_eq!(
-		block_import.import_block(import, HashMap::new()).unwrap(),
+		block_on(block_import.import_block(import, HashMap::new())).unwrap(),
 		ImportResult::Imported(ImportedAux {
 			needs_justification: false,
 			clear_justification_requests: false,
@@ -1600,7 +1623,7 @@ fn imports_justification_for_regular_blocks_on_import() {
 
 	// the justification should be imported and available from the client
 	assert!(
-		client.justification(&BlockId::Hash(block_hash)).unwrap().is_some(),
+		client.justifications(&BlockId::Hash(block_hash)).unwrap().is_some(),
 	);
 }
 
@@ -1612,7 +1635,7 @@ fn grandpa_environment_doesnt_send_equivocation_reports_for_itself() {
 	let voters = make_ids(&[alice]);
 
 	let environment = {
-		let mut net = GrandpaTestNet::new(TestApi::new(voters), 1);
+		let mut net = GrandpaTestNet::new(TestApi::new(voters), 1, 0);
 		let peer = net.peer(0);
 		let network_service = peer.network_service().clone();
 		let link = peer.data.lock().take().unwrap();

@@ -27,7 +27,7 @@ use sp_runtime::{
 };
 use frame_system::InitKind;
 use frame_support::{
-	parameter_types, StorageValue,
+	parameter_types,
 	traits::{KeyOwnerProofSystem, OnInitialize},
 	weights::Weight,
 };
@@ -51,14 +51,14 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
-		Historical: pallet_session_historical::{Module},
-		Offences: pallet_offences::{Module, Call, Storage, Event},
-		Babe: pallet_babe::{Module, Call, Storage, Config, ValidateUnsigned},
-		Staking: pallet_staking::{Module, Call, Storage, Config<T>, Event<T>},
-		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
-		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Historical: pallet_session_historical::{Pallet},
+		Offences: pallet_offences::{Pallet, Call, Storage, Event},
+		Babe: pallet_babe::{Pallet, Call, Storage, Config, ValidateUnsigned},
+		Staking: pallet_staking::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
+		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
 	}
 );
 
@@ -104,7 +104,7 @@ where
 
 impl_opaque_keys! {
 	pub struct MockSessionKeys {
-		pub babe_authority: super::Module<Test>,
+		pub babe_authority: super::Pallet<Test>,
 	}
 }
 
@@ -193,6 +193,7 @@ impl onchain::Config for Test {
 }
 
 impl pallet_staking::Config for Test {
+	const MAX_NOMINATIONS: u32 = 16;
 	type RewardRemainder = ();
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type Event = Event;
@@ -204,16 +205,10 @@ impl pallet_staking::Config for Test {
 	type SlashDeferDuration = SlashDeferDuration;
 	type SlashCancelOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type SessionInterface = Self;
-	type UnixTime = pallet_timestamp::Module<Test>;
+	type UnixTime = pallet_timestamp::Pallet<Test>;
 	type EraPayout = pallet_staking::ConvertCurve<RewardCurve>;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type NextNewSession = Session;
-	type ElectionLookahead = ElectionLookahead;
-	type Call = Call;
-	type UnsignedPriority = StakingUnsignedPriority;
-	type MaxIterations = ();
-	type MinSolutionScoreBump = ();
-	type OffchainSolutionWeightLimit = ();
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type WeightInfo = ();
 }
@@ -451,7 +446,7 @@ pub fn generate_equivocation_proof(
 	use sp_consensus_babe::digests::CompatibleDigestItem;
 
 	let current_block = System::block_number();
-	let current_slot = CurrentSlot::get();
+	let current_slot = CurrentSlot::<Test>::get();
 
 	let make_header = || {
 		let parent_hash = System::parent_hash();

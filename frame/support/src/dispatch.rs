@@ -1375,11 +1375,11 @@ macro_rules! decl_module {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?> $module<$trait_instance $(, $instance)?>
 			where $( $other_where_bounds )*
 		{
-			/// Deposits an event using `frame_system::Module::deposit_event`.
+			/// Deposits an event using `frame_system::Pallet::deposit_event`.
 			$vis fn deposit_event(
 				event: impl Into<< $trait_instance as $trait_name $(<$instance>)? >::Event>
 			) {
-				<$system::Module<$trait_instance>>::deposit_event(event.into())
+				<$system::Pallet<$trait_instance>>::deposit_event(event.into())
 			}
 		}
 	};
@@ -1859,6 +1859,11 @@ macro_rules! decl_module {
 		>($crate::sp_std::marker::PhantomData<($trait_instance, $( $instance)?)>) where
 			$( $other_where_bounds )*;
 
+		/// Type alias to `Module`, to be used by `construct_runtime`.
+		#[allow(dead_code)]
+		pub type Pallet<$trait_instance $(, $instance $( = $module_default_instance)?)?>
+			= $mod_type<$trait_instance $(, $instance)?>;
+
 		$crate::decl_module! {
 			@impl_on_initialize
 			{ $system }
@@ -1962,23 +1967,23 @@ macro_rules! decl_module {
 				match *self {
 					$(
 						$call_type::$fn_name( $( ref $param_name ),* ) => {
-							let base_weight = $weight;
-							let weight = <dyn $crate::dispatch::WeighData<( $( & $param, )* )>>::weigh_data(
-								&base_weight,
+							let __pallet_base_weight = $weight;
+							let __pallet_weight = <dyn $crate::dispatch::WeighData<( $( & $param, )* )>>::weigh_data(
+								&__pallet_base_weight,
 								($( $param_name, )*)
 							);
-							let class = <dyn $crate::dispatch::ClassifyDispatch<( $( & $param, )* )>>::classify_dispatch(
-								&base_weight,
+							let __pallet_class = <dyn $crate::dispatch::ClassifyDispatch<( $( & $param, )* )>>::classify_dispatch(
+								&__pallet_base_weight,
 								($( $param_name, )*)
 							);
-							let pays_fee = <dyn $crate::dispatch::PaysFee<( $( & $param, )* )>>::pays_fee(
-								&base_weight,
+							let __pallet_pays_fee = <dyn $crate::dispatch::PaysFee<( $( & $param, )* )>>::pays_fee(
+								&__pallet_base_weight,
 								($( $param_name, )*)
 							);
 							$crate::dispatch::DispatchInfo {
-								weight,
-								class,
-								pays_fee,
+								weight: __pallet_weight,
+								class: __pallet_class,
+								pays_fee: __pallet_pays_fee,
 							}
 						},
 					)*

@@ -288,13 +288,13 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: frame_system::{Module, Call, Event<T>},
-		Example: pallet::{Module, Call, Event<T>, Config, Storage, Inherent, Origin<T>, ValidateUnsigned},
+		System: frame_system::{Pallet, Call, Event<T>},
+		Example: pallet::{Pallet, Call, Event<T>, Config, Storage, Inherent, Origin<T>, ValidateUnsigned},
 		Instance1Example: pallet::<Instance1>::{
-			Module, Call, Event<T>, Config, Storage, Inherent, Origin<T>, ValidateUnsigned
+			Pallet, Call, Event<T>, Config, Storage, Inherent, Origin<T>, ValidateUnsigned
 		},
-		Example2: pallet2::{Module, Call, Event<T>, Config<T>, Storage},
-		Instance1Example2: pallet2::<Instance1>::{Module, Call, Event<T>, Config<T>, Storage},
+		Example2: pallet2::{Pallet, Call, Event<T>, Config<T>, Storage},
+		Instance1Example2: pallet2::<Instance1>::{Pallet, Call, Event<T>, Config<T>, Storage},
 	}
 );
 
@@ -377,19 +377,19 @@ fn instance_expand() {
 #[test]
 fn pallet_expand_deposit_event() {
 	TestExternalities::default().execute_with(|| {
-		frame_system::Module::<Runtime>::set_block_number(1);
+		frame_system::Pallet::<Runtime>::set_block_number(1);
 		pallet::Call::<Runtime>::foo(3).dispatch_bypass_filter(None.into()).unwrap();
 		assert_eq!(
-			frame_system::Module::<Runtime>::events()[0].event,
+			frame_system::Pallet::<Runtime>::events()[0].event,
 			Event::pallet(pallet::Event::Something(3)),
 		);
 	});
 
 	TestExternalities::default().execute_with(|| {
-		frame_system::Module::<Runtime>::set_block_number(1);
+		frame_system::Pallet::<Runtime>::set_block_number(1);
 		pallet::Call::<Runtime, pallet::Instance1>::foo(3).dispatch_bypass_filter(None.into()).unwrap();
 		assert_eq!(
-			frame_system::Module::<Runtime>::events()[0].event,
+			frame_system::Pallet::<Runtime>::events()[0].event,
 			Event::pallet_Instance1(pallet::Event::Something(3)),
 		);
 	});
@@ -480,14 +480,14 @@ fn storage_expand() {
 #[test]
 fn pallet_hooks_expand() {
 	TestExternalities::default().execute_with(|| {
-		frame_system::Module::<Runtime>::set_block_number(1);
+		frame_system::Pallet::<Runtime>::set_block_number(1);
 
-		assert_eq!(AllModules::on_initialize(1), 21);
-		AllModules::on_finalize(1);
+		assert_eq!(AllPallets::on_initialize(1), 21);
+		AllPallets::on_finalize(1);
 
 		assert_eq!(pallet::Pallet::<Runtime>::storage_version(), None);
 		assert_eq!(pallet::Pallet::<Runtime, pallet::Instance1>::storage_version(), None);
-		assert_eq!(AllModules::on_runtime_upgrade(), 61);
+		assert_eq!(AllPallets::on_runtime_upgrade(), 61);
 		assert_eq!(
 			pallet::Pallet::<Runtime>::storage_version(),
 			Some(pallet::Pallet::<Runtime>::current_version()),
@@ -499,27 +499,27 @@ fn pallet_hooks_expand() {
 
 		// The order is indeed reversed due to https://github.com/paritytech/substrate/issues/6280
 		assert_eq!(
-			frame_system::Module::<Runtime>::events()[0].event,
+			frame_system::Pallet::<Runtime>::events()[0].event,
 			Event::pallet_Instance1(pallet::Event::Something(11)),
 		);
 		assert_eq!(
-			frame_system::Module::<Runtime>::events()[1].event,
+			frame_system::Pallet::<Runtime>::events()[1].event,
 			Event::pallet(pallet::Event::Something(10)),
 		);
 		assert_eq!(
-			frame_system::Module::<Runtime>::events()[2].event,
+			frame_system::Pallet::<Runtime>::events()[2].event,
 			Event::pallet_Instance1(pallet::Event::Something(21)),
 		);
 		assert_eq!(
-			frame_system::Module::<Runtime>::events()[3].event,
+			frame_system::Pallet::<Runtime>::events()[3].event,
 			Event::pallet(pallet::Event::Something(20)),
 		);
 		assert_eq!(
-			frame_system::Module::<Runtime>::events()[4].event,
+			frame_system::Pallet::<Runtime>::events()[4].event,
 			Event::pallet_Instance1(pallet::Event::Something(31)),
 		);
 		assert_eq!(
-			frame_system::Module::<Runtime>::events()[5].event,
+			frame_system::Pallet::<Runtime>::events()[5].event,
 			Event::pallet(pallet::Event::Something(30)),
 		);
 	})
