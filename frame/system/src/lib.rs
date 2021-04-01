@@ -94,7 +94,7 @@ use frame_support::{
 		Weight, RuntimeDbWeight, DispatchInfo, DispatchClass,
 		extract_actual_weight, PerDispatchClass,
 	},
-	dispatch::DispatchResultWithPostInfo,
+	dispatch::{DispatchResultWithPostInfo, DispatchResult},
 };
 use codec::{Encode, Decode, FullCodec, EncodeLike};
 
@@ -143,12 +143,13 @@ pub use pallet::*;
 /// Do something when we should be setting the code.
 pub trait SetCode {
 	/// Set the code to the given blob.
-	fn set_code(code: Vec<u8>);
+	fn set_code(code: Vec<u8>) -> DispatchResult;
 }
 
 impl SetCode for () {
-	fn set_code(code: Vec<u8>) {
+	fn set_code(code: Vec<u8>) -> DispatchResult {
 		storage::unhashed::put_raw(well_known_keys::CODE, &code);
+		Ok(())
 	}
 }
 
@@ -345,7 +346,7 @@ pub mod pallet {
 			ensure_root(origin)?;
 			Self::can_set_code(&code)?;
 
-			T::OnSetCode::set_code(code);
+			T::OnSetCode::set_code(code)?;
 			Self::deposit_event(Event::CodeUpdated);
 			Ok(().into())
 		}
@@ -364,7 +365,7 @@ pub mod pallet {
 			code: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			T::OnSetCode::set_code(code);
+			T::OnSetCode::set_code(code)?;
 			Self::deposit_event(Event::CodeUpdated);
 			Ok(().into())
 		}
