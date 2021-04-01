@@ -184,7 +184,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		fn on_runtime_upgrade() -> frame_support::weights::Weight {
-			if !UpgradedPalletPrefix::<T, I>::get() {
+			if !Self::upgraded_pallet_prefix() {
 				UpgradedPalletPrefix::<T, I>::put(true);
 				migrations::migrate_to_new_pallet_prefix::<T, I>()
 			} else {
@@ -662,9 +662,9 @@ pub mod pallet {
 	#[pallet::getter(fn prime)]
 	pub type Prime<T: Config<I>, I: 'static = ()> = StorageValue<_, T::AccountId, OptionQuery>;
 
-	/// True if we have upgraded so that AccountInfo contains three types of `RefCount`. False
 	/// (default) if not.
 	#[pallet::storage]
+	#[pallet::getter(fn upgraded_pallet_prefix)]
 	pub(super) type UpgradedPalletPrefix<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, bool, ValueQuery>;
 
@@ -1009,13 +1009,17 @@ mod tests {
 	use super::*;
 	use frame_support::{
 		Hashable, assert_ok, assert_noop, parameter_types,
+		Identity,
 		weights::{Pays},
+		pallet_prelude::{StorageValue, StorageMap},
+		traits::{OnRuntimeUpgrade},
 	};
 	use frame_system::{self as system, EventRecord, Phase};
 	use hex_literal::hex;
 	use sp_core::H256;
 	use sp_runtime::{
-		traits::{BlakeTwo256, IdentityLookup}, testing::Header,
+		traits::{BlakeTwo256, IdentityLookup},
+		testing::Header,
 		BuildStorage,
 	};
 	use crate as collective;
@@ -1777,6 +1781,146 @@ mod tests {
 				record(Event::collective_Instance1(collective::Event::Voted(2, hash.clone(), true, 2, 0))),
 				record(Event::collective_Instance1(collective::Event::Disapproved(hash.clone()))),
 			]);
+		})
+	}
+
+	#[test]
+	fn on_runtime_upgrade_works() {
+
+		struct OldProposalsPrefix;
+		impl frame_support::traits::StorageInstance for OldProposalsPrefix {
+			const STORAGE_PREFIX: &'static str = "Proposals";
+			fn pallet_prefix() -> &'static str {
+				"Collective"
+			}
+		}
+		type OldProposals = StorageValue<OldProposalsPrefix, Vec<H256>>;
+
+		struct OldProposalOfPrefix;
+		impl frame_support::traits::StorageInstance for OldProposalOfPrefix {
+			const STORAGE_PREFIX: &'static str = "ProposalOf";
+			fn pallet_prefix() -> &'static str {
+				"Collective"
+			}
+		}
+		type OldProposalOf = StorageMap<OldProposalOfPrefix, Identity, H256, Call>;
+
+		struct OldVotingPrefix;
+		impl frame_support::traits::StorageInstance for OldVotingPrefix {
+			const STORAGE_PREFIX: &'static str = "Voting";
+			fn pallet_prefix() -> &'static str {
+				"Collective"
+			}
+		}
+		type OldVoting = StorageMap<OldVotingPrefix, Identity, H256, Votes<u64, u64>>;
+
+		struct OldProposalCountPrefix;
+		impl frame_support::traits::StorageInstance for OldProposalCountPrefix {
+			const STORAGE_PREFIX: &'static str = "ProposalCount";
+			fn pallet_prefix() -> &'static str {
+				"Collective"
+			}
+		}
+		type OldProposalCount = StorageValue<OldProposalCountPrefix, u32>;
+
+		struct OldMembersPrefix;
+		impl frame_support::traits::StorageInstance for OldMembersPrefix {
+			const STORAGE_PREFIX: &'static str = "Members";
+			fn pallet_prefix() -> &'static str {
+				"Collective"
+			}
+		}
+		type OldMembers = StorageValue<OldMembersPrefix, Vec<u64>>;
+
+		struct OldPrimePrefix;
+		impl frame_support::traits::StorageInstance for OldPrimePrefix {
+			const STORAGE_PREFIX: &'static str = "Prime";
+			fn pallet_prefix() -> &'static str {
+				"Collective"
+			}
+		}
+		type OldPrime = StorageValue<OldPrimePrefix, u64>;
+
+		new_test_ext().execute_with(|| {
+
+			let end = 4;
+
+			collective::UpgradedPalletPrefix::<Test>::put(false);
+
+			// Storage Item "Proposals"
+			let proposal = make_proposal(42);
+			let hash: H256 = proposal.blake2_256().into();
+			OldProposals::put(vec![hash]);
+
+			assert_eq!(OldProposals::get(), Some(vec![hash]));
+			assert_eq!(collective::Proposals::<Test>::get(), []);
+
+			// Storage Item "ProposalOf"
+			OldProposalOf::insert(hash, proposal);
+
+			assert_eq!(OldProposalOf::iter().collect::<Vec<_>>().len(), 1);
+			assert_eq!(collective::ProposalOf::<Test>::iter().collect::<Vec<_>>().len(), 0);
+
+			// Storage Item "Votes"
+			OldVoting::insert(hash,
+				Votes {
+					index: 0,
+					threshold: 2,
+					ayes: vec![],
+					nays: vec![1],
+					end
+				},
+			);
+
+			assert_eq!(OldVoting::iter().collect::<Vec<_>>().len(), 1);
+			assert_eq!(collective::Voting::<Test>::iter().collect::<Vec<_>>().len(), 0);
+
+			// Storage Item "ProposalCount"
+			OldProposalCount::put(10);
+
+			assert_eq!(OldProposalCount::get(), Some(10));
+			assert_eq!(collective::ProposalCount::<Test>::get(), 0);
+
+			// Storage Item "Members"
+			OldMembers::put(vec![2]);
+
+			assert_eq!(OldMembers::get(), Some(vec![2]));
+			assert_eq!(collective::Members::<Test>::get().is_empty(), true);
+
+			// Storage Item "Prime"
+			OldPrime::put(2);
+
+			assert_eq!(OldPrime::get(), Some(2));
+			assert_eq!(collective::Prime::<Test>::get(), None);
+
+			// Trigger runtime upgraade
+			AllPallets::on_runtime_upgrade();
+
+			// Storage Item "Proposals"
+			assert_eq!(OldProposals::get(), None);
+			assert_eq!(collective::Proposals::<Test>::get(), vec![hash]);
+
+			// Storage Item "ProposalOf"
+			assert_eq!(OldProposalOf::iter().collect::<Vec<_>>().len(), 0);
+			assert_eq!(collective::ProposalOf::<Test>::iter().collect::<Vec<_>>().len(), 1);
+
+			// Storage Item "Voting"
+			assert_eq!(OldVoting::iter().collect::<Vec<_>>().len(), 0);
+			assert_eq!(collective::Voting::<Test>::iter().collect::<Vec<_>>().len(), 1);
+
+			// Storage Item "ProposalCount"
+			assert_eq!(OldProposalCount::get(), None);
+			assert_eq!(collective::ProposalCount::<Test>::get(), 10);
+
+			// Storage Item "Members"
+			assert_eq!(OldMembers::get(), None);
+			assert_eq!(collective::Members::<Test>::get(), [2]);
+
+			// Storage Item "Prime"
+			assert_eq!(OldPrime::get(), None);
+			assert_eq!(collective::Prime::<Test>::get(), Some(2));
+
+
 		})
 	}
 
