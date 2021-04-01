@@ -53,11 +53,11 @@ pub enum MinerError {
 	Feasibility(FeasibilityError),
 	/// Something went wrong fetching the lock.
 	Lock(&'static str),
-	/// Cannot restore a solution that was not stored
+	/// Cannot restore a solution that was not stored.
 	NoStoredSolution,
-	/// Cached solution does not match the current round
+	/// Cached solution does not match the current round.
 	SolutionOutOfDate,
-	/// Failed to store a solution
+	/// Failed to store a solution.
 	FailedToStoreSolution,
 }
 
