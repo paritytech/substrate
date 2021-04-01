@@ -328,6 +328,7 @@ mod tests {
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
+		type OnSetCode = ();
 	}
 	ord_parameter_types! {
 		pub const One: u64 = 1;
