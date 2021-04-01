@@ -157,11 +157,9 @@ use sp_std::{collections::btree_map::{BTreeMap, IntoIter, Entry}, vec::Vec};
 
 #[cfg(feature = "std")]
 mod client_side;
-mod runtime_side;
 
 #[cfg(feature = "std")]
 pub use client_side::*;
-pub use runtime_side::*;
 
 /// An error that can occur within the inherent data system.
 #[cfg(feature = "std")]

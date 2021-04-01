@@ -20,11 +20,66 @@ pub use crate::sp_std::vec::Vec;
 #[doc(hidden)]
 pub use crate::sp_runtime::traits::{Block as BlockT, Extrinsic};
 #[doc(hidden)]
-pub use sp_inherents::{InherentData, ProvideInherent, CheckInherentsResult, IsFatalError};
+pub use sp_inherents::{InherentData, CheckInherentsResult, IsFatalError};
 
+/// Auxiliary to make any given error resolve to `is_fatal_error() == true` for [`IsFatalError`].
+#[derive(codec::Encode)]
+pub struct MakeFatalError<E>(E);
+
+impl<E: codec::Encode> From<E> for MakeFatalError<E> {
+	fn from(err: E) -> Self {
+		MakeFatalError(err)
+	}
+}
+
+impl<E: codec::Encode> IsFatalError for MakeFatalError<E> {
+	fn is_fatal_error(&self) -> bool {
+		true
+	}
+}
+
+/// A pallet that provides or verifies an inherent extrinsic.
+///
+/// The pallet may provide the inherent, verify an inherent, or both provide and verify.
+pub trait ProvideInherent {
+	/// The call type of the pallet.
+	type Call;
+	/// The error returned by `check_inherent`.
+	type Error: codec::Encode + IsFatalError;
+	/// The inherent identifier used by this inherent.
+	const INHERENT_IDENTIFIER: crate::InherentIdentifier;
+
+	/// Create an inherent out of the given `InherentData`.
+	fn create_inherent(data: &InherentData) -> Option<Self::Call>;
+
+	/// Determines whether this inherent is required in this block.
+	///
+	/// - `Ok(None)` indicates that this inherent is not required in this block. The default
+	/// implementation returns this.
+	///
+	/// - `Ok(Some(e))` indicates that this inherent is required in this block. The
+	/// `impl_outer_inherent!`, will call this function from its `check_extrinsics`.
+	/// If the inherent is not present, it will return `e`.
+	///
+	/// - `Err(_)` indicates that this function failed and further operations should be aborted.
+	///
+	/// CAUTION: This check has a bug when used in pallets that also provide unsigned transactions.
+	/// See <https://github.com/paritytech/substrate/issues/6243> for details.
+	fn is_inherent_required(_: &InherentData) -> Result<Option<Self::Error>, Self::Error> { Ok(None) }
+
+	/// Check whether the given inherent is valid. Checking the inherent is optional and can be
+	/// omitted by using the default implementation.
+	///
+	/// When checking an inherent, the first parameter represents the inherent that is actually
+	/// included in the block by its author. Whereas the second parameter represents the inherent
+	/// data that the verifying node calculates.
+	fn check_inherent(_: &Self::Call, _: &InherentData) -> Result<(), Self::Error> {
+		Ok(())
+	}
+}
 
 /// Implement the outer inherent.
-/// All given modules need to implement `ProvideInherent`.
+/// All given modules need to implement [`ProvideInherent`].
 ///
 /// # Example
 ///
