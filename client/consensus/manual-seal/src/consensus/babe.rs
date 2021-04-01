@@ -221,7 +221,7 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 
 		if !has_authority {
 			log::info!(target: "manual-seal", "authority not found");
-			let slot = inherents.timestamp_inherent_data()? / self.config.slot_duration;
+			let slot = *inherents.timestamp_inherent_data()? / self.config.slot_duration;
 			// manually hard code epoch descriptor
 			epoch_descriptor = match epoch_descriptor {
 				ViableEpochDescriptor::Signaled(identifier, _header) => {
@@ -293,7 +293,10 @@ impl ProvideInherentData for SlotTimestampProvider {
 
 	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), sp_inherents::Error> {
 		// we update the time here.
-		let duration: InherentType = self.time.fetch_add(self.slot_duration, atomic::Ordering::SeqCst);
+		let duration: InherentType = self.time.fetch_add(
+			self.slot_duration,
+			atomic::Ordering::SeqCst,
+		).into();
 		inherent_data.put_data(INHERENT_IDENTIFIER, &duration)?;
 		Ok(())
 	}

@@ -1449,7 +1449,12 @@ impl<T: Config> Module<T> {
 			match r {
 				Ok(_) => Event::ExtrinsicSuccess(info),
 				Err(err) => {
-					sp_runtime::print(err);
+					log::trace!(
+						target: "runtime::system", 
+						"Extrinsic failed at block({:?}): {:?}", 
+						Self::block_number(), 
+						err,
+					);
 					Event::ExtrinsicFailed(err.error, info)
 				},
 			}

@@ -375,16 +375,16 @@ where
 
 		if remaining_weight > 0 {
 			let mut used_weight =
-                <frame_system::Module<System> as OnIdle<System::BlockNumber>>::on_idle(
-                    block_number,
-                    remaining_weight
-                );
+				<frame_system::Module<System> as OnIdle<System::BlockNumber>>::on_idle(
+					block_number,
+					remaining_weight
+				);
 			remaining_weight = remaining_weight.saturating_sub(used_weight);
 			used_weight = <AllModules as OnIdle<System::BlockNumber>>::on_idle(
-                block_number,
-                remaining_weight
-            )
-            .saturating_add(used_weight);
+				block_number,
+				remaining_weight
+			)
+			.saturating_add(used_weight);
 			<frame_system::Module::<System>>::register_extra_weight_unchecked(used_weight, DispatchClass::Mandatory);
 		}
 

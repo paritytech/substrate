@@ -20,7 +20,7 @@
 #![cfg(test)]
 
 use sp_runtime::traits::IdentityLookup;
-use sp_election_providers::onchain;
+use frame_election_provider_support::onchain;
 use frame_support::parameter_types;
 
 type AccountId = u64;
@@ -157,6 +157,7 @@ where
 impl onchain::Config for Test {
 	type AccountId = AccountId;
 	type BlockNumber = BlockNumber;
+	type BlockWeights = ();
 	type Accuracy = sp_runtime::Perbill;
 	type DataProvider = Staking;
 }
@@ -174,7 +175,7 @@ impl pallet_staking::Config for Test {
 	type SlashCancelOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type BondingDuration = ();
 	type SessionInterface = Self;
-	type RewardCurve = RewardCurve;
+	type EraPayout = pallet_staking::ConvertCurve<RewardCurve>;
 	type NextNewSession = Session;
 	type ElectionLookahead = ();
 	type Call = Call;

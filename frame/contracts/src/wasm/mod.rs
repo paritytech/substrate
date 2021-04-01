@@ -224,12 +224,20 @@ where
 	fn occupied_storage(&self) -> u32 {
 		// We disregard the size of the struct itself as the size is completely
 		// dominated by the code size.
-		let len = self.original_code_len.saturating_add(self.code.len() as u32);
+		let len = self.aggregate_code_len();
 		len.checked_div(self.refcount as u32).unwrap_or(len)
 	}
 
 	fn code_len(&self) -> u32 {
 		self.code.len() as u32
+	}
+
+	fn aggregate_code_len(&self) -> u32 {
+		self.original_code_len.saturating_add(self.code_len())
+	}
+
+	fn refcount(&self) -> u32 {
+		self.refcount as u32
 	}
 }
 
@@ -238,7 +246,7 @@ mod tests {
 	use super::*;
 	use crate::{
 		CodeHash, BalanceOf, Error, Module as Contracts,
-		exec::{Ext, StorageKey, AccountIdOf, Executable},
+		exec::{Ext, StorageKey, AccountIdOf, Executable, RentParams},
 		gas::GasMeter,
 		tests::{Test, Call, ALICE, BOB},
 	};
@@ -249,6 +257,7 @@ mod tests {
 	use frame_support::{dispatch::DispatchResult, weights::Weight};
 	use assert_matches::assert_matches;
 	use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags, ExecError, ErrorOrigin};
+	use pretty_assertions::assert_eq;
 
 	const GAS_LIMIT: Weight = 10_000_000_000;
 
@@ -295,6 +304,7 @@ mod tests {
 		// (topics, data)
 		events: Vec<(Vec<H256>, Vec<u8>)>,
 		schedule: Schedule<Test>,
+		rent_params: RentParams<Test>,
 	}
 
 	impl Ext for MockExt {
@@ -395,45 +405,37 @@ mod tests {
 		fn value_transferred(&self) -> u64 {
 			1337
 		}
-
 		fn now(&self) -> &u64 {
 			&1111
 		}
-
 		fn minimum_balance(&self) -> u64 {
 			666
 		}
-
 		fn tombstone_deposit(&self) -> u64 {
 			16
 		}
-
 		fn random(&self, subject: &[u8]) -> H256 {
 			H256::from_slice(subject)
 		}
-
 		fn deposit_event(&mut self, topics: Vec<H256>, data: Vec<u8>) {
 			self.events.push((topics, data))
 		}
-
 		fn set_rent_allowance(&mut self, rent_allowance: u64) {
 			self.rent_allowance = rent_allowance;
 		}
-
 		fn rent_allowance(&self) -> u64 {
 			self.rent_allowance
 		}
-
 		fn block_number(&self) -> u64 { 121 }
-
 		fn max_value_size(&self) -> u32 { 16_384 }
-
 		fn get_weight_price(&self, weight: Weight) -> BalanceOf<Self::T> {
 			BalanceOf::<Self::T>::from(1312_u32).saturating_mul(weight.into())
 		}
-
 		fn schedule(&self) -> &Schedule<Self::T> {
 			&self.schedule
+		}
+		fn rent_params(&self) -> &RentParams<Self::T> {
+			&self.rent_params
 		}
 	}
 
@@ -536,6 +538,9 @@ mod tests {
 		}
 		fn schedule(&self) -> &Schedule<Self::T> {
 			(**self).schedule()
+		}
+		fn rent_params(&self) -> &RentParams<Self::T> {
+			(**self).rent_params()
 		}
 	}
 
@@ -1840,4 +1845,45 @@ mod tests {
 		);
 	}
 
+	const CODE_RENT_PARAMS: &str = r#"
+(module
+	(import "seal0" "seal_rent_params" (func $seal_rent_params (param i32 i32)))
+	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	;; [0, 4) buffer size = 128 bytes
+	(data (i32.const 0) "\80")
+
+	;; [4; inf) buffer where the result is copied
+
+	(func (export "call")
+		;; Load the rent params into memory
+		(call $seal_rent_params
+			(i32.const 4)		;; Pointer to the output buffer
+			(i32.const 0)		;; Pointer to the size of the buffer
+		)
+
+		;; Return the contents of the buffer
+		(call $seal_return
+			(i32.const 0)				;; return flags
+			(i32.const 4)				;; buffer pointer
+			(i32.load (i32.const 0))	;; buffer size
+		)
+	)
+
+	(func (export "deploy"))
+)
+"#;
+
+	#[test]
+	fn rent_params_work() {
+		let output = execute(
+			CODE_RENT_PARAMS,
+			vec![],
+			MockExt::default(),
+			&mut GasMeter::new(GAS_LIMIT),
+		).unwrap();
+		let rent_params = <RentParams<Test>>::default().encode();
+		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::empty(), data: rent_params });
+	}
 }

@@ -18,14 +18,14 @@
 use crate::{
 	CodeHash, Event, Config, Module as Contracts,
 	TrieId, BalanceOf, ContractInfo, gas::GasMeter, rent::Rent, storage::{self, Storage},
-	Error, ContractInfoOf, Schedule,
+	Error, ContractInfoOf, Schedule, AliveContractInfo,
 };
 use sp_core::crypto::UncheckedFrom;
 use sp_std::{
 	prelude::*,
 	marker::PhantomData,
 };
-use sp_runtime::traits::{Bounded, Zero, Convert, Saturating};
+use sp_runtime::{Perbill, traits::{Bounded, Zero, Convert, Saturating}};
 use frame_support::{
 	dispatch::{DispatchResult, DispatchError},
 	traits::{ExistenceRequirement, Currency, Time, Randomness, Get},
@@ -43,13 +43,82 @@ pub type StorageKey = [u8; 32];
 /// A type that represents a topic of an event. At the moment a hash is used.
 pub type TopicOf<T> = <T as frame_system::Config>::Hash;
 
-/// Describes whether we deal with a contract or a plain account.
-pub enum TransactorKind {
-	/// Transaction was initiated from a plain account. That can be either be through a
-	/// signed transaction or through RPC.
-	PlainAccount,
-	/// The call was initiated by a contract account.
-	Contract,
+/// Information needed for rent calculations that can be requested by a contract.
+#[derive(codec::Encode)]
+#[cfg_attr(test, derive(Debug, PartialEq))]
+pub struct RentParams<T: Config> {
+	/// The total balance of the contract. Includes the balance transferred from the caller.
+	total_balance: BalanceOf<T>,
+	/// The free balance of the contract. Includes the balance transferred from the caller.
+	free_balance: BalanceOf<T>,
+	/// See crate [`Contracts::subsistence_threshold()`].
+	subsistence_threshold: BalanceOf<T>,
+	/// See crate [`Config::DepositPerContract`].
+	deposit_per_contract: BalanceOf<T>,
+	/// See crate [`Config::DepositPerStorageByte`].
+	deposit_per_storage_byte: BalanceOf<T>,
+	/// See crate [`Config::DepositPerStorageItem`].
+	deposit_per_storage_item: BalanceOf<T>,
+	/// See crate [`Ext::rent_allowance()`].
+	rent_allowance: BalanceOf<T>,
+	/// See crate [`Config::RentFraction`].
+	rent_fraction: Perbill,
+	/// See crate [`AliveContractInfo::storage_size`].
+	storage_size: u32,
+	/// See crate [`Executable::aggregate_code_len()`].
+	code_size: u32,
+	/// See crate [`Executable::refcount()`].
+	code_refcount: u32,
+	/// Reserved for backwards compatible changes to this data structure.
+	_reserved: Option<()>,
+}
+
+impl<T> RentParams<T>
+where
+	T: Config,
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
+{
+	fn new<E: Executable<T>>(
+		account_id: &T::AccountId,
+		contract: &AliveContractInfo<T>,
+		executable: &E
+	) -> Self {
+		Self {
+			total_balance: T::Currency::total_balance(account_id),
+			free_balance: T::Currency::free_balance(account_id),
+			subsistence_threshold: <Contracts<T>>::subsistence_threshold(),
+			deposit_per_contract: T::DepositPerContract::get(),
+			deposit_per_storage_byte: T::DepositPerStorageByte::get(),
+			deposit_per_storage_item: T::DepositPerStorageItem::get(),
+			rent_allowance: contract.rent_allowance,
+			rent_fraction: T::RentFraction::get(),
+			storage_size: contract.storage_size,
+			code_size: executable.aggregate_code_len(),
+			code_refcount: executable.refcount(),
+			_reserved: None,
+		}
+	}
+}
+
+/// We cannot derive `Default` because `T` does not necessarily implement `Default`.
+#[cfg(test)]
+impl<T: Config> Default for RentParams<T> {
+	fn default() -> Self {
+		Self {
+			total_balance: Default::default(),
+			free_balance: Default::default(),
+			subsistence_threshold: Default::default(),
+			deposit_per_contract: Default::default(),
+			deposit_per_storage_byte: Default::default(),
+			deposit_per_storage_item: Default::default(),
+			rent_allowance: Default::default(),
+			rent_fraction: Default::default(),
+			storage_size: Default::default(),
+			code_size: Default::default(),
+			code_refcount: Default::default(),
+			_reserved: Default::default(),
+		}
+	}
 }
 
 /// An interface that provides access to the external environment in which the
@@ -198,9 +267,13 @@ pub trait Ext: sealing::Sealed {
 
 	/// Get a reference to the schedule used by the current call.
 	fn schedule(&self) -> &Schedule<Self::T>;
+
+	/// Information needed for rent calculations.
+	fn rent_params(&self) -> &RentParams<Self::T>;
 }
 
 /// Describes the different functions that can be exported by an [`Executable`].
+#[cfg_attr(test, derive(Clone, Copy, PartialEq))]
 pub enum ExportedFunction {
 	/// The constructor function which is executed on deployment of a contract.
 	Constructor,
@@ -263,6 +336,7 @@ pub trait Executable<T: Config>: Sized {
 	/// The storage that is occupied by the instrumented executable and its pristine source.
 	///
 	/// The returned size is already divided by the number of users who share the code.
+	/// This is essentially `aggregate_code_len() / refcount()`.
 	///
 	/// # Note
 	///
@@ -273,16 +347,22 @@ pub trait Executable<T: Config>: Sized {
 
 	/// Size of the instrumented code in bytes.
 	fn code_len(&self) -> u32;
+
+	/// Sum of instrumented and pristine code len.
+	fn aggregate_code_len(&self) -> u32;
+
+	// The number of contracts using this executable.
+	fn refcount(&self) -> u32;
 }
 
 pub struct ExecutionContext<'a, T: Config + 'a, E> {
-	pub caller: Option<&'a ExecutionContext<'a, T, E>>,
-	pub self_account: T::AccountId,
-	pub self_trie_id: Option<TrieId>,
-	pub depth: usize,
-	pub schedule: &'a Schedule<T>,
-	pub timestamp: MomentOf<T>,
-	pub block_number: T::BlockNumber,
+	caller: Option<&'a ExecutionContext<'a, T, E>>,
+	self_account: T::AccountId,
+	self_trie_id: Option<TrieId>,
+	depth: usize,
+	schedule: &'a Schedule<T>,
+	timestamp: MomentOf<T>,
+	block_number: T::BlockNumber,
 	_phantom: PhantomData<E>,
 }
 
@@ -371,8 +451,12 @@ where
 				)?
 			}
 
+			let call_context = nested.new_call_context(
+				caller, &dest, value, &contract, &executable,
+			);
+
 			let output = executable.execute(
-				nested.new_call_context(caller, value),
+				call_context,
 				&ExportedFunction::Call,
 				input_data,
 				gas_meter,
@@ -403,7 +487,7 @@ where
 			let dest_trie_id = Storage::<T>::generate_trie_id(&dest);
 
 			let output = self.with_nested_context(dest.clone(), dest_trie_id, |nested| {
-				Storage::<T>::place_contract(
+				let contract = Storage::<T>::place_contract(
 					&dest,
 					nested
 						.self_trie_id
@@ -428,8 +512,16 @@ where
 				// spawned. This is OK as overcharging is always safe.
 				let occupied_storage = executable.occupied_storage();
 
+				let call_context = nested.new_call_context(
+					caller.clone(),
+					&dest,
+					endowment,
+					&contract,
+					&executable,
+				);
+
 				let output = executable.execute(
-					nested.new_call_context(caller.clone(), endowment),
+					call_context,
 					&ExportedFunction::Constructor,
 					input_data,
 					gas_meter,
@@ -468,7 +560,10 @@ where
 	fn new_call_context<'b>(
 		&'b mut self,
 		caller: T::AccountId,
+		dest: &T::AccountId,
 		value: BalanceOf<T>,
+		contract: &AliveContractInfo<T>,
+		executable: &E,
 	) -> CallContext<'b, 'a, T, E> {
 		let timestamp = self.timestamp.clone();
 		let block_number = self.block_number.clone();
@@ -478,6 +573,7 @@ where
 			value_transferred: value,
 			timestamp,
 			block_number,
+			rent_params: RentParams::new(dest, contract, executable),
 			_phantom: Default::default(),
 		}
 	}
@@ -515,6 +611,15 @@ where
 			TransactorKind::Contract
 		}
 	}
+}
+
+/// Describes whether we deal with a contract or a plain account.
+enum TransactorKind {
+	/// Transaction was initiated from a plain account. That can be either be through a
+	/// signed transaction or through RPC.
+	PlainAccount,
+	/// The call was initiated by a contract account.
+	Contract,
 }
 
 /// Describes possible transfer causes.
@@ -581,6 +686,7 @@ struct CallContext<'a, 'b: 'a, T: Config + 'b, E> {
 	value_transferred: BalanceOf<T>,
 	timestamp: MomentOf<T>,
 	block_number: T::BlockNumber,
+	rent_params: RentParams<T>,
 	_phantom: PhantomData<E>,
 }
 
@@ -793,6 +899,10 @@ where
 	fn schedule(&self) -> &Schedule<Self::T> {
 		&self.ctx.schedule
 	}
+
+	fn rent_params(&self) -> &RentParams<Self::T> {
+		&self.rent_params
+	}
 }
 
 fn deposit_event<T: Config>(
@@ -834,11 +944,13 @@ mod tests {
 			ALICE, BOB, CHARLIE,
 			test_utils::{place_contract, set_balance, get_balance},
 		},
+		exec::ExportedFunction::*,
 		Error, Weight,
 	};
 	use sp_runtime::DispatchError;
 	use assert_matches::assert_matches;
 	use std::{cell::RefCell, collections::HashMap, rc::Rc};
+	use pretty_assertions::{assert_eq, assert_ne};
 
 	type MockContext<'a> = ExecutionContext<'a, Test, MockExecutable>;
 
@@ -865,7 +977,12 @@ mod tests {
 	}
 
 	#[derive(Clone)]
-	struct MockExecutable(Rc<dyn Fn(MockCtx) -> ExecResult + 'static>, CodeHash<Test>);
+	struct MockExecutable {
+		func: Rc<dyn Fn(MockCtx, &Self) -> ExecResult + 'static>,
+		func_type: ExportedFunction,
+		code_hash: CodeHash<Test>,
+		refcount: u64,
+	}
 
 	#[derive(Default)]
 	struct MockLoader {
@@ -874,14 +991,59 @@ mod tests {
 	}
 
 	impl MockLoader {
-		fn insert(f: impl Fn(MockCtx) -> ExecResult + 'static) -> CodeHash<Test> {
+		fn insert(
+			func_type: ExportedFunction,
+			f: impl Fn(MockCtx, &MockExecutable,
+		) -> ExecResult + 'static) -> CodeHash<Test> {
 			LOADER.with(|loader| {
 				let mut loader = loader.borrow_mut();
 				// Generate code hashes as monotonically increasing values.
 				let hash = <Test as frame_system::Config>::Hash::from_low_u64_be(loader.counter);
 				loader.counter += 1;
-				loader.map.insert(hash, MockExecutable (Rc::new(f), hash.clone()));
+				loader.map.insert(hash, MockExecutable {
+					func: Rc::new(f),
+					func_type,
+					code_hash: hash.clone(),
+					refcount: 1,
+				});
 				hash
+			})
+		}
+
+		fn increment_refcount(code_hash: CodeHash<Test>) {
+			LOADER.with(|loader| {
+				let mut loader = loader.borrow_mut();
+				loader.map
+					.entry(code_hash)
+					.and_modify(|executable| executable.refcount += 1)
+					.or_insert_with(|| panic!("code_hash does not exist"));
+			});
+		}
+
+		fn decrement_refcount(code_hash: CodeHash<Test>) {
+			use std::collections::hash_map::Entry::Occupied;
+			LOADER.with(|loader| {
+				let mut loader = loader.borrow_mut();
+				let mut entry = match loader.map.entry(code_hash) {
+					Occupied(e) => e,
+					_ => panic!("code_hash does not exist"),
+				};
+				let refcount = &mut entry.get_mut().refcount;
+				*refcount -= 1;
+				if *refcount == 0 {
+					entry.remove();
+				}
+			});
+		}
+
+		fn refcount(code_hash: &CodeHash<Test>) -> u32 {
+			LOADER.with(|loader| {
+				loader
+					.borrow()
+					.map
+					.get(code_hash)
+					.expect("code_hash does not exist")
+					.refcount()
 			})
 		}
 	}
@@ -905,30 +1067,43 @@ mod tests {
 			})
 		}
 
-		fn drop_from_storage(self) {}
+		fn drop_from_storage(self) {
+			MockLoader::decrement_refcount(self.code_hash);
+		}
 
-		fn add_user(_code_hash: CodeHash<Test>) -> Result<u32, DispatchError> {
+		fn add_user(code_hash: CodeHash<Test>) -> Result<u32, DispatchError> {
+			MockLoader::increment_refcount(code_hash);
 			Ok(0)
 		}
 
-		fn remove_user(_code_hash: CodeHash<Test>) -> u32 { 0 }
+		fn remove_user(code_hash: CodeHash<Test>) -> u32 {
+			MockLoader::decrement_refcount(code_hash);
+			0
+		}
 
 		fn execute<E: Ext<T = Test>>(
 			self,
 			mut ext: E,
-			_function: &ExportedFunction,
+			function: &ExportedFunction,
 			input_data: Vec<u8>,
 			gas_meter: &mut GasMeter<Test>,
 		) -> ExecResult {
-			(self.0)(MockCtx {
-				ext: &mut ext,
-				input_data,
-				gas_meter,
-			})
+			if let &Constructor = function {
+				MockLoader::increment_refcount(self.code_hash);
+			}
+			if function == &self.func_type {
+				(self.func)(MockCtx {
+					ext: &mut ext,
+					input_data,
+					gas_meter,
+				}, &self)
+			} else {
+				exec_success()
+			}
 		}
 
 		fn code_hash(&self) -> &CodeHash<Test> {
-			&self.1
+			&self.code_hash
 		}
 
 		fn occupied_storage(&self) -> u32 {
@@ -937,6 +1112,14 @@ mod tests {
 
 		fn code_len(&self) -> u32 {
 			0
+		}
+
+		fn aggregate_code_len(&self) -> u32 {
+			0
+		}
+
+		fn refcount(&self) -> u32 {
+			self.refcount as u32
 		}
 	}
 
@@ -952,7 +1135,7 @@ mod tests {
 
 		let value = Default::default();
 		let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
-		let exec_ch = MockLoader::insert(|_ctx| {
+		let exec_ch = MockLoader::insert(Call, |_ctx, _executable| {
 			TEST_DATA.with(|data| data.borrow_mut().push(1));
 			exec_success()
 		});
@@ -1003,7 +1186,8 @@ mod tests {
 		let dest = BOB;
 
 		let return_ch = MockLoader::insert(
-			|_| Ok(ExecReturnValue { flags: ReturnFlags::REVERT, data: Vec::new() })
+			Call,
+			|_, _| Ok(ExecReturnValue { flags: ReturnFlags::REVERT, data: Vec::new() })
 		);
 
 		ExtBuilder::default().build().execute_with(|| {
@@ -1062,7 +1246,8 @@ mod tests {
 		let origin = ALICE;
 		let dest = BOB;
 		let return_ch = MockLoader::insert(
-			|_| Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: vec![1, 2, 3, 4] })
+			Call,
+			|_, _| Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: vec![1, 2, 3, 4] })
 		);
 
 		ExtBuilder::default().build().execute_with(|| {
@@ -1090,7 +1275,8 @@ mod tests {
 		let origin = ALICE;
 		let dest = BOB;
 		let return_ch = MockLoader::insert(
-			|_| Ok(ExecReturnValue { flags: ReturnFlags::REVERT, data: vec![1, 2, 3, 4] })
+			Call,
+			|_, _| Ok(ExecReturnValue { flags: ReturnFlags::REVERT, data: vec![1, 2, 3, 4] })
 		);
 
 		ExtBuilder::default().build().execute_with(|| {
@@ -1113,7 +1299,7 @@ mod tests {
 
 	#[test]
 	fn input_data_to_call() {
-		let input_data_ch = MockLoader::insert(|ctx| {
+		let input_data_ch = MockLoader::insert(Call, |ctx, _| {
 			assert_eq!(ctx.input_data, &[1, 2, 3, 4]);
 			exec_success()
 		});
@@ -1136,7 +1322,7 @@ mod tests {
 
 	#[test]
 	fn input_data_to_instantiate() {
-		let input_data_ch = MockLoader::insert(|ctx| {
+		let input_data_ch = MockLoader::insert(Constructor, |ctx, _| {
 			assert_eq!(ctx.input_data, &[1, 2, 3, 4]);
 			exec_success()
 		});
@@ -1172,7 +1358,7 @@ mod tests {
 			static REACHED_BOTTOM: RefCell<bool> = RefCell::new(false);
 		}
 		let value = Default::default();
-		let recurse_ch = MockLoader::insert(|ctx| {
+		let recurse_ch = MockLoader::insert(Call, |ctx, _| {
 			// Try to call into yourself.
 			let r = ctx.ext.call(&BOB, 0, ctx.gas_meter, vec![]);
 
@@ -1222,7 +1408,7 @@ mod tests {
 			static WITNESSED_CALLER_CHARLIE: RefCell<Option<AccountIdOf<Test>>> = RefCell::new(None);
 		}
 
-		let bob_ch = MockLoader::insert(|ctx| {
+		let bob_ch = MockLoader::insert(Call, |ctx, _| {
 			// Record the caller for bob.
 			WITNESSED_CALLER_BOB.with(|caller|
 				*caller.borrow_mut() = Some(ctx.ext.caller().clone())
@@ -1235,7 +1421,7 @@ mod tests {
 			);
 			exec_success()
 		});
-		let charlie_ch = MockLoader::insert(|ctx| {
+		let charlie_ch = MockLoader::insert(Call, |ctx, _| {
 			// Record the caller for charlie.
 			WITNESSED_CALLER_CHARLIE.with(|caller|
 				*caller.borrow_mut() = Some(ctx.ext.caller().clone())
@@ -1265,7 +1451,7 @@ mod tests {
 
 	#[test]
 	fn address_returns_proper_values() {
-		let bob_ch = MockLoader::insert(|ctx| {
+		let bob_ch = MockLoader::insert(Call, |ctx, _| {
 			// Verify that address matches BOB.
 			assert_eq!(*ctx.ext.address(), BOB);
 
@@ -1276,7 +1462,7 @@ mod tests {
 			);
 			exec_success()
 		});
-		let charlie_ch = MockLoader::insert(|ctx| {
+		let charlie_ch = MockLoader::insert(Call, |ctx, _| {
 			assert_eq!(*ctx.ext.address(), CHARLIE);
 			exec_success()
 		});
@@ -1300,7 +1486,7 @@ mod tests {
 
 	#[test]
 	fn refuse_instantiate_with_value_below_existential_deposit() {
-		let dummy_ch = MockLoader::insert(|_| exec_success());
+		let dummy_ch = MockLoader::insert(Constructor, |_, _| exec_success());
 
 		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
 			let schedule = Contracts::current_schedule();
@@ -1326,7 +1512,8 @@ mod tests {
 	#[test]
 	fn instantiation_work_with_success_output() {
 		let dummy_ch = MockLoader::insert(
-			|_| Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: vec![80, 65, 83, 83] })
+			Constructor,
+			|_, _| Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: vec![80, 65, 83, 83] })
 		);
 
 		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
@@ -1361,7 +1548,8 @@ mod tests {
 	#[test]
 	fn instantiation_fails_with_failing_output() {
 		let dummy_ch = MockLoader::insert(
-			|_| Ok(ExecReturnValue { flags: ReturnFlags::REVERT, data: vec![70, 65, 73, 76] })
+			Constructor,
+			|_, _| Ok(ExecReturnValue { flags: ReturnFlags::REVERT, data: vec![70, 65, 73, 76] })
 		);
 
 		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
@@ -1392,12 +1580,12 @@ mod tests {
 
 	#[test]
 	fn instantiation_from_contract() {
-		let dummy_ch = MockLoader::insert(|_| exec_success());
+		let dummy_ch = MockLoader::insert(Call, |_, _| exec_success());
 		let instantiated_contract_address = Rc::new(RefCell::new(None::<AccountIdOf<Test>>));
-		let instantiator_ch = MockLoader::insert({
+		let instantiator_ch = MockLoader::insert(Call, {
 			let dummy_ch = dummy_ch.clone();
 			let instantiated_contract_address = Rc::clone(&instantiated_contract_address);
-			move |ctx| {
+			move |ctx, _| {
 				// Instantiate a contract and save it's address in `instantiated_contract_address`.
 				let (address, output, _) = ctx.ext.instantiate(
 					dummy_ch,
@@ -1436,12 +1624,12 @@ mod tests {
 
 	#[test]
 	fn instantiation_traps() {
-		let dummy_ch = MockLoader::insert(
-			|_| Err("It's a trap!".into())
+		let dummy_ch = MockLoader::insert(Constructor,
+			|_, _| Err("It's a trap!".into())
 		);
-		let instantiator_ch = MockLoader::insert({
+		let instantiator_ch = MockLoader::insert(Call, {
 			let dummy_ch = dummy_ch.clone();
-			move |ctx| {
+			move |ctx, _| {
 				// Instantiate a contract and save it's address in `instantiated_contract_address`.
 				assert_matches!(
 					ctx.ext.instantiate(
@@ -1481,7 +1669,7 @@ mod tests {
 
 	#[test]
 	fn termination_from_instantiate_fails() {
-		let terminate_ch = MockLoader::insert(|ctx| {
+		let terminate_ch = MockLoader::insert(Constructor, |ctx, _| {
 			ctx.ext.terminate(&ALICE).unwrap();
 			exec_success()
 		});
@@ -1518,7 +1706,7 @@ mod tests {
 
 	#[test]
 	fn rent_allowance() {
-		let rent_allowance_ch = MockLoader::insert(|ctx| {
+		let rent_allowance_ch = MockLoader::insert(Constructor, |ctx, _| {
 			let subsistence = Contracts::<Test>::subsistence_threshold();
 			let allowance = subsistence * 3;
 			assert_eq!(ctx.ext.rent_allowance(), <BalanceOf<Test>>::max_value());
@@ -1545,6 +1733,81 @@ mod tests {
 				&[],
 			);
 			assert_matches!(result, Ok(_));
+		});
+	}
+
+	#[test]
+	fn rent_params_works() {
+		let code_hash = MockLoader::insert(Call, |ctx, executable| {
+			let address = ctx.ext.address();
+			let contract = <ContractInfoOf<Test>>::get(address)
+				.and_then(|c| c.get_alive())
+				.unwrap();
+			assert_eq!(ctx.ext.rent_params(), &RentParams::new(address, &contract, executable));
+			exec_success()
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let subsistence = Contracts::<Test>::subsistence_threshold();
+			let schedule = Contracts::current_schedule();
+			let mut ctx = MockContext::top_level(ALICE, &schedule);
+			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
+			set_balance(&ALICE, subsistence * 10);
+			place_contract(&BOB, code_hash);
+			ctx.call(
+				BOB,
+				0,
+				&mut gas_meter,
+				vec![],
+			).unwrap();
+		});
+	}
+
+	#[test]
+	fn rent_params_snapshotted() {
+		let code_hash = MockLoader::insert(Call, |ctx, executable| {
+			let subsistence = Contracts::<Test>::subsistence_threshold();
+			let address = ctx.ext.address();
+			let contract = <ContractInfoOf<Test>>::get(address)
+				.and_then(|c| c.get_alive())
+				.unwrap();
+			let rent_params = RentParams::new(address, &contract, executable);
+
+			// Changing the allowance during the call: rent params stay unchanged.
+			let allowance = 42;
+			assert_ne!(allowance, rent_params.rent_allowance);
+			ctx.ext.set_rent_allowance(allowance);
+			assert_eq!(ctx.ext.rent_params(), &rent_params);
+
+			// Creating another instance from the same code_hash increases the refcount.
+			// This is also not reflected in the rent params.
+			assert_eq!(MockLoader::refcount(&executable.code_hash), 1);
+			ctx.ext.instantiate(
+				executable.code_hash,
+				subsistence * 25,
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
+				vec![],
+				&[],
+			).unwrap();
+			assert_eq!(MockLoader::refcount(&executable.code_hash), 2);
+			assert_eq!(ctx.ext.rent_params(), &rent_params);
+
+			exec_success()
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let subsistence = Contracts::<Test>::subsistence_threshold();
+			let schedule = Contracts::current_schedule();
+			let mut ctx = MockContext::top_level(ALICE, &schedule);
+			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
+			set_balance(&ALICE, subsistence * 100);
+			place_contract(&BOB, code_hash);
+			ctx.call(
+				BOB,
+				subsistence * 50,
+				&mut gas_meter,
+				vec![],
+			).unwrap();
 		});
 	}
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,17 +19,16 @@
 
 use super::*;
 use crate::Module as MultiPhase;
-
-pub use frame_benchmarking::{account, benchmarks, whitelist_account, whitelisted_caller};
+use frame_benchmarking::impl_benchmark_test_suite;
 use frame_support::{assert_ok, traits::OnInitialize};
 use frame_system::RawOrigin;
 use rand::{prelude::SliceRandom, rngs::SmallRng, SeedableRng};
-use sp_election_providers::Assignment;
+use frame_election_provider_support::Assignment;
 use sp_arithmetic::traits::One;
 use sp_runtime::InnerOf;
 use sp_std::convert::TryInto;
 
-const SEED: u32 = 0;
+const SEED: u32 = 999;
 
 /// Creates a **valid** solution with exactly the given size.
 ///
@@ -55,9 +54,9 @@ fn solution_with_size<T: Config>(
 
 	// first generates random targets.
 	let targets: Vec<T::AccountId> =
-		(0..size.targets).map(|i| account("Targets", i, SEED)).collect();
+		(0..size.targets).map(|i| frame_benchmarking::account("Targets", i, SEED)).collect();
 
-	let mut rng = SmallRng::seed_from_u64(999u64);
+	let mut rng = SmallRng::seed_from_u64(SEED as u64);
 
 	// decide who are the winners.
 	let winners = targets
@@ -75,7 +74,7 @@ fn solution_with_size<T: Config>(
 				.choose_multiple(&mut rng, <CompactOf<T>>::LIMIT)
 				.cloned()
 				.collect::<Vec<_>>();
-			let voter = account::<T::AccountId>("Voter", i, SEED);
+			let voter = frame_benchmarking::account::<T::AccountId>("Voter", i, SEED);
 			(voter, stake, winner_votes)
 		})
 		.collect::<Vec<_>>();
@@ -89,7 +88,7 @@ fn solution_with_size<T: Config>(
 				.choose_multiple(&mut rng, <CompactOf<T>>::LIMIT)
 				.cloned()
 				.collect::<Vec<T::AccountId>>();
-			let voter = account::<T::AccountId>("Voter", i, SEED);
+			let voter = frame_benchmarking::account::<T::AccountId>("Voter", i, SEED);
 			(voter, stake, votes)
 		})
 		.collect::<Vec<_>>();
@@ -109,8 +108,9 @@ fn solution_with_size<T: Config>(
 	<DesiredTargets<T>>::put(desired_targets);
 	<Snapshot<T>>::put(RoundSnapshot { voters: all_voters.clone(), targets: targets.clone() });
 
-	// write the snapshot to staking or whoever is the data provider.
-	T::DataProvider::put_snapshot(all_voters.clone(), targets.clone());
+	// write the snapshot to staking or whoever is the data provider, in case it is needed further
+	// down the road.
+	T::DataProvider::put_snapshot(all_voters.clone(), targets.clone(), Some(stake));
 
 	let cache = helpers::generate_voter_cache::<T>(&all_voters);
 	let stake_of = helpers::stake_of_fn::<T>(&all_voters, &cache);
@@ -138,10 +138,12 @@ fn solution_with_size<T: Config>(
 		<CompactOf<T>>::from_assignment(assignments, &voter_index, &target_index).unwrap();
 	let score = compact.clone().score(&winners, stake_of, voter_at, target_at).unwrap();
 	let round = <MultiPhase<T>>::round();
+
+	assert!(score[0] > 0, "score is zero, this probably means that the stakes are not set.");
 	RawSolution { compact, score, round }
 }
 
-benchmarks! {
+frame_benchmarking::benchmarks! {
 	on_initialize_nothing {
 		assert!(<MultiPhase<T>>::current_phase().is_off());
 	}: {
@@ -157,7 +159,7 @@ benchmarks! {
 		assert!(<MultiPhase<T>>::snapshot().is_none());
 		assert!(<MultiPhase<T>>::current_phase().is_off());
 	}: {
-		<MultiPhase<T>>::on_initialize_open_signed();
+		<MultiPhase<T>>::on_initialize_open_signed().unwrap();
 	} verify {
 		assert!(<MultiPhase<T>>::snapshot().is_some());
 		assert!(<MultiPhase<T>>::current_phase().is_signed());
@@ -167,7 +169,7 @@ benchmarks! {
 		assert!(<MultiPhase<T>>::snapshot().is_none());
 		assert!(<MultiPhase<T>>::current_phase().is_off());
 	}: {
-		<MultiPhase<T>>::on_initialize_open_unsigned(true, true, 1u32.into());
+		<MultiPhase<T>>::on_initialize_open_unsigned(true, true, 1u32.into()).unwrap();
 	} verify {
 		assert!(<MultiPhase<T>>::snapshot().is_some());
 		assert!(<MultiPhase<T>>::current_phase().is_unsigned());
@@ -175,21 +177,51 @@ benchmarks! {
 
 	on_initialize_open_unsigned_without_snapshot {
 		// need to assume signed phase was open before
-		<MultiPhase<T>>::on_initialize_open_signed();
+		<MultiPhase<T>>::on_initialize_open_signed().unwrap();
 		assert!(<MultiPhase<T>>::snapshot().is_some());
 		assert!(<MultiPhase<T>>::current_phase().is_signed());
 	}: {
-		<MultiPhase<T>>::on_initialize_open_unsigned(false, true, 1u32.into());
+		<MultiPhase<T>>::on_initialize_open_unsigned(false, true, 1u32.into()).unwrap();
 	} verify {
 		assert!(<MultiPhase<T>>::snapshot().is_some());
 		assert!(<MultiPhase<T>>::current_phase().is_unsigned());
+	}
+
+	// a call to `<Pallet as ElectionProvider>::elect` where we only return the queued solution.
+	elect_queued {
+		// assume largest values for the election status. These will merely affect the decoding.
+		let v = T::BenchmarkingConfig::VOTERS[1];
+		let t = T::BenchmarkingConfig::TARGETS[1];
+		let a = T::BenchmarkingConfig::ACTIVE_VOTERS[1];
+		let d = T::BenchmarkingConfig::DESIRED_TARGETS[1];
+
+		let witness = SolutionOrSnapshotSize { voters: v, targets: t };
+		let raw_solution = solution_with_size::<T>(witness, a, d);
+		let ready_solution =
+			<MultiPhase<T>>::feasibility_check(raw_solution, ElectionCompute::Signed).unwrap();
+
+		// these are set by the `solution_with_size` function.
+		assert!(<DesiredTargets<T>>::get().is_some());
+		assert!(<Snapshot<T>>::get().is_some());
+		assert!(<SnapshotMetadata<T>>::get().is_some());
+		<CurrentPhase<T>>::put(Phase::Signed);
+		// assume a queued solution is stored, regardless of where it comes from.
+		<QueuedSolution<T>>::put(ready_solution);
+	}: {
+		let _ = <MultiPhase<T> as ElectionProvider<T::AccountId, T::BlockNumber>>::elect();
+	} verify {
+		assert!(<MultiPhase<T>>::queued_solution().is_none());
+		assert!(<DesiredTargets<T>>::get().is_none());
+		assert!(<Snapshot<T>>::get().is_none());
+		assert!(<SnapshotMetadata<T>>::get().is_none());
+		assert_eq!(<CurrentPhase<T>>::get(), <Phase<T::BlockNumber>>::Off);
 	}
 
 	#[extra]
 	create_snapshot {
 		assert!(<MultiPhase<T>>::snapshot().is_none());
 	}: {
-		<MultiPhase::<T>>::create_snapshot()
+		<MultiPhase::<T>>::create_snapshot().unwrap()
 	} verify {
 		assert!(<MultiPhase<T>>::snapshot().is_some());
 	}
@@ -248,35 +280,8 @@ benchmarks! {
 	}
 }
 
-#[cfg(test)]
-mod test {
-	use super::*;
-	use crate::mock::*;
-
-	#[test]
-	fn test_benchmarks() {
-		ExtBuilder::default().build_and_execute(|| {
-			assert_ok!(test_benchmark_feasibility_check::<Runtime>());
-		});
-
-		ExtBuilder::default().build_and_execute(|| {
-			assert_ok!(test_benchmark_submit_unsigned::<Runtime>());
-		});
-
-		ExtBuilder::default().build_and_execute(|| {
-			assert_ok!(test_benchmark_on_initialize_open_unsigned_with_snapshot::<Runtime>());
-		});
-
-		ExtBuilder::default().build_and_execute(|| {
-			assert_ok!(test_benchmark_on_initialize_open_unsigned_without_snapshot::<Runtime>());
-		});
-
-		ExtBuilder::default().build_and_execute(|| {
-			assert_ok!(test_benchmark_on_initialize_nothing::<Runtime>());
-		});
-
-		ExtBuilder::default().build_and_execute(|| {
-			assert_ok!(test_benchmark_create_snapshot::<Runtime>());
-		});
-	}
-}
+impl_benchmark_test_suite!(
+	MultiPhase,
+	crate::mock::ExtBuilder::default().build(),
+	crate::mock::Runtime,
+);

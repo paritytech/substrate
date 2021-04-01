@@ -119,6 +119,8 @@ pub use pjr::*;
 pub use codec;
 #[doc(hidden)]
 pub use sp_arithmetic;
+#[doc(hidden)]
+pub use sp_std;
 
 /// Simple Extension trait to easily convert `None` from index closures to `Err`.
 ///
@@ -142,10 +144,22 @@ pub trait CompactSolution: Sized {
 	const LIMIT: usize;
 
 	/// The voter type. Needs to be an index (convert to usize).
-	type Voter: UniqueSaturatedInto<usize> + TryInto<usize> + TryFrom<usize> + Debug + Copy + Clone;
+	type Voter: UniqueSaturatedInto<usize>
+		+ TryInto<usize>
+		+ TryFrom<usize>
+		+ Debug
+		+ Copy
+		+ Clone
+		+ Bounded;
 
 	/// The target type. Needs to be an index (convert to usize).
-	type Target: UniqueSaturatedInto<usize> + TryInto<usize> + TryFrom<usize> + Debug + Copy + Clone;
+	type Target: UniqueSaturatedInto<usize>
+		+ TryInto<usize>
+		+ TryFrom<usize>
+		+ Debug
+		+ Copy
+		+ Clone
+		+ Bounded;
 
 	/// The weight/accuracy type of each vote.
 	type Accuracy: PerThing128;
@@ -359,7 +373,7 @@ impl<AccountId: IdentifierT> Voter<AccountId> {
 			.edges
 			.into_iter()
 			.filter_map(|e| {
-				let per_thing = P::from_rational_approximation(e.weight, budget);
+				let per_thing = P::from_rational(e.weight, budget);
 			// trim zero edges.
 			if per_thing.is_zero() { None } else { Some((e.who, per_thing)) }
 		}).collect::<Vec<_>>();
@@ -539,7 +553,7 @@ impl<AccountId> StakedAssignment<AccountId> {
 		let distribution = self.distribution
 			.into_iter()
 			.filter_map(|(target, w)| {
-				let per_thing = P::from_rational_approximation(w, stake);
+				let per_thing = P::from_rational(w, stake);
 				if per_thing == Bounded::min_value() {
 					None
 				} else {

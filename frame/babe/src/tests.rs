@@ -20,12 +20,12 @@
 use super::{Call, *};
 use frame_support::{
 	assert_err, assert_ok,
-	traits::{Currency, OnFinalize},
+	traits::{Currency, EstimateNextSessionRotation, OnFinalize},
 	weights::{GetDispatchInfo, Pays},
 };
 use mock::*;
 use pallet_session::ShouldEndSession;
-use sp_consensus_babe::{AllowedSlots, Slot, BabeEpochConfiguration};
+use sp_consensus_babe::{AllowedSlots, BabeEpochConfiguration, Slot};
 use sp_core::crypto::Pair;
 
 const EMPTY_RANDOMNESS: [u8; 32] = [
@@ -217,6 +217,38 @@ fn can_predict_next_epoch_change() {
 		// next epoch change will be at
 		assert_eq!(*Babe::current_epoch_start(), 9); // next change will be 12, 2 slots from now
 		assert_eq!(Babe::next_expected_epoch_change(System::block_number()), Some(5 + 2));
+	})
+}
+
+#[test]
+fn can_estimate_current_epoch_progress() {
+	new_test_ext(1).execute_with(|| {
+		assert_eq!(<Test as Config>::EpochDuration::get(), 3);
+
+		// with BABE the genesis block is not part of any epoch, the first epoch starts at block #1,
+		// therefore its last block should be #3
+		for i in 1u64..4 {
+			progress_to_block(i);
+
+			assert_eq!(Babe::estimate_next_session_rotation(i).0.unwrap(), 4);
+
+			// the last block of the epoch must have 100% progress.
+			if Babe::estimate_next_session_rotation(i).0.unwrap() - 1 == i {
+				assert_eq!(
+					Babe::estimate_current_session_progress(i).0.unwrap(),
+					Percent::from_percent(100)
+				);
+			} else {
+				assert!(Babe::estimate_current_session_progress(i).0.unwrap() < Percent::from_percent(100));
+			}
+		}
+
+		// the first block of the new epoch counts towards the epoch progress as well
+		progress_to_block(4);
+		assert_eq!(
+			Babe::estimate_current_session_progress(4).0.unwrap(),
+			Percent::from_percent(33),
+		);
 	})
 }
 

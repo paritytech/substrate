@@ -78,7 +78,7 @@ pub mod weights;
 pub mod pallet {
 	use sp_std::prelude::*;
 	use sp_arithmetic::{Perquintill, PerThing};
-	use sp_runtime::traits::{Zero, Saturating, SaturatedConversion};
+	use sp_runtime::traits::{Zero, Saturating};
 	use frame_support::traits::{Currency, OnUnbalanced, ReservableCurrency};
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
@@ -96,7 +96,13 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// Currency type that this works on.
-		type Currency: ReservableCurrency<Self::AccountId>;
+		type Currency: ReservableCurrency<Self::AccountId, Balance=Self::CurrencyBalance>;
+
+		/// Just the `Currency::Balance` type; we have this item to allow us to constrain it to
+		/// `From<u64>`.
+		type CurrencyBalance:
+			sp_runtime::traits::AtLeast32BitUnsigned + codec::FullCodec + Copy
+				+ MaybeSerializeDeserialize + sp_std::fmt::Debug + Default + From<u64>;
 
 		/// Origin required for setting the target proportion to be under gilt.
 		type AdminOrigin: EnsureOrigin<Self::Origin>;
@@ -448,11 +454,10 @@ pub mod pallet {
 			// Multiply the proportion it is by the total issued.
 			let total_issuance = T::Currency::total_issuance().saturating_sub(T::IgnoredIssuance::get());
 			ActiveTotal::<T>::mutate(|totals| {
-				let nongilt_issuance: u128 = total_issuance.saturating_sub(totals.frozen)
-					.saturated_into();
+				let nongilt_issuance = total_issuance.saturating_sub(totals.frozen);
 				let effective_issuance = totals.proportion.left_from_one()
 					.saturating_reciprocal_mul(nongilt_issuance);
-				let gilt_value: BalanceOf<T> = (gilt.proportion * effective_issuance).saturated_into();
+				let gilt_value = gilt.proportion * effective_issuance;
 
 				totals.frozen = totals.frozen.saturating_sub(gilt.amount);
 				totals.proportion = totals.proportion.saturating_sub(gilt.proportion);
@@ -488,7 +493,40 @@ pub mod pallet {
 		}
 	}
 
+	/// Issuance information returned by `issuance()`.
+	pub struct IssuanceInfo<Balance> {
+		/// The balance held in reserve over all active gilts.
+		pub reserved: Balance,
+		/// The issuance not held in reserve for active gilts. Together with `reserved` this sums to
+		/// `Currency::total_issuance`.
+		pub non_gilt: Balance,
+		/// The balance that `reserved` is effectively worth, at present. This is not issued funds
+		/// and could be less than `reserved` (though in most cases should be greater).
+		pub effective: Balance,
+	}
+
 	impl<T: Config> Pallet<T> {
+		/// Get the target amount of Gilts that we're aiming for.
+		pub fn target() -> Perquintill {
+			ActiveTotal::<T>::get().target
+		}
+
+		/// Returns information on the issuance of gilts.
+		pub fn issuance() -> IssuanceInfo<BalanceOf<T>> {
+			let totals = ActiveTotal::<T>::get();
+
+			let total_issuance = T::Currency::total_issuance();
+			let non_gilt = total_issuance.saturating_sub(totals.frozen);
+			let effective = totals.proportion.left_from_one()
+				.saturating_reciprocal_mul(non_gilt);
+
+			IssuanceInfo {
+				reserved: totals.frozen,
+				non_gilt,
+				effective,
+			}
+		}
+
 		/// Attempt to enlarge our gilt-set from bids in order to satisfy our desired target amount
 		/// of funds frozen into gilts.
 		pub fn pursue_target(max_bids: u32) -> Weight {
@@ -497,11 +535,10 @@ pub mod pallet {
 				let missing = totals.target.saturating_sub(totals.proportion);
 
 				let total_issuance = T::Currency::total_issuance().saturating_sub(T::IgnoredIssuance::get());
-				let nongilt_issuance: u128 = total_issuance.saturating_sub(totals.frozen)
-					.saturated_into();
+				let nongilt_issuance = total_issuance.saturating_sub(totals.frozen);
 				let effective_issuance = totals.proportion.left_from_one()
 					.saturating_reciprocal_mul(nongilt_issuance);
-				let intake: BalanceOf<T> = (missing * effective_issuance).saturated_into();
+				let intake = missing * effective_issuance;
 
 				let (bids_taken, queues_hit) = Self::enlarge(intake, max_bids);
 				let first_from_each_queue = T::WeightInfo::pursue_target_per_queue(queues_hit);
@@ -550,13 +587,12 @@ pub mod pallet {
 								qs[queue_index].1 = qs[queue_index].1.saturating_sub(bid.amount);
 
 								// Now to activate the bid...
-								let nongilt_issuance: u128 = total_issuance.saturating_sub(totals.frozen)
-									.saturated_into();
+								let nongilt_issuance = total_issuance.saturating_sub(totals.frozen);
 								let effective_issuance = totals.proportion.left_from_one()
 									.saturating_reciprocal_mul(nongilt_issuance);
-								let n: u128 = amount.saturated_into();
+								let n = amount;
 								let d = effective_issuance;
-								let proportion = Perquintill::from_rational_approximation(n, d);
+								let proportion = Perquintill::from_rational(n, d);
 								let who = bid.who;
 								let index = totals.index;
 								totals.frozen += bid.amount;

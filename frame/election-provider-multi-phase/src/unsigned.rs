@@ -66,8 +66,17 @@ impl<T: Config> Pallet<T> {
 		let iters = Self::get_balancing_iters();
 		// get the solution, with a load of checks to ensure if submitted, IT IS ABSOLUTELY VALID.
 		let (raw_solution, witness) = Self::mine_and_check(iters)?;
+		let score = raw_solution.score.clone();
 
-		let call = Call::submit_unsigned(raw_solution, witness).into();
+		let call: <T as frame_system::offchain::SendTransactionTypes<Call<T>>>::OverarchingCall =
+			Call::submit_unsigned(raw_solution, witness).into();
+		log!(
+			info,
+			"mined a solution with score {:?} and size {}",
+			score,
+			call.using_encoded(|b| b.len())
+		);
+
 		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call)
 			.map_err(|_| MinerError::PoolSubmissionFailed)
 	}
@@ -413,6 +422,9 @@ mod max_weight {
 		fn on_initialize_open_unsigned_with_snapshot() -> Weight {
 			unreachable!()
 		}
+		fn elect_queued() -> Weight {
+			0
+		}
 		fn on_initialize_open_unsigned_without_snapshot() -> Weight {
 			unreachable!()
 		}
@@ -487,7 +499,7 @@ mod tests {
 	};
 	use frame_support::{dispatch::Dispatchable, traits::OffchainWorker};
 	use mock::Call as OuterCall;
-	use sp_election_providers::Assignment;
+	use frame_election_provider_support::Assignment;
 	use sp_runtime::{traits::ValidateUnsigned, PerU16};
 
 	#[test]

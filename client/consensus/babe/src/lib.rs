@@ -97,7 +97,7 @@ use sp_consensus::{
 	SelectChain, SlotData, import_queue::{Verifier, BasicQueue, DefaultImportQueue, CacheKeyId},
 };
 use sp_consensus_babe::inherents::BabeInherentData;
-use sp_timestamp::{TimestampInherentData, InherentType as TimestampInherent};
+use sp_timestamp::TimestampInherentData;
 use sc_client_api::{
 	backend::AuxStore, BlockchainEvents, ProvideUncles,
 };
@@ -919,13 +919,13 @@ impl SlotCompatible for TimeSource {
 	fn extract_timestamp_and_slot(
 		&self,
 		data: &InherentData,
-	) -> Result<(TimestampInherent, Slot, std::time::Duration), sp_consensus::Error> {
+	) -> Result<(u64, Slot, std::time::Duration), sp_consensus::Error> {
 		trace!(target: "babe", "extract timestamp");
 		data.timestamp_inherent_data()
 			.and_then(|t| data.babe_inherent_data().map(|a| (t, a)))
 			.map_err(Into::into)
 			.map_err(sp_consensus::Error::InherentData)
-			.map(|(x, y)| (x, y, self.0.lock().0.take().unwrap_or_default()))
+			.map(|(x, y)| (*x, y, self.0.lock().0.take().unwrap_or_default()))
 	}
 }
 

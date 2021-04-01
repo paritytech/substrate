@@ -83,7 +83,7 @@ impl ProvideInherentData for InherentDataProvider {
 
 	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), Error> {
 		let timestamp = inherent_data.timestamp_inherent_data()?;
-		let slot = timestamp / self.slot_duration;
+		let slot = *timestamp / self.slot_duration;
 		inherent_data.put_data(INHERENT_IDENTIFIER, &slot)
 	}
 

@@ -357,3 +357,86 @@ fn should_not_send_a_report_if_already_online() {
 		});
 	});
 }
+
+#[test]
+fn should_handle_missing_progress_estimates() {
+	use frame_support::traits::OffchainWorker;
+
+	let mut ext = new_test_ext();
+	let (offchain, _state) = TestOffchainExt::new();
+	let (pool, state) = TestTransactionPoolExt::new();
+	ext.register_extension(OffchainDbExt::new(offchain.clone()));
+	ext.register_extension(OffchainWorkerExt::new(offchain));
+	ext.register_extension(TransactionPoolExt::new(pool));
+
+	ext.execute_with(|| {
+		let block = 1;
+
+		System::set_block_number(block);
+		UintAuthorityId::set_all_keys(vec![0, 1, 2]);
+
+		// buffer new validators
+		Session::rotate_session();
+
+		// enact the change and buffer another one
+		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![0, 1, 2]));
+		Session::rotate_session();
+
+		// we will return `None` on the next call to `estimate_current_session_progress`
+		// and the offchain worker should fallback to checking `HeartbeatAfter`
+		MOCK_CURRENT_SESSION_PROGRESS.with(|p| *p.borrow_mut() = Some(None));
+		ImOnline::offchain_worker(block);
+
+		assert_eq!(state.read().transactions.len(), 3);
+	});
+}
+
+#[test]
+fn should_handle_non_linear_session_progress() {
+	// NOTE: this is the reason why we started using `EstimateNextSessionRotation` to figure out if
+	// we should send a heartbeat, it's possible that between successive blocks we progress through
+	// the session more than just one block increment (in BABE session length is defined in slots,
+	// not block numbers).
+
+	let mut ext = new_test_ext();
+	let (offchain, _state) = TestOffchainExt::new();
+	let (pool, _) = TestTransactionPoolExt::new();
+	ext.register_extension(OffchainDbExt::new(offchain.clone()));
+	ext.register_extension(OffchainWorkerExt::new(offchain));
+	ext.register_extension(TransactionPoolExt::new(pool));
+
+	ext.execute_with(|| {
+		UintAuthorityId::set_all_keys(vec![0, 1, 2]);
+
+		// buffer new validator
+		Session::rotate_session();
+
+		// mock the session length as being 10 blocks long,
+		// enact the change and buffer another one
+		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![0, 1, 2]));
+
+		// mock the session length has being 10 which should make us assume the fallback for half
+		// session will be reached by block 5.
+		MOCK_AVERAGE_SESSION_LENGTH.with(|p| *p.borrow_mut() = Some(10));
+
+		Session::rotate_session();
+
+		// if we don't have valid results for the current session progres then
+		// we'll fallback to `HeartbeatAfter` and only heartbeat on block 5.
+		MOCK_CURRENT_SESSION_PROGRESS.with(|p| *p.borrow_mut() = Some(None));
+		assert_eq!(
+			ImOnline::send_heartbeats(2).err(),
+			Some(OffchainErr::TooEarly),
+		);
+
+		MOCK_CURRENT_SESSION_PROGRESS.with(|p| *p.borrow_mut() = Some(None));
+		assert!(ImOnline::send_heartbeats(5).ok().is_some());
+
+		// if we have a valid current session progress then we'll heartbeat as soon
+		// as we're past 50% of the session regardless of the block number
+		MOCK_CURRENT_SESSION_PROGRESS
+			.with(|p| *p.borrow_mut() = Some(Some(Percent::from_percent(51))));
+
+		assert!(ImOnline::send_heartbeats(2).ok().is_some());
+	});
+}

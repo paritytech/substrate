@@ -19,9 +19,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::Encode;
-#[cfg(feature = "std")]
-use codec::Decode;
+use codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use sp_inherents::ProvideInherentData;
 use sp_inherents::{InherentIdentifier, IsFatalError, InherentData};
@@ -30,8 +28,83 @@ use sp_runtime::RuntimeString;
 
 /// The identifier for the `timestamp` inherent.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"timstap0";
+
 /// The type of the inherent.
-pub type InherentType = u64;
+pub type InherentType = Timestamp;
+
+/// Unit type wrapper that represents a timestamp.
+///
+/// Such a timestamp is the time since the UNIX_EPOCH in milliseconds at a given point in time.
+#[derive(Debug, Encode, Decode, Eq, Clone, Copy, Default, Ord)]
+pub struct Timestamp(u64);
+
+impl Timestamp {
+	/// Create new `Self`.
+	pub const fn new(inner: u64) -> Self {
+		Self(inner)
+	}
+}
+
+impl sp_std::ops::Deref for Timestamp {
+	type Target = u64;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+impl core::ops::Add for Timestamp {
+	type Output = Self;
+
+	fn add(self, other: Self) -> Self {
+		Self(self.0 + other.0)
+	}
+}
+
+impl core::ops::Add<u64> for Timestamp {
+	type Output = Self;
+
+	fn add(self, other: u64) -> Self {
+		Self(self.0 + other)
+	}
+}
+
+impl<T: Into<u64> + Copy> core::cmp::PartialEq<T> for Timestamp {
+	fn eq(&self, eq: &T) -> bool {
+		self.0 == (*eq).into()
+	}
+}
+
+impl<T: Into<u64> + Copy> core::cmp::PartialOrd<T> for Timestamp {
+	fn partial_cmp(&self, other: &T) -> Option<core::cmp::Ordering> {
+		self.0.partial_cmp(&(*other).into())
+	}
+}
+
+#[cfg(feature = "std")]
+impl std::fmt::Display for Timestamp {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}", self.0)
+	}
+}
+
+impl From<u64> for Timestamp {
+	fn from(timestamp: u64) -> Self {
+		Timestamp(timestamp)
+	}
+}
+
+impl From<Timestamp> for u64 {
+	fn from(timestamp: Timestamp) -> u64 {
+		timestamp.0
+	}
+}
+
+impl From<sp_std::time::Duration> for Timestamp {
+	fn from(duration: sp_std::time::Duration) -> Self {
+		Timestamp(duration.as_millis() as u64)
+	}
+}
 
 /// Errors that can occur while checking the timestamp inherent.
 #[derive(Encode, sp_runtime::RuntimeDebug)]
@@ -99,8 +172,7 @@ impl ProvideInherentData for InherentDataProvider {
 			.map_err(|_| {
 				"Current time is before unix epoch".into()
 			}).and_then(|d| {
-				let duration: InherentType = d.as_millis() as u64;
-				inherent_data.put_data(INHERENT_IDENTIFIER, &duration)
+				inherent_data.put_data(INHERENT_IDENTIFIER, &InherentType::from(d))
 			})
 	}
 
@@ -109,9 +181,3 @@ impl ProvideInherentData for InherentDataProvider {
 	}
 }
 
-
-/// A trait which is called when the timestamp is set.
-#[impl_trait_for_tuples::impl_for_tuples(30)]
-pub trait OnTimestampSet<Moment> {
-	fn on_timestamp_set(moment: Moment);
-}
