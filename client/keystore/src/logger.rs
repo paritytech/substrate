@@ -18,128 +18,271 @@
 
 //! Keystore logging wrapper
 
-use async_trait::async_trait;
 use parking_lot::RwLock;
+use sp_application_crypto::{ecdsa, ed25519, sr25519, AppKey, AppPair, IsWrappedBy};
 use sp_core::{
-	crypto::{CryptoTypePublicPair, KeyTypeId, Pair as PairT, ExposeSecret, SecretString, Public},
-	sr25519::{Public as Sr25519Public, Pair as Sr25519Pair},
-	Encode,
+    crypto::{CryptoTypePublicPair, ExposeSecret, KeyTypeId, Pair as PairT, Public, SecretString},
+    sr25519::{Pair as Sr25519Pair, Public as Sr25519Public},
+    Encode,
 };
 use sp_keystore::{
-	CryptoStore,
-	SyncCryptoStorePtr,
-	Error as TraitError,
-	SyncCryptoStore,
-	vrf::{VRFTranscriptData, VRFSignature, make_transcript},
+    vrf::{make_transcript, VRFSignature, VRFTranscriptData},
+    Error as TraitError, SyncCryptoStorePtr,
 };
-use sp_application_crypto::{ed25519, sr25519, ecdsa, AppPair, AppKey, IsWrappedBy};
-use sp_tracing::info;
-
-use crate::{Result, Error};
+use sp_tracing::{debug, enter_span, info, Level};
 
 /// A logging keystore that wraps any keystore and logs all access to it
-pub struct TracingKeystore<C: CryptoStore>(C);
+pub struct TracingKeystore<C>(C);
 
-#[async_trait]
-impl<C> CryptoStore for TracingKeystore<C> where C: CryptoStore {
-	async fn keys(&self, id: KeyTypeId) -> std::result::Result<Vec<CryptoTypePublicPair>, TraitError> {
-		sp_tracing::enter_span!(sp_tracing::Level::INFO, "keys");
-		let r = self.0.keys(id).await;
-		r
-	}
+impl<C> TracingKeystore<C> {
+    /// Instantiate a new TracingKeystore with the given CryptoStore
+    pub fn new(store: C) -> Self {
+        Self(store)
+    }
+}
 
-	async fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public> {
-		sp_tracing::enter_span!(sp_tracing::Level::INFO, "sr25519_public_keys");
-		let r = self.0.sr25519_public_keys(id).await;
-		r
-	}
+mod cryptostore {
+    use super::*;
+    use async_trait::async_trait;
+    use sp_keystore::CryptoStore;
 
-	async fn sr25519_generate_new(
-		&self,
-		id: KeyTypeId,
-		seed: Option<&str>,
-	) -> std::result::Result<sr25519::Public, TraitError> {
-		sp_tracing::enter_span!(sp_tracing::Level::INFO, "sr25519_generate_new");
-		let r = self.0.sr25519_generate_new(id, seed).await;
-		r
-	}
+    #[async_trait]
+    impl<C> CryptoStore for TracingKeystore<C>
+    where
+        C: CryptoStore,
+    {
+        async fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, TraitError> {
+            enter_span!(Level::INFO, "keys");
+            let r = self.0.keys(id).await;
+            debug!(result = ?r, "keys");
+            r
+        }
 
-	async fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public> {
-		sp_tracing::enter_span!(sp_tracing::Level::INFO, "keys");
-		let r = self.0.ed25519_public_keys(id).await;
-		r
-	}
+        async fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public> {
+            enter_span!(Level::INFO, "sr25519_public_keys");
+            let r = self.0.sr25519_public_keys(id).await;
+            debug!(result = ?r, "sr25519_public_keys");
+            r
+        }
 
-	async fn ed25519_generate_new(
-		&self,
-		id: KeyTypeId,
-		seed: Option<&str>,
-	) -> std::result::Result<ed25519::Public, TraitError> {
-		sp_tracing::enter_span!(sp_tracing::Level::INFO, "ed25519_generate_new");
-		let r = self.0.ed25519_generate_new(id, seed).await;
-		r
-	}
+        async fn sr25519_generate_new(
+            &self,
+            id: KeyTypeId,
+            seed: Option<&str>,
+        ) -> Result<sr25519::Public, TraitError> {
+            enter_span!(Level::INFO, "sr25519_generate_new");
+            let r = self.0.sr25519_generate_new(id, seed).await;
+            debug!(result = ?r, "sr25519_generate_new");
+            r
+        }
 
-	async fn ecdsa_public_keys(&self, id: KeyTypeId) -> Vec<ecdsa::Public> {
-		sp_tracing::enter_span!(sp_tracing::Level::INFO, "ecdsa_public_keys");
-		let r = self.0.ecdsa_public_keys(id).await;
-		r
-	}
+        async fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public> {
+            enter_span!(Level::INFO, "keys");
+            let r = self.0.ed25519_public_keys(id).await;
+            debug!(result = ?r, "keys");
+            r
+        }
 
-	async fn ecdsa_generate_new(
-		&self,
-		id: KeyTypeId,
-		seed: Option<&str>,
-	) -> std::result::Result<ecdsa::Public, TraitError> {
-		sp_tracing::enter_span!(sp_tracing::Level::INFO, "ecdsa_generate_new");
-		let r = self.0.ecdsa_generate_new(id, seed).await;
-		r
-	}
+        async fn ed25519_generate_new(
+            &self,
+            id: KeyTypeId,
+            seed: Option<&str>,
+        ) -> Result<ed25519::Public, TraitError> {
+            enter_span!(Level::INFO, "ed25519_generate_new");
+            let r = self.0.ed25519_generate_new(id, seed).await;
+            debug!(result = ?r, "ed25519_generate_new");
+            r
+        }
 
-	async fn insert_unknown(&self, id: KeyTypeId, suri: &str, public: &[u8]) -> std::result::Result<(), ()> {
-		sp_tracing::enter_span!(sp_tracing::Level::INFO, "insert_unknown");
-		let r = self.0.insert_unknown(id, suri, public).await;
-		r
-	}
+        async fn ecdsa_public_keys(&self, id: KeyTypeId) -> Vec<ecdsa::Public> {
+            enter_span!(Level::INFO, "ecdsa_public_keys");
+            let r = self.0.ecdsa_public_keys(id).await;
+            debug!(result = ?r, "ecdsa_public_keys");
+            r
+        }
 
-	async fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
-		sp_tracing::enter_span!(sp_tracing::Level::INFO, "has_keys");
-		let r = self.0.has_keys(public_keys).await;
-		r
-	}
+        async fn ecdsa_generate_new(
+            &self,
+            id: KeyTypeId,
+            seed: Option<&str>,
+        ) -> Result<ecdsa::Public, TraitError> {
+            enter_span!(Level::INFO, "ecdsa_generate_new");
+            let r = self.0.ecdsa_generate_new(id, seed).await;
+            debug!(result = ?r, "ecdsa_generate_new");
+            r
+        }
 
-	async fn supported_keys(
-		&self,
-		id: KeyTypeId,
-		keys: Vec<CryptoTypePublicPair>,
-	) -> std::result::Result<Vec<CryptoTypePublicPair>, TraitError> {
+        async fn insert_unknown(&self, id: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
+            enter_span!(Level::INFO, "insert_unknown");
+            let r = self.0.insert_unknown(id, suri, public).await;
+            debug!(result = ?r, "insert_unknown");
+            r
+        }
 
-		sp_tracing::enter_span!(sp_tracing::Level::INFO, "supported_keys");
-		let r = self.0.supported_keys(id, keys).await;
-		r
-	}
+        async fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
+            enter_span!(Level::INFO, "has_keys");
+            let r = self.0.has_keys(public_keys).await;
+            debug!(result = ?r, "has_keys");
+            r
+        }
 
-	async fn sign_with(
-		&self,
-		id: KeyTypeId,
-		key: &CryptoTypePublicPair,
-		msg: &[u8],
-	) -> std::result::Result<Option<Vec<u8>>, TraitError> {
+        async fn supported_keys(
+            &self,
+            id: KeyTypeId,
+            keys: Vec<CryptoTypePublicPair>,
+        ) -> Result<Vec<CryptoTypePublicPair>, TraitError> {
+            enter_span!(Level::INFO, "supported_keys");
+            let r = self.0.supported_keys(id, keys).await;
+            debug!(result = ?r, "supported_keys");
+            r
+        }
 
-		sp_tracing::enter_span!(sp_tracing::Level::INFO, "sign_with");
-		let r = self.0.sign_with(id, key, msg).await;
-		r
-	}
+        async fn sign_with(
+            &self,
+            id: KeyTypeId,
+            key: &CryptoTypePublicPair,
+            msg: &[u8],
+        ) -> Result<Vec<u8>, TraitError> {
+            enter_span!(Level::INFO, "sign_with");
+            let r = self.0.sign_with(id, key, msg).await;
+            debug!(result = ?r, "sign_with");
+            r
+        }
 
-	async fn sr25519_vrf_sign(
-		&self,
-		key_type: KeyTypeId,
-		public: &sr25519::Public,
-		transcript_data: VRFTranscriptData,
-	) -> std::result::Result<Option<VRFSignature>, TraitError> {
+        async fn sr25519_vrf_sign(
+            &self,
+            key_type: KeyTypeId,
+            public: &sr25519::Public,
+            transcript_data: VRFTranscriptData,
+        ) -> Result<VRFSignature, TraitError> {
+            enter_span!(Level::INFO, "sr25519_vrf_sign");
+            let r = self
+                .0
+                .sr25519_vrf_sign(key_type, public, transcript_data)
+                .await;
+            debug!(result = ?r, "sr25519_vrf_sign");
+            r
+        }
+    }
+}
 
-		sp_tracing::enter_span!(sp_tracing::Level::INFO, "sr25519_vrf_sign");
-		let r = self.0.sr25519_vrf_sign(key_type, public, transcript_data).await;
-		r
-	}
+mod sync_cryptostore {
+    use super::*;
+    use sp_keystore::SyncCryptoStore;
+
+    impl<C> SyncCryptoStore for TracingKeystore<C>
+    where
+        C: SyncCryptoStore,
+    {
+        fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, TraitError> {
+            enter_span!(Level::INFO, "sync_keys");
+            let r = SyncCryptoStore::keys(&self.0, id);
+
+            debug!(result = ?r, "sync_keys");
+            r
+        }
+
+        fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public> {
+            enter_span!(Level::INFO, "sync_sr25519_public_keys");
+            let r = SyncCryptoStore::sr25519_public_keys(&self.0, id);
+            debug!(result = ?r, "sync_sr25519_public_keys");
+            r
+        }
+
+        fn sr25519_generate_new(
+            &self,
+            id: KeyTypeId,
+            seed: Option<&str>,
+        ) -> Result<sr25519::Public, TraitError> {
+            enter_span!(Level::INFO, "sync_sr25519_generate_new");
+            let r = SyncCryptoStore::sr25519_generate_new(&self.0, id, seed);
+            debug!(result = ?r, "sync_sr25519_generate_new");
+            r
+        }
+
+        fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public> {
+            enter_span!(Level::INFO, "sync_keys");
+            let r = SyncCryptoStore::ed25519_public_keys(&self.0, id);
+            debug!(result = ?r, "sync_keys");
+            r
+        }
+
+        fn ed25519_generate_new(
+            &self,
+            id: KeyTypeId,
+            seed: Option<&str>,
+        ) -> Result<ed25519::Public, TraitError> {
+            enter_span!(Level::INFO, "sync_ed25519_generate_new");
+            let r = SyncCryptoStore::ed25519_generate_new(&self.0, id, seed);
+            debug!(result = ?r, "sync_ed25519_generate_new");
+            r
+        }
+
+        fn ecdsa_public_keys(&self, id: KeyTypeId) -> Vec<ecdsa::Public> {
+            enter_span!(Level::INFO, "sync_ecdsa_public_keys");
+            let r = SyncCryptoStore::ecdsa_public_keys(&self.0, id);
+            debug!(result = ?r, "sync_ecdsa_public_keys");
+            r
+        }
+
+        fn ecdsa_generate_new(
+            &self,
+            id: KeyTypeId,
+            seed: Option<&str>,
+        ) -> Result<ecdsa::Public, TraitError> {
+            enter_span!(Level::INFO, "sync_ecdsa_generate_new");
+            let r = SyncCryptoStore::ecdsa_generate_new(&self.0, id, seed);
+            debug!(result = ?r, "sync_ecdsa_generate_new");
+            r
+        }
+
+        fn insert_unknown(&self, id: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
+            enter_span!(Level::INFO, "sync_insert_unknown");
+            let r = SyncCryptoStore::insert_unknown(&self.0, id, suri, public);
+            debug!(result = ?r, "sync_insert_unknown");
+            r
+        }
+
+        fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
+            enter_span!(Level::INFO, "sync_has_keys");
+            let r = SyncCryptoStore::has_keys(&self.0, public_keys);
+            debug!(result = ?r, "sync_has_keys");
+            r
+        }
+
+        fn supported_keys(
+            &self,
+            id: KeyTypeId,
+            keys: Vec<CryptoTypePublicPair>,
+        ) -> Result<Vec<CryptoTypePublicPair>, TraitError> {
+            enter_span!(Level::INFO, "sync_supported_keys");
+            let r = SyncCryptoStore::supported_keys(&self.0, id, keys);
+            debug!(result = ?r, "sync_supported_keys");
+            r
+        }
+
+        fn sign_with(
+            &self,
+            id: KeyTypeId,
+            key: &CryptoTypePublicPair,
+            msg: &[u8],
+        ) -> Result<Vec<u8>, TraitError> {
+            enter_span!(Level::INFO, "sync_sign_with");
+            let r = SyncCryptoStore::sign_with(&self.0, id, key, msg);
+            debug!(result = ?r, "sync_sign_with");
+            r
+        }
+
+        fn sr25519_vrf_sign(
+            &self,
+            key_type: KeyTypeId,
+            public: &sr25519::Public,
+            transcript_data: VRFTranscriptData,
+        ) -> Result<VRFSignature, TraitError> {
+            enter_span!(Level::INFO, "sync_sr25519_vrf_sign");
+            let r = SyncCryptoStore::sr25519_vrf_sign(&self.0, key_type, public, transcript_data);
+            debug!(result = ?r, "sync_sr25519_vrf_sign");
+            r
+        }
+    }
 }

@@ -23,7 +23,7 @@ use schnorrkel::vrf::{VRFOutput, VRFProof};
 
 /// An enum whose variants represent possible
 /// accepted values to construct the VRF transcript
-#[derive(Clone, Encode)]
+#[derive(Clone, Encode, Debug)]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum VRFTranscriptValue {
 	/// Value is an array of bytes
@@ -32,7 +32,7 @@ pub enum VRFTranscriptValue {
 	U64(u64),
 }
 /// VRF Transcript data
-#[derive(Clone, Encode)]
+#[derive(Clone, Encode, Debug)]
 pub struct VRFTranscriptData {
 	/// The transcript's label
 	pub label: &'static [u8],
@@ -41,6 +41,7 @@ pub struct VRFTranscriptData {
 }
 /// VRF signature data
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug)]
 pub struct VRFSignature {
 	/// The VRFOutput serialized
 	pub output: VRFOutput,
