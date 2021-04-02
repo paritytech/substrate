@@ -238,7 +238,7 @@ impl<B: BlockT> Cache<B> {
 	/// Returns if this is the first modification at the given block height.
 	///
 	/// If there already exists a modification for a higher block height, `false` is returned.
-	fn is_first_modification_at_block_height(&self, number: NumberFor<B>) -> bool {
+	fn has_no_modification_at_block_height(&self, number: NumberFor<B>) -> bool {
 		self.modifications.get(0).map(|c| c.number < number).unwrap_or(true)
 	}
 }
@@ -304,9 +304,9 @@ struct LocalCache<B: BlockT> {
 }
 
 impl<B: BlockT> LocalCache<B> {
-	/// Commit all cached values to the given `cache`.
+	/// Commit all cached values to the given shared `Cache`.
 	///
-	/// After calling this method, the internal state is resetted.
+	/// After calling this method, the internal state is reset.
 	fn commit_to(&mut self, cache: &mut Cache<B>) {
 		trace!(
 			"Committing {} local, {} hashes to shared cache",
@@ -396,8 +396,8 @@ impl<B: BlockT> CacheChanges<B> {
 			.cloned()
 			.collect();
 
-		let is_first_modification_at_height = if let Some(num) = commit_number {
-			cache.is_first_modification_at_block_height(num)
+		let has_no_modification_at_block_height = if let Some(num) = commit_number {
+			cache.has_no_modification_at_block_height(num)
 		} else {
 			false
 		};
@@ -436,7 +436,7 @@ impl<B: BlockT> CacheChanges<B> {
 		cache.sync(&enacted, &retracted);
 
 		if let (Some(ref parent_hash), true) = (self.parent_hash, update_cache) {
-			let commit_to_shared_cache = is_best || is_first_modification_at_height;
+			let commit_to_shared_cache = is_best || has_no_modification_at_block_height;
 			// Propagate cache only if committing on top of the latest canonical state
 			// blocks are ordered by number and only one block with a given number is
 			// marked as canonical (contributed to canonical state cache)
