@@ -50,7 +50,7 @@ pub struct Cache<B: BlockT> {
 	/// Information on the modifications in recently committed blocks; specifically which keys
 	/// changed in which block. Ordered by block number.
 	///
-	/// The latest committed block is always at the top!
+	/// The latest committed block is always at the front.
 	modifications: VecDeque<BlockChanges<B::Header>>,
 }
 
