@@ -193,14 +193,17 @@ pub fn new_full_base(
 	} = new_partial(&config)?;
 
 	if let Some(uri) = &config.keystore_remote {
-		//use tee_keystore::TEEKeystore;
-		//let keystore = TEEKeystore::deferred(&uri)
-		//	.map_err(|e| format!("Failed to connect to remote keystore: {:?}", e))
-		//	.map_err(ServiceError::Other)?;
+		// use tee_keystore::TEEKeystore;
+		// let keystore = TEEKeystore::deferred(&uri)
+		// 	.map_err(|e| format!("Failed to connect to remote keystore: {:?}", e))
+		// 	.map_err(ServiceError::Other)?;
 
-		//keystore_container.set_remote_keystore(Arc::new(keystore));
-		use substrate_example_tssrs::client::RemoteKeystore;
-		let keystore = RemoteKeystore::open(uri[6..].to_string(), None).map_err(ServiceError::Other)?;
+		//use substrate_example_tssrs::client::RemoteKeystore;
+		//let keystore = RemoteKeystore::open(uri[6..].to_string(), None).map_err(ServiceError::Other)?;
+
+		let keystore = play_keystore::PlayKeystore::new();
+
+		let keystore = sc_keystore::TracingKeystore::new(keystore);
 
 		keystore_container.set_remote_keystore(Arc::new(keystore));
 	}
