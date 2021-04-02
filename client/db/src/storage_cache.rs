@@ -1480,106 +1480,106 @@ mod tests {
 		let h2c = H256::random();
 
 		for (commit_as_best, cached_value) in vec![(h2a, Some(vec![2])), (h2b, None), (h2c, None)] {
-		let shared = new_shared_cache::<Block>(256*1024, (0,1));
+			let shared = new_shared_cache::<Block>(256*1024, (0,1));
 
-		let mut s = CachingState::new(
-			InMemoryBackend::<BlakeTwo256>::default(),
-			shared.clone(),
-			Some(root_parent),
-		);
-		s.cache.sync_cache(
-			&[],
-			&[],
-			vec![(key.clone(), Some(vec![1]))],
-			vec![],
-			Some(h1),
-			Some(1),
-			true,
-		);
-		assert_eq!(shared.lock().lru_storage.get(&key).unwrap(), &Some(vec![1]));
+			let mut s = CachingState::new(
+				InMemoryBackend::<BlakeTwo256>::default(),
+				shared.clone(),
+				Some(root_parent),
+			);
+			s.cache.sync_cache(
+				&[],
+				&[],
+				vec![(key.clone(), Some(vec![1]))],
+				vec![],
+				Some(h1),
+				Some(1),
+				true,
+			);
+			assert_eq!(shared.lock().lru_storage.get(&key).unwrap(), &Some(vec![1]));
 
-		{
+			{
+				let mut s = CachingState::new(
+					InMemoryBackend::<BlakeTwo256>::default(),
+					shared.clone(),
+					Some(h1),
+				);
+
+				// commit all forks as non-best
+				s.cache.sync_cache(
+					&[],
+					&[],
+					vec![(key.clone(), Some(vec![2]))],
+					vec![],
+					Some(h2a),
+					Some(2),
+					false,
+				);
+			}
+
+			{
+				let mut s = CachingState::new(
+					InMemoryBackend::<BlakeTwo256>::default(),
+					shared.clone(),
+					Some(h1),
+				);
+
+				s.cache.sync_cache(
+					&[],
+					&[],
+					vec![(key.clone(), Some(vec![3]))],
+					vec![],
+					Some(h2b),
+					Some(2),
+					false,
+				);
+			}
+
+			{
+				let mut s = CachingState::new(
+					InMemoryBackend::<BlakeTwo256>::default(),
+					shared.clone(),
+					Some(h1),
+				);
+
+				s.cache.sync_cache(
+					&[],
+					&[],
+					vec![(key.clone(), Some(vec![4]))],
+					vec![],
+					Some(h2c),
+					Some(2),
+					false,
+				);
+			}
+
+			// We should have the value of the first block cached.
+			assert_eq!(shared.lock().lru_storage.get(&key).unwrap(), &Some(vec![2]));
+
 			let mut s = CachingState::new(
 				InMemoryBackend::<BlakeTwo256>::default(),
 				shared.clone(),
 				Some(h1),
 			);
 
-			// commit all forks as non-best
+			// commit again as best with no changes
 			s.cache.sync_cache(
 				&[],
 				&[],
-				vec![(key.clone(), Some(vec![2]))],
 				vec![],
-				Some(h2a),
+				vec![],
+				Some(commit_as_best),
 				Some(2),
-				false,
+				true,
 			);
-		}
 
-		{
-			let mut s = CachingState::new(
+			let s = CachingState::new(
 				InMemoryBackend::<BlakeTwo256>::default(),
 				shared.clone(),
-				Some(h1),
+				Some(commit_as_best),
 			);
 
-			s.cache.sync_cache(
-				&[],
-				&[],
-				vec![(key.clone(), Some(vec![3]))],
-				vec![],
-				Some(h2b),
-				Some(2),
-				false,
-			);
-		}
-
-		{
-			let mut s = CachingState::new(
-				InMemoryBackend::<BlakeTwo256>::default(),
-				shared.clone(),
-				Some(h1),
-			);
-
-			s.cache.sync_cache(
-				&[],
-				&[],
-				vec![(key.clone(), Some(vec![4]))],
-				vec![],
-				Some(h2c),
-				Some(2),
-				false,
-			);
-		}
-
-		// We should have the value of the first block cached.
-		assert_eq!(shared.lock().lru_storage.get(&key).unwrap(), &Some(vec![2]));
-
-		let mut s = CachingState::new(
-			InMemoryBackend::<BlakeTwo256>::default(),
-			shared.clone(),
-			Some(h1),
-		);
-
-		// commit again as best with no changes
-		s.cache.sync_cache(
-			&[],
-			&[],
-			vec![],
-			vec![],
-			Some(commit_as_best),
-			Some(2),
-			true,
-		);
-
-		let s = CachingState::new(
-			InMemoryBackend::<BlakeTwo256>::default(),
-			shared.clone(),
-			Some(commit_as_best),
-		);
-
-		assert_eq!(s.storage(&key).unwrap(), cached_value);
+			assert_eq!(s.storage(&key).unwrap(), cached_value);
 		}
 	}
 }
