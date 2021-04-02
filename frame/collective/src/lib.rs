@@ -198,6 +198,8 @@ decl_storage! {
 		/// Actual proposal for a given hash, if it's current.
 		pub ProposalOf get(fn proposal_of):
 			map hasher(identity) T::Hash => Option<<T as Config<I>>::Proposal>;
+		/// Information about whether we want to dispatch a proposal using the collective
+		/// origin or as a regular account id.
 		pub DispatchAsAccount get(fn dispatch_as_account):
 			map hasher(identity) T::Hash => bool;
 		/// Votes on a given proposal, if it is ongoing.
@@ -806,6 +808,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 		if as_account {
 			let account = match origin {
 				RawOrigin::Members(n, d) => {
+					// TODO: reduce fraction n/d
 					T::ModuleId::get().into_sub_account((n, d))
 				},
 				RawOrigin::Member(who) => who,
