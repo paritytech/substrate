@@ -45,7 +45,10 @@
 use sp_std::{prelude::*, result};
 use sp_core::u32_trait::Value as U32;
 use sp_io::storage;
-use sp_runtime::{RuntimeDebug, traits::Hash};
+use sp_runtime::{
+	RuntimeDebug, ModuleId,
+	traits::{Hash, AccountIdConversion},
+};
 
 use frame_support::{
 	codec::{Decode, Encode},
@@ -62,6 +65,9 @@ use frame_system::{self as system, ensure_signed, ensure_root};
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+
+#[cfg(test)]
+mod ensure_account_tests;
 
 pub mod weights;
 pub use weights::WeightInfo;
@@ -149,6 +155,9 @@ pub trait Config<I: Instance=DefaultInstance>: frame_system::Config {
 
 	/// Default vote strategy of this collective.
 	type DefaultVote: DefaultVote;
+
+	/// The collective's module id, used for deriving its sovereign account ID.
+	type ModuleId: Get<ModuleId>;
 
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
@@ -715,6 +724,22 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 		Self::members().contains(who)
 	}
 
+	/// Returns an account that represents when at least n of m (GCD) of the collective
+	/// members approve of something, for a specific instance of this pallet.
+	///
+	/// This function does computation, so if it will be used multiple times, store it locally.
+	pub fn ensure_at_least_account(n: u32, m: u32) -> T::AccountId {
+		T::ModuleId::get().into_sub_account(("atleast", n, m))
+	}
+
+	/// Returns an account that represents when more than n of m (GCD) of the collective
+	/// members approve of something, for a specific instance of this pallet.
+	///
+	/// This function does computation, so if it will be used multiple times, store it locally.
+	pub fn ensure_more_than_account(n: u32, m: u32) -> T::AccountId {
+		T::ModuleId::get().into_sub_account(("morethan", n, m))
+	}
+
 	/// Ensure that the right proposal bounds were passed and get the proposal from storage.
 	///
 	/// Checks the length in storage via `storage::read` which adds an extra `size_of::<u32>() == 4`
@@ -960,6 +985,60 @@ impl<
 	}
 }
 
+pub struct EnsureProportionMoreThanToAccount<N: U32, D: U32, T, I=DefaultInstance>(
+	sp_std::marker::PhantomData<(N, D, T, I)>
+);
+impl<
+	O: Into<Result<RawOrigin<T::AccountId, I>, O>> + From<RawOrigin<T::AccountId, I>>,
+	N: U32,
+	D: U32,
+	T: Config<I>,
+	I: Instance,
+> EnsureOrigin<O> for EnsureProportionMoreThanToAccount<N, D, T, I> {
+	type Success = T::AccountId;
+	fn try_origin(o: O) -> Result<Self::Success, O> {
+		o.into().and_then(|o| match o {
+			RawOrigin::Members(n, m) if n * D::VALUE > N::VALUE * m => {
+				let account = crate::Module::<T, I>::ensure_more_than_account(N::VALUE, D::VALUE);
+				Ok(account)
+			},
+			r => Err(O::from(r)),
+		})
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		O::from(RawOrigin::Members(1u32, 0u32))
+	}
+}
+
+pub struct EnsureProportionAtLeastToAccount<N: U32, D: U32, T, I=DefaultInstance>(
+	sp_std::marker::PhantomData<(N, D, T, I)>
+);
+impl<
+	O: Into<Result<RawOrigin<T::AccountId, I>, O>> + From<RawOrigin<T::AccountId, I>>,
+	N: U32,
+	D: U32,
+	T: Config<I>,
+	I: Instance,
+> EnsureOrigin<O> for EnsureProportionAtLeastToAccount<N, D, T, I> {
+	type Success = T::AccountId;
+	fn try_origin(o: O) -> Result<Self::Success, O> {
+		o.into().and_then(|o| match o {
+			RawOrigin::Members(n, m) if n * D::VALUE >= N::VALUE * m => {
+				let account = crate::Module::<T, I>::ensure_at_least_account(N::VALUE, D::VALUE);
+				Ok(account)
+			},
+			r => Err(O::from(r)),
+		})
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		O::from(RawOrigin::Members(0u32, 0u32))
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -978,8 +1057,12 @@ mod tests {
 		pub const MotionDuration: u64 = 3;
 		pub const MaxProposals: u32 = 100;
 		pub const MaxMembers: u32 = 100;
+		pub const CollectiveModuleId0: ModuleId = ModuleId(*b"py/coll0");
+		pub const CollectiveModuleId1: ModuleId = ModuleId(*b"py/coll1");
+		pub const CollectiveModuleId2: ModuleId = ModuleId(*b"py/coll2");
 		pub BlockWeights: frame_system::limits::BlockWeights =
 			frame_system::limits::BlockWeights::simple_max(1024);
+
 	}
 	impl frame_system::Config for Test {
 		type BaseCallFilter = ();
@@ -1014,6 +1097,7 @@ mod tests {
 		type MaxProposals = MaxProposals;
 		type MaxMembers = MaxMembers;
 		type DefaultVote = PrimeDefaultVote;
+		type ModuleId = CollectiveModuleId1;
 		type WeightInfo = ();
 	}
 	impl Config<Instance2> for Test {
@@ -1024,6 +1108,7 @@ mod tests {
 		type MaxProposals = MaxProposals;
 		type MaxMembers = MaxMembers;
 		type DefaultVote = MoreThanMajorityThenPrimeDefaultVote;
+		type ModuleId = CollectiveModuleId2;
 		type WeightInfo = ();
 	}
 	impl Config for Test {
@@ -1034,6 +1119,7 @@ mod tests {
 		type MaxProposals = MaxProposals;
 		type MaxMembers = MaxMembers;
 		type DefaultVote = PrimeDefaultVote;
+		type ModuleId = CollectiveModuleId0;
 		type WeightInfo = ();
 	}
 
