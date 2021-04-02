@@ -45,7 +45,12 @@
 use sp_std::{prelude::*, result};
 use sp_core::u32_trait::Value as U32;
 use sp_io::storage;
-use sp_runtime::{RuntimeDebug, traits::Hash};
+use sp_runtime::{
+	RuntimeDebug, ModuleId,
+	traits::{
+		Hash, AccountIdConversion
+	},
+};
 
 use frame_support::{
 	codec::{Decode, Encode},
@@ -150,6 +155,9 @@ pub trait Config<I: Instance=DefaultInstance>: frame_system::Config {
 	/// Default vote strategy of this collective.
 	type DefaultVote: DefaultVote;
 
+	/// The treasury's module id, used for deriving its sovereign account ID.
+	type ModuleId: Get<ModuleId>;
+
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
 }
@@ -190,6 +198,8 @@ decl_storage! {
 		/// Actual proposal for a given hash, if it's current.
 		pub ProposalOf get(fn proposal_of):
 			map hasher(identity) T::Hash => Option<<T as Config<I>>::Proposal>;
+		pub DispatchAsAccount get(fn dispatch_as_account):
+			map hasher(identity) T::Hash => bool;
 		/// Votes on a given proposal, if it is ongoing.
 		pub Voting get(fn voting):
 			map hasher(identity) T::Hash => Option<Votes<T::AccountId, T::BlockNumber>>;
@@ -435,7 +445,8 @@ decl_module! {
 		fn propose(origin,
 			#[compact] threshold: MemberCount,
 			proposal: Box<<T as Config<I>>::Proposal>,
-			#[compact] length_bound: u32
+			#[compact] length_bound: u32,
+			dispatch_as_account: bool,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let members = Self::members();
@@ -786,6 +797,22 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 			proposals.len() + 1 // calculate weight based on original length
 		});
 		num_proposals as u32
+	}
+
+	// A handler for dispatching a proposal as an account or with the collective origin.
+	fn dispatch(proposal: T::Proposal, origin: Origin<T>, as_account: bool) {
+		if as_account {
+
+			let account = match origin {
+				RawOrigin::Members(n, d) => {
+					T::ModuleId::get().into_sub_account((n, d))
+				},
+				RawOrigin::Member(who) => who,
+			};
+			proposal.dispatch(frame_system::RawOrigin::Signed(account).into());
+		} else {
+			proposal.dispatch(origin);
+		}
 	}
 }
 
