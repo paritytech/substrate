@@ -197,7 +197,7 @@ decl_storage! {
 		pub Proposals get(fn proposals): Vec<T::Hash>;
 		/// Actual proposal for a given hash, if it's current.
 		pub ProposalOf get(fn proposal_of):
-			map hasher(identity) T::Hash => Option<<T as Config<I>>::Proposal>;
+			map hasher(identity) T::Hash => Option<T::Proposal>;
 		/// Information about whether we want to dispatch a proposal using the collective
 		/// origin or as a regular account id.
 		pub DispatchAsAccount get(fn dispatch_as_account):
@@ -379,7 +379,7 @@ decl_module! {
 			DispatchClass::Operational
 		)]
 		fn execute(origin,
-			proposal: Box<<T as Config<I>>::Proposal>,
+			proposal: Box<T::Proposal>,
 			#[compact] length_bound: u32,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
@@ -446,7 +446,7 @@ decl_module! {
 		)]
 		fn propose(origin,
 			#[compact] threshold: MemberCount,
-			proposal: Box<<T as Config<I>>::Proposal>,
+			proposal: Box<T::Proposal>,
 			#[compact] length_bound: u32,
 			dispatch_as_account: bool,
 		) -> DispatchResultWithPostInfo {
@@ -457,7 +457,7 @@ decl_module! {
 			let proposal_len = proposal.using_encoded(|x| x.len());
 			ensure!(proposal_len <= length_bound as usize, Error::<T, I>::WrongProposalLength);
 			let proposal_hash = T::Hashing::hash_of(&proposal);
-			ensure!(!<ProposalOf<T, I>>::contains_key(proposal_hash), Error::<T, I>::DuplicateProposal);
+			ensure!(!ProposalOf::<T, I>::contains_key(proposal_hash), Error::<T, I>::DuplicateProposal);
 
 			if threshold < 2 {
 				let seats = Self::members().len() as MemberCount;
@@ -474,7 +474,7 @@ decl_module! {
 				}).into())
 			} else {
 				let active_proposals =
-					<Proposals<T, I>>::try_mutate(|proposals| -> Result<usize, DispatchError> {
+					Proposals::<T, I>::try_mutate(|proposals| -> Result<usize, DispatchError> {
 						proposals.push(proposal_hash);
 						ensure!(
 							proposals.len() <= T::MaxProposals::get() as usize,
@@ -483,12 +483,12 @@ decl_module! {
 						Ok(proposals.len())
 					})?;
 				let index = Self::proposal_count();
-				<ProposalCount<I>>::mutate(|i| *i += 1);
-				<ProposalOf<T, I>>::insert(proposal_hash, *proposal);
+				ProposalCount::<I>::mutate(|i| *i += 1);
+				ProposalOf::<T, I>::insert(proposal_hash, *proposal);
 				DispatchAsAccount::<T, I>::insert(proposal_hash, dispatch_as_account);
 				let end = system::Pallet::<T>::block_number() + T::MotionDuration::get();
 				let votes = Votes { index, threshold, ayes: vec![who.clone()], nays: vec![], end };
-				<Voting<T, I>>::insert(proposal_hash, votes);
+				Voting::<T, I>::insert(proposal_hash, votes);
 
 				Self::deposit_event(RawEvent::Proposed(who, index, proposal_hash, threshold));
 
@@ -737,7 +737,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 		hash: &T::Hash,
 		length_bound: u32,
 		weight_bound: Weight
-	) -> Result<(<T as Config<I>>::Proposal, usize), DispatchError> {
+	) -> Result<(T::Proposal, usize), DispatchError> {
 		let key = ProposalOf::<T, I>::hashed_key_for(hash);
 		// read the length of the proposal storage entry directly
 		let proposal_len = storage::read(&key, &mut [0; 0], 0)
@@ -767,7 +767,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 		seats: MemberCount,
 		voting: Votes<T::AccountId, T::BlockNumber>,
 		proposal_hash: T::Hash,
-		proposal: <T as Config<I>>::Proposal,
+		proposal: T::Proposal,
 	) -> (Weight, u32) {
 		Self::deposit_event(RawEvent::Approved(proposal_hash));
 
@@ -856,7 +856,7 @@ impl<T: Config<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
 		let mut outgoing = outgoing.to_vec();
 		outgoing.sort();
 		for h in Self::proposals().into_iter() {
-			<Voting<T, I>>::mutate(h, |v|
+			Voting::<T, I>::mutate(h, |v|
 				if let Some(mut votes) = v.take() {
 					votes.ayes = votes.ayes.into_iter()
 						.filter(|i| outgoing.binary_search(i).is_err())
@@ -884,8 +884,8 @@ impl<T: Config<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
 impl<T: Config<I>, I: Instance> InitializeMembers<T::AccountId> for Module<T, I> {
 	fn initialize_members(members: &[T::AccountId]) {
 		if !members.is_empty() {
-			assert!(<Members<T, I>>::get().is_empty(), "Members are already initialized!");
-			<Members<T, I>>::put(members);
+			assert!(Members::<T, I>::get().is_empty(), "Members are already initialized!");
+			Members::<T, I>::put(members);
 		}
 	}
 }
