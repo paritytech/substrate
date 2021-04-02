@@ -96,7 +96,6 @@ mod benchmarking;
 pub mod weights;
 
 use sp_std::{result, cmp};
-use sp_inherents::InherentData;
 use frame_support::traits::{Time, UnixTime, OnTimestampSet};
 use sp_runtime::{
 	RuntimeString,
@@ -260,7 +259,9 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-fn extract_inherent_data(data: &InherentData) -> Result<InherentType, RuntimeString> {
+fn extract_inherent_data(
+	data: &frame_support::inherent::InherentData,
+) -> Result<InherentType, RuntimeString> {
 	data.get_data::<InherentType>(&INHERENT_IDENTIFIER)
 		.map_err(|_| RuntimeString::from("Invalid timestamp inherent data encoding."))?
 		.ok_or_else(|| "Timestamp inherent data is not provided.".into())

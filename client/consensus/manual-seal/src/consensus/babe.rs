@@ -276,6 +276,7 @@ impl SlotTimestampProvider {
 	}
 }
 
+#[async_trait::async_trait]
 impl InherentDataProvider for SlotTimestampProvider {
 	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), sp_inherents::Error> {
 		// we update the time here.
@@ -287,17 +288,17 @@ impl InherentDataProvider for SlotTimestampProvider {
 		Ok(())
 	}
 
-	fn try_handle_error(
+	async fn try_handle_error(
 		&self,
 		identifier: &InherentIdentifier,
 		error: &[u8],
-	) -> sp_inherents::TryHandleErrorResult {
+	) -> Option<Result<(), Box<dyn std::error::Error + Send + Sync>>> {
 		if *identifier != INHERENT_IDENTIFIER {
 			return None
 		}
 
 		let error = InherentError::try_from(&INHERENT_IDENTIFIER, error)?;
 
-		Some(Box::pin(async move { Err(Box::new(error) as Box<_>) }))
+		Some(Err(Box::new(error) as Box<_>))
 	}
 }

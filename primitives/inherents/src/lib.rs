@@ -387,6 +387,22 @@ pub trait IsFatalError {
 	fn is_fatal_error(&self) -> bool;
 }
 
+/// Auxiliary to make any given error resolve to `is_fatal_error() == true` for [`IsFatalError`].
+#[derive(codec::Encode)]
+pub struct MakeFatalError<E>(E);
+
+impl<E: codec::Encode> From<E> for MakeFatalError<E> {
+	fn from(err: E) -> Self {
+		MakeFatalError(err)
+	}
+}
+
+impl<E: codec::Encode> IsFatalError for MakeFatalError<E> {
+	fn is_fatal_error(&self) -> bool {
+		true
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -432,17 +448,18 @@ mod tests {
 
 	const ERROR_TO_STRING: &str = "Found error!";
 
+	#[async_trait::async_trait]
 	impl InherentDataProvider for TestInherentDataProvider {
 		fn provide_inherent_data(&self, data: &mut InherentData) -> Result<(), Error> {
 			data.put_data(TEST_INHERENT_0, &42)
 		}
 
-		fn try_handle_error(
+		async fn try_handle_error(
 			&self,
 			_: &InherentIdentifier,
 			_: &[u8],
-		) -> TryHandleErrorResult {
-			Some(Box::pin(async move { Err(Box::from(ERROR_TO_STRING)) }))
+		) -> Option<Result<(), Box<dyn std::error::Error + Send + Sync>>> {
+			Some(Err(Box::from(ERROR_TO_STRING)))
 		}
 	}
 

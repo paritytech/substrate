@@ -23,13 +23,15 @@
 
 use sp_std::{result, prelude::*};
 use sp_std::collections::btree_set::BTreeSet;
-use frame_support::{decl_module, decl_storage, decl_error, dispatch, ensure};
-use frame_support::traits::{FindAuthor, VerifySeal, Get};
+use frame_support::{
+	decl_module, decl_storage, decl_error, dispatch, ensure,
+	inherent::{InherentIdentifier, ProvideInherent, InherentData},
+	traits::{FindAuthor, VerifySeal, Get},
+};
 use codec::{Encode, Decode};
 use frame_system::ensure_none;
 use sp_runtime::traits::{Header as HeaderT, One, Zero};
 use frame_support::weights::{Weight, DispatchClass};
-use sp_inherents::{InherentIdentifier, ProvideInherent, InherentData};
 use sp_authorship::{INHERENT_IDENTIFIER, UnclesInherentData, InherentError};
 
 const MAX_UNCLES: usize = 10;

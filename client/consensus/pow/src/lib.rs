@@ -292,10 +292,9 @@ impl<B, I, C, S, Algorithm, CAW, CIDP> PowBlockImport<B, I, C, S, Algorithm, CAW
 
 		if !inherent_res.ok() {
 			for (identifier, error) in inherent_res.into_errors() {
-				if let Some(res) = inherent_data_providers.try_handle_error(&identifier, &error) {
-					res.await.map_err(Error::CheckInherents)?;
-				} else {
-					return Err(Error::CheckInherentsUnknownError(identifier))
+				match inherent_data_providers.try_handle_error(&identifier, &error).await {
+					Some(res) => res.map_err(Error::CheckInherents)?,
+					None => return Err(Error::CheckInherentsUnknownError(identifier)),
 				}
 			}
 		}

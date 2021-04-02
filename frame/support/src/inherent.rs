@@ -19,24 +19,10 @@
 pub use crate::sp_std::vec::Vec;
 #[doc(hidden)]
 pub use crate::sp_runtime::traits::{Block as BlockT, Extrinsic};
-#[doc(hidden)]
-pub use sp_inherents::{InherentData, CheckInherentsResult, IsFatalError};
 
-/// Auxiliary to make any given error resolve to `is_fatal_error() == true` for [`IsFatalError`].
-#[derive(codec::Encode)]
-pub struct MakeFatalError<E>(E);
-
-impl<E: codec::Encode> From<E> for MakeFatalError<E> {
-	fn from(err: E) -> Self {
-		MakeFatalError(err)
-	}
-}
-
-impl<E: codec::Encode> IsFatalError for MakeFatalError<E> {
-	fn is_fatal_error(&self) -> bool {
-		true
-	}
-}
+pub use sp_inherents::{
+	InherentData, CheckInherentsResult, IsFatalError, InherentIdentifier, MakeFatalError,
+};
 
 /// A pallet that provides or verifies an inherent extrinsic.
 ///
@@ -47,7 +33,7 @@ pub trait ProvideInherent {
 	/// The error returned by `check_inherent`.
 	type Error: codec::Encode + IsFatalError;
 	/// The inherent identifier used by this inherent.
-	const INHERENT_IDENTIFIER: crate::InherentIdentifier;
+	const INHERENT_IDENTIFIER: sp_inherents::InherentIdentifier;
 
 	/// Create an inherent out of the given `InherentData`.
 	fn create_inherent(data: &InherentData) -> Option<Self::Call>;
