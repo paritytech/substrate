@@ -2745,6 +2745,100 @@ pub(crate) mod tests {
 	}
 
 	#[test]
+	fn storage_hash_is_cached_correctly() {
+		let backend = Backend::<Block>::new_test(10, 10);
+
+		let hash0 = {
+			let mut op = backend.begin_operation().unwrap();
+			backend.begin_state_operation(&mut op, BlockId::Hash(Default::default())).unwrap();
+			let mut header = Header {
+				number: 0,
+				parent_hash: Default::default(),
+				state_root: Default::default(),
+				digest: Default::default(),
+				extrinsics_root: Default::default(),
+			};
+
+			let storage = vec![(b"test".to_vec(), b"test".to_vec())];
+
+			header.state_root = op.old_state.storage_root(storage
+				.iter()
+				.map(|(x, y)| (&x[..], Some(&y[..])))
+			).0.into();
+			let hash = header.hash();
+
+			op.reset_storage(Storage {
+				top: storage.into_iter().collect(),
+				children_default: Default::default(),
+			}).unwrap();
+			op.set_block_data(
+				header.clone(),
+				Some(vec![]),
+				None,
+				NewBlockState::Best,
+			).unwrap();
+
+			backend.commit_operation(op).unwrap();
+
+			hash
+		};
+
+		let block0_hash = backend.state_at(BlockId::Hash(hash0))
+			.unwrap()
+			.storage_hash(&b"test"[..])
+			.unwrap();
+
+		let hash1 = {
+			let mut op = backend.begin_operation().unwrap();
+			backend.begin_state_operation(&mut op, BlockId::Number(0)).unwrap();
+			let mut header = Header {
+				number: 1,
+				parent_hash: hash0,
+				state_root: Default::default(),
+				digest: Default::default(),
+				extrinsics_root: Default::default(),
+			};
+
+			let storage = vec![(b"test".to_vec(), Some(b"test2".to_vec()))];
+
+			let (root, overlay) = op.old_state.storage_root(
+				storage.iter()
+					.map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..])))
+			);
+			op.update_db_storage(overlay).unwrap();
+			header.state_root = root.into();
+			let hash = header.hash();
+
+			op.update_storage(storage, Vec::new()).unwrap();
+			op.set_block_data(
+				header,
+				Some(vec![]),
+				None,
+				NewBlockState::Normal,
+			).unwrap();
+
+			backend.commit_operation(op).unwrap();
+
+			hash
+		};
+
+		{
+			let header = backend.blockchain().header(BlockId::Hash(hash1)).unwrap().unwrap();
+			let mut op = backend.begin_operation().unwrap();
+			backend.begin_state_operation(&mut op, BlockId::Hash(hash0)).unwrap();
+			op.set_block_data(header, None, None, NewBlockState::Best).unwrap();
+			backend.commit_operation(op).unwrap();
+		}
+
+		let block1_hash = backend.state_at(BlockId::Hash(hash1))
+			.unwrap()
+			.storage_hash(&b"test"[..])
+			.unwrap();
+
+		assert_ne!(block0_hash, block1_hash);
+	}
+
+	#[test]
 	fn test_finalize_non_sequential() {
 		let backend = Backend::<Block>::new_test(10, 10);
 
