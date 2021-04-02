@@ -23,6 +23,7 @@
 stages:
   - check
   - test
+  - verify
   - build
   - publish
   - deploy
@@ -96,6 +97,18 @@ default:
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
 
+.test-refs-no-trigger-no-master:   &test-refs-no-trigger-no-master
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "pipeline"
+      when: never
+    - if: $CI_COMMIT_REF_NAME == "master"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_COMMIT_REF_NAME == "tags"
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
+
 .build-refs:                       &build-refs
   rules:
     # .publish-refs with manual on PRs
@@ -123,6 +136,24 @@ default:
   rules:
     # this job runs only on nightly pipeline with the mentioned variable, against `master` branch
     - if: $CI_COMMIT_REF_NAME == "master" && $CI_PIPELINE_SOURCE == "schedule" && $PIPELINE == "nightly"
+
+.merge-ref-into-master:            &merge-ref-into-master
+  before_script:
+      - git fetch origin +master:master
+      - git fetch origin +$CI_COMMIT_REF_NAME:$CI_COMMIT_REF_NAME
+      - git checkout master
+      - git config user.email "ci@gitlab.parity.io"
+      - git merge $CI_COMMIT_REF_NAME --verbose --no-edit
+
+.cargo-check-benches-script:       &cargo-check-benches-script
+  script:
+    - mkdir -p artifacts/benches/$CI_COMMIT_REF_NAME
+    - SKIP_WASM_BUILD=1 time cargo +nightly check --benches --all
+    - 'cargo run --release -p node-bench -- ::node::import::native::sr25519::transfer_keep_alive::paritydb::small --json
+      | tee artifacts/benches/$CI_COMMIT_REF_NAME/::node::import::native::sr25519::transfer_keep_alive::paritydb::small.json'
+    - 'cargo run --release -p node-bench -- ::trie::read::small --json
+      | tee artifacts/benches/$CI_COMMIT_REF_NAME/::trie::read::small.json'
+    - sccache -s
 
 #### stage:                       .pre
 
@@ -223,11 +254,35 @@ cargo-check-benches:
   stage:                           test
   <<:                              *docker-env
   <<:                              *test-refs-no-trigger
+  <<:                              *cargo-check-benches-script
+  <<:                              *collect-artifacts
+
+cargo-check-benches-merged:
+  stage:                           test
+  <<:                              *docker-env
+  <<:                              *test-refs-no-trigger-no-master
+  <<:                              *merge-ref-into-master
+  <<:                              *cargo-check-benches-script
+  <<:                              *collect-artifacts
+
+node-bench-regression-guard:
+  stage:                           verify
+  <<:                              *docker-env
+  <<:                              *test-refs-no-trigger-no-master
+  needs:
+    - job:                         cargo-check-benches-merged
+      artifacts:                   true
+    - project:                     $CI_PROJECT_PATH
+      job:                         cargo-check-benches
+      ref:                         master
+      artifacts:                   true
+  variables:
+    CI_IMAGE:                      "paritytech/node-bench-regression-guard:latest"
+  before_script: [""]
   script:
-    - SKIP_WASM_BUILD=1 time cargo +nightly check --benches --all
-    - cargo run --release -p node-bench -- ::node::import::native::sr25519::transfer_keep_alive::paritydb::small
-    - cargo run --release -p node-bench -- ::trie::read::small
-    - sccache -s
+    - node-bench-regression-guard --reference artifacts/benches/master --compare-with artifacts/benches/$CI_COMMIT_REF_NAME
+  # FIXME: remove this when master will be populated with bench results artifacts
+  allow_failure:                   true
 
 cargo-check-subkey:
   stage:                           test
