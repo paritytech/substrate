@@ -128,7 +128,7 @@ impl DefaultVote for MoreThanMajorityThenPrimeDefaultVote {
 
 pub trait Config<I: Instance=DefaultInstance>: frame_system::Config {
 	/// The outer origin type.
-	type Origin: From<RawOrigin<Self::AccountId, I>>;
+	type Origin: From<RawOrigin<Self::AccountId, I>> + From<frame_system::RawOrigin<Self::AccountId>>;
 
 	/// The outer call dispatch type.
 	type Proposal: Parameter
@@ -800,18 +800,18 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 	}
 
 	// A handler for dispatching a proposal as an account or with the collective origin.
-	fn dispatch(proposal: T::Proposal, origin: Origin<T>, as_account: bool) {
+	fn dispatch(proposal: T::Proposal, origin: RawOrigin<T::AccountId, I>, as_account: bool) {
 		if as_account {
-
 			let account = match origin {
 				RawOrigin::Members(n, d) => {
 					T::ModuleId::get().into_sub_account((n, d))
 				},
 				RawOrigin::Member(who) => who,
+				RawOrigin::_Phantom(_) => { return; }
 			};
 			proposal.dispatch(frame_system::RawOrigin::Signed(account).into());
 		} else {
-			proposal.dispatch(origin);
+			proposal.dispatch(origin.into());
 		}
 	}
 }
