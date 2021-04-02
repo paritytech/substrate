@@ -163,7 +163,7 @@ pub mod pallet {
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: 'static + Eq + Clone {
 		/// The basic call filter to use in Origin. All origins are built with this filter as base,
-		/// except Root.
+		/// including Root.
 		type BaseCallFilter: Filter<Self::Call>;
 
 		/// Block & extrinsics weights: base values and limits.
