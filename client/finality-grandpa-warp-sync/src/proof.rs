@@ -175,7 +175,7 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 		let mut current_set_id = set_id;
 		let mut current_authorities = authorities;
 
-		for proof in &self.proofs {
+		for (fragment_num, proof) in self.proofs.iter().enumerate() {
 			proof
 				.justification
 				.verify(current_set_id, &current_authorities)
@@ -190,6 +190,12 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 			if let Some(scheduled_change) = find_scheduled_change::<Block>(&proof.header) {
 				current_authorities = scheduled_change.next_authorities;
 				current_set_id += 1;
+			} else if fragment_num != self.proofs.len() - 1 {
+				// Only the last fragment of the proof is allowed to be missing the authority
+				// set change.
+				return Err(HandleRequestError::InvalidProof(
+					"Header is missing authority set change digest".to_string(),
+				));
 			}
 		}
 
