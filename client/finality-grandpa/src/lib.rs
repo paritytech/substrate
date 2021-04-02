@@ -122,6 +122,7 @@ mod until_imported;
 mod voting_rule;
 
 pub use authorities::{AuthoritySet, AuthoritySetChanges, SharedAuthoritySet};
+pub use aux_schema::best_justification;
 pub use finality_proof::{FinalityProof, FinalityProofProvider, FinalityProofError};
 pub use notification::{GrandpaJustificationSender, GrandpaJustificationStream};
 pub use import::{find_scheduled_change, find_forced_change, GrandpaBlockImport};

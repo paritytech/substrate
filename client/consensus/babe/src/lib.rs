@@ -76,7 +76,8 @@ pub use sp_consensus_babe::{
 pub use sp_consensus::SyncOracle;
 pub use sc_consensus_slots::SlotProportion;
 use std::{
-	collections::HashMap, sync::Arc, u64, pin::Pin, borrow::Cow, convert::TryInto, time::Duration,
+	collections::HashMap, sync::Arc, u64, pin::Pin, borrow::Cow, convert::TryInto,
+	time::Duration,
 };
 use sp_consensus::{ImportResult, CanAuthorWith, import_queue::BoxJustificationImport};
 use sp_core::crypto::Public;
@@ -1628,42 +1629,4 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, Inner, CAW, CIDP>(
 		spawner,
 		registry,
 	))
-}
-
-/// BABE test helpers. Utility methods for manually authoring blocks.
-#[cfg(feature = "test-helpers")]
-pub mod test_helpers {
-	use super::*;
-
-	/// Try to claim the given slot and return a `BabePreDigest` if
-	/// successful.
-	pub fn claim_slot<B, C>(
-		slot: Slot,
-		parent: &B::Header,
-		client: &C,
-		keystore: SyncCryptoStorePtr,
-		link: &BabeLink<B>,
-	) -> Option<PreDigest> where
-		B: BlockT,
-		C: ProvideRuntimeApi<B> +
-			ProvideCache<B> +
-			HeaderBackend<B> +
-			HeaderMetadata<B, Error = ClientError>,
-		C::Api: BabeApi<B>,
-	{
-		let epoch_changes = link.epoch_changes.shared_data();
-		let epoch = epoch_changes.epoch_data_for_child_of(
-			descendent_query(client),
-			&parent.hash(),
-			parent.number().clone(),
-			slot,
-			|slot| Epoch::genesis(&link.config, slot),
-		).unwrap().unwrap();
-
-		authorship::claim_slot(
-			slot,
-			&epoch,
-			&keystore,
-		).map(|(digest, _)| digest)
-	}
 }

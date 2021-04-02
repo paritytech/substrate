@@ -24,7 +24,7 @@ use frame_system::RawOrigin;
 use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
 use sp_runtime::traits::Bounded;
 
-use crate::Module as Indices;
+use crate::Pallet as Indices;
 
 const SEED: u32 = 0;
 

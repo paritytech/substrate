@@ -144,6 +144,26 @@ pub struct RemoteReadResponse {
 	pub proof: StorageProof,
 }
 
+/// Announcement summary used for debug logging.
+#[derive(Debug)]
+pub struct AnnouncementSummary<H: HeaderT> {
+	block_hash: H::Hash,
+	number: H::Number,
+	parent_hash: H::Hash,
+	state: Option<BlockState>,
+}
+
+impl<H: HeaderT> generic::BlockAnnounce<H> {
+	pub fn summary(&self) -> AnnouncementSummary<H> {
+		AnnouncementSummary {
+			block_hash: self.header.hash(),
+			number: *self.header.number(),
+			parent_hash: self.header.parent_hash().clone(),
+			state: self.state,
+		}
+	}
+}
+
 /// Generic types.
 pub mod generic {
 	use bitflags::bitflags;

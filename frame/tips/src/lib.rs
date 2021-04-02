@@ -550,13 +550,13 @@ impl<T: Config> Module<T> {
 			tips: Vec<(AccountId, Balance)>,
 		}
 
-		use frame_support::{Twox64Concat, migration::StorageKeyIterator};
+		use frame_support::{Twox64Concat, migration::storage_key_iter};
 
-		for (hash, old_tip) in StorageKeyIterator::<
+		for (hash, old_tip) in storage_key_iter::<
 			T::Hash,
 			OldOpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>,
 			Twox64Concat,
-		>::new(b"Treasury", b"Tips").drain()
+		>(b"Treasury", b"Tips").drain()
 		{
 
 			let (finder, deposit, finders_fee) = match old_tip.finder {

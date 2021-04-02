@@ -16,14 +16,14 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Provides the a generic wrapper around shared data. See [`SharedData`] for more information.
+//! Provides a generic wrapper around shared data. See [`SharedData`] for more information.
 
 use std::sync::Arc;
 use parking_lot::{Mutex, MappedMutexGuard, Condvar, MutexGuard};
 
 /// Created by [`SharedDataLocked::release_mutex`].
 ///
-/// As long as the object isn't dropped, the shared data is locked. Is it advised to drop this
+/// As long as the object isn't dropped, the shared data is locked. It is advised to drop this
 /// object when the shared data doesn't need to be locked anymore. To get access to the shared data
 /// [`Self::upgrade`] is provided.
 #[must_use = "Shared data will be unlocked on drop!"]
@@ -53,14 +53,14 @@ impl<T> Drop for SharedDataLockedUpgradable<T> {
 
 /// Created by [`SharedData::shared_data_locked`].
 ///
-/// As long as this object isn't dropped, the shared data is hold in a mutex guard and the shared
+/// As long as this object isn't dropped, the shared data is held in a mutex guard and the shared
 /// data is tagged as locked. Access to the shared data is provided through [`Deref`] and
 /// [`DerefMut`]. The trick is to use [`Self::release_mutex`] to release the mutex, but still keep
 /// the shared data locked. This means every other thread trying to access the shared data in this
 /// time will need to wait until this lock is freed.
 ///
 /// If this object is dropped without calling [`Self::release_mutex`], the lock will be dropped
-/// immediatley.
+/// immediately.
 #[must_use = "Shared data will be unlocked on drop!"]
 pub struct SharedDataLocked<'a, T> {
 	/// The current active mutex guard holding the inner data.
@@ -193,7 +193,7 @@ impl<T> SharedData<T> {
 	/// Acquire access to the shared data.
 	///
 	/// This will give mutable access to the shared data. After the returned mutex guard is dropped,
-	/// the shared data is accessable by other threads. So, this function should be used when
+	/// the shared data is accessible by other threads. So, this function should be used when
 	/// reading/writing of the shared data in a local context is required.
 	///
 	/// When requiring to lock shared data for some longer time, even with temporarily releasing the
