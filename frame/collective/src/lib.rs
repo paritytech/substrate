@@ -245,6 +245,7 @@ decl_event! {
 		/// \[proposal_hash, yes, no\]
 		Closed(Hash, MemberCount, MemberCount),
 		/// A proposal has been dispatched by an account representing the collective origin.
+		/// \[account, proposal_hash, result\]
 		AccountExecuted(AccountId, Hash, DispatchResult),
 	}
 }
