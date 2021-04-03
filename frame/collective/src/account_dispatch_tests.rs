@@ -180,9 +180,21 @@ fn dispatch_with_account_works() {
 		let hash: H256 = proposal.blake2_256().into();
 
 		// Create a call with 2 / 6
-		assert_ok!(CollectiveMajority::propose(Origin::signed(account(1)), 2, Box::new(proposal.clone()), proposal_len, true));
+		assert_ok!(CollectiveMajority::propose(
+			Origin::signed(account(1)),
+			2,
+			Box::new(proposal.clone()),
+			proposal_len,
+			true,
+		));
 		assert_ok!(CollectiveMajority::vote(Origin::signed(account(2)), hash.clone(), 0, true));
-		assert_ok!(CollectiveMajority::close(Origin::signed(account(2)), hash.clone(), 0, proposal_weight, proposal_len));
+		assert_ok!(CollectiveMajority::close(
+			Origin::signed(account(2)),
+			hash.clone(),
+			0,
+			proposal_weight,
+			proposal_len
+		));
 
 		// Should match 1/3
 		assert_eq!(example::WhoCalled::<Test>::get(), vec![CollectiveMajority::collective_account(1, 3)]);
