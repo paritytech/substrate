@@ -195,6 +195,7 @@ decl_module! {
 		for enum Call
 		where origin: T::Origin
 	{
+		type Error = Error<T>;
 
 		/// The period for which a tip remains open after is has achieved threshold tippers.
 		const TipCountdown: T::BlockNumber = T::TipCountdown::get();
