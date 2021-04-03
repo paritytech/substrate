@@ -81,6 +81,7 @@ benchmarks_instance! {
 				threshold,
 				Box::new(proposal.clone()),
 				MAX_BYTES,
+				false,
 			)?;
 			let hash = T::Hashing::hash_of(&proposal);
 			// Vote on the proposal to increase state relevant for `set_members`.
@@ -164,7 +165,7 @@ benchmarks_instance! {
 		let proposal: T::Proposal = SystemCall::<T>::remark(vec![1; b as usize]).into();
 		let threshold = 1;
 
-	}: propose(SystemOrigin::Signed(caller), threshold, Box::new(proposal.clone()), bytes_in_storage)
+	}: propose(SystemOrigin::Signed(caller), threshold, Box::new(proposal.clone()), bytes_in_storage, false)
 	verify {
 		let proposal_hash = T::Hashing::hash_of(&proposal);
 		// Note that execution fails due to mis-matched origin
@@ -201,6 +202,7 @@ benchmarks_instance! {
 				threshold,
 				Box::new(proposal),
 				bytes_in_storage,
+				false,
 			)?;
 		}
 
@@ -208,7 +210,7 @@ benchmarks_instance! {
 
 		let proposal: T::Proposal = SystemCall::<T>::remark(vec![p as u8; b as usize]).into();
 
-	}: propose(SystemOrigin::Signed(caller.clone()), threshold, Box::new(proposal.clone()), bytes_in_storage)
+	}: propose(SystemOrigin::Signed(caller.clone()), threshold, Box::new(proposal.clone()), bytes_in_storage, false)
 	verify {
 		// New proposal is recorded
 		assert_eq!(Collective::<T, _>::proposals().len(), p as usize);
@@ -249,6 +251,7 @@ benchmarks_instance! {
 				threshold,
 				Box::new(proposal.clone()),
 				bytes_in_storage,
+				false,
 			)?;
 			last_hash = T::Hashing::hash_of(&proposal);
 		}
@@ -325,6 +328,7 @@ benchmarks_instance! {
 				threshold,
 				Box::new(proposal.clone()),
 				bytes_in_storage,
+				false,
 			)?;
 			last_hash = T::Hashing::hash_of(&proposal);
 		}
@@ -403,6 +407,7 @@ benchmarks_instance! {
 				threshold,
 				Box::new(proposal.clone()),
 				bytes_in_storage,
+				false,
 			)?;
 			last_hash = T::Hashing::hash_of(&proposal);
 		}
@@ -489,6 +494,7 @@ benchmarks_instance! {
 				threshold,
 				Box::new(proposal.clone()),
 				bytes_in_storage,
+				false,
 			)?;
 			last_hash = T::Hashing::hash_of(&proposal);
 		}
@@ -561,6 +567,7 @@ benchmarks_instance! {
 				threshold,
 				Box::new(proposal.clone()),
 				bytes_in_storage,
+				false,
 			)?;
 			last_hash = T::Hashing::hash_of(&proposal);
 		}
@@ -624,6 +631,7 @@ benchmarks_instance! {
 				threshold,
 				Box::new(proposal.clone()),
 				bytes_in_storage,
+				false,
 			)?;
 			last_hash = T::Hashing::hash_of(&proposal);
 		}
