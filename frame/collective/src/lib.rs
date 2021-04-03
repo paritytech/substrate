@@ -390,7 +390,7 @@ decl_module! {
 			ensure!(proposal_len <= length_bound as usize, Error::<T, I>::WrongProposalLength);
 
 			let proposal_hash = T::Hashing::hash_of(&proposal);
-			let result = Self::dispatch(proposal, RawOrigin::Member(who).into(), false);
+			let result = Self::dispatch(*proposal, RawOrigin::Member(who).into(), false);
 			Self::deposit_event(
 				RawEvent::MemberExecuted(proposal_hash, result.map(|_| ()).map_err(|e| e.error))
 			);
@@ -462,7 +462,7 @@ decl_module! {
 
 			if threshold < 2 {
 				let seats = Self::members().len() as MemberCount;
-				let result = Self::dispatch(proposal, RawOrigin::Members(1, seats).into(), dispatch_as_account);
+				let result = Self::dispatch(*proposal, RawOrigin::Members(1, seats).into(), dispatch_as_account);
 				Self::deposit_event(
 					RawEvent::Executed(proposal_hash, result.map(|_| ()).map_err(|e| e.error))
 				);
@@ -775,7 +775,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 		let dispatch_weight = proposal.get_dispatch_info().weight;
 		let origin = RawOrigin::Members(voting.threshold, seats).into();
 		let dispatch_as_account = DispatchAsAccount::<T, I>::get(proposal_hash);
-		let result = Self::dispatch(Box::new(proposal), origin, dispatch_as_account);
+		let result = Self::dispatch(proposal, origin, dispatch_as_account);
 		Self::deposit_event(
 			RawEvent::Executed(proposal_hash, result.map(|_| ()).map_err(|e| e.error))
 		);
@@ -806,7 +806,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 
 	// A handler for dispatching a proposal as an account or with the collective origin.
 	fn dispatch(
-		proposal: Box<T::Proposal>,
+		proposal: T::Proposal,
 		origin: RawOrigin<T::AccountId, I>,
 		as_account: bool,
 	) -> DispatchResultWithPostInfo {
