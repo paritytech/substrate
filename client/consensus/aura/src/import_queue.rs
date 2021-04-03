@@ -229,7 +229,7 @@ impl<B: BlockT, C, P, CAW, IDP> Verifier<B> for AuraVerifier<C, P, CAW, IDP> whe
 			.map_err(|e| Error::<B>::Client(sp_blockchain::Error::Application(e)))?;
 
 		let mut inherent_data = inherent_data_providers.create_inherent_data()
-			.map_err(|e| Error::<B>::Inherent(Box::new(e)))?;
+			.map_err(Error::<B>::Inherent)?;
 
 		let slot_now = inherent_data_providers.slot();
 

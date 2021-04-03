@@ -43,7 +43,7 @@ use sp_runtime::{
 	traits::{DigestItemFor, DigestFor, Block as BlockT, Zero, Header},
 	generic::{Digest, BlockId},
 };
-use sp_timestamp::{InherentType, InherentError, INHERENT_IDENTIFIER, TimestampInherentData};
+use sp_timestamp::{InherentType, INHERENT_IDENTIFIER, TimestampInherentData};
 
 /// Provides BABE-compatible predigests and BlockImportParams.
 /// Intended for use with BABE runtimes.
@@ -126,7 +126,8 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 	type Transaction = TransactionFor<C, B>;
 
 	fn create_digest(&self, parent: &B::Header, inherents: &InherentData) -> Result<DigestFor<B>, Error> {
-		let slot = inherents.babe_inherent_data()?;
+		let slot = inherents.babe_inherent_data()?
+			.ok_or_else(|| Error::StringError("No babe inherent data".into()))?;
 		let epoch = self.epoch(parent, slot)?;
 
 		// this is a dev node environment, we should always be able to claim a slot.
@@ -189,7 +190,8 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 		params: &mut BlockImportParams<B, Self::Transaction>,
 		inherents: &InherentData
 	) -> Result<(), Error> {
-		let slot = inherents.babe_inherent_data()?;
+		let slot = inherents.babe_inherent_data()?
+			.ok_or_else(|| Error::StringError("No babe inherent data".into()))?;
 		let epoch_changes = self.epoch_changes.shared_data();
 		let mut epoch_descriptor = epoch_changes
 			.epoch_descriptor_for_child_of(
@@ -211,7 +213,9 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 
 		if !has_authority {
 			log::info!(target: "manual-seal", "authority not found");
-			let slot = *inherents.timestamp_inherent_data()? / self.config.slot_duration;
+			let timestamp = inherents.timestamp_inherent_data()?
+				.ok_or_else(|| Error::StringError("No timestamp inherent data".into()))?;
+			let slot = *timestamp / self.config.slot_duration;
 			// manually hard code epoch descriptor
 			epoch_descriptor = match epoch_descriptor {
 				ViableEpochDescriptor::Signaled(identifier, _header) => {
@@ -290,15 +294,9 @@ impl InherentDataProvider for SlotTimestampProvider {
 
 	async fn try_handle_error(
 		&self,
-		identifier: &InherentIdentifier,
-		error: &[u8],
-	) -> Option<Result<(), Box<dyn std::error::Error + Send + Sync>>> {
-		if *identifier != INHERENT_IDENTIFIER {
-			return None
-		}
-
-		let error = InherentError::try_from(&INHERENT_IDENTIFIER, error)?;
-
-		Some(Err(Box::new(error) as Box<_>))
+		_: &InherentIdentifier,
+		_: &[u8],
+	) -> Option<Result<(), sp_inherents::Error>> {
+		None
 	}
 }

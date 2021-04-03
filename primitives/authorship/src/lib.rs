@@ -87,13 +87,13 @@ impl<H: HeaderT> sp_inherents::InherentDataProvider for InherentDataProvider<H> 
 		&self,
 		identifier: &InherentIdentifier,
 		error: &[u8],
-	) -> Option<Result<(), Box<dyn std::error::Error + Send + Sync>>> {
+	) -> Option<Result<(), Error>> {
 		if *identifier != INHERENT_IDENTIFIER {
 			return None
 		}
 
 		let error = InherentError::decode(&mut &error[..]).ok()?;
 
-		Some(Err(Box::from(format!("{:?}", error))))
+		Some(Err(Error::Application(Box::from(format!("{:?}", error)))))
 	}
 }

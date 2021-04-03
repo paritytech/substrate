@@ -46,18 +46,22 @@
 //!
 //! ```
 //! use codec::Decode;
+//! use sp_inherents::{InherentIdentifier, InherentData};
 //!
 //! // This needs to be unique for the runtime.
-//! const INHERENT_IDENTIFIER: sp_inherents::InherentIndentifier = *b"testinh0";
+//! const INHERENT_IDENTIFIER: InherentIdentifier = *b"testinh0";
 //!
 //! /// Some custom inherent data provider
 //! struct InherentDataProvider;
 //!
 //! #[async_trait::async_trait]
 //! impl sp_inherents::InherentDataProvider for InherentDataProvider {
-//! 	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), sp_inherents::Error> {
+//! 	fn provide_inherent_data(
+//! 		&self,
+//! 		inherent_data: &mut InherentData,
+//! 	) -> Result<(), sp_inherents::Error> {
 //! 		// We can insert any data that implements [`codec::Encode`].
-//! 		inherent_data.put_data(&INHERENT_IDENTIFIER, "hello")
+//! 		inherent_data.put_data(INHERENT_IDENTIFIER, &"hello")
 //! 	}
 //!
 //! 	/// When validating the inherents, the runtime implementation can throw errors. We support
@@ -73,8 +77,8 @@
 //! 	async fn try_handle_error(
 //! 		&self,
 //! 		identifier: &InherentIdentifier,
-//! 		error: &[u8],
-//! 	) -> Option<Result<(), Box<dyn std::error::Error + Send + Sync>>> {
+//! 		mut error: &[u8],
+//! 	) -> Option<Result<(), sp_inherents::Error>> {
 //! 		// Check if this error belongs to us.
 //! 		if *identifier != INHERENT_IDENTIFIER {
 //! 			return None;
@@ -82,7 +86,9 @@
 //!
 //! 		// For demonstration purposes we are using a `String` as error type. In real
 //! 		// implementations it is advised to not use `String`.
-//! 		Some(Err(Box::from(String::decode(&mut error[..]).ok()?) as Box<_>))
+//! 		Some(Err(
+//! 			sp_inherents::Error::Application(Box::from(String::decode(&mut error).ok()?))
+//! 		))
 //! 	}
 //! }
 //! ```
@@ -92,19 +98,22 @@
 //! and production.
 //!
 //! ```
-//! # sp_runtime::testing::ExtrinsicWrapper;
-//! # type sp_runtime::Block<ExtrinsicWrapper<()>>;
+//! # use sp_runtime::testing::ExtrinsicWrapper;
+//! # use sp_inherents::{InherentIdentifier, InherentData};
+//! # use futures::FutureExt;
+//! # type Block = sp_runtime::testing::Block<ExtrinsicWrapper<()>>;
+//! # const INHERENT_IDENTIFIER: InherentIdentifier = *b"testinh0";
 //! # struct InherentDataProvider;
 //! # #[async_trait::async_trait]
 //! # impl sp_inherents::InherentDataProvider for InherentDataProvider {
 //! # 	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), sp_inherents::Error> {
-//! # 		inherent_data.put_data(&INHERENT_IDENTIFIER, "hello")
+//! # 		inherent_data.put_data(INHERENT_IDENTIFIER, &"hello")
 //! # 	}
 //! # 	async fn try_handle_error(
 //! # 		&self,
-//! # 		identifier: &InherentIdentifier,
-//! # 		error: &[u8],
-//! # 	) -> Option<Result<(), Box<dyn std::error::Error + Send + Sync>>> {
+//! # 		_: &InherentIdentifier,
+//! # 		_: &[u8],
+//! # 	) -> Option<Result<(), sp_inherents::Error>> {
 //! # 		None
 //! # 	}
 //! # }
@@ -130,12 +139,14 @@
 //!
 //! 	let block_production = if is_validator {
 //! 		// For block production we want to provide our inherent data provider
-//! 		cool_consensus_block_production(|_parent, ()| {
+//! 		cool_consensus_block_production(|_parent, ()| async {
 //!			Ok(InherentDataProvider)
-//! 		})
+//! 		}).boxed()
 //! 	} else {
-//! 		futures::future::pending()
+//! 		futures::future::pending().boxed()
 //! 	};
+//!
+//! 	futures::pin_mut!(block_import);
 //!
 //! 	futures::future::select(block_import, block_production).await;
 //! }
@@ -161,37 +172,29 @@ mod client_side;
 #[cfg(feature = "std")]
 pub use client_side::*;
 
-/// An error that can occur within the inherent data system.
-#[cfg(feature = "std")]
-#[derive(Debug, Encode, Decode, thiserror::Error)]
-#[error("Inherents: {0}")]
-pub struct Error(String);
-
-#[cfg(feature = "std")]
-impl<T: Into<String>> From<T> for Error {
-	fn from(data: T) -> Error {
-		Self(data.into())
-	}
-}
-
-#[cfg(feature = "std")]
-impl Error {
-	/// Convert this error into a `String`.
-	pub fn into_string(self) -> String {
-		self.0
-	}
-}
-
-/// An error that can occur within the inherent data system.
-#[derive(Encode, sp_core::RuntimeDebug)]
-#[cfg(not(feature = "std"))]
-pub struct Error(&'static str);
-
-#[cfg(not(feature = "std"))]
-impl From<&'static str> for Error {
-	fn from(data: &'static str) -> Error {
-		Self(data)
-	}
+/// Errors that occur in context of inherents.
+#[derive(Debug)]
+#[cfg_attr(feature = "std", derive(thiserror::Error))]
+#[allow(missing_docs)]
+pub enum Error {
+	#[cfg_attr(
+		feature = "std",
+		error("Inherent data already exists for identifier: {}", "String::from_utf8_lossy(_0)")
+	)]
+	InherentDataExists(InherentIdentifier),
+	#[cfg_attr(
+		feature = "std",
+		error("Failed to decode inherent data for identifier: {}", "String::from_utf8_lossy(_1)")
+	)]
+	DecodingFailed(#[cfg_attr(feature = "std", source)] codec::Error, InherentIdentifier),
+	#[cfg_attr(
+		feature = "std",
+		error("There was already a fatal error reported and no other errors are allowed")
+	)]
+	FatalErrorReported,
+	#[cfg(feature = "std")]
+	#[error(transparent)]
+	Application(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
 /// An identifier for an inherent.
@@ -229,7 +232,7 @@ impl InherentData {
 				Ok(())
 			},
 			Entry::Occupied(_) => {
-				Err("Inherent with same identifier already exists!".into())
+				Err(Error::InherentDataExists(identifier))
 			}
 		}
 	}
@@ -259,9 +262,7 @@ impl InherentData {
 		match self.data.get(identifier) {
 			Some(inherent) =>
 				I::decode(&mut &inherent[..])
-					.map_err(|_| {
-						"Could not decode requested inherent type!".into()
-					})
+					.map_err(|e| Error::DecodingFailed(e, *identifier))
 					.map(Some),
 			None => Ok(None)
 		}
@@ -320,7 +321,7 @@ impl CheckInherentsResult {
 	) -> Result<(), Error> {
 		// Don't accept any other error
 		if self.fatal_error {
-			return Err("No other errors are accepted after an hard error!".into())
+			return Err(Error::FatalErrorReported)
 		}
 
 		if error.is_fatal_error() {
@@ -458,8 +459,8 @@ mod tests {
 			&self,
 			_: &InherentIdentifier,
 			_: &[u8],
-		) -> Option<Result<(), Box<dyn std::error::Error + Send + Sync>>> {
-			Some(Err(Box::from(ERROR_TO_STRING)))
+		) -> Option<Result<(), Error>> {
+			Some(Err(Error::Application(Box::from(ERROR_TO_STRING))))
 		}
 	}
 

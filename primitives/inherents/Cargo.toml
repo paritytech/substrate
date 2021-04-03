@@ -23,6 +23,9 @@ thiserror = { version = "1.0.21", optional = true }
 impl-trait-for-tuples = "0.2.0"
 async-trait = { version = "0.1.30", optional = true }
 
+[dev-dependencies]
+futures = "0.3.9"
+
 [features]
 default = [ "std" ]
 std = [

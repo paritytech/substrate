@@ -271,16 +271,17 @@ pub enum Error<B: BlockT> {
 	ParentBlockNoAssociatedWeight(B::Hash),
 	/// Check inherents error
 	#[display(fmt = "Checking inherents failed: {}", _0)]
-	CheckInherents(Box<dyn std::error::Error + Send + Sync>),
+	CheckInherents(sp_inherents::Error),
 	/// Unhandled check inherents error
 	#[display(fmt = "Checking inherents unhandled error: {}", "String::from_utf8_lossy(_0)")]
 	CheckInherentsUnhandled(sp_inherents::InherentIdentifier),
+	/// Create inherents error.
+	#[display(fmt = "Creating inherents failed: {}", _0)]
+	CreateInherents(sp_inherents::Error),
 	/// Client error
 	Client(sp_blockchain::Error),
 	/// Runtime Api error.
 	RuntimeApi(sp_api::ApiError),
-	/// Runtime error
-	Runtime(sp_inherents::Error),
 	/// Fork tree error
 	ForkTree(Box<fork_tree::Error<sp_blockchain::Error>>),
 }
@@ -1160,7 +1161,7 @@ where
 				// actually matches the slot set in the seal.
 				if let Some(inner_body) = body.take() {
 					let mut inherent_data = inherent_data_providers.create_inherent_data()
-						.map_err(Error::<Block>::Runtime)?;
+						.map_err(Error::<Block>::CreateInherents)?;
 					inherent_data.babe_replace_inherent_data(slot);
 					let block = Block::new(pre_header.clone(), inner_body);
 

@@ -21,7 +21,6 @@
 
 use codec::{Encode, Decode};
 use sp_inherents::{InherentIdentifier, IsFatalError, InherentData};
-use sp_runtime::RuntimeString;
 use sp_std::time::Duration;
 
 /// The identifier for the `timestamp` inherent.
@@ -122,16 +121,16 @@ pub enum InherentError {
 	/// This is a non-fatal-error and will not stop checking the inherents.
 	#[cfg_attr(feature = "std", error("Block will be valid at {0}."))]
 	ValidAtTimestamp(InherentType),
-	/// Some other error.
-	#[cfg_attr(feature = "std", error("Some other error {0}."))]
-	Other(RuntimeString),
+	/// The block timestamp is too far in the future
+	#[cfg_attr(feature = "std", error("The timestamp of the block is too far in the future."))]
+	TooFarInFuture,
 }
 
 impl IsFatalError for InherentError {
 	fn is_fatal_error(&self) -> bool {
 		match self {
 			InherentError::ValidAtTimestamp(_) => false,
-			InherentError::Other(_) => true,
+			InherentError::TooFarInFuture => true,
 		}
 	}
 }
@@ -151,13 +150,12 @@ impl InherentError {
 /// Auxiliary trait to extract timestamp inherent data.
 pub trait TimestampInherentData {
 	/// Get timestamp inherent data.
-	fn timestamp_inherent_data(&self) -> Result<InherentType, sp_inherents::Error>;
+	fn timestamp_inherent_data(&self) -> Result<Option<InherentType>, sp_inherents::Error>;
 }
 
 impl TimestampInherentData for InherentData {
-	fn timestamp_inherent_data(&self) -> Result<InherentType, sp_inherents::Error> {
+	fn timestamp_inherent_data(&self) -> Result<Option<InherentType>, sp_inherents::Error> {
 		self.get_data(&INHERENT_IDENTIFIER)
-			.and_then(|r| r.ok_or_else(|| "Timestamp inherent data not found".into()))
 	}
 }
 
@@ -231,19 +229,21 @@ impl sp_inherents::InherentDataProvider for InherentDataProvider {
 		&self,
 		identifier: &InherentIdentifier,
 		error: &[u8],
-	) -> Option<Result<(), Box<dyn std::error::Error + Send + Sync>>> {
+	) -> Option<Result<(), sp_inherents::Error>> {
 		if *identifier != INHERENT_IDENTIFIER {
 			return None
 		}
 
-		match InherentError::try_from(&INHERENT_IDENTIFIER, error) {
-			Some(InherentError::ValidAtTimestamp(valid)) => {
+		match InherentError::try_from(&INHERENT_IDENTIFIER, error)? {
+			InherentError::ValidAtTimestamp(valid) => {
 				let max_drift = self.max_drift;
 				let timestamp = self.timestamp;
 				// halt import until timestamp is valid.
 				// reject when too far ahead.
 				if valid > timestamp + max_drift {
-					return Some(Err(Box::from(String::from("Too far in future"))))
+					return Some(Err(
+						sp_inherents::Error::Application(Box::from(InherentError::TooFarInFuture))
+					))
 				}
 
 				let diff = valid.checked_sub(timestamp).unwrap_or_default();
@@ -257,10 +257,7 @@ impl sp_inherents::InherentDataProvider for InherentDataProvider {
 
 				Some(Ok(()))
 			},
-			Some(InherentError::Other(o)) => {
-				Some(Err(Box::from(String::from(o))))
-			},
-			None => None
+			o => Some(Err(sp_inherents::Error::Application(Box::from(o)))),
 		}
 	}
 }

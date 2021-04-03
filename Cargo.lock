@@ -8861,6 +8861,7 @@ name = "sp-inherents"
 version = "3.0.0"
 dependencies = [
  "async-trait",
+ "futures 0.3.13",
  "impl-trait-for-tuples",
  "parity-scale-codec 2.0.1",
  "sp-core",

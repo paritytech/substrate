@@ -17,10 +17,8 @@
 
 //! Inherents for BABE
 
-use sp_inherents::{Error, InherentData, InherentIdentifier};
+use sp_inherents::{InherentData, InherentIdentifier, Error};
 
-#[cfg(feature = "std")]
-use codec::Decode;
 use sp_std::result::Result;
 
 /// The BABE inherent identifier.
@@ -31,15 +29,14 @@ pub type InherentType = sp_consensus_slots::Slot;
 /// Auxiliary trait to extract BABE inherent data.
 pub trait BabeInherentData {
 	/// Get BABE inherent data.
-	fn babe_inherent_data(&self) -> Result<InherentType, Error>;
+	fn babe_inherent_data(&self) -> Result<Option<InherentType>, Error>;
 	/// Replace BABE inherent data.
 	fn babe_replace_inherent_data(&mut self, new: InherentType);
 }
 
 impl BabeInherentData for InherentData {
-	fn babe_inherent_data(&self) -> Result<InherentType, Error> {
+	fn babe_inherent_data(&self) -> Result<Option<InherentType>, Error> {
 		self.get_data(&INHERENT_IDENTIFIER)
-			.and_then(|r| r.ok_or_else(|| "BABE inherent data not found".into()))
 	}
 
 	fn babe_replace_inherent_data(&mut self, new: InherentType) {
@@ -100,15 +97,10 @@ impl sp_inherents::InherentDataProvider for InherentDataProvider {
 
 	async fn try_handle_error(
 		&self,
-		identifier: &InherentIdentifier,
-		error: &[u8],
-	) -> Option<Result<(), Box<dyn std::error::Error + Send + Sync>>> {
-		if identifier != &INHERENT_IDENTIFIER {
-			return None;
-		}
-
-		let error = Error::decode(&mut &error[..]).ok()?;
-
-		Some(Err(Box::from(format!("{:?}", error)) as Box<_>))
+		_: &InherentIdentifier,
+		_: &[u8],
+	) -> Option<Result<(), Error>> {
+		// There is no error anymore
+		None
 	}
 }

@@ -75,16 +75,6 @@ impl<Block: BlockT, ExtraArgs: Send, IDPS: InherentDataProvider>
 	}
 }
 
-/// Result of [`InherentDataProvider::try_handle_error`].
-pub type TryHandleErrorResult =
-	Option<
-		std::pin::Pin<
-			Box<
-				dyn std::future::Future<Output = Result<(), Box<dyn std::error::Error + Send + Sync>>> + Send
-			>
-		>
-	>;
-
 /// Something that provides inherent data.
 #[async_trait::async_trait]
 pub trait InherentDataProvider: Send + Sync {
@@ -109,7 +99,7 @@ pub trait InherentDataProvider: Send + Sync {
 		&self,
 		identifier: &InherentIdentifier,
 		error: &[u8],
-	) -> Option<Result<(), Box<dyn std::error::Error + Send + Sync>>>;
+	) -> Option<Result<(), Error>>;
 }
 
 #[impl_trait_for_tuples::impl_for_tuples(30)]
@@ -125,7 +115,7 @@ impl InherentDataProvider for Tuple {
 		&self,
 		identifier: &InherentIdentifier,
 		error: &[u8],
-	) -> Option<Result<(), Box<dyn std::error::Error + Send + Sync>>> {
+	) -> Option<Result<(), Error>> {
 		for_tuples!( #(
 			if let Some(r) = Tuple.try_handle_error(identifier, error).await { return Some(r) }
 		)* );

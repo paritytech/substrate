@@ -91,7 +91,7 @@ pub enum Error<B: BlockT> {
 	#[display(fmt = "Creating inherents failed: {}", _0)]
 	CreateInherents(sp_inherents::Error),
 	#[display(fmt = "Checking inherents failed: {}", _0)]
-	CheckInherents(Box<dyn std::error::Error + Send + Sync>),
+	CheckInherents(sp_inherents::Error),
 	#[display(
 		fmt = "Checking inherents unknown error for identifier: {:?}",
 		"String::from_utf8_lossy(_0)",

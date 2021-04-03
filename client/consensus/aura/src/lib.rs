@@ -498,7 +498,7 @@ enum Error<B: BlockT> {
 	#[display(fmt = "Unknown inherent error for identifier: {}", "String::from_utf8_lossy(_0)")]
 	UnknownInherentError(sp_inherents::InherentIdentifier),
 	#[display(fmt = "Inherent error: {}", _0)]
-	Inherent(Box<dyn std::error::Error + Send + Sync>),
+	Inherent(sp_inherents::Error),
 }
 
 impl<B: BlockT> std::convert::From<Error<B>> for String {

@@ -28,15 +28,14 @@ pub type InherentType = sp_consensus_slots::Slot;
 /// Auxiliary trait to extract Aura inherent data.
 pub trait AuraInherentData {
 	/// Get aura inherent data.
-	fn aura_inherent_data(&self) ->Result<InherentType, Error>;
+	fn aura_inherent_data(&self) ->Result<Option<InherentType>, Error>;
 	/// Replace aura inherent data.
 	fn aura_replace_inherent_data(&mut self, new: InherentType);
 }
 
 impl AuraInherentData for InherentData {
-	fn aura_inherent_data(&self) ->Result<InherentType, Error> {
+	fn aura_inherent_data(&self) ->Result<Option<InherentType>, Error> {
 		self.get_data(&INHERENT_IDENTIFIER)
-			.and_then(|r| r.ok_or_else(|| "Aura inherent data not found".into()))
 	}
 
 	fn aura_replace_inherent_data(&mut self, new: InherentType) {
@@ -97,17 +96,10 @@ impl sp_inherents::InherentDataProvider for InherentDataProvider {
 
 	async fn try_handle_error(
 		&self,
-		identifier: &InherentIdentifier,
-		error: &[u8],
-	) -> Option<Result<(), Box<dyn std::error::Error + Send + Sync>>> {
-		use codec::Decode;
-
-		if *identifier != INHERENT_IDENTIFIER {
-			return None;
-		}
-
-		let error = sp_inherents::Error::decode(&mut &error[..]).ok()?;
-
-		Some(Err(Box::new(error) as Box<_>))
+		_: &InherentIdentifier,
+		_: &[u8],
+	) -> Option<Result<(), Error>> {
+		// There is no error anymore
+		None
 	}
 }
