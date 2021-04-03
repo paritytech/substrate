@@ -113,6 +113,8 @@ decl_module! {
 		for enum Call
 		where origin: T::Origin
 	{
+		type Error = Error<T, I>;
+
 		fn deposit_event() = default;
 
 		/// Add a member `who` to the set.
