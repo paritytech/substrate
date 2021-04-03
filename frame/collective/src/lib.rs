@@ -805,7 +805,11 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 	}
 
 	// A handler for dispatching a proposal as an account or with the collective origin.
-	fn dispatch(proposal: Box<T::Proposal>, origin: RawOrigin<T::AccountId, I>, as_account: bool) -> DispatchResultWithPostInfo {
+	fn dispatch(
+		proposal: Box<T::Proposal>,
+		origin: RawOrigin<T::AccountId, I>,
+		as_account: bool,
+	) -> DispatchResultWithPostInfo {
 		if as_account {
 			let account = match origin {
 				RawOrigin::Members(n, d) => {
