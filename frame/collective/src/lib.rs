@@ -42,13 +42,14 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit = "128"]
 
+use gcd::Gcd;
 use sp_std::{prelude::*, result};
 use sp_core::u32_trait::Value as U32;
 use sp_io::storage;
 use sp_runtime::{
 	RuntimeDebug, ModuleId,
 	traits::{
-		Hash, AccountIdConversion
+		Hash, AccountIdConversion, One,
 	},
 };
 
@@ -808,8 +809,11 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 		if as_account {
 			let account = match origin {
 				RawOrigin::Members(n, d) => {
-					// TODO: reduce fraction n/d
-					T::ModuleId::get().into_sub_account((n, d))
+					// We want to reduce the fraction n/d to have unique accounts for different
+					// ratios of voters. For example 1/2, 3/6, 9/18 origins should all be treated
+					// the same.
+					let gcd = d.gcd(n).max(One::one());
+					T::ModuleId::get().into_sub_account((n / gcd, d / gcd))
 				},
 				RawOrigin::Member(who) => who,
 				RawOrigin::_Phantom(_) => { return Err(DispatchError::BadOrigin.into()) }
