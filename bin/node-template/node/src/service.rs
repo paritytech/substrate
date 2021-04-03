@@ -95,7 +95,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 			block_import: aura_block_import.clone(),
 			justification_import: Some(Box::new(grandpa_block_import.clone())),
 			client: client.clone(),
-			inherent_data_providers: move |_, ()| async move {
+			create_inherent_data_providers: move |_, ()| async move {
 				let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
 
 				let slot =
@@ -237,7 +237,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 				select_chain,
 				block_import,
 				proposer_factory,
-				inherent_data_providers: move |_, ()| async move {
+				create_inherent_data_providers: move |_, ()| async move {
 					let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
 
 					let slot =
@@ -365,7 +365,7 @@ pub fn new_light(mut config: Configuration) -> Result<TaskManager, ServiceError>
 			block_import: aura_block_import.clone(),
 			justification_import: Some(Box::new(grandpa_block_import.clone())),
 			client: client.clone(),
-			inherent_data_providers: move |_, ()| async move {
+			create_inherent_data_providers: move |_, ()| async move {
 				let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
 
 				let slot =

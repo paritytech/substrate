@@ -309,7 +309,7 @@ pub fn new_full_base(
 			env: proposer,
 			block_import,
 			sync_oracle: network.clone(),
-			inherent_data_providers: move |parent, ()| {
+			create_inherent_data_providers: move |parent, ()| {
 				let client_clone = client_clone.clone();
 				async move {
 					let uncles = sc_consensus_uncles::create_uncles_inherent_data_provider(

@@ -121,7 +121,7 @@ fn check_header<C, B: BlockT, P: Pair>(
 pub struct AuraVerifier<C, P, CAW, IDP> {
 	client: Arc<C>,
 	phantom: PhantomData<P>,
-	inherent_data_providers: IDP,
+	create_inherent_data_providers: IDP,
 	can_author_with: CAW,
 	check_for_equivocation: CheckForEquivocation,
 	telemetry: Option<TelemetryHandle>,
@@ -130,14 +130,14 @@ pub struct AuraVerifier<C, P, CAW, IDP> {
 impl<C, P, CAW, IDP> AuraVerifier<C, P, CAW, IDP> {
 	pub(crate) fn new(
 		client: Arc<C>,
-		inherent_data_providers: IDP,
+		create_inherent_data_providers: IDP,
 		can_author_with: CAW,
 		check_for_equivocation: CheckForEquivocation,
 		telemetry: Option<TelemetryHandle>,
 	) -> Self {
 		Self {
 			client,
-			inherent_data_providers,
+			create_inherent_data_providers,
 			can_author_with,
 			check_for_equivocation,
 			telemetry,
@@ -156,7 +156,7 @@ impl<C, P, CAW, IDP> AuraVerifier<C, P, CAW, IDP> where
 		block: B,
 		block_id: BlockId<B>,
 		inherent_data: sp_inherents::InherentData,
-		inherent_data_providers: IDP::InherentDataProviders,
+		create_inherent_data_providers: IDP::InherentDataProviders,
 	) -> Result<(), Error<B>> where
 		C: ProvideRuntimeApi<B>, C::Api: BlockBuilderApi<B>,
 		CAW: CanAuthorWith<B>,
@@ -180,7 +180,7 @@ impl<C, P, CAW, IDP> AuraVerifier<C, P, CAW, IDP> where
 
 		if !inherent_res.ok() {
 			for (i, e) in inherent_res.into_errors() {
-				match inherent_data_providers.try_handle_error(&i, &e).await {
+				match create_inherent_data_providers.try_handle_error(&i, &e).await {
 					Some(res) => res.map_err(Error::Inherent)?,
 					None => return Err(Error::UnknownInherentError(i)),
 				}
@@ -220,7 +220,7 @@ impl<B: BlockT, C, P, CAW, IDP> Verifier<B> for AuraVerifier<C, P, CAW, IDP> whe
 		let authorities = authorities(self.client.as_ref(), &BlockId::Hash(parent_hash))
 			.map_err(|e| format!("Could not fetch authorities at {:?}: {:?}", parent_hash, e))?;
 
-		let inherent_data_providers = self.inherent_data_providers
+		let create_inherent_data_providers = self.create_inherent_data_providers
 			.create_inherent_data_providers(
 				parent_hash,
 				(),
@@ -228,10 +228,10 @@ impl<B: BlockT, C, P, CAW, IDP> Verifier<B> for AuraVerifier<C, P, CAW, IDP> whe
 			.await
 			.map_err(|e| Error::<B>::Client(sp_blockchain::Error::Application(e)))?;
 
-		let mut inherent_data = inherent_data_providers.create_inherent_data()
+		let mut inherent_data = create_inherent_data_providers.create_inherent_data()
 			.map_err(Error::<B>::Inherent)?;
 
-		let slot_now = inherent_data_providers.slot();
+		let slot_now = create_inherent_data_providers.slot();
 
 		// we add one to allow for some small drift.
 		// FIXME #1019 in the future, alter this queue to allow deferring of
@@ -267,7 +267,7 @@ impl<B: BlockT, C, P, CAW, IDP> Verifier<B> for AuraVerifier<C, P, CAW, IDP> whe
 							block.clone(),
 							BlockId::Hash(parent_hash),
 							inherent_data,
-							inherent_data_providers,
+							create_inherent_data_providers,
 						).await.map_err(|e| e.to_string())?;
 					}
 
@@ -474,8 +474,8 @@ pub struct ImportQueueParams<'a, Block, I, C, S, CAW, CIDP> {
 	pub justification_import: Option<BoxJustificationImport<Block>>,
 	/// The client to interact with the chain.
 	pub client: Arc<C>,
-	/// The inherent data provider, to create the inherent data.
-	pub inherent_data_providers: CIDP,
+	/// Something that can create the inherent data providers.
+	pub create_inherent_data_providers: CIDP,
 	/// The spawner to spawn background tasks.
 	pub spawner: &'a S,
 	/// The prometheus registry.
@@ -494,7 +494,7 @@ pub fn import_queue<'a, P, Block, I, C, S, CAW, CIDP>(
 		block_import,
 		justification_import,
 		client,
-		inherent_data_providers,
+		create_inherent_data_providers,
 		spawner,
 		registry,
 		can_author_with,
@@ -529,7 +529,7 @@ pub fn import_queue<'a, P, Block, I, C, S, CAW, CIDP>(
 
 	let verifier = AuraVerifier::<_, P, _, _>::new(
 		client,
-		inherent_data_providers,
+		create_inherent_data_providers,
 		can_author_with,
 		check_for_equivocation,
 		telemetry,

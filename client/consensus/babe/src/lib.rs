@@ -384,8 +384,8 @@ pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW, BS, IDP> {
 	/// A sync oracle
 	pub sync_oracle: SO,
 
-	/// Providers for inherent data.
-	pub inherent_data_providers: IDP,
+	/// Something that can create the inherent data providers.
+	pub create_inherent_data_providers: IDP,
 
 	/// Force authoring of blocks even if we are offline
 	pub force_authoring: bool,
@@ -418,7 +418,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, BS, Error, IDP>(BabeParams {
 	env,
 	block_import,
 	sync_oracle,
-	inherent_data_providers,
+	create_inherent_data_providers,
 	force_authoring,
 	backoff_authoring_blocks,
 	babe_link,
@@ -472,7 +472,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, BS, Error, IDP>(BabeParams {
 		select_chain,
 		worker,
 		sync_oracle,
-		inherent_data_providers,
+		create_inherent_data_providers,
 		can_author_with,
 	);
 
@@ -932,7 +932,7 @@ impl<Block: BlockT> BabeLink<Block> {
 pub struct BabeVerifier<Block: BlockT, Client, SelectChain, CAW, CIDP> {
 	client: Arc<Client>,
 	select_chain: SelectChain,
-	inherent_data_providers: CIDP,
+	create_inherent_data_providers: CIDP,
 	config: Config,
 	epoch_changes: SharedEpochChanges<Block, Epoch>,
 	can_author_with: CAW,
@@ -953,7 +953,7 @@ where
 		block: Block,
 		block_id: BlockId<Block>,
 		inherent_data: InherentData,
-		inherent_data_providers: CIDP::InherentDataProviders,
+		create_inherent_data_providers: CIDP::InherentDataProviders,
 	) -> Result<(), Error<Block>> {
 		if let Err(e) = self.can_author_with.can_author_with(&block_id) {
 			debug!(
@@ -973,7 +973,7 @@ where
 
 		if !inherent_res.ok() {
 			for (i, e) in inherent_res.into_errors() {
-				match inherent_data_providers.try_handle_error(&i, &e).await {
+				match create_inherent_data_providers.try_handle_error(&i, &e).await {
 					Some(res) => res.map_err(|e| Error::CheckInherents(e))?,
 					None => return Err(Error::CheckInherentsUnhandled(i)),
 				}
@@ -1098,13 +1098,13 @@ where
 
 		debug!(target: "babe", "We have {:?} logs in this header", header.digest().logs().len());
 
-		let inherent_data_providers = self
-			.inherent_data_providers
+		let create_inherent_data_providers = self
+			.create_inherent_data_providers
 			.create_inherent_data_providers(parent_hash, ())
 			.await
 			.map_err(|e| Error::<Block>::Client(sp_consensus::Error::from(e).into()))?;
 
-		let slot_now = inherent_data_providers.slot();
+		let slot_now = create_inherent_data_providers.slot();
 
 		let parent_header_metadata = self.client.header_metadata(parent_hash)
 			.map_err(Error::<Block>::FetchParentHeader)?;
@@ -1160,7 +1160,7 @@ where
 				// to check that the internally-set timestamp in the inherents
 				// actually matches the slot set in the seal.
 				if let Some(inner_body) = body.take() {
-					let mut inherent_data = inherent_data_providers.create_inherent_data()
+					let mut inherent_data = create_inherent_data_providers.create_inherent_data()
 						.map_err(Error::<Block>::CreateInherents)?;
 					inherent_data.babe_replace_inherent_data(slot);
 					let block = Block::new(pre_header.clone(), inner_body);
@@ -1169,7 +1169,7 @@ where
 						block.clone(),
 						BlockId::Hash(parent_hash),
 						inherent_data,
-						inherent_data_providers,
+						create_inherent_data_providers,
 					).await?;
 
 					let (_, inner_body) = block.deconstruct();
@@ -1596,7 +1596,7 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, Inner, CAW, CIDP>(
 	justification_import: Option<BoxJustificationImport<Block>>,
 	client: Arc<Client>,
 	select_chain: SelectChain,
-	inherent_data_providers: CIDP,
+	create_inherent_data_providers: CIDP,
 	spawner: &impl sp_core::traits::SpawnEssentialNamed,
 	registry: Option<&Registry>,
 	can_author_with: CAW,
@@ -1615,7 +1615,7 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, Inner, CAW, CIDP>(
 {
 	let verifier = BabeVerifier {
 		select_chain,
-		inherent_data_providers,
+		create_inherent_data_providers,
 		config: babe_link.config,
 		epoch_changes: babe_link.epoch_changes,
 		can_author_with,

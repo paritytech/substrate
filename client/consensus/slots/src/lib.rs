@@ -461,12 +461,12 @@ impl<T, S> InherentDataProviderExt for (T, S) where T: Deref<Target = Timestamp>
 ///
 /// Every time a new slot is triggered, `worker.on_slot` is called and the future it returns is
 /// polled until completion, unless we are major syncing.
-pub async fn start_slot_worker<B, C, W, T, SO, CAW, IDP, Proof>(
+pub async fn start_slot_worker<B, C, W, T, SO, CAW, CIDP, Proof>(
 	slot_duration: SlotDuration<T>,
 	client: C,
 	mut worker: W,
 	mut sync_oracle: SO,
-	inherent_data_provider: IDP,
+	create_inherent_data_providers: CIDP,
 	can_author_with: CAW,
 )
 where
@@ -476,14 +476,14 @@ where
 	SO: SyncOracle + Send,
 	T: SlotData + Clone,
 	CAW: CanAuthorWith<B> + Send,
-	IDP: CreateInherentDataProviders<B, ()> + Send,
-	IDP::InherentDataProviders: InherentDataProviderExt + Send,
+	CIDP: CreateInherentDataProviders<B, ()> + Send,
+	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
 {
 	let SlotDuration(slot_duration) = slot_duration;
 
 	let mut slots = Slots::new(
 		slot_duration.slot_duration(),
-		inherent_data_provider,
+		create_inherent_data_providers,
 		client,
 	);
 

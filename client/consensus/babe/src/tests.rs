@@ -340,7 +340,7 @@ impl TestNetFactory for BabeTestNet {
 			inner: BabeVerifier {
 				client: client.clone(),
 				select_chain: longest_chain,
-				inherent_data_providers: Box::new(|_, _| async {
+				create_inherent_data_providers: Box::new(|_, _| async {
 					let timestamp = TimestampInherentDataProvider::from_system_time();
 					let slot = InherentDataProvider::from_timestamp_and_duration(
 						*timestamp,
@@ -458,7 +458,7 @@ fn run_one_test(
 			client,
 			env: environ,
 			sync_oracle: DummyOracle,
-			inherent_data_providers: Box::new(|_, _| async {
+			create_inherent_data_providers: Box::new(|_, _| async {
 				let timestamp = TimestampInherentDataProvider::from_system_time();
 				let slot = InherentDataProvider::from_timestamp_and_duration(
 					*timestamp,

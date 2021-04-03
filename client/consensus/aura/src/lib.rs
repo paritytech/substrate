@@ -119,8 +119,8 @@ pub struct StartAuraParams<C, SC, I, PF, SO, BS, CAW, IDP> {
 	pub proposer_factory: PF,
 	/// The sync oracle that can give us the current sync status.
 	pub sync_oracle: SO,
-	/// The inherent data providers to create the inherent data.
-	pub inherent_data_providers: IDP,
+	/// Something that can create the inherent data providers.
+	pub create_inherent_data_providers: IDP,
 	/// Should we force the authoring of blocks?
 	pub force_authoring: bool,
 	/// The backoff strategy when we miss slots.
@@ -148,7 +148,7 @@ pub fn start_aura<P, B, C, SC, PF, I, SO, CAW, BS, Error, IDP>(
 		block_import,
 		proposer_factory,
 		sync_oracle,
-		inherent_data_providers,
+		create_inherent_data_providers,
 		force_authoring,
 		backoff_authoring_blocks,
 		keystore,
@@ -191,7 +191,7 @@ pub fn start_aura<P, B, C, SC, PF, I, SO, CAW, BS, Error, IDP>(
 		select_chain,
 		worker,
 		sync_oracle,
-		inherent_data_providers,
+		create_inherent_data_providers,
 		can_author_with,
 	))
 }
@@ -732,7 +732,7 @@ mod tests {
 				client,
 				proposer_factory: environ,
 				sync_oracle: DummyOracle,
-				inherent_data_providers: |_, _| async {
+				create_inherent_data_providers: |_, _| async {
 					let timestamp = TimestampInherentDataProvider::from_system_time();
 					let slot = InherentDataProvider::from_timestamp_and_duration(
 						*timestamp,

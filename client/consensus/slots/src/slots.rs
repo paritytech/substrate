@@ -90,7 +90,7 @@ pub(crate) struct Slots<Block, C, IDP> {
 	last_slot: Slot,
 	slot_duration: Duration,
 	inner_delay: Option<Delay>,
-	inherent_data_providers: IDP,
+	create_inherent_data_providers: IDP,
 	client: C,
 	_phantom: std::marker::PhantomData<Block>,
 }
@@ -99,14 +99,14 @@ impl<Block, C, IDP> Slots<Block, C, IDP> {
 	/// Create a new `Slots` stream.
 	pub fn new(
 		slot_duration: Duration,
-		inherent_data_providers: IDP,
+		create_inherent_data_providers: IDP,
 		client: C,
 	) -> Self {
 		Slots {
 			last_slot: 0.into(),
 			slot_duration,
 			inner_delay: None,
-			inherent_data_providers,
+			create_inherent_data_providers,
 			client,
 			_phantom: Default::default(),
 		}
@@ -151,7 +151,7 @@ where
 				}
 			};
 
-			let inherent_data_providers = self.inherent_data_providers
+			let inherent_data_providers = self.create_inherent_data_providers
 				.create_inherent_data_providers(chain_head.hash(), ())
 				.await?;
 
