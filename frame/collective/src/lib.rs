@@ -123,7 +123,10 @@ impl DefaultVote for MoreThanMajorityThenPrimeDefaultVote {
 
 pub trait Config<I: Instance=DefaultInstance>: frame_system::Config {
 	/// The outer origin type.
-	type Origin: From<RawOrigin<Self::AccountId, I>>;
+	type Origin: From<RawOrigin<Self::AccountId, I>>
+		+ From<frame_system::RawOrigin<Self::AccountId>>
+		+ From<<Self as frame_system::Config>::Origin>
+		+ Into<Result<RawOrigin<Self::AccountId, I>, <Self as Config<I>>::Origin>>;
 
 	/// The outer call dispatch type.
 	type Proposal: Parameter
@@ -703,6 +706,31 @@ decl_module! {
 			ensure_root(origin)?;
 			let proposal_count = Self::do_disapprove_proposal(proposal_hash);
 			Ok(Some(T::WeightInfo::disapprove_proposal(proposal_count)).into())
+		}
+
+		/// Re-dispatch a collective origin call as a unique account that represents that origin.
+		///
+		/// For calls from members with a ratio of n / d, that fraction will be reduced before
+		/// generating an account
+		///
+		/// Can only be called by the collective origin.
+		#[weight = 0]
+		fn dispatch_as_account(origin, proposal: Box<T::Proposal>, n: u32, d: u32) -> DispatchResult {
+			let maybe_raw_origin: Result<RawOrigin<T::AccountId, I>, _> = <T as Config<I>>::Origin::from(origin).into();
+
+			let raw_origin = match maybe_raw_origin {
+				Ok(origin) => origin,
+				Err(_) => return DispatchError::BadOrigin.into(),
+			};
+
+			let account: T::AccountId = match raw_origin {
+				RawOrigin::Members(n, d) => { Default::default() },
+				RawOrigin::Member(who) => who,
+				_ => return Err("not allowed".into())
+			};
+			let signed_origin = frame_system::RawOrigin::Signed(account);
+			let result = proposal.dispatch(signed_origin.into());
+			Ok(())
 		}
 	}
 }
