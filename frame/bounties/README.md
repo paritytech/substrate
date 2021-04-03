@@ -53,13 +53,13 @@ Bounty protocol:
 - `claim_bounty` - Claim a specific bounty amount from the Payout Address.
 - `unassign_curator` - Unassign an accepted curator from a specific earmark.
 - `close_bounty` - Cancel the earmark for a specific treasury amount and close the bounty.
-- `add_subbounty` - Master curator may break or deligate the execution of bounty,
-   by adding new subbounty, with amount which can be deducted from parent bounty.
+- `add_subbounty` - Master curator may split or delegate the execution of bounty,
+   by adding a new subbounty, with an amount which can be deducted from the parent bounty.
 - `propose_subcurator` - Master curator may assign an account to a subbouty
    as candidate subcurator.
 - `accept_subcurator` - Accept a subbounty assignment from the Master curator,
    setting a subcurator deposit.
 - `unassign_subcurator` - Unassign an accepted subcurator from a specific earmark.
-- `award_subbounty` - Close and specify the subbouty payout benefiiary address.
+- `award_subbounty` - Close and specify the subbouty payout beneficiary address.
 - `claim_subbounty` - Claim a payout amount & subcurator fee for specific subbounty.
-- `close_subbounty` - Cancel the earmark for a specific treasury amount and close the bounty.
+- `close_subbounty` - Cancel the earmark for a specific treasury amount and close the subbounty.

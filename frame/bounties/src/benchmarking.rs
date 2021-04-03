@@ -337,7 +337,15 @@ benchmarks! {
 
 		let bm_setup = create_subbounty_bounty::<T>(0, d)?;
 
-	}: _(RawOrigin::Signed(bm_setup.curator), bm_setup.bounty_id, bm_setup.subbounty_value, bm_setup.reason)
+	}: _(
+		RawOrigin::Signed(bm_setup.curator),
+		bm_setup.bounty_id,
+		bm_setup.subbounty_value,
+		bm_setup.reason
+	)
+	verify {
+		assert_last_event::<T>(RawEvent::SubBountyAdded(0, 1).into())
+	}
 
 	propose_subcurator {
 		setup_pot_account::<T>();
@@ -352,7 +360,13 @@ benchmarks! {
 			bm_setup.reason.clone(),
 		)?;
 		bm_setup.subbounty_id = BountyCount::get() - 1;
-	}: _(RawOrigin::Signed(bm_setup.curator), bm_setup.bounty_id, bm_setup.subbounty_id, subcurator_lookup, bm_setup.subbounty_fee)
+	}: _(
+		RawOrigin::Signed(bm_setup.curator),
+		bm_setup.bounty_id,
+		bm_setup.subbounty_id,
+		subcurator_lookup,
+		bm_setup.subbounty_fee
+	)
 
 	unassign_subcurator {
 		setup_pot_account::<T>();
@@ -392,7 +406,12 @@ benchmarks! {
 		setup_pot_account::<T>();
 		let bm_setup = create_subbounty::<T>(0, MAX_BYTES)?;
 		let beneficiary = T::Lookup::unlookup(account("beneficiary", 0, SEED));
-	}: _(RawOrigin::Signed(bm_setup.subcurator), bm_setup.bounty_id, bm_setup.subbounty_id, beneficiary)
+	}: _(
+		RawOrigin::Signed(bm_setup.subcurator),
+		bm_setup.bounty_id,
+		bm_setup.subbounty_id,
+		beneficiary
+	)
 
 	claim_subbounty {
 		setup_pot_account::<T>();
