@@ -45,7 +45,10 @@
 use sp_std::{prelude::*, result};
 use sp_core::u32_trait::Value as U32;
 use sp_io::storage;
-use sp_runtime::{RuntimeDebug, traits::Hash};
+use sp_runtime::{
+	ModuleId, RuntimeDebug, Perbill,
+	traits::{Hash, AccountIdConversion},
+};
 
 use frame_support::{
 	codec::{Decode, Encode},
@@ -153,6 +156,9 @@ pub trait Config<I: Instance=DefaultInstance>: frame_system::Config {
 	/// Default vote strategy of this collective.
 	type DefaultVote: DefaultVote;
 
+	/// The collective's module id, used for deriving its sovereign account ID.
+	type ModuleId: Get<ModuleId>;
+
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
 }
@@ -238,6 +244,8 @@ decl_event! {
 		/// A proposal was closed because its threshold was reached or after its duration was up.
 		/// \[proposal_hash, yes, no\]
 		Closed(Hash, MemberCount, MemberCount),
+		/// A proposal has been dispatched by an account representing the collective origin.
+		AccountExecuted(AccountId, Hash, DispatchResult),
 	}
 }
 
@@ -263,6 +271,8 @@ decl_error! {
 		WrongProposalWeight,
 		/// The given length bound for the proposal was too low.
 		WrongProposalLength,
+		/// Not enough members to create the account.
+		NotEnoughMembers,
 	}
 }
 
@@ -710,12 +720,13 @@ decl_module! {
 
 		/// Re-dispatch a collective origin call as a unique account that represents that origin.
 		///
-		/// For calls from members with a ratio of n / d, that fraction will be reduced before
-		/// generating an account
+		/// Since the collective may want to be able to represent a different ratio than exists,
+		/// we allow the re-dispatch to specify the target ratio, as long as it is less restrictive
+		/// than the provided origin.
 		///
 		/// Can only be called by the collective origin.
 		#[weight = 0]
-		fn dispatch_as_account(origin, proposal: Box<T::Proposal>, n: u32, d: u32) -> DispatchResult {
+		fn dispatch_as_account(origin, proposal: Box<T::Proposal>, target_n: u32, target_d: u32) -> DispatchResult {
 			let maybe_raw_origin: Result<RawOrigin<T::AccountId, I>, _> = <T as Config<I>>::Origin::from(origin).into();
 
 			let raw_origin = match maybe_raw_origin {
@@ -724,12 +735,27 @@ decl_module! {
 			};
 
 			let account: T::AccountId = match raw_origin {
-				RawOrigin::Members(n, d) => { Default::default() },
+				RawOrigin::Members(n, d) => {
+					// n is the number of members who voted aye. d is the total number of members.
+					// Should never be able to make an origin which represents more members than exists.
+					ensure!(target_d <= d, Error::<T, I>::NotEnoughMembers);
+					let members_ratio = Perbill::from_rational(n, d);
+					let target_ratio = Perbill::from_rational(target_n, target_d);
+					// The target ratio should be less than or equal to the ratio provided by the origin.
+					// For example 6/13 cannot create a 1/2 account, but 7/13 can.
+					ensure!(target_ratio <= members_ratio, Error::<T, I>::NotEnoughMembers);
+					// Create the account.
+					T::ModuleId::get().into_sub_account((target_n, target_d))
+				},
 				RawOrigin::Member(who) => who,
-				_ => return Err("not allowed".into())
+				_ => return DispatchError::BadOrigin.into(),
 			};
-			let signed_origin = frame_system::RawOrigin::Signed(account);
+			let proposal_hash = T::Hashing::hash_of(&proposal);
+			let signed_origin = frame_system::RawOrigin::Signed(account.clone());
 			let result = proposal.dispatch(signed_origin.into());
+			Self::deposit_event(
+				RawEvent::AccountExecuted(account, proposal_hash, result.map(|_| ()).map_err(|e| e.error))
+			);
 			Ok(())
 		}
 	}
@@ -1006,6 +1032,9 @@ mod tests {
 		pub const MotionDuration: u64 = 3;
 		pub const MaxProposals: u32 = 100;
 		pub const MaxMembers: u32 = 100;
+		pub const ModuleId0: ModuleId = ModuleId(*b"py/coll0");
+		pub const ModuleId1: ModuleId = ModuleId(*b"py/coll1");
+		pub const ModuleId2: ModuleId = ModuleId(*b"py/coll2");
 		pub BlockWeights: frame_system::limits::BlockWeights =
 			frame_system::limits::BlockWeights::simple_max(1024);
 	}
@@ -1042,6 +1071,7 @@ mod tests {
 		type MaxProposals = MaxProposals;
 		type MaxMembers = MaxMembers;
 		type DefaultVote = PrimeDefaultVote;
+		type ModuleId = ModuleId1;
 		type WeightInfo = ();
 	}
 	impl Config<Instance2> for Test {
@@ -1052,6 +1082,7 @@ mod tests {
 		type MaxProposals = MaxProposals;
 		type MaxMembers = MaxMembers;
 		type DefaultVote = MoreThanMajorityThenPrimeDefaultVote;
+		type ModuleId = ModuleId2;
 		type WeightInfo = ();
 	}
 	impl Config for Test {
@@ -1062,6 +1093,7 @@ mod tests {
 		type MaxProposals = MaxProposals;
 		type MaxMembers = MaxMembers;
 		type DefaultVote = PrimeDefaultVote;
+		type ModuleId = ModuleId0;
 		type WeightInfo = ();
 	}
 
