@@ -31,7 +31,7 @@
 //! # Canonicalization vs Finality
 //! Database engine uses a notion of canonicality, rather then finality. A canonical block may not be yet finalized
 //! from the perspective of the consensus engine, but it still can't be reverted in the database. Most of the time
-//! during normal operation last canonical block is the same as lst finalized. However if finality stall for a
+//! during normal operation last canonical block is the same as last finalized. However if finality stall for a
 //! long duration for some reason, there's only a certain number of blocks that can fit in the non-canonical overlay,
 //! so canonicalization of an unfinalized block may be forced.
 //!
