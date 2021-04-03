@@ -16,16 +16,24 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! State database maintenance. Handles canonicalization and pruning in the database. The input to
-//! this module is a `ChangeSet` which is basically a list of key-value pairs (trie nodes) that
-//! were added or deleted during block execution.
+//! State database maintenance. Handles canonicalization and pruning in the database.
 //!
 //! # Canonicalization.
 //! Canonicalization window tracks a tree of blocks identified by header hash. The in-memory
-//! overlay allows to get any node that was inserted in any of the blocks within the window.
-//! The tree is journaled to the backing database and rebuilt on startup.
+//! overlay allows to get any trie node that was inserted in any of the blocks within the window.
+//! The overlay is journaled to the backing database and rebuilt on startup.
+//! There's a limit of 32 blocks that may have the same block number in the canonicalization window.
+//!
 //! Canonicalization function selects one root from the top of the tree and discards all other roots
-//! and their subtrees.
+//! and their subtrees. Upon canonicalization all trie nodes that were inserted in the block are added to
+//! the backing DB and block tracking is moved to the pruning window, where no forks are allowed.
+//!
+//! # Canonicalization vs Finality
+//! Database engine uses a notion of canonicality, rather then finality. A canonical block may not be yet finalized
+//! from the perspective of the consensus engine, but it still can't be reverted in the database. Most of the time
+//! during normal operation last canonical block is the same as last finalized. However if finality stall for a
+//! long duration for some reason, there's only a certain number of blocks that can fit in the non-canonical overlay,
+//! so canonicalization of an unfinalized block may be forced.
 //!
 //! # Pruning.
 //! See `RefWindow` for pruning algorithm details. `StateDb` prunes on each canonicalization until
@@ -89,6 +97,8 @@ pub enum Error<E: fmt::Debug> {
 	InvalidParent,
 	/// Invalid pruning mode specified. Contains expected mode.
 	InvalidPruningMode(String),
+	/// Too many unfinalized sibling blocks inserted.
+	TooManySiblingBlocks,
 }
 
 /// Pinning error type.
@@ -112,6 +122,7 @@ impl<E: fmt::Debug> fmt::Debug for Error<E> {
 			Error::InvalidBlockNumber => write!(f, "Trying to insert block with invalid number"),
 			Error::InvalidParent => write!(f, "Trying to insert block with unknown parent"),
 			Error::InvalidPruningMode(e) => write!(f, "Expected pruning mode: {}", e),
+			Error::TooManySiblingBlocks => write!(f, "Too many sibling blocks inserted"),
 		}
 	}
 }
