@@ -21,15 +21,19 @@
 
 use std::cell::RefCell;
 
-use crate::Config;
-use sp_runtime::Perbill;
-use sp_staking::{SessionIndex, offence::{ReportOffence, OffenceError}};
-use sp_runtime::testing::{Header, UintAuthorityId, TestXt};
-use sp_runtime::traits::{IdentityLookup, BlakeTwo256, ConvertInto};
-use sp_core::H256;
-use frame_support::parameter_types;
-use crate as imonline;
+use frame_support::{parameter_types, weights::Weight};
 use pallet_session::historical as pallet_session_historical;
+use sp_core::H256;
+use sp_runtime::testing::{Header, TestXt, UintAuthorityId};
+use sp_runtime::traits::{BlakeTwo256, ConvertInto, IdentityLookup};
+use sp_runtime::{Perbill, Percent};
+use sp_staking::{
+	offence::{OffenceError, ReportOffence},
+	SessionIndex,
+};
+
+use crate as imonline;
+use crate::Config;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
 type Block = frame_system::mocking::MockBlock<Runtime>;
@@ -40,10 +44,10 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
-		ImOnline: imonline::{Module, Call, Storage, Config<T>, Event<T>},
-		Historical: pallet_session_historical::{Module},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
+		ImOnline: imonline::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Historical: pallet_session_historical::{Pallet},
 	}
 );
 
@@ -136,6 +140,7 @@ impl frame_system::Config for Runtime {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 
 parameter_types! {
@@ -176,6 +181,41 @@ impl pallet_authorship::Config for Runtime {
 	type EventHandler = ImOnline;
 }
 
+thread_local! {
+	pub static MOCK_CURRENT_SESSION_PROGRESS: RefCell<Option<Option<Percent>>> = RefCell::new(None);
+}
+
+thread_local! {
+	pub static MOCK_AVERAGE_SESSION_LENGTH: RefCell<Option<u64>> = RefCell::new(None);
+}
+
+pub struct TestNextSessionRotation;
+
+impl frame_support::traits::EstimateNextSessionRotation<u64> for TestNextSessionRotation {
+	fn average_session_length() -> u64 {
+		// take the mock result if any and return it
+		let mock = MOCK_AVERAGE_SESSION_LENGTH.with(|p| p.borrow_mut().take());
+
+		mock.unwrap_or(pallet_session::PeriodicSessions::<Period, Offset>::average_session_length())
+	}
+
+	fn estimate_current_session_progress(now: u64) -> (Option<Percent>, Weight) {
+		let (estimate, weight) =
+			pallet_session::PeriodicSessions::<Period, Offset>::estimate_current_session_progress(
+				now,
+			);
+
+		// take the mock result if any and return it
+		let mock = MOCK_CURRENT_SESSION_PROGRESS.with(|p| p.borrow_mut().take());
+
+		(mock.unwrap_or(estimate), weight)
+	}
+
+	fn estimate_next_session_rotation(now: u64) -> (Option<u64>, Weight) {
+		pallet_session::PeriodicSessions::<Period, Offset>::estimate_next_session_rotation(now)
+	}
+}
+
 parameter_types! {
 	pub const UnsignedPriority: u64 = 1 << 20;
 }
@@ -183,9 +223,9 @@ parameter_types! {
 impl Config for Runtime {
 	type AuthorityId = UintAuthorityId;
 	type Event = Event;
-	type ReportUnresponsiveness = OffenceHandler;
 	type ValidatorSet = Historical;
-	type SessionDuration = Period;
+	type NextSessionRotation = TestNextSessionRotation;
+	type ReportUnresponsiveness = OffenceHandler;
 	type UnsignedPriority = UnsignedPriority;
 	type WeightInfo = ();
 }

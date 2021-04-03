@@ -18,7 +18,6 @@ sp-consensus-aura = { version = "0.9.0", default-features = false, path = "../..
 sp-consensus-babe = { version = "0.9.0", default-features = false, path = "../../primitives/consensus/babe" }
 sp-block-builder = { version = "3.0.0", default-features = false, path = "../../primitives/block-builder" }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-frame-executive = { version = "3.0.0", default-features = false, path = "../../frame/executive" }
 sp-inherents = { version = "3.0.0", default-features = false, path = "../../primitives/inherents" }
 sp-keyring = { version = "3.0.0", optional = true, path = "../../primitives/keyring" }
 memory-db = { version = "0.26.0", default-features = false }
@@ -47,13 +46,14 @@ sp-externalities = { version = "0.9.0", default-features = false, path = "../../
 
 # 3rd party
 cfg-if = "1.0"
-log = { version = "0.4.8", optional = true }
+log = { version = "0.4.14", default-features = false }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 
 [dev-dependencies]
 sc-block-builder = { version = "0.9.0", path = "../../client/block-builder" }
 sc-executor = { version = "0.9.0", path = "../../client/executor" }
 substrate-test-runtime-client = { version = "2.0.0", path = "./client" }
+futures = "0.3.9"
 
 [build-dependencies]
 substrate-wasm-builder = { version = "4.0.0", path = "../../utils/wasm-builder" }
@@ -68,10 +68,9 @@ std = [
 	"sp-consensus-babe/std",
 	"sp-block-builder/std",
 	"codec/std",
-	"frame-executive/std",
 	"sp-inherents/std",
 	"sp-keyring",
-	"log",
+	"log/std",
 	"memory-db/std",
 	"sp-offchain/std",
 	"sp-core/std",
@@ -97,3 +96,5 @@ std = [
 	"sp-transaction-pool/std",
 	"trie-db/std",
 ]
+# Special feature to disable logging
+disable-logging = [ "sp-api/disable-logging" ]

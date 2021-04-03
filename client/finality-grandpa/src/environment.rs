@@ -39,7 +39,7 @@ use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, Zero,
 };
-use sc_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
+use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO};
 
 use crate::{
 	local_authority_id, CommandOrError, Commit, Config, Error, NewAuthoritySet, Precommit, Prevote,
@@ -55,7 +55,7 @@ use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
 use crate::voting_rule::VotingRule;
 use sp_finality_grandpa::{
-	AuthorityId, AuthoritySignature, Equivocation, EquivocationProof,
+	AuthorityId, AuthoritySignature, Equivocation, EquivocationProof, GRANDPA_ENGINE_ID,
 	GrandpaApi, RoundNumber, SetId,
 };
 use prometheus_endpoint::{register, Counter, Gauge, PrometheusError, U64};
@@ -445,6 +445,7 @@ pub(crate) struct Environment<Backend, Block: BlockT, C, N: NetworkT<Block>, SC,
 	pub(crate) voting_rule: VR,
 	pub(crate) metrics: Option<Metrics>,
 	pub(crate) justification_sender: Option<GrandpaJustificationSender<Block>>,
+	pub(crate) telemetry: Option<TelemetryHandle>,
 	pub(crate) _phantom: PhantomData<Backend>,
 }
 
@@ -507,7 +508,7 @@ where
 			.best_chain()
 			.map_err(|e| Error::Blockchain(e.to_string()))?;
 
-		let authority_set = self.authority_set.inner().read();
+		let authority_set = self.authority_set.inner();
 
 		// block hash and number of the next pending authority set change in the
 		// given best chain.
@@ -891,7 +892,10 @@ where
 		};
 
 		let report_prevote_metrics = |prevote: &Prevote<Block>| {
-			telemetry!(CONSENSUS_DEBUG; "afg.prevote_issued";
+			telemetry!(
+				self.telemetry;
+				CONSENSUS_DEBUG;
+				"afg.prevote_issued";
 				"round" => round,
 				"target_number" => ?prevote.target_number,
 				"target_hash" => ?prevote.target_hash,
@@ -950,7 +954,10 @@ where
 		};
 
 		let report_precommit_metrics = |precommit: &Precommit<Block>| {
-			telemetry!(CONSENSUS_DEBUG; "afg.precommit_issued";
+			telemetry!(
+				self.telemetry;
+				CONSENSUS_DEBUG;
+				"afg.precommit_issued";
 				"round" => round,
 				"target_number" => ?precommit.target_number,
 				"target_hash" => ?precommit.target_hash,
@@ -1146,6 +1153,7 @@ where
 			(round, commit).into(),
 			false,
 			self.justification_sender.as_ref(),
+			self.telemetry.clone(),
 		)
 	}
 
@@ -1210,6 +1218,7 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 	justification_or_commit: JustificationOrCommit<Block>,
 	initial_sync: bool,
 	justification_sender: Option<&GrandpaJustificationSender<Block>>,
+	telemetry: Option<TelemetryHandle>,
 ) -> Result<(), CommandOrError<Block::Hash, NumberFor<Block>>>
 where
 	Block: BlockT,
@@ -1219,7 +1228,7 @@ where
 	// NOTE: lock must be held through writing to DB to avoid race. this lock
 	//       also implicitly synchronizes the check for last finalized number
 	//       below.
-	let mut authority_set = authority_set.inner().write();
+	let mut authority_set = authority_set.inner();
 
 	let status = client.info();
 
@@ -1245,6 +1254,7 @@ where
 			number,
 			&is_descendent_of::<Block, _>(&*client, None),
 			initial_sync,
+			None,
 		).map_err(|e| Error::Safety(e.to_string()))?;
 
 		// send a justification notification if a sender exists and in case of error log it.
@@ -1265,11 +1275,8 @@ where
 		// `N+1`. this assumption is required to make sure we store
 		// justifications for transition blocks which will be requested by
 		// syncing clients.
-		let justification = match justification_or_commit {
-			JustificationOrCommit::Justification(justification) => {
-				notify_justification(justification_sender, || Ok(justification.clone()));
-				Some(justification.encode())
-			},
+		let (justification_required, justification) = match justification_or_commit {
+			JustificationOrCommit::Justification(justification) => (true, justification),
 			JustificationOrCommit::Commit((round_number, commit)) => {
 				let mut justification_required =
 					// justification is always required when block that enacts new authorities
@@ -1287,42 +1294,46 @@ where
 					}
 				}
 
-				// NOTE: the code below is a bit more verbose because we
-				// really want to avoid creating a justification if it isn't
-				// needed (e.g. if there's no subscribers), and also to avoid
-				// creating it twice. depending on the vote tree for the round,
-				// creating a justification might require multiple fetches of
-				// headers from the database.
-				let justification = || GrandpaJustification::from_commit(
+				let justification = GrandpaJustification::from_commit(
 					&client,
 					round_number,
 					commit,
-				);
+				)?;
 
-				if justification_required {
-					let justification = justification()?;
-					notify_justification(justification_sender, || Ok(justification.clone()));
-
-					Some(justification.encode())
-				} else {
-					notify_justification(justification_sender, justification);
-
-					None
-				}
+				(justification_required, justification)
 			},
 		};
 
-		debug!(target: "afg", "Finalizing blocks up to ({:?}, {})", number, hash);
+		notify_justification(justification_sender, || Ok(justification.clone()));
+
+		let persisted_justification = if justification_required {
+			Some((GRANDPA_ENGINE_ID, justification.encode()))
+		} else {
+			None
+		};
 
 		// ideally some handle to a synchronization oracle would be used
 		// to avoid unconditionally notifying.
-		client.apply_finality(import_op, BlockId::Hash(hash), justification, true).map_err(|e| {
-			warn!(target: "afg", "Error applying finality to block {:?}: {:?}", (hash, number), e);
-			e
-		})?;
-		telemetry!(CONSENSUS_INFO; "afg.finalized_blocks_up_to";
+		client
+			.apply_finality(import_op, BlockId::Hash(hash), persisted_justification, true)
+			.map_err(|e| {
+				warn!(target: "afg", "Error applying finality to block {:?}: {:?}", (hash, number), e);
+				e
+			})?;
+
+		debug!(target: "afg", "Finalizing blocks up to ({:?}, {})", number, hash);
+
+		telemetry!(
+			telemetry;
+			CONSENSUS_INFO;
+			"afg.finalized_blocks_up_to";
 			"number" => ?number, "hash" => ?hash,
 		);
+
+		crate::aux_schema::update_best_justification(
+			&justification,
+			|insert| apply_aux(import_op, insert, &[]),
+		)?;
 
 		let new_authorities = if let Some((canon_hash, canon_number)) = status.new_set_block {
 			// the authority set has changed.
@@ -1340,7 +1351,10 @@ where
 				);
 			}
 
-			telemetry!(CONSENSUS_INFO; "afg.generating_new_authority_set";
+			telemetry!(
+				telemetry;
+				CONSENSUS_INFO;
+				"afg.generating_new_authority_set";
 				"number" => ?canon_number, "hash" => ?canon_hash,
 				"authorities" => ?set_ref.to_vec(),
 				"set_id" => ?new_id,

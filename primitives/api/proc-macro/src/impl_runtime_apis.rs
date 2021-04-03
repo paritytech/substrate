@@ -162,6 +162,7 @@ fn generate_dispatch_function(impls: &[ItemImpl]) -> Result<TokenStream> {
 fn generate_wasm_interface(impls: &[ItemImpl]) -> Result<TokenStream> {
 	let input = Ident::new("input", Span::call_site());
 	let c = generate_crate_access(HIDDEN_INCLUDES_ID);
+
 	let impl_calls = generate_impl_calls(impls, &input)?
 		.into_iter()
 		.map(|(trait_, fn_name, impl_, attrs)| {
@@ -182,6 +183,8 @@ fn generate_wasm_interface(impls: &[ItemImpl]) -> Result<TokenStream> {
 							#c::slice::from_raw_parts(input_data, input_len)
 						}
 					};
+
+					#c::init_runtime_logger();
 
 					let output = { #impl_ };
 					#c::to_substrate_wasm_fn_return_value(&output)

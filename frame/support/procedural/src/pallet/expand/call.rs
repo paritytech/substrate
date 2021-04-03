@@ -70,7 +70,17 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			.collect::<Vec<_>>()
 	});
 
+	let default_docs = [syn::parse_quote!(
+		r"Contains one variant per dispatchable that can be called by an extrinsic."
+	)];
+	let docs = if def.call.docs.is_empty() {
+		&default_docs[..]
+	} else {
+		&def.call.docs[..]
+	};
+
 	quote::quote_spanned!(def.call.attr_span =>
+		#( #[doc = #docs] )*
 		#[derive(
 			#frame_support::RuntimeDebugNoBound,
 			#frame_support::CloneNoBound,
@@ -87,7 +97,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 				#frame_support::sp_std::marker::PhantomData<(#type_use_gen,)>,
 				#frame_support::Never,
 			),
-			#( #fn_name( #( #args_compact_attr #args_type ),* ), )*
+			#( #( #[doc = #fn_doc] )* #fn_name( #( #args_compact_attr #args_type ),* ), )*
 		}
 
 		impl<#type_impl_gen> #frame_support::dispatch::GetDispatchInfo
@@ -98,26 +108,26 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 				match *self {
 					#(
 						Self::#fn_name ( #( ref #args_name, )* ) => {
-							let base_weight = #fn_weight;
+							let __pallet_base_weight = #fn_weight;
 
-							let weight = <
+							let __pallet_weight = <
 								dyn #frame_support::dispatch::WeighData<( #( & #args_type, )* )>
-							>::weigh_data(&base_weight, ( #( #args_name, )* ));
+							>::weigh_data(&__pallet_base_weight, ( #( #args_name, )* ));
 
-							let class = <
+							let __pallet_class = <
 								dyn #frame_support::dispatch::ClassifyDispatch<
 									( #( & #args_type, )* )
 								>
-							>::classify_dispatch(&base_weight, ( #( #args_name, )* ));
+							>::classify_dispatch(&__pallet_base_weight, ( #( #args_name, )* ));
 
-							let pays_fee = <
+							let __pallet_pays_fee = <
 								dyn #frame_support::dispatch::PaysFee<( #( & #args_type, )* )>
-							>::pays_fee(&base_weight, ( #( #args_name, )* ));
+							>::pays_fee(&__pallet_base_weight, ( #( #args_name, )* ));
 
 							#frame_support::dispatch::DispatchInfo {
-								weight,
-								class,
-								pays_fee,
+								weight: __pallet_weight,
+								class: __pallet_class,
+								pays_fee: __pallet_pays_fee,
 							}
 						},
 					)*
@@ -152,9 +162,13 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			) -> #frame_support::dispatch::DispatchResultWithPostInfo {
 				match self {
 					#(
-						Self::#fn_name( #( #args_name, )* ) =>
+						Self::#fn_name( #( #args_name, )* ) => {
+							#frame_support::sp_tracing::enter_span!(
+								#frame_support::sp_tracing::trace_span!(stringify!(#fn_name))
+							);
 							<#pallet_ident<#type_use_gen>>::#fn_name(origin, #( #args_name, )* )
-								.map(Into::into).map_err(Into::into),
+								.map(Into::into).map_err(Into::into)
+						},
 					)*
 					Self::__Ignore(_, _) => {
 						let _ = origin; // Use origin for empty Call enum
@@ -172,6 +186,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 
 		impl<#type_impl_gen> #pallet_ident<#type_use_gen> #where_clause {
 			#[doc(hidden)]
+			#[allow(dead_code)]
 			pub fn call_functions() -> &'static [#frame_support::dispatch::FunctionMetadata] {
 				&[ #(
 					#frame_support::dispatch::FunctionMetadata {

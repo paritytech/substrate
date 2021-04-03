@@ -36,3 +36,4 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 ]
+try-runtime = ["frame-support/try-runtime"]

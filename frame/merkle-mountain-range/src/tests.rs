@@ -23,7 +23,7 @@ use sp_core::{
 	H256,
 	offchain::{
 		testing::TestOffchainExt,
-		OffchainExt,
+		OffchainWorkerExt, OffchainDbExt,
 	},
 };
 use pallet_mmr_primitives::{Proof, Compact};
@@ -34,15 +34,16 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 
 fn register_offchain_ext(ext: &mut sp_io::TestExternalities) {
 	let (offchain, _offchain_state) = TestOffchainExt::with_offchain_db(ext.offchain_db());
-	ext.register_extension(OffchainExt::new(offchain));
+	ext.register_extension(OffchainDbExt::new(offchain.clone()));
+	ext.register_extension(OffchainWorkerExt::new(offchain));
 }
 
 fn new_block() -> u64 {
-	let number = frame_system::Module::<Test>::block_number() + 1;
+	let number = frame_system::Pallet::<Test>::block_number() + 1;
 	let hash = H256::repeat_byte(number as u8);
 	LEAF_DATA.with(|r| r.borrow_mut().a = number);
 
-	frame_system::Module::<Test>::initialize(
+	frame_system::Pallet::<Test>::initialize(
 		&number,
 		&hash,
 		&Default::default(),

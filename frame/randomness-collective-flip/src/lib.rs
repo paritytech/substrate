@@ -25,7 +25,7 @@
 //!
 //! ## Public Functions
 //!
-//! See the [`Module`](./struct.Module.html) struct for details of publicly available functions.
+//! See the [`Module`] struct for details of publicly available functions.
 //!
 //! ## Usage
 //!
@@ -56,7 +56,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::{prelude::*, convert::TryInto};
-use sp_runtime::traits::Hash;
+use sp_runtime::traits::{Hash, Saturating};
 use frame_support::{
 	decl_module, decl_storage, traits::Randomness,
 	weights::Weight
@@ -76,7 +76,7 @@ fn block_number_to_index<T: Config>(block_number: T::BlockNumber) -> usize {
 decl_module! {
 	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		fn on_initialize(block_number: T::BlockNumber) -> Weight {
-			let parent_hash = <frame_system::Module<T>>::parent_hash();
+			let parent_hash = <frame_system::Pallet<T>>::parent_hash();
 
 			<RandomMaterial<T>>::mutate(|ref mut values| if values.len() < RANDOM_MATERIAL_LEN as usize {
 				values.push(parent_hash)
@@ -99,7 +99,7 @@ decl_storage! {
 	}
 }
 
-impl<T: Config> Randomness<T::Hash> for Module<T> {
+impl<T: Config> Randomness<T::Hash, T::BlockNumber> for Module<T> {
 	/// This randomness uses a low-influence function, drawing upon the block hashes from the
 	/// previous 81 blocks. Its result for any given subject will be known far in advance by anyone
 	/// observing the chain. Any block producer has significant influence over their block hashes
@@ -110,14 +110,15 @@ impl<T: Config> Randomness<T::Hash> for Module<T> {
 	/// WARNING: Hashing the result of this function will remove any low-influence properties it has
 	/// and mean that all bits of the resulting value are entirely manipulatable by the author of
 	/// the parent block, who can determine the value of `parent_hash`.
-	fn random(subject: &[u8]) -> T::Hash {
-		let block_number = <frame_system::Module<T>>::block_number();
+	fn random(subject: &[u8]) -> (T::Hash, T::BlockNumber) {
+		let block_number = <frame_system::Pallet<T>>::block_number();
 		let index = block_number_to_index::<T>(block_number);
 
 		let hash_series = <RandomMaterial<T>>::get();
-		if !hash_series.is_empty() {
+		let seed = if !hash_series.is_empty() {
 			// Always the case after block 1 is initialized.
-			hash_series.iter()
+			hash_series
+				.iter()
 				.cycle()
 				.skip(index)
 				.take(RANDOM_MATERIAL_LEN as usize)
@@ -126,7 +127,12 @@ impl<T: Config> Randomness<T::Hash> for Module<T> {
 				.triplet_mix()
 		} else {
 			T::Hash::default()
-		}
+		};
+
+		(
+			seed,
+			block_number.saturating_sub(RANDOM_MATERIAL_LEN.into()),
+		)
 	}
 }
 
@@ -151,8 +157,8 @@ mod tests {
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
-			System: frame_system::{Module, Call, Config, Storage, Event<T>},
-			CollectiveFlip: pallet_randomness_collective_flip::{Module, Call, Storage},
+			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+			CollectiveFlip: pallet_randomness_collective_flip::{Pallet, Call, Storage},
 		}
 	);
 
@@ -187,6 +193,7 @@ mod tests {
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
+		type OnSetCode = ();
 	}
 
 	fn new_test_ext() -> sp_io::TestExternalities {
@@ -272,8 +279,9 @@ mod tests {
 			assert_eq!(CollectiveFlip::random_seed(), CollectiveFlip::random_seed());
 			assert_ne!(CollectiveFlip::random(b"random_1"), CollectiveFlip::random(b"random_2"));
 
-			let random = CollectiveFlip::random_seed();
+			let (random, known_since) = CollectiveFlip::random_seed();
 
+			assert_eq!(known_since, 162 - RANDOM_MATERIAL_LEN as u64);
 			assert_ne!(random, H256::zero());
 			assert!(!CollectiveFlip::random_material().contains(&random));
 		});

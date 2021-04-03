@@ -18,7 +18,7 @@ sc-service = { version = "0.9.0", features = ["test-helpers", "db"],  path = "..
 sc-client-db = { version = "0.9.0", path = "../../../client/db/", features = ["kvdb-rocksdb", "parity-db"] }
 sc-client-api = { version = "3.0.0", path = "../../../client/api/" }
 codec = { package = "parity-scale-codec", version = "2.0.0" }
-pallet-contracts = { version = "2.0.0", path = "../../../frame/contracts" }
+pallet-contracts = { version = "3.0.0", path = "../../../frame/contracts" }
 pallet-grandpa = { version = "3.0.0", path = "../../../frame/grandpa" }
 pallet-indices = { version = "3.0.0", path = "../../../frame/indices" }
 sp-keyring = { version = "3.0.0", path = "../../../primitives/keyring" }

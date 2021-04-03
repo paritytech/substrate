@@ -84,7 +84,7 @@ fn setup_pot_account<T: Config>() {
 }
 
 fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
-	let events = frame_system::Module::<T>::events();
+	let events = frame_system::Pallet::<T>::events();
 	let system_event: <T as frame_system::Config>::Event = generic_event.into();
 	// compare to the last event record
 	let EventRecord { event, .. } = &events[events.len() - 1];
@@ -234,7 +234,7 @@ benchmarks! {
 		let (curator_lookup, bounty_id) = create_bounty::<T>()?;
 		Bounties::<T>::on_initialize(T::BlockNumber::zero());
 		let bounty_id = BountyCount::get() - 1;
-		frame_system::Module::<T>::set_block_number(T::BountyUpdatePeriod::get() + 1u32.into());
+		frame_system::Pallet::<T>::set_block_number(T::BountyUpdatePeriod::get() + 1u32.into());
 		let caller = whitelisted_caller();
 	}: _(RawOrigin::Signed(caller), bounty_id)
 
@@ -271,7 +271,7 @@ benchmarks! {
 		let beneficiary = T::Lookup::unlookup(beneficiary_account.clone());
 		Bounties::<T>::award_bounty(RawOrigin::Signed(curator.clone()).into(), bounty_id, beneficiary)?;
 
-		frame_system::Module::<T>::set_block_number(T::BountyDepositPayoutDelay::get());
+		frame_system::Pallet::<T>::set_block_number(T::BountyDepositPayoutDelay::get());
 		ensure!(T::Currency::free_balance(&beneficiary_account).is_zero(), "Beneficiary already has balance");
 
 	}: _(RawOrigin::Signed(curator), bounty_id)
@@ -359,7 +359,7 @@ benchmarks! {
 
 		let bm_setup = create_subbounty::<T>(0, MAX_BYTES)?;
 		Bounties::<T>::on_initialize(T::BlockNumber::zero());
-		frame_system::Module::<T>::set_block_number(T::BountyUpdatePeriod::get() + 1u32.into());
+		frame_system::Pallet::<T>::set_block_number(T::BountyUpdatePeriod::get() + 1u32.into());
 		let caller = whitelisted_caller();
 	}: _(RawOrigin::Signed(caller), bm_setup.bounty_id, bm_setup.subbounty_id)
 
@@ -409,7 +409,7 @@ benchmarks! {
 			beneficiary,
 		)?;
 
-		frame_system::Module::<T>::set_block_number(T::BountyDepositPayoutDelay::get());
+		frame_system::Pallet::<T>::set_block_number(T::BountyDepositPayoutDelay::get());
 		ensure!(
 			T::Currency::free_balance(&beneficiary_account).is_zero(),
 			"Beneficiary already has balance"
