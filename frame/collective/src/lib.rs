@@ -69,6 +69,9 @@ use frame_system::{self as system, ensure_signed, ensure_root};
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
+#[cfg(test)]
+mod account_dispatch_tests;
+
 pub mod weights;
 pub use weights::WeightInfo;
 
@@ -813,11 +816,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 		if as_account {
 			let account = match origin {
 				RawOrigin::Members(n, d) => {
-					// We want to reduce the fraction n/d to have unique accounts for different
-					// ratios of voters. For example 1/2, 3/6, 9/18 origins should all be treated
-					// the same.
-					let gcd = d.gcd(n).max(One::one());
-					T::ModuleId::get().into_sub_account((n / gcd, d / gcd))
+					Self::collective_account(n, d)
 				},
 				RawOrigin::Member(who) => who,
 				RawOrigin::_Phantom(_) => { return Err(DispatchError::BadOrigin.into()) }
@@ -826,6 +825,17 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 		} else {
 			proposal.dispatch(origin.into())
 		}
+	}
+
+	// Generate a unique Account ID based on the ratio of members
+	//
+	// Note that this function does computation, so save the value if you will call it multiple times.
+	fn collective_account(n: u32, d: u32) -> T::AccountId {
+		// We want to reduce the fraction n/d to have unique accounts for different
+		// ratios of voters. For example 1/2, 3/6, 9/18 origins should all be treated
+		// the same.
+		let gcd = d.gcd(n).max(One::one());
+		T::ModuleId::get().into_sub_account((n / gcd, d / gcd))
 	}
 }
 
