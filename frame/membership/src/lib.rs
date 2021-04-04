@@ -113,6 +113,8 @@ decl_module! {
 		for enum Call
 		where origin: T::Origin
 	{
+		type Error = Error<T, I>;
+
 		fn deposit_event() = default;
 
 		/// Add a member `who` to the set.
@@ -328,6 +330,7 @@ mod tests {
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
+		type OnSetCode = ();
 	}
 	ord_parameter_types! {
 		pub const One: u64 = 1;
