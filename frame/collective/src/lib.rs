@@ -46,7 +46,7 @@ use sp_std::{prelude::*, result};
 use sp_core::u32_trait::Value as U32;
 use sp_io::storage;
 use sp_runtime::{
-	ModuleId, RuntimeDebug, Perbill,
+	ModuleId, RuntimeDebug,
 	traits::{Hash, AccountIdConversion},
 };
 
@@ -277,6 +277,8 @@ decl_error! {
 		WrongProposalLength,
 		/// Not enough members to create the account.
 		NotEnoughMembers,
+		/// An overflow has occured.
+		Overflow,
 	}
 }
 
@@ -731,7 +733,7 @@ decl_module! {
 		/// Can only be called by the collective origin.
 		//#[weight = T::WeightInfo::dispatch_as_account(proposal.len() as u32).saturating_add(proposal.dispatch)]
 		#[weight = 0]
-		fn dispatch_as_account(origin, proposal: Box<T::Proposal>, target_n: u32, target_d: u32) -> DispatchResult {
+		fn dispatch_as_ratio_account(origin, proposal: Box<T::Proposal>, target_n: u32, target_d: u32) -> DispatchResult {
 			let maybe_raw_origin: Result<RawOrigin<T::AccountId, I>, _> = <T as Config<I>>::Origin::from(origin).into();
 
 			let raw_origin = match maybe_raw_origin {
@@ -739,22 +741,34 @@ decl_module! {
 				Err(_) => return DispatchError::BadOrigin.into(),
 			};
 
-			let account: T::AccountId = match raw_origin {
-				RawOrigin::Members(n, d) => {
-					// n is the number of members who voted aye. d is the total number of members.
-					// Should never be able to make an origin which represents more members than exists.
-					ensure!(target_d <= d, Error::<T, I>::NotEnoughMembers);
-					let members_ratio = Perbill::from_rational(n, d);
-					let target_ratio = Perbill::from_rational(target_n, target_d);
-					// The target ratio should be less than or equal to the ratio provided by the origin.
-					// For example 6/13 cannot create a 1/2 account, but 7/13 can.
-					ensure!(target_ratio <= members_ratio, Error::<T, I>::NotEnoughMembers);
-					// Create the account.
-					Self::collective_account(target_n, target_d)
-				},
-				RawOrigin::Member(who) => who,
-				_ => return DispatchError::BadOrigin.into(),
+			let account = Self::origin_to_ratio_account(raw_origin, target_n, target_d)?;
+			let proposal_hash = T::Hashing::hash_of(&proposal);
+			let signed_origin = frame_system::RawOrigin::Signed(account.clone());
+			let result = proposal.dispatch(signed_origin.into());
+			Self::deposit_event(
+				RawEvent::AccountExecuted(account, proposal_hash, result.map(|_| ()).map_err(|e| e.error))
+			);
+			Ok(())
+		}
+
+		/// Re-dispatch a collective origin call as a unique account that represents that origin.
+		///
+		/// Since the collective may want to be able to represent a different ratio than exists,
+		/// we allow the re-dispatch to specify the target ratio, as long as it is less restrictive
+		/// than the provided origin.
+		///
+		/// Can only be called by the collective origin.
+		//#[weight = T::WeightInfo::dispatch_as_account(proposal.len() as u32).saturating_add(proposal.dispatch)]
+		#[weight = 0]
+		fn dispatch_as_quantity_account(origin, proposal: Box<T::Proposal>) -> DispatchResult {
+			let maybe_raw_origin: Result<RawOrigin<T::AccountId, I>, _> = <T as Config<I>>::Origin::from(origin).into();
+
+			let raw_origin = match maybe_raw_origin {
+				Ok(origin) => origin,
+				Err(_) => return DispatchError::BadOrigin.into(),
 			};
+
+			let account = Self::origin_to_quantity_account(raw_origin)?;
 			let proposal_hash = T::Hashing::hash_of(&proposal);
 			let signed_origin = frame_system::RawOrigin::Signed(account.clone());
 			let result = proposal.dispatch(signed_origin.into());
@@ -767,9 +781,53 @@ decl_module! {
 }
 
 impl<T: Config<I>, I: Instance> Module<T, I> {
-	/// A simple helper function to generate a collective account from the ratio n / d.
-	pub fn collective_account(n: u32, d: u32) -> T::AccountId {
-		T::ModuleId::get().into_sub_account((n, d))
+	/// A simple helper function to generate a collective ratio account from the collective origin.
+	///
+	/// A ratio account is an account which represents a ratio of n / d users where n is the number
+	/// of approving members, and d is the total number of members. n and d can be any fraction which
+	/// is less or equally restrictive than the origin.
+	pub fn origin_to_ratio_account(
+		origin: RawOrigin<T::AccountId, I>,
+		target_n: u32,
+		target_d: u32,
+	) -> Result<T::AccountId, DispatchError> {
+		match origin {
+			RawOrigin::Members(n, d) => {
+				// n is the number of members who voted aye. d is the total number of members.
+				// Should never be able to make an origin which represents more members than exists.
+				ensure!(target_d <= d, Error::<T, I>::NotEnoughMembers);
+				// The target ratio should be less than or equal to the ratio provided by the origin.
+				// For example 6/13 cannot create a 1/2 account, but 7/13 can.
+				// To check (target_n / target_d) <= (n / d) we check (target_n * d) <= (target_d * n)
+				let target_n_d = target_n.checked_mul(d).ok_or(Error::<T, I>::Overflow)?;
+				let target_d_n = target_d.checked_mul(n).ok_or(Error::<T, I>::Overflow)?;
+				ensure!(target_n_d <= target_d_n, Error::<T, I>::NotEnoughMembers);
+				// Create the account.
+				Ok(T::ModuleId::get().into_sub_account((target_n, target_d)))
+			},
+			RawOrigin::Member(who) => {
+				Ok(T::ModuleId::get().into_sub_account(who))
+			},
+			_ => return Err(DispatchError::BadOrigin.into()),
+		}
+	}
+
+	/// A simple helper function to generate a collective quantity account from the collective origin.
+	///
+	/// A quantity account simply represents the total number of members used to generate this account.
+	pub fn origin_to_quantity_account(
+		origin: RawOrigin<T::AccountId, I>,
+	) -> Result<T::AccountId, DispatchError> {
+		match origin {
+			RawOrigin::Members(n, _) => {
+				// Create an account where n is the number of members who voted aye
+				Ok(T::ModuleId::get().into_sub_account(n))
+			},
+			RawOrigin::Member(who) => {
+				Ok(T::ModuleId::get().into_sub_account(who))
+			},
+			_ => return Err(DispatchError::BadOrigin.into()),
+		}
 	}
 
 	/// Check whether `who` is a member of the collective.

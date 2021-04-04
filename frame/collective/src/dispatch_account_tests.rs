@@ -1,5 +1,5 @@
 use crate::*;
-use frame_support::{Hashable, assert_ok, parameter_types, decl_storage, decl_module};
+use frame_support::{Hashable, assert_ok, assert_noop, assert_err, parameter_types, decl_storage, decl_module};
 use sp_core::H256;
 use sp_runtime::{
 	ModuleId, AccountId32,
@@ -149,27 +149,73 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	ext
 }
 
-fn make_proposal(n: u32, d: u32) -> Call {
-	Call::CollectiveMajority(
-		crate::Call::dispatch_as_account(
-			Box::new(Call::Example(example::Call::store_me())),
-			n,
-			d,
-		)
-	)
-}
-
 #[test]
 fn accounts_dont_match_instantiations() {
 	// Basically, accounts are seeded on their ModuleId, and these should be globally unique.
-	assert_eq!(Collective::collective_account(1, 3), Collective::collective_account(1, 3));
-	assert_ne!(Collective::collective_account(1, 3), CollectiveMajority::collective_account(1, 3));
+	assert_ne!(
+		Collective::origin_to_ratio_account(RawOrigin::Members(1, 3), 1, 3),
+		CollectiveMajority::origin_to_ratio_account(RawOrigin::Members(1, 3), 1, 3),
+	);
 }
 
 #[test]
-fn dispatch_with_account_works() {
+fn origin_to_ratio_account_works() {
+	assert_ok!(Collective::origin_to_ratio_account(RawOrigin::Members(1, 3), 1, 3));
+	assert_ok!(Collective::origin_to_ratio_account(RawOrigin::Members(2, 3), 1, 3));
+	// Can't increase ratio
+	assert_err!(
+		Collective::origin_to_ratio_account(RawOrigin::Members(1, 3), 2, 3),
+		Error::<Test, Instance1>::NotEnoughMembers,
+	);
+	// Can't increase member representation
+	assert_err!(
+		Collective::origin_to_ratio_account(RawOrigin::Members(1, 3), 2, 6),
+		Error::<Test, Instance1>::NotEnoughMembers,
+	);
+	assert_eq!(
+		Collective::origin_to_ratio_account(RawOrigin::Members(1, 3), 1, 3).unwrap(),
+		Collective::origin_to_ratio_account(RawOrigin::Members(2, 6), 1, 3).unwrap(),
+	);
+	assert_ne!(
+		Collective::origin_to_ratio_account(RawOrigin::Members(1, 3), 1, 3).unwrap(),
+		Collective::origin_to_ratio_account(RawOrigin::Members(2, 6), 2, 6).unwrap(),
+	);
+}
+
+#[test]
+fn origin_to_quantity_account_works() {
+	assert_ok!(Collective::origin_to_quantity_account(RawOrigin::Members(1, 3)));
+	assert_ok!(Collective::origin_to_quantity_account(RawOrigin::Members(1, 6)));
+	assert_ok!(Collective::origin_to_quantity_account(RawOrigin::Members(2, 3)));
+	assert_eq!(
+		Collective::origin_to_quantity_account(RawOrigin::Members(1, 3)).unwrap(),
+		Collective::origin_to_quantity_account(RawOrigin::Members(1, 6)).unwrap(),
+	);
+	assert_ne!(
+		Collective::origin_to_quantity_account(RawOrigin::Members(1, 3)).unwrap(),
+		Collective::origin_to_quantity_account(RawOrigin::Members(2, 6)).unwrap(),
+	);
+}
+
+#[test]
+fn dispatch_with_ratio_account_works() {
 	new_test_ext().execute_with(|| {
-		let proposal = make_proposal(1, 3);
+		let proposal = Call::CollectiveMajority(
+			crate::Call::dispatch_as_ratio_account(
+				Box::new(Call::Example(example::Call::store_me())),
+				1,
+				3,
+			)
+		);
+
+		// Checks origin
+		assert_noop!(Collective::dispatch_as_ratio_account(
+				Origin::signed(Default::default()),
+				Box::new(Call::Example(example::Call::store_me())),
+				1,
+				3,
+		), DispatchError::BadOrigin);
+
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		let proposal_weight = proposal.get_dispatch_info().weight;
 		let hash: H256 = proposal.blake2_256().into();
@@ -191,6 +237,52 @@ fn dispatch_with_account_works() {
 		));
 
 		// Should match 1/3
-		assert_eq!(example::WhoCalled::<Test>::get(), vec![CollectiveMajority::collective_account(1, 3)]);
+		assert_eq!(
+			example::WhoCalled::<Test>::get(),
+			vec![CollectiveMajority::origin_to_ratio_account(RawOrigin::Members(1, 3), 1, 3).unwrap()],
+		);
+	});
+}
+
+#[test]
+fn dispatch_with_quantity_account_works() {
+	new_test_ext().execute_with(|| {
+		let proposal = Call::CollectiveMajority(
+			crate::Call::dispatch_as_quantity_account(
+				Box::new(Call::Example(example::Call::store_me()))
+			)
+		);
+
+		// Checks origin
+		assert_noop!(Collective::dispatch_as_quantity_account(
+				Origin::signed(Default::default()),
+				Box::new(Call::Example(example::Call::store_me())),
+		), DispatchError::BadOrigin);
+
+		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
+		let proposal_weight = proposal.get_dispatch_info().weight;
+		let hash: H256 = proposal.blake2_256().into();
+
+		// Create a call with 2 / 6
+		assert_ok!(CollectiveMajority::propose(
+			Origin::signed(account(1)),
+			2,
+			Box::new(proposal.clone()),
+			proposal_len,
+		));
+		assert_ok!(CollectiveMajority::vote(Origin::signed(account(2)), hash.clone(), 0, true));
+		assert_ok!(CollectiveMajority::close(
+			Origin::signed(account(2)),
+			hash.clone(),
+			0,
+			proposal_weight,
+			proposal_len
+		));
+
+		// Should match 1/3
+		assert_eq!(
+			example::WhoCalled::<Test>::get(),
+			vec![CollectiveMajority::origin_to_quantity_account(RawOrigin::Members(2, 100)).unwrap()],
+		);
 	});
 }
