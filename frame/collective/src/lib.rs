@@ -731,15 +731,25 @@ decl_module! {
 		/// than the provided origin.
 		///
 		/// Can only be called by the collective origin.
-		//#[weight = T::WeightInfo::dispatch_as_account(proposal.len() as u32).saturating_add(proposal.dispatch)]
-		#[weight = 0]
-		fn dispatch_as_ratio_account(origin, proposal: Box<T::Proposal>, target_n: u32, target_d: u32) -> DispatchResult {
+		#[weight = {
+			T::WeightInfo::dispatch_as_ratio_account(*length_bound)
+			.saturating_add(proposal.get_dispatch_info().weight)
+		}]
+		fn dispatch_as_ratio_account(origin,
+			proposal: Box<T::Proposal>,
+			#[compact] length_bound: u32,
+			#[compact] target_n: u32,
+			#[compact] target_d: u32,
+		) -> DispatchResult {
 			let maybe_raw_origin: Result<RawOrigin<T::AccountId, I>, _> = <T as Config<I>>::Origin::from(origin).into();
 
 			let raw_origin = match maybe_raw_origin {
 				Ok(origin) => origin,
 				Err(_) => return DispatchError::BadOrigin.into(),
 			};
+
+			let proposal_len = proposal.using_encoded(|x| x.len());
+			ensure!(proposal_len <= length_bound as usize, Error::<T, I>::WrongProposalLength);
 
 			let account = Self::origin_to_ratio_account(raw_origin, target_n, target_d)?;
 			let proposal_hash = T::Hashing::hash_of(&proposal);
@@ -758,15 +768,23 @@ decl_module! {
 		/// than the provided origin.
 		///
 		/// Can only be called by the collective origin.
-		//#[weight = T::WeightInfo::dispatch_as_account(proposal.len() as u32).saturating_add(proposal.dispatch)]
-		#[weight = 0]
-		fn dispatch_as_quantity_account(origin, proposal: Box<T::Proposal>) -> DispatchResult {
+		#[weight = {
+			T::WeightInfo::dispatch_as_quantity_account(*length_bound)
+			.saturating_add(proposal.get_dispatch_info().weight)
+		}]
+		fn dispatch_as_quantity_account(origin,
+			proposal: Box<T::Proposal>,
+			#[compact] length_bound: u32,
+		) -> DispatchResult {
 			let maybe_raw_origin: Result<RawOrigin<T::AccountId, I>, _> = <T as Config<I>>::Origin::from(origin).into();
 
 			let raw_origin = match maybe_raw_origin {
 				Ok(origin) => origin,
 				Err(_) => return DispatchError::BadOrigin.into(),
 			};
+
+			let proposal_len = proposal.using_encoded(|x| x.len());
+			ensure!(proposal_len <= length_bound as usize, Error::<T, I>::WrongProposalLength);
 
 			let account = Self::origin_to_quantity_account(raw_origin)?;
 			let proposal_hash = T::Hashing::hash_of(&proposal);

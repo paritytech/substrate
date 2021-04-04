@@ -203,6 +203,7 @@ fn dispatch_with_ratio_account_works() {
 		let proposal = Call::CollectiveMajority(
 			crate::Call::dispatch_as_ratio_account(
 				Box::new(Call::Example(example::Call::store_me())),
+				100,
 				1,
 				3,
 			)
@@ -212,6 +213,7 @@ fn dispatch_with_ratio_account_works() {
 		assert_noop!(Collective::dispatch_as_ratio_account(
 				Origin::signed(Default::default()),
 				Box::new(Call::Example(example::Call::store_me())),
+				100,
 				1,
 				3,
 		), DispatchError::BadOrigin);
@@ -249,7 +251,8 @@ fn dispatch_with_quantity_account_works() {
 	new_test_ext().execute_with(|| {
 		let proposal = Call::CollectiveMajority(
 			crate::Call::dispatch_as_quantity_account(
-				Box::new(Call::Example(example::Call::store_me()))
+				Box::new(Call::Example(example::Call::store_me())),
+				100,
 			)
 		);
 
@@ -257,6 +260,7 @@ fn dispatch_with_quantity_account_works() {
 		assert_noop!(Collective::dispatch_as_quantity_account(
 				Origin::signed(Default::default()),
 				Box::new(Call::Example(example::Call::store_me())),
+				100,
 		), DispatchError::BadOrigin);
 
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);

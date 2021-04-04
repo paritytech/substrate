@@ -47,6 +47,8 @@ fn assert_last_event<T: Config<I>, I: Instance>(generic_event: <T as Config<I>>:
 }
 
 benchmarks_instance! {
+//	where_clause { where <T as Config>::Origin == <T as frame_system::Config>::Origin }
+
 	set_members {
 		let m in 1 .. T::MaxMembers::get();
 		let n in 1 .. T::MaxMembers::get();
@@ -635,6 +637,38 @@ benchmarks_instance! {
 	verify {
 		assert_eq!(Collective::<T, _>::proposals().len(), (p - 1) as usize);
 		assert_last_event::<T, I>(RawEvent::Disapproved(last_hash).into());
+	}
+
+	dispatch_as_ratio_account {
+		let b in 1 .. MAX_BYTES;
+		let bytes_in_storage = b + size_of::<u32>() as u32;
+		let proposal: T::Proposal = SystemCall::<T>::remark(vec![255 as u8; b as usize]).into();
+		let proposal_hash = T::Hashing::hash_of(&proposal);
+
+		let raw_origin = RawOrigin::<T::AccountId, I>::Members(5, 10);
+		let outer_origin: <T as Config<I>>::Origin = raw_origin.into();
+		let system_origin: <T as frame_system::Config>::Origin = outer_origin.into();
+	}: {
+		Collective::<T, I>::dispatch_as_ratio_account(system_origin.into(), Box::new(proposal), bytes_in_storage, 1, 2)?;
+	} verify {
+		let account = Collective::origin_to_ratio_account(raw_origin, 1, 2);
+		assert_last_event::<T, I>(RawEvent::AccountExecuted(account, proposal_hash, Ok(())).into());
+	}
+
+	dispatch_as_quantity_account {
+		let b in 1 .. MAX_BYTES;
+		let bytes_in_storage = b + size_of::<u32>() as u32;
+		let proposal: T::Proposal = SystemCall::<T>::remark(vec![255 as u8; b as usize]).into();
+		let proposal_hash = T::Hashing::hash_of(&proposal);
+
+		let raw_origin = RawOrigin::<T::AccountId, I>::Members(5, 10);
+		let outer_origin: <T as Config<I>>::Origin = raw_origin.into();
+		let system_origin: <T as frame_system::Config>::Origin = outer_origin.into();
+	}: {
+		Collective::<T, I>::dispatch_as_quantity_account(system_origin.into(), Box::new(proposal), bytes_in_storage, 1, 2)?;
+	} verify {
+		let account = Collective::origin_to_quantity_account(raw_origin, 1, 2);
+		assert_last_event::<T, I>(RawEvent::AccountExecuted(account, proposal_hash, Ok(())).into());
 	}
 }
 

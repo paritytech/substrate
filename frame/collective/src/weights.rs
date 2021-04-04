@@ -53,7 +53,8 @@ pub trait WeightInfo {
 	fn close_disapproved(_m: u32, _p: u32, ) -> Weight;
 	fn close_approved(_b: u32, _m: u32, _p: u32, ) -> Weight;
 	fn disapprove_proposal(_p: u32, ) -> Weight;
-
+	fn dispatch_as_ratio_account(b: u32, ) -> Weight;
+	fn dispatch_as_quantity_account(b: u32, ) -> Weight;
 }
 
 /// Weights for pallet_collective using the Substrate node and recommended hardware.
@@ -140,6 +141,12 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 
 	}
+	fn dispatch_as_ratio_account(b: u32, ) -> Weight {
+		b as Weight
+	}
+	fn dispatch_as_quantity_account(b: u32, ) -> Weight {
+		b as Weight
+	}
 
 }
 
@@ -225,6 +232,12 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 
+	}
+	fn dispatch_as_ratio_account(b: u32, ) -> Weight {
+		b as Weight
+	}
+	fn dispatch_as_quantity_account(b: u32, ) -> Weight {
+		b as Weight
 	}
 
 }
