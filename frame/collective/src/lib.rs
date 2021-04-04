@@ -66,6 +66,9 @@ use frame_system::{self as system, ensure_signed, ensure_root};
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
+#[cfg(test)]
+mod dispatch_account_tests;
+
 pub mod weights;
 pub use weights::WeightInfo;
 
@@ -726,6 +729,7 @@ decl_module! {
 		/// than the provided origin.
 		///
 		/// Can only be called by the collective origin.
+		//#[weight = T::WeightInfo::dispatch_as_account(proposal.len() as u32).saturating_add(proposal.dispatch)]
 		#[weight = 0]
 		fn dispatch_as_account(origin, proposal: Box<T::Proposal>, target_n: u32, target_d: u32) -> DispatchResult {
 			let maybe_raw_origin: Result<RawOrigin<T::AccountId, I>, _> = <T as Config<I>>::Origin::from(origin).into();
@@ -746,7 +750,7 @@ decl_module! {
 					// For example 6/13 cannot create a 1/2 account, but 7/13 can.
 					ensure!(target_ratio <= members_ratio, Error::<T, I>::NotEnoughMembers);
 					// Create the account.
-					T::ModuleId::get().into_sub_account((target_n, target_d))
+					Self::collective_account(target_n, target_d)
 				},
 				RawOrigin::Member(who) => who,
 				_ => return DispatchError::BadOrigin.into(),
@@ -763,6 +767,11 @@ decl_module! {
 }
 
 impl<T: Config<I>, I: Instance> Module<T, I> {
+	/// A simple helper function to generate a collective account from the ratio n / d.
+	pub fn collective_account(n: u32, d: u32) -> T::AccountId {
+		T::ModuleId::get().into_sub_account((n, d))
+	}
+
 	/// Check whether `who` is a member of the collective.
 	pub fn is_member(who: &T::AccountId) -> bool {
 		// Note: The dispatchables *do not* use this to check membership so make sure
