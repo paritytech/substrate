@@ -31,7 +31,7 @@ use sc_finality_grandpa::SharedAuthoritySet;
 
 mod proof;
 
-pub use proof::{AuthoritySetChangeProof, WarpSyncProof};
+pub use proof::{WarpSyncFragment, WarpSyncProof};
 
 /// Generates the appropriate [`RequestResponseConfig`] for a given chain configuration.
 pub fn request_response_config_for_chain<TBlock: BlockT, TBackend: Backend<TBlock> + 'static>(
@@ -135,6 +135,7 @@ impl<TBlock: BlockT, TBackend: Backend<TBlock>> GrandpaWarpSyncRequestHandler<TB
 		pending_response.send(OutgoingResponse {
 			result: Ok(proof.encode()),
 			reputation_changes: Vec::new(),
+			sent_feedback: None,
 		}).map_err(|_| HandleRequestError::SendResponse)
 	}
 

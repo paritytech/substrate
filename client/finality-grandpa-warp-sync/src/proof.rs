@@ -24,7 +24,7 @@ use sp_blockchain::{Backend as BlockchainBackend, HeaderBackend};
 use sp_finality_grandpa::{AuthorityList, SetId, GRANDPA_ENGINE_ID};
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, NumberFor, One},
+	traits::{Block as BlockT, Header as HeaderT, NumberFor, One},
 };
 
 use crate::HandleRequestError;
@@ -34,7 +34,7 @@ const MAX_CHANGES_PER_WARP_SYNC_PROOF: usize = 256;
 
 /// A proof of an authority set change.
 #[derive(Decode, Encode)]
-pub struct AuthoritySetChangeProof<Block: BlockT> {
+pub struct WarpSyncFragment<Block: BlockT> {
 	/// The last block that the given authority set finalized. This block should contain a digest
 	/// signaling an authority set change from which we can fetch the next authority set.
 	pub header: Block::Header,
@@ -43,21 +43,11 @@ pub struct AuthoritySetChangeProof<Block: BlockT> {
 	pub justification: GrandpaJustification<Block>,
 }
 
-/// Represents the current state of the warp sync, namely whether it is considered
-/// finished, i.e. we have proved everything up until the latest authority set, or not.
-/// When the warp sync is finished we might optionally provide a justification for the
-/// latest finalized block, which should be checked against the latest authority set.
-#[derive(Debug, Decode, Encode)]
-pub enum WarpSyncFinished<Block: BlockT> {
-	No,
-	Yes(Option<GrandpaJustification<Block>>),
-}
-
 /// An accumulated proof of multiple authority set changes.
 #[derive(Decode, Encode)]
 pub struct WarpSyncProof<Block: BlockT> {
-	proofs: Vec<AuthoritySetChangeProof<Block>>,
-	is_finished: WarpSyncFinished<Block>,
+	proofs: Vec<WarpSyncFragment<Block>>,
+	is_finished: bool,
 }
 
 impl<Block: BlockT> WarpSyncProof<Block> {
@@ -130,16 +120,16 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 
 			let justification = GrandpaJustification::<Block>::decode(&mut &justification[..])?;
 
-			proofs.push(AuthoritySetChangeProof {
+			proofs.push(WarpSyncFragment {
 				header: header.clone(),
 				justification,
 			});
 		}
 
 		let is_finished = if proof_limit_reached {
-			WarpSyncFinished::No
+			false
 		} else {
-			let latest =
+			let latest_justification =
 				sc_finality_grandpa::best_justification(backend)?.filter(|justification| {
 					// the existing best justification must be for a block higher than the
 					// last authority set change. if we didn't prove any authority set
@@ -153,7 +143,17 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 					justification.target().0 >= limit
 				});
 
-			WarpSyncFinished::Yes(latest)
+			if let Some(latest_justification) = latest_justification {
+				let header = blockchain.header(BlockId::Hash(latest_justification.target().1))?
+					.expect("header hash corresponds to a justification in db; must exist in db as well; qed.");
+
+				proofs.push(WarpSyncFragment {
+					header,
+					justification: latest_justification,
+				})
+			}
+
+			true
 		};
 
 		Ok(WarpSyncProof {
@@ -175,26 +175,28 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 		let mut current_set_id = set_id;
 		let mut current_authorities = authorities;
 
-		for proof in &self.proofs {
+		for (fragment_num, proof) in self.proofs.iter().enumerate() {
 			proof
 				.justification
 				.verify(current_set_id, &current_authorities)
 				.map_err(|err| HandleRequestError::InvalidProof(err.to_string()))?;
 
-			let scheduled_change = find_scheduled_change::<Block>(&proof.header).ok_or(
-				HandleRequestError::InvalidProof(
+			if proof.justification.target().1 != proof.header.hash() {
+				return Err(HandleRequestError::InvalidProof(
+					"mismatch between header and justification".to_owned()
+				));
+			}
+
+			if let Some(scheduled_change) = find_scheduled_change::<Block>(&proof.header) {
+				current_authorities = scheduled_change.next_authorities;
+				current_set_id += 1;
+			} else if fragment_num != self.proofs.len() - 1 {
+				// Only the last fragment of the proof is allowed to be missing the authority
+				// set change.
+				return Err(HandleRequestError::InvalidProof(
 					"Header is missing authority set change digest".to_string(),
-				),
-			)?;
-
-			current_authorities = scheduled_change.next_authorities;
-			current_set_id += 1;
-		}
-
-		if let WarpSyncFinished::Yes(Some(ref justification)) = self.is_finished {
-			justification
-				.verify(current_set_id, &current_authorities)
-				.map_err(|err| HandleRequestError::InvalidProof(err.to_string()))?;
+				));
+			}
 		}
 
 		Ok((current_set_id, current_authorities))

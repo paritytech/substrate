@@ -213,6 +213,7 @@ impl frame_system::Config for Runtime {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = frame_system::weights::SubstrateWeight<Runtime>;
 	type SS58Prefix = SS58Prefix;
+	type OnSetCode = ();
 }
 
 impl pallet_utility::Config for Runtime {
@@ -471,8 +472,7 @@ parameter_types! {
 }
 
 impl pallet_staking::Config for Runtime {
-	const MAX_NOMINATIONS: u32 =
-		<NposCompactSolution16 as sp_npos_elections::CompactSolution>::LIMIT as u32;
+	const MAX_NOMINATIONS: u32 = MAX_NOMINATIONS;
 	type Currency = Balances;
 	type UnixTime = Timestamp;
 	type CurrencyToVote = U128CurrencyToVote;
@@ -525,6 +525,9 @@ sp_npos_elections::generate_solution_type!(
 		Accuracy = sp_runtime::PerU16,
 	>(16)
 );
+
+pub const MAX_NOMINATIONS: u32 =
+	<NposCompactSolution16 as sp_npos_elections::CompactSolution>::LIMIT as u32;
 
 impl pallet_election_provider_multi_phase::Config for Runtime {
 	type Event = Event;

@@ -82,7 +82,12 @@ impl<B: Block> LightClientRequestHandler<B> {
 
 			match self.handle_request(peer, payload) {
 				Ok(response_data) => {
-					let response = OutgoingResponse { result: Ok(response_data), reputation_changes: Vec::new() };
+					let response = OutgoingResponse {
+						result: Ok(response_data),
+						reputation_changes: Vec::new(),
+						sent_feedback: None
+					};
+
 					match pending_response.send(response) {
 						Ok(()) => debug!(
 							target: LOG_TARGET,
@@ -110,7 +115,12 @@ impl<B: Block> LightClientRequestHandler<B> {
 						_ => Vec::new(),
 					};
 
-					let response = OutgoingResponse { result: Err(()), reputation_changes };
+					let response = OutgoingResponse {
+						result: Err(()),
+						reputation_changes,
+						sent_feedback: None
+					};
+
 					if pending_response.send(response).is_err() {
 						debug!(
 							target: LOG_TARGET,

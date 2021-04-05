@@ -249,6 +249,7 @@ impl<B: BlockT> BlockRequestHandler<B> {
 		pending_response.send(OutgoingResponse {
 			result,
 			reputation_changes,
+			sent_feedback: None,
 		}).map_err(|_| HandleRequestError::SendResponse)
 	}
 
