@@ -32,7 +32,7 @@ use sp_runtime::{
 	Perbill,
 	traits::{Convert, StaticLookup, Saturating, UniqueSaturatedInto},
 };
-use sp_staking::offence::{ReportOffence, Offence, OffenceDetails};
+use sp_staking::offence::{ReportOffence, Offence};
 
 use pallet_balances::Config as BalancesConfig;
 use pallet_babe::BabeEquivocationOffence;
