@@ -89,7 +89,7 @@ impl<B: Block> LightClientRequestHandler<B> {
 					};
 
 					match pending_response.send(response) {
-						Ok(()) => debug!(
+						Ok(()) => trace!(
 							target: LOG_TARGET,
 							"Handled light client request from {}.",
 							peer,
