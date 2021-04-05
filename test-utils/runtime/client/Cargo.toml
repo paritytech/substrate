@@ -12,17 +12,17 @@ publish = false
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sc-light = { version = "2.0.0", path = "../../../client/light" }
-sp-consensus = { version = "0.8.0", path = "../../../primitives/consensus/common" }
-sc-block-builder = { version = "0.8.0", path = "../../../client/block-builder" }
+sc-light = { version = "3.0.0", path = "../../../client/light" }
+sp-consensus = { version = "0.9.0", path = "../../../primitives/consensus/common" }
+sc-block-builder = { version = "0.9.0", path = "../../../client/block-builder" }
 substrate-test-client = { version = "2.0.0", path = "../../client" }
-sp-core = { version = "2.0.0", path = "../../../primitives/core" }
+sp-core = { version = "3.0.0", path = "../../../primitives/core" }
 substrate-test-runtime = { version = "2.0.0", path = "../../runtime" }
-sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
-sp-api = { version = "2.0.0", path = "../../../primitives/api" }
-sp-blockchain = { version = "2.0.0", path = "../../../primitives/blockchain" }
+sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
+sp-api = { version = "3.0.0", path = "../../../primitives/api" }
+sp-blockchain = { version = "3.0.0", path = "../../../primitives/blockchain" }
 codec = { package = "parity-scale-codec", version = "2.0.0" }
-sc-client-api = { version = "2.0.0", path = "../../../client/api" }
-sc-consensus = { version = "0.8.0", path = "../../../client/consensus/common" }
-sc-service = { version = "0.8.0", default-features = false, path = "../../../client/service" }
+sc-client-api = { version = "3.0.0", path = "../../../client/api" }
+sc-consensus = { version = "0.9.0", path = "../../../client/consensus/common" }
+sc-service = { version = "0.9.0", default-features = false, path = "../../../client/service" }
 futures = "0.3.9"

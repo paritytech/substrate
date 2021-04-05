@@ -1,7 +1,7 @@
 [package]
 description = "components for a light client"
 name = "sc-light"
-version = "2.0.1"
+version = "3.0.0"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -14,15 +14,15 @@ readme = "README.md"
 parking_lot = "0.11.1"
 lazy_static = "1.4.0"
 hash-db = "0.15.2"
-sp-runtime = { version = "2.0.0", path = "../../primitives/runtime" }
-sp-externalities = { version = "0.8.0", path = "../../primitives/externalities" }
-sp-blockchain = { version = "2.0.0", path = "../../primitives/blockchain" }
-sp-core = { version = "2.0.0", path = "../../primitives/core" }
-sp-state-machine = { version = "0.8.0", path = "../../primitives/state-machine" }
-sc-client-api = { version = "2.0.0", path = "../api" }
-sp-api = { version = "2.0.0", path = "../../primitives/api" }
+sp-runtime = { version = "3.0.0", path = "../../primitives/runtime" }
+sp-externalities = { version = "0.9.0", path = "../../primitives/externalities" }
+sp-blockchain = { version = "3.0.0", path = "../../primitives/blockchain" }
+sp-core = { version = "3.0.0", path = "../../primitives/core" }
+sp-state-machine = { version = "0.9.0", path = "../../primitives/state-machine" }
+sc-client-api = { version = "3.0.0", path = "../api" }
+sp-api = { version = "3.0.0", path = "../../primitives/api" }
 codec = { package = "parity-scale-codec", version = "2.0.0" }
-sc-executor = { version = "0.8.0", path = "../executor" }
+sc-executor = { version = "0.9.0", path = "../executor" }
 
 [features]
 default = []

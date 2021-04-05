@@ -35,9 +35,13 @@ use sp_core::{
 };
 #[cfg(feature="test-helpers")]
 use sp_keystore::SyncCryptoStorePtr;
-use sc_telemetry::{telemetry, SUBSTRATE_INFO};
+use sc_telemetry::{
+	telemetry,
+	TelemetryHandle,
+	SUBSTRATE_INFO,
+};
 use sp_runtime::{
-	Justification, BuildStorage,
+	Justification, Justifications, BuildStorage,
 	generic::{BlockId, SignedBlock, DigestItem},
 	traits::{
 		Block as BlockT, Header as HeaderT, Zero, NumberFor,
@@ -52,7 +56,7 @@ use sp_state_machine::{
 use sc_executor::RuntimeVersion;
 use sp_consensus::{
 	Error as ConsensusError, BlockStatus, BlockImportParams, BlockCheckParams,
-	ImportResult, BlockOrigin, ForkChoiceStrategy, RecordProof,
+	ImportResult, BlockOrigin, ForkChoiceStrategy,
 };
 use sp_blockchain::{
 	self as blockchain,
@@ -66,7 +70,7 @@ use sp_api::{
 	CallApiAt, ConstructRuntimeApi, Core as CoreApi, ApiExt, ApiRef, ProvideRuntimeApi,
 	CallApiAtParams,
 };
-use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
+use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider, RecordProof};
 use sc_client_api::{
 	backend::{
 		self, BlockImportOperation, PrunableStateChangesTrieStorage,
@@ -115,6 +119,7 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	block_rules: BlockRules<Block>,
 	execution_extensions: ExecutionExtensions<Block>,
 	config: ClientConfig,
+	telemetry: Option<TelemetryHandle>,
 	_phantom: PhantomData<RA>,
 }
 
@@ -152,6 +157,7 @@ pub fn new_in_mem<E, Block, S, RA>(
 	genesis_storage: &S,
 	keystore: Option<SyncCryptoStorePtr>,
 	prometheus_registry: Option<Registry>,
+	telemetry: Option<TelemetryHandle>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	config: ClientConfig,
 ) -> sp_blockchain::Result<Client<
@@ -171,6 +177,7 @@ pub fn new_in_mem<E, Block, S, RA>(
 		keystore,
 		spawn_handle,
 		prometheus_registry,
+		telemetry,
 		config,
 	)
 }
@@ -196,6 +203,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 	keystore: Option<SyncCryptoStorePtr>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
+	telemetry: Option<TelemetryHandle>,
 	config: ClientConfig,
 ) -> sp_blockchain::Result<Client<B, LocalCallExecutor<B, E>, Block, RA>>
 	where
@@ -205,7 +213,11 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 		B: backend::LocalBackend<Block> + 'static,
 {
 	let call_executor = LocalCallExecutor::new(backend.clone(), executor, spawn_handle, config.clone())?;
-	let extensions = ExecutionExtensions::new(Default::default(), keystore);
+	let extensions = ExecutionExtensions::new(
+		Default::default(),
+		keystore,
+		sc_offchain::OffchainDb::factory_from_backend(&*backend),
+	);
 	Client::new(
 		backend,
 		call_executor,
@@ -214,6 +226,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 		Default::default(),
 		extensions,
 		prometheus_registry,
+		telemetry,
 		config,
 	)
 }
@@ -294,6 +307,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		bad_blocks: BadBlocks<Block>,
 		execution_extensions: ExecutionExtensions<Block>,
 		prometheus_registry: Option<Registry>,
+		telemetry: Option<TelemetryHandle>,
 		config: ClientConfig,
 	) -> sp_blockchain::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
@@ -326,6 +340,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			block_rules: BlockRules::new(fork_blocks, bad_blocks),
 			execution_extensions,
 			config,
+			telemetry,
 			_phantom: Default::default(),
 		})
 	}
@@ -604,13 +619,13 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> sp_blockchain::Result<ImportResult> where
 		Self: ProvideRuntimeApi<Block>,
-		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error> +
+		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block> +
 			ApiExt<Block, StateBackend = B::State>,
 	{
 		let BlockImportParams {
 			origin,
 			header,
-			justification,
+			justifications,
 			post_digests,
 			body,
 			storage_changes,
@@ -622,7 +637,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			..
 		} = import_block;
 
-		assert!(justification.is_some() && finalized || justification.is_none());
+		assert!(justifications.is_some() && finalized || justifications.is_none());
 
 		if !intermediates.is_empty() {
 			return Err(Error::IncompletePipeline)
@@ -650,7 +665,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			origin,
 			hash,
 			import_headers,
-			justification,
+			justifications,
 			body,
 			storage_changes,
 			new_cache,
@@ -668,7 +683,10 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				if origin != BlockOrigin::NetworkInitialSync ||
 					rand::thread_rng().gen_bool(0.1)
 				{
-					telemetry!(SUBSTRATE_INFO; "block.import";
+					telemetry!(
+						self.telemetry;
+						SUBSTRATE_INFO;
+						"block.import";
 						"height" => height,
 						"best" => ?hash,
 						"origin" => ?origin
@@ -686,7 +704,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		origin: BlockOrigin,
 		hash: Block::Hash,
 		import_headers: PrePostHeader<Block::Header>,
-		justification: Option<Justification>,
+		justifications: Option<Justifications>,
 		body: Option<Vec<Block::Extrinsic>>,
 		storage_changes: Option<sp_api::StorageChanges<backend::StateBackendFor<B, Block>, Block>>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
@@ -696,7 +714,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		import_existing: bool,
 	) -> sp_blockchain::Result<ImportResult> where
 		Self: ProvideRuntimeApi<Block>,
-		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error> +
+		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block> +
 				ApiExt<Block, StateBackend = B::State>,
 	{
 		let parent_hash = import_headers.post().parent_hash().clone();
@@ -749,6 +767,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 					offchain_sc,
 					tx, _,
 					changes_trie_tx,
+					tx_index,
 				) = storage_changes.into_inner();
 
 				if self.config.offchain_indexing_api {
@@ -757,6 +776,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 				operation.op.update_db_storage(tx)?;
 				operation.op.update_storage(main_sc.clone(), child_sc.clone())?;
+				operation.op.update_transaction_index(tx_index)?;
 
 				if let Some(changes_trie_transaction) = changes_trie_tx {
 					operation.op.update_changes_trie(changes_trie_transaction)?;
@@ -802,7 +822,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		operation.op.set_block_data(
 			import_headers.post().clone(),
 			body,
-			justification,
+			justifications,
 			leaf_state,
 		)?;
 
@@ -838,7 +858,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	) -> sp_blockchain::Result<Option<ImportResult>>
 		where
 			Self: ProvideRuntimeApi<Block>,
-			<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error> +
+			<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block> +
 				ApiExt<Block, StateBackend = B::State>,
 	{
 		let parent_hash = import_block.header.parent_hash();
@@ -985,10 +1005,13 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			let header = self.header(&BlockId::Hash(*last))?
 				.expect(
 					"Header already known to exist in DB because it is \
-					 indicated in the tree route; qed"
+					indicated in the tree route; qed"
 				);
 
-			telemetry!(SUBSTRATE_INFO; "notify.finalized";
+			telemetry!(
+				self.telemetry;
+				SUBSTRATE_INFO;
+				"notify.finalized";
 				"height" => format!("{}", header.number()),
 				"best" => ?last,
 			);
@@ -998,7 +1021,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			let header = self.header(&BlockId::Hash(finalized_hash))?
 				.expect(
 					"Header already known to exist in DB because it is \
-					 indicated in the tree route; qed"
+					indicated in the tree route; qed"
 				);
 
 			let notification = FinalityNotification {
@@ -1272,7 +1295,7 @@ impl<B, E, Block, RA> BlockBuilderProvider<B, Block, Self> for Client<B, E, Bloc
 		Block: BlockT,
 		Self: ChainHeaderBackend<Block> + ProvideRuntimeApi<Block>,
 		<Self as ProvideRuntimeApi<Block>>::Api: ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
-			+ BlockBuilderApi<Block, Error = Error>,
+			+ BlockBuilderApi<Block>,
 {
 	fn new_block_at<R: Into<RecordProof>>(
 		&self,
@@ -1628,18 +1651,17 @@ impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
 	E: CallExecutor<Block, Backend = B> + Send + Sync,
 	Block: BlockT,
 {
-	type Error = Error;
 	type StateBackend = B::State;
 
 	fn call_api_at<
 		'a,
 		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
-		C: CoreApi<Block, Error = Error>,
+		NC: FnOnce() -> result::Result<R, sp_api::ApiError> + UnwindSafe,
+		C: CoreApi<Block>,
 	>(
 		&self,
 		params: CallApiAtParams<'a, Block, C, NC, B::State>,
-	) -> sp_blockchain::Result<NativeOrEncoded<R>> {
+	) -> Result<NativeOrEncoded<R>, sp_api::ApiError> {
 		let core_api = params.core_api;
 		let at = params.at;
 
@@ -1649,7 +1671,9 @@ impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
 		);
 
 		self.executor.contextual_call::<_, fn(_,_) -> _,_,_>(
-			|| core_api.initialize_block(at, &self.prepare_environment_block(at)?),
+			|| core_api
+				.initialize_block(at, &self.prepare_environment_block(at)?)
+				.map_err(Error::RuntimeApiError),
 			at,
 			params.function,
 			&params.arguments,
@@ -1660,24 +1684,30 @@ impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
 			params.native_call,
 			params.recorder,
 			Some(extensions),
-		)
+		).map_err(Into::into)
 	}
 
-	fn runtime_version_at(&self, at: &BlockId<Block>) -> sp_blockchain::Result<RuntimeVersion> {
-		self.runtime_version_at(at)
+	fn runtime_version_at(
+		&self,
+		at: &BlockId<Block>,
+	) -> Result<RuntimeVersion, sp_api::ApiError> {
+		self.runtime_version_at(at).map_err(Into::into)
 	}
 }
 
 /// NOTE: only use this implementation when you are sure there are NO consensus-level BlockImport
 /// objects. Otherwise, importing blocks directly into the client would be bypassing
 /// important verification work.
+#[async_trait::async_trait]
 impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for &Client<B, E, Block, RA> where
 	B: backend::Backend<Block>,
 	E: CallExecutor<Block> + Send + Sync,
 	Block: BlockT,
 	Client<B, E, Block, RA>: ProvideRuntimeApi<Block>,
-	<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error> +
+	<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api: CoreApi<Block> +
 		ApiExt<Block, StateBackend = B::State>,
+	RA: Sync + Send,
+	backend::TransactionFor<B, Block>: Send + 'static,
 {
 	type Error = ConsensusError;
 	type Transaction = backend::TransactionFor<B, Block>;
@@ -1691,7 +1721,7 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for &Client<B, E, Block, 
 	///
 	/// If you are not sure that there are no BlockImport objects provided by the consensus
 	/// algorithm, don't use this function.
-	fn import_block(
+	async fn import_block(
 		&mut self,
 		mut import_block: BlockImportParams<Block, backend::TransactionFor<B, Block>>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
@@ -1715,7 +1745,7 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for &Client<B, E, Block, 
 	}
 
 	/// Check block preconditions.
-	fn check_block(
+	async fn check_block(
 		&mut self,
 		block: BlockCheckParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
@@ -1771,30 +1801,33 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for &Client<B, E, Block, 
 	}
 }
 
+#[async_trait::async_trait]
 impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block>,
 	E: CallExecutor<Block> + Send + Sync,
 	Block: BlockT,
 	Self: ProvideRuntimeApi<Block>,
-	<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error> +
+	<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block> +
 		ApiExt<Block, StateBackend = B::State>,
+	RA: Sync + Send,
+	backend::TransactionFor<B, Block>: Send + 'static,
 {
 	type Error = ConsensusError;
 	type Transaction = backend::TransactionFor<B, Block>;
 
-	fn import_block(
+	async fn import_block(
 		&mut self,
 		import_block: BlockImportParams<Block, Self::Transaction>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		(&*self).import_block(import_block, new_cache)
+		(&*self).import_block(import_block, new_cache).await
 	}
 
-	fn check_block(
+	async fn check_block(
 		&mut self,
 		block: BlockCheckParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
-		(&*self).check_block(block)
+		(&*self).check_block(block).await
 	}
 }
 
@@ -1901,9 +1934,9 @@ impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 	}
 
 	fn block(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<SignedBlock<Block>>> {
-		Ok(match (self.header(id)?, self.body(id)?, self.justification(id)?) {
-			(Some(header), Some(extrinsics), justification) =>
-				Some(SignedBlock { block: Block::new(header, extrinsics), justification }),
+		Ok(match (self.header(id)?, self.body(id)?, self.justifications(id)?) {
+			(Some(header), Some(extrinsics), justifications) =>
+				Some(SignedBlock { block: Block::new(header, extrinsics), justifications }),
 			_ => None,
 		})
 	}
@@ -1912,20 +1945,20 @@ impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 		Client::block_status(self, id)
 	}
 
-	fn justification(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justification>> {
-		self.backend.blockchain().justification(*id)
+	fn justifications(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justifications>> {
+		self.backend.blockchain().justifications(*id)
 	}
 
 	fn block_hash(&self, number: NumberFor<Block>) -> sp_blockchain::Result<Option<Block::Hash>> {
 		self.backend.blockchain().hash(number)
 	}
 
-	fn extrinsic(&self, hash: &Block::Hash) -> sp_blockchain::Result<Option<Block::Extrinsic>> {
-		self.backend.blockchain().extrinsic(hash)
+	fn indexed_transaction(&self, hash: &Block::Hash) -> sp_blockchain::Result<Option<Vec<u8>>> {
+		self.backend.blockchain().indexed_transaction(hash)
 	}
 
-	fn have_extrinsic(&self, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
-		self.backend.blockchain().have_extrinsic(hash)
+	fn has_indexed_transaction(&self, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
+		self.backend.blockchain().has_indexed_transaction(hash)
 	}
 }
 
@@ -1935,7 +1968,7 @@ impl<B, E, Block, RA> backend::AuxStore for Client<B, E, Block, RA>
 		E: CallExecutor<Block>,
 		Block: BlockT,
 		Self: ProvideRuntimeApi<Block>,
-		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error>,
+		<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block>,
 {
 	/// Insert auxiliary data into key-value store.
 	fn insert_aux<
@@ -1965,7 +1998,7 @@ impl<B, E, Block, RA> backend::AuxStore for &Client<B, E, Block, RA>
 		E: CallExecutor<Block>,
 		Block: BlockT,
 		Client<B, E, Block, RA>: ProvideRuntimeApi<Block>,
-		<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error>,
+		<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api: CoreApi<Block>,
 {
 	fn insert_aux<
 		'a,
@@ -1983,9 +2016,10 @@ impl<B, E, Block, RA> backend::AuxStore for &Client<B, E, Block, RA>
 }
 
 impl<BE, E, B, RA> sp_consensus::block_validation::Chain<B> for Client<BE, E, B, RA>
-	where BE: backend::Backend<B>,
-		  E: CallExecutor<B>,
-		  B: BlockT
+	where
+		BE: backend::Backend<B>,
+		E: CallExecutor<B>,
+		B: BlockT,
 {
 	fn block_status(
 		&self,

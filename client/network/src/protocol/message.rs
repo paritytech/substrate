@@ -144,11 +144,31 @@ pub struct RemoteReadResponse {
 	pub proof: StorageProof,
 }
 
+/// Announcement summary used for debug logging.
+#[derive(Debug)]
+pub struct AnnouncementSummary<H: HeaderT> {
+	block_hash: H::Hash,
+	number: H::Number,
+	parent_hash: H::Hash,
+	state: Option<BlockState>,
+}
+
+impl<H: HeaderT> generic::BlockAnnounce<H> {
+	pub fn summary(&self) -> AnnouncementSummary<H> {
+		AnnouncementSummary {
+			block_hash: self.header.hash(),
+			number: *self.header.number(),
+			parent_hash: self.header.parent_hash().clone(),
+			state: self.state,
+		}
+	}
+}
+
 /// Generic types.
 pub mod generic {
 	use bitflags::bitflags;
 	use codec::{Encode, Decode, Input, Output};
-	use sp_runtime::Justification;
+	use sp_runtime::EncodedJustification;
 	use super::{
 		RemoteReadResponse, Transactions, Direction,
 		RequestId, BlockAttributes, RemoteCallResponse, ConsensusEngineId,
@@ -191,7 +211,6 @@ pub mod generic {
 			match roles {
 				crate::config::Role::Full => Roles::FULL,
 				crate::config::Role::Light => Roles::LIGHT,
-				crate::config::Role::Sentry { .. } => Roles::AUTHORITY,
 				crate::config::Role::Authority { .. } => Roles::AUTHORITY,
 			}
 		}
@@ -234,7 +253,7 @@ pub mod generic {
 		/// Block message queue if requested.
 		pub message_queue: Option<Vec<u8>>,
 		/// Justification if requested.
-		pub justification: Option<Justification>,
+		pub justification: Option<EncodedJustification>,
 	}
 
 	/// Identifies starting point of a block sequence.

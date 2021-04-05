@@ -23,7 +23,7 @@ use super::*;
 
 use sp_runtime::traits::Bounded;
 use frame_system::{EventRecord, RawOrigin};
-use frame_benchmarking::{benchmarks, account, whitelisted_caller};
+use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
 use frame_support::traits::OnInitialize;
 
 use crate::Module as Bounties;
@@ -84,7 +84,7 @@ fn setup_pot_account<T: Config>() {
 }
 
 fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
-	let events = frame_system::Module::<T>::events();
+	let events = frame_system::Pallet::<T>::events();
 	let system_event: <T as frame_system::Config>::Event = generic_event.into();
 	// compare to the last event record
 	let EventRecord { event, .. } = &events[events.len() - 1];
@@ -122,7 +122,7 @@ benchmarks! {
 		let (curator_lookup, bounty_id) = create_bounty::<T>()?;
 		Bounties::<T>::on_initialize(T::BlockNumber::zero());
 		let bounty_id = BountyCount::get() - 1;
-		frame_system::Module::<T>::set_block_number(T::BountyUpdatePeriod::get() + 1u32.into());
+		frame_system::Pallet::<T>::set_block_number(T::BountyUpdatePeriod::get() + 1u32.into());
 		let caller = whitelisted_caller();
 	}: _(RawOrigin::Signed(caller), bounty_id)
 
@@ -159,7 +159,7 @@ benchmarks! {
 		let beneficiary = T::Lookup::unlookup(beneficiary_account.clone());
 		Bounties::<T>::award_bounty(RawOrigin::Signed(curator.clone()).into(), bounty_id, beneficiary)?;
 
-		frame_system::Module::<T>::set_block_number(T::BountyDepositPayoutDelay::get());
+		frame_system::Pallet::<T>::set_block_number(T::BountyDepositPayoutDelay::get());
 		ensure!(T::Currency::free_balance(&beneficiary_account).is_zero(), "Beneficiary already has balance");
 
 	}: _(RawOrigin::Signed(curator), bounty_id)
@@ -220,26 +220,8 @@ benchmarks! {
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::tests::{new_test_ext, Test};
-	use frame_support::assert_ok;
-
-	#[test]
-	fn test_benchmarks() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_propose_bounty::<Test>());
-			assert_ok!(test_benchmark_approve_bounty::<Test>());
-			assert_ok!(test_benchmark_propose_curator::<Test>());
-			assert_ok!(test_benchmark_unassign_curator::<Test>());
-			assert_ok!(test_benchmark_accept_curator::<Test>());
-			assert_ok!(test_benchmark_award_bounty::<Test>());
-			assert_ok!(test_benchmark_claim_bounty::<Test>());
-			assert_ok!(test_benchmark_close_bounty_proposed::<Test>());
-			assert_ok!(test_benchmark_close_bounty_active::<Test>());
-			assert_ok!(test_benchmark_extend_bounty_expiry::<Test>());
-			assert_ok!(test_benchmark_spend_funds::<Test>());
-		});
-	}
-}
+impl_benchmark_test_suite!(
+	Bounties,
+	crate::tests::new_test_ext(),
+	crate::tests::Test,
+);

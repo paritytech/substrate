@@ -1,6 +1,6 @@
 [package]
 name = "sp-state-machine"
-version = "0.8.1"
+version = "0.9.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate State Machine"
 edition = "2018"
@@ -20,19 +20,19 @@ parking_lot = { version = "0.11.1", optional = true }
 hash-db = { version = "0.15.2", default-features = false }
 trie-db = { version = "0.22.2", default-features = false }
 trie-root = { version = "0.16.0", default-features = false }
-sp-trie = { version = "2.0.0", path = "../trie", default-features = false }
-sp-core = { version = "2.0.0", path = "../core", default-features = false }
-sp-panic-handler = { version = "2.0.0", path = "../panic-handler", optional = true }
+sp-trie = { version = "3.0.0", path = "../trie", default-features = false }
+sp-core = { version = "3.0.0", path = "../core", default-features = false }
+sp-panic-handler = { version = "3.0.0", path = "../panic-handler", optional = true }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
 num-traits = { version = "0.2.8", default-features = false }
 rand = { version = "0.7.2", optional = true }
-sp-externalities = { version = "0.8.0", path = "../externalities", default-features = false }
+sp-externalities = { version = "0.9.0", path = "../externalities", default-features = false }
 smallvec = "1.4.1"
-sp-std = { version = "2.0.0", default-features = false, path = "../std" }
+sp-std = { version = "3.0.0", default-features = false, path = "../std" }
 
 [dev-dependencies]
 hex-literal = "0.3.1"
-sp-runtime = { version = "2.0.0", path = "../runtime" }
+sp-runtime = { version = "3.0.0", path = "../runtime" }
 pretty_assertions = "0.6.1"
 
 [features]

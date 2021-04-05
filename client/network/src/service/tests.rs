@@ -47,12 +47,14 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 
 	#[derive(Clone)]
 	struct PassThroughVerifier(bool);
+
+	#[async_trait::async_trait]
 	impl<B: BlockT> sp_consensus::import_queue::Verifier<B> for PassThroughVerifier {
-		fn verify(
+		async fn verify(
 			&mut self,
 			origin: sp_consensus::BlockOrigin,
 			header: B::Header,
-			justification: Option<sp_runtime::Justification>,
+			justifications: Option<sp_runtime::Justifications>,
 			body: Option<Vec<B::Extrinsic>>,
 		) -> Result<
 			(
@@ -79,7 +81,7 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 			let mut import = sp_consensus::BlockImportParams::new(origin, header);
 			import.body = body;
 			import.finalized = self.0;
-			import.justification = justification;
+			import.justifications = justifications;
 			import.fork_choice = Some(sp_consensus::ForkChoiceStrategy::LongestChain);
 			Ok((import, maybe_keys))
 		}
@@ -99,6 +101,7 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 		let (handler, protocol_config) = BlockRequestHandler::new(
 			&protocol_id,
 			client.clone(),
+			50,
 		);
 		async_std::task::spawn(handler.run().boxed());
 		protocol_config
@@ -116,6 +119,7 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 	let worker = NetworkWorker::new(config::Params {
 		role: config::Role::Full,
 		executor: None,
+		transactions_handler_executor: Box::new(|task| { async_std::task::spawn(task); }),
 		network_config: config,
 		chain: client.clone(),
 		on_demand: None,

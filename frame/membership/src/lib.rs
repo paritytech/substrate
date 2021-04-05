@@ -113,6 +113,8 @@ decl_module! {
 		for enum Call
 		where origin: T::Origin
 	{
+		type Error = Error<T, I>;
+
 		fn deposit_event() = default;
 
 		/// Add a member `who` to the set.
@@ -293,8 +295,8 @@ mod tests {
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
-			System: frame_system::{Module, Call, Config, Storage, Event<T>},
-			Membership: pallet_membership::{Module, Call, Storage, Config<T>, Event<T>},
+			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+			Membership: pallet_membership::{Pallet, Call, Storage, Config<T>, Event<T>},
 		}
 	);
 
@@ -328,6 +330,7 @@ mod tests {
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
+		type OnSetCode = ();
 	}
 	ord_parameter_types! {
 		pub const One: u64 = 1;

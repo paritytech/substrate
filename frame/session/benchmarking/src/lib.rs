@@ -25,7 +25,7 @@ mod mock;
 use sp_std::prelude::*;
 use sp_std::vec;
 
-use frame_benchmarking::benchmarks;
+use frame_benchmarking::{benchmarks, impl_benchmark_test_suite};
 use frame_support::{
 	codec::Decode,
 	storage::StorageValue,
@@ -35,16 +35,16 @@ use frame_system::RawOrigin;
 use pallet_session::{historical::Module as Historical, Module as Session, *};
 use pallet_staking::{
 	benchmarking::create_validator_with_nominators, testing_utils::create_validators,
-	MAX_NOMINATIONS, RewardDestination,
+	RewardDestination,
 };
 use sp_runtime::traits::{One, StaticLookup};
 
 const MAX_VALIDATORS: u32 = 1000;
 
-pub struct Module<T: Config>(pallet_session::Module<T>);
+pub struct Pallet<T: Config>(pallet_session::Module<T>);
 pub trait Config: pallet_session::Config + pallet_session::historical::Config + pallet_staking::Config {}
 
-impl<T: Config> OnInitialize<T::BlockNumber> for Module<T> {
+impl<T: Config> OnInitialize<T::BlockNumber> for Pallet<T> {
 	fn on_initialize(n: T::BlockNumber) -> frame_support::weights::Weight {
 		pallet_session::Module::<T>::on_initialize(n)
 	}
@@ -52,10 +52,10 @@ impl<T: Config> OnInitialize<T::BlockNumber> for Module<T> {
 
 benchmarks! {
 	set_keys {
-		let n = MAX_NOMINATIONS as u32;
+		let n = <T as pallet_staking::Config>::MAX_NOMINATIONS;
 		let (v_stash, _) = create_validator_with_nominators::<T>(
 			n,
-			MAX_NOMINATIONS as u32,
+			<T as pallet_staking::Config>::MAX_NOMINATIONS,
 			false,
 			RewardDestination::Staked,
 		)?;
@@ -68,10 +68,10 @@ benchmarks! {
 	}: _(RawOrigin::Signed(v_controller), keys, proof)
 
 	purge_keys {
-		let n = MAX_NOMINATIONS as u32;
+		let n = <T as pallet_staking::Config>::MAX_NOMINATIONS;
 		let (v_stash, _) = create_validator_with_nominators::<T>(
 			n,
-			MAX_NOMINATIONS as u32,
+			<T as pallet_staking::Config>::MAX_NOMINATIONS,
 			false,
 			RewardDestination::Staked
 		)?;
@@ -157,7 +157,7 @@ fn check_membership_proof_setup<T: Config>(
 		Session::<T>::set_keys(RawOrigin::Signed(controller).into(), keys, proof).unwrap();
 	}
 
-	Module::<T>::on_initialize(T::BlockNumber::one());
+	Pallet::<T>::on_initialize(T::BlockNumber::one());
 
 	// skip sessions until the new validator set is enacted
 	while Session::<T>::validators().len() < n as usize {
@@ -169,17 +169,9 @@ fn check_membership_proof_setup<T: Config>(
 	(key, Historical::<T>::prove(key).unwrap())
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::mock::{new_test_ext, Test};
-	use frame_support::assert_ok;
-
-	#[test]
-	fn test_benchmarks() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_set_keys::<Test>());
-			assert_ok!(test_benchmark_purge_keys::<Test>());
-		});
-	}
-}
+impl_benchmark_test_suite!(
+	Pallet,
+	crate::mock::new_test_ext(),
+	crate::mock::Test,
+	extra = false,
+);

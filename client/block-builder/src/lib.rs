@@ -35,14 +35,49 @@ use sp_runtime::{
 use sp_blockchain::{ApplyExtrinsicFailed, Error};
 use sp_core::ExecutionContext;
 use sp_api::{
-	Core, ApiExt, ApiErrorFor, ApiRef, ProvideRuntimeApi, StorageChanges, StorageProof,
-	TransactionOutcome,
+	Core, ApiExt, ApiRef, ProvideRuntimeApi, StorageChanges, StorageProof, TransactionOutcome,
 };
-use sp_consensus::RecordProof;
 
 pub use sp_block_builder::BlockBuilder as BlockBuilderApi;
 
 use sc_client_api::backend;
+
+/// Used as parameter to [`BlockBuilderProvider`] to express if proof recording should be enabled.
+///
+/// When `RecordProof::Yes` is given, all accessed trie nodes should be saved. These recorded
+/// trie nodes can be used by a third party to proof this proposal without having access to the
+/// full storage.
+#[derive(Copy, Clone, PartialEq)]
+pub enum RecordProof {
+	/// `Yes`, record a proof.
+	Yes,
+	/// `No`, don't record any proof.
+	No,
+}
+
+impl RecordProof {
+	/// Returns if `Self` == `Yes`.
+	pub fn yes(&self) -> bool {
+		matches!(self, Self::Yes)
+	}
+}
+
+/// Will return [`RecordProof::No`] as default value.
+impl Default for RecordProof {
+	fn default() -> Self {
+		Self::No
+	}
+}
+
+impl From<bool> for RecordProof {
+	fn from(val: bool) -> Self {
+		if val {
+			Self::Yes
+		} else {
+			Self::No
+		}
+	}
+}
 
 /// A block that was build by [`BlockBuilder`] plus some additional data.
 ///
@@ -106,8 +141,7 @@ impl<'a, Block, A, B> BlockBuilder<'a, Block, A, B>
 where
 	Block: BlockT,
 	A: ProvideRuntimeApi<Block> + 'a,
-	A::Api: BlockBuilderApi<Block, Error = Error> +
-		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>,
+	A::Api: BlockBuilderApi<Block> + ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>,
 	B: backend::Backend<Block>,
 {
 	/// Create a new instance of builder based on the given `parent_hash` and `parent_number`.
@@ -122,7 +156,7 @@ where
 		record_proof: RecordProof,
 		inherent_digests: DigestFor<Block>,
 		backend: &'a B,
-	) -> Result<Self, ApiErrorFor<A, Block>> {
+	) -> Result<Self, Error> {
 		let header = <<Block as BlockT>::Header as HeaderT>::new(
 			parent_number + One::one(),
 			Default::default(),
@@ -155,7 +189,7 @@ where
 	/// Push onto the block's list of extrinsics.
 	///
 	/// This will ensure the extrinsic can be validly executed (by executing it).
-	pub fn push(&mut self, xt: <Block as BlockT>::Extrinsic) -> Result<(), ApiErrorFor<A, Block>> {
+	pub fn push(&mut self, xt: <Block as BlockT>::Extrinsic) -> Result<(), Error> {
 		let block_id = &self.block_id;
 		let extrinsics = &mut self.extrinsics;
 
@@ -174,7 +208,7 @@ where
 						Err(ApplyExtrinsicFailed::Validity(tx_validity).into()),
 					)
 				},
-				Err(e) => TransactionOutcome::Rollback(Err(e)),
+				Err(e) => TransactionOutcome::Rollback(Err(Error::from(e))),
 			}
 		})
 	}
@@ -184,10 +218,7 @@ where
 	/// Returns the build `Block`, the changes to the storage and an optional `StorageProof`
 	/// supplied by `self.api`, combined as [`BuiltBlock`].
 	/// The storage proof will be `Some(_)` when proof recording was enabled.
-	pub fn build(mut self) -> Result<
-		BuiltBlock<Block, backend::StateBackendFor<B, Block>>,
-		ApiErrorFor<A, Block>
-	> {
+	pub fn build(mut self) -> Result<BuiltBlock<Block, backend::StateBackendFor<B, Block>>, Error> {
 		let header = self.api.finalize_block_with_context(
 			&self.block_id, ExecutionContext::BlockConstruction
 		)?;
@@ -227,7 +258,7 @@ where
 	pub fn create_inherents(
 		&mut self,
 		inherent_data: sp_inherents::InherentData,
-	) -> Result<Vec<Block::Extrinsic>, ApiErrorFor<A, Block>> {
+	) -> Result<Vec<Block::Extrinsic>, Error> {
 		let block_id = self.block_id;
 		self.api.execute_in_transaction(move |api| {
 			// `create_inherents` should not change any state, to ensure this we always rollback
@@ -237,7 +268,7 @@ where
 				ExecutionContext::BlockConstruction,
 				inherent_data
 			))
-		})
+		}).map_err(|e| Error::Application(Box::new(e)))
 	}
 }
 

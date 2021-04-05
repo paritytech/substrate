@@ -23,9 +23,9 @@ use sp_core::{Pair, Public, crypto::UncheckedInto, sr25519};
 use serde::{Serialize, Deserialize};
 use node_runtime::{
 	AuthorityDiscoveryConfig, BabeConfig, BalancesConfig, ContractsConfig, CouncilConfig,
-	DemocracyConfig,GrandpaConfig, ImOnlineConfig, SessionConfig, SessionKeys, StakerStatus,
+	DemocracyConfig, GrandpaConfig, ImOnlineConfig, SessionConfig, SessionKeys, StakerStatus,
 	StakingConfig, ElectionsConfig, IndicesConfig, SocietyConfig, SudoConfig, SystemConfig,
-	TechnicalCommitteeConfig, wasm_binary_unwrap,
+	TechnicalCommitteeConfig, wasm_binary_unwrap, MAX_NOMINATIONS,
 };
 use node_runtime::Block;
 use node_runtime::constants::currency::*;
@@ -146,12 +146,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 
 	let endowed_accounts: Vec<AccountId> = vec![root_key.clone()];
 
-	testnet_genesis(
-		initial_authorities,
-		root_key,
-		Some(endowed_accounts),
-		false,
-	)
+	testnet_genesis(initial_authorities, vec![], root_key, Some(endowed_accounts), false)
 }
 
 /// Staging testnet config.
@@ -214,6 +209,7 @@ pub fn testnet_genesis(
 		ImOnlineId,
 		AuthorityDiscoveryId,
 	)>,
+	initial_nominators: Vec<AccountId>,
 	root_key: AccountId,
 	endowed_accounts: Option<Vec<AccountId>>,
 	enable_println: bool,
@@ -234,11 +230,31 @@ pub fn testnet_genesis(
 			get_account_id_from_seed::<sr25519::Public>("Ferdie//stash"),
 		]
 	});
-	initial_authorities.iter().for_each(|x|
-		if !endowed_accounts.contains(&x.0) {
-			endowed_accounts.push(x.0.clone())
+	// endow all authorities and nominators.
+	initial_authorities.iter().map(|x| &x.0).chain(initial_nominators.iter()).for_each(|x| {
+		if !endowed_accounts.contains(&x) {
+			endowed_accounts.push(x.clone())
 		}
-	);
+	});
+
+	// stakers: all validators and nominators.
+	let mut rng = rand::thread_rng();
+	let stakers = initial_authorities
+		.iter()
+		.map(|x| (x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator))
+		.chain(initial_nominators.iter().map(|x| {
+			use rand::{seq::SliceRandom, Rng};
+			let limit = (MAX_NOMINATIONS as usize).min(initial_authorities.len());
+			let count = rng.gen::<usize>() % limit;
+			let nominations = initial_authorities
+				.as_slice()
+				.choose_multiple(&mut rng, count)
+				.into_iter()
+				.map(|choice| choice.0.clone())
+				.collect::<Vec<_>>();
+			(x.clone(), x.clone(), STASH, StakerStatus::Nominator(nominations))
+		}))
+		.collect::<Vec<_>>();
 
 	let num_endowed_accounts = endowed_accounts.len();
 
@@ -246,19 +262,19 @@ pub fn testnet_genesis(
 	const STASH: Balance = ENDOWMENT / 1000;
 
 	GenesisConfig {
-		frame_system: Some(SystemConfig {
+		frame_system: SystemConfig {
 			code: wasm_binary_unwrap().to_vec(),
 			changes_trie_config: Default::default(),
-		}),
-		pallet_balances: Some(BalancesConfig {
+		},
+		pallet_balances: BalancesConfig {
 			balances: endowed_accounts.iter().cloned()
 				.map(|x| (x, ENDOWMENT))
 				.collect()
-		}),
-		pallet_indices: Some(IndicesConfig {
+		},
+		pallet_indices: IndicesConfig {
 			indices: vec![],
-		}),
-		pallet_session: Some(SessionConfig {
+		},
+		pallet_session: SessionConfig {
 			keys: initial_authorities.iter().map(|x| {
 				(x.0.clone(), x.0.clone(), session_keys(
 					x.2.clone(),
@@ -267,65 +283,64 @@ pub fn testnet_genesis(
 					x.5.clone(),
 				))
 			}).collect::<Vec<_>>(),
-		}),
-		pallet_staking: Some(StakingConfig {
+		},
+		pallet_staking: StakingConfig {
 			validator_count: initial_authorities.len() as u32 * 2,
 			minimum_validator_count: initial_authorities.len() as u32,
-			stakers: initial_authorities.iter().map(|x| {
-				(x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator)
-			}).collect(),
 			invulnerables: initial_authorities.iter().map(|x| x.0.clone()).collect(),
 			slash_reward_fraction: Perbill::from_percent(10),
+			stakers,
 			.. Default::default()
-		}),
-		pallet_democracy: Some(DemocracyConfig::default()),
-		pallet_elections_phragmen: Some(ElectionsConfig {
+		},
+		pallet_democracy: DemocracyConfig::default(),
+		pallet_elections_phragmen: ElectionsConfig {
 			members: endowed_accounts.iter()
 						.take((num_endowed_accounts + 1) / 2)
 						.cloned()
 						.map(|member| (member, STASH))
 						.collect(),
-		}),
-		pallet_collective_Instance1: Some(CouncilConfig::default()),
-		pallet_collective_Instance2: Some(TechnicalCommitteeConfig {
+		},
+		pallet_collective_Instance1: CouncilConfig::default(),
+		pallet_collective_Instance2: TechnicalCommitteeConfig {
 			members: endowed_accounts.iter()
 						.take((num_endowed_accounts + 1) / 2)
 						.cloned()
 						.collect(),
 			phantom: Default::default(),
-		}),
-		pallet_contracts: Some(ContractsConfig {
-			current_schedule: pallet_contracts::Schedule {
-				enable_println, // this should only be enabled on development chains
-				..Default::default()
-			},
-		}),
-		pallet_sudo: Some(SudoConfig {
+		},
+		pallet_contracts: ContractsConfig {
+			// println should only be enabled on development chains
+			current_schedule: pallet_contracts::Schedule::default()
+				.enable_println(enable_println),
+		},
+		pallet_sudo: SudoConfig {
 			key: root_key,
-		}),
-		pallet_babe: Some(BabeConfig {
+		},
+		pallet_babe: BabeConfig {
 			authorities: vec![],
-		}),
-		pallet_im_online: Some(ImOnlineConfig {
+			epoch_config: Some(node_runtime::BABE_GENESIS_EPOCH_CONFIG),
+		},
+		pallet_im_online: ImOnlineConfig {
 			keys: vec![],
-		}),
-		pallet_authority_discovery: Some(AuthorityDiscoveryConfig {
+		},
+		pallet_authority_discovery: AuthorityDiscoveryConfig {
 			keys: vec![],
-		}),
-		pallet_grandpa: Some(GrandpaConfig {
+		},
+		pallet_grandpa: GrandpaConfig {
 			authorities: vec![],
-		}),
-		pallet_membership_Instance1: Some(Default::default()),
-		pallet_treasury: Some(Default::default()),
-		pallet_society: Some(SocietyConfig {
+		},
+		pallet_membership_Instance1: Default::default(),
+		pallet_treasury: Default::default(),
+		pallet_society: SocietyConfig {
 			members: endowed_accounts.iter()
 						.take((num_endowed_accounts + 1) / 2)
 						.cloned()
 						.collect(),
 			pot: 0,
 			max_members: 999,
-		}),
-		pallet_vesting: Some(Default::default()),
+		},
+		pallet_vesting: Default::default(),
+		pallet_gilt: Default::default(),
 	}
 }
 
@@ -334,6 +349,7 @@ fn development_config_genesis() -> GenesisConfig {
 		vec![
 			authority_keys_from_seed("Alice"),
 		],
+		vec![],
 		get_account_id_from_seed::<sr25519::Public>("Alice"),
 		None,
 		true,
@@ -361,6 +377,7 @@ fn local_testnet_genesis() -> GenesisConfig {
 			authority_keys_from_seed("Alice"),
 			authority_keys_from_seed("Bob"),
 		],
+		vec![],
 		get_account_id_from_seed::<sr25519::Public>("Alice"),
 		None,
 		false,
@@ -394,6 +411,7 @@ pub(crate) mod tests {
 			vec![
 				authority_keys_from_seed("Alice"),
 			],
+			vec![],
 			get_account_id_from_seed::<sr25519::Public>("Alice"),
 			None,
 			false,
@@ -441,7 +459,7 @@ pub(crate) mod tests {
 				Ok(sc_service_test::TestNetComponents::new(task_manager, client, network, transaction_pool))
 			},
 			|config| {
-				let (keep_alive, _, _, client, network, transaction_pool) = new_light_base(config)?;
+				let (keep_alive, _, client, network, transaction_pool) = new_light_base(config)?;
 				Ok(sc_service_test::TestNetComponents::new(keep_alive, client, network, transaction_pool))
 			}
 		);

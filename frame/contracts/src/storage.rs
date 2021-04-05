@@ -19,24 +19,130 @@
 
 use crate::{
 	exec::{AccountIdOf, StorageKey},
-	AliveContractInfo, BalanceOf, CodeHash, ContractInfo, ContractInfoOf, Config, TrieId,
+	BalanceOf, CodeHash, ContractInfoOf, Config, TrieId,
 	AccountCounter, DeletionQueue, Error,
 	weights::WeightInfo,
 };
-use codec::{Encode, Decode};
+use codec::{Codec, Encode, Decode};
 use sp_std::prelude::*;
-use sp_std::marker::PhantomData;
+use sp_std::{marker::PhantomData, fmt::Debug};
 use sp_io::hashing::blake2_256;
-use sp_runtime::traits::{Bounded, Saturating, Zero};
+use sp_runtime::{
+	RuntimeDebug,
+	traits::{Bounded, Saturating, Zero, Hash, Member, MaybeSerializeDeserialize},
+};
 use sp_core::crypto::UncheckedFrom;
 use frame_support::{
-	dispatch::DispatchResult,
-	StorageMap,
-	debug,
-	storage::{child::{self, KillOutcome}, StorageValue},
+	dispatch::{DispatchError, DispatchResult},
+	storage::child::{self, KillChildStorageResult, ChildInfo},
 	traits::Get,
 	weights::Weight,
 };
+
+pub type AliveContractInfo<T> =
+	RawAliveContractInfo<CodeHash<T>, BalanceOf<T>, <T as frame_system::Config>::BlockNumber>;
+pub type TombstoneContractInfo<T> =
+	RawTombstoneContractInfo<<T as frame_system::Config>::Hash, <T as frame_system::Config>::Hashing>;
+
+/// Information for managing an account and its sub trie abstraction.
+/// This is the required info to cache for an account
+#[derive(Encode, Decode, RuntimeDebug)]
+pub enum ContractInfo<T: Config> {
+	Alive(AliveContractInfo<T>),
+	Tombstone(TombstoneContractInfo<T>),
+}
+
+impl<T: Config> ContractInfo<T> {
+	/// If contract is alive then return some alive info
+	pub fn get_alive(self) -> Option<AliveContractInfo<T>> {
+		if let ContractInfo::Alive(alive) = self {
+			Some(alive)
+		} else {
+			None
+		}
+	}
+	/// If contract is alive then return some reference to alive info
+	pub fn as_alive(&self) -> Option<&AliveContractInfo<T>> {
+		if let ContractInfo::Alive(ref alive) = self {
+			Some(alive)
+		} else {
+			None
+		}
+	}
+
+	/// If contract is tombstone then return some tombstone info
+	pub fn get_tombstone(self) -> Option<TombstoneContractInfo<T>> {
+		if let ContractInfo::Tombstone(tombstone) = self {
+			Some(tombstone)
+		} else {
+			None
+		}
+	}
+}
+
+/// Information for managing an account and its sub trie abstraction.
+/// This is the required info to cache for an account.
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
+	/// Unique ID for the subtree encoded as a bytes vector.
+	pub trie_id: TrieId,
+	/// The total number of bytes used by this contract.
+	///
+	/// It is a sum of each key-value pair stored by this contract.
+	pub storage_size: u32,
+	/// The total number of key-value pairs in storage of this contract.
+	pub pair_count: u32,
+	/// The code associated with a given account.
+	pub code_hash: CodeHash,
+	/// Pay rent at most up to this value.
+	pub rent_allowance: Balance,
+	/// The amount of rent that was payed by the contract over its whole lifetime.
+	///
+	/// A restored contract starts with a value of zero just like a new contract.
+	pub rent_payed: Balance,
+	/// Last block rent has been payed.
+	pub deduct_block: BlockNumber,
+	/// Last block child storage has been written.
+	pub last_write: Option<BlockNumber>,
+	/// This field is reserved for future evolution of format.
+	pub _reserved: Option<()>,
+}
+
+impl<CodeHash, Balance, BlockNumber> RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
+	/// Associated child trie unique id is built from the hash part of the trie id.
+	pub fn child_trie_info(&self) -> ChildInfo {
+		child_trie_info(&self.trie_id[..])
+	}
+}
+
+/// Associated child trie unique id is built from the hash part of the trie id.
+fn child_trie_info(trie_id: &[u8]) -> ChildInfo {
+	ChildInfo::new_default(trie_id)
+}
+
+#[derive(Encode, Decode, PartialEq, Eq, RuntimeDebug)]
+pub struct RawTombstoneContractInfo<H, Hasher>(H, PhantomData<Hasher>);
+
+impl<H, Hasher> RawTombstoneContractInfo<H, Hasher>
+where
+	H: Member + MaybeSerializeDeserialize+ Debug
+		+ AsRef<[u8]> + AsMut<[u8]> + Copy + Default
+		+ sp_std::hash::Hash + Codec,
+	Hasher: Hash<Output=H>,
+{
+	pub fn new(storage_root: &[u8], code_hash: H) -> Self {
+		let mut buf = Vec::new();
+		storage_root.using_encoded(|encoded| buf.extend_from_slice(encoded));
+		buf.extend_from_slice(code_hash.as_ref());
+		RawTombstoneContractInfo(<Hasher as Hash>::hash(&buf[..]), PhantomData)
+	}
+}
+
+impl<T: Config> From<AliveContractInfo<T>> for ContractInfo<T> {
+	fn from(alive_info: AliveContractInfo<T>) -> Self {
+		Self::Alive(alive_info)
+	}
+}
 
 /// An error that means that the account requested either doesn't exist or represents a tombstone
 /// account.
@@ -61,7 +167,7 @@ where
 	/// The read is performed from the `trie_id` only. The `address` is not necessary. If the contract
 	/// doesn't store under the given `key` `None` is returned.
 	pub fn read(trie_id: &TrieId, key: &StorageKey) -> Option<Vec<u8>> {
-		child::get_raw(&crate::child_trie_info(&trie_id), &blake2_256(key))
+		child::get_raw(&child_trie_info(&trie_id), &blake2_256(key))
 	}
 
 	/// Update a storage entry into a contract's kv storage.
@@ -89,7 +195,7 @@ where
 		};
 
 		let hashed_key = blake2_256(key);
-		let child_trie_info = &crate::child_trie_info(&trie_id);
+		let child_trie_info = &child_trie_info(&trie_id);
 
 		let opt_prev_len = child::len(&child_trie_info, &hashed_key);
 
@@ -119,7 +225,7 @@ where
 			.and_then(|val| val.checked_add(new_value_len))
 			.ok_or_else(|| Error::<T>::StorageExhausted)?;
 
-		new_info.last_write = Some(<frame_system::Module<T>>::block_number());
+		new_info.last_write = Some(<frame_system::Pallet<T>>::block_number());
 		<ContractInfoOf<T>>::insert(&account, ContractInfo::Alive(new_info));
 
 		// Finally, perform the change on the storage.
@@ -164,7 +270,7 @@ where
 		account: &AccountIdOf<T>,
 		trie_id: TrieId,
 		ch: CodeHash<T>,
-	) -> DispatchResult {
+	) -> Result<AliveContractInfo<T>, DispatchError> {
 		<ContractInfoOf<T>>::try_mutate(account, |existing| {
 			if existing.is_some() {
 				return Err(Error::<T>::DuplicateContract.into());
@@ -178,16 +284,17 @@ where
 					// We want to charge rent for the first block in advance. Therefore we
 					// treat the contract as if it was created in the last block and then
 					// charge rent for it during instantiation.
-					<frame_system::Module<T>>::block_number().saturating_sub(1u32.into()),
+					<frame_system::Pallet<T>>::block_number().saturating_sub(1u32.into()),
 				rent_allowance: <BalanceOf<T>>::max_value(),
 				rent_payed: <BalanceOf<T>>::zero(),
 				pair_count: 0,
 				last_write: None,
+				_reserved: None,
 			};
 
-			*existing = Some(contract.into());
+			*existing = Some(contract.clone().into());
 
-			Ok(())
+			Ok(contract)
 		})
 	}
 
@@ -196,10 +303,10 @@ where
 	/// You must make sure that the contract is also removed or converted into a tombstone
 	/// when queuing the trie for deletion.
 	pub fn queue_trie_for_deletion(contract: &AliveContractInfo<T>) -> DispatchResult {
-		if DeletionQueue::decode_len().unwrap_or(0) >= T::DeletionQueueDepth::get() as usize {
+		if <DeletionQueue<T>>::decode_len().unwrap_or(0) >= T::DeletionQueueDepth::get() as usize {
 			Err(Error::<T>::DeletionQueueFull.into())
 		} else {
-			DeletionQueue::append(DeletedContract {
+			<DeletionQueue<T>>::append(DeletedContract {
 				pair_count: contract.pair_count,
 				trie_id: contract.trie_id.clone(),
 			});
@@ -234,7 +341,7 @@ where
 	/// It returns the amount of weight used for that task or `None` when no weight was used
 	/// apart from the base weight.
 	pub fn process_deletion_queue_batch(weight_limit: Weight) -> Weight {
-		let queue_len = DeletionQueue::decode_len().unwrap_or(0);
+		let queue_len = <DeletionQueue<T>>::decode_len().unwrap_or(0);
 		if queue_len == 0 {
 			return weight_limit;
 		}
@@ -251,14 +358,14 @@ where
 			return weight_limit;
 		}
 
-		let mut queue = DeletionQueue::get();
+		let mut queue = <DeletionQueue<T>>::get();
 
 		while !queue.is_empty() && remaining_key_budget > 0 {
 			// Cannot panic due to loop condition
 			let trie = &mut queue[0];
 			let pair_count = trie.pair_count;
 			let outcome = child::kill_storage(
-				&crate::child_trie_info(&trie.trie_id),
+				&child_trie_info(&trie.trie_id),
 				Some(remaining_key_budget),
 			);
 			if pair_count > remaining_key_budget {
@@ -270,30 +377,30 @@ where
 				let removed = queue.swap_remove(0);
 				match outcome {
 					// This should not happen as our budget was large enough to remove all keys.
-					KillOutcome::SomeRemaining => {
-						debug::error!(
+					KillChildStorageResult::SomeRemaining(_) => {
+						log::error!(
+							target: "runtime::contracts",
 							"After deletion keys are remaining in this child trie: {:?}",
 							removed.trie_id,
 						);
 					},
-					KillOutcome::AllRemoved => (),
+					KillChildStorageResult::AllRemoved(_) => (),
 				}
 			}
 			remaining_key_budget = remaining_key_budget
 				.saturating_sub(remaining_key_budget.min(pair_count));
 		}
 
-		DeletionQueue::put(queue);
+		<DeletionQueue<T>>::put(queue);
 		weight_limit.saturating_sub(weight_per_key.saturating_mul(remaining_key_budget as Weight))
 	}
 
 	/// This generator uses inner counter for account id and applies the hash over `AccountId +
 	/// accountid_counter`.
 	pub fn generate_trie_id(account_id: &AccountIdOf<T>) -> TrieId {
-		use sp_runtime::traits::Hash;
 		// Note that skipping a value due to error is not an issue here.
 		// We only need uniqueness, not sequence.
-		let new_seed = AccountCounter::mutate(|v| {
+		let new_seed = <AccountCounter<T>>::mutate(|v| {
 			*v = v.wrapping_add(1);
 			*v
 		});
@@ -322,6 +429,6 @@ where
 			trie_id: vec![],
 		})
 		.collect();
-		DeletionQueue::put(queue);
+		<DeletionQueue<T>>::put(queue);
 	}
 }

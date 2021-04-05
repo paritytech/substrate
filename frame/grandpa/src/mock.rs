@@ -30,7 +30,6 @@ use frame_support::{
 use pallet_staking::EraIndex;
 use sp_core::{crypto::KeyTypeId, H256};
 use sp_finality_grandpa::{RoundNumber, SetId, GRANDPA_ENGINE_ID};
-use sp_io;
 use sp_keyring::Ed25519Keyring;
 use sp_runtime::{
 	curve::PiecewiseLinear,
@@ -41,6 +40,7 @@ use sp_runtime::{
 };
 use sp_staking::SessionIndex;
 use pallet_session::historical as pallet_session_historical;
+use frame_election_provider_support::onchain;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -51,14 +51,14 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
-		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
-		Staking: pallet_staking::{Module, Call, Config<T>, Storage, Event<T>, ValidateUnsigned},
-		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
-		Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event, ValidateUnsigned},
-		Offences: pallet_offences::{Module, Call, Storage, Event},
-		Historical: pallet_session_historical::{Module},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
+		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
+		Grandpa: pallet_grandpa::{Pallet, Call, Storage, Config, Event, ValidateUnsigned},
+		Offences: pallet_offences::{Pallet, Call, Storage, Event},
+		Historical: pallet_session_historical::{Pallet},
 	}
 );
 
@@ -97,6 +97,7 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 
 impl<C> frame_system::offchain::SendTransactionTypes<C> for Test
@@ -190,7 +191,16 @@ parameter_types! {
 	pub const StakingUnsignedPriority: u64 = u64::max_value() / 2;
 }
 
+impl onchain::Config for Test {
+	type AccountId = <Self as frame_system::Config>::AccountId;
+	type BlockNumber = <Self as frame_system::Config>::BlockNumber;
+	type BlockWeights = ();
+	type Accuracy = Perbill;
+	type DataProvider = Staking;
+}
+
 impl pallet_staking::Config for Test {
+	const MAX_NOMINATIONS: u32 = 16;
 	type RewardRemainder = ();
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type Event = Event;
@@ -202,16 +212,11 @@ impl pallet_staking::Config for Test {
 	type SlashDeferDuration = SlashDeferDuration;
 	type SlashCancelOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type SessionInterface = Self;
-	type UnixTime = pallet_timestamp::Module<Test>;
-	type RewardCurve = RewardCurve;
+	type UnixTime = pallet_timestamp::Pallet<Test>;
+	type EraPayout = pallet_staking::ConvertCurve<RewardCurve>;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type NextNewSession = Session;
-	type ElectionLookahead = ElectionLookahead;
-	type Call = Call;
-	type UnsignedPriority = StakingUnsignedPriority;
-	type MaxIterations = ();
-	type MinSolutionScoreBump = ();
-	type OffchainSolutionWeightLimit = ();
+	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type WeightInfo = ();
 }
 
@@ -224,6 +229,11 @@ impl pallet_offences::Config for Test {
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
 	type WeightSoftLimit = OffencesWeightSoftLimit;
+}
+
+parameter_types! {
+	pub const ReportLongevity: u64 =
+		BondingDuration::get() as u64 * SessionsPerEra::get() as u64 * Period::get();
 }
 
 impl Config for Test {
@@ -240,7 +250,8 @@ impl Config for Test {
 		AuthorityId,
 	)>>::IdentificationTuple;
 
-	type HandleEquivocation = super::EquivocationHandler<Self::KeyOwnerIdentification, Offences>;
+	type HandleEquivocation =
+		super::EquivocationHandler<Self::KeyOwnerIdentification, Offences, ReportLongevity>;
 
 	type WeightInfo = ();
 }

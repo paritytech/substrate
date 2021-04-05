@@ -18,9 +18,9 @@
 //! # Scheduler
 //! A module for scheduling dispatches.
 //!
-//! - [`scheduler::Config`](./trait.Config.html)
-//! - [`Call`](./enum.Call.html)
-//! - [`Module`](./struct.Module.html)
+//! - [`Config`]
+//! - [`Call`]
+//! - [`Module`]
 //!
 //! ## Overview
 //!
@@ -76,8 +76,8 @@ pub trait Config: system::Config {
 	type Event: From<Event<Self>> + Into<<Self as system::Config>::Event>;
 
 	/// The aggregated origin which the dispatch will take.
-	type Origin: OriginTrait<PalletsOrigin =
-		Self::PalletsOrigin> + From<Self::PalletsOrigin> + IsType<<Self as system::Config>::Origin>;
+	type Origin: OriginTrait<PalletsOrigin = Self::PalletsOrigin>
+		+ From<Self::PalletsOrigin> + IsType<<Self as system::Config>::Origin>;
 
 	/// The caller origin, overarching type of all pallets origins.
 	type PalletsOrigin: From<system::RawOrigin<Self::AccountId>> + Codec + Clone + Eq;
@@ -333,7 +333,8 @@ decl_module! {
 				.filter_map(|(index, s)| s.map(|inner| (index as u32, inner)))
 				.collect::<Vec<_>>();
 			if queued.len() as u32 > T::MaxScheduledPerBlock::get() {
-				frame_support::debug::warn!(
+				log::warn!(
+					target: "runtime::scheduler",
 					"Warning: This block has more items queued in Scheduler than \
 					expected from the runtime configuration. An update might be needed."
 				);
@@ -464,7 +465,7 @@ impl<T: Config> Module<T> {
 	}
 
 	fn resolve_time(when: DispatchTime<T::BlockNumber>) -> Result<T::BlockNumber, DispatchError> {
-		let now = frame_system::Module::<T>::block_number();
+		let now = frame_system::Pallet::<T>::block_number();
 
 		let when = match when {
 			DispatchTime::At(x) => x,
@@ -500,9 +501,10 @@ impl<T: Config> Module<T> {
 		Agenda::<T>::append(when, s);
 		let index = Agenda::<T>::decode_len(when).unwrap_or(1) as u32 - 1;
 		if index > T::MaxScheduledPerBlock::get() {
-			frame_support::debug::warn!(
+			log::warn!(
+				target: "runtime::scheduler",
 				"Warning: There are more items queued in the Scheduler than \
-				expected from the runtime configuration. An update might be needed."
+				expected from the runtime configuration. An update might be needed.",
 			);
 		}
 		Self::deposit_event(RawEvent::Scheduled(when, index));
@@ -590,9 +592,10 @@ impl<T: Config> Module<T> {
 		Agenda::<T>::append(when, Some(s));
 		let index = Agenda::<T>::decode_len(when).unwrap_or(1) as u32 - 1;
 		if index > T::MaxScheduledPerBlock::get() {
-			frame_support::debug::warn!(
+			log::warn!(
+				target: "runtime::scheduler",
 				"Warning: There are more items queued in the Scheduler than \
-				expected from the runtime configuration. An update might be needed."
+				expected from the runtime configuration. An update might be needed.",
 			);
 		}
 		let address = (when, index);
@@ -790,9 +793,9 @@ mod tests {
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
-			System: frame_system::{Module, Call, Config, Storage, Event<T>},
-			Logger: logger::{Module, Call, Event},
-			Scheduler: scheduler::{Module, Call, Storage, Event<T>},
+			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+			Logger: logger::{Pallet, Call, Event},
+			Scheduler: scheduler::{Pallet, Call, Storage, Event<T>},
 		}
 	);
 
@@ -832,6 +835,7 @@ mod tests {
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
+		type OnSetCode = ();
 	}
 	impl logger::Config for Test {
 		type Event = Event;

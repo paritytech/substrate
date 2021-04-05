@@ -28,8 +28,9 @@ use sc_light::{
 };
 use std::sync::Arc;
 use sp_runtime::{
-	traits::{BlakeTwo256, HashFor, NumberFor},
-	generic::BlockId, traits::{Block as _, Header as HeaderT}, Digest,
+	generic::BlockId,
+	traits::{BlakeTwo256, Block as _, HashFor, Header as HeaderT, NumberFor},
+	Digest, Justifications,
 };
 use std::collections::HashMap;
 use parking_lot::Mutex;
@@ -215,7 +216,7 @@ impl CallExecutor<Block> for DummyCallExecutor {
 			Result<NativeOrEncoded<R>, Self::Error>
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> Result<R, String> + UnwindSafe,
+		NC: FnOnce() -> Result<R, sp_api::ApiError> + UnwindSafe,
 	>(
 		&self,
 		_initialize_block_fn: IB,
@@ -374,11 +375,11 @@ fn execution_proof_is_generated_and_checked() {
 	for i in 1u32..3u32 {
 		let mut digest = Digest::default();
 		digest.push(sp_runtime::generic::DigestItem::Other::<H256>(i.to_le_bytes().to_vec()));
-		remote_client.import_justified(
+		futures::executor::block_on(remote_client.import_justified(
 			BlockOrigin::Own,
 			remote_client.new_block(digest).unwrap().build().unwrap().block,
-			Default::default(),
-		).unwrap();
+			Justifications::from((*b"TEST", Default::default())),
+		)).unwrap();
 	}
 
 	// check method that doesn't requires environment
@@ -539,7 +540,7 @@ fn prepare_for_header_proof_check(insert_cht: bool) -> (TestChecker, Hash, Heade
 	let mut local_headers_hashes = Vec::new();
 	for i in 0..4 {
 		let block = remote_client.new_block(Default::default()).unwrap().build().unwrap().block;
-		remote_client.import(BlockOrigin::Own, block).unwrap();
+		futures::executor::block_on(remote_client.import(BlockOrigin::Own, block)).unwrap();
 		local_headers_hashes.push(
 			remote_client.block_hash(i + 1)
 				.map_err(|_| ClientError::Backend("TestError".into()))
@@ -684,10 +685,13 @@ fn changes_proof_is_generated_and_checked_when_headers_are_not_pruned() {
 		}).unwrap();
 
 		// ..and ensure that result is the same as on remote node
-		match local_result == expected_result {
-			true => (),
-			false => panic!(format!("Failed test {}: local = {:?}, expected = {:?}",
-									index, local_result, expected_result)),
+		if local_result != expected_result {
+			panic!(
+				"Failed test {}: local = {:?}, expected = {:?}",
+				index,
+				local_result,
+				expected_result,
+			);
 		}
 	}
 }

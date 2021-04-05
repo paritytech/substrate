@@ -29,6 +29,7 @@ use log::{debug, info, warn};
 use sp_keystore::SyncCryptoStorePtr;
 use sp_consensus::SelectChain;
 use sc_client_api::backend::Backend;
+use sc_telemetry::TelemetryHandle;
 use sp_utils::mpsc::TracingUnboundedReceiver;
 use sp_runtime::traits::{NumberFor, Block as BlockT};
 use sp_blockchain::HeaderMetadata;
@@ -57,11 +58,6 @@ impl<'a, Block, Client> finality_grandpa::Chain<Block::Hash, NumberFor<Block>>
 	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
 		environment::ancestry(&self.client, base, block)
 	}
-
-	fn best_chain_containing(&self, _block: Block::Hash) -> Option<(Block::Hash, NumberFor<Block>)> {
-		// only used by voter
-		None
-	}
 }
 
 fn grandpa_observer<BE, Block: BlockT, Client, S, F>(
@@ -72,6 +68,7 @@ fn grandpa_observer<BE, Block: BlockT, Client, S, F>(
 	last_finalized_number: NumberFor<Block>,
 	commits: S,
 	note_round: F,
+	telemetry: Option<TelemetryHandle>,
 ) -> impl Future<Output = Result<(), CommandOrError<Block::Hash, NumberFor<Block>>>>
 where
 	NumberFor<Block>: BlockNumberOps,
@@ -126,6 +123,7 @@ where
 				(round, commit).into(),
 				false,
 				justification_sender.as_ref(),
+				telemetry.clone(),
 			) {
 				Ok(_) => {},
 				Err(e) => return future::err(e),
@@ -177,7 +175,8 @@ where
 		persistent_data,
 		voter_commands_rx,
 		justification_sender,
-		..
+		justification_stream: _,
+		telemetry,
 	} = link;
 
 	let network = NetworkBridge::new(
@@ -185,15 +184,17 @@ where
 		config.clone(),
 		persistent_data.set_state.clone(),
 		None,
+		telemetry.clone(),
 	);
 
 	let observer_work = ObserverWork::new(
-		client,
+		client.clone(),
 		network,
 		persistent_data,
 		config.keystore,
 		voter_commands_rx,
 		Some(justification_sender),
+		telemetry.clone(),
 	);
 
 	let observer_work = observer_work
@@ -215,6 +216,7 @@ struct ObserverWork<B: BlockT, BE, Client, N: NetworkT<B>> {
 	keystore: Option<SyncCryptoStorePtr>,
 	voter_commands_rx: TracingUnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
 	justification_sender: Option<GrandpaJustificationSender<B>>,
+	telemetry: Option<TelemetryHandle>,
 	_phantom: PhantomData<BE>,
 }
 
@@ -233,6 +235,7 @@ where
 		keystore: Option<SyncCryptoStorePtr>,
 		voter_commands_rx: TracingUnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
 		justification_sender: Option<GrandpaJustificationSender<B>>,
+		telemetry: Option<TelemetryHandle>,
 	) -> Self {
 
 		let mut work = ObserverWork {
@@ -245,6 +248,7 @@ where
 			keystore: keystore.clone(),
 			voter_commands_rx,
 			justification_sender,
+			telemetry,
 			_phantom: PhantomData,
 		};
 		work.rebuild_observer();
@@ -294,6 +298,7 @@ where
 			last_finalized_number,
 			global_in,
 			note_round,
+			self.telemetry.clone(),
 		);
 
 		self.observer = Box::pin(observer);
@@ -321,7 +326,7 @@ where
 				// set changed (not where the signal happened!) as the base.
 				let set_state = VoterSetState::live(
 					new.set_id,
-					&*self.persistent_data.authority_set.inner().read(),
+					&*self.persistent_data.authority_set.inner(),
 					(new.canon_hash, new.canon_number),
 				);
 
@@ -433,6 +438,7 @@ mod tests {
 			persistent_data,
 			None,
 			voter_command_rx,
+			None,
 			None,
 		);
 

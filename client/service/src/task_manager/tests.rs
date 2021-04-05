@@ -21,9 +21,6 @@ use crate::task_manager::TaskManager;
 use futures::{future::FutureExt, pin_mut, select};
 use parking_lot::Mutex;
 use std::{any::Any, sync::Arc, time::Duration};
-use tracing_subscriber::{layer::{SubscriberExt, Context}, Layer};
-use tracing::{subscriber::Subscriber, span::{Attributes, Id, Record, Span}, event::Event};
-use sc_telemetry::TelemetrySpan;
 
 #[derive(Clone, Debug)]
 struct DropTester(Arc<Mutex<usize>>);
@@ -83,7 +80,7 @@ async fn run_background_task_blocking(duration: Duration, _keep_alive: impl Any)
 }
 
 fn new_task_manager(task_executor: TaskExecutor) -> TaskManager {
-	TaskManager::new(task_executor, None, None).unwrap()
+	TaskManager::new(task_executor, None).unwrap()
 }
 
 #[test]
@@ -312,95 +309,4 @@ fn ensure_task_manager_future_continues_when_childs_not_essential_task_fails() {
 	assert_eq!(drop_tester, 4);
 	runtime.block_on(task_manager.clean_shutdown());
 	assert_eq!(drop_tester, 0);
-}
-
-struct TestLayer {
-	spans_entered: Arc<Mutex<Vec<String>>>,
-	spans: Arc<Mutex<std::collections::HashMap<Id, String>>>,
-}
-
-impl<S: Subscriber> Layer<S> for TestLayer {
-	fn new_span(&self, attrs: &Attributes<'_>, id: &Id, _ctx: Context<S>) {
-		self.spans.lock().insert(id.clone(), attrs.metadata().name().to_string());
-	}
-
-	fn on_record(&self, _: &Id, _: &Record<'_>, _: Context<S>) {}
-
-	fn on_event(&self, _: &Event<'_>, _: Context<S>) {}
-
-	fn on_enter(&self, span: &Id, _: Context<S>) {
-		let name = self.spans.lock().get(span).unwrap().clone();
-		self.spans_entered.lock().push(name);
-	}
-
-	fn on_exit(&self, _: &Id, _: Context<S>) {}
-
-	fn on_close(&self, _: Id, _: Context<S>) {}
-}
-
-type TestSubscriber = tracing_subscriber::layer::Layered<
-	TestLayer,
-	tracing_subscriber::fmt::Subscriber
->;
-
-fn setup_subscriber() -> (
-	TestSubscriber,
-	Arc<Mutex<Vec<String>>>,
-) {
-	let spans_entered = Arc::new(Mutex::new(Default::default()));
-	let layer = TestLayer {
-		spans: Arc::new(Mutex::new(Default::default())),
-		spans_entered: spans_entered.clone(),
-	};
-	let subscriber = tracing_subscriber::fmt().finish().with(layer);
-	(subscriber, spans_entered)
-}
-
-#[test]
-fn telemetry_span_is_forwarded_to_task() {
-	let (subscriber, spans_entered) = setup_subscriber();
-	let _sub_guard = tracing::subscriber::set_global_default(subscriber);
-
-	let telemetry_span = TelemetrySpan::new();
-
-	let span = tracing::info_span!("test");
-	let _enter = span.enter();
-
-	let mut runtime = tokio::runtime::Runtime::new().unwrap();
-	let handle = runtime.handle().clone();
-	let task_executor = TaskExecutor::from(move |fut, _| handle.spawn(fut).map(|_| ()));
-	let task_manager = TaskManager::new(task_executor, None, Some(telemetry_span.clone())).unwrap();
-
-	let (sender, receiver) = futures::channel::oneshot::channel();
-	let spawn_handle = task_manager.spawn_handle();
-
-	let span = span.clone();
-	task_manager.spawn_handle().spawn(
-		"test",
-		async move {
-			assert_eq!(span, Span::current());
-			spawn_handle.spawn("test-nested", async move {
-				assert_eq!(span, Span::current());
-				sender.send(()).unwrap();
-			}.boxed());
-		}.boxed(),
-	);
-
-	// We need to leave exit the span here. If tokio is not running with multithreading, this
-	// would lead to duplicate spans being "active" and forwarding the wrong one.
-	drop(_enter);
-	runtime.block_on(receiver).unwrap();
-	runtime.block_on(task_manager.clean_shutdown());
-	drop(runtime);
-
-	let spans = spans_entered.lock();
-	// We entered the telemetry span and the "test" in the future, the nested future and
-	// the "test" span outside of the future. So, we should have recorded 3 spans.
-	assert_eq!(5, spans.len());
-
-	assert_eq!(spans[0], "test");
-	assert_eq!(spans[1], telemetry_span.span().metadata().unwrap().name());
-	assert_eq!(spans[2], "test");
-	assert_eq!(spans[3], telemetry_span.span().metadata().unwrap().name());
-	assert_eq!(spans[4], "test");
 }

@@ -64,7 +64,6 @@ arg_enum! {
 	#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 	pub enum TracingReceiver {
 		Log,
-		Telemetry,
 	}
 }
 
@@ -72,7 +71,6 @@ impl Into<sc_tracing::TracingReceiver> for TracingReceiver {
 	fn into(self) -> sc_tracing::TracingReceiver {
 		match self {
 			TracingReceiver::Log => sc_tracing::TracingReceiver::Log,
-			TracingReceiver::Telemetry => sc_tracing::TracingReceiver::Telemetry,
 		}
 	}
 }
@@ -165,18 +163,35 @@ impl Into<sc_service::config::RpcMethods> for RpcMethods {
 	}
 }
 
-arg_enum! {
-	/// Database backend
-	#[allow(missing_docs)]
-	#[derive(Debug, Clone, Copy)]
-	pub enum Database {
-		// Facebooks RocksDB
-		RocksDb,
-		// ParityDb. https://github.com/paritytech/parity-db/
-		ParityDb,
+/// Database backend
+#[derive(Debug, Clone, Copy)]
+pub enum Database {
+	/// Facebooks RocksDB
+	RocksDb,
+	/// ParityDb. <https://github.com/paritytech/parity-db/>
+	ParityDb,
+}
+
+impl std::str::FromStr for Database {
+	type Err = String;
+
+	fn from_str(s: &str) -> Result<Self, String> {
+		if s.eq_ignore_ascii_case("rocksdb") {
+			Ok(Self::RocksDb)
+		} else if s.eq_ignore_ascii_case("paritydb-experimental") {
+			Ok(Self::ParityDb)
+		} else {
+			Err(format!("Unknwon variant `{}`, known variants: {:?}", s, Self::variants()))
+		}
 	}
 }
 
+impl Database {
+	/// Returns all the variants of this enum to be shown in the cli.
+	pub fn variants() -> &'static [&'static str] {
+		&["rocksdb", "paritydb-experimental"]
+	}
+}
 
 arg_enum! {
 	/// Whether off-chain workers are enabled.

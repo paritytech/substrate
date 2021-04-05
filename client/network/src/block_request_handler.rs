@@ -24,19 +24,30 @@ use crate::protocol::{message::BlockAttributes};
 use crate::request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig};
 use crate::schema::v1::block_request::FromBlock;
 use crate::schema::v1::{BlockResponse, Direction};
+use crate::{PeerId, ReputationChange};
 use futures::channel::{mpsc, oneshot};
 use futures::stream::StreamExt;
 use log::debug;
+use lru::LruCache;
 use prost::Message;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header, One, Zero};
 use std::cmp::min;
-use std::sync::{Arc};
+use std::sync::Arc;
 use std::time::Duration;
+use std::hash::{Hasher, Hash};
 
-const LOG_TARGET: &str = "block-request-handler";
+const LOG_TARGET: &str = "sync";
 const MAX_BLOCKS_IN_RESPONSE: usize = 128;
 const MAX_BODY_BYTES: usize = 8 * 1024 * 1024;
+const MAX_NUMBER_OF_SAME_REQUESTS_PER_PEER: usize = 2;
+
+mod rep {
+	use super::ReputationChange as Rep;
+
+	/// Reputation change when a peer sent us the same request multiple times.
+	pub const SAME_REQUEST: Rep = Rep::new(i32::min_value(), "Same block request multiple times");
+}
 
 /// Generates a [`ProtocolConfig`] for the block request protocol, refusing incoming requests.
 pub fn generate_protocol_config(protocol_id: &ProtocolId) -> ProtocolConfig {
@@ -61,28 +72,65 @@ pub(crate) fn generate_protocol_name(protocol_id: &ProtocolId) -> String {
 	s
 }
 
-/// Handler for incoming block requests from a remote peer.
-pub struct BlockRequestHandler<B> {
-	client: Arc<dyn Client<B>>,
-	request_receiver: mpsc::Receiver<IncomingRequest>,
+/// The key of [`BlockRequestHandler::seen_requests`].
+#[derive(Eq, PartialEq, Clone)]
+struct SeenRequestsKey<B: BlockT> {
+	peer: PeerId,
+	from: BlockId<B>,
+	max_blocks: usize,
+	direction: Direction,
+	attributes: BlockAttributes,
 }
 
-impl <B: BlockT> BlockRequestHandler<B> {
+impl<B: BlockT> Hash for SeenRequestsKey<B> {
+	fn hash<H: Hasher>(&self, state: &mut H) {
+		self.peer.hash(state);
+		self.max_blocks.hash(state);
+		self.direction.hash(state);
+		self.attributes.hash(state);
+
+		match self.from {
+			BlockId::Hash(h) => h.hash(state),
+			BlockId::Number(n) => n.hash(state),
+		}
+	}
+}
+
+/// The value of [`BlockRequestHandler::seen_requests`].
+enum SeenRequestsValue {
+	/// First time we have seen the request.
+	First,
+	/// We have fulfilled the request `n` times.
+	Fulfilled(usize),
+}
+
+/// Handler for incoming block requests from a remote peer.
+pub struct BlockRequestHandler<B: BlockT> {
+	client: Arc<dyn Client<B>>,
+	request_receiver: mpsc::Receiver<IncomingRequest>,
+	/// Maps from request to number of times we have seen this request.
+	///
+	/// This is used to check if a peer is spamming us with the same request.
+	seen_requests: LruCache<SeenRequestsKey<B>, SeenRequestsValue>,
+}
+
+impl<B: BlockT> BlockRequestHandler<B> {
 	/// Create a new [`BlockRequestHandler`].
-	pub fn new(protocol_id: &ProtocolId, client: Arc<dyn Client<B>>) -> (Self, ProtocolConfig) {
-		// Rate of arrival multiplied with the waiting time in the queue equals the queue length.
-		//
-		// An average Polkadot sentry node serves less than 5 requests per second. The 95th percentile
-		// serving a request is less than 2 second. Thus one would estimate the queue length to be
-		// below 10.
-		//
-		// Choosing 20 as the queue length to give some additional buffer.
-		let (tx, request_receiver) = mpsc::channel(20);
+	pub fn new(
+		protocol_id: &ProtocolId,
+		client: Arc<dyn Client<B>>,
+		num_peer_hint: usize,
+	) -> (Self, ProtocolConfig) {
+		// Reserve enough request slots for one request per peer when we are at the maximum
+		// number of peers.
+		let (tx, request_receiver) = mpsc::channel(num_peer_hint);
 
 		let mut protocol_config = generate_protocol_config(protocol_id);
 		protocol_config.inbound_queue = Some(tx);
 
-		(Self { client, request_receiver }, protocol_config)
+		let seen_requests = LruCache::new(num_peer_hint * 2);
+
+		(Self { client, request_receiver, seen_requests }, protocol_config)
 	}
 
 	/// Run [`BlockRequestHandler`].
@@ -90,21 +138,23 @@ impl <B: BlockT> BlockRequestHandler<B> {
 		while let Some(request) = self.request_receiver.next().await {
 			let IncomingRequest { peer, payload, pending_response } = request;
 
-			match self.handle_request(payload, pending_response) {
+			match self.handle_request(payload, pending_response, &peer) {
 				Ok(()) => debug!(target: LOG_TARGET, "Handled block request from {}.", peer),
 				Err(e) => debug!(
 					target: LOG_TARGET,
 					"Failed to handle block request from {}: {}",
-					peer, e,
+					peer,
+					e,
 				),
 			}
 		}
 	}
 
 	fn handle_request(
-		&self,
+		&mut self,
 		payload: Vec<u8>,
-		pending_response: oneshot::Sender<OutgoingResponse>
+		pending_response: oneshot::Sender<OutgoingResponse>,
+		peer: &PeerId,
 	) -> Result<(), HandleRequestError> {
 		let request = crate::schema::v1::BlockRequest::decode(&payload[..])?;
 
@@ -127,25 +177,122 @@ impl <B: BlockT> BlockRequestHandler<B> {
 
 		let direction = Direction::from_i32(request.direction)
 			.ok_or(HandleRequestError::ParseDirection)?;
+
 		let attributes = BlockAttributes::from_be_u32(request.fields)?;
+
+		let key = SeenRequestsKey {
+			peer: *peer,
+			max_blocks,
+			direction,
+			from: from_block_id.clone(),
+			attributes,
+		};
+
+		let mut reputation_changes = Vec::new();
+
+		match self.seen_requests.get_mut(&key) {
+			Some(SeenRequestsValue::First) => {},
+			Some(SeenRequestsValue::Fulfilled(ref mut requests)) => {
+				*requests = requests.saturating_add(1);
+
+				if *requests > MAX_NUMBER_OF_SAME_REQUESTS_PER_PEER {
+					reputation_changes.push(rep::SAME_REQUEST);
+				}
+			},
+			None => {
+				self.seen_requests.put(key.clone(), SeenRequestsValue::First);
+			}
+		}
+
+		debug!(
+			target: LOG_TARGET,
+			"Handling block request from {}: Starting at `{:?}` with maximum blocks \
+			 of `{}`, direction `{:?}` and attributes `{:?}`.",
+			peer,
+			from_block_id,
+			max_blocks,
+			direction,
+			attributes,
+		);
+
+		let result = if reputation_changes.is_empty() {
+			let block_response = self.get_block_response(
+				attributes,
+				from_block_id,
+				direction,
+				max_blocks,
+			)?;
+
+			// If any of the blocks contains nay data, we can consider it as successful request.
+			if block_response
+				.blocks
+				.iter()
+				.any(|b| !b.header.is_empty() || !b.body.is_empty() || b.is_empty_justification)
+			{
+				if let Some(value) = self.seen_requests.get_mut(&key) {
+					// If this is the first time we have processed this request, we need to change
+					// it to `Fulfilled`.
+					if let SeenRequestsValue::First = value {
+						*value = SeenRequestsValue::Fulfilled(1);
+					}
+				}
+			}
+
+			let mut data = Vec::with_capacity(block_response.encoded_len());
+			block_response.encode(&mut data)?;
+
+			Ok(data)
+		} else {
+			Err(())
+		};
+
+		pending_response.send(OutgoingResponse {
+			result,
+			reputation_changes,
+			sent_feedback: None,
+		}).map_err(|_| HandleRequestError::SendResponse)
+	}
+
+	fn get_block_response(
+		&self,
+		attributes: BlockAttributes,
+		mut block_id: BlockId<B>,
+		direction: Direction,
+		max_blocks: usize,
+	) -> Result<BlockResponse, HandleRequestError> {
 		let get_header = attributes.contains(BlockAttributes::HEADER);
 		let get_body = attributes.contains(BlockAttributes::BODY);
 		let get_justification = attributes.contains(BlockAttributes::JUSTIFICATION);
 
 		let mut blocks = Vec::new();
-		let mut block_id = from_block_id;
 
 		let mut total_size: usize = 0;
-		while let Some(header) = self.client.header(block_id).unwrap_or(None) {
+		while let Some(header) = self.client.header(block_id).unwrap_or_default() {
 			let number = *header.number();
 			let hash = header.hash();
 			let parent_hash = *header.parent_hash();
-			let justification = if get_justification {
-				self.client.justification(&BlockId::Hash(hash))?
+			let justifications = if get_justification {
+				self.client.justifications(&BlockId::Hash(hash))?
 			} else {
 				None
 			};
-			let is_empty_justification = justification.as_ref().map(|j| j.is_empty()).unwrap_or(false);
+
+			// TODO: In a follow up PR tracked by https://github.com/paritytech/substrate/issues/8172
+			// we want to send/receive all justifications.
+			// For now we keep compatibility by selecting precisely the GRANDPA one, and not just
+			// the first one. When sending we could have just taken the first one, since we don't
+			// expect there to be any other kind currently, but when receiving we need to add the
+			// engine ID tag.
+			// The ID tag is hardcoded here to avoid depending on the GRANDPA crate, and will be
+			// removed when resolving the above issue.
+			let justification = justifications.and_then(|just| just.into_justification(*b"FRNK"));
+
+			let is_empty_justification = justification
+				.as_ref()
+				.map(|j| j.is_empty())
+				.unwrap_or(false);
+
+			let justification = justification.unwrap_or_default();
 
 			let body = if get_body {
 				match self.client.block_body(&BlockId::Hash(hash))? {
@@ -153,7 +300,7 @@ impl <B: BlockT> BlockRequestHandler<B> {
 						.map(|extrinsic| extrinsic.encode())
 						.collect(),
 					None => {
-						log::trace!(target: "sync", "Missing data for block request.");
+						log::trace!(target: LOG_TARGET, "Missing data for block request.");
 						break;
 					}
 				}
@@ -171,7 +318,7 @@ impl <B: BlockT> BlockRequestHandler<B> {
 				body,
 				receipt: Vec::new(),
 				message_queue: Vec::new(),
-				justification: justification.unwrap_or_default(),
+				justification,
 				is_empty_justification,
 			};
 
@@ -195,15 +342,7 @@ impl <B: BlockT> BlockRequestHandler<B> {
 			}
 		}
 
-		let res = BlockResponse { blocks };
-
-		let mut data = Vec::with_capacity(res.encoded_len());
-		res.encode(&mut data)?;
-
-		pending_response.send(OutgoingResponse {
-			result: Ok(data),
-			reputation_changes: Vec::new(),
-		}).map_err(|_| HandleRequestError::SendResponse)
+		Ok(BlockResponse { blocks })
 	}
 }
 

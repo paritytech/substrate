@@ -1,6 +1,6 @@
 [package]
 name = "frame-support-procedural-tools-derive"
-version = "2.0.1"
+version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"

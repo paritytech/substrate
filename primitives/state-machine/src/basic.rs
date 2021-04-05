@@ -211,9 +211,9 @@ impl Externalities for BasicExternalities {
 		&mut self,
 		child_info: &ChildInfo,
 		_limit: Option<u32>,
-	) -> bool {
-		self.inner.children_default.remove(child_info.storage_key());
-		true
+	) -> (bool, u32) {
+		let num_removed = self.inner.children_default.remove(child_info.storage_key()).map(|c| c.data.len()).unwrap_or(0);
+		(true, num_removed as u32)
 	}
 
 	fn clear_prefix(&mut self, prefix: &[u8]) {
@@ -409,6 +409,29 @@ mod tests {
 
 		ext.kill_child_storage(child_info, None);
 		assert_eq!(ext.child_storage(child_info, b"doe"), None);
+	}
+
+	#[test]
+	fn kill_child_storage_returns_num_elements_removed() {
+		let child_info = ChildInfo::new_default(b"storage_key");
+		let child_info = &child_info;
+		let mut ext = BasicExternalities::new(Storage {
+			top: Default::default(),
+			children_default: map![
+				child_info.storage_key().to_vec() => StorageChild {
+					data: map![
+						b"doe".to_vec() => b"reindeer".to_vec(),
+						b"dog".to_vec() => b"puppy".to_vec(),
+						b"hello".to_vec() => b"world".to_vec(),
+					],
+					child_info: child_info.to_owned(),
+				}
+			]
+		});
+
+
+		let res = ext.kill_child_storage(child_info, None);
+		assert_eq!(res, (true, 3));
 	}
 
 	#[test]

@@ -40,8 +40,8 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		MMR: pallet_mmr::{Module, Call, Storage},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		MMR: pallet_mmr::{Pallet, Call, Storage},
 	}
 );
 
@@ -71,6 +71,7 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 
 impl Config for Test {
@@ -78,7 +79,7 @@ impl Config for Test {
 
 	type Hashing = Keccak256;
 	type Hash = H256;
-	type LeafData = Compact<Keccak256, (frame_system::Module<Test>, LeafData)>;
+	type LeafData = Compact<Keccak256, (frame_system::Pallet<Test>, LeafData)>;
 	type OnNewRoot = ();
 	type WeightInfo = ();
 }

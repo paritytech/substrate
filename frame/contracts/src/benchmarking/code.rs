@@ -24,15 +24,15 @@
 //! we define this simple definition of a contract that can be passed to `create_code` that
 //! compiles it down into a `WasmModule` that can be used as a contract's code.
 
-use crate::Config;
-use crate::Module as Contracts;
-
-use parity_wasm::elements::{Instruction, Instructions, FuncBody, ValueType, BlockType};
+use crate::{Config, CurrentSchedule};
+use parity_wasm::elements::{
+	Instruction, Instructions, FuncBody, ValueType, BlockType, Section, CustomSection,
+};
 use pwasm_utils::stack_height::inject_limiter;
 use sp_core::crypto::UncheckedFrom;
 use sp_runtime::traits::Hash;
 use sp_sandbox::{EnvironmentDefinitionBuilder, Memory};
-use sp_std::{prelude::*, convert::TryFrom};
+use sp_std::{prelude::*, convert::TryFrom, borrow::ToOwned};
 
 /// Pass to `create_code` in order to create a compiled `WasmModule`.
 ///
@@ -66,6 +66,10 @@ pub struct ModuleDefinition {
 	pub inject_stack_metering: bool,
 	/// Create a table containing function pointers.
 	pub table: Option<TableSegment>,
+	/// Create a section named "dummy" of the specified size. This is useful in order to
+	/// benchmark the overhead of loading and storing codes of specified sizes. The dummy
+	/// section only contributes to the size of the contract but does not affect execution.
+	pub dummy_section: u32,
 }
 
 pub struct TableSegment {
@@ -204,13 +208,22 @@ where
 				.build();
 		}
 
+		// Add the dummy section
+		if def.dummy_section > 0 {
+			contract = contract.with_section(
+				Section::Custom(
+					CustomSection::new("dummy".to_owned(), vec![42; def.dummy_section as usize])
+				)
+			);
+		}
+
 		let mut code = contract.build();
 
 		// Inject stack height metering
 		if def.inject_stack_metering {
 			code = inject_limiter(
 				code,
-				Contracts::<T>::current_schedule().limits.stack_height
+				<CurrentSchedule<T>>::get().limits.stack_height
 			)
 			.unwrap();
 		}
@@ -235,10 +248,11 @@ where
 		ModuleDefinition::default().into()
 	}
 
-	/// Same as `dummy` but with maximum sized linear memory.
-	pub fn dummy_with_mem() -> Self {
+	/// Same as `dummy` but with maximum sized linear memory and a dummy section of specified size.
+	pub fn dummy_with_bytes(dummy_bytes: u32) -> Self {
 		ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
+			dummy_section: dummy_bytes,
 			.. Default::default()
 		}
 		.into()
@@ -489,5 +503,5 @@ where
 	T: Config,
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
-	Contracts::<T>::current_schedule().limits.memory_pages
+	<CurrentSchedule<T>>::get().limits.memory_pages
 }

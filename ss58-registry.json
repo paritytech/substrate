@@ -60,9 +60,9 @@
 			"network": "plasm",
 			"displayName": "Plasm Network",
 			"symbols": ["PLM"],
-			"decimals": null,
+			"decimals": [15],
 			"standardAccount": "*25519",
-			"website": null
+			"website": "https://plasmnet.io"
 		},
 		{
 			"prefix": 6,
@@ -443,6 +443,33 @@
 			"website": null
 		},
 		{
+			"prefix": 48,
+			"network": "neatcoin",
+			"displayName": "Neatcoin Mainnet",
+			"symbols": ["NEAT"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://neatcoin.org"
+		},
+		{
+			"prefix": 63,
+			"network": "hydradx",
+			"displayName": "HydraDX",
+			"symbols": ["HDX"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://hydradx.io"
+		},
+		{
+			"prefix": 65,
+			"network": "aventus",
+			"displayName": "AvN Mainnet",
+			"symbols": ["AVT"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://aventus.io"
+		},
+		{
 			"prefix": 66,
 			"network": "crust",
 			"displayName": "Crust Network",
@@ -459,6 +486,14 @@
 			"decimals": [18],
 			"standardAccount": "*25519",
 			"website": "https://edgewa.re"
+    }, {
+			"prefix": 252,
+			"network": "social-network",
+			"displayName": "Social Network",
+			"symbols": ["NET"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://social.network"
 		}
 	]
 }

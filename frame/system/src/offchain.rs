@@ -38,10 +38,10 @@
 //!
 //! To be able to use signing, the following trait should be implemented:
 //!
-//! - [`AppCrypto`](./trait.AppCrypto.html): where an application-specific key
-//!   is defined and can be used by this module's helpers for signing.
-//! - [`CreateSignedTransaction`](./trait.CreateSignedTransaction.html): where
-//!   the manner in which the transaction is constructed is defined.
+//! - [`AppCrypto`](./trait.AppCrypto.html): where an application-specific key is defined and can be
+//!   used by this module's helpers for signing.
+//! - [`CreateSignedTransaction`](./trait.CreateSignedTransaction.html): where the manner in which
+//!   the transaction is constructed is defined.
 //!
 //! #### Submit an unsigned transaction with a signed payload
 //!
@@ -53,7 +53,6 @@
 //! #### Submit a signed transaction
 //!
 //! [`Signer`](./struct.Signer.html) can be used to sign/verify payloads
-//!
 
 #![warn(missing_docs)]
 
@@ -63,7 +62,7 @@ use sp_std::convert::{TryInto, TryFrom};
 use sp_std::prelude::{Box, Vec};
 use sp_runtime::app_crypto::RuntimeAppPublic;
 use sp_runtime::traits::{Extrinsic as ExtrinsicT, IdentifyAccount, One};
-use frame_support::{debug, RuntimeDebug};
+use frame_support::RuntimeDebug;
 
 /// Marker struct used to flag using all supported keys to sign a payload.
 pub struct ForAll {}
@@ -473,7 +472,7 @@ pub trait SendTransactionTypes<LocalCall> {
 	/// The runtime's call type.
 	///
 	/// This has additional bound to be able to be created from pallet-local `Call` types.
-	type OverarchingCall: From<LocalCall>;
+	type OverarchingCall: From<LocalCall> + codec::Encode;
 }
 
 /// Create signed transaction.
@@ -550,8 +549,8 @@ pub trait SendSignedTransaction<
 		call: LocalCall,
 	) -> Option<Result<(), ()>> {
 		let mut account_data = crate::Account::<T>::get(&account.id);
-		debug::native::debug!(
-			target: "offchain",
+		log::debug!(
+			target: "runtime::offchain",
 			"Creating signed transaction from account: {:?} (nonce: {:?})",
 			account.id,
 			account_data.nonce,

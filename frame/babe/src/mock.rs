@@ -27,7 +27,7 @@ use sp_runtime::{
 };
 use frame_system::InitKind;
 use frame_support::{
-	parameter_types, StorageValue,
+	parameter_types,
 	traits::{KeyOwnerProofSystem, OnInitialize},
 	weights::Weight,
 };
@@ -37,6 +37,7 @@ use sp_consensus_babe::{AuthorityId, AuthorityPair, Slot};
 use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
 use sp_staking::SessionIndex;
 use pallet_staking::EraIndex;
+use frame_election_provider_support::onchain;
 use pallet_session::historical as pallet_session_historical;
 
 type DummyValidatorId = u64;
@@ -50,21 +51,19 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
-		Historical: pallet_session_historical::{Module},
-		Offences: pallet_offences::{Module, Call, Storage, Event},
-		Babe: pallet_babe::{Module, Call, Storage, Config, Inherent, ValidateUnsigned},
-		Staking: pallet_staking::{Module, Call, Storage, Config<T>, Event<T>},
-		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
-		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Historical: pallet_session_historical::{Pallet},
+		Offences: pallet_offences::{Pallet, Call, Storage, Event},
+		Babe: pallet_babe::{Pallet, Call, Storage, Config, ValidateUnsigned},
+		Staking: pallet_staking::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
+		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
 	}
 );
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const EpochDuration: u64 = 3;
-	pub const ExpectedBlockTime: u64 = 1;
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(16);
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1024);
@@ -93,6 +92,7 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 
 impl<C> frame_system::offchain::SendTransactionTypes<C> for Test
@@ -105,7 +105,7 @@ where
 
 impl_opaque_keys! {
 	pub struct MockSessionKeys {
-		pub babe_authority: super::Module<Test>,
+		pub babe_authority: super::Pallet<Test>,
 	}
 }
 
@@ -185,7 +185,16 @@ parameter_types! {
 	pub const StakingUnsignedPriority: u64 = u64::max_value() / 2;
 }
 
+impl onchain::Config for Test {
+	type AccountId = <Self as frame_system::Config>::AccountId;
+	type BlockNumber = <Self as frame_system::Config>::BlockNumber;
+	type BlockWeights = ();
+	type Accuracy = Perbill;
+	type DataProvider = Staking;
+}
+
 impl pallet_staking::Config for Test {
+	const MAX_NOMINATIONS: u32 = 16;
 	type RewardRemainder = ();
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type Event = Event;
@@ -197,16 +206,11 @@ impl pallet_staking::Config for Test {
 	type SlashDeferDuration = SlashDeferDuration;
 	type SlashCancelOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type SessionInterface = Self;
-	type UnixTime = pallet_timestamp::Module<Test>;
-	type RewardCurve = RewardCurve;
+	type UnixTime = pallet_timestamp::Pallet<Test>;
+	type EraPayout = pallet_staking::ConvertCurve<RewardCurve>;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type NextNewSession = Session;
-	type ElectionLookahead = ElectionLookahead;
-	type Call = Call;
-	type UnsignedPriority = StakingUnsignedPriority;
-	type MaxIterations = ();
-	type MinSolutionScoreBump = ();
-	type OffchainSolutionWeightLimit = ();
+	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type WeightInfo = ();
 }
 
@@ -220,6 +224,13 @@ impl pallet_offences::Config for Test {
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
 	type WeightSoftLimit = OffencesWeightSoftLimit;
+}
+
+parameter_types! {
+	pub const EpochDuration: u64 = 3;
+	pub const ExpectedBlockTime: u64 = 1;
+	pub const ReportLongevity: u64 =
+		BondingDuration::get() as u64 * SessionsPerEra::get() as u64 * EpochDuration::get();
 }
 
 impl Config for Test {
@@ -237,14 +248,16 @@ impl Config for Test {
 		AuthorityId,
 	)>>::IdentificationTuple;
 
-	type HandleEquivocation = super::EquivocationHandler<Self::KeyOwnerIdentification, Offences>;
+	type HandleEquivocation =
+		super::EquivocationHandler<Self::KeyOwnerIdentification, Offences, ReportLongevity>;
+
 	type WeightInfo = ();
 }
 
 pub fn go_to_block(n: u64, s: u64) {
 	use frame_support::traits::OnFinalize;
 
-	System::on_finalize(System::block_number());
+	Babe::on_finalize(System::block_number());
 	Session::on_finalize(System::block_number());
 	Staking::on_finalize(System::block_number());
 
@@ -258,14 +271,8 @@ pub fn go_to_block(n: u64, s: u64) {
 	let pre_digest = make_secondary_plain_pre_digest(0, s.into());
 
 	System::initialize(&n, &parent_hash, &pre_digest, InitKind::Full);
-	System::set_block_number(n);
-	Timestamp::set_timestamp(n);
 
-	if s > 1 {
-		CurrentSlot::put(Slot::from(s));
-	}
-
-	System::on_initialize(n);
+	Babe::on_initialize(n);
 	Session::on_initialize(n);
 	Staking::on_initialize(n);
 }
@@ -440,7 +447,7 @@ pub fn generate_equivocation_proof(
 	use sp_consensus_babe::digests::CompatibleDigestItem;
 
 	let current_block = System::block_number();
-	let current_slot = CurrentSlot::get();
+	let current_slot = CurrentSlot::<Test>::get();
 
 	let make_header = || {
 		let parent_hash = System::parent_hash();

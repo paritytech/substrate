@@ -23,8 +23,7 @@ mod block_import;
 mod sync;
 
 use std::{
-	borrow::Cow, collections::HashMap, pin::Pin, sync::Arc, marker::PhantomData,
-	task::{Poll, Context as FutureContext}
+	borrow::Cow, collections::HashMap, pin::Pin, sync::Arc, task::{Poll, Context as FutureContext}
 };
 
 use libp2p::build_multiaddr;
@@ -63,8 +62,8 @@ use sp_core::H256;
 use sc_network::config::ProtocolConfig;
 use sp_runtime::generic::{BlockId, OpaqueDigestItemId};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use sp_runtime::Justification;
-use substrate_test_runtime_client::{self, AccountKeyring};
+use sp_runtime::{Justification, Justifications};
+use substrate_test_runtime_client::AccountKeyring;
 use sc_service::client::Client;
 pub use sc_network::config::EmptyTransactionPool;
 pub use substrate_test_runtime_client::runtime::{Block, Extrinsic, Hash, Transfer};
@@ -104,12 +103,13 @@ impl PassThroughVerifier {
 }
 
 /// This `Verifier` accepts all data as valid.
+#[async_trait::async_trait]
 impl<B: BlockT> Verifier<B> for PassThroughVerifier {
-	fn verify(
+	async fn verify(
 		&mut self,
 		origin: BlockOrigin,
 		header: B::Header,
-		justification: Option<Justification>,
+		justifications: Option<Justifications>,
 		body: Option<Vec<B::Extrinsic>>
 	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		let maybe_keys = header.digest()
@@ -120,7 +120,7 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 		let mut import = BlockImportParams::new(origin, header);
 		import.body = body;
 		import.finalized = self.finalized;
-		import.justification = justification;
+		import.justifications = justifications;
 		import.fork_choice = Some(self.fork_choice.clone());
 
 		Ok((import, maybe_keys))
@@ -154,13 +154,8 @@ impl PeersClient {
 		}
 	}
 
-	pub fn as_block_import<Transaction>(&self) -> BlockImportAdapter<Transaction> {
-		match *self {
-			PeersClient::Full(ref client, ref _backend) =>
-				BlockImportAdapter::new_full(client.clone()),
-			PeersClient::Light(ref client, ref _backend) =>
-				BlockImportAdapter::Light(Arc::new(Mutex::new(client.clone())), PhantomData),
-		}
+	pub fn as_block_import(&self) -> BlockImportAdapter<Self> {
+		BlockImportAdapter::new(self.clone())
 	}
 
 	pub fn get_aux(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
@@ -184,10 +179,10 @@ impl PeersClient {
 		}
 	}
 
-	pub fn justification(&self, block: &BlockId<Block>) -> ClientResult<Option<Justification>> {
+	pub fn justifications(&self, block: &BlockId<Block>) -> ClientResult<Option<Justifications>> {
 		match *self {
-			PeersClient::Full(ref client, ref _backend) => client.justification(block),
-			PeersClient::Light(ref client, ref _backend) => client.justification(block),
+			PeersClient::Full(ref client, ref _backend) => client.justifications(block),
+			PeersClient::Light(ref client, ref _backend) => client.justifications(block),
 		}
 	}
 
@@ -218,7 +213,36 @@ impl PeersClient {
 	}
 }
 
-pub struct Peer<D> {
+#[async_trait::async_trait]
+impl BlockImport<Block> for PeersClient {
+	type Error = ConsensusError;
+	type Transaction = ();
+
+	async fn check_block(
+		&mut self,
+		block: BlockCheckParams<Block>,
+	) -> Result<ImportResult, Self::Error> {
+		match self {
+			PeersClient::Full(client, _) => client.check_block(block).await,
+			PeersClient::Light(client, _) => client.check_block(block).await,
+		}
+	}
+
+	async fn import_block(
+		&mut self,
+		block: BlockImportParams<Block, ()>,
+		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
+	) -> Result<ImportResult, Self::Error> {
+		match self {
+			PeersClient::Full(client, _) =>
+				client.import_block(block.convert_transaction(), cache).await,
+			PeersClient::Light(client, _) =>
+				client.import_block(block.convert_transaction(), cache).await,
+		}
+	}
+}
+
+pub struct Peer<D, BlockImport> {
 	pub data: D,
 	client: PeersClient,
 	/// We keep a copy of the verifier so that we can invoke it for locally-generated blocks,
@@ -226,7 +250,7 @@ pub struct Peer<D> {
 	verifier: VerifierAdapter<Block>,
 	/// We keep a copy of the block_import so that we can invoke it for locally-generated blocks,
 	/// instead of going through the import queue.
-	block_import: BlockImportAdapter<()>,
+	block_import: BlockImportAdapter<BlockImport>,
 	select_chain: Option<LongestChain<substrate_test_runtime_client::Backend, Block>>,
 	backend: Option<Arc<substrate_test_runtime_client::Backend>>,
 	network: NetworkWorker<Block, <Block as BlockT>::Hash>,
@@ -235,7 +259,10 @@ pub struct Peer<D> {
 	listen_addr: Multiaddr,
 }
 
-impl<D> Peer<D> {
+impl<D, B> Peer<D, B> where
+	B: BlockImport<Block, Error = ConsensusError> + Send + Sync,
+	B::Transaction: Send,
+{
 	/// Get this peer ID.
 	pub fn id(&self) -> PeerId {
 		self.network.service().local_peer_id().clone()
@@ -277,13 +304,24 @@ impl<D> Peer<D> {
 	}
 
 	/// Request explicit fork sync.
-	pub fn set_sync_fork_request(&self, peers: Vec<PeerId>, hash: <Block as BlockT>::Hash, number: NumberFor<Block>) {
+	pub fn set_sync_fork_request(
+		&self,
+		peers: Vec<PeerId>,
+		hash: <Block as BlockT>::Hash,
+		number: NumberFor<Block>,
+	) {
 		self.network.service().set_sync_fork_request(peers, hash, number);
 	}
 
 	/// Add blocks to the peer -- edit the block before adding
-	pub fn generate_blocks<F>(&mut self, count: usize, origin: BlockOrigin, edit_block: F) -> H256
-		where F: FnMut(BlockBuilder<Block, PeersFullClient, substrate_test_runtime_client::Backend>) -> Block
+	pub fn generate_blocks<F>(
+		&mut self,
+		count: usize,
+		origin: BlockOrigin,
+		edit_block: F,
+	) -> H256
+		where
+			F: FnMut(BlockBuilder<Block, PeersFullClient, substrate_test_runtime_client::Backend>) -> Block
 	{
 		let best_hash = self.client.info().best_hash;
 		self.generate_blocks_at(BlockId::Hash(best_hash), count, origin, edit_block, false, true, true)
@@ -320,19 +358,21 @@ impl<D> Peer<D> {
 				block.header.parent_hash,
 			);
 			let header = block.header.clone();
-			let (import_block, cache) = self.verifier.verify(
+			let (import_block, cache) = futures::executor::block_on(self.verifier.verify(
 				origin,
 				header.clone(),
 				None,
 				if headers_only { None } else { Some(block.extrinsics) },
-			).unwrap();
+			)).unwrap();
 			let cache = if let Some(cache) = cache {
 				cache.into_iter().collect()
 			} else {
 				Default::default()
 			};
 
-			self.block_import.import_block(import_block, cache).expect("block_import failed");
+			futures::executor::block_on(
+				self.block_import.import_block(import_block, cache)
+			).expect("block_import failed");
 			if announce_block {
 				self.network.service().announce_block(hash, None);
 			}
@@ -449,6 +489,11 @@ impl<D> Peer<D> {
 		&self.network.service()
 	}
 
+	/// Get a reference to the network worker.
+	pub fn network(&self) -> &NetworkWorker<Block, <Block as BlockT>::Hash> {
+		&self.network
+	}
+
 	/// Test helper to compare the blockchain state of multiple (networked)
 	/// clients.
 	pub fn blockchain_canon_equals(&self, other: &Self) -> bool {
@@ -478,120 +523,107 @@ impl<D> Peer<D> {
 	}
 }
 
+pub trait BlockImportAdapterFull:
+	BlockImport<
+		Block,
+		Transaction = TransactionFor<substrate_test_runtime_client::Backend, Block>,
+		Error = ConsensusError,
+	> +
+	Send +
+	Sync +
+	Clone
+{}
+
+impl<T> BlockImportAdapterFull for T where
+	T: BlockImport<
+		Block,
+		Transaction = TransactionFor<substrate_test_runtime_client::Backend, Block>,
+		Error = ConsensusError,
+	> +
+	Send +
+	Sync +
+	Clone
+{}
+
 /// Implements `BlockImport` for any `Transaction`. Internally the transaction is
 /// "converted", aka the field is set to `None`.
 ///
 /// This is required as the `TestNetFactory` trait does not distinguish between
 /// full and light nodes.
-pub enum BlockImportAdapter<Transaction> {
-	Full(
-		Arc<Mutex<dyn BlockImport<
-			Block,
-			Transaction = TransactionFor<substrate_test_runtime_client::Backend, Block>,
-			Error = ConsensusError
-		> + Send>>,
-		PhantomData<Transaction>,
-	),
-	Light(
-		Arc<Mutex<dyn BlockImport<
-			Block,
-			Transaction = TransactionFor<substrate_test_runtime_client::LightBackend, Block>,
-			Error = ConsensusError
-		> + Send>>,
-		PhantomData<Transaction>,
-	),
+#[derive(Clone)]
+pub struct BlockImportAdapter<I> {
+	inner: I,
 }
 
-impl<Transaction> BlockImportAdapter<Transaction> {
+impl<I> BlockImportAdapter<I> {
 	/// Create a new instance of `Self::Full`.
-	pub fn new_full(
-		full: impl BlockImport<
-			Block,
-			Transaction = TransactionFor<substrate_test_runtime_client::Backend, Block>,
-			Error = ConsensusError
-		>
-		+ 'static
-		+ Send
-	) -> Self {
-		Self::Full(Arc::new(Mutex::new(full)), PhantomData)
-	}
-
-	/// Create a new instance of `Self::Light`.
-	pub fn new_light(
-		light: impl BlockImport<
-			Block,
-			Transaction = TransactionFor<substrate_test_runtime_client::LightBackend, Block>,
-			Error = ConsensusError
-		>
-		+ 'static
-		+ Send
-	) -> Self {
-		Self::Light(Arc::new(Mutex::new(light)), PhantomData)
-	}
-}
-
-impl<Transaction> Clone for BlockImportAdapter<Transaction> {
-	fn clone(&self) -> Self {
-		match self {
-			Self::Full(full, _) => Self::Full(full.clone(), PhantomData),
-			Self::Light(light, _) => Self::Light(light.clone(), PhantomData),
+	pub fn new(inner: I) -> Self {
+		Self {
+			inner,
 		}
 	}
 }
 
-impl<Transaction> BlockImport<Block> for BlockImportAdapter<Transaction> {
+#[async_trait::async_trait]
+impl<I> BlockImport<Block> for BlockImportAdapter<I> where
+	I: BlockImport<Block, Error = ConsensusError> + Send + Sync,
+	I::Transaction: Send,
+{
 	type Error = ConsensusError;
-	type Transaction = Transaction;
+	type Transaction = ();
 
-	fn check_block(
+	async fn check_block(
 		&mut self,
 		block: BlockCheckParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
-		match self {
-			Self::Full(full, _) => full.lock().check_block(block),
-			Self::Light(light, _) => light.lock().check_block(block),
-		}
+		self.inner.check_block(block).await
 	}
 
-	fn import_block(
+	async fn import_block(
 		&mut self,
-		block: BlockImportParams<Block, Transaction>,
+		block: BlockImportParams<Block, ()>,
 		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		match self {
-			Self::Full(full, _) => full.lock().import_block(block.convert_transaction(), cache),
-			Self::Light(light, _) => light.lock().import_block(block.convert_transaction(), cache),
-		}
+		self.inner.import_block(block.convert_transaction(), cache).await
 	}
 }
 
-/// Implements `Verifier` on an `Arc<Mutex<impl Verifier>>`. Used internally.
-#[derive(Clone)]
+/// Implements `Verifier` and keeps track of failed verifications.
 struct VerifierAdapter<B: BlockT> {
-	verifier: Arc<Mutex<Box<dyn Verifier<B>>>>,
+	verifier: Arc<futures::lock::Mutex<Box<dyn Verifier<B>>>>,
 	failed_verifications: Arc<Mutex<HashMap<B::Hash, String>>>,
 }
 
+#[async_trait::async_trait]
 impl<B: BlockT> Verifier<B> for VerifierAdapter<B> {
-	fn verify(
+	async fn verify(
 		&mut self,
 		origin: BlockOrigin,
 		header: B::Header,
-		justification: Option<Justification>,
+		justifications: Option<Justifications>,
 		body: Option<Vec<B::Extrinsic>>
 	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		let hash = header.hash();
-		self.verifier.lock().verify(origin, header, justification, body).map_err(|e| {
+		self.verifier.lock().await.verify(origin, header, justifications, body).await.map_err(|e| {
 			self.failed_verifications.lock().insert(hash, e.clone());
 			e
 		})
 	}
 }
 
+impl<B: BlockT> Clone for VerifierAdapter<B> {
+	fn clone(&self) -> Self {
+		Self {
+			verifier: self.verifier.clone(),
+			failed_verifications: self.failed_verifications.clone(),
+		}
+	}
+}
+
 impl<B: BlockT> VerifierAdapter<B> {
-	fn new(verifier: Arc<Mutex<Box<dyn Verifier<B>>>>) -> VerifierAdapter<B> {
+	fn new(verifier: impl Verifier<B> + 'static) -> Self {
 		VerifierAdapter {
-			verifier,
+			verifier: Arc::new(futures::lock::Mutex::new(Box::new(verifier))),
 			failed_verifications: Default::default(),
 		}
 	}
@@ -610,10 +642,13 @@ pub struct FullPeerConfig {
 	///
 	/// If `None`, it will be connected to all other peers.
 	pub connect_to_peers: Option<Vec<usize>>,
+	/// Whether the full peer should have the authority role.
+	pub is_authority: bool,
 }
 
-pub trait TestNetFactory: Sized {
+pub trait TestNetFactory: Sized where <Self::BlockImport as BlockImport<Block>>::Transaction: Send {
 	type Verifier: 'static + Verifier<Block>;
+	type BlockImport: BlockImport<Block, Error = ConsensusError> + Clone + Send + Sync + 'static;
 	type PeerData: Default;
 
 	/// These two need to be implemented!
@@ -626,23 +661,20 @@ pub trait TestNetFactory: Sized {
 	) -> Self::Verifier;
 
 	/// Get reference to peer.
-	fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData>;
-	fn peers(&self) -> &Vec<Peer<Self::PeerData>>;
-	fn mut_peers<F: FnOnce(&mut Vec<Peer<Self::PeerData>>)>(
+	fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData, Self::BlockImport>;
+	fn peers(&self) -> &Vec<Peer<Self::PeerData, Self::BlockImport>>;
+	fn mut_peers<F: FnOnce(&mut Vec<Peer<Self::PeerData, Self::BlockImport>>)>(
 		&mut self,
 		closure: F,
 	);
 
 	/// Get custom block import handle for fresh client, along with peer data.
-	fn make_block_import<Transaction>(&self, client: PeersClient)
+	fn make_block_import(&self, client: PeersClient)
 		-> (
-			BlockImportAdapter<Transaction>,
+			BlockImportAdapter<Self::BlockImport>,
 			Option<BoxJustificationImport<Block>>,
 			Self::PeerData,
-		)
-	{
-		(client.as_block_import(), None, Default::default())
-	}
+		);
 
 	fn default_config() -> ProtocolConfig {
 		ProtocolConfig::default()
@@ -686,7 +718,7 @@ pub trait TestNetFactory: Sized {
 			&Default::default(),
 			&data,
 		);
-		let verifier = VerifierAdapter::new(Arc::new(Mutex::new(Box::new(verifier) as Box<_>)));
+		let verifier = VerifierAdapter::new(verifier);
 
 		let import_queue = Box::new(BasicQueue::new(
 			verifier.clone(),
@@ -727,7 +759,11 @@ pub trait TestNetFactory: Sized {
 		let protocol_id = ProtocolId::from("test-protocol-name");
 
 		let block_request_protocol_config = {
-			let (handler, protocol_config) = BlockRequestHandler::new(&protocol_id, client.clone());
+			let (handler, protocol_config) = BlockRequestHandler::new(
+				&protocol_id,
+				client.clone(),
+				50,
+			);
 			self.spawn_task(handler.run().boxed());
 			protocol_config
 		};
@@ -739,8 +775,9 @@ pub trait TestNetFactory: Sized {
 		};
 
 		let network = NetworkWorker::new(sc_network::config::Params {
-			role: Role::Full,
+			role: if config.is_authority { Role::Authority } else { Role::Full },
 			executor: None,
+			transactions_handler_executor: Box::new(|task| { async_std::task::spawn(task); }),
 			network_config,
 			chain: client.clone(),
 			on_demand: None,
@@ -769,7 +806,7 @@ pub trait TestNetFactory: Sized {
 
 			peers.push(Peer {
 				data,
-				client: PeersClient::Full(client, backend.clone()),
+				client: PeersClient::Full(client.clone(), backend.clone()),
 				select_chain: Some(longest_chain),
 				backend: Some(backend),
 				imported_blocks_stream,
@@ -797,7 +834,7 @@ pub trait TestNetFactory: Sized {
 			&Default::default(),
 			&data,
 		);
-		let verifier = VerifierAdapter::new(Arc::new(Mutex::new(Box::new(verifier) as Box<_>)));
+		let verifier = VerifierAdapter::new(verifier);
 
 		let import_queue = Box::new(BasicQueue::new(
 			verifier.clone(),
@@ -831,6 +868,7 @@ pub trait TestNetFactory: Sized {
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: Role::Light,
 			executor: None,
+			transactions_handler_executor: Box::new(|task| { async_std::task::spawn(task); }),
 			network_config,
 			chain: client.clone(),
 			on_demand: None,
@@ -952,12 +990,12 @@ pub trait TestNetFactory: Sized {
 	/// Polls the testnet. Processes all the pending actions.
 	fn poll(&mut self, cx: &mut FutureContext) {
 		self.mut_peers(|peers| {
-			for peer in peers {
-				trace!(target: "sync", "-- Polling {}", peer.id());
+			for (i, peer) in peers.into_iter().enumerate() {
+				trace!(target: "sync", "-- Polling {}: {}", i, peer.id());
 				if let Poll::Ready(()) = peer.network.poll_unpin(cx) {
 					panic!("NetworkWorker has terminated unexpectedly.")
 				}
-				trace!(target: "sync", "-- Polling complete {}", peer.id());
+				trace!(target: "sync", "-- Polling complete {}: {}", i, peer.id());
 
 				// We poll `imported_blocks_stream`.
 				while let Poll::Ready(Some(notification)) = peer.imported_blocks_stream.as_mut().poll_next(cx) {
@@ -978,7 +1016,7 @@ pub trait TestNetFactory: Sized {
 }
 
 pub struct TestNet {
-	peers: Vec<Peer<()>>,
+	peers: Vec<Peer<(), PeersClient>>,
 	fork_choice: ForkChoiceStrategy,
 }
 
@@ -995,6 +1033,7 @@ impl TestNet {
 impl TestNetFactory for TestNet {
 	type Verifier = PassThroughVerifier;
 	type PeerData = ();
+	type BlockImport = PeersClient;
 
 	/// Create new test network with peers and given config.
 	fn from_config(_config: &ProtocolConfig) -> Self {
@@ -1010,15 +1049,25 @@ impl TestNetFactory for TestNet {
 		PassThroughVerifier::new_with_fork_choice(false, self.fork_choice.clone())
 	}
 
-	fn peer(&mut self, i: usize) -> &mut Peer<()> {
+	fn make_block_import(&self, client: PeersClient)
+		-> (
+			BlockImportAdapter<Self::BlockImport>,
+			Option<BoxJustificationImport<Block>>,
+			Self::PeerData,
+		)
+	{
+		(client.as_block_import(), None, ())
+	}
+
+	fn peer(&mut self, i: usize) -> &mut Peer<(), Self::BlockImport> {
 		&mut self.peers[i]
 	}
 
-	fn peers(&self) -> &Vec<Peer<()>> {
+	fn peers(&self) -> &Vec<Peer<(), Self::BlockImport>> {
 		&self.peers
 	}
 
-	fn mut_peers<F: FnOnce(&mut Vec<Peer<()>>)>(&mut self, closure: F) {
+	fn mut_peers<F: FnOnce(&mut Vec<Peer<(), Self::BlockImport>>)>(&mut self, closure: F) {
 		closure(&mut self.peers);
 	}
 }
@@ -1044,6 +1093,7 @@ pub struct JustificationTestNet(TestNet);
 impl TestNetFactory for JustificationTestNet {
 	type Verifier = PassThroughVerifier;
 	type PeerData = ();
+	type BlockImport = PeersClient;
 
 	fn from_config(config: &ProtocolConfig) -> Self {
 		JustificationTestNet(TestNet::from_config(config))
@@ -1053,23 +1103,23 @@ impl TestNetFactory for JustificationTestNet {
 		self.0.make_verifier(client, config, peer_data)
 	}
 
-	fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData> {
+	fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData, Self::BlockImport> {
 		self.0.peer(i)
 	}
 
-	fn peers(&self) -> &Vec<Peer<Self::PeerData>> {
+	fn peers(&self) -> &Vec<Peer<Self::PeerData, Self::BlockImport>> {
 		self.0.peers()
 	}
 
 	fn mut_peers<F: FnOnce(
-		&mut Vec<Peer<Self::PeerData>>,
+		&mut Vec<Peer<Self::PeerData, Self::BlockImport>>,
 	)>(&mut self, closure: F) {
 		self.0.mut_peers(closure)
 	}
 
-	fn make_block_import<Transaction>(&self, client: PeersClient)
+	fn make_block_import(&self, client: PeersClient)
 		-> (
-			BlockImportAdapter<Transaction>,
+			BlockImportAdapter<Self::BlockImport>,
 			Option<BoxJustificationImport<Block>>,
 			Self::PeerData,
 		)

@@ -424,7 +424,7 @@ pub trait ProvideInherent {
 	/// - `Err(_)` indicates that this function failed and further operations should be aborted.
 	///
 	/// CAUTION: This check has a bug when used in pallets that also provide unsigned transactions.
-	/// See https://github.com/paritytech/substrate/issues/6243 for details.
+	/// See <https://github.com/paritytech/substrate/issues/6243> for details.
 	fn is_inherent_required(_: &InherentData) -> Result<Option<Self::Error>, Self::Error> { Ok(None) }
 
 	/// Check whether the given inherent is valid. Checking the inherent is optional and can be

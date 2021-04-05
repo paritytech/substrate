@@ -23,7 +23,7 @@
 use std::{pin::Pin, time, sync::Arc};
 use sc_client_api::backend;
 use codec::Decode;
-use sp_consensus::{evaluation, Proposal, RecordProof};
+use sp_consensus::{evaluation, Proposal, ProofRecording, DisableProofRecording, EnableProofRecording};
 use sp_core::traits::SpawnNamed;
 use sp_inherents::InherentData;
 use log::{error, info, debug, trace, warn};
@@ -32,7 +32,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, Hash as HashT, Header as HeaderT, DigestFor, BlakeTwo256},
 };
 use sp_transaction_pool::{TransactionPool, InPoolTransaction};
-use sc_telemetry::{telemetry, CONSENSUS_INFO};
+use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_INFO};
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sp_api::{ProvideRuntimeApi, ApiExt};
 use futures::{future, future::{Future, FutureExt}, channel::oneshot, select};
@@ -52,7 +52,7 @@ use sc_proposer_metrics::MetricsLink as PrometheusMetrics;
 pub const DEFAULT_MAX_BLOCK_SIZE: usize = 4 * 1024 * 1024 + 512;
 
 /// Proposer factory.
-pub struct ProposerFactory<A, B, C> {
+pub struct ProposerFactory<A, B, C, PR> {
 	spawn_handle: Box<dyn SpawnNamed>,
 	/// The client instance.
 	client: Arc<C>,
@@ -60,28 +60,59 @@ pub struct ProposerFactory<A, B, C> {
 	transaction_pool: Arc<A>,
 	/// Prometheus Link,
 	metrics: PrometheusMetrics,
-	/// phantom member to pin the `Backend` type.
-	_phantom: PhantomData<B>,
 	max_block_size: usize,
+	telemetry: Option<TelemetryHandle>,
+	/// phantom member to pin the `Backend`/`ProofRecording` type.
+	_phantom: PhantomData<(B, PR)>,
 }
 
-impl<A, B, C> ProposerFactory<A, B, C> {
+impl<A, B, C> ProposerFactory<A, B, C, DisableProofRecording> {
+	/// Create a new proposer factory.
+	///
+	/// Proof recording will be disabled when using proposers built by this instance to build blocks.
 	pub fn new(
 		spawn_handle: impl SpawnNamed + 'static,
 		client: Arc<C>,
 		transaction_pool: Arc<A>,
 		prometheus: Option<&PrometheusRegistry>,
+		telemetry: Option<TelemetryHandle>,
+	) -> Self {
+		ProposerFactory {
+			spawn_handle: Box::new(spawn_handle),
+			transaction_pool,
+			metrics: PrometheusMetrics::new(prometheus),
+			max_block_size: DEFAULT_MAX_BLOCK_SIZE,
+			telemetry,
+			client,
+			_phantom: PhantomData,
+		}
+	}
+}
+
+impl<A, B, C> ProposerFactory<A, B, C, EnableProofRecording> {
+	/// Create a new proposer factory with proof recording enabled.
+	///
+	/// Each proposer created by this instance will record a proof while building a block.
+	pub fn with_proof_recording(
+		spawn_handle: impl SpawnNamed + 'static,
+		client: Arc<C>,
+		transaction_pool: Arc<A>,
+		prometheus: Option<&PrometheusRegistry>,
+		telemetry: Option<TelemetryHandle>,
 	) -> Self {
 		ProposerFactory {
 			spawn_handle: Box::new(spawn_handle),
 			client,
 			transaction_pool,
 			metrics: PrometheusMetrics::new(prometheus),
-			_phantom: PhantomData,
 			max_block_size: DEFAULT_MAX_BLOCK_SIZE,
+			telemetry,
+			_phantom: PhantomData,
 		}
 	}
+}
 
+impl<A, B, C, PR> ProposerFactory<A, B, C, PR> {
 	/// Set the maximum block size in bytes.
 	///
 	/// The default value for the maximum block size is:
@@ -91,7 +122,7 @@ impl<A, B, C> ProposerFactory<A, B, C> {
 	}
 }
 
-impl<B, Block, C, A> ProposerFactory<A, B, C>
+impl<B, Block, C, A, PR> ProposerFactory<A, B, C, PR>
 	where
 		A: TransactionPool<Block = Block> + 'static,
 		B: backend::Backend<Block> + Send + Sync + 'static,
@@ -99,20 +130,20 @@ impl<B, Block, C, A> ProposerFactory<A, B, C>
 		C: BlockBuilderProvider<B, Block, C> + HeaderBackend<Block> + ProvideRuntimeApi<Block>
 			+ Send + Sync + 'static,
 		C::Api: ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
-			+ BlockBuilderApi<Block, Error = sp_blockchain::Error>,
+			+ BlockBuilderApi<Block>,
 {
-	pub fn init_with_now(
+	fn init_with_now(
 		&mut self,
 		parent_header: &<Block as BlockT>::Header,
 		now: Box<dyn Fn() -> time::Instant + Send + Sync>,
-	) -> Proposer<B, Block, C, A> {
+	) -> Proposer<B, Block, C, A, PR> {
 		let parent_hash = parent_header.hash();
 
 		let id = BlockId::hash(parent_hash);
 
 		info!("🙌 Starting consensus session on top of parent {:?}", parent_hash);
 
-		let proposer = Proposer {
+		let proposer = Proposer::<_, _, _, _, PR> {
 			spawn_handle: self.spawn_handle.clone(),
 			client: self.client.clone(),
 			parent_hash,
@@ -121,16 +152,17 @@ impl<B, Block, C, A> ProposerFactory<A, B, C>
 			transaction_pool: self.transaction_pool.clone(),
 			now,
 			metrics: self.metrics.clone(),
-			_phantom: PhantomData,
 			max_block_size: self.max_block_size,
+			telemetry: self.telemetry.clone(),
+			_phantom: PhantomData,
 		};
 
 		proposer
 	}
 }
 
-impl<A, B, Block, C> sp_consensus::Environment<Block> for
-	ProposerFactory<A, B, C>
+impl<A, B, Block, C, PR> sp_consensus::Environment<Block> for
+	ProposerFactory<A, B, C, PR>
 		where
 			A: TransactionPool<Block = Block> + 'static,
 			B: backend::Backend<Block> + Send + Sync + 'static,
@@ -138,10 +170,11 @@ impl<A, B, Block, C> sp_consensus::Environment<Block> for
 			C: BlockBuilderProvider<B, Block, C> + HeaderBackend<Block> + ProvideRuntimeApi<Block>
 				+ Send + Sync + 'static,
 			C::Api: ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
-				+ BlockBuilderApi<Block, Error = sp_blockchain::Error>,
+				+ BlockBuilderApi<Block>,
+			PR: ProofRecording,
 {
 	type CreateProposer = future::Ready<Result<Self::Proposer, Self::Error>>;
-	type Proposer = Proposer<B, Block, C, A>;
+	type Proposer = Proposer<B, Block, C, A, PR>;
 	type Error = sp_blockchain::Error;
 
 	fn init(
@@ -153,7 +186,7 @@ impl<A, B, Block, C> sp_consensus::Environment<Block> for
 }
 
 /// The proposer logic.
-pub struct Proposer<B, Block: BlockT, C, A: TransactionPool> {
+pub struct Proposer<B, Block: BlockT, C, A: TransactionPool, PR> {
 	spawn_handle: Box<dyn SpawnNamed>,
 	client: Arc<C>,
 	parent_hash: <Block as BlockT>::Hash,
@@ -162,12 +195,13 @@ pub struct Proposer<B, Block: BlockT, C, A: TransactionPool> {
 	transaction_pool: Arc<A>,
 	now: Box<dyn Fn() -> time::Instant + Send + Sync>,
 	metrics: PrometheusMetrics,
-	_phantom: PhantomData<B>,
 	max_block_size: usize,
+	telemetry: Option<TelemetryHandle>,
+	_phantom: PhantomData<(B, PR)>,
 }
 
-impl<A, B, Block, C> sp_consensus::Proposer<Block> for
-	Proposer<B, Block, C, A>
+impl<A, B, Block, C, PR> sp_consensus::Proposer<Block> for
+	Proposer<B, Block, C, A, PR>
 		where
 			A: TransactionPool<Block = Block> + 'static,
 			B: backend::Backend<Block> + Send + Sync + 'static,
@@ -175,20 +209,22 @@ impl<A, B, Block, C> sp_consensus::Proposer<Block> for
 			C: BlockBuilderProvider<B, Block, C> + HeaderBackend<Block> + ProvideRuntimeApi<Block>
 				+ Send + Sync + 'static,
 			C::Api: ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
-				+ BlockBuilderApi<Block, Error = sp_blockchain::Error>,
+				+ BlockBuilderApi<Block>,
+			PR: ProofRecording,
 {
 	type Transaction = backend::TransactionFor<B, Block>;
 	type Proposal = Pin<Box<dyn Future<
-		Output = Result<Proposal<Block, Self::Transaction>, Self::Error>
+		Output = Result<Proposal<Block, Self::Transaction, PR::Proof>, Self::Error>
 	> + Send>>;
 	type Error = sp_blockchain::Error;
+	type ProofRecording = PR;
+	type Proof = PR::Proof;
 
 	fn propose(
 		self,
 		inherent_data: InherentData,
 		inherent_digests: DigestFor<Block>,
 		max_duration: time::Duration,
-		record_proof: RecordProof,
 	) -> Self::Proposal {
 		let (tx, rx) = oneshot::channel();
 		let spawn_handle = self.spawn_handle.clone();
@@ -200,7 +236,6 @@ impl<A, B, Block, C> sp_consensus::Proposer<Block> for
 				inherent_data,
 				inherent_digests,
 				deadline,
-				record_proof,
 			).await;
 			if tx.send(res).is_err() {
 				trace!("Could not send block production result to proposer!");
@@ -213,7 +248,7 @@ impl<A, B, Block, C> sp_consensus::Proposer<Block> for
 	}
 }
 
-impl<A, B, Block, C> Proposer<B, Block, C, A>
+impl<A, B, Block, C, PR> Proposer<B, Block, C, A, PR>
 	where
 		A: TransactionPool<Block = Block>,
 		B: backend::Backend<Block> + Send + Sync + 'static,
@@ -221,15 +256,15 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 		C: BlockBuilderProvider<B, Block, C> + HeaderBackend<Block> + ProvideRuntimeApi<Block>
 			+ Send + Sync + 'static,
 		C::Api: ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
-			+ BlockBuilderApi<Block, Error = sp_blockchain::Error>,
+			+ BlockBuilderApi<Block>,
+		PR: ProofRecording,
 {
 	async fn propose_with(
 		self,
 		inherent_data: InherentData,
 		inherent_digests: DigestFor<Block>,
 		deadline: time::Instant,
-		record_proof: RecordProof,
-	) -> Result<Proposal<Block, backend::TransactionFor<B, Block>>, sp_blockchain::Error> {
+	) -> Result<Proposal<Block, backend::TransactionFor<B, Block>, PR::Proof>, sp_blockchain::Error> {
 		/// If the block is full we will attempt to push at most
 		/// this number of transactions before quitting for real.
 		/// It allows us to increase block utilization.
@@ -238,7 +273,7 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 		let mut block_builder = self.client.new_block_at(
 			&self.parent_id,
 			inherent_digests,
-			record_proof,
+			PR::ENABLED,
 		)?;
 
 		for inherent in block_builder.create_inherents(inherent_data)? {
@@ -343,7 +378,10 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 				.collect::<Vec<_>>()
 				.join(", ")
 		);
-		telemetry!(CONSENSUS_INFO; "prepared_block_for_proposing";
+		telemetry!(
+			self.telemetry;
+			CONSENSUS_INFO;
+			"prepared_block_for_proposing";
 			"number" => ?block.header().number(),
 			"hash" => ?<Block as BlockT>::Hash::from(block.header().hash()),
 		);
@@ -361,6 +399,8 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 			error!("Failed to evaluate authored block: {:?}", err);
 		}
 
+		let proof = PR::into_proof(proof)
+			.map_err(|e| sp_blockchain::Error::Application(Box::new(e)))?;
 		Ok(Proposal { block, proof, storage_changes })
 	}
 }
@@ -380,6 +420,7 @@ mod tests {
 	use sp_blockchain::HeaderBackend;
 	use sp_runtime::traits::NumberFor;
 	use sc_client_api::Backend;
+	use futures::executor::block_on;
 
 	const SOURCE: TransactionSource = TransactionSource::External;
 
@@ -414,11 +455,11 @@ mod tests {
 			client.clone(),
 		);
 
-		futures::executor::block_on(
+		block_on(
 			txpool.submit_at(&BlockId::number(0), SOURCE, vec![extrinsic(0), extrinsic(1)])
 		).unwrap();
 
-		futures::executor::block_on(
+		block_on(
 			txpool.maintain(chain_event(
 				client.header(&BlockId::Number(0u64))
 					.expect("header get error")
@@ -430,6 +471,7 @@ mod tests {
 			spawner.clone(),
 			client.clone(),
 			txpool.clone(),
+			None,
 			None,
 		);
 
@@ -451,8 +493,8 @@ mod tests {
 
 		// when
 		let deadline = time::Duration::from_secs(3);
-		let block = futures::executor::block_on(
-			proposer.propose(Default::default(), Default::default(), deadline, RecordProof::No)
+		let block = block_on(
+			proposer.propose(Default::default(), Default::default(), deadline)
 		).map(|r| r.block).unwrap();
 
 		// then
@@ -478,6 +520,7 @@ mod tests {
 			client.clone(),
 			txpool.clone(),
 			None,
+			None,
 		);
 
 		let cell = Mutex::new((false, time::Instant::now()));
@@ -496,8 +539,8 @@ mod tests {
 		);
 
 		let deadline = time::Duration::from_secs(1);
-		futures::executor::block_on(
-			proposer.propose(Default::default(), Default::default(), deadline, RecordProof::No)
+		block_on(
+			proposer.propose(Default::default(), Default::default(), deadline)
 		).map(|r| r.block).unwrap();
 	}
 
@@ -517,11 +560,11 @@ mod tests {
 		let genesis_hash = client.info().best_hash;
 		let block_id = BlockId::Hash(genesis_hash);
 
-		futures::executor::block_on(
+		block_on(
 			txpool.submit_at(&BlockId::number(0), SOURCE, vec![extrinsic(0)]),
 		).unwrap();
 
-		futures::executor::block_on(
+		block_on(
 			txpool.maintain(chain_event(
 				client.header(&BlockId::Number(0u64))
 					.expect("header get error")
@@ -534,6 +577,7 @@ mod tests {
 			client.clone(),
 			txpool.clone(),
 			None,
+			None,
 		);
 
 		let proposer = proposer_factory.init_with_now(
@@ -542,8 +586,8 @@ mod tests {
 		);
 
 		let deadline = time::Duration::from_secs(9);
-		let proposal = futures::executor::block_on(
-			proposer.propose(Default::default(), Default::default(), deadline, RecordProof::No),
+		let proposal = block_on(
+			proposer.propose(Default::default(), Default::default(), deadline),
 		).unwrap();
 
 		assert_eq!(proposal.block.extrinsics().len(), 1);
@@ -582,7 +626,7 @@ mod tests {
 			client.clone(),
 		);
 
-		futures::executor::block_on(
+		block_on(
 			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
 				extrinsic(0),
 				extrinsic(1),
@@ -609,6 +653,7 @@ mod tests {
 			client.clone(),
 			txpool.clone(),
 			None,
+			None,
 		);
 		let mut propose_block = |
 			client: &TestClient,
@@ -623,8 +668,8 @@ mod tests {
 
 			// when
 			let deadline = time::Duration::from_secs(9);
-			let block = futures::executor::block_on(
-				proposer.propose(Default::default(), Default::default(), deadline, RecordProof::No)
+			let block = block_on(
+				proposer.propose(Default::default(), Default::default(), deadline)
 			).map(|r| r.block).unwrap();
 
 			// then
@@ -635,7 +680,7 @@ mod tests {
 			block
 		};
 
-		futures::executor::block_on(
+		block_on(
 			txpool.maintain(chain_event(
 				client.header(&BlockId::Number(0u64))
 					.expect("header get error")
@@ -645,9 +690,9 @@ mod tests {
 
 		// let's create one block and import it
 		let block = propose_block(&client, 0, 2, 7);
-		client.import(BlockOrigin::Own, block).unwrap();
+		block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
-		futures::executor::block_on(
+		block_on(
 			txpool.maintain(chain_event(
 				client.header(&BlockId::Number(1))
 					.expect("header get error")
@@ -657,6 +702,6 @@ mod tests {
 
 		// now let's make sure that we can still make some progress
 		let block = propose_block(&client, 1, 2, 5);
-		client.import(BlockOrigin::Own, block).unwrap();
+		block_on(client.import(BlockOrigin::Own, block)).unwrap();
 	}
 }

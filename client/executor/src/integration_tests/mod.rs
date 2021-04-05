@@ -21,7 +21,7 @@ use codec::{Encode, Decode};
 use hex_literal::hex;
 use sp_core::{
 	blake2_128, blake2_256, ed25519, sr25519, map, Pair,
-	offchain::{OffchainExt, testing},
+	offchain::{OffchainWorkerExt, OffchainDbExt, testing},
 	traits::{Externalities, CallInWasm},
 };
 use sc_runtime_test::wasm_binary_unwrap;
@@ -75,6 +75,7 @@ fn call_in_wasm<E: Externalities>(
 		Some(1024),
 		HostFunctions::host_functions(),
 		8,
+		None,
 	);
 	executor.call_in_wasm(
 		&wasm_binary_unwrap()[..],
@@ -467,7 +468,7 @@ test_wasm_execution!(offchain_index);
 fn offchain_index(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let (offchain, _state) = testing::TestOffchainExt::new();
-	ext.register_extension(OffchainExt::new(offchain));
+	ext.register_extension(OffchainWorkerExt::new(offchain));
 	call_in_wasm(
 		"test_offchain_index_set",
 		&[0],
@@ -486,7 +487,8 @@ test_wasm_execution!(offchain_local_storage_should_work);
 fn offchain_local_storage_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let (offchain, state) = testing::TestOffchainExt::new();
-	ext.register_extension(OffchainExt::new(offchain));
+	ext.register_extension(OffchainDbExt::new(offchain.clone()));
+	ext.register_extension(OffchainWorkerExt::new(offchain));
 	assert_eq!(
 		call_in_wasm(
 			"test_offchain_local_storage",
@@ -503,7 +505,7 @@ test_wasm_execution!(offchain_http_should_work);
 fn offchain_http_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let (offchain, state) = testing::TestOffchainExt::new();
-	ext.register_extension(OffchainExt::new(offchain));
+	ext.register_extension(OffchainWorkerExt::new(offchain));
 	state.write().expect_request(testing::PendingRequest {
 			method: "POST".into(),
 			uri: "http://localhost:12345".into(),
@@ -536,6 +538,7 @@ fn should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 		Some(17),  // `17` is the initial number of pages compiled into the binary.
 		HostFunctions::host_functions(),
 		8,
+		None,
 	);
 
 	let err = executor.call_in_wasm(
@@ -558,6 +561,7 @@ fn returns_mutable_static(wasm_method: WasmExecutionMethod) {
 		&wasm_binary_unwrap()[..],
 		HostFunctions::host_functions(),
 		true,
+		None,
 	).expect("Creates runtime");
 
 	let instance = runtime.new_instance().unwrap();
@@ -591,6 +595,7 @@ fn restoration_of_globals(wasm_method: WasmExecutionMethod) {
 		&wasm_binary_unwrap()[..],
 		HostFunctions::host_functions(),
 		true,
+		None,
 	).expect("Creates runtime");
 	let instance = runtime.new_instance().unwrap();
 
@@ -611,6 +616,7 @@ fn heap_is_reset_between_calls(wasm_method: WasmExecutionMethod) {
 		&wasm_binary_unwrap()[..],
 		HostFunctions::host_functions(),
 		true,
+		None,
 	).expect("Creates runtime");
 	let instance = runtime.new_instance().unwrap();
 
@@ -634,6 +640,7 @@ fn parallel_execution(wasm_method: WasmExecutionMethod) {
 		Some(1024),
 		HostFunctions::host_functions(),
 		8,
+		None,
 	));
 	let code_hash = blake2_256(wasm_binary_unwrap()).to_vec();
 	let threads: Vec<_> = (0..8).map(|_|

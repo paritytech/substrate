@@ -15,10 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{limits::BlockWeights, Config, Module};
+use crate::{limits::BlockWeights, Config, Pallet};
 use codec::{Encode, Decode};
 use sp_runtime::{
-	traits::{SignedExtension, DispatchInfoOf, Dispatchable, PostDispatchInfoOf, Printable},
+	traits::{SignedExtension, DispatchInfoOf, Dispatchable, PostDispatchInfoOf},
 	transaction_validity::{
 		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
 		TransactionPriority,
@@ -58,7 +58,7 @@ impl<T: Config + Send + Sync> CheckWeight<T> where
 		info: &DispatchInfoOf<T::Call>,
 	) -> Result<crate::ConsumedWeight, TransactionValidityError> {
 		let maximum_weight = T::BlockWeights::get();
-		let all_weight = Module::<T>::block_weight();
+		let all_weight = Pallet::<T>::block_weight();
 		calculate_consumed_weight::<T::Call>(maximum_weight, all_weight, info)
 	}
 
@@ -70,7 +70,7 @@ impl<T: Config + Send + Sync> CheckWeight<T> where
 		len: usize,
 	) -> Result<u32, TransactionValidityError> {
 		let length_limit = T::BlockLength::get();
-		let current_len = Module::<T>::all_extrinsics_len();
+		let current_len = Pallet::<T>::all_extrinsics_len();
 		let added_len = len as u32;
 		let next_len = current_len.saturating_add(added_len);
 		if next_len > *length_limit.max.get(info.class) {
@@ -248,9 +248,7 @@ impl<T: Config + Send + Sync> SignedExtension for CheckWeight<T> where
 		// to them actually being useful. Block producers are thus not allowed to include mandatory
 		// extrinsics that result in error.
 		if let (DispatchClass::Mandatory, Err(e)) = (info.class, result) {
-			"Bad mandatory".print();
-			e.print();
-
+			log::error!(target: "runtime::system", "Bad mandatory: {:?}", e);
 			Err(InvalidTransaction::BadMandatory)?
 		}
 
