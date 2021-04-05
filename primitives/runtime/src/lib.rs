@@ -245,7 +245,7 @@ pub enum MultiSignature {
 
 impl From<ed25519::Signature> for MultiSignature {
 	fn from(x: ed25519::Signature) -> Self {
-		MultiSignature::Ed25519(x)
+		Self::Ed25519(x)
 	}
 }
 
@@ -258,7 +258,7 @@ impl TryFrom<MultiSignature> for ed25519::Signature {
 
 impl From<sr25519::Signature> for MultiSignature {
 	fn from(x: sr25519::Signature) -> Self {
-		MultiSignature::Sr25519(x)
+		Self::Sr25519(x)
 	}
 }
 
@@ -271,7 +271,7 @@ impl TryFrom<MultiSignature> for sr25519::Signature {
 
 impl From<ecdsa::Signature> for MultiSignature {
 	fn from(x: ecdsa::Signature) -> Self {
-		MultiSignature::Ecdsa(x)
+		Self::Ecdsa(x)
 	}
 }
 
@@ -284,7 +284,7 @@ impl TryFrom<MultiSignature> for ecdsa::Signature {
 
 impl Default for MultiSignature {
 	fn default() -> Self {
-		MultiSignature::Ed25519(Default::default())
+		Self::Ed25519(Default::default())
 	}
 }
 
@@ -302,7 +302,7 @@ pub enum MultiSigner {
 
 impl Default for MultiSigner {
 	fn default() -> Self {
-		MultiSigner::Ed25519(Default::default())
+		Self::Ed25519(Default::default())
 	}
 }
 
@@ -317,9 +317,9 @@ impl<T: Into<H256>> crypto::UncheckedFrom<T> for MultiSigner {
 impl AsRef<[u8]> for MultiSigner {
 	fn as_ref(&self) -> &[u8] {
 		match *self {
-			MultiSigner::Ed25519(ref who) => who.as_ref(),
-			MultiSigner::Sr25519(ref who) => who.as_ref(),
-			MultiSigner::Ecdsa(ref who) => who.as_ref(),
+			Self::Ed25519(ref who) => who.as_ref(),
+			Self::Sr25519(ref who) => who.as_ref(),
+			Self::Ecdsa(ref who) => who.as_ref(),
 		}
 	}
 }
@@ -328,16 +328,16 @@ impl traits::IdentifyAccount for MultiSigner {
 	type AccountId = AccountId32;
 	fn into_account(self) -> AccountId32 {
 		match self {
-			MultiSigner::Ed25519(who) => <[u8; 32]>::from(who).into(),
-			MultiSigner::Sr25519(who) => <[u8; 32]>::from(who).into(),
-			MultiSigner::Ecdsa(who) => sp_io::hashing::blake2_256(&who.as_ref()[..]).into(),
+			Self::Ed25519(who) => <[u8; 32]>::from(who).into(),
+			Self::Sr25519(who) => <[u8; 32]>::from(who).into(),
+			Self::Ecdsa(who) => sp_io::hashing::blake2_256(who.as_ref()).into(),
 		}
 	}
 }
 
 impl From<ed25519::Public> for MultiSigner {
 	fn from(x: ed25519::Public) -> Self {
-		MultiSigner::Ed25519(x)
+		Self::Ed25519(x)
 	}
 }
 
@@ -350,7 +350,7 @@ impl TryFrom<MultiSigner> for ed25519::Public {
 
 impl From<sr25519::Public> for MultiSigner {
 	fn from(x: sr25519::Public) -> Self {
-		MultiSigner::Sr25519(x)
+		Self::Sr25519(x)
 	}
 }
 
@@ -363,7 +363,7 @@ impl TryFrom<MultiSigner> for sr25519::Public {
 
 impl From<ecdsa::Public> for MultiSigner {
 	fn from(x: ecdsa::Public) -> Self {
-		MultiSigner::Ecdsa(x)
+		Self::Ecdsa(x)
 	}
 }
 
@@ -378,9 +378,9 @@ impl TryFrom<MultiSigner> for ecdsa::Public {
 impl std::fmt::Display for MultiSigner {
 	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
 		match *self {
-			MultiSigner::Ed25519(ref who) => write!(fmt, "ed25519: {}", who),
-			MultiSigner::Sr25519(ref who) => write!(fmt, "sr25519: {}", who),
-			MultiSigner::Ecdsa(ref who) => write!(fmt, "ecdsa: {}", who),
+			Self::Ed25519(ref who) => write!(fmt, "ed25519: {}", who),
+			Self::Sr25519(ref who) => write!(fmt, "sr25519: {}", who),
+			Self::Ecdsa(ref who) => write!(fmt, "ecdsa: {}", who),
 		}
 	}
 }
@@ -389,9 +389,9 @@ impl Verify for MultiSignature {
 	type Signer = MultiSigner;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &AccountId32) -> bool {
 		match (self, signer) {
-			(MultiSignature::Ed25519(ref sig), who) => sig.verify(msg, &ed25519::Public::from_slice(who.as_ref())),
-			(MultiSignature::Sr25519(ref sig), who) => sig.verify(msg, &sr25519::Public::from_slice(who.as_ref())),
-			(MultiSignature::Ecdsa(ref sig), who) => {
+			(Self::Ed25519(ref sig), who) => sig.verify(msg, &ed25519::Public::from_slice(who.as_ref())),
+			(Self::Sr25519(ref sig), who) => sig.verify(msg, &sr25519::Public::from_slice(who.as_ref())),
+			(Self::Ecdsa(ref sig), who) => {
 				let m = sp_io::hashing::blake2_256(msg.get());
 				match sp_io::crypto::secp256k1_ecdsa_recover_compressed(sig.as_ref(), &m) {
 					Ok(pubkey) =>
@@ -424,13 +424,13 @@ impl Verify for AnySignature {
 
 impl From<sr25519::Signature> for AnySignature {
 	fn from(s: sr25519::Signature) -> Self {
-		AnySignature(s.into())
+		Self(s.into())
 	}
 }
 
 impl From<ed25519::Signature> for AnySignature {
 	fn from(s: ed25519::Signature) -> Self {
-		AnySignature(s.into())
+		Self(s.into())
 	}
 }
 
@@ -573,13 +573,13 @@ impl From<TokenError> for &'static str {
 
 impl From<TokenError> for DispatchError {
 	fn from(e: TokenError) -> DispatchError {
-		DispatchError::Token(e)
+		Self::Token(e)
 	}
 }
 
 impl From<&'static str> for DispatchError {
 	fn from(err: &'static str) -> DispatchError {
-		DispatchError::Other(err)
+		Self::Other(err)
 	}
 }
 
@@ -764,7 +764,7 @@ pub struct OpaqueExtrinsic(Vec<u8>);
 impl OpaqueExtrinsic {
 	/// Convert an encoded extrinsic to an `OpaqueExtrinsic`.
 	pub fn from_bytes(mut bytes: &[u8]) -> Result<Self, codec::Error> {
-		OpaqueExtrinsic::decode(&mut bytes)
+		Self::decode(&mut bytes)
 	}
 }
 
@@ -786,7 +786,6 @@ impl sp_std::fmt::Debug for OpaqueExtrinsic {
 		Ok(())
 	}
 }
-
 
 #[cfg(feature = "std")]
 impl ::serde::Serialize for OpaqueExtrinsic {
@@ -813,7 +812,6 @@ impl traits::Extrinsic for OpaqueExtrinsic {
 pub fn print(print: impl traits::Printable) {
 	print.print();
 }
-
 
 /// Batching session.
 ///
@@ -946,7 +944,6 @@ mod tests {
 		let multi_signer = MultiSigner::from(pair.public());
 		assert!(multi_sig.verify(msg, &multi_signer.into_account()));
 	}
-
 
 	#[test]
 	#[should_panic(expected = "Signature verification has not been called")]
