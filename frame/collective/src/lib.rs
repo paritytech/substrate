@@ -132,6 +132,7 @@ pub trait Config<I: Instance=DefaultInstance>: frame_system::Config {
 	type Origin: From<RawOrigin<Self::AccountId, I>>
 		+ From<frame_system::RawOrigin<Self::AccountId>>
 		+ From<<Self as frame_system::Config>::Origin>
+		+ Into<<Self as frame_system::Config>::Origin>
 		+ Into<Result<RawOrigin<Self::AccountId, I>, <Self as Config<I>>::Origin>>;
 
 	/// The outer call dispatch type.

@@ -47,8 +47,6 @@ fn assert_last_event<T: Config<I>, I: Instance>(generic_event: <T as Config<I>>:
 }
 
 benchmarks_instance! {
-//	where_clause { where <T as Config>::Origin == <T as frame_system::Config>::Origin }
-
 	set_members {
 		let m in 1 .. T::MaxMembers::get();
 		let n in 1 .. T::MaxMembers::get();
@@ -649,9 +647,10 @@ benchmarks_instance! {
 		let outer_origin: <T as Config<I>>::Origin = raw_origin.into();
 		let system_origin: <T as frame_system::Config>::Origin = outer_origin.into();
 	}: {
-		Collective::<T, I>::dispatch_as_ratio_account(system_origin.into(), Box::new(proposal), bytes_in_storage, 1, 2)?;
+		Collective::<T, I>::dispatch_as_ratio_account(system_origin, Box::new(proposal), bytes_in_storage, 1, 2)?;
 	} verify {
-		let account = Collective::origin_to_ratio_account(raw_origin, 1, 2);
+		let raw_origin = RawOrigin::<T::AccountId, I>::Members(5, 10);
+		let account: T::AccountId = Collective::<T, I>::origin_to_ratio_account(raw_origin, 1, 2)?;
 		assert_last_event::<T, I>(RawEvent::AccountExecuted(account, proposal_hash, Ok(())).into());
 	}
 
@@ -665,15 +664,17 @@ benchmarks_instance! {
 		let outer_origin: <T as Config<I>>::Origin = raw_origin.into();
 		let system_origin: <T as frame_system::Config>::Origin = outer_origin.into();
 	}: {
-		Collective::<T, I>::dispatch_as_quantity_account(system_origin.into(), Box::new(proposal), bytes_in_storage, 1, 2)?;
+		Collective::<T, I>::dispatch_as_quantity_account(system_origin, Box::new(proposal), bytes_in_storage)?;
 	} verify {
-		let account = Collective::origin_to_quantity_account(raw_origin, 1, 2);
+		let raw_origin = RawOrigin::<T::AccountId, I>::Members(5, 10);
+		let account: T::AccountId = Collective::<T, I>::origin_to_quantity_account(raw_origin)?;
 		assert_last_event::<T, I>(RawEvent::AccountExecuted(account, proposal_hash, Ok(())).into());
 	}
 }
 
 impl_benchmark_test_suite!(
 	Collective,
-	crate::tests::new_test_ext(),
-	crate::tests::Test,
+	// Using dispatch_account_tests environment because it uses a real account id type.
+	crate::dispatch_account_tests::new_test_ext(),
+	crate::dispatch_account_tests::Test,
 );
