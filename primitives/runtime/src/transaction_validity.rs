@@ -279,7 +279,7 @@ pub struct ValidTransaction {
 
 impl Default for ValidTransaction {
 	fn default() -> Self {
-		ValidTransaction {
+		Self {
 			priority: 0,
 			requires: vec![],
 			provides: vec![],
@@ -305,7 +305,7 @@ impl ValidTransaction {
 	/// `provides` and `requires` tags, it will sum the priorities, take the minimum longevity and
 	/// the logic *And* of the propagate flags.
 	pub fn combine_with(mut self, mut other: ValidTransaction) -> Self {
-		ValidTransaction {
+		Self {
 			priority: self.priority.saturating_add(other.priority),
 			requires: { self.requires.append(&mut other.requires); self.requires },
 			provides: { self.provides.append(&mut other.provides); self.provides },

@@ -210,12 +210,12 @@ impl<Hash> DigestItem<Hash> {
 	/// Returns a 'referencing view' for this digest item.
 	pub fn dref(&self) -> DigestItemRef<Hash> {
 		match *self {
-			DigestItem::ChangesTrieRoot(ref v) => DigestItemRef::ChangesTrieRoot(v),
-			DigestItem::PreRuntime(ref v, ref s) => DigestItemRef::PreRuntime(v, s),
-			DigestItem::Consensus(ref v, ref s) => DigestItemRef::Consensus(v, s),
-			DigestItem::Seal(ref v, ref s) => DigestItemRef::Seal(v, s),
-			DigestItem::ChangesTrieSignal(ref s) => DigestItemRef::ChangesTrieSignal(s),
-			DigestItem::Other(ref v) => DigestItemRef::Other(v),
+			Self::ChangesTrieRoot(ref v) => DigestItemRef::ChangesTrieRoot(v),
+			Self::PreRuntime(ref v, ref s) => DigestItemRef::PreRuntime(v, s),
+			Self::Consensus(ref v, ref s) => DigestItemRef::Consensus(v, s),
+			Self::Seal(ref v, ref s) => DigestItemRef::Seal(v, s),
+			Self::ChangesTrieSignal(ref s) => DigestItemRef::ChangesTrieSignal(s),
+			Self::Other(ref v) => DigestItemRef::Other(v),
 		}
 	}
 
