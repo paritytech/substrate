@@ -21,10 +21,13 @@
 use codec::FullCodec;
 use frame_metadata::{DefaultByte, StorageEntryModifier};
 
+mod key;
 mod value;
 mod map;
+mod nmap;
 mod double_map;
 
+pub use key::{Key, KeyGenerator, KeyHasher, KeyHasherGenerator, ReversibleKeyGenerator};
 pub use value::{StorageValue, StorageValueMetadata};
 pub use map::{StorageMap, StorageMapMetadata};
 pub use double_map::{StorageDoubleMap, StorageDoubleMapMetadata};

@@ -22,6 +22,7 @@ use sp_std::prelude::*;
 use codec::{FullCodec, FullEncode, Encode, EncodeLike, Decode};
 use crate::{
 	hash::{Twox128, StorageHasher, ReversibleStorageHasher},
+	storage::types::{KeyGenerator, KeyHasherGenerator, ReversibleKeyGenerator},
 	traits::Get,
 };
 use sp_runtime::generic::{Digest, DigestItem};
@@ -360,6 +361,26 @@ pub trait IterableStorageDoubleMap<
 	fn translate<O: Decode, F: FnMut(K1, K2, O) -> Option<V>>(f: F);
 }
 
+/// A strongly-typed map with arbitrary number of keys in storage whose keys and values can be iterated over.
+pub trait IterableStorageNMap<K: ReversibleKeyGenerator, V: FullCodec>: StorageNMap<K, V> {
+	/// The type that iterates over all `(key1, (key2, (key3, ... (keyN, ()))), value)` tuples
+	type Iterator: Iterator<Item = ((K::CurrentKey, K::NextKey), V)>;
+
+	/// Enumerate all elements in the map in no particular order. If you add or remove values to
+	/// the map while doing this, you'll get undefined results.
+	fn iter() -> Self::Iterator;
+
+	/// Remove all elements from the map and iterate through them in no particular order. If you
+	/// add elements to the map while doing this, you'll get undefined results.
+	fn drain() -> Self::Iterator;
+
+	/// Translate the values of all elements by a function `f`, in the map in no particular order.
+	/// By returning `None` from `f` for an element, you'll remove it from the map.
+	///
+	/// NOTE: If a value fail to decode because storage is corrupted then it is skipped.
+	fn translate<O: Decode, F: FnMut((K::CurrentKey, K::NextKey), O) -> Option<V>>(f: F);
+}
+
 /// An implementation of a map with a two keys.
 ///
 /// It provides an important ability to efficiently remove all entries
@@ -509,6 +530,125 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		KeyArg1: EncodeLike<K1>,
 		KeyArg2: EncodeLike<K2>,
 	>(key1: KeyArg1, key2: KeyArg2) -> Option<V>;
+}
+
+/// An implementation of a map with an arbitrary number of keys.
+///
+/// Details of implementation can be found at [`generator::StorageNMap`].
+pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
+	/// The type that get/take returns.
+	type Query;
+
+	/// Get the storage key used to fetch a value corresponding to a specific key.
+	fn hashed_key_for<KArg: EncodeLike<K::CurrentKey>>(key: (KArg, K::NextKey)) -> Vec<u8>;
+
+	/// Does the value (explicitly) exist in storage?
+	fn contains_key<KArg: EncodeLike<K::CurrentKey>>(key: (KArg, K::NextKey)) -> bool;
+
+	/// Load the value associated with the given key from the map.
+	fn get<KArg: EncodeLike<K::CurrentKey>>(key: (KArg, K::NextKey)) -> Self::Query;
+
+	/// Try to get the value for the given key from the map.
+	///
+	/// Returns `Ok` if it exists, `Err` if not.
+	fn try_get<KArg: EncodeLike<K::CurrentKey>>(key: (KArg, K::NextKey)) -> Result<V, ()>;
+
+	/// Swap the values of two keys.
+	fn swap<KArg1, KArg2, KOther>(key1: (KArg1, K::NextKey), key2: (KArg2, KOther::NextKey))
+	where
+		KOther: KeyGenerator,
+		KArg1: EncodeLike<K::CurrentKey>,
+		KArg2: EncodeLike<KOther::CurrentKey>;
+
+	/// Store a value to be associated with the given key from the map.
+	fn insert<KArg: EncodeLike<K::CurrentKey>, VArg: EncodeLike<V>>(key: (KArg, K::NextKey), val: VArg);
+
+	/// Remove the value under a key.
+	fn remove<KArg: EncodeLike<K::CurrentKey>>(key: (KArg, K::NextKey));
+
+	/// Remove all values under the partial prefix key.
+	fn remove_prefix<KG, KArg>(partial_key: (KArg, KG::NextKey))
+	where
+		KG: KeyGenerator,
+		KArg: ?Sized + EncodeLike<KG::CurrentKey>;
+
+	/// Iterate over values that share the partial prefix key.
+	fn iter_prefix_values<KG, KArg>(partial_key: (KArg, KG::NextKey)) -> PrefixIterator<V>
+	where
+		KG: KeyGenerator,
+		KArg: ?Sized + EncodeLike<KG::CurrentKey>;
+
+	/// Mutate the value under a key.
+	fn mutate<KArg: EncodeLike<K::CurrentKey>, R, F: FnOnce(&mut Self::Query) -> R>(
+		key: (KArg, K::NextKey),
+		f: F,
+	) -> R;
+
+	/// Mutate the item, only if an `Ok` value is returned.
+	fn try_mutate<KArg: EncodeLike<K::CurrentKey>, R, E, F: FnOnce(&mut Self::Query) -> Result<R, E>>(
+		key: (KArg, K::NextKey),
+		f: F,
+	) -> Result<R, E>;
+
+	/// Mutate the value under a key.
+	///
+	/// Deletes the item if mutated to a `None`.
+	fn mutate_exists<KArg: EncodeLike<K::CurrentKey>, R, F: FnOnce(&mut Option<V>) -> R>(
+		key: (KArg, K::NextKey),
+		f: F,
+	) -> R;
+
+	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
+	fn try_mutate_exists<KArg: EncodeLike<K::CurrentKey>, R, E, F: FnOnce(&mut Option<V>) -> Result<R, E>>(
+		key: (KArg, K::NextKey),
+		f: F,
+	) -> Result<R, E>;
+
+	/// Take the value under a key.
+	fn take<KArg: EncodeLike<K::CurrentKey>>(key: (KArg, K::NextKey)) -> Self::Query;
+
+	/// Append the given items to the value in the storage.
+	///
+	/// `V` is required to implement `codec::EncodeAppend`.
+	///
+	/// # Warning
+	///
+	/// If the storage item is not encoded properly, the storage will be overwritten
+	/// and set to `[item]`. Any default value set for the storage item will be ignored
+	/// on overwrite.
+	fn append<Item, EncodeLikeItem, KArg>(key: (KArg, K::NextKey), item: EncodeLikeItem)
+	where
+		KArg: EncodeLike<K::CurrentKey>,
+		Item: Encode,
+		EncodeLikeItem: EncodeLike<Item>,
+		V: StorageAppend<Item>;
+
+	/// Read the length of the storage value without decoding the entire value under the
+	/// given `key`.
+	///
+	/// `V` is required to implement [`StorageDecodeLength`].
+	///
+	/// If the value does not exists or it fails to decode the length, `None` is returned.
+	/// Otherwise `Some(len)` is returned.
+	///
+	/// # Warning
+	///
+	/// `None` does not mean that `get()` does not return a value. The default value is completly
+	/// ignored by this function.
+	fn decode_len<KArg: EncodeLike<K::CurrentKey>>(key: (KArg, K::NextKey)) -> Option<usize>
+	where
+		V: StorageDecodeLength,
+	{
+		V::decode_len(&Self::hashed_key_for(key))
+	}
+
+	/// Migrate an item with the given `key` from a defunct `OldHasher` to the current hasher.
+	///
+	/// If the key doesn't exist, then it's a no-op. If it does, then it returns its value.
+	fn migrate_keys<OldHasher, KArg>(key: (KArg, K::NextKey)) -> Option<V>
+	where
+		OldHasher: KeyHasherGenerator,
+		KArg: EncodeLike<K::CurrentKey>;
 }
 
 /// Iterate over a prefix and decode raw_key and raw_value into `T`.
