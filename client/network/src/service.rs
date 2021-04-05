@@ -79,7 +79,7 @@ use libp2p::swarm::{
 	SwarmEvent,
 	protocols_handler::NodeHandlerWrapperError
 };
-use log::{error, info, trace, warn};
+use log::{error, info, trace, debug, warn};
 use metrics::{Metrics, MetricSources, Histogram, HistogramVec};
 use parking_lot::Mutex;
 use sc_peerset::PeersetHandle;

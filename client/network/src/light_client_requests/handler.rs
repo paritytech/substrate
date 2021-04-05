@@ -48,7 +48,7 @@ use std::{
 	collections::{BTreeMap},
 	sync::Arc,
 };
-use log::debug;
+use log::{trace, debug};
 
 const LOG_TARGET: &str = "light-client-request-handler";
 
