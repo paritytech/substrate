@@ -18,7 +18,7 @@
 use crate::{limits::BlockWeights, Config, Pallet};
 use codec::{Encode, Decode};
 use sp_runtime::{
-	traits::{SignedExtension, DispatchInfoOf, Dispatchable, PostDispatchInfoOf, Printable},
+	traits::{SignedExtension, DispatchInfoOf, Dispatchable, PostDispatchInfoOf},
 	transaction_validity::{
 		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
 		TransactionPriority,
@@ -248,9 +248,7 @@ impl<T: Config + Send + Sync> SignedExtension for CheckWeight<T> where
 		// to them actually being useful. Block producers are thus not allowed to include mandatory
 		// extrinsics that result in error.
 		if let (DispatchClass::Mandatory, Err(e)) = (info.class, result) {
-			"Bad mandatory".print();
-			e.print();
-
+			log::error!(target: "runtime::system", "Bad mandatory: {:?}", e);
 			Err(InvalidTransaction::BadMandatory)?
 		}
 
