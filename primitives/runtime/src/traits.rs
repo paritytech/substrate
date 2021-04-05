@@ -19,7 +19,6 @@
 
 use sp_std::prelude::*;
 use sp_std::{self, marker::PhantomData, convert::{TryFrom, TryInto}, fmt::Debug};
-use sp_io;
 #[cfg(feature = "std")]
 use std::fmt::Display;
 #[cfg(feature = "std")]
@@ -111,7 +110,7 @@ impl Verify for sp_core::ecdsa::Signature {
 			self.as_ref(),
 			&sp_io::hashing::blake2_256(msg.get()),
 		) {
-			Ok(pubkey) => &signer.as_ref()[..] == &pubkey[..],
+			Ok(pubkey) => signer.as_ref() == &pubkey[..],
 			_ => false,
 		}
 	}

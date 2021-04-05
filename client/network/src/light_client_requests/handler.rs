@@ -48,7 +48,7 @@ use std::{
 	collections::{BTreeMap},
 	sync::Arc,
 };
-use log::debug;
+use log::{trace, debug};
 
 const LOG_TARGET: &str = "light-client-request-handler";
 
@@ -89,7 +89,7 @@ impl<B: Block> LightClientRequestHandler<B> {
 					};
 
 					match pending_response.send(response) {
-						Ok(()) => debug!(
+						Ok(()) => trace!(
 							target: LOG_TARGET,
 							"Handled light client request from {}.",
 							peer,
