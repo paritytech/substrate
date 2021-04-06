@@ -21,7 +21,7 @@
 use std::borrow::Cow;
 use std::io::Read;
 
-// An arbitrary prefix, that indicates a blob beginning with should be decoded with
+// An arbitrary prefix, that indicates a blob beginning with should be decompressed with
 // Zstd compression.
 const ZSTD_PREFIX: [u8; 8] = [82, 188, 83, 118, 70, 219, 142, 5];
 
@@ -68,14 +68,14 @@ fn read_from_decoder(decoder: impl Read, blob_len: usize) -> Result<Vec<u8>, Err
 }
 
 #[cfg(not(target_os = "unknown"))]
-fn decode_zstd(blob: &[u8]) -> Result<Vec<u8>, Error> {
+fn decompress_zstd(blob: &[u8]) -> Result<Vec<u8>, Error> {
 	let decoder = zstd::Decoder::new(blob).map_err(|_| Error::Invalid)?;
 
 	read_from_decoder(decoder, blob.len())
 }
 
 #[cfg(target_os = "unknown")]
-fn decode_zstd(mut blob: &[u8]) -> Result<Vec<u8>, Error> {
+fn decompress_zstd(mut blob: &[u8]) -> Result<Vec<u8>, Error> {
 	let blob_len = blob.len();
 	let decoder = ruzstd::streaming_decoder::StreamingDecoder::new(&mut blob)
 		.map_err(|_| Error::Invalid)?;
@@ -84,9 +84,9 @@ fn decode_zstd(mut blob: &[u8]) -> Result<Vec<u8>, Error> {
 }
 
 /// Decode a blob, if it indicates that it is compressed.
-pub fn decode(blob: &[u8]) -> Result<Cow<[u8]>, Error> {
+pub fn decompress(blob: &[u8]) -> Result<Cow<[u8]>, Error> {
 	if blob.starts_with(&ZSTD_PREFIX) {
-		decode_zstd(&blob[ZSTD_PREFIX.len()..]).map(Into::into)
+		decompress_zstd(&blob[ZSTD_PREFIX.len()..]).map(Into::into)
 	} else {
 		Ok(blob.into())
 	}
@@ -129,20 +129,20 @@ mod tests {
 	}
 
 	#[test]
-	fn compress_and_decode() {
+	fn compress_and_decompress() {
 		let v = vec![0; 10_000];
 
 		let compressed = compress(&v).unwrap();
 
 		assert!(compressed.starts_with(&ZSTD_PREFIX));
-		assert_eq!(&decode(&compressed).unwrap()[..], &v[..])
+		assert_eq!(&decompress(&compressed).unwrap()[..], &v[..])
 	}
 
 	#[test]
-	fn decodes_only_when_magic() {
+	fn decompresses_only_when_magic() {
 		let v = vec![0; 10_000];
 
-		assert_eq!(&decode(&v).unwrap()[..], &v[..]);
+		assert_eq!(&decompress(&v).unwrap()[..], &v[..]);
 	}
 
 	#[test]
@@ -155,6 +155,6 @@ mod tests {
 			v.write_all(&encoded_bigger_than_bomb[..]).unwrap();
 		}
 
-		assert_eq!(decode(&buf[..]).err(), Some(Error::PossibleBomb));
+		assert_eq!(decompress(&buf[..]).err(), Some(Error::PossibleBomb));
 	}
 }
