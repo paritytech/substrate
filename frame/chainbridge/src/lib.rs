@@ -619,7 +619,8 @@ impl<T: Trait> EnsureOrigin<T::Origin> for EnsureBridge<T> {
         })
     }
 
-	fn successful_origin() -> <T as Trait>::Origin {
-		unimplemented!()
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> T::Origin {
+
 	}
 }
