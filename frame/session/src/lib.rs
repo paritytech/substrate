@@ -20,9 +20,9 @@
 //! The Session module allows validators to manage their session keys, provides a function for
 //! changing the session length, and handles session rotation.
 //!
-//! - [`session::Config`](./trait.Config.html)
-//! - [`Call`](./enum.Call.html)
-//! - [`Module`](./struct.Module.html)
+//! - [`Config`]
+//! - [`Call`]
+//! - [`Module`]
 //!
 //! ## Overview
 //!
@@ -819,7 +819,8 @@ impl<T: Config> Module<T> {
 		<NextKeys<T>>::insert(v, keys);
 	}
 
-	fn key_owner(id: KeyTypeId, key_data: &[u8]) -> Option<T::ValidatorId> {
+	/// Query the owner of a session key by returning the owner's validator ID.
+	pub fn key_owner(id: KeyTypeId, key_data: &[u8]) -> Option<T::ValidatorId> {
 		<KeyOwner<T>>::get((id, key_data))
 	}
 

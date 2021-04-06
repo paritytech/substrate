@@ -241,6 +241,7 @@ impl onchain::Config for Test {
 	type DataProvider = Staking;
 }
 impl Config for Test {
+	const MAX_NOMINATIONS: u32 = 16;
 	type Currency = Balances;
 	type UnixTime = Timestamp;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
@@ -269,6 +270,8 @@ where
 }
 
 pub type Extrinsic = TestXt<Call, ()>;
+pub(crate) type StakingCall = crate::Call<Test>;
+pub(crate) type TestRuntimeCall = <Test as frame_system::Config>::Call;
 
 pub struct ExtBuilder {
 	validator_pool: bool,

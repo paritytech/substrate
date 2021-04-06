@@ -18,9 +18,9 @@
 //! # Scheduler
 //! A module for scheduling dispatches.
 //!
-//! - [`scheduler::Config`](./trait.Config.html)
-//! - [`Call`](./enum.Call.html)
-//! - [`Module`](./struct.Module.html)
+//! - [`Config`]
+//! - [`Call`]
+//! - [`Module`]
 //!
 //! ## Overview
 //!

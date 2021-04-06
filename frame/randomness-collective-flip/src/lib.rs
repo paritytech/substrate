@@ -25,7 +25,7 @@
 //!
 //! ## Public Functions
 //!
-//! See the [`Module`](./struct.Module.html) struct for details of publicly available functions.
+//! See the [`Module`] struct for details of publicly available functions.
 //!
 //! ## Usage
 //!

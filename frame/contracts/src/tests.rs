@@ -17,7 +17,7 @@
 
 use crate::{
 	BalanceOf, ContractInfo, ContractInfoOf, Pallet,
-	RawAliveContractInfo, Config, Schedule,
+	Config, Schedule,
 	Error, storage::Storage,
 	chain_extension::{
 		Result as ExtensionResult, Environment, ChainExtension, Ext, SysConfig, RetVal,
@@ -26,6 +26,7 @@ use crate::{
 	exec::{AccountIdOf, Executable}, wasm::PrefabWasmModule,
 	weights::WeightInfo,
 	wasm::ReturnCode as RuntimeReturnCode,
+	storage::RawAliveContractInfo,
 };
 use assert_matches::assert_matches;
 use codec::Encode;

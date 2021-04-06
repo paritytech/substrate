@@ -94,7 +94,7 @@ use frame_support::{
 		Weight, RuntimeDbWeight, DispatchInfo, DispatchClass,
 		extract_actual_weight, PerDispatchClass,
 	},
-	dispatch::DispatchResultWithPostInfo,
+	dispatch::{DispatchResultWithPostInfo, DispatchResult},
 };
 use codec::{Encode, Decode, FullCodec, EncodeLike};
 
@@ -143,12 +143,13 @@ pub use pallet::*;
 /// Do something when we should be setting the code.
 pub trait SetCode {
 	/// Set the code to the given blob.
-	fn set_code(code: Vec<u8>);
+	fn set_code(code: Vec<u8>) -> DispatchResult;
 }
 
 impl SetCode for () {
-	fn set_code(code: Vec<u8>) {
+	fn set_code(code: Vec<u8>) -> DispatchResult {
 		storage::unhashed::put_raw(well_known_keys::CODE, &code);
+		Ok(())
 	}
 }
 
@@ -181,7 +182,7 @@ pub mod pallet {
 			+ OriginTrait<Call=Self::Call>;
 
 		/// The aggregated `Call` type.
-		type Call: Dispatchable + Debug;
+		type Call: Dispatchable + Debug + FullCodec;
 
 		/// Account index (aka nonce) type. This stores the number of previous transactions associated
 		/// with a sender account.
@@ -345,7 +346,7 @@ pub mod pallet {
 			ensure_root(origin)?;
 			Self::can_set_code(&code)?;
 
-			T::OnSetCode::set_code(code);
+			T::OnSetCode::set_code(code)?;
 			Self::deposit_event(Event::CodeUpdated);
 			Ok(().into())
 		}
@@ -364,7 +365,7 @@ pub mod pallet {
 			code: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			T::OnSetCode::set_code(code);
+			T::OnSetCode::set_code(code)?;
 			Self::deposit_event(Event::CodeUpdated);
 			Ok(().into())
 		}
@@ -1217,9 +1218,20 @@ impl<T: Config> Pallet<T> {
 		Account::<T>::get(who).consumers
 	}
 
-	/// True if the account has some outstanding references.
+	/// True if the account has some outstanding consumer references.
 	pub fn is_provider_required(who: &T::AccountId) -> bool {
 		Account::<T>::get(who).consumers != 0
+	}
+
+	/// True if the account has no outstanding consumer references or more than one provider.
+	pub fn can_dec_provider(who: &T::AccountId) -> bool {
+		let a = Account::<T>::get(who);
+		a.consumers == 0 || a.providers > 1
+	}
+
+	/// True if the account has at least one provider reference.
+	pub fn can_inc_consumer(who: &T::AccountId) -> bool {
+		Account::<T>::get(who).providers > 0
 	}
 
 	/// Deposits an event into this block's event record.
