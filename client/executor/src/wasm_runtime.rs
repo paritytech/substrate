@@ -283,6 +283,8 @@ pub fn create_wasm_runtime_with_code(
 	allow_missing_func_imports: bool,
 	cache_path: Option<&Path>,
 ) -> Result<Arc<dyn WasmModule>, WasmError> {
+	// TODO [now]: decompress code.
+
 	match wasm_method {
 		WasmExecutionMethod::Interpreted => {
 			// Wasmi doesn't have any need in a cache directory.
