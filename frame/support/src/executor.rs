@@ -143,103 +143,12 @@ impl StoredExecutor for () {
 	}
 }
 
-/// An executor that tries to execute as many tasks as possible in multiple passes over all of them.
-///
-/// A user may create an instance of this struct, add tasks to it (each of which must implement
-///	[`RuntimeTask`]), place it in storage, and execute tasks via the [`execute`] method.
-///
-/// This executor is opinionated, and cane be potentially re-implemented with different strategies.
-/// Namely, the assumption is that tasks are heterogenous, meaning that each might require different
-/// weight or be in different stage of execution. See [`execute`] for more info.
-///
-/// From the tasks being heterogenous follows that if they are being iterated and one of them
-/// fails to finish (i.e. return `Some(_)` in [`RuntimeTask::execute`]), we do **not** assume
-/// that the rest of the tasks will also fail. Therefore, we always make a full
-/// pass over the tasks, to make sure any of them can use any leftover weight. Once is a pass is
-/// done without any of the tasks consuming any weight, then we conclude that this execution is
-/// done.
-///
-/// # WARNING
-///
-/// This implementation is prone to the _weight leaking_ explained in [`RuntimeTask::execute`].
-/// Namely, if a task keep consuming a little amount of weight in each execution, this executor will
-/// assume that it still has work to do, and will indefinitely executor a second pass for it.
-#[derive(Encode, Decode, RuntimeDebugNoBound, PartialEqNoBound, EqNoBound, CloneNoBound)]
-pub struct MultiPassExecutor<Task: RuntimeTask, Quota: Get<Weight> = ()> {
-	/// The queue of tasks.
-	pub(crate) tasks: Vec<Task>,
-	_marker: sp_std::marker::PhantomData<Quota>,
-}
-
-// TODO: can't we just have a DefaultNoBound as well? then we can ditch this.
-impl<Task: RuntimeTask, Quota: Get<Weight>> Default for MultiPassExecutor<Task, Quota> {
-	fn default() -> Self {
-		Self { tasks: vec![], _marker: sp_std::marker::PhantomData }
-	}
-}
-
-impl<Task: RuntimeTask, Quota: Get<Weight>> StoredExecutor for MultiPassExecutor<Task, Quota> {
-	type Task = Task;
-	type Quota = Quota;
-
-	fn new() -> Self {
-		Self { tasks: vec![], _marker: Default::default() }
-	}
-
-	fn add_task(&mut self, task: Task) {
-		self.tasks.push(task)
-	}
-
-	fn clear(&mut self) {
-		self.tasks.clear()
-	}
-
-	fn remove(&mut self, task: Task) {
-		let maybe_index = self.tasks.iter().position(|t| t == &task);
-		if let Some(index) = maybe_index {
-			self.tasks.remove(index);
-		}
-	}
-
-	fn count(&self) -> usize {
-		self.tasks.len()
-	}
-
-	#[cfg(any(test, feature = "std"))]
-	fn tasks(&self) -> Vec<Task> {
-		self.tasks.clone()
-	}
-
-	fn execute(&mut self) -> Weight {
-		let max_weight = Self::Quota::get();
-		// NOTE: we can optimize this a bit: if we make a pass and 8/10 of the tasks do nothing, we
-		// should mark them and not re-execute them in the next pass. Need to store Vec<(Task,
-		// bool)> for this.
-		if max_weight.is_zero() {
-			return 0;
-		}
-
-		let mut leftover_weight = max_weight;
-		loop {
-			let (next_tasks, consumed) = single_pass::<Task>(self.tasks.as_ref(), leftover_weight);
-			self.tasks = next_tasks;
-			leftover_weight = leftover_weight.saturating_sub(consumed);
-
-			if leftover_weight.is_zero() || consumed.is_zero() {
-				// if we run out, or there's nothing to consume the weight, we're done.
-				break;
-			}
-		}
-
-		max_weight.saturating_sub(leftover_weight)
-	}
-}
-
 /// An executor that only tries to execute a single pass on a given list of tasks in each
 /// execution.
 ///
-/// This is a much more conservative variation of the [`MultiPassExecutor`], and arguable more
-/// suitable for homogenous tasks.
+/// This is suitable for homogenous tasks. Otherwise, if among a the inner task queue one of the
+/// intermediate ones fails to consume any weight, it is sensible to re-try all the previous ones
+/// again as well.
 #[derive(Encode, Decode, RuntimeDebugNoBound, PartialEqNoBound, EqNoBound, CloneNoBound)]
 pub struct SinglePassExecutor<Task: RuntimeTask, Quota: Get<Weight> = ()> {
 	/// The queue of tasks.
@@ -247,6 +156,7 @@ pub struct SinglePassExecutor<Task: RuntimeTask, Quota: Get<Weight> = ()> {
 	_marker: sp_std::marker::PhantomData<Quota>,
 }
 
+// TODO: can't we just have a DefaultNoBound as well? then we can ditch this.
 impl<Task: RuntimeTask, Quota: Get<Weight>> Default for SinglePassExecutor<Task, Quota> {
 	fn default() -> Self {
 		Self { tasks: vec![], _marker: sp_std::marker::PhantomData }
@@ -318,7 +228,7 @@ macro_rules! impl_append_decode_len_shim {
 		{
 			fn len(mut self_encoded: &[u8]) -> Result<usize, codec::Error> {
 				use sp_std::convert::TryFrom;
-				// Single/Multi pass executor stored just a `Vec<Task>`, thus the length is at the
+				// `SinglePassExecutor` stored just a `Vec<Task>`, thus the length is at the
 				// beginning in `Compact` form.
 				usize::try_from(u32::from(codec::Compact::<u32>::decode(&mut self_encoded)?))
 					.map_err(|_| "Failed convert decoded size into usize.".into())
@@ -328,7 +238,6 @@ macro_rules! impl_append_decode_len_shim {
 }
 
 impl_append_decode_len_shim!(SinglePassExecutor);
-impl_append_decode_len_shim!(MultiPassExecutor);
 
 /// Aggregator trait to indicate an executor with task `Task` has `decode_len` and `append`.
 pub trait StorageValueShim<Task: RuntimeTask>:
@@ -389,10 +298,22 @@ mod tests {
 		static Quota: Weight = 10;
 	}
 
+	/// A test task.
 	#[derive(Clone, Encode, Decode, Default, PartialEq, Eq, Debug)]
 	struct Task {
+		/// The amount of weight that this task will consume.
 		weight: Weight,
+		/// If set to a non-zero number, the in the first `half` time this task is `execute`ed, it
+		/// will only consume `self.weight / 2`, and decrement `self.half`. Once `self.half` is
+		/// zero, it will try to consume the whole `self.weight`.
 		half: u8,
+		/// If set to `true`, it will only consume some weight upon `execute` IFF it can consume the
+		/// entire `self.weight`. In other words, this if set to true, this task will have a
+		/// all-or-none execution.
+		///
+		/// Note that if combined with `self.half > 0`, this behavior is changed and in that case
+		/// only half of `self.weight` is the subject; if it can consume all of `self.weight / 2`,
+		/// it will, else it will consume nothing.
 		greedy: bool,
 	}
 
@@ -436,7 +357,6 @@ mod tests {
 
 		/// Should consume `amount` of `Self`'s weight, capping it at `max_weight`.
 		fn consume(mut self, amount: Weight, max_weight: Weight) -> (Option<Self>, Weight) {
-			println!("Consuming {:?} with {} from {}", &self, amount, max_weight);
 			let consumed = if self.greedy {
 				if amount > max_weight {
 					// we are greedy and we need more than max_weight, consume all of it.
@@ -464,7 +384,6 @@ mod tests {
 
 	impl RuntimeTask for Task {
 		fn execute(mut self, max_weight: Weight) -> (Option<Self>, Weight) {
-			println!("++ Execute {:?} by {}", &self, max_weight);
 			let weight_needed = self.weight;
 			match self.half {
 				0 => {
@@ -516,12 +435,8 @@ mod tests {
 		crate::generate_storage_alias!(
 			DoNotCareAtAll, TestStoredSinglePassExecutor => Value<SinglePassExecutor<Task, Quota>>
 		);
-		crate::generate_storage_alias!(
-			DoNotCareAtAll, TestStoredSingleMultiExecutor => Value<MultiPassExecutor<Task, Quota>>
-		);
 
 		shim_test!(TestStoredSinglePassExecutor);
-		shim_test!(TestStoredSingleMultiExecutor);
 	}
 
 	#[test]
@@ -600,71 +515,19 @@ mod tests {
 	}
 
 	#[test]
-	fn multi_pass_execution_basic() {
-		// equal
-		{
-			let mut executor = MultiPassExecutor::<Task, Quota>::new();
-			executor.add_task(TaskBuilder::default().build(10));
-			executor.add_task(TaskBuilder::default().build(10));
-			executor.add_task(TaskBuilder::default().build(10));
-
-			Quota::set(30);
-			executor.execute();
-			assert_eq!(remaining_weights_of(&executor), Vec::<Weight>::new());
-		}
-
-		// more
-		{
-			let mut executor = MultiPassExecutor::<Task, Quota>::new();
-			executor.add_task(TaskBuilder::default().build(10));
-			executor.add_task(TaskBuilder::default().build(10));
-			executor.add_task(TaskBuilder::default().build(10));
-
-			Quota::set(33);
-			executor.execute();
-			assert_eq!(remaining_weights_of(&executor), Vec::<Weight>::new());
-		}
-
-		// less
-		{
-			let mut executor = MultiPassExecutor::<Task, Quota>::new();
-			executor.add_task(TaskBuilder::default().build(10));
-			executor.add_task(TaskBuilder::default().build(10));
-			executor.add_task(TaskBuilder::default().build(10));
-
-			Quota::set(27);
-			executor.execute();
-			assert_eq!(remaining_weights_of(&executor), vec![3]);
-		}
-	}
-
-	#[test]
-	fn multi_step_simple() {
+	fn where_additional_pass_is_useful() {
+		// This is an example where a single pass execution is sab-par.
 		let _ = env_logger::try_init();
-		let mut executor = MultiPassExecutor::<Task, Quota>::new();
-		executor.add_task(TaskBuilder::default().half(1).build(10));
-		executor.add_task(TaskBuilder::default().half(1).build(10));
-		executor.add_task(TaskBuilder::default().half(1).build(10));
-
-		// first, each task will eat up 5, 15 in total. Then, one of them drains the last 2.
-		Quota::set(17);
-		assert_eq!(executor.execute(), 17);
-		assert_eq!(remaining_weights_of(&executor), vec![3, 5, 5]);
-	}
-
-	#[test]
-	fn multi_step_where_additional_pass_is_useful() {
-		let _ = env_logger::try_init();
-		let mut executor = MultiPassExecutor::<Task, Quota>::new();
+		let mut executor = SinglePassExecutor::<Task, Quota>::new();
 		executor.add_task(TaskBuilder::default().half(1).greedy(false).build(30));
 		executor.add_task(TaskBuilder::default().half(1).greedy(false).build(20));
 		executor.add_task(TaskBuilder::default().half(1).greedy(false).build(10));
 
-		// first batch, we consume 15 + 10 + 5 = 30. Second round, only the last one can use the
-		// remaining 5. 1 unit is unused.
+		// first batch, we consume 15 + 10 + 5 = 30. We have 6 leftover, and the last 5 could have
+		// been consumed, but nothing we can do.
 		Quota::set(36);
-		assert_eq!(executor.execute(), 35);
-		assert_eq!(remaining_weights_of(&executor), vec![15, 10]);
+		assert_eq!(executor.execute(), 30);
+		assert_eq!(remaining_weights_of(&executor), vec![15, 10, 5]);
 	}
 
 	#[test]
@@ -680,7 +543,6 @@ mod tests {
 			assert_eq!(remaining_weights_of(&executor), Vec::<Weight>::new());
 		}
 
-		with_executor(MultiPassExecutor::<Task, Quota>::new());
 		with_executor(SinglePassExecutor::<Task, Quota>::new());
 	}
 
@@ -700,7 +562,6 @@ mod tests {
 			assert_eq!(remaining_weights_of(&executor), vec![10, 10, 10]);
 		}
 
-		with_executor(MultiPassExecutor::<Task, Quota>::new());
 		with_executor(SinglePassExecutor::<Task, Quota>::new());
 	}
 }

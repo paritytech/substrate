@@ -259,7 +259,7 @@ impl Config for Test {
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
-	type TaskExecutor = executor::MultiPassExecutor<SlashTask<Self>, SlashTaskWeight>;
+	type TaskExecutor = executor::SinglePassExecutor<SlashTask<Self>, SlashTaskWeight>;
 	type WeightInfo = ();
 }
 

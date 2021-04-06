@@ -17,6 +17,7 @@ static_assertions = "1.1.0"
 serde = { version = "1.0.101", optional = true }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
+sp-core = { version = "3.0.0", path = "../../primitives/core", default-features = false }
 sp-io ={ version = "3.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-staking = { version = "3.0.0", default-features = false, path = "../../primitives/staking" }
@@ -36,7 +37,6 @@ rand_chacha = { version = "0.2", default-features = false, optional = true }
 [dev-dependencies]
 sp-storage = { version = "3.0.0", path = "../../primitives/storage" }
 sp-tracing = { version = "3.0.0", path = "../../primitives/tracing" }
-sp-core = { version = "3.0.0", path = "../../primitives/core" }
 pallet-balances = { version = "3.0.0", path = "../balances" }
 pallet-timestamp = { version = "3.0.0", path = "../timestamp" }
 pallet-staking-reward-curve = { version = "3.0.0",  path = "../staking/reward-curve" }
@@ -54,6 +54,7 @@ std = [
 	"codec/std",
 	"sp-std/std",
 	"sp-io/std",
+	"sp-core/std",
 	"frame-support/std",
 	"sp-runtime/std",
 	"sp-staking/std",

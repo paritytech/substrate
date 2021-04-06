@@ -839,7 +839,7 @@ impl Default for Releases {
 	}
 }
 
-use frame_support::{CloneNoBound, PartialEqNoBound, EqNoBound, RuntimeDebugNoBound, executor::{self, StoredExecutor}};
+use frame_support::{CloneNoBound, PartialEqNoBound, EqNoBound, executor::{self, StoredExecutor}};
 /// A task that needs to be stored and executed per slashed validator.
 #[derive(Encode, Decode, CloneNoBound, PartialEqNoBound, EqNoBound)]
 pub struct SlashTask<T: Config> {
