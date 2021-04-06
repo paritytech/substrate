@@ -18,6 +18,8 @@
 //! Handling of blobs that may be compressed, based on an 8-byte magic identifier
 //! at the head.
 
+use std::borrow::Cow;
+
 // An arbitrary prefix, that indicates a blob beginning with should be decoded with
 // Zstd compression.
 const ZSTD_PREFIX: [u8; 8] = [82, 188, 83, 118, 70, 219, 142, 5];
@@ -31,7 +33,7 @@ pub struct PossibleBomb;
 
 impl std::fmt::Display for PossibleBomb {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		write!(f, "Possible compression bomb encountered");
+		write!(f, "Possible compression bomb encountered")
 	}
 }
 
@@ -39,7 +41,7 @@ impl std::error::Error for PossibleBomb { }
 
 /// Decode a blob, if it indicates that it is compressed.
 pub fn decode(blob: &[u8]) -> Result<Cow<[u8]>, PossibleBomb> {
-	if blob.starts_with(ZSTD_PREFIX) {
+	if blob.starts_with(&ZSTD_PREFIX) {
 		unimplemented!()
 	} else {
 		Ok(blob.into())
