@@ -532,7 +532,17 @@ impl ProtocolsHandler for NotifsHandler {
 					pending_opening: *pending_opening,
 				};
 			},
-			State::Opening { in_substream_reopened: ref mut in_substream, .. } |
+
+			State::Opening { ref mut in_substream_closing, ref mut in_substream_reopened, .. } => {
+				*in_substream_closing = None;
+
+				// Create `handshake_message` on a separate line to be sure that the
+				// lock is released as soon as possible.
+				let handshake_message = protocol_info.handshake.read().clone();
+				new_substream.send_handshake(handshake_message);
+				*in_substream_reopened = Some(new_substream);
+			},
+
 			State::Open { ref mut in_substream, .. } if in_substream.is_none() => {
 				// Create `handshake_message` on a separate line to be sure that the
 				// lock is released as soon as possible.
@@ -542,7 +552,6 @@ impl ProtocolsHandler for NotifsHandler {
 			},
 
 			State::Closed { .. } |
-			State::Opening { .. } |
 			State::Open { .. } |
 			State::OpenDesiredByRemote { .. } => {
 				// If a substream already exists, silently drop the new one.
