@@ -798,7 +798,10 @@ impl<T: Config> Module<T> {
 	}
 
 	fn do_purge_keys(account: &T::AccountId) -> DispatchResult {
-		let old_keys = Self::take_keys(&account).ok_or(Error::<T>::NoKeys)?;
+		let who = T::ValidatorIdOf::convert(account.clone())
+			.ok_or(Error::<T>::NoAssociatedValidatorId)?;
+
+		let old_keys = Self::take_keys(&who).ok_or(Error::<T>::NoKeys)?;
 		for id in T::Keys::key_ids() {
 			let key_data = old_keys.get_raw(*id);
 			Self::clear_key_owner(*id, key_data);
