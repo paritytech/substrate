@@ -233,22 +233,27 @@ where
 	fn handle_finality_notification(&mut self, notification: FinalityNotification<B>) {
 		debug!(target: "beefy", "🥩 Finality notification: {:?}", notification);
 
+		if let Some(new) = find_authorities_change::<B, P::Public>(&notification.header) {
+			debug!(target: "beefy", "🥩 New validator set: {:?}", new);
+
+			if let Some(metrics) = self.metrics.as_ref() {
+				metrics.beefy_validator_set_id.set(new.id);
+			}
+
+			self.rounds = round::Rounds::new(new);
+
+			// NOTE: currently we act as if this block has been finalized by BEEFY as we perform
+			// the validator set changes instantly (insecure). Once proper validator set changes
+			// are implemented this should be removed
+			self.best_finalized_block = *notification.header.number();
+		};
+
 		if self.should_vote_on(*notification.header.number()) {
-			let local_id = if let Some(id) = &self.local_id {
+			let local_id = if let Some(ref id) = self.local_id {
 				id
 			} else {
 				error!(target: "beefy", "🥩 Missing validator id - can't vote for: {:?}", notification.header.hash());
 				return;
-			};
-
-			if let Some(new) = find_authorities_change::<B, P::Public>(&notification.header) {
-				debug!(target: "beefy", "🥩 New validator set: {:?}", new);
-
-				if let Some(metrics) = self.metrics.as_ref() {
-					metrics.beefy_validator_set_id.set(new.id);
-				}
-
-				self.rounds = round::Rounds::new(new);
 			};
 
 			let mmr_root = if let Some(hash) = find_mmr_root_digest::<B, P::Public>(&notification.header) {
@@ -264,7 +269,7 @@ where
 				validator_set_id: self.rounds.validator_set_id(),
 			};
 
-			let signature = match self.sign_commitment(local_id, commitment.encode().as_ref()) {
+			let signature = match self.sign_commitment(&local_id, commitment.encode().as_ref()) {
 				Ok(sig) => sig,
 				Err(err) => {
 					warn!(target: "beefy", "🥩 Error signing commitment: {:?}", err);
@@ -295,8 +300,6 @@ where
 				(message.id, message.signature),
 			);
 		}
-
-		self.best_finalized_block = *notification.header.number();
 	}
 
 	fn handle_vote(&mut self, round: (MmrRootHash, NumberFor<B>), vote: (P::Public, S)) {
@@ -316,6 +319,7 @@ where
 				info!(target: "beefy", "🥩 Round #{} concluded, committed: {:?}.", round.1, signed_commitment);
 
 				self.signed_commitment_sender.notify(signed_commitment);
+				self.best_finalized_block = round.1;
 			}
 		}
 	}
