@@ -553,15 +553,15 @@ mod tests {
 				#[weight = 100]
 				fn some_function(origin) {
 					// NOTE: does not make any different.
-					let _ = frame_system::ensure_signed(origin);
+					let _ = frame_system::ensure_signed(origin)?;
 				}
 				#[weight = (200, DispatchClass::Operational)]
 				fn some_root_operation(origin) {
-					let _ = frame_system::ensure_root(origin);
+					let _ = frame_system::ensure_root(origin)?;
 				}
 				#[weight = 0]
 				fn some_unsigned_message(origin) {
-					let _ = frame_system::ensure_none(origin);
+					let _ = frame_system::ensure_none(origin)?;
 				}
 
 				#[weight = 0]

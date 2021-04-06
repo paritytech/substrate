@@ -208,7 +208,8 @@ frame_benchmarking::benchmarks! {
 		// assume a queued solution is stored, regardless of where it comes from.
 		<QueuedSolution<T>>::put(ready_solution);
 	}: {
-		let _ = <MultiPhase<T> as ElectionProvider<T::AccountId, T::BlockNumber>>::elect();
+		let res = <MultiPhase<T> as ElectionProvider<T::AccountId, T::BlockNumber>>::elect();
+		debug_assert!(res.is_ok());
 	} verify {
 		assert!(<MultiPhase<T>>::queued_solution().is_none());
 		assert!(<DesiredTargets<T>>::get().is_none());

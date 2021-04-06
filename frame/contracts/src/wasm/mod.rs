@@ -254,7 +254,7 @@ mod tests {
 	use sp_core::H256;
 	use hex_literal::hex;
 	use sp_runtime::DispatchError;
-	use frame_support::{dispatch::DispatchResult, weights::Weight};
+	use frame_support::{assert_ok, dispatch::DispatchResult, weights::Weight};
 	use assert_matches::assert_matches;
 	use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags, ExecError, ErrorOrigin};
 	use pretty_assertions::assert_eq;
@@ -597,12 +597,12 @@ mod tests {
 	#[test]
 	fn contract_transfer() {
 		let mut mock_ext = MockExt::default();
-		let _ = execute(
+		assert_ok!(execute(
 			CODE_TRANSFER,
 			vec![],
 			&mut mock_ext,
 			&mut GasMeter::new(GAS_LIMIT),
-		).unwrap();
+		));
 
 		assert_eq!(
 			&mock_ext.transfers,
@@ -663,12 +663,12 @@ mod tests {
 	#[test]
 	fn contract_call() {
 		let mut mock_ext = MockExt::default();
-		let _ = execute(
+		assert_ok!(execute(
 			CODE_CALL,
 			vec![],
 			&mut mock_ext,
 			&mut GasMeter::new(GAS_LIMIT),
-		).unwrap();
+		));
 
 		assert_eq!(
 			&mock_ext.transfers,
@@ -739,12 +739,12 @@ mod tests {
 	#[test]
 	fn contract_instantiate() {
 		let mut mock_ext = MockExt::default();
-		let _ = execute(
+		assert_ok!(execute(
 			CODE_INSTANTIATE,
 			vec![],
 			&mut mock_ext,
 			&mut GasMeter::new(GAS_LIMIT),
-		).unwrap();
+		));
 
 		assert_matches!(
 			&mock_ext.instantiates[..],
@@ -851,12 +851,12 @@ mod tests {
 	#[test]
 	fn contract_call_limited_gas() {
 		let mut mock_ext = MockExt::default();
-		let _ = execute(
+		assert_ok!(execute(
 			&CODE_TRANSFER_LIMITED_GAS,
 			vec![],
 			&mut mock_ext,
 			&mut GasMeter::new(GAS_LIMIT),
-		).unwrap();
+		));
 
 		assert_eq!(
 			&mock_ext.transfers,
@@ -994,12 +994,12 @@ mod tests {
 
 	#[test]
 	fn caller() {
-		let _ = execute(
+		assert_ok!(execute(
 			CODE_CALLER,
 			vec![],
 			MockExt::default(),
 			&mut GasMeter::new(GAS_LIMIT),
-		).unwrap();
+		));
 	}
 
 	/// calls `seal_address` and compares the result with the constant 69.
@@ -1047,12 +1047,12 @@ mod tests {
 
 	#[test]
 	fn address() {
-		let _ = execute(
+		assert_ok!(execute(
 			CODE_ADDRESS,
 			vec![],
 			MockExt::default(),
 			&mut GasMeter::new(GAS_LIMIT),
-		).unwrap();
+		));
 	}
 
 	const CODE_BALANCE: &str = r#"
@@ -1099,12 +1099,12 @@ mod tests {
 	#[test]
 	fn balance() {
 		let mut gas_meter = GasMeter::new(GAS_LIMIT);
-		let _ = execute(
+		assert_ok!(execute(
 			CODE_BALANCE,
 			vec![],
 			MockExt::default(),
 			&mut gas_meter,
-		).unwrap();
+		));
 	}
 
 	const CODE_GAS_PRICE: &str = r#"
@@ -1151,12 +1151,12 @@ mod tests {
 	#[test]
 	fn gas_price() {
 		let mut gas_meter = GasMeter::new(GAS_LIMIT);
-		let _ = execute(
+		assert_ok!(execute(
 			CODE_GAS_PRICE,
 			vec![],
 			MockExt::default(),
 			&mut gas_meter,
-		).unwrap();
+		));
 	}
 
 	const CODE_GAS_LEFT: &str = r#"
@@ -1258,12 +1258,12 @@ mod tests {
 	#[test]
 	fn value_transferred() {
 		let mut gas_meter = GasMeter::new(GAS_LIMIT);
-		let _ = execute(
+		assert_ok!(execute(
 			CODE_VALUE_TRANSFERRED,
 			vec![],
 			MockExt::default(),
 			&mut gas_meter,
-		).unwrap();
+		));
 	}
 
 	const CODE_RETURN_FROM_START_FN: &str = r#"
@@ -1346,12 +1346,12 @@ mod tests {
 	#[test]
 	fn now() {
 		let mut gas_meter = GasMeter::new(GAS_LIMIT);
-		let _ = execute(
+		assert_ok!(execute(
 			CODE_TIMESTAMP_NOW,
 			vec![],
 			MockExt::default(),
 			&mut gas_meter,
-		).unwrap();
+		));
 	}
 
 	const CODE_MINIMUM_BALANCE: &str = r#"
@@ -1397,12 +1397,12 @@ mod tests {
 	#[test]
 	fn minimum_balance() {
 		let mut gas_meter = GasMeter::new(GAS_LIMIT);
-		let _ = execute(
+		assert_ok!(execute(
 			CODE_MINIMUM_BALANCE,
 			vec![],
 			MockExt::default(),
 			&mut gas_meter,
-		).unwrap();
+		));
 	}
 
 	const CODE_TOMBSTONE_DEPOSIT: &str = r#"
@@ -1448,12 +1448,12 @@ mod tests {
 	#[test]
 	fn tombstone_deposit() {
 		let mut gas_meter = GasMeter::new(GAS_LIMIT);
-		let _ = execute(
+		assert_ok!(execute(
 			CODE_TOMBSTONE_DEPOSIT,
 			vec![],
 			MockExt::default(),
 			&mut gas_meter,
-		).unwrap();
+		));
 	}
 
 	const CODE_RANDOM: &str = r#"
@@ -1637,12 +1637,12 @@ mod tests {
 	fn deposit_event() {
 		let mut mock_ext = MockExt::default();
 		let mut gas_meter = GasMeter::new(GAS_LIMIT);
-		let _ = execute(
+		assert_ok!(execute(
 			CODE_DEPOSIT_EVENT,
 			vec![],
 			&mut mock_ext,
 			&mut gas_meter
-		).unwrap();
+		));
 
 		assert_eq!(mock_ext.events, vec![
 			(vec![H256::repeat_byte(0x33)],
