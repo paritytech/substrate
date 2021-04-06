@@ -618,4 +618,8 @@ impl<T: Trait> EnsureOrigin<T::Origin> for EnsureBridge<T> {
             r => Err(T::Origin::from(r)),
         })
     }
+
+	fn successful_origin() -> <T as Trait>::Origin {
+		unimplemented!()
+	}
 }
