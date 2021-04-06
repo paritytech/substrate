@@ -50,21 +50,15 @@ fn read_from_decoder(
 	blob_len: usize,
 	bomb_limit: usize,
 ) -> Result<Vec<u8>, Error> {
-	let mut decoder = decoder.take(bomb_limit as u64);
+	let mut decoder = decoder.take((bomb_limit + 1) as u64);
 
 	let mut buf = Vec::with_capacity(blob_len);
 	decoder.read_to_end(&mut buf).map_err(|_| Error::Invalid)?;
 
-	if buf.len() < bomb_limit {
+	if buf.len() <= bomb_limit {
 		Ok(buf)
 	} else {
-		// try reading one more byte and see if it succeeds.
-		decoder.set_limit((bomb_limit + 1) as u64);
-		if decoder.read(&mut [0]).ok().map_or(false, |read| read == 0) {
-			Ok(buf)
-		} else {
-			Err(Error::PossibleBomb)
-		}
+		Err(Error::PossibleBomb)
 	}
 }
 
