@@ -7376,6 +7376,7 @@ dependencies = [
  "sp-core",
  "sp-externalities",
  "sp-io",
+ "sp-maybe-compressed-blob",
  "sp-panic-handler",
  "sp-runtime",
  "sp-runtime-interface",

@@ -283,7 +283,8 @@ pub fn create_wasm_runtime_with_code(
 	allow_missing_func_imports: bool,
 	cache_path: Option<&Path>,
 ) -> Result<Arc<dyn WasmModule>, WasmError> {
-	// TODO [now]: decompress code.
+	let code = sp_maybe_compressed_blob::decompress(code)
+		.map_err(|e| WasmError::Other(format!("Decompression error: {:?}", e)))?;
 
 	match wasm_method {
 		WasmExecutionMethod::Interpreted => {
@@ -294,7 +295,7 @@ pub fn create_wasm_runtime_with_code(
 			drop(cache_path);
 
 			sc_executor_wasmi::create_runtime(
-				code,
+				&code,
 				heap_pages,
 				host_functions,
 				allow_missing_func_imports,
@@ -303,7 +304,7 @@ pub fn create_wasm_runtime_with_code(
 		}
 		#[cfg(feature = "wasmtime")]
 		WasmExecutionMethod::Compiled => {
-			let blob = sc_executor_common::runtime_blob::RuntimeBlob::new(code)?;
+			let blob = sc_executor_common::runtime_blob::RuntimeBlob::new(&code)?;
 			sc_executor_wasmtime::create_runtime(
 				sc_executor_wasmtime::CodeSupplyMode::Verbatim { blob },
 				sc_executor_wasmtime::Config {
