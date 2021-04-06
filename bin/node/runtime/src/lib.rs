@@ -664,7 +664,7 @@ parameter_types! {
 	pub const TechnicalMotionDuration: BlockNumber = 5 * DAYS;
 	pub const TechnicalMaxProposals: u32 = 100;
 	pub const TechnicalMaxMembers: u32 = 100;
-	pub const TechnicalModuleId: ModuleId = ModuleId(*b"py/counc");
+	pub const TechnicalModuleId: ModuleId = ModuleId(*b"py/techc");
 }
 
 type TechnicalCollective = pallet_collective::Instance2;
