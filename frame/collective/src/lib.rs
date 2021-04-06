@@ -299,6 +299,9 @@ decl_module! {
 	pub struct Module<T: Config<I>, I: Instance=DefaultInstance> for enum Call where origin: <T as frame_system::Config>::Origin {
 		type Error = Error<T, I>;
 
+		const MaxMembers: u32 = T::MaxMembers::get();
+		const ModuleId: ModuleId = T::ModuleId::get();
+
 		fn deposit_event() = default;
 
 		/// Set the collective's membership.
