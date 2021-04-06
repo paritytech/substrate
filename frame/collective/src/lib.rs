@@ -813,6 +813,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 		target_n: u32,
 		target_d: u32,
 	) -> Result<T::AccountId, DispatchError> {
+		ensure!(target_n <= target_d, Error::<T, I>::NotEnoughMembers);
 		match origin {
 			RawOrigin::Members(n, d) => {
 				// n is the number of members who voted aye. d is the total number of members.
