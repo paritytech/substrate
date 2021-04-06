@@ -7390,6 +7390,7 @@ dependencies = [
  "derive_more",
  "parity-scale-codec 2.0.1",
  "parity-wasm 0.41.0",
+ "pwasm-utils 0.14.0",
  "sp-allocator",
  "sp-core",
  "sp-serializer",
