@@ -283,7 +283,10 @@ pub fn create_wasm_runtime_with_code(
 	allow_missing_func_imports: bool,
 	cache_path: Option<&Path>,
 ) -> Result<Arc<dyn WasmModule>, WasmError> {
-	let code = sp_maybe_compressed_blob::decompress(code)
+	const WASM_CODE_BOMB_LIMIT: usize = 50 * 1024 * 1024;
+
+
+	let code = sp_maybe_compressed_blob::decompress(code, WASM_CODE_BOMB_LIMIT)
 		.map_err(|e| WasmError::Other(format!("Decompression error: {:?}", e)))?;
 
 	match wasm_method {
