@@ -88,7 +88,7 @@ pub const LOG_TARGET: &'static str = "runtime::frame-support";
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Never {}
 
-/// Generate a new type aliases for [`storage::types::value::StorageValue`],
+/// Generate a new type alias for [`storage::types::value::StorageValue`],
 /// [`storage::types::value::StorageMap`] and [`storage::types::value::StorageDoubleMap`].
 ///
 /// Useful for creating a *storage-like* struct for test and migrations.
@@ -102,20 +102,20 @@ pub enum Never {}
 ///
 /// // generate a double map from `(u32, u32)` (with hasher `Twox64Concat`) to `Vec<u8>`
 /// generate_storage_alias!(
-/// 		OtherPrefix, OtherStorageName => DoubleMap<
-/// 		(u32, Twox64Concat),
-/// 		(u32, Twox64Concat),
+///		OtherPrefix, OtherStorageName => DoubleMap<
+/// 		(u32, u32),
+/// 		(u32, u32),
 /// 		Vec<u8>
-/// 		>
+///		>
 /// );
 ///
 /// // generate a map from `Config::AccountId` (with hasher `Twox64Concat`) to `Vec<u8>`
 /// trait Config { type AccountId: codec::FullCodec; }
 /// generate_storage_alias!(
-/// 		Prefix, GenericStorage<T: Config> => Map<(T::AccountId, Twox64Concat), Vec<u8>>
+///		Prefix, GenericStorage<T: Config> => Map<(Twox64Concat, T::AccountId), Vec<u8>>
 /// );
 /// # fn main() {}
-/// ```
+///```
 #[macro_export]
 macro_rules! generate_storage_alias {
 	// without generic for $name.
@@ -156,6 +156,7 @@ macro_rules! generate_storage_alias {
 	($pallet:ident, $name:ident<$t:ident : $bounds:tt> => Map<($key:ty, $hasher:ty), $value:ty>) => {
 		$crate::paste::paste! {
 			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
+			#[allow(type_alias_bounds)]
 			type $name<$t : $bounds> = $crate::storage::types::StorageMap<
 				[<$name Instance>],
 				$key,
@@ -164,9 +165,14 @@ macro_rules! generate_storage_alias {
 			>;
 		}
 	};
-	($pallet:ident, $name:ident<$t:ident : $bounds:tt> => DoubleMap<($key1:ty, $hasher1:ty), ($key2:ty, $hasher2:ty), $value:ty>) => {
+	(
+		$pallet:ident,
+		$name:ident<$t:ident : $bounds:tt>
+		=> DoubleMap<($key1:ty, $hasher1:ty), ($key2:ty, $hasher2:ty), $value:ty>)
+	=> {
 		$crate::paste::paste! {
 			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
+			#[allow(type_alias_bounds)]
 			type $name<$t : $bounds> = $crate::storage::types::StorageMap<
 				[<$name Instance>],
 				$key1,
@@ -180,6 +186,7 @@ macro_rules! generate_storage_alias {
 	($pallet:ident, $name:ident<$t:ident : $bounds:tt> => Value<$value:ty>) => {
 		$crate::paste::paste! {
 			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
+			#[allow(type_alias_bounds)]
 			type $name<$t : $bounds> = $crate::storage::types::StorageValue<
 				[<$name Instance>],
 				$value,
@@ -196,7 +203,7 @@ macro_rules! generate_storage_alias {
 				const STORAGE_PREFIX: &'static str = stringify!($name);
 			}
 		}
-	};
+	}
 }
 
 /// Create new implementations of the [`Get`](crate::traits::Get) trait.

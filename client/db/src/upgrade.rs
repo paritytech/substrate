@@ -25,7 +25,7 @@ use std::path::{Path, PathBuf};
 use sp_runtime::traits::Block as BlockT;
 use crate::{columns, utils::DatabaseType};
 use kvdb_rocksdb::{Database, DatabaseConfig};
-use codec::Encode;
+use codec::{Decode, Encode};
 
 /// Version file name.
 const VERSION_FILE_NAME: &'static str = "db_version";
@@ -83,7 +83,12 @@ fn migrate_2_to_3<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> sp_b
 	let mut transaction = db.transaction();
 	for key in keys {
 		if let Some(justification) = db.get(columns::JUSTIFICATIONS, &key).map_err(db_err)? {
-			// Tag each Justification with the hardcoded ID for GRANDPA. Avoid the dependency on the GRANDPA crate
+			// Tag each justification with the hardcoded ID for GRANDPA to avoid the dependency on
+			// the GRANDPA crate.
+			// NOTE: when storing justifications the previous API would get a `Vec<u8>` and still
+			// call encode on it.
+			let justification = Vec::<u8>::decode(&mut &justification[..])
+				.map_err(|_| sp_blockchain::Error::Backend("Invalid justification blob".into()))?;
 			let justifications = sp_runtime::Justifications::from((*b"FRNK", justification));
 			transaction.put_vec(columns::JUSTIFICATIONS, &key, justifications.encode());
 		}

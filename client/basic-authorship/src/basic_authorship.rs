@@ -420,6 +420,7 @@ mod tests {
 	use sp_blockchain::HeaderBackend;
 	use sp_runtime::traits::NumberFor;
 	use sc_client_api::Backend;
+	use futures::executor::block_on;
 
 	const SOURCE: TransactionSource = TransactionSource::External;
 
@@ -454,11 +455,11 @@ mod tests {
 			client.clone(),
 		);
 
-		futures::executor::block_on(
+		block_on(
 			txpool.submit_at(&BlockId::number(0), SOURCE, vec![extrinsic(0), extrinsic(1)])
 		).unwrap();
 
-		futures::executor::block_on(
+		block_on(
 			txpool.maintain(chain_event(
 				client.header(&BlockId::Number(0u64))
 					.expect("header get error")
@@ -492,7 +493,7 @@ mod tests {
 
 		// when
 		let deadline = time::Duration::from_secs(3);
-		let block = futures::executor::block_on(
+		let block = block_on(
 			proposer.propose(Default::default(), Default::default(), deadline)
 		).map(|r| r.block).unwrap();
 
@@ -538,7 +539,7 @@ mod tests {
 		);
 
 		let deadline = time::Duration::from_secs(1);
-		futures::executor::block_on(
+		block_on(
 			proposer.propose(Default::default(), Default::default(), deadline)
 		).map(|r| r.block).unwrap();
 	}
@@ -559,11 +560,11 @@ mod tests {
 		let genesis_hash = client.info().best_hash;
 		let block_id = BlockId::Hash(genesis_hash);
 
-		futures::executor::block_on(
+		block_on(
 			txpool.submit_at(&BlockId::number(0), SOURCE, vec![extrinsic(0)]),
 		).unwrap();
 
-		futures::executor::block_on(
+		block_on(
 			txpool.maintain(chain_event(
 				client.header(&BlockId::Number(0u64))
 					.expect("header get error")
@@ -585,7 +586,7 @@ mod tests {
 		);
 
 		let deadline = time::Duration::from_secs(9);
-		let proposal = futures::executor::block_on(
+		let proposal = block_on(
 			proposer.propose(Default::default(), Default::default(), deadline),
 		).unwrap();
 
@@ -625,7 +626,7 @@ mod tests {
 			client.clone(),
 		);
 
-		futures::executor::block_on(
+		block_on(
 			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
 				extrinsic(0),
 				extrinsic(1),
@@ -667,7 +668,7 @@ mod tests {
 
 			// when
 			let deadline = time::Duration::from_secs(9);
-			let block = futures::executor::block_on(
+			let block = block_on(
 				proposer.propose(Default::default(), Default::default(), deadline)
 			).map(|r| r.block).unwrap();
 
@@ -679,7 +680,7 @@ mod tests {
 			block
 		};
 
-		futures::executor::block_on(
+		block_on(
 			txpool.maintain(chain_event(
 				client.header(&BlockId::Number(0u64))
 					.expect("header get error")
@@ -689,9 +690,9 @@ mod tests {
 
 		// let's create one block and import it
 		let block = propose_block(&client, 0, 2, 7);
-		client.import(BlockOrigin::Own, block).unwrap();
+		block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
-		futures::executor::block_on(
+		block_on(
 			txpool.maintain(chain_event(
 				client.header(&BlockId::Number(1))
 					.expect("header get error")
@@ -701,6 +702,6 @@ mod tests {
 
 		// now let's make sure that we can still make some progress
 		let block = propose_block(&client, 1, 2, 5);
-		client.import(BlockOrigin::Own, block).unwrap();
+		block_on(client.import(BlockOrigin::Own, block)).unwrap();
 	}
 }
