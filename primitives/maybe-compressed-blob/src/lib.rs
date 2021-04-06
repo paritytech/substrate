@@ -29,7 +29,7 @@ const ZSTD_PREFIX: [u8; 8] = [82, 188, 83, 118, 70, 219, 142, 5];
 pub const BOMB_LIMIT: u64 = 50 * 1024 * 1024;
 
 /// A possible bomb was encountered.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Error {
 	/// Decoded size was too large, and the code payload may be a bomb.
 	PossibleBomb,
@@ -96,10 +96,65 @@ pub fn decode(blob: &[u8]) -> Result<Cow<[u8]>, Error> {
 /// this will not compress the blob, as the decoder will not be able to be
 /// able to differentiate it from a compression bomb.
 #[cfg(not(target_os = "unknown"))]
-pub fn encode(blob: &[u8]) -> Option<Vec<u8>> {
+pub fn compress(blob: &[u8]) -> Option<Vec<u8>> {
+	use std::io::Write;
+
 	if (blob.len() as u64) > BOMB_LIMIT {
 		return None;
 	}
 
-	zstd::encode_all(blob, 3).ok()
+	let mut buf = ZSTD_PREFIX.to_vec();
+
+	{
+		let mut v = zstd::Encoder::new(&mut buf, 3).ok()?.auto_finish();
+		v.write_all(blob).ok()?;
+	}
+
+	Some(buf)
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use std::io::Write;
+
+	#[test]
+	fn refuse_to_encode_over_limit() {
+		let mut v = vec![0; (BOMB_LIMIT + 1) as usize];
+		assert!(compress(&v).is_none());
+
+		let _ = v.pop();
+		assert!(compress(&v).is_some());
+
+	}
+
+	#[test]
+	fn compress_and_decode() {
+		let v = vec![0; 10_000];
+
+		let compressed = compress(&v).unwrap();
+
+		assert!(compressed.starts_with(&ZSTD_PREFIX));
+		assert_eq!(&decode(&compressed).unwrap()[..], &v[..])
+	}
+
+	#[test]
+	fn decodes_only_when_magic() {
+		let v = vec![0; 10_000];
+
+		assert_eq!(&decode(&v).unwrap()[..], &v[..]);
+	}
+
+	#[test]
+	fn possible_bomb_fails() {
+		let encoded_bigger_than_bomb = vec![0; (BOMB_LIMIT + 1) as usize];
+		let mut buf = ZSTD_PREFIX.to_vec();
+
+		{
+			let mut v = zstd::Encoder::new(&mut buf, 3).unwrap().auto_finish();
+			v.write_all(&encoded_bigger_than_bomb[..]).unwrap();
+		}
+
+		assert_eq!(decode(&buf[..]).err(), Some(Error::PossibleBomb));
+	}
 }
