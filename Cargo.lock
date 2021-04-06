@@ -8919,7 +8919,6 @@ name = "sp-maybe-compressed-blob"
 version = "3.0.0"
 dependencies = [
  "impl-trait-for-tuples",
- "parity-scale-codec 2.0.1",
  "ruzstd",
  "zstd",
 ]

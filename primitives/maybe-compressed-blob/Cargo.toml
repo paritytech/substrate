@@ -10,14 +10,8 @@ description = "Handling of blobs, usually Wasm code, which may be compresed"
 documentation = "https://docs.rs/sp-maybe-compressed-blob"
 readme = "README.md"
 
-[dependencies]
-impl-trait-for-tuples = "0.2.1"
-codec = { package = "parity-scale-codec", version = "2.0.0", features = ["derive"] }
-zstd = { version = "0.6.0", optional = true }
-ruzstd = { version = "0.2.2", optional = true }
+[target.'cfg(not(target_os = "unknown"))'.dependencies]
+zstd = { version = "0.6.0" }
 
-[features]
-default = []
-zstd_c = ["zstd"]
-zstd_rust = []
-encode = ["zstd"]
+[target.'cfg(target_os = "unknown")'.dependencies]
+ruzstd = { version = "0.2.2" }
