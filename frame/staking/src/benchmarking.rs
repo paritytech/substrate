@@ -260,7 +260,7 @@ benchmarks! {
 	verify {
 		// all nominators now should *not* be nominating our validator...
 		for n in nominator_stashes.iter() {
-			assert!(!Nominators::<T>::get(n).unwrap().targets.iter().map(|(t, _)| t).collect::<Vec<_>>().contains(&&stash));
+			assert!(!Nominators::<T>::get(n).unwrap().targets.iter().any(|(t, _)| t == &stash));
 		}
 	}
 
