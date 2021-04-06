@@ -238,6 +238,14 @@ cargo-check-subkey:
     - SKIP_WASM_BUILD=1 time cargo check --release
     - sccache -s
 
+cargo-check-try-runtime:
+  stage:                           test
+  <<:                              *docker-env
+  <<:                              *test-refs
+  script:
+    - time cargo check --features try-runtime
+    - sccache -s
+
 test-deterministic-wasm:
   stage:                           test
   <<:                              *docker-env
