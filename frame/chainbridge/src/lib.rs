@@ -621,6 +621,6 @@ impl<T: Trait> EnsureOrigin<T::Origin> for EnsureBridge<T> {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> T::Origin {
-
+		T::Origin::from(system::RawOrigin::Root.into())
 	}
 }
