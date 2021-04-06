@@ -25,9 +25,6 @@ use std::io::Read;
 // Zstd compression.
 const ZSTD_PREFIX: [u8; 8] = [82, 188, 83, 118, 70, 219, 142, 5];
 
-/// The maximum size for compressed blobs.
-pub const BOMB_LIMIT: u64 = 50 * 1024 * 1024;
-
 /// A possible bomb was encountered.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Error {
@@ -48,17 +45,21 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error { }
 
-fn read_from_decoder(decoder: impl Read, blob_len: usize) -> Result<Vec<u8>, Error> {
-	let mut decoder = decoder.take(BOMB_LIMIT);
+fn read_from_decoder(
+	decoder: impl Read,
+	blob_len: usize,
+	bomb_limit: usize,
+) -> Result<Vec<u8>, Error> {
+	let mut decoder = decoder.take(bomb_limit as u64);
 
 	let mut buf = Vec::with_capacity(blob_len);
 	decoder.read_to_end(&mut buf).map_err(|_| Error::Invalid)?;
 
-	if (buf.len() as u64) < BOMB_LIMIT {
+	if buf.len() < bomb_limit {
 		Ok(buf)
 	} else {
 		// try reading one more byte and see if it succeeds.
-		decoder.set_limit(BOMB_LIMIT + 1);
+		decoder.set_limit((bomb_limit + 1) as u64);
 		if decoder.read(&mut [0]).ok().map_or(false, |read| read == 0) {
 			Ok(buf)
 		} else {
@@ -68,25 +69,26 @@ fn read_from_decoder(decoder: impl Read, blob_len: usize) -> Result<Vec<u8>, Err
 }
 
 #[cfg(not(target_os = "unknown"))]
-fn decompress_zstd(blob: &[u8]) -> Result<Vec<u8>, Error> {
+fn decompress_zstd(blob: &[u8], bomb_limit: usize) -> Result<Vec<u8>, Error> {
 	let decoder = zstd::Decoder::new(blob).map_err(|_| Error::Invalid)?;
 
-	read_from_decoder(decoder, blob.len())
+	read_from_decoder(decoder, blob.len(), bomb_limit)
 }
 
 #[cfg(target_os = "unknown")]
-fn decompress_zstd(mut blob: &[u8]) -> Result<Vec<u8>, Error> {
+fn decompress_zstd(mut blob: &[u8], bomb_limit: usize) -> Result<Vec<u8>, Error> {
 	let blob_len = blob.len();
 	let decoder = ruzstd::streaming_decoder::StreamingDecoder::new(&mut blob)
 		.map_err(|_| Error::Invalid)?;
 
-	read_from_decoder(decoder, blob_len)
+	read_from_decoder(decoder, blob_len, bom_limit)
 }
 
-/// Decode a blob, if it indicates that it is compressed.
-pub fn decompress(blob: &[u8]) -> Result<Cow<[u8]>, Error> {
+/// Decode a blob, if it indicates that it is compressed. Provide a `bomb_limit`, which
+/// is the limit of bytes which should be decompressed from the blob.
+pub fn decompress(blob: &[u8], bomb_limit: usize) -> Result<Cow<[u8]>, Error> {
 	if blob.starts_with(&ZSTD_PREFIX) {
-		decompress_zstd(&blob[ZSTD_PREFIX.len()..]).map(Into::into)
+		decompress_zstd(&blob[ZSTD_PREFIX.len()..], bomb_limit).map(Into::into)
 	} else {
 		Ok(blob.into())
 	}
@@ -96,10 +98,10 @@ pub fn decompress(blob: &[u8]) -> Result<Cow<[u8]>, Error> {
 /// this will not compress the blob, as the decoder will not be able to be
 /// able to differentiate it from a compression bomb.
 #[cfg(not(target_os = "unknown"))]
-pub fn compress(blob: &[u8]) -> Option<Vec<u8>> {
+pub fn compress(blob: &[u8], bomb_limit: usize) -> Option<Vec<u8>> {
 	use std::io::Write;
 
-	if (blob.len() as u64) > BOMB_LIMIT {
+	if blob.len() > bomb_limit {
 		return None;
 	}
 
@@ -118,36 +120,37 @@ mod tests {
 	use super::*;
 	use std::io::Write;
 
+	const BOMB_LIMIT: usize = 10;
+
 	#[test]
 	fn refuse_to_encode_over_limit() {
-		let mut v = vec![0; (BOMB_LIMIT + 1) as usize];
-		assert!(compress(&v).is_none());
+		let mut v = vec![0; BOMB_LIMIT + 1];
+		assert!(compress(&v, BOMB_LIMIT).is_none());
 
 		let _ = v.pop();
-		assert!(compress(&v).is_some());
-
+		assert!(compress(&v, BOMB_LIMIT).is_some());
 	}
 
 	#[test]
 	fn compress_and_decompress() {
-		let v = vec![0; 10_000];
+		let v = vec![0; BOMB_LIMIT];
 
-		let compressed = compress(&v).unwrap();
+		let compressed = compress(&v, BOMB_LIMIT).unwrap();
 
 		assert!(compressed.starts_with(&ZSTD_PREFIX));
-		assert_eq!(&decompress(&compressed).unwrap()[..], &v[..])
+		assert_eq!(&decompress(&compressed, BOMB_LIMIT).unwrap()[..], &v[..])
 	}
 
 	#[test]
 	fn decompresses_only_when_magic() {
-		let v = vec![0; 10_000];
+		let v = vec![0; BOMB_LIMIT + 1];
 
-		assert_eq!(&decompress(&v).unwrap()[..], &v[..]);
+		assert_eq!(&decompress(&v, BOMB_LIMIT).unwrap()[..], &v[..]);
 	}
 
 	#[test]
 	fn possible_bomb_fails() {
-		let encoded_bigger_than_bomb = vec![0; (BOMB_LIMIT + 1) as usize];
+		let encoded_bigger_than_bomb = vec![0; BOMB_LIMIT + 1];
 		let mut buf = ZSTD_PREFIX.to_vec();
 
 		{
@@ -155,6 +158,6 @@ mod tests {
 			v.write_all(&encoded_bigger_than_bomb[..]).unwrap();
 		}
 
-		assert_eq!(decompress(&buf[..]).err(), Some(Error::PossibleBomb));
+		assert_eq!(decompress(&buf[..], BOMB_LIMIT).err(), Some(Error::PossibleBomb));
 	}
 }
