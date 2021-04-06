@@ -72,7 +72,7 @@ enum State {
 	Gossip,
 }
 
-pub(crate) struct BeefyWorker<B, S, C, BE, P>
+pub(crate) struct BeefyWorker<B, C, BE, P>
 where
 	B: Block,
 	BE: Backend<B>,
@@ -85,10 +85,10 @@ where
 	local_id: Option<P::Public>,
 	key_store: SyncCryptoStorePtr,
 	min_interval: u32,
-	rounds: round::Rounds<MmrRootHash, NumberFor<B>, P::Public, S>,
+	rounds: round::Rounds<MmrRootHash, NumberFor<B>, P::Public, P::Signature>,
 	finality_notifications: FinalityNotifications<B>,
 	gossip_engine: Arc<Mutex<GossipEngine<B>>>,
-	signed_commitment_sender: notification::BeefySignedCommitmentSender<B, S>,
+	signed_commitment_sender: notification::BeefySignedCommitmentSender<B, P::Signature>,
 	best_finalized_block: NumberFor<B>,
 	best_block_voted_on: NumberFor<B>,
 	client: Arc<C>,
@@ -97,7 +97,7 @@ where
 	_pair: PhantomData<P>,
 }
 
-impl<B, S, C, BE, P> BeefyWorker<B, S, C, BE, P>
+impl<B, C, BE, P> BeefyWorker<B, C, BE, P>
 where
 	B: Block,
 	BE: Backend<B>,
@@ -119,7 +119,7 @@ where
 	pub(crate) fn new(
 		client: Arc<C>,
 		key_store: SyncCryptoStorePtr,
-		signed_commitment_sender: notification::BeefySignedCommitmentSender<B, S>,
+		signed_commitment_sender: notification::BeefySignedCommitmentSender<B, P::Signature>,
 		gossip_engine: GossipEngine<B>,
 		metrics: Option<Metrics>,
 	) -> Self {
@@ -181,10 +181,9 @@ where
 	}
 }
 
-impl<B, S, C, BE, P> BeefyWorker<B, S, C, BE, P>
+impl<B, C, BE, P> BeefyWorker<B, C, BE, P>
 where
 	B: Block,
-	S: Clone + Codec + Debug + PartialEq + std::convert::TryFrom<Vec<u8>>,
 	BE: Backend<B>,
 	P: sp_core::Pair,
 	P::Public: AppPublic + Codec,
@@ -217,7 +216,7 @@ where
 		number == next_block_to_vote_on
 	}
 
-	fn sign_commitment(&self, id: &P::Public, commitment: &[u8]) -> Result<S, error::Crypto<P::Public>> {
+	fn sign_commitment(&self, id: &P::Public, commitment: &[u8]) -> Result<P::Signature, error::Crypto<P::Public>> {
 		let sig = SyncCryptoStore::sign_with(&*self.key_store, KEY_TYPE, &id.to_public_crypto_pair(), &commitment)
 			.map_err(|e| error::Crypto::CannotSign((*id).clone(), e.to_string()))?
 			.ok_or_else(|| error::Crypto::CannotSign((*id).clone(), "No key in KeyStore found".into()))?;
@@ -302,7 +301,7 @@ where
 		}
 	}
 
-	fn handle_vote(&mut self, round: (MmrRootHash, NumberFor<B>), vote: (P::Public, S)) {
+	fn handle_vote(&mut self, round: (MmrRootHash, NumberFor<B>), vote: (P::Public, P::Signature)) {
 		// TODO: validate signature
 		let vote_added = self.rounds.add_vote(round, vote);
 
@@ -329,7 +328,10 @@ where
 			|notification| async move {
 				debug!(target: "beefy", "🥩 Got vote message: {:?}", notification);
 
-				VoteMessage::<MmrRootHash, NumberFor<B>, P::Public, S>::decode(&mut &notification.message[..]).ok()
+				VoteMessage::<MmrRootHash, NumberFor<B>, P::Public, P::Signature>::decode(
+					&mut &notification.message[..],
+				)
+				.ok()
 			},
 		));
 

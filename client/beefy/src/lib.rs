@@ -149,7 +149,7 @@ pub async fn start_beefy_gadget<B, P, BE, C, N, SO>(
 			}
 		});
 
-	let worker = worker::BeefyWorker::<_, P::Signature, _, BE, P>::new(
+	let worker = worker::BeefyWorker::<_, _, BE, P>::new(
 		client.clone(),
 		key_store,
 		signed_commitment_sender,
