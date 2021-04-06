@@ -81,7 +81,7 @@ fn decompress_zstd(mut blob: &[u8], bomb_limit: usize) -> Result<Vec<u8>, Error>
 	let decoder = ruzstd::streaming_decoder::StreamingDecoder::new(&mut blob)
 		.map_err(|_| Error::Invalid)?;
 
-	read_from_decoder(decoder, blob_len, bom_limit)
+	read_from_decoder(decoder, blob_len, bomb_limit)
 }
 
 /// Decode a blob, if it indicates that it is compressed. Provide a `bomb_limit`, which
