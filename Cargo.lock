@@ -3862,12 +3862,15 @@ dependencies = [
  "pallet-babe",
  "pallet-balances",
  "pallet-cere-ddc",
+ "pallet-chainbridge",
  "pallet-collective",
  "pallet-contracts",
  "pallet-contracts-primitives",
  "pallet-contracts-rpc-runtime-api",
  "pallet-democracy",
  "pallet-elections-phragmen",
+ "pallet-erc20",
+ "pallet-erc721",
  "pallet-finality-tracker",
  "pallet-grandpa",
  "pallet-identity",
@@ -4336,6 +4339,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-chainbridge"
+version = "2.0.0"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "parity-scale-codec",
+ "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-collective"
 version = "2.0.1"
 dependencies = [
@@ -4472,6 +4491,42 @@ dependencies = [
  "sp-runtime",
  "sp-std",
  "substrate-test-utils",
+]
+
+[[package]]
+name = "pallet-erc20"
+version = "2.0.0"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "pallet-chainbridge",
+ "pallet-erc721",
+ "parity-scale-codec",
+ "serde",
+ "sp-arithmetic",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-erc721"
+version = "2.0.0"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "pallet-chainbridge",
+ "parity-scale-codec",
+ "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
 ]
 
 [[package]]

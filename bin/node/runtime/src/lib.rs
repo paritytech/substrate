@@ -40,6 +40,9 @@ use sp_core::{
 	u32_trait::{_1, _2, _3, _4},
 	OpaqueMetadata,
 };
+use sp_io::{
+	hashing::{blake2_128},
+};
 pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
 use sp_api::impl_runtime_apis;
@@ -67,6 +70,7 @@ use pallet_session::{historical as pallet_session_historical};
 use sp_inherents::{InherentData, CheckInherentsResult};
 use static_assertions::const_assert;
 pub use pallet_cere_ddc;
+pub use pallet_chainbridge;
 
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
@@ -903,6 +907,42 @@ impl pallet_cere_ddc::Trait for Runtime {
 	type Event = Event;
 }
 
+parameter_types! {
+	pub const ChainId: u8 = 1;
+    pub const ProposalLifetime: BlockNumber = 1000;
+}
+
+/// Configure the send data pallet
+impl pallet_chainbridge::Trait for Runtime {
+	type Event = Event;
+	type AdminOrigin = frame_system::EnsureRoot<Self::AccountId>;
+	type Proposal = Call;
+	type ChainId = ChainId;
+	type ProposalLifetime = ProposalLifetime;
+}
+
+parameter_types! {
+    pub HashId: pallet_chainbridge::ResourceId = pallet_chainbridge::derive_resource_id(1, &blake2_128(b"hash"));
+    // Note: Chain ID is 0 indicating this is native to another chain
+    pub NativeTokenId: pallet_chainbridge::ResourceId = pallet_chainbridge::derive_resource_id(0, &blake2_128(b"DAV"));
+
+    pub NFTTokenId: pallet_chainbridge::ResourceId = pallet_chainbridge::derive_resource_id(1, &blake2_128(b"NFT"));
+}
+
+impl pallet_erc721::Trait for Runtime {
+	type Event = Event;
+	type Identifier = NFTTokenId;
+}
+
+impl pallet_erc20::Trait for Runtime {
+	type Event = Event;
+	type BridgeOrigin = pallet_chainbridge::EnsureBridge<Runtime>;
+	type Currency = pallet_balances::Module<Runtime>;
+	type HashId = HashId;
+	type NativeTokenId = NativeTokenId;
+	type Erc721Id = NFTTokenId;
+}
+
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -942,6 +982,9 @@ construct_runtime!(
 		Proxy: pallet_proxy::{Module, Call, Storage, Event<T>},
 		Multisig: pallet_multisig::{Module, Call, Storage, Event<T>},
 		CereDDCModule: pallet_cere_ddc::{Module, Call, Storage, Event<T>},
+		ChainBridge: pallet_chainbridge::{Module, Call, Storage, Event<T>},
+		Erc721: pallet_erc721::{Module, Call, Storage, Event<T>},
+		Erc20: pallet_erc20::{Module, Call, Event<T>},
 	}
 );
 
