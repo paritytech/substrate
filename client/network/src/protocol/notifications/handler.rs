@@ -633,6 +633,7 @@ impl ProtocolsHandler for NotifsHandler {
 							});
 						}
 
+						debug_assert!(!(in_substream_reopened.is_some() && in_substream_closing.is_some()));
 						protocol_info.state = State::Opening {
 							in_substream_closing: in_substream_closing.take(),
 							in_substream_reopened: in_substream_reopened.take(),
@@ -703,6 +704,8 @@ impl ProtocolsHandler for NotifsHandler {
 						};
 					},
 					State::Opening { in_substream_closing, in_substream_reopened, out_substream_closing } => {
+						debug_assert!(!(in_substream_reopened.is_some() && in_substream_closing.is_some()));
+
 						let pending_opening = out_substream_closing.is_none();
 						if let Some(in_substream_reopened) = in_substream_reopened.as_mut() {
 							in_substream_reopened.set_close_desired();
@@ -771,6 +774,7 @@ impl ProtocolsHandler for NotifsHandler {
 				ref mut in_substream_reopened,
 				..
 			} => {
+				debug_assert!(!(in_substream_reopened.is_some() && in_substream_closing.is_some()));
 				debug_assert!(out_substream_closing.is_none());
 
 				if let Some(in_substream_reopened) = in_substream_reopened.as_mut() {
