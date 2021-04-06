@@ -755,7 +755,6 @@ impl<T: Config> Module<T> {
 		if old_keys.is_none() {
 			let assertion = frame_system::Pallet::<T>::inc_consumers(&account).is_ok();
 			debug_assert!(assertion, "can_inc_consumer() returned true; no change since; qed");
-			// ^^^ Defensive only; Consumers were incremented just before, so should never fail.
 		}
 
 		Ok(())
@@ -799,7 +798,7 @@ impl<T: Config> Module<T> {
 	}
 
 	fn do_purge_keys(account: &T::AccountId) -> DispatchResult {
-		let old_keys = Self::take_keys(&who).ok_or(Error::<T>::NoKeys)?;
+		let old_keys = Self::take_keys(&account).ok_or(Error::<T>::NoKeys)?;
 		for id in T::Keys::key_ids() {
 			let key_data = old_keys.get_raw(*id);
 			Self::clear_key_owner(*id, key_data);
