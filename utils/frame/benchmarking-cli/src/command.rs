@@ -63,7 +63,7 @@ impl BenchmarkCmd {
 		let genesis_storage = spec.build_storage()?;
 		let mut changes = Default::default();
 		let cache_size = Some(self.database_cache_size as usize);
-		let state = BenchmarkingState::<BB>::new(genesis_storage, cache_size)?;
+		let state = BenchmarkingState::<BB>::new(genesis_storage, cache_size, self.record_proof)?;
 		let executor = NativeExecutor::<ExecDispatch>::new(
 			wasm_method,
 			self.heap_pages,

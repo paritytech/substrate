@@ -162,6 +162,12 @@ pub trait Benchmarking {
 		whitelist.retain(|x| x.key != remove);
 		self.set_whitelist(whitelist);
 	}
+
+	/// Get current estimated proof size
+	fn proof_size(&self) -> Option<u32> {
+		self.proof_size()
+	}
+
 }
 
 /// The pallet benchmarking trait.
