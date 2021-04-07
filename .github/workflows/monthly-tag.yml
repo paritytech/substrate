@@ -24,7 +24,7 @@ jobs:
         run: |
           echo "# Automatic snapshot pre-release ${{ steps.tags.outputs.new }}" > Changelog.md
           echo "" >> Changelog.md
-          echo "## Changes since last snapshot (${{ steps.tags.outputs.oold }})" >> Changelog.md
+          echo "## Changes since last snapshot (${{ steps.tags.outputs.old }})" >> Changelog.md
           echo "" >> Changelog.md
           GITHUB_DEPLOY_TOKEN=${{ secrets.GITHUB_TOKEN }} ./.maintain/gitlab/generate_changelog.sh ${{ steps.tags.outputs.old }} >>  Changelog.md
       - name: Release snapshot
@@ -38,4 +38,3 @@ jobs:
           draft: false
           prerelease: true
           body_path: Changelog.md
-
