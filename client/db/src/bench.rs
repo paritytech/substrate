@@ -542,7 +542,7 @@ mod test {
 
 	#[test]
 	fn read_to_main_and_child_tries() {
-		let bench_state = BenchmarkingState::<crate::tests::Block>::new(Default::default(), None)
+		let bench_state = BenchmarkingState::<crate::tests::Block>::new(Default::default(), None, false)
 			.unwrap();
 
 		for _ in 0..2 {
