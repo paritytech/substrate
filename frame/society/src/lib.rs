@@ -997,7 +997,8 @@ decl_module! {
 						match kind {
 							BidKind::Deposit(deposit) => {
 								// Slash deposit and move it to the society account
-								let _ = T::Currency::repatriate_reserved(&who, &Self::account_id(), deposit, BalanceStatus::Free);
+								let res = T::Currency::repatriate_reserved(&who, &Self::account_id(), deposit, BalanceStatus::Free);
+								debug_assert!(res.is_ok());
 							}
 							BidKind::Vouch(voucher, _) => {
 								// Ban the voucher from vouching again
