@@ -136,6 +136,32 @@ enum Enum<T: Config, U, V> {
 	VariantUnit2,
 }
 
+// enum that will have a named default.
+#[derive(DebugNoBound, CloneNoBound, EqNoBound, PartialEqNoBound, DefaultNoBound)]
+enum Enum2<T: Config> {
+	VariantNamed {
+		a: u32,
+		b: u64,
+		c: T::C,
+	},
+	VariantUnnamed(u32, u64, T::C),
+	VariantUnit,
+	VariantUnit2,
+}
+
+// enum that will have a unit default.
+#[derive(DebugNoBound, CloneNoBound, EqNoBound, PartialEqNoBound, DefaultNoBound)]
+enum Enum3<T: Config> {
+	VariantUnit,
+	VariantNamed {
+		a: u32,
+		b: u64,
+		c: T::C,
+	},
+	VariantUnnamed(u32, u64, T::C),
+	VariantUnit2,
+}
+
 #[test]
 fn test_enum() {
 	type TestEnum = Enum::<Runtime, ImplNone, ImplNone>;
@@ -151,6 +177,15 @@ fn test_enum() {
 		default,
 		// first variant is default.
 		TestEnum::VariantUnnamed(0, 0, 0, Default::default())
+	);
+
+	assert_eq!(
+		Enum2::<Runtime>::default(),
+		Enum2::<Runtime>::VariantNamed { a: 0, b: 0, c: 0},
+	);
+	assert_eq!(
+		Enum3::<Runtime>::default(),
+		Enum3::<Runtime>::VariantUnit,
 	);
 
 	assert!(variant_0 != variant_0_bis);

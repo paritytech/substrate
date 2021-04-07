@@ -62,7 +62,7 @@ pub fn derive_default_no_bound(input: proc_macro::TokenStream) -> proc_macro::To
 								#i: core::default::Default::default()
 							));
 
-						quote::quote!( Self { #( #fields, )* } )
+						quote::quote!( #name :: #ty_generics :: #variant_ident { #( #fields, )* } )
 					},
 					syn::Fields::Unnamed(unnamed) => {
 						let fields = unnamed.unnamed.iter().enumerate()
@@ -70,9 +70,10 @@ pub fn derive_default_no_bound(input: proc_macro::TokenStream) -> proc_macro::To
 							.map(|i| quote::quote_spanned!(i.span() =>
 								core::default::Default::default()
 							));
+
 						quote::quote!( #name :: #ty_generics :: #variant_ident ( #( #fields, )* ) )
 					},
-					syn::Fields::Unit => quote::quote!( #name :: #ty_generics ),
+					syn::Fields::Unit => quote::quote!( #name :: #ty_generics :: #variant_ident ),
 				}
 			} else {
 				quote::quote!( Self )
