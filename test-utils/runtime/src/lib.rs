@@ -1353,9 +1353,7 @@ mod tests {
 		);
 		let proof = sp_state_machine::prove_read(backend, vec![b"value3"]).unwrap();
 		let client = TestClientBuilder::new()
-//			.set_execution_strategy(ExecutionStrategy::NativeElseWasm)
 			.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
-//			.set_execution_strategy(ExecutionStrategy::Both)
 			.build();
 		let runtime_api = client.runtime_api();
 		let block_id = BlockId::Number(client.chain_info().best_number);

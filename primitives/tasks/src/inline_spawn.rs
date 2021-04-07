@@ -28,15 +28,8 @@ use sp_externalities::{WorkerResult, Externalities, AsyncExternalities, TaskId};
 use sp_std::rc::Rc;
 use sp_std::cell::RefCell;
 use sp_std::collections::btree_map::BTreeMap;
-use sp_std::sync::Arc;
 use sp_std::boxed::Box;
 use sp_std::vec::Vec;
-#[cfg(feature = "std")]
-use crate::wasm_runtime::{WasmInstance, WasmModule};
-#[cfg(feature = "std")]
-use parking_lot::Mutex;
-#[cfg(feature = "std")]
-use std::panic::AssertUnwindSafe;
 #[cfg(feature = "std")]
 pub use log::error as log_error;
 #[cfg(feature = "std")]
@@ -55,12 +48,6 @@ use crate::common::{
 pub struct RuntimeInstanceSpawn {
 	tasks: BTreeMap<TaskId, PendingTask>,
 	counter: TaskId,
-}
-
-#[cfg(feature = "std")]
-struct LocalWasm {
-	module: Option<Arc<dyn WasmModule>>,
-	instance: Option<AssertUnwindSafe<Box<dyn WasmInstance>>>,
 }
 
 /// Run a given task inline.
@@ -202,114 +189,6 @@ impl RuntimeInstanceSpawn {
 	) -> TaskId {
 		let task = Task::Wasm(WasmTask { dispatcher_ref, func, data });
 		self.spawn_call_inner(task, calling_ext)
-	}
-}
-
-/// Unbounded inline instance spawn, to use with nodes that can manage threads.
-/// TODO unused could remove.
-#[cfg(feature = "std")]
-pub struct RuntimeInstanceSpawnSend(
-	Arc<Mutex<RuntimeInstanceSpawn>>,
-	Arc<Mutex<LocalWasm>>,
-);
-
-#[cfg(feature = "std")]
-impl RuntimeInstanceSpawnSend {
-	/// Create a new unbounded
-	/// runtime spawn instance.
-	pub fn new(module: Arc<dyn WasmModule>) -> RuntimeInstanceSpawnSend {
-		let instance_spawn = RuntimeInstanceSpawn::new();
-		let wasm = LocalWasm {
-			module: Some(module),
-			instance: None,
-		};
-
-		RuntimeInstanceSpawnSend(
-			Arc::new(Mutex::new(instance_spawn)),
-			Arc::new(Mutex::new(wasm)),
-		)
-	}
-	
-	/// Create a new native only unbounded
-	/// runtime spawn instance.
-	pub fn new_native() -> RuntimeInstanceSpawnSend {
-		let instance_spawn = RuntimeInstanceSpawn::new();
-		let no_wasm = LocalWasm {
-			module: None,
-			instance: None,
-		};
-
-		RuntimeInstanceSpawnSend(
-			Arc::new(Mutex::new(instance_spawn)),
-			Arc::new(Mutex::new(no_wasm)),
-		)
-	}
-}
-
-#[cfg(feature = "std")]
-impl RuntimeInstanceSpawnSend {
-	fn nested_instance(&self) -> Self {
-		let local_wasm = LocalWasm {
-			module: self.1.lock().module.clone(),
-			instance: None,
-		};
-		RuntimeInstanceSpawnSend(
-			Arc::new(Mutex::new(self.0.lock().nested_instance())),
-			Arc::new(Mutex::new(local_wasm)),
-		)
-	}
-}
-
-#[cfg(feature = "std")]
-impl RuntimeSpawn for RuntimeInstanceSpawnSend {
-	fn spawn_call_native(
-		&self,
-		func: fn(Vec<u8>) -> Vec<u8>,
-		data: Vec<u8>,
-		calling_ext: &mut dyn Externalities,
-	) -> TaskId {
-		self.0.lock().spawn_call_native(func, data, calling_ext)
-	}
-
-	fn spawn_call(
-		&self,
-		dispatcher_ref: u32,
-		func: u32,
-		data: Vec<u8>,
-		calling_ext: &mut dyn Externalities,
-	) -> TaskId {
-		self.0.lock().spawn_call(dispatcher_ref, func, data, calling_ext)
-	}
-
-	fn join(&self, handle: TaskId, calling_ext: &mut dyn Externalities) -> Option<Vec<u8>> {
-		let nested = Box::new(self.nested_instance());
-		let worker_result = match self.0.lock().tasks.remove(&handle) {
-			Some(task) => {
-				{
-					let LocalWasm { instance, module } = &mut *self.1.lock();
-					let instance_ref = InlineInstantiateRef {
-						instance,
-						module: &*module,
-					};
-
-					process_task_inline(task.task, task.ext, nested, instance_ref)
-				}
-			},
-			// handle has been removed due to dismiss or
-			// invalid externality condition.
-			None => WorkerResult::Invalid,
-		};
-
-		calling_ext.resolve_worker_result(worker_result)
-	}
-
-	fn dismiss(&self, handle: TaskId, calling_ext: &mut dyn Externalities) {
-		calling_ext.dismiss_worker(handle);
-		self.0.lock().dismiss(handle)
-	}
-
-	fn set_capacity(&self, _capacity: u32) {
-		// No capacity, only inline, skip useless lock.
 	}
 }
 
