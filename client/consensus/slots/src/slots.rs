@@ -39,19 +39,19 @@ pub fn duration_now() -> Duration {
 	))
 }
 
-/// Returns the duration until the next slot, based on current duration since
-pub fn time_until_next(now: Duration, slot_duration: Duration) -> Duration {
+/// Returns the duration until the next slot from now.
+pub fn time_until_next(slot_duration: Duration) -> Duration {
 	let remaining_full_millis = slot_duration.as_millis()
-		- (now.as_millis() % slot_duration.as_millis())
+		- (duration_now().as_millis() % slot_duration.as_millis())
 		- 1;
 	Duration::from_millis(remaining_full_millis as u64)
 }
 
 /// Information about a slot.
 pub struct SlotInfo<B: BlockT> {
-	/// The slot number.
+	/// The slot number as found in the inherent data.
 	pub slot: Slot,
-	/// Current timestamp.
+	/// Current timestamp as found in the inherent data.
 	pub timestamp: sp_timestamp::Timestamp,
 	/// The instant at which the slot ends.
 	pub ends_at: Instant,
@@ -80,7 +80,7 @@ impl<B: BlockT> SlotInfo<B> {
 			inherent_data,
 			duration,
 			chain_head,
-			ends_at: Instant::now() + time_until_next(timestamp.as_duration(), duration),
+			ends_at: Instant::now() + time_until_next(duration),
 		}
 	}
 }
@@ -126,7 +126,7 @@ where
 			self.inner_delay = match self.inner_delay.take() {
 				None => {
 					// schedule wait.
-					let wait_dur = time_until_next(duration_now(), self.slot_duration);
+					let wait_dur = time_until_next(self.slot_duration);
 					Some(Delay::new(wait_dur))
 				}
 				Some(d) => Some(d),
@@ -160,7 +160,7 @@ where
 			let inherent_data = inherent_data_providers.create_inherent_data()?;
 
 			// reschedule delay for next slot.
-			let ends_in = time_until_next(timestamp.as_duration(), self.slot_duration);
+			let ends_in = time_until_next(self.slot_duration);
 			self.inner_delay = Some(Delay::new(ends_in));
 
 			// never yield the same slot twice.
