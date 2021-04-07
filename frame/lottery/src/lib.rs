@@ -209,6 +209,8 @@ decl_error! {
 
 decl_module! {
 	pub struct Module<T: Config> for enum Call where origin: T::Origin, system = frame_system {
+		type Error = Error<T>;
+
 		const ModuleId: ModuleId = T::ModuleId::get();
 		const MaxCalls: u32 = T::MaxCalls::get() as u32;
 
@@ -324,7 +326,8 @@ decl_module! {
 						let winning_number = Self::choose_winner(ticket_count);
 						let winner = Tickets::<T>::get(winning_number).unwrap_or(lottery_account);
 						// Not much we can do if this fails...
-						let _ = T::Currency::transfer(&Self::account_id(), &winner, lottery_balance, KeepAlive);
+						let res = T::Currency::transfer(&Self::account_id(), &winner, lottery_balance, KeepAlive);
+						debug_assert!(res.is_ok());
 
 						Self::deposit_event(RawEvent::Winner(winner, lottery_balance));
 

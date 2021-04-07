@@ -24,9 +24,7 @@
 //! we define this simple definition of a contract that can be passed to `create_code` that
 //! compiles it down into a `WasmModule` that can be used as a contract's code.
 
-use crate::Config;
-use crate::Pallet as Contracts;
-
+use crate::{Config, CurrentSchedule};
 use parity_wasm::elements::{
 	Instruction, Instructions, FuncBody, ValueType, BlockType, Section, CustomSection,
 };
@@ -225,7 +223,7 @@ where
 		if def.inject_stack_metering {
 			code = inject_limiter(
 				code,
-				Contracts::<T>::current_schedule().limits.stack_height
+				<CurrentSchedule<T>>::get().limits.stack_height
 			)
 			.unwrap();
 		}
@@ -505,5 +503,5 @@ where
 	T: Config,
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
-	Contracts::<T>::current_schedule().limits.memory_pages
+	<CurrentSchedule<T>>::get().limits.memory_pages
 }
