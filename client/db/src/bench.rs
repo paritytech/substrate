@@ -51,17 +51,16 @@ struct StorageDb<Block: BlockT> {
 
 impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Block> {
 	fn get(&self, key: &Block::Hash, prefix: Prefix) -> Result<Option<DBValue>, String> {
+		let prefixed_key = prefixed_key::<HashFor<Block>>(key, prefix);
 		if let Some(recorder) = &self.proof_recorder {
 			if let Some(v) = recorder.read().get(&key) {
 				return Ok(v.clone());
 			}
-			let prefixed_key = prefixed_key::<HashFor<Block>>(key, prefix);
 			let backend_value = self.db.get(0, &prefixed_key)
 				.map_err(|e| format!("Database backend error: {:?}", e))?;
 			recorder.write().insert(key.clone(), backend_value.clone());
 			Ok(backend_value)
 		} else {
-			let prefixed_key = prefixed_key::<HashFor<Block>>(key, prefix);
 			self.db.get(0, &prefixed_key)
 				.map_err(|e| format!("Database backend error: {:?}", e))
 		}
