@@ -437,7 +437,11 @@ pub trait InherentDataProviderExt {
 	fn slot(&self) -> Slot;
 }
 
-impl<T, S, P> InherentDataProviderExt for (T, S, P) where T: Deref<Target = Timestamp>, S: Deref<Target = Slot> {
+impl<T, S, P> InherentDataProviderExt for (T, S, P)
+where
+	T: Deref<Target = Timestamp>,
+	S: Deref<Target = Slot>,
+{
 	fn timestamp(&self) -> Timestamp {
 		*self.0.deref()
 	}
@@ -447,7 +451,25 @@ impl<T, S, P> InherentDataProviderExt for (T, S, P) where T: Deref<Target = Time
 	}
 }
 
-impl<T, S> InherentDataProviderExt for (T, S) where T: Deref<Target = Timestamp>, S: Deref<Target = Slot> {
+impl<T, S, P, R> InherentDataProviderExt for (T, S, P, R)
+where
+	T: Deref<Target = Timestamp>,
+	S: Deref<Target = Slot>,
+{
+	fn timestamp(&self) -> Timestamp {
+		*self.0.deref()
+	}
+
+	fn slot(&self) -> Slot {
+		*self.1.deref()
+	}
+}
+
+impl<T, S> InherentDataProviderExt for (T, S)
+where
+	T: Deref<Target = Timestamp>,
+	S: Deref<Target = Slot>,
+{
 	fn timestamp(&self) -> Timestamp {
 		*self.0.deref()
 	}
