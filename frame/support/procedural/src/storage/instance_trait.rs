@@ -87,6 +87,7 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 				/// instance.
 				#[doc(hidden)]
 			),
+			// This is just to make the type system happy. Not actually used.
 			index: 0,
 		};
 		impls.extend(create_and_impl_instance_struct(scrate, &instance_def, def));
