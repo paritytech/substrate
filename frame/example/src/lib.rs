@@ -598,6 +598,22 @@ pub mod pallet {
 	#[pallet::getter(fn foo)]
 	pub(super) type Foo<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
 
+	frame_support::parameter_types! {
+		pub const Five: usize = 5;
+	}
+
+	// TODO: we can avoid this probably.
+	impl Default for Five {
+		fn default() -> Self {
+			Self
+		}
+	}
+
+	#[pallet::storage]
+	#[pallet::getter(fn bounded)]
+	pub(super) type BoundedStuff<T: Config> =
+		StorageValue<_, frame_support::storage::BoundedVec<u32, Five>, ValueQuery>;
+
 	// The genesis config type.
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {

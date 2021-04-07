@@ -811,15 +811,129 @@ mod private {
 
 	impl<T: Encode> Sealed for Vec<T> {}
 	impl<Hash: Encode> Sealed for Digest<Hash> {}
+	impl<T: ValueType, S: Get<usize>> Sealed for BoundedVec<T, S> {}
 }
 
 impl<T: Encode> StorageAppend<T> for Vec<T> {}
 impl<T: Encode> StorageDecodeLength for Vec<T> {}
 
-/// We abuse the fact that SCALE does not put any marker into the encoding, i.e.
-/// we only encode the internal vec and we can append to this vec. We have a test that ensures
-/// that if the `Digest` format ever changes, we need to remove this here.
+/// We abuse the fact that SCALE does not put any marker into the encoding, i.e. we only encode the
+/// internal vec and we can append to this vec. We have a test that ensures that if the `Digest`
+/// format ever changes, we need to remove this here.
 impl<Hash: Encode> StorageAppend<DigestItem<Hash>> for Digest<Hash> {}
+
+use crate::traits::Get;
+use sp_std::convert::TryFrom;
+
+pub trait ValueType: FullCodec + Default {}
+impl<T: FullCodec + Default> ValueType for T {}
+
+#[derive(Encode, Decode, Default)]
+pub struct BoundedVec<T: ValueType, S: Get<usize>>(Vec<T>, sp_std::marker::PhantomData<S>);
+
+impl<T: ValueType, S: Get<usize>> BoundedVec<T, S> {
+	fn unchecked_from(t: Vec<T>) -> Self {
+		Self(t, Default::default())
+	}
+	// TODO: add a subset of the Vec's API here that generally doesn't expand it in any way. Adding
+	// any API that can insert/append/enqueue is tricky and needs care.
+}
+
+impl<T: ValueType, S: Get<usize>> TryFrom<Vec<T>> for BoundedVec<T, S> {
+	type Error = ();
+	fn try_from(t: Vec<T>) -> Result<Self, Self::Error> {
+		if t.len() <= S::get() {
+			Ok(Self::unchecked_from(t))
+		} else {
+			Err(())
+		}
+	}
+}
+
+// It is okay to give a non-mutable reference of the inner vec to anyone.
+impl<T: ValueType, S: Get<usize>> AsRef<Vec<T>> for BoundedVec<T, S> {
+	fn as_ref(&self) -> &Vec<T> {
+		&self.0
+	}
+}
+
+impl<T: ValueType, S: Get<usize>> codec::DecodeLength for BoundedVec<T, S> {
+	fn len(mut self_encoded: &[u8]) -> Result<usize, codec::Error> {
+		use sp_std::convert::TryFrom;
+		// `BoundedVec<T, _>` stored just a `Vec<T>`, thus the length is at the beginning in
+		// `Compact` form, and same implementation as `Vec<T>` can be used.
+		<Vec<T> as codec::DecodeLength>::len(self_encoded)
+	}
+}
+
+impl<T: ValueType, S: Get<usize>> StorageDecodeLength for BoundedVec<T, S> {}
+
+pub trait TryAppend<T: ValueType, S: Get<usize>> {
+	fn try_append<LikeT: EncodeLike<T>>(item: LikeT) -> Result<(), ()>;
+}
+
+impl<T: ValueType, S: Get<usize>, V: generator::StorageValue<BoundedVec<T, S>>> TryAppend<T, S>
+	for V
+{
+	fn try_append<LikeT: EncodeLike<T>>(item: LikeT) -> Result<(), ()> {
+		let bound = S::get();
+		let current = Self::decode_len().unwrap_or_default();
+		dbg!(current, bound);
+		if (current + 1usize) <= bound {
+			// NOTE: we cannot reuse the implementation for `Vec<T>` here because we never want to
+			// mark `BoundedVec<T, S>` as `StorageAppend`.
+			let key = Self::storage_value_final_key();
+			sp_io::storage::append(&key, item.encode());
+			Ok(())
+		} else {
+			Err(())
+		}
+	}
+}
+
+#[cfg(test)]
+mod bounded_vec {
+	use super::*;
+	use sp_core::hashing::twox_128;
+	// use crate::hash::Identity;
+	use sp_io::TestExternalities;
+	// use generator::StorageValue as _;
+	use sp_std::convert::TryInto;
+	use crate::assert_ok;
+
+	crate::parameter_types! {
+		pub const Seven: usize = 7;
+	}
+
+	crate::generate_storage_alias! { Prefix, Foo => Value<BoundedVec<u32, Seven>> }
+
+	#[test]
+	fn decode_len_works() {
+		TestExternalities::default().execute_with(|| {
+			let bounded: BoundedVec<u32, Seven> = vec![1, 2, 3].try_into().unwrap();
+			Foo::put(bounded);
+			assert_eq!(Foo::decode_len().unwrap(), 3);
+		});
+
+		// TODO: also for map.
+	}
+
+	#[test]
+	fn append_works() {
+		TestExternalities::default().execute_with(|| {
+			let bounded: BoundedVec<u32, Seven> = vec![1, 2, 3].try_into().unwrap();
+			Foo::put(bounded);
+			assert_ok!(Foo::try_append(4));
+			assert_ok!(Foo::try_append(5));
+			assert_ok!(Foo::try_append(6));
+			assert_ok!(Foo::try_append(7));
+			assert_eq!(Foo::decode_len().unwrap(), 7);
+			assert!(Foo::try_append(8).is_err());
+		});
+
+		// TODO: also for map.
+	}
+}
 
 #[cfg(test)]
 mod test {
