@@ -985,8 +985,7 @@ impl<B: BlockT> ChainSync<B> {
 	fn validate_and_queue_blocks(
 		&mut self,
 		mut new_blocks: Vec<IncomingBlock<B>>,
-	) -> OnBlockData<B>
-	{
+	) -> OnBlockData<B> {
 		let orig_len = new_blocks.len();
 		new_blocks.retain(|b| !self.queue_blocks.contains(&b.hash));
 		if new_blocks.len() != orig_len {
