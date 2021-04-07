@@ -98,13 +98,13 @@ parameter_types! {
 	pub const ProposalBondMinimum: u64 = 1;
 	pub const SpendPeriod: u64 = 2;
 	pub const Burn: Permill = Permill::from_percent(50);
-	pub const TreasuryModuleId: PalletId = PalletId(*b"py/trsry");
+	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
 	pub const BountyUpdatePeriod: u32 = 20;
 	pub const BountyCuratorDeposit: Permill = Permill::from_percent(50);
 	pub const BountyValueMinimum: u64 = 1;
 }
 impl Config for Test {
-	type PalletId = TreasuryModuleId;
+	type PalletId = TreasuryPalletId;
 	type Currency = pallet_balances::Pallet<Test>;
 	type ApproveOrigin = frame_system::EnsureRoot<u128>;
 	type RejectOrigin = frame_system::EnsureRoot<u128>;
