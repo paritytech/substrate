@@ -421,3 +421,7 @@ pub fn require_transactional(attr: TokenStream, input: TokenStream) -> TokenStre
 pub fn crate_to_pallet_version(input: TokenStream) -> TokenStream {
 	pallet_version::crate_to_pallet_version(input).unwrap_or_else(|e| e.to_compile_error()).into()
 }
+
+/// The number of module instances supported by the runtime, starting at index 1,
+/// and up to `NUMBER_OF_INSTANCE`.
+pub(crate) const NUMBER_OF_INSTANCE: u8 = 16;

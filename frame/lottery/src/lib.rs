@@ -209,6 +209,8 @@ decl_error! {
 
 decl_module! {
 	pub struct Module<T: Config> for enum Call where origin: T::Origin, system = frame_system {
+		type Error = Error<T>;
+
 		const ModuleId: ModuleId = T::ModuleId::get();
 		const MaxCalls: u32 = T::MaxCalls::get() as u32;
 
