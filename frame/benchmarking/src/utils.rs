@@ -62,6 +62,7 @@ pub struct BenchmarkResults {
 	pub repeat_reads: u32,
 	pub writes: u32,
 	pub repeat_writes: u32,
+	pub proof_size: u32,
 }
 
 /// Configuration used to setup and run runtime benchmarks.
@@ -163,11 +164,10 @@ pub trait Benchmarking {
 		self.set_whitelist(whitelist);
 	}
 
-	/// Get current estimated proof size
+	/// Get current estimated proof size.
 	fn proof_size(&self) -> Option<u32> {
 		self.proof_size()
 	}
-
 }
 
 /// The pallet benchmarking trait.
