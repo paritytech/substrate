@@ -122,6 +122,7 @@ mod until_imported;
 mod voting_rule;
 
 pub use authorities::{AuthoritySet, AuthoritySetChanges, SharedAuthoritySet};
+pub use aux_schema::best_justification;
 pub use finality_proof::{FinalityProof, FinalityProofProvider, FinalityProofError};
 pub use notification::{GrandpaJustificationSender, GrandpaJustificationStream};
 pub use import::{find_scheduled_change, find_forced_change, GrandpaBlockImport};
@@ -1019,7 +1020,7 @@ where
 					// set changed (not where the signal happened!) as the base.
 					let set_state = VoterSetState::live(
 						new.set_id,
-						&*self.env.authority_set.inner().read(),
+						&*self.env.authority_set.inner(),
 						(new.canon_hash, new.canon_number),
 					);
 
@@ -1170,7 +1171,7 @@ impl<Block, Aux> SnapshotSyncComponent<Block> for SyncBackend<Block, Aux>
 		)?;
 
 		// writing whole set (could limit to range in the future).
-		self.0.inner().read().encode_to(&mut out);
+		self.0.inner().encode_to(&mut out);
 
 		use sp_runtime::traits::Saturating;
 		let from = range.from.saturating_sub(HEADER_RANGE.into());
@@ -1194,13 +1195,13 @@ impl<Block, Aux> SnapshotSyncComponent<Block> for SyncBackend<Block, Aux>
 			_ => return Err(sp_blockchain::Error::Backend("Invalid snapshot version.".into())),
 		}
 		let mut reader = IoReader(encoded);
-		*self.0.inner().write() = Decode::decode(&mut reader).map_err(|e|
+		*self.0.inner() = Decode::decode(&mut reader).map_err(|e|
 			sp_blockchain::Error::Backend(format!("Snapshot import error: {:?}", e)),
 		)?;
 
 		// persist set.
 		crate::aux_schema::update_authority_set::<Block, _, _>(
-			&*self.0.inner().write(),
+			&*self.0.inner(),
 			None,
 			|values| (
 				self.1.insert_aux(values, &[]).unwrap()

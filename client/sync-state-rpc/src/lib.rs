@@ -37,7 +37,7 @@ type SharedEpochChanges<TBl> = sc_consensus_epochs::SharedEpochChanges<TBl, sc_c
 enum Error<Block: BlockT> {
 	#[error(transparent)]
 	Blockchain(#[from] sp_blockchain::Error),
-	
+
 	#[error("Failed to load the block weight for block {0:?}")]
 	LoadingBlockWeightFailed(<Block as BlockT>::Hash),
 
@@ -94,7 +94,7 @@ impl<TBl, TCl> SyncStateRpcHandler<TBl, TCl>
 			chain_spec, client, shared_authority_set, shared_epoch_changes, deny_unsafe,
 		}
 	}
-	
+
 	fn build_sync_state(&self) -> Result<sc_chain_spec::LightSyncState<TBl>, Error<TBl>> {
 		let finalized_hash = self.client.info().finalized_hash;
 		let finalized_header = self.client.header(BlockId::Hash(finalized_hash))?
@@ -108,7 +108,7 @@ impl<TBl, TCl> SyncStateRpcHandler<TBl, TCl>
 
 		Ok(sc_chain_spec::LightSyncState {
 			finalized_block_header: finalized_header,
-			babe_epoch_changes: self.shared_epoch_changes.lock().clone(),
+			babe_epoch_changes: self.shared_epoch_changes.shared_data().clone(),
 			babe_finalized_block_weight: finalized_block_weight,
 			grandpa_authority_set: self.shared_authority_set.clone_inner(),
 		})

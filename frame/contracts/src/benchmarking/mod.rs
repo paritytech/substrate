@@ -36,6 +36,7 @@ use self::{
 	},
 	sandbox::Sandbox,
 };
+use codec::Encode;
 use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
 use frame_system::{Pallet as System, RawOrigin};
 use parity_wasm::elements::{Instruction, ValueType, BlockType};
@@ -313,7 +314,7 @@ benchmarks! {
 		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c * 1024);
 		Contracts::<T>::store_code_raw(code)?;
 		let mut module = PrefabWasmModule::from_storage_noinstr(hash)?;
-		let schedule = Contracts::<T>::current_schedule();
+		let schedule = <CurrentSchedule<T>>::get();
 	}: {
 		Contracts::<T>::reinstrument_module(&mut module, &schedule)?;
 	}
@@ -936,7 +937,7 @@ benchmarks! {
 	seal_random {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let pages = code::max_pages::<T>();
-		let subject_len = Contracts::<T>::current_schedule().limits.subject_len;
+		let subject_len = <CurrentSchedule<T>>::get().limits.subject_len;
 		assert!(subject_len < 1024);
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
@@ -992,7 +993,7 @@ benchmarks! {
 	// `t`: Number of topics
 	// `n`: Size of event payload in kb
 	seal_deposit_event_per_topic_and_kb {
-		let t in 0 .. Contracts::<T>::current_schedule().limits.event_topics;
+		let t in 0 .. <CurrentSchedule<T>>::get().limits.event_topics;
 		let n in 0 .. T::MaxValueSize::get() / 1024;
 		let mut topics = (0..API_BENCHMARK_BATCH_SIZE)
 			.map(|n| (n * t..n * t + t).map(|i| T::Hashing::hash_of(&i)).collect::<Vec<_>>().encode())
@@ -1922,7 +1923,7 @@ benchmarks! {
 
 	// w_br_table_per_entry = w_bench
 	instr_br_table_per_entry {
-		let e in 1 .. Contracts::<T>::current_schedule().limits.br_table_size;
+		let e in 1 .. <CurrentSchedule<T>>::get().limits.br_table_size;
 		let entry: Vec<u32> = [0, 1].iter()
 			.cloned()
 			.cycle()
@@ -1978,7 +1979,7 @@ benchmarks! {
 	// w_call_indrect = w_bench - 3 * w_param
 	instr_call_indirect {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
-		let num_elements = Contracts::<T>::current_schedule().limits.table_size;
+		let num_elements = <CurrentSchedule<T>>::get().limits.table_size;
 		use self::code::TableSegment;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
 			// We need to make use of the stack here in order to trigger stack height
@@ -2008,8 +2009,8 @@ benchmarks! {
 	// linearly depend on the amount of parameters to this function.
 	// Please note that this is not necessary with a direct call.
 	instr_call_indirect_per_param {
-		let p in 0 .. Contracts::<T>::current_schedule().limits.parameters;
-		let num_elements = Contracts::<T>::current_schedule().limits.table_size;
+		let p in 0 .. <CurrentSchedule<T>>::get().limits.parameters;
+		let num_elements = <CurrentSchedule<T>>::get().limits.table_size;
 		use self::code::TableSegment;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
 			// We need to make use of the stack here in order to trigger stack height
@@ -2039,7 +2040,7 @@ benchmarks! {
 	// w_local_get = w_bench - 1 * w_param
 	instr_local_get {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
-		let max_locals = Contracts::<T>::current_schedule().limits.stack_height;
+		let max_locals = <CurrentSchedule<T>>::get().limits.stack_height;
 		let mut call_body = body::repeated_dyn(r * INSTR_BENCHMARK_BATCH_SIZE, vec![
 			RandomGetLocal(0, max_locals),
 			Regular(Instruction::Drop),
@@ -2056,7 +2057,7 @@ benchmarks! {
 	// w_local_set = w_bench - 1 * w_param
 	instr_local_set {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
-		let max_locals = Contracts::<T>::current_schedule().limits.stack_height;
+		let max_locals = <CurrentSchedule<T>>::get().limits.stack_height;
 		let mut call_body = body::repeated_dyn(r * INSTR_BENCHMARK_BATCH_SIZE, vec![
 			RandomI64Repeated(1),
 			RandomSetLocal(0, max_locals),
@@ -2073,7 +2074,7 @@ benchmarks! {
 	// w_local_tee = w_bench - 2 * w_param
 	instr_local_tee {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
-		let max_locals = Contracts::<T>::current_schedule().limits.stack_height;
+		let max_locals = <CurrentSchedule<T>>::get().limits.stack_height;
 		let mut call_body = body::repeated_dyn(r * INSTR_BENCHMARK_BATCH_SIZE, vec![
 			RandomI64Repeated(1),
 			RandomTeeLocal(0, max_locals),
@@ -2091,7 +2092,7 @@ benchmarks! {
 	// w_global_get = w_bench - 1 * w_param
 	instr_global_get {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
-		let max_globals = Contracts::<T>::current_schedule().limits.globals;
+		let max_globals = <CurrentSchedule<T>>::get().limits.globals;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
 			call_body: Some(body::repeated_dyn(r * INSTR_BENCHMARK_BATCH_SIZE, vec![
 				RandomGetGlobal(0, max_globals),
@@ -2107,7 +2108,7 @@ benchmarks! {
 	// w_global_set = w_bench - 1 * w_param
 	instr_global_set {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
-		let max_globals = Contracts::<T>::current_schedule().limits.globals;
+		let max_globals = <CurrentSchedule<T>>::get().limits.globals;
 		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
 			call_body: Some(body::repeated_dyn(r * INSTR_BENCHMARK_BATCH_SIZE, vec![
 				RandomI64Repeated(1),

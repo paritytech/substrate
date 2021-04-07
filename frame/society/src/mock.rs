@@ -57,6 +57,7 @@ parameter_types! {
 	pub const ChallengePeriod: u64 = 8;
 	pub const BlockHashCount: u64 = 250;
 	pub const ExistentialDeposit: u64 = 1;
+	pub const MaxCandidateIntake: u32 = 10;
 	pub const SocietyModuleId: ModuleId = ModuleId(*b"py/socie");
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1024);
@@ -90,6 +91,7 @@ impl frame_system::Config for Test {
 	type AccountData = pallet_balances::AccountData<u64>;
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 
 impl pallet_balances::Config for Test {
@@ -116,6 +118,7 @@ impl Config for Test {
 	type FounderSetOrigin = EnsureSignedBy<FounderSetAccount, u128>;
 	type SuspensionJudgementOrigin = EnsureSignedBy<SuspensionJudgementSetAccount, u128>;
 	type ChallengePeriod = ChallengePeriod;
+	type MaxCandidateIntake = MaxCandidateIntake;
 	type ModuleId = SocietyModuleId;
 }
 

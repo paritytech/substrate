@@ -18,7 +18,7 @@ regex = "1.4.2"
 tokio = { version = "0.2.21", features = [ "signal", "rt-core", "rt-threaded", "blocking" ] }
 futures = "0.3.9"
 fdlimit = "0.2.1"
-libp2p = "0.35.1"
+libp2p = "0.36.0"
 parity-scale-codec = "2.0.0"
 hex = "0.4.2"
 rand = "0.7.3"
@@ -43,7 +43,7 @@ sc-tracing = { version = "3.0.0", path = "../tracing" }
 chrono = "0.4.10"
 serde = "1.0.111"
 thiserror = "1.0.21"
-zstd = "0.5.0"
+zstd = "0.6.1"
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
 rpassword = "5.0.0"
