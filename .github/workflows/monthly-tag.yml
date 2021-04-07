@@ -22,6 +22,8 @@ jobs:
           fetch-depth: 0
       - name: Generate changelog
         id: changelog
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "# Automatic snapshot pre-release ${{ steps.tags.outputs.new }}" > Changelog.md
           echo "" >> Changelog.md
