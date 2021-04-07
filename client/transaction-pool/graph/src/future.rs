@@ -61,10 +61,10 @@ impl<Hash: fmt::Debug, Ex: fmt::Debug> fmt::Debug for WaitingTransaction<Hash, E
 
 impl<Hash, Ex> Clone for WaitingTransaction<Hash, Ex> {
 	fn clone(&self) -> Self {
-		WaitingTransaction {
+		Self {
 			transaction: self.transaction.clone(),
 			missing_tags: self.missing_tags.clone(),
-			imported_at: self.imported_at.clone(),
+			imported_at: self.imported_at,
 		}
 	}
 }
@@ -90,7 +90,7 @@ impl<Hash, Ex> WaitingTransaction<Hash, Ex> {
 			.cloned()
 			.collect();
 
-		WaitingTransaction {
+		Self {
 			transaction: Arc::new(transaction),
 			missing_tags,
 			imported_at: Instant::now(),
