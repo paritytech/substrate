@@ -4244,7 +4244,6 @@ version = "2.0.0"
 dependencies = [
  "jsonrpc-core",
  "node-primitives",
- "node-runtime",
  "pallet-contracts-rpc",
  "pallet-mmr-rpc",
  "pallet-transaction-payment-rpc",
