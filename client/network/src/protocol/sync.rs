@@ -2387,6 +2387,9 @@ mod test {
 					.for_each(|b| block_on(client.import_as_final(BlockOrigin::Own, b)).unwrap());
 		}
 
+		// "Wait" for the queue to clear
+		sync.queue_blocks.clear();
+
 		// Let peer2 announce that it finished syncing
 		send_block_announce(best_block.header().clone(), &peer_id2, &mut sync);
 
