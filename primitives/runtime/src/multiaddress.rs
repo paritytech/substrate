@@ -45,9 +45,9 @@ where
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		use sp_core::hexdisplay::HexDisplay;
 		match self {
-			MultiAddress::Raw(inner) => write!(f, "MultiAddress::Raw({})", HexDisplay::from(inner)),
-			MultiAddress::Address32(inner) => write!(f, "MultiAddress::Address32({})", HexDisplay::from(inner)),
-			MultiAddress::Address20(inner) => write!(f, "MultiAddress::Address20({})", HexDisplay::from(inner)),
+			Self::Raw(inner) => write!(f, "MultiAddress::Raw({})", HexDisplay::from(inner)),
+			Self::Address32(inner) => write!(f, "MultiAddress::Address32({})", HexDisplay::from(inner)),
+			Self::Address20(inner) => write!(f, "MultiAddress::Address20({})", HexDisplay::from(inner)),
 			_ => write!(f, "{:?}", self),
 		}
 	}
@@ -55,12 +55,12 @@ where
 
 impl<AccountId, AccountIndex> From<AccountId> for MultiAddress<AccountId, AccountIndex> {
 	fn from(a: AccountId) -> Self {
-		MultiAddress::Id(a)
+		Self::Id(a)
 	}
 }
 
 impl<AccountId: Default, AccountIndex> Default for MultiAddress<AccountId, AccountIndex> {
 	fn default() -> Self {
-		MultiAddress::Id(Default::default())
+		Self::Id(Default::default())
 	}
 }

@@ -17,8 +17,8 @@
 
 //! # Nicks Module
 //!
-//! - [`nicks::Config`](./trait.Config.html)
-//! - [`Call`](./enum.Call.html)
+//! - [`Config`]
+//! - [`Call`]
 //!
 //! ## Overview
 //!
@@ -179,7 +179,8 @@ decl_module! {
 
 			let deposit = <NameOf<T>>::take(&sender).ok_or(Error::<T>::Unnamed)?.1;
 
-			let _ = T::Currency::unreserve(&sender, deposit.clone());
+			let err_amount = T::Currency::unreserve(&sender, deposit.clone());
+			debug_assert!(err_amount.is_zero());
 
 			Self::deposit_event(RawEvent::NameCleared(sender, deposit));
 		}
@@ -291,6 +292,7 @@ mod tests {
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
+		type OnSetCode = ();
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;

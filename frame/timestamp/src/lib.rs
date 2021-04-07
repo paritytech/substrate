@@ -19,9 +19,9 @@
 //!
 //! The Timestamp pallet provides functionality to get and set the on-chain time.
 //!
-//! - [`timestamp::Config`](./trait.Config.html)
-//! - [`Call`](./enum.Call.html)
-//! - [`Pallet`](./struct.Pallet.html)
+//! - [`Config`]
+//! - [`Call`]
+//! - [`Pallet`]
 //!
 //! ## Overview
 //!
@@ -352,6 +352,7 @@ mod tests {
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
+		type OnSetCode = ();
 	}
 	parameter_types! {
 		pub const MinimumPeriod: u64 = 5;

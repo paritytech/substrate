@@ -107,6 +107,7 @@ impl Config for Test {
 	type OnKilledAccount = RecordKilled;
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 
 pub type SysEvent = frame_system::Event<Test>;
