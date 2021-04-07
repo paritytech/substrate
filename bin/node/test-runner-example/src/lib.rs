@@ -18,12 +18,9 @@
 
 //! Basic example of end to end runtime tests.
 
-use test_runner::{Node, ChainInfo, SignatureVerificationOverride, base_path};
+use test_runner::{Node, ChainInfo, SignatureVerificationOverride, default_config};
 use grandpa::GrandpaBlockImport;
-use sc_service::{
-	TFullBackend, TFullClient, Configuration, TaskManager, new_full_parts,
-	TaskExecutor, DatabaseConfig, KeepBlocks, TransactionStorageMode, ChainSpec,
-};
+use sc_service::{TFullBackend, TFullClient, Configuration, TaskManager, new_full_parts, TaskExecutor};
 use std::sync::Arc;
 use sp_inherents::InherentDataProviders;
 use sc_consensus_babe::BabeBlockImport;
@@ -32,13 +29,7 @@ use sp_keyring::sr25519::Keyring::Alice;
 use sp_consensus_babe::AuthorityId;
 use sc_consensus_manual_seal::{ConsensusDataProvider, consensus::babe::BabeConsensusDataProvider};
 use sp_runtime::{traits::IdentifyAccount, MultiSigner, generic::Era};
-use sc_network::config::{NetworkConfiguration, TransportConfig, Role};
-use sc_informant::OutputFormat;
-use sc_service::config::KeystoreConfig;
-use sc_executor::WasmExecutionMethod;
 use node_cli::chain_spec::development_config;
-use sc_client_api::execution_extensions::ExecutionStrategies;
-use sc_network::multiaddr;
 
 type BlockImport<B, BE, C, SC> = BabeBlockImport<B, C, GrandpaBlockImport<BE, B, C, SC>>;
 
@@ -82,86 +73,7 @@ impl ChainInfo for NodeTemplateChainInfo {
 	}
 
 	fn config(task_executor: TaskExecutor) -> Configuration {
-		let base_path = base_path();
-		let mut chain_spec = Box::new(development_config());
-		let root_path = base_path.path().to_path_buf().join("chains").join(chain_spec.id());
-
-		let storage = chain_spec
-			.as_storage_builder()
-			.build_storage()
-			.expect("could not build storage");
-
-		chain_spec.set_storage(storage);
-		let key_seed = Alice.to_seed();
-
-		let mut network_config = NetworkConfiguration::new(
-			format!("Test Node for: {}", key_seed),
-			"network/test/0.1",
-			Default::default(),
-			None,
-		);
-		let informant_output_format = OutputFormat { enable_color: false };
-		network_config.allow_non_globals_in_dht = true;
-
-		network_config
-			.listen_addresses
-			.push(multiaddr::Protocol::Memory(0).into());
-
-		network_config.transport = TransportConfig::MemoryOnly;
-
-		Configuration {
-			impl_name: "test-node".to_string(),
-			impl_version: "0.1".to_string(),
-			role: Role::Authority,
-			task_executor: task_executor.into(),
-			transaction_pool: Default::default(),
-			network: network_config,
-			keystore: KeystoreConfig::Path {
-				path: root_path.join("key"),
-				password: None,
-			},
-			database: DatabaseConfig::RocksDb {
-				path: root_path.join("db"),
-				cache_size: 128,
-			},
-			state_cache_size: 16777216,
-			state_cache_child_ratio: None,
-			chain_spec,
-			wasm_method: WasmExecutionMethod::Interpreted,
-			execution_strategies: ExecutionStrategies {
-				syncing: sc_client_api::ExecutionStrategy::AlwaysWasm,
-				importing: sc_client_api::ExecutionStrategy::AlwaysWasm,
-				block_construction: sc_client_api::ExecutionStrategy::AlwaysWasm,
-				offchain_worker: sc_client_api::ExecutionStrategy::AlwaysWasm,
-				other: sc_client_api::ExecutionStrategy::AlwaysWasm,
-			},
-			rpc_http: None,
-			rpc_ws: None,
-			rpc_ipc: None,
-			rpc_ws_max_connections: None,
-			rpc_cors: None,
-			rpc_methods: Default::default(),
-			prometheus_config: None,
-			telemetry_endpoints: None,
-			telemetry_external_transport: None,
-			default_heap_pages: None,
-			offchain_worker: Default::default(),
-			force_authoring: false,
-			disable_grandpa: false,
-			dev_key_seed: Some(key_seed),
-			tracing_targets: None,
-			tracing_receiver: Default::default(),
-			max_runtime_instances: 8,
-			announce_block: true,
-			base_path: Some(base_path),
-			wasm_runtime_overrides: None,
-			informant_output_format,
-			disable_log_reloading: false,
-			keystore_remote: None,
-			keep_blocks: KeepBlocks::All,
-			state_pruning: Default::default(),
-			transaction_storage: TransactionStorageMode::BlockBody,
-		}
+		default_config(task_executor, Box::new(development_config()))
 	}
 
 	fn create_client_parts(

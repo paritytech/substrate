@@ -43,8 +43,7 @@ use sp_state_machine::Ext;
 use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
 use sp_transaction_pool::TransactionPool;
 
-pub use crate::utils::{logger, base_path};
-use crate::ChainInfo;
+use crate::{ChainInfo, utils::logger};
 use log::LevelFilter;
 
 /// This holds a reference to a running node on another thread,
