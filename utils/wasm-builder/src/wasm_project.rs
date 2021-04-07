@@ -473,7 +473,7 @@ fn compact_wasm_file(
 	};
 
 	let wasm_compact_compressed_file = wasm_compact_file.as_ref()
-		.filter_map(|compact_binary| {
+		.and_then(|compact_binary| {
 			let file_name = wasm_binary_name.clone()
 				.unwrap_or_else(|| default_wasm_binary_name.clone());
 
@@ -516,7 +516,7 @@ fn compress_wasm(
 	let data = fs::read(wasm_binary_path).expect("Failed to read WASM binary");
 	if let Some(compressed) = sp_maybe_compressed_blob::compress(
 		&data,
-		CODE_BLOB_BOMB_LIMIT,,
+		CODE_BLOB_BOMB_LIMIT,
 	) {
 		fs::write(compressed_binary_out_path, &compressed[..])
 			.expect("Failed to write WASM binary");
