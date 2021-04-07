@@ -89,7 +89,7 @@ fi
 diener patch --crates-to-patch ../ --substrate --path Cargo.toml
 
 # Test Polkadot pr or master branch with this Substrate commit.
-time cargo test --all --release --verbose --features=real-overseer
+time cargo test --all --release --verbose
 
 cd parachain/test-parachains/adder/collator/
-time cargo test --release --verbose --locked --features=real-overseer
+time cargo test --release --verbose --locked
