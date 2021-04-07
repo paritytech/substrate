@@ -1,0 +1,40 @@
+name: Monthly Snapshot Tag
+
+on:
+  schedule:
+    - cron: "0 1 1 * *"
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Take Snapshot
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get the tags by date
+        id: tags
+        run: |
+          echo "::set-output name=new::$(date +'monthly-%Y-%m')"
+          echo "::set-output name=old::$(date -d'1 month ago' +'monthly-%Y-%m')"
+      - name: Checkout branch "master"
+        uses: actions/checkout@v2
+        with:
+          ref: 'master'
+      - name: Generate changelog
+        id: changelog
+        run: |
+          echo "# Automatic snapshot pre-release ${{ steps.tags.outputs.new }}" > Changelog.md
+          echo "" >> Changelog.md
+          echo "## Changes since last snapshot (${{ steps.tags.outputs.old }})" >> Changelog.md
+          echo "" >> Changelog.md
+          GITHUB_DEPLOY_TOKEN=${{ secrets.GITHUB_TOKEN }} ./.maintain/gitlab/generate_changelog.sh ${{ steps.tags.outputs.old }} >>  Changelog.md
+      - name: Release snapshot
+        id: release-snapshot
+        uses: actions/create-release@latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.tags.outputs.new }}
+          release_name: ${{ steps.tags.outputs.new }}
+          draft: false
+          prerelease: true
+          body_path: Changelog.md
