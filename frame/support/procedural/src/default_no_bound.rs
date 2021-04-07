@@ -53,6 +53,7 @@ pub fn derive_default_no_bound(input: proc_macro::TokenStream) -> proc_macro::To
 		},
 		syn::Data::Enum(enum_) => {
 			if let Some(first_variant) = enum_.variants.first() {
+				let variant_ident = &first_variant.ident;
 				match &first_variant.fields {
 					syn::Fields::Named(named) => {
 						let fields = named.named.iter()
@@ -69,10 +70,9 @@ pub fn derive_default_no_bound(input: proc_macro::TokenStream) -> proc_macro::To
 							.map(|i| quote::quote_spanned!(i.span() =>
 								core::default::Default::default()
 							));
-
-						quote::quote!( Self ( #( #fields, )* ) )
+						quote::quote!( #name :: #ty_generics :: #variant_ident ( #( #fields, )* ) )
 					},
-					syn::Fields::Unit => quote::quote!( Self ),
+					syn::Fields::Unit => quote::quote!( #name :: #ty_generics ),
 				}
 			} else {
 				quote::quote!( Self )
@@ -87,8 +87,8 @@ pub fn derive_default_no_bound(input: proc_macro::TokenStream) -> proc_macro::To
 
 	quote::quote!(
 		const _: () = {
-			impl #impl_generics core::clone::Clone for #name #ty_generics #where_clause {
-				fn clone(&self) -> Self {
+			impl #impl_generics core::default::Default for #name #ty_generics #where_clause {
+				fn default() -> Self {
 					#impl_
 				}
 			}

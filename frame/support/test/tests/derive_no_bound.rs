@@ -15,9 +15,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Tests for DebugNoBound, CloneNoBound, EqNoBound, PartialEqNoBound, and RuntimeDebugNoBound
+//! Tests for DebugNoBound, CloneNoBound, EqNoBound, PartialEqNoBound, DefaultNoBound, and
+//! RuntimeDebugNoBound
 
-use frame_support::{DebugNoBound, CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound};
+use frame_support::{
+	DebugNoBound, CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound, DefaultNoBound,
+};
 
 #[derive(RuntimeDebugNoBound)]
 struct Unnamed(u64);
@@ -29,7 +32,7 @@ fn runtime_debug_no_bound_display_correctly() {
 }
 
 trait Config {
-	type C: std::fmt::Debug + Clone + Eq + PartialEq;
+	type C: std::fmt::Debug + Clone + Eq + PartialEq + Default;
 }
 
 struct Runtime;
@@ -39,7 +42,7 @@ impl Config for Runtime {
 	type C = u32;
 }
 
-#[derive(DebugNoBound, CloneNoBound, EqNoBound, PartialEqNoBound)]
+#[derive(DebugNoBound, CloneNoBound, EqNoBound, PartialEqNoBound, DefaultNoBound)]
 struct StructNamed<T: Config, U, V> {
 	a: u32,
 	b: u64,
@@ -55,6 +58,12 @@ fn test_struct_named() {
 		c: 3,
 		phantom: Default::default(),
 	};
+
+	let a_default: StructNamed::<Runtime, ImplNone, ImplNone> = Default::default();
+	assert_eq!(a_default.a, 0);
+	assert_eq!(a_default.b, 0);
+	assert_eq!(a_default.c, 0);
+	assert_eq!(a_default.phantom, Default::default());
 
 	let a_2 = a_1.clone();
 	assert_eq!(a_2.a, 1);
@@ -76,7 +85,7 @@ fn test_struct_named() {
 	assert!(b != a_1);
 }
 
-#[derive(DebugNoBound, CloneNoBound, EqNoBound, PartialEqNoBound)]
+#[derive(DebugNoBound, CloneNoBound, EqNoBound, PartialEqNoBound, DefaultNoBound)]
 struct StructUnnamed<T: Config, U, V>(u32, u64, T::C, core::marker::PhantomData<(U, V)>);
 
 #[test]
@@ -87,6 +96,12 @@ fn test_struct_unnamed() {
 		3,
 		Default::default(),
 	);
+
+	let a_default: StructUnnamed::<Runtime, ImplNone, ImplNone> = Default::default();
+	assert_eq!(a_default.0, 0);
+	assert_eq!(a_default.1, 0);
+	assert_eq!(a_default.2, 0);
+	assert_eq!(a_default.3, Default::default());
 
 	let a_2 = a_1.clone();
 	assert_eq!(a_2.0, 1);
@@ -108,7 +123,7 @@ fn test_struct_unnamed() {
 	assert!(b != a_1);
 }
 
-#[derive(DebugNoBound, CloneNoBound, EqNoBound, PartialEqNoBound)]
+#[derive(DebugNoBound, CloneNoBound, EqNoBound, PartialEqNoBound, DefaultNoBound)]
 enum Enum<T: Config, U, V> {
 	VariantUnnamed(u32, u64, T::C, core::marker::PhantomData<(U, V)>),
 	VariantNamed {
@@ -130,6 +145,13 @@ fn test_enum() {
 	let variant_1_bis = TestEnum::VariantNamed { a: 1, b: 2, c: 4, phantom: Default::default() };
 	let variant_2 = TestEnum::VariantUnit;
 	let variant_3 = TestEnum::VariantUnit2;
+
+	let default: TestEnum = Default::default();
+	assert_eq!(
+		default,
+		// first variant is default.
+		TestEnum::VariantUnnamed(0, 0, 0, Default::default())
+	);
 
 	assert!(variant_0 != variant_0_bis);
 	assert!(variant_1 != variant_1_bis);
