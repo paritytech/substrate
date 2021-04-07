@@ -472,18 +472,24 @@ fn compact_wasm_file(
 		None
 	};
 
-	let wasm_compact_compressed_file = wasm_compact_file.as_ref().map(|compact_binary| {
-		let wasm_compact_compressed_file = project.join(
-			format!(
-				"{}.compact.compressed.wasm",
-				wasm_binary_name.clone().unwrap_or_else(|| default_wasm_binary_name.clone()),
-			)
-		);
+	let wasm_compact_compressed_file = wasm_compact_file.as_ref()
+		.filter_map(|compact_binary| {
+			let file_name = wasm_binary_name.clone()
+				.unwrap_or_else(|| default_wasm_binary_name.clone());
 
-		compress_wasm(&compact_binary.0, &wasm_compact_compressed_file);
+			let wasm_compact_compressed_file = project.join(
+				format!(
+					"{}.compact.compressed.wasm",
+					file_name,
+				)
+			);
 
-		WasmBinary(wasm_compact_compressed_file)
-	});
+			if compress_wasm(&compact_binary.0, &wasm_compact_compressed_file) {
+				Some(WasmBinary(wasm_compact_compressed_file))
+			} else {
+				None
+			}
+		});
 
 	let bloaty_file_name = if let Some(name) = wasm_binary_name {
 		format!("{}.wasm", name)
@@ -504,21 +510,25 @@ fn compact_wasm_file(
 fn compress_wasm(
 	wasm_binary_path: &Path,
 	compressed_binary_out_path: &Path,
-) {
-	const MAX_UNCOMPRESSED_SIZE: usize = 100 * 1024 * 1024;
+) -> bool {
+	use sp_maybe_compressed_blob::CODE_BLOB_BOMB_LIMIT;
 
 	let data = fs::read(wasm_binary_path).expect("Failed to read WASM binary");
 	if let Some(compressed) = sp_maybe_compressed_blob::compress(
 		&data,
-		MAX_UNCOMPRESSED_SIZE,
+		CODE_BLOB_BOMB_LIMIT,,
 	) {
 		fs::write(compressed_binary_out_path, &compressed[..])
 			.expect("Failed to write WASM binary");
+
+		true
 	} else {
 		println!(
-			"Writing uncompressed wasm. Exceeded maximum size {}",
-			MAX_UNCOMPRESSED_SIZE,
+			"cargo:warning=Writing uncompressed wasm. Exceeded maximum size {}",
+			CODE_BLOB_BOMB_LIMIT,
 		);
+
+		false
 	}
 }
 

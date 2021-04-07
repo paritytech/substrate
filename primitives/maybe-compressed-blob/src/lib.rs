@@ -23,7 +23,16 @@ use std::io::Read;
 
 // An arbitrary prefix, that indicates a blob beginning with should be decompressed with
 // Zstd compression.
+//
+// This differs from the WASM magic bytes, so real WASM blobs will not have this prefix.
 const ZSTD_PREFIX: [u8; 8] = [82, 188, 83, 118, 70, 219, 142, 5];
+
+/// A recommendation for the bomb limit for code blobs.
+///
+/// This may be adjusted upwards in the future, but is set much higher than the
+/// expected maximum code size. When adjusting upwards, nodes should be updated
+/// before performing a runtime upgrade to a blob with larger compressed size.
+pub const CODE_BLOB_BOMB_LIMIT: usize = 50 * 1024 * 1024;
 
 /// A possible bomb was encountered.
 #[derive(Debug, Clone, PartialEq)]
