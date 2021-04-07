@@ -1,9 +1,11 @@
 name: Monthly Snapshot Tag
 
-on:
-  schedule:
-    - cron: "0 1 1 * *"
-  workflow_dispatch:
+# TODO: REVERT ME BEFORE MERGE
+on: push
+# on:
+  # schedule:
+    # - cron: "0 1 1 * *"
+  # workflow_dispatch:
 
 jobs:
   build:
@@ -30,14 +32,16 @@ jobs:
           echo "## Changes since last snapshot (${{ steps.tags.outputs.old }})" >> Changelog.md
           echo "" >> Changelog.md
           ./.maintain/gitlab/generate_changelog.sh ${{ steps.tags.outputs.old }} >>  Changelog.md
-      - name: Release snapshot
-        id: release-snapshot
-        uses: actions/create-release@latest
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ steps.tags.outputs.new }}
-          release_name: ${{ steps.tags.outputs.new }}
-          draft: false
-          prerelease: true
-          body_path: Changelog.md
+# TODO: REVERT ME BEFORE MERGE
+          cat Changelog.md
+      # - name: Release snapshot
+        # id: release-snapshot
+        # uses: actions/create-release@latest
+        # env:
+          # GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # with:
+          # tag_name: ${{ steps.tags.outputs.new }}
+          # release_name: ${{ steps.tags.outputs.new }}
+          # draft: false
+          # prerelease: true
+          # body_path: Changelog.md
