@@ -130,190 +130,29 @@ pub mod mock;
 #[cfg(test)]
 mod tests;
 
-use sp_std::prelude::*;
+mod extra_mutator;
+pub use extra_mutator::*;
+mod impl_stored_map;
+mod impl_fungibles;
+mod functions;
+mod types;
+pub use types::*;
+
+use sp_std::{prelude::*, borrow::Borrow};
 use sp_runtime::{
-	RuntimeDebug,
-	traits::{
-		AtLeast32BitUnsigned, Zero, StaticLookup, Saturating, CheckedSub, CheckedAdd,
+	RuntimeDebug, TokenError, traits::{
+		AtLeast32BitUnsigned, Zero, StaticLookup, Saturating, CheckedSub, CheckedAdd, Bounded,
+		StoredMapError,
 	}
 };
 use codec::{Encode, Decode, HasCompact};
 use frame_support::{ensure, dispatch::{DispatchError, DispatchResult}};
-use frame_support::traits::{Currency, ReservableCurrency, BalanceStatus::Reserved};
+use frame_support::traits::{Currency, ReservableCurrency, BalanceStatus::Reserved, StoredMap};
 use frame_support::traits::tokens::{WithdrawConsequence, DepositConsequence, fungibles};
 use frame_system::Config as SystemConfig;
 
 pub use weights::WeightInfo;
 pub use pallet::*;
-
-impl<T: Config> fungibles::Inspect<<T as SystemConfig>::AccountId> for Pallet<T> {
-	type AssetId = T::AssetId;
-	type Balance = T::Balance;
-
-	fn total_issuance(asset: Self::AssetId) -> Self::Balance {
-		Asset::<T>::get(asset).map(|x| x.supply).unwrap_or_else(Zero::zero)
-	}
-
-	fn minimum_balance(asset: Self::AssetId) -> Self::Balance {
-		Asset::<T>::get(asset).map(|x| x.min_balance).unwrap_or_else(Zero::zero)
-	}
-
-	fn balance(
-		asset: Self::AssetId,
-		who: &<T as SystemConfig>::AccountId,
-	) -> Self::Balance {
-		Pallet::<T>::balance(asset, who)
-	}
-
-	fn can_deposit(
-		asset: Self::AssetId,
-		who: &<T as SystemConfig>::AccountId,
-		amount: Self::Balance,
-	) -> DepositConsequence {
-		Pallet::<T>::can_deposit(asset, who, amount)
-	}
-
-	fn can_withdraw(
-		asset: Self::AssetId,
-		who: &<T as SystemConfig>::AccountId,
-		amount: Self::Balance,
-	) -> WithdrawConsequence<Self::Balance> {
-		Pallet::<T>::can_withdraw(asset, who, amount)
-	}
-}
-
-impl<T: Config> fungibles::Mutate<<T as SystemConfig>::AccountId> for Pallet<T> {
-	fn deposit(
-		asset: Self::AssetId,
-		who: &<T as SystemConfig>::AccountId,
-		amount: Self::Balance,
-	) -> DispatchResult {
-		Pallet::<T>::increase_balance(asset, who.clone(), amount, None)
-	}
-
-	fn withdraw(
-		asset: Self::AssetId,
-		who: &<T as SystemConfig>::AccountId,
-		amount: Self::Balance,
-	) -> Result<Self::Balance, DispatchError> {
-		Pallet::<T>::reduce_balance(asset, who.clone(), amount, None)
-	}
-}
-
-impl<T: Config> fungibles::Transfer<T::AccountId> for Pallet<T> {
-	fn transfer(
-		asset: Self::AssetId,
-		source: &T::AccountId,
-		dest: &T::AccountId,
-		amount: T::Balance,
-	) -> Result<T::Balance, DispatchError> {
-		<Self as fungibles::Mutate::<T::AccountId>>::transfer(asset, source, dest, amount)
-	}
-}
-
-type DepositBalanceOf<T> = <<T as Config>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
-
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
-pub struct AssetDetails<
-	Balance,
-	AccountId,
-	DepositBalance,
-> {
-	/// Can change `owner`, `issuer`, `freezer` and `admin` accounts.
-	owner: AccountId,
-	/// Can mint tokens.
-	issuer: AccountId,
-	/// Can thaw tokens, force transfers and burn tokens from any account.
-	admin: AccountId,
-	/// Can freeze tokens.
-	freezer: AccountId,
-	/// The total supply across all accounts.
-	supply: Balance,
-	/// The balance deposited for this asset. This pays for the data stored here.
-	deposit: DepositBalance,
-	/// The ED for virtual accounts.
-	min_balance: Balance,
-	/// If `true`, then any account with this asset is given a provider reference. Otherwise, it
-	/// requires a consumer reference.
-	is_sufficient: bool,
-	/// The total number of accounts.
-	accounts: u32,
-	/// The total number of accounts for which we have placed a self-sufficient reference.
-	sufficients: u32,
-	/// The total number of approvals.
-	approvals: u32,
-	/// Whether the asset is frozen for non-admin transfers.
-	is_frozen: bool,
-}
-
-impl<Balance, AccountId, DepositBalance> AssetDetails<Balance, AccountId, DepositBalance> {
-	pub fn destroy_witness(&self) -> DestroyWitness {
-		DestroyWitness {
-			accounts: self.accounts,
-			sufficients: self.sufficients,
-			approvals: self.approvals,
-		}
-	}
-}
-
-/// A pair to act as a key for the approval storage map.
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
-pub struct ApprovalKey<AccountId> {
-	/// The owner of the funds that are being approved.
-	owner: AccountId,
-	/// The party to whom transfer of the funds is being delegated.
-	delegate: AccountId,
-}
-
-/// Data concerning an approval.
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default)]
-pub struct Approval<Balance, DepositBalance> {
-	/// The amount of funds approved for the balance transfer from the owner to some delegated
-	/// target.
-	amount: Balance,
-	/// The amount reserved on the owner's account to hold this item in storage.
-	deposit: DepositBalance,
-}
-
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default)]
-pub struct AssetBalance<Balance> {
-	/// The balance.
-	balance: Balance,
-	/// Whether the account is frozen.
-	is_frozen: bool,
-	/// `true` if this balance gave the account a self-sufficient reference.
-	sufficient: bool,
-}
-
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default)]
-pub struct AssetMetadata<DepositBalance> {
-	/// The balance deposited for this metadata.
-	///
-	/// This pays for the data stored in this struct.
-	deposit: DepositBalance,
-	/// The user friendly name of this asset. Limited in length by `StringLimit`.
-	name: Vec<u8>,
-	/// The ticker symbol for this asset. Limited in length by `StringLimit`.
-	symbol: Vec<u8>,
-	/// The number of decimals this asset uses to represent one unit.
-	decimals: u8,
-	/// Whether the asset metadata may be changed by a non Force origin.
-	is_frozen: bool,
-}
-
-/// Witness data for the destroy transactions.
-#[derive(Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
-pub struct DestroyWitness {
-	/// The number of accounts holding the asset.
-	#[codec(compact)]
-	accounts: u32,
-	/// The number of accounts holding the asset with a self-sufficient reference.
-	#[codec(compact)]
-	sufficients: u32,
-	/// The number of transfer-approvals of the asset.
-	#[codec(compact)]
-	approvals: u32,
-}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -363,6 +202,13 @@ pub mod pallet {
 		/// The maximum length of a name or symbol stored on-chain.
 		type StringLimit: Get<u32>;
 
+		/// A hook to allow a per-asset, per-account minimum balance to be enforced. This must be
+		/// respected in all permissionless operations.
+		type Freezer: FrozenBalance<Self::AssetId, Self::AccountId, Self::Balance>;
+
+		/// Additional data to be stored with an account's asset balance.
+		type Extra: Member + Parameter + Default;
+
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 	}
@@ -384,7 +230,7 @@ pub mod pallet {
 		T::AssetId,
 		Blake2_128Concat,
 		T::AccountId,
-		AssetBalance<T::Balance>,
+		AssetBalance<T::Balance, T::Extra>,
 		ValueQuery,
 	>;
 
@@ -637,7 +483,7 @@ pub mod pallet {
 				ensure!(details.approvals == witness.approvals, Error::<T>::BadWitness);
 
 				for (who, v) in Account::<T>::drain_prefix(id) {
-					Self::dead_account(&who, &mut details, v.sufficient);
+					Self::dead_account(id, &who, &mut details, v.sufficient);
 				}
 				debug_assert_eq!(details.accounts, 0);
 				debug_assert_eq!(details.sufficients, 0);
@@ -674,7 +520,9 @@ pub mod pallet {
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
-			Self::increase_balance(id, beneficiary, amount, Some(origin))
+			Self::do_mint(id, &beneficiary, amount, Some(origin))?;
+			Self::deposit_event(Event::Issued(id, beneficiary, amount));
+			Ok(())
 		}
 
 		/// Reduce the balance of `who` by as much as possible up to `amount` assets of `id`.
@@ -702,7 +550,10 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let who = T::Lookup::lookup(who)?;
 
-			Self::reduce_balance(id, who, amount, Some(origin)).map(|_| ())
+			let f = DebitFlags { keep_alive: false, best_effort: true };
+			let burned = Self::do_burn(id, &who, amount, Some(origin), f)?;
+			Self::deposit_event(Event::Burned(id, who, burned));
+			Ok(())
 		}
 
 		/// Move some assets from the sender account to another.
@@ -733,7 +584,12 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(target)?;
 
-			Self::do_transfer(id, origin, dest, amount, None, false)
+			let f = TransferFlags {
+				keep_alive: false,
+				best_effort: false,
+				burn_dust: false
+			};
+			Self::do_transfer(id, &origin, &dest, amount, None, f).map(|_| ())
 		}
 
 		/// Move some assets from the sender account to another, keeping the sender account alive.
@@ -761,10 +617,15 @@ pub mod pallet {
 			target: <T::Lookup as StaticLookup>::Source,
 			#[pallet::compact] amount: T::Balance
 		) -> DispatchResult {
-			let origin = ensure_signed(origin)?;
+			let source = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(target)?;
 
-			Self::do_transfer(id, origin, dest, amount, None, true)
+			let f = TransferFlags {
+				keep_alive: true,
+				best_effort: false,
+				burn_dust: false
+			};
+			Self::do_transfer(id, &source, &dest, amount, None, f).map(|_| ())
 		}
 
 		/// Move some assets from one account to another.
@@ -798,7 +659,12 @@ pub mod pallet {
 			let source = T::Lookup::lookup(source)?;
 			let dest = T::Lookup::lookup(dest)?;
 
-			Self::do_transfer(id, source, dest, amount, Some(origin), false)
+			let f = TransferFlags {
+				keep_alive: false,
+				best_effort: false,
+				burn_dust: false
+			};
+			Self::do_transfer(id, &source, &dest, amount, Some(origin), f).map(|_| ())
 		}
 
 		/// Disallow further unprivileged transfers from an account.
@@ -1351,7 +1217,12 @@ pub mod pallet {
 				let mut approved = maybe_approved.take().ok_or(Error::<T>::Unapproved)?;
 				let remaining = approved.amount.checked_sub(&amount).ok_or(Error::<T>::Unapproved)?;
 
-				Self::do_transfer(id, key.owner.clone(), destination, amount, None, false)?;
+				let f = TransferFlags {
+					keep_alive: false,
+					best_effort: false,
+					burn_dust: false
+				};
+				Self::do_transfer(id, &key.owner, &destination, amount, None, f)?;
 
 				if remaining.is_zero() {
 					T::Currency::unreserve(&key.owner, approved.deposit);
@@ -1363,224 +1234,5 @@ pub mod pallet {
 			})?;
 			Ok(())
 		}
-	}
-}
-
-// The main implementation block for the module.
-impl<T: Config> Pallet<T> {
-	// Public immutables
-
-	/// Get the asset `id` balance of `who`.
-	pub fn balance(id: T::AssetId, who: impl sp_std::borrow::Borrow<T::AccountId>) -> T::Balance {
-		Account::<T>::get(id, who.borrow()).balance
-	}
-
-	/// Get the total supply of an asset `id`.
-	pub fn total_supply(id: T::AssetId) -> T::Balance {
-		Asset::<T>::get(id).map(|x| x.supply).unwrap_or_else(Zero::zero)
-	}
-
-	fn new_account(
-		who: &T::AccountId,
-		d: &mut AssetDetails<T::Balance, T::AccountId, DepositBalanceOf<T>>,
-	) -> Result<bool, DispatchError> {
-		let accounts = d.accounts.checked_add(1).ok_or(Error::<T>::Overflow)?;
-		let is_sufficient = if d.is_sufficient {
-			frame_system::Pallet::<T>::inc_sufficients(who);
-			d.sufficients += 1;
-			true
-		} else {
-			frame_system::Pallet::<T>::inc_consumers(who).map_err(|_| Error::<T>::NoProvider)?;
-			false
-		};
-		d.accounts = accounts;
-		Ok(is_sufficient)
-	}
-
-	fn dead_account(
-		who: &T::AccountId,
-		d: &mut AssetDetails<T::Balance, T::AccountId, DepositBalanceOf<T>>,
-		sufficient: bool,
-	) {
-		if sufficient {
-			d.sufficients = d.sufficients.saturating_sub(1);
-			frame_system::Pallet::<T>::dec_sufficients(who);
-		} else {
-			frame_system::Pallet::<T>::dec_consumers(who);
-		}
-		d.accounts = d.accounts.saturating_sub(1);
-	}
-
-	fn can_deposit(id: T::AssetId, who: &T::AccountId, amount: T::Balance) -> DepositConsequence {
-		let details = match Asset::<T>::get(id) {
-			Some(details) => details,
-			None => return DepositConsequence::UnknownAsset,
-		};
-		if details.supply.checked_add(&amount).is_none() {
-			return DepositConsequence::Overflow
-		}
-		let account = Account::<T>::get(id, who);
-		if account.balance.checked_add(&amount).is_none() {
-			return DepositConsequence::Overflow
-		}
-		if account.balance.is_zero() {
-			if amount < details.min_balance {
-				return DepositConsequence::BelowMinimum
-			}
-			if !details.is_sufficient && frame_system::Pallet::<T>::providers(who) == 0 {
-				return DepositConsequence::CannotCreate
-			}
-			if details.is_sufficient && details.sufficients.checked_add(1).is_none() {
-				return DepositConsequence::Overflow
-			}
-		}
-
-		DepositConsequence::Success
-	}
-
-	fn can_withdraw(
-		id: T::AssetId,
-		who: &T::AccountId,
-		amount: T::Balance,
-	) -> WithdrawConsequence<T::Balance> {
-		let details = match Asset::<T>::get(id) {
-			Some(details) => details,
-			None => return WithdrawConsequence::UnknownAsset,
-		};
-		if details.supply.checked_sub(&amount).is_none() {
-			return WithdrawConsequence::Underflow
-		}
-		let account = Account::<T>::get(id, who);
-		if let Some(rest) = account.balance.checked_sub(&amount) {
-			if rest < details.min_balance {
-				WithdrawConsequence::ReducedToZero(rest)
-			} else {
-				// NOTE: this assumes (correctly) that the token won't be a provider. If that ever
-				// changes, this will need to change.
-				WithdrawConsequence::Success
-			}
-		} else {
-			WithdrawConsequence::NoFunds
-		}
-	}
-
-	fn increase_balance(
-		id: T::AssetId,
-		beneficiary: T::AccountId,
-		amount: T::Balance,
-		maybe_check_issuer: Option<T::AccountId>,
-	) -> DispatchResult {
-		Asset::<T>::try_mutate(id, |maybe_details| {
-			let details = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
-
-			if let Some(check_issuer) = maybe_check_issuer {
-				ensure!(&check_issuer == &details.issuer, Error::<T>::NoPermission);
-			}
-			details.supply = details.supply.checked_add(&amount).ok_or(Error::<T>::Overflow)?;
-
-			Account::<T>::try_mutate(id, &beneficiary, |t| -> DispatchResult {
-				let new_balance = t.balance.saturating_add(amount);
-				ensure!(new_balance >= details.min_balance, Error::<T>::BalanceLow);
-				if t.balance.is_zero() {
-					t.sufficient = Self::new_account(&beneficiary, details)?;
-				}
-				t.balance = new_balance;
-				Ok(())
-			})?;
-			Self::deposit_event(Event::Issued(id, beneficiary, amount));
-			Ok(())
-		})
-	}
-
-	fn reduce_balance(
-		id: T::AssetId,
-		target: T::AccountId,
-		amount: T::Balance,
-		maybe_check_admin: Option<T::AccountId>,
-	) -> Result<T::Balance, DispatchError> {
-		Asset::<T>::try_mutate(id, |maybe_details| {
-			let d = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
-			if let Some(check_admin) = maybe_check_admin {
-				ensure!(&check_admin == &d.admin, Error::<T>::NoPermission);
-			}
-
-			let burned = Account::<T>::try_mutate_exists(
-				id,
-				&target,
-				|maybe_account| -> Result<T::Balance, DispatchError> {
-					let mut account = maybe_account.take().ok_or(Error::<T>::BalanceZero)?;
-					let mut burned = amount.min(account.balance);
-					account.balance -= burned;
-					*maybe_account = if account.balance < d.min_balance {
-						burned += account.balance;
-						Self::dead_account(&target, d, account.sufficient);
-						None
-					} else {
-						Some(account)
-					};
-					Ok(burned)
-				}
-			)?;
-
-			d.supply = d.supply.saturating_sub(burned);
-
-			Self::deposit_event(Event::Burned(id, target, burned));
-			Ok(burned)
-		})
-	}
-
-	fn do_transfer(
-		id: T::AssetId,
-		source: T::AccountId,
-		dest: T::AccountId,
-		amount: T::Balance,
-		maybe_need_admin: Option<T::AccountId>,
-		keep_alive: bool,
-	) -> DispatchResult {
-		let mut source_account = Account::<T>::get(id, &source);
-		ensure!(!source_account.is_frozen, Error::<T>::Frozen);
-
-		source_account.balance = source_account.balance.checked_sub(&amount)
-			.ok_or(Error::<T>::BalanceLow)?;
-
-		Asset::<T>::try_mutate(id, |maybe_details| {
-			let details = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
-			ensure!(!details.is_frozen, Error::<T>::Frozen);
-
-			if let Some(need_admin) = maybe_need_admin {
-				ensure!(&need_admin == &details.admin, Error::<T>::NoPermission);
-			}
-
-			if dest != source && !amount.is_zero() {
-				let mut amount = amount;
-				if source_account.balance < details.min_balance {
-					ensure!(!keep_alive, Error::<T>::WouldDie);
-					amount += source_account.balance;
-					source_account.balance = Zero::zero();
-				}
-
-				Account::<T>::try_mutate(id, &dest, |a| -> DispatchResult {
-					let new_balance = a.balance.saturating_add(amount);
-
-					ensure!(new_balance >= details.min_balance, Error::<T>::BalanceLow);
-
-					if a.balance.is_zero() {
-						a.sufficient = Self::new_account(&dest, details)?;
-					}
-					a.balance = new_balance;
-					Ok(())
-				})?;
-
-				if source_account.balance.is_zero() {
-					Self::dead_account(&source, details, source_account.sufficient);
-					Account::<T>::remove(id, &source);
-				} else {
-					Account::<T>::insert(id, &source, &source_account)
-				}
-			}
-
-			Self::deposit_event(Event::Transferred(id, source, dest, amount));
-			Ok(())
-		})
 	}
 }

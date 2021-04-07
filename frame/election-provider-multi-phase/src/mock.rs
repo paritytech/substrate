@@ -65,7 +65,7 @@ pub(crate) type TargetIndex = u16;
 
 sp_npos_elections::generate_solution_type!(
 	#[compact]
-	pub struct TestCompact::<VoterIndex, TargetIndex, PerU16>(16)
+	pub struct TestCompact::<VoterIndex = VoterIndex, TargetIndex = TargetIndex, Accuracy = PerU16>(16)
 );
 
 /// All events of this pallet.
@@ -161,6 +161,7 @@ impl frame_system::Config for Runtime {
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
+	type OnSetCode = ();
 }
 
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);

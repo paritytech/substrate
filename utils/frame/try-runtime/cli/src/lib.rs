@@ -67,15 +67,14 @@ pub struct TryRuntimeCmd {
 pub enum State {
 	/// Use a state snapshot as state to run the migration.
 	Snap {
-		#[structopt(flatten)]
-		snapshot_path: SnapshotPath,
+		snapshot_path: PathBuf,
 	},
 
 	/// Use a live chain to run the migration.
 	Live {
 		/// An optional state snapshot file to WRITE to. Not written if set to `None`.
 		#[structopt(short, long)]
-		snapshot_path: Option<SnapshotPath>,
+		snapshot_path: Option<PathBuf>,
 
 		/// The block hash at which to connect.
 		/// Will be latest finalized head if not provided.
@@ -118,31 +117,6 @@ fn parse_url(s: &str) -> Result<String, &'static str> {
 	}
 }
 
-#[derive(Debug, structopt::StructOpt)]
-pub struct SnapshotPath {
-	/// The directory of the state snapshot.
-	#[structopt(short, long, default_value = ".")]
-	directory: String,
-
-	/// The file name of the state snapshot.
-	#[structopt(default_value = "SNAPSHOT")]
-	file_name: String,
-}
-
-impl FromStr for SnapshotPath {
-	type Err = &'static str;
-	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		let p: PathBuf = s.parse().map_err(|_| "invalid path")?;
-		let parent = p.parent();
-		let file_name = p.file_name();
-
-		file_name.and_then(|file_name| Some(Self {
-			directory: parent.map(|p| p.to_string_lossy().into()).unwrap_or(".".to_string()),
-			file_name: file_name.to_string_lossy().into()
-		})).ok_or("invalid path")
-	}
-}
-
 impl TryRuntimeCmd {
 	pub async fn run<B, ExecDispatch>(&self, config: Configuration) -> sc_cli::Result<()>
 	where
@@ -182,12 +156,8 @@ impl TryRuntimeCmd {
 			use remote_externalities::{Builder, Mode, SnapshotConfig, OfflineConfig, OnlineConfig};
 			let builder = match &self.state {
 				State::Snap { snapshot_path } => {
-					let SnapshotPath { directory, file_name } = snapshot_path;
 					Builder::<B>::new().mode(Mode::Offline(OfflineConfig {
-						state_snapshot: SnapshotConfig {
-							name: file_name.into(),
-							directory: directory.into(),
-						},
+						state_snapshot: SnapshotConfig::new(snapshot_path),
 					}))
 				},
 				State::Live {
@@ -197,10 +167,7 @@ impl TryRuntimeCmd {
 					modules
 				} => Builder::<B>::new().mode(Mode::Online(OnlineConfig {
 					uri: url.into(),
-					state_snapshot: snapshot_path.as_ref().map(|c| SnapshotConfig {
-						name: c.file_name.clone(),
-						directory: c.directory.clone(),
-					}),
+					state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
 					modules: modules.clone().unwrap_or_default(),
 					at: match block_at {
 						Some(b) => Some(b.parse().map_err(|e| format!("Could not parse hash: {:?}", e))?),

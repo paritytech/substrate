@@ -150,6 +150,7 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 impl pallet_balances::Config for Test {
 	type MaxLocks = MaxLocks;
@@ -269,6 +270,8 @@ where
 }
 
 pub type Extrinsic = TestXt<Call, ()>;
+pub(crate) type StakingCall = crate::Call<Test>;
+pub(crate) type TestRuntimeCall = <Test as frame_system::Config>::Call;
 
 pub struct ExtBuilder {
 	validator_pool: bool,

@@ -1,6 +1,6 @@
 [package]
 name = "pallet-example"
-version = "2.0.0"
+version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Unlicense"
@@ -21,8 +21,8 @@ pallet-balances = { version = "3.0.0", default-features = false, path = "../bala
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/io" }
-
 frame-benchmarking = { version = "3.1.0", default-features = false, path = "../benchmarking", optional = true }
+log = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]
 sp-core = { version = "3.0.0", path = "../../primitives/core", default-features = false }
@@ -30,14 +30,15 @@ sp-core = { version = "3.0.0", path = "../../primitives/core", default-features 
 [features]
 default = ["std"]
 std = [
-	"serde",
 	"codec/std",
-	"sp-runtime/std",
 	"frame-benchmarking/std",
 	"frame-support/std",
 	"frame-system/std",
+	"log/std",
 	"pallet-balances/std",
+	"serde",
 	"sp-io/std",
+	"sp-runtime/std",
 	"sp-std/std"
 ]
 runtime-benchmarks = ["frame-benchmarking"]

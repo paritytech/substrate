@@ -372,7 +372,7 @@ mod tests {
 				.unwrap()
 				.block;
 
-			client.import(BlockOrigin::Own, block).unwrap();
+			futures::executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
 		}
 
 		let genesis = client

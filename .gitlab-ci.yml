@@ -238,6 +238,14 @@ cargo-check-subkey:
     - SKIP_WASM_BUILD=1 time cargo check --release
     - sccache -s
 
+cargo-check-try-runtime:
+  stage:                           test
+  <<:                              *docker-env
+  <<:                              *test-refs
+  script:
+    - time cargo check --features try-runtime
+    - sccache -s
+
 test-deterministic-wasm:
   stage:                           test
   <<:                              *docker-env
@@ -336,7 +344,7 @@ check-web-wasm:
     # Note: we don't need to test crates imported in `bin/node/cli`
     - time cargo build --manifest-path=client/consensus/aura/Cargo.toml --target=wasm32-unknown-unknown --features getrandom
     # Note: the command below is a bit weird because several Cargo issues prevent us from compiling the node in a more straight-forward way.
-    - time cargo +nightly build --manifest-path=bin/node/cli/Cargo.toml --no-default-features --features browser --target=wasm32-unknown-unknown -Z features=itarget
+    - time cargo +nightly build --manifest-path=bin/node/cli/Cargo.toml --no-default-features --features browser --target=wasm32-unknown-unknown
     # with-tracing must be explicitly activated, we run a test to ensure this works as expected in both cases
     - time cargo +nightly test --manifest-path primitives/tracing/Cargo.toml --no-default-features
     - time cargo +nightly test --manifest-path primitives/tracing/Cargo.toml --no-default-features --features=with-tracing
@@ -407,7 +415,7 @@ test-browser-node:
     CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER: "wasm-bindgen-test-runner"
     WASM_BINDGEN_TEST_TIMEOUT:                  120
   script:
-    - cargo +nightly test --target wasm32-unknown-unknown -p node-browser-testing -Z features=itarget
+    - cargo +nightly test --target wasm32-unknown-unknown -p node-browser-testing
 
 build-linux-substrate:             &build-binary
   stage:                           build
