@@ -188,6 +188,14 @@ impl InherentDataProvider {
 		}
 	}
 
+	/// Create `Self` using the given `timestamp`.
+	pub fn new(timestamp: InherentType) -> Self {
+		Self {
+			max_drift: std::time::Duration::from_secs(60).into(),
+			timestamp,
+		}
+	}
+
 	/// With the given maximum drift.
 	///
 	/// By default the maximum drift is 60 seconds.

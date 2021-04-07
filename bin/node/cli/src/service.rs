@@ -583,7 +583,7 @@ mod tests {
 	};
 	use node_primitives::{Block, DigestItem, Signature};
 	use node_runtime::{BalancesCall, Call, UncheckedExtrinsic, Address};
-	use node_runtime::constants::currency::CENTS;
+	use node_runtime::constants::{currency::CENTS, time::SLOT_DURATION};
 	use codec::Encode;
 	use sp_core::{
 		crypto::Pair as CryptoPair,
@@ -705,7 +705,9 @@ mod tests {
 				};
 
 				let inherent_data = (
-					sp_timestamp::InherentDataProvider::from_system_time(),
+					sp_timestamp::InherentDataProvider::new(
+						std::time::Duration::from_millis(SLOT_DURATION * slot).into(),
+					),
 					sp_consensus_babe::inherents::InherentDataProvider::new(slot.into()),
 				).create_inherent_data().expect("Creates inherent data");
 
