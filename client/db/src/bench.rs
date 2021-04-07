@@ -525,7 +525,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 				.iter()
 				.filter_map(|(_k, v)| v.as_ref().map(|v| v.to_vec()))
 				.collect());
-			proof.encode().len() as u32
+			proof.encoded_size() as u32
 		})
 	}
 }
