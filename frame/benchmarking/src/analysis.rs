@@ -374,6 +374,7 @@ mod tests {
 			repeat_reads: 0,
 			writes,
 			repeat_writes: 0,
+			proof_size: 0,
 		}
 	}
 
