@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Implementation of the `moduleid` subcommand
+//! Implementation of the `palletid` subcommand
 
 use sc_cli::{
 	Error, utils::print_from_uri, CryptoSchemeFlag,
@@ -27,13 +27,13 @@ use std::convert::{TryInto, TryFrom};
 use structopt::StructOpt;
 use frame_support::PalletId;
 
-/// The `moduleid` command
+/// The `palletid` command
 #[derive(Debug, StructOpt)]
 #[structopt(
-	name = "moduleid",
+	name = "palletid",
 	about = "Inspect a module ID address"
 )]
-pub struct ModuleIdCmd {
+pub struct PalletIdCmd {
 	/// The module ID used to derive the account
 	id: String,
 
@@ -60,7 +60,7 @@ pub struct ModuleIdCmd {
 	pub keystore_params: KeystoreParams,
 }
 
-impl ModuleIdCmd {
+impl PalletIdCmd {
 	/// runs the command
 	pub fn run<R>(&self) -> Result<(), Error>
 		where
@@ -74,7 +74,7 @@ impl ModuleIdCmd {
 
 		let id_fixed_array: [u8; 8] = self.id.as_bytes()
 			.try_into()
-			.map_err(|_| "Cannot convert argument to moduleid: argument should be 8-character string")?;
+			.map_err(|_| "Cannot convert argument to palletid: argument should be 8-character string")?;
 
 		let account_id: R::AccountId = PalletId(id_fixed_array).into_account();
 
