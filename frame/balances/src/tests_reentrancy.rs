@@ -105,7 +105,7 @@ impl pallet_transaction_payment::Config for Test {
 pub struct OnDustRemoval;
 impl OnUnbalanced<NegativeImbalance<Test>> for OnDustRemoval {
 	fn on_nonzero_unbalanced(amount: NegativeImbalance<Test>) {
-		let _ = Balances::resolve_into_existing(&1, amount);
+		assert_ok!(Balances::resolve_into_existing(&1, amount));
 	}
 }
 parameter_types! {
