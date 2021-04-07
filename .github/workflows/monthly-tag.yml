@@ -32,8 +32,8 @@ jobs:
           echo "## Changes since last snapshot (${{ steps.tags.outputs.old }})" >> Changelog.md
           echo "" >> Changelog.md
           ./.maintain/gitlab/generate_changelog.sh ${{ steps.tags.outputs.old }} >>  Changelog.md
-# TODO: REVERT ME BEFORE MERGE
           cat Changelog.md
+# TODO: REVERT ME BEFORE MERGE
       # - name: Release snapshot
         # id: release-snapshot
         # uses: actions/create-release@latest
