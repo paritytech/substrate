@@ -1557,7 +1557,8 @@ impl<B: BlockT> ChainSync<B> {
 	}
 
 	/// Call when a peer has disconnected.
-	/// Canceled block request may result in
+	/// Canceled obsolete block request may result in some blocks being ready for
+	/// import, so this functions checks for such blocks and returns them.
 	pub fn peer_disconnected(&mut self, who: &PeerId) -> Option<OnBlockData<B>> {
 		self.blocks.clear_peer_download(who);
 		self.peers.remove(who);
