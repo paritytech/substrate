@@ -19,6 +19,7 @@ jobs:
         uses: actions/checkout@v2
         with:
           ref: 'master'
+          fetch-depth: 0
       - name: Generate changelog
         id: changelog
         run: |
@@ -26,7 +27,7 @@ jobs:
           echo "" >> Changelog.md
           echo "## Changes since last snapshot (${{ steps.tags.outputs.old }})" >> Changelog.md
           echo "" >> Changelog.md
-          GITHUB_DEPLOY_TOKEN=${{ secrets.GITHUB_TOKEN }} ./.maintain/gitlab/generate_changelog.sh ${{ steps.tags.outputs.old }} >>  Changelog.md
+          ./.maintain/gitlab/generate_changelog.sh ${{ steps.tags.outputs.old }} >>  Changelog.md
       - name: Release snapshot
         id: release-snapshot
         uses: actions/create-release@latest
