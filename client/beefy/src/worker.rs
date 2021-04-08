@@ -109,20 +109,25 @@ impl<B, P> GossipValidator<B> for BeefyGossipValidator<B, P>
 where
 	B: Block,
 	P: Pair,
-	P::Public: Decode,
-	P::Signature: Decode,
+	P::Public: Debug + Decode,
+	P::Signature: Debug + Decode,
 {
 	fn validate(
 		&self,
 		_context: &mut dyn GossipValidatorContext<B>,
-		_sender: &sc_network::PeerId,
+		sender: &sc_network::PeerId,
 		mut data: &[u8],
 	) -> GossipValidationResult<B::Hash> {
-		if VoteMessage::<MmrRootHash, NumberFor<B>, P::Public, P::Signature>::decode(&mut data).is_ok() {
-			GossipValidationResult::ProcessAndKeep(self.topic)
-		} else {
-			GossipValidationResult::Discard
+		if let Ok(msg) = VoteMessage::<MmrRootHash, NumberFor<B>, P::Public, P::Signature>::decode(&mut data) {
+			if P::verify(&msg.signature, &msg.commitment.encode(), &msg.id) {
+				return GossipValidationResult::ProcessAndKeep(self.topic);
+			} else {
+				// TODO: report peer
+				debug!(target: "beefy", "🥩 Bad signature on message: {:?}, from: {:?}", msg, sender);
+			}
 		}
+
+		GossipValidationResult::Discard
 	}
 
 	fn message_expired<'a>(&'a self) -> Box<dyn FnMut(B::Hash, &[u8]) -> bool + 'a> {
@@ -406,7 +411,6 @@ where
 	fn handle_vote(&mut self, round: (MmrRootHash, NumberFor<B>), vote: (P::Public, P::Signature)) {
 		self.gossip_validator.note_round(round.1);
 
-		// TODO: validate signature
 		let vote_added = self.rounds.add_vote(round, vote);
 
 		if vote_added && self.rounds.is_done(&round) {
