@@ -701,7 +701,6 @@ impl ProtocolsHandler for NotifsHandler {
 			NotifsHandlerIn::Close { protocol_index } => {
 				match &mut self.protocols[protocol_index].state {
 					State::Open { in_substream, out_substream, .. } => {
-						debug_assert!(in_substream.is_some() || out_substream.is_some());
 						if let Some(in_substream) = in_substream.as_mut() {
 							in_substream.set_close_desired();
 						}
