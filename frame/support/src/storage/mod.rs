@@ -19,9 +19,12 @@
 
 use sp_core::storage::ChildInfo;
 use sp_std::prelude::*;
-use sp_std::iter;
+use sp_std::{iter, convert::TryFrom};
 use codec::{FullCodec, FullEncode, Encode, EncodeLike, Decode};
-use crate::hash::{Twox128, StorageHasher, ReversibleStorageHasher};
+use crate::{
+	hash::{Twox128, StorageHasher, ReversibleStorageHasher},
+	traits::Get,
+};
 use sp_runtime::generic::{Digest, DigestItem};
 pub use sp_runtime::TransactionOutcome;
 
@@ -822,9 +825,6 @@ impl<T: Encode> StorageDecodeLength for Vec<T> {}
 /// internal vec and we can append to this vec. We have a test that ensures that if the `Digest`
 /// format ever changes, we need to remove this here.
 impl<Hash: Encode> StorageAppend<DigestItem<Hash>> for Digest<Hash> {}
-
-use crate::traits::Get;
-use sp_std::convert::TryFrom;
 
 /// Marker trait for types `T` that can be stored in storage as `Vec<T>`.
 pub trait Value: FullCodec + Default + sp_std::fmt::Debug + Eq + PartialEq {}
