@@ -324,8 +324,8 @@ impl<Bn: PartialEq + Eq> Phase<Bn> {
 /// The type of `Computation` that provided this election data.
 #[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
 pub enum ElectionCompute {
-	/// Election was computed on-chain.
-	OnChain,
+	/// Election was computed using the fallback method.
+	Fallback,
 	/// Election was computed with a signed submission.
 	Signed,
 	/// Election was computed with an unsigned submission.
@@ -334,7 +334,7 @@ pub enum ElectionCompute {
 
 impl Default for ElectionCompute {
 	fn default() -> Self {
-		ElectionCompute::OnChain
+		ElectionCompute::Fallback
 	}
 }
 
@@ -1041,7 +1041,7 @@ impl<T: Config> Pallet<T> {
 	fn do_elect() -> Result<(Supports<T::AccountId>, Weight), ElectionError> {
 		<QueuedSolution<T>>::take()
 			.map_or_else(
-				|| Self::fallback().map(|(s, w)| (s, w, ElectionCompute::OnChain)),
+				|| Self::fallback().map(|(s, w)| (s, w, ElectionCompute::Fallback)),
 				|ReadySolution { supports, compute, .. }| Ok((
 					supports,
 					T::WeightInfo::elect_queued(),
@@ -1160,7 +1160,7 @@ mod feasibility_check {
 
 	use super::{mock::*, *};
 
-	const COMPUTE: ElectionCompute = ElectionCompute::OnChain;
+	const COMPUTE: ElectionCompute = ElectionCompute::Fallback;
 
 	#[test]
 	fn snapshot_is_there() {
@@ -1485,7 +1485,7 @@ mod tests {
 				multi_phase_events(),
 				vec![
 					Event::SignedPhaseStarted(1),
-					Event::ElectionFinalized(Some(ElectionCompute::OnChain))
+					Event::ElectionFinalized(Some(ElectionCompute::Fallback))
 				],
 			);
 			// all storage items must be cleared.
