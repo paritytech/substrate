@@ -608,6 +608,13 @@ pub mod pallet {
 		pub const Five: usize = 5;
 	}
 
+	/// An example of how to create a bounded vector. This is a special 'newtype' that behaves
+	/// identical to a normal `Vec`, except the size can never exceed `Five`.
+	///
+	/// Similar to normal storage values that contain a vector, the length of the bounded vector can
+	///be queried efficiently with `decode_len`. Also, adding to the end of the vector can be done
+	///efficiently via `try_append`. See [`frame_support::TryAppendValue`] and
+	/// [`frame_support::TryAppendMap`].
 	#[pallet::storage]
 	#[pallet::getter(fn bounded)]
 	pub(super) type BoundedStuff<T: Config> =
