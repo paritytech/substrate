@@ -560,6 +560,25 @@ pub use frame_support_procedural::PartialEqNoBound;
 /// ```
 pub use frame_support_procedural::DebugNoBound;
 
+/// Derive [`Default`] but do not bound any generic.
+///
+/// This is useful for type generic over runtime:
+/// ```
+/// # use frame_support::DefaultNoBound;
+/// # use core::default::Default;
+/// trait Config {
+///		type C: Default;
+/// }
+///
+/// // Foo implements [`Default`] because `C` bounds [`Default`].
+/// // Otherwise compilation will fail with an output telling `c` doesn't implement [`Default`].
+/// #[derive(DefaultNoBound)]
+/// struct Foo<T: Config> {
+///		c: T::C,
+/// }
+/// ```
+pub use frame_support_procedural::DefaultNoBound;
+
 /// Assert the annotated function is executed within a storage transaction.
 ///
 /// The assertion is enabled for native execution and when `debug_assertions` are enabled.

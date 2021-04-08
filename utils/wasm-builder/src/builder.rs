@@ -217,7 +217,7 @@ fn generate_rerun_if_changed_instructions() {
 /// `project_cargo_toml` - The path to the `Cargo.toml` of the project that should be built.
 /// `default_rustflags` - Default `RUSTFLAGS` that will always be set for the build.
 /// `features_to_enable` - Features that should be enabled for the project.
-/// `wasm_binary_name` - The optional wasm binary name that is extended with `.compact.wasm`.
+/// `wasm_binary_name` - The optional wasm binary name that is extended with `.compact.compressed.wasm`.
 ///                      If `None`, the project name will be used.
 fn build_project(
 	file_name: PathBuf,

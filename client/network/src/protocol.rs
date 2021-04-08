@@ -526,7 +526,9 @@ impl<B: BlockT> Protocol<B> {
 		}
 
 		if let Some(_peer_data) = self.peers.remove(&peer) {
-			self.sync.peer_disconnected(&peer);
+			if let Some(sync::OnBlockData::Import(origin, blocks)) = self.sync.peer_disconnected(&peer) {
+				self.pending_messages.push_back(CustomMessageOutcome::BlockImport(origin, blocks));
+			}
 			Ok(())
 		} else {
 			Err(())
