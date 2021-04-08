@@ -126,22 +126,13 @@ mod inner {
 		entry_point: fn(Vec<u8>) -> Vec<u8>,
 		data: Vec<u8>,
 	) -> DataJoinHandle {
-		let handle = sp_externalities::with_externalities(|mut ext|{
-			let ext_unsafe = ext as *mut dyn Externalities;
-			let runtime_spawn = ext.extension::<RuntimeSpawnExt>()
-				.expect("Cannot spawn without dynamic runtime dispatcher (RuntimeSpawnExt)");
-			// Unsafe usage here means that `spawn_call` shall never attempt to access
-			// or deregister this `RuntimeSpawnExt` from the unchecked ext2.
-			let ext_unsafe: &mut _  = unsafe { &mut *ext_unsafe };
-			// TODO could wrap ext_unsafe in a ext struct that filter calls to extension of
-			// a given id, to make this safer.
-			let result = runtime_spawn.spawn_call_native(entry_point, data, ext_unsafe);
-			std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::AcqRel);
+		let handle = sp_externalities::with_externalities_and_extension::<RuntimeSpawnExt, _, _>(|ext, runtime_spawn| {
+			let result = runtime_spawn.spawn_call_native(entry_point, data, ext);
 			// Not necessary (same lifetime as runtime_spawn), but shows intent to keep
-			// ext alive as long as ext_unsafe is in scope.
+			// ext alive as long as ext is in scope.
 			drop(ext);
 			result
-		}).expect("`RuntimeTasks::spawn`: called outside of externalities context");
+		}).expect("Cannot spawn without dynamic runtime dispatcher (RuntimeSpawnExt), or outside of externalities context.");
 
 		DataJoinHandle { handle }
 	}
