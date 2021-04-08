@@ -285,8 +285,6 @@ node-bench-regression-guard:
   script:
     - 'node-bench-regression-guard --reference artifacts/benches/master-* 
        --compare-with artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA'
-  # FIXME: remove this when master will be populated with bench results artifacts
-  allow_failure:                   true
 
 cargo-check-subkey:
   stage:                           test
