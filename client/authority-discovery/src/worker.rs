@@ -114,7 +114,7 @@ pub struct Worker<Client, Network, Block, DhtEventStream> {
 	publish_if_changed_interval: ExpIncInterval,
 	/// List of keys onto which addresses have been published at the latest publication.
 	/// Used to check whether they have changed.
-	latest_published_keys: Vec<CryptoTypePublicPair>,
+	latest_published_keys: HashSet<CryptoTypePublicPair>,
 
 	/// Interval at which to request addresses of authorities, refilling the pending lookups queue.
 	query_interval: ExpIncInterval,
@@ -196,7 +196,7 @@ where
 			dht_event_rx,
 			publish_interval,
 			publish_if_changed_interval,
-			latest_published_keys: Vec::new(),
+			latest_published_keys: HashSet::new(),
 			query_interval,
 			pending_lookups: Vec::new(),
 			in_flight_lookups: HashMap::new(),
@@ -307,7 +307,7 @@ where
 		let keys = Worker::<Client, Network, Block, DhtEventStream>::get_own_public_keys_within_authority_set(
 			key_store.clone(),
 			self.client.as_ref(),
-		).await?.into_iter().map(Into::into).collect::<Vec<_>>();
+		).await?.into_iter().map(Into::into).collect::<HashSet<_>>();
 
 		if only_if_changed && keys == self.latest_published_keys {
 			return Ok(())
@@ -315,7 +315,7 @@ where
 
 		let signatures = key_store.sign_with_all(
 			key_types::AUTHORITY_DISCOVERY,
-			keys.clone(),
+			keys.iter().cloned().collect(),
 			serialized_addresses.as_slice(),
 		).await.map_err(|_| Error::Signing)?;
 
