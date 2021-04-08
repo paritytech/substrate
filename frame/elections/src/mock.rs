@@ -25,7 +25,7 @@ use frame_support::{
 };
 use sp_core::H256;
 use sp_runtime::{
-	BuildStorage, testing::Header, traits::{BlakeTwo256, IdentityLookup, Block as BlockT},
+	BuildStorage, testing::Header, traits::{BlakeTwo256, IdentityLookup},
 };
 use crate as elections;
 
@@ -52,12 +52,13 @@ impl frame_system::Config for Test {
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
-	type PalletInfo = ();
+	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 
 parameter_types! {
@@ -135,9 +136,9 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: system::{Module, Call, Event<T>},
-		Balances: pallet_balances::{Module, Call, Event<T>, Config<T>},
-		Elections: elections::{Module, Call, Event<T>, Config<T>},
+		System: system::{Pallet, Call, Event<T>},
+		Balances: pallet_balances::{Pallet, Call, Event<T>, Config<T>},
+		Elections: elections::{Pallet, Call, Event<T>, Config<T>},
 	}
 );
 
@@ -194,7 +195,7 @@ impl ExtBuilder {
 		PRESENT_SLASH_PER_VOTER.with(|v| *v.borrow_mut() = self.bad_presentation_punishment);
 		DECAY_RATIO.with(|v| *v.borrow_mut() = self.decay_ratio);
 		let mut ext: sp_io::TestExternalities = GenesisConfig {
-			pallet_balances: Some(pallet_balances::GenesisConfig::<Test>{
+			pallet_balances: pallet_balances::GenesisConfig::<Test>{
 				balances: vec![
 					(1, 10 * self.balance_factor),
 					(2, 20 * self.balance_factor),
@@ -203,13 +204,13 @@ impl ExtBuilder {
 					(5, 50 * self.balance_factor),
 					(6, 60 * self.balance_factor)
 				],
-			}),
-			elections: Some(elections::GenesisConfig::<Test>{
+			},
+			elections: elections::GenesisConfig::<Test>{
 				members: vec![],
 				desired_seats: self.desired_seats,
 				presentation_duration: 2,
 				term_duration: 5,
-			}),
+			},
 		}.build_storage().unwrap().into();
 		ext.execute_with(|| System::set_block_number(1));
 		ext

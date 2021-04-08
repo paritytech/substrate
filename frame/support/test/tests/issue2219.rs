@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use frame_support::sp_runtime::generic;
-use frame_support::sp_runtime::traits::{BlakeTwo256, Block as _, Verify};
+use frame_support::sp_runtime::traits::{BlakeTwo256, Verify};
 use frame_support::codec::{Encode, Decode};
 use sp_core::{H256, sr25519};
 use serde::{Serialize, Deserialize};
@@ -164,7 +164,7 @@ impl system::Config for Runtime {
 	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
 	type Event = Event;
-	type PalletInfo = ();
+	type PalletInfo = PalletInfo;
 	type Call = Call;
 	type DbWeight = ();
 }
@@ -177,17 +177,17 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: system::{Module, Call, Event<T>},
-		Module: module::{Module, Call, Storage, Config},
+		System: system::{Pallet, Call, Event<T>},
+		Module: module::{Pallet, Call, Storage, Config},
 	}
 );
 
 #[test]
 fn create_genesis_config() {
 	GenesisConfig {
-		module: Some(module::GenesisConfig {
+		module: module::GenesisConfig {
 			request_life_time: 0,
 			enable_storage_role: true,
-		})
+		}
 	};
 }

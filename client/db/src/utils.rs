@@ -37,7 +37,7 @@ use crate::{DatabaseSettings, DatabaseSettingsSrc, Database, DbHash};
 /// Number of columns in the db. Must be the same for both full && light dbs.
 /// Otherwise RocksDb will fail to open database && check its type.
 #[cfg(any(feature = "with-kvdb-rocksdb", feature = "with-parity-db", feature = "test-helpers", test))]
-pub const NUM_COLUMNS: u32 = 11;
+pub const NUM_COLUMNS: u32 = 12;
 /// Meta column. The set of keys in the column is shared by full && light storages.
 pub const COLUMN_META: u32 = 0;
 
@@ -278,7 +278,7 @@ pub fn open_database<Block: BlockT>(
 		#[cfg(feature = "with-parity-db")]
 		DatabaseSettingsSrc::ParityDb { path } => {
 			crate::parity_db::open(&path, db_type)
-				.map_err(|e| sp_blockchain::Error::Backend(format!("{:?}", e)))?
+				.map_err(|e| sp_blockchain::Error::Backend(format!("{}", e)))?
 		},
 		#[cfg(not(feature = "with-parity-db"))]
 		DatabaseSettingsSrc::ParityDb { .. } => {
@@ -324,6 +324,23 @@ pub fn read_db<Block>(
 	block_id_to_lookup_key(db, col_index, id).and_then(|key| match key {
 		Some(key) => Ok(db.get(col, key.as_ref())),
 		None => Ok(None),
+	})
+}
+
+/// Remove database column entry for the given block.
+pub fn remove_from_db<Block>(
+	transaction: &mut Transaction<DbHash>,
+	db: &dyn Database<DbHash>,
+	col_index: u32,
+	col: u32,
+	id: BlockId<Block>,
+) -> sp_blockchain::Result<()>
+where
+	Block: BlockT,
+{
+	block_id_to_lookup_key(db, col_index, id).and_then(|key| match key {
+		Some(key) => Ok(transaction.remove(col, key.as_ref())),
+		None => Ok(()),
 	})
 }
 
@@ -384,7 +401,13 @@ pub fn read_meta<Block>(db: &dyn Database<DbHash>, col_header: u32) -> Result<
 			}
 		{
 			let hash = header.hash();
-			debug!("DB Opened blockchain db, fetched {} = {:?} ({})", desc, hash, header.number());
+			debug!(
+				target: "db",
+				"Opened blockchain db, fetched {} = {:?} ({})",
+				desc,
+				hash,
+				header.number()
+			);
 			Ok((hash, *header.number()))
 		} else {
 			Ok((genesis_hash.clone(), Zero::zero()))
@@ -426,10 +449,35 @@ impl DatabaseType {
 	}
 }
 
+pub(crate) struct JoinInput<'a, 'b>(&'a [u8], &'b [u8]);
+
+pub(crate) fn join_input<'a, 'b>(i1: &'a[u8], i2: &'b [u8]) -> JoinInput<'a, 'b> {
+	JoinInput(i1, i2)
+}
+
+impl<'a, 'b> codec::Input for JoinInput<'a, 'b> {
+	fn remaining_len(&mut self) -> Result<Option<usize>, codec::Error> {
+		Ok(Some(self.0.len() + self.1.len()))
+	}
+
+	fn read(&mut self, into: &mut [u8]) -> Result<(), codec::Error> {
+		let mut read = 0;
+		if self.0.len() > 0 {
+			read = std::cmp::min(self.0.len(), into.len());
+			self.0.read(&mut into[..read])?;
+		}
+		if read < into.len() {
+			self.1.read(&mut into[read..])?;
+		}
+		Ok(())
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use sp_runtime::testing::{Block as RawBlock, ExtrinsicWrapper};
+	use codec::Input;
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
 
 	#[test]
@@ -445,5 +493,26 @@ mod tests {
 	fn database_type_as_str_works() {
 		assert_eq!(DatabaseType::Full.as_str(), "full");
 		assert_eq!(DatabaseType::Light.as_str(), "light");
+	}
+
+	#[test]
+	fn join_input_works() {
+		let buf1 = [1, 2, 3, 4];
+		let buf2 = [5, 6, 7, 8];
+		let mut test = [0, 0, 0];
+		let mut joined = join_input(buf1.as_ref(), buf2.as_ref());
+		assert_eq!(joined.remaining_len().unwrap(), Some(8));
+
+		joined.read(&mut test).unwrap();
+		assert_eq!(test, [1, 2, 3]);
+		assert_eq!(joined.remaining_len().unwrap(), Some(5));
+
+		joined.read(&mut test).unwrap();
+		assert_eq!(test, [4, 5, 6]);
+		assert_eq!(joined.remaining_len().unwrap(), Some(2));
+
+		joined.read(&mut test[0..2]).unwrap();
+		assert_eq!(test, [7, 8, 6]);
+		assert_eq!(joined.remaining_len().unwrap(), Some(0));
 	}
 }

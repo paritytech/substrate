@@ -21,8 +21,10 @@ use sc_network::config::TransportConfig;
 use sc_service::{
 	RpcSession, Role, Configuration, TaskManager, RpcHandlers,
 	config::{DatabaseConfig, KeystoreConfig, NetworkConfiguration},
-	GenericChainSpec, RuntimeGenesis
+	GenericChainSpec, RuntimeGenesis,
+	KeepBlocks, TransactionStorageMode,
 };
+use sc_tracing::logging::LoggerBuilder;
 use wasm_bindgen::prelude::*;
 use futures::{
 	prelude::*, channel::{oneshot, mpsc}, compat::*, future::{ready, ok, select}
@@ -32,20 +34,25 @@ use sc_chain_spec::Extension;
 use libp2p_wasm_ext::{ExtTransport, ffi};
 
 pub use console_error_panic_hook::set_once as set_console_error_panic_hook;
-pub use console_log::init_with_level as init_console_log;
+
+/// Initialize the logger and return a `TelemetryWorker` and a wasm `ExtTransport`.
+pub fn init_logging(pattern: &str) -> Result<(), sc_tracing::logging::Error> {
+	LoggerBuilder::new(pattern).init()
+}
 
 /// Create a service configuration from a chain spec.
 ///
 /// This configuration contains good defaults for a browser light client.
-pub async fn browser_configuration<G, E>(chain_spec: GenericChainSpec<G, E>)
-	-> Result<Configuration, Box<dyn std::error::Error>>
+pub async fn browser_configuration<G, E>(
+	chain_spec: GenericChainSpec<G, E>,
+) -> Result<Configuration, Box<dyn std::error::Error>>
 where
 	G: RuntimeGenesis + 'static,
 	E: Extension + 'static + Send + Sync,
 {
 	let name = chain_spec.name().to_string();
-
 	let transport = ExtTransport::new(ffi::websocket_transport());
+
 	let mut network = NetworkConfiguration::new(
 		format!("{} (Browser)", name),
 		"unknown",
@@ -86,7 +93,9 @@ where
 		impl_version: String::from("0.0.0"),
 		offchain_worker: Default::default(),
 		prometheus_config: Default::default(),
-		pruning: Default::default(),
+		state_pruning: Default::default(),
+		keep_blocks: KeepBlocks::All,
+		transaction_storage: TransactionStorageMode::BlockBody,
 		rpc_cors: Default::default(),
 		rpc_http: Default::default(),
 		rpc_ipc: Default::default(),

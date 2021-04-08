@@ -40,7 +40,6 @@ pub use storage_proof::{StorageProof, CompactProof};
 /// Various re-exports from the `trie-db` crate.
 pub use trie_db::{
 	Trie, TrieMut, DBValue, Recorder, CError, Query, TrieLayout, TrieConfiguration, nibble_ops, TrieDBIterator,
-	LazyFetcher,
 };
 /// Various re-exports from the `memory-db` crate.
 pub use memory_db::KeyFunction;

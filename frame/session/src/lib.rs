@@ -20,9 +20,9 @@
 //! The Session module allows validators to manage their session keys, provides a function for
 //! changing the session length, and handles session rotation.
 //!
-//! - [`session::Config`](./trait.Config.html)
-//! - [`Call`](./enum.Call.html)
-//! - [`Module`](./struct.Module.html)
+//! - [`Config`]
+//! - [`Call`]
+//! - [`Module`]
 //!
 //! ## Overview
 //!
@@ -116,13 +116,16 @@ pub mod weights;
 
 use sp_std::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
 use codec::Decode;
-use sp_runtime::{KeyTypeId, Perbill, RuntimeAppPublic, BoundToRuntimeAppPublic};
-use sp_runtime::traits::{Convert, Zero, Member, OpaqueKeys, Saturating};
+use sp_runtime::{
+	traits::{AtLeast32BitUnsigned, Convert, Member, One, OpaqueKeys, Zero},
+	KeyTypeId, Perbill, Percent, RuntimeAppPublic,
+};
 use sp_staking::SessionIndex;
 use frame_support::{
 	ensure, decl_module, decl_event, decl_storage, decl_error, ConsensusEngineId, Parameter,
 	traits::{
 		Get, FindAuthor, ValidatorRegistration, EstimateNextSessionRotation, EstimateNextNewSession,
+		OneSessionHandler, ValidatorSet,
 	},
 	dispatch::{self, DispatchResult, DispatchError},
 	weights::Weight,
@@ -141,16 +144,14 @@ pub trait ShouldEndSession<BlockNumber> {
 /// The first session will have length of `Offset`, and
 /// the following sessions will have length of `Period`.
 /// This may prove nonsensical if `Offset` >= `Period`.
-pub struct PeriodicSessions<
-	Period,
-	Offset,
->(PhantomData<(Period, Offset)>);
+pub struct PeriodicSessions<Period, Offset>(PhantomData<(Period, Offset)>);
 
 impl<
-	BlockNumber: Rem<Output=BlockNumber> + Sub<Output=BlockNumber> + Zero + PartialOrd,
+	BlockNumber: Rem<Output = BlockNumber> + Sub<Output = BlockNumber> + Zero + PartialOrd,
 	Period: Get<BlockNumber>,
 	Offset: Get<BlockNumber>,
-> ShouldEndSession<BlockNumber> for PeriodicSessions<Period, Offset> {
+> ShouldEndSession<BlockNumber> for PeriodicSessions<Period, Offset>
+{
 	fn should_end_session(now: BlockNumber) -> bool {
 		let offset = Offset::get();
 		now >= offset && ((now - offset) % Period::get()).is_zero()
@@ -158,33 +159,66 @@ impl<
 }
 
 impl<
-	BlockNumber: Rem<Output=BlockNumber> + Sub<Output=BlockNumber> + Zero + PartialOrd + Saturating + Clone,
+	BlockNumber: AtLeast32BitUnsigned + Clone,
 	Period: Get<BlockNumber>,
-	Offset: Get<BlockNumber>,
-> EstimateNextSessionRotation<BlockNumber> for PeriodicSessions<Period, Offset> {
-	fn estimate_next_session_rotation(now: BlockNumber) -> Option<BlockNumber> {
+	Offset: Get<BlockNumber>
+> EstimateNextSessionRotation<BlockNumber> for PeriodicSessions<Period, Offset>
+{
+	fn average_session_length() -> BlockNumber {
+		Period::get()
+	}
+
+	fn estimate_current_session_progress(now: BlockNumber) -> (Option<Percent>, Weight) {
 		let offset = Offset::get();
 		let period = Period::get();
-		Some(if now > offset {
+
+		// NOTE: we add one since we assume that the current block has already elapsed,
+		// i.e. when evaluating the last block in the session the progress should be 100%
+		// (0% is never returned).
+		let progress = if now >= offset {
+			let current = (now - offset) % period.clone() + One::one();
+			Some(Percent::from_rational(
+				current.clone(),
+				period.clone(),
+			))
+		} else {
+			Some(Percent::from_rational(
+				now + One::one(),
+				offset,
+			))
+		};
+
+		// Weight note: `estimate_current_session_progress` has no storage reads and trivial
+		// computational overhead. There should be no risk to the chain having this weight value be
+		// zero for now. However, this value of zero was not properly calculated, and so it would be
+		// reasonable to come back here and properly calculate the weight of this function.
+		(progress, Zero::zero())
+	}
+
+	fn estimate_next_session_rotation(now: BlockNumber) -> (Option<BlockNumber>, Weight) {
+		let offset = Offset::get();
+		let period = Period::get();
+
+		let next_session = if now > offset {
 			let block_after_last_session = (now.clone() - offset) % period.clone();
 			if block_after_last_session > Zero::zero() {
-				now.saturating_add(
-					period.saturating_sub(block_after_last_session)
-				)
+				now.saturating_add(period.saturating_sub(block_after_last_session))
 			} else {
-				now
+				// this branch happens when the session is already rotated or will rotate in this
+				// block (depending on being called before or after `session::on_initialize`). Here,
+				// we assume the latter, namely that this is called after `session::on_initialize`,
+				// and thus we add period to it as well.
+				now + period
 			}
 		} else {
 			offset
-		})
-	}
+		};
 
-	fn weight(_now: BlockNumber) -> Weight {
 		// Weight note: `estimate_next_session_rotation` has no storage reads and trivial
 		// computational overhead. There should be no risk to the chain having this weight value be
 		// zero for now. However, this value of zero was not properly calculated, and so it would be
 		// reasonable to come back here and properly calculate the weight of this function.
-		0
+		(Some(next_session), Zero::zero())
 	}
 }
 
@@ -256,45 +290,9 @@ pub trait SessionHandler<ValidatorId> {
 	fn on_disabled(validator_index: usize);
 }
 
-/// A session handler for specific key type.
-pub trait OneSessionHandler<ValidatorId>: BoundToRuntimeAppPublic {
-	/// The key type expected.
-	type Key: Decode + Default + RuntimeAppPublic;
-
-	fn on_genesis_session<'a, I: 'a>(validators: I)
-		where I: Iterator<Item=(&'a ValidatorId, Self::Key)>, ValidatorId: 'a;
-
-	/// Session set has changed; act appropriately. Note that this can be called
-	/// before initialization of your module.
-	///
-	/// `changed` is true when at least one of the session keys
-	/// or the underlying economic identities/distribution behind one the
-	/// session keys has changed, false otherwise.
-	///
-	/// The `validators` are the validators of the incoming session, and `queued_validators`
-	/// will follow.
-	fn on_new_session<'a, I: 'a>(
-		changed: bool,
-		validators: I,
-		queued_validators: I,
-	) where I: Iterator<Item=(&'a ValidatorId, Self::Key)>, ValidatorId: 'a;
-
-
-	/// A notification for end of the session.
-	///
-	/// Note it is triggered before any `SessionManager::end_session` handlers,
-	/// so we can still affect the validator set.
-	fn on_before_session_ending() {}
-
-	/// A validator got disabled. Act accordingly until a new session begins.
-	fn on_disabled(_validator_index: usize);
-}
-
 #[impl_trait_for_tuples::impl_for_tuples(1, 30)]
-#[tuple_types_no_default_trait_bound]
+#[tuple_types_custom_trait_bound(OneSessionHandler<AId>)]
 impl<AId> SessionHandler<AId> for Tuple {
-	for_tuples!( where #( Tuple: OneSessionHandler<AId> )* );
-
 	for_tuples!(
 		const KEY_TYPE_IDS: &'static [KeyTypeId] = &[ #( <Tuple::Key as RuntimeAppPublic>::ID ),* ];
 	);
@@ -444,7 +442,11 @@ decl_storage! {
 			for (account, val, keys) in config.keys.iter().cloned() {
 				<Module<T>>::inner_set_keys(&val, keys)
 					.expect("genesis config must not contain duplicates; qed");
-				frame_system::Module::<T>::inc_ref(&account);
+				assert!(
+					frame_system::Pallet::<T>::inc_consumers(&account).is_ok(),
+					"Account ({:?}) does not exist at genesis to set key. Account not endowed?",
+					account,
+				);
 			}
 
 			let initial_validators_0 = T::SessionManager::new_session(0)
@@ -498,6 +500,8 @@ decl_error! {
 		DuplicatedKey,
 		/// No keys are associated with this account.
 		NoKeys,
+		/// Key setting account is not live, so it's impossible to associate keys.
+		NoAccount,
 	}
 }
 
@@ -746,9 +750,11 @@ impl<T: Config> Module<T> {
 		let who = T::ValidatorIdOf::convert(account.clone())
 			.ok_or(Error::<T>::NoAssociatedValidatorId)?;
 
+		ensure!(frame_system::Pallet::<T>::can_inc_consumer(&account), Error::<T>::NoAccount);
 		let old_keys = Self::inner_set_keys(&who, keys)?;
 		if old_keys.is_none() {
-			frame_system::Module::<T>::inc_ref(&account);
+			let assertion = frame_system::Pallet::<T>::inc_consumers(&account).is_ok();
+			debug_assert!(assertion, "can_inc_consumer() returned true; no change since; qed");
 		}
 
 		Ok(())
@@ -771,6 +777,10 @@ impl<T: Config> Module<T> {
 				Self::key_owner(*id, key).map_or(true, |owner| &owner == who),
 				Error::<T>::DuplicatedKey,
 			);
+		}
+
+		for id in T::Keys::key_ids() {
+			let key = keys.get_raw(*id);
 
 			if let Some(old) = old_keys.as_ref().map(|k| k.get_raw(*id)) {
 				if key == old {
@@ -796,7 +806,7 @@ impl<T: Config> Module<T> {
 			let key_data = old_keys.get_raw(*id);
 			Self::clear_key_owner(*id, key_data);
 		}
-		frame_system::Module::<T>::dec_ref(&account);
+		frame_system::Pallet::<T>::dec_consumers(&account);
 
 		Ok(())
 	}
@@ -813,7 +823,8 @@ impl<T: Config> Module<T> {
 		<NextKeys<T>>::insert(v, keys);
 	}
 
-	fn key_owner(id: KeyTypeId, key_data: &[u8]) -> Option<T::ValidatorId> {
+	/// Query the owner of a session key by returning the owner's validator ID.
+	pub fn key_owner(id: KeyTypeId, key_data: &[u8]) -> Option<T::ValidatorId> {
 		<KeyOwner<T>>::get((id, key_data))
 	}
 
@@ -823,6 +834,19 @@ impl<T: Config> Module<T> {
 
 	fn clear_key_owner(id: KeyTypeId, key_data: &[u8]) {
 		<KeyOwner<T>>::remove((id, key_data));
+	}
+}
+
+impl<T: Config> ValidatorSet<T::AccountId> for Module<T> {
+	type ValidatorId = T::ValidatorId;
+	type ValidatorIdOf = T::ValidatorIdOf;
+
+	fn session_index() -> sp_staking::SessionIndex {
+		Module::<T>::current_index()
+	}
+
+	fn validators() -> Vec<Self::ValidatorId> {
+		Module::<T>::validators()
 	}
 }
 
@@ -845,13 +869,13 @@ impl<T: Config, Inner: FindAuthor<u32>> FindAuthor<T::ValidatorId>
 }
 
 impl<T: Config> EstimateNextNewSession<T::BlockNumber> for Module<T> {
-	/// This session module always calls new_session and next_session at the same time, hence we
-	/// do a simple proxy and pass the function to next rotation.
-	fn estimate_next_new_session(now: T::BlockNumber) -> Option<T::BlockNumber> {
-		T::NextSessionRotation::estimate_next_session_rotation(now)
+	fn average_session_length() -> T::BlockNumber {
+		T::NextSessionRotation::average_session_length()
 	}
 
-	fn weight(now: T::BlockNumber) -> Weight {
-		T::NextSessionRotation::weight(now)
+	/// This session module always calls new_session and next_session at the same time, hence we
+	/// do a simple proxy and pass the function to next rotation.
+	fn estimate_next_new_session(now: T::BlockNumber) -> (Option<T::BlockNumber>, Weight) {
+		T::NextSessionRotation::estimate_next_session_rotation(now)
 	}
 }

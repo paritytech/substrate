@@ -81,13 +81,13 @@ pub fn maybe_print_pallet_upgrade(def: &super::DeclStorageDefExt) {
 		};
 
 		let genesis_config_impl_gen = if genesis_config_def.is_generic {
-			impl_gen.clone()
+			impl_gen
 		} else {
 			Default::default()
 		};
 
 		let genesis_config_use_gen = if genesis_config_def.is_generic {
-			use_gen.clone()
+			use_gen
 		} else {
 			Default::default()
 		};
@@ -200,7 +200,7 @@ pub fn maybe_print_pallet_upgrade(def: &super::DeclStorageDefExt) {
 					default_expr = to_cleaned_string(&default_expr),
 				)
 			})
-			.unwrap_or_else(|| String::new());
+			.unwrap_or_else(String::new);
 
 		let comma_query_kind = if line.is_option {
 			if line.default_value.is_some() {
@@ -214,7 +214,7 @@ pub fn maybe_print_pallet_upgrade(def: &super::DeclStorageDefExt) {
 
 		let comma_default_value_getter_name = line.default_value.as_ref()
 			.map(|_| format!(", DefaultFor{}", line.name))
-			.unwrap_or_else(|| String::new());
+			.unwrap_or_else(String::new);
 
 		let typ = match &line.storage_type {
 			StorageLineTypeDef::Map(map) => {
@@ -323,7 +323,7 @@ pub mod pallet {{
 	#[pallet::generate_store({store_vis} trait Store)]
 	pub struct Pallet{decl_gen}(PhantomData{use_gen_tuple});
 
-	#[pallet::interface]
+	#[pallet::hooks]
 	impl{impl_gen} Hooks<BlockNumberFor<T>> for Pallet{use_gen}
 		// TODO_MAYBE_WHERE_CLAUSE
 	{{

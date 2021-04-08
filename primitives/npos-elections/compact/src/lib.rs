@@ -19,9 +19,9 @@
 
 use proc_macro::TokenStream;
 use proc_macro2::{TokenStream as TokenStream2, Span, Ident};
-use proc_macro_crate::crate_name;
+use proc_macro_crate::{crate_name, FoundCrate};
 use quote::quote;
-use syn::{parse::{Parse, ParseStream, Result}};
+use syn::parse::{Parse, ParseStream, Result};
 
 mod assignment;
 mod codec;
@@ -52,8 +52,14 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 /// For example, the following generates a public struct with name `TestSolution` with `u16` voter
 /// type, `u8` target type and `Perbill` accuracy with maximum of 8 edges per voter.
 ///
-/// ```ignore
-/// generate_solution_type!(pub struct TestSolution<u16, u8, Perbill>::(8))
+/// ```
+/// # use sp_npos_elections_compact::generate_solution_type;
+/// # use sp_arithmetic::per_things::Perbill;
+/// generate_solution_type!(pub struct TestSolution::<
+/// 	VoterIndex = u16,
+/// 	TargetIndex = u8,
+/// 	Accuracy = Perbill,
+/// >(8));
 /// ```
 ///
 /// The given struct provides function to convert from/to Assignment:
@@ -65,11 +71,13 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 /// lead to many 0s in the solution. If prefixed with `#[compact]`, then a custom compact encoding
 /// for numbers will be used, similar to how `parity-scale-codec`'s `Compact` works.
 ///
-/// ```ignore
+/// ```
+/// # use sp_npos_elections_compact::generate_solution_type;
+/// # use sp_arithmetic::per_things::Perbill;
 /// generate_solution_type!(
 ///     #[compact]
-///     pub struct TestSolutionCompact<u16, u8, Perbill>::(8)
-/// )
+///     pub struct TestSolutionCompact::<VoterIndex = u16, TargetIndex = u8, Accuracy = Perbill>(8)
+/// );
 /// ```
 #[proc_macro]
 pub fn generate_solution_type(item: TokenStream) -> TokenStream {
@@ -95,19 +103,11 @@ pub fn generate_solution_type(item: TokenStream) -> TokenStream {
 		compact_encoding,
 	).unwrap_or_else(|e| e.to_compile_error());
 
-	let assignment_impls = assignment::assignment(
-		ident.clone(),
-		voter_type.clone(),
-		target_type.clone(),
-		weight_type.clone(),
-		count,
-	);
-
 	quote!(
 		#imports
 		#solution_struct
-		#assignment_impls
-	).into()
+	)
+	.into()
 }
 
 fn struct_def(
@@ -125,29 +125,32 @@ fn struct_def(
 
 	let singles = {
 		let name = field_name_for(1);
+		// NOTE: we use the visibility of the struct for the fields as well.. could be made better.
 		quote!(
-			#name: Vec<(#voter_type, #target_type)>,
+			#vis #name: _npos::sp_std::prelude::Vec<(#voter_type, #target_type)>,
 		)
 	};
 
 	let doubles = {
 		let name = field_name_for(2);
 		quote!(
-			#name: Vec<(#voter_type, (#target_type, #weight_type), #target_type)>,
+			#vis #name: _npos::sp_std::prelude::Vec<(#voter_type, (#target_type, #weight_type), #target_type)>,
 		)
 	};
 
-	let rest = (3..=count).map(|c| {
-		let field_name = field_name_for(c);
-		let array_len = c - 1;
-		quote!(
-			#field_name: Vec<(
-				#voter_type,
-				[(#target_type, #weight_type); #array_len],
-				#target_type
-			)>,
-		)
-	}).collect::<TokenStream2>();
+	let rest = (3..=count)
+		.map(|c| {
+			let field_name = field_name_for(c);
+			let array_len = c - 1;
+			quote!(
+				#vis #field_name: _npos::sp_std::prelude::Vec<(
+					#voter_type,
+					[(#target_type, #weight_type); #array_len],
+					#target_type
+				)>,
+			)
+		})
+		.collect::<TokenStream2>();
 
 	let len_impl = len_impl(count);
 	let edge_count_impl = edge_count_impl(count);
@@ -172,66 +175,85 @@ fn struct_def(
 		quote!(#[derive(Default, PartialEq, Eq, Clone, Debug, _npos::codec::Encode, _npos::codec::Decode)])
 	};
 
+	let from_impl = assignment::from_impl(count);
+	let into_impl = assignment::into_impl(count, weight_type.clone());
+
 	Ok(quote! (
 		/// A struct to encode a election assignment in a compact way.
 		#derives_and_maybe_compact_encoding
 		#vis struct #ident { #singles #doubles #rest }
 
-		impl _npos::VotingLimit for #ident {
+		use _npos::__OrInvalidIndex;
+		impl _npos::CompactSolution for #ident {
 			const LIMIT: usize = #count;
-		}
+			type Voter = #voter_type;
+			type Target = #target_type;
+			type Accuracy = #weight_type;
 
-		impl #ident {
-			/// Get the length of all the assignments that this type is encoding. This is basically
-			/// the same as the number of assignments, or the number of voters in total.
-			pub fn len(&self) -> usize {
+			fn voter_count(&self) -> usize {
 				let mut all_len = 0usize;
 				#len_impl
 				all_len
 			}
 
-			/// Get the total count of edges.
-			pub fn edge_count(&self) -> usize {
+			fn edge_count(&self) -> usize {
 				let mut all_edges = 0usize;
 				#edge_count_impl
 				all_edges
 			}
 
-			/// Get the number of unique targets in the whole struct.
-			///
-			/// Once presented with a list of winners, this set and the set of winners must be
-			/// equal.
-			///
-			/// The resulting indices are sorted.
-			pub fn unique_targets(&self) -> Vec<#target_type> {
-				let mut all_targets: Vec<#target_type> = Vec::with_capacity(self.average_edge_count());
-				let mut maybe_insert_target = |t: #target_type| {
-					match all_targets.binary_search(&t) {
-						Ok(_) => (),
-						Err(pos) => all_targets.insert(pos, t)
-					}
+			fn unique_targets(&self) -> _npos::sp_std::prelude::Vec<Self::Target> {
+				// NOTE: this implementation returns the targets sorted, but we don't use it yet per
+				// se, nor is the API enforcing it.
+				use _npos::sp_std::collections::btree_set::BTreeSet;
+
+				let mut all_targets: BTreeSet<Self::Target> = BTreeSet::new();
+				let mut maybe_insert_target = |t: Self::Target| {
+					all_targets.insert(t);
 				};
 
 				#unique_targets_impl
 
-				all_targets
+				all_targets.into_iter().collect()
 			}
 
-			/// Get the average edge count.
-			pub fn average_edge_count(&self) -> usize {
-				self.edge_count().checked_div(self.len()).unwrap_or(0)
-			}
-
-			/// Remove a certain voter.
-			///
-			/// This will only search until the first instance of `to_remove`, and return true. If
-			/// no instance is found (no-op), then it returns false.
-			///
-			/// In other words, if this return true, exactly one element must have been removed from
-			/// `self.len()`.
-			pub fn remove_voter(&mut self, to_remove: #voter_type) -> bool {
+			fn remove_voter(&mut self, to_remove: Self::Voter) -> bool {
 				#remove_voter_impl
 				return false
+			}
+
+			fn from_assignment<FV, FT, A>(
+				assignments: _npos::sp_std::prelude::Vec<_npos::Assignment<A, #weight_type>>,
+				index_of_voter: FV,
+				index_of_target: FT,
+			) -> Result<Self, _npos::Error>
+				where
+					A: _npos::IdentifierT,
+					for<'r> FV: Fn(&'r A) -> Option<Self::Voter>,
+					for<'r> FT: Fn(&'r A) -> Option<Self::Target>,
+			{
+				let mut compact: #ident = Default::default();
+
+				for _npos::Assignment { who, distribution } in assignments {
+					match distribution.len() {
+						0 => continue,
+						#from_impl
+						_ => {
+							return Err(_npos::Error::CompactTargetOverflow);
+						}
+					}
+				};
+				Ok(compact)
+			}
+
+			fn into_assignment<A: _npos::IdentifierT>(
+				self,
+				voter_at: impl Fn(Self::Voter) -> Option<A>,
+				target_at: impl Fn(Self::Target) -> Option<A>,
+			) -> Result<_npos::sp_std::prelude::Vec<_npos::Assignment<A, #weight_type>>, _npos::Error> {
+				let mut assignments: _npos::sp_std::prelude::Vec<_npos::Assignment<A, #weight_type>> = Default::default();
+				#into_impl
+				Ok(assignments)
 			}
 		}
 	))
@@ -333,18 +355,13 @@ fn unique_targets_impl(count: usize) -> TokenStream2 {
 }
 
 fn imports() -> Result<TokenStream2> {
-	if std::env::var("CARGO_PKG_NAME").unwrap() == "sp-npos-elections" {
-		Ok(quote! {
-			use crate as _npos;
-		})
-	} else {
-		match crate_name("sp-npos-elections") {
-			Ok(sp_npos_elections) => {
-				let ident = syn::Ident::new(&sp_npos_elections, Span::call_site());
-				Ok(quote!( extern crate #ident as _npos; ))
-			},
-			Err(e) => Err(syn::Error::new(Span::call_site(), &e)),
-		}
+	match crate_name("sp-npos-elections") {
+		Ok(FoundCrate::Itself) => Ok(quote! { use crate as _npos; }),
+		Ok(FoundCrate::Name(sp_npos_elections)) => {
+			let ident = syn::Ident::new(&sp_npos_elections, Span::call_site());
+			Ok(quote!( extern crate #ident as _npos; ))
+		},
+		Err(e) => Err(syn::Error::new(Span::call_site(), e)),
 	}
 }
 
@@ -377,7 +394,7 @@ fn check_compact_attr(input: ParseStream) -> Result<bool> {
 	}
 }
 
-/// #[compact] pub struct CompactName::<u32, u32, u32>()
+/// #[compact] pub struct CompactName::<VoterIndex = u32, TargetIndex = u32, Accuracy = u32>()
 impl Parse for SolutionDef {
 	fn parse(input: ParseStream) -> syn::Result<Self> {
 		// optional #[compact]
@@ -396,9 +413,22 @@ impl Parse for SolutionDef {
 			return Err(syn_err("Must provide 3 generic args."))
 		}
 
-		let mut types: Vec<syn::Type> = generics.args.iter().map(|t|
+		let expected_types = ["VoterIndex", "TargetIndex", "Accuracy"];
+
+		let mut types: Vec<syn::Type> = generics.args.iter().zip(expected_types.iter()).map(|(t, expected)|
 			match t {
-				syn::GenericArgument::Type(ty) => Ok(ty.clone()),
+				syn::GenericArgument::Type(ty) => {
+					// this is now an error
+					Err(syn::Error::new_spanned(ty, format!("Expected binding: `{} = ...`", expected)))
+				},
+				syn::GenericArgument::Binding(syn::Binding{ident, ty, ..}) => {
+					// check that we have the right keyword for this position in the argument list
+					if ident == expected {
+						Ok(ty.clone())
+					} else {
+						Err(syn::Error::new_spanned(ident, format!("Expected `{}`", expected)))
+					}
+				}
 				_ => Err(syn_err("Wrong type of generic provided. Must be a `type`.")),
 			}
 		).collect::<Result<_>>()?;
@@ -426,4 +456,13 @@ impl Parse for SolutionDef {
 
 fn field_name_for(n: usize) -> Ident {
 	Ident::new(&format!("{}{}", PREFIX, n), Span::call_site())
+}
+
+#[cfg(test)]
+mod tests {
+	#[test]
+	fn ui_fail() {
+		let cases = trybuild::TestCases::new();
+		cases.compile_fail("tests/ui/fail/*.rs");
+	}
 }

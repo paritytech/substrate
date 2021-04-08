@@ -25,53 +25,11 @@ use crate::imports::Imports;
 use std::{slice, marker};
 use sc_executor_common::{
 	error::{Error, Result},
-	util::{WasmModuleInfo, DataSegmentsSnapshot},
+	runtime_blob,
 	wasm_runtime::InvokeMethod,
 };
 use sp_wasm_interface::{Pointer, WordSize, Value};
-use wasmtime::{Engine, Instance, Module, Memory, Table, Val, Func, Extern, Global, Store};
-use parity_wasm::elements;
-
-mod globals_snapshot;
-
-pub use globals_snapshot::GlobalsSnapshot;
-
-pub struct ModuleWrapper {
-	module: Module,
-	data_segments_snapshot: DataSegmentsSnapshot,
-}
-
-impl ModuleWrapper {
-	pub fn new(engine: &Engine, code: &[u8]) -> Result<Self> {
-		let mut raw_module: elements::Module = elements::deserialize_buffer(code)
-			.map_err(|e| Error::from(format!("cannot decode module: {}", e)))?;
-		pwasm_utils::export_mutable_globals(&mut raw_module, "exported_internal_global");
-		let instrumented_code = elements::serialize(raw_module)
-			.map_err(|e| Error::from(format!("cannot encode module: {}", e)))?;
-
-		let module = Module::new(engine, &instrumented_code)
-			.map_err(|e| Error::from(format!("cannot create module: {}", e)))?;
-
-		let module_info = WasmModuleInfo::new(code)
-			.ok_or_else(|| Error::from("cannot deserialize module".to_string()))?;
-
-		let data_segments_snapshot = DataSegmentsSnapshot::take(&module_info)
-			.map_err(|e| Error::from(format!("cannot take data segments snapshot: {}", e)))?;
-
-		Ok(Self {
-			module,
-			data_segments_snapshot,
-		})
-	}
-
-	pub fn module(&self) -> &Module {
-		&self.module
-	}
-
-	pub fn data_segments_snapshot(&self) -> &DataSegmentsSnapshot {
-		&self.data_segments_snapshot
-	}
-}
+use wasmtime::{Instance, Module, Memory, Table, Val, Func, Extern, Global, Store};
 
 /// Invoked entrypoint format.
 pub enum EntryPointType {
@@ -113,7 +71,7 @@ impl EntryPoint {
 				])
 			},
 		})
-			.map(|results| 
+			.map(|results|
 				// the signature is checked to have i64 return type
 				results[0].unwrap_i64() as u64
 			)
@@ -124,27 +82,28 @@ impl EntryPoint {
 	}
 
 	pub fn direct(func: wasmtime::Func) -> std::result::Result<Self, &'static str> {
-		match (func.ty().params(), func.ty().results()) {
-			(&[wasmtime::ValType::I32, wasmtime::ValType::I32], &[wasmtime::ValType::I64]) => {
-				Ok(Self { func, call_type: EntryPointType::Direct })
-			}
-			_ => {
-				Err("Invalid signature for direct entry point")
-			}
+		use wasmtime::ValType;
+		let entry_point = wasmtime::FuncType::new(
+			[ValType::I32, ValType::I32].iter().cloned(),
+			[ValType::I64].iter().cloned(),
+		);
+		if func.ty() == entry_point {
+			Ok(Self { func, call_type: EntryPointType::Direct })
+		} else {
+			Err("Invalid signature for direct entry point")
 		}
 	}
 
 	pub fn wrapped(dispatcher: wasmtime::Func, func: u32) -> std::result::Result<Self, &'static str> {
-		match (dispatcher.ty().params(), dispatcher.ty().results()) {
-			(
-				&[wasmtime::ValType::I32, wasmtime::ValType::I32, wasmtime::ValType::I32],
-				&[wasmtime::ValType::I64],
-			) => {
-				Ok(Self { func: dispatcher, call_type: EntryPointType::Wrapped(func) })
-			},
-			_ => {
-				Err("Invalid signature for wrapped entry point")
-			}
+		use wasmtime::ValType;
+		let entry_point = wasmtime::FuncType::new(
+			[ValType::I32, ValType::I32, ValType::I32].iter().cloned(),
+			[ValType::I64].iter().cloned(),
+		);
+		if dispatcher.ty() == entry_point {
+			Ok(Self { func: dispatcher, call_type: EntryPointType::Wrapped(func) })
+		} else {
+			Err("Invalid signature for wrapped entry point")
 		}
 	}
 }
@@ -196,8 +155,8 @@ fn extern_func(extern_: &Extern) -> Option<&Func> {
 
 impl InstanceWrapper {
 	/// Create a new instance wrapper from the given wasm module.
-	pub fn new(store: &Store, module_wrapper: &ModuleWrapper, imports: &Imports, heap_pages: u32) -> Result<Self> {
-		let instance = Instance::new(store, &module_wrapper.module, &imports.externs)
+	pub fn new(store: &Store, module: &Module, imports: &Imports, heap_pages: u32) -> Result<Self> {
+		let instance = Instance::new(store, module, &imports.externs)
 			.map_err(|e| Error::from(format!("cannot instantiate: {}", e)))?;
 
 		let memory = match imports.memory_import_index {
@@ -459,5 +418,25 @@ impl InstanceWrapper {
 		} else {
 			slice::from_raw_parts_mut(ptr, len)
 		}
+	}
+}
+
+impl runtime_blob::InstanceGlobals for InstanceWrapper {
+	type Global = wasmtime::Global;
+
+	fn get_global(&self, export_name: &str) -> Self::Global {
+		self.instance
+			.get_global(export_name)
+			.expect("get_global is guaranteed to be called with an export name of a global; qed")
+	}
+
+	fn get_global_value(&self, global: &Self::Global) -> Value {
+		util::from_wasmtime_val(global.get())
+	}
+
+	fn set_global_value(&self, global: &Self::Global, value: Value) {
+		global.set(util::into_wasmtime_val(value)).expect(
+			"the value is guaranteed to be of the same value; the global is guaranteed to be mutable; qed",
+		);
 	}
 }

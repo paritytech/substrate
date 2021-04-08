@@ -40,7 +40,7 @@ pub struct Digest<Hash> {
 
 impl<Item> Default for Digest<Item> {
 	fn default() -> Self {
-		Digest { logs: Vec::new(), }
+		Self { logs: Vec::new(), }
 	}
 }
 
@@ -62,19 +62,14 @@ impl<Hash> Digest<Hash> {
 
 	/// Get reference to the first digest item that matches the passed predicate.
 	pub fn log<T: ?Sized, F: Fn(&DigestItem<Hash>) -> Option<&T>>(&self, predicate: F) -> Option<&T> {
-		self.logs().iter()
-			.filter_map(predicate)
-			.next()
+		self.logs().iter().find_map(predicate)
 	}
 
 	/// Get a conversion of the first digest item that successfully converts using the function.
 	pub fn convert_first<T, F: Fn(&DigestItem<Hash>) -> Option<T>>(&self, predicate: F) -> Option<T> {
-		self.logs().iter()
-			.filter_map(predicate)
-			.next()
+		self.logs().iter().find_map(predicate)
 	}
 }
-
 
 /// Digest item that is able to encode/decode 'system' digest items and
 /// provide opaque access to other items.
@@ -213,14 +208,14 @@ pub enum OpaqueDigestItemId<'a> {
 
 impl<Hash> DigestItem<Hash> {
 	/// Returns a 'referencing view' for this digest item.
-	pub fn dref<'a>(&'a self) -> DigestItemRef<'a, Hash> {
+	pub fn dref(&self) -> DigestItemRef<Hash> {
 		match *self {
-			DigestItem::ChangesTrieRoot(ref v) => DigestItemRef::ChangesTrieRoot(v),
-			DigestItem::PreRuntime(ref v, ref s) => DigestItemRef::PreRuntime(v, s),
-			DigestItem::Consensus(ref v, ref s) => DigestItemRef::Consensus(v, s),
-			DigestItem::Seal(ref v, ref s) => DigestItemRef::Seal(v, s),
-			DigestItem::ChangesTrieSignal(ref s) => DigestItemRef::ChangesTrieSignal(s),
-			DigestItem::Other(ref v) => DigestItemRef::Other(v),
+			Self::ChangesTrieRoot(ref v) => DigestItemRef::ChangesTrieRoot(v),
+			Self::PreRuntime(ref v, ref s) => DigestItemRef::PreRuntime(v, s),
+			Self::Consensus(ref v, ref s) => DigestItemRef::Consensus(v, s),
+			Self::Seal(ref v, ref s) => DigestItemRef::Seal(v, s),
+			Self::ChangesTrieSignal(ref s) => DigestItemRef::ChangesTrieSignal(s),
+			Self::Other(ref v) => DigestItemRef::Other(v),
 		}
 	}
 
@@ -251,10 +246,7 @@ impl<Hash> DigestItem<Hash> {
 
 	/// Returns Some if `self` is a `DigestItem::Other`.
 	pub fn as_other(&self) -> Option<&[u8]> {
-		match *self {
-			DigestItem::Other(ref v) => Some(&v[..]),
-			_ => None,
-		}
+		self.dref().as_other()
 	}
 
 	/// Returns the opaque data contained in the item if `Some` if this entry has the id given.
@@ -266,6 +258,29 @@ impl<Hash> DigestItem<Hash> {
 	/// to the type provided `T`.
 	pub fn try_to<T: Decode>(&self, id: OpaqueDigestItemId) -> Option<T> {
 		self.dref().try_to::<T>(id)
+	}
+
+	/// Try to match this to a `Self::Seal`, check `id` matches and decode it.
+	///
+	/// Returns `None` if this isn't a seal item, the `id` doesn't match or when the decoding fails.
+	pub fn seal_try_to<T: Decode>(&self, id: &ConsensusEngineId) -> Option<T> {
+		self.dref().seal_try_to(id)
+	}
+
+	/// Try to match this to a `Self::Consensus`, check `id` matches and decode it.
+	///
+	/// Returns `None` if this isn't a consensus item, the `id` doesn't match or
+	/// when the decoding fails.
+	pub fn consensus_try_to<T: Decode>(&self, id: &ConsensusEngineId) -> Option<T> {
+		self.dref().consensus_try_to(id)
+	}
+
+	/// Try to match this to a `Self::PreRuntime`, check `id` matches and decode it.
+	///
+	/// Returns `None` if this isn't a pre-runtime item, the `id` doesn't match or
+	/// when the decoding fails.
+	pub fn pre_runtime_try_to<T: Decode>(&self, id: &ConsensusEngineId) -> Option<T> {
+		self.dref().pre_runtime_try_to(id)
 	}
 }
 
@@ -282,25 +297,25 @@ impl<Hash: Decode> Decode for DigestItem<Hash> {
 	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
 		let item_type: DigestItemType = Decode::decode(input)?;
 		match item_type {
-			DigestItemType::ChangesTrieRoot => Ok(DigestItem::ChangesTrieRoot(
+			DigestItemType::ChangesTrieRoot => Ok(Self::ChangesTrieRoot(
 				Decode::decode(input)?,
 			)),
 			DigestItemType::PreRuntime => {
 				let vals: (ConsensusEngineId, Vec<u8>) = Decode::decode(input)?;
-				Ok(DigestItem::PreRuntime(vals.0, vals.1))
+				Ok(Self::PreRuntime(vals.0, vals.1))
 			},
 			DigestItemType::Consensus => {
 				let vals: (ConsensusEngineId, Vec<u8>) = Decode::decode(input)?;
-				Ok(DigestItem::Consensus(vals.0, vals.1))
+				Ok(Self::Consensus(vals.0, vals.1))
 			}
 			DigestItemType::Seal => {
 				let vals: (ConsensusEngineId, Vec<u8>) = Decode::decode(input)?;
-				Ok(DigestItem::Seal(vals.0, vals.1))
+				Ok(Self::Seal(vals.0, vals.1))
 			},
-			DigestItemType::ChangesTrieSignal => Ok(DigestItem::ChangesTrieSignal(
+			DigestItemType::ChangesTrieSignal => Ok(Self::ChangesTrieSignal(
 				Decode::decode(input)?,
 			)),
-			DigestItemType::Other => Ok(DigestItem::Other(
+			DigestItemType::Other => Ok(Self::Other(
 				Decode::decode(input)?,
 			)),
 		}
@@ -311,7 +326,7 @@ impl<'a, Hash> DigestItemRef<'a, Hash> {
 	/// Cast this digest item into `ChangesTrieRoot`.
 	pub fn as_changes_trie_root(&self) -> Option<&'a Hash> {
 		match *self {
-			DigestItemRef::ChangesTrieRoot(ref changes_trie_root) => Some(changes_trie_root),
+			Self::ChangesTrieRoot(ref changes_trie_root) => Some(changes_trie_root),
 			_ => None,
 		}
 	}
@@ -319,7 +334,7 @@ impl<'a, Hash> DigestItemRef<'a, Hash> {
 	/// Cast this digest item into `PreRuntime`
 	pub fn as_pre_runtime(&self) -> Option<(ConsensusEngineId, &'a [u8])> {
 		match *self {
-			DigestItemRef::PreRuntime(consensus_engine_id, ref data) => Some((*consensus_engine_id, data)),
+			Self::PreRuntime(consensus_engine_id, ref data) => Some((*consensus_engine_id, data)),
 			_ => None,
 		}
 	}
@@ -327,7 +342,7 @@ impl<'a, Hash> DigestItemRef<'a, Hash> {
 	/// Cast this digest item into `Consensus`
 	pub fn as_consensus(&self) -> Option<(ConsensusEngineId, &'a [u8])> {
 		match *self {
-			DigestItemRef::Consensus(consensus_engine_id, ref data) => Some((*consensus_engine_id, data)),
+			Self::Consensus(consensus_engine_id, ref data) => Some((*consensus_engine_id, data)),
 			_ => None,
 		}
 	}
@@ -335,7 +350,7 @@ impl<'a, Hash> DigestItemRef<'a, Hash> {
 	/// Cast this digest item into `Seal`
 	pub fn as_seal(&self) -> Option<(ConsensusEngineId, &'a [u8])> {
 		match *self {
-			DigestItemRef::Seal(consensus_engine_id, ref data) => Some((*consensus_engine_id, data)),
+			Self::Seal(consensus_engine_id, ref data) => Some((*consensus_engine_id, data)),
 			_ => None,
 		}
 	}
@@ -343,7 +358,7 @@ impl<'a, Hash> DigestItemRef<'a, Hash> {
 	/// Cast this digest item into `ChangesTrieSignal`.
 	pub fn as_changes_trie_signal(&self) -> Option<&'a ChangesTrieSignal> {
 		match *self {
-			DigestItemRef::ChangesTrieSignal(ref changes_trie_signal) => Some(changes_trie_signal),
+			Self::ChangesTrieSignal(ref changes_trie_signal) => Some(changes_trie_signal),
 			_ => None,
 		}
 	}
@@ -351,7 +366,7 @@ impl<'a, Hash> DigestItemRef<'a, Hash> {
 	/// Cast this digest item into `PreRuntime`
 	pub fn as_other(&self) -> Option<&'a [u8]> {
 		match *self {
-			DigestItemRef::Other(ref data) => Some(data),
+			Self::Other(ref data) => Some(data),
 			_ => None,
 		}
 	}
@@ -360,11 +375,11 @@ impl<'a, Hash> DigestItemRef<'a, Hash> {
 	/// return the opaque data it contains.
 	pub fn try_as_raw(&self, id: OpaqueDigestItemId) -> Option<&'a [u8]> {
 		match (id, self) {
-			(OpaqueDigestItemId::Consensus(w), &DigestItemRef::Consensus(v, s)) |
-				(OpaqueDigestItemId::Seal(w), &DigestItemRef::Seal(v, s)) |
-				(OpaqueDigestItemId::PreRuntime(w), &DigestItemRef::PreRuntime(v, s))
+			(OpaqueDigestItemId::Consensus(w), &Self::Consensus(v, s)) |
+				(OpaqueDigestItemId::Seal(w), &Self::Seal(v, s)) |
+				(OpaqueDigestItemId::PreRuntime(w), &Self::PreRuntime(v, s))
 				if v == w => Some(&s[..]),
-			(OpaqueDigestItemId::Other, &DigestItemRef::Other(s)) => Some(&s[..]),
+			(OpaqueDigestItemId::Other, &Self::Other(s)) => Some(&s[..]),
 			_ => None,
 		}
 	}
@@ -374,6 +389,41 @@ impl<'a, Hash> DigestItemRef<'a, Hash> {
 	pub fn try_to<T: Decode>(&self, id: OpaqueDigestItemId) -> Option<T> {
 		self.try_as_raw(id).and_then(|mut x| Decode::decode(&mut x).ok())
 	}
+
+	/// Try to match this to a `Self::Seal`, check `id` matches and decode it.
+	///
+	/// Returns `None` if this isn't a seal item, the `id` doesn't match or when the decoding fails.
+	pub fn seal_try_to<T: Decode>(&self, id: &ConsensusEngineId) -> Option<T> {
+		match self {
+			Self::Seal(v, s) if *v == id =>
+				Decode::decode(&mut &s[..]).ok(),
+			_ => None,
+		}
+	}
+
+	/// Try to match this to a `Self::Consensus`, check `id` matches and decode it.
+	///
+	/// Returns `None` if this isn't a consensus item, the `id` doesn't match or
+	/// when the decoding fails.
+	pub fn consensus_try_to<T: Decode>(&self, id: &ConsensusEngineId) -> Option<T> {
+		match self {
+			Self::Consensus(v, s) if *v == id =>
+				Decode::decode(&mut &s[..]).ok(),
+			_ => None,
+		}
+	}
+
+	/// Try to match this to a `Self::PreRuntime`, check `id` matches and decode it.
+	///
+	/// Returns `None` if this isn't a pre-runtime item, the `id` doesn't match or
+	/// when the decoding fails.
+	pub fn pre_runtime_try_to<T: Decode>(&self, id: &ConsensusEngineId) -> Option<T> {
+		match self {
+			Self::PreRuntime(v, s) if *v == id =>
+				Decode::decode(&mut &s[..]).ok(),
+			_ => None,
+		}
+	}
 }
 
 impl<'a, Hash: Encode> Encode for DigestItemRef<'a, Hash> {
@@ -381,27 +431,27 @@ impl<'a, Hash: Encode> Encode for DigestItemRef<'a, Hash> {
 		let mut v = Vec::new();
 
 		match *self {
-			DigestItemRef::ChangesTrieRoot(changes_trie_root) => {
+			Self::ChangesTrieRoot(changes_trie_root) => {
 				DigestItemType::ChangesTrieRoot.encode_to(&mut v);
 				changes_trie_root.encode_to(&mut v);
 			},
-			DigestItemRef::Consensus(val, data) => {
+			Self::Consensus(val, data) => {
 				DigestItemType::Consensus.encode_to(&mut v);
 				(val, data).encode_to(&mut v);
 			},
-			DigestItemRef::Seal(val, sig) => {
+			Self::Seal(val, sig) => {
 				DigestItemType::Seal.encode_to(&mut v);
 				(val, sig).encode_to(&mut v);
 			},
-			DigestItemRef::PreRuntime(val, data) => {
+			Self::PreRuntime(val, data) => {
 				DigestItemType::PreRuntime.encode_to(&mut v);
 				(val, data).encode_to(&mut v);
 			},
-			DigestItemRef::ChangesTrieSignal(changes_trie_signal) => {
+			Self::ChangesTrieSignal(changes_trie_signal) => {
 				DigestItemType::ChangesTrieSignal.encode_to(&mut v);
 				changes_trie_signal.encode_to(&mut v);
 			},
-			DigestItemRef::Other(val) => {
+			Self::Other(val) => {
 				DigestItemType::Other.encode_to(&mut v);
 				val.encode_to(&mut v);
 			},
@@ -415,7 +465,7 @@ impl ChangesTrieSignal {
 	/// Try to cast this signal to NewConfiguration.
 	pub fn as_new_configuration(&self) -> Option<&Option<ChangesTrieConfiguration>> {
 		match self {
-			ChangesTrieSignal::NewConfiguration(config) => Some(config),
+			Self::NewConfiguration(config) => Some(config),
 		}
 	}
 }
@@ -437,7 +487,7 @@ mod tests {
 		};
 
 		assert_eq!(
-			::serde_json::to_string(&digest).unwrap(),
+			serde_json::to_string(&digest).unwrap(),
 			r#"{"logs":["0x0204000000","0x000c010203","0x05746573740c010203"]}"#
 		);
 	}

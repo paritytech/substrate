@@ -74,6 +74,7 @@ impl core::Benchmark for PoolBenchmark {
 		let executor = sp_core::testing::TaskExecutor::new();
 		let txpool = BasicPool::new_full(
 			Default::default(),
+			true.into(),
 			None,
 			executor,
 			context.client.clone(),

@@ -72,8 +72,8 @@ enum PalletEventAttr {
 impl PalletEventAttr {
 	fn span(&self) -> proc_macro2::Span {
 		match self {
-			Self::Metadata { span, .. } => span.clone(),
-			Self::DepositEvent { span, .. } => span.clone(),
+			Self::Metadata { span, .. } => *span,
+			Self::DepositEvent { span, .. } => *span,
 		}
 	}
 }
@@ -163,9 +163,9 @@ impl EventDef {
 			return Err(syn::Error::new(item.span(), "Invalid pallet::event, expected item enum"))
 		};
 
-		let event_attrs: Vec<PalletEventAttr> = helper::take_item_attrs(&mut item.attrs)?;
+		let event_attrs: Vec<PalletEventAttr> = helper::take_item_pallet_attrs(&mut item.attrs)?;
 		let attr_info = PalletEventAttrInfo::from_attrs(event_attrs)?;
-		let metadata = attr_info.metadata.unwrap_or_else(|| vec![]);
+		let metadata = attr_info.metadata.unwrap_or_else(Vec::new);
 		let deposit_event = attr_info.deposit_event;
 
 		if !matches!(item.vis, syn::Visibility::Public(_)) {

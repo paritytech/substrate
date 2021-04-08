@@ -21,12 +21,7 @@
 use super::ConsensusDataProvider;
 use crate::Error;
 use codec::Encode;
-use std::{
-	any::Any,
-	borrow::Cow,
-	sync::{Arc, atomic},
-	time::SystemTime,
-};
+use std::{borrow::Cow, sync::{Arc, atomic}, time::SystemTime};
 use sc_client_api::AuxStore;
 use sc_consensus_babe::{
 	Config, Epoch, authorship, CompatibleDigestItem, BabeIntermediate,
@@ -38,6 +33,7 @@ use sp_keystore::SyncCryptoStorePtr;
 use sp_api::{ProvideRuntimeApi, TransactionFor};
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
 use sp_consensus::BlockImportParams;
+use sp_consensus_slots::Slot;
 use sp_consensus_babe::{
 	BabeApi, inherents::BabeInherentData, ConsensusLog, BABE_ENGINE_ID, AuthorityId,
 	digests::{PreDigest, SecondaryPlainPreDigest, NextEpochDescriptor}, BabeAuthorityWeight,
@@ -72,7 +68,7 @@ impl<B, C> BabeConsensusDataProvider<B, C>
 	where
 		B: BlockT,
 		C: AuxStore + HeaderBackend<B> + ProvideRuntimeApi<B> + HeaderMetadata<B, Error = sp_blockchain::Error>,
-		C::Api: BabeApi<B, Error = sp_blockchain::Error>,
+		C::Api: BabeApi<B>,
 {
 	pub fn new(
 		client: Arc<C>,
@@ -89,7 +85,7 @@ impl<B, C> BabeConsensusDataProvider<B, C>
 		let timestamp_provider = SlotTimestampProvider::new(client.clone())?;
 
 		provider.register_provider(timestamp_provider)?;
-		register_babe_inherent_data_provider(provider, config.slot_duration)?;
+		register_babe_inherent_data_provider(provider, config.slot_duration())?;
 
 		Ok(Self {
 			config,
@@ -100,14 +96,14 @@ impl<B, C> BabeConsensusDataProvider<B, C>
 		})
 	}
 
-	fn epoch(&self, parent: &B::Header, slot_number: u64) -> Result<Epoch, Error> {
-		let epoch_changes = self.epoch_changes.lock();
+	fn epoch(&self, parent: &B::Header, slot: Slot) -> Result<Epoch, Error> {
+		let epoch_changes = self.epoch_changes.shared_data();
 		let epoch_descriptor = epoch_changes
 			.epoch_descriptor_for_child_of(
 				descendent_query(&*self.client),
 				&parent.hash(),
 				parent.number().clone(),
-				slot_number,
+				slot,
 			)
 			.map_err(|e| Error::StringError(format!("failed to fetch epoch_descriptor: {}", e)))?
 			.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet)?;
@@ -130,16 +126,20 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 	where
 		B: BlockT,
 		C: AuxStore + HeaderBackend<B> + HeaderMetadata<B, Error = sp_blockchain::Error> + ProvideRuntimeApi<B>,
-		C::Api: BabeApi<B, Error = sp_blockchain::Error>,
+		C::Api: BabeApi<B>,
 {
 	type Transaction = TransactionFor<C, B>;
 
 	fn create_digest(&self, parent: &B::Header, inherents: &InherentData) -> Result<DigestFor<B>, Error> {
-		let slot_number = inherents.babe_inherent_data()?;
-		let epoch = self.epoch(parent, slot_number)?;
+		let slot = inherents.babe_inherent_data()?;
+		let epoch = self.epoch(parent, slot)?;
 
 		// this is a dev node environment, we should always be able to claim a slot.
-		let logs =  if let Some((predigest, _)) = authorship::claim_slot(slot_number, &epoch, &self.keystore) {
+		let logs =  if let Some((predigest, _)) = authorship::claim_slot(
+			slot,
+			&epoch,
+			&self.keystore,
+		) {
 			vec![
 				<DigestItemFor<B> as CompatibleDigestItem>::babe_pre_digest(predigest),
 			]
@@ -147,17 +147,17 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 			// well we couldn't claim a slot because this is an existing chain and we're not in the authorities.
 			// we need to tell BabeBlockImport that the epoch has changed, and we put ourselves in the authorities.
 			let predigest = PreDigest::SecondaryPlain(SecondaryPlainPreDigest {
-				slot_number,
+				slot,
 				authority_index: 0_u32,
 			});
 
-			let mut epoch_changes = self.epoch_changes.lock();
+			let mut epoch_changes = self.epoch_changes.shared_data();
 			let epoch_descriptor = epoch_changes
 				.epoch_descriptor_for_child_of(
 					descendent_query(&*self.client),
 					&parent.hash(),
 					parent.number().clone(),
-					slot_number,
+					slot,
 				)
 				.map_err(|e| Error::StringError(format!("failed to fetch epoch_descriptor: {}", e)))?
 				.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet)?;
@@ -194,21 +194,21 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 		params: &mut BlockImportParams<B, Self::Transaction>,
 		inherents: &InherentData
 	) -> Result<(), Error> {
-		let slot_number = inherents.babe_inherent_data()?;
-		let epoch_changes = self.epoch_changes.lock();
+		let slot = inherents.babe_inherent_data()?;
+		let epoch_changes = self.epoch_changes.shared_data();
 		let mut epoch_descriptor = epoch_changes
 			.epoch_descriptor_for_child_of(
 				descendent_query(&*self.client),
 				&parent.hash(),
 				parent.number().clone(),
-				slot_number,
+				slot,
 			)
 			.map_err(|e| Error::StringError(format!("failed to fetch epoch_descriptor: {}", e)))?
 			.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet)?;
 		// drop the lock
 		drop(epoch_changes);
 		// a quick check to see if we're in the authorities
-		let epoch = self.epoch(parent, slot_number)?;
+		let epoch = self.epoch(parent, slot)?;
 		let (authority, _) = self.authorities.first().expect("authorities is non-emptyp; qed");
 		let has_authority = epoch.authorities.iter()
 			.find(|(id, _)| *id == *authority)
@@ -216,15 +216,15 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 
 		if !has_authority {
 			log::info!(target: "manual-seal", "authority not found");
-			let slot_number = inherents.timestamp_inherent_data()? / self.config.slot_duration;
+			let slot = *inherents.timestamp_inherent_data()? / self.config.slot_duration;
 			// manually hard code epoch descriptor
 			epoch_descriptor = match epoch_descriptor {
 				ViableEpochDescriptor::Signaled(identifier, _header) => {
 					ViableEpochDescriptor::Signaled(
 						identifier,
 						EpochHeader {
-							start_slot: slot_number,
-							end_slot: slot_number * self.config.epoch_length,
+							start_slot: slot.into(),
+							end_slot: (slot * self.config.epoch_length).into(),
 						},
 					)
 				},
@@ -234,7 +234,7 @@ impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
 
 		params.intermediates.insert(
 			Cow::from(INTERMEDIATE_KEY),
-			Box::new(BabeIntermediate::<B> { epoch_descriptor }) as Box<dyn Any>,
+			Box::new(BabeIntermediate::<B> { epoch_descriptor }) as Box<_>,
 		);
 
 		Ok(())
@@ -254,7 +254,7 @@ impl SlotTimestampProvider {
 		where
 			B: BlockT,
 			C: AuxStore + HeaderBackend<B> + ProvideRuntimeApi<B>,
-			C::Api: BabeApi<B, Error = sp_blockchain::Error>,
+			C::Api: BabeApi<B>,
 	{
 		let slot_duration = Config::get_or_compute(&*client)?.slot_duration;
 		let info = client.info();
@@ -263,9 +263,9 @@ impl SlotTimestampProvider {
 		// otherwise we'd be producing blocks for older slots.
 		let duration = if info.best_number != Zero::zero() {
 			let header = client.header(BlockId::Hash(info.best_hash))?.unwrap();
-			let slot_number = find_pre_digest::<B>(&header).unwrap().slot_number();
+			let slot = find_pre_digest::<B>(&header).unwrap().slot();
 			// add the slot duration so there's no collision of slots
-			(slot_number * slot_duration) + slot_duration
+			(*slot * slot_duration) + slot_duration
 		} else {
 			// this is the first block, use the correct time.
 			let now = SystemTime::now();
@@ -288,7 +288,10 @@ impl ProvideInherentData for SlotTimestampProvider {
 
 	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), sp_inherents::Error> {
 		// we update the time here.
-		let duration: InherentType = self.time.fetch_add(self.slot_duration, atomic::Ordering::SeqCst);
+		let duration: InherentType = self.time.fetch_add(
+			self.slot_duration,
+			atomic::Ordering::SeqCst,
+		).into();
 		inherent_data.put_data(INHERENT_IDENTIFIER, &duration)?;
 		Ok(())
 	}

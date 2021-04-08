@@ -185,7 +185,7 @@ pub enum BountyStatus<AccountId, BlockNumber> {
 	},
 }
 
-// Note :: For backward compatability reasons,
+// Note :: For backward compatibility reasons,
 // pallet-bounties uses Treasury for storage.
 // This is temporary solution, soon will get replaced with
 // Own storage identifier.
@@ -269,6 +269,9 @@ decl_module! {
 
 		/// The delay period for which a bounty beneficiary need to wait before claim the payout.
 		const BountyDepositPayoutDelay: T::BlockNumber = T::BountyDepositPayoutDelay::get();
+
+		/// Bounty duration in blocks.
+		const BountyUpdatePeriod: T::BlockNumber = T::BountyUpdatePeriod::get();
 
 		/// Percentage of the curator fee that will be reserved upfront as deposit for bounty curator.
 		const BountyCuratorDeposit: Permill = T::BountyCuratorDeposit::get();
@@ -421,7 +424,7 @@ decl_module! {
 								// If the sender is not the curator, and the curator is inactive,
 								// slash the curator.
 								if sender != *curator {
-									let block_number = system::Module::<T>::block_number();
+									let block_number = system::Pallet::<T>::block_number();
 									if *update_due < block_number {
 										slash_curator(curator, &mut bounty.curator_deposit);
 										// Continue to change bounty status below...
@@ -432,7 +435,8 @@ decl_module! {
 								} else {
 									// Else this is the curator, willingly giving up their role.
 									// Give back their deposit.
-									let _ = T::Currency::unreserve(&curator, bounty.curator_deposit);
+									let err_amount = T::Currency::unreserve(&curator, bounty.curator_deposit);
+									debug_assert!(err_amount.is_zero());
 									// Continue to change bounty status below...
 								}
 							},
@@ -476,7 +480,7 @@ decl_module! {
 						T::Currency::reserve(curator, deposit)?;
 						bounty.curator_deposit = deposit;
 
-						let update_due = system::Module::<T>::block_number() + T::BountyUpdatePeriod::get();
+						let update_due = system::Pallet::<T>::block_number() + T::BountyUpdatePeriod::get();
 						bounty.status = BountyStatus::Active { curator: curator.clone(), update_due };
 
 						Ok(())
@@ -515,7 +519,7 @@ decl_module! {
 				bounty.status = BountyStatus::PendingPayout {
 					curator: signer,
 					beneficiary: beneficiary.clone(),
-					unlock_at: system::Module::<T>::block_number() + T::BountyDepositPayoutDelay::get(),
+					unlock_at: system::Pallet::<T>::block_number() + T::BountyDepositPayoutDelay::get(),
 				};
 
 				Ok(())
@@ -540,14 +544,18 @@ decl_module! {
 			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let bounty = maybe_bounty.take().ok_or(Error::<T>::InvalidIndex)?;
 				if let BountyStatus::PendingPayout { curator, beneficiary, unlock_at } = bounty.status {
-					ensure!(system::Module::<T>::block_number() >= unlock_at, Error::<T>::Premature);
+					ensure!(system::Pallet::<T>::block_number() >= unlock_at, Error::<T>::Premature);
 					let bounty_account = Self::bounty_account_id(bounty_id);
 					let balance = T::Currency::free_balance(&bounty_account);
 					let fee = bounty.fee.min(balance); // just to be safe
 					let payout = balance.saturating_sub(fee);
-					let _ = T::Currency::unreserve(&curator, bounty.curator_deposit);
-					let _ = T::Currency::transfer(&bounty_account, &curator, fee, AllowDeath); // should not fail
-					let _ = T::Currency::transfer(&bounty_account, &beneficiary, payout, AllowDeath); // should not fail
+					let err_amount = T::Currency::unreserve(&curator, bounty.curator_deposit);
+					debug_assert!(err_amount.is_zero());
+					let res = T::Currency::transfer(&bounty_account, &curator, fee, AllowDeath); // should not fail
+					debug_assert!(res.is_ok());
+					let res = T::Currency::transfer(&bounty_account, &beneficiary, payout, AllowDeath); // should not fail
+					debug_assert!(res.is_ok());
+
 					*maybe_bounty = None;
 
 					BountyDescriptions::remove(bounty_id);
@@ -601,7 +609,8 @@ decl_module! {
 					},
 					BountyStatus::Active { curator, .. } => {
 						// Cancelled by council, refund deposit of the working curator.
-						let _ = T::Currency::unreserve(&curator, bounty.curator_deposit);
+						let err_amount = T::Currency::unreserve(&curator, bounty.curator_deposit);
+						debug_assert!(err_amount.is_zero());
 						// Then execute removal of the bounty below.
 					},
 					BountyStatus::PendingPayout { .. } => {
@@ -618,7 +627,8 @@ decl_module! {
 				BountyDescriptions::remove(bounty_id);
 
 				let balance = T::Currency::free_balance(&bounty_account);
-				let _ = T::Currency::transfer(&bounty_account, &Self::account_id(), balance, AllowDeath); // should not fail
+				let res = T::Currency::transfer(&bounty_account, &Self::account_id(), balance, AllowDeath); // should not fail
+				debug_assert!(res.is_ok());
 				*maybe_bounty = None;
 
 				Self::deposit_event(Event::<T>::BountyCanceled(bounty_id));
@@ -646,7 +656,7 @@ decl_module! {
 				match bounty.status {
 					BountyStatus::Active { ref curator, ref mut update_due } => {
 						ensure!(*curator == signer, Error::<T>::RequireCurator);
-						*update_due = (system::Module::<T>::block_number() + T::BountyUpdatePeriod::get()).max(*update_due);
+						*update_due = (system::Pallet::<T>::block_number() + T::BountyUpdatePeriod::get()).max(*update_due);
 					},
 					_ => return Err(Error::<T>::UnexpectedStatus.into()),
 				}
@@ -733,7 +743,8 @@ impl<T: Config> pallet_treasury::SpendFunds<T> for Module<T> {
 							bounty.status = BountyStatus::Funded;
 
 							// return their deposit.
-							let _ = T::Currency::unreserve(&bounty.proposer, bounty.bond);
+							let err_amount = T::Currency::unreserve(&bounty.proposer, bounty.bond);
+							debug_assert!(err_amount.is_zero());
 
 							// fund the bounty account
 							imbalance.subsume(T::Currency::deposit_creating(&Self::bounty_account_id(index), bounty.value));

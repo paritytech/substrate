@@ -16,8 +16,7 @@
 // limitations under the License.
 
 use codec::{Encode, Decode};
-use crate::{Config, Module, BlockHash};
-use frame_support::StorageMap;
+use crate::{Config, Pallet, BlockHash};
 use sp_runtime::{
 	generic::Era,
 	traits::{SignedExtension, DispatchInfoOf, SaturatedConversion},
@@ -63,7 +62,7 @@ impl<T: Config + Send + Sync> SignedExtension for CheckMortality<T> {
 		_info: &DispatchInfoOf<Self::Call>,
 		_len: usize,
 	) -> TransactionValidity {
-		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
+		let current_u64 = <Pallet<T>>::block_number().saturated_into::<u64>();
 		let valid_till = self.0.death(current_u64);
 		Ok(ValidTransaction {
 			longevity: valid_till.saturating_sub(current_u64),
@@ -72,12 +71,12 @@ impl<T: Config + Send + Sync> SignedExtension for CheckMortality<T> {
 	}
 
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
-		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
+		let current_u64 = <Pallet<T>>::block_number().saturated_into::<u64>();
 		let n = self.0.birth(current_u64).saturated_into::<T::BlockNumber>();
 		if !<BlockHash<T>>::contains_key(n) {
 			Err(InvalidTransaction::AncientBirthBlock.into())
 		} else {
-			Ok(<Module<T>>::block_hash(n))
+			Ok(<Pallet<T>>::block_hash(n))
 		}
 	}
 }
@@ -111,7 +110,7 @@ mod tests {
 			let normal = DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: Pays::Yes };
 			let len = 0_usize;
 			let ext = (
-				crate::CheckWeight::<Test>::default(),
+				crate::CheckWeight::<Test>::new(),
 				CheckMortality::<Test>::from(Era::mortal(16, 256)),
 			);
 			System::set_block_number(17);

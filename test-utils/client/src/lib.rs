@@ -79,6 +79,7 @@ pub struct TestClientBuilder<Block: BlockT, Executor, Backend, G: GenesisInit> {
 	keystore: Option<SyncCryptoStorePtr>,
 	fork_blocks: ForkBlocks<Block>,
 	bad_blocks: BadBlocks<Block>,
+	enable_offchain_indexing_api: bool,
 }
 
 impl<Block: BlockT, Executor, G: GenesisInit> Default
@@ -114,6 +115,7 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 			keystore: None,
 			fork_blocks: None,
 			bad_blocks: None,
+			enable_offchain_indexing_api: false,
 		}
 	}
 
@@ -175,6 +177,12 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 		self
 	}
 
+	/// Enable the offchain indexing api.
+	pub fn enable_offchain_indexing_api(mut self) -> Self {
+		self.enable_offchain_indexing_api = true;
+		self
+	}
+
 	/// Build the test client with the given native executor.
 	pub fn build_with_executor<RuntimeApi>(
 		self,
@@ -190,6 +198,7 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 	) where
 		Executor: sc_client_api::CallExecutor<Block> + 'static,
 		Backend: sc_client_api::backend::Backend<Block>,
+		<Backend as sc_client_api::backend::Backend<Block>>::OffchainStorage: 'static,
 	{
 		let storage = {
 			let mut storage = self.genesis_init.genesis_storage();
@@ -217,9 +226,14 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 			ExecutionExtensions::new(
 				self.execution_strategies,
 				self.keystore,
+				sc_offchain::OffchainDb::factory_from_backend(&*self.backend),
 			),
 			None,
-			ClientConfig::default(),
+			None,
+			ClientConfig {
+				offchain_indexing_api: self.enable_offchain_indexing_api,
+				..Default::default()
+			},
 		).expect("Creates new client");
 
 		let longest_chain = sc_consensus::LongestChain::new(self.backend);

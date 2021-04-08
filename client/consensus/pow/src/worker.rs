@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{pin::Pin, time::Duration, collections::HashMap, any::Any, borrow::Cow};
+use std::{pin::Pin, time::Duration, collections::HashMap, borrow::Cow};
 use sc_client_api::ImportNotifications;
 use sp_runtime::{DigestItem, traits::Block as BlockT, generic::BlockId};
 use sp_consensus::{Proposal, BlockOrigin, BlockImportParams, import_queue::BoxBlockImport};
@@ -40,25 +40,36 @@ pub struct MiningMetadata<H, D> {
 }
 
 /// A build of mining, containing the metadata and the block proposal.
-pub struct MiningBuild<Block: BlockT, Algorithm: PowAlgorithm<Block>, C: sp_api::ProvideRuntimeApi<Block>> {
+pub struct MiningBuild<
+	Block: BlockT,
+	Algorithm: PowAlgorithm<Block>,
+	C: sp_api::ProvideRuntimeApi<Block>,
+	Proof
+> {
 	/// Mining metadata.
 	pub metadata: MiningMetadata<Block::Hash, Algorithm::Difficulty>,
 	/// Mining proposal.
-	pub proposal: Proposal<Block, sp_api::TransactionFor<C, Block>>,
+	pub proposal: Proposal<Block, sp_api::TransactionFor<C, Block>, Proof>,
 }
 
 /// Mining worker that exposes structs to query the current mining build and submit mined blocks.
-pub struct MiningWorker<Block: BlockT, Algorithm: PowAlgorithm<Block>, C: sp_api::ProvideRuntimeApi<Block>> {
-	pub(crate) build: Option<MiningBuild<Block, Algorithm, C>>,
+pub struct MiningWorker<
+	Block: BlockT,
+	Algorithm: PowAlgorithm<Block>,
+	C: sp_api::ProvideRuntimeApi<Block>,
+	Proof
+> {
+	pub(crate) build: Option<MiningBuild<Block, Algorithm, C, Proof>>,
 	pub(crate) algorithm: Algorithm,
 	pub(crate) block_import: BoxBlockImport<Block, sp_api::TransactionFor<C, Block>>,
 }
 
-impl<Block, Algorithm, C> MiningWorker<Block, Algorithm, C> where
+impl<Block, Algorithm, C, Proof> MiningWorker<Block, Algorithm, C, Proof> where
 	Block: BlockT,
 	C: sp_api::ProvideRuntimeApi<Block>,
 	Algorithm: PowAlgorithm<Block>,
-	Algorithm::Difficulty: 'static,
+	Algorithm::Difficulty: 'static + Send,
+	sp_api::TransactionFor<C, Block>: Send + 'static,
 {
 	/// Get the current best hash. `None` if the worker has just started or the client is doing
 	/// major syncing.
@@ -72,7 +83,7 @@ impl<Block, Algorithm, C> MiningWorker<Block, Algorithm, C> where
 
 	pub(crate) fn on_build(
 		&mut self,
-		build: MiningBuild<Block, Algorithm, C>,
+		build: MiningBuild<Block, Algorithm, C, Proof>,
 	) {
 		self.build = Some(build);
 	}
@@ -84,7 +95,7 @@ impl<Block, Algorithm, C> MiningWorker<Block, Algorithm, C> where
 
 	/// Submit a mined seal. The seal will be validated again. Returns true if the submission is
 	/// successful.
-	pub fn submit(&mut self, seal: Seal) -> bool {
+	pub async fn submit(&mut self, seal: Seal) -> bool {
 		if let Some(build) = self.build.take() {
 			match self.algorithm.verify(
 				&BlockId::Hash(build.metadata.best_hash),
@@ -125,10 +136,10 @@ impl<Block, Algorithm, C> MiningWorker<Block, Algorithm, C> where
 
 			import_block.intermediates.insert(
 				Cow::from(INTERMEDIATE_KEY),
-				Box::new(intermediate) as Box<dyn Any>
+				Box::new(intermediate) as Box<_>,
 			);
 
-			match self.block_import.import_block(import_block, HashMap::default()) {
+			match self.block_import.import_block(import_block, HashMap::default()).await {
 				Ok(_) => {
 					info!(
 						target: "pow",

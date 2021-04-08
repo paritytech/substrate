@@ -26,7 +26,7 @@ use quote::quote;
 
 use std::env;
 
-use proc_macro_crate::crate_name;
+use proc_macro_crate::{crate_name, FoundCrate};
 
 fn generate_hidden_includes_mod_name(unique_id: &'static str) -> Ident {
 	Ident::new(&format!("sp_api_hidden_includes_{}", unique_id), Span::call_site())
@@ -34,27 +34,23 @@ fn generate_hidden_includes_mod_name(unique_id: &'static str) -> Ident {
 
 /// Generates the hidden includes that are required to make the macro independent from its scope.
 pub fn generate_hidden_includes(unique_id: &'static str) -> TokenStream {
-	if env::var("CARGO_PKG_NAME").unwrap() == "sp-api" {
-		TokenStream::new()
-	} else {
-		let mod_name = generate_hidden_includes_mod_name(unique_id);
-		match crate_name("sp-api") {
-			Ok(client_name) => {
-				let client_name = Ident::new(&client_name, Span::call_site());
-				quote!(
-					#[doc(hidden)]
-					mod #mod_name {
-						pub extern crate #client_name as sp_api;
-					}
-				)
-			},
-			Err(e) => {
-				let err = Error::new(Span::call_site(), &e).to_compile_error();
-				quote!( #err )
-			}
+	let mod_name = generate_hidden_includes_mod_name(unique_id);
+	match crate_name("sp-api") {
+		Ok(FoundCrate::Itself) => quote!(),
+		Ok(FoundCrate::Name(client_name)) => {
+			let client_name = Ident::new(&client_name, Span::call_site());
+			quote!(
+				#[doc(hidden)]
+				mod #mod_name {
+					pub extern crate #client_name as sp_api;
+				}
+			)
+		},
+		Err(e) => {
+			let err = Error::new(Span::call_site(), e).to_compile_error();
+			quote!( #err )
 		}
-
-	}.into()
+	}
 }
 
 /// Generates the access to the `sc_client` crate.
@@ -99,6 +95,7 @@ pub fn replace_wild_card_parameter_names(input: &mut Signature) {
 pub fn fold_fn_decl_for_client_side(
 	input: &mut Signature,
 	block_id: &TokenStream,
+	crate_: &TokenStream,
 ) {
 	replace_wild_card_parameter_names(input);
 
@@ -109,7 +106,7 @@ pub fn fold_fn_decl_for_client_side(
 	// Wrap the output in a `Result`
 	input.output = {
 		let ty = return_type_extract_type(&input.output);
-		parse_quote!( -> std::result::Result<#ty, Self::Error> )
+		parse_quote!( -> std::result::Result<#ty, #crate_::ApiError> )
 	};
 }
 

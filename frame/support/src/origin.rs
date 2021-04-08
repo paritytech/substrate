@@ -478,9 +478,9 @@ mod tests {
 	);
 
 	impl_outer_origin!(
-		pub enum OriginIndices for TestRuntime where system = frame_system, system_index = "11" {
+		pub enum OriginIndices for TestRuntime where system = frame_system, system_index = 11 {
 			origin_with_generic<T>,
-			#[codec(index = "10")] origin_without_generic,
+			#[codec(index = 10)] origin_without_generic,
 		}
 	);
 

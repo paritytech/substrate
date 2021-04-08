@@ -80,6 +80,7 @@ mod tests {
 			Some(8),
 			sp_io::SubstrateHostFunctions::host_functions(),
 			8,
+			None,
 		);
 		let res = executor.call_in_wasm(
 			&wasm_binary_unwrap()[..],

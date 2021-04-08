@@ -113,7 +113,6 @@ mod tests {
 
 	use libp2p::multihash::{self, Multihash};
 	use quickcheck::{Arbitrary, Gen, QuickCheck, TestResult};
-	use rand::Rng;
 
 	use sp_authority_discovery::{AuthorityId, AuthorityPair};
 	use sp_core::crypto::Pair;
@@ -122,8 +121,8 @@ mod tests {
 	struct TestAuthorityId(AuthorityId);
 
 	impl Arbitrary for TestAuthorityId {
-		fn arbitrary<G: Gen>(g: &mut G) -> Self {
-			let seed: [u8; 32] = g.gen();
+		fn arbitrary(g: &mut Gen) -> Self {
+			let seed = (0..32).map(|_| u8::arbitrary(g)).collect::<Vec<_>>();
 			TestAuthorityId(AuthorityPair::from_seed_slice(&seed).unwrap().public())
 		}
 	}
@@ -132,8 +131,8 @@ mod tests {
 	struct TestMultiaddr(Multiaddr);
 
 	impl Arbitrary for TestMultiaddr {
-		fn arbitrary<G: Gen>(g: &mut G) -> Self {
-			let seed: [u8; 32] = g.gen();
+		fn arbitrary(g: &mut Gen) -> Self {
+			let seed = (0..32).map(|_| u8::arbitrary(g)).collect::<Vec<_>>();
 			let peer_id = PeerId::from_multihash(
 				Multihash::wrap(multihash::Code::Sha2_256.into(), &seed).unwrap()
 			).unwrap();

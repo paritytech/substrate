@@ -26,13 +26,21 @@ mod analysis;
 
 pub use utils::*;
 #[cfg(feature = "std")]
-pub use analysis::{Analysis, BenchmarkSelector, RegressionModel};
+pub use analysis::{Analysis, BenchmarkSelector, RegressionModel, AnalysisChoice};
 #[doc(hidden)]
 pub use sp_io::storage::root as storage_root;
+#[doc(hidden)]
 pub use sp_runtime::traits::Zero;
+#[doc(hidden)]
 pub use frame_support;
+#[doc(hidden)]
+pub use sp_std::{self, vec, prelude::Vec, boxed::Box};
+#[doc(hidden)]
 pub use paste;
+#[doc(hidden)]
 pub use sp_storage::TrackedStorageKey;
+#[doc(hidden)]
+pub use log;
 
 /// Construct pallet benchmarks for weighing dispatchables.
 ///
@@ -68,10 +76,6 @@ pub use sp_storage::TrackedStorageKey;
 /// for arbitrary expresions to be evaluated in a benchmark (including for example,
 /// `on_initialize`).
 ///
-/// The macro allows for common parameters whose ranges and instancing expressions may be drawn upon
-/// (or not) by each arm. Syntax is available to allow for only the range to be drawn upon if
-/// desired, allowing an alternative instancing expression to be given.
-///
 /// Note that the ranges are *inclusive* on both sides. This is in contrast to ranges in Rust which
 /// are left-inclusive right-exclusive.
 ///
@@ -79,9 +83,6 @@ pub use sp_storage::TrackedStorageKey;
 /// which is run afterwards. All code blocks may draw upon the specific value of each parameter
 /// at any time. Local variables are shared between the two pre- and post- code blocks, but do not
 /// leak from the interior of any instancing expressions.
-///
-/// Any common parameters that are unused in an arm do not have their instancing expressions
-/// evaluated.
 ///
 /// Example:
 /// ```ignore
@@ -105,8 +106,7 @@ pub use sp_storage::TrackedStorageKey;
 ///   // third dispatchable: baz; this is a user dispatchable. It isn't dependent on length like the
 ///   // other two but has its own complexity `c` that needs setting up. It uses `caller` (in the
 ///   // pre-instancing block) within the code block. This is only allowed in the param instancers
-///   // of arms. Instancers of common params cannot optimistically draw upon hypothetical variables
-///   // that the arm's pre-instancing code block might have declared.
+///   // of arms.
 ///   baz1 {
 ///     let caller = account::<T>(b"caller", 0, benchmarks_seed);
 ///     let c = 0 .. 10 => setup_c(&caller, c);
@@ -183,13 +183,33 @@ macro_rules! benchmarks {
 }
 
 /// Same as [`benchmarks`] but for instantiable module.
+///
+/// NOTE: For pallet declared with [`frame_support::pallet`], use [`benchmarks_instance_pallet`].
 #[macro_export]
 macro_rules! benchmarks_instance {
 	(
 		$( $rest:tt )*
 	) => {
 		$crate::benchmarks_iter!(
-			{ I }
+			{ I: Instance }
+			{ }
+			( )
+			( )
+			$( $rest )*
+		);
+	}
+}
+
+/// Same as [`benchmarks`] but for instantiable pallet declared [`frame_support::pallet`].
+///
+/// NOTE: For pallet declared with `decl_module!`, use [`benchmarks_instance`].
+#[macro_export]
+macro_rules! benchmarks_instance_pallet {
+	(
+		$( $rest:tt )*
+	) => {
+		$crate::benchmarks_iter!(
+			{ I: 'static }
 			{ }
 			( )
 			( )
@@ -203,16 +223,16 @@ macro_rules! benchmarks_instance {
 macro_rules! benchmarks_iter {
 	// detect and extract where clause:
 	(
-		{ $( $instance:ident )? }
+		{ $( $instance:ident: $instance_bound:tt )? }
 		{ $( $where_clause:tt )* }
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
-		where_clause { where $( $where_ty:ty: $where_bound:path ),* $(,)? }
+		where_clause { where $( $where_bound:tt )* }
 		$( $rest:tt )*
 	) => {
 		$crate::benchmarks_iter! {
-			{ $( $instance)? }
-			{ $( $where_ty: $where_bound ),* }
+			{ $( $instance: $instance_bound)? }
+			{ $( $where_bound )* }
 			( $( $names )* )
 			( $( $names_extra )* )
 			$( $rest )*
@@ -220,7 +240,7 @@ macro_rules! benchmarks_iter {
 	};
 	// detect and extract extra tag:
 	(
-		{ $( $instance:ident )? }
+		{ $( $instance:ident: $instance_bound:tt )? }
 		{ $( $where_clause:tt )* }
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
@@ -229,7 +249,7 @@ macro_rules! benchmarks_iter {
 		$( $rest:tt )*
 	) => {
 		$crate::benchmarks_iter! {
-			{ $( $instance)? }
+			{ $( $instance: $instance_bound )? }
 			{ $( $where_clause )* }
 			( $( $names )* )
 			( $( $names_extra )* $name )
@@ -239,7 +259,7 @@ macro_rules! benchmarks_iter {
 	};
 	// mutation arm:
 	(
-		{ $( $instance:ident )? }
+		{ $( $instance:ident: $instance_bound:tt )? }
 		{ $( $where_clause:tt )* }
 		( $( $names:tt )* ) // This contains $( $( { $instance } )? $name:ident )*
 		( $( $names_extra:tt )* )
@@ -248,7 +268,7 @@ macro_rules! benchmarks_iter {
 		$( $rest:tt )*
 	) => {
 		$crate::benchmarks_iter! {
-			{ $( $instance)? }
+			{ $( $instance: $instance_bound )? }
 			{ $( $where_clause )* }
 			( $( $names )* )
 			( $( $names_extra )* )
@@ -259,7 +279,7 @@ macro_rules! benchmarks_iter {
 	};
 	// mutation arm:
 	(
-		{ $( $instance:ident )? }
+		{ $( $instance:ident: $instance_bound:tt )? }
 		{ $( $where_clause:tt )* }
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
@@ -268,7 +288,7 @@ macro_rules! benchmarks_iter {
 		$( $rest:tt )*
 	) => {
 		$crate::benchmarks_iter! {
-			{ $( $instance)? }
+			{ $( $instance: $instance_bound )? }
 			{ $( $where_clause )* }
 			( $( $names )* )
 			( $( $names_extra )* )
@@ -285,7 +305,7 @@ macro_rules! benchmarks_iter {
 	};
 	// iteration arm:
 	(
-		{ $( $instance:ident )? }
+		{ $( $instance:ident: $instance_bound:tt )? }
 		{ $( $where_clause:tt )* }
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
@@ -294,7 +314,7 @@ macro_rules! benchmarks_iter {
 		$( $rest:tt )*
 	) => {
 		$crate::benchmark_backend! {
-			{ $( $instance)? }
+			{ $( $instance: $instance_bound )? }
 			$name
 			{ $( $where_clause )* }
 			{ }
@@ -306,12 +326,12 @@ macro_rules! benchmarks_iter {
 		#[cfg(test)]
 		$crate::impl_benchmark_test!(
 			{ $( $where_clause )* }
-			{ $( $instance)? }
+			{ $( $instance: $instance_bound )? }
 			$name
 		);
 
 		$crate::benchmarks_iter!(
-			{ $( $instance)? }
+			{ $( $instance: $instance_bound )? }
 			{ $( $where_clause )* }
 			( $( $names )* { $( $instance )? } $name )
 			( $( $names_extra )* )
@@ -320,26 +340,26 @@ macro_rules! benchmarks_iter {
 	};
 	// iteration-exit arm
 	(
-		{ $( $instance:ident )? }
+		{ $( $instance:ident: $instance_bound:tt )? }
 		{ $( $where_clause:tt )* }
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
 	) => {
 		$crate::selected_benchmark!(
 			{ $( $where_clause)* }
-			{ $( $instance)? }
+			{ $( $instance: $instance_bound )? }
 			$( $names )*
 		);
 		$crate::impl_benchmark!(
 			{ $( $where_clause )* }
-			{ $( $instance)? }
+			{ $( $instance: $instance_bound )? }
 			( $( $names )* )
 			( $( $names_extra ),* )
 		);
 	};
 	// add verify block to _() format
 	(
-		{ $( $instance:ident )? }
+		{ $( $instance:ident: $instance_bound:tt )? }
 		{ $( $where_clause:tt )* }
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
@@ -347,7 +367,7 @@ macro_rules! benchmarks_iter {
 		$( $rest:tt )*
 	) => {
 		$crate::benchmarks_iter! {
-			{ $( $instance)? }
+			{ $( $instance: $instance_bound )? }
 			{ $( $where_clause )* }
 			( $( $names )* )
 			( $( $names_extra )* )
@@ -358,7 +378,7 @@ macro_rules! benchmarks_iter {
 	};
 	// add verify block to name() format
 	(
-		{ $( $instance:ident )? }
+		{ $( $instance:ident: $instance_bound:tt )? }
 		{ $( $where_clause:tt )* }
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
@@ -366,7 +386,7 @@ macro_rules! benchmarks_iter {
 		$( $rest:tt )*
 	) => {
 		$crate::benchmarks_iter! {
-			{ $( $instance)? }
+			{ $( $instance: $instance_bound )? }
 			{ $( $where_clause )* }
 			( $( $names )* )
 			( $( $names_extra )* )
@@ -377,7 +397,7 @@ macro_rules! benchmarks_iter {
 	};
 	// add verify block to {} format
 	(
-		{ $( $instance:ident )? }
+		{ $( $instance:ident: $instance_bound:tt )? }
 		{ $( $where_clause:tt )* }
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
@@ -385,7 +405,7 @@ macro_rules! benchmarks_iter {
 		$( $rest:tt )*
 	) => {
 		$crate::benchmarks_iter!(
-			{ $( $instance)? }
+			{ $( $instance: $instance_bound )? }
 			{ $( $where_clause )* }
 			( $( $names )* )
 			( $( $names_extra )* )
@@ -401,7 +421,7 @@ macro_rules! benchmarks_iter {
 macro_rules! benchmark_backend {
 	// parsing arms
 	(
-		{ $( $instance:ident )? }
+		{ $( $instance:ident: $instance_bound:tt )? }
 		$name:ident
 		{ $( $where_clause:tt )* }
 		{ $( PRE { $( $pre_parsed:tt )* } )* }
@@ -413,7 +433,7 @@ macro_rules! benchmark_backend {
 		$postcode:block
 	) => {
 		$crate::benchmark_backend! {
-			{ $( $instance)? }
+			{ $( $instance: $instance_bound )? }
 			$name
 			{ $( $where_clause )* }
 			{
@@ -426,7 +446,7 @@ macro_rules! benchmark_backend {
 		}
 	};
 	(
-		{ $( $instance:ident )? }
+		{ $( $instance:ident: $instance_bound:tt )? }
 		$name:ident
 		{ $( $where_clause:tt )* }
 		{ $( $parsed:tt )* }
@@ -438,7 +458,7 @@ macro_rules! benchmark_backend {
 		$postcode:block
 	) => {
 		$crate::benchmark_backend! {
-			{ $( $instance)? }
+			{ $( $instance: $instance_bound )? }
 			$name
 			{ $( $where_clause )* }
 			{
@@ -450,53 +470,9 @@ macro_rules! benchmark_backend {
 			$postcode
 		}
 	};
-	// mutation arm to look after defaulting to a common param
-	(
-		{ $( $instance:ident )? }
-		$name:ident
-		{ $( $where_clause:tt )* }
-		{ $( $parsed:tt )* }
-		{ $eval:block }
-		{
-			let $param:ident in ...;
-			$( $rest:tt )*
-		}
-		$postcode:block
-	) => {
-		$crate::benchmark_backend! {
-			{ $( $instance)? }
-			$name
-			{ $( $where_clause )* }
-			{ $( $parsed )* }
-			{ $eval }
-			$postcode
-		}
-	};
-	// mutation arm to look after defaulting only the range to common param
-	(
-		{ $( $instance:ident )? }
-		$name:ident
-		{ $( $where_clause:tt )* }
-		{ $( $parsed:tt )* }
-		{ $eval:block }
-		{
-			let $param:ident in _ .. _ => $param_instancer:expr ;
-			$( $rest:tt )*
-		}
-		$postcode:block
-	) => {
-		$crate::benchmark_backend! {
-			{ $( $instance)? }
-			$name
-			{ $( $where_clause )* }
-			{ $( $parsed )* }
-			{ $eval }
-			$postcode
-		}
-	};
 	// mutation arm to look after a single tt for param_from.
 	(
-		{ $( $instance:ident )? }
+		{ $( $instance:ident: $instance_bound:tt )? }
 		$name:ident
 		{ $( $where_clause:tt )* }
 		{ $( $parsed:tt )* }
@@ -508,7 +484,7 @@ macro_rules! benchmark_backend {
 		$postcode:block
 	) => {
 		$crate::benchmark_backend! {
-			{ $( $instance)? }
+			{ $( $instance: $instance_bound )? }
 			$name
 			{ $( $where_clause )* }
 			{ $( $parsed )* }
@@ -522,7 +498,7 @@ macro_rules! benchmark_backend {
 	};
 	// mutation arm to look after the default tail of `=> ()`
 	(
-		{ $( $instance:ident )? }
+		{ $( $instance:ident: $instance_bound:tt )? }
 		$name:ident
 		{ $( $where_clause:tt )* }
 		{ $( $parsed:tt )* }
@@ -534,7 +510,7 @@ macro_rules! benchmark_backend {
 		$postcode:block
 	) => {
 		$crate::benchmark_backend! {
-			{ $( $instance)? }
+			{ $( $instance: $instance_bound )? }
 			$name
 			{ $( $where_clause )* }
 			{ $( $parsed )* }
@@ -548,7 +524,7 @@ macro_rules! benchmark_backend {
 	};
 	// mutation arm to look after `let _ =`
 	(
-		{ $( $instance:ident )? }
+		{ $( $instance:ident: $instance_bound:tt )? }
 		$name:ident
 		{ $( $where_clause:tt )* }
 		{ $( $parsed:tt )* }
@@ -560,7 +536,7 @@ macro_rules! benchmark_backend {
 		$postcode:block
 	) => {
 		$crate::benchmark_backend! {
-			{ $( $instance)? }
+			{ $( $instance: $instance_bound )? }
 			$name
 			{ $( $where_clause )* }
 			{ $( $parsed )* }
@@ -574,7 +550,7 @@ macro_rules! benchmark_backend {
 	};
 	// actioning arm
 	(
-		{ $( $instance:ident )? }
+		{ $( $instance:ident: $instance_bound:tt )? }
 		$name:ident
 		{ $( $where_clause:tt )* }
 		{
@@ -588,12 +564,12 @@ macro_rules! benchmark_backend {
 		#[allow(non_camel_case_types)]
 		struct $name;
 		#[allow(unused_variables)]
-		impl<T: Config $( <$instance>, I: Instance)? >
+		impl<T: Config $( <$instance>, $instance: $instance_bound )? >
 			$crate::BenchmarkingSetup<T $(, $instance)? > for $name
 			where $( $where_clause )*
 		{
-			fn components(&self) -> Vec<($crate::BenchmarkParameter, u32, u32)> {
-				vec! [
+			fn components(&self) -> $crate::Vec<($crate::BenchmarkParameter, u32, u32)> {
+				$crate::vec! [
 					$(
 						($crate::BenchmarkParameter::$param, $param_from, $param_to)
 					),*
@@ -604,7 +580,7 @@ macro_rules! benchmark_backend {
 				&self,
 				components: &[($crate::BenchmarkParameter, u32)],
 				verify: bool
-			) -> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str> {
+			) -> Result<$crate::Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str> {
 				$(
 					// Prepare instance
 					let $param = components.iter()
@@ -618,7 +594,7 @@ macro_rules! benchmark_backend {
 				$( $param_instancer ; )*
 				$( $post )*
 
-				Ok(Box::new(move || -> Result<(), &'static str> {
+				Ok($crate::Box::new(move || -> Result<(), &'static str> {
 					$eval;
 					if verify {
 						$postcode;
@@ -649,7 +625,7 @@ macro_rules! benchmark_backend {
 macro_rules! selected_benchmark {
 	(
 		{ $( $where_clause:tt )* }
-		{ $( $instance:ident )? }
+		{ $( $instance:ident: $instance_bound:tt )? }
 		$( { $( $bench_inst:ident )? } $bench:ident )*
 	) => {
 		// The list of available benchmarks for this pallet.
@@ -659,11 +635,11 @@ macro_rules! selected_benchmark {
 		}
 
 		// Allow us to select a benchmark from the list of available benchmarks.
-		impl<T: Config $( <$instance>, I: Instance )? >
+		impl<T: Config $( <$instance>, $instance: $instance_bound )? >
 			$crate::BenchmarkingSetup<T $(, $instance )? > for SelectedBenchmark
 			where $( $where_clause )*
 		{
-			fn components(&self) -> Vec<($crate::BenchmarkParameter, u32, u32)> {
+			fn components(&self) -> $crate::Vec<($crate::BenchmarkParameter, u32, u32)> {
 				match self {
 					$(
 						Self::$bench => <
@@ -677,7 +653,7 @@ macro_rules! selected_benchmark {
 				&self,
 				components: &[($crate::BenchmarkParameter, u32)],
 				verify: bool
-			) -> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str> {
+			) -> Result<$crate::Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str> {
 				match self {
 					$(
 						Self::$bench => <
@@ -695,16 +671,16 @@ macro_rules! selected_benchmark {
 macro_rules! impl_benchmark {
 	(
 		{ $( $where_clause:tt )* }
-		{ $( $instance:ident )? }
+		{ $( $instance:ident: $instance_bound:tt )? }
 		( $( { $( $name_inst:ident )? } $name:ident )* )
 		( $( $name_extra:ident ),* )
 	) => {
-		impl<T: Config $(<$instance>, I: Instance)? >
-			$crate::Benchmarking<$crate::BenchmarkResults> for Module<T $(, $instance)? >
+		impl<T: Config $(<$instance>, $instance: $instance_bound )? >
+			$crate::Benchmarking<$crate::BenchmarkResults> for Pallet<T $(, $instance)? >
 			where T: frame_system::Config, $( $where_clause )*
 		{
-			fn benchmarks(extra: bool) -> Vec<&'static [u8]> {
-				let mut all = vec![ $( stringify!($name).as_ref() ),* ];
+			fn benchmarks(extra: bool) -> $crate::Vec<&'static [u8]> {
+				let mut all = $crate::vec![ $( stringify!($name).as_ref() ),* ];
 				if !extra {
 					let extra = [ $( stringify!($name_extra).as_ref() ),* ];
 					all.retain(|x| !extra.contains(x));
@@ -720,15 +696,15 @@ macro_rules! impl_benchmark {
 				repeat: u32,
 				whitelist: &[$crate::TrackedStorageKey],
 				verify: bool,
-			) -> Result<Vec<$crate::BenchmarkResults>, &'static str> {
+			) -> Result<$crate::Vec<$crate::BenchmarkResults>, &'static str> {
 				// Map the input to the selected benchmark.
-				let extrinsic = sp_std::str::from_utf8(extrinsic)
+				let extrinsic = $crate::sp_std::str::from_utf8(extrinsic)
 					.map_err(|_| "`extrinsic` is not a valid utf8 string!")?;
 				let selected_benchmark = match extrinsic {
 					$( stringify!($name) => SelectedBenchmark::$name, )*
 					_ => return Err("Could not find extrinsic."),
 				};
-				let mut results: Vec<$crate::BenchmarkResults> = Vec::new();
+				let mut results: $crate::Vec<$crate::BenchmarkResults> = $crate::Vec::new();
 				if repeat == 0 {
 					return Ok(results);
 				}
@@ -736,7 +712,7 @@ macro_rules! impl_benchmark {
 				// Add whitelist to DB including whitelisted caller
 				let mut whitelist = whitelist.to_vec();
 				let whitelisted_caller_key =
-					<frame_system::Account::<T> as frame_support::storage::StorageMap<_,_>>::hashed_key_for(
+					<frame_system::Account::<T> as $crate::frame_support::storage::StorageMap<_,_>>::hashed_key_for(
 						$crate::whitelisted_caller::<T::AccountId>()
 					);
 				whitelist.push(whitelisted_caller_key.into());
@@ -756,7 +732,7 @@ macro_rules! impl_benchmark {
 				let repeat_benchmark = |
 					repeat: u32,
 					c: &[($crate::BenchmarkParameter, u32)],
-					results: &mut Vec<$crate::BenchmarkResults>,
+					results: &mut $crate::Vec<$crate::BenchmarkResults>,
 					verify: bool,
 				| -> Result<(), &'static str> {
 					// Run the benchmark `repeat` times.
@@ -768,8 +744,8 @@ macro_rules! impl_benchmark {
 						>::instance(&selected_benchmark, c, verify)?;
 
 						// Set the block number to at least 1 so events are deposited.
-						if $crate::Zero::is_zero(&frame_system::Module::<T>::block_number()) {
-							frame_system::Module::<T>::set_block_number(1u32.into());
+						if $crate::Zero::is_zero(&frame_system::Pallet::<T>::block_number()) {
+							frame_system::Pallet::<T>::set_block_number(1u32.into());
 						}
 
 						// Commit the externalities to the database, flushing the DB cache.
@@ -783,7 +759,7 @@ macro_rules! impl_benchmark {
 							closure_to_benchmark()?;
 						} else {
 							// Time the extrinsic logic.
-							frame_support::debug::trace!(
+							$crate::log::trace!(
 								target: "benchmark",
 								"Start Benchmark: {:?}", c
 							);
@@ -796,12 +772,12 @@ macro_rules! impl_benchmark {
 							let elapsed_extrinsic = finish_extrinsic - start_extrinsic;
 							// Commit the changes to get proper write count
 							$crate::benchmarking::commit_db();
-							frame_support::debug::trace!(
+							$crate::log::trace!(
 								target: "benchmark",
 								"End Benchmark: {} ns", elapsed_extrinsic
 							);
 							let read_write_count = $crate::benchmarking::read_write_count();
-							frame_support::debug::trace!(
+							$crate::log::trace!(
 								target: "benchmark",
 								"Read/Write Count {:?}", read_write_count
 							);
@@ -833,7 +809,7 @@ macro_rules! impl_benchmark {
 				if components.is_empty() {
 					if verify {
 						// If `--verify` is used, run the benchmark once to verify it would complete.
-						repeat_benchmark(1, Default::default(), &mut Vec::new(), true)?;
+						repeat_benchmark(1, Default::default(), &mut $crate::Vec::new(), true)?;
 					}
 					repeat_benchmark(repeat, Default::default(), &mut results, false)?;
 				} else {
@@ -860,7 +836,7 @@ macro_rules! impl_benchmark {
 							let component_value = lowest + step_size * s;
 
 							// Select the max value for all the other components.
-							let c: Vec<($crate::BenchmarkParameter, u32)> = components.iter()
+							let c: $crate::Vec<($crate::BenchmarkParameter, u32)> = components.iter()
 								.enumerate()
 								.map(|(idx, (n, _, h))|
 									if n == name {
@@ -873,13 +849,38 @@ macro_rules! impl_benchmark {
 
 							if verify {
 								// If `--verify` is used, run the benchmark once to verify it would complete.
-								repeat_benchmark(1, &c, &mut Vec::new(), true)?;
+								repeat_benchmark(1, &c, &mut $crate::Vec::new(), true)?;
 							}
 							repeat_benchmark(repeat, &c, &mut results, false)?;
 						}
 					}
 				}
 				return Ok(results);
+			}
+		}
+
+		/// Test a particular benchmark by name.
+		///
+		/// This isn't called `test_benchmark_by_name` just in case some end-user eventually
+		/// writes a benchmark, itself called `by_name`; the function would be shadowed in
+		/// that case.
+		///
+		/// This is generally intended to be used by child test modules such as those created
+		/// by the `impl_benchmark_test_suite` macro. However, it is not an error if a pallet
+		/// author chooses not to implement benchmarks.
+		#[cfg(test)]
+		#[allow(unused)]
+		fn test_bench_by_name<T>(name: &[u8]) -> Result<(), &'static str>
+		where
+			T: Config + frame_system::Config, $( $where_clause )*
+		{
+			let name = $crate::sp_std::str::from_utf8(name)
+				.map_err(|_| "`name` is not a valid utf8 string!")?;
+			match name {
+				$( stringify!($name) => {
+					$crate::paste::paste! { [< test_benchmark_ $name >]::<T>() }
+				} )*
+				_ => Err("Could not find test for requested benchmark."),
 			}
 		}
 	};
@@ -893,7 +894,7 @@ macro_rules! impl_benchmark {
 macro_rules! impl_benchmark_test {
 	(
 		{ $( $where_clause:tt )* }
-		{ $( $instance:ident )? }
+		{ $( $instance:ident: $instance_bound:tt )? }
 		$name:ident
 	) => {
 		$crate::paste::item! {
@@ -906,7 +907,7 @@ macro_rules! impl_benchmark_test {
 				>::components(&selected_benchmark);
 
 				let execute_benchmark = |
-					c: Vec<($crate::BenchmarkParameter, u32)>
+					c: $crate::Vec<($crate::BenchmarkParameter, u32)>
 				| -> Result<(), &'static str> {
 					// Set up the benchmark, return execution + verification function.
 					let closure_to_verify = <
@@ -914,8 +915,8 @@ macro_rules! impl_benchmark_test {
 					>::instance(&selected_benchmark, &c, true)?;
 
 					// Set the block number to at least 1 so events are deposited.
-					if $crate::Zero::is_zero(&frame_system::Module::<T>::block_number()) {
-						frame_system::Module::<T>::set_block_number(1u32.into());
+					if $crate::Zero::is_zero(&frame_system::Pallet::<T>::block_number()) {
+						frame_system::Pallet::<T>::set_block_number(1u32.into());
 					}
 
 					// Run execution + verification
@@ -932,9 +933,9 @@ macro_rules! impl_benchmark_test {
 				} else {
 					for (_, (name, low, high)) in components.iter().enumerate() {
 						// Test only the low and high value, assuming values in the middle won't break
-						for component_value in vec![low, high] {
+						for component_value in $crate::vec![low, high] {
 							// Select the max value for all the other components.
-							let c: Vec<($crate::BenchmarkParameter, u32)> = components.iter()
+							let c: $crate::Vec<($crate::BenchmarkParameter, u32)> = components.iter()
 								.enumerate()
 								.map(|(_, (n, _, h))|
 									if n == name {
@@ -955,6 +956,279 @@ macro_rules! impl_benchmark_test {
 	};
 }
 
+/// This creates a test suite which runs the module's benchmarks.
+///
+/// When called in `pallet_example` as
+///
+/// ```rust,ignore
+/// impl_benchmark_test_suite!(Pallet, crate::tests::new_test_ext(), crate::tests::Test);
+/// ```
+///
+/// It expands to the equivalent of:
+///
+/// ```rust,ignore
+/// #[cfg(test)]
+/// mod tests {
+/// 	use super::*;
+/// 	use crate::tests::{new_test_ext, Test};
+/// 	use frame_support::assert_ok;
+///
+/// 	#[test]
+/// 	fn test_benchmarks() {
+/// 		new_test_ext().execute_with(|| {
+/// 			assert_ok!(test_benchmark_accumulate_dummy::<Test>());
+/// 			assert_ok!(test_benchmark_set_dummy::<Test>());
+/// 			assert_ok!(test_benchmark_another_set_dummy::<Test>());
+/// 			assert_ok!(test_benchmark_sort_vector::<Test>());
+/// 		});
+/// 	}
+/// }
+/// ```
+///
+/// ## Arguments
+///
+/// The first argument, `module`, must be the path to this crate's module.
+///
+/// The second argument, `new_test_ext`, must be a function call which returns either a
+/// `sp_io::TestExternalities`, or some other type with a similar interface.
+///
+/// Note that this function call is _not_ evaluated at compile time, but is instead copied textually
+/// into each appropriate invocation site.
+///
+/// The third argument, `test`, must be the path to the runtime. The item to which this must refer
+/// will generally take the form:
+///
+/// ```rust,ignore
+/// frame_support::construct_runtime!(
+/// 	pub enum Test where ...
+/// 	{ ... }
+/// );
+/// ```
+///
+/// There is an optional fourth argument, with keyword syntax: `benchmarks_path = path_to_benchmarks_invocation`.
+/// In the typical case in which this macro is in the same module as the `benchmarks!` invocation,
+/// you don't need to supply this. However, if the `impl_benchmark_test_suite!` invocation is in a
+/// different module than the `benchmarks!` invocation, then you should provide the path to the
+/// module containing the `benchmarks!` invocation:
+///
+/// ```rust,ignore
+/// mod benches {
+/// 	benchmarks!{
+/// 		...
+/// 	}
+/// }
+///
+/// mod tests {
+/// 	// because of macro syntax limitations, neither Pallet nor benches can be paths, but both have
+/// 	// to be idents in the scope of `impl_benchmark_test_suite`.
+/// 	use crate::{benches, Pallet};
+///
+/// 	impl_benchmark_test_suite!(Pallet, new_test_ext(), Test, benchmarks_path = benches);
+///
+/// 	// new_test_ext and the Test item are defined later in this module
+/// }
+/// ```
+///
+/// There is an optional fifth argument, with keyword syntax: `extra = true` or `extra = false`.
+/// By default, this generates a test suite which iterates over all benchmarks, including those
+/// marked with the `#[extra]` annotation. Setting `extra = false` excludes those.
+///
+/// There is an optional sixth argument, with keyword syntax: `exec_name = custom_exec_name`.
+/// By default, this macro uses `execute_with` for this parameter. This argument, if set, is subject
+/// to these restrictions:
+///
+/// - It must be the name of a method applied to the output of the `new_test_ext` argument.
+/// - That method must have a signature capable of receiving a single argument of the form `impl FnOnce()`.
+///
+// ## Notes (not for rustdoc)
+//
+// The biggest challenge for this macro is communicating the actual test functions to be run. We
+// can't just build an array of function pointers to each test function and iterate over it, because
+// the test functions are parameterized by the `Test` type. That's incompatible with
+// monomorphization: if it were legal, then even if the compiler detected and monomorphized the
+// functions into only the types of the callers, which implementation would the function pointer
+// point to? There would need to be some kind of syntax for selecting the destination of the pointer
+// according to a generic argument, and in general it would be a huge mess and not worth it.
+//
+// Instead, we're going to steal a trick from `fn run_benchmark`: generate a function which is
+// itself parametrized by `Test`, which accepts a `&[u8]` parameter containing the name of the
+// benchmark, and dispatches based on that to the appropriate real test implementation. Then, we can
+// just iterate over the `Benchmarking::benchmarks` list to run the actual implementations.
+#[macro_export]
+macro_rules! impl_benchmark_test_suite {
+	// user might or might not have set some keyword arguments; set the defaults
+	//
+	// The weird syntax indicates that `rest` comes only after a comma, which is otherwise optional
+	(
+		$bench_module:ident,
+		$new_test_ext:expr,
+		$test:path
+		$(, $( $rest:tt )* )?
+	) => {
+		impl_benchmark_test_suite!(
+			@selected:
+				$bench_module,
+				$new_test_ext,
+				$test,
+				benchmarks_path = super,
+				extra = true,
+				exec_name = execute_with,
+			@user:
+				$( $( $rest )* )?
+		);
+	};
+	// pick off the benchmarks_path keyword argument
+	(
+		@selected:
+			$bench_module:ident,
+			$new_test_ext:expr,
+			$test:path,
+			benchmarks_path = $old:ident,
+			extra = $extra:expr,
+			exec_name = $exec_name:ident,
+		@user:
+			benchmarks_path = $benchmarks_path:ident
+			$(, $( $rest:tt )* )?
+	) => {
+		impl_benchmark_test_suite!(
+			@selected:
+				$bench_module,
+				$new_test_ext,
+				$test,
+				benchmarks_path = $benchmarks_path,
+				extra = $extra,
+				exec_name = $exec_name,
+			@user:
+				$( $( $rest )* )?
+		);
+	};
+	// pick off the extra keyword argument
+	(
+		@selected:
+			$bench_module:ident,
+			$new_test_ext:expr,
+			$test:path,
+			benchmarks_path = $benchmarks_path:ident,
+			extra = $old:expr,
+			exec_name = $exec_name:ident,
+		@user:
+			extra = $extra:expr
+			$(, $( $rest:tt )* )?
+	) => {
+		impl_benchmark_test_suite!(
+			@selected:
+				$bench_module,
+				$new_test_ext,
+				$test,
+				benchmarks_path = $benchmarks_path,
+				extra = $extra,
+				exec_name = $exec_name,
+			@user:
+				$( $( $rest )* )?
+		);
+	};
+	// pick off the exec_name keyword argument
+	(
+		@selected:
+			$bench_module:ident,
+			$new_test_ext:expr,
+			$test:path,
+			benchmarks_path = $benchmarks_path:ident,
+			extra = $extra:expr,
+			exec_name = $old:ident,
+		@user:
+			exec_name = $exec_name:ident
+			$(, $( $rest:tt )* )?
+	) => {
+		impl_benchmark_test_suite!(
+			@selected:
+				$bench_module,
+				$new_test_ext,
+				$test,
+				benchmarks_path = $benchmarks_path,
+				extra = $extra,
+				exec_name = $exec_name,
+			@user:
+				$( $( $rest )* )?
+		);
+	};
+	// all options set; nothing else in user-provided keyword arguments
+	(
+		@selected:
+			$bench_module:ident,
+			$new_test_ext:expr,
+			$test:path,
+			benchmarks_path = $path_to_benchmarks_invocation:ident,
+			extra = $extra:expr,
+			exec_name = $exec_name:ident,
+		@user:
+			$(,)?
+	) => {
+		#[cfg(test)]
+		mod benchmark_tests {
+			use $path_to_benchmarks_invocation::test_bench_by_name;
+			use super::$bench_module;
+
+			#[test]
+			fn test_benchmarks() {
+				$new_test_ext.$exec_name(|| {
+					use $crate::Benchmarking;
+
+					let mut anything_failed = false;
+					println!("failing benchmark tests:");
+					for benchmark_name in $bench_module::<$test>::benchmarks($extra) {
+						match std::panic::catch_unwind(|| test_bench_by_name::<$test>(benchmark_name)) {
+							Err(err) => {
+								println!("{}: {:?}", String::from_utf8_lossy(benchmark_name), err);
+								anything_failed = true;
+							},
+							Ok(Err(err)) => {
+								println!("{}: {}", String::from_utf8_lossy(benchmark_name), err);
+								anything_failed = true;
+							},
+							Ok(Ok(_)) => (),
+						}
+					}
+					assert!(!anything_failed);
+				});
+			}
+		}
+	};
+}
+
+/// show error message and debugging info for the case of an error happening
+/// during a benchmark
+pub fn show_benchmark_debug_info(
+	instance_string: &[u8],
+	benchmark: &[u8],
+	lowest_range_values: &sp_std::prelude::Vec<u32>,
+	highest_range_values: &sp_std::prelude::Vec<u32>,
+	steps: &sp_std::prelude::Vec<u32>,
+	repeat: &u32,
+	verify: &bool,
+	error_message: &str,
+) -> sp_runtime::RuntimeString {
+	sp_runtime::format_runtime_string!(
+		"\n* Pallet: {}\n\
+		* Benchmark: {}\n\
+		* Lowest_range_values: {:?}\n\
+		* Highest_range_values: {:?}\n\
+		* Steps: {:?}\n\
+		* Repeat: {:?}\n\
+		* Verify: {:?}\n\
+		* Error message: {}",
+		sp_std::str::from_utf8(instance_string)
+		.expect("it's all just strings ran through the wasm interface. qed"),
+		sp_std::str::from_utf8(benchmark)
+		.expect("it's all just strings ran through the wasm interface. qed"),
+		lowest_range_values,
+		highest_range_values,
+		steps,
+		repeat,
+		verify,
+		error_message,
+	)
+}
 
 /// This macro adds pallet benchmarks to a `Vec<BenchmarkBatch>` object.
 ///
@@ -1050,7 +1324,18 @@ macro_rules! add_benchmark {
 							*repeat,
 							whitelist,
 							*verify,
-						)?,
+						).map_err(|e| {
+							$crate::show_benchmark_debug_info(
+								instance_string,
+								benchmark,
+								lowest_range_values,
+								highest_range_values,
+								steps,
+								repeat,
+								verify,
+								e,
+							)
+						})?,
 					});
 				}
 			} else {
@@ -1066,7 +1351,18 @@ macro_rules! add_benchmark {
 						*repeat,
 						whitelist,
 						*verify,
-					)?,
+					).map_err(|e| {
+						$crate::show_benchmark_debug_info(
+							instance_string,
+							benchmark,
+							lowest_range_values,
+							highest_range_values,
+							steps,
+							repeat,
+							verify,
+							e,
+						)
+					})?,
 				});
 			}
 		}

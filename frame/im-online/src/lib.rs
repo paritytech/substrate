@@ -30,9 +30,9 @@
 //! as the [NetworkState](../../client/offchain/struct.NetworkState.html).
 //! It is submitted as an Unsigned Transaction via off-chain workers.
 //!
-//! - [`im_online::Config`](./trait.Config.html)
-//! - [`Call`](./enum.Call.html)
-//! - [`Module`](./struct.Module.html)
+//! - [`Config`]
+//! - [`Call`]
+//! - [`Module`]
 //!
 //! ## Interface
 //!
@@ -79,29 +79,28 @@ use codec::{Encode, Decode};
 use sp_core::offchain::OpaqueNetworkState;
 use sp_std::prelude::*;
 use sp_std::convert::TryInto;
-use pallet_session::historical::IdentificationTuple;
 use sp_runtime::{
 	offchain::storage::StorageValueRef,
-	RuntimeDebug,
-	traits::{Convert, Member, Saturating, AtLeast32BitUnsigned}, Perbill,
+	traits::{AtLeast32BitUnsigned, Convert, Member, Saturating},
 	transaction_validity::{
-		TransactionValidity, ValidTransaction, InvalidTransaction, TransactionSource,
-		TransactionPriority,
+		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
+		ValidTransaction,
 	},
+	Perbill, Percent, RuntimeDebug,
 };
 use sp_staking::{
 	SessionIndex,
 	offence::{ReportOffence, Offence, Kind},
 };
 use frame_support::{
-	decl_module, decl_event, decl_storage, Parameter, debug, decl_error,
-	traits::Get,
+	decl_error, decl_event, decl_module, decl_storage,
+	traits::{
+		EstimateNextSessionRotation, Get, OneSessionHandler, ValidatorSet,
+		ValidatorSetWithIdentification,
+	},
+	Parameter,
 };
-use frame_system::ensure_none;
-use frame_system::offchain::{
-	SendTransactionTypes,
-	SubmitTransaction,
-};
+use frame_system::{ensure_none, offchain::{SendTransactionTypes, SubmitTransaction}};
 pub use weights::WeightInfo;
 
 pub mod sr25519 {
@@ -182,7 +181,7 @@ impl<BlockNumber: PartialEq + AtLeast32BitUnsigned + Copy> HeartbeatStatus<Block
 /// Error which may occur while executing the off-chain code.
 #[cfg_attr(test, derive(PartialEq))]
 enum OffchainErr<BlockNumber> {
-	TooEarly(BlockNumber),
+	TooEarly,
 	WaitingForInclusion(BlockNumber),
 	AlreadyOnline(u32),
 	FailedSigning,
@@ -194,8 +193,8 @@ enum OffchainErr<BlockNumber> {
 impl<BlockNumber: sp_std::fmt::Debug> sp_std::fmt::Debug for OffchainErr<BlockNumber> {
 	fn fmt(&self, fmt: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		match *self {
-			OffchainErr::TooEarly(ref block) =>
-				write!(fmt, "Too early to send heartbeat, next expected at {:?}", block),
+			OffchainErr::TooEarly =>
+				write!(fmt, "Too early to send heartbeat."),
 			OffchainErr::WaitingForInclusion(ref block) =>
 				write!(fmt, "Heartbeat already sent at {:?}. Waiting for inclusion.", block),
 			OffchainErr::AlreadyOnline(auth_idx) =>
@@ -227,28 +226,43 @@ pub struct Heartbeat<BlockNumber>
 	pub validators_len: u32,
 }
 
-pub trait Config: SendTransactionTypes<Call<Self>> + pallet_session::historical::Config {
+/// A type for representing the validator id in a session.
+pub type ValidatorId<T> = <
+	<T as Config>::ValidatorSet as ValidatorSet<<T as frame_system::Config>::AccountId>
+>::ValidatorId;
+
+/// A tuple of (ValidatorId, Identification) where `Identification` is the full identification of `ValidatorId`.
+pub type IdentificationTuple<T> = (
+	ValidatorId<T>,
+	<<T as Config>::ValidatorSet as
+		ValidatorSetWithIdentification<<T as frame_system::Config>::AccountId>>::Identification,
+);
+
+pub trait Config: SendTransactionTypes<Call<Self>> + frame_system::Config {
 	/// The identifier type for an authority.
 	type AuthorityId: Member + Parameter + RuntimeAppPublic + Default + Ord;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
-	/// An expected duration of the session.
+	/// A type for retrieving the validators supposed to be online in a session.
+	type ValidatorSet: ValidatorSetWithIdentification<Self::AccountId>;
+
+	/// A trait that allows us to estimate the current session progress and also the
+	/// average session length.
 	///
-	/// This parameter is used to determine the longevity of `heartbeat` transaction
-	/// and a rough time when we should start considering sending heartbeats,
-	/// since the workers avoids sending them at the very beginning of the session, assuming
-	/// there is a chance the authority will produce a block and they won't be necessary.
-	type SessionDuration: Get<Self::BlockNumber>;
+	/// This parameter is used to determine the longevity of `heartbeat` transaction and a
+	/// rough time when we should start considering sending heartbeats, since the workers
+	/// avoids sending them at the very beginning of the session, assuming there is a
+	/// chance the authority will produce a block and they won't be necessary.
+	type NextSessionRotation: EstimateNextSessionRotation<Self::BlockNumber>;
 
 	/// A type that gives us the ability to submit unresponsiveness offence reports.
-	type ReportUnresponsiveness:
-		ReportOffence<
-			Self::AccountId,
-			IdentificationTuple<Self>,
-			UnresponsivenessOffence<IdentificationTuple<Self>>,
-		>;
+	type ReportUnresponsiveness: ReportOffence<
+		Self::AccountId,
+		IdentificationTuple<Self>,
+		UnresponsivenessOffence<IdentificationTuple<Self>>,
+	>;
 
 	/// A configuration for base priority of unsigned transactions.
 	///
@@ -276,12 +290,17 @@ decl_event!(
 
 decl_storage! {
 	trait Store for Module<T: Config> as ImOnline {
-		/// The block number after which it's ok to send heartbeats in current session.
+		/// The block number after which it's ok to send heartbeats in the current
+		/// session.
 		///
-		/// At the beginning of each session we set this to a value that should
-		/// fall roughly in the middle of the session duration.
-		/// The idea is to first wait for the validators to produce a block
-		/// in the current session, so that the heartbeat later on will not be necessary.
+		/// At the beginning of each session we set this to a value that should fall
+		/// roughly in the middle of the session duration. The idea is to first wait for
+		/// the validators to produce a block in the current session, so that the
+		/// heartbeat later on will not be necessary.
+		///
+		/// This value will only be used as a fallback if we fail to get a proper session
+		/// progress estimate from `NextSessionRotation`, as those estimates should be
+		/// more accurate then the value we calculate for `HeartbeatAfter`.
 		HeartbeatAfter get(fn heartbeat_after): T::BlockNumber;
 
 		/// The current set of keys that may issue a heartbeat.
@@ -293,10 +312,10 @@ decl_storage! {
 			double_map hasher(twox_64_concat) SessionIndex, hasher(twox_64_concat) AuthIndex
 			=> Option<Vec<u8>>;
 
-		/// For each session index, we keep a mapping of `T::ValidatorId` to the
+		/// For each session index, we keep a mapping of `ValidatorId<T>` to the
 		/// number of blocks authored by the given authority.
 		AuthoredBlocks get(fn authored_blocks):
-			double_map hasher(twox_64_concat) SessionIndex, hasher(twox_64_concat) T::ValidatorId
+			double_map hasher(twox_64_concat) SessionIndex, hasher(twox_64_concat) ValidatorId<T>
 			=> u32;
 	}
 	add_extra_genesis {
@@ -345,7 +364,7 @@ decl_module! {
 		) {
 			ensure_none(origin)?;
 
-			let current_session = <pallet_session::Module<T>>::current_index();
+			let current_session = T::ValidatorSet::session_index();
 			let exists = <ReceivedHeartbeats>::contains_key(
 				&current_session,
 				&heartbeat.authority_index
@@ -374,8 +393,8 @@ decl_module! {
 			if sp_io::offchain::is_validator() {
 				for res in Self::send_heartbeats(now).into_iter().flatten() {
 					if let Err(e) = res {
-						debug::debug!(
-							target: "imonline",
+						log::debug!(
+							target: "runtime::im-online",
 							"Skipping heartbeat at {:?}: {:?}",
 							now,
 							e,
@@ -383,8 +402,8 @@ decl_module! {
 					}
 				}
 			} else {
-				debug::trace!(
-					target: "imonline",
+				log::trace!(
+					target: "runtime::im-online",
 					"Skipping heartbeat at {:?}. Not a validator.",
 					now,
 				)
@@ -397,12 +416,15 @@ type OffchainResult<T, A> = Result<A, OffchainErr<<T as frame_system::Config>::B
 
 /// Keep track of number of authored blocks per authority, uncles are counted as
 /// well since they're a valid proof of being online.
-impl<T: Config + pallet_authorship::Config> pallet_authorship::EventHandler<T::ValidatorId, T::BlockNumber> for Module<T> {
-	fn note_author(author: T::ValidatorId) {
+impl<
+	T: Config + pallet_authorship::Config,
+> pallet_authorship::EventHandler<ValidatorId<T>, T::BlockNumber> for Module<T>
+{
+	fn note_author(author: ValidatorId<T>) {
 		Self::note_authorship(author);
 	}
 
-	fn note_uncle(author: T::ValidatorId, _age: T::BlockNumber) {
+	fn note_uncle(author: ValidatorId<T>, _age: T::BlockNumber) {
 		Self::note_authorship(author);
 	}
 }
@@ -413,7 +435,7 @@ impl<T: Config> Module<T> {
 	/// authored at least one block, during the current session. Otherwise
 	/// `false`.
 	pub fn is_online(authority_index: AuthIndex) -> bool {
-		let current_validators = <pallet_session::Module<T>>::validators();
+		let current_validators = T::ValidatorSet::validators();
 
 		if authority_index >= current_validators.len() as u32 {
 			return false;
@@ -424,8 +446,8 @@ impl<T: Config> Module<T> {
 		Self::is_online_aux(authority_index, authority)
 	}
 
-	fn is_online_aux(authority_index: AuthIndex, authority: &T::ValidatorId) -> bool {
-		let current_session = <pallet_session::Module<T>>::current_index();
+	fn is_online_aux(authority_index: AuthIndex, authority: &ValidatorId<T>) -> bool {
+		let current_session = T::ValidatorSet::session_index();
 
 		<ReceivedHeartbeats>::contains_key(&current_session, &authority_index) ||
 			<AuthoredBlocks<T>>::get(
@@ -437,13 +459,13 @@ impl<T: Config> Module<T> {
 	/// Returns `true` if a heartbeat has been received for the authority at `authority_index` in
 	/// the authorities series, during the current session. Otherwise `false`.
 	pub fn received_heartbeat_in_current_session(authority_index: AuthIndex) -> bool {
-		let current_session = <pallet_session::Module<T>>::current_index();
+		let current_session = T::ValidatorSet::session_index();
 		<ReceivedHeartbeats>::contains_key(&current_session, &authority_index)
 	}
 
 	/// Note that the given authority has authored a block in the current session.
-	fn note_authorship(author: T::ValidatorId) {
-		let current_session = <pallet_session::Module<T>>::current_index();
+	fn note_authorship(author: ValidatorId<T>) {
+		let current_session = T::ValidatorSet::session_index();
 
 		<AuthoredBlocks<T>>::mutate(
 			&current_session,
@@ -452,19 +474,34 @@ impl<T: Config> Module<T> {
 		);
 	}
 
-	pub(crate) fn send_heartbeats(block_number: T::BlockNumber)
-		-> OffchainResult<T, impl Iterator<Item=OffchainResult<T, ()>>>
-	{
-		let heartbeat_after = <HeartbeatAfter<T>>::get();
-		if block_number < heartbeat_after {
-			return Err(OffchainErr::TooEarly(heartbeat_after))
+	pub(crate) fn send_heartbeats(
+		block_number: T::BlockNumber,
+	) -> OffchainResult<T, impl Iterator<Item = OffchainResult<T, ()>>> {
+		const HALF_SESSION: Percent = Percent::from_percent(50);
+
+		let too_early = if let (Some(progress), _) =
+			T::NextSessionRotation::estimate_current_session_progress(block_number)
+		{
+			// we try to get an estimate of the current session progress first since it
+			// should provide more accurate results and send the heartbeat if we're halfway
+			// through the session.
+			progress < HALF_SESSION
+		} else {
+			// otherwise we fallback to using the block number calculated at the beginning
+			// of the session that should roughly correspond to the middle of the session
+			let heartbeat_after = <HeartbeatAfter<T>>::get();
+			block_number < heartbeat_after
+		};
+
+		if too_early {
+			return Err(OffchainErr::TooEarly);
 		}
 
-		let session_index = <pallet_session::Module<T>>::current_index();
-		let validators_len = <pallet_session::Module<T>>::validators().len() as u32;
+		let session_index = T::ValidatorSet::session_index();
+		let validators_len = Keys::<T>::decode_len().unwrap_or_default() as u32;
 
-		Ok(Self::local_authority_keys()
-			.map(move |(authority_index, key)|
+		Ok(
+			Self::local_authority_keys().map(move |(authority_index, key)| {
 				Self::send_single_heartbeat(
 					authority_index,
 					key,
@@ -472,7 +509,8 @@ impl<T: Config> Module<T> {
 					block_number,
 					validators_len,
 				)
-			))
+			}),
+		)
 	}
 
 
@@ -512,8 +550,8 @@ impl<T: Config> Module<T> {
 			block_number,
 			|| {
 				let call = prepare_heartbeat()?;
-				debug::info!(
-					target: "imonline",
+				log::info!(
+					target: "runtime::im-online",
 					"[index: {:?}] Reporting im-online at block: {:?} (session: {:?}): {:?}",
 					authority_index,
 					block_number,
@@ -614,7 +652,7 @@ impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
 	type Public = T::AuthorityId;
 }
 
-impl<T: Config> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
+impl<T: Config> OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = T::AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)
@@ -630,8 +668,8 @@ impl<T: Config> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 		// Tell the offchain worker to start making the next session's heartbeats.
 		// Since we consider producing blocks as being online,
 		// the heartbeat is deferred a bit to prevent spamming.
-		let block_number = <frame_system::Module<T>>::block_number();
-		let half_session = T::SessionDuration::get() / 2u32.into();
+		let block_number = <frame_system::Pallet<T>>::block_number();
+		let half_session = T::NextSessionRotation::average_session_length() / 2u32.into();
 		<HeartbeatAfter<T>>::put(block_number + half_session);
 
 		// Remember who the authorities are for the new session.
@@ -639,22 +677,24 @@ impl<T: Config> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 	}
 
 	fn on_before_session_ending() {
-		let session_index = <pallet_session::Module<T>>::current_index();
+		let session_index = T::ValidatorSet::session_index();
 		let keys = Keys::<T>::get();
-		let current_validators = <pallet_session::Module<T>>::validators();
+		let current_validators = T::ValidatorSet::validators();
 
 		let offenders = current_validators.into_iter().enumerate()
 			.filter(|(index, id)|
 				!Self::is_online_aux(*index as u32, id)
 			).filter_map(|(_, id)|
-				T::FullIdentificationOf::convert(id.clone()).map(|full_id| (id, full_id))
+				<T::ValidatorSet as ValidatorSetWithIdentification<T::AccountId>>::IdentificationOf::convert(
+					id.clone()
+				).map(|full_id| (id, full_id))
 			).collect::<Vec<IdentificationTuple<T>>>();
 
 		// Remove all received heartbeats and number of authored blocks from the
 		// current session, they have already been processed and won't be needed
 		// anymore.
-		<ReceivedHeartbeats>::remove_prefix(&<pallet_session::Module<T>>::current_index());
-		<AuthoredBlocks<T>>::remove_prefix(&<pallet_session::Module<T>>::current_index());
+		<ReceivedHeartbeats>::remove_prefix(&T::ValidatorSet::session_index());
+		<AuthoredBlocks<T>>::remove_prefix(&T::ValidatorSet::session_index());
 
 		if offenders.is_empty() {
 			Self::deposit_event(RawEvent::AllGood);
@@ -680,10 +720,7 @@ const INVALID_VALIDATORS_LEN: u8 = 10;
 impl<T: Config> frame_support::unsigned::ValidateUnsigned for Module<T> {
 	type Call = Call<T>;
 
-	fn validate_unsigned(
-		_source: TransactionSource,
-		call: &Self::Call,
-	) -> TransactionValidity {
+	fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 		if let Call::heartbeat(heartbeat, signature) = call {
 			if <Module<T>>::is_online(heartbeat.authority_index) {
 				// we already received a heartbeat for this authority
@@ -691,7 +728,7 @@ impl<T: Config> frame_support::unsigned::ValidateUnsigned for Module<T> {
 			}
 
 			// check if session index from heartbeat is recent
-			let current_session = <pallet_session::Module<T>>::current_index();
+			let current_session = T::ValidatorSet::session_index();
 			if heartbeat.session_index != current_session {
 				return InvalidTransaction::Stale.into();
 			}
@@ -718,9 +755,12 @@ impl<T: Config> frame_support::unsigned::ValidateUnsigned for Module<T> {
 			ValidTransaction::with_tag_prefix("ImOnline")
 				.priority(T::UnsignedPriority::get())
 				.and_provides((current_session, authority_id))
-				.longevity(TryInto::<u64>::try_into(
-					T::SessionDuration::get() / 2u32.into()
-				).unwrap_or(64_u64))
+				.longevity(
+					TryInto::<u64>::try_into(
+						T::NextSessionRotation::average_session_length() / 2u32.into(),
+					)
+					.unwrap_or(64_u64),
+				)
 				.propagate(true)
 				.build()
 		} else {
@@ -769,7 +809,7 @@ impl<Offender: Clone> Offence<Offender> for UnresponsivenessOffence<Offender> {
 		// basically, 10% can be offline with no slash, but after that, it linearly climbs up to 7%
 		// when 13/30 are offline (around 5% when 1/3 are offline).
 		if let Some(threshold) = offenders.checked_sub(validator_set_count / 10 + 1) {
-			let x = Perbill::from_rational_approximation(3 * threshold, validator_set_count);
+			let x = Perbill::from_rational(3 * threshold, validator_set_count);
 			x.saturating_mul(Perbill::from_percent(7))
 		} else {
 			Perbill::default()

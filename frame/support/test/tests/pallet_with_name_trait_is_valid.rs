@@ -88,7 +88,6 @@ mod tests {
 	use crate as pallet_test;
 
 	use frame_support::parameter_types;
-	use sp_runtime::traits::Block;
 
 	type SignedExtra = (
 		frame_system::CheckEra<Runtime>,
@@ -110,8 +109,8 @@ mod tests {
 			NodeBlock = TestBlock,
 			UncheckedExtrinsic = TestUncheckedExtrinsic
 		{
-			System: frame_system::{Module, Call, Config, Storage, Event<T>},
-			PalletTest: pallet_test::{Module, Call, Storage, Event<T>, Config, ValidateUnsigned, Inherent},
+			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+			PalletTest: pallet_test::{Pallet, Call, Storage, Event<T>, Config, ValidateUnsigned, Inherent},
 		}
 	);
 
@@ -136,12 +135,13 @@ mod tests {
 		type BlockWeights = ();
 		type BlockLength = ();
 		type Version = ();
-		type PalletInfo = ();
+		type PalletInfo = PalletInfo;
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
+		type OnSetCode = ();
 	}
 
 	impl pallet_test::Trait for Runtime {

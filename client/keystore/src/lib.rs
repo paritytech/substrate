@@ -46,9 +46,6 @@ pub enum Error {
 	/// Public key type is not supported
 	#[display(fmt="Key crypto type is not supported")]
 	KeyNotSupported(KeyTypeId),
-	/// Pair not found for public key and KeyTypeId
-	#[display(fmt="Pair not found for {} public key", "_0")]
-	PairNotFound(String),
 	/// Keystore unavailable
 	#[display(fmt="Keystore unavailable")]
 	Unavailable,
@@ -61,7 +58,6 @@ impl From<Error> for TraitError {
 	fn from(error: Error) -> Self {
 		match error {
 			Error::KeyNotSupported(id) => TraitError::KeyNotSupported(id),
-			Error::PairNotFound(e) => TraitError::PairNotFound(e),
 			Error::InvalidSeed | Error::InvalidPhrase | Error::InvalidPassword => {
 				TraitError::ValidationError(error.to_string())
 			},

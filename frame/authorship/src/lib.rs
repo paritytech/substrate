@@ -234,7 +234,7 @@ impl<T: Config> Module<T> {
 			return author;
 		}
 
-		let digest = <frame_system::Module<T>>::digest();
+		let digest = <frame_system::Pallet<T>>::digest();
 		let pre_runtime_digests = digest.logs.iter().filter_map(|d| d.as_pre_runtime());
 		if let Some(author) = T::FindAuthor::find_author(pre_runtime_digests) {
 			<Self as Store>::Author::put(&author);
@@ -245,7 +245,7 @@ impl<T: Config> Module<T> {
 	}
 
 	fn verify_and_import_uncles(new_uncles: Vec<T::Header>) -> dispatch::DispatchResult {
-		let now = <frame_system::Module<T>>::block_number();
+		let now = <frame_system::Pallet<T>>::block_number();
 
 		let mut uncles = <Self as Store>::Uncles::get();
 		uncles.push(UncleEntryItem::InclusionHeight(now));
@@ -278,7 +278,7 @@ impl<T: Config> Module<T> {
 		accumulator: &mut <T::FilterUncle as FilterUncle<T::Header, T::AccountId>>::Accumulator,
 	) -> Result<Option<T::AccountId>, dispatch::DispatchError>
 	{
-		let now = <frame_system::Module<T>>::block_number();
+		let now = <frame_system::Pallet<T>>::block_number();
 
 		let (minimum_height, maximum_height) = {
 			let uncle_generations = T::UncleGenerations::get();
@@ -303,7 +303,7 @@ impl<T: Config> Module<T> {
 
 		{
 			let parent_number = uncle.number().clone() - One::one();
-			let parent_hash = <frame_system::Module<T>>::block_hash(&parent_number);
+			let parent_hash = <frame_system::Pallet<T>>::block_hash(&parent_number);
 			if &parent_hash != uncle.parent_hash() {
 				return Err(Error::<T>::InvalidUncleParent.into());
 			}
@@ -314,7 +314,7 @@ impl<T: Config> Module<T> {
 		}
 
 		let duplicate = existing_uncles.into_iter().find(|h| **h == hash).is_some();
-		let in_chain = <frame_system::Module<T>>::block_hash(uncle.number()) == hash;
+		let in_chain = <frame_system::Pallet<T>>::block_hash(uncle.number()) == hash;
 
 		if duplicate || in_chain {
 			return Err(Error::<T>::UncleAlreadyIncluded.into())
@@ -396,19 +396,27 @@ impl<T: Config> ProvideInherent for Module<T> {
 
 #[cfg(test)]
 mod tests {
+	use crate as pallet_authorship;
 	use super::*;
 	use sp_core::H256;
 	use sp_runtime::{
 		traits::{BlakeTwo256, IdentityLookup}, testing::Header, generic::DigestItem,
 	};
-	use frame_support::{parameter_types, impl_outer_origin, ConsensusEngineId};
+	use frame_support::{parameter_types, ConsensusEngineId};
 
-	impl_outer_origin!{
-		pub enum Origin for Test where system = frame_system {}
-	}
+	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+	type Block = frame_system::mocking::MockBlock<Test>;
 
-	#[derive(Clone, Eq, PartialEq)]
-	pub struct Test;
+	frame_support::construct_runtime!(
+		pub enum Test where
+			Block = Block,
+			NodeBlock = Block,
+			UncheckedExtrinsic = UncheckedExtrinsic,
+		{
+			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+			Authorship: pallet_authorship::{Pallet, Call, Storage, Inherent},
+		}
+	);
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
@@ -424,21 +432,22 @@ mod tests {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
-		type Call = ();
+		type Call = Call;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = ();
+		type Event = Event;
 		type BlockHashCount = BlockHashCount;
 		type Version = ();
-		type PalletInfo = ();
+		type PalletInfo = PalletInfo;
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
+		type OnSetCode = ();
 	}
 
 	parameter_types! {
@@ -451,9 +460,6 @@ mod tests {
 		type FilterUncle = SealVerify<VerifyBlock>;
 		type EventHandler = ();
 	}
-
-	type System = frame_system::Module<Test>;
-	type Authorship = Module<Test>;
 
 	const TEST_ID: ConsensusEngineId = [1, 2, 3, 4];
 

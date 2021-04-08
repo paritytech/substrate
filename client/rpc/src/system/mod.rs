@@ -24,6 +24,7 @@ mod tests;
 use futures::{future::BoxFuture, FutureExt, TryFutureExt};
 use futures::{channel::oneshot, compat::Compat};
 use sc_rpc_api::{DenyUnsafe, Receiver};
+use sc_tracing::logging;
 use sp_utils::mpsc::TracingUnboundedSender;
 use sp_runtime::traits::{self, Header as HeaderT};
 
@@ -200,12 +201,12 @@ impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for Sy
 
 	fn system_add_log_filter(&self, directives: String) -> std::result::Result<(), rpc::Error> {
 		self.deny_unsafe.check_if_safe()?;
-		sc_tracing::add_directives(&directives);
-		sc_tracing::reload_filter().map_err(|_e| rpc::Error::internal_error())
+		logging::add_directives(&directives);
+		logging::reload_filter().map_err(|_e| rpc::Error::internal_error())
 	}
 
 	fn system_reset_log_filter(&self)-> std::result::Result<(), rpc::Error> {
 		self.deny_unsafe.check_if_safe()?;
-		sc_tracing::reset_log_filter().map_err(|_e| rpc::Error::internal_error())
+		logging::reset_log_filter().map_err(|_e| rpc::Error::internal_error())
 	}
 }

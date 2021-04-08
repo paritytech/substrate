@@ -60,10 +60,10 @@ impl TypeValueDef {
 		}
 
 		if let Some(span) = item.sig.constness.as_ref().map(|t| t.span())
-			.or(item.sig.asyncness.as_ref().map(|t| t.span()))
-			.or(item.sig.unsafety.as_ref().map(|t| t.span()))
-			.or(item.sig.abi.as_ref().map(|t| t.span()))
-			.or(item.sig.variadic.as_ref().map(|t| t.span()))
+			.or_else(|| item.sig.asyncness.as_ref().map(|t| t.span()))
+			.or_else(|| item.sig.unsafety.as_ref().map(|t| t.span()))
+			.or_else(|| item.sig.abi.as_ref().map(|t| t.span()))
+			.or_else(|| item.sig.variadic.as_ref().map(|t| t.span()))
 		{
 			let msg = "Invalid pallet::type_value, unexpected token";
 			return Err(syn::Error::new(span, msg));

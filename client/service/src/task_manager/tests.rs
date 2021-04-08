@@ -20,9 +20,7 @@ use crate::config::TaskExecutor;
 use crate::task_manager::TaskManager;
 use futures::{future::FutureExt, pin_mut, select};
 use parking_lot::Mutex;
-use std::any::Any;
-use std::sync::Arc;
-use std::time::Duration;
+use std::{any::Any, sync::Arc, time::Duration};
 
 #[derive(Clone, Debug)]
 struct DropTester(Arc<Mutex<usize>>);
@@ -81,13 +79,17 @@ async fn run_background_task_blocking(duration: Duration, _keep_alive: impl Any)
 	}
 }
 
+fn new_task_manager(task_executor: TaskExecutor) -> TaskManager {
+	TaskManager::new(task_executor, None).unwrap()
+}
+
 #[test]
 fn ensure_tasks_are_awaited_on_shutdown() {
 	let mut runtime = tokio::runtime::Runtime::new().unwrap();
 	let handle = runtime.handle().clone();
 	let task_executor: TaskExecutor = (move |future, _| handle.spawn(future).map(|_| ())).into();
 
-	let task_manager = TaskManager::new(task_executor, None).unwrap();
+	let task_manager = new_task_manager(task_executor);
 	let spawn_handle = task_manager.spawn_handle();
 	let drop_tester = DropTester::new();
 	spawn_handle.spawn("task1", run_background_task(drop_tester.new_ref()));
@@ -106,7 +108,7 @@ fn ensure_keep_alive_during_shutdown() {
 	let handle = runtime.handle().clone();
 	let task_executor: TaskExecutor = (move |future, _| handle.spawn(future).map(|_| ())).into();
 
-	let mut task_manager = TaskManager::new(task_executor, None).unwrap();
+	let mut task_manager = new_task_manager(task_executor);
 	let spawn_handle = task_manager.spawn_handle();
 	let drop_tester = DropTester::new();
 	task_manager.keep_alive(drop_tester.new_ref());
@@ -125,7 +127,7 @@ fn ensure_blocking_futures_are_awaited_on_shutdown() {
 	let handle = runtime.handle().clone();
 	let task_executor: TaskExecutor = (move |future, _| handle.spawn(future).map(|_| ())).into();
 
-	let task_manager = TaskManager::new(task_executor, None).unwrap();
+	let task_manager = new_task_manager(task_executor);
 	let spawn_handle = task_manager.spawn_handle();
 	let drop_tester = DropTester::new();
 	spawn_handle.spawn(
@@ -150,7 +152,7 @@ fn ensure_no_task_can_be_spawn_after_terminate() {
 	let handle = runtime.handle().clone();
 	let task_executor: TaskExecutor = (move |future, _| handle.spawn(future).map(|_| ())).into();
 
-	let mut task_manager = TaskManager::new(task_executor, None).unwrap();
+	let mut task_manager = new_task_manager(task_executor);
 	let spawn_handle = task_manager.spawn_handle();
 	let drop_tester = DropTester::new();
 	spawn_handle.spawn("task1", run_background_task(drop_tester.new_ref()));
@@ -171,7 +173,7 @@ fn ensure_task_manager_future_ends_when_task_manager_terminated() {
 	let handle = runtime.handle().clone();
 	let task_executor: TaskExecutor = (move |future, _| handle.spawn(future).map(|_| ())).into();
 
-	let mut task_manager = TaskManager::new(task_executor, None).unwrap();
+	let mut task_manager = new_task_manager(task_executor);
 	let spawn_handle = task_manager.spawn_handle();
 	let drop_tester = DropTester::new();
 	spawn_handle.spawn("task1", run_background_task(drop_tester.new_ref()));
@@ -192,7 +194,7 @@ fn ensure_task_manager_future_ends_with_error_when_essential_task_fails() {
 	let handle = runtime.handle().clone();
 	let task_executor: TaskExecutor = (move |future, _| handle.spawn(future).map(|_| ())).into();
 
-	let mut task_manager = TaskManager::new(task_executor, None).unwrap();
+	let mut task_manager = new_task_manager(task_executor);
 	let spawn_handle = task_manager.spawn_handle();
 	let spawn_essential_handle = task_manager.spawn_essential_handle();
 	let drop_tester = DropTester::new();
@@ -215,10 +217,10 @@ fn ensure_children_tasks_ends_when_task_manager_terminated() {
 	let handle = runtime.handle().clone();
 	let task_executor: TaskExecutor = (move |future, _| handle.spawn(future).map(|_| ())).into();
 
-	let mut task_manager = TaskManager::new(task_executor.clone(), None).unwrap();
-	let child_1 = TaskManager::new(task_executor.clone(), None).unwrap();
+	let mut task_manager = new_task_manager(task_executor.clone());
+	let child_1 = new_task_manager(task_executor.clone());
 	let spawn_handle_child_1 = child_1.spawn_handle();
-	let child_2 = TaskManager::new(task_executor.clone(), None).unwrap();
+	let child_2 = new_task_manager(task_executor.clone());
 	let spawn_handle_child_2 = child_2.spawn_handle();
 	task_manager.add_child(child_1);
 	task_manager.add_child(child_2);
@@ -244,11 +246,11 @@ fn ensure_task_manager_future_ends_with_error_when_childs_essential_task_fails()
 	let handle = runtime.handle().clone();
 	let task_executor: TaskExecutor = (move |future, _| handle.spawn(future).map(|_| ())).into();
 
-	let mut task_manager = TaskManager::new(task_executor.clone(), None).unwrap();
-	let child_1 = TaskManager::new(task_executor.clone(), None).unwrap();
+	let mut task_manager = new_task_manager(task_executor.clone());
+	let child_1 = new_task_manager(task_executor.clone());
 	let spawn_handle_child_1 = child_1.spawn_handle();
 	let spawn_essential_handle_child_1 = child_1.spawn_essential_handle();
-	let child_2 = TaskManager::new(task_executor.clone(), None).unwrap();
+	let child_2 = new_task_manager(task_executor.clone());
 	let spawn_handle_child_2 = child_2.spawn_handle();
 	task_manager.add_child(child_1);
 	task_manager.add_child(child_2);
@@ -275,10 +277,10 @@ fn ensure_task_manager_future_continues_when_childs_not_essential_task_fails() {
 	let handle = runtime.handle().clone();
 	let task_executor: TaskExecutor = (move |future, _| handle.spawn(future).map(|_| ())).into();
 
-	let mut task_manager = TaskManager::new(task_executor.clone(), None).unwrap();
-	let child_1 = TaskManager::new(task_executor.clone(), None).unwrap();
+	let mut task_manager = new_task_manager(task_executor.clone());
+	let child_1 = new_task_manager(task_executor.clone());
 	let spawn_handle_child_1 = child_1.spawn_handle();
-	let child_2 = TaskManager::new(task_executor.clone(), None).unwrap();
+	let child_2 = new_task_manager(task_executor.clone());
 	let spawn_handle_child_2 = child_2.spawn_handle();
 	task_manager.add_child(child_1);
 	task_manager.add_child(child_2);

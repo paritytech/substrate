@@ -1,6 +1,6 @@
 [package]
 name = "sp-api-proc-macro"
-version = "2.0.1"
+version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -21,7 +21,7 @@ quote = "1.0.3"
 syn = { version = "1.0.58", features = ["full", "fold", "extra-traits", "visit"] }
 proc-macro2 = "1.0.6"
 blake2-rfc = { version = "0.2.18", default-features = false }
-proc-macro-crate = "0.1.4"
+proc-macro-crate = "1.0.0"
 
 # Required for the doc tests
 [features]

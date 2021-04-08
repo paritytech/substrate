@@ -31,7 +31,7 @@ use sp_std::result::Result;
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"babeslot";
 
 /// The type of the BABE inherent.
-pub type InherentType = u64;
+pub type InherentType = sp_consensus_slots::Slot;
 /// Auxiliary trait to extract BABE inherent data.
 pub trait BabeInherentData {
 	/// Get BABE inherent data.
@@ -52,15 +52,16 @@ impl BabeInherentData for InherentData {
 }
 
 /// Provides the slot duration inherent data for BABE.
+// TODO: Remove in the future. https://github.com/paritytech/substrate/issues/8029
 #[cfg(feature = "std")]
 pub struct InherentDataProvider {
-	slot_duration: u64,
+	slot_duration: std::time::Duration,
 }
 
 #[cfg(feature = "std")]
 impl InherentDataProvider {
 	/// Constructs `Self`
-	pub fn new(slot_duration: u64) -> Self {
+	pub fn new(slot_duration: std::time::Duration) -> Self {
 		Self { slot_duration }
 	}
 }
@@ -82,8 +83,8 @@ impl ProvideInherentData for InherentDataProvider {
 
 	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), Error> {
 		let timestamp = inherent_data.timestamp_inherent_data()?;
-		let slot_number = timestamp / self.slot_duration;
-		inherent_data.put_data(INHERENT_IDENTIFIER, &slot_number)
+		let slot = *timestamp / self.slot_duration.as_millis() as u64;
+		inherent_data.put_data(INHERENT_IDENTIFIER, &slot)
 	}
 
 	fn error_to_string(&self, error: &[u8]) -> Option<String> {

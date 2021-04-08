@@ -52,7 +52,7 @@ mod tests {
 	impl Config for Runtime {
 		type Origin = u32;
 		type BlockNumber = u32;
-		type PalletInfo = ();
+		type PalletInfo = crate::tests::PanicPalletInfo;
 		type DbWeight = ();
 	}
 
@@ -80,7 +80,8 @@ mod tests {
 			let translate_fn = |old: Option<u32>| -> Option<(u64, u64)> {
 				old.map(|o| (o.into(), (o*2).into()))
 			};
-			let _ = Value::translate(translate_fn);
+			let res = Value::translate(translate_fn);
+			debug_assert!(res.is_ok());
 
 			// new storage should be `(1111, 1111 * 2)`
 			assert_eq!(Value::get(), (1111, 2222));

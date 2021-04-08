@@ -39,6 +39,12 @@ pub enum NumberOrHex {
 	Hex(U256),
 }
 
+impl Default for NumberOrHex {
+	fn default() -> Self {
+		Self::Number(Default::default())
+	}
+}
+
 impl NumberOrHex {
 	/// Converts this number into an U256.
 	pub fn into_u256(self) -> U256 {
@@ -49,9 +55,21 @@ impl NumberOrHex {
 	}
 }
 
+impl From<u32> for NumberOrHex {
+	fn from(n: u32) -> Self {
+		NumberOrHex::Number(n.into())
+	}
+}
+
 impl From<u64> for NumberOrHex {
 	fn from(n: u64) -> Self {
 		NumberOrHex::Number(n)
+	}
+}
+
+impl From<u128> for NumberOrHex {
+	fn from(n: u128) -> Self {
+		NumberOrHex::Hex(n.into())
 	}
 }
 
@@ -66,21 +84,21 @@ pub struct TryFromIntError(pub(crate) ());
 
 impl TryFrom<NumberOrHex> for u32 {
 	type Error = TryFromIntError;
-	fn try_from(num_or_hex: NumberOrHex) -> Result<u32, TryFromIntError> {
+	fn try_from(num_or_hex: NumberOrHex) -> Result<u32, Self::Error> {
 		num_or_hex.into_u256().try_into().map_err(|_| TryFromIntError(()))
 	}
 }
 
 impl TryFrom<NumberOrHex> for u64 {
 	type Error = TryFromIntError;
-	fn try_from(num_or_hex: NumberOrHex) -> Result<u64, TryFromIntError> {
+	fn try_from(num_or_hex: NumberOrHex) -> Result<u64, Self::Error> {
 		num_or_hex.into_u256().try_into().map_err(|_| TryFromIntError(()))
 	}
 }
 
 impl TryFrom<NumberOrHex> for u128 {
 	type Error = TryFromIntError;
-	fn try_from(num_or_hex: NumberOrHex) -> Result<u128, TryFromIntError> {
+	fn try_from(num_or_hex: NumberOrHex) -> Result<u128, Self::Error> {
 		num_or_hex.into_u256().try_into().map_err(|_| TryFromIntError(()))
 	}
 }

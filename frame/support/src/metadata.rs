@@ -43,10 +43,14 @@ pub use frame_metadata::{
 ///# }
 ///# use module0 as module1;
 ///# use module0 as module2;
+///# impl frame_support::traits::PalletInfo for Runtime {
+///#     fn index<P: 'static>() -> Option<usize> { unimplemented!() }
+///#     fn name<P: 'static>() -> Option<&'static str> { unimplemented!() }
+///# }
 ///# impl module0::Config for Runtime {
 ///#     type Origin = u32;
 ///#     type BlockNumber = u32;
-///#     type PalletInfo = ();
+///#     type PalletInfo = Self;
 ///#     type DbWeight = ();
 ///# }
 ///#
@@ -54,7 +58,7 @@ pub use frame_metadata::{
 ///
 /// struct Runtime;
 /// frame_support::impl_runtime_metadata! {
-///     for Runtime with modules where Extrinsic = UncheckedExtrinsic
+///     for Runtime with pallets where Extrinsic = UncheckedExtrinsic
 ///         module0::Module as Module0 { index 0 } with,
 ///         module1::Module as Module1 { index 1 } with,
 ///         module2::Module as Module2 { index 2 } with Storage,
@@ -65,7 +69,7 @@ pub use frame_metadata::{
 #[macro_export]
 macro_rules! impl_runtime_metadata {
 	(
-		for $runtime:ident with modules where Extrinsic = $ext:ident
+		for $runtime:ident with pallets where Extrinsic = $ext:ident
 			$( $rest:tt )*
 	) => {
 		impl $runtime {
@@ -414,6 +418,37 @@ mod tests {
 	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 	pub struct TestRuntime;
 
+	impl crate::traits::PalletInfo for TestRuntime {
+		fn index<P: 'static>() -> Option<usize> {
+			let type_id = sp_std::any::TypeId::of::<P>();
+			if type_id == sp_std::any::TypeId::of::<system::Pallet<TestRuntime>>() {
+				return Some(0)
+			}
+			if type_id == sp_std::any::TypeId::of::<EventModule>() {
+				return Some(1)
+			}
+			if type_id == sp_std::any::TypeId::of::<EventModule2>() {
+				return Some(2)
+			}
+
+			None
+		}
+		fn name<P: 'static>() -> Option<&'static str> {
+			let type_id = sp_std::any::TypeId::of::<P>();
+			if type_id == sp_std::any::TypeId::of::<system::Pallet<TestRuntime>>() {
+				return Some("System")
+			}
+			if type_id == sp_std::any::TypeId::of::<EventModule>() {
+				return Some("EventModule")
+			}
+			if type_id == sp_std::any::TypeId::of::<EventModule2>() {
+				return Some("EventModule2")
+			}
+
+			None
+		}
+	}
+
 	impl_outer_event! {
 		pub enum TestEvent for TestRuntime {
 			system,
@@ -451,14 +486,14 @@ mod tests {
 		type AccountId = u32;
 		type BlockNumber = u32;
 		type SomeValue = SystemValue;
-		type PalletInfo = ();
+		type PalletInfo = Self;
 		type DbWeight = ();
 		type Call = Call;
 	}
 
 	impl_runtime_metadata!(
-		for TestRuntime with modules where Extrinsic = TestExtrinsic
-			system::Module as System { index 0 } with Event,
+		for TestRuntime with pallets where Extrinsic = TestExtrinsic
+			system::Pallet as System { index 0 } with Event,
 			event_module::Module as Module { index 1 } with Event Call,
 			event_module2::Module as Module2 { index 2 } with Event Storage Call,
 	);

@@ -20,12 +20,11 @@
 //!
 //! This is used instead of `futures_timer::Interval` because it was unreliable.
 
-use super::SlotCompatible;
+use super::{SlotCompatible, Slot};
 use sp_consensus::Error;
-use futures::{prelude::*, task::Context, task::Poll};
 use sp_inherents::{InherentData, InherentDataProviders};
 
-use std::{pin::Pin, time::{Duration, Instant}};
+use std::time::{Duration, Instant};
 use futures_timer::Delay;
 
 /// Returns current duration since unix epoch.
@@ -40,29 +39,51 @@ pub fn duration_now() -> Duration {
 }
 
 /// Returns the duration until the next slot, based on current duration since
-pub fn time_until_next(now: Duration, slot_duration: u64) -> Duration {
-	let remaining_full_millis = slot_duration - (now.as_millis() as u64 % slot_duration) - 1;
-	Duration::from_millis(remaining_full_millis)
+pub fn time_until_next(now: Duration, slot_duration: Duration) -> Duration {
+	let remaining_full_millis = slot_duration.as_millis()
+		- (now.as_millis() % slot_duration.as_millis())
+		- 1;
+	Duration::from_millis(remaining_full_millis as u64)
 }
 
 /// Information about a slot.
 pub struct SlotInfo {
 	/// The slot number.
-	pub number: u64,
+	pub slot: Slot,
 	/// Current timestamp.
-	pub timestamp: u64,
+	pub timestamp: sp_timestamp::Timestamp,
 	/// The instant at which the slot ends.
 	pub ends_at: Instant,
 	/// The inherent data.
 	pub inherent_data: InherentData,
 	/// Slot duration.
-	pub duration: u64,
+	pub duration: Duration,
+}
+
+impl SlotInfo {
+	/// Create a new [`SlotInfo`].
+	///
+	/// `ends_at` is calculated using `timestamp` and `duration`.
+	pub fn new(
+		slot: Slot,
+		timestamp: sp_timestamp::Timestamp,
+		inherent_data: InherentData,
+		duration: Duration,
+	) -> Self {
+		Self {
+			slot,
+			timestamp,
+			inherent_data,
+			duration,
+			ends_at: Instant::now() + time_until_next(timestamp.as_duration(), duration),
+		}
+	}
 }
 
 /// A stream that returns every time there is a new slot.
 pub(crate) struct Slots<SC> {
-	last_slot: u64,
-	slot_duration: u64,
+	last_slot: Slot,
+	slot_duration: Duration,
 	inner_delay: Option<Delay>,
 	inherent_data_providers: InherentDataProviders,
 	timestamp_extractor: SC,
@@ -71,12 +92,12 @@ pub(crate) struct Slots<SC> {
 impl<SC> Slots<SC> {
 	/// Create a new `Slots` stream.
 	pub fn new(
-		slot_duration: u64,
+		slot_duration: Duration,
 		inherent_data_providers: InherentDataProviders,
 		timestamp_extractor: SC,
 	) -> Self {
 		Slots {
-			last_slot: 0,
+			last_slot: 0.into(),
 			slot_duration,
 			inner_delay: None,
 			inherent_data_providers,
@@ -85,59 +106,49 @@ impl<SC> Slots<SC> {
 	}
 }
 
-impl<SC: SlotCompatible> Stream for Slots<SC> {
-	type Item = Result<SlotInfo, Error>;
-
-	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+impl<SC: SlotCompatible> Slots<SC> {
+	/// Returns a future that fires when the next slot starts.
+	pub async fn next_slot(&mut self) -> Result<SlotInfo, Error> {
 		loop {
-			let slot_duration = self.slot_duration;
 			self.inner_delay = match self.inner_delay.take() {
 				None => {
 					// schedule wait.
-					let wait_dur = time_until_next(duration_now(), slot_duration);
+					let wait_dur = time_until_next(duration_now(), self.slot_duration);
 					Some(Delay::new(wait_dur))
 				}
 				Some(d) => Some(d),
 			};
 
-			if let Some(ref mut inner_delay) = self.inner_delay {
-				match Future::poll(Pin::new(inner_delay), cx) {
-					Poll::Pending => return Poll::Pending,
-					Poll::Ready(()) => {}
-				}
+			if let Some(inner_delay) = self.inner_delay.take() {
+				inner_delay.await;
 			}
-
 			// timeout has fired.
 
 			let inherent_data = match self.inherent_data_providers.create_inherent_data() {
 				Ok(id) => id,
-				Err(err) => return Poll::Ready(Some(Err(sp_consensus::Error::InherentData(err)))),
+				Err(err) => return Err(sp_consensus::Error::InherentData(err)),
 			};
 			let result = self.timestamp_extractor.extract_timestamp_and_slot(&inherent_data);
-			let (timestamp, slot_num, offset) = match result {
+			let (timestamp, slot, offset) = match result {
 				Ok(v) => v,
-				Err(err) => return Poll::Ready(Some(Err(err))),
+				Err(err) => return Err(err),
 			};
 			// reschedule delay for next slot.
 			let ends_in = offset +
-				time_until_next(Duration::from_millis(timestamp), slot_duration);
-			let ends_at = Instant::now() + ends_in;
+				time_until_next(timestamp.as_duration(), self.slot_duration);
 			self.inner_delay = Some(Delay::new(ends_in));
 
 			// never yield the same slot twice.
-			if slot_num > self.last_slot {
-				self.last_slot = slot_num;
+			if slot > self.last_slot {
+				self.last_slot = slot;
 
-				break Poll::Ready(Some(Ok(SlotInfo {
-					number: slot_num,
-					duration: self.slot_duration,
+				break Ok(SlotInfo::new(
+					slot,
 					timestamp,
-					ends_at,
 					inherent_data,
-				})))
+					self.slot_duration,
+				))
 			}
 		}
 	}
 }
-
-impl<SC> Unpin for Slots<SC> {}

@@ -410,19 +410,23 @@ impl BenchDb {
 		let db_config = sc_client_db::DatabaseSettings {
 			state_cache_size: 16*1024*1024,
 			state_cache_child_ratio: Some((0, 100)),
-			pruning: PruningMode::ArchiveAll,
+			state_pruning: PruningMode::ArchiveAll,
 			source: database_type.into_settings(dir.into()),
+			keep_blocks: sc_client_db::KeepBlocks::All,
+			transaction_storage: sc_client_db::TransactionStorageMode::BlockBody,
 		};
 		let task_executor = TaskExecutor::new();
 
-		let (client, backend) = sc_service::new_client(
-			db_config,
+		let backend = sc_service::new_db_backend(db_config).expect("Should not fail");
+		let client = sc_service::new_client(
+			backend.clone(),
 			NativeExecutor::new(WasmExecutionMethod::Compiled, None, 8),
 			&keyring.generate_genesis(),
 			None,
 			None,
-			ExecutionExtensions::new(profile.into_execution_strategies(), None),
+			ExecutionExtensions::new(profile.into_execution_strategies(), None, None),
 			Box::new(task_executor.clone()),
+			None,
 			None,
 			Default::default(),
 		).expect("Should not fail");
@@ -687,7 +691,7 @@ impl BenchContext {
 		assert_eq!(self.client.chain_info().best_number, 0);
 
 		assert_eq!(
-			self.client.import_block(import_params, Default::default())
+			futures::executor::block_on(self.client.import_block(import_params, Default::default()))
 				.expect("Failed to import block"),
 			ImportResult::Imported(
 				ImportedAux {

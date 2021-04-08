@@ -1,4 +1,4 @@
-error: Module index doesn't fit into u8, index is 256
+error: Pallet index doesn't fit into u8, index is 256
   --> $DIR/more_than_256_modules.rs:10:3
    |
 10 |         Pallet256: pallet256::{},

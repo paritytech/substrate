@@ -20,7 +20,7 @@
 //! This uses compact proof from trie crate and extends
 //! it to substrate specific layout and child trie system.
 
-use crate::{EMPTY_PREFIX, HashDBT, LazyFetcher,
+use crate::{EMPTY_PREFIX, HashDBT,
 	TrieHash, TrieError, TrieConfiguration, CompactProof, StorageProof};
 use sp_std::boxed::Box;
 use sp_std::vec::Vec;
@@ -36,41 +36,23 @@ fn verify_error<L: TrieConfiguration>(error: Box<TrieError<L>>) -> VerifyError<L
 /// Takes as input a destination `db` for decoded node and `encoded`
 /// an iterator of compact encoded nodes.
 ///
-/// Also allows optionally injecting specified value in
-/// top trie proof with `know_keys` and the lazy
-/// associated `fetcher`.
-///
 /// Child trie are decoded in order of child trie root present
 /// in the top trie.
-pub fn decode_compact<'a, L, DB, I, F, K>(
+pub fn decode_compact<'a, L, DB, I>(
 	db: &mut DB,
 	encoded: I,
-	fetcher: F,
-	known_keys: Option<K>,
 	expected_root: Option<&TrieHash<L>>,
 ) -> Result<TrieHash<L>, VerifyError<L>>
 	where
 		L: TrieConfiguration,
 		DB: HashDBT<L::Hash, trie_db::DBValue> + hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
 		I: IntoIterator<Item = &'a [u8]>,
-		F: LazyFetcher<'a>,
-		K: IntoIterator<Item = &'a [u8]>,
 {
 	let mut nodes_iter = encoded.into_iter();
-	let (top_root, _nb_used) = if let Some(known_keys) = known_keys {
-		trie_db::decode_compact_with_known_values::<L, _, _, _, _, _>(
-			db,
-			&mut nodes_iter,
-			fetcher,
-			known_keys,
-			false, // current use of compact do to escape empty value.
-		).map_err(verify_error::<L>)?
-	} else {
-		trie_db::decode_compact_from_iter::<L, _, _, _>(
-			db,
-			&mut nodes_iter,
-		).map_err(verify_error::<L>)?
-	};
+	let (top_root, _nb_used) = trie_db::decode_compact_from_iter::<L, _, _, _>(
+		db,
+		&mut nodes_iter,
+	).map_err(verify_error::<L>)?;
 
 	if let Some(expected_root) = expected_root {
 		if expected_root != &top_root {
@@ -126,9 +108,9 @@ pub fn decode_compact<'a, L, DB, I, F, K>(
 			).map_err(verify_error::<L>)?;
 			previous_extracted_child_trie = Some(top_root);
 		}
-	
+
 		// we allow skipping child root by only
-		// decoding next on match. 	
+		// decoding next on match.
 		if Some(child_root) == previous_extracted_child_trie {
 			previous_extracted_child_trie = None;
 		}
@@ -144,14 +126,12 @@ pub fn decode_compact<'a, L, DB, I, F, K>(
 	Ok(top_root)
 }
 
-pub fn encode_compact<'a, L, I>(
+pub fn encode_compact<'a, L>(
 	proof: StorageProof,
 	root: TrieHash<L>,
-	to_skip: I,
 ) -> Result<CompactProof, Box<TrieError<L>>>
 	where
 		L: TrieConfiguration,
-		I: IntoIterator<Item = &'a [u8]> + 'a,
 {
 	let mut child_tries = Vec::new();
 	let partial_db = proof.into_memory_db();
@@ -184,11 +164,7 @@ pub fn encode_compact<'a, L, I>(
 			}
 		}
 
-		trie_db::encode_compact_skip_conditional_with_key::<L, _>(
-			&trie,
-			trie_db::compact_conditions::skip_given_ordered_keys(to_skip),
-			false, // We do not escape empty value.
-		)?
+		trie_db::encode_compact::<L>(&trie)?
 	};
 
 	for child_root in child_tries {

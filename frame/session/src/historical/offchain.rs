@@ -28,7 +28,7 @@
 use sp_runtime::{offchain::storage::StorageValueRef, KeyTypeId};
 use sp_session::MembershipProof;
 
-use super::super::{Module as SessionModule, SessionIndex};
+use super::super::{Pallet as SessionModule, SessionIndex};
 use super::{IdentificationTuple, ProvingTrie, Config};
 
 use super::shared;
@@ -147,33 +147,33 @@ mod tests {
 	use sp_core::crypto::key_types::DUMMY;
 	use sp_core::offchain::{
 		testing::TestOffchainExt,
-		OffchainExt,
+		OffchainDbExt,
+		OffchainWorkerExt,
 		StorageKind,
 	};
 
 	use sp_runtime::testing::UintAuthorityId;
+	use frame_support::BasicExternalities;
 
 	type Historical = Module<Test>;
 
 	pub fn new_test_ext() -> sp_io::TestExternalities {
-		let mut ext = frame_system::GenesisConfig::default()
+		let mut t = frame_system::GenesisConfig::default()
 			.build_storage::<Test>()
 			.expect("Failed to create test externalities.");
 
-		crate::GenesisConfig::<Test> {
-			keys: NEXT_VALIDATORS.with(|l| {
-				l.borrow()
-					.iter()
-					.cloned()
-					.map(|i| (i, i, UintAuthorityId(i).into()))
-					.collect()
-			}),
-		}
-		.assimilate_storage(&mut ext)
-		.unwrap();
+		let keys: Vec<_> = NEXT_VALIDATORS.with(|l|
+			l.borrow().iter().cloned().map(|i| (i, i, UintAuthorityId(i).into())).collect()
+		);
+		BasicExternalities::execute_with_storage(&mut t, || {
+			for (ref k, ..) in &keys {
+				frame_system::Pallet::<Test>::inc_providers(k);
+			}
+		});
 
+		crate::GenesisConfig::<Test>{ keys }.assimilate_storage(&mut t).unwrap();
 
-		let mut ext = sp_io::TestExternalities::new(ext);
+		let mut ext = sp_io::TestExternalities::new(t);
 
 		let (offchain, offchain_state) = TestOffchainExt::with_offchain_db(ext.offchain_db());
 
@@ -182,7 +182,8 @@ mod tests {
 		seed[0..4].copy_from_slice(&ITERATIONS.to_le_bytes());
 		offchain_state.write().seed = seed;
 
-		ext.register_extension(OffchainExt::new(offchain));
+		ext.register_extension(OffchainDbExt::new(offchain.clone()));
+		ext.register_extension(OffchainWorkerExt::new(offchain));
 		ext
 	}
 

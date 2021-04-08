@@ -37,7 +37,7 @@ use sc_block_builder::BlockBuilderProvider;
 use sp_consensus::BlockOrigin;
 
 fn pool() -> Pool<TestApi> {
-	Pool::new(Default::default(), TestApi::with_alice_nonce(209).into())
+	Pool::new(Default::default(), true.into(), TestApi::with_alice_nonce(209).into())
 }
 
 fn maintained_pool() -> (
@@ -161,7 +161,7 @@ fn should_correctly_prune_transactions_providing_more_than_one_tag() {
 	api.set_valid_modifier(Box::new(|v: &mut ValidTransaction| {
 		v.provides.push(vec![155]);
 	}));
-	let pool = Pool::new(Default::default(), api.clone());
+	let pool = Pool::new(Default::default(), true.into(), api.clone());
 	let xt = uxt(Alice, 209);
 	block_on(pool.submit_one(&BlockId::number(0), SOURCE, xt.clone())).expect("1. Imported");
 	assert_eq!(pool.validated_pool().status().ready, 1);
@@ -985,7 +985,7 @@ fn import_notification_to_pool_maintain_works() {
 	let mut block_builder = client.new_block(Default::default()).unwrap();
 	block_builder.push(xt).unwrap();
 	let block = block_builder.build().unwrap().block;
-	client.import(BlockOrigin::Own, block).unwrap();
+	block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
 	// Get the notification of the block import and maintain the pool with it,
 	// Now, the pool should not contain any transactions.

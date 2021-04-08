@@ -21,8 +21,8 @@
 use crate::arg_enums::Database;
 use crate::error::Result;
 use crate::{
-	init_logger, DatabaseParams, ImportParams, KeystoreParams, NetworkParams, NodeKeyParams,
-	OffchainWorkerParams, PruningParams, SharedParams, SubstrateCli, InitLoggerParams,
+	DatabaseParams, ImportParams, KeystoreParams, NetworkParams, NodeKeyParams,
+	OffchainWorkerParams, PruningParams, SharedParams, SubstrateCli,
 };
 use log::warn;
 use names::{Generator, Name};
@@ -32,7 +32,8 @@ use sc_service::config::{
 	NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode, Role, RpcMethods,
 	TaskExecutor, TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
 };
-use sc_service::{ChainSpec, TracingReceiver};
+use sc_service::{ChainSpec, TracingReceiver, KeepBlocks, TransactionStorageMode};
+use sc_tracing::logging::LoggerBuilder;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
@@ -203,6 +204,13 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			.unwrap_or_default())
 	}
 
+	/// Get the database transaction storage scheme.
+	fn database_transaction_storage(&self) -> Result<TransactionStorageMode> {
+		Ok(self.database_params()
+			.map(|x| x.transaction_storage())
+			.unwrap_or(TransactionStorageMode::BlockBody))
+	}
+
 	/// Get the database backend variant.
 	///
 	/// By default this is retrieved from `DatabaseParams` if it is available. Otherwise its `None`.
@@ -244,14 +252,24 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(Default::default())
 	}
 
-	/// Get the pruning mode.
+	/// Get the state pruning mode.
 	///
 	/// By default this is retrieved from `PruningMode` if it is available. Otherwise its
 	/// `PruningMode::default()`.
-	fn pruning(&self, unsafe_pruning: bool, role: &Role) -> Result<PruningMode> {
+	fn state_pruning(&self, unsafe_pruning: bool, role: &Role) -> Result<PruningMode> {
 		self.pruning_params()
-			.map(|x| x.pruning(unsafe_pruning, role))
+			.map(|x| x.state_pruning(unsafe_pruning, role))
 			.unwrap_or_else(|| Ok(Default::default()))
+	}
+
+	/// Get the block pruning mode.
+	///
+	/// By default this is retrieved from `block_pruning` if it is available. Otherwise its
+	/// `KeepBlocks::All`.
+	fn keep_blocks(&self) -> Result<KeepBlocks> {
+		self.pruning_params()
+			.map(|x| x.keep_blocks())
+			.unwrap_or_else(|| Ok(KeepBlocks::All))
 	}
 
 	/// Get the chain ID (string).
@@ -466,8 +484,9 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		let node_key = self.node_key(&net_config_dir)?;
 		let role = self.role(is_dev)?;
 		let max_runtime_instances = self.max_runtime_instances()?.unwrap_or(8);
-		let is_validator = role.is_network_authority();
+		let is_validator = role.is_authority();
 		let (keystore_remote, keystore) = self.keystore_config(&config_dir)?;
+		let telemetry_endpoints = self.telemetry_endpoints(&chain_spec)?;
 
 		let unsafe_pruning = self
 			.import_params()
@@ -493,7 +512,9 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			database: self.database_config(&config_dir, database_cache_size, database)?,
 			state_cache_size: self.state_cache_size()?,
 			state_cache_child_ratio: self.state_cache_child_ratio()?,
-			pruning: self.pruning(unsafe_pruning, &role)?,
+			state_pruning: self.state_pruning(unsafe_pruning, &role)?,
+			keep_blocks: self.keep_blocks()?,
+			transaction_storage: self.database_transaction_storage()?,
 			wasm_method: self.wasm_method()?,
 			wasm_runtime_overrides: self.wasm_runtime_overrides(),
 			execution_strategies: self.execution_strategies(is_dev, is_validator)?,
@@ -504,7 +525,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			rpc_ws_max_connections: self.rpc_ws_max_connections()?,
 			rpc_cors: self.rpc_cors(is_dev)?,
 			prometheus_config: self.prometheus_config(DCV::prometheus_listen_port())?,
-			telemetry_endpoints: self.telemetry_endpoints(&chain_spec)?,
+			telemetry_endpoints,
 			telemetry_external_transport: self.telemetry_external_transport()?,
 			default_heap_pages: self.default_heap_pages()?,
 			offchain_worker: self.offchain_worker(&role)?,
@@ -551,27 +572,27 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	/// 2. Initializes the logger
 	/// 3. Raises the FD limit
 	fn init<C: SubstrateCli>(&self) -> Result<()> {
-		let logger_pattern = self.log_filters()?;
-		let tracing_receiver = self.tracing_receiver()?;
-		let tracing_targets = self.tracing_targets()?;
-		let disable_log_reloading = self.is_log_filter_reloading_disabled()?;
-		let disable_log_color = self.disable_log_color()?;
-
 		sp_panic_handler::set(&C::support_url(), &C::impl_version());
 
-		init_logger(InitLoggerParams {
-			pattern: logger_pattern,
-			tracing_receiver,
-			tracing_targets,
-			disable_log_reloading,
-			disable_log_color,
-		})?;
+		let mut logger = LoggerBuilder::new(self.log_filters()?);
+		logger.with_log_reloading(!self.is_log_filter_reloading_disabled()?);
+
+		if let Some(tracing_targets) = self.tracing_targets()? {
+			let tracing_receiver = self.tracing_receiver()?;
+			logger.with_profiling(tracing_receiver, tracing_targets);
+		}
+
+		if self.disable_log_color()? {
+			logger.with_colors(false);
+		}
+
+		logger.init()?;
 
 		if let Some(new_limit) = fdlimit::raise_fd_limit() {
 			if new_limit < RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT {
 				warn!(
 					"Low open file descriptor limit configured for the process. \
-					 Current value: {:?}, recommended value: {:?}.",
+					Current value: {:?}, recommended value: {:?}.",
 					new_limit, RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT,
 				);
 			}

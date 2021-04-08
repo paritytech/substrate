@@ -95,7 +95,7 @@ impl BlockAttributes {
 }
 
 impl Encode for BlockAttributes {
-	fn encode_to<T: Output>(&self, dest: &mut T) {
+	fn encode_to<T: Output + ?Sized>(&self, dest: &mut T) {
 		dest.push_byte(self.bits())
 	}
 }
@@ -144,11 +144,31 @@ pub struct RemoteReadResponse {
 	pub proof: StorageProof,
 }
 
+/// Announcement summary used for debug logging.
+#[derive(Debug)]
+pub struct AnnouncementSummary<H: HeaderT> {
+	block_hash: H::Hash,
+	number: H::Number,
+	parent_hash: H::Hash,
+	state: Option<BlockState>,
+}
+
+impl<H: HeaderT> generic::BlockAnnounce<H> {
+	pub fn summary(&self) -> AnnouncementSummary<H> {
+		AnnouncementSummary {
+			block_hash: self.header.hash(),
+			number: *self.header.number(),
+			parent_hash: self.header.parent_hash().clone(),
+			state: self.state,
+		}
+	}
+}
+
 /// Generic types.
 pub mod generic {
 	use bitflags::bitflags;
 	use codec::{Encode, Decode, Input, Output};
-	use sp_runtime::Justification;
+	use sp_runtime::EncodedJustification;
 	use super::{
 		RemoteReadResponse, Transactions, Direction,
 		RequestId, BlockAttributes, RemoteCallResponse, ConsensusEngineId,
@@ -191,14 +211,13 @@ pub mod generic {
 			match roles {
 				crate::config::Role::Full => Roles::FULL,
 				crate::config::Role::Light => Roles::LIGHT,
-				crate::config::Role::Sentry { .. } => Roles::AUTHORITY,
 				crate::config::Role::Authority { .. } => Roles::AUTHORITY,
 			}
 		}
 	}
 
 	impl codec::Encode for Roles {
-		fn encode_to<T: codec::Output>(&self, dest: &mut T) {
+		fn encode_to<T: codec::Output + ?Sized>(&self, dest: &mut T) {
 			dest.push_byte(self.bits())
 		}
 	}
@@ -234,7 +253,7 @@ pub mod generic {
 		/// Block message queue if requested.
 		pub message_queue: Option<Vec<u8>>,
 		/// Justification if requested.
-		pub justification: Option<Justification>,
+		pub justification: Option<EncodedJustification>,
 	}
 
 	/// Identifies starting point of a block sequence.
@@ -282,32 +301,8 @@ pub mod generic {
 		/// Batch of consensus protocol messages.
 		// NOTE: index is incremented by 2 due to finality proof related
 		// messages that were removed.
-		#[codec(index = "17")]
+		#[codec(index = 17)]
 		ConsensusBatch(Vec<ConsensusMessage>),
-	}
-
-	impl<Header, Hash, Number, Extrinsic> Message<Header, Hash, Number, Extrinsic> {
-		/// Message id useful for logging.
-		pub fn id(&self) -> &'static str {
-			match self {
-				Message::Status(_) => "Status",
-				Message::BlockRequest(_) => "BlockRequest",
-				Message::BlockResponse(_) => "BlockResponse",
-				Message::BlockAnnounce(_) => "BlockAnnounce",
-				Message::Transactions(_) => "Transactions",
-				Message::Consensus(_) => "Consensus",
-				Message::RemoteCallRequest(_) => "RemoteCallRequest",
-				Message::RemoteCallResponse(_) => "RemoteCallResponse",
-				Message::RemoteReadRequest(_) => "RemoteReadRequest",
-				Message::RemoteReadResponse(_) => "RemoteReadResponse",
-				Message::RemoteHeaderRequest(_) => "RemoteHeaderRequest",
-				Message::RemoteHeaderResponse(_) => "RemoteHeaderResponse",
-				Message::RemoteChangesRequest(_) => "RemoteChangesRequest",
-				Message::RemoteChangesResponse(_) => "RemoteChangesResponse",
-				Message::RemoteReadChildRequest(_) => "RemoteReadChildRequest",
-				Message::ConsensusBatch(_) => "ConsensusBatch",
-			}
-		}
 	}
 
 	/// Status sent on connection.
@@ -426,7 +421,7 @@ pub mod generic {
 	// This assumes that the packet contains nothing but the announcement message.
 	// TODO: Get rid of it once protocol v4 is common.
 	impl<H: Encode> Encode for BlockAnnounce<H> {
-		fn encode_to<T: Output>(&self, dest: &mut T) {
+		fn encode_to<T: Output + ?Sized>(&self, dest: &mut T) {
 			self.header.encode_to(dest);
 			if let Some(state) = &self.state {
 				state.encode_to(dest);

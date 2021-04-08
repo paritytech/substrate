@@ -26,7 +26,7 @@ use sp_state_machine::StateMachine;
 use sp_externalities::Extensions;
 use sc_service::{Configuration, NativeExecutionDispatch};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use sp_core::offchain::{OffchainExt, testing::TestOffchainExt};
+use sp_core::offchain::{OffchainWorkerExt, testing::TestOffchainExt};
 use sp_keystore::{
 	SyncCryptoStorePtr, KeystoreExt,
 	testing::KeyStore,
@@ -62,7 +62,6 @@ impl BenchmarkCmd {
 
 		let genesis_storage = spec.build_storage()?;
 		let mut changes = Default::default();
-		let mut offchain_changes = Default::default();
 		let cache_size = Some(self.database_cache_size as usize);
 		let state = BenchmarkingState::<BB>::new(genesis_storage, cache_size)?;
 		let executor = NativeExecutor::<ExecDispatch>::new(
@@ -74,13 +73,12 @@ impl BenchmarkCmd {
 		let mut extensions = Extensions::default();
 		extensions.register(KeystoreExt(Arc::new(KeyStore::new()) as SyncCryptoStorePtr));
 		let (offchain, _) = TestOffchainExt::new();
-		extensions.register(OffchainExt::new(offchain));
+		extensions.register(OffchainWorkerExt::new(offchain));
 
 		let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
 			&state,
 			None,
 			&mut changes,
-			&mut offchain_changes,
 			&executor,
 			"Benchmark_dispatch_benchmark",
 			&(
@@ -174,7 +172,7 @@ impl BenchmarkCmd {
 					}
 				}
 			},
-			Err(error) => eprintln!("Error: {:?}", error),
+			Err(error) => eprintln!("Error: {}", error),
 		}
 
 		Ok(())

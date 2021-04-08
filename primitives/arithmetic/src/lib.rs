@@ -114,19 +114,16 @@ impl_normalize_for_numeric!(u8, u16, u32, u64, u128);
 
 impl<P: PerThing> Normalizable<P> for Vec<P> {
 	fn normalize(&self, targeted_sum: P) -> Result<Vec<P>, &'static str> {
-		let inners = self
-			.iter()
-			.map(|p| p.clone().deconstruct().into())
-			.collect::<Vec<_>>();
+		let uppers =
+			self.iter().map(|p| <UpperOf<P>>::from(p.clone().deconstruct())).collect::<Vec<_>>();
 
-		let normalized = normalize(inners.as_ref(), targeted_sum.deconstruct().into())?;
+		let normalized =
+			normalize(uppers.as_ref(), <UpperOf<P>>::from(targeted_sum.deconstruct()))?;
 
-		Ok(
-			normalized
-				.into_iter()
-				.map(|i: UpperOf<P>| P::from_parts(i.saturated_into()))
-				.collect()
-		)
+		Ok(normalized
+			.into_iter()
+			.map(|i: UpperOf<P>| P::from_parts(i.saturated_into::<P::Inner>()))
+			.collect())
 	}
 }
 
@@ -206,7 +203,7 @@ pub fn normalize<T>(input: &[T], targeted_sum: T) -> Result<Vec<T>, &'static str
 					.expect("Proof provided in the module doc; qed.");
 				if output_with_idx[min_index].1 >= threshold {
 					min_index += 1;
-					min_index = min_index % count;
+					min_index %= count;
 				}
 			}
 		}
@@ -218,7 +215,7 @@ pub fn normalize<T>(input: &[T], targeted_sum: T) -> Result<Vec<T>, &'static str
 				.expect("Proof provided in the module doc; qed.");
 			if output_with_idx[min_index].1 >= threshold {
 				min_index += 1;
-				min_index = min_index % count;
+				min_index %= count;
 			}
 			leftover -= One::one()
 		}
@@ -497,7 +494,7 @@ mod threshold_compare_tests {
 	fn peru16_rational_does_not_overflow() {
 		// A historical example that will panic only for per_thing type that are created with
 		// maximum capacity of their type, e.g. PerU16.
-		let _ = PerU16::from_rational_approximation(17424870u32, 17424870);
+		let _ = PerU16::from_rational(17424870u32, 17424870);
 	}
 
 	#[test]

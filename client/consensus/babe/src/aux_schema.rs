@@ -18,8 +18,6 @@
 
 //! Schema for BABE epoch changes in the aux-db.
 
-use std::sync::Arc;
-use parking_lot::Mutex;
 use log::info;
 use codec::{Decode, Encode};
 
@@ -44,7 +42,7 @@ fn load_decode<B, T>(backend: &B, key: &[u8]) -> ClientResult<Option<T>>
 		T: Decode,
 {
 	let corrupt = |e: codec::Error| {
-		ClientError::Backend(format!("BABE DB is corrupted. Decode error: {}", e.what()))
+		ClientError::Backend(format!("BABE DB is corrupted. Decode error: {}", e))
 	};
 	match backend.get_aux(key)? {
 		None => Ok(None),
@@ -79,18 +77,19 @@ pub fn load_epoch_changes<Block: BlockT, B: AuxStore>(
 		},
 	};
 
-	let epoch_changes = Arc::new(Mutex::new(maybe_epoch_changes.unwrap_or_else(|| {
-		info!(target: "babe",
-			  "👶 Creating empty BABE epoch changes on what appears to be first startup."
+	let epoch_changes = SharedEpochChanges::<Block, Epoch>::new(maybe_epoch_changes.unwrap_or_else(|| {
+		info!(
+			target: "babe",
+			"👶 Creating empty BABE epoch changes on what appears to be first startup.",
 		);
 		EpochChangesFor::<Block, Epoch>::default()
-	})));
+	}));
 
 	// rebalance the tree after deserialization. this isn't strictly necessary
 	// since the tree is now rebalanced on every update operation. but since the
 	// tree wasn't rebalanced initially it's useful to temporarily leave it here
 	// to avoid having to wait until an import for rebalancing.
-	epoch_changes.lock().rebalance();
+	epoch_changes.shared_data().rebalance();
 
 	Ok(epoch_changes)
 }
@@ -151,7 +150,7 @@ mod test {
 	#[test]
 	fn load_decode_from_v0_epoch_changes() {
 		let epoch = EpochV0 {
-			start_slot: 0,
+			start_slot: 0.into(),
 			authorities: vec![],
 			randomness: [0; 32],
 			epoch_index: 1,
@@ -189,19 +188,19 @@ mod test {
 		).unwrap();
 
 		assert!(
-			epoch_changes.lock()
+			epoch_changes.shared_data()
 				.tree()
 				.iter()
 				.map(|(_, _, epoch)| epoch.clone())
 				.collect::<Vec<_>>() ==
 				vec![PersistedEpochHeader::Regular(EpochHeader {
-					start_slot: 0,
-					end_slot: 100,
+					start_slot: 0.into(),
+					end_slot: 100.into(),
 				})],
 		); // PersistedEpochHeader does not implement Debug, so we use assert! directly.
 
 		write_epoch_changes::<TestBlock, _, _>(
-			&epoch_changes.lock(),
+			&epoch_changes.shared_data(),
 			|values| {
 				client.insert_aux(values, &[]).unwrap();
 			},

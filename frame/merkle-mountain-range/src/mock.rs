@@ -16,12 +16,11 @@
 // limitations under the License.
 
 use crate::*;
-use crate::primitives::{LeafDataProvider, Compact};
+use crate as pallet_mmr;
 
 use codec::{Encode, Decode};
-use frame_support::{
-	impl_outer_origin, parameter_types,
-};
+use frame_support::parameter_types;
+use pallet_mmr_primitives::{LeafDataProvider, Compact};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -32,19 +31,27 @@ use sp_runtime::{
 use sp_std::cell::RefCell;
 use sp_std::prelude::*;
 
-impl_outer_origin! {
-	pub enum Origin for Test where system = frame_system {}
-}
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
 
-#[derive(Clone, Eq, PartialEq, Encode, Decode)]
-pub struct Test;
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		MMR: pallet_mmr::{Pallet, Call, Storage},
+	}
+);
+
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = ();
 	type Origin = Origin;
-	type Call = ();
+	type Call = Call;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -52,18 +59,19 @@ impl frame_system::Config for Test {
 	type AccountId = sp_core::sr25519::Public;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = ();
+	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type DbWeight = ();
 	type BlockWeights = ();
 	type BlockLength = ();
 	type Version = ();
-	type PalletInfo = ();
+	type PalletInfo = PalletInfo;
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 
 impl Config for Test {
@@ -71,7 +79,7 @@ impl Config for Test {
 
 	type Hashing = Keccak256;
 	type Hash = H256;
-	type LeafData = Compact<Keccak256, (frame_system::Module<Test>, LeafData)>;
+	type LeafData = Compact<Keccak256, (frame_system::Pallet<Test>, LeafData)>;
 	type OnNewRoot = ();
 	type WeightInfo = ();
 }
@@ -102,5 +110,3 @@ impl LeafDataProvider for LeafData {
 		LEAF_DATA.with(|r| r.borrow().clone())
 	}
 }
-
-pub(crate) type MMR = Module<Test>;

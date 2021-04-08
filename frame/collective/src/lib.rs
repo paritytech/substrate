@@ -40,7 +40,7 @@
 //! If there are not, or if no prime is set, then the motion is dropped without being executed.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![recursion_limit="128"]
+#![recursion_limit = "128"]
 
 use sp_std::{prelude::*, result};
 use sp_core::u32_trait::Value as U32;
@@ -49,7 +49,7 @@ use sp_runtime::{RuntimeDebug, traits::Hash};
 
 use frame_support::{
 	codec::{Decode, Encode},
-	debug, decl_error, decl_event, decl_module, decl_storage,
+	decl_error, decl_event, decl_module, decl_storage,
 	dispatch::{
 		DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable, Parameter,
 		PostDispatchInfo,
@@ -320,19 +320,21 @@ decl_module! {
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			if new_members.len() > T::MaxMembers::get() as usize {
-				debug::error!(
-					"New members count exceeds maximum amount of members expected. (expected: {}, actual: {})",
+				log::error!(
+					target: "runtime::collective",
+					"New members count ({}) exceeds maximum amount of members expected ({}).",
+					new_members.len(),
 					T::MaxMembers::get(),
-					new_members.len()
 				);
 			}
 
 			let old = Members::<T, I>::get();
 			if old.len() > old_count as usize {
-				debug::warn!(
-					"Wrong count used to estimate set_members weight. (expected: {}, actual: {})",
+				log::warn!(
+					target: "runtime::collective",
+					"Wrong count used to estimate set_members weight. expected ({}) vs actual ({})",
 					old_count,
-					old.len()
+					old.len(),
 				);
 			}
 			let mut new_members = new_members;
@@ -470,7 +472,7 @@ decl_module! {
 				let index = Self::proposal_count();
 				<ProposalCount<I>>::mutate(|i| *i += 1);
 				<ProposalOf<T, I>>::insert(proposal_hash, *proposal);
-				let end = system::Module::<T>::block_number() + T::MotionDuration::get();
+				let end = system::Pallet::<T>::block_number() + T::MotionDuration::get();
 				let votes = Votes { index, threshold, ayes: vec![who.clone()], nays: vec![], end };
 				<Voting<T, I>>::insert(proposal_hash, votes);
 
@@ -645,7 +647,7 @@ decl_module! {
 			}
 
 			// Only allow actual closing of the proposal after the voting period has ended.
-			ensure!(system::Module::<T>::block_number() >= voting.end, Error::<T, I>::TooEarly);
+			ensure!(system::Pallet::<T>::block_number() >= voting.end, Error::<T, I>::TooEarly);
 
 			let prime_vote = Self::prime().map(|who| voting.ayes.iter().any(|a| a == &who));
 
@@ -811,10 +813,11 @@ impl<T: Config<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
 		new: &[T::AccountId],
 	) {
 		if new.len() > T::MaxMembers::get() as usize {
-			debug::error!(
-				"New members count exceeds maximum amount of members expected. (expected: {}, actual: {})",
+			log::error!(
+				target: "runtime::collective",
+				"New members count ({}) exceeds maximum amount of members expected ({}).",
+				new.len(),
 				T::MaxMembers::get(),
-				new.len()
 			);
 		}
 		// remove accounts from all current voting in motions.
@@ -839,6 +842,10 @@ impl<T: Config<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
 
 	fn set_prime(prime: Option<T::AccountId>) {
 		Prime::<T, I>::set(prime);
+	}
+
+	fn get_prime() -> Option<T::AccountId> {
+		Prime::<T, I>::get()
 	}
 }
 
@@ -961,7 +968,7 @@ mod tests {
 	use hex_literal::hex;
 	use sp_core::H256;
 	use sp_runtime::{
-		traits::{BlakeTwo256, IdentityLookup, Block as BlockT}, testing::Header,
+		traits::{BlakeTwo256, IdentityLookup}, testing::Header,
 		BuildStorage,
 	};
 	use crate as collective;
@@ -991,12 +998,13 @@ mod tests {
 		type Event = Event;
 		type BlockHashCount = BlockHashCount;
 		type Version = ();
-		type PalletInfo = ();
+		type PalletInfo = PalletInfo;
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
+		type OnSetCode = ();
 	}
 	impl Config<Instance1> for Test {
 		type Origin = Origin;
@@ -1038,24 +1046,24 @@ mod tests {
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic
 		{
-			System: system::{Module, Call, Event<T>},
-			Collective: collective::<Instance1>::{Module, Call, Event<T>, Origin<T>, Config<T>},
-			CollectiveMajority: collective::<Instance2>::{Module, Call, Event<T>, Origin<T>, Config<T>},
-			DefaultCollective: collective::{Module, Call, Event<T>, Origin<T>, Config<T>},
+			System: system::{Pallet, Call, Event<T>},
+			Collective: collective::<Instance1>::{Pallet, Call, Event<T>, Origin<T>, Config<T>},
+			CollectiveMajority: collective::<Instance2>::{Pallet, Call, Event<T>, Origin<T>, Config<T>},
+			DefaultCollective: collective::{Pallet, Call, Event<T>, Origin<T>, Config<T>},
 		}
 	);
 
 	pub fn new_test_ext() -> sp_io::TestExternalities {
 		let mut ext: sp_io::TestExternalities = GenesisConfig {
-			collective_Instance1: Some(collective::GenesisConfig {
+			collective_Instance1: collective::GenesisConfig {
 				members: vec![1, 2, 3],
 				phantom: Default::default(),
-			}),
-			collective_Instance2: Some(collective::GenesisConfig {
+			},
+			collective_Instance2: collective::GenesisConfig {
 				members: vec![1, 2, 3, 4, 5],
 				phantom: Default::default(),
-			}),
-			collective: None,
+			},
+			collective: Default::default(),
 		}.build_storage().unwrap().into();
 		ext.execute_with(|| System::set_block_number(1));
 		ext

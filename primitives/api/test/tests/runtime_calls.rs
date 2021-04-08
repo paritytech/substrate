@@ -50,10 +50,7 @@ fn calling_wasm_runtime_function() {
 }
 
 #[test]
-#[should_panic(
-	expected =
-		"Could not convert parameter `param` between node and runtime: DecodeFails always fails"
-)]
+#[should_panic(expected = "FailedToConvertParameter { function: \"fail_convert_parameter\"")]
 fn calling_native_runtime_function_with_non_decodable_parameter() {
 	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::NativeWhenPossible).build();
 	let runtime_api = client.runtime_api();
@@ -62,7 +59,7 @@ fn calling_native_runtime_function_with_non_decodable_parameter() {
 }
 
 #[test]
-#[should_panic(expected = "Could not convert return value from runtime to node!")]
+#[should_panic(expected = "FailedToConvertReturnValue { function: \"fail_convert_return_value\"")]
 fn calling_native_runtime_function_with_non_decodable_return_value() {
 	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::NativeWhenPossible).build();
 	let runtime_api = client.runtime_api();
@@ -217,4 +214,35 @@ fn call_runtime_api_with_multiple_arguments() {
 	client.runtime_api()
 		.test_multiple_arguments(&block_id, data.clone(), data.clone(), data.len() as u32)
 		.unwrap();
+}
+
+#[test]
+fn disable_logging_works() {
+	if std::env::var("RUN_TEST").is_ok() {
+		sp_tracing::try_init_simple();
+
+		let mut builder = TestClientBuilder::new()
+			.set_execution_strategy(ExecutionStrategy::AlwaysWasm);
+		builder.genesis_init_mut().set_wasm_code(
+			substrate_test_runtime_client::runtime::wasm_binary_logging_disabled_unwrap().to_vec(),
+		);
+
+		let client = builder.build();
+		let runtime_api = client.runtime_api();
+		let block_id = BlockId::Number(0);
+		runtime_api.do_trace_log(&block_id).expect("Logging should not fail");
+		log::error!("Logging from native works");
+	} else {
+		let executable = std::env::current_exe().unwrap();
+		let output = std::process::Command::new(executable)
+			.env("RUN_TEST", "1")
+			.env("RUST_LOG", "info")
+			.args(&["--nocapture", "disable_logging_works"])
+			.output()
+			.unwrap();
+
+		let output = dbg!(String::from_utf8(output.stderr).unwrap());
+		assert!(!output.contains("Hey I'm runtime"));
+		assert!(output.contains("Logging from native works"));
+	}
 }

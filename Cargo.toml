@@ -1,4 +1,6 @@
 [workspace]
+resolver = "2"
+
 members = [
 	"bin/node-template/node",
 	"bin/node-template/pallets/template",
@@ -6,6 +8,7 @@ members = [
 	"bin/node/bench",
 	"bin/node/browser-testing",
 	"bin/node/cli",
+	"bin/node/test-runner-example",
 	"bin/node/executor",
 	"bin/node/primitives",
 	"bin/node/rpc",
@@ -21,7 +24,6 @@ members = [
 	"client/chain-spec",
 	"client/chain-spec/derive",
 	"client/cli",
-	"client/cli/proc-macro",
 	"client/consensus/aura",
 	"client/consensus/babe",
 	"client/consensus/babe/rpc",
@@ -38,6 +40,7 @@ members = [
 	"client/executor/wasmi",
 	"client/executor/wasmtime",
 	"client/finality-grandpa",
+	"client/finality-grandpa-warp-sync",
 	"client/informant",
 	"client/keystore",
 	"client/light",
@@ -56,6 +59,7 @@ members = [
 	"client/sync-state-rpc",
 	"client/telemetry",
 	"client/tracing",
+	"client/tracing/proc-macro",
 	"client/transaction-pool",
 	"client/transaction-pool/graph",
 	"frame/assets",
@@ -72,11 +76,15 @@ members = [
 	"frame/contracts/rpc",
 	"frame/contracts/rpc/runtime-api",
 	"frame/democracy",
+	"frame/try-runtime",
 	"frame/elections",
+	"frame/election-provider-multi-phase",
+	"frame/election-provider-support",
 	"frame/example",
 	"frame/example-offchain-worker",
 	"frame/example-parallel",
 	"frame/executive",
+	"frame/gilt",
 	"frame/grandpa",
 	"frame/identity",
 	"frame/im-online",
@@ -84,6 +92,8 @@ members = [
 	"frame/lottery",
 	"frame/membership",
 	"frame/merkle-mountain-range",
+	"frame/merkle-mountain-range/primitives",
+	"frame/merkle-mountain-range/rpc",
 	"frame/metadata",
 	"frame/multisig",
 	"frame/nicks",
@@ -98,8 +108,8 @@ members = [
 	"frame/session/benchmarking",
 	"frame/society",
 	"frame/staking",
-	"frame/staking/fuzzer",
 	"frame/staking/reward-curve",
+	"frame/staking/reward-fn",
 	"frame/sudo",
 	"frame/support",
 	"frame/support/procedural",
@@ -177,12 +187,15 @@ members = [
 	"test-utils/runtime",
 	"test-utils/runtime/client",
 	"test-utils/runtime/transaction-pool",
+	"test-utils/test-runner",
 	"test-utils/test-crate",
 	"utils/browser",
 	"utils/build-script-utils",
 	"utils/fork-tree",
 	"utils/frame/benchmarking-cli",
+	"utils/frame/remote-externalities",
 	"utils/frame/frame-utilities-cli",
+	"utils/frame/try-runtime/cli",
 	"utils/frame/rpc/support",
 	"utils/frame/rpc/system",
 	"utils/prometheus",
@@ -255,7 +268,3 @@ zeroize = { opt-level = 3 }
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
-
-[patch.crates-io]
-trie-db = { git = 'https://github.com/cheme/trie', branch = 'skip_compact_values_alt' }
-hash-db = { git = 'https://github.com/cheme/trie', branch = 'skip_compact_values_alt' }

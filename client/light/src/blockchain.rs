@@ -21,7 +21,7 @@
 
 use std::sync::Arc;
 
-use sp_runtime::{Justification, generic::BlockId};
+use sp_runtime::{Justifications, generic::BlockId};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
 
 use sp_blockchain::{
@@ -109,7 +109,7 @@ impl<S, Block> BlockchainBackend<Block> for Blockchain<S> where Block: BlockT, S
 		Err(ClientError::NotAvailableOnLightClient)
 	}
 
-	fn justification(&self, _id: BlockId<Block>) -> ClientResult<Option<Justification>> {
+	fn justifications(&self, _id: BlockId<Block>) -> ClientResult<Option<Justifications>> {
 		Err(ClientError::NotAvailableOnLightClient)
 	}
 
@@ -126,6 +126,13 @@ impl<S, Block> BlockchainBackend<Block> for Blockchain<S> where Block: BlockT, S
 	}
 
 	fn children(&self, _parent_hash: Block::Hash) -> ClientResult<Vec<Block::Hash>> {
+		Err(ClientError::NotAvailableOnLightClient)
+	}
+
+	fn indexed_transaction(
+		&self,
+		_hash: &Block::Hash,
+	) -> ClientResult<Option<Vec<u8>>> {
 		Err(ClientError::NotAvailableOnLightClient)
 	}
 }
