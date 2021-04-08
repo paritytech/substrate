@@ -79,7 +79,7 @@ pub trait OriginTrait: Sized {
 	/// Do something with the caller, consuming self but returning it if the caller was unused.
 	fn try_with_caller<R>(
 		self,
-		f: impl FnOnce(Self::PalletsOrigin) -> Result<R, Self::PalletsOrigin>
+		f: impl FnOnce(Self::PalletsOrigin) -> Result<R, Self::PalletsOrigin>,
 	) -> Result<R, Self>;
 
 	/// Create with system none origin and `frame-system::Config::BaseCallFilter`.

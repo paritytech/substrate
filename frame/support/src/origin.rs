@@ -322,6 +322,7 @@ macro_rules! impl_outer_origin {
 				}
 			}
 		}
+
 		impl From<$system::Origin<$runtime>> for $name {
 			/// Convert to runtime origin:
 			/// * root origin is built with no filter
