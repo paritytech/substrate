@@ -126,7 +126,8 @@ impl BenchmarkCmd {
 						// Print the table header
 						batch.results[0].components.iter().for_each(|param| print!("{:?},", param.0));
 
-						print!("extrinsic_time_ns,storage_root_time_ns,reads,repeat_reads,writes,repeat_writes,proof_size_bytes,compact_proof_size_bytes\n");
+						print!("extrinsic_time_ns,storage_root_time_ns,reads,repeat_reads,
+							\\writes,repeat_writes,proof_size_bytes,compact_proof_size_bytes\n");
 						// Print the values
 						batch.results.iter().for_each(|result| {
 							let parameters = &result.components;
