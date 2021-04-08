@@ -23,7 +23,7 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 
 use hash_db::{Prefix, Hasher};
-use sp_trie::{MemoryDB, prefixed_key, StorageProof};
+use sp_trie::{MemoryDB, prefixed_key, StorageProof, encode_compact};
 use sp_core::{
 	storage::{ChildInfo, TrackedStorageKey},
 	hexdisplay::HexDisplay
@@ -517,14 +517,20 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		self.state.borrow().as_ref().map_or(sp_state_machine::UsageInfo::empty(), |s| s.usage_info())
 	}
 
-	fn proof_size(&self) -> Option<u32> {
+	fn proof_size(&self) -> Option<(u32, u32)> {
 		self.proof_recorder.as_ref().map(|recorder| {
 			let proof = StorageProof::new(recorder
 				.read()
 				.iter()
 				.filter_map(|(_k, v)| v.as_ref().map(|v| v.to_vec()))
 				.collect());
-			proof.encoded_size() as u32
+			let proof_size = proof.encoded_size() as u32;
+			let compact_proof = encode_compact::<sp_trie::Layout<HashFor<B>>>(
+				proof,
+				self.root.get(),
+			).unwrap();
+
+			(proof_size, compact_proof.encoded_size() as u32)
 		})
 	}
 }

@@ -288,7 +288,7 @@ pub trait Externalities: ExtensionStore {
 	///
 	/// Returns estimated proof size for the state queries so far.
 	/// Proof is reset on commit and wipe.
-	fn proof_size(&self) -> Option<u32> {
+	fn proof_size(&self) -> Option<(u32, u32)> {
 		None
 	}
 }

@@ -422,6 +422,7 @@ mod test {
 					writes: (base + slope * i).into(),
 					repeat_writes: 0,
 					proof_size: 0,
+					compact_proof_size: 0,
 				}
 			)
 		}

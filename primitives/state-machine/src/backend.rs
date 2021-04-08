@@ -247,7 +247,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	fn set_whitelist(&self, _: Vec<TrackedStorageKey>) {}
 
 	/// Estimate proof size
-	fn proof_size(&self) -> Option<u32> {
+	fn proof_size(&self) -> Option<(u32, u32)> {
 		unimplemented!()
 	}
 }

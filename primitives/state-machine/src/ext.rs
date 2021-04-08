@@ -713,7 +713,7 @@ where
 		self.backend.set_whitelist(new)
 	}
 
-	fn proof_size(&self) -> Option<u32> {
+	fn proof_size(&self) -> Option<(u32, u32)> {
 		self.backend.proof_size()
 	}
 }
