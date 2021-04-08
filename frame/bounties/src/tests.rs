@@ -312,7 +312,7 @@ fn pot_underflow_should_not_diminish() {
 		<Treasury as OnInitialize<u64>>::on_initialize(2);
 		assert_eq!(Treasury::pot(), 100); // Pot hasn't changed
 
-		let _ = Balances::deposit_into_existing(&Treasury::account_id(), 100).unwrap();
+		assert_ok!(Balances::deposit_into_existing(&Treasury::account_id(), 100));
 		<Treasury as OnInitialize<u64>>::on_initialize(4);
 		assert_eq!(Balances::free_balance(3), 150); // Fund has been spent
 		assert_eq!(Treasury::pot(), 25); // Pot has finally changed
@@ -689,7 +689,8 @@ fn claim_handles_high_fee() {
 		<Treasury as OnInitialize<u64>>::on_initialize(5);
 
 		// make fee > balance
-		let _ = Balances::slash(&Bounties::bounty_account_id(0), 10);
+		let res = Balances::slash(&Bounties::bounty_account_id(0), 10);
+		assert_eq!(res.0.peek(), 10);
 
 		assert_ok!(Bounties::claim_bounty(Origin::signed(1), 0));
 
