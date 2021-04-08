@@ -154,6 +154,7 @@ members = [
 	"primitives/io",
 	"primitives/keyring",
 	"primitives/keystore",
+	"primitives/maybe-compressed-blob",
 	"primitives/npos-elections",
 	"primitives/npos-elections/compact",
 	"primitives/npos-elections/fuzzer",
