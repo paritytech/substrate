@@ -320,7 +320,7 @@ where
 			serialized_addresses.as_slice(),
 		).await.map_err(|_| Error::Signing)?;
 
-		for (sign_result, key) in signatures.into_iter().zip(keys.iter()) {
+		for (sign_result, key) in signatures.into_iter().zip(keys_vec.iter()) {
 			let mut signed_addresses = vec![];
 
 			// Verify that all signatures exist for all provided keys.
