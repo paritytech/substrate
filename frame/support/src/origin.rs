@@ -246,6 +246,13 @@ macro_rules! impl_outer_origin {
 				&self.caller
 			}
 
+			fn try_with_caller<R>(mut self, f: impl FnOnce(Self::PalletsOrigin) -> Result<R, Self::PalletsOrigin>) -> Result<R, Self> {
+				match f(self.caller) {
+					Ok(r) => Ok(r),
+					Err(caller) => { self.caller = caller; Err(self) }
+				}
+			}
+
 			/// Create with system none origin and `frame-system::Config::BaseCallFilter`.
 			fn none() -> Self {
 				$system::RawOrigin::None.into()
@@ -297,6 +304,19 @@ macro_rules! impl_outer_origin {
 		impl From<$system::Origin<$runtime>> for $caller_name {
 			fn from(x: $system::Origin<$runtime>) -> Self {
 				$caller_name::system(x)
+			}
+		}
+
+		impl $crate::sp_std::convert::TryFrom<$caller_name> for $system::Origin<$runtime> {
+			type Error = $caller_name;
+			fn try_from(x: $caller_name)
+				-> $crate::sp_std::result::Result<$system::Origin<$runtime>, $caller_name>
+			{
+				if let $caller_name::system(l) = x {
+					Ok(l)
+				} else {
+					Err(x)
+				}
 			}
 		}
 		impl From<$system::Origin<$runtime>> for $name {
@@ -373,6 +393,22 @@ macro_rules! impl_outer_origin {
 							Ok(l)
 						} else {
 							Err(self)
+						}
+					}
+				}
+
+				impl $crate::sp_std::convert::TryFrom<
+					$caller_name
+				> for $module::Origin < $( $generic )? $(, $module::$generic_instance )? > {
+					type Error = $caller_name;
+					fn try_from(x: $caller_name) -> $crate::sp_std::result::Result<
+						$module::Origin < $( $generic )? $(, $module::$generic_instance )? >,
+						$caller_name,
+					> {
+						if let $caller_name::[< $module $( _ $generic_instance )? >](l) = x {
+							Ok(l)
+						} else {
+							Err(x)
 						}
 					}
 				}
