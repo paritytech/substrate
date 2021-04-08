@@ -313,9 +313,10 @@ where
 			return Ok(())
 		}
 
+		let keys_vec = keys.iter().cloned().collect::<Vec<_>>();
 		let signatures = key_store.sign_with_all(
 			key_types::AUTHORITY_DISCOVERY,
-			keys.iter().cloned().collect(),
+			keys_vec.clone(),
 			serialized_addresses.as_slice(),
 		).await.map_err(|_| Error::Signing)?;
 
