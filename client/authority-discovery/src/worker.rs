@@ -109,7 +109,8 @@ pub struct Worker<Client, Network, Block, DhtEventStream> {
 
 	/// Interval to be proactive, publishing own addresses.
 	publish_interval: ExpIncInterval,
-	/// Pro-actively publish our own addresses at this interval, if the addresses have changed.
+	/// Pro-actively publish our own addresses at this interval, if the keys in the keystore
+	/// have changed.
 	publish_if_changed_interval: ExpIncInterval,
 	/// List of keys onto which addresses have been published at the latest publication.
 	/// Used to check whether they have changed.
