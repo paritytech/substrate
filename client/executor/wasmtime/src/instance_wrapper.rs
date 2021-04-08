@@ -75,7 +75,7 @@ impl EntryPoint {
 				// the signature is checked to have i64 return type
 				results[0].unwrap_i64() as u64
 			)
-			.map_err(|err| Error::from(format!(
+			.map_err(|err| Error::RuntimePanicked(format!(
 				"Wasm execution trapped: {}",
 				err
 			)))
