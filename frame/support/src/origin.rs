@@ -246,7 +246,10 @@ macro_rules! impl_outer_origin {
 				&self.caller
 			}
 
-			fn try_with_caller<R>(mut self, f: impl FnOnce(Self::PalletsOrigin) -> Result<R, Self::PalletsOrigin>) -> Result<R, Self> {
+			fn try_with_caller<R>(
+				mut self,
+				f: impl FnOnce(Self::PalletsOrigin) -> Result<R, Self::PalletsOrigin>,
+			) -> Result<R, Self> {
 				match f(self.caller) {
 					Ok(r) => Ok(r),
 					Err(caller) => { self.caller = caller; Err(self) }
