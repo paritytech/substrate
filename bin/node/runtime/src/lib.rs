@@ -504,10 +504,6 @@ parameter_types! {
 	pub const SignedPhase: u32 = EPOCH_DURATION_IN_BLOCKS / 4;
 	pub const UnsignedPhase: u32 = EPOCH_DURATION_IN_BLOCKS / 4;
 
-	// fallback: no need to do on-chain phragmen initially.
-	pub const Fallback: pallet_election_provider_multi_phase::FallbackStrategy =
-		pallet_election_provider_multi_phase::FallbackStrategy::OnChain;
-
 	pub SolutionImprovementThreshold: Perbill = Perbill::from_rational(1u32, 10_000);
 
 	// miner configs
@@ -543,7 +539,9 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type DataProvider = Staking;
 	type OnChainAccuracy = Perbill;
 	type CompactSolution = NposCompactSolution16;
-	type Fallback = Fallback;
+	type Fallback = frame_election_provider_support::onchain::OnChainSequentialPhragmen<
+		pallet_election_provider_multi_phase::OnChainConfig<Runtime>,
+	>;
 	type WeightInfo = pallet_election_provider_multi_phase::weights::SubstrateWeight<Runtime>;
 	type BenchmarkingConfig = ();
 }

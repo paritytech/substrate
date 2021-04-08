@@ -112,9 +112,10 @@
 //!
 //! If we reach the end of both phases (i.e. call to [`ElectionProvider::elect`] happens) and no
 //! good solution is queued, then the fallback strategy [`pallet::Config::Fallback`] is used to
-//! determine what needs to be done. The on-chain election is slow, and contains no balancing or
-//! reduction post-processing. See [`onchain::OnChainSequentialPhragmen`]. The
-//! [`FallbackStrategy::Nothing`] should probably only be used for testing, and returns an error.
+//! determine what needs to be done. A fallback strategy is an [`ElectionProvider`] itself. If
+//! on-chain phragmen is to be used as fallback, this pallet is an [`ElectionDataProvider`] itself,
+//! and can act as the data provider for the fallback. This is likely to be more efficient than
+//! querying the original source of the election data (i.e. staking) again.
 //!
 //! ## Feasible Solution (correct solution)
 //!
@@ -184,24 +185,12 @@
 //! [`DesiredTargets`], no more, no less. Over time, we can change this to a [min, max] where any
 //! solution within this range is acceptable, where bigger solutions are prioritized.
 //!
-//! **Recursive Fallback**: Currently, the fallback is a separate enum. A different and fancier way
-//! of doing this would be to have the fallback be another
-//! [`frame_election_provider_support::ElectionProvider`]. In this case, this pallet can even have
-//! the on-chain election provider as fallback, or special _noop_ fallback that simply returns an
-//! error, thus replicating [`FallbackStrategy::Nothing`]. In this case, we won't need the
-//! additional config OnChainAccuracy either.
-//!
 //! **Score based on (byte) size**: We should always prioritize small solutions over bigger ones, if
 //! there is a tie. Even more harsh should be to enforce the bound of the `reduce` algorithm.
 //!
 //! **Offchain resubmit**: Essentially port <https://github.com/paritytech/substrate/pull/7976> to
 //! this pallet as well. The `OFFCHAIN_REPEAT` also needs to become an adjustable parameter of the
 //! pallet.
-//!
-//! **Make the number of nominators configurable from the runtime**. Remove `sp_npos_elections`
-//! dependency from staking and the compact solution type. It should be generated at runtime, there
-//! it should be encoded how many votes each nominators have. Essentially translate
-//! <https://github.com/paritytech/substrate/pull/7929> to this pallet.
 //!
 //! **More accurate weight for error cases**: Both `ElectionDataProvider` and `ElectionProvider`
 //! assume no weight is consumed in their functions, when operations fail with `Err`. This can
@@ -222,7 +211,7 @@ use frame_support::{
 	weights::Weight,
 };
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
-use frame_election_provider_support::{ElectionDataProvider, ElectionProvider, onchain};
+use frame_election_provider_support::{ElectionDataProvider, ElectionProvider, data_provider, onchain};
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, is_score_better, CompactSolution, ElectionScore,
 	EvaluateSupport, PerThing128, Supports, VoteWeight,
@@ -235,7 +224,7 @@ use sp_runtime::{
 	DispatchError, PerThing, Perbill, RuntimeDebug, SaturatedConversion,
 	traits::Bounded,
 };
-use sp_std::prelude::*;
+use sp_std::{prelude::*, marker::PhantomData};
 use sp_arithmetic::{
 	UpperOf,
 	traits::{Zero, CheckedAdd},
@@ -267,16 +256,6 @@ pub type CompactTargetIndexOf<T> = <CompactOf<T> as CompactSolution>::Target;
 pub type CompactAccuracyOf<T> = <CompactOf<T> as CompactSolution>::Accuracy;
 /// The accuracy of the election, when computed on-chain. Equal to [`Config::OnChainAccuracy`].
 pub type OnChainAccuracyOf<T> = <T as Config>::OnChainAccuracy;
-
-/// Wrapper type that implements the configurations needed for the on-chain backup.
-struct OnChainConfig<T: Config>(sp_std::marker::PhantomData<T>);
-impl<T: Config> onchain::Config for OnChainConfig<T> {
-	type AccountId = T::AccountId;
-	type BlockNumber = T::BlockNumber;
-	type BlockWeights = T::BlockWeights;
-	type Accuracy = T::OnChainAccuracy;
-	type DataProvider = T::DataProvider;
-}
 
 /// Configuration for the benchmarks of the pallet.
 pub trait BenchmarkingConfig {
@@ -340,19 +319,6 @@ impl<Bn: PartialEq + Eq> Phase<Bn> {
 	pub fn is_off(&self) -> bool {
 		matches!(self, Phase::Off)
 	}
-}
-
-/// A configuration for the pallet to indicate what should happen in the case of a fallback i.e.
-/// reaching a call to `elect` with no good solution.
-#[cfg_attr(test, derive(Clone))]
-pub enum FallbackStrategy {
-	/// Run a on-chain sequential phragmen.
-	///
-	/// This might burn the chain for a few minutes due to a stall, but is generally a safe
-	/// approach to maintain a sensible validator set.
-	OnChain,
-	/// Nothing. Return an error.
-	Nothing,
 }
 
 /// The type of `Computation` that provided this election data.
@@ -447,18 +413,10 @@ pub enum ElectionError {
 	Feasibility(FeasibilityError),
 	/// An error in the miner (offchain) sub-system.
 	Miner(unsigned::MinerError),
-	/// An error in the on-chain fallback.
-	OnChainFallback(onchain::Error),
 	/// An error happened in the data provider.
 	DataProvider(&'static str),
-	/// No fallback is configured. This is a special case.
-	NoFallbackConfigured,
-}
-
-impl From<onchain::Error> for ElectionError {
-	fn from(e: onchain::Error) -> Self {
-		ElectionError::OnChainFallback(e)
-	}
+	/// The fallback election provider also failed.
+	FallbackFailed,
 }
 
 impl From<FeasibilityError> for ElectionError {
@@ -555,8 +513,13 @@ pub mod pallet {
 		/// Accuracy used for fallback on-chain election.
 		type OnChainAccuracy: PerThing128;
 
-		/// Configuration for the fallback
-		type Fallback: Get<FallbackStrategy>;
+		/// The fallback. We only accept another election provider that uses us as the data
+		/// provider.
+		type Fallback: ElectionProvider<
+			Self::AccountId,
+			Self::BlockNumber,
+			DataProvider = Pallet<Self>,
+		>;
 
 		/// The configuration of benchmarking.
 		type BenchmarkingConfig: BenchmarkingConfig;
@@ -1068,23 +1031,17 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// On-chain fallback of election.
-	fn onchain_fallback() -> Result<(Supports<T::AccountId>, Weight), ElectionError> {
-		<onchain::OnChainSequentialPhragmen<OnChainConfig<T>> as ElectionProvider<
-			T::AccountId,
-			T::BlockNumber,
-		>>::elect()
-		.map_err(Into::into)
+	fn fallback() -> Result<(Supports<T::AccountId>, Weight), ElectionError> {
+		<T::Fallback as ElectionProvider<T::AccountId, T::BlockNumber>>::elect().map_err(|e| {
+			log!(error, "fallback election failed due to: {:?}", e);
+			ElectionError::FallbackFailed
+		})
 	}
 
 	fn do_elect() -> Result<(Supports<T::AccountId>, Weight), ElectionError> {
 		<QueuedSolution<T>>::take()
 			.map_or_else(
-				|| match T::Fallback::get() {
-					FallbackStrategy::OnChain => Self::onchain_fallback()
-						.map(|(s, w)| (s, w, ElectionCompute::OnChain))
-						.map_err(Into::into),
-					FallbackStrategy::Nothing => Err(ElectionError::NoFallbackConfigured),
-				},
+				|| Self::fallback().map(|(s, w)| (s, w, ElectionCompute::OnChain)),
 				|ReadySolution { supports, compute, .. }| Ok((
 					supports,
 					T::WeightInfo::elect_queued(),
@@ -1118,6 +1075,71 @@ impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for Pallet<T> {
 		Self::post_elect();
 		outcome_and_weight
 	}
+}
+
+fn maybe_trim<T>(items: Vec<T>, maybe_size: Option<usize>) -> Vec<T> {
+	if let Some(size) = maybe_size {
+		items.into_iter().take(size).collect::<Vec<T>>()
+	} else {
+		items
+	}
+}
+
+impl<T: Config> ElectionDataProvider<T::AccountId, T::BlockNumber> for Pallet<T> {
+	const MAXIMUM_VOTES_PER_VOTER: u32 = T::DataProvider::MAXIMUM_VOTES_PER_VOTER;
+
+	fn desired_targets() -> data_provider::Result<(u32, Weight)> {
+		Self::desired_targets().map(|t| (t, T::DbWeight::get().reads(1))).ok_or("No snapshot")
+	}
+
+	fn voters(
+		maybe_max_len: Option<usize>,
+	) -> data_provider::Result<(Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>, Weight)> {
+		Self::snapshot()
+			.map(|s| (maybe_trim(s.voters, maybe_max_len), T::DbWeight::get().reads(1)))
+			.ok_or("No snapshot")
+	}
+
+	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<(Vec<T::AccountId>, Weight)> {
+		Self::snapshot()
+			.map(|s| (maybe_trim(s.targets, maybe_max_len), T::DbWeight::get().reads(1)))
+			.ok_or("No snapshot")
+	}
+
+	fn next_election_prediction(now: T::BlockNumber) -> T::BlockNumber {
+		T::DataProvider::next_election_prediction(now)
+	}
+
+	#[cfg(any(feature = "runtime-benchmarks", test))]
+	fn put_snapshot(
+		_: Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
+		_: Vec<T::AccountId>,
+		_: Option<VoteWeight>,
+	) {
+		unreachable!()
+	}
+}
+
+/// A struct that can be used the the fallback election of this pallet in cases where no fallback is
+/// needed.
+pub struct NoFallback<T: Config>(PhantomData<T>);
+impl<T: Config> ElectionProvider<T::AccountId, T::BlockNumber> for NoFallback<T> {
+	type Error = &'static str;
+	type DataProvider = Pallet<T>;
+
+	fn elect() -> Result<(Supports<T::AccountId>, Weight), Self::Error> {
+		Err("'NoFallback' will not perform an election.")
+	}
+}
+
+/// Wrapper type that implements the configurations needed for the on-chain backup.
+pub struct OnChainConfig<T: Config>(sp_std::marker::PhantomData<T>);
+impl<T: Config> onchain::Config for OnChainConfig<T> {
+	type AccountId = T::AccountId;
+	type BlockNumber = T::BlockNumber;
+	type BlockWeights = T::BlockWeights;
+	type Accuracy = T::OnChainAccuracy;
+	type DataProvider = Pallet<T>;
 }
 
 /// convert a DispatchError to a custom InvalidTransaction with the inner code being the error
@@ -1304,8 +1326,7 @@ mod feasibility_check {
 #[cfg(test)]
 mod tests {
 	use super::{mock::*, Event, *};
-	use frame_election_provider_support::ElectionProvider;
-	use sp_npos_elections::Support;
+	use frame_election_provider_support::{ElectionProvider, Support};
 
 	#[test]
 	fn phase_rotation_works() {
@@ -1433,9 +1454,11 @@ mod tests {
 			roll_to(30);
 			assert!(MultiPhase::current_phase().is_off());
 
-			// this module is now only capable of doing on-chain backup.
-			assert_ok!(MultiPhase::elect());
+			// this module is only capable of the fallback, which in this case cannot work either
+			// because no snapshot exists.
+			assert!(MultiPhase::elect().is_err());
 
+			// Phase resets anyhow.
 			assert!(MultiPhase::current_phase().is_off());
 		});
 	}
@@ -1476,7 +1499,7 @@ mod tests {
 
 	#[test]
 	fn fallback_strategy_works() {
-		ExtBuilder::default().fallback(FallbackStrategy::OnChain).build_and_execute(|| {
+		ExtBuilder::default().fallback(NothingOrOnChain::OnChain).build_and_execute(|| {
 			roll_to(15);
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 
@@ -1486,6 +1509,7 @@ mod tests {
 			// zilch solutions thus far.
 			let (supports, _) = MultiPhase::elect().unwrap();
 
+			// but the fallback works.
 			assert_eq!(
 				supports,
 				vec![
@@ -1495,21 +1519,21 @@ mod tests {
 			)
 		});
 
-		ExtBuilder::default().fallback(FallbackStrategy::Nothing).build_and_execute(|| {
+		ExtBuilder::default().fallback(NothingOrOnChain::Nothing).build_and_execute(|| {
 			roll_to(15);
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 
 			roll_to(25);
 			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
 
-			// zilch solutions thus far.
-			assert_eq!(MultiPhase::elect().unwrap_err(), ElectionError::NoFallbackConfigured);
+			// zilch solutions thus far, and fallback will also do nothing.
+			assert_eq!(MultiPhase::elect().unwrap_err(), ElectionError::FallbackFailed);
 		})
 	}
 
 	#[test]
 	fn snapshot_creation_fails_if_too_big() {
-		ExtBuilder::default().build_and_execute(|| {
+		ExtBuilder::default().fallback(NothingOrOnChain::OnChain).build_and_execute(|| {
 			Targets::set((0..(TargetIndex::max_value() as AccountId) + 1).collect::<Vec<_>>());
 
 			// signed phase failed to open.
@@ -1520,10 +1544,9 @@ mod tests {
 			roll_to(25);
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
-			// on-chain backup works though.
+			// on-chain backup cannot work either
 			roll_to(29);
-			let (supports, _) = MultiPhase::elect().unwrap();
-			assert!(supports.len() > 0);
+			assert!(MultiPhase::elect().is_err());
 		})
 	}
 

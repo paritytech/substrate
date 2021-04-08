@@ -195,7 +195,6 @@ parameter_types! {
 		(40, 40, vec![40]),
 	];
 
-	pub static Fallback: FallbackStrategy = FallbackStrategy::OnChain;
 	pub static DesiredTargets: u32 = 2;
 	pub static SignedPhase: u64 = 10;
 	pub static UnsignedPhase: u64 = 5;
@@ -269,6 +268,32 @@ impl multi_phase::weights::WeightInfo for DualMockWeightInfo {
 	}
 }
 
+#[derive(Clone)]
+pub enum NothingOrOnChain {
+	Nothing,
+	OnChain,
+}
+
+parameter_types! {
+	pub static FallbackMode: NothingOrOnChain = NothingOrOnChain::OnChain;
+}
+
+pub struct MultiFacadeElectionProvider;
+impl ElectionProvider<AccountId, u64> for MultiFacadeElectionProvider {
+	type Error = ();
+	type DataProvider = Pallet<Runtime>;
+
+	fn elect() -> Result<(Supports<AccountId>, Weight), Self::Error> {
+		match FallbackMode::get() {
+			NothingOrOnChain::Nothing => NoFallback::<Runtime>::elect().map_err(|_| ()),
+			NothingOrOnChain::OnChain => {
+				onchain::OnChainSequentialPhragmen::<OnChainConfig<Runtime>>::elect()
+					.map_err(|_| ())
+			}
+		}
+	}
+}
+
 impl crate::Config for Runtime {
 	type Event = Event;
 	type Currency = Balances;
@@ -282,7 +307,7 @@ impl crate::Config for Runtime {
 	type WeightInfo = DualMockWeightInfo;
 	type BenchmarkingConfig = ();
 	type OnChainAccuracy = Perbill;
-	type Fallback = Fallback;
+	type Fallback = MultiFacadeElectionProvider;
 	type CompactSolution = TestCompact;
 }
 
@@ -355,8 +380,8 @@ impl ExtBuilder {
 		<UnsignedPhase>::set(unsigned);
 		self
 	}
-	pub fn fallback(self, fallback: FallbackStrategy) -> Self {
-		<Fallback>::set(fallback);
+	pub fn fallback(self, fallback: NothingOrOnChain) -> Self {
+		<FallbackMode>::set(fallback);
 		self
 	}
 	pub fn miner_weight(self, weight: Weight) -> Self {
