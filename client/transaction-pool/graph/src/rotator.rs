@@ -78,7 +78,6 @@ impl<Hash: hash::Hash + Eq + Clone> PoolRotator<Hash> {
 		}
 	}
 
-
 	/// Bans extrinsic if it's stale.
 	///
 	/// Returns `true` if extrinsic is stale and got banned.

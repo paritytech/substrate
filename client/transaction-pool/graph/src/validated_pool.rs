@@ -95,13 +95,13 @@ pub struct IsValidator(Box<dyn Fn() -> bool + Send + Sync>);
 
 impl From<bool> for IsValidator {
 	fn from(is_validator: bool) -> Self {
-		IsValidator(Box::new(move || is_validator))
+		Self(Box::new(move || is_validator))
 	}
 }
 
 impl From<Box<dyn Fn() -> bool + Send + Sync>> for IsValidator {
 	fn from(is_validator: Box<dyn Fn() -> bool + Send + Sync>) -> Self {
-		IsValidator(is_validator)
+		Self(is_validator)
 	}
 }
 
@@ -134,7 +134,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 	/// Create a new transaction pool.
 	pub fn new(options: Options, is_validator: IsValidator, api: Arc<B>) -> Self {
 		let base_pool = base::BasePool::new(options.reject_future_transactions);
-		ValidatedPool {
+		Self {
 			is_validator,
 			options,
 			listener: Default::default(),
