@@ -60,12 +60,15 @@ default:
     - kubernetes-parity-build
   interruptible:                   true
 
+.rust-info-script:                 &rust-info-script
+  - rustup show
+  - cargo --version
+  - sccache -s
+
 .docker-env:                       &docker-env
   image:                           "${CI_IMAGE}"
   before_script:
-    - rustup show
-    - cargo --version
-    - sccache -s
+    - *rust-info-script
   retry:
     max: 2
     when:
@@ -96,6 +99,14 @@ default:
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
 
+.test-refs-no-trigger-prs-only:   &test-refs-no-trigger-prs-only
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "pipeline"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
+
 .build-refs:                       &build-refs
   rules:
     # .publish-refs with manual on PRs
@@ -123,6 +134,22 @@ default:
   rules:
     # this job runs only on nightly pipeline with the mentioned variable, against `master` branch
     - if: $CI_COMMIT_REF_NAME == "master" && $CI_PIPELINE_SOURCE == "schedule" && $PIPELINE == "nightly"
+
+.merge-ref-into-master-script:     &merge-ref-into-master-script
+  - git fetch origin +master:master
+  - git fetch origin +$CI_COMMIT_REF_NAME:$CI_COMMIT_REF_NAME
+  - git checkout master
+  - git config user.email "ci@gitlab.parity.io"
+  - git merge $CI_COMMIT_REF_NAME --verbose --no-edit
+
+.cargo-check-benches-script:       &cargo-check-benches-script
+  - mkdir -p artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA
+  - SKIP_WASM_BUILD=1 time cargo +nightly check --benches --all
+  - 'cargo run --release -p node-bench -- ::node::import::native::sr25519::transfer_keep_alive::paritydb::small --json
+    | tee artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::node::import::native::sr25519::transfer_keep_alive::paritydb::small.json'
+  - 'cargo run --release -p node-bench -- ::trie::read::small --json
+    | tee artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::trie::read::small.json'
+  - sccache -s
 
 #### stage:                       .pre
 
@@ -223,11 +250,43 @@ cargo-check-benches:
   stage:                           test
   <<:                              *docker-env
   <<:                              *test-refs-no-trigger
+  <<:                              *collect-artifacts
   script:
-    - SKIP_WASM_BUILD=1 time cargo +nightly check --benches --all
-    - cargo run --release -p node-bench -- ::node::import::native::sr25519::transfer_keep_alive::paritydb::small
-    - cargo run --release -p node-bench -- ::trie::read::small
-    - sccache -s
+    - *cargo-check-benches-script
+
+cargo-check-benches-merged:
+  stage:                           test
+  <<:                              *docker-env
+  <<:                              *test-refs-no-trigger-prs-only
+  <<:                              *collect-artifacts
+  before_script:
+    - *merge-ref-into-master-script
+    - *rust-info-script
+  script:
+    - *cargo-check-benches-script
+
+node-bench-regression-guard:
+  # it's not belong to `build` semantically, but dag jobs can't depend on each other
+  # within the single stage - https://gitlab.com/gitlab-org/gitlab/-/issues/30632
+  # more: https://github.com/paritytech/substrate/pull/8519#discussion_r608012402
+  stage:                           build
+  <<:                              *docker-env
+  <<:                              *test-refs-no-trigger-prs-only
+  needs:
+    - job:                         cargo-check-benches-merged
+      artifacts:                   true
+    - project:                     $CI_PROJECT_PATH
+      job:                         cargo-check-benches
+      ref:                         master
+      artifacts:                   true
+  variables:
+    CI_IMAGE:                      "paritytech/node-bench-regression-guard:latest"
+  before_script: [""]
+  script:
+    - 'node-bench-regression-guard --reference artifacts/benches/master-* 
+       --compare-with artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA'
+  # FIXME: remove this when master will be populated with bench results artifacts
+  allow_failure:                   true
 
 cargo-check-subkey:
   stage:                           test
