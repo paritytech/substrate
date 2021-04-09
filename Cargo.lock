@@ -9216,11 +9216,11 @@ version = "3.0.0"
 dependencies = [
  "erased-serde",
  "log",
+ "parity-scale-codec 2.0.1",
  "parking_lot 0.10.2",
  "serde",
  "serde_json",
  "slog",
- "parity-scale-codec 2.0.1",
  "sp-std",
  "tracing",
  "tracing-core",
