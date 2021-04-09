@@ -80,12 +80,23 @@ pub use self::storage::{
 pub use self::dispatch::{Parameter, Callable};
 pub use sp_runtime::{self, ConsensusEngineId, print, traits::Printable};
 
+use codec::{Encode, Decode};
+use sp_runtime::TypeId;
+
 /// A unified log target for support operations.
 pub const LOG_TARGET: &'static str = "runtime::frame-support";
 
 /// A type that cannot be instantiated.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Never {}
+
+/// A pallet identifier. These are per pallet and should be stored in a registry somewhere.
+#[derive(Clone, Copy, Eq, PartialEq, Encode, Decode)]
+pub struct PalletId(pub [u8; 8]);
+
+impl TypeId for PalletId {
+	const TYPE_ID: [u8; 4] = *b"modl";
+}
 
 /// Generate a new type alias for [`storage::types::value::StorageValue`],
 /// [`storage::types::value::StorageMap`] and [`storage::types::value::StorageDoubleMap`].
@@ -559,6 +570,25 @@ pub use frame_support_procedural::PartialEqNoBound;
 /// }
 /// ```
 pub use frame_support_procedural::DebugNoBound;
+
+/// Derive [`Default`] but do not bound any generic.
+///
+/// This is useful for type generic over runtime:
+/// ```
+/// # use frame_support::DefaultNoBound;
+/// # use core::default::Default;
+/// trait Config {
+///		type C: Default;
+/// }
+///
+/// // Foo implements [`Default`] because `C` bounds [`Default`].
+/// // Otherwise compilation will fail with an output telling `c` doesn't implement [`Default`].
+/// #[derive(DefaultNoBound)]
+/// struct Foo<T: Config> {
+///		c: T::C,
+/// }
+/// ```
+pub use frame_support_procedural::DefaultNoBound;
 
 /// Assert the annotated function is executed within a storage transaction.
 ///

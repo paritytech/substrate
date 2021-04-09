@@ -46,7 +46,7 @@ pub use filter::{
 mod misc;
 pub use misc::{
 	Len, Get, GetDefault, HandleLifetime, TryDrop, Time, UnixTime, IsType, IsSubType, ExecuteBlock,
-	SameOrOther, OnNewAccount, OnKilledAccount, OffchainWorker,
+	SameOrOther, OnNewAccount, OnKilledAccount, OffchainWorker, GetBacking, Backing,
 };
 
 mod stored_map;
