@@ -30,6 +30,7 @@ use log::trace;
 
 const NON_CANONICAL_JOURNAL: &[u8] = b"noncanonical_journal";
 const LAST_CANONICAL: &[u8] = b"last_canonical";
+const MAX_BLOCKS_PER_LEVEL: u64 = 32;
 
 /// See module documentation.
 #[derive(parity_util_mem_derive::MallocSizeOf)]
@@ -162,28 +163,30 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			let mut total: u64 = 0;
 			block += 1;
 			loop {
-				let mut index: u64 = 0;
 				let mut level = Vec::new();
-				loop {
+				for index in 0 .. MAX_BLOCKS_PER_LEVEL {
 					let journal_key = to_journal_key(block, index);
-					match db.get_meta(&journal_key).map_err(|e| Error::Db(e))? {
-						Some(record) => {
-							let record: JournalRecord<BlockHash, Key> = Decode::decode(&mut record.as_slice())?;
-							let inserted = record.inserted.iter().map(|(k, _)| k.clone()).collect();
-							let overlay = BlockOverlay {
-								hash: record.hash.clone(),
-								journal_key,
-								inserted: inserted,
-								deleted: record.deleted,
-							};
-							insert_values(&mut values, record.inserted);
-							trace!(target: "state-db", "Uncanonicalized journal entry {}.{} ({} inserted, {} deleted)", block, index, overlay.inserted.len(), overlay.deleted.len());
-							level.push(overlay);
-							parents.insert(record.hash, record.parent_hash);
-							index += 1;
-							total += 1;
-						},
-						None => break,
+					if let Some(record) = db.get_meta(&journal_key).map_err(|e| Error::Db(e))? {
+						let record: JournalRecord<BlockHash, Key> = Decode::decode(&mut record.as_slice())?;
+						let inserted = record.inserted.iter().map(|(k, _)| k.clone()).collect();
+						let overlay = BlockOverlay {
+							hash: record.hash.clone(),
+							journal_key,
+							inserted: inserted,
+							deleted: record.deleted,
+						};
+						insert_values(&mut values, record.inserted);
+						trace!(
+							target: "state-db",
+							"Uncanonicalized journal entry {}.{} ({} inserted, {} deleted)",
+							block,
+							index,
+							overlay.inserted.len(),
+							overlay.deleted.len()
+						);
+						level.push(overlay);
+						parents.insert(record.hash, record.parent_hash);
+						total += 1;
 					}
 				}
 				if level.is_empty() {
@@ -240,6 +243,10 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			self.levels.get_mut((number - front_block_number) as usize)
 				.expect("number is [front_block_number .. front_block_number + levels.len()) is asserted in precondition; qed")
 		};
+
+		if level.len() >= MAX_BLOCKS_PER_LEVEL as usize {
+			return Err(Error::TooManySiblingBlocks);
+		}
 
 		let index = level.len() as u64;
 		let journal_key = to_journal_key(number, index);
@@ -513,7 +520,7 @@ mod tests {
 	use std::io;
 	use sp_core::H256;
 	use super::{NonCanonicalOverlay, to_journal_key};
-	use crate::{ChangeSet, CommitSet};
+	use crate::{ChangeSet, CommitSet, MetaDb};
 	use crate::test::{make_db, make_changeset};
 
 	fn contains(overlay: &NonCanonicalOverlay<H256, H256>, key: u64) -> bool {
@@ -716,7 +723,6 @@ mod tests {
 
 	#[test]
 	fn complex_tree() {
-		use crate::MetaDb;
 		let mut db = make_db(&[]);
 
 		// - 1 - 1_1 - 1_1_1
@@ -957,5 +963,43 @@ mod tests {
 		overlay.unpin(&h_21);
 		assert!(!contains(&overlay, 1));
 		assert!(overlay.pinned.is_empty());
+	}
+
+	#[test]
+	fn restore_from_journal_after_canonicalize_no_first() {
+		// This test discards a branch that is journaled under a non-zero index on level 1,
+		// making sure all journals are loaded for each level even if some of them are missing.
+		let root = H256::random();
+		let h1 = H256::random();
+		let h2 = H256::random();
+		let h11 = H256::random();
+		let h21 = H256::random();
+		let mut db = make_db(&[]);
+		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
+		db.commit(&overlay.insert::<io::Error>(&root, 10, &H256::default(), make_changeset(&[], &[])).unwrap());
+		db.commit(&overlay.insert::<io::Error>(&h1, 11, &root, make_changeset(&[1], &[])).unwrap());
+		db.commit(&overlay.insert::<io::Error>(&h2, 11, &root, make_changeset(&[2], &[])).unwrap());
+		db.commit(&overlay.insert::<io::Error>(&h11, 12, &h1, make_changeset(&[11], &[])).unwrap());
+		db.commit(&overlay.insert::<io::Error>(&h21, 12, &h2, make_changeset(&[21], &[])).unwrap());
+		let mut commit = CommitSet::default();
+		overlay.canonicalize::<io::Error>(&root, &mut commit).unwrap();
+		overlay.canonicalize::<io::Error>(&h2, &mut commit).unwrap();  // h11 should stay in the DB
+		db.commit(&commit);
+		overlay.apply_pending();
+		assert_eq!(overlay.levels.len(), 1);
+		assert!(contains(&overlay, 21));
+		assert!(!contains(&overlay, 11));
+		assert!(db.get_meta(&to_journal_key(12, 1)).unwrap().is_some());
+		assert!(db.get_meta(&to_journal_key(12, 0)).unwrap().is_none());
+
+		// Restore into a new overlay and check that journaled value exists.
+		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
+		assert!(contains(&overlay, 21));
+
+		let mut commit = CommitSet::default();
+		overlay.canonicalize::<io::Error>(&h21, &mut commit).unwrap();  // h11 should stay in the DB
+		db.commit(&commit);
+		overlay.apply_pending();
+		assert!(!contains(&overlay, 21));
 	}
 }
