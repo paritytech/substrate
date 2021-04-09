@@ -604,8 +604,7 @@ pub mod pallet {
 	pub(super) type Foo<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
 
 	frame_support::parameter_types! {
-		#[derive(Default)] // TODO: might be avoidable after https://github.com/paritytech/substrate/pull/8542/files
-		pub const Five: usize = 5;
+		pub const Five: u32 = 5;
 	}
 
 	/// An example of how to create a bounded vector. This is a special 'newtype' that behaves

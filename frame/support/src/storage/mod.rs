@@ -25,6 +25,7 @@ use crate::{
 	hash::{Twox128, StorageHasher, ReversibleStorageHasher},
 	traits::Get,
 };
+use sp_arithmetic::traits::Zero;
 use sp_runtime::generic::{Digest, DigestItem};
 pub use sp_runtime::TransactionOutcome;
 
@@ -815,7 +816,7 @@ mod private {
 
 	impl<T: Encode> Sealed for Vec<T> {}
 	impl<Hash: Encode> Sealed for Digest<Hash> {}
-	impl<T: Value, S: Get<usize>> Sealed for BoundedVec<T, S> {}
+	impl<T: Value, S: Get<u32>> Sealed for BoundedVec<T, S> {}
 }
 
 impl<T: Encode> StorageAppend<T> for Vec<T> {}
@@ -827,8 +828,8 @@ impl<T: Encode> StorageDecodeLength for Vec<T> {}
 impl<Hash: Encode> StorageAppend<DigestItem<Hash>> for Digest<Hash> {}
 
 /// Marker trait for types `T` that can be stored in storage as `Vec<T>`.
-pub trait Value: FullCodec + Default + sp_std::fmt::Debug + Eq + PartialEq {}
-impl<T: FullCodec + Default + sp_std::fmt::Debug + Eq + PartialEq> Value for T {}
+pub trait Value: FullCodec + Clone + sp_std::fmt::Debug + Eq + PartialEq {}
+impl<T: FullCodec + Clone + sp_std::fmt::Debug + Eq + PartialEq> Value for T {}
 
 /// A bounded vector.
 ///
@@ -837,23 +838,51 @@ impl<T: FullCodec + Default + sp_std::fmt::Debug + Eq + PartialEq> Value for T {
 ///
 /// As the name suggests, the length of the queue is always bounded. All internal operations ensure
 /// this bound is respected.
-#[derive(Encode, Decode, Default, Clone, crate::RuntimeDebugNoBound)]
-pub struct BoundedVec<T: Value, S: Get<usize>>(Vec<T>, sp_std::marker::PhantomData<S>);
+#[derive(Encode, Decode, crate::DefaultNoBound, crate::CloneNoBound, crate::RuntimeDebugNoBound)]
+pub struct BoundedVec<T: Value, S: Get<u32>>(Vec<T>, sp_std::marker::PhantomData<S>);
 
 // NOTE: we could also implement this as:
-// impl<T: Value, S1: Get<usize>, S2: Get<usize>> PartialEq<BoundedVec<T, S2>> for BoundedVec<T, S1>
+// impl<T: Value, S1: Get<u32>, S2: Get<u32>> PartialEq<BoundedVec<T, S2>> for BoundedVec<T, S1>
 // to allow comparison of bounded vectors with different bounds.
-impl<T: Value, S: Get<usize>> PartialEq for BoundedVec<T, S> {
+impl<T: Value, S: Get<u32>> PartialEq for BoundedVec<T, S> {
 	fn eq(&self, rhs: &Self) -> bool {
 		self.0 == rhs.0
 	}
 }
-impl<T: Value, S: Get<usize>> Eq for BoundedVec<T, S> {}
+impl<T: Value, S: Get<u32>> Eq for BoundedVec<T, S> {}
 
-impl<T: Value, S: Get<usize>> BoundedVec<T, S> {
+impl<T: Value, S: Get<u32>> BoundedVec<T, S> {
 	/// Create `Self` from `t` without any checks.
+	///
+	/// # WARNING
+	///
+	/// Only use when you are sure you know what you are doing.
 	fn unchecked_from(t: Vec<T>) -> Self {
 		Self(t, Default::default())
+	}
+
+	/// Create `Self` from `t` without any checks. Logs warnings if the bound is not being
+	/// respected. The additional scope can be used to indicate where a potential overflow is
+	/// happening.
+	///
+	/// # WARNING
+	///
+	/// Only use when you are sure you know what you are doing.
+	pub fn force_from(t: Vec<T>, scope: Option<&'static str>) -> Self {
+		if t.len() > Self::bound() {
+			log::warn!(
+				target: crate::LOG_TARGET,
+				"length of a bounded vector in scope {} is not respected.",
+				scope.unwrap_or("UNKNOWN"),
+			);
+		}
+
+		Self::unchecked_from(t)
+	}
+
+	/// Get the bound of the type in `usize`.
+	pub fn bound() -> usize {
+		S::get() as usize
 	}
 
 	/// Consume self, and return the inner `Vec`. Henceforth, the `Vec<_>` can be altered in an
@@ -871,6 +900,16 @@ impl<T: Value, S: Get<usize>> BoundedVec<T, S> {
 		self.0.len()
 	}
 
+	/// Exactly the same semantics as [`Vec::is_empty`].
+	pub fn is_empty(&self) -> bool {
+		self.0.len().is_zero()
+	}
+
+	/// Exactly the same semantics as [`Vec::retain`].
+	pub fn retain<F: FnMut(&T) -> bool>(&mut self, f: F) {
+		self.0.retain(f)
+	}
+
 	/// Exactly the same semantics as [`Vec::insert`], but returns an `Err` (and is a noop) if the
 	/// new length of the vector exceeds `S`.
 	///
@@ -878,7 +917,7 @@ impl<T: Value, S: Get<usize>> BoundedVec<T, S> {
 	///
 	/// Panics if `index > len`.
 	pub fn try_insert(&mut self, index: usize, element: T) -> Result<(), ()> {
-		if self.len() < S::get() {
+		if self.len() < Self::bound() {
 			self.0.insert(index, element);
 			Ok(())
 		} else {
@@ -910,7 +949,7 @@ impl<T: Value, S: Get<usize>> BoundedVec<T, S> {
 	}
 }
 
-impl<T: Value, S: Get<usize>> iter::IntoIterator for BoundedVec<T, S> {
+impl<T: Value, S: Get<u32>> iter::IntoIterator for BoundedVec<T, S> {
 	type Item = T;
 	type IntoIter = sp_std::vec::IntoIter<T>;
 	fn into_iter(self) -> Self::IntoIter {
@@ -918,7 +957,7 @@ impl<T: Value, S: Get<usize>> iter::IntoIterator for BoundedVec<T, S> {
 	}
 }
 
-impl<'a, T: Value, S: Get<usize>> iter::IntoIterator for &'a BoundedVec<T, S> {
+impl<'a, T: Value, S: Get<u32>> iter::IntoIterator for &'a BoundedVec<T, S> {
 	type Item = <sp_std::slice::Iter<'a, T> as sp_std::iter::Iterator>::Item;
 	type IntoIter = sp_std::slice::Iter<'a, T>;
 	fn into_iter(self) -> Self::IntoIter {
@@ -926,10 +965,10 @@ impl<'a, T: Value, S: Get<usize>> iter::IntoIterator for &'a BoundedVec<T, S> {
 	}
 }
 
-impl<T: Value, S: Get<usize>> TryFrom<Vec<T>> for BoundedVec<T, S> {
+impl<T: Value, S: Get<u32>> TryFrom<Vec<T>> for BoundedVec<T, S> {
 	type Error = ();
 	fn try_from(t: Vec<T>) -> Result<Self, Self::Error> {
-		if t.len() <= S::get() {
+		if t.len() <= Self::bound() {
 			Ok(Self::unchecked_from(t))
 		} else {
 			Err(())
@@ -938,13 +977,13 @@ impl<T: Value, S: Get<usize>> TryFrom<Vec<T>> for BoundedVec<T, S> {
 }
 
 // It is okay to give a non-mutable reference of the inner vec to anyone.
-impl<T: Value, S: Get<usize>> AsRef<Vec<T>> for BoundedVec<T, S> {
+impl<T: Value, S: Get<u32>> AsRef<Vec<T>> for BoundedVec<T, S> {
 	fn as_ref(&self) -> &Vec<T> {
 		&self.0
 	}
 }
 
-impl<T: Value, S: Get<usize>> codec::DecodeLength for BoundedVec<T, S> {
+impl<T: Value, S: Get<u32>> codec::DecodeLength for BoundedVec<T, S> {
 	fn len(self_encoded: &[u8]) -> Result<usize, codec::Error> {
 		// `BoundedVec<T, _>` stored just a `Vec<T>`, thus the length is at the beginning in
 		// `Compact` form, and same implementation as `Vec<T>` can be used.
@@ -952,26 +991,26 @@ impl<T: Value, S: Get<usize>> codec::DecodeLength for BoundedVec<T, S> {
 	}
 }
 
-impl<T: Value, S: Get<usize>> StorageDecodeLength for BoundedVec<T, S> {}
+impl<T: Value, S: Get<u32>> StorageDecodeLength for BoundedVec<T, S> {}
 
 /// Storage value that is *maybe* capable of [`StorageAppend`].
-pub trait TryAppendValue<T: Value, S: Get<usize>> {
+pub trait TryAppendValue<T: Value, S: Get<u32>> {
 	fn try_append<LikeT: EncodeLike<T>>(item: LikeT) -> Result<(), ()>;
 }
 
 /// Storage map that is *maybe* capable of [`StorageAppend`].
-pub trait TryAppendMap<K: FullCodec, T: Value, S: Get<usize>> {
+pub trait TryAppendMap<K: FullCodec, T: Value, S: Get<u32>> {
 	fn try_append<LikeK: EncodeLike<K> + Clone, LikeT: EncodeLike<T>>(
 		key: LikeK,
 		item: LikeT,
 	) -> Result<(), ()>;
 }
 
-impl<T: Value, S: Get<usize>, StorageValueT: generator::StorageValue<BoundedVec<T, S>>>
+impl<T: Value, S: Get<u32>, StorageValueT: generator::StorageValue<BoundedVec<T, S>>>
 	TryAppendValue<T, S> for StorageValueT
 {
 	fn try_append<LikeT: EncodeLike<T>>(item: LikeT) -> Result<(), ()> {
-		let bound = S::get();
+		let bound = BoundedVec::<T, S>::bound();
 		let current = Self::decode_len().unwrap_or_default();
 		if current < bound {
 			// NOTE: we cannot reuse the implementation for `Vec<T>` here because we never want to
@@ -988,7 +1027,7 @@ impl<T: Value, S: Get<usize>, StorageValueT: generator::StorageValue<BoundedVec<
 impl<
 		K: FullCodec,
 		T: Value,
-		S: Get<usize>,
+		S: Get<u32>,
 		StorageMapT: generator::StorageMap<K, BoundedVec<T, S>>,
 	> TryAppendMap<K, T, S> for StorageMapT
 {
@@ -996,7 +1035,7 @@ impl<
 		key: LikeK,
 		item: LikeT,
 	) -> Result<(), ()> {
-		let bound = S::get();
+		let bound = BoundedVec::<T, S>::bound();
 		let current = Self::decode_len(key.clone()).unwrap_or_default();
 		if current < bound {
 			let key = Self::storage_map_final_key(key);
@@ -1009,14 +1048,14 @@ impl<
 }
 
 #[cfg(test)]
-mod bounded_vec {
+pub mod bounded_vec {
 	use super::*;
 	use sp_io::TestExternalities;
 	use sp_std::convert::TryInto;
 	use crate::{assert_ok, Twox128};
 
 	crate::parameter_types! {
-		pub const Seven: usize = 7;
+		pub const Seven: u32 = 7;
 	}
 
 	crate::generate_storage_alias! { Prefix, Foo => Value<BoundedVec<u32, Seven>> }
