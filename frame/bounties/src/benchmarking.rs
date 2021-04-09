@@ -457,6 +457,19 @@ benchmarks! {
 			).into()
 		)
 	}
+
+	extend_subbounty_bounty_expiry {
+		setup_pot_account::<T>();
+		let bm_setup = create_subbounty::<T>(0, MAX_BYTES)?;
+	}: _(
+		RawOrigin::Signed(bm_setup.subcurator),
+		bm_setup.bounty_id,
+		bm_setup.subbounty_id,
+		Vec::new()
+	)
+	verify {
+		assert_last_event::<T>(RawEvent::BountyExtended(bm_setup.bounty_id).into())
+	}
 }
 
 impl_benchmark_test_suite!(

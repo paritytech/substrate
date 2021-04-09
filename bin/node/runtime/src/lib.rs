@@ -711,6 +711,7 @@ parameter_types! {
 	pub const BountyCuratorDeposit: Permill = Permill::from_percent(50);
 	pub const BountyValueMinimum: Balance = 5 * DOLLARS;
 	pub const MaxActiveSubBountyCount: u32 = 10;
+	pub const MinimumCurationFee:u64 = 1;
 }
 
 impl pallet_treasury::Config for Runtime {
@@ -747,6 +748,7 @@ impl pallet_bounties::Config for Runtime {
 	type DataDepositPerByte = DataDepositPerByte;
 	type MaximumReasonLength = MaximumReasonLength;
 	type MaxActiveSubBountyCount = MaxActiveSubBountyCount;
+	type MinimumCurationFee = MinimumCurationFee;
 	type WeightInfo = pallet_bounties::weights::SubstrateWeight<Runtime>;
 }
 

@@ -1424,7 +1424,7 @@ decl_module! {
 		/// # <weight>
 		/// - O(1).
 		/// # </weight>
-		#[weight = <T as Config>::WeightInfo::extend_bounty_expiry()]
+		#[weight = <T as Config>::WeightInfo::extend_subbounty_bounty_expiry()]
 		fn extend_subbounty_bounty_expiry(origin,
 			#[compact] bounty_id: BountyIndex,
 			#[compact] subbounty_id: BountyIndex,
@@ -1455,9 +1455,11 @@ decl_module! {
 					let bounty = maybe_bounty.as_mut().ok_or(Error::<T>::InvalidIndex)?;
 
 					match bounty.status {
-						BountyStatus::Active { ref curator, ref mut update_due } => {
-							ensure!(*curator == signer, Error::<T>::RequireCurator);
-							*update_due = (system::Pallet::<T>::block_number() + T::BountyUpdatePeriod::get()).max(*update_due);
+						BountyStatus::Active { curator: _ , ref mut update_due } => {
+							*update_due = (
+								system::Pallet::<T>::block_number()
+								+ T::BountyUpdatePeriod::get()
+							).max(*update_due);
 						},
 						_ => return Err(Error::<T>::UnexpectedStatus.into()),
 					}
