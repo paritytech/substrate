@@ -671,8 +671,5 @@ decl_runtime_apis! {
 	pub trait Metadata {
 		/// Returns the metadata of a runtime.
 		fn metadata() -> OpaqueMetadata;
-
-		/// Returns the vnext metadata of a runtime.
-		fn metadata_vnext() -> OpaqueMetadata;
 	}
 }

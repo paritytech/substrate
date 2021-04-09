@@ -628,10 +628,6 @@ cfg_if! {
 				fn metadata() -> OpaqueMetadata {
 					unimplemented!()
 				}
-
-				fn metadata_vnext() -> OpaqueMetadata {
-					unimplemented!()
-				}
 			}
 
 			impl sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block> for Runtime {
@@ -887,10 +883,6 @@ cfg_if! {
 
 			impl sp_api::Metadata<Block> for Runtime {
 				fn metadata() -> OpaqueMetadata {
-					unimplemented!()
-				}
-
-				fn metadata_vnext() -> OpaqueMetadata {
 					unimplemented!()
 				}
 			}

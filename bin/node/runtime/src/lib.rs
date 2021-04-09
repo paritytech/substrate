@@ -1213,11 +1213,7 @@ impl_runtime_apis! {
 
 	impl sp_api::Metadata<Block> for Runtime {
 		fn metadata() -> OpaqueMetadata {
-			Runtime::metadata().into()
-		}
-
-		fn metadata_vnext() -> OpaqueMetadata {
-			OpaqueMetadata::new(Runtime::metadata_vnext().encode())
+			OpaqueMetadata::new(Runtime::metadata().encode())
 		}
 	}
 

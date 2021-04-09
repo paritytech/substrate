@@ -601,248 +601,249 @@ fn pallet_on_genesis() {
 	})
 }
 
-#[test]
-fn metadata() {
-	use frame_metadata::*;
-	use codec::{Decode, Encode};
+// #[test]
+// fn metadata() {
+// 	use frame_metadata::*;
+// 	use codec::{Decode, Encode};
+//
+// 	let expected_pallet_metadata = ModuleMetadata {
+// 		index: 1,
+// 		name: DecodeDifferent::Decoded("Example".to_string()),
+// 		storage: Some(DecodeDifferent::Decoded(StorageMetadata {
+// 			prefix: DecodeDifferent::Decoded("Example".to_string()),
+// 			entries: DecodeDifferent::Decoded(vec![
+// 				StorageEntryMetadata {
+// 					name: DecodeDifferent::Decoded("ValueWhereClause".to_string()),
+// 					modifier: StorageEntryModifier::Optional,
+// 					ty: StorageEntryType::Plain(
+// 						DecodeDifferent::Decoded(
+// 							"<T::AccountId as SomeAssociation2>::_2".to_string()
+// 						),
+// 					),
+// 					default: DecodeDifferent::Decoded(vec![0]),
+// 					documentation: DecodeDifferent::Decoded(vec![]),
+// 				},
+// 				StorageEntryMetadata {
+// 					name: DecodeDifferent::Decoded("Value".to_string()),
+// 					modifier: StorageEntryModifier::Optional,
+// 					ty: StorageEntryType::Plain(DecodeDifferent::Decoded("u32".to_string())),
+// 					default: DecodeDifferent::Decoded(vec![0]),
+// 					documentation: DecodeDifferent::Decoded(vec![]),
+// 				},
+// 				StorageEntryMetadata {
+// 					name: DecodeDifferent::Decoded("Map".to_string()),
+// 					modifier: StorageEntryModifier::Default,
+// 					ty: StorageEntryType::Map {
+// 						key: DecodeDifferent::Decoded("u8".to_string()),
+// 						value: DecodeDifferent::Decoded("u16".to_string()),
+// 						hasher: StorageHasher::Blake2_128Concat,
+// 						unused: false,
+// 					},
+// 					default: DecodeDifferent::Decoded(vec![4, 0]),
+// 					documentation: DecodeDifferent::Decoded(vec![]),
+// 				},
+// 				StorageEntryMetadata {
+// 					name: DecodeDifferent::Decoded("Map2".to_string()),
+// 					modifier: StorageEntryModifier::Optional,
+// 					ty: StorageEntryType::Map {
+// 						key: DecodeDifferent::Decoded("u16".to_string()),
+// 						value: DecodeDifferent::Decoded("u32".to_string()),
+// 						hasher: StorageHasher::Twox64Concat,
+// 						unused: false,
+// 					},
+// 					default: DecodeDifferent::Decoded(vec![0]),
+// 					documentation: DecodeDifferent::Decoded(vec![]),
+// 				},
+// 				StorageEntryMetadata {
+// 					name: DecodeDifferent::Decoded("DoubleMap".to_string()),
+// 					modifier: StorageEntryModifier::Optional,
+// 					ty: StorageEntryType::DoubleMap {
+// 						value: DecodeDifferent::Decoded("u32".to_string()),
+// 						key1: DecodeDifferent::Decoded("u8".to_string()),
+// 						key2: DecodeDifferent::Decoded("u16".to_string()),
+// 						hasher: StorageHasher::Blake2_128Concat,
+// 						key2_hasher: StorageHasher::Twox64Concat,
+// 					},
+// 					default: DecodeDifferent::Decoded(vec![0]),
+// 					documentation: DecodeDifferent::Decoded(vec![]),
+// 				},
+// 				StorageEntryMetadata {
+// 					name: DecodeDifferent::Decoded("DoubleMap2".to_string()),
+// 					modifier: StorageEntryModifier::Optional,
+// 					ty: StorageEntryType::DoubleMap {
+// 						value: DecodeDifferent::Decoded("u64".to_string()),
+// 						key1: DecodeDifferent::Decoded("u16".to_string()),
+// 						key2: DecodeDifferent::Decoded("u32".to_string()),
+// 						hasher: StorageHasher::Twox64Concat,
+// 						key2_hasher: StorageHasher::Blake2_128Concat,
+// 					},
+// 					default: DecodeDifferent::Decoded(vec![0]),
+// 					documentation: DecodeDifferent::Decoded(vec![]),
+// 				},
+// 				#[cfg(feature = "conditional-storage")] StorageEntryMetadata {
+// 					name: DecodeDifferent::Decoded("ConditionalValue".to_string()),
+// 					modifier: StorageEntryModifier::Optional,
+// 					ty: StorageEntryType::Plain(DecodeDifferent::Decoded("u32".to_string())),
+// 					default: DecodeDifferent::Decoded(vec![0]),
+// 					documentation: DecodeDifferent::Decoded(vec![]),
+// 				},
+// 				#[cfg(feature = "conditional-storage")] StorageEntryMetadata {
+// 					name: DecodeDifferent::Decoded("ConditionalMap".to_string()),
+// 					modifier: StorageEntryModifier::Optional,
+// 					ty: StorageEntryType::Map {
+// 						key: DecodeDifferent::Decoded("u16".to_string()),
+// 						value: DecodeDifferent::Decoded("u32".to_string()),
+// 						hasher: StorageHasher::Twox64Concat,
+// 						unused: false,
+// 					},
+// 					default: DecodeDifferent::Decoded(vec![0]),
+// 					documentation: DecodeDifferent::Decoded(vec![]),
+// 				},
+// 				#[cfg(feature = "conditional-storage")] StorageEntryMetadata {
+// 					name: DecodeDifferent::Decoded("ConditionalDoubleMap".to_string()),
+// 					modifier: StorageEntryModifier::Optional,
+// 					ty: StorageEntryType::DoubleMap {
+// 						value: DecodeDifferent::Decoded("u32".to_string()),
+// 						key1: DecodeDifferent::Decoded("u8".to_string()),
+// 						key2: DecodeDifferent::Decoded("u16".to_string()),
+// 						hasher: StorageHasher::Blake2_128Concat,
+// 						key2_hasher: StorageHasher::Twox64Concat,
+// 					},
+// 					default: DecodeDifferent::Decoded(vec![0]),
+// 					documentation: DecodeDifferent::Decoded(vec![]),
+// 				},
+// 			]),
+// 		})),
+// 		calls: Some(DecodeDifferent::Decoded(vec![
+// 			FunctionMetadata {
+// 				name: DecodeDifferent::Decoded("foo".to_string()),
+// 				arguments: DecodeDifferent::Decoded(vec![
+// 					FunctionArgumentMetadata {
+// 						name: DecodeDifferent::Decoded("_foo".to_string()),
+// 						ty: DecodeDifferent::Decoded("Compact<u32>".to_string()),
+// 					},
+// 					FunctionArgumentMetadata {
+// 						name: DecodeDifferent::Decoded("_bar".to_string()),
+// 						ty: DecodeDifferent::Decoded("u32".to_string()),
+// 					}
+// 				]),
+// 				documentation: DecodeDifferent::Decoded(vec![
+// 					" Doc comment put in metadata".to_string(),
+// 				]),
+// 			},
+// 			FunctionMetadata {
+// 				name: DecodeDifferent::Decoded("foo_transactional".to_string()),
+// 				arguments: DecodeDifferent::Decoded(vec![
+// 					FunctionArgumentMetadata {
+// 						name: DecodeDifferent::Decoded("foo".to_string()),
+// 						ty: DecodeDifferent::Decoded("Compact<u32>".to_string()),
+// 					}
+// 				]),
+// 				documentation: DecodeDifferent::Decoded(vec![
+// 					" Doc comment put in metadata".to_string(),
+// 				]),
+// 			},
+// 			FunctionMetadata {
+// 				name: DecodeDifferent::Decoded("foo_no_post_info".to_string()),
+// 				arguments: DecodeDifferent::Decoded(vec![]),
+// 				documentation: DecodeDifferent::Decoded(vec![]),
+// 			},
+// 		])),
+// 		event: Some(DecodeDifferent::Decoded(vec![
+// 			EventMetadata {
+// 				name: DecodeDifferent::Decoded("Proposed".to_string()),
+// 				arguments: DecodeDifferent::Decoded(vec!["<T as frame_system::Config>::AccountId".to_string()]),
+// 				documentation: DecodeDifferent::Decoded(vec![
+// 					" doc comment put in metadata".to_string()
+// 				]),
+// 			},
+// 			EventMetadata {
+// 				name: DecodeDifferent::Decoded("Spending".to_string()),
+// 				arguments: DecodeDifferent::Decoded(vec!["Balance".to_string()]),
+// 				documentation: DecodeDifferent::Decoded(vec![
+// 					" doc".to_string()
+// 				]),
+// 			},
+// 			EventMetadata {
+// 				name: DecodeDifferent::Decoded("Something".to_string()),
+// 				arguments: DecodeDifferent::Decoded(vec!["Other".to_string()]),
+// 				documentation: DecodeDifferent::Decoded(vec![]),
+// 			},
+// 			EventMetadata {
+// 				name: DecodeDifferent::Decoded("SomethingElse".to_string()),
+// 				arguments: DecodeDifferent::Decoded(vec!["<T::AccountId as SomeAssociation1>::_1".to_string()]),
+// 				documentation: DecodeDifferent::Decoded(vec![]),
+// 			},
+// 		])),
+// 		constants: DecodeDifferent::Decoded(vec![
+// 			ModuleConstantMetadata {
+// 				name: DecodeDifferent::Decoded("MyGetParam".to_string()),
+// 				ty: DecodeDifferent::Decoded("u32".to_string()),
+// 				value: DecodeDifferent::Decoded(vec![10, 0, 0, 0]),
+// 				documentation: DecodeDifferent::Decoded(vec![
+// 					" Some comment".to_string(),
+// 					" Some comment".to_string(),
+// 				]),
+// 			},
+// 			ModuleConstantMetadata {
+// 				name: DecodeDifferent::Decoded("MyGetParam2".to_string()),
+// 				ty: DecodeDifferent::Decoded("u32".to_string()),
+// 				value: DecodeDifferent::Decoded(vec![11, 0, 0, 0]),
+// 				documentation: DecodeDifferent::Decoded(vec![
+// 					" Some comment".to_string(),
+// 					" Some comment".to_string(),
+// 				]),
+// 			},
+// 			ModuleConstantMetadata {
+// 				name: DecodeDifferent::Decoded("MyGetParam3".to_string()),
+// 				ty: DecodeDifferent::Decoded("<T::AccountId as SomeAssociation1>::_1".to_string()),
+// 				value: DecodeDifferent::Decoded(vec![12, 0, 0, 0, 0, 0, 0, 0]),
+// 				documentation: DecodeDifferent::Decoded(vec![]),
+// 			},
+// 			ModuleConstantMetadata {
+// 				name: DecodeDifferent::Decoded("some_extra".to_string()),
+// 				ty: DecodeDifferent::Decoded("T::AccountId".to_string()),
+// 				value: DecodeDifferent::Decoded(vec![100, 0, 0, 0, 0, 0, 0, 0]),
+// 				documentation: DecodeDifferent::Decoded(vec![
+// 					" Some doc".to_string(),
+// 					" Some doc".to_string(),
+// 				]),
+// 			},
+// 			ModuleConstantMetadata {
+// 				name: DecodeDifferent::Decoded("some_extra_extra".to_string()),
+// 				ty: DecodeDifferent::Decoded("T::AccountId".to_string()),
+// 				value: DecodeDifferent::Decoded(vec![0, 0, 0, 0, 0, 0, 0, 0]),
+// 				documentation: DecodeDifferent::Decoded(vec![
+// 					" Some doc".to_string(),
+// 				]),
+// 			},
+// 		]),
+// 		errors: DecodeDifferent::Decoded(vec![
+// 			ErrorMetadata {
+// 				name: DecodeDifferent::Decoded("InsufficientProposersBalance".to_string()),
+// 				documentation: DecodeDifferent::Decoded(vec![
+// 					" doc comment put into metadata".to_string(),
+// 				]),
+// 			},
+// 		]),
+// 	};
+//
+// 	let metadata = match Runtime::metadata().1 {
+// 		RuntimeMetadata::V12(metadata) => metadata,
+// 		_ => panic!("metadata has been bump, test needs to be updated"),
+// 	};
+//
+// 	let modules_metadata = match metadata.modules {
+// 		DecodeDifferent::Encode(modules_metadata) => modules_metadata,
+// 		_ => unreachable!(),
+// 	};
+//
+// 	let pallet_metadata = ModuleMetadata::decode(&mut &modules_metadata[1].encode()[..]).unwrap();
+//
+// 	pretty_assertions::assert_eq!(pallet_metadata, expected_pallet_metadata);
+// }
 
-	let expected_pallet_metadata = ModuleMetadata {
-		index: 1,
-		name: DecodeDifferent::Decoded("Example".to_string()),
-		storage: Some(DecodeDifferent::Decoded(StorageMetadata {
-			prefix: DecodeDifferent::Decoded("Example".to_string()),
-			entries: DecodeDifferent::Decoded(vec![
-				StorageEntryMetadata {
-					name: DecodeDifferent::Decoded("ValueWhereClause".to_string()),
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Plain(
-						DecodeDifferent::Decoded(
-							"<T::AccountId as SomeAssociation2>::_2".to_string()
-						),
-					),
-					default: DecodeDifferent::Decoded(vec![0]),
-					documentation: DecodeDifferent::Decoded(vec![]),
-				},
-				StorageEntryMetadata {
-					name: DecodeDifferent::Decoded("Value".to_string()),
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Plain(DecodeDifferent::Decoded("u32".to_string())),
-					default: DecodeDifferent::Decoded(vec![0]),
-					documentation: DecodeDifferent::Decoded(vec![]),
-				},
-				StorageEntryMetadata {
-					name: DecodeDifferent::Decoded("Map".to_string()),
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
-						key: DecodeDifferent::Decoded("u8".to_string()),
-						value: DecodeDifferent::Decoded("u16".to_string()),
-						hasher: StorageHasher::Blake2_128Concat,
-						unused: false,
-					},
-					default: DecodeDifferent::Decoded(vec![4, 0]),
-					documentation: DecodeDifferent::Decoded(vec![]),
-				},
-				StorageEntryMetadata {
-					name: DecodeDifferent::Decoded("Map2".to_string()),
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Map {
-						key: DecodeDifferent::Decoded("u16".to_string()),
-						value: DecodeDifferent::Decoded("u32".to_string()),
-						hasher: StorageHasher::Twox64Concat,
-						unused: false,
-					},
-					default: DecodeDifferent::Decoded(vec![0]),
-					documentation: DecodeDifferent::Decoded(vec![]),
-				},
-				StorageEntryMetadata {
-					name: DecodeDifferent::Decoded("DoubleMap".to_string()),
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::DoubleMap {
-						value: DecodeDifferent::Decoded("u32".to_string()),
-						key1: DecodeDifferent::Decoded("u8".to_string()),
-						key2: DecodeDifferent::Decoded("u16".to_string()),
-						hasher: StorageHasher::Blake2_128Concat,
-						key2_hasher: StorageHasher::Twox64Concat,
-					},
-					default: DecodeDifferent::Decoded(vec![0]),
-					documentation: DecodeDifferent::Decoded(vec![]),
-				},
-				StorageEntryMetadata {
-					name: DecodeDifferent::Decoded("DoubleMap2".to_string()),
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::DoubleMap {
-						value: DecodeDifferent::Decoded("u64".to_string()),
-						key1: DecodeDifferent::Decoded("u16".to_string()),
-						key2: DecodeDifferent::Decoded("u32".to_string()),
-						hasher: StorageHasher::Twox64Concat,
-						key2_hasher: StorageHasher::Blake2_128Concat,
-					},
-					default: DecodeDifferent::Decoded(vec![0]),
-					documentation: DecodeDifferent::Decoded(vec![]),
-				},
-				#[cfg(feature = "conditional-storage")] StorageEntryMetadata {
-					name: DecodeDifferent::Decoded("ConditionalValue".to_string()),
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Plain(DecodeDifferent::Decoded("u32".to_string())),
-					default: DecodeDifferent::Decoded(vec![0]),
-					documentation: DecodeDifferent::Decoded(vec![]),
-				},
-				#[cfg(feature = "conditional-storage")] StorageEntryMetadata {
-					name: DecodeDifferent::Decoded("ConditionalMap".to_string()),
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Map {
-						key: DecodeDifferent::Decoded("u16".to_string()),
-						value: DecodeDifferent::Decoded("u32".to_string()),
-						hasher: StorageHasher::Twox64Concat,
-						unused: false,
-					},
-					default: DecodeDifferent::Decoded(vec![0]),
-					documentation: DecodeDifferent::Decoded(vec![]),
-				},
-				#[cfg(feature = "conditional-storage")] StorageEntryMetadata {
-					name: DecodeDifferent::Decoded("ConditionalDoubleMap".to_string()),
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::DoubleMap {
-						value: DecodeDifferent::Decoded("u32".to_string()),
-						key1: DecodeDifferent::Decoded("u8".to_string()),
-						key2: DecodeDifferent::Decoded("u16".to_string()),
-						hasher: StorageHasher::Blake2_128Concat,
-						key2_hasher: StorageHasher::Twox64Concat,
-					},
-					default: DecodeDifferent::Decoded(vec![0]),
-					documentation: DecodeDifferent::Decoded(vec![]),
-				},
-			]),
-		})),
-		calls: Some(DecodeDifferent::Decoded(vec![
-			FunctionMetadata {
-				name: DecodeDifferent::Decoded("foo".to_string()),
-				arguments: DecodeDifferent::Decoded(vec![
-					FunctionArgumentMetadata {
-						name: DecodeDifferent::Decoded("_foo".to_string()),
-						ty: DecodeDifferent::Decoded("Compact<u32>".to_string()),
-					},
-					FunctionArgumentMetadata {
-						name: DecodeDifferent::Decoded("_bar".to_string()),
-						ty: DecodeDifferent::Decoded("u32".to_string()),
-					}
-				]),
-				documentation: DecodeDifferent::Decoded(vec![
-					" Doc comment put in metadata".to_string(),
-				]),
-			},
-			FunctionMetadata {
-				name: DecodeDifferent::Decoded("foo_transactional".to_string()),
-				arguments: DecodeDifferent::Decoded(vec![
-					FunctionArgumentMetadata {
-						name: DecodeDifferent::Decoded("foo".to_string()),
-						ty: DecodeDifferent::Decoded("Compact<u32>".to_string()),
-					}
-				]),
-				documentation: DecodeDifferent::Decoded(vec![
-					" Doc comment put in metadata".to_string(),
-				]),
-			},
-			FunctionMetadata {
-				name: DecodeDifferent::Decoded("foo_no_post_info".to_string()),
-				arguments: DecodeDifferent::Decoded(vec![]),
-				documentation: DecodeDifferent::Decoded(vec![]),
-			},
-		])),
-		event: Some(DecodeDifferent::Decoded(vec![
-			EventMetadata {
-				name: DecodeDifferent::Decoded("Proposed".to_string()),
-				arguments: DecodeDifferent::Decoded(vec!["<T as frame_system::Config>::AccountId".to_string()]),
-				documentation: DecodeDifferent::Decoded(vec![
-					" doc comment put in metadata".to_string()
-				]),
-			},
-			EventMetadata {
-				name: DecodeDifferent::Decoded("Spending".to_string()),
-				arguments: DecodeDifferent::Decoded(vec!["Balance".to_string()]),
-				documentation: DecodeDifferent::Decoded(vec![
-					" doc".to_string()
-				]),
-			},
-			EventMetadata {
-				name: DecodeDifferent::Decoded("Something".to_string()),
-				arguments: DecodeDifferent::Decoded(vec!["Other".to_string()]),
-				documentation: DecodeDifferent::Decoded(vec![]),
-			},
-			EventMetadata {
-				name: DecodeDifferent::Decoded("SomethingElse".to_string()),
-				arguments: DecodeDifferent::Decoded(vec!["<T::AccountId as SomeAssociation1>::_1".to_string()]),
-				documentation: DecodeDifferent::Decoded(vec![]),
-			},
-		])),
-		constants: DecodeDifferent::Decoded(vec![
-			ModuleConstantMetadata {
-				name: DecodeDifferent::Decoded("MyGetParam".to_string()),
-				ty: DecodeDifferent::Decoded("u32".to_string()),
-				value: DecodeDifferent::Decoded(vec![10, 0, 0, 0]),
-				documentation: DecodeDifferent::Decoded(vec![
-					" Some comment".to_string(),
-					" Some comment".to_string(),
-				]),
-			},
-			ModuleConstantMetadata {
-				name: DecodeDifferent::Decoded("MyGetParam2".to_string()),
-				ty: DecodeDifferent::Decoded("u32".to_string()),
-				value: DecodeDifferent::Decoded(vec![11, 0, 0, 0]),
-				documentation: DecodeDifferent::Decoded(vec![
-					" Some comment".to_string(),
-					" Some comment".to_string(),
-				]),
-			},
-			ModuleConstantMetadata {
-				name: DecodeDifferent::Decoded("MyGetParam3".to_string()),
-				ty: DecodeDifferent::Decoded("<T::AccountId as SomeAssociation1>::_1".to_string()),
-				value: DecodeDifferent::Decoded(vec![12, 0, 0, 0, 0, 0, 0, 0]),
-				documentation: DecodeDifferent::Decoded(vec![]),
-			},
-			ModuleConstantMetadata {
-				name: DecodeDifferent::Decoded("some_extra".to_string()),
-				ty: DecodeDifferent::Decoded("T::AccountId".to_string()),
-				value: DecodeDifferent::Decoded(vec![100, 0, 0, 0, 0, 0, 0, 0]),
-				documentation: DecodeDifferent::Decoded(vec![
-					" Some doc".to_string(),
-					" Some doc".to_string(),
-				]),
-			},
-			ModuleConstantMetadata {
-				name: DecodeDifferent::Decoded("some_extra_extra".to_string()),
-				ty: DecodeDifferent::Decoded("T::AccountId".to_string()),
-				value: DecodeDifferent::Decoded(vec![0, 0, 0, 0, 0, 0, 0, 0]),
-				documentation: DecodeDifferent::Decoded(vec![
-					" Some doc".to_string(),
-				]),
-			},
-		]),
-		errors: DecodeDifferent::Decoded(vec![
-			ErrorMetadata {
-				name: DecodeDifferent::Decoded("InsufficientProposersBalance".to_string()),
-				documentation: DecodeDifferent::Decoded(vec![
-					" doc comment put into metadata".to_string(),
-				]),
-			},
-		]),
-	};
-
-	let metadata = match Runtime::metadata().1 {
-		RuntimeMetadata::V12(metadata) => metadata,
-		_ => panic!("metadata has been bump, test needs to be updated"),
-	};
-
-	let modules_metadata = match metadata.modules {
-		DecodeDifferent::Encode(modules_metadata) => modules_metadata,
-		_ => unreachable!(),
-	};
-
-	let pallet_metadata = ModuleMetadata::decode(&mut &modules_metadata[1].encode()[..]).unwrap();
-
-	pretty_assertions::assert_eq!(pallet_metadata, expected_pallet_metadata);
-}
-
+// todo: [AJ] update this test
 #[test]
 fn metadata_vnext() {
 	use frame_metadata::*;
@@ -915,7 +916,7 @@ fn metadata_vnext() {
 		// errors:
 	};
 
-	let metadata = match Runtime::metadata_vnext().1 {
+	let metadata = match Runtime::metadata().1 {
 		vnext::RuntimeMetadata::V12(metadata) => metadata,
 	};
 

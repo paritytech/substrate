@@ -41,25 +41,8 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 	let frame_support = &def.frame_support;
 	let event_use_gen = &event.gen_kind.type_use_gen(event.attr_span);
 	let event_impl_gen= &event.gen_kind.type_impl_gen(event.attr_span);
-	let metadata = event.metadata.iter()
-		.map(|event_def| {
-			let name = format!("{}", event_def.name);
-			let args = event_def.args.iter().map(|arg| arg.1.clone());
-			let docs = &event_def.docs;
-			quote::quote_spanned!(event.attr_span =>
-				#frame_support::event::EventMetadata {
-					name: #frame_support::event::DecodeDifferent::Encode(#name),
-					arguments: #frame_support::event::DecodeDifferent::Encode(&[
-						#( #args, )*
-					]),
-					documentation: #frame_support::event::DecodeDifferent::Encode(&[
-						#( #docs, )*
-					]),
-				},
-			)
-		});
 
-	let metadata_vnext = event.metadata.iter()
+	let metadata = event.metadata.iter()
 		.map(|event| {
 			let name = format!("{}", event.name);
 			let args = event.args
@@ -162,14 +145,8 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 		impl<#event_impl_gen> #event_ident<#event_use_gen> #event_where_clause {
 			#[allow(dead_code)]
 			#[doc(hidden)]
-			pub fn metadata() -> &'static [#frame_support::event::EventMetadata] {
-				&[ #( #metadata )* ]
-			}
-
-			#[allow(dead_code)]
-			#[doc(hidden)]
-			pub fn metadata_vnext() -> #frame_support::scale_info::prelude::vec::Vec<#frame_support::metadata::v13::EventMetadata> {
-				#frame_support::scale_info::prelude::vec![ #( #metadata_vnext )* ]
+			pub fn metadata() -> #frame_support::scale_info::prelude::vec::Vec<#frame_support::metadata::v13::EventMetadata> {
+				#frame_support::scale_info::prelude::vec![ #( #metadata )* ]
 			}
 		}
 	)

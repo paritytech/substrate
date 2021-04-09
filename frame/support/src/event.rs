@@ -146,15 +146,8 @@ macro_rules! decl_event {
 		impl Event {
 			#[allow(dead_code)]
 			#[doc(hidden)]
-			pub fn metadata() -> &'static [ $crate::event::EventMetadata ] {
+			pub fn metadata() -> $crate::scale_info::prelude::vec::Vec<$crate::metadata::v13::EventMetadata> {
 				$crate::__events_to_metadata!(; $( $events )* )
-			}
-
-			/// Metadata vnext only supported by new frame support macros
-			#[allow(dead_code)]
-			#[doc(hidden)]
-			pub fn metadata_vnext() -> $crate::scale_info::prelude::vec::Vec<$crate::metadata::v13::EventMetadata> {
-				$crate::__events_to_metadata_vnext!(; $( $events )* )
 			}
 		}
 	}
@@ -305,14 +298,8 @@ macro_rules! __decl_generic_event {
 		{
 			#[allow(dead_code)]
 			#[doc(hidden)]
-			pub fn metadata() -> &'static [$crate::event::EventMetadata] {
+			pub fn metadata() -> $crate::scale_info::prelude::vec::Vec<$crate::metadata::v13::EventMetadata> {
 				$crate::__events_to_metadata!(; $( $events )* )
-			}
-
-			#[allow(dead_code)]
-			#[doc(hidden)]
-			pub fn metadata_vnext() -> $crate::scale_info::prelude::vec::Vec<$crate::metadata::v13::EventMetadata> {
-				$crate::__events_to_metadata_vnext!(; $( $events )* )
 			}
 		}
 	};
@@ -331,36 +318,6 @@ macro_rules! __events_to_metadata {
 		$( $rest:tt )*
 	) => {
 		$crate::__events_to_metadata!(
-			$( $metadata, )*
-			$crate::event::EventMetadata {
-				name: $crate::event::DecodeDifferent::Encode(stringify!($event)),
-				arguments: $crate::event::DecodeDifferent::Encode(&[
-					$( $( stringify!($param) ),* )*
-				]),
-				documentation: $crate::event::DecodeDifferent::Encode(&[
-					$( $doc_attr ),*
-				]),
-			};
-			$( $rest )*
-		)
-	};
-	(
-		$( $metadata:expr ),*;
-	) => {
-		&[ $( $metadata ),* ]
-	}
-}
-
-#[macro_export]
-#[doc(hidden)]
-macro_rules! __events_to_metadata_vnext {
-	(
-		$( $metadata:expr ),*;
-		$( #[doc = $doc_attr:tt] )*
-		$event:ident $( ( $( $param:path ),* $(,)? ) )*,
-		$( $rest:tt )*
-	) => {
-		$crate::__events_to_metadata_vnext!(
 			$( $metadata, )*
 			$crate::metadata::v13::EventMetadata {
 				name: stringify!($event),
@@ -542,15 +499,6 @@ macro_rules! impl_outer_event {
 				$( $generic_instance )?,
 			)*;
 		);
-		$crate::__impl_outer_event_json_metadata_vnext!(
-			$runtime;
-			$name;
-			$(
-				$module_name::Event
-				< $( $generic_param )? $(, $module_name::$generic_instance )? >
-				$( $generic_instance )?,
-			)*;
-		);
 	}
 }
 
@@ -564,19 +512,17 @@ macro_rules! __impl_outer_event_json_metadata {
 	) => {
 		impl $runtime {
 			#[allow(dead_code)]
-			pub fn outer_event_metadata() -> $crate::event::OuterEventMetadata {
-				$crate::event::OuterEventMetadata {
-					name: $crate::event::DecodeDifferent::Encode(stringify!($event_name)),
-					events: $crate::event::DecodeDifferent::Encode(&[
+			pub fn outer_event_metadata() -> $crate::metadata::v13::OuterEventMetadata {
+				$crate::metadata::v13::OuterEventMetadata {
+					name: stringify!($event_name),
+					events: $crate::scale_info::prelude::vec![
 						$(
-							(
-								stringify!($module_name),
-								$crate::event::FnEncode(
-									$module_name::Event ::< $( $generic_params ),* > ::metadata
-								)
-							)
+							$crate::metadata::v13::ModuleEventMetadata {
+								name: stringify!($module_name),
+								events: $module_name::Event ::< $( $generic_params ),* > ::metadata()
+							}
 						),*
-					])
+					]
 				}
 			}
 
@@ -596,58 +542,9 @@ macro_rules! __impl_outer_event_json_metadata {
 			$(
 				#[allow(dead_code)]
 				pub fn [< __module_events_ $module_name $( _ $instance )? >] () ->
-					&'static [$crate::event::EventMetadata]
-				{
-					$module_name::Event ::< $( $generic_params ),* > ::metadata()
-				}
-			)*
-		}
-	}
-}
-
-#[macro_export]
-#[doc(hidden)]
-macro_rules! __impl_outer_event_json_metadata_vnext {
-	(
-		$runtime:ident;
-		$event_name:ident;
-		$( $module_name:ident::Event < $( $generic_params:path ),* > $( $instance:ident )?, )*;
-	) => {
-		impl $runtime {
-			#[allow(dead_code)]
-			pub fn outer_event_metadata_vnext() -> $crate::metadata::v13::OuterEventMetadata {
-				$crate::metadata::v13::OuterEventMetadata {
-					name: stringify!($event_name),
-					events: $crate::scale_info::prelude::vec![
-						$(
-							$crate::metadata::v13::ModuleEventMetadata {
-								name: stringify!($module_name),
-								events: $module_name::Event ::< $( $generic_params ),* > ::metadata_vnext()
-							}
-						),*
-					]
-				}
-			}
-
-			$crate::__impl_outer_event_json_metadata_vnext! {
-				@DECL_MODULE_EVENT_FNS
-				$( $module_name < $( $generic_params ),* > $( $instance )? ; )*
-			}
-		}
-	};
-
-	(@DECL_MODULE_EVENT_FNS
-		$(
-			$module_name:ident < $( $generic_params:path ),* > $( $instance:ident )? ;
-		)*
-	) => {
-		$crate::paste::item! {
-			$(
-				#[allow(dead_code)]
-				pub fn [< __module_events_vnext_ $module_name $( _ $instance )? >] () ->
 					Vec<$crate::metadata::v13::EventMetadata>
 				{
-					$module_name::Event ::< $( $generic_params ),* > ::metadata_vnext()
+					$module_name::Event ::< $( $generic_params ),* > ::metadata()
 				}
 			)*
 		}

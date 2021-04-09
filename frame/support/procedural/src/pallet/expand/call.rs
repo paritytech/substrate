@@ -16,7 +16,6 @@
 // limitations under the License.
 
 use crate::pallet::Def;
-use frame_support_procedural_tools::clean_type_string;
 use syn::spanned::Spanned;
 
 /// * Generate enum call and implement various trait on it.
@@ -53,19 +52,6 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 				} else {
 					quote::quote!()
 				}
-			})
-			.collect::<Vec<_>>()
-	});
-
-	let args_metadata_type = def.call.methods.iter().map(|method| {
-		method.args.iter()
-			.map(|(is_compact, _, type_)| {
-				let final_type = if *is_compact {
-					quote::quote_spanned!(type_.span() => Compact<#type_>)
-				} else {
-					quote::quote!(#type_)
-				};
-				clean_type_string(&final_type.to_string())
 			})
 			.collect::<Vec<_>>()
 	});
@@ -193,34 +179,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 
 		impl<#type_impl_gen> #pallet_ident<#type_use_gen> #where_clause {
 			#[doc(hidden)]
-			#[allow(dead_code)]
-			pub fn call_functions() -> &'static [#frame_support::dispatch::FunctionMetadata] {
-				&[ #(
-					#frame_support::dispatch::FunctionMetadata {
-						name: #frame_support::dispatch::DecodeDifferent::Encode(
-							stringify!(#fn_name)
-						),
-						arguments: #frame_support::dispatch::DecodeDifferent::Encode(
-							&[ #(
-								#frame_support::dispatch::FunctionArgumentMetadata {
-									name: #frame_support::dispatch::DecodeDifferent::Encode(
-										stringify!(#args_name)
-									),
-									ty: #frame_support::dispatch::DecodeDifferent::Encode(
-										#args_metadata_type
-									),
-								},
-							)* ]
-						),
-						documentation: #frame_support::dispatch::DecodeDifferent::Encode(
-							&[ #( #fn_doc ),* ]
-						),
-					},
-				)* ]
-			}
-
-			#[doc(hidden)]
-			pub fn call_functions_vnext() -> #frame_support::scale_info::prelude::vec::Vec<#frame_support::metadata::v13::FunctionMetadata> {
+			pub fn call_functions() -> #frame_support::scale_info::prelude::vec::Vec<#frame_support::metadata::v13::FunctionMetadata> {
 				#frame_support::scale_info::prelude::vec![ #(
 					#frame_support::metadata::v13::FunctionMetadata {
 						name: stringify!(#fn_name),
