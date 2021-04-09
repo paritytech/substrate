@@ -229,7 +229,7 @@ where
 		let mut headers = Vec::new();
 		let mut current = block + One::one();
 		loop {
-			if current >= just_block || headers.len() >= MAX_UNKNOWN_HEADERS {
+			if current > just_block || headers.len() >= MAX_UNKNOWN_HEADERS {
 				break;
 			}
 			headers.push(backend.blockchain().expect_header(BlockId::Number(current))?);
@@ -487,6 +487,7 @@ pub(crate) mod tests {
 	fn finality_proof_using_authority_set_changes_works() {
 		let (client, backend, blocks) = test_blockchain(8, &[4, 5]);
 		let block7_header = blocks[6].header().clone();
+		let block8_header = blocks[7].header().clone();
 		let block8_hash = blocks[7].hash();
 
 		let auth = vec![(AuthorityId::from_slice(&[1u8; 32]), 1u64)];
@@ -515,7 +516,7 @@ pub(crate) mod tests {
 			FinalityProof {
 				block: block8_hash,
 				justification: grandpa_just8.encode(),
-				unknown_headers: vec![block7_header],
+				unknown_headers: vec![block7_header, block8_header],
 			}
 		);
 	}
@@ -524,6 +525,7 @@ pub(crate) mod tests {
 	fn finality_proof_in_last_set_using_latest_justification_works() {
 		let (client, backend, blocks) = test_blockchain(8, &[4, 5]);
 		let block7_header = blocks[6].header().clone();
+		let block8_header = blocks[7].header().clone();
 		let block8_hash = blocks[7].hash();
 
 		let auth = vec![(AuthorityId::from_slice(&[1u8; 32]), 1u64)];
@@ -551,7 +553,7 @@ pub(crate) mod tests {
 			FinalityProof {
 				block: block8_hash,
 				justification: grandpa_just8.encode(),
-				unknown_headers: vec![block7_header],
+				unknown_headers: vec![block7_header, block8_header],
 			}
 		);
 	}
