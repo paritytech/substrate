@@ -274,7 +274,7 @@ pub trait OffchainWorker<BlockNumber> {
 pub struct Backing {
 	/// The number of members of the group that back some motion.
 	pub approvals: u32,
-	/// The number of members of the group that do not back the motion.
+	/// The total count of group members.
 	pub eligible: u32,
 }
 /// Retrieve the backing from an object's ref.
