@@ -247,7 +247,7 @@ impl Sandbox for FunctionExecutor {
 			.instance(instance_id).map_err(|e| e.to_string())?;
 
 		let result = EXECUTOR.set(self, || {
-			instance.invoke::<_, Holder>(export_name, &args, state)
+			instance.invoke::<_, CapsHolder>(export_name, &args, state)
 		});
 
 		match result {
@@ -301,7 +301,7 @@ impl Sandbox for FunctionExecutor {
 		println!("Instantiating sandbox from wasmi");
 
 		let store = &mut *self.inner.sandbox_store.borrow_mut();
-		let result = EXECUTOR.set(self, || store.instantiate::<_, Holder>(
+		let result = EXECUTOR.set(self, || store.instantiate::<_, CapsHolder, ThunkHolder>(
 			dispatch_thunk,
 			wasm,
 			guest_env,
@@ -336,17 +336,30 @@ impl Sandbox for FunctionExecutor {
 	}
 }
 
-struct Holder;
+struct CapsHolder;
 
 scoped_tls::scoped_thread_local!(static EXECUTOR: FunctionExecutor);
 
-impl sandbox::SandboxCapabiliesHolder for Holder {
+impl sandbox::SandboxCapabiliesHolder for CapsHolder {
 	type SupervisorFuncRef = wasmi::FuncRef;
 	type SC = FunctionExecutor;
 
 	fn with_sandbox_capabilities<R, F: FnOnce(&mut Self::SC) -> R>(f: F) -> R {
 		assert!(EXECUTOR.is_set(), "wasmi executor is not set");
 		EXECUTOR.with(|executor| f(&mut executor.clone()))
+	}
+}
+
+struct ThunkHolder;
+
+scoped_tls::scoped_thread_local!(static DISPATCH_THUNK: wasmi::FuncRef);
+
+impl sandbox::DispatchThunkHolder for ThunkHolder {
+	type DispatchThunk = wasmi::FuncRef;
+
+	fn with_dispatch_thunk<R, F: FnOnce(&mut Self::DispatchThunk) -> R>(f: F) -> R {
+		assert!(DISPATCH_THUNK.is_set(), "dispatch thunk is not set");
+		DISPATCH_THUNK.with(|thunk| f(&mut thunk.clone()))
 	}
 }
 

@@ -22,7 +22,7 @@
 //! a compiled execution engine.
 
 use crate::error::{Result, Error};
-use std::{cell::RefCell, collections::HashMap, convert::TryInto, rc::Rc, todo};
+use std::{cell::RefCell, collections::HashMap, convert::TryInto, rc::Rc, sync::{Arc, Mutex}, todo};
 use codec::{Decode, Encode};
 use sp_core::sandbox as sandbox_primitives;
 
@@ -649,6 +649,15 @@ pub trait SandboxCapabiliesHolder {
 	fn with_sandbox_capabilities<R, F: FnOnce(&mut Self::SC) -> R>(f: F) -> R;
 }
 
+/// Helper type to provide dispatch thunk to the inner context
+pub trait DispatchThunkHolder {
+	/// Dispatch thunk for this particular context
+	type DispatchThunk;
+
+	/// Wrapper that provides dispatch thunk in a limited context
+	fn with_dispatch_thunk<R, F: FnOnce(&mut Self::DispatchThunk) -> R>(f: F) -> R;
+}
+
 /// Sandbox backend to use
 pub enum SandboxBackend {
 	/// Wasm interpreter
@@ -685,7 +694,7 @@ impl Memory {
 }
 
 struct WasmerBackend {
-	compiler: Singlepass,
+	// compiler: Singlepass,
 	store: wasmer::Store,
 }
 
@@ -706,8 +715,8 @@ impl BackendContext {
 
 				BackendContext::Wasmer(
 					WasmerBackend {
-						store: wasmer::Store::new(&wasmer::JIT::new(&compiler).engine()),
-						compiler,
+						store: wasmer::Store::new(&wasmer::JIT::new(compiler).engine()),
+						// compiler,
 					}
 				)
 			}
@@ -867,7 +876,7 @@ impl<FR> Store<FR> {
 	/// normally created by `sp_sandbox::Instance` primitive.
 	///
 	/// Returns uninitialized sandboxed module instance or an instantiation error.
-	pub fn instantiate<'a, FE, SCH>(
+	pub fn instantiate<'a, FE, SCH, DTH>(
 		&mut self,
 		dispatch_thunk: FR,
 		wasm: &[u8],
@@ -878,6 +887,7 @@ impl<FR> Store<FR> {
 		FR: Clone + 'static,
 		FE: SandboxCapabilities<SupervisorFuncRef = FR> + 'a,
 		SCH: SandboxCapabiliesHolder<SupervisorFuncRef = FR, SC = FE>,
+		DTH: DispatchThunkHolder<DispatchThunk = FR>,
 	{
 		let memories = &mut self.memories;
 		let backend_context = &self.backend_context;
@@ -1090,8 +1100,9 @@ impl<FR> Store<FR> {
 							let supervisor_func_index = guest_env.guest_to_supervisor_mapping
 								.func_by_guest_index(guest_func_index).expect("missing guest to host mapping");
 
-							let dispatch_thunk = dispatch_thunk.clone();
-							let function = wasmer::Function::new(&context.store, func_ty, move |params| {
+							let dispatch_thunk = Mutex::new(dispatch_thunk.clone());
+							let function = wasmer::Function::new(&context.store, func_ty, move |params: &[wasmer::Val]| {
+
 								SCH::with_sandbox_capabilities(|supervisor_externals| {
 									// Serialize arguments into a byte vector.
 									let invoke_args_data = params
@@ -1127,14 +1138,15 @@ impl<FR> Store<FR> {
 										return Err(wasmer::RuntimeError::new("Can't write invoke args into memory"));
 									}
 
-									let serialized_result = supervisor_externals.invoke(
-										&dispatch_thunk,
-										invoke_args_ptr,
-										invoke_args_len,
-										state,
-										supervisor_func_index,
-									)
-										.map_err(|e| wasmer::RuntimeError::new(e.to_string()))?;
+									let serialized_result = DTH::with_dispatch_thunk(|dispatch_thunk| {
+										supervisor_externals.invoke(
+											&dispatch_thunk,
+											invoke_args_ptr,
+											invoke_args_len,
+											state,
+											supervisor_func_index,
+										)
+									}).map_err(|e| wasmer::RuntimeError::new(e.to_string()))?;
 
 									// dispatch_thunk returns pointer to serialized arguments.
 									// Unpack pointer and len of the serialized result data.
@@ -1192,6 +1204,7 @@ impl<FR> Store<FR> {
 						match error {
 							wasmer::InstantiationError::Link(_) => InstantiationError::Instantiation,
 							wasmer::InstantiationError::Start(_) => InstantiationError::StartTrapped,
+							wasmer::InstantiationError::HostEnvInitialization(_) => InstantiationError::EnvironmentDefinitionCorrupted,
 						}
 					})?;
 

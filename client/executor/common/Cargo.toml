@@ -24,8 +24,10 @@ sp-wasm-interface = { version = "3.0.0", path = "../../../primitives/wasm-interf
 sp-serializer = { version = "3.0.0", path = "../../../primitives/serializer" }
 wasmtime = { git = "https://github.com/Vurich/wasmtime.git", branch="master" }
 
-wasmer = { git = "https://github.com/0x7CFE/wasmer", branch = "frame-info-patch" }
-wasmer-compiler-singlepass = { git = "https://github.com/0x7CFE/wasmer", branch = "frame-info-patch" }
+wasmer = "1.0"
+wasmer-compiler-singlepass = "1.0"
+# wasmer = { git = "https://github.com/0x7CFE/wasmer", branch = "frame-info-patch" }
+# wasmer-compiler-singlepass = { git = "https://github.com/0x7CFE/wasmer", branch = "frame-info-patch" }
 #wasmer-engine-jit = { git = "https://github.com/0x7CFE/wasmer", branch = "frame-info-patch" }
 
 #wasmer = "1.0.0-alpha3"

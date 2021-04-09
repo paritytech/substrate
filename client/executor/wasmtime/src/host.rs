@@ -335,7 +335,7 @@ impl Sandbox for HostState {
 			.instance(instance_id)
 			.map_err(|e| e.to_string())?;
 
-		let result = instance.invoke::<_, Holder>(export_name, &args, state);
+		let result = instance.invoke::<_, CapsHolder>(export_name, &args, state);
 
 		match result {
 			Ok(None) => Ok(sandbox_primitives::ERR_OK),
@@ -400,7 +400,7 @@ impl Sandbox for HostState {
 
 		let store = &mut *self.inner.sandbox_store.borrow_mut();
 		let instance_idx_or_err_code =
-			match store.instantiate::<_, Holder>(
+			match store.instantiate::<_, CapsHolder, ThunkHolder>(
 				dispatch_thunk,
 				wasm,
 				guest_env,
@@ -429,9 +429,9 @@ impl Sandbox for HostState {
 	}
 }
 
-struct Holder;
+struct CapsHolder;
 
-impl SandboxCapabiliesHolder for Holder {
+impl SandboxCapabiliesHolder for CapsHolder {
 	type SupervisorFuncRef = SupervisorFuncRef;
 	type SC = HostState;
 
@@ -439,5 +439,18 @@ impl SandboxCapabiliesHolder for Holder {
 		crate::state_holder::with_context(|ctx| {
 			f(&mut ctx.expect("wasmtime executor is not set"))
 		})
+	}
+}
+
+struct ThunkHolder;
+
+scoped_tls::scoped_thread_local!(static DISPATCH_THUNK: SupervisorFuncRef);
+
+impl sandbox::DispatchThunkHolder for ThunkHolder {
+	type DispatchThunk = SupervisorFuncRef;
+
+	fn with_dispatch_thunk<R, F: FnOnce(&mut Self::DispatchThunk) -> R>(f: F) -> R {
+		assert!(DISPATCH_THUNK.is_set(), "dispatch thunk is not set");
+		DISPATCH_THUNK.with(|thunk| f(&mut thunk.clone()))
 	}
 }
