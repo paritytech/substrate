@@ -117,11 +117,9 @@ macro_rules! __runtime_modules_to_metadata {
 			$( $metadata, )* $crate::metadata::v13::ModuleMetadata {
 				name: stringify!($name),
 				index: $index,
-				// todo: [AJ] storage
-				storage: None,
-				// storage: $crate::__runtime_modules_to_metadata_calls_storage!(
-				// 	$mod, $module $( <$instance> )?, $runtime, $(with $kw)*
-				// ),
+				storage: $crate::__runtime_modules_to_metadata_calls_storage!(
+					$mod, $module $( <$instance> )?, $runtime, $(with $kw)*
+				),
 				calls: $crate::__runtime_modules_to_metadata_calls_call!(
 					$mod, $module $( <$instance> )?, $runtime, $(with $kw)*
 				),
@@ -219,42 +217,37 @@ macro_rules! __runtime_modules_to_metadata_calls_event {
 	};
 }
 
-// todo: [AJ] implement storage metadata vnext
-// #[macro_export]
-// #[doc(hidden)]
-// macro_rules! __runtime_modules_to_metadata_calls_storage {
-// 	(
-// 		$mod: ident,
-// 		$module: ident $( <$instance:ident> )?,
-// 		$runtime: ident,
-// 		with Storage
-// 		$(with $kws:ident)*
-// 	) => {
-// 		Some($crate::metadata::DecodeDifferent::Encode(
-// 			$crate::metadata::FnEncode(
-// 				$mod::$module::<$runtime $(, $mod::$instance )?>::storage_metadata
-// 			)
-// 		))
-// 	};
-// 	(
-// 		$mod: ident,
-// 		$module: ident $( <$instance:ident> )?,
-// 		$runtime: ident,
-// 		with $_:ident
-// 		$(with $kws:ident)*
-// 	) => {
-// 		$crate::__runtime_modules_to_metadata_calls_storage! {
-// 			$mod, $module $( <$instance> )?, $runtime, $(with $kws)*
-// 		};
-// 	};
-// 	(
-// 		$mod: ident,
-// 		$module: ident $( <$instance:ident> )?,
-// 		$runtime: ident,
-// 	) => {
-// 		None
-// 	};
-// }
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __runtime_modules_to_metadata_calls_storage {
+	(
+		$mod: ident,
+		$module: ident $( <$instance:ident> )?,
+		$runtime: ident,
+		with Storage
+		$(with $kws:ident)*
+	) => {
+		Some($mod::$module::<$runtime $(, $mod::$instance )?>::storage_metadata())
+	};
+	(
+		$mod: ident,
+		$module: ident $( <$instance:ident> )?,
+		$runtime: ident,
+		with $_:ident
+		$(with $kws:ident)*
+	) => {
+		$crate::__runtime_modules_to_metadata_calls_storage! {
+			$mod, $module $( <$instance> )?, $runtime, $(with $kws)*
+		};
+	};
+	(
+		$mod: ident,
+		$module: ident $( <$instance:ident> )?,
+		$runtime: ident,
+	) => {
+		None
+	};
+}
 
 // todo: [AJ] restore metadata tests
 // #[cfg(test)]

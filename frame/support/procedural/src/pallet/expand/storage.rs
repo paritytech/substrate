@@ -17,7 +17,6 @@
 
 use crate::pallet::Def;
 use crate::pallet::parse::storage::{Metadata, QueryKind};
-use frame_support_procedural_tools::clean_type_string;
 
 /// Generate the prefix_ident related the the storage.
 /// prefix_ident is used for the prefix struct to be given to storage as first generic param.
@@ -94,54 +93,45 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 
 			let ty = match &storage.metadata {
 				Metadata::Value { value } => {
-					let value = clean_type_string(&quote::quote!(#value).to_string());
 					quote::quote_spanned!(storage.attr_span =>
-						#frame_support::metadata::StorageEntryType::Plain(
-							#frame_support::metadata::DecodeDifferent::Encode(#value)
+						#frame_support::metadata::v13::StorageEntryType::Plain(
+							#frame_support::scale_info::meta_type::<#value>()
 						)
 					)
 				},
 				Metadata::Map { key, value } => {
-					let value = clean_type_string(&quote::quote!(#value).to_string());
-					let key = clean_type_string(&quote::quote!(#key).to_string());
 					quote::quote_spanned!(storage.attr_span =>
-						#frame_support::metadata::StorageEntryType::Map {
+						#frame_support::metadata::v13::StorageEntryType::Map {
 							hasher: <#full_ident as #metadata_trait>::HASHER,
-							key: #frame_support::metadata::DecodeDifferent::Encode(#key),
-							value: #frame_support::metadata::DecodeDifferent::Encode(#value),
+							key: #frame_support::scale_info::meta_type::<#key>(),
+							value: #frame_support::scale_info::meta_type::<#value>(),
 							unused: false,
 						}
 					)
 				},
 				Metadata::DoubleMap { key1, key2, value } => {
-					let value = clean_type_string(&quote::quote!(#value).to_string());
-					let key1 = clean_type_string(&quote::quote!(#key1).to_string());
-					let key2 = clean_type_string(&quote::quote!(#key2).to_string());
 					quote::quote_spanned!(storage.attr_span =>
-						#frame_support::metadata::StorageEntryType::DoubleMap {
+						#frame_support::metadata::v13::StorageEntryType::DoubleMap {
 							hasher: <#full_ident as #metadata_trait>::HASHER1,
 							key2_hasher: <#full_ident as #metadata_trait>::HASHER2,
-							key1: #frame_support::metadata::DecodeDifferent::Encode(#key1),
-							key2: #frame_support::metadata::DecodeDifferent::Encode(#key2),
-							value: #frame_support::metadata::DecodeDifferent::Encode(#value),
+							key1: #frame_support::scale_info::meta_type::<#key1>(),
+							key2: #frame_support::scale_info::meta_type::<#key2>(),
+							value: #frame_support::scale_info::meta_type::<#value>(),
 						}
 					)
 				}
 			};
 
 			quote::quote_spanned!(storage.attr_span =>
-				#(#cfg_attrs)* #frame_support::metadata::StorageEntryMetadata {
-					name: #frame_support::metadata::DecodeDifferent::Encode(
-						<#full_ident as #metadata_trait>::NAME
-					),
+				#(#cfg_attrs)* #frame_support::metadata::v13::StorageEntryMetadata {
+					name: <#full_ident as #metadata_trait>::NAME,
 					modifier: <#full_ident as #metadata_trait>::MODIFIER,
 					ty: #ty,
-					default: #frame_support::metadata::DecodeDifferent::Encode(
-						<#full_ident as #metadata_trait>::DEFAULT
-					),
-					documentation: #frame_support::metadata::DecodeDifferent::Encode(&[
+					// todo: [AJ] do we need the ByteGetter stuff or is a Vec<u8> okay?
+					default: <#full_ident as #metadata_trait>::DEFAULT.0.default_byte(),
+					documentation: #frame_support::scale_info::prelude::vec![
 						#( #docs, )*
-					]),
+					],
 				}
 			)
 		});
@@ -275,18 +265,16 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 			#completed_where_clause
 		{
 			#[doc(hidden)]
-			pub fn storage_metadata() -> #frame_support::metadata::StorageMetadata {
-				#frame_support::metadata::StorageMetadata {
-					prefix: #frame_support::metadata::DecodeDifferent::Encode(
-						<
-							<T as #frame_system::Config>::PalletInfo as
-							#frame_support::traits::PalletInfo
-						>::name::<#pallet_ident<#type_use_gen>>()
-							.expect("Every active pallet has a name in the runtime; qed")
-					),
-					entries: #frame_support::metadata::DecodeDifferent::Encode(
-						&[ #( #entries, )* ]
-					),
+			pub fn storage_metadata() -> #frame_support::metadata::v13::StorageMetadata {
+				#frame_support::metadata::v13::StorageMetadata {
+					prefix: <
+						<T as #frame_system::Config>::PalletInfo as
+						#frame_support::traits::PalletInfo
+					>::name::<#pallet_ident<#type_use_gen>>()
+						.expect("Every active pallet has a name in the runtime; qed"),
+					entries: #frame_support::scale_info::prelude::vec![
+						#( #entries, )*
+					],
 				}
 			}
 		}

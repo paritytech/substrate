@@ -26,7 +26,8 @@ use crate::{
 	},
 	traits::{GetDefault, StorageInstance},
 };
-use frame_metadata::{DefaultByteGetter, StorageEntryModifier};
+use frame_metadata::DefaultByteGetter;
+use frame_metadata2::v13::StorageEntryModifier;
 use sp_std::vec::Vec;
 
 /// A type that allow to store values for `(key1, key2)` couple. Similar to `StorageMap` but allow
@@ -391,8 +392,8 @@ pub trait StorageDoubleMapMetadata {
 	const MODIFIER: StorageEntryModifier;
 	const NAME: &'static str;
 	const DEFAULT: DefaultByteGetter;
-	const HASHER1: frame_metadata::StorageHasher;
-	const HASHER2: frame_metadata::StorageHasher;
+	const HASHER1: frame_metadata2::v13::StorageHasher;
+	const HASHER2: frame_metadata2::v13::StorageHasher;
 }
 
 impl<Prefix, Hasher1, Hasher2, Key1, Key2, Value, QueryKind, OnEmpty> StorageDoubleMapMetadata
@@ -407,8 +408,8 @@ impl<Prefix, Hasher1, Hasher2, Key1, Key2, Value, QueryKind, OnEmpty> StorageDou
 	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static
 {
 	const MODIFIER: StorageEntryModifier = QueryKind::METADATA;
-	const HASHER1: frame_metadata::StorageHasher = Hasher1::METADATA;
-	const HASHER2: frame_metadata::StorageHasher = Hasher2::METADATA;
+	const HASHER1: frame_metadata2::v13::StorageHasher = Hasher1::METADATA;
+	const HASHER2: frame_metadata2::v13::StorageHasher = Hasher2::METADATA;
 	const NAME: &'static str = Prefix::STORAGE_PREFIX;
 	const DEFAULT: DefaultByteGetter =
 		DefaultByteGetter(&OnEmptyGetter::<QueryKind::Query, OnEmpty>(core::marker::PhantomData));
