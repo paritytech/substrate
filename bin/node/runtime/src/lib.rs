@@ -40,7 +40,7 @@ use frame_system::{
 	EnsureRoot, EnsureOneOf,
 	limits::{BlockWeights, BlockLength}
 };
-use frame_support::traits::InstanceFilter;
+use frame_support::{traits::InstanceFilter, PalletId};
 use codec::{Encode, Decode};
 use sp_core::{
 	crypto::KeyTypeId,
@@ -52,7 +52,7 @@ use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
 use sp_api::impl_runtime_apis;
 use sp_runtime::{
 	Permill, Perbill, Perquintill, Percent, ApplyExtrinsicResult, impl_opaque_keys, generic,
-	create_runtime_str, ModuleId, FixedPointNumber,
+	create_runtime_str, FixedPointNumber,
 };
 use sp_runtime::curve::PiecewiseLinear;
 use sp_runtime::transaction_validity::{TransactionValidity, TransactionSource, TransactionPriority};
@@ -634,7 +634,7 @@ parameter_types! {
 	pub const TermDuration: BlockNumber = 7 * DAYS;
 	pub const DesiredMembers: u32 = 13;
 	pub const DesiredRunnersUp: u32 = 7;
-	pub const ElectionsPhragmenModuleId: LockIdentifier = *b"phrelect";
+	pub const ElectionsPhragmenPalletId: LockIdentifier = *b"phrelect";
 }
 
 // Make sure that there are no more than `MaxMembers` members elected via elections-phragmen.
@@ -642,7 +642,7 @@ const_assert!(DesiredMembers::get() <= CouncilMaxMembers::get());
 
 impl pallet_elections_phragmen::Config for Runtime {
 	type Event = Event;
-	type ModuleId = ElectionsPhragmenModuleId;
+	type PalletId = ElectionsPhragmenPalletId;
 	type Currency = Balances;
 	type ChangeMembers = Council;
 	// NOTE: this implies that council's genesis members cannot be set directly and must come from
@@ -705,7 +705,7 @@ parameter_types! {
 	pub const DataDepositPerByte: Balance = 1 * CENTS;
 	pub const BountyDepositBase: Balance = 1 * DOLLARS;
 	pub const BountyDepositPayoutDelay: BlockNumber = 1 * DAYS;
-	pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
+	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
 	pub const BountyUpdatePeriod: BlockNumber = 14 * DAYS;
 	pub const MaximumReasonLength: u32 = 16384;
 	pub const BountyCuratorDeposit: Permill = Permill::from_percent(50);
@@ -713,7 +713,7 @@ parameter_types! {
 }
 
 impl pallet_treasury::Config for Runtime {
-	type ModuleId = TreasuryModuleId;
+	type PalletId = TreasuryPalletId;
 	type Currency = Balances;
 	type ApproveOrigin = EnsureOneOf<
 		AccountId,
@@ -970,12 +970,12 @@ parameter_types! {
 	pub const MaxLockDuration: BlockNumber = 36 * 30 * DAYS;
 	pub const ChallengePeriod: BlockNumber = 7 * DAYS;
 	pub const MaxCandidateIntake: u32 = 10;
-	pub const SocietyModuleId: ModuleId = ModuleId(*b"py/socie");
+	pub const SocietyPalletId: PalletId = PalletId(*b"py/socie");
 }
 
 impl pallet_society::Config for Runtime {
 	type Event = Event;
-	type ModuleId = SocietyModuleId;
+	type PalletId = SocietyPalletId;
 	type Currency = Balances;
 	type Randomness = RandomnessCollectiveFlip;
 	type CandidateDeposit = CandidateDeposit;
@@ -1013,13 +1013,13 @@ impl pallet_mmr::Config for Runtime {
 }
 
 parameter_types! {
-	pub const LotteryModuleId: ModuleId = ModuleId(*b"py/lotto");
+	pub const LotteryPalletId: PalletId = PalletId(*b"py/lotto");
 	pub const MaxCalls: usize = 10;
 	pub const MaxGenerateRandom: u32 = 10;
 }
 
 impl pallet_lottery::Config for Runtime {
-	type ModuleId = LotteryModuleId;
+	type PalletId = LotteryPalletId;
 	type Call = Call;
 	type Currency = Balances;
 	type Randomness = RandomnessCollectiveFlip;
