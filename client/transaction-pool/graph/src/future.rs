@@ -47,8 +47,12 @@ impl<Hash: fmt::Debug, Ex: fmt::Debug> fmt::Debug for WaitingTransaction<Hash, E
 		write!(fmt, "WaitingTransaction {{ ")?;
 		write!(fmt, "imported_at: {:?}, ", self.imported_at)?;
 		write!(fmt, "transaction: {:?}, ", self.transaction)?;
-		write!(fmt, "missing_tags: {{{}}}", self.missing_tags.iter()
-			.map(|tag| HexDisplay::from(tag).to_string()).collect::<Vec<_>>().join(", "))?;
+		write!(
+			fmt, 
+			"missing_tags: {{{}}}", 
+			self.missing_tags.iter()
+				.map(|tag| HexDisplay::from(tag).to_string()).collect::<Vec<_>>().join(", "),
+		)?;
 		write!(fmt, "}}")
 	}
 }
