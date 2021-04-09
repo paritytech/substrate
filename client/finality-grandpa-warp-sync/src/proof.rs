@@ -29,8 +29,8 @@ use sp_runtime::{
 
 use crate::HandleRequestError;
 
-/// The maximum number of authority set change proofs to include in a single warp sync proof.
-const MAX_CHANGES_PER_WARP_SYNC_PROOF: usize = 256;
+/// The maximum size in bytes of the `WarpSyncProof`.
+pub(super) const MAX_WARP_SYNC_PROOF_SIZE: usize = 16 * 1024 * 1024;
 
 /// A proof of an authority set change.
 #[derive(Decode, Encode)]
@@ -53,7 +53,7 @@ pub struct WarpSyncProof<Block: BlockT> {
 impl<Block: BlockT> WarpSyncProof<Block> {
 	/// Generates a warp sync proof starting at the given block. It will generate authority set
 	/// change proofs for all changes that happened from `begin` until the current authority set
-	/// (capped by MAX_CHANGES_PER_WARP_SYNC_PROOF).
+	/// (capped by MAX_WARP_SYNC_PROOF_SIZE).
 	pub fn generate<Backend>(
 		backend: &Backend,
 		begin: Block::Hash,
@@ -88,10 +88,14 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 		}
 
 		let mut proofs = Vec::new();
+		let mut proofs_encoded_len = 0;
 		let mut proof_limit_reached = false;
 
 		for (_, last_block) in set_changes.iter_from(begin_number) {
-			if proofs.len() >= MAX_CHANGES_PER_WARP_SYNC_PROOF {
+			// Check for the limit. We remove some bytes from the maximum size, because we're only
+			// counting the size of the `WarpSyncFragment`s. The extra margin is here to leave
+			// room for rest of the data (the size of the `Vec` and the boolean).
+			if proofs_encoded_len >= MAX_WARP_SYNC_PROOF_SIZE - 50 {
 				proof_limit_reached = true;
 				break;
 			}
@@ -120,10 +124,13 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 
 			let justification = GrandpaJustification::<Block>::decode(&mut &justification[..])?;
 
-			proofs.push(WarpSyncFragment {
+			let proof = WarpSyncFragment {
 				header: header.clone(),
 				justification,
-			});
+			};
+
+			proofs_encoded_len += proof.encoded_size();
+			proofs.push(proof);
 		}
 
 		let is_finished = if proof_limit_reached {
