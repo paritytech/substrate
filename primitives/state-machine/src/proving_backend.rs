@@ -121,11 +121,13 @@ pub struct ProofRecorder<Hash> {
 impl<Hash: std::hash::Hash + Eq> ProofRecorder<Hash> {
 	/// Record the given `key` => `val` combination.
 	pub fn record(&self, key: Hash, val: Option<DBValue>) {
-		if let Some(ref val) = val {
-			self.encoded_size.fetch_add(val.encoded_size(), Ordering::Relaxed);
-		}
+		self.records.write().entry(key).or_insert_with(|| {
+			if let Some(ref val) = val {
+				self.encoded_size.fetch_add(val.encoded_size(), Ordering::Relaxed);
+			}
 
-		self.records.write().insert(key, val);
+			val
+		});
 	}
 
 	/// Returns the value at the given `key`.
