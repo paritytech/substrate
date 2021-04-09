@@ -158,7 +158,7 @@ impl<B, Block, C, A, PR> ProposerFactory<A, B, C, PR>
 
 		let id = BlockId::hash(parent_hash);
 
-		info!("🙌 Starting consdefault_block_size_limiton top of parent {:?}", parent_hash);
+		info!("🙌 Starting consensus session on top of parent {:?}", parent_hash);
 
 		let proposer = Proposer::<_, _, _, _, PR> {
 			spawn_handle: self.spawn_handle.clone(),
