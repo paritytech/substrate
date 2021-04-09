@@ -175,7 +175,7 @@ impl<Hash, Extrinsic> fmt::Debug for Transaction<Hash, Extrinsic> where
 {
 	fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
 		let join_tags = |tags: &[Tag]| {
-			tags.iter().map(|tag| HexDisplay::from(tag).to_string()).collect::<Vec<_>>().join(",")
+			tags.iter().map(|tag| HexDisplay::from(tag).to_string()).collect::<Vec<_>>().join(", ")
 		};
 
 		write!(fmt, "Transaction {{ ")?;
