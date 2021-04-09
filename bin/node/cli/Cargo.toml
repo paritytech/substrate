@@ -116,7 +116,7 @@ sp-trie = { version = "3.0.0", default-features = false, path = "../../../primit
 [dev-dependencies]
 sc-keystore = { version = "3.0.0", path = "../../../client/keystore" }
 sc-consensus = { version = "0.9.0", path = "../../../client/consensus/common" }
-sc-consensus-babe = { version = "0.9.0", features = ["test-helpers"], path = "../../../client/consensus/babe" }
+sc-consensus-babe = { version = "0.9.0", path = "../../../client/consensus/babe" }
 sc-consensus-epochs = { version = "0.9.0", path = "../../../client/consensus/epochs" }
 sc-service-test = { version = "2.0.0", path = "../../../client/service/test" }
 futures = "0.3.9"
