@@ -55,7 +55,7 @@ use frame_support::{
 		PostDispatchInfo,
 	},
 	ensure,
-	traits::{ChangeMembers, EnsureOrigin, Get, InitializeMembers},
+	traits::{ChangeMembers, EnsureOrigin, Get, InitializeMembers, GetBacking, Backing},
 	weights::{DispatchClass, GetDispatchInfo, Weight, Pays},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
@@ -163,6 +163,15 @@ pub enum RawOrigin<AccountId, I> {
 	Member(AccountId),
 	/// Dummy to manage the fact we have instancing.
 	_Phantom(sp_std::marker::PhantomData<I>),
+}
+
+impl<AccountId, I> GetBacking for RawOrigin<AccountId, I> {
+	fn get_backing(&self) -> Option<Backing> {
+		match self {
+			RawOrigin::Members(n, d) => Some(Backing { approvals: *n, eligible: *d }),
+			_ => None,
+		}
+	}
 }
 
 /// Origin for the collective module.
