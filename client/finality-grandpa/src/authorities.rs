@@ -27,6 +27,8 @@ use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_INFO};
 use sp_finality_grandpa::{AuthorityId, AuthorityList};
 use sc_consensus::shared_data::{SharedData, SharedDataLocked};
 
+use crate::SetId;
+
 use std::cmp::Ord;
 use std::fmt::Debug;
 use std::ops::Add;
@@ -684,6 +686,17 @@ impl<H, N: Add<Output=N> + Clone> PendingChange<H, N> {
 #[derive(Debug, Encode, Decode, Clone, PartialEq)]
 pub struct AuthoritySetChanges<N>(Vec<(u64, N)>);
 
+/// The response when queuering for a the set id for a specific block. Either we get a set id
+/// together with a block number for the last block in the set, or that the requested block is in the
+/// latest set.
+#[derive(Debug, PartialEq)]
+pub enum AuthoritySetChangeId<N> {
+	/// The requested block is in the latest set.
+	Latest,
+	/// Tuple containing the set id and the last block number of that set.
+	Set(SetId, N),
+}
+
 impl<N> From<Vec<(u64, N)>> for AuthoritySetChanges<N> {
 	fn from(changes: Vec<(u64, N)>) -> AuthoritySetChanges<N> {
 		AuthoritySetChanges(changes)
@@ -699,7 +712,11 @@ impl<N: Ord + Clone> AuthoritySetChanges<N> {
 		self.0.push((set_id, block_number));
 	}
 
-	pub(crate) fn get_set_id(&self, block_number: N) -> Option<(u64, N)> {
+	pub(crate) fn get_set_id(&self, block_number: N) -> Option<AuthoritySetChangeId<N>> {
+		if self.block_is_current_set(block_number.clone()).unwrap_or(false) {
+			return Some(AuthoritySetChangeId::Latest);
+		}
+
 		let idx = self.0
 			.binary_search_by_key(&block_number, |(_, n)| n.clone())
 			.unwrap_or_else(|b| b);
@@ -718,10 +735,14 @@ impl<N: Ord + Clone> AuthoritySetChanges<N> {
 				// that we are in the right set id.
 				return None;
 			}
-			Some((set_id, block_number))
+			Some(AuthoritySetChangeId::Set(set_id, block_number))
 		} else {
 			None
 		}
+	}
+
+	pub(crate) fn block_is_current_set(&self, block_number: N) -> Option<bool> {
+		self.0.last().map(|last_auth_change| last_auth_change.1 < block_number)
 	}
 
 	/// Returns an iterator over all historical authority set changes starting at the given block
@@ -1660,11 +1681,11 @@ mod tests {
 		authority_set_changes.append(1, 81);
 		authority_set_changes.append(2, 121);
 
-		assert_eq!(authority_set_changes.get_set_id(20), Some((0, 41)));
-		assert_eq!(authority_set_changes.get_set_id(40), Some((0, 41)));
-		assert_eq!(authority_set_changes.get_set_id(41), Some((0, 41)));
-		assert_eq!(authority_set_changes.get_set_id(42), Some((1, 81)));
-		assert_eq!(authority_set_changes.get_set_id(141), None);
+		assert_eq!(authority_set_changes.get_set_id(20), Some(AuthoritySetChangeId::Set(0, 41)));
+		assert_eq!(authority_set_changes.get_set_id(40), Some(AuthoritySetChangeId::Set(0, 41)));
+		assert_eq!(authority_set_changes.get_set_id(41), Some(AuthoritySetChangeId::Set(0, 41)));
+		assert_eq!(authority_set_changes.get_set_id(42), Some(AuthoritySetChangeId::Set(1, 81)));
+		assert_eq!(authority_set_changes.get_set_id(141), Some(AuthoritySetChangeId::Latest));
 	}
 
 	#[test]
@@ -1677,8 +1698,8 @@ mod tests {
 		assert_eq!(authority_set_changes.get_set_id(20), None);
 		assert_eq!(authority_set_changes.get_set_id(40), None);
 		assert_eq!(authority_set_changes.get_set_id(41), None);
-		assert_eq!(authority_set_changes.get_set_id(42), Some((3, 81)));
-		assert_eq!(authority_set_changes.get_set_id(141), None);
+		assert_eq!(authority_set_changes.get_set_id(42), Some(AuthoritySetChangeId::Set(3, 81)));
+		assert_eq!(authority_set_changes.get_set_id(141), Some(AuthoritySetChangeId::Latest));
 	}
 
 	#[test]

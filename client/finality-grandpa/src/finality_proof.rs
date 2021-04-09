@@ -41,18 +41,21 @@ use std::sync::Arc;
 
 use finality_grandpa::BlockNumberOps;
 use parity_scale_codec::{Encode, Decode};
-use sp_blockchain::{Backend as BlockchainBackend, Error as ClientError, Result as ClientResult};
+use sp_blockchain::{
+	Backend as BlockchainBackend, HeaderBackend, Error as ClientError, Result as ClientResult
+};
 use sp_runtime::{
 	EncodedJustification, generic::BlockId,
 	traits::{NumberFor, Block as BlockT, Header as HeaderT, One},
 };
 use sc_client_api::backend::Backend;
-use sp_finality_grandpa::{AuthorityId, GRANDPA_ENGINE_ID};
+use sp_finality_grandpa::{AuthorityId, GRANDPA_ENGINE_ID, SetId};
 
-use crate::authorities::AuthoritySetChanges;
-use crate::justification::GrandpaJustification;
-use crate::SharedAuthoritySet;
-use crate::VoterSet;
+use crate::{
+	VoterSet, SharedAuthoritySet, best_justification,
+	authorities::{AuthoritySetChangeId, AuthoritySetChanges},
+	justification::GrandpaJustification,
+};
 
 const MAX_UNKNOWN_HEADERS: usize = 100_000;
 
@@ -104,7 +107,7 @@ where
 	/// the authority set.
 	pub fn prove_finality(
 		&self,
-		block: NumberFor<Block>
+		block: NumberFor<Block>,
 	) -> Result<Option<Vec<u8>>, FinalityProofError> {
 		let authority_set_changes = if let Some(changes) = self
 			.shared_authority_set
@@ -117,7 +120,7 @@ where
 		};
 
 		prove_finality::<_, _, GrandpaJustification<Block>>(
-			&*self.backend.blockchain(),
+			&*self.backend,
 			authority_set_changes,
 			block,
 		)
@@ -152,17 +155,17 @@ pub enum FinalityProofError {
 }
 
 fn prove_finality<Block, B, J>(
-	blockchain: &B,
+	backend: &B,
 	authority_set_changes: AuthoritySetChanges<NumberFor<Block>>,
 	block: NumberFor<Block>,
 ) -> Result<Option<Vec<u8>>, FinalityProofError>
 where
 	Block: BlockT,
-	B: BlockchainBackend<Block>,
+	B: Backend<Block>,
 	J: ProvableJustification<Block::Header>,
 {
 	// Early-return if we sure that there are no blocks finalized AFTER begin block
-	let info = blockchain.info();
+	let info = backend.blockchain().info();
 	if info.finalized_number <= block {
 		let err = format!(
 			"Requested finality proof for descendant of #{} while we only have finalized #{}.",
@@ -173,10 +176,8 @@ where
 		return Err(FinalityProofError::BlockNotYetFinalized);
 	}
 
-	// Get set_id the block belongs to, and the last block of the set which should contain a
-	// Justification we can use to prove the requested block.
-	let (_, last_block_for_set) = if let Some(id) = authority_set_changes.get_set_id(block) {
-		id
+	let authority_set_change_id = if let Some(set_id) = authority_set_changes.get_set_id(block) {
+		set_id
 	} else {
 		trace!(
 			target: "afg",
@@ -187,31 +188,51 @@ where
 		return Err(FinalityProofError::BlockNotInAuthoritySetChanges);
 	};
 
-	// Get the Justification stored at the last block of the set
-	let last_block_for_set_id = BlockId::Number(last_block_for_set);
-	let justification =
-		if let Some(grandpa_justification) = blockchain.justifications(last_block_for_set_id)?
-			.and_then(|justifications| justifications.into_justification(GRANDPA_ENGINE_ID))
-		{
-			grandpa_justification
-		} else {
-			trace!(
-				target: "afg",
-				"No justification found when making finality proof for {}. Returning empty proof.",
-				block,
-			);
-			return Ok(None);
-		};
+	let (justification, just_block) = match authority_set_change_id {
+		AuthoritySetChangeId::Latest => {
+			if let Some(justification) = best_justification::<_, Block::Header, _>(backend)?
+				.map(|j: J| (j.encode(), j.target_number()))
+			{
+				justification
+			} else {
+				trace!(
+					target: "afg",
+					"No justification found for the latest finalized block. \
+					Returning empty proof.",
+				);
+				return Ok(None);
+			}
+		}
+		AuthoritySetChangeId::Set(_, last_block_for_set) => {
+			let last_block_for_set_id = BlockId::Number(last_block_for_set);
+			let justification = if let Some(grandpa_justification) = backend
+				.blockchain()
+				.justifications(last_block_for_set_id)?
+				.and_then(|justifications| justifications.into_justification(GRANDPA_ENGINE_ID))
+			{
+				grandpa_justification
+			} else {
+				trace!(
+					target: "afg",
+					"No justification found when making finality proof for {}. \
+					Returning empty proof.",
+					block,
+				);
+				return Ok(None);
+			};
+			(justification, last_block_for_set)
+		}
+	};
 
 	// Collect all headers from the requested block until the last block of the set
 	let unknown_headers = {
 		let mut headers = Vec::new();
 		let mut current = block + One::one();
 		loop {
-			if current >= last_block_for_set || headers.len() >= MAX_UNKNOWN_HEADERS {
+			if current >= just_block || headers.len() >= MAX_UNKNOWN_HEADERS {
 				break;
 			}
-			headers.push(blockchain.expect_header(BlockId::Number(current))?);
+			headers.push(backend.blockchain().expect_header(BlockId::Number(current))?);
 			current += One::one();
 		}
 		headers
@@ -219,7 +240,7 @@ where
 
 	Ok(Some(
 		FinalityProof {
-			block: blockchain.expect_block_hash_from_id(&last_block_for_set_id)?,
+			block: backend.blockchain().expect_block_hash_from_id(&BlockId::Number(just_block))?,
 			justification,
 			unknown_headers,
 		}
@@ -235,7 +256,7 @@ where
 /// This is currently not used, and exists primarily as an example of how to check finality proofs.
 #[cfg(test)]
 fn check_finality_proof<Header: HeaderT, J>(
-	current_set_id: u64,
+	current_set_id: SetId,
 	current_authorities: sp_finality_grandpa::AuthorityList,
 	remote_proof: Vec<u8>,
 ) -> ClientResult<FinalityProof<Header>>
@@ -255,12 +276,12 @@ where
 /// Justification used to prove block finality.
 pub trait ProvableJustification<Header: HeaderT>: Encode + Decode {
 	/// Verify justification with respect to authorities set and authorities set id.
-	fn verify(&self, set_id: u64, authorities: &[(AuthorityId, u64)]) -> ClientResult<()>;
+	fn verify(&self, set_id: SetId, authorities: &[(AuthorityId, u64)]) -> ClientResult<()>;
 
 	/// Decode and verify justification.
 	fn decode_and_verify(
 		justification: &EncodedJustification,
-		set_id: u64,
+		set_id: SetId,
 		authorities: &[(AuthorityId, u64)],
 	) -> ClientResult<Self> {
 		let justification =
@@ -268,18 +289,24 @@ pub trait ProvableJustification<Header: HeaderT>: Encode + Decode {
 		justification.verify(set_id, authorities)?;
 		Ok(justification)
 	}
+
+	fn target_number(&self) -> Header::Number;
 }
 
 impl<Block: BlockT> ProvableJustification<Block::Header> for GrandpaJustification<Block>
 where
 	NumberFor<Block>: BlockNumberOps,
 {
-	fn verify(&self, set_id: u64, authorities: &[(AuthorityId, u64)]) -> ClientResult<()> {
+	fn verify(&self, set_id: SetId, authorities: &[(AuthorityId, u64)]) -> ClientResult<()> {
 		let authorities = VoterSet::new(authorities.iter().cloned()).ok_or(
 			ClientError::Consensus(sp_consensus::Error::InvalidAuthoritiesSet),
 		)?;
 
 		GrandpaJustification::verify_with_voter_set(self, set_id, &authorities)
+	}
+
+	fn target_number(&self) -> NumberFor<Block> {
+		self.target().0
 	}
 }
 
@@ -287,34 +314,34 @@ where
 pub(crate) mod tests {
 	use super::*;
 	use crate::authorities::AuthoritySetChanges;
+	use futures::executor::block_on;
+	use sc_block_builder::BlockBuilderProvider;
+	use sc_client_api::{apply_aux, LockImportRun};
+	use sp_consensus::BlockOrigin;
 	use sp_core::crypto::Public;
-	use sp_runtime::Justifications;
-	use sp_finality_grandpa::AuthorityList;
-	use sc_client_api::NewBlockState;
-	use sc_client_api::in_mem::Blockchain as InMemoryBlockchain;
-	use substrate_test_runtime_client::runtime::{Block, Header, H256};
+	use sp_finality_grandpa::{AuthorityList, GRANDPA_ENGINE_ID as ID};
+	use substrate_test_runtime_client::{
+		runtime::{Block, BlockNumber, Header, H256},
+		Backend as TestBackend, ClientBlockImportExt, ClientExt, DefaultTestClientBuilderExt,
+		TestClient, TestClientBuilder, TestClientBuilderExt,
+	};
 
 	pub(crate) type FinalityProof = super::FinalityProof<Header>;
 
 	#[derive(Debug, PartialEq, Encode, Decode)]
-	pub struct TestJustification(pub (u64, AuthorityList), pub Vec<u8>);
+	pub struct TestJustification(pub (SetId, AuthorityList), pub Vec<u8>, pub BlockNumber);
 
 	impl ProvableJustification<Header> for TestJustification {
-		fn verify(&self, set_id: u64, authorities: &[(AuthorityId, u64)]) -> ClientResult<()> {
+		fn verify(&self, set_id: SetId, authorities: &[(AuthorityId, u64)]) -> ClientResult<()> {
 			if (self.0).0 != set_id || (self.0).1 != authorities {
 				return Err(ClientError::BadJustification("test".into()));
 			}
 
 			Ok(())
 		}
-	}
 
-	#[derive(Debug, PartialEq, Encode, Decode)]
-	pub struct TestBlockJustification(TestJustification, u64, H256);
-
-	impl ProvableJustification<Header> for TestBlockJustification {
-		fn verify(&self, set_id: u64, authorities: &[(AuthorityId, u64)]) -> ClientResult<()> {
-			self.0.verify(set_id, authorities)
+		fn target_number(&self) -> u64 {
+			self.2
 		}
 	}
 
@@ -332,60 +359,72 @@ pub(crate) mod tests {
 		)
 	}
 
-	fn test_blockchain() -> InMemoryBlockchain<Block> {
-		use sp_finality_grandpa::GRANDPA_ENGINE_ID as ID;
-		let blockchain = InMemoryBlockchain::<Block>::new();
-		let just0 = Some(Justifications::from((ID, vec![0])));
-		let just1 = Some(Justifications::from((ID, vec![1])));
-		let just2 = None;
-		let just3 = Some(Justifications::from((ID, vec![3])));
-		blockchain.insert(header(0).hash(), header(0), just0, None, NewBlockState::Final).unwrap();
-		blockchain.insert(header(1).hash(), header(1), just1, None, NewBlockState::Final).unwrap();
-		blockchain.insert(header(2).hash(), header(2), just2, None, NewBlockState::Best).unwrap();
-		blockchain.insert(header(3).hash(), header(3), just3, None, NewBlockState::Final).unwrap();
-		blockchain
+	fn test_blockchain(
+		number_of_blocks: u64,
+		to_finalize: &[u64],
+	) -> (Arc<TestClient>, Arc<TestBackend>, Vec<Block>) {
+		let builder = TestClientBuilder::new();
+		let backend = builder.backend();
+		let mut client = Arc::new(builder.build());
+
+		let mut blocks = Vec::new();
+		for _ in 0..number_of_blocks {
+			let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+			block_on(client.import(BlockOrigin::Own, block.clone())).unwrap();
+			blocks.push(block);
+		}
+
+		for block in to_finalize {
+			let just = block.encode();
+			client.finalize_block(BlockId::Number(*block), Some((ID, just))).unwrap();
+		}
+
+		(client, backend, blocks)
+	}
+
+	fn store_best_justification(client: &TestClient, just: &TestJustification) {
+		client.lock_import_and_run(|import_op| {
+			crate::aux_schema::update_best_justification::<Header, _, _, _>(
+				just,
+				|insert| apply_aux(import_op, insert, &[]),
+			)
+		})
+		.unwrap();
 	}
 
 	#[test]
 	fn finality_proof_fails_if_no_more_last_finalized_blocks() {
-		use sp_finality_grandpa::GRANDPA_ENGINE_ID as ID;
-		let blockchain = test_blockchain();
-		let just1 = Some(Justifications::from((ID, vec![1])));
-		let just2 = Some(Justifications::from((ID, vec![2])));
-		blockchain.insert(header(4).hash(), header(4), just1, None, NewBlockState::Best).unwrap();
-		blockchain.insert(header(5).hash(), header(5), just2, None, NewBlockState::Best).unwrap();
+		let (_, backend, _) = test_blockchain(6, &[4]);
+		let authority_set_changes = AuthoritySetChanges::empty();
 
-		let mut authority_set_changes = AuthoritySetChanges::empty();
-		authority_set_changes.append(0, 5);
-
-		// The last finalized block is 3, so we cannot provide further justifications.
-		let proof_of_4 = prove_finality::<_, _, TestJustification>(
-			&blockchain,
+		// The last finalized block is 4, so we cannot provide further justifications.
+		let proof_of_5 = prove_finality::<_, _, TestJustification>(
+			&*backend,
 			authority_set_changes,
-			*header(4).number(),
+			*header(5).number(),
 		);
-		assert!(matches!(proof_of_4, Err(FinalityProofError::BlockNotYetFinalized)));
+		assert!(matches!(proof_of_5, Err(FinalityProofError::BlockNotYetFinalized)));
 	}
 
 	#[test]
 	fn finality_proof_is_none_if_no_justification_known() {
-		let blockchain = test_blockchain();
-		blockchain
-			.insert(header(4).hash(), header(4), None, None, NewBlockState::Final)
-			.unwrap();
+		let (client, backend, _) = test_blockchain(5, &[4]);
+
+		// Finalize without justification
+		client.finalize_block(BlockId::Number(5), None).unwrap();
 
 		let mut authority_set_changes = AuthoritySetChanges::empty();
-		authority_set_changes.append(0, 4);
+		authority_set_changes.append(0, 5);
 
-		// Block 4 is finalized without justification
-		// => we can't prove finality of 3
-		let proof_of_3 = prove_finality::<_, _, TestJustification>(
-			&blockchain,
+		// Block 5 is finalized without justification
+		// => we can't prove finality of 4
+		let proof_of_4 = prove_finality::<_, _, TestJustification>(
+			&*backend,
 			authority_set_changes,
-			*header(3).number(),
+			*header(4).number(),
 		)
 		.unwrap();
-		assert_eq!(proof_of_3, None);
+		assert_eq!(proof_of_4, None);
 	}
 
 	#[test]
@@ -415,7 +454,7 @@ pub(crate) mod tests {
 		let auth = vec![(AuthorityId::from_slice(&[3u8; 32]), 1u64)];
 		let finality_proof = FinalityProof {
 			block: header(2).hash(),
-			justification: TestJustification((1, auth.clone()), vec![7]).encode(),
+			justification: TestJustification((1, auth.clone()), vec![7], 2).encode(),
 			unknown_headers: Vec::new(),
 		};
 		let proof = check_finality_proof::<_, TestJustification>(
@@ -429,65 +468,90 @@ pub(crate) mod tests {
 
 	#[test]
 	fn finality_proof_using_authority_set_changes_fails_with_undefined_start() {
-		use sp_finality_grandpa::GRANDPA_ENGINE_ID as ID;
-		let blockchain = test_blockchain();
-		let auth = vec![(AuthorityId::from_slice(&[1u8; 32]), 1u64)];
-		let grandpa_just4 = TestJustification((0, auth.clone()), vec![4]).encode();
-		let grandpa_just7 = TestJustification((1, auth.clone()), vec![7]).encode();
-		let just4 = Some(Justifications::from((ID, grandpa_just4)));
-		let just7 = Some(Justifications::from((ID, grandpa_just7)));
-		blockchain.insert(header(4).hash(), header(4), just4, None, NewBlockState::Final).unwrap();
-		blockchain.insert(header(5).hash(), header(5), None, None, NewBlockState::Final).unwrap();
-		blockchain.insert(header(6).hash(), header(6), None, None, NewBlockState::Final).unwrap();
-		blockchain.insert(header(7).hash(), header(7), just7, None, NewBlockState::Final).unwrap();
+		let (_, backend, _) = test_blockchain(8, &[4, 5, 8]);
 
 		// We have stored the correct block number for the relevant set, but as we are missing the
 		// block for the preceding set the start is not well-defined.
 		let mut authority_set_changes = AuthoritySetChanges::empty();
-		authority_set_changes.append(1, 7);
+		authority_set_changes.append(1, 8);
 
-		let proof_of_5 = prove_finality::<_, _, TestJustification>(
-			&blockchain,
+		let proof_of_6 = prove_finality::<_, _, TestJustification>(
+			&*backend,
 			authority_set_changes,
-			*header(5).number(),
+			*header(6).number(),
 		);
-		assert!(matches!(proof_of_5, Err(FinalityProofError::BlockNotInAuthoritySetChanges)));
+		assert!(matches!(proof_of_6, Err(FinalityProofError::BlockNotInAuthoritySetChanges)));
 	}
 
 	#[test]
 	fn finality_proof_using_authority_set_changes_works() {
-		use sp_finality_grandpa::GRANDPA_ENGINE_ID as ID;
-		let blockchain = test_blockchain();
+		let (client, backend, blocks) = test_blockchain(8, &[4, 5]);
+		let block7_header = blocks[6].header().clone();
+		let block8_hash = blocks[7].hash();
+
 		let auth = vec![(AuthorityId::from_slice(&[1u8; 32]), 1u64)];
-		let grandpa_just4 = TestJustification((0, auth.clone()), vec![4]).encode();
-		let grandpa_just7 = TestJustification((1, auth.clone()), vec![7]).encode();
-		let just4 = Some(Justifications::from((ID, grandpa_just4)));
-		let just7 = Some(Justifications::from((ID, grandpa_just7.clone())));
-		blockchain.insert(header(4).hash(), header(4), just4, None, NewBlockState::Final) .unwrap();
-		blockchain.insert(header(5).hash(), header(5), None, None, NewBlockState::Final) .unwrap();
-		blockchain.insert(header(6).hash(), header(6), None, None, NewBlockState::Final).unwrap();
-		blockchain.insert(header(7).hash(), header(7), just7, None, NewBlockState::Final).unwrap();
+		let grandpa_just8 = TestJustification((1, auth.clone()), vec![8], 8);
+		let just8 = Some((ID, grandpa_just8.encode().clone()));
+		client.finalize_block(BlockId::Number(8), just8).unwrap();
+
+		store_best_justification(&client, &grandpa_just8);
 
 		let mut authority_set_changes = AuthoritySetChanges::empty();
-		authority_set_changes.append(0, 4);
-		authority_set_changes.append(1, 7);
+		authority_set_changes.append(0, 5);
+		authority_set_changes.append(1, 8);
 
-		let proof_of_5: FinalityProof = Decode::decode(
+		let proof_of_6: FinalityProof = Decode::decode(
 			&mut &prove_finality::<_, _, TestJustification>(
-				&blockchain,
+				&*backend,
 				authority_set_changes,
-				*header(5).number(),
+				*header(6).number(),
 			)
 			.unwrap()
 			.unwrap()[..],
 		)
 		.unwrap();
 		assert_eq!(
-			proof_of_5,
+			proof_of_6,
 			FinalityProof {
-				block: header(7).hash(),
-				justification: grandpa_just7,
-				unknown_headers: vec![header(6)],
+				block: block8_hash,
+				justification: grandpa_just8.encode(),
+				unknown_headers: vec![block7_header],
+			}
+		);
+	}
+
+	#[test]
+	fn finality_proof_in_last_set_using_latest_justification_works() {
+		let (client, backend, blocks) = test_blockchain(8, &[4, 5]);
+		let block7_header = blocks[6].header().clone();
+		let block8_hash = blocks[7].hash();
+
+		let auth = vec![(AuthorityId::from_slice(&[1u8; 32]), 1u64)];
+		let grandpa_just8 = TestJustification((1, auth.clone()), vec![4], 8);
+		let just8 = Some((ID, grandpa_just8.encode()));
+		client.finalize_block(BlockId::Number(8), just8).unwrap();
+
+		store_best_justification(&client, &grandpa_just8);
+
+		let mut authority_set_changes = AuthoritySetChanges::empty();
+		authority_set_changes.append(0, 5);
+
+		let proof_of_6: FinalityProof = Decode::decode(
+			&mut &prove_finality::<_, _, TestJustification>(
+				&*backend,
+				authority_set_changes,
+				*header(6).number(),
+			)
+			.unwrap()
+			.unwrap()[..],
+		)
+		.unwrap();
+		assert_eq!(
+			proof_of_6,
+			FinalityProof {
+				block: block8_hash,
+				justification: grandpa_just8.encode(),
+				unknown_headers: vec![block7_header],
 			}
 		);
 	}

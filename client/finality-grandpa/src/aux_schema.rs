@@ -28,15 +28,19 @@ use fork_tree::ForkTree;
 use sc_client_api::backend::AuxStore;
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use sp_finality_grandpa::{AuthorityList, RoundNumber, SetId};
-use sp_runtime::traits::{Block as BlockT, NumberFor};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 
-use crate::authorities::{
-	AuthoritySet, AuthoritySetChanges, DelayKind, PendingChange, SharedAuthoritySet,
+use crate::{
+	authorities::{
+		AuthoritySet, AuthoritySetChanges, DelayKind, PendingChange, SharedAuthoritySet,
+	},
+	environment::{
+		CompletedRound, CompletedRounds, CurrentRounds, HasVoted, SharedVoterSetState,
+		VoterSetState,
+	},
+	finality_proof::ProvableJustification,
+	NewAuthoritySet,
 };
-use crate::environment::{
-	CompletedRound, CompletedRounds, CurrentRounds, HasVoted, SharedVoterSetState, VoterSetState,
-};
-use crate::{GrandpaJustification, NewAuthoritySet};
 
 const VERSION_KEY: &[u8] = b"grandpa_schema_version";
 const SET_STATE_KEY: &[u8] = b"grandpa_completed_round";
@@ -500,11 +504,13 @@ where
 /// We always keep around the justification for the best finalized block and overwrite it
 /// as we finalize new blocks, this makes sure that we don't store useless justifications
 /// but can always prove finality of the latest block.
-pub(crate) fn update_best_justification<Block: BlockT, F, R>(
-	justification: &GrandpaJustification<Block>,
+pub(crate) fn update_best_justification<Header, J, F, R>(
+	justification: &J,
 	write_aux: F,
 ) -> R
 where
+	Header: HeaderT,
+	J: ProvableJustification<Header>,
 	F: FnOnce(&[(&'static [u8], &[u8])]) -> R,
 {
 	let encoded_justification = justification.encode();
@@ -512,14 +518,15 @@ where
 }
 
 /// Fetch the justification for the latest block finalized by GRANDPA, if any.
-pub fn best_justification<B, Block>(
+pub fn best_justification<B, Header, J>(
 	backend: &B,
-) -> ClientResult<Option<GrandpaJustification<Block>>>
+) -> ClientResult<Option<J>>
 where
 	B: AuxStore,
-	Block: BlockT,
+	Header: HeaderT,
+	J: ProvableJustification<Header>,
 {
-	load_decode::<_, GrandpaJustification<Block>>(backend, BEST_JUSTIFICATION)
+	load_decode::<_, J>(backend, BEST_JUSTIFICATION)
 }
 
 /// Write voter set state.

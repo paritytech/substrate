@@ -1224,6 +1224,7 @@ where
 	Block: BlockT,
 	BE: Backend<Block>,
 	Client: crate::ClientForGrandpa<Block, BE>,
+	NumberFor<Block>: BlockNumberOps,
 {
 	// NOTE: lock must be held through writing to DB to avoid race. this lock
 	//       also implicitly synchronizes the check for last finalized number
@@ -1330,7 +1331,7 @@ where
 			"number" => ?number, "hash" => ?hash,
 		);
 
-		crate::aux_schema::update_best_justification(
+		crate::aux_schema::update_best_justification::<Block::Header, _, _, _>(
 			&justification,
 			|insert| apply_aux(import_op, insert, &[]),
 		)?;
