@@ -3833,7 +3833,13 @@ fn subbounty_extend_expiry_works() {
 		<Treasury as OnInitialize<u64>>::on_initialize(25);
 
 		// Extend the expiry block count of parent bounty.
-		assert_ok!(Bounties::extend_bounty_expiry(Origin::signed(4), 0, Vec::new()));
+		assert_noop!(
+			Bounties::extend_subbounty_bounty_expiry(Origin::signed(4), 0, 1, Vec::new()),
+			Error::<Test>::RequireSubCurator,
+		);
+		assert_ok!(
+			Bounties::extend_subbounty_bounty_expiry(Origin::signed(5), 0, 1, Vec::new())
+		);
 
 		// Check expiry status of parent bounty, gets updated to
 		// new expiry period.

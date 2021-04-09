@@ -63,3 +63,4 @@ Bounty protocol:
 - `award_subbounty` - Close and specify the subbouty payout beneficiary address.
 - `claim_subbounty` - Claim a payout amount & subcurator fee for specific subbounty.
 - `close_subbounty` - Cancel the earmark for a specific treasury amount and close the subbounty.
+- `extend_subbounty_bounty_expiry` - Extend the expiry time of an bounty of active subbounty.

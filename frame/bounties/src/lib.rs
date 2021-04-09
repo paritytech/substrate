@@ -1413,17 +1413,14 @@ decl_module! {
 			Self::impl_close_subbounty(bounty_id, subbounty_id)?;
 		}
 
-		/// Extend the expiry time of an active bounty.
+		/// Extend the expiry time of an bounty of active subbounty.
 		///
-		/// The dispatch origin for this call must be the curator of this bounty.
+		/// The dispatch origin for this call must be the subcurator of this
+		/// subbounty.
 		///
 		/// - `bounty_id`: ID pair Bounty ID.
 		/// - `subbounty_id`: ID pair SubBounty ID to cancel.
 		/// - `remark`: additional information.
-		///
-		/// # <weight>
-		/// - O(1).
-		/// # </weight>
 		#[weight = <T as Config>::WeightInfo::extend_subbounty_bounty_expiry()]
 		fn extend_subbounty_bounty_expiry(origin,
 			#[compact] bounty_id: BountyIndex,
