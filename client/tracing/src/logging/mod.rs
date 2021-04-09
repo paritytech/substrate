@@ -172,6 +172,9 @@ where
 	let builder = FmtSubscriber::builder().with_env_filter(env_filter);
 
 	#[cfg(not(target_os = "unknown"))]
+	let builder = builder.with_span_events(format::FmtSpan::CLOSE);
+
+	#[cfg(not(target_os = "unknown"))]
 	let builder = builder.with_writer(std::io::stderr as _);
 
 	#[cfg(target_os = "unknown")]
