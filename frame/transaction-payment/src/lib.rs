@@ -616,7 +616,7 @@ mod tests {
 	use sp_runtime::{
 		testing::{Header, TestXt},
 		traits::{BlakeTwo256, IdentityLookup},
-        transaction_validity::InvalidTransaction,
+		transaction_validity::InvalidTransaction,
 		Perbill,
 	};
 	use std::cell::RefCell;
