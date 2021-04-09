@@ -664,7 +664,7 @@ trigger-simnet:
 
 trigger-fail-guard:
   stage:                           verify
-  <<:                              *nightly-pipeline
+  # <<:                              *nightly-pipeline
   needs:
     - job:                         trigger-simnet
   when:                            on_failure
