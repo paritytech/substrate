@@ -21,8 +21,6 @@ use std::{
 	sync::Arc,
 };
 
-use crate::{base_pool as base, watcher::Watcher};
-
 use futures::Future;
 use sp_runtime::{
 	generic::BlockId,
@@ -35,6 +33,7 @@ use sp_transaction_pool::error;
 use wasm_timer::Instant;
 use futures::channel::mpsc::Receiver;
 
+use crate::{base_pool as base, watcher::Watcher};
 use crate::validated_pool::ValidatedPool;
 pub use crate::validated_pool::{IsValidator, ValidatedTransaction};
 

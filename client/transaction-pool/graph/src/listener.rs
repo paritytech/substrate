@@ -20,11 +20,13 @@
 use std::{
 	collections::HashMap, hash, fmt::Debug,
 };
+
 use linked_hash_map::LinkedHashMap;
 use serde::Serialize;
-use crate::{watcher, ChainApi, ExtrinsicHash, BlockHash};
 use log::{debug, trace, warn};
 use sp_runtime::traits;
+
+use crate::{watcher, ChainApi, ExtrinsicHash, BlockHash};
 
 /// Extrinsic pool default listener.
 pub struct Listener<H: hash::Hash + Eq, C: ChainApi> {

@@ -47,15 +47,13 @@ impl<Hash: fmt::Debug, Ex: fmt::Debug> fmt::Debug for WaitingTransaction<Hash, E
 		write!(fmt, "WaitingTransaction {{ ")?;
 		write!(fmt, "imported_at: {:?}, ", self.imported_at)?;
 		write!(fmt, "transaction: {:?}, ", self.transaction)?;
-		write!(fmt, "missing_tags: {{")?;
-		let mut it = self.missing_tags.iter().map(|tag| HexDisplay::from(tag));
-		if let Some(tag) = it.next() {
-			write!(fmt, "{}", tag)?;
-		}
-		for tag in it {
-			write!(fmt, ", {}", tag)?;
-		}
-		write!(fmt, " }}}}")
+		write!(
+			fmt, 
+			"missing_tags: {{{}}}", 
+			self.missing_tags.iter()
+				.map(|tag| HexDisplay::from(tag).to_string()).collect::<Vec<_>>().join(", "),
+		)?;
+		write!(fmt, "}}")
 	}
 }
 
@@ -123,7 +121,7 @@ pub struct FutureTransactions<Hash: hash::Hash + Eq, Ex> {
 
 impl<Hash: hash::Hash + Eq, Ex> Default for FutureTransactions<Hash, Ex> {
 	fn default() -> Self {
-		FutureTransactions {
+		Self {
 			wanted_tags: Default::default(),
 			waiting: Default::default(),
 		}

@@ -22,12 +22,7 @@ use std::{
 	sync::Arc,
 };
 
-use crate::base_pool as base;
-use crate::listener::Listener;
-use crate::rotator::PoolRotator;
-use crate::watcher::Watcher;
 use serde::Serialize;
-
 use parking_lot::{Mutex, RwLock};
 use sp_runtime::{
 	generic::BlockId,
@@ -39,7 +34,10 @@ use wasm_timer::Instant;
 use futures::channel::mpsc::{channel, Sender};
 use retain_mut::RetainMut;
 
-use crate::base_pool::PruneStatus;
+use crate::base_pool::{self as base, PruneStatus};
+use crate::listener::Listener;
+use crate::rotator::PoolRotator;
+use crate::watcher::Watcher;
 use crate::pool::{
 	EventStream, Options, ChainApi, BlockHash, ExtrinsicHash, ExtrinsicFor, TransactionFor,
 };
@@ -168,7 +166,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 		if !ignore_banned && self.is_banned(tx_hash) {
 			Err(error::Error::TemporarilyBanned.into())
 		} else if self.pool.read().is_imported(tx_hash) {
-			Err(error::Error::AlreadyImported(Box::new(tx_hash.clone())).into())
+			Err(error::Error::AlreadyImported(Box::new(*tx_hash)).into())
 		} else {
 			Ok(())
 		}
@@ -209,7 +207,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 				if let base::Imported::Ready { ref hash, .. } = imported {
 					self.import_notification_sinks.lock()
 						.retain_mut(|sink| {
-							match sink.try_send(hash.clone()) {
+							match sink.try_send(*hash) {
 								Ok(()) => true,
 								Err(e) => {
 									if e.is_full() {
@@ -225,7 +223,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 
 				let mut listener = self.listener.write();
 				fire_events(&mut *listener, &imported);
-				Ok(imported.hash().clone())
+				Ok(*imported.hash())
 			},
 			ValidatedTransaction::Invalid(hash, err) => {
 				self.rotator.ban(&Instant::now(), std::iter::once(hash));
