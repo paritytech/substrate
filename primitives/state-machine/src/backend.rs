@@ -245,6 +245,11 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 
 	/// Update the whitelist for tracking db reads/writes
 	fn set_whitelist(&self, _: Vec<TrackedStorageKey>) {}
+
+	/// Estimate proof size
+	fn proof_size(&self) -> Option<u32> {
+		unimplemented!()
+	}
 }
 
 impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
