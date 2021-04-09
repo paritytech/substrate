@@ -2328,7 +2328,7 @@ macro_rules! __dispatch_impl_metadata {
 		{
 			#[doc(hidden)]
 			#[allow(dead_code)]
-			pub fn call_functions() -> &'static [$crate::dispatch::FunctionMetadata] {
+			pub fn call_functions() -> $crate::dispatch::Vec<$crate::metadata::v13::FunctionMetadata> {
 				$crate::__call_to_functions!($($rest)*)
 			}
 		}
@@ -2512,7 +2512,7 @@ macro_rules! __functions_to_metadata{
 		$origin_type:ty;
 		$( $function_metadata:expr ),*;
 	) => {
-		&[ $( $function_metadata ),* ]
+		$crate::scale_info::prelude::vec![ $( $function_metadata ),* ]
 	}
 }
 
@@ -2527,31 +2527,26 @@ macro_rules! __function_to_metadata {
 		$( $fn_doc:expr ),*;
 		$fn_id:expr;
 	) => {
-		$crate::dispatch::FunctionMetadata {
-			name: $crate::dispatch::DecodeDifferent::Encode(stringify!($fn_name)),
-			arguments: $crate::dispatch::DecodeDifferent::Encode(&[
+		$crate::metadata::v13::FunctionMetadata {
+			name: stringify!($fn_name),
+			arguments: $crate::scale_info::prelude::vec![
 				$(
-					$crate::dispatch::FunctionArgumentMetadata {
-						name: $crate::dispatch::DecodeDifferent::Encode(stringify!($param_name)),
-						ty: $crate::dispatch::DecodeDifferent::Encode(
-							$crate::__function_to_metadata!(@stringify_expand_attr
-								$(#[$codec_attr])* $param_name: $param
-							)
-						),
+					$crate::metadata::v13::FunctionArgumentMetadata {
+						name: stringify!($param_name),
+						ty: $crate::scale_info::meta_type::<$param>(),
+						is_compact: $crate::__function_to_metadata!(@has_compact_attr
+							$(#[$codec_attr])* $param_name
+						)
 					}
 				),*
-			]),
-			documentation: $crate::dispatch::DecodeDifferent::Encode(&[ $( $fn_doc ),* ]),
+			],
+			documentation: $crate::scale_info::prelude::vec![ $( $fn_doc ),* ],
 		}
 	};
 
-	(@stringify_expand_attr #[compact] $param_name:ident : $param:ty) => {
-		concat!("Compact<", stringify!($param), ">")
-	};
-
-	(@stringify_expand_attr $param_name:ident : $param:ty) => { stringify!($param) };
-
-	(@stringify_expand_attr $(#[codec_attr:ident])* $param_name:ident : $param:ty) => {
+	(@has_compact_attr #[compact] $param_name:ident) => { true };
+	(@has_compact_attr $param_name:ident) => { false };
+	(@has_compact_attr $(#[codec_attr:ident])* $param_name:ident) => {
 		compile_error!(concat!(
 			"Invalid attribute for parameter `", stringify!($param_name),
 			"`, the following attributes are supported: `#[compact]`"

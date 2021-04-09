@@ -142,7 +142,7 @@ impl traits::IdentifyAccount for UintAuthorityId {
 }
 
 /// A dummy signature type, to match `UintAuthorityId`.
-#[derive(Eq, PartialEq, Clone, Debug, Hash, Serialize, Deserialize, Encode, Decode)]
+#[derive(Eq, PartialEq, Clone, Debug, Hash, Serialize, Deserialize, Encode, Decode, scale_info::TypeInfo)]
 pub struct TestSignature(pub u64, pub Vec<u8>);
 
 impl traits::Verify for TestSignature {
