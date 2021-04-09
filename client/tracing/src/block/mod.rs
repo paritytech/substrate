@@ -170,11 +170,13 @@ impl<Block, Client> BlockExecutor<Block, Client>
 
 	/// Execute block, recording all spans and events belonging to `Self::targets`
 	pub fn trace_block(&self) -> Result<BlockTrace, String> {
+		tracing::info!(target: "state_tracing", "Tracing block: {}", self.block);
 		// Prepare block
 		let id = BlockId::Hash(self.block);
 		let extrinsics = self.client.block_body(&id)
 			.map_err(|e| format!("Invalid block id: {:?}", e))?
 			.ok_or("Block not found".to_string())?;
+		tracing::debug!(target: "state_tracing", "Found {} extrinsics", extrinsics.len());
 		let mut header = self.client.header(id)
 			.map_err(|e| format!("Invalid block id: {:?}", e))?
 			.ok_or("Header not found".to_string())?;
@@ -190,16 +192,22 @@ impl<Block, Client> BlockExecutor<Block, Client>
 		let sub = BlockSubscriber::new(targets, spans, events);
 		let dispatch = Dispatch::new(sub);
 
-		if let Err(e) = dispatcher::with_default(&dispatch, || {
-			let span = tracing::info_span!(
-				target: TRACE_TARGET,
-				"trace_block",
-			);
-			let _enter = span.enter();
-			self.client.runtime_api().execute_block(&parent_id, block)
-		}) {
-			return Err(format!("Error executing block: {:?}", e));
+		{
+			let dispatcher_span = tracing::debug_span!(target: "state_tracing",
+				"execute_block", extrinsics_len = block.extrinsics().len());
+			let _guard = dispatcher_span.enter();
+			if let Err(e) = dispatcher::with_default(&dispatch, || {
+				let span = tracing::info_span!(
+					target: TRACE_TARGET,
+					"trace_block",
+				);
+				let _enter = span.enter();
+				self.client.runtime_api().execute_block(&parent_id, block)
+			}) {
+				return Err(format!("Error executing block: {:?}", e));
+			}
 		}
+
 		let block_subscriber = dispatch.downcast_ref::<BlockSubscriber>()
 			.ok_or("Cannot downcast Dispatch to BlockSubscriber after tracing block")?;
 		let mut spans: Vec<Span> = block_subscriber.spans
