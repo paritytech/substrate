@@ -277,6 +277,7 @@ pub struct Backing {
 	/// The total count of group members.
 	pub eligible: u32,
 }
+
 /// Retrieve the backing from an object's ref.
 pub trait GetBacking {
 	/// Returns `Some` `Backing` if `self` represents a fractional/groupwise backing of some
