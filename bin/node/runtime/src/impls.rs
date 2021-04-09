@@ -74,7 +74,7 @@ mod multiplier_tests {
 		let m = max_normal() as f64;
 		// block weight always truncated to max weight
 		let block_weight = (block_weight as f64).min(m);
-		let v: f64 = AdjustmentVariable::get().to_fraction();
+		let v: f64 = AdjustmentVariable::get().to_float();
 
 		// Ideal saturation in terms of weight
 		let ss = target() as f64;
