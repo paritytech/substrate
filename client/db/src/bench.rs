@@ -118,6 +118,7 @@ pub struct BenchmarkingState<B: BlockT> {
 	read_write_tracker: RefCell<ReadWriteTracker>,
 	whitelist: RefCell<Vec<TrackedStorageKey>>,
 	proof_recorder: Option<ProofRecorder<HashFor<B>>>,
+	proof_recorder_root: Cell<B::Hash>,
 }
 
 impl<B: BlockT> BenchmarkingState<B> {
@@ -130,7 +131,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 		let mut state = BenchmarkingState {
 			state: RefCell::new(None),
 			db: Cell::new(None),
-			root: Cell::new(root),
+			root: Cell::new(root.clone()),
 			genesis: Default::default(),
 			genesis_root: Default::default(),
 			record: Default::default(),
@@ -140,6 +141,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 			read_write_tracker: Default::default(),
 			whitelist: Default::default(),
 			proof_recorder: record_proof.then(Default::default),
+			proof_recorder_root: Cell::new(root.clone()),
 		};
 
 		state.add_whitelist_to_tracker();
@@ -169,6 +171,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 		self.db.set(Some(db.clone()));
 		if let Some(recorder) = &self.proof_recorder {
 			recorder.write().clear();
+			self.proof_recorder_root.set(self.root.get());
 		}
 		let storage_db = Arc::new(StorageDb::<B> {
 			db,
@@ -525,12 +528,29 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 				.filter_map(|(_k, v)| v.as_ref().map(|v| v.to_vec()))
 				.collect());
 			let proof_size = proof.encoded_size() as u32;
-			let compact_proof = encode_compact::<sp_trie::Layout<HashFor<B>>>(
-				proof,
-				self.root.get(),
-			).unwrap();
+			let proof_recorder_root = self.proof_recorder_root.get();
+			let compact_size = if proof_recorder_root == Default::default() || proof_size == 1 {
+				// empty trie
+				proof_size
+			} else {
+				let compact_proof = encode_compact::<sp_trie::Layout<HashFor<B>>>(
+					proof,
+					proof_recorder_root,
+				);
+				if compact_proof.is_err() {
+					panic!(
+						"proof rec root {:?}, root {:?}, genesis {:?}, rec_len {:?}",
+						self.proof_recorder_root.get(),
+						self.root.get(),
+						self.genesis_root,
+						proof_size,
+					);
+				}
+				let compact_proof = compact_proof.unwrap();
+				compact_proof.encoded_size() as u32
+			};
 
-			(proof_size, compact_proof.encoded_size() as u32)
+			(proof_size, compact_size)
 		})
 	}
 }
