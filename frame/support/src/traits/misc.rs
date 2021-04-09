@@ -269,3 +269,18 @@ pub trait OffchainWorker<BlockNumber> {
 	fn offchain_worker(_n: BlockNumber) {}
 }
 
+/// Some amount of backing from a group. The precise defintion of what it means to "back" something
+/// is left flexible.
+pub struct Backing {
+	/// The number of members of the group that back some motion.
+	pub approvals: u32,
+	/// The total count of group members.
+	pub eligible: u32,
+}
+
+/// Retrieve the backing from an object's ref.
+pub trait GetBacking {
+	/// Returns `Some` `Backing` if `self` represents a fractional/groupwise backing of some
+	/// implicit motion. `None` if it does not.
+	fn get_backing(&self) -> Option<Backing>;
+}
