@@ -137,6 +137,8 @@ where
 			}
 			// timeout has fired.
 
+			let ends_at = Instant::now() + time_until_next(self.slot_duration);
+
 			let chain_head = match self.client.best_chain() {
 				Ok(x) => x,
 				Err(e) => {
@@ -154,6 +156,13 @@ where
 			let inherent_data_providers = self.create_inherent_data_providers
 				.create_inherent_data_providers(chain_head.hash(), ())
 				.await?;
+
+			if Instant::now() > ends_at {
+				log::warn!(
+					target: "slots",
+					"Creating inherent data providers took more time than we had left for the slot.",
+				);
+			}
 
 			let timestamp = inherent_data_providers.timestamp();
 			let slot = inherent_data_providers.slot();
