@@ -8570,6 +8570,7 @@ dependencies = [
  "serde_json",
  "sp-debug-derive",
  "sp-std",
+ "static_assertions",
 ]
 
 [[package]]
