@@ -166,8 +166,8 @@ enum State {
 		/// Substream opened by the remote. Being closed.
 		in_substream_closing: Option<NotificationsInSubstream<NegotiatedSubstream>>,
 
-		/// Substream re-opened by the remote. Not to be closed. If `Some`, then we should jump
-		/// to `OpenDesiredByRemote` after `out_substream_closing` has finished been closed.
+		/// Substream re-opened by the remote. Not to be closed after `in_substream_closing` has
+		/// been closed.
 		in_substream_reopened: Option<NotificationsInSubstream<NegotiatedSubstream>>,
 	},
 
@@ -191,7 +191,7 @@ enum State {
 	/// be emitted when transitionning to respectively [`State::Open`] or [`State::Closed`].
 	Opening {
 		/// Outbound substream that has been accepted by the remote. Being closed. An outbound
-		/// substream request has been emitted if and only if this field is `None`.
+		/// substream request has been emitted towards libp2p if and only if this field is `None`.
 		out_substream_closing: Option<NotificationsOutSubstream<NegotiatedSubstream>>,
 
 		/// Substream re-opened by the remote. Has been accepted.
