@@ -250,7 +250,7 @@ impl sp_consensus::SlotData for BabeGenesisConfiguration {
 }
 
 /// Configuration data used by the BABE consensus engine.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, scale_info::TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct BabeEpochConfiguration {
 	/// A constant value that is used in the threshold calculation formula.

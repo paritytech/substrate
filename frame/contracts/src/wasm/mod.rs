@@ -51,7 +51,7 @@ pub use tests::MockExt;
 /// `schedule_version` and `code` when a contract with an outdated instrumention is called.
 /// Therefore one must be careful when holding any in-memory representation of this type while
 /// calling into a contract as those fields can get out of date.
-#[derive(Clone, Encode, Decode)]
+#[derive(Clone, Encode, Decode, scale_info::TypeInfo)]
 pub struct PrefabWasmModule<T: Config> {
 	/// Version of the schedule with which the code was instrumented.
 	#[codec(compact)]

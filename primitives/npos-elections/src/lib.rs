@@ -605,7 +605,7 @@ impl<AccountId> StakedAssignment<AccountId> {
 ///
 /// This, at the current version, resembles the `Exposure` defined in the Staking pallet, yet they
 /// do not necessarily have to be the same.
-#[derive(Default, RuntimeDebug, Encode, Decode, Clone, Eq, PartialEq)]
+#[derive(Default, RuntimeDebug, Encode, Decode, Clone, Eq, PartialEq, scale_info::TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct Support<AccountId> {
 	/// Total support.

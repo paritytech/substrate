@@ -202,7 +202,7 @@ pub mod pallet {
 			+ Default + Copy + CheckEqual + sp_std::hash::Hash + AsRef<[u8]> + AsMut<[u8]> + MaybeMallocSizeOf;
 
 		/// The hashing system (algorithm) being used in the runtime (e.g. Blake2).
-		type Hashing: Hash<Output=Self::Hash>;
+		type Hashing: Hash<Output=Self::Hash> + scale_info::TypeInfo;
 
 		/// The user account identifier type for the runtime.
 		type AccountId: Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + Ord
@@ -247,7 +247,7 @@ pub mod pallet {
 
 		/// Data to be associated with an account (other than nonce/transaction counter, which this
 		/// pallet does regardless).
-		type AccountData: Member + FullCodec + Clone + Default;
+		type AccountData: Member + FullCodec + Clone + Default + scale_info::TypeInfo;
 
 		/// Handler for when a new account has just been created.
 		type OnNewAccount: OnNewAccount<Self::AccountId>;
@@ -714,7 +714,7 @@ pub type Key = Vec<u8>;
 pub type KeyValue = (Vec<u8>, Vec<u8>);
 
 /// A phase of a block's execution.
-#[derive(Encode, Decode, RuntimeDebug)]
+#[derive(Encode, Decode, RuntimeDebug, scale_info::TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, PartialEq, Eq, Clone))]
 pub enum Phase {
 	/// Applying an extrinsic.
@@ -732,7 +732,7 @@ impl Default for Phase {
 }
 
 /// Record of an event happening.
-#[derive(Encode, Decode, RuntimeDebug)]
+#[derive(Encode, Decode, RuntimeDebug, scale_info::TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, PartialEq, Eq, Clone))]
 pub struct EventRecord<E: Parameter + Member, T> {
 	/// The phase of the block it happened in.
@@ -784,7 +784,7 @@ type EventIndex = u32;
 pub type RefCount = u32;
 
 /// Information of an account.
-#[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]
+#[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode, scale_info::TypeInfo)]
 pub struct AccountInfo<Index, AccountData> {
 	/// The number of transactions this account has sent.
 	pub nonce: Index,
@@ -804,7 +804,7 @@ pub struct AccountInfo<Index, AccountData> {
 
 /// Stores the `spec_version` and `spec_name` of when the last runtime upgrade
 /// happened.
-#[derive(sp_runtime::RuntimeDebug, Encode, Decode)]
+#[derive(sp_runtime::RuntimeDebug, Encode, Decode, scale_info::TypeInfo)]
 #[cfg_attr(feature = "std", derive(PartialEq))]
 pub struct LastRuntimeUpgradeInfo {
 	pub spec_version: codec::Compact<u32>,

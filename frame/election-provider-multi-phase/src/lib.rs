@@ -298,7 +298,7 @@ impl BenchmarkingConfig for () {
 }
 
 /// Current phase of the pallet.
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, scale_info::TypeInfo)]
 pub enum Phase<Bn> {
 	/// Nothing, the election is not happening.
 	Off,
@@ -396,7 +396,7 @@ impl<C: Default> Default for RawSolution<C> {
 }
 
 /// A checked solution, ready to be enacted.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default, scale_info::TypeInfo)]
 pub struct ReadySolution<A> {
 	/// The final supports of the solution.
 	///
@@ -415,7 +415,7 @@ pub struct ReadySolution<A> {
 /// [`ElectionDataProvider`] and are kept around until the round is finished.
 ///
 /// These are stored together because they are often accessed together.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default, scale_info::TypeInfo)]
 pub struct RoundSnapshot<A> {
 	/// All of the voters.
 	pub voters: Vec<(A, VoteWeight, Vec<A>)>,

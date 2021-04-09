@@ -58,7 +58,7 @@ type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Con
 
 /// The parameters under which a particular account has a proxy relationship with some other
 /// account.
-#[derive(Encode, Decode, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, RuntimeDebug, scale_info::TypeInfo)]
 pub struct ProxyDefinition<AccountId, ProxyType, BlockNumber> {
 	/// The account which may act on behalf of another.
 	delegate: AccountId,
@@ -70,7 +70,7 @@ pub struct ProxyDefinition<AccountId, ProxyType, BlockNumber> {
 }
 
 /// Details surrounding a specific instance of an announcement to make a call.
-#[derive(Encode, Decode, Clone, Copy, Eq, PartialEq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, Copy, Eq, PartialEq, RuntimeDebug, scale_info::TypeInfo)]
 pub struct Announcement<AccountId, Hash, BlockNumber> {
 	/// The account which made the announcement.
 	real: AccountId,
