@@ -92,14 +92,6 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 		let mut proof_limit_reached = false;
 
 		for (_, last_block) in set_changes.iter_from(begin_number) {
-			// Check for the limit. We remove some bytes from the maximum size, because we're only
-			// counting the size of the `WarpSyncFragment`s. The extra margin is here to leave
-			// room for rest of the data (the size of the `Vec` and the boolean).
-			if proofs_encoded_len >= MAX_WARP_SYNC_PROOF_SIZE - 50 {
-				proof_limit_reached = true;
-				break;
-			}
-
 			let header = blockchain.header(BlockId::Number(*last_block))?.expect(
 				"header number comes from previously applied set changes; must exist in db; qed.",
 			);
@@ -128,8 +120,17 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 				header: header.clone(),
 				justification,
 			};
+			let proof_size = proof.encoded_size();
 
-			proofs_encoded_len += proof.encoded_size();
+			// Check for the limit. We remove some bytes from the maximum size, because we're only
+			// counting the size of the `WarpSyncFragment`s. The extra margin is here to leave
+			// room for rest of the data (the size of the `Vec` and the boolean).
+			if proofs_encoded_len + proof_size >= MAX_WARP_SYNC_PROOF_SIZE - 50 {
+				proof_limit_reached = true;
+				break;
+			}
+
+			proofs_encoded_len += proof_size;
 			proofs.push(proof);
 		}
 
