@@ -163,10 +163,12 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 			true
 		};
 
-		Ok(WarpSyncProof {
+		let final_outcome = WarpSyncProof {
 			proofs,
 			is_finished,
-		})
+		};
+		debug_assert!(final_outcome.encoded_size() <= MAX_WARP_SYNC_PROOF_SIZE);
+		Ok(final_outcome)
 	}
 
 	/// Verifies the warp sync proof starting at the given set id and with the given authorities.
