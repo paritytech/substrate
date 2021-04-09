@@ -38,6 +38,12 @@ pub trait Contains<T: Ord> {
 	fn add(_t: &T) { unimplemented!() }
 }
 
+/// Trivial utility for implementing `Contains` with a `Vec`.
+pub struct IsInVec<T>(sp_std::marker::PhantomData<T>);
+impl<X: Ord + PartialOrd, T: super::Get<Vec<X>>> Contains<X> for IsInVec<T> {
+	fn sorted_members() -> Vec<X> { let mut r = T::get(); r.sort(); r }
+}
+
 /// A trait for querying bound for the length of an implementation of `Contains`
 pub trait ContainsLengthBound {
 	/// Minimum number of elements contained
