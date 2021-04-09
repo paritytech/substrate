@@ -130,6 +130,7 @@ parameter_types! {
 	pub const BountyValueMinimum: u64 = 1;
 	pub const MaximumReasonLength: u32 = 16384;
 	pub const MaxActiveSubBountyCount: u32 = 3;
+	pub const MinimumCurationFee:u64 = 1;
 }
 impl Config for Test {
 	type Event = Event;
@@ -141,6 +142,7 @@ impl Config for Test {
 	type DataDepositPerByte = DataDepositPerByte;
 	type MaximumReasonLength = MaximumReasonLength;
 	type MaxActiveSubBountyCount = MaxActiveSubBountyCount;
+	type MinimumCurationFee = MinimumCurationFee;
 	type WeightInfo = ();
 }
 

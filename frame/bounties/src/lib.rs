@@ -161,6 +161,9 @@ pub trait Config: frame_system::Config + pallet_treasury::Config {
 
 	/// Maximum number of subbounty that can be added to active bounty.
 	type MaxActiveSubBountyCount: Get<u32>;
+
+	/// Minimum curation fee.
+	type MinimumCurationFee: Get<BalanceOf<Self>>;
 }
 
 /// An index of a bounty. Just a `u32`.
@@ -441,6 +444,10 @@ decl_module! {
 			T::ApproveOrigin::ensure_origin(origin)?;
 
 			let curator = T::Lookup::lookup(curator)?;
+
+			// Ensure proposed fee is equal or more than MinimumCurationFee
+			ensure!(fee >= T::MinimumCurationFee::get(), Error::<T>::InvalidFee);
+
 			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 
 				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T>::InvalidIndex)?;
@@ -901,6 +908,9 @@ decl_module! {
 
 			// Ensure parent bounty exist & get master curator
 			let maybe_bounty_active_status = Self::ensure_bounty_exist(bounty_id, false)?;
+
+			// Ensure proposed fee is equal or more than MinimumCurationFee
+			ensure!(fee >= T::MinimumCurationFee::get(), Error::<T>::InvalidFee);
 
 			// Mutate the Subbounty instance
 			SubBounties::<T>::try_mutate_exists(
@@ -1401,6 +1411,63 @@ decl_module! {
 
 			// Call the internal implementation.
 			Self::impl_close_subbounty(bounty_id, subbounty_id)?;
+		}
+
+		/// Extend the expiry time of an active bounty.
+		///
+		/// The dispatch origin for this call must be the curator of this bounty.
+		///
+		/// - `bounty_id`: ID pair Bounty ID.
+		/// - `subbounty_id`: ID pair SubBounty ID to cancel.
+		/// - `remark`: additional information.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// # </weight>
+		#[weight = <T as Config>::WeightInfo::extend_bounty_expiry()]
+		fn extend_subbounty_bounty_expiry(origin,
+			#[compact] bounty_id: BountyIndex,
+			#[compact] subbounty_id: BountyIndex,
+			_remark: Vec<u8>,
+		) {
+			let signer = ensure_signed(origin)?;
+
+			// Ensure parent bounty exist
+			let _ = Self::ensure_bounty_exist(
+				bounty_id,
+				false,
+			)?;
+
+			let subbounty = Self::subbounties(
+				bounty_id,
+				subbounty_id,
+			).ok_or(Error::<T>::InvalidIndex)?;
+
+			if let SubBountyStatus::Active { subcurator } = subbounty.status {
+
+				// Ensure caller is subcurator
+				ensure!(
+					subcurator == signer,
+					Error::<T>::RequireSubCurator,
+				);
+
+				Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
+					let bounty = maybe_bounty.as_mut().ok_or(Error::<T>::InvalidIndex)?;
+
+					match bounty.status {
+						BountyStatus::Active { ref curator, ref mut update_due } => {
+							ensure!(*curator == signer, Error::<T>::RequireCurator);
+							*update_due = (system::Pallet::<T>::block_number() + T::BountyUpdatePeriod::get()).max(*update_due);
+						},
+						_ => return Err(Error::<T>::UnexpectedStatus.into()),
+					}
+					Ok(())
+				})?;
+			} else {
+				return Err(Error::<T>::UnexpectedStatus.into());
+			}
+
+			Self::deposit_event(Event::<T>::BountyExtended(bounty_id));
 		}
 	}
 }
