@@ -31,7 +31,7 @@
 //!
 //! 2. The [`InherentData`] is passed to the `inherent_extrinsics` function of the `BlockBuilder`
 //! runtime api. This will call the runtime which will create all the inherents that should be
-//! applyed to the block.
+//! applied to the block.
 //!
 //! 3. Apply each inherent to the block like any normal extrinsic.
 //!
