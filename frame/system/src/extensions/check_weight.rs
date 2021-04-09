@@ -466,15 +466,21 @@ mod tests {
 				current_weight.set(normal_limit, DispatchClass::Normal)
 			});
 			// will not fit.
-			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &normal, len).is_err());
+			assert_noop!(
+				CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &normal, len),
+				InvalidTransaction::MandatoryDispatch
+			);
 			// will fit.
-			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &op, len).is_ok());
+			assert_ok!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &op, len));
 
 			// likewise for length limit.
 			let len = 100_usize;
 			AllExtrinsicsLen::<Test>::put(normal_length_limit());
-			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &normal, len).is_err());
-			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &op, len).is_ok());
+			assert_noop!(
+				CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &normal, len),
+				InvalidTransaction::MandatoryDispatch
+			);
+			assert_ok!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &op, len));
 		})
 	}
 
@@ -575,10 +581,7 @@ mod tests {
 			let pre = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &info, len).unwrap();
 			assert_eq!(BlockWeight::<Test>::get().total(), info.weight + 256);
 
-			assert!(
-				CheckWeight::<Test>::post_dispatch(pre, &info, &post_info, len, &Ok(()))
-				.is_ok()
-			);
+			assert_ok!( CheckWeight::<Test>::post_dispatch(pre, &info, &post_info, len, &Ok(())));
 			assert_eq!(
 				BlockWeight::<Test>::get().total(),
 				post_info.actual_weight.unwrap() + 256,
@@ -607,10 +610,7 @@ mod tests {
 				info.weight + 128 + block_weights().get(DispatchClass::Normal).base_extrinsic,
 			);
 
-			assert!(
-				CheckWeight::<Test>::post_dispatch(pre, &info, &post_info, len, &Ok(()))
-				.is_ok()
-			);
+			assert_ok!(CheckWeight::<Test>::post_dispatch(pre, &info, &post_info, len, &Ok(())));
 			assert_eq!(
 				BlockWeight::<Test>::get().total(),
 				info.weight + 128 + block_weights().get(DispatchClass::Normal).base_extrinsic,
@@ -630,8 +630,7 @@ mod tests {
 				System::block_weight().total(),
 				weights.base_block
 			);
-			let r = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &free, len);
-			assert!(r.is_ok());
+			assert_ok!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &free, len));
 			assert_eq!(
 				System::block_weight().total(),
 				weights.get(DispatchClass::Normal).base_extrinsic + weights.base_block
@@ -687,15 +686,14 @@ mod tests {
 		let mandatory2 = DispatchInfo { weight: 6, class: DispatchClass::Mandatory, ..Default::default() };
 
 		// when
-		let result1 = calculate_consumed_weight::<<Test as Config>::Call>(
+		assert_ok!(calculate_consumed_weight::<<Test as Config>::Call>(
 			maximum_weight.clone(), all_weight.clone(), &mandatory1
+			)
 		);
-		let result2 = calculate_consumed_weight::<<Test as Config>::Call>(
+		assert_noop!(calculate_consumed_weight::<<Test as Config>::Call>(
 			maximum_weight, all_weight, &mandatory2
+			),
+			InvalidTransaction::MandatoryDispatch
 		);
-
-		// then
-		assert!(result2.is_err());
-		assert!(result1.is_ok());
 	}
 }
