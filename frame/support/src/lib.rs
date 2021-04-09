@@ -80,12 +80,23 @@ pub use self::storage::{
 pub use self::dispatch::{Parameter, Callable};
 pub use sp_runtime::{self, ConsensusEngineId, print, traits::Printable};
 
+use codec::{Encode, Decode};
+use sp_runtime::TypeId;
+
 /// A unified log target for support operations.
 pub const LOG_TARGET: &'static str = "runtime::frame-support";
 
 /// A type that cannot be instantiated.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Never {}
+
+/// A pallet identifier. These are per pallet and should be stored in a registry somewhere.
+#[derive(Clone, Copy, Eq, PartialEq, Encode, Decode)]
+pub struct PalletId(pub [u8; 8]);
+
+impl TypeId for PalletId {
+	const TYPE_ID: [u8; 4] = *b"modl";
+}
 
 /// Generate a new type alias for [`storage::types::value::StorageValue`],
 /// [`storage::types::value::StorageMap`] and [`storage::types::value::StorageDoubleMap`].

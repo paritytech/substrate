@@ -9411,6 +9411,7 @@ dependencies = [
 name = "substrate-frame-cli"
 version = "3.0.0"
 dependencies = [
+ "frame-support",
  "frame-system",
  "sc-cli",
  "sp-core",
