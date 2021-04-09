@@ -36,7 +36,7 @@
 //! 3. Apply each inherent to the block like any normal extrinsic.
 //!
 //! On block import the inherents in the block are checked by calling the `check_inherents` runtime
-//! api. This will also pass an instance of [`InherentData`] which the runtime can use to validate
+//! API. This will also pass an instance of [`InherentData`] which the runtime can use to validate
 //! all inherents. If some inherent data isn't required for validating an inherent, it can be
 //! obmitted when providing the inherent data providers for block import.
 //!
