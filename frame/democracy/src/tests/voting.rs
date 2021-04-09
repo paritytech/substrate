@@ -49,7 +49,7 @@ fn split_vote_cancellation_should_work() {
 		assert_ok!(Democracy::remove_vote(Origin::signed(5), r));
 		assert_eq!(tally(r), Tally { ayes: 0, nays: 0, turnout: 0 });
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
-		assert_eq!(Balances::locks(5), vec![]);
+		assert_eq!(Balances::locks(5).inner(), vec![]);
 	});
 }
 

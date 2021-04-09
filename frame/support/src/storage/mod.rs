@@ -892,6 +892,7 @@ impl<T: Value, S: Get<u32>> BoundedVec<T, S> {
 	/// This is useful for cases if you need access to an internal API of the inner `Vec<_>` which
 	/// is not provided by the wrapper `BoundedVec`.
 	pub fn inner(self) -> Vec<T> {
+		debug_assert!(self.0.len() <= Self::bound());
 		self.0
 	}
 
@@ -903,6 +904,11 @@ impl<T: Value, S: Get<u32>> BoundedVec<T, S> {
 	/// Exactly the same semantics as [`Vec::is_empty`].
 	pub fn is_empty(&self) -> bool {
 		self.0.len().is_zero()
+	}
+
+	/// Exactly the same semantics as [`Vec::get`].
+	pub fn get(&self, index: usize) -> Option<&T> {
+		self.0.get(index)
 	}
 
 	/// Exactly the same semantics as [`Vec::retain`].
