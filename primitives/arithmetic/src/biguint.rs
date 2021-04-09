@@ -214,22 +214,23 @@ impl BigUint {
 			let s = {
 				let u = Double::from(self.checked_get(j).unwrap_or(0));
 				let v = Double::from(other.checked_get(j).unwrap_or(0));
-				let mut t: Double = 0;
 
 				if let Some(v2) = u.checked_sub(v).and_then(|v1| v1.checked_sub(k)) {
 					// no borrow is needed. u - v - k can be computed as-is
-					t = v2;
+					let t = v2;
 					k = 0;
+
+					t
 				} else {
 					// borrow is needed. Add a `B` to u, before subtracting.
 					// PROOF: addition: `u + B < 2*B`, thus can fit in double.
 					// PROOF: subtraction: if `u - v - k < 0`, then `u + B - v - k < B`.
 					// NOTE: the order of operations is critical to ensure underflow won't happen.
-					t = u + B - v - k;
+					let t = u + B - v - k;
 					k = 1;
-				}
 
-				t
+					t
+				}
 			};
 			w.set(j, s as Single);
 		}
