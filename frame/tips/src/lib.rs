@@ -444,7 +444,7 @@ impl<T: Config> Module<T> {
 	/// This actually does computation. If you need to keep using it, then make sure you cache the
 	/// value and only call this once.
 	pub fn account_id() -> T::AccountId {
-		T::ModuleId::get().into_account()
+		T::PalletId::get().into_account()
 	}
 
 	/// Given a mutable reference to an `OpenTip`, insert the tip into it and check whether it
