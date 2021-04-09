@@ -61,7 +61,7 @@ fn lock_voting_should_work() {
 
 		// All balances are currently locked.
 		for i in 1..=5 {
-			assert_eq!(Balances::locks(i), vec![the_lock(i * 10)]);
+			assert_eq!(Balances::locks(i).inner(), vec![the_lock(i * 10)]);
 		}
 
 		fast_forward_to(2);
@@ -79,11 +79,11 @@ fn lock_voting_should_work() {
 		assert_ok!(Democracy::remove_vote(Origin::signed(2), r));
 		assert_ok!(Democracy::unlock(Origin::signed(2), 2));
 
-		assert_eq!(Balances::locks(1), vec![]);
-		assert_eq!(Balances::locks(2), vec![the_lock(20)]);
-		assert_eq!(Balances::locks(3), vec![the_lock(30)]);
-		assert_eq!(Balances::locks(4), vec![the_lock(40)]);
-		assert_eq!(Balances::locks(5), vec![]);
+		assert_eq!(Balances::locks(1).inner(), vec![]);
+		assert_eq!(Balances::locks(2).inner(), vec![the_lock(20)]);
+		assert_eq!(Balances::locks(3).inner(), vec![the_lock(30)]);
+		assert_eq!(Balances::locks(4).inner(), vec![the_lock(40)]);
+		assert_eq!(Balances::locks(5).inner(), vec![]);
 		assert_eq!(Balances::free_balance(42), 2);
 
 
@@ -91,29 +91,29 @@ fn lock_voting_should_work() {
 		// No change yet...
 		assert_noop!(Democracy::remove_other_vote(Origin::signed(1), 4, r), Error::<Test>::NoPermission);
 		assert_ok!(Democracy::unlock(Origin::signed(1), 4));
-		assert_eq!(Balances::locks(4), vec![the_lock(40)]);
+		assert_eq!(Balances::locks(4).inner(), vec![the_lock(40)]);
 		fast_forward_to(6);
 		// 4 should now be able to reap and unlock
 		assert_ok!(Democracy::remove_other_vote(Origin::signed(1), 4, r));
 		assert_ok!(Democracy::unlock(Origin::signed(1), 4));
-		assert_eq!(Balances::locks(4), vec![]);
+		assert_eq!(Balances::locks(4).inner(), vec![]);
 
 		fast_forward_to(9);
 		assert_noop!(Democracy::remove_other_vote(Origin::signed(1), 3, r), Error::<Test>::NoPermission);
 		assert_ok!(Democracy::unlock(Origin::signed(1), 3));
-		assert_eq!(Balances::locks(3), vec![the_lock(30)]);
+		assert_eq!(Balances::locks(3).inner(), vec![the_lock(30)]);
 		fast_forward_to(10);
 		assert_ok!(Democracy::remove_other_vote(Origin::signed(1), 3, r));
 		assert_ok!(Democracy::unlock(Origin::signed(1), 3));
-		assert_eq!(Balances::locks(3), vec![]);
+		assert_eq!(Balances::locks(3).inner(), vec![]);
 
 		// 2 doesn't need to reap_vote here because it was already done before.
 		fast_forward_to(17);
 		assert_ok!(Democracy::unlock(Origin::signed(1), 2));
-		assert_eq!(Balances::locks(2), vec![the_lock(20)]);
+		assert_eq!(Balances::locks(2).inner(), vec![the_lock(20)]);
 		fast_forward_to(18);
 		assert_ok!(Democracy::unlock(Origin::signed(1), 2));
-		assert_eq!(Balances::locks(2), vec![]);
+		assert_eq!(Balances::locks(2).inner(), vec![]);
 	});
 }
 
@@ -134,7 +134,7 @@ fn no_locks_without_conviction_should_work() {
 		assert_eq!(Balances::free_balance(42), 2);
 		assert_ok!(Democracy::remove_other_vote(Origin::signed(2), 1, r));
 		assert_ok!(Democracy::unlock(Origin::signed(2), 1));
-		assert_eq!(Balances::locks(1), vec![]);
+		assert_eq!(Balances::locks(1).inner(), vec![]);
 	});
 }
 
@@ -204,27 +204,27 @@ fn prior_lockvotes_should_be_enforced() {
 		fast_forward_to(5);
 		assert_noop!(Democracy::remove_other_vote(Origin::signed(1), 5, r.2), Error::<Test>::NoPermission);
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
-		assert_eq!(Balances::locks(5), vec![the_lock(50)]);
+		assert_eq!(Balances::locks(5).inner(), vec![the_lock(50)]);
 		fast_forward_to(6);
 		assert_ok!(Democracy::remove_other_vote(Origin::signed(1), 5, r.2));
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
-		assert_eq!(Balances::locks(5), vec![the_lock(20)]);
+		assert_eq!(Balances::locks(5).inner(), vec![the_lock(20)]);
 		fast_forward_to(9);
 		assert_noop!(Democracy::remove_other_vote(Origin::signed(1), 5, r.1), Error::<Test>::NoPermission);
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
-		assert_eq!(Balances::locks(5), vec![the_lock(20)]);
+		assert_eq!(Balances::locks(5).inner(), vec![the_lock(20)]);
 		fast_forward_to(10);
 		assert_ok!(Democracy::remove_other_vote(Origin::signed(1), 5, r.1));
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
-		assert_eq!(Balances::locks(5), vec![the_lock(10)]);
+		assert_eq!(Balances::locks(5).inner(), vec![the_lock(10)]);
 		fast_forward_to(17);
 		assert_noop!(Democracy::remove_other_vote(Origin::signed(1), 5, r.0), Error::<Test>::NoPermission);
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
-		assert_eq!(Balances::locks(5), vec![the_lock(10)]);
+		assert_eq!(Balances::locks(5).inner(), vec![the_lock(10)]);
 		fast_forward_to(18);
 		assert_ok!(Democracy::remove_other_vote(Origin::signed(1), 5, r.0));
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
-		assert_eq!(Balances::locks(5), vec![]);
+		assert_eq!(Balances::locks(5).inner(), vec![]);
 	});
 }
 
@@ -239,26 +239,26 @@ fn single_consolidation_of_lockvotes_should_work_as_before() {
 		fast_forward_to(5);
 		assert_ok!(Democracy::remove_vote(Origin::signed(5), r.2));
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
-		assert_eq!(Balances::locks(5), vec![the_lock(50)]);
+		assert_eq!(Balances::locks(5).inner(), vec![the_lock(50)]);
 		fast_forward_to(6);
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
-		assert_eq!(Balances::locks(5), vec![the_lock(20)]);
+		assert_eq!(Balances::locks(5).inner(), vec![the_lock(20)]);
 
 		fast_forward_to(9);
 		assert_ok!(Democracy::remove_vote(Origin::signed(5), r.1));
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
-		assert_eq!(Balances::locks(5), vec![the_lock(20)]);
+		assert_eq!(Balances::locks(5).inner(), vec![the_lock(20)]);
 		fast_forward_to(10);
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
-		assert_eq!(Balances::locks(5), vec![the_lock(10)]);
+		assert_eq!(Balances::locks(5).inner(), vec![the_lock(10)]);
 
 		fast_forward_to(17);
 		assert_ok!(Democracy::remove_vote(Origin::signed(5), r.0));
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
-		assert_eq!(Balances::locks(5), vec![the_lock(10)]);
+		assert_eq!(Balances::locks(5).inner(), vec![the_lock(10)]);
 		fast_forward_to(18);
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
-		assert_eq!(Balances::locks(5), vec![]);
+		assert_eq!(Balances::locks(5).inner(), vec![]);
 	});
 }
 
@@ -276,15 +276,15 @@ fn multi_consolidation_of_lockvotes_should_be_conservative() {
 
 		fast_forward_to(6);
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
-		assert!(Balances::locks(5)[0].amount >= 20);
+		assert!(Balances::locks(5).inner()[0].amount >= 20);
 
 		fast_forward_to(10);
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
-		assert!(Balances::locks(5)[0].amount >= 10);
+		assert!(Balances::locks(5).inner()[0].amount >= 10);
 
 		fast_forward_to(18);
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
-		assert_eq!(Balances::locks(5), vec![]);
+		assert_eq!(Balances::locks(5).inner(), vec![]);
 	});
 }
 
@@ -305,26 +305,26 @@ fn locks_should_persist_from_voting_to_delegation() {
 
 		assert_ok!(Democracy::delegate(Origin::signed(5), 1, Conviction::Locked3x, 20));
 		// locked 20.
-		assert!(Balances::locks(5)[0].amount == 20);
+		assert!(Balances::locks(5).inner()[0].amount == 20);
 
 		assert_ok!(Democracy::undelegate(Origin::signed(5)));
 		// locked 20 until #10
 
 		fast_forward_to(9);
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
-		assert!(Balances::locks(5)[0].amount == 20);
+		assert!(Balances::locks(5).inner()[0].amount == 20);
 
 		fast_forward_to(10);
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
-		assert!(Balances::locks(5)[0].amount >= 10);
+		assert!(Balances::locks(5).inner()[0].amount >= 10);
 
 		fast_forward_to(17);
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
-		assert!(Balances::locks(5)[0].amount >= 10);
+		assert!(Balances::locks(5).inner()[0].amount >= 10);
 
 		fast_forward_to(18);
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
-		assert_eq!(Balances::locks(5), vec![]);
+		assert_eq!(Balances::locks(5).inner(), vec![]);
 	});
 }
 
@@ -347,18 +347,18 @@ fn locks_should_persist_from_delegation_to_voting() {
 
 		fast_forward_to(6);
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
-		assert!(Balances::locks(5)[0].amount >= 20);
+		assert!(Balances::locks(5).inner()[0].amount >= 20);
 
 		fast_forward_to(10);
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
-		assert!(Balances::locks(5)[0].amount >= 10);
+		assert!(Balances::locks(5).inner()[0].amount >= 10);
 
 		fast_forward_to(18);
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
-		assert!(Balances::locks(5)[0].amount >= 5);
+		assert!(Balances::locks(5).inner()[0].amount >= 5);
 
 		fast_forward_to(32);
 		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
-		assert_eq!(Balances::locks(5), vec![]);
+		assert_eq!(Balances::locks(5).inner(), vec![]);
 	});
 }
