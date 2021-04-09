@@ -905,6 +905,11 @@ impl<T: Value, S: Get<u32>> BoundedVec<T, S> {
 		self.0.len().is_zero()
 	}
 
+	/// Exactly the same semantics as [`Vec::get`].
+	pub fn get(&self, index: usize) -> Option<&T> {
+		self.0.get(index)
+	}
+
 	/// Exactly the same semantics as [`Vec::retain`].
 	pub fn retain<F: FnMut(&T) -> bool>(&mut self, f: F) {
 		self.0.retain(f)
@@ -946,6 +951,13 @@ impl<T: Value, S: Get<u32>> BoundedVec<T, S> {
 	/// Returns an iterator over inner values.
 	pub fn iter<I: iter::IntoIterator>(&self) -> sp_std::slice::Iter<'_, T> {
 		self.into_iter()
+	}
+}
+
+impl<T: Value, S: Get<u32>> sp_std::ops::Index<usize> for BoundedVec<T, S> {
+	type Output = T;
+	fn index(&self, index: usize) -> &Self::Output {
+		self.get(index).expect("index out of bound")
 	}
 }
 
