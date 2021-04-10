@@ -1572,8 +1572,10 @@ mod tests {
 			);
 
 			// Check that the account has not been created.
-			assert_noop!(Storage::<Test>::code_hash(&instantiated_contract_address),
-				ContractAbsentError);
+			assert_noop!(
+				Storage::<Test>::code_hash(&instantiated_contract_address),
+				ContractAbsentError,
+			);
 			assert!(events().is_empty());
 		});
 	}
