@@ -211,8 +211,10 @@ benchmarks! {
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		// Referendum has been canceled
-		assert_noop!(Democracy::<T>::referendum_status(referendum_index),
-            Error::<T>::ReferendumInvalid);
+		assert_noop!(
+			Democracy::<T>::referendum_status(referendum_index),
+			Error::<T>::ReferendumInvalid,
+		);
 	}
 
 	blacklist {
