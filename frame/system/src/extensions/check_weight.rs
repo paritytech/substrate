@@ -468,7 +468,7 @@ mod tests {
 			// will not fit.
 			assert_noop!(
 				CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &normal, len),
-				InvalidTransaction::MandatoryDispatch
+				InvalidTransaction::ExhaustsResources
 			);
 			// will fit.
 			assert_ok!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &op, len));
@@ -478,7 +478,7 @@ mod tests {
 			AllExtrinsicsLen::<Test>::put(normal_length_limit());
 			assert_noop!(
 				CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &normal, len),
-				InvalidTransaction::MandatoryDispatch
+				InvalidTransaction::ExhaustsResources
 			);
 			assert_ok!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &op, len));
 		})
