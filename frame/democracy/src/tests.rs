@@ -22,7 +22,7 @@ use super::*;
 use codec::Encode;
 use frame_support::{
 	assert_noop, assert_ok, parameter_types, ord_parameter_types,
-	traits::{Contains, OnInitialize, Filter},
+	traits::{SortedMembers, OnInitialize, Filter},
 	weights::Weight,
 };
 use sp_core::H256;
@@ -151,7 +151,7 @@ ord_parameter_types! {
 	pub const Six: u64 = 6;
 }
 pub struct OneToFive;
-impl Contains<u64> for OneToFive {
+impl SortedMembers<u64> for OneToFive {
 	fn sorted_members() -> Vec<u64> {
 		vec![1, 2, 3, 4, 5]
 	}
