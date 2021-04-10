@@ -107,7 +107,7 @@ use frame_support::{
 	traits::{
 		ChangeMembers, Contains, ContainsLengthBound, Currency, CurrencyToVote, Get,
 		InitializeMembers, LockIdentifier, LockableCurrency, OnUnbalanced, ReservableCurrency,
-		WithdrawReasons,
+		WithdrawReasons, SortedMembers,
 	},
 	weights::Weight,
 };
@@ -1012,6 +1012,12 @@ impl<T: Config> Module<T> {
 }
 
 impl<T: Config> Contains<T::AccountId> for Module<T> {
+	fn contains(who: &T::AccountId) -> bool {
+		Self::is_member(who)
+	}
+}
+
+impl<T: Config> SortedMembers<T::AccountId> for Module<T> {
 	fn contains(who: &T::AccountId) -> bool {
 		Self::is_member(who)
 	}
