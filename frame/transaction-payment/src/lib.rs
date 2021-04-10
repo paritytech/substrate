@@ -926,7 +926,7 @@ mod tests {
 			assert_noop!(
 				ChargeTransactionPayment::<Runtime>::from(0)
 					.validate(&1, CALL, &free_transaction , len),
-				TransactionValidityError::Invalid(InvalidTransaction::Payment)
+				TransactionValidityError::Invalid(InvalidTransaction::Payment),
 			);
 		});
 	}
