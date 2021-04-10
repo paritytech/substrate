@@ -17,6 +17,7 @@ codec = { package = "parity-scale-codec", version = "2.0.0", default-features = 
 frame-support = { default-features = false, version = "3.0.0", path = "../../../../frame/support" }
 frame-system = { default-features = false,  version = "3.0.0",  path = "../../../../frame/system" }
 frame-benchmarking = { default-features = false,  version = "3.1.0",  path = "../../../../frame/benchmarking", optional = true }
+sp-std = { default-features = false, version = "3.0.0",  path = "../../../../primitives/std" }
 
 [dev-dependencies]
 serde = { version = "1.0.119" }
@@ -31,6 +32,7 @@ std = [
 	'frame-support/std',
 	'frame-system/std',
 	'frame-benchmarking/std',
+	'sp-std/std',
 ]
 
 runtime-benchmarks = ["frame-benchmarking"]

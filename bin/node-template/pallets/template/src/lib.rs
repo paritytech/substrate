@@ -19,6 +19,38 @@ mod benchmarking;
 pub mod pallet {
 	use frame_support::{dispatch::DispatchResult, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
+	use codec::{Encode, Decode};
+	use sp_std::prelude::Vec;
+
+	#[derive(Encode, Decode, Clone, Eq, PartialEq)]
+	pub struct Arg {}
+
+	/*
+	
+	== If Debug trait is not implemented we get compiler error == 
+
+	error[E0277]: `Arg` doesn't implement `std::fmt::Debug`
+   --> bin/node-template/pallets/template/src/lib.rs:121:46
+    |
+121 |         pub fn breakit(origin: OriginFor<T>, _arg: Vec<Arg>) -> DispatchResult {
+    |                                                    ^^^^^^^^ `Arg` cannot be formatted using `{:?}`
+    |
+    = help: the trait `std::fmt::Debug` is not implemented for `Arg`
+    = note: add `#[derive(Debug)]` or manually implement `std::fmt::Debug`
+    = note: required because of the requirements on the impl of `std::fmt::Debug` for `Vec<Arg>`
+    = note: 1 redundant requirements hidden
+    = note: required because of the requirements on the impl of `std::fmt::Debug` for `&Vec<Arg>`
+    = note: required for the cast to the object type `dyn std::fmt::Debug`
+
+	We Implement Debug trait because we are required to. We could derive the trait, but
+	we are explicitly implementing it and making it panic to figure out when it is invoked.
+	*/
+	impl sp_std::fmt::Debug for Arg {
+		fn fmt(&self, _formatter: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
+			panic!("Arg::fmt()");
+			Ok(())
+		}
+	}
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
@@ -102,6 +134,13 @@ pub mod pallet {
 					Ok(())
 				},
 			}
+		}
+
+		/// Break it
+		#[pallet::weight(10_000)]
+		pub fn breakit(origin: OriginFor<T>, _arg: Vec<Arg>) -> DispatchResult {
+			let _who = ensure_signed(origin)?;
+			Ok(())
 		}
 	}
 }
