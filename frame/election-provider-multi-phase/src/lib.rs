@@ -1411,7 +1411,7 @@ mod tests {
 			roll_to(30);
 			assert!(MultiPhase::current_phase().is_signed());
 
-			let _ = MultiPhase::elect().unwrap();
+			assert_ok!(MultiPhase::elect());
 
 			assert!(MultiPhase::current_phase().is_off());
 			assert!(MultiPhase::snapshot().is_none());
@@ -1434,7 +1434,7 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_off());
 
 			// this module is now only capable of doing on-chain backup.
-			let _ = MultiPhase::elect().unwrap();
+			assert_ok!(MultiPhase::elect());
 
 			assert!(MultiPhase::current_phase().is_off());
 		});
