@@ -26,7 +26,7 @@
 use sp_std::prelude::*;
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error,
-	traits::{ChangeMembers, InitializeMembers, EnsureOrigin, Contains, Get},
+	traits::{ChangeMembers, InitializeMembers, EnsureOrigin, Contains, SortedMembers, Get},
 };
 use frame_system::ensure_signed;
 
@@ -293,6 +293,12 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 }
 
 impl<T: Config<I>, I: Instance> Contains<T::AccountId> for Module<T, I> {
+	fn contains(t: &T::AccountId) -> bool {
+		Self::members().binary_search(t).is_ok()
+	}
+}
+
+impl<T: Config<I>, I: Instance> SortedMembers<T::AccountId> for Module<T, I> {
 	fn sorted_members() -> Vec<T::AccountId> {
 		Self::members()
 	}

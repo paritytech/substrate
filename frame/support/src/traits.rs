@@ -29,7 +29,10 @@ pub use tokens::imbalance::{Imbalance, OnUnbalanced, SignedImbalance};
 pub use tokens::{ExistenceRequirement, WithdrawReasons, BalanceStatus};
 
 mod members;
-pub use members::{Contains, ContainsLengthBound, InitializeMembers, ChangeMembers};
+pub use members::{
+	Contains, ContainsLengthBound, SortedMembers, InitializeMembers, ChangeMembers, All, IsInVec,
+	AsContains,
+};
 
 mod validation;
 pub use validation::{
