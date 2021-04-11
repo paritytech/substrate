@@ -269,5 +269,7 @@ panic = "unwind"
 #[patch.'https://github.com/Zondax/tee-substrate-service']
 #tee-keystore = { path = "../../remotee-signer/substrate/keystore" }
 
-[patch.'https://github.com/becominginsane/substrate-remote-signer-example']
-substrate-example-tssrs = { path = "../gnunicorn/lib" }
+[patch.'https://github.com/Zondax/substrate-remote-signer-example']
+# substrate-example-tssrs = { path = "../gnunicorn/lib" }
+# play_keystore = { path = "../play_keystore" }
+tcp-keystore = { path = "../tcp-keystore" }

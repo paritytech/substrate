@@ -201,7 +201,11 @@ pub fn new_full_base(
 		//use substrate_example_tssrs::client::RemoteKeystore;
 		//let keystore = RemoteKeystore::open(uri[6..].to_string(), None).map_err(ServiceError::Other)?;
 
-		let keystore = play_keystore::PlayKeystore::new();
+		// let keystore = play_keystore::PlayKeystore::new()
+		// 	.map_err(|e| ServiceError::Other(format!("couldn't init keystore {:?}", e)))?;
+
+		let keystore = tcp_keystore::client::Keystore::new(uri)
+			.map_err(|e| ServiceError::Other(format!("couldn't init keystore {:?}", e)))?;
 
 		let keystore = sc_keystore::TracingKeystore::new(keystore);
 
