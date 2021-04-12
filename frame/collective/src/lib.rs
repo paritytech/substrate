@@ -155,7 +155,7 @@ pub trait Config<I: Instance=DefaultInstance>: frame_system::Config {
 }
 
 /// Origin for the collective module.
-#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode)]
+#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode, scale_info::TypeInfo)]
 pub enum RawOrigin<AccountId, I> {
 	/// It has been condoned by a given number of members of the collective from a given total.
 	Members(MemberCount, MemberCount),
