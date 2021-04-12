@@ -75,7 +75,6 @@ pub struct RuntimeInstanceSpawn {
 	scheduler: Box<dyn sp_core::traits::SpawnNamed>,
 	task_receiver: Arc<parking_lot::Mutex<mpsc::Receiver<RemoteTask>>>,
 	task_sender: mpsc::Sender<RemoteTask>,
-	recursive_level: usize,
 	task_handles: task_handle::TaskHandles,
 }
 
@@ -193,16 +192,12 @@ impl RuntimeInstanceSpawnInfo {
 		}
 	}
 
-	fn start(&mut self, depth: usize) -> Processing {
+	fn start(&mut self) -> Processing {
 		if self.nb_runing < self.capacity {
 			self.nb_runing += 1;
 			Processing::SpawnNew
 		} else {
-			if self.capacity > depth {
-				Processing::Queue
-			} else {
-				Processing::RunInline
-			}
+			Processing::RunInline
 		}
 	}
 
@@ -230,7 +225,6 @@ impl Drop for RuntimeInstanceSpawnInfo {
 enum Processing {
 	SpawnNew,
 	RunInline,
-	Queue,
 }
 
 impl RuntimeInstanceSpawn {
@@ -241,7 +235,6 @@ impl RuntimeInstanceSpawn {
 			instance: Arc::new(parking_lot::Mutex::new(None)),
 			counter: Default::default(),
 			tasks: Default::default(),
-			recursive_level: self.recursive_level + 1,
 			task_handles: Default::default(),
 
 			module: self.module.clone(),
@@ -259,7 +252,7 @@ impl RuntimeInstanceSpawn {
 		ext: Box<dyn AsyncExternalities>,
 	) {
 		let mut infos = self.infos.lock();
-		match infos.start(self.recursive_level) {
+		match infos.start() {
 			Processing::SpawnNew => {
 				// warning self.tasks is locked when calling spawn_new
 				if !self.spawn_new() {
@@ -268,7 +261,6 @@ impl RuntimeInstanceSpawn {
 					return;
 				}
 			},
-			Processing::Queue => (),
 			Processing::RunInline => {
 				let task = InlineTask { task, ext };
 				self.tasks.lock().insert(handle, PendingTask::Inline(task));
@@ -500,7 +492,6 @@ impl RuntimeInstanceSpawn {
 			task_receiver: Arc::new(parking_lot::Mutex::new(task_receiver)),
 			task_sender,
 			instance: Arc::new(parking_lot::Mutex::new(None)),
-			recursive_level: 0,
 			task_handles: Default::default(),
 		}
 	}

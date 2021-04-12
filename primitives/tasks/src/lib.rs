@@ -117,7 +117,6 @@ pub fn set_capacity(capacity: u32) {
 
 #[cfg(feature = "std")]
 mod inner {
-	use sp_externalities::{Externalities, ExternalitiesExt as _};
 	use sp_core::traits::RuntimeSpawnExt;
 	use super::DataJoinHandle;
 
