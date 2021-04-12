@@ -254,13 +254,13 @@ mod tests;
 use rand_chacha::{rand_core::{RngCore, SeedableRng}, ChaChaRng};
 use sp_std::prelude::*;
 use codec::{Encode, Decode};
-use sp_runtime::{Percent, ModuleId, RuntimeDebug,
+use sp_runtime::{Percent, RuntimeDebug,
 	traits::{
 		StaticLookup, AccountIdConversion, Saturating, Zero, IntegerSquareRoot, Hash,
 		TrailingZeroInput, CheckedSub
 	}
 };
-use frame_support::{decl_error, decl_module, decl_storage, decl_event, ensure, dispatch::DispatchResult};
+use frame_support::{decl_error, decl_module, decl_storage, decl_event, ensure, dispatch::DispatchResult, PalletId};
 use frame_support::weights::Weight;
 use frame_support::traits::{
 	Currency, ReservableCurrency, Randomness, Get, ChangeMembers, BalanceStatus,
@@ -277,7 +277,7 @@ pub trait Config<I = DefaultInstance>: system::Config {
 	type Event: From<Event<Self, I>> + Into<<Self as system::Config>::Event>;
 
 	/// The societies's module id
-	type ModuleId: Get<ModuleId>;
+	type PalletId: Get<PalletId>;
 
 	/// The currency type used for bidding.
 	type Currency: ReservableCurrency<Self::AccountId>;
@@ -498,7 +498,7 @@ decl_module! {
 		const ChallengePeriod: T::BlockNumber = T::ChallengePeriod::get();
 
 		/// The societies's module id
-		const ModuleId: ModuleId = T::ModuleId::get();
+		const PalletId: PalletId = T::PalletId::get();
 
 		/// Maximum candidate intake per round.
 		const MaxCandidateIntake: u32 = T::MaxCandidateIntake::get();
@@ -1601,7 +1601,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 	/// This actually does computation. If you need to keep using it, then make sure you cache the
 	/// value and only call this once.
 	pub fn account_id() -> T::AccountId {
-		T::ModuleId::get().into_account()
+		T::PalletId::get().into_account()
 	}
 
 	/// The account ID of the payouts pot. This is where payouts are made from.
@@ -1609,7 +1609,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 	/// This actually does computation. If you need to keep using it, then make sure you cache the
 	/// value and only call this once.
 	pub fn payouts() -> T::AccountId {
-		T::ModuleId::get().into_sub_account(b"payouts")
+		T::PalletId::get().into_sub_account(b"payouts")
 	}
 
 	/// Return the duration of the lock, in blocks, with the given number of members.

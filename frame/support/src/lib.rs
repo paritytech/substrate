@@ -82,12 +82,23 @@ pub use self::storage::{
 pub use self::dispatch::{Parameter, Callable};
 pub use sp_runtime::{self, ConsensusEngineId, print, traits::Printable};
 
+use codec::{Encode, Decode};
+use sp_runtime::TypeId;
+
 /// A unified log target for support operations.
 pub const LOG_TARGET: &'static str = "runtime::frame-support";
 
 /// A type that cannot be instantiated.
 #[derive(Debug, PartialEq, Eq, Clone, scale_info::TypeInfo)] // todo: [AJ] remove this TypeInfo derive once we support skip
 pub enum Never {}
+
+/// A pallet identifier. These are per pallet and should be stored in a registry somewhere.
+#[derive(Clone, Copy, Eq, PartialEq, Encode, Decode)]
+pub struct PalletId(pub [u8; 8]);
+
+impl TypeId for PalletId {
+	const TYPE_ID: [u8; 4] = *b"modl";
+}
 
 /// Generate a new type alias for [`storage::types::value::StorageValue`],
 /// [`storage::types::value::StorageMap`] and [`storage::types::value::StorageDoubleMap`].
@@ -450,12 +461,15 @@ macro_rules! ord_parameter_types {
 	);
 	() => ();
 	(IMPL $name:ident , $type:ty , $value:expr) => {
-		impl $crate::traits::Contains<$type> for $name {
+		impl $crate::traits::SortedMembers<$type> for $name {
 			fn contains(t: &$type) -> bool { &$value == t }
 			fn sorted_members() -> $crate::sp_std::prelude::Vec<$type> { vec![$value] }
 			fn count() -> usize { 1 }
 			#[cfg(feature = "runtime-benchmarks")]
 			fn add(_: &$type) {}
+		}
+		impl $crate::traits::Contains<$type> for $name {
+			fn contains(t: &$type) -> bool { &$value == t }
 		}
 	}
 }
