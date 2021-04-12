@@ -36,5 +36,4 @@ sp-api = { version = "3.0.0",  path = "../../../primitives/api" }
 sp-inherents = { version = "3.0.0", path = "../../../primitives/inherents" }
 sp-keystore = { version = "0.9.0", path = "../../../primitives/keystore" }
 
-rand = "0.8.3"
 log = "0.4.14"

@@ -26,7 +26,7 @@
 use sp_std::prelude::*;
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error,
-	traits::{ChangeMembers, InitializeMembers, EnsureOrigin, Contains},
+	traits::{ChangeMembers, InitializeMembers, EnsureOrigin, Contains, SortedMembers},
 };
 use frame_system::ensure_signed;
 
@@ -113,6 +113,8 @@ decl_module! {
 		for enum Call
 		where origin: T::Origin
 	{
+		type Error = Error<T, I>;
+
 		fn deposit_event() = default;
 
 		/// Add a member `who` to the set.
@@ -265,6 +267,12 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 }
 
 impl<T: Config<I>, I: Instance> Contains<T::AccountId> for Module<T, I> {
+	fn contains(t: &T::AccountId) -> bool {
+		Self::members().binary_search(t).is_ok()
+	}
+}
+
+impl<T: Config<I>, I: Instance> SortedMembers<T::AccountId> for Module<T, I> {
 	fn sorted_members() -> Vec<T::AccountId> {
 		Self::members()
 	}
@@ -328,6 +336,7 @@ mod tests {
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
+		type OnSetCode = ();
 	}
 	ord_parameter_types! {
 		pub const One: u64 = 1;
