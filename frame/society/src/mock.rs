@@ -58,7 +58,7 @@ parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const ExistentialDeposit: u64 = 1;
 	pub const MaxCandidateIntake: u32 = 10;
-	pub const SocietyModuleId: ModuleId = ModuleId(*b"py/socie");
+	pub const SocietyPalletId: PalletId = PalletId(*b"py/socie");
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1024);
 }
@@ -119,7 +119,7 @@ impl Config for Test {
 	type SuspensionJudgementOrigin = EnsureSignedBy<SuspensionJudgementSetAccount, u128>;
 	type ChallengePeriod = ChallengePeriod;
 	type MaxCandidateIntake = MaxCandidateIntake;
-	type ModuleId = SocietyModuleId;
+	type PalletId = SocietyPalletId;
 }
 
 pub struct EnvBuilder {

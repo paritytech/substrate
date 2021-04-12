@@ -103,7 +103,7 @@ impl ChangeMembers<u64> for TestChangeMembers {
 }
 
 parameter_types!{
-	pub const ElectionModuleId: LockIdentifier = *b"py/elect";
+	pub const ElectionPalletId: LockIdentifier = *b"py/elect";
 }
 
 impl elections::Config for Test {
@@ -123,7 +123,7 @@ impl elections::Config for Test {
 	type InactiveGracePeriod = InactiveGracePeriod;
 	type VotingPeriod = VotingPeriod;
 	type DecayRatio = DecayRatio;
-	type ModuleId = ElectionModuleId;
+	type PalletId = ElectionPalletId;
 }
 
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
