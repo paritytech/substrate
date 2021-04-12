@@ -116,7 +116,7 @@ struct ScheduledV1<Call, BlockNumber> {
 
 /// Information regarding an item to be executed in the future.
 #[cfg_attr(any(feature = "std", test), derive(PartialEq, Eq))]
-#[derive(Clone, RuntimeDebug, Encode, Decode)]
+#[derive(Clone, RuntimeDebug, Encode, Decode, scale_info::TypeInfo)]
 pub struct ScheduledV2<Call, BlockNumber, PalletsOrigin, AccountId> {
 	/// The unique identity for this task, if there is one.
 	maybe_id: Option<Vec<u8>>,
@@ -137,7 +137,7 @@ pub type Scheduled<Call, BlockNumber, PalletsOrigin, AccountId> = ScheduledV2<Ca
 // A value placed in storage that represents the current version of the Scheduler storage.
 // This value is used by the `on_runtime_upgrade` logic to determine whether we run
 // storage migration logic.
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
 enum Releases {
 	V1,
 	V2,

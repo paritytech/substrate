@@ -305,7 +305,7 @@ pub trait Config: frame_system::Config + Sized {
 	type MaxProposals: Get<u32>;
 }
 
-#[derive(Clone, Encode, Decode, RuntimeDebug)]
+#[derive(Clone, Encode, Decode, RuntimeDebug, scale_info::TypeInfo)]
 pub enum PreimageStatus<AccountId, Balance, BlockNumber> {
 	/// The preimage is imminently needed at the argument.
 	Missing(BlockNumber),
@@ -332,7 +332,7 @@ impl<AccountId, Balance, BlockNumber> PreimageStatus<AccountId, Balance, BlockNu
 // A value placed in storage that represents the current version of the Democracy storage.
 // This value is used by the `on_runtime_upgrade` logic to determine whether we run
 // storage migration logic.
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
 enum Releases {
 	V1,
 }

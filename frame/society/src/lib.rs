@@ -322,7 +322,7 @@ pub trait Config<I = DefaultInstance>: system::Config {
 }
 
 /// A vote by a member on a candidate application.
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
 pub enum Vote {
 	/// The member has been chosen to be skeptic and has not yet taken any action.
 	Skeptic,

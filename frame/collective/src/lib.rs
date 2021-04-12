@@ -177,7 +177,7 @@ impl<AccountId, I> GetBacking for RawOrigin<AccountId, I> {
 /// Origin for the collective module.
 pub type Origin<T, I=DefaultInstance> = RawOrigin<<T as frame_system::Config>::AccountId, I>;
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, scale_info::TypeInfo)]
 /// Info for keeping track of a motion being voted on.
 pub struct Votes<AccountId, BlockNumber> {
 	/// The proposal's unique index.

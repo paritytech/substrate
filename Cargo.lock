@@ -9220,6 +9220,7 @@ name = "sp-staking"
 version = "3.0.0"
 dependencies = [
  "parity-scale-codec",
+ "scale-info",
  "sp-runtime",
  "sp-std",
 ]

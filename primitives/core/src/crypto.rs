@@ -1097,7 +1097,7 @@ pub trait CryptoType {
 /// public modules.
 #[derive(
 	Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode, PassByInner,
-	crate::RuntimeDebug
+	crate::RuntimeDebug, scale_info::TypeInfo
 )]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct KeyTypeId(pub [u8; 4]);

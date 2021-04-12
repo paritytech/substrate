@@ -216,7 +216,7 @@ impl<T, S, V, M> Convert<Multiplier, Multiplier> for TargetedFeeAdjustment<T, S,
 }
 
 /// Storage releases of the module.
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
 enum Releases {
 	/// Original version of the module.
 	V1Ancient,

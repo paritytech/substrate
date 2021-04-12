@@ -210,7 +210,7 @@ pub trait Config: frame_system::Config {
 }
 
 /// An active recovery process.
-#[derive(Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug, scale_info::TypeInfo)]
 pub struct ActiveRecovery<BlockNumber, Balance, AccountId> {
 	/// The block number when the recovery process started.
 	created: BlockNumber,
@@ -222,7 +222,7 @@ pub struct ActiveRecovery<BlockNumber, Balance, AccountId> {
 }
 
 /// Configuration for recovering an account.
-#[derive(Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug, scale_info::TypeInfo)]
 pub struct RecoveryConfig<BlockNumber, Balance, AccountId> {
 	/// The minimum number of blocks since the start of the recovery process before the account
 	/// can be recovered.

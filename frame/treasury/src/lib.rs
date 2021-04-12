@@ -159,7 +159,7 @@ pub type ProposalIndex = u32;
 
 /// A spending proposal.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
 pub struct Proposal<AccountId, Balance> {
 	/// The account proposing it.
 	proposer: AccountId,
