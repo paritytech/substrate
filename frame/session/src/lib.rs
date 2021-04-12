@@ -750,11 +750,11 @@ impl<T: Config> Module<T> {
 		let who = T::ValidatorIdOf::convert(account.clone())
 			.ok_or(Error::<T>::NoAssociatedValidatorId)?;
 
-		frame_system::Pallet::<T>::inc_consumers(&account).map_err(|_| Error::<T>::NoAccount)?;
+		ensure!(frame_system::Pallet::<T>::can_inc_consumer(&account), Error::<T>::NoAccount);
 		let old_keys = Self::inner_set_keys(&who, keys)?;
-		if old_keys.is_some() {
-			let _ = frame_system::Pallet::<T>::dec_consumers(&account);
-			// ^^^ Defensive only; Consumers were incremented just before, so should never fail.
+		if old_keys.is_none() {
+			let assertion = frame_system::Pallet::<T>::inc_consumers(&account).is_ok();
+			debug_assert!(assertion, "can_inc_consumer() returned true; no change since; qed");
 		}
 
 		Ok(())
@@ -777,6 +777,10 @@ impl<T: Config> Module<T> {
 				Self::key_owner(*id, key).map_or(true, |owner| &owner == who),
 				Error::<T>::DuplicatedKey,
 			);
+		}
+
+		for id in T::Keys::key_ids() {
+			let key = keys.get_raw(*id);
 
 			if let Some(old) = old_keys.as_ref().map(|k| k.get_raw(*id)) {
 				if key == old {

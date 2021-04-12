@@ -1477,7 +1477,11 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 								let reason = match err {
 									ResponseFailure::Network(InboundFailure::Timeout) => "timeout",
 									ResponseFailure::Network(InboundFailure::UnsupportedProtocols) =>
-										"unsupported",
+										// `UnsupportedProtocols` is reported for every single
+										// inbound request whenever a request with an unsupported
+										// protocol is received. This is not reported in order to
+										// avoid confusions.
+										continue,
 									ResponseFailure::Network(InboundFailure::ResponseOmission) =>
 										"busy-omitted",
 									ResponseFailure::Network(InboundFailure::ConnectionClosed) =>
