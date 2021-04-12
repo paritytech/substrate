@@ -910,6 +910,21 @@ impl<T: Value, S: Get<u32>> BoundedVec<T, S> {
 		}
 	}
 
+	/// Exactly the same semantics as [`Vec::push`], but returns an `Err` (and is a noop) if the
+	/// new length of the vector exceeds `S`.
+	///
+	/// # Panics
+	///
+	/// Panics if the new capacity exceeds isize::MAX bytes.
+	pub fn try_push(&mut self, element: T) -> Result<(), ()> {
+		if self.len() < Self::bound() {
+			self.0.push(element);
+			Ok(())
+		} else {
+			Err(())
+		}
+	}
+
 	/// Exactly the same semantics as [`Vec::remove`].
 	///
 	/// # Panics
