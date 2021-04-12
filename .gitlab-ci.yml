@@ -26,7 +26,6 @@ stages:
   - build
   - publish
   - deploy
-  - verify
 
 workflow:
   rules:
@@ -84,7 +83,6 @@ default:
     - if: $CI_PIPELINE_SOURCE == "web"
     - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_COMMIT_REF_NAME == "master"
-    - if: $CI_COMMIT_REF_NAME == "tags"
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
 
@@ -95,7 +93,6 @@ default:
     - if: $CI_PIPELINE_SOURCE == "web"
     - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_COMMIT_REF_NAME == "master"
-    - if: $CI_COMMIT_REF_NAME == "tags"
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
 
@@ -114,7 +111,6 @@ default:
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
     - if: $CI_COMMIT_REF_NAME == "master"
-    - if: $CI_COMMIT_REF_NAME == "tags"
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
       when: manual
@@ -127,7 +123,6 @@ default:
     - if: $CI_PIPELINE_SOURCE == "web"
     - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_COMMIT_REF_NAME == "master"
-    - if: $CI_COMMIT_REF_NAME == "tags"
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
 
 .nightly-pipeline:                 &nightly-pipeline
@@ -348,7 +343,6 @@ unleash-check:
     - if: $CI_PIPELINE_SOURCE == "pipeline"
       when: never
     - if: $CI_COMMIT_REF_NAME == "master"
-    - if: $CI_COMMIT_REF_NAME == "tags"
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
   script:
     - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
@@ -586,13 +580,14 @@ build-rust-doc:
     - buildah push --format=v2s2 "$IMAGE_NAME:latest"
   after_script:
     - buildah logout "$IMAGE_NAME"
-    # pass artifacts to the trigget-simnet job
+    # pass artifacts to the trigger-simnet job
     - echo "IMAGE_NAME=${IMAGE_NAME}" > ./artifacts/$PRODUCT/build.env
     - echo "IMAGE_TAG=${VERSION}" >> ./artifacts/$PRODUCT/build.env
 
 publish-docker-substrate:
   stage:                           publish
   <<:                              *build-push-docker-image
+  <<:                              *build-refs
   needs:
     - job:                         build-linux-substrate
       artifacts:                   true
@@ -716,26 +711,19 @@ deploy-prometheus-alerting-rules:
 
 trigger-simnet:
   stage:                           deploy
-  <<:                              *nightly-pipeline
+  image:                           paritytech/tools:latest
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master"
+    - if: $CI_COMMIT_REF_NAME == "master"
   needs:
     - job:                         publish-docker-substrate
-  trigger:
-    project:                       parity/simnet
-    branch:                        master
-    strategy:                      depend
+  # `build.env` brings here `$IMAGE_NAME` and `$IMAGE_TAG` (`$VERSION` here, 
+  # i.e. `2643-0.8.29-5f689e0a-6b24dc54`).
   variables:
     TRGR_PROJECT:                  ${CI_PROJECT_NAME}
     TRGR_REF:                      ${CI_COMMIT_REF_NAME}
-
-trigger-fail-guard:
-  stage:                           verify
-  # <<:                              *nightly-pipeline
-  needs:
-    - job:                         trigger-simnet
-  when:                            on_failure
+    # simnet project ID
+    DWNSTRM_ID:                    332
   script:
-    - echo "This job runs and returns the failed status to Github when the 
-            `trigger-simnet` job has failed.
-            This is a workaround for a Gitlab's bug, waits here until
-            https://gitlab.com/gitlab-org/gitlab/-/issues/326137 gets fixed."
-    - exit 1
+    # API trigger for a simnet job
+    - ./scripts/gitlab/trigger_pipeline.sh
