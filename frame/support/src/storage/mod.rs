@@ -890,7 +890,7 @@ impl<T: Value, S: Get<u32>> BoundedVec<T, S> {
 	///
 	/// This is useful for cases if you need access to an internal API of the inner `Vec<_>` which
 	/// is not provided by the wrapper `BoundedVec`.
-	pub fn inner(self) -> Vec<T> {
+	pub fn into_inner(self) -> Vec<T> {
 		self.0
 	}
 
