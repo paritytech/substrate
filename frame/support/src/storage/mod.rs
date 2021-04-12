@@ -19,13 +19,12 @@
 
 use sp_core::storage::ChildInfo;
 use sp_std::prelude::*;
-use sp_std::{iter, convert::TryFrom};
+use sp_std::convert::TryFrom;
 use codec::{FullCodec, FullEncode, Encode, EncodeLike, Decode};
 use crate::{
 	hash::{Twox128, StorageHasher, ReversibleStorageHasher},
 	traits::Get,
 };
-use sp_arithmetic::traits::Zero;
 use sp_runtime::generic::{Digest, DigestItem};
 pub use sp_runtime::TransactionOutcome;
 
@@ -895,21 +894,6 @@ impl<T: Value, S: Get<u32>> BoundedVec<T, S> {
 		self.0
 	}
 
-	//// Return the length of the inner vector.
-	pub fn len(&self) -> usize {
-		self.0.len()
-	}
-
-	/// Exactly the same semantics as [`Vec::is_empty`].
-	pub fn is_empty(&self) -> bool {
-		self.0.len().is_zero()
-	}
-
-	/// Exactly the same semantics as [`Vec::retain`].
-	pub fn retain<F: FnMut(&T) -> bool>(&mut self, f: F) {
-		self.0.retain(f)
-	}
-
 	/// Exactly the same semantics as [`Vec::insert`], but returns an `Err` (and is a noop) if the
 	/// new length of the vector exceeds `S`.
 	///
@@ -943,25 +927,9 @@ impl<T: Value, S: Get<u32>> BoundedVec<T, S> {
 		self.0.swap_remove(index);
 	}
 
-	/// Returns an iterator over inner values.
-	pub fn iter<I: iter::IntoIterator>(&self) -> sp_std::slice::Iter<'_, T> {
-		self.into_iter()
-	}
-}
-
-impl<T: Value, S: Get<u32>> iter::IntoIterator for BoundedVec<T, S> {
-	type Item = T;
-	type IntoIter = sp_std::vec::IntoIter<T>;
-	fn into_iter(self) -> Self::IntoIter {
-		self.0.into_iter()
-	}
-}
-
-impl<'a, T: Value, S: Get<u32>> iter::IntoIterator for &'a BoundedVec<T, S> {
-	type Item = <sp_std::slice::Iter<'a, T> as sp_std::iter::Iterator>::Item;
-	type IntoIter = sp_std::slice::Iter<'a, T>;
-	fn into_iter(self) -> Self::IntoIter {
-		self.0.as_slice().into_iter()
+	/// Exactly the same semantics as [`Vec::retain`].
+	pub fn retain<F: FnMut(&T) -> bool>(&mut self, f: F) {
+		self.0.retain(f)
 	}
 }
 
@@ -979,6 +947,15 @@ impl<T: Value, S: Get<u32>> TryFrom<Vec<T>> for BoundedVec<T, S> {
 // It is okay to give a non-mutable reference of the inner vec to anyone.
 impl<T: Value, S: Get<u32>> AsRef<Vec<T>> for BoundedVec<T, S> {
 	fn as_ref(&self) -> &Vec<T> {
+		&self.0
+	}
+}
+
+// will allow for immutable all operations of `Vec<T>` on `BoundedVec<T>`.
+impl<T: Value, S: Get<u32>> sp_std::ops::Deref for BoundedVec<T, S> {
+	type Target = Vec<T>;
+
+	fn deref(&self) -> &Self::Target {
 		&self.0
 	}
 }
@@ -1115,25 +1092,12 @@ pub mod bounded_vec {
 	}
 
 	#[test]
-	fn iter_works() {
-		// consuming
-		{
-			let bounded: BoundedVec<u32, Seven> = vec![1, 2, 3].try_into().unwrap();
-			assert_eq!(bounded.into_iter().fold(0u32, |acc, prev| acc + prev), 6);
-		}
-
-		// non consuming
-		{
-			let bounded: BoundedVec<u32, Seven> = vec![1, 2, 3].try_into().unwrap();
-			assert_eq!(
-				bounded
-					.iter::<sp_std::vec::IntoIter<&u32>>()
-					.filter(|x| *x % 2u32 == 0u32)
-					.cloned()
-					.collect::<Vec<u32>>(),
-				vec![2],
-			);
-		}
+	fn deref_coercion_works() {
+		let bounded: BoundedVec<u32, Seven> = vec![1, 2, 3].try_into().unwrap();
+		// these methods come from deref-ed vec.
+		assert_eq!(bounded.len(), 3);
+		assert!(bounded.iter().next().is_some());
+		assert!(!bounded.is_empty());
 	}
 }
 

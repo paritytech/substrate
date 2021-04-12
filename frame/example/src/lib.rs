@@ -26,8 +26,8 @@
 //!
 //! ### Documentation Guidelines:
 //!
-//! <!-- Original author of paragraph: Various. Based on collation of review comments to PRs
-//! addressing issues with --> <!-- label 'S3-FRAME' in https://github.com/paritytech/substrate-developer-hub/issues -->
+//! <!-- Original author of paragraph: Various. Based on collation of review comments to PRs addressing issues with -->
+//! <!-- label 'S3-FRAME' in https://github.com/paritytech/substrate-developer-hub/issues -->
 //! <ul>
 //!     <li>Documentation comments (i.e. <code>/// comment</code>) - should
 //!         accompany pallet functions and be restricted to the pallet interface,
@@ -37,13 +37,13 @@
 //!         Capitalize the first word of each documentation comment and end it with
 //!         a full stop. See
 //!         <a href="https://github.com/paritytech/substrate#72-contributing-to-documentation-for-substrate-packages"
-//!         target="_blank"> Generic example of annotating source code with documentation
-//! comments</a></li>     <li>Self-documenting code - Try to refactor code to be
-//! self-documenting.</li>     <li>Code comments - Supplement complex code with a brief explanation,
-//! not every line of code.</li>     <li>Identifiers - surround by backticks (i.e.
-//! <code>INHERENT_IDENTIFIER</code>, <code>InherentType</code>,         <code>u64</code>)</li>
-//!     <li>Usage scenarios - should be simple doctests. The compiler should ensure they stay
-//! valid.</li>     <li>Extended tutorials - should be moved to external files and refer to.</li>
+//!         target="_blank"> Generic example of annotating source code with documentation comments</a></li>
+//!     <li>Self-documenting code - Try to refactor code to be self-documenting.</li>
+//!     <li>Code comments - Supplement complex code with a brief explanation, not every line of code.</li>
+//!     <li>Identifiers - surround by backticks (i.e. <code>INHERENT_IDENTIFIER</code>, <code>InherentType</code>,
+//!         <code>u64</code>)</li>
+//!     <li>Usage scenarios - should be simple doctests. The compiler should ensure they stay valid.</li>
+//!     <li>Extended tutorials - should be moved to external files and refer to.</li>
 //!     <!-- Original author of paragraph: @AmarRSingh -->
 //!     <li>Mandatory - include all of the sections/subsections where <b>MUST</b> is specified.</li>
 //!     <li>Optional - optionally include sections/subsections where <b>CAN</b> is specified.</li>
@@ -84,13 +84,12 @@
 //!
 //! \## Terminology
 //!
-//! // Add terminology used in the custom pallet. Include concepts, storage items, or actions that
-//! you think // deserve to be noted to give context to the rest of the documentation or pallet
-//! usage. The author needs to // use some judgment about what is included. We don't want a list of
-//! every storage item nor types - the user // can go to the code for that. For example, "transfer
-//! fee" is obvious and should not be included, but // "free balance" and "reserved balance" should
-//! be noted to give context to the pallet. // Please do not link to outside resources. The
-//! reference docs should be the ultimate source of truth.
+//! // Add terminology used in the custom pallet. Include concepts, storage items, or actions that you think
+//! // deserve to be noted to give context to the rest of the documentation or pallet usage. The author needs to
+//! // use some judgment about what is included. We don't want a list of every storage item nor types - the user
+//! // can go to the code for that. For example, "transfer fee" is obvious and should not be included, but
+//! // "free balance" and "reserved balance" should be noted to give context to the pallet.
+//! // Please do not link to outside resources. The reference docs should be the ultimate source of truth.
 //!
 //! <!-- Original author of heading: @Kianenigma in PR https://github.com/paritytech/substrate/pull/1951 -->
 //!
@@ -107,8 +106,7 @@
 //! \#### <INSERT_SCENARIO_NAME>
 //!
 //! // Describe requirements prior to interacting with the custom pallet.
-//! // Describe the process of interacting with the custom pallet for this scenario and public API
-//! functions used.
+//! // Describe the process of interacting with the custom pallet for this scenario and public API functions used.
 //!
 //! \## Interface
 //!
@@ -132,15 +130,14 @@
 //!
 //! <!-- Original author of paragraph: ??? -->
 //!
-//! // Reference documentation of aspects such as `storageItems` and `dispatchable` functions should
-//! only be // included in the <https://docs.rs> Rustdocs for Substrate and not repeated in the README file.
+//! // Reference documentation of aspects such as `storageItems` and `dispatchable` functions should only be
+//! // included in the <https://docs.rs> Rustdocs for Substrate and not repeated in the README file.
 //!
 //! \### Dispatchable Functions
 //!
 //! <!-- Original author of paragraph: @AmarRSingh & @joepetrowski -->
 //!
-//! // A brief description of dispatchable functions and a link to the rustdoc with their actual
-//! documentation.
+//! // A brief description of dispatchable functions and a link to the rustdoc with their actual documentation.
 //!
 //! // <b>MUST</b> have link to Call enum
 //! // <b>MUST</b> have origin information included in function doc
@@ -157,8 +154,7 @@
 //!
 //! <!-- Original author of paragraph: @AmarRSingh -->
 //!
-//! // It is up to the writer of the respective pallet (with respect to how much information to
-//! provide).
+//! // It is up to the writer of the respective pallet (with respect to how much information to provide).
 //!
 //! \#### Public Inspection functions - Immutable (getters)
 //!
@@ -221,8 +217,7 @@
 //!
 //! \### Simple Code Snippet
 //!
-//! // Show a simple example (e.g. how to query a public getter function of
-//! <INSERT_CUSTOM_PALLET_NAME>)
+//! // Show a simple example (e.g. how to query a public getter function of <INSERT_CUSTOM_PALLET_NAME>)
 //!
 //! \### Example from FRAME
 //!
@@ -602,22 +597,6 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn foo)]
 	pub(super) type Foo<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
-
-	frame_support::parameter_types! {
-		pub const Five: u32 = 5;
-	}
-
-	/// An example of how to create a bounded vector. This is a special 'newtype' that behaves
-	/// identical to a normal `Vec`, except the size can never exceed `Five`.
-	///
-	/// Similar to normal storage values that contain a vector, the length of the bounded vector can
-	///be queried efficiently with `decode_len`. Also, adding to the end of the vector can be done
-	///efficiently via `try_append`. See [`frame_support::TryAppendValue`] and
-	/// [`frame_support::TryAppendMap`].
-	#[pallet::storage]
-	#[pallet::getter(fn bounded)]
-	pub(super) type BoundedStuff<T: Config> =
-		StorageValue<_, frame_support::storage::BoundedVec<u32, Five>, ValueQuery>;
 
 	// The genesis config type.
 	#[pallet::genesis_config]
