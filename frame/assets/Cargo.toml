@@ -15,7 +15,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 serde = { version = "1.0.101", optional = true }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
-scale-info = { git = "https://github.com/paritytech/scale-info", branch = "master", default-features = false, features = ["derive"] }
+scale-info = { git = "https://github.com/paritytech/scale-info", branch = "aj-remove-compact-type-bounds", default-features = false, features = ["derive"] }
 sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
 # Needed for various traits. In our case, `OnFinalize`.
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
