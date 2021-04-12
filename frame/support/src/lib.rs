@@ -379,21 +379,20 @@ macro_rules! parameter_types {
 		}
 	};
 	(
-		$(
-			$( #[ $attr:meta ] )*
-			$vis:vis static $name:ident: $type:ty = $value:expr;
-		)*
+		$( #[ $attr:meta ] )*
+		$vis:vis static $name:ident: $type:ty = $value:expr;
+		$( $rest:tt )*
 	) => (
 		$crate::parameter_types_impl_thread_local!(
-			$(
-				$( #[ $attr ] )*
-				$vis static $name: $type = $value;
-			)*
+			$( #[ $attr ] )*
+			$vis static $name: $type = $value;
 		);
+		$crate::parameter_types!( $( $rest )* );
 	);
 }
 
 #[cfg(not(feature = "std"))]
+#[doc(inline)]
 #[macro_export]
 macro_rules! parameter_types_impl_thread_local {
 	( $( $any:tt )* ) => {
@@ -402,6 +401,7 @@ macro_rules! parameter_types_impl_thread_local {
 }
 
 #[cfg(feature = "std")]
+#[doc(inline)]
 #[macro_export]
 macro_rules! parameter_types_impl_thread_local {
 	(
@@ -1216,6 +1216,12 @@ pub mod tests {
 			StorageParameter::set(&300);
 			assert_eq!(300, StorageParameter::get());
 		})
+	}
+
+	parameter_types! {
+		pub const BlockHashCount: u64 = 250;
+		pub static Members: Vec<u64> = vec![];
+		pub const Foo: Option<u64> = None;
 	}
 }
 
