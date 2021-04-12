@@ -88,7 +88,6 @@ pub struct Span {
 #[derive(Serialize, Deserialize, Default, Clone, Debug)]
 pub struct Values {
 	/// HashMap of `bool` values
-	#[serde(skip)]
 	pub bool_values: HashMap<String, bool>,
 	/// HashMap of `i64` values
 	#[serde(skip)]
