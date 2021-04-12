@@ -335,10 +335,7 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> StaticLookup for Pallet<T>
-where
-	<<T as Config>::AccountIndex as codec::HasCompact>::Type: scale_info::TypeInfo,
-{
+impl<T: Config> StaticLookup for Pallet<T> {
 	type Source = MultiAddress<T::AccountId, T::AccountIndex>;
 	type Target = T::AccountId;
 

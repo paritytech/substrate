@@ -539,7 +539,6 @@ impl<T: Config + TypeInfo> sp_std::fmt::Debug for ChargeTransactionPayment<T> {
 impl<T: Config + TypeInfo> SignedExtension for ChargeTransactionPayment<T> where
 	BalanceOf<T>: Send + Sync + From<u64> + FixedPointOperand + TypeInfo,
 	T::Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>,
-	<<<T as Config>::OnChargeTransaction as payment::OnChargeTransaction<T>>::Balance as codec::HasCompact>::Type: TypeInfo, // todo: [AJ] this is a result of the derived compact TypeInfo impl, can we get rid of it?
 {
 	const IDENTIFIER: &'static str = "ChargeTransactionPayment";
 	type AccountId = T::AccountId;
