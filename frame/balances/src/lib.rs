@@ -159,7 +159,7 @@ use sp_std::prelude::*;
 use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr};
 use codec::{Codec, Encode, Decode};
 use frame_support::{
-	ensure, BoundedVec,
+	ensure,
 	traits::{
 		Currency, OnUnbalanced, TryDrop, StoredMap,
 		WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
@@ -441,7 +441,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		T::AccountId,
-		BoundedVec<BalanceLock<T::Balance>, T::MaxLocks>,
+		Vec<BalanceLock<T::Balance>>,
 		ValueQuery
 	>;
 
@@ -828,6 +828,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Update the account entry for `who`, given the locks.
 	fn update_locks(who: &T::AccountId, locks: &[BalanceLock<T::Balance>]) {
+		if locks.len() as u32 > T::MaxLocks::get() {
+			log::warn!(
+				target: "runtime::balances",
+				"Warning: A user has more currency locks than expected. \
+				A runtime configuration adjustment may be needed."
+			);
+		}
 		// No way this can fail since we do not alter the existential balances.
 		let res = Self::mutate_account(who, |b| {
 			b.misc_frozen = Zero::zero();
@@ -852,11 +859,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				system::Pallet::<T>::dec_consumers(who);
 			}
 		} else {
-			let bounded_locks = <BoundedVec<BalanceLock<T::Balance>, T::MaxLocks>>::force_from(
-				locks.to_vec(),
-				"balance:locks".into(),
-			);
-			Locks::<T, I>::insert(who, bounded_locks);
+			Locks::<T, I>::insert(who, locks);
 			if !existed {
 				if system::Pallet::<T>::inc_consumers(who).is_err() {
 					// No providers for the locks. This is impossible under normal circumstances
@@ -1646,6 +1649,7 @@ where
 	T::Balance: MaybeSerializeDeserialize + Debug
 {
 	type Moment = T::BlockNumber;
+
 	type MaxLocks = T::MaxLocks;
 
 	// Set a lock on the balance of `who`.
@@ -1701,6 +1705,6 @@ where
 	) {
 		let mut locks = Self::locks(who);
 		locks.retain(|l| l.id != id);
-		Self::update_locks(who, locks.as_ref());
+		Self::update_locks(who, &locks[..]);
 	}
 }
