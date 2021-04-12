@@ -21,8 +21,6 @@ use std::{
 	sync::Arc,
 };
 
-use crate::{base_pool as base, watcher::Watcher};
-
 use futures::Future;
 use sp_runtime::{
 	generic::BlockId,
@@ -35,6 +33,7 @@ use sp_transaction_pool::error;
 use wasm_timer::Instant;
 use futures::channel::mpsc::Receiver;
 
+use crate::{base_pool as base, watcher::Watcher};
 use crate::validated_pool::ValidatedPool;
 pub use crate::validated_pool::{IsValidator, ValidatedTransaction};
 
@@ -111,7 +110,7 @@ pub struct Options {
 
 impl Default for Options {
 	fn default() -> Self {
-		Options {
+		Self {
 			ready: base::Limit {
 				count: 8192,
 				total_bytes: 20 * 1024 * 1024,
@@ -151,7 +150,7 @@ where
 impl<B: ChainApi> Pool<B> {
 	/// Create a new transaction pool.
 	pub fn new(options: Options, is_validator: IsValidator, api: Arc<B>) -> Self {
-		Pool {
+		Self {
 			validated_pool: Arc::new(ValidatedPool::new(options, is_validator, api)),
 		}
 	}
@@ -193,7 +192,7 @@ impl<B: ChainApi> Pool<B> {
 		res.expect("One extrinsic passed; one result returned; qed")
 	}
 
-	/// Import a single extrinsic and starts to watch their progress in the pool.
+	/// Import a single extrinsic and starts to watch its progress in the pool.
 	pub async fn submit_and_watch(
 		&self,
 		at: &BlockId<B::Block>,
@@ -242,8 +241,8 @@ impl<B: ChainApi> Pool<B> {
 
 		// Prune all transactions that provide given tags
 		let prune_status = self.validated_pool.prune_tags(in_pool_tags)?;
-		let pruned_transactions = hashes.into_iter().cloned()
-			.chain(prune_status.pruned.iter().map(|tx| tx.hash.clone()));
+		let pruned_transactions = hashes.iter().cloned()
+			.chain(prune_status.pruned.iter().map(|tx| tx.hash));
 		self.validated_pool.fire_pruned(at, pruned_transactions)
 	}
 
@@ -337,7 +336,7 @@ impl<B: ChainApi> Pool<B> {
 		// note that `known_imported_hashes` will be rejected here due to temporary ban.
 		let pruned_hashes = prune_status.pruned
 			.iter()
-			.map(|tx| tx.hash.clone()).collect::<Vec<_>>();
+			.map(|tx| tx.hash).collect::<Vec<_>>();
 		let pruned_transactions = prune_status.pruned
 			.into_iter()
 			.map(|tx| (tx.source, tx.data.clone()));
@@ -402,7 +401,7 @@ impl<B: ChainApi> Pool<B> {
 
 		let ignore_banned = matches!(check, CheckBannedBeforeVerify::No);
 		if let Err(err) = self.validated_pool.check_is_known(&hash, ignore_banned) {
-			return (hash.clone(), ValidatedTransaction::Invalid(hash, err.into()))
+			return (hash, ValidatedTransaction::Invalid(hash, err))
 		}
 
 		let validation_result = self.validated_pool.api().validate_transaction(
@@ -413,17 +412,17 @@ impl<B: ChainApi> Pool<B> {
 
 		let status = match validation_result {
 			Ok(status) => status,
-			Err(e) => return (hash.clone(), ValidatedTransaction::Invalid(hash, e)),
+			Err(e) => return (hash, ValidatedTransaction::Invalid(hash, e)),
 		};
 
 		let validity = match status {
 			Ok(validity) => {
 				if validity.provides.is_empty() {
-					ValidatedTransaction::Invalid(hash.clone(), error::Error::NoTagsProvided.into())
+					ValidatedTransaction::Invalid(hash, error::Error::NoTagsProvided.into())
 				} else {
 					ValidatedTransaction::valid_at(
 						block_number.saturated_into::<u64>(),
-						hash.clone(),
+						hash,
 						source,
 						xt,
 						bytes,
@@ -432,9 +431,9 @@ impl<B: ChainApi> Pool<B> {
 				}
 			},
 			Err(TransactionValidityError::Invalid(e)) =>
-				ValidatedTransaction::Invalid(hash.clone(), error::Error::InvalidTransaction(e).into()),
+				ValidatedTransaction::Invalid(hash, error::Error::InvalidTransaction(e).into()),
 			Err(TransactionValidityError::Unknown(e)) =>
-				ValidatedTransaction::Unknown(hash.clone(), error::Error::UnknownTransaction(e).into()),
+				ValidatedTransaction::Unknown(hash, error::Error::UnknownTransaction(e).into()),
 		};
 
 		(hash, validity)

@@ -32,7 +32,7 @@ $line"
     runtime_changes="$runtime_changes
 $line"
   fi
-  if has_label 'paritytech/substrate' "$pr_id" 'D1-runtime-migration'; then
+  if has_label 'paritytech/substrate' "$pr_id" 'E1-runtime-migration'; then
     migrations="$migrations
 $line"
   fi

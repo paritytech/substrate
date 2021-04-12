@@ -365,6 +365,25 @@ pub mod pallet2 {
 	}
 }
 
+/// Test that the supertrait check works when we pass some parameter to the `frame_system::Config`.
+#[frame_support::pallet]
+pub mod pallet3 {
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
+
+	#[pallet::config]
+	pub trait Config: frame_system::Config<Origin = ()> {}
+
+	#[pallet::pallet]
+	pub struct Pallet<T>(_);
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {}
+}
+
 frame_support::parameter_types!(
 	pub const MyGetParam: u32= 10;
 	pub const MyGetParam2: u32= 11;
@@ -395,6 +414,7 @@ impl frame_system::Config for Runtime {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 impl pallet::Config for Runtime {
 	type Event = Event;
