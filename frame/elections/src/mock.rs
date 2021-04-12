@@ -257,7 +257,7 @@ pub(crate) fn balances(who: &u64) -> (u64, u64) {
 }
 
 pub(crate) fn locks(who: &u64) -> Vec<u64> {
-	Balances::locks(who).inner().iter().map(|l| l.amount).collect::<Vec<u64>>()
+	Balances::locks(who).iter().map(|l| l.amount).collect::<Vec<u64>>()
 }
 
 pub(crate) fn new_test_ext_with_candidate_holes() -> sp_io::TestExternalities {
