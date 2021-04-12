@@ -17,31 +17,26 @@
 
 //! Implementation of `storage_metadata` on module structure, used by construct_runtime.
 
-use frame_support_procedural_tools::clean_type_string;
 use proc_macro2::TokenStream;
 use quote::quote;
 use super::{DeclStorageDefExt, StorageLineDefExt, StorageLineTypeDef};
 
 fn storage_line_metadata_type(scrate: &TokenStream, line: &StorageLineDefExt) -> TokenStream {
 	let value_type = &line.value_type;
-	let value_type = clean_type_string(&quote!( #value_type ).to_string());
 	match &line.storage_type {
 		StorageLineTypeDef::Simple(_) => {
 			quote!{
-				#scrate::metadata::StorageEntryType::Plain(
-					#scrate::metadata::DecodeDifferent::Encode(#value_type),
-				)
+				#scrate::scale_info::meta_type::<#value_type>()
 			}
 		},
 		StorageLineTypeDef::Map(map) => {
 			let hasher = map.hasher.into_metadata();
 			let key = &map.key;
-			let key = clean_type_string(&quote!(#key).to_string());
 			quote!{
 				#scrate::metadata::StorageEntryType::Map {
-					hasher: #scrate::metadata::#hasher,
-					key: #scrate::metadata::DecodeDifferent::Encode(#key),
-					value: #scrate::metadata::DecodeDifferent::Encode(#value_type),
+					hasher: #scrate::metadata::v13::#hasher,
+					key: #scrate::scale_info::meta_type::<#key>(),
+					value: #scrate::scale_info::meta_type::<#value_type>(),
 					unused: false,
 				}
 			}
@@ -50,16 +45,14 @@ fn storage_line_metadata_type(scrate: &TokenStream, line: &StorageLineDefExt) ->
 			let hasher1 = map.hasher1.into_metadata();
 			let hasher2 = map.hasher2.into_metadata();
 			let key1 = &map.key1;
-			let key1 = clean_type_string(&quote!(#key1).to_string());
 			let key2 = &map.key2;
-			let key2 = clean_type_string(&quote!(#key2).to_string());
 			quote!{
 				#scrate::metadata::StorageEntryType::DoubleMap {
-					hasher: #scrate::metadata::#hasher1,
-					key1: #scrate::metadata::DecodeDifferent::Encode(#key1),
-					key2: #scrate::metadata::DecodeDifferent::Encode(#key2),
-					value: #scrate::metadata::DecodeDifferent::Encode(#value_type),
-					key2_hasher: #scrate::metadata::#hasher2,
+					hasher: #scrate::metadata::v13::#hasher1,
+					key1: #scrate::scale_info::meta_type::<#key1>(),
+					key2: #scrate::scale_info::meta_type::<#key2>(),
+					value: #scrate::scale_info::meta_type::<#value_type>(),
+					key2_hasher: #scrate::metadata::v13::#hasher2,
 				}
 			}
 		},
@@ -148,9 +141,9 @@ pub fn impl_metadata(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 		let str_name = line.name.to_string();
 
 		let modifier = if line.is_option {
-			quote!(#scrate::metadata::StorageEntryModifier::Optional)
+			quote!(#scrate::metadata::v13::StorageEntryModifier::Optional)
 		} else {
-			quote!(#scrate::metadata::StorageEntryModifier::Default)
+			quote!(#scrate::metadata::v13::StorageEntryModifier::Default)
 		};
 
 		let ty = storage_line_metadata_type(scrate, line);
@@ -171,14 +164,12 @@ pub fn impl_metadata(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 		}
 
 		let entry = quote! {
-			#scrate::metadata::StorageEntryMetadata {
-				name: #scrate::metadata::DecodeDifferent::Encode(#str_name),
+			#scrate::metadata::v13::StorageEntryMetadata {
+				name: #str_name,
 				modifier: #modifier,
 				ty: #ty,
-				default: #scrate::metadata::DecodeDifferent::Encode(
-					#scrate::metadata::DefaultByteGetter(&#default_byte_getter_struct_instance)
-				),
-				documentation: #scrate::metadata::DecodeDifferent::Encode(&[ #docs ]),
+				default: #scrate::metadata::DefaultByteGetter(&#default_byte_getter_struct_instance).0.default_byte(),
+				documentation: #scrate::scale_info::prelude::vec![ #docs ],
 			},
 		};
 
@@ -195,9 +186,9 @@ pub fn impl_metadata(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 	};
 
 	let store_metadata = quote!(
-		#scrate::metadata::StorageMetadata {
-			prefix: #scrate::metadata::DecodeDifferent::Encode(#prefix),
-			entries: #scrate::metadata::DecodeDifferent::Encode(&[ #entries ][..]),
+		#scrate::metadata::v13::StorageMetadata {
+			prefix: #prefix,
+			entries: #scrate::scale_info::prelude::vec![ #entries ],
 		}
 	);
 
@@ -210,7 +201,7 @@ pub fn impl_metadata(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 
 		impl#module_impl #module_struct #where_clause {
 			#[doc(hidden)]
-			pub fn storage_metadata() -> #scrate::metadata::StorageMetadata {
+			pub fn storage_metadata() -> #scrate::metadata::v13::StorageMetadata {
 				#store_metadata
 			}
 		}
