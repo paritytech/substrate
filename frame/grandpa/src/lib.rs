@@ -110,7 +110,7 @@ pub trait WeightInfo {
 /// A stored pending change, old format.
 // TODO: remove shim
 // https://github.com/paritytech/substrate/issues/1614
-#[derive(Encode, Decode)]
+#[derive(Encode, Decode, scale_info::TypeInfo)]
 pub struct OldStoredPendingChange<N> {
 	/// The block number this was scheduled at.
 	pub scheduled_at: N,
@@ -121,7 +121,7 @@ pub struct OldStoredPendingChange<N> {
 }
 
 /// A stored pending change.
-#[derive(Encode)]
+#[derive(Encode, scale_info::TypeInfo)] // todo: [AJ] manual TypeInfo impl to express conversion somehow?
 pub struct StoredPendingChange<N> {
 	/// The block number this was scheduled at.
 	pub scheduled_at: N,
@@ -151,7 +151,7 @@ impl<N: Decode> Decode for StoredPendingChange<N> {
 /// Current state of the GRANDPA authority set. State transitions must happen in
 /// the same order of states defined below, e.g. `Paused` implies a prior
 /// `PendingPause`.
-#[derive(Decode, Encode)]
+#[derive(Decode, Encode, scale_info::TypeInfo)]
 #[cfg_attr(test, derive(Debug, PartialEq))]
 pub enum StoredState<N> {
 	/// The current authority set is live, and GRANDPA is enabled.

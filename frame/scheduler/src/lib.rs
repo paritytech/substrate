@@ -80,7 +80,8 @@ pub trait Config: system::Config {
 		+ From<Self::PalletsOrigin> + IsType<<Self as system::Config>::Origin>;
 
 	/// The caller origin, overarching type of all pallets origins.
-	type PalletsOrigin: From<system::RawOrigin<Self::AccountId>> + Codec + Clone + Eq;
+	type PalletsOrigin: From<system::RawOrigin<Self::AccountId>> + Codec + Clone + Eq
+		+ scale_info::TypeInfo;
 
 	/// The aggregated call type.
 	type Call: Parameter + Dispatchable<Origin=<Self as Config>::Origin> + GetDispatchInfo + From<system::Call<Self>>;
