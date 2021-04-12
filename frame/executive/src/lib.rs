@@ -560,25 +560,25 @@ mod tests {
 				#[weight = 100]
 				fn some_function(origin) {
 					// NOTE: does not make any different.
-					let _ = frame_system::ensure_signed(origin);
+					frame_system::ensure_signed(origin)?;
 				}
 				#[weight = (200, DispatchClass::Operational)]
 				fn some_root_operation(origin) {
-					let _ = frame_system::ensure_root(origin);
+					frame_system::ensure_root(origin)?;
 				}
 				#[weight = 0]
 				fn some_unsigned_message(origin) {
-					let _ = frame_system::ensure_none(origin);
+					frame_system::ensure_none(origin)?;
 				}
 
 				#[weight = 0]
 				fn allowed_unsigned(origin) {
-					let _ = frame_system::ensure_root(origin)?;
+					frame_system::ensure_root(origin)?;
 				}
 
 				#[weight = 0]
 				fn unallowed_unsigned(origin) {
-					let _ = frame_system::ensure_root(origin)?;
+					frame_system::ensure_root(origin)?;
 				}
 
 				#[weight = 0]
@@ -612,7 +612,7 @@ mod tests {
 				}
 
 				#[weight = 0]
-				fn calculate_storage_root(origin) {
+				fn calculate_storage_root(_origin) {
 					let root = sp_io::storage::root();
 					sp_io::storage::set("storage_root".as_bytes(), &root);
 				}
@@ -707,6 +707,7 @@ mod tests {
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
+		type OnSetCode = ();
 	}
 
 	type Balance = u64;

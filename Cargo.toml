@@ -1,4 +1,6 @@
 [workspace]
+resolver = "2"
+
 members = [
 	"bin/node-template/node",
 	"bin/node-template/pallets/template",
@@ -6,6 +8,7 @@ members = [
 	"bin/node/bench",
 	"bin/node/browser-testing",
 	"bin/node/cli",
+	"bin/node/test-runner-example",
 	"bin/node/executor",
 	"bin/node/primitives",
 	"bin/node/rpc",
@@ -151,6 +154,7 @@ members = [
 	"primitives/io",
 	"primitives/keyring",
 	"primitives/keystore",
+	"primitives/maybe-compressed-blob",
 	"primitives/npos-elections",
 	"primitives/npos-elections/compact",
 	"primitives/npos-elections/fuzzer",
@@ -184,6 +188,7 @@ members = [
 	"test-utils/runtime",
 	"test-utils/runtime/client",
 	"test-utils/runtime/transaction-pool",
+	"test-utils/test-runner",
 	"test-utils/test-crate",
 	"utils/browser",
 	"utils/build-script-utils",

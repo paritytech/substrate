@@ -92,9 +92,9 @@
 //!
 //! ### Module Information
 //!
-//! - [`election_sp_phragmen::Config`](./trait.Config.html)
-//! - [`Call`](./enum.Call.html)
-//! - [`Module`](./struct.Module.html)
+//! - [`Config`]
+//! - [`Call`]
+//! - [`Module`]
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -107,7 +107,7 @@ use frame_support::{
 	traits::{
 		ChangeMembers, Contains, ContainsLengthBound, Currency, CurrencyToVote, Get,
 		InitializeMembers, LockIdentifier, LockableCurrency, OnUnbalanced, ReservableCurrency,
-		WithdrawReasons,
+		WithdrawReasons, SortedMembers,
 	},
 	weights::Weight,
 };
@@ -175,7 +175,7 @@ pub trait Config: frame_system::Config {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// Identifier for the elections-phragmen pallet's lock
-	type ModuleId: Get<LockIdentifier>;
+	type PalletId: Get<LockIdentifier>;
 
 	/// The currency that people are electing with.
 	type Currency:
@@ -375,7 +375,7 @@ decl_module! {
 		const DesiredMembers: u32 = T::DesiredMembers::get();
 		const DesiredRunnersUp: u32 = T::DesiredRunnersUp::get();
 		const TermDuration: T::BlockNumber = T::TermDuration::get();
-		const ModuleId: LockIdentifier = T::ModuleId::get();
+		const PalletId: LockIdentifier = T::PalletId::get();
 
 		/// Vote for a set of candidates for the upcoming round of election. This can be called to
 		/// set the initial votes, or update already existing votes.
@@ -452,7 +452,7 @@ decl_module! {
 			// Amount to be locked up.
 			let locked_stake = value.min(T::Currency::total_balance(&who));
 			T::Currency::set_lock(
-				T::ModuleId::get(),
+				T::PalletId::get(),
 				&who,
 				locked_stake,
 				WithdrawReasons::all(),
@@ -807,7 +807,7 @@ impl<T: Config> Module<T> {
 		let Voter { deposit, .. } = <Voting<T>>::take(who);
 
 		// remove storage, lock and unreserve.
-		T::Currency::remove_lock(T::ModuleId::get(), who);
+		T::Currency::remove_lock(T::PalletId::get(), who);
 
 		// NOTE: we could check the deposit amount before removing and skip if zero, but it will be
 		// a noop anyhow.
@@ -1015,6 +1015,12 @@ impl<T: Config> Contains<T::AccountId> for Module<T> {
 	fn contains(who: &T::AccountId) -> bool {
 		Self::is_member(who)
 	}
+}
+
+impl<T: Config> SortedMembers<T::AccountId> for Module<T> {
+	fn contains(who: &T::AccountId) -> bool {
+		Self::is_member(who)
+	}
 
 	fn sorted_members() -> Vec<T::AccountId> {
 		Self::members_ids()
@@ -1084,7 +1090,8 @@ mod tests {
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
-	type SS58Prefix = ();
+		type SS58Prefix = ();
+		type OnSetCode = ();
 	}
 
 	parameter_types! {
@@ -1157,11 +1164,11 @@ mod tests {
 	}
 
 	parameter_types! {
-		pub const ElectionsPhragmenModuleId: LockIdentifier = *b"phrelect";
+		pub const ElectionsPhragmenPalletId: LockIdentifier = *b"phrelect";
 	}
 
 	impl Config for Test {
-		type ModuleId = ElectionsPhragmenModuleId;
+		type PalletId = ElectionsPhragmenPalletId;
 		type Event = Event;
 		type Currency = Balances;
 		type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
@@ -1308,12 +1315,11 @@ mod tests {
 	}
 
 	fn has_lock(who: &u64) -> u64 {
-		dbg!(Balances::locks(who));
 		Balances::locks(who)
 			.get(0)
 			.cloned()
 			.map(|lock| {
-				assert_eq!(lock.id, ElectionsPhragmenModuleId::get());
+				assert_eq!(lock.id, ElectionsPhragmenPalletId::get());
 				lock.amount
 			})
 			.unwrap_or_default()

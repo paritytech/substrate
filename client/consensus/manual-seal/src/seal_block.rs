@@ -144,7 +144,7 @@ pub async fn seal_block<B, BI, SC, C, E, P>(
 			digest_provider.append_block_import(&parent, &mut params, &id)?;
 		}
 
-		match block_import.import_block(params, HashMap::new())? {
+		match block_import.import_block(params, HashMap::new()).await? {
 			ImportResult::Imported(aux) => {
 				Ok(CreatedBlock { hash: <B as BlockT>::Header::hash(&header), aux })
 			},
