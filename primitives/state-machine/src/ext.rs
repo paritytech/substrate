@@ -290,12 +290,12 @@ where
 			_ => self.backend.exists_storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL),
 		};
 
-		trace!(target: "state",
-			method = "Exists",
-			ext_id = self.id,
-			key = %HexDisplay::from(&key),
-			result = %HexDisplay::from(&result.encode()),
-		);
+		// trace!(target: "state",
+		// 	method = "Exists",
+		// 	ext_id = self.id,
+		// 	key = %HexDisplay::from(&key),
+		// 	result = %HexDisplay::from(&result.encode()),
+		// );
 
 		result
 	}
@@ -314,14 +314,14 @@ where
 				.expect(EXT_NOT_ALLOWED_TO_FAIL),
 		};
 
-		trace!(target: "state",
-			method = "ExistsChild",
-			ext_id = self.id,
-			key = %HexDisplay::from(&key),
-			// TODO REVIEW is this necessary?
-			child_trie_parent_key_id = %HexDisplay::from(&child_info.storage_key()),
-			result = %HexDisplay::from(&result.encode()),
-		);
+		// trace!(target: "state",
+		// 	method = "ExistsChild",
+		// 	ext_id = self.id,
+		// 	key = %HexDisplay::from(&key),
+		// 	// TODO REVIEW is this necessary?
+		// 	child_trie_parent_key_id = %HexDisplay::from(&child_info.storage_key()),
+		// 	result = %HexDisplay::from(&result.encode()),
+		// );
 
 		result
 	}
@@ -375,14 +375,14 @@ where
 			return;
 		}
 
-		let ready_to_encode_result = value.as_ref().map(|v| EncodeOpaqueValue(v.clone()));
-		trace!(target: "state",
-			method = "Put",
-			ext_id = self.id,
-			key = %HexDisplay::from(&key),
-			result = %HexDisplay::from(&value.encode()),
-			result = %HexDisplay::from(&ready_to_encode_result.encode()),
-		);
+		// let ready_to_encode_result = value.as_ref().map(|v| EncodeOpaqueValue(v.clone()));
+		// trace!(target: "state",
+		// 	method = "Put",
+		// 	ext_id = self.id,
+		// 	key = %HexDisplay::from(&key),
+		// 	result = %HexDisplay::from(&value.encode()),
+		// 	result = %HexDisplay::from(&ready_to_encode_result.encode()),
+		// );
 
 		self.mark_dirty();
 		self.overlay.set_storage(key, value);
@@ -394,13 +394,13 @@ where
 		key: StorageKey,
 		value: Option<StorageValue>,
 	) {
-		let ready_to_encode_result = value.as_ref().map(|v| EncodeOpaqueValue(v.clone()));
-		trace!(target: "state",
-			method = "PutChild",
-			ext_id = self.id,
-			key = %HexDisplay::from(&key),
-			result = %HexDisplay::from(&ready_to_encode_result.encode()),
-		);
+		// let ready_to_encode_result = value.as_ref().map(|v| EncodeOpaqueValue(v.clone()));
+		// trace!(target: "state",
+		// 	method = "PutChild",
+		// 	ext_id = self.id,
+		// 	key = %HexDisplay::from(&key),
+		// 	result = %HexDisplay::from(&ready_to_encode_result.encode()),
+		// );
 
 		let _guard = guard();
 
@@ -435,13 +435,13 @@ where
 				true
 			});
 
-			trace!(target: "state",
-				method = "KillChild",
-				ext_id = self.id,
-				// TODO REVIEW is this necessary?
-				child_trie_parent_key_id = %HexDisplay::from(&child_info.storage_key()),
-				result = ?(all_deleted, num_deleted),
-			);
+			// trace!(target: "state",
+			// 	method = "KillChild",
+			// 	ext_id = self.id,
+			// 	// TODO REVIEW is this necessary?
+			// 	child_trie_parent_key_id = %HexDisplay::from(&child_info.storage_key()),
+			// 	result = ?(all_deleted, num_deleted),
+			// );
 
 			(all_deleted, num_deleted)
 		} else {
@@ -451,13 +451,13 @@ where
 				true
 			});
 
-			trace!(target: "state",
-				method = "KillChild",
-				ext_id = self.id,
-				// TODO REVIEW is this necessary?
-				child_trie_parent_key_id = %HexDisplay::from(&child_info.storage_key()),
-				result = ?(true, num_deleted),
-			);
+			// trace!(target: "state",
+			// 	method = "KillChild",
+			// 	ext_id = self.id,
+			// 	// TODO REVIEW is this necessary?
+			// 	child_trie_parent_key_id = %HexDisplay::from(&child_info.storage_key()),
+			// 	result = ?(true, num_deleted),
+			// );
 
 			(true, num_deleted)
 		}
@@ -471,11 +471,11 @@ where
 			return;
 		}
 
-		trace!(target: "state",
-			method = "ClearPrefix",
-			ext_id = self.id,
-			prefix = %HexDisplay::from(&prefix),
-		);
+		// trace!(target: "state",
+		// 	method = "ClearPrefix",
+		// 	ext_id = self.id,
+		// 	prefix = %HexDisplay::from(&prefix),
+		// );
 
 		self.mark_dirty();
 		self.overlay.clear_prefix(prefix);
@@ -489,13 +489,13 @@ where
 		child_info: &ChildInfo,
 		prefix: &[u8],
 	) {
-		trace!(target: "state",
-			method = "ClearChildPrefix",
-			ext_id = self.id,
-			// TODO REVIEW is this necessary?
-			child_trie_parent_key_id = %HexDisplay::from(&child_info.storage_key()),
-			prefix = %HexDisplay::from(&prefix),
-		);
+		// trace!(target: "state",
+		// 	method = "ClearChildPrefix",
+		// 	ext_id = self.id,
+		// 	// TODO REVIEW is this necessary?
+		// 	child_trie_parent_key_id = %HexDisplay::from(&child_info.storage_key()),
+		// 	prefix = %HexDisplay::from(&prefix),
+		// );
 		let _guard = guard();
 
 		self.mark_dirty();
@@ -510,12 +510,12 @@ where
 		key: Vec<u8>,
 		value: Vec<u8>,
 	) {
-		trace!(target: "state",
-			method = "Append",
-			ext_id = self.id,
-			key = %HexDisplay::from(&key),
-			result = %HexDisplay::from(&value),
-		);
+		// trace!(target: "state",
+		// 	method = "Append",
+		// 	ext_id = self.id,
+		// 	key = %HexDisplay::from(&key),
+		// 	result = %HexDisplay::from(&value),
+		// );
 
 		let _guard = guard();
 		self.mark_dirty();
@@ -532,22 +532,22 @@ where
 		let _guard = guard();
 		if let Some(ref root) = self.storage_transaction_cache.transaction_storage_root {
 			let encoded_root = root.encode();
-			trace!(target: "state",
-				method = "GetRootCached",
-				ext_id = self.id,
-				root = %HexDisplay::from(&encoded_root)
-			);
+			// trace!(target: "state",
+			// 	method = "GetRootCached",
+			// 	ext_id = self.id,
+			// 	root = %HexDisplay::from(&encoded_root)
+			// );
 			return encoded_root;
 		}
 
 		let root = self.overlay.storage_root(self.backend, self.storage_transaction_cache);
 		let encoded_root = root.encode();
 
-		trace!(target: "state",
-			method = "GetRootCached",
-			ext_id = self.id,
-			root = %HexDisplay::from(&encoded_root)
-		);
+		// trace!(target: "state",
+		// 	method = "GetRootCached",
+		// 	ext_id = self.id,
+		// 	root = %HexDisplay::from(&encoded_root)
+		// );
 
 		encoded_root
 	}
