@@ -36,6 +36,8 @@ use sp_tracing::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
 // Default to only pallet, frame support and state related traces
 const DEFAULT_TARGETS: &'static str = "pallet,frame,state";
 const TRACE_TARGET: &'static str = "block_trace";
+// :extrinsic_index,system::Account
+const KEY_TARGETS: &'static str = "3a65787472696e7369635f696e646578,26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9";
 
 struct BlockSubscriber {
 	targets: Vec<(String, Level)>,
@@ -223,7 +225,12 @@ impl<Block, Client> BlockExecutor<Block, Client>
 
 		spans.sort_by(|a, b| a.entered[0].cmp(&b.entered[0]));
 
-		let events = block_subscriber.events.lock().drain(..).map(|s| s.into()).collect();
+		let events = block_subscriber.events
+			.lock()
+			.drain(..)
+			.map(|s| s.into())
+			.filter(|e| event_key_filter(e, KEY_TARGETS))
+			.collect();
 
 		let block_traces = BlockTrace {
 			block_hash: id.to_string(),
@@ -234,6 +241,16 @@ impl<Block, Client> BlockExecutor<Block, Client>
 		};
 		Ok(block_traces)
 	}
+}
+
+fn event_key_filter(event: &Event, targets: &str) -> bool {
+	if let Some(key) = event.values.string_values.get("key") {
+		if check_target(targets, key, &event.level) {
+			return false;
+		}
+	}
+
+	false
 }
 
 fn patch_and_filter(mut span: Span, targets: &str) -> Option<Span> {
