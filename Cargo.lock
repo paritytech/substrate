@@ -9249,6 +9249,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp-version-proc-macro"
+version = "3.0.0"
+dependencies = [
+ "parity-scale-codec",
+ "proc-macro-crate 1.0.0",
+ "proc-macro2",
+ "quote",
+ "sp-runtime",
+ "sp-version",
+ "syn",
+]
+
+[[package]]
 name = "sp-wasm-interface"
 version = "3.0.0"
 dependencies = [
