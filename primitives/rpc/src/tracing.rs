@@ -81,6 +81,7 @@ pub struct Span {
 	/// List of timestamps when the span was exited
 	pub exited: Vec<Duration>,
 	/// Values recorded to this span
+	#[serde(skip_serializing)]
 	pub values: Values,
 }
 
@@ -90,10 +91,10 @@ pub struct Values {
 	/// HashMap of `bool` values
 	pub bool_values: HashMap<String, bool>,
 	/// HashMap of `i64` values
-	#[serde(skip)]
+	#[serde(skip_serializing)]
 	pub i64_values: HashMap<String, i64>,
 	/// HashMap of `u64` values
-	#[serde(skip)]
+	#[serde(skip_serializing)]
 	pub u64_values: HashMap<String, u64>,
 	/// HashMap of `String` values
 	pub string_values: HashMap<String, String>,
