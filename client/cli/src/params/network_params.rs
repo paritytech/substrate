@@ -150,11 +150,11 @@ impl NetworkParams {
 					Multiaddr::empty()
 						.with(Protocol::Ip6([0, 0, 0, 0, 0, 0, 0, 0].into()))
 						.with(Protocol::Tcp(port))
-						.with(Protocol::Ws(Cow::Borrowed(""))),
+						.with(Protocol::Ws(Cow::Borrowed("/"))),
 					Multiaddr::empty()
 						.with(Protocol::Ip4([0, 0, 0, 0].into()))
 						.with(Protocol::Tcp(port))
-						.with(Protocol::Ws(Cow::Borrowed(""))),
+						.with(Protocol::Ws(Cow::Borrowed("/"))),
 				]
 			}
 		} else {
