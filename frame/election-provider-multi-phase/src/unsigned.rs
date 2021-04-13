@@ -25,7 +25,7 @@ use sp_npos_elections::{
 	assignment_staked_to_ratio_normalized,
 };
 use sp_runtime::{offchain::storage::StorageValueRef, traits::TrailingZeroInput};
-use sp_std::cmp::Ordering;
+use sp_std::{cmp::Ordering, collections::btree_map::BTreeMap};
 
 /// Storage key used to store the persistent offchain worker status.
 pub(crate) const OFFCHAIN_HEAD_DB: &[u8] = b"parity/multi-phase-unsigned-election";
@@ -33,6 +33,18 @@ pub(crate) const OFFCHAIN_HEAD_DB: &[u8] = b"parity/multi-phase-unsigned-electio
 /// The repeat threshold of the offchain worker. This means we won't run the offchain worker twice
 /// within a window of 5 blocks.
 pub(crate) const OFFCHAIN_REPEAT: u32 = 5;
+
+// type helpers for method definitions
+// these types are defined elsewhere, but we simplify them here for convenience
+pub(crate) type Assignment<T> = sp_npos_elections::Assignment<
+	<T as frame_system::Config>::AccountId,
+	CompactAccuracyOf<T>,
+>;
+pub(crate) type Voter<T> = (
+		<T as frame_system::Config>::AccountId,
+		sp_npos_elections::VoteWeight,
+		Vec<<T as frame_system::Config>::AccountId>,
+);
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum MinerError {
@@ -140,11 +152,18 @@ impl<T: Config> Pallet<T> {
 		// some point though.
 
 		// storage items. Note: we have already read this from storage, they must be in cache.
-		let RoundSnapshot { voters, targets } =
+		let RoundSnapshot { mut voters, targets } =
 			Self::snapshot().ok_or(MinerError::SnapshotUnAvailable)?;
 		let desired_targets = Self::desired_targets().ok_or(MinerError::SnapshotUnAvailable)?;
 
-		// closures.
+		// Both `voters` and `assignments` are vectors.
+		// They're synchronized: for any arbitrary index `i`, `voters[i]` corresponds to `assignments[i]`.
+		// However, it turns out to be convenient for us if the assignments are sorted by decreasing
+		// stake. In order to maintain the correspondence, we have to also sort the voters.
+		let ElectionResult { mut assignments, winners } = election_result;
+		Self::sort_by_decreasing_stake(voters.as_mut_slice(), assignments.as_mut_slice());
+
+		// now make some helper closures.
 		let cache = helpers::generate_voter_cache::<T>(&voters);
 		let voter_index = helpers::voter_index_fn::<T>(&cache);
 		let target_index = helpers::target_index_fn::<T>(&targets);
@@ -152,40 +171,28 @@ impl<T: Config> Pallet<T> {
 		let target_at = helpers::target_at_fn::<T>(&targets);
 		let stake_of = helpers::stake_of_fn::<T>(&voters, &cache);
 
-		let ElectionResult { assignments, winners } = election_result;
+		// trim assignments list for weight and length
+		let size =
+			SolutionOrSnapshotSize { voters: voters.len() as u32, targets: targets.len() as u32 };
+		Self::trim_assignments_weight(
+			desired_targets,
+			size,
+			T::MinerMaxWeight::get(),
+			&mut assignments,
+		);
+		Self::trim_assignments_length(
+			T::MinerMaxLength::get(),
+			&mut assignments,
+		);
 
 		// convert to staked and reduce.
 		let mut staked = assignment_ratio_to_staked_normalized(assignments, &stake_of)
 			.map_err::<MinerError, _>(Into::into)?;
 		sp_npos_elections::reduce(&mut staked);
 
-		// convert back to ration and make compact.
+		// convert back to ratios and make compact.
 		let ratio = assignment_staked_to_ratio_normalized(staked)?;
 		let compact = <CompactOf<T>>::from_assignment(ratio, &voter_index, &target_index)?;
-
-		let size =
-			SolutionOrSnapshotSize { voters: voters.len() as u32, targets: targets.len() as u32 };
-		let maximum_allowed_voters = Self::maximum_voter_for_weight::<T::WeightInfo>(
-			desired_targets,
-			size,
-			T::MinerMaxWeight::get(),
-		);
-
-		log!(
-			debug,
-			"initial solution voters = {}, snapshot = {:?}, maximum_allowed(capped) = {}",
-			compact.voter_count(),
-			size,
-			maximum_allowed_voters,
-		);
-
-		// trim length and weight
-		let compact = Self::trim_compact_weight(maximum_allowed_voters, compact, &voter_index)?;
-		let compact = Self::trim_compact_length(
-			T::MinerMaxLength::get(),
-			compact,
-			&voter_index,
-		)?;
 
 		// re-calc score.
 		let winners = sp_npos_elections::to_without_backing(winners);
@@ -212,15 +219,51 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	/// Greedily reduce the size of the a solution to fit into the block, w.r.t. weight.
+	/// Sort the `voters` and `assignments` lists by decreasing voter stake.
+	///
+	/// [`trim_assignments_weight`] and [`trim_assignments_length`] both depend on this property
+	/// on the `assignments` list for efficient computation. Meanwhile, certain other helper closures
+	/// depend on `voters` and `assignments` corresponding, so we have to sort both.
+	fn sort_by_decreasing_stake(
+		voters: &mut [Voter<T>],
+		assignments: &mut [Assignment<T>],
+	) {
+		let stakes: BTreeMap<_, _> = voters.iter().map(|(who, stake, _)| {
+			(who.clone(), *stake)
+		}).collect();
+
+		// `Reverse` just reverses the meaning of this key's ordering, so the greatest items come
+		// first without needing to explicitly call `reverse` afterwards.
+		//
+		// Getting an assignment's stake from the `stakes` map should never fail. It will definitely
+		// never fail for a member of `voters`. However, we use `unwrap_or_default` defensively. In
+		// case a voter can't be found, it's assumed to have 0 stake, which puts it first on the
+		// chopping block for removal.
+		//
+		// This would be a closure of its own, but rustc doesn't like that and gives E0521, so it's
+		// simpler to just declare a little macro. The point is that we can show that both lists
+		// get sorted according to identical rules.
+		macro_rules! stake_of {
+			($who:expr) => {
+				sp_std::cmp::Reverse(
+					stakes.get($who).cloned().unwrap_or_default()
+				)
+			};
+		}
+
+		// we sort stably so the lists stay synchronized
+		voters.sort_by_key(|(who, _, _)| stake_of!(who));
+		assignments.sort_by_key(|Assignment::<T> { who, .. }| stake_of!(who));
+	}
+
+	/// Greedily reduce the size of the solution to fit into the block w.r.t. weight.
 	///
 	/// The weight of the solution is foremost a function of the number of voters (i.e.
-	/// `compact.len()`). Aside from this, the other components of the weight are invariant. The
+	/// `assignments.len()`). Aside from this, the other components of the weight are invariant. The
 	/// number of winners shall not be changed (otherwise the solution is invalid) and the
 	/// `ElectionSize` is merely a representation of the total number of stakers.
 	///
-	/// Thus, we reside to stripping away some voters. This means only changing the `compact`
-	/// struct.
+	/// Thus, we reside to stripping away some voters from the `assignments`.
 	///
 	/// Note that the solution is already computed, and the winners are elected based on the merit
 	/// of the entire stake in the system. Nonetheless, some of the voters will be removed further
@@ -228,50 +271,24 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Indeed, the score must be computed **after** this step. If this step reduces the score too
 	/// much or remove a winner, then the solution must be discarded **after** this step.
-	pub fn trim_compact_weight<FN>(
-		maximum_allowed_voters: u32,
-		mut compact: CompactOf<T>,
-		voter_index: FN,
-	) -> Result<CompactOf<T>, MinerError>
-	where
-		for<'r> FN: Fn(&'r T::AccountId) -> Option<CompactVoterIndexOf<T>>,
-	{
-		match compact.voter_count().checked_sub(maximum_allowed_voters as usize) {
-			Some(to_remove) if to_remove > 0 => {
-				// grab all voters and sort them by least stake.
-				let RoundSnapshot { voters, .. } =
-					Self::snapshot().ok_or(MinerError::SnapshotUnAvailable)?;
-				let mut voters_sorted = voters
-					.into_iter()
-					.map(|(who, stake, _)| (who.clone(), stake))
-					.collect::<Vec<_>>();
-				voters_sorted.sort_by_key(|(_, y)| *y);
-
-				// start removing from the least stake. Iterate until we know enough have been
-				// removed.
-				let mut removed = 0;
-				for (maybe_index, _stake) in
-					voters_sorted.iter().map(|(who, stake)| (voter_index(&who), stake))
-				{
-					let index = maybe_index.ok_or(MinerError::SnapshotUnAvailable)?;
-					if compact.remove_voter(index) {
-						removed += 1
-					}
-
-					if removed >= to_remove {
-						break;
-					}
-				}
-
-				log!(debug, "removed {} voter to meet the max weight limit.", to_remove);
-				Ok(compact)
-			}
-			_ => {
-				// nada, return as-is
-				log!(debug, "didn't remove any voter for weight limits.");
-				Ok(compact)
-			}
-		}
+	fn trim_assignments_weight(
+		desired_targets: u32,
+		size: SolutionOrSnapshotSize,
+		max_weight: Weight,
+		assignments: &mut Vec<Assignment<T>>,
+	) {
+		let maximum_allowed_voters = Self::maximum_voter_for_weight::<T::WeightInfo>(
+			desired_targets,
+			size,
+			max_weight,
+		);
+		let removing: usize = assignments.len() - maximum_allowed_voters as usize;
+		log!(
+			debug,
+			"from {} assignments, truncating to {} for weight, removing {}",
+			assignments.len(), maximum_allowed_voters, removing,
+		);
+		assignments.truncate(maximum_allowed_voters as usize);
 	}
 
 	/// Greedily reduce the size of the solution to fit into the block w.r.t length.
@@ -288,34 +305,44 @@ impl<T: Config> Pallet<T> {
 	///
 	/// The score must be computed **after** this step. If this step reduces the score too much,
 	/// then the solution must be discarded.
-	pub fn trim_compact_length(
+	fn trim_assignments_length(
 		max_allowed_length: u32,
-		mut compact: CompactOf<T>,
-		voter_index: impl Fn(&T::AccountId) -> Option<CompactVoterIndexOf<T>>,
-	) -> Result<CompactOf<T>, MinerError> {
-		// short-circuit to avoid getting the voters if possible
-		// this involves a redundant encoding, but that should hopefully be relatively cheap
-		if (compact.encoded_size().saturated_into::<u32>()) <= max_allowed_length {
-			return Ok(compact);
+		assignments: &mut Vec<Assignment<T>>,
+	) {
+		// The encoded size of an assignment list is staticly computable, but only in `O(assignments.len())`.
+		// That makes the naive approach, to loop and pop, somewhat inefficient.
+		//
+		// Instead, we perform a binary search for the max subset of which can fit into the allowed
+		// length. Having discovered that, we can truncate efficiently.
+		let mut high = assignments.len();
+		let mut low = 0;
+		let avg = move || (high + low) / 2;
+		while high - low > 1 {
+			let test = avg();
+			if CompactOf::<T>::encoded_size_for(&assignments[..test]) > max_allowed_length.saturated_into() {
+				high = test;
+			} else {
+				low = test;
+			}
 		}
+		let maximum_allowed_voters = avg();
 
-		// grab all voters and sort them by least stake.
-		let RoundSnapshot { voters, .. } =
-			Self::snapshot().ok_or(MinerError::SnapshotUnAvailable)?;
-		let mut voters_sorted = voters
-			.into_iter()
-			.map(|(who, stake, _)| (who.clone(), stake))
-			.collect::<Vec<_>>();
-		voters_sorted.sort_by_key(|(_, y)| *y);
-		voters_sorted.reverse();
+		// ensure our postconditions are correct
+		debug_assert!(
+			CompactOf::<T>::encoded_size_for(&assignments[..maximum_allowed_voters]) <=
+			max_allowed_length.saturated_into()
+		);
+		debug_assert!(
+			CompactOf::<T>::encoded_size_for(&assignments[..maximum_allowed_voters + 1]) >
+			max_allowed_length.saturated_into()
+		);
 
-		while compact.encoded_size() > max_allowed_length.saturated_into() {
-			let (smallest_stake_voter, _) = voters_sorted.pop().ok_or(MinerError::NoMoreVoters)?;
-			let index = voter_index(&smallest_stake_voter).ok_or(MinerError::SnapshotUnAvailable)?;
-			compact.remove_voter(index);
-		}
-
-		Ok(compact)
+		log!(
+			debug,
+			"from {} assignments, truncating to {} for length, removing {}",
+			assignments.len(), maximum_allowed_voters, assignments.len() - maximum_allowed_voters,
+		);
+		assignments.truncate(maximum_allowed_voters);
 	}
 
 	/// Find the maximum `len` that a compact can have in order to fit into the block weight.

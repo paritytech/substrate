@@ -255,6 +255,12 @@ fn struct_def(
 				#into_impl
 				Ok(assignments)
 			}
+
+			fn encoded_size_for<AccountId, P: _npos::sp_arithmetic::PerThing>(
+				assignments: &[_npos::Assignment<AccountId, P>],
+			) -> usize {
+				unimplemented!()
+			}
 		}
 	))
 }

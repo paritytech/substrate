@@ -136,6 +136,42 @@ impl<T> __OrInvalidIndex<T> for Option<T> {
 	}
 }
 
+/// For types whose `parity_scale_codec::Encode` implementation is guaranteed to occupy a certain
+/// fixed number of output bytes.
+///
+/// This whole thing is a hack working around the fact that `Encode::size_hint` is unreliable.
+pub trait FixedEncodingSize {
+	const ENCODED_SIZE: usize;
+}
+
+macro_rules! impl_fes {
+	($t:ty => $size:literal; $( $rest:tt )* ) => {
+		impl FixedEncodingSize for $t {
+			const ENCODED_SIZE: usize = $size;
+		}
+		impl_fes!{$($rest)*}
+	};
+	() => {};
+}
+
+impl_fes! {
+	() => 0;
+	bool => 1;
+	u8 => 1;
+	u16 => 2;
+	u32 => 4;
+	u64 => 8;
+	u128 => 16;
+	i8 => 1;
+	i16 => 2;
+	i32 => 4;
+	i64 => 8;
+	i128 => 16;
+	f32 => 4;
+	f64 => 8;
+	char => 4;
+}
+
 /// A common interface for all compact solutions.
 ///
 /// See [`sp-npos-elections-compact`] for more info.
@@ -150,7 +186,8 @@ pub trait CompactSolution: Sized {
 		+ Debug
 		+ Copy
 		+ Clone
-		+ Bounded;
+		+ Bounded
+		+ FixedEncodingSize;
 
 	/// The target type. Needs to be an index (convert to usize).
 	type Target: UniqueSaturatedInto<usize>
@@ -159,7 +196,8 @@ pub trait CompactSolution: Sized {
 		+ Debug
 		+ Copy
 		+ Clone
-		+ Bounded;
+		+ Bounded
+		+ FixedEncodingSize;
 
 	/// The weight/accuracy type of each vote.
 	type Accuracy: PerThing128;
@@ -232,6 +270,8 @@ pub trait CompactSolution: Sized {
 		let supports = to_supports(winners, &staked)?;
 		Ok(supports.evaluate())
 	}
+
+	fn encoded_size_for<AccountId, P: PerThing>(assignments: &[Assignment<AccountId, P>]) -> usize;
 }
 
 // re-export the compact solution type.
