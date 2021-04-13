@@ -4813,6 +4813,8 @@ version = "3.0.0"
 dependencies = [
  "bitflags",
  "parity-scale-codec",
+ "serde",
+ "sp-core",
  "sp-runtime",
  "sp-std",
 ]
