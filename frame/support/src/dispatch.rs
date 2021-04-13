@@ -21,8 +21,10 @@
 pub use crate::sp_std::{result, fmt, prelude::{Vec, Clone, Eq, PartialEq}, marker};
 pub use crate::codec::{Codec, EncodeLike, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
 pub use frame_metadata::{
-	FunctionMetadata, DecodeDifferent, DecodeDifferentArray, FunctionArgumentMetadata,
-	ModuleConstantMetadata, DefaultByte, DefaultByteGetter, ModuleErrorMetadata, ErrorMetadata
+	DefaultByte, DefaultByteGetter, ModuleErrorMetadata, ErrorMetadata
+};
+pub use frame_metadata2::v13::{
+	FunctionMetadata, FunctionArgumentMetadata, ModuleConstantMetadata,
 };
 pub use crate::weights::{
 	GetDispatchInfo, DispatchInfo, WeighData, ClassifyDispatch, TransactionPriority, Weight,

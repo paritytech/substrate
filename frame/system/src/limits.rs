@@ -29,7 +29,7 @@ use frame_support::weights::{Weight, DispatchClass, constants, PerDispatchClass,
 use sp_runtime::{RuntimeDebug, Perbill};
 
 /// Block length limit configuration.
-#[derive(RuntimeDebug, Clone, codec::Encode, codec::Decode)]
+#[derive(RuntimeDebug, Clone, codec::Encode, codec::Decode, scale_info::TypeInfo)]
 pub struct BlockLength {
 	/// Maximal total length in bytes for each extrinsic class.
 	///
@@ -194,7 +194,7 @@ pub struct WeightsPerClass {
 ///
 /// As a consequence of `reserved` space, total consumed block weight might exceed `max_block`
 /// value, so this parameter should rather be thought of as "target block weight" than a hard limit.
-#[derive(RuntimeDebug, Clone, codec::Encode, codec::Decode)]
+#[derive(RuntimeDebug, Clone, codec::Encode, codec::Decode, scale_info::TypeInfo)]
 pub struct BlockWeights {
 	/// Base weight of block execution.
 	pub base_block: Weight,

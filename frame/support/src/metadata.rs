@@ -126,13 +126,7 @@ macro_rules! __runtime_modules_to_metadata {
 				event: $crate::__runtime_modules_to_metadata_calls_event!(
 					$mod, $module $( <$instance> )?, $runtime, $(with $kw)*
 				),
-				// todo: [AJ] constants
-				constants: None,
-				// constants: $crate::metadata::DecodeDifferent::Encode(
-				// 	$crate::metadata::FnEncode(
-				// 		$mod::$module::<$runtime $(, $mod::$instance )?>::module_constants_metadata
-				// 	)
-				// ),
+				constants: $mod::$module::<$runtime $(, $mod::$instance )?>::module_constants_metadata(),
 				// todo: [AJ] errors
 				errors: vec![],
 				// errors: $crate::metadata::DecodeDifferent::Encode(

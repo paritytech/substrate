@@ -16,7 +16,6 @@
 // limitations under the License.
 
 use crate::pallet::Def;
-use frame_support_procedural_tools::clean_type_string;
 use quote::ToTokens;
 
 struct ConstDef {
@@ -74,7 +73,6 @@ pub fn expand_constants(def: &mut Def) -> proc_macro2::TokenStream {
 	let consts = config_consts.chain(extra_consts)
 		.map(|const_| {
 			let const_type = &const_.type_;
-			let const_type_str = clean_type_string(&const_type.to_token_stream().to_string());
 			let ident = &const_.ident;
 			let ident_str = format!("{}", ident);
 			let doc = const_.doc.clone().into_iter();
@@ -108,18 +106,14 @@ pub fn expand_constants(def: &mut Def) -> proc_macro2::TokenStream {
 				{}
 
 				#frame_support::dispatch::ModuleConstantMetadata {
-					name: #frame_support::dispatch::DecodeDifferent::Encode(#ident_str),
-					ty: #frame_support::dispatch::DecodeDifferent::Encode(#const_type_str),
-					value: #frame_support::dispatch::DecodeDifferent::Encode(
-						#frame_support::dispatch::DefaultByteGetter(
-							&#default_byte_getter::<#type_use_gen>(
-								#frame_support::sp_std::marker::PhantomData
-							)
+					name: #ident_str,
+					ty: #frame_support::scale_info::meta_type::<#const_type>(),
+					value: #frame_support::dispatch::DefaultByteGetter(
+						&#default_byte_getter::<#type_use_gen>(
+							#frame_support::sp_std::marker::PhantomData
 						)
 					),
-					documentation: #frame_support::dispatch::DecodeDifferent::Encode(
-						&[ #( #doc ),* ]
-					),
+					documentation: #frame_support::scale_info::prelude::vec![ #( #doc ),* ],
 				}
 			})
 		});
@@ -129,9 +123,9 @@ pub fn expand_constants(def: &mut Def) -> proc_macro2::TokenStream {
 
 			#[doc(hidden)]
 			pub fn module_constants_metadata()
-				-> &'static [#frame_support::dispatch::ModuleConstantMetadata]
+				-> #frame_support::sp_std::vec::Vec<#frame_support::dispatch::ModuleConstantMetadata>
 			{
-				&[ #( #consts ),* ]
+				#frame_support::scale_info::prelude::vec![ #( #consts ),* ]
 			}
 		}
 	)

@@ -15,7 +15,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 sp-std = { version = "3.0.0", default-features = false, path = "../std" }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-scale-info = { git = "https://github.com/paritytech/scale-info", branch = "aj-remove-compact-type-bounds", default-features = false, features = ["derive"] }
+scale-info = { git = "https://github.com/paritytech/scale-info", branch = "aj-substrate", default-features = false, features = ["derive"] }
 log = { version = "0.4.11", default-features = false }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 byteorder = { version = "1.3.2", default-features = false }
