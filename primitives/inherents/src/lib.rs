@@ -423,8 +423,10 @@ pub trait ProvideInherent {
 	///
 	/// - `Err(_)` indicates that this function failed and further operations should be aborted.
 	///
-	/// CAUTION: This check has a bug when used in pallets that also provide unsigned transactions.
-	/// See <https://github.com/paritytech/substrate/issues/6243> for details.
+	/// NOTE: If inherent is required then the runtime asserts that the block contains at least
+	/// one inherent for which:
+	/// * type is [`Self::Call`],
+	/// * [`Self::is_inherent`] returns true.
 	fn is_inherent_required(_: &InherentData) -> Result<Option<Self::Error>, Self::Error> { Ok(None) }
 
 	/// Check whether the given inherent is valid. Checking the inherent is optional and can be
@@ -433,9 +435,24 @@ pub trait ProvideInherent {
 	/// When checking an inherent, the first parameter represents the inherent that is actually
 	/// included in the block by its author. Whereas the second parameter represents the inherent
 	/// data that the verifying node calculates.
+	///
+	/// NOTE: A block can contains multiple inherent.
 	fn check_inherent(_: &Self::Call, _: &InherentData) -> Result<(), Self::Error> {
 		Ok(())
 	}
+
+	/// Return whether the call is an inherent call.
+	///
+	/// NOTE: Signed extrinsics are not inherent, but signed extrinsic with the given call variant
+	/// can be dispatched.
+	///
+	/// # Warning
+	///
+	/// In FRAME, inherent are enforced to be before other extrinsics, for this reason,
+	/// pallets with unsigned transactions **must ensure** that no unsigned transaction call
+	/// is an inherent call, when implementing `ValidateUnsigned::validate_unsigned`.
+	/// Otherwise block producer can produce invalid blocks by including them after non inherent.
+	fn is_inherent(call: &Self::Call) -> bool;
 }
 
 #[cfg(test)]
