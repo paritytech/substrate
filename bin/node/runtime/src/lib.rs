@@ -115,7 +115,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// is and increment impl_version.
 	spec_version: 265,
 	impl_version: 1,
-	apis: RUNTIME_API_VERSIONS,
+	apis: sp_version::create_apis_vec!([]),
 	transaction_version: 2,
 };
 

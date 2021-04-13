@@ -26,7 +26,7 @@ use sp_runtime::{
 use sp_state_machine::{
 	OverlayedChanges, ExecutionManager, ExecutionStrategy, StorageProof,
 };
-use sc_executor::{RuntimeVersion, NativeVersion};
+use sc_executor::{RuntimeVersion, ApisVec, NativeVersion};
 use sp_externalities::Extensions;
 use sp_core::NativeOrEncoded;
 
@@ -100,6 +100,9 @@ pub trait CallExecutor<B: BlockT> {
 	///
 	/// No changes are made.
 	fn runtime_version(&self, id: &BlockId<B>) -> Result<RuntimeVersion, sp_blockchain::Error>;
+
+	// TODO:
+	fn supported_runtime_apis(&self, id: &BlockId<B>) -> Result<ApisVec, sp_blockchain::Error>;
 
 	/// Execute a call to a contract on top of given state, gathering execution proof.
 	///

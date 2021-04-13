@@ -25,7 +25,7 @@ use sp_state_machine::{
 	self, OverlayedChanges, Ext, ExecutionManager, StateMachine, ExecutionStrategy,
 	backend::Backend as _, StorageProof,
 };
-use sc_executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
+use sc_executor::{RuntimeVersion, ApisVec, RuntimeInfo, NativeVersion};
 use sp_externalities::Extensions;
 use sp_core::{
 	NativeOrEncoded, NeverNativeValue, traits::{CodeExecutor, SpawnNamed, RuntimeCode},
@@ -257,12 +257,22 @@ where
 	}
 
 	fn runtime_version(&self, id: &BlockId<Block>) -> sp_blockchain::Result<RuntimeVersion> {
+		// TODO: First we should access `runtime_code`, potentially uncompress and then extract
+		// the version information from there.
+		//
+		// If it's not there, fallback to the runtime API.
+		let state = self.backend.state_at(*id)?;
+		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
+		let runtime_code = state_runtime_code.runtime_code()
+			.map_err(sp_blockchain::Error::RuntimeCode)?;
+
+		// TODO: decompress and extract.
+
 		let mut overlay = OverlayedChanges::default();
 		let changes_trie_state = backend::changes_tries_state_at_block(
 			id,
 			self.backend.changes_trie_storage(),
 		)?;
-		let state = self.backend.state_at(*id)?;
 		let mut cache = StorageTransactionCache::<Block, B::State>::default();
 		let mut ext = Ext::new(
 			&mut overlay,
@@ -271,11 +281,21 @@ where
 			changes_trie_state,
 			None,
 		);
+		self.executor.runtime_version(&mut ext, &runtime_code)
+			.map_err(|e| sp_blockchain::Error::VersionInvalid(format!("{:?}", e)).into())
+	}
+
+	fn supported_runtime_apis(&self, id: &BlockId<Block>) -> sp_blockchain::Result<ApisVec> {
+		let state = self.backend.state_at(*id)?;
 		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
 		let runtime_code = state_runtime_code.runtime_code()
 			.map_err(sp_blockchain::Error::RuntimeCode)?;
-		self.executor.runtime_version(&mut ext, &runtime_code)
-			.map_err(|e| sp_blockchain::Error::VersionInvalid(format!("{:?}", e)).into())
+
+		drop(runtime_code);
+
+		// TODO: decompress and extract.
+
+		todo!()
 	}
 
 	fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorage<HashFor<Block>>>(

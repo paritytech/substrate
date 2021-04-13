@@ -428,7 +428,7 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 				context: #crate_::ExecutionContext,
 				recorder: &Option<#crate_::ProofRecorder<Block>>,
 			) -> std::result::Result<#crate_::NativeOrEncoded<R>, #crate_::ApiError> {
-				let version = call_runtime_at.runtime_version_at(at)?;
+				let supported_apis = call_runtime_at.supported_apis_at(at)?;
 				use #crate_::InitializeBlock;
 				let initialize_block = if #skip_initialize_block {
 					InitializeBlock::Skip
@@ -439,9 +439,7 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 
 				#(
 					// Check if we need to call the function by an old name.
-					if version.apis.iter().any(|(s, v)| {
-						s == &ID && *v < #versions
-					}) {
+					if supported_apis.has_api_with(&ID, |v| v < #versions) {
 						let params = #crate_::CallApiAtParams::<_, _, fn() -> _, _> {
 							core_api,
 							at,

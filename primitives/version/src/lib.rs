@@ -39,12 +39,41 @@ use sp_runtime::{traits::Block as BlockT, generic::BlockId};
 pub type ApiId = [u8; 8];
 
 /// A vector of pairs of `ApiId` and a `u32` for version.
-pub type ApisVec = sp_std::borrow::Cow<'static, [(ApiId, u32)]>;
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", serde(transparent))]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, Default, sp_runtime::RuntimeDebug)]
+pub struct ApisVec(
+	#[cfg_attr(
+		feature = "std",
+		serde(
+			serialize_with = "apis_serialize::serialize",
+			deserialize_with = "apis_serialize::deserialize",
+		)
+	)]
+	#[doc(hidden)]
+	pub sp_std::borrow::Cow<'static, [(ApiId, u32)]>
+);
+
+impl ApisVec {
+	/// Check if the given api with `api_id` is implemented and the version passes the given
+	/// `predicate`.
+	pub fn has_api_with<P: Fn(u32) -> bool>(
+		&self,
+		id: &ApiId,
+		predicate: P,
+	) -> bool {
+		self.0.iter().any(|(s, v)| s == id && predicate(*v))
+	}
+}
 
 /// Create a vector of Api declarations.
 #[macro_export]
 macro_rules! create_apis_vec {
-	( $y:expr ) => { $crate::sp_std::borrow::Cow::Borrowed(& $y) }
+	( $y:expr ) => {
+		// It is important to construct the value explicitly here, without calling to any `const fn`
+		// functions, or otherwise, the value won't be promoted to a static implicitly and 
+		$crate::ApisVec($crate::sp_std::borrow::Cow::Borrowed(& $y))
+	}
 }
 
 /// Runtime version.
@@ -86,13 +115,7 @@ pub struct RuntimeVersion {
 	pub impl_version: u32,
 
 	/// List of supported API "features" along with their versions.
-	#[cfg_attr(
-		feature = "std",
-		serde(
-			serialize_with = "apis_serialize::serialize",
-			deserialize_with = "apis_serialize::deserialize",
-		)
-	)]
+	#[deprecated]
 	pub apis: ApisVec,
 
 	/// All existing dispatches are fully compatible when this number doesn't change. If this
@@ -132,12 +155,14 @@ impl RuntimeVersion {
 
 	/// Check if the given api with `api_id` is implemented and the version passes the given
 	/// `predicate`.
+	#[deprecated]
 	pub fn has_api_with<P: Fn(u32) -> bool>(
 		&self,
 		id: &ApiId,
 		predicate: P,
 	) -> bool {
-		self.apis.iter().any(|(s, v)| s == id && predicate(*v))
+		#[allow(deprecated)]
+		self.apis.has_api_with(id, predicate)
 	}
 }
 
@@ -206,6 +231,7 @@ mod apis_serialize {
 	use super::*;
 	use impl_serde::serialize as bytes;
 	use serde::{Serializer, de, ser::SerializeTuple};
+	use sp_std::borrow::Cow;
 
 	#[derive(Serialize)]
 	struct ApiId<'a>(
@@ -213,7 +239,7 @@ mod apis_serialize {
 		&'a u32,
 	);
 
-	pub fn serialize<S>(apis: &ApisVec, ser: S) -> Result<S::Ok, S::Error> where
+	pub fn serialize<S>(apis: &Cow<'static, [(super::ApiId, u32)]>, ser: S) -> Result<S::Ok, S::Error> where
 		S: Serializer,
 	{
 		let len = apis.len();
@@ -237,12 +263,12 @@ mod apis_serialize {
 		u32,
 	);
 
-	pub fn deserialize<'de, D>(deserializer: D) -> Result<ApisVec, D::Error> where
+	pub fn deserialize<'de, D>(deserializer: D) -> Result<Cow<'static, [(super::ApiId, u32)]>, D::Error> where
 		D: de::Deserializer<'de>,
 	{
 		struct Visitor;
 		impl<'de> de::Visitor<'de> for Visitor {
-			type Value = ApisVec;
+			type Value = Cow<'static, [(super::ApiId, u32)]>;
 
 			fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
 				formatter.write_str("a sequence of api id and version tuples")

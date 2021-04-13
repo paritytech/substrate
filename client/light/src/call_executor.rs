@@ -45,7 +45,7 @@ use sc_client_api::{
 	light::RemoteCallRequest,
 	call_executor::CallExecutor,
 };
-use sc_executor::{RuntimeVersion, NativeVersion};
+use sc_executor::{RuntimeVersion, ApisVec, NativeVersion};
 
 /// Call executor that is able to execute calls only on genesis state.
 ///
@@ -152,6 +152,13 @@ impl<Block, B, Local> CallExecutor<Block> for
 	fn runtime_version(&self, id: &BlockId<Block>) -> ClientResult<RuntimeVersion> {
 		match self.backend.is_local_state_available(id) {
 			true => self.local.runtime_version(id),
+			false => Err(ClientError::NotAvailableOnLightClient),
+		}
+	}
+
+	fn supported_runtime_apis(&self, id: &BlockId<Block>) -> ClientResult<ApisVec> {
+		match self.backend.is_local_state_available(id) {
+			true => self.local.supported_runtime_apis(id),
 			false => Err(ClientError::NotAvailableOnLightClient),
 		}
 	}

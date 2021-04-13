@@ -558,6 +558,11 @@ pub trait CallApiAt<Block: BlockT> {
 		&self,
 		at: &BlockId<Block>,
 	) -> Result<RuntimeVersion, ApiError>;
+
+	fn supported_apis_at(
+		&self,
+		at: &BlockId<Block>,
+	) -> Result<ApisVec, ApiError>;
 }
 
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.

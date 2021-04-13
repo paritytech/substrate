@@ -264,7 +264,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				at: &#crate_::BlockId<Block>,
 			) -> std::result::Result<bool, #crate_::ApiError> where Self: Sized {
 				self.call
-					.runtime_version_at(at)
+					.supported_apis_at(at)
 					.map(|v| v.has_api_with(&A::ID, |v| v == A::VERSION))
 			}
 
@@ -274,7 +274,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				pred: P,
 			) -> std::result::Result<bool, #crate_::ApiError> where Self: Sized {
 				self.call
-					.runtime_version_at(at)
+					.supported_apis_at(at)
 					.map(|v| v.has_api_with(&A::ID, pred))
 			}
 

@@ -53,7 +53,7 @@ use sp_state_machine::{
 	prove_read, prove_child_read, ChangesTrieRootsStorage, ChangesTrieStorage,
 	ChangesTrieConfigurationRange, key_changes, key_changes_proof,
 };
-use sc_executor::RuntimeVersion;
+use sc_executor::{RuntimeVersion, ApisVec};
 use sp_consensus::{
 	Error as ConsensusError, BlockStatus, BlockImportParams, BlockCheckParams,
 	ImportResult, BlockOrigin, ForkChoiceStrategy,
@@ -372,6 +372,13 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// Get the RuntimeVersion at a given block.
 	pub fn runtime_version_at(&self, id: &BlockId<Block>) -> sp_blockchain::Result<RuntimeVersion> {
 		self.executor.runtime_version(id)
+	}
+
+	pub fn supported_runtime_apis_at(
+		&self,
+		id: &BlockId<Block>
+	) -> sp_blockchain::Result<ApisVec> {
+		self.executor.supported_runtime_apis(id)
 	}
 
 	/// Reads given header and generates CHT-based header proof for CHT of given size.
@@ -1692,6 +1699,13 @@ impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
 		at: &BlockId<Block>,
 	) -> Result<RuntimeVersion, sp_api::ApiError> {
 		self.runtime_version_at(at).map_err(Into::into)
+	}
+
+	fn supported_apis_at(
+		&self,
+		at: &BlockId<Block>,
+	) -> Result<ApisVec, sp_api::ApiError> {
+		self.supported_runtime_apis_at(at).map_err(Into::into)	
 	}
 }
 
