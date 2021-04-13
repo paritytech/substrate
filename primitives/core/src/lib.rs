@@ -148,6 +148,12 @@ impl Deref for Bytes {
 	fn deref(&self) -> &[u8] { &self.0[..] }
 }
 
+impl codec::WrapperTypeEncode for Bytes {}
+
+impl codec::WrapperTypeDecode for Bytes {
+	type Wrapped = Vec<u8>;
+}
+
 #[cfg(feature = "std")]
 impl sp_std::str::FromStr for Bytes {
 	type Err = bytes::FromHexError;

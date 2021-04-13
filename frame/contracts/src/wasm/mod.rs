@@ -27,14 +27,13 @@ mod runtime;
 use crate::{
 	CodeHash, Schedule, Config,
 	wasm::env_def::FunctionImplProvider,
-	exec::{Ext, Executable, ExportedFunction},
+	exec::{Ext, Executable, ExportedFunction, ExecResult},
 	gas::GasMeter,
 };
 use sp_std::prelude::*;
 use sp_core::crypto::UncheckedFrom;
 use codec::{Encode, Decode};
 use frame_support::dispatch::DispatchError;
-use pallet_contracts_primitives::ExecResult;
 pub use self::runtime::{ReturnCode, Runtime, RuntimeToken};
 #[cfg(feature = "runtime-benchmarks")]
 pub use self::code_cache::reinstrument;
@@ -246,17 +245,20 @@ mod tests {
 	use super::*;
 	use crate::{
 		CodeHash, BalanceOf, Error, Pallet as Contracts,
-		exec::{Ext, StorageKey, AccountIdOf, Executable, SeedOf, BlockNumberOf, RentParams},
+		exec::{
+			Ext, StorageKey, AccountIdOf, Executable, SeedOf, BlockNumberOf,
+			RentParams, ExecError, ErrorOrigin,
+		},
 		gas::GasMeter,
 		tests::{Test, Call, ALICE, BOB},
 	};
 	use std::collections::HashMap;
-	use sp_core::H256;
+	use sp_core::{Bytes, H256};
 	use hex_literal::hex;
 	use sp_runtime::DispatchError;
 	use frame_support::{assert_ok, dispatch::DispatchResult, weights::Weight};
 	use assert_matches::assert_matches;
-	use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags, ExecError, ErrorOrigin};
+	use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags};
 	use pretty_assertions::assert_eq;
 
 	const GAS_LIMIT: Weight = 10_000_000_000;
@@ -336,7 +338,7 @@ mod tests {
 				Contracts::<Test>::contract_address(&ALICE, &code_hash, salt),
 				ExecReturnValue {
 					flags: ReturnFlags::empty(),
-					data: Vec::new(),
+					data: Bytes(Vec::new()),
 				},
 				0,
 			))
@@ -367,7 +369,7 @@ mod tests {
 			});
 			// Assume for now that it was just a plain transfer.
 			// TODO: Add tests for different call outcomes.
-			Ok((ExecReturnValue { flags: ReturnFlags::empty(), data: Vec::new() }, 0))
+			Ok((ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(Vec::new()) }, 0))
 		}
 		fn terminate(
 			&mut self,
@@ -946,7 +948,10 @@ mod tests {
 			&mut GasMeter::new(GAS_LIMIT),
 		).unwrap();
 
-		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::empty(), data: [0x22; 32].to_vec() });
+		assert_eq!(output, ExecReturnValue {
+			flags: ReturnFlags::empty(),
+			data: Bytes([0x22; 32].to_vec())
+		});
 	}
 
 	/// calls `seal_caller` and compares the result with the constant 42.
@@ -1209,7 +1214,7 @@ mod tests {
 			&mut gas_meter,
 		).unwrap();
 
-		let gas_left = Weight::decode(&mut output.data.as_slice()).unwrap();
+		let gas_left = Weight::decode(&mut &*output.data).unwrap();
 		assert!(gas_left < GAS_LIMIT, "gas_left must be less than initial");
 		assert!(gas_left > gas_meter.gas_left(), "gas_left must be greater than final");
 	}
@@ -1299,7 +1304,13 @@ mod tests {
 			&mut GasMeter::new(GAS_LIMIT),
 		).unwrap();
 
-		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::empty(), data: vec![1, 2, 3, 4] });
+		assert_eq!(
+			output,
+			ExecReturnValue {
+				flags: ReturnFlags::empty(),
+				data: Bytes(vec![1, 2, 3, 4])
+			}
+		);
 	}
 
 	const CODE_TIMESTAMP_NOW: &str = r#"
@@ -1526,7 +1537,10 @@ mod tests {
 			output,
 			ExecReturnValue {
 				flags: ReturnFlags::empty(),
-				data: hex!("000102030405060708090A0B0C0D0E0F000102030405060708090A0B0C0D0E0F").to_vec(),
+				data: Bytes(
+					hex!("000102030405060708090A0B0C0D0E0F000102030405060708090A0B0C0D0E0F")
+						.to_vec()
+				),
 			},
 		);
 	}
@@ -1601,10 +1615,10 @@ mod tests {
 			output,
 			ExecReturnValue {
 				flags: ReturnFlags::empty(),
-				data: (
+				data: Bytes((
 						hex!("000102030405060708090A0B0C0D0E0F000102030405060708090A0B0C0D0E0F"),
 						42u64,
-					).encode(),
+					).encode()),
 			},
 		);
 	}
@@ -1837,7 +1851,10 @@ mod tests {
 			&mut GasMeter::new(GAS_LIMIT),
 		).unwrap();
 
-		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::empty(), data: hex!("445566778899").to_vec() });
+		assert_eq!(output, ExecReturnValue {
+			flags: ReturnFlags::empty(),
+			data: Bytes(hex!("445566778899").to_vec()),
+		});
 		assert!(output.is_success());
 	}
 
@@ -1850,7 +1867,10 @@ mod tests {
 			&mut GasMeter::new(GAS_LIMIT),
 		).unwrap();
 
-		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::REVERT, data: hex!("5566778899").to_vec() });
+		assert_eq!(output, ExecReturnValue {
+			flags: ReturnFlags::REVERT,
+			data: Bytes(hex!("5566778899").to_vec()),
+		});
 		assert!(!output.is_success());
 	}
 
@@ -1962,7 +1982,7 @@ mod tests {
 			MockExt::default(),
 			&mut GasMeter::new(GAS_LIMIT),
 		).unwrap();
-		let rent_params = <RentParams<Test>>::default().encode();
+		let rent_params = Bytes(<RentParams<Test>>::default().encode());
 		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::empty(), data: rent_params });
 	}
 }
