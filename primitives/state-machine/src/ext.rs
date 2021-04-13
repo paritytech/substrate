@@ -220,12 +220,12 @@ where
 			.map(|x| x.map(|x| H::hash(x)))
 			.unwrap_or_else(|| self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL));
 
-		trace!(target: "state",
-			method = "GetHash",
-			ext_id = self.id,
-			key = %HexDisplay::from(&key),
-			result = %HexDisplay::from(&result.encode()),
-		);
+		// trace!(target: "state",
+		// 	method = "GetHash",
+		// 	ext_id = self.id,
+		// 	key = %HexDisplay::from(&key),
+		// 	result = %HexDisplay::from(&result.encode()),
+		// );
 
 		result.map(|r| r.encode())
 	}
@@ -244,15 +244,15 @@ where
 					.expect(EXT_NOT_ALLOWED_TO_FAIL)
 			);
 
-		let ready_to_encode_result = result.as_ref().map(|v| EncodeOpaqueValue(v.to_vec()));
-		trace!(target: "state",
-			method = "GetChild",
-			ext_id = self.id,
-			key = %HexDisplay::from(&key),
-			// TODO REVIEW is this necessary?
-			child_trie_parent_key_id = %HexDisplay::from(&child_info.storage_key()),
-			result = %HexDisplay::from(&ready_to_encode_result.encode()),
-		);
+		// let ready_to_encode_result = result.as_ref().map(|v| EncodeOpaqueValue(v.to_vec()));
+		// trace!(target: "state",
+		// 	method = "GetChild",
+		// 	ext_id = self.id,
+		// 	key = %HexDisplay::from(&key),
+		// 	// TODO REVIEW is this necessary?
+		// 	child_trie_parent_key_id = %HexDisplay::from(&child_info.storage_key()),
+		// 	result = %HexDisplay::from(&ready_to_encode_result.encode()),
+		// );
 
 		result
 	}
@@ -271,14 +271,14 @@ where
 					.expect(EXT_NOT_ALLOWED_TO_FAIL)
 			);
 
-		trace!(target: "state",
-			method = "GetChildHash",
-			ext_id = self.id,
-			key = %HexDisplay::from(&key),
-			// TODO REVIEW is this necessary?
-			child_trie_parent_key_id = %HexDisplay::from(&child_info.storage_key()),
-			result = %HexDisplay::from(&result.encode()),
-		);
+		// trace!(target: "state",
+		// 	method = "GetChildHash",
+		// 	ext_id = self.id,
+		// 	key = %HexDisplay::from(&key),
+		// 	// TODO REVIEW is this necessary?
+		// 	child_trie_parent_key_id = %HexDisplay::from(&child_info.storage_key()),
+		// 	result = %HexDisplay::from(&result.encode()),
+		// );
 
 		result.map(|r| r.encode())
 	}

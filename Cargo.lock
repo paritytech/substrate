@@ -9208,7 +9208,7 @@ version = "3.0.0"
 dependencies = [
  "erased-serde",
  "log",
- "parity-scale-codec 2.0.1",
+ "parity-scale-codec",
  "parking_lot 0.10.2",
  "serde",
  "serde_json",

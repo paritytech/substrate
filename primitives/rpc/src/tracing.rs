@@ -81,7 +81,6 @@ pub struct Span {
 	/// List of timestamps when the span was exited
 	pub exited: Vec<Duration>,
 	/// Values recorded to this span
-	#[serde(skip_serializing)]
 	pub values: Values,
 }
 
