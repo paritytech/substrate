@@ -17,7 +17,6 @@
 
 use crate::utils::{generate_crate_access, generate_hidden_includes};
 use std::mem;
-use sp_version::RuntimeVersion;
 use codec::Encode;
 use syn::{
 	Expr, ExprLit, ExprStruct, FieldValue, ItemConst, Lit,
@@ -27,6 +26,17 @@ use syn::{
 };
 use quote::quote;
 use proc_macro2::{TokenStream, Span};
+
+#[derive(Encode)]
+struct RuntimeVersion {
+	spec_name: String,
+	impl_name: String,
+	authoring_version: u32,
+	spec_version: u32,
+	impl_version: u32,
+	apis: u8,
+	transaction_version: u32,
+}
 
 /// Unique identifier used to make the hidden includes unique for this macro.
 const HIDDEN_INCLUDES_ID: &str = "DECL_RUNTIME_VERSION";
@@ -192,13 +202,13 @@ impl ParseRuntimeVersion {
 		} = self;
 
 		Ok(RuntimeVersion {
-			spec_name: sp_runtime::RuntimeString::Owned(required!(spec_name)),
-			impl_name: sp_runtime::RuntimeString::Owned(required!(impl_name)),
+			spec_name: required!(spec_name),
+			impl_name: required!(impl_name),
 			authoring_version: required!(authoring_version),
 			spec_version: required!(spec_version),
 			impl_version: required!(impl_version),
 			transaction_version: required!(transaction_version),
-			apis: Default::default(),
+			apis: 0,
 		})
 	}
 }

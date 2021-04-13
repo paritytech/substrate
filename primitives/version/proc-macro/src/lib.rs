@@ -22,7 +22,7 @@ use proc_macro::TokenStream;
 mod decl_runtime_version;
 mod utils;
 
-#[proc_macro]
-pub fn decl_runtime_version(input: TokenStream) -> TokenStream {
+#[proc_macro_attribute]
+pub fn decl_runtime_version(_: TokenStream, input: TokenStream) -> TokenStream {
 	decl_runtime_version::decl_runtime_version_impl(input)
 }

@@ -9256,8 +9256,6 @@ dependencies = [
  "proc-macro-crate 1.0.0",
  "proc-macro2",
  "quote",
- "sp-runtime",
- "sp-version",
  "syn",
 ]
 
