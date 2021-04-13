@@ -1275,11 +1275,8 @@ where
 		// `N+1`. this assumption is required to make sure we store
 		// justifications for transition blocks which will be requested by
 		// syncing clients.
-		let justification = match justification_or_commit {
-			JustificationOrCommit::Justification(justification) => {
-				notify_justification(justification_sender, || Ok(justification.clone()));
-				Some(justification.encode())
-			},
+		let (justification_required, justification) = match justification_or_commit {
+			JustificationOrCommit::Justification(justification) => (true, justification),
 			JustificationOrCommit::Commit((round_number, commit)) => {
 				let mut justification_required =
 					// justification is always required when block that enacts new authorities
@@ -1297,48 +1294,46 @@ where
 					}
 				}
 
-				// NOTE: the code below is a bit more verbose because we
-				// really want to avoid creating a justification if it isn't
-				// needed (e.g. if there's no subscribers), and also to avoid
-				// creating it twice. depending on the vote tree for the round,
-				// creating a justification might require multiple fetches of
-				// headers from the database.
-				let justification = || GrandpaJustification::from_commit(
+				let justification = GrandpaJustification::from_commit(
 					&client,
 					round_number,
 					commit,
-				);
+				)?;
 
-				if justification_required {
-					let justification = justification()?;
-					notify_justification(justification_sender, || Ok(justification.clone()));
-
-					Some(justification.encode())
-				} else {
-					notify_justification(justification_sender, justification);
-
-					None
-				}
+				(justification_required, justification)
 			},
 		};
 
-		debug!(target: "afg", "Finalizing blocks up to ({:?}, {})", number, hash);
+		notify_justification(justification_sender, || Ok(justification.clone()));
+
+		let persisted_justification = if justification_required {
+			Some((GRANDPA_ENGINE_ID, justification.encode()))
+		} else {
+			None
+		};
 
 		// ideally some handle to a synchronization oracle would be used
 		// to avoid unconditionally notifying.
-		let justification = justification.map(|j| (GRANDPA_ENGINE_ID, j.clone()));
 		client
-			.apply_finality(import_op, BlockId::Hash(hash), justification, true)
+			.apply_finality(import_op, BlockId::Hash(hash), persisted_justification, true)
 			.map_err(|e| {
 				warn!(target: "afg", "Error applying finality to block {:?}: {:?}", (hash, number), e);
 				e
 			})?;
+
+		debug!(target: "afg", "Finalizing blocks up to ({:?}, {})", number, hash);
+
 		telemetry!(
 			telemetry;
 			CONSENSUS_INFO;
 			"afg.finalized_blocks_up_to";
 			"number" => ?number, "hash" => ?hash,
 		);
+
+		crate::aux_schema::update_best_justification(
+			&justification,
+			|insert| apply_aux(import_op, insert, &[]),
+		)?;
 
 		let new_authorities = if let Some((canon_hash, canon_number)) = status.new_set_block {
 			// the authority set has changed.

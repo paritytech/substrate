@@ -170,6 +170,10 @@ pub mod pallet {
 		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
 			unimplemented!();
 		}
+
+		fn is_inherent(_call: &Self::Call) -> bool {
+			unimplemented!();
+		}
 	}
 
 	#[derive(codec::Encode, sp_runtime::RuntimeDebug)]
@@ -260,6 +264,7 @@ impl frame_system::Config for Runtime {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 impl pallet::Config for Runtime {
 	type Event = Event;

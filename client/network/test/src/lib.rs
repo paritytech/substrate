@@ -489,6 +489,11 @@ impl<D, B> Peer<D, B> where
 		&self.network.service()
 	}
 
+	/// Get a reference to the network worker.
+	pub fn network(&self) -> &NetworkWorker<Block, <Block as BlockT>::Hash> {
+		&self.network
+	}
+
 	/// Test helper to compare the blockchain state of multiple (networked)
 	/// clients.
 	pub fn blockchain_canon_equals(&self, other: &Self) -> bool {
@@ -985,12 +990,12 @@ pub trait TestNetFactory: Sized where <Self::BlockImport as BlockImport<Block>>:
 	/// Polls the testnet. Processes all the pending actions.
 	fn poll(&mut self, cx: &mut FutureContext) {
 		self.mut_peers(|peers| {
-			for peer in peers {
-				trace!(target: "sync", "-- Polling {}", peer.id());
+			for (i, peer) in peers.into_iter().enumerate() {
+				trace!(target: "sync", "-- Polling {}: {}", i, peer.id());
 				if let Poll::Ready(()) = peer.network.poll_unpin(cx) {
 					panic!("NetworkWorker has terminated unexpectedly.")
 				}
-				trace!(target: "sync", "-- Polling complete {}", peer.id());
+				trace!(target: "sync", "-- Polling complete {}: {}", i, peer.id());
 
 				// We poll `imported_blocks_stream`.
 				while let Poll::Ready(Some(notification)) = peer.imported_blocks_stream.as_mut().poll_next(cx) {

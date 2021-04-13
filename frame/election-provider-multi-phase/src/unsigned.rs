@@ -650,7 +650,7 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Invalid unsigned submission must produce invalid block and \
 	                           deprive validator from their authoring reward.: \
-	                           DispatchError::Module { index: 2, error: 1, message: \
+	                           Module { index: 2, error: 1, message: \
 	                           Some(\"PreDispatchWrongWinnerCount\") }")]
 	fn unfeasible_solution_panics() {
 		ExtBuilder::default().build_and_execute(|| {
@@ -832,20 +832,20 @@ mod tests {
 			assert!(MultiPhase::try_acquire_offchain_lock(25).is_ok());
 
 			// next block: rejected.
-			assert!(MultiPhase::try_acquire_offchain_lock(26).is_err());
+			assert_noop!(MultiPhase::try_acquire_offchain_lock(26), "recently executed.");
 
 			// allowed after `OFFCHAIN_REPEAT`
 			assert!(MultiPhase::try_acquire_offchain_lock((26 + OFFCHAIN_REPEAT).into()).is_ok());
 
 			// a fork like situation: re-execute last 3.
-			assert!(
-				MultiPhase::try_acquire_offchain_lock((26 + OFFCHAIN_REPEAT - 3).into()).is_err()
+			assert_noop!(
+				MultiPhase::try_acquire_offchain_lock((26 + OFFCHAIN_REPEAT - 3).into()), "fork."
 			);
-			assert!(
-				MultiPhase::try_acquire_offchain_lock((26 + OFFCHAIN_REPEAT - 2).into()).is_err()
+			assert_noop!(
+				MultiPhase::try_acquire_offchain_lock((26 + OFFCHAIN_REPEAT - 2).into()), "fork."
 			);
-			assert!(
-				MultiPhase::try_acquire_offchain_lock((26 + OFFCHAIN_REPEAT - 1).into()).is_err()
+			assert_noop!(
+				MultiPhase::try_acquire_offchain_lock((26 + OFFCHAIN_REPEAT - 1).into()), "fork."
 			);
 		})
 	}
