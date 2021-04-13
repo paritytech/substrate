@@ -891,6 +891,7 @@ impl<T: Value, S: Get<u32>> BoundedVec<T, S> {
 	/// This is useful for cases if you need access to an internal API of the inner `Vec<_>` which
 	/// is not provided by the wrapper `BoundedVec`.
 	pub fn into_inner(self) -> Vec<T> {
+		debug_assert!(self.0.len() <= Self::bound());
 		self.0
 	}
 
@@ -903,6 +904,21 @@ impl<T: Value, S: Get<u32>> BoundedVec<T, S> {
 	pub fn try_insert(&mut self, index: usize, element: T) -> Result<(), ()> {
 		if self.len() < Self::bound() {
 			self.0.insert(index, element);
+			Ok(())
+		} else {
+			Err(())
+		}
+	}
+
+	/// Exactly the same semantics as [`Vec::push`], but returns an `Err` (and is a noop) if the
+	/// new length of the vector exceeds `S`.
+	///
+	/// # Panics
+	///
+	/// Panics if the new capacity exceeds isize::MAX bytes.
+	pub fn try_push(&mut self, element: T) -> Result<(), ()> {
+		if self.len() < Self::bound() {
+			self.0.push(element);
 			Ok(())
 		} else {
 			Err(())
@@ -957,6 +973,21 @@ impl<T: Value, S: Get<u32>> sp_std::ops::Deref for BoundedVec<T, S> {
 
 	fn deref(&self) -> &Self::Target {
 		&self.0
+	}
+}
+
+impl<T: Value, S: Get<u32>> sp_std::ops::Index<usize> for BoundedVec<T, S> {
+	type Output = T;
+	fn index(&self, index: usize) -> &Self::Output {
+		self.get(index).expect("index out of bound")
+	}
+}
+
+impl<T: Value, S: Get<u32>> sp_std::iter::IntoIterator for BoundedVec<T, S> {
+	type Item = T;
+	type IntoIter = sp_std::vec::IntoIter<T>;
+	fn into_iter(self) -> Self::IntoIter {
+		self.0.into_iter()
 	}
 }
 
