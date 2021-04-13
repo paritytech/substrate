@@ -30,8 +30,9 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header},
 };
-use sp_rpc::tracing::{BlockTrace, Span, Event, Values};
+use sp_rpc::tracing::{BlockTrace, Span};
 use sp_tracing::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
+use crate::{SpanDatum, TraceEvent, Values};
 
 // Default to only pallet, frame support and state related traces
 const DEFAULT_TARGETS: &'static str = "pallet,frame,state";
@@ -43,16 +44,16 @@ struct BlockSubscriber {
 	targets: Vec<(String, Level)>,
 	next_id: AtomicU64,
 	current_span: CurrentSpan,
-	spans: Mutex<HashMap<Id, Span>>,
-	events: Mutex<Vec<Event>>,
+	spans: Mutex<HashMap<Id, SpanDatum>>,
+	events: Mutex<Vec<TraceEvent>>,
 	timestamp: Instant,
 }
 
 impl BlockSubscriber {
 	fn new(
 		targets: &str,
-		spans: Mutex<HashMap<Id, Span>>,
-		events: Mutex<Vec<Event>>,
+		spans: Mutex<HashMap<Id, SpanDatum>>,
+		events: Mutex<Vec<TraceEvent>>,
 	) -> Self {
 		let next_id = AtomicU64::new(1);
 		let mut targets: Vec<_> = targets
@@ -85,23 +86,23 @@ impl Subscriber for BlockSubscriber {
 
 	fn new_span(&self, attrs: &Attributes<'_>) -> Id {
 		let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+		let id = Id::from_u64(id);
 		let mut values = Values::default();
 		attrs.record(&mut values);
-		let parent_id = attrs.parent()
-			.map(|pid| pid.into_u64())
-			.or_else(|| self.current_span.id().map(|x| x.into_u64()));
-		let span = Span {
-			id,
+		let parent_id = attrs.parent().cloned()
+			.or_else(|| self.current_span.id());
+		let span = SpanDatum {
+			id: id.clone(),
 			parent_id,
 			name: attrs.metadata().name().to_owned(),
 			target: attrs.metadata().target().to_owned(),
 			level: *attrs.metadata().level(),
 			line: attrs.metadata().line().unwrap_or(0),
-			entered: vec![],
-			exited: vec![],
+			start_time: Instant::now(),
 			values,
+			overall_time: Default::default()
 		};
-		let id = Id::from_u64(id);
+
 		self.spans.lock().insert(id.clone(), span);
 		id
 	}
@@ -120,14 +121,12 @@ impl Subscriber for BlockSubscriber {
 	fn event(&self, event: &tracing::Event<'_>) {
 		let mut values = crate::Values::default();
 		event.record(&mut values);
-		let parent_id = event.parent()
-			.map(|pid| pid.into_u64())
-			.or_else(|| self.current_span.id().map(|x| x.into_u64()));
-		let trace_event = Event {
+		let parent_id = event.parent().cloned()
+			.or_else(|| self.current_span.id());
+		let trace_event = TraceEvent {
 			name: event.metadata().name().to_owned(),
 			target: event.metadata().target().to_owned(),
 			level: *event.metadata().level(),
-			rel_timestamp: Instant::now() - self.timestamp,
 			values: values.into(),
 			parent_id,
 		};
@@ -136,16 +135,11 @@ impl Subscriber for BlockSubscriber {
 
 	fn enter(&self, id: &Id) {
 		self.current_span.enter(id.clone());
-		let mut span_data = self.spans.lock();
-		if let Some(span) = span_data.get_mut(&id) {
-			span.entered.push(Instant::now() - self.timestamp);
-		}
 	}
 
 	fn exit(&self, span: &Id) {
 		if let Some(s) = self.spans.lock().get_mut(span) {
 			self.current_span.exit();
-			s.exited.push(Instant::now() - self.timestamp)
 		}
 	}
 }
@@ -191,8 +185,8 @@ impl<Block, Client> BlockExecutor<Block, Client>
 		let targets = if let Some(t) = &self.targets { t } else { DEFAULT_TARGETS };
 		let spans = Mutex::new(HashMap::new());
 		let events = Mutex::new(Vec::new());
-		let sub = BlockSubscriber::new(targets, spans, events);
-		let dispatch = Dispatch::new(sub);
+		let block_subscriber = BlockSubscriber::new(targets, spans, events);
+		let dispatch = Dispatch::new(block_subscriber);
 
 		{
 			let dispatcher_span = tracing::debug_span!(target: "state_tracing",
@@ -217,20 +211,20 @@ impl<Block, Client> BlockExecutor<Block, Client>
 			.drain()
 			.map(|(_, s)| s.into())
 			.into_iter()
-			// Filter out any spans that were never entered
-			.filter(|s: &Span| !s.entered.is_empty())
 			// Patch wasm identifiers
 			.filter_map(|s| patch_and_filter(s, targets))
 			.collect();
 
-		spans.sort_by(|a, b| a.entered[0].cmp(&b.entered[0]));
+		let events: Vec<_> = block_subscriber.events.lock().drain(..).map(|s| s.into()).collect();
 
-		let events = block_subscriber.events
-			.lock()
-			.drain(..)
-			.map(|s| s.into())
-			.filter(|e| event_key_filter(e, KEY_TARGETS))
-			.collect();
+		tracing::debug!(target: "state_tracing", "Captured {} spans and {} events", spans.len(), events.len());
+
+		// let events = block_subscriber.events
+		// 	.lock()
+		// 	.drain(..)
+		// 	.map(|s| s.into())
+		// 	.filter(|e| event_key_filter(e, KEY_TARGETS))
+		// 	.collect();
 
 		let block_traces = BlockTrace {
 			block_hash: id.to_string(),
@@ -243,7 +237,7 @@ impl<Block, Client> BlockExecutor<Block, Client>
 	}
 }
 
-fn event_key_filter(event: &Event, targets: &str) -> bool {
+fn event_key_filter(event: &TraceEvent, targets: &str) -> bool {
 	if let Some(key) = event.values.string_values.get("key") {
 		if check_target(targets, key, &event.level) {
 			return true;
@@ -252,7 +246,7 @@ fn event_key_filter(event: &Event, targets: &str) -> bool {
 	false
 }
 
-fn patch_and_filter(mut span: Span, targets: &str) -> Option<Span> {
+fn patch_and_filter(mut span: SpanDatum, targets: &str) -> Option<Span> {
 	if span.name == WASM_TRACE_IDENTIFIER {
 		span.values.bool_values.insert("wasm".to_owned(), true);
 		if let Some(n) = span.values.string_values.remove(WASM_NAME_KEY) {
@@ -265,7 +259,7 @@ fn patch_and_filter(mut span: Span, targets: &str) -> Option<Span> {
 			return None;
 		}
 	}
-	Some(span)
+	Some(span.into())
 }
 
 fn check_target(targets: &str, target: &str, level: &Level) -> bool {

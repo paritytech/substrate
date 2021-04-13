@@ -87,7 +87,7 @@ pub trait TraceHandler: Send + Sync {
 #[derive(Debug)]
 pub struct TraceEvent {
 	/// Name of the event.
-	pub name: &'static str,
+	pub name: String,
 	/// Target of the event.
 	pub target: String,
 	/// Level of the event.
@@ -119,17 +119,6 @@ pub struct SpanDatum {
 	pub overall_time: Duration,
 	/// Values recorded to this span
 	pub values: Values,
-}
-
-impl From<Values> for sp_rpc::tracing::Values {
-	fn from(v: Values) -> Self {
-		sp_rpc::tracing::Values {
-			bool_values: v.bool_values,
-			i64_values: v.i64_values,
-			u64_values: v.u64_values,
-			string_values: v.string_values,
-		}
-	}
 }
 
 /// Holds associated values for a tracing span
@@ -297,7 +286,7 @@ impl<S: Subscriber> Layer<S> for ProfilingLayer {
 		let mut values = Values::default();
 		event.record(&mut values);
 		let trace_event = TraceEvent {
-			name: event.metadata().name(),
+			name: event.metadata().name().to_owned(),
 			target: event.metadata().target().to_owned(),
 			level: *event.metadata().level(),
 			values,
@@ -393,6 +382,33 @@ impl TraceHandler for LogTraceHandler {
 			event.parent_id.map(|s| s.into_u64()),
 			event.values,
 		);
+	}
+}
+
+impl From<TraceEvent> for sp_rpc::tracing::Event {
+	fn from(trace_event: TraceEvent) -> Self {
+		let data = sp_rpc::tracing::Data {
+			string_values: trace_event.values.string_values
+		};
+		sp_rpc::tracing::Event {
+			name: trace_event.name,
+			target: trace_event.target,
+			data,
+			parent_id: trace_event.parent_id.map(|id| id.into_u64())
+		}
+	}
+}
+
+impl From<SpanDatum> for sp_rpc::tracing::Span {
+	fn from(span_datum: SpanDatum) -> Self {
+		let wasm = span_datum.values.bool_values.get("wasm").is_some();
+		sp_rpc::tracing::Span {
+			id: span_datum.id.into_u64(),
+			parent_id: span_datum.parent_id.map(|id| id.into_u64()),
+			name: span_datum.name,
+			target: span_datum.target,
+			wasm,
+		}
 	}
 }
 

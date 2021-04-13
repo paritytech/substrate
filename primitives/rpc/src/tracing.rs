@@ -46,13 +46,8 @@ pub struct Event {
 	pub name: String,
 	/// Event target
 	pub target: String,
-	/// Level
-	#[serde(skip, default = "default_level")]
-	pub level: Level,
-	/// Timestamp relative to start of the tracing scope
-	pub rel_timestamp: Duration,
-	/// Associated `Values` of the Event
-	pub values: Values,
+	/// Associated data
+	pub data: Data,
 	/// Parent id, if it exists
 	pub parent_id: Option<u64>,
 }
@@ -71,54 +66,15 @@ pub struct Span {
 	pub name: String,
 	/// Target, typically module
 	pub target: String,
-	/// Level
-	#[serde(skip, default = "default_level")]
-	pub level: Level,
-	/// Line number in source
-	pub line: u32,
-	/// List of timestamps when the span was entered
-	pub entered: Vec<Duration>,
-	/// List of timestamps when the span was exited
-	pub exited: Vec<Duration>,
-	/// Values recorded to this span
-	pub values: Values,
+	/// Indicates trace from wasm
+	pub wasm: bool,
 }
 
 /// Holds associated values for a tracing span
 #[derive(Serialize, Deserialize, Default, Clone, Debug)]
-pub struct Values {
-	/// HashMap of `bool` values
-	pub bool_values: HashMap<String, bool>,
-	/// HashMap of `i64` values
-	#[serde(skip_serializing)]
-	pub i64_values: HashMap<String, i64>,
-	/// HashMap of `u64` values
-	#[serde(skip_serializing)]
-	pub u64_values: HashMap<String, u64>,
+pub struct Data {
 	/// HashMap of `String` values
 	pub string_values: HashMap<String, String>,
-}
-
-impl Visit for Values {
-	fn record_i64(&mut self, field: &Field, value: i64) {
-		self.i64_values.insert(field.name().to_string(), value);
-	}
-
-	fn record_u64(&mut self, field: &Field, value: u64) {
-		self.u64_values.insert(field.name().to_string(), value);
-	}
-
-	fn record_bool(&mut self, field: &Field, value: bool) {
-		self.bool_values.insert(field.name().to_string(), value);
-	}
-
-	fn record_str(&mut self, field: &Field, value: &str) {
-		self.string_values.insert(field.name().to_string(), value.to_owned());
-	}
-
-	fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
-		self.string_values.insert(field.name().to_string(), format!("{:?}", value).to_owned());
-	}
 }
 
 fn default_level() -> Level {
