@@ -93,7 +93,7 @@ pub const LOG_TARGET: &'static str = "runtime::frame-support";
 pub enum Never {}
 
 /// A pallet identifier. These are per pallet and should be stored in a registry somewhere.
-#[derive(Clone, Copy, Eq, PartialEq, Encode, Decode)]
+#[derive(Clone, Copy, Eq, PartialEq, Encode, Decode, scale_info::TypeInfo)]
 pub struct PalletId(pub [u8; 8]);
 
 impl TypeId for PalletId {

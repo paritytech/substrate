@@ -655,7 +655,7 @@ impl RuntimeDbWeight {
 ///
 /// The `negative` value encodes whether the term is added or substracted from the
 /// overall polynomial result.
-#[derive(Clone, Encode, Decode)]
+#[derive(Clone, Encode, Decode, scale_info::TypeInfo)]
 pub struct WeightToFeeCoefficient<Balance> {
 	/// The integral part of the coefficient.
 	pub coeff_integer: Balance,
