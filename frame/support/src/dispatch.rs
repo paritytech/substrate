@@ -2404,7 +2404,7 @@ macro_rules! __impl_module_constants_metadata {
 		{
 			#[doc(hidden)]
 			#[allow(dead_code)]
-			pub fn module_constants_metadata() -> &'static [$crate::dispatch::ModuleConstantMetadata] {
+			pub fn module_constants_metadata() -> ::sp_std::vec::Vec<$crate::dispatch::ModuleConstantMetadata> {
 				// Create the `ByteGetter`s
 				$(
 					#[allow(non_upper_case_types)]
@@ -2435,23 +2435,19 @@ macro_rules! __impl_module_constants_metadata {
 						<I>, $const_instance: $const_instantiable)?
 					> Sync for $default_byte_name <$const_trait_instance $(, $const_instance)?> {}
 				)*
-				&[
+				$crate::scale_info::prelude::vec![
 					$(
 						$crate::dispatch::ModuleConstantMetadata {
-							name: $crate::dispatch::DecodeDifferent::Encode(stringify!($name)),
-							ty: $crate::dispatch::DecodeDifferent::Encode(stringify!($type)),
-							value: $crate::dispatch::DecodeDifferent::Encode(
-								$crate::dispatch::DefaultByteGetter(
-									&$default_byte_name::<
-										$const_trait_instance $(, $const_instance)?
-									>(
-										$crate::dispatch::marker::PhantomData
-									)
+							name: stringify!($name),
+							ty: $crate::scale_info::meta_type::<$type>(),
+							value: $crate::dispatch::DefaultByteGetter(
+								&$default_byte_name::<
+									$const_trait_instance $(, $const_instance)?
+								>(
+									$crate::dispatch::marker::PhantomData
 								)
-							),
-							documentation: $crate::dispatch::DecodeDifferent::Encode(
-								&[ $( $doc_attr ),* ]
-							),
+							).0.default_byte(), // todo: [AJ] unify DefaultByteGetter,
+							documentation: $crate::scale_info::prelude::vec![ $( $doc_attr ),* ],
 						}
 					),*
 				]

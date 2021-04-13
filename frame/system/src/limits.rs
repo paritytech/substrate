@@ -94,7 +94,7 @@ pub type ValidationResult = Result<BlockWeights, ValidationErrors>;
 const DEFAULT_NORMAL_RATIO: Perbill = Perbill::from_percent(75);
 
 /// `DispatchClass`-specific weight configuration.
-#[derive(RuntimeDebug, Clone, codec::Encode, codec::Decode)]
+#[derive(RuntimeDebug, Clone, codec::Encode, codec::Decode, scale_info::TypeInfo)]
 pub struct WeightsPerClass {
 	/// Base weight of single extrinsic of given class.
 	pub base_extrinsic: Weight,

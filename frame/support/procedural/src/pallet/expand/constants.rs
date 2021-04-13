@@ -16,7 +16,6 @@
 // limitations under the License.
 
 use crate::pallet::Def;
-use quote::ToTokens;
 
 struct ConstDef {
 	/// Name of the associated type.
@@ -112,7 +111,7 @@ pub fn expand_constants(def: &mut Def) -> proc_macro2::TokenStream {
 						&#default_byte_getter::<#type_use_gen>(
 							#frame_support::sp_std::marker::PhantomData
 						)
-					),
+					).0.default_byte(), // todo: [AJ] unify DefaultByteGetter
 					documentation: #frame_support::scale_info::prelude::vec![ #( #doc ),* ],
 				}
 			})
