@@ -84,6 +84,8 @@
 //!
 //! * [Balances](../pallet_balances/index.html)
 
+// Just a bogus PR in order to re-bench contracts. Not intended to be merged.
+
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "runtime-benchmarks", recursion_limit="512")]
 
