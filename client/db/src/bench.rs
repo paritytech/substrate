@@ -23,7 +23,7 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 
 use hash_db::{Prefix, Hasher};
-use sp_trie::{MemoryDB, prefixed_key};
+use sp_trie::{MemoryDB, prefixed_key, StorageProof};
 use sp_core::{
 	storage::{ChildInfo, TrackedStorageKey},
 	hexdisplay::HexDisplay
@@ -31,9 +31,10 @@ use sp_core::{
 use sp_runtime::traits::{Block as BlockT, HashFor};
 use sp_runtime::Storage;
 use sp_state_machine::{
-	DBValue, backend::Backend as StateBackend, StorageCollection, ChildStorageCollection
+	DBValue, backend::Backend as StateBackend, StorageCollection, ChildStorageCollection, ProofRecorder,
 };
 use kvdb::{KeyValueDB, DBTransaction};
+use codec::Encode;
 use crate::storage_cache::{CachingState, SharedCache, new_shared_cache};
 
 type DbState<B> = sp_state_machine::TrieBackend<
@@ -44,14 +45,25 @@ type State<B> = CachingState<DbState<B>, B>;
 
 struct StorageDb<Block: BlockT> {
 	db: Arc<dyn KeyValueDB>,
+	proof_recorder: Option<ProofRecorder<HashFor<Block>>>,
 	_block: std::marker::PhantomData<Block>,
 }
 
 impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Block> {
 	fn get(&self, key: &Block::Hash, prefix: Prefix) -> Result<Option<DBValue>, String> {
-		let key = prefixed_key::<HashFor<Block>>(key, prefix);
-		self.db.get(0, &key)
-			.map_err(|e| format!("Database backend error: {:?}", e))
+		let prefixed_key = prefixed_key::<HashFor<Block>>(key, prefix);
+		if let Some(recorder) = &self.proof_recorder {
+			if let Some(v) = recorder.read().get(&key) {
+				return Ok(v.clone());
+			}
+			let backend_value = self.db.get(0, &prefixed_key)
+				.map_err(|e| format!("Database backend error: {:?}", e))?;
+			recorder.write().insert(key.clone(), backend_value.clone());
+			Ok(backend_value)
+		} else {
+			self.db.get(0, &prefixed_key)
+				.map_err(|e| format!("Database backend error: {:?}", e))
+		}
 	}
 }
 
@@ -105,11 +117,12 @@ pub struct BenchmarkingState<B: BlockT> {
 	child_key_tracker: RefCell<HashMap<Vec<u8>, HashMap<Vec<u8>, KeyTracker>>>,
 	read_write_tracker: RefCell<ReadWriteTracker>,
 	whitelist: RefCell<Vec<TrackedStorageKey>>,
+	proof_recorder: Option<ProofRecorder<HashFor<B>>>,
 }
 
 impl<B: BlockT> BenchmarkingState<B> {
 	/// Create a new instance that creates a database in a temporary dir.
-	pub fn new(genesis: Storage, _cache_size_mb: Option<usize>) -> Result<Self, String> {
+	pub fn new(genesis: Storage, _cache_size_mb: Option<usize>, record_proof: bool) -> Result<Self, String> {
 		let mut root = B::Hash::default();
 		let mut mdb = MemoryDB::<HashFor<B>>::default();
 		sp_state_machine::TrieDBMut::<HashFor<B>>::new(&mut mdb, &mut root);
@@ -126,6 +139,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 			child_key_tracker: Default::default(),
 			read_write_tracker: Default::default(),
 			whitelist: Default::default(),
+			proof_recorder: record_proof.then(Default::default),
 		};
 
 		state.add_whitelist_to_tracker();
@@ -153,7 +167,14 @@ impl<B: BlockT> BenchmarkingState<B> {
 			None => Arc::new(::kvdb_memorydb::create(1)),
 		};
 		self.db.set(Some(db.clone()));
-		let storage_db = Arc::new(StorageDb::<B> { db, _block: Default::default() });
+		if let Some(recorder) = &self.proof_recorder {
+			recorder.write().clear();
+		}
+		let storage_db = Arc::new(StorageDb::<B> {
+			db,
+			proof_recorder: self.proof_recorder.clone(),
+			_block: Default::default()
+		});
 		*self.state.borrow_mut() = Some(State::new(
 			DbState::<B>::new(storage_db, self.root.get()),
 			self.shared_cache.clone(),
@@ -495,6 +516,17 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 	fn usage_info(&self) -> sp_state_machine::UsageInfo {
 		self.state.borrow().as_ref().map_or(sp_state_machine::UsageInfo::empty(), |s| s.usage_info())
 	}
+
+	fn proof_size(&self) -> Option<u32> {
+		self.proof_recorder.as_ref().map(|recorder| {
+			let proof = StorageProof::new(recorder
+				.read()
+				.iter()
+				.filter_map(|(_k, v)| v.as_ref().map(|v| v.to_vec()))
+				.collect());
+			proof.encoded_size() as u32
+		})
+	}
 }
 
 impl<Block: BlockT> std::fmt::Debug for BenchmarkingState<Block> {
@@ -510,7 +542,7 @@ mod test {
 
 	#[test]
 	fn read_to_main_and_child_tries() {
-		let bench_state = BenchmarkingState::<crate::tests::Block>::new(Default::default(), None)
+		let bench_state = BenchmarkingState::<crate::tests::Block>::new(Default::default(), None, false)
 			.unwrap();
 
 		for _ in 0..2 {

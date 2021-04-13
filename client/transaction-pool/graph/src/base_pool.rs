@@ -155,13 +155,13 @@ impl<Hash: Clone, Extrinsic: Clone> Transaction<Hash, Extrinsic> {
 	/// every reason to be commented. That's why we `Transaction` is not `Clone`,
 	/// but there's explicit `duplicate` method.
 	pub fn duplicate(&self) -> Self {
-		Transaction {
+		Self {
 			data: self.data.clone(),
-			bytes: self.bytes.clone(),
+			bytes: self.bytes,
 			hash: self.hash.clone(),
-			priority: self.priority.clone(),
+			priority: self.priority,
 			source: self.source,
-			valid_till: self.valid_till.clone(),
+			valid_till: self.valid_till,
 			requires: self.requires.clone(),
 			provides: self.provides.clone(),
 			propagate: self.propagate,
@@ -174,16 +174,9 @@ impl<Hash, Extrinsic> fmt::Debug for Transaction<Hash, Extrinsic> where
 	Extrinsic: fmt::Debug,
 {
 	fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-		fn print_tags(fmt: &mut fmt::Formatter, tags: &[Tag]) -> fmt::Result {
-			let mut it = tags.iter();
-			if let Some(t) = it.next() {
-				write!(fmt, "{}", HexDisplay::from(t))?;
-			}
-			for t in it {
-				write!(fmt, ",{}", HexDisplay::from(t))?;
-			}
-			Ok(())
-		}
+		let join_tags = |tags: &[Tag]| {
+			tags.iter().map(|tag| HexDisplay::from(tag).to_string()).collect::<Vec<_>>().join(", ")
+		};
 
 		write!(fmt, "Transaction {{ ")?;
 		write!(fmt, "hash: {:?}, ", &self.hash)?;
@@ -192,11 +185,8 @@ impl<Hash, Extrinsic> fmt::Debug for Transaction<Hash, Extrinsic> where
 		write!(fmt, "bytes: {:?}, ", &self.bytes)?;
 		write!(fmt, "propagate: {:?}, ", &self.propagate)?;
 		write!(fmt, "source: {:?}, ", &self.source)?;
-		write!(fmt, "requires: [")?;
-		print_tags(fmt, &self.requires)?;
-		write!(fmt, "], provides: [")?;
-		print_tags(fmt, &self.provides)?;
-		write!(fmt, "], ")?;
+		write!(fmt, "requires: [{}], ", join_tags(&self.requires))?;
+		write!(fmt, "provides: [{}], ", join_tags(&self.provides))?;
 		write!(fmt, "data: {:?}", &self.data)?;
 		write!(fmt, "}}")?;
 		Ok(())
@@ -239,7 +229,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> Default for Bas
 impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, Ex> {
 	/// Create new pool given reject_future_transactions flag.
 	pub fn new(reject_future_transactions: bool) -> Self {
-		BasePool {
+		Self {
 			reject_future_transactions,
 			future: Default::default(),
 			ready: Default::default(),
@@ -320,13 +310,8 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: std::fmt::Debug> BasePool<Hash, 
 		let mut first = true;
 		let mut to_import = vec![tx];
 
-		loop {
-			// take first transaction from the list
-			let tx = match to_import.pop() {
-				Some(tx) => tx,
-				None => break,
-			};
-
+		// take first transaction from the list
+		while let Some(tx) = to_import.pop() {
 			// find transactions in Future that it unlocks
 			to_import.append(&mut self.future.satisfy_tags(&tx.transaction.provides));
 
@@ -1087,7 +1072,7 @@ mod tests {
 			}),
 			"Transaction { \
 hash: 4, priority: 1000, valid_till: 64, bytes: 1, propagate: true, \
-source: TransactionSource::External, requires: [03,02], provides: [04], data: [4]}".to_owned()
+source: TransactionSource::External, requires: [03, 02], provides: [04], data: [4]}".to_owned()
 		);
 	}
 

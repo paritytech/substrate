@@ -241,6 +241,10 @@ pub mod pallet {
 				Ok(())
 			}
 		}
+
+		fn is_inherent(call: &Self::Call) -> bool {
+			matches!(call, Call::set(_))
+		}
 	}
 }
 
@@ -352,6 +356,7 @@ mod tests {
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
+		type OnSetCode = ();
 	}
 	parameter_types! {
 		pub const MinimumPeriod: u64 = 5;
