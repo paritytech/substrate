@@ -832,7 +832,7 @@ impl<T: FullCodec + Clone + sp_std::fmt::Debug + Eq + PartialEq> Value for T {}
 
 /// A bounded vector.
 ///
-/// It implementations for efficient append and length decoding, as with a normal `Vec<_>`, once put
+/// It has implementations for efficient append and length decoding, as with a normal `Vec<_>`, once put
 /// into a [`StorageValue`].
 ///
 /// As the name suggests, the length of the queue is always bounded. All internal operations ensure
