@@ -254,7 +254,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Set the timestamp to something in particular. Only used for tests.
-	#[cfg(any(feature = "runtime-benchmarks", test))]
+	#[cfg(any(feature = "runtime-benchmarks", feature = "std"))]
 	pub fn set_timestamp(now: T::Moment) {
 		Now::<T>::put(now);
 	}
