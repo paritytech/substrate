@@ -604,7 +604,7 @@ mod tests {
 	use frame_system as system;
 	use codec::Encode;
 	use frame_support::{
-		parameter_types,
+		assert_noop, assert_ok, parameter_types,
 		weights::{
 			DispatchClass, DispatchInfo, PostDispatchInfo, GetDispatchInfo, Weight,
 			WeightToFeePolynomial, WeightToFeeCoefficients, WeightToFeeCoefficient,
@@ -616,6 +616,7 @@ mod tests {
 	use sp_runtime::{
 		testing::{Header, TestXt},
 		traits::{BlakeTwo256, IdentityLookup},
+		transaction_validity::InvalidTransaction,
 		Perbill,
 	};
 	use std::cell::RefCell;
@@ -826,10 +827,9 @@ mod tests {
 				.unwrap();
 			assert_eq!(Balances::free_balance(1), 100 - 5 - 5 - 10);
 
-			assert!(
+			assert_ok!(
 				ChargeTransactionPayment::<Runtime>
 					::post_dispatch(pre, &info_from_weight(5), &default_post_info(), len, &Ok(()))
-					.is_ok()
 			);
 			assert_eq!(Balances::free_balance(1), 100 - 5 - 5 - 10);
 
@@ -838,10 +838,9 @@ mod tests {
 				.unwrap();
 			assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 100 - 5);
 
-			assert!(
+			assert_ok!(
 				ChargeTransactionPayment::<Runtime>
 					::post_dispatch(pre, &info_from_weight(100), &post_info_from_weight(50), len, &Ok(()))
-					.is_ok()
 			);
 			assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 50 - 5);
 		});
@@ -864,10 +863,9 @@ mod tests {
 			// 5 base fee, 10 byte fee, 3/2 * 100 weight fee, 5 tip
 			assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 150 - 5);
 
-			assert!(
+			assert_ok!(
 				ChargeTransactionPayment::<Runtime>
 					::post_dispatch(pre, &info_from_weight(100), &post_info_from_weight(50), len, &Ok(()))
-					.is_ok()
 			);
 			// 75 (3/2 of the returned 50 units of weight) is refunded
 			assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 75 - 5);
@@ -883,10 +881,9 @@ mod tests {
 			.execute_with(||
 		{
 			// maximum weight possible
-			assert!(
+			assert_ok!(
 				ChargeTransactionPayment::<Runtime>::from(0)
 					.pre_dispatch(&1, CALL, &info_from_weight(Weight::max_value()), 10)
-					.is_ok()
 			);
 			// fee will be proportional to what is the actual maximum weight in the runtime.
 			assert_eq!(
@@ -915,10 +912,9 @@ mod tests {
 				class: DispatchClass::Operational,
 				pays_fee: Pays::No,
 			};
-			assert!(
+			assert_ok!(
 				ChargeTransactionPayment::<Runtime>::from(0)
 					.validate(&1, CALL, &operational_transaction , len)
-					.is_ok()
 			);
 
 			// like a InsecureFreeNormal
@@ -927,10 +923,10 @@ mod tests {
 				class: DispatchClass::Normal,
 				pays_fee: Pays::Yes,
 			};
-			assert!(
+			assert_noop!(
 				ChargeTransactionPayment::<Runtime>::from(0)
-					.validate(&1, CALL, &free_transaction , len)
-					.is_err()
+					.validate(&1, CALL, &free_transaction , len),
+				TransactionValidityError::Invalid(InvalidTransaction::Payment),
 			);
 		});
 	}
@@ -947,10 +943,9 @@ mod tests {
 			NextFeeMultiplier::put(Multiplier::saturating_from_rational(3, 2));
 			let len = 10;
 
-			assert!(
+			assert_ok!(
 				ChargeTransactionPayment::<Runtime>::from(10) // tipped
 					.pre_dispatch(&1, CALL, &info_from_weight(3), len)
-					.is_ok()
 			);
 			assert_eq!(
 				Balances::free_balance(1),
@@ -1146,13 +1141,12 @@ mod tests {
 			assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 100 - 5);
 
 			// kill the account between pre and post dispatch
-			assert!(Balances::transfer(Some(2).into(), 3, Balances::free_balance(2)).is_ok());
+			assert_ok!(Balances::transfer(Some(2).into(), 3, Balances::free_balance(2)));
 			assert_eq!(Balances::free_balance(2), 0);
 
-			assert!(
+			assert_ok!(
 				ChargeTransactionPayment::<Runtime>
 					::post_dispatch(pre, &info_from_weight(100), &post_info_from_weight(50), len, &Ok(()))
-					.is_ok()
 			);
 			assert_eq!(Balances::free_balance(2), 0);
 			// Transfer Event
@@ -1180,10 +1174,9 @@ mod tests {
 				.unwrap();
 			assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 100 - 5);
 
-			assert!(
+			assert_ok!(
 				ChargeTransactionPayment::<Runtime>
 					::post_dispatch(pre, &info_from_weight(100), &post_info_from_weight(101), len, &Ok(()))
-					.is_ok()
 			);
 			assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 100 - 5);
 		});
@@ -1210,10 +1203,9 @@ mod tests {
 				.pre_dispatch(&user, CALL, &dispatch_info, len)
 				.unwrap();
 			assert_eq!(Balances::total_balance(&user), 0);
-			assert!(
+			assert_ok!(
 				ChargeTransactionPayment::<Runtime>
 					::post_dispatch(pre, &dispatch_info, &default_post_info(), len, &Ok(()))
-					.is_ok()
 			);
 			assert_eq!(Balances::total_balance(&user), 0);
 			// No events for such a scenario
