@@ -878,7 +878,7 @@ impl<FR> Store<FR> {
 	/// Returns uninitialized sandboxed module instance or an instantiation error.
 	pub fn instantiate<'a, FE, SCH, DTH>(
 		&mut self,
-		dispatch_thunk: FR,
+		// dispatch_thunk: FR,
 		wasm: &[u8],
 		guest_env: GuestEnvironment,
 		state: u32,
@@ -898,13 +898,15 @@ impl<FR> Store<FR> {
 				let wasmi_instance = ModuleInstance::new(&wasmi_module, &guest_env.imports)
 					.map_err(|_| InstantiationError::Instantiation)?;
 
-				let sandbox_instance = Rc::new(SandboxInstance {
-					// In general, it's not a very good idea to use `.not_started_instance()` for anything
-					// but for extracting memory and tables. But in this particular case, we are extracting
-					// for the purpose of running `start` function which should be ok.
-					backend_instance: BackendInstance::Wasmi(wasmi_instance.not_started_instance().clone()),
-					dispatch_thunk,
-					guest_to_supervisor_mapping: guest_env.guest_to_supervisor_mapping,
+				let sandbox_instance = DTH::with_dispatch_thunk(|dispatch_thunk| {
+					Rc::new(SandboxInstance {
+						// In general, it's not a very good idea to use `.not_started_instance()` for anything
+						// but for extracting memory and tables. But in this particular case, we are extracting
+						// for the purpose of running `start` function which should be ok.
+						backend_instance: BackendInstance::Wasmi(wasmi_instance.not_started_instance().clone()),
+						dispatch_thunk: dispatch_thunk.clone(),
+						guest_to_supervisor_mapping: guest_env.guest_to_supervisor_mapping,
+					})
 				});
 
 				SCH::with_sandbox_capabilities( |supervisor_externals| {
@@ -948,7 +950,7 @@ impl<FR> Store<FR> {
 							let supervisor_func_index = guest_env.guest_to_supervisor_mapping
 								.func_by_guest_index(guest_func_index).expect("missing guest to host mapping");
 
-							let dispatch_thunk = dispatch_thunk.clone();
+							// let dispatch_thunk = dispatch_thunk.clone();
 							Some(wasmtime::Extern::Func(wasmtime::Func::new(&wasmtime_store, func_ty,
 								move |_caller, params, result| {
 									SCH::with_sandbox_capabilities(|supervisor_externals| {
@@ -986,13 +988,15 @@ impl<FR> Store<FR> {
 											return Err(wasmtime::Trap::new("Can't write invoke args into memory"));
 										}
 
-										let serialized_result = supervisor_externals.invoke(
-											&dispatch_thunk,
-											invoke_args_ptr,
-											invoke_args_len,
-											state,
-											supervisor_func_index,
-										)
+										let serialized_result = DTH::with_dispatch_thunk(|dispatch_thunk| {
+											supervisor_externals.invoke(
+												&dispatch_thunk,
+												invoke_args_ptr,
+												invoke_args_len,
+												state,
+												supervisor_func_index,
+											)
+										})
 											.map_err(|e| wasmtime::Trap::new(e.to_string()))?;
 
 										// dispatch_thunk returns pointer to serialized arguments.
@@ -1045,7 +1049,7 @@ impl<FR> Store<FR> {
 
 				Rc::new(SandboxInstance {
 					backend_instance: BackendInstance::Wasmtime(wasmtime_instance),
-					dispatch_thunk,
+					dispatch_thunk: DTH::with_dispatch_thunk(|dispatch_thunk| dispatch_thunk.clone()),
 					guest_to_supervisor_mapping: guest_env.guest_to_supervisor_mapping,
 				})
 			}
@@ -1100,7 +1104,6 @@ impl<FR> Store<FR> {
 							let supervisor_func_index = guest_env.guest_to_supervisor_mapping
 								.func_by_guest_index(guest_func_index).expect("missing guest to host mapping");
 
-							let dispatch_thunk = Mutex::new(dispatch_thunk.clone());
 							let function = wasmer::Function::new(&context.store, func_ty, move |params: &[wasmer::Val]| {
 
 								SCH::with_sandbox_capabilities(|supervisor_externals| {
@@ -1211,7 +1214,7 @@ impl<FR> Store<FR> {
 				println!("Creating SandboxInstance...");
 				Rc::new(SandboxInstance {
 					backend_instance: BackendInstance::Wasmer(instance),
-					dispatch_thunk,
+					dispatch_thunk: DTH::with_dispatch_thunk(|dispatch_thunk| dispatch_thunk.clone()),
 					guest_to_supervisor_mapping: guest_env.guest_to_supervisor_mapping,
 				})
 			}

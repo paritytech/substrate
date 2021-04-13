@@ -301,11 +301,13 @@ impl Sandbox for FunctionExecutor {
 		println!("Instantiating sandbox from wasmi");
 
 		let store = &mut *self.inner.sandbox_store.borrow_mut();
-		let result = EXECUTOR.set(self, || store.instantiate::<_, CapsHolder, ThunkHolder>(
-			dispatch_thunk,
-			wasm,
-			guest_env,
-			state
+		let result = EXECUTOR.set(self, || DISPATCH_THUNK.set(&dispatch_thunk, || {
+				store.instantiate::<_, CapsHolder, ThunkHolder>(
+				// dispatch_thunk,
+				wasm,
+				guest_env,
+				state,
+			)}
 		));
 
 		let instance_idx_or_err_code: u32 =

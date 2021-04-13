@@ -399,19 +399,21 @@ impl Sandbox for HostState {
 		println!("Instantiating sandbox from host");
 
 		let store = &mut *self.inner.sandbox_store.borrow_mut();
-		let instance_idx_or_err_code =
-			match store.instantiate::<_, CapsHolder, ThunkHolder>(
-				dispatch_thunk,
+		let result = DISPATCH_THUNK.set(&dispatch_thunk, || {
+			store.instantiate::<_, CapsHolder, ThunkHolder>(
+				// dispatch_thunk,
 				wasm,
 				guest_env,
 				state
 			)
 				.map(|i| i.register(store))
-			{
-				Ok(instance_idx) => instance_idx,
-				Err(sandbox::InstantiationError::StartTrapped) => sandbox_primitives::ERR_EXECUTION,
-				Err(_) => sandbox_primitives::ERR_MODULE,
-			};
+		});
+
+		let instance_idx_or_err_code = match result {
+			Ok(instance_idx) => instance_idx,
+			Err(sandbox::InstantiationError::StartTrapped) => sandbox_primitives::ERR_EXECUTION,
+			Err(_) => sandbox_primitives::ERR_MODULE,
+		};
 
 		Ok(instance_idx_or_err_code as u32)
 	}
