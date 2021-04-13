@@ -246,10 +246,9 @@ impl<Block, Client> BlockExecutor<Block, Client>
 fn event_key_filter(event: &Event, targets: &str) -> bool {
 	if let Some(key) = event.values.string_values.get("key") {
 		if check_target(targets, key, &event.level) {
-			return false;
+			return true;
 		}
 	}
-
 	false
 }
 
