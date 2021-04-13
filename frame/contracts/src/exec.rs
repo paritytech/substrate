@@ -972,7 +972,7 @@ mod tests {
 	use super::*;
 	use crate::{
 		gas::GasMeter, tests::{ExtBuilder, Test, Event as MetaEvent},
-		storage::Storage,
+		storage::{Storage, ContractAbsentError},
 		tests::{
 			ALICE, BOB, CHARLIE,
 			test_utils::{place_contract, set_balance, get_balance},
@@ -981,6 +981,7 @@ mod tests {
 		Error, Weight, CurrentSchedule,
 	};
 	use sp_core::Bytes;
+	use frame_support::assert_noop;
 	use sp_runtime::DispatchError;
 	use assert_matches::assert_matches;
 	use std::{cell::RefCell, collections::HashMap, rc::Rc};
@@ -1607,7 +1608,10 @@ mod tests {
 			);
 
 			// Check that the account has not been created.
-			assert!(Storage::<Test>::code_hash(&instantiated_contract_address).is_err());
+			assert_noop!(
+				Storage::<Test>::code_hash(&instantiated_contract_address),
+				ContractAbsentError,
+			);
 			assert!(events().is_empty());
 		});
 	}
