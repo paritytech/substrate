@@ -41,12 +41,6 @@ const TRACE_TARGET: &'static str = "block_trace";
 // Default to only events with the key prefixes for :extrinsic_index & system::Account.
 const DEFAULT_STORAGE_KEYS: &'static str =
 	"3a65787472696e7369635f696e646578,26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9";
-// Heuristic for average event size in bytes.
-const AVG_EVENT: usize = 600 * 8;
-// Heuristic for average span size in bytes.
-const AVG_SPAN: usize = 100 * 8;
-// Base line payload (a response with no events or spans) size in bytes.
-const BASE_PAYLOAD: usize = 525 * 8;
 /// Maximal payload accepted by RPC servers. // TODO maybe import from sc_rpc_server
 const MAX_PAYLOAD: usize = 15 * 1024 * 1024;
 
@@ -189,7 +183,9 @@ impl<Block, Client> BlockExecutor<Block, Client>
 		let extrinsics = self.client.block_body(&id)
 			.map_err(|e| format!("Invalid block id: {:?}", e))?
 			.ok_or("Block not found".to_string())?;
-		tracing::info!(target: "state_tracing", "Found {} extrinsics", extrinsics.len());
+
+		tracing::debug!(target: "state_tracing", "Found {} extrinsics", extrinsics.len());
+
 		let mut header = self.client.header(id)
 			.map_err(|e| format!("Invalid block id: {:?}", e))?
 			.ok_or("Header not found".to_string())?;
@@ -253,25 +249,32 @@ impl<Block, Client> BlockExecutor<Block, Client>
 
 		tracing::debug!(target: "state_tracing", "Captured {} spans and {} events", spans.len(), events.len());
 
-		let res = if BASE_PAYLOAD + events.len() * AVG_EVENT + spans.len() * AVG_SPAN > MAX_PAYLOAD {
-				TraceBlockResponse::TraceError(TraceError {
-					error:
-						"Total amount of events + spans likely exceeds max payload size of RPC server.".to_string()
-				})
-		} else {
-			let block_hash = block_id_as_string(id);
-			let parent_hash = block_id_as_string(parent_id);
-			TraceBlockResponse::BlockTrace(BlockTrace {
-				block_hash,
-				parent_hash,
-				tracing_targets: targets.to_string(),
-				storage_keys: storage_keys.to_string(),
-				spans,
-				events,
-			})
+		let block_trace = BlockTrace {
+			block_hash: block_id_as_string(id),
+			parent_hash: block_id_as_string(parent_id),
+			tracing_targets: targets.to_string(),
+			storage_keys: storage_keys.to_string(),
+			spans,
+			events,
 		};
 
-		Ok(res)
+		let block_trace_size = serde_json::to_vec(&block_trace)
+			.map_err(|_| "Failed to serialize payload".to_string())?
+			.len();
+		let response = if block_trace_size  > MAX_PAYLOAD {
+			TraceBlockResponse::TraceError(TraceError {
+				error:
+					format!(
+						"Payload was {} bytes; it must be less than {} bytes",
+						block_trace_size,
+						MAX_PAYLOAD
+					)
+			})
+		} else {
+			TraceBlockResponse::BlockTrace(block_trace)
+		};
+
+		Ok(response)
 	}
 }
 
