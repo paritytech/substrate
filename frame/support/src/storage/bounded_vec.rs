@@ -43,7 +43,7 @@ pub struct BoundedVec<T: BoundedVecValue, S: Get<u32>>(Vec<T>, sp_std::marker::P
 // NOTE: we could also implement this as:
 // impl<T: Value, S1: Get<u32>, S2: Get<u32>> PartialEq<BoundedVec<T, S2>> for BoundedVec<T, S1>
 // to allow comparison of bounded vectors with different bounds.
-impl<T: Eq + PartialEq + BoundedVecValue, S: Get<u32>> PartialEq for BoundedVec<T, S> {
+impl<T: PartialEq + BoundedVecValue, S: Get<u32>> PartialEq for BoundedVec<T, S> {
 	fn eq(&self, rhs: &Self) -> bool {
 		self.0 == rhs.0
 	}
