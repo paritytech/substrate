@@ -24,7 +24,7 @@ use super::*;
 use std::cell::RefCell;
 use frame_support::{
 	assert_noop, assert_ok, parameter_types,
-	weights::Weight, traits::Contains,
+	weights::Weight, traits::SortedMembers,
 	PalletId
 };
 use sp_runtime::Permill;
@@ -98,7 +98,7 @@ thread_local! {
 	static TEN_TO_FOURTEEN: RefCell<Vec<u128>> = RefCell::new(vec![10,11,12,13,14]);
 }
 pub struct TenToFourteen;
-impl Contains<u128> for TenToFourteen {
+impl SortedMembers<u128> for TenToFourteen {
 	fn sorted_members() -> Vec<u128> {
 		TEN_TO_FOURTEEN.with(|v| {
 			v.borrow().clone()

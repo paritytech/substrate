@@ -379,21 +379,20 @@ macro_rules! parameter_types {
 		}
 	};
 	(
-		$(
-			$( #[ $attr:meta ] )*
-			$vis:vis static $name:ident: $type:ty = $value:expr;
-		)*
+		$( #[ $attr:meta ] )*
+		$vis:vis static $name:ident: $type:ty = $value:expr;
+		$( $rest:tt )*
 	) => (
 		$crate::parameter_types_impl_thread_local!(
-			$(
-				$( #[ $attr ] )*
-				$vis static $name: $type = $value;
-			)*
+			$( #[ $attr ] )*
+			$vis static $name: $type = $value;
 		);
+		$crate::parameter_types!( $( $rest )* );
 	);
 }
 
 #[cfg(not(feature = "std"))]
+#[doc(inline)]
 #[macro_export]
 macro_rules! parameter_types_impl_thread_local {
 	( $( $any:tt )* ) => {
@@ -402,6 +401,7 @@ macro_rules! parameter_types_impl_thread_local {
 }
 
 #[cfg(feature = "std")]
+#[doc(inline)]
 #[macro_export]
 macro_rules! parameter_types_impl_thread_local {
 	(
@@ -459,12 +459,15 @@ macro_rules! ord_parameter_types {
 	);
 	() => ();
 	(IMPL $name:ident , $type:ty , $value:expr) => {
-		impl $crate::traits::Contains<$type> for $name {
+		impl $crate::traits::SortedMembers<$type> for $name {
 			fn contains(t: &$type) -> bool { &$value == t }
 			fn sorted_members() -> $crate::sp_std::prelude::Vec<$type> { vec![$value] }
 			fn count() -> usize { 1 }
 			#[cfg(feature = "runtime-benchmarks")]
 			fn add(_: &$type) {}
+		}
+		impl $crate::traits::Contains<$type> for $name {
+			fn contains(t: &$type) -> bool { &$value == t }
 		}
 	}
 }
@@ -1214,6 +1217,12 @@ pub mod tests {
 			assert_eq!(300, StorageParameter::get());
 		})
 	}
+
+	parameter_types! {
+		pub const BlockHashCount: u64 = 250;
+		pub static Members: Vec<u64> = vec![];
+		pub const Foo: Option<u64> = None;
+	}
 }
 
 /// Prelude to be used alongside pallet macro, for ease of use.
@@ -1930,6 +1939,10 @@ pub mod pallet_prelude {
 /// 		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
 /// 			unimplemented!();
 /// 		}
+///
+/// 		fn is_inherent(_call: &Self::Call) -> bool {
+/// 			unimplemented!();
+/// 		}
 /// 	}
 ///
 /// 	// Regular rust code needed for implementing ProvideInherent trait
@@ -2055,6 +2068,10 @@ pub mod pallet_prelude {
 /// 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 ///
 /// 		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
+/// 			unimplemented!();
+/// 		}
+///
+/// 		fn is_inherent(_call: &Self::Call) -> bool {
 /// 			unimplemented!();
 /// 		}
 /// 	}

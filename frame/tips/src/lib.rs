@@ -68,7 +68,7 @@ use frame_support::traits::{
 use sp_runtime::{ Percent, RuntimeDebug, traits::{
 	Zero, AccountIdConversion, Hash, BadOrigin
 }};
-use frame_support::traits::{Contains, ContainsLengthBound, OnUnbalanced, EnsureOrigin};
+use frame_support::traits::{SortedMembers, ContainsLengthBound, OnUnbalanced, EnsureOrigin};
 use codec::{Encode, Decode};
 use frame_system::{self as system, ensure_signed};
 pub use weights::WeightInfo;
@@ -86,7 +86,7 @@ pub trait Config: frame_system::Config + pallet_treasury::Config {
 	/// Origin from which tippers must come.
 	///
 	/// `ContainsLengthBound::max_len` must be cost free (i.e. no storage read or heavy operation).
-	type Tippers: Contains<Self::AccountId> + ContainsLengthBound;
+	type Tippers: SortedMembers<Self::AccountId> + ContainsLengthBound;
 
 	/// The period for which a tip remains open after is has achieved threshold tippers.
 	type TipCountdown: Get<Self::BlockNumber>;
