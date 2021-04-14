@@ -1035,27 +1035,24 @@ mod tests {
 			let (mut voters, mut assignments) = voters_and_assignments();
 			let compact = make_compact_from(voters.clone(), assignments.clone());
 			let encoded_len = compact.encode().len() as u32;
-			let voter_count = voters.len();
+			let count = assignments.len();
 			let min_stake_voter = voters.iter()
 				.map(|(id, weight, _)| (weight, id))
 				.min()
 				.map(|(_, id)| *id)
 				.unwrap();
-			// test precondition
-			assert_eq!(voter_count, compact.voter_count());
 
 			// when
 			MultiPhase::sort_by_decreasing_stake(&mut voters, &mut assignments);
 			MultiPhase::trim_assignments_length(encoded_len - 1, &mut assignments);
 
 			// then
+			assert_eq!(assignments.len(), count - 1, "we must have removed exactly one assignment");
 			assert!(
 				assignments.iter()
 					.all(|Assignment{ who, ..}| *who != min_stake_voter),
 				"min_stake_voter must no longer be in the set of voters",
 			);
-			let compact = make_compact_from(voters, assignments);
-			assert_eq!(compact.voter_count(), voter_count - 1, "we must have removed exactly 1 voter");
 		});
 	}
 
