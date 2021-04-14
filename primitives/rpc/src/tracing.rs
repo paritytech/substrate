@@ -45,7 +45,7 @@ pub struct BlockTrace {
 #[serde(rename_all = "camelCase")]
 pub struct Event {
 	/// Event name
-	pub name: String,
+	// pub name: String, // This is just the file and line number .. not to helpful imo - zeke
 	/// Event target
 	pub target: String,
 	/// Associated data
