@@ -66,6 +66,9 @@ pub mod ecdsa {
 /// The `ConsensusEngineId` of BEEFY.
 pub const BEEFY_ENGINE_ID: sp_runtime::ConsensusEngineId = *b"BEEF";
 
+/// Authority set id starts with zero at genesis
+pub const GENESIS_AUTHORITY_SET_ID: u64 = 0;
+
 /// A typedef for validator set id.
 pub type ValidatorSetId = u64;
 
