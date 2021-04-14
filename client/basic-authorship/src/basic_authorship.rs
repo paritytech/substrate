@@ -90,8 +90,8 @@ impl<A, B, C> ProposerFactory<A, B, C, DisableProofRecording> {
 			default_block_size_limit: DEFAULT_BLOCK_SIZE_LIMIT,
 			telemetry,
 			client,
-			_phantom: PhantomData,
 			include_proof_in_block_size_estimation: false,
+			_phantom: PhantomData,
 		}
 	}
 }
