@@ -29,7 +29,7 @@ use substrate_test_runtime_client::{
 	BlockBuilderExt, DefaultTestClientBuilderExt, TestClientBuilderExt, ClientExt,
 };
 use sc_client_api::{
-	StorageProvider, BlockBackend, in_mem, BlockchainEvents,
+	in_mem, Backend as _, BlockBackend, BlockchainEvents, StorageProvider,
 };
 use sc_client_db::{
 	Backend, DatabaseSettings, DatabaseSettingsSrc, PruningMode, KeepBlocks, TransactionStorageMode
@@ -1995,11 +1995,45 @@ fn mark_bad_block_works() {
 	// block as it is the deepest block available
 	client.mark_bad(a7).unwrap();
 
-	assert_eq!(client.info().best_hash, a6,);
+	assert_eq!(client.info().best_hash, a6);
 
 	// marking block a3 as bad should invalidate the whole fork making b5
 	// the best block
 	client.mark_bad(a3).unwrap();
 
-	assert_eq!(client.info().best_hash, b5,);
+	assert_eq!(client.info().best_hash, b5);
+
+	// block data for "bad" blocks should still be available
+	assert!(client.header(&BlockId::Hash(a3)).unwrap().is_some());
+	assert!(client.header(&BlockId::Hash(a6)).unwrap().is_some());
+
+	// but importing anything on top of these blocks should be rejected
+	let mut builder = client
+		.new_block_at(&BlockId::Hash(a3), Default::default(), false)
+		.unwrap();
+
+	// add a transfer so that the block doesn't have the same hash as the previously generated a4
+	builder
+		.push_transfer(Transfer {
+			from: AccountKeyring::Bob.into(),
+			to: AccountKeyring::Ferdie.into(),
+			amount: 42,
+			nonce: 0,
+		})
+		.unwrap();
+
+	let block = builder.build().unwrap().block;
+
+	let params = BlockCheckParams {
+		hash: block.hash().clone(),
+		number: 4,
+		parent_hash: a3,
+		allow_missing_state: false,
+		import_existing: false,
+	};
+
+	assert_eq!(
+		block_on(client.check_block(params)).unwrap(),
+		ImportResult::imported(false)
+	);
 }
