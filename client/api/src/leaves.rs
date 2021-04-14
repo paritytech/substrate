@@ -220,7 +220,8 @@ impl<H, N> LeafSet<H, N> where
 
 	/// Revert all leaves from any forks descending from the given block hash,
 	/// inclusive. This method will re-add the parent block hash as a leaf if no
-	/// leaf descending from it already exists.
+	/// leaf descending from it already exists. Returns the hashes of all reverted
+	/// leaves.
 	pub fn revert_block<F>(
 		&mut self,
 		number: N,

@@ -478,7 +478,7 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	/// Attemps to "ghost" the given block and all forks descending from it. This will remove all
 	/// leaves descending from this block and will re-org the chain to a new best block. If there's
 	/// no alternative longer fork descending from the given block then its parent will be set as the
-	/// new best.
+	/// new best. Returns the hash of the new best block and the hashes of all reverted leaves.
 	///
 	/// Ghosting a block is distinguished from reverting a block in that no data is actually removed
 	/// from the database, all block data will still be available provided that you know the block

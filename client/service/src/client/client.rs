@@ -1111,6 +1111,59 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok(number)
 	}
 
+	/// Marks the given block and all of its descendents as being bad blocks. This method
+	/// will "ghost" all the blocks that descend from this one (inclusive), i.e. they will
+	/// not be removed from the database but they will only be accessible through their
+	/// hash. This method will re-org the chain to a new best block and from then on the
+	/// client will refuse to import any block that builds on top of this one (or any of
+	/// its descendants). Returns the hash of the new best block and the hashes of all
+	/// reverted leafs.
+	pub fn mark_bad(
+		&mut self,
+		hash: Block::Hash,
+	) -> sp_blockchain::Result<(Block::Hash, Vec<Block::Hash>)> {
+		let number = self
+			.backend
+			.blockchain()
+			.expect_block_number_from_id(&BlockId::Hash(hash))?;
+
+		if number <= self.backend.blockchain().info().finalized_number {
+			return Err(Error::Backend(
+				"Can't mark finalized blocks as bad".to_string(),
+			));
+		}
+
+		// ghost the given block and its descendants
+		let (new_best, reverted) = self.backend.ghost(hash)?;
+
+		// mark all ghosted blocks as bad, i.e. go through all reverted leaves
+		// and iterate backwards to the block being marked as bad.
+		for reverted_hash in &reverted {
+			let mut current_header = self
+				.backend
+				.blockchain()
+				.expect_header(BlockId::Hash(*reverted_hash))?;
+
+			loop {
+				if current_header.hash() == hash {
+					break;
+				}
+
+				self.block_rules.mark_bad(current_header.hash());
+
+				current_header = self
+					.backend
+					.blockchain()
+					.expect_header(BlockId::Hash(*current_header.parent_hash()))?;
+			}
+		}
+
+		// mark the original bad block
+		self.block_rules.mark_bad(hash);
+
+		Ok((new_best, reverted))
+	}
+
 	/// Get blockchain info.
 	pub fn chain_info(&self) -> blockchain::Info<Block> {
 		self.backend.blockchain().info()
