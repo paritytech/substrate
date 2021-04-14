@@ -27,14 +27,14 @@ use crate::{
 use sp_runtime::generic::{Digest, DigestItem};
 pub use sp_runtime::TransactionOutcome;
 
+pub mod unhashed;
+pub mod hashed;
 pub mod bounded_vec;
 pub mod child;
 #[doc(hidden)]
 pub mod generator;
-pub mod hashed;
 pub mod migration;
 pub mod types;
-pub mod unhashed;
 
 #[cfg(all(feature = "std", any(test, debug_assertions)))]
 mod debug_helper {
