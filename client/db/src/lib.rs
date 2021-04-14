@@ -1835,17 +1835,21 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		}
 
 		let mut transaction = Transaction::new();
-		let mut leaves = self.blockchain.leaves.write();
 
 		// revert all leaves that descend from this block
-		let reverted = leaves.revert_block(
-			*header.number(),
-			header.hash(),
-			*header.parent_hash(),
-			is_descendent_of(self.blockchain(), None),
-		)?;
+		let reverted = {
+			let mut leaves = self.blockchain.leaves.write();
 
-		leaves.prepare_transaction(&mut transaction, columns::META, meta_keys::LEAF_PREFIX);
+			let reverted = leaves.revert_block(
+				*header.number(),
+				header.hash(),
+				*header.parent_hash(),
+				is_descendent_of(self.blockchain(), None),
+			)?;
+
+			leaves.prepare_transaction(&mut transaction, columns::META, meta_keys::LEAF_PREFIX);
+			reverted
+		};
 
 		// leaves have been updated so we can find the new best block, either some longer fork
 		// exists that doesn't include the given block, or its parent will become the new best.
@@ -1864,6 +1868,9 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 
 		// commit all changes to db
 		self.storage.db.commit(transaction)?;
+
+		// update metadata as this is not done by `set_head_with_transaction`
+		self.blockchain.update_meta(new_best.hash(), *new_best.number(), true, false);
 
 		Ok((new_best.hash(), reverted))
 	}
@@ -3045,5 +3052,58 @@ pub(crate) mod tests {
 				assert!(bc.indexed_transaction(&x1_hash).unwrap().is_none());
 			}
 		}
+	}
+
+	#[test]
+	fn ghosting_block_works() {
+		let backend = Backend::<Block>::new_test(1000, 100);
+		let blockchain = backend.blockchain();
+		let genesis = insert_header(&backend, 0, Default::default(), None, Default::default());
+
+		// fork from genesis: 3 prong.
+		let a1 = insert_header(&backend, 1, genesis, None, Default::default());
+		let a2 = insert_header(&backend, 2, a1, None, Default::default());
+		let a3 = insert_header(&backend, 3, a2, None, Default::default());
+		let a4 = insert_header(&backend, 4, a3, None, Default::default());
+
+		// fork from genesis: 2 prong.
+		let b1 = insert_header(&backend, 1, genesis, None, H256::from([1; 32]));
+		let b2 = insert_header(&backend, 2, b1, None, Default::default());
+
+		// ghosting block a4 should lead to block a3 becoming the new best block
+		let (new_best, reverted) = backend.ghost(a4).unwrap();
+
+		assert_eq!(
+			new_best,
+			a3,
+		);
+
+		assert_eq!(
+			blockchain.info().best_hash,
+			a3,
+		);
+
+		assert_eq!(
+			reverted,
+			vec![a4],
+		);
+
+		// ghosting block a1 should lead to block b2 becoming the new best block
+		let (new_best, reverted) = backend.ghost(a1).unwrap();
+
+		assert_eq!(
+			new_best,
+			b2,
+		);
+
+		assert_eq!(
+			blockchain.info().best_hash,
+			b2,
+		);
+
+		assert_eq!(
+			reverted,
+			vec![a3],
+		);
 	}
 }
