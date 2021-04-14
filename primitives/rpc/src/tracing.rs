@@ -19,13 +19,14 @@
 
 use serde::{Serialize, Deserialize};
 use tracing_core::{Field, Level};
-use tracing_core::field::Visit;
+// use tracing_core::field::Visit;
 
 use std::collections::HashMap;
-use std::time::Duration;
+// use std::time::Duration;
 
 /// Container for all related spans and events for the block being traced.
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct BlockTrace {
 	/// Hash of the block being traced
 	pub block_hash: String,
@@ -41,6 +42,7 @@ pub struct BlockTrace {
 
 /// Represents a tracing event, complete with values
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct Event {
 	/// Event name
 	pub name: String,
@@ -57,6 +59,7 @@ pub struct Event {
 /// Exiting a span does not imply that the span will not be re-entered,
 /// so there is a complete record of all entry & exit times
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct Span {
 	/// id for this span
 	pub id: u64,
@@ -72,6 +75,7 @@ pub struct Span {
 
 /// Holds associated values for a tracing span
 #[derive(Serialize, Deserialize, Default, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct Data {
 	/// HashMap of `String` values
 	pub string_values: HashMap<String, String>,
