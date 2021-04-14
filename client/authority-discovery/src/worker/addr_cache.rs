@@ -174,6 +174,25 @@ mod tests {
 		}
 	}
 
+	#[derive(Clone, Debug)]
+	struct TestMultiaddrsSamePeerCombo(Multiaddr, Multiaddr);
+
+	impl Arbitrary for TestMultiaddrsSamePeerCombo {
+		fn arbitrary(g: &mut Gen) -> Self {
+			let seed = (0..32).map(|_| u8::arbitrary(g)).collect::<Vec<_>>();
+			let peer_id = PeerId::from_multihash(
+				Multihash::wrap(multihash::Code::Sha2_256.into(), &seed).unwrap()
+			).unwrap();
+			let multiaddr1 = "/ip6/2001:db8:0:0:0:0:0:2/tcp/30333".parse::<Multiaddr>()
+				.unwrap()
+				.with(Protocol::P2p(peer_id.clone().into()));
+			let multiaddr2 = "/ip6/2002:db8:0:0:0:0:0:2/tcp/30133".parse::<Multiaddr>()
+				.unwrap()
+				.with(Protocol::P2p(peer_id.into()));
+			TestMultiaddrsSamePeerCombo(multiaddr1, multiaddr2)
+		}
+	}
+
 	#[test]
 	fn retains_only_entries_of_provided_authority_ids() {
 		fn property(
@@ -228,18 +247,18 @@ mod tests {
 			authority2: TestAuthorityId,
 			multiaddr1: TestMultiaddr,
 			multiaddr2: TestMultiaddr,
-			multiaddr3: TestMultiaddr,
+			multiaddr3: TestMultiaddrsSamePeerCombo,
 		) -> TestResult {
 			let authority1 = authority1.0;
 			let authority2 = authority2.0;
 			let multiaddr1 = multiaddr1.0;
 			let multiaddr2 = multiaddr2.0;
-			let multiaddr3 = multiaddr3.0;
+			let TestMultiaddrsSamePeerCombo(multiaddr3, multiaddr4) = multiaddr3;
 
 			let mut cache = AddrCache::new();
 
 			cache.insert(authority1.clone(), vec![multiaddr1.clone()]);
-			cache.insert(authority1.clone(), vec![multiaddr2.clone(), multiaddr3.clone()]);
+			cache.insert(authority1.clone(), vec![multiaddr2.clone(), multiaddr3.clone(), multiaddr4.clone()]);
 
 			assert_eq!(
 				None,
@@ -253,6 +272,10 @@ mod tests {
 				Some(&authority1),
 				cache.get_authority_id_by_peer_id(&peer_id_from_multiaddr(&multiaddr3).unwrap())
 			);
+			assert_eq!(
+				Some(&authority1),
+				cache.get_authority_id_by_peer_id(&peer_id_from_multiaddr(&multiaddr4).unwrap())
+			);
 
 			cache.insert(authority2.clone(), vec![multiaddr2.clone()]);
 
@@ -264,6 +287,19 @@ mod tests {
 				Some(&authority1),
 				cache.get_authority_id_by_peer_id(&peer_id_from_multiaddr(&multiaddr3).unwrap())
 			);
+			assert_eq!(cache.get_addresses_by_authority_id(&authority1).unwrap().len(), 2);
+
+			cache.insert(authority2.clone(), vec![multiaddr2.clone(), multiaddr3.clone()]);
+
+			assert_eq!(
+				Some(&authority2),
+				cache.get_authority_id_by_peer_id(&peer_id_from_multiaddr(&multiaddr2).unwrap())
+			);
+			assert_eq!(
+				Some(&authority2),
+				cache.get_authority_id_by_peer_id(&peer_id_from_multiaddr(&multiaddr3).unwrap())
+			);
+			assert!(cache.get_addresses_by_authority_id(&authority1).unwrap().is_empty());
 
 			TestResult::passed()
 		}
