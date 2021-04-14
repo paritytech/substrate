@@ -247,7 +247,7 @@ impl Sandbox for FunctionExecutor {
 			.instance(instance_id).map_err(|e| e.to_string())?;
 
 		let result = EXECUTOR.set(self, || {
-			instance.invoke::<_, CapsHolder>(export_name, &args, state)
+			instance.invoke::<_, CapsHolder, ThunkHolder>(export_name, &args, state)
 		});
 
 		match result {
@@ -363,6 +363,10 @@ impl sandbox::DispatchThunkHolder for ThunkHolder {
 		assert!(DISPATCH_THUNK.is_set(), "dispatch thunk is not set");
 		DISPATCH_THUNK.with(|thunk| f(&mut thunk.clone()))
 	}
+
+	fn initialize_thunk<R, F>(s: &Self::DispatchThunk, f: F) -> R where F: FnOnce() -> R {
+		DISPATCH_THUNK.set(s, f)
+    }
 }
 
 /// Will be used on initialization of a module to resolve function and memory imports.

@@ -378,7 +378,7 @@ impl<FR> SandboxInstance<FR> {
 	///
 	/// The `state` parameter can be used to provide custom data for
 	/// these syscall implementations.
-	pub fn invoke<'a, FE, SCH>(
+	pub fn invoke<'a, FE, SCH, DTH>(
 		&self,
 
 		// function to call that is exported from the module
@@ -395,7 +395,8 @@ impl<FR> SandboxInstance<FR> {
 	) -> std::result::Result<Option<wasmi::RuntimeValue>, wasmi::Error>
 	where
 		FE: SandboxCapabilities<SupervisorFuncRef = FR> + 'a,
-		SCH: SandboxCapabiliesHolder<SupervisorFuncRef = FR, SC = FE>
+		SCH: SandboxCapabiliesHolder<SupervisorFuncRef = FR, SC = FE>,
+		DTH: DispatchThunkHolder<DispatchThunk = FR>,
 	{
 		SCH::with_sandbox_capabilities( |supervisor_externals| {
 			with_guest_externals(
@@ -468,8 +469,7 @@ impl<FR> SandboxInstance<FR> {
 								})
 								.collect();
 
-							let wasmer_result = function
-								.call(&args)
+							let wasmer_result = DTH::initialize_thunk(&self.dispatch_thunk, || function.call(&args))
 								.map_err(|e| wasmi::Error::Function(e.to_string()))?;
 
 							assert!(wasmer_result.len() < 2, "multiple return types are not supported yet");
@@ -653,6 +653,11 @@ pub trait SandboxCapabiliesHolder {
 pub trait DispatchThunkHolder {
 	/// Dispatch thunk for this particular context
 	type DispatchThunk;
+
+	/// Provide `DispatchThunk` for the runtime method call and execute the given function `f`.
+	///
+	/// During the execution of the provided function `dispatch_thunk` will be callable.
+	fn initialize_thunk<R, F>(s: &Self::DispatchThunk, f: F) -> R where F: FnOnce() -> R;
 
 	/// Wrapper that provides dispatch thunk in a limited context
 	fn with_dispatch_thunk<R, F: FnOnce(&mut Self::DispatchThunk) -> R>(f: F) -> R;

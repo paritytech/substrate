@@ -335,7 +335,7 @@ impl Sandbox for HostState {
 			.instance(instance_id)
 			.map_err(|e| e.to_string())?;
 
-		let result = instance.invoke::<_, CapsHolder>(export_name, &args, state);
+		let result = instance.invoke::<_, CapsHolder, ThunkHolder>(export_name, &args, state);
 
 		match result {
 			Ok(None) => Ok(sandbox_primitives::ERR_OK),
@@ -454,5 +454,9 @@ impl sandbox::DispatchThunkHolder for ThunkHolder {
 	fn with_dispatch_thunk<R, F: FnOnce(&mut Self::DispatchThunk) -> R>(f: F) -> R {
 		assert!(DISPATCH_THUNK.is_set(), "dispatch thunk is not set");
 		DISPATCH_THUNK.with(|thunk| f(&mut thunk.clone()))
+	}
+
+	fn initialize_thunk<R, F>(s: &Self::DispatchThunk, f: F) -> R where F: FnOnce() -> R {
+		DISPATCH_THUNK.set(s, f)
 	}
 }
