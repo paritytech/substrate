@@ -101,7 +101,8 @@ impl<A, B, C> ProposerFactory<A, B, C, EnableProofRecording> {
 	///
 	/// Each proposer created by this instance will record a proof while building a block.
 	///
-	/// This will also include the proof into the estimation of the block size. This can be
+	/// This will also include the proof into the estimation of the block size. This can be disabled
+	/// by calling [`ProposerFactory::disable_proof_in_block_size_estimation`].
 	pub fn with_proof_recording(
 		spawn_handle: impl SpawnNamed + 'static,
 		client: Arc<C>,
