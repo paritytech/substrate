@@ -45,6 +45,37 @@ pub enum Error {
 	Other(String)
 }
 
+/// Return type for key lookups
+#[derive(Debug, PartialEq)]
+pub enum HasKeys {
+    /// No key found
+	None,
+    /// Found some key(s)
+	Found(Vec<usize>),
+    /// Found all keys
+	FoundAll(Vec<usize>)
+}
+
+impl HasKeys {
+    /// Was any key found in the store.
+    pub fn found_any(&self) -> bool {
+        matches!(self, Self::Found(_) | Self::FoundAll(_))
+    }
+
+    /// Where all keys found in the store.
+    pub fn found_all(&self) -> bool {
+        matches!(self, Self::FoundAll(_))
+    }
+
+    /// Create an iterator over the found key indices.
+    pub fn into_found(self) -> impl Iterator<Item = usize> {
+        match self {
+            Self::None => Vec::new().into_iter(),
+            Self::Found(found) | Self::FoundAll(found) => found.into_iter(),
+        }
+    }
+}
+
 /// Something that generates, stores and provides access to keys.
 #[async_trait]
 pub trait CryptoStore: Send + Sync {
@@ -114,9 +145,12 @@ pub trait CryptoStore: Send + Sync {
 
 	/// Checks if the private keys for the given public key and key type combinations exist.
 	///
-	/// Returns the indices of the matching keys in `public_keys`. Call `is_empty()` on the returned
-	/// list to check if no keys match.
-	async fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> Vec<usize>;
+	/// Returns the indices of the matching keys in `public_keys`.
+	///
+	/// Call `found_any()` on the returned enum to check if *any* keys match.
+	/// Call `found_all()` on the returned enum to check if *all* keys match.
+	/// Call `into_found()` to iterate the returned key indices.
+	async fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> HasKeys;
 
 	/// Sign with key
 	///
@@ -277,7 +311,7 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 	///
 	/// Returns the indices of the matching keys in `public_keys`. Call `is_empty()` on the returned
 	/// list to check if no keys match.
-	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> Vec<usize>;
+	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> HasKeys;
 
 	/// Sign with key
 	///
