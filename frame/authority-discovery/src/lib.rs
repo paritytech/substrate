@@ -156,9 +156,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 }
 
 impl GenesisConfig {
-	/// Direct implementation of `GenesisBuild::assimilate_storage`.
-	///
-	/// Kept in order not to break dependency.
+	/// Direct implementation of `GenesisBuild::assimilate_storage`.	
 	pub	fn assimilate_storage<T: Config>(
 		&self,
 		storage: &mut sp_runtime::Storage
