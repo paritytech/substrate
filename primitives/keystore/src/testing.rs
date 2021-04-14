@@ -372,6 +372,32 @@ mod tests {
 		assert!(public_keys.contains(&key_pair.public().into()));
 	}
 
+	fn vrf_transcript() -> VRFTranscriptData {
+		use std::borrow::Cow;
+
+		VRFTranscriptData {
+			label: Cow::from(&b"Test"[..]),
+			items: vec![
+				(Cow::from(&b"one"[..]), VRFTranscriptValue::U64(1)),
+				(Cow::from(&b"two"[..]), VRFTranscriptValue::U64(2)),
+				(Cow::from(&b"three"[..]), VRFTranscriptValue::Bytes("test".as_bytes().to_vec())),
+			]
+		}
+	}
+
+	fn vrf_transcript_owned() -> VRFTranscriptData {
+		use std::borrow::Cow;
+
+		VRFTranscriptData {
+			label: Cow::from(b"Test"[..].to_vec()),
+			items: vec![
+				(Cow::from(b"one"[..].to_vec()), VRFTranscriptValue::U64(1)),
+				(Cow::from(b"two"[..].to_vec()), VRFTranscriptValue::U64(2)),
+				(Cow::from(b"three"[..].to_vec()), VRFTranscriptValue::Bytes("test".as_bytes().to_vec())),
+			]
+		}
+	}
+
 	#[test]
 	fn vrf_sign() {
 		let store = KeyStore::new();
@@ -379,14 +405,41 @@ mod tests {
 		let secret_uri = "//Alice";
 		let key_pair = sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");
 
-		let transcript_data = VRFTranscriptData {
-			label: b"Test",
-			items: vec![
-				("one", VRFTranscriptValue::U64(1)),
-				("two", VRFTranscriptValue::U64(2)),
-				("three", VRFTranscriptValue::Bytes("test".as_bytes().to_vec())),
-			]
-		};
+		let transcript_data = vrf_transcript();
+
+		let result = SyncCryptoStore::sr25519_vrf_sign(
+			&store,
+			SR25519,
+			&key_pair.public(),
+			transcript_data.clone(),
+		);
+		assert!(result.is_err());
+
+		SyncCryptoStore::insert_unknown(
+			&store,
+			SR25519,
+			secret_uri,
+			key_pair.public().as_ref(),
+		).expect("Inserts unknown key");
+
+		let result = SyncCryptoStore::sr25519_vrf_sign(
+			&store,
+			SR25519,
+			&key_pair.public(),
+			transcript_data,
+		);
+
+		assert!(result.is_ok());
+	}
+
+	#[test]
+	fn vrf_sign_owned() {
+		let store = KeyStore::new();
+
+		let secret_uri = "//Alice";
+		let key_pair = sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");
+
+		let transcript_data = vrf_transcript_owned();
 
 		let result = SyncCryptoStore::sr25519_vrf_sign(
 			&store,

@@ -109,12 +109,14 @@ pub fn make_transcript_data(
 	slot: Slot,
 	epoch: u64,
 ) -> VRFTranscriptData {
+	use std::borrow::Cow;
+
 	VRFTranscriptData {
-		label: &BABE_ENGINE_ID,
+		label: Cow::from(&BABE_ENGINE_ID[..]),
 		items: vec![
-			("slot number", VRFTranscriptValue::U64(*slot)),
-			("current epoch", VRFTranscriptValue::U64(epoch)),
-			("chain randomness", VRFTranscriptValue::Bytes(randomness.to_vec())),
+			(Cow::from(&b"slot number"[..]), VRFTranscriptValue::U64(*slot)),
+			(Cow::from(&b"current epoch"[..]), VRFTranscriptValue::U64(epoch)),
+			(Cow::from(&b"chain randomness"[..]), VRFTranscriptValue::Bytes(randomness.to_vec())),
 		]
 	}
 }
