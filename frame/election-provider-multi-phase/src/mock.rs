@@ -17,6 +17,7 @@
 
 use super::*;
 use crate as multi_phase;
+use multi_phase::unsigned::{Voter, Assignment};
 pub use frame_support::{assert_noop, assert_ok};
 use frame_support::{
 	parameter_types,
@@ -95,18 +96,56 @@ pub fn roll_to_with_ocw(n: u64) {
 	}
 }
 
+/// Compute voters and assignments for this runtime.
+///
+/// Just a helper for trimming tests.
+pub fn voters_and_assignments() -> (Vec<Voter<Runtime>>, Vec<Assignment<Runtime>>) {
+	let RoundSnapshot { voters, targets } = MultiPhase::snapshot().unwrap();
+	let desired_targets = MultiPhase::desired_targets().unwrap();
+
+	let ElectionResult { assignments, .. } = seq_phragmen::<_, CompactAccuracyOf<Runtime>>(
+		desired_targets as usize,
+		targets,
+		voters.clone(),
+		None,
+	)
+	.unwrap();
+
+	(voters, assignments)
+}
+
+/// Convert voters and assignments into a verifiable raw solution.
+///
+/// If you don't need to mess with `voters` and `assignments`, [`raw_solution`] is more efficient.
+///
+/// It's important that voters and assignments retain their correspondence.
+pub fn make_compact_from(
+	voters: Vec<Voter<Runtime>>,
+	assignments: Vec<Assignment<Runtime>>,
+) -> CompactOf<Runtime> {
+	// voters and assignments may have different length, but the voter ID must correspond at each
+	// position.
+	let voter_ids = voters.iter().map(|(who, _, _)| who).cloned();
+	let assignment_ids = assignments.iter().map(|assignment| assignment.who);
+	assert!(voter_ids
+		.zip(assignment_ids)
+		.all(|(voter_id, assignment_id)| voter_id == assignment_id));
+
+	let RoundSnapshot { targets, .. } = MultiPhase::snapshot().unwrap();
+
+	// closures
+	let voter_index = helpers::voter_index_fn_linear::<Runtime>(&voters);
+	let target_index = helpers::target_index_fn_linear::<Runtime>(&targets);
+
+	<CompactOf<Runtime>>::from_assignment(assignments, &voter_index, &target_index).unwrap()
+}
+
 /// Spit out a verifiable raw solution.
 ///
 /// This is a good example of what an offchain miner would do.
 pub fn raw_solution() -> RawSolution<CompactOf<Runtime>> {
 	let RoundSnapshot { voters, targets } = MultiPhase::snapshot().unwrap();
 	let desired_targets = MultiPhase::desired_targets().unwrap();
-
-	// closures
-	let cache = helpers::generate_voter_cache::<Runtime>(&voters);
-	let voter_index = helpers::voter_index_fn_linear::<Runtime>(&voters);
-	let target_index = helpers::target_index_fn_linear::<Runtime>(&targets);
-	let stake_of = helpers::stake_of_fn::<Runtime>(&voters, &cache);
 
 	let ElectionResult { winners, assignments } = seq_phragmen::<_, CompactAccuracyOf<Runtime>>(
 		desired_targets as usize,
@@ -115,6 +154,12 @@ pub fn raw_solution() -> RawSolution<CompactOf<Runtime>> {
 		None,
 	)
 	.unwrap();
+
+	// closures
+	let cache = helpers::generate_voter_cache::<Runtime>(&voters);
+	let voter_index = helpers::voter_index_fn_linear::<Runtime>(&voters);
+	let target_index = helpers::target_index_fn_linear::<Runtime>(&targets);
+	let stake_of = helpers::stake_of_fn::<Runtime>(&voters, &cache);
 
 	let winners = to_without_backing(winners);
 

@@ -222,15 +222,18 @@ impl<T: Config> Pallet<T> {
 	/// Sort the `voters` and `assignments` lists by decreasing voter stake.
 	///
 	/// [`trim_assignments_weight`] and [`trim_assignments_length`] both depend on this property
-	/// on the `assignments` list for efficient computation. Meanwhile, certain other helper closures
-	/// depend on `voters` and `assignments` corresponding, so we have to sort both.
-	fn sort_by_decreasing_stake(
-		voters: &mut [Voter<T>],
-		assignments: &mut [Assignment<T>],
-	) {
-		let stakes: BTreeMap<_, _> = voters.iter().map(|(who, stake, _)| {
-			(who.clone(), *stake)
-		}).collect();
+	/// on the `assignments` list for efficient computation. Meanwhile, certain other helper
+	/// closures depend on `voters` and `assignments` corresponding, so we have to sort both.
+	fn sort_by_decreasing_stake(voters: &mut [Voter<T>], assignments: &mut [Assignment<T>]) {
+		// verify precondition
+		debug_assert!({
+			let voter_ids = voters.iter().map(|(who, _, _)| who).cloned();
+			let assignment_ids = assignments.iter().map(|assignment| assignment.who.clone());
+			voter_ids.zip(assignment_ids).all(|(voter_id, assignment_id)| voter_id == assignment_id)
+		});
+
+		let stakes: BTreeMap<_, _> =
+			voters.iter().map(|(who, stake, _)| (who.clone(), *stake)).collect();
 
 		// `Reverse` just reverses the meaning of this key's ordering, so the greatest items come
 		// first without needing to explicitly call `reverse` afterwards.
@@ -254,6 +257,13 @@ impl<T: Config> Pallet<T> {
 		// we sort stably so the lists stay synchronized
 		voters.sort_by_key(|(who, _, _)| stake_of!(who));
 		assignments.sort_by_key(|Assignment::<T> { who, .. }| stake_of!(who));
+
+		// verify postcondition
+		debug_assert!({
+			let voter_ids = voters.iter().map(|(who, _, _)| who).cloned();
+			let assignment_ids = assignments.iter().map(|assignment| assignment.who.clone());
+			voter_ids.zip(assignment_ids).all(|(voter_id, assignment_id)| voter_id == assignment_id)
+		});
 	}
 
 	/// Greedily reduce the size of the solution to fit into the block w.r.t. weight.
@@ -579,12 +589,13 @@ mod max_weight {
 
 #[cfg(test)]
 mod tests {
-	use super::{
-		mock::{Origin, *},
-		Call, *,
+	use super::*;
+	use crate::mock::{
+		assert_noop, assert_ok, ExtBuilder, Extrinsic, make_compact_from,
+		MinerMaxWeight, MultiPhase, Origin, roll_to_with_ocw, roll_to, Runtime,
+		TestCompact, voters_and_assignments, witness,
 	};
 	use frame_support::{dispatch::Dispatchable, traits::OffchainWorker};
-	use helpers::voter_index_fn_linear;
 	use mock::Call as OuterCall;
 	use frame_election_provider_support::Assignment;
 	use sp_runtime::{traits::ValidateUnsigned, PerU16};
@@ -970,90 +981,81 @@ mod tests {
 	}
 
 	#[test]
-	fn trim_compact_length_does_not_modify_when_short_enough() {
+	fn trim_assignments_length_does_not_modify_when_short_enough() {
 		let mut ext = ExtBuilder::default().build();
 		ext.execute_with(|| {
 			roll_to(25);
 
 			// given
-			let RoundSnapshot { voters, ..} = MultiPhase::snapshot().unwrap();
-			let RawSolution { mut compact, .. } = raw_solution();
+			let (mut voters, mut assignments) = voters_and_assignments();
+			let compact = make_compact_from(voters.clone(), assignments.clone());
 			let encoded_len = compact.encode().len() as u32;
 			let compact_clone = compact.clone();
 
 			// when
-			assert!(encoded_len < <Runtime as Config>::MinerMaxLength::get());
+			MultiPhase::sort_by_decreasing_stake(&mut voters, &mut assignments);
+			MultiPhase::trim_assignments_length(encoded_len, &mut assignments);
 
 			// then
-			compact = MultiPhase::trim_compact_length(
-				encoded_len,
-				compact,
-				voter_index_fn_linear::<Runtime>(&voters),
-			).unwrap();
+			let compact = make_compact_from(voters, assignments);
 			assert_eq!(compact, compact_clone);
 		});
 	}
 
 	#[test]
-	fn trim_compact_length_modifies_when_too_long() {
+	fn trim_assignments_length_modifies_when_too_long() {
 		let mut ext = ExtBuilder::default().build();
 		ext.execute_with(|| {
 			roll_to(25);
 
-			let RoundSnapshot { voters, ..} =
-				MultiPhase::snapshot().unwrap();
-
-			let RawSolution { mut compact, .. } = raw_solution();
-			let encoded_len = compact.encoded_size() as u32;
+			// given
+			let (mut voters, mut assignments) = voters_and_assignments();
+			let compact = make_compact_from(voters.clone(), assignments.clone());
+			let encoded_len = compact.encode().len() as u32;
 			let compact_clone = compact.clone();
 
-			compact = MultiPhase::trim_compact_length(
-				encoded_len - 1,
-				compact,
-				voter_index_fn_linear::<Runtime>(&voters),
-			).unwrap();
+			// when
+			MultiPhase::sort_by_decreasing_stake(&mut voters, &mut assignments);
+			MultiPhase::trim_assignments_length(encoded_len - 1, &mut assignments);
 
+			// then
+			let compact = make_compact_from(voters, assignments);
 			assert_ne!(compact, compact_clone);
 			assert!((compact.encoded_size() as u32) < encoded_len);
 		});
 	}
 
 	#[test]
-	fn trim_compact_length_trims_lowest_stake() {
+	fn trim_assignments_length_trims_lowest_stake() {
 		let mut ext = ExtBuilder::default().build();
 		ext.execute_with(|| {
 			roll_to(25);
 
-			let RoundSnapshot { voters, ..} =
-				MultiPhase::snapshot().unwrap();
-
-			let RawSolution { mut compact, .. } = raw_solution();
-			let encoded_len = compact.encoded_size() as u32;
-			let voter_count = compact.voter_count();
+			// given
+			let (mut voters, mut assignments) = voters_and_assignments();
+			let compact = make_compact_from(voters.clone(), assignments.clone());
+			let encoded_len = compact.encode().len() as u32;
+			let voter_count = voters.len();
 			let min_stake_voter = voters.iter()
 				.map(|(id, weight, _)| (weight, id))
 				.min()
-				.map(|(_, id)| id)
+				.map(|(_, id)| *id)
 				.unwrap();
+			// test precondition
+			assert_eq!(voter_count, compact.voter_count());
 
+			// when
+			MultiPhase::sort_by_decreasing_stake(&mut voters, &mut assignments);
+			MultiPhase::trim_assignments_length(encoded_len - 1, &mut assignments);
 
-			compact = MultiPhase::trim_compact_length(
-				encoded_len - 1,
-				compact,
-				voter_index_fn_linear::<Runtime>(&voters),
-			).unwrap();
-
-			assert_eq!(compact.voter_count(), voter_count - 1, "we must have removed exactly 1 voter");
-
-			let assignments = compact.into_assignment(
-				|voter| Some(voter as AccountId),
-				|target| Some(target as AccountId),
-			).unwrap();
+			// then
 			assert!(
 				assignments.iter()
-					.all(|Assignment{ who, ..}| who != min_stake_voter),
+					.all(|Assignment{ who, ..}| *who != min_stake_voter),
 				"min_stake_voter must no longer be in the set of voters",
 			);
+			let compact = make_compact_from(voters, assignments);
+			assert_eq!(compact.voter_count(), voter_count - 1, "we must have removed exactly 1 voter");
 		});
 	}
 
