@@ -18,7 +18,7 @@
 pub use frame_metadata::{
 	DecodeDifferent, FnEncode, RuntimeMetadata, ModuleMetadata, RuntimeMetadataLastVersion,
 	DefaultByteGetter, RuntimeMetadataPrefixed, StorageEntryMetadata, StorageMetadata,
-	StorageEntryType, StorageEntryModifier, DefaultByte, StorageHasher, ModuleErrorMetadata,
+	StorageEntryType, StorageEntryModifier, DefaultByte, StorageHasher,
 	ExtrinsicMetadata,
 };
 pub use frame_metadata2;
@@ -127,7 +127,7 @@ macro_rules! __runtime_modules_to_metadata {
 					$mod, $module $( <$instance> )?, $runtime, $(with $kw)*
 				),
 				constants: $mod::$module::<$runtime $(, $mod::$instance )?>::module_constants_metadata(),
-				errors: <$mod::$module::<$runtime $(, $mod::$instance )?> as $crate::metadata::ModuleErrorMetadata>::metadata(),
+				errors: <$mod::$module::<$runtime $(, $mod::$instance )?> as $crate::error::ModuleErrorMetadata>::metadata(),
 			};
 			$( $rest )*
 		)
