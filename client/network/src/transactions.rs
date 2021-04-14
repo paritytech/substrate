@@ -360,7 +360,7 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 	) {
 		// sending transaction to light node is considered a bad behavior
 		if matches!(self.local_role, config::Role::Light) {
-			trace!(target: "sync", "Peer {} is trying to send transactions to the light node", who);
+			debug!(target: "sync", "Peer {} is trying to send transactions to the light node", who);
 			self.service.disconnect_peer(who, self.protocol_name.clone());
 			self.service.report_peer(who, rep::UNEXPECTED_TRANSACTIONS);
 			return;

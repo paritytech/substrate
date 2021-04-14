@@ -50,7 +50,7 @@ pub struct TransactionRef<Hash, Ex> {
 
 impl<Hash, Ex> Clone for TransactionRef<Hash, Ex> {
 	fn clone(&self) -> Self {
-		TransactionRef {
+		Self {
 			transaction: self.transaction.clone(),
 			insertion_id: self.insertion_id,
 		}
@@ -93,7 +93,7 @@ pub struct ReadyTx<Hash, Ex> {
 
 impl<Hash: Clone, Ex> Clone for ReadyTx<Hash, Ex> {
 	fn clone(&self) -> Self {
-		ReadyTx {
+		Self {
 			transaction: self.transaction.clone(),
 			unlocks: self.unlocks.clone(),
 			requires_offset: self.requires_offset,
@@ -128,7 +128,7 @@ impl<Hash, Ex> tracked_map::Size for ReadyTx<Hash, Ex> {
 
 impl<Hash: hash::Hash + Eq, Ex> Default for ReadyTransactions<Hash, Ex> {
 	fn default() -> Self {
-		ReadyTransactions {
+		Self {
 			insertion_id: Default::default(),
 			provided_tags: Default::default(),
 			ready: Default::default(),
@@ -259,7 +259,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 	/// (i.e. the entire subgraph that this transaction is a start of will be removed).
 	/// All removed transactions are returned.
 	pub fn remove_subtree(&mut self, hashes: &[Hash]) -> Vec<Arc<Transaction<Hash, Ex>>> {
-		let to_remove = hashes.iter().cloned().collect::<Vec<_>>();
+		let to_remove = hashes.to_vec();
 		self.remove_subtree_with_tag_filter(to_remove, None)
 	}
 

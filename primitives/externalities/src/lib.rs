@@ -281,6 +281,16 @@ pub trait Externalities: ExtensionStore {
 	///
 	/// Adds new storage keys to the DB tracking whitelist.
 	fn set_whitelist(&mut self, new: Vec<TrackedStorageKey>);
+
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	/// Benchmarking related functionality and shouldn't be used anywhere else!
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	///
+	/// Returns estimated proof size for the state queries so far.
+	/// Proof is reset on commit and wipe.
+	fn proof_size(&self) -> Option<u32> {
+		None
+	}
 }
 
 /// Extension for the [`Externalities`] trait.

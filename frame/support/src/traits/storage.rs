@@ -26,6 +26,8 @@
 pub trait Instance: 'static {
 	/// Unique module prefix. E.g. "InstanceNMyModule" or "MyModule"
 	const PREFIX: &'static str;
+	/// Unique numerical identifier for an instance.
+	const INDEX: u8;
 }
 
 /// An instance of a storage in a pallet.

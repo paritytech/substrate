@@ -580,6 +580,7 @@ mod tests {
 	use super::*;
 	use sp_consensus::{
 		NoNetwork as DummyOracle, Proposal, AlwaysCanAuthor, DisableProofRecording,
+		import_queue::BoxJustificationImport,
 	};
 	use sc_network_test::{Block as TestBlock, *};
 	use sp_runtime::traits::{Block as BlockT, DigestFor};
@@ -641,13 +642,17 @@ mod tests {
 
 	const SLOT_DURATION: u64 = 1000;
 
+	type AuraVerifier = import_queue::AuraVerifier<PeersFullClient, AuthorityPair, AlwaysCanAuthor>;
+	type AuraPeer = Peer<(), PeersClient>;
+
 	pub struct AuraTestNet {
-		peers: Vec<Peer<()>>,
+		peers: Vec<AuraPeer>,
 	}
 
 	impl TestNetFactory for AuraTestNet {
-		type Verifier = import_queue::AuraVerifier<PeersFullClient, AuthorityPair, AlwaysCanAuthor>;
+		type Verifier = AuraVerifier;
 		type PeerData = ();
+		type BlockImport = PeersClient;
 
 		/// Create new test network with peers and given config.
 		fn from_config(_config: &ProtocolConfig) -> Self {
@@ -681,14 +686,22 @@ mod tests {
 			}
 		}
 
-		fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData> {
+		fn make_block_import(&self, client: PeersClient) -> (
+			BlockImportAdapter<Self::BlockImport>,
+			Option<BoxJustificationImport<Block>>,
+			Self::PeerData,
+		) {
+			(client.as_block_import(), None, ())
+		}
+
+		fn peer(&mut self, i: usize) -> &mut AuraPeer {
 			&mut self.peers[i]
 		}
 
-		fn peers(&self) -> &Vec<Peer<Self::PeerData>> {
+		fn peers(&self) -> &Vec<AuraPeer> {
 			&self.peers
 		}
-		fn mut_peers<F: FnOnce(&mut Vec<Peer<Self::PeerData>>)>(&mut self, closure: F) {
+		fn mut_peers<F: FnOnce(&mut Vec<AuraPeer>)>(&mut self, closure: F) {
 			closure(&mut self.peers);
 		}
 	}

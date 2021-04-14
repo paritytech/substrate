@@ -161,6 +161,7 @@ impl frame_system::Config for Runtime {
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
+	type OnSetCode = ();
 }
 
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
@@ -204,6 +205,7 @@ parameter_types! {
 	pub static MinerTxPriority: u64 = 100;
 	pub static SolutionImprovementThreshold: Perbill = Perbill::zero();
 	pub static MinerMaxWeight: Weight = BlockWeights::get().max_block;
+	pub static MinerMaxLength: u32 = 256;
 	pub static MockWeightInfo: bool = false;
 
 
@@ -276,6 +278,7 @@ impl crate::Config for Runtime {
 	type SolutionImprovementThreshold = SolutionImprovementThreshold;
 	type MinerMaxIterations = MinerMaxIterations;
 	type MinerMaxWeight = MinerMaxWeight;
+	type MinerMaxLength = MinerMaxLength;
 	type MinerTxPriority = MinerTxPriority;
 	type DataProvider = StakingMock;
 	type WeightInfo = DualMockWeightInfo;

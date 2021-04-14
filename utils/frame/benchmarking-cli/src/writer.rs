@@ -421,6 +421,7 @@ mod test {
 					repeat_reads: 0,
 					writes: (base + slope * i).into(),
 					repeat_writes: 0,
+					proof_size: 0,
 				}
 			)
 		}
