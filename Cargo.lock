@@ -1796,17 +1796,7 @@ dependencies = [
  "cfg-if 1.0.0",
  "parity-scale-codec",
  "scale-info",
-]
-
-[[package]]
-name = "frame-metadata"
-version = "13.0.0"
-dependencies = [
- "parity-scale-codec",
- "scale-info",
  "serde",
- "sp-core",
- "sp-std",
 ]
 
 [[package]]
@@ -1814,8 +1804,7 @@ name = "frame-support"
 version = "3.0.0"
 dependencies = [
  "bitflags",
- "frame-metadata 12.0.0",
- "frame-metadata 13.0.0",
+ "frame-metadata",
  "frame-support-procedural",
  "frame-system",
  "impl-trait-for-tuples",
@@ -1874,7 +1863,6 @@ dependencies = [
 name = "frame-support-test"
 version = "3.0.0"
 dependencies = [
- "frame-metadata 13.0.0",
  "frame-support",
  "frame-system",
  "parity-scale-codec",
@@ -8179,6 +8167,7 @@ dependencies = [
  "derive_more",
  "parity-scale-codec",
  "scale-info-derive",
+ "serde",
 ]
 
 [[package]]

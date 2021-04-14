@@ -179,12 +179,12 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 
 		impl<#type_impl_gen> #pallet_ident<#type_use_gen> #where_clause {
 			#[doc(hidden)]
-			pub fn call_functions() -> #frame_support::scale_info::prelude::vec::Vec<#frame_support::metadata::v13::FunctionMetadata> {
+			pub fn call_functions() -> #frame_support::scale_info::prelude::vec::Vec<#frame_support::metadata::FunctionMetadata> {
 				#frame_support::scale_info::prelude::vec![ #(
-					#frame_support::metadata::v13::FunctionMetadata {
+					#frame_support::metadata::FunctionMetadata {
 						name: stringify!(#fn_name),
 						arguments: #frame_support::scale_info::prelude::vec![ #(
-							#frame_support::metadata::v13::FunctionArgumentMetadata {
+							#frame_support::metadata::FunctionArgumentMetadata {
 								name: stringify!(#args_name),
 								ty: #frame_support::scale_info::meta_type::<#args_type>(),
 								is_compact: #args_is_compact,

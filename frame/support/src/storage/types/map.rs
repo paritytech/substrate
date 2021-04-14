@@ -20,14 +20,13 @@
 
 use codec::{FullCodec, Decode, EncodeLike, Encode};
 use crate::{
+	metadata::{self, StorageEntryModifier},
 	storage::{
 		StorageAppend, StorageDecodeLength,
 		types::{OptionQuery, QueryKindTrait, OnEmptyGetter},
 	},
 	traits::{GetDefault, StorageInstance},
 };
-use frame_metadata::{DefaultByteGetter};
-use frame_metadata2::v13::StorageEntryModifier;
 use sp_std::prelude::*;
 
 /// A type that allow to store value for given key. Allowing to insert/remove/iterate on values.
@@ -296,7 +295,7 @@ pub trait StorageMapMetadata {
 	const MODIFIER: StorageEntryModifier;
 	const NAME: &'static str;
 	const DEFAULT: DefaultByteGetter;
-	const HASHER: frame_metadata2::v13::StorageHasher;
+	const HASHER: metadata::StorageHasher;
 }
 
 impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty> StorageMapMetadata
@@ -309,7 +308,7 @@ impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty> StorageMapMetadata
 	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static,
 {
 	const MODIFIER: StorageEntryModifier = QueryKind::METADATA;
-	const HASHER: frame_metadata2::v13::StorageHasher = Hasher::METADATA;
+	const HASHER: metadata::StorageHasher = Hasher::METADATA;
 	const NAME: &'static str = Prefix::STORAGE_PREFIX;
 	const DEFAULT: DefaultByteGetter =
 		DefaultByteGetter(&OnEmptyGetter::<QueryKind::Query, OnEmpty>(core::marker::PhantomData));

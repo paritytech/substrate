@@ -56,7 +56,7 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 		.map(|(variant, doc)| {
 			let variant_str = format!("{}", variant);
 			quote::quote_spanned!(error.attr_span =>
-				#frame_support::error::ErrorMetadata {
+				#frame_support::metadata::ErrorMetadata {
 					name: #variant_str,
 					documentation: #frame_support::scale_info::prelude::vec![ #( #doc, )* ],
 				},
@@ -141,7 +141,7 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 			for #error_ident<#type_use_gen>
 			#config_where_clause
 		{
-			fn metadata() -> #frame_support::scale_info::prelude::vec::Vec<#frame_support::error::ErrorMetadata> {
+			fn metadata() -> #frame_support::scale_info::prelude::vec::Vec<#frame_support::metadata::ErrorMetadata> {
 				#frame_support::scale_info::prelude::vec![ #( #metadata )* ]
 			}
 		}

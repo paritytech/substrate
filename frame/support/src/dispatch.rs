@@ -20,8 +20,7 @@
 
 pub use crate::sp_std::{result, fmt, prelude::{Vec, Clone, Eq, PartialEq}, marker};
 pub use crate::codec::{Codec, EncodeLike, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
-pub use frame_metadata::{DefaultByte, DefaultByteGetter};
-pub use frame_metadata2::v13::{
+pub use frame_metadata::v13::{
 	FunctionMetadata, FunctionArgumentMetadata, ModuleConstantMetadata,
 };
 pub use crate::weights::{
@@ -2328,7 +2327,7 @@ macro_rules! __dispatch_impl_metadata {
 		{
 			#[doc(hidden)]
 			#[allow(dead_code)]
-			pub fn call_functions() -> $crate::dispatch::Vec<$crate::metadata::v13::FunctionMetadata> {
+			pub fn call_functions() -> $crate::dispatch::Vec<$crate::metadata::FunctionMetadata> {
 				$crate::__call_to_functions!($($rest)*)
 			}
 		}
@@ -2523,11 +2522,11 @@ macro_rules! __function_to_metadata {
 		$( $fn_doc:expr ),*;
 		$fn_id:expr;
 	) => {
-		$crate::metadata::v13::FunctionMetadata {
+		$crate::metadata::FunctionMetadata {
 			name: stringify!($fn_name),
 			arguments: $crate::scale_info::prelude::vec![
 				$(
-					$crate::metadata::v13::FunctionArgumentMetadata {
+					$crate::metadata::FunctionArgumentMetadata {
 						name: stringify!($param_name),
 						ty: $crate::scale_info::meta_type::<$param>(),
 						is_compact: $crate::__function_to_metadata!(@has_compact_attr

@@ -15,14 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use frame_metadata::{
-	DecodeDifferent, FnEncode, RuntimeMetadata, ModuleMetadata, RuntimeMetadataLastVersion,
-	DefaultByteGetter, RuntimeMetadataPrefixed, StorageEntryMetadata, StorageMetadata,
-	StorageEntryType, StorageEntryModifier, DefaultByte, StorageHasher,
-	ExtrinsicMetadata,
+pub use frame_metadata::v13::{
+	ModuleMetadata, RuntimeMetadataLastVersion, StorageEntryMetadata, StorageMetadata,
+	StorageEntryType, StorageEntryModifier, StorageHasher, ExtrinsicMetadata,
 };
-pub use frame_metadata2;
-pub use frame_metadata2::v13;
 
 /// todo: [AJ] update docs
 /// Implements the metadata support for the given runtime and all its modules.
@@ -77,9 +73,9 @@ macro_rules! impl_runtime_metadata {
 	) => {
 		impl $runtime {
 			pub fn metadata() -> $crate::metadata::frame_metadata2::RuntimeMetadataPrefixed {
-				$crate::metadata::v13::RuntimeMetadataLastVersion::new(
+				$crate::metadata::RuntimeMetadataLastVersion::new(
 					$crate::__runtime_modules_to_metadata!($runtime;; $( $rest )*),
-					$crate::metadata::v13::ExtrinsicMetadata {
+					$crate::metadata::ExtrinsicMetadata {
 						ty: $crate::scale_info::meta_type::<$ext>(),
 						version: <$ext as $crate::sp_runtime::traits::ExtrinsicMetadata>::VERSION,
 						signed_extensions: <
@@ -88,7 +84,7 @@ macro_rules! impl_runtime_metadata {
 								>::SignedExtensions as $crate::sp_runtime::traits::SignedExtension
 							>::identifier()
 								.into_iter()
-								.map(|(id, ty)| $crate::metadata::v13::SignedExtensionMetadata {
+								.map(|(id, ty)| $crate::metadata::SignedExtensionMetadata {
 									identifier: id,
 									ty,
 								})
@@ -114,7 +110,7 @@ macro_rules! __runtime_modules_to_metadata {
 	) => {
 		$crate::__runtime_modules_to_metadata!(
 			$runtime;
-			$( $metadata, )* $crate::metadata::v13::ModuleMetadata {
+			$( $metadata, )* $crate::metadata::ModuleMetadata {
 				name: stringify!($name),
 				index: $index,
 				storage: $crate::__runtime_modules_to_metadata_calls_storage!(

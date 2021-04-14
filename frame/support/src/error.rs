@@ -19,8 +19,6 @@
 
 #[doc(hidden)]
 pub use sp_runtime::traits::{LookupError, BadOrigin};
-#[doc(hidden)]
-pub use frame_metadata2::v13::ErrorMetadata;
 
 /// Declare an error type for a runtime module.
 ///

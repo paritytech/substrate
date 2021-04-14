@@ -16,8 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 scale-info = { git = "https://github.com/paritytech/scale-info", branch = "aj-substrate", default-features = false, features = ["derive"] }
-frame-metadata = { version = "13.0.0", default-features = false, path = "../metadata" }
-frame-metadata2 = { package = "frame-metadata", git = "https://github.com/paritytech/frame-metadata", branch = "aj-substrate", default-features = false, features = ["v13"] }
+frame-metadata = { package = "frame-metadata", git = "https://github.com/paritytech/frame-metadata", branch = "aj-substrate", default-features = false, features = ["v13"] }
 sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }

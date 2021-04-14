@@ -94,14 +94,14 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 			let ty = match &storage.metadata {
 				Metadata::Value { value } => {
 					quote::quote_spanned!(storage.attr_span =>
-						#frame_support::metadata::v13::StorageEntryType::Plain(
+						#frame_support::metadata::StorageEntryType::Plain(
 							#frame_support::scale_info::meta_type::<#value>()
 						)
 					)
 				},
 				Metadata::Map { key, value } => {
 					quote::quote_spanned!(storage.attr_span =>
-						#frame_support::metadata::v13::StorageEntryType::Map {
+						#frame_support::metadata::StorageEntryType::Map {
 							hasher: <#full_ident as #metadata_trait>::HASHER,
 							key: #frame_support::scale_info::meta_type::<#key>(),
 							value: #frame_support::scale_info::meta_type::<#value>(),
@@ -111,7 +111,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 				},
 				Metadata::DoubleMap { key1, key2, value } => {
 					quote::quote_spanned!(storage.attr_span =>
-						#frame_support::metadata::v13::StorageEntryType::DoubleMap {
+						#frame_support::metadata::StorageEntryType::DoubleMap {
 							hasher: <#full_ident as #metadata_trait>::HASHER1,
 							key2_hasher: <#full_ident as #metadata_trait>::HASHER2,
 							key1: #frame_support::scale_info::meta_type::<#key1>(),
@@ -123,7 +123,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 			};
 
 			quote::quote_spanned!(storage.attr_span =>
-				#(#cfg_attrs)* #frame_support::metadata::v13::StorageEntryMetadata {
+				#(#cfg_attrs)* #frame_support::metadata::StorageEntryMetadata {
 					name: <#full_ident as #metadata_trait>::NAME,
 					modifier: <#full_ident as #metadata_trait>::MODIFIER,
 					ty: #ty,
@@ -265,8 +265,8 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 			#completed_where_clause
 		{
 			#[doc(hidden)]
-			pub fn storage_metadata() -> #frame_support::metadata::v13::StorageMetadata {
-				#frame_support::metadata::v13::StorageMetadata {
+			pub fn storage_metadata() -> #frame_support::metadata::StorageMetadata {
+				#frame_support::metadata::StorageMetadata {
 					prefix: <
 						<T as #frame_system::Config>::PalletInfo as
 						#frame_support::traits::PalletInfo

@@ -21,8 +21,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-pub use frame_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnEncode};
-
 /// Implement the `Event` for a module.
 ///
 /// # Simple Event Example:
@@ -146,7 +144,7 @@ macro_rules! decl_event {
 		impl Event {
 			#[allow(dead_code)]
 			#[doc(hidden)]
-			pub fn metadata() -> $crate::scale_info::prelude::vec::Vec<$crate::metadata::v13::EventMetadata> {
+			pub fn metadata() -> $crate::scale_info::prelude::vec::Vec<$crate::metadata::EventMetadata> {
 				$crate::__events_to_metadata!(; $( $events )* )
 			}
 		}
@@ -298,7 +296,7 @@ macro_rules! __decl_generic_event {
 		{
 			#[allow(dead_code)]
 			#[doc(hidden)]
-			pub fn metadata() -> $crate::scale_info::prelude::vec::Vec<$crate::metadata::v13::EventMetadata> {
+			pub fn metadata() -> $crate::scale_info::prelude::vec::Vec<$crate::metadata::EventMetadata> {
 				$crate::__events_to_metadata!(; $( $events )* )
 			}
 		}
@@ -319,10 +317,10 @@ macro_rules! __events_to_metadata {
 	) => {
 		$crate::__events_to_metadata!(
 			$( $metadata, )*
-			$crate::metadata::v13::EventMetadata {
+			$crate::metadata::EventMetadata {
 				name: stringify!($event),
 				arguments: $crate::scale_info::prelude::vec![
-					$( $( $crate::metadata::v13::TypeSpec::new::<$param>(stringify!($param)) ),* )*
+					$( $( $crate::metadata::TypeSpec::new::<$param>(stringify!($param)) ),* )*
 				],
 				documentation: $crate::scale_info::prelude::vec![
 					$( $doc_attr ),*
@@ -512,12 +510,12 @@ macro_rules! __impl_outer_event_json_metadata {
 	) => {
 		impl $runtime {
 			#[allow(dead_code)]
-			pub fn outer_event_metadata() -> $crate::metadata::v13::OuterEventMetadata {
-				$crate::metadata::v13::OuterEventMetadata {
+			pub fn outer_event_metadata() -> $crate::metadata::OuterEventMetadata {
+				$crate::metadata::OuterEventMetadata {
 					name: stringify!($event_name),
 					events: $crate::scale_info::prelude::vec![
 						$(
-							$crate::metadata::v13::ModuleEventMetadata {
+							$crate::metadata::ModuleEventMetadata {
 								name: stringify!($module_name),
 								events: $module_name::Event ::< $( $generic_params ),* > ::metadata()
 							}
@@ -542,7 +540,7 @@ macro_rules! __impl_outer_event_json_metadata {
 			$(
 				#[allow(dead_code)]
 				pub fn [< __module_events_ $module_name $( _ $instance )? >] () ->
-					Vec<$crate::metadata::v13::EventMetadata>
+					Vec<$crate::metadata::EventMetadata>
 				{
 					$module_name::Event ::< $( $generic_params ),* > ::metadata()
 				}

@@ -49,12 +49,12 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 				.iter()
 				.map(|(ty, name)| {
 					quote::quote!(
-						#frame_support::metadata::v13::TypeSpec::new::<#ty>(#name)
+						#frame_support::metadata::TypeSpec::new::<#ty>(#name)
 					)
 				});
 			let docs = &event.docs;
 			quote::quote!(
-				#frame_support::metadata::v13::EventMetadata {
+				#frame_support::metadata::EventMetadata {
 					name: #name,
 					arguments: #frame_support::scale_info::prelude::vec![ #( #args, )* ],
 					documentation: #frame_support::scale_info::prelude::vec![ #( #docs, )* ],
@@ -145,7 +145,7 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 		impl<#event_impl_gen> #event_ident<#event_use_gen> #event_where_clause {
 			#[allow(dead_code)]
 			#[doc(hidden)]
-			pub fn metadata() -> #frame_support::scale_info::prelude::vec::Vec<#frame_support::metadata::v13::EventMetadata> {
+			pub fn metadata() -> #frame_support::scale_info::prelude::vec::Vec<#frame_support::metadata::EventMetadata> {
 				#frame_support::scale_info::prelude::vec![ #( #metadata )* ]
 			}
 		}

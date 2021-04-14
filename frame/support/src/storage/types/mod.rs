@@ -19,8 +19,7 @@
 //! StorageMap and others.
 
 use codec::FullCodec;
-use frame_metadata::{DefaultByte};
-use frame_metadata2::v13::StorageEntryModifier;
+use frame_metadata::v13::StorageEntryModifier;
 
 mod value;
 mod map;

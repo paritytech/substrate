@@ -25,8 +25,7 @@ use crate::{
 	},
 	traits::{GetDefault, StorageInstance},
 };
-use frame_metadata::{DefaultByteGetter};
-use frame_metadata2::v13::StorageEntryModifier;
+use frame_metadata::v13::StorageEntryModifier;
 
 /// A type that allow to store a value.
 ///
