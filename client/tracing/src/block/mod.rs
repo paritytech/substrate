@@ -215,16 +215,19 @@ impl<Block, Client> BlockExecutor<Block, Client>
 			.filter_map(|s| patch_and_filter(s, targets))
 			.collect();
 
-		let events: Vec<_> = block_subscriber.events.lock().drain(..).map(|s| s.into()).collect();
+		// let events: Vec<_> = block_subscriber.events.lock().drain(..).map(|s| s.into()).collect();
 
-		tracing::debug!(target: "state_tracing", "Captured {} spans and {} events", spans.len(), events.len());
+		let events: Vec<_> = block_subscriber.events
+			.lock()
+			.drain(..)
+			// .map(|s| s.into())
+			.filter(|e| event_key_filter(e, KEY_TARGETS))
+			.map(|s| s.into())
+			.collect();
 
-		// let events = block_subscriber.events
-		// 	.lock()
-		// 	.drain(..)
-		// 	.map(|s| s.into())
-		// 	.filter(|e| event_key_filter(e, KEY_TARGETS))
-		// 	.collect();
+		// tracing::debug!(target: "state_tracing", "Captured {} spans and {} events", spans.len(), events.len());
+
+
 
 		let block_traces = BlockTrace {
 			block_hash: id.to_string(),

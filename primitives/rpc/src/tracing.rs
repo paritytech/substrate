@@ -18,7 +18,7 @@
 //! Types for working with tracing data
 
 use serde::{Serialize, Deserialize};
-use tracing_core::{Field, Level};
+// use tracing_core::{Field, Level};
 // use tracing_core::field::Visit;
 
 use std::collections::HashMap;
@@ -81,6 +81,6 @@ pub struct Data {
 	pub string_values: HashMap<String, String>,
 }
 
-fn default_level() -> Level {
-	Level::TRACE
-}
+// fn default_level() -> Level {
+// 	Level::TRACE
+// }
