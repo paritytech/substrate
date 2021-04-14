@@ -8014,6 +8014,7 @@ dependencies = [
  "sp-api",
  "sp-block-builder",
  "sp-blockchain",
+ "sp-core",
  "sp-rpc",
  "sp-runtime",
  "sp-storage",

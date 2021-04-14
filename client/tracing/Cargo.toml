@@ -34,6 +34,7 @@ sp-storage = { version = "3.0.0", path = "../../primitives/storage" }
 sp-runtime = { version = "3.0.0", path = "../../primitives/runtime" }
 sp-blockchain = { version = "3.0.0", path = "../../primitives/blockchain" }
 sp-api = { version = "3.0.0", path = "../../primitives/api" }
+sp-core = { version = "3.0.0", path = "../../primitives/core" }
 sc-telemetry = { version = "3.0.0", path = "../telemetry" }
 sc-client-api = { version = "3.0.0", path = "../api" }
 sc-tracing-proc-macro = { version = "3.0.0", path = "./proc-macro" }

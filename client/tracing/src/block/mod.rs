@@ -24,14 +24,15 @@ use tracing::{Dispatch, dispatcher, Subscriber, Level, span::{Attributes, Record
 use tracing_subscriber::CurrentSpan;
 
 use sc_client_api::BlockBackend;
-use sp_api::{Core, Metadata, ProvideRuntimeApi};
+use sp_api::{Core, Metadata, ProvideRuntimeApi, Encode};
 use sp_blockchain::HeaderBackend;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header},
 };
-use sp_rpc::tracing::{BlockTrace, Span};
+use sp_rpc::tracing::{BlockTrace, Span, TraceError, TraceBlockResponse};
 use sp_tracing::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
+use sp_core::hexdisplay::HexDisplay;
 use crate::{SpanDatum, TraceEvent, Values};
 
 // Default to only pallet, frame support and state related traces
@@ -40,6 +41,14 @@ const TRACE_TARGET: &'static str = "block_trace";
 // Default to only events with the key prefixes for :extrinsic_index & system::Account.
 const DEFAULT_STORAGE_KEYS: &'static str =
 	"3a65787472696e7369635f696e646578,26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9";
+// Heuristic for average event size in bytes.
+const AVG_EVENT: usize = 600 * 8;
+// Heuristic for average span size in bytes.
+const AVG_SPAN: usize = 100 * 8;
+// Base line payload (a response with no events or spans) size in bytes.
+const BASE_PAYLOAD: usize = 525 * 8;
+/// Maximal payload accepted by RPC servers. // TODO maybe import from sc_rpc_server
+const MAX_PAYLOAD: usize = 15 * 1024 * 1024;
 
 struct BlockSubscriber {
 	targets: Vec<(String, Level)>,
@@ -172,15 +181,15 @@ impl<Block, Client> BlockExecutor<Block, Client>
 	}
 
 	/// Execute block, recording all spans and events belonging to `Self::targets`
-	pub fn trace_block(&self) -> Result<BlockTrace, String> {
-		tracing::info!(target: "state_tracing", "Tracing block: {}", self.block);
+	pub fn trace_block(&self) -> Result<TraceBlockResponse, String> {
+		tracing::debug!(target: "state_tracing", "Tracing block: {}", self.block);
+
 		// Prepare block
 		let id = BlockId::Hash(self.block);
 		let extrinsics = self.client.block_body(&id)
 			.map_err(|e| format!("Invalid block id: {:?}", e))?
 			.ok_or("Block not found".to_string())?;
-		tracing::debug!(target: "state_tracing", "Found {} extrinsics", extrinsics.len());
-
+		tracing::info!(target: "state_tracing", "Found {} extrinsics", extrinsics.len());
 		let mut header = self.client.header(id)
 			.map_err(|e| format!("Invalid block id: {:?}", e))?
 			.ok_or("Header not found".to_string())?;
@@ -219,23 +228,21 @@ impl<Block, Client> BlockExecutor<Block, Client>
 
 		let block_subscriber = dispatch.downcast_ref::<BlockSubscriber>()
 			.ok_or("Cannot downcast Dispatch to BlockSubscriber after tracing block")?;
-		let mut span_datums: Vec<SpanDatum> = block_subscriber.spans
+		let mut span_data: Vec<SpanDatum> = block_subscriber.spans
 			.lock()
 			.drain()
-			.map(|(_, s)| s.into())
+			.map(|(_, s)| SpanDatum::from(s))
 			.collect::<Vec<SpanDatum>>();
 
 		// Is there a way to do this sort without collecting twice? My only idea was to add start_time
 		// into `Span` - zeke
-		span_datums.sort_by(|a, b| a.start_time.cmp(&b.start_time));
+		span_data.sort_by(|a, b| a.start_time.cmp(&b.start_time));
 
-		let spans: Vec<Span> = span_datums
+		let spans: Vec<Span> = span_data
 			.into_iter()
 			// Patch wasm identifiers
 			.filter_map(|s| patch_and_filter(s, targets))
 			.collect();
-
-		// let events: Vec<_> = block_subscriber.events.lock().drain(..).map(|s| s.into()).collect();
 
 		let events: Vec<_> = block_subscriber.events
 			.lock()
@@ -246,26 +253,32 @@ impl<Block, Client> BlockExecutor<Block, Client>
 
 		tracing::debug!(target: "state_tracing", "Captured {} spans and {} events", spans.len(), events.len());
 
-
-
-		let block_traces = BlockTrace {
-			block_hash: id.to_string(),
-			parent_hash: parent_id.to_string(),
-			tracing_targets: targets.to_string(),
-			spans,
-			events,
+		let res = if BASE_PAYLOAD + events.len() * AVG_EVENT + spans.len() * AVG_SPAN > MAX_PAYLOAD {
+				TraceBlockResponse::TraceError(TraceError {
+					error:
+						"Total amount of events + spans likely exceeds max payload size of RPC server.".to_string()
+				})
+		} else {
+			let block_hash = block_id_as_string(id);
+			let parent_hash = block_id_as_string(parent_id);
+			TraceBlockResponse::BlockTrace(BlockTrace {
+				block_hash,
+				parent_hash,
+				tracing_targets: targets.to_string(),
+				storage_keys: storage_keys.to_string(),
+				spans,
+				events,
+			})
 		};
-		Ok(block_traces)
+
+		Ok(res)
 	}
 }
 
 fn event_key_filter(event: &TraceEvent, storage_keys: &str) -> bool {
-	if let Some(key) = event.values.string_values.get("key") {
-		if check_target(storage_keys, key, &event.level) {
-			return true;
-		}
-	}
-	false
+	event.values.string_values.get("key")
+		.and_then(|key| Some(check_target(storage_keys, key, &event.level)))
+		.unwrap_or(false)
 }
 
 fn patch_and_filter(mut span: SpanDatum, targets: &str) -> Option<Span> {
@@ -291,4 +304,11 @@ fn check_target(targets: &str, target: &str, level: &Level) -> bool {
 		}
 	}
 	false
+}
+
+fn block_id_as_string<T: BlockT>(block_id: BlockId<T>) -> String {
+	 match block_id {
+		BlockId::Hash(h) => HexDisplay::from(&h.encode()).to_string(),
+		BlockId::Number(n) =>  HexDisplay::from(&n.encode()).to_string()
+	}
 }

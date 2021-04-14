@@ -32,8 +32,12 @@ pub struct BlockTrace {
 	pub block_hash: String,
 	/// Parent hash
 	pub parent_hash: String,
-	/// Module targets that were recorded by the tracing subscriber
+	/// Module targets that were recorded by the tracing subscriber.
+	/// Empty string means record all targets.
 	pub tracing_targets: String,
+	/// Storage key targets used to filter out events that do not have one of the storage keys.
+	/// Empty string means do not filter out any events.
+	pub storage_keys: String,
 	/// Vec of tracing spans
 	pub spans: Vec<Span>,
 	/// Vec of tracing events
@@ -79,6 +83,24 @@ pub struct Span {
 pub struct Data {
 	/// HashMap of `String` values
 	pub string_values: HashMap<String, String>,
+}
+
+/// Error response for `state_traceBlock` RPC
+#[derive(Serialize, Deserialize, Default, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct TraceError {
+	/// Error message
+    pub error: String,
+}
+
+/// `BlockExecutor::trace_block` return value
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub enum TraceBlockResponse {
+	/// Error block tracing response
+	TraceError(TraceError),
+	/// Successful block tracing response
+	BlockTrace(BlockTrace)
 }
 
 // fn default_level() -> Level {

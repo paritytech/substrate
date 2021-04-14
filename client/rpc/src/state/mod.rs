@@ -174,7 +174,7 @@ pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 		block: Block::Hash,
 		targets: Option<String>,
 		storage_keys: Option<String>,
-	) -> FutureResult<sp_rpc::tracing::BlockTrace>;
+	) -> FutureResult<sp_rpc::tracing::TraceBlockResponse>;
 }
 
 /// Create new state API that works on full node.
@@ -366,7 +366,7 @@ impl<Block, Client> StateApi<Block::Hash> for State<Block, Client>
 		&self, block: Block::Hash,
 		targets: Option<String>,
 		storage_keys: Option<String>
-	) -> FutureResult<sp_rpc::tracing::BlockTrace> {
+	) -> FutureResult<sp_rpc::tracing::TraceBlockResponse> {
 		if let Err(err) = self.deny_unsafe.check_if_safe() {
 			return Box::new(result(Err(err.into())))
 		}
