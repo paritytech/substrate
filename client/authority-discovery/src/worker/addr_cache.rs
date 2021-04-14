@@ -76,7 +76,7 @@ impl AddrCache {
 
 			let peer_id = match peer_id_from_multiaddr(&former_addr) {
 				Some(p) => p,
-				None => { debug_assert!(false); continue },
+				None => continue,
 			};
 
 			if !peer_ids.clone().any(|p| p == peer_id) {
