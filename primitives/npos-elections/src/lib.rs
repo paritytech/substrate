@@ -164,9 +164,9 @@ pub trait CompactSolution: Sized {
 	/// The weight/accuracy type of each vote.
 	type Accuracy: PerThing128;
 
-	/// Build self from a `assignments: Vec<Assignment<A, Self::Accuracy>>`.
+	/// Build self from a list of assignments.
 	fn from_assignment<FV, FT, A>(
-		assignments: Vec<Assignment<A, Self::Accuracy>>,
+		assignments: &[Assignment<A, Self::Accuracy>],
 		voter_index: FV,
 		target_index: FT,
 	) -> Result<Self, Error>

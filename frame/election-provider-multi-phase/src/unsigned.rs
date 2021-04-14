@@ -183,7 +183,9 @@ impl<T: Config> Pallet<T> {
 		Self::trim_assignments_length(
 			T::MinerMaxLength::get(),
 			&mut assignments,
-		);
+			&voter_at,
+			&target_at,
+		)?;
 
 		// convert to staked and reduce.
 		let mut staked = assignment_ratio_to_staked_normalized(assignments, &stake_of)
@@ -192,7 +194,7 @@ impl<T: Config> Pallet<T> {
 
 		// convert back to ratios and make compact.
 		let ratio = assignment_staked_to_ratio_normalized(staked)?;
-		let compact = <CompactOf<T>>::from_assignment(ratio, &voter_index, &target_index)?;
+		let compact = <CompactOf<T>>::from_assignment(&ratio, &voter_index, &target_index)?;
 
 		// re-calc score.
 		let winners = sp_npos_elections::to_without_backing(winners);
@@ -310,15 +312,25 @@ impl<T: Config> Pallet<T> {
 	/// the total stake in the system. Nevertheless, some of the voters may be removed here.
 	///
 	/// Sometimes, removing a voter can cause a validator to also be implicitly removed, if
-	/// that voter was the only backer of that winner. In such cases, this solution is invalid, which
-	/// will be caught prior to submission.
+	/// that voter was the only backer of that winner. In such cases, this solution is invalid,
+	/// which will be caught prior to submission.
 	///
 	/// The score must be computed **after** this step. If this step reduces the score too much,
 	/// then the solution must be discarded.
 	fn trim_assignments_length(
 		max_allowed_length: u32,
 		assignments: &mut Vec<Assignment<T>>,
-	) {
+		voter_index: impl Fn(&T::AccountId) -> Option<CompactVoterIndexOf<T>>,
+		target_index: impl Fn(&T::AccountId) -> Option<CompactTargetIndexOf<T>>,
+	) -> Result<(), MinerError> {
+		// Compute the size of a compact solution comprised of the selected arguments.
+		//
+		// This function completes in `O(edges)`; it's expensive, but linear.
+		let encoded_size_of = |assignments: &[Assignment<T>]| {
+			CompactOf::<T>::from_assignment(assignments, voter_index, target_index)
+				.map(|compact| compact.encoded_size())
+		};
+
 		// The encoded size of an assignment list is staticly computable, but only in `O(assignments.len())`.
 		// That makes the naive approach, to loop and pop, somewhat inefficient.
 		//
@@ -329,7 +341,7 @@ impl<T: Config> Pallet<T> {
 		let avg = move || (high + low) / 2;
 		while high - low > 1 {
 			let test = avg();
-			if CompactOf::<T>::encoded_size_for(&assignments[..test]) > max_allowed_length.saturated_into() {
+			if encoded_size_of(&assignments[..test])? > max_allowed_length.saturated_into() {
 				high = test;
 			} else {
 				low = test;
@@ -339,20 +351,28 @@ impl<T: Config> Pallet<T> {
 
 		// ensure our postconditions are correct
 		debug_assert!(
-			CompactOf::<T>::encoded_size_for(&assignments[..maximum_allowed_voters]) <=
-			max_allowed_length.saturated_into()
+			encoded_size_of(&assignments[..maximum_allowed_voters]).unwrap()
+				<= max_allowed_length.saturated_into()
 		);
 		debug_assert!(
-			CompactOf::<T>::encoded_size_for(&assignments[..maximum_allowed_voters + 1]) >
-			max_allowed_length.saturated_into()
+			encoded_size_of(&assignments[..maximum_allowed_voters + 1]).unwrap()
+				> max_allowed_length.saturated_into()
 		);
+
+		// NOTE: before this point, every access was immutable.
+		// after this point, we never error.
+		// check before edit.
 
 		log!(
 			debug,
 			"from {} assignments, truncating to {} for length, removing {}",
-			assignments.len(), maximum_allowed_voters, assignments.len() - maximum_allowed_voters,
+			assignments.len(),
+			maximum_allowed_voters,
+			assignments.len() - maximum_allowed_voters,
 		);
 		assignments.truncate(maximum_allowed_voters);
+
+		Ok(())
 	}
 
 	/// Find the maximum `len` that a compact can have in order to fit into the block weight.
