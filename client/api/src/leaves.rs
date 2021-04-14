@@ -18,12 +18,14 @@
 
 //! Helper for managing the set of available leaves in the chain for DB implementations.
 
-use std::collections::BTreeMap;
 use std::cmp::Reverse;
-use sp_database::{Database, Transaction};
-use sp_runtime::traits::AtLeast32Bit;
-use codec::{Encode, Decode};
+use std::collections::BTreeMap;
+
+use codec::{Decode, Encode};
+
 use sp_blockchain::{Error, Result};
+use sp_database::{Database, Transaction};
+use sp_runtime::traits::{AtLeast32Bit, One};
 
 type DbHash = sp_core::H256;
 
@@ -216,6 +218,83 @@ impl<H, N> LeafSet<H, N> where
 		self.pending_removed.clear();
 	}
 
+	/// Revert all leaves from any forks descending from the given block hash,
+	/// inclusive. This method will re-add the parent block hash as a leaf if no
+	/// leaf descending from it already exists.
+	pub fn revert_block<F>(
+		&mut self,
+		number: N,
+		hash: H,
+		parent_hash: H,
+		is_descendent_of: F,
+	) -> Result<Vec<H>>
+	where
+		F: Fn(&H, &H) -> Result<bool>,
+	{
+		let mut removed = Vec::new();
+		let mut empty = Vec::new();
+		let parent_number = number.clone() - One::one();
+
+		for (n, leaves) in self.storage.iter_mut() {
+			// Any leaf with a lower block number than the one we're looking for
+			// cannot be its descendant
+			if n.0 < number {
+				continue;
+			}
+
+			let old_leaves = std::mem::take(leaves);
+			for leaf in old_leaves {
+				// Remove the hash itself or any descendant
+				if leaf == hash || is_descendent_of(&hash, &leaf)? {
+					removed.push(leaf);
+				} else {
+					leaves.push(leaf);
+				}
+			}
+
+			if leaves.is_empty() {
+				empty.push(n.clone());
+			}
+		}
+
+		// Remove all empty storage entries
+		for n in empty {
+			self.storage.remove(&n);
+		}
+
+		// Add all of the removed leafs to the transactional storage
+		self.pending_removed.append(&mut removed.clone());
+
+		// We need to check if there's any leaf branching from the parent of the
+		// block we removed (this would probably become the new best leaf)
+		let mut found = false;
+		for (n, leaves) in self.storage.iter_mut() {
+			// We're looking for blocks equal to or descending from the parent
+			// of the removed block.
+			if n.0 < parent_number {
+				continue;
+			}
+
+			for leaf in leaves {
+				if *leaf == parent_hash || is_descendent_of(&parent_hash, &leaf)? {
+					found = true;
+					break;
+				}
+			}
+		}
+
+		// We have removed all leaves descending from the given block and
+		// there's no higher blocks descending from its parent. We need to
+		// re-add the parent as a leaf to keep the invariants of this data
+		// structure (this will probably become the new best leaf).
+		if !found {
+			self.insert_leaf(Reverse(parent_number.clone()), parent_hash.clone());
+			self.pending_added.push((parent_hash, parent_number));
+		}
+
+		Ok(removed)
+	}
+
 	#[cfg(test)]
 	fn contains(&self, number: N, hash: H) -> bool {
 		self.storage.get(&Reverse(number)).map_or(false, |hashes| hashes.contains(&hash))
@@ -382,5 +461,79 @@ mod tests {
 
 		set.undo().undo_finalization(displaced);
 		assert!(set.contains(10, 10_1));
+	}
+
+	#[test]
+	fn revert_block_works_when_no_other_branch_exists() {
+		let mut leaves = LeafSet::<String, u32>::new();
+
+		leaves.import("a".into(), 1, "0".into());
+		leaves.import("b".into(), 2, "a".into());
+		leaves.import("c".into(), 3, "b".into());
+		leaves.import("d".into(), 4, "c".into());
+		leaves.import("e".into(), 5, "d".into());
+
+		assert_eq!(leaves.hashes(), vec!["e".to_string()],);
+
+		let is_descendent_of =
+			|base: &String, target: &String| match (base.as_str(), target.as_str()) {
+				("0", _) => Ok(true),
+				("a", b) => Ok(b == "b" || b == "c" || b == "d" || b == "e"),
+				("b", b) => Ok(b == "c" || b == "d" || b == "e"),
+				("c", b) => Ok(b == "d" || b == "e"),
+				("d", b) => Ok(b == "e"),
+				("e", _) => Ok(false),
+				_ => Ok(false),
+			};
+
+		let reverted = leaves
+			.revert_block(2, "b".into(), "a".into(), is_descendent_of)
+			.unwrap();
+
+		assert_eq!(reverted, vec!["e".to_string()],);
+
+		// the only new leaf is the parent of the block we just reverted
+		assert_eq!(leaves.hashes(), vec!["a".to_string()],);
+	}
+
+	#[test]
+	fn revert_block_works_when_longer_branch_exists() {
+		let mut leaves = LeafSet::<String, u32>::new();
+
+		leaves.import("a".into(), 1, "0".into());
+		leaves.import("b".into(), 2, "a".into());
+		leaves.import("c".into(), 3, "b".into());
+		leaves.import("d".into(), 4, "c".into());
+		leaves.import("e".into(), 5, "d".into());
+
+		leaves.import("b'".into(), 2, "a".into());
+		leaves.import("c'".into(), 3, "b'".into());
+
+		assert_eq!(leaves.hashes(), vec!["e".to_string(), "c'".to_string()],);
+
+		let is_descendent_of =
+			|base: &String, target: &String| match (base.as_str(), target.as_str()) {
+				("0", _) => Ok(true),
+				("a", b) => {
+					Ok(b == "b" || b == "c" || b == "d" || b == "e" || b == "b'" || b == "c'")
+				}
+				("b", b) => Ok(b == "c" || b == "d" || b == "e"),
+				("c", b) => Ok(b == "d" || b == "e"),
+				("d", b) => Ok(b == "e"),
+				("e", _) => Ok(false),
+				("b'", b) => Ok(b == "c'"),
+				("c'", _) => Ok(false),
+				_ => Ok(false),
+			};
+
+		let reverted = leaves
+			.revert_block(2, "b".into(), "a".into(), is_descendent_of)
+			.unwrap();
+
+		assert_eq!(reverted, vec!["e".to_string()],);
+
+		// the new leaf is the deepest existing leaf that descends from the parent
+		// of the reverted block
+		assert_eq!(leaves.hashes(), vec!["c'".to_string()],);
 	}
 }
