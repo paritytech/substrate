@@ -117,8 +117,8 @@ impl<A, B, C> ProposerFactory<A, B, C, EnableProofRecording> {
 			metrics: PrometheusMetrics::new(prometheus),
 			default_block_size_limit: DEFAULT_BLOCK_SIZE_LIMIT,
 			telemetry,
-			_phantom: PhantomData,
 			include_proof_in_block_size_estimation: true,
+			_phantom: PhantomData,
 		}
 	}
 
