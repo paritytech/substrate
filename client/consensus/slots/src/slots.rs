@@ -58,7 +58,7 @@ pub struct SlotInfo {
 	pub inherent_data: InherentData,
 	/// Slot duration.
 	pub duration: Duration,
-	/// Some potatenial block size limit for the block of this slot.
+	/// Some potential block size limit for the block to be authored at this slot.
 	///
 	/// For more information see [`Proposer::propose`](sp_consensus::Proposer::propose).
 	pub block_size_limit: Option<usize>,
