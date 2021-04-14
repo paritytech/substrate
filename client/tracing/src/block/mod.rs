@@ -37,8 +37,9 @@ use crate::{SpanDatum, TraceEvent, Values};
 // Default to only pallet, frame support and state related traces
 const DEFAULT_TARGETS: &'static str = "pallet,frame,state";
 const TRACE_TARGET: &'static str = "block_trace";
-// :extrinsic_index,system::Account
-const KEY_TARGETS: &'static str = "3a65787472696e7369635f696e646578,26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9";
+// Default to only events with the key prefixes for :extrinsic_index & system::Account.
+const DEFAULT_STORAGE_KEYS: &'static str =
+	"3a65787472696e7369635f696e646578,26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9";
 
 struct BlockSubscriber {
 	targets: Vec<(String, Level)>,
@@ -150,6 +151,7 @@ pub struct BlockExecutor<Block: BlockT, Client> {
 	client: Arc<Client>,
 	block: Block::Hash,
 	targets: Option<String>,
+	storage_keys: Option<String>,
 }
 
 impl<Block, Client> BlockExecutor<Block, Client>
@@ -160,8 +162,13 @@ impl<Block, Client> BlockExecutor<Block, Client>
 		Client::Api: Metadata<Block>,
 {
 	/// Create a new `BlockExecutor`
-	pub fn new(client: Arc<Client>, block: Block::Hash, targets: Option<String>) -> Self {
-		Self { client, block, targets }
+	pub fn new(
+		client: Arc<Client>,
+		block: Block::Hash,
+		targets: Option<String>,
+		storage_keys: Option<String>,
+	) -> Self {
+		Self { client, block, targets, storage_keys }
 	}
 
 	/// Execute block, recording all spans and events belonging to `Self::targets`
@@ -173,6 +180,7 @@ impl<Block, Client> BlockExecutor<Block, Client>
 			.map_err(|e| format!("Invalid block id: {:?}", e))?
 			.ok_or("Block not found".to_string())?;
 		tracing::debug!(target: "state_tracing", "Found {} extrinsics", extrinsics.len());
+
 		let mut header = self.client.header(id)
 			.map_err(|e| format!("Invalid block id: {:?}", e))?
 			.ok_or("Header not found".to_string())?;
@@ -183,6 +191,11 @@ impl<Block, Client> BlockExecutor<Block, Client>
 		let block = Block::new(header, extrinsics);
 
 		let targets = if let Some(t) = &self.targets { t } else { DEFAULT_TARGETS };
+		let storage_keys = if let Some(s) = &self.storage_keys {
+			s
+		} else {
+			DEFAULT_STORAGE_KEYS
+		};
 		let spans = Mutex::new(HashMap::new());
 		let events = Mutex::new(Vec::new());
 		let block_subscriber = BlockSubscriber::new(targets, spans, events);
@@ -227,7 +240,7 @@ impl<Block, Client> BlockExecutor<Block, Client>
 		let events: Vec<_> = block_subscriber.events
 			.lock()
 			.drain(..)
-			.filter(|e| event_key_filter(e, KEY_TARGETS))
+			.filter(|e| event_key_filter(e, storage_keys))
 			.map(|s| s.into())
 			.collect();
 
@@ -246,9 +259,9 @@ impl<Block, Client> BlockExecutor<Block, Client>
 	}
 }
 
-fn event_key_filter(event: &TraceEvent, targets: &str) -> bool {
+fn event_key_filter(event: &TraceEvent, storage_keys: &str) -> bool {
 	if let Some(key) = event.values.string_values.get("key") {
-		if check_target(targets, key, &event.level) {
+		if check_target(storage_keys, key, &event.level) {
 			return true;
 		}
 	}

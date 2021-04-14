@@ -537,9 +537,10 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 		&self,
 		block: Block::Hash,
 		targets: Option<String>,
+		storage_keys: Option<String>,
 	) -> FutureResult<sp_rpc::tracing::BlockTrace> {
 		Box::new(result(
-			sc_tracing::block::BlockExecutor::new(self.client.clone(), block, targets)
+			sc_tracing::block::BlockExecutor::new(self.client.clone(), block, targets, storage_keys)
 				.trace_block()
 				.map_err(|e| invalid_block::<Block>(block, None, e.to_owned()))
 		))

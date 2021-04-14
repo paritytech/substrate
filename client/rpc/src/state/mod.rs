@@ -173,6 +173,7 @@ pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 		&self,
 		block: Block::Hash,
 		targets: Option<String>,
+		storage_keys: Option<String>,
 	) -> FutureResult<sp_rpc::tracing::BlockTrace>;
 }
 
@@ -361,12 +362,16 @@ impl<Block, Client> StateApi<Block::Hash> for State<Block, Client>
 	/// and capture all state changes.
 	///
 	/// Note: requires the node to run with `--rpc-methods=Unsafe`.
-	fn trace_block(&self, block: Block::Hash, targets: Option<String>) -> FutureResult<sp_rpc::tracing::BlockTrace> {
+	fn trace_block(
+		&self, block: Block::Hash,
+		targets: Option<String>,
+		storage_keys: Option<String>
+	) -> FutureResult<sp_rpc::tracing::BlockTrace> {
 		if let Err(err) = self.deny_unsafe.check_if_safe() {
 			return Box::new(result(Err(err.into())))
 		}
 
-		self.backend.trace_block(block, targets)
+		self.backend.trace_block(block, targets, storage_keys)
 	}
 }
 
