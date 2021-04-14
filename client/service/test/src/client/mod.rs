@@ -46,6 +46,7 @@ use sp_api::ProvideRuntimeApi;
 use sp_core::{H256, ChangesTrieConfiguration, blake2_256, testing::TaskExecutor};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use sp_blockchain::{Backend as BlockchainBackend, HeaderBackend};
 use sp_consensus::{
 	BlockOrigin, SelectChain, BlockImport, Error as ConsensusError, BlockCheckParams, ImportResult,
 	BlockStatus, BlockImportParams, ForkChoiceStrategy,
@@ -1927,4 +1928,78 @@ fn reorg_triggers_a_notification_even_for_sources_that_should_not_trigger_notifi
 	// We should have a tree route of the re-org
 	let tree_route = notification.tree_route.unwrap();
 	assert_eq!(tree_route.enacted()[0].hash, b1.hash());
+}
+
+#[test]
+fn mark_bad_block_works() {
+	let builder = TestClientBuilder::new();
+	let backend = builder.backend();
+	let mut client = builder.build();
+
+	// create two forks
+	//
+	// G -> A1 -> A2 -> A3 -> A4 -> A5 -> A6 -> A7
+	//             \
+	//              -> B3 -> B4 -> B5
+	(1..8).for_each(|number| {
+		let block = client
+			.new_block_at(&BlockId::Number(number - 1), Default::default(), false)
+			.unwrap()
+			.build()
+			.unwrap()
+			.block;
+
+		block_on(client.import(BlockOrigin::Own, block)).unwrap();
+	});
+
+	let a1 = client.header(&BlockId::Number(1)).unwrap().unwrap().hash();
+	let a2 = client.header(&BlockId::Number(2)).unwrap().unwrap().hash();
+	let a3 = client.header(&BlockId::Number(3)).unwrap().unwrap().hash();
+	let a6 = client.header(&BlockId::Number(6)).unwrap().unwrap().hash();
+	let a7 = client.header(&BlockId::Number(7)).unwrap().unwrap().hash();
+
+	let b5 = (1..4).fold(a2, |parent_hash, n| {
+		let mut builder = client
+			.new_block_at(&BlockId::Hash(parent_hash), Default::default(), false)
+			.unwrap();
+
+		// push an extrinsic so that we get different hashes on the block
+		// compared to the other fork
+		if n == 1 {
+			builder
+				.push_transfer(Transfer {
+					from: AccountKeyring::Alice.into(),
+					to: AccountKeyring::Ferdie.into(),
+					amount: 42,
+					nonce: 0,
+				})
+				.unwrap();
+		}
+
+		let block = builder.build().unwrap().block;
+
+		let hash = block.hash();
+
+		block_on(client.import(BlockOrigin::Own, block)).unwrap();
+		hash
+	});
+
+	assert_eq!(backend.blockchain().leaves().unwrap(), vec![a7, b5]);
+
+	client.finalize_block(BlockId::Hash(a1), None).unwrap();
+
+	// marking a finalized block as bad should fail
+	assert!(client.mark_bad(a1).is_err());
+
+	// marking block a7 as bad should lead to a6 becoming the new best
+	// block as it is the deepest block available
+	client.mark_bad(a7).unwrap();
+
+	assert_eq!(client.info().best_hash, a6,);
+
+	// marking block a3 as bad should invalidate the whole fork making b5
+	// the best block
+	client.mark_bad(a3).unwrap();
+
+	assert_eq!(client.info().best_hash, b5,);
 }
