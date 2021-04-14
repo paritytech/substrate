@@ -46,16 +46,6 @@ frame_support::construct_runtime!(
 	}
 );
 
-impl_outer_event! {
-	pub enum Event for Test {
-		system<T>,
-		balances<T>,
-	}
-}
-
-// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-#[derive(Clone, PartialEq, Eq, Debug, scale_info::TypeInfo)]
-pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
@@ -70,7 +60,7 @@ impl frame_system::Config for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = CallWithDispatchInfo;
+	type Call = Call;
 	type Hash = H256;
 	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
@@ -79,7 +69,7 @@ impl frame_system::Config for Test {
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
-	type PalletInfo = ();
+	type PalletInfo = PalletInfo;
 	type AccountData = super::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
@@ -134,7 +124,7 @@ impl ExtBuilder {
 	pub fn build(self) -> sp_io::TestExternalities {
 		self.set_associated_consts();
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		GenesisConfig::<Test> {
+		pallet_balances::GenesisConfig::<Test> {
 			balances: if self.monied {
 				vec![
 					(1, 10 * self.existential_deposit),
