@@ -746,15 +746,20 @@ impl<Block: BlockT> backend::Backend<Block> for Backend<Block> where Block::Hash
 			));
 		}
 
-		let mut storage = self.blockchain.storage.write();
+		// we need to clone the leaves otherwise the `is_descendent_of` calls below will try to
+		// query back into the blockchain storage which requires a read lock, this would lead
+		// to a deadlock.
+		let mut leaves = self.blockchain.storage.read().leaves.clone();
 
 		// revert all leaves that descend from this block
-		let reverted = storage.leaves.revert_block(
+		let reverted = leaves.revert_block(
 			*header.number(),
 			header.hash(),
 			*header.parent_hash(),
 			super::utils::is_descendent_of(self.blockchain(), None),
 		)?;
+
+		self.blockchain.storage.write().leaves = leaves;
 
 		// leaves have been updated so we can find the new best block, either some longer fork
 		// exists that doesn't include the given block, or its parent will become the new best.
@@ -841,10 +846,11 @@ pub fn check_genesis_storage(storage: &Storage) -> sp_blockchain::Result<()> {
 
 #[cfg(test)]
 mod tests {
-	use crate::{NewBlockState, in_mem::Blockchain};
+	use super::Backend;
+	use crate::{backend::Backend as _, in_mem::Blockchain, NewBlockState};
 	use sp_api::{BlockId, HeaderT};
+	use sp_blockchain::{Backend as BlockchainBackend, HeaderBackend};
 	use sp_runtime::{ConsensusEngineId, Justifications};
-	use sp_blockchain::Backend;
 	use substrate_test_runtime::{Block, Header, H256};
 
 	pub const ID1: ConsensusEngineId = *b"TST1";
@@ -862,13 +868,18 @@ mod tests {
 		let blockchain = Blockchain::<Block>::new();
 		let just0 = Some(Justifications::from((ID1, vec![0])));
 		let just1 = Some(Justifications::from((ID1, vec![1])));
-		let just2 = None;
-		let just3 = Some(Justifications::from((ID1, vec![3])));
+
 		blockchain.insert(header(0).hash(), header(0), just0, None, NewBlockState::Final).unwrap();
 		blockchain.insert(header(1).hash(), header(1), just1, None, NewBlockState::Final).unwrap();
-		blockchain.insert(header(2).hash(), header(2), just2, None, NewBlockState::Best).unwrap();
-		blockchain.insert(header(3).hash(), header(3), just3, None, NewBlockState::Final).unwrap();
+		blockchain.insert(header(2).hash(), header(2), None, None, NewBlockState::Best).unwrap();
+		blockchain.insert(header(3).hash(), header(3), None, None, NewBlockState::Best).unwrap();
 		blockchain
+	}
+
+	fn test_backend() -> Backend<Block> {
+		let mut backend = Backend::new();
+		backend.blockchain = test_blockchain();
+		backend
 	}
 
 	#[test]
@@ -877,10 +888,10 @@ mod tests {
 		let last_finalized = blockchain.last_finalized().unwrap();
 		let block = BlockId::Hash(last_finalized);
 
-		blockchain.append_justification(block, (ID2, vec![4])).unwrap();
+		blockchain.append_justification(block, (ID2, vec![2])).unwrap();
 		let justifications = {
-			let mut just = Justifications::from((ID1, vec![3]));
-			just.append((ID2, vec![4]));
+			let mut just = Justifications::from((ID1, vec![1]));
+			just.append((ID2, vec![2]));
 			just
 		};
 		assert_eq!(blockchain.justifications(block).unwrap(), Some(justifications));
@@ -897,5 +908,31 @@ mod tests {
 			blockchain.append_justification(block, (ID2, vec![1])),
 			Err(sp_blockchain::Error::BadJustification(_)),
 		));
+	}
+
+	#[test]
+	fn ghosting_block_works() {
+		let backend = test_backend();
+
+		// ghosting a finalized block should fail
+		assert!(backend.ghost(header(1).hash()).is_err());
+
+		// ghosting block #2 should lead to block #1 becoming the new best block
+		let (new_best, reverted) = backend.ghost(header(2).hash()).unwrap();
+
+		assert_eq!(
+			new_best,
+			header(1).hash(),
+		);
+
+		assert_eq!(
+			backend.blockchain().info().best_hash,
+			header(1).hash(),
+		);
+
+		assert_eq!(
+			reverted,
+			vec![header(3).hash()],
+		);
 	}
 }
