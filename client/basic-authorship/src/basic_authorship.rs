@@ -340,7 +340,7 @@ impl<A, B, Block, C, PR> Proposer<B, Block, C, A, PR>
 
 		debug!("Attempting to push transactions from the pool.");
 		debug!("Pool status: {:?}", self.transaction_pool.status());
-		let mut transaction_pushed = true;
+		let mut transaction_pushed = false;
 		let mut hit_block_size_limit = false;
 
 		for pending_tx in pending_iterator {
