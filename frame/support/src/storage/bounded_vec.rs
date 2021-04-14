@@ -32,8 +32,8 @@ impl<T: FullCodec + Clone + sp_std::fmt::Debug> BoundedVecValue for T {}
 
 /// A bounded vector.
 ///
-/// It implementations for efficient append and length decoding, as with a normal `Vec<_>`, once put
-/// into a [`StorageValue`].
+/// It has implementations for efficient append and length decoding, as with a normal `Vec<_>`, once
+/// put into storage as a raw value, map or double-map.
 ///
 /// As the name suggests, the length of the queue is always bounded. All internal operations ensure
 /// this bound is respected.
