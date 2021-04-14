@@ -124,7 +124,7 @@ impl ExtBuilder {
 	pub fn build(self) -> sp_io::TestExternalities {
 		self.set_associated_consts();
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		GenesisConfig::<Test> {
+		pallet_balances::GenesisConfig::<Test> {
 			balances: if self.monied {
 				vec![
 					(1, 10 * self.existential_deposit),
