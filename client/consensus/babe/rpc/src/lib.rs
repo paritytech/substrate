@@ -139,8 +139,8 @@ impl<B, C, SC> BabeApi for BabeRpcHandler<B, C, SC>
 				epoch.authorities.iter()
 					.enumerate()
 					.filter_map(|(i, a)| {
-						if !SyncCryptoStore::has_keys( &*keystore, &[(a.0.to_raw_vec(),
-								AuthorityId::ID)]).is_empty() {
+						if SyncCryptoStore::has_keys( &*keystore, &[(a.0.to_raw_vec(),
+								AuthorityId::ID)]).found_any() {
 							Some((a.0.clone(), i))
 						} else {
 							None
