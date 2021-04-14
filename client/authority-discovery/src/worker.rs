@@ -290,6 +290,15 @@ where
 			Role::Discover => return Ok(()),
 		};
 
+		let keys = Worker::<Client, Network, Block, DhtEventStream>::get_own_public_keys_within_authority_set(
+			key_store.clone(),
+			self.client.as_ref(),
+		).await?.into_iter().map(Into::into).collect::<HashSet<_>>();
+
+		if only_if_changed && keys == self.latest_published_keys {
+			return Ok(())
+		}
+
 		let addresses = self.addresses_to_publish();
 
 		if let Some(metrics) = &self.metrics {
@@ -303,15 +312,6 @@ where
 		schema::AuthorityAddresses { addresses: addresses.map(|a| a.to_vec()).collect() }
 			.encode(&mut serialized_addresses)
 			.map_err(Error::EncodingProto)?;
-
-		let keys = Worker::<Client, Network, Block, DhtEventStream>::get_own_public_keys_within_authority_set(
-			key_store.clone(),
-			self.client.as_ref(),
-		).await?.into_iter().map(Into::into).collect::<HashSet<_>>();
-
-		if only_if_changed && keys == self.latest_published_keys {
-			return Ok(())
-		}
 
 		let keys_vec = keys.iter().cloned().collect::<Vec<_>>();
 		let signatures = key_store.sign_with_all(
