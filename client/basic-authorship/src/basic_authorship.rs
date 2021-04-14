@@ -172,8 +172,8 @@ impl<B, Block, C, A, PR> ProposerFactory<A, B, C, PR>
 			metrics: self.metrics.clone(),
 			default_block_size_limit: self.default_block_size_limit,
 			telemetry: self.telemetry.clone(),
-			include_proof_in_block_size_estimation: self.include_proof_in_block_size_estimation,
 			_phantom: PhantomData,
+			include_proof_in_block_size_estimation: self.include_proof_in_block_size_estimation,
 		};
 
 		proposer
