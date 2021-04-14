@@ -206,10 +206,16 @@ impl<Block, Client> BlockExecutor<Block, Client>
 
 		let block_subscriber = dispatch.downcast_ref::<BlockSubscriber>()
 			.ok_or("Cannot downcast Dispatch to BlockSubscriber after tracing block")?;
-		let mut spans: Vec<Span> = block_subscriber.spans
+		let mut span_datums: Vec<SpanDatum> = block_subscriber.spans
 			.lock()
 			.drain()
 			.map(|(_, s)| s.into())
+			.collect::<Vec<SpanDatum>>();
+
+		// Is there a way to do this sort without collecting twice? - zeke
+		span_datums.sort_by(|a, b| b.start_time.cmp(&a.start_time));
+
+		let spans: Vec<Span> = span_datums
 			.into_iter()
 			// Patch wasm identifiers
 			.filter_map(|s| patch_and_filter(s, targets))
@@ -220,12 +226,11 @@ impl<Block, Client> BlockExecutor<Block, Client>
 		let events: Vec<_> = block_subscriber.events
 			.lock()
 			.drain(..)
-			// .map(|s| s.into())
 			.filter(|e| event_key_filter(e, KEY_TARGETS))
 			.map(|s| s.into())
 			.collect();
 
-		// tracing::debug!(target: "state_tracing", "Captured {} spans and {} events", spans.len(), events.len());
+		tracing::debug!(target: "state_tracing", "Captured {} spans and {} events", spans.len(), events.len());
 
 
 
