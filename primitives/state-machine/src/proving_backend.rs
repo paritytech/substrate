@@ -17,7 +17,7 @@
 
 //! Proving state machine backend.
 
-use std::{sync::{Arc, atomic::{AtomicUsize, Ordering}}, collections::HashMap};
+use std::{sync::Arc, collections::{HashMap, hash_map::Entry}};
 use parking_lot::RwLock;
 use codec::{Decode, Codec, Encode};
 use log::debug;
@@ -109,30 +109,39 @@ impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
 	}
 }
 
+#[derive(Default)]
+struct ProofRecorderInner<Hash> {
+	/// All the records that we have stored so far.
+	records: HashMap<Hash, Option<DBValue>>,
+	/// The encoded size of all recorded values.
+	encoded_size: usize,
+}
+
 /// Global proof recorder, act as a layer over a hash db for recording queried data.
 #[derive(Clone, Default)]
 pub struct ProofRecorder<Hash> {
-	/// All the records that we have stored so far.
-	records: Arc<RwLock<HashMap<Hash, Option<DBValue>>>>,
-	/// The encoded size of all recorded values.
-	encoded_size: Arc<AtomicUsize>,
+	inner: Arc<RwLock<ProofRecorderInner<Hash>>>,
 }
 
 impl<Hash: std::hash::Hash + Eq> ProofRecorder<Hash> {
 	/// Record the given `key` => `val` combination.
 	pub fn record(&self, key: Hash, val: Option<DBValue>) {
-		self.records.write().entry(key).or_insert_with(|| {
-			if let Some(ref val) = val {
-				self.encoded_size.fetch_add(val.encoded_size(), Ordering::Relaxed);
-			}
+		let mut inner = self.inner.write();
+		let encoded_size = if let Entry::Vacant(entry) = inner.records.entry(key) {
+			let encoded_size = val.as_ref().map(Encode::encoded_size).unwrap_or(0);
 
-			val
-		});
+			entry.insert(val);
+			encoded_size
+		} else {
+			0
+		};
+
+		inner.encoded_size += encoded_size;
 	}
 
 	/// Returns the value at the given `key`.
 	pub fn get(&self, key: &Hash) -> Option<Option<DBValue>> {
-		self.records.read().get(key).cloned()
+		self.inner.read().records.get(key).cloned()
 	}
 
 	/// Returns the estimated encoded size of the proof.
@@ -140,13 +149,15 @@ impl<Hash: std::hash::Hash + Eq> ProofRecorder<Hash> {
 	/// The estimation is maybe bigger (by in maximum 4 bytes), but never smaller than the actual
 	/// encoded proof.
 	pub fn estimate_encoded_size(&self) -> usize {
-		self.encoded_size.load(Ordering::Relaxed)
-			+ codec::Compact(self.records.read().len() as u32).encoded_size()
+		let inner = self.inner.read();
+		inner.encoded_size
+			+ codec::Compact(inner.records.len() as u32).encoded_size()
 	}
 
 	/// Convert into a [`StorageProof`].
 	pub fn to_storage_proof(&self) -> StorageProof {
-		let trie_nodes = self.records.read()
+		let trie_nodes = self.inner.read()
+			.records
 			.iter()
 			.filter_map(|(_k, v)| v.as_ref().map(|v| v.to_vec()))
 			.collect();
@@ -156,8 +167,9 @@ impl<Hash: std::hash::Hash + Eq> ProofRecorder<Hash> {
 
 	/// Reset the internal state.
 	pub fn reset(&self) {
-		self.records.write().clear();
-		self.encoded_size.store(0, Ordering::Relaxed);
+		let mut inner = self.inner.write();
+		inner.records.clear();
+		inner.encoded_size = 0;
 	}
 }
 
