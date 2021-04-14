@@ -64,7 +64,7 @@ impl AddrCache {
 				Some(a) => a,
 				None => { debug_assert!(false); continue }
 			};
-			former_auth_addrs.retain(|a| peer_id_from_multiaddr(a).map_or(false, |p| p != peer_id));
+			former_auth_addrs.retain(|a| peer_id_from_multiaddr(a).map_or(true, |p| p != peer_id));
 		}
 
 		// Insert into `self.authority_id_to_addresses`.
