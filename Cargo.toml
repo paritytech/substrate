@@ -157,7 +157,6 @@ members = [
 	"primitives/maybe-compressed-blob",
 	"primitives/npos-elections",
 	"primitives/npos-elections/compact",
-	"primitives/npos-elections/compact/fuzzer",
 	"primitives/npos-elections/fuzzer",
 	"primitives/offchain",
 	"primitives/panic-handler",
