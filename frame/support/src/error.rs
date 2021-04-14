@@ -20,7 +20,7 @@
 #[doc(hidden)]
 pub use sp_runtime::traits::{LookupError, BadOrigin};
 #[doc(hidden)]
-pub use frame_metadata::{ModuleErrorMetadata, ErrorMetadata, DecodeDifferent};
+pub use frame_metadata2::v13::ErrorMetadata;
 
 /// Declare an error type for a runtime module.
 ///
@@ -164,14 +164,14 @@ macro_rules! decl_error {
 			for $error<$generic $(, $inst_generic)?>
 		$( where $( $where_ty: $where_bound ),* )?
 		{
-			fn metadata() -> &'static [$crate::error::ErrorMetadata] {
-				&[
+			fn metadata() -> $crate::scale_info::prelude::vec::Vec<$crate::error::ErrorMetadata> {
+				$crate::scale_info::prelude::vec![
 					$(
 						$crate::error::ErrorMetadata {
-							name: $crate::error::DecodeDifferent::Encode(stringify!($name)),
-							documentation: $crate::error::DecodeDifferent::Encode(&[
+							name: stringify!($name),
+							documentation: $crate::scale_info::prelude::vec![
 								$( $doc_attr ),*
-							]),
+							],
 						}
 					),*
 				]
@@ -208,5 +208,16 @@ macro_rules! decl_error {
 			$error::__Ignore(_, _) => unreachable!("`__Ignore` can never be constructed"),
 			$( $generated )*
 		}
+	}
+}
+
+/// All the metadata about errors in a module.
+pub trait ModuleErrorMetadata {
+	fn metadata() -> sp_std::prelude::Vec<ErrorMetadata>;
+}
+
+impl ModuleErrorMetadata for &'static str {
+	fn metadata() -> sp_std::prelude::Vec<ErrorMetadata> {
+		sp_std::prelude::Vec::new()
 	}
 }

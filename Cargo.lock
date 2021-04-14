@@ -1791,7 +1791,7 @@ dependencies = [
 [[package]]
 name = "frame-metadata"
 version = "12.0.0"
-source = "git+https://github.com/paritytech/frame-metadata?branch=aj-constants#616aba05e84c022345da37dae1ff11eb0d873afb"
+source = "git+https://github.com/paritytech/frame-metadata?branch=aj-substrate#eb8166882db7603b8b7eea1ac87061af0651d02f"
 dependencies = [
  "cfg-if 1.0.0",
  "parity-scale-codec",

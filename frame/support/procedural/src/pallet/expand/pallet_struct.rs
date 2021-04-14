@@ -76,7 +76,7 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 				for #pallet_ident<#type_use_gen>
 				#config_where_clause
 			{
-				fn metadata() -> &'static [#frame_support::error::ErrorMetadata] {
+				fn metadata() -> #frame_support::scale_info::prelude::vec::Vec<#frame_support::error::ErrorMetadata> {
 					<
 						#error_ident<#type_use_gen> as #frame_support::error::ModuleErrorMetadata
 					>::metadata()
@@ -89,8 +89,8 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 				for #pallet_ident<#type_use_gen>
 				#config_where_clause
 			{
-				fn metadata() -> &'static [#frame_support::error::ErrorMetadata] {
-					&[]
+				fn metadata() -> #frame_support::scale_info::prelude::vec::Vec<#frame_support::error::ErrorMetadata> {
+					#frame_support::scale_info::prelude::vec::Vec::new()
 				}
 			}
 		)

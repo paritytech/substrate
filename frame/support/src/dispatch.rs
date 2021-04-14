@@ -20,9 +20,7 @@
 
 pub use crate::sp_std::{result, fmt, prelude::{Vec, Clone, Eq, PartialEq}, marker};
 pub use crate::codec::{Codec, EncodeLike, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
-pub use frame_metadata::{
-	DefaultByte, DefaultByteGetter, ModuleErrorMetadata, ErrorMetadata
-};
+pub use frame_metadata::{DefaultByte, DefaultByteGetter};
 pub use frame_metadata2::v13::{
 	FunctionMetadata, FunctionArgumentMetadata, ModuleConstantMetadata,
 };
@@ -2154,11 +2152,11 @@ macro_rules! decl_module {
 			$( $constants )*
 		}
 
-		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::ModuleErrorMetadata
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::error::ModuleErrorMetadata
 			for $mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
-			fn metadata() -> &'static [$crate::dispatch::ErrorMetadata] {
-				<$error_type as $crate::dispatch::ModuleErrorMetadata>::metadata()
+			fn metadata() -> $crate::scale_info::prelude::vec::Vec<$crate::error::ErrorMetadata> {
+				<$error_type as $crate::error::ModuleErrorMetadata>::metadata()
 			}
 		}
 	}
