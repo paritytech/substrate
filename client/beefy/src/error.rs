@@ -32,11 +32,3 @@ pub(crate) enum Crypto<Id: Public + Debug> {
 	#[error("Failed to sign comitment using key: {0:?}. Reason: {1}")]
 	CannotSign(Id, String),
 }
-
-/// Lifecycle related errors
-#[derive(Debug, thiserror::Error)]
-pub(crate) enum Lifecycle {
-	/// Can't fetch validator set from BEEFY pallet
-	#[error("Failed to fetch validator set: {0}")]
-	MissingValidatorSet(String),
-}

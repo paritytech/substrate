@@ -49,7 +49,8 @@ use crate::{
 	notification, round, Client,
 };
 use beefy_primitives::{
-	BeefyApi, Commitment, ConsensusLog, MmrRootHash, SignedCommitment, ValidatorSet, BEEFY_ENGINE_ID, KEY_TYPE,
+	BeefyApi, Commitment, ConsensusLog, MmrRootHash, SignedCommitment, ValidatorSet, BEEFY_ENGINE_ID,
+	GENESIS_AUTHORITY_SET_ID, KEY_TYPE,
 };
 
 /// The maximum number of live gossip rounds allowed, i.e. we will expire messages older than this.
@@ -163,17 +164,6 @@ struct VoteMessage<Hash, Number, Id, Signature> {
 	signature: Signature,
 }
 
-#[derive(PartialEq)]
-/// Worker lifecycle state
-enum State {
-	/// A new worker that still needs to be initialized.
-	New,
-	/// A worker that validates and votes for commitments
-	Validate,
-	/// A worker that acts as a goosip relay only
-	Gossip,
-}
-
 pub(crate) struct BeefyWorker<B, C, BE, P>
 where
 	B: Block,
@@ -183,19 +173,21 @@ where
 	P::Signature: Clone + Codec + Debug + PartialEq + TryFrom<Vec<u8>>,
 	C: Client<B, BE, P>,
 {
-	state: State,
-	local_id: Option<P::Public>,
+	client: Arc<C>,
 	key_store: SyncCryptoStorePtr,
-	min_interval: u32,
+	signed_commitment_sender: notification::BeefySignedCommitmentSender<B, P::Signature>,
+	gossip_engine: Arc<Mutex<GossipEngine<B>>>,
+	gossip_validator: Arc<BeefyGossipValidator<B, P>>,
+	metrics: Option<Metrics>,
 	rounds: round::Rounds<MmrRootHash, NumberFor<B>, P::Public, P::Signature>,
 	finality_notifications: FinalityNotifications<B>,
-	gossip_engine: Arc<Mutex<GossipEngine<B>>>,
-	signed_commitment_sender: notification::BeefySignedCommitmentSender<B, P::Signature>,
-	best_finalized_block: NumberFor<B>,
+	min_interval: u32,
+	/// Best block we received a GRANDPA notification for
+	best_grandpa_block: NumberFor<B>,
+	/// Best block a BEEFY voting round has been concluded for
+	best_beefy_block: Option<NumberFor<B>>,
+	/// Best block this node has voted for
 	best_block_voted_on: NumberFor<B>,
-	client: Arc<C>,
-	metrics: Option<Metrics>,
-	gossip_validator: Arc<BeefyGossipValidator<B, P>>,
 	_backend: PhantomData<BE>,
 	_pair: PhantomData<P>,
 }
@@ -228,61 +220,21 @@ where
 		metrics: Option<Metrics>,
 	) -> Self {
 		BeefyWorker {
-			state: State::New,
-			local_id: None,
+			client: client.clone(),
 			key_store,
-			min_interval: 2,
+			signed_commitment_sender,
+			gossip_engine: Arc::new(Mutex::new(gossip_engine)),
+			gossip_validator,
+			metrics,
 			rounds: round::Rounds::new(ValidatorSet::empty()),
 			finality_notifications: client.finality_notification_stream(),
-			gossip_engine: Arc::new(Mutex::new(gossip_engine)),
-			signed_commitment_sender,
-			best_finalized_block: Zero::zero(),
+			min_interval: 2,
+			best_grandpa_block: client.info().finalized_number,
+			best_beefy_block: None,
 			best_block_voted_on: Zero::zero(),
-			client,
-			metrics,
-			gossip_validator,
 			_backend: PhantomData,
 			_pair: PhantomData,
 		}
-	}
-
-	fn init_validator_set(&mut self) -> Result<(), error::Lifecycle> {
-		let at = BlockId::hash(self.client.info().best_hash);
-
-		let validator_set = self
-			.client
-			.runtime_api()
-			.validator_set(&at)
-			.map_err(|err| error::Lifecycle::MissingValidatorSet(err.to_string()))?;
-
-		let local_id = match validator_set
-			.validators
-			.iter()
-			.find(|id| SyncCryptoStore::has_keys(&*self.key_store, &[(id.to_raw_vec(), KEY_TYPE)]))
-		{
-			Some(id) => {
-				info!(target: "beefy", "🥩 Starting BEEFY worker with local id: {:?}", id);
-				self.state = State::Validate;
-				Some(id.clone())
-			}
-			None => {
-				info!(target: "beefy", "🥩 No local id found, BEEFY worker will be gossip only.");
-				self.state = State::Gossip;
-				None
-			}
-		};
-
-		self.local_id = local_id;
-		self.rounds = round::Rounds::new(validator_set.clone());
-
-		// we are actually interested in the best finalized block with the BEEFY pallet
-		// being available on-chain. That is why we set `best_finalized_block` here and
-		// not as part of `new()` already.
-		self.best_finalized_block = self.client.info().finalized_number;
-
-		debug!(target: "beefy", "🥩 Validator set with id {} initialized", validator_set.id);
-
-		Ok(())
 	}
 }
 
@@ -296,15 +248,18 @@ where
 	C: Client<B, BE, P>,
 	C::Api: BeefyApi<B, P::Public>,
 {
+	/// Return `true`, if the should vote on block `number`
 	fn should_vote_on(&self, number: NumberFor<B>) -> bool {
 		use sp_runtime::{traits::Saturating, SaturatedConversion};
 
-		// we only vote as a validator
-		if self.state != State::Validate {
+		let best_beefy_block = if let Some(block) = self.best_beefy_block {
+			block
+		} else {
+			debug!(target: "beefy", "🥩 Missing best BEEFY block - won't vote for: {:?}", number);
 			return false;
-		}
+		};
 
-		let diff = self.best_finalized_block.saturating_sub(self.best_block_voted_on);
+		let diff = self.best_grandpa_block.saturating_sub(best_beefy_block);
 		let diff = diff.saturated_into::<u32>();
 		let next_power_of_two = (diff / 2).next_power_of_two();
 		let next_block_to_vote_on = self.best_block_voted_on + self.min_interval.max(next_power_of_two).into();
@@ -334,26 +289,61 @@ where
 		Ok(sig)
 	}
 
+	/// Return the current active validator set at header `header`.
+	///
+	/// Note that the validator set could be `None`. This is the case if we don't find
+	/// a BEEFY authority set change and we can't fetch the validator set from the
+	/// BEEFY on-chain state. Such a failure is usually an indication that the BEEFT
+	/// pallet has not been deployed (yet).
+	fn validator_set(&self, header: &B::Header) -> Option<ValidatorSet<P::Public>> {
+		if let Some(new) = find_authorities_change::<B, P::Public>(header) {
+			Some(new)
+		} else {
+			let at = BlockId::hash(header.hash());
+			self.client.runtime_api().validator_set(&at).ok()
+		}
+	}
+
+	/// Return the local authority id.
+	///
+	/// `None` is returned, if we are not permitted to vote
+	fn local_id(&self) -> Option<P::Public> {
+		self.rounds
+			.validators()
+			.iter()
+			.find(|id| SyncCryptoStore::has_keys(&*self.key_store, &[(id.to_raw_vec(), KEY_TYPE)]))
+			.cloned()
+	}
+
 	fn handle_finality_notification(&mut self, notification: FinalityNotification<B>) {
 		debug!(target: "beefy", "🥩 Finality notification: {:?}", notification);
 
-		if let Some(new) = find_authorities_change::<B, P::Public>(&notification.header) {
-			debug!(target: "beefy", "🥩 New validator set: {:?}", new);
+		// update best GRANDPA finalized block we have seen
+		self.best_grandpa_block = *notification.header.number();
+
+		if let Some(active) = self.validator_set(&notification.header) {
+			debug!(target: "beefy", "🥩 Active validator set id: {:?}", active);
 
 			if let Some(metrics) = self.metrics.as_ref() {
-				metrics.beefy_validator_set_id.set(new.id);
+				metrics.beefy_validator_set_id.set(active.id);
 			}
 
-			self.rounds = round::Rounds::new(new);
+			// Authority set change or genesis set id triggers new voting rounds
+			//
+			// TODO: (adoerr) Enacting a new authority set will also implicitly 'conclude'
+			// the currently active BEEFY voting round by starting a new one. This is
+			// temporary and needs to be repalced by proper round life cycle handling.
+			if (active.id != self.rounds.validator_set_id()) || (active.id == GENESIS_AUTHORITY_SET_ID) {
+				self.rounds = round::Rounds::new(active.clone());
 
-			// NOTE: currently we act as if this block has been finalized by BEEFY as we perform
-			// the validator set changes instantly (insecure). Once proper validator set changes
-			// are implemented this should be removed
-			self.best_finalized_block = *notification.header.number();
+				debug!(target: "beefy", "🥩 New Rounds for id: {:?}", active.id);
+
+				self.best_beefy_block = Some(*notification.header.number());
+			}
 		};
 
 		if self.should_vote_on(*notification.header.number()) {
-			let local_id = if let Some(ref id) = self.local_id {
+			let local_id = if let Some(id) = self.local_id() {
 				id
 			} else {
 				error!(target: "beefy", "🥩 Missing validator id - can't vote for: {:?}", notification.header.hash());
@@ -385,7 +375,7 @@ where
 
 			let message = VoteMessage {
 				commitment,
-				id: local_id.clone(),
+				id: local_id,
 				signature,
 			};
 
@@ -426,7 +416,7 @@ where
 				info!(target: "beefy", "🥩 Round #{} concluded, committed: {:?}.", round.1, signed_commitment);
 
 				self.signed_commitment_sender.notify(signed_commitment);
-				self.best_finalized_block = round.1;
+				self.best_beefy_block = Some(round.1);
 			}
 		}
 	}
@@ -450,16 +440,6 @@ where
 			futures::select! {
 				notification = self.finality_notifications.next().fuse() => {
 					if let Some(notification) = notification {
-						if self.state == State::New {
-							match self.init_validator_set() {
-								Ok(()) => (),
-								Err(err) => {
-									// this is not treated as an error here because there really is
-									// nothing a node operator could do in order to remedy the root cause.
-									debug!(target: "beefy", "🥩 Init validator set failed: {:?}", err);
-								}
-							}
-						}
 						self.handle_finality_notification(notification);
 					} else {
 						return;

@@ -75,11 +75,15 @@ impl<Hash, Number, Id, Signature> Rounds<Hash, Number, Id, Signature>
 where
 	Hash: Ord,
 	Number: Ord,
-	Id: PartialEq,
+	Id: PartialEq + Clone,
 	Signature: Clone + PartialEq,
 {
 	pub(crate) fn validator_set_id(&self) -> ValidatorSetId {
 		self.validator_set.id
+	}
+
+	pub(crate) fn validators(&self) -> Vec<Id> {
+		self.validator_set.validators.clone()
 	}
 
 	pub(crate) fn add_vote(&mut self, round: (Hash, Number), vote: (Id, Signature)) -> bool {
