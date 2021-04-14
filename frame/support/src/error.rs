@@ -20,6 +20,9 @@
 #[doc(hidden)]
 pub use sp_runtime::traits::{LookupError, BadOrigin};
 
+use crate::metadata::ErrorMetadata;
+use sp_std::prelude::Vec;
+
 /// Declare an error type for a runtime module.
 ///
 /// `decl_error!` supports only variants that do not hold any data. The dispatchable
@@ -211,11 +214,11 @@ macro_rules! decl_error {
 
 /// All the metadata about errors in a module.
 pub trait ModuleErrorMetadata {
-	fn metadata() -> sp_std::prelude::Vec<ErrorMetadata>;
+	fn metadata() -> Vec<ErrorMetadata>;
 }
 
 impl ModuleErrorMetadata for &'static str {
-	fn metadata() -> sp_std::prelude::Vec<ErrorMetadata> {
-		sp_std::prelude::Vec::new()
+	fn metadata() -> Vec<ErrorMetadata> {
+		Vec::new()
 	}
 }
