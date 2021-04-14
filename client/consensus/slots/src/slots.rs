@@ -58,6 +58,10 @@ pub struct SlotInfo {
 	pub inherent_data: InherentData,
 	/// Slot duration.
 	pub duration: Duration,
+	/// Some potential block size limit for the block to be authored at this slot.
+	///
+	/// For more information see [`Proposer::propose`](sp_consensus::Proposer::propose).
+	pub block_size_limit: Option<usize>,
 }
 
 impl SlotInfo {
@@ -69,12 +73,14 @@ impl SlotInfo {
 		timestamp: sp_timestamp::Timestamp,
 		inherent_data: InherentData,
 		duration: Duration,
+		block_size_limit: Option<usize>,
 	) -> Self {
 		Self {
 			slot,
 			timestamp,
 			inherent_data,
 			duration,
+			block_size_limit,
 			ends_at: Instant::now() + time_until_next(timestamp.as_duration(), duration),
 		}
 	}
@@ -147,6 +153,7 @@ impl<SC: SlotCompatible> Slots<SC> {
 					timestamp,
 					inherent_data,
 					self.slot_duration,
+					None,
 				))
 			}
 		}

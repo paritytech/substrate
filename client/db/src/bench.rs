@@ -23,7 +23,7 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 
 use hash_db::{Prefix, Hasher};
-use sp_trie::{MemoryDB, prefixed_key, StorageProof};
+use sp_trie::{MemoryDB, prefixed_key};
 use sp_core::{
 	storage::{ChildInfo, TrackedStorageKey},
 	hexdisplay::HexDisplay
@@ -34,7 +34,6 @@ use sp_state_machine::{
 	DBValue, backend::Backend as StateBackend, StorageCollection, ChildStorageCollection, ProofRecorder,
 };
 use kvdb::{KeyValueDB, DBTransaction};
-use codec::Encode;
 use crate::storage_cache::{CachingState, SharedCache, new_shared_cache};
 
 type DbState<B> = sp_state_machine::TrieBackend<
@@ -45,7 +44,7 @@ type State<B> = CachingState<DbState<B>, B>;
 
 struct StorageDb<Block: BlockT> {
 	db: Arc<dyn KeyValueDB>,
-	proof_recorder: Option<ProofRecorder<HashFor<Block>>>,
+	proof_recorder: Option<ProofRecorder<Block::Hash>>,
 	_block: std::marker::PhantomData<Block>,
 }
 
@@ -53,12 +52,12 @@ impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Bloc
 	fn get(&self, key: &Block::Hash, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		let prefixed_key = prefixed_key::<HashFor<Block>>(key, prefix);
 		if let Some(recorder) = &self.proof_recorder {
-			if let Some(v) = recorder.read().get(&key) {
+			if let Some(v) = recorder.get(&key) {
 				return Ok(v.clone());
 			}
 			let backend_value = self.db.get(0, &prefixed_key)
 				.map_err(|e| format!("Database backend error: {:?}", e))?;
-			recorder.write().insert(key.clone(), backend_value.clone());
+			recorder.record(key.clone(), backend_value.clone());
 			Ok(backend_value)
 		} else {
 			self.db.get(0, &prefixed_key)
@@ -117,7 +116,7 @@ pub struct BenchmarkingState<B: BlockT> {
 	child_key_tracker: RefCell<HashMap<Vec<u8>, HashMap<Vec<u8>, KeyTracker>>>,
 	read_write_tracker: RefCell<ReadWriteTracker>,
 	whitelist: RefCell<Vec<TrackedStorageKey>>,
-	proof_recorder: Option<ProofRecorder<HashFor<B>>>,
+	proof_recorder: Option<ProofRecorder<B::Hash>>,
 }
 
 impl<B: BlockT> BenchmarkingState<B> {
@@ -164,12 +163,10 @@ impl<B: BlockT> BenchmarkingState<B> {
 		*self.state.borrow_mut() = None;
 		let db = match self.db.take() {
 			Some(db) => db,
-			None => Arc::new(::kvdb_memorydb::create(1)),
+			None => Arc::new(kvdb_memorydb::create(1)),
 		};
 		self.db.set(Some(db.clone()));
-		if let Some(recorder) = &self.proof_recorder {
-			recorder.write().clear();
-		}
+		self.proof_recorder.as_ref().map(|r| r.reset());
 		let storage_db = Arc::new(StorageDb::<B> {
 			db,
 			proof_recorder: self.proof_recorder.clone(),
@@ -429,7 +426,8 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		None
 	}
 
-	fn commit(&self,
+	fn commit(
+		&self,
 		storage_root: <HashFor<B> as Hasher>::Out,
 		mut transaction: Self::Transaction,
 		main_storage_changes: StorageCollection,
@@ -518,14 +516,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 	}
 
 	fn proof_size(&self) -> Option<u32> {
-		self.proof_recorder.as_ref().map(|recorder| {
-			let proof = StorageProof::new(recorder
-				.read()
-				.iter()
-				.filter_map(|(_k, v)| v.as_ref().map(|v| v.to_vec()))
-				.collect());
-			proof.encoded_size() as u32
-		})
+		self.proof_recorder.as_ref().map(|recorder| recorder.estimate_encoded_size() as u32)
 	}
 }
 
