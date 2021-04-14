@@ -38,6 +38,7 @@ sp-core = { version = "3.0.0", path = "../../primitives/core" }
 sc-telemetry = { version = "3.0.0", path = "../telemetry" }
 sc-client-api = { version = "3.0.0", path = "../api" }
 sc-tracing-proc-macro = { version = "3.0.0", path = "./proc-macro" }
+sc-rpc-server =  { version = "3.0.0", path = "../rpc-servers" }
 wasm-timer = "0.2"
 
 [target.'cfg(target_os = "unknown")'.dependencies]

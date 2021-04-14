@@ -24,6 +24,7 @@ use tracing::{Dispatch, dispatcher, Subscriber, Level, span::{Attributes, Record
 use tracing_subscriber::CurrentSpan;
 
 use sc_client_api::BlockBackend;
+use sc_rpc_server::MAX_PAYLOAD;
 use sp_api::{Core, Metadata, ProvideRuntimeApi, Encode};
 use sp_blockchain::HeaderBackend;
 use sp_runtime::{
@@ -41,8 +42,6 @@ const TRACE_TARGET: &'static str = "block_trace";
 // Default to only events with the key prefixes for :extrinsic_index & system::Account.
 const DEFAULT_STORAGE_KEYS: &'static str =
 	"3a65787472696e7369635f696e646578,26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9";
-/// Maximal payload accepted by RPC servers. // TODO maybe import from sc_rpc_server
-const MAX_PAYLOAD: usize = 15 * 1024 * 1024;
 
 struct BlockSubscriber {
 	targets: Vec<(String, Level)>,
@@ -50,7 +49,6 @@ struct BlockSubscriber {
 	current_span: CurrentSpan,
 	spans: Mutex<HashMap<Id, SpanDatum>>,
 	events: Mutex<Vec<TraceEvent>>,
-	timestamp: Instant,
 }
 
 impl BlockSubscriber {
@@ -73,7 +71,6 @@ impl BlockSubscriber {
 			current_span: CurrentSpan::default(),
 			spans,
 			events,
-			timestamp: Instant::now(),
 		}
 	}
 }

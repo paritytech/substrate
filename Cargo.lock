@@ -8007,6 +8007,7 @@ dependencies = [
  "parking_lot 0.11.1",
  "regex",
  "sc-client-api",
+ "sc-rpc-server",
  "sc-telemetry",
  "sc-tracing-proc-macro",
  "serde",
