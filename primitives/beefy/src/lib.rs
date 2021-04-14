@@ -111,6 +111,20 @@ pub enum ConsensusLog<AuthorityId: Codec> {
 	MmrRoot(MmrRootHash),
 }
 
+/// BEEFY vote message.
+///
+/// A vote message is a direct vote created by a BEEFY node on every voting round
+/// and is gossiped to its peers.
+#[derive(Debug, Decode, Encode)]
+pub struct VoteMessage<Hash, Number, Id, Signature> {
+	/// Commit to information extracted from a finalized block
+	pub commitment: Commitment<Number, Hash>,
+	/// Node authority id
+	pub id: Id,
+	/// Node signature
+	pub signature: Signature,
+}
+
 sp_api::decl_runtime_apis! {
 	/// API necessary for BEEFY voters.
 	pub trait BeefyApi<AuthorityId: Codec> {
