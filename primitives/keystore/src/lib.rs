@@ -48,11 +48,11 @@ pub enum Error {
 /// Return type for key lookups
 #[derive(Debug, PartialEq)]
 pub enum HasKeys {
-    /// No key found
+	/// No key found
 	None,
-    /// Found some key(s)
+	/// Found some key(s)
 	Found(Vec<usize>),
-    /// Found all keys
+	/// Found all keys
 	FoundAll(Vec<usize>)
 }
 
