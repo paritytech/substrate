@@ -22,6 +22,7 @@ use codec::{FullCodec, Decode, EncodeLike, Encode};
 use crate::{
 	storage::{
 		StorageAppend, StorageDecodeLength,
+		bounded_vec::{BoundedVec, BoundedVecValue},
 		types::{OptionQuery, QueryKindTrait, OnEmptyGetter},
 	},
 	traits::{GetDefault, StorageInstance},

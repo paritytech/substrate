@@ -19,7 +19,6 @@
 
 use sp_core::storage::ChildInfo;
 use sp_std::prelude::*;
-use sp_std::convert::TryFrom;
 use codec::{FullCodec, FullEncode, Encode, EncodeLike, Decode};
 use crate::{
 	hash::{Twox128, StorageHasher, ReversibleStorageHasher},
@@ -28,13 +27,14 @@ use crate::{
 use sp_runtime::generic::{Digest, DigestItem};
 pub use sp_runtime::TransactionOutcome;
 
-pub mod unhashed;
-pub mod hashed;
+pub mod bounded_vec;
 pub mod child;
 #[doc(hidden)]
 pub mod generator;
+pub mod hashed;
 pub mod migration;
 pub mod types;
+pub mod unhashed;
 
 #[cfg(all(feature = "std", any(test, debug_assertions)))]
 mod debug_helper {
@@ -810,12 +810,13 @@ pub trait StorageDecodeLength: private::Sealed + codec::DecodeLength {
 /// outside of this crate.
 mod private {
 	use super::*;
+	use bounded_vec::{BoundedVecValue, BoundedVec};
 
 	pub trait Sealed {}
 
 	impl<T: Encode> Sealed for Vec<T> {}
 	impl<Hash: Encode> Sealed for Digest<Hash> {}
-	impl<T: Value, S: Get<u32>> Sealed for BoundedVec<T, S> {}
+	impl<T: BoundedVecValue, S: Get<u32>> Sealed for BoundedVec<T, S> {}
 }
 
 impl<T: Encode> StorageAppend<T> for Vec<T> {}
@@ -825,312 +826,6 @@ impl<T: Encode> StorageDecodeLength for Vec<T> {}
 /// internal vec and we can append to this vec. We have a test that ensures that if the `Digest`
 /// format ever changes, we need to remove this here.
 impl<Hash: Encode> StorageAppend<DigestItem<Hash>> for Digest<Hash> {}
-
-/// Marker trait for types `T` that can be stored in storage as `Vec<T>`.
-pub trait Value: FullCodec + Clone + sp_std::fmt::Debug + Eq + PartialEq {}
-impl<T: FullCodec + Clone + sp_std::fmt::Debug + Eq + PartialEq> Value for T {}
-
-/// A bounded vector.
-///
-/// It implementations for efficient append and length decoding, as with a normal `Vec<_>`, once put
-/// into a [`StorageValue`].
-///
-/// As the name suggests, the length of the queue is always bounded. All internal operations ensure
-/// this bound is respected.
-#[derive(Encode, Decode, crate::DefaultNoBound, crate::CloneNoBound, crate::RuntimeDebugNoBound)]
-pub struct BoundedVec<T: Value, S: Get<u32>>(Vec<T>, sp_std::marker::PhantomData<S>);
-
-// NOTE: we could also implement this as:
-// impl<T: Value, S1: Get<u32>, S2: Get<u32>> PartialEq<BoundedVec<T, S2>> for BoundedVec<T, S1>
-// to allow comparison of bounded vectors with different bounds.
-impl<T: Value, S: Get<u32>> PartialEq for BoundedVec<T, S> {
-	fn eq(&self, rhs: &Self) -> bool {
-		self.0 == rhs.0
-	}
-}
-impl<T: Value, S: Get<u32>> Eq for BoundedVec<T, S> {}
-
-impl<T: Value, S: Get<u32>> BoundedVec<T, S> {
-	/// Create `Self` from `t` without any checks.
-	///
-	/// # WARNING
-	///
-	/// Only use when you are sure you know what you are doing.
-	fn unchecked_from(t: Vec<T>) -> Self {
-		Self(t, Default::default())
-	}
-
-	/// Create `Self` from `t` without any checks. Logs warnings if the bound is not being
-	/// respected. The additional scope can be used to indicate where a potential overflow is
-	/// happening.
-	///
-	/// # WARNING
-	///
-	/// Only use when you are sure you know what you are doing.
-	pub fn force_from(t: Vec<T>, scope: Option<&'static str>) -> Self {
-		if t.len() > Self::bound() {
-			log::warn!(
-				target: crate::LOG_TARGET,
-				"length of a bounded vector in scope {} is not respected.",
-				scope.unwrap_or("UNKNOWN"),
-			);
-		}
-
-		Self::unchecked_from(t)
-	}
-
-	/// Get the bound of the type in `usize`.
-	pub fn bound() -> usize {
-		S::get() as usize
-	}
-
-	/// Consume self, and return the inner `Vec`. Henceforth, the `Vec<_>` can be altered in an
-	/// arbitrary way. At some point, if the reverse conversion is required, `TryFrom<Vec<_>>` can
-	/// be used.
-	///
-	/// This is useful for cases if you need access to an internal API of the inner `Vec<_>` which
-	/// is not provided by the wrapper `BoundedVec`.
-	pub fn into_inner(self) -> Vec<T> {
-		debug_assert!(self.0.len() <= Self::bound());
-		self.0
-	}
-
-	/// Exactly the same semantics as [`Vec::insert`], but returns an `Err` (and is a noop) if the
-	/// new length of the vector exceeds `S`.
-	///
-	/// # Panics
-	///
-	/// Panics if `index > len`.
-	pub fn try_insert(&mut self, index: usize, element: T) -> Result<(), ()> {
-		if self.len() < Self::bound() {
-			self.0.insert(index, element);
-			Ok(())
-		} else {
-			Err(())
-		}
-	}
-
-	/// Exactly the same semantics as [`Vec::push`], but returns an `Err` (and is a noop) if the
-	/// new length of the vector exceeds `S`.
-	///
-	/// # Panics
-	///
-	/// Panics if the new capacity exceeds isize::MAX bytes.
-	pub fn try_push(&mut self, element: T) -> Result<(), ()> {
-		if self.len() < Self::bound() {
-			self.0.push(element);
-			Ok(())
-		} else {
-			Err(())
-		}
-	}
-
-	/// Exactly the same semantics as [`Vec::remove`].
-	///
-	/// # Panics
-	///
-	/// Panics if `index` is out of bounds.
-	pub fn remove(&mut self, index: usize) {
-		self.0.remove(index);
-	}
-
-	/// Exactly the same semantics as [`Vec::swap_remove`].
-	///
-	/// # Panics
-	///
-	/// Panics if `index` is out of bounds.
-	pub fn swap_remove(&mut self, index: usize) {
-		self.0.swap_remove(index);
-	}
-
-	/// Exactly the same semantics as [`Vec::retain`].
-	pub fn retain<F: FnMut(&T) -> bool>(&mut self, f: F) {
-		self.0.retain(f)
-	}
-}
-
-impl<T: Value, S: Get<u32>> TryFrom<Vec<T>> for BoundedVec<T, S> {
-	type Error = ();
-	fn try_from(t: Vec<T>) -> Result<Self, Self::Error> {
-		if t.len() <= Self::bound() {
-			Ok(Self::unchecked_from(t))
-		} else {
-			Err(())
-		}
-	}
-}
-
-// It is okay to give a non-mutable reference of the inner vec to anyone.
-impl<T: Value, S: Get<u32>> AsRef<Vec<T>> for BoundedVec<T, S> {
-	fn as_ref(&self) -> &Vec<T> {
-		&self.0
-	}
-}
-
-// will allow for immutable all operations of `Vec<T>` on `BoundedVec<T>`.
-impl<T: Value, S: Get<u32>> sp_std::ops::Deref for BoundedVec<T, S> {
-	type Target = Vec<T>;
-
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
-}
-
-impl<T: Value, S: Get<u32>> sp_std::ops::Index<usize> for BoundedVec<T, S> {
-	type Output = T;
-	fn index(&self, index: usize) -> &Self::Output {
-		self.get(index).expect("index out of bound")
-	}
-}
-
-impl<T: Value, S: Get<u32>> sp_std::iter::IntoIterator for BoundedVec<T, S> {
-	type Item = T;
-	type IntoIter = sp_std::vec::IntoIter<T>;
-	fn into_iter(self) -> Self::IntoIter {
-		self.0.into_iter()
-	}
-}
-
-impl<T: Value, S: Get<u32>> codec::DecodeLength for BoundedVec<T, S> {
-	fn len(self_encoded: &[u8]) -> Result<usize, codec::Error> {
-		// `BoundedVec<T, _>` stored just a `Vec<T>`, thus the length is at the beginning in
-		// `Compact` form, and same implementation as `Vec<T>` can be used.
-		<Vec<T> as codec::DecodeLength>::len(self_encoded)
-	}
-}
-
-impl<T: Value, S: Get<u32>> StorageDecodeLength for BoundedVec<T, S> {}
-
-/// Storage value that is *maybe* capable of [`StorageAppend`].
-pub trait TryAppendValue<T: Value, S: Get<u32>> {
-	fn try_append<LikeT: EncodeLike<T>>(item: LikeT) -> Result<(), ()>;
-}
-
-/// Storage map that is *maybe* capable of [`StorageAppend`].
-pub trait TryAppendMap<K: FullCodec, T: Value, S: Get<u32>> {
-	fn try_append<LikeK: EncodeLike<K> + Clone, LikeT: EncodeLike<T>>(
-		key: LikeK,
-		item: LikeT,
-	) -> Result<(), ()>;
-}
-
-impl<T: Value, S: Get<u32>, StorageValueT: generator::StorageValue<BoundedVec<T, S>>>
-	TryAppendValue<T, S> for StorageValueT
-{
-	fn try_append<LikeT: EncodeLike<T>>(item: LikeT) -> Result<(), ()> {
-		let bound = BoundedVec::<T, S>::bound();
-		let current = Self::decode_len().unwrap_or_default();
-		if current < bound {
-			// NOTE: we cannot reuse the implementation for `Vec<T>` here because we never want to
-			// mark `BoundedVec<T, S>` as `StorageAppend`.
-			let key = Self::storage_value_final_key();
-			sp_io::storage::append(&key, item.encode());
-			Ok(())
-		} else {
-			Err(())
-		}
-	}
-}
-
-impl<
-		K: FullCodec,
-		T: Value,
-		S: Get<u32>,
-		StorageMapT: generator::StorageMap<K, BoundedVec<T, S>>,
-	> TryAppendMap<K, T, S> for StorageMapT
-{
-	fn try_append<LikeK: EncodeLike<K> + Clone, LikeT: EncodeLike<T>>(
-		key: LikeK,
-		item: LikeT,
-	) -> Result<(), ()> {
-		let bound = BoundedVec::<T, S>::bound();
-		let current = Self::decode_len(key.clone()).unwrap_or_default();
-		if current < bound {
-			let key = Self::storage_map_final_key(key);
-			sp_io::storage::append(&key, item.encode());
-			Ok(())
-		} else {
-			Err(())
-		}
-	}
-}
-
-#[cfg(test)]
-pub mod bounded_vec {
-	use super::*;
-	use sp_io::TestExternalities;
-	use sp_std::convert::TryInto;
-	use crate::{assert_ok, Twox128};
-
-	crate::parameter_types! {
-		pub const Seven: u32 = 7;
-	}
-
-	crate::generate_storage_alias! { Prefix, Foo => Value<BoundedVec<u32, Seven>> }
-	crate::generate_storage_alias! { Prefix, FooMap => Map<(u32, Twox128), BoundedVec<u32, Seven>> }
-
-	#[test]
-	fn decode_len_works() {
-		TestExternalities::default().execute_with(|| {
-			let bounded: BoundedVec<u32, Seven> = vec![1, 2, 3].try_into().unwrap();
-			Foo::put(bounded);
-			assert_eq!(Foo::decode_len().unwrap(), 3);
-		});
-
-		TestExternalities::default().execute_with(|| {
-			let bounded: BoundedVec<u32, Seven> = vec![1, 2, 3].try_into().unwrap();
-			FooMap::insert(1, bounded);
-			assert_eq!(FooMap::decode_len(1).unwrap(), 3);
-			assert!(FooMap::decode_len(0).is_none());
-			assert!(FooMap::decode_len(2).is_none());
-		});
-	}
-
-	#[test]
-	fn try_append_works() {
-		TestExternalities::default().execute_with(|| {
-			let bounded: BoundedVec<u32, Seven> = vec![1, 2, 3].try_into().unwrap();
-			Foo::put(bounded);
-			assert_ok!(Foo::try_append(4));
-			assert_ok!(Foo::try_append(5));
-			assert_ok!(Foo::try_append(6));
-			assert_ok!(Foo::try_append(7));
-			assert_eq!(Foo::decode_len().unwrap(), 7);
-			assert!(Foo::try_append(8).is_err());
-		});
-
-		TestExternalities::default().execute_with(|| {
-			let bounded: BoundedVec<u32, Seven> = vec![1, 2, 3].try_into().unwrap();
-			FooMap::insert(1, bounded);
-
-			assert_ok!(FooMap::try_append(1, 4));
-			assert_ok!(FooMap::try_append(1, 5));
-			assert_ok!(FooMap::try_append(1, 6));
-			assert_ok!(FooMap::try_append(1, 7));
-			assert_eq!(FooMap::decode_len(1).unwrap(), 7);
-			assert!(FooMap::try_append(1, 8).is_err());
-
-			// append to a non-existing
-			assert!(FooMap::get(2).is_none());
-			assert_ok!(FooMap::try_append(2, 4));
-			assert_eq!(FooMap::get(2).unwrap(), BoundedVec::<u32, Seven>::unchecked_from(vec![4]));
-			assert_ok!(FooMap::try_append(2, 5));
-			assert_eq!(
-				FooMap::get(2).unwrap(),
-				BoundedVec::<u32, Seven>::unchecked_from(vec![4, 5])
-			);
-		});
-	}
-
-	#[test]
-	fn deref_coercion_works() {
-		let bounded: BoundedVec<u32, Seven> = vec![1, 2, 3].try_into().unwrap();
-		// these methods come from deref-ed vec.
-		assert_eq!(bounded.len(), 3);
-		assert!(bounded.iter().next().is_some());
-		assert!(!bounded.is_empty());
-	}
-}
 
 #[cfg(test)]
 mod test {
