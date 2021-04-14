@@ -46,16 +46,6 @@ frame_support::construct_runtime!(
 	}
 );
 
-impl_outer_event! {
-	pub enum Event for Test {
-		system<T>,
-		balances<T>,
-	}
-}
-
-// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-#[derive(Clone, PartialEq, Eq, Debug, scale_info::TypeInfo)]
-pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
