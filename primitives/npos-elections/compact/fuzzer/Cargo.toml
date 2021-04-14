@@ -1,0 +1,35 @@
+[package]
+name = "sp-npos-elections-compact-fuzzer"
+version = "2.0.0-alpha.5"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "Apache-2.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+description = "Fuzzer for sp-npos-elections-compact macro"
+publish = false
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+honggfuzz = "0.5"
+rand = { version = "0.7.3", features = ["std", "small_rng"] }
+structopt = "0.3.21"
+
+sp-npos-elections = { version = "3.0.0", path = "../.." }
+sp-runtime = { version = "3.0.0", path = "../../../runtime" }
+
+[[bin]]
+name = "compact_32_16_16"
+path = "src/compact_32_16_16.rs"
+
+# [[bin]]
+# name = "compact_24"
+# path = "src/compact24.rs"
+
+# [[bin]]
+# name = "non_compact_16"
+# path = "src/noncompact16.rs"
+
+# [[bin]]
+# name = "non_compact_24"
+# path = "src/noncompact24.rs"

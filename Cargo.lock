@@ -8929,6 +8929,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp-npos-elections-compact-fuzzer"
+version = "2.0.0-alpha.5"
+dependencies = [
+ "honggfuzz",
+ "parity-scale-codec",
+ "rand 0.7.3",
+ "sp-npos-elections",
+ "sp-runtime",
+ "structopt",
+]
+
+[[package]]
 name = "sp-npos-elections-fuzzer"
 version = "2.0.0-alpha.5"
 dependencies = [
