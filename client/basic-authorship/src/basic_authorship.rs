@@ -66,10 +66,10 @@ pub struct ProposerFactory<A, B, C, PR> {
 	/// used.
 	default_block_size_limit: usize,
 	telemetry: Option<TelemetryHandle>,
-	/// phantom member to pin the `Backend`/`ProofRecording` type.
-	_phantom: PhantomData<(B, PR)>,
 	/// When estimating the block size, should the proof be included?
 	include_proof_in_block_size_estimation: bool,
+	/// phantom member to pin the `Backend`/`ProofRecording` type.
+	_phantom: PhantomData<(B, PR)>,
 }
 
 impl<A, B, C> ProposerFactory<A, B, C, DisableProofRecording> {
