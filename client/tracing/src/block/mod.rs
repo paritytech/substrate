@@ -212,8 +212,9 @@ impl<Block, Client> BlockExecutor<Block, Client>
 			.map(|(_, s)| s.into())
 			.collect::<Vec<SpanDatum>>();
 
-		// Is there a way to do this sort without collecting twice? - zeke
-		span_datums.sort_by(|a, b| b.start_time.cmp(&a.start_time));
+		// Is there a way to do this sort without collecting twice? My only idea was to add start_time
+		// into `Span` - zeke
+		span_datums.sort_by(|a, b| a.start_time.cmp(&b.start_time));
 
 		let spans: Vec<Span> = span_datums
 			.into_iter()
