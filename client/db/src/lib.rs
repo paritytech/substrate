@@ -1824,6 +1824,50 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		Ok(())
 	}
 
+	fn ghost(&self, hash: Block::Hash) -> sp_blockchain::Result<(Block::Hash, Vec<Block::Hash>)> {
+		let import_lock = self.get_import_lock();
+
+		let header = self.blockchain().expect_header(BlockId::Hash(hash))?;
+		if *header.number() <= self.blockchain().info().finalized_number {
+			return Err(sp_blockchain::Error::Backend(
+				"Can't ghost finalized blocks".to_string(),
+			));
+		}
+
+		let mut transaction = Transaction::new();
+		let mut leaves = self.blockchain.leaves.write();
+
+		// revert all leaves that descend from this block
+		let reverted = leaves.revert_block(
+			*header.number(),
+			header.hash(),
+			*header.parent_hash(),
+			is_descendent_of(self.blockchain(), None),
+		)?;
+
+		leaves.prepare_transaction(&mut transaction, columns::META, meta_keys::LEAF_PREFIX);
+
+		// leaves have been updated so we can find the new best block, either some longer fork
+		// exists that doesn't include the given block, or its parent will become the new best.
+		let new_best = self
+			.blockchain()
+			.best_containing(*header.parent_hash(), None, import_lock)?
+			.unwrap_or(*header.parent_hash());
+
+		let new_best = self.blockchain().expect_header(BlockId::Hash(new_best))?;
+
+		self.set_head_with_transaction(
+			&mut transaction,
+			new_best.hash(),
+			(*new_best.number(), new_best.hash()),
+		)?;
+
+		// commit all changes to db
+		self.storage.db.commit(transaction)?;
+
+		Ok((new_best.hash(), reverted))
+	}
+
 	fn changes_trie_storage(&self) -> Option<&dyn PrunableStateChangesTrieStorage<Block>> {
 		Some(&self.changes_tries_storage)
 	}

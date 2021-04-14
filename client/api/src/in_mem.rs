@@ -32,7 +32,7 @@ use sp_state_machine::{
 	ChangesTrieTransaction, InMemoryBackend, Backend as StateBackend, StorageCollection,
 	ChildStorageCollection, IndexOperation,
 };
-use sp_blockchain::{CachedHeaderMetadata, HeaderMetadata};
+use sp_blockchain::{Backend as BlockchainBackend, CachedHeaderMetadata, HeaderMetadata};
 
 use crate::{
 	backend::{self, NewBlockState, ProvideChtRoots},
@@ -734,6 +734,38 @@ impl<Block: BlockT> backend::Backend<Block> for Backend<Block> where Block::Hash
 		justification: Justification,
 	) -> sp_blockchain::Result<()> {
 		self.blockchain.append_justification(block, justification)
+	}
+
+	fn ghost(&self, hash: Block::Hash) -> sp_blockchain::Result<(Block::Hash, Vec<Block::Hash>)> {
+		let import_lock = self.get_import_lock();
+
+		let header = self.blockchain().expect_header(BlockId::Hash(hash))?;
+		if *header.number() <= self.blockchain().info().finalized_number {
+			return Err(sp_blockchain::Error::Backend(
+				"Can't ghost finalized blocks".to_string(),
+			));
+		}
+
+		let mut storage = self.blockchain.storage.write();
+
+		// revert all leaves that descend from this block
+		let reverted = storage.leaves.revert_block(
+			*header.number(),
+			header.hash(),
+			*header.parent_hash(),
+			super::utils::is_descendent_of(self.blockchain(), None),
+		)?;
+
+		// leaves have been updated so we can find the new best block, either some longer fork
+		// exists that doesn't include the given block, or its parent will become the new best.
+		let new_best = self
+			.blockchain()
+			.best_containing(*header.parent_hash(), None, import_lock)?
+			.unwrap_or(*header.parent_hash());
+
+		self.blockchain().set_head(BlockId::Hash(new_best))?;
+
+		Ok((new_best, reverted))
 	}
 
 	fn blockchain(&self) -> &Self::Blockchain {

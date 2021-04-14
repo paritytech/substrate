@@ -475,6 +475,16 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 		revert_finalized: bool,
 	) -> sp_blockchain::Result<(NumberFor<Block>, HashSet<Block::Hash>)>;
 
+	/// Attemps to "ghost" the given block and all forks descending from it. This will remove all
+	/// leaves descending from this block and will re-org the chain to a new best block. If there's
+	/// no alternative longer fork descending from the given block then its parent will be set as the
+	/// new best.
+	///
+	/// Ghosting a block is distinguished from reverting a block in that no data is actually removed
+	/// from the database, all block data will still be available provided that you know the block
+	/// hash, otherwise it looks as if the block (and forks) have disappeared.
+	fn ghost(&self, hash: Block::Hash) -> sp_blockchain::Result<(Block::Hash, Vec<Block::Hash>)>;
+
 	/// Insert auxiliary data into key-value store.
 	fn insert_aux<
 		'a,
@@ -486,6 +496,7 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	{
 		AuxStore::insert_aux(self, insert, delete)
 	}
+
 	/// Query auxiliary data from key-value store.
 	fn get_aux(&self, key: &[u8]) -> sp_blockchain::Result<Option<Vec<u8>>> {
 		AuxStore::get_aux(self, key)

@@ -207,6 +207,10 @@ impl<S, Block> ClientBackend<Block> for Backend<S, HashFor<Block>>
 		Ok(())
 	}
 
+	fn ghost(&self, _hash: Block::Hash) -> sp_blockchain::Result<(Block::Hash, Vec<Block::Hash>)> {
+		Err(ClientError::NotAvailableOnLightClient)
+	}
+
 	fn blockchain(&self) -> &Blockchain<S> {
 		&self.blockchain
 	}
