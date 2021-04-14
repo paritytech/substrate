@@ -313,7 +313,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				logs,
 			},
 			proposing_remaining_duration.mul_f32(0.98),
-            None,
+			None,
 		).map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e)));
 
 		let proposal = match futures::future::select(proposing, proposing_remaining).await {
