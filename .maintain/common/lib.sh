@@ -22,7 +22,7 @@ last_github_release(){
   i=0
   # Iterate over releases until we find the last release that's not just a draft
   while [ $i -lt 29 ]; do
-    out=$(curl -H "Authorization: token $GITHUB_RELEASE_TOKEN" -s "$api_base/$1/releases" | jq ".[$i]")
+    out=$(curl -H "Authorization: token $(github_token)" -s "$api_base/$1/releases" | jq ".[$i]")
     echo "$out"
     # Ugh when echoing to jq, we need to translate newlines into spaces :/
     if [ "$(echo "$out" | tr '\r\n' ' ' | jq '.draft')" = "false" ]; then
@@ -41,13 +41,13 @@ last_github_release(){
 check_tag () {
   repo=$1
   tagver=$2
-  tag_out=$(curl -H "Authorization: token $GITHUB_RELEASE_TOKEN" -s "$api_base/$repo/git/refs/tags/$tagver")
+  tag_out=$(curl -H "Authorization: token $(github_token)" -s "$api_base/$repo/git/refs/tags/$tagver")
   tag_sha=$(echo "$tag_out" | jq -r .object.sha)
   object_url=$(echo "$tag_out" | jq -r .object.url)
   if [ "$tag_sha" = "null" ]; then
     return 2
   fi
-  verified_str=$(curl -H "Authorization: token $GITHUB_RELEASE_TOKEN" -s "$object_url" | jq -r .verification.verified)
+  verified_str=$(curl -H "Authorization: token $(github_token)" -s "$object_url" | jq -r .verification.verified)
   if [ "$verified_str" = "true" ]; then
     # Verified, everything is good
     return 0
@@ -67,16 +67,7 @@ has_label(){
   pr_id="$2"
   label="$3"
 
-  # These will exist if the function is called in Gitlab.
-  # If the function's called in Github, we should have GITHUB_ACCESS_TOKEN set
-  # already.
-  if [ -n "$GITHUB_RELEASE_TOKEN" ]; then
-    GITHUB_TOKEN="$GITHUB_RELEASE_TOKEN"
-  elif [ -n "$GITHUB_PR_TOKEN" ]; then
-    GITHUB_TOKEN="$GITHUB_PR_TOKEN"
-  fi
-
-  out=$(curl -H "Authorization: token $GITHUB_TOKEN" -s "$api_base/$repo/pulls/$pr_id")
+  out=$(curl -H "Authorization: token $(github_token)" -s "$api_base/$repo/pulls/$pr_id")
   [ -n "$(echo "$out" | tr -d '\r\n' | jq ".labels | .[] | select(.name==\"$label\")")" ]
 }
 
@@ -114,4 +105,51 @@ has_runtime_changes() {
   else
     return 1
   fi
+}
+
+# Add a label to a PR in a given repo. Doesn't error if label already present
+# repo: paritytech/substrate
+# label: A7-needspolkadotpr
+# PR: 1234
+add_label() {
+  repo=$1
+  pr=$2
+  label=$3
+  curl -X POST \
+    --data "[\"$label\"]" \
+    -H "Accept: application/vnd.github.v3+json" \
+    -H "Authorization: token $(github_token)" \
+    -s "$api_base/$repo/issues/$pr/labels"
+}
+
+# Remove a label from a PR in a given repo. Doesn't error if label already absent
+# repo: paritytech/substrate
+# label: A7-needspolkadotpr
+# PR: 1234
+remove_label() {
+  repo=$1
+  pr=$2
+  # Escape the labels... we use emojis quite often, so this is required
+  # to not break things. Source:
+  # https://stackoverflow.com/questions/12735450/delete-using-curl-with-encoded-url
+  label=$(printf '%s' "$3" | xxd -plain | tr -d '\n' | sed 's/\(..\)/%\1/g')
+
+  curl -X DELETE \
+    -H "Accept: application/vnd.github.v3+json" \
+    -H "Authorization: token $(github_token)" \
+    -s "$api_base/$repo/issues/$pr/labels/$label"
+}
+
+# Useful shim for getting the right GITHUB_TOKEN, depending on whether we're
+# in Github or Gitlab CI
+github_token() {
+  # These will exist if the function is called in Gitlab.
+  # If the function's called in Github, we should have GITHUB_ACCESS_TOKEN set
+  # already.
+  if [ -n "$GITHUB_RELEASE_TOKEN" ]; then
+    GITHUB_TOKEN="$GITHUB_RELEASE_TOKEN"
+  elif [ -n "$GITHUB_PR_TOKEN" ]; then
+    GITHUB_TOKEN="$GITHUB_PR_TOKEN"
+  fi
+  printf '%s' "$GITHUB_TOKEN"
 }

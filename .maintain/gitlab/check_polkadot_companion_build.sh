@@ -89,4 +89,12 @@ fi
 diener patch --crates-to-patch ../ --substrate --path Cargo.toml
 
 # Test Polkadot pr or master branch with this Substrate commit.
-time cargo test --all --release --verbose
+# If it fails, it requires a companion PR. Label thusly. Otherwise remove the
+# label. These operations are idempotent.
+if time cargo test --all --release --verbose ; then
+  remove_label 'paritytech/substrate' "${CI_COMMIT_REF_NAME}" 'A7-needspolkadotpr'
+  exit 0
+else
+  add_label 'paritytech/substrate' "${CI_COMMIT_REF_NAME}" 'A7-needspolkadotpr'
+  exit 1
+fi
