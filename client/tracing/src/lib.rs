@@ -391,7 +391,6 @@ impl From<TraceEvent> for sp_rpc::tracing::Event {
 			string_values: trace_event.values.string_values
 		};
 		sp_rpc::tracing::Event {
-			// name: trace_event.name,
 			target: trace_event.target,
 			data,
 			parent_id: trace_event.parent_id.map(|id| id.into_u64())

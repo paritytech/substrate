@@ -447,6 +447,7 @@ where
 		}
 
 		let root = self.overlay.storage_root(self.backend, self.storage_transaction_cache);
+
 		root.encode()
 	}
 

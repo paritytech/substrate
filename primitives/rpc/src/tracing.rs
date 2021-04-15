@@ -18,11 +18,8 @@
 //! Types for working with tracing data
 
 use serde::{Serialize, Deserialize};
-// use tracing_core::{Field, Level};
-// use tracing_core::field::Visit;
 
 use std::collections::HashMap;
-// use std::time::Duration;
 
 /// Container for all related spans and events for the block being traced.
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -44,12 +41,10 @@ pub struct BlockTrace {
 	pub events: Vec<Event>,
 }
 
-/// Represents a tracing event, complete with values
+/// Represents a tracing event, complete with recorded data.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Event {
-	/// Event name
-	// pub name: String, // This is just the file and line number .. not to helpful imo - zeke
 	/// Event target
 	pub target: String,
 	/// Associated data
@@ -58,10 +53,9 @@ pub struct Event {
 	pub parent_id: Option<u64>,
 }
 
-/// Represents a single instance of a tracing span
+/// Represents a single instance of a tracing span.
 ///
-/// Exiting a span does not imply that the span will not be re-entered,
-/// so there is a complete record of all entry & exit times
+/// Exiting a span does not imply that the span will not be re-entered.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Span {
@@ -73,7 +67,7 @@ pub struct Span {
 	pub name: String,
 	/// Target, typically module
 	pub target: String,
-	/// Indicates trace from wasm
+	/// Indicates if the span is from wasm
 	pub wasm: bool,
 }
 
@@ -81,7 +75,7 @@ pub struct Span {
 #[derive(Serialize, Deserialize, Default, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Data {
-	/// HashMap of `String` values
+	/// HashMap of `String` values recorded while tracing
 	pub string_values: HashMap<String, String>,
 }
 
@@ -93,7 +87,7 @@ pub struct TraceError {
     pub error: String,
 }
 
-/// `BlockExecutor::trace_block` return value
+/// ``state_traceBlock` RPC response
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub enum TraceBlockResponse {
@@ -102,7 +96,3 @@ pub enum TraceBlockResponse {
 	/// Successful block tracing response
 	BlockTrace(BlockTrace)
 }
-
-// fn default_level() -> Level {
-// 	Level::TRACE
-// }

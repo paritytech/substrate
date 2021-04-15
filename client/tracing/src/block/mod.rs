@@ -139,14 +139,17 @@ impl Subscriber for BlockSubscriber {
 	}
 
 	fn exit(&self, span: &Id) {
-		if let Some(s) = self.spans.lock().get_mut(span) {
+		if self.spans.lock().get_mut(span).is_some() {
 			self.current_span.exit();
 		}
 	}
 }
 
-/// Holds a reference to the client in order to execute the given block
-/// and record traces for the supplied targets (eg. "pallet,frame,state")
+/// Holds a reference to the client in order to execute the given block.
+/// Record spans & events for the supplied targets (eg. "pallet,frame,state") and
+/// only records events with the specified hex encoded storage key prefixes.
+/// Note: if `targets` or `storage_keys` is an empty string then nothing is
+/// filtered out.
 pub struct BlockExecutor<Block: BlockT, Client> {
 	client: Arc<Client>,
 	block: Block::Hash,
@@ -172,20 +175,19 @@ impl<Block, Client> BlockExecutor<Block, Client>
 	}
 
 	/// Execute block, recording all spans and events belonging to `Self::targets`
+	/// and filter out events which do not have the keys starting with one of the
+	/// prefixes in `Self::storage_keys`.
 	pub fn trace_block(&self) -> Result<TraceBlockResponse, String> {
 		tracing::debug!(target: "state_tracing", "Tracing block: {}", self.block);
-
-		// Prepare block
+		// Prepare the block
 		let id = BlockId::Hash(self.block);
-		let extrinsics = self.client.block_body(&id)
-			.map_err(|e| format!("Invalid block id: {:?}", e))?
-			.ok_or("Block not found".to_string())?;
-
-		tracing::debug!(target: "state_tracing", "Found {} extrinsics", extrinsics.len());
-
 		let mut header = self.client.header(id)
-			.map_err(|e| format!("Invalid block id: {:?}", e))?
+			.map_err(|e| format!("Invalid block Id: {:?}", e))?
 			.ok_or("Header not found".to_string())?;
+		let extrinsics = self.client.block_body(&id)
+			.map_err(|e| format!("Invalid block Id: {:?}", e))?
+			.ok_or("Extrinsics not found".to_string())?;
+		tracing::debug!(target: "state_tracing", "Found {} extrinsics", extrinsics.len());
 		let parent_hash = header.parent_hash().clone();
 		let parent_id = BlockId::Hash(parent_hash.clone());
 		// Pop digest else RuntimePanic due to: 'Number of digest items must match that calculated.'
@@ -225,25 +227,19 @@ impl<Block, Client> BlockExecutor<Block, Client>
 			.lock()
 			.drain()
 			.map(|(_, s)| SpanDatum::from(s))
-			.collect::<Vec<SpanDatum>>();
-
-		// Is there a way to do this sort without collecting twice? My only idea was to add start_time
-		// into `Span` - zeke
+			.collect();
 		span_data.sort_by(|a, b| a.start_time.cmp(&b.start_time));
-
-		let spans: Vec<Span> = span_data
+		let spans: Vec<_> = span_data
 			.into_iter()
 			// Patch wasm identifiers
 			.filter_map(|s| patch_and_filter(s, targets))
 			.collect();
-
 		let events: Vec<_> = block_subscriber.events
 			.lock()
 			.drain(..)
 			.filter(|e| event_key_filter(e, storage_keys))
 			.map(|s| s.into())
 			.collect();
-
 		tracing::debug!(target: "state_tracing", "Captured {} spans and {} events", spans.len(), events.len());
 
 		let block_trace = BlockTrace {
@@ -254,17 +250,14 @@ impl<Block, Client> BlockExecutor<Block, Client>
 			spans,
 			events,
 		};
-
 		let block_trace_size = serde_json::to_vec(&block_trace)
-			.map_err(|_| "Failed to serialize payload".to_string())?
+			.map_err(|e| format!("Failed to serialize payload: {}", e))?
 			.len();
 		let response = if block_trace_size  > MAX_PAYLOAD {
 			TraceBlockResponse::TraceError(TraceError {
 				error:
-					format!(
-						"Payload was {} bytes; it must be less than {} bytes",
-						block_trace_size,
-						MAX_PAYLOAD
+					format!("Payload was {} bytes; it must be less than {} bytes",
+						block_trace_size, MAX_PAYLOAD,
 					)
 			})
 		} else {
@@ -297,6 +290,7 @@ fn patch_and_filter(mut span: SpanDatum, targets: &str) -> Option<Span> {
 	Some(span.into())
 }
 
+/// Check if a `target` matches any `targets` by prefix
 fn check_target(targets: &str, target: &str, level: &Level) -> bool {
 	for (t, l) in targets.split(',').map(|s| crate::parse_target(s)) {
 		if target.starts_with(t.as_str()) && level <= &l {
