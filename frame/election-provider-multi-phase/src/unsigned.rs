@@ -171,7 +171,25 @@ impl<T: Config> Pallet<T> {
 		let target_at = helpers::target_at_fn::<T>(&targets);
 		let stake_of = helpers::stake_of_fn::<T>(&voters, &cache);
 
-		// trim assignments list for weight and length
+		// Compute the size of a compact solution comprised of the selected arguments.
+		//
+		// This function completes in `O(edges)`; it's expensive, but linear.
+		let encoded_size_of = |assignments: &[Assignment<T>]| {
+			CompactOf::<T>::from_assignment(assignments, &voter_index, &target_index)
+				.map(|compact| compact.encoded_size())
+		};
+
+		// Reduce (requires round-trip to staked form)
+		assignments = {
+			// convert to staked and reduce.
+			let mut staked = assignment_ratio_to_staked_normalized(assignments, &stake_of)?;
+			sp_npos_elections::reduce(&mut staked);
+
+			// convert back.
+			assignment_staked_to_ratio_normalized(staked)?
+		};
+
+		// trim assignments list for weight and length.
 		let size =
 			SolutionOrSnapshotSize { voters: voters.len() as u32, targets: targets.len() as u32 };
 		Self::trim_assignments_weight(
@@ -183,18 +201,11 @@ impl<T: Config> Pallet<T> {
 		Self::trim_assignments_length(
 			T::MinerMaxLength::get(),
 			&mut assignments,
-			&voter_at,
-			&target_at,
+			&encoded_size_of,
 		)?;
 
-		// convert to staked and reduce.
-		let mut staked = assignment_ratio_to_staked_normalized(assignments, &stake_of)
-			.map_err::<MinerError, _>(Into::into)?;
-		sp_npos_elections::reduce(&mut staked);
-
-		// convert back to ratios and make compact.
-		let ratio = assignment_staked_to_ratio_normalized(staked)?;
-		let compact = <CompactOf<T>>::from_assignment(&ratio, &voter_index, &target_index)?;
+		// now make compact.
+		let compact = CompactOf::<T>::from_assignment(&assignments, &voter_index, &target_index)?;
 
 		// re-calc score.
 		let winners = sp_npos_elections::to_without_backing(winners);
@@ -320,21 +331,9 @@ impl<T: Config> Pallet<T> {
 	fn trim_assignments_length(
 		max_allowed_length: u32,
 		assignments: &mut Vec<Assignment<T>>,
-		voter_index: impl Fn(&T::AccountId) -> Option<CompactVoterIndexOf<T>>,
-		target_index: impl Fn(&T::AccountId) -> Option<CompactTargetIndexOf<T>>,
+		encoded_size_of: impl Fn(&[Assignment<T>]) -> Result<usize, sp_npos_elections::Error>,
 	) -> Result<(), MinerError> {
-		// Compute the size of a compact solution comprised of the selected arguments.
-		//
-		// This function completes in `O(edges)`; it's expensive, but linear.
-		let encoded_size_of = |assignments: &[Assignment<T>]| {
-			CompactOf::<T>::from_assignment(assignments, voter_index, target_index)
-				.map(|compact| compact.encoded_size())
-		};
-
-		// The encoded size of an assignment list is staticly computable, but only in `O(assignments.len())`.
-		// That makes the naive approach, to loop and pop, somewhat inefficient.
-		//
-		// Instead, we perform a binary search for the max subset of which can fit into the allowed
+		// Perform a binary search for the max subset of which can fit into the allowed
 		// length. Having discovered that, we can truncate efficiently.
 		let mut high = assignments.len();
 		let mut low = 0;
