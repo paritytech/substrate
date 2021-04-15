@@ -15,8 +15,8 @@ github_api_substrate_pull_url="https://api.github.com/repos/paritytech/substrate
 # use github api v3 in order to access the data without authentication
 github_header="Authorization: token ${GITHUB_PR_TOKEN}"
 
-boldprint () { printf "|\n| \033[1m${@}\033[0m\n|\n" ; }
-boldcat () { printf "|\n"; while read l; do printf "| \033[1m${l}\033[0m\n"; done; printf "|\n" ; }
+boldprint () { printf "|\n| \033[1m%s\033[0m\n|\n" "{@}"; }
+boldcat () { printf "|\n"; while read -r l; do printf "| \033[1m%s\033[0m\n" "${l}"; done; printf "|\n" ; }
 
 
 
@@ -55,6 +55,7 @@ cd polkadot
 
 # either it's a pull request then check for a companion otherwise use
 # polkadot:master
+# shellcheck disable=2003
 if expr match "${CI_COMMIT_REF_NAME}" '^[0-9]\+$' >/dev/null
 then
   boldprint "this is pull request no ${CI_COMMIT_REF_NAME}"
@@ -74,8 +75,8 @@ then
   if [ "${pr_companion}" ]
   then
     boldprint "companion pr specified/detected: #${pr_companion}"
-    git fetch origin refs/pull/${pr_companion}/head:pr/${pr_companion}
-    git checkout pr/${pr_companion}
+    git fetch origin "refs/pull/${pr_companion}/head:pr/${pr_companion}"
+    git checkout "pr/${pr_companion}"
     git merge origin/master
   else
     boldprint "no companion branch found - building polkadot:master"
