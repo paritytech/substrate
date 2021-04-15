@@ -57,7 +57,7 @@ use frame_support::{
 		DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable, Parameter,
 		PostDispatchInfo,
 	},
-	traits::{ChangeMembers, EnsureOrigin, Get, InitializeMembers, GetBacking, Backing},
+	traits::{ChangeMembers, EnsureOrigin, Get, InitializeMembers, GetBacking, Backing, PalletInfo},
 	weights::{DispatchClass, GetDispatchInfo, Weight, Pays},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
@@ -810,6 +810,11 @@ decl_module! {
 }
 
 impl<T: Config<I>, I: Instance> Module<T, I> {
+	/// Get the unique index for this pallet from the `construct_runtime` order.
+	pub fn pallet_index() -> u32 {
+		 T::PalletInfo::index::<Pallet<T, I>>().expect("pallet is part of the runtime") as u32
+	}
+
 	/// A simple helper function to generate a collective ratio account from the collective origin.
 	///
 	/// A ratio account is an account which represents a ratio of n / d users where n is the number
@@ -833,10 +838,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 				let target_d_n = target_d.checked_mul(n).ok_or(Error::<T, I>::Overflow)?;
 				ensure!(target_n_d <= target_d_n, Error::<T, I>::NotEnoughMembers);
 				// Create the account.
-				Ok(PALLET_ID.into_sub_account((target_n, target_d)))
-			},
-			RawOrigin::Member(who) => {
-				Ok(PALLET_ID.into_sub_account(who))
+				Ok(PALLET_ID.into_sub_account((Self::pallet_index(), target_n, target_d)))
 			},
 			_ => return Err(DispatchError::BadOrigin.into()),
 		}
@@ -851,10 +853,10 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 		match origin {
 			RawOrigin::Members(n, _) => {
 				// Create an account where n is the number of members who voted aye
-				Ok(PALLET_ID.into_sub_account(n))
+				Ok(PALLET_ID.into_sub_account((Self::pallet_index(), n)))
 			},
 			RawOrigin::Member(who) => {
-				Ok(PALLET_ID.into_sub_account(who))
+				Ok(PALLET_ID.into_sub_account((Self::pallet_index(), who)))
 			},
 			_ => return Err(DispatchError::BadOrigin.into()),
 		}
