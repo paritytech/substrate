@@ -4767,10 +4767,10 @@ dependencies = [
  "pallet-randomness-collective-flip",
  "pallet-timestamp",
  "parity-scale-codec",
- "parity-wasm 0.41.0",
+ "parity-wasm 0.42.2",
  "paste 1.0.4",
  "pretty_assertions",
- "pwasm-utils 0.16.0",
+ "pwasm-utils 0.17.0",
  "rand 0.7.3",
  "rand_pcg",
  "serde",
@@ -4779,7 +4779,7 @@ dependencies = [
  "sp-runtime",
  "sp-sandbox",
  "sp-std",
- "wasmi-validation",
+ "wasmi-validation 0.4.0",
  "wat",
 ]
 
@@ -5699,6 +5699,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ddfc878dac00da22f8f61e7af3157988424567ab01d9920b962ef7dcbd7cd865"
 
 [[package]]
+name = "parity-wasm"
+version = "0.42.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be5e13c266502aadf83426d87d81a0f5d1ef45b8027f5a471c360abfe4bfae92"
+
+[[package]]
 name = "parity-ws"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6257,13 +6263,13 @@ dependencies = [
 
 [[package]]
 name = "pwasm-utils"
-version = "0.16.0"
+version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c8ac87af529432d3a4f0e2b3bbf08af49f28f09cc73ed7e551161bdaef5f78d"
+checksum = "51992bc74c0f34f759ff97fb303602e60343afc83693769c91aa17724442809e"
 dependencies = [
  "byteorder",
  "log",
- "parity-wasm 0.41.0",
+ "parity-wasm 0.42.2",
 ]
 
 [[package]]
@@ -10733,7 +10739,7 @@ dependencies = [
  "num-rational",
  "num-traits",
  "parity-wasm 0.41.0",
- "wasmi-validation",
+ "wasmi-validation 0.3.0",
 ]
 
 [[package]]
@@ -10743,6 +10749,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ea78c597064ba73596099281e2f4cfc019075122a65cdda3205af94f0b264d93"
 dependencies = [
  "parity-wasm 0.41.0",
+]
+
+[[package]]
+name = "wasmi-validation"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2eb8e860796d8be48efef530b60eebf84e74a88bce107374fffb0da97d504b8"
+dependencies = [
+ "parity-wasm 0.42.2",
 ]
 
 [[package]]

@@ -128,14 +128,14 @@ where
 		let mut contract = parity_wasm::builder::module()
 			// deploy function (first internal function)
 			.function()
-				.signature().with_return_type(None).build()
+				.signature().build()
 				.with_body(def.deploy_body.unwrap_or_else(||
 					FuncBody::new(Vec::new(), Instructions::empty())
 				))
 				.build()
 			// call function (second internal function)
 			.function()
-				.signature().with_return_type(None).build()
+				.signature().build()
 				.with_body(def.call_body.unwrap_or_else(||
 					FuncBody::new(Vec::new(), Instructions::empty())
 				))
@@ -147,7 +147,7 @@ where
 		if let Some(body) = def.aux_body {
 			let mut signature = contract
 				.function()
-				.signature().with_return_type(None);
+				.signature();
 			for _ in 0 .. def.aux_arg_num {
 				signature = signature.with_param(ValueType::I64);
 			}
@@ -166,7 +166,7 @@ where
 		for func in def.imported_functions {
 			let sig = parity_wasm::builder::signature()
 				.with_params(func.params)
-				.with_return_type(func.return_type)
+				.with_results(func.return_type.into_iter().collect())
 				.build_sig();
 			let sig = contract.push_signature(sig);
 			contract = contract.import()
