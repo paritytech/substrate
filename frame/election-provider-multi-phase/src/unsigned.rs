@@ -154,19 +154,18 @@ impl<T: Config> Pallet<T> {
 
 		// Compute the size of a compact solution comprised of the selected arguments.
 		//
-		// This function completes in `O(edges)`; it's expensive, but linear.
-		let encoded_size_of = |assignments: &[Assignment<T>]| {
-			CompactOf::<T>::from_assignment(assignments, &voter_index, &target_index)
-				.map(|compact| compact.encoded_size())
+		// This function completes in `O(edges * log voters.len())`; it's expensive, but linear.
+		let encoded_size_of = |assignments: &[IndexAssignmentOf<T>]| {
+			CompactOf::<T>::from(assignments).map(|compact| compact.encoded_size())
 		};
 
 		let ElectionResult { mut assignments, winners } = election_result;
 		// Sort the assignments by reversed voter stake. This ensures that we can efficiently truncate the list.
 		let stakes: BTreeMap<_, _> =
 			voters.iter().map(|(who, stake, _)| (who.clone(), *stake)).collect();
-		assignments.sort_unstable_by_key(|Assignment::<T> { who, .. }| sp_std::cmp::Reverse(
-			stakes.get(who).cloned().unwrap_or_default()
-		));
+		assignments.sort_unstable_by_key(|Assignment::<T> { who, .. }| {
+			sp_std::cmp::Reverse(stakes.get(who).cloned().unwrap_or_default())
+		});
 
 		// Reduce (requires round-trip to staked form)
 		assignments = {
@@ -177,6 +176,12 @@ impl<T: Config> Pallet<T> {
 			// convert back.
 			assignment_staked_to_ratio_normalized(staked)?
 		};
+
+		// convert to `IndexAssignment`. This improves the runtime complexity of converting to `Compact`.
+		let mut assignments = assignments
+			.iter()
+			.map(|assignment| IndexAssignmentOf::<T>::new(assignment, &voter_index, &target_index))
+			.collect::<Result<Vec<_>, _>>()?;
 
 		// trim assignments list for weight and length.
 		let size =
@@ -194,7 +199,7 @@ impl<T: Config> Pallet<T> {
 		)?;
 
 		// now make compact.
-		let compact = CompactOf::<T>::from_assignment(&assignments, &voter_index, &target_index)?;
+		let compact = CompactOf::<T>::from(assignments)?;
 
 		// re-calc score.
 		let winners = sp_npos_elections::to_without_backing(winners);
@@ -240,7 +245,7 @@ impl<T: Config> Pallet<T> {
 		desired_targets: u32,
 		size: SolutionOrSnapshotSize,
 		max_weight: Weight,
-		assignments: &mut Vec<Assignment<T>>,
+		assignments: &mut Vec<IndexAssignmentOf<T>>,
 	) {
 		let maximum_allowed_voters = Self::maximum_voter_for_weight::<T::WeightInfo>(
 			desired_targets,
@@ -272,8 +277,8 @@ impl<T: Config> Pallet<T> {
 	/// then the solution must be discarded.
 	fn trim_assignments_length(
 		max_allowed_length: u32,
-		assignments: &mut Vec<Assignment<T>>,
-		encoded_size_of: impl Fn(&[Assignment<T>]) -> Result<usize, sp_npos_elections::Error>,
+		assignments: &mut Vec<IndexAssignmentOf<T>>,
+		encoded_size_of: impl Fn(&[IndexAssignmentOf<T>]) -> Result<usize, sp_npos_elections::Error>,
 	) -> Result<(), MinerError> {
 		// Perform a binary search for the max subset of which can fit into the allowed
 		// length. Having discovered that, we can truncate efficiently.
