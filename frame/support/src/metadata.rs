@@ -18,6 +18,7 @@
 pub use frame_metadata::v13::{
 	ModuleMetadata, RuntimeMetadataLastVersion, StorageEntryMetadata, StorageMetadata,
 	StorageEntryType, StorageEntryModifier, StorageHasher, ExtrinsicMetadata, ErrorMetadata,
+	TypeSpec,
 };
 
 /// todo: [AJ] update docs

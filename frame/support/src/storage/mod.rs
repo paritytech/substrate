@@ -23,6 +23,7 @@ use codec::{FullCodec, FullEncode, Encode, EncodeLike, Decode};
 use crate::hash::{Twox128, StorageHasher, ReversibleStorageHasher};
 use sp_runtime::generic::{Digest, DigestItem};
 pub use sp_runtime::TransactionOutcome;
+pub use self::types::StorageEntryMetadata;
 
 pub mod unhashed;
 pub mod hashed;

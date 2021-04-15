@@ -19,13 +19,13 @@
 
 use codec::{FullCodec, Decode, EncodeLike, Encode};
 use crate::{
+	metadata::{StorageEntryModifier, StorageEntryType},
 	storage::{
 		StorageAppend, StorageDecodeLength,
-		types::{OptionQuery, QueryKindTrait, OnEmptyGetter},
+		types::{OptionQuery, StorageEntryMetadata, QueryKindTrait},
 	},
 	traits::{GetDefault, StorageInstance},
 };
-use frame_metadata::v13::StorageEntryModifier;
 
 /// A type that allow to store a value.
 ///
@@ -171,24 +171,23 @@ where
 	}
 }
 
-/// Part of storage metadata for storage value.
-pub trait StorageValueMetadata {
-	const MODIFIER: StorageEntryModifier;
-	const NAME: &'static str;
-	const DEFAULT: DefaultByteGetter;
-}
-
-impl<Prefix, Value, QueryKind, OnEmpty> StorageValueMetadata
+impl<Prefix, Value, QueryKind, OnEmpty> StorageEntryMetadata
 	for StorageValue<Prefix, Value, QueryKind, OnEmpty> where
 	Prefix: StorageInstance,
-	Value: FullCodec,
+	Value: FullCodec + scale_info::TypeInfo + 'static,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
 	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static,
 {
 	const MODIFIER: StorageEntryModifier = QueryKind::METADATA;
 	const NAME: &'static str = Prefix::STORAGE_PREFIX;
-	const DEFAULT: DefaultByteGetter =
-		DefaultByteGetter(&OnEmptyGetter::<QueryKind::Query, OnEmpty>(core::marker::PhantomData));
+
+	fn ty() -> StorageEntryType {
+		StorageEntryType::Plain(scale_info::meta_type::<Value>())
+	}
+
+	fn default() -> Vec<u8> {
+		OnEmpty::get().encode()
+	}
 }
 
 #[cfg(test)]

@@ -79,56 +79,12 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 
 			let cfg_attrs = &storage.cfg_attrs;
 
-			let metadata_trait = match &storage.metadata {
-				Metadata::Value { .. } => quote::quote_spanned!(storage.attr_span =>
-					#frame_support::storage::types::StorageValueMetadata
-				),
-				Metadata::Map { .. } => quote::quote_spanned!(storage.attr_span =>
-					#frame_support::storage::types::StorageMapMetadata
-				),
-				Metadata::DoubleMap { .. } => quote::quote_spanned!(storage.attr_span =>
-					#frame_support::storage::types::StorageDoubleMapMetadata
-				),
-			};
-
-			let ty = match &storage.metadata {
-				Metadata::Value { value } => {
-					quote::quote_spanned!(storage.attr_span =>
-						#frame_support::metadata::StorageEntryType::Plain(
-							#frame_support::scale_info::meta_type::<#value>()
-						)
-					)
-				},
-				Metadata::Map { key, value } => {
-					quote::quote_spanned!(storage.attr_span =>
-						#frame_support::metadata::StorageEntryType::Map {
-							hasher: <#full_ident as #metadata_trait>::HASHER,
-							key: #frame_support::scale_info::meta_type::<#key>(),
-							value: #frame_support::scale_info::meta_type::<#value>(),
-							unused: false,
-						}
-					)
-				},
-				Metadata::DoubleMap { key1, key2, value } => {
-					quote::quote_spanned!(storage.attr_span =>
-						#frame_support::metadata::StorageEntryType::DoubleMap {
-							hasher: <#full_ident as #metadata_trait>::HASHER1,
-							key2_hasher: <#full_ident as #metadata_trait>::HASHER2,
-							key1: #frame_support::scale_info::meta_type::<#key1>(),
-							key2: #frame_support::scale_info::meta_type::<#key2>(),
-							value: #frame_support::scale_info::meta_type::<#value>(),
-						}
-					)
-				}
-			};
-
 			quote::quote_spanned!(storage.attr_span =>
 				#(#cfg_attrs)* #frame_support::metadata::StorageEntryMetadata {
-					name: <#full_ident as #metadata_trait>::NAME,
-					modifier: <#full_ident as #metadata_trait>::MODIFIER,
-					ty: #ty,
-					// todo: [AJ] do we need the ByteGetter stuff or is a Vec<u8> okay?
-					default: <#full_ident as #metadata_trait>::DEFAULT.0.default_byte(),
+					name: <#full_ident as #frame_support::storage::StorageEntryMetadata>::NAME,
+					modifier: <#full_ident as #frame_support::storage::StorageEntryMetadata>::MODIFIER,
+					ty: <#full_ident as #frame_support::storage::StorageEntryMetadata>::ty(),
+					default: <#full_ident as #frame_support::storage::StorageEntryMetadata>::default(),
 					documentation: #frame_support::scale_info::prelude::vec![
 						#( #docs, )*
 					],

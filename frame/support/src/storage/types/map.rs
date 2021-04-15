@@ -20,10 +20,10 @@
 
 use codec::{FullCodec, Decode, EncodeLike, Encode};
 use crate::{
-	metadata::{self, StorageEntryModifier},
+	metadata::{StorageEntryModifier, StorageEntryType},
 	storage::{
 		StorageAppend, StorageDecodeLength,
-		types::{OptionQuery, QueryKindTrait, OnEmptyGetter},
+		types::{OptionQuery, StorageEntryMetadata, QueryKindTrait},
 	},
 	traits::{GetDefault, StorageInstance},
 };
@@ -288,30 +288,30 @@ where
 	}
 }
 
-/// Part of storage metadata for a storage map.
-///
-/// NOTE: Generic hasher is supported.
-pub trait StorageMapMetadata {
-	const MODIFIER: StorageEntryModifier;
-	const NAME: &'static str;
-	const DEFAULT: DefaultByteGetter;
-	const HASHER: metadata::StorageHasher;
-}
-
-impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty> StorageMapMetadata
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty> StorageEntryMetadata
 	for StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty> where
 	Prefix: StorageInstance,
 	Hasher: crate::hash::StorageHasher,
-	Key: FullCodec,
-	Value: FullCodec,
+	Key: FullCodec + scale_info::TypeInfo + 'static,
+	Value: FullCodec + scale_info::TypeInfo + 'static,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
 	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static,
 {
 	const MODIFIER: StorageEntryModifier = QueryKind::METADATA;
-	const HASHER: metadata::StorageHasher = Hasher::METADATA;
 	const NAME: &'static str = Prefix::STORAGE_PREFIX;
-	const DEFAULT: DefaultByteGetter =
-		DefaultByteGetter(&OnEmptyGetter::<QueryKind::Query, OnEmpty>(core::marker::PhantomData));
+
+	fn ty() -> StorageEntryType {
+		StorageEntryType::Map {
+			hasher: Hasher::METADATA,
+			key: scale_info::meta_type::<Key>(),
+			value: scale_info::meta_type::<Value>(),
+			unused: false
+		}
+	}
+
+	fn default() -> Vec<u8> {
+		OnEmpty::get().encode()
+	}
 }
 
 #[cfg(test)]

@@ -20,14 +20,15 @@
 
 use codec::{FullCodec, Decode, EncodeLike, Encode};
 use crate::{
-	metadata::{self, StorageEntryModifier},
+	metadata::StorageEntryModifier,
 	storage::{
 		StorageAppend, StorageDecodeLength,
-		types::{OptionQuery, QueryKindTrait, OnEmptyGetter},
+		types::{OptionQuery, StorageEntryMetadata, QueryKindTrait},
 	},
 	traits::{GetDefault, StorageInstance},
 };
 use sp_std::vec::Vec;
+use crate::metadata::StorageEntryType;
 
 /// A type that allow to store values for `(key1, key2)` couple. Similar to `StorageMap` but allow
 /// to iterate and remove value associated to first key.
@@ -384,34 +385,33 @@ where
 	}
 }
 
-/// Part of storage metadata for a storage double map.
-///
-/// NOTE: Generic hashers is supported.
-pub trait StorageDoubleMapMetadata {
-	const MODIFIER: StorageEntryModifier;
-	const NAME: &'static str;
-	const DEFAULT: DefaultByteGetter;
-	const HASHER1: metadata::StorageHasher;
-	const HASHER2: metadata::StorageHasher;
-}
-
-impl<Prefix, Hasher1, Hasher2, Key1, Key2, Value, QueryKind, OnEmpty> StorageDoubleMapMetadata
+impl<Prefix, Hasher1, Hasher2, Key1, Key2, Value, QueryKind, OnEmpty> StorageEntryMetadata
 	for StorageDoubleMap<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty> where
 	Prefix: StorageInstance,
 	Hasher1: crate::hash::StorageHasher,
 	Hasher2: crate::hash::StorageHasher,
-	Key1: FullCodec,
-	Key2: FullCodec,
-	Value: FullCodec,
+	Key1: FullCodec + scale_info::TypeInfo + 'static,
+	Key2: FullCodec + scale_info::TypeInfo + 'static,
+	Value: FullCodec + scale_info::TypeInfo + 'static,
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
 	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static
 {
 	const MODIFIER: StorageEntryModifier = QueryKind::METADATA;
-	const HASHER1: metadata::StorageHasher = Hasher1::METADATA;
-	const HASHER2: metadata::StorageHasher = Hasher2::METADATA;
 	const NAME: &'static str = Prefix::STORAGE_PREFIX;
-	const DEFAULT: DefaultByteGetter =
-		DefaultByteGetter(&OnEmptyGetter::<QueryKind::Query, OnEmpty>(core::marker::PhantomData));
+
+	fn ty() -> StorageEntryType {
+		StorageEntryType::DoubleMap {
+			hasher: Hasher1::METADATA,
+			key2_hasher: Hasher2::METADATA,
+			key1: scale_info::meta_type::<Key1>(),
+			key2: scale_info::meta_type::<Key2>(),
+			value: scale_info::meta_type::<Value>(),
+		}
+	}
+
+	fn default() -> Vec<u8> {
+		OnEmpty::get().encode()
+	}
 }
 
 #[cfg(test)]
