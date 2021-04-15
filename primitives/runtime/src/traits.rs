@@ -1217,6 +1217,8 @@ macro_rules! impl_opaque_keys {
 			)*
 		}
 	) => {
+		#[cfg(feature = "std")]
+		use $crate::serde as __opaque_keys_serde_import__;
 		$( #[ $attr ] )*
 		#[derive(
 			Default, Clone, PartialEq, Eq,
@@ -1225,6 +1227,7 @@ macro_rules! impl_opaque_keys {
 			$crate::RuntimeDebug,
 		)]
 		#[cfg_attr(feature = "std", derive($crate::serde::Serialize, $crate::serde::Deserialize))]
+		#[cfg_attr(feature = "std", serde(crate = "__opaque_keys_serde_import__"))]
 		pub struct $name {
 			$(
 				$( #[ $inner_attr ] )*
