@@ -5607,9 +5607,11 @@ dependencies = [
 name = "pallet-transaction-storage"
 version = "3.0.0"
 dependencies = [
+ "frame-benchmarking",
  "frame-support",
  "frame-support-test",
  "frame-system",
+ "hex-literal",
  "pallet-balances",
  "parity-scale-codec",
  "serde",

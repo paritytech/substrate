@@ -3054,13 +3054,16 @@ pub(crate) mod tests {
 		for i in 0 .. 10 {
 			let mut index = Vec::new();
 			if i == 0 {
-				index.push(IndexOperation::Insert { extrinsic: 0, offset: 1 });
+				index.push(IndexOperation::Insert {
+					extrinsic: 0,
+					hash: x1_hash.as_ref().to_vec(),
+					size: (x1.len() - 1) as u32,
+				});
 			} else if i < 5 {
 				// keep renewing 1st
 				index.push(IndexOperation::Renew {
 					extrinsic: 0,
 					hash: x1_hash.as_ref().to_vec(),
-					size: (x1.len() - 1) as u32,
 				});
 			} // else stop renewing
 			let hash = insert_block(

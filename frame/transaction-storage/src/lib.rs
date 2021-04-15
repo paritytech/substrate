@@ -17,9 +17,15 @@
 
 //! Transaction storage pallet. Indexes transactions and manages storage proofs.
 
-
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
+
+#[cfg(any(test, feature = "runtime-benchmarks"))]
+mod mock;
+#[cfg(test)]
+mod tests;
+mod benchmarking;
+pub mod weights;
 
 use frame_support::{
 	traits::{ReservableCurrency, Currency},
@@ -28,50 +34,44 @@ use frame_support::{
 use sp_std::prelude::*;
 use sp_std::{result};
 use codec::{Encode, Decode};
-use sp_runtime::{
-	traits::{
-		Saturating, BlakeTwo256, Hash, Zero,
-	},
-};
-use sp_storage_proof::StorageProof;
+use sp_runtime::traits::{Saturating, BlakeTwo256, Hash, Zero};
+use sp_storage_proof::{StorageProof, DEFAULT_STORAGE_PERIOD};
 
 /// A type alias for the balance type from this pallet's point of view.
 type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 // Re-export pallet items so that they can be accessed from the crate namespace.
 pub use pallet::*;
+pub use weights::WeightInfo;
 
 const CHUNK_SIZE: usize = sp_storage_proof::CHUNK_SIZE;
+/// Maximum bytes that can be storead in one transaction.
+// Increasing it further also requires raising the allocator limit.
+pub const MAX_DATA_SIZE: u32 = 8 * 1024 * 1024;
 
-#[derive(Encode, Decode, sp_runtime::RuntimeDebug)]
+#[derive(Encode, Decode, sp_runtime::RuntimeDebug, PartialEq, Eq)]
 pub struct TransactionInfo {
 	chunk_root: <BlakeTwo256 as Hash>::Output,
 	content_hash: <BlakeTwo256 as Hash>::Output,
 	size: u32,
 }
 
-// Definition of the pallet logic, to be aggregated at runtime definition through
-// `construct_runtime`.
 #[frame_support::pallet]
 pub mod pallet {
-	// Import various types used to declare pallet in scope.
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 	use super::*;
 
-	/// Our pallet's configuration trait. All our types and constants go in here. If the
-	/// pallet is dependent on specific other pallets, then their configuration traits
-	/// should be added to our implied traits list.
-	///
-	/// `frame_system::Config` should always be included.
 	#[pallet::config]
-	pub trait Config: pallet_balances::Config + frame_system::Config {
+	pub trait Config: frame_system::Config {
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// A dispatchable call.
 		type Call: Parameter + Dispatchable<Origin=Self::Origin> + GetDispatchInfo + From<frame_system::Call<Self>>;
 		/// The currency trait.
 		type Currency: ReservableCurrency<Self::AccountId>;
+		/// Weight information for extrinsics in this pallet.
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::error]
@@ -101,15 +101,16 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(_n: T::BlockNumber) -> Weight {
+			// This will be cleared in in `on_finalize`
 			<Counter<T>>::put(0);
 			0
 		}
 
 		fn on_finalize(n: T::BlockNumber) {
 			<TransactionCount<T>>::insert(n, <Counter<T>>::get().unwrap_or(0));
-			// Drop obsolete roots
 			<Counter<T>>::kill();
-			let period = <StoragePeriod<T>>::get().unwrap();
+			// Drop obsolete roots
+			let period = <StoragePeriod<T>>::get().unwrap_or(DEFAULT_STORAGE_PERIOD.into());
 			let obsolete = n.saturating_sub(period);
 			if obsolete > Zero::zero() {
 				<TransactionRoots<T>>::remove_prefix(obsolete);
@@ -120,7 +121,13 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		#[pallet::weight(1)]
+		/// Index and store data on chain. Minimum data size is 1 bytes, maxmum is `MAX_DATA_SIZE`.
+		/// Data will be removed after `STORAGE_PERIOD` blocks, unless `renew` is called.
+		/// # <weight>
+		/// - n*log(n) of data size, as all data is pushed to an in-memory trie.
+		/// Additionally contains a DB write.
+		/// # </weight>
+		#[pallet::weight(T::WeightInfo::store(data.len() as u32))]
 		pub(super) fn store(
 			origin: OriginFor<T>,
 			data: Vec<u8>,
@@ -143,14 +150,20 @@ pub mod pallet {
 				size: data.len() as u32,
 				content_hash: content_hash.into(),
 			});
+			Self::deposit_event(Event::Stored(counter));
 			counter += 1;
 			<Counter<T>>::put(counter);
-
-			Self::deposit_event(Event::Stored);
 			Ok(().into())
 		}
 
-		#[pallet::weight(1)]
+		/// Renew previously stored data. Parameters are the block number that contains
+		/// previous `store` or `renew` call and transaction index within that block.
+		/// Transaction index is emitted in the `Stored` or `Renewed` event.
+		/// Applies same fees as `store`.
+		/// # <weight>
+		/// - Constant with a single DB read.
+		/// # </weight>
+		#[pallet::weight(T::WeightInfo::renew())]
 		pub(super) fn renew(
 			origin: OriginFor<T>,
 			block: T::BlockNumber,
@@ -165,21 +178,27 @@ pub mod pallet {
 			let mut counter = <Counter<T>>::get().unwrap_or(0);
 			let block_num = <frame_system::Pallet<T>>::block_number();
 			<TransactionRoots<T>>::insert(block_num, counter, info);
+			Self::deposit_event(Event::Renewed(counter));
 			counter += 1;
 			<Counter<T>>::put(counter);
-
-			Self::deposit_event(Event::Renewed);
 			Ok(().into())
 		}
 
-		#[pallet::weight(1)]
-		fn check_proof(
+		/// Check storage proof for block number `block_number() - StoragePeriod`.
+		/// If such block does not exist the proof is expected to be `None`.
+		/// # <weight>
+		/// - Linear w.r.t the number of indexed transactions in the proved block for random probing.
+		/// There's a DB read for each transaction.
+		/// Here we assume a maximum of 100 probed transactions.
+		/// # </weight>
+		#[pallet::weight(T::WeightInfo::check_proof_max())]
+		pub(super) fn check_proof(
 			origin: OriginFor<T>,
 			proof: Option<StorageProof>,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
 			let number = <frame_system::Pallet<T>>::block_number();
-			let period = <StoragePeriod<T>>::get().unwrap();
+			let period = <StoragePeriod<T>>::get().unwrap_or(DEFAULT_STORAGE_PERIOD.into());
 			let target_number = number.saturating_sub(period);
 			if target_number.is_zero() {
 				ensure!(proof.is_none(), Error::<T>::UnexpectedProof);
@@ -189,7 +208,8 @@ pub mod pallet {
 			let mut total_chunks = 0;
 			for t in 0 .. transaction_count {
 				match <TransactionRoots<T>>::get(target_number, t) {
-					Some(info) => total_chunks += ((info.size as u64 + CHUNK_SIZE as u64 - 1) / CHUNK_SIZE as u64) as u32,
+					Some(info) => total_chunks +=
+						((info.size as u64 + CHUNK_SIZE as u64 - 1) / CHUNK_SIZE as u64) as u32,
 					None => break,
 				}
 			}
@@ -205,10 +225,11 @@ pub mod pallet {
 			let (info, chunk_index) = loop {
 				match <TransactionRoots<T>>::get(target_number, t) {
 					Some(info) => {
-						total_chunks += ((info.size as u64 + CHUNK_SIZE as u64 - 1) / CHUNK_SIZE as u64) as u32;
-						if total_chunks >= selected_chunk_index {
-							break (info, total_chunks - selected_chunk_index)
+						let chunks = ((info.size as u64 + CHUNK_SIZE as u64 - 1) / CHUNK_SIZE as u64) as u32;
+						if total_chunks + chunks >= selected_chunk_index {
+							break (info, selected_chunk_index - total_chunks)
 						}
+						total_chunks += chunks;
 					},
 					None => Err(Error::<T>::MissingStateData)?,
 				}
@@ -219,11 +240,12 @@ pub mod pallet {
 				sp_io::trie::blake2_256_verity_proof(
 					info.chunk_root,
 					&proof.proof,
-					&(chunk_index as u32).to_be_bytes(),
+					&sp_storage_proof::encode_index(chunk_index),
 					&proof.chunk,
 				),
 				Error::<T>::InvalidProof
 			);
+			Self::deposit_event(Event::ProofChecked);
 			Ok(().into())
 		}
 	}
@@ -231,8 +253,12 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		Stored,
-		Renewed,
+		/// Stored data under specified index.
+		Stored(u32),
+		/// Renewed data under specified index.
+		Renewed(u32),
+		/// Storage proof was successfully checked.
+		ProofChecked,
 	}
 
 	/// Collection of extrinsic storage roots for the current block.
@@ -260,11 +286,14 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn byte_fee)]
+	/// Storage fee per byte.
 	pub(super) type ByteFee<T: Config> = StorageValue<_, BalanceOf<T>>;
 
 	#[pallet::storage]
 	pub(super) type Counter<T: Config> = StorageValue<_, u32>;
 
+	/// Storage period for data in blocks. Should match `sp_storage_proof::DEFAULT_STORAGE_PERIOD`
+	/// for block authoring.
 	#[pallet::storage]
 	pub(super) type StoragePeriod<T: Config> = StorageValue<_, T::BlockNumber>;
 
@@ -318,109 +347,5 @@ pub mod pallet {
 			T::Currency::slash(&sender, fee);
 			Ok(())
 		}
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	use frame_support::{
-		assert_ok, parameter_types,
-		weights::{DispatchInfo, GetDispatchInfo}, traits::{OnInitialize, OnFinalize}
-	};
-	use sp_core::H256;
-	// The testing primitives are very useful for avoiding having to work with signatures
-	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
-	use sp_runtime::{
-		testing::Header, BuildStorage,
-		traits::{BlakeTwo256, IdentityLookup},
-	};
-	// Reexport crate as its pallet name for construct_runtime.
-	use crate as pallet_transaction_storage;
-
-	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
-	type Block = frame_system::mocking::MockBlock<Test>;
-
-	// For testing the pallet, we construct a mock runtime.
-	frame_support::construct_runtime!(
-		pub enum Test where
-			Block = Block,
-			NodeBlock = Block,
-			UncheckedExtrinsic = UncheckedExtrinsic,
-		{
-			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-			Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-			TransactionStorage: pallet_transaction_storage::{Pallet, Call, Storage, Config<T>, Inherent, Event<T>},
-		}
-	);
-
-	parameter_types! {
-		pub const BlockHashCount: u64 = 250;
-		pub BlockWeights: frame_system::limits::BlockWeights =
-			frame_system::limits::BlockWeights::simple_max(1024);
-	}
-	impl frame_system::Config for Test {
-		type BaseCallFilter = ();
-		type BlockWeights = ();
-		type BlockLength = ();
-		type DbWeight = ();
-		type Origin = Origin;
-		type Index = u64;
-		type BlockNumber = u64;
-		type Hash = H256;
-		type Call = Call;
-		type Hashing = BlakeTwo256;
-		type AccountId = u64;
-		type Lookup = IdentityLookup<Self::AccountId>;
-		type Header = Header;
-		type Event = Event;
-		type BlockHashCount = BlockHashCount;
-		type Version = ();
-		type PalletInfo = PalletInfo;
-		type AccountData = pallet_balances::AccountData<u64>;
-		type OnNewAccount = ();
-		type OnKilledAccount = ();
-		type SystemWeightInfo = ();
-		type SS58Prefix = ();
-	}
-	parameter_types! {
-		pub const ExistentialDeposit: u64 = 1;
-	}
-	impl pallet_balances::Config for Test {
-		type MaxLocks = ();
-		type Balance = u64;
-		type DustRemoval = ();
-		type Event = Event;
-		type ExistentialDeposit = ExistentialDeposit;
-		type AccountStore = System;
-		type WeightInfo = ();
-	}
-	impl Config for Test {
-		type Event = Event;
-		type Call = Call;
-		type Currency = Balances;
-	}
-
-	// This function basically just builds a genesis storage key/value store according to
-	// our desired mockup.
-	pub fn new_test_ext() -> sp_io::TestExternalities {
-		let t = GenesisConfig {
-			// We use default for brevity, but you can configure as desired if needed.
-			frame_system: Default::default(),
-			pallet_balances: Default::default(),
-			pallet_transaction_storage: pallet_transaction_storage::GenesisConfig::default(),
-		}.build_storage().unwrap();
-		t.into()
-	}
-
-	#[test]
-	fn stores_transaction() {
-		let mut ext = new_test_ext();
-		let data = vec![1u8, 2u8, 3u8];
-		ext.execute_with(|| {
-			assert_ok!(TransactionStorage::store(Origin::signed(1), data));
-		});
-		assert!(ext.overlayed_changes().transaction_index_ops().len() == 1);
 	}
 }
