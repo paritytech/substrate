@@ -165,10 +165,10 @@ macro_rules! decl_error {
 			for $error<$generic $(, $inst_generic)?>
 		$( where $( $where_ty: $where_bound ),* )?
 		{
-			fn metadata() -> $crate::scale_info::prelude::vec::Vec<$crate::error::ErrorMetadata> {
+			fn metadata() -> $crate::scale_info::prelude::vec::Vec<$crate::metadata::ErrorMetadata> {
 				$crate::scale_info::prelude::vec![
 					$(
-						$crate::error::ErrorMetadata {
+						$crate::metadata::ErrorMetadata {
 							name: stringify!($name),
 							documentation: $crate::scale_info::prelude::vec![
 								$( $doc_attr ),*
