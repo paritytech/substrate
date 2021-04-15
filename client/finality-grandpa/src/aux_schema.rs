@@ -19,27 +19,30 @@
 //! Schema for stuff in the aux-db.
 
 use std::fmt::Debug;
-use parity_scale_codec::{Encode, Decode};
-use sc_client_api::backend::AuxStore;
-use sp_blockchain::{Result as ClientResult, Error as ClientError};
-use fork_tree::ForkTree;
+
 use finality_grandpa::round::State as RoundState;
-use sp_runtime::traits::{Block as BlockT, NumberFor};
 use log::{info, warn};
-use sp_finality_grandpa::{AuthorityList, SetId, RoundNumber};
+use parity_scale_codec::{Decode, Encode};
+
+use fork_tree::ForkTree;
+use sc_client_api::backend::AuxStore;
+use sp_blockchain::{Error as ClientError, Result as ClientResult};
+use sp_finality_grandpa::{AuthorityList, RoundNumber, SetId};
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 use crate::authorities::{
-	AuthoritySet, AuthoritySetChanges, SharedAuthoritySet, PendingChange, DelayKind,
+	AuthoritySet, AuthoritySetChanges, DelayKind, PendingChange, SharedAuthoritySet,
 };
 use crate::environment::{
 	CompletedRound, CompletedRounds, CurrentRounds, HasVoted, SharedVoterSetState, VoterSetState,
 };
-use crate::NewAuthoritySet;
+use crate::{GrandpaJustification, NewAuthoritySet};
 
 const VERSION_KEY: &[u8] = b"grandpa_schema_version";
 const SET_STATE_KEY: &[u8] = b"grandpa_completed_round";
 const CONCLUDED_ROUNDS: &[u8] = b"grandpa_concluded_rounds";
 const AUTHORITY_SET_KEY: &[u8] = b"grandpa_voters";
+const BEST_JUSTIFICATION: &[u8] = b"grandpa_best_justification";
 
 const CURRENT_VERSION: u32 = 3;
 
@@ -464,7 +467,7 @@ where
 pub(crate) fn update_authority_set<Block: BlockT, F, R>(
 	set: &AuthoritySet<Block::Hash, NumberFor<Block>>,
 	new_set: Option<&NewAuthoritySet<Block::Hash, NumberFor<Block>>>,
-	write_aux: F
+	write_aux: F,
 ) -> R
 where
 	F: FnOnce(&[(&'static [u8], &[u8])]) -> R,
@@ -492,6 +495,33 @@ where
 	}
 }
 
+/// Update the justification for the latest finalized block on-disk.
+///
+/// We always keep around the justification for the best finalized block and overwrite it
+/// as we finalize new blocks, this makes sure that we don't store useless justifications
+/// but can always prove finality of the latest block.
+pub(crate) fn update_best_justification<Block: BlockT, F, R>(
+	justification: &GrandpaJustification<Block>,
+	write_aux: F,
+) -> R
+where
+	F: FnOnce(&[(&'static [u8], &[u8])]) -> R,
+{
+	let encoded_justification = justification.encode();
+	write_aux(&[(BEST_JUSTIFICATION, &encoded_justification[..])])
+}
+
+/// Fetch the justification for the latest block finalized by GRANDPA, if any.
+pub fn best_justification<B, Block>(
+	backend: &B,
+) -> ClientResult<Option<GrandpaJustification<Block>>>
+where
+	B: AuxStore,
+	Block: BlockT,
+{
+	load_decode::<_, GrandpaJustification<Block>>(backend, BEST_JUSTIFICATION)
+}
+
 /// Write voter set state.
 pub(crate) fn write_voter_set_state<Block: BlockT, B: AuxStore>(
 	backend: &B,
@@ -517,10 +547,9 @@ pub(crate) fn write_concluded_round<Block: BlockT, B: AuxStore>(
 
 #[cfg(test)]
 pub(crate) fn load_authorities<B: AuxStore, H: Decode, N: Decode + Clone + Ord>(
-	backend: &B
+	backend: &B,
 ) -> Option<AuthoritySet<H, N>> {
-	load_decode::<_, AuthoritySet<H, N>>(backend, AUTHORITY_SET_KEY)
-		.expect("backend error")
+	load_decode::<_, AuthoritySet<H, N>>(backend, AUTHORITY_SET_KEY).expect("backend error")
 }
 
 #[cfg(test)]

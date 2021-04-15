@@ -104,7 +104,7 @@ use frame_support::{
 	traits::{
 		ChangeMembers, Contains, ContainsLengthBound, Currency, CurrencyToVote, Get,
 		InitializeMembers, LockIdentifier, LockableCurrency, OnUnbalanced, ReservableCurrency,
-		WithdrawReasons,
+		WithdrawReasons, SortedMembers,
 	},
 	weights::Weight,
 };
@@ -182,7 +182,7 @@ pub mod pallet {
 
 		/// Identifier for the elections-phragmen pallet's lock
 		#[pallet::constant]
-		type ModuleId: Get<LockIdentifier>;
+		type PalletId: Get<LockIdentifier>;
 
 		/// The currency that people are electing with.
 		type Currency: LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>
@@ -332,7 +332,12 @@ pub mod pallet {
 
 			// Amount to be locked up.
 			let locked_stake = value.min(T::Currency::total_balance(&who));
-			T::Currency::set_lock(T::ModuleId::get(), &who, locked_stake, WithdrawReasons::all());
+			T::Currency::set_lock(
+				T::PalletId::get(),
+				&who,
+				locked_stake,
+				WithdrawReasons::all(),
+			);
 
 			Voting::<T>::insert(&who, Voter { votes, deposit: new_deposit, stake: locked_stake });
 			Ok(None.into())
@@ -854,7 +859,7 @@ impl<T: Config> Pallet<T> {
 		let Voter { deposit, .. } = <Voting<T>>::take(who);
 
 		// remove storage, lock and unreserve.
-		T::Currency::remove_lock(T::ModuleId::get(), who);
+		T::Currency::remove_lock(T::PalletId::get(), who);
 
 		// NOTE: we could check the deposit amount before removing and skip if zero, but it will be
 		// a noop anyhow.
@@ -1062,6 +1067,12 @@ impl<T: Config> Contains<T::AccountId> for Pallet<T> {
 	fn contains(who: &T::AccountId) -> bool {
 		Self::is_member(who)
 	}
+}
+
+impl<T: Config> SortedMembers<T::AccountId> for Module<T> {
+	fn contains(who: &T::AccountId) -> bool {
+		Self::is_member(who)
+	}
 
 	fn sorted_members() -> Vec<T::AccountId> {
 		Self::members_ids()
@@ -1137,6 +1148,7 @@ mod tests {
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
+		type OnSetCode = ();
 	}
 
 	parameter_types! {
@@ -1209,11 +1221,11 @@ mod tests {
 	}
 
 	parameter_types! {
-		pub const ElectionsPhragmenModuleId: LockIdentifier = *b"phrelect";
+		pub const ElectionsPhragmenPalletId: LockIdentifier = *b"phrelect";
 	}
 
 	impl Config for Test {
-		type ModuleId = ElectionsPhragmenModuleId;
+		type PalletId = ElectionsPhragmenPalletId;
 		type Event = Event;
 		type Currency = Balances;
 		type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
@@ -1364,7 +1376,7 @@ mod tests {
 			.get(0)
 			.cloned()
 			.map(|lock| {
-				assert_eq!(lock.id, ElectionsPhragmenModuleId::get());
+				assert_eq!(lock.id, ElectionsPhragmenPalletId::get());
 				lock.amount
 			})
 			.unwrap_or_default()

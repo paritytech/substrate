@@ -9,7 +9,8 @@ and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 ### Added
 
 ### Changed
-[migrate pallet-elections-phragmen to attribute macros](https://github.com/paritytech/substrate/pull/8044)
+\[**Needs Migration**\] [migrate pallet-elections-phragmen to attribute macros](https://github.com/paritytech/substrate/pull/8044)
+
 ### Fixed
 
 ### Security
