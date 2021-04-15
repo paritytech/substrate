@@ -191,7 +191,7 @@ pub mod pallet {
 		/// There's a DB read for each transaction.
 		/// Here we assume a maximum of 100 probed transactions.
 		/// # </weight>
-		#[pallet::weight(T::WeightInfo::check_proof_max())]
+		#[pallet::weight((T::WeightInfo::check_proof_max(), DispatchClass::Mandatory))]
 		pub(super) fn check_proof(
 			origin: OriginFor<T>,
 			proof: Option<StorageProof>,

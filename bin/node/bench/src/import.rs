@@ -140,7 +140,7 @@ impl core::Benchmark for ImportBenchmark {
 				match self.block_type {
 					BlockType::RandomTransfersKeepAlive => {
 						// should be 5 per signed extrinsic + 1 per unsigned
-						// we have 1 unsigned and the rest are signed in the block
+						// we have 2 unsigned and the rest are signed in the block
 						// those 5 events per signed are:
 						//    - new account (RawEvent::NewAccount) as we always transfer fund to non-existant account
 						//    - endowed (RawEvent::Endowed) for this new account
@@ -149,7 +149,7 @@ impl core::Benchmark for ImportBenchmark {
 						//    - extrinsic success
 						assert_eq!(
 							node_runtime::System::events().len(),
-							(self.block.extrinsics.len() - 1) * 5 + 1,
+							(self.block.extrinsics.len() - 2) * 5 + 2,
 						);
 					},
 					BlockType::Noop => {
@@ -157,11 +157,11 @@ impl core::Benchmark for ImportBenchmark {
 							node_runtime::System::events().len(),
 
 							// should be 2 per signed extrinsic + 1 per unsigned
-							// we have 1 unsigned and the rest are signed in the block
+							// we have 2 unsigned and the rest are signed in the block
 							// those 2 events per signed are:
 							//    - deposit event for charging transaction fee
 							//    - extrinsic success
-							(self.block.extrinsics.len() - 1) *  2 + 1,
+							(self.block.extrinsics.len() - 2) *  2 + 2,
 						);
 					},
 					_ => {},
