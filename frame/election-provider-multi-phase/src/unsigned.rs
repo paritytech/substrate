@@ -34,18 +34,6 @@ pub(crate) const OFFCHAIN_HEAD_DB: &[u8] = b"parity/multi-phase-unsigned-electio
 /// within a window of 5 blocks.
 pub(crate) const OFFCHAIN_REPEAT: u32 = 5;
 
-// type helpers for method definitions
-// these types are defined elsewhere, but we simplify them here for convenience
-pub(crate) type Assignment<T> = sp_npos_elections::Assignment<
-	<T as frame_system::Config>::AccountId,
-	CompactAccuracyOf<T>,
->;
-pub(crate) type Voter<T> = (
-		<T as frame_system::Config>::AccountId,
-		sp_npos_elections::VoteWeight,
-		Vec<<T as frame_system::Config>::AccountId>,
-);
-
 #[derive(Debug, Eq, PartialEq)]
 pub enum MinerError {
 	/// An internal error in the NPoS elections crate.
@@ -152,16 +140,9 @@ impl<T: Config> Pallet<T> {
 		// some point though.
 
 		// storage items. Note: we have already read this from storage, they must be in cache.
-		let RoundSnapshot { mut voters, targets } =
+		let RoundSnapshot { voters, targets } =
 			Self::snapshot().ok_or(MinerError::SnapshotUnAvailable)?;
 		let desired_targets = Self::desired_targets().ok_or(MinerError::SnapshotUnAvailable)?;
-
-		// Both `voters` and `assignments` are vectors.
-		// They're synchronized: for any arbitrary index `i`, `voters[i]` corresponds to `assignments[i]`.
-		// However, it turns out to be convenient for us if the assignments are sorted by decreasing
-		// stake. In order to maintain the correspondence, we have to also sort the voters.
-		let ElectionResult { mut assignments, winners } = election_result;
-		Self::sort_by_decreasing_stake(voters.as_mut_slice(), assignments.as_mut_slice());
 
 		// now make some helper closures.
 		let cache = helpers::generate_voter_cache::<T>(&voters);
@@ -178,6 +159,14 @@ impl<T: Config> Pallet<T> {
 			CompactOf::<T>::from_assignment(assignments, &voter_index, &target_index)
 				.map(|compact| compact.encoded_size())
 		};
+
+		let ElectionResult { mut assignments, winners } = election_result;
+		// Sort the assignments by reversed voter stake. This ensures that we can efficiently truncate the list.
+		let stakes: BTreeMap<_, _> =
+			voters.iter().map(|(who, stake, _)| (who.clone(), *stake)).collect();
+		assignments.sort_unstable_by_key(|Assignment::<T> { who, .. }| sp_std::cmp::Reverse(
+			stakes.get(who).cloned().unwrap_or_default()
+		));
 
 		// Reduce (requires round-trip to staked form)
 		assignments = {
@@ -230,53 +219,6 @@ impl<T: Config> Pallet<T> {
 				random as usize
 			}
 		}
-	}
-
-	/// Sort the `voters` and `assignments` lists by decreasing voter stake.
-	///
-	/// [`trim_assignments_weight`] and [`trim_assignments_length`] both depend on this property
-	/// on the `assignments` list for efficient computation. Meanwhile, certain other helper
-	/// closures depend on `voters` and `assignments` corresponding, so we have to sort both.
-	fn sort_by_decreasing_stake(voters: &mut [Voter<T>], assignments: &mut [Assignment<T>]) {
-		// verify precondition
-		debug_assert!({
-			let voter_ids = voters.iter().map(|(who, _, _)| who).cloned();
-			let assignment_ids = assignments.iter().map(|assignment| assignment.who.clone());
-			voter_ids.zip(assignment_ids).all(|(voter_id, assignment_id)| voter_id == assignment_id)
-		});
-
-		let stakes: BTreeMap<_, _> =
-			voters.iter().map(|(who, stake, _)| (who.clone(), *stake)).collect();
-
-		// `Reverse` just reverses the meaning of this key's ordering, so the greatest items come
-		// first without needing to explicitly call `reverse` afterwards.
-		//
-		// Getting an assignment's stake from the `stakes` map should never fail. It will definitely
-		// never fail for a member of `voters`. However, we use `unwrap_or_default` defensively. In
-		// case a voter can't be found, it's assumed to have 0 stake, which puts it first on the
-		// chopping block for removal.
-		//
-		// This would be a closure of its own, but rustc doesn't like that and gives E0521, so it's
-		// simpler to just declare a little macro. The point is that we can show that both lists
-		// get sorted according to identical rules.
-		macro_rules! stake_of {
-			($who:expr) => {
-				sp_std::cmp::Reverse(
-					stakes.get($who).cloned().unwrap_or_default()
-				)
-			};
-		}
-
-		// we sort stably so the lists stay synchronized
-		voters.sort_by_key(|(who, _, _)| stake_of!(who));
-		assignments.sort_by_key(|Assignment::<T> { who, .. }| stake_of!(who));
-
-		// verify postcondition
-		debug_assert!({
-			let voter_ids = voters.iter().map(|(who, _, _)| who).cloned();
-			let assignment_ids = assignments.iter().map(|assignment| assignment.who.clone());
-			voter_ids.zip(assignment_ids).all(|(voter_id, assignment_id)| voter_id == assignment_id)
-		});
 	}
 
 	/// Greedily reduce the size of the solution to fit into the block w.r.t. weight.

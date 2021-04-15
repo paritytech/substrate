@@ -267,6 +267,17 @@ pub type CompactTargetIndexOf<T> = <CompactOf<T> as CompactSolution>::Target;
 pub type CompactAccuracyOf<T> = <CompactOf<T> as CompactSolution>::Accuracy;
 /// The accuracy of the election, when computed on-chain. Equal to [`Config::OnChainAccuracy`].
 pub type OnChainAccuracyOf<T> = <T as Config>::OnChainAccuracy;
+/// The relative distribution of a voter's stake among the winning targets.
+pub type Assignment<T> = sp_npos_elections::Assignment<
+	<T as frame_system::Config>::AccountId,
+	CompactAccuracyOf<T>,
+>;
+/// A voter's fundamental data: their ID, their stake, and the list of candidates for whom they voted.
+pub type Voter<T> = (
+		<T as frame_system::Config>::AccountId,
+		sp_npos_elections::VoteWeight,
+		Vec<<T as frame_system::Config>::AccountId>,
+);
 
 /// Wrapper type that implements the configurations needed for the on-chain backup.
 struct OnChainConfig<T: Config>(sp_std::marker::PhantomData<T>);
