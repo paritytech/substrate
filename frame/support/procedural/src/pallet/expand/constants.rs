@@ -96,13 +96,6 @@ pub fn expand_constants(def: &mut Def) -> proc_macro2::TokenStream {
 					}
 				}
 
-				// unsafe impl<#type_impl_gen> Send for #default_byte_getter<#type_use_gen>
-				// 	#completed_where_clause
-				// {}
-				// unsafe impl<#type_impl_gen> Sync for #default_byte_getter<#type_use_gen>
-				// 	#completed_where_clause
-				// {}
-
 				#frame_support::metadata::ModuleConstantMetadata {
 					name: #ident_str,
 					ty: #frame_support::scale_info::meta_type::<#const_type>(),
