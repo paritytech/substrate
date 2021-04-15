@@ -19,7 +19,7 @@
 //! or a double map.
 
 use sp_std::prelude::*;
-use sp_std::convert::TryFrom;
+use sp_std::{convert::TryFrom, marker::PhantomData};
 use codec::{FullCodec, Encode, EncodeLike, Decode};
 use crate::{
 	traits::Get,
@@ -38,7 +38,7 @@ impl<T: FullCodec + Clone + sp_std::fmt::Debug> BoundedVecValue for T {}
 /// As the name suggests, the length of the queue is always bounded. All internal operations ensure
 /// this bound is respected.
 #[derive(Encode, Decode, crate::DefaultNoBound, crate::CloneNoBound, crate::DebugNoBound)]
-pub struct BoundedVec<T: BoundedVecValue, S: Get<u32>>(Vec<T>, sp_std::marker::PhantomData<S>);
+pub struct BoundedVec<T: BoundedVecValue, S: Get<u32>>(Vec<T>, PhantomData<S>);
 
 // NOTE: we could also implement this as:
 // impl<T: Value, S1: Get<u32>, S2: Get<u32>> PartialEq<BoundedVec<T, S2>> for BoundedVec<T, S1>
