@@ -669,6 +669,7 @@ pub fn start_mining_worker<Block, C, S, Algorithm, E, SO, CAW>(
 				inherent_data,
 				inherent_digest,
 				build_time.clone(),
+				None,
 			).await {
 				Ok(x) => x,
 				Err(err) => {

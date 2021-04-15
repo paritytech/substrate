@@ -679,6 +679,7 @@ mod tests {
 						inherent_data,
 						digest,
 						std::time::Duration::from_secs(1),
+						None,
 					).await
 				}).expect("Error making test block").block;
 
