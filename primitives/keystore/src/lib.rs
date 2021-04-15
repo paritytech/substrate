@@ -62,7 +62,7 @@ impl HasKeys {
         matches!(self, Self::Found(_) | Self::FoundAll(_))
     }
 
-    /// Where all keys found in the store.
+    /// Were all keys found in the store.
     pub fn found_all(&self) -> bool {
         matches!(self, Self::FoundAll(_))
     }
