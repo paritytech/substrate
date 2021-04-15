@@ -727,6 +727,7 @@ impl<T: Config<I>, I: 'static> GenesisConfig<T, I> {
 	/// Direct implementation of `GenesisBuild::build_storage`.
 	///
 	/// Kept in order not to break dependency.
+	#[deprecated(note = "use [`GenesisBuild::build_storage`] instead")]
 	pub fn build_storage(&self) -> Result<sp_runtime::Storage, String> {
 		<Self as GenesisBuild<T, I>>::build_storage(self)
 	}
