@@ -58,6 +58,7 @@ use frame_support::{
 	traits::{
 		ChangeMembers, EnsureOrigin,
 		Get, InitializeMembers, PalletInfo,
+		GetBacking, Backing,
 	},
 	weights::{GetDispatchInfo, Weight},
 };
@@ -753,6 +754,15 @@ pub enum RawOrigin<AccountId, I> {
 	Member(AccountId),
 	/// Dummy to manage the fact we have instancing.
 	_Phantom(sp_std::marker::PhantomData<I>),
+}
+
+impl<AccountId, I> GetBacking for RawOrigin<AccountId, I> {
+	fn get_backing(&self) -> Option<Backing> {
+		match self {
+			RawOrigin::Members(n, d) => Some(Backing { approvals: *n, eligible: *d }),
+			_ => None,
+		}
+	}
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]

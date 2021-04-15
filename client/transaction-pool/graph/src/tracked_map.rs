@@ -22,7 +22,7 @@ use std::{
 };
 use parking_lot::{RwLock, RwLockWriteGuard, RwLockReadGuard};
 
-/// Something that can report it's size.
+/// Something that can report its size.
 pub trait Size {
 	fn size(&self) -> usize;
 }
@@ -64,14 +64,14 @@ impl<K, V> TrackedMap<K, V> {
 	}
 
 	/// Lock map for read.
-	pub fn read<'a>(&'a self) -> TrackedMapReadAccess<'a, K, V> {
+	pub fn read(&self) -> TrackedMapReadAccess<K, V> {
 		TrackedMapReadAccess {
 			inner_guard: self.index.read(),
 		}
 	}
 
 	/// Lock map for write.
-	pub fn write<'a>(&'a self) -> TrackedMapWriteAccess<'a, K, V> {
+	pub fn write(&self) -> TrackedMapWriteAccess<K, V> {
 		TrackedMapWriteAccess {
 			inner_guard: self.index.write(),
 			bytes: &self.bytes,
@@ -90,7 +90,7 @@ where
 	K: Eq + std::hash::Hash
 {
 	/// Lock map for read.
-	pub fn read<'a>(&'a self) -> TrackedMapReadAccess<'a, K, V> {
+	pub fn read(&self) -> TrackedMapReadAccess<K, V> {
 		TrackedMapReadAccess {
 			inner_guard: self.0.read(),
 		}
@@ -136,10 +136,10 @@ where
 		let new_bytes = val.size();
 		self.bytes.fetch_add(new_bytes as isize, AtomicOrdering::Relaxed);
 		self.length.fetch_add(1, AtomicOrdering::Relaxed);
-		self.inner_guard.insert(key, val).and_then(|old_val| {
+		self.inner_guard.insert(key, val).map(|old_val| {
 			self.bytes.fetch_sub(old_val.size() as isize, AtomicOrdering::Relaxed);
 			self.length.fetch_sub(1, AtomicOrdering::Relaxed);
-			Some(old_val)
+			old_val
 		})
 	}
 
