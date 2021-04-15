@@ -384,7 +384,6 @@ where
 				self.overlay.set_child_storage(child_info, key.to_vec(), None);
 				true
 			});
-
 			(all_deleted, num_deleted)
 		} else {
 			self.backend.apply_to_child_keys_while(child_info, |key| {
@@ -392,7 +391,6 @@ where
 				self.overlay.set_child_storage(child_info, key.to_vec(), None);
 				true
 			});
-
 			(true, num_deleted)
 		}
 	}
@@ -467,9 +465,7 @@ where
 					|| empty_child_trie_root::<Layout<H>>()
 				);
 
-			let encoded_root = root.encode();
-
-			encoded_root
+			root.encode()
 		} else {
 			let root = if let Some((changes, info)) = self.overlay.child_changes(storage_key) {
 				let delta = changes.map(|(k, v)| (k.as_ref(), v.value().map(AsRef::as_ref)));
@@ -501,9 +497,7 @@ where
 						|| empty_child_trie_root::<Layout<H>>()
 					);
 
-				let encoded_root = root.encode();
-
-				encoded_root
+				root.encode()
 			}
 		}
 	}
@@ -533,9 +527,8 @@ where
 	fn storage_changes_root(&mut self, parent_hash: &[u8]) -> Result<Option<Vec<u8>>, ()> {
 		let _guard = guard();
 		if let Some(ref root) = self.storage_transaction_cache.changes_trie_transaction_storage_root {
-			let encoded_root = root.encode();
 
-			Ok(Some(encoded_root))
+			Ok(Some(root.encode()))
 		} else {
 			let root = self.overlay.changes_trie_root(
 				self.backend,
@@ -551,12 +544,7 @@ where
 				self.storage_transaction_cache,
 			);
 
-			let root = root.map(|r| r.map(|o| o.encode()));
-
-			let ready_to_encode_root = root.as_ref()
-				.map(|r| r.as_ref().map(|o| EncodeOpaqueValue(o.to_vec())));
-
-			root
+			root.map(|r| r.map(|o| o.encode()))
 		}
 	}
 
