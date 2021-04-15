@@ -275,12 +275,9 @@ impl SyncCryptoStore for LocalKeystore {
 	}
 
 	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> HasKeys {
-		let found = public_keys.iter().enumerate().fold(Vec::new(), |mut idxs, (i, (p, t))| {
-			if self.0.read().key_phrase_by_type(&p, *t).ok().flatten().is_some() {
-				idxs.push(i);
-			}
-			idxs
-		});
+		let found = public_keys.iter().enumerate().filter_map(|(i, (p, t))|
+			self.0.read().key_phrase_by_type(&p, *t).ok().map(|_| i)
+		).collect::<Vec<_>>();
 
 		if found.is_empty() {
 			HasKeys::None
