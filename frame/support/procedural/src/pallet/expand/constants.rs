@@ -88,8 +88,7 @@ pub fn expand_constants(def: &mut Def) -> proc_macro2::TokenStream {
 					#frame_support::sp_std::marker::PhantomData<(#type_use_gen)>
 				);
 
-				impl<#type_impl_gen> #frame_support::dispatch::DefaultByte for
-					#default_byte_getter<#type_use_gen>
+				impl<#type_impl_gen> #default_byte_getter<#type_use_gen>
 					#completed_where_clause
 				{
 					fn default_byte(&self) -> #frame_support::sp_std::vec::Vec<u8> {
@@ -97,21 +96,17 @@ pub fn expand_constants(def: &mut Def) -> proc_macro2::TokenStream {
 					}
 				}
 
-				unsafe impl<#type_impl_gen> Send for #default_byte_getter<#type_use_gen>
-					#completed_where_clause
-				{}
-				unsafe impl<#type_impl_gen> Sync for #default_byte_getter<#type_use_gen>
-					#completed_where_clause
-				{}
+				// unsafe impl<#type_impl_gen> Send for #default_byte_getter<#type_use_gen>
+				// 	#completed_where_clause
+				// {}
+				// unsafe impl<#type_impl_gen> Sync for #default_byte_getter<#type_use_gen>
+				// 	#completed_where_clause
+				// {}
 
 				#frame_support::dispatch::ModuleConstantMetadata {
 					name: #ident_str,
 					ty: #frame_support::scale_info::meta_type::<#const_type>(),
-					value: #frame_support::dispatch::DefaultByteGetter(
-						&#default_byte_getter::<#type_use_gen>(
-							#frame_support::sp_std::marker::PhantomData
-						)
-					).0.default_byte(), // todo: [AJ] unify DefaultByteGetter
+					value: #default_byte_getter::<#type_use_gen>(Default::default()).default_byte(),
 					documentation: #frame_support::scale_info::prelude::vec![ #( #doc ),* ],
 				}
 			})
