@@ -158,7 +158,6 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 #[cfg(feature = "std")]
 impl GenesisConfig {
 	/// Direct implementation of `GenesisBuild::assimilate_storage`.
-	#[deprecated(note = "use [`GenesisBuild::assimilate_storage`] instead")]
 	pub fn assimilate_storage<T: Config>(
 		&self,
 		storage: &mut sp_runtime::Storage
