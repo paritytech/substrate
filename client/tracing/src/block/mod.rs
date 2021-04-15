@@ -36,6 +36,10 @@ use sp_tracing::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
 use sp_core::hexdisplay::HexDisplay;
 use crate::{SpanDatum, TraceEvent, Values};
 
+// Estimate of the max size base RPC payload when the Id is bound as a u64. If strings
+// are used for the RPC Id this may need to be adjusted. Note: The base payload does not
+// include the RPC result.
+const BASE_RPC_PAYLOAD: usize = 500;
 // Default to only pallet, frame support and state related traces
 const DEFAULT_TARGETS: &'static str = "pallet,frame,state";
 const TRACE_TARGET: &'static str = "block_trace";
@@ -86,7 +90,7 @@ impl Subscriber for BlockSubscriber {
 	}
 
 	fn new_span(&self, attrs: &Attributes<'_>) -> Id {
-		let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+		let id = self.next_id.fetch_add(1, Ordering::SeqCst);
 		let id = Id::from_u64(id);
 		let mut values = Values::default();
 		attrs.record(&mut values);
@@ -223,14 +227,10 @@ impl<Block, Client> BlockExecutor<Block, Client>
 
 		let block_subscriber = dispatch.downcast_ref::<BlockSubscriber>()
 			.ok_or("Cannot downcast Dispatch to BlockSubscriber after tracing block")?;
-		let mut span_data: Vec<SpanDatum> = block_subscriber.spans
+		let spans: Vec<_> = block_subscriber.spans
 			.lock()
 			.drain()
 			.map(|(_, s)| SpanDatum::from(s))
-			.collect();
-		span_data.sort_by(|a, b| a.start_time.cmp(&b.start_time));
-		let spans: Vec<_> = span_data
-			.into_iter()
 			// Patch wasm identifiers
 			.filter_map(|s| patch_and_filter(s, targets))
 			.collect();
@@ -253,11 +253,11 @@ impl<Block, Client> BlockExecutor<Block, Client>
 		let block_trace_size = serde_json::to_vec(&block_trace)
 			.map_err(|e| format!("Failed to serialize payload: {}", e))?
 			.len();
-		let response = if block_trace_size  > MAX_PAYLOAD {
+		let response = if block_trace_size  > MAX_PAYLOAD - BASE_RPC_PAYLOAD {
 			TraceBlockResponse::TraceError(TraceError {
 				error:
 					format!("Payload was {} bytes; it must be less than {} bytes",
-						block_trace_size, MAX_PAYLOAD,
+						block_trace_size, MAX_PAYLOAD - BASE_RPC_PAYLOAD,
 					)
 			})
 		} else {
