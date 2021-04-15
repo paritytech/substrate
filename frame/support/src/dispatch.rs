@@ -2151,7 +2151,7 @@ macro_rules! decl_module {
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::error::ModuleErrorMetadata
 			for $mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
-			fn metadata() -> $crate::scale_info::prelude::vec::Vec<$crate::error::ErrorMetadata> {
+			fn metadata() -> $crate::scale_info::prelude::vec::Vec<$crate::metadata::ErrorMetadata> {
 				<$error_type as $crate::error::ModuleErrorMetadata>::metadata()
 			}
 		}
@@ -2412,35 +2412,22 @@ macro_rules! __impl_module_constants_metadata {
 					>);
 					impl<$const_trait_instance: 'static + $const_trait_name $(
 						<I>, $const_instance: $const_instantiable)?
-					> $crate::dispatch::DefaultByte
-						for $default_byte_name <$const_trait_instance $(, $const_instance)?>
+					> $default_byte_name <$const_trait_instance $(, $const_instance)?>
 					{
 						fn default_byte(&self) -> $crate::dispatch::Vec<u8> {
 							let value: $type = $value;
 							$crate::dispatch::Encode::encode(&value)
 						}
 					}
-
-					unsafe impl<$const_trait_instance: 'static + $const_trait_name $(
-						<I>, $const_instance: $const_instantiable)?
-					> Send for $default_byte_name <$const_trait_instance $(, $const_instance)?> {}
-
-					unsafe impl<$const_trait_instance: 'static + $const_trait_name $(
-						<I>, $const_instance: $const_instantiable)?
-					> Sync for $default_byte_name <$const_trait_instance $(, $const_instance)?> {}
 				)*
 				$crate::scale_info::prelude::vec![
 					$(
 						$crate::metadata::ModuleConstantMetadata {
 							name: stringify!($name),
 							ty: $crate::scale_info::meta_type::<$type>(),
-							value: $crate::dispatch::DefaultByteGetter(
-								&$default_byte_name::<
-									$const_trait_instance $(, $const_instance)?
-								>(
-									$crate::dispatch::marker::PhantomData
-								)
-							).0.default_byte(), // todo: [AJ] unify DefaultByteGetter,
+							value: $default_byte_name::<$const_trait_instance $(, $const_instance)?>(
+								Default::default()
+							).default_byte(),
 							documentation: $crate::scale_info::prelude::vec![ $( $doc_attr ),* ],
 						}
 					),*
