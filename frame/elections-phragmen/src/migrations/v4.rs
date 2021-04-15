@@ -72,8 +72,10 @@ pub fn pre_migration<P: GetPalletVersion, N: AsRef<str>>(new: N) {
 	let new = new.as_ref();
 	log::info!("pre-migration elections-phragmen test with new = {}", new);
 
-	// ensure some stuff exist in the old prefix.
-	assert!(sp_io::storage::next_key(OLD_PREFIX).is_some());
+	// the next key must exist, and start with the hash of `OLD_PREFIX`.
+	let next_key = sp_io::storage::next_key(OLD_PREFIX).unwrap();
+	assert!(next_key.starts_with(&sp_io::hashing::twox_128(OLD_PREFIX)));
+
 	// ensure nothing is stored in the new prefix.
 	assert!(
 		sp_io::storage::next_key(new.as_bytes()).map_or(

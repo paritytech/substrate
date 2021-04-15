@@ -1066,7 +1066,7 @@ impl<T: Config> Contains<T::AccountId> for Pallet<T> {
 	}
 }
 
-impl<T: Config> SortedMembers<T::AccountId> for Module<T> {
+impl<T: Config> SortedMembers<T::AccountId> for Pallet<T> {
 	fn contains(who: &T::AccountId) -> bool {
 		Self::is_member(who)
 	}
