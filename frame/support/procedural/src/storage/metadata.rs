@@ -96,8 +96,7 @@ fn default_byte_getter(
 
 		#[cfg(feature = "std")]
 		impl<#runtime_generic: #runtime_trait, #optional_instance_bound>
-			#scrate::metadata::DefaultByte
-			for #struct_name<#runtime_generic, #optional_instance>
+			#struct_name<#runtime_generic, #optional_instance>
 			#where_clause
 		{
 			fn default_byte(&self) -> #scrate::sp_std::vec::Vec<u8> {
@@ -109,16 +108,9 @@ fn default_byte_getter(
 			}
 		}
 
-		unsafe impl<#runtime_generic: #runtime_trait, #optional_instance_bound> Send
-			for #struct_name<#runtime_generic, #optional_instance> #where_clause {}
-
-		unsafe impl<#runtime_generic: #runtime_trait, #optional_instance_bound> Sync
-			for #struct_name<#runtime_generic, #optional_instance> #where_clause {}
-
 		#[cfg(not(feature = "std"))]
 		impl<#runtime_generic: #runtime_trait, #optional_instance_bound>
-			#scrate::metadata::DefaultByte
-			for #struct_name<#runtime_generic, #optional_instance>
+			#struct_name<#runtime_generic, #optional_instance>
 			#where_clause
 		{
 			fn default_byte(&self) -> #scrate::sp_std::vec::Vec<u8> {
@@ -170,7 +162,7 @@ pub fn impl_metadata(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 				name: #str_name,
 				modifier: #modifier,
 				ty: #ty,
-				default: #scrate::metadata::DefaultByteGetter(&#default_byte_getter_struct_instance).0.default_byte(),
+				default: #default_byte_getter_struct_instance.default_byte(),
 				documentation: #scrate::scale_info::prelude::vec![ #docs ],
 			},
 		};
