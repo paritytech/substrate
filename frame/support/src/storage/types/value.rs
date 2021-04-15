@@ -26,6 +26,7 @@ use crate::{
 	},
 	traits::{GetDefault, StorageInstance},
 };
+use sp_std::prelude::*;
 
 /// A type that allow to store a value.
 ///
