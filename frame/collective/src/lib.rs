@@ -735,6 +735,7 @@ impl<T: Config<I>, I: 'static> GenesisConfig<T, I> {
 	/// Direct implementation of `GenesisBuild::assimilate_storage`.
 	///
 	/// Kept in order not to break dependency.
+	#[deprecated(note = "use [`GenesisBuild::assimilate_storage`] instead")]
 	pub fn assimilate_storage(
 		&self,
 		storage: &mut sp_runtime::Storage
