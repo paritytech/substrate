@@ -46,6 +46,7 @@ pub enum Error {
 }
 
 /// Return type of [`CryptoStore::has_keys`].
+#[must_use]
 #[derive(Debug, PartialEq)]
 pub enum HasKeys {
 	/// No key found
