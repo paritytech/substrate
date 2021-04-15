@@ -37,11 +37,10 @@ pub fn migrate<
 	P: GetPalletVersion,
 	N: AsRef<str>,
 >(new_pallet_name: N) -> Weight {
-	if new_pallet_name.as_ref() == OLD_PREFIX {
+	if new_pallet_name.as_ref().as_bytes() == OLD_PREFIX {
 		log::info!(
 			target: "runtime::elections-phragmen",
 			"New pallet name is equal to the old prefix. No migration needs to be done.",
-			maybe_storage_version,
 		);
 		return 0;
 	}
