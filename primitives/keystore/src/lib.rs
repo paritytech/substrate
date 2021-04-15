@@ -146,10 +146,6 @@ pub trait CryptoStore: Send + Sync {
 	/// Checks if the private keys for the given public key and key type combinations exist.
 	///
 	/// Returns the indices of the matching keys in `public_keys`.
-	///
-	/// Call `found_any()` on the returned enum to check if *any* keys match.
-	/// Call `found_all()` on the returned enum to check if *all* keys match.
-	/// Call `into_found()` to iterate the returned key indices.
 	async fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> HasKeys;
 
 	/// Sign with key
