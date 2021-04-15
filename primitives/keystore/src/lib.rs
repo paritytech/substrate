@@ -309,8 +309,7 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 
 	/// Checks if the private keys for the given public key and key type combinations exist.
 	///
-	/// Returns the indices of the matching keys in `public_keys`. Call `is_empty()` on the returned
-	/// list to check if no keys match.
+	/// Returns the indices of the matching keys in `public_keys`.
 	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> HasKeys;
 
 	/// Sign with key
