@@ -30,7 +30,7 @@ use frame_support::{
 	weights::{PostDispatchInfo, DispatchInfo, DispatchClass, priority::FrameTransactionPriority},
 };
 
-/// Block resource (weight) limit check.
+/// Block resource (weight) limit check. And dispatch class check.
 #[derive(Encode, Decode, Clone, Eq, PartialEq, Default)]
 pub struct CheckWeight<T: Config + Send + Sync>(sp_std::marker::PhantomData<T>);
 
@@ -234,6 +234,9 @@ impl<T: Config + Send + Sync> SignedExtension for CheckWeight<T> where
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> TransactionValidity {
+		if info.class == DispatchClass::Mandatory {
+			Err(InvalidTransaction::MandatoryDispatch)?
+		}
 		Self::do_validate(info, len)
 	}
 
@@ -683,5 +686,29 @@ mod tests {
 			calculate_consumed_weight::<<Test as Config>::Call>( maximum_weight, all_weight, &mandatory2),
 			InvalidTransaction::ExhaustsResources
 		);
+	}
+
+	#[test]
+	fn mandatory_are_inherent_only() {
+		new_test_ext().execute_with(|| {
+			let mandatory = DispatchInfo { class: DispatchClass::Mandatory, ..Default::default() };
+			let len = 0_usize;
+
+			assert_ok!(
+				CheckWeight::<Test>::pre_dispatch_unsigned(CALL, &mandatory, len)
+			);
+			assert_err!(
+				CheckWeight::<Test>::validate_unsigned(CALL, &mandatory, len),
+				TransactionValidityError::Invalid(InvalidTransaction::MandatoryDispatch),
+			);
+			assert_err!(
+				CheckWeight::<Test>(PhantomData).validate(&1, CALL, &mandatory, len),
+				TransactionValidityError::Invalid(InvalidTransaction::MandatoryDispatch),
+			);
+			assert_err!(
+				CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &mandatory, len),
+				TransactionValidityError::Invalid(InvalidTransaction::MandatoryDispatch),
+			);
+		});
 	}
 }
