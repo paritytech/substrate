@@ -15,10 +15,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use frame_metadata::v13::{
-	ModuleMetadata, RuntimeMetadataLastVersion, StorageEntryMetadata, StorageMetadata,
-	StorageEntryType, StorageEntryModifier, StorageHasher, ExtrinsicMetadata, ErrorMetadata,
-	EventMetadata, TypeSpec, FunctionMetadata, FunctionArgumentMetadata, ModuleConstantMetadata,
+pub use frame_metadata::{
+    v13::{
+        ErrorMetadata, EventMetadata, ExtrinsicMetadata, FunctionArgumentMetadata,
+        FunctionMetadata, ModuleConstantMetadata, ModuleEventMetadata, ModuleMetadata,
+        OuterEventMetadata, RuntimeMetadataLastVersion, SignedExtensionMetadata,
+        StorageEntryMetadata, StorageEntryModifier, StorageEntryType, StorageHasher,
+        StorageMetadata, TypeSpec,
+    },
+    RuntimeMetadataPrefixed,
 };
 
 /// todo: [AJ] update docs
@@ -73,7 +78,7 @@ macro_rules! impl_runtime_metadata {
 			$( $rest:tt )*
 	) => {
 		impl $runtime {
-			pub fn metadata() -> $crate::metadata::frame_metadata2::RuntimeMetadataPrefixed {
+			pub fn metadata() -> $crate::metadata::RuntimeMetadataPrefixed {
 				$crate::metadata::RuntimeMetadataLastVersion::new(
 					$crate::__runtime_modules_to_metadata!($runtime;; $( $rest )*),
 					$crate::metadata::ExtrinsicMetadata {
