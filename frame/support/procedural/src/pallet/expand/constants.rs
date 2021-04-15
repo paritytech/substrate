@@ -103,7 +103,7 @@ pub fn expand_constants(def: &mut Def) -> proc_macro2::TokenStream {
 				// 	#completed_where_clause
 				// {}
 
-				#frame_support::dispatch::ModuleConstantMetadata {
+				#frame_support::metadata::ModuleConstantMetadata {
 					name: #ident_str,
 					ty: #frame_support::scale_info::meta_type::<#const_type>(),
 					value: #default_byte_getter::<#type_use_gen>(Default::default()).default_byte(),
@@ -117,7 +117,7 @@ pub fn expand_constants(def: &mut Def) -> proc_macro2::TokenStream {
 
 			#[doc(hidden)]
 			pub fn module_constants_metadata()
-				-> #frame_support::sp_std::vec::Vec<#frame_support::dispatch::ModuleConstantMetadata>
+				-> #frame_support::sp_std::vec::Vec<#frame_support::metadata::ModuleConstantMetadata>
 			{
 				#frame_support::scale_info::prelude::vec![ #( #consts ),* ]
 			}

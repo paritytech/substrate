@@ -26,7 +26,7 @@ fn storage_line_metadata_type(scrate: &TokenStream, line: &StorageLineDefExt) ->
 	match &line.storage_type {
 		StorageLineTypeDef::Simple(_) => {
 			quote!{
-				#scrate::metadata::v13::StorageEntryType::Plain(
+				#scrate::metadata::StorageEntryType::Plain(
 					#scrate::scale_info::meta_type::<#value_type>()
 				)
 			}
@@ -35,8 +35,8 @@ fn storage_line_metadata_type(scrate: &TokenStream, line: &StorageLineDefExt) ->
 			let hasher = map.hasher.into_metadata();
 			let key = &map.key;
 			quote!{
-				#scrate::metadata::v13::StorageEntryType::Map {
-					hasher: #scrate::metadata::v13::#hasher,
+				#scrate::metadata::StorageEntryType::Map {
+					hasher: #scrate::metadata::#hasher,
 					key: #scrate::scale_info::meta_type::<#key>(),
 					value: #scrate::scale_info::meta_type::<#value_type>(),
 					unused: false,
@@ -49,12 +49,12 @@ fn storage_line_metadata_type(scrate: &TokenStream, line: &StorageLineDefExt) ->
 			let key1 = &map.key1;
 			let key2 = &map.key2;
 			quote!{
-				#scrate::metadata::v13::StorageEntryType::DoubleMap {
-					hasher: #scrate::metadata::v13::#hasher1,
+				#scrate::metadata::StorageEntryType::DoubleMap {
+					hasher: #scrate::metadata::#hasher1,
 					key1: #scrate::scale_info::meta_type::<#key1>(),
 					key2: #scrate::scale_info::meta_type::<#key2>(),
 					value: #scrate::scale_info::meta_type::<#value_type>(),
-					key2_hasher: #scrate::metadata::v13::#hasher2,
+					key2_hasher: #scrate::metadata::#hasher2,
 				}
 			}
 		},
@@ -143,9 +143,9 @@ pub fn impl_metadata(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 		let str_name = line.name.to_string();
 
 		let modifier = if line.is_option {
-			quote!(#scrate::metadata::v13::StorageEntryModifier::Optional)
+			quote!(#scrate::metadata::StorageEntryModifier::Optional)
 		} else {
-			quote!(#scrate::metadata::v13::StorageEntryModifier::Default)
+			quote!(#scrate::metadata::StorageEntryModifier::Default)
 		};
 
 		let ty = storage_line_metadata_type(scrate, line);
@@ -166,7 +166,7 @@ pub fn impl_metadata(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 		}
 
 		let entry = quote! {
-			#scrate::metadata::v13::StorageEntryMetadata {
+			#scrate::metadata::StorageEntryMetadata {
 				name: #str_name,
 				modifier: #modifier,
 				ty: #ty,
@@ -188,7 +188,7 @@ pub fn impl_metadata(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 	};
 
 	let store_metadata = quote!(
-		#scrate::metadata::v13::StorageMetadata {
+		#scrate::metadata::StorageMetadata {
 			prefix: #prefix,
 			entries: #scrate::scale_info::prelude::vec![ #entries ],
 		}
@@ -203,7 +203,7 @@ pub fn impl_metadata(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 
 		impl#module_impl #module_struct #where_clause {
 			#[doc(hidden)]
-			pub fn storage_metadata() -> #scrate::metadata::v13::StorageMetadata {
+			pub fn storage_metadata() -> #scrate::metadata::StorageMetadata {
 				#store_metadata
 			}
 		}

@@ -20,9 +20,6 @@
 
 pub use crate::sp_std::{result, fmt, prelude::{Vec, Clone, Eq, PartialEq}, marker};
 pub use crate::codec::{Codec, EncodeLike, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
-pub use frame_metadata::v13::{
-	FunctionMetadata, FunctionArgumentMetadata, ModuleConstantMetadata,
-};
 pub use crate::weights::{
 	GetDispatchInfo, DispatchInfo, WeighData, ClassifyDispatch, TransactionPriority, Weight,
 	PaysFee, PostDispatchInfo, WithPostDispatchInfo,
@@ -2401,7 +2398,7 @@ macro_rules! __impl_module_constants_metadata {
 		{
 			#[doc(hidden)]
 			#[allow(dead_code)]
-			pub fn module_constants_metadata() -> ::sp_std::vec::Vec<$crate::dispatch::ModuleConstantMetadata> {
+			pub fn module_constants_metadata() -> ::sp_std::vec::Vec<$crate::metadata::ModuleConstantMetadata> {
 				// Create the `ByteGetter`s
 				$(
 					#[allow(non_upper_case_types)]
@@ -2434,7 +2431,7 @@ macro_rules! __impl_module_constants_metadata {
 				)*
 				$crate::scale_info::prelude::vec![
 					$(
-						$crate::dispatch::ModuleConstantMetadata {
+						$crate::metadata::ModuleConstantMetadata {
 							name: stringify!($name),
 							ty: $crate::scale_info::meta_type::<$type>(),
 							value: $crate::dispatch::DefaultByteGetter(
