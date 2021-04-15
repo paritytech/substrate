@@ -51,6 +51,11 @@ impl<T: Eq + PartialEq + BoundedVecValue, S: Get<u32>> PartialEq for BoundedVec<
 impl<T: Eq + PartialEq + BoundedVecValue, S: Get<u32>> Eq for BoundedVec<T, S> {}
 
 impl<T: BoundedVecValue, S: Get<u32>> BoundedVec<T, S> {
+	/// Get the bound of the type in `usize`.
+	pub fn bound() -> usize {
+		S::get() as usize
+	}
+
 	/// Create `Self` from `t` without any checks.
 	///
 	/// # WARNING
@@ -77,11 +82,6 @@ impl<T: BoundedVecValue, S: Get<u32>> BoundedVec<T, S> {
 		}
 
 		Self::unchecked_from(t)
-	}
-
-	/// Get the bound of the type in `usize`.
-	pub fn bound() -> usize {
-		S::get() as usize
 	}
 
 	/// Consume self, and return the inner `Vec`. Henceforth, the `Vec<_>` can be altered in an
@@ -328,6 +328,7 @@ pub mod test {
 
 	crate::parameter_types! {
 		pub const Seven: u32 = 7;
+		pub const Four: u32 = 4;
 	}
 
 	crate::generate_storage_alias! { Prefix, Foo => Value<BoundedVec<u32, Seven>> }
@@ -422,6 +423,32 @@ pub mod test {
 				BoundedVec::<u32, Seven>::unchecked_from(vec![4, 5])
 			);
 		});
+	}
+
+	#[test]
+	fn try_insert_works() {
+		let mut bounded: BoundedVec<u32, Four> = vec![1, 2, 3].try_into().unwrap();
+		bounded.try_insert(1, 0).unwrap();
+		assert_eq!(*bounded, vec![1, 0, 2, 3]);
+
+		assert!(bounded.try_insert(0, 9).is_err());
+		assert_eq!(*bounded, vec![1, 0, 2, 3]);
+	}
+
+	#[test]
+	#[should_panic(expected = "insertion index (is 9) should be <= len (is 3)")]
+	fn try_inert_panics_if_oob() {
+		let mut bounded: BoundedVec<u32, Four> = vec![1, 2, 3].try_into().unwrap();
+		bounded.try_insert(9, 0).unwrap();
+	}
+
+	#[test]
+	fn try_push_works() {
+		let mut bounded: BoundedVec<u32, Four> = vec![1, 2, 3].try_into().unwrap();
+		bounded.try_push(0).unwrap();
+		assert_eq!(*bounded, vec![1, 2, 3, 0]);
+
+		assert!(bounded.try_push(9).is_err());
 	}
 
 	#[test]
