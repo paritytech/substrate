@@ -199,15 +199,15 @@ pub trait StateApi<Hash> {
 	///
 	/// ### Params
 	///
-	/// `block_hash` (param index 0): Hash of the block to trace.
-	/// `targets` (param index 1): String of comma separated (no spaces) targets. Specified
+	/// - `block_hash` (param index 0): Hash of the block to trace.
+	/// - `targets` (param index 1): String of comma separated (no spaces) targets. Specified
 	/// 	targets matched with trace targets by prefix (i.e if a target is in the beginning
 	/// 	of a trace target it is considered a match). If an empty string is specified no
 	/// 	targets will be filtered out. The majority of targets correspond to module names,
 	/// 	and the ones that do not are typically "hardcoded" into span or event location
 	/// 	somewhere in Substrate source. ("Non-hardcoded" targets typically come from frame
 	/// 	support macros.)
-	/// `storage_keys` (param index 2): String of comma separated (no spaces) hex encoded
+	/// - `storage_keys` (param index 2): String of comma separated (no spaces) hex encoded
 	/// 	storage keys. (No `0x` prefix). If an empty string is specified no events will
 	/// 	be filtered out. If anything other than an empty string is specified, events
 	/// 	will be filtered by storage key (so non-storage events will **not** show up).
