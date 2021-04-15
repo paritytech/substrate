@@ -710,9 +710,6 @@ mod migrations {
 			.expect("Fatal Error Invalid PalletInfo name")
 			.as_bytes();
 
-		if new_name == b"Collective" {
-			return 0
-		}
 
 		move_storage_from_pallet(b"Proposals", b"Collective", new_name);
 		move_storage_from_pallet(b"ProposalOf", b"Collective", new_name);
