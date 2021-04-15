@@ -46,18 +46,17 @@ use sp_std::{prelude::*, result};
 use sp_core::u32_trait::Value as U32;
 use sp_io::storage;
 use sp_runtime::{
-	ModuleId, RuntimeDebug,
+	RuntimeDebug,
 	traits::{Hash, AccountIdConversion},
 };
 
 use frame_support::{
 	codec::{Decode, Encode},
-	decl_error, decl_event, decl_module, decl_storage,
+	decl_error, decl_event, decl_module, decl_storage, ensure, PalletId,
 	dispatch::{
 		DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable, Parameter,
 		PostDispatchInfo,
 	},
-	ensure,
 	traits::{ChangeMembers, EnsureOrigin, Get, InitializeMembers, GetBacking, Backing},
 	weights::{DispatchClass, GetDispatchInfo, Weight, Pays},
 };
@@ -127,6 +126,8 @@ impl DefaultVote for MoreThanMajorityThenPrimeDefaultVote {
 	}
 }
 
+pub const PALLET_ID: PalletId = PalletId(*b"py/colle");
+
 pub trait Config<I: Instance=DefaultInstance>: frame_system::Config {
 	/// The outer origin type.
 	type Origin: From<RawOrigin<Self::AccountId, I>>
@@ -159,9 +160,6 @@ pub trait Config<I: Instance=DefaultInstance>: frame_system::Config {
 
 	/// Default vote strategy of this collective.
 	type DefaultVote: DefaultVote;
-
-	/// The collective's module id, used for deriving its sovereign account ID.
-	type ModuleId: Get<ModuleId>;
 
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
@@ -309,7 +307,7 @@ decl_module! {
 		type Error = Error<T, I>;
 
 		const MaxMembers: u32 = T::MaxMembers::get();
-		const ModuleId: ModuleId = T::ModuleId::get();
+		const PalletId: PalletId = PALLET_ID;
 
 		fn deposit_event() = default;
 
@@ -835,10 +833,10 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 				let target_d_n = target_d.checked_mul(n).ok_or(Error::<T, I>::Overflow)?;
 				ensure!(target_n_d <= target_d_n, Error::<T, I>::NotEnoughMembers);
 				// Create the account.
-				Ok(T::ModuleId::get().into_sub_account((target_n, target_d)))
+				Ok(PALLET_ID.into_sub_account((target_n, target_d)))
 			},
 			RawOrigin::Member(who) => {
-				Ok(T::ModuleId::get().into_sub_account(who))
+				Ok(PALLET_ID.into_sub_account(who))
 			},
 			_ => return Err(DispatchError::BadOrigin.into()),
 		}
@@ -853,10 +851,10 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 		match origin {
 			RawOrigin::Members(n, _) => {
 				// Create an account where n is the number of members who voted aye
-				Ok(T::ModuleId::get().into_sub_account(n))
+				Ok(PALLET_ID.into_sub_account(n))
 			},
 			RawOrigin::Member(who) => {
-				Ok(T::ModuleId::get().into_sub_account(who))
+				Ok(PALLET_ID.into_sub_account(who))
 			},
 			_ => return Err(DispatchError::BadOrigin.into()),
 		}
@@ -1132,9 +1130,9 @@ mod tests {
 		pub const MotionDuration: u64 = 3;
 		pub const MaxProposals: u32 = 100;
 		pub const MaxMembers: u32 = 100;
-		pub const ModuleId0: ModuleId = ModuleId(*b"py/coll0");
-		pub const ModuleId1: ModuleId = ModuleId(*b"py/coll1");
-		pub const ModuleId2: ModuleId = ModuleId(*b"py/coll2");
+		pub const PalletId0: PalletId = PalletId(*b"py/coll0");
+		pub const PalletId1: PalletId = PalletId(*b"py/coll1");
+		pub const PalletId2: PalletId = PalletId(*b"py/coll2");
 		pub BlockWeights: frame_system::limits::BlockWeights =
 			frame_system::limits::BlockWeights::simple_max(1024);
 	}
@@ -1171,7 +1169,6 @@ mod tests {
 		type MaxProposals = MaxProposals;
 		type MaxMembers = MaxMembers;
 		type DefaultVote = PrimeDefaultVote;
-		type ModuleId = ModuleId1;
 		type WeightInfo = ();
 	}
 	impl Config<Instance2> for Test {
@@ -1182,7 +1179,6 @@ mod tests {
 		type MaxProposals = MaxProposals;
 		type MaxMembers = MaxMembers;
 		type DefaultVote = MoreThanMajorityThenPrimeDefaultVote;
-		type ModuleId = ModuleId2;
 		type WeightInfo = ();
 	}
 	impl Config for Test {
@@ -1193,7 +1189,6 @@ mod tests {
 		type MaxProposals = MaxProposals;
 		type MaxMembers = MaxMembers;
 		type DefaultVote = PrimeDefaultVote;
-		type ModuleId = ModuleId0;
 		type WeightInfo = ();
 	}
 

@@ -2,7 +2,7 @@ use crate::*;
 use frame_support::{Hashable, assert_ok, assert_noop, assert_err, parameter_types, decl_storage, decl_module};
 use sp_core::H256;
 use sp_runtime::{
-	ModuleId, AccountId32,
+	AccountId32,
 	traits::{BlakeTwo256, IdentityLookup}, testing::Header,
 	BuildStorage,
 };
@@ -15,9 +15,6 @@ parameter_types! {
 	pub const MotionDuration: u64 = 3;
 	pub const MaxProposals: u32 = 100;
 	pub const MaxMembers: u32 = 100;
-	pub const ModuleId0: ModuleId = ModuleId(*b"py/coll0");
-	pub const ModuleId1: ModuleId = ModuleId(*b"py/coll1");
-	pub const ModuleId2: ModuleId = ModuleId(*b"py/coll2");
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1024);
 }
@@ -54,7 +51,6 @@ impl Config<Instance1> for Test {
 	type MaxProposals = MaxProposals;
 	type MaxMembers = MaxMembers;
 	type DefaultVote = PrimeDefaultVote;
-	type ModuleId = ModuleId1;
 	type WeightInfo = ();
 }
 impl Config<Instance2> for Test {
@@ -65,7 +61,6 @@ impl Config<Instance2> for Test {
 	type MaxProposals = MaxProposals;
 	type MaxMembers = MaxMembers;
 	type DefaultVote = MoreThanMajorityThenPrimeDefaultVote;
-	type ModuleId = ModuleId2;
 	type WeightInfo = ();
 }
 impl Config for Test {
@@ -76,7 +71,6 @@ impl Config for Test {
 	type MaxProposals = MaxProposals;
 	type MaxMembers = MaxMembers;
 	type DefaultVote = PrimeDefaultVote;
-	type ModuleId = ModuleId0;
 	type WeightInfo = ();
 }
 
