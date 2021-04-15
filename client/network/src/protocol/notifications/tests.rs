@@ -97,7 +97,7 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 			behaviour,
 			keypairs[index].public().into_peer_id()
 		);
-		Swarm::listen_on(&mut swarm, addrs[index].clone()).unwrap();
+		swarm.listen_on(addrs[index].clone()).unwrap();
 		out.push(swarm);
 	}
 
@@ -192,16 +192,24 @@ impl NetworkBehaviour for CustomProtoWithAddr {
 		self.inner.inject_dial_failure(peer_id)
 	}
 
-	fn inject_new_listen_addr(&mut self, addr: &Multiaddr) {
-		self.inner.inject_new_listen_addr(addr)
+	fn inject_new_listener(&mut self, id: ListenerId) {
+		self.inner.inject_new_listener(id)
 	}
 
-	fn inject_expired_listen_addr(&mut self, addr: &Multiaddr) {
-		self.inner.inject_expired_listen_addr(addr)
+	fn inject_new_listen_addr(&mut self, id: ListenerId, addr: &Multiaddr) {
+		self.inner.inject_new_listen_addr(id, addr)
+	}
+
+	fn inject_expired_listen_addr(&mut self, id: ListenerId, addr: &Multiaddr) {
+		self.inner.inject_expired_listen_addr(id, addr)
 	}
 
 	fn inject_new_external_addr(&mut self, addr: &Multiaddr) {
 		self.inner.inject_new_external_addr(addr)
+	}
+
+	fn inject_expired_external_addr(&mut self, addr: &Multiaddr) {
+		self.inner.inject_expired_external_addr(addr)
 	}
 
 	fn inject_listener_error(&mut self, id: ListenerId, err: &(dyn error::Error + 'static)) {

@@ -573,9 +573,19 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		}
 	}
 
-	fn inject_expired_listen_addr(&mut self, addr: &Multiaddr) {
+	fn inject_expired_external_addr(&mut self, addr: &Multiaddr) {
+		let with_peer_id = addr.clone()
+			.with(Protocol::P2p(self.local_peer_id.clone().into()));
+		self.known_external_addresses.remove(&with_peer_id);
+
 		for k in self.kademlias.values_mut() {
-			NetworkBehaviour::inject_expired_listen_addr(k, addr)
+			NetworkBehaviour::inject_expired_external_addr(k, addr)
+		}
+	}
+
+	fn inject_expired_listen_addr(&mut self, id: ListenerId, addr: &Multiaddr) {
+		for k in self.kademlias.values_mut() {
+			NetworkBehaviour::inject_expired_listen_addr(k, id, addr)
 		}
 	}
 
@@ -585,9 +595,15 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		}
 	}
 
-	fn inject_new_listen_addr(&mut self, addr: &Multiaddr) {
+	fn inject_new_listener(&mut self, id: ListenerId) {
 		for k in self.kademlias.values_mut() {
-			NetworkBehaviour::inject_new_listen_addr(k, addr)
+			NetworkBehaviour::inject_new_listener(k, id)
+		}
+	}
+
+	fn inject_new_listen_addr(&mut self, id: ListenerId, addr: &Multiaddr) {
+		for k in self.kademlias.values_mut() {
+			NetworkBehaviour::inject_new_listen_addr(k, id, addr)
 		}
 	}
 
@@ -892,7 +908,7 @@ mod tests {
 				first_swarm_peer_id_and_addr = Some((keypair.public().into_peer_id(), listen_addr.clone()))
 			}
 
-			Swarm::listen_on(&mut swarm, listen_addr.clone()).unwrap();
+			swarm.listen_on(listen_addr.clone()).unwrap();
 			(swarm, listen_addr)
 		}).collect::<Vec<_>>();
 
