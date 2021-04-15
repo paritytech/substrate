@@ -599,9 +599,6 @@ pub mod pallet {
 		InvalidReplacement,
 	}
 
-	#[pallet::origin]
-	pub struct Origin<T>(PhantomData<T>);
-
 	/// The current elected members.
 	///
 	/// Invariant: Always sorted based on account id.
