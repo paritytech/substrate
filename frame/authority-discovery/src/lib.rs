@@ -24,16 +24,16 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
-use frame_support::traits::{OneSessionHandler, GenesisBuild};
+use frame_support::traits::OneSessionHandler;
+#[cfg(feature = "std")]
+use frame_support::traits::GenesisBuild;
 use sp_authority_discovery::AuthorityId;
 
 pub use pallet::*;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_support::{
-		pallet_prelude::*,
-	};
+	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 	use super::*;
 
@@ -58,7 +58,7 @@ pub mod pallet {
 	#[pallet::getter(fn next_keys)]
 	/// Keys of the next authority set.
 	pub(super) type NextKeys<T: Config> = StorageValue<
-		_,	
+		_,
 		Vec<AuthorityId>,
 		ValueQuery,
 	>;
@@ -155,9 +155,11 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 	}
 }
 
+#[cfg(feature = "std")]
 impl GenesisConfig {
-	/// Direct implementation of `GenesisBuild::assimilate_storage`.	
-	pub	fn assimilate_storage<T: Config>(
+	/// Direct implementation of `GenesisBuild::assimilate_storage`.
+	#[deprecated(note = "use [`GenesisBuild::assimilate_storage`] instead")]
+	pub fn assimilate_storage<T: Config>(
 		&self,
 		storage: &mut sp_runtime::Storage
 	) -> Result<(), String> {
