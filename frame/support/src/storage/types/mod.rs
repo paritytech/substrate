@@ -20,6 +20,7 @@
 
 use crate::metadata::{StorageEntryType, StorageEntryModifier};
 use codec::FullCodec;
+use sp_std::prelude::*;
 
 mod value;
 mod map;
