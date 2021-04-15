@@ -45,7 +45,7 @@ pub enum Error {
 	Other(String)
 }
 
-/// Return type for key lookups
+/// Return type of [`CryptoStore::has_keys`].
 #[derive(Debug, PartialEq)]
 pub enum HasKeys {
 	/// No key found
