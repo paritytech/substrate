@@ -284,16 +284,15 @@ impl<T: Config> Pallet<T> {
 		// length. Having discovered that, we can truncate efficiently.
 		let mut high = assignments.len();
 		let mut low = 0;
-		let avg = move || (high + low) / 2;
 		while high - low > 1 {
-			let test = avg();
+			let test = (high + low) / 2;
 			if encoded_size_of(&assignments[..test])? > max_allowed_length.saturated_into() {
 				high = test;
 			} else {
 				low = test;
 			}
 		}
-		let maximum_allowed_voters = avg();
+		let maximum_allowed_voters = (high + low) / 2;
 
 		// ensure our postconditions are correct
 		debug_assert!(
