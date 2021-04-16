@@ -272,4 +272,4 @@ panic = "unwind"
 [patch.'https://github.com/Zondax/substrate-remote-signer-example']
 # substrate-example-tssrs = { path = "../gnunicorn/lib" }
 # play_keystore = { path = "../play_keystore" }
-tcp-keystore = { path = "../remote-keystore" }
+tcp-keystore = { path = "remote-keystore" }
