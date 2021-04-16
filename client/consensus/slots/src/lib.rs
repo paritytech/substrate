@@ -313,6 +313,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				logs,
 			},
 			proposing_remaining_duration.mul_f32(0.98),
+			None,
 		).map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e)));
 
 		let proposal = match futures::future::select(proposing, proposing_remaining).await {
@@ -535,7 +536,7 @@ pub enum Error<T> where T: Debug {
 	SlotDurationInvalid(SlotDuration<T>),
 }
 
-/// A slot duration. Create with `get_or_compute`.
+/// A slot duration. Create with [`get_or_compute`](Self::get_or_compute).
 // The internal member should stay private here to maintain invariants of
 // `get_or_compute`.
 #[derive(Clone, Copy, Debug, Encode, Decode, Hash, PartialOrd, Ord, PartialEq, Eq)]
@@ -793,6 +794,7 @@ mod test {
 			timestamp: Default::default(),
 			inherent_data: Default::default(),
 			ends_at: Instant::now(),
+			block_size_limit: None,
 		}
 	}
 

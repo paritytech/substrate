@@ -629,6 +629,7 @@ mod tests {
 			_: InherentData,
 			digests: DigestFor<TestBlock>,
 			_: Duration,
+			_: Option<usize>,
 		) -> Self::Proposal {
 			let r = self.1.new_block(digests).unwrap().build().map_err(|e| e.into());
 
@@ -887,6 +888,7 @@ mod tests {
 				ends_at: Instant::now() + Duration::from_secs(100),
 				inherent_data: InherentData::new(),
 				duration: Duration::from_millis(1000),
+				block_size_limit: None,
 			},
 		)).unwrap();
 
