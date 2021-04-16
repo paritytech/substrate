@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+-
+
+### Removed
+
+-
+
+### Changed
+
+-
+
+### Fixed
+
+-
+## [2.2.0] - 2021-04-16
+
+### Added
+
 - Added 3 new pallets for ERC20 integration. Source is [here](https://github.com/ChainSafe/chainbridge-substrate):
 	- pallet-chainbridge
 	- pallet-erc721
