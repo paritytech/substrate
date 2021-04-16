@@ -253,7 +253,7 @@ fn reconnect_after_disconnect() {
 						ServiceState::NotConnected => {
 							service1_state = ServiceState::FirstConnec;
 							if service2_state == ServiceState::FirstConnec {
-								service1.disconnect_peer(
+								service1.behaviour_mut().disconnect_peer(
 									Swarm::local_peer_id(&service2),
 									sc_peerset::SetId::from(0)
 								);
@@ -275,7 +275,7 @@ fn reconnect_after_disconnect() {
 						ServiceState::NotConnected => {
 							service2_state = ServiceState::FirstConnec;
 							if service1_state == ServiceState::FirstConnec {
-								service1.disconnect_peer(
+								service1.behaviour_mut().disconnect_peer(
 									Swarm::local_peer_id(&service2),
 									sc_peerset::SetId::from(0)
 								);

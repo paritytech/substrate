@@ -1012,7 +1012,7 @@ mod tests {
 				match swarm.next_event().await {
 					SwarmEvent::ConnectionEstablished { peer_id, .. } => {
 						let (sender, receiver) = oneshot::channel();
-						swarm.send_request(
+						swarm.behaviour_mut().send_request(
 							&peer_id,
 							protocol_name,
 							b"this is a request".to_vec(),
@@ -1102,7 +1102,7 @@ mod tests {
 				match swarm.next_event().await {
 					SwarmEvent::ConnectionEstablished { peer_id, .. } => {
 						let (sender, receiver) = oneshot::channel();
-						swarm.send_request(
+						swarm.behaviour_mut().send_request(
 							&peer_id,
 							protocol_name,
 							b"this is a request".to_vec(),
@@ -1247,14 +1247,14 @@ mod tests {
 						SwarmEvent::ConnectionEstablished { peer_id, .. } => {
 							let (sender_1, receiver_1) = oneshot::channel();
 							let (sender_2, receiver_2) = oneshot::channel();
-							swarm_1.send_request(
+							swarm_1.behaviour_mut().send_request(
 								&peer_id,
 								protocol_name_1,
 								b"this is a request".to_vec(),
 								sender_1,
 								IfDisconnected::ImmediateError,
 							);
-							swarm_1.send_request(
+							swarm_1.behaviour_mut().send_request(
 								&peer_id,
 								protocol_name_2,
 								b"this is a request".to_vec(),

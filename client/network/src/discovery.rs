@@ -931,13 +931,13 @@ mod tests {
 								DiscoveryOut::UnroutablePeer(other) | DiscoveryOut::Discovered(other) => {
 									// Call `add_self_reported_address` to simulate identify happening.
 									let addr = swarms.iter().find_map(|(s, a)|
-										if s.local_peer_id == other {
+										if s.behaviour().local_peer_id == other {
 											Some(a.clone())
 										} else {
 											None
 										})
 										.unwrap();
-									swarms[swarm_n].0.add_self_reported_address(
+									swarms[swarm_n].0.behaviour_mut().add_self_reported_address(
 										&other,
 										[protocol_name_from_protocol_id(&protocol_id)].iter(),
 										addr,
