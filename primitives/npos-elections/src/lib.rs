@@ -166,13 +166,6 @@ pub trait CompactSolution: Sized {
 	/// The weight/accuracy type of each vote.
 	type Accuracy: PerThing128;
 
-	/// Build self from a list of `IndexAssignment`s.
-	fn from_index_assignments(index_assignments: &[IndexAssignment<
-		Self::Voter,
-		Self::Target,
-		Self::Accuracy,
-	>]) -> Result<Self, Error>;
-
 	/// Build self from a list of assignments.
 	fn from_assignment<FV, FT, A>(
 		assignments: &[Assignment<A, Self::Accuracy>],

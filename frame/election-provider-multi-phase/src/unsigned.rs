@@ -25,7 +25,7 @@ use sp_npos_elections::{
 	assignment_staked_to_ratio_normalized,
 };
 use sp_runtime::{offchain::storage::StorageValueRef, traits::TrailingZeroInput};
-use sp_std::{cmp::Ordering, collections::btree_map::BTreeMap};
+use sp_std::{cmp::Ordering, collections::btree_map::BTreeMap, convert::TryFrom};
 
 /// Storage key used to store the persistent offchain worker status.
 pub(crate) const OFFCHAIN_HEAD_DB: &[u8] = b"parity/multi-phase-unsigned-election";
@@ -156,7 +156,7 @@ impl<T: Config> Pallet<T> {
 		//
 		// This function completes in `O(edges * log voters.len())`; it's expensive, but linear.
 		let encoded_size_of = |assignments: &[IndexAssignmentOf<T>]| {
-			CompactOf::<T>::from_index_assignments(assignments).map(|compact| compact.encoded_size())
+			CompactOf::<T>::try_from(assignments).map(|compact| compact.encoded_size())
 		};
 
 		let ElectionResult { mut assignments, winners } = election_result;
@@ -199,7 +199,7 @@ impl<T: Config> Pallet<T> {
 		)?;
 
 		// now make compact.
-		let compact = CompactOf::<T>::from_index_assignments(&assignments)?;
+		let compact = CompactOf::<T>::try_from(&assignments)?;
 
 		// re-calc score.
 		let winners = sp_npos_elections::to_without_backing(winners);

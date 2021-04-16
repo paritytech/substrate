@@ -577,6 +577,7 @@ pub mod pallet {
 			+ Eq
 			+ Clone
 			+ sp_std::fmt::Debug
+			+ for<'a> sp_std::convert::TryFrom<&'a [IndexAssignmentOf<Self>], Error = sp_npos_elections::Error>
 			+ CompactSolution;
 
 		/// Accuracy used for fallback on-chain election.

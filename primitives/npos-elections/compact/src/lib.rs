@@ -224,10 +224,6 @@ fn struct_def(
 				return false
 			}
 
-			fn from_index_assignments(index_assignments: &[__IndexAssignment]) -> Result<Self, _npos::Error> {
-				Self::try_from(index_assignments)
-			}
-
 			fn from_assignment<FV, FT, A>(
 				assignments: _npos::sp_std::prelude::Vec<_npos::Assignment<A, #weight_type>>,
 				index_of_voter: FV,
