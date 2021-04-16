@@ -94,6 +94,7 @@ pub async fn start_beefy_gadget<B, P, BE, C, N, SO>(
 	network: N,
 	signed_commitment_sender: notification::BeefySignedCommitmentSender<B, P::Signature>,
 	_sync_oracle: SO,
+	min_block_delta: u32,
 	prometheus_registry: Option<Registry>,
 ) where
 	B: Block,
@@ -129,6 +130,7 @@ pub async fn start_beefy_gadget<B, P, BE, C, N, SO>(
 		signed_commitment_sender,
 		gossip_engine,
 		gossip_validator,
+		min_block_delta,
 		metrics,
 	);
 

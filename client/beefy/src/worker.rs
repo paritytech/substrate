@@ -67,10 +67,10 @@ where
 	signed_commitment_sender: notification::BeefySignedCommitmentSender<B, P::Signature>,
 	gossip_engine: Arc<Mutex<GossipEngine<B>>>,
 	gossip_validator: Arc<BeefyGossipValidator<B, P>>,
+	min_block_delta: u32,
 	metrics: Option<Metrics>,
 	rounds: round::Rounds<MmrRootHash, NumberFor<B>, P::Public, P::Signature>,
 	finality_notifications: FinalityNotifications<B>,
-	min_interval: u32,
 	/// Best block we received a GRANDPA notification for
 	best_grandpa_block: NumberFor<B>,
 	/// Best block a BEEFY voting round has been concluded for
@@ -103,6 +103,7 @@ where
 		signed_commitment_sender: notification::BeefySignedCommitmentSender<B, P::Signature>,
 		gossip_engine: GossipEngine<B>,
 		gossip_validator: Arc<BeefyGossipValidator<B, P>>,
+		min_block_delta: u32,
 		metrics: Option<Metrics>,
 	) -> Self {
 		BeefyWorker {
@@ -111,10 +112,10 @@ where
 			signed_commitment_sender,
 			gossip_engine: Arc::new(Mutex::new(gossip_engine)),
 			gossip_validator,
+			min_block_delta,
 			metrics,
 			rounds: round::Rounds::new(ValidatorSet::empty()),
 			finality_notifications: client.finality_notification_stream(),
-			min_interval: 2,
 			best_grandpa_block: client.info().finalized_number,
 			best_beefy_block: None,
 			best_block_voted_on: Zero::zero(),
@@ -148,7 +149,7 @@ where
 		let diff = self.best_grandpa_block.saturating_sub(best_beefy_block);
 		let diff = diff.saturated_into::<u32>();
 		let next_power_of_two = (diff / 2).next_power_of_two();
-		let next_block_to_vote_on = self.best_block_voted_on + self.min_interval.max(next_power_of_two).into();
+		let next_block_to_vote_on = self.best_block_voted_on + self.min_block_delta.max(next_power_of_two).into();
 
 		trace!(
 			target: "beefy",
