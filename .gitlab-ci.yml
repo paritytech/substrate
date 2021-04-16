@@ -251,6 +251,10 @@ node-bench-regression-guard:
   <<:                              *docker-env
   <<:                              *test-refs-no-trigger-prs-only
   needs:
+    # this is a DAG
+    - job:                         cargo-check-benches
+      artifacts:                   true
+    # this does not like a DAG, just polls the artifact
     - project:                     $CI_PROJECT_PATH
       job:                         cargo-check-benches
       ref:                         master
