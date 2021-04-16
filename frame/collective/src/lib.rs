@@ -750,7 +750,7 @@ decl_module! {
 		) -> DispatchResult {
 			let maybe_raw_origin: Result<RawOrigin<T::AccountId, I>, _> = <T as Config<I>>::Origin::from(origin).into();
 
-			let raw_origin = maybe_raw_origin.map_err(|_| DispatchError::BadOrigin.into())?;
+			let raw_origin = maybe_raw_origin.map_err(|_| DispatchError::BadOrigin)?;
 
 			let proposal_len = proposal.using_encoded(|x| x.len());
 			ensure!(proposal_len <= length_bound as usize, Error::<T, I>::WrongProposalLength);
@@ -782,7 +782,7 @@ decl_module! {
 		) -> DispatchResult {
 			let maybe_raw_origin: Result<RawOrigin<T::AccountId, I>, _> = <T as Config<I>>::Origin::from(origin).into();
 
-			let raw_origin = maybe_raw_origin.map_err(|_| DispatchError::BadOrigin.into())?;
+			let raw_origin = maybe_raw_origin.map_err(|_| DispatchError::BadOrigin)?;
 
 			let proposal_len = proposal.using_encoded(|x| x.len());
 			ensure!(proposal_len <= length_bound as usize, Error::<T, I>::WrongProposalLength);
