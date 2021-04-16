@@ -35,7 +35,11 @@ use sp_std::prelude::*;
 use sp_std::{result};
 use codec::{Encode, Decode};
 use sp_runtime::traits::{Saturating, BlakeTwo256, Hash, Zero};
-use sp_storage_proof::{StorageProof, DEFAULT_STORAGE_PERIOD};
+use sp_transaction_storage_proof::{
+	TransactionStorageProof, InherentError,
+	random_chunk, encode_index,
+	CHUNK_SIZE, INHERENT_IDENTIFIER, DEFAULT_STORAGE_PERIOD,
+};
 
 /// A type alias for the balance type from this pallet's point of view.
 type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
@@ -44,7 +48,6 @@ type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Con
 pub use pallet::*;
 pub use weights::WeightInfo;
 
-const CHUNK_SIZE: usize = sp_storage_proof::CHUNK_SIZE;
 /// Maximum bytes that can be storead in one transaction.
 // Increasing it further also requires raising the allocator limit.
 pub const MAX_DATA_SIZE: u32 = 8 * 1024 * 1024;
@@ -194,7 +197,7 @@ pub mod pallet {
 		#[pallet::weight((T::WeightInfo::check_proof_max(), DispatchClass::Mandatory))]
 		pub(super) fn check_proof(
 			origin: OriginFor<T>,
-			proof: Option<StorageProof>,
+			proof: Option<TransactionStorageProof>,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
 			let number = <frame_system::Pallet<T>>::block_number();
@@ -219,7 +222,7 @@ pub mod pallet {
 			}
 			let proof = proof.ok_or_else(|| Error::<T>::MissingProof)?;
 			let parent_hash = <frame_system::Pallet<T>>::parent_hash();
-			let selected_chunk_index = sp_storage_proof::random_chunk(parent_hash.as_ref(), total_chunks);
+			let selected_chunk_index = random_chunk(parent_hash.as_ref(), total_chunks);
 			total_chunks = 0;
 			let mut t = 0;
 			let (info, chunk_index) = loop {
@@ -240,7 +243,7 @@ pub mod pallet {
 				sp_io::trie::blake2_256_verify_proof(
 					info.chunk_root,
 					&proof.proof,
-					&sp_storage_proof::encode_index(chunk_index),
+					&encode_index(chunk_index),
 					&proof.chunk,
 				),
 				Error::<T>::InvalidProof
@@ -321,11 +324,11 @@ pub mod pallet {
 	#[pallet::inherent]
 	impl<T: Config> ProvideInherent for Pallet<T> {
 		type Call = Call<T>;
-		type Error = sp_storage_proof::InherentError;
-		const INHERENT_IDENTIFIER: InherentIdentifier = sp_storage_proof::INHERENT_IDENTIFIER;
+		type Error = InherentError;
+		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 		fn create_inherent(data: &InherentData) -> Option<Self::Call> {
-			let proof = data.get_data::<StorageProof>(&Self::INHERENT_IDENTIFIER).unwrap_or(None);
+			let proof = data.get_data::<TransactionStorageProof>(&Self::INHERENT_IDENTIFIER).unwrap_or(None);
 			Some(Call::check_proof(proof))
 		}
 

@@ -22,6 +22,7 @@
 use sp_std::*;
 use super::*;
 use sp_runtime::traits::{Zero, One, Bounded};
+use sp_transaction_storage_proof::TransactionStorageProof;
 use frame_system::{RawOrigin, Pallet as System, EventRecord};
 use frame_benchmarking::{benchmarks, whitelisted_caller, impl_benchmark_test_suite};
 use frame_support::{traits::{Currency}};
@@ -127,7 +128,7 @@ benchmarks! {
 		run_to_block::<T>(11);
 		let random_hash = [0u8];
 		let mut encoded_proof = PROOF;
-		let proof = sp_storage_proof::StorageProof::decode(&mut encoded_proof).unwrap();
+		let proof = TransactionStorageProof::decode(&mut encoded_proof).unwrap();
 	}: check_proof(RawOrigin::None, Some(proof))
 	verify {
 		assert_last_event::<T>(Event::ProofChecked.into());

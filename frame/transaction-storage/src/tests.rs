@@ -23,6 +23,7 @@ use crate::mock::runtime::*;
 use super::Pallet as TransactionStorage;
 use frame_support::{assert_ok, assert_noop};
 use frame_system::RawOrigin;
+use sp_transaction_storage_proof::registration::build_proof;
 
 #[test]
 fn discards_data() {
@@ -82,7 +83,7 @@ fn checks_proof() {
 		));
 		run_to_block::<Test>(10);
 		let parent_hash = <frame_system::Pallet<Test>>::parent_hash();
-		let proof = sp_storage_proof::registration::build_proof(
+		let proof = build_proof(
 			parent_hash.as_ref(),
 			vec![vec![0u8; MAX_DATA_SIZE as usize]]
 		).unwrap();
@@ -94,12 +95,12 @@ fn checks_proof() {
 		);
 		run_to_block::<Test>(11);
 		let parent_hash = <frame_system::Pallet<Test>>::parent_hash();
-		let proof = sp_storage_proof::registration::build_proof(
+		let proof = build_proof(
 			parent_hash.as_ref(),
 			vec![vec![0u8; MAX_DATA_SIZE as usize]]
 		).unwrap();
 		assert_ok!(TransactionStorage::<Test>::check_proof(Origin::none(), Some(proof)));
-		let invalid_proof = sp_storage_proof::registration::build_proof(
+		let invalid_proof = build_proof(
 			parent_hash.as_ref(),
 			vec![vec![0u8; 1000]]
 		).unwrap();

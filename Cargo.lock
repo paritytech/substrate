@@ -5620,7 +5620,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
- "sp-storage-proof",
+ "sp-transaction-storage-proof",
 ]
 
 [[package]]
@@ -9263,21 +9263,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sp-storage-proof"
-version = "3.0.0"
-dependencies = [
- "log",
- "parity-scale-codec",
- "sc-client-api",
- "sp-consensus",
- "sp-core",
- "sp-inherents",
- "sp-runtime",
- "sp-std",
- "sp-trie",
-]
-
-[[package]]
 name = "sp-tasks"
 version = "3.0.0"
 dependencies = [
@@ -9348,6 +9333,21 @@ dependencies = [
  "sp-blockchain",
  "sp-runtime",
  "thiserror",
+]
+
+[[package]]
+name = "sp-transaction-storage-proof"
+version = "3.0.0"
+dependencies = [
+ "log",
+ "parity-scale-codec",
+ "sc-client-api",
+ "sp-consensus",
+ "sp-core",
+ "sp-inherents",
+ "sp-runtime",
+ "sp-std",
+ "sp-trie",
 ]
 
 [[package]]

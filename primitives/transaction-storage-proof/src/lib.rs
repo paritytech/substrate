@@ -47,7 +47,7 @@ impl IsFatalError for InherentError {
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Debug)]
-pub struct StorageProof {
+pub struct TransactionStorageProof {
 	/// Data chunk that is proved to exist.
 	pub chunk: Vec<u8>,
 	/// Trie nodes that compose the proof.
@@ -55,13 +55,13 @@ pub struct StorageProof {
 }
 
 /// Auxiliary trait to extract storage proof.
-pub trait StorageProofInherentData {
+pub trait TransactionStorageProofInherentData {
 	/// Get the proof.
-	fn storage_proof(&self) -> Result<Option<StorageProof>, Error>;
+	fn storage_proof(&self) -> Result<Option<TransactionStorageProof>, Error>;
 }
 
-impl StorageProofInherentData for InherentData {
-	fn storage_proof(&self) -> Result<Option<StorageProof>, Error> {
+impl TransactionStorageProofInherentData for InherentData {
+	fn storage_proof(&self) -> Result<Option<TransactionStorageProof>, Error> {
 		Ok(self.get_data(&INHERENT_IDENTIFIER)?)
 	}
 }
@@ -81,7 +81,7 @@ impl<F> InherentDataProvider<F> {
 
 #[cfg(feature = "std")]
 impl<F> sp_inherents::ProvideInherentData for InherentDataProvider<F>
-where F: Fn() -> Result<Option<StorageProof>, Error>
+where F: Fn() -> Result<Option<TransactionStorageProof>, Error>
 {
 	fn inherent_identifier(&self) -> &'static InherentIdentifier {
 		&INHERENT_IDENTIFIER
@@ -178,7 +178,7 @@ pub mod registration {
 
 	/// Build a proof for a given source of randomness and indexed transactions.
 	pub fn build_proof(random_hash: &[u8], transactions: Vec<Vec<u8>>)
-		-> Result<StorageProof, sp_inherents::Error>
+		-> Result<TransactionStorageProof, sp_inherents::Error>
 	{
 		let mut db = sp_trie::MemoryDB::<Hasher>::default();
 
@@ -221,7 +221,7 @@ pub mod registration {
 			}
 		};
 
-		Ok(StorageProof {
+		Ok(TransactionStorageProof {
 			proof: chunk_proof,
 			chunk: target_chunk.unwrap(),
 		})
