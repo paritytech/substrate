@@ -156,7 +156,7 @@ impl<T: Config> Pallet<T> {
 		//
 		// This function completes in `O(edges * log voters.len())`; it's expensive, but linear.
 		let encoded_size_of = |assignments: &[IndexAssignmentOf<T>]| {
-			CompactOf::<T>::from(assignments).map(|compact| compact.encoded_size())
+			CompactOf::<T>::from_index_assignments(assignments).map(|compact| compact.encoded_size())
 		};
 
 		let ElectionResult { mut assignments, winners } = election_result;
@@ -199,7 +199,7 @@ impl<T: Config> Pallet<T> {
 		)?;
 
 		// now make compact.
-		let compact = CompactOf::<T>::from(assignments)?;
+		let compact = CompactOf::<T>::from_index_assignments(&assignments)?;
 
 		// re-calc score.
 		let winners = sp_npos_elections::to_without_backing(winners);

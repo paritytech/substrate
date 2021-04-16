@@ -225,7 +225,7 @@ use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use frame_election_provider_support::{ElectionDataProvider, ElectionProvider, onchain};
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, is_score_better, CompactSolution, ElectionScore,
-	EvaluateSupport, PerThing128, Supports, VoteWeight,
+	EvaluateSupport, IndexAssignment, PerThing128, Supports, VoteWeight,
 };
 use sp_runtime::{
 	transaction_validity::{
@@ -267,17 +267,26 @@ pub type CompactTargetIndexOf<T> = <CompactOf<T> as CompactSolution>::Target;
 pub type CompactAccuracyOf<T> = <CompactOf<T> as CompactSolution>::Accuracy;
 /// The accuracy of the election, when computed on-chain. Equal to [`Config::OnChainAccuracy`].
 pub type OnChainAccuracyOf<T> = <T as Config>::OnChainAccuracy;
+
+/// A voter's fundamental data: their ID, their stake, and the list of candidates for whom they voted.
+pub type Voter<T> = (
+	<T as frame_system::Config>::AccountId,
+	sp_npos_elections::VoteWeight,
+	Vec<<T as frame_system::Config>::AccountId>,
+);
+
 /// The relative distribution of a voter's stake among the winning targets.
 pub type Assignment<T> = sp_npos_elections::Assignment<
 	<T as frame_system::Config>::AccountId,
 	CompactAccuracyOf<T>,
 >;
-/// A voter's fundamental data: their ID, their stake, and the list of candidates for whom they voted.
-pub type Voter<T> = (
-		<T as frame_system::Config>::AccountId,
-		sp_npos_elections::VoteWeight,
-		Vec<<T as frame_system::Config>::AccountId>,
-);
+
+// The [`IndexAssignment`] type specialized for a particular runtime `T`.
+pub type IndexAssignmentOf<T> = IndexAssignment<
+	CompactVoterIndexOf<T>,
+	CompactTargetIndexOf<T>,
+	CompactAccuracyOf<T>,
+>;
 
 /// Wrapper type that implements the configurations needed for the on-chain backup.
 struct OnChainConfig<T: Config>(sp_std::marker::PhantomData<T>);
