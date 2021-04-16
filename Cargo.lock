@@ -4777,8 +4777,8 @@ dependencies = [
  "paste 1.0.4",
  "pretty_assertions 0.7.2",
  "pwasm-utils 0.17.0",
- "rand 0.7.3",
- "rand_pcg",
+ "rand 0.8.3",
+ "rand_pcg 0.3.0",
  "serde",
  "sp-core",
  "sp-io",
@@ -6373,7 +6373,7 @@ dependencies = [
  "rand_chacha 0.2.2",
  "rand_core 0.5.1",
  "rand_hc 0.2.0",
- "rand_pcg",
+ "rand_pcg 0.2.1",
 ]
 
 [[package]]
@@ -6475,6 +6475,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "16abd0c1b639e9eb4d7c50c0b8100b0d0f849be2349829c740fe8e6eb4816429"
 dependencies = [
  "rand_core 0.5.1",
+]
+
+[[package]]
+name = "rand_pcg"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7de198537002b913568a3847e53535ace266f93526caf5c360ec41d72c5787f0"
+dependencies = [
+ "rand_core 0.6.2",
 ]
 
 [[package]]

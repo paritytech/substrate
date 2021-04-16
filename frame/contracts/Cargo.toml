@@ -21,8 +21,8 @@ serde = { version = "1", optional = true, features = ["derive"] }
 wasmi-validation = { version = "0.4", default-features = false }
 
 # Only used in benchmarking to generate random contract code
-rand = { version = "0.7", optional = true, default-features = false }
-rand_pcg = { version = "0.2", optional = true }
+rand = { version = "0.8", optional = true, default-features = false }
+rand_pcg = { version = "0.3", optional = true }
 
 # Substrate Dependencies
 frame-benchmarking = { version = "3.1.0", default-features = false, path = "../benchmarking", optional = true }
