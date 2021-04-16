@@ -290,7 +290,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 		if members.len() as u32 > T::MaxMembers::get() {
 			log::error!(
 				target: "runtime::membership",
-				"max weight exceeded [{} > {}].",
+				"maximum number of members used for weight is exceeded, weights can be underestimated [{} > {}].",
 				members.len(),
 				T::MaxMembers::get(),
 			)
