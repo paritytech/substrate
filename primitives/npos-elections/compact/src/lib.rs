@@ -225,7 +225,7 @@ fn struct_def(
 			}
 
 			fn from_assignment<FV, FT, A>(
-				assignments: _npos::sp_std::prelude::Vec<_npos::Assignment<A, #weight_type>>,
+				assignments: &[_npos::Assignment<A, #weight_type>],
 				index_of_voter: FV,
 				index_of_target: FT,
 			) -> Result<Self, _npos::Error>

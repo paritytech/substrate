@@ -27,7 +27,7 @@ pub(crate) fn from_impl(count: usize) -> TokenStream2 {
 		quote!(1 => compact.#name.push(
 			(
 				*who,
-				*distribution[0].0,
+				distribution[0].0,
 			)
 		),)
 	};
@@ -38,33 +38,35 @@ pub(crate) fn from_impl(count: usize) -> TokenStream2 {
 			(
 				*who,
 				(
-					*distribution[0].0,
-					*distribution[0].1,
+					distribution[0].0,
+					distribution[0].1,
 				),
-				*distribution[1].0,
+				distribution[1].0,
 			)
 		),)
 	};
 
-	let from_impl_rest = (3..=count).map(|c| {
-		let inner = (0..c-1).map(|i|
-			quote!((*distribution[#i].0, *distribution[#i].1),)
-		).collect::<TokenStream2>();
+	let from_impl_rest = (3..=count)
+		.map(|c| {
+			let inner = (0..c - 1)
+				.map(|i| quote!((distribution[#i].0, distribution[#i].1),))
+				.collect::<TokenStream2>();
 
-		let field_name = field_name_for(c);
-		let last_index = c - 1;
-		let last = quote!(*distribution[#last_index].0);
+			let field_name = field_name_for(c);
+			let last_index = c - 1;
+			let last = quote!(distribution[#last_index].0);
 
-		quote!(
-			#c => compact.#field_name.push(
-				(
-					&who,
-					[#inner],
-					#last,
-				)
-			),
-		)
-	}).collect::<TokenStream2>();
+			quote!(
+				#c => compact.#field_name.push(
+					(
+						*who,
+						[#inner],
+						#last,
+					)
+				),
+			)
+	})
+		.collect::<TokenStream2>();
 
 	quote!(
 		#from_impl_single

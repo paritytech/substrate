@@ -135,7 +135,7 @@ fn solution_with_size<T: Config>(
 		.collect::<Vec<_>>();
 
 	let compact =
-		<CompactOf<T>>::from_assignment(assignments, &voter_index, &target_index).unwrap();
+		<CompactOf<T>>::from_assignment(&assignments, &voter_index, &target_index).unwrap();
 	let score = compact.clone().score(&winners, stake_of, voter_at, target_at).unwrap();
 	let round = <MultiPhase<T>>::round();
 

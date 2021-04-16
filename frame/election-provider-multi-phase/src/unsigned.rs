@@ -154,7 +154,7 @@ impl<T: Config> Pallet<T> {
 
 		// Compute the size of a compact solution comprised of the selected arguments.
 		//
-		// This function completes in `O(edges * log voters.len())`; it's expensive, but linear.
+		// This function completes in `O(edges)`; it's expensive, but linear.
 		let encoded_size_of = |assignments: &[IndexAssignmentOf<T>]| {
 			CompactOf::<T>::try_from(assignments).map(|compact| compact.encoded_size())
 		};
@@ -557,14 +557,14 @@ mod max_weight {
 mod tests {
 	use super::*;
 	use crate::mock::{
-		assert_noop, assert_ok, ExtBuilder, Extrinsic, make_compact_from,
-		MinerMaxWeight, MultiPhase, Origin, roll_to_with_ocw, roll_to, Runtime,
-		TestCompact, voters_and_assignments, witness,
+		assert_noop, assert_ok, ExtBuilder, Extrinsic, MinerMaxWeight, MultiPhase, Origin,
+		roll_to_with_ocw, roll_to, Runtime, TestCompact, TrimHelpers, trim_helpers, witness,
 	};
 	use frame_support::{dispatch::Dispatchable, traits::OffchainWorker};
 	use mock::Call as OuterCall;
-	use frame_election_provider_support::Assignment;
 	use sp_runtime::{traits::ValidateUnsigned, PerU16};
+
+	type Assignment = crate::Assignment<Runtime>;
 
 	#[test]
 	fn validate_unsigned_retracts_wrong_phase() {
@@ -953,17 +953,20 @@ mod tests {
 			roll_to(25);
 
 			// given
-			let (mut voters, mut assignments) = voters_and_assignments();
-			let compact = make_compact_from(voters.clone(), assignments.clone());
-			let encoded_len = compact.encode().len() as u32;
+			let TrimHelpers {
+				mut assignments,
+				encoded_size_of,
+				..
+			} = trim_helpers();
+			let compact = CompactOf::<Runtime>::try_from(assignments.as_slice()).unwrap();
+			let encoded_len = compact.encoded_size() as u32;
 			let compact_clone = compact.clone();
 
 			// when
-			MultiPhase::sort_by_decreasing_stake(&mut voters, &mut assignments);
-			MultiPhase::trim_assignments_length(encoded_len, &mut assignments);
+			MultiPhase::trim_assignments_length(encoded_len, &mut assignments, encoded_size_of).unwrap();
 
 			// then
-			let compact = make_compact_from(voters, assignments);
+			let compact = CompactOf::<Runtime>::try_from(assignments.as_slice()).unwrap();
 			assert_eq!(compact, compact_clone);
 		});
 	}
@@ -975,19 +978,22 @@ mod tests {
 			roll_to(25);
 
 			// given
-			let (mut voters, mut assignments) = voters_and_assignments();
-			let compact = make_compact_from(voters.clone(), assignments.clone());
-			let encoded_len = compact.encode().len() as u32;
+			let TrimHelpers {
+				mut assignments,
+				encoded_size_of,
+				..
+			} = trim_helpers();
+			let compact = CompactOf::<Runtime>::try_from(assignments.as_slice()).unwrap();
+			let encoded_len = compact.encoded_size();
 			let compact_clone = compact.clone();
 
 			// when
-			MultiPhase::sort_by_decreasing_stake(&mut voters, &mut assignments);
-			MultiPhase::trim_assignments_length(encoded_len - 1, &mut assignments);
+			MultiPhase::trim_assignments_length(encoded_len as u32 - 1, &mut assignments, encoded_size_of).unwrap();
 
 			// then
-			let compact = make_compact_from(voters, assignments);
+			let compact = CompactOf::<Runtime>::try_from(assignments.as_slice()).unwrap();
 			assert_ne!(compact, compact_clone);
-			assert!((compact.encoded_size() as u32) < encoded_len);
+			assert!(compact.encoded_size() < encoded_len);
 		});
 	}
 
@@ -998,25 +1004,29 @@ mod tests {
 			roll_to(25);
 
 			// given
-			let (mut voters, mut assignments) = voters_and_assignments();
-			let compact = make_compact_from(voters.clone(), assignments.clone());
-			let encoded_len = compact.encode().len() as u32;
+			let TrimHelpers {
+				voters,
+				mut assignments,
+				encoded_size_of,
+				voter_index,
+			} = trim_helpers();
+			let compact = CompactOf::<Runtime>::try_from(assignments.as_slice()).unwrap();
+			let encoded_len = compact.encoded_size() as u32;
 			let count = assignments.len();
 			let min_stake_voter = voters.iter()
 				.map(|(id, weight, _)| (weight, id))
 				.min()
-				.map(|(_, id)| *id)
+				.and_then(|(_, id)| voter_index(id))
 				.unwrap();
 
 			// when
-			MultiPhase::sort_by_decreasing_stake(&mut voters, &mut assignments);
-			MultiPhase::trim_assignments_length(encoded_len - 1, &mut assignments);
+			MultiPhase::trim_assignments_length(encoded_len - 1, &mut assignments, encoded_size_of).unwrap();
 
 			// then
 			assert_eq!(assignments.len(), count - 1, "we must have removed exactly one assignment");
 			assert!(
 				assignments.iter()
-					.all(|Assignment{ who, ..}| *who != min_stake_voter),
+					.all(|IndexAssignment{ who, ..}| *who != min_stake_voter),
 				"min_stake_voter must no longer be in the set of voters",
 			);
 		});
