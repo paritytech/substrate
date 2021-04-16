@@ -1315,6 +1315,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "diff"
+version = "0.1.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e25ea47919b1560c4e3b7fe0aaab9becf5b84a10325ddf7db0f0ba5e1026499"
+
+[[package]]
 name = "difference"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1797,7 +1803,7 @@ dependencies = [
  "parity-scale-codec",
  "parity-util-mem",
  "paste 1.0.4",
- "pretty_assertions",
+ "pretty_assertions 0.6.1",
  "serde",
  "smallvec 1.6.1",
  "sp-arithmetic",
@@ -1850,7 +1856,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "parity-scale-codec",
- "pretty_assertions",
+ "pretty_assertions 0.6.1",
  "rustversion",
  "serde",
  "sp-core",
@@ -4202,7 +4208,7 @@ version = "2.0.0"
 dependencies = [
  "frame-system",
  "parity-scale-codec",
- "pretty_assertions",
+ "pretty_assertions 0.6.1",
  "sp-application-crypto",
  "sp-core",
  "sp-runtime",
@@ -4769,7 +4775,7 @@ dependencies = [
  "parity-scale-codec",
  "parity-wasm 0.42.2",
  "paste 1.0.4",
- "pretty_assertions",
+ "pretty_assertions 0.7.2",
  "pwasm-utils 0.17.0",
  "rand 0.7.3",
  "rand_pcg",
@@ -6097,6 +6103,18 @@ dependencies = [
  "ansi_term 0.11.0",
  "ctor",
  "difference",
+ "output_vt100",
+]
+
+[[package]]
+name = "pretty_assertions"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1cab0e7c02cf376875e9335e0ba1da535775beb5450d21e1dffca068818ed98b"
+dependencies = [
+ "ansi_term 0.12.1",
+ "ctor",
+ "diff",
  "output_vt100",
 ]
 
@@ -8720,7 +8738,7 @@ dependencies = [
  "parity-scale-codec",
  "parity-util-mem",
  "parking_lot 0.11.1",
- "pretty_assertions",
+ "pretty_assertions 0.6.1",
  "primitive-types",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
@@ -9076,7 +9094,7 @@ dependencies = [
  "num-traits",
  "parity-scale-codec",
  "parking_lot 0.11.1",
- "pretty_assertions",
+ "pretty_assertions 0.6.1",
  "rand 0.7.3",
  "smallvec 1.6.1",
  "sp-core",

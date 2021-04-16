@@ -40,7 +40,7 @@ sp-std = { version = "3.0.0", default-features = false, path = "../../primitives
 assert_matches = "1"
 hex-literal = "0.3"
 paste = "1"
-pretty_assertions = "0.6"
+pretty_assertions = "0.7"
 wat = "1"
 
 # Substrate Dependencies
