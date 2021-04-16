@@ -686,7 +686,7 @@ impl<H, N: Add<Output=N> + Clone> PendingChange<H, N> {
 #[derive(Debug, Encode, Decode, Clone, PartialEq)]
 pub struct AuthoritySetChanges<N>(Vec<(u64, N)>);
 
-/// The response when queuering for a the set id for a specific block. Either we get a set id
+/// The response when querying for a set id for a specific block. Either we get a set id
 /// together with a block number for the last block in the set, or that the requested block is in the
 /// latest set.
 #[derive(Debug, PartialEq)]
