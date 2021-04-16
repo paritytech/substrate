@@ -130,9 +130,10 @@ remove_label() {
   repo=$1
   pr=$2
   # Escape the labels... we use emojis quite often, so this is required
-  # to not break things. Source:
+  # to not break things.
+  # Source below: (with od instead of xxd since it's in IEEE Std 1003.1-2008)
   # https://stackoverflow.com/questions/12735450/delete-using-curl-with-encoded-url
-  label=$(printf '%s' "$3" | xxd -plain | tr -d '\n' | sed 's/\(..\)/%\1/g')
+  label=$(printf '%s' "$3" | od -A n -w1000 -t x1 | tr -d ' ' | sed 's/\(..\)/%\1/g')
 
   curl -X DELETE \
     -H "Accept: application/vnd.github.v3+json" \
