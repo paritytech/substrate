@@ -320,7 +320,7 @@ mod benchmark {
 	// TODO: this can use bounded-vec as well.
 	// TODO: MembershipChanged could become weight-aware.
 
-	benchmarks! {
+	benchmarks_instance! {
 		add_member {
 			let m in 1 .. T::MaxMembers::get();
 
