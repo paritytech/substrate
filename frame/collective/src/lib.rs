@@ -750,10 +750,7 @@ decl_module! {
 		) -> DispatchResult {
 			let maybe_raw_origin: Result<RawOrigin<T::AccountId, I>, _> = <T as Config<I>>::Origin::from(origin).into();
 
-			let raw_origin = match maybe_raw_origin {
-				Ok(origin) => origin,
-				Err(_) => return DispatchError::BadOrigin.into(),
-			};
+			let raw_origin = maybe_raw_origin.map_err(|_| DispatchError::BadOrigin.into())?;
 
 			let proposal_len = proposal.using_encoded(|x| x.len());
 			ensure!(proposal_len <= length_bound as usize, Error::<T, I>::WrongProposalLength);
@@ -785,10 +782,7 @@ decl_module! {
 		) -> DispatchResult {
 			let maybe_raw_origin: Result<RawOrigin<T::AccountId, I>, _> = <T as Config<I>>::Origin::from(origin).into();
 
-			let raw_origin = match maybe_raw_origin {
-				Ok(origin) => origin,
-				Err(_) => return DispatchError::BadOrigin.into(),
-			};
+			let raw_origin = maybe_raw_origin.map_err(|_| DispatchError::BadOrigin.into())?;
 
 			let proposal_len = proposal.using_encoded(|x| x.len());
 			ensure!(proposal_len <= length_bound as usize, Error::<T, I>::WrongProposalLength);
@@ -808,7 +802,7 @@ decl_module! {
 impl<T: Config<I>, I: Instance> Module<T, I> {
 	/// Get the unique index for this pallet from the `construct_runtime` order.
 	pub fn pallet_index() -> u32 {
-		 T::PalletInfo::index::<Pallet<T, I>>().expect("pallet is part of the runtime") as u32
+		 T::PalletInfo::index::<Pallet<T, I>>().expect("pallet is part of the runtime and thus has an index; qed.") as u32
 	}
 
 	/// A simple helper function to generate a collective ratio account from the collective origin.
