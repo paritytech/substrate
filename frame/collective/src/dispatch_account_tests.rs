@@ -82,16 +82,6 @@ impl Config<Instance2> for Test {
 	type DefaultVote = MoreThanMajorityThenPrimeDefaultVote;
 	type WeightInfo = ();
 }
-impl Config for Test {
-	type Origin = Origin;
-	type Proposal = Call;
-	type Event = Event;
-	type MotionDuration = MotionDuration;
-	type MaxProposals = MaxProposals;
-	type MaxMembers = MaxMembers;
-	type DefaultVote = PrimeDefaultVote;
-	type WeightInfo = ();
-}
 
 // example module to test behaviors.
 pub mod example {
@@ -153,7 +143,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			members: collective2,
 			phantom: Default::default(),
 		},
-		collective: Default::default(),
 	}.build_storage().unwrap().into();
 	ext.execute_with(|| System::set_block_number(1));
 	ext
