@@ -133,7 +133,6 @@ frame_support::construct_runtime!(
 		System: frame_system::{Pallet, Call, Event<T>},
 		Collective: collective::<Instance1>::{Pallet, Call, Event<T>, Origin<T>, Config<T>},
 		CollectiveMajority: collective::<Instance2>::{Pallet, Call, Event<T>, Origin<T>, Config<T>},
-		DefaultCollective: collective::{Pallet, Call, Event<T>, Origin<T>, Config<T>},
 		Example: example::{Pallet, Call},
 	}
 );
