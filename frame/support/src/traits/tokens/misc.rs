@@ -126,7 +126,7 @@ pub enum BalanceStatus {
 bitflags::bitflags! {
 	/// Reasons for moving funds out of an account.
 	#[derive(Encode, Decode)]
-	pub struct WithdrawReasons: i8 {
+	pub struct WithdrawReasons: u8 {
 		/// In order to pay for (system) transaction costs.
 		const TRANSACTION_PAYMENT = 0b00000001;
 		/// In order to transfer ownership.

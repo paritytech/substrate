@@ -269,3 +269,55 @@ pub trait OffchainWorker<BlockNumber> {
 	fn offchain_worker(_n: BlockNumber) {}
 }
 
+/// Some amount of backing from a group. The precise defintion of what it means to "back" something
+/// is left flexible.
+pub struct Backing {
+	/// The number of members of the group that back some motion.
+	pub approvals: u32,
+	/// The total count of group members.
+	pub eligible: u32,
+}
+
+/// Retrieve the backing from an object's ref.
+pub trait GetBacking {
+	/// Returns `Some` `Backing` if `self` represents a fractional/groupwise backing of some
+	/// implicit motion. `None` if it does not.
+	fn get_backing(&self) -> Option<Backing>;
+}
+
+
+
+/// A trait to ensure the inherent are before non-inherent in a block.
+///
+/// This is typically implemented on runtime, through `construct_runtime!`.
+pub trait EnsureInherentsAreFirst<Block> {
+	/// Ensure the position of inherent is correct, i.e. they are before non-inherents.
+	///
+	/// On error return the index of the inherent with invalid position (counting from 0).
+	fn ensure_inherents_are_first(block: &Block) -> Result<(), u32>;
+}
+
+/// An extrinsic on which we can get access to call.
+pub trait ExtrinsicCall: sp_runtime::traits::Extrinsic {
+	/// Get the call of the extrinsic.
+	fn call(&self) -> &Self::Call;
+}
+
+#[cfg(feature = "std")]
+impl<Call, Extra> ExtrinsicCall for sp_runtime::testing::TestXt<Call, Extra> where
+	Call: codec::Codec + Sync + Send,
+{
+	fn call(&self) -> &Self::Call {
+		&self.call
+	}
+}
+
+impl<Address, Call, Signature, Extra> ExtrinsicCall
+for sp_runtime::generic::UncheckedExtrinsic<Address, Call, Signature, Extra>
+where
+	Extra: sp_runtime::traits::SignedExtension,
+{
+	fn call(&self) -> &Self::Call {
+		&self.function
+	}
+}

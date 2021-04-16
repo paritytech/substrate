@@ -14,7 +14,6 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-serde = { version = "1.0.101", optional = true }
 sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
@@ -29,7 +28,6 @@ sp-core = { version = "3.0.0", path = "../../primitives/core" }
 default = ["std"]
 std = [
 	"codec/std",
-	"serde",
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-std/std",
