@@ -1362,8 +1362,8 @@ pub mod pallet_prelude {
 ///
 /// It declare `type Module` type alias for `Pallet`, used by [`construct_runtime`].
 ///
-/// It implements `pub fn name() -> &'static str { ... }` and `pub fn index() -> usize { ... }` on
-/// `Pallet` to ease access to [`frame_support::traits::PalletInfo`] informations.
+/// It implements [`traits::PalletInfoAccess`] on `Pallet` to ease access to pallet informations
+/// given by [`frame_support::traits::PalletInfo`].
 /// (The implementation use the associated type `PalletInfo` of frame-system config trait).
 ///
 /// If attribute generate_store then macro create the trait `Store` and implement it on `Pallet`.

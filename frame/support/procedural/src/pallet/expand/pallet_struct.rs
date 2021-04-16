@@ -23,12 +23,10 @@ use crate::pallet::{Def, parse::helper::get_doc_literals};
 /// * Implement ModuleErrorMetadata on Pallet
 /// * declare Module type alias for construct_runtime
 /// * replace the first field type of `struct Pallet` with `PhantomData` if it is `_`
-/// * implementation of access to `PalletInfo` information
+/// * implementation of `PalletInfoAccess` information
 pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 	let frame_support = &def.frame_support;
-	let pallet_info_trait_str = format!("[`{}::traits::PalletInfo`]", def.frame_support);
 	let frame_system = &def.frame_system;
-	let pallet_info_type_str = format!("[`{}::Config::PalletInfo`]", def.frame_system);
 	let type_impl_gen = &def.type_impl_generics(def.pallet_struct.attr_span);
 	let type_use_gen = &def.type_use_generics(def.pallet_struct.attr_span);
 	let type_decl_gen = &def.type_decl_generics(def.pallet_struct.attr_span);
@@ -138,17 +136,12 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 			}
 		}
 
-		/// Implementation of accessors to
-		#[doc = #pallet_info_trait_str]
-		/// information on pallet placeholder.
-		impl<#type_impl_gen> #pallet_ident<#type_use_gen> #config_where_clause {
-			/// Index of the pallet as configured in the runtime.
-			///
-			/// Implementation retrieve the pallet index using
-			#[doc = #pallet_info_type_str]
-			/// and
-			#[doc = #pallet_info_trait_str]
-			pub fn index() -> usize {
+		// Implement `PalletInfoAccess` for `Pallet`
+		impl<#type_impl_gen> #frame_support::traits::PalletInfoAccess
+			for #pallet_ident<#type_use_gen>
+			#config_where_clause
+		{
+			fn index() -> usize {
 				<
 					<T as #frame_system::Config>::PalletInfo as #frame_support::traits::PalletInfo
 				>::index::<Self>()
@@ -156,13 +149,7 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 						implemented by the runtime")
 			}
 
-			/// Name of the pallet as configured in the runtime.
-			///
-			/// Implementation retrieve the pallet name using
-			#[doc = #pallet_info_type_str]
-			/// and
-			#[doc = #pallet_info_trait_str]
-			pub fn name() -> &'static str {
+			fn name() -> &'static str {
 				<
 					<T as #frame_system::Config>::PalletInfo as #frame_support::traits::PalletInfo
 				>::name::<Self>()
