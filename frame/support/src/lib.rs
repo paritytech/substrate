@@ -1364,7 +1364,7 @@ pub mod pallet_prelude {
 ///
 /// It implements [`traits::PalletInfoAccess`] on `Pallet` to ease access to pallet informations
 /// given by [`frame_support::traits::PalletInfo`].
-/// (The implementation use the associated type `PalletInfo` of frame-system config trait).
+/// (The implementation use the associated type `frame_system::Config::PalletInfo`).
 ///
 /// If attribute generate_store then macro create the trait `Store` and implement it on `Pallet`.
 ///
