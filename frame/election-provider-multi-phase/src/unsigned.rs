@@ -252,7 +252,7 @@ impl<T: Config> Pallet<T> {
 			size,
 			max_weight,
 		);
-		let removing: usize = assignments.len() - maximum_allowed_voters as usize;
+		let removing: usize = assignments.len().saturating_sub(maximum_allowed_voters.saturated_into());
 		log!(
 			debug,
 			"from {} assignments, truncating to {} for weight, removing {}",
