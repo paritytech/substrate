@@ -145,7 +145,8 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 
 #[test]
 fn accounts_dont_match_instantiations() {
-	// Basically, accounts are seeded on their ModuleId, and these should be globally unique.
+	// Basically, accounts are seeded on their Pallet Id and Pallet Index,
+	// and these should be globally unique.
 	assert_ne!(
 		Collective::origin_to_ratio_account(RawOrigin::Members(1, 3), 1, 3),
 		CollectiveMajority::origin_to_ratio_account(RawOrigin::Members(1, 3), 1, 3),
