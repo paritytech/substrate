@@ -323,9 +323,6 @@ mod benchmark {
 
 	const SEED: u32 = 0;
 
-	// TODO: this can use bounded-vec as well.
-	// TODO: MembershipChanged could become weight-aware.
-
 	fn set_members<T: Config<I>, I: Instance>(members: Vec<T::AccountId>, prime: Option<usize>) {
 		let reset_origin = T::ResetOrigin::successful_origin();
 		let prime_origin = T::PrimeOrigin::successful_origin();
