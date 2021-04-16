@@ -431,7 +431,7 @@ pub trait Trie {
 	}
 
 	/// Verify trie proof
-	fn blake2_256_verity_proof(root: H256, proof: &[Vec<u8>], key: &[u8], value: &[u8]) -> bool {
+	fn blake2_256_verify_proof(root: H256, proof: &[Vec<u8>], key: &[u8], value: &[u8]) -> bool {
 		sp_trie::verify_trie_proof::<Layout<sp_core::Blake2Hasher>, _, _, _>(
 			&root,
 			proof,
@@ -440,7 +440,7 @@ pub trait Trie {
 	}
 
 	/// Verify trie proof
-	fn keccak_256_verity_proof(root: H256, proof: &[Vec<u8>], key: &[u8], value: &[u8]) -> bool {
+	fn keccak_256_verify_proof(root: H256, proof: &[Vec<u8>], key: &[u8], value: &[u8]) -> bool {
 		sp_trie::verify_trie_proof::<Layout<sp_core::KeccakHasher>, _, _, _>(
 			&root,
 			proof,

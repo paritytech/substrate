@@ -237,7 +237,7 @@ pub mod pallet {
 			};
 
 			ensure!(
-				sp_io::trie::blake2_256_verity_proof(
+				sp_io::trie::blake2_256_verify_proof(
 					info.chunk_root,
 					&proof.proof,
 					&sp_storage_proof::encode_index(chunk_index),
