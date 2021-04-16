@@ -57,7 +57,7 @@ use frame_support::{
 		DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable, Parameter,
 		PostDispatchInfo,
 	},
-	traits::{ChangeMembers, EnsureOrigin, Get, InitializeMembers, GetBacking, Backing},
+	traits::{ChangeMembers, EnsureOrigin, Get, InitializeMembers, GetBacking, Backing, PalletInfo},
 	weights::{DispatchClass, GetDispatchInfo, Weight, Pays},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
