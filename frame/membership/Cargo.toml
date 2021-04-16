@@ -22,7 +22,7 @@ sp-runtime = { version = "3.0.0", default-features = false, path = "../../primit
 frame-support = { version = "3.0.0", default-features = false, path = "../support" }
 frame-system = { version = "3.0.0", default-features = false, path = "../system" }
 
-frame-benchmarking = { version = "3.0.0", optional = true, default-features = false, path = "../benchmarking" }
+frame-benchmarking = { version = "3.1.0", optional = true, default-features = false, path = "../benchmarking" }
 
 [dev-dependencies]
 sp-core = { version = "3.0.0", path = "../../primitives/core" }
@@ -33,14 +33,16 @@ std = [
 	"serde",
 	"codec/std",
 	"log/std",
-	"sp-runtime/std",
 	"sp-std/std",
 	"sp-io/std",
+	"sp-runtime/std",
 	"frame-support/std",
 	"frame-system/std",
+	"frame-benchmarking/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking",
+	"sp-runtime/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
 ]
