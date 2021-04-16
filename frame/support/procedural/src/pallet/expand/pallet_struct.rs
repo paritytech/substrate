@@ -29,7 +29,6 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 	let pallet_info_trait_str = format!("[`{}::traits::PalletInfo`]", def.frame_support);
 	let frame_system = &def.frame_system;
 	let pallet_info_type_str = format!("[`{}::Config::PalletInfo`]", def.frame_system);
-	let frame_system_str = def.frame_system.to_string();
 	let type_impl_gen = &def.type_impl_generics(def.pallet_struct.attr_span);
 	let type_use_gen = &def.type_use_generics(def.pallet_struct.attr_span);
 	let type_decl_gen = &def.type_decl_generics(def.pallet_struct.attr_span);
