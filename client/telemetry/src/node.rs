@@ -19,7 +19,7 @@
 use crate::TelemetryPayload;
 use futures::channel::mpsc;
 use futures::prelude::*;
-use libp2p::core::transport::Transport;
+use libp2p::{core::transport::Transport, websocket::framed::IncomingData};
 use libp2p::Multiaddr;
 use rand::Rng as _;
 use std::{fmt, mem, pin::Pin, task::Context, task::Poll, time::Duration};
@@ -109,7 +109,9 @@ where
 	TTrans: Clone + Unpin,
 	TTrans::Dial: Unpin,
 	TTrans::Output:
-		Sink<Vec<u8>, Error = TSinkErr> + Stream<Item = Result<Vec<u8>, TSinkErr>> + Unpin,
+		Sink<Vec<u8>, Error = TSinkErr> + Stream<Item = IncomingData> + Unpin,
+		// Originally was:
+		// Sink<Vec<u8>, Error = TSinkErr> + Stream<Item = Result<Vec<u8>, TSinkErr>> + Unpin,
 	TSinkErr: fmt::Debug,
 {
 	// NOTE: this code has been inspired from `Buffer` (`futures_util::sink::Buffer`).
@@ -136,7 +138,10 @@ where
 	TTrans: Clone + Unpin,
 	TTrans::Dial: Unpin,
 	TTrans::Output:
-		Sink<Vec<u8>, Error = TSinkErr> + Stream<Item = Result<Vec<u8>, TSinkErr>> + Unpin,
+		Sink<Vec<u8>, Error = TSinkErr> + Stream<Item = IncomingData> + Unpin,
+		// Sink<Vec<u8>, Error = TSinkErr> + Stream<Item = Result<IncomingData, ()>> + Unpin,
+		// Originally was:
+		// Sink<Vec<u8>, Error = TSinkErr> + Stream<Item = Result<Vec<u8>, TSinkErr>> + Unpin,
 	TSinkErr: fmt::Debug,
 {
 	type Error = Infallible;
@@ -145,30 +150,44 @@ where
 		let mut socket = mem::replace(&mut self.socket, NodeSocket::Poisoned);
 		self.socket = loop {
 			match socket {
-				NodeSocket::Connected(mut conn) => match conn.sink.poll_ready_unpin(cx) {
-					Poll::Ready(Ok(())) => {
-						match self.as_mut().try_send_connection_messages(cx, &mut conn) {
-							Poll::Ready(Err(err)) => {
-								log::warn!(target: "telemetry", "⚠️  Disconnected from {}: {:?}", self.addr, err);
-								socket = NodeSocket::wait_reconnect();
-							}
-							Poll::Ready(Ok(())) => {
-								self.socket = NodeSocket::Connected(conn);
-								return Poll::Ready(Ok(()));
-							}
-							Poll::Pending => {
-								self.socket = NodeSocket::Connected(conn);
-								return Poll::Pending;
+				NodeSocket::Connected(mut conn) => {
+					log::debug!(target: "telemetry", "poll_ready, NodeSocket::Connected");
+
+					// TODO: poll_next or poll_next_unpin?
+					if let Poll::Ready(Some(Ok(ref bytes))) = conn.sink.poll_next_unpin(cx) {
+						log::debug!(target: "telemetry", "Remote closed the connection with reason code: {:?}", bytes);
+						// if bytes.len() == 2 {
+						// 	let code = (bytes[0] as u16) * 256 + bytes[1] as u16;
+						// 	log::debug!(target: "telemetry", "Remote closed the connection with reason code: {}", code);
+						// 	// TODO: Do something smarter with the close code here…
+						// 	socket = NodeSocket::wait_reconnect();
+						// }
+					}
+					match conn.sink.poll_ready_unpin(cx) {
+						Poll::Ready(Ok(())) => {
+							match self.as_mut().try_send_connection_messages(cx, &mut conn) {
+								Poll::Ready(Err(err)) => {
+									log::warn!(target: "telemetry", "⚠️  Disconnected from {}: {:?}", self.addr, err);
+									socket = NodeSocket::wait_reconnect();
+								}
+								Poll::Ready(Ok(())) => {
+									self.socket = NodeSocket::Connected(conn);
+									return Poll::Ready(Ok(()));
+								}
+								Poll::Pending => {
+									self.socket = NodeSocket::Connected(conn);
+									return Poll::Pending;
+								}
 							}
 						}
-					}
-					Poll::Ready(Err(err)) => {
-						log::warn!(target: "telemetry", "⚠️  Disconnected from {}: {:?}", self.addr, err);
-						socket = NodeSocket::wait_reconnect();
-					}
-					Poll::Pending => {
-						self.socket = NodeSocket::Connected(conn);
-						return Poll::Pending;
+						Poll::Ready(Err(err)) => {
+							log::warn!(target: "telemetry", "⚠️  Disconnected from {}: {:?}", self.addr, err);
+							socket = NodeSocket::wait_reconnect();
+						}
+						Poll::Pending => {
+							self.socket = NodeSocket::Connected(conn);
+							return Poll::Pending;
+						}
 					}
 				},
 				NodeSocket::Dialing(mut s) => match Future::poll(Pin::new(&mut s), cx) {
@@ -255,16 +274,16 @@ where
 				),
 			},
 			_socket => {
-				log::trace!(
-					target: "telemetry",
-					"Message has been discarded: {}",
-					serde_json::to_string(&item)
-						.unwrap_or_else(|err| format!(
-							"could not be serialized ({}): {:?}",
-							err,
-							item,
-						)),
-				);
+				// log::trace!(
+				// 	target: "telemetry",
+				// 	"Message has been discarded: {}",
+				// 	serde_json::to_string(&item)
+				// 		.unwrap_or_else(|err| format!(
+				// 			"could not be serialized ({}): {:?}",
+				// 			err,
+				// 			item,
+				// 		)),
+				// );
 			}
 		}
 		Ok(())

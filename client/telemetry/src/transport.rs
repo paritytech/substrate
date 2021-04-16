@@ -24,7 +24,7 @@ use futures::{
 };
 use libp2p::{
 	core::transport::{timeout::TransportTimeout, OptionalTransport},
-	wasm_ext, Transport,
+	wasm_ext, Transport, websocket::framed::IncomingData
 };
 use std::io;
 use std::pin::Pin;
@@ -50,21 +50,32 @@ pub(crate) fn initialize_transport(
 	let transport = transport.or_transport({
 		let inner = block_on(libp2p::dns::DnsConfig::system(libp2p::tcp::TcpConfig::new()))?;
 		libp2p::websocket::framed::WsConfig::new(inner).and_then(|connec, _| {
+			log::info!(target: "telemetry", "Setting up a connection");
 			let connec = connec
 				.with(|item| {
 					let item = libp2p::websocket::framed::OutgoingData::Binary(item);
 					future::ready(Ok::<_, io::Error>(item))
 				})
-				.try_filter(|item| future::ready(item.is_data()))
-				.map_ok(|data| data.into_bytes());
+				.try_filter(|incoming| {
+					log::info!(target: "telemetry", "Incoming data from libp2p: {:?}", incoming);
+					future::ready(incoming.is_close())
+				});
+				// TODO: what goes here?
+				// .map_ok(|data| data);
+				// .map_err(|_e| ());
+				// Original was:
+				// .map_ok(|data| data.into_bytes());
 			future::ready(Ok::<_, io::Error>(connec))
 		})
 	});
 
 	Ok(TransportTimeout::new(
-		transport.map(|out, _| {
+		transport.map(|out, _dialer| {
+			// `out` is StreamSink<libp2p::libp2p_wasm_ext::Connection>
+			// `_dialer` is Dialer { address: "/ip4/127.0.0.1/tcp/8000/x-parity-ws/%2Fsubmit" }
 			let out = out
-				.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+				// TODO: what goes here?
+				// .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
 				.sink_map_err(|err| io::Error::new(io::ErrorKind::Other, err));
 			Box::pin(out) as Pin<Box<_>>
 		}),
@@ -81,7 +92,11 @@ impl<T: ?Sized + Stream + Sink<I>, I> StreamAndSink<I> for T {}
 pub(crate) type WsTrans = libp2p::core::transport::Boxed<
 	Pin<
 		Box<
-			dyn StreamAndSink<Vec<u8>, Item = Result<Vec<u8>, io::Error>, Error = io::Error> + Send,
+			dyn StreamAndSink<Vec<u8>, Item = IncomingData, Error = io::Error> + Send,
+			// dyn StreamAndSink<Vec<u8>, Item = Result<IncomingData, ()>, Error = io::Error> + Send,
+			// dyn StreamAndSink<Vec<u8>, Item = Result<IncomingData, io::Error>, Error = io::Error> + Send,
+			// Original was:
+			// dyn StreamAndSink<Vec<u8>, Item = Result<Vec<u8>, io::Error>, Error = io::Error> + Send,
 		>,
 	>,
 >;
@@ -100,22 +115,22 @@ impl<T> From<T> for StreamSink<T> {
 	}
 }
 
-impl<T: AsyncRead> Stream for StreamSink<T> {
-	type Item = Result<Vec<u8>, io::Error>;
-
-	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-		let this = self.project();
-		let mut buf = vec![0; 128];
-		match ready!(AsyncRead::poll_read(this.0, cx, &mut buf)) {
-			Ok(0) => Poll::Ready(None),
-			Ok(n) => {
-				buf.truncate(n);
-				Poll::Ready(Some(Ok(buf)))
-			}
-			Err(err) => Poll::Ready(Some(Err(err))),
-		}
-	}
-}
+// impl<T: AsyncRead> Stream for StreamSink<T> {
+// type Item = Result<Vec<u8>, io::Error>;
+//
+// 	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+// 		let this = self.project();
+// 		let mut buf = vec![0; 128];
+// 		match ready!(AsyncRead::poll_read(this.0, cx, &mut buf)) {
+// 			Ok(0) => Poll::Ready(None),
+// 			Ok(n) => {
+// 				buf.truncate(n);
+// 				Poll::Ready(Some(Ok(buf)))
+// 			}
+// 			Err(err) => Poll::Ready(Some(Err(err))),
+// 		}
+// 	}
+// }
 
 impl<T: AsyncWrite> StreamSink<T> {
 	fn poll_flush_buffer(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), io::Error>> {
