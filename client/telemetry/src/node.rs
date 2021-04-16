@@ -19,8 +19,7 @@
 use crate::TelemetryPayload;
 use futures::channel::mpsc;
 use futures::prelude::*;
-use libp2p::{core::transport::Transport, websocket::framed::IncomingData};
-use libp2p::Multiaddr;
+use libp2p::{Multiaddr, core::transport::Transport};
 use rand::Rng as _;
 use std::{fmt, mem, pin::Pin, task::Context, task::Poll, time::Duration};
 use wasm_timer::Delay;
@@ -109,9 +108,7 @@ where
 	TTrans: Clone + Unpin,
 	TTrans::Dial: Unpin,
 	TTrans::Output:
-		Sink<Vec<u8>, Error = TSinkErr> + Stream<Item = IncomingData> + Unpin,
-		// Originally was:
-		// Sink<Vec<u8>, Error = TSinkErr> + Stream<Item = Result<Vec<u8>, TSinkErr>> + Unpin,
+		Sink<Vec<u8>, Error = TSinkErr> + Stream<Item = Result<Vec<u8>, TSinkErr>> + Unpin,
 	TSinkErr: fmt::Debug,
 {
 	// NOTE: this code has been inspired from `Buffer` (`futures_util::sink::Buffer`).
@@ -138,10 +135,7 @@ where
 	TTrans: Clone + Unpin,
 	TTrans::Dial: Unpin,
 	TTrans::Output:
-		Sink<Vec<u8>, Error = TSinkErr> + Stream<Item = IncomingData> + Unpin,
-		// Sink<Vec<u8>, Error = TSinkErr> + Stream<Item = Result<IncomingData, ()>> + Unpin,
-		// Originally was:
-		// Sink<Vec<u8>, Error = TSinkErr> + Stream<Item = Result<Vec<u8>, TSinkErr>> + Unpin,
+		Sink<Vec<u8>, Error = TSinkErr> + Stream<Item = Result<Vec<u8>, TSinkErr>> + Unpin,
 	TSinkErr: fmt::Debug,
 {
 	type Error = Infallible;
@@ -153,15 +147,17 @@ where
 				NodeSocket::Connected(mut conn) => {
 					log::debug!(target: "telemetry", "poll_ready, NodeSocket::Connected");
 
-					// TODO: poll_next or poll_next_unpin?
 					if let Poll::Ready(Some(Ok(ref bytes))) = conn.sink.poll_next_unpin(cx) {
 						log::debug!(target: "telemetry", "Remote closed the connection with reason code: {:?}", bytes);
-						// if bytes.len() == 2 {
-						// 	let code = (bytes[0] as u16) * 256 + bytes[1] as u16;
-						// 	log::debug!(target: "telemetry", "Remote closed the connection with reason code: {}", code);
-						// 	// TODO: Do something smarter with the close code here…
-						// 	socket = NodeSocket::wait_reconnect();
-						// }
+						if bytes.len() == 2 {
+							let code = u16::from_be_bytes([bytes[0], bytes[1]]);
+							// TODO: Do something smarter with the close code here…
+							log::warn!(target: "telemetry", "⚠️  Disconnected from {} because {:?}", self.addr, code);
+							// self.socket = NodeSocket::wait_reconnect();
+							// return Poll::Pending;
+							socket = NodeSocket::wait_reconnect();
+							continue;
+						}
 					}
 					match conn.sink.poll_ready_unpin(cx) {
 						Poll::Ready(Ok(())) => {
