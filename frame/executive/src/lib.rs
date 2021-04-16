@@ -535,7 +535,7 @@ mod tests {
 		},
 	};
 	use frame_support::{
-		parameter_types,
+		assert_err, parameter_types,
 		weights::{Weight, RuntimeDbWeight, IdentityFee, WeightToFeePolynomial},
 		traits::{Currency, LockIdentifier, LockableCurrency, WithdrawReasons},
 	};
@@ -889,7 +889,9 @@ mod tests {
 				[69u8; 32].into(),
 				Digest::default(),
 			));
-			assert!(Executive::apply_extrinsic(xt).is_err());
+			assert_err!(Executive::apply_extrinsic(xt),
+				TransactionValidityError::Invalid(InvalidTransaction::Future)
+			);
 			assert_eq!(<frame_system::Pallet<Runtime>>::extrinsic_index(), Some(0));
 		});
 	}
