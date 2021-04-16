@@ -282,27 +282,37 @@ impl<T: Config> Pallet<T> {
 	) -> Result<(), MinerError> {
 		// Perform a binary search for the max subset of which can fit into the allowed
 		// length. Having discovered that, we can truncate efficiently.
+		let max_allowed_length: usize = max_allowed_length.saturated_into();
 		let mut high = assignments.len();
 		let mut low = 0;
+		let mut maximum_allowed_voters = 0;
+		let mut size;
+
 		while high - low > 1 {
-			let test = (high + low) / 2;
-			if encoded_size_of(&assignments[..test])? > max_allowed_length.saturated_into() {
-				high = test;
+			maximum_allowed_voters = (high + low) / 2;
+			size = encoded_size_of(&assignments[..maximum_allowed_voters])?;
+			if size > max_allowed_length {
+				high = maximum_allowed_voters;
 			} else {
-				low = test;
+				low = maximum_allowed_voters;
 			}
 		}
-		let maximum_allowed_voters = (high + low) / 2;
+		if high - low == 1
+			&& encoded_size_of(&assignments[..maximum_allowed_voters + 1])? <= max_allowed_length
+		{
+			maximum_allowed_voters += 1;
+		}
 
 		// ensure our postconditions are correct
 		debug_assert!(
-			encoded_size_of(&assignments[..maximum_allowed_voters]).unwrap()
-				<= max_allowed_length.saturated_into()
+			encoded_size_of(&assignments[..maximum_allowed_voters]).unwrap() <= max_allowed_length
 		);
-		debug_assert!(
+		debug_assert!(if maximum_allowed_voters < assignments.len() {
 			encoded_size_of(&assignments[..maximum_allowed_voters + 1]).unwrap()
-				> max_allowed_length.saturated_into()
-		);
+				> max_allowed_length
+		} else {
+			true
+		});
 
 		// NOTE: before this point, every access was immutable.
 		// after this point, we never error.
