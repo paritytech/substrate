@@ -1217,49 +1217,24 @@ macro_rules! impl_opaque_keys {
 			)*
 		}
 	) => {
-		$crate::paste::paste!(
-			$crate::impl_opaque_keys!(@with_serde_crate_literal
-				$( #[ $attr ] )*
-				pub struct $name {
-					$(
-						$( #[ $inner_attr ] )*
-						pub $field: $type,
-					)*
-				}
-				// NOTE: we abuse from `paste` feature which concatenate string in docs to build
-				// our string
-				#[doc = "__opaque_keys_serde_import__" $name]
-			);
-		);
-	};
-	(@with_serde_crate_literal
-		$( #[ $attr:meta ] )*
-		pub struct $name:ident {
-			$(
-				$( #[ $inner_attr:meta ] )*
-				pub $field:ident: $type:ty,
-			)*
-		}
-		#[ doc = $serde_crate_literal:expr ]
-	) => {
-		#[cfg(feature = "std")]
-		$crate::paste::paste!(
+		$crate::paste::paste! {
+			#[cfg(feature = "std")]
 			use $crate::serde as [< __opaque_keys_serde_import__ $name >];
-		);
-		$( #[ $attr ] )*
-		#[derive(
-			Default, Clone, PartialEq, Eq,
-			$crate::codec::Encode,
-			$crate::codec::Decode,
-			$crate::RuntimeDebug,
-		)]
-		#[cfg_attr(feature = "std", derive($crate::serde::Serialize, $crate::serde::Deserialize))]
-		#[cfg_attr(feature = "std", serde(crate = $serde_crate_literal))]
-		pub struct $name {
-			$(
-				$( #[ $inner_attr ] )*
-				pub $field: <$type as $crate::BoundToRuntimeAppPublic>::Public,
-			)*
+			$( #[ $attr ] )*
+				#[derive(
+					Default, Clone, PartialEq, Eq,
+					$crate::codec::Encode,
+					$crate::codec::Decode,
+					$crate::RuntimeDebug,
+				)]
+			#[cfg_attr(feature = "std", derive($crate::serde::Serialize, $crate::serde::Deserialize))]
+			#[cfg_attr(feature = "std", serde(crate = "__opaque_keys_serde_import__" $name))]
+			pub struct $name {
+				$(
+					$( #[ $inner_attr ] )*
+						pub $field: <$type as $crate::BoundToRuntimeAppPublic>::Public,
+				)*
+			}
 		}
 
 		impl $name {
