@@ -108,9 +108,7 @@ pub mod example {
 	decl_module! {
 		pub struct Module<T: Config> for enum Call where origin: <T as frame_system::Config>::Origin {
 			#[weight = 0]
-			fn store_me(
-				origin,
-			) -> DispatchResult {
+			fn store_me(origin) -> DispatchResult {
 				let who = ensure_signed(origin)?;
 				WhoCalled::<T>::append(who);
 				Ok(())
@@ -121,8 +119,8 @@ pub mod example {
 
 impl example::Config for Test {}
 
-pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
 	pub enum Test where
