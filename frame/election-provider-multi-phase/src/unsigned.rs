@@ -323,7 +323,7 @@ impl<T: Config> Pallet<T> {
 			"from {} assignments, truncating to {} for length, removing {}",
 			assignments.len(),
 			maximum_allowed_voters,
-			assignments.len() - maximum_allowed_voters,
+			assignments.len().saturating_sub(maximum_allowed_voters),
 		);
 		assignments.truncate(maximum_allowed_voters);
 
