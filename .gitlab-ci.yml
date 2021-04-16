@@ -131,11 +131,13 @@ default:
     - if: $CI_COMMIT_REF_NAME == "master" && $CI_PIPELINE_SOURCE == "schedule" && $PIPELINE == "nightly"
 
 .merge-ref-into-master-script:     &merge-ref-into-master-script
-  - git fetch origin +master:master
-  - git fetch origin +$CI_COMMIT_REF_NAME:$CI_COMMIT_REF_NAME
-  - git checkout master
-  - git config user.email "ci@gitlab.parity.io"
-  - git merge $CI_COMMIT_REF_NAME --verbose --no-edit
+  - if [ $CI_COMMIT_REF_NAME != "master" ]; then
+      git fetch origin +master:master;
+      git fetch origin +$CI_COMMIT_REF_NAME:$CI_COMMIT_REF_NAME;
+      git checkout master;
+      git config user.email "ci@gitlab.parity.io";
+      git merge $CI_COMMIT_REF_NAME --verbose --no-edit;
+    fi
 
 .cargo-check-benches-script:       &cargo-check-benches-script
   - mkdir -p artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA
@@ -244,17 +246,10 @@ cargo-deny:
 cargo-check-benches:
   stage:                           test
   <<:                              *docker-env
-  <<:                              *test-refs-no-trigger
-  <<:                              *collect-artifacts
-  script:
-    - *cargo-check-benches-script
-
-cargo-check-benches-merged:
-  stage:                           test
-  <<:                              *docker-env
-  <<:                              *test-refs-no-trigger-prs-only
+  <<:                              *test-refs
   <<:                              *collect-artifacts
   before_script:
+    # merges in the master branch on PRs
     - *merge-ref-into-master-script
     - *rust-info-script
   script:
@@ -268,8 +263,6 @@ node-bench-regression-guard:
   <<:                              *docker-env
   <<:                              *test-refs-no-trigger-prs-only
   needs:
-    - job:                         cargo-check-benches-merged
-      artifacts:                   true
     - project:                     $CI_PROJECT_PATH
       job:                         cargo-check-benches
       ref:                         master
@@ -713,6 +706,8 @@ trigger-simnet:
   stage:                           deploy
   image:                           paritytech/tools:latest
   rules:
+    - if: $CI_PIPELINE_SOURCE == "pipeline"
+      when: never
     - if: $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master"
     - if: $CI_COMMIT_REF_NAME == "master"
   needs:
