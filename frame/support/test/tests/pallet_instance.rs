@@ -170,6 +170,10 @@ pub mod pallet {
 		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
 			unimplemented!();
 		}
+
+		fn is_inherent(_call: &Self::Call) -> bool {
+			unimplemented!();
+		}
 	}
 
 	#[derive(codec::Encode, sp_runtime::RuntimeDebug)]

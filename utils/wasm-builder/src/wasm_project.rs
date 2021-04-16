@@ -258,6 +258,7 @@ fn create_project_cargo_toml(
 	package.insert("name".into(), format!("{}-wasm", crate_name).into());
 	package.insert("version".into(), "1.0.0".into());
 	package.insert("edition".into(), "2018".into());
+	package.insert("resolver".into(), "2".into());
 
 	wasm_workspace_toml.insert("package".into(), package.into());
 
@@ -416,7 +417,7 @@ fn build_project(project: &Path, default_rustflags: &str, cargo_cmd: CargoComman
 		env::var(crate::WASM_BUILD_RUSTFLAGS_ENV).unwrap_or_default(),
 	);
 
-	build_cmd.args(&["-Zfeatures=build_dep", "rustc", "--target=wasm32-unknown-unknown"])
+	build_cmd.args(&["rustc", "--target=wasm32-unknown-unknown"])
 		.arg(format!("--manifest-path={}", manifest_path.display()))
 		.env("RUSTFLAGS", rustflags)
 		// Unset the `CARGO_TARGET_DIR` to prevent a cargo deadlock (cargo locks a target dir exclusive).
