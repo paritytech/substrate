@@ -30,6 +30,9 @@ use frame_support::{
 };
 use frame_system::ensure_signed;
 
+pub mod weights;
+pub use weights::WeightInfo;
+
 pub trait Config<I = DefaultInstance>: frame_system::Config {
 	/// The overarching event type.
 	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Config>::Event>;
@@ -63,6 +66,9 @@ pub trait Config<I = DefaultInstance>: frame_system::Config {
 	///
 	/// This is not enforced in the code; the membership size can exceed this limit.
 	type MaxMembers: Get<u32>;
+
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 decl_storage! {
@@ -558,6 +564,7 @@ mod tests {
 		type MembershipInitialized = TestChangeMembers;
 		type MembershipChanged = TestChangeMembers;
 		type MaxMembers = MaxMembers;
+		type WeightInfo = ();
 	}
 
 	pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
@@ -570,10 +577,12 @@ mod tests {
 		t.into()
 	}
 
+	#[cfg(feature = "runtime-benchmarks")]
 	pub(crate) fn new_bench_ext() -> sp_io::TestExternalities {
 		frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
 	}
 
+	#[cfg(feature = "runtime-benchmarks")]
 	pub(crate) fn clean() {
 		Members::set(vec![]);
 		Prime::set(None);
