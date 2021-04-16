@@ -106,18 +106,6 @@ default:
 
 .build-refs:                       &build-refs
   rules:
-    # .publish-refs with manual on PRs
-    - if: $CI_PIPELINE_SOURCE == "pipeline"
-      when: never
-    - if: $CI_PIPELINE_SOURCE == "web"
-    - if: $CI_COMMIT_REF_NAME == "master"
-    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
-      when: manual
-      allow_failure: true
-
-.publish-refs:                     &publish-refs
-  rules:
     - if: $CI_PIPELINE_SOURCE == "pipeline"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -543,7 +531,7 @@ build-rust-doc:
 #### stage:                        publish
 
 .build-push-docker-image:          &build-push-docker-image
-  <<:                              *publish-refs
+  <<:                              *build-refs
   <<:                              *kubernetes-build
   image:                           quay.io/buildah/stable
   variables:                       &docker-build-vars
@@ -605,7 +593,7 @@ publish-docker-subkey:
 
 publish-s3-release:
   stage:                           publish
-  <<:                              *publish-refs
+  <<:                              *build-refs
   <<:                              *kubernetes-build
   needs:
     - job:                         build-linux-substrate
@@ -634,7 +622,7 @@ publish-s3-doc:
       artifacts:                   true
     - job:                         build-linux-substrate
       artifacts:                   false
-  <<:                              *publish-refs
+  <<:                              *build-refs
   <<:                              *kubernetes-build
   variables:
     GIT_STRATEGY:                  none
