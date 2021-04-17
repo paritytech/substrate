@@ -92,8 +92,7 @@ impl Subscriber for BlockSubscriber {
 	fn new_span(&self, attrs: &Attributes<'_>) -> Id {
 		let id = self.next_id.fetch_add(1, Ordering::SeqCst);
 		let id = Id::from_u64(id);
-		let mut values = Values::default();
-		attrs.record(&mut values);
+		let values = Values::default();
 		let parent_id = attrs.parent().cloned()
 			.or_else(|| self.current_span.id());
 		let span = SpanDatum {
