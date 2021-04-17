@@ -158,7 +158,8 @@ pub trait StateApi<Hash> {
 	/// ### Requirements
 	///
 	/// - Fully synced archive node.
-	/// - [Tracing enabled WASM runtimes](#tracing-wasm-runtimes) for all runtime versions that tracing is desired.
+	/// - [Tracing enabled WASM runtimes](#tracing-wasm-runtimes) for all runtime versions that
+	///		tracing is desired.
 	///
 	/// #### Tracing WASM runtimes
 	///
@@ -223,6 +224,9 @@ pub trait StateApi<Hash> {
 	/// The maximum payload size allowed is 15mb. Payloads over this size will return a
 	/// object with a simple error message. If you run into issues with payload size you can
 	/// narrow down the traces using a smaller set of targets and/or storage keys.
+	///
+	/// I you are having issues with maximum payload size you can use the flag
+	/// `-lstate_tracing=trace` to get some logging during tracing.
 	#[rpc(name = "state_traceBlock")]
 	fn trace_block(
 		&self,
