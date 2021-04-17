@@ -57,49 +57,49 @@ pub trait WeightInfo {
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn add_member(m: u32, ) -> Weight {
-		(25_775_000 as Weight)
+		(25_448_000 as Weight)
 			// Standard Error: 3_000
-			.saturating_add((251_000 as Weight).saturating_mul(m as Weight))
+			.saturating_add((257_000 as Weight).saturating_mul(m as Weight))
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
 	fn remove_member(m: u32, ) -> Weight {
-		(31_604_000 as Weight)
+		(31_317_000 as Weight)
 			// Standard Error: 0
-			.saturating_add((210_000 as Weight).saturating_mul(m as Weight))
+			.saturating_add((215_000 as Weight).saturating_mul(m as Weight))
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
 	fn swap_member(m: u32, ) -> Weight {
-		(31_731_000 as Weight)
+		(31_208_000 as Weight)
 			// Standard Error: 0
-			.saturating_add((228_000 as Weight).saturating_mul(m as Weight))
+			.saturating_add((229_000 as Weight).saturating_mul(m as Weight))
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
 	fn reset_member(m: u32, ) -> Weight {
-		(31_924_000 as Weight)
+		(31_673_000 as Weight)
 			// Standard Error: 1_000
-			.saturating_add((452_000 as Weight).saturating_mul(m as Weight))
+			.saturating_add((455_000 as Weight).saturating_mul(m as Weight))
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
 	fn change_key(m: u32, ) -> Weight {
-		(34_062_000 as Weight)
+		(33_499_000 as Weight)
 			// Standard Error: 0
-			.saturating_add((224_000 as Weight).saturating_mul(m as Weight))
+			.saturating_add((226_000 as Weight).saturating_mul(m as Weight))
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
 	fn set_prime(m: u32, ) -> Weight {
-		(8_879_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((119_000 as Weight).saturating_mul(m as Weight))
+		(8_865_000 as Weight)
+			// Standard Error: 0
+			.saturating_add((124_000 as Weight).saturating_mul(m as Weight))
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	fn clear_prime(m: u32, ) -> Weight {
-		(3_449_000 as Weight)
+		(3_397_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((1_000 as Weight).saturating_mul(m as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
@@ -109,49 +109,49 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 // For backwards compatibility and tests
 impl WeightInfo for () {
 	fn add_member(m: u32, ) -> Weight {
-		(25_775_000 as Weight)
+		(25_448_000 as Weight)
 			// Standard Error: 3_000
-			.saturating_add((251_000 as Weight).saturating_mul(m as Weight))
+			.saturating_add((257_000 as Weight).saturating_mul(m as Weight))
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
 	fn remove_member(m: u32, ) -> Weight {
-		(31_604_000 as Weight)
+		(31_317_000 as Weight)
 			// Standard Error: 0
-			.saturating_add((210_000 as Weight).saturating_mul(m as Weight))
+			.saturating_add((215_000 as Weight).saturating_mul(m as Weight))
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
 	fn swap_member(m: u32, ) -> Weight {
-		(31_731_000 as Weight)
+		(31_208_000 as Weight)
 			// Standard Error: 0
-			.saturating_add((228_000 as Weight).saturating_mul(m as Weight))
+			.saturating_add((229_000 as Weight).saturating_mul(m as Weight))
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
 	fn reset_member(m: u32, ) -> Weight {
-		(31_924_000 as Weight)
+		(31_673_000 as Weight)
 			// Standard Error: 1_000
-			.saturating_add((452_000 as Weight).saturating_mul(m as Weight))
+			.saturating_add((455_000 as Weight).saturating_mul(m as Weight))
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
 	fn change_key(m: u32, ) -> Weight {
-		(34_062_000 as Weight)
+		(33_499_000 as Weight)
 			// Standard Error: 0
-			.saturating_add((224_000 as Weight).saturating_mul(m as Weight))
+			.saturating_add((226_000 as Weight).saturating_mul(m as Weight))
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
 	}
 	fn set_prime(m: u32, ) -> Weight {
-		(8_879_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((119_000 as Weight).saturating_mul(m as Weight))
+		(8_865_000 as Weight)
+			// Standard Error: 0
+			.saturating_add((124_000 as Weight).saturating_mul(m as Weight))
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
 	fn clear_prime(m: u32, ) -> Weight {
-		(3_449_000 as Weight)
+		(3_397_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((1_000 as Weight).saturating_mul(m as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
