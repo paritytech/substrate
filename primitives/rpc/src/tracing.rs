@@ -87,7 +87,7 @@ pub struct TraceError {
     pub error: String,
 }
 
-/// ``state_traceBlock` RPC response
+/// `state_traceBlock` RPC response
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub enum TraceBlockResponse {
