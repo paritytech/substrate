@@ -202,12 +202,13 @@ where
 		let result = self.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
 			self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL));
 
-		let ready_to_encode_result = result.as_ref().map(|v| EncodeOpaqueValue(v.clone()));
 		trace!(target: "state",
 			method = "Get",
 			ext_id = self.id,
 			key = %HexDisplay::from(&key),
-			result = %HexDisplay::from(&ready_to_encode_result.encode()),
+			result = %HexDisplay::from(
+				&result.as_ref().map(|v| EncodeOpaqueValue(v.clone())).encode()
+			),
 		);
 
 		result
@@ -333,13 +334,14 @@ where
 			return;
 		}
 
-		let ready_to_encode_result = value.as_ref().map(|v| EncodeOpaqueValue(v.clone()));
 		trace!(target: "state",
 			method = "Put",
 			ext_id = self.id,
 			key = %HexDisplay::from(&key),
 			result = %HexDisplay::from(&value.encode()),
-			result = %HexDisplay::from(&ready_to_encode_result.encode()),
+			result = %HexDisplay::from(
+				&value.as_ref().map(|v| EncodeOpaqueValue(v.clone())).encode()
+			),
 		);
 
 		self.mark_dirty();
