@@ -1163,6 +1163,8 @@ pub mod key_types {
 
 	/// Key type for Babe module, built-in. Identified as `babe`.
 	pub const BABE: KeyTypeId = KeyTypeId(*b"babe");
+	/// Key type for PoC module, built-in. Identified as `poc0`.
+	pub const POC: KeyTypeId = KeyTypeId(*b"poc0");
 	/// Key type for Grandpa module, built-in. Identified as `gran`.
 	pub const GRANDPA: KeyTypeId = KeyTypeId(*b"gran");
 	/// Key type for controlling an account in a Substrate runtime, built-in. Identified as `acco`.

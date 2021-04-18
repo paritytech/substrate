@@ -7217,6 +7217,95 @@ dependencies = [
 ]
 
 [[package]]
+name = "sc-consensus-poc"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "derive_more",
+ "fork-tree",
+ "futures 0.3.13",
+ "futures-timer 3.0.2",
+ "log",
+ "merlin",
+ "num-bigint",
+ "num-rational",
+ "num-traits",
+ "parity-scale-codec",
+ "parking_lot 0.11.1",
+ "pdqselect",
+ "rand 0.7.3",
+ "rand_chacha 0.2.2",
+ "retain_mut",
+ "sc-block-builder",
+ "sc-client-api",
+ "sc-consensus-epochs",
+ "sc-consensus-slots",
+ "sc-consensus-uncles",
+ "sc-executor",
+ "sc-keystore",
+ "sc-network",
+ "sc-network-test",
+ "sc-service",
+ "sc-telemetry",
+ "schnorrkel",
+ "serde",
+ "sp-api",
+ "sp-application-crypto",
+ "sp-block-builder",
+ "sp-blockchain",
+ "sp-consensus",
+ "sp-consensus-poc",
+ "sp-consensus-slots",
+ "sp-consensus-vrf",
+ "sp-core",
+ "sp-inherents",
+ "sp-io",
+ "sp-keyring",
+ "sp-keystore",
+ "sp-runtime",
+ "sp-timestamp",
+ "sp-tracing",
+ "sp-utils",
+ "sp-version",
+ "substrate-prometheus-endpoint",
+ "substrate-test-runtime-client",
+ "tempfile",
+]
+
+[[package]]
+name = "sc-consensus-poc-rpc"
+version = "0.1.0"
+dependencies = [
+ "derive_more",
+ "futures 0.3.13",
+ "futures-timer 3.0.2",
+ "jsonrpc-core",
+ "jsonrpc-core-client",
+ "jsonrpc-derive",
+ "jsonrpc-pubsub",
+ "log",
+ "parking_lot 0.11.1",
+ "sc-consensus",
+ "sc-consensus-epochs",
+ "sc-consensus-poc",
+ "sc-keystore",
+ "sc-rpc-api",
+ "serde",
+ "serde_json",
+ "sp-api",
+ "sp-application-crypto",
+ "sp-blockchain",
+ "sp-consensus",
+ "sp-consensus-poc",
+ "sp-core",
+ "sp-keyring",
+ "sp-keystore",
+ "sp-runtime",
+ "substrate-test-runtime-client",
+ "tempfile",
+]
+
+[[package]]
 name = "sc-consensus-pow"
 version = "0.9.0"
 dependencies = [
@@ -8642,6 +8731,26 @@ dependencies = [
 [[package]]
 name = "sp-consensus-babe"
 version = "0.9.0"
+dependencies = [
+ "merlin",
+ "parity-scale-codec",
+ "serde",
+ "sp-api",
+ "sp-application-crypto",
+ "sp-consensus",
+ "sp-consensus-slots",
+ "sp-consensus-vrf",
+ "sp-core",
+ "sp-inherents",
+ "sp-keystore",
+ "sp-runtime",
+ "sp-std",
+ "sp-timestamp",
+]
+
+[[package]]
+name = "sp-consensus-poc"
+version = "0.1.0"
 dependencies = [
  "merlin",
  "parity-scale-codec",
