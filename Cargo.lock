@@ -5091,8 +5091,10 @@ dependencies = [
 name = "pallet-membership"
 version = "3.0.0"
 dependencies = [
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "log",
  "parity-scale-codec",
  "sp-core",
  "sp-io",
