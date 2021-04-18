@@ -22,7 +22,24 @@ use super::{
 use codec::{Codec, Decode, Encode};
 use sp_runtime::{DigestItem, RuntimeDebug};
 
-use sp_consensus_vrf::schnorrkel::{Randomness, VRFOutput, VRFProof};
+use sp_consensus_vrf::schnorrkel::Randomness;
+use sp_std::vec::Vec;
+use crate::FarmerId;
+
+/// Solution
+#[derive(Clone, RuntimeDebug, Encode, Decode)]
+pub struct Solution {
+	/// Public key of the farmer that created solution
+	pub public_key: FarmerId,
+	/// Nonce used for encoding
+	pub nonce: u64,
+	/// Encoding
+	pub encoding: Vec<u8>,
+	/// Signature of the tag
+	pub signature: Vec<u8>,
+	/// Tag (hmac of encoding and salt)
+	pub tag: [u8; 8],
+}
 
 /// A PoC pre-runtime digest. This contains all data required to validate a
 /// block and for the PoC runtime module.
@@ -30,10 +47,8 @@ use sp_consensus_vrf::schnorrkel::{Randomness, VRFOutput, VRFProof};
 pub struct PreDigest {
 	/// Slot
 	pub slot: Slot,
-	/// VRF output
-	pub vrf_output: VRFOutput,
-	/// VRF proof
-	pub vrf_proof: VRFProof,
+	/// Solution (includes PoR)
+	pub solution: Solution,
 }
 
 impl PreDigest {
@@ -41,11 +56,6 @@ impl PreDigest {
 	/// of the chain.
 	pub fn added_weight(&self) -> crate::PoCBlockWeight {
 		1
-	}
-
-	/// Returns the VRF output, if it exists.
-	pub fn vrf_output(&self) -> &VRFOutput {
-		&self.vrf_output
 	}
 }
 

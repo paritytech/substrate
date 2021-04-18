@@ -164,44 +164,13 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 	// let name = config.network.node_name.clone();
 	let prometheus_registry = config.prometheus_registry().cloned();
 
-	let rpc_extensions_builder = {
-		let client = client.clone();
-		let pool = transaction_pool.clone();
-
-		Box::new(move |deny_unsafe, _| {
-			let deps = crate::rpc::FullDeps {
-				client: client.clone(),
-				pool: pool.clone(),
-				deny_unsafe,
-			};
-
-			crate::rpc::create_full(deps)
-		})
-	};
-
-	let _rpc_handlers = sc_service::spawn_tasks(
-		sc_service::SpawnTasksParams {
-			network: network.clone(),
-			client: client.clone(),
-			keystore: keystore_container.sync_keystore(),
-			task_manager: &mut task_manager,
-			transaction_pool: transaction_pool.clone(),
-			rpc_extensions_builder,
-			on_demand: None,
-			remote_blockchain: None,
-			backend,
-			network_status_sinks,
-			system_rpc_tx,
-			config,
-			telemetry: telemetry.as_mut(),
-		},
-	)?;
+	let new_slot_notifier;
 
 	// if role.is_authority() {
 		let proposer_factory = sc_basic_authorship::ProposerFactory::new(
 			task_manager.spawn_handle(),
 			client.clone(),
-			transaction_pool,
+			transaction_pool.clone(),
 			prometheus_registry.as_ref(),
 			telemetry.as_ref().map(|x| x.handle()),
 		);
@@ -226,11 +195,47 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		};
 
 		let poc = sc_consensus_poc::start_poc(poc_config)?;
+		new_slot_notifier = poc.get_new_slot_notifier();
 
 		// the PoC authoring task is considered essential, i.e. if it
 		// fails we take down the service with it.
 		task_manager.spawn_essential_handle().spawn_blocking("poc", poc);
 	// }
+
+	let rpc_extensions_builder = {
+		let client = client.clone();
+		let pool = transaction_pool.clone();
+
+		Box::new(move |deny_unsafe, subscription_executor| {
+			let deps = crate::rpc::FullDeps {
+				client: client.clone(),
+				pool: pool.clone(),
+				deny_unsafe,
+				subscription_executor,
+				new_slot_notifier: new_slot_notifier.clone(),
+			};
+
+			crate::rpc::create_full(deps)
+		})
+	};
+
+	let _rpc_handlers = sc_service::spawn_tasks(
+		sc_service::SpawnTasksParams {
+			network: network.clone(),
+			client: client.clone(),
+			keystore: keystore_container.sync_keystore(),
+			task_manager: &mut task_manager,
+			transaction_pool,
+			rpc_extensions_builder,
+			on_demand: None,
+			remote_blockchain: None,
+			backend,
+			network_status_sinks,
+			system_rpc_tx,
+			config,
+			telemetry: telemetry.as_mut(),
+		},
+	)?;
 
 	network_starter.start_network();
 	Ok(task_manager)

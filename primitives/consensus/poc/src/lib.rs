@@ -122,41 +122,6 @@ pub enum ConsensusLog {
 
 /// Configuration data used by the PoC consensus engine.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
-pub struct PoCGenesisConfigurationV1 {
-	/// The slot duration in milliseconds for PoC. Currently, only
-	/// the value provided by this type at genesis will be used.
-	///
-	/// Dynamic slot duration may be supported in the future.
-	pub slot_duration: u64,
-
-	/// The duration of epochs in slots.
-	pub epoch_length: u64,
-
-	/// A constant value that is used in the threshold calculation formula.
-	/// Expressed as a rational where the first member of the tuple is the
-	/// numerator and the second is the denominator. The rational should
-	/// represent a value between 0 and 1.
-	/// In the threshold formula calculation, `1 - c` represents the probability
-	/// of a slot being empty.
-	pub c: (u64, u64),
-
-	/// The randomness for the genesis epoch.
-	pub randomness: Randomness,
-}
-
-impl From<PoCGenesisConfigurationV1> for PoCGenesisConfiguration {
-	fn from(v1: PoCGenesisConfigurationV1) -> Self {
-		Self {
-			slot_duration: v1.slot_duration,
-			epoch_length: v1.epoch_length,
-			c: v1.c,
-			randomness: v1.randomness,
-		}
-	}
-}
-
-/// Configuration data used by the PoC consensus engine.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
 pub struct PoCGenesisConfiguration {
 	/// The slot duration in milliseconds for PoC. Currently, only
 	/// the value provided by this type at genesis will be used.
@@ -306,14 +271,9 @@ pub struct Epoch {
 
 sp_api::decl_runtime_apis! {
 	/// API necessary for block authorship with PoC.
-	#[api_version(2)]
 	pub trait PoCApi {
 		/// Return the genesis configuration for PoC. The configuration is only read on genesis.
 		fn configuration() -> PoCGenesisConfiguration;
-
-		/// Return the configuration for PoC. Version 1.
-		#[changed_in(2)]
-		fn configuration() -> PoCGenesisConfigurationV1;
 
 		/// Returns the slot that started the current epoch.
 		fn current_epoch_start() -> Slot;

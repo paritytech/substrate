@@ -120,6 +120,9 @@ use schnorrkel::SignatureError;
 use codec::{Encode, Decode};
 use sp_api::ApiExt;
 use sp_consensus_slots::Slot;
+use std::sync::mpsc;
+use ring::digest;
+use sp_consensus_poc::digests::Solution;
 
 mod verification;
 
@@ -127,6 +130,25 @@ pub mod aux_schema;
 pub mod authorship;
 #[cfg(test)]
 mod tests;
+
+// TODO: Real adjustable solution range
+const SOLUTION_RANGE: u64 = u64::MAX / 4096;
+
+/// Information about new slot that just arrived
+#[derive(Debug, Clone)]
+pub struct NewSlotInfo {
+	/// Slot
+	pub slot: Slot,
+	/// Slot challenge
+	pub challenge: [u8; 8],
+	/// Acceptable solution range
+	pub solution_range: u64,
+}
+
+/// A function that can be called whenever it is necessary to create a subscription for new slots
+pub type NewSlotNotifier = Arc<Box<dyn (Fn() -> mpsc::Receiver<
+	(NewSlotInfo, mpsc::SyncSender<Option<Solution>>)
+>) + Send + Sync>>;
 
 /// PoC epoch information
 #[derive(Decode, Encode, PartialEq, Eq, Clone, Debug)]
@@ -420,7 +442,8 @@ pub fn start_poc<B, C, SC, E, I, SO, CAW, BS, Error>(PoCParams {
 	const HANDLE_BUFFER_SIZE: usize = 1024;
 
 	let config = poc_link.config;
-	let slot_notification_sinks = Arc::new(Mutex::new(Vec::new()));
+
+	let new_slot_senders: Arc<Mutex<Vec<mpsc::SyncSender<(NewSlotInfo, mpsc::SyncSender<Option<Solution>>)>>>> = Arc::default();
 
 	let worker = PoCSlotWorker {
 		client: client.clone(),
@@ -431,8 +454,43 @@ pub fn start_poc<B, C, SC, E, I, SO, CAW, BS, Error>(PoCParams {
 		backoff_authoring_blocks,
 		keystore,
 		epoch_changes: poc_link.epoch_changes.clone(),
-		slot_notification_sinks: slot_notification_sinks.clone(),
 		config: config.clone(),
+		on_claim_slot: Box::new({
+			let new_slot_senders = Arc::clone(&new_slot_senders);
+
+			move |slot, epoch| {
+				let slot_info = NewSlotInfo {
+					slot,
+					challenge: create_challenge(epoch, slot),
+					solution_range: SOLUTION_RANGE
+				};
+				let (solution_sender, solution_receiver) = mpsc::sync_channel(0);
+				{
+					// drain_filter() would be more convenient here
+					let mut new_slot_senders = new_slot_senders.lock();
+					let mut i = 0;
+					while i != new_slot_senders.len() {
+						if new_slot_senders.get_mut(i).unwrap().send((slot_info.clone(), solution_sender.clone())).is_err() {
+							new_slot_senders.remove(i);
+						} else {
+							i += 1;
+						}
+					}
+				}
+				drop(solution_sender);
+
+				while let Ok(solution) = solution_receiver.recv() {
+					if let Some(solution) = solution {
+						return Some(PreDigest {
+							solution,
+							slot,
+						});
+					}
+				}
+
+				None
+			}
+		}),
 		block_proposal_slot_portion,
 		telemetry,
 	};
@@ -461,8 +519,8 @@ pub fn start_poc<B, C, SC, E, I, SO, CAW, BS, Error>(PoCParams {
 	let answer_requests = answer_requests(worker_rx, config.0, client, poc_link.epoch_changes.clone());
 	Ok(PoCWorker {
 		inner: Box::pin(future::join(inner, answer_requests).map(|_| ())),
-		slot_notification_sinks,
 		handle: PoCWorkerHandle(worker_tx),
+		new_slot_senders,
 	})
 }
 
@@ -540,21 +598,24 @@ impl<B: BlockT> PoCWorkerHandle<B> {
 #[must_use]
 pub struct PoCWorker<B: BlockT> {
 	inner: Pin<Box<dyn futures::Future<Output=()> + Send + 'static>>,
-	slot_notification_sinks: SlotNotificationSinks<B>,
 	handle: PoCWorkerHandle<B>,
+	new_slot_senders: Arc<Mutex<Vec<
+		mpsc::SyncSender<
+			(NewSlotInfo, mpsc::SyncSender<Option<Solution>>)
+		>
+	>>>,
 }
 
 impl<B: BlockT> PoCWorker<B> {
-	/// Return an event stream of notifications for when new slot happens, and the corresponding
-	/// epoch descriptor.
-	pub fn slot_notification_stream(
-		&self
-	) -> Receiver<(Slot, ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>)> {
-		const CHANNEL_BUFFER_SIZE: usize = 1024;
-
-		let (sink, stream) = channel(CHANNEL_BUFFER_SIZE);
-		self.slot_notification_sinks.lock().push(sink);
-		stream
+	/// Returns a function that can be called whenever it is necessary to create a subscription for
+	/// new slots
+	pub fn get_new_slot_notifier(&self) -> NewSlotNotifier {
+		let new_slot_senders = Arc::clone(&self.new_slot_senders);
+		Arc::new(Box::new(move || {
+			let (new_slot_sender, new_slot_receiver) = mpsc::sync_channel(0);
+			new_slot_senders.lock().push(new_slot_sender);
+			new_slot_receiver
+		}))
 	}
 
 	/// Get a handle to the worker.
@@ -574,11 +635,6 @@ impl<B: BlockT> futures::Future for PoCWorker<B> {
 	}
 }
 
-/// Slot notification sinks.
-type SlotNotificationSinks<B> = Arc<
-	Mutex<Vec<Sender<(Slot, ViableEpochDescriptor<<B as BlockT>::Hash, NumberFor<B>, Epoch>)>>>
->;
-
 struct PoCSlotWorker<B: BlockT, C, E, I, SO, BS> {
 	client: Arc<C>,
 	block_import: I,
@@ -588,13 +644,13 @@ struct PoCSlotWorker<B: BlockT, C, E, I, SO, BS> {
 	backoff_authoring_blocks: Option<BS>,
 	keystore: SyncCryptoStorePtr,
 	epoch_changes: SharedEpochChanges<B, Epoch>,
-	slot_notification_sinks: SlotNotificationSinks<B>,
 	config: Config,
+	on_claim_slot: Box<dyn (Fn(Slot, &Epoch) -> Option<PreDigest>) + Send + Sync + 'static>,
 	block_proposal_slot_portion: SlotProportion,
 	telemetry: Option<TelemetryHandle>,
 }
 
-impl<B, C, E, I, Error, SO, BS> sc_consensus_slots::SimpleSlotWorker<B>
+impl<B, C, E, I, Error, SO, BS> SimpleSlotWorker<B>
 	for PoCSlotWorker<B, C, E, I, SO, BS>
 where
 	B: BlockT,
@@ -646,48 +702,26 @@ where
 		&self,
 		_parent_header: &B::Header,
 		slot: Slot,
-		_epoch_descriptor: &ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
+		epoch_descriptor: &ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
 	) -> Option<Self::Claim> {
 		debug!(target: "poc", "Attempting to claim slot {}", slot);
 
-		// TODO: Connect to RPC
-		let s = None;
-		// authorship::claim_slot(
-		// 	slot,
-		// 	self.epoch_changes.shared_data().viable_epoch(
-		// 		&epoch_descriptor,
-		// 		|slot| Epoch::genesis(&self.config, slot)
-		// 	)?.as_ref(),
-		// 	&self.keystore,
-		// );
+		let epoch_changes = self.epoch_changes.shared_data();
+		let epoch = epoch_changes.viable_epoch(
+			&epoch_descriptor,
+			|slot| Epoch::genesis(&self.config, slot)
+		)?;
 
-		if s.is_some() {
+		let claim: Option<PreDigest> = (self.on_claim_slot)(slot, epoch.as_ref());
+
+		if claim.is_some() {
 			debug!(target: "poc", "Claimed slot {}", slot);
 		}
 
-		s
-	}
-
-	fn notify_slot(
-		&self,
-		_parent_header: &B::Header,
-		slot: Slot,
-		epoch_descriptor: &ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
-	) {
-		self.slot_notification_sinks.lock()
-			.retain_mut(|sink| {
-				match sink.try_send((slot, epoch_descriptor.clone())) {
-					Ok(()) => true,
-					Err(e) => {
-						if e.is_full() {
-							warn!(target: "poc", "Trying to notify a slot but the channel is full");
-							true
-						} else {
-							false
-						}
-					},
-				}
-			});
+		claim.map(|claim| {
+			let public_key = claim.solution.public_key.clone();
+			(claim, public_key)
+		})
 	}
 
 	fn pre_digest_data(
@@ -1639,4 +1673,13 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, Inner, CAW>(
 		spawner,
 		registry,
 	))
+}
+
+pub(crate) fn create_challenge(epoch: &Epoch, slot: Slot) -> [u8; 8] {
+	digest::digest(&digest::SHA256, &{
+		let mut data = Vec::with_capacity(epoch.randomness.len() + std::mem::size_of::<Slot>());
+		data.extend_from_slice(&epoch.randomness);
+		data.extend_from_slice( &slot.to_le_bytes());
+		data
+	}).as_ref()[..8].try_into().unwrap()
 }

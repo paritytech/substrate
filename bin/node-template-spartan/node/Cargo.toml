@@ -28,6 +28,7 @@ sp-inherents = { version = "3.0.0", path = "../../../primitives/inherents" }
 sc-transaction-pool = { version = "3.0.0", path = "../../../client/transaction-pool" }
 sp-transaction-pool = { version = "3.0.0", path = "../../../primitives/transaction-pool" }
 sc-consensus-poc = { version = "0.1.0", path = "../../../client/consensus/poc" }
+sc-consensus-poc-rpc = { version = "0.1.0", path = "../../../client/consensus/poc/rpc" }
 sp-consensus-poc = { version = "0.1.0", path = "../../../primitives/consensus/poc" }
 sp-consensus = { version = "0.9.0", path = "../../../primitives/consensus/common" }
 sc-consensus = { version = "0.9.0", path = "../../../client/consensus/common" }

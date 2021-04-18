@@ -17,31 +17,7 @@
 
 //! RPC api for PoC.
 
-// TODO: Import these 3 from `sc_consensus_poc` instead
-/// Information about new slot that just arrived
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NewSlotInfo {
-	/// Slot number
-	pub slot_number: Slot,
-	/// Slot challenge
-	pub challenge: [u8; 8],
-	/// Acceptable solution range
-	pub solution_range: u64,
-}
-/// A function that can be called whenever it is necessary to create a subscription for new slots
-pub type NewSlotNotifier = std::sync::Arc<Box<dyn (Fn() -> std::sync::mpsc::Receiver<
-	(NewSlotInfo, std::sync::mpsc::SyncSender<Option<Solution>>)
->) + Send + Sync>>;
-#[derive(Clone)]
-pub struct Solution {
-	pub public_key: FarmerId,
-	pub nonce: u64,
-	pub encoding: Vec<u8>,
-	pub signature: Vec<u8>,
-	pub tag: [u8; 8],
-}
-
-//use sc_consensus_poc::{NewSlotNotifier, NewSlotInfo};
+use sc_consensus_poc::{NewSlotNotifier, NewSlotInfo};
 use futures::{FutureExt as _, TryFutureExt as _, SinkExt, TryStreamExt, StreamExt};
 use jsonrpc_core::{
 	Error as RpcError,
@@ -68,11 +44,23 @@ use futures::channel::mpsc::UnboundedSender;
 use futures::future;
 use futures::future::Either;
 use std::time::Duration;
+use sp_consensus_poc::digests::Solution;
 
 const SOLUTION_TIMEOUT: Duration = Duration::from_secs(5);
 
 type Slot = u64;
 type FutureResult<T> = Box<dyn rpc_future::Future<Item = T, Error = RpcError> + Send>;
+
+/// Information about new slot that just arrived
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RpcNewSlotInfo {
+	/// Slot number
+	pub slot_number: Slot,
+	/// Slot challenge
+	pub challenge: [u8; 8],
+	/// Acceptable solution range
+	pub solution_range: u64,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RpcSolution {
@@ -101,7 +89,7 @@ pub trait PoCApi {
 
 	/// Slot info subscription
 	#[pubsub(subscription = "poc_slot_info", subscribe, name = "poc_subscribeSlotInfo")]
-	fn subscribe_slot_info(&self, metadata: Self::Metadata, subscriber: Subscriber<NewSlotInfo>);
+	fn subscribe_slot_info(&self, metadata: Self::Metadata, subscriber: Subscriber<RpcNewSlotInfo>);
 
 	/// Unsubscribe from slot info subscription.
 	#[pubsub(subscription = "poc_slot_info", unsubscribe, name = "poc_unsubscribeSlotInfo")]
@@ -115,7 +103,7 @@ pub trait PoCApi {
 /// Implements the PoCRpc trait for interacting with PoC.
 pub struct PoCRpcHandler {
 	manager: SubscriptionManager,
-	notification_senders: Arc<Mutex<Vec<UnboundedSender<NewSlotInfo>>>>,
+	notification_senders: Arc<Mutex<Vec<UnboundedSender<RpcNewSlotInfo>>>>,
 	solution_senders: Arc<Mutex<HashMap<Slot, futures::channel::mpsc::Sender<Option<RpcSolution>>>>>,
 }
 
@@ -129,7 +117,7 @@ impl PoCRpcHandler {
 		where
 			E: Executor01<Box<dyn Future01<Item = (), Error = ()> + Send>> + Send + Sync + 'static,
 	{
-		let notification_senders: Arc<Mutex<Vec<UnboundedSender<NewSlotInfo>>>> = Arc::default();
+		let notification_senders: Arc<Mutex<Vec<UnboundedSender<RpcNewSlotInfo>>>> = Arc::default();
 		let solution_senders: Arc<Mutex<HashMap<Slot, futures::channel::mpsc::Sender<Option<RpcSolution>>>>> = Arc::default();
 		std::thread::Builder::new()
 			.name("poc_rpc_nsn_handler".to_string())
@@ -144,7 +132,7 @@ impl PoCRpcHandler {
 					while let Ok((new_slot_info, sync_solution_sender)) = new_slot_notifier.recv() {
 						futures::executor::block_on(async {
 							let (solution_sender, mut solution_receiver) = futures::channel::mpsc::channel(0);
-							solution_senders.lock().insert(new_slot_info.slot_number, solution_sender);
+							solution_senders.lock().insert(new_slot_info.slot.into(), solution_sender);
 							let mut expected_solutions_count;
 							{
 								let mut notification_senders = notification_senders.lock();
@@ -154,7 +142,11 @@ impl PoCRpcHandler {
 									return;
 								}
 								for notification_sender in notification_senders.iter_mut() {
-									if notification_sender.send(new_slot_info.clone()).await.is_err() {
+									if notification_sender.send(RpcNewSlotInfo {
+										slot_number: new_slot_info.slot.into(),
+										challenge: new_slot_info.challenge,
+										solution_range: new_slot_info.solution_range,
+									}).await.is_err() {
 										expected_solutions_count -= 1;
 									}
 								}
@@ -193,7 +185,7 @@ impl PoCRpcHandler {
 								debug!("Failed to send solution: {}", error);
 							}
 
-							solution_senders.lock().remove(&new_slot_info.slot_number);
+							solution_senders.lock().remove(&new_slot_info.slot.into());
 						});
 					}
 				}
@@ -223,7 +215,7 @@ impl PoCApi for PoCRpcHandler {
 		Box::new(future.compat())
 	}
 
-	fn subscribe_slot_info(&self, _metadata: Self::Metadata, subscriber: Subscriber<NewSlotInfo>) {
+	fn subscribe_slot_info(&self, _metadata: Self::Metadata, subscriber: Subscriber<RpcNewSlotInfo>) {
 		self.manager.add(subscriber, |sink| {
 			let (tx, rx) = futures::channel::mpsc::unbounded();
 			self.notification_senders.lock().push(tx);

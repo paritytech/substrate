@@ -13,6 +13,8 @@ use sp_blockchain::{Error as BlockChainError, HeaderMetadata, HeaderBackend};
 use sp_block_builder::BlockBuilder;
 pub use sc_rpc_api::DenyUnsafe;
 use sp_transaction_pool::TransactionPool;
+use sc_consensus_poc::NewSlotNotifier;
+use sc_rpc::SubscriptionTaskExecutor;
 
 
 /// Full client dependencies.
@@ -23,6 +25,10 @@ pub struct FullDeps<C, P> {
 	pub pool: Arc<P>,
 	/// Whether to deny unsafe calls
 	pub deny_unsafe: DenyUnsafe,
+	/// Executor to drive the subscription manager in the Grandpa RPC handler.
+	pub subscription_executor: SubscriptionTaskExecutor,
+	/// A function that can be called whenever it is necessary to create a subscription for new slots
+	pub new_slot_notifier: NewSlotNotifier
 }
 
 /// Instantiate all full RPC extensions.
@@ -45,6 +51,8 @@ pub fn create_full<C, P>(
 		client,
 		pool,
 		deny_unsafe,
+		subscription_executor,
+		new_slot_notifier,
 	} = deps;
 
 	io.extend_with(
@@ -53,6 +61,15 @@ pub fn create_full<C, P>(
 
 	io.extend_with(
 		TransactionPaymentApi::to_delegate(TransactionPayment::new(client.clone()))
+	);
+
+	io.extend_with(
+		sc_consensus_poc_rpc::PoCApi::to_delegate(
+			sc_consensus_poc_rpc::PoCRpcHandler::new(
+				subscription_executor,
+				new_slot_notifier,
+			),
+		)
 	);
 
 	// Extend this RPC with a custom API by using the following syntax.
