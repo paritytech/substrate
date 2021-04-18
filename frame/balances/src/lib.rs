@@ -192,6 +192,20 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
 		/// The balance of an account.
+		///
+		/// It is important to note that this type is all about the minimum presentation of
+		/// your token, just like a Satoshi, which is the smallest Bitcoin representation.
+		///
+		/// When dealing with internal arithmetic operations, it is also worth tracking the same
+		/// decimals defined in the node chain specification (`tokenDecimals`) for proper number
+		/// evaluation and user UI display. Take for example an hypothetical case where
+		/// `type Balance = u128;` and `tokeDecimals` is `18`.
+		///
+		/// ```rust
+		/// const BASE: u128 = 1_000_000_000_000_000_000;
+		/// let _fours_tokens = 4 * BASE;
+		/// let _ten_tokens = 10 * BASE;
+		/// ```
 		type Balance: Parameter + Member + AtLeast32BitUnsigned + Codec + Default + Copy +
 			MaybeSerializeDeserialize + Debug;
 
