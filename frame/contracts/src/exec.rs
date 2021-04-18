@@ -35,6 +35,7 @@ use frame_support::{
 	ensure,
 };
 use pallet_contracts_primitives::{ExecReturnValue};
+use smallvec::{SmallVec, Array};
 
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 pub type MomentOf<T> = <<T as Config>::Time as Time>::Moment;
@@ -429,7 +430,7 @@ pub struct Stack<'a, T: Config, E> {
 	/// finishes executing.
 	account_counter: Option<u64>,
 	/// The actual call stack. One entry per nested contract called/instantiated.
-	frames: smallvec::SmallVec<[Frame<T>; 32]>,
+	frames: SmallVec<T::CallStack>,
 	/// Statically guarantee that each call stack has at least one frame.
 	first_frame: Frame<T>,
 	/// No executable is held by the struct but influences its behaviour.
@@ -440,7 +441,7 @@ pub struct Stack<'a, T: Config, E> {
 ///
 /// For each nested contract call or instantiate one frame is created. It holds specific
 /// information for the said call and caches the in-storage `ContractInfo` data structure.
-struct Frame<T: Config> {
+pub struct Frame<T: Config> {
 	/// The account id of the executing contract.
 	account_id: T::AccountId,
 	/// The cached in-storage data of the contract.
@@ -633,17 +634,6 @@ where
 			_phantom: Default::default(),
 		};
 
-		// We disallow configuring the call depth larger than the inline size of
-		// the smallvec in order to prevent allocations. This is a static error that
-		// constitutes a misconfiguration of the contracts pallet. It cannot be checked
-		// at compile time because the max depth is not available as const value.
-		if T::MaxDepth::get() > (stack.frames.inline_size() + 1) as u32 {
-			return Err((
-				"The contracts pallet is configured with a too large max call depth.".into(),
-				0,
-			));
-		}
-
 		Ok((stack, executable))
 	}
 
@@ -658,10 +648,6 @@ where
 		gas_limit: Weight,
 		schedule: &Schedule<T>
 	) -> Result<(Frame<T>, E), (ExecError, u32)> {
-		if T::MaxDepth::get() == 0 {
-			return Err((Error::<T>::MaxCallDepthReached.into(), 0));
-		}
-
 		let (account_id, contract_info, executable, entry_point) = match frame_args {
 			FrameArgs::Call(account_id, contract) => {
 				let contract = if let Some(contract) = contract {
@@ -722,7 +708,7 @@ where
 		value_transferred: BalanceOf<T>,
 		gas_limit: Weight,
 	) -> Result<E, (ExecError, u32)> {
-		if self.depth() == T::MaxDepth::get() {
+		if self.frames.len() == T::CallStack::size() {
 			return Err((Error::<T>::MaxCallDepthReached.into(), 0));
 		}
 		let nested_meter = &mut self.frames
@@ -917,17 +903,9 @@ where
 		)
 	}
 
-	/// The depth of the call stack.
-	///
-	/// The minimum depth is one and means that the caller is the signed origin that
-	/// initiated the call stack.
-	fn depth(&self) -> u32 {
-		(self.frames.len() + 1) as u32
-	}
-
 	/// Wether the caller is a contract (opposed to the origin of the call stack).
 	fn caller_is_contract(&self) -> bool {
-		self.depth() > 1
+		!self.frames.is_empty()
 	}
 
 	/// Reference to the current (top) frame.

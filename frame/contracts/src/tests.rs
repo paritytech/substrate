@@ -23,7 +23,7 @@ use crate::{
 		Result as ExtensionResult, Environment, ChainExtension, Ext, SysConfig, RetVal,
 		UncheckedFrom, InitState, ReturnFlags,
 	},
-	exec::{AccountIdOf, Executable}, wasm::PrefabWasmModule,
+	exec::{AccountIdOf, Executable, Frame}, wasm::PrefabWasmModule,
 	weights::WeightInfo,
 	wasm::ReturnCode as RuntimeReturnCode,
 	storage::RawAliveContractInfo,
@@ -261,7 +261,6 @@ parameter_types! {
 	pub const DepositPerStorageItem: u64 = 10_000;
 	pub RentFraction: Perbill = Perbill::from_rational(4u32, 10_000u32);
 	pub const SurchargeReward: u64 = 500_000;
-	pub const MaxDepth: u32 = 32;
 	pub const MaxValueSize: u32 = 16_384;
 	pub const DeletionQueueDepth: u32 = 1024;
 	pub const DeletionWeightLimit: Weight = 500_000_000_000;
@@ -291,7 +290,7 @@ impl Config for Test {
 	type DepositPerStorageItem = DepositPerStorageItem;
 	type RentFraction = RentFraction;
 	type SurchargeReward = SurchargeReward;
-	type MaxDepth = MaxDepth;
+	type CallStack = [Frame<Self>; 31];
 	type MaxValueSize = MaxValueSize;
 	type WeightPrice = Self;
 	type WeightInfo = ();

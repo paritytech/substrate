@@ -103,7 +103,7 @@ pub mod weights;
 #[cfg(test)]
 mod tests;
 
-pub use crate::{pallet::*, schedule::Schedule};
+pub use crate::{pallet::*, schedule::Schedule, exec::Frame};
 use crate::{
 	gas::GasMeter,
 	exec::{Stack as ExecStack, Executable},
@@ -210,9 +210,12 @@ pub mod pallet {
 		#[pallet::constant]
 		type SurchargeReward: Get<BalanceOf<Self>>;
 
-		/// The maximum nesting level of a call/instantiate stack.
-		#[pallet::constant]
-		type MaxDepth: Get<u32>;
+		/// The type of the call stack determines the maximum nesting depth of contract calls.
+		///
+		/// The allowed depth is `CallStack::size() + 1`.
+		/// Therefore a size of `0` means that a contract cannot use call or instantiate.
+		/// In other words only the origin called "root contract" is allowed to execute then.
+		type CallStack: smallvec::Array<Item=Frame<Self>>;
 
 		/// The maximum size of a storage value and event payload in bytes.
 		#[pallet::constant]
