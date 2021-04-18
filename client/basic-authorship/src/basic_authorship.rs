@@ -22,7 +22,7 @@
 
 use std::{pin::Pin, time, sync::Arc};
 use sc_client_api::backend;
-use codec::Decode;
+use codec::{Decode, Encode};
 use sp_consensus::{evaluation, Proposal, ProofRecording, DisableProofRecording, EnableProofRecording};
 use sp_core::traits::SpawnNamed;
 use sp_inherents::InherentData;
@@ -42,14 +42,14 @@ use std::marker::PhantomData;
 use prometheus_endpoint::Registry as PrometheusRegistry;
 use sc_proposer_metrics::MetricsLink as PrometheusMetrics;
 
-/// Default maximum block size in bytes used by [`Proposer`].
+/// Default block size limit in bytes used by [`Proposer`].
 ///
-/// Can be overwritten by [`ProposerFactory::set_maximum_block_size`].
+/// Can be overwritten by [`ProposerFactory::set_block_size_limit`].
 ///
 /// Be aware that there is also an upper packet size on what the networking code
 /// will accept. If the block doesn't fit in such a package, it can not be
 /// transferred to other nodes.
-pub const DEFAULT_MAX_BLOCK_SIZE: usize = 4 * 1024 * 1024 + 512;
+pub const DEFAULT_BLOCK_SIZE_LIMIT: usize = 4 * 1024 * 1024 + 512;
 
 /// Proposer factory.
 pub struct ProposerFactory<A, B, C, PR> {
@@ -60,8 +60,14 @@ pub struct ProposerFactory<A, B, C, PR> {
 	transaction_pool: Arc<A>,
 	/// Prometheus Link,
 	metrics: PrometheusMetrics,
-	max_block_size: usize,
+	/// The default block size limit.
+	///
+	/// If no `block_size_limit` is passed to [`Proposer::propose`], this block size limit will be
+	/// used.
+	default_block_size_limit: usize,
 	telemetry: Option<TelemetryHandle>,
+	/// When estimating the block size, should the proof be included?
+	include_proof_in_block_size_estimation: bool,
 	/// phantom member to pin the `Backend`/`ProofRecording` type.
 	_phantom: PhantomData<(B, PR)>,
 }
@@ -81,9 +87,10 @@ impl<A, B, C> ProposerFactory<A, B, C, DisableProofRecording> {
 			spawn_handle: Box::new(spawn_handle),
 			transaction_pool,
 			metrics: PrometheusMetrics::new(prometheus),
-			max_block_size: DEFAULT_MAX_BLOCK_SIZE,
+			default_block_size_limit: DEFAULT_BLOCK_SIZE_LIMIT,
 			telemetry,
 			client,
+			include_proof_in_block_size_estimation: false,
 			_phantom: PhantomData,
 		}
 	}
@@ -93,6 +100,9 @@ impl<A, B, C> ProposerFactory<A, B, C, EnableProofRecording> {
 	/// Create a new proposer factory with proof recording enabled.
 	///
 	/// Each proposer created by this instance will record a proof while building a block.
+	///
+	/// This will also include the proof into the estimation of the block size. This can be disabled
+	/// by calling [`ProposerFactory::disable_proof_in_block_size_estimation`].
 	pub fn with_proof_recording(
 		spawn_handle: impl SpawnNamed + 'static,
 		client: Arc<C>,
@@ -101,24 +111,32 @@ impl<A, B, C> ProposerFactory<A, B, C, EnableProofRecording> {
 		telemetry: Option<TelemetryHandle>,
 	) -> Self {
 		ProposerFactory {
-			spawn_handle: Box::new(spawn_handle),
 			client,
+			spawn_handle: Box::new(spawn_handle),
 			transaction_pool,
 			metrics: PrometheusMetrics::new(prometheus),
-			max_block_size: DEFAULT_MAX_BLOCK_SIZE,
+			default_block_size_limit: DEFAULT_BLOCK_SIZE_LIMIT,
 			telemetry,
+			include_proof_in_block_size_estimation: true,
 			_phantom: PhantomData,
 		}
+	}
+
+	/// Disable the proof inclusion when estimating the block size.
+	pub fn disable_proof_in_block_size_estimation(&mut self) {
+		self.include_proof_in_block_size_estimation = false;
 	}
 }
 
 impl<A, B, C, PR> ProposerFactory<A, B, C, PR> {
-	/// Set the maximum block size in bytes.
+	/// Set the default block size limit in bytes.
 	///
-	/// The default value for the maximum block size is:
-	/// [`DEFAULT_MAX_BLOCK_SIZE`].
-	pub fn set_maximum_block_size(&mut self, size: usize) {
-		self.max_block_size = size;
+	/// The default value for the block size limit is:
+	/// [`DEFAULT_BLOCK_SIZE_LIMIT`].
+	///
+	/// If there is no block size limit passed to [`Proposer::propose`], this value will be used.
+	pub fn set_default_block_size_limit(&mut self, limit: usize) {
+		self.default_block_size_limit = limit;
 	}
 }
 
@@ -152,9 +170,10 @@ impl<B, Block, C, A, PR> ProposerFactory<A, B, C, PR>
 			transaction_pool: self.transaction_pool.clone(),
 			now,
 			metrics: self.metrics.clone(),
-			max_block_size: self.max_block_size,
+			default_block_size_limit: self.default_block_size_limit,
 			telemetry: self.telemetry.clone(),
 			_phantom: PhantomData,
+			include_proof_in_block_size_estimation: self.include_proof_in_block_size_estimation,
 		};
 
 		proposer
@@ -195,7 +214,8 @@ pub struct Proposer<B, Block: BlockT, C, A: TransactionPool, PR> {
 	transaction_pool: Arc<A>,
 	now: Box<dyn Fn() -> time::Instant + Send + Sync>,
 	metrics: PrometheusMetrics,
-	max_block_size: usize,
+	default_block_size_limit: usize,
+	include_proof_in_block_size_estimation: bool,
 	telemetry: Option<TelemetryHandle>,
 	_phantom: PhantomData<(B, PR)>,
 }
@@ -225,6 +245,7 @@ impl<A, B, Block, C, PR> sp_consensus::Proposer<Block> for
 		inherent_data: InherentData,
 		inherent_digests: DigestFor<Block>,
 		max_duration: time::Duration,
+		block_size_limit: Option<usize>,
 	) -> Self::Proposal {
 		let (tx, rx) = oneshot::channel();
 		let spawn_handle = self.spawn_handle.clone();
@@ -236,6 +257,7 @@ impl<A, B, Block, C, PR> sp_consensus::Proposer<Block> for
 				inherent_data,
 				inherent_digests,
 				deadline,
+				block_size_limit,
 			).await;
 			if tx.send(res).is_err() {
 				trace!("Could not send block production result to proposer!");
@@ -264,6 +286,7 @@ impl<A, B, Block, C, PR> Proposer<B, Block, C, A, PR>
 		inherent_data: InherentData,
 		inherent_digests: DigestFor<Block>,
 		deadline: time::Instant,
+		block_size_limit: Option<usize>,
 	) -> Result<Proposal<Block, backend::TransactionFor<B, Block>, PR::Proof>, sp_blockchain::Error> {
 		/// If the block is full we will attempt to push at most
 		/// this number of transactions before quitting for real.
@@ -297,7 +320,9 @@ impl<A, B, Block, C, PR> Proposer<B, Block, C, A, PR>
 		let mut unqueue_invalid = Vec::new();
 
 		let mut t1 = self.transaction_pool.ready_at(self.parent_number).fuse();
-		let mut t2 = futures_timer::Delay::new(deadline.saturating_duration_since((self.now)()) / 8).fuse();
+		let mut t2 = futures_timer::Delay::new(
+			deadline.saturating_duration_since((self.now)()) / 8,
+		).fuse();
 
 		let pending_iterator = select! {
 			res = t1 => res,
@@ -311,8 +336,13 @@ impl<A, B, Block, C, PR> Proposer<B, Block, C, A, PR>
 			},
 		};
 
+		let block_size_limit = block_size_limit.unwrap_or(self.default_block_size_limit);
+
 		debug!("Attempting to push transactions from the pool.");
 		debug!("Pool status: {:?}", self.transaction_pool.status());
+		let mut transaction_pushed = false;
+		let mut hit_block_size_limit = false;
+
 		for pending_tx in pending_iterator {
 			if (self.now)() > deadline {
 				debug!(
@@ -324,9 +354,30 @@ impl<A, B, Block, C, PR> Proposer<B, Block, C, A, PR>
 
 			let pending_tx_data = pending_tx.data().clone();
 			let pending_tx_hash = pending_tx.hash().clone();
+
+			let block_size = block_builder.estimate_block_size(
+				self.include_proof_in_block_size_estimation,
+			);
+			if block_size + pending_tx_data.encoded_size() > block_size_limit {
+				if skipped < MAX_SKIPPED_TRANSACTIONS {
+					skipped += 1;
+					debug!(
+						"Transaction would overflow the block size limit, \
+						 but will try {} more transactions before quitting.",
+						MAX_SKIPPED_TRANSACTIONS - skipped,
+					);
+					continue;
+				} else {
+					debug!("Reached block size limit, proceeding with proposing.");
+					hit_block_size_limit = true;
+					break;
+				}
+			}
+
 			trace!("[{:?}] Pushing to the block.", pending_tx_hash);
 			match sc_block_builder::BlockBuilder::push(&mut block_builder, pending_tx_data) {
 				Ok(()) => {
+					transaction_pushed = true;
 					debug!("[{:?}] Pushed to the block.", pending_tx_hash);
 				}
 				Err(ApplyExtrinsicFailed(Validity(e)))
@@ -356,6 +407,13 @@ impl<A, B, Block, C, PR> Proposer<B, Block, C, A, PR>
 			}
 		}
 
+		if hit_block_size_limit && !transaction_pushed {
+			warn!(
+				"Hit block size limit of `{}` without including any transaction!",
+				block_size_limit,
+			);
+		}
+
 		self.transaction_pool.remove_invalid(&unqueue_invalid);
 
 		let (block, storage_changes, proof) = block_builder.build()?.into_inner();
@@ -367,7 +425,8 @@ impl<A, B, Block, C, PR> Proposer<B, Block, C, A, PR>
 			}
 		);
 
-		info!("🎁 Prepared block for proposing at {} [hash: {:?}; parent_hash: {}; extrinsics ({}): [{}]]",
+		info!(
+			"🎁 Prepared block for proposing at {} [hash: {:?}; parent_hash: {}; extrinsics ({}): [{}]]",
 			block.header().number(),
 			<Block as BlockT>::Hash::from(block.header().hash()),
 			block.header().parent_hash(),
@@ -394,7 +453,6 @@ impl<A, B, Block, C, PR> Proposer<B, Block, C, A, PR>
 			&block,
 			&self.parent_hash,
 			self.parent_number,
-			self.max_block_size,
 		) {
 			error!("Failed to evaluate authored block: {:?}", err);
 		}
@@ -421,6 +479,7 @@ mod tests {
 	use sp_runtime::traits::NumberFor;
 	use sc_client_api::Backend;
 	use futures::executor::block_on;
+	use sp_consensus::Environment;
 
 	const SOURCE: TransactionSource = TransactionSource::External;
 
@@ -494,7 +553,7 @@ mod tests {
 		// when
 		let deadline = time::Duration::from_secs(3);
 		let block = block_on(
-			proposer.propose(Default::default(), Default::default(), deadline)
+			proposer.propose(Default::default(), Default::default(), deadline, None)
 		).map(|r| r.block).unwrap();
 
 		// then
@@ -540,7 +599,7 @@ mod tests {
 
 		let deadline = time::Duration::from_secs(1);
 		block_on(
-			proposer.propose(Default::default(), Default::default(), deadline)
+			proposer.propose(Default::default(), Default::default(), deadline, None)
 		).map(|r| r.block).unwrap();
 	}
 
@@ -587,7 +646,7 @@ mod tests {
 
 		let deadline = time::Duration::from_secs(9);
 		let proposal = block_on(
-			proposer.propose(Default::default(), Default::default(), deadline),
+			proposer.propose(Default::default(), Default::default(), deadline, None),
 		).unwrap();
 
 		assert_eq!(proposal.block.extrinsics().len(), 1);
@@ -669,7 +728,7 @@ mod tests {
 			// when
 			let deadline = time::Duration::from_secs(9);
 			let block = block_on(
-				proposer.propose(Default::default(), Default::default(), deadline)
+				proposer.propose(Default::default(), Default::default(), deadline, None)
 			).map(|r| r.block).unwrap();
 
 			// then
@@ -703,5 +762,83 @@ mod tests {
 		// now let's make sure that we can still make some progress
 		let block = propose_block(&client, 1, 2, 5);
 		block_on(client.import(BlockOrigin::Own, block)).unwrap();
+	}
+
+	#[test]
+	fn should_cease_building_block_when_block_limit_is_reached() {
+		let client = Arc::new(substrate_test_runtime_client::new());
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let txpool = BasicPool::new_full(
+			Default::default(),
+			true.into(),
+			None,
+			spawner.clone(),
+			client.clone(),
+		);
+		let genesis_header = client.header(&BlockId::Number(0u64))
+			.expect("header get error")
+			.expect("there should be header");
+
+		let extrinsics_num = 4;
+		let extrinsics = (0..extrinsics_num)
+			.map(|v| Extrinsic::IncludeData(vec![v as u8; 10]))
+			.collect::<Vec<_>>();
+
+		let block_limit = genesis_header.encoded_size()
+			+ extrinsics.iter().take(extrinsics_num - 1).map(Encode::encoded_size).sum::<usize>()
+			+ Vec::<Extrinsic>::new().encoded_size();
+
+		block_on(
+			txpool.submit_at(&BlockId::number(0), SOURCE, extrinsics)
+		).unwrap();
+
+		block_on(txpool.maintain(chain_event(genesis_header.clone())));
+
+		let mut proposer_factory = ProposerFactory::new(
+			spawner.clone(),
+			client.clone(),
+			txpool.clone(),
+			None,
+			None,
+		);
+
+		let proposer = block_on(proposer_factory.init(&genesis_header)).unwrap();
+
+		// Give it enough time
+		let deadline = time::Duration::from_secs(300);
+		let block = block_on(
+			proposer.propose(Default::default(), Default::default(), deadline, Some(block_limit))
+		).map(|r| r.block).unwrap();
+
+		// Based on the block limit, one transaction shouldn't be included.
+		assert_eq!(block.extrinsics().len(), extrinsics_num - 1);
+
+		let proposer = block_on(proposer_factory.init(&genesis_header)).unwrap();
+
+		let block = block_on(
+			proposer.propose(Default::default(), Default::default(), deadline, None,
+		)).map(|r| r.block).unwrap();
+
+		// Without a block limit we should include all of them
+		assert_eq!(block.extrinsics().len(), extrinsics_num);
+
+		let mut proposer_factory = ProposerFactory::with_proof_recording(
+			spawner.clone(),
+			client.clone(),
+			txpool.clone(),
+			None,
+			None,
+		);
+
+		let proposer = block_on(proposer_factory.init(&genesis_header)).unwrap();
+
+		// Give it enough time
+		let block = block_on(
+			proposer.propose(Default::default(), Default::default(), deadline, Some(block_limit))
+		).map(|r| r.block).unwrap();
+
+		// The block limit didn't changed, but we now include the proof in the estimation of the
+		// block size and thus, one less transaction should fit into the limit.
+		assert_eq!(block.extrinsics().len(), extrinsics_num - 2);
 	}
 }

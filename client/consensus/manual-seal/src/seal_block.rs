@@ -127,6 +127,7 @@ pub async fn seal_block<B, BI, SC, C, E, P>(
 			id.clone(),
 			digest,
 			Duration::from_secs(MAX_PROPOSAL_DURATION),
+			None,
 		).map_err(|err| Error::StringError(format!("{:?}", err))).await?;
 
 		if proposal.block.extrinsics().len() == inherents_len && !create_empty {

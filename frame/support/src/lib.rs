@@ -75,7 +75,8 @@ pub use self::hash::{
 };
 pub use self::storage::{
 	StorageValue, StorageMap, StorageDoubleMap, StoragePrefixedMap, IterableStorageMap,
-	IterableStorageDoubleMap, migration
+	IterableStorageDoubleMap, migration,
+	bounded_vec::{self, BoundedVec},
 };
 pub use self::dispatch::{Parameter, Callable};
 pub use sp_runtime::{self, ConsensusEngineId, print, traits::Printable};
@@ -98,8 +99,8 @@ impl TypeId for PalletId {
 	const TYPE_ID: [u8; 4] = *b"modl";
 }
 
-/// Generate a new type alias for [`storage::types::value::StorageValue`],
-/// [`storage::types::value::StorageMap`] and [`storage::types::value::StorageDoubleMap`].
+/// Generate a new type alias for [`storage::types::StorageValue`],
+/// [`storage::types::StorageMap`] and [`storage::types::StorageDoubleMap`].
 ///
 /// Useful for creating a *storage-like* struct for test and migrations.
 ///
@@ -112,20 +113,20 @@ impl TypeId for PalletId {
 ///
 /// // generate a double map from `(u32, u32)` (with hasher `Twox64Concat`) to `Vec<u8>`
 /// generate_storage_alias!(
-///		OtherPrefix, OtherStorageName => DoubleMap<
+/// 	OtherPrefix, OtherStorageName => DoubleMap<
 /// 		(u32, u32),
 /// 		(u32, u32),
 /// 		Vec<u8>
-///		>
+/// 	>
 /// );
 ///
 /// // generate a map from `Config::AccountId` (with hasher `Twox64Concat`) to `Vec<u8>`
 /// trait Config { type AccountId: codec::FullCodec; }
 /// generate_storage_alias!(
-///		Prefix, GenericStorage<T: Config> => Map<(Twox64Concat, T::AccountId), Vec<u8>>
+/// 	Prefix, GenericStorage<T: Config> => Map<(Twox64Concat, T::AccountId), Vec<u8>>
 /// );
 /// # fn main() {}
-///```
+/// ```
 #[macro_export]
 macro_rules! generate_storage_alias {
 	// without generic for $name.
@@ -143,7 +144,7 @@ macro_rules! generate_storage_alias {
 	($pallet:ident, $name:ident => DoubleMap<($key1:ty, $hasher1:ty), ($key2:ty, $hasher2:ty), $value:ty>) => {
 		$crate::paste::paste! {
 			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
-			type $name = $crate::storage::types::StorageMap<
+			type $name = $crate::storage::types::StorageDoubleMap<
 				[<$name Instance>],
 				$hasher1,
 				$key1,
@@ -178,12 +179,11 @@ macro_rules! generate_storage_alias {
 	(
 		$pallet:ident,
 		$name:ident<$t:ident : $bounds:tt>
-		=> DoubleMap<($key1:ty, $hasher1:ty), ($key2:ty, $hasher2:ty), $value:ty>)
-	=> {
+		=> DoubleMap<($key1:ty, $hasher1:ty), ($key2:ty, $hasher2:ty), $value:ty>) => {
 		$crate::paste::paste! {
 			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
 			#[allow(type_alias_bounds)]
-			type $name<$t : $bounds> = $crate::storage::types::StorageMap<
+			type $name<$t : $bounds> = $crate::storage::types::StorageDoubleMap<
 				[<$name Instance>],
 				$key1,
 				$hasher1,
@@ -213,7 +213,7 @@ macro_rules! generate_storage_alias {
 				const STORAGE_PREFIX: &'static str = stringify!($name);
 			}
 		}
-	}
+	};
 }
 
 /// Create new implementations of the [`Get`](crate::traits::Get) trait.
@@ -1939,6 +1939,10 @@ pub mod pallet_prelude {
 /// 		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
 /// 			unimplemented!();
 /// 		}
+///
+/// 		fn is_inherent(_call: &Self::Call) -> bool {
+/// 			unimplemented!();
+/// 		}
 /// 	}
 ///
 /// 	// Regular rust code needed for implementing ProvideInherent trait
@@ -2064,6 +2068,10 @@ pub mod pallet_prelude {
 /// 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 ///
 /// 		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
+/// 			unimplemented!();
+/// 		}
+///
+/// 		fn is_inherent(_call: &Self::Call) -> bool {
 /// 			unimplemented!();
 /// 		}
 /// 	}

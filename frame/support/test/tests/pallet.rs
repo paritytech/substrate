@@ -288,6 +288,10 @@ pub mod pallet {
 			T::AccountId::from(SomeType6); // Test for where clause
 			unimplemented!();
 		}
+
+		fn is_inherent(_call: &Self::Call) -> bool {
+			unimplemented!();
+		}
 	}
 
 	#[derive(codec::Encode, sp_runtime::RuntimeDebug)]
