@@ -22,7 +22,7 @@ use sc_network::{
 	multiaddr::Protocol,
 };
 use sc_service::{ChainSpec, ChainType, config::{Multiaddr, MultiaddrWithPeerId}};
-use std::path::PathBuf;
+use std::{borrow::Cow, path::PathBuf};
 use structopt::StructOpt;
 
 /// Parameters used to create the network configuration.
@@ -53,6 +53,10 @@ pub struct NetworkParams {
 	pub public_addr: Vec<Multiaddr>,
 
 	/// Listen on this multiaddress.
+	///
+	/// By default:
+	/// If `--validator` is passed: `/ip4/0.0.0.0/tcp/<port>` and `/ip6/[::]/tcp/<port>`.
+	/// Otherwise: `/ip4/0.0.0.0/tcp/<port>/ws` and `/ip6/[::]/tcp/<port>/ws`.
 	#[structopt(long = "listen-addr", value_name = "LISTEN_ADDR")]
 	pub listen_addr: Vec<Multiaddr>,
 
@@ -122,6 +126,7 @@ impl NetworkParams {
 		&self,
 		chain_spec: &Box<dyn ChainSpec>,
 		is_dev: bool,
+		is_validator: bool,
 		net_config_path: Option<PathBuf>,
 		client_id: &str,
 		node_name: &str,
@@ -131,14 +136,27 @@ impl NetworkParams {
 		let port = self.port.unwrap_or(default_listen_port);
 
 		let listen_addresses = if self.listen_addr.is_empty() {
-			vec![
-				Multiaddr::empty()
-					.with(Protocol::Ip6([0, 0, 0, 0, 0, 0, 0, 0].into()))
-					.with(Protocol::Tcp(port)),
-				Multiaddr::empty()
-					.with(Protocol::Ip4([0, 0, 0, 0].into()))
-					.with(Protocol::Tcp(port)),
-			]
+			if is_validator {
+				vec![
+					Multiaddr::empty()
+						.with(Protocol::Ip6([0, 0, 0, 0, 0, 0, 0, 0].into()))
+						.with(Protocol::Tcp(port)),
+					Multiaddr::empty()
+						.with(Protocol::Ip4([0, 0, 0, 0].into()))
+						.with(Protocol::Tcp(port)),
+				]
+			} else {
+				vec![
+					Multiaddr::empty()
+						.with(Protocol::Ip6([0, 0, 0, 0, 0, 0, 0, 0].into()))
+						.with(Protocol::Tcp(port))
+						.with(Protocol::Ws(Cow::Borrowed("/"))),
+					Multiaddr::empty()
+						.with(Protocol::Ip4([0, 0, 0, 0].into()))
+						.with(Protocol::Tcp(port))
+						.with(Protocol::Ws(Cow::Borrowed("/"))),
+				]
+			}
 		} else {
 			self.listen_addr.clone()
 		};

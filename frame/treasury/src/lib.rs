@@ -63,8 +63,6 @@ mod benchmarking;
 
 pub mod weights;
 
-#[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
 use sp_std::prelude::*;
 use frame_support::{decl_module, decl_storage, decl_event, ensure, print, decl_error, PalletId};
 use frame_support::traits::{
@@ -158,7 +156,7 @@ pub trait SpendFunds<T: Config<I>, I=DefaultInstance> {
 pub type ProposalIndex = u32;
 
 /// A spending proposal.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct Proposal<AccountId, Balance> {
 	/// The account proposing it.
