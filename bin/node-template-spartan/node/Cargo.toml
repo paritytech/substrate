@@ -27,12 +27,10 @@ sc-keystore = { version = "3.0.0", path = "../../../client/keystore" }
 sp-inherents = { version = "3.0.0", path = "../../../primitives/inherents" }
 sc-transaction-pool = { version = "3.0.0", path = "../../../client/transaction-pool" }
 sp-transaction-pool = { version = "3.0.0", path = "../../../primitives/transaction-pool" }
-sc-consensus-aura = { version = "0.9.0", path = "../../../client/consensus/aura" }
-sp-consensus-aura = { version = "0.9.0", path = "../../../primitives/consensus/aura" }
+sc-consensus-poc = { version = "0.1.0", path = "../../../client/consensus/poc" }
+sp-consensus-poc = { version = "0.1.0", path = "../../../primitives/consensus/poc" }
 sp-consensus = { version = "0.9.0", path = "../../../primitives/consensus/common" }
 sc-consensus = { version = "0.9.0", path = "../../../client/consensus/common" }
-sc-finality-grandpa = { version = "0.9.0", path = "../../../client/finality-grandpa" }
-sp-finality-grandpa = { version = "3.0.0", path = "../../../primitives/finality-grandpa" }
 sc-client-api = { version = "3.0.0", path = "../../../client/api" }
 sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }
 
@@ -46,6 +44,7 @@ sp-block-builder = { version = "3.0.0", path = "../../../primitives/block-builde
 sc-basic-authorship = { version = "0.9.0", path = "../../../client/basic-authorship" }
 substrate-frame-rpc-system = { version = "3.0.0", path = "../../../utils/frame/rpc/system" }
 pallet-transaction-payment-rpc = { version = "3.0.0", path = "../../../frame/transaction-payment/rpc/" }
+pallet-im-online = { version = "3.0.0", path = "../../../frame/im-online" }
 
 # These dependencies are used for runtime benchmarking
 frame-benchmarking = { version = "3.1.0", path = "../../../frame/benchmarking" }

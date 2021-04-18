@@ -16,9 +16,6 @@ use sp_runtime::traits::{
 	BlakeTwo256, Block as BlockT, AccountIdLookup, Verify, IdentifyAccount, NumberFor,
 };
 use sp_api::impl_runtime_apis;
-use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use pallet_grandpa::{AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList};
-use pallet_grandpa::fg_primitives;
 use sp_version::RuntimeVersion;
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
@@ -40,7 +37,7 @@ pub use frame_support::{
 use pallet_transaction_payment::CurrencyAdapter;
 
 /// Import the template pallet.
-pub use pallet_template;
+pub use pallet_template_spartan;
 
 /// An index to a block.
 pub type BlockNumber = u32;
@@ -68,6 +65,9 @@ pub type Hash = sp_core::H256;
 /// Digest item type.
 pub type DigestItem = generic::DigestItem<Hash>;
 
+/// Type used for expressing timestamp.
+pub type Moment = u64;
+
 /// Opaque types. These are used by the CLI to instantiate machinery that don't need to know
 /// the specifics of the runtime. They can then be made to be agnostic over specific formats
 /// of data like extrinsics, allowing for them to continue syncing the network through upgrades
@@ -86,8 +86,7 @@ pub mod opaque {
 
 	impl_opaque_keys! {
 		pub struct SessionKeys {
-			pub aura: Aura,
-			pub grandpa: Grandpa,
+			pub poc: PoC,
 		}
 	}
 }
@@ -95,8 +94,8 @@ pub mod opaque {
 // To learn more about runtime versioning and what each of the following value means:
 //   https://substrate.dev/docs/en/knowledgebase/runtime/upgrades#runtime-versioning
 pub const VERSION: RuntimeVersion = RuntimeVersion {
-	spec_name: create_runtime_str!("node-template"),
-	impl_name: create_runtime_str!("node-template"),
+	spec_name: create_runtime_str!("node-template-spartan"),
+	impl_name: create_runtime_str!("node-template-spartan"),
 	authoring_version: 1,
 	// The version of the runtime specification. A full node will not attempt to use its native
 	//   runtime in substitute for the on-chain Wasm runtime unless all of `spec_name`,
@@ -109,12 +108,20 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	transaction_version: 1,
 };
 
-/// This determines the average expected block time that we are targeting.
-/// Blocks will be produced at a minimum duration defined by `SLOT_DURATION`.
-/// `SLOT_DURATION` is picked up by `pallet_timestamp` which is in turn picked
-/// up by `pallet_aura` to implement `fn slot_duration()`.
+/// Since PoC is probabilistic this is the average expected block time that
+/// we are targeting. Blocks will be produced at a minimum duration defined
+/// by `SLOT_DURATION`, but some slots will not be allocated to any
+/// authority and hence no block will be produced. We expect to have this
+/// block time on average following the defined slot duration and the value
+/// of `c` configured for PoC (where `1 - c` represents the probability of
+/// a slot being empty).
+/// This value is only used indirectly to define the unit constants below
+/// that are expressed in blocks. The rest of the code should use
+/// `SLOT_DURATION` instead (like the Timestamp pallet for calculating the
+/// minimum period).
 ///
-/// Change this to adjust the block time.
+/// Based on:
+/// <https://research.web3.foundation/en/latest/polkadot/block-production/Babe.html#-6.-practical-results>
 pub const MILLISECS_PER_BLOCK: u64 = 6000;
 
 // NOTE: Currently it is not possible to change the slot duration after the chain has started.
@@ -125,6 +132,23 @@ pub const SLOT_DURATION: u64 = MILLISECS_PER_BLOCK;
 pub const MINUTES: BlockNumber = 60_000 / (MILLISECS_PER_BLOCK as BlockNumber);
 pub const HOURS: BlockNumber = MINUTES * 60;
 pub const DAYS: BlockNumber = HOURS * 24;
+
+// TODO: Change or remove this
+// 1 in 4 blocks (on average, not counting collisions) will be primary BABE blocks.
+pub const PRIMARY_PROBABILITY: (u64, u64) = (1, 4);
+
+pub const EPOCH_DURATION_IN_BLOCKS: BlockNumber = 10 * MINUTES;
+pub const EPOCH_DURATION_IN_SLOTS: u64 = {
+	const SLOT_FILL_RATE: f64 = MILLISECS_PER_BLOCK as f64 / SLOT_DURATION as f64;
+
+	(EPOCH_DURATION_IN_BLOCKS as f64 * SLOT_FILL_RATE) as u64
+};
+
+/// The PoC epoch configuration at genesis.
+pub const POC_GENESIS_EPOCH_CONFIG: sp_consensus_poc::PoCEpochConfiguration =
+	sp_consensus_poc::PoCEpochConfiguration {
+		c: PRIMARY_PROBABILITY,
+	};
 
 /// The version information used to identify this runtime when compiled natively.
 #[cfg(feature = "std")]
@@ -201,25 +225,31 @@ impl frame_system::Config for Runtime {
 	type OnSetCode = ();
 }
 
-impl pallet_aura::Config for Runtime {
-	type AuthorityId = AuraId;
+parameter_types! {
+	pub const EpochDuration: u64 = EPOCH_DURATION_IN_SLOTS;
+	pub const ExpectedBlockTime: Moment = MILLISECS_PER_BLOCK;
 }
 
-impl pallet_grandpa::Config for Runtime {
-	type Event = Event;
-	type Call = Call;
+impl pallet_poc::Config for Runtime {
+	type EpochDuration = EpochDuration;
+	type ExpectedBlockTime = ExpectedBlockTime;
+	// Change SameAuthoritiesForever to ExternalTrigger to enable elections in PoS.
+	type EpochChangeTrigger = pallet_poc::ExternalTrigger;
 
-	type KeyOwnerProofSystem = ();
+	// type KeyOwnerProofSystem = Historical;
 
-	type KeyOwnerProof =
-		<Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, GrandpaId)>>::Proof;
-
-	type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
-		KeyTypeId,
-		GrandpaId,
-	)>>::IdentificationTuple;
-
-	type HandleEquivocation = ();
+	// type KeyOwnerProof = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
+	// 	KeyTypeId,
+	// 	pallet_poc::FarmerId,
+	// )>>::Proof;
+	//
+	// type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
+	// 	KeyTypeId,
+	// 	pallet_poc::FarmerId,
+	// )>>::IdentificationTuple;
+	//
+	// type HandleEquivocation =
+	// pallet_poc::EquivocationHandler<Self::KeyOwnerIdentification, Offences>;
 
 	type WeightInfo = ();
 }
@@ -230,8 +260,8 @@ parameter_types! {
 
 impl pallet_timestamp::Config for Runtime {
 	/// A timestamp: milliseconds since the unix epoch.
-	type Moment = u64;
-	type OnTimestampSet = Aura;
+	type Moment = Moment;
+	type OnTimestampSet = PoC;
 	type MinimumPeriod = MinimumPeriod;
 	type WeightInfo = ();
 }
@@ -270,7 +300,7 @@ impl pallet_sudo::Config for Runtime {
 }
 
 /// Configure the pallet-template in pallets/template.
-impl pallet_template::Config for Runtime {
+impl pallet_template_spartan::Config for Runtime {
 	type Event = Event;
 }
 
@@ -284,13 +314,12 @@ construct_runtime!(
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Pallet, Call, Storage},
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
-		Aura: pallet_aura::{Pallet, Config<T>},
-		Grandpa: pallet_grandpa::{Pallet, Call, Storage, Config, Event},
+		PoC: pallet_poc::{Pallet, Call, Storage, Config},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		TransactionPayment: pallet_transaction_payment::{Pallet, Storage},
 		Sudo: pallet_sudo::{Pallet, Call, Config<T>, Storage, Event<T>},
 		// Include the custom logic from the pallet-template in the runtime.
-		TemplateModule: pallet_template::{Pallet, Call, Storage, Event<T>},
+		TemplateModule: pallet_template_spartan::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -388,13 +417,53 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl sp_consensus_aura::AuraApi<Block, AuraId> for Runtime {
-		fn slot_duration() -> sp_consensus_aura::SlotDuration {
-			sp_consensus_aura::SlotDuration::from_millis(Aura::slot_duration())
+	impl sp_consensus_poc::PoCApi<Block> for Runtime {
+		fn configuration() -> sp_consensus_poc::PoCGenesisConfiguration {
+			// The choice of `c` parameter (where `1 - c` represents the
+			// probability of a slot being empty), is done in accordance to the
+			// slot duration and expected target block time, for safely
+			// resisting network delays of maximum two seconds.
+			// <https://research.web3.foundation/en/latest/polkadot/BABE/Babe/#6-practical-results>
+			sp_consensus_poc::PoCGenesisConfiguration {
+				slot_duration: PoC::slot_duration(),
+				epoch_length: EpochDuration::get(),
+				c: POC_GENESIS_EPOCH_CONFIG.c,
+				randomness: PoC::randomness(),
+			}
 		}
 
-		fn authorities() -> Vec<AuraId> {
-			Aura::authorities()
+		fn current_epoch_start() -> sp_consensus_poc::Slot {
+			PoC::current_epoch_start()
+		}
+
+		fn current_epoch() -> sp_consensus_poc::Epoch {
+			PoC::current_epoch()
+		}
+
+		fn next_epoch() -> sp_consensus_poc::Epoch {
+			PoC::next_epoch()
+		}
+
+		fn generate_key_ownership_proof(
+			_slot_number: sp_consensus_poc::Slot,
+			farmer_id: sp_consensus_poc::FarmerId,
+		) -> Option<sp_consensus_poc::OpaqueKeyOwnershipProof> {
+			// TODO: Change this
+			None
+		}
+
+		fn submit_report_equivocation_unsigned_extrinsic(
+			equivocation_proof: sp_consensus_poc::EquivocationProof<<Block as BlockT>::Header>,
+			key_owner_proof: sp_consensus_poc::OpaqueKeyOwnershipProof,
+		) -> Option<()> {
+			let key_owner_proof = key_owner_proof.decode()?;
+
+			// TODO
+			// PoC::submit_unsigned_equivocation_report(
+			// 	equivocation_proof,
+			// 	key_owner_proof,
+			// )
+			None
 		}
 	}
 
@@ -407,32 +476,6 @@ impl_runtime_apis! {
 			encoded: Vec<u8>,
 		) -> Option<Vec<(Vec<u8>, KeyTypeId)>> {
 			opaque::SessionKeys::decode_into_raw_public_keys(&encoded)
-		}
-	}
-
-	impl fg_primitives::GrandpaApi<Block> for Runtime {
-		fn grandpa_authorities() -> GrandpaAuthorityList {
-			Grandpa::grandpa_authorities()
-		}
-
-		fn submit_report_equivocation_unsigned_extrinsic(
-			_equivocation_proof: fg_primitives::EquivocationProof<
-				<Block as BlockT>::Hash,
-				NumberFor<Block>,
-			>,
-			_key_owner_proof: fg_primitives::OpaqueKeyOwnershipProof,
-		) -> Option<()> {
-			None
-		}
-
-		fn generate_key_ownership_proof(
-			_set_id: fg_primitives::SetId,
-			_authority_id: GrandpaId,
-		) -> Option<fg_primitives::OpaqueKeyOwnershipProof> {
-			// NOTE: this is the only implementation possible since we've
-			// defined our key owner proof type as a bottom type (i.e. a type
-			// with no values).
-			None
 		}
 	}
 
@@ -486,7 +529,7 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, frame_system, SystemBench::<Runtime>);
 			add_benchmark!(params, batches, pallet_balances, Balances);
 			add_benchmark!(params, batches, pallet_timestamp, Timestamp);
-			add_benchmark!(params, batches, pallet_template, TemplateModule);
+			add_benchmark!(params, batches, pallet_template_spartan, TemplateModule);
 
 			if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
 			Ok(batches)

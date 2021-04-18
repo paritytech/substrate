@@ -13,10 +13,10 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 
-pallet-aura = { version = "3.0.0", default-features = false, path = "../../../frame/aura" }
+pallet-poc = { version = "0.1.0", default-features = false, path = "../../../frame/poc" }
 pallet-balances = { version = "3.0.0", default-features = false, path = "../../../frame/balances" }
+pallet-session = { version = "3.0.0", default-features = false, features = ["historical"], path = "../../../frame/session" }
 frame-support = { version = "3.0.0", default-features = false, path = "../../../frame/support" }
-pallet-grandpa = { version = "3.0.0", default-features = false, path = "../../../frame/grandpa" }
 pallet-randomness-collective-flip = { version = "3.0.0", default-features = false, path = "../../../frame/randomness-collective-flip" }
 pallet-sudo = { version = "3.0.0", default-features = false, path = "../../../frame/sudo" }
 frame-system = { version = "3.0.0", default-features = false, path = "../../../frame/system" }
@@ -25,7 +25,7 @@ pallet-transaction-payment = { version = "3.0.0", default-features = false, path
 frame-executive = { version = "3.0.0", default-features = false, path = "../../../frame/executive" }
 sp-api = { version = "3.0.0", default-features = false, path = "../../../primitives/api" }
 sp-block-builder = { path = "../../../primitives/block-builder", default-features = false, version = "3.0.0"}
-sp-consensus-aura = { version = "0.9.0", default-features = false, path = "../../../primitives/consensus/aura" }
+sp-consensus-poc = { version = "0.1.0", default-features = false, path = "../../../primitives/consensus/poc" }
 sp-core = { version = "3.0.0", default-features = false, path = "../../../primitives/core" }
 sp-inherents = { path = "../../../primitives/inherents", default-features = false, version = "3.0.0"}
 sp-offchain = { version = "3.0.0", default-features = false, path = "../../../primitives/offchain" }
@@ -57,9 +57,9 @@ std = [
 	"frame-support/std",
 	"frame-system-rpc-runtime-api/std",
 	"frame-system/std",
-	"pallet-aura/std",
+	"pallet-poc/std",
 	"pallet-balances/std",
-	"pallet-grandpa/std",
+	"pallet-session/std",
 	"pallet-randomness-collective-flip/std",
 	"pallet-sudo/std",
 	"pallet-template-spartan/std",
@@ -68,7 +68,7 @@ std = [
 	"pallet-transaction-payment/std",
 	"sp-api/std",
 	"sp-block-builder/std",
-	"sp-consensus-aura/std",
+	"sp-consensus-poc/std",
 	"sp-core/std",
 	"sp-inherents/std",
 	"sp-offchain/std",
