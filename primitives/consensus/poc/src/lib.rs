@@ -32,8 +32,7 @@ use codec::{Decode, Encode};
 use serde::{Serialize, Deserialize};
 #[cfg(feature = "std")]
 use sp_keystore::vrf::{VRFTranscriptData, VRFTranscriptValue};
-use sp_runtime::{traits::Header, ConsensusEngineId, RuntimeDebug};
-use sp_std::vec::Vec;
+use sp_runtime::{/*traits::Header, */ConsensusEngineId, RuntimeDebug};
 
 use crate::digests::{NextConfigDescriptor, NextEpochDescriptor};
 
@@ -71,8 +70,8 @@ pub const MEDIAN_ALGORITHM_CARDINALITY: usize = 1200; // arbitrary suggestion by
 
 pub use sp_consensus_slots::Slot;
 
-/// An equivocation proof for multiple block authorships on the same slot (i.e. double vote).
-pub type EquivocationProof<H> = sp_consensus_slots::EquivocationProof<H, FarmerId>;
+// /// An equivocation proof for multiple block authorships on the same slot (i.e. double vote).
+// pub type EquivocationProof<H> = sp_consensus_slots::EquivocationProof<H, FarmerId>;
 
 /// The weight of a PoC block.
 pub type PoCBlockWeight = u32;
@@ -202,93 +201,93 @@ pub struct PoCEpochConfiguration {
 	pub c: (u64, u64),
 }
 
-/// Verifies the equivocation proof by making sure that: both headers have
-/// different hashes, are targeting the same slot, and have valid signatures by
-/// the same authority.
-pub fn check_equivocation_proof<H>(proof: EquivocationProof<H>) -> bool
-where
-	H: Header,
-{
-	use digests::*;
-	use sp_application_crypto::RuntimeAppPublic;
-
-	let find_pre_digest = |header: &H| {
-		header
-			.digest()
-			.logs()
-			.iter()
-			.find_map(|log| log.as_poc_pre_digest())
-	};
-
-	let verify_seal_signature = |mut header: H, offender: &FarmerId| {
-		let seal = header.digest_mut().pop()?.as_poc_seal()?;
-		let pre_hash = header.hash();
-
-		if !offender.verify(&pre_hash.as_ref(), &seal) {
-			return None;
-		}
-
-		Some(())
-	};
-
-	let verify_proof = || {
-		// we must have different headers for the equivocation to be valid
-		if proof.first_header.hash() == proof.second_header.hash() {
-			return None;
-		}
-
-		let first_pre_digest = find_pre_digest(&proof.first_header)?;
-		let second_pre_digest = find_pre_digest(&proof.second_header)?;
-
-		// both headers must be targeting the same slot and it must
-		// be the same as the one in the proof.
-		if proof.slot != first_pre_digest.slot ||
-			first_pre_digest.slot != second_pre_digest.slot
-		{
-			return None;
-		}
-
-		// TODO: Replace with FarmerId
-		// // both headers must have been authored by the same authority
-		// if first_pre_digest.authority_index() != second_pre_digest.authority_index() {
-		// 	return None;
-		// }
-
-		// we finally verify that the expected farmer has signed both headers and
-		// that the signature is valid.
-		verify_seal_signature(proof.first_header, &proof.offender)?;
-		verify_seal_signature(proof.second_header, &proof.offender)?;
-
-		Some(())
-	};
-
-	// NOTE: we isolate the verification code into an helper function that
-	// returns `Option<()>` so that we can use `?` to deal with any intermediate
-	// errors and discard the proof as invalid.
-	verify_proof().is_some()
-}
-
-/// An opaque type used to represent the key ownership proof at the runtime API
-/// boundary. The inner value is an encoded representation of the actual key
-/// ownership proof which will be parameterized when defining the runtime. At
-/// the runtime API boundary this type is unknown and as such we keep this
-/// opaque representation, implementors of the runtime API will have to make
-/// sure that all usages of `OpaqueKeyOwnershipProof` refer to the same type.
-#[derive(Decode, Encode, PartialEq)]
-pub struct OpaqueKeyOwnershipProof(Vec<u8>);
-impl OpaqueKeyOwnershipProof {
-	/// Create a new `OpaqueKeyOwnershipProof` using the given encoded
-	/// representation.
-	pub fn new(inner: Vec<u8>) -> OpaqueKeyOwnershipProof {
-		OpaqueKeyOwnershipProof(inner)
-	}
-
-	/// Try to decode this `OpaqueKeyOwnershipProof` into the given concrete key
-	/// ownership proof type.
-	pub fn decode<T: Decode>(self) -> Option<T> {
-		Decode::decode(&mut &self.0[..]).ok()
-	}
-}
+// /// Verifies the equivocation proof by making sure that: both headers have
+// /// different hashes, are targeting the same slot, and have valid signatures by
+// /// the same authority.
+// pub fn check_equivocation_proof<H>(proof: EquivocationProof<H>) -> bool
+// where
+// 	H: Header,
+// {
+// 	use digests::*;
+// 	use sp_application_crypto::RuntimeAppPublic;
+//
+// 	let find_pre_digest = |header: &H| {
+// 		header
+// 			.digest()
+// 			.logs()
+// 			.iter()
+// 			.find_map(|log| log.as_poc_pre_digest())
+// 	};
+//
+// 	let verify_seal_signature = |mut header: H, offender: &FarmerId| {
+// 		let seal = header.digest_mut().pop()?.as_poc_seal()?;
+// 		let pre_hash = header.hash();
+//
+// 		if !offender.verify(&pre_hash.as_ref(), &seal) {
+// 			return None;
+// 		}
+//
+// 		Some(())
+// 	};
+//
+// 	let verify_proof = || {
+// 		// we must have different headers for the equivocation to be valid
+// 		if proof.first_header.hash() == proof.second_header.hash() {
+// 			return None;
+// 		}
+//
+// 		let first_pre_digest = find_pre_digest(&proof.first_header)?;
+// 		let second_pre_digest = find_pre_digest(&proof.second_header)?;
+//
+// 		// both headers must be targeting the same slot and it must
+// 		// be the same as the one in the proof.
+// 		if proof.slot != first_pre_digest.slot ||
+// 			first_pre_digest.slot != second_pre_digest.slot
+// 		{
+// 			return None;
+// 		}
+//
+// 		// TODO: Replace with FarmerId
+// 		// // both headers must have been authored by the same authority
+// 		// if first_pre_digest.authority_index() != second_pre_digest.authority_index() {
+// 		// 	return None;
+// 		// }
+//
+// 		// we finally verify that the expected farmer has signed both headers and
+// 		// that the signature is valid.
+// 		verify_seal_signature(proof.first_header, &proof.offender)?;
+// 		verify_seal_signature(proof.second_header, &proof.offender)?;
+//
+// 		Some(())
+// 	};
+//
+// 	// NOTE: we isolate the verification code into an helper function that
+// 	// returns `Option<()>` so that we can use `?` to deal with any intermediate
+// 	// errors and discard the proof as invalid.
+// 	verify_proof().is_some()
+// }
+//
+// /// An opaque type used to represent the key ownership proof at the runtime API
+// /// boundary. The inner value is an encoded representation of the actual key
+// /// ownership proof which will be parameterized when defining the runtime. At
+// /// the runtime API boundary this type is unknown and as such we keep this
+// /// opaque representation, implementors of the runtime API will have to make
+// /// sure that all usages of `OpaqueKeyOwnershipProof` refer to the same type.
+// #[derive(Decode, Encode, PartialEq)]
+// pub struct OpaqueKeyOwnershipProof(Vec<u8>);
+// impl OpaqueKeyOwnershipProof {
+// 	/// Create a new `OpaqueKeyOwnershipProof` using the given encoded
+// 	/// representation.
+// 	pub fn new(inner: Vec<u8>) -> OpaqueKeyOwnershipProof {
+// 		OpaqueKeyOwnershipProof(inner)
+// 	}
+//
+// 	/// Try to decode this `OpaqueKeyOwnershipProof` into the given concrete key
+// 	/// ownership proof type.
+// 	pub fn decode<T: Decode>(self) -> Option<T> {
+// 		Decode::decode(&mut &self.0[..]).ok()
+// 	}
+// }
 
 /// PoC epoch information
 #[derive(Decode, Encode, PartialEq, Eq, Clone, Debug)]
@@ -326,33 +325,33 @@ sp_api::decl_runtime_apis! {
 		/// previously announced).
 		fn next_epoch() -> Epoch;
 
-		/// Generates a proof of key ownership for the given authority in the
-		/// current epoch. An example usage of this module is coupled with the
-		/// session historical module to prove that a given farmer key is
-		/// tied to a given given plot during a specific session. Proofs
-		/// of key ownership are necessary for submitting equivocation reports.
-		/// NOTE: even though the API takes a `slot` as parameter the current
-		/// implementations ignores this parameter and instead relies on this
-		/// method being called at the correct block height, i.e. any point at
-		/// which the epoch for the given slot is live on-chain. Future
-		/// implementations will instead use indexed data through an offchain
-		/// worker, not requiring older states to be available.
-		fn generate_key_ownership_proof(
-			slot: Slot,
-			farmer_id: FarmerId,
-		) -> Option<OpaqueKeyOwnershipProof>;
-
-		/// Submits an unsigned extrinsic to report an equivocation. The caller
-		/// must provide the equivocation proof and a key ownership proof
-		/// (should be obtained using `generate_key_ownership_proof`). The
-		/// extrinsic will be unsigned and should only be accepted for local
-		/// authorship (not to be broadcast to the network). This method returns
-		/// `None` when creation of the extrinsic fails, e.g. if equivocation
-		/// reporting is disabled for the given runtime (i.e. this method is
-		/// hardcoded to return `None`). Only useful in an offchain context.
-		fn submit_report_equivocation_unsigned_extrinsic(
-			equivocation_proof: EquivocationProof<Block::Header>,
-			key_owner_proof: OpaqueKeyOwnershipProof,
-		) -> Option<()>;
+		// /// Generates a proof of key ownership for the given authority in the
+		// /// current epoch. An example usage of this module is coupled with the
+		// /// session historical module to prove that a given farmer key is
+		// /// tied to a given given plot during a specific session. Proofs
+		// /// of key ownership are necessary for submitting equivocation reports.
+		// /// NOTE: even though the API takes a `slot` as parameter the current
+		// /// implementations ignores this parameter and instead relies on this
+		// /// method being called at the correct block height, i.e. any point at
+		// /// which the epoch for the given slot is live on-chain. Future
+		// /// implementations will instead use indexed data through an offchain
+		// /// worker, not requiring older states to be available.
+		// fn generate_key_ownership_proof(
+		// 	slot: Slot,
+		// 	farmer_id: FarmerId,
+		// ) -> Option<OpaqueKeyOwnershipProof>;
+		//
+		// /// Submits an unsigned extrinsic to report an equivocation. The caller
+		// /// must provide the equivocation proof and a key ownership proof
+		// /// (should be obtained using `generate_key_ownership_proof`). The
+		// /// extrinsic will be unsigned and should only be accepted for local
+		// /// authorship (not to be broadcast to the network). This method returns
+		// /// `None` when creation of the extrinsic fails, e.g. if equivocation
+		// /// reporting is disabled for the given runtime (i.e. this method is
+		// /// hardcoded to return `None`). Only useful in an offchain context.
+		// fn submit_report_equivocation_unsigned_extrinsic(
+		// 	equivocation_proof: EquivocationProof<Block::Header>,
+		// 	key_owner_proof: OpaqueKeyOwnershipProof,
+		// ) -> Option<()>;
 	}
 }

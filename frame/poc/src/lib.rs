@@ -39,7 +39,7 @@ use sp_std::prelude::*;
 use sp_consensus_poc::{
 	digests::{NextConfigDescriptor, NextEpochDescriptor, PreDigest},
 	PoCEpochConfiguration, ConsensusLog, Epoch,
-	EquivocationProof, Slot, POC_ENGINE_ID,
+	/*EquivocationProof, */Slot, POC_ENGINE_ID,
 };
 use sp_consensus_vrf::schnorrkel;
 

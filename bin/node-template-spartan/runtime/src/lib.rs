@@ -444,27 +444,27 @@ impl_runtime_apis! {
 			PoC::next_epoch()
 		}
 
-		fn generate_key_ownership_proof(
-			_slot_number: sp_consensus_poc::Slot,
-			farmer_id: sp_consensus_poc::FarmerId,
-		) -> Option<sp_consensus_poc::OpaqueKeyOwnershipProof> {
-			// TODO: Change this
-			None
-		}
-
-		fn submit_report_equivocation_unsigned_extrinsic(
-			equivocation_proof: sp_consensus_poc::EquivocationProof<<Block as BlockT>::Header>,
-			key_owner_proof: sp_consensus_poc::OpaqueKeyOwnershipProof,
-		) -> Option<()> {
-			let key_owner_proof = key_owner_proof.decode()?;
-
-			// TODO
-			// PoC::submit_unsigned_equivocation_report(
-			// 	equivocation_proof,
-			// 	key_owner_proof,
-			// )
-			None
-		}
+		// fn generate_key_ownership_proof(
+		// 	_slot_number: sp_consensus_poc::Slot,
+		// 	farmer_id: sp_consensus_poc::FarmerId,
+		// ) -> Option<sp_consensus_poc::OpaqueKeyOwnershipProof> {
+		// 	// TODO: Change this
+		// 	None
+		// }
+		//
+		// fn submit_report_equivocation_unsigned_extrinsic(
+		// 	equivocation_proof: sp_consensus_poc::EquivocationProof<<Block as BlockT>::Header>,
+		// 	key_owner_proof: sp_consensus_poc::OpaqueKeyOwnershipProof,
+		// ) -> Option<()> {
+		// 	let key_owner_proof = key_owner_proof.decode()?;
+		//
+		// 	// TODO
+		// 	// PoC::submit_unsigned_equivocation_report(
+		// 	// 	equivocation_proof,
+		// 	// 	key_owner_proof,
+		// 	// )
+		// 	None
+		// }
 	}
 
 	impl sp_session::SessionKeys<Block> for Runtime {

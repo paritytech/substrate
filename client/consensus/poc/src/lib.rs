@@ -982,86 +982,86 @@ where
 		}
 	}
 
-	fn check_and_report_equivocation(
-		&self,
-		slot_now: Slot,
-		slot: Slot,
-		header: &Block::Header,
-		author: &FarmerId,
-		origin: &BlockOrigin,
-	) -> Result<(), Error<Block>> {
-		// don't report any equivocations during initial sync
-		// as they are most likely stale.
-		if *origin == BlockOrigin::NetworkInitialSync {
-			return Ok(());
-		}
-
-		// check if authorship of this header is an equivocation and return a proof if so.
-		let equivocation_proof =
-			match check_equivocation(&*self.client, slot_now, slot, header, author)
-				.map_err(Error::Client)?
-			{
-				Some(proof) => proof,
-				None => return Ok(()),
-			};
-
-		info!(
-			"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
-			author,
-			slot,
-			equivocation_proof.first_header.hash(),
-			equivocation_proof.second_header.hash(),
-		);
-
-		// get the best block on which we will build and send the equivocation report.
-		let best_id = self
-			.select_chain
-			.best_chain()
-			.map(|h| BlockId::Hash(h.hash()))
-			.map_err(|e| Error::Client(e.into()))?;
-
-		// generate a key ownership proof. we start by trying to generate the
-		// key ownership proof at the parent of the equivocating header, this
-		// will make sure that proof generation is successful since it happens
-		// during the on-going session (i.e. session keys are available in the
-		// state to be able to generate the proof). this might fail if the
-		// equivocation happens on the first block of the session, in which case
-		// its parent would be on the previous session. if generation on the
-		// parent header fails we try with best block as well.
-		let generate_key_owner_proof = |block_id: &BlockId<Block>| {
-			self.client
-				.runtime_api()
-				.generate_key_ownership_proof(block_id, slot, equivocation_proof.offender.clone())
-				.map_err(Error::RuntimeApi)
-		};
-
-		let parent_id = BlockId::Hash(*header.parent_hash());
-		let key_owner_proof = match generate_key_owner_proof(&parent_id)? {
-			Some(proof) => proof,
-			None => match generate_key_owner_proof(&best_id)? {
-				Some(proof) => proof,
-				None => {
-					// TODO: Is this actually checking authority set, do we have it?
-					debug!(target: "poc", "Equivocation offender is not part of the authority set.");
-					return Ok(());
-				}
-			},
-		};
-
-		// submit equivocation report at best block.
-		self.client
-			.runtime_api()
-			.submit_report_equivocation_unsigned_extrinsic(
-				&best_id,
-				equivocation_proof,
-				key_owner_proof,
-			)
-			.map_err(Error::RuntimeApi)?;
-
-		info!(target: "poc", "Submitted equivocation report for author {:?}", author);
-
-		Ok(())
-	}
+	// fn check_and_report_equivocation(
+	// 	&self,
+	// 	slot_now: Slot,
+	// 	slot: Slot,
+	// 	header: &Block::Header,
+	// 	author: &FarmerId,
+	// 	origin: &BlockOrigin,
+	// ) -> Result<(), Error<Block>> {
+	// 	// don't report any equivocations during initial sync
+	// 	// as they are most likely stale.
+	// 	if *origin == BlockOrigin::NetworkInitialSync {
+	// 		return Ok(());
+	// 	}
+	//
+	// 	// check if authorship of this header is an equivocation and return a proof if so.
+	// 	let equivocation_proof =
+	// 		match check_equivocation(&*self.client, slot_now, slot, header, author)
+	// 			.map_err(Error::Client)?
+	// 		{
+	// 			Some(proof) => proof,
+	// 			None => return Ok(()),
+	// 		};
+	//
+	// 	info!(
+	// 		"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
+	// 		author,
+	// 		slot,
+	// 		equivocation_proof.first_header.hash(),
+	// 		equivocation_proof.second_header.hash(),
+	// 	);
+	//
+	// 	// get the best block on which we will build and send the equivocation report.
+	// 	let best_id = self
+	// 		.select_chain
+	// 		.best_chain()
+	// 		.map(|h| BlockId::Hash(h.hash()))
+	// 		.map_err(|e| Error::Client(e.into()))?;
+	//
+	// 	// generate a key ownership proof. we start by trying to generate the
+	// 	// key ownership proof at the parent of the equivocating header, this
+	// 	// will make sure that proof generation is successful since it happens
+	// 	// during the on-going session (i.e. session keys are available in the
+	// 	// state to be able to generate the proof). this might fail if the
+	// 	// equivocation happens on the first block of the session, in which case
+	// 	// its parent would be on the previous session. if generation on the
+	// 	// parent header fails we try with best block as well.
+	// 	let generate_key_owner_proof = |block_id: &BlockId<Block>| {
+	// 		self.client
+	// 			.runtime_api()
+	// 			.generate_key_ownership_proof(block_id, slot, equivocation_proof.offender.clone())
+	// 			.map_err(Error::RuntimeApi)
+	// 	};
+	//
+	// 	let parent_id = BlockId::Hash(*header.parent_hash());
+	// 	let key_owner_proof = match generate_key_owner_proof(&parent_id)? {
+	// 		Some(proof) => proof,
+	// 		None => match generate_key_owner_proof(&best_id)? {
+	// 			Some(proof) => proof,
+	// 			None => {
+	// 				// TODO: Is this actually checking authority set, do we have it?
+	// 				debug!(target: "poc", "Equivocation offender is not part of the authority set.");
+	// 				return Ok(());
+	// 			}
+	// 		},
+	// 	};
+	//
+	// 	// submit equivocation report at best block.
+	// 	self.client
+	// 		.runtime_api()
+	// 		.submit_report_equivocation_unsigned_extrinsic(
+	// 			&best_id,
+	// 			equivocation_proof,
+	// 			key_owner_proof,
+	// 		)
+	// 		.map_err(Error::RuntimeApi)?;
+	//
+	// 	info!(target: "poc", "Submitted equivocation report for author {:?}", author);
+	//
+	// 	Ok(())
+	// }
 }
 
 #[async_trait::async_trait]
@@ -1136,18 +1136,18 @@ where
 					.expect("check_header always returns a pre-digest digest item; qed");
 				let slot = poc_pre_digest.slot;
 
-				// the header is valid but let's check if there was something else already
-				// proposed at the same slot by the given author. if there was, we will
-				// report the equivocation to the runtime.
-				if let Err(err) = self.check_and_report_equivocation(
-					slot_now,
-					slot,
-					&header,
-					&verified_info.author,
-					&origin,
-				) {
-					warn!(target: "poc", "Error checking/reporting PoC equivocation: {:?}", err);
-				}
+				// // the header is valid but let's check if there was something else already
+				// // proposed at the same slot by the given author. if there was, we will
+				// // report the equivocation to the runtime.
+				// if let Err(err) = self.check_and_report_equivocation(
+				// 	slot_now,
+				// 	slot,
+				// 	&header,
+				// 	&verified_info.author,
+				// 	&origin,
+				// ) {
+				// 	warn!(target: "poc", "Error checking/reporting PoC equivocation: {:?}", err);
+				// }
 
 				// if the body is passed through, we need to use the runtime
 				// to check that the internally-set timestamp in the inherents
