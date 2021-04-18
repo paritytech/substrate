@@ -61,7 +61,6 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 	) -> Result<WarpSyncProof<Block>, HandleRequestError>
 	where
 		Backend: ClientBackend<Block>,
-		NumberFor<Block>: BlockNumberOps,
 	{
 		// TODO: cache best response (i.e. the one with lowest begin_number)
 		let blockchain = backend.blockchain();
@@ -131,20 +130,18 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 			false
 		} else {
 			let latest_justification =
-				sc_finality_grandpa::best_justification::<_, Block::Header, _>(backend)?.filter(
-					|justification: &GrandpaJustification<Block>| {
-						// the existing best justification must be for a block higher than the
-						// last authority set change. if we didn't prove any authority set
-						// change then we fallback to make sure it's higher or equal to the
-						// initial warp sync block.
-						let limit = proofs
-							.last()
-							.map(|proof| proof.justification.target().0 + One::one())
-							.unwrap_or(begin_number);
+				sc_finality_grandpa::best_justification(backend)?.filter(|justification| {
+					// the existing best justification must be for a block higher than the
+					// last authority set change. if we didn't prove any authority set
+					// change then we fallback to make sure it's higher or equal to the
+					// initial warp sync block.
+					let limit = proofs
+						.last()
+						.map(|proof| proof.justification.target().0 + One::one())
+						.unwrap_or(begin_number);
 
-						justification.target().0 >= limit
-					},
-				);
+					justification.target().0 >= limit
+				});
 
 			if let Some(latest_justification) = latest_justification {
 				let header = blockchain.header(BlockId::Hash(latest_justification.target().1))?

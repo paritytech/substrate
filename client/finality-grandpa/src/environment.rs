@@ -1331,7 +1331,7 @@ where
 			"number" => ?number, "hash" => ?hash,
 		);
 
-		crate::aux_schema::update_best_justification::<Block::Header, _, _, _>(
+		crate::aux_schema::update_best_justification(
 			&justification,
 			|insert| apply_aux(import_op, insert, &[]),
 		)?;

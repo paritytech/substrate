@@ -713,7 +713,11 @@ impl<N: Ord + Clone> AuthoritySetChanges<N> {
 	}
 
 	pub(crate) fn get_set_id(&self, block_number: N) -> Option<AuthoritySetChangeId<N>> {
-		if self.block_is_current_set(block_number.clone()).unwrap_or(false) {
+		if self.0
+			.last()
+			.map(|last_auth_change| last_auth_change.1 < block_number)
+			.unwrap_or(false)
+		{
 			return Some(AuthoritySetChangeId::Latest);
 		}
 
@@ -739,10 +743,6 @@ impl<N: Ord + Clone> AuthoritySetChanges<N> {
 		} else {
 			None
 		}
-	}
-
-	pub(crate) fn block_is_current_set(&self, block_number: N) -> Option<bool> {
-		self.0.last().map(|last_auth_change| last_auth_change.1 < block_number)
 	}
 
 	/// Returns an iterator over all historical authority set changes starting at the given block
