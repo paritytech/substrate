@@ -102,7 +102,7 @@ node-inspect = { version = "0.8.0", optional = true, path = "../inspect" }
 try-runtime-cli = { version = "0.9.0", optional = true, path = "../../../utils/frame/try-runtime/cli" }
 
 # WASM-specific dependencies
-wasm-bindgen = { version = "0.2.57", optional = true }
+wasm-bindgen = { version = "0.2.73", optional = true }
 wasm-bindgen-futures = { version = "0.4.18", optional = true }
 browser-utils = { package = "substrate-browser-utils", path = "../../../utils/browser", optional = true, version = "0.9.0"}
 libp2p-wasm-ext = { version = "0.28", features = ["websocket"], optional = true }

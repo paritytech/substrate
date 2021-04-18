@@ -23,7 +23,7 @@ use libp2p::core::connection::{ConnectionId, ListenerId};
 use libp2p::core::{ConnectedPoint, either::EitherOutput, PeerId, PublicKey};
 use libp2p::swarm::{IntoProtocolsHandler, IntoProtocolsHandlerSelect, ProtocolsHandler};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
-use libp2p::identify::{Identify, IdentifyEvent, IdentifyInfo};
+use libp2p::identify::{Identify, IdentifyConfig, IdentifyEvent, IdentifyInfo};
 use libp2p::ping::{Ping, PingConfig, PingEvent, PingSuccess};
 use log::{debug, trace, error};
 use smallvec::SmallVec;
@@ -86,8 +86,9 @@ impl PeerInfoBehaviour {
 		local_public_key: PublicKey,
 	) -> Self {
 		let identify = {
-			let proto_version = "/substrate/1.0".to_string();
-			Identify::new(proto_version, user_agent, local_public_key)
+			let cfg = IdentifyConfig::new("/substrate/1.0".to_string(), local_public_key)
+				.with_agent_version(user_agent);
+			Identify::new(cfg)
 		};
 
 		PeerInfoBehaviour {
@@ -253,19 +254,29 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 		self.identify.inject_dial_failure(peer_id);
 	}
 
-	fn inject_new_listen_addr(&mut self, addr: &Multiaddr) {
-		self.ping.inject_new_listen_addr(addr);
-		self.identify.inject_new_listen_addr(addr);
+	fn inject_new_listener(&mut self, id: ListenerId) {
+		self.ping.inject_new_listener(id);
+		self.identify.inject_new_listener(id);
 	}
 
-	fn inject_expired_listen_addr(&mut self, addr: &Multiaddr) {
-		self.ping.inject_expired_listen_addr(addr);
-		self.identify.inject_expired_listen_addr(addr);
+	fn inject_new_listen_addr(&mut self, id: ListenerId, addr: &Multiaddr) {
+		self.ping.inject_new_listen_addr(id, addr);
+		self.identify.inject_new_listen_addr(id, addr);
+	}
+
+	fn inject_expired_listen_addr(&mut self, id: ListenerId, addr: &Multiaddr) {
+		self.ping.inject_expired_listen_addr(id, addr);
+		self.identify.inject_expired_listen_addr(id, addr);
 	}
 
 	fn inject_new_external_addr(&mut self, addr: &Multiaddr) {
 		self.ping.inject_new_external_addr(addr);
 		self.identify.inject_new_external_addr(addr);
+	}
+
+	fn inject_expired_external_addr(&mut self, addr: &Multiaddr) {
+		self.ping.inject_expired_external_addr(addr);
+		self.identify.inject_expired_external_addr(addr);
 	}
 
 	fn inject_listener_error(&mut self, id: ListenerId, err: &(dyn error::Error + 'static)) {
@@ -323,6 +334,7 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 						}
 						IdentifyEvent::Error { peer_id, error } =>
 							debug!(target: "sub-libp2p", "Identification with peer {:?} failed => {}", peer_id, error),
+						IdentifyEvent::Pushed { .. } => {}
 						IdentifyEvent::Sent { .. } => {}
 					}
 				},

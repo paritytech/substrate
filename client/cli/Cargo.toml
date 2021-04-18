@@ -18,7 +18,7 @@ regex = "1.4.2"
 tokio = { version = "0.2.21", features = [ "signal", "rt-core", "rt-threaded", "blocking" ] }
 futures = "0.3.9"
 fdlimit = "0.2.1"
-libp2p = "0.36.0"
+libp2p = "0.37.1"
 parity-scale-codec = "2.0.0"
 hex = "0.4.2"
 rand = "0.7.3"
