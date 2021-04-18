@@ -1523,16 +1523,24 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		self.behaviour.inject_dial_failure(peer_id)
 	}
 
-	fn inject_new_listen_addr(&mut self, addr: &Multiaddr) {
-		self.behaviour.inject_new_listen_addr(addr)
+	fn inject_new_listener(&mut self, id: ListenerId) {
+		self.behaviour.inject_new_listener(id)
 	}
 
-	fn inject_expired_listen_addr(&mut self, addr: &Multiaddr) {
-		self.behaviour.inject_expired_listen_addr(addr)
+	fn inject_new_listen_addr(&mut self, id: ListenerId, addr: &Multiaddr) {
+		self.behaviour.inject_new_listen_addr(id, addr)
+	}
+
+	fn inject_expired_listen_addr(&mut self, id: ListenerId, addr: &Multiaddr) {
+		self.behaviour.inject_expired_listen_addr(id, addr)
 	}
 
 	fn inject_new_external_addr(&mut self, addr: &Multiaddr) {
 		self.behaviour.inject_new_external_addr(addr)
+	}
+
+	fn inject_expired_external_addr(&mut self, addr: &Multiaddr) {
+		self.behaviour.inject_expired_external_addr(addr)
 	}
 
 	fn inject_listener_error(&mut self, id: ListenerId, err: &(dyn std::error::Error + 'static)) {
