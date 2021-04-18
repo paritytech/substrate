@@ -183,6 +183,7 @@
 // 		_: InherentData,
 // 		pre_digests: DigestFor<TestBlock>,
 // 		_: Duration,
+// _: Option<usize>,
 // 	) -> Self::Proposal {
 // 		self.propose_with(pre_digests)
 // 	}
