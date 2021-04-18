@@ -39,7 +39,8 @@ pub use tracing::{
 };
 
 pub use crate::types::{
-    WasmEntryAttributes, WasmFieldName, WasmFields, WasmLevel, WasmMetadata, WasmValue, WasmValuesSet
+    WasmEntryAttributes, WasmFieldName, WasmFields, WasmLevel, WasmMetadata, WasmValue,
+	WasmValuesSet
 };
 #[cfg(feature = "std")]
 pub use crate::types::{

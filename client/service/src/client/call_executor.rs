@@ -94,7 +94,10 @@ where
 			debug!(target: "wasm_overrides", "using WASM override for block {}", id);
 			d
 		} else {
-			debug!(target: "wasm_overrides", "No WASM override available for block {}, using onchain code", id);
+			debug!(target: "wasm_overrides",
+				"No WASM override available for block {}, using onchain code",
+				id
+			);
 			onchain_code
 		};
 

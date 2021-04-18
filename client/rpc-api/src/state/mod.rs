@@ -137,12 +137,8 @@ pub trait StateApi<Hash> {
 		&self, metadata: Option<Self::Metadata>, id: SubscriptionId
 	) -> RpcResult<bool>;
 
-	/// # `state_traceBlock`
-	///
-	/// ## Overview
-	///
 	/// The `state_traceBlock` RPC provides a way to trace the re-execution of a single
-	/// block, collecting Spans and Events from both the client and the WASM runtime.
+	/// block, collecting Spans and Events from both the client and the relevant WASM runtime.
 	/// The Spans and Events are conceptually equivalent to those from the Rust
 	/// [Tracing](https://crates.io/crates/tracing) crate.
 	///
@@ -150,22 +146,27 @@ pub trait StateApi<Hash> {
 	/// interpretation of the traces requires an understanding of the Substrate chain's block
 	/// execution.
 	///
-	/// TODO: Link to conceptual map of traces? Where would this be hosted? Right now its
-	/// https://docs.google.com/drawings/d/1vZoJo9jaXlz0LmrdTOgHck9_1LsfuQPRmTr-5g1tOis/edit?usp=sharing
+	/// [Link to conceptual map of trace structure for Polkadot and Kusama block execution.][1]
 	///
-	/// ## Node setup
+	/// [1]:
+	///	https://github.com/emostov/substrate-state-tracing/blob/main/assets/TraceBlock_Trace_Heiarchy.jpg
 	///
-	/// ### Requirements
+	/// ## Node requirements
 	///
 	/// - Fully synced archive node.
-	/// - [Tracing enabled WASM runtimes](#tracing-wasm-runtimes) for all runtime versions that
-	///		tracing is desired.
+	/// - [Tracing enabled WASM runtimes](#creating-tracing-enabled-wasm-runtimes) for all runtime versions
+	/// that tracing is desired.
 	///
-	/// #### Tracing WASM runtimes
+	/// ## Node recommendations
+	///
+	/// - Use fast SSD disk storage.
+	/// - Run node flags to increase DB read speed (i.e. `--state-cache-size`, `--db-cache`).
+	///
+	/// ## Creating tracing enabled WASM runtimes
 	///
 	/// - Checkout commit of chain version to compile with WASM traces
 	/// - [diener](https://crates.io/crates/diener) can help to peg commit of substrate
-	/// /// to what the chain expects.
+	///	to what the chain expects.
 	/// - Navigate to the `runtime` folder/package of the chain
 	/// - Add feature `with-tracing = ["frame-executive/with-tracing", "sp-io/with-tracing"]`
 	/// under `[features]` to the `runtime` packages' `Cargo.toml`.
@@ -175,23 +176,15 @@ pub trait StateApi<Hash> {
 	/// renamed/modified however you like, as long as it retains the `.wasm` extension.
 	/// - Run the node with overrides by placing this folder with all your other runtimes,
 	/// and passing the path of this folder to your chain.
-	/// - `./target/release/polkadot --wasm-runtime-overrides /home/user/my-custom-wasm-runtimes`
+	/// 	- `./target/release/polkadot --wasm-runtime-overrides /home/user/my-custom-wasm-runtimes`
 	///
-	/// Source: github.com/paritytech/substrate-archive/wiki/5.)-Creating-WASM-runtimes-with-Tracing-Enabled
-	///
-	/// TODO link to CLI tool that creates tracing enabled runtimes.
-	///
-	/// ### Recommendations
-	///
-	/// - Use fast SSD disk storage.
-	/// - Run node flags to increase DB read speed (i.e. `--state-cache-size`, `--db-cache`).
+	/// [Source.](github.com/paritytech/substrate-archive/wiki)
 	///
 	/// ## RPC Usage
 	///
-	/// The RPC allows for two filtering mechanisms: tracing targets and storage key (prefixes).
-	/// The filtering of spans and events takes place after they are all collected, so while it
-	/// does not reduce time for actual block re-execution, it will reduce the payload size sent
-	/// over the wire.
+	/// The RPC allows for two filtering mechanisms: tracing targets and storage key prefixes.
+	/// The filtering of spans and events takes place after they are all collected; so while filters
+	/// do not reduce time for actual block re-execution, they reduce the response payload size.
 	///
 	/// The default `targets` `storage_key` values are designed around facilitating balance
 	/// reconciliations on chains that hold users balances in the `system::Account` storage
@@ -214,10 +207,13 @@ pub trait StateApi<Hash> {
 	/// 	will be filtered by storage key (so non-storage events will **not** show up).
 	/// 	You can specify any degree of a storage key prefix (i.e. if a specified storage
 	/// 	key is in the beginning of an events storage key it is considered a match).
-	///		Below are some resources to learn more about storage keys:
-	/// 		- [substrate storage](https://substrate.dev/docs/en/knowledgebase/advanced/storage#storage-map-key)
-	/// 		- [transparent keys in substrate](https://www.shawntabrizi.com/substrate/transparent-keys-in-substrate/)
-	/// 		- [querying substrate storage via rpc](https://www.shawntabrizi.com/substrate/querying-substrate-storage-via-rpc/)
+	///		The following are some resources to learn more about storage keys in substrate:
+	///		[substrate storage][1], [transparent keys in substrate][2],
+	///		[querying substrate storage via rpc][3].
+	///
+	///		[1]: https://substrate.dev/docs/en/knowledgebase/advanced/storage#storage-map-key
+	///		[2]: https://www.shawntabrizi.com/substrate/transparent-keys-in-substrate/
+	///		[3]: https://www.shawntabrizi.com/substrate/querying-substrate-storage-via-rpc/
 	///
 	/// ### Maximum payload size
 	///
@@ -225,7 +221,7 @@ pub trait StateApi<Hash> {
 	/// object with a simple error message. If you run into issues with payload size you can
 	/// narrow down the traces using a smaller set of targets and/or storage keys.
 	///
-	/// I you are having issues with maximum payload size you can use the flag
+	/// If you are having issues with maximum payload size you can use the flag
 	/// `-lstate_tracing=trace` to get some logging during tracing.
 	#[rpc(name = "state_traceBlock")]
 	fn trace_block(

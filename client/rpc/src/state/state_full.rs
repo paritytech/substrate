@@ -225,7 +225,8 @@ impl<BE, Block: BlockT, Client> FullState<BE, Block, Client>
 impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Client> where
 	Block: BlockT + 'static,
 	BE: Backend<Block> + 'static,
-	Client: ExecutorProvider<Block> + StorageProvider<Block, BE> + ProofProvider<Block> + HeaderBackend<Block>
+	Client: ExecutorProvider<Block> + StorageProvider<Block, BE>
+		+ ProofProvider<Block> + HeaderBackend<Block>
 		+ HeaderMetadata<Block, Error = sp_blockchain::Error> + BlockchainEvents<Block>
 		+ CallApiAt<Block> + ProvideRuntimeApi<Block>
 		+ BlockBackend<Block>
@@ -550,7 +551,8 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 impl<BE, Block, Client> ChildStateBackend<Block, Client> for FullState<BE, Block, Client> where
 	Block: BlockT + 'static,
 	BE: Backend<Block> + 'static,
-	Client: ExecutorProvider<Block> + StorageProvider<Block, BE> + HeaderBackend<Block> + BlockBackend<Block>
+	Client: ExecutorProvider<Block> + StorageProvider<Block, BE>
+		+ HeaderBackend<Block> + BlockBackend<Block>
 		+ HeaderMetadata<Block, Error = sp_blockchain::Error> + BlockchainEvents<Block>
 		+ CallApiAt<Block> + ProvideRuntimeApi<Block>
 		+ Send + Sync + 'static,
