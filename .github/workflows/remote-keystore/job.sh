@@ -21,20 +21,20 @@ trap cleanup SIGINT SIGTERM EXIT
 	cargo run --bin server --features server &> keystore.out
 ) &
 
-echo "Build substrate"
+echo "Build substrate executable"
 make substrate
 
 echo "Running node"
 make bootnode &> bootnode.out &
 
-tail -F bootnode.out | timeout 60 grep -m 1 "finalized #1" > tests.out
+(tail -F bootnode.out) &
+
+tail -F bootnode.out | timeout 60 grep -E -m 1 "finalized #[1-9][0-9]?" > tests.out
 
 if [[ ! -s tests.out ]]; then
-	cat bootnode.out
 	echo "---------------------- BLOCK FINALIZATION TIMED OUT ----------------------"
 	exit 1
 else
-	cat bootnode.out
 	echo "------------------------ BLOCK FINALIZED SUCCESFULLY ----------------------"
 	exit 0
 fi
