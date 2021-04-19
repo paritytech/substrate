@@ -757,66 +757,68 @@ mod tests {
 		type DbWeight = ();
 	}
 
-	const EXPECTED_METADATA: OuterEventMetadata = OuterEventMetadata {
-		name: "TestEvent",
-		events: vec![
-			ModuleEventMetadata {
-				name: "system",
-				events: vec![EventMetadata {
-					name: "SystemEvent",
-					arguments: vec![],
-					documentation: vec![],
-				}]
-			},
-			ModuleEventMetadata {
-				name: "event_module",
-				events: vec![
-					EventMetadata {
-						name: "TestEvent",
-						arguments: vec![
-							TypeSpec::new::<u32>("Balance"),
-							TypeSpec::new::<u32>("Origin"),
-						],
-						documentation: vec![ " Hi, I am a comment." ]
-					},
-					EventMetadata {
-						name: "EventWithoutParams",
+	fn expected_metadata() -> OuterEventMetadata {
+		OuterEventMetadata {
+			name: "TestEvent",
+			events: vec![
+				ModuleEventMetadata {
+					name: "system",
+					events: vec![EventMetadata {
+						name: "SystemEvent",
 						arguments: vec![],
-						documentation: vec![ " Dog" ],
-					},
-				]
-			},
-			ModuleEventMetadata {
-				name: "event_module2",
-				events: vec![
-					EventMetadata {
-						name: "TestEvent",
-						arguments: vec![TypeSpec::new::<u32>("BalanceRenamed")],
-						documentation: vec![]
-					},
-					EventMetadata {
-						name: "TestOrigin",
-						arguments: vec![TypeSpec::new::<u32>("OriginRenamed")],
 						documentation: vec![],
-					},
-				]
-			},
-			ModuleEventMetadata {
-				name: "event_module3",
-				events: vec![
-					EventMetadata {
-						name: "HiEvent",
-						arguments: vec![],
-						documentation: vec![]
-					}
-				]
-			}
-		]
-	};
+					}]
+				},
+				ModuleEventMetadata {
+					name: "event_module",
+					events: vec![
+						EventMetadata {
+							name: "TestEvent",
+							arguments: vec![
+								TypeSpec::new::<u32>("Balance"),
+								TypeSpec::new::<u32>("Origin"),
+							],
+							documentation: vec![" Hi, I am a comment."]
+						},
+						EventMetadata {
+							name: "EventWithoutParams",
+							arguments: vec![],
+							documentation: vec![" Dog"],
+						},
+					]
+				},
+				ModuleEventMetadata {
+					name: "event_module2",
+					events: vec![
+						EventMetadata {
+							name: "TestEvent",
+							arguments: vec![TypeSpec::new::<u32>("BalanceRenamed")],
+							documentation: vec![]
+						},
+						EventMetadata {
+							name: "TestOrigin",
+							arguments: vec![TypeSpec::new::<u32>("OriginRenamed")],
+							documentation: vec![],
+						},
+					]
+				},
+				ModuleEventMetadata {
+					name: "event_module3",
+					events: vec![
+						EventMetadata {
+							name: "HiEvent",
+							arguments: vec![],
+							documentation: vec![]
+						}
+					]
+				}
+			]
+		}
+	}
 
 	#[test]
 	fn outer_event_metadata() {
-		assert_eq!(EXPECTED_METADATA, TestRuntime::outer_event_metadata());
+		assert_eq!(expected_metadata(), TestRuntime::outer_event_metadata());
 	}
 
 	#[test]

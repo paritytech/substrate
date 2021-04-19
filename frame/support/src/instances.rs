@@ -32,65 +32,65 @@
 //! accessible to [`frame_support::construct_runtime`].
 
 /// Instance1 to be used for instantiable pallet define with `pallet` macro.
-#[derive(Clone, Copy, PartialEq, Eq, crate::RuntimeDebugNoBound)]
+#[derive(Clone, Copy, PartialEq, Eq, crate::RuntimeDebugNoBound, scale_info::TypeInfo)] // todo: [AJ] can we remove these TypeInfo derives?
 pub struct Instance1;
 
 /// Instance2 to be used for instantiable pallet define with `pallet` macro.
-#[derive(Clone, Copy, PartialEq, Eq, crate::RuntimeDebugNoBound)]
+#[derive(Clone, Copy, PartialEq, Eq, crate::RuntimeDebugNoBound, scale_info::TypeInfo)]
 pub struct Instance2;
 
 /// Instance3 to be used for instantiable pallet define with `pallet` macro.
-#[derive(Clone, Copy, PartialEq, Eq, crate::RuntimeDebugNoBound)]
+#[derive(Clone, Copy, PartialEq, Eq, crate::RuntimeDebugNoBound, scale_info::TypeInfo)]
 pub struct Instance3;
 
 /// Instance4 to be used for instantiable pallet define with `pallet` macro.
-#[derive(Clone, Copy, PartialEq, Eq, crate::RuntimeDebugNoBound)]
+#[derive(Clone, Copy, PartialEq, Eq, crate::RuntimeDebugNoBound, scale_info::TypeInfo)]
 pub struct Instance4;
 
 /// Instance5 to be used for instantiable pallet define with `pallet` macro.
-#[derive(Clone, Copy, PartialEq, Eq, crate::RuntimeDebugNoBound)]
+#[derive(Clone, Copy, PartialEq, Eq, crate::RuntimeDebugNoBound, scale_info::TypeInfo)]
 pub struct Instance5;
 
 /// Instance6 to be used for instantiable pallet define with `pallet` macro.
-#[derive(Clone, Copy, PartialEq, Eq, crate::RuntimeDebugNoBound)]
+#[derive(Clone, Copy, PartialEq, Eq, crate::RuntimeDebugNoBound, scale_info::TypeInfo)]
 pub struct Instance6;
 
 /// Instance7 to be used for instantiable pallet define with `pallet` macro.
-#[derive(Clone, Copy, PartialEq, Eq, crate::RuntimeDebugNoBound)]
+#[derive(Clone, Copy, PartialEq, Eq, crate::RuntimeDebugNoBound, scale_info::TypeInfo)]
 pub struct Instance7;
 
 /// Instance8 to be used for instantiable pallet define with `pallet` macro.
-#[derive(Clone, Copy, PartialEq, Eq, crate::RuntimeDebugNoBound)]
+#[derive(Clone, Copy, PartialEq, Eq, crate::RuntimeDebugNoBound, scale_info::TypeInfo)]
 pub struct Instance8;
 
 /// Instance9 to be used for instantiable pallet define with `pallet` macro.
-#[derive(Clone, Copy, PartialEq, Eq, crate::RuntimeDebugNoBound)]
+#[derive(Clone, Copy, PartialEq, Eq, crate::RuntimeDebugNoBound, scale_info::TypeInfo)]
 pub struct Instance9;
 
 /// Instance10 to be used for instantiable pallet define with `pallet` macro.
-#[derive(Clone, Copy, PartialEq, Eq, crate::RuntimeDebugNoBound)]
+#[derive(Clone, Copy, PartialEq, Eq, crate::RuntimeDebugNoBound, scale_info::TypeInfo)]
 pub struct Instance10;
 
 /// Instance11 to be used for instantiable pallet define with `pallet` macro.
-#[derive(Clone, Copy, PartialEq, Eq, crate::RuntimeDebugNoBound)]
+#[derive(Clone, Copy, PartialEq, Eq, crate::RuntimeDebugNoBound, scale_info::TypeInfo)]
 pub struct Instance11;
 
 /// Instance12 to be used for instantiable pallet define with `pallet` macro.
-#[derive(Clone, Copy, PartialEq, Eq, crate::RuntimeDebugNoBound)]
+#[derive(Clone, Copy, PartialEq, Eq, crate::RuntimeDebugNoBound, scale_info::TypeInfo)]
 pub struct Instance12;
 
 /// Instance13 to be used for instantiable pallet define with `pallet` macro.
-#[derive(Clone, Copy, PartialEq, Eq, crate::RuntimeDebugNoBound)]
+#[derive(Clone, Copy, PartialEq, Eq, crate::RuntimeDebugNoBound, scale_info::TypeInfo)]
 pub struct Instance13;
 
 /// Instance14 to be used for instantiable pallet define with `pallet` macro.
-#[derive(Clone, Copy, PartialEq, Eq, crate::RuntimeDebugNoBound)]
+#[derive(Clone, Copy, PartialEq, Eq, crate::RuntimeDebugNoBound, scale_info::TypeInfo)]
 pub struct Instance14;
 
 /// Instance15 to be used for instantiable pallet define with `pallet` macro.
-#[derive(Clone, Copy, PartialEq, Eq, crate::RuntimeDebugNoBound)]
+#[derive(Clone, Copy, PartialEq, Eq, crate::RuntimeDebugNoBound, scale_info::TypeInfo)]
 pub struct Instance15;
 
 /// Instance16 to be used for instantiable pallet define with `pallet` macro.
-#[derive(Clone, Copy, PartialEq, Eq, crate::RuntimeDebugNoBound)]
+#[derive(Clone, Copy, PartialEq, Eq, crate::RuntimeDebugNoBound, scale_info::TypeInfo)]
 pub struct Instance16;
