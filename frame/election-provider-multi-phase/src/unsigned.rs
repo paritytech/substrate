@@ -179,7 +179,7 @@ impl<T: Config> Pallet<T> {
 		// Sort the assignments by reversed voter stake. This ensures that we can efficiently truncate the list.
 		let stakes: BTreeMap<_, _> =
 			voters.iter().map(|(who, stake, _)| (who.clone(), *stake)).collect();
-		assignments.sort_unstable_by_key(|Assignment::<T> { who, .. }| {
+		assignments.sort_by_key(|Assignment::<T> { who, .. }| {
 			sp_std::cmp::Reverse(stakes.get(who).cloned().unwrap_or_default())
 		});
 
