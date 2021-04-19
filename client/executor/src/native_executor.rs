@@ -40,7 +40,10 @@ use sp_core::{
 };
 use log::trace;
 use sp_wasm_interface::{HostFunctions, Function};
-use sc_executor_common::wasm_runtime::{WasmInstance, WasmModule, InvokeMethod};
+use sc_executor_common::{
+	wasm_runtime::{WasmInstance, WasmModule, InvokeMethod},
+	runtime_blob::RuntimeBlob,
+};
 use sp_externalities::ExternalitiesExt as _;
 use sp_tasks::new_async_externalities;
 
@@ -222,7 +225,8 @@ impl sp_core::traits::CallInWasm for WasmExecutor {
 			let module = crate::wasm_runtime::create_wasm_runtime_with_code(
 				self.method,
 				self.default_heap_pages,
-				&wasm_code,
+				RuntimeBlob::new(wasm_code)
+					.map_err(|e| format!("Failed to create runtime blob: {:?}", e))?,
 				self.host_functions.to_vec(),
 				allow_missing_host_functions,
 				self.cache_path.as_deref(),

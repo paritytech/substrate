@@ -266,8 +266,6 @@ where
 		let runtime_code = state_runtime_code.runtime_code()
 			.map_err(sp_blockchain::Error::RuntimeCode)?;
 
-		// TODO: decompress and extract.
-
 		let mut overlay = OverlayedChanges::default();
 		let changes_trie_state = backend::changes_tries_state_at_block(
 			id,
@@ -292,8 +290,6 @@ where
 			.map_err(sp_blockchain::Error::RuntimeCode)?;
 
 		drop(runtime_code);
-
-		// TODO: decompress and extract.
 
 		todo!()
 	}

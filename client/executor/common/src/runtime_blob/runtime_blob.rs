@@ -85,9 +85,25 @@ impl RuntimeBlob {
 		})
 	}
 
+	/// Scans the wasm blob for the first section with the name that matches the given. Returns the
+	/// contents of the custom section if found or `None` otherwise.
+	pub fn custom_section_contents(&self, section_name: &str) -> Option<&[u8]> {
+		self
+			.raw_module
+			.custom_sections()
+			.filter(|cs| cs.name() == section_name)
+			.next()
+			.map(|cs| cs.payload())
+	}
+
 	/// Consumes this runtime blob and serializes it.
 	pub fn serialize(self) -> Vec<u8> {
 		serialize(self.raw_module)
 			.expect("serializing into a vec should succeed; qed")
+	}
+
+	/// Destruct this structure into the underlying parity-wasm Module.
+	pub fn into_inner(self) -> RawModule {
+		self.raw_module
 	}
 }

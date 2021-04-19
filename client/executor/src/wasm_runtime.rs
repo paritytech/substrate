@@ -29,7 +29,10 @@ use sp_core::traits::{Externalities, RuntimeCode, FetchRuntimeCode};
 use sp_version::RuntimeVersion;
 use std::panic::AssertUnwindSafe;
 use std::path::{Path, PathBuf};
-use sc_executor_common::wasm_runtime::{WasmModule, WasmInstance};
+use sc_executor_common::{
+	wasm_runtime::{WasmModule, WasmInstance},
+	runtime_blob::RuntimeBlob,
+};
 
 use sp_wasm_interface::Function;
 
@@ -278,16 +281,11 @@ impl RuntimeCache {
 pub fn create_wasm_runtime_with_code(
 	wasm_method: WasmExecutionMethod,
 	heap_pages: u64,
-	code: &[u8],
+	blob: RuntimeBlob,
 	host_functions: Vec<&'static dyn Function>,
 	allow_missing_func_imports: bool,
 	cache_path: Option<&Path>,
 ) -> Result<Arc<dyn WasmModule>, WasmError> {
-	use sp_maybe_compressed_blob::CODE_BLOB_BOMB_LIMIT;
-
-	let code = sp_maybe_compressed_blob::decompress(code, CODE_BLOB_BOMB_LIMIT)
-		.map_err(|e| WasmError::Other(format!("Decompression error: {:?}", e)))?;
-
 	match wasm_method {
 		WasmExecutionMethod::Interpreted => {
 			// Wasmi doesn't have any need in a cache directory.
@@ -297,7 +295,7 @@ pub fn create_wasm_runtime_with_code(
 			drop(cache_path);
 
 			sc_executor_wasmi::create_runtime(
-				&code,
+				blob,
 				heap_pages,
 				host_functions,
 				allow_missing_func_imports,
@@ -306,7 +304,6 @@ pub fn create_wasm_runtime_with_code(
 		}
 		#[cfg(feature = "wasmtime")]
 		WasmExecutionMethod::Compiled => {
-			let blob = sc_executor_common::runtime_blob::RuntimeBlob::new(&code)?;
 			sc_executor_wasmtime::create_runtime(
 				sc_executor_wasmtime::CodeSupplyMode::Verbatim { blob },
 				sc_executor_wasmtime::Config {
@@ -356,32 +353,53 @@ fn create_versioned_wasm_runtime(
 ) -> Result<VersionedRuntime, WasmError> {
 	#[cfg(not(target_os = "unknown"))]
 	let time = std::time::Instant::now();
+
+	// The incoming code may be actually compressed. We decompress it here and then work with
+	// the uncompressed code from now on.
+	use sp_maybe_compressed_blob::CODE_BLOB_BOMB_LIMIT;
+	let code = sp_maybe_compressed_blob::decompress(code, CODE_BLOB_BOMB_LIMIT)
+		.map_err(|e| WasmError::Other(format!("Decompression error: {:?}", e)))?;
+	let blob = sc_executor_common::runtime_blob::RuntimeBlob::new(&code)?;
+
+	let mut version = None;
+
+	// Before creating the runtime, use the runtime blob to scan if there is any metadata embedded
+	// into the wasm binary pertaining to runtime version.
+	if let Some(version_section) = blob.custom_section_contents("runtime_version") {
+		version = Some(decode_version(&version_section)?);
+	}
+
 	let runtime = create_wasm_runtime_with_code(
 		wasm_method,
 		heap_pages,
-		&code,
+		blob,
 		host_functions,
 		allow_missing_func_imports,
 		cache_path,
 	)?;
 
-	// Call to determine runtime version.
-	let version_result = {
-		// `ext` is already implicitly handled as unwind safe, as we store it in a global variable.
-		let mut ext = AssertUnwindSafe(ext);
+	// If the runtime blob doesn't embed the runtime version then use the legacy version query
+	// mechanism: call the runtime.
+	if version.is_none() {
+		// Call to determine runtime version.
+		let version_result = {
+			// `ext` is already implicitly handled as unwind safe, as we store it in a global variable.
+			let mut ext = AssertUnwindSafe(ext);
 
-		// The following unwind safety assertion is OK because if the method call panics, the
-		// runtime will be dropped.
-		let runtime = AssertUnwindSafe(runtime.as_ref());
-		crate::native_executor::with_externalities_safe(
-			&mut **ext,
-			move || runtime.new_instance()?.call("Core_version".into(), &[])
-		).map_err(|_| WasmError::Instantiation("panic in call to get runtime version".into()))?
-	};
-	let version = match version_result {
-		Ok(version) => Some(decode_version(&version)?),
-		Err(_) => None,
-	};
+			// The following unwind safety assertion is OK because if the method call panics, the
+			// runtime will be dropped.
+			let runtime = AssertUnwindSafe(runtime.as_ref());
+			crate::native_executor::with_externalities_safe(
+				&mut **ext,
+				move || runtime.new_instance()?.call("Core_version".into(), &[])
+			).map_err(|_| WasmError::Instantiation("panic in call to get runtime version".into()))?
+		};
+		let version = match version_result {
+			Ok(version) => Some(decode_version(&version)?),
+			Err(_) => None,
+		};
+	}
+
 	#[cfg(not(target_os = "unknown"))]
 	log::debug!(
 		target: "wasm-runtime",
