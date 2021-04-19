@@ -139,17 +139,17 @@ pub trait StateApi<Hash> {
 
 	/// The `state_traceBlock` RPC provides a way to trace the re-execution of a single
 	/// block, collecting Spans and Events from both the client and the relevant WASM runtime.
-	/// The Spans and Events are conceptually equivalent to those from the Rust
-	/// [Tracing](https://crates.io/crates/tracing) crate.
+	/// The Spans and Events are conceptually equivalent to those from the [Tracing][1] crate.
 	///
 	/// The structure of the traces follows that of the block execution pipeline, so meaningful
 	/// interpretation of the traces requires an understanding of the Substrate chain's block
 	/// execution.
 	///
-	/// [Link to conceptual map of trace structure for Polkadot and Kusama block execution.][1]
+	/// [Link to conceptual map of trace structure for Polkadot and Kusama block execution.][2]
 	///
-	/// [1]:
-	///	https://github.com/emostov/substrate-state-tracing/blob/main/assets/TraceBlock_Trace_Heiarchy.jpg
+	/// [1]: https://crates.io/crates/tracing
+	/// [2]:
+	/// https://github.com/paritytech/substrate/tree/master/client/rpc-api/TraceBlock_Trace_Hierarchy.png
 	///
 	/// ## Node requirements
 	///
