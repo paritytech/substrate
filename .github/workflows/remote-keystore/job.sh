@@ -54,9 +54,11 @@ echo "------------------------ KEYSTORE AVAILABLE ------------------------------
 echo "Running node"
 ./target/release/substrate --chain zondaxSpecRaw.json --tmp \
 	--port 30333 --ws-port 9945 --validator --execution native \
-	--node-key 0000000000000000000000000000000000000000000000000000000000000001 --keystore-uri "localhost:10710"&> bootnode.out &
+	--node-key 0000000000000000000000000000000000000000000000000000000000000001 --keystore-uri "localhost:10710" &> bootnode.out &
 
-(tail -n +1 -F bootnode.out) &
+#(tail -n +1 -F bootnode.out) &
+
+echo "Checking for finalized blocks... timing out in 90s..."
 
 tail -n +1 -F bootnode.out | timeout 90 grep -E -m 1 "finalized #[1-9][0-9]?"
 SUCCESS=$?
