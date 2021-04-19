@@ -841,5 +841,5 @@ fn should_import_block_with_test_client() {
 	let block_data = block1.0;
 	let block = node_primitives::Block::decode(&mut &block_data[..]).unwrap();
 
-	client.import(BlockOrigin::Own, block).unwrap();
+	futures::executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
 }

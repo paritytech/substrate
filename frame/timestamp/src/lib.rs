@@ -241,6 +241,10 @@ pub mod pallet {
 				Ok(())
 			}
 		}
+
+		fn is_inherent(call: &Self::Call) -> bool {
+			matches!(call, Call::set(_))
+		}
 	}
 }
 
@@ -254,7 +258,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Set the timestamp to something in particular. Only used for tests.
-	#[cfg(feature = "std")]
+	#[cfg(any(feature = "runtime-benchmarks", feature = "std"))]
 	pub fn set_timestamp(now: T::Moment) {
 		Now::<T>::put(now);
 	}
@@ -352,6 +356,7 @@ mod tests {
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
+		type OnSetCode = ();
 	}
 	parameter_types! {
 		pub const MinimumPeriod: u64 = 5;

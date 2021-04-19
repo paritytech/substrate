@@ -43,18 +43,10 @@ sp-runtime-interface = { version = "3.0.0", path = "../../primitives/runtime-int
 # pallets
 frame-system = { version = "3.0.0", path = "../../frame/system" }
 
-parity-scale-codec = "1.3.1"
 env_logger = "0.7.1"
 log = "0.4.8"
-futures01 = { package = "futures", version = "0.1.29" }
 futures = { package = "futures", version = "0.3", features = ["compat"] }
-rand = "0.7"
 tokio = { version = "0.2", features = ["full"] }
 
 # Calling RPC
 jsonrpc-core = "15.1"
-[dev-dependencies]
-sc-finality-grandpa = { version = "0.9.0", path = "../../client/finality-grandpa" }
-sc-consensus-babe = { version = "0.9.0", path = "../../client/consensus/babe" }
-sp-consensus-babe = { version = "0.9.0", path = "../../primitives/consensus/babe" }
-node-cli = { version = "2.0.0", path = "../../bin/node/cli" }

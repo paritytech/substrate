@@ -27,6 +27,7 @@ mod transactional;
 mod debug_no_bound;
 mod clone_no_bound;
 mod partial_eq_no_bound;
+mod default_no_bound;
 
 pub(crate) use storage::INHERENT_INSTANCE_NAME;
 use proc_macro::TokenStream;
@@ -412,6 +413,12 @@ pub fn derive_eq_no_bound(input: TokenStream) -> TokenStream {
 	).into()
 }
 
+/// derive `Default` but do no bound any generic. Docs are at `frame_support::DefaultNoBound`.
+#[proc_macro_derive(DefaultNoBound)]
+pub fn derive_default_no_bound(input: TokenStream) -> TokenStream {
+	default_no_bound::derive_default_no_bound(input)
+}
+
 #[proc_macro_attribute]
 pub fn require_transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
 	transactional::require_transactional(attr, input).unwrap_or_else(|e| e.to_compile_error().into())
@@ -421,3 +428,7 @@ pub fn require_transactional(attr: TokenStream, input: TokenStream) -> TokenStre
 pub fn crate_to_pallet_version(input: TokenStream) -> TokenStream {
 	pallet_version::crate_to_pallet_version(input).unwrap_or_else(|e| e.to_compile_error()).into()
 }
+
+/// The number of module instances supported by the runtime, starting at index 1,
+/// and up to `NUMBER_OF_INSTANCE`.
+pub(crate) const NUMBER_OF_INSTANCE: u8 = 16;
