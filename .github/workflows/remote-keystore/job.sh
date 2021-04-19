@@ -44,25 +44,27 @@ popd
 	cargo run --bin server --features server
 ) &
 
-echo "Build substrate executable"
-make substrate
-
 if wait_port 60; then
-	echo "Unable to start keystore"
+	echo "-------------------- UNABLE TO CONNECT TO KEYSTORE --------------------------"
 	exit 2
 fi
 
+echo "------------------------ KEYSTORE AVAILABLE ------------------------------"
+
 echo "Running node"
-make bootnode &> bootnode.out &
+./target/release/substrate --chain zondaxSpecRaw.json --tmp \
+	--port 30333 --ws-port 9945 --validator --execution native \
+	--node-key 0000000000000000000000000000000000000000000000000000000000000001 --keystore-uri "localhost:10710"&> bootnode.out &
 
-(tail -F bootnode.out) &
+(tail -n +1 -F bootnode.out) &
 
-tail -F bootnode.out | timeout 60 grep -E -m 1 "finalized #[1-9][0-9]?" > tests.out
+tail -n +1 -F bootnode.out | timeout 90 grep -E -m 1 "finalized #[1-9][0-9]?"
+SUCCESS=$?
 
-if [[ ! -s tests.out ]]; then
-	echo "---------------------- BLOCK FINALIZATION TIMED OUT ----------------------"
-	exit 1
-else
+if [ $SUCCESS == 141 ] || [ $SUCCESS == 0 ] ; then
 	echo "------------------------ BLOCK FINALIZED SUCCESFULLY ----------------------"
 	exit 0
+else
+	echo "---------------------- BLOCK FINALIZATION TIMED OUT/ERRORED ----------------------"
+	exit 1
 fi
