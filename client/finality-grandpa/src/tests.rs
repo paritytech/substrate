@@ -33,7 +33,7 @@ use tokio::runtime::{Runtime, Handle};
 use sp_keyring::Ed25519Keyring;
 use sp_blockchain::Result;
 use sp_api::{ApiRef, ProvideRuntimeApi};
-use substrate_test_runtime_client::runtime::{BlockNumber};
+use substrate_test_runtime_client::runtime::BlockNumber;
 use sp_consensus::{
 	BlockOrigin, ForkChoiceStrategy, ImportedAux, BlockImportParams, ImportResult, BlockImport,
 	import_queue::BoxJustificationImport,
@@ -458,10 +458,9 @@ fn finalize_3_voters_1_full_observer() {
 	// all peers should have stored the justification for the best finalized block #20
 	for peer_id in 0..4 {
 		let client = net.lock().peers[peer_id].client().as_full().unwrap();
-		let justification: GrandpaJustification<Block> =
-			crate::aux_schema::best_justification(&*client)
-				.unwrap()
-				.unwrap();
+		let justification = crate::aux_schema::best_justification::<_, Block>(&*client)
+			.unwrap()
+			.unwrap();
 
 		assert_eq!(justification.commit.target_number, 20);
 	}

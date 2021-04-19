@@ -30,17 +30,13 @@ use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use sp_finality_grandpa::{AuthorityList, RoundNumber, SetId};
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
-use crate::{
-	authorities::{
-		AuthoritySet, AuthoritySetChanges, DelayKind, PendingChange, SharedAuthoritySet,
-	},
-	environment::{
-		CompletedRound, CompletedRounds, CurrentRounds, HasVoted, SharedVoterSetState,
-		VoterSetState,
-	},
-	NewAuthoritySet,
-	GrandpaJustification,
+use crate::authorities::{
+	AuthoritySet, AuthoritySetChanges, DelayKind, PendingChange, SharedAuthoritySet,
 };
+use crate::environment::{
+	CompletedRound, CompletedRounds, CurrentRounds, HasVoted, SharedVoterSetState, VoterSetState,
+};
+use crate::{GrandpaJustification, NewAuthoritySet};
 
 const VERSION_KEY: &[u8] = b"grandpa_schema_version";
 const SET_STATE_KEY: &[u8] = b"grandpa_completed_round";
