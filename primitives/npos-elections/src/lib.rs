@@ -141,7 +141,10 @@ impl<T> __OrInvalidIndex<T> for Option<T> {
 /// A common interface for all compact solutions.
 ///
 /// See [`sp-npos-elections-compact`] for more info.
-pub trait CompactSolution: Sized {
+pub trait CompactSolution
+where
+	Self: Sized + for<'a> sp_std::convert::TryFrom<&'a [IndexAssignmentOf<Self>], Error = Error>,
+{
 	/// The maximum number of votes that are allowed.
 	const LIMIT: usize;
 
