@@ -437,7 +437,8 @@ fn no_candidate_emergency_condition() {
 			<Staking as crate::Store>::MinimumValidatorCount::put(10);
 
 			// try to chill
-			let _ = Staking::chill(Origin::signed(10));
+			let res = Staking::chill(Origin::signed(10));
+			assert_ok!(res);
 
 			// trigger era
 			mock::start_active_era(1);

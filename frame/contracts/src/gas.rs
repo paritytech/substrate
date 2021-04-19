@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{Config, Error};
+use crate::{Config, Error, exec::ExecError};
 use sp_std::marker::PhantomData;
 use sp_runtime::traits::Zero;
 use frame_support::{
@@ -24,7 +24,6 @@ use frame_support::{
 	},
 	weights::Weight,
 };
-use pallet_contracts_primitives::ExecError;
 use sp_core::crypto::UncheckedFrom;
 
 #[cfg(test)]
