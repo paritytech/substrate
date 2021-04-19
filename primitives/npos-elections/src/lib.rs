@@ -108,7 +108,7 @@ pub mod reduce;
 pub mod helpers;
 pub mod pjr;
 
-pub use assignments::{Assignment, IndexAssignment, StakedAssignment};
+pub use assignments::{Assignment, IndexAssignment, StakedAssignment, IndexAssignmentOf};
 pub use reduce::reduce;
 pub use helpers::*;
 pub use phragmen::*;

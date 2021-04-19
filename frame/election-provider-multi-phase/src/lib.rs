@@ -225,7 +225,7 @@ use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use frame_election_provider_support::{ElectionDataProvider, ElectionProvider, onchain};
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, is_score_better, CompactSolution, ElectionScore,
-	EvaluateSupport, IndexAssignment, PerThing128, Supports, VoteWeight,
+	EvaluateSupport, PerThing128, Supports, VoteWeight,
 };
 use sp_runtime::{
 	transaction_validity::{
@@ -281,12 +281,8 @@ pub type Assignment<T> = sp_npos_elections::Assignment<
 	CompactAccuracyOf<T>,
 >;
 
-// The [`IndexAssignment`] type specialized for a particular runtime `T`.
-pub type IndexAssignmentOf<T> = IndexAssignment<
-	CompactVoterIndexOf<T>,
-	CompactTargetIndexOf<T>,
-	CompactAccuracyOf<T>,
->;
+/// The [`IndexAssignment`] type specialized for a particular runtime `T`.
+pub type IndexAssignmentOf<T> = sp_npos_elections::IndexAssignmentOf<CompactOf<T>>;
 
 /// Wrapper type that implements the configurations needed for the on-chain backup.
 struct OnChainConfig<T: Config>(sp_std::marker::PhantomData<T>);
