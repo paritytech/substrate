@@ -34,6 +34,22 @@ pub(crate) const OFFCHAIN_HEAD_DB: &[u8] = b"parity/multi-phase-unsigned-electio
 /// within a window of 5 blocks.
 pub(crate) const OFFCHAIN_REPEAT: u32 = 5;
 
+/// A voter's fundamental data: their ID, their stake, and the list of candidates for whom they voted.
+pub type Voter<T> = (
+	<T as frame_system::Config>::AccountId,
+	sp_npos_elections::VoteWeight,
+	Vec<<T as frame_system::Config>::AccountId>,
+);
+
+/// The relative distribution of a voter's stake among the winning targets.
+pub type Assignment<T> = sp_npos_elections::Assignment<
+	<T as frame_system::Config>::AccountId,
+	CompactAccuracyOf<T>,
+>;
+
+/// The [`IndexAssignment`] type specialized for a particular runtime `T`.
+pub type IndexAssignmentOf<T> = sp_npos_elections::IndexAssignmentOf<CompactOf<T>>;
+
 #[derive(Debug, Eq, PartialEq)]
 pub enum MinerError {
 	/// An internal error in the NPoS elections crate.
@@ -565,15 +581,18 @@ mod max_weight {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::mock::{
-		assert_noop, assert_ok, ExtBuilder, Extrinsic, MinerMaxWeight, MultiPhase, Origin,
-		roll_to_with_ocw, roll_to, Runtime, TestCompact, TrimHelpers, trim_helpers, witness,
+	use crate::{
+		mock::{
+			assert_noop, assert_ok, ExtBuilder, Extrinsic, MinerMaxWeight, MultiPhase, Origin,
+			roll_to_with_ocw, roll_to, Runtime, TestCompact, TrimHelpers, trim_helpers, witness,
+		},
 	};
 	use frame_support::{dispatch::Dispatchable, traits::OffchainWorker};
 	use mock::Call as OuterCall;
+	use sp_npos_elections::IndexAssignment;
 	use sp_runtime::{traits::ValidateUnsigned, PerU16};
 
-	type Assignment = crate::Assignment<Runtime>;
+	type Assignment = crate::unsigned::Assignment<Runtime>;
 
 	#[test]
 	fn validate_unsigned_retracts_wrong_phase() {

@@ -17,7 +17,7 @@
 
 use super::*;
 use crate as multi_phase;
-use multi_phase::Voter;
+use multi_phase::unsigned::{IndexAssignmentOf, Voter};
 pub use frame_support::{assert_noop, assert_ok};
 use frame_support::{
 	parameter_types,
