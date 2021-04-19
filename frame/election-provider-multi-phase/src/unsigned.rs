@@ -34,7 +34,8 @@ pub(crate) const OFFCHAIN_HEAD_DB: &[u8] = b"parity/multi-phase-unsigned-electio
 /// within a window of 5 blocks.
 pub(crate) const OFFCHAIN_REPEAT: u32 = 5;
 
-/// A voter's fundamental data: their ID, their stake, and the list of candidates for whom they voted.
+/// A voter's fundamental data: their ID, their stake, and the list of candidates for whom they
+/// voted.
 pub type Voter<T> = (
 	<T as frame_system::Config>::AccountId,
 	sp_npos_elections::VoteWeight,
@@ -176,7 +177,8 @@ impl<T: Config> Pallet<T> {
 		};
 
 		let ElectionResult { mut assignments, winners } = election_result;
-		// Sort the assignments by reversed voter stake. This ensures that we can efficiently truncate the list.
+		// Sort the assignments by reversed voter stake. This ensures that we can efficiently
+		// truncate the list.
 		let stakes: BTreeMap<_, _> =
 			voters.iter().map(|(who, stake, _)| (who.clone(), *stake)).collect();
 		assignments.sort_by_key(|Assignment::<T> { who, .. }| {
@@ -193,7 +195,8 @@ impl<T: Config> Pallet<T> {
 			assignment_staked_to_ratio_normalized(staked)?
 		};
 
-		// convert to `IndexAssignment`. This improves the runtime complexity of converting to `Compact`.
+		// convert to `IndexAssignment`. This improves the runtime complexity of converting to
+		// `Compact`.
 		let mut assignments = assignments
 			.iter()
 			.map(|assignment| IndexAssignmentOf::<T>::new(assignment, &voter_index, &target_index))
