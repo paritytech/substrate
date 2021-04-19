@@ -317,10 +317,11 @@ impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty> StorageEntryMetadata
 #[cfg(test)]
 mod test {
 	use super::*;
+	use assert_matches::assert_matches;
 	use sp_io::{TestExternalities, hashing::twox_128};
 	use crate::hash::*;
 	use crate::{
-		metadata::{StorageEntryModifier, StorageHasher},
+		metadata::{StorageEntryModifier, StorageHasher, StorageEntryType},
 		storage::types::ValueQuery
 	};
 
@@ -472,11 +473,14 @@ mod test {
 
 			assert_eq!(A::MODIFIER, StorageEntryModifier::Optional);
 			assert_eq!(AValueQueryWithAnOnEmpty::MODIFIER, StorageEntryModifier::Default);
-			assert_eq!(A::HASHER, StorageHasher::Blake2_128Concat);
-			assert_eq!(
-				AValueQueryWithAnOnEmpty::HASHER,
-				StorageHasher::Blake2_128Concat
-			);
+			assert_matches!(A::ty(), StorageEntryType::Map {
+				hasher: StorageHasher::Blake2_128Concat,
+				..
+			});
+			assert_matches!(AValueQueryWithAnOnEmpty::ty(), StorageEntryType::Map {
+				hasher: StorageHasher::Blake2_128Concat,
+				..
+			});
 			assert_eq!(A::NAME, "foo");
 			assert_eq!(AValueQueryWithAnOnEmpty::default(), 97u32.encode());
 			assert_eq!(A::default(), Option::<u32>::None.encode());

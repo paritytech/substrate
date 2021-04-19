@@ -2601,7 +2601,7 @@ mod tests {
 			type DbWeight: Get<RuntimeDbWeight>;
 		}
 
-		#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
+		#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, scale_info::TypeInfo)]
 		pub enum RawOrigin<AccountId> {
 			Root,
 			Signed(AccountId),
@@ -2680,11 +2680,11 @@ mod tests {
 			arguments: vec![
 				FunctionArgumentMetadata {
 					name: "_data",
-					ty: "i32",
+					ty: scale_info::meta_type::<i32>(),
 				},
 				FunctionArgumentMetadata {
 					name: "_data2",
-					ty: "String",
+					ty: scale_info::meta_type::<String>(),
 				}
 			],
 			documentation: vec![],
@@ -2699,7 +2699,7 @@ mod tests {
 			arguments: vec![
 				FunctionArgumentMetadata {
 					name: "_data",
-					ty: "i32",
+					ty: scale_info::meta_type::<i32>(),
 				}
 			],
 			documentation: vec![],
@@ -2709,7 +2709,7 @@ mod tests {
 			arguments: vec![
 				FunctionArgumentMetadata {
 					name: "_data",
-					ty: "i32",
+					ty: scale_info::meta_type::<u32>(),
 				},
 				FunctionArgumentMetadata {
 					name: "_data2",
@@ -2725,6 +2725,7 @@ mod tests {
 		},
 	];
 
+	#[derive(scale_info::TypeInfo)]
 	pub struct TraitImpl {}
 	impl Config for TraitImpl { }
 

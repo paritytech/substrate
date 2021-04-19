@@ -758,7 +758,7 @@ pub mod tests {
 		StorageEntryMetadata, StorageMetadata, StorageEntryType, StorageEntryModifier,
 		StorageHasher,
 	};
-	use sp_std::{marker::PhantomData, result};
+	use sp_std::result;
 	use sp_io::TestExternalities;
 
 	/// A PalletInfo implementation which just panics.

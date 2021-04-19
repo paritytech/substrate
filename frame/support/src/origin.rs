@@ -434,7 +434,7 @@ mod tests {
 			type BaseCallFilter;
 		}
 
-		#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
+		#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, scale_info::TypeInfo)]
 		pub enum RawOrigin<AccountId> {
 			Root,
 			Signed(AccountId),
@@ -456,20 +456,20 @@ mod tests {
 	mod origin_without_generic {
 		use super::*;
 
-		#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
+		#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, scale_info::TypeInfo)]
 		pub struct Origin;
 	}
 
 	mod origin_with_generic {
 		use super::*;
 
-		#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
+		#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, scale_info::TypeInfo)]
 		pub struct Origin<T> {
 			t: T
 		}
 	}
 
-	#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
+	#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, scale_info::TypeInfo)]
 	pub struct TestRuntime;
 
 	pub struct BaseCallFilter;
