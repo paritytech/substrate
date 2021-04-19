@@ -106,18 +106,6 @@ default:
 
 .build-refs:                       &build-refs
   rules:
-    # .publish-refs with manual on PRs
-    - if: $CI_PIPELINE_SOURCE == "pipeline"
-      when: never
-    - if: $CI_PIPELINE_SOURCE == "web"
-    - if: $CI_COMMIT_REF_NAME == "master"
-    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
-      when: manual
-      allow_failure: true
-
-.publish-refs:                     &publish-refs
-  rules:
     - if: $CI_PIPELINE_SOURCE == "pipeline"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -131,11 +119,13 @@ default:
     - if: $CI_COMMIT_REF_NAME == "master" && $CI_PIPELINE_SOURCE == "schedule" && $PIPELINE == "nightly"
 
 .merge-ref-into-master-script:     &merge-ref-into-master-script
-  - git fetch origin +master:master
-  - git fetch origin +$CI_COMMIT_REF_NAME:$CI_COMMIT_REF_NAME
-  - git checkout master
-  - git config user.email "ci@gitlab.parity.io"
-  - git merge $CI_COMMIT_REF_NAME --verbose --no-edit
+  - if [ $CI_COMMIT_REF_NAME != "master" ]; then
+      git fetch origin +master:master;
+      git fetch origin +$CI_COMMIT_REF_NAME:$CI_COMMIT_REF_NAME;
+      git checkout master;
+      git config user.email "ci@gitlab.parity.io";
+      git merge $CI_COMMIT_REF_NAME --verbose --no-edit;
+    fi
 
 .cargo-check-benches-script:       &cargo-check-benches-script
   - mkdir -p artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA
@@ -244,17 +234,10 @@ cargo-deny:
 cargo-check-benches:
   stage:                           test
   <<:                              *docker-env
-  <<:                              *test-refs-no-trigger
-  <<:                              *collect-artifacts
-  script:
-    - *cargo-check-benches-script
-
-cargo-check-benches-merged:
-  stage:                           test
-  <<:                              *docker-env
-  <<:                              *test-refs-no-trigger-prs-only
+  <<:                              *test-refs
   <<:                              *collect-artifacts
   before_script:
+    # merges in the master branch on PRs
     - *merge-ref-into-master-script
     - *rust-info-script
   script:
@@ -268,8 +251,10 @@ node-bench-regression-guard:
   <<:                              *docker-env
   <<:                              *test-refs-no-trigger-prs-only
   needs:
-    - job:                         cargo-check-benches-merged
+    # this is a DAG
+    - job:                         cargo-check-benches
       artifacts:                   true
+    # this does not like a DAG, just polls the artifact
     - project:                     $CI_PROJECT_PATH
       job:                         cargo-check-benches
       ref:                         master
@@ -550,7 +535,7 @@ build-rust-doc:
 #### stage:                        publish
 
 .build-push-docker-image:          &build-push-docker-image
-  <<:                              *publish-refs
+  <<:                              *build-refs
   <<:                              *kubernetes-build
   image:                           quay.io/buildah/stable
   variables:                       &docker-build-vars
@@ -612,7 +597,7 @@ publish-docker-subkey:
 
 publish-s3-release:
   stage:                           publish
-  <<:                              *publish-refs
+  <<:                              *build-refs
   <<:                              *kubernetes-build
   needs:
     - job:                         build-linux-substrate
@@ -641,7 +626,7 @@ publish-s3-doc:
       artifacts:                   true
     - job:                         build-linux-substrate
       artifacts:                   false
-  <<:                              *publish-refs
+  <<:                              *build-refs
   <<:                              *kubernetes-build
   variables:
     GIT_STRATEGY:                  none
@@ -713,6 +698,8 @@ trigger-simnet:
   stage:                           deploy
   image:                           paritytech/tools:latest
   rules:
+    - if: $CI_PIPELINE_SOURCE == "pipeline"
+      when: never
     - if: $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master"
     - if: $CI_COMMIT_REF_NAME == "master"
   needs:
