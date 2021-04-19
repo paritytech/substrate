@@ -15,12 +15,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::*;
+use super::Config;
+use frame_support::{traits::Get, storage::StorageValue, weights::Weight};
+use sp_staking::offence::OnOffenceHandler;
 
 mod deprecated {
     use crate::{Config, Perbill, OffenceDetails, SessionIndex};
-    use frame_support::{decl_module, decl_storage};
-    use sp_std::prelude::*;
+    use sp_std::vec::Vec;
 
     /// Type of data stored as a deferred offence
     pub type DeferredOffenceOf<T> = (
@@ -29,24 +30,29 @@ mod deprecated {
         SessionIndex,
     );
 
-    decl_storage! {
-        trait Store for Module<T: Config> as Indices {
-            /// Deferred reports that have been rejected by the offence handler and need to be submitted
-            /// at a later time.
-            pub DeferredOffences get(fn deferred_offences): Vec<DeferredOffenceOf<T>>;
+    /// Deferred reports that have been rejected by the offence handler and need to be submitted
+    /// at a later time.
+    pub struct DeferredOffences<T: Config>(::frame_support::sp_std::marker::PhantomData<T>);
+
+    impl<T: Config> ::frame_support::storage::generator::StorageValue<Vec<DeferredOffenceOf<T>>> for DeferredOffences<T> {
+        type Query = Vec<DeferredOffenceOf<T>>;
+        fn module_prefix() -> &'static [u8] {
+            b"Offences"
         }
-    }
-    decl_module! {
-        pub struct Module<T: Config> for enum Call where origin: T::Origin { }
+        fn storage_prefix() -> &'static [u8] {
+            b"DeferredOffences"
+        }
+        fn from_optional_value_to_query(v: Option<Vec<DeferredOffenceOf<T>>>) -> Self::Query {
+            v.unwrap_or_else(|| Default::default())
+        }
+        fn from_query_to_optional_value(v: Self::Query) -> Option<Vec<DeferredOffenceOf<T>>> {
+            Some(v)
+        }
     }
 }
 
 pub fn remove_deferred_storage<T: Config>() -> Weight {
-    if !deprecated::DeferredOffences::<T>::exists() {
-        return T::DbWeight::get().reads(1)
-    }
-
-    let mut weight = T::DbWeight::get().reads_writes(2, 1);
+    let mut weight = T::DbWeight::get().reads_writes(1, 1);
     let deferred = <deprecated::DeferredOffences<T>>::take();
     log::info!(target: "runtime::offences", "have {} deferred offences, applying.", deferred.len());
     for (offences, perbill, session) in deferred.iter() {
@@ -55,4 +61,54 @@ pub fn remove_deferred_storage<T: Config>() -> Weight {
     }
 
     weight
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::mock::{
+        Runtime as T, Offences, System, new_test_ext, with_on_offence_fractions
+    };
+    use sp_runtime::Perbill;
+    use frame_support::traits::OnRuntimeUpgrade;
+    use sp_staking::offence::OffenceDetails;
+
+    #[test]
+    fn should_resubmit_deferred_offences() {
+        new_test_ext().execute_with(|| {
+            // given
+            assert_eq!(<deprecated::DeferredOffences<T>>::get().len(), 0);
+            with_on_offence_fractions(|f| {
+                assert_eq!(f.clone(), vec![]);
+            });
+
+            let offence_details = OffenceDetails::<
+                <T as frame_system::Config>::AccountId,
+                <T as Config>::IdentificationTuple,
+            > {
+                offender: 5,
+                reporters: vec![],
+            };
+
+            // push deferred offence
+            <deprecated::DeferredOffences<T>>::mutate(|d|
+                d.push((vec![offence_details], vec![Perbill::from_percent(5 + 1 * 100 / 5)], 1))
+            );
+
+            // when
+            assert_eq!(
+                Offences::on_runtime_upgrade(),
+                <T as frame_system::Config>::DbWeight::get().reads_writes(1, 2),
+            );
+
+            // then
+            assert_eq!(<deprecated::DeferredOffences<T>>::get().len(), 0);
+            with_on_offence_fractions(|f| {
+                assert_eq!(f.clone(), vec![Perbill::from_percent(5 + 1 * 100 / 5)]);
+            });
+
+            // No events emitted
+            assert_eq!(System::events().len(), 0);
+        })
+    }
 }
