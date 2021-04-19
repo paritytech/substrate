@@ -511,7 +511,7 @@ fn call_codec() {
 // todo: [AJ] update test below with v13 metadata from above
 #[test]
 fn test_metadata() {
-	use frame_metadata::*;
+	use crate::metadata::*;
 	use frame_support::scale_info::{form::MetaForm, IntoPortable, Registry};
 	// vnext modules defined with legacy macros have empty metadata
 	let expected_metadata: vnext::RuntimeMetadataLastVersion<MetaForm> = vnext::RuntimeMetadataLastVersion {

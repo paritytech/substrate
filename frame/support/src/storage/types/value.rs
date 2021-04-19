@@ -195,8 +195,10 @@ impl<Prefix, Value, QueryKind, OnEmpty> StorageEntryMetadata
 mod test {
 	use super::*;
 	use sp_io::{TestExternalities, hashing::twox_128};
-	use crate::storage::types::ValueQuery;
-	use frame_metadata::StorageEntryModifier;
+	use crate::{
+		metadata::StorageEntryModifier,
+		storage::types::ValueQuery,
+	};
 
 	struct Prefix;
 	impl StorageInstance for Prefix {
@@ -268,8 +270,8 @@ mod test {
 			assert_eq!(A::MODIFIER, StorageEntryModifier::Optional);
 			assert_eq!(AValueQueryWithAnOnEmpty::MODIFIER, StorageEntryModifier::Default);
 			assert_eq!(A::NAME, "foo");
-			assert_eq!(A::DEFAULT.0.default_byte(), Option::<u32>::None.encode());
-			assert_eq!(AValueQueryWithAnOnEmpty::DEFAULT.0.default_byte(), 97u32.encode());
+			assert_eq!(A::default(), Option::<u32>::None.encode());
+			assert_eq!(AValueQueryWithAnOnEmpty::default(), 97u32.encode());
 
 			WithLen::kill();
 			assert_eq!(WithLen::decode_len(), None);

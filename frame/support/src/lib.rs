@@ -754,9 +754,9 @@ pub use serde::{Serialize, Deserialize};
 pub mod tests {
 	use super::*;
 	use codec::{Codec, EncodeLike};
-	use frame_metadata::{
-		DecodeDifferent, StorageEntryMetadata, StorageMetadata, StorageEntryType,
-		StorageEntryModifier, DefaultByteGetter, StorageHasher,
+	use crate::metadata::{
+		StorageEntryMetadata, StorageMetadata, StorageEntryType, StorageEntryModifier,
+		StorageHasher,
 	};
 	use sp_std::{marker::PhantomData, result};
 	use sp_io::TestExternalities;

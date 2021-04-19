@@ -2595,6 +2595,7 @@ mod tests {
 		CallMetadata, GetCallMetadata, GetCallName, OnInitialize, OnFinalize, OnIdle, OnRuntimeUpgrade,
 		IntegrityTest, Get, PalletInfo,
 	};
+	use crate::metadata::*;
 
 	pub trait Config: system::Config + Sized where Self::AccountId: From<u32> { }
 
@@ -2669,69 +2670,69 @@ mod tests {
 
 	const EXPECTED_METADATA: &'static [FunctionMetadata] = &[
 		FunctionMetadata {
-			name: DecodeDifferent::Encode("aux_0"),
-			arguments: DecodeDifferent::Encode(&[]),
-			documentation: DecodeDifferent::Encode(&[
+			name: "aux_0",
+			arguments: vec![],
+			documentation: vec![
 				" Hi, this is a comment."
-			])
+			]
 		},
 		FunctionMetadata {
-			name: DecodeDifferent::Encode("aux_1"),
-			arguments: DecodeDifferent::Encode(&[
+			name: "aux_1",
+			arguments: vec![
 				FunctionArgumentMetadata {
-					name: DecodeDifferent::Encode("_data"),
-					ty: DecodeDifferent::Encode("Compact<u32>")
+					name: "_data",
+					ty: scale_info::meta_type::<Compact<u32>>(),
 				}
-			]),
-			documentation: DecodeDifferent::Encode(&[]),
+			],
+			documentation: vec![],
 		},
 		FunctionMetadata {
-			name: DecodeDifferent::Encode("aux_2"),
-			arguments: DecodeDifferent::Encode(&[
+			name: "aux_2",
+			arguments: vec![
 				FunctionArgumentMetadata {
-					name: DecodeDifferent::Encode("_data"),
-					ty: DecodeDifferent::Encode("i32"),
+					name: "_data",
+					ty: "i32",
 				},
 				FunctionArgumentMetadata {
-					name: DecodeDifferent::Encode("_data2"),
-					ty: DecodeDifferent::Encode("String"),
+					name: "_data2",
+					ty: "String",
 				}
-			]),
-			documentation: DecodeDifferent::Encode(&[]),
+			],
+			documentation: vec![],
 		},
 		FunctionMetadata {
-			name: DecodeDifferent::Encode("aux_3"),
-			arguments: DecodeDifferent::Encode(&[]),
-			documentation: DecodeDifferent::Encode(&[]),
+			name: "aux_3",
+			arguments: vec![],
+			documentation: vec![],
 		},
 		FunctionMetadata {
-			name: DecodeDifferent::Encode("aux_4"),
-			arguments: DecodeDifferent::Encode(&[
+			name: "aux_4",
+			arguments: vec![
 				FunctionArgumentMetadata {
-					name: DecodeDifferent::Encode("_data"),
-					ty: DecodeDifferent::Encode("i32"),
+					name: "_data",
+					ty: "i32",
 				}
-			]),
-			documentation: DecodeDifferent::Encode(&[]),
+			],
+			documentation: vec![],
 		},
 		FunctionMetadata {
-			name: DecodeDifferent::Encode("aux_5"),
-			arguments: DecodeDifferent::Encode(&[
+			name: "aux_5",
+			arguments: vec![
 				FunctionArgumentMetadata {
-					name: DecodeDifferent::Encode("_data"),
-					ty: DecodeDifferent::Encode("i32"),
+					name: "_data",
+					ty: "i32",
 				},
 				FunctionArgumentMetadata {
-					name: DecodeDifferent::Encode("_data2"),
-					ty: DecodeDifferent::Encode("Compact<u32>")
+					name: "_data2",
+					ty: scale_info::meta_type::<Compact<u32>>()
 				}
-			]),
-			documentation: DecodeDifferent::Encode(&[]),
+			],
+			documentation: vec![],
 		},
 		FunctionMetadata {
-			name: DecodeDifferent::Encode("operational"),
-			arguments: DecodeDifferent::Encode(&[]),
-			documentation: DecodeDifferent::Encode(&[]),
+			name: "operational",
+			arguments: vec![],
+			documentation: vec![],
 		},
 	];
 

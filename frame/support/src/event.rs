@@ -553,6 +553,7 @@ macro_rules! __impl_outer_event_json_metadata {
 #[allow(dead_code)]
 mod tests {
 	use super::*;
+	use crate::metadata::*;
 	use serde::Serialize;
 	use codec::{Encode, Decode};
 
@@ -758,59 +759,60 @@ mod tests {
 	}
 
 	const EXPECTED_METADATA: OuterEventMetadata = OuterEventMetadata {
-		name: DecodeDifferent::Encode("TestEvent"),
-		events: DecodeDifferent::Encode(&[
-			(
-				"system",
-				FnEncode(|| &[
+		name: "TestEvent",
+		events: vec![
+			ModuleEventMetadata {
+				name: "system",
+				events: vec![EventMetadata {
+					name: "SystemEvent",
+					arguments: vec![],
+					documentation: vec![],
+				}]
+			},
+			ModuleEventMetadata {
+				name: "event_module",
+				events: vec![
 					EventMetadata {
-						name: DecodeDifferent::Encode("SystemEvent"),
-						arguments: DecodeDifferent::Encode(&[]),
-						documentation: DecodeDifferent::Encode(&[]),
+						name: "TestEvent",
+						arguments: vec![
+							TypeSpec::new::<Balance>("Balance"),
+							TypeSpec::new::<Origin>("Origin"),
+						],
+						documentation: vec![ " Hi, I am a comment." ]
+					},
+					EventMetadata {
+						name: "EventWithoutParams",
+						arguments: vec![],
+						documentation: vec![ " Dog" ],
+					},
+				]
+			},
+			ModuleEventMetadata {
+				name: "event_module2",
+				events: vec![
+					EventMetadata {
+						name: "TestEvent",
+						arguments: vec![TypeSpec::new::<Balance>("BalanceRenamed")],
+						documentation: vec![]
+					},
+					EventMetadata {
+						name: "TestOrigin",
+						arguments: vec![TypeSpec::new::<Origin>("OriginRenamed")],
+						documentation: vec![],
+					},
+				]
+			},
+			ModuleEventMetadata {
+				name: "event_module3",
+				events: vec![
+					EventMetadata {
+						name: "HiEvent",
+						arguments: vec![],
+						documentation: vec![]
 					}
-				])
-			),
-			(
-				"event_module",
-				FnEncode(|| &[
-					EventMetadata {
-						name: DecodeDifferent::Encode("TestEvent"),
-						arguments: DecodeDifferent::Encode(&[ "Balance", "Origin" ]),
-						documentation: DecodeDifferent::Encode(&[ " Hi, I am a comment." ])
-					},
-					EventMetadata {
-						name: DecodeDifferent::Encode("EventWithoutParams"),
-						arguments: DecodeDifferent::Encode(&[]),
-						documentation: DecodeDifferent::Encode(&[ " Dog" ]),
-					},
-				])
-			),
-			(
-				"event_module2",
-				FnEncode(|| &[
-					EventMetadata {
-						name: DecodeDifferent::Encode("TestEvent"),
-						arguments: DecodeDifferent::Encode(&[ "BalanceRenamed" ]),
-						documentation: DecodeDifferent::Encode(&[])
-					},
-					EventMetadata {
-						name: DecodeDifferent::Encode("TestOrigin"),
-						arguments: DecodeDifferent::Encode(&[ "OriginRenamed" ]),
-						documentation: DecodeDifferent::Encode(&[]),
-					},
-				])
-			),
-			(
-				"event_module3",
-				FnEncode(|| &[
-					EventMetadata {
-						name: DecodeDifferent::Encode("HiEvent"),
-						arguments: DecodeDifferent::Encode(&[]),
-						documentation: DecodeDifferent::Encode(&[])
-					}
-				])
-			)
-		])
+				]
+			}
+		]
 	};
 
 	#[test]

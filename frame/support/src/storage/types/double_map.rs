@@ -20,7 +20,7 @@
 
 use codec::{FullCodec, Decode, EncodeLike, Encode};
 use crate::{
-	metadata::StorageEntryModifier,
+	metadata::{StorageEntryModifier, StorageEntryType},
 	storage::{
 		StorageAppend, StorageDecodeLength,
 		types::{OptionQuery, StorageEntryMetadata, QueryKindTrait},
@@ -28,7 +28,6 @@ use crate::{
 	traits::{GetDefault, StorageInstance},
 };
 use sp_std::vec::Vec;
-use crate::metadata::StorageEntryType;
 
 /// A type that allow to store values for `(key1, key2)` couple. Similar to `StorageMap` but allow
 /// to iterate and remove value associated to first key.
@@ -417,10 +416,13 @@ impl<Prefix, Hasher1, Hasher2, Key1, Key2, Value, QueryKind, OnEmpty> StorageEnt
 #[cfg(test)]
 mod test {
 	use super::*;
+	use assert_matches::assert_matches;
 	use sp_io::{TestExternalities, hashing::twox_128};
 	use crate::hash::*;
-	use crate::storage::types::ValueQuery;
-	use frame_metadata::StorageEntryModifier;
+	use crate::{
+		metadata::{StorageEntryModifier, StorageEntryType, StorageHasher},
+		storage::types::ValueQuery,
+	};
 
 	struct Prefix;
 	impl StorageInstance for Prefix {
@@ -573,19 +575,20 @@ mod test {
 
 			assert_eq!(A::MODIFIER, StorageEntryModifier::Optional);
 			assert_eq!(AValueQueryWithAnOnEmpty::MODIFIER, StorageEntryModifier::Default);
-			assert_eq!(A::HASHER1, frame_metadata::StorageHasher::Blake2_128Concat);
-			assert_eq!(A::HASHER2, frame_metadata::StorageHasher::Twox64Concat);
-			assert_eq!(
-				AValueQueryWithAnOnEmpty::HASHER1,
-				frame_metadata::StorageHasher::Blake2_128Concat
-			);
-			assert_eq!(
-				AValueQueryWithAnOnEmpty::HASHER2,
-				frame_metadata::StorageHasher::Twox64Concat
-			);
+			assert_matches!(A::ty(), StorageEntryType::DoubleMap {
+				hasher: StorageHasher::Blake2_128Concat,
+				key2_hasher: StorageHasher::Twox64Concat,
+				..
+			});
+			assert_matches!(AValueQueryWithAnOnEmpty::ty(), StorageEntryType::DoubleMap {
+				hasher: StorageHasher::Blake2_128Concat,
+				key2_hasher: StorageHasher::Twox64Concat,
+				..
+			});
+
 			assert_eq!(A::NAME, "foo");
-			assert_eq!(AValueQueryWithAnOnEmpty::DEFAULT.0.default_byte(), 97u32.encode());
-			assert_eq!(A::DEFAULT.0.default_byte(), Option::<u32>::None.encode());
+			assert_eq!(AValueQueryWithAnOnEmpty::default(), 97u32.encode());
+			assert_eq!(A::default(), Option::<u32>::None.encode());
 
 			WithLen::remove_all();
 			assert_eq!(WithLen::decode_len(3, 30), None);

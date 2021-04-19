@@ -319,8 +319,10 @@ mod test {
 	use super::*;
 	use sp_io::{TestExternalities, hashing::twox_128};
 	use crate::hash::*;
-	use crate::storage::types::ValueQuery;
-	use frame_metadata::StorageEntryModifier;
+	use crate::{
+		metadata::{StorageEntryModifier, StorageHasher},
+		storage::types::ValueQuery
+	};
 
 	struct Prefix;
 	impl StorageInstance for Prefix {
@@ -470,14 +472,14 @@ mod test {
 
 			assert_eq!(A::MODIFIER, StorageEntryModifier::Optional);
 			assert_eq!(AValueQueryWithAnOnEmpty::MODIFIER, StorageEntryModifier::Default);
-			assert_eq!(A::HASHER, frame_metadata::StorageHasher::Blake2_128Concat);
+			assert_eq!(A::HASHER, StorageHasher::Blake2_128Concat);
 			assert_eq!(
 				AValueQueryWithAnOnEmpty::HASHER,
-				frame_metadata::StorageHasher::Blake2_128Concat
+				StorageHasher::Blake2_128Concat
 			);
 			assert_eq!(A::NAME, "foo");
-			assert_eq!(AValueQueryWithAnOnEmpty::DEFAULT.0.default_byte(), 97u32.encode());
-			assert_eq!(A::DEFAULT.0.default_byte(), Option::<u32>::None.encode());
+			assert_eq!(AValueQueryWithAnOnEmpty::default(), 97u32.encode());
+			assert_eq!(A::default(), Option::<u32>::None.encode());
 
 			WithLen::remove_all();
 			assert_eq!(WithLen::decode_len(3), None);
