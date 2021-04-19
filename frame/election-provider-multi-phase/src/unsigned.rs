@@ -25,7 +25,7 @@ use sp_npos_elections::{
 	assignment_staked_to_ratio_normalized,
 };
 use sp_runtime::{offchain::storage::StorageValueRef, traits::TrailingZeroInput};
-use sp_std::{cmp::Ordering, collections::btree_map::BTreeMap, convert::TryFrom};
+use sp_std::{cmp::Ordering, convert::TryFrom};
 
 /// Storage key used to store the persistent offchain worker status.
 pub(crate) const OFFCHAIN_HEAD_DB: &[u8] = b"parity/multi-phase-unsigned-election";
@@ -179,10 +179,12 @@ impl<T: Config> Pallet<T> {
 		let ElectionResult { mut assignments, winners } = election_result;
 		// Sort the assignments by reversed voter stake. This ensures that we can efficiently
 		// truncate the list.
-		let stakes: BTreeMap<_, _> =
-			voters.iter().map(|(who, stake, _)| (who.clone(), *stake)).collect();
 		assignments.sort_by_key(|Assignment::<T> { who, .. }| {
-			sp_std::cmp::Reverse(stakes.get(who).cloned().unwrap_or_default())
+			let stake = cache.get(who).map(|idx| {
+				let (_, stake, _) = voters[*idx];
+				stake
+			}).unwrap_or_default();
+			sp_std::cmp::Reverse(stake)
 		});
 
 		// Reduce (requires round-trip to staked form)
