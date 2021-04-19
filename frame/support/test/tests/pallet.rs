@@ -882,13 +882,11 @@ fn metadata_vnext() {
 				arguments: vec![
 					vnext::FunctionArgumentMetadata {
 						name: "_foo",
-						ty: meta_type::<u32>(),
-						is_compact: true,
+						ty: meta_type::<Compact<u32>>(),
 					},
 					vnext::FunctionArgumentMetadata {
 						name: "_bar",
-						ty: meta_type::<u32>(),
-						is_compact: false,
+						ty: meta_type::<Compact<u32>>(),
 					},
 				],
 				documentation: vec![" Doc comment put in metadata"],
@@ -898,8 +896,7 @@ fn metadata_vnext() {
 				arguments: vec![
 					vnext::FunctionArgumentMetadata {
 						name: "foo",
-						ty: meta_type::<u32>(),
-						is_compact: true,
+						ty: meta_type::<Compact<u32>>(),
 					},
 				],
 				documentation: vec![" Doc comment put in metadata"],

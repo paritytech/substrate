@@ -56,12 +56,6 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			.collect::<Vec<_>>()
 	});
 
-	let args_is_compact = def.call.methods.iter().map(|method| {
-		method.args.iter()
-			.map(|(is_compact, _, _)| is_compact)
-			.collect::<Vec<_>>()
-	});
-
 	let default_docs = [syn::parse_quote!(
 		r"Contains one variant per dispatchable that can be called by an extrinsic."
 	)];
@@ -187,7 +181,6 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 							#frame_support::metadata::FunctionArgumentMetadata {
 								name: stringify!(#args_name),
 								ty: #frame_support::scale_info::meta_type::<#args_type>(),
-								is_compact: #args_is_compact,
 							},
 						)* ],
 						documentation: #frame_support::scale_info::prelude::vec![ #( #fn_doc ),* ],

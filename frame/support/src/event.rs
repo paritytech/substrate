@@ -552,7 +552,6 @@ macro_rules! __impl_outer_event_json_metadata {
 #[cfg(test)]
 #[allow(dead_code)]
 mod tests {
-	use super::*;
 	use crate::metadata::*;
 	use serde::Serialize;
 	use codec::{Encode, Decode};
@@ -775,8 +774,8 @@ mod tests {
 					EventMetadata {
 						name: "TestEvent",
 						arguments: vec![
-							TypeSpec::new::<Balance>("Balance"),
-							TypeSpec::new::<Origin>("Origin"),
+							TypeSpec::new::<u32>("Balance"),
+							TypeSpec::new::<u32>("Origin"),
 						],
 						documentation: vec![ " Hi, I am a comment." ]
 					},
@@ -792,12 +791,12 @@ mod tests {
 				events: vec![
 					EventMetadata {
 						name: "TestEvent",
-						arguments: vec![TypeSpec::new::<Balance>("BalanceRenamed")],
+						arguments: vec![TypeSpec::new::<u32>("BalanceRenamed")],
 						documentation: vec![]
 					},
 					EventMetadata {
 						name: "TestOrigin",
-						arguments: vec![TypeSpec::new::<Origin>("OriginRenamed")],
+						arguments: vec![TypeSpec::new::<u32>("OriginRenamed")],
 						documentation: vec![],
 					},
 				]

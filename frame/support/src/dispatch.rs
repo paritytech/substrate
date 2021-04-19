@@ -2513,24 +2513,12 @@ macro_rules! __function_to_metadata {
 					$crate::metadata::FunctionArgumentMetadata {
 						name: stringify!($param_name),
 						ty: $crate::scale_info::meta_type::<$param>(),
-						is_compact: $crate::__function_to_metadata!(@has_compact_attr
-							$(#[$codec_attr])* $param_name
-						)
 					}
 				),*
 			],
 			documentation: $crate::scale_info::prelude::vec![ $( $fn_doc ),* ],
 		}
 	};
-
-	(@has_compact_attr #[compact] $param_name:ident) => { true };
-	(@has_compact_attr $param_name:ident) => { false };
-	(@has_compact_attr $(#[codec_attr:ident])* $param_name:ident) => {
-		compile_error!(concat!(
-			"Invalid attribute for parameter `", stringify!($param_name),
-			"`, the following attributes are supported: `#[compact]`"
-		));
-	}
 }
 
 #[macro_export]
@@ -2596,6 +2584,7 @@ mod tests {
 		IntegrityTest, Get, PalletInfo,
 	};
 	use crate::metadata::*;
+	use codec::Compact;
 
 	pub trait Config: system::Config + Sized where Self::AccountId: From<u32> { }
 
