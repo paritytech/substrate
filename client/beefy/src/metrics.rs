@@ -22,7 +22,16 @@ use prometheus::{register, Counter, Gauge, PrometheusError, Registry, U64};
 pub(crate) struct Metrics {
 	/// Current active validator set id
 	pub beefy_validator_set_id: Gauge<U64>,
-	pub beefy_gadget_votes: Counter<U64>,
+	/// Total number of votes sent by this node
+	pub beefy_votes_sent: Counter<U64>,
+	/// Most recent concluded voting round
+	pub beefy_round_concluded: Gauge<U64>,
+	/// Best block finalized by BEEFY
+	pub beefy_best_block: Gauge<U64>,
+	/// Next block BEEFY should vote on
+	pub beefy_should_vote_on: Gauge<U64>,
+	/// Number of sessions without a signed commitment
+	pub beefy_skipped_sessions: Counter<U64>,
 }
 
 impl Metrics {
@@ -32,10 +41,51 @@ impl Metrics {
 				Gauge::new("beefy_validator_set_id", "Current BEEFY active validator set id.")?,
 				registry,
 			)?,
-			beefy_gadget_votes: register(
-				Counter::new("beefy_gadget_votes_total", "Total number of vote messages gossiped.")?,
+			beefy_votes_sent: register(
+				Counter::new("beefy_votes_sent", "Number of votes sent by this node")?,
+				registry,
+			)?,
+			beefy_round_concluded: register(
+				Gauge::new("beefy_round_concluded", "Voting round, that has been concluded")?,
+				registry,
+			)?,
+			beefy_best_block: register(
+				Gauge::new("beefy_best_block", "Best block finalized by BEEFY")?,
+				registry,
+			)?,
+			beefy_should_vote_on: register(
+				Gauge::new("beefy_should_vote_on", "Next block, BEEFY should vote on")?,
+				registry,
+			)?,
+			beefy_skipped_sessions: register(
+				Counter::new(
+					"beefy_skipped_sessions",
+					"Number of sessions without a signed commitment",
+				)?,
 				registry,
 			)?,
 		})
 	}
+}
+
+// Note: we use the `format` macro to convert an expr into a `u64`. This will fail,
+// if expr does not derive `Display`.
+#[macro_export]
+macro_rules! metric_set {
+	($self:ident, $m:ident, $v:expr) => {{
+		let val: u64 = format!("{}", $v).parse().unwrap();
+
+		if let Some(metrics) = $self.metrics.as_ref() {
+			metrics.$m.set(val);
+		}
+	}};
+}
+
+#[macro_export]
+macro_rules! metric_inc {
+	($self:ident, $m:ident) => {{
+		if let Some(metrics) = $self.metrics.as_ref() {
+			metrics.$m.inc();
+		}
+	}};
 }

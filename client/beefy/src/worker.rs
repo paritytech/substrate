@@ -46,6 +46,7 @@ use beefy_primitives::{
 
 use crate::{
 	error::{self},
+	metric_inc, metric_set,
 	metrics::Metrics,
 	notification, round,
 	validator::{topic, BeefyGossipValidator},
@@ -67,6 +68,7 @@ where
 	signed_commitment_sender: notification::BeefySignedCommitmentSender<B, P::Signature>,
 	gossip_engine: Arc<Mutex<GossipEngine<B>>>,
 	gossip_validator: Arc<BeefyGossipValidator<B, P>>,
+	/// Min delta in block numbers between two blocks, BEEFY should vote on
 	min_block_delta: u32,
 	metrics: Option<Metrics>,
 	rounds: round::Rounds<MmrRootHash, NumberFor<B>, P::Public, P::Signature>,
@@ -77,6 +79,9 @@ where
 	best_beefy_block: Option<NumberFor<B>>,
 	/// Best block this node has voted for
 	best_block_voted_on: NumberFor<B>,
+	/// Validator set id for the last signed commitment
+	last_signed_id: u64,
+	// keep rustc happy
 	_backend: PhantomData<BE>,
 	_pair: PhantomData<P>,
 }
@@ -119,6 +124,7 @@ where
 			best_grandpa_block: client.info().finalized_number,
 			best_beefy_block: None,
 			best_block_voted_on: Zero::zero(),
+			last_signed_id: 0,
 			_backend: PhantomData,
 			_pair: PhantomData,
 		}
@@ -159,6 +165,8 @@ where
 			next_power_of_two,
 			next_block_to_vote_on,
 		);
+
+		metric_set!(self, beefy_should_vote_on, next_block_to_vote_on);
 
 		number == next_block_to_vote_on
 	}
@@ -212,8 +220,11 @@ where
 		if let Some(active) = self.validator_set(&notification.header) {
 			debug!(target: "beefy", "🥩 Active validator set id: {:?}", active);
 
-			if let Some(metrics) = self.metrics.as_ref() {
-				metrics.beefy_validator_set_id.set(active.id);
+			metric_set!(self, beefy_validator_set_id, active.id);
+
+			// BEEFY should produce a signed commitment for each session
+			if (active.id != GENESIS_AUTHORITY_SET_ID) && (active.id != (1 + self.last_signed_id)) {
+				metric_inc!(self, beefy_skipped_sessions);
 			}
 
 			// Authority set change or genesis set id triggers new voting rounds
@@ -227,6 +238,10 @@ where
 				debug!(target: "beefy", "🥩 New Rounds for id: {:?}", active.id);
 
 				self.best_beefy_block = Some(*notification.header.number());
+
+				// this metric is kind of 'fake'. Best BEEFY block should only be updated once we have a
+				// signed commitment for the block. Remove once the above TODO is done.
+				metric_set!(self, beefy_best_block, *notification.header.number());
 			}
 		};
 
@@ -269,9 +284,7 @@ where
 
 			let encoded_message = message.encode();
 
-			if let Some(metrics) = self.metrics.as_ref() {
-				metrics.beefy_gadget_votes.inc();
-			}
+			metric_inc!(self, beefy_votes_sent);
 
 			debug!(target: "beefy", "🥩 Sent vote message: {:?}", message);
 
@@ -293,18 +306,25 @@ where
 
 		if vote_added && self.rounds.is_done(&round) {
 			if let Some(signatures) = self.rounds.drop(&round) {
+				// id is stored for skipped session metric calculation
+				self.last_signed_id = self.rounds.validator_set_id();
+
 				let commitment = Commitment {
 					payload: round.0,
 					block_number: round.1,
-					validator_set_id: self.rounds.validator_set_id(),
+					validator_set_id: self.last_signed_id,
 				};
 
 				let signed_commitment = SignedCommitment { commitment, signatures };
+
+				metric_set!(self, beefy_round_concluded, round.1);
 
 				info!(target: "beefy", "🥩 Round #{} concluded, committed: {:?}.", round.1, signed_commitment);
 
 				self.signed_commitment_sender.notify(signed_commitment);
 				self.best_beefy_block = Some(round.1);
+
+				metric_set!(self, beefy_best_block, round.1);
 			}
 		}
 	}
