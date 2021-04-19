@@ -175,19 +175,7 @@ where
 		return Err(FinalityProofError::BlockNotYetFinalized);
 	}
 
-	let authority_set_change_id = if let Some(set_id) = authority_set_changes.get_set_id(block) {
-		set_id
-	} else {
-		trace!(
-			target: "afg",
-			"AuthoritySetChanges does not cover the requested block #{}. \
-			Maybe the subscription API is more appropriate.",
-			block,
-		);
-		return Err(FinalityProofError::BlockNotInAuthoritySetChanges);
-	};
-
-	let (justification, just_block) = match authority_set_change_id {
+	let (justification, just_block) = match authority_set_changes.get_set_id(block) {
 		AuthoritySetChangeId::Latest => {
 			if let Some(justification) = best_justification(backend)?
 				.map(|j: GrandpaJustification<Block>| (j.encode(), j.target().0))
@@ -220,6 +208,15 @@ where
 				return Ok(None);
 			};
 			(justification, last_block_for_set)
+		}
+		AuthoritySetChangeId::Unknown => {
+			trace!(
+				target: "afg",
+				"AuthoritySetChanges does not cover the requested block #{} due to missing data. \
+				 You need to resync to populate AuthoritySetChanges properly.",
+				block,
+			);
+			return Err(FinalityProofError::BlockNotInAuthoritySetChanges);
 		}
 	};
 
