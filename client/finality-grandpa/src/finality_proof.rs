@@ -207,7 +207,7 @@ where
 			(justification, last_block_for_set)
 		}
 		AuthoritySetChangeId::Unknown => {
-			trace!(
+			warn!(
 				target: "afg",
 				"AuthoritySetChanges does not cover the requested block #{} due to missing data. \
 				 You need to resync to populate AuthoritySetChanges properly.",
