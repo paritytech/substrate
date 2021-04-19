@@ -18,6 +18,10 @@
 
 //! Utilities for dealing with authorities, authority sets, and handoffs.
 
+use std::cmp::Ord;
+use std::fmt::Debug;
+use std::ops::Add;
+
 use fork_tree::ForkTree;
 use parking_lot::MappedMutexGuard;
 use finality_grandpa::voter_set::VoterSet;
@@ -28,10 +32,6 @@ use sp_finality_grandpa::{AuthorityId, AuthorityList};
 use sc_consensus::shared_data::{SharedData, SharedDataLocked};
 
 use crate::SetId;
-
-use std::cmp::Ord;
-use std::fmt::Debug;
-use std::ops::Add;
 
 /// Error type returned on operations on the `AuthoritySet`.
 #[derive(Debug, derive_more::Display)]

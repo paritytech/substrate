@@ -39,12 +39,9 @@
 use log::trace;
 use std::sync::Arc;
 
-use finality_grandpa::BlockNumberOps;
 use parity_scale_codec::{Encode, Decode};
-use sp_blockchain::{
-	Backend as BlockchainBackend, HeaderBackend, Error as ClientError, Result as ClientResult
-};
-use sp_finality_grandpa::{GRANDPA_ENGINE_ID, SetId};
+use sp_blockchain::{Backend as BlockchainBackend, HeaderBackend};
+use sp_finality_grandpa::GRANDPA_ENGINE_ID;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{NumberFor, Block as BlockT, Header as HeaderT, One},
@@ -244,35 +241,12 @@ where
 	))
 }
 
-/// Check GRANDPA proof-of-finality for the given block.
-///
-/// Returns the vector of headers that MUST be validated + imported
-/// AND if at least one of those headers is invalid, all other MUST be considered invalid.
-///
-/// This is currently not used, and exists primarily as an example of how to check finality proofs.
-#[allow(unused)]
-fn check_finality_proof<Block: BlockT>(
-	current_set_id: SetId,
-	current_authorities: sp_finality_grandpa::AuthorityList,
-	remote_proof: Vec<u8>,
-) -> ClientResult<FinalityProof<Block::Header>>
-where
-	NumberFor<Block>: BlockNumberOps,
-{
-	let proof = FinalityProof::<Block::Header>::decode(&mut &remote_proof[..])
-		.map_err(|_| ClientError::BadJustification("failed to decode finality proof".into()))?;
-
-	let justification: GrandpaJustification<Block> = Decode::decode(&mut &proof.justification[..])
-		.map_err(|_| ClientError::JustificationDecode)?;
-	justification.verify(current_set_id, &current_authorities)?;
-
-	Ok(proof)
-}
-
 #[cfg(test)]
 pub(crate) mod tests {
 	use super::*;
-	use crate::authorities::AuthoritySetChanges;
+	use crate::{
+		authorities::AuthoritySetChanges, BlockNumberOps, ClientError, SetId,
+	};
 	use futures::executor::block_on;
 	use sc_block_builder::BlockBuilderProvider;
 	use sc_client_api::{apply_aux, LockImportRun};
@@ -285,6 +259,28 @@ pub(crate) mod tests {
 		Backend as TestBackend, ClientBlockImportExt, ClientExt, DefaultTestClientBuilderExt,
 		TestClient, TestClientBuilder, TestClientBuilderExt,
 	};
+
+	/// Check GRANDPA proof-of-finality for the given block.
+	///
+	/// Returns the vector of headers that MUST be validated + imported
+	/// AND if at least one of those headers is invalid, all other MUST be considered invalid.
+	fn check_finality_proof<Block: BlockT>(
+		current_set_id: SetId,
+		current_authorities: sp_finality_grandpa::AuthorityList,
+		remote_proof: Vec<u8>,
+	) -> sp_blockchain::Result<super::FinalityProof<Block::Header>>
+	where
+		NumberFor<Block>: BlockNumberOps,
+	{
+		let proof = super::FinalityProof::<Block::Header>::decode(&mut &remote_proof[..])
+			.map_err(|_| ClientError::BadJustification("failed to decode finality proof".into()))?;
+
+		let justification: GrandpaJustification<Block> = Decode::decode(&mut &proof.justification[..])
+			.map_err(|_| ClientError::JustificationDecode)?;
+		justification.verify(current_set_id, &current_authorities)?;
+
+		Ok(proof)
+	}
 
 	pub(crate) type FinalityProof = super::FinalityProof<Header>;
 
