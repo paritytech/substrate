@@ -1355,7 +1355,7 @@ mod solution_type {
 		};
 
 		let compacted = TestSolutionCompact::from_assignment(
-			assignments.clone(),
+			&assignments,
 			voter_index,
 			target_index,
 		).unwrap();
@@ -1518,7 +1518,7 @@ mod solution_type {
 		];
 
 		let compacted = TestSolutionCompact::from_assignment(
-			assignments.clone(),
+			&assignments,
 			voter_index,
 			target_index,
 		);
@@ -1549,7 +1549,7 @@ mod solution_type {
 		};
 
 		let compacted = TestSolutionCompact::from_assignment(
-			assignments.clone(),
+			&assignments,
 			voter_index,
 			target_index,
 		).unwrap();
