@@ -2657,73 +2657,75 @@ mod tests {
 		}
 	}
 
-	const EXPECTED_METADATA: &'static [FunctionMetadata] = &[
-		FunctionMetadata {
-			name: "aux_0",
-			arguments: vec![],
-			documentation: vec![
-				" Hi, this is a comment."
-			]
-		},
-		FunctionMetadata {
-			name: "aux_1",
-			arguments: vec![
-				FunctionArgumentMetadata {
-					name: "_data",
-					ty: scale_info::meta_type::<Compact<u32>>(),
-				}
-			],
-			documentation: vec![],
-		},
-		FunctionMetadata {
-			name: "aux_2",
-			arguments: vec![
-				FunctionArgumentMetadata {
-					name: "_data",
-					ty: scale_info::meta_type::<i32>(),
-				},
-				FunctionArgumentMetadata {
-					name: "_data2",
-					ty: scale_info::meta_type::<String>(),
-				}
-			],
-			documentation: vec![],
-		},
-		FunctionMetadata {
-			name: "aux_3",
-			arguments: vec![],
-			documentation: vec![],
-		},
-		FunctionMetadata {
-			name: "aux_4",
-			arguments: vec![
-				FunctionArgumentMetadata {
-					name: "_data",
-					ty: scale_info::meta_type::<i32>(),
-				}
-			],
-			documentation: vec![],
-		},
-		FunctionMetadata {
-			name: "aux_5",
-			arguments: vec![
-				FunctionArgumentMetadata {
-					name: "_data",
-					ty: scale_info::meta_type::<u32>(),
-				},
-				FunctionArgumentMetadata {
-					name: "_data2",
-					ty: scale_info::meta_type::<Compact<u32>>()
-				}
-			],
-			documentation: vec![],
-		},
-		FunctionMetadata {
-			name: "operational",
-			arguments: vec![],
-			documentation: vec![],
-		},
-	];
+	fn expected_metadata() -> Vec<FunctionMetadata> {
+		vec![
+			FunctionMetadata {
+				name: "aux_0",
+				arguments: vec![],
+				documentation: vec![
+					" Hi, this is a comment."
+				]
+			},
+			FunctionMetadata {
+				name: "aux_1",
+				arguments: vec![
+					FunctionArgumentMetadata {
+						name: "_data",
+						ty: scale_info::meta_type::<Compact<u32>>(),
+					}
+				],
+				documentation: vec![],
+			},
+			FunctionMetadata {
+				name: "aux_2",
+				arguments: vec![
+					FunctionArgumentMetadata {
+						name: "_data",
+						ty: scale_info::meta_type::<i32>(),
+					},
+					FunctionArgumentMetadata {
+						name: "_data2",
+						ty: scale_info::meta_type::<String>(),
+					}
+				],
+				documentation: vec![],
+			},
+			FunctionMetadata {
+				name: "aux_3",
+				arguments: vec![],
+				documentation: vec![],
+			},
+			FunctionMetadata {
+				name: "aux_4",
+				arguments: vec![
+					FunctionArgumentMetadata {
+						name: "_data",
+						ty: scale_info::meta_type::<i32>(),
+					}
+				],
+				documentation: vec![],
+			},
+			FunctionMetadata {
+				name: "aux_5",
+				arguments: vec![
+					FunctionArgumentMetadata {
+						name: "_data",
+						ty: scale_info::meta_type::<u32>(),
+					},
+					FunctionArgumentMetadata {
+						name: "_data2",
+						ty: scale_info::meta_type::<Compact<u32>>()
+					}
+				],
+				documentation: vec![],
+			},
+			FunctionMetadata {
+				name: "operational",
+				arguments: vec![],
+				documentation: vec![],
+			},
+		]
+	}
 
 	#[derive(scale_info::TypeInfo)]
 	pub struct TraitImpl {}
@@ -2773,7 +2775,7 @@ mod tests {
 	#[test]
 	fn module_json_metadata() {
 		let metadata = Module::<TraitImpl>::call_functions();
-		assert_eq!(EXPECTED_METADATA, metadata);
+		assert_eq!(expected_metadata(), metadata);
 	}
 
 	#[test]

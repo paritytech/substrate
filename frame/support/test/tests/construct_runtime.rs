@@ -511,76 +511,116 @@ fn call_codec() {
 // todo: [AJ] update test below with v13 metadata from above
 #[test]
 fn test_metadata() {
-	use crate::metadata::*;
-	use frame_support::scale_info::{form::MetaForm, IntoPortable, Registry};
-	// vnext modules defined with legacy macros have empty metadata
-	let expected_metadata: vnext::RuntimeMetadataLastVersion<MetaForm> = vnext::RuntimeMetadataLastVersion {
-		modules: vec![
-			vnext::ModuleMetadata {
-				name: "System",
-				calls: Some(vec![]),
-				event: Some(vec![]),
-			},
-			vnext::ModuleMetadata {
-				name: "Module1_1",
-				calls: Some(vec![]),
-				event: Some(vec![]),
-			},
-			vnext::ModuleMetadata {
-				name: "Module2",
-				calls: Some(vec![]),
-				event: Some(vec![]),
-			},
-			vnext::ModuleMetadata {
-				name: "Module1_2",
-				calls: Some(vec![]),
-				event: Some(vec![]),
-			},
-			vnext::ModuleMetadata {
-				name: "Module1_3",
-				calls: None,
-				event: None,
-			},
-			vnext::ModuleMetadata {
-				name: "Module1_4",
-				calls: Some(vec![]),
-				event: None,
-			},
-			vnext::ModuleMetadata {
-				name: "Module1_5",
-				calls: None,
-				event: Some(vec![]),
-			},
-			vnext::ModuleMetadata {
-				name: "Module1_6",
-				calls: Some(vec![]),
-				event: Some(vec![]),
-			},
-			vnext::ModuleMetadata {
-				name: "Module1_7",
-				calls: Some(vec![]),
-				event: Some(vec![]),
-			},
-			vnext::ModuleMetadata {
-				name: "Module1_8",
-				calls: Some(vec![]),
-				event: Some(vec![]),
-			},
-			vnext::ModuleMetadata {
-				name: "Module1_9",
-				calls: Some(vec![]),
-				event: Some(vec![]),
-			}
-		],
-		// todo [AJ]: add back extrinsic
-		// extrinsic: ExtrinsicMetadata {
-		// 	version: 4,
-		// 	signed_extensions: vec![DecodeDifferent::Encode("UnitSignedExtension")],
-		// },
+	use scale_info::{form::MetaForm, IntoPortable, Registry};
+	use frame_support::metadata::*;
+	let modules = modules: vec![
+		ModuleMetadata {
+			name: "System",
+			storage: None,
+			calls: Some(vec![]),
+			event: Some(vec![]),
+			constants: vec![],
+			errors: vec![],
+			index: 0
+		},
+		ModuleMetadata {
+			name: "Module1_1",
+			storage: None,
+			calls: Some(vec![]),
+			event: Some(vec![]),
+			constants: vec![],
+			errors: vec![],
+			index: 1
+		},
+		ModuleMetadata {
+			name: "Module2",
+			storage: None,
+			calls: Some(vec![]),
+			event: Some(vec![]),
+			constants: vec![],
+			errors: vec![],
+			index: 2
+		},
+		ModuleMetadata {
+			name: "Module1_2",
+			storage: None,
+			calls: Some(vec![]),
+			event: Some(vec![]),
+			constants: vec![],
+			errors: vec![],
+			index: 3
+		},
+		ModuleMetadata {
+			name: "Module1_3",
+			storage: None,
+			calls: None,
+			event: None,
+			constants: vec![],
+			errors: vec![],
+			index: 4
+		},
+		ModuleMetadata {
+			name: "Module1_4",
+			storage: None,
+			calls: Some(vec![]),
+			event: None,
+			constants: vec![],
+			errors: vec![],
+			index: 5
+		},
+		ModuleMetadata {
+			name: "Module1_5",
+			storage: None,
+			calls: None,
+			event: Some(vec![]),
+			constants: vec![],
+			errors: vec![],
+			index: 6
+		},
+		ModuleMetadata {
+			name: "Module1_6",
+			storage: None,
+			calls: Some(vec![]),
+			event: Some(vec![]),
+			constants: vec![],
+			errors: vec![],
+			index: 7
+		},
+		ModuleMetadata {
+			name: "Module1_7",
+			storage: None,
+			calls: Some(vec![]),
+			event: Some(vec![]),
+			constants: vec![],
+			errors: vec![],
+			index: 8
+		},
+		ModuleMetadata {
+			name: "Module1_8",
+			storage: None,
+			calls: Some(vec![]),
+			event: Some(vec![]),
+			constants: vec![],
+			errors: vec![],
+			index: 9
+		},
+		ModuleMetadata {
+			name: "Module1_9",
+			storage: None,
+			calls: Some(vec![]),
+			event: Some(vec![]),
+			constants: vec![],
+			errors: vec![],
+			index: 10
+		}
+	];
+	let extrinsic = ExtrinsicMetadata {
+		ty: scale_info::meta_type::<UncheckedExtrinsic>(),
+		version: 0,
+		signed_extensions: vec![]
 	};
-	let mut registry = Registry::new();
-	let expected_metadata = expected_metadata.into_portable(&mut registry);
-	pretty_assertions::assert_eq!(Runtime::metadata().1, vnext::RuntimeMetadata::V12(expected_metadata));
+	let expected_metadata = RuntimeMetadataLastVersion::new(modules, extrinsic);
+	pretty_assertions::assert_eq!(Runtime::metadata().1, RuntimeMetadata::V13(expected_metadata));
 }
 
 #[test]

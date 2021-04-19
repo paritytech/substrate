@@ -25,7 +25,7 @@ use sp_runtime::{
 };
 use sp_core::H256;
 use sp_io;
-use frame_support::{impl_outer_origin, impl_outer_event, parameter_types};
+use frame_support::parameter_types;
 use frame_support::weights::{Weight, DispatchInfo, IdentityFee};
 use pallet_transaction_payment::CurrencyAdapter;
 use crate::{
