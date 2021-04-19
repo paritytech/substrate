@@ -17,7 +17,7 @@ trap cleanup SIGINT SIGTERM EXIT
 	echo "Running keystore"
 	set RUST_LOG=debug
 
-	cd remote-keystore || exit
+	cd remote-keystore
 	cargo run --bin server --features server &> keystore.out
 ) &
 
