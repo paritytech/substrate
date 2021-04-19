@@ -202,7 +202,7 @@ pub trait StateApi<Hash> {
 	/// 	somewhere in Substrate source. ("Non-hardcoded" targets typically come from frame
 	/// 	support macros.)
 	/// - `storage_keys` (param index 2): String of comma separated (no spaces) hex encoded
-	/// 	storage keys. (No `0x` prefix). If an empty string is specified no events will
+	/// 	(no `0x` prefix) storage keys. If an empty string is specified no events will
 	/// 	be filtered out. If anything other than an empty string is specified, events
 	/// 	will be filtered by storage key (so non-storage events will **not** show up).
 	/// 	You can specify any degree of a storage key prefix (i.e. if a specified storage
