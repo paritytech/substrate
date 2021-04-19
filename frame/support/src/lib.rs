@@ -1234,7 +1234,7 @@ pub mod pallet_prelude {
 		EqNoBound, PartialEqNoBound, RuntimeDebugNoBound, DebugNoBound, CloneNoBound, Twox256,
 		Twox128, Blake2_256, Blake2_128, Identity, Twox64Concat, Blake2_128Concat, ensure,
 		RuntimeDebug, storage,
-		traits::{Get, Hooks, IsType, GetPalletVersion, EnsureOrigin},
+		traits::{Get, Hooks, IsType, GetPalletVersion, EnsureOrigin, PalletInfoAccess},
 		dispatch::{DispatchResultWithPostInfo, Parameter, DispatchError, DispatchResult},
 		weights::{DispatchClass, Pays, Weight},
 		storage::types::{StorageValue, StorageMap, StorageDoubleMap, ValueQuery, OptionQuery},
