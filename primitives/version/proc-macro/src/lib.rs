@@ -22,6 +22,8 @@ use proc_macro::TokenStream;
 mod decl_runtime_version;
 mod utils;
 
+// TODO: rename to just `runtime_version`
+
 #[proc_macro_attribute]
 pub fn decl_runtime_version(_: TokenStream, input: TokenStream) -> TokenStream {
 	decl_runtime_version::decl_runtime_version_impl(input)

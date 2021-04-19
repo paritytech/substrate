@@ -66,7 +66,7 @@ fn decl_runtime_version_impl_inner(mut item: ItemConst) -> Result<TokenStream> {
 	})
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct ParseRuntimeVersion {
 	spec_name: Option<String>,
 	impl_name: Option<String>,
@@ -110,14 +110,15 @@ impl ParseRuntimeVersion {
 			value: &mut Option<T>,
 			field: &FieldValue,
 			parser: impl FnOnce(&Expr) -> Result<T>,
-		) -> Result<T> {
+		) -> Result<()> {
 			if value.is_some() {
 				return Err(Error::new(
 					field.span(),
 					"field is already initialized before",
 				));
 			} else {
-				parser(&field.expr)
+				*value = Some(parser(&field.expr)?);
+				Ok(())
 			}
 		}
 
@@ -226,6 +227,8 @@ fn patch_runtime_str_literal(item: &mut ItemConst) {
 		),
 	};
 
+	let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
+
 	for field_value in init_expr.fields.iter_mut() {
 		let field_name = match field_value.member {
 			syn::Member::Named(ref ident) => ident,
@@ -241,7 +244,6 @@ fn patch_runtime_str_literal(item: &mut ItemConst) {
 
 			use syn::parse::Parse;
 
-			let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
 			let create_runtime_str: syn::ExprMacro = syn::parse_quote! {
 				#crate_::create_runtime_str!(#lit_str_expr)
 			};
@@ -249,6 +251,14 @@ fn patch_runtime_str_literal(item: &mut ItemConst) {
 			field_value.expr = Expr::Macro(create_runtime_str);
 		}
 	}
+
+	// TODO: Rename and update the rustdoc to accomodate the change below
+
+	// Inject the `apis` field.
+	let apis_field: syn::FieldValue = syn::parse_quote! {
+		apis: #crate_::create_apis_vec!([])
+	};
+	init_expr.fields.push(apis_field);
 }
 
 fn generate_emit_link_section_decl(contents: &[u8], section_name: &str) -> TokenStream {
