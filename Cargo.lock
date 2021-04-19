@@ -8875,8 +8875,10 @@ dependencies = [
  "proc-macro-crate 1.0.0",
  "proc-macro2",
  "quote",
+ "rand 0.7.3",
  "sp-arithmetic",
  "sp-npos-elections",
+ "sp-runtime",
  "syn",
  "trybuild",
 ]
