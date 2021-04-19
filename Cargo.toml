@@ -191,6 +191,8 @@ members = [
 	"utils/prometheus",
 	"utils/wasm-builder",
 ]
+exclude = ["remote-keystore"]
+
 
 [patch.crates-io]
 sp-runtime-interface = { path = "primitives/runtime-interface" }

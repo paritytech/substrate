@@ -11,18 +11,46 @@ cleanup() {
 	pkill -P $$
 }
 
+wait_port() {
+	TIMES=${1:=180}
+	PORT=${2:=10710}
+
+	while ! nc -z localhost $PORT && [[ $TIMES -ne 0 ]]; do
+		TIMES=$(( TIMES - 1 ))
+		sleep 1
+	done
+
+	if [[ $TIMES == 0 ]]; then
+	   return 1;
+	else
+		return 0;
+	fi
+
+}
+
 trap cleanup SIGINT SIGTERM EXIT
 
+pushd remote-keystore
+echo "Building keystore"
+cargo build --bin server --features server
+popd
+
 (
+	cd remote-keystore
+
 	echo "Running keystore"
 	set RUST_LOG=debug
 
-	cd remote-keystore
-	cargo run --bin server --features server &> keystore.out
+	cargo run --bin server --features server
 ) &
 
 echo "Build substrate executable"
 make substrate
+
+if wait_port 60; then
+	echo "Unable to start keystore"
+	exit 2
+fi
 
 echo "Running node"
 make bootnode &> bootnode.out &
