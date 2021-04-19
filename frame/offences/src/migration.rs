@@ -16,25 +16,31 @@
 // limitations under the License.
 
 use super::Config;
-use frame_support::{traits::Get, storage::StorageValue, weights::Weight};
+use frame_support::{storage::StorageValue, traits::Get, weights::Weight};
 use sp_staking::offence::OnOffenceHandler;
 
 mod deprecated {
-    use crate::{Config, Perbill, OffenceDetails, SessionIndex};
+    use crate::{Config, OffenceDetails, Perbill, SessionIndex};
+    use frame_support::{sp_std::marker::PhantomData, storage::generator::StorageValue};
     use sp_std::vec::Vec;
 
     /// Type of data stored as a deferred offence
     pub type DeferredOffenceOf<T> = (
-        Vec<OffenceDetails<<T as frame_system::Config>::AccountId, <T as Config>::IdentificationTuple>>,
+        Vec<
+            OffenceDetails<
+                <T as frame_system::Config>::AccountId,
+                <T as Config>::IdentificationTuple,
+            >,
+        >,
         Vec<Perbill>,
         SessionIndex,
     );
 
     /// Deferred reports that have been rejected by the offence handler and need to be submitted
     /// at a later time.
-    pub struct DeferredOffences<T: Config>(::frame_support::sp_std::marker::PhantomData<T>);
+    pub struct DeferredOffences<T: Config>(PhantomData<T>);
 
-    impl<T: Config> ::frame_support::storage::generator::StorageValue<Vec<DeferredOffenceOf<T>>> for DeferredOffences<T> {
+    impl<T: Config> StorageValue<Vec<DeferredOffenceOf<T>>> for DeferredOffences<T> {
         type Query = Vec<DeferredOffenceOf<T>>;
         fn module_prefix() -> &'static [u8] {
             b"Offences"
@@ -66,11 +72,9 @@ pub fn remove_deferred_storage<T: Config>() -> Weight {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::mock::{
-        Runtime as T, Offences, System, new_test_ext, with_on_offence_fractions
-    };
-    use sp_runtime::Perbill;
+    use crate::mock::{new_test_ext, with_on_offence_fractions, Offences, Runtime as T, System};
     use frame_support::traits::OnRuntimeUpgrade;
+    use sp_runtime::Perbill;
     use sp_staking::offence::OffenceDetails;
 
     #[test]
@@ -91,9 +95,13 @@ mod test {
             };
 
             // push deferred offence
-            <deprecated::DeferredOffences<T>>::mutate(|d|
-                d.push((vec![offence_details], vec![Perbill::from_percent(5 + 1 * 100 / 5)], 1))
-            );
+            <deprecated::DeferredOffences<T>>::mutate(|d| {
+                d.push((
+                    vec![offence_details],
+                    vec![Perbill::from_percent(5 + 1 * 100 / 5)],
+                    1,
+                ))
+            });
 
             // when
             assert_eq!(
