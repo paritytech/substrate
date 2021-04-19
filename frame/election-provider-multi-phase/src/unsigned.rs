@@ -197,11 +197,11 @@ impl<T: Config> Pallet<T> {
 			assignment_staked_to_ratio_normalized(staked)?
 		};
 
-		// convert to `IndexAssignment`. This improves the runtime complexity of converting to
-		// `Compact`.
-		let mut assignments = assignments
-			.iter()
-			.map(|assignment| IndexAssignmentOf::<T>::new(assignment, &voter_index, &target_index))
+		// convert to `IndexAssignment`. This improves the runtime complexity of repeatedly
+		// converting to `Compact`.
+		let mut index_assignments = assignments
+			.into_iter()
+			.map(|assignment| IndexAssignmentOf::<T>::new(&assignment, &voter_index, &target_index))
 			.collect::<Result<Vec<_>, _>>()?;
 
 		// trim assignments list for weight and length.
@@ -211,16 +211,16 @@ impl<T: Config> Pallet<T> {
 			desired_targets,
 			size,
 			T::MinerMaxWeight::get(),
-			&mut assignments,
+			&mut index_assignments,
 		);
 		Self::trim_assignments_length(
 			T::MinerMaxLength::get(),
-			&mut assignments,
+			&mut index_assignments,
 			&encoded_size_of,
 		)?;
 
 		// now make compact.
-		let compact = CompactOf::<T>::try_from(&assignments)?;
+		let compact = CompactOf::<T>::try_from(&index_assignments)?;
 
 		// re-calc score.
 		let winners = sp_npos_elections::to_without_backing(winners);
