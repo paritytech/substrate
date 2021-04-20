@@ -23,6 +23,7 @@
 
 use codec::{Decode, Encode};
 use frame_support::{
+	BoundedVec,
 	dispatch::DispatchResultWithPostInfo,
 	traits::{FindAuthor, Get, KeyOwnerProofSystem, OnSessionHandler, OnTimestampSet},
 	weights::{Pays, Weight},
@@ -34,7 +35,7 @@ use sp_runtime::{
 	ConsensusEngineId, KeyTypeId, Percent,
 };
 use sp_session::{GetSessionNumber, GetValidatorCount};
-use sp_std::prelude::*;
+use sp_std::{prelude::*, convert::TryInto};
 
 use sp_consensus_babe::{
 	digests::{NextConfigDescriptor, NextEpochDescriptor, PreDigest},
@@ -93,7 +94,7 @@ impl EpochChangeTrigger for SameAuthoritiesForever {
 			let authorities = <Pallet<T>>::authorities();
 			let next_authorities = authorities.clone();
 
-			<Pallet<T>>::enact_epoch_change(authorities, next_authorities);
+			<Pallet<T>>::enact_epoch_change(authorities.to_vec(), next_authorities.to_vec());
 		}
 	}
 }
@@ -185,7 +186,11 @@ pub mod pallet {
 	/// Current epoch authorities.
 	#[pallet::storage]
 	#[pallet::getter(fn authorities)]
-	pub type Authorities<T> = StorageValue<_, Vec<(AuthorityId, BabeAuthorityWeight)>, ValueQuery>;
+	pub type Authorities<T: Config> = StorageValue<
+		_,
+		BoundedVec<(AuthorityId, BabeAuthorityWeight), T::MaxAuthorities>,
+		ValueQuery,
+	>;
 
 	/// The slot at which the first epoch actually started. This is 0
 	/// until the first block of the chain.
@@ -225,9 +230,9 @@ pub mod pallet {
 
 	/// Next epoch authorities.
 	#[pallet::storage]
-	pub(super) type NextAuthorities<T> = StorageValue<
+	pub(super) type NextAuthorities<T: Config> = StorageValue<
 		_,
-		Vec<(AuthorityId, BabeAuthorityWeight)>,
+		BoundedVec<(AuthorityId, BabeAuthorityWeight), T::MaxAuthorities>,
 		ValueQuery,
 	>;
 
@@ -521,7 +526,12 @@ impl<T: Config> Pallet<T> {
 			.expect("epoch indices will never reach 2^64 before the death of the universe; qed");
 
 		EpochIndex::<T>::put(epoch_index);
-		Authorities::<T>::put(authorities);
+
+		let bounded_authorities = BoundedVec::<(AuthorityId, BabeAuthorityWeight), T::MaxAuthorities>::force_from(
+			authorities.into_iter().take(T::MaxAuthorities::get() as usize).collect::<Vec<_>>(),
+			Some("Babe Enact Epoch Change"),
+		);
+		Authorities::<T>::put(bounded_authorities);
 
 		// Update epoch randomness.
 		let next_epoch_index = epoch_index
@@ -534,7 +544,11 @@ impl<T: Config> Pallet<T> {
 		Randomness::<T>::put(randomness);
 
 		// Update the next epoch authorities.
-		NextAuthorities::<T>::put(&next_authorities);
+		let bounded_next_authorities = BoundedVec::<(AuthorityId, BabeAuthorityWeight), T::MaxAuthorities>::force_from(
+			next_authorities.into_iter().take(T::MaxAuthorities::get() as usize).collect::<Vec<_>>(),
+			Some("Babe Enact Epoch Change"),
+		);
+		NextAuthorities::<T>::put(&bounded_next_authorities);
 
 		// Update the start blocks of the previous and new current epoch.
 		<EpochStart<T>>::mutate(|(previous_epoch_start_block, current_epoch_start_block)| {
@@ -547,7 +561,7 @@ impl<T: Config> Pallet<T> {
 		let next_randomness = NextRandomness::<T>::get();
 
 		let next_epoch = NextEpochDescriptor {
-			authorities: next_authorities,
+			authorities: bounded_next_authorities.to_vec(),
 			randomness: next_randomness,
 		};
 		Self::deposit_consensus(ConsensusLog::NextEpochData(next_epoch));
@@ -578,7 +592,7 @@ impl<T: Config> Pallet<T> {
 			epoch_index: EpochIndex::<T>::get(),
 			start_slot: Self::current_epoch_start(),
 			duration: T::EpochDuration::get(),
-			authorities: Self::authorities(),
+			authorities: Self::authorities().to_vec(),
 			randomness: Self::randomness(),
 			config: EpochConfig::<T>::get().expect("EpochConfig is initialized in genesis; we never `take` or `kill` it; qed"),
 		}
@@ -596,7 +610,7 @@ impl<T: Config> Pallet<T> {
 			epoch_index: next_epoch_index,
 			start_slot: Self::epoch_start(next_epoch_index),
 			duration: T::EpochDuration::get(),
-			authorities: NextAuthorities::<T>::get(),
+			authorities: NextAuthorities::<T>::get().to_vec(),
 			randomness: NextRandomness::<T>::get(),
 			config: NextEpochConfig::<T>::get().unwrap_or_else(|| {
 				EpochConfig::<T>::get().expect("EpochConfig is initialized in genesis; we never `take` or `kill` it; qed")
@@ -670,7 +684,7 @@ impl<T: Config> Pallet<T> {
 				// we use the same values as genesis because we haven't collected any
 				// randomness yet.
 				let next = NextEpochDescriptor {
-					authorities: Self::authorities(),
+					authorities: Self::authorities().to_vec(),
 					randomness: Self::randomness(),
 				};
 
@@ -752,8 +766,10 @@ impl<T: Config> Pallet<T> {
 	fn initialize_authorities(authorities: &[(AuthorityId, BabeAuthorityWeight)]) {
 		if !authorities.is_empty() {
 			assert!(Authorities::<T>::get().is_empty(), "Authorities are already initialized!");
-			Authorities::<T>::put(authorities);
-			NextAuthorities::<T>::put(authorities);
+			let bounded_authorities: BoundedVec<(AuthorityId, BabeAuthorityWeight), T::MaxAuthorities> =
+				authorities.to_vec().try_into().expect("Too many initial authorities!");
+			Authorities::<T>::put(&bounded_authorities);
+			NextAuthorities::<T>::put(&bounded_authorities);
 		}
 	}
 
