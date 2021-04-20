@@ -21,10 +21,11 @@ use crate::{error::{Error, Result}, interval::ExpIncInterval, ServicetoWorkerMsg
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
 use std::marker::PhantomData;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
-use futures::channel::mpsc;
+use futures::{channel::mpsc, prelude::*};
 use futures::{future, FutureExt, Stream, StreamExt, stream::Fuse};
 
 use addr_cache::AddrCache;
@@ -37,6 +38,7 @@ use prost::Message;
 use rand::{seq::SliceRandom, thread_rng};
 use sc_client_api::blockchain::HeaderBackend;
 use sc_network::{
+	config::parse_addr,
 	DhtEvent,
 	ExHashT,
 	Multiaddr,
@@ -130,13 +132,16 @@ pub struct Worker<Client, Network, Block, DhtEventStream> {
 
 	role: Role,
 
+	test_connectivity: ExpIncInterval,
+	test_connectivity_future: Pin<Box<dyn future::FusedFuture<Output = Vec<(AuthorityId, std::result::Result<(), ()>)>> + Send>>,
+
 	phantom: PhantomData<Block>,
 }
 
 impl<Client, Network, Block, DhtEventStream> Worker<Client, Network, Block, DhtEventStream>
 where
 	Block: BlockT + Unpin + 'static,
-	Network: NetworkProvider,
+	Network: NetworkProvider + Send + Sync + 'static,
 	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static + HeaderBackend<Block>,
 	<Client as ProvideRuntimeApi<Block>>::Api:
 		AuthorityDiscoveryApi<Block>,
@@ -204,6 +209,8 @@ where
 			role,
 			metrics,
 			phantom: PhantomData,
+			test_connectivity: ExpIncInterval::new(Duration::from_secs(60), Duration::from_secs(60)),
+			test_connectivity_future: Box::pin(future::pending()),
 		}
 	}
 
@@ -248,6 +255,40 @@ where
 						);
 					}
 				},
+				_ = self.test_connectivity.next().fuse() => {
+					log::debug!(target: LOG_TARGET, "Starting connectivity tests");
+
+					let authorities = self
+						.client
+						.runtime_api()
+						.authorities(&BlockId::hash(self.client.info().best_hash))
+						.map_err(|e| Error::CallingRuntime(e.into()))
+						.unwrap(); // TODO: don't leave unwrap in master branch
+
+					let queries = stream::FuturesUnordered::new();
+					for authority in authorities {
+						let network = self.network.clone();
+						let authority = authority.clone();
+						let addresses = self.addr_cache.get_addresses_by_authority_id(&authority)
+							.cloned().unwrap_or_default();
+						queries.push(Box::pin(async move {
+							log::debug!(target: LOG_TARGET, "Starting test for {:?}", authority);
+							let out = network.test_connectivity(addresses).await;
+							log::debug!(target: LOG_TARGET, "Finished test for {:?}", authority);
+							(authority, out)
+						}));
+					}
+
+					self.test_connectivity_future = Box::pin(queries.collect::<Vec<_>>());
+				}
+				list = &mut self.test_connectivity_future => {
+					log::info!(target: LOG_TARGET, "{} of {} authorities reachable", list.iter().filter(|(_, r)| r.is_ok()).count(), list.len());
+					for (authority_id, result) in list {
+						if result.is_err() {
+							log::info!(target: LOG_TARGET, "Authority {:?} is unreachable", authority_id);
+						}
+					}
+				}
 			}
 		}
 	}
@@ -599,6 +640,9 @@ pub trait NetworkProvider: NetworkStateInfo {
 
 	/// Start getting a value from the Dht.
 	fn get_value(&self, key: &libp2p::kad::record::Key);
+
+	fn test_connectivity(self: &Arc<Self>, addrs: Vec<Multiaddr>)
+		-> Pin<Box<dyn Future<Output = std::result::Result<(), ()>> + Send>>;
 }
 
 #[async_trait::async_trait]
@@ -612,6 +656,41 @@ where
 	}
 	fn get_value(&self, key: &libp2p::kad::record::Key) {
 		self.get_value(key)
+	}
+	fn test_connectivity(self: &Arc<Self>, addrs: Vec<Multiaddr>)
+		-> Pin<Box<dyn Future<Output = std::result::Result<(), ()>> + Send>>
+	{
+		let mut global_peer_id = None;
+
+		for addr in addrs {
+			let (peer_id, addr) = match parse_addr(addr) {
+				Ok(v) => v,
+				Err(_) => continue,
+			};
+
+			global_peer_id = Some(peer_id.clone());
+
+			self.add_known_address(peer_id, addr);
+		}
+
+		if let Some(global_peer_id) = global_peer_id {
+			let me = self.clone();
+			Box::pin(async move {
+				match me.request(global_peer_id, "/foo/non-existing", Vec::new(), sc_network::IfDisconnected::TryConnect).await {
+					Ok(_) => unreachable!(),
+					Err(sc_network::RequestFailure::NotConnected) => unreachable!(),
+					Err(sc_network::RequestFailure::UnknownProtocol) => Ok(()),
+					Err(sc_network::RequestFailure::Refused) => Ok(()),
+					Err(sc_network::RequestFailure::Obsolete) => unreachable!(),
+					Err(sc_network::RequestFailure::Network(sc_network::OutboundFailure::DialFailure)) => Err(()),
+					Err(sc_network::RequestFailure::Network(sc_network::OutboundFailure::Timeout)) => Err(()),
+					Err(sc_network::RequestFailure::Network(sc_network::OutboundFailure::ConnectionClosed)) => Err(()),
+					Err(sc_network::RequestFailure::Network(sc_network::OutboundFailure::UnsupportedProtocols)) => Ok(()),
+				}
+			})
+		} else {
+			Box::pin(future::err(()))
+		}
 	}
 }
 

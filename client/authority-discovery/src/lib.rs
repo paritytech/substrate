@@ -97,7 +97,7 @@ pub fn new_worker_and_service<Client, Network, Block, DhtEventStream>(
 ) -> (Worker<Client, Network, Block, DhtEventStream>, Service)
 where
 	Block: BlockT + Unpin + 'static,
-	Network: NetworkProvider,
+	Network: NetworkProvider + Send + Sync + 'static,
 	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static + HeaderBackend<Block>,
 	<Client as ProvideRuntimeApi<Block>>::Api: AuthorityDiscoveryApi<Block>,
 	DhtEventStream: Stream<Item = DhtEvent> + Unpin,
@@ -125,7 +125,7 @@ pub fn new_worker_and_service_with_config<Client, Network, Block, DhtEventStream
 ) -> (Worker<Client, Network, Block, DhtEventStream>, Service)
 where
 	Block: BlockT + Unpin + 'static,
-	Network: NetworkProvider,
+	Network: NetworkProvider + Send + Sync + 'static,
 	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static + HeaderBackend<Block>,
 	<Client as ProvideRuntimeApi<Block>>::Api: AuthorityDiscoveryApi<Block>,
 	DhtEventStream: Stream<Item = DhtEvent> + Unpin,

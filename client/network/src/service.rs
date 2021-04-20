@@ -146,6 +146,15 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	/// for the network processing to advance. From it, you can extract a `NetworkService` using
 	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
 	pub fn new(mut params: Params<B, H>) -> Result<NetworkWorker<B, H>, Error> {
+		// Hack for authority discovery. DO NOT MERGE AS-IS IN MASTER BRANCH
+		params.network_config.request_response_protocols.push(crate::config::RequestResponseConfig {
+			name: "/foo/non-existing".into(),
+			max_request_size: 32,
+			max_response_size: 1024,
+			request_timeout: std::time::Duration::from_secs(10),
+			inbound_queue: None,
+		});
+
 		// Ensure the listen addresses are consistent with the transport.
 		ensure_addresses_consistent_with_transport(
 			params.network_config.listen_addresses.iter(),
