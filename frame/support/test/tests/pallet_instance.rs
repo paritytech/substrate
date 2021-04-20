@@ -630,7 +630,7 @@ fn metadata() {
 					}
 				],
 				documentation: vec![
-					" Doc comment put in metadata".to_string(),
+					" Doc comment put in metadata",
 				],
 			},
 			FunctionMetadata {
@@ -642,7 +642,7 @@ fn metadata() {
 					}
 				],
 				documentation: vec![
-					" Doc comment put in metadata".to_string(),
+					" Doc comment put in metadata",
 				],
 			},
 		]),
@@ -658,7 +658,7 @@ fn metadata() {
 				name: "Spending",
 				arguments: vec![TypeSpec::new::<u32>("Balance")],
 				documentation: vec![
-					" doc".to_string()
+					" doc"
 				],
 			},
 			EventMetadata {
@@ -679,7 +679,7 @@ fn metadata() {
 			ErrorMetadata {
 				name: "InsufficientProposersBalance",
 				documentation: vec![
-					" doc comment put into metadata".to_string(),
+					" doc comment put into metadata",
 				],
 			},
 		],
@@ -701,7 +701,9 @@ fn metadata() {
 		_ => panic!("metadata has been bump, test needs to be updated"),
 	};
 
-	let pallet_metadata = ModuleMetadata::decode(&mut &metadata.modules[1].encode()[..]).unwrap();
+	let pallet_metadata = ModuleMetadata::<scale_info::form::PortableForm>::decode(
+		&mut &metadata.modules[1].encode()[..]
+	).unwrap();
 	let pallet_instance1_metadata =
 		ModuleMetadata::decode(&mut &metadata.modules[2].encode()[..]).unwrap();
 

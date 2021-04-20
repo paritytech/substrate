@@ -393,66 +393,50 @@ fn storage_with_instance_basic_operation() {
 	});
 }
 
-const EXPECTED_METADATA: StorageMetadata = StorageMetadata {
-	prefix: DecodeDifferent::Encode("Instance2Module2"),
-	entries: DecodeDifferent::Encode(
-		&[
-			StorageEntryMetadata {
-				name: DecodeDifferent::Encode("Value"),
+fn expected_metadata() -> StorageMetadata {
+	StorageMetadata {
+		prefix: "Instance2Module2",
+		entries: vec![
+			StorageEntryMetadata
+			{
+				name: "Value",
 				modifier: StorageEntryModifier::Default,
-				ty: StorageEntryType::Plain(DecodeDifferent::Encode("T::Amount")),
-				default: DecodeDifferent::Encode(
-					DefaultByteGetter(
-						&module2::__GetByteStructValue(
-							std::marker::PhantomData::<(Runtime, module2::Instance2)>
-						)
-					)
-				),
-				documentation: DecodeDifferent::Encode(&[]),
+				ty: StorageEntryType::Plain(scale_info::meta_type::<u64>()),
+				default: vec![0],
+				documentation: vec![],
 			},
 			StorageEntryMetadata {
-				name: DecodeDifferent::Encode("Map"),
+				name: "Map",
 				modifier: StorageEntryModifier::Default,
 				ty: StorageEntryType::Map {
 					hasher: StorageHasher::Identity,
-					key: DecodeDifferent::Encode("u64"),
-					value: DecodeDifferent::Encode("u64"),
+					key: scale_info::meta_type::<u64>(),
+					value: scale_info::meta_type::<u64>(),
 					unused: false,
 				},
-				default: DecodeDifferent::Encode(
-					DefaultByteGetter(
-						&module2::__GetByteStructMap(
-							std::marker::PhantomData::<(Runtime, module2::Instance2)>
-						)
-					)
-				),
-				documentation: DecodeDifferent::Encode(&[]),
+				default: vec![0],
+				documentation: vec![],
 			},
 			StorageEntryMetadata {
-				name: DecodeDifferent::Encode("DoubleMap"),
+				name: "DoubleMap",
 				modifier: StorageEntryModifier::Default,
 				ty: StorageEntryType::DoubleMap {
 					hasher: StorageHasher::Identity,
 					key2_hasher: StorageHasher::Identity,
-					key1: DecodeDifferent::Encode("u64"),
-					key2: DecodeDifferent::Encode("u64"),
-					value: DecodeDifferent::Encode("u64"),
+					key1: scale_info::meta_type::<u64>(),
+					key2: scale_info::meta_type::<u64>(),
+					value: scale_info::meta_type::<u64>(),
 				},
-				default: DecodeDifferent::Encode(
-					DefaultByteGetter(
-						&module2::__GetByteStructDoubleMap(
-							std::marker::PhantomData::<(Runtime, module2::Instance2)>
-						)
-					)
-				),
-				documentation: DecodeDifferent::Encode(&[]),
-			}
+				default: vec![],
+				documentation: vec![],
+			},
 		]
-	)
-};
+	}
+}
+
 
 #[test]
 fn test_instance_storage_metadata() {
 	let metadata = Module2_2::storage_metadata();
-	pretty_assertions::assert_eq!(EXPECTED_METADATA, metadata);
+	pretty_assertions::assert_eq!(expected_metadata(), metadata);
 }
