@@ -256,6 +256,10 @@ where
 					}
 				},
 				_ = self.test_connectivity.next().fuse() => {
+					if !self.test_connectivity_future.is_terminated() {
+						continue;
+					}
+
 					log::debug!(target: LOG_TARGET, "Starting connectivity tests");
 
 					let authorities = self
