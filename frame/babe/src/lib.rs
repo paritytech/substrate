@@ -527,7 +527,10 @@ impl<T: Config> Pallet<T> {
 
 		EpochIndex::<T>::put(epoch_index);
 
-		let bounded_authorities = BoundedVec::<(AuthorityId, BabeAuthorityWeight), T::MaxAuthorities>::force_from(
+		let bounded_authorities = BoundedVec::<
+			(AuthorityId, BabeAuthorityWeight),
+			T::MaxAuthorities,
+		>::force_from(
 			authorities.into_iter().take(T::MaxAuthorities::get() as usize).collect::<Vec<_>>(),
 			Some("Babe Enact Epoch Change"),
 		);
@@ -544,7 +547,10 @@ impl<T: Config> Pallet<T> {
 		Randomness::<T>::put(randomness);
 
 		// Update the next epoch authorities.
-		let bounded_next_authorities = BoundedVec::<(AuthorityId, BabeAuthorityWeight), T::MaxAuthorities>::force_from(
+		let bounded_next_authorities = BoundedVec::<
+			(AuthorityId, BabeAuthorityWeight),
+			T::MaxAuthorities,
+		>::force_from(
 			next_authorities.into_iter().take(T::MaxAuthorities::get() as usize).collect::<Vec<_>>(),
 			Some("Babe Enact Epoch Change"),
 		);
