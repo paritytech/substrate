@@ -116,7 +116,7 @@ impl<T: Config> Pallet<T> {
 			"OCW attempting to restore or compute an unsigned solution for the current election"
 		);
 
-		let (call, score) = restore_solution::<T>()
+		let (call, _score) = restore_solution::<T>()
 			.and_then(|call| {
 				// ensure the cached call is still current before submitting
 				let current_round = Self::round();
@@ -131,7 +131,18 @@ impl<T: Config> Pallet<T> {
 							score,
 						);
 
-						Ok((call, score))
+						if Self::queued_solution().map_or(true, |q: ReadySolution<_>| is_score_better::<Perbill>(
+							score,
+							q.score,
+							T::SolutionImprovementThreshold::get()
+						)) {
+							Ok((call, score))
+						} else {
+							// not technically accurate; it's valid, just scores too low.
+							// Still, this will cause a re-mine in the `or_else` clause;
+							// we might get lucky and generate a higher-scoring solution this time.
+							Err(MinerError::SolutionCallInvalid)
+						}
 					} else {
 						Err(MinerError::SolutionOutOfDate)
 					}
@@ -146,20 +157,7 @@ impl<T: Config> Pallet<T> {
 				Ok((call, score))
 			})?;
 
-		if Self::queued_solution().map_or(true, |q: ReadySolution<_>| is_score_better::<Perbill>(
-			score,
-			q.score,
-			T::SolutionImprovementThreshold::get()
-		)) {
-			Self::submit_call(call)
-		} else {
-			log!(
-				debug,
-				"queued solution has better score than OCW mined solution; skipping submission"
-			);
-
-			Ok(())
-		}
+		Self::submit_call(call)
 	}
 
 	/// Mine a new solution, cache it, and submit it back to the chain as an unsigned transaction.
