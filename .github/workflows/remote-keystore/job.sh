@@ -9,11 +9,18 @@ rm tests.out
 # This will kill all spawned processes
 cleanup() {
 	pkill -P $$
+
+	jobs=$(jobs -p)
+    if [[ -n "$jobs" ]]; then
+        kill "$jobs" &> /dev/null
+    fi
+
+	killall server
 }
 
 wait_port() {
-	TIMES=${1:=180}
-	PORT=${2:=10710}
+	TIMES=${1:-180}
+	PORT=${2:-10710}
 
 	while ! nc -z localhost $PORT && [[ $TIMES -ne 0 ]]; do
 		TIMES=$(( TIMES - 1 ))
@@ -21,7 +28,7 @@ wait_port() {
 	done
 
 	if [[ $TIMES == 0 ]]; then
-	   return 1;
+		return 1;
 	else
 		return 0;
 	fi
@@ -44,24 +51,30 @@ popd
 	cargo run --bin server --features server
 ) &
 
-if wait_port 60; then
-	echo "-------------------- UNABLE TO CONNECT TO KEYSTORE --------------------------"
-	exit 2
-fi
+#wait_port 3
+#WAIT_PORT=$?
+#if [[ $WAIT_PORT -ne 0 ]]; then
+#	echo "-------------------- UNABLE TO CONNECT TO KEYSTORE --------------------------"
+#	exit 2;
+#fi
 
-echo "------------------------ KEYSTORE AVAILABLE ------------------------------"
+sleep 5
+
+#echo "------------------------ KEYSTORE AVAILABLE ------------------------------"
 
 echo "Running node"
 ./target/release/substrate --chain zondaxSpecRaw.json --tmp \
 	--port 30333 --ws-port 9945 --validator --execution native \
 	--node-key 0000000000000000000000000000000000000000000000000000000000000001 --keystore-uri "localhost:10710" &> bootnode.out &
 
-#(tail -n +1 -F bootnode.out) &
+(tail -n +1 -F bootnode.out) &
 
 echo "Checking for finalized blocks... timing out in 90s..."
 
 tail -n +1 -F bootnode.out | timeout 90 grep -E -m 1 "finalized #[1-9][0-9]?"
 SUCCESS=$?
+
+echo "----------------------------- CHECKING RESULT --------------------------------"
 
 if [ $SUCCESS == 141 ] || [ $SUCCESS == 0 ] ; then
 	echo "------------------------ BLOCK FINALIZED SUCCESFULLY ----------------------"
