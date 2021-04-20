@@ -161,6 +161,7 @@ std = [
 	"sp-npos-elections/std",
 ]
 runtime-benchmarks = [
+	"sp-api/disable-logging",
 	"frame-benchmarking",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
@@ -196,7 +197,6 @@ runtime-benchmarks = [
 	"pallet-session-benchmarking",
 	"frame-system-benchmarking",
 	"hex-literal",
-	"sp-api/disable-logging",
 ]
 try-runtime = [
 	"frame-executive/try-runtime",
