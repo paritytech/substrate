@@ -256,7 +256,7 @@ impl<A> SessionManager<A> for () {
 }
 
 /// Handler for session life cycle events.
-pub trait SessionHandler<ValidatorId> {
+pub trait SessionHandler<ValidatorId, MaxValidators> {
 	/// All the key type ids this session handler can process.
 	///
 	/// The order must be the same as it expects them in
@@ -291,8 +291,8 @@ pub trait SessionHandler<ValidatorId> {
 }
 
 #[impl_trait_for_tuples::impl_for_tuples(1, 30)]
-#[tuple_types_custom_trait_bound(OnSessionHandler<AId>)]
-impl<AId> SessionHandler<AId> for Tuple {
+#[tuple_types_custom_trait_bound(OnSessionHandler<AId, MV>)]
+impl<AId, MV: Get<u32>> SessionHandler<AId, MV> for Tuple {
 	for_tuples!(
 		const KEY_TYPE_IDS: &'static [KeyTypeId] = &[ #( <Tuple::Key as RuntimeAppPublic>::ID ),* ];
 	);
@@ -338,7 +338,7 @@ impl<AId> SessionHandler<AId> for Tuple {
 
 /// `SessionHandler` for tests that use `UintAuthorityId` as `Keys`.
 pub struct TestSessionHandler;
-impl<AId> SessionHandler<AId> for TestSessionHandler {
+impl<AId, MV: Get<u32>> SessionHandler<AId, MV> for TestSessionHandler {
 	const KEY_TYPE_IDS: &'static [KeyTypeId] = &[sp_runtime::key_types::DUMMY];
 
 	fn on_genesis_session<Ks: OpaqueKeys>(_: &[(AId, Ks)]) {}
@@ -368,6 +368,9 @@ pub trait Config: frame_system::Config {
 	/// Its cost must be at most one storage read.
 	type ValidatorIdOf: Convert<Self::AccountId, Option<Self::ValidatorId>>;
 
+	/// The maximum number of validators supported by the session handler.
+	type MaxValidators: Get<u32>;
+
 	/// Indicator for when to end the session.
 	type ShouldEndSession: ShouldEndSession<Self::BlockNumber>;
 
@@ -380,7 +383,7 @@ pub trait Config: frame_system::Config {
 	type SessionManager: SessionManager<Self::ValidatorId>;
 
 	/// Handler when a session has changed.
-	type SessionHandler: SessionHandler<Self::ValidatorId>;
+	type SessionHandler: SessionHandler<Self::ValidatorId, Self::MaxValidators>;
 
 	/// The keys.
 	type Keys: OpaqueKeys + Member + Parameter + Default;

@@ -119,7 +119,7 @@ impl ShouldEndSession<u64> for TestShouldEndSession {
 }
 
 pub struct TestSessionHandler;
-impl SessionHandler<u64> for TestSessionHandler {
+impl SessionHandler<u64, MaxValidators> for TestSessionHandler {
 	const KEY_TYPE_IDS: &'static [sp_runtime::KeyTypeId] = &[UintAuthorityId::ID];
 	fn on_genesis_session<T: OpaqueKeys>(_validators: &[(u64, T)]) {}
 	fn on_new_session<T: OpaqueKeys>(
@@ -262,6 +262,7 @@ impl pallet_timestamp::Config for Test {
 
 parameter_types! {
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
+	pub const MaxValidators: u32 = 10;
 }
 
 impl Config for Test {
@@ -273,6 +274,7 @@ impl Config for Test {
 	type SessionHandler = TestSessionHandler;
 	type ValidatorId = u64;
 	type ValidatorIdOf = ConvertInto;
+	type MaxValidators = MaxValidators;
 	type Keys = MockSessionKeys;
 	type Event = Event;
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;

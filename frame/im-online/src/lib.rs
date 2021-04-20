@@ -98,7 +98,7 @@ use frame_support::{
 		EstimateNextSessionRotation, Get, OnSessionHandler, ValidatorSet,
 		ValidatorSetWithIdentification,
 	},
-	Parameter,
+	Parameter, BoundedVec,
 };
 use frame_system::{ensure_none, offchain::{SendTransactionTypes, SubmitTransaction}};
 pub use weights::WeightInfo;
@@ -270,6 +270,9 @@ pub trait Config: SendTransactionTypes<Call<Self>> + frame_system::Config {
 	/// multiple pallets send unsigned transactions.
 	type UnsignedPriority: Get<TransactionPriority>;
 
+	/// The maximum number of authority keys that can be stored by this pallet.
+	type MaxAuthorityKeys: Get<u32>;
+
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
 }
@@ -304,7 +307,7 @@ decl_storage! {
 		HeartbeatAfter get(fn heartbeat_after): T::BlockNumber;
 
 		/// The current set of keys that may issue a heartbeat.
-		Keys get(fn keys): Vec<T::AuthorityId>;
+		Keys get(fn keys): BoundedVec<T::AuthorityId, T::MaxAuthorityKeys>;
 
 		/// For each session index, we keep a mapping of `AuthIndex` to
 		/// `offchain::OpaqueNetworkState`.
@@ -638,12 +641,16 @@ impl<T: Config> Module<T> {
 	fn initialize_keys(keys: &[T::AuthorityId]) {
 		if !keys.is_empty() {
 			assert!(Keys::<T>::get().is_empty(), "Keys are already initialized!");
-			Keys::<T>::put(keys);
+			let bounded_keys: BoundedVec<T::AuthorityId, T::MaxAuthorityKeys> = keys
+				.to_vec()
+				.try_into()
+				.expect("Too many initial keys!");
+			Keys::<T>::put(bounded_keys);
 		}
 	}
 
 	#[cfg(test)]
-	fn set_keys(keys: Vec<T::AuthorityId>) {
+	fn set_keys(keys: BoundedVec<T::AuthorityId, T::MaxAuthorityKeys>) {
 		Keys::<T>::put(&keys)
 	}
 }
@@ -652,7 +659,7 @@ impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
 	type Public = T::AuthorityId;
 }
 
-impl<T: Config> OnSessionHandler<T::AccountId> for Module<T> {
+impl<T: Config> OnSessionHandler<T::AccountId, T::MaxAuthorityKeys> for Module<T> {
 	type Key = T::AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)
@@ -673,7 +680,16 @@ impl<T: Config> OnSessionHandler<T::AccountId> for Module<T> {
 		<HeartbeatAfter<T>>::put(block_number + half_session);
 
 		// Remember who the authorities are for the new session.
-		Keys::<T>::put(validators.map(|x| x.1).collect::<Vec<_>>());
+		let next_validators = validators
+			.map(|x| x.1)
+			.take(T::MaxAuthorityKeys::get() as usize)
+			.collect::<Vec<_>>();
+
+		let bounded_validators = BoundedVec::<T::AuthorityId, T::MaxAuthorityKeys>::force_from(
+			next_validators,
+			Some("Im Online New Session"),
+		);
+		Keys::<T>::put(bounded_validators);
 	}
 
 	fn on_before_session_ending() {

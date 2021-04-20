@@ -187,7 +187,7 @@ impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Pallet<T> {
 	type Public = T::AuthorityId;
 }
 
-impl<T: Config> OnSessionHandler<T::AccountId> for Pallet<T> {
+impl<T: Config> OnSessionHandler<T::AccountId, T::MaxAuthorities> for Pallet<T> {
 	type Key = T::AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)
@@ -209,7 +209,7 @@ impl<T: Config> OnSessionHandler<T::AccountId> for Pallet<T> {
 				.collect::<Vec<_>>();
 			let bounded_next_authorities = BoundedVec::<T::AuthorityId, T::MaxAuthorities>::force_from(
 				next_authorities,
-				Some("Aura Authority Change"),
+				Some("Aura New Session"),
 			);
 
 			let last_authorities = Self::authorities();

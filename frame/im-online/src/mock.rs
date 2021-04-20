@@ -21,9 +21,10 @@
 
 use std::cell::RefCell;
 
-use frame_support::{parameter_types, weights::Weight};
+use frame_support::{parameter_types, weights::Weight, BoundedVec};
 use pallet_session::historical as pallet_session_historical;
 use sp_core::H256;
+use sp_std::convert::TryInto;
 use sp_runtime::testing::{Header, TestXt, UintAuthorityId};
 use sp_runtime::traits::{BlakeTwo256, ConvertInto, IdentityLookup};
 use sp_runtime::{Perbill, Percent};
@@ -150,6 +151,7 @@ parameter_types! {
 
 parameter_types! {
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
+	pub const MaxValidators: u32 = 10;
 }
 
 impl pallet_session::Config for Runtime {
@@ -158,6 +160,7 @@ impl pallet_session::Config for Runtime {
 	type SessionHandler = (ImOnline, );
 	type ValidatorId = u64;
 	type ValidatorIdOf = ConvertInto;
+	type MaxValidators = MaxValidators;
 	type Keys = UintAuthorityId;
 	type Event = Event;
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
@@ -227,6 +230,7 @@ impl Config for Runtime {
 	type NextSessionRotation = TestNextSessionRotation;
 	type ReportUnresponsiveness = OffenceHandler;
 	type UnsignedPriority = UnsignedPriority;
+	type MaxAuthorityKeys = MaxValidators;
 	type WeightInfo = ();
 }
 
@@ -241,7 +245,8 @@ pub fn advance_session() {
 	let now = System::block_number().max(1);
 	System::set_block_number(now + 1);
 	Session::rotate_session();
-	let keys = Session::validators().into_iter().map(UintAuthorityId).collect();
-	ImOnline::set_keys(keys);
+	let keys: Vec<UintAuthorityId> = Session::validators().into_iter().map(UintAuthorityId).collect();
+	let bounded_keys: BoundedVec<UintAuthorityId, MaxValidators> = keys.try_into().unwrap();
+	ImOnline::set_keys(bounded_keys);
 	assert_eq!(Session::current_index(), (now / Period::get()) as u32);
 }
