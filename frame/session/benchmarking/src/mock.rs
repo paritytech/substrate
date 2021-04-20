@@ -103,7 +103,7 @@ sp_runtime::impl_opaque_keys! {
 }
 
 pub struct TestSessionHandler;
-impl pallet_session::SessionHandler<AccountId> for TestSessionHandler {
+impl pallet_session::SessionHandler<AccountId, MaxValidators> for TestSessionHandler {
 	const KEY_TYPE_IDS: &'static [sp_runtime::KeyTypeId] = &[];
 
 	fn on_genesis_session<Ks: sp_runtime::traits::OpaqueKeys>(_validators: &[(AccountId, Ks)]) {}
@@ -117,6 +117,9 @@ impl pallet_session::SessionHandler<AccountId> for TestSessionHandler {
 	fn on_disabled(_: usize) {}
 }
 
+parameter_types! {
+	pub const MaxValidators: u32 = 10;
+}
 impl pallet_session::Config for Test {
 	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Test, Staking>;
 	type Keys = SessionKeys;
@@ -127,6 +130,7 @@ impl pallet_session::Config for Test {
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = pallet_staking::StashOf<Test>;
 	type DisabledValidatorsThreshold = ();
+	type MaxValidators = MaxValidators;
 	type WeightInfo = ();
 }
 pallet_staking_reward_curve::build! {
@@ -181,6 +185,7 @@ impl pallet_staking::Config for Test {
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
+	type MaxValidators = MaxValidators;
 	type WeightInfo = ();
 }
 
