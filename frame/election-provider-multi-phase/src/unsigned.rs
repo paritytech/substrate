@@ -1127,7 +1127,7 @@ mod tests {
 			// this ensures that when the resubmit window rolls around, we're ready to regenerate
 			// from scratch if necessary
 			let mut call_cache = StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL);
-			assert!(matches!(call_cache.get::<Vec<u8>>(), Some(Some(_call))));
+			assert!(matches!(call_cache.get::<Call<Runtime>>(), Some(Some(_call))));
 			call_cache.clear();
 
 			// attempts to resubmit the tx after the threshold has expired
