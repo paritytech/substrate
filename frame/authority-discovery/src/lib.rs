@@ -24,9 +24,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::{prelude::*, convert::TryInto};
-use frame_support::{traits::OnSessionHandler, BoundedVec};
+use frame_support::{traits::{OnSessionHandler, Get}, BoundedVec};
 #[cfg(feature = "std")]
-use frame_support::traits::{GenesisBuild, Get};
+use frame_support::traits::GenesisBuild;
 use sp_authority_discovery::AuthorityId;
 
 pub use pallet::*;
