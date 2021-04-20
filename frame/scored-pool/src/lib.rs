@@ -122,7 +122,8 @@ pub trait Config<I=DefaultInstance>: frame_system::Config {
 
 	/// The score attributed to a member or candidate.
 	type Score:
-		AtLeast32Bit + Clone + Copy + Default + FullCodec + MaybeSerializeDeserialize + Debug;
+		AtLeast32Bit + Clone + Copy + Default + FullCodec + MaybeSerializeDeserialize + Debug
+		+ scale_info::TypeInfo;
 
 	/// The overarching event type.
 	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Config>::Event>;

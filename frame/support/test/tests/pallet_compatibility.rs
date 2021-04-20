@@ -267,8 +267,8 @@ mod test {
 	fn metadata() {
 		let metadata = Runtime::metadata();
 		let modules = match metadata.1 {
-			frame_metadata::RuntimeMetadata::V12(frame_metadata::RuntimeMetadataV12 {
-				modules: frame_metadata::DecodeDifferent::Encode(m),
+			frame_support::metadata::RuntimeMetadata::V12(frame_support::metadata::RuntimeMetadataV12 {
+				modules: m,
 				..
 			}) => m,
 			_ => unreachable!(),

@@ -92,7 +92,7 @@ impl Config for Test {
 	type DustRemoval = ();
 	type Event = Event;
 	type ExistentialDeposit = ExistentialDeposit;
-	type AccountStore = system::Module<Test>;
+	type AccountStore = system::Pallet<Test>;
 	type MaxLocks = ();
 	type WeightInfo = ();
 }

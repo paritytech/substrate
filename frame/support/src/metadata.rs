@@ -23,7 +23,7 @@ pub use frame_metadata::{
         StorageEntryMetadata, StorageEntryModifier, StorageEntryType, StorageHasher,
         StorageMetadata, TypeSpec,
     },
-    RuntimeMetadataPrefixed,
+	RuntimeMetadata, RuntimeMetadataPrefixed,
 };
 
 /// todo: [AJ] update docs

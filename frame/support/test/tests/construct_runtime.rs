@@ -92,7 +92,7 @@ mod module2 {
 		}
 	}
 
-	#[derive(Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode)]
+	#[derive(Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode, scale_info::TypeInfo)]
 	pub struct Origin;
 
 	frame_support::decl_event! {
@@ -513,7 +513,7 @@ fn call_codec() {
 fn test_metadata() {
 	use scale_info::{form::MetaForm, IntoPortable, Registry};
 	use frame_support::metadata::*;
-	let modules = modules: vec![
+	let modules = vec![
 		ModuleMetadata {
 			name: "System",
 			storage: None,
