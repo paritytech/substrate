@@ -211,6 +211,7 @@ mod tests {
 		type ValidatorIdOf = ConvertInto;
 		type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 		type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
+		type MaxValidators = MaxValidators;
 		type WeightInfo = ();
 	}
 
@@ -256,8 +257,12 @@ mod tests {
 		type OnSetCode = ();
 	}
 
+	parameter_types! {
+		pub const MaxValidators: u32 = 10;
+	}
+
 	pub struct TestSessionHandler;
-	impl pallet_session::SessionHandler<AuthorityId> for TestSessionHandler {
+	impl pallet_session::SessionHandler<AuthorityId, MaxValidators> for TestSessionHandler {
 		const KEY_TYPE_IDS: &'static [KeyTypeId] = &[key_types::DUMMY];
 
 		fn on_new_session<Ks: OpaqueKeys>(

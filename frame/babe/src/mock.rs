@@ -109,6 +109,10 @@ impl_opaque_keys! {
 	}
 }
 
+parameter_types! {
+	pub const MaxValidators: u32 = 10;
+}
+
 impl pallet_session::Config for Test {
 	type Event = Event;
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
@@ -119,6 +123,7 @@ impl pallet_session::Config for Test {
 	type SessionHandler = <MockSessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type Keys = MockSessionKeys;
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
+	type MaxValidators = MaxValidators;
 	type WeightInfo = ();
 }
 
@@ -211,6 +216,7 @@ impl pallet_staking::Config for Test {
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type NextNewSession = Session;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
+	type MaxValidators = MaxValidators;
 	type WeightInfo = ();
 }
 
@@ -250,6 +256,8 @@ impl Config for Test {
 
 	type HandleEquivocation =
 		super::EquivocationHandler<Self::KeyOwnerIdentification, Offences, ReportLongevity>;
+
+	type MaxAuthorities = MaxValidators;
 
 	type WeightInfo = ();
 }

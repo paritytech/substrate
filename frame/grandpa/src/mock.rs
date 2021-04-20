@@ -112,6 +112,7 @@ parameter_types! {
 	pub const Period: u64 = 1;
 	pub const Offset: u64 = 0;
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(17);
+	pub const MaxValidators: u32 = 10;
 }
 
 /// Custom `SessionHandler` since we use `TestSessionKeys` as `Keys`.
@@ -125,6 +126,7 @@ impl pallet_session::Config for Test {
 	type SessionHandler = <TestSessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type Keys = TestSessionKeys;
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
+	type MaxValidators = MaxValidators;
 	type WeightInfo = ();
 }
 
@@ -217,6 +219,7 @@ impl pallet_staking::Config for Test {
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type NextNewSession = Session;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
+	type MaxValidators = MaxValidators;
 	type WeightInfo = ();
 }
 
@@ -252,6 +255,8 @@ impl Config for Test {
 
 	type HandleEquivocation =
 		super::EquivocationHandler<Self::KeyOwnerIdentification, Offences, ReportLongevity>;
+
+	type MaxAuthorities = MaxValidators;
 
 	type WeightInfo = ();
 }

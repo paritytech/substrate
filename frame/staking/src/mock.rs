@@ -51,7 +51,7 @@ thread_local! {
 
 /// Another session handler struct to test on_disabled.
 pub struct OtherSessionHandler;
-impl OnSessionHandler<AccountId> for OtherSessionHandler {
+impl OnSessionHandler<AccountId, MaxValidators> for OtherSessionHandler {
 	type Key = UintAuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(_: I)
@@ -180,6 +180,7 @@ impl pallet_session::Config for Test {
 	type ValidatorIdOf = crate::StashOf<Test>;
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
+	type MaxValidators = MaxValidators;
 	type WeightInfo = ();
 }
 
@@ -240,6 +241,11 @@ impl onchain::Config for Test {
 	type Accuracy = Perbill;
 	type DataProvider = Staking;
 }
+
+parameter_types! {
+	pub const MaxValidators: u32 = 10;
+}
+
 impl Config for Test {
 	const MAX_NOMINATIONS: u32 = 16;
 	type Currency = Balances;
@@ -258,6 +264,7 @@ impl Config for Test {
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
+	type MaxValidators = MaxValidators;
 	type WeightInfo = ();
 }
 
