@@ -319,7 +319,7 @@ where
 
 				metric_set!(self, beefy_round_concluded, round.1);
 
-				info!(target: "beefy", "🥩 Round #{} concluded, committed: {:?}.", round.1, signed_commitment);
+				debug!(target: "beefy", "🥩 Round #{} concluded, committed: {:?}.", round.1, signed_commitment);
 
 				self.signed_commitment_sender.notify(signed_commitment);
 				self.best_beefy_block = Some(round.1);
