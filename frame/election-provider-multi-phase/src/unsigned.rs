@@ -107,6 +107,18 @@ pub(super) fn kill_ocw_solution<T: Config>() {
 	storage.clear();
 }
 
+/// `true` when OCW storage contains a solution
+///
+/// More precise than `restore_solution::<T>().is_ok()`; that invocation will return `false`
+/// if a solution exists but cannot be decoded, whereas this just checks whether an item is present.
+#[cfg(test)]
+fn ocw_solution_exists<T: Config>() -> bool {
+	matches!(
+		StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL).get::<Call<T>>(),
+		Some(_),
+	)
+}
+
 impl<T: Config> Pallet<T> {
 	/// Attempt to restore a solution from cache. Otherwise, compute it fresh. Either way, submit
 	/// if our call's score is greater than that of the cached solution.
@@ -1054,6 +1066,33 @@ mod tests {
 			// locked, but also, has previously cached.
 			MultiPhase::offchain_worker(26);
 			assert!(pool.read().transactions.len().is_zero());
+		})
+	}
+
+	#[test]
+	fn ocw_clears_cache_after_election() {
+		let (mut ext, _pool) = ExtBuilder::default().build_offchainify(0);
+		ext.execute_with(|| {
+			roll_to(25);
+			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
+
+			// we must clear the offchain storage to ensure the offchain execution check doesn't get
+			// in the way.
+			let mut storage = StorageValueRef::persistent(&OFFCHAIN_LOCK);
+			storage.clear();
+
+			assert!(!ocw_solution_exists::<Runtime>(), "no solution should be present before we mine one");
+
+			// creates and cache a solution
+			MultiPhase::offchain_worker(25);
+			assert!(ocw_solution_exists::<Runtime>(), "a solution must be cached after running the worker");
+
+			// after an election, the solution must be cleared
+			// we don't actually care about the result of the election
+			roll_to(26);
+			let _ = MultiPhase::do_elect();
+			MultiPhase::offchain_worker(26);
+			assert!(!ocw_solution_exists::<Runtime>(), "elections must clear the ocw cache");
 		})
 	}
 
