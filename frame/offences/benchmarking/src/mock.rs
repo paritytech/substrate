@@ -101,7 +101,7 @@ sp_runtime::impl_opaque_keys! {
 }
 
 pub struct TestSessionHandler;
-impl pallet_session::SessionHandler<AccountId> for TestSessionHandler {
+impl pallet_session::SessionHandler<AccountId, MaxValidators> for TestSessionHandler {
 	const KEY_TYPE_IDS: &'static [sp_runtime::KeyTypeId] = &[];
 
 	fn on_genesis_session<Ks: sp_runtime::traits::OpaqueKeys>(_validators: &[(AccountId, Ks)]) {}
@@ -118,6 +118,7 @@ impl pallet_session::SessionHandler<AccountId> for TestSessionHandler {
 parameter_types! {
 	pub const Period: u64 = 1;
 	pub const Offset: u64 = 0;
+	pub const MaxValidators: u32 = 10;
 }
 
 impl pallet_session::Config for Test {
@@ -130,6 +131,7 @@ impl pallet_session::Config for Test {
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = pallet_staking::StashOf<Test>;
 	type DisabledValidatorsThreshold = ();
+	type MaxValidators = MaxValidators;
 	type WeightInfo = ();
 }
 
@@ -176,6 +178,7 @@ impl pallet_staking::Config for Test {
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
+	type MaxValidators = MaxValidators;
 	type WeightInfo = ();
 }
 
@@ -186,6 +189,7 @@ impl pallet_im_online::Config for Test {
 	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 	type ReportUnresponsiveness = Offences;
 	type UnsignedPriority = ();
+	type MaxAuthorityKeys = MaxValidators;
 	type WeightInfo = ();
 }
 
