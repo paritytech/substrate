@@ -20,11 +20,40 @@
 #![cfg(test)]
 
 use crate::mock::{Aura, new_test_ext};
+use sp_runtime::testing::UintAuthorityId;
+use frame_support::traits::OneSessionHandler;
 
 #[test]
 fn initial_values() {
 	new_test_ext(vec![0, 1, 2, 3]).execute_with(|| {
 		assert_eq!(Aura::current_slot(), 0u64);
 		assert_eq!(Aura::authorities().len(), 4);
+	});
+}
+
+// Should not be able to put more authorities than allowed in genesis.
+#[test]
+#[should_panic(expected = "Too many initial authorities!")]
+fn too_many_initial_fails() {
+	new_test_ext((0..100).collect::<Vec<_>>());
+}
+
+// Session change should truncate the new authorities to fit into the limits
+// of the Aura pallet.
+#[test]
+fn session_change_truncates() {
+	new_test_ext(vec![0, 1, 2, 3]).execute_with(|| {
+		Aura::on_new_session(
+			true,
+			(0..100)
+				.map(|x| {
+					let auth_id = UintAuthorityId(x).to_public_key();
+					(&0, auth_id)
+				})
+				.collect::<Vec<_>>()
+				.into_iter(),
+			vec![].into_iter(),
+		);
+		assert_eq!(Aura::authorities().len(), 10);
 	});
 }
