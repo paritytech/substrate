@@ -21,7 +21,6 @@
 mod tests {
 	use frame_support::metadata::*;
 	use sp_io::TestExternalities;
-	use std::marker::PhantomData;
 
 	frame_support::decl_module! {
 		pub struct Module<T: Config> for enum Call where origin: T::Origin, system=frame_support_test {}
@@ -90,301 +89,247 @@ mod tests {
 
 	impl Config for TraitImpl {}
 
-	const EXPECTED_METADATA: StorageMetadata = StorageMetadata {
-		prefix: DecodeDifferent::Encode("TestStorage"),
-		entries: DecodeDifferent::Encode(
-			&[
+	fn expected_metadata() -> StorageMetadata {
+		StorageMetadata {
+			prefix: "TestStorage",
+			entries: vec![
 				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("U32"),
+					name: "U32",
 					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Plain(DecodeDifferent::Encode("u32")),
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructU32(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[ " Hello, this is doc!" ]),
+					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+					default: vec![],
+					documentation: vec![" Hello, this is doc!"],
 				},
 				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("PUBU32"),
+					name: "PUBU32",
 					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Plain(DecodeDifferent::Encode("u32")),
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructPUBU32(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
+					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+					default: vec![],
+					documentation: vec![],
 				},
 				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("U32MYDEF"),
+					name: "U32MYDEF",
 					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Plain(DecodeDifferent::Encode("u32")),
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructU32MYDEF(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
+					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+					default: vec![],
+					documentation: vec![],
 				},
 				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("PUBU32MYDEF"),
+					name: "PUBU32MYDEF",
 					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Plain(DecodeDifferent::Encode("u32")),
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructPUBU32MYDEF(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
+					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+					default: vec![],
+					documentation: vec![],
 				},
 				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("GETU32"),
+					name: "GETU32",
 					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Plain(DecodeDifferent::Encode("T::Origin")),
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructGETU32(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
+					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+					default: vec![],
+					documentation: vec![],
 				},
 				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("PUBGETU32"),
+					name: "PUBGETU32",
 					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Plain(DecodeDifferent::Encode("u32")),
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructPUBGETU32(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
+					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+					default: vec![],
+					documentation: vec![],
 				},
 				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("GETU32WITHCONFIG"),
+					name: "GETU32WITHCONFIG",
 					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Plain(DecodeDifferent::Encode("u32")),
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructGETU32WITHCONFIG(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
+					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+					default: vec![],
+					documentation: vec![],
 				},
 				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("PUBGETU32WITHCONFIG"),
+					name: "PUBGETU32WITHCONFIG",
 					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Plain(DecodeDifferent::Encode("u32")),
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructPUBGETU32WITHCONFIG(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
+					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+					default: vec![],
+					documentation: vec![],
 				},
 				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("GETU32MYDEF"),
+					name: "GETU32MYDEF",
 					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Plain(DecodeDifferent::Encode("u32")),
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructGETU32MYDEF(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
+					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+					default: vec![],
+					documentation: vec![],
 				},
 				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("PUBGETU32MYDEF"),
+					name: "PUBGETU32MYDEF",
 					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Plain(DecodeDifferent::Encode("u32")),
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructPUBGETU32MYDEF(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
+					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+					default: vec![],
+					documentation: vec![],
 				},
 				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("GETU32WITHCONFIGMYDEF"),
+					name: "GETU32WITHCONFIGMYDEF",
 					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Plain(DecodeDifferent::Encode("u32")),
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructGETU32WITHCONFIGMYDEF(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
+					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+					default: vec![],
+					documentation: vec![],
 				},
 				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("PUBGETU32WITHCONFIGMYDEF"),
+					name: "PUBGETU32WITHCONFIGMYDEF",
 					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Plain(DecodeDifferent::Encode("u32")),
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructPUBGETU32WITHCONFIGMYDEF(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
+					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+					default: vec![],
+					documentation: vec![],
 				},
 				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("PUBGETU32WITHCONFIGMYDEFOPT"),
+					name: "PUBGETU32WITHCONFIGMYDEFOPT",
 					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Plain(DecodeDifferent::Encode("u32")),
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructPUBGETU32WITHCONFIGMYDEFOPT(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
+					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+					default: vec![],
+					documentation: vec![],
 				},
 				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("GetU32WithBuilder"),
+					name: "GetU32WithBuilder",
 					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Plain(DecodeDifferent::Encode("u32")),
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructGetU32WithBuilder(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
+					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+					default: vec![],
+					documentation: vec![],
 				},
 				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("GetOptU32WithBuilderSome"),
+					name: "GetOptU32WithBuilderSome",
 					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Plain(DecodeDifferent::Encode("u32")),
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructGetOptU32WithBuilderSome(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
+					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+					default: vec![],
+					documentation: vec![],
 				},
 				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("GetOptU32WithBuilderNone"),
+					name: "GetOptU32WithBuilderNone",
 					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Plain(DecodeDifferent::Encode("u32")),
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructGetOptU32WithBuilderNone(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
+					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+					default: vec![],
+					documentation: vec![],
 				},
 				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("MAPU32"),
+					name: "MAPU32",
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::Map {
 						hasher: StorageHasher::Blake2_128Concat,
-						key: DecodeDifferent::Encode("u32"),
-						value: DecodeDifferent::Encode("String"),
+						key: scale_info::meta_type::<u32>(),
+						value: scale_info::meta_type::<String>(),
 						unused: false,
 					},
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructMAPU32(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
+					default: vec![],
+					documentation: vec![],
 				},
 				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("PUBMAPU32"),
+					name: "PUBMAPU32",
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::Map {
 						hasher: StorageHasher::Blake2_128Concat,
-						key: DecodeDifferent::Encode("u32"),
-						value: DecodeDifferent::Encode("String"),
+						key: scale_info::meta_type::<u32>(),
+						value: scale_info::meta_type::<String>(),
 						unused: false,
 					},
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructPUBMAPU32(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
+					default: vec![],
+					documentation: vec![],
 				},
 				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("MAPU32MYDEF"),
+					name: "MAPU32MYDEF",
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::Map {
 						hasher: StorageHasher::Blake2_128Concat,
-						key: DecodeDifferent::Encode("u32"),
-						value: DecodeDifferent::Encode("String"),
+						key: scale_info::meta_type::<u32>(),
+						value: scale_info::meta_type::<String>(),
 						unused: false,
 					},
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructMAPU32MYDEF(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
+					default: vec![],
+					documentation: vec![],
 				},
 				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("PUBMAPU32MYDEF"),
+					name: "PUBMAPU32MYDEF",
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::Map {
 						hasher: StorageHasher::Blake2_128Concat,
-						key: DecodeDifferent::Encode("u32"),
-						value: DecodeDifferent::Encode("String"),
+						key: scale_info::meta_type::<u32>(),
+						value: scale_info::meta_type::<String>(),
 						unused: false,
 					},
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructPUBMAPU32MYDEF(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
+					default: vec![],
+					documentation: vec![],
 				},
 				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("GETMAPU32"),
+					name: "GETMAPU32",
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::Map {
 						hasher: StorageHasher::Blake2_128Concat,
-						key: DecodeDifferent::Encode("u32"),
-						value: DecodeDifferent::Encode("String"),
+						key: scale_info::meta_type::<u32>(),
+						value: scale_info::meta_type::<String>(),
 						unused: false,
 					},
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructGETMAPU32(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
+					default: vec![],
+					documentation: vec![],
 				},
 				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("PUBGETMAPU32"),
+					name: "PUBGETMAPU32",
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::Map {
 						hasher: StorageHasher::Blake2_128Concat,
-						key: DecodeDifferent::Encode("u32"),
-						value: DecodeDifferent::Encode("String"),
+						key: scale_info::meta_type::<u32>(),
+						value: scale_info::meta_type::<String>(),
 						unused: false,
 					},
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructPUBGETMAPU32(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
+					default: vec![],
+					documentation: vec![],
 				},
 				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("GETMAPU32MYDEF"),
+					name: "GETMAPU32MYDEF",
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::Map {
 						hasher: StorageHasher::Blake2_128Concat,
-						key: DecodeDifferent::Encode("u32"),
-						value: DecodeDifferent::Encode("String"),
+						key: scale_info::meta_type::<u32>(),
+						value: scale_info::meta_type::<String>(),
 						unused: false,
 					},
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructGETMAPU32MYDEF(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
+					default: vec![],
+					documentation: vec![],
 				},
 				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("PUBGETMAPU32MYDEF"),
+					name: "PUBGETMAPU32MYDEF",
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::Map {
 						hasher: StorageHasher::Blake2_128Concat,
-						key: DecodeDifferent::Encode("u32"),
-						value: DecodeDifferent::Encode("String"),
+						key: scale_info::meta_type::<u32>(),
+						value: scale_info::meta_type::<String>(),
 						unused: false,
 					},
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructPUBGETMAPU32MYDEF(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
+					default: vec![],
+					documentation: vec![],
 				},
 				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("COMPLEXTYPE1"),
+					name: "COMPLEXTYPE1",
 					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Plain(DecodeDifferent::Encode("::std::vec::Vec<T::Origin>")),
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructCOMPLEXTYPE1(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
+					ty: StorageEntryType::Plain(scale_info::meta_type::<Vec<u32>>()),
+					default: vec![],
+					documentation: vec![],
 				},
 				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("COMPLEXTYPE2"),
+					name: "COMPLEXTYPE2",
 					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Plain(DecodeDifferent::Encode("(Vec<Vec<(u16, Box<()>)>>, u32)")),
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructCOMPLEXTYPE2(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
+					ty: StorageEntryType::Plain(scale_info::meta_type::<(Vec<Vec<(u16, Box<()>)>>, u32)>()),
+					default: vec![],
+					documentation: vec![],
 				},
 				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("COMPLEXTYPE3"),
+					name: "COMPLEXTYPE3",
 					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Plain(DecodeDifferent::Encode("[u32; 25]")),
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructCOMPLEXTYPE3(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
+					ty: StorageEntryType::Plain(scale_info::meta_type::<[u32; 25]>()),
+					default: vec![],
+					documentation: vec![],
 				},
 			]
-		),
-	};
+		}
+	}
 
 	#[test]
 	fn store_metadata() {
 		let metadata = Module::<TraitImpl>::storage_metadata();
-		pretty_assertions::assert_eq!(EXPECTED_METADATA, metadata);
+		pretty_assertions::assert_eq!(expected_metadata(), metadata);
 	}
 
 	#[test]
@@ -488,7 +433,7 @@ mod test_append_and_len {
 		pub struct Module<T: Config> for enum Call where origin: T::Origin, system=frame_support_test {}
 	}
 
-	#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+	#[derive(PartialEq, Eq, Clone, Encode, Decode, scale_info::TypeInfo)]
 	struct NoDef(u32);
 
 	frame_support::decl_storage! {
