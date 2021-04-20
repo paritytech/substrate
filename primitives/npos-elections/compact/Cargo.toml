@@ -22,8 +22,6 @@ proc-macro-crate = "1.0.0"
 
 [dev-dependencies]
 parity-scale-codec = "2.0.1"
-rand = { version = "0.7.3", features = ["small_rng"] }
 sp-arithmetic = { path = "../../arithmetic" }
 sp-npos-elections = { path = ".." }
-sp-runtime = { path = "../../runtime" }
 trybuild = "1.0.41"
