@@ -16,50 +16,40 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use assert_cmd::cargo::cargo_bin;
-use std::process::Command;
 use tempfile::tempdir;
+use sc_client_db::{
+	DatabaseSettings, DatabaseSettingsSrc, KeepBlocks, PruningMode, TransactionStorageMode,
+	light::LightStorage
+};
+use sp_runtime::testing::{Block as RawBlock, ExtrinsicWrapper};
 
 pub mod common;
 
 #[test]
 #[cfg(unix)]
-fn purge_chain_works() {
+fn database_role_subdir_migration() {
+	type Block = RawBlock<ExtrinsicWrapper<u64>>;
+
 	let base_path = tempdir().expect("could not create a temp dir");
+	let old_db_path = base_path.path().join("chains/dev/db");
 
-	common::run_dev_node_for_a_while(base_path.path());
-
-	let status = Command::new(cargo_bin("substrate"))
-		.args(&["purge-chain", "--dev", "-d"])
-		.arg(base_path.path())
-		.arg("-y")
-		.status()
-		.unwrap();
-	assert!(status.success());
-
-	// Make sure that the `dev` db chain folder exists, but the `db` is deleted.
-	assert!(base_path.path().join("chains/dev/db").exists());
-	assert!(!base_path.path().join("chains/dev/db/full").exists());
-}
-
-#[test]
-#[cfg(unix)]
-fn purge_wrong_role_chain_does_nothing() {
-	let base_path = tempdir().expect("could not create a temp dir");
+	// create a database with the old layout
+	{
+		let _old_db = LightStorage::<Block>::new(DatabaseSettings{
+			state_cache_size: 0,
+			state_cache_child_ratio: None,
+			state_pruning: PruningMode::ArchiveAll,
+			source: DatabaseSettingsSrc::RocksDb { path: old_db_path.to_path_buf(), cache_size: 128 },
+			keep_blocks: KeepBlocks::All,
+			transaction_storage: TransactionStorageMode::BlockBody
+		}).unwrap();
+	}
+	assert!(old_db_path.join("db_version").exists());
 
 	// start a light client
 	common::run_node_with_args_for_a_while(base_path.path(), &["--dev", "--light"]);
 
-	// issue the command in full mode
-	let status = Command::new(cargo_bin("substrate"))
-		.args(&["purge-chain", "--dev", "-d"])
-		.arg(base_path.path())
-		.arg("-y")
-		.status()
-		.unwrap();
-	assert!(status.success());
-
-	// Make sure that the `light` db chain folder still exists.
-	assert!(base_path.path().join("chains/dev/db/light").exists());
+	// check if the database dir had been migrated
+	assert!(!old_db_path.join("db_version").exists());
+	assert!(old_db_path.join("light/db_version").exists());
 }
-
