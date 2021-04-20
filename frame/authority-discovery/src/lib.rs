@@ -24,7 +24,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
-use frame_support::traits::OneSessionHandler;
+use frame_support::traits::OnSessionHandler;
 #[cfg(feature = "std")]
 use frame_support::traits::GenesisBuild;
 use sp_authority_discovery::AuthorityId;
@@ -53,7 +53,7 @@ pub mod pallet {
 		Vec<AuthorityId>,
 		ValueQuery,
 	>;
-	
+
 	#[pallet::storage]
 	#[pallet::getter(fn next_keys)]
 	/// Keys of the next authority set.
@@ -127,7 +127,7 @@ impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Pallet<T> {
 	type Public = AuthorityId;
 }
 
-impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
+impl<T: Config> OnSessionHandler<T::AccountId> for Pallet<T> {
 	type Key = AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(authorities: I)
@@ -275,7 +275,7 @@ mod tests {
 	#[test]
 	fn authorities_returns_current_and_next_authority_set() {
 		// The whole authority discovery pallet ignores account ids, but we still need them for
-		// `pallet_session::OneSessionHandler::on_new_session`, thus its safe to use the same value
+		// `pallet_session::OnSessionHandler::on_new_session`, thus its safe to use the same value
 		// everywhere.
 		let account_id = AuthorityPair::from_seed_slice(vec![10; 32].as_ref()).unwrap().public();
 
@@ -288,7 +288,7 @@ mod tests {
 			.map(|i| AuthorityPair::from_seed_slice(vec![i; 32].as_ref()).unwrap().public())
 			.map(AuthorityId::from)
 			.collect();
-		// Needed for `pallet_session::OneSessionHandler::on_new_session`.
+		// Needed for `pallet_session::OnSessionHandler::on_new_session`.
 		let second_authorities_and_account_ids = second_authorities.clone()
 			.into_iter()
 			.map(|id| (&account_id, id))
@@ -298,7 +298,7 @@ mod tests {
 			.map(|i| AuthorityPair::from_seed_slice(vec![i; 32].as_ref()).unwrap().public())
 			.map(AuthorityId::from)
 			.collect();
-		// Needed for `pallet_session::OneSessionHandler::on_new_session`.
+		// Needed for `pallet_session::OnSessionHandler::on_new_session`.
 		let third_authorities_and_account_ids = third_authorities.clone()
 			.into_iter()
 			.map(|id| (&account_id, id))
@@ -319,7 +319,7 @@ mod tests {
 		let mut externalities = TestExternalities::new(t);
 
 		externalities.execute_with(|| {
-			use frame_support::traits::OneSessionHandler;
+			use frame_support::traits::OnSessionHandler;
 
 			AuthorityDiscovery::on_genesis_session(
 				first_authorities.iter().map(|id| (id, id.clone()))

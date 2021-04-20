@@ -95,7 +95,7 @@ use sp_staking::{
 use frame_support::{
 	decl_error, decl_event, decl_module, decl_storage,
 	traits::{
-		EstimateNextSessionRotation, Get, OneSessionHandler, ValidatorSet,
+		EstimateNextSessionRotation, Get, OnSessionHandler, ValidatorSet,
 		ValidatorSetWithIdentification,
 	},
 	Parameter,
@@ -652,7 +652,7 @@ impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
 	type Public = T::AuthorityId;
 }
 
-impl<T: Config> OneSessionHandler<T::AccountId> for Module<T> {
+impl<T: Config> OnSessionHandler<T::AccountId> for Module<T> {
 	type Key = T::AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)

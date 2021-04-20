@@ -44,7 +44,7 @@ use sp_std::{
 use codec::{Encode, Decode};
 use frame_support::{
 	Parameter, BoundedVec, ConsensusEngineId,
-	traits::{Get, FindAuthor, OneSessionHandler, OnTimestampSet},
+	traits::{Get, FindAuthor, OnSessionHandler, OnTimestampSet},
 };
 use sp_runtime::{
 	RuntimeAppPublic,
@@ -187,7 +187,7 @@ impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Pallet<T> {
 	type Public = T::AuthorityId;
 }
 
-impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
+impl<T: Config> OnSessionHandler<T::AccountId> for Pallet<T> {
 	type Key = T::AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)

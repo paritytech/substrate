@@ -36,7 +36,7 @@ pub use members::{
 
 mod validation;
 pub use validation::{
-	ValidatorSet, ValidatorSetWithIdentification, OneSessionHandler, FindAuthor, VerifySeal,
+	ValidatorSet, ValidatorSetWithIdentification, OnSessionHandler, FindAuthor, VerifySeal,
 	EstimateNextNewSession, EstimateNextSessionRotation, KeyOwnerProofSystem, ValidatorRegistration,
 	Lateness,
 };
