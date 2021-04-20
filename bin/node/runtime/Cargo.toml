@@ -196,7 +196,6 @@ runtime-benchmarks = [
 	"pallet-session-benchmarking",
 	"frame-system-benchmarking",
 	"hex-literal",
-	"sp-api/disable-logging",
 ]
 try-runtime = [
 	"frame-executive/try-runtime",
