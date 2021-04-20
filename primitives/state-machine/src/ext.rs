@@ -293,7 +293,6 @@ where
 			result,
 		);
 
-
 		result
 	}
 
