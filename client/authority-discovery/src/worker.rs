@@ -276,9 +276,9 @@ where
 						let addresses = self.addr_cache.get_addresses_by_authority_id(&authority)
 							.cloned().unwrap_or_default();
 						queries.push(Box::pin(async move {
-							log::debug!(target: LOG_TARGET, "Starting test for {:?}", authority);
+							log::debug!(target: LOG_TARGET, "Starting test for {}", authority);
 							let out = network.test_connectivity(addresses).await;
-							log::debug!(target: LOG_TARGET, "Finished test for {:?}", authority);
+							log::debug!(target: LOG_TARGET, "Finished test for {}", authority);
 							(authority, out)
 						}));
 					}
@@ -289,7 +289,7 @@ where
 					log::info!(target: LOG_TARGET, "{} of {} authorities reachable", list.iter().filter(|(_, r)| r.is_ok()).count(), list.len());
 					for (authority_id, result) in list {
 						if result.is_err() {
-							log::info!(target: LOG_TARGET, "Authority {:?} is unreachable", authority_id);
+							log::info!(target: LOG_TARGET, "Authority {} is unreachable", authority_id);
 						}
 					}
 				}
