@@ -88,6 +88,9 @@ pallet-erc20 = { version = "2.0.0", default-features = false, path = "../../../f
 [build-dependencies]
 wasm-builder-runner = { version = "1.0.5", package = "substrate-wasm-builder-runner", path = "../../../utils/wasm-builder-runner" }
 
+
+ocw-ddc = { path = "../pallets/ocw-ddc", default-features = false }
+
 [features]
 default = ["std"]
 with-tracing = [ "frame-executive/with-tracing" ]
@@ -151,6 +154,7 @@ std = [
 	"pallet-society/std",
 	"pallet-recovery/std",
 	"pallet-vesting/std",
+	"ocw-ddc/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking",
