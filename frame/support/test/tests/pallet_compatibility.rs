@@ -267,7 +267,7 @@ mod test {
 	fn metadata() {
 		let metadata = Runtime::metadata();
 		let modules = match metadata.1 {
-			frame_support::metadata::RuntimeMetadata::V12(frame_support::metadata::RuntimeMetadataV12 {
+			frame_support::metadata::RuntimeMetadata::V12(frame_support::metadata::RuntimeMetadataLastVersion {
 				modules: m,
 				..
 			}) => m,

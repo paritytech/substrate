@@ -869,32 +869,33 @@ fn pallet_on_genesis() {
 // todo: [AJ] update this test
 #[test]
 fn metadata_vnext() {
-	use frame_metadata::*;
 	use crate::scale_info::{meta_type, Registry, IntoPortable};
+	use codec::Compact;
+	use frame_support::metadata::*;
 
-	let expected_pallet_metadata = vnext::ModuleMetadata {
+	let expected_pallet_metadata = ModuleMetadata {
 		// index: 1,
 		name: "Example",
 		// storage:
 		calls: Some(vec![
-			vnext::FunctionMetadata {
+			FunctionMetadata {
 				name: "foo",
 				arguments: vec![
-					vnext::FunctionArgumentMetadata {
+					FunctionArgumentMetadata {
 						name: "_foo",
 						ty: meta_type::<Compact<u32>>(),
 					},
-					vnext::FunctionArgumentMetadata {
+					FunctionArgumentMetadata {
 						name: "_bar",
 						ty: meta_type::<Compact<u32>>(),
 					},
 				],
 				documentation: vec![" Doc comment put in metadata"],
 			},
-			vnext::FunctionMetadata {
+			FunctionMetadata {
 				name: "foo_transactional",
 				arguments: vec![
-					vnext::FunctionArgumentMetadata {
+					FunctionArgumentMetadata {
 						name: "foo",
 						ty: meta_type::<Compact<u32>>(),
 					},
@@ -903,31 +904,31 @@ fn metadata_vnext() {
 			},
 		]),
 		event: Some(vec![
-			vnext::EventMetadata {
+			EventMetadata {
 				name: "Proposed",
 				arguments: vec![
-					vnext::TypeSpec::new::<<Runtime as frame_system::Config>::AccountId>("<T as frame_system::Config>::AccountId"),
+					TypeSpec::new::<<Runtime as frame_system::Config>::AccountId>("<T as frame_system::Config>::AccountId"),
 				],
 				documentation: vec![" doc comment put in metadata"],
 			},
-			vnext::EventMetadata {
+			EventMetadata {
 				name: "Spending",
 				arguments: vec![
-					vnext::TypeSpec::new::<<Runtime as pallet::Config>::Balance>("Balance"),
+					TypeSpec::new::<<Runtime as pallet::Config>::Balance>("Balance"),
 				],
 				documentation: vec![" doc"],
 			},
-			vnext::EventMetadata {
+			EventMetadata {
 				name: "Something",
 				arguments: vec![
-					vnext::TypeSpec::new::<u32>("Other"),
+					TypeSpec::new::<u32>("Other"),
 				],
 				documentation: vec![],
 			},
-			vnext::EventMetadata {
+			EventMetadata {
 				name: "SomethingElse",
 				arguments: vec![
-					vnext::TypeSpec::new::<<<Runtime as frame_system::Config>::AccountId as SomeAssociation1>::_1>("<T::AccountId as SomeAssociation1>::_1"),
+					TypeSpec::new::<<<Runtime as frame_system::Config>::AccountId as SomeAssociation1>::_1>("<T::AccountId as SomeAssociation1>::_1"),
 				],
 				documentation: vec![],
 			},
@@ -937,7 +938,7 @@ fn metadata_vnext() {
 	};
 
 	let metadata = match Runtime::metadata().1 {
-		vnext::RuntimeMetadata::V12(metadata) => metadata,
+		RuntimeMetadata::V12(metadata) => metadata,
 	};
 
 	let mut registry = Registry::new();
