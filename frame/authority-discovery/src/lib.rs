@@ -23,10 +23,10 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::prelude::*;
-use frame_support::traits::OnSessionHandler;
+use sp_std::{prelude::*, convert::TryInto};
+use frame_support::{traits::OnSessionHandler, BoundedVec};
 #[cfg(feature = "std")]
-use frame_support::traits::GenesisBuild;
+use frame_support::traits::{GenesisBuild, Get};
 use sp_authority_discovery::AuthorityId;
 
 pub use pallet::*;
@@ -50,7 +50,7 @@ pub mod pallet {
 	/// Keys of the current authority set.
 	pub(super) type Keys<T: Config> = StorageValue<
 		_,
-		Vec<AuthorityId>,
+		BoundedVec<AuthorityId, T::MaxValidators>,
 		ValueQuery,
 	>;
 
@@ -59,7 +59,7 @@ pub mod pallet {
 	/// Keys of the next authority set.
 	pub(super) type NextKeys<T: Config> = StorageValue<
 		_,
-		Vec<AuthorityId>,
+		BoundedVec<AuthorityId, T::MaxValidators>,
 		ValueQuery,
 	>;
 
@@ -79,7 +79,9 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
-			Pallet::<T>::initialize_keys(&self.keys)
+			let bounded_keys: BoundedVec::<AuthorityId, T::MaxValidators> =
+				self.keys.clone().try_into().expect("Too many genesis keys!");
+			Pallet::<T>::initialize_keys(&bounded_keys)
 		}
 	}
 
@@ -94,8 +96,8 @@ impl<T: Config> Pallet<T> {
 	/// Retrieve authority identifiers of the current and next authority set
 	/// sorted and deduplicated.
 	pub fn authorities() -> Vec<AuthorityId> {
-		let mut keys = Keys::<T>::get();
-		let next = NextKeys::<T>::get();
+		let mut keys = Keys::<T>::get().to_vec();
+		let next = NextKeys::<T>::get().to_vec();
 
 		keys.extend(next);
 		keys.sort();
@@ -106,19 +108,21 @@ impl<T: Config> Pallet<T> {
 
 	/// Retrieve authority identifiers of the current authority set in the original order.
 	pub fn current_authorities() -> Vec<AuthorityId> {
-		Keys::<T>::get()
+		Keys::<T>::get().to_vec()
 	}
 
 	/// Retrieve authority identifiers of the next authority set in the original order.
 	pub fn next_authorities() -> Vec<AuthorityId> {
-		NextKeys::<T>::get()
+		NextKeys::<T>::get().to_vec()
 	}
 
 	fn initialize_keys(keys: &[AuthorityId]) {
 		if !keys.is_empty() {
 			assert!(Keys::<T>::get().is_empty(), "Keys are already initialized!");
-			Keys::<T>::put(keys);
-			NextKeys::<T>::put(keys);
+			let bounded_keys: BoundedVec<AuthorityId, T::MaxValidators> =
+				keys.to_vec().try_into().expect("Too many initial keys!");
+			Keys::<T>::put(&bounded_keys);
+			NextKeys::<T>::put(&bounded_keys);
 		}
 	}
 }
@@ -143,10 +147,26 @@ impl<T: Config> OnSessionHandler<T::AccountId, T::MaxValidators> for Pallet<T> {
 	{
 		// Remember who the authorities are for the new and next session.
 		if changed {
-			let keys = validators.map(|x| x.1);
-			Keys::<T>::put(keys.collect::<Vec<_>>());
-			let next_keys = queued_validators.map(|x| x.1);
-			NextKeys::<T>::put(next_keys.collect::<Vec<_>>());
+			let keys = validators
+				.map(|x| x.1)
+				// Truncate to bounded vec
+				.take(T::MaxValidators::get() as usize)
+				.collect::<Vec<_>>();
+			let bounded_keys = BoundedVec::<AuthorityId, T::MaxValidators>::force_from(
+				keys,
+				Some("Authority Discovery New Session Keys"),
+			);
+			Keys::<T>::put(bounded_keys);
+			let next_keys = queued_validators
+				.map(|x| x.1)
+				// Truncate to bounded vec
+				.take(T::MaxValidators::get() as usize)
+				.collect::<Vec<_>>();
+			let bounded_next_keys = BoundedVec::<AuthorityId, T::MaxValidators>::force_from(
+				next_keys,
+				Some("Authority Discovery New Session Next Keys"),
+			);
+			NextKeys::<T>::put(bounded_next_keys);
 		}
 	}
 
