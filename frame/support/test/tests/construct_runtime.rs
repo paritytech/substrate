@@ -50,7 +50,7 @@ mod module1 {
 		}
 	}
 
-	#[derive(Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode)]
+	#[derive(Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode, scale_info::TypeInfo)]
 	pub struct Origin<T, I: Instance = DefaultInstance>(pub core::marker::PhantomData::<(T, I)>);
 
 	frame_support::decl_event! {
@@ -511,7 +511,6 @@ fn call_codec() {
 // todo: [AJ] update test below with v13 metadata from above
 #[test]
 fn test_metadata() {
-	use scale_info::{form::MetaForm, IntoPortable, Registry};
 	use frame_support::metadata::*;
 	let modules = vec![
 		ModuleMetadata {
