@@ -48,7 +48,7 @@ pub type Assignment<T> = sp_npos_elections::Assignment<
 	CompactAccuracyOf<T>,
 >;
 
-/// The [`IndexAssignment`] type specialized for a particular runtime `T`.
+/// The [`IndexAssignment`][sp_npos_elections::IndexAssignment] type specialized for a particular runtime `T`.
 pub type IndexAssignmentOf<T> = sp_npos_elections::IndexAssignmentOf<CompactOf<T>>;
 
 #[derive(Debug, Eq, PartialEq)]
