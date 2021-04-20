@@ -485,7 +485,7 @@ pub mod test {
 
 	#[test]
 	fn truncating_from_works() {
-		let bounded = BoundedVec::<u32, Four>::truncating_from(vec![1, 2, 3, 4, 5, 6]);
+		let bounded = BoundedVec::<u32, Four>::truncating_from(vec![1, 2, 3, 4, 5, 6], None);
 		assert_eq!(*bounded, vec![1, 2, 3, 4]);
 	}
 }
