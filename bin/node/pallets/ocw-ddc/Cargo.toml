@@ -28,7 +28,7 @@ serde_json = { version = "1", default-features = false, git = "https://github.co
 frame-support = { version = '2.0.0', default-features = false }
 frame-system = { version = '2.0.0', default-features = false }
 sp-core = { version = '2.0.0', default-features = false }
-sp-io = { version = '2.0.', default-features = false }
+sp-io = { version = '2.0.0', default-features = false }
 sp-runtime = { version = '2.0.0', default-features = false }
 sp-std = { version = '2.0.0', default-features = false }
 
