@@ -38,7 +38,7 @@ use sp_std::{
 
 // We use `alt_serde`, and Xanewok-modified `serde_json` so that we can compile the program
 //   with serde(features `std`) and alt_serde(features `no_std`).
-use alt_serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer};
 
 /// Defines application identifier for crypto keys of this module.
 ///
@@ -55,6 +55,9 @@ pub const UNSIGNED_TXS_PRIORITY: u64 = 100;
 // We are fetching information from the github public API about organization`substrate-developer-hub`.
 pub const HTTP_REMOTE_REQUEST: &str = "https://api.github.com/orgs/substrate-developer-hub";
 pub const HTTP_HEADER_USER_AGENT: &str = "jimmychu0807";
+
+// We are fetching information from the github public API about organization`substrate-developer-hub`.
+pub const HTTP_NODES_REQUEST: &str = "http://localhost:8081/listNodes";
 
 pub const FETCH_TIMEOUT_PERIOD: u64 = 3000; // in milli-seconds
 pub const LOCK_TIMEOUT_EXPIRATION: u64 = FETCH_TIMEOUT_PERIOD + 1000; // in milli-seconds
@@ -84,7 +87,7 @@ pub mod crypto {
 
 	// implemented for mock runtime in test
 	impl frame_system::offchain::AppCrypto<<Sr25519Signature as Verify>::Signer, Sr25519Signature>
-		for TestAuthId
+	for TestAuthId
 	{
 		type RuntimeAppPublic = Public;
 		type GenericSignature = sp_core::sr25519::Signature;
@@ -106,38 +109,50 @@ impl <T: SigningTypes> SignedPayload<T> for Payload<T::Public> {
 
 // Specifying serde path as `alt_serde`
 // ref: https://serde.rs/container-attrs.html#crate
-#[serde(crate = "alt_serde")]
+//#[serde(crate = "alt_serde")]
+//#[derive(Deserialize, Encode, Decode, Default)]
+//struct GithubInfo {
+//	// Specify our own deserializing function to convert JSON string to vector of bytes
+//	#[serde(deserialize_with = "de_string_to_bytes")]
+//	url: Vec<u8>,
+//	#[serde(deserialize_with = "de_string_to_bytes")]
+//	blog: Vec<u8>,
+//	public_repos: u32,
+//}
+
+// Specifying serde path as `alt_serde`
+// ref: https://serde.rs/container-attrs.html#crate
+//#[serde(crate = "alt_serde")]
 #[derive(Deserialize, Encode, Decode, Default)]
-struct GithubInfo {
+#[derive(Debug)]
+struct NodeInfo {
 	// Specify our own deserializing function to convert JSON string to vector of bytes
 	#[serde(deserialize_with = "de_string_to_bytes")]
-	login: Vec<u8>,
+	url: Vec<u8>,
 	#[serde(deserialize_with = "de_string_to_bytes")]
-	blog: Vec<u8>,
-	public_repos: u32,
+	id: Vec<u8>
 }
 
 pub fn de_string_to_bytes<'de, D>(de: D) -> Result<Vec<u8>, D::Error>
-where
-	D: Deserializer<'de>,
+	where
+		D: Deserializer<'de>,
 {
 	let s: &str = Deserialize::deserialize(de)?;
 	Ok(s.as_bytes().to_vec())
 }
 
-impl fmt::Debug for GithubInfo {
-	// `fmt` converts the vector of bytes inside the struct back to string for
-	//   more friendly display.
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(
-			f,
-			"{{ login: {}, blog: {}, public_repos: {} }}",
-			str::from_utf8(&self.login).map_err(|_| fmt::Error)?,
-			str::from_utf8(&self.blog).map_err(|_| fmt::Error)?,
-			&self.public_repos
-		)
-	}
-}
+//impl fmt::Debug for GithubInfo {
+//	// `fmt` converts the vector of bytes inside the struct back to string for
+//	//   more friendly display.
+//	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//		write!(
+//			f,
+//			"{{ blog: {}, public_repos: {} }}",
+//			str::from_utf8(&self.blog).map_err(|_| fmt::Error)?,
+//			&self.public_repos
+//		)
+//	}
+//}
 
 /// This is the pallet's configuration trait
 pub trait Trait: system::Trait + CreateSignedTransaction<Call<Self>> {
@@ -234,14 +249,18 @@ decl_module! {
 			// 2. Sending unsigned transaction from ocw
 			// 3. Sending unsigned transactions with signed payloads from ocw
 			// 4. Fetching JSON via http requests in ocw
-			const TRANSACTION_TYPES: usize = 4;
+			const TRANSACTION_TYPES: usize = 5;
 			let result = match block_number.try_into()
 				.map_or(TRANSACTION_TYPES, |bn| bn % TRANSACTION_TYPES)
 			{
-				0 => Self::offchain_signed_tx(block_number),
-				1 => Self::offchain_unsigned_tx(block_number),
-				2 => Self::offchain_unsigned_tx_signed_payload(block_number),
-				3 => Self::fetch_github_info(),
+				// 0 => Self::offchain_signed_tx(block_number),
+				// 1 => Self::offchain_unsigned_tx(block_number),
+				// 2 => Self::offchain_unsigned_tx_signed_payload(block_number),
+				0 => Self::fetch_ddc_data_and_send_to_sc(block_number),
+				1 => Ok(()),
+				2 => Ok(()),
+				3 => Ok(()),
+				4 => Ok(()),
 				_ => Err(Error::<T>::UnknownOffchainMux),
 			};
 
@@ -268,11 +287,12 @@ impl<T: Trait> Module<T> {
 	/// Check if we have fetched github info before. If yes, we can use the cached version
 	///   stored in off-chain worker storage `storage`. If not, we fetch the remote info and
 	///   write the info into the storage for future retrieval.
-	fn fetch_github_info() -> Result<(), Error<T>> {
+	fn fetch_ddc_data_and_send_to_sc(block_number: T::BlockNumber) -> Result<(), Error<T>> {
 		// Create a reference to Local Storage value.
 		// Since the local storage is common for all offchain workers, it's a good practice
 		// to prepend our entry with the pallet name.
-		let s_info = StorageValueRef::persistent(b"offchain-demo::gh-info");
+//		debug::info!("About to get info from storage");
+//		let s_info = StorageValueRef::persistent(b"offchain-demo::gh-info");
 
 		// Local storage is persisted and shared between runs of the offchain workers,
 		// offchain workers may run concurrently. We can use the `mutate` function to
@@ -283,11 +303,11 @@ impl<T: Trait> Module<T> {
 		// the storage comprehensively.
 		//
 		// Ref: https://substrate.dev/rustdocs/v2.0.0/sp_runtime/offchain/storage/struct.StorageValueRef.html
-		if let Some(Some(gh_info)) = s_info.get::<GithubInfo>() {
-			// gh-info has already been fetched. Return early.
-			debug::info!("cached gh-info: {:?}", gh_info);
-			return Ok(());
-		}
+//		if let Some(Some(gh_info)) = s_info.get::<GithubInfo>() {
+//			// gh-info has already been fetched. Return early.
+//			debug::info!("cached gh-info: {:?}", gh_info);
+//			return Ok(());
+//		}
 
 		// Since off-chain storage can be accessed by off-chain workers from multiple runs, it is important to lock
 		//   it before doing heavy computations or write operations.
@@ -299,38 +319,147 @@ impl<T: Trait> Module<T> {
 		//   3) `with_block_deadline` - lock with default time but custom block expiration
 		//   4) `with_block_and_time_deadline` - lock with custom time and block expiration
 		// Here we choose the most custom one for demonstration purpose.
-		let mut lock = StorageLock::<BlockAndTime<Self>>::with_block_and_time_deadline(
-			b"offchain-demo::lock", LOCK_BLOCK_EXPIRATION,
-			rt_offchain::Duration::from_millis(LOCK_TIMEOUT_EXPIRATION)
-		);
+//		let mut lock = StorageLock::<BlockAndTime<Self>>::with_block_and_time_deadline(
+//			b"offchain-demo::lock", LOCK_BLOCK_EXPIRATION,
+//			rt_offchain::Duration::from_millis(LOCK_TIMEOUT_EXPIRATION)
+//		);
 
 		// We try to acquire the lock here. If failed, we know the `fetch_n_parse` part inside is being
 		//   executed by previous run of ocw, so the function just returns.
 		// ref: https://substrate.dev/rustdocs/v2.0.0/sp_runtime/offchain/storage_lock/struct.StorageLock.html#method.try_lock
-		if let Ok(_guard) = lock.try_lock() {
-			match Self::fetch_n_parse() {
-				Ok(gh_info) => { s_info.set(&gh_info); }
-				Err(err) => { return Err(err); }
-			}
+//		if let Ok(_guard) = lock.try_lock() {
+		match Self::fetch_n_parse(block_number) {
+			Ok(info) => { /*s_info.set(&info);*/ }
+			Err(err) => { return Err(err); }
 		}
+//		}
 		Ok(())
 	}
 
 	/// Fetch from remote and deserialize the JSON to a struct
-	fn fetch_n_parse() -> Result<GithubInfo, Error<T>> {
-		let resp_bytes = Self::fetch_from_remote().map_err(|e| {
-			debug::error!("fetch_from_remote error: {:?}", e);
+	fn fetch_n_parse(block_number: T::BlockNumber) -> Result<(), Error<T>> {
+		let resp_node_bytes = Self::fetch_list_nodes().map_err(|e| {
+			debug::error!("fetch_list_nodes error: {:?}", e);
 			<Error<T>>::HttpFetchingError
 		})?;
 
-		let resp_str = str::from_utf8(&resp_bytes).map_err(|_| <Error<T>>::HttpFetchingError)?;
+		let resp_node_str = str::from_utf8(&resp_node_bytes).map_err(|_| <Error<T>>::HttpFetchingError)?;
 		// Print out our fetched JSON string
-		debug::info!("{}", resp_str);
+		debug::info!("Nodes info: {}", resp_node_str);
 
 		// Deserializing JSON to struct, thanks to `serde` and `serde_derive`
-		let gh_info: GithubInfo =
-			serde_json::from_str(&resp_str).map_err(|_| <Error<T>>::HttpFetchingError)?;
-		Ok(gh_info)
+		let node_info: Vec<NodeInfo> = serde_json::from_str(&resp_node_str).map_err(|_| <Error<T>>::HttpFetchingError)?;
+		// debug::info!("Nodes info: {:#?}", node_info);
+
+		for (one_node) in node_info.iter() {
+			// debug::info!("Nodes info: {:?}", one_node);
+			let resp_bytes = Self::fetch_from_node(one_node).map_err(|e| {
+				debug::error!("fetch_from_node error: {:?}", e);
+				<Error<T>>::HttpFetchingError
+			})?;
+
+			let resp_str = str::from_utf8(&resp_bytes).map_err(|_| <Error<T>>::HttpFetchingError)?;
+			// Print out our fetched JSON string
+			debug::info!("{}", resp_str);
+
+			// Send signed Tx, TODO: send to call SC method.
+			Self::offchain_signed_tx(block_number);
+		}
+
+		Ok(())
+
+
+//		let resp_bytes = Self::fetch_from_remote().map_err(|e| {
+//			debug::error!("fetch_from_remote error: {:?}", e);
+//			<Error<T>>::HttpFetchingError
+//		})?;
+
+//		let resp_str = str::from_utf8(&resp_bytes).map_err(|_| <Error<T>>::HttpFetchingError)?;
+//		// Print out our fetched JSON string
+//		debug::info!("{}", resp_str);
+
+		// Deserializing JSON to struct, thanks to `serde` and `serde_derive`
+//		let gh_info: GithubInfo =
+//			serde_json::from_str(&resp_str).map_err(|_| <Error<T>>::HttpFetchingError)?;
+//		Ok(gh_info)
+	}
+
+	/// This function uses the `offchain::http` API to query the remote github information,
+	///   and returns the JSON response as vector of bytes.
+	fn fetch_list_nodes() -> Result<Vec<u8>, Error<T>> {
+		debug::info!("sending request to: {}", HTTP_NODES_REQUEST);
+
+		// Initiate an external HTTP GET request. This is using high-level wrappers from `sp_runtime`.
+		let request = rt_offchain::http::Request::get(HTTP_NODES_REQUEST);
+
+		// Keeping the offchain worker execution time reasonable, so limiting the call to be within 3s.
+		let timeout = sp_io::offchain::timestamp()
+			.add(rt_offchain::Duration::from_millis(FETCH_TIMEOUT_PERIOD));
+
+		// For github API request, we also need to specify `user-agent` in http request header.
+		//   See: https://developer.github.com/v3/#user-agent-required
+		let pending = request
+			.add_header("User-Agent", HTTP_HEADER_USER_AGENT)
+			.deadline(timeout) // Setting the timeout time
+			.send() // Sending the request out by the host
+			.map_err(|_| <Error<T>>::HttpFetchingError)?;
+
+		// By default, the http request is async from the runtime perspective. So we are asking the
+		//   runtime to wait here.
+		// The returning value here is a `Result` of `Result`, so we are unwrapping it twice by two `?`
+		//   ref: https://substrate.dev/rustdocs/v2.0.0/sp_runtime/offchain/http/struct.PendingRequest.html#method.try_wait
+		let response = pending
+			.try_wait(timeout)
+			.map_err(|_| <Error<T>>::HttpFetchingError)?
+			.map_err(|_| <Error<T>>::HttpFetchingError)?;
+
+		if response.code != 200 {
+			debug::error!("Unexpected http request status code: {}", response.code);
+			return Err(<Error<T>>::HttpFetchingError);
+		}
+
+		// Next we fully read the response body and collect it to a vector of bytes.
+		Ok(response.body().collect::<Vec<u8>>())
+	}
+
+	/// This function uses the `offchain::http` API to query the remote github information,
+	///   and returns the JSON response as vector of bytes.
+	fn fetch_from_node(one_node: &NodeInfo) -> Result<Vec<u8>, Error<T>> {
+		let node_url = str::from_utf8(&one_node.url).unwrap();
+
+		debug::info!("sending request to: {:?}", node_url);
+
+		// Initiate an external HTTP GET request. This is using high-level wrappers from `sp_runtime`.
+		let request = rt_offchain::http::Request::get(node_url);
+
+		// Keeping the offchain worker execution time reasonable, so limiting the call to be within 3s.
+		let timeout = sp_io::offchain::timestamp()
+			.add(rt_offchain::Duration::from_millis(FETCH_TIMEOUT_PERIOD));
+
+		// For github API request, we also need to specify `user-agent` in http request header.
+		//   See: https://developer.github.com/v3/#user-agent-required
+		let pending = request
+			.add_header("User-Agent", HTTP_HEADER_USER_AGENT)
+			.deadline(timeout) // Setting the timeout time
+			.send() // Sending the request out by the host
+			.map_err(|_| <Error<T>>::HttpFetchingError)?;
+
+		// By default, the http request is async from the runtime perspective. So we are asking the
+		//   runtime to wait here.
+		// The returning value here is a `Result` of `Result`, so we are unwrapping it twice by two `?`
+		//   ref: https://substrate.dev/rustdocs/v2.0.0/sp_runtime/offchain/http/struct.PendingRequest.html#method.try_wait
+		let response = pending
+			.try_wait(timeout)
+			.map_err(|_| <Error<T>>::HttpFetchingError)?
+			.map_err(|_| <Error<T>>::HttpFetchingError)?;
+
+		if response.code != 200 {
+			debug::error!("Unexpected http request status code: {}", response.code);
+			return Err(<Error<T>>::HttpFetchingError);
+		}
+
+		// Next we fully read the response body and collect it to a vector of bytes.
+		Ok(response.body().collect::<Vec<u8>>())
 	}
 
 	/// This function uses the `offchain::http` API to query the remote github information,
@@ -449,7 +578,7 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 	type Call = Call<T>;
 
 	fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-		let valid_tx = |provide| ValidTransaction::with_tag_prefix("ocw-ddc")
+		let valid_tx = |provide| ValidTransaction::with_tag_prefix("ocw-demo")
 			.priority(UNSIGNED_TXS_PRIORITY)
 			.and_provides([&provide])
 			.longevity(3)
@@ -472,6 +601,6 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 impl<T: Trait> rt_offchain::storage_lock::BlockNumberProvider for Module<T> {
 	type BlockNumber = T::BlockNumber;
 	fn current_block_number() -> Self::BlockNumber {
-	  <frame_system::Module<T>>::block_number()
+		<frame_system::Module<T>>::block_number()
 	}
 }
