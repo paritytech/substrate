@@ -36,7 +36,7 @@
 //! finality proof (that finalizes some block C that is ancestor of the B and descendant
 //! of the U) could be returned.
 
-use log::trace;
+use log::{trace, warn};
 use std::sync::Arc;
 
 use parity_scale_codec::{Encode, Decode};
