@@ -392,7 +392,6 @@ where
 		key: StorageKey,
 		value: Option<StorageValue>,
 	) {
-
 		trace!(target: "state", "{:04x}: PutChild({}) {}={:?}",
 			self.id,
 			HexDisplay::from(&child_info.storage_key()),
@@ -494,6 +493,7 @@ where
 			HexDisplay::from(&key),
 			HexDisplay::from(&value),
 		);
+
 		let _guard = guard();
 		self.mark_dirty();
 
@@ -534,13 +534,11 @@ where
 				.unwrap_or_else(
 					|| empty_child_trie_root::<Layout<H>>()
 				);
-
 			trace!(target: "state", "{:04x}: ChildRoot({})(cached) {}",
 				self.id,
 				HexDisplay::from(&storage_key),
 				HexDisplay::from(&root.as_ref()),
 			);
-
 			root.encode()
 		} else {
 			let root = if let Some((changes, info)) = self.overlay.child_changes(storage_key) {
@@ -568,7 +566,6 @@ where
 					HexDisplay::from(&storage_key.as_ref()),
 					HexDisplay::from(&root.as_ref()),
 				);
-
 				root
 			} else {
 				// empty overlay
@@ -583,7 +580,6 @@ where
 					HexDisplay::from(&storage_key.as_ref()),
 					HexDisplay::from(&root.as_ref()),
 				);
-
 				root.encode()
 			}
 		}
