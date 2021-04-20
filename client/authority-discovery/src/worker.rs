@@ -133,7 +133,7 @@ pub struct Worker<Client, Network, Block, DhtEventStream> {
 	role: Role,
 
 	test_connectivity: ExpIncInterval,
-	test_connectivity_future: Pin<Box<dyn future::FusedFuture<Output = Vec<(AuthorityId, std::result::Result<(), ()>)>> + Send>>,
+	test_connectivity_future: Pin<Box<dyn future::FusedFuture<Output = Vec<(AuthorityId, Vec<Multiaddr>, std::result::Result<(), ()>)>> + Send>>,
 
 	phantom: PhantomData<Block>,
 }
@@ -277,19 +277,19 @@ where
 							.cloned().unwrap_or_default();
 						queries.push(Box::pin(async move {
 							log::debug!(target: LOG_TARGET, "Starting test for {}", authority);
-							let out = network.test_connectivity(addresses).await;
+							let out = network.test_connectivity(&addresses).await;
 							log::debug!(target: LOG_TARGET, "Finished test for {}", authority);
-							(authority, out)
+							(authority, addresses, out)
 						}));
 					}
 
 					self.test_connectivity_future = Box::pin(queries.collect::<Vec<_>>());
 				}
 				list = &mut self.test_connectivity_future => {
-					log::info!(target: LOG_TARGET, "{} of {} authorities reachable", list.iter().filter(|(_, r)| r.is_ok()).count(), list.len());
-					for (authority_id, result) in list {
+					log::info!(target: LOG_TARGET, "{} of {} authorities reachable", list.iter().filter(|(_, _, r)| r.is_ok()).count(), list.len());
+					for (authority_id, addresses, result) in list {
 						if result.is_err() {
-							log::info!(target: LOG_TARGET, "Authority {} is unreachable", authority_id);
+							log::info!(target: LOG_TARGET, "Authority {} is unreachable. Addresses: {:?}", authority_id, addresses);
 						}
 					}
 				}
@@ -645,7 +645,7 @@ pub trait NetworkProvider: NetworkStateInfo {
 	/// Start getting a value from the Dht.
 	fn get_value(&self, key: &libp2p::kad::record::Key);
 
-	fn test_connectivity(self: &Arc<Self>, addrs: Vec<Multiaddr>)
+	fn test_connectivity(self: &Arc<Self>, addrs: &[Multiaddr])
 		-> Pin<Box<dyn Future<Output = std::result::Result<(), ()>> + Send>>;
 }
 
@@ -661,20 +661,20 @@ where
 	fn get_value(&self, key: &libp2p::kad::record::Key) {
 		self.get_value(key)
 	}
-	fn test_connectivity(self: &Arc<Self>, addrs: Vec<Multiaddr>)
+	fn test_connectivity(self: &Arc<Self>, addrs: &[Multiaddr])
 		-> Pin<Box<dyn Future<Output = std::result::Result<(), ()>> + Send>>
 	{
 		let mut global_peer_id = None;
 
 		for addr in addrs {
-			let (peer_id, addr) = match parse_addr(addr) {
+			let (peer_id, addr) = match parse_addr(addr.clone()) {
 				Ok(v) => v,
 				Err(_) => continue,
 			};
 
 			global_peer_id = Some(peer_id.clone());
 
-			self.add_known_address(peer_id, addr);
+			self.add_known_address(peer_id, addr.clone());
 		}
 
 		if let Some(global_peer_id) = global_peer_id {
