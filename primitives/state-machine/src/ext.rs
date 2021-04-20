@@ -270,6 +270,13 @@ where
 					.expect(EXT_NOT_ALLOWED_TO_FAIL)
 			);
 
+		trace!(target: "state", "{:04x}: ChildHash({}) {}={:?}",
+			self.id,
+			HexDisplay::from(&child_info.storage_key()),
+			HexDisplay::from(&key),
+			result,
+		);
+
 		result.map(|r| r.encode())
 	}
 
@@ -279,6 +286,13 @@ where
 			Some(x) => x.is_some(),
 			_ => self.backend.exists_storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL),
 		};
+
+		trace!(target: "state", "{:04x}: Exists {}={:?}",
+			self.id,
+			HexDisplay::from(&key),
+			result,
+		);
+
 
 		result
 	}
@@ -297,6 +311,12 @@ where
 				.expect(EXT_NOT_ALLOWED_TO_FAIL),
 		};
 
+		trace!(target: "state", "{:04x}: ChildExists({}) {}={:?}",
+			self.id,
+			HexDisplay::from(&child_info.storage_key()),
+			HexDisplay::from(&key),
+			result,
+		);
 		result
 	}
 
@@ -372,6 +392,13 @@ where
 		key: StorageKey,
 		value: Option<StorageValue>,
 	) {
+
+		trace!(target: "state", "{:04x}: PutChild({}) {}={:?}",
+			self.id,
+			HexDisplay::from(&child_info.storage_key()),
+			HexDisplay::from(&key),
+			value.as_ref().map(HexDisplay::from)
+		);
 		let _guard = guard();
 
 		self.mark_dirty();
@@ -383,6 +410,10 @@ where
 		child_info: &ChildInfo,
 		limit: Option<u32>,
 	) -> (bool, u32) {
+		trace!(target: "state", "{:04x}: KillChild({})",
+			self.id,
+			HexDisplay::from(&child_info.storage_key()),
+		);
 		let _guard = guard();
 		self.mark_dirty();
 		self.overlay.clear_child_storage(child_info);
@@ -416,6 +447,10 @@ where
 	}
 
 	fn clear_prefix(&mut self, prefix: &[u8]) {
+		trace!(target: "state", "{:04x}: ClearPrefix {}",
+			self.id,
+			HexDisplay::from(&prefix),
+		);
 		let _guard = guard();
 
 		if sp_core::storage::well_known_keys::starts_with_child_storage_key(prefix) {
@@ -435,6 +470,11 @@ where
 		child_info: &ChildInfo,
 		prefix: &[u8],
 	) {
+		trace!(target: "state", "{:04x}: ClearChildPrefix({}) {}",
+			self.id,
+			HexDisplay::from(&child_info.storage_key()),
+			HexDisplay::from(&prefix),
+		);
 		let _guard = guard();
 
 		self.mark_dirty();
@@ -449,6 +489,11 @@ where
 		key: Vec<u8>,
 		value: Vec<u8>,
 	) {
+		trace!(target: "state", "{:04x}: Append {}={}",
+			self.id,
+			HexDisplay::from(&key),
+			HexDisplay::from(&value),
+		);
 		let _guard = guard();
 		self.mark_dirty();
 
@@ -463,11 +508,15 @@ where
 	fn storage_root(&mut self) -> Vec<u8> {
 		let _guard = guard();
 		if let Some(ref root) = self.storage_transaction_cache.transaction_storage_root {
+			trace!(target: "state", "{:04x}: Root(cached) {}",
+				self.id,
+				HexDisplay::from(&root.as_ref()),
+			);
 			return root.encode();
 		}
 
 		let root = self.overlay.storage_root(self.backend, self.storage_transaction_cache);
-
+		trace!(target: "state", "{:04x}: Root {}", self.id, HexDisplay::from(&root.as_ref()));
 		root.encode()
 	}
 
@@ -485,6 +534,12 @@ where
 				.unwrap_or_else(
 					|| empty_child_trie_root::<Layout<H>>()
 				);
+
+			trace!(target: "state", "{:04x}: ChildRoot({})(cached) {}",
+				self.id,
+				HexDisplay::from(&storage_key),
+				HexDisplay::from(&root.as_ref()),
+			);
 
 			root.encode()
 		} else {
@@ -508,6 +563,12 @@ where
 					self.overlay.set_storage(prefixed_storage_key.into_inner(), Some(root.clone()));
 				}
 
+				trace!(target: "state", "{:04x}: ChildRoot({}) {}",
+					self.id,
+					HexDisplay::from(&storage_key.as_ref()),
+					HexDisplay::from(&root.as_ref()),
+				);
+
 				root
 			} else {
 				// empty overlay
@@ -517,6 +578,11 @@ where
 					.unwrap_or_else(
 						|| empty_child_trie_root::<Layout<H>>()
 					);
+				trace!(target: "state", "{:04x}: ChildRoot({})(no_change) {}",
+					self.id,
+					HexDisplay::from(&storage_key.as_ref()),
+					HexDisplay::from(&root.as_ref()),
+				);
 
 				root.encode()
 			}
@@ -524,6 +590,13 @@ where
 	}
 
 	fn storage_index_transaction(&mut self, index: u32, offset: u32) {
+		trace!(
+			target: "state",
+			"{:04x}: IndexTransaction ({}): [{}..]",
+			self.id,
+			index,
+			offset,
+		);
 		self.overlay.add_transaction_index(IndexOperation::Insert {
 			extrinsic: index,
 			offset,
@@ -532,6 +605,13 @@ where
 
 	/// Renew existing piece of data storage.
 	fn storage_renew_transaction_index(&mut self, index: u32, hash: &[u8], size: u32) {
+		trace!(
+			target: "state",
+			"{:04x}: RenewTransactionIndex ({}) {} bytes",
+			self.id,
+			HexDisplay::from(&hash),
+			size,
+		);
 		self.overlay.add_transaction_index(IndexOperation::Renew {
 			extrinsic: index,
 			hash: hash.to_vec(),
@@ -548,6 +628,13 @@ where
 	fn storage_changes_root(&mut self, parent_hash: &[u8]) -> Result<Option<Vec<u8>>, ()> {
 		let _guard = guard();
 		if let Some(ref root) = self.storage_transaction_cache.changes_trie_transaction_storage_root {
+			trace!(
+				target: "state",
+				"{:04x}: ChangesRoot({})(cached) {:?}",
+				self.id,
+				HexDisplay::from(&parent_hash),
+				root,
+			);
 
 			Ok(Some(root.encode()))
 		} else {
@@ -563,6 +650,14 @@ where
 				)?,
 				true,
 				self.storage_transaction_cache,
+			);
+
+			trace!(
+				target: "state",
+				"{:04x}: ChangesRoot({}) {:?}",
+				self.id,
+				HexDisplay::from(&parent_hash),
+				root,
 			);
 
 			root.map(|r| r.map(|o| o.encode()))
