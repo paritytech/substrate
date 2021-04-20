@@ -204,7 +204,9 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin,
 
 	/// Equivalent to `Stream::poll_next`, except that it only drives the handshake and is
 	/// guaranteed to not generate any notification.
-	pub fn poll_process(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<Infallible, io::Error>> {
+	///
+	/// Returns `Ready(Ok(()))` if the substream has been closed by the remote.
+	pub fn poll_process(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), io::Error>> {
 		let mut this = self.project();
 
 		loop {
@@ -247,10 +249,14 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin,
 					},
 
 				st @ NotificationsInSubstreamHandshake::NotSent |
-				st @ NotificationsInSubstreamHandshake::Normal { .. } |
-				st @ NotificationsInSubstreamHandshake::BothSidesClosed => {
+				st @ NotificationsInSubstreamHandshake::Normal { .. } => {
 					*this.handshake = st;
 					return Poll::Pending;
+				}
+
+				st @ NotificationsInSubstreamHandshake::BothSidesClosed => {
+					*this.handshake = st;
+					return Poll::Ready(Ok(()));
 				}
 			}
 		}

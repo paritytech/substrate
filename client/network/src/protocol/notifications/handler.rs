@@ -980,7 +980,7 @@ impl ProtocolsHandler for NotifsHandler {
 				State::OpenDesiredByRemote { in_substream, pending_opening, out_substream_closing } => {
 					match NotificationsInSubstream::poll_process(Pin::new(in_substream), cx) {
 						Poll::Pending => {},
-						Poll::Ready(Ok(void)) => match void {},
+						Poll::Ready(Ok(())) |
 						Poll::Ready(Err(_)) => {
 							self.protocols[protocol_index].state = State::Closed {
 								pending_opening: *pending_opening,
@@ -1020,8 +1020,7 @@ impl ProtocolsHandler for NotifsHandler {
 				} => {
 					match NotificationsInSubstream::poll_process(Pin::new(in_substream.as_mut().unwrap()), cx) {
 						Poll::Pending => {},
-						Poll::Ready(Ok(void)) => match void {},
-						Poll::Ready(Err(_)) => *in_substream = None,
+						Poll::Ready(Ok(())) | Poll::Ready(Err(_)) => *in_substream = None,
 					}
 				}
 
