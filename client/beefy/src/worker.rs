@@ -24,7 +24,7 @@ use std::{
 use codec::{Codec, Decode, Encode};
 use futures::{future, FutureExt, StreamExt};
 use hex::ToHex;
-use log::{debug, error, info, trace, warn};
+use log::{debug, error, trace, warn};
 use parking_lot::Mutex;
 
 use sc_client_api::{Backend, FinalityNotification, FinalityNotifications};
@@ -249,7 +249,7 @@ where
 			let local_id = if let Some(id) = self.local_id() {
 				id
 			} else {
-				error!(target: "beefy", "🥩 Missing validator id - can't vote for: {:?}", notification.header.hash());
+				debug!(target: "beefy", "🥩 Missing validator id - can't vote for: {:?}", notification.header.hash());
 				return;
 			};
 
