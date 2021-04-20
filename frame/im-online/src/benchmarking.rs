@@ -31,17 +31,18 @@ use frame_support::traits::UnfilteredDispatchable;
 
 use crate::Module as ImOnline;
 
-const MAX_KEYS: u32 = 1000;
 const MAX_EXTERNAL_ADDRESSES: u32 = 100;
 
 pub fn create_heartbeat<T: Config>(k: u32, e: u32) ->
 	Result<(crate::Heartbeat<T::BlockNumber>, <T::AuthorityId as RuntimeAppPublic>::Signature), &'static str>
 {
 	let mut keys = Vec::new();
+	assert!(k <= T::MaxAuthorityKeys::get(), "Trying to add too many keys!");
 	for _ in 0..k {
 		keys.push(T::AuthorityId::generate_pair(None));
 	}
-	Keys::<T>::put(keys.clone());
+	let bounded_keys: BoundedVec::<_, T::MaxAuthorityKeys> = keys.try_into().unwrap();
+	Keys::<T>::put(&bounded_keys);
 
 	let network_state = OpaqueNetworkState {
 		peer_id: OpaquePeerId::default(),
@@ -52,11 +53,11 @@ pub fn create_heartbeat<T: Config>(k: u32, e: u32) ->
 		network_state,
 		session_index: 0,
 		authority_index: k-1,
-		validators_len: keys.len() as u32,
+		validators_len: bounded_keys.len() as u32,
 	};
 
 	let encoded_heartbeat = input_heartbeat.encode();
-	let authority_id = keys.get((k-1) as usize).ok_or("out of range")?;
+	let authority_id = bounded_keys.get((k-1) as usize).ok_or("out of range")?;
 	let signature = authority_id.sign(&encoded_heartbeat).ok_or("couldn't make signature")?;
 
 	Ok((input_heartbeat, signature))
@@ -65,14 +66,14 @@ pub fn create_heartbeat<T: Config>(k: u32, e: u32) ->
 benchmarks! {
 	#[extra]
 	heartbeat {
-		let k in 1 .. MAX_KEYS;
+		let k in 1 .. T::MaxAuthorityKeys::get();
 		let e in 1 .. MAX_EXTERNAL_ADDRESSES;
 		let (input_heartbeat, signature) = create_heartbeat::<T>(k, e)?;
 	}: _(RawOrigin::None, input_heartbeat, signature)
 
 	#[extra]
 	validate_unsigned {
-		let k in 1 .. MAX_KEYS;
+		let k in 1 .. T::MaxAuthorityKeys::get();
 		let e in 1 .. MAX_EXTERNAL_ADDRESSES;
 		let (input_heartbeat, signature) = create_heartbeat::<T>(k, e)?;
 		let call = Call::heartbeat(input_heartbeat, signature);
@@ -81,7 +82,7 @@ benchmarks! {
 	}
 
 	validate_unsigned_and_then_heartbeat {
-		let k in 1 .. MAX_KEYS;
+		let k in 1 .. T::MaxAuthorityKeys::get();
 		let e in 1 .. MAX_EXTERNAL_ADDRESSES;
 		let (input_heartbeat, signature) = create_heartbeat::<T>(k, e)?;
 		let call = Call::heartbeat(input_heartbeat, signature);
