@@ -648,7 +648,7 @@ impl<T: Config> SessionInterface<<T as frame_system::Config>::AccountId> for T w
 		FullIdentification = Exposure<<T as frame_system::Config>::AccountId, BalanceOf<T>>,
 		FullIdentificationOf = ExposureOf<T>,
 	>,
-	T::SessionHandler: pallet_session::SessionHandler<<T as frame_system::Config>::AccountId>,
+	T::SessionHandler: pallet_session::SessionHandler<<T as frame_system::Config>::AccountId, <T as Config>::MaxValidators>,
 	T::SessionManager: pallet_session::SessionManager<<T as frame_system::Config>::AccountId>,
 	T::ValidatorIdOf:
 		Convert<<T as frame_system::Config>::AccountId, Option<<T as frame_system::Config>::AccountId>>,
@@ -784,6 +784,9 @@ pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
 	/// For each validator only the `$MaxNominatorRewardedPerValidator` biggest stakers can claim
 	/// their reward. This used to limit the i/o cost for the nominator payout.
 	type MaxNominatorRewardedPerValidator: Get<u32>;
+
+	/// The maximum number of validators supported by the session handler and should be selected by the staking system.
+	type MaxValidators: Get<u32>;
 
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
@@ -2754,7 +2757,7 @@ where
 		FullIdentification = Exposure<<T as frame_system::Config>::AccountId, BalanceOf<T>>,
 		FullIdentificationOf = ExposureOf<T>,
 	>,
-	T::SessionHandler: pallet_session::SessionHandler<<T as frame_system::Config>::AccountId>,
+	T::SessionHandler: pallet_session::SessionHandler<<T as frame_system::Config>::AccountId, <T as Config>::MaxValidators>,
 	T::SessionManager: pallet_session::SessionManager<<T as frame_system::Config>::AccountId>,
 	T::ValidatorIdOf: Convert<
 		<T as frame_system::Config>::AccountId,

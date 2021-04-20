@@ -161,6 +161,9 @@ pub mod pallet {
 		/// definition.
 		type HandleEquivocation: HandleEquivocation<Self>;
 
+		/// Maximum number of authorities handled by the session manager.
+		type MaxAuthorities: Get<u32>;
+
 		type WeightInfo: WeightInfo;
 	}
 
@@ -868,7 +871,7 @@ impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Pallet<T> {
 	type Public = AuthorityId;
 }
 
-impl<T: Config> OnSessionHandler<T::AccountId> for Pallet<T> {
+impl<T: Config> OnSessionHandler<T::AccountId, T::MaxAuthorities> for Pallet<T> {
 	type Key = AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)

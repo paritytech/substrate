@@ -202,7 +202,7 @@ impl frame_system::Config for Runtime {
 }
 
 parameter_types! {
-	pub const MaxAuthorities: u64 = 100;
+	pub const MaxAuthorities: u32 = 100;
 }
 
 impl pallet_aura::Config for Runtime {
@@ -225,6 +225,8 @@ impl pallet_grandpa::Config for Runtime {
 	)>>::IdentificationTuple;
 
 	type HandleEquivocation = ();
+
+	type MaxAuthorities = MaxAuthorities;
 
 	type WeightInfo = ();
 }
@@ -399,7 +401,7 @@ impl_runtime_apis! {
 		}
 
 		fn authorities() -> Vec<AuraId> {
-			Aura::authorities()
+			Aura::authorities().to_vec()
 		}
 	}
 

@@ -40,8 +40,10 @@ use fg_primitives::{
 	GRANDPA_ENGINE_ID,
 };
 use frame_support::{
-	decl_error, decl_event, decl_module, decl_storage, dispatch::DispatchResultWithPostInfo,
-	storage, traits::{OnSessionHandler, KeyOwnerProofSystem}, weights::{Pays, Weight}, Parameter,
+	decl_error, decl_event, decl_module, decl_storage, storage,
+	dispatch::DispatchResultWithPostInfo,
+	traits::{OnSessionHandler, KeyOwnerProofSystem}, weights::{Pays, Weight},
+	pallet_prelude::Get, Parameter,
 };
 use frame_system::{ensure_none, ensure_root, ensure_signed};
 use sp_runtime::{
@@ -97,6 +99,9 @@ pub trait Config: frame_system::Config {
 	/// `()`) you must use this pallet's `ValidateUnsigned` in the runtime
 	/// definition.
 	type HandleEquivocation: HandleEquivocation<Self>;
+
+	/// The maximum number of authorities for the session handler.
+	type MaxAuthorities: Get<u32>;
 
 	/// Weights for this pallet.
 	type WeightInfo: WeightInfo;
@@ -587,7 +592,7 @@ impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
 	type Public = AuthorityId;
 }
 
-impl<T: Config> OnSessionHandler<T::AccountId> for Module<T>
+impl<T: Config> OnSessionHandler<T::AccountId, T::MaxAuthorities> for Module<T>
 	where T: pallet_session::Config
 {
 	type Key = AuthorityId;

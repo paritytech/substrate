@@ -332,6 +332,7 @@ parameter_types! {
 	pub const ExpectedBlockTime: Moment = MILLISECS_PER_BLOCK;
 	pub const ReportLongevity: u64 =
 		BondingDuration::get() as u64 * SessionsPerEra::get() as u64 * EpochDuration::get();
+	pub const MaxAuthorities: u32 = 100;
 }
 
 impl pallet_babe::Config for Runtime {
@@ -353,6 +354,8 @@ impl pallet_babe::Config for Runtime {
 
 	type HandleEquivocation =
 		pallet_babe::EquivocationHandler<Self::KeyOwnerIdentification, Offences, ReportLongevity>;
+
+	type MaxAuthorities = MaxAuthorities;
 
 	type WeightInfo = ();
 }
@@ -446,6 +449,7 @@ impl pallet_session::Config for Runtime {
 	type SessionHandler = <SessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type Keys = SessionKeys;
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
+	type MaxValidators = MaxAuthorities;
 	type WeightInfo = pallet_session::weights::SubstrateWeight<Runtime>;
 }
 
@@ -496,6 +500,7 @@ impl pallet_staking::Config for Runtime {
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type ElectionProvider = ElectionProviderMultiPhase;
+	type MaxValidators = MaxAuthorities;
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Runtime>;
 }
 
@@ -891,6 +896,7 @@ impl pallet_im_online::Config for Runtime {
 	type ValidatorSet = Historical;
 	type ReportUnresponsiveness = Offences;
 	type UnsignedPriority = ImOnlineUnsignedPriority;
+	type MaxAuthorityKeys = MaxAuthorities;
 	type WeightInfo = pallet_im_online::weights::SubstrateWeight<Runtime>;
 }
 
@@ -924,6 +930,8 @@ impl pallet_grandpa::Config for Runtime {
 
 	type HandleEquivocation =
 		pallet_grandpa::EquivocationHandler<Self::KeyOwnerIdentification, Offences, ReportLongevity>;
+
+	type MaxAuthorities = MaxAuthorities;
 
 	type WeightInfo = ();
 }

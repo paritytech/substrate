@@ -127,7 +127,7 @@ impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Pallet<T> {
 	type Public = AuthorityId;
 }
 
-impl<T: Config> OnSessionHandler<T::AccountId> for Pallet<T> {
+impl<T: Config> OnSessionHandler<T::AccountId, T::MaxValidators> for Pallet<T> {
 	type Key = AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(authorities: I)
