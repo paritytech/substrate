@@ -180,9 +180,12 @@ impl NetworkParams {
 			|| is_dev
 			|| matches!(chain_type, ChainType::Local | ChainType::Development);
 
-		let allow_private_ipv4 = self.allow_private_ipv4 || (
-			!self.no_private_ipv4 && (is_dev || matches!(chain_type, ChainType::Local | ChainType::Development))
-		);
+		let allow_private_ipv4 = match (self.allow_private_ipv4, self.no_private_ipv4) {
+			(true, true) => { debug_assert!(false); true },  // The `StructOpt` library forbids that.
+			(true, false) => true,
+			(false, true) => false,
+			(false, false) => is_dev || matches!(chain_type, ChainType::Local | ChainType::Development),
+		};
 
 		NetworkConfiguration {
 			boot_nodes,
