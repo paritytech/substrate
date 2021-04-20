@@ -63,7 +63,7 @@ pub struct WorkerConfig {
 	/// By default this is set to 10 minutes.
 	pub max_query_interval: Duration,
 
-	/// If `false`, the local not won't publish on the DHT multiaddresses that contain non-global
+	/// If `false`, the node won't publish on the DHT multiaddresses that contain non-global
 	/// IP addresses (such as 10.0.0.1).
 	///
 	/// Recommended: `false` for live chains, and `true` for local chains or for testing.
