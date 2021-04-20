@@ -202,7 +202,7 @@ where
 		let result = self.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
 			self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL));
 
-		trace!(target: "state",
+		trace!(target: "state_get_put",
 			method = "Get",
 			ext_id = self.id,
 			key = %HexDisplay::from(&key),
@@ -224,6 +224,11 @@ where
 			.map(|x| x.map(|x| H::hash(x)))
 			.unwrap_or_else(|| self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL));
 
+		trace!(target: "state", "{:04x}: Hash {}={:?}",
+			self.id,
+			HexDisplay::from(&key),
+			result,
+		);
 		result.map(|r| r.encode())
 	}
 
@@ -240,6 +245,13 @@ where
 				self.backend.child_storage(child_info, key)
 					.expect(EXT_NOT_ALLOWED_TO_FAIL)
 			);
+
+		trace!(target: "state", "{:04x}: GetChild({}) {}={:?}",
+			self.id,
+			HexDisplay::from(&child_info.storage_key()),
+			HexDisplay::from(&key),
+			result.as_ref().map(HexDisplay::from)
+		);
 
 		result
 	}
@@ -337,7 +349,7 @@ where
 			return;
 		}
 
-		trace!(target: "state",
+		trace!(target: "state_get_put",
 			method = "Put",
 			ext_id = self.id,
 			key = %HexDisplay::from(&key),

@@ -41,11 +41,10 @@ use crate::{SpanDatum, TraceEvent, Values};
 // include the RPC result.
 const BASE_RPC_PAYLOAD: usize = 500;
 // Default to only pallet, frame support and state related traces
-const DEFAULT_TARGETS: &'static str = "pallet,frame,state";
+const DEFAULT_TARGETS: &'static str = "pallet,frame,state_get_put";
 const TRACE_TARGET: &'static str = "block_trace";
-// Default to only events with the key prefixes for :extrinsic_index & system::Account.
-const DEFAULT_STORAGE_KEYS: &'static str =
-	"3a65787472696e7369635f696e646578,26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9";
+// Default to not filtering based on storage keys as storage keys vary per chain.
+const DEFAULT_STORAGE_KEYS: &'static str = "";
 
 struct BlockSubscriber {
 	targets: Vec<(String, Level)>,

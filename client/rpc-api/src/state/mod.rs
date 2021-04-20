@@ -207,6 +207,14 @@ pub trait StateApi<Hash> {
 	/// 	will be filtered by storage key (so non-storage events will **not** show up).
 	/// 	You can specify any degree of a storage key prefix (i.e. if a specified storage
 	/// 	key is in the beginning of an events storage key it is considered a match).
+	/// 	Example: for balance tracking on Polkadot & Kusama you would likely want
+	///		to track changes to account balances with the frame_system::Account storage item,
+	///		which is a map from `AccountId` to `AccountInfo`. The key filter for this would be
+	///		the storage prefix for the map:
+	///		`26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9`
+	/// 	Additionally you would want to track the extrinsic index, which is under the
+	///		`:extrinsic_index` key. The key for this would be the aforementioned string as bytes
+	///		in hex: `3a65787472696e7369635f696e646578`.
 	///		The following are some resources to learn more about storage keys in substrate:
 	///		[substrate storage][1], [transparent keys in substrate][2],
 	///		[querying substrate storage via rpc][3].
