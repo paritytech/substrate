@@ -67,7 +67,7 @@ impl<T: BoundedVecValue, S: Get<u32>> BoundedVec<T, S> {
 
 	/// Create self from `t` in a lossy way. In case too many items exist, a log with the given
 	/// scope is emitted and `t` is truncated to fit the size.
-	fn truncating_from(mut t: Vec<T>, scope: Option<&'static str>) -> Self {
+	pub fn truncating_from(mut t: Vec<T>, scope: Option<&'static str>) -> Self {
 		if t.len() > Self::bound() {
 			log::warn!(
 				target: crate::LOG_TARGET,
@@ -485,7 +485,7 @@ pub mod test {
 
 	#[test]
 	fn truncating_from_works() {
-		let bounded = BoundedVec<u32, Four>::truncating_from(vec![1, 2, 3, 4, 5, 6])
+		let bounded = BoundedVec::<u32, Four>::truncating_from(vec![1, 2, 3, 4, 5, 6]);
 		assert_eq!(*bounded, vec![1, 2, 3, 4]);
 	}
 }
