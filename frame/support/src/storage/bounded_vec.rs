@@ -65,6 +65,21 @@ impl<T: BoundedVecValue, S: Get<u32>> BoundedVec<T, S> {
 		Self(t, Default::default())
 	}
 
+	/// Create self from `t` in a lossy way. In case too many items exist, a log with the given
+	/// scope is emitted and `t` is truncated to fit the size.
+	fn truncating_from(mut t: Vec<T>, scope: Option<&'static str>) -> Self {
+		if t.len() > Self::bound() {
+			log::warn!(
+				target: crate::LOG_TARGET,
+				"length of a bounded vector in scope {} is not respected. Truncating...",
+				scope.unwrap_or("UNKNOWN"),
+			);
+			t.truncate(Self::bound())
+		}
+
+		Self::unchecked_from(t)
+	}
+
 	/// Create `Self` from `t` without any checks. Logs warnings if the bound is not being
 	/// respected. The additional scope can be used to indicate where a potential overflow is
 	/// happening.
@@ -76,7 +91,7 @@ impl<T: BoundedVecValue, S: Get<u32>> BoundedVec<T, S> {
 		if t.len() > Self::bound() {
 			log::warn!(
 				target: crate::LOG_TARGET,
-				"length of a bounded vector in scope {} is not respected.",
+				"length of a bounded vector in scope {} is not respected. Forcing...",
 				scope.unwrap_or("UNKNOWN"),
 			);
 		}
@@ -466,5 +481,11 @@ pub mod test {
 		let bounded = bounded.try_mutate(|v| v.push(7)).unwrap();
 		assert_eq!(bounded.len(), 7);
 		assert!(bounded.try_mutate(|v| v.push(8)).is_none());
+	}
+
+	#[test]
+	fn truncating_from_works() {
+		let bounded = BoundedVec<u32, Four>::truncating_from(vec![1, 2, 3, 4, 5, 6])
+		assert_eq!(*bounded, vec![1, 2, 3, 4]);
 	}
 }
