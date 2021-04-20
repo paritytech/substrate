@@ -415,7 +415,7 @@ pub struct Stack<'a, T: Config, E> {
 	/// # Note
 	///
 	/// Please note that it is possible that the id belongs to a contract rather than a plain
-	/// account when being called through one of the conteact RPCs where the client can freely
+	/// account when being called through one of the contract RPCs where the client can freely
 	/// choose the origin. This usually makes no sense but is still possible.
 	origin: T::AccountId,
 	/// The cost schedule used when charging from the gas meter.
