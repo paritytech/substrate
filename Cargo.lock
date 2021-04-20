@@ -450,6 +450,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
 
 [[package]]
+name = "beef"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6736e2428df2ca2848d846c43e88745121a6654696e349ce0054a420815a7409"
+
+[[package]]
 name = "bincode"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2902,12 +2908,12 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-http-client"
-version = "0.2.0-alpha.3"
+version = "0.2.0-alpha.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b15fc3a0ef2e02d770aa1a221d3412443dcaedc43e27d80c957dd5bbd65321b"
+checksum = "7e3a49473ea266be8e9f23e20a7bfa4349109b42319d72cc0b8a101e18fa6466"
 dependencies = [
  "async-trait",
- "futures 0.3.13",
+ "fnv",
  "hyper 0.13.10",
  "hyper-rustls",
  "jsonrpsee-types",
@@ -2916,17 +2922,17 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
- "unicase",
  "url 2.2.1",
 ]
 
 [[package]]
 name = "jsonrpsee-proc-macros"
-version = "0.2.0-alpha.3"
+version = "0.2.0-alpha.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6bb4afbda476e2ee11cc6245055c498c116fc8002d2d60fe8338b6ee15d84c3a"
+checksum = "b0cbaee9ca6440e191545a68c7bf28db0ff918359a904e37a6e7cf7edd132f5a"
 dependencies = [
  "Inflector",
+ "proc-macro-crate 1.0.0",
  "proc-macro2",
  "quote",
  "syn",
@@ -2934,32 +2940,29 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-types"
-version = "0.2.0-alpha.3"
+version = "0.2.0-alpha.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c42a82588b5f7830e94341bb7e79d15f46070ab6f64dde1e3b3719721b61c5bf"
+checksum = "e4ce2de6884fb4abee16eca02329a1eec1eb8df8aed751a8e929083820c78ce7"
 dependencies = [
  "async-trait",
- "futures 0.3.13",
+ "beef",
+ "futures-channel",
+ "futures-util",
  "log",
  "serde",
  "serde_json",
- "smallvec 1.6.1",
  "thiserror",
 ]
 
 [[package]]
 name = "jsonrpsee-utils"
-version = "0.2.0-alpha.3"
+version = "0.2.0-alpha.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e65c77838fce96bc554b4a3a159d0b9a2497319ae9305c66ee853998c7ed2fd3"
+checksum = "3b22199cccd81d9ef601be86bedc5bef67aeacbbfddace031d4931c60fca96e9"
 dependencies = [
- "futures 0.3.13",
- "globset",
+ "futures-util",
  "hyper 0.13.10",
  "jsonrpsee-types",
- "lazy_static",
- "log",
- "unicase",
 ]
 
 [[package]]
@@ -6642,7 +6645,6 @@ dependencies = [
  "hex-literal",
  "jsonrpsee-http-client",
  "jsonrpsee-proc-macros",
- "jsonrpsee-types",
  "log",
  "parity-scale-codec",
  "sp-core",

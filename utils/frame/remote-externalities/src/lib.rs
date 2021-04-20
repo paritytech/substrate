@@ -113,7 +113,7 @@ use sp_core::{
 	storage::{StorageKey, StorageData},
 };
 use codec::{Encode, Decode};
-use jsonrpsee_http_client::{HttpClient, HttpConfig};
+use jsonrpsee_http_client::{HttpClient, HttpClientBuilder};
 
 use sp_runtime::traits::Block as BlockT;
 
@@ -173,7 +173,7 @@ impl<B: BlockT> Default for OnlineConfig<B> {
 impl<B: BlockT> OnlineConfig<B> {
 	/// Return a new http rpc client.
 	fn rpc(&self) -> HttpClient {
-		HttpClient::new(&self.uri, HttpConfig { max_request_body_size: u32::MAX })
+		HttpClientBuilder::default().max_request_body_size(u32::MAX).build(&self.uri)
 			.expect("valid HTTP url; qed")
 	}
 }
