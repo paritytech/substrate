@@ -1169,14 +1169,21 @@ mod tests {
 
 			let encoded = pool.read().transactions[0].clone();
 			let extrinsic = Extrinsic::decode(&mut &*encoded).unwrap();
-			let solution = match extrinsic.call {
-				OuterCall::MultiPhase(Call::submit_unsigned(solution, _)) => solution,
+			let call = match extrinsic.call {
+				OuterCall::MultiPhase(call @ Call::submit_unsigned(..)) => call,
 				_ => panic!("bad call: unexpected submission"),
 			};
 
-			assert_noop!(
-				MultiPhase::unsigned_pre_dispatch_checks(&solution),
-				Error::<Runtime>::OcwCallWrongEra,
+			// Custom(3) maps to PreDispatchChecksFailed
+			let pre_dispatch_check_error = TransactionValidityError::Invalid(InvalidTransaction::Custom(3));
+			assert_eq!(
+				<MultiPhase as ValidateUnsigned>::validate_unsigned(TransactionSource::Local, &call)
+					.unwrap_err(),
+				pre_dispatch_check_error,
+			);
+			assert_eq!(
+				<MultiPhase as ValidateUnsigned>::pre_dispatch(&call).unwrap_err(),
+				pre_dispatch_check_error,
 			);
 		})
 	}
