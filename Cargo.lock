@@ -6857,6 +6857,7 @@ dependencies = [
  "either",
  "futures 0.3.13",
  "futures-timer 3.0.2",
+ "ip_network",
  "libp2p",
  "log",
  "parity-scale-codec",
