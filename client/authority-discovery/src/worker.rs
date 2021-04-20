@@ -687,8 +687,8 @@ where
 					Err(sc_network::RequestFailure::Refused) => Ok(()),
 					Err(sc_network::RequestFailure::Obsolete) => unreachable!(),
 					Err(sc_network::RequestFailure::Network(sc_network::OutboundFailure::DialFailure)) => Err(()),
-					Err(sc_network::RequestFailure::Network(sc_network::OutboundFailure::Timeout)) => Err(()),
-					Err(sc_network::RequestFailure::Network(sc_network::OutboundFailure::ConnectionClosed)) => Err(()),
+					Err(sc_network::RequestFailure::Network(sc_network::OutboundFailure::Timeout)) => Ok(()),
+					Err(sc_network::RequestFailure::Network(sc_network::OutboundFailure::ConnectionClosed)) => Ok(()),
 					Err(sc_network::RequestFailure::Network(sc_network::OutboundFailure::UnsupportedProtocols)) => Ok(()),
 				}
 			})
