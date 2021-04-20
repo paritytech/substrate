@@ -37,10 +37,14 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::prelude::*;
+use sp_std::{
+	prelude::*,
+	convert::TryInto,
+};
 use codec::{Encode, Decode};
 use frame_support::{
-	Parameter, traits::{Get, FindAuthor, OneSessionHandler, OnTimestampSet}, ConsensusEngineId,
+	Parameter, BoundedVec, ConsensusEngineId,
+	traits::{Get, FindAuthor, OneSessionHandler, OnTimestampSet},
 };
 use sp_runtime::{
 	RuntimeAppPublic,
@@ -64,10 +68,20 @@ pub mod pallet {
 	pub trait Config: pallet_timestamp::Config + frame_system::Config {
 		/// The identifier type for an authority.
 		type AuthorityId: Member + Parameter + RuntimeAppPublic + Default + MaybeSerializeDeserialize;
+
+		/// The maximum number of authorities that can be registered in this pallet.
+		type MaxAuthorities: Get<u32>;
 	}
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(sp_std::marker::PhantomData<T>);
+
+		// Errors inform users that something went wrong.
+	#[pallet::error]
+	pub enum Error<T> {
+		/// You are trying to add more authorities than allowed in the pallet configuration.
+		TooManyAuthorities,
+	}
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -93,7 +107,11 @@ pub mod pallet {
 	/// The current authority set.
 	#[pallet::storage]
 	#[pallet::getter(fn authorities)]
-	pub(super) type Authorities<T: Config> = StorageValue<_, Vec<T::AuthorityId>, ValueQuery>;
+	pub(super) type Authorities<T: Config> = StorageValue<
+		_,
+		BoundedVec<T::AuthorityId, T::MaxAuthorities>,
+		ValueQuery,
+	>;
 
 	/// The current slot of this block.
 	///
@@ -123,12 +141,12 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	fn change_authorities(new: Vec<T::AuthorityId>) {
+	fn change_authorities(new: BoundedVec<T::AuthorityId, T::MaxAuthorities>) {
 		<Authorities<T>>::put(&new);
 
 		let log: DigestItem<T::Hash> = DigestItem::Consensus(
 			AURA_ENGINE_ID,
-			ConsensusLog::AuthoritiesChange(new).encode()
+			ConsensusLog::AuthoritiesChange(new.to_vec()).encode()
 		);
 		<frame_system::Pallet<T>>::deposit_log(log.into());
 	}
@@ -136,7 +154,11 @@ impl<T: Config> Pallet<T> {
 	fn initialize_authorities(authorities: &[T::AuthorityId]) {
 		if !authorities.is_empty() {
 			assert!(<Authorities<T>>::get().is_empty(), "Authorities are already initialized!");
-			<Authorities<T>>::put(authorities);
+			let bounded_authorities: BoundedVec<T::AuthorityId, T::MaxAuthorities> = authorities
+				.to_vec()
+				.try_into()
+				.expect("Too many initial authorities!");
+			<Authorities<T>>::put(&bounded_authorities);
 		}
 	}
 
@@ -180,10 +202,19 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 	{
 		// instant changes
 		if changed {
-			let next_authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
+			let next_authorities = validators
+				.map(|(_, k)| k)
+				// Only take a number of authorities that would fit in the set.
+				.take(T::MaxAuthorities::get() as usize)
+				.collect::<Vec<_>>();
+			let bounded_next_authorities = BoundedVec::<T::AuthorityId, T::MaxAuthorities>::force_from(
+				next_authorities,
+				Some("Aura Authority Change"),
+			);
+
 			let last_authorities = Self::authorities();
-			if next_authorities != last_authorities {
-				Self::change_authorities(next_authorities);
+			if bounded_next_authorities != last_authorities {
+				Self::change_authorities(bounded_next_authorities);
 			}
 		}
 	}
