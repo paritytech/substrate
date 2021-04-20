@@ -249,8 +249,23 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin,
 						}
 					},
 
+				NotificationsInSubstreamHandshake::Normal { write_side_open: false } => {
+					match Stream::poll_next(this.socket.as_mut(), cx) {
+						Poll::Ready(None) =>
+							*this.handshake = NotificationsInSubstreamHandshake::BothSidesClosed,
+						Poll::Ready(Some(_)) => {
+							// Messages are discared in this state, as we are only just driving
+							// the substream towards closing.
+						},
+						Poll::Pending => {
+							*this.handshake = NotificationsInSubstreamHandshake::Normal { write_side_open: false };
+							return Poll::Pending
+						},
+					}
+				}
+
 				st @ NotificationsInSubstreamHandshake::NotSent |
-				st @ NotificationsInSubstreamHandshake::Normal { .. } => {
+				st @ NotificationsInSubstreamHandshake::Normal { write_side_open: true } => {
 					*this.handshake = st;
 					return Poll::Pending;
 				}
