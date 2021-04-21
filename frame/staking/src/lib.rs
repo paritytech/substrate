@@ -284,11 +284,11 @@ use sp_std::{
 	result,
 	prelude::*,
 	collections::btree_map::BTreeMap,
-	convert::From,
+	convert::{From, TryInto},
 };
 use codec::{HasCompact, Encode, Decode};
 use frame_support::{
-	decl_module, decl_event, decl_storage, ensure, decl_error,
+	decl_module, decl_event, decl_storage, ensure, decl_error, BoundedVec,
 	weights::{
 		Weight, WithPostDispatchInfo,
 		constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS},
@@ -854,7 +854,7 @@ decl_storage! {
 		/// Any validators that may never be slashed or forcibly kicked. It's a Vec since they're
 		/// easy to initialize and the performance hit is minimal (we expect no more than four
 		/// invulnerables) and restricted to testnets.
-		pub Invulnerables get(fn invulnerables) config(): Vec<T::AccountId>;
+		pub Invulnerables get(fn invulnerables) config(): BoundedVec<T::AccountId, T::MaxValidators>;
 
 		/// Map from all locked "stash" accounts to the controller account.
 		pub Bonded get(fn bonded): map hasher(twox_64_concat) T::AccountId => Option<T::AccountId>;
@@ -1709,7 +1709,9 @@ decl_module! {
 		#[weight = T::WeightInfo::set_invulnerables(invulnerables.len() as u32)]
 		fn set_invulnerables(origin, invulnerables: Vec<T::AccountId>) {
 			ensure_root(origin)?;
-			<Invulnerables<T>>::put(invulnerables);
+			let bounded_invulnerables: BoundedVec<T::AccountId, T::MaxValidators>
+				= invulnerables.try_into().map_err(|_| Error::<T>::TooManyValidators)?;
+			<Invulnerables<T>>::put(bounded_invulnerables);
 		}
 
 		/// Force a current staker to become completely unstaked, immediately.

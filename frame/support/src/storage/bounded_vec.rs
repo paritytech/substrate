@@ -20,6 +20,7 @@
 
 use sp_std::prelude::*;
 use sp_std::{convert::TryFrom, marker::PhantomData};
+use serde::{Serialize, Deserialize};
 use codec::{FullCodec, Encode, EncodeLike, Decode};
 use crate::{
 	traits::Get,
@@ -38,6 +39,7 @@ impl<T: FullCodec + Clone + sp_std::fmt::Debug> BoundedVecValue for T {}
 /// As the name suggests, the length of the queue is always bounded. All internal operations ensure
 /// this bound is respected.
 #[derive(Encode, Decode, crate::DefaultNoBound, crate::CloneNoBound, crate::DebugNoBound)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct BoundedVec<T: BoundedVecValue, S: Get<u32>>(Vec<T>, PhantomData<S>);
 
 // NOTE: we could also implement this as:
