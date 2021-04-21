@@ -90,7 +90,6 @@ pallet-example-offchain-worker = { path = "../../../frame/example-offchain-worke
 [build-dependencies]
 wasm-builder-runner = { version = "1.0.5", package = "substrate-wasm-builder-runner", path = "../../../utils/wasm-builder-runner" }
 
-
 [features]
 default = ["std"]
 with-tracing = [ "frame-executive/with-tracing" ]
