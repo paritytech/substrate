@@ -169,7 +169,17 @@ impl<T: Config> Pallet<T> {
 				Ok((call, score))
 			})?;
 
-		Self::submit_call(call)
+		Self::submit_call(call).map_err(|err| {
+			// in case submission failed because of a bad solution, ensure that next time,
+			// we mine a new one.
+			match err {
+				MinerError::PreDispatchChecksFailed | MinerError::PoolSubmissionFailed => {
+					kill_ocw_solution::<T>()
+				}
+				_ => {}
+			}
+			err
+		})
 	}
 
 	/// Mine a new solution, cache it, and submit it back to the chain as an unsigned transaction.
