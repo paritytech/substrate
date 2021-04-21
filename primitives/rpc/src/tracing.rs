@@ -19,7 +19,7 @@
 
 use serde::{Serialize, Deserialize};
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 /// Container for all related spans and events for the block being traced.
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -76,7 +76,7 @@ pub struct Span {
 #[serde(rename_all = "camelCase")]
 pub struct Data {
 	/// HashMap of `String` values recorded while tracing
-	pub string_values: HashMap<String, String>,
+	pub string_values: FxHashMap<String, String>,
 }
 
 /// Error response for `state_traceBlock` RPC

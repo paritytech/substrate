@@ -31,6 +31,7 @@
 pub mod logging;
 pub mod block;
 
+use rustc_hash::FxHashMap;
 use std::fmt;
 use std::time::{Duration, Instant};
 use parking_lot::Mutex;
@@ -47,7 +48,6 @@ use tracing_subscriber::{
 	layer::{Layer, Context},
 };
 use sp_tracing::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
-use std::collections::HashMap;
 
 #[doc(hidden)]
 pub use tracing;
@@ -58,7 +58,7 @@ const ZERO_DURATION: Duration = Duration::from_nanos(0);
 pub struct ProfilingLayer {
 	targets: Vec<(String, Level)>,
 	trace_handler: Box<dyn TraceHandler>,
-	span_data: Mutex<HashMap<Id, SpanDatum>>,
+	span_data: Mutex<FxHashMap<Id, SpanDatum>>,
 	current_span: CurrentSpan,
 }
 
@@ -124,14 +124,14 @@ pub struct SpanDatum {
 /// Holds associated values for a tracing span
 #[derive(Default, Clone, Debug)]
 pub struct Values {
-	/// HashMap of `bool` values
-	pub bool_values: HashMap<String, bool>,
-	/// HashMap of `i64` values
-	pub i64_values: HashMap<String, i64>,
-	/// HashMap of `u64` values
-	pub u64_values: HashMap<String, u64>,
-	/// HashMap of `String` values
-	pub string_values: HashMap<String, String>,
+	/// FxHashMap of `bool` values
+	pub bool_values: FxHashMap<String, bool>,
+	/// FxHashMap of `i64` values
+	pub i64_values: FxHashMap<String, i64>,
+	/// FxHashMap of `u64` values
+	pub u64_values: FxHashMap<String, u64>,
+	/// FxHashMap of `String` values
+	pub string_values: FxHashMap<String, String>,
 }
 
 impl Values {
@@ -225,7 +225,7 @@ impl ProfilingLayer {
 		Self {
 			targets,
 			trace_handler,
-			span_data: Mutex::new(HashMap::default()),
+			span_data: Mutex::new(FxHashMap::default()),
 			current_span: Default::default(),
 		}
 	}
