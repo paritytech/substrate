@@ -1155,6 +1155,8 @@ decl_error! {
 		TooManyTargets,
 		/// A nomination target was supplied that was blocked or otherwise not a validator.
 		BadTarget,
+		/// Validator count cannot be greater than the configured `MaxValidators`.
+		TooManyValidators,
 	}
 }
 
@@ -1627,6 +1629,7 @@ decl_module! {
 		#[weight = T::WeightInfo::set_validator_count()]
 		fn set_validator_count(origin, #[compact] new: u32) {
 			ensure_root(origin)?;
+			ensure!(new <= T::MaxValidators::get(), Error::<T>::TooManyValidators);
 			ValidatorCount::put(new);
 		}
 
@@ -1640,7 +1643,11 @@ decl_module! {
 		#[weight = T::WeightInfo::set_validator_count()]
 		fn increase_validator_count(origin, #[compact] additional: u32) {
 			ensure_root(origin)?;
-			ValidatorCount::mutate(|n| *n += additional);
+			ValidatorCount::try_mutate(|n| -> DispatchResult {
+				*n += additional;
+				ensure!(*n <= T::MaxValidators::get(), Error::<T>::TooManyValidators);
+				Ok(())
+			})?;
 		}
 
 		/// Scale up the ideal number of validators by a factor.
@@ -1653,7 +1660,11 @@ decl_module! {
 		#[weight = T::WeightInfo::set_validator_count()]
 		fn scale_validator_count(origin, factor: Percent) {
 			ensure_root(origin)?;
-			ValidatorCount::mutate(|n| *n += factor * *n);
+			ValidatorCount::try_mutate(|n| -> DispatchResult {
+				*n += factor * *n;
+				ensure!(*n <= T::MaxValidators::get(), Error::<T>::TooManyValidators);
+				Ok(())
+			})?;
 		}
 
 		/// Force there to be no new eras indefinitely.
