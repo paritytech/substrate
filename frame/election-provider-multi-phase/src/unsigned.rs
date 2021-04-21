@@ -187,10 +187,13 @@ impl<T: Config> Pallet<T> {
 			sp_std::cmp::Reverse(stake)
 		});
 
+		// rename to emphasize that ordering matters
+		let mut sorted_assignments = assignments;
+
 		// Reduce (requires round-trip to staked form)
-		assignments = {
+		sorted_assignments = {
 			// convert to staked and reduce.
-			let mut staked = assignment_ratio_to_staked_normalized(assignments, &stake_of)?;
+			let mut staked = assignment_ratio_to_staked_normalized(sorted_assignments, &stake_of)?;
 			sp_npos_elections::reduce(&mut staked);
 
 			// convert back.
@@ -199,7 +202,7 @@ impl<T: Config> Pallet<T> {
 
 		// convert to `IndexAssignment`. This improves the runtime complexity of repeatedly
 		// converting to `Compact`.
-		let mut index_assignments = assignments
+		let mut index_assignments = sorted_assignments
 			.into_iter()
 			.map(|assignment| IndexAssignmentOf::<T>::new(&assignment, &voter_index, &target_index))
 			.collect::<Result<Vec<_>, _>>()?;
