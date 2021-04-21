@@ -108,10 +108,10 @@ browser-utils = { package = "substrate-browser-utils", path = "../../../utils/br
 
 #extra deps
 tokio = { version = "0.2", features = ["blocking"] }
-# tee-keystore = { version = "0.1", git = "https://github.com/Zondax/tee-substrate-service", branch = "feature/substrate" }
+tee-keystore = { version = "0.1", git = "https://github.com/Zondax/tee-substrate-service", branch = "feature/substrate" }
 # substrate-example-tssrs = { version = "0.1", git = "https://github.com/Zondax/substrate-remote-signer-example", features = ["client"] }
 # play_keystore = { version = "0.1", git = "https://github.com/Zondax/substrate-remote-signer-example", branch = "play" }
-tcp-keystore = { version = "0.1", git = "https://github.com/Zondax/substrate-remote-signer-example", branch = "tcp", features = ["client"] }
+# tcp-keystore = { version = "0.1", git = "https://github.com/Zondax/substrate-remote-signer-example", branch = "tcp", features = ["client"] }
 
 [target.'cfg(target_arch="x86_64")'.dependencies]
 node-executor = { version = "2.0.0", path = "../executor", features = [ "wasmtime" ] }
