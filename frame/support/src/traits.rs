@@ -38,7 +38,7 @@ mod validation;
 pub use validation::{
 	ValidatorSet, ValidatorSetWithIdentification, OneSessionHandler, FindAuthor, VerifySeal,
 	EstimateNextNewSession, EstimateNextSessionRotation, KeyOwnerProofSystem, ValidatorRegistration,
-	Lateness, SessionHandler,
+	Lateness, SessionHandler, TestSessionHandler
 };
 
 mod filter;

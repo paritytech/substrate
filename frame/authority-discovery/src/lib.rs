@@ -172,11 +172,11 @@ mod tests {
 	use super::*;
 	use sp_authority_discovery::AuthorityPair;
 	use sp_application_crypto::Pair;
-	use sp_core::{crypto::key_types, H256};
+	use sp_core::H256;
 	use sp_io::TestExternalities;
 	use sp_runtime::{
-		testing::{Header, UintAuthorityId}, traits::{ConvertInto, IdentityLookup, OpaqueKeys},
-		Perbill, KeyTypeId,
+		testing::{Header, UintAuthorityId}, traits::{ConvertInto, IdentityLookup},
+		Perbill,
 	};
 	use frame_support::parameter_types;
 
@@ -205,7 +205,7 @@ mod tests {
 		type SessionManager = ();
 		type Keys = UintAuthorityId;
 		type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
-		type SessionHandler = TestSessionHandler;
+		type SessionHandler = frame_support::traits::TestSessionHandler;
 		type Event = Event;
 		type ValidatorId = AuthorityId;
 		type ValidatorIdOf = ConvertInto;
@@ -254,22 +254,6 @@ mod tests {
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
 		type OnSetCode = ();
-	}
-
-	pub struct TestSessionHandler;
-	impl pallet_session::SessionHandler<AuthorityId> for TestSessionHandler {
-		const KEY_TYPE_IDS: &'static [KeyTypeId] = &[key_types::DUMMY];
-
-		fn on_new_session<Ks: OpaqueKeys>(
-			_changed: bool,
-			_validators: &[(AuthorityId, Ks)],
-			_queued_validators: &[(AuthorityId, Ks)],
-		) {
-		}
-
-		fn on_disabled(_validator_index: usize) {}
-
-		fn on_genesis_session<Ks: OpaqueKeys>(_validators: &[(AuthorityId, Ks)]) {}
 	}
 
 	#[test]
