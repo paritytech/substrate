@@ -118,6 +118,8 @@ pub use pjr::*;
 #[doc(hidden)]
 pub use codec;
 #[doc(hidden)]
+pub use scale_info;
+#[doc(hidden)]
 pub use sp_arithmetic;
 #[doc(hidden)]
 pub use sp_std;

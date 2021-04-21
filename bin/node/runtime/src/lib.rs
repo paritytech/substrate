@@ -533,17 +533,6 @@ sp_npos_elections::generate_solution_type!(
 	>(16)
 );
 
-// todo [AJ] probably need to generate custom TypeInfo in generate_solution_type!, see polkadot.js
-impl scale_info::TypeInfo for NposCompactSolution16 {
-	type Identity = ();
-
-	fn type_info() -> scale_info::Type<scale_info::form::MetaForm> {
-		scale_info::Type::builder()
-			.path(scale_info::Path::new("NposCompactSolution16", module_path!()))
-			.composite(scale_info::build::Fields::unit())
-	}
-}
-
 pub const MAX_NOMINATIONS: u32 =
 	<NposCompactSolution16 as sp_npos_elections::CompactSolution>::LIMIT as u32;
 

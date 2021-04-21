@@ -168,11 +168,11 @@ fn struct_def(
 		);
 		quote!{
 			#compact_impl
-			#[derive(Default, PartialEq, Eq, Clone, Debug)]
+			#[derive(Default, PartialEq, Eq, Clone, Debug, _npos::scale_info::TypeInfo)] // todo: [AJ] manually generate TypeInfo here instead
 		}
 	} else {
 		// automatically derived.
-		quote!(#[derive(Default, PartialEq, Eq, Clone, Debug, _npos::codec::Encode, _npos::codec::Decode)])
+		quote!(#[derive(Default, PartialEq, Eq, Clone, Debug, _npos::codec::Encode, _npos::codec::Decode, _npos::scale_info::TypeInfo)])
 	};
 
 	let from_impl = assignment::from_impl(count);
