@@ -293,6 +293,7 @@ macro_rules! __decl_generic_event {
 		impl<$( $generic_param ),* $(, $instance)?> RawEvent<$( $generic_param ),* $(, $instance)?>
 		where
 			$( $generic_param: $crate::scale_info::TypeInfo + 'static ),*
+			$(, $instance: $crate::scale_info::TypeInfo + 'static)? // todo: [AJ] just adding this to make it compile, look at removing it.
 		{
 			#[allow(dead_code)]
 			#[doc(hidden)]
