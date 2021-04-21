@@ -24,7 +24,10 @@ use frame_support::{
 	storage::unhashed,
 	scale_info,
 };
-use scale_info::form::PortableForm;
+use scale_info::{
+	form::PortableForm,
+	IntoPortable,
+};
 use sp_runtime::DispatchError;
 use sp_io::{TestExternalities, hashing::{twox_64, twox_128, blake2_128}};
 
@@ -261,7 +264,7 @@ pub mod pallet {
 	}
 
 	#[pallet::origin]
-	#[derive(EqNoBound, RuntimeDebugNoBound, CloneNoBound, PartialEqNoBound, Encode, Decode)]
+	#[derive(EqNoBound, RuntimeDebugNoBound, CloneNoBound, PartialEqNoBound, Encode, Decode, scale_info::TypeInfo)]
 	pub struct Origin<T>(PhantomData<T>);
 
 	#[pallet::validate_unsigned]
@@ -856,5 +859,8 @@ fn metadata() {
 	let pallet_metadata = ModuleMetadata::<PortableForm>::decode(
 		&mut &metadata.modules[1].encode()[..]
 	).unwrap();
+
+	let mut registry = scale_info::Registry::new();
+	let expected_pallet_metadata = expected_pallet_metadata.into_portable(&mut registry);
 	pretty_assertions::assert_eq!(pallet_metadata, expected_pallet_metadata);
 }

@@ -255,7 +255,7 @@ impl<'a, Xt> Deserialize<'a> for Block<Xt> where Block<Xt>: Decode {
 /// with index only used if sender is some.
 ///
 /// If sender is some then the transaction is signed otherwise it is unsigned.
-#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, scale_info::TypeInfo)]
 pub struct TestXt<Call, Extra> {
 	/// Signature of the extrinsic.
 	pub signature: Option<(u64, Extra)>,

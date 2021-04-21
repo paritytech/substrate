@@ -23,6 +23,10 @@ use frame_support::{
 	dispatch::UnfilteredDispatchable,
 	storage::unhashed,
 };
+use scale_info::{
+	form::PortableForm,
+	IntoPortable,
+};
 use sp_runtime::DispatchError;
 use sp_io::{TestExternalities, hashing::{twox_64, twox_128, blake2_128}};
 
@@ -147,7 +151,7 @@ pub mod pallet {
 	}
 
 	#[pallet::origin]
-	#[derive(EqNoBound, RuntimeDebugNoBound, CloneNoBound, PartialEqNoBound, Encode, Decode)]
+	#[derive(EqNoBound, RuntimeDebugNoBound, CloneNoBound, PartialEqNoBound, Encode, Decode, scale_info::TypeInfo)]
 	pub struct Origin<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::validate_unsigned]
@@ -701,11 +705,17 @@ fn metadata() {
 		_ => panic!("metadata has been bump, test needs to be updated"),
 	};
 
-	let pallet_metadata = ModuleMetadata::<scale_info::form::PortableForm>::decode(
+	let pallet_metadata = ModuleMetadata::<PortableForm>::decode(
 		&mut &metadata.modules[1].encode()[..]
 	).unwrap();
 	let pallet_instance1_metadata =
 		ModuleMetadata::decode(&mut &metadata.modules[2].encode()[..]).unwrap();
+
+	let mut registry = scale_info::Registry::new();
+	let expected_pallet_metadata = expected_pallet_metadata.into_portable(&mut registry);
+
+	let mut registry = scale_info::Registry::new();
+	let expected_pallet_instance1_metadata = expected_pallet_instance1_metadata.into_portable(&mut registry);
 
 	pretty_assertions::assert_eq!(pallet_metadata, expected_pallet_metadata);
 	pretty_assertions::assert_eq!(pallet_instance1_metadata, expected_pallet_instance1_metadata);
