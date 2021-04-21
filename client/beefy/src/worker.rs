@@ -46,11 +46,10 @@ use beefy_primitives::{
 
 use crate::{
 	error::{self},
+	gossip::{topic, BeefyGossipValidator},
 	metric_inc, metric_set,
 	metrics::Metrics,
-	notification, round,
-	validator::{topic, BeefyGossipValidator},
-	Client,
+	notification, round, Client,
 };
 
 /// A BEEFY worker plays the BEEFY protocol
@@ -212,27 +211,28 @@ where
 	}
 
 	fn handle_finality_notification(&mut self, notification: FinalityNotification<B>) {
-		debug!(target: "beefy", "🥩 Finality notification: {:?}", notification);
+		trace!(target: "beefy", "🥩 Finality notification: {:?}", notification);
 
 		// update best GRANDPA finalized block we have seen
 		self.best_grandpa_block = *notification.header.number();
 
 		if let Some(active) = self.validator_set(&notification.header) {
-			debug!(target: "beefy", "🥩 Active validator set id: {:?}", active);
-
-			metric_set!(self, beefy_validator_set_id, active.id);
-
-			// BEEFY should produce a signed commitment for each session
-			if (active.id != GENESIS_AUTHORITY_SET_ID) && (active.id != (1 + self.last_signed_id)) {
-				metric_inc!(self, beefy_skipped_sessions);
-			}
-
 			// Authority set change or genesis set id triggers new voting rounds
 			//
 			// TODO: (adoerr) Enacting a new authority set will also implicitly 'conclude'
 			// the currently active BEEFY voting round by starting a new one. This is
-			// temporary and needs to be repalced by proper round life cycle handling.
-			if (active.id != self.rounds.validator_set_id()) || (active.id == GENESIS_AUTHORITY_SET_ID) {
+			// temporary and needs to be replaced by proper round life cycle handling.
+			if active.id != self.rounds.validator_set_id()
+				|| (active.id == GENESIS_AUTHORITY_SET_ID && self.best_beefy_block.is_none())
+			{
+				debug!(target: "beefy", "🥩 New active validator set id: {:?}", active);
+				metric_set!(self, beefy_validator_set_id, active.id);
+
+				// BEEFY should produce a signed commitment for each session
+				if active.id != self.last_signed_id + 1 && active.id != GENESIS_AUTHORITY_SET_ID {
+					metric_inc!(self, beefy_skipped_sessions);
+				}
+
 				self.rounds = round::Rounds::new(active.clone());
 
 				debug!(target: "beefy", "🥩 New Rounds for id: {:?}", active.id);
@@ -243,13 +243,13 @@ where
 				// signed commitment for the block. Remove once the above TODO is done.
 				metric_set!(self, beefy_best_block, *notification.header.number());
 			}
-		};
+		}
 
 		if self.should_vote_on(*notification.header.number()) {
 			let local_id = if let Some(id) = self.local_id() {
 				id
 			} else {
-				debug!(target: "beefy", "🥩 Missing validator id - can't vote for: {:?}", notification.header.hash());
+				trace!(target: "beefy", "🥩 Missing validator id - can't vote for: {:?}", notification.header.hash());
 				return;
 			};
 
@@ -332,7 +332,7 @@ where
 	pub(crate) async fn run(mut self) {
 		let mut votes = Box::pin(self.gossip_engine.lock().messages_for(topic::<B>()).filter_map(
 			|notification| async move {
-				debug!(target: "beefy", "🥩 Got vote message: {:?}", notification);
+				trace!(target: "beefy", "🥩 Got vote message: {:?}", notification);
 
 				VoteMessage::<MmrRootHash, NumberFor<B>, P::Public, P::Signature>::decode(
 					&mut &notification.message[..],
