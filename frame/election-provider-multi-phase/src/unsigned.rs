@@ -189,16 +189,21 @@ impl<T: Config> Pallet<T> {
 
 			// Sort the assignments by reversed voter stake. This ensures that we can efficiently
 			// truncate the list.
-			staked.sort_by_key(|sp_npos_elections::StakedAssignment::<T::AccountId> { who, .. }| {
-				// though staked assignments are expressed in terms of absolute stake, we'd still
-				// need to iterate over all votes in order to actually compute the total stake.
-				// it should be faster to look it up from the cache.
-				let stake = cache.get(who).map(|idx| {
-					let (_, stake, _) = voters[*idx];
-					stake
-				}).unwrap_or_default();
-				sp_std::cmp::Reverse(stake)
-			});
+			staked.sort_by_key(
+				|sp_npos_elections::StakedAssignment::<T::AccountId> { who, .. }| {
+					// though staked assignments are expressed in terms of absolute stake, we'd
+					// still need to iterate over all votes in order to actually compute the total
+					// stake. it should be faster to look it up from the cache.
+					let stake = cache
+						.get(who)
+						.map(|idx| {
+							let (_, stake, _) = voters[*idx];
+							stake
+						})
+						.unwrap_or_default();
+					sp_std::cmp::Reverse(stake)
+				},
+			);
 
 			// convert back.
 			assignment_staked_to_ratio_normalized(staked)?
@@ -303,7 +308,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// The score must be computed **after** this step. If this step reduces the score too much,
 	/// then the solution must be discarded.
-	fn trim_assignments_length(
+	pub(crate) fn trim_assignments_length(
 		max_allowed_length: u32,
 		assignments: &mut Vec<IndexAssignmentOf<T>>,
 		encoded_size_of: impl Fn(&[IndexAssignmentOf<T>]) -> Result<usize, sp_npos_elections::Error>,
@@ -313,23 +318,21 @@ impl<T: Config> Pallet<T> {
 		let max_allowed_length: usize = max_allowed_length.saturated_into();
 		let mut high = assignments.len();
 		let mut low = 0;
-		let mut maximum_allowed_voters = 0;
-		let mut size;
 
 		while high - low > 1 {
-			maximum_allowed_voters = (high + low) / 2;
-			size = encoded_size_of(&assignments[..maximum_allowed_voters])?;
-			if size > max_allowed_length {
-				high = maximum_allowed_voters;
+			let test = (high + low) / 2;
+			if encoded_size_of(&assignments[..test])? <= max_allowed_length {
+				low = test;
 			} else {
-				low = maximum_allowed_voters;
+				high = test;
 			}
 		}
-		if high - low == 1
-			&& encoded_size_of(&assignments[..maximum_allowed_voters + 1])? <= max_allowed_length
-		{
-			maximum_allowed_voters += 1;
-		}
+		let maximum_allowed_voters =
+			if encoded_size_of(&assignments[..low + 1])? <= max_allowed_length {
+				low + 1
+			} else {
+				low
+			};
 
 		// ensure our postconditions are correct
 		debug_assert!(
