@@ -118,14 +118,14 @@ use sp_std::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
 use codec::Decode;
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, Convert, Member, One, OpaqueKeys, Zero},
-	KeyTypeId, Perbill, Percent, RuntimeAppPublic,
+	KeyTypeId, Perbill, Percent,
 };
 use sp_staking::SessionIndex;
 use frame_support::{
 	ensure, decl_module, decl_event, decl_storage, decl_error, ConsensusEngineId, Parameter,
 	traits::{
 		Get, FindAuthor, ValidatorRegistration, EstimateNextSessionRotation, EstimateNextNewSession,
-		OneSessionHandler, ValidatorSet,
+		ValidatorSet, SessionHandler
 	},
 	dispatch::{self, DispatchResult, DispatchError},
 	weights::Weight,
@@ -253,101 +253,6 @@ impl<A> SessionManager<A> for () {
 	fn new_session(_: SessionIndex) -> Option<Vec<A>> { None }
 	fn start_session(_: SessionIndex) {}
 	fn end_session(_: SessionIndex) {}
-}
-
-/// Handler for session life cycle events.
-pub trait SessionHandler<ValidatorId> {
-	/// All the key type ids this session handler can process.
-	///
-	/// The order must be the same as it expects them in
-	/// [`on_new_session`](Self::on_new_session<Ks>) and [`on_genesis_session`](Self::on_genesis_session<Ks>).
-	const KEY_TYPE_IDS: &'static [KeyTypeId];
-
-	/// The given validator set will be used for the genesis session.
-	/// It is guaranteed that the given validator set will also be used
-	/// for the second session, therefore the first call to `on_new_session`
-	/// should provide the same validator set.
-	fn on_genesis_session<Ks: OpaqueKeys>(validators: &[(ValidatorId, Ks)]);
-
-	/// Session set has changed; act appropriately. Note that this can be called
-	/// before initialization of your module.
-	///
-	/// `changed` is true whenever any of the session keys or underlying economic
-	/// identities or weightings behind those keys has changed.
-	fn on_new_session<Ks: OpaqueKeys>(
-		changed: bool,
-		validators: &[(ValidatorId, Ks)],
-		queued_validators: &[(ValidatorId, Ks)],
-	);
-
-	/// A notification for end of the session.
-	///
-	/// Note it is triggered before any [`SessionManager::end_session`] handlers,
-	/// so we can still affect the validator set.
-	fn on_before_session_ending() {}
-
-	/// A validator got disabled. Act accordingly until a new session begins.
-	fn on_disabled(validator_index: usize);
-}
-
-#[impl_trait_for_tuples::impl_for_tuples(1, 30)]
-#[tuple_types_custom_trait_bound(OneSessionHandler<AId>)]
-impl<AId> SessionHandler<AId> for Tuple {
-	for_tuples!(
-		const KEY_TYPE_IDS: &'static [KeyTypeId] = &[ #( <Tuple::Key as RuntimeAppPublic>::ID ),* ];
-	);
-
-	fn on_genesis_session<Ks: OpaqueKeys>(validators: &[(AId, Ks)]) {
-		for_tuples!(
-			#(
-				let our_keys: Box<dyn Iterator<Item=_>> = Box::new(validators.iter()
-					.map(|k| (&k.0, k.1.get::<Tuple::Key>(<Tuple::Key as RuntimeAppPublic>::ID)
-						.unwrap_or_default())));
-
-				Tuple::on_genesis_session(our_keys);
-			)*
-		)
-	}
-
-	fn on_new_session<Ks: OpaqueKeys>(
-		changed: bool,
-		validators: &[(AId, Ks)],
-		queued_validators: &[(AId, Ks)],
-	) {
-		for_tuples!(
-			#(
-				let our_keys: Box<dyn Iterator<Item=_>> = Box::new(validators.iter()
-					.map(|k| (&k.0, k.1.get::<Tuple::Key>(<Tuple::Key as RuntimeAppPublic>::ID)
-						.unwrap_or_default())));
-				let queued_keys: Box<dyn Iterator<Item=_>> = Box::new(queued_validators.iter()
-					.map(|k| (&k.0, k.1.get::<Tuple::Key>(<Tuple::Key as RuntimeAppPublic>::ID)
-						.unwrap_or_default())));
-				Tuple::on_new_session(changed, our_keys, queued_keys);
-			)*
-		)
-	}
-
-	fn on_before_session_ending() {
-		for_tuples!( #( Tuple::on_before_session_ending(); )* )
-	}
-
-	fn on_disabled(i: usize) {
-		for_tuples!( #( Tuple::on_disabled(i); )* )
-	}
-}
-
-/// `SessionHandler` for tests that use `UintAuthorityId` as `Keys`.
-pub struct TestSessionHandler;
-impl<AId> SessionHandler<AId> for TestSessionHandler {
-	const KEY_TYPE_IDS: &'static [KeyTypeId] = &[sp_runtime::key_types::DUMMY];
-
-	fn on_genesis_session<Ks: OpaqueKeys>(_: &[(AId, Ks)]) {}
-
-	fn on_new_session<Ks: OpaqueKeys>(_: bool, _: &[(AId, Ks)], _: &[(AId, Ks)]) {}
-
-	fn on_before_session_ending() {}
-
-	fn on_disabled(_: usize) {}
 }
 
 impl<T: Config> ValidatorRegistration<T::ValidatorId> for Module<T> {

@@ -53,7 +53,7 @@ pub mod pallet {
 		Vec<AuthorityId>,
 		ValueQuery,
 	>;
-	
+
 	#[pallet::storage]
 	#[pallet::getter(fn next_keys)]
 	/// Keys of the next authority set.

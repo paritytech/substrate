@@ -19,8 +19,10 @@
 
 use sp_std::prelude::*;
 use codec::{Codec, Decode};
-use sp_runtime::traits::{Convert, Zero};
-use sp_runtime::{BoundToRuntimeAppPublic, ConsensusEngineId, Percent, RuntimeAppPublic};
+use sp_runtime::traits::{Convert, Zero, OpaqueKeys};
+use sp_runtime::{
+	BoundToRuntimeAppPublic, KeyTypeId, ConsensusEngineId, Percent, RuntimeAppPublic,
+};
 use sp_staking::SessionIndex;
 use crate::dispatch::Parameter;
 use crate::weights::Weight;
@@ -71,27 +73,122 @@ pub trait VerifySeal<Header, Author> {
 	fn verify_seal(header: &Header) -> Result<Option<Author>, &'static str>;
 }
 
+/// Handler for session life cycle events. This is typically implemented for a tuple of items that
+/// implement [`OneSessionHandler`].
+pub trait SessionHandler<ValidatorId> {
+	/// All the key type ids this session handler can process.
+	///
+	/// The order must be the same as it expects them in
+	/// [`on_new_session`](Self::on_new_session<Ks>) and
+	/// [`on_genesis_session`](Self::on_genesis_session<Ks>).
+	const KEY_TYPE_IDS: &'static [KeyTypeId];
+
+	/// The given validator set will be used for the genesis session. It is guaranteed that the
+	/// given validator set will also be used for the second session, therefore the first call to
+	/// `on_new_session` should provide the same validator set.
+	fn on_genesis_session<Ks: OpaqueKeys>(validators: &[(ValidatorId, Ks)]);
+
+	/// Session set has changed; act appropriately. Note that this can be called before
+	/// initialization of your module.
+	///
+	/// `changed` is true whenever any of the session keys or underlying economic identities or
+	/// weightings behind those keys has changed.
+	///
+	/// If the the session provider, like `pallet-session` has queuing mechanism, an optional
+	/// `queued_validators` can also be provided.
+	fn on_new_session<Ks: OpaqueKeys>(
+		changed: bool,
+		validators: &[(ValidatorId, Ks)],
+		queued_validators: &[(ValidatorId, Ks)],
+	);
+
+	/// A notification for end of the session.
+	///
+	/// Note it is triggered before any [`SessionManager::end_session`] handlers, so we can still
+	/// affect the validator set.
+	fn on_before_session_ending() {}
+
+	/// A validator got disabled. Act accordingly until a new session begins.
+	fn on_disabled(validator_index: usize);
+}
+
+#[impl_trait_for_tuples::impl_for_tuples(1, 30)]
+#[tuple_types_custom_trait_bound(OneSessionHandler<AId>)]
+impl<AId> SessionHandler<AId> for Tuple {
+	for_tuples!(
+		const KEY_TYPE_IDS: &'static [KeyTypeId] = &[ #( <Tuple::Key as RuntimeAppPublic>::ID ),* ];
+	);
+
+	fn on_genesis_session<Ks: OpaqueKeys>(validators: &[(AId, Ks)]) {
+		for_tuples!(
+			#(
+				let our_keys: Box<dyn Iterator<Item=_>> = Box::new(validators.iter()
+					.map(|k| (&k.0, k.1.get::<Tuple::Key>(<Tuple::Key as RuntimeAppPublic>::ID)
+						.unwrap_or_default())));
+
+				Tuple::on_genesis_session(our_keys);
+			)*
+		)
+	}
+
+	fn on_new_session<Ks: OpaqueKeys>(
+		changed: bool,
+		validators: &[(AId, Ks)],
+		queued_validators: &[(AId, Ks)],
+	) {
+		for_tuples!(
+			#(
+				let our_keys: Box<dyn Iterator<Item=_>> = Box::new(validators.iter()
+					.map(|k| (&k.0, k.1.get::<Tuple::Key>(<Tuple::Key as RuntimeAppPublic>::ID)
+						.unwrap_or_default())));
+				let queued_keys: Box<dyn Iterator<Item=_>> = Box::new(queued_validators.iter()
+					.map(|k| (&k.0, k.1.get::<Tuple::Key>(<Tuple::Key as RuntimeAppPublic>::ID)
+						.unwrap_or_default())));
+				Tuple::on_new_session(changed, our_keys, queued_keys);
+			)*
+		)
+	}
+
+	fn on_before_session_ending() {
+		for_tuples!( #( Tuple::on_before_session_ending(); )* )
+	}
+
+	fn on_disabled(i: usize) {
+		for_tuples!( #( Tuple::on_disabled(i); )* )
+	}
+}
+
+/// `SessionHandler` for tests that use `UintAuthorityId` as `Keys`.
+pub struct TestSessionHandler;
+impl<AId> SessionHandler<AId> for TestSessionHandler {
+	const KEY_TYPE_IDS: &'static [KeyTypeId] = &[sp_runtime::key_types::DUMMY];
+
+	fn on_genesis_session<Ks: OpaqueKeys>(_: &[(AId, Ks)]) {}
+	fn on_new_session<Ks: OpaqueKeys>(_: bool, _: &[(AId, Ks)], _: &[(AId, Ks)]) {}
+	fn on_before_session_ending() {}
+	fn on_disabled(_: usize) {}
+}
+
+
 /// A session handler for specific key type.
 pub trait OneSessionHandler<ValidatorId>: BoundToRuntimeAppPublic {
 	/// The key type expected.
 	type Key: Decode + Default + RuntimeAppPublic;
 
-	/// The given validator set will be used for the genesis session.
-	/// It is guaranteed that the given validator set will also be used
-	/// for the second session, therefore the first call to `on_new_session`
-	/// should provide the same validator set.
+	/// The given validator set will be used for the genesis session. It is guaranteed that the
+	/// given validator set will also be used for the second session, therefore the first call to
+	/// `on_new_session` should provide the same validator set.
 	fn on_genesis_session<'a, I: 'a>(validators: I)
 		where I: Iterator<Item=(&'a ValidatorId, Self::Key)>, ValidatorId: 'a;
 
-	/// Session set has changed; act appropriately. Note that this can be called
-	/// before initialization of your module.
+	/// Session set has changed; act appropriately. Note that this can be called before
+	/// initialization of your module.
 	///
-	/// `changed` is true when at least one of the session keys
-	/// or the underlying economic identities/distribution behind one the
-	/// session keys has changed, false otherwise.
+	/// `changed` is true when at least one of the session keys or the underlying economic
+	/// identities/distribution behind one the session keys has changed, false otherwise.
 	///
-	/// The `validators` are the validators of the incoming session, and `queued_validators`
-	/// will follow.
+	/// The `validators` are the validators of the incoming session, and `queued_validators` will
+	/// follow.
 	fn on_new_session<'a, I: 'a>(
 		changed: bool,
 		validators: I,
@@ -100,8 +197,8 @@ pub trait OneSessionHandler<ValidatorId>: BoundToRuntimeAppPublic {
 
 	/// A notification for end of the session.
 	///
-	/// Note it is triggered before any `SessionManager::end_session` handlers,
-	/// so we can still affect the validator set.
+	/// Note it is triggered before any `SessionManager::end_session` handlers, so we can still
+	/// affect the validator set.
 	fn on_before_session_ending() {}
 
 	/// A validator got disabled. Act accordingly until a new session begins.
