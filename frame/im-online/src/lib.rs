@@ -680,12 +680,9 @@ impl<T: Config> OneSessionHandler<T::AccountId, T::MaxAuthorityKeys> for Module<
 		<HeartbeatAfter<T>>::put(block_number + half_session);
 
 		// Remember who the authorities are for the new session.
-		let next_validators = validators
-			.map(|x| x.1)
-			.take(T::MaxAuthorityKeys::get() as usize)
-			.collect::<Vec<_>>();
+		let next_validators = validators.map(|x| x.1).collect::<Vec<_>>();
 
-		let bounded_validators = BoundedVec::<T::AuthorityId, T::MaxAuthorityKeys>::force_from(
+		let bounded_validators = BoundedVec::<T::AuthorityId, T::MaxAuthorityKeys>::truncating_from(
 			next_validators,
 			Some("Im Online New Session"),
 		);

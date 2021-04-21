@@ -530,8 +530,8 @@ impl<T: Config> Pallet<T> {
 		let bounded_authorities = BoundedVec::<
 			(AuthorityId, BabeAuthorityWeight),
 			T::MaxAuthorities,
-		>::force_from(
-			authorities.into_iter().take(T::MaxAuthorities::get() as usize).collect::<Vec<_>>(),
+		>::truncating_from(
+			authorities,
 			Some("Babe Enact Epoch Change"),
 		);
 		Authorities::<T>::put(bounded_authorities);
@@ -550,8 +550,8 @@ impl<T: Config> Pallet<T> {
 		let bounded_next_authorities = BoundedVec::<
 			(AuthorityId, BabeAuthorityWeight),
 			T::MaxAuthorities,
-		>::force_from(
-			next_authorities.into_iter().take(T::MaxAuthorities::get() as usize).collect::<Vec<_>>(),
+		>::truncating_from(
+			next_authorities,
 			Some("Babe Enact Epoch Change"),
 		);
 		NextAuthorities::<T>::put(&bounded_next_authorities);

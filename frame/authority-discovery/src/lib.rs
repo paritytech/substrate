@@ -24,7 +24,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::{prelude::*, convert::TryInto};
-use frame_support::{traits::{OneSessionHandler, Get}, BoundedVec};
+use frame_support::{traits::OneSessionHandler, BoundedVec};
 #[cfg(feature = "std")]
 use frame_support::traits::GenesisBuild;
 use sp_authority_discovery::AuthorityId;
@@ -147,22 +147,16 @@ impl<T: Config> OneSessionHandler<T::AccountId, T::MaxValidators> for Pallet<T> 
 	{
 		// Remember who the authorities are for the new and next session.
 		if changed {
-			let keys = validators
-				.map(|x| x.1)
-				// Truncate to bounded vec
-				.take(T::MaxValidators::get() as usize)
-				.collect::<Vec<_>>();
-			let bounded_keys = BoundedVec::<AuthorityId, T::MaxValidators>::force_from(
+			let keys = validators.map(|x| x.1).collect::<Vec<_>>();
+			// Truncate any extra that would not fit in storage...
+			let bounded_keys = BoundedVec::<AuthorityId, T::MaxValidators>::truncating_from(
 				keys,
 				Some("Authority Discovery New Session Keys"),
 			);
 			Keys::<T>::put(bounded_keys);
-			let next_keys = queued_validators
-				.map(|x| x.1)
-				// Truncate to bounded vec
-				.take(T::MaxValidators::get() as usize)
-				.collect::<Vec<_>>();
-			let bounded_next_keys = BoundedVec::<AuthorityId, T::MaxValidators>::force_from(
+			let next_keys = queued_validators.map(|x| x.1).collect::<Vec<_>>();
+			// Truncate any extra that would not fit in storage...
+			let bounded_next_keys = BoundedVec::<AuthorityId, T::MaxValidators>::truncating_from(
 				next_keys,
 				Some("Authority Discovery New Session Next Keys"),
 			);

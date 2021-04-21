@@ -202,12 +202,9 @@ impl<T: Config> OneSessionHandler<T::AccountId, T::MaxAuthorities> for Pallet<T>
 	{
 		// instant changes
 		if changed {
-			let next_authorities = validators
-				.map(|(_, k)| k)
-				// Only take a number of authorities that would fit in the set.
-				.take(T::MaxAuthorities::get() as usize)
-				.collect::<Vec<_>>();
-			let bounded_next_authorities = BoundedVec::<T::AuthorityId, T::MaxAuthorities>::force_from(
+			let next_authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
+			// Truncate any extra that would not fit into storage...
+			let bounded_next_authorities = BoundedVec::<T::AuthorityId, T::MaxAuthorities>::truncating_from(
 				next_authorities,
 				Some("Aura New Session"),
 			);
