@@ -21,7 +21,7 @@ use std::time::Instant;
 
 use parking_lot::Mutex;
 use tracing::{Dispatch, dispatcher, Subscriber, Level, span::{Attributes, Record, Id}};
-use tracing_subscriber::CurrentSpan;
+use tracing_subscriber::{CurrentSpan, filter::{EnvFilter, Directive}, layer::SubscriberExt};
 
 use sc_client_api::BlockBackend;
 use sc_rpc_server::MAX_PAYLOAD;
@@ -45,6 +45,9 @@ const DEFAULT_TARGETS: &'static str = "pallet,frame,state_get_put";
 const TRACE_TARGET: &'static str = "block_trace";
 // Default to not filtering based on storage keys as storage keys vary per chain.
 const DEFAULT_STORAGE_KEYS: &'static str = "";
+// If a Span or Event has target `state`, only collect it if it has a `method` field.
+// This is useful for only collecting Get/Put events in _primitives/state-machine/src/ext.rs_.
+const DEFAULT_ENV_FILTER: &'static str  = "state[{method}]";
 
 struct BlockSubscriber {
 	targets: Vec<(String, Level)>,
@@ -205,7 +208,8 @@ impl<Block, Client> BlockExecutor<Block, Client>
 		};
 		let spans = Mutex::new(HashMap::new());
 		let events = Mutex::new(Vec::new());
-		let block_subscriber = BlockSubscriber::new(targets, spans, events);
+		let block_subscriber = BlockSubscriber::new(targets, spans, events)
+			.with(EnvFilter::new(DEFAULT_ENV_FILTER));
 		let dispatch = Dispatch::new(block_subscriber);
 
 		{
