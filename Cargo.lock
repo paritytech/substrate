@@ -3466,7 +3466,7 @@ dependencies = [
 
 [[package]]
 name = "libp2p-websocket"
-version = "0.28.0"
+version = "0.29.0"
 dependencies = [
  "either",
  "futures 0.3.13",

@@ -60,10 +60,11 @@ pub(crate) fn initialize_transport(
 					log::info!(target: "telemetry", "Incoming data from libp2p: {:?}", incoming);
 					future::ready(incoming.is_close())
 				})
-				// The `wasm_ext::ExtTransport` does not support a `Stream` that
-				// does not yield `Vec<u8>`, so in order to support telemetry
-				// when running in a browser we have to pretend the
-				// `IncomingData::Closed` is bytes (i.e. the reason code).
+				// The `wasm_ext::ExtTransport` only supports `Stream`s that
+				// yield `Vec<u8>`, so in order to support telemetry when
+				// running in a browser we have to pretend the
+				// `IncomingData::Closed` is bytes (which means we only use the
+				// reason code).
 				.map_ok(|data| data.into_bytes());
 			future::ready(Ok::<_, io::Error>(connec))
 		})
