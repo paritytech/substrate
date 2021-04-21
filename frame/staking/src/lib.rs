@@ -958,6 +958,7 @@ decl_storage! {
 		pub CanceledSlashPayout get(fn canceled_payout) config(): BalanceOf<T>;
 
 		/// All unapplied slashes that are queued for later.
+		// TODO: BOUND THIS VEC
 		pub UnappliedSlashes:
 			map hasher(twox_64_concat) EraIndex => Vec<UnappliedSlash<T::AccountId, BalanceOf<T>>>;
 
