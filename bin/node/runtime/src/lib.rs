@@ -71,6 +71,7 @@ use sp_inherents::{InherentData, CheckInherentsResult};
 use static_assertions::const_assert;
 pub use pallet_cere_ddc;
 pub use pallet_chainbridge;
+pub use pallet_example_offchain_worker;
 
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
@@ -946,6 +947,12 @@ impl pallet_erc20::Trait for Runtime {
 	type Erc721Id = NFTTokenId;
 }
 
+impl pallet_example_offchain_worker::Trait for Runtime {
+//	type AuthorityId = pallet_example_offchain_worker::crypto::TestAuthId;
+	type Call = Call;
+	type Event = Event;
+}
+
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -988,6 +995,7 @@ construct_runtime!(
 		ChainBridge: pallet_chainbridge::{Module, Call, Storage, Event<T>},
 		Erc721: pallet_erc721::{Module, Call, Storage, Event<T>},
 		Erc20: pallet_erc20::{Module, Call, Event<T>},
+		ExampleOffchainWorker: pallet_example_offchain_worker::{Module, Call, Event<T>},
 	}
 );
 

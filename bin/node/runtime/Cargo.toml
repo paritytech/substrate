@@ -85,11 +85,11 @@ pallet-chainbridge = { version = "2.0.0", default-features = false, path = "../.
 pallet-erc721 = { version = "2.0.0", default-features = false, path = "../../../frame/erc721" }
 pallet-erc20 = { version = "2.0.0", default-features = false, path = "../../../frame/erc20" }
 
+pallet-example-offchain-worker = { path = "../../../frame/example-offchain-worker", default-features = false }
+
 [build-dependencies]
 wasm-builder-runner = { version = "1.0.5", package = "substrate-wasm-builder-runner", path = "../../../utils/wasm-builder-runner" }
 
-
-ocw-ddc = { path = "../pallets/ocw-ddc", default-features = false }
 
 [features]
 default = ["std"]
@@ -154,7 +154,7 @@ std = [
 	"pallet-society/std",
 	"pallet-recovery/std",
 	"pallet-vesting/std",
-	"ocw-ddc/std",
+	"pallet-example-offchain-worker/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking",
