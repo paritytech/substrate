@@ -76,7 +76,7 @@ pub mod pallet {
 	#[pallet::pallet]
 	pub struct Pallet<T>(sp_std::marker::PhantomData<T>);
 
-		// Errors inform users that something went wrong.
+	// Errors inform users that something went wrong.
 	#[pallet::error]
 	pub enum Error<T> {
 		/// You are trying to add more authorities than allowed in the pallet configuration.
