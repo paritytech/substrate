@@ -35,6 +35,7 @@ use rpc::{
 use sc_client_api::{BlockchainEvents, light::{Fetcher, RemoteBlockchain}};
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId, manager::SubscriptionManager};
 use jsonrpsee_ws_server::{RpcModule, RpcContextModule};
+use jsonrpsee_types::error::RpcError as RpseeError;
 use sp_rpc::{number::NumberOrHex, list::ListOrValue};
 use sp_runtime::{
 	generic::{BlockId, SignedBlock},
@@ -230,16 +231,14 @@ where
 	Client: BlockchainEvents<Block> + HeaderBackend<Block> + Send + Sync + 'static,
 {
 	/// Convert a [`Chain`] to an [`RpcModule`]. Registers all the RPC methods available with the RPC server.
-	pub fn into_rpc_module(self) -> RpcModule {
+	pub fn into_rpc_module(self) -> Result<RpcModule> {
 		let mut rpc_module = RpcContextModule::new(self);
 
 		rpc_module.register_method("chain_getBlockHash", |params, chain| {
-			let hash = chain.block_hash(params.one()?).unwrap();
+			chain.block_hash(params.one()?).map_err(|_e| RpseeError::Unknown /* TODO: what error variant to use? */)
+		})?;
 
-			Ok(hash)
-		}).unwrap();
-
-		rpc_module.into_module()
+		Ok(rpc_module.into_module())
 	}
 }
 

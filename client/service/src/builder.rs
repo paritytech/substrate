@@ -791,7 +791,7 @@ fn gen_rpc_module<TBl, TBackend, TCl>(
 		(chain, state, child_state)
 	};
 
-	chain.into_rpc_module()
+	chain.into_rpc_module().expect("TODO: why doesn't gen_handler return Result?")
 }
 
 fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(

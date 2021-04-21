@@ -20,6 +20,7 @@
 
 use crate::errors;
 use jsonrpc_core as rpc;
+use jsonrpsee_types::Error as RpseeError;
 
 /// Chain RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -59,5 +60,21 @@ impl From<Error> for rpc::Error {
 			},
 			e => errors::internal(e),
 		}
+	}
+}
+
+impl From<Error> for RpseeError {
+	fn from(e: Error) -> Self {
+		match e {
+			Error::Other(message) => RpseeError::Custom(message),
+			Error::Client(e) => RpseeError::Custom(e.to_string()) // TODO: what see error variant should we use here?
+		}
+	}
+}
+
+impl From<RpseeError> for Error {
+	fn from(e: RpseeError) -> Self {
+		// TODO: map Rpc errors to Error
+		Error::Other("dunno, TODO".into())
 	}
 }
