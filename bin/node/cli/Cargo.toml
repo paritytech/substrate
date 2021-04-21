@@ -163,6 +163,7 @@ cli = [
 	"substrate-build-script-utils",
 	"try-runtime-cli",
 ]
+disable-logging = ["node-runtime/disable-logging"]
 runtime-benchmarks = [
 	"node-runtime/runtime-benchmarks",
 	"frame-benchmarking-cli",

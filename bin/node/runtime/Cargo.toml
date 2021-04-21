@@ -95,6 +95,7 @@ sp-io = { version = "3.0.0", path = "../../../primitives/io" }
 
 [features]
 default = ["std"]
+disable-logging = ["sp-api/disable-logging"]
 with-tracing = [ "frame-executive/with-tracing" ]
 std = [
 	"sp-authority-discovery/std",
@@ -161,7 +162,6 @@ std = [
 	"sp-npos-elections/std",
 ]
 runtime-benchmarks = [
-	"sp-api/disable-logging",
 	"frame-benchmarking",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",

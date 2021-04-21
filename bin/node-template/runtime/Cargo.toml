@@ -51,6 +51,7 @@ substrate-wasm-builder = { version = "4.0.0", path = "../../../utils/wasm-builde
 
 [features]
 default = ["std"]
+disable-logging = ["sp-api/disable-logging"]
 std = [
 	"codec/std",
 	"frame-executive/std",
@@ -79,7 +80,6 @@ std = [
 	"sp-version/std",
 ]
 runtime-benchmarks = [
-	"sp-api/disable-logging",
 	"frame-benchmarking",
 	"frame-support/runtime-benchmarks",
 	"frame-system-benchmarking",
