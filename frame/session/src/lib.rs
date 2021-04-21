@@ -95,7 +95,7 @@
 //! use pallet_session as session;
 //!
 //! fn validators<T: pallet_session::Config>() -> Vec<<T as pallet_session::Config>::ValidatorId> {
-//! <pallet_session::Module<T>>::validators()
+//! <pallet_session::Module<T>>::validators().to_vec()
 //! }
 //! # fn main(){}
 //! ```
@@ -114,7 +114,7 @@ mod tests;
 pub mod historical;
 pub mod weights;
 
-use sp_std::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
+use sp_std::{prelude::*, marker::PhantomData, ops::{Sub, Rem}, convert::TryInto};
 use codec::Decode;
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, Convert, Member, One, OpaqueKeys, Zero},
@@ -122,7 +122,8 @@ use sp_runtime::{
 };
 use sp_staking::SessionIndex;
 use frame_support::{
-	ensure, decl_module, decl_event, decl_storage, decl_error, ConsensusEngineId, Parameter,
+	ensure, decl_module, decl_event, decl_storage, decl_error,
+	ConsensusEngineId, Parameter, BoundedVec,
 	traits::{
 		Get, FindAuthor, ValidatorRegistration, EstimateNextSessionRotation, EstimateNextNewSession,
 		OneSessionHandler, ValidatorSet,
@@ -401,7 +402,7 @@ pub trait Config: frame_system::Config {
 decl_storage! {
 	trait Store for Module<T: Config> as Session {
 		/// The current set of validators.
-		Validators get(fn validators): Vec<T::ValidatorId>;
+		Validators get(fn validators): BoundedVec<T::ValidatorId, T::MaxValidators>;
 
 		/// Current index of the session.
 		CurrentIndex get(fn current_index): SessionIndex;
@@ -412,7 +413,7 @@ decl_storage! {
 
 		/// The queued keys for the next session. When the next session begins, these keys
 		/// will be used to determine the validator's session keys.
-		QueuedKeys get(fn queued_keys): Vec<(T::ValidatorId, T::Keys)>;
+		QueuedKeys get(fn queued_keys): BoundedVec<(T::ValidatorId, T::Keys), T::MaxValidators>;
 
 		/// Indices of disabled validators.
 		///
@@ -458,10 +459,12 @@ decl_storage! {
 						session config keys to generate initial validator set.");
 					config.keys.iter().map(|x| x.1.clone()).collect()
 				});
-			assert!(!initial_validators_0.is_empty(), "Empty validator set for session 0 in genesis block!");
+			let bounded_initial_validators_0: BoundedVec<T::ValidatorId, T::MaxValidators>
+				= initial_validators_0.clone().try_into().expect("Too many initial validators!");
+			assert!(!bounded_initial_validators_0.is_empty(), "Empty validator set for session 0 in genesis block!");
 
 			let initial_validators_1 = T::SessionManager::new_session(1)
-				.unwrap_or_else(|| initial_validators_0.clone());
+				.unwrap_or_else(|| initial_validators_0);
 			assert!(!initial_validators_1.is_empty(), "Empty validator set for session 1 in genesis block!");
 
 			let queued_keys: Vec<_> = initial_validators_1
@@ -472,12 +475,13 @@ decl_storage! {
 					<Module<T>>::load_keys(&v).unwrap_or_default(),
 				))
 				.collect();
-
+			let bounded_queued_keys: BoundedVec<(T::ValidatorId, T::Keys), T::MaxValidators>
+				= queued_keys.try_into().expect("Too many queued keys!");
 			// Tell everyone about the genesis session keys
-			T::SessionHandler::on_genesis_session::<T::Keys>(&queued_keys);
+			T::SessionHandler::on_genesis_session::<T::Keys>(&bounded_queued_keys);
 
-			<Validators<T>>::put(initial_validators_0);
-			<QueuedKeys<T>>::put(queued_keys);
+			<Validators<T>>::put(bounded_initial_validators_0);
+			<QueuedKeys<T>>::put(bounded_queued_keys);
 
 			T::SessionManager::start_session(0);
 		});
@@ -592,6 +596,12 @@ impl<T: Config> Module<T> {
 		let validators = session_keys.iter()
 			.map(|(validator, _)| validator.clone())
 			.collect::<Vec<_>>();
+		// Note this should never truncate because queued keys is also bounded to `MaxValidators`,
+		// but we do so defensively.
+		let validators = BoundedVec::<T::ValidatorId, T::MaxValidators>::truncating_from(
+			validators,
+			Some("Session Rotate Session"),
+		);
 		<Validators<T>>::put(&validators);
 
 		if changed {
@@ -610,6 +620,10 @@ impl<T: Config> Module<T> {
 		let (next_validators, next_identities_changed)
 			= if let Some(validators) = maybe_next_validators
 		{
+			let validators = BoundedVec::<T::ValidatorId, T::MaxValidators>::truncating_from(
+				validators,
+				Some("Session Rotate Session Maybe Next Validators"),
+			);
 			// NOTE: as per the documentation on `OnSessionEnding`, we consider
 			// the validator set as having changed even if the validators are the
 			// same as before, as underlying economic conditions may have changed.
@@ -644,6 +658,12 @@ impl<T: Config> Module<T> {
 					(a, k)
 				})
 				.collect::<Vec<_>>();
+			// Should never truncate since next_validators should already be the right length,
+			// but we do so defensively.
+			let queued_amalgamated = BoundedVec::<(T::ValidatorId, T::Keys), T::MaxValidators>::truncating_from(
+				queued_amalgamated,
+				Some("Session Rotate Session"),
+			);
 
 			(queued_amalgamated, changed)
 		};
@@ -738,9 +758,16 @@ impl<T: Config> Module<T> {
 
 		let _ = <QueuedKeys<T>>::translate::<Vec<(T::ValidatorId, Old)>, _>(
 			|k| {
-				k.map(|k| k.into_iter()
-					.map(|(val, old_keys)| (val.clone(), upgrade(val, old_keys)))
-					.collect::<Vec<_>>())
+				k.map(|k| {
+					let keys = k.into_iter()
+						.map(|(val, old_keys)| (val.clone(), upgrade(val, old_keys)))
+						.collect::<Vec<_>>();
+						// Should never truncate since queued keys is already bounded.
+					BoundedVec::<(T::ValidatorId, T::Keys), T::MaxValidators>::truncating_from(
+						keys,
+						Some("Session Upgrade Keys"),
+					)
+				})
 			}
 		);
 	}
@@ -849,7 +876,7 @@ impl<T: Config> ValidatorSet<T::AccountId> for Module<T> {
 	}
 
 	fn validators() -> Vec<Self::ValidatorId> {
-		Module::<T>::validators()
+		Module::<T>::validators().to_vec()
 	}
 }
 

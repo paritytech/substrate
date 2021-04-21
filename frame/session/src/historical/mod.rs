@@ -113,7 +113,7 @@ impl<T: Config> ValidatorSet<T::AccountId> for Module<T> {
 	}
 
 	fn validators() -> Vec<Self::ValidatorId> {
-		super::Module::<T>::validators()
+		super::Module::<T>::validators().to_vec()
 	}
 }
 

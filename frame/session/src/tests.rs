@@ -40,7 +40,7 @@ fn initialize_block(block: u64) {
 fn simple_setup_should_work() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
-		assert_eq!(Session::validators(), vec![1, 2, 3]);
+		assert_eq!(Session::validators().to_vec(), vec![1, 2, 3]);
 	});
 }
 
@@ -56,7 +56,7 @@ fn put_get_keys() {
 fn keys_cleared_on_kill() {
 	let mut ext = new_test_ext();
 	ext.execute_with(|| {
-		assert_eq!(Session::validators(), vec![1, 2, 3]);
+		assert_eq!(Session::validators().to_vec(), vec![1, 2, 3]);
 		assert_eq!(Session::load_keys(&1), Some(UintAuthorityId(1).into()));
 
 		let id = DUMMY;
@@ -79,22 +79,22 @@ fn authorities_should_track_validators() {
 		set_next_validators(vec![1, 2]);
 		force_new_session();
 		initialize_block(1);
-		assert_eq!(Session::queued_keys(), vec![
+		assert_eq!(Session::queued_keys().to_vec(), vec![
 			(1, UintAuthorityId(1).into()),
 			(2, UintAuthorityId(2).into()),
 		]);
-		assert_eq!(Session::validators(), vec![1, 2, 3]);
+		assert_eq!(Session::validators().to_vec(), vec![1, 2, 3]);
 		assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
 		assert!(before_session_end_called());
 		reset_before_session_end_called();
 
 		force_new_session();
 		initialize_block(2);
-		assert_eq!(Session::queued_keys(), vec![
+		assert_eq!(Session::queued_keys().to_vec(), vec![
 			(1, UintAuthorityId(1).into()),
 			(2, UintAuthorityId(2).into()),
 		]);
-		assert_eq!(Session::validators(), vec![1, 2]);
+		assert_eq!(Session::validators().to_vec(), vec![1, 2]);
 		assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2)]);
 		assert!(before_session_end_called());
 		reset_before_session_end_called();
@@ -103,23 +103,23 @@ fn authorities_should_track_validators() {
 		assert_ok!(Session::set_keys(Origin::signed(4), UintAuthorityId(4).into(), vec![]));
 		force_new_session();
 		initialize_block(3);
-		assert_eq!(Session::queued_keys(), vec![
+		assert_eq!(Session::queued_keys().to_vec(), vec![
 			(1, UintAuthorityId(1).into()),
 			(2, UintAuthorityId(2).into()),
 			(4, UintAuthorityId(4).into()),
 		]);
-		assert_eq!(Session::validators(), vec![1, 2]);
+		assert_eq!(Session::validators().to_vec(), vec![1, 2]);
 		assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2)]);
 		assert!(before_session_end_called());
 
 		force_new_session();
 		initialize_block(4);
-		assert_eq!(Session::queued_keys(), vec![
+		assert_eq!(Session::queued_keys().to_vec(), vec![
 			(1, UintAuthorityId(1).into()),
 			(2, UintAuthorityId(2).into()),
 			(4, UintAuthorityId(4).into()),
 		]);
-		assert_eq!(Session::validators(), vec![1, 2, 4]);
+		assert_eq!(Session::validators().to_vec(), vec![1, 2, 4]);
 		assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(4)]);
 	});
 }
@@ -437,7 +437,7 @@ fn upgrade_keys() {
 
 		// Check queued keys.
 		assert_eq!(
-			Session::queued_keys(),
+			Session::queued_keys().to_vec(),
 			vec![
 				(1, mock_keys_for(1)),
 				(2, mock_keys_for(2)),
