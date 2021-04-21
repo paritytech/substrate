@@ -75,7 +75,7 @@ use sc_client_api::{
 	execution_extensions::ExecutionExtensions
 };
 use sp_blockchain::{HeaderMetadata, HeaderBackend};
-use jsonrpsee_ws_server::{RpcModule, RpcContextModule};
+use jsonrpsee_ws_server::RpcModule;
 
 /// A utility trait for building an RPC extension given a `DenyUnsafe` instance.
 /// This is useful since at service definition time we don't know whether the
@@ -657,7 +657,12 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 
 	// jsonrpsee RPC
 	let gen_rpc_module = |deny_unsafe: sc_rpc::DenyUnsafe| {
-		gen_rpc_module(deny_unsafe, task_manager.spawn_handle(), client.clone(), on_demand.clone(), remote_blockchain.clone())
+		gen_rpc_module(
+			deny_unsafe,
+			task_manager.spawn_handle(),
+			client.clone(), on_demand.clone(),
+			remote_blockchain.clone()
+		)
 	};
 
 	let rpc_metrics = sc_rpc_server::RpcMetrics::new(config.prometheus_registry())?;
@@ -785,17 +790,8 @@ fn gen_rpc_module<TBl, TBackend, TCl>(
 		);
 		(chain, state, child_state)
 	};
-	let mut chain_module = RpcContextModule::new(chain);
 
-	chain_module.register_method("chain_getBlockHash", |params, chain| {
-		use sc_rpc::chain::ChainApi;
-
-		let hash = chain.block_hash(params.one()?).unwrap();
-
-		Ok(hash)
-	}).unwrap();
-
-	chain_module.into_module()
+	chain.into_rpc_module()
 }
 
 fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(

@@ -34,6 +34,7 @@ use rpc::{
 
 use sc_client_api::{BlockchainEvents, light::{Fetcher, RemoteBlockchain}};
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId, manager::SubscriptionManager};
+use jsonrpsee_ws_server::{RpcModule, RpcContextModule};
 use sp_rpc::{number::NumberOrHex, list::ListOrValue};
 use sp_runtime::{
 	generic::{BlockId, SignedBlock},
@@ -222,6 +223,24 @@ pub fn new_light<Block: BlockT, Client, F: Fetcher<Block>>(
 /// Chain API with subscriptions support.
 pub struct Chain<Block: BlockT, Client> {
 	backend: Box<dyn ChainBackend<Client, Block>>,
+}
+
+impl<Block: BlockT, Client> Chain<Block, Client>
+where
+	Client: BlockchainEvents<Block> + HeaderBackend<Block> + Send + Sync + 'static,
+{
+	/// Convert a [`Chain`] to an [`RpcModule`]. Registers all the RPC methods available with the RPC server.
+	pub fn into_rpc_module(self) -> RpcModule {
+		let mut rpc_module = RpcContextModule::new(self);
+
+		rpc_module.register_method("chain_getBlockHash", |params, chain| {
+			let hash = chain.block_hash(params.one()?).unwrap();
+
+			Ok(hash)
+		}).unwrap();
+
+		rpc_module.into_module()
+	}
 }
 
 impl<Block, Client> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, SignedBlock<Block>> for
