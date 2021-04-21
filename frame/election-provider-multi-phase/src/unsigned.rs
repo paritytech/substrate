@@ -176,25 +176,29 @@ impl<T: Config> Pallet<T> {
 			CompactOf::<T>::try_from(assignments).map(|compact| compact.encoded_size())
 		};
 
-		let ElectionResult { mut assignments, winners } = election_result;
-		// Sort the assignments by reversed voter stake. This ensures that we can efficiently
-		// truncate the list.
-		assignments.sort_by_key(|Assignment::<T> { who, .. }| {
-			let stake = cache.get(who).map(|idx| {
-				let (_, stake, _) = voters[*idx];
-				stake
-			}).unwrap_or_default();
-			sp_std::cmp::Reverse(stake)
-		});
-
-		// rename to emphasize that ordering matters
-		let mut sorted_assignments = assignments;
+		let ElectionResult { assignments, winners } = election_result;
 
 		// Reduce (requires round-trip to staked form)
-		sorted_assignments = {
+		let sorted_assignments = {
 			// convert to staked and reduce.
-			let mut staked = assignment_ratio_to_staked_normalized(sorted_assignments, &stake_of)?;
+			let mut staked = assignment_ratio_to_staked_normalized(assignments, &stake_of)?;
+
+			// we reduce before sorting in order to ensure that the reduction process doesn't
+			// accidentally change the sort order
 			sp_npos_elections::reduce(&mut staked);
+
+			// Sort the assignments by reversed voter stake. This ensures that we can efficiently
+			// truncate the list.
+			staked.sort_by_key(|sp_npos_elections::StakedAssignment::<T::AccountId> { who, .. }| {
+				// though staked assignments are expressed in terms of absolute stake, we'd still
+				// need to iterate over all votes in order to actually compute the total stake.
+				// it should be faster to look it up from the cache.
+				let stake = cache.get(who).map(|idx| {
+					let (_, stake, _) = voters[*idx];
+					stake
+				}).unwrap_or_default();
+				sp_std::cmp::Reverse(stake)
+			});
 
 			// convert back.
 			assignment_staked_to_ratio_normalized(staked)?
