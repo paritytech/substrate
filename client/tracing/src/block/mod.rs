@@ -41,13 +41,14 @@ use crate::{SpanDatum, TraceEvent, Values};
 // include the RPC result.
 const BASE_RPC_PAYLOAD: usize = 500;
 // Default to only pallet, frame support and state related traces
-const DEFAULT_TARGETS: &'static str = "pallet,frame,state_get_put";
+const DEFAULT_TARGETS: &'static str = "pallet,frame,state";
 const TRACE_TARGET: &'static str = "block_trace";
 // Default to not filtering based on storage keys as storage keys vary per chain.
 const DEFAULT_STORAGE_KEYS: &'static str = "";
 // If a Span or Event has target `state`, only collect it if it has a `method` field.
 // This is useful for only collecting Get/Put events in _primitives/state-machine/src/ext.rs_.
-const DEFAULT_ENV_FILTER: &'static str  = "state[{method}]";
+// const DEFAULT_ENV_FILTER: &'static str  = "state[{method}]";
+const REQUIRED_EVENT_FIELD: &'static str  = "method";
 
 struct BlockSubscriber {
 	targets: Vec<(String, Level)>,
@@ -85,7 +86,12 @@ impl Subscriber for BlockSubscriber {
 	fn enabled(&self, metadata: &tracing::Metadata<'_>) -> bool {
 		for (target, level) in &self.targets {
 			if metadata.target().starts_with(target.as_str()) && metadata.level() <= level {
-				return true;
+				if metadata.kind.is_span() {
+					return true;
+				} else if metadata.fields.contains(REQUIRED_EVENT_FIELD) {
+					// it is an event, so we check if has the method field
+					return true;
+				}
 			}
 		}
 		false
@@ -209,7 +215,7 @@ impl<Block, Client> BlockExecutor<Block, Client>
 		let spans = Mutex::new(HashMap::new());
 		let events = Mutex::new(Vec::new());
 		let block_subscriber = BlockSubscriber::new(targets, spans, events)
-			.with(EnvFilter::new(DEFAULT_ENV_FILTER));
+			// .with(EnvFilter::new(DEFAULT_ENV_FILTER));
 		let dispatch = Dispatch::new(block_subscriber);
 
 		{
