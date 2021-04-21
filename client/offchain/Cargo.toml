@@ -35,7 +35,7 @@ threadpool = "1.7"
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
 hyper = "0.13.9"
-hyper-rustls = "0.21.0"
+hyper-rustls = "0.22.1"
 
 [dev-dependencies]
 sc-client-db = { version = "0.9.0", default-features = true, path = "../db" }
