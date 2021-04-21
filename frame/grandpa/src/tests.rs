@@ -25,7 +25,7 @@ use codec::{Decode, Encode};
 use fg_primitives::ScheduledChange;
 use frame_support::{
 	assert_err, assert_ok, assert_noop,
-	traits::{Currency, OnFinalize, OnSessionHandler},
+	traits::{Currency, OnFinalize, OneSessionHandler},
 	weights::{GetDispatchInfo, Pays},
 };
 use frame_system::{EventRecord, Phase};

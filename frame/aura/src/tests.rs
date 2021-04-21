@@ -21,7 +21,7 @@
 
 use crate::mock::{Aura, new_test_ext};
 use sp_runtime::testing::UintAuthorityId;
-use frame_support::traits::OnSessionHandler;
+use frame_support::traits::OneSessionHandler;
 
 #[test]
 fn initial_values() {

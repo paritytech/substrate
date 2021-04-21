@@ -21,7 +21,7 @@ use crate::*;
 use crate as staking;
 use frame_support::{
 	assert_ok, parameter_types,
-	traits::{Currency, FindAuthor, Get, OnFinalize, OnInitialize, OnSessionHandler},
+	traits::{Currency, FindAuthor, Get, OnFinalize, OnInitialize, OneSessionHandler},
 	weights::constants::RocksDbWeight,
 	IterableStorageMap, StorageDoubleMap, StorageMap, StorageValue,
 };
@@ -51,7 +51,7 @@ thread_local! {
 
 /// Another session handler struct to test on_disabled.
 pub struct OtherSessionHandler;
-impl OnSessionHandler<AccountId, MaxValidators> for OtherSessionHandler {
+impl OneSessionHandler<AccountId, MaxValidators> for OtherSessionHandler {
 	type Key = UintAuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(_: I)

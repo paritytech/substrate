@@ -125,7 +125,7 @@ use frame_support::{
 	ensure, decl_module, decl_event, decl_storage, decl_error, ConsensusEngineId, Parameter,
 	traits::{
 		Get, FindAuthor, ValidatorRegistration, EstimateNextSessionRotation, EstimateNextNewSession,
-		OnSessionHandler, ValidatorSet,
+		OneSessionHandler, ValidatorSet,
 	},
 	dispatch::{self, DispatchResult, DispatchError},
 	weights::Weight,
@@ -291,7 +291,7 @@ pub trait SessionHandler<ValidatorId, MaxValidators> {
 }
 
 #[impl_trait_for_tuples::impl_for_tuples(1, 30)]
-#[tuple_types_custom_trait_bound(OnSessionHandler<AId, MV>)]
+#[tuple_types_custom_trait_bound(OneSessionHandler<AId, MV>)]
 impl<AId, MV: Get<u32>> SessionHandler<AId, MV> for Tuple {
 	for_tuples!(
 		const KEY_TYPE_IDS: &'static [KeyTypeId] = &[ #( <Tuple::Key as RuntimeAppPublic>::ID ),* ];

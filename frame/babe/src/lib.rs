@@ -25,7 +25,7 @@ use codec::{Decode, Encode};
 use frame_support::{
 	BoundedVec,
 	dispatch::DispatchResultWithPostInfo,
-	traits::{FindAuthor, Get, KeyOwnerProofSystem, OnSessionHandler, OnTimestampSet},
+	traits::{FindAuthor, Get, KeyOwnerProofSystem, OneSessionHandler, OnTimestampSet},
 	weights::{Pays, Weight},
 };
 use sp_application_crypto::Public;
@@ -893,7 +893,7 @@ impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Pallet<T> {
 	type Public = AuthorityId;
 }
 
-impl<T: Config> OnSessionHandler<T::AccountId, T::MaxAuthorities> for Pallet<T> {
+impl<T: Config> OneSessionHandler<T::AccountId, T::MaxAuthorities> for Pallet<T> {
 	type Key = AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)

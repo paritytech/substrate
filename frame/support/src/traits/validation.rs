@@ -72,7 +72,7 @@ pub trait VerifySeal<Header, Author> {
 }
 
 /// A session handler for specific key type.
-pub trait OnSessionHandler<ValidatorId, MaxValidators>: BoundToRuntimeAppPublic {
+pub trait OneSessionHandler<ValidatorId, MaxValidators>: BoundToRuntimeAppPublic {
 	/// The key type expected.
 	type Key: Decode + Default + RuntimeAppPublic;
 
