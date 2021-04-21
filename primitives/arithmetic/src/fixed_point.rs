@@ -57,7 +57,7 @@ pub trait FixedPointNumber:
 	+ Saturating + Bounded
 	+ Eq + PartialEq + Ord + PartialOrd
 	+ CheckedSub + CheckedAdd + CheckedMul + CheckedDiv
-	+ Add + Sub + Div + Mul
+	+ Add + Sub + Div + Mul + Zero + One
 {
 	/// The underlying data type used for this fixed point number.
 	type Inner: Debug + One + CheckedMul + CheckedDiv + FixedPointOperand;
@@ -193,21 +193,6 @@ pub trait FixedPointNumber:
 	/// Returns `None` if `self = 0`.
 	fn reciprocal(self) -> Option<Self> {
 		Self::one().checked_div(&self)
-	}
-
-	/// Returns zero.
-	fn zero() -> Self {
-		Self::from_inner(Self::Inner::zero())
-	}
-
-	/// Checks if the number is zero.
-	fn is_zero(&self) -> bool {
-		self.into_inner() == Self::Inner::zero()
-	}
-
-	/// Returns one.
-	fn one() -> Self {
-		Self::from_inner(Self::DIV)
 	}
 
 	/// Checks if the number is one.
@@ -516,17 +501,17 @@ macro_rules! implement_fixed {
 
 		impl Zero for $name {
 			fn zero() -> Self {
-				<Self as FixedPointNumber>::zero()
+				Self::from_inner(<Self as FixedPointNumber>::Inner::zero())
 			}
 
 			fn is_zero(&self) -> bool {
-				<Self as FixedPointNumber>::is_zero(self)
+				self.into_inner() == <Self as FixedPointNumber>::Inner::zero()
 			}
 		}
 
 		impl One for $name {
 			fn one() -> Self {
-				<Self as FixedPointNumber>::one()
+				Self::from_inner(Self::DIV)
 			}
 		}
 
