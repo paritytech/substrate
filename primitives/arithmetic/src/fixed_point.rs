@@ -514,6 +514,22 @@ macro_rules! implement_fixed {
 			}
 		}
 
+		impl Zero for $name {
+			fn zero() -> Self {
+				<Self as FixedPointNumber>::zero()
+			}
+
+			fn is_zero(&self) -> bool {
+				<Self as FixedPointNumber>::is_zero(self)
+			}
+		}
+
+		impl One for $name {
+			fn one() -> Self {
+				<Self as FixedPointNumber>::one()
+			}
+		}
+
 		impl sp_std::fmt::Debug for $name {
 			#[cfg(feature = "std")]
 			fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
