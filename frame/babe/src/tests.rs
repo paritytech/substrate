@@ -413,7 +413,7 @@ fn report_equivocation_current_session_works() {
 		start_era(1);
 
 		let authorities = Babe::authorities();
-		let validators = Session::validators();
+		let validators = Session::validators().to_vec();
 
 		// make sure that all authorities have the same balance
 		for validator in &validators {

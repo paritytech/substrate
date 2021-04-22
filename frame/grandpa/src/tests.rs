@@ -364,7 +364,7 @@ fn report_equivocation_current_set_works() {
 		start_era(1);
 
 		let authorities = Grandpa::grandpa_authorities();
-		let validators = Session::validators();
+		let validators = Session::validators().to_vec();
 
 		// make sure that all validators have the same balance
 		for validator in &validators {
@@ -453,7 +453,7 @@ fn report_equivocation_old_set_works() {
 		start_era(1);
 
 		let authorities = Grandpa::grandpa_authorities();
-		let validators = Session::validators();
+		let validators = Session::validators().to_vec();
 
 		let equivocation_authority_index = 0;
 		let equivocation_key = &authorities[equivocation_authority_index].0;
