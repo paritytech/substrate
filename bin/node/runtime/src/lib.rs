@@ -332,8 +332,13 @@ parameter_types! {
 	pub const ExpectedBlockTime: Moment = MILLISECS_PER_BLOCK;
 	pub const ReportLongevity: u64 =
 		BondingDuration::get() as u64 * SessionsPerEra::get() as u64 * EpochDuration::get();
+	// The maximum number of authorities / validators for this runtime system.
+	// This is should be shared across all pallets using session handlers.
 	pub const MaxAuthorities: u32 = 100;
 }
+
+// Just a convenient rename...
+type MaxValidators = MaxAuthorities;
 
 impl pallet_babe::Config for Runtime {
 	type EpochDuration = EpochDuration;
@@ -449,7 +454,7 @@ impl pallet_session::Config for Runtime {
 	type SessionHandler = <SessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type Keys = SessionKeys;
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
-	type MaxValidators = MaxAuthorities;
+	type MaxValidators = MaxValidators;
 	type WeightInfo = pallet_session::weights::SubstrateWeight<Runtime>;
 }
 
@@ -500,7 +505,7 @@ impl pallet_staking::Config for Runtime {
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type ElectionProvider = ElectionProviderMultiPhase;
-	type MaxValidators = MaxAuthorities;
+	type MaxValidators = MaxValidators;
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Runtime>;
 }
 
