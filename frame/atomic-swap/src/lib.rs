@@ -144,7 +144,7 @@ pub mod pallet {
 
 	/// Atomic swap's pallet configuration trait.
 	#[pallet::config]
-	pub trait Config: frame_system::Config {
+	pub trait Config: frame_system::Config + scale_info::TypeInfo { // todo: [AJ] see whether we really need this bound
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// Swap action.
