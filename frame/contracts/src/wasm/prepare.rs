@@ -273,13 +273,17 @@ impl<'a, T: Config> ContractModule<'a, T> {
 
 			// Then check the signature.
 			// Both "call" and "deploy" has a () -> () function type.
+			// We still support () -> (i32) for backwards compatibility.
 			let func_ty_idx = func_entries.get(fn_idx as usize)
 				.ok_or_else(|| "export refers to non-existent function")?
 				.type_ref();
 			let Type::Function(ref func_ty) = types
 				.get(func_ty_idx as usize)
 				.ok_or_else(|| "function has a non-existent type")?;
-			if !(func_ty.params().is_empty() && func_ty.results().is_empty()) {
+			if !(
+				func_ty.params().is_empty() &&
+				(func_ty.results().is_empty() || func_ty.results() == [ValueType::I32])
+			) {
 				return Err("entry point has wrong signature");
 			}
 		}
