@@ -82,17 +82,19 @@ impl BlockSubscriber {
 
 impl Subscriber for BlockSubscriber {
 	fn enabled(&self, metadata: &tracing::Metadata<'_>) -> bool {
-		for (target, level) in &self.targets {
-			if metadata.target().starts_with(target.as_str()) && metadata.level() <= level {
-				if metadata.is_span() {
-					return true;
-				} else if metadata.fields().field(REQUIRED_EVENT_FIELD).is_some() {
-					// it is an event, so we check if has the method field
-					return true;
-				}
-			}
-		}
-		false
+		// for (target, level) in &self.targets {
+		// 	if metadata.target().starts_with(target.as_str()) && metadata.level() <= level {
+		// 		if metadata.is_span() {
+		// 			return true;
+		// 		} else if metadata.fields().field(REQUIRED_EVENT_FIELD).is_some() {
+		// 			// it is an event, so we check if has the method field
+		// 			return true;
+		// 		}
+		// 	}
+		// }
+		// false
+
+		true
 	}
 
 	fn new_span(&self, attrs: &Attributes<'_>) -> Id {
@@ -212,7 +214,8 @@ impl<Block, Client> BlockExecutor<Block, Client>
 		};
 		let spans = Mutex::new(HashMap::new());
 		let events = Mutex::new(Vec::new());
-		let block_subscriber = BlockSubscriber::new(targets, spans, events);
+		let block_subscriber = BlockSubscriber::new(targets, spans, events)
+			.with(EnvFilter::new("pallet,frame,state[{method}]"));
 		let dispatch = Dispatch::new(block_subscriber);
 
 		{
