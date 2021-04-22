@@ -79,7 +79,7 @@ mod tests;
 /// When offchain worker is signing transactions it's going to request keys of type
 /// `KeyTypeId` from the keystore and use the ones it finds to sign the transaction.
 /// The keys can be inserted manually via RPC (see `author_insertKey`).
-pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"ocwddc");
+pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"ddc1");
 
 pub const HTTP_NODES_REQUEST: &str = "http://localhost:8081/listNodes";
 
