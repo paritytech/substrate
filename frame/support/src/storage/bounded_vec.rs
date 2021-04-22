@@ -20,6 +20,7 @@
 
 use sp_std::prelude::*;
 use sp_std::{convert::TryFrom, marker::PhantomData};
+#[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use codec::{FullCodec, Encode, EncodeLike, Decode};
 use crate::{
