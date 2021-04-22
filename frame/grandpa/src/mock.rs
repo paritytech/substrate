@@ -332,7 +332,7 @@ pub fn new_test_ext_raw_authorities(authorities: AuthorityList) -> sp_io::TestEx
 		validator_count: 8,
 		force_era: pallet_staking::Forcing::ForceNew,
 		minimum_validator_count: 0,
-		invulnerables: Default::default(),
+		invulnerables: vec![],
 		..Default::default()
 	};
 

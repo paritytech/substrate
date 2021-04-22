@@ -436,7 +436,7 @@ impl ExtBuilder {
 			stakers: stakers,
 			validator_count: self.validator_count,
 			minimum_validator_count: self.minimum_validator_count,
-			invulnerables: self.invulnerables.try_into().unwrap(),
+			invulnerables: self.invulnerables,
 			slash_reward_fraction: Perbill::from_percent(10),
 			..Default::default()
 		}
