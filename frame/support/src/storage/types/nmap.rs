@@ -21,7 +21,7 @@
 use codec::{Decode, Encode, EncodeLike, FullCodec};
 use crate::{
 	storage::{
-		types::{OnEmptyGetter, OptionQuery, QueryKindTrait},
+		types::{HasKeyPrefix, HasReversibleKeyPrefix, OnEmptyGetter, OptionQuery, QueryKindTrait},
 		KeyGenerator, PrefixIterator, StorageAppend, StorageDecodeLength,
 	},
 	traits::{GetDefault, StorageInstance},
@@ -145,13 +145,16 @@ where
 	}
 
 	/// Remove all values under the first key.
-	pub fn remove_prefix<KG: KeyGenerator>(partial_key: KG::Key) {
-		<Self as crate::storage::StorageNMap<Key, Value>>::remove_prefix::<KG>(partial_key)
+	pub fn remove_prefix<KP>(partial_key: KP) where Key: HasKeyPrefix<KP> {
+		<Self as crate::storage::StorageNMap<Key, Value>>::remove_prefix(partial_key)
 	}
 
 	/// Iterate over values that share the first key.
-	pub fn iter_prefix_values<KG: KeyGenerator>(partial_key: KG::Key) -> PrefixIterator<Value> {
-		<Self as crate::storage::StorageNMap<Key, Value>>::iter_prefix_values::<KG>(partial_key)
+	pub fn iter_prefix_values<KP>(partial_key: KP) -> PrefixIterator<Value>
+	where
+		Key: HasKeyPrefix<KP>,
+	{
+		<Self as crate::storage::StorageNMap<Key, Value>>::iter_prefix_values(partial_key)
 	}
 
 	/// Mutate the value under the given keys.
@@ -258,6 +261,29 @@ where
 	QueryKind: QueryKindTrait<Value, OnEmpty>,
 	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static
 {
+	/// Enumerate all elements in the map with prefix key `kp` in no particular order.
+	///
+	/// If you add or remove values whose prefix key is `kp` to the map while doing this, you'll get
+	/// undefined results.
+	pub fn iter_prefix<KP>(kp: KP) -> crate::storage::PrefixIterator<(<Key as HasKeyPrefix<KP>>::Suffix, Value)>
+	where
+		Key: HasReversibleKeyPrefix<KP>,
+	{
+		<Self as crate::storage::IterableStorageNMap<Key, Value>>::iter_prefix(kp)
+	}
+
+	/// Remove all elements from the map with prefix key `kp` and iterate through them in no
+	/// particular order.
+	///
+	/// If you add elements with prefix key `k1` to the map while doing this, you'll get undefined
+	/// results.
+	pub fn drain_prefix<KP>(kp: KP) -> crate::storage::PrefixIterator<(<Key as HasKeyPrefix<KP>>::Suffix, Value)>
+	where
+		Key: HasReversibleKeyPrefix<KP>,
+	{
+		<Self as crate::storage::IterableStorageNMap<Key, Value>>::drain_prefix(kp)
+	}
+
 	/// Enumerate all elements in the map in no particular order.
 	///
 	/// If you add or remove values to the map while doing this, you'll get undefined results.
@@ -606,8 +632,8 @@ mod test {
 			A::insert((3, 31), 12);
 			A::insert((4, 40), 13);
 			A::insert((4, 41), 14);
-			assert_eq!(A::iter_prefix_values::<Key<Blake2_128Concat, u16>>(3).collect::<Vec<_>>(), vec![12, 11]);
-			assert_eq!(A::iter_prefix_values::<Key<Blake2_128Concat, u16>>(4).collect::<Vec<_>>(), vec![13, 14]);
+			assert_eq!(A::iter_prefix_values(3).collect::<Vec<_>>(), vec![12, 11]);
+			assert_eq!(A::iter_prefix_values(4).collect::<Vec<_>>(), vec![13, 14]);
 		});
 	}
 
@@ -748,8 +774,10 @@ mod test {
 			A::insert((3, 30, 301), 12);
 			A::insert((4, 40, 400), 13);
 			A::insert((4, 40, 401), 14);
-			assert_eq!(A::iter_prefix_values::<(Key<Blake2_128Concat, u16>, Key<Blake2_128Concat, u16>)>((3, 30)).collect::<Vec<_>>(), vec![11, 12]);
-			assert_eq!(A::iter_prefix_values::<(Key<Blake2_128Concat, u16>, Key<Blake2_128Concat, u16>)>((4, 40)).collect::<Vec<_>>(), vec![14, 13]);
+			assert_eq!(A::iter_prefix_values(3).collect::<Vec<_>>(), vec![11, 12]);
+			assert_eq!(A::iter_prefix_values(4).collect::<Vec<_>>(), vec![14, 13]);
+			assert_eq!(A::iter_prefix_values((3, 30)).collect::<Vec<_>>(), vec![11, 12]);
+			assert_eq!(A::iter_prefix_values((4, 40)).collect::<Vec<_>>(), vec![14, 13]);
 		});
 	}
 }

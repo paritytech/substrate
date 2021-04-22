@@ -22,7 +22,7 @@ use sp_std::prelude::*;
 use codec::{FullCodec, FullEncode, Encode, EncodeLike, Decode};
 use crate::{
 	hash::{Twox128, StorageHasher, ReversibleStorageHasher},
-	storage::types::{KeyGenerator, ReversibleKeyGenerator},
+	storage::types::{HasKeyPrefix, HasReversibleKeyPrefix, KeyGenerator, ReversibleKeyGenerator},
 	traits::Get,
 };
 use sp_runtime::generic::{Digest, DigestItem};
@@ -366,6 +366,18 @@ pub trait IterableStorageNMap<K: ReversibleKeyGenerator, V: FullCodec>: StorageN
 	/// The type that iterates over all `(key1, (key2, (key3, ... (keyN, ()))), value)` tuples
 	type Iterator: Iterator<Item = (K::Key, V)>;
 
+	/// Enumerate all elements in the map with prefix key `kp` in no particular order. If you add or
+	/// remove values whose prefix is `kp` to the map while doing this, you'll get undefined
+	/// results.
+	fn iter_prefix<KP>(kp: KP) -> PrefixIterator<(<K as HasKeyPrefix<KP>>::Suffix, V)>
+	where K: HasReversibleKeyPrefix<KP>;
+
+	/// Remove all elements from the map with prefix key `kp` and iterate through them in no
+	/// particular order. If you add elements with prefix key `kp` to the map while doing this,
+	/// you'll get undefined results.
+	fn drain_prefix<KP>(kp: KP) -> PrefixIterator<(<K as HasKeyPrefix<KP>>::Suffix, V)>
+	where K: HasReversibleKeyPrefix<KP>;
+
 	/// Enumerate all elements in the map in no particular order. If you add or remove values to
 	/// the map while doing this, you'll get undefined results.
 	fn iter() -> Self::Iterator;
@@ -563,10 +575,10 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 	fn remove(key: K::Key);
 
 	/// Remove all values under the partial prefix key.
-	fn remove_prefix<KG: KeyGenerator>(partial_key: KG::Key);
+	fn remove_prefix<KP>(partial_key: KP) where K: HasKeyPrefix<KP>;
 
 	/// Iterate over values that share the partial prefix key.
-	fn iter_prefix_values<KG: KeyGenerator>(partial_key: KG::Key) -> PrefixIterator<V>;
+	fn iter_prefix_values<KP>(partial_key: KP) -> PrefixIterator<V> where K: HasKeyPrefix<KP>;
 
 	/// Mutate the value under a key.
 	fn mutate<R, F: FnOnce(&mut Self::Query) -> R>(key: K::Key, f: F) -> R;

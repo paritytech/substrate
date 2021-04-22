@@ -19,6 +19,7 @@
 
 use crate::hash::{ReversibleStorageHasher, StorageHasher};
 use codec::{EncodeLike, FullCodec};
+use paste::paste;
 use sp_std::prelude::*;
 
 /// A type used exclusively by storage maps as their key type.
@@ -34,7 +35,7 @@ pub struct Key<Hasher, KeyType>(
 	core::marker::PhantomData<(Hasher, KeyType)>,
 );
 
-/// A trait that contains the current key as an associated type and generates the next key.
+/// A trait that contains the current key as an associated type.
 pub trait KeyGenerator {
 	type Key: EncodeLike<Self::Key>;
 
@@ -95,3 +96,256 @@ impl ReversibleKeyGenerator for Tuple {
 		), current_key_material))
 	}
 }
+
+/// Trait indicating whether a KeyGenerator has the prefix P.
+pub trait HasKeyPrefix<P>: KeyGenerator {
+	type Suffix;
+
+	fn partial_key(prefix: P) -> Vec<u8>;
+}
+
+/// Trait indicating whether a ReversibleKeyGenerator has the prefix P.
+pub trait HasReversibleKeyPrefix<P>: ReversibleKeyGenerator + HasKeyPrefix<P> {
+	fn decode_partial_key(key_material: &[u8]) -> Result<Self::Suffix, codec::Error>;
+}
+
+macro_rules! impl_key_prefix_for {
+	(($($keygen:ident),+), ($($prefix:ident),+), ($($suffix:ident),+)) => {
+		paste! {
+			impl<$($keygen: FullCodec,)+ $( [<$keygen $keygen>]: StorageHasher),+>
+				HasKeyPrefix<($($prefix),+)> for
+				($(Key<[<$keygen $keygen>], $keygen>),+)
+			{
+				type Suffix = ($($suffix),+);
+
+				fn partial_key(prefix: ($($prefix),+)) -> Vec<u8> {
+					<($(Key<[<$prefix $prefix>], $prefix>),+)>::final_key(prefix)
+				}
+			}
+
+			impl<$($keygen: FullCodec,)+ $( [<$keygen $keygen>]: ReversibleStorageHasher),+>
+				HasReversibleKeyPrefix<($($prefix),+)> for
+				($(Key<[<$keygen $keygen>], $keygen>),+)
+			{
+				fn decode_partial_key(key_material: &[u8]) -> Result<Self::Suffix, codec::Error> {
+					<($(Key<[<$suffix $suffix>], $suffix>),+)>::decode_final_key(key_material).map(|k| k.0)
+				}
+			}
+		}
+	};
+	(($($keygen:ident),+), $prefix:ident, ($($suffix:ident),+)) => {
+		paste! {
+			impl<$($keygen: FullCodec,)+ $( [<$keygen $keygen>]: StorageHasher),+>
+				HasKeyPrefix<$prefix> for
+				($(Key<[<$keygen $keygen>], $keygen>),+)
+			{
+				type Suffix = ($($suffix),+);
+
+				fn partial_key(prefix: $prefix) -> Vec<u8> {
+					<Key<[<$prefix $prefix>], $prefix>>::final_key(prefix)
+				}
+			}
+
+			impl<$($keygen: FullCodec,)+ $( [<$keygen $keygen>]: ReversibleStorageHasher),+>
+				HasReversibleKeyPrefix<$prefix> for
+				($(Key<[<$keygen $keygen>], $keygen>),+)
+			{
+				fn decode_partial_key(key_material: &[u8]) -> Result<Self::Suffix, codec::Error> {
+					<($(Key<[<$suffix $suffix>], $suffix>),+)>::decode_final_key(key_material).map(|k| k.0)
+				}
+			}
+		}
+	};
+	(($($keygen:ident),+), ($($prefix:ident),+), $suffix:ident) => {
+		paste! {
+			impl<$($keygen: FullCodec,)+ $( [<$keygen $keygen>]: StorageHasher),+>
+				HasKeyPrefix<($($prefix),+)> for
+				($(Key<[<$keygen $keygen>], $keygen>),+)
+			{
+				type Suffix = $suffix;
+
+				fn partial_key(prefix: ($($prefix),+)) -> Vec<u8> {
+					<($(Key<[<$prefix $prefix>], $prefix>),+)>::final_key(prefix)
+				}
+			}
+
+			impl<$($keygen: FullCodec,)+ $( [<$keygen $keygen>]: ReversibleStorageHasher),+>
+				HasReversibleKeyPrefix<($($prefix),+)> for
+				($(Key<[<$keygen $keygen>], $keygen>),+)
+			{
+				fn decode_partial_key(key_material: &[u8]) -> Result<Self::Suffix, codec::Error> {
+					<Key<[<$suffix $suffix>], $suffix>>::decode_final_key(key_material).map(|k| k.0)
+				}
+			}
+		}
+	};
+}
+
+impl<A: FullCodec, B: FullCodec, X: StorageHasher, Y: StorageHasher> HasKeyPrefix<A> for (Key<X, A>, Key<Y, B>) {
+	type Suffix = B;
+
+	fn partial_key(prefix: A) -> Vec<u8> {
+		<Key<X, A>>::final_key(prefix)
+	}
+}
+
+impl<A: FullCodec, B: FullCodec, X: ReversibleStorageHasher, Y: ReversibleStorageHasher>
+	HasReversibleKeyPrefix<A> for (Key<X, A>, Key<Y, B>)
+{
+	fn decode_partial_key(key_material: &[u8]) -> Result<B, codec::Error> {
+		<Key<Y, B>>::decode_final_key(key_material).map(|k| k.0)
+	}
+}
+
+impl_key_prefix_for!((A, B, C), (A, B), C);
+impl_key_prefix_for!((A, B, C), A, (B, C));
+impl_key_prefix_for!((A, B, C, D), (A, B, C), D);
+impl_key_prefix_for!((A, B, C, D), (A, B), (C, D));
+impl_key_prefix_for!((A, B, C, D), A, (B, C, D));
+impl_key_prefix_for!((A, B, C, D, E), (A, B, C, D), E);
+impl_key_prefix_for!((A, B, C, D, E), (A, B, C), (D, E));
+impl_key_prefix_for!((A, B, C, D, E), (A, B), (C, D, E));
+impl_key_prefix_for!((A, B, C, D, E), A, (B, C, D, E));
+impl_key_prefix_for!((A, B, C, D, E, F), (A, B, C, D, E), F);
+impl_key_prefix_for!((A, B, C, D, E, F), (A, B, C, D), (E, F));
+impl_key_prefix_for!((A, B, C, D, E, F), (A, B, C), (D, E, F));
+impl_key_prefix_for!((A, B, C, D, E, F), (A, B), (C, D, E, F));
+impl_key_prefix_for!((A, B, C, D, E, F), A, (B, C, D, E, F));
+impl_key_prefix_for!((A, B, C, D, E, F, G), (A, B, C, D, E, F), G);
+impl_key_prefix_for!((A, B, C, D, E, F, G), (A, B, C, D, E), (F, G));
+impl_key_prefix_for!((A, B, C, D, E, F, G), (A, B, C, D), (E, F, G));
+impl_key_prefix_for!((A, B, C, D, E, F, G), (A, B, C), (D, E, F, G));
+impl_key_prefix_for!((A, B, C, D, E, F, G), (A, B), (C, D, E, F, G));
+impl_key_prefix_for!((A, B, C, D, E, F, G), A, (B, C, D, E, F, G));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H), (A, B, C, D, E, F, G), H);
+impl_key_prefix_for!((A, B, C, D, E, F, G, H), (A, B, C, D, E, F), (G, H));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H), (A, B, C, D, E), (F, G, H));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H), (A, B, C, D), (E, F, G, H));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H), (A, B, C), (D, E, F, G, H));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H), (A, B), (C, D, E, F, G, H));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H), A, (B, C, D, E, F, G, H));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I), (A, B, C, D, E, F, G, H), I);
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I), (A, B, C, D, E, F, G), (H, I));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I), (A, B, C, D, E, F), (G, H, I));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I), (A, B, C, D, E), (F, G, H, I));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I), (A, B, C, D), (E, F, G, H, I));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I), (A, B, C), (D, E, F, G, H, I));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I), (A, B), (C, D, E, F, G, H, I));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I), A, (B, C, D, E, F, G, H, I));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J), (A, B, C, D, E, F, G, H, I), J);
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J), (A, B, C, D, E, F, G, H), (I, J));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J), (A, B, C, D, E, F, G), (H, I, J));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J), (A, B, C, D, E, F), (G, H, I, J));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J), (A, B, C, D, E), (F, G, H, I, J));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J), (A, B, C, D), (E, F, G, H, I, J));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J), (A, B, C), (D, E, F, G, H, I, J));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J), (A, B), (C, D, E, F, G, H, I, J));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J), A, (B, C, D, E, F, G, H, I, J));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K), (A, B, C, D, E, F, G, H, I, J), K);
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K), (A, B, C, D, E, F, G, H, I), (J, K));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K), (A, B, C, D, E, F, G, H), (I, J, K));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K), (A, B, C, D, E, F, G), (H, I, J, K));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K), (A, B, C, D, E, F), (G, H, I, J, K));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K), (A, B, C, D, E), (F, G, H, I, J, K));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K), (A, B, C, D), (E, F, G, H, I, J, K));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K), (A, B, C), (D, E, F, G, H, I, J, K));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K), (A, B), (C, D, E, F, G, H, I, J, K));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K), A, (B, C, D, E, F, G, H, I, J, K));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L), (A, B, C, D, E, F, G, H, I, J, K), L);
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L), (A, B, C, D, E, F, G, H, I, J), (K, L));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L), (A, B, C, D, E, F, G, H, I), (J, K, L));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L), (A, B, C, D, E, F, G, H), (I, J, K, L));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L), (A, B, C, D, E, F, G), (H, I, J, K, L));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L), (A, B, C, D, E, F), (G, H, I, J, K, L));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L), (A, B, C, D, E), (F, G, H, I, J, K, L));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L), (A, B, C, D), (E, F, G, H, I, J, K, L));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L), (A, B, C), (D, E, F, G, H, I, J, K, L));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L), (A, B), (C, D, E, F, G, H, I, J, K, L));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L), A, (B, C, D, E, F, G, H, I, J, K, L));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M), (A, B, C, D, E, F, G, H, I, J, K, L), M);
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M), (A, B, C, D, E, F, G, H, I, J, K), (L, M));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M), (A, B, C, D, E, F, G, H, I, J), (K, L, M));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M), (A, B, C, D, E, F, G, H, I), (J, K, L, M));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M), (A, B, C, D, E, F, G, H), (I, J, K, L, M));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M), (A, B, C, D, E, F, G), (H, I, J, K, L, M));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M), (A, B, C, D, E, F), (G, H, I, J, K, L, M));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M), (A, B, C, D, E), (F, G, H, I, J, K, L, M));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M), (A, B, C, D), (E, F, G, H, I, J, K, L, M));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M), (A, B, C), (D, E, F, G, H, I, J, K, L, M));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M), (A, B), (C, D, E, F, G, H, I, J, K, L, M));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M), A, (B, C, D, E, F, G, H, I, J, K, L, M));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N), (A, B, C, D, E, F, G, H, I, J, K, L, M), N);
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N), (A, B, C, D, E, F, G, H, I, J, K, L), (M, N));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N), (A, B, C, D, E, F, G, H, I, J, K), (L, M, N));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N), (A, B, C, D, E, F, G, H, I, J), (K, L, M, N));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N), (A, B, C, D, E, F, G, H, I), (J, K, L, M, N));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N), (A, B, C, D, E, F, G, H), (I, J, K, L, M, N));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N), (A, B, C, D, E, F, G), (H, I, J, K, L, M, N));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N), (A, B, C, D, E, F), (G, H, I, J, K, L, M, N));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N), (A, B, C, D, E), (F, G, H, I, J, K, L, M, N));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N), (A, B, C, D), (E, F, G, H, I, J, K, L, M, N));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N), (A, B, C), (D, E, F, G, H, I, J, K, L, M, N));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N), (A, B), (C, D, E, F, G, H, I, J, K, L, M, N));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N), A, (B, C, D, E, F, G, H, I, J, K, L, M, N));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O), (A, B, C, D, E, F, G, H, I, J, K, L, M, N), O);
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O), (A, B, C, D, E, F, G, H, I, J, K, L, M), (N, O));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O), (A, B, C, D, E, F, G, H, I, J, K, L), (M, N, O));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O), (A, B, C, D, E, F, G, H, I, J, K), (L, M, N, O));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O), (A, B, C, D, E, F, G, H, I, J), (K, L, M, N, O));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O), (A, B, C, D, E, F, G, H, I), (J, K, L, M, N, O));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O), (A, B, C, D, E, F, G, H), (I, J, K, L, M, N, O));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O), (A, B, C, D, E, F, G), (H, I, J, K, L, M, N, O));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O), (A, B, C, D, E, F), (G, H, I, J, K, L, M, N, O));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O), (A, B, C, D, E), (F, G, H, I, J, K, L, M, N, O));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O), (A, B, C, D), (E, F, G, H, I, J, K, L, M, N, O));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O), (A, B, C), (D, E, F, G, H, I, J, K, L, M, N, O));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O), (A, B), (C, D, E, F, G, H, I, J, K, L, M, N, O));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O), A, (B, C, D, E, F, G, H, I, J, K, L, M, N, O));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P), (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O), P);
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P), (A, B, C, D, E, F, G, H, I, J, K, L, M, N), (O, P));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P), (A, B, C, D, E, F, G, H, I, J, K, L, M), (N, O, P));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P), (A, B, C, D, E, F, G, H, I, J, K, L), (M, N, O, P));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P), (A, B, C, D, E, F, G, H, I, J, K), (L, M, N, O, P));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P), (A, B, C, D, E, F, G, H, I, J), (K, L, M, N, O, P));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P), (A, B, C, D, E, F, G, H, I), (J, K, L, M, N, O, P));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P), (A, B, C, D, E, F, G, H), (I, J, K, L, M, N, O, P));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P), (A, B, C, D, E, F, G), (H, I, J, K, L, M, N, O, P));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P), (A, B, C, D, E, F), (G, H, I, J, K, L, M, N, O, P));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P), (A, B, C, D, E), (F, G, H, I, J, K, L, M, N, O, P));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P), (A, B, C, D), (E, F, G, H, I, J, K, L, M, N, O, P));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P), (A, B, C), (D, E, F, G, H, I, J, K, L, M, N, O, P));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P), (A, B), (C, D, E, F, G, H, I, J, K, L, M, N, O, P));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P), A, (B, C, D, E, F, G, H, I, J, K, L, M, N, O, P));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q), (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P), Q);
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q), (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O), (P, Q));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q), (A, B, C, D, E, F, G, H, I, J, K, L, M, N), (O, P, Q));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q), (A, B, C, D, E, F, G, H, I, J, K, L, M), (N, O, P, Q));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q), (A, B, C, D, E, F, G, H, I, J, K, L), (M, N, O, P, Q));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q), (A, B, C, D, E, F, G, H, I, J, K), (L, M, N, O, P, Q));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q), (A, B, C, D, E, F, G, H, I, J), (K, L, M, N, O, P, Q));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q), (A, B, C, D, E, F, G, H, I), (J, K, L, M, N, O, P, Q));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q), (A, B, C, D, E, F, G, H), (I, J, K, L, M, N, O, P, Q));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q), (A, B, C, D, E, F, G), (H, I, J, K, L, M, N, O, P, Q));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q), (A, B, C, D, E, F), (G, H, I, J, K, L, M, N, O, P, Q));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q), (A, B, C, D, E), (F, G, H, I, J, K, L, M, N, O, P, Q));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q), (A, B, C, D), (E, F, G, H, I, J, K, L, M, N, O, P, Q));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q), (A, B, C), (D, E, F, G, H, I, J, K, L, M, N, O, P, Q));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q), (A, B), (C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q), A, (B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R), (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q), R);
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R), (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P), (Q, R));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R), (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O), (P, Q, R));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R), (A, B, C, D, E, F, G, H, I, J, K, L, M, N), (O, P, Q, R));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R), (A, B, C, D, E, F, G, H, I, J, K, L, M), (N, O, P, Q, R));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R), (A, B, C, D, E, F, G, H, I, J, K, L), (M, N, O, P, Q, R));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R), (A, B, C, D, E, F, G, H, I, J, K), (L, M, N, O, P, Q, R));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R), (A, B, C, D, E, F, G, H, I, J), (K, L, M, N, O, P, Q, R));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R), (A, B, C, D, E, F, G, H, I), (J, K, L, M, N, O, P, Q, R));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R), (A, B, C, D, E, F, G, H), (I, J, K, L, M, N, O, P, Q, R));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R), (A, B, C, D, E, F, G), (H, I, J, K, L, M, N, O, P, Q, R));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R), (A, B, C, D, E, F), (G, H, I, J, K, L, M, N, O, P, Q, R));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R), (A, B, C, D, E), (F, G, H, I, J, K, L, M, N, O, P, Q, R));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R), (A, B, C, D), (E, F, G, H, I, J, K, L, M, N, O, P, Q, R));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R), (A, B, C), (D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R), (A, B), (C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R));
+impl_key_prefix_for!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R), A, (B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R));
