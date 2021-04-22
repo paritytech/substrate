@@ -661,7 +661,7 @@ impl<T: Config> SessionInterface<<T as frame_system::Config>::AccountId> for T w
 	}
 
 	fn validators() -> Vec<<T as frame_system::Config>::AccountId> {
-		<pallet_session::Module<T>>::validators()
+		<pallet_session::Module<T>>::validators().to_vec()
 	}
 
 	fn prune_historical_up_to(up_to: SessionIndex) {

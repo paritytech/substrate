@@ -3099,7 +3099,7 @@ fn six_session_delay() {
 	ExtBuilder::default().initialize_first_session(false).build_and_execute(|| {
 		use pallet_session::SessionManager;
 
-		let val_set = Session::validators();
+		let val_set = Session::validators().to_vec();
 		let init_session = Session::current_index();
 		let init_active_era = Staking::active_era().unwrap().index;
 

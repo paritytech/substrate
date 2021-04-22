@@ -452,7 +452,7 @@ impl ExtBuilder {
 
 		let mut ext = sp_io::TestExternalities::from(storage);
 		ext.execute_with(|| {
-			let validators = Session::validators();
+			let validators = Session::validators().to_vec();
 			SESSION.with(|x| *x.borrow_mut() = (validators.clone(), HashSet::new()));
 		});
 
