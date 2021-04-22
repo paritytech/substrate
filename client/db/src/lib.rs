@@ -709,10 +709,10 @@ impl<Block: BlockT> BlockImportOperation<Block> {
 				OffchainOverlayedChange::Remove =>
 					transaction.remove(columns::OFFCHAIN, &key),
 			}
+		}
 
-			if count > 0 {
-				log::debug!(target: "sc_offchain", "Applied {} offchain indexing changes.", count);
-			}
+		if count > 0 {
+			log::debug!(target: "sc_offchain", "Applied {} offchain indexing changes.", count);
 		}
 	}
 
