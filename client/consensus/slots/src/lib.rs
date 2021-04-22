@@ -313,6 +313,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				logs,
 			},
 			proposing_remaining_duration.mul_f32(0.98),
+			None,
 		).map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e)));
 
 		let proposal = match futures::future::select(proposing, proposing_remaining).await {
@@ -398,6 +399,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		let header = block_import_params.post_header();
 		if let Err(err) = block_import
 			.import_block(block_import_params, Default::default())
+			.await
 		{
 			warn!(
 				target: logging_target,
@@ -534,7 +536,7 @@ pub enum Error<T> where T: Debug {
 	SlotDurationInvalid(SlotDuration<T>),
 }
 
-/// A slot duration. Create with `get_or_compute`.
+/// A slot duration. Create with [`get_or_compute`](Self::get_or_compute).
 // The internal member should stay private here to maintain invariants of
 // `get_or_compute`.
 #[derive(Clone, Copy, Debug, Encode, Decode, Hash, PartialOrd, Ord, PartialEq, Eq)]
@@ -582,7 +584,7 @@ impl<T: Clone + Send + Sync + 'static> SlotDuration<T> {
 					cb(client.runtime_api(), &BlockId::number(Zero::zero()))?;
 
 				info!(
-					"⏱  Loaded block-time = {:?} milliseconds from genesis on first-launch",
+					"⏱  Loaded block-time = {:?} from genesis on first-launch",
 					genesis_slot_duration.slot_duration()
 				);
 
@@ -792,6 +794,7 @@ mod test {
 			timestamp: Default::default(),
 			inherent_data: Default::default(),
 			ends_at: Instant::now(),
+			block_size_limit: None,
 		}
 	}
 

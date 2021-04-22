@@ -381,7 +381,7 @@ macro_rules! implement_fixed {
 			}
 
 			#[cfg(any(feature = "std", test))]
-			pub fn to_fraction(self) -> f64 {
+			pub fn to_float(self) -> f64 {
 				self.0 as f64 / <Self as FixedPointNumber>::DIV as f64
 			}
 		}

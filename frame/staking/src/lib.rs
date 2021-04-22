@@ -313,8 +313,6 @@ use sp_staking::{
 	SessionIndex,
 	offence::{OnOffenceHandler, OffenceDetails, Offence, ReportOffence, OffenceError},
 };
-#[cfg(feature = "std")]
-use sp_runtime::{Serialize, Deserialize};
 use frame_system::{
 	self as system, ensure_signed, ensure_root,
 	offchain::SendTransactionTypes,
@@ -380,7 +378,7 @@ pub struct EraRewardPoints<AccountId: Ord> {
 
 /// Indicates the initial status of the staker.
 #[derive(RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum StakerStatus<AccountId> {
 	/// Chilling.
 	Idle,
@@ -793,7 +791,7 @@ pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
 
 /// Mode of era-forcing.
 #[derive(Copy, Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum Forcing {
 	/// Not forcing anything - just let whatever happen.
 	NotForcing,
@@ -1036,30 +1034,15 @@ pub mod migrations {
 
 	pub mod v6 {
 		use super::*;
-		use frame_support::{traits::Get, weights::Weight, pallet_prelude::*};
-
-		macro_rules! generate_storage_types {
-			($name:ident => Value<$value:ty>) => {
-				paste::paste! {
-					struct [<$name Instance>];
-					impl frame_support::traits::StorageInstance for [<$name Instance>] {
-						fn pallet_prefix() -> &'static str {
-							"Staking"
-						}
-						const STORAGE_PREFIX: &'static str = stringify!($name);
-					}
-					type $name = StorageValue<[<$name Instance>], $value, ValueQuery>;
-				}
-			}
-		}
+		use frame_support::{traits::Get, weights::Weight, generate_storage_alias};
 
 		// NOTE: value type doesn't matter, we just set it to () here.
-		generate_storage_types!(SnapshotValidators => Value<()>);
-		generate_storage_types!(SnapshotNominators => Value<()>);
-		generate_storage_types!(QueuedElected => Value<()>);
-		generate_storage_types!(QueuedScore => Value<()>);
-		generate_storage_types!(EraElectionStatus => Value<()>);
-		generate_storage_types!(IsCurrentSessionFinal => Value<()>);
+		generate_storage_alias!(Staking, SnapshotValidators => Value<()>);
+		generate_storage_alias!(Staking, SnapshotNominators => Value<()>);
+		generate_storage_alias!(Staking, QueuedElected => Value<()>);
+		generate_storage_alias!(Staking, QueuedScore => Value<()>);
+		generate_storage_alias!(Staking, EraElectionStatus => Value<()>);
+		generate_storage_alias!(Staking, IsCurrentSessionFinal => Value<()>);
 
 		/// check to execute prior to migration.
 		pub fn pre_migrate<T: Config>() -> Result<(), &'static str> {

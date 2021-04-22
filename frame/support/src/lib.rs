@@ -75,10 +75,14 @@ pub use self::hash::{
 };
 pub use self::storage::{
 	StorageValue, StorageMap, StorageDoubleMap, StoragePrefixedMap, IterableStorageMap,
-	IterableStorageDoubleMap, migration
+	IterableStorageDoubleMap, migration,
+	bounded_vec::{self, BoundedVec},
 };
 pub use self::dispatch::{Parameter, Callable};
 pub use sp_runtime::{self, ConsensusEngineId, print, traits::Printable};
+
+use codec::{Encode, Decode};
+use sp_runtime::TypeId;
 
 /// A unified log target for support operations.
 pub const LOG_TARGET: &'static str = "runtime::frame-support";
@@ -86,6 +90,131 @@ pub const LOG_TARGET: &'static str = "runtime::frame-support";
 /// A type that cannot be instantiated.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Never {}
+
+/// A pallet identifier. These are per pallet and should be stored in a registry somewhere.
+#[derive(Clone, Copy, Eq, PartialEq, Encode, Decode)]
+pub struct PalletId(pub [u8; 8]);
+
+impl TypeId for PalletId {
+	const TYPE_ID: [u8; 4] = *b"modl";
+}
+
+/// Generate a new type alias for [`storage::types::StorageValue`],
+/// [`storage::types::StorageMap`] and [`storage::types::StorageDoubleMap`].
+///
+/// Useful for creating a *storage-like* struct for test and migrations.
+///
+///```
+/// # use frame_support::generate_storage_alias;
+/// use frame_support::codec;
+/// use frame_support::Twox64Concat;
+/// // generate a storage value with type u32.
+/// generate_storage_alias!(Prefix, StorageName => Value<u32>);
+///
+/// // generate a double map from `(u32, u32)` (with hasher `Twox64Concat`) to `Vec<u8>`
+/// generate_storage_alias!(
+/// 	OtherPrefix, OtherStorageName => DoubleMap<
+/// 		(u32, u32),
+/// 		(u32, u32),
+/// 		Vec<u8>
+/// 	>
+/// );
+///
+/// // generate a map from `Config::AccountId` (with hasher `Twox64Concat`) to `Vec<u8>`
+/// trait Config { type AccountId: codec::FullCodec; }
+/// generate_storage_alias!(
+/// 	Prefix, GenericStorage<T: Config> => Map<(Twox64Concat, T::AccountId), Vec<u8>>
+/// );
+/// # fn main() {}
+/// ```
+#[macro_export]
+macro_rules! generate_storage_alias {
+	// without generic for $name.
+	($pallet:ident, $name:ident => Map<($key:ty, $hasher:ty), $value:ty>) => {
+		$crate::paste::paste! {
+			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
+			type $name = $crate::storage::types::StorageMap<
+				[<$name Instance>],
+				$hasher,
+				$key,
+				$value,
+			>;
+		}
+	};
+	($pallet:ident, $name:ident => DoubleMap<($key1:ty, $hasher1:ty), ($key2:ty, $hasher2:ty), $value:ty>) => {
+		$crate::paste::paste! {
+			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
+			type $name = $crate::storage::types::StorageDoubleMap<
+				[<$name Instance>],
+				$hasher1,
+				$key1,
+				$hasher2,
+				$key2,
+				$value,
+			>;
+		}
+	};
+	($pallet:ident, $name:ident => Value<$value:ty>) => {
+		$crate::paste::paste! {
+			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
+			type $name = $crate::storage::types::StorageValue<
+				[<$name Instance>],
+				$value,
+			>;
+		}
+	};
+	// with generic for $name.
+	($pallet:ident, $name:ident<$t:ident : $bounds:tt> => Map<($key:ty, $hasher:ty), $value:ty>) => {
+		$crate::paste::paste! {
+			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
+			#[allow(type_alias_bounds)]
+			type $name<$t : $bounds> = $crate::storage::types::StorageMap<
+				[<$name Instance>],
+				$key,
+				$hasher,
+				$value,
+			>;
+		}
+	};
+	(
+		$pallet:ident,
+		$name:ident<$t:ident : $bounds:tt>
+		=> DoubleMap<($key1:ty, $hasher1:ty), ($key2:ty, $hasher2:ty), $value:ty>) => {
+		$crate::paste::paste! {
+			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
+			#[allow(type_alias_bounds)]
+			type $name<$t : $bounds> = $crate::storage::types::StorageDoubleMap<
+				[<$name Instance>],
+				$key1,
+				$hasher1,
+				$key2,
+				$hasher2,
+				$value,
+			>;
+		}
+	};
+	($pallet:ident, $name:ident<$t:ident : $bounds:tt> => Value<$value:ty>) => {
+		$crate::paste::paste! {
+			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
+			#[allow(type_alias_bounds)]
+			type $name<$t : $bounds> = $crate::storage::types::StorageValue<
+				[<$name Instance>],
+				$value,
+				$crate::storage::types::ValueQuery,
+			>;
+		}
+	};
+	// helper used in all arms.
+	(@GENERATE_INSTANCE_STRUCT $pallet:ident, $name:ident) => {
+		$crate::paste::paste! {
+			struct [<$name Instance>];
+			impl $crate::traits::StorageInstance for [<$name Instance>] {
+				fn pallet_prefix() -> &'static str { stringify!($pallet) }
+				const STORAGE_PREFIX: &'static str = stringify!($name);
+			}
+		}
+	};
+}
 
 /// Create new implementations of the [`Get`](crate::traits::Get) trait.
 ///
@@ -250,21 +379,20 @@ macro_rules! parameter_types {
 		}
 	};
 	(
-		$(
-			$( #[ $attr:meta ] )*
-			$vis:vis static $name:ident: $type:ty = $value:expr;
-		)*
+		$( #[ $attr:meta ] )*
+		$vis:vis static $name:ident: $type:ty = $value:expr;
+		$( $rest:tt )*
 	) => (
 		$crate::parameter_types_impl_thread_local!(
-			$(
-				$( #[ $attr ] )*
-				$vis static $name: $type = $value;
-			)*
+			$( #[ $attr ] )*
+			$vis static $name: $type = $value;
 		);
+		$crate::parameter_types!( $( $rest )* );
 	);
 }
 
 #[cfg(not(feature = "std"))]
+#[doc(inline)]
 #[macro_export]
 macro_rules! parameter_types_impl_thread_local {
 	( $( $any:tt )* ) => {
@@ -273,6 +401,7 @@ macro_rules! parameter_types_impl_thread_local {
 }
 
 #[cfg(feature = "std")]
+#[doc(inline)]
 #[macro_export]
 macro_rules! parameter_types_impl_thread_local {
 	(
@@ -330,12 +459,15 @@ macro_rules! ord_parameter_types {
 	);
 	() => ();
 	(IMPL $name:ident , $type:ty , $value:expr) => {
-		impl $crate::traits::Contains<$type> for $name {
+		impl $crate::traits::SortedMembers<$type> for $name {
 			fn contains(t: &$type) -> bool { &$value == t }
 			fn sorted_members() -> $crate::sp_std::prelude::Vec<$type> { vec![$value] }
 			fn count() -> usize { 1 }
 			#[cfg(feature = "runtime-benchmarks")]
 			fn add(_: &$type) {}
+		}
+		impl $crate::traits::Contains<$type> for $name {
+			fn contains(t: &$type) -> bool { &$value == t }
 		}
 	}
 }
@@ -441,6 +573,25 @@ pub use frame_support_procedural::PartialEqNoBound;
 /// }
 /// ```
 pub use frame_support_procedural::DebugNoBound;
+
+/// Derive [`Default`] but do not bound any generic.
+///
+/// This is useful for type generic over runtime:
+/// ```
+/// # use frame_support::DefaultNoBound;
+/// # use core::default::Default;
+/// trait Config {
+///		type C: Default;
+/// }
+///
+/// // Foo implements [`Default`] because `C` bounds [`Default`].
+/// // Otherwise compilation will fail with an output telling `c` doesn't implement [`Default`].
+/// #[derive(DefaultNoBound)]
+/// struct Foo<T: Config> {
+///		c: T::C,
+/// }
+/// ```
+pub use frame_support_procedural::DefaultNoBound;
 
 /// Assert the annotated function is executed within a storage transaction.
 ///
@@ -1066,6 +1217,12 @@ pub mod tests {
 			assert_eq!(300, StorageParameter::get());
 		})
 	}
+
+	parameter_types! {
+		pub const BlockHashCount: u64 = 250;
+		pub static Members: Vec<u64> = vec![];
+		pub const Foo: Option<u64> = None;
+	}
 }
 
 /// Prelude to be used alongside pallet macro, for ease of use.
@@ -1077,7 +1234,7 @@ pub mod pallet_prelude {
 		EqNoBound, PartialEqNoBound, RuntimeDebugNoBound, DebugNoBound, CloneNoBound, Twox256,
 		Twox128, Blake2_256, Blake2_128, Identity, Twox64Concat, Blake2_128Concat, ensure,
 		RuntimeDebug, storage,
-		traits::{Get, Hooks, IsType, GetPalletVersion, EnsureOrigin},
+		traits::{Get, Hooks, IsType, GetPalletVersion, EnsureOrigin, PalletInfoAccess},
 		dispatch::{DispatchResultWithPostInfo, Parameter, DispatchError, DispatchResult},
 		weights::{DispatchClass, Pays, Weight},
 		storage::types::{StorageValue, StorageMap, StorageDoubleMap, ValueQuery, OptionQuery},
@@ -1204,6 +1361,10 @@ pub mod pallet_prelude {
 /// * `ModuleErrorMetadata`: using error declared or no metadata.
 ///
 /// It declare `type Module` type alias for `Pallet`, used by [`construct_runtime`].
+///
+/// It implements [`traits::PalletInfoAccess`] on `Pallet` to ease access to pallet informations
+/// given by [`frame_support::traits::PalletInfo`].
+/// (The implementation use the associated type `frame_system::Config::PalletInfo`).
 ///
 /// If attribute generate_store then macro create the trait `Store` and implement it on `Pallet`.
 ///
@@ -1782,6 +1943,10 @@ pub mod pallet_prelude {
 /// 		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
 /// 			unimplemented!();
 /// 		}
+///
+/// 		fn is_inherent(_call: &Self::Call) -> bool {
+/// 			unimplemented!();
+/// 		}
 /// 	}
 ///
 /// 	// Regular rust code needed for implementing ProvideInherent trait
@@ -1907,6 +2072,10 @@ pub mod pallet_prelude {
 /// 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 ///
 /// 		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
+/// 			unimplemented!();
+/// 		}
+///
+/// 		fn is_inherent(_call: &Self::Call) -> bool {
 /// 			unimplemented!();
 /// 		}
 /// 	}

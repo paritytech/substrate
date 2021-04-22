@@ -127,6 +127,7 @@ pub async fn seal_block<B, BI, SC, C, E, P>(
 			id.clone(),
 			digest,
 			Duration::from_secs(MAX_PROPOSAL_DURATION),
+			None,
 		).map_err(|err| Error::StringError(format!("{:?}", err))).await?;
 
 		if proposal.block.extrinsics().len() == inherents_len && !create_empty {
@@ -144,7 +145,7 @@ pub async fn seal_block<B, BI, SC, C, E, P>(
 			digest_provider.append_block_import(&parent, &mut params, &id)?;
 		}
 
-		match block_import.import_block(params, HashMap::new())? {
+		match block_import.import_block(params, HashMap::new()).await? {
 			ImportResult::Imported(aux) => {
 				Ok(CreatedBlock { hash: <B as BlockT>::Header::hash(&header), aux })
 			},
