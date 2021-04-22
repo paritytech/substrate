@@ -21,7 +21,7 @@ use std::time::Instant;
 
 use parking_lot::Mutex;
 use tracing::{Dispatch, dispatcher, Subscriber, Level, span::{Attributes, Record, Id}};
-use tracing_subscriber::{CurrentSpan, filter::{EnvFilter, Directive}, layer::SubscriberExt};
+use tracing_subscriber::CurrentSpan;
 
 use sc_client_api::BlockBackend;
 use sc_rpc_server::MAX_PAYLOAD;
