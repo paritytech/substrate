@@ -289,10 +289,10 @@ where
 			fn consume(
 				mut self,
 			) -> Option<(AuthoritySet<H, N>, SharedDataLocked<'a, AuthoritySet<H, N>>)> {
-				self.old.take().map(|old| { (
+				self.old.take().map(|old| (
 						old,
 						self.guard.take().expect("only taken on deconstruction; qed"),
-					) })
+				))
 			}
 		}
 

@@ -392,16 +392,16 @@ fn start_rpc_servers<
 	fn maybe_start_server<T, F>(address: Option<SocketAddr>, mut start: F) -> Result<Option<T>, io::Error>
 		where F: FnMut(&SocketAddr) -> Result<T, io::Error>,
 	{
-		Ok(address.map(|mut address| { start(&address)
-				.or_else(|e| match e.kind() {
-					io::ErrorKind::AddrInUse |
-					io::ErrorKind::PermissionDenied => {
-						warn!("Unable to bind RPC server to {}. Trying random port.", address);
-						address.set_port(0);
-						start(&address)
-					},
-					_ => Err(e),
-				}) }).transpose()?)
+		address.map(|mut address| start(&address)
+		.or_else(|e| match e.kind() {
+			io::ErrorKind::AddrInUse |
+			io::ErrorKind::PermissionDenied => {
+				warn!("Unable to bind RPC server to {}. Trying random port.", address);
+				address.set_port(0);
+				start(&address)
+			},
+			_ => Err(e),
+		}) ).transpose()
 	}
 
 	fn deny_unsafe(addr: &SocketAddr, methods: &RpcMethods) -> sc_rpc::DenyUnsafe {
