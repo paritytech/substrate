@@ -1083,6 +1083,7 @@ pub trait Logging {
 		}
 	}
 
+	/// Returns the max log level used by the host.
 	fn max_level() -> LogLevelFilter {
 		log::max_level().into()
 	}

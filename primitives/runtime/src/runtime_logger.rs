@@ -40,22 +40,15 @@ impl RuntimeLogger {
 		static LOGGER: RuntimeLogger = RuntimeLogger;
 		let _ = log::set_logger(&LOGGER);
 
-		// Set max level to `TRACE` to ensure we propagate
-		// all log entries to the native side that will do the
-		// final filtering on what should be printed.
-		//
-		// If we don't set any level, logging is disabled
-		// completly.
+		// Use the same max log level as used by the host.
 		log::set_max_level(sp_io::logging::max_level().into());
 	}
 }
 
 impl log::Log for RuntimeLogger {
-	fn enabled(&self, _metadata: &log::Metadata) -> bool {
-		// to avoid calling to host twice, we pass everything
-		// and let the host decide what to print.
-		// If someone is initializing the logger they should
-		// know what they are doing.
+	fn enabled(&self, _: &log::Metadata) -> bool {
+		// The final filtering is done by the host. This is not perfect, as we would still call into
+		// the host for log lines that will be thrown away.
 		true
 	}
 

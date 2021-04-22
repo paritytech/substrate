@@ -281,7 +281,7 @@ pub trait TypeId {
 
 /// A log level matching the one from `log` crate.
 ///
-/// Used internally by `sp_io::log` method.
+/// Used internally by `sp_io::logging::log` method.
 #[derive(Encode, Decode, PassByEnum, Copy, Clone)]
 pub enum LogLevel {
 	/// `Error` log level.
@@ -334,20 +334,22 @@ impl From<LogLevel> for log::Level {
 	}
 }
 
-/// TODO
+/// Log level filter that expresses which log levels should be filtered.
+///
+/// This enum matches the [`log::LogLevelFilter`] enum.
 #[derive(Encode, Decode, PassByEnum, Copy, Clone)]
 pub enum LogLevelFilter {
-	/// `Off` log level.
+	/// `Off` log level filter.
 	Off = 0,
-	/// `Error` log level.
+	/// `Error` log level filter.
 	Error = 1,
-	/// `Warn` log level.
+	/// `Warn` log level filter.
 	Warn = 2,
-	/// `Info` log level.
+	/// `Info` log level filter.
 	Info = 3,
-	/// `Debug` log level.
+	/// `Debug` log level filter.
 	Debug = 4,
-	/// `Trace` log level.
+	/// `Trace` log level filter.
 	Trace = 5,
 }
 
