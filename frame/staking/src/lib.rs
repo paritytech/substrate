@@ -854,7 +854,7 @@ decl_storage! {
 		/// Any validators that may never be slashed or forcibly kicked. It's a Vec since they're
 		/// easy to initialize and the performance hit is minimal (we expect no more than four
 		/// invulnerables) and restricted to testnets.
-		pub Invulnerables get(fn invulnerables) config(): BoundedVec<T::AccountId, T::MaxValidators>;
+		pub Invulnerables get(fn invulnerables): BoundedVec<T::AccountId, T::MaxValidators>;
 
 		/// Map from all locked "stash" accounts to the controller account.
 		pub Bonded get(fn bonded): map hasher(twox_64_concat) T::AccountId => Option<T::AccountId>;
@@ -1005,7 +1005,11 @@ decl_storage! {
 	add_extra_genesis {
 		config(stakers):
 			Vec<(T::AccountId, T::AccountId, BalanceOf<T>, StakerStatus<T::AccountId>)>;
+		config(invulnerables): Vec<T::AccountId>;
 		build(|config: &GenesisConfig<T>| {
+			let bounded_invulnerables: BoundedVec<T::AccountId, T::MaxValidators>
+				= config.invulnerables.clone().try_into().expect("Too many invulnerables!");
+			Invulnerables::<T>::put(bounded_invulnerables);
 			for &(ref stash, ref controller, balance, ref status) in &config.stakers {
 				assert!(
 					T::Currency::free_balance(&stash) >= balance,
