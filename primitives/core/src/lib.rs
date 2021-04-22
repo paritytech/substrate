@@ -334,6 +334,51 @@ impl From<LogLevel> for log::Level {
 	}
 }
 
+/// TODO
+#[derive(Encode, Decode, PassByEnum, Copy, Clone)]
+pub enum LogLevelFilter {
+	/// `Off` log level.
+	Off = 0,
+	/// `Error` log level.
+	Error = 1,
+	/// `Warn` log level.
+	Warn = 2,
+	/// `Info` log level.
+	Info = 3,
+	/// `Debug` log level.
+	Debug = 4,
+	/// `Trace` log level.
+	Trace = 5,
+}
+
+impl From<LogLevelFilter> for log::LevelFilter {
+	fn from(l: LogLevelFilter) -> Self {
+		use self::LogLevelFilter::*;
+		match l {
+			Off => Self::Off,
+			Error => Self::Error,
+			Warn => Self::Warn,
+			Info => Self::Info,
+			Debug => Self::Debug,
+			Trace => Self::Trace,
+		}
+	}
+}
+
+impl From<log::LevelFilter> for LogLevelFilter {
+	fn from(l: log::LevelFilter) -> Self {
+		use log::LevelFilter::*;
+		match l {
+			Off => Self::Off,
+			Error => Self::Error,
+			Warn => Self::Warn,
+			Info => Self::Info,
+			Debug => Self::Debug,
+			Trace => Self::Trace,
+		}
+	}
+}
+
 /// Encodes the given value into a buffer and returns the pointer and the length as a single `u64`.
 ///
 /// When Substrate calls into Wasm it expects a fixed signature for functions exported

@@ -46,7 +46,7 @@ impl RuntimeLogger {
 		//
 		// If we don't set any level, logging is disabled
 		// completly.
-		log::set_max_level(log::LevelFilter::Trace);
+		log::set_max_level(sp_io::logging::max_level().into());
 	}
 }
 
@@ -81,11 +81,13 @@ mod tests {
 		TestClientBuilder, runtime::TestAPI,
 	};
 	use sp_api::{ProvideRuntimeApi, BlockId};
+	use std::{env, str::FromStr};
 
 	#[test]
-	fn ensure_runtime_logger_works() {
-		if std::env::var("RUN_TEST").is_ok() {
+	fn ensure_runtime_logger_respects_host_max_log_level() {
+		if env::var("RUN_TEST").is_ok() {
 			sp_tracing::try_init_simple();
+			log::set_max_level(log::LevelFilter::from_str(&env::var("RUST_LOG").unwrap()).unwrap());
 
 			let client = TestClientBuilder::new()
 				.set_execution_strategy(ExecutionStrategy::AlwaysWasm).build();
@@ -93,16 +95,18 @@ mod tests {
 			let block_id = BlockId::Number(0);
 			runtime_api.do_trace_log(&block_id).expect("Logging should not fail");
 		} else {
-			let executable = std::env::current_exe().unwrap();
-			let output = std::process::Command::new(executable)
-				.env("RUN_TEST", "1")
-				.env("RUST_LOG", "trace")
-				.args(&["--nocapture", "ensure_runtime_logger_works"])
-				.output()
-				.unwrap();
+			for (level, should_print) in &[("trace", true), ("info", false)] {
+				let executable = std::env::current_exe().unwrap();
+				let output = std::process::Command::new(executable)
+					.env("RUN_TEST", "1")
+					.env("RUST_LOG", level)
+					.args(&["--nocapture", "ensure_runtime_logger_respects_host_max_log_level"])
+					.output()
+					.unwrap();
 
-			let output = dbg!(String::from_utf8(output.stderr).unwrap());
-			assert!(output.contains("Hey I'm runtime"));
+				let output = String::from_utf8(output.stderr).unwrap();
+				assert!(output.contains("Hey I'm runtime") == *should_print);
+			}
 		}
 	}
 }
