@@ -81,6 +81,8 @@ mod tests;
 /// The keys can be inserted manually via RPC (see `author_insertKey`).
 pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"btc!");
 
+pub const HTTP_NODES_REQUEST: &str = "http://localhost:8081/listNodes";
+
 /// Based on the above `KeyTypeId` we need to generate a pallet-specific crypto type wrappers.
 /// We can use from supported crypto kinds (`sr25519`, `ed25519` and `ecdsa`) and augment
 /// the types with this pallet-specific identifier.
@@ -275,9 +277,13 @@ decl_module! {
 //				TransactionType::Raw => Self::fetch_price_and_send_raw_unsigned(block_number),
 //				TransactionType::None => Ok(()),
 //			};
-//			if let Err(e) = res {
-//				debug::error!("Error: {}", e);
-//			}
+
+			let res = Self::fetch_ddc_data_and_send_to_sc(block_number);
+
+			if let Err(e) = res {
+				// TODO: Print ERROR
+				debug::error!("Some error occurred");
+			}
 		}
 	}
 }
@@ -485,6 +491,63 @@ impl<T: Trait> Module<T> {
 //
 //		Ok(())
 //	}
+
+
+	fn fetch_ddc_data_and_send_to_sc(_block_number: T::BlockNumber) -> Result<(), http::Error> {
+		let topology = Self::fetch_ddc_network_topology().map_err(|_| "Failed to fetch topology");
+
+//		debug::info!("Network topology: {:?}", topology);
+
+//		let data = Self::get_nodes_data(topology);
+
+		// send_to_sc(data);
+
+		Ok(())
+	}
+
+//	fn get_nodes_data(topology: Vec<u32>) -> Result<u32, http::Error> {
+//		debug::warn("Topology: {}", topology)
+//	}
+
+	fn fetch_ddc_network_topology() -> Result<(), http::Error> {
+		let request = http::Request::get(HTTP_NODES_REQUEST);
+
+		let deadline = sp_io::offchain::timestamp().add(Duration::from_millis(5_000));
+
+		let pending = request
+			.deadline(deadline)
+			.send()
+			.map_err(|_| http::Error::IoError)?;
+
+		let response = pending.try_wait(deadline)
+			.map_err(|_| http::Error::DeadlineReached)??;
+
+		if response.code != 200 {
+			debug::warn!("Unexpected status code: {}", response.code);
+			return Err(http::Error::Unknown);
+		}
+
+		let body = response.body().collect::<Vec<u8>>();
+
+		// Create a str slice from the body.
+		let body_str = sp_std::str::from_utf8(&body).map_err(|_| {
+			debug::warn!("No UTF8 body");
+			http::Error::Unknown
+		})?;
+
+		debug::info!("Network topology: {:?}", body_str);
+
+		let topology = Self::parse_topology(body_str);
+
+		Ok(())
+	}
+
+	fn parse_topology(topology_str: &str) -> Result<(), http::Error> {
+		let val = lite_json::parse_json(topology_str).ok();
+
+		Ok(())
+
+	}
 
 //	fn fetch_price() -> Result<u32, http::Error> {
 //		// We want to keep the offchain worker execution time reasonable, so we set a hard-coded
