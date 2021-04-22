@@ -161,8 +161,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		id: T::AssetId,
 		who: &T::AccountId,
 		f: DebitFlags,
-	) -> Result<T::Balance, Error<T>> {
-		let details = match Asset::<T>::get(id) {
+	) -> Result<T::Balance, Error::<T, I>> {
+		let details = match Asset::<T, I>::get(id) {
 			Some(details) => details,
 			None => return Err(Error::<T, I>::Unknown),
 		};
@@ -214,7 +214,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> Result<T::Balance, DispatchError> {
 		let actual = Self::reducible_balance(id, target, f.into())?
 			.min(amount);
-		ensure!(actual >= amount, Error::<T>::BalanceLow);
+		ensure!(actual >= amount, Error::<T, I>::BalanceLow);
 
 		let conseq = Self::can_decrease(id, target, actual, f.into());
 		let actual = match conseq.into_result(false) {

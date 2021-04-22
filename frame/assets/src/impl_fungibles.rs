@@ -45,7 +45,7 @@ impl<T: Config<I>, I: 'static> fungibles::Inspect<<T as SystemConfig>::AccountId
 		keep_alive: bool,
 	) -> Self::Balance {
 		let f = DebitFlags { keep_alive, ignore_freezer: false };
-		Pallet::<T>::reducible_balance(asset, who, f).unwrap_or(Zero::zero())
+		Pallet::<T, I>::reducible_balance(asset, who, f).unwrap_or(Zero::zero())
 	}
 
 	fn can_deposit(
@@ -62,18 +62,18 @@ impl<T: Config<I>, I: 'static> fungibles::Inspect<<T as SystemConfig>::AccountId
 		amount: Self::Balance,
 	) -> WithdrawConsequence<Self::Balance> {
 		let f = DebitFlags { keep_alive: false, ignore_freezer: false };
-		Pallet::<T>::can_decrease(asset, who, amount, f)
+		Pallet::<T, I>::can_decrease(asset, who, amount, f)
 	}
 }
 
-impl<T: Config> fungibles::InspectWithoutFreezer<<T as SystemConfig>::AccountId> for Pallet<T> {
+impl<T: Config<I>, I: 'static> fungibles::InspectWithoutFreezer<<T as SystemConfig>::AccountId> for Pallet<T, I> {
 	fn reducible_balance(
 		asset: Self::AssetId,
 		who: &<T as SystemConfig>::AccountId,
 		keep_alive: bool,
 	) -> Self::Balance {
 		let f = DebitFlags { keep_alive, ignore_freezer: true };
-		Pallet::<T>::reducible_balance(asset, who, f).unwrap_or(Zero::zero())
+		Pallet::<T, I>::reducible_balance(asset, who, f).unwrap_or(Zero::zero())
 	}
 
 	fn can_withdraw(
@@ -82,11 +82,11 @@ impl<T: Config> fungibles::InspectWithoutFreezer<<T as SystemConfig>::AccountId>
 		amount: Self::Balance,
 	) -> WithdrawConsequence<Self::Balance> {
 		let f = DebitFlags { keep_alive: false, ignore_freezer: true };
-		Pallet::<T>::can_decrease(asset, who, amount, f)
+		Pallet::<T, I>::can_decrease(asset, who, amount, f)
 	}
 }
 
-impl<T: Config> fungibles::Mutate<<T as SystemConfig>::AccountId> for Pallet<T> {
+impl<T: Config<I>, I: 'static> fungibles::Mutate<<T as SystemConfig>::AccountId> for Pallet<T, I> {
 	fn mint_into(
 		asset: Self::AssetId,
 		who: &<T as SystemConfig>::AccountId,
