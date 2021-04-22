@@ -762,7 +762,7 @@ impl<T: Config> Module<T> {
 					let keys = k.into_iter()
 						.map(|(val, old_keys)| (val.clone(), upgrade(val, old_keys)))
 						.collect::<Vec<_>>();
-						// Should never truncate since queued keys is already bounded.
+					// Should never truncate since queued keys is already bounded.
 					BoundedVec::<(T::ValidatorId, T::Keys), T::MaxValidators>::truncating_from(
 						keys,
 						Some("Session Upgrade Keys"),
