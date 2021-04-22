@@ -948,7 +948,7 @@ impl pallet_erc20::Trait for Runtime {
 }
 
 impl pallet_example_offchain_worker::Trait for Runtime {
-//	type AuthorityId = pallet_example_offchain_worker::crypto::TestAuthId;
+	type AuthorityId = pallet_example_offchain_worker::crypto::TestAuthId;
 	type Call = Call;
 	type Event = Event;
 }
