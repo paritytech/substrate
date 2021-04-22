@@ -18,7 +18,7 @@
 //! Storage key type.
 
 use crate::hash::{ReversibleStorageHasher, StorageHasher};
-use codec::{EncodeLike, FullCodec};
+use codec::{Encode, EncodeLike, FullCodec};
 use paste::paste;
 use sp_std::prelude::*;
 
@@ -38,28 +38,65 @@ pub struct Key<Hasher, KeyType>(
 /// A trait that contains the current key as an associated type.
 pub trait KeyGenerator {
 	type Key: EncodeLike<Self::Key>;
+	type Arg: Encode;
 
-	fn final_key(key: Self::Key) -> Vec<u8>;
+	fn final_key<KArg: EncodeLike<Self::Arg> + TupleToEncodedIter>(key: KArg) -> Vec<u8>;
+	fn final_hash(encoded: &[u8]) -> Vec<u8>;
 }
 
 impl<H: StorageHasher, K: FullCodec> KeyGenerator for Key<H, K> {
 	type Key = K;
+	type Arg = (K,);
 
-	fn final_key(key: Self::Key) -> Vec<u8> {
-		key.using_encoded(H::hash).as_ref().to_vec()
+	fn final_key<KArg: EncodeLike<Self::Arg> + TupleToEncodedIter>(key: KArg) -> Vec<u8> {
+		H::hash(&key.to_encoded_iter().next().expect("should have at least one element!")).as_ref().to_vec()
+	}
+
+	fn final_hash(encoded: &[u8]) -> Vec<u8> {
+		H::hash(encoded).as_ref().to_vec()
 	}
 }
 
 #[impl_trait_for_tuples::impl_for_tuples(2, 18)]
 impl KeyGenerator for Tuple {
 	for_tuples!( type Key = ( #(Tuple::Key),* ); );
+	for_tuples!( type Arg = ( #(Tuple::Key),* ); );
 
-	fn final_key(key: Self::Key) -> Vec<u8> {
+	fn final_key<KArg: EncodeLike<Self::Arg> + TupleToEncodedIter>(key: KArg) -> Vec<u8> {
 		let mut final_key = Vec::new();
+		let mut iter = key.to_encoded_iter();
 		for_tuples!(
-			#( final_key.extend_from_slice(&Tuple::final_key(key.Tuple)); )*
+			#(
+				let next_encoded = iter.next().expect("KArg number should be equal to Key number");
+				final_key.extend_from_slice(&Tuple::final_hash(&next_encoded));
+			)*
 		);
 		final_key
+	}
+
+	fn final_hash(encoded: &[u8]) -> Vec<u8> {
+		panic!("final_hash called on KeyGenerator tuple")
+	}
+}
+
+pub trait TupleToEncodedIter {
+	fn to_encoded_iter(self) -> Box<dyn Iterator<Item = Vec<u8>>>;
+}
+
+impl<A: Encode> TupleToEncodedIter for (A,) {
+	fn to_encoded_iter(self) -> Box<dyn Iterator<Item = Vec<u8>>> {
+		Box::new(sp_std::iter::once(self.0.encode()))
+	}
+}
+
+#[impl_trait_for_tuples::impl_for_tuples(2, 18)]
+#[tuple_types_no_default_trait_bound]
+impl TupleToEncodedIter for Tuple {
+	for_tuples!( where #(Tuple: Encode),* );
+	fn to_encoded_iter(self) -> Box<dyn Iterator<Item = Vec<u8>>> {
+		let mut iter: Box<dyn Iterator<Item = Vec<u8>>> = Box::new(sp_std::iter::empty::<Vec<u8>>());
+		for_tuples!( #(iter = Box::new(iter.chain((self.Tuple,).to_encoded_iter()));)* );
+		iter
 	}
 }
 
@@ -136,18 +173,18 @@ macro_rules! impl_key_prefix_for {
 	(($($keygen:ident),+), $prefix:ident, ($($suffix:ident),+)) => {
 		paste! {
 			impl<$($keygen: FullCodec,)+ $( [<$keygen $keygen>]: StorageHasher),+>
-				HasKeyPrefix<$prefix> for
+				HasKeyPrefix<($prefix,)> for
 				($(Key<[<$keygen $keygen>], $keygen>),+)
 			{
 				type Suffix = ($($suffix),+);
 
-				fn partial_key(prefix: $prefix) -> Vec<u8> {
+				fn partial_key(prefix: ($prefix,)) -> Vec<u8> {
 					<Key<[<$prefix $prefix>], $prefix>>::final_key(prefix)
 				}
 			}
 
 			impl<$($keygen: FullCodec,)+ $( [<$keygen $keygen>]: ReversibleStorageHasher),+>
-				HasReversibleKeyPrefix<$prefix> for
+				HasReversibleKeyPrefix<($prefix,)> for
 				($(Key<[<$keygen $keygen>], $keygen>),+)
 			{
 				fn decode_partial_key(key_material: &[u8]) -> Result<Self::Suffix, codec::Error> {
@@ -181,16 +218,18 @@ macro_rules! impl_key_prefix_for {
 	};
 }
 
-impl<A: FullCodec, B: FullCodec, X: StorageHasher, Y: StorageHasher> HasKeyPrefix<A> for (Key<X, A>, Key<Y, B>) {
+impl<A: FullCodec, B: FullCodec, X: StorageHasher, Y: StorageHasher>
+	HasKeyPrefix<(A,)> for (Key<X, A>, Key<Y, B>)
+{
 	type Suffix = B;
 
-	fn partial_key(prefix: A) -> Vec<u8> {
+	fn partial_key(prefix: (A,)) -> Vec<u8> {
 		<Key<X, A>>::final_key(prefix)
 	}
 }
 
 impl<A: FullCodec, B: FullCodec, X: ReversibleStorageHasher, Y: ReversibleStorageHasher>
-	HasReversibleKeyPrefix<A> for (Key<X, A>, Key<Y, B>)
+	HasReversibleKeyPrefix<(A,)> for (Key<X, A>, Key<Y, B>)
 {
 	fn decode_partial_key(key_material: &[u8]) -> Result<B, codec::Error> {
 		<Key<Y, B>>::decode_final_key(key_material).map(|k| k.0)

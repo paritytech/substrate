@@ -23,7 +23,7 @@ use crate::{
 	storage::{
 		self, unhashed,
 		types::{HasKeyPrefix, HasReversibleKeyPrefix, KeyGenerator, ReversibleKeyGenerator},
-		StorageAppend, PrefixIterator
+		PrefixIterator, StorageAppend, TupleToEncodedIter,
 	},
 	Never, hash::{StorageHasher, Twox128},
 };
@@ -94,7 +94,11 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 	}
 
 	/// Generate the full key used in top storage.
-	fn storage_n_map_final_key<KG: KeyGenerator>(key: KG::Key) -> Vec<u8> {
+	fn storage_n_map_final_key<KG, KArg>(key: KArg) -> Vec<u8>
+	where
+		KG: KeyGenerator,
+		KArg: EncodeLike<KG::Arg> + TupleToEncodedIter,
+	{
 		let module_prefix_hashed = Twox128::hash(Self::module_prefix());
 		let storage_prefix_hashed = Twox128::hash(Self::storage_prefix());
 		let key_hashed = KG::final_key(key);
@@ -119,32 +123,37 @@ where
 {
 	type Query = G::Query;
 
-	fn hashed_key_for(key: K::Key) -> Vec<u8> {
-		Self::storage_n_map_final_key::<K>(key)
+	fn hashed_key_for<KArg: EncodeLike<K::Arg> + TupleToEncodedIter>(key: KArg) -> Vec<u8> {
+		Self::storage_n_map_final_key::<K, _>(key)
 	}
 
-	fn contains_key(key: K::Key) -> bool {
-		unhashed::exists(&Self::storage_n_map_final_key::<K>(key))
+	fn contains_key<KArg: EncodeLike<K::Arg> + TupleToEncodedIter>(key: KArg) -> bool {
+		unhashed::exists(&Self::storage_n_map_final_key::<K, _>(key))
 	}
 
-	fn get(key: K::Key) -> Self::Query {
-		G::from_optional_value_to_query(unhashed::get(&Self::storage_n_map_final_key::<K>(key)))
+	fn get<KArg: EncodeLike<K::Arg> + TupleToEncodedIter>(key: KArg) -> Self::Query {
+		G::from_optional_value_to_query(unhashed::get(&Self::storage_n_map_final_key::<K, _>(key)))
 	}
 
-	fn try_get(key: K::Key) -> Result<V, ()> {
-		unhashed::get(&Self::storage_n_map_final_key::<K>(key)).ok_or(())
+	fn try_get<KArg: EncodeLike<K::Arg> + TupleToEncodedIter>(key: KArg) -> Result<V, ()> {
+		unhashed::get(&Self::storage_n_map_final_key::<K, _>(key)).ok_or(())
 	}
 
-	fn take(key: K::Key) -> Self::Query {
-		let final_key = Self::storage_n_map_final_key::<K>(key);
+	fn take<KArg: EncodeLike<K::Arg> + TupleToEncodedIter>(key: KArg) -> Self::Query {
+		let final_key = Self::storage_n_map_final_key::<K, _>(key);
 
 		let value = unhashed::take(&final_key);
 		G::from_optional_value_to_query(value)
 	}
 
-	fn swap<KOther: KeyGenerator>(key1: K::Key, key2: KOther::Key) {
-		let final_x_key = Self::storage_n_map_final_key::<K>(key1);
-		let final_y_key = Self::storage_n_map_final_key::<KOther>(key2);
+	fn swap<KOther, KArg1, KArg2>(key1: KArg1, key2: KArg2)
+	where
+		KOther: KeyGenerator,
+		KArg1: EncodeLike<K::Arg> + TupleToEncodedIter,
+		KArg2: EncodeLike<KOther::Arg> + TupleToEncodedIter,
+	{
+		let final_x_key = Self::storage_n_map_final_key::<K, _>(key1);
+		let final_y_key = Self::storage_n_map_final_key::<KOther, _>(key2);
 
 		let v1 = unhashed::get_raw(&final_x_key);
 		if let Some(val) = unhashed::get_raw(&final_y_key) {
@@ -159,19 +168,19 @@ where
 		}
 	}
 
-	fn insert<VArg: EncodeLike<V>>(key: K::Key, val: VArg) {
-		unhashed::put(&Self::storage_n_map_final_key::<K>(key), &val.borrow());
+	fn insert<KArg: EncodeLike<K::Arg> + TupleToEncodedIter, VArg: EncodeLike<V>>(key: KArg, val: VArg) {
+		unhashed::put(&Self::storage_n_map_final_key::<K, _>(key), &val.borrow());
 	}
 
-	fn remove(key: K::Key) {
-		unhashed::kill(&Self::storage_n_map_final_key::<K>(key));
+	fn remove<KArg: EncodeLike<K::Arg> + TupleToEncodedIter>(key: KArg) {
+		unhashed::kill(&Self::storage_n_map_final_key::<K, _>(key));
 	}
 
 	fn remove_prefix<KP>(partial_key: KP) where K: HasKeyPrefix<KP> {
 		unhashed::kill_prefix(&Self::storage_n_map_partial_key(partial_key));
 	}
 
-	fn iter_prefix_values<KP:>(partial_key: KP) -> PrefixIterator<V>
+	fn iter_prefix_values<KP>(partial_key: KP) -> PrefixIterator<V>
 	where
 		K: HasKeyPrefix<KP>,
 	{
@@ -184,12 +193,18 @@ where
 		}
 	}
 
-	fn mutate<R, F: FnOnce(&mut Self::Query) -> R>(key: K::Key, f: F) -> R {
+	fn mutate<KArg: EncodeLike<K::Arg> + TupleToEncodedIter, R, F: FnOnce(&mut Self::Query) -> R>(
+		key: KArg,
+		f: F,
+	) -> R {
 		Self::try_mutate(key, |v| Ok::<R, Never>(f(v))).expect("`Never` can not be constructed; qed")
 	}
 
-	fn try_mutate<R, E, F: FnOnce(&mut Self::Query) -> Result<R, E>>(key: K::Key, f: F) -> Result<R, E> {
-		let final_key = Self::storage_n_map_final_key::<K>(key);
+	fn try_mutate<KArg: EncodeLike<K::Arg> + TupleToEncodedIter, R, E, F: FnOnce(&mut Self::Query) -> Result<R, E>>(
+		key: KArg,
+		f: F,
+	) -> Result<R, E> {
+		let final_key = Self::storage_n_map_final_key::<K, _>(key);
 		let mut val = G::from_optional_value_to_query(unhashed::get(final_key.as_ref()));
 
 		let ret = f(&mut val);
@@ -202,12 +217,18 @@ where
 		ret
 	}
 
-	fn mutate_exists<R, F: FnOnce(&mut Option<V>) -> R>(key: K::Key, f: F) -> R {
+	fn mutate_exists<KArg: EncodeLike<K::Arg> + TupleToEncodedIter, R, F: FnOnce(&mut Option<V>) -> R>(
+		key: KArg,
+		f: F,
+	) -> R {
 		Self::try_mutate_exists(key, |v| Ok::<R, Never>(f(v))).expect("`Never` can not be constructed; qed")
 	}
 
-	fn try_mutate_exists<R, E, F: FnOnce(&mut Option<V>) -> Result<R, E>>(key: K::Key, f: F) -> Result<R, E> {
-		let final_key = Self::storage_n_map_final_key::<K>(key);
+	fn try_mutate_exists<KArg: EncodeLike<K::Arg> + TupleToEncodedIter, R, E, F: FnOnce(&mut Option<V>) -> Result<R, E>>(
+		key: KArg,
+		f: F,
+	) -> Result<R, E> {
+		let final_key = Self::storage_n_map_final_key::<K, _>(key);
 		let mut val = unhashed::get(final_key.as_ref());
 
 		let ret = f(&mut val);
@@ -220,13 +241,14 @@ where
 		ret
 	}
 
-	fn append<Item, EncodeLikeItem>(key: K::Key, item: EncodeLikeItem)
+	fn append<Item, EncodeLikeItem, KArg>(key: KArg, item: EncodeLikeItem)
 	where
+		KArg: EncodeLike<K::Arg> + TupleToEncodedIter,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
 		V: StorageAppend<Item>
 	{
-		let final_key = Self::storage_n_map_final_key::<K>(key);
+		let final_key = Self::storage_n_map_final_key::<K, _>(key);
 		sp_io::storage::append(&final_key, item.encode());
 	}
 }
