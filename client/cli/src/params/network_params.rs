@@ -64,11 +64,18 @@ pub struct NetworkParams {
 	#[structopt(long = "port", value_name = "PORT", conflicts_with_all = &[ "listen-addr" ])]
 	pub port: Option<u16>,
 
-	/// Forbid connecting to private IPv4 addresses (as specified in
+	/// Always forbid connecting to private IPv4 addresses (as specified in
 	/// [RFC1918](https://tools.ietf.org/html/rfc1918)), unless the address was passed with
-	/// `--reserved-nodes` or `--bootnodes`.
-	#[structopt(long = "no-private-ipv4")]
+	/// `--reserved-nodes` or `--bootnodes`. Enabled by default for chains marked as "live" in
+	/// their chain specifications.
+	#[structopt(long = "no-private-ipv4", conflicts_with_all = &["allow-private-ipv4"])]
 	pub no_private_ipv4: bool,
+
+	/// Always accept connecting to private IPv4 addresses (as specified in
+	/// [RFC1918](https://tools.ietf.org/html/rfc1918)). Enabled by default for chains marked as
+	/// "local" in their chain specifications, or when `--dev` is passed.
+	#[structopt(long = "allow-private-ipv4", conflicts_with_all = &["no-private-ipv4"])]
+	pub allow_private_ipv4: bool,
 
 	/// Specify the number of outgoing connections we're trying to maintain.
 	#[structopt(long = "out-peers", value_name = "COUNT", default_value = "25")]
@@ -173,6 +180,13 @@ impl NetworkParams {
 			|| is_dev
 			|| matches!(chain_type, ChainType::Local | ChainType::Development);
 
+		let allow_private_ipv4 = match (self.allow_private_ipv4, self.no_private_ipv4) {
+			(true, true) => unreachable!("`*_private_ipv4` flags are mutually exclusive; qed"),
+			(true, false) => true,
+			(false, true) => false,
+			(false, false) => is_dev || matches!(chain_type, ChainType::Local | ChainType::Development),
+		};
+
 		NetworkConfiguration {
 			boot_nodes,
 			net_config_path,
@@ -195,7 +209,7 @@ impl NetworkParams {
 			client_version: client_id.to_string(),
 			transport: TransportConfig::Normal {
 				enable_mdns: !is_dev && !self.no_mdns,
-				allow_private_ipv4: !self.no_private_ipv4,
+				allow_private_ipv4,
 				wasm_external_transport: None,
 			},
 			max_parallel_downloads: self.max_parallel_downloads,
