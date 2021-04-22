@@ -53,15 +53,13 @@ impl StorageChangeSet {
 			.iter()
 			.filter_map(move |(sk, changes)| {
 				if let Some(cf) = self.child_filters.as_ref() {
-					if let Some(filter) = cf.get(sk) {
-						Some(changes
+					cf.get(sk).map(|filter| { changes
 							.iter()
 							.filter(move |&(key, _)| match filter {
 								Some(ref filter) => filter.contains(key),
 								None => true,
 							})
-							.map(move |(k,v)| (Some(sk), k, v.as_ref())))
-					} else { None }
+							.map(move |(k,v)| (Some(sk), k, v.as_ref())) })
 				} else { None	}
 			})
 			.flatten();

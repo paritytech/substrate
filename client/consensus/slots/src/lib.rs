@@ -256,10 +256,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			return None;
 		}
 
-		let claim = match self.claim_slot(&chain_head, slot, &epoch_data) {
-			None => return None,
-			Some(claim) => claim,
-		};
+		let claim = self.claim_slot(&chain_head, slot, &epoch_data)?;
 
 		if self.should_backoff(slot, &chain_head) {
 			return None;
