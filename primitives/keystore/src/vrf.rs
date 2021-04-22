@@ -43,7 +43,7 @@ pub struct VRFTranscriptData {
 	pub items: Vec<(Cow<'static, [u8]>, VRFTranscriptValue)>,
 }
 /// VRF signature data
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct VRFSignature {
 	/// The VRFOutput serialized

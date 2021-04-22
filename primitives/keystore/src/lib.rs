@@ -29,7 +29,7 @@ use sp_core::{
 use crate::vrf::{VRFTranscriptData, VRFSignature};
 
 /// CryptoStore error
-#[derive(Debug, derive_more::Display)]
+#[derive(Clone, Debug, derive_more::Display)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Error {
 	/// Public key type is not supported
