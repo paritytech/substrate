@@ -29,7 +29,8 @@ use codec::{Decode, Encode, EncodeLike, FullCodec};
 use frame_metadata::{DefaultByteGetter, StorageEntryModifier};
 use sp_std::prelude::*;
 
-/// A type that allow to store values for an arbitrary number of keys in the form of `(key1, (key2, (..., (keyN, ()))))`.
+/// A type that allow to store values for an arbitrary number of keys in the form of
+/// `(Key<Hasher1, key1>, Key<Hasher2, key2>, ..., Key<HasherN, keyN>)`.
 ///
 /// Each value is stored at:
 /// ```nocompile
@@ -139,10 +140,11 @@ where
 	}
 
 	/// Store a value to be associated with the given keys from the map.
-	pub fn insert<KArg: EncodeLike<Key::KArg> + TupleToEncodedIter, VArg: EncodeLike<Value>>(
-		key: KArg,
-		val: VArg,
-	) {
+	pub fn insert<KArg, VArg>(key: KArg, val: VArg)
+	where
+		KArg: EncodeLike<Key::KArg> + TupleToEncodedIter,
+		VArg: EncodeLike<Value>,
+	{
 		<Self as crate::storage::StorageNMap<Key, Value>>::insert(key, val)
 	}
 
@@ -244,10 +246,10 @@ where
 	/// Migrate an item with the given `key` from defunct `hash_fns` to the current hashers.
 	///
 	/// If the key doesn't exist, then it's a no-op. If it does, then it returns its value.
-	pub fn migrate_keys<KArg: EncodeLike<Key::KArg> + TupleToEncodedIter>(
-		key: KArg,
-		hash_fns: Key::HArg,
-	) -> Option<Value> {
+	pub fn migrate_keys<KArg>(key: KArg, hash_fns: Key::HArg) -> Option<Value>
+	where
+		KArg: EncodeLike<Key::KArg> + TupleToEncodedIter
+	{
 		<Self as crate::storage::StorageNMap<Key, Value>>::migrate_keys::<_>(key, hash_fns)
 	}
 

@@ -168,10 +168,11 @@ where
 		}
 	}
 
-	fn insert<KArg: EncodeLike<K::KArg> + TupleToEncodedIter, VArg: EncodeLike<V>>(
-		key: KArg,
-		val: VArg,
-	) {
+	fn insert<KArg, VArg>(key: KArg, val: VArg)
+	where
+		KArg: EncodeLike<K::KArg> + TupleToEncodedIter,
+		VArg: EncodeLike<V>,
+	{
 		unhashed::put(&Self::storage_n_map_final_key::<K, _>(key), &val.borrow());
 	}
 
@@ -264,10 +265,10 @@ where
 		sp_io::storage::append(&final_key, item.encode());
 	}
 
-	fn migrate_keys<KArg: EncodeLike<K::KArg> + TupleToEncodedIter>(
-		key: KArg,
-		hash_fns: K::HArg,
-	) -> Option<V> {
+	fn migrate_keys<KArg>(key: KArg, hash_fns: K::HArg) -> Option<V>
+	where
+		KArg: EncodeLike<K::KArg> + TupleToEncodedIter,
+	{
 		let old_key = {
 			let module_prefix_hashed = Twox128::hash(Self::module_prefix());
 			let storage_prefix_hashed = Twox128::hash(Self::storage_prefix());

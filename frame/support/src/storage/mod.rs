@@ -22,7 +22,10 @@ use sp_std::prelude::*;
 use codec::{FullCodec, FullEncode, Encode, EncodeLike, Decode};
 use crate::{
 	hash::{Twox128, StorageHasher, ReversibleStorageHasher},
-	storage::types::{HasKeyPrefix, HasReversibleKeyPrefix, KeyGenerator, ReversibleKeyGenerator, TupleToEncodedIter},
+	storage::types::{
+		HasKeyPrefix, HasReversibleKeyPrefix, KeyGenerator, ReversibleKeyGenerator,
+		TupleToEncodedIter,
+	},
 	traits::Get,
 };
 use sp_runtime::generic::{Digest, DigestItem};
@@ -362,7 +365,8 @@ pub trait IterableStorageDoubleMap<
 	fn translate<O: Decode, F: FnMut(K1, K2, O) -> Option<V>>(f: F);
 }
 
-/// A strongly-typed map with arbitrary number of keys in storage whose keys and values can be iterated over.
+/// A strongly-typed map with arbitrary number of keys in storage whose keys and values can be
+/// iterated over.
 pub trait IterableStorageNMap<K: ReversibleKeyGenerator, V: FullCodec>: StorageNMap<K, V> {
 	/// The type that iterates over all `(key1, (key2, (key3, ... (keyN, ()))), value)` tuples
 	type Iterator: Iterator<Item = (K::Key, V)>;
@@ -574,7 +578,10 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 		KArg2: EncodeLike<KOther::KArg> + TupleToEncodedIter;
 
 	/// Store a value to be associated with the given key from the map.
-	fn insert<KArg: EncodeLike<K::KArg> + TupleToEncodedIter, VArg: EncodeLike<V>>(key: KArg, val: VArg);
+	fn insert<KArg, VArg>(key: KArg, val: VArg)
+	where
+		KArg: EncodeLike<K::KArg> + TupleToEncodedIter,
+		VArg: EncodeLike<V>;
 
 	/// Remove the value under a key.
 	fn remove<KArg: EncodeLike<K::KArg> + TupleToEncodedIter>(key: KArg);
@@ -652,7 +659,9 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 	/// Migrate an item with the given `key` from defunct `hash_fns` to the current hashers.
 	///
 	/// If the key doesn't exist, then it's a no-op. If it does, then it returns its value.
-	fn migrate_keys<KArg: EncodeLike<K::KArg> + TupleToEncodedIter>(key: KArg, hash_fns: K::HArg) -> Option<V>;
+	fn migrate_keys<KArg>(key: KArg, hash_fns: K::HArg) -> Option<V>
+	where
+		KArg: EncodeLike<K::KArg> + TupleToEncodedIter;
 }
 
 /// Iterate over a prefix and decode raw_key and raw_value into `T`.
