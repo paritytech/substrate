@@ -22,24 +22,16 @@
 use super::*;
 
 use frame_system::RawOrigin;
-use frame_benchmarking::{benchmarks, account, impl_benchmark_test_suite};
-use frame_support::traits::OnInitialize;
+use frame_benchmarking::{benchmarks, account, whitelist, impl_benchmark_test_suite};
+use frame_support::{traits::OnInitialize, dispatch::DispatchResultWithPostInfo};
 
-use crate::Module as Elections;
+use crate::Pallet as Elections;
 
 const BALANCE_FACTOR: u32 = 250;
 const MAX_VOTERS: u32 = 500;
 const MAX_CANDIDATES: u32 = 200;
 
 type Lookup<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
-
-macro_rules! whitelist {
-	($acc:ident) => {
-		frame_benchmarking::benchmarking::add_to_whitelist(
-			frame_system::Account::<T>::hashed_key_for(&$acc).into()
-		);
-	};
-}
 
 /// grab new account with infinite balance.
 fn endowed_account<T: Config>(name: &'static str, index: u32) -> T::AccountId {
@@ -95,11 +87,12 @@ fn submit_candidates_with_self_vote<T: Config>(c: u32, prefix: &'static str)
 	Ok(candidates)
 }
 
-
 /// Submit one voter.
-fn submit_voter<T: Config>(caller: T::AccountId, votes: Vec<T::AccountId>, stake: BalanceOf<T>)
-	-> frame_support::dispatch::DispatchResult
-{
+fn submit_voter<T: Config>(
+	caller: T::AccountId,
+	votes: Vec<T::AccountId>,
+	stake: BalanceOf<T>,
+) -> DispatchResultWithPostInfo {
 	<Elections<T>>::vote(RawOrigin::Signed(caller).into(), votes, stake)
 }
 

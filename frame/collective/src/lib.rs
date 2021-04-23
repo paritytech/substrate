@@ -48,13 +48,12 @@ use sp_io::storage;
 use sp_runtime::{RuntimeDebug, traits::Hash};
 
 use frame_support::{
+	decl_error, decl_event, decl_module, decl_storage, ensure, BoundedVec,
 	codec::{Decode, Encode},
-	decl_error, decl_event, decl_module, decl_storage,
 	dispatch::{
 		DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable, Parameter,
 		PostDispatchInfo,
 	},
-	ensure,
 	traits::{ChangeMembers, EnsureOrigin, Get, InitializeMembers, GetBacking, Backing},
 	weights::{DispatchClass, GetDispatchInfo, Weight, Pays},
 };
@@ -195,7 +194,7 @@ pub struct Votes<AccountId, BlockNumber> {
 decl_storage! {
 	trait Store for Module<T: Config<I>, I: Instance=DefaultInstance> as Collective {
 		/// The hashes of the active proposals.
-		pub Proposals get(fn proposals): Vec<T::Hash>;
+		pub Proposals get(fn proposals): BoundedVec<T::Hash, T::MaxProposals>;
 		/// Actual proposal for a given hash, if it's current.
 		pub ProposalOf get(fn proposal_of):
 			map hasher(identity) T::Hash => Option<<T as Config<I>>::Proposal>;
@@ -471,11 +470,7 @@ decl_module! {
 			} else {
 				let active_proposals =
 					<Proposals<T, I>>::try_mutate(|proposals| -> Result<usize, DispatchError> {
-						proposals.push(proposal_hash);
-						ensure!(
-							proposals.len() <= T::MaxProposals::get() as usize,
-							Error::<T, I>::TooManyProposals
-						);
+						proposals.try_push(proposal_hash).map_err(|_| Error::<T, I>::TooManyProposals)?;
 						Ok(proposals.len())
 					})?;
 				let index = Self::proposal_count();
@@ -1086,7 +1081,7 @@ mod tests {
 	fn motions_basic_environment_works() {
 		new_test_ext().execute_with(|| {
 			assert_eq!(Collective::members(), vec![1, 2, 3]);
-			assert_eq!(Collective::proposals(), Vec::<H256>::new());
+			assert_eq!(*Collective::proposals(), Vec::<H256>::new());
 		});
 	}
 
@@ -1316,7 +1311,7 @@ mod tests {
 			let hash = proposal.blake2_256().into();
 			let end = 4;
 			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len));
-			assert_eq!(Collective::proposals(), vec![hash]);
+			assert_eq!(*Collective::proposals(), vec![hash]);
 			assert_eq!(Collective::proposal_of(&hash), Some(proposal));
 			assert_eq!(
 				Collective::voting(&hash),
@@ -1577,9 +1572,9 @@ mod tests {
 			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len));
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, false));
 			assert_ok!(Collective::close(Origin::signed(2), hash.clone(), 0, proposal_weight, proposal_len));
-			assert_eq!(Collective::proposals(), vec![]);
+			assert_eq!(*Collective::proposals(), vec![]);
 			assert_ok!(Collective::propose(Origin::signed(1), 2, Box::new(proposal.clone()), proposal_len));
-			assert_eq!(Collective::proposals(), vec![hash]);
+			assert_eq!(*Collective::proposals(), vec![hash]);
 		});
 	}
 
