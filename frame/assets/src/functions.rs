@@ -163,10 +163,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		who: &T::AccountId,
 		keep_alive: bool,
 	) -> Result<T::Balance, Error<T, I>> {
-		let details = match Asset::<T, I>::get(id) {
-			Some(details) => details,
-			None => return Err(Error::<T, I>::Unknown),
-		};
+		let details = Asset::<T, I>::get(id).ok_or_else(|| Error::<T, I>::Unknown)?;
 		ensure!(!details.is_frozen, Error::<T, I>::Frozen);
 
 		let account = Account::<T, I>::get(id, who);

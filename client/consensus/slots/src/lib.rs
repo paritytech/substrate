@@ -256,10 +256,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			return None;
 		}
 
-		let claim = match self.claim_slot(&chain_head, slot, &epoch_data) {
-			None => return None,
-			Some(claim) => claim,
-		};
+		let claim = self.claim_slot(&chain_head, slot, &epoch_data)?;
 
 		if self.should_backoff(slot, &chain_head) {
 			return None;
@@ -584,7 +581,7 @@ impl<T: Clone + Send + Sync + 'static> SlotDuration<T> {
 					cb(client.runtime_api(), &BlockId::number(Zero::zero()))?;
 
 				info!(
-					"⏱  Loaded block-time = {:?} milliseconds from genesis on first-launch",
+					"⏱  Loaded block-time = {:?} from genesis on first-launch",
 					genesis_slot_duration.slot_duration()
 				);
 
