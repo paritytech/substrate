@@ -26,7 +26,7 @@ use crate::{
 		bounded_vec::{BoundedVec, BoundedVecValue},
 		types::{OptionQuery, StorageEntryMetadata, QueryKindTrait},
 	},
-	traits::{GetDefault, StorageInstance},
+	traits::{GetDefault, StorageInstance, Get},
 };
 use sp_std::vec::Vec;
 
