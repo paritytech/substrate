@@ -67,7 +67,30 @@ use sp_runtime::{
 };
 use codec::{Encode, Decode};
 use sp_std::vec::Vec;
-use lite_json::json::JsonValue;
+// use lite_json::json::JsonValue;
+use alt_serde::{Deserialize, Deserializer};
+
+// use serde_json::{Value};
+
+// Specifying serde path as `alt_serde`
+// ref: https://serde.rs/container-attrs.html#crate
+#[serde(crate = "alt_serde")]
+#[derive(Deserialize, Encode, Decode, Default)]
+#[derive(Debug)]
+struct NodeInfo {
+	#[serde(deserialize_with = "de_string_to_bytes")]
+	id: Vec<u8>,
+	#[serde(deserialize_with = "de_string_to_bytes")]
+	url: Vec<u8>,
+}
+
+pub fn de_string_to_bytes<'de, D>(de: D) -> Result<Vec<u8>, D::Error>
+	where
+		D: Deserializer<'de>,
+{
+	let s: &str = Deserialize::deserialize(de)?;
+	Ok(s.as_bytes().to_vec())
+}
 
 #[cfg(test)]
 mod tests;
@@ -82,6 +105,7 @@ mod tests;
 pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"ddc1");
 
 pub const HTTP_NODES_REQUEST: &str = "http://localhost:8081/listNodes";
+pub const FETCH_TIMEOUT_PERIOD: u64 = 3000; // in milli-seconds
 
 /// Based on the above `KeyTypeId` we need to generate a pallet-specific crypto type wrappers.
 /// We can use from supported crypto kinds (`sr25519`, `ed25519` and `ecdsa`) and augment
@@ -574,6 +598,35 @@ impl<T: Trait> Module<T> {
 //		debug::warn("Topology: {}", topology)
 //	}
 
+	/// This function uses the `offchain::http` API to query the remote github information,
+	///   and returns the JSON response as vector of bytes.
+	fn fetch_from_node(one_node: &NodeInfo) -> Result<Vec<u8>, http::Error> {
+		let node_url = sp_std::str::from_utf8(&one_node.url).unwrap();
+	
+		debug::info!("sending request to: {:?}", node_url);
+
+		// Initiate an external HTTP GET request. This is using high-level wrappers from `sp_runtime`.
+		let request = http::Request::get(node_url);
+
+		let deadline = sp_io::offchain::timestamp().add(Duration::from_millis(FETCH_TIMEOUT_PERIOD));
+
+		let pending = request
+			.deadline(deadline)
+			.send()
+			.map_err(|_| http::Error::IoError)?;
+
+		let response = pending.try_wait(deadline)
+			.map_err(|_| http::Error::DeadlineReached)??;
+
+		if response.code != 200 {
+			debug::warn!("Unexpected status code: {}", response.code);
+			return Err(http::Error::Unknown);
+		}
+
+		// Next we fully read the response body and collect it to a vector of bytes.
+		Ok(response.body().collect::<Vec<u8>>())
+	}
+
 	fn fetch_ddc_network_topology() -> Result<(), http::Error> {
 		let request = http::Request::get(HTTP_NODES_REQUEST);
 
@@ -600,19 +653,42 @@ impl<T: Trait> Module<T> {
 			http::Error::Unknown
 		})?;
 
-		debug::info!("Network topology: {:?}", body_str);
+		debug::info!("body_str: {}", body_str);
+		// Parse the string of data into serde_json::Value.
+		let node_info: Vec<NodeInfo> = serde_json::from_str(&body_str).map_err(|_| {
+			debug::warn!("No UTF8 body");
+			http::Error::Unknown
+		})?;
 
-		let topology = Self::parse_topology(body_str);
+		// debug::info!("Nodes info: {:#?}", node_info);
 
+		for (one_node) in node_info.iter() {
+			// debug::info!("Nodes info: {:?}", one_node);
+			let resp_bytes = Self::fetch_from_node(one_node).map_err(|e| {
+				debug::error!("fetch_from_node error: {:?}", e);
+				http::Error::Unknown
+			})?;
+
+			let resp_str = sp_std::str::from_utf8(&resp_bytes).map_err(|_| {
+				debug::warn!("No UTF8 body");
+				http::Error::Unknown
+			})?;
+
+			// Print out our fetched JSON string
+			debug::info!("Node data: {}", resp_str);
+
+			// Send signed Tx, TODO: send to call SC method.
+		}
+	
 		Ok(())
 	}
 
-	fn parse_topology(topology_str: &str) -> Result<(), http::Error> {
-		let val = lite_json::parse_json(topology_str).ok();
+	// fn parse_topology(topology_str: &str) -> Result<(), http::Error> {
+	// 	let val = lite_json::parse_json(topology_str).ok();
 
-		Ok(())
+	// 	Ok(())
 
-	}
+	// }
 
 //	fn fetch_price() -> Result<u32, http::Error> {
 //		// We want to keep the offchain worker execution time reasonable, so we set a hard-coded
