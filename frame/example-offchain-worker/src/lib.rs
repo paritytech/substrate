@@ -102,7 +102,7 @@ mod tests;
 /// When offchain worker is signing transactions it's going to request keys of type
 /// `KeyTypeId` from the keystore and use the ones it finds to sign the transaction.
 /// The keys can be inserted manually via RPC (see `author_insertKey`).
-pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"btc!");
+pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"ddc1");
 
 pub const HTTP_NODES_REQUEST: &str = "http://localhost:8081/listNodes";
 pub const FETCH_TIMEOUT_PERIOD: u64 = 3000; // in milli-seconds
@@ -116,11 +116,23 @@ pub mod crypto {
 		app_crypto::{app_crypto, sr25519},
 		traits::Verify,
 	};
+	use frame_system::offchain::AppCrypto;
 	use sp_core::sr25519::Signature as Sr25519Signature;
 	app_crypto!(sr25519, KEY_TYPE);
 
+	use sp_runtime::{
+		MultiSignature,
+		MultiSigner,
+	};
+
 	pub struct TestAuthId;
-	impl frame_system::offchain::AppCrypto<<Sr25519Signature as Verify>::Signer, Sr25519Signature> for TestAuthId {
+	impl AppCrypto<<Sr25519Signature as Verify>::Signer, Sr25519Signature> for TestAuthId {
+		type RuntimeAppPublic = Public;
+		type GenericSignature = sp_core::sr25519::Signature;
+		type GenericPublic = sp_core::sr25519::Public;
+	}
+
+	impl AppCrypto<MultiSigner, MultiSignature> for TestAuthId {
 		type RuntimeAppPublic = Public;
 		type GenericSignature = sp_core::sr25519::Signature;
 		type GenericPublic = sp_core::sr25519::Public;
@@ -129,7 +141,7 @@ pub mod crypto {
 
 pub trait Trait: CreateSignedTransaction<Call<Self>> {
 	/// The identifier type for an offchain worker.
-//	type AuthorityId: AppCrypto<Self::Public, Self::Signature>;
+	type AuthorityId: AppCrypto<Self::Public, Self::Signature>;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
@@ -176,7 +188,7 @@ decl_event!(
 	pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId {
 		/// Event generated when new price is accepted to contribute to the average.
 		/// \[price, who\]
-		NewPrice(u32, AccountId),
+		NewTestEvent(Vec<u8>, AccountId),
 	}
 );
 
@@ -199,14 +211,14 @@ decl_module! {
 		/// working and receives (and provides) meaningful data.
 		/// This example is not focused on correctness of the oracle itself, but rather its
 		/// purpose is to showcase offchain worker capabilities.
-//		#[weight = 0]
-//		pub fn submit_price(origin, price: u32) -> DispatchResult {
-//			// Retrieve sender of the transaction.
-//			let who = ensure_signed(origin)?;
-//			// Add the price to the on-chain list.
-//			Self::add_price(who, price);
-//			Ok(())
-//		}
+		#[weight = 0]
+		pub fn submit_test_data(origin, test_str: Vec<u8>) -> DispatchResult {
+			// Retrieve sender of the transaction.
+			let who = ensure_signed(origin)?;
+			// Add the price to the on-chain list.
+			Self::add_test_data_event(who, test_str);
+			Ok(())
+		}
 
 		/// Submit new price to the list via unsigned transaction.
 		///
@@ -265,7 +277,7 @@ decl_module! {
 		/// so the code should be able to handle that.
 		/// You can use `Local Storage` API to coordinate runs of the worker.
 		fn offchain_worker(block_number: T::BlockNumber) {
-			debug::info!("Entering off-chain worker");
+			debug::info!("[OCW] Starting");
 
 			// It's a good idea to add logs to your offchain workers.
 			// Using the `frame_support::debug` module you have access to the same API exposed by
@@ -274,7 +286,7 @@ decl_module! {
 			// significantly. You can use `RuntimeDebug` custom derive to hide details of the types
 			// in WASM or use `debug::native` namespace to produce logs only when the worker is
 			// running natively.
-			debug::native::info!("Hello World from offchain workers!");
+			debug::native::info!("[OCW] Hello World from offchain workers!");
 
 			// Since off-chain workers are just part of the runtime code, they have direct access
 			// to the storage and other included pallets.
@@ -308,6 +320,19 @@ decl_module! {
 				// TODO: Print ERROR
 				debug::error!("Some error occurred");
 			}
+
+
+			debug::info!("[OCW] About to send mock transaction");
+			let sc_res = Self::send_to_sc_mock();
+
+
+
+			if let Err(e) = sc_res {
+				debug::error!("Some error occurred: {:?}", e);
+			}
+
+
+            debug::info!("[OCW] Finishing!");
 		}
 	}
 }
@@ -516,6 +541,46 @@ impl<T: Trait> Module<T> {
 //		Ok(())
 //	}
 
+	fn send_to_sc_mock() -> Result<(), &'static str> {
+		debug::info!("[OCW] Getting signer");
+		let signer = Signer::<T, T::AuthorityId>::all_accounts();
+		debug::info!("[OCW] Checking signer");
+		if !signer.can_sign() {
+			return Err(
+				"No local accounts available. Consider adding one via `author_insertKey` RPC."
+			)?
+		}
+
+		debug::info!("[OCW] Continue, signer exists!");
+
+		// Using `send_signed_transaction` associated type we create and submit a transaction
+		// representing the call, we've just created.
+		// Submit signed will return a vector of results for all accounts that were found in the
+		// local keystore with expected `KEY_TYPE`.
+		let results = signer.send_signed_transaction(
+			|_account| {
+//				contracts::Contracts::call(
+//					signer,
+//					BOB,
+//					0,
+//					67_500_000,
+//					vec![],
+//				)
+
+				Call::submit_test_data("Hello World data".as_bytes().to_vec())
+			}
+		);
+
+		for (acc, res) in &results {
+			match res {
+				Ok(()) => debug::info!("Submitted TX to SC!"),
+				Err(e) => debug::error!("Some error occured: {:?}", e),
+			}
+		}
+
+		Ok(())
+	}
+
 
 	fn fetch_ddc_data_and_send_to_sc(_block_number: T::BlockNumber) -> Result<(), http::Error> {
 		let topology = Self::fetch_ddc_network_topology().map_err(|_| "Failed to fetch topology");
@@ -704,24 +769,16 @@ impl<T: Trait> Module<T> {
 //		Some(price.integer as u32 * 100 + (price.fraction / 10_u64.pow(exp)) as u32)
 //	}
 
-//	fn add_price(who: T::AccountId, price: u32) {
-//		debug::info!("Adding to the average: {}", price);
-//		Prices::mutate(|prices| {
-//			const MAX_LEN: usize = 64;
-//
-//			if prices.len() < MAX_LEN {
-//				prices.push(price);
-//			} else {
-//				prices[price as usize % MAX_LEN] = price;
-//			}
-//		});
-//
-//		let average = Self::average_price()
-//			.expect("The average is not empty, because it was just mutated; qed");
-//		debug::info!("Current average price is: {}", average);
-//		// here we are raising the NewPrice event
-//		Self::deposit_event(RawEvent::NewPrice(price, who));
-//	}
+	fn add_test_data_event(who: T::AccountId, test_str: Vec<u8>) {
+		let s = match sp_std::str::from_utf8(&test_str) {
+			Ok(v) => v,
+			Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
+		};
+
+		debug::info!("Adding Test Event: {}", s);
+
+		Self::deposit_event(RawEvent::NewTestEvent(test_str, who));
+	}
 
 //	fn average_price() -> Option<u32> {
 //		let prices = Prices::get();
