@@ -37,7 +37,7 @@ impl<T: FullCodec + Clone + sp_std::fmt::Debug> BoundedVecValue for T {}
 ///
 /// As the name suggests, the length of the queue is always bounded. All internal operations ensure
 /// this bound is respected.
-#[derive(Encode, Decode, crate::DefaultNoBound, crate::CloneNoBound, crate::DebugNoBound)]
+#[derive(Encode, Decode, crate::DefaultNoBound, crate::CloneNoBound, crate::DebugNoBound, scale_info::TypeInfo)]
 pub struct BoundedVec<T: BoundedVecValue, S: Get<u32>>(Vec<T>, PhantomData<S>);
 
 // NOTE: we could also implement this as:
