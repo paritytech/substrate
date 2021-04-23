@@ -4188,6 +4188,7 @@ dependencies = [
  "pallet-treasury",
  "parity-scale-codec",
  "sc-executor",
+ "scale-info",
  "sp-application-crypto",
  "sp-consensus-babe",
  "sp-core",
