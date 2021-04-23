@@ -202,7 +202,8 @@ where
 		let result = self.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
 			self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL));
 
-		trace!(target: "state",
+		trace!(
+			target: "state",
 			method = "Get",
 			ext_id = self.id,
 			key = %HexDisplay::from(&key),
@@ -368,7 +369,8 @@ where
 			return;
 		}
 
-		trace!(target: "state",
+		trace!(
+			target: "state",
 			method = "Put",
 			ext_id = self.id,
 			key = %HexDisplay::from(&key),
