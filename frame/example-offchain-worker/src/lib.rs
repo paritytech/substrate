@@ -33,15 +33,9 @@ use sp_runtime::{
 };
 use codec::{Encode, Decode};
 use sp_std::vec::Vec;
-// use lite_json::json::JsonValue;
-use alt_serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer};
+use serde_json;
 
-
-// use serde_json::{Value};
-
-// Specifying serde path as `alt_serde`
-// ref: https://serde.rs/container-attrs.html#crate
-#[serde(crate = "alt_serde")]
 #[derive(Deserialize, Encode, Decode, Default)]
 #[derive(Debug)]
 struct NodeInfo {
