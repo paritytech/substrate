@@ -23,7 +23,6 @@ frame-system = { version = "3.0.0", default-features = false, path = "../../../f
 pallet-timestamp = { version = "3.0.0", default-features = false, path = "../../../frame/timestamp" }
 pallet-transaction-payment = { version = "3.0.0", default-features = false, path = "../../../frame/transaction-payment" }
 frame-executive = { version = "3.0.0", default-features = false, path = "../../../frame/executive" }
-serde = { version = "1.0.101", optional = true, features = ["derive"] }
 sp-api = { version = "3.0.0", default-features = false, path = "../../../primitives/api" }
 sp-block-builder = { path = "../../../primitives/block-builder", default-features = false, version = "3.0.0"}
 sp-consensus-aura = { version = "0.9.0", default-features = false, path = "../../../primitives/consensus/aura" }
@@ -67,7 +66,6 @@ std = [
 	"pallet-timestamp/std",
 	"pallet-transaction-payment-rpc-runtime-api/std",
 	"pallet-transaction-payment/std",
-	"serde",
 	"sp-api/std",
 	"sp-block-builder/std",
 	"sp-consensus-aura/std",

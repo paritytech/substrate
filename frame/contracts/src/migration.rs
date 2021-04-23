@@ -26,16 +26,12 @@ pub fn migrate<T: Config>() -> Weight {
 		Some(version) if version == PalletVersion::new(3, 0, 0) => {
 			weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
 			let _ = <CurrentSchedule<T>>::translate::<u32, _>(|version| {
-				if let Some(version) = version {
-					Some(Schedule {
+				version.map(|version| Schedule {
 						version: version.saturating_add(1),
 						// Default limits were not decreased. Therefore it is OK to overwrite
 						// the schedule with the new defaults.
 						.. Default::default()
 					})
-				} else {
-					None
-				}
 			});
 		}
 		_ => (),

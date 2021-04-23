@@ -72,10 +72,7 @@ fn check_header<C, B: BlockT, P: Pair>(
 	C: sc_client_api::backend::AuxStore,
 	P::Public: Encode + Decode + PartialEq + Clone,
 {
-	let seal = match header.digest_mut().pop() {
-		Some(x) => x,
-		None => return Err(Error::HeaderUnsealed(hash)),
-	};
+	let seal = header.digest_mut().pop().ok_or_else(|| Error::HeaderUnsealed(hash))?;
 
 	let sig = seal.as_aura_seal().ok_or_else(|| {
 		aura_err(Error::HeaderBadSeal(hash))
@@ -89,10 +86,8 @@ fn check_header<C, B: BlockT, P: Pair>(
 	} else {
 		// check the signature is valid under the expected authority and
 		// chain state.
-		let expected_author = match slot_author::<P>(slot, &authorities) {
-			None => return Err(Error::SlotAuthorNotFound),
-			Some(author) => author,
-		};
+		let expected_author = slot_author::<P>(slot, &authorities)
+			.ok_or_else(|| Error::SlotAuthorNotFound)?;
 
 		let pre_hash = header.hash();
 

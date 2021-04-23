@@ -585,10 +585,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		&dyn PrunableStateChangesTrieStorage<Block>,
 		Vec<(NumberFor<Block>, Option<(NumberFor<Block>, Block::Hash)>, ChangesTrieConfiguration)>,
 	)> {
-		let storage = match self.backend.changes_trie_storage() {
-			Some(storage) => storage,
-			None => return Err(sp_blockchain::Error::ChangesTriesNotSupported),
-		};
+		let storage = self.backend.changes_trie_storage()
+			.ok_or_else(|| sp_blockchain::Error::ChangesTriesNotSupported)?;
 
 		let mut configs = Vec::with_capacity(1);
 		let mut current = last;
@@ -1153,10 +1151,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// Gets the uncles of the block with `target_hash` going back `max_generation` ancestors.
 	pub fn uncles(&self, target_hash: Block::Hash, max_generation: NumberFor<Block>) -> sp_blockchain::Result<Vec<Block::Hash>> {
 		let load_header = |id: Block::Hash| -> sp_blockchain::Result<Block::Header> {
-			match self.backend.blockchain().header(BlockId::Hash(id))? {
-				Some(hdr) => Ok(hdr),
-				None => Err(Error::UnknownBlock(format!("{:?}", id))),
-			}
+			self.backend.blockchain().header(BlockId::Hash(id))?
+				.ok_or_else(|| Error::UnknownBlock(format!("{:?}", id)))
 		};
 
 		let genesis_hash = self.backend.blockchain().info().genesis_hash;
