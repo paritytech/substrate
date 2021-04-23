@@ -1070,12 +1070,6 @@ impl<T: Config> SortedMembers<T::AccountId> for Pallet<T> {
 	fn contains(who: &T::AccountId) -> bool {
 		Self::is_member(who)
 	}
-}
-
-impl<T: Config> SortedMembers<T::AccountId> for Module<T> {
-	fn contains(who: &T::AccountId) -> bool {
-		Self::is_member(who)
-	}
 
 	fn sorted_members() -> Vec<T::AccountId> {
 		Self::members_ids()
