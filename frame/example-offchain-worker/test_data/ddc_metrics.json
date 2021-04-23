@@ -1,0 +1,110 @@
+[
+   {
+      "appPubKey" : "0x100ad4097b6e60700a5d5c5294cb6d663090ef5f547e84cc20ec6bcc7a552f13",
+      "bytes" : 632,
+      "partitionId" : "d9fb155d-6e15-44c5-8d71-ff22db7a0193",
+      "requests" : 2
+   },
+   {
+      "appPubKey" : "0x125eecdff8c954b9504b3c8790b37e3797854f31e22846e3de6273cc064f2127",
+      "bytes" : 3522,
+      "partitionId" : "7bdf69de-c69f-4dfd-b8d7-7e09e4a02833",
+      "requests" : 9
+   },
+   {
+      "appPubKey" : "0x125eecdff8c954b9504b3c8790b37e3797854f31e22846e3de6273cc064f2127",
+      "bytes" : 7071,
+      "partitionId" : "b05db5ef-0959-4b8b-b6db-b7913aaae939",
+      "requests" : 18
+   },
+   {
+      "appPubKey" : "0x1abd3e9c3e8eadff76eb6db396b70cb4ed731436bd2ea3a024d2da590a60787a",
+      "bytes" : 1930,
+      "partitionId" : "4b74b4b3-f610-4c3d-8e0f-a94ab0c2df07",
+      "requests" : 6
+   },
+   {
+      "appPubKey" : "0x1abd3e9c3e8eadff76eb6db396b70cb4ed731436bd2ea3a024d2da590a60787a",
+      "bytes" : 620,
+      "partitionId" : "61e4b875-6306-495e-ac64-5abaa11d9bf6",
+      "requests" : 2
+   },
+   {
+      "appPubKey" : "0x1eeebb717f3992171e9352f3d48d6ffae95c2815c6da8b9822704cf251b91307",
+      "bytes" : 2209,
+      "partitionId" : "f7999b2a-8338-4aca-ba0a-5036eae6439e",
+      "requests" : 7
+   },
+   {
+      "appPubKey" : "0x22e980bf3e00bcfbcff99a6b83b578793d487ca7b78b53365ee7afe87a8ce10c",
+      "bytes" : 2925,
+      "partitionId" : "418b36a6-5d5c-4558-b055-b125511360a9",
+      "requests" : 9
+   },
+   {
+      "appPubKey" : "0x22e980bf3e00bcfbcff99a6b83b578793d487ca7b78b53365ee7afe87a8ce10c",
+      "bytes" : 2937,
+      "partitionId" : "bfc7691c-83ee-43a3-846c-04310871d008",
+      "requests" : 9
+   },
+   {
+      "appPubKey" : "0x3eefb796ca5e7202826cd96f72f5cba0d986776568f01fb2bd127239c9f44e32",
+      "bytes" : 303,
+      "partitionId" : "291bae7c-2bcd-4010-9073-614e48cf51ac",
+      "requests" : 1
+   },
+   {
+      "appPubKey" : "0x6022edee2f2aad5992d82754b536a00fe7f3b4a987c9d736dac8daddd9afb848",
+      "bytes" : 885,
+      "partitionId" : "32cd3ee9-123a-4532-9de4-c95fc39371c3",
+      "requests" : 3
+   },
+   {
+      "appPubKey" : "0x74f8d72793333b498d6c6da10c5169d089b9c294c87bc639628511572a936252",
+      "bytes" : 4389,
+      "partitionId" : "1f1ed72d-ec33-484b-be51-87f2b3629f5e",
+      "requests" : 12
+   },
+   {
+      "appPubKey" : "0x74f8d72793333b498d6c6da10c5169d089b9c294c87bc639628511572a936252",
+      "bytes" : 2541,
+      "partitionId" : "c909cf1c-ab58-4568-a20f-05c897e41772",
+      "requests" : 7
+   },
+   {
+      "appPubKey" : "0x84e41a3d5c0fae8457a0a28bb31b27572e81c166a4ed883bfca6ea8c0455a24a",
+      "bytes" : 606,
+      "partitionId" : "4569a28b-4591-4353-8881-c6a34318e4d7",
+      "requests" : 2
+   },
+   {
+      "appPubKey" : "0x84e41a3d5c0fae8457a0a28bb31b27572e81c166a4ed883bfca6ea8c0455a24a",
+      "bytes" : 570,
+      "partitionId" : "f2384c9c-ac1a-43fc-b229-2eaa6bcaa408",
+      "requests" : 2
+   },
+   {
+      "appPubKey" : "0x92478cb8a90e24efe941ccd46604eb622a7eb9926423fdb69dc8f2e3d2841e5a",
+      "bytes" : 953,
+      "partitionId" : "785695e0-29a5-4de1-935e-e437c837f213",
+      "requests" : 3
+   },
+   {
+      "appPubKey" : "0x9ccd42073a74761e15c52515ada178d59572f1a152df7c1890e41c97fba7c10e",
+      "bytes" : 1446,
+      "partitionId" : "8316b166-de36-4e3c-bf74-886d42fda2c6",
+      "requests" : 2
+   },
+   {
+      "appPubKey" : "0xde9082b3d33dad539b6dbb93a73b9aade687b42d8ea5603acbbfd61eb19f6d4b",
+      "bytes" : 1258,
+      "partitionId" : "5ed3fec8-d733-4ac5-bcb2-46245922964e",
+      "requests" : 4
+   },
+   {
+      "appPubKey" : "0xde9082b3d33dad539b6dbb93a73b9aade687b42d8ea5603acbbfd61eb19f6d4b",
+      "bytes" : 285,
+      "partitionId" : "83c109c3-d666-4f4c-b54a-5cad50f0e96b",
+      "requests" : 1
+   }
+]
