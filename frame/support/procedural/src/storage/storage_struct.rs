@@ -47,7 +47,8 @@ fn from_query_to_optional_value(is_option: bool) -> TokenStream {
 	}
 }
 
-pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStream {
+pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
+	let scrate = &def.hidden_crate;
 	let mut impls = TokenStream::new();
 
 	for line in &def.storage_lines {

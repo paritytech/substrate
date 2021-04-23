@@ -121,7 +121,7 @@ impl BuilderDef {
 						}}
 					},
 					StorageLineTypeDef::NMap(map) => {
-						let keygen = map.to_keygen_struct();
+						let keygen = map.to_keygen_struct(scrate);
 						let key_tuple = map.to_key_tuple();
 						let key_arg = if map.keys.len() == 1 {
 							quote!((k,))

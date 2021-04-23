@@ -161,7 +161,8 @@ fn default_byte_getter(
 	(struct_def, struct_instance)
 }
 
-pub fn impl_metadata(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStream {
+pub fn impl_metadata(def: &DeclStorageDefExt) -> TokenStream {
+	let scrate = &def.hidden_crate;
 	let mut entries = TokenStream::new();
 	let mut default_byte_getter_struct_defs = TokenStream::new();
 
