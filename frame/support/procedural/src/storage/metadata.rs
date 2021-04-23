@@ -63,6 +63,27 @@ fn storage_line_metadata_type(scrate: &TokenStream, line: &StorageLineDefExt) ->
 				}
 			}
 		},
+		StorageLineTypeDef::NMap(map) => {
+			let keys = map.keys
+				.iter()
+				.map(|key| clean_type_string(&quote!(#key).to_string()))
+				.collect::<Vec<_>>();
+			let hashers = map.hashers
+				.iter()
+				.map(|hasher| hasher.to_storage_hasher_struct())
+				.collect::<Vec<_>>();
+			quote!{
+				#scrate::metadata::StorageEntryType::NMap {
+					keys: #scrate::metadata::DecodeDifferent::Encode(&[
+						#( #keys, )*
+					]),
+					hashers: #scrate::metadata::DecodeDifferent::Encode(&[
+						#( #scrate::metadata::StorageHasher::#hashers, )*
+					]),
+					value: #scrate::metadata::DecodeDifferent::Encode(#value_type),
+				}
+			}
+		}
 	}
 }
 

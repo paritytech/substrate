@@ -74,8 +74,8 @@ pub use self::hash::{
 	StorageHasher, ReversibleStorageHasher
 };
 pub use self::storage::{
-	StorageValue, StorageMap, StorageDoubleMap, StoragePrefixedMap, IterableStorageMap,
-	IterableStorageDoubleMap, migration,
+	StorageValue, StorageMap, StorageDoubleMap, StorageNMap, StoragePrefixedMap, IterableStorageMap,
+	IterableStorageDoubleMap, IterableStorageNMap, migration,
 	bounded_vec::{self, BoundedVec},
 };
 pub use self::dispatch::{Parameter, Callable};

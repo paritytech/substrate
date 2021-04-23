@@ -244,12 +244,17 @@ impl StorageLineDefExt {
 					|| ext::type_contains_ident(&map.key2, &def.module_runtime_generic)
 					|| ext::type_contains_ident(&map.value, &def.module_runtime_generic)
 			}
+			StorageLineTypeDef::NMap(map) => {
+				map.keys.iter().any(|key| ext::type_contains_ident(key, &def.module_runtime_generic))
+					|| ext::type_contains_ident(&map.value, &def.module_runtime_generic)
+			}
 		};
 
 		let query_type = match &storage_def.storage_type {
 			StorageLineTypeDef::Simple(value) => value.clone(),
 			StorageLineTypeDef::Map(map) => map.value.clone(),
 			StorageLineTypeDef::DoubleMap(map) => map.value.clone(),
+			StorageLineTypeDef::NMap(map) => map.value.clone(),
 		};
 		let is_option = ext::extract_type_option(&query_type).is_some();
 		let value_type = ext::extract_type_option(&query_type).unwrap_or_else(|| query_type.clone());
@@ -295,6 +300,10 @@ impl StorageLineDefExt {
 				let key2 = &map.key2;
 				quote!( StorageDoubleMap<#key1, #key2, #value_type> )
 			},
+			StorageLineTypeDef::NMap(map) => {
+				let keygen = map.to_keygen_struct();
+				quote!( StorageNMap<#keygen, #value_type> )
+			}
 		};
 
 		let storage_trait = quote!( storage::#storage_trait_truncated );
@@ -332,6 +341,7 @@ impl StorageLineDefExt {
 pub enum StorageLineTypeDef {
 	Map(MapDef),
 	DoubleMap(Box<DoubleMapDef>),
+	NMap(NMapDef),
 	Simple(syn::Type),
 }
 
@@ -349,6 +359,36 @@ pub struct DoubleMapDef {
 	pub key2: syn::Type,
 	/// This is the query value not the inner value used in storage trait implementation.
 	pub value: syn::Type,
+}
+
+pub struct NMapDef {
+	pub hashers: Vec<HasherKind>,
+	pub keys: Vec<syn::Type>,
+	pub value: syn::Type,
+}
+
+impl NMapDef {
+	fn to_keygen_struct(&self) -> proc_macro2::TokenStream {
+		let key_hasher = self.keys.iter().zip(&self.hashers).map(|(key, hasher)| {
+			let hasher = hasher.to_storage_hasher_struct();
+			quote!( Key<#hasher, #key> )
+		})
+		.collect::<Vec<_>>();
+		quote!(( #(#key_hasher,)* ))
+	}
+
+	fn to_key_tuple(&self) -> proc_macro2::TokenStream {
+		if self.keys.len() == 1 {
+			let key = &self.keys[0];
+			return quote!(#key);
+		}
+
+		let tuple = self.keys.iter().map(|key| {
+			quote!(#key)
+		})
+		.collect::<Vec<_>>();
+		quote!(( #(#tuple,)* ))
+	}
 }
 
 pub struct ExtraGenesisLineDef {
@@ -420,9 +460,20 @@ pub fn decl_storage_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStr
 			StorageValue as _,
 			StorageMap as _,
 			StorageDoubleMap as _,
+			StorageNMap as _,
 			StoragePrefixedMap as _,
 			IterableStorageMap as _,
+			IterableStorageNMap as _,
 			IterableStorageDoubleMap as _,
+
+			storage::types::Key,
+			Blake2_256,
+			Blake2_128,
+			Blake2_128Concat,
+			Twox256,
+			Twox128,
+			Twox64Concat,
+			Identity,
 		};
 
 		#scrate_decl

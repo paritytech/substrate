@@ -30,6 +30,7 @@ mod double_map;
 pub use key::{HasKeyPrefix, HasReversibleKeyPrefix, Key, KeyGenerator, ReversibleKeyGenerator, TupleToEncodedIter};
 pub use value::{StorageValue, StorageValueMetadata};
 pub use map::{StorageMap, StorageMapMetadata};
+pub use nmap::{StorageNMap, StorageNMapMetadata};
 pub use double_map::{StorageDoubleMap, StorageDoubleMapMetadata};
 
 /// Trait implementing how the storage optional value is converted into the queried type.

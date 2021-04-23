@@ -120,6 +120,24 @@ impl BuilderDef {
 							});
 						}}
 					},
+					StorageLineTypeDef::NMap(map) => {
+						let keygen = map.to_keygen_struct();
+						let key_tuple = map.to_key_tuple();
+						let key_arg = if map.keys.len() == 1 {
+							quote!((k,))
+						} else {
+							quote!(k)
+						};
+						quote!{{
+							#data
+							let data: &#scrate::sp_std::vec::Vec<(#key_tuple, #value_type)> = data;
+							data.iter().for_each(|(k, v)| {
+								<#storage_struct as #scrate::#storage_trait>::insert::<
+									&#keygen, &#value_type
+								>(#key_arg, v);
+							});
+						}}
+					},
 				});
 			}
 		}

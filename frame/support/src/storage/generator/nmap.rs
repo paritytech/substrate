@@ -330,3 +330,148 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>> storage::Ite
 		}
 	}
 }
+
+/// Test iterators for StorageNMap
+#[cfg(test)]
+mod test_iterators {
+	use codec::{Encode, Decode};
+	use crate::{
+		hash::StorageHasher,
+		storage::{generator::StorageNMap, IterableStorageNMap, unhashed},
+	};
+
+	pub trait Config: 'static {
+		type Origin;
+		type BlockNumber;
+		type PalletInfo: crate::traits::PalletInfo;
+		type DbWeight: crate::traits::Get<crate::weights::RuntimeDbWeight>;
+	}
+
+	crate::decl_module! {
+		pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {}
+	}
+
+	#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+	struct NoDef(u32);
+
+	crate::decl_storage! {
+		trait Store for Module<T: Config> as Test {
+			NMap: nmap hasher(blake2_128_concat) u16, hasher(twox_64_concat) u32 => u64;
+		}
+	}
+
+	fn key_before_prefix(mut prefix: Vec<u8>) -> Vec<u8> {
+		let last = prefix.iter_mut().last().unwrap();
+		assert!(*last != 0, "mock function not implemented for this prefix");
+		*last -= 1;
+		prefix
+	}
+
+	fn key_after_prefix(mut prefix: Vec<u8>) -> Vec<u8> {
+		let last = prefix.iter_mut().last().unwrap();
+		assert!(*last != 255, "mock function not implemented for this prefix");
+		*last += 1;
+		prefix
+	}
+
+	#[test]
+	fn n_map_reversible_reversible_iteration() {
+		sp_io::TestExternalities::default().execute_with(|| {
+			// All map iterator
+			let prefix = NMap::prefix_hash();
+
+			unhashed::put(&key_before_prefix(prefix.clone()), &1u64);
+			unhashed::put(&key_after_prefix(prefix.clone()), &1u64);
+
+			for i in 0..4 {
+				NMap::insert((i as u16, i as u32), i as u64);
+			}
+
+			assert_eq!(
+				NMap::iter().collect::<Vec<_>>(),
+				vec![((3, 3), 3), ((0, 0), 0), ((2, 2), 2), ((1, 1), 1)],
+			);
+
+			assert_eq!(
+				NMap::iter_values().collect::<Vec<_>>(),
+				vec![3, 0, 2, 1],
+			);
+
+			assert_eq!(
+				NMap::drain().collect::<Vec<_>>(),
+				vec![((3, 3), 3), ((0, 0), 0), ((2, 2), 2), ((1, 1), 1)],
+			);
+
+			assert_eq!(NMap::iter().collect::<Vec<_>>(), vec![]);
+			assert_eq!(unhashed::get(&key_before_prefix(prefix.clone())), Some(1u64));
+			assert_eq!(unhashed::get(&key_after_prefix(prefix.clone())), Some(1u64));
+
+			// Prefix iterator
+			let k1 = 3 << 8;
+			let prefix = NMap::storage_n_map_partial_key((k1,));
+
+			unhashed::put(&key_before_prefix(prefix.clone()), &1u64);
+			unhashed::put(&key_after_prefix(prefix.clone()), &1u64);
+
+			for i in 0..4 {
+				NMap::insert((k1, i as u32), i as u64);
+			}
+
+			assert_eq!(
+				NMap::iter_prefix((k1,)).collect::<Vec<_>>(),
+				vec![(1, 1), (2, 2), (0, 0), (3, 3)],
+			);
+
+			assert_eq!(
+				NMap::iter_prefix_values((k1,)).collect::<Vec<_>>(),
+				vec![1, 2, 0, 3],
+			);
+
+			assert_eq!(
+				NMap::drain_prefix((k1,)).collect::<Vec<_>>(),
+				vec![(1, 1), (2, 2), (0, 0), (3, 3)],
+			);
+
+			assert_eq!(NMap::iter_prefix((k1,)).collect::<Vec<_>>(), vec![]);
+			assert_eq!(unhashed::get(&key_before_prefix(prefix.clone())), Some(1u64));
+			assert_eq!(unhashed::get(&key_after_prefix(prefix.clone())), Some(1u64));
+
+			// Translate
+			let prefix = NMap::prefix_hash();
+
+			unhashed::put(&key_before_prefix(prefix.clone()), &1u64);
+			unhashed::put(&key_after_prefix(prefix.clone()), &1u64);
+			for i in 0..4 {
+				NMap::insert((i as u16, i as u32), i as u64);
+			}
+
+			// Wrong key1
+			unhashed::put(
+				&[prefix.clone(), vec![1, 2, 3]].concat(),
+				&3u64.encode()
+			);
+
+			// Wrong key2
+			unhashed::put(
+				&[prefix.clone(), crate::Blake2_128Concat::hash(&1u16.encode())].concat(),
+				&3u64.encode()
+			);
+
+			// Wrong value
+			unhashed::put(
+				&[
+					prefix.clone(),
+					crate::Blake2_128Concat::hash(&1u16.encode()),
+					crate::Twox64Concat::hash(&2u32.encode()),
+				].concat(),
+				&vec![1],
+			);
+
+			NMap::translate(|(_k1, _k2), v: u64| Some(v*2));
+			assert_eq!(
+				NMap::iter().collect::<Vec<_>>(),
+				vec![((3, 3), 6), ((0, 0), 0), ((2, 2), 4), ((1, 1), 2)],
+			);
+		})
+	}
+}

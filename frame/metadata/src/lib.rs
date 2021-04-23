@@ -300,6 +300,11 @@ pub enum StorageEntryType {
 		value: DecodeDifferentStr,
 		key2_hasher: StorageHasher,
 	},
+	NMap {
+		keys: DecodeDifferentArray<&'static str, StringBuf>,
+		hashers: DecodeDifferentArray<StorageHasher>,
+		value: DecodeDifferentStr,
+	},
 }
 
 /// A storage entry modifier.

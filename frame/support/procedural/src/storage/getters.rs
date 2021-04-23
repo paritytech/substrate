@@ -65,6 +65,24 @@ pub fn impl_getters(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStrea
 					}
 				}
 			},
+			StorageLineTypeDef::NMap(map) => {
+				let keygen = map.to_keygen_struct();
+				let value = &map.value;
+				let key_arg = if map.keys.len() == 1 {
+					quote!((key,))
+				} else {
+					quote!(key)
+				};
+				quote!{
+					pub fn #get_fn<KArg>(key: KArg) -> #value
+					where
+						KArg: #scrate::codec::EncodeLike<<#keygen as KeyGenerator>::KArg>
+							+ #scrate::storage::types::TupleToEncodedIter,
+					{
+						<#storage_struct as #scrate::#storage_trait>::get(#key_arg)
+					}
+				}
+			}
 		};
 		getters.extend(getter);
 	}

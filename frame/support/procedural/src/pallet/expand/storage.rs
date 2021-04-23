@@ -18,6 +18,7 @@
 use crate::pallet::Def;
 use crate::pallet::parse::storage::{Metadata, QueryKind};
 use frame_support_procedural_tools::clean_type_string;
+use syn::spanned::Spanned;
 
 /// Generate the prefix_ident related the the storage.
 /// prefix_ident is used for the prefix struct to be given to storage as first generic param.
@@ -90,6 +91,9 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 				Metadata::DoubleMap { .. } => quote::quote_spanned!(storage.attr_span =>
 					#frame_support::storage::types::StorageDoubleMapMetadata
 				),
+				Metadata::NMap { .. } => quote::quote_spanned!(storage.attr_span =>
+					#frame_support::storage::types::StorageNMapMetadata
+				),
 			};
 
 			let ty = match &storage.metadata {
@@ -123,6 +127,31 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 							key2_hasher: <#full_ident as #metadata_trait>::HASHER2,
 							key1: #frame_support::metadata::DecodeDifferent::Encode(#key1),
 							key2: #frame_support::metadata::DecodeDifferent::Encode(#key2),
+							value: #frame_support::metadata::DecodeDifferent::Encode(#value),
+						}
+					)
+				},
+				Metadata::NMap { keys, hashers, value, .. } => {
+					let keys = keys
+						.iter()
+						.map(|key| clean_type_string(&quote::quote!(#key).to_string()))
+						.collect::<Vec<_>>();
+					let hashers = hashers
+						.iter()
+						.map(|hasher| syn::Ident::new(
+							&clean_type_string(&quote::quote!(#hasher).to_string()),
+							hasher.span(),
+						))
+						.collect::<Vec<_>>();
+					let value = clean_type_string(&quote::quote!(#value).to_string());
+					quote::quote_spanned!(storage.attr_span =>
+						#frame_support::metadata::StorageEntryType::NMap {
+							keys: #frame_support::metadata::DecodeDifferent::Encode(&[
+								#( #keys, )*
+							]),
+							hashers: #frame_support::metadata::DecodeDifferent::Encode(&[
+								#( #frame_support::metadata::StorageHasher::#hashers, )*
+							]),
 							value: #frame_support::metadata::DecodeDifferent::Encode(#value),
 						}
 					)
@@ -227,6 +256,35 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						}
 					)
 				},
+				Metadata::NMap { keys, keygen, value, .. } => {
+					let query = match storage.query_kind.as_ref().expect("Checked by def") {
+						QueryKind::OptionQuery => quote::quote_spanned!(storage.attr_span =>
+							Option<#value>
+						),
+						QueryKind::ValueQuery => quote::quote!(#value),
+					};
+					let key_arg = if keys.len() == 1 {
+						quote::quote!((key,))
+					} else {
+						quote::quote!(key)
+					};
+					quote::quote_spanned!(storage.attr_span =>
+						#(#cfg_attrs)*
+						impl<#type_impl_gen> #pallet_ident<#type_use_gen> #completed_where_clause {
+							#( #docs )*
+							pub fn #getter<KArg>(key: KArg) -> #query
+							where
+								KArg: #frame_support::codec::EncodeLike<<#keygen as KeyGenerator>::KArg>
+									+ #frame_support::storage::types::TupleToEncodedIter,
+							{
+								<
+									#full_ident as
+									#frame_support::storage::StorageNMap<#keygen, #value>
+								>::get(#key_arg)
+							}
+						}
+					)
+				}
 			}
 		} else {
 			Default::default()
