@@ -39,17 +39,26 @@ pub struct Key<Hasher, KeyType>(
 pub trait KeyGenerator {
 	type Key: EncodeLike<Self::Key>;
 	type KArg: Encode;
+	type HashFn: FnOnce(&[u8]) -> Vec<u8>;
+	type HArg;
 
 	fn final_key<KArg: EncodeLike<Self::KArg> + TupleToEncodedIter>(key: KArg) -> Vec<u8>;
+	fn migrate_key<KArg: EncodeLike<Self::KArg> + TupleToEncodedIter>(key: &KArg, hash_fns: Self::HArg) -> Vec<u8>;
 	fn final_hash(encoded: &[u8]) -> Vec<u8>;
 }
 
 impl<H: StorageHasher, K: FullCodec> KeyGenerator for Key<H, K> {
 	type Key = K;
 	type KArg = (K,);
+	type HashFn = Box<dyn FnOnce(&[u8]) -> Vec<u8>>;
+	type HArg = (Self::HashFn,);
 
 	fn final_key<KArg: EncodeLike<Self::KArg> + TupleToEncodedIter>(key: KArg) -> Vec<u8> {
 		H::hash(&key.to_encoded_iter().next().expect("should have at least one element!")).as_ref().to_vec()
+	}
+
+	fn migrate_key<KArg: EncodeLike<Self::KArg> + TupleToEncodedIter>(key: &KArg, hash_fns: Self::HArg) -> Vec<u8> {
+		(hash_fns.0)(&key.to_encoded_iter().next().expect("should have at least one element!"))
 	}
 
 	fn final_hash(encoded: &[u8]) -> Vec<u8> {
@@ -61,6 +70,8 @@ impl<H: StorageHasher, K: FullCodec> KeyGenerator for Key<H, K> {
 impl KeyGenerator for Tuple {
 	for_tuples!( type Key = ( #(Tuple::Key),* ); );
 	for_tuples!( type KArg = ( #(Tuple::Key),* ); );
+	for_tuples!( type HArg = ( #(Tuple::HashFn),* ); );
+	type HashFn = Box<dyn FnOnce(&[u8]) -> Vec<u8>>;
 
 	fn final_key<KArg: EncodeLike<Self::KArg> + TupleToEncodedIter>(key: KArg) -> Vec<u8> {
 		let mut final_key = Vec::new();
@@ -74,18 +85,30 @@ impl KeyGenerator for Tuple {
 		final_key
 	}
 
+	fn migrate_key<KArg: EncodeLike<Self::KArg> + TupleToEncodedIter>(key: &KArg, hash_fns: Self::HArg) -> Vec<u8> {
+		let mut migrated_key = Vec::new();
+		let mut iter = key.to_encoded_iter();
+		for_tuples!(
+			#(
+				let next_encoded = iter.next().expect("KArg number should be equal to Key number");
+				migrated_key.extend_from_slice(&(hash_fns.Tuple)(&next_encoded));
+			)*
+		);
+		migrated_key
+	}
+
 	fn final_hash(encoded: &[u8]) -> Vec<u8> {
 		panic!("final_hash called on KeyGenerator tuple")
 	}
 }
 
 pub trait TupleToEncodedIter {
-	fn to_encoded_iter(self) -> Box<dyn Iterator<Item = Vec<u8>>>;
+	fn to_encoded_iter(&self) -> sp_std::vec::IntoIter<Vec<u8>>;
 }
 
 impl<A: Encode> TupleToEncodedIter for (A,) {
-	fn to_encoded_iter(self) -> Box<dyn Iterator<Item = Vec<u8>>> {
-		Box::new(sp_std::iter::once(self.0.encode()))
+	fn to_encoded_iter(&self) -> sp_std::vec::IntoIter<Vec<u8>> {
+		vec![self.0.encode()].into_iter()
 	}
 }
 
@@ -93,10 +116,10 @@ impl<A: Encode> TupleToEncodedIter for (A,) {
 #[tuple_types_no_default_trait_bound]
 impl TupleToEncodedIter for Tuple {
 	for_tuples!( where #(Tuple: Encode),* );
-	fn to_encoded_iter(self) -> Box<dyn Iterator<Item = Vec<u8>>> {
-		let mut iter: Box<dyn Iterator<Item = Vec<u8>>> = Box::new(sp_std::iter::empty::<Vec<u8>>());
-		for_tuples!( #(iter = Box::new(iter.chain((self.Tuple,).to_encoded_iter()));)* );
-		iter
+	fn to_encoded_iter(&self) -> sp_std::vec::IntoIter<Vec<u8>> {
+		[ for_tuples!( #(self.Tuple.encode()),* ) ]
+			.to_vec()
+			.into_iter()
 	}
 }
 

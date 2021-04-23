@@ -236,6 +236,18 @@ where
 		<Self as crate::storage::StorageNMap<Key, Value>>::decode_len(key)
 	}
 
+	/// Migrate an item with the given `key` from defunct `hash_fns` to the current hashers.
+	///
+	/// If the key doesn't exist, then it's a no-op. If it does, then it returns its value.
+	pub fn migrate_keys<KArg: EncodeLike<Key::KArg> + TupleToEncodedIter>(
+		key: KArg,
+		hash_fns: Key::HArg,
+	) -> Option<Value> {
+		<
+			Self as crate::storage::StorageNMap<Key, Value>
+		>::migrate_keys::<_>(key, hash_fns)
+	}
+
 	/// Remove all value of the storage.
 	pub fn remove_all() {
 		<Self as crate::storage::StoragePrefixedMap<Value>>::remove_all()
@@ -372,6 +384,7 @@ mod test {
 		type AValueQueryWithAnOnEmpty = StorageNMap<
 			Prefix, Key<Blake2_128Concat, u16>, u32, ValueQuery, ADefault
 		>;
+		type B = StorageNMap<Prefix, Key<Blake2_256, u16>, u32, ValueQuery>;
 		type C = StorageNMap<Prefix, Key<Blake2_128Concat, u16>, u8, ValueQuery>;
 		type WithLen = StorageNMap<Prefix, Key<Blake2_128Concat, u16>, Vec<u32>>;
 
@@ -467,6 +480,16 @@ mod test {
 			assert_eq!(A::contains_key((2,)), false);
 			assert_eq!(A::try_get((2,)), Err(()));
 
+			B::insert((2,), 10);
+			assert_eq!(A::migrate_keys(
+				(2,),
+				(
+					Box::new(|key| Blake2_256::hash(key).to_vec()),
+				),
+			), Some(10));
+			assert_eq!(A::contains_key((2,)), true);
+			assert_eq!(A::get((2,)), Some(10));
+
 			A::insert((3,), 10);
 			A::insert((4,), 10);
 			A::remove_all();
@@ -512,6 +535,7 @@ mod test {
 		type AValueQueryWithAnOnEmpty = StorageNMap<
 			Prefix, (Key<Blake2_128Concat, u16>, Key<Twox64Concat, u8>), u32, ValueQuery, ADefault
 		>;
+		type B = StorageNMap<Prefix, (Key<Blake2_256, u16>, Key<Twox128, u8>), u32, ValueQuery>;
 		type C = StorageNMap<Prefix, (Key<Blake2_128Concat, u16>, Key<Twox64Concat, u8>), u8, ValueQuery>;
 		type WithLen = StorageNMap<Prefix, (Key<Blake2_128Concat, u16>, Key<Twox64Concat, u8>), Vec<u32>>;
 
@@ -604,6 +628,17 @@ mod test {
 			assert_eq!(A::contains_key((2, 20)), false);
 			assert_eq!(A::try_get((2, 20)), Err(()));
 
+			B::insert((2, 20), 10);
+			assert_eq!(A::migrate_keys(
+				(2, 20),
+				(
+					Box::new(|key| Blake2_256::hash(key).to_vec()),
+					Box::new(|key| Twox128::hash(key).to_vec()),
+				),
+			), Some(10));
+			assert_eq!(A::contains_key((2, 20)), true);
+			assert_eq!(A::get((2, 20)), Some(10));
+
 			A::insert((3, 30), 10);
 			A::insert((4, 40), 10);
 			A::remove_all();
@@ -656,6 +691,7 @@ mod test {
 		type AValueQueryWithAnOnEmpty = StorageNMap<
 			Prefix, (Key<Blake2_128Concat, u16>, Key<Blake2_128Concat, u16>, Key<Twox64Concat, u16>), u32, ValueQuery, ADefault
 		>;
+		type B = StorageNMap<Prefix, (Key<Blake2_256, u16>, Key<Blake2_256, u16>, Key<Twox128, u16>), u32, ValueQuery>;
 		type C = StorageNMap<Prefix, (Key<Blake2_128Concat, u16>, Key<Blake2_128Concat, u16>, Key<Twox64Concat, u16>), u8, ValueQuery>;
 		type WithLen = StorageNMap<Prefix, (Key<Blake2_128Concat, u16>, Key<Blake2_128Concat, u16>, Key<Twox64Concat, u16>), Vec<u32>>;
 
@@ -745,6 +781,18 @@ mod test {
 			assert_eq!(AValueQueryWithAnOnEmpty::take((2, 20, 200)), 98);
 			assert_eq!(A::contains_key((2, 20, 200)), false);
 			assert_eq!(A::try_get((2, 20, 200)), Err(()));
+
+			B::insert((2, 20, 200), 10);
+			assert_eq!(A::migrate_keys(
+				(2, 20, 200),
+				(
+					Box::new(|key| Blake2_256::hash(key).to_vec()),
+					Box::new(|key| Blake2_256::hash(key).to_vec()),
+					Box::new(|key| Twox128::hash(key).to_vec()),
+				),
+			), Some(10));
+			assert_eq!(A::contains_key((2, 20, 200)), true);
+			assert_eq!(A::get((2, 20, 200)), Some(10));
 
 			A::insert((3, 30, 300), 10);
 			A::insert((4, 40, 400), 10);

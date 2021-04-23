@@ -251,6 +251,30 @@ where
 		let final_key = Self::storage_n_map_final_key::<K, _>(key);
 		sp_io::storage::append(&final_key, item.encode());
 	}
+	
+	fn migrate_keys<KArg: EncodeLike<K::KArg> + TupleToEncodedIter>(key: KArg, hash_fns: K::HArg) -> Option<V> {
+		let old_key = {
+			let module_prefix_hashed = Twox128::hash(Self::module_prefix());
+			let storage_prefix_hashed = Twox128::hash(Self::storage_prefix());
+			let key_hashed = K::migrate_key(&key, hash_fns);
+
+			let mut final_key = Vec::with_capacity(
+				module_prefix_hashed.len()
+					+ storage_prefix_hashed.len()
+					+ key_hashed.len()
+			);
+
+			final_key.extend_from_slice(&module_prefix_hashed[..]);
+			final_key.extend_from_slice(&storage_prefix_hashed[..]);
+			final_key.extend_from_slice(key_hashed.as_ref());
+
+			final_key
+		};
+		unhashed::take(old_key.as_ref()).map(|value| {
+			unhashed::put(Self::storage_n_map_final_key::<K, _>(key).as_ref(), &value);
+			value
+		})
+	}
 }
 
 impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>> storage::IterableStorageNMap<K, V> for G {

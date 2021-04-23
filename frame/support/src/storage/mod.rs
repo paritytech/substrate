@@ -642,6 +642,11 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 	{
 		V::decode_len(&Self::hashed_key_for(key))
 	}
+
+	/// Migrate an item with the given `key` from defunct `hash_fns` to the current hashers.
+	///
+	/// If the key doesn't exist, then it's a no-op. If it does, then it returns its value.
+	fn migrate_keys<KArg: EncodeLike<K::KArg> + TupleToEncodedIter>(key: KArg, hash_fns: K::HArg) -> Option<V>;
 }
 
 /// Iterate over a prefix and decode raw_key and raw_value into `T`.
