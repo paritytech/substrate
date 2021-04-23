@@ -94,7 +94,7 @@ pub trait Config: frame_system::Config {
 	type ManagerOrigin: EnsureOrigin<Self::Origin>;
 
 	/// The max number of calls available in a single lottery.
-	type MaxCalls: Get<usize>;
+	type MaxCalls: Get<u32>; // todo: [AJ] changed from usize -> u32 (see usages) for TypeInfo support.
 
 	/// Used to determine if a call would be valid for purchasing a ticket.
 	///
@@ -212,7 +212,7 @@ decl_module! {
 		type Error = Error<T>;
 
 		const PalletId: PalletId = T::PalletId::get();
-		const MaxCalls: u32 = T::MaxCalls::get() as u32;
+		const MaxCalls: u32 = T::MaxCalls::get();
 
 		fn deposit_event() = default;
 
@@ -247,7 +247,7 @@ decl_module! {
 		#[weight = T::WeightInfo::set_calls(calls.len() as u32)]
 		fn set_calls(origin, calls: Vec<<T as Config>::Call>) {
 			T::ManagerOrigin::ensure_origin(origin)?;
-			ensure!(calls.len() <= T::MaxCalls::get(), Error::<T>::TooManyCalls);
+			ensure!(calls.len() as u32 <= T::MaxCalls::get(), Error::<T>::TooManyCalls);
 			if calls.is_empty() {
 				CallIndices::kill();
 			} else {

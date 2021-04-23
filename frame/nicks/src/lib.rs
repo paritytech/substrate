@@ -71,10 +71,10 @@ pub trait Config: frame_system::Config {
 	type ForceOrigin: EnsureOrigin<Self::Origin>;
 
 	/// The minimum length a name may be.
-	type MinLength: Get<usize>;
+	type MinLength: Get<u32>;
 
 	/// The maximum length a name may be.
-	type MaxLength: Get<usize>;
+	type MaxLength: Get<u32>;
 }
 
 decl_storage! {
@@ -122,10 +122,10 @@ decl_module! {
 		const ReservationFee: BalanceOf<T> = T::ReservationFee::get();
 
 		/// The minimum length a name may be.
-		const MinLength: u32 = T::MinLength::get() as u32;
+		const MinLength: u32 = T::MinLength::get();
 
 		/// The maximum length a name may be.
-		const MaxLength: u32 = T::MaxLength::get() as u32;
+		const MaxLength: u32 = T::MaxLength::get();
 
 		/// Set an account's name. The name should be a UTF-8-encoded string by convention, though
 		/// we don't check it.
@@ -147,8 +147,8 @@ decl_module! {
 		fn set_name(origin, name: Vec<u8>) {
 			let sender = ensure_signed(origin)?;
 
-			ensure!(name.len() >= T::MinLength::get(), Error::<T>::TooShort);
-			ensure!(name.len() <= T::MaxLength::get(), Error::<T>::TooLong);
+			ensure!(name.len() as u32 >= T::MinLength::get(), Error::<T>::TooShort);
+			ensure!(name.len() as u32 <= T::MaxLength::get(), Error::<T>::TooLong);
 
 			let deposit = if let Some((_, deposit)) = <NameOf<T>>::get(&sender) {
 				Self::deposit_event(RawEvent::NameChanged(sender.clone()));
@@ -308,8 +308,8 @@ mod tests {
 	}
 	parameter_types! {
 		pub const ReservationFee: u64 = 2;
-		pub const MinLength: usize = 3;
-		pub const MaxLength: usize = 16;
+		pub const MinLength: u32 = 3;
+		pub const MaxLength: u32 = 16;
 	}
 	ord_parameter_types! {
 		pub const One: u64 = 1;
