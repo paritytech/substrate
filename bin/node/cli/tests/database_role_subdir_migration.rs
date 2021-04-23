@@ -53,3 +53,34 @@ fn database_role_subdir_migration() {
 	assert!(!old_db_path.join("db_version").exists());
 	assert!(old_db_path.join("light/db_version").exists());
 }
+
+#[test]
+#[cfg(unix)]
+fn database_role_subdir_migration_fail_on_wrong_role() {
+	type Block = RawBlock<ExtrinsicWrapper<u64>>;
+
+	let base_path = tempdir().expect("could not create a temp dir");
+	let old_db_path = base_path.path().join("chains/dev/db");
+
+	// create a database with the old layout
+	{
+		let _old_db = LightStorage::<Block>::new(DatabaseSettings{
+			state_cache_size: 0,
+			state_cache_child_ratio: None,
+			state_pruning: PruningMode::ArchiveAll,
+			source: DatabaseSettingsSrc::RocksDb { path: old_db_path.to_path_buf(), cache_size: 128 },
+			keep_blocks: KeepBlocks::All,
+			transaction_storage: TransactionStorageMode::BlockBody
+		}).unwrap();
+	}
+	assert!(old_db_path.join("db_version").exists());
+
+	// start a client with a different role (full) than the old database
+	common::run_node_with_args_for_a_while(base_path.path(), &["--dev"]);
+
+	// check that the database dir had **not** been migrated
+	assert!(old_db_path.join("db_version").exists());
+	assert!(!old_db_path.join("light/db_version").exists());
+	assert!(!old_db_path.join("full/db_version").exists());
+}
+
