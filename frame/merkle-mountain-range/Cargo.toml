@@ -18,7 +18,6 @@ frame-support = { version = "3.0.0", default-features = false, path = "../suppor
 frame-system = { version = "3.0.0", default-features = false, path = "../system" }
 mmr-lib = { package = "ckb-merkle-mountain-range", default-features = false, version = "0.3.1" }
 pallet-mmr-primitives = { version = "3.0.0", default-features = false, path = "./primitives" }
-serde = { version = "1.0.101", optional = true }
 sp-core = { version = "3.0.0", default-features = false, path = "../../primitives/core" }
 sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
@@ -37,7 +36,6 @@ std = [
 	"frame-system/std",
 	"mmr-lib/std",
 	"pallet-mmr-primitives/std",
-	"serde",
 	"sp-core/std",
 	"sp-io/std",
 	"sp-runtime/std",
