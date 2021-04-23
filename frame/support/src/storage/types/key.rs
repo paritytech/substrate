@@ -38,17 +38,17 @@ pub struct Key<Hasher, KeyType>(
 /// A trait that contains the current key as an associated type.
 pub trait KeyGenerator {
 	type Key: EncodeLike<Self::Key>;
-	type Arg: Encode;
+	type KArg: Encode;
 
-	fn final_key<KArg: EncodeLike<Self::Arg> + TupleToEncodedIter>(key: KArg) -> Vec<u8>;
+	fn final_key<KArg: EncodeLike<Self::KArg> + TupleToEncodedIter>(key: KArg) -> Vec<u8>;
 	fn final_hash(encoded: &[u8]) -> Vec<u8>;
 }
 
 impl<H: StorageHasher, K: FullCodec> KeyGenerator for Key<H, K> {
 	type Key = K;
-	type Arg = (K,);
+	type KArg = (K,);
 
-	fn final_key<KArg: EncodeLike<Self::Arg> + TupleToEncodedIter>(key: KArg) -> Vec<u8> {
+	fn final_key<KArg: EncodeLike<Self::KArg> + TupleToEncodedIter>(key: KArg) -> Vec<u8> {
 		H::hash(&key.to_encoded_iter().next().expect("should have at least one element!")).as_ref().to_vec()
 	}
 
@@ -60,9 +60,9 @@ impl<H: StorageHasher, K: FullCodec> KeyGenerator for Key<H, K> {
 #[impl_trait_for_tuples::impl_for_tuples(2, 18)]
 impl KeyGenerator for Tuple {
 	for_tuples!( type Key = ( #(Tuple::Key),* ); );
-	for_tuples!( type Arg = ( #(Tuple::Key),* ); );
+	for_tuples!( type KArg = ( #(Tuple::Key),* ); );
 
-	fn final_key<KArg: EncodeLike<Self::Arg> + TupleToEncodedIter>(key: KArg) -> Vec<u8> {
+	fn final_key<KArg: EncodeLike<Self::KArg> + TupleToEncodedIter>(key: KArg) -> Vec<u8> {
 		let mut final_key = Vec::new();
 		let mut iter = key.to_encoded_iter();
 		for_tuples!(

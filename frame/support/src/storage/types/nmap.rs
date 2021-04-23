@@ -103,29 +103,29 @@ where
 	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static,
 {
 	/// Get the storage key used to fetch a value corresponding to a specific key.
-	pub fn hashed_key_for<KArg: EncodeLike<Key::Arg> + TupleToEncodedIter>(key: KArg) -> Vec<u8> {
+	pub fn hashed_key_for<KArg: EncodeLike<Key::KArg> + TupleToEncodedIter>(key: KArg) -> Vec<u8> {
 		<Self as crate::storage::StorageNMap<Key, Value>>::hashed_key_for(key)
 	}
 
 	/// Does the value (explicitly) exist in storage?
-	pub fn contains_key<KArg: EncodeLike<Key::Arg> + TupleToEncodedIter>(key: KArg) -> bool {
+	pub fn contains_key<KArg: EncodeLike<Key::KArg> + TupleToEncodedIter>(key: KArg) -> bool {
 		<Self as crate::storage::StorageNMap<Key, Value>>::contains_key(key)
 	}
 
 	/// Load the value associated with the given key from the map.
-	pub fn get<KArg: EncodeLike<Key::Arg> + TupleToEncodedIter>(key: KArg) -> QueryKind::Query {
+	pub fn get<KArg: EncodeLike<Key::KArg> + TupleToEncodedIter>(key: KArg) -> QueryKind::Query {
 		<Self as crate::storage::StorageNMap<Key, Value>>::get(key)
 	}
 
 	/// Try to get the value for the given key from the map.
 	///
 	/// Returns `Ok` if it exists, `Err` if not.
-	pub fn try_get<KArg: EncodeLike<Key::Arg> + TupleToEncodedIter>(key: KArg) -> Result<Value, ()> {
+	pub fn try_get<KArg: EncodeLike<Key::KArg> + TupleToEncodedIter>(key: KArg) -> Result<Value, ()> {
 		<Self as crate::storage::StorageNMap<Key, Value>>::try_get(key)
 	}
 
 	/// Take a value from storage, removing it afterwards.
-	pub fn take<KArg: EncodeLike<Key::Arg> + TupleToEncodedIter>(key: KArg) -> QueryKind::Query {
+	pub fn take<KArg: EncodeLike<Key::KArg> + TupleToEncodedIter>(key: KArg) -> QueryKind::Query {
 		<Self as crate::storage::StorageNMap<Key, Value>>::take(key)
 	}
 
@@ -133,19 +133,19 @@ where
 	pub fn swap<KOther, KArg1, KArg2>(key1: KArg1, key2: KArg2)
 	where
 		KOther: KeyGenerator,
-		KArg1: EncodeLike<Key::Arg> + TupleToEncodedIter,
-		KArg2: EncodeLike<KOther::Arg> + TupleToEncodedIter,
+		KArg1: EncodeLike<Key::KArg> + TupleToEncodedIter,
+		KArg2: EncodeLike<KOther::KArg> + TupleToEncodedIter,
 	{
 		<Self as crate::storage::StorageNMap<Key, Value>>::swap::<KOther, _, _>(key1, key2)
 	}
 
 	/// Store a value to be associated with the given keys from the map.
-	pub fn insert<KArg: EncodeLike<Key::Arg> + TupleToEncodedIter, VArg: EncodeLike<Value>>(key: KArg, val: VArg) {
+	pub fn insert<KArg: EncodeLike<Key::KArg> + TupleToEncodedIter, VArg: EncodeLike<Value>>(key: KArg, val: VArg) {
 		<Self as crate::storage::StorageNMap<Key, Value>>::insert(key, val)
 	}
 
 	/// Remove the value under the given keys.
-	pub fn remove<KArg: EncodeLike<Key::Arg> + TupleToEncodedIter>(key: KArg) {
+	pub fn remove<KArg: EncodeLike<Key::KArg> + TupleToEncodedIter>(key: KArg) {
 		<Self as crate::storage::StorageNMap<Key, Value>>::remove(key)
 	}
 
@@ -165,7 +165,7 @@ where
 	/// Mutate the value under the given keys.
 	pub fn mutate<KArg, R, F>(key: KArg, f: F) -> R
 	where
-		KArg: EncodeLike<Key::Arg> + TupleToEncodedIter,
+		KArg: EncodeLike<Key::KArg> + TupleToEncodedIter,
 		F: FnOnce(&mut QueryKind::Query) -> R,
 	{
 		<Self as crate::storage::StorageNMap<Key, Value>>::mutate(key, f)
@@ -174,7 +174,7 @@ where
 	/// Mutate the value under the given keys when the closure returns `Ok`.
 	pub fn try_mutate<KArg, R, E, F>(key: KArg, f: F) -> Result<R, E>
 	where
-		KArg: EncodeLike<Key::Arg> + TupleToEncodedIter,
+		KArg: EncodeLike<Key::KArg> + TupleToEncodedIter,
 		F: FnOnce(&mut QueryKind::Query) -> Result<R, E>,
 	{
 		<Self as crate::storage::StorageNMap<Key, Value>>::try_mutate(key, f)
@@ -183,7 +183,7 @@ where
 	/// Mutate the value under the given keys. Deletes the item if mutated to a `None`.
 	pub fn mutate_exists<KArg, R, F>(key: KArg, f: F) -> R
 	where
-		KArg: EncodeLike<Key::Arg> + TupleToEncodedIter,
+		KArg: EncodeLike<Key::KArg> + TupleToEncodedIter,
 		F: FnOnce(&mut Option<Value>) -> R,
 	{
 		<Self as crate::storage::StorageNMap<Key, Value>>::mutate_exists(key, f)
@@ -192,7 +192,7 @@ where
 	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
 	pub fn try_mutate_exists<KArg, R, E, F>(key: KArg, f: F) -> Result<R, E>
 	where
-		KArg: EncodeLike<Key::Arg> + TupleToEncodedIter,
+		KArg: EncodeLike<Key::KArg> + TupleToEncodedIter,
 		F: FnOnce(&mut Option<Value>) -> Result<R, E>,
 	{
 		<Self as crate::storage::StorageNMap<Key, Value>>::try_mutate_exists(key, f)
@@ -209,7 +209,7 @@ where
 	/// on overwrite.
 	pub fn append<Item, EncodeLikeItem, KArg>(key: KArg, item: EncodeLikeItem)
 	where
-		KArg: EncodeLike<Key::Arg> + TupleToEncodedIter,
+		KArg: EncodeLike<Key::KArg> + TupleToEncodedIter,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
 		Value: StorageAppend<Item>
@@ -229,7 +229,7 @@ where
 	///
 	/// `None` does not mean that `get()` does not return a value. The default value is completly
 	/// ignored by this function.
-	pub fn decode_len<KArg: EncodeLike<Key::Arg> + TupleToEncodedIter>(key: KArg) -> Option<usize>
+	pub fn decode_len<KArg: EncodeLike<Key::KArg> + TupleToEncodedIter>(key: KArg) -> Option<usize>
 	where
 		Value: StorageDecodeLength,
 	{
