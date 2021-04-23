@@ -23,7 +23,7 @@
 
 use sp_std::{result, prelude::*};
 use sp_std::collections::btree_set::BTreeSet;
-use frame_support::{decl_module, decl_storage, decl_error, dispatch, ensure};
+use frame_support::dispatch;
 use frame_support::traits::{FindAuthor, VerifySeal, Get};
 use codec::{Encode, Decode};
 use frame_system::ensure_none;
@@ -33,6 +33,8 @@ use sp_inherents::{InherentIdentifier, ProvideInherent, InherentData};
 use sp_authorship::{INHERENT_IDENTIFIER, UnclesInherentData, InherentError};
 
 const MAX_UNCLES: usize = 10;
+
+pub use pallet::*;
 
 pub trait Config: frame_system::Config {
 	/// Find the author of a block.
@@ -59,7 +61,7 @@ pub trait Config: frame_system::Config {
 	type EventHandler: EventHandler<Self::AccountId, Self::BlockNumber>;
 }
 
-/// An event handler for the authorship module. There is a dummy implementation
+/// An event handler for the authorship pallet. There is a dummy implementation
 /// for `()`, which does nothing.
 #[impl_trait_for_tuples::impl_for_tuples(30)]
 pub trait EventHandler<Author, BlockNumber> {
@@ -150,21 +152,86 @@ enum UncleEntryItem<BlockNumber, Hash, Author> {
 	InclusionHeight(BlockNumber),
 	Uncle(Hash, Option<Author>),
 }
+#[frame_support::pallet]
+pub mod pallet {
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
+	use super::*;
 
-decl_storage! {
-	trait Store for Module<T: Config> as Authorship {
-		/// Uncles
-		Uncles: Vec<UncleEntryItem<T::BlockNumber, T::Hash, T::AccountId>>;
-		/// Author of current block.
-		Author: Option<T::AccountId>;
-		/// Whether uncles were already set in this block.
-		DidSetUncles: bool;
+	#[pallet::config]
+	pub trait Config: frame_system::Config {
+		/// Find the author of a block.
+		type FindAuthor: FindAuthor<Self::AccountId>;
+		/// The number of blocks back we should accept uncles.
+		/// This means that we will deal with uncle-parents that are
+		/// `UncleGenerations + 1` before `now`.
+		type UncleGenerations: Get<Self::BlockNumber>;
+		/// A filter for uncles within a block. This is for implementing
+		/// further constraints on what uncles can be included, other than their ancestry.
+		///
+		/// For PoW, as long as the seals are checked, there is no need to use anything
+		/// but the `VerifySeal` implementation as the filter. This is because the cost of making many equivocating
+		/// uncles is high.
+		///
+		/// For PoS, there is no such limitation, so a further constraint must be imposed
+		/// beyond a seal check in order to prevent an arbitrary number of
+		/// equivocating uncles from being included.
+		///
+		/// The `OnePerAuthorPerHeight` filter is good for many slot-based PoS
+		/// engines.
+		type FilterUncle: FilterUncle<Self::Header, Self::AccountId>;
+		/// An event handler for authored blocks.
+		type EventHandler: EventHandler<Self::AccountId, Self::BlockNumber>;
 	}
-}
 
-decl_error! {
-	/// Error for the authorship module.
-	pub enum Error for Module<T: Config> {
+	#[pallet::pallet]
+	#[pallet::generate_store(pub(super) trait Store)]
+	pub struct Pallet<T>(_);
+
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+
+			fn on_initialize(now: T::BlockNumber) -> Weight {
+			let uncle_generations = T::UncleGenerations::get();
+			// prune uncles that are older than the allowed number of generations.
+			if uncle_generations <= now {
+				let minimum_height = now - uncle_generations;
+				Self::prune_old_uncles(minimum_height)
+			}
+
+			<DidSetUncles<T>>::put(false);
+
+			T::EventHandler::note_author(Self::author());
+
+			0
+		}
+
+		fn on_finalize() {
+			// ensure we never go to trie with these values.
+			<Author<T>>::kill();
+			<DidSetUncles<T>>::kill();
+		}
+	}
+
+	#[pallet::storage]
+	/// Uncles
+	pub(super) type Uncles<T: Config> = StorageValue<
+		_,
+		Vec<UncleEntryItem<T::BlockNumber, T::Hash, T::AccountId>>
+	>;
+
+	#[pallet::storage]
+	/// Author of current block.
+	pub(super) type Author<T: Config> = StorageValue<_, Option<T::AccountId>>;
+
+	#[pallet::storage]
+	/// Whether uncles were already set in this block.
+	pub(super) type DidSetUncles<T: Config> = StorageValue<_, bool>;
+
+
+	#[pallet::error]
+	pub enum Error<T> {
 		/// The uncle parent not in the chain.
 		InvalidUncleParent,
 		/// Uncles already set in the block.
@@ -180,64 +247,38 @@ decl_error! {
 		/// The uncle isn't recent enough to be included.
 		OldUncle,
 	}
-}
 
-decl_module! {
-	pub struct Module<T: Config> for enum Call where origin: T::Origin {
-		type Error = Error<T>;
-
-		fn on_initialize(now: T::BlockNumber) -> Weight {
-			let uncle_generations = T::UncleGenerations::get();
-			// prune uncles that are older than the allowed number of generations.
-			if uncle_generations <= now {
-				let minimum_height = now - uncle_generations;
-				Self::prune_old_uncles(minimum_height)
-			}
-
-			<Self as Store>::DidSetUncles::put(false);
-
-			T::EventHandler::note_author(Self::author());
-
-			0
-		}
-
-		fn on_finalize() {
-			// ensure we never go to trie with these values.
-			<Self as Store>::Author::kill();
-			<Self as Store>::DidSetUncles::kill();
-		}
-
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {
 		/// Provide a set of uncles.
-		#[weight = (0, DispatchClass::Mandatory)]
-		fn set_uncles(origin, new_uncles: Vec<T::Header>) -> dispatch::DispatchResult {
+		#[pallet::weight((0, DispatchClass::Mandatory))]
+		fn set_uncles(origin: OriginFor<T>, new_uncles: Vec<T::Header>) -> DispatchResult {
 			ensure_none(origin)?;
 			ensure!(new_uncles.len() <= MAX_UNCLES, Error::<T>::TooManyUncles);
 
-			if <Self as Store>::DidSetUncles::get() {
+			if <DidSetUncles<T>>::get() {
 				Err(Error::<T>::UnclesAlreadySet)?
 			}
-			<Self as Store>::DidSetUncles::put(true);
+			<DidSetUncles<T>>::put(true);
 
 			Self::verify_and_import_uncles(new_uncles)
 		}
 	}
 }
 
-impl<T: Config> Module<T> {
-	/// Fetch the author of the block.
-	///
+impl<T: Config> Pallet<T> {
 	/// This is safe to invoke in `on_initialize` implementations, as well
 	/// as afterwards.
 	pub fn author() -> T::AccountId {
 		// Check the memoized storage value.
-		if let Some(author) = <Self as Store>::Author::get() {
+		if let Some(author) = <Author<T>>::get() {
 			return author;
 		}
 
 		let digest = <frame_system::Pallet<T>>::digest();
 		let pre_runtime_digests = digest.logs.iter().filter_map(|d| d.as_pre_runtime());
 		if let Some(author) = T::FindAuthor::find_author(pre_runtime_digests) {
-			<Self as Store>::Author::put(&author);
+			<Author<T>>::put(&author);
 			author
 		} else {
 			Default::default()
@@ -247,7 +288,7 @@ impl<T: Config> Module<T> {
 	fn verify_and_import_uncles(new_uncles: Vec<T::Header>) -> dispatch::DispatchResult {
 		let now = <frame_system::Pallet<T>>::block_number();
 
-		let mut uncles = <Self as Store>::Uncles::get();
+		let mut uncles = <Uncles<T>>::get();
 		uncles.push(UncleEntryItem::InclusionHeight(now));
 
 		let mut acc: <T::FilterUncle as FilterUncle<_, _>>::Accumulator = Default::default();
@@ -268,7 +309,7 @@ impl<T: Config> Module<T> {
 			uncles.push(UncleEntryItem::Uncle(hash, author));
 		}
 
-		<Self as Store>::Uncles::put(&uncles);
+		<Uncles<T>>::put(&uncles);
 		Ok(())
 	}
 
@@ -325,7 +366,7 @@ impl<T: Config> Module<T> {
 	}
 
 	fn prune_old_uncles(minimum_height: T::BlockNumber) {
-		let mut uncles = <Self as Store>::Uncles::get();
+		let mut uncles = <Uncles<T>>::get();
 		let prune_entries = uncles.iter().take_while(|item| match item {
 			UncleEntryItem::Uncle(_, _) => true,
 			UncleEntryItem::InclusionHeight(height) => height < &minimum_height,
@@ -333,11 +374,11 @@ impl<T: Config> Module<T> {
 		let prune_index = prune_entries.count();
 
 		let _ = uncles.drain(..prune_index);
-		<Self as Store>::Uncles::put(uncles);
+		<Uncles<T>>::put(uncles);
 	}
 }
 
-impl<T: Config> ProvideInherent for Module<T> {
+impl<T: Config> ProvideInherent for Pallet<T> {
 	type Call = Call<T>;
 	type Error = InherentError;
 	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
@@ -347,7 +388,7 @@ impl<T: Config> ProvideInherent for Module<T> {
 		let mut set_uncles = Vec::new();
 
 		if !uncles.is_empty() {
-			let prev_uncles = <Self as Store>::Uncles::get();
+			let prev_uncles = <Uncles<T>>::get();
 			let mut existing_hashes: Vec<_> = prev_uncles.into_iter().filter_map(|entry|
 				match entry {
 					UncleEntryItem::InclusionHeight(_) => None,
@@ -418,7 +459,7 @@ mod tests {
 			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
 			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-			Authorship: pallet_authorship::{Pallet, Call, Storage, Inherent},
+			Authorship: pallet_authorship::{Pallet, Call, Config, Storage, Inherent},
 		}
 	);
 
@@ -458,7 +499,7 @@ mod tests {
 		pub const UncleGenerations: u64 = 5;
 	}
 
-	impl Config for Test {
+	impl pallet::Config for Test {
 		type FindAuthor = AuthorGiven;
 		type UncleGenerations = UncleGenerations;
 		type FilterUncle = SealVerify<VerifyBlock>;
