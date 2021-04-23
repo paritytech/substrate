@@ -128,33 +128,37 @@ impl<T: Config> Pallet<T> {
 		let (call, _score) = restore_solution::<T>()
 			.and_then(|call| {
 				// ensure the cached call is still current before submitting
-				let current_round = Self::round();
 				if let Call::submit_unsigned(solution, _) = &call {
-					if solution.round == current_round {
-						let score = solution.score.clone();
-
-						log!(
-							debug,
-							"restored a cached call for round {} with score {:?}",
-							current_round,
-							score,
-						);
-
-						if Self::queued_solution().map_or(true, |q: ReadySolution<_>| is_score_better::<Perbill>(
-							score,
-							q.score,
-							T::SolutionImprovementThreshold::get()
-						)) {
-							Ok((call, score))
-						} else {
-							// not technically accurate; it's valid, just scores too low.
-							// Still, this will cause a re-mine in the `or_else` clause;
-							// we might get lucky and generate a higher-scoring solution this time.
-							Err(MinerError::SolutionCallInvalid)
-						}
-					} else {
-						Err(MinerError::SolutionOutOfDate)
+					// not out of date by round
+					let current_round = Self::round();
+					if solution.round != current_round {
+						return Err(MinerError::SolutionOutOfDate);
 					}
+
+					// higher score than what's currently queued
+					let score = solution.score.clone();
+					if !Self::queued_solution().map_or(true, |q: ReadySolution<_>| is_score_better::<Perbill>(
+						score,
+						q.score,
+						T::SolutionImprovementThreshold::get()
+					)) {
+						// not technically accurate; it's valid, just scores too low.
+						// Still, this will cause a re-mine in the `or_else` clause;
+						// we might get lucky and generate a higher-scoring solution this time.
+						return Err(MinerError::SolutionCallInvalid);
+					}
+
+					// prevent errors arising from state changes in a forkful chain
+					Self::feasibility_check(solution.clone(), ElectionCompute::Unsigned)?;
+
+					// checks complete
+					log!(
+						debug,
+						"restored a cached call for round {} with score {:?}",
+						current_round,
+						score,
+					);
+					Ok((call, score))
 				} else {
 					Err(MinerError::SolutionCallInvalid)
 				}
