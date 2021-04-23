@@ -21,17 +21,20 @@
 use codec::FullCodec;
 use frame_metadata::{DefaultByte, StorageEntryModifier};
 
+mod double_map;
 mod key;
-mod value;
 mod map;
 mod nmap;
-mod double_map;
+mod value;
 
-pub use key::{HasKeyPrefix, HasReversibleKeyPrefix, Key, KeyGenerator, ReversibleKeyGenerator, TupleToEncodedIter};
-pub use value::{StorageValue, StorageValueMetadata};
+pub use double_map::{StorageDoubleMap, StorageDoubleMapMetadata};
+pub use key::{
+	HasKeyPrefix, HasReversibleKeyPrefix, Key, KeyGenerator, ReversibleKeyGenerator,
+	TupleToEncodedIter,
+};
 pub use map::{StorageMap, StorageMapMetadata};
 pub use nmap::{StorageNMap, StorageNMapMetadata};
-pub use double_map::{StorageDoubleMap, StorageDoubleMapMetadata};
+pub use value::{StorageValue, StorageValueMetadata};
 
 /// Trait implementing how the storage optional value is converted into the queried type.
 ///
@@ -108,5 +111,5 @@ impl<Value: FullCodec, OnEmpty: crate::traits::Get<Value>> DefaultByte
 		OnEmpty::get().encode()
 	}
 }
-unsafe impl <Value, OnEmpty: crate::traits::Get<Value>> Send for OnEmptyGetter<Value, OnEmpty> {}
-unsafe impl <Value, OnEmpty: crate::traits::Get<Value>> Sync for OnEmptyGetter<Value, OnEmpty> {}
+unsafe impl<Value, OnEmpty: crate::traits::Get<Value>> Send for OnEmptyGetter<Value, OnEmpty> {}
+unsafe impl<Value, OnEmpty: crate::traits::Get<Value>> Sync for OnEmptyGetter<Value, OnEmpty> {}

@@ -586,24 +586,30 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 	fn iter_prefix_values<KP>(partial_key: KP) -> PrefixIterator<V> where K: HasKeyPrefix<KP>;
 
 	/// Mutate the value under a key.
-	fn mutate<KArg: EncodeLike<K::KArg> + TupleToEncodedIter, R, F: FnOnce(&mut Self::Query) -> R>(key: KArg, f: F) -> R;
+	fn mutate<KArg, R, F>(key: KArg, f: F) -> R
+	where
+		KArg: EncodeLike<K::KArg> + TupleToEncodedIter,
+		F: FnOnce(&mut Self::Query) -> R;
 
 	/// Mutate the item, only if an `Ok` value is returned.
-	fn try_mutate<KArg: EncodeLike<K::KArg> + TupleToEncodedIter, R, E, F: FnOnce(&mut Self::Query) -> Result<R, E>>(
-		key: KArg,
-		f: F,
-	) -> Result<R, E>;
+	fn try_mutate<KArg, R, E, F>(key: KArg, f: F) -> Result<R, E>
+	where
+		KArg: EncodeLike<K::KArg> + TupleToEncodedIter,
+		F: FnOnce(&mut Self::Query) -> Result<R, E>;
 
 	/// Mutate the value under a key.
 	///
 	/// Deletes the item if mutated to a `None`.
-	fn mutate_exists<KArg: EncodeLike<K::KArg> + TupleToEncodedIter, R, F: FnOnce(&mut Option<V>) -> R>(key: KArg, f: F) -> R;
+	fn mutate_exists<KArg, R, F>(key: KArg, f: F) -> R
+	where
+		KArg: EncodeLike<K::KArg> + TupleToEncodedIter,
+		F: FnOnce(&mut Option<V>) -> R;
 
 	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
-	fn try_mutate_exists<KArg: EncodeLike<K::KArg> + TupleToEncodedIter, R, E, F: FnOnce(&mut Option<V>) -> Result<R, E>>(
-		key: KArg,
-		f: F,
-	) -> Result<R, E>;
+	fn try_mutate_exists<KArg, R, E, F>(key: KArg, f: F) -> Result<R, E>
+	where
+		KArg: EncodeLike<K::KArg> + TupleToEncodedIter,
+		F: FnOnce(&mut Option<V>) -> Result<R, E>;
 
 	/// Take the value under a key.
 	fn take<KArg: EncodeLike<K::KArg> + TupleToEncodedIter>(key: KArg) -> Self::Query;

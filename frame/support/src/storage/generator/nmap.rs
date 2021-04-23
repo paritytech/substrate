@@ -15,18 +15,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::{
+	hash::{StorageHasher, Twox128},
+	storage::{
+		self,
+		types::{HasKeyPrefix, HasReversibleKeyPrefix, KeyGenerator, ReversibleKeyGenerator},
+		unhashed, PrefixIterator, StorageAppend, TupleToEncodedIter,
+	},
+	Never,
+};
+use codec::{Decode, Encode, EncodeLike, FullCodec};
+use sp_std::borrow::Borrow;
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::*;
-use sp_std::borrow::Borrow;
-use codec::{Decode, Encode, EncodeLike, FullCodec};
-use crate::{
-	storage::{
-		self, unhashed,
-		types::{HasKeyPrefix, HasReversibleKeyPrefix, KeyGenerator, ReversibleKeyGenerator},
-		PrefixIterator, StorageAppend, TupleToEncodedIter,
-	},
-	Never, hash::{StorageHasher, Twox128},
-};
 
 /// Generator for `StorageNMap` used by `decl_storage`.
 ///
@@ -57,9 +58,8 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 		let module_prefix_hashed = Twox128::hash(Self::module_prefix());
 		let storage_prefix_hashed = Twox128::hash(Self::storage_prefix());
 
-		let mut result = Vec::with_capacity(
-			module_prefix_hashed.len() + storage_prefix_hashed.len()
-		);
+		let mut result =
+			Vec::with_capacity(module_prefix_hashed.len() + storage_prefix_hashed.len());
 
 		result.extend_from_slice(&module_prefix_hashed[..]);
 		result.extend_from_slice(&storage_prefix_hashed[..]);
@@ -72,7 +72,7 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 
 	/// Convert a query to an optional value into storage.
 	fn from_query_to_optional_value(v: Self::Query) -> Option<V>;
-	
+
 	/// Generate a partial key used in top storage.
 	fn storage_n_map_partial_key<KP>(key: KP) -> Vec<u8>
 	where
@@ -83,7 +83,7 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 		let key_hashed = <K as HasKeyPrefix<KP>>::partial_key(key);
 
 		let mut final_key = Vec::with_capacity(
-			module_prefix_hashed.len() + storage_prefix_hashed.len() + key_hashed.len()
+			module_prefix_hashed.len() + storage_prefix_hashed.len() + key_hashed.len(),
 		);
 
 		final_key.extend_from_slice(&module_prefix_hashed[..]);
@@ -104,7 +104,7 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 		let key_hashed = KG::final_key(key);
 
 		let mut final_key = Vec::with_capacity(
-			module_prefix_hashed.len() + storage_prefix_hashed.len() + key_hashed.len()
+			module_prefix_hashed.len() + storage_prefix_hashed.len() + key_hashed.len(),
 		);
 
 		final_key.extend_from_slice(&module_prefix_hashed[..]);
@@ -168,7 +168,10 @@ where
 		}
 	}
 
-	fn insert<KArg: EncodeLike<K::KArg> + TupleToEncodedIter, VArg: EncodeLike<V>>(key: KArg, val: VArg) {
+	fn insert<KArg: EncodeLike<K::KArg> + TupleToEncodedIter, VArg: EncodeLike<V>>(
+		key: KArg,
+		val: VArg,
+	) {
 		unhashed::put(&Self::storage_n_map_final_key::<K, _>(key), &val.borrow());
 	}
 
@@ -176,7 +179,10 @@ where
 		unhashed::kill(&Self::storage_n_map_final_key::<K, _>(key));
 	}
 
-	fn remove_prefix<KP>(partial_key: KP) where K: HasKeyPrefix<KP> {
+	fn remove_prefix<KP>(partial_key: KP)
+	where
+		K: HasKeyPrefix<KP>,
+	{
 		unhashed::kill_prefix(&Self::storage_n_map_partial_key(partial_key));
 	}
 
@@ -193,17 +199,20 @@ where
 		}
 	}
 
-	fn mutate<KArg: EncodeLike<K::KArg> + TupleToEncodedIter, R, F: FnOnce(&mut Self::Query) -> R>(
-		key: KArg,
-		f: F,
-	) -> R {
-		Self::try_mutate(key, |v| Ok::<R, Never>(f(v))).expect("`Never` can not be constructed; qed")
+	fn mutate<KArg, R, F>(key: KArg, f: F) -> R
+	where
+		KArg: EncodeLike<K::KArg> + TupleToEncodedIter,
+		F: FnOnce(&mut Self::Query) -> R,
+	{
+		Self::try_mutate(key, |v| Ok::<R, Never>(f(v)))
+			.expect("`Never` can not be constructed; qed")
 	}
 
-	fn try_mutate<KArg: EncodeLike<K::KArg> + TupleToEncodedIter, R, E, F: FnOnce(&mut Self::Query) -> Result<R, E>>(
-		key: KArg,
-		f: F,
-	) -> Result<R, E> {
+	fn try_mutate<KArg, R, E, F>(key: KArg, f: F) -> Result<R, E>
+	where
+		KArg: EncodeLike<K::KArg> + TupleToEncodedIter,
+		F: FnOnce(&mut Self::Query) -> Result<R, E>
+	{
 		let final_key = Self::storage_n_map_final_key::<K, _>(key);
 		let mut val = G::from_optional_value_to_query(unhashed::get(final_key.as_ref()));
 
@@ -217,17 +226,20 @@ where
 		ret
 	}
 
-	fn mutate_exists<KArg: EncodeLike<K::KArg> + TupleToEncodedIter, R, F: FnOnce(&mut Option<V>) -> R>(
-		key: KArg,
-		f: F,
-	) -> R {
-		Self::try_mutate_exists(key, |v| Ok::<R, Never>(f(v))).expect("`Never` can not be constructed; qed")
+	fn mutate_exists<KArg, R, F>(key: KArg, f: F) -> R
+	where
+		KArg: EncodeLike<K::KArg> + TupleToEncodedIter,
+		F: FnOnce(&mut Option<V>) -> R,
+	{
+		Self::try_mutate_exists(key, |v| Ok::<R, Never>(f(v)))
+			.expect("`Never` can not be constructed; qed")
 	}
 
-	fn try_mutate_exists<KArg: EncodeLike<K::KArg> + TupleToEncodedIter, R, E, F: FnOnce(&mut Option<V>) -> Result<R, E>>(
-		key: KArg,
-		f: F,
-	) -> Result<R, E> {
+	fn try_mutate_exists<KArg, R, E, F>(key: KArg, f: F) -> Result<R, E>
+	where
+		KArg: EncodeLike<K::KArg> + TupleToEncodedIter,
+		F: FnOnce(&mut Option<V>) -> Result<R, E>,
+	{
 		let final_key = Self::storage_n_map_final_key::<K, _>(key);
 		let mut val = unhashed::get(final_key.as_ref());
 
@@ -246,22 +258,23 @@ where
 		KArg: EncodeLike<K::KArg> + TupleToEncodedIter,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
-		V: StorageAppend<Item>
+		V: StorageAppend<Item>,
 	{
 		let final_key = Self::storage_n_map_final_key::<K, _>(key);
 		sp_io::storage::append(&final_key, item.encode());
 	}
-	
-	fn migrate_keys<KArg: EncodeLike<K::KArg> + TupleToEncodedIter>(key: KArg, hash_fns: K::HArg) -> Option<V> {
+
+	fn migrate_keys<KArg: EncodeLike<K::KArg> + TupleToEncodedIter>(
+		key: KArg,
+		hash_fns: K::HArg,
+	) -> Option<V> {
 		let old_key = {
 			let module_prefix_hashed = Twox128::hash(Self::module_prefix());
 			let storage_prefix_hashed = Twox128::hash(Self::storage_prefix());
 			let key_hashed = K::migrate_key(&key, hash_fns);
 
 			let mut final_key = Vec::with_capacity(
-				module_prefix_hashed.len()
-					+ storage_prefix_hashed.len()
-					+ key_hashed.len()
+				module_prefix_hashed.len() + storage_prefix_hashed.len() + key_hashed.len(),
 			);
 
 			final_key.extend_from_slice(&module_prefix_hashed[..]);
@@ -277,7 +290,9 @@ where
 	}
 }
 
-impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>> storage::IterableStorageNMap<K, V> for G {
+impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
+	storage::IterableStorageNMap<K, V> for G
+{
 	type Iterator = PrefixIterator<(K::Key, V)>;
 
 	fn iter_prefix<KP>(kp: KP) -> PrefixIterator<(<K as HasKeyPrefix<KP>>::Suffix, V)>
@@ -314,7 +329,7 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>> storage::Ite
 			closure: |raw_key_without_prefix, mut raw_value| {
 				let (final_key, _) = K::decode_final_key(raw_key_without_prefix)?;
 				Ok((final_key, V::decode(&mut raw_value)?))
-			}
+			},
 		}
 	}
 
@@ -327,23 +342,23 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>> storage::Ite
 	fn translate<O: Decode, F: FnMut(K::Key, O) -> Option<V>>(mut f: F) {
 		let prefix = G::prefix_hash();
 		let mut previous_key = prefix.clone();
-		while let Some(next) = sp_io::storage::next_key(&previous_key)
-			.filter(|n| n.starts_with(&prefix))
+		while let Some(next) =
+			sp_io::storage::next_key(&previous_key).filter(|n| n.starts_with(&prefix))
 		{
 			previous_key = next;
 			let value = match unhashed::get::<O>(&previous_key) {
 				Some(value) => value,
 				None => {
 					log::error!("Invalid translate: fail to decode old value");
-					continue
-				},
+					continue;
+				}
 			};
-			
+
 			let final_key = match K::decode_final_key(&previous_key[prefix.len()..]) {
 				Ok((final_key, _)) => final_key,
 				Err(_) => {
 					log::error!("Invalid translate: fail to decode key");
-					continue
+					continue;
 				}
 			};
 
@@ -358,11 +373,11 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>> storage::Ite
 /// Test iterators for StorageNMap
 #[cfg(test)]
 mod test_iterators {
-	use codec::{Encode, Decode};
 	use crate::{
 		hash::StorageHasher,
-		storage::{generator::StorageNMap, IterableStorageNMap, unhashed},
+		storage::{generator::StorageNMap, unhashed, IterableStorageNMap},
 	};
+	use codec::{Decode, Encode};
 
 	pub trait Config: 'static {
 		type Origin;
@@ -393,7 +408,10 @@ mod test_iterators {
 
 	fn key_after_prefix(mut prefix: Vec<u8>) -> Vec<u8> {
 		let last = prefix.iter_mut().last().unwrap();
-		assert!(*last != 255, "mock function not implemented for this prefix");
+		assert!(
+			*last != 255,
+			"mock function not implemented for this prefix"
+		);
 		*last += 1;
 		prefix
 	}
@@ -416,10 +434,7 @@ mod test_iterators {
 				vec![((3, 3), 3), ((0, 0), 0), ((2, 2), 2), ((1, 1), 1)],
 			);
 
-			assert_eq!(
-				NMap::iter_values().collect::<Vec<_>>(),
-				vec![3, 0, 2, 1],
-			);
+			assert_eq!(NMap::iter_values().collect::<Vec<_>>(), vec![3, 0, 2, 1],);
 
 			assert_eq!(
 				NMap::drain().collect::<Vec<_>>(),
@@ -427,7 +442,10 @@ mod test_iterators {
 			);
 
 			assert_eq!(NMap::iter().collect::<Vec<_>>(), vec![]);
-			assert_eq!(unhashed::get(&key_before_prefix(prefix.clone())), Some(1u64));
+			assert_eq!(
+				unhashed::get(&key_before_prefix(prefix.clone())),
+				Some(1u64)
+			);
 			assert_eq!(unhashed::get(&key_after_prefix(prefix.clone())), Some(1u64));
 
 			// Prefix iterator
@@ -457,7 +475,10 @@ mod test_iterators {
 			);
 
 			assert_eq!(NMap::iter_prefix((k1,)).collect::<Vec<_>>(), vec![]);
-			assert_eq!(unhashed::get(&key_before_prefix(prefix.clone())), Some(1u64));
+			assert_eq!(
+				unhashed::get(&key_before_prefix(prefix.clone())),
+				Some(1u64)
+			);
 			assert_eq!(unhashed::get(&key_after_prefix(prefix.clone())), Some(1u64));
 
 			// Translate
@@ -470,15 +491,16 @@ mod test_iterators {
 			}
 
 			// Wrong key1
-			unhashed::put(
-				&[prefix.clone(), vec![1, 2, 3]].concat(),
-				&3u64.encode()
-			);
+			unhashed::put(&[prefix.clone(), vec![1, 2, 3]].concat(), &3u64.encode());
 
 			// Wrong key2
 			unhashed::put(
-				&[prefix.clone(), crate::Blake2_128Concat::hash(&1u16.encode())].concat(),
-				&3u64.encode()
+				&[
+					prefix.clone(),
+					crate::Blake2_128Concat::hash(&1u16.encode()),
+				]
+				.concat(),
+				&3u64.encode(),
 			);
 
 			// Wrong value
@@ -487,11 +509,12 @@ mod test_iterators {
 					prefix.clone(),
 					crate::Blake2_128Concat::hash(&1u16.encode()),
 					crate::Twox64Concat::hash(&2u32.encode()),
-				].concat(),
+				]
+				.concat(),
 				&vec![1],
 			);
 
-			NMap::translate(|(_k1, _k2), v: u64| Some(v*2));
+			NMap::translate(|(_k1, _k2), v: u64| Some(v * 2));
 			assert_eq!(
 				NMap::iter().collect::<Vec<_>>(),
 				vec![((3, 3), 6), ((0, 0), 0), ((2, 2), 4), ((1, 1), 2)],

@@ -122,7 +122,9 @@ fn retrieve_arg(
 }
 
 /// Parse the 2nd type argument to `StorageNMap` and return its keys and hashers.
-fn collect_keys_and_hashers(keygen: &syn::GenericArgument) -> syn::Result<(Vec<syn::Type>, Vec<syn::Type>)> {
+fn collect_keys_and_hashers(
+	keygen: &syn::GenericArgument,
+) -> syn::Result<(Vec<syn::Type>, Vec<syn::Type>)> {
 	if let syn::GenericArgument::Type(syn::Type::Tuple(tup)) = keygen {
 		tup
 			.elems
