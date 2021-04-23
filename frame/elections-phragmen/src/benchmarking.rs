@@ -23,7 +23,7 @@ use super::*;
 
 use frame_system::RawOrigin;
 use frame_benchmarking::{benchmarks, account, whitelist, impl_benchmark_test_suite};
-use frame_support::traits::OnInitialize;
+use frame_support::{traits::OnInitialize, dispatch::DispatchResultWithPostInfo};
 
 use crate::Pallet as Elections;
 
