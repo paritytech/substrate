@@ -36,17 +36,24 @@ use sp_tracing::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
 use sp_core::hexdisplay::HexDisplay;
 use crate::{SpanDatum, TraceEvent, Values};
 
-// Estimate of the max size base RPC payload when the Id is bound as a u64. If strings
-// are used for the RPC Id this may need to be adjusted. Note: The base payload does not
-// include the RPC result.
-const BASE_RPC_PAYLOAD: usize = 500;
+// Estimate of the max base RPC payload size when the Id is bound as a u64. If strings
+// are used for the RPC Id this may need to be adjusted. Note: The base payload
+// does not include the RPC result.
+//
+// The estimate is based on the JSONRPC response message which has the following format:
+// `{"jsonrpc":"2.0","result":[],"id":18446744073709551615}`.
+//
+// We care about the total size of the payload because jsonrpc-server will simply ignore
+// messages larger than `sc_rpc_server::MAX_PAYLOAD` and the caller will not get any
+// response.
+const BASE_RPC_PAYLOAD: usize = 100;
 // Default to only pallet, frame support and state related traces
-const DEFAULT_TARGETS: &'static str = "pallet,frame,state";
-const TRACE_TARGET: &'static str = "block_trace";
+const DEFAULT_TARGETS: &str = "pallet,frame,state";
+const TRACE_TARGET: &str = "block_trace";
 // Default to not filtering based on storage keys as storage keys vary per chain.
-const DEFAULT_STORAGE_KEYS: &'static str = "";
+const DEFAULT_STORAGE_KEYS: &str = "";
 // The name of a field required for all events.
-const REQUIRED_EVENT_FIELD: &'static str  = "method";
+const REQUIRED_EVENT_FIELD: &str  = "method";
 
 struct BlockSubscriber {
 	targets: Vec<(String, Level)>,
@@ -84,10 +91,7 @@ impl Subscriber for BlockSubscriber {
 	fn enabled(&self, metadata: &tracing::Metadata<'_>) -> bool {
 		for (target, level) in &self.targets {
 			if metadata.target().starts_with(target.as_str()) && metadata.level() <= level {
-				if metadata.is_span() {
-					return true;
-				} else if metadata.fields().field(REQUIRED_EVENT_FIELD).is_some() {
-					// it is an event, so we check if has the method field
+				if metadata.is_span() || metadata.fields().field(REQUIRED_EVENT_FIELD).is_some() {
 					return true;
 				}
 			}
@@ -138,7 +142,7 @@ impl Subscriber for BlockSubscriber {
 			name: event.metadata().name().to_owned(),
 			target: event.metadata().target().to_owned(),
 			level: *event.metadata().level(),
-			values: values.into(),
+			values,
 			parent_id,
 		};
 		self.events.lock().push(trace_event);
@@ -193,13 +197,13 @@ impl<Block, Client> BlockExecutor<Block, Client>
 		let id = BlockId::Hash(self.block);
 		let mut header = self.client.header(id)
 			.map_err(|e| format!("Invalid block Id: {:?}", e))?
-			.ok_or("Header not found".to_string())?;
+			.ok_or_else(|| "Header not found".to_string())?;
 		let extrinsics = self.client.block_body(&id)
 			.map_err(|e| format!("Invalid block Id: {:?}", e))?
-			.ok_or("Extrinsics not found".to_string())?;
+			.ok_or_else(|| "Extrinsics not found".to_string())?;
 		tracing::debug!(target: "state_tracing", "Found {} extrinsics", extrinsics.len());
-		let parent_hash = header.parent_hash().clone();
-		let parent_id = BlockId::Hash(parent_hash.clone());
+		let parent_hash = *header.parent_hash();
+		let parent_id = BlockId::Hash(parent_hash);
 		// Pop digest else RuntimePanic due to: 'Number of digest items must match that calculated.'
 		header.digest_mut().pop();
 		let block = Block::new(header, extrinsics);
@@ -236,9 +240,8 @@ impl<Block, Client> BlockExecutor<Block, Client>
 		let spans: Vec<_> = block_subscriber.spans
 			.lock()
 			.drain()
-			.map(|(_, s)| SpanDatum::from(s))
 			// Patch wasm identifiers
-			.filter_map(|s| patch_and_filter(s, targets))
+			.filter_map(|(_, s)| patch_and_filter(SpanDatum::from(s), targets))
 			.collect();
 		let events: Vec<_> = block_subscriber.events
 			.lock()
@@ -280,6 +283,8 @@ fn event_key_filter(event: &TraceEvent, storage_keys: &str) -> bool {
 		.unwrap_or(false)
 }
 
+/// Filter out spans that do not meet our targets and if the span is from WASM
+/// update its `name` and `target` fields to the WASM values for those fields.
 fn patch_and_filter(mut span: SpanDatum, targets: &str) -> Option<Span> {
 	if span.name == WASM_TRACE_IDENTIFIER {
 		span.values.bool_values.insert("wasm".to_owned(), true);
