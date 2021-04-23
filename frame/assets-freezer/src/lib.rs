@@ -22,10 +22,10 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-/*#[cfg(test)]
+#[cfg(test)]
 pub mod mock;
 #[cfg(test)]
-mod tests;*/
+mod tests;
 
 use sp_std::prelude::*;
 use sp_runtime::{TokenError, traits::{Zero, Saturating, CheckedAdd, CheckedSub}};

@@ -18,11 +18,12 @@
 //! Test environment for Assets pallet.
 
 use super::*;
-use crate as pallet_assets;
+use crate as pallet_assets_freezer;
 
 use sp_core::H256;
 use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 use frame_support::{parameter_types, construct_runtime};
+use frame_support::traits::StorageMapShim;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -34,8 +35,9 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Assets: pallet_assets::{Pallet, Call, Storage, Event<T>},
+		AssetsFreezer: pallet_assets_freezer::{Pallet, Call, Storage, Event<T>},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 	}
 );
 
@@ -65,6 +67,7 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 
 parameter_types! {
@@ -89,7 +92,7 @@ parameter_types! {
 	pub const MetadataDepositPerByte: u64 = 1;
 }
 
-impl Config for Test {
+impl pallet_assets::Config for Test {
 	type Event = Event;
 	type Balance = u64;
 	type AssetId = u32;
@@ -100,47 +103,24 @@ impl Config for Test {
 	type MetadataDepositPerByte = MetadataDepositPerByte;
 	type ApprovalDeposit = ApprovalDeposit;
 	type StringLimit = StringLimit;
-	type Freezer = TestFreezer;
+	type Freezer = AssetsFreezer;
 	type WeightInfo = ();
+	type Extra = ();
+}
+
+impl Config for Test {
+	type Event = Event;
+	type Assets = Assets;
+	type Store = StorageMapShim<
+		_,
+		frame_system::Provider<Test>,
+		(super::AssetIdOf<Test>,u64)
+		super::FreezeData<u64>,
+	>;
 }
 
 use std::cell::RefCell;
 use std::collections::HashMap;
-
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub(crate) enum Hook {
-	Melted(u32, u64, u64),
-	Died(u32, u64),
-}
-thread_local! {
-	static FROZEN: RefCell<HashMap<(u32, u64), u64>> = RefCell::new(Default::default());
-	static HOOKS: RefCell<Vec<Hook>> = RefCell::new(Default::default());
-}
-
-pub struct TestFreezer;
-impl FrozenBalance<u32, u64, u64> for TestFreezer {
-	fn frozen_balance(asset: u32, who: &u64) -> Option<u64> {
-		FROZEN.with(|f| f.borrow().get(&(asset, who.clone())).cloned())
-	}
-
-	fn melted(asset: u32, who: &u64, amount_left_frozen: u64) {
-		HOOKS.with(|h| h.borrow_mut().push(Hook::Melted(asset, who.clone(), amount_left_frozen)));
-	}
-
-	fn died(asset: u32, who: &u64) {
-		HOOKS.with(|h| h.borrow_mut().push(Hook::Died(asset, who.clone())));
-	}
-}
-
-pub(crate) fn set_frozen_balance(asset: u32, who: u64, amount: u64) {
-	FROZEN.with(|f| f.borrow_mut().insert((asset, who), amount));
-}
-pub(crate) fn clear_frozen_balance(asset: u32, who: u64) {
-	FROZEN.with(|f| f.borrow_mut().remove(&(asset, who)));
-}
-pub(crate) fn hooks() -> Vec<Hook> {
-	HOOKS.with(|h| h.borrow().clone())
-}
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
