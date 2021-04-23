@@ -49,7 +49,8 @@ pub use filter::{
 mod misc;
 pub use misc::{
 	Len, Get, GetDefault, HandleLifetime, TryDrop, Time, UnixTime, IsType, IsSubType, ExecuteBlock,
-	SameOrOther, OnNewAccount, OnKilledAccount, OffchainWorker, GetBacking, Backing,
+	SameOrOther, OnNewAccount, OnKilledAccount, OffchainWorker, GetBacking, Backing, ExtrinsicCall,
+	EnsureInherentsAreFirst,
 };
 
 mod stored_map;
@@ -60,7 +61,7 @@ pub use randomness::Randomness;
 mod metadata;
 pub use metadata::{
 	CallMetadata, GetCallMetadata, GetCallName, PalletInfo, PalletVersion, GetPalletVersion,
-	PALLET_VERSION_STORAGE_KEY_POSTFIX,
+	PALLET_VERSION_STORAGE_KEY_POSTFIX, PalletInfoAccess,
 };
 
 mod hooks;

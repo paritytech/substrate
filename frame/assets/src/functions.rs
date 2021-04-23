@@ -20,37 +20,40 @@
 use super::*;
 
 // The main implementation block for the module.
-impl<T: Config> Pallet<T> {
+impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	// Public immutables
 
 	/// Return the extra "sid-car" data for `id`/`who`, or `None` if the account doesn't exist.
-	pub fn adjust_extra(id: T::AssetId, who: impl sp_std::borrow::Borrow<T::AccountId>)
-		-> Option<ExtraMutator<T>>
-	{
+	pub fn adjust_extra(
+		id: T::AssetId,
+		who: impl sp_std::borrow::Borrow<T::AccountId>,
+	) -> Option<ExtraMutator<T, I>> {
 		ExtraMutator::maybe_new(id, who)
 	}
 
 	/// Get the asset `id` balance of `who`.
 	pub fn balance(id: T::AssetId, who: impl sp_std::borrow::Borrow<T::AccountId>) -> T::Balance {
-		Account::<T>::get(id, who.borrow()).balance
+		Account::<T, I>::get(id, who.borrow()).balance
 	}
 
 	/// Get the total supply of an asset `id`.
 	pub fn total_supply(id: T::AssetId) -> T::Balance {
-		Asset::<T>::get(id).map(|x| x.supply).unwrap_or_else(Zero::zero)
+		Asset::<T, I>::get(id)
+			.map(|x| x.supply)
+			.unwrap_or_else(Zero::zero)
 	}
 
 	pub(super) fn new_account(
 		who: &T::AccountId,
-		d: &mut AssetDetails<T::Balance, T::AccountId, DepositBalanceOf<T>>,
+		d: &mut AssetDetails<T::Balance, T::AccountId, DepositBalanceOf<T, I>>,
 	) -> Result<bool, DispatchError> {
-		let accounts = d.accounts.checked_add(1).ok_or(Error::<T>::Overflow)?;
+		let accounts = d.accounts.checked_add(1).ok_or(Error::<T, I>::Overflow)?;
 		let is_sufficient = if d.is_sufficient {
 			frame_system::Pallet::<T>::inc_sufficients(who);
 			d.sufficients += 1;
 			true
 		} else {
-			frame_system::Pallet::<T>::inc_consumers(who).map_err(|_| Error::<T>::NoProvider)?;
+			frame_system::Pallet::<T>::inc_consumers(who).map_err(|_| Error::<T, I>::NoProvider)?;
 			false
 		};
 		d.accounts = accounts;
@@ -60,7 +63,7 @@ impl<T: Config> Pallet<T> {
 	pub(super) fn dead_account(
 		what: T::AssetId,
 		who: &T::AccountId,
-		d: &mut AssetDetails<T::Balance, T::AccountId, DepositBalanceOf<T>>,
+		d: &mut AssetDetails<T::Balance, T::AccountId, DepositBalanceOf<T, I>>,
 		sufficient: bool,
 	) {
 		if sufficient {
@@ -73,15 +76,19 @@ impl<T: Config> Pallet<T> {
 		T::Freezer::died(what, who)
 	}
 
-	pub(super) fn can_increase(id: T::AssetId, who: &T::AccountId, amount: T::Balance) -> DepositConsequence {
-		let details = match Asset::<T>::get(id) {
+	pub(super) fn can_increase(
+		id: T::AssetId,
+		who: &T::AccountId,
+		amount: T::Balance,
+	) -> DepositConsequence {
+		let details = match Asset::<T, I>::get(id) {
 			Some(details) => details,
 			None => return DepositConsequence::UnknownAsset,
 		};
 		if details.supply.checked_add(&amount).is_none() {
 			return DepositConsequence::Overflow
 		}
-		let account = Account::<T>::get(id, who);
+		let account = Account::<T, I>::get(id, who);
 		if account.balance.checked_add(&amount).is_none() {
 			return DepositConsequence::Overflow
 		}
@@ -108,7 +115,7 @@ impl<T: Config> Pallet<T> {
 		keep_alive: bool,
 	) -> WithdrawConsequence<T::Balance> {
 		use WithdrawConsequence::*;
-		let details = match Asset::<T>::get(id) {
+		let details = match Asset::<T, I>::get(id) {
 			Some(details) => details,
 			None => return UnknownAsset,
 		};
@@ -118,7 +125,7 @@ impl<T: Config> Pallet<T> {
 		if details.is_frozen {
 			return Frozen
 		}
-		let account = Account::<T>::get(id, who);
+		let account = Account::<T, I>::get(id, who);
 		if account.is_frozen {
 			return Frozen
 		}
@@ -155,19 +162,21 @@ impl<T: Config> Pallet<T> {
 		id: T::AssetId,
 		who: &T::AccountId,
 		keep_alive: bool,
-	) -> Result<T::Balance, Error<T>> {
-		let details = match Asset::<T>::get(id) {
+	) -> Result<T::Balance, Error<T, I>> {
+		let details = match Asset::<T, I>::get(id) {
 			Some(details) => details,
-			None => return Err(Error::<T>::Unknown),
+			None => return Err(Error::<T, I>::Unknown),
 		};
-		ensure!(!details.is_frozen, Error::<T>::Frozen);
+		ensure!(!details.is_frozen, Error::<T, I>::Frozen);
 
-		let account = Account::<T>::get(id, who);
-		ensure!(!account.is_frozen, Error::<T>::Frozen);
+		let account = Account::<T, I>::get(id, who);
+		ensure!(!account.is_frozen, Error::<T, I>::Frozen);
 
 		let amount = if let Some(frozen) = T::Freezer::frozen_balance(id, who) {
 			// Frozen balance: account CANNOT be deleted
-			let required = frozen.checked_add(&details.min_balance).ok_or(Error::<T>::Overflow)?;
+			let required = frozen
+				.checked_add(&details.min_balance)
+				.ok_or(Error::<T, I>::Overflow)?;
 			account.balance.saturating_sub(required)
 		} else {
 			let is_provider = false;
@@ -204,9 +213,8 @@ impl<T: Config> Pallet<T> {
 		amount: T::Balance,
 		f: DebitFlags,
 	) -> Result<T::Balance, DispatchError> {
-		let actual = Self::reducible_balance(id, target, f.keep_alive)?
-			.min(amount);
-		ensure!(f.best_effort || actual >= amount, Error::<T>::BalanceLow);
+		let actual = Self::reducible_balance(id, target, f.keep_alive)?.min(amount);
+		ensure!(f.best_effort || actual >= amount, Error::<T, I>::BalanceLow);
 
 		let conseq = Self::can_decrease(id, target, actual, f.keep_alive);
 		let actual = match conseq.into_result() {
@@ -263,7 +271,10 @@ impl<T: Config> Pallet<T> {
 	) -> DispatchResult {
 		Self::increase_balance(id, beneficiary, amount, |details| -> DispatchResult {
 			if let Some(check_issuer) = maybe_check_issuer {
-				ensure!(&check_issuer == &details.issuer, Error::<T>::NoPermission);
+				ensure!(
+					&check_issuer == &details.issuer,
+					Error::<T, I>::NoPermission
+				);
 			}
 			debug_assert!(T::Balance::max_value() - details.supply >= amount, "checked in prep; qed");
 			details.supply = details.supply.saturating_add(amount);
@@ -283,17 +294,19 @@ impl<T: Config> Pallet<T> {
 		id: T::AssetId,
 		beneficiary: &T::AccountId,
 		amount: T::Balance,
-		check: impl FnOnce(&mut AssetDetails<T::Balance, T::AccountId, DepositBalanceOf<T>>) -> DispatchResult,
+		check: impl FnOnce(
+			&mut AssetDetails<T::Balance, T::AccountId, DepositBalanceOf<T, I>>,
+		) -> DispatchResult,
 	) -> DispatchResult {
 		if amount.is_zero() { return Ok(()) }
 
 		Self::can_increase(id, beneficiary, amount).into_result()?;
-		Asset::<T>::try_mutate(id, |maybe_details| -> DispatchResult {
-			let details = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
+		Asset::<T, I>::try_mutate(id, |maybe_details| -> DispatchResult {
+			let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
 
 			check(details)?;
 
-			Account::<T>::try_mutate(id, beneficiary, |t| -> DispatchResult {
+			Account::<T, I>::try_mutate(id, beneficiary, |t| -> DispatchResult {
 				let new_balance = t.balance.saturating_add(amount);
 				ensure!(new_balance >= details.min_balance, TokenError::BelowMinimum);
 				if t.balance.is_zero() {
@@ -324,7 +337,7 @@ impl<T: Config> Pallet<T> {
 		let actual = Self::decrease_balance(id, target, amount, f, |actual, details| {
 			// Check admin rights.
 			if let Some(check_admin) = maybe_check_admin {
-				ensure!(&check_admin == &details.admin, Error::<T>::NoPermission);
+				ensure!(&check_admin == &details.admin, Error::<T, I>::NoPermission);
 			}
 
 			debug_assert!(details.supply >= actual, "checked in prep; qed");
@@ -351,19 +364,19 @@ impl<T: Config> Pallet<T> {
 		f: DebitFlags,
 		check: impl FnOnce(
 			T::Balance,
-			&mut AssetDetails<T::Balance, T::AccountId, DepositBalanceOf<T>>,
+			&mut AssetDetails<T::Balance, T::AccountId, DepositBalanceOf<T, I>>,
 		) -> DispatchResult,
 	) -> Result<T::Balance, DispatchError> {
 		if amount.is_zero() { return Ok(amount) }
 
 		let actual = Self::prep_debit(id, target, amount, f)?;
 
-		Asset::<T>::try_mutate(id, |maybe_details| -> DispatchResult {
-			let details = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
+		Asset::<T, I>::try_mutate(id, |maybe_details| -> DispatchResult {
+			let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
 
 			check(actual, details)?;
 
-			Account::<T>::try_mutate_exists(id, target, |maybe_account| -> DispatchResult {
+			Account::<T, I>::try_mutate_exists(id, target, |maybe_account| -> DispatchResult {
 				let mut account = maybe_account.take().unwrap_or_default();
 				debug_assert!(account.balance >= actual, "checked in prep; qed");
 
@@ -411,14 +424,14 @@ impl<T: Config> Pallet<T> {
 		let debit = Self::prep_debit(id, &source, amount, f.into())?;
 		let (credit, maybe_burn) = Self::prep_credit(id, &dest, amount, debit, f.burn_dust)?;
 
-		let mut source_account = Account::<T>::get(id, &source);
+		let mut source_account = Account::<T, I>::get(id, &source);
 
-		Asset::<T>::try_mutate(id, |maybe_details| -> DispatchResult {
-			let details = maybe_details.as_mut().ok_or(Error::<T>::Unknown)?;
+		Asset::<T, I>::try_mutate(id, |maybe_details| -> DispatchResult {
+			let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
 
 			// Check admin rights.
 			if let Some(need_admin) = maybe_need_admin {
-				ensure!(&need_admin == &details.admin, Error::<T>::NoPermission);
+				ensure!(&need_admin == &details.admin, Error::<T, I>::NoPermission);
 			}
 
 			// Skip if source == dest
@@ -437,7 +450,7 @@ impl<T: Config> Pallet<T> {
 			debug_assert!(source_account.balance >= debit, "checked in prep; qed");
 			source_account.balance = source_account.balance.saturating_sub(debit);
 
-			Account::<T>::try_mutate(id, &dest, |a| -> DispatchResult {
+			Account::<T, I>::try_mutate(id, &dest, |a| -> DispatchResult {
 				// Calculate new balance; this will not saturate since it's already checked in prep.
 				debug_assert!(a.balance.checked_add(&credit).is_some(), "checked in prep; qed");
 				let new_balance = a.balance.saturating_add(credit);
@@ -455,9 +468,9 @@ impl<T: Config> Pallet<T> {
 			if source_account.balance < details.min_balance {
 				debug_assert!(source_account.balance.is_zero(), "checked in prep; qed");
 				Self::dead_account(id, &source, details, source_account.sufficient);
-				Account::<T>::remove(id, &source);
+				Account::<T, I>::remove(id, &source);
 			} else {
-				Account::<T>::insert(id, &source, &source_account)
+				Account::<T, I>::insert(id, &source, &source_account)
 			}
 
 			Ok(())
