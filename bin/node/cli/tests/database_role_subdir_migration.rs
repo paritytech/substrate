@@ -75,8 +75,9 @@ fn database_role_subdir_migration_fail_on_wrong_role() {
 	}
 	assert!(old_db_path.join("db_version").exists());
 
-	// start a client with a different role (full) than the old database
-	common::run_node_with_args_for_a_while(base_path.path(), &["--dev"]);
+	// start a client with a different role (full), it should fail but not migrate the
+	// old database to the new directory
+	common::run_node_with_args_assert_fail(base_path.path(), &["--dev"]);
 
 	// check that the database dir had **not** been migrated
 	assert!(old_db_path.join("db_version").exists());

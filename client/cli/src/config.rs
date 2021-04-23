@@ -27,6 +27,7 @@ use crate::{
 use log::{warn, info};
 use names::{Generator, Name};
 use sc_client_api::execution_extensions::ExecutionStrategies;
+use sc_client_db::{Backend, DatabaseType};
 use sc_service::config::{
 	BasePath, Configuration, DatabaseConfig, ExtTransport, KeystoreConfig, NetworkConfiguration,
 	NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode, Role, RpcMethods,
@@ -34,6 +35,7 @@ use sc_service::config::{
 };
 use sc_service::{ChainSpec, TracingReceiver, KeepBlocks, TransactionStorageMode};
 use sc_tracing::logging::LoggerBuilder;
+use sp_runtime::{generic, OpaqueExtrinsic, traits::BlakeTwo256};
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::fs;
@@ -248,12 +250,26 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			let mut basedir = p.to_path_buf();
 			basedir.pop();
 
-			// Do we have to migrate to a role-based subdirectory layout:
-			// See if the base dir exists (`db`) and there's no `light` or `full` directory inside
-			// of it, so we assume the database is not-migrated yet.
-			if basedir.exists() &&
-				!(basedir.join("light").exists() || basedir.join("full").exists()) {
-				migrate_to_role_subdir(&basedir, role_suffix)?
+			// Do we have to migrate to a role-based subdirectory layout?
+			// See if the `db_version` file exists in the base dir, if so we assume the database
+			// is not-migrated yet.
+			if basedir.join("db_version").exists() {
+				type DummyBlock = generic::Block<generic::Header<u32, BlakeTwo256>, OpaqueExtrinsic>;
+				let mut old_conf = db_conf.clone();
+				old_conf.set_path(&basedir);
+
+				// assert that the node is started with the same role as the database type
+				match (role, Backend::<DummyBlock>::database_type(old_conf)) {
+					(Role::Light, Ok(DatabaseType::Light)) |
+					(Role::Full, Ok(DatabaseType::Full)) |
+					(Role::Authority, Ok(DatabaseType::Full)) =>
+						migrate_to_role_subdir(&basedir, role_suffix)?,
+					_ => return Err(
+							sp_blockchain::Error::Backend(
+								"Client role does not match database type: {:?}".into()
+							).into()
+						),
+				}
 			}
 		}
 
