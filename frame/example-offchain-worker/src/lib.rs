@@ -35,6 +35,7 @@ use codec::{Encode, Decode};
 use sp_std::vec::Vec;
 use serde::{Deserialize, Deserializer};
 use serde_json;
+use pallet_contracts;
 
 #[derive(Deserialize, Encode, Decode, Default)]
 #[derive(Debug)]
@@ -65,6 +66,7 @@ pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"ddc1");
 
 pub const HTTP_NODES_REQUEST: &str = "http://localhost:8081/listNodes";
 pub const FETCH_TIMEOUT_PERIOD: u64 = 3000; // in milli-seconds
+const ALICE: u64 = 1;
 
 /// Based on the above `KeyTypeId` we need to generate a pallet-specific crypto type wrappers.
 /// We can use from supported crypto kinds (`sr25519`, `ed25519` and `ecdsa`) and augment
@@ -175,7 +177,14 @@ impl<T: Trait> Module<T> {
 //					vec![],
 //				)
 
-				Call::submit_test_data("Hello World data".as_bytes().to_vec())
+				pallet_contracts::Call::call(
+					ALICE,
+					0u32.into(),
+					100,
+					vec![]
+				)
+
+//				Call::submit_test_data("Hello World data".as_bytes().to_vec())
 			}
 		);
 
