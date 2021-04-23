@@ -345,6 +345,7 @@ impl<Bn: PartialEq + Eq> Phase<Bn> {
 /// A configuration for the pallet to indicate what should happen in the case of a fallback i.e.
 /// reaching a call to `elect` with no good solution.
 #[cfg_attr(test, derive(Clone))]
+#[derive(scale_info::TypeInfo)]
 pub enum FallbackStrategy {
 	/// Run a on-chain sequential phragmen.
 	///
