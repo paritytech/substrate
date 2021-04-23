@@ -22,8 +22,8 @@
 use super::*;
 
 use frame_system::RawOrigin;
-use frame_benchmarking::{benchmarks, account, impl_benchmark_test_suite};
-use frame_support::{dispatch::DispatchResultWithPostInfo, traits::OnInitialize};
+use frame_benchmarking::{benchmarks, account, whitelist, impl_benchmark_test_suite};
+use frame_support::traits::OnInitialize;
 
 use crate::Pallet as Elections;
 
@@ -32,14 +32,6 @@ const MAX_VOTERS: u32 = 500;
 const MAX_CANDIDATES: u32 = 200;
 
 type Lookup<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
-
-macro_rules! whitelist {
-	($acc:ident) => {
-		frame_benchmarking::benchmarking::add_to_whitelist(
-			frame_system::Account::<T>::hashed_key_for(&$acc).into()
-		);
-	};
-}
 
 /// grab new account with infinite balance.
 fn endowed_account<T: Config>(name: &'static str, index: u32) -> T::AccountId {

@@ -62,6 +62,14 @@ pub struct WorkerConfig {
 	///
 	/// By default this is set to 10 minutes.
 	pub max_query_interval: Duration,
+
+	/// If `false`, the node won't publish on the DHT multiaddresses that contain non-global
+	/// IP addresses (such as 10.0.0.1).
+	///
+	/// Recommended: `false` for live chains, and `true` for local chains or for testing.
+	///
+	/// Defaults to `true` to avoid the surprise factor.
+	pub publish_non_global_ips: bool,
 }
 
 impl Default for WorkerConfig {
@@ -81,6 +89,7 @@ impl Default for WorkerConfig {
 			// comparing `authority_discovery_authority_addresses_requested_total` and
 			// `authority_discovery_dht_event_received`.
 			max_query_interval: Duration::from_secs(10 * 60),
+			publish_non_global_ips: true,
 		}
 	}
 }

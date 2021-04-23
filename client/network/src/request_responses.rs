@@ -428,9 +428,15 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 		}
 	}
 
-	fn inject_expired_listen_addr(&mut self, addr: &Multiaddr) {
+	fn inject_expired_external_addr(&mut self, addr: &Multiaddr) {
 		for (p, _) in self.protocols.values_mut() {
-			NetworkBehaviour::inject_expired_listen_addr(p, addr)
+			NetworkBehaviour::inject_expired_external_addr(p, addr)
+		}
+	}
+
+	fn inject_expired_listen_addr(&mut self, id: ListenerId, addr: &Multiaddr) {
+		for (p, _) in self.protocols.values_mut() {
+			NetworkBehaviour::inject_expired_listen_addr(p, id, addr)
 		}
 	}
 
@@ -440,9 +446,15 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 		}
 	}
 
-	fn inject_new_listen_addr(&mut self, addr: &Multiaddr) {
+	fn inject_new_listener(&mut self, id: ListenerId) {
 		for (p, _) in self.protocols.values_mut() {
-			NetworkBehaviour::inject_new_listen_addr(p, addr)
+			NetworkBehaviour::inject_new_listener(p, id)
+		}
+	}
+
+	fn inject_new_listen_addr(&mut self, id: ListenerId, addr: &Multiaddr) {
+		for (p, _) in self.protocols.values_mut() {
+			NetworkBehaviour::inject_new_listen_addr(p, id, addr)
 		}
 	}
 
@@ -930,7 +942,7 @@ mod tests {
 		let mut swarm = Swarm::new(transport, behaviour, keypair.public().into_peer_id());
 		let listen_addr: Multiaddr = format!("/memory/{}", rand::random::<u64>()).parse().unwrap();
 
-		Swarm::listen_on(&mut swarm, listen_addr.clone()).unwrap();
+		swarm.listen_on(listen_addr.clone()).unwrap();
 		(swarm, listen_addr)
 	}
 
@@ -1000,7 +1012,7 @@ mod tests {
 				match swarm.next_event().await {
 					SwarmEvent::ConnectionEstablished { peer_id, .. } => {
 						let (sender, receiver) = oneshot::channel();
-						swarm.send_request(
+						swarm.behaviour_mut().send_request(
 							&peer_id,
 							protocol_name,
 							b"this is a request".to_vec(),
@@ -1090,7 +1102,7 @@ mod tests {
 				match swarm.next_event().await {
 					SwarmEvent::ConnectionEstablished { peer_id, .. } => {
 						let (sender, receiver) = oneshot::channel();
-						swarm.send_request(
+						swarm.behaviour_mut().send_request(
 							&peer_id,
 							protocol_name,
 							b"this is a request".to_vec(),
@@ -1182,7 +1194,7 @@ mod tests {
 
 		// Ask swarm 1 to dial swarm 2. There isn't any discovery mechanism in place in this test,
 		// so they wouldn't connect to each other.
-		Swarm::dial_addr(&mut swarm_1, listen_add_2).unwrap();
+		swarm_1.dial_addr(listen_add_2).unwrap();
 
 		// Run swarm 2 in the background, receiving two requests.
 		pool.spawner().spawn_obj(
@@ -1235,14 +1247,14 @@ mod tests {
 						SwarmEvent::ConnectionEstablished { peer_id, .. } => {
 							let (sender_1, receiver_1) = oneshot::channel();
 							let (sender_2, receiver_2) = oneshot::channel();
-							swarm_1.send_request(
+							swarm_1.behaviour_mut().send_request(
 								&peer_id,
 								protocol_name_1,
 								b"this is a request".to_vec(),
 								sender_1,
 								IfDisconnected::ImmediateError,
 							);
-							swarm_1.send_request(
+							swarm_1.behaviour_mut().send_request(
 								&peer_id,
 								protocol_name_2,
 								b"this is a request".to_vec(),
