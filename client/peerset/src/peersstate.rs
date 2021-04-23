@@ -272,11 +272,11 @@ impl PeersState {
 			})
 			.map(|(peer_id, _)| peer_id.clone());
 
-		outcome.map(move |peer_id| { NotConnectedPeer {
+		outcome.map(move |peer_id| NotConnectedPeer {
 				state: self,
 				set,
 				peer_id: Cow::Owned(peer_id),
-			} })
+			})
 	}
 
 	/// Returns `true` if there is a free outgoing slot available related to this set.
