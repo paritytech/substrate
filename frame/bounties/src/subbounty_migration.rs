@@ -25,9 +25,7 @@ use frame_support::{
 	crate_to_pallet_version,
 };
 
-use sp_runtime::{
-	RuntimeDebug
-};
+use sp_runtime::RuntimeDebug;
 
 /// An index of a bounty. Just a `u32`.
 pub type BountyIndex = u32;
