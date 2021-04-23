@@ -113,10 +113,7 @@ pub(super) fn kill_ocw_solution<T: Config>() {
 /// if a solution exists but cannot be decoded, whereas this just checks whether an item is present.
 #[cfg(test)]
 fn ocw_solution_exists<T: Config>() -> bool {
-	matches!(
-		StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL).get::<Call<T>>(),
-		Some(_),
-	)
+	StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL).get::<Call<T>>().is_some()
 }
 
 impl<T: Config> Pallet<T> {
