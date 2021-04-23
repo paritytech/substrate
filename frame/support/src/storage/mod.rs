@@ -27,6 +27,7 @@ use crate::{
 };
 use sp_runtime::generic::{Digest, DigestItem};
 pub use sp_runtime::TransactionOutcome;
+pub use types::Key;
 
 pub mod unhashed;
 pub mod hashed;

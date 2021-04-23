@@ -1237,7 +1237,7 @@ pub mod pallet_prelude {
 		traits::{Get, Hooks, IsType, GetPalletVersion, EnsureOrigin},
 		dispatch::{DispatchResultWithPostInfo, Parameter, DispatchError, DispatchResult},
 		weights::{DispatchClass, Pays, Weight},
-		storage::types::{StorageValue, StorageMap, StorageDoubleMap, ValueQuery, OptionQuery},
+		storage::types::{StorageValue, StorageMap, StorageDoubleMap, StorageNMap, ValueQuery, OptionQuery},
 	};
 	pub use codec::{Encode, Decode};
 	pub use sp_inherents::{InherentData, InherentIdentifier, ProvideInherent};
