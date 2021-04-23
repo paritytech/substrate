@@ -383,6 +383,31 @@ pub(crate) mod tests {
 		.unwrap_err();
 	}
 
+	#[test]
+	fn finality_proof_check_fails_with_incomplete_justification() {
+		let (client, _, blocks) = test_blockchain(8, &[4, 5, 8]);
+
+		// Create a commit without precommits
+		let commit = finality_grandpa::Commit {
+			target_hash: blocks[7].hash(),
+			target_number: *blocks[7].header().number(),
+			precommits: Vec::new(),
+		};
+		let grandpa_just = GrandpaJustification::from_commit(&client, 8, commit).unwrap();
+
+		let finality_proof = FinalityProof {
+			block: header(2).hash(),
+			justification: grandpa_just.encode(),
+			unknown_headers: Vec::new(),
+		};
+
+		check_finality_proof::<Block>(
+			1,
+			vec![(AuthorityId::from_slice(&[3u8; 32]), 1u64)],
+			finality_proof.encode(),
+		).unwrap_err();
+	}
+
 	fn create_commit<S, Id>(
 		block: Block,
 		round: u64,
@@ -393,14 +418,12 @@ pub(crate) mod tests {
 		Id: From<sp_core::ed25519::Public>,
 		S: From<sp_core::ed25519::Signature>,
 	{
-		let target_hash = block.hash();
-		let target_number = *block.header().number();
 		let mut precommits = Vec::new();
 
 		for voter in auth {
 			let precommit = finality_grandpa::Precommit {
-				target_hash,
-				target_number,
+				target_hash: block.hash(),
+				target_number: *block.header().number(),
 			};
 
 			let msg = finality_grandpa::Message::Precommit(precommit.clone());
@@ -416,23 +439,20 @@ pub(crate) mod tests {
 		}
 
 		finality_grandpa::Commit {
-			target_hash,
-			target_number,
+			target_hash: block.hash(),
+			target_number: *block.header().number(),
 			precommits,
 		}
 	}
 
 	#[test]
-	fn finality_proof_check_works() {
+	fn finality_proof_check_works_with_correct_justification() {
 		let (client, _, blocks) = test_blockchain(8, &[4, 5, 8]);
-		let block8 = &blocks[7];
 
 		let alice = Ed25519Keyring::Alice;
-		let auth = vec![(alice.public().into(), 1u64)];
-
 		let set_id = 1;
 		let round = 8;
-		let commit = create_commit(block8.clone(), round, set_id, &[alice]);
+		let commit = create_commit(blocks[7].clone(), round, set_id, &[alice]);
 		let grandpa_just = GrandpaJustification::from_commit(&client, round, commit).unwrap();
 
 		let finality_proof = FinalityProof {
@@ -444,11 +464,11 @@ pub(crate) mod tests {
 			finality_proof,
 			check_finality_proof::<Block>(
 				set_id,
-				auth.clone(),
+				vec![(alice.public().into(), 1u64)],
 				finality_proof.encode(),
 			)
 			.unwrap(),
-		)
+		);
 	}
 
 	#[test]
@@ -484,6 +504,8 @@ pub(crate) mod tests {
 		)
 		.unwrap();
 
+		// Authority set change at block 8, so the justification stored there will be used in the
+		// FinalityProof for block 6
 		let mut authority_set_changes = AuthoritySetChanges::empty();
 		authority_set_changes.append(0, 5);
 		authority_set_changes.append(1, 8);
@@ -506,6 +528,21 @@ pub(crate) mod tests {
 				unknown_headers: vec![block7.header().clone(), block8.header().clone()],
 			},
 		);
+	}
+
+	#[test]
+	fn finality_proof_in_last_set_fails_without_latest() {
+		let (_, backend, _) = test_blockchain(8, &[4, 5, 8]);
+
+		// No recent authority set change, so we are in the latest set, and we will try to pickup
+		// the best stored justification, for which there is none in this case.
+		let mut authority_set_changes = AuthoritySetChanges::empty();
+		authority_set_changes.append(0, 5);
+
+		assert!(matches!(
+			prove_finality(&*backend, authority_set_changes, 6),
+			Ok(None),
+		));
 	}
 
 	#[test]
