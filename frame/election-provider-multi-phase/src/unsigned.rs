@@ -125,62 +125,33 @@ impl<T: Config> Pallet<T> {
 			"OCW attempting to restore or compute an unsigned solution for the current election"
 		);
 
-		let (call, _score) = restore_solution::<T>()
+		let call = restore_solution::<T>()
 			.and_then(|call| {
 				// ensure the cached call is still current before submitting
 				if let Call::submit_unsigned(solution, _) = &call {
-					// not out of date by round
-					let current_round = Self::round();
-					if solution.round != current_round {
-						return Err(MinerError::SolutionOutOfDate);
-					}
-
-					// higher score than what's currently queued
-					let score = solution.score.clone();
-					if !Self::queued_solution().map_or(true, |q: ReadySolution<_>| is_score_better::<Perbill>(
-						score,
-						q.score,
-						T::SolutionImprovementThreshold::get()
-					)) {
-						// not technically accurate; it's valid, just scores too low.
-						// Still, this will cause a re-mine in the `or_else` clause;
-						// we might get lucky and generate a higher-scoring solution this time.
-						return Err(MinerError::SolutionCallInvalid);
-					}
-
 					// prevent errors arising from state changes in a forkful chain
-					Self::feasibility_check(solution.clone(), ElectionCompute::Unsigned)?;
-
-					// checks complete
-					log!(
-						debug,
-						"restored a cached call for round {} with score {:?}",
-						current_round,
-						score,
-					);
-					Ok((call, score))
+					Self::basic_checks(solution, "restored")?;
+					Ok(call)
 				} else {
 					Err(MinerError::SolutionCallInvalid)
 				}
 			})
 			.or_else::<MinerError, _>(|_| {
 				// if not present or cache invalidated, regenerate
-				let (call, score) = Self::mine_checked_call()?;
+				let (call, _) = Self::mine_checked_call()?;
 				save_solution(&call)?;
-				Ok((call, score))
+				Ok(call)
 			})?;
 
-		Self::submit_call(call).map_err(|err| {
-			// in case submission failed because of a bad solution, ensure that next time,
-			// we mine a new one.
-			match err {
-				MinerError::PreDispatchChecksFailed | MinerError::PoolSubmissionFailed => {
-					kill_ocw_solution::<T>()
-				}
-				_ => {}
-			}
-			err
-		})
+		// the runtime will catch it and reject the transaction if the phase is wrong, but it's
+		// cheap and easy to check it here to ease the workload on the runtime, so:
+		if !Self::current_phase().is_unsigned_open() {
+			// don't bother submitting; it's not an error, we're just too late.
+			return Ok(());
+		}
+
+		// in case submission fails for any reason, `submit_call` kills the stored solution
+		Self::submit_call(call)
 	}
 
 	/// Mine a new solution, cache it, and submit it back to the chain as an unsigned transaction.
@@ -227,6 +198,23 @@ impl<T: Config> Pallet<T> {
 			})
 	}
 
+	// perform basic checks of a solution's validity
+	//
+	// Performance: note that it internally clones the provided solution.
+	fn basic_checks(raw_solution: &RawSolution<CompactOf<T>>, solution_type: &str) -> Result<(), MinerError> {
+		Self::unsigned_pre_dispatch_checks(raw_solution).map_err(|err| {
+			log!(warn, "pre-dispatch checks fialed for {} solution: {:?}", solution_type, err);
+			MinerError::PreDispatchChecksFailed
+		})?;
+
+		Self::feasibility_check(raw_solution.clone(), ElectionCompute::Unsigned).map_err(|err| {
+			log!(warn, "feasibility check failed for {} solution: {:?}", solution_type, err);
+			err
+		})?;
+
+		Ok(())
+	}
+
 	/// Mine a new npos solution, with all the relevant checks to make sure that it will be accepted
 	/// to the chain.
 	///
@@ -237,21 +225,7 @@ impl<T: Config> Pallet<T> {
 		iters: usize,
 	) -> Result<(RawSolution<CompactOf<T>>, SolutionOrSnapshotSize), MinerError> {
 		let (raw_solution, witness) = Self::mine_solution(iters)?;
-
-		// ensure that this will pass the pre-dispatch checks
-		Self::unsigned_pre_dispatch_checks(&raw_solution).map_err(|e| {
-			log!(warn, "pre-dispatch-checks failed for mined solution: {:?}", e);
-			MinerError::PreDispatchChecksFailed
-		})?;
-
-		// ensure that this is a feasible solution
-		let _ = Self::feasibility_check(raw_solution.clone(), ElectionCompute::Unsigned).map_err(
-			|e| {
-				log!(warn, "feasibility-check failed for mined solution: {:?}", e);
-				MinerError::from(e)
-			},
-		)?;
-
+		Self::basic_checks(&raw_solution, "mined")?;
 		Ok((raw_solution, witness))
 	}
 
