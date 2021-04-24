@@ -33,7 +33,6 @@ use sp_runtime::{
 	traits::{IsMember, One, SaturatedConversion, Saturating, Zero},
 	ConsensusEngineId, KeyTypeId, Percent,
 };
-use sp_session::{GetSessionNumber, GetValidatorCount};
 use sp_std::prelude::*;
 
 use sp_consensus_poc::{
@@ -108,23 +107,6 @@ pub mod pallet {
 		type ExpectedBlockTime: Get<Self::Moment>;
 
 		// TODO: Bring this back
-		// TODO: Does it need `GetValidatorCount`
-		// /// The proof of key ownership, used for validating equivocation reports.
-		// /// The proof must include the session index and validator count of the
-		// /// session at which the equivocation occurred.
-		// type KeyOwnerProof: Parameter + GetSessionNumber + GetValidatorCount;
-		//
-		// /// The identification of a key owner, used when reporting equivocations.
-		// type KeyOwnerIdentification: Parameter;
-		//
-		// /// A system for proving ownership of keys, i.e. that a given key was part
-		// /// of a validator set, needed for validating equivocation reports.
-		// type KeyOwnerProofSystem: KeyOwnerProofSystem<
-		// 	(KeyTypeId, FarmerId),
-		// 	Proof = Self::KeyOwnerProof,
-		// 	IdentificationTuple = Self::KeyOwnerIdentification,
-		// >;
-		//
 		// /// The equivocation handling subsystem, defines methods to report an
 		// /// offence (after the equivocation has been validated) and for submitting a
 		// /// transaction to report an equivocation (from an offchain context).

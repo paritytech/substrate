@@ -5328,7 +5328,6 @@ dependencies = [
  "pallet-authorship",
  "pallet-balances",
  "pallet-offences",
- "pallet-session",
  "pallet-staking",
  "pallet-staking-reward-curve",
  "pallet-timestamp",
@@ -5340,7 +5339,6 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
- "sp-session",
  "sp-staking",
  "sp-std",
 ]

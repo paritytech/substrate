@@ -18,7 +18,6 @@ frame-benchmarking = { version = "3.1.0", default-features = false, path = "../b
 frame-support = { version = "3.0.0", default-features = false, path = "../support" }
 frame-system = { version = "3.0.0", default-features = false, path = "../system" }
 pallet-authorship = { version = "3.0.0", default-features = false, path = "../authorship" }
-pallet-session = { version = "3.0.0", default-features = false, path = "../session" }
 pallet-timestamp = { version = "3.0.0", default-features = false, path = "../timestamp" }
 serde = { version = "1.0.101", optional = true }
 sp-application-crypto = { version = "3.0.0", default-features = false, path = "../../primitives/application-crypto" }
@@ -26,7 +25,6 @@ sp-consensus-poc = { version = "0.1.0", default-features = false, path = "../../
 sp-consensus-vrf = { version = "0.9.0", default-features = false, path = "../../primitives/consensus/vrf" }
 sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-session = { version = "3.0.0", default-features = false, path = "../../primitives/session" }
 sp-staking = { version = "3.0.0", default-features = false, path = "../../primitives/staking" }
 sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
 log = { version = "0.4.14", default-features = false }
@@ -47,7 +45,6 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 	"pallet-authorship/std",
-	"pallet-session/std",
 	"pallet-timestamp/std",
 	"serde",
 	"sp-application-crypto/std",
@@ -55,7 +52,6 @@ std = [
 	"sp-consensus-vrf/std",
 	"sp-io/std",
 	"sp-runtime/std",
-	"sp-session/std",
 	"sp-staking/std",
 	"sp-std/std",
 	"log/std",
