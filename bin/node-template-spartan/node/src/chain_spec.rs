@@ -4,7 +4,6 @@ use node_template_spartan_runtime::{
 	SudoConfig, SystemConfig, WASM_BINARY, Signature
 };
 use sp_consensus_poc::FarmerId;
-use pallet_im_online::sr25519::{AuthorityId as ImOnlineId};
 use sp_runtime::traits::{Verify, IdentifyAccount};
 use sc_service::ChainType;
 use serde::{Serialize, Deserialize};
@@ -55,15 +54,6 @@ pub fn get_account_id_from_seed<TPublic: Public>(seed: &str) -> AccountId where
 	AccountPublic::from(get_from_seed::<TPublic>(seed)).into_account()
 }
 
-// TODO: Remove this
-/// Generate an Aura authority key.
-pub fn authority_keys_from_seed(s: &str) -> (FarmerId, ImOnlineId) {
-	(
-		get_from_seed::<FarmerId>(s),
-		get_from_seed::<ImOnlineId>(s),
-	)
-}
-
 pub fn development_config() -> Result<ChainSpec, String> {
 	let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm not available".to_string())?;
 
@@ -75,11 +65,6 @@ pub fn development_config() -> Result<ChainSpec, String> {
 		ChainType::Development,
 		move || testnet_genesis(
 			wasm_binary,
-			// TODO: remove this
-			// Initial PoA authorities
-			vec![
-				authority_keys_from_seed("Alice"),
-			],
 			// Sudo account
 			get_account_id_from_seed::<sr25519::Public>("Alice"),
 			// Pre-funded accounts
@@ -125,12 +110,6 @@ pub fn local_testnet_config() -> Result<ChainSpec, String> {
 		ChainType::Local,
 		move || testnet_genesis(
 			wasm_binary,
-			// TODO: Remove these
-			// Initial PoA authorities
-			vec![
-				authority_keys_from_seed("Alice"),
-				authority_keys_from_seed("Bob"),
-			],
 			// Sudo account
 			get_account_id_from_seed::<sr25519::Public>("Alice"),
 			// Pre-funded accounts
@@ -177,7 +156,6 @@ pub fn local_testnet_config() -> Result<ChainSpec, String> {
 /// Configure initial storage state for FRAME modules.
 fn testnet_genesis(
 	wasm_binary: &[u8],
-	initial_authorities: Vec<(FarmerId, ImOnlineId)>,
 	root_key: AccountId,
 	endowed_accounts: Vec<AccountId>,
 	_enable_println: bool,

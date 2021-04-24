@@ -4425,7 +4425,6 @@ dependencies = [
  "frame-benchmarking-cli",
  "jsonrpc-core",
  "node-template-spartan-runtime",
- "pallet-im-online",
  "pallet-transaction-payment-rpc",
  "sc-basic-authorship",
  "sc-cli",

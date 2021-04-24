@@ -47,7 +47,6 @@ sp-block-builder = { version = "3.0.0", path = "../../../primitives/block-builde
 sc-basic-authorship = { version = "0.9.0", path = "../../../client/basic-authorship" }
 substrate-frame-rpc-system = { version = "3.0.0", path = "../../../utils/frame/rpc/system" }
 pallet-transaction-payment-rpc = { version = "3.0.0", path = "../../../frame/transaction-payment/rpc/" }
-pallet-im-online = { version = "3.0.0", path = "../../../frame/im-online" }
 
 # These dependencies are used for runtime benchmarking
 frame-benchmarking = { version = "3.1.0", path = "../../../frame/benchmarking" }
