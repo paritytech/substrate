@@ -868,17 +868,9 @@ pub fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error
 	// genesis block doesn't contain a pre digest so let's generate a
 	// dummy one to not break any invariants in the rest of the code
 	if header.number().is_zero() {
-		// TODO: Clean this up
-		// return Err(poc_err(Error::NoPreRuntimeDigest));
 		return Ok(PreDigest {
-			slot: 0.into(),
-			solution: Solution {
-				public_key: FarmerId::default(),
-				nonce: 0u64,
-				encoding: Vec::new(),
-				signature: Vec::new(),
-				tag: [0u8; 8],
-			},
+			slot: Slot::from(0),
+			solution: Solution::get_for_genesis(),
 		});
 	}
 

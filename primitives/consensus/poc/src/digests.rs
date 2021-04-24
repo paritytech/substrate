@@ -41,6 +41,19 @@ pub struct Solution {
 	pub tag: [u8; 8],
 }
 
+impl Solution {
+	/// Dummy solution for the genesis block
+	pub fn get_for_genesis() -> Self {
+		Self {
+			public_key: FarmerId::default(),
+			nonce: 0u64,
+			encoding: Vec::new(),
+			signature: Vec::new(),
+			tag: [0u8; 8],
+		}
+	}
+}
+
 /// A PoC pre-runtime digest. This contains all data required to validate a
 /// block and for the PoC runtime module.
 #[derive(Clone, RuntimeDebug, Encode, Decode)]
