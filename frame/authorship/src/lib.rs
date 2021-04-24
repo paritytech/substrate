@@ -167,7 +167,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 
-			fn on_initialize(now: T::BlockNumber) -> Weight {
+		fn on_initialize(now: T::BlockNumber) -> Weight {
 			let uncle_generations = T::UncleGenerations::get();
 			// prune uncles that are older than the allowed number of generations.
 			if uncle_generations <= now {
