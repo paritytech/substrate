@@ -382,6 +382,12 @@ pub struct NMapDef {
 
 impl NMapDef {
 	fn to_keygen_struct(&self, scrate: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
+		if self.keys.len() == 1 {
+			let hasher = &self.hashers[0].to_storage_hasher_struct();
+			let key = &self.keys[0];
+			return quote!( Key<#scrate::#hasher, #key> );
+		}
+
 		let key_hasher = self.keys.iter().zip(&self.hashers).map(|(key, hasher)| {
 			let hasher = hasher.to_storage_hasher_struct();
 			quote!( Key<#scrate::#hasher, #key> )
