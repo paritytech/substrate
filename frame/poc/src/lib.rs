@@ -43,7 +43,6 @@ pub use sp_consensus_poc::{FarmerId, PUBLIC_KEY_LENGTH, RANDOMNESS_LENGTH, VRF_O
 
 mod default_weights;
 mod equivocation;
-mod randomness;
 
 #[cfg(any(feature = "runtime-benchmarks", test))]
 mod benchmarking;
@@ -53,9 +52,6 @@ mod mock;
 mod tests;
 
 // pub use equivocation::{PoCEquivocationOffence, EquivocationHandler, HandleEquivocation};
-pub use randomness::{
-	CurrentBlockRandomness, RandomnessFromOneEpochAgo, RandomnessFromTwoEpochsAgo,
-};
 
 pub use pallet::*;
 
