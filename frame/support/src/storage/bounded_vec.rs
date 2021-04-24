@@ -214,7 +214,7 @@ impl<T: BoundedVecValue, S: Get<u32>> codec::DecodeLength for BoundedVec<T, S> {
 
 impl<T: BoundedVecValue, S: Get<u32>> StorageDecodeLength for BoundedVec<T, S> {}
 
-/// Storage value that is *maybe* capable of [`StorageAppend`].
+/// Storage value that is *maybe* capable of [`StorageAppend`](crate::storage::StorageAppend).
 pub trait TryAppendValue<T: BoundedVecValue, S: Get<u32>> {
 	/// Try and append the `item` into the storage item.
 	///
@@ -222,7 +222,7 @@ pub trait TryAppendValue<T: BoundedVecValue, S: Get<u32>> {
 	fn try_append<LikeT: EncodeLike<T>>(item: LikeT) -> Result<(), ()>;
 }
 
-/// Storage map that is *maybe* capable of [`StorageAppend`].
+/// Storage map that is *maybe* capable of [`StorageAppend`](crate::storage::StorageAppend).
 pub trait TryAppendMap<K: FullCodec, T: BoundedVecValue, S: Get<u32>> {
 	/// Try and append the `item` into the storage map at the given `key`.
 	///
@@ -233,7 +233,7 @@ pub trait TryAppendMap<K: FullCodec, T: BoundedVecValue, S: Get<u32>> {
 	) -> Result<(), ()>;
 }
 
-/// Storage double map that is *maybe* capable of [`StorageAppend`].
+/// Storage double map that is *maybe* capable of [`StorageAppend`](crate::storage::StorageAppend).
 pub trait TryAppendDoubleMap<K1: FullCodec, K2: FullCodec, T: BoundedVecValue, S: Get<u32>> {
 	/// Try and append the `item` into the storage double map at the given `key`.
 	///

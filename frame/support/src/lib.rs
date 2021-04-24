@@ -99,8 +99,8 @@ impl TypeId for PalletId {
 	const TYPE_ID: [u8; 4] = *b"modl";
 }
 
-/// Generate a new type alias for [`storage::types::value::StorageValue`],
-/// [`storage::types::value::StorageMap`] and [`storage::types::value::StorageDoubleMap`].
+/// Generate a new type alias for [`storage::types::StorageValue`],
+/// [`storage::types::StorageMap`] and [`storage::types::StorageDoubleMap`].
 ///
 /// Useful for creating a *storage-like* struct for test and migrations.
 ///
@@ -1234,7 +1234,7 @@ pub mod pallet_prelude {
 		EqNoBound, PartialEqNoBound, RuntimeDebugNoBound, DebugNoBound, CloneNoBound, Twox256,
 		Twox128, Blake2_256, Blake2_128, Identity, Twox64Concat, Blake2_128Concat, ensure,
 		RuntimeDebug, storage,
-		traits::{Get, Hooks, IsType, GetPalletVersion, EnsureOrigin},
+		traits::{Get, Hooks, IsType, GetPalletVersion, EnsureOrigin, PalletInfoAccess},
 		dispatch::{DispatchResultWithPostInfo, Parameter, DispatchError, DispatchResult},
 		weights::{DispatchClass, Pays, Weight},
 		storage::types::{StorageValue, StorageMap, StorageDoubleMap, StorageNMap, ValueQuery, OptionQuery},
@@ -1361,6 +1361,10 @@ pub mod pallet_prelude {
 /// * `ModuleErrorMetadata`: using error declared or no metadata.
 ///
 /// It declare `type Module` type alias for `Pallet`, used by [`construct_runtime`].
+///
+/// It implements [`traits::PalletInfoAccess`] on `Pallet` to ease access to pallet informations
+/// given by [`frame_support::traits::PalletInfo`].
+/// (The implementation use the associated type `frame_system::Config::PalletInfo`).
 ///
 /// If attribute generate_store then macro create the trait `Store` and implement it on `Pallet`.
 ///
