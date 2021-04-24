@@ -76,8 +76,6 @@ pub use sp_consensus_slots::Slot;
 /// The weight of a PoC block.
 pub type PoCBlockWeight = u32;
 
-// TODO: can this be removed?
-
 /// Make a VRF transcript from given randomness, slot number and epoch.
 pub fn make_transcript(
 	randomness: &Randomness,

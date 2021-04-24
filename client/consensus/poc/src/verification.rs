@@ -72,13 +72,10 @@ pub(super) fn check_header<B: BlockT + Sized>(
 		None => return Err(poc_err(Error::HeaderUnsealed(header.hash()))),
 	};
 
+	// TODO: Check if we need this signature and why do we have this and another one in `pre_digest`
 	let sig = seal.as_poc_seal().ok_or_else(|| {
 		poc_err(Error::HeaderBadSeal(header.hash()))
 	})?;
-
-	// the pre-hash of the header doesn't include the seal
-	// and that's what we sign
-	let pre_hash = header.hash();
 
 	if pre_digest.slot > slot_now {
 		header.digest_mut().push(seal);
@@ -92,7 +89,6 @@ pub(super) fn check_header<B: BlockT + Sized>(
 	);
 
 	check_primary_header::<B>(
-		pre_hash,
 		&pre_digest,
 		sig,
 		&epoch,
@@ -111,12 +107,10 @@ pub(super) struct VerifiedHeaderInfo<B: BlockT> {
 	pub(super) seal: DigestItemFor<B>,
 }
 
-/// Check a primary slot proposal header. We validate that the given header is
-/// properly signed by the expected authority, and that the contained VRF proof
-/// is valid. Additionally, the weight of this block must increase compared to
-/// its parent since it is a primary block.
+/// Check a slot proposal header. We validate that the given header is
+/// properly signed by the expected authority, and that the contained PoR proof
+/// is valid.
 fn check_primary_header<B: BlockT + Sized>(
-	_pre_hash: B::Hash,
 	pre_digest: &PreDigest,
 	_signature: FarmerSignature,
 	epoch: &Epoch,
