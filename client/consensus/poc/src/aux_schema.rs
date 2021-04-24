@@ -67,7 +67,7 @@ pub fn load_epoch_changes<Block: BlockT, B: AuxStore>(
 				format!("Unsupported PoC DB version: {:?}", other)
 			))
 		},
-		_ => None,
+		None => None,
 	};
 
 	let epoch_changes = SharedEpochChanges::<Block, Epoch>::new(maybe_epoch_changes.unwrap_or_else(|| {
