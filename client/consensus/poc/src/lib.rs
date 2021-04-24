@@ -757,27 +757,11 @@ where
 		sp_consensus::Error> + Send + 'static>
 	{
 		// TODO: Probably remove keystore-related code from here
-		let keystore = self.keystore.clone();
-		Box::new(move |header, header_hash, body, storage_changes, (_, public), epoch_descriptor| {
-			// sign the pre-sealed hash of the block and then
-			// add it to a digest item.
-			let public_type_pair = public.clone().into();
-			let public = public.to_raw_vec();
-			let signature = SyncCryptoStore::sign_with(
-				&*keystore,
-				<FarmerId as AppKey>::ID,
-				&public_type_pair,
-				header_hash.as_ref()
-			)
-			.map_err(|e| sp_consensus::Error::CannotSign(
-				public.clone(), e.to_string(),
-			))?
-			.ok_or_else(|| sp_consensus::Error::CannotSign(
-				public.clone(), "Could not find key in keystore.".into(),
-			))?;
-			let signature: FarmerSignature = signature.clone().try_into()
+		// let keystore = self.keystore.clone();
+		Box::new(move |header, header_hash, body, storage_changes, (pre_digest, public), epoch_descriptor| {
+			let signature: FarmerSignature = pre_digest.solution.signature.clone().try_into()
 				.map_err(|_| sp_consensus::Error::InvalidSignature(
-					signature, public
+					pre_digest.solution.signature.clone(), public.to_raw_vec()
 				))?;
 			let digest_item = <DigestItemFor<B> as CompatibleDigestItem>::poc_seal(signature.into());
 
