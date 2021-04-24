@@ -1,14 +1,12 @@
 //! Service and ServiceFactory implementation. Specialized wrapper over substrate service.
 
 use std::sync::Arc;
-use std::time::Duration;
 use sc_client_api::{ExecutorProvider, RemoteBackend};
 use node_template_spartan_runtime::{self, opaque::Block, RuntimeApi};
 use sc_service::{error::Error as ServiceError, Configuration, TaskManager};
 use sp_inherents::InherentDataProviders;
 use sc_executor::native_executor_instance;
 pub use sc_executor::NativeExecutor;
-use sc_keystore::LocalKeystore;
 use sc_telemetry::{Telemetry, TelemetryWorker};
 use sc_consensus_poc::SlotProportion;
 
@@ -105,13 +103,13 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 }
 
 /// Builds a new service for a full client.
-pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> {
+pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 	let sc_service::PartialComponents {
 		client,
 		backend,
 		mut task_manager,
 		import_queue,
-		mut keystore_container,
+		keystore_container,
 		select_chain,
 		transaction_pool,
 		inherent_data_providers,
@@ -217,7 +215,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 }
 
 /// Builds a new service for a light client.
-pub fn new_light(mut config: Configuration) -> Result<TaskManager, ServiceError> {
+pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 	let telemetry = config.telemetry_endpoints.clone()
 		.filter(|x| !x.is_empty())
 		.map(|endpoints| -> Result<_, sc_telemetry::Error> {

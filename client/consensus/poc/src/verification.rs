@@ -17,7 +17,7 @@
 
 //! Verification for PoC headers.
 use sp_runtime::{traits::Header, traits::DigestItemFor};
-use sp_core::{Pair, Public};
+use sp_core::Public;
 use sp_consensus_poc::{make_transcript, FarmerSignature, FarmerId};
 use sp_consensus_poc::digests::{PreDigest, CompatibleDigestItem, Solution};
 use sc_consensus_slots::CheckedHeader;
@@ -102,8 +102,6 @@ pub(super) fn check_header<B: BlockT + Sized>(
 	let info = VerifiedHeaderInfo {
 		pre_digest: CompatibleDigestItem::poc_pre_digest(pre_digest),
 		seal,
-		// TODO: Fix author
-		author: Default::default(),
 	};
 	Ok(CheckedHeader::Checked(header, info))
 }
@@ -111,7 +109,6 @@ pub(super) fn check_header<B: BlockT + Sized>(
 pub(super) struct VerifiedHeaderInfo<B: BlockT> {
 	pub(super) pre_digest: DigestItemFor<B>,
 	pub(super) seal: DigestItemFor<B>,
-	pub(super) author: FarmerId,
 }
 
 /// Check a primary slot proposal header. We validate that the given header is

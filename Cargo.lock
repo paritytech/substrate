@@ -4433,7 +4433,6 @@ dependencies = [
  "sc-consensus-poc",
  "sc-consensus-poc-rpc",
  "sc-executor",
- "sc-keystore",
  "sc-rpc",
  "sc-rpc-api",
  "sc-service",

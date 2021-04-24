@@ -747,7 +747,7 @@ where
 	{
 		// TODO: Probably remove keystore-related code from here
 		// let keystore = self.keystore.clone();
-		Box::new(move |header, header_hash, body, storage_changes, (pre_digest, public), epoch_descriptor| {
+		Box::new(move |header, _header_hash, body, storage_changes, (pre_digest, public), epoch_descriptor| {
 			let signature: FarmerSignature = pre_digest.solution.signature.clone().try_into()
 				.map_err(|_| sp_consensus::Error::InvalidSignature(
 					pre_digest.solution.signature.clone(), public.to_raw_vec()

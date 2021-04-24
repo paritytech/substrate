@@ -26,7 +26,6 @@ use sp_runtime::traits::Block as BlockT;
 use sp_consensus_poc::{PoCBlockWeight, PoCGenesisConfiguration};
 use sc_consensus_epochs::{EpochChangesFor, SharedEpochChanges};
 use crate::Epoch;
-use sc_consensus_epochs::migration::EpochChangesForV0;
 
 const POC_EPOCH_CHANGES_VERSION: &[u8] = b"poc_epoch_changes_version";
 const POC_EPOCH_CHANGES_KEY: &[u8] = b"poc_epoch_changes";

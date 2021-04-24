@@ -3,11 +3,9 @@ use node_template_spartan_runtime::{
 	AccountId, BalancesConfig, GenesisConfig, PoCConfig,
 	SudoConfig, SystemConfig, WASM_BINARY, Signature
 };
-use sp_consensus_poc::FarmerId;
 use sp_runtime::traits::{Verify, IdentifyAccount};
 use sc_service::ChainType;
 use serde::{Serialize, Deserialize};
-use std::iter::FromIterator;
 
 // TODO: Get back and fix this
 /// PoC-specific chain spec properties
