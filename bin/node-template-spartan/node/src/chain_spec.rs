@@ -7,6 +7,31 @@ use sp_consensus_poc::FarmerId;
 use pallet_im_online::sr25519::{AuthorityId as ImOnlineId};
 use sp_runtime::traits::{Verify, IdentifyAccount};
 use sc_service::ChainType;
+use serde::{Serialize, Deserialize};
+use std::iter::FromIterator;
+
+// TODO: Get back and fix this
+/// PoC-specific chain spec properties
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PoCChainSpecProperties {
+	// TODO
+	pub initial_plot_piece_count: u64,
+	// TODO
+	pub genesis_piece_seed: String,
+	// TODO
+	pub encode_rounds: u8,
+	// TODO
+	pub signing_context: Vec<u8>,
+	// TODO
+	pub initial_salt: [u8; 32],
+}
+
+impl PoCChainSpecProperties {
+	// TODO
+	pub fn initial_solution_range(&self) -> u64 {
+		u64::MAX / self.initial_plot_piece_count
+	}
+}
 
 // The URL for the telemetry server.
 // const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
@@ -73,7 +98,17 @@ pub fn development_config() -> Result<ChainSpec, String> {
 		// Protocol ID
 		None,
 		// Properties
-		None,
+		Some({
+			let mut map = serde_json::Map::new();
+			map.insert("poc".to_string(), serde_json::json!({
+				"initial_plot_piece_count": 256000,
+				"genesis_piece_seed": "spartan",
+				"encode_rounds": 1,
+				"signing_context": "FARMER",
+				"initial_salt": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+			}));
+			map
+		}),
 		// Extensions
 		None,
 	))
@@ -122,7 +157,17 @@ pub fn local_testnet_config() -> Result<ChainSpec, String> {
 		// Protocol ID
 		None,
 		// Properties
-		None,
+		Some({
+			let mut map = serde_json::Map::new();
+			map.insert("poc".to_string(), serde_json::json!({
+				"initial_plot_piece_count": 256000,
+				"genesis_piece_seed": "spartan",
+				"encode_rounds": 1,
+				"signing_context": "FARMER",
+				"initial_salt": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+			}));
+			map
+		}),
 		// Extensions
 		None,
 	))
