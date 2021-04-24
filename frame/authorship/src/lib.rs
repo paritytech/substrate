@@ -36,31 +36,6 @@ const MAX_UNCLES: usize = 10;
 
 pub use pallet::*;
 
-pub trait Config: frame_system::Config {
-	/// Find the author of a block.
-	type FindAuthor: FindAuthor<Self::AccountId>;
-	/// The number of blocks back we should accept uncles.
-	/// This means that we will deal with uncle-parents that are
-	/// `UncleGenerations + 1` before `now`.
-	type UncleGenerations: Get<Self::BlockNumber>;
-	/// A filter for uncles within a block. This is for implementing
-	/// further constraints on what uncles can be included, other than their ancestry.
-	///
-	/// For PoW, as long as the seals are checked, there is no need to use anything
-	/// but the `VerifySeal` implementation as the filter. This is because the cost of making many equivocating
-	/// uncles is high.
-	///
-	/// For PoS, there is no such limitation, so a further constraint must be imposed
-	/// beyond a seal check in order to prevent an arbitrary number of
-	/// equivocating uncles from being included.
-	///
-	/// The `OnePerAuthorPerHeight` filter is good for many slot-based PoS
-	/// engines.
-	type FilterUncle: FilterUncle<Self::Header, Self::AccountId>;
-	/// An event handler for authored blocks.
-	type EventHandler: EventHandler<Self::AccountId, Self::BlockNumber>;
-}
-
 /// An event handler for the authorship pallet. There is a dummy implementation
 /// for `()`, which does nothing.
 #[impl_trait_for_tuples::impl_for_tuples(30)]
@@ -207,7 +182,7 @@ pub mod pallet {
 			0
 		}
 
-		fn on_finalize() {
+		fn on_finalize(_: T::BlockNumber) {
 			// ensure we never go to trie with these values.
 			<Author<T>>::kill();
 			<DidSetUncles<T>>::kill();
@@ -218,16 +193,17 @@ pub mod pallet {
 	/// Uncles
 	pub(super) type Uncles<T: Config> = StorageValue<
 		_,
-		Vec<UncleEntryItem<T::BlockNumber, T::Hash, T::AccountId>>
+		Vec<UncleEntryItem<T::BlockNumber, T::Hash, T::AccountId>>,
+		ValueQuery,
 	>;
 
 	#[pallet::storage]
 	/// Author of current block.
-	pub(super) type Author<T: Config> = StorageValue<_, Option<T::AccountId>>;
+	pub(super) type Author<T: Config> = StorageValue<_, Option<T::AccountId>, ValueQuery>;
 
 	#[pallet::storage]
 	/// Whether uncles were already set in this block.
-	pub(super) type DidSetUncles<T: Config> = StorageValue<_, bool>;
+	pub(super) type DidSetUncles<T: Config> = StorageValue<_, bool, ValueQuery>;
 
 
 	#[pallet::error]
@@ -278,7 +254,7 @@ impl<T: Config> Pallet<T> {
 		let digest = <frame_system::Pallet<T>>::digest();
 		let pre_runtime_digests = digest.logs.iter().filter_map(|d| d.as_pre_runtime());
 		if let Some(author) = T::FindAuthor::find_author(pre_runtime_digests) {
-			<Author<T>>::put(&author);
+			<Author<T>>::put(Some(&author));
 			author
 		} else {
 			Default::default()
@@ -459,7 +435,7 @@ mod tests {
 			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
 			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-			Authorship: pallet_authorship::{Pallet, Call, Config, Storage, Inherent},
+			Authorship: pallet_authorship::{Pallet, Call, Storage, Inherent},
 		}
 	);
 
