@@ -526,7 +526,7 @@ impl<T: Config> Pallet<T> {
 			})
 			.next();
 
-		let maybe_randomness: MaybeRandomness = maybe_pre_digest.and_then(|digest| {
+		let maybe_randomness: MaybeRandomness = maybe_pre_digest.map(|digest| {
 			// on the first non-zero block (i.e. block #1)
 			// this is where the first epoch (epoch #0) actually starts.
 			// we need to adjust internal storage accordingly.
@@ -554,28 +554,7 @@ impl<T: Config> Pallet<T> {
 			Lateness::<T>::put(lateness);
 			CurrentSlot::<T>::put(current_slot);
 
-			// TODO: Update this to use farmer ID
-			// // Extract out the VRF output if we have it
-			// digest
-			// 	.solution.signature
-			// 	.and_then(|vrf_output| {
-			// 		// Reconstruct the bytes of VRFInOut using the authority id.
-			// 		let pubkey = digest.solution.public_key;
-			// 		let transcript = sp_consensus_poc::make_transcript(
-			// 			&Self::randomness(),
-			// 			current_slot,
-			// 			EpochIndex::<T>::get(),
-			// 		);
-			//
-			// 		vrf_output.0.attach_input_hash(
-			// 			&pubkey,
-			// 			transcript
-			// 		).ok()
-			// 		.map(|inout| {
-			// 			inout.make_bytes(&sp_consensus_poc::POC_VRF_INOUT_CONTEXT)
-			// 		})
-			// 	})
-			None
+			sp_io::hashing::blake2_256(&digest.solution.signature)
 		});
 
 		// For primary PoR output we place it in the `Initialized` storage
