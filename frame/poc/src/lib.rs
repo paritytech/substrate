@@ -75,14 +75,6 @@ pub trait EpochChangeTrigger {
 	fn trigger<T: Config>(now: T::BlockNumber);
 }
 
-/// A type signifying to PoC that an external trigger
-/// for epoch changes (e.g. pallet-session) is used.
-pub struct ExternalTrigger;
-
-impl EpochChangeTrigger for ExternalTrigger {
-	fn trigger<T: Config>(_: T::BlockNumber) { } // nothing - trigger is external.
-}
-
 const UNDER_CONSTRUCTION_SEGMENT_LENGTH: usize = 256;
 
 type MaybeRandomness = Option<schnorrkel::Randomness>;
@@ -114,13 +106,6 @@ pub mod pallet {
 		/// the probability of a slot being empty).
 		#[pallet::constant]
 		type ExpectedBlockTime: Get<Self::Moment>;
-
-		/// PoC requires some logic to be triggered on every block to query for whether an epoch
-		/// has ended and to perform the transition to the next epoch.
-		///
-		/// Typically, the `ExternalTrigger` type should be used. An internal trigger should only be used
-		/// when no other module is responsible for changing authority set.
-		type EpochChangeTrigger: EpochChangeTrigger;
 
 		// TODO: Bring this back
 		// TODO: Does it need `GetValidatorCount`
@@ -648,9 +633,6 @@ impl<T: Config> Pallet<T> {
 		// Place either the primary or secondary VRF output into the
 		// `AuthorVrfRandomness` storage item.
 		AuthorVrfRandomness::<T>::put(maybe_randomness);
-
-		// enact epoch change, if necessary.
-		T::EpochChangeTrigger::trigger::<T>(now)
 	}
 
 	// TODO: why does this need schnorrkel randomness?

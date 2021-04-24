@@ -294,22 +294,6 @@ sp_api::decl_runtime_apis! {
 
 		// TODO: fix this in milestone 3
 
-		// /// Generates a proof of key ownership for the given authority in the
-		// /// current epoch. An example usage of this module is coupled with the
-		// /// session historical module to prove that a given farmer key is
-		// /// tied to a given given plot during a specific session. Proofs
-		// /// of key ownership are necessary for submitting equivocation reports.
-		// /// NOTE: even though the API takes a `slot` as parameter the current
-		// /// implementations ignores this parameter and instead relies on this
-		// /// method being called at the correct block height, i.e. any point at
-		// /// which the epoch for the given slot is live on-chain. Future
-		// /// implementations will instead use indexed data through an offchain
-		// /// worker, not requiring older states to be available.
-		// fn generate_key_ownership_proof(
-		// 	slot: Slot,
-		// 	farmer_id: FarmerId,
-		// ) -> Option<OpaqueKeyOwnershipProof>;
-		//
 		// /// Submits an unsigned extrinsic to report an equivocation. The caller
 		// /// must provide the equivocation proof and a key ownership proof
 		// /// (should be obtained using `generate_key_ownership_proof`). The
