@@ -503,8 +503,7 @@ pub fn start_poc<B, C, SC, E, I, SO, CAW, BS, Error>(PoCParams {
 		&inherent_data_providers,
 	)?;
 
-	// TODO: Better emoji
-	info!(target: "poc", "🧑🌾 Starting PoC Authorship worker");
+	info!(target: "poc", "🧑‍🌾 Starting PoC Authorship worker");
 	let inner = sc_consensus_slots::start_slot_worker(
 		config.0.clone(),
 		select_chain,
@@ -1424,8 +1423,7 @@ impl<Block, Client, Inner> BlockImport<Block> for PoCBlockImport<Block, Client, 
 
 				log!(target: "poc",
 					 log_level,
-					 // TODO: Put emoji
-					 "👶 New epoch {} launching at block {} (block slot {} >= start slot {}).",
+					 "🧑‍🌾 New epoch {} launching at block {} (block slot {} >= start slot {}).",
 					 viable_epoch.as_ref().epoch_index,
 					 hash,
 					 slot,
@@ -1436,8 +1434,7 @@ impl<Block, Client, Inner> BlockImport<Block> for PoCBlockImport<Block, Client, 
 
 				log!(target: "poc",
 					 log_level,
-					 // TODO: Put emoji
-					 "👶 Next epoch starts at slot {}",
+					 "🧑‍🌾 Next epoch starts at slot {}",
 					 next_epoch.as_ref().start_slot,
 				);
 

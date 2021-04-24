@@ -72,8 +72,7 @@ pub fn load_epoch_changes<Block: BlockT, B: AuxStore>(
 	let epoch_changes = SharedEpochChanges::<Block, Epoch>::new(maybe_epoch_changes.unwrap_or_else(|| {
 		info!(
 			target: "poc",
-			// TODO: Replace emoji
-			"👶 Creating empty PoC epoch changes on what appears to be first startup.",
+			"🧑‍🌾 Creating empty PoC epoch changes on what appears to be first startup.",
 		);
 		EpochChangesFor::<Block, Epoch>::default()
 	}));
