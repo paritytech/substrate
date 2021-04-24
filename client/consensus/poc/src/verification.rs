@@ -24,7 +24,6 @@ use sc_consensus_slots::CheckedHeader;
 use sp_consensus_slots::Slot;
 use log::{debug, trace};
 use super::{find_pre_digest, poc_err, Epoch, BlockT, Error};
-use super::authorship::{calculate_threshold, check_threshold};
 use crate::{INITIAL_SOLUTION_RANGE, Tag, SALT, SIGNING_CONTEXT, GENESIS_PIECE_SEED, ENCODE_ROUNDS, Piece, PIECE_SIZE, PRIME_SIZE_BYTES};
 use std::convert::TryInto;
 use ring::{hmac, digest};

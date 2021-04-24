@@ -47,9 +47,6 @@ mod app {
 
 // TODO: may be able to remove both of these
 
-/// The prefix used by PoC for its VRF keys.
-pub const POC_VRF_PREFIX: &[u8] = b"substrate-poc-vrf";
-
 /// PoC VRFInOut context.
 pub static POC_VRF_INOUT_CONTEXT: &[u8] = b"PoCVRFInOutContext";
 

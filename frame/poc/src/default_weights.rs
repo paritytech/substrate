@@ -18,7 +18,7 @@
 //! This file was not auto-generated.
 
 use frame_support::weights::{
-	Weight, constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS, RocksDbWeight as DbWeight},
+	Weight, constants::{RocksDbWeight as DbWeight},
 };
 
 impl crate::WeightInfo for () {

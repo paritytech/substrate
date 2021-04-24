@@ -23,15 +23,12 @@
 
 use codec::{Decode, Encode};
 use frame_support::{
-	dispatch::DispatchResultWithPostInfo,
-	traits::{Get, KeyOwnerProofSystem, OneSessionHandler, OnTimestampSet},
-	weights::{Pays, Weight},
+	traits::{Get, OnTimestampSet},
+	weights::Weight,
 };
-use sp_application_crypto::Public;
 use sp_runtime::{
 	generic::DigestItem,
-	traits::{IsMember, One, SaturatedConversion, Saturating, Zero},
-	ConsensusEngineId, KeyTypeId, Percent,
+	traits::{One, SaturatedConversion, Saturating, Zero},
 };
 use sp_std::prelude::*;
 
@@ -526,7 +523,7 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	fn do_initialize(now: T::BlockNumber) {
+	fn do_initialize(_now: T::BlockNumber) {
 		// TODO: change this since session has been removed
 		// since do_initialize can be called twice (if session module is present)
 		// => let's ensure that we only modify the storage once per block

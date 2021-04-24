@@ -80,8 +80,6 @@ use std::{
 };
 use sp_consensus::{ImportResult, CanAuthorWith, import_queue::BoxJustificationImport};
 use sp_core::crypto::Public;
-use sp_application_crypto::AppKey;
-use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
 use sp_runtime::{
 	generic::{BlockId, OpaqueDigestItemId}, Justifications,
 	traits::{Block as BlockT, Header, DigestItemFor, Zero},
@@ -103,7 +101,6 @@ use sc_client_api::{
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use futures::channel::mpsc::{channel, Sender, Receiver};
 use futures::channel::oneshot;
-use retain_mut::RetainMut;
 
 use futures::prelude::*;
 use log::{debug, info, log, trace, warn};
@@ -127,7 +124,6 @@ use sp_consensus_poc::digests::Solution;
 mod verification;
 
 pub mod aux_schema;
-pub mod authorship;
 #[cfg(test)]
 mod tests;
 
