@@ -132,7 +132,19 @@ pub mod authorship;
 mod tests;
 
 // TODO: Real adjustable solution range, Milestone 2. For now configure for 1 GB plot.
-const SOLUTION_RANGE: u64 = u64::MAX / 4096;
+const INITIAL_SOLUTION_RANGE: u64 = u64::MAX / 4096;
+// TODO: These should not be hardcoded
+const PRIME_SIZE_BYTES: usize = 8;
+const PIECE_SIZE: usize = 4096;
+const GENESIS_PIECE_SEED: &str = "hello";
+const ENCODE_ROUNDS: usize = 1;
+// TODO: Replace fixed salt with something
+const SALT: Salt = [1u8; 32];
+const SIGNING_CONTEXT: &[u8] = b"FARMER";
+
+type Piece = [u8; PIECE_SIZE];
+type Salt = [u8; 32];
+type Tag = [u8; PRIME_SIZE_BYTES];
 
 /// Information about new slot that just arrived
 #[derive(Debug, Clone)]
@@ -461,7 +473,7 @@ pub fn start_poc<B, C, SC, E, I, SO, CAW, BS, Error>(PoCParams {
 				let slot_info = NewSlotInfo {
 					slot,
 					challenge: create_challenge(epoch, slot),
-					solution_range: SOLUTION_RANGE
+					solution_range: INITIAL_SOLUTION_RANGE
 				};
 				let (solution_sender, solution_receiver) = mpsc::sync_channel(0);
 				{
