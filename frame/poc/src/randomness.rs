@@ -18,7 +18,7 @@
 //! randomness collected from VRF outputs.
 
 use super::{
-	AuthorVrfRandomness, Config, EpochStart, NextRandomness, Randomness, VRF_OUTPUT_LENGTH,
+	AuthorPorRandomness, Config, EpochStart, NextRandomness, Randomness, VRF_OUTPUT_LENGTH,
 };
 use frame_support::{traits::Randomness as RandomnessT};
 use sp_runtime::traits::Hash;
@@ -135,7 +135,7 @@ impl<T: Config> RandomnessT<T::Hash, T::BlockNumber> for RandomnessFromOneEpochA
 
 impl<T: Config> RandomnessT<Option<T::Hash>, T::BlockNumber> for CurrentBlockRandomness<T> {
 	fn random(subject: &[u8]) -> (Option<T::Hash>, T::BlockNumber) {
-		let random = AuthorVrfRandomness::<T>::get().map(|random| {
+		let random = AuthorPorRandomness::<T>::get().map(|random| {
 			let mut subject = subject.to_vec();
 			subject.reserve(VRF_OUTPUT_LENGTH);
 			subject.extend_from_slice(&random);

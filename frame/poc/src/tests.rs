@@ -64,7 +64,7 @@
 //
 // 	ext.execute_with(|| {
 // 		let genesis_slot = Slot::from(100);
-// 		let (vrf_output, vrf_proof, vrf_randomness) = make_vrf_output(genesis_slot, &pairs[0]);
+// 		let (vrf_output, vrf_proof, por_randomness) = make_vrf_output(genesis_slot, &pairs[0]);
 //
 // 		let first_vrf = vrf_output;
 // 		let pre_digest = make_primary_pre_digest(
@@ -88,15 +88,15 @@
 // 		assert_eq!(Babe::genesis_slot(), genesis_slot);
 // 		assert_eq!(Babe::current_slot(), genesis_slot);
 // 		assert_eq!(Babe::epoch_index(), 0);
-// 		assert_eq!(Babe::author_vrf_randomness(), Some(vrf_randomness));
+// 		assert_eq!(Babe::author_por_randomness(), Some(por_randomness));
 //
 // 		Babe::on_finalize(1);
 // 		let header = System::finalize();
 //
 // 		assert_eq!(SegmentIndex::<Test>::get(), 0);
-// 		assert_eq!(UnderConstruction::<Test>::get(0), vec![vrf_randomness]);
+// 		assert_eq!(UnderConstruction::<Test>::get(0), vec![por_randomness]);
 // 		assert_eq!(Babe::randomness(), [0; 32]);
-// 		assert_eq!(Babe::author_vrf_randomness(), None);
+// 		assert_eq!(Babe::author_por_randomness(), None);
 // 		assert_eq!(NextRandomness::<Test>::get(), [0; 32]);
 //
 // 		assert_eq!(header.digest.logs.len(), 2);
@@ -122,7 +122,7 @@
 //
 // 	ext.execute_with(|| {
 // 		let genesis_slot = Slot::from(10);
-// 		let (vrf_output, vrf_proof, vrf_randomness) = make_vrf_output(genesis_slot, &pairs[0]);
+// 		let (vrf_output, vrf_proof, por_randomness) = make_vrf_output(genesis_slot, &pairs[0]);
 // 		let primary_pre_digest = make_primary_pre_digest(0, genesis_slot, vrf_output, vrf_proof);
 //
 // 		System::initialize(
@@ -131,14 +131,14 @@
 // 			&primary_pre_digest,
 // 			Default::default(),
 // 		);
-// 		assert_eq!(Babe::author_vrf_randomness(), None);
+// 		assert_eq!(Babe::author_por_randomness(), None);
 //
 // 		Babe::do_initialize(1);
-// 		assert_eq!(Babe::author_vrf_randomness(), Some(vrf_randomness));
+// 		assert_eq!(Babe::author_por_randomness(), Some(por_randomness));
 //
 // 		Babe::on_finalize(1);
 // 		System::finalize();
-// 		assert_eq!(Babe::author_vrf_randomness(), None);
+// 		assert_eq!(Babe::author_por_randomness(), None);
 // 	})
 // }
 //
@@ -148,7 +148,7 @@
 //
 // 	ext.execute_with(|| {
 // 		let genesis_slot = Slot::from(10);
-// 		let (vrf_output, vrf_proof, vrf_randomness) = make_vrf_output(genesis_slot, &pairs[0]);
+// 		let (vrf_output, vrf_proof, por_randomness) = make_vrf_output(genesis_slot, &pairs[0]);
 // 		let secondary_vrf_pre_digest = make_secondary_vrf_pre_digest(0, genesis_slot, vrf_output, vrf_proof);
 //
 // 		System::initialize(
@@ -157,14 +157,14 @@
 // 			&secondary_vrf_pre_digest,
 // 			Default::default(),
 // 		);
-// 		assert_eq!(Babe::author_vrf_randomness(), None);
+// 		assert_eq!(Babe::author_por_randomness(), None);
 //
 // 		Babe::do_initialize(1);
-// 		assert_eq!(Babe::author_vrf_randomness(), Some(vrf_randomness));
+// 		assert_eq!(Babe::author_por_randomness(), Some(por_randomness));
 //
 // 		Babe::on_finalize(1);
 // 		System::finalize();
-// 		assert_eq!(Babe::author_vrf_randomness(), None);
+// 		assert_eq!(Babe::author_por_randomness(), None);
 // 	})
 // }
 //
@@ -180,14 +180,14 @@
 // 			&secondary_plain_pre_digest,
 // 			Default::default(),
 // 		);
-// 		assert_eq!(Babe::author_vrf_randomness(), None);
+// 		assert_eq!(Babe::author_por_randomness(), None);
 //
 // 		Babe::do_initialize(1);
-// 		assert_eq!(Babe::author_vrf_randomness(), None);
+// 		assert_eq!(Babe::author_por_randomness(), None);
 //
 // 		Babe::on_finalize(1);
 // 		System::finalize();
-// 		assert_eq!(Babe::author_vrf_randomness(), None);
+// 		assert_eq!(Babe::author_por_randomness(), None);
 // 	})
 // }
 //

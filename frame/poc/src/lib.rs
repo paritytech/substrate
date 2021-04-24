@@ -194,13 +194,13 @@ pub mod pallet {
 	#[pallet::getter(fn initialized)]
 	pub(super) type Initialized<T> = StorageValue<_, MaybeRandomness>;
 
-	// TODO: change this
+	// TODO: Fix the docs
 	/// Temporary value (cleared at block finalization) that includes the VRF output generated
 	/// at this block. This field should always be populated during block processing unless
 	/// secondary plain slots are enabled (which don't contain a VRF output).
 	#[pallet::storage]
-	#[pallet::getter(fn author_vrf_randomness)]
-	pub(super) type AuthorVrfRandomness<T> = StorageValue<_, MaybeRandomness, ValueQuery>;
+	#[pallet::getter(fn author_por_randomness)]
+	pub(super) type AuthorPorRandomness<T> = StorageValue<_, MaybeRandomness, ValueQuery>;
 
 	/// The block numbers when the last and current epoch have started, respectively `N-1` and
 	/// `N`.
@@ -273,9 +273,8 @@ pub mod pallet {
 				Self::deposit_randomness(&randomness);
 			}
 
-			// TODO: can this be removed?
-			// The stored author generated VRF output is ephemeral.
-			AuthorVrfRandomness::<T>::kill();
+			// The stored author generated PoR output is ephemeral.
+			AuthorPorRandomness::<T>::kill();
 
 			// remove temporary "environment" entry from storage
 			Lateness::<T>::kill();
@@ -341,10 +340,6 @@ pub mod pallet {
 		}
 	}
 }
-
-// TODO: rename to FarmerPublicKey?
-/// A PoC public key
-pub type PoCKey = [u8; PUBLIC_KEY_LENGTH];
 
 impl<T: Config> Pallet<T> {
 	/// Determine the PoC slot duration based on the Timestamp module configuration.
@@ -524,14 +519,6 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn do_initialize(_now: T::BlockNumber) {
-		// TODO: change this since session has been removed
-		// since do_initialize can be called twice (if session module is present)
-		// => let's ensure that we only modify the storage once per block
-		let initialized = Self::initialized().is_some();
-		if initialized {
-			return;
-		}
-
 		let maybe_pre_digest: Option<PreDigest> = <frame_system::Pallet<T>>::digest()
 			.logs
 			.iter()
@@ -572,33 +559,25 @@ impl<T: Config> Pallet<T> {
 			CurrentSlot::<T>::put(current_slot);
 
 			// TODO: Update this to use farmer ID
-			// let authority_index = digest.authority_index();
-			//
 			// // Extract out the VRF output if we have it
 			// digest
-			// 	.vrf_output()
+			// 	.solution.signature
 			// 	.and_then(|vrf_output| {
 			// 		// Reconstruct the bytes of VRFInOut using the authority id.
-			// 		Authorities::<T>::get()
-			// 			.get(authority_index as usize)
-			// 			.and_then(|author| {
-			// 				schnorrkel::PublicKey::from_bytes(author.0.as_slice()).ok()
-			// 			})
-			// 			.and_then(|pubkey| {
-			// 				let transcript = sp_consensus_poc::make_transcript(
-			// 					&Self::randomness(),
-			// 					current_slot,
-			// 					EpochIndex::<T>::get(),
-			// 				);
+			// 		let pubkey = digest.solution.public_key;
+			// 		let transcript = sp_consensus_poc::make_transcript(
+			// 			&Self::randomness(),
+			// 			current_slot,
+			// 			EpochIndex::<T>::get(),
+			// 		);
 			//
-			// 				vrf_output.0.attach_input_hash(
-			// 					&pubkey,
-			// 					transcript
-			// 				).ok()
-			// 			})
-			// 			.map(|inout| {
-			// 				inout.make_bytes(&sp_consensus_poc::POC_VRF_INOUT_CONTEXT)
-			// 			})
+			// 		vrf_output.0.attach_input_hash(
+			// 			&pubkey,
+			// 			transcript
+			// 		).ok()
+			// 		.map(|inout| {
+			// 			inout.make_bytes(&sp_consensus_poc::POC_VRF_INOUT_CONTEXT)
+			// 		})
 			// 	})
 			None
 		});
@@ -608,10 +587,8 @@ impl<T: Config> Pallet<T> {
 		// once we've decided which epoch this block is in.
 		Initialized::<T>::put(maybe_randomness);
 
-		// TODO: change this
-		// Place either the primary or secondary VRF output into the
-		// `AuthorVrfRandomness` storage item.
-		AuthorVrfRandomness::<T>::put(maybe_randomness);
+		// Place either the primary PoR output into the `AuthorPorRandomness` storage item.
+		AuthorPorRandomness::<T>::put(maybe_randomness);
 	}
 
 	// TODO: why does this need schnorrkel randomness?
