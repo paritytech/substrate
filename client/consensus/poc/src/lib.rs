@@ -744,8 +744,6 @@ where
 		sp_consensus::BlockImportParams<B, I::Transaction>,
 		sp_consensus::Error> + Send + 'static>
 	{
-		// TODO: Probably remove keystore-related code from here
-		// let keystore = self.keystore.clone();
 		Box::new(move |header, _header_hash, body, storage_changes, (pre_digest, public), epoch_descriptor| {
 			let signature: FarmerSignature = pre_digest.solution.signature.clone().try_into()
 				.map_err(|_| sp_consensus::Error::InvalidSignature(
@@ -840,7 +838,6 @@ where
 		}
 	}
 
-	// TODO: change name or remove
 	fn authorities_len(&self, _epoch_data: &Self::EpochData) -> Option<usize> {
 		None
 	}
@@ -1147,13 +1144,13 @@ where
 			epoch: viable_epoch.as_ref(),
 		};
 
-		// TODO: fix this
 		match verification::check_header::<Block>(v_params)? {
 			CheckedHeader::Checked(pre_header, verified_info) => {
 				let poc_pre_digest = verified_info.pre_digest.as_poc_pre_digest()
 					.expect("check_header always returns a pre-digest digest item; qed");
 				let slot = poc_pre_digest.slot;
 
+				// TODO: for milestone 3
 				// // the header is valid but let's check if there was something else already
 				// // proposed at the same slot by the given author. if there was, we will
 				// // report the equivocation to the runtime.
