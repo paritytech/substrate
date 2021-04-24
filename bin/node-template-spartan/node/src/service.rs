@@ -135,16 +135,14 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		);
 	}
 
-	// TODO: Check these variables
-	let _role = config.role.clone();
+	let role = config.role.clone();
 	let force_authoring = config.force_authoring;
 	let backoff_authoring_blocks: Option<()> = None;
-	let _name = config.network.node_name.clone();
 	let prometheus_registry = config.prometheus_registry().cloned();
 
-	let new_slot_notifier;
+	let mut new_slot_notifier = None;
 
-	// if role.is_authority() {
+	if role.is_authority() {
 		let proposer_factory = sc_basic_authorship::ProposerFactory::new(
 			task_manager.spawn_handle(),
 			client.clone(),
@@ -172,12 +170,12 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		};
 
 		let poc = sc_consensus_poc::start_poc(poc_config)?;
-		new_slot_notifier = poc.get_new_slot_notifier();
+		new_slot_notifier.replace(poc.get_new_slot_notifier());
 
 		// the PoC authoring task is considered essential, i.e. if it
 		// fails we take down the service with it.
 		task_manager.spawn_essential_handle().spawn_blocking("poc", poc);
-	// }
+	}
 
 	let rpc_extensions_builder = {
 		let client = client.clone();

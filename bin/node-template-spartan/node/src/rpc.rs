@@ -28,7 +28,7 @@ pub struct FullDeps<C, P> {
 	/// Executor to drive the subscription manager in the Grandpa RPC handler.
 	pub subscription_executor: SubscriptionTaskExecutor,
 	/// A function that can be called whenever it is necessary to create a subscription for new slots
-	pub new_slot_notifier: NewSlotNotifier
+	pub new_slot_notifier: Option<NewSlotNotifier>
 }
 
 /// Instantiate all full RPC extensions.
@@ -63,14 +63,16 @@ pub fn create_full<C, P>(
 		TransactionPaymentApi::to_delegate(TransactionPayment::new(client.clone()))
 	);
 
-	io.extend_with(
-		sc_consensus_poc_rpc::PoCApi::to_delegate(
-			sc_consensus_poc_rpc::PoCRpcHandler::new(
-				subscription_executor,
-				new_slot_notifier,
-			),
-		)
-	);
+	if let Some(new_slot_notifier) = new_slot_notifier {
+		io.extend_with(
+			sc_consensus_poc_rpc::PoCApi::to_delegate(
+				sc_consensus_poc_rpc::PoCRpcHandler::new(
+					subscription_executor,
+					new_slot_notifier,
+				),
+			)
+		);
+	}
 
 	// Extend this RPC with a custom API by using the following syntax.
 	// `YourRpcStruct` should have a reference to a client, which is needed
