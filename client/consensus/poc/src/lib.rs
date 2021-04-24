@@ -131,7 +131,7 @@ pub mod authorship;
 #[cfg(test)]
 mod tests;
 
-// TODO: Real adjustable solution range
+// TODO: Real adjustable solution range, Milestone 2. For now configure for 1 GB plot.
 const SOLUTION_RANGE: u64 = u64::MAX / 4096;
 
 /// Information about new slot that just arrived
@@ -381,7 +381,6 @@ pub struct PoCParams<B: BlockT, C, E, I, SO, SC, CAW, BS> {
 	/// Providers for inherent data.
 	pub inherent_data_providers: InherentDataProviders,
 
-	// TODO: Do we need this?
 	/// Force authoring of blocks even if we are offline
 	pub force_authoring: bool,
 
@@ -857,6 +856,7 @@ where
 		}
 	}
 
+	// TODO: change name or remove
 	fn authorities_len(&self, _epoch_data: &Self::EpochData) -> Option<usize> {
 		None
 	}
@@ -868,7 +868,7 @@ pub fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error
 	// genesis block doesn't contain a pre digest so let's generate a
 	// dummy one to not break any invariants in the rest of the code
 	if header.number().is_zero() {
-		// TODO: Deal with this later
+		// TODO: Clean this up
 		// return Err(poc_err(Error::NoPreRuntimeDigest));
 		return Ok(PreDigest {
 			slot: 0.into(),
@@ -1022,6 +1022,7 @@ where
 		}
 	}
 
+	// TODO: fix for milestone 3
 	// fn check_and_report_equivocation(
 	// 	&self,
 	// 	slot_now: Slot,
@@ -1170,6 +1171,7 @@ where
 			epoch: viable_epoch.as_ref(),
 		};
 
+		// TODO: fix this
 		match verification::check_header::<Block>(v_params)? {
 			CheckedHeader::Checked(pre_header, verified_info) => {
 				let poc_pre_digest = verified_info.pre_digest.as_poc_pre_digest()

@@ -84,6 +84,7 @@ pub mod opaque {
 	/// Opaque block identifier type.
 	pub type BlockId = generic::BlockId<Block>;
 
+	// TODO: can we remove this?
 	impl_opaque_keys! {
 		pub struct SessionKeys {
 			pub poc: PoC,
@@ -133,7 +134,7 @@ pub const MINUTES: BlockNumber = 60_000 / (MILLISECS_PER_BLOCK as BlockNumber);
 pub const HOURS: BlockNumber = MINUTES * 60;
 pub const DAYS: BlockNumber = HOURS * 24;
 
-// TODO: Change or remove this
+// TODO: Change or remove this, as we no longer have secondary slots
 // 1 in 4 blocks (on average, not counting collisions) will be primary BABE blocks.
 pub const PRIMARY_PROBABILITY: (u64, u64) = (1, 4);
 
@@ -234,6 +235,7 @@ impl pallet_poc::Config for Runtime {
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ExpectedBlockTime;
 	// Change SameAuthoritiesForever to ExternalTrigger to enable elections in PoS.
+	// TODO: may be able to remove this
 	type EpochChangeTrigger = pallet_poc::ExternalTrigger;
 
 	// type KeyOwnerProofSystem = Historical;
@@ -467,6 +469,7 @@ impl_runtime_apis! {
 		// }
 	}
 
+	// TODO: remove this
 	impl sp_session::SessionKeys<Block> for Runtime {
 		fn generate_session_keys(seed: Option<Vec<u8>>) -> Vec<u8> {
 			opaque::SessionKeys::generate(seed)

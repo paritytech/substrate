@@ -123,6 +123,9 @@ fn check_primary_header<B: BlockT + Sized>(
 	_epoch: &Epoch,
 	_c: (u64, u64),
 ) -> Result<(), Error<B>> {
+
+	// TODO: verify the PoR here
+
 	// let author = &epoch.authorities[pre_digest.authority_index as usize].0;
 	//
 	// if AuthorityPair::verify(&signature, pre_hash, &author) {

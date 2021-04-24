@@ -1,5 +1,5 @@
 // Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
-// Copyright (C) 2021 Subpace Labs, Inc.
+// Copyright (C) 2021 Subspace Labs, Inc.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify

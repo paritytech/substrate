@@ -22,6 +22,7 @@
 pub mod digests;
 pub mod inherents;
 
+// TODO: these should change with PoR
 pub use merlin::Transcript;
 pub use sp_consensus_vrf::schnorrkel::{
 	Randomness, RANDOMNESS_LENGTH, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH,
@@ -43,6 +44,8 @@ mod app {
 	use sp_application_crypto::{app_crypto, key_types::POC, sr25519};
 	app_crypto!(sr25519, POC);
 }
+
+// TODO: may be able to remove both of these
 
 /// The prefix used by PoC for its VRF keys.
 pub const POC_VRF_PREFIX: &[u8] = b"substrate-poc-vrf";
@@ -75,6 +78,8 @@ pub use sp_consensus_slots::Slot;
 
 /// The weight of a PoC block.
 pub type PoCBlockWeight = u32;
+
+// TODO: can this be removed?
 
 /// Make a VRF transcript from given randomness, slot number and epoch.
 pub fn make_transcript(
@@ -165,6 +170,8 @@ pub struct PoCEpochConfiguration {
 	/// of a slot being empty.
 	pub c: (u64, u64),
 }
+
+// TODO: bring this back in for Milestone 3
 
 // /// Verifies the equivocation proof by making sure that: both headers have
 // /// different hashes, are targeting the same slot, and have valid signatures by
@@ -284,6 +291,8 @@ sp_api::decl_runtime_apis! {
 		/// Returns information regarding the next epoch (which was already
 		/// previously announced).
 		fn next_epoch() -> Epoch;
+
+		// TODO: fix this in milestone 3
 
 		// /// Generates a proof of key ownership for the given authority in the
 		// /// current epoch. An example usage of this module is coupled with the

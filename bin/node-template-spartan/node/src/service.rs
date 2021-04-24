@@ -38,6 +38,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		Option<Telemetry>,
 	)
 >, ServiceError> {
+	// TODO: can we move keystore to the farmer?
 	if config.keystore_remote.is_some() {
 		return Err(ServiceError::Other(
 			format!("Remote Keystores are not supported.")))
@@ -70,7 +71,6 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 
 	let transaction_pool = sc_transaction_pool::BasicPool::new_full(
 		config.transaction_pool.clone(),
-		// TODO: Probably remove later
 		config.role.is_authority().into(),
 		config.prometheus_registry(),
 		task_manager.spawn_handle(),
@@ -158,10 +158,10 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 	}
 
 	// TODO: Check these variables
-	// let role = config.role.clone();
+	let _role = config.role.clone();
 	let force_authoring = config.force_authoring;
 	let backoff_authoring_blocks: Option<()> = None;
-	// let name = config.network.node_name.clone();
+	let _name = config.network.node_name.clone();
 	let prometheus_registry = config.prometheus_registry().cloned();
 
 	let new_slot_notifier;

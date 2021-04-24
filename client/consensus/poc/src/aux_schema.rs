@@ -128,6 +128,8 @@ pub fn load_block_weight<H: Encode, B: AuxStore>(
 	load_decode(backend, block_weight_key(block_hash).as_slice())
 }
 
+// TODO: fix tests
+
 // #[cfg(test)]
 // mod test {
 // 	use super::*;

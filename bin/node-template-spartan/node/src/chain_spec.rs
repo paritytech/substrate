@@ -30,6 +30,7 @@ pub fn get_account_id_from_seed<TPublic: Public>(seed: &str) -> AccountId where
 	AccountPublic::from(get_from_seed::<TPublic>(seed)).into_account()
 }
 
+// TODO: Remove this
 /// Generate an Aura authority key.
 pub fn authority_keys_from_seed(s: &str) -> (FarmerId, ImOnlineId) {
 	(
@@ -49,6 +50,7 @@ pub fn development_config() -> Result<ChainSpec, String> {
 		ChainType::Development,
 		move || testnet_genesis(
 			wasm_binary,
+			// TODO: remove this
 			// Initial PoA authorities
 			vec![
 				authority_keys_from_seed("Alice"),
@@ -88,6 +90,7 @@ pub fn local_testnet_config() -> Result<ChainSpec, String> {
 		ChainType::Local,
 		move || testnet_genesis(
 			wasm_binary,
+			// TODO: Remove these
 			// Initial PoA authorities
 			vec![
 				authority_keys_from_seed("Alice"),
@@ -125,6 +128,7 @@ pub fn local_testnet_config() -> Result<ChainSpec, String> {
 	))
 }
 
+// TODO: modify this to remove initial authorities if possible
 /// Configure initial storage state for FRAME modules.
 fn testnet_genesis(
 	wasm_binary: &[u8],

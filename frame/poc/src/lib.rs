@@ -230,6 +230,7 @@ pub mod pallet {
 	#[pallet::getter(fn initialized)]
 	pub(super) type Initialized<T> = StorageValue<_, MaybeRandomness>;
 
+	// TODO: change this
 	/// Temporary value (cleared at block finalization) that includes the VRF output generated
 	/// at this block. This field should always be populated during block processing unless
 	/// secondary plain slots are enabled (which don't contain a VRF output).
@@ -308,6 +309,7 @@ pub mod pallet {
 				Self::deposit_randomness(&randomness);
 			}
 
+			// TODO: can this be removed?
 			// The stored author generated VRF output is ephemeral.
 			AuthorVrfRandomness::<T>::kill();
 
@@ -376,6 +378,7 @@ pub mod pallet {
 	}
 }
 
+// TODO: rename to FarmerPublicKey?
 /// A PoC public key
 pub type PoCKey = [u8; PUBLIC_KEY_LENGTH];
 
@@ -557,6 +560,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn do_initialize(now: T::BlockNumber) {
+		// TODO: change this since session has been removed
 		// since do_initialize can be called twice (if session module is present)
 		// => let's ensure that we only modify the storage once per block
 		let initialized = Self::initialized().is_some();
@@ -635,11 +639,12 @@ impl<T: Config> Pallet<T> {
 			None
 		});
 
-		// For primary VRF output we place it in the `Initialized` storage
+		// For primary PoR output we place it in the `Initialized` storage
 		// item and it'll be put onto the under-construction randomness later,
 		// once we've decided which epoch this block is in.
 		Initialized::<T>::put(maybe_randomness);
 
+		// TODO: change this
 		// Place either the primary or secondary VRF output into the
 		// `AuthorVrfRandomness` storage item.
 		AuthorVrfRandomness::<T>::put(maybe_randomness);
@@ -648,6 +653,7 @@ impl<T: Config> Pallet<T> {
 		T::EpochChangeTrigger::trigger::<T>(now)
 	}
 
+	// TODO: why does this need schnorrkel randomness?
 	/// Call this function exactly once when an epoch changes, to update the
 	/// randomness. Returns the new randomness.
 	fn randomness_change_epoch(next_epoch_index: u64) -> schnorrkel::Randomness {
@@ -754,6 +760,7 @@ impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Pallet<T> {
 	type Public = FarmerId;
 }
 
+// TODO: fix this, no VRF
 // compute randomness for a new epoch. rho is the concatenation of all
 // VRF outputs in the prior epoch.
 //
