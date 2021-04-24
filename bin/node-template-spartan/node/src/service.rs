@@ -38,11 +38,6 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		Option<Telemetry>,
 	)
 >, ServiceError> {
-	// TODO: can we move keystore to the farmer?
-	if config.keystore_remote.is_some() {
-		return Err(ServiceError::Other(
-			format!("Remote Keystores are not supported.")))
-	}
 	let inherent_data_providers = InherentDataProviders::new();
 
 	let telemetry = config.telemetry_endpoints.clone()
@@ -109,13 +104,6 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 	})
 }
 
-fn remote_keystore(_url: &String) -> Result<Arc<LocalKeystore>, &'static str> {
-	// FIXME: here would the concrete keystore be built,
-	//        must return a concrete type (NOT `LocalKeystore`) that
-	//        implements `CryptoStore` and `SyncCryptoStore`
-	Err("Remote Keystore not supported.")
-}
-
 /// Builds a new service for a full client.
 pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> {
 	let sc_service::PartialComponents {
@@ -129,16 +117,6 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		inherent_data_providers,
 		other: (block_import, poc_link, mut telemetry),
 	} = new_partial(&config)?;
-
-	if let Some(url) = &config.keystore_remote {
-		match remote_keystore(url) {
-			Ok(k) => keystore_container.set_remote_keystore(k),
-			Err(e) => {
-				return Err(ServiceError::Other(
-					format!("Error hooking up remote keystore for {}: {}", url, e)))
-			}
-		};
-	}
 
 	let (network, network_status_sinks, system_rpc_tx, network_starter) =
 		sc_service::build_network(sc_service::BuildNetworkParams {
@@ -179,7 +157,6 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 			sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone());
 
 		let poc_config = sc_consensus_poc::PoCParams {
-			keystore: keystore_container.sync_keystore(),
 			client: client.clone(),
 			select_chain: select_chain.clone(),
 			env: proposer_factory,

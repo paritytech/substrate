@@ -369,10 +369,6 @@ impl std::ops::Deref for Config {
 
 /// Parameters for PoC.
 pub struct PoCParams<B: BlockT, C, E, I, SO, SC, CAW, BS> {
-	// TODO: Remove keystore
-	/// The keystore that manages the keys of the node.
-	pub keystore: SyncCryptoStorePtr,
-
 	/// The client to use
 	pub client: Arc<C>,
 
@@ -418,7 +414,6 @@ pub struct PoCParams<B: BlockT, C, E, I, SO, SC, CAW, BS> {
 
 /// Start the PoC worker.
 pub fn start_poc<B, C, SC, E, I, SO, CAW, BS, Error>(PoCParams {
-	keystore,
 	client,
 	select_chain,
 	env,
@@ -463,7 +458,6 @@ pub fn start_poc<B, C, SC, E, I, SO, CAW, BS, Error>(PoCParams {
 		sync_oracle: sync_oracle.clone(),
 		force_authoring,
 		backoff_authoring_blocks,
-		keystore,
 		epoch_changes: poc_link.epoch_changes.clone(),
 		config: config.clone(),
 		on_claim_slot: Box::new({
@@ -653,7 +647,6 @@ struct PoCSlotWorker<B: BlockT, C, E, I, SO, BS> {
 	sync_oracle: SO,
 	force_authoring: bool,
 	backoff_authoring_blocks: Option<BS>,
-	keystore: SyncCryptoStorePtr,
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 	config: Config,
 	on_claim_slot: Box<dyn (Fn(Slot, &Epoch) -> Option<PreDigest>) + Send + Sync + 'static>,

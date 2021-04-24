@@ -63,6 +63,7 @@ pub fn development_config() -> Result<ChainSpec, String> {
 		// ID
 		"dev",
 		ChainType::Development,
+		// TODO: Provide a way for farmer to start with these accounts
 		move || testnet_genesis(
 			wasm_binary,
 			// Sudo account
@@ -152,7 +153,6 @@ pub fn local_testnet_config() -> Result<ChainSpec, String> {
 	))
 }
 
-// TODO: modify this to remove initial authorities if possible
 /// Configure initial storage state for FRAME modules.
 fn testnet_genesis(
 	wasm_binary: &[u8],
