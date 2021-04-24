@@ -321,11 +321,11 @@ impl Config {
 	{
 		trace!(target: "poc", "Getting slot duration");
 		match sc_consensus_slots::SlotDuration::get_or_compute(client, |a, b| {
-			let has_api_v0 = a.has_api_with::<dyn PoCApi<B>, _>(
-				&b, |v| v == 0,
+			let has_api_v1 = a.has_api_with::<dyn PoCApi<B>, _>(
+				&b, |v| v == 1,
 			)?;
 
-			if has_api_v0 {
+			if has_api_v1 {
 				a.configuration(b).map_err(Into::into)
 			} else {
 				Err(sp_blockchain::Error::VersionInvalid(
@@ -869,11 +869,17 @@ pub fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error
 	// dummy one to not break any invariants in the rest of the code
 	if header.number().is_zero() {
 		// TODO: Deal with this later
-		return Err(poc_err(Error::NoPreRuntimeDigest));
-		// return Ok(PreDigest::SecondaryPlain(SecondaryPlainPreDigest {
-		// 	slot: 0.into(),
-		// 	authority_index: 0,
-		// }));
+		// return Err(poc_err(Error::NoPreRuntimeDigest));
+		return Ok(PreDigest {
+			slot: 0.into(),
+			solution: Solution {
+				public_key: FarmerId::default(),
+				nonce: 0u64,
+				encoding: Vec::new(),
+				signature: Vec::new(),
+				tag: [0u8; 8],
+			},
+		});
 	}
 
 	let mut pre_digest: Option<_> = None;

@@ -26,10 +26,11 @@ use sp_runtime::traits::Block as BlockT;
 use sp_consensus_poc::{PoCBlockWeight, PoCGenesisConfiguration};
 use sc_consensus_epochs::{EpochChangesFor, SharedEpochChanges};
 use crate::Epoch;
+use sc_consensus_epochs::migration::EpochChangesForV0;
 
 const POC_EPOCH_CHANGES_VERSION: &[u8] = b"poc_epoch_changes_version";
 const POC_EPOCH_CHANGES_KEY: &[u8] = b"poc_epoch_changes";
-const POC_EPOCH_CHANGES_CURRENT_VERSION: u32 = 0;
+const POC_EPOCH_CHANGES_CURRENT_VERSION: u32 = 1;
 
 fn block_weight_key<H: Encode>(block_hash: H) -> Vec<u8> {
 	(b"block_weight", block_hash).encode()
@@ -66,11 +67,7 @@ pub fn load_epoch_changes<Block: BlockT, B: AuxStore>(
 				format!("Unsupported PoC DB version: {:?}", other)
 			))
 		},
-		None => {
-			return Err(ClientError::Backend(
-				format!("Unsupported PoC DB version: None")
-			))
-		},
+		_ => None,
 	};
 
 	let epoch_changes = SharedEpochChanges::<Block, Epoch>::new(maybe_epoch_changes.unwrap_or_else(|| {
