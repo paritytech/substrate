@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Private implementation details of PoC digests.
+//! Private implementation details of Proof-of-Capacity (PoC) consensus digests.
 
 use super::{
 	FarmerSignature, PoCEpochConfiguration, Slot, POC_ENGINE_ID,
@@ -26,6 +26,7 @@ use sp_consensus_vrf::schnorrkel::Randomness;
 use sp_std::vec::Vec;
 use crate::FarmerId;
 
+// TODO: better documentation here
 /// Solution
 #[derive(Clone, RuntimeDebug, Encode, Decode)]
 pub struct Solution {

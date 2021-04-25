@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Inherents for PoC
+//! Inherents for Proof-of-Capacity (PoC) consensus
 
 use sp_inherents::{Error, InherentData, InherentIdentifier};
 #[cfg(feature = "std")]

@@ -111,7 +111,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 /// Since PoC is probabilistic this is the average expected block time that
 /// we are targeting. Blocks will be produced at a minimum duration defined
 /// by `SLOT_DURATION`, but some slots will not be allocated to any
-/// authority and hence no block will be produced. We expect to have this
+/// farmer and hence no block will be produced. We expect to have this
 /// block time on average following the defined slot duration and the value
 /// of `c` configured for PoC (where `1 - c` represents the probability of
 /// a slot being empty).
@@ -233,6 +233,7 @@ impl pallet_poc::Config for Runtime {
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ExpectedBlockTime;
 
+	// TODO: fix for milestone 3
 	// type KeyOwnerProofSystem = Historical;
 
 	// type KeyOwnerProof = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
@@ -441,17 +442,18 @@ impl_runtime_apis! {
 			PoC::next_epoch()
 		}
 
+		// TODO: fix for milestone 3
 		// fn submit_report_equivocation_unsigned_extrinsic(
 		// 	equivocation_proof: sp_consensus_poc::EquivocationProof<<Block as BlockT>::Header>,
 		// 	key_owner_proof: sp_consensus_poc::OpaqueKeyOwnershipProof,
 		// ) -> Option<()> {
 		// 	let key_owner_proof = key_owner_proof.decode()?;
 		//
-		// 	// TODO
-		// 	// PoC::submit_unsigned_equivocation_report(
-		// 	// 	equivocation_proof,
-		// 	// 	key_owner_proof,
-		// 	// )
+		//
+			// PoC::submit_unsigned_equivocation_report(
+			// 	equivocation_proof,
+			// 	key_owner_proof,
+			// )
 		// 	None
 		// }
 	}

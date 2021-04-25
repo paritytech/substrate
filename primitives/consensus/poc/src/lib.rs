@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Primitives for PoC.
+//! Primitives for Proof-of-Capacity (PoC) Consensus.
 #![deny(warnings)]
 #![forbid(unsafe_code, missing_docs, unused_variables, unused_imports)]
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -70,13 +70,14 @@ pub const MEDIAN_ALGORITHM_CARDINALITY: usize = 1200; // arbitrary suggestion by
 
 pub use sp_consensus_slots::Slot;
 
+// TODO: fix in milestone 3
 // /// An equivocation proof for multiple block authorships on the same slot (i.e. double vote).
 // pub type EquivocationProof<H> = sp_consensus_slots::EquivocationProof<H, FarmerId>;
 
 /// The weight of a PoC block.
 pub type PoCBlockWeight = u32;
 
-/// Make a VRF transcript from given randomness, slot number and epoch.
+/// Make a PoR transcript from given randomness, slot number and epoch.
 pub fn make_transcript(
 	randomness: &Randomness,
 	slot: Slot,
@@ -89,7 +90,7 @@ pub fn make_transcript(
 	transcript
 }
 
-/// Make a VRF transcript data container
+/// Make a PoR transcript data container
 #[cfg(feature = "std")]
 pub fn make_transcript_data(
 	randomness: &Randomness,
@@ -106,7 +107,7 @@ pub fn make_transcript_data(
 	}
 }
 
-/// An consensus log item for BABE.
+/// An consensus log item for PoC.
 #[derive(Decode, Encode, Clone, PartialEq, Eq)]
 pub enum ConsensusLog {
 	/// The epoch has changed. This provides information about the _next_
@@ -167,7 +168,6 @@ pub struct PoCEpochConfiguration {
 }
 
 // TODO: bring this back in for Milestone 3
-
 // /// Verifies the equivocation proof by making sure that: both headers have
 // /// different hashes, are targeting the same slot, and have valid signatures by
 // /// the same authority.

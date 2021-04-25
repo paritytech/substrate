@@ -14,9 +14,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// TODO: Update description
 //! Consensus extension module for PoC consensus. Collects on-chain randomness
-//! from VRF outputs and manages epoch transitions.
+//! from PoR outputs and manages epoch transitions.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(unused_must_use, unsafe_code, unused_variables, unused_must_use)]
@@ -51,6 +50,7 @@ mod mock;
 #[cfg(all(feature = "std", test))]
 mod tests;
 
+// TODO: retain for milestone 3
 // pub use equivocation::{PoCEquivocationOffence, EquivocationHandler, HandleEquivocation};
 
 pub use pallet::*;
@@ -99,7 +99,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type ExpectedBlockTime: Get<Self::Moment>;
 
-		// TODO: Bring this back
+		// TODO: Bring this back for milestone 3
 		// /// The equivocation handling subsystem, defines methods to report an
 		// /// offence (after the equivocation has been validated) and for submitting a
 		// /// transaction to report an equivocation (from an offchain context).
@@ -190,10 +190,8 @@ pub mod pallet {
 	#[pallet::getter(fn initialized)]
 	pub(super) type Initialized<T> = StorageValue<_, MaybeRandomness>;
 
-	// TODO: Fix the docs
-	/// Temporary value (cleared at block finalization) that includes the VRF output generated
-	/// at this block. This field should always be populated during block processing unless
-	/// secondary plain slots are enabled (which don't contain a VRF output).
+	/// Temporary value (cleared at block finalization) that includes the PoR output generated
+	/// at this block. This field should always be populated during block processing.
 	#[pallet::storage]
 	#[pallet::getter(fn author_por_randomness)]
 	pub(super) type AuthorPorRandomness<T> = StorageValue<_, MaybeRandomness, ValueQuery>;
@@ -260,7 +258,7 @@ pub mod pallet {
 
 		/// Block finalization
 		fn on_finalize(_n: BlockNumberFor<T>) {
-			// at the end of the block, we can safely include the new VRF output
+			// at the end of the block, we can safely include the new PoR output
 			// from this block into the under-construction randomness. If we've determined
 			// that this block was the first in a new epoch, the changeover logic has
 			// already occurred at this point, so the under-construction randomness
@@ -279,6 +277,8 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+
+		// TODO: fix in milestone 3
 		// /// Report farmer equivocation/misbehavior. This method will verify
 		// /// the equivocation proof and validate the given key ownership proof
 		// /// against the extracted offender. If both are valid, the offence will
@@ -586,6 +586,7 @@ impl<T: Config> Pallet<T> {
 		this_randomness
 	}
 
+	// TODO: fix for milestone 3
 	// fn do_report_equivocation(
 	// 	reporter: Option<T::AccountId>,
 	// 	equivocation_proof: EquivocationProof<T::Header>,
