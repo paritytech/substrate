@@ -110,8 +110,12 @@ impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for T
 }
 
 impl Trait for Test {
-	type Event = ();
+
+	type CT = Self;
+	type CST = Self;
 	type AuthorityId = crypto::TestAuthId;
+
+	type Event = ();
 	type Call = Call<Test>;
 }
 

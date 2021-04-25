@@ -25,15 +25,17 @@ use sp_core::crypto::KeyTypeId;
 use sp_runtime::{
 	RuntimeDebug,
 	offchain::{http, Duration, storage::StorageValueRef},
-	traits::Zero,
+	traits::{Zero, StaticLookup},
 	transaction_validity::{
 		InvalidTransaction, ValidTransaction, TransactionValidity, TransactionSource,
 		TransactionPriority,
 	},
 };
 use codec::{Encode, Decode};
+use sp_std::vec;
 use sp_std::vec::Vec;
 use pallet_contracts;
+
 // use lite_json::json::JsonValue;
 use alt_serde::{Deserialize, Deserializer};
 
@@ -157,8 +159,10 @@ decl_module! {
 impl<T: Trait> Module<T> {
 
 	fn send_to_sc_mock() -> Result<(), &'static str> {
+		//T::API::call();
+
 		debug::info!("[OCW] Getting signer");
-		let signer = Signer::<T, T::AuthorityId>::all_accounts();
+		let signer = Signer::<T::CST, T::AuthorityId>::all_accounts();
 		debug::info!("[OCW] Checking signer");
 		if !signer.can_sign() {
 			return Err(
@@ -174,24 +178,20 @@ impl<T: Trait> Module<T> {
 		// local keystore with expected `KEY_TYPE`.
 		let results = signer.send_signed_transaction(
 			|_account| {
-//				contracts::Contracts::call(
-//					signer,
-//					BOB,
-//					0,
-//					67_500_000,
-//					vec![],
-//				)
+				// TODO: find actual contract address.
+				let contract_addr = vec![0 as u8; 32];
+				let mut contract_addr = &contract_addr[..];
+				let contract_addr = <<T::CT as frame_system::Trait>::Lookup as StaticLookup>::Source::decode(&mut contract_addr).unwrap();
 
 				pallet_contracts::Call::call(
-					ALICE,
+					contract_addr,
 					0u32.into(),
 					100,
 					vec![]
 				)
-
-//				Call::submit_test_data("Hello World data".as_bytes().to_vec())
 			}
 		);
+		/*
 
 		for (acc, res) in &results {
 			match res {
@@ -199,6 +199,7 @@ impl<T: Trait> Module<T> {
 				Err(e) => debug::error!("Some error occured: {:?}", e),
 			}
 		}
+		*/
 
 		Ok(())
 	}
@@ -323,10 +324,19 @@ decl_event!(
 	}
 );
 
-// TODO: remove.
-pub trait Trait: CreateSignedTransaction<Call<Self>> {
+pub trait Trait: frame_system::Trait {
+
+	type CT: pallet_contracts::Trait;
+	type CST: CreateSignedTransaction<pallet_contracts::Call<Self::CT>>;
+
 	/// The identifier type for an offchain worker.
-	type AuthorityId: AppCrypto<Self::Public, Self::Signature>;
+	type AuthorityId: AppCrypto<<Self::CST as SigningTypes>::Public, <Self::CST as SigningTypes>::Signature>;
+
+	/* TODO: remove. Alternative, core contracts API.
+	type Block: frame_support::inherent::BlockT;
+	type Balance: frame_support::dispatch::Codec;
+	type API: pallet_contracts_rpc_runtime_api::ContractsApi<Self::Block, Self::AccountId, Self::Balance, Self::BlockNumber>;
+	*/
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
