@@ -949,7 +949,7 @@ impl pallet_erc20::Trait for Runtime {
 
 parameter_types! {
 	pub MetricsContractId: AccountId = {
-		AccountId::from_raw(pallet_example_offchain_worker::METRICS_CONTRACT_ID)
+		AccountId::from(pallet_example_offchain_worker::METRICS_CONTRACT_ID)
 	};
 }
 
