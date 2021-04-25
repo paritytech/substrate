@@ -120,7 +120,7 @@ pub mod pallet {
 		}
 
 		fn on_finalize(n: T::BlockNumber) {
-			<TransactionCount<T>>::insert(n, <Counter<T>>::get().unwrap_or(0));
+			<TransactionCount<T>>::insert(n, <Counter<T>>::get());
 			<Counter<T>>::kill();
 			// Drop obsolete roots
 			let period = <StoragePeriod<T>>::get().unwrap_or(DEFAULT_STORAGE_PERIOD.into());
@@ -157,12 +157,12 @@ pub mod pallet {
 			sp_io::transaction_index::index(extrinsic_index, data.len() as u32, content_hash);
 
 			let block_num = <frame_system::Pallet<T>>::block_number();
+			let counter = <Counter<T>>::mutate(|c| { *c += 1; *c - 1 });
 			<TransactionRoots<T>>::insert(block_num, counter, TransactionInfo {
 				chunk_root: root,
 				size: data.len() as u32,
 				content_hash: content_hash.into(),
 			});
-			let counter = <Counter<T>>::mutate(|c| { *c += 1; c }); 
 			Self::deposit_event(Event::Stored(counter));
 			Ok(().into())
 		}
@@ -186,12 +186,10 @@ pub mod pallet {
 			let extrinsic_index = <frame_system::Pallet<T>>::extrinsic_index().unwrap();
 			sp_io::transaction_index::renew(extrinsic_index, info.content_hash.into());
 
-			let mut counter = <Counter<T>>::get().unwrap_or(0);
+			let counter = <Counter<T>>::mutate(|c| { *c += 1; *c - 1 });
 			let block_num = <frame_system::Pallet<T>>::block_number();
 			<TransactionRoots<T>>::insert(block_num, counter, info);
 			Self::deposit_event(Event::Renewed(counter));
-			counter += 1;
-			<Counter<T>>::put(counter);
 			Ok(().into())
 		}
 
