@@ -13,7 +13,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 
-pallet-poc = { version = "0.1.0", default-features = false, path = "../../../frame/poc" }
+pallet-spartan = { version = "0.1.0", default-features = false, path = "../../../frame/spartan" }
 pallet-balances = { version = "3.0.0", default-features = false, path = "../../../frame/balances" }
 pallet-session = { version = "3.0.0", default-features = false, features = ["historical"], path = "../../../frame/session" }
 frame-support = { version = "3.0.0", default-features = false, path = "../../../frame/support" }
@@ -57,7 +57,7 @@ std = [
 	"frame-support/std",
 	"frame-system-rpc-runtime-api/std",
 	"frame-system/std",
-	"pallet-poc/std",
+	"pallet-spartan/std",
 	"pallet-balances/std",
 	"pallet-session/std",
 	"pallet-randomness-collective-flip/std",

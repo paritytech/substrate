@@ -229,7 +229,7 @@ parameter_types! {
 	pub const ExpectedBlockTime: Moment = MILLISECS_PER_BLOCK;
 }
 
-impl pallet_poc::Config for Runtime {
+impl pallet_spartan::Config for Runtime {
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ExpectedBlockTime;
 
@@ -238,16 +238,16 @@ impl pallet_poc::Config for Runtime {
 
 	// type KeyOwnerProof = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
 	// 	KeyTypeId,
-	// 	pallet_poc::FarmerId,
+	// 	pallet_spartan::FarmerId,
 	// )>>::Proof;
 	//
 	// type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
 	// 	KeyTypeId,
-	// 	pallet_poc::FarmerId,
+	// 	pallet_spartan::FarmerId,
 	// )>>::IdentificationTuple;
 	//
 	// type HandleEquivocation =
-	// pallet_poc::EquivocationHandler<Self::KeyOwnerIdentification, Offences>;
+	// pallet_spartan::EquivocationHandler<Self::KeyOwnerIdentification, Offences>;
 
 	type WeightInfo = ();
 }
@@ -312,7 +312,7 @@ construct_runtime!(
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Pallet, Call, Storage},
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
-		PoC: pallet_poc::{Pallet, Call, Storage, Config},
+		PoC: pallet_spartan::{Pallet, Call, Storage, Config},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		TransactionPayment: pallet_transaction_payment::{Pallet, Storage},
 		Sudo: pallet_sudo::{Pallet, Call, Config<T>, Storage, Event<T>},

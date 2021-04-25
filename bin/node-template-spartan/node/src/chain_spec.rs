@@ -124,7 +124,7 @@ fn testnet_genesis(
 			// Configure endowed accounts with initial balance of 1 << 60.
 			balances: endowed_accounts.iter().cloned().map(|k|(k, 1 << 60)).collect(),
 		},
-		pallet_poc: PoCConfig {
+		pallet_spartan: PoCConfig {
 			epoch_config: Some(node_template_spartan_runtime::POC_GENESIS_EPOCH_CONFIG),
 		},
 		pallet_sudo: SudoConfig {
