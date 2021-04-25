@@ -25,10 +25,9 @@ use sp_runtime::traits::{Zero, One, Bounded};
 use sp_transaction_storage_proof::TransactionStorageProof;
 use frame_system::{RawOrigin, Pallet as System, EventRecord};
 use frame_benchmarking::{benchmarks, whitelisted_caller, impl_benchmark_test_suite};
-use frame_support::{traits::{Currency, OnFinalize}};
+use frame_support::{traits::{Currency, OnFinalize, OnInitialize}};
 
 use crate::Pallet as TransactionStorage;
-use crate::mock::{run_to_block, setup};
 
 const MAX_EXTRINSICS: u32 = 100;
 
@@ -89,10 +88,19 @@ fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
 	assert_eq!(event, &system_event);
 }
 
+pub fn run_to_block<T: Config>(n: T::BlockNumber) {
+	while frame_system::Pallet::<T>::block_number() < n {
+		crate::Pallet::<T>::on_finalize(frame_system::Pallet::<T>::block_number());
+		frame_system::Pallet::<T>::on_finalize(frame_system::Pallet::<T>::block_number());
+		frame_system::Pallet::<T>::set_block_number(frame_system::Pallet::<T>::block_number() + One::one());
+		frame_system::Pallet::<T>::on_initialize(frame_system::Pallet::<T>::block_number());
+		crate::Pallet::<T>::on_initialize(frame_system::Pallet::<T>::block_number());
+	}
+}
+
 benchmarks! {
 	store {
 		let l in 1 .. MAX_DATA_SIZE;
-		setup::<T>()?;
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 	}: _(RawOrigin::Signed(caller.clone()), vec![0u8; l as usize])
@@ -102,7 +110,6 @@ benchmarks! {
 	}
 
 	renew {
-		setup::<T>()?;
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		TransactionStorage::<T>::store(
@@ -115,8 +122,7 @@ benchmarks! {
 	}
 
 	check_proof_max {
-		setup::<T>()?;
-		run_to_block::<T>(1);
+		run_to_block::<T>(1u32.into());
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		for _ in 0 .. MAX_EXTRINSICS {
@@ -125,7 +131,7 @@ benchmarks! {
 				vec![0u8; MAX_DATA_SIZE as usize],
 			)?;
 		}
-		run_to_block::<T>(11);
+		run_to_block::<T>(StoragePeriod::<T>::get() + T::BlockNumber::one());
 		let random_hash = [0u8];
 		let mut encoded_proof = PROOF;
 		let proof = TransactionStorageProof::decode(&mut encoded_proof).unwrap();
@@ -136,8 +142,7 @@ benchmarks! {
 
 	on_finalize {
 		let l in 0 .. MAX_EXTRINSICS;
-		setup::<T>()?;
-		run_to_block::<T>(1);
+		run_to_block::<T>(1u32.into());
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		for _ in 0 .. l {
@@ -146,7 +151,7 @@ benchmarks! {
 				vec![0u8],
 			)?;
 		}
-		run_to_block::<T>(11);
+		run_to_block::<T>(StoragePeriod::<T>::get() + T::BlockNumber::one());
 		if l != 0 {
 			assert!(TransactionRoots::<T>::get(T::BlockNumber::one(), 0).is_some());
 		}
@@ -160,6 +165,6 @@ benchmarks! {
 
 impl_benchmark_test_suite!(
 	TransactionStorage,
-	crate::mock::runtime::new_test_ext(),
-	crate::mock::runtime::Test,
+	crate::mock::new_test_ext(),
+	crate::mock::Test,
 );

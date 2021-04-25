@@ -20,12 +20,13 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(any(test, feature = "runtime-benchmarks"))]
+mod benchmarking;
+pub mod weights;
+
+#[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
-mod benchmarking;
-pub mod weights;
 
 use frame_support::{
 	traits::{ReservableCurrency, Currency},
@@ -108,7 +109,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(n: T::BlockNumber) -> Weight {
-			let period = <StoragePeriod<T>>::get().unwrap_or(DEFAULT_STORAGE_PERIOD.into());
+			let period = <StoragePeriod<T>>::get();
 			let obsolete = n.saturating_sub(period);
 			let transaction_count = if obsolete > Zero::zero() {
 				<TransactionCount<T>>::get(obsolete)
@@ -123,7 +124,7 @@ pub mod pallet {
 			<TransactionCount<T>>::insert(n, <Counter<T>>::get());
 			<Counter<T>>::kill();
 			// Drop obsolete roots
-			let period = <StoragePeriod<T>>::get().unwrap_or(DEFAULT_STORAGE_PERIOD.into());
+			let period = <StoragePeriod<T>>::get();
 			let obsolete = n.saturating_sub(period);
 			if obsolete > Zero::zero() {
 				<TransactionRoots<T>>::remove_prefix(obsolete);
@@ -207,7 +208,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
 			let number = <frame_system::Pallet<T>>::block_number();
-			let period = <StoragePeriod<T>>::get().unwrap_or(DEFAULT_STORAGE_PERIOD.into());
+			let period = <StoragePeriod<T>>::get();
 			let target_number = number.saturating_sub(period);
 			if target_number.is_zero() {
 				ensure!(proof.is_none(), Error::<T>::UnexpectedProof);
@@ -304,11 +305,12 @@ pub mod pallet {
 	/// Storage period for data in blocks. Should match `sp_storage_proof::DEFAULT_STORAGE_PERIOD`
 	/// for block authoring.
 	#[pallet::storage]
-	pub(super) type StoragePeriod<T: Config> = StorageValue<_, T::BlockNumber>;
+	pub(super) type StoragePeriod<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub byte_fee: BalanceOf<T>,
+		pub storage_period: T::BlockNumber,
 	}
 
 	#[cfg(feature = "std")]
@@ -316,6 +318,7 @@ pub mod pallet {
 		fn default() -> Self {
 			Self {
 				byte_fee: 10u32.into(),
+				storage_period: DEFAULT_STORAGE_PERIOD.into(),
 			}
 		}
 	}
@@ -324,6 +327,7 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			<ByteFee<T>>::put(&self.byte_fee);
+			<StoragePeriod<T>>::put(&self.storage_period);
 		}
 	}
 
