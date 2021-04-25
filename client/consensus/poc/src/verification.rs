@@ -148,7 +148,7 @@ fn check_primary_header<B: BlockT + Sized>(
 
 	if !spartan.is_encoding_valid(
 		piece,
-		&pre_digest.solution.public_key,
+		pre_digest.solution.public_key.as_ref(),
 		pre_digest.solution.nonce,
 	) {
 		panic!("Solution encoding is incorrect for slot {}", pre_digest.slot);

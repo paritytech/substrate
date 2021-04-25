@@ -49,7 +49,7 @@
 #![warn(missing_docs)]
 pub use sp_consensus_poc::{
 	PoCApi, ConsensusLog, POC_ENGINE_ID, PoCEpochConfiguration, PoCGenesisConfiguration,
-	FarmerId, FarmerSignature, VRF_OUTPUT_LENGTH,
+	FarmerId, FarmerSignature,
 	digests::{
 		CompatibleDigestItem, NextEpochDescriptor, NextConfigDescriptor, PreDigest,
 	},
@@ -104,6 +104,7 @@ use ring::digest;
 use sp_consensus_poc::digests::Solution;
 use sp_consensus_spartan::spartan::{Spartan, SIGNING_CONTEXT, Salt};
 use schnorrkel::context::SigningContext;
+use sp_consensus_poc::Randomness;
 
 mod verification;
 
@@ -142,7 +143,7 @@ pub struct Epoch {
 	/// The duration of this epoch.
 	pub duration: u64,
 	/// Randomness for this epoch.
-	pub randomness: [u8; VRF_OUTPUT_LENGTH],
+	pub randomness: Randomness,
 	/// Configuration of the epoch.
 	pub config: PoCEpochConfiguration,
 }

@@ -24,9 +24,7 @@ pub mod inherents;
 
 // TODO: these should change with PoR
 pub use merlin::Transcript;
-pub use sp_consensus_vrf::schnorrkel::{
-	Randomness, RANDOMNESS_LENGTH, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH,
-};
+pub use sp_consensus_spartan::{Randomness, RANDOMNESS_LENGTH};
 
 use codec::{Decode, Encode};
 #[cfg(feature = "std")]
@@ -261,7 +259,7 @@ pub struct Epoch {
 	/// The duration of this epoch.
 	pub duration: u64,
 	/// Randomness for this epoch.
-	pub randomness: [u8; VRF_OUTPUT_LENGTH],
+	pub randomness: Randomness,
 	/// Configuration of the epoch.
 	pub config: PoCEpochConfiguration,
 }

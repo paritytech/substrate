@@ -19,7 +19,6 @@
 //! Spartan-based PoR.
 
 use ring::{hmac, digest};
-use sp_consensus_poc::FarmerId;
 use std::io::Write;
 use std::convert::TryInto;
 
@@ -49,7 +48,7 @@ impl Spartan {
 	pub fn is_encoding_valid(
 		&self,
 		encoding: Piece,
-		public_key: &FarmerId,
+		public_key: &[u8],
 		nonce: u64,
 	) -> bool {
 		self.instance.is_valid(
@@ -77,9 +76,9 @@ fn genesis_piece_from_seed(seed: &str) -> Piece {
 	piece
 }
 
-fn hash_public_key(public_key: &FarmerId) -> [u8; PRIME_SIZE_BYTES] {
+fn hash_public_key(public_key: &[u8]) -> [u8; PRIME_SIZE_BYTES] {
 	let mut array = [0u8; PRIME_SIZE_BYTES];
-	let hash = digest::digest(&digest::SHA256, public_key.as_ref());
+	let hash = digest::digest(&digest::SHA256, public_key);
 	array.copy_from_slice(&hash.as_ref()[..PRIME_SIZE_BYTES]);
 	array
 }

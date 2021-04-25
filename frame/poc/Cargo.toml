@@ -21,7 +21,6 @@ pallet-authorship = { version = "3.0.0", default-features = false, path = "../au
 pallet-timestamp = { version = "3.0.0", default-features = false, path = "../timestamp" }
 serde = { version = "1.0.101", optional = true }
 sp-consensus-poc = { version = "0.1.0", default-features = false, path = "../../primitives/consensus/poc" }
-sp-consensus-vrf = { version = "0.9.0", default-features = false, path = "../../primitives/consensus/vrf" }
 sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-staking = { version = "3.0.0", default-features = false, path = "../../primitives/staking" }
@@ -47,7 +46,6 @@ std = [
 	"pallet-timestamp/std",
 	"serde",
 	"sp-consensus-poc/std",
-	"sp-consensus-vrf/std",
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-staking/std",

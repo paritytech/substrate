@@ -22,7 +22,7 @@ use super::{
 use codec::{Codec, Decode, Encode};
 use sp_runtime::{DigestItem, RuntimeDebug};
 
-use sp_consensus_vrf::schnorrkel::Randomness;
+use sp_consensus_spartan::Randomness;
 use sp_std::vec::Vec;
 use crate::FarmerId;
 

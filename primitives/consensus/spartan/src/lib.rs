@@ -16,5 +16,14 @@
 // limitations under the License.
 
 //! Primitives for Spartan-based PoR.
+#![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(feature = "std")]
 pub mod spartan;
+
+/// The length of the Randomness.
+pub const RANDOMNESS_LENGTH: usize = 32;
+
+/// Randomness value.
+pub type Randomness = [u8; RANDOMNESS_LENGTH];
+

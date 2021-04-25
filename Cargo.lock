@@ -5333,7 +5333,6 @@ dependencies = [
  "parity-scale-codec",
  "serde",
  "sp-consensus-poc",
- "sp-consensus-vrf",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -7395,7 +7394,6 @@ dependencies = [
  "sp-consensus-poc",
  "sp-consensus-slots",
  "sp-consensus-spartan",
- "sp-consensus-vrf",
  "sp-core",
  "sp-inherents",
  "sp-io",
@@ -8898,7 +8896,7 @@ dependencies = [
  "sp-application-crypto",
  "sp-consensus",
  "sp-consensus-slots",
- "sp-consensus-vrf",
+ "sp-consensus-spartan",
  "sp-core",
  "sp-inherents",
  "sp-keystore",
@@ -8931,12 +8929,7 @@ dependencies = [
 name = "sp-consensus-spartan"
 version = "0.1.0"
 dependencies = [
- "parity-scale-codec",
  "ring",
- "sp-consensus-poc",
- "sp-core",
- "sp-runtime",
- "sp-std",
  "spartan-codec",
 ]
 

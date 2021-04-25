@@ -13,10 +13,8 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { version = "2.0.0", package = "parity-scale-codec", default-features = false }
-spartan-codec = { version = "0.1.0", default-features = false }
-sp-std = { version = "3.0.0", path = "../../std", default-features = false }
-sp-consensus-poc = { version = "0.1.0", default-features = false, path = "../poc" }
-sp-core = { version = "3.0.0", path = "../../core", default-features = false }
-sp-runtime = { version = "3.0.0", default-features = false, path = "../../runtime" }
-ring = "0.16"
+spartan-codec = { version = "0.1.0", default-features = false, optional = true }
+ring = { version = "0.16", optional = true }
+
+[features]
+std = ["spartan-codec", "ring"]

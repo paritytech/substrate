@@ -36,9 +36,8 @@ use sp_consensus_poc::{
 	PoCEpochConfiguration, ConsensusLog, Epoch,
 	/*EquivocationProof, */Slot, POC_ENGINE_ID,
 };
-use sp_consensus_vrf::schnorrkel;
 
-pub use sp_consensus_poc::{FarmerId, PUBLIC_KEY_LENGTH, RANDOMNESS_LENGTH, VRF_OUTPUT_LENGTH};
+pub use sp_consensus_poc::{FarmerId, PUBLIC_KEY_LENGTH, RANDOMNESS_LENGTH};
 
 mod default_weights;
 mod equivocation;
@@ -69,7 +68,7 @@ pub trait EpochChangeTrigger {
 
 const UNDER_CONSTRUCTION_SEGMENT_LENGTH: usize = 256;
 
-type MaybeRandomness = Option<schnorrkel::Randomness>;
+type MaybeRandomness = Option<sp_consensus_poc::Randomness>;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -152,7 +151,7 @@ pub mod pallet {
 	// variable to its underlying value.
 	#[pallet::storage]
 	#[pallet::getter(fn randomness)]
-	pub type Randomness<T> = StorageValue<_, schnorrkel::Randomness, ValueQuery>;
+	pub type Randomness<T> = StorageValue<_, sp_consensus_poc::Randomness, ValueQuery>;
 
 	/// Pending epoch configuration change that will be applied when the next epoch is enacted.
 	#[pallet::storage]
@@ -160,7 +159,7 @@ pub mod pallet {
 
 	/// Next epoch randomness.
 	#[pallet::storage]
-	pub(super) type NextRandomness<T> = StorageValue<_, schnorrkel::Randomness, ValueQuery>;
+	pub(super) type NextRandomness<T> = StorageValue<_, sp_consensus_poc::Randomness, ValueQuery>;
 
 	/// Randomness under construction.
 	///
@@ -180,7 +179,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		u32,
-		Vec<schnorrkel::Randomness>,
+		Vec<sp_consensus_poc::Randomness>,
 		ValueQuery,
 	>;
 
@@ -499,7 +498,7 @@ impl<T: Config> Pallet<T> {
 		<frame_system::Pallet<T>>::deposit_log(log.into())
 	}
 
-	fn deposit_randomness(randomness: &schnorrkel::Randomness) {
+	fn deposit_randomness(randomness: &sp_consensus_poc::Randomness) {
 		let segment_idx = SegmentIndex::<T>::get();
 		let mut segment = UnderConstruction::<T>::get(&segment_idx);
 		if segment.len() < UNDER_CONSTRUCTION_SEGMENT_LENGTH {
@@ -566,10 +565,9 @@ impl<T: Config> Pallet<T> {
 		AuthorPorRandomness::<T>::put(maybe_randomness);
 	}
 
-	// TODO: why does this need schnorrkel randomness?
 	/// Call this function exactly once when an epoch changes, to update the
 	/// randomness. Returns the new randomness.
-	fn randomness_change_epoch(next_epoch_index: u64) -> schnorrkel::Randomness {
+	fn randomness_change_epoch(next_epoch_index: u64) -> sp_consensus_poc::Randomness {
 		let this_randomness = NextRandomness::<T>::get();
 		let segment_idx: u32 = SegmentIndex::<T>::mutate(|s| sp_std::mem::replace(s, 0));
 
@@ -680,12 +678,12 @@ impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Pallet<T> {
 //
 // an optional size hint as to how many VRF outputs there were may be provided.
 fn compute_randomness(
-	last_epoch_randomness: schnorrkel::Randomness,
+	last_epoch_randomness: sp_consensus_poc::Randomness,
 	epoch_index: u64,
-	rho: impl Iterator<Item=schnorrkel::Randomness>,
+	rho: impl Iterator<Item=sp_consensus_poc::Randomness>,
 	rho_size_hint: Option<usize>,
-) -> schnorrkel::Randomness {
-	let mut s = Vec::with_capacity(40 + rho_size_hint.unwrap_or(0) * VRF_OUTPUT_LENGTH);
+) -> sp_consensus_poc::Randomness {
+	let mut s = Vec::with_capacity(40 + rho_size_hint.unwrap_or(0) * RANDOMNESS_LENGTH);
 	s.extend_from_slice(&last_epoch_randomness);
 	s.extend_from_slice(&epoch_index.to_le_bytes());
 
