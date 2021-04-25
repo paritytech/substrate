@@ -948,6 +948,9 @@ impl pallet_erc20::Trait for Runtime {
 }
 
 impl pallet_example_offchain_worker::Trait for Runtime {
+	// TODO: configure contract address.
+	type ContractId = ();
+
 	type CT = Self;
 	type CST = Self;
 	type AuthorityId = pallet_example_offchain_worker::crypto::TestAuthId;

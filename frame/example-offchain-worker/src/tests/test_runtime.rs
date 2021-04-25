@@ -15,6 +15,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, Convert, Extrinsic as ExtrinsicT, IdentityLookup, Verify},
 	Perbill,
 };
+use sp_std::str::FromStr;
 use std::cell::RefCell;
 
 type AccountId = sp_core::sr25519::Public;
@@ -237,7 +238,16 @@ where
 	}
 }
 
+parameter_types! {
+	pub ContractId: AccountId = {
+		let contract_addr_str = "5Fay3QQH2S4wXqCQdhZAS2bWrqvdbVmq77jb2M7seNDqjz1G";
+		AccountId::from_str(contract_addr_str).unwrap()
+	};
+}
+
 impl Trait for Test {
+	type ContractId = ContractId;
+
 	type CT = Self;
 	type CST = Self;
 	type AuthorityId = crypto::TestAuthId;
