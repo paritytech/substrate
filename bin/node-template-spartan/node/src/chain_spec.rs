@@ -5,7 +5,6 @@ use node_template_spartan_runtime::{
 };
 use sp_runtime::traits::{Verify, IdentifyAccount};
 use sc_service::ChainType;
-use serde::{Serialize, Deserialize};
 
 // The URL for the telemetry server.
 // const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";

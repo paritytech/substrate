@@ -95,7 +95,6 @@ use sp_blockchain::{
 	Result as ClientResult, Error as ClientError,
 	HeaderBackend, ProvideCache, HeaderMetadata
 };
-use schnorrkel::SignatureError;
 use codec::{Encode, Decode};
 use sp_api::ApiExt;
 use sp_consensus_slots::Slot;
@@ -229,18 +228,21 @@ pub enum Error<B: BlockT> {
 	/// Header is unsealed
 	#[display(fmt = "Header {:?} is unsealed", _0)]
 	HeaderUnsealed(B::Hash),
-	/// Slot author not found
-	#[display(fmt = "Slot author not found")]
-	SlotAuthorNotFound,
 	/// Bad signature
-	#[display(fmt = "Bad signature on {:?}", _0)]
-	BadSignature(B::Hash),
-	/// VRF verification of block by author failed
-	#[display(fmt = "VRF verification of block by farmer {:?} failed: threshold {} exceeded", _0, _1)]
-	VRFVerificationOfBlockFailed(FarmerId, u128),
-	/// VRF verification failed
-	#[display(fmt = "VRF verification failed: {:?}", _0)]
-	VRFVerificationFailed(SignatureError),
+	#[display(fmt = "Bad signature")]
+	BadSignature,
+	/// Solution is outside of solution range
+	#[display(fmt = "Solution is outside of solution range for slot {}", _0)]
+	OutsideOfSolutionRange(Slot),
+	/// Encoding is of wrong size
+	#[display(fmt = "Encoding is of the wrong size")]
+	EncodingOfWrongSize,
+	/// Invalid encoding of genesis piece for public key and nonce
+	#[display(fmt = "Invalid encoding for slot {}", _0)]
+	InvalidEncoding(Slot),
+	/// Invalid commitment for salt
+	#[display(fmt = "Invalid commitment for salt for slot {}", _0)]
+	InvalidCommitment(Slot),
 	/// Could not fetch parent header
 	#[display(fmt = "Could not fetch parent header: {:?}", _0)]
 	FetchParentHeader(sp_blockchain::Error),

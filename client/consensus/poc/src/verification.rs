@@ -130,20 +130,20 @@ fn check_primary_header<B: BlockT + Sized>(
 		crate::create_challenge(epoch, pre_digest.slot),
 		INITIAL_SOLUTION_RANGE,
 	) {
-		panic!("Solution is outside of solution range for slot {}", pre_digest.slot);
+		return Err(Error::OutsideOfSolutionRange(pre_digest.slot));
 	}
 
 	let piece: Piece = pre_digest.solution.encoding
 		.as_slice()
 		.try_into()
-		.expect("Incorrect piece, must be 4096 bytes");
+		.map_err(|_error| Error::EncodingOfWrongSize)?;
 
 	if !spartan::is_commitment_valid(&piece, &pre_digest.solution.tag, &SALT) {
-		panic!("Solution commitment is incorrect for slot {}", pre_digest.slot);
+		return Err(Error::InvalidCommitment(pre_digest.slot));
 	}
 
 	if !is_signature_valid(signing_context, &pre_digest.solution) {
-		panic!("Solution signature is invalid for slot {}", pre_digest.slot);
+		return Err(Error::BadSignature);
 	}
 
 	if !spartan.is_encoding_valid(
@@ -151,7 +151,7 @@ fn check_primary_header<B: BlockT + Sized>(
 		pre_digest.solution.public_key.as_ref(),
 		pre_digest.solution.nonce,
 	) {
-		panic!("Solution encoding is incorrect for slot {}", pre_digest.slot);
+		return Err(Error::InvalidEncoding(pre_digest.slot));
 	}
 
 	// TODO: Other verification?
