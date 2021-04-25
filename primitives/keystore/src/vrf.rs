@@ -21,7 +21,7 @@ use std::borrow::Cow;
 
 use codec::Encode;
 use merlin::Transcript;
-use schnorrkel::vrf::{VRFOutput, VRFProof};
+pub use schnorrkel::{errors::SignatureError, vrf::{VRFOutput, VRFProof}};
 
 /// An enum whose variants represent possible
 /// accepted values to construct the VRF transcript
