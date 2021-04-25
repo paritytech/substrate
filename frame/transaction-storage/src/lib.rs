@@ -147,15 +147,13 @@ pub mod pallet {
 			sp_io::transaction_index::index(extrinsic_index, data.len() as u32, content_hash);
 
 			let block_num = <frame_system::Pallet<T>>::block_number();
-			let mut counter = <Counter<T>>::get().unwrap_or(0);
 			<TransactionRoots<T>>::insert(block_num, counter, TransactionInfo {
 				chunk_root: root,
 				size: data.len() as u32,
 				content_hash: content_hash.into(),
 			});
+			let counter = <Counter<T>>::mutate(|c| { *c += 1; c }); 
 			Self::deposit_event(Event::Stored(counter));
-			counter += 1;
-			<Counter<T>>::put(counter);
 			Ok(().into())
 		}
 
@@ -293,7 +291,7 @@ pub mod pallet {
 	pub(super) type ByteFee<T: Config> = StorageValue<_, BalanceOf<T>>;
 
 	#[pallet::storage]
-	pub(super) type Counter<T: Config> = StorageValue<_, u32>;
+	pub(super) type Counter<T: Config> = StorageValue<_, u32, ValueQuery>;
 
 	/// Storage period for data in blocks. Should match `sp_storage_proof::DEFAULT_STORAGE_PERIOD`
 	/// for block authoring.

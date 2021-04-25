@@ -36,7 +36,6 @@ pub mod runtime {
 	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 	pub type Block = frame_system::mocking::MockBlock<Test>;
 
-
 	// Configure a mock runtime to test the pallet.
 	frame_support::construct_runtime!(
 		pub enum Test where
@@ -121,7 +120,7 @@ pub mod runtime {
 			pallet_balances: pallet_balances::GenesisConfig::<Test> {
 				balances: vec![(1, 1000000000), (2, 100), (3, 100), (4, 100)]
 			},
-			pallet_transaction_storage: pallet_transaction_storage::GenesisConfig::default(),
+			pallet_transaction_storage: Default::default(),
 		}.build_storage().unwrap();
 		t.into()
 	}
@@ -145,4 +144,3 @@ pub fn setup<T: Config>() -> Result<(), &'static str> {
 	pallet_transaction_storage::StoragePeriod::<T>::set(Some(storage_period));
 	Ok(())
 }
-
