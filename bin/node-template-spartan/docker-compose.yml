@@ -1,17 +1,35 @@
 version: "3.2"
 
 services:
-  dev:
+  node:
+    build: .
     container_name: node-template-spartan
-    image: paritytech/ci-linux:974ba3ac-20201006
     working_dir: /var/www/node-template-spartan
     ports:
       - "9944:9944"
     environment:
       - CARGO_HOME=/var/www/node-template-spartan/.cargo
+      - RUST_LOG=info
     volumes:
-      - .:/var/www/node-template-spartan
+      - ../..:/var/www/node-template-spartan
       - type: bind
         source: ./.local
         target: /root/.local
-    command: bash -c "cargo build --release && ./target/release/node-template-spartan --dev --ws-external"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9615/metrics"]
+    command: bash -c "source /root/.cargo/env && cargo run --bin node-template-spartan -- --dev --ws-external"
+  farmer:
+    build:
+      context: .
+      dockerfile: Dockerfile-farmer
+    container_name: node-template-spartan-farmer
+    depends_on:
+      - node
+    environment:
+      - RUST_LOG=debug
+    volumes:
+      - type: bind
+        source: ./.local
+        target: /root/.local
+    restart: unless-stopped
+    command: bash -c "source /root/.cargo/env && spartan-farmer plot 256000 spartan && spartan-farmer farm --ws-server ws://node:9944"

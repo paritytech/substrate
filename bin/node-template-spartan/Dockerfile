@@ -1,0 +1,15 @@
+FROM ubuntu:20.04
+
+RUN \
+    apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        gcc \
+        llvm \
+        clang \
+        make \
+        m4 && \
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain nightly
+
+RUN bash -c "source /root/.cargo/env && rustup target add wasm32-unknown-unknown --toolchain nightly"
