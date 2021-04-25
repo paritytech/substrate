@@ -250,10 +250,10 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			let mut basedir = p.to_path_buf();
 			basedir.pop();
 
-			// Do we have to migrate to a role-based subdirectory layout?
-			// See if the `db_version` file exists in the base dir, if so we assume the database
-			// is not-migrated yet.
-			if basedir.join("db_version").exists() {
+			// Do we have to migrate to a role-based subdirectory layout:
+			// See if the base dir exists (`db`) and there's no `light` or `full` directory inside
+			// of it, so we assume the database is not-migrated yet.
+			if basedir.exists() && !(basedir.join("light").exists() || basedir.join("full").exists()) {
 				type DummyBlock = generic::Block<generic::Header<u32, BlakeTwo256>, OpaqueExtrinsic>;
 				let mut old_conf = db_conf.clone();
 				old_conf.set_path(&basedir);
