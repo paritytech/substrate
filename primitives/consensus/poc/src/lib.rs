@@ -22,8 +22,6 @@
 pub mod digests;
 pub mod inherents;
 
-// TODO: these should change with PoR
-pub use merlin::Transcript;
 pub use sp_consensus_spartan::{Randomness, RANDOMNESS_LENGTH};
 
 use codec::{Decode, Encode};
@@ -53,9 +51,6 @@ pub type FarmerId = app::Public;
 /// The `ConsensusEngineId` of PoC.
 pub const POC_ENGINE_ID: ConsensusEngineId = *b"POC_";
 
-/// The length of the public key
-pub const PUBLIC_KEY_LENGTH: usize = 32;
-
 /// How many blocks to wait before running the median algorithm for relative time
 /// This will not vary from chain to chain as it is not dependent on slot duration
 /// or epoch length.
@@ -69,19 +64,6 @@ pub use sp_consensus_slots::Slot;
 
 /// The weight of a PoC block.
 pub type PoCBlockWeight = u32;
-
-/// Make a PoR transcript from given randomness, slot number and epoch.
-pub fn make_transcript(
-	randomness: &Randomness,
-	slot: Slot,
-	epoch: u64,
-) -> Transcript {
-	let mut transcript = Transcript::new(&POC_ENGINE_ID);
-	transcript.append_u64(b"slot number", *slot);
-	transcript.append_u64(b"current epoch", epoch);
-	transcript.append_message(b"chain randomness", &randomness[..]);
-	transcript
-}
 
 /// Make a PoR transcript data container
 #[cfg(feature = "std")]

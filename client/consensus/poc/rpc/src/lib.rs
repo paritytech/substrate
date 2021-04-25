@@ -51,6 +51,7 @@ const SOLUTION_TIMEOUT: Duration = Duration::from_secs(5);
 type Slot = u64;
 type FutureResult<T> = Box<dyn rpc_future::Future<Item = T, Error = RpcError> + Send>;
 
+// TODO: Re-evaluate if we can share this with farmer
 /// Information about new slot that just arrived
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RpcNewSlotInfo {
@@ -73,8 +74,8 @@ pub struct RpcSolution {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ProposedProofOfSpaceResult {
-	slot_number: Slot,
-	solution: Option<RpcSolution>,
+	pub slot_number: Slot,
+	pub solution: Option<RpcSolution>,
 }
 
 /// Provides rpc methods for interacting with PoC.

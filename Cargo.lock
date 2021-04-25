@@ -8889,7 +8889,6 @@ dependencies = [
 name = "sp-consensus-poc"
 version = "0.1.0"
 dependencies = [
- "merlin",
  "parity-scale-codec",
  "serde",
  "sp-api",

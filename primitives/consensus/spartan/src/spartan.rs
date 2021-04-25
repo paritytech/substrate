@@ -66,7 +66,6 @@ pub fn is_commitment_valid(encoding: &Piece, tag: &Tag, salt: &Salt) -> bool {
 }
 
 fn genesis_piece_from_seed(seed: &str) -> Piece {
-	// TODO: This is not efficient
 	let mut piece = [0u8; PIECE_SIZE];
 	let mut input = seed.as_bytes().to_vec();
 	for mut chunk in piece.chunks_mut(digest::SHA256.output_len) {

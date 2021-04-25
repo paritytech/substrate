@@ -37,7 +37,7 @@ use sp_consensus_poc::{
 	/*EquivocationProof, */Slot, POC_ENGINE_ID,
 };
 
-pub use sp_consensus_poc::{FarmerId, PUBLIC_KEY_LENGTH, RANDOMNESS_LENGTH};
+pub use sp_consensus_poc::{FarmerId, RANDOMNESS_LENGTH};
 
 mod default_weights;
 mod equivocation;
@@ -672,11 +672,10 @@ impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Pallet<T> {
 	type Public = FarmerId;
 }
 
-// TODO: fix this, no VRF
-// compute randomness for a new epoch. rho is the concatenation of all
-// VRF outputs in the prior epoch.
+// Compute randomness for a new epoch. rho is the concatenation of all
+// PoR outputs in the prior epoch.
 //
-// an optional size hint as to how many VRF outputs there were may be provided.
+// An optional size hint as to how many PoR outputs there were may be provided.
 fn compute_randomness(
 	last_epoch_randomness: sp_consensus_poc::Randomness,
 	epoch_index: u64,
@@ -687,8 +686,8 @@ fn compute_randomness(
 	s.extend_from_slice(&last_epoch_randomness);
 	s.extend_from_slice(&epoch_index.to_le_bytes());
 
-	for vrf_output in rho {
-		s.extend_from_slice(&vrf_output[..]);
+	for output in rho {
+		s.extend_from_slice(&output[..]);
 	}
 
 	sp_io::hashing::blake2_256(&s)

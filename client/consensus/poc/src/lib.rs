@@ -113,7 +113,7 @@ pub mod aux_schema;
 mod tests;
 
 // TODO: Real adjustable solution range, Milestone 2. For now configure for 1 GB plot.
-const INITIAL_SOLUTION_RANGE: u64 = u64::MAX / 4096;
+const INITIAL_SOLUTION_RANGE: u64 = u64::MAX / 256_000;
 // TODO: Replace fixed salt with something
 const SALT: Salt = [1u8; 32];
 
@@ -1623,7 +1623,7 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, Inner, CAW>(
 		telemetry,
 		client,
 		spartan: Spartan::new(),
-		// TODO: Replace constant
+		// TODO: Figure out how to remove explicit schnorrkel dependency
 		signing_context: schnorrkel::context::signing_context(SIGNING_CONTEXT),
 	};
 

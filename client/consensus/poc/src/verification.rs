@@ -18,7 +18,7 @@
 //! Verification for PoC headers.
 use sp_runtime::{traits::Header, traits::DigestItemFor};
 use sp_core::Public;
-use sp_consensus_poc::{make_transcript, FarmerSignature};
+use sp_consensus_poc::FarmerSignature;
 use sp_consensus_poc::digests::{PreDigest, CompatibleDigestItem, Solution};
 use sc_consensus_slots::CheckedHeader;
 use sp_consensus_slots::Slot;
