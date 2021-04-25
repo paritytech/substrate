@@ -52,10 +52,14 @@ pub use weights::WeightInfo;
 // Increasing it further also requires raising the allocator limit.
 pub const MAX_DATA_SIZE: u32 = 8 * 1024 * 1024;
 
+/// State data for a stored transaction.
 #[derive(Encode, Decode, sp_runtime::RuntimeDebug, PartialEq, Eq)]
 pub struct TransactionInfo {
+	/// Chunk trie root.
 	chunk_root: <BlakeTwo256 as Hash>::Output,
+	/// Plain hash of indexed data.
 	content_hash: <BlakeTwo256 as Hash>::Output,
+	/// Size of indexed data in bytes.
 	size: u32,
 }
 
@@ -103,10 +107,16 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(_n: T::BlockNumber) -> Weight {
-			// This will be cleared in in `on_finalize`
-			<Counter<T>>::put(0);
-			0
+		fn on_initialize(n: T::BlockNumber) -> Weight {
+			let period = <StoragePeriod<T>>::get().unwrap_or(DEFAULT_STORAGE_PERIOD.into());
+			let obsolete = n.saturating_sub(period);
+			let transaction_count = if obsolete > Zero::zero() {
+				<TransactionCount<T>>::get(obsolete)
+			} else {
+				0
+			};
+			// return weight for `on_finalize` does
+			T::WeightInfo::on_finalize(transaction_count)
 		}
 
 		fn on_finalize(n: T::BlockNumber) {

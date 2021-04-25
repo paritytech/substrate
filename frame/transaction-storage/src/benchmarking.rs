@@ -25,7 +25,7 @@ use sp_runtime::traits::{Zero, One, Bounded};
 use sp_transaction_storage_proof::TransactionStorageProof;
 use frame_system::{RawOrigin, Pallet as System, EventRecord};
 use frame_benchmarking::{benchmarks, whitelisted_caller, impl_benchmark_test_suite};
-use frame_support::{traits::{Currency}};
+use frame_support::{traits::{Currency, OnFinalize}};
 
 use crate::Pallet as TransactionStorage;
 use crate::mock::{run_to_block, setup};
@@ -107,7 +107,7 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		TransactionStorage::<T>::store(
 			RawOrigin::Signed(caller.clone()).into(),
-			vec![0u8; MAX_DATA_SIZE as usize]
+			vec![0u8; MAX_DATA_SIZE as usize],
 		)?;
 	}: _(RawOrigin::Signed(caller.clone()), T::BlockNumber::zero(), 0)
 	verify {
@@ -122,7 +122,7 @@ benchmarks! {
 		for _ in 0 .. MAX_EXTRINSICS {
 			TransactionStorage::<T>::store(
 				RawOrigin::Signed(caller.clone()).into(),
-				vec![0u8; MAX_DATA_SIZE as usize]
+				vec![0u8; MAX_DATA_SIZE as usize],
 			)?;
 		}
 		run_to_block::<T>(11);
@@ -132,6 +132,29 @@ benchmarks! {
 	}: check_proof(RawOrigin::None, Some(proof))
 	verify {
 		assert_last_event::<T>(Event::ProofChecked.into());
+	}
+
+	on_finalize {
+		let l in 0 .. MAX_EXTRINSICS;
+		setup::<T>()?;
+		run_to_block::<T>(1);
+		let caller: T::AccountId = whitelisted_caller();
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+		for _ in 0 .. l {
+			TransactionStorage::<T>::store(
+				RawOrigin::Signed(caller.clone()).into(),
+				vec![0u8],
+			)?;
+		}
+		run_to_block::<T>(11);
+		if l != 0 {
+			assert!(TransactionRoots::<T>::get(T::BlockNumber::one(), 0).is_some());
+		}
+	}: {
+		<TransactionStorage<T>>::on_finalize(frame_system::Pallet::<T>::block_number())
+	}
+	verify {
+		assert_eq!(TransactionRoots::<T>::get(T::BlockNumber::one(), 0), None);
 	}
 }
 
