@@ -7413,7 +7413,6 @@ dependencies = [
 name = "sc-consensus-poc-rpc"
 version = "0.1.0"
 dependencies = [
- "derive_more",
  "futures 0.3.13",
  "futures-timer 3.0.2",
  "jsonrpc-core",
@@ -7422,24 +7421,11 @@ dependencies = [
  "jsonrpc-pubsub",
  "log",
  "parking_lot 0.11.1",
- "sc-consensus",
- "sc-consensus-epochs",
  "sc-consensus-poc",
- "sc-keystore",
  "sc-rpc-api",
  "serde",
- "serde_json",
- "sp-api",
- "sp-application-crypto",
- "sp-blockchain",
- "sp-consensus",
  "sp-consensus-poc",
  "sp-core",
- "sp-keyring",
- "sp-keystore",
- "sp-runtime",
- "substrate-test-runtime-client",
- "tempfile",
 ]
 
 [[package]]

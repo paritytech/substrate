@@ -34,6 +34,7 @@ use jsonrpc_core::{
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId, manager::SubscriptionManager};
 use sp_consensus_poc::FarmerId;
+use sp_consensus_poc::digests::Solution;
 use serde::{Deserialize, Serialize};
 use sp_core::crypto::Public;
 use std::{collections::HashMap, sync::Arc};
@@ -44,7 +45,6 @@ use futures::channel::mpsc::UnboundedSender;
 use futures::future;
 use futures::future::Either;
 use std::time::Duration;
-use sp_consensus_poc::digests::Solution;
 
 const SOLUTION_TIMEOUT: Duration = Duration::from_secs(5);
 
