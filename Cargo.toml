@@ -151,6 +151,7 @@ members = [
 	"primitives/consensus/common",
 	"primitives/consensus/poc",
 	"primitives/consensus/pow",
+	"primitives/consensus/spartan",
 	"primitives/consensus/vrf",
 	"primitives/core",
 	"primitives/database",

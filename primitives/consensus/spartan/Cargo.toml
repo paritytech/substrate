@@ -1,0 +1,22 @@
+[package]
+name = "sp-consensus-spartan"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Primitives for Spartan based consensus"
+edition = "2018"
+license = "Apache-2.0"
+repository = "https://github.com/subspace/spartan-node-template"
+homepage = "https://subspace.network"
+readme = "README.md"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+codec = { version = "2.0.0", package = "parity-scale-codec", default-features = false }
+spartan-codec = { version = "0.1.0", default-features = false }
+sp-std = { version = "3.0.0", path = "../../std", default-features = false }
+sp-consensus-poc = { version = "0.1.0", default-features = false, path = "../poc" }
+sp-core = { version = "3.0.0", path = "../../core", default-features = false }
+sp-runtime = { version = "3.0.0", default-features = false, path = "../../runtime" }
+ring = "0.16"

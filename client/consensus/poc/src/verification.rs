@@ -18,17 +18,16 @@
 //! Verification for PoC headers.
 use sp_runtime::{traits::Header, traits::DigestItemFor};
 use sp_core::Public;
-use sp_consensus_poc::{make_transcript, FarmerSignature, FarmerId};
+use sp_consensus_poc::{make_transcript, FarmerSignature};
 use sp_consensus_poc::digests::{PreDigest, CompatibleDigestItem, Solution};
 use sc_consensus_slots::CheckedHeader;
 use sp_consensus_slots::Slot;
 use log::{debug, trace};
 use super::{find_pre_digest, poc_err, Epoch, BlockT, Error};
-use crate::{INITIAL_SOLUTION_RANGE, Tag, SALT, SIGNING_CONTEXT, GENESIS_PIECE_SEED, ENCODE_ROUNDS, Piece, PIECE_SIZE, PRIME_SIZE_BYTES};
+use crate::{INITIAL_SOLUTION_RANGE, SALT};
 use std::convert::TryInto;
-use ring::{hmac, digest};
-use std::io::Write;
-use spartan_codec::Spartan;
+use sp_consensus_spartan::spartan::{self, Spartan, Piece};
+use schnorrkel::context::SigningContext;
 
 /// PoC verification parameters
 pub(super) struct VerificationParams<'a, B: 'a + BlockT> {
@@ -42,6 +41,10 @@ pub(super) struct VerificationParams<'a, B: 'a + BlockT> {
 	pub(super) slot_now: Slot,
 	/// Epoch descriptor of the epoch this block _should_ be under, if it's valid.
 	pub(super) epoch: &'a Epoch,
+	/// Spartan instance
+	pub(super) spartan: &'a Spartan,
+	/// Signing context for verifying signatures
+	pub(super) signing_context: &'a SigningContext,
 }
 
 /// Check a header has been signed by the right key. If the slot is too far in
@@ -62,6 +65,8 @@ pub(super) fn check_header<B: BlockT + Sized>(
 		pre_digest,
 		slot_now,
 		epoch,
+		spartan,
+		signing_context,
 	} = params;
 
 	let pre_digest = pre_digest.map(Ok).unwrap_or_else(|| find_pre_digest::<B>(&header))?;
@@ -93,6 +98,8 @@ pub(super) fn check_header<B: BlockT + Sized>(
 		sig,
 		&epoch,
 		epoch.config.c,
+		&spartan,
+		&signing_context,
 	)?;
 
 	let info = VerifiedHeaderInfo {
@@ -115,6 +122,8 @@ fn check_primary_header<B: BlockT + Sized>(
 	_signature: FarmerSignature,
 	epoch: &Epoch,
 	_c: (u64, u64),
+	spartan: &Spartan,
+	signing_context: &SigningContext,
 ) -> Result<(), Error<B>> {
 	if !is_within_solution_range(
 		&pre_digest.solution,
@@ -124,15 +133,24 @@ fn check_primary_header<B: BlockT + Sized>(
 		panic!("Solution is outside of solution range for slot {}", pre_digest.slot);
 	}
 
-	if !is_commitment_valid(&pre_digest.solution) {
+	let piece: Piece = pre_digest.solution.encoding
+		.as_slice()
+		.try_into()
+		.expect("Incorrect piece, must be 4096 bytes");
+
+	if !spartan::is_commitment_valid(&piece, &pre_digest.solution.tag, &SALT) {
 		panic!("Solution commitment is incorrect for slot {}", pre_digest.slot);
 	}
 
-	if !is_signature_valid(&pre_digest.solution) {
+	if !is_signature_valid(signing_context, &pre_digest.solution) {
 		panic!("Solution signature is invalid for slot {}", pre_digest.slot);
 	}
 
-	if !is_encoding_valid(&pre_digest.solution) {
+	if !spartan.is_encoding_valid(
+		piece,
+		&pre_digest.solution.public_key,
+		pre_digest.solution.nonce,
+	) {
 		panic!("Solution encoding is incorrect for slot {}", pre_digest.slot);
 	}
 
@@ -154,14 +172,7 @@ fn is_within_solution_range(solution: &Solution, challenge: [u8; 8], solution_ra
 	}
 }
 
-fn is_commitment_valid(solution: &Solution) -> bool {
-	let correct_tag: Tag = create_hmac(&solution.encoding, &SALT)[..8].try_into().unwrap();
-	correct_tag == solution.tag
-}
-
-fn is_signature_valid(solution: &Solution) -> bool {
-	// TODO: These should not be created on each verification
-	let ctx = schnorrkel::context::signing_context(SIGNING_CONTEXT);
+fn is_signature_valid(signing_context: &SigningContext, solution: &Solution) -> bool {
 	let public_key = match schnorrkel::PublicKey::from_bytes(solution.public_key.as_slice()) {
 		Ok(public_key) => public_key,
 		Err(_) => {
@@ -174,45 +185,5 @@ fn is_signature_valid(solution: &Solution) -> bool {
 			return false;
 		}
 	};
-	public_key.verify(ctx.bytes(&solution.tag), &signature).is_ok()
-}
-
-fn is_encoding_valid(solution: &Solution) -> bool {
-	// TODO: This should not be created on each verification
-	let spartan: Spartan<PRIME_SIZE_BYTES, PIECE_SIZE> =
-		Spartan::<PRIME_SIZE_BYTES, PIECE_SIZE>::new(genesis_piece_from_seed(GENESIS_PIECE_SEED));
-	let encoding = match solution.encoding.as_slice().try_into() {
-		Ok(piece) => piece,
-		Err(_) => {
-			return false;
-		}
-	};
-	spartan.is_valid(encoding, hash_public_key(&solution.public_key), solution.nonce, ENCODE_ROUNDS)
-}
-
-fn create_hmac(message: &[u8], key: &[u8]) -> [u8; 32] {
-	let key = hmac::Key::new(hmac::HMAC_SHA256, key);
-	let mut array = [0u8; 32];
-	let hmac = hmac::sign(&key, message).as_ref().to_vec();
-	array.copy_from_slice(&hmac[0..32]);
-	array
-}
-
-// TODO: This should be only generated once on startup
-fn genesis_piece_from_seed(seed: &str) -> Piece {
-	// TODO: This is not efficient
-	let mut piece = [0u8; PIECE_SIZE];
-	let mut input = seed.as_bytes().to_vec();
-	for mut chunk in piece.chunks_mut(digest::SHA256.output_len) {
-		input = digest::digest(&digest::SHA256, &input).as_ref().to_vec();
-		chunk.write_all(input.as_ref()).unwrap();
-	}
-	piece
-}
-
-fn hash_public_key(public_key: &FarmerId) -> [u8; PRIME_SIZE_BYTES] {
-	let mut array = [0u8; PRIME_SIZE_BYTES];
-	let hash = digest::digest(&digest::SHA256, public_key.as_ref());
-	array.copy_from_slice(&hash.as_ref()[..PRIME_SIZE_BYTES]);
-	array
+	public_key.verify(signing_context.bytes(&solution.tag), &signature).is_ok()
 }

@@ -102,6 +102,8 @@ use sp_consensus_slots::Slot;
 use std::sync::mpsc;
 use ring::digest;
 use sp_consensus_poc::digests::Solution;
+use sp_consensus_spartan::spartan::{Spartan, SIGNING_CONTEXT, Salt};
+use schnorrkel::context::SigningContext;
 
 mod verification;
 
@@ -111,18 +113,8 @@ mod tests;
 
 // TODO: Real adjustable solution range, Milestone 2. For now configure for 1 GB plot.
 const INITIAL_SOLUTION_RANGE: u64 = u64::MAX / 4096;
-// TODO: These should not be hardcoded
-const PRIME_SIZE_BYTES: usize = 8;
-const PIECE_SIZE: usize = 4096;
-const GENESIS_PIECE_SEED: &str = "hello";
-const ENCODE_ROUNDS: usize = 1;
 // TODO: Replace fixed salt with something
 const SALT: Salt = [1u8; 32];
-const SIGNING_CONTEXT: &[u8] = b"FARMER";
-
-type Piece = [u8; PIECE_SIZE];
-type Salt = [u8; 32];
-type Tag = [u8; PRIME_SIZE_BYTES];
 
 /// Information about new slot that just arrived
 #[derive(Debug, Clone)]
@@ -934,6 +926,8 @@ pub struct PoCVerifier<Block: BlockT, Client, SelectChain, CAW> {
 	time_source: TimeSource,
 	can_author_with: CAW,
 	telemetry: Option<TelemetryHandle>,
+	spartan: Spartan,
+	signing_context: SigningContext,
 }
 
 impl<Block, Client, SelectChain, CAW> PoCVerifier<Block, Client, SelectChain, CAW>
@@ -1124,6 +1118,8 @@ where
 			pre_digest: Some(pre_digest),
 			slot_now: slot_now + 1,
 			epoch: viable_epoch.as_ref(),
+			spartan: &self.spartan,
+			signing_context: &self.signing_context,
 		};
 
 		match verification::check_header::<Block>(v_params)? {
@@ -1625,6 +1621,9 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, Inner, CAW>(
 		can_author_with,
 		telemetry,
 		client,
+		spartan: Spartan::new(),
+		// TODO: Replace constant
+		signing_context: schnorrkel::context::signing_context(SIGNING_CONTEXT),
 	};
 
 	Ok(BasicQueue::new(

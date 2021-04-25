@@ -45,11 +45,6 @@ mod app {
 	app_crypto!(sr25519, POC);
 }
 
-// TODO: may be able to remove both of these
-
-/// PoC VRFInOut context.
-pub static POC_VRF_INOUT_CONTEXT: &[u8] = b"PoCVRFInOutContext";
-
 /// A PoC farmer signature.
 pub type FarmerSignature = app::Signature;
 
@@ -58,7 +53,7 @@ pub type FarmerSignature = app::Signature;
 pub type FarmerId = app::Public;
 
 /// The `ConsensusEngineId` of PoC.
-pub const POC_ENGINE_ID: ConsensusEngineId = *b"POC0";
+pub const POC_ENGINE_ID: ConsensusEngineId = *b"POC_";
 
 /// The length of the public key
 pub const PUBLIC_KEY_LENGTH: usize = 32;
