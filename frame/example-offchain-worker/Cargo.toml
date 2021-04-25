@@ -42,3 +42,9 @@ std = [
 	"pallet-contracts/std",
 	# "pallet-contracts-rpc-runtime-api/std",
 ]
+
+[dev-dependencies]
+pallet-balances = { version = "2.0.0", path = "../balances" }
+pallet-timestamp = { version = "2.0.0", path = "../timestamp" }
+pallet-randomness-collective-flip = { version = "2.0.0", path = "../randomness-collective-flip" }
+pretty_assertions = "0.6.1"
