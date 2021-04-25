@@ -29,6 +29,13 @@ use pallet_contracts;
 // use lite_json::json::JsonValue;
 use alt_serde::{Deserialize, Deserializer};
 
+
+// The address of the metrics contract, in SS58 and in bytes formats.
+// To change the address, see tests/mod.rs decode_contract_address().
+pub const METRICS_CONTRACT_ADDR: &str = "5Fay3QQH2S4wXqCQdhZAS2bWrqvdbVmq77jb2M7seNDqjz1G";
+pub const METRICS_CONTRACT_ID: [u8; 32] = [155, 201, 46, 25, 147, 11, 237, 193, 134, 106, 146, 4, 177, 142, 253, 126, 65, 206, 165, 144, 244, 237, 10, 180, 103, 26, 19, 15, 156, 54, 220, 195];
+
+
 // use serde_json::{Value};
 
 // Specifying serde path as `alt_serde`

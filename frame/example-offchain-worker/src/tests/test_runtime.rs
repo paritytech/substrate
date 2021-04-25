@@ -18,7 +18,7 @@ use sp_runtime::{
 use sp_std::str::FromStr;
 use std::cell::RefCell;
 
-type AccountId = sp_core::sr25519::Public;
+pub type AccountId = sp_core::sr25519::Public;
 
 // -- Implement a contracts runtime for testing --
 
@@ -239,14 +239,13 @@ where
 }
 
 parameter_types! {
-	pub ContractId: AccountId = {
-		let contract_addr_str = "5Fay3QQH2S4wXqCQdhZAS2bWrqvdbVmq77jb2M7seNDqjz1G";
-		AccountId::from_str(contract_addr_str).unwrap()
+	pub MetricsContractId: AccountId = {
+		AccountId::from_raw(METRICS_CONTRACT_ID)
 	};
 }
 
 impl Trait for Test {
-	type ContractId = ContractId;
+	type ContractId = MetricsContractId;
 
 	type CT = Self;
 	type CST = Self;

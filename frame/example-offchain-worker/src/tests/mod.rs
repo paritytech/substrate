@@ -5,9 +5,20 @@ use sp_core::{
 	traits::KeystoreExt,
 };
 use sp_runtime::RuntimeAppPublic;
+use sp_std::str::FromStr;
+
+use crate::{METRICS_CONTRACT_ADDR, METRICS_CONTRACT_ID};
 
 mod test_runtime;
-use test_runtime::{ExampleOffchainWorker, Extrinsic};
+use test_runtime::{AccountId, ExampleOffchainWorker, Extrinsic};
+
+#[test]
+fn decode_contract_address() {
+	let account_decoded = AccountId::from_str(METRICS_CONTRACT_ADDR).unwrap();
+	let account_from_bytes = AccountId::from_raw(METRICS_CONTRACT_ID);
+
+	assert_eq!(account_decoded.0, account_from_bytes.0);
+}
 
 #[test]
 fn should_submit_signed_transaction_on_chain() {
