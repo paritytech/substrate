@@ -31,7 +31,7 @@ use sp_inherents::InherentDataProviders;
 use sc_network::{Event, NetworkService};
 use sp_runtime::traits::Block as BlockT;
 use futures::prelude::*;
-use sc_client_api::{ExecutorProvider, RemoteBackend};
+use sc_client_api::{ExecutorProvider, RemoteBackend, BlockchainEvents};
 use node_executor::Executor;
 use sc_telemetry::{Telemetry, TelemetryWorker};
 use sc_consensus_babe::SlotProportion;
@@ -141,6 +141,9 @@ pub fn new_partial(
 
 		let babe_config = babe_link.config().clone();
 		let shared_epoch_changes = babe_link.epoch_changes().clone();
+
+		// @todo  we can create one here
+		//let import_notification_stream = client.import_notification_stream().fuse();
 
 		let client = client.clone();
 		let pool = transaction_pool.clone();
