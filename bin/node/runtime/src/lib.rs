@@ -948,16 +948,9 @@ impl pallet_erc20::Trait for Runtime {
 }
 
 impl pallet_example_offchain_worker::Trait for Runtime {
-
 	type CT = Self;
 	type CST = Self;
 	type AuthorityId = pallet_example_offchain_worker::crypto::TestAuthId;
-
-	/* TODO: remove.
-	type Block = Self::Block;
-	type Balance = Self::Balance;
-	type API = Self;
-	 */
 
 	type Event = Event;
 	type Call = Call;
