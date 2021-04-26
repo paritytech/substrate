@@ -321,7 +321,7 @@ decl_module! {
 		/// - DbReads: `Proposals`, `Approvals`
 		/// - DbWrite: `Approvals`
 		/// # </weight>
-		#[weight = (T::WeightInfo::approve_proposal(), DispatchClass::Operational)]
+		#[weight = (T::WeightInfo::approve_proposal(T::MaxApprovals::get()), DispatchClass::Operational)]
 		pub fn approve_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::ApproveOrigin::ensure_origin(origin)?;
 
