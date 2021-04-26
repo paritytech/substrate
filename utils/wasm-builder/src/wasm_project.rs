@@ -128,6 +128,8 @@ pub(crate) fn create_and_compile(
 		copy_wasm_to_target_directory(project_cargo_toml, wasm_binary_compressed)
 	);
 
+	eprintln!("project_cargo_toml {:?}", project_cargo_toml);
+	eprintln!("wasm_workspace {:?}", wasm_workspace);
 	generate_rerun_if_changed_instructions(project_cargo_toml, &project, &wasm_workspace);
 
 	(wasm_binary_compressed.or(wasm_binary), bloaty)
@@ -584,10 +586,12 @@ fn generate_rerun_if_changed_instructions(
 		rerun_if_changed(cargo_lock);
 	}
 
+	eprintln!("project_folder {:?}", project_folder.join("Cargo.toml"));
 	let metadata = MetadataCommand::new()
 		.manifest_path(project_folder.join("Cargo.toml"))
 		.exec()
 		.expect("`cargo metadata` can not fail!");
+	eprintln!("`cargo metadata` did not fail!");
 
 	let package = metadata.packages
 		.iter()
