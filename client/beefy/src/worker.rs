@@ -32,11 +32,13 @@ use sc_network_gossip::GossipEngine;
 
 use sp_api::BlockId;
 use sp_application_crypto::{AppPublic, Public};
+use sp_arithmetic::traits::AtLeast32Bit;
 use sp_core::Pair;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::OpaqueDigestItemId,
-	traits::{Block, Header, NumberFor, Zero},
+	traits::{Block, Header, NumberFor},
+	SaturatedConversion,
 };
 
 use beefy_primitives::{
@@ -76,8 +78,6 @@ where
 	best_grandpa_block: NumberFor<B>,
 	/// Best block a BEEFY voting round has been concluded for
 	best_beefy_block: Option<NumberFor<B>>,
-	/// Best block this node has voted for
-	best_block_voted_on: NumberFor<B>,
 	/// Validator set id for the last signed commitment
 	last_signed_id: u64,
 	// keep rustc happy
@@ -122,7 +122,6 @@ where
 			finality_notifications: client.finality_notification_stream(),
 			best_grandpa_block: client.info().finalized_number,
 			best_beefy_block: None,
-			best_block_voted_on: Zero::zero(),
 			last_signed_id: 0,
 			_backend: PhantomData,
 			_pair: PhantomData,
@@ -142,8 +141,6 @@ where
 {
 	/// Return `true`, if we should vote on block `number`
 	fn should_vote_on(&self, number: NumberFor<B>) -> bool {
-		use sp_runtime::{traits::Saturating, SaturatedConversion};
-
 		let best_beefy_block = if let Some(block) = self.best_beefy_block {
 			block
 		} else {
@@ -151,23 +148,13 @@ where
 			return false;
 		};
 
-		let diff = self.best_grandpa_block.saturating_sub(best_beefy_block);
-		let diff = diff.saturated_into::<u32>();
-		let next_power_of_two = (diff / 2).next_power_of_two();
-		let next_block_to_vote_on = self.best_block_voted_on + self.min_block_delta.max(next_power_of_two).into();
+		let target = vote_target(self.best_grandpa_block, best_beefy_block, self.min_block_delta);
 
-		trace!(
-			target: "beefy",
-			"should_vote_on: #{:?}, diff: {:?}, next_power_of_two: {:?}, next_block_to_vote_on: #{:?}",
-			number,
-			diff,
-			next_power_of_two,
-			next_block_to_vote_on,
-		);
+		trace!(target: "beefy", "🥩 should_vote_on: #{:?}, next_block_to_vote_on: #{:?}", number, target);
 
-		metric_set!(self, beefy_should_vote_on, next_block_to_vote_on);
+		metric_set!(self, beefy_should_vote_on, target);
 
-		number == next_block_to_vote_on
+		number == target
 	}
 
 	fn sign_commitment(&self, id: &P::Public, commitment: &[u8]) -> Result<P::Signature, error::Crypto<P::Public>> {
@@ -273,8 +260,6 @@ where
 					return;
 				}
 			};
-
-			self.best_block_voted_on = *notification.header.number();
 
 			let message = VoteMessage {
 				commitment,
@@ -401,4 +386,117 @@ where
 	};
 
 	header.digest().convert_first(|l| l.try_to(id).and_then(filter))
+}
+
+/// Calculate next block number to vote on
+fn vote_target<N>(best_grandpa: N, best_beefy: N, min_delta: u32) -> N
+where
+	N: AtLeast32Bit + Copy + Debug,
+{
+	let diff = best_grandpa.saturating_sub(best_beefy);
+	let diff = diff.saturated_into::<u32>();
+	let target = best_beefy + min_delta.max(diff.next_power_of_two()).into();
+
+	trace!(
+		target: "beefy",
+		"🥩 vote target - diff: {:?}, next_power_of_two: {:?}, target block: #{:?}",
+		diff,
+		diff.next_power_of_two(),
+		target,
+	);
+
+	target
+}
+
+#[cfg(test)]
+mod tests {
+	use super::vote_target;
+
+	#[test]
+	fn vote_on_min_block_delta() {
+		let t = vote_target(1u32, 0, 4);
+		assert_eq!(4, t);
+		let t = vote_target(2u32, 0, 4);
+		assert_eq!(4, t);
+		let t = vote_target(3u32, 0, 4);
+		assert_eq!(4, t);
+		let t = vote_target(4u32, 0, 4);
+		assert_eq!(4, t);
+
+		let t = vote_target(4u32, 4, 4);
+		assert_eq!(8, t);
+
+		let t = vote_target(10u32, 10, 4);
+		assert_eq!(14, t);
+		let t = vote_target(11u32, 10, 4);
+		assert_eq!(14, t);
+		let t = vote_target(12u32, 10, 4);
+		assert_eq!(14, t);
+		let t = vote_target(13u32, 10, 4);
+		assert_eq!(14, t);
+
+		let t = vote_target(10u32, 10, 8);
+		assert_eq!(18, t);
+		let t = vote_target(11u32, 10, 8);
+		assert_eq!(18, t);
+		let t = vote_target(12u32, 10, 8);
+		assert_eq!(18, t);
+		let t = vote_target(13u32, 10, 8);
+		assert_eq!(18, t);
+	}
+
+	#[test]
+	fn vote_on_power_of_two() {
+		let t = vote_target(1008u32, 1000, 4);
+		assert_eq!(1008, t);
+
+		let t = vote_target(1016u32, 1000, 4);
+		assert_eq!(1016, t);
+
+		let t = vote_target(1032u32, 1000, 4);
+		assert_eq!(1032, t);
+
+		let t = vote_target(1064u32, 1000, 4);
+		assert_eq!(1064, t);
+
+		let t = vote_target(1128u32, 1000, 4);
+		assert_eq!(1128, t);
+
+		let t = vote_target(1256u32, 1000, 4);
+		assert_eq!(1256, t);
+
+		let t = vote_target(1512u32, 1000, 4);
+		assert_eq!(1512, t);
+
+		let t = vote_target(1024u32, 0, 4);
+		assert_eq!(1024, t);
+	}
+
+	#[test]
+	fn vote_on_target_block() {
+		let t = vote_target(1008u32, 1002, 4);
+		assert_eq!(1010, t);
+		let t = vote_target(1010u32, 1002, 4);
+		assert_eq!(1010, t);
+
+		let t = vote_target(1016u32, 1006, 4);
+		assert_eq!(1022, t);
+		let t = vote_target(1022u32, 1006, 4);
+		assert_eq!(1022, t);
+
+		let t = vote_target(1032u32, 1012, 4);
+		assert_eq!(1044, t);
+		let t = vote_target(1044u32, 1012, 4);
+		assert_eq!(1044, t);
+
+		let t = vote_target(1064u32, 1014, 4);
+		assert_eq!(1078, t);
+		let t = vote_target(1078u32, 1014, 4);
+		assert_eq!(1078, t);
+
+		let t = vote_target(1128u32, 1008, 4);
+		assert_eq!(1136, t);
+		let t = vote_target(1136u32, 1008, 4);
+		assert_eq!(1136, t);
+	}
 }
