@@ -228,8 +228,10 @@ pub struct ArbitraryStorageItems<T: Config>
 }
 
 impl<'a, T> Arbitrary<'a> for ArbitraryStorageItems<T>
-// this where clause is straightforward enough for a human, but I'm not sure what's the best way
-// to implement it in a macro. The fundamental rule is
+// This where clause is straightforward enough for a human, but I'm not sure what's the best way
+// to implement it in a macro. The fundamental rule is that we need a trait bound for each distinct
+// `T::X` mentioned in the struct definition; that may or may not be easy to recognize. As we already
+// see, it might not be _called_ `T::X`; Substrate encourage aliases such as `BalanceOf<T>`.
 where
 	T: Config,
 	T::AccountId: Arbitrary<'a>,
@@ -243,6 +245,7 @@ where
 		let bounties = unstructured.arbitrary()?;
 		let bounty_descriptions = unstructured.arbitrary()?;
 		let bounty_approvals = unstructured.arbitrary()?;
+
 		Ok(ArbitraryStorageItems { bounty_count, bounties, bounty_descriptions, bounty_approvals })
 	}
 }
