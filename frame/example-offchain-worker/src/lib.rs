@@ -179,15 +179,27 @@ impl<T: Trait> Module<T> {
 		let results = signer.send_signed_transaction(
 			|_account| {
 				// TODO: find actual contract address.
-				let contract_addr = vec![0 as u8; 32];
+				let contract_addr = "cf46eb019892909924329941a6fe76aeb41cfd5b994e78ff28b508c5bc46e931".as_bytes();
 				let mut contract_addr = &contract_addr[..];
 				let contract_addr = <<T::CT as frame_system::Trait>::Lookup as StaticLookup>::Source::decode(&mut contract_addr).unwrap();
+
+				let input = [
+					// the selector
+					0xCA,
+					0xFE,
+					0xBA,
+					0xBE,
+					0,
+					0,
+					0,
+					0,
+				];
 
 				pallet_contracts::Call::call(
 					contract_addr,
 					0u32.into(),
-					100,
-					vec![]
+					10_000_000_000,
+					input.to_vec()
 				)
 			}
 		);
