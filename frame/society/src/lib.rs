@@ -252,7 +252,7 @@ mod mock;
 mod tests;
 
 use rand_chacha::{rand_core::{RngCore, SeedableRng}, ChaChaRng};
-use sp_std::prelude::*;
+use sp_std::{prelude::*, convert::TryInto};
 use codec::{Encode, Decode};
 use sp_runtime::{Percent, RuntimeDebug,
 	traits::{
@@ -260,7 +260,10 @@ use sp_runtime::{Percent, RuntimeDebug,
 		TrailingZeroInput, CheckedSub
 	}
 };
-use frame_support::{decl_error, decl_module, decl_storage, decl_event, ensure, dispatch::DispatchResult, PalletId};
+use frame_support::{
+	decl_error, decl_module, decl_storage, decl_event, ensure,
+	dispatch::DispatchResult, PalletId, BoundedVec,
+};
 use frame_support::weights::Weight;
 use frame_support::traits::{
 	Currency, ReservableCurrency, Randomness, Get, ChangeMembers, BalanceStatus,
@@ -404,6 +407,15 @@ impl<AccountId: PartialEq, Balance> BidKind<AccountId, Balance> {
 	}
 }
 
+struct MaxMembersGetter<I>(sp_std::marker::PhantomData<I>);
+impl<I> Get<u32> for MaxMembersGetter<I>
+	where I: Instance,
+{
+	fn get() -> u32 {
+		MaxMembers::<I>::get()
+	}
+}
+
 // This module's storage items.
 decl_storage! {
 	trait Store for Module<T: Config<I>, I: Instance=DefaultInstance> as Society {
@@ -416,7 +428,10 @@ decl_storage! {
 		pub Rules get(fn rules): Option<T::Hash>;
 
 		/// The current set of candidates; bidders that are attempting to become members.
-		pub Candidates get(fn candidates): Vec<Bid<T::AccountId, BalanceOf<T, I>>>;
+		pub Candidates get(fn candidates): BoundedVec<
+			Bid<T::AccountId, BalanceOf<T, I>>,
+			T::MaxCandidateIntake,
+		>;
 
 		/// The set of suspended candidates.
 		pub SuspendedCandidates get(fn suspended_candidate):
@@ -434,8 +449,8 @@ decl_storage! {
 		pub Members get(fn members) build(|config: &GenesisConfig<T, I>| {
 			let mut m = config.members.clone();
 			m.sort();
-			m
-		}): Vec<T::AccountId>;
+			m.try_into().expect("Too many genesis members")
+		}): BoundedVec<T::AccountId, MaxMembersGetter<I>>;
 
 		/// The set of suspended members.
 		pub SuspendedMembers get(fn suspended_member): map hasher(twox_64_concat) T::AccountId => bool;
@@ -1304,7 +1319,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 			Err(_) => Err(Error::<T, I>::NotMember)?,
 			Ok(i) => {
 				members.remove(i);
-				T::MembershipChanged::change_members_sorted(&[], &[m.clone()], &members[..]);
+				T::MembershipChanged::change_members_sorted(&[], &[m.clone()], &members.to_vec()[..]);
 				<Members<T, I>>::put(members);
 				Ok(())
 			}
@@ -1444,7 +1459,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 				members.sort();
 				// NOTE: This may cause member length to surpass `MaxMembers`, but results in no consensus
 				// critical issues or side-effects. This is auto-correcting as members fall out of society.
-				<Members<T, I>>::put(&members[..]);
+				<Members<T, I>>::put(&members.to_vec()[..]);
 				<Head<T, I>>::put(&primary);
 
 				T::MembershipChanged::change_members_sorted(&accounts, &[], &members);
