@@ -18,15 +18,15 @@
 //! Storage map type. Implements StorageMap, StorageIterableMap, StoragePrefixedMap traits and their
 //! methods directly.
 
+use codec::{FullCodec, Decode, EncodeLike, Encode};
 use crate::{
 	storage::{
-		bounded_vec::{BoundedVec, BoundedVecValue},
-		types::{OnEmptyGetter, OptionQuery, QueryKindTrait},
 		StorageAppend, StorageDecodeLength,
+		bounded_vec::{BoundedVec, BoundedVecValue},
+		types::{OptionQuery, QueryKindTrait, OnEmptyGetter},
 	},
-	traits::{Get, GetDefault, StorageInstance},
+	traits::{GetDefault, StorageInstance, Get},
 };
-use codec::{Decode, Encode, EncodeLike, FullCodec};
 use frame_metadata::{DefaultByteGetter, StorageEntryModifier};
 use sp_std::prelude::*;
 
@@ -43,8 +43,8 @@ use sp_std::prelude::*;
 ///
 /// If the keys are not trusted (e.g. can be set by a user), a cryptographic `hasher` such as
 /// `blake2_128_concat` must be used.  Otherwise, other values in storage can be compromised.
-pub struct StorageMap<Prefix, Hasher, Key, Value, QueryKind = OptionQuery, OnEmpty = GetDefault>(
-	core::marker::PhantomData<(Prefix, Hasher, Key, Value, QueryKind, OnEmpty)>,
+pub struct StorageMap<Prefix, Hasher, Key, Value, QueryKind=OptionQuery, OnEmpty=GetDefault>(
+	core::marker::PhantomData<(Prefix, Hasher, Key, Value, QueryKind, OnEmpty)>
 );
 
 impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty>
@@ -74,8 +74,8 @@ where
 	}
 }
 
-impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty> crate::storage::StoragePrefixedMap<Value>
-	for StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty>
+impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty> crate::storage::StoragePrefixedMap<Value> for
+	StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty>
 where
 	Prefix: StorageInstance,
 	Hasher: crate::hash::StorageHasher,
@@ -170,7 +170,7 @@ where
 	/// Mutate the value under a key.
 	pub fn mutate<KeyArg: EncodeLike<Key>, R, F: FnOnce(&mut QueryKind::Query) -> R>(
 		key: KeyArg,
-		f: F,
+		f: F
 	) -> R {
 		<Self as crate::storage::StorageMap<Key, Value>>::mutate(key, f)
 	}
@@ -187,7 +187,7 @@ where
 	/// Mutate the value under a key. Deletes the item if mutated to a `None`.
 	pub fn mutate_exists<KeyArg: EncodeLike<Key>, R, F: FnOnce(&mut Option<Value>) -> R>(
 		key: KeyArg,
-		f: F,
+		f: F
 	) -> R {
 		<Self as crate::storage::StorageMap<Key, Value>>::mutate_exists(key, f)
 	}
@@ -220,7 +220,7 @@ where
 		EncodeLikeKey: EncodeLike<Key>,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
-		Value: StorageAppend<Item>,
+		Value: StorageAppend<Item>
 	{
 		<Self as crate::storage::StorageMap<Key, Value>>::append(key, item)
 	}
@@ -238,8 +238,7 @@ where
 	/// `None` does not mean that `get()` does not return a value. The default value is completly
 	/// ignored by this function.
 	pub fn decode_len<KeyArg: EncodeLike<Key>>(key: KeyArg) -> Option<usize>
-	where
-		Value: StorageDecodeLength,
+		where Value: StorageDecodeLength,
 	{
 		<Self as crate::storage::StorageMap<Key, Value>>::decode_len(key)
 	}
@@ -248,7 +247,7 @@ where
 	///
 	/// If the key doesn't exist, then it's a no-op. If it does, then it returns its value.
 	pub fn migrate_key<OldHasher: crate::hash::StorageHasher, KeyArg: EncodeLike<Key>>(
-		key: KeyArg,
+		key: KeyArg
 	) -> Option<Value> {
 		<Self as crate::storage::StorageMap<Key, Value>>::migrate_key::<OldHasher, _>(key)
 	}
@@ -329,8 +328,7 @@ pub trait StorageMapMetadata {
 }
 
 impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty> StorageMapMetadata
-	for StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty>
-where
+	for StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty> where
 	Prefix: StorageInstance,
 	Hasher: crate::hash::StorageHasher,
 	Key: FullCodec,
@@ -341,24 +339,21 @@ where
 	const MODIFIER: StorageEntryModifier = QueryKind::METADATA;
 	const HASHER: frame_metadata::StorageHasher = Hasher::METADATA;
 	const NAME: &'static str = Prefix::STORAGE_PREFIX;
-	const DEFAULT: DefaultByteGetter = DefaultByteGetter(
-		&OnEmptyGetter::<QueryKind::Query, OnEmpty>(core::marker::PhantomData),
-	);
+	const DEFAULT: DefaultByteGetter =
+		DefaultByteGetter(&OnEmptyGetter::<QueryKind::Query, OnEmpty>(core::marker::PhantomData));
 }
 
 #[cfg(test)]
 mod test {
 	use super::*;
+	use sp_io::{TestExternalities, hashing::twox_128};
 	use crate::hash::*;
 	use crate::storage::types::ValueQuery;
 	use frame_metadata::StorageEntryModifier;
-	use sp_io::{hashing::twox_128, TestExternalities};
 
 	struct Prefix;
 	impl StorageInstance for Prefix {
-		fn pallet_prefix() -> &'static str {
-			"test"
-		}
+		fn pallet_prefix() -> &'static str { "test" }
 		const STORAGE_PREFIX: &'static str = "foo";
 	}
 
@@ -372,8 +367,9 @@ mod test {
 	#[test]
 	fn test() {
 		type A = StorageMap<Prefix, Blake2_128Concat, u16, u32, OptionQuery>;
-		type AValueQueryWithAnOnEmpty =
-			StorageMap<Prefix, Blake2_128Concat, u16, u32, ValueQuery, ADefault>;
+		type AValueQueryWithAnOnEmpty = StorageMap<
+			Prefix, Blake2_128Concat, u16, u32, ValueQuery, ADefault
+		>;
 		type B = StorageMap<Prefix, Blake2_256, u16, u32, ValueQuery>;
 		type C = StorageMap<Prefix, Blake2_128Concat, u16, u8, ValueQuery>;
 		type WithLen = StorageMap<Prefix, Blake2_128Concat, u16, Vec<u32>>;
@@ -415,20 +411,17 @@ mod test {
 
 			A::remove(2);
 			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate(2, |v| {
-				*v = *v * 2;
-				Ok(())
+				*v = *v * 2; Ok(())
 			});
 			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate(2, |v| {
-				*v = *v * 2;
-				Ok(())
+				*v = *v * 2; Ok(())
 			});
 			assert_eq!(A::contains_key(2), true);
 			assert_eq!(A::get(2), Some(97 * 4));
 
 			A::remove(2);
 			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate(2, |v| {
-				*v = *v * 2;
-				Err(())
+				*v = *v * 2; Err(())
 			});
 			assert_eq!(A::contains_key(2), false);
 
@@ -465,6 +458,7 @@ mod test {
 			});
 			assert_eq!(A::contains_key(2), true);
 			assert_eq!(A::get(2), Some(100));
+
 
 			A::insert(2, 10);
 			assert_eq!(A::take(2), Some(10));
@@ -489,7 +483,7 @@ mod test {
 
 			C::insert(3, 10);
 			C::insert(4, 10);
-			A::translate_values::<u8, _>(|v| Some((v * 2).into()));
+			A::translate_values::<u8,_>(|v| Some((v * 2).into()));
 			assert_eq!(A::iter().collect::<Vec<_>>(), vec![(4, 20), (3, 20)]);
 
 			A::insert(3, 10);
@@ -500,24 +494,18 @@ mod test {
 
 			C::insert(3, 10);
 			C::insert(4, 10);
-			A::translate::<u8, _>(|k, v| Some((k * v as u16).into()));
+			A::translate::<u8,_>(|k, v| Some((k * v as u16).into()));
 			assert_eq!(A::iter().collect::<Vec<_>>(), vec![(4, 40), (3, 30)]);
 
 			assert_eq!(A::MODIFIER, StorageEntryModifier::Optional);
-			assert_eq!(
-				AValueQueryWithAnOnEmpty::MODIFIER,
-				StorageEntryModifier::Default
-			);
+			assert_eq!(AValueQueryWithAnOnEmpty::MODIFIER, StorageEntryModifier::Default);
 			assert_eq!(A::HASHER, frame_metadata::StorageHasher::Blake2_128Concat);
 			assert_eq!(
 				AValueQueryWithAnOnEmpty::HASHER,
 				frame_metadata::StorageHasher::Blake2_128Concat
 			);
 			assert_eq!(A::NAME, "foo");
-			assert_eq!(
-				AValueQueryWithAnOnEmpty::DEFAULT.0.default_byte(),
-				97u32.encode()
-			);
+			assert_eq!(AValueQueryWithAnOnEmpty::DEFAULT.0.default_byte(), 97u32.encode());
 			assert_eq!(A::DEFAULT.0.default_byte(), Option::<u32>::None.encode());
 
 			WithLen::remove_all();
