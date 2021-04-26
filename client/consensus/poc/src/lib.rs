@@ -112,7 +112,7 @@ pub mod aux_schema;
 mod tests;
 
 // TODO: Real adjustable solution range, Milestone 2. For now configure for 1 GB plot.
-const INITIAL_SOLUTION_RANGE: u64 = u64::MAX / 256_000;
+const INITIAL_SOLUTION_RANGE: u64 = u64::MAX / 262_144 / 2;
 // TODO: Replace fixed salt with something
 const SALT: Salt = [1u8; 32];
 

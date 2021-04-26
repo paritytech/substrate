@@ -122,21 +122,21 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 ///
 /// Based on:
 /// <https://research.web3.foundation/en/latest/polkadot/block-production/Babe.html#-6.-practical-results>
-pub const MILLISECS_PER_BLOCK: u64 = 6000;
+pub const MILLISECS_PER_BLOCK: u64 = 1000;
 
 // NOTE: Currently it is not possible to change the slot duration after the chain has started.
 //       Attempting to do so will brick block production.
-pub const SLOT_DURATION: u64 = MILLISECS_PER_BLOCK;
+pub const SLOT_DURATION: u64 = 250;
 
 // Time is measured by number of blocks.
-pub const MINUTES: BlockNumber = 60_000 / (MILLISECS_PER_BLOCK as BlockNumber);
-pub const HOURS: BlockNumber = MINUTES * 60;
-pub const DAYS: BlockNumber = HOURS * 24;
+// pub const MINUTES: BlockNumber = 3_200 / (MILLISECS_PER_BLOCK as BlockNumber);
+// pub const HOURS: BlockNumber = MINUTES * 60;
+// pub const DAYS: BlockNumber = HOURS * 24;
 
-// 1 in 4 blocks (on average, not counting collisions) will be primary PoC blocks.
+// 1 in 4 slots (on average, not counting collisions) will have a block.
 pub const SLOT_PROBABILITY: (u64, u64) = (1, 4);
 
-pub const EPOCH_DURATION_IN_BLOCKS: BlockNumber = 10 * MINUTES;
+pub const EPOCH_DURATION_IN_BLOCKS: BlockNumber = 32;
 pub const EPOCH_DURATION_IN_SLOTS: u64 = {
 	const SLOT_FILL_RATE: f64 = MILLISECS_PER_BLOCK as f64 / SLOT_DURATION as f64;
 
@@ -232,6 +232,7 @@ parameter_types! {
 impl pallet_spartan::Config for Runtime {
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ExpectedBlockTime;
+	type EpochChangeTrigger = pallet_spartan::NormalEpochChange;
 
 	// TODO: fix for milestone 3
 	// type KeyOwnerProofSystem = Historical;

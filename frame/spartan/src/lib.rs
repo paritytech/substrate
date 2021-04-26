@@ -65,6 +65,17 @@ pub trait EpochChangeTrigger {
 	/// during every block, after initialization is done.
 	fn trigger<T: Config>(now: T::BlockNumber);
 }
+/// A type signifying to Spartan that it should perform epoch changes
+/// with an internal trigger.
+pub struct NormalEpochChange;
+
+impl EpochChangeTrigger for NormalEpochChange {
+	fn trigger<T: Config>(now: T::BlockNumber) {
+		if <Pallet<T>>::should_epoch_change(now) {
+			<Pallet<T>>::enact_epoch_change();
+		}
+	}
+}
 
 const UNDER_CONSTRUCTION_SEGMENT_LENGTH: usize = 256;
 
@@ -97,6 +108,13 @@ pub mod pallet {
 		/// the probability of a slot being empty).
 		#[pallet::constant]
 		type ExpectedBlockTime: Get<Self::Moment>;
+
+		/// Spartan requires some logic to be triggered on every block to query for whether an epoch
+		/// has ended and to perform the transition to the next epoch.
+		///
+		/// Typically, the `ExternalTrigger` type should be used. An internal trigger should only be used
+		/// when no other module is responsible for changing epochs.
+		type EpochChangeTrigger: EpochChangeTrigger;
 
 		// TODO: Bring this back for milestone 3
 		// /// The equivocation handling subsystem, defines methods to report an
@@ -337,7 +355,7 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	/// Determine the PoC slot duration based on the Timestamp module configuration.
+	/// Determine the Spartan slot duration based on the Timestamp module configuration.
 	pub fn slot_duration() -> T::Moment {
 		// we double the minimum block-period so each author can always propose within
 		// the majority of their slot.
@@ -363,10 +381,10 @@ impl<T: Config> Pallet<T> {
 
 	/// Return the _best guess_ block number, at which the next epoch change is predicted to happen.
 	///
-	/// Returns None if the prediction is in the past; This implies an error internally in the PoC
+	/// Returns None if the prediction is in the past; This implies an error internally in Spartan
 	/// and should not happen under normal circumstances.
 	///
-	/// In other word, this is only accurate if no slots are missed. Given missed slots, the slot
+	/// In other words, this is only accurate if no slots are missed. Given missed slots, the slot
 	/// number will grow while the block number will not. Hence, the result can be interpreted as an
 	/// upper bound.
 	//
@@ -513,7 +531,7 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	fn do_initialize(_now: T::BlockNumber) {
+	fn do_initialize(now: T::BlockNumber) {
 		let maybe_pre_digest: Option<PreDigest> = <frame_system::Pallet<T>>::digest()
 			.logs
 			.iter()
@@ -563,6 +581,9 @@ impl<T: Config> Pallet<T> {
 
 		// Place either the primary PoR output into the `AuthorPorRandomness` storage item.
 		AuthorPorRandomness::<T>::put(maybe_randomness);
+
+		// enact epoch change, if necessary.
+		T::EpochChangeTrigger::trigger::<T>(now)
 	}
 
 	/// Call this function exactly once when an epoch changes, to update the
