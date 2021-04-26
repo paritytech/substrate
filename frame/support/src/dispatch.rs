@@ -2512,13 +2512,28 @@ macro_rules! __function_to_metadata {
 				$(
 					$crate::metadata::FunctionArgumentMetadata {
 						name: stringify!($param_name),
-						ty: $crate::scale_info::meta_type::<$param>(),
+						ty: $crate::__function_to_metadata!(@meta_type
+							$(#[$codec_attr])* $param_name $param
+						),
 					}
 				),*
 			],
 			documentation: $crate::scale_info::prelude::vec![ $( $fn_doc ),* ],
 		}
 	};
+
+	(@meta_type #[compact] $param_name:ident $param:ty) => {
+		$crate::scale_info::meta_type::<$crate::codec::Compact<$param>>()
+	};
+	(@meta_type $param_name:ident $param:ty) => {
+		$crate::scale_info::meta_type::<$param>()
+	};
+	(@meta_type $(#[codec_attr:ident])* $param_name:ident, $param:ty) => {
+		compile_error!(concat!(
+			"Invalid attribute for parameter `", stringify!($param_name),
+			"`, the following attributes are supported: `#[compact]`"
+		));
+	}
 }
 
 #[macro_export]
@@ -2584,7 +2599,6 @@ mod tests {
 		IntegrityTest, Get, PalletInfo,
 	};
 	use crate::metadata::*;
-	use codec::Compact;
 
 	pub trait Config: system::Config + Sized where Self::AccountId: From<u32> { }
 
@@ -2671,7 +2685,7 @@ mod tests {
 				arguments: vec![
 					FunctionArgumentMetadata {
 						name: "_data",
-						ty: scale_info::meta_type::<Compact<u32>>(),
+						ty: scale_info::meta_type::<codec::Compact<u32>>(),
 					}
 				],
 				documentation: vec![],
@@ -2714,7 +2728,7 @@ mod tests {
 					},
 					FunctionArgumentMetadata {
 						name: "_data2",
-						ty: scale_info::meta_type::<Compact<u32>>()
+						ty: scale_info::meta_type::<codec::Compact<u32>>()
 					}
 				],
 				documentation: vec![],
