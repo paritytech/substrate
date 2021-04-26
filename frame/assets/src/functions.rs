@@ -160,8 +160,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub(super) fn reducible_balance(
 		id: T::AssetId,
 		who: &T::AccountId,
-		keep_alive: bool,
-	) -> Result<T::Balance, Error<T, I>> {
+		f: DebitFlags,
+	) -> Result<T::Balance, Error::<T, I>> {
 		let details = Asset::<T, I>::get(id).ok_or_else(|| Error::<T, I>::Unknown)?;
 		ensure!(!details.is_frozen, Error::<T, I>::Frozen);
 

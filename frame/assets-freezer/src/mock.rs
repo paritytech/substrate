@@ -24,7 +24,6 @@ use sp_core::H256;
 use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 use frame_support::{parameter_types, construct_runtime};
 use frame_support::traits::StorageMapShim;
-
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -105,18 +104,13 @@ impl pallet_assets::Config for Test {
 	type StringLimit = StringLimit;
 	type Freezer = AssetsFreezer;
 	type WeightInfo = ();
-	type Extra = ();
+	type Extra = super::FreezeData<u64>;
 }
 
 impl Config for Test {
 	type Event = Event;
 	type Assets = Assets;
-	type Store = StorageMapShim<
-		_,
-		frame_system::Provider<Test>,
-		(super::AssetIdOf<Test>,u64)
-		super::FreezeData<u64>,
-	>;
+	type Store = pallet_assets::Pallet<Test>;
 }
 
 use std::cell::RefCell;

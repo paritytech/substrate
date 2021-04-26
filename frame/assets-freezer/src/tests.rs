@@ -27,13 +27,3 @@ fn last_event() -> mock::Event {
 	frame_system::Pallet::<Test>::events().pop().expect("Event expected").event
 }
 
-#[test]
-fn basic_minting_should_work() {
-	new_test_ext().execute_with(|| {
-		// assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
-		// assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
-		// assert_eq!(Assets::balance(0, 1), 100);
-		// assert_ok!(AssetsFreezer::set_total_issuance(Origin::signed(1), 0, 2, 100));
-		// assert_eq!(AssetsFreezer::balance(0, 2), 100);
-	});
-}
