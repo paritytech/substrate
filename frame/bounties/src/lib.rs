@@ -137,7 +137,7 @@ pub trait Config: frame_system::Config + pallet_treasury::Config {
 pub type BountyIndex = u32;
 
 /// A bounty proposal.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Arbitrary, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct Bounty<AccountId, Balance, BlockNumber> {
 	/// The account proposing it.
 	proposer: AccountId,
@@ -154,7 +154,7 @@ pub struct Bounty<AccountId, Balance, BlockNumber> {
 }
 
 /// The status of a bounty proposal.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Arbitrary, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub enum BountyStatus<AccountId, BlockNumber> {
 	/// The bounty is proposed and waiting for approval.
 	Proposed,
@@ -205,6 +205,45 @@ decl_storage! {
 
 		/// Bounty indices that have been approved but not yet funded.
 		pub BountyApprovals get(fn bounty_approvals): Vec<BountyIndex>;
+	}
+}
+
+// The storage trait above doesn't actually produce a struct onto which we can implement Arbitrary.
+// We have to do that ourselves, here. However, in the future, we can extend the macro to implement
+// something like this automatically.
+
+use arbitrary::{Arbitrary, Unstructured};
+use std::collections::HashMap;
+
+/// The storage items for this trait.
+///
+/// These are implemented in a way which permits fuzzers, property-based testing implementations,
+/// and the like to generate valid instances based on a string of random bytes.
+pub struct ArbitraryStorageItems<T: Config>
+{
+	pub bounty_count: BountyIndex,
+	pub bounties: HashMap<BountyIndex, Bounty<T::AccountId, BalanceOf<T>, T::BlockNumber>>,
+	pub bounty_descriptions: HashMap<BountyIndex, Vec<u8>>,
+	pub bounty_approvals: Vec<BountyIndex>,
+}
+
+impl<'a, T> Arbitrary<'a> for ArbitraryStorageItems<T>
+// this where clause is straightforward enough for a human, but I'm not sure what's the best way
+// to implement it in a macro. The fundamental rule is
+where
+	T: Config,
+	T::AccountId: Arbitrary<'a>,
+	BalanceOf<T>: Arbitrary<'a>,
+	T::BlockNumber: Arbitrary<'a>,
+{
+	fn arbitrary(unstructured: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
+		// Note that while it would be possible, for example, to set `bounty_count` to `bounties.len()`,
+		// that requires domain knowledge that the macro will not possess.
+		let bounty_count = unstructured.arbitrary()?;
+		let bounties = unstructured.arbitrary()?;
+		let bounty_descriptions = unstructured.arbitrary()?;
+		let bounty_approvals = unstructured.arbitrary()?;
+		Ok(ArbitraryStorageItems { bounty_count, bounties, bounty_descriptions, bounty_approvals })
 	}
 }
 
