@@ -169,10 +169,8 @@ impl TryRuntimeCmd {
 					uri: url.into(),
 					state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
 					modules: modules.clone().unwrap_or_default(),
-					at: match block_at {
-						Some(b) => Some(b.parse().map_err(|e| format!("Could not parse hash: {:?}", e))?),
-						None => None,
-					},
+					at: block_at.as_ref()
+						.map(|b| b.parse().map_err(|e| format!("Could not parse hash: {:?}", e))).transpose()?,
 					..Default::default()
 				})),
 			};

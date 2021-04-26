@@ -246,7 +246,7 @@ fn parse_target(s: &str) -> (String, Level) {
 		Some(i) => {
 			let target = s[0..i].to_string();
 			if s.len() > i {
-				let level = s[i + 1..s.len()].parse::<Level>().unwrap_or(Level::TRACE);
+				let level = s[i + 1..].parse::<Level>().unwrap_or(Level::TRACE);
 				(target, level)
 			} else {
 				(target, Level::TRACE)
