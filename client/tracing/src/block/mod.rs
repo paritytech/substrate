@@ -99,8 +99,7 @@ impl Subscriber for BlockSubscriber {
 	}
 
 	fn new_span(&self, attrs: &Attributes<'_>) -> Id {
-		let id = self.next_id.fetch_add(1, Ordering::Relaxed);
-		let id = Id::from_u64(id);
+		let id = Id::from_u64(self.next_id.fetch_add(1, Ordering::Relaxed));
 		let mut values = Values::default();
 		attrs.record(&mut values);
 		let parent_id = attrs.parent().cloned()
@@ -152,7 +151,7 @@ impl Subscriber for BlockSubscriber {
 	}
 
 	fn exit(&self, span: &Id) {
-		if self.spans.lock().get_mut(span).is_some() {
+		if self.spans.lock().contains_key(span) {
 			self.current_span.exit();
 		}
 	}
