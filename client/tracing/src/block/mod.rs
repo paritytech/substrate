@@ -188,8 +188,8 @@ impl<Block, Client> BlockExecutor<Block, Client>
 		Self { client, block, targets, storage_keys }
 	}
 
-	/// Execute block, recording all spans and events belonging to `Self::targets`
-	/// and filter out events which do not have the keys starting with one of the
+	/// Execute block, record all spans and events belonging to `Self::targets`
+	/// and filter out events which do not have keys starting with one of the
 	/// prefixes in `Self::storage_keys`.
 	pub fn trace_block(&self) -> Result<TraceBlockResponse, String> {
 		tracing::debug!(target: "state_tracing", "Tracing block: {}", self.block);
