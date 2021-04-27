@@ -1,7 +1,7 @@
-// TODO
 // // This file is part of Substrate.
 //
 // // Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// // Copyright (C) 2021 Subspace Labs, Inc.
 // // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 //
 // // This program is free software: you can redistribute it and/or modify
@@ -23,13 +23,13 @@
 // // https://github.com/paritytech/substrate/issues/2532
 // #![allow(deprecated)]
 // use super::*;
-// use authorship::claim_slot;
 // use sp_core::crypto::Pair;
-// use sp_keystore::{
-// 	SyncCryptoStore,
-// 	vrf::make_transcript as transcript_from_data,
-// };
-// use sp_consensus_poc::{AuthorityPair, Slot, AllowedSlots, make_transcript, make_transcript_data};
+// // use sp_keystore::{
+// // 	SyncCryptoStore,
+// // 	vrf::make_transcript as transcript_from_data,
+// // };
+// use schnorrkel::Keypair;
+// use sp_consensus_poc::Slot;
 // use sc_consensus_slots::BackoffAuthoringOnFinalizedHeadLagging;
 // use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 // use sp_consensus::{
@@ -42,12 +42,9 @@
 // use sc_client_api::{BlockchainEvents, backend::TransactionFor};
 // use log::debug;
 // use std::{time::Duration, cell::RefCell, task::Poll};
-// use rand::RngCore;
 // use rand_chacha::{
-// 	rand_core::SeedableRng, ChaChaRng,
+// 	rand_core::SeedableRng,
 // };
-// use sc_keystore::LocalKeystore;
-// use sp_application_crypto::key_types::BABE;
 // use futures::executor::block_on;
 //
 // type Item = DigestItem<Hash>;
@@ -69,7 +66,7 @@
 //
 // type Mutator = Arc<dyn Fn(&mut TestHeader, Stage) + Send + Sync>;
 //
-// type BabeBlockImport =
+// type PoCBlockImport =
 // 	PanickingBlockImport<crate::PoCBlockImport<TestBlock, TestClient, Arc<TestClient>>>;
 //
 // #[derive(Clone)]
@@ -157,10 +154,9 @@
 // 			// epoch. this will break when we add light client support, since
 // 			// that will re-check the randomness logic off-chain.
 // 			let digest_data = ConsensusLog::NextEpochData(NextEpochDescriptor {
-// 				authorities: epoch.authorities.clone(),
 // 				randomness: epoch.randomness.clone(),
 // 			}).encode();
-// 			let digest = DigestItem::Consensus(BABE_ENGINE_ID, digest_data);
+// 			let digest = DigestItem::Consensus(POC_ENGINE_ID, digest_data);
 // 			block.header.digest_mut().push(digest)
 // 		}
 //
@@ -221,10 +217,10 @@
 // 	}
 // }
 //
-// type BabePeer = Peer<Option<PeerData>, BabeBlockImport>;
+// type PoCPeer = Peer<Option<PeerData>, PoCBlockImport>;
 //
-// pub struct BabeTestNet {
-// 	peers: Vec<BabePeer>,
+// pub struct PoCTestNet {
+// 	peers: Vec<PoCPeer>,
 // }
 //
 // type TestHeader = <TestBlock as BlockT>::Header;
@@ -266,104 +262,106 @@
 // 	>,
 // }
 //
-// impl TestNetFactory for BabeTestNet {
-// 	type Verifier = TestVerifier;
-// 	type PeerData = Option<PeerData>;
-// 	type BlockImport = BabeBlockImport;
-//
-// 	/// Create new test network with peers and given config.
-// 	fn from_config(_config: &ProtocolConfig) -> Self {
-// 		debug!(target: "babe", "Creating test network from config");
-// 		BabeTestNet {
-// 			peers: Vec::new(),
-// 		}
-// 	}
-//
-// 	fn make_block_import(&self, client: PeersClient)
-// 		-> (
-// 			BlockImportAdapter<Self::BlockImport>,
-// 			Option<BoxJustificationImport<Block>>,
-// 			Option<PeerData>,
-// 		)
-// 	{
-// 		let client = client.as_full().expect("only full clients are tested");
-// 		let inherent_data_providers = InherentDataProviders::new();
-//
-// 		let config = Config::get_or_compute(&*client).expect("config available");
-// 		let (block_import, link) = crate::block_import(
-// 			config,
-// 			client.clone(),
-// 			client.clone(),
-// 		).expect("can initialize block-import");
-//
-// 		let block_import = PanickingBlockImport(block_import);
-//
-// 		let data_block_import = Mutex::new(
-// 			Some(Box::new(block_import.clone()) as BoxBlockImport<_, _>)
-// 		);
-// 		(
-// 			BlockImportAdapter::new(block_import),
-// 			None,
-// 			Some(PeerData { link, inherent_data_providers, block_import: data_block_import }),
-// 		)
-// 	}
-//
-// 	fn make_verifier(
-// 		&self,
-// 		client: PeersClient,
-// 		_cfg: &ProtocolConfig,
-// 		maybe_link: &Option<PeerData>,
-// 	)
-// 		-> Self::Verifier
-// 	{
-// 		use substrate_test_runtime_client::DefaultTestClientBuilderExt;
-//
-// 		let client = client.as_full().expect("only full clients are used in test");
-// 		trace!(target: "babe", "Creating a verifier");
-//
-// 		// ensure block import and verifier are linked correctly.
-// 		let data = maybe_link.as_ref().expect("babe link always provided to verifier instantiation");
-//
-// 		let (_, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
-//
-// 		TestVerifier {
-// 			inner: PoCVerifier {
-// 				client: client.clone(),
-// 				select_chain: longest_chain,
-// 				inherent_data_providers: data.inherent_data_providers.clone(),
-// 				config: data.link.config.clone(),
-// 				epoch_changes: data.link.epoch_changes.clone(),
-// 				time_source: data.link.time_source.clone(),
-// 				can_author_with: AlwaysCanAuthor,
-// 				telemetry: None,
-// 			},
-// 			mutator: MUTATOR.with(|m| m.borrow().clone()),
-// 		}
-// 	}
-//
-// 	fn peer(&mut self, i: usize) -> &mut BabePeer {
-// 		trace!(target: "babe", "Retrieving a peer");
-// 		&mut self.peers[i]
-// 	}
-//
-// 	fn peers(&self) -> &Vec<BabePeer> {
-// 		trace!(target: "babe", "Retrieving peers");
-// 		&self.peers
-// 	}
-//
-// 	fn mut_peers<F: FnOnce(&mut Vec<BabePeer>)>(
-// 		&mut self,
-// 		closure: F,
-// 	) {
-// 		closure(&mut self.peers);
-// 	}
-// }
+// // impl TestNetFactory for PoCTestNet {
+// // 	type Verifier = TestVerifier;
+// // 	type PeerData = Option<PeerData>;
+// // 	type BlockImport = PoCBlockImport;
+// //
+// // 	/// Create new test network with peers and given config.
+// // 	fn from_config(_config: &ProtocolConfig) -> Self {
+// // 		debug!(target: "poc", "Creating test network from config");
+// // 		PoCTestNet {
+// // 			peers: Vec::new(),
+// // 		}
+// // 	}
+// //
+// // 	fn make_block_import(&self, client: PeersClient)
+// // 		-> (
+// // 			BlockImportAdapter<Self::BlockImport>,
+// // 			Option<BoxJustificationImport<Block>>,
+// // 			Option<PeerData>,
+// // 		)
+// // 	{
+// // 		let client = client.as_full().expect("only full clients are tested");
+// // 		let inherent_data_providers = InherentDataProviders::new();
+// //
+// // 		let config = Config::get_or_compute(&*client).expect("config available");
+// // 		let (block_import, link) = crate::block_import(
+// // 			config,
+// // 			client.clone(),
+// // 			client.clone(),
+// // 		).expect("can initialize block-import");
+// //
+// // 		let block_import = PanickingBlockImport(block_import);
+// //
+// // 		let data_block_import = Mutex::new(
+// // 			Some(Box::new(block_import.clone()) as BoxBlockImport<_, _>)
+// // 		);
+// // 		(
+// // 			BlockImportAdapter::new(block_import),
+// // 			None,
+// // 			Some(PeerData { link, inherent_data_providers, block_import: data_block_import }),
+// // 		)
+// // 	}
+// //
+// // 	fn make_verifier(
+// // 		&self,
+// // 		client: PeersClient,
+// // 		_cfg: &ProtocolConfig,
+// // 		maybe_link: &Option<PeerData>,
+// // 	)
+// // 		-> Self::Verifier
+// // 	{
+// // 		use substrate_test_runtime_client::DefaultTestClientBuilderExt;
+// //
+// // 		let client = client.as_full().expect("only full clients are used in test");
+// // 		trace!(target: "poc", "Creating a verifier");
+// //
+// // 		// ensure block import and verifier are linked correctly.
+// // 		let data = maybe_link.as_ref().expect("poc link always provided to verifier instantiation");
+// //
+// // 		let (_, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
+// //
+// // 		TestVerifier {
+// // 			inner: PoCVerifier {
+// // 				client: client.clone(),
+// // 				select_chain: longest_chain,
+// // 				inherent_data_providers: data.inherent_data_providers.clone(),
+// // 				config: data.link.config.clone(),
+// // 				epoch_changes: data.link.epoch_changes.clone(),
+// // 				time_source: data.link.time_source.clone(),
+// // 				can_author_with: AlwaysCanAuthor,
+// // 				telemetry: None,
+// // 				spartan: Spartan::new(),
+// // 				signing_context: schnorrkel::context::signing_context(SIGNING_CONTEXT)
+// // 			},
+// // 			mutator: MUTATOR.with(|m| m.borrow().clone()),
+// // 		}
+// // 	}
+// //
+// // 	fn peer(&mut self, i: usize) -> &mut PoCPeer {
+// // 		trace!(target: "poc", "Retrieving a peer");
+// // 		&mut self.peers[i]
+// // 	}
+// //
+// // 	fn peers(&self) -> &Vec<PoCPeer> {
+// // 		trace!(target: "poc", "Retrieving peers");
+// // 		&self.peers
+// // 	}
+// //
+// // 	fn mut_peers<F: FnOnce(&mut Vec<PoCPeer>)>(
+// // 		&mut self,
+// // 		closure: F,
+// // 	) {
+// // 		closure(&mut self.peers);
+// // 	}
+// // }
 //
 // #[test]
 // #[should_panic]
 // fn rejects_empty_block() {
 // 	sp_tracing::try_init_simple();
-// 	let mut net = BabeTestNet::new(3);
+// 	let mut net = PoCTestNet::new(3);
 // 	let block_builder = |builder: BlockBuilder<_, _, _>| {
 // 		builder.build().unwrap().block
 // 	};
@@ -379,7 +377,7 @@
 // 	let mutator = Arc::new(mutator) as Mutator;
 //
 // 	MUTATOR.with(|m| *m.borrow_mut() = mutator.clone());
-// 	let net = BabeTestNet::new(3);
+// 	let net = PoCTestNet::new(3);
 //
 // 	let peers = &[
 // 		(0, "//Alice"),
@@ -389,7 +387,7 @@
 //
 // 	let net = Arc::new(Mutex::new(net));
 // 	let mut import_notifications = Vec::new();
-// 	let mut babe_futures = Vec::new();
+// 	let mut poc_futures = Vec::new();
 // 	let mut keystore_paths = Vec::new();
 //
 // 	for (peer_id, seed) in peers {
@@ -398,16 +396,10 @@
 // 		let client = peer.client().as_full().expect("Only full clients are used in tests").clone();
 // 		let select_chain = peer.select_chain().expect("Full client has select_chain");
 //
-// 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-// 		let keystore: SyncCryptoStorePtr = Arc::new(LocalKeystore::open(keystore_path.path(), None)
-// 			.expect("Creates keystore"));
-// 		SyncCryptoStore::sr25519_generate_new(&*keystore, BABE, Some(seed)).expect("Generates authority key");
-// 		keystore_paths.push(keystore_path);
-//
 // 		let mut got_own = false;
 // 		let mut got_other = false;
 //
-// 		let data = peer.data.as_ref().expect("babe link set up during initialization");
+// 		let data = peer.data.as_ref().expect("poc link set up during initialization");
 //
 // 		let environ = DummyFactory {
 // 			client: client.clone(),
@@ -435,7 +427,7 @@
 // 		);
 //
 //
-// 		babe_futures.push(start_poc(PoCParams {
+// 		poc_futures.push(start_poc(PoCParams {
 // 			block_import: data.block_import.lock().take().expect("import set up during init"),
 // 			select_chain,
 // 			client,
@@ -445,11 +437,10 @@
 // 			force_authoring: false,
 // 			backoff_authoring_blocks: Some(BackoffAuthoringOnFinalizedHeadLagging::default()),
 // 			poc_link: data.link.clone(),
-// 			keystore,
 // 			can_author_with: sp_consensus::AlwaysCanAuthor,
 // 			block_proposal_slot_portion: SlotProportion::new(0.5),
 // 			telemetry: None,
-// 		}).expect("Starts babe"));
+// 		}).expect("Starts poc"));
 // 	}
 // 	block_on(future::select(
 // 		futures::future::poll_fn(move |cx| {
@@ -463,7 +454,7 @@
 //
 // 			Poll::<()>::Pending
 // 		}),
-// 		future::select(future::join_all(import_notifications), future::join_all(babe_futures))
+// 		future::select(future::join_all(import_notifications), future::join_all(poc_futures))
 // 	));
 // }
 //
@@ -478,7 +469,7 @@
 // 	run_one_test(|header: &mut TestHeader, stage| {
 // 		let v = std::mem::take(&mut header.digest_mut().logs);
 // 		header.digest_mut().logs = v.into_iter()
-// 			.filter(|v| stage == Stage::PostSeal || v.as_babe_pre_digest().is_none())
+// 			.filter(|v| stage == Stage::PostSeal || v.as_poc_pre_digest().is_none())
 // 			.collect()
 // 	})
 // }
@@ -489,7 +480,7 @@
 // 	run_one_test(|header: &mut TestHeader, stage| {
 // 		let v = std::mem::take(&mut header.digest_mut().logs);
 // 		header.digest_mut().logs = v.into_iter()
-// 			.filter(|v| stage == Stage::PreSeal || v.as_babe_seal().is_none())
+// 			.filter(|v| stage == Stage::PreSeal || v.as_poc_seal().is_none())
 // 			.collect()
 // 	})
 // }
@@ -508,80 +499,77 @@
 // #[test]
 // fn wrong_consensus_engine_id_rejected() {
 // 	sp_tracing::try_init_simple();
-// 	let sig = AuthorityPair::generate().0.sign(b"");
+// 	let sig = Keypair::generate().0.sign(b"");
 // 	let bad_seal: Item = DigestItem::Seal([0; 4], sig.to_vec());
-// 	assert!(bad_seal.as_babe_pre_digest().is_none());
-// 	assert!(bad_seal.as_babe_seal().is_none())
+// 	assert!(bad_seal.as_poc_pre_digest().is_none());
+// 	assert!(bad_seal.as_poc_seal().is_none())
 // }
 //
 // #[test]
 // fn malformed_pre_digest_rejected() {
 // 	sp_tracing::try_init_simple();
-// 	let bad_seal: Item = DigestItem::Seal(BABE_ENGINE_ID, [0; 64].to_vec());
-// 	assert!(bad_seal.as_babe_pre_digest().is_none());
+// 	let bad_seal: Item = DigestItem::Seal(POC_ENGINE_ID, [0; 64].to_vec());
+// 	assert!(bad_seal.as_poc_pre_digest().is_none());
 // }
 //
 // #[test]
 // fn sig_is_not_pre_digest() {
 // 	sp_tracing::try_init_simple();
-// 	let sig = AuthorityPair::generate().0.sign(b"");
-// 	let bad_seal: Item = DigestItem::Seal(BABE_ENGINE_ID, sig.to_vec());
-// 	assert!(bad_seal.as_babe_pre_digest().is_none());
-// 	assert!(bad_seal.as_babe_seal().is_some())
+// 	let sig = Keypair::generate().0.sign(b"");
+// 	let bad_seal: Item = DigestItem::Seal(POC_ENGINE_ID, sig.to_vec());
+// 	assert!(bad_seal.as_poc_pre_digest().is_none());
+// 	assert!(bad_seal.as_poc_seal().is_some())
 // }
+//
+// /// Claims the given slot number. always returning a dummy block.
+// pub fn dummy_claim_slot(
+// 	slot: Slot,
+// 	_epoch: &Epoch,
+// ) -> Option<(PreDigest, FarmerId)> {
+//
+// 	return Some((PreDigest {
+// 		solution: Solution::default(),
+// 		slot,
+// 	}, FarmerId::default()))
+// }
+//
 //
 // #[test]
 // fn can_author_block() {
 // 	sp_tracing::try_init_simple();
-// 	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-// 	let keystore: SyncCryptoStorePtr = Arc::new(LocalKeystore::open(keystore_path.path(), None)
-// 		.expect("Creates keystore"));
-// 	let public = SyncCryptoStore::sr25519_generate_new(&*keystore, BABE, Some("//Alice"))
-// 		.expect("Generates authority pair");
 //
 // 	let mut i = 0;
 // 	let epoch = Epoch {
 // 		start_slot: 0.into(),
-// 		authorities: vec![(public.into(), 1)],
 // 		randomness: [0; 32],
 // 		epoch_index: 1,
 // 		duration: 100,
-// 		config: BabeEpochConfiguration {
+// 		config: PoCEpochConfiguration {
 // 			c: (3, 10),
-// 			allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 // 		},
 // 	};
 //
-// 	let mut config = crate::BabeGenesisConfiguration {
+// 	let mut _config = crate::PoCGenesisConfiguration {
 // 		slot_duration: 1000,
 // 		epoch_length: 100,
 // 		c: (3, 10),
-// 		genesis_authorities: Vec::new(),
 // 		randomness: [0; 32],
-// 		allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 // 	};
 //
-// 	// with secondary slots enabled it should never be empty
-// 	match claim_slot(i.into(), &epoch, &keystore) {
-// 		None => i += 1,
-// 		Some(s) => debug!(target: "babe", "Authored block {:?}", s.0),
-// 	}
 //
-// 	// otherwise with only vrf-based primary slots we might need to try a couple
-// 	// of times.
-// 	config.allowed_slots = AllowedSlots::PrimarySlots;
+// 	// we might need to try a couple of times
 // 	loop {
-// 		match claim_slot(i.into(), &epoch, &keystore) {
+// 		match dummy_claim_slot(i.into(), &epoch) {
 // 			None => i += 1,
 // 			Some(s) => {
-// 				debug!(target: "babe", "Authored block {:?}", s.0);
+// 				debug!(target: "poc", "Authored block {:?}", s.0);
 // 				break;
 // 			}
 // 		}
 // 	}
 // }
 //
-// // Propose and import a new BABE block on top of the given parent.
+// // Propose and import a new PoC block on top of the given parent.
 // fn propose_and_import_block<Transaction: Send + 'static>(
 // 	parent: &TestHeader,
 // 	slot: Option<Slot>,
@@ -598,10 +586,10 @@
 // 	let pre_digest = sp_runtime::generic::Digest {
 // 		logs: vec![
 // 			Item::poc_pre_digest(
-// 				PreDigest::SecondaryPlain(SecondaryPlainPreDigest {
-// 					authority_index: 0,
+// 				PreDigest {
 // 					slot,
-// 				}),
+// 					solution: Solution::Defautlt(),
+// 				}
 // 			),
 // 		],
 // 	};
@@ -620,7 +608,7 @@
 // 	let seal = {
 // 		// sign the pre-sealed hash of the block and then
 // 		// add it to a digest item.
-// 		let pair = AuthorityPair::from_seed(&[1; 32]);
+// 		let pair = Keypair::from_seed(&[1; 32]);
 // 		let pre_hash = block.header.hash();
 // 		let signature = pair.sign(pre_hash.as_ref());
 // 		Item::poc_seal(signature)
@@ -638,7 +626,7 @@
 // 	import.body = Some(block.extrinsics);
 // 	import.intermediates.insert(
 // 		Cow::from(INTERMEDIATE_KEY),
-// 		Box::new(BabeIntermediate::<TestBlock> { epoch_descriptor }) as Box<_>,
+// 		Box::new(PoCIntermediate::<TestBlock> { epoch_descriptor }) as Box<_>,
 // 	);
 // 	import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 // 	let import_result = block_on(block_import.import_block(import, Default::default())).unwrap();
@@ -653,10 +641,10 @@
 //
 // #[test]
 // fn importing_block_one_sets_genesis_epoch() {
-// 	let mut net = BabeTestNet::new(1);
+// 	let mut net = PoCTestNet::new(1);
 //
 // 	let peer = net.peer(0);
-// 	let data = peer.data.as_ref().expect("babe link set up during initialization");
+// 	let data = peer.data.as_ref().expect("poc link set up during initialization");
 // 	let client = peer.client().as_full().expect("Only full clients are used in tests").clone();
 //
 // 	let mut proposer_factory = DummyFactory {
@@ -695,10 +683,10 @@
 // fn importing_epoch_change_block_prunes_tree() {
 // 	use sc_client_api::Finalizer;
 //
-// 	let mut net = BabeTestNet::new(1);
+// 	let mut net = PoCTestNet::new(1);
 //
 // 	let peer = net.peer(0);
-// 	let data = peer.data.as_ref().expect("babe link set up during initialization");
+// 	let data = peer.data.as_ref().expect("poc link set up during initialization");
 //
 // 	let client = peer.client().as_full().expect("Only full clients are used in tests").clone();
 // 	let mut block_import = data.block_import.lock().take().expect("import set up during init");
@@ -711,7 +699,7 @@
 // 		mutator: Arc::new(|_, _| ()),
 // 	};
 //
-// 	// This is just boilerplate code for proposing and importing n valid BABE
+// 	// This is just boilerplate code for proposing and importing n valid PoC
 // 	// blocks that are built on top of the given parent. The proposer takes care
 // 	// of producing epoch change digests according to the epoch duration (which
 // 	// is set to 6 slots in the test runtime).
@@ -801,10 +789,10 @@
 // #[test]
 // #[should_panic]
 // fn verify_slots_are_strictly_increasing() {
-// 	let mut net = BabeTestNet::new(1);
+// 	let mut net = PoCTestNet::new(1);
 //
 // 	let peer = net.peer(0);
-// 	let data = peer.data.as_ref().expect("babe link set up during initialization");
+// 	let data = peer.data.as_ref().expect("poc link set up during initialization");
 //
 // 	let client = peer.client().as_full().expect("Only full clients are used in tests").clone();
 // 	let mut block_import = data.block_import.lock().take().expect("import set up during init");
@@ -838,36 +826,37 @@
 // 	);
 // }
 //
-// #[test]
-// fn babe_transcript_generation_match() {
-// 	sp_tracing::try_init_simple();
-// 	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-// 	let keystore: SyncCryptoStorePtr = Arc::new(LocalKeystore::open(keystore_path.path(), None)
-// 		.expect("Creates keystore"));
-// 	let public = SyncCryptoStore::sr25519_generate_new(&*keystore, BABE, Some("//Alice"))
-// 		.expect("Generates authority pair");
-//
-// 	let epoch = Epoch {
-// 		start_slot: 0.into(),
-// 		authorities: vec![(public.into(), 1)],
-// 		randomness: [0; 32],
-// 		epoch_index: 1,
-// 		duration: 100,
-// 		config: BabeEpochConfiguration {
-// 			c: (3, 10),
-// 			allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
-// 		},
-// 	};
-//
-// 	let orig_transcript = make_transcript(&epoch.randomness.clone(), 1.into(), epoch.epoch_index);
-// 	let new_transcript = make_transcript_data(&epoch.randomness, 1.into(), epoch.epoch_index);
-//
-// 	let test = |t: merlin::Transcript| -> [u8; 16] {
-// 		let mut b = [0u8; 16];
-// 		t.build_rng()
-// 			.finalize(&mut ChaChaRng::from_seed([0u8;32]))
-// 			.fill_bytes(&mut b);
-// 		b
-// 	};
-// 	debug_assert!(test(orig_transcript) == test(transcript_from_data(new_transcript)));
-// }
+// // TODO: fix for milestone 3
+// // #[test]
+// // fn babe_transcript_generation_match() {
+// // 	sp_tracing::try_init_simple();
+// // 	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
+// // 	let keystore: SyncCryptoStorePtr = Arc::new(LocalKeystore::open(keystore_path.path(), None)
+// // 		.expect("Creates keystore"));
+// // 	let public = SyncCryptoStore::sr25519_generate_new(&*keystore, BABE, Some("//Alice"))
+// // 		.expect("Generates authority pair");
+// //
+// // 	let epoch = Epoch {
+// // 		start_slot: 0.into(),
+// // 		authorities: vec![(public.into(), 1)],
+// // 		randomness: [0; 32],
+// // 		epoch_index: 1,
+// // 		duration: 100,
+// // 		config: BabeEpochConfiguration {
+// // 			c: (3, 10),
+// // 			allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
+// // 		},
+// // 	};
+// //
+// // 	let orig_transcript = make_transcript(&epoch.randomness.clone(), 1.into(), epoch.epoch_index);
+// // 	let new_transcript = make_transcript_data(&epoch.randomness, 1.into(), epoch.epoch_index);
+// //
+// // 	let test = |t: merlin::Transcript| -> [u8; 16] {
+// // 		let mut b = [0u8; 16];
+// // 		t.build_rng()
+// // 			.finalize(&mut ChaChaRng::from_seed([0u8;32]))
+// // 			.fill_bytes(&mut b);
+// // 		b
+// // 	};
+// // 	debug_assert!(test(orig_transcript) == test(transcript_from_data(new_transcript)));
+// // }
