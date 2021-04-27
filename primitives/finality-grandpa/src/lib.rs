@@ -378,7 +378,7 @@ where
 				let mut buf = Vec::new();
 				localized_payload_with_buffer(round, set_id + i, message, &mut buf);
 				if id.verify(&buf, signature) {
-					log::info!(target: "afg", "Set id is off by one +{}!!!", i);
+					log::info!(target: "afg", "Set id actual: {}, expected: {}", set_id, set_id + i);
 					break;
 				}
 			}
@@ -387,7 +387,7 @@ where
 				let mut buf = Vec::new();
 				localized_payload_with_buffer(round, set_id - i, message, &mut buf);
 				if id.verify(&buf, signature) {
-					log::info!(target: "afg", "Set id is off by one -{}!!!", i);
+					log::info!(target: "afg", "Set id actual: {}, expected: {}", set_id, set_id - i);
 					break;
 				}
 			}
