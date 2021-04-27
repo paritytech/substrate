@@ -54,7 +54,7 @@ pub fn remove_deferred_storage<T: Config>() -> Weight {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::mock::{new_test_ext, with_on_offence_fractions, Offences, Runtime as T, System};
+    use crate::mock::{new_test_ext, with_on_offence_fractions, Offences, Runtime as T};
     use frame_support::traits::OnRuntimeUpgrade;
     use sp_runtime::Perbill;
     use sp_staking::offence::OffenceDetails;
@@ -77,13 +77,11 @@ mod test {
             };
 
             // push deferred offence
-            <DeferredOffences<T>>::mutate(|d| {
-                d.push((
-                    vec![offence_details],
-                    vec![Perbill::from_percent(5 + 1 * 100 / 5)],
-                    1,
-                ))
-            });
+            <DeferredOffences<T>>::append((
+                vec![offence_details],
+                vec![Perbill::from_percent(5 + 1 * 100 / 5)],
+                1,
+            ));
 
             // when
             assert_eq!(
@@ -96,9 +94,6 @@ mod test {
             with_on_offence_fractions(|f| {
                 assert_eq!(f.clone(), vec![Perbill::from_percent(5 + 1 * 100 / 5)]);
             });
-
-            // No events emitted
-            assert_eq!(System::events().len(), 0);
         })
     }
 }
