@@ -31,6 +31,18 @@ impl<T: Ord> Contains<T> for All<T> {
 	fn contains(_: &T) -> bool { true }
 }
 
+#[macro_export]
+macro_rules! match_type {
+	( pub type $n:ident: impl Contains<$t:ty> = { $phead:pat $( | $ptail:pat )* } ; ) => {
+		pub struct $n;
+		impl $crate::traits::Contains<$t> for $n {
+			fn contains(l: &$t) -> bool {
+				matches!(l, $phead $( | $ptail )* )
+			}
+		}
+	}
+}
+
 /// A trait for a set which can enumerate its members in order.
 pub trait SortedMembers<T: Ord> {
 	/// Get a vector of all members in the set, ordered.
