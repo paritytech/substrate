@@ -446,11 +446,7 @@ decl_storage! {
 			Option<T::AccountId>;
 
 		/// The current set of members, ordered.
-		pub Members get(fn members) build(|config: &GenesisConfig<T, I>| {
-			let mut m = config.members.clone();
-			m.sort();
-			m.try_into().expect("Too many genesis members")
-		}): BoundedVec<T::AccountId, MaxMembersGetter<I>>;
+		pub Members get(fn members): BoundedVec<T::AccountId, MaxMembersGetter<I>>;
 
 		/// The set of suspended members.
 		pub SuspendedMembers get(fn suspended_member): map hasher(twox_64_concat) T::AccountId => bool;
@@ -480,10 +476,21 @@ decl_storage! {
 		DefenderVotes: map hasher(twox_64_concat) T::AccountId => Option<Vote>;
 
 		/// The max number of members for the society at one time.
-		MaxMembers get(fn max_members) config(): u32;
+		MaxMembers get(fn max_members): u32;
 	}
 	add_extra_genesis {
 		config(members): Vec<T::AccountId>;
+		config(max_members): u32;
+		build(|config| {
+			// We need to make sure to set `MaxMembers` first so that we can
+			// correctly create a bounded vec below.
+			MaxMembers::<I>::put(config.max_members);
+			let mut m = config.members.clone();
+			m.sort();
+			let bounded_members: BoundedVec<T::AccountId, MaxMembersGetter<I>>
+				= m.try_into().expect("Too many genesis members");
+			Members::<T, I>::put(bounded_members);
+		})
 	}
 }
 

@@ -233,6 +233,12 @@ impl<T: BoundedVecValue, S: Get<u32>> codec::DecodeLength for BoundedVec<T, S> {
 	}
 }
 
+impl<T: BoundedVecValue + PartialEq, S: Get<u32>> PartialEq<Vec<T>> for BoundedVec<T, S> {
+	fn eq(&self, other: &Vec<T>) -> bool {
+		&self.0 == other
+	}
+}
+
 impl<T: BoundedVecValue, S: Get<u32>> StorageDecodeLength for BoundedVec<T, S> {}
 
 /// Storage value that is *maybe* capable of [`StorageAppend`](crate::storage::StorageAppend).
@@ -493,5 +499,11 @@ pub mod test {
 	fn slice_indexing_works() {
 		let bounded: BoundedVec<u32, Seven> = vec![1, 2, 3, 4, 5, 6].try_into().unwrap();
 		assert_eq!(&bounded[0..=2], &[1, 2, 3]);
+	}
+
+	#[test]
+	fn vec_eq_works() {
+		let bounded: BoundedVec<u32, Seven> = vec![1, 2, 3, 4, 5, 6].try_into().unwrap();
+		assert_eq!(bounded, vec![1, 2, 3, 4, 5, 6]);
 	}
 }
