@@ -18,7 +18,7 @@
 
 use structopt::StructOpt;
 use sc_cli::{
-	Error, VanityCmd, SignCmd, VerifyCmd, GenerateNodeKeyCmd, GenerateCmd, InspectKeyCmd,
+	Error, VanityCmd, SignCmd, VerifyCmd, GenerateNodeKeyCmd, GenerateCmd, InspectCmd,
 	InspectNodeKeyCmd
 };
 
@@ -37,7 +37,7 @@ pub enum Subkey {
 	Generate(GenerateCmd),
 
 	/// Gets a public key and a SS58 address from the provided Secret URI
-	Inspect(InspectKeyCmd),
+	Inspect(InspectCmd),
 
 	/// Print the peer ID corresponding to the node key in the given file
 	InspectNodeKey(InspectNodeKeyCmd),
