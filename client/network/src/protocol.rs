@@ -581,7 +581,7 @@ impl<B: BlockT> Protocol<B> {
 					None
 				},
 				justifications: if !block_data.justifications.is_empty() {
-					Some(Decode::decode(&mut block_data.justifications.as_ref())?)
+					Some(DecodeAll::decode_all(&mut block_data.justifications.as_ref())?)
 				} else {
 					None
 				},
