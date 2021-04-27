@@ -87,11 +87,12 @@ impl BlockSubscriber {
 
 impl Subscriber for BlockSubscriber {
 	fn enabled(&self, metadata: &tracing::Metadata<'_>) -> bool {
+		if !metadata.is_span() && !metadata.fields().field(REQUIRED_EVENT_FIELD).is_some() {
+			return false;
+		}
 		for (target, level) in &self.targets {
-			if metadata.target().starts_with(target.as_str()) && metadata.level() <= level {
-				if metadata.is_span() || metadata.fields().field(REQUIRED_EVENT_FIELD).is_some() {
-					return true;
-				}
+			if metadata.level() <= level && metadata.target().starts_with(target) {
+				return true;
 			}
 		}
 		false
