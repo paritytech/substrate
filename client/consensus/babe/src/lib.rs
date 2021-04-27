@@ -360,7 +360,7 @@ impl std::ops::Deref for Config {
 }
 
 /// Parameters for BABE.
-pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW, BS> {
+pub struct BabeParams<B: BlockT, C, E, I, SO, SC, BS, CAW, L> {
 	/// The keystore that manages the keys of the node.
 	pub keystore: SyncCryptoStorePtr,
 
@@ -396,6 +396,9 @@ pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW, BS> {
 	/// Checks if the current native implementation can author with a runtime at a given block.
 	pub can_author_with: CAW,
 
+	/// Hook into the sync module to control the justification sync process.
+	pub link: L,
+
 	/// The proportion of the slot dedicated to proposing.
 	///
 	/// The block proposing will be limited to this proportion of the slot from the starting of the
@@ -408,38 +411,48 @@ pub struct BabeParams<B: BlockT, C, E, I, SO, SC, CAW, BS> {
 }
 
 /// Start the babe worker.
-pub fn start_babe<B, C, SC, E, I, SO, CAW, BS, Error>(BabeParams {
-	keystore,
-	client,
-	select_chain,
-	env,
-	block_import,
-	sync_oracle,
-	inherent_data_providers,
-	force_authoring,
-	backoff_authoring_blocks,
-	babe_link,
-	can_author_with,
-	block_proposal_slot_portion,
-	telemetry,
-}: BabeParams<B, C, E, I, SO, SC, CAW, BS>) -> Result<
-	BabeWorker<B>,
-	sp_consensus::Error,
-> where
+pub fn start_babe<B, C, SC, E, I, SO, BS, CAW, L, Error>(
+	BabeParams {
+		keystore,
+		client,
+		select_chain,
+		env,
+		block_import,
+		sync_oracle,
+		inherent_data_providers,
+		force_authoring,
+		backoff_authoring_blocks,
+		babe_link,
+		can_author_with,
+		link,
+		block_proposal_slot_portion,
+		telemetry,
+	}: BabeParams<B, C, E, I, SO, SC, BS, CAW, L>,
+) -> Result<BabeWorker<B>, sp_consensus::Error>
+where
 	B: BlockT,
-	C: ProvideRuntimeApi<B> + ProvideCache<B> + ProvideUncles<B> + BlockchainEvents<B>
-		+ HeaderBackend<B> + HeaderMetadata<B, Error = ClientError>
-		+ Send + Sync + 'static,
+	C: ProvideRuntimeApi<B>
+		+ ProvideCache<B>
+		+ ProvideUncles<B>
+		+ BlockchainEvents<B>
+		+ HeaderBackend<B>
+		+ HeaderMetadata<B, Error = ClientError>
+		+ Send
+		+ Sync
+		+ 'static,
 	C::Api: BabeApi<B>,
 	SC: SelectChain<B> + 'static,
 	E: Environment<B, Error = Error> + Send + Sync + 'static,
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
-	I: BlockImport<B, Error = ConsensusError, Transaction = sp_api::TransactionFor<C, B>> + Send
-		+ Sync + 'static,
+	I: BlockImport<B, Error = ConsensusError, Transaction = sp_api::TransactionFor<C, B>>
+		+ Send
+		+ Sync
+		+ 'static,
 	Error: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
 	SO: SyncOracle + Send + Sync + Clone + 'static,
-	CAW: CanAuthorWith<B> + Send + Sync + 'static,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
+	CAW: CanAuthorWith<B> + Send + Sync + 'static,
+	L: sp_consensus::JustificationSyncLink<B> + 'static,
 {
 	const HANDLE_BUFFER_SIZE: usize = 1024;
 
@@ -474,6 +487,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, BS, Error>(BabeParams {
 		select_chain,
 		worker,
 		sync_oracle,
+		link,
 		inherent_data_providers,
 		babe_link.time_source,
 		can_author_with,
