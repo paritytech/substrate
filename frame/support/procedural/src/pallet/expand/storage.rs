@@ -274,7 +274,9 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 							#( #docs )*
 							pub fn #getter<KArg>(key: KArg) -> #query
 							where
-								KArg: #frame_support::codec::EncodeLike<<#keygen as KeyGenerator>::KArg>
+								KArg: #frame_support::codec::EncodeLike<
+									<#keygen as #frame_support::storage::types::KeyGenerator>::KArg
+								>
 									+ #frame_support::storage::types::TupleToEncodedIter,
 							{
 								<
