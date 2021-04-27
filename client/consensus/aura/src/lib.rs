@@ -120,7 +120,7 @@ impl SlotCompatible for AuraSlotCompatible {
 }
 
 /// Parameters of [`start_aura`].
-pub struct StartAuraParams<C, SC, I, PF, SO, BS, CAW> {
+pub struct StartAuraParams<C, SC, I, PF, SO, BS, CAW, L> {
 	/// The duration of a slot.
 	pub slot_duration: SlotDuration,
 	/// The client to interact with the chain.
@@ -143,6 +143,8 @@ pub struct StartAuraParams<C, SC, I, PF, SO, BS, CAW> {
 	pub keystore: SyncCryptoStorePtr,
 	/// Can we author a block with this node?
 	pub can_author_with: CAW,
+	/// Hook into the sync module to control the justification sync process.
+	pub link: L,
 	/// The proportion of the slot dedicated to proposing.
 	///
 	/// The block proposing will be limited to this proportion of the slot from the starting of the
@@ -154,7 +156,7 @@ pub struct StartAuraParams<C, SC, I, PF, SO, BS, CAW> {
 }
 
 /// Start the aura worker. The returned future should be run in a futures executor.
-pub fn start_aura<P, B, C, SC, PF, I, SO, CAW, BS, Error>(
+pub fn start_aura<P, B, C, SC, PF, I, SO, BS, CAW, L, Error>(
 	StartAuraParams {
 		slot_duration,
 		client,
@@ -167,10 +169,12 @@ pub fn start_aura<P, B, C, SC, PF, I, SO, CAW, BS, Error>(
 		backoff_authoring_blocks,
 		keystore,
 		can_author_with,
+		link,
 		block_proposal_slot_portion,
 		telemetry,
-	}: StartAuraParams<C, SC, I, PF, SO, BS, CAW>,
-) -> Result<impl Future<Output = ()>, sp_consensus::Error> where
+	}: StartAuraParams<C, SC, I, PF, SO, BS, CAW, L>,
+) -> Result<impl Future<Output = ()>, sp_consensus::Error>
+where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + AuxStore + HeaderBackend<B> + Send + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
@@ -183,8 +187,9 @@ pub fn start_aura<P, B, C, SC, PF, I, SO, CAW, BS, Error>(
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
 	SO: SyncOracle + Send + Sync + Clone,
-	CAW: CanAuthorWith<B> + Send,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
+	CAW: CanAuthorWith<B> + Send,
+	L: sp_consensus::JustificationSyncLink<B> + 'static,
 {
 	let worker = build_aura_worker::<P, _, _, _, _, _, _, _>(BuildAuraWorkerParams {
 		client: client.clone(),
@@ -203,11 +208,12 @@ pub fn start_aura<P, B, C, SC, PF, I, SO, CAW, BS, Error>(
 		slot_duration.slot_duration()
 	)?;
 
-	Ok(sc_consensus_slots::start_slot_worker::<_, _, _, _, _, AuraSlotCompatible, _, _>(
+	Ok(sc_consensus_slots::start_slot_worker(
 		slot_duration,
 		select_chain,
 		worker,
 		sync_oracle,
+		link,
 		inherent_data_providers,
 		AuraSlotCompatible,
 		can_author_with,
