@@ -373,19 +373,23 @@ where
 	if !valid {
 		debug!(target: "afg", "Bad signature on message from {:?}", id);
 
-		{
-			let mut buf = Vec::new();
-			localized_payload_with_buffer(round, set_id + 1, message, &mut buf);
-			if id.verify(&buf, signature) {
-				log::info!(target: "afg", "Set id is off by one +1!!!");
+		for i in 1..5 {
+			{
+				let mut buf = Vec::new();
+				localized_payload_with_buffer(round, set_id + i, message, &mut buf);
+				if id.verify(&buf, signature) {
+					log::info!(target: "afg", "Set id is off by one +{}!!!", i);
+					break;
+				}
 			}
-		}
 
-		{
-			let mut buf = Vec::new();
-			localized_payload_with_buffer(round, set_id - 1, message, &mut buf);
-			if id.verify(&buf, signature) {
-				log::info!(target: "afg", "Set id is off by one -1!!!");
+			{
+				let mut buf = Vec::new();
+				localized_payload_with_buffer(round, set_id - i, message, &mut buf);
+				if id.verify(&buf, signature) {
+					log::info!(target: "afg", "Set id is off by one -{}!!!", i);
+					break;
+				}
 			}
 		}
 	}

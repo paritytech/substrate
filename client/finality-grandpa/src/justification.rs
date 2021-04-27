@@ -145,6 +145,7 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 			Ok(ref result) if result.ghost().is_some() => {},
 			_ => {
 				let msg = "invalid commit in grandpa justification".to_string();
+				log::info!(target: "afg", "commit: {:?}", self.commit);
 				return Err(ClientError::BadJustification(msg));
 			}
 		}
