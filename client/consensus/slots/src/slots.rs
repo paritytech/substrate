@@ -135,10 +135,7 @@ impl<SC: SlotCompatible> Slots<SC> {
 				Err(err) => return Err(sp_consensus::Error::InherentData(err)),
 			};
 			let result = self.timestamp_extractor.extract_timestamp_and_slot(&inherent_data);
-			let (timestamp, slot, offset) = match result {
-				Ok(v) => v,
-				Err(err) => return Err(err),
-			};
+			let (timestamp, slot, offset) = result?;
 			// reschedule delay for next slot.
 			let ends_in = offset +
 				time_until_next(timestamp.as_duration(), self.slot_duration);

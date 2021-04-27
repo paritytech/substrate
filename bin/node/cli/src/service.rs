@@ -218,6 +218,7 @@ pub fn new_full_base(
 	} = new_partial(&config)?;
 
 	let shared_voter_state = rpc_setup;
+	let auth_disc_publish_non_global_ips = config.network.allow_non_globals_in_dht;
 
 	config.network.extra_sets.push(grandpa::grandpa_peers_set_config());
 
@@ -320,7 +321,11 @@ pub fn new_full_base(
 				Event::Dht(e) => Some(e),
 				_ => None,
 			}});
-		let (authority_discovery_worker, _service) = sc_authority_discovery::new_worker_and_service(
+		let (authority_discovery_worker, _service) = sc_authority_discovery::new_worker_and_service_with_config(
+			sc_authority_discovery::WorkerConfig {
+				publish_non_global_ips: auth_disc_publish_non_global_ips,
+				..Default::default()
+			},
 			client.clone(),
 			network.clone(),
 			Box::pin(dht_event_stream),

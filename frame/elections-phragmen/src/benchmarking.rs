@@ -23,9 +23,9 @@ use super::*;
 
 use frame_system::RawOrigin;
 use frame_benchmarking::{benchmarks, account, whitelist, impl_benchmark_test_suite};
-use frame_support::traits::OnInitialize;
+use frame_support::{traits::OnInitialize, dispatch::DispatchResultWithPostInfo};
 
-use crate::Module as Elections;
+use crate::Pallet as Elections;
 
 const BALANCE_FACTOR: u32 = 250;
 const MAX_VOTERS: u32 = 500;
@@ -87,11 +87,12 @@ fn submit_candidates_with_self_vote<T: Config>(c: u32, prefix: &'static str)
 	Ok(candidates)
 }
 
-
 /// Submit one voter.
-fn submit_voter<T: Config>(caller: T::AccountId, votes: Vec<T::AccountId>, stake: BalanceOf<T>)
-	-> frame_support::dispatch::DispatchResult
-{
+fn submit_voter<T: Config>(
+	caller: T::AccountId,
+	votes: Vec<T::AccountId>,
+	stake: BalanceOf<T>,
+) -> DispatchResultWithPostInfo {
 	<Elections<T>>::vote(RawOrigin::Signed(caller).into(), votes, stake)
 }
 
