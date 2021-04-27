@@ -404,7 +404,7 @@ mod test {
 			k.extend(&twox_128(b"test"));
 			k.extend(&twox_128(b"foo"));
 			k.extend(&3u16.blake2_128_concat());
-			assert_eq!(A::hashed_key_for((3,)).to_vec(), k);
+			assert_eq!(A::hashed_key_for((&3,)).to_vec(), k);
 
 			assert_eq!(A::contains_key((3,)), false);
 			assert_eq!(A::get((3,)), None);

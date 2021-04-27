@@ -173,7 +173,7 @@ where
 		KArg: EncodeLike<K::KArg> + TupleToEncodedIter,
 		VArg: EncodeLike<V>,
 	{
-		unhashed::put(&Self::storage_n_map_final_key::<K, _>(key), &val.borrow());
+		unhashed::put(&Self::storage_n_map_final_key::<K, _>(key), &val);
 	}
 
 	fn remove<KArg: EncodeLike<K::KArg> + TupleToEncodedIter>(key: KArg) {
