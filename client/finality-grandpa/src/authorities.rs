@@ -330,6 +330,10 @@ where
 							   (delayed by {:?} blocks).",
 			   (&pending.canon_height, &pending.canon_hash), pending.delay);
 
+		if let DelayKind::Best { ref median_last_finalized } = pending.delay_kind {
+			debug!(target: "afg", "Best finalized block: {:?}", median_last_finalized);
+		}
+
 		self.pending_forced_changes.insert(idx, pending);
 
 		debug!(target: "afg", "There are now {} pending forced changes.", self.pending_forced_changes.len());
