@@ -407,6 +407,8 @@ impl<AccountId: PartialEq, Balance> BidKind<AccountId, Balance> {
 	}
 }
 
+// Note that accessing this struct isn't free. It requires a storage read,
+// but that is pretty much unavoidable.
 pub struct MaxMembersGetter<I>(sp_std::marker::PhantomData<I>);
 impl<I> Get<u32> for MaxMembersGetter<I>
 	where I: Instance,
