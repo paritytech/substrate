@@ -288,6 +288,13 @@ fn event_key_filter(event: &TraceEvent, storage_keys: &str) -> bool {
 
 /// Filter out spans that do not meet our targets and if the span is from WASM
 /// update its `name` and `target` fields to the WASM values for those fields.
+//
+// Due the original `tracing` crate requiring trace metadata to be static,
+// the workaround for substrate's WASM tracing wrappers is to put the `name`
+// and `target` in the `values` map (normally they would be in the static metadata.)
+// Here, if a special WASM name or target key is found in the `values` we remove
+// it and put the key value pair in the span's metadata, making it consistent
+// with spans that come from native.
 fn patch_and_filter(mut span: SpanDatum, targets: &str) -> Option<Span> {
 	if span.name == WASM_TRACE_IDENTIFIER {
 		span.values.bool_values.insert("wasm".to_owned(), true);

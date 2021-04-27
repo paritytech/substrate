@@ -148,8 +148,7 @@ pub trait StateApi<Hash> {
 	/// [Link to conceptual map of trace structure for Polkadot and Kusama block execution.][2]
 	///
 	/// [1]: https://crates.io/crates/tracing
-	/// [2]:
-	/// https://github.com/paritytech/substrate/tree/master/client/rpc-api/TraceBlock_Trace_Hierarchy.png
+	/// [2]: https://docs.google.com/drawings/d/1vZoJo9jaXlz0LmrdTOgHck9_1LsfuQPRmTr-5g1tOis/edit?usp=sharing
 	///
 	/// ## Node requirements
 	///
