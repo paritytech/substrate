@@ -718,6 +718,7 @@ parameter_types! {
 	pub const MaximumReasonLength: u32 = 16384;
 	pub const BountyCuratorDeposit: Permill = Permill::from_percent(50);
 	pub const BountyValueMinimum: Balance = 5 * DOLLARS;
+	pub const MaxApprovals: u32 = 100;
 }
 
 impl pallet_treasury::Config for Runtime {
@@ -742,6 +743,7 @@ impl pallet_treasury::Config for Runtime {
 	type BurnDestination = ();
 	type SpendFunds = Bounties;
 	type WeightInfo = pallet_treasury::weights::SubstrateWeight<Runtime>;
+	type MaxApprovals = MaxApprovals;
 }
 
 impl pallet_bounties::Config for Runtime {
