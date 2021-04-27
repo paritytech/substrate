@@ -130,6 +130,7 @@ impl Subscriber for BlockSubscriber {
 
 	fn record_follows_from(&self, _span: &Id, _follows: &Id) {
 		// Not currently used
+		unimplemented!("record_follows_from is not implemented");
 	}
 
 	fn event(&self, event: &tracing::Event<'_>) {
@@ -159,7 +160,7 @@ impl Subscriber for BlockSubscriber {
 }
 
 /// Holds a reference to the client in order to execute the given block.
-/// Record spans & events for the supplied targets (eg. "pallet,frame,state") and
+/// Records spans & events for the supplied targets (eg. "pallet,frame,state") and
 /// only records events with the specified hex encoded storage key prefixes.
 /// Note: if `targets` or `storage_keys` is an empty string then nothing is
 /// filtered out.
