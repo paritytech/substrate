@@ -36,6 +36,10 @@ use sp_tracing::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
 use sp_core::hexdisplay::HexDisplay;
 use crate::{SpanDatum, TraceEvent, Values};
 
+// Heuristic for average event size in bytes.
+const AVG_EVENT: usize = 600 * 8;
+// Heuristic for average span size in bytes.
+const AVG_SPAN: usize = 100 * 8;
 // Estimate of the max base RPC payload size when the Id is bound as a u64. If strings
 // are used for the RPC Id this may need to be adjusted. Note: The base payload
 // does not include the RPC result.
@@ -46,7 +50,7 @@ use crate::{SpanDatum, TraceEvent, Values};
 // We care about the total size of the payload because jsonrpc-server will simply ignore
 // messages larger than `sc_rpc_server::MAX_PAYLOAD` and the caller will not get any
 // response.
-const BASE_RPC_PAYLOAD: usize = 100;
+const BASE_PAYLOAD: usize = 100;
 // Default to only pallet, frame support and state related traces
 const DEFAULT_TARGETS: &str = "pallet,frame,state";
 const TRACE_TARGET: &str = "block_trace";
@@ -251,26 +255,21 @@ impl<Block, Client> BlockExecutor<Block, Client>
 			.collect();
 		tracing::debug!(target: "state_tracing", "Captured {} spans and {} events", spans.len(), events.len());
 
-		let block_trace = BlockTrace {
-			block_hash: block_id_as_string(id),
-			parent_hash: block_id_as_string(parent_id),
-			tracing_targets: targets.to_string(),
-			storage_keys: storage_keys.to_string(),
-			spans,
-			events,
-		};
-		let block_trace_size = serde_json::to_vec(&block_trace)
-			.map_err(|e| format!("Failed to serialize payload: {}", e))?
-			.len();
-		let response = if block_trace_size  > MAX_PAYLOAD - BASE_RPC_PAYLOAD {
-			TraceBlockResponse::TraceError(TraceError {
-				error:
-					format!("Payload was {} bytes; it must be less than {} bytes",
-						block_trace_size, MAX_PAYLOAD - BASE_RPC_PAYLOAD,
-					)
-			})
+		let aprox_payload_size = BASE_PAYLOAD + events.len() * AVG_EVENT + spans.len() * AVG_SPAN;
+		let response = if aprox_payload_size > MAX_PAYLOAD {
+				TraceBlockResponse::TraceError(TraceError {
+					error:
+						"Payload likely exceeds max payload size of RPC server.".to_string()
+				})
 		} else {
-			TraceBlockResponse::BlockTrace(block_trace)
+			TraceBlockResponse::BlockTrace(BlockTrace {
+				block_hash: block_id_as_string(id),
+				parent_hash: block_id_as_string(parent_id),
+				tracing_targets: targets.to_string(),
+				storage_keys: storage_keys.to_string(),
+				spans,
+				events,
+			})
 		};
 
 		Ok(response)
