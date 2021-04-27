@@ -25,7 +25,6 @@ use crate::{
 	Never,
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec};
-use sp_std::borrow::Borrow;
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::*;
 
