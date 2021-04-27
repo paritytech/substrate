@@ -931,7 +931,7 @@ fn metadata() {
 	};
 
 	let metadata = match Runtime::metadata().1 {
-		RuntimeMetadata::V12(metadata) => metadata,
+		RuntimeMetadata::V13(metadata) => metadata,
 		_ => panic!("metadata has been bump, test needs to be updated"),
 	};
 
