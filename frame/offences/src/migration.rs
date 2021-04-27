@@ -90,7 +90,7 @@ mod test {
 			);
 
 			// then
-			assert_eq!(<DeferredOffences<T>>::get().len(), 0);
+			assert!(!<DeferredOffences<T>>::exists());
 			with_on_offence_fractions(|f| {
 				assert_eq!(f.clone(), vec![Perbill::from_percent(5 + 1 * 100 / 5)]);
 			});
