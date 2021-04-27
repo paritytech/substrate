@@ -65,9 +65,7 @@ struct BlockSubscriber {
 
 impl BlockSubscriber {
 	fn new(
-		targets: &str,
-		spans: Mutex<HashMap<Id, SpanDatum>>,
-		events: Mutex<Vec<TraceEvent>>,
+		targets: &str
 	) -> Self {
 		let next_id = AtomicU64::new(1);
 		let mut targets: Vec<_> = targets
@@ -81,8 +79,8 @@ impl BlockSubscriber {
 			targets,
 			next_id,
 			current_span: CurrentSpan::default(),
-			spans,
-			events,
+			spans: Mutex::new(HashMap::new()),
+			events: Mutex::new(Vec::new()),
 		}
 	}
 }
@@ -214,9 +212,7 @@ impl<Block, Client> BlockExecutor<Block, Client>
 		} else {
 			DEFAULT_STORAGE_KEYS
 		};
-		let spans = Mutex::new(HashMap::new());
-		let events = Mutex::new(Vec::new());
-		let block_subscriber = BlockSubscriber::new(targets, spans, events);
+		let block_subscriber = BlockSubscriber::new(targets);
 		let dispatch = Dispatch::new(block_subscriber);
 
 		{
