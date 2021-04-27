@@ -692,3 +692,12 @@ fn parse_price_works() {
 		assert_eq!(expected, Example::parse_price(json));
 	}
 }
+
+// Call contract in test.
+	Contracts::call(
+		Origin::signed(alice),
+		contract_id,
+		0,
+		GAS_LIMIT,
+		vec![],
+	).unwrap();

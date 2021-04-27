@@ -153,7 +153,7 @@ impl<T: Trait> Module<T> {
 	fn send_to_sc_mock() -> Result<(), &'static str> {
 
 		debug::info!("[OCW] Getting signer");
-		let signer = Signer::<T::CST, T::AuthorityId>::all_accounts();
+		let signer = Signer::<T::CST, T::AuthorityId>::any_account();
 		debug::info!("[OCW] Checking signer");
 		if !signer.can_sign() {
 			return Err(
