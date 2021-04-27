@@ -407,10 +407,7 @@ where
 		);
 
 		// Check what happened after enaction of the verdict.
-		let alive_contract_info = match new_contract_info.map_err(|_| IsTombstone)? {
-			None => return Err(IsTombstone),
-			Some(contract) => contract,
-		};
+		let alive_contract_info = new_contract_info.map_err(|_| IsTombstone)?.ok_or_else(|| IsTombstone)?;
 
 		// Compute how much would the fee per block be with the *updated* balance.
 		let total_balance = T::Currency::total_balance(account);

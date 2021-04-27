@@ -150,10 +150,8 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 	pub fn new<D: MetaDb>(db: &D) -> Result<NonCanonicalOverlay<BlockHash, Key>, Error<D::Error>> {
 		let last_canonicalized = db.get_meta(&to_meta_key(LAST_CANONICAL, &()))
 			.map_err(|e| Error::Db(e))?;
-		let last_canonicalized = match last_canonicalized {
-			Some(buffer) => Some(<(BlockHash, u64)>::decode(&mut buffer.as_slice())?),
-			None => None,
-		};
+		let last_canonicalized = last_canonicalized
+			.map(|buffer| <(BlockHash, u64)>::decode(&mut buffer.as_slice())).transpose()?;
 		let mut levels = VecDeque::new();
 		let mut parents = HashMap::new();
 		let mut values = HashMap::new();

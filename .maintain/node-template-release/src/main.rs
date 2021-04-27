@@ -99,8 +99,7 @@ fn replace_path_dependencies_with_git(cargo_toml_path: &Path, commit_id: &str, c
 		let deps_rewritten = dependencies
 			.iter()
 			.filter_map(|(k, v)| v.clone().try_into::<toml::value::Table>().ok().map(move |v| (k, v)))
-			.filter(|t| t.1.contains_key("path"))
-			.filter(|t| {
+			.filter(|t| t.1.contains_key("path") && {
 				// if the path does not exists, we need to add this as git dependency
 				t.1.get("path").unwrap().as_str().map(|path| !cargo_toml_path.join(path).exists()).unwrap_or(false)
 			})
