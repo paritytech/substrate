@@ -21,7 +21,7 @@
 use sp_std::prelude::*;
 use sp_std::{convert::TryFrom, marker::PhantomData};
 use codec::{FullCodec, Encode, EncodeLike, Decode};
-use core::{ops::Index, slice::SliceIndex};
+use core::{ops::{Index, IndexMut}, slice::SliceIndex};
 use crate::{
 	traits::Get,
 	storage::{generator, StorageDecodeLength, StorageValue, StorageMap, StorageDoubleMap},
@@ -214,6 +214,13 @@ impl<T: BoundedVecValue, S: Get<u32>, I: SliceIndex<[T]>> Index<I> for BoundedVe
 	#[inline]
 	fn index(&self, index: I) -> &Self::Output {
 		Index::index(&**self, index)
+	}
+}
+
+impl<T: BoundedVecValue, S: Get<u32>, I: SliceIndex<[T]>> IndexMut<I> for BoundedVec<T, S> {
+	#[inline]
+	fn index_mut(&mut self, index: I) -> &mut Self::Output {
+		IndexMut::index_mut(&mut **self, index)
 	}
 }
 

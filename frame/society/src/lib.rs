@@ -322,6 +322,9 @@ pub trait Config<I = DefaultInstance>: system::Config {
 
 	/// The maximum number of candidates that we accept per round.
 	type MaxCandidateIntake: Get<u32>;
+
+	/// The maximum number of payouts that can be queued.
+	type MaxPayouts: Get<u32>;
 }
 
 /// A vote by a member on a candidate application.
@@ -460,7 +463,10 @@ decl_storage! {
 		Vouching get(fn vouching): map hasher(twox_64_concat) T::AccountId => Option<VouchingStatus>;
 
 		/// Pending payouts; ordered by block number, with the amount that should be paid out.
-		Payouts: map hasher(twox_64_concat) T::AccountId => Vec<(T::BlockNumber, BalanceOf<T, I>)>;
+		Payouts: map hasher(twox_64_concat) T::AccountId => BoundedVec<
+			(T::BlockNumber, BalanceOf<T, I>),
+			T::MaxPayouts,
+		>;
 
 		/// The ongoing number of losing votes cast by the member.
 		Strikes: map hasher(twox_64_concat) T::AccountId => StrikeCount;
@@ -1518,7 +1524,11 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 					break;
 				}
 			}
-			<Payouts<T, I>>::insert(who, &payouts[dropped..]);
+			let payouts_after = BoundedVec::<_, T::MaxPayouts>::force_from(
+				payouts[dropped..].to_vec(),
+				Some("Society Slash Payout"),
+			);
+			<Payouts<T, I>>::insert(who, payouts_after);
 		}
 		value - rest
 	}
