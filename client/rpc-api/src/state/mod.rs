@@ -186,10 +186,8 @@ pub trait StateApi<Hash> {
 	/// The filtering of spans and events takes place after they are all collected; so while filters
 	/// do not reduce time for actual block re-execution, they reduce the response payload size.
 	///
-	/// The default `targets` `storage_key` values are designed around facilitating balance
-	/// reconciliations on chains that hold users balances in the `system::Account` storage
-	/// item. (Note: storage events primarily come from _primitives/state-machine/src/ext.rs_).
-	/// Both of the default filters can be overridden, see details in the [params section](#params).
+	/// Note: storage events primarily come from _primitives/state-machine/src/ext.rs_).
+	/// The default filters can be overridden, see details in the [params section](#params).
 	///
 	/// ### Params
 	///

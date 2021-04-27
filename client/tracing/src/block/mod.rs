@@ -100,7 +100,7 @@ impl Subscriber for BlockSubscriber {
 	}
 
 	fn new_span(&self, attrs: &Attributes<'_>) -> Id {
-		let id = self.next_id.fetch_add(1, Ordering::SeqCst);
+		let id = self.next_id.fetch_add(1, Ordering::Relaxed);
 		let id = Id::from_u64(id);
 		let mut values = Values::default();
 		attrs.record(&mut values);
@@ -222,7 +222,7 @@ impl<Block, Client> BlockExecutor<Block, Client>
 		{
 			let dispatcher_span = tracing::debug_span!(
 				target: "state_tracing",
-				"execute_block", 
+				"execute_block",
 				extrinsics_len = block.extrinsics().len()
 			);
 			let _guard = dispatcher_span.enter();
