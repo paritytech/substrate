@@ -701,3 +701,10 @@ fn parse_price_works() {
 		GAS_LIMIT,
 		vec![],
 	).unwrap();
+
+// Parse transaction in test.
+// Extrinsic might be wrong because it assumes u64 AccountId.
+    let tx = &transactions.last().unwrap()[..];
+    let tx = Extrinsic::decode(&mut &*tx).unwrap();
+    assert_eq!(tx.signature.unwrap().0, 0);
+    println!("{:?}", tx.call);
