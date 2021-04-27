@@ -1138,10 +1138,9 @@ pub trait AccountIdConversion<AccountId>: Sized {
 	/// - `self.into_account()`
 	fn into_sub_account<S: Encode>(&self, sub: S) -> Option<AccountId>;
 
-    fn hash_into_sub_account<H: Hash, S: Encode + AsRef<[u8]>>(&self, sub: S) -> AccountId
-        where
-            H::Output: Encode;
-
+	fn hash_into_sub_account<H: Hash, S: Encode + AsRef<[u8]>>(&self, sub: S) -> AccountId
+		where
+			H::Output: Encode;
 
 	/// Try to convert an account ID into this type. Might not succeed.
 	fn try_from_sub_account<S: Decode>(x: &AccountId) -> Option<(Self, S)>;
@@ -1160,13 +1159,13 @@ impl<T: Encode + Decode + Default, Id: Encode + Decode + TypeId> AccountIdConver
         }
 	}
 
-    fn hash_into_sub_account<H: Hash, S: Encode + AsRef<[u8]>>(&self, sub: S) -> T
-        where
-            H::Output: Encode
-    {
-        (Id::TYPE_ID, self, <H as Hash>::hash(sub.as_ref())).using_encoded(|b|
-            T::decode(&mut TrailingZeroInput(b))
-        ).unwrap_or_default()
+	fn hash_into_sub_account<H: Hash, S: Encode + AsRef<[u8]>>(&self, sub: S) -> T
+		where
+			H::Output: Encode
+	{
+		(Id::TYPE_ID, self, <H as Hash>::hash(sub.as_ref())).using_encoded(|b|
+			T::decode(&mut TrailingZeroInput(b))
+		).unwrap_or_default()
 	}
 
 	fn try_from_sub_account<S: Decode>(x: &T) -> Option<(Self, S)> {
@@ -1503,7 +1502,7 @@ mod tests {
 	fn into_subaccount_should_work() {
 		let r = U16Value::try_from_account(&0x0000_c0da_f00dcafe_u64).unwrap();
 		assert_eq!(r, U16Value(0xc0da));
-        let sub: Option<AccountId> = r.into_sub_account(0xbeef_u16);
+		let sub: Option<AccountId> = r.into_sub_account(0xbeef_u16);
 		assert_eq!(sub,  Some(0x_beef_c0da_f00dcafe));
 	}
 
@@ -1511,15 +1510,15 @@ mod tests {
 	fn into_subaccount_should_fail_on_seed_excess() {
 		let r = U16Value::try_from_account(&0x0000_c0da_f00dcafe_u64).unwrap();
 		assert_eq!(r, U16Value(0xc0da));
-        let sub: Option<AccountId> = r.into_sub_account(0xdeadbeef_u32);
-        assert!(sub.is_none());
-    }
+		let sub: Option<AccountId> = r.into_sub_account(0xdeadbeef_u32);
+		assert!(sub.is_none());
+	}
 
     #[test]
 	fn hash_into_subaccount_should_work() {
 		let r = U16Value::try_from_account(&0x0000_c0da_f00dcafe_u64).unwrap();
 		assert_eq!(r, U16Value(0xc0da));
-        let sub: AccountId = r.hash_into_sub_account::<BlakeTwo256, _>([0xef, 0xbe]);
+		let sub: AccountId = r.hash_into_sub_account::<BlakeTwo256, _>([0xef, 0xbe]);
 		assert_eq!(sub,  0xa50a_c0da_f00dcafe);
 	}
 
