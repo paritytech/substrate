@@ -82,18 +82,32 @@ fn should_submit_signed_transaction_on_chain() {
     t.register_extension(OffchainExt::new(offchain));
 
     {
+        let nodes = include_bytes!("./test_data/ddc_nodes.json");
+        let metrics = include_bytes!("./test_data/ddc_metrics.json");
+
         let mut state = offchain_state.write();
+
+        // List nodes from a boot node.
         state.expect_request(testing::PendingRequest {
             method: "GET".into(),
-            uri: "https://node-0.ddc.stage.cere.network/api/rest/nodes".into(),
-            response: Some(include_bytes!("./test_data/ddc_nodes.json").to_vec()),
+            uri: "https://TEST_DDC/api/rest/nodes".into(),
+            response: Some(nodes.to_vec()),
+            sent: true,
+            ..Default::default()
+        });
+
+        // Get metrics from each node given in ddc_nodes.json.
+        state.expect_request(testing::PendingRequest {
+            method: "GET".into(),
+            uri: "https://node-0.ddc.stage.cere.network/api/rest/metrics".into(),
+            response: Some(metrics.to_vec()),
             sent: true,
             ..Default::default()
         });
         state.expect_request(testing::PendingRequest {
             method: "GET".into(),
-            uri: "https://node-0.ddc.stage.cere.network/api/rest/metrics".into(),
-            response: Some(include_bytes!("./test_data/ddc_metrics.json").to_vec()),
+            uri: "https://node-3.ddc.stage.cere.network/api/rest/metrics".into(),
+            response: Some(metrics.to_vec()),
             sent: true,
             ..Default::default()
         });

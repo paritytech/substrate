@@ -951,10 +951,12 @@ parameter_types! {
 	pub MetricsContractId: AccountId = {
 		AccountId::from(pallet_example_offchain_worker::METRICS_CONTRACT_ID)
 	};
+	pub DdcUrl: String = "https://node-0.ddc.stage.cere.network".to_string();
 }
 
 impl pallet_example_offchain_worker::Trait for Runtime {
 	type ContractId = MetricsContractId;
+	type DdcUrl = DdcUrl;
 
 	type CT = Self;
 	type CST = Self;

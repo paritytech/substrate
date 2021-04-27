@@ -43,12 +43,14 @@ pub const METRICS_CONTRACT_ID: [u8; 32] = [27, 191, 65, 45, 0, 189, 12, 234, 31,
 #[serde(crate = "alt_serde")]
 #[derive(Deserialize, Encode, Decode, Default)]
 #[derive(Debug)]
+#[allow(non_snake_case)]
 struct NodeInfo {
+	httpAddr: String,
+}
+
+/* TODO: remove?
 	#[serde(deserialize_with = "de_string_to_bytes")]
 	id: Vec<u8>,
-	#[serde(deserialize_with = "de_string_to_bytes")]
-	url: Vec<u8>,
-}
 
 pub fn de_string_to_bytes<'de, D>(de: D) -> Result<Vec<u8>, D::Error>
 	where
@@ -57,6 +59,7 @@ pub fn de_string_to_bytes<'de, D>(de: D) -> Result<Vec<u8>, D::Error>
 	let s: &str = Deserialize::deserialize(de)?;
 	Ok(s.as_bytes().to_vec())
 }
+*/
 
 
 /// Defines application identifier for crypto keys of this module.
@@ -68,7 +71,8 @@ pub fn de_string_to_bytes<'de, D>(de: D) -> Result<Vec<u8>, D::Error>
 /// The keys can be inserted manually via RPC (see `author_insertKey`).
 pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"ddc1");
 
-pub const HTTP_NODES_REQUEST: &str = "http://localhost:8081/listNodes";
+pub const HTTP_NODES: &str = "/api/rest/nodes";
+pub const HTTP_METRICS: &str = "/api/rest/metrics";
 pub const FETCH_TIMEOUT_PERIOD: u64 = 3000; // in milli-seconds
 
 /// Based on the above `KeyTypeId` we need to generate a pallet-specific crypto type wrappers.
@@ -206,26 +210,16 @@ impl<T: Trait> Module<T> {
 
 		debug::info!("Network topology: {:?}", topology);
 
-//		let data = Self::get_nodes_data(topology);
-
-		// send_to_sc(data);
-
 		Ok(())
 	}
 
-//	fn get_nodes_data(topology: Vec<u32>) -> Result<u32, http::Error> {
-//		debug::warn("Topology: {}", topology)
-//	}
-
-	/// This function uses the `offchain::http` API to query the remote github information,
-	///   and returns the JSON response as vector of bytes.
 	fn fetch_from_node(one_node: &NodeInfo) -> Result<Vec<u8>, http::Error> {
-		let node_url = sp_std::str::from_utf8(&one_node.url).unwrap();
+		let node_url = one_node.httpAddr.clone() + HTTP_METRICS;
 	
 		debug::info!("sending request to: {:?}", node_url);
 
 		// Initiate an external HTTP GET request. This is using high-level wrappers from `sp_runtime`.
-		let request = http::Request::get(node_url);
+		let request = http::Request::get(&node_url);
 
 		let deadline = sp_io::offchain::timestamp().add(Duration::from_millis(FETCH_TIMEOUT_PERIOD));
 
@@ -247,7 +241,8 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn fetch_ddc_network_topology() -> Result<(), http::Error> {
-		let request = http::Request::get(HTTP_NODES_REQUEST);
+		let url = T::DdcUrl::get() + HTTP_NODES;
+		let request = http::Request::get(&url);
 
 		let deadline = sp_io::offchain::timestamp().add(Duration::from_millis(5_000));
 
@@ -321,6 +316,7 @@ decl_event!(
 
 pub trait Trait: frame_system::Trait {
 	type ContractId: Get<<<Self::CT as frame_system::Trait>::Lookup as StaticLookup>::Source>;
+	type DdcUrl: Get<String>;
 
 	type CT: pallet_contracts::Trait;
 	type CST: CreateSignedTransaction<pallet_contracts::Call<Self::CT>>;
