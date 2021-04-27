@@ -171,14 +171,14 @@ impl<T: Trait> Module<T> {
 			|_account| {
 				let input = [
 					// the selector
-					0xCA,
-					0xFE,
-					0xBA,
+					0x35,
+					0x32,
+					0x0B,
 					0xBE,
-					0,
-					0,
-					0,
-					0,
+					1,
+					2,
+					3,
+					4,
 				];
 
 				pallet_contracts::Call::call(
