@@ -979,6 +979,7 @@ parameter_types! {
 	pub const ChallengePeriod: BlockNumber = 7 * DAYS;
 	pub const MaxCandidateIntake: u32 = 10;
 	pub const SocietyPalletId: PalletId = PalletId(*b"py/socie");
+	pub const MaxPayouts: u32 = 100;
 }
 
 impl pallet_society::Config for Runtime {
@@ -997,6 +998,7 @@ impl pallet_society::Config for Runtime {
 	type SuspensionJudgementOrigin = pallet_society::EnsureFounder<Runtime>;
 	type MaxCandidateIntake = MaxCandidateIntake;
 	type ChallengePeriod = ChallengePeriod;
+	type MaxPayouts = MaxPayouts;
 }
 
 parameter_types! {
