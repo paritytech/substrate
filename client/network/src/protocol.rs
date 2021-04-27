@@ -617,9 +617,7 @@ impl<B: BlockT> Protocol<B> {
 			blocks_range(),
 		);
 
-		if (message::BlockAttributes::JUSTIFICATION | message::BlockAttributes::JUSTIFICATIONS)
-			.contains(request.fields)
-		{
+		if request.fields == message::BlockAttributes::JUSTIFICATION {
 			match self.sync.on_block_justification(peer_id, block_response) {
 				Ok(sync::OnBlockJustification::Nothing) => CustomMessageOutcome::None,
 				Ok(sync::OnBlockJustification::Import { peer, hash, number, justifications }) =>
@@ -1131,6 +1129,7 @@ fn prepare_block_request<B: BlockT>(
 		to_block: request.to.map(|h| h.encode()).unwrap_or_default(),
 		direction: request.direction as i32,
 		max_blocks: request.max.unwrap_or(0),
+		support_multiple_justifications: true,
 	};
 
 	CustomMessageOutcome::BlockRequest {

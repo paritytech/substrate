@@ -77,10 +77,6 @@ bitflags! {
 		const MESSAGE_QUEUE = 0b00001000;
 		/// Include a justification for the block.
 		const JUSTIFICATION = 0b00010000;
-		/// Include multiple justifications for the block. For backwards compatibility we request
-		/// both a single justification as well as the full container. The response contains either
-		/// (not both).
-		const JUSTIFICATIONS = 0b00100000;
 	}
 }
 

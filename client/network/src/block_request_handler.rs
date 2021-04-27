@@ -80,6 +80,7 @@ struct SeenRequestsKey<B: BlockT> {
 	max_blocks: usize,
 	direction: Direction,
 	attributes: BlockAttributes,
+	support_multiple_justifications: bool,
 }
 
 impl<B: BlockT> Hash for SeenRequestsKey<B> {
@@ -180,12 +181,15 @@ impl<B: BlockT> BlockRequestHandler<B> {
 
 		let attributes = BlockAttributes::from_be_u32(request.fields)?;
 
+		let support_multiple_justifications = request.support_multiple_justifications;
+
 		let key = SeenRequestsKey {
 			peer: *peer,
 			max_blocks,
 			direction,
 			from: from_block_id.clone(),
 			attributes,
+			support_multiple_justifications,
 		};
 
 		let mut reputation_changes = Vec::new();
@@ -221,6 +225,7 @@ impl<B: BlockT> BlockRequestHandler<B> {
 				from_block_id,
 				direction,
 				max_blocks,
+				support_multiple_justifications,
 			)?;
 
 			// If any of the blocks contains nay data, we can consider it as successful request.
@@ -259,11 +264,11 @@ impl<B: BlockT> BlockRequestHandler<B> {
 		mut block_id: BlockId<B>,
 		direction: Direction,
 		max_blocks: usize,
+		support_multiple_justifications: bool,
 	) -> Result<BlockResponse, HandleRequestError> {
 		let get_header = attributes.contains(BlockAttributes::HEADER);
 		let get_body = attributes.contains(BlockAttributes::BODY);
 		let get_justification = attributes.contains(BlockAttributes::JUSTIFICATION);
-		let get_justifications = attributes.contains(BlockAttributes::JUSTIFICATIONS);
 
 		let mut blocks = Vec::new();
 
@@ -272,14 +277,14 @@ impl<B: BlockT> BlockRequestHandler<B> {
 			let number = *header.number();
 			let hash = header.hash();
 			let parent_hash = *header.parent_hash();
-			let justifications = if get_justification || get_justifications {
+			let justifications = if get_justification {
 				self.client.justifications(&BlockId::Hash(hash))?
 			} else {
 				None
 			};
 
 			let (justifications, justification, is_empty_justification) =
-				if get_justifications {
+				if support_multiple_justifications {
 					let justifications = match justifications {
 						Some(v) => v.encode(),
 						None => Vec::new(),

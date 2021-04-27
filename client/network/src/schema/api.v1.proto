@@ -29,6 +29,10 @@ message BlockRequest {
 	Direction direction = 5;
 	// Maximum number of blocks to return. An implementation defined maximum is used when unspecified.
 	uint32 max_blocks = 6; // optional
+	// Indicate to the receiver that we support multiple justifications. If the responder also
+	// supports this it will populate the multiple justifications field in `BlockData` instead of
+	// the single justification field.
+	bool support_multiple_justifications = 7; // optional
 }
 
 // Response to `BlockRequest`
