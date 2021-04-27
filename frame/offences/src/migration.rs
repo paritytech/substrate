@@ -15,51 +15,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::Config;
-use frame_support::{storage::StorageValue, traits::Get, weights::Weight};
+use super::{Config, OffenceDetails, Perbill, SessionIndex};
+use frame_support::{traits::Get, weights::Weight, generate_storage_alias};
 use sp_staking::offence::OnOffenceHandler;
+use sp_std::vec::Vec;
 
-mod deprecated {
-    use crate::{Config, OffenceDetails, Perbill, SessionIndex};
-    use frame_support::{sp_std::marker::PhantomData, storage::generator::StorageValue};
-    use sp_std::vec::Vec;
-
-    /// Type of data stored as a deferred offence
-    pub type DeferredOffenceOf<T> = (
-        Vec<
-            OffenceDetails<
-                <T as frame_system::Config>::AccountId,
-                <T as Config>::IdentificationTuple,
-            >,
+/// Type of data stored as a deferred offence
+type DeferredOffenceOf<T> = (
+    Vec<
+        OffenceDetails<
+            <T as frame_system::Config>::AccountId,
+            <T as Config>::IdentificationTuple,
         >,
-        Vec<Perbill>,
-        SessionIndex,
-    );
+    >,
+    Vec<Perbill>,
+    SessionIndex,
+);
 
-    /// Deferred reports that have been rejected by the offence handler and need to be submitted
-    /// at a later time.
-    pub struct DeferredOffences<T: Config>(PhantomData<T>);
-
-    impl<T: Config> StorageValue<Vec<DeferredOffenceOf<T>>> for DeferredOffences<T> {
-        type Query = Vec<DeferredOffenceOf<T>>;
-        fn module_prefix() -> &'static [u8] {
-            b"Offences"
-        }
-        fn storage_prefix() -> &'static [u8] {
-            b"DeferredOffences"
-        }
-        fn from_optional_value_to_query(v: Option<Vec<DeferredOffenceOf<T>>>) -> Self::Query {
-            v.unwrap_or_else(|| Default::default())
-        }
-        fn from_query_to_optional_value(v: Self::Query) -> Option<Vec<DeferredOffenceOf<T>>> {
-            Some(v)
-        }
-    }
-}
+// Deferred reports that have been rejected by the offence handler and need to be submitted
+// at a later time.
+generate_storage_alias!(
+    Offences,
+    DeferredOffences<T: Config> => Value<Vec<DeferredOffenceOf<T>>>
+);
 
 pub fn remove_deferred_storage<T: Config>() -> Weight {
     let mut weight = T::DbWeight::get().reads_writes(1, 1);
-    let deferred = <deprecated::DeferredOffences<T>>::take();
+    let deferred = <DeferredOffences<T>>::take();
     log::info!(target: "runtime::offences", "have {} deferred offences, applying.", deferred.len());
     for (offences, perbill, session) in deferred.iter() {
         let consumed = T::OnOffenceHandler::on_offence(&offences, &perbill, *session);
@@ -81,7 +63,7 @@ mod test {
     fn should_resubmit_deferred_offences() {
         new_test_ext().execute_with(|| {
             // given
-            assert_eq!(<deprecated::DeferredOffences<T>>::get().len(), 0);
+            assert_eq!(<DeferredOffences<T>>::get().len(), 0);
             with_on_offence_fractions(|f| {
                 assert_eq!(f.clone(), vec![]);
             });
@@ -95,7 +77,7 @@ mod test {
             };
 
             // push deferred offence
-            <deprecated::DeferredOffences<T>>::mutate(|d| {
+            <DeferredOffences<T>>::mutate(|d| {
                 d.push((
                     vec![offence_details],
                     vec![Perbill::from_percent(5 + 1 * 100 / 5)],
@@ -110,7 +92,7 @@ mod test {
             );
 
             // then
-            assert_eq!(<deprecated::DeferredOffences<T>>::get().len(), 0);
+            assert_eq!(<DeferredOffences<T>>::get().len(), 0);
             with_on_offence_fractions(|f| {
                 assert_eq!(f.clone(), vec![Perbill::from_percent(5 + 1 * 100 / 5)]);
             });
