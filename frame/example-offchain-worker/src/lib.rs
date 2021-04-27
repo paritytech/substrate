@@ -32,8 +32,8 @@ use alt_serde::{Deserialize, Deserializer};
 
 // The address of the metrics contract, in SS58 and in bytes formats.
 // To change the address, see tests/mod.rs decode_contract_address().
-pub const METRICS_CONTRACT_ADDR: &str = "5Fay3QQH2S4wXqCQdhZAS2bWrqvdbVmq77jb2M7seNDqjz1G";
-pub const METRICS_CONTRACT_ID: [u8; 32] = [155, 201, 46, 25, 147, 11, 237, 193, 134, 106, 146, 4, 177, 142, 253, 126, 65, 206, 165, 144, 244, 237, 10, 180, 103, 26, 19, 15, 156, 54, 220, 195];
+pub const METRICS_CONTRACT_ADDR: &str = "5Ch5xtvoFF3Muu91WkHCY4mhTDTCyYS2TmBL1zKiBXrYbiZv";
+pub const METRICS_CONTRACT_ID: [u8; 32] = [27, 191, 65, 45, 0, 189, 12, 234, 31, 196, 9, 143, 196, 27, 157, 170, 92, 57, 127, 122, 70, 152, 19, 223, 235, 21, 170, 26, 249, 130, 98, 114];
 
 
 // use serde_json::{Value};
