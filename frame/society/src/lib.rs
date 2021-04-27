@@ -407,7 +407,7 @@ impl<AccountId: PartialEq, Balance> BidKind<AccountId, Balance> {
 	}
 }
 
-struct MaxMembersGetter<I>(sp_std::marker::PhantomData<I>);
+pub struct MaxMembersGetter<I>(sp_std::marker::PhantomData<I>);
 impl<I> Get<u32> for MaxMembersGetter<I>
 	where I: Instance,
 {
@@ -1058,7 +1058,7 @@ decl_module! {
 		}
 
 		fn on_initialize(n: T::BlockNumber) -> Weight {
-			let mut members = vec![];
+			let mut members: BoundedVec<T::AccountId, MaxMembersGetter<I>> = Default::default();
 
 			let mut weight = 0;
 			let weights = T::BlockWeights::get();
@@ -1459,7 +1459,11 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 				members.sort();
 				// NOTE: This may cause member length to surpass `MaxMembers`, but results in no consensus
 				// critical issues or side-effects. This is auto-correcting as members fall out of society.
-				<Members<T, I>>::put(&members.to_vec()[..]);
+				let bounded_members = BoundedVec::<T::AccountId, MaxMembersGetter<I>>::force_from(
+					members.to_vec(),
+					Some("Society Rotate Period"),
+				);
+				<Members<T, I>>::put(bounded_members);
 				<Head<T, I>>::put(&primary);
 
 				T::MembershipChanged::change_members_sorted(&accounts, &[], &members);
@@ -1561,7 +1565,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 	}
 
 	/// End the current challenge period and start a new one.
-	fn rotate_challenge(members: &mut Vec<T::AccountId>) {
+	fn rotate_challenge(members: &mut BoundedVec<T::AccountId, MaxMembersGetter<I>>) {
 		// Assume there are members, else don't run this logic.
 		if !members.is_empty() {
 			// End current defender rotation
@@ -1601,7 +1605,8 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 				let seed = <[u8; 32]>::decode(&mut TrailingZeroInput::new(seed.as_ref()))
 					.expect("input is padded with zeroes; qed");
 				let mut rng = ChaChaRng::from_seed(seed);
-				let chosen = pick_item(&mut rng, &members[1..members.len() - 1])
+				let members_len: usize = members.len();
+				let chosen = pick_item(&mut rng, &members[1..members_len - 1])
 					.expect("exited if members empty; qed");
 				<Defender<T, I>>::put(&chosen);
 				Self::deposit_event(RawEvent::Challenged(chosen.clone()));
@@ -1643,7 +1648,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 	pub fn take_selected(
 		members_len: usize,
 		pot: BalanceOf<T, I>,
-	) -> Vec<Bid<T::AccountId, BalanceOf<T, I>>> {
+	) -> BoundedVec<Bid<T::AccountId, BalanceOf<T, I>>, T::MaxCandidateIntake> {
 		let max_members = MaxMembers::<I>::get() as usize;
 		let mut max_selections: usize =
 			(T::MaxCandidateIntake::get() as usize).min(max_members.saturating_sub(members_len));
@@ -1694,9 +1699,13 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 					<Bids<T, I>>::put(bids);
 				}
 			}
-			selected
+			// Length should be less than `max_selections` <= `MaxCandidateIntake`
+			BoundedVec::<_, T::MaxCandidateIntake>::force_from(
+				selected,
+				Some("Society Take Selected"),
+			)
 		} else {
-			vec![]
+			Default::default()
 		}
 	}
 }
