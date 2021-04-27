@@ -369,8 +369,8 @@ where
 
 	let valid = id.verify(&buf, signature);
 
+	#[cfg(feature = "std")]
 	if !valid {
-		#[cfg(feature = "std")]
 		debug!(target: "afg", "Bad signature on message from {:?}", id);
 
 		{
