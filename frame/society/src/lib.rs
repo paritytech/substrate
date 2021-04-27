@@ -1334,7 +1334,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 			Err(_) => Err(Error::<T, I>::NotMember)?,
 			Ok(i) => {
 				members.remove(i);
-				T::MembershipChanged::change_members_sorted(&[], &[m.clone()], &members.to_vec()[..]);
+				T::MembershipChanged::change_members_sorted(&[], &[m.clone()], &members);
 				<Members<T, I>>::put(members);
 				Ok(())
 			}
