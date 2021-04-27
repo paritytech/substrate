@@ -539,7 +539,7 @@ pub fn import_queue<B, Transaction, Algorithm>(
 ///
 /// `pre_runtime` is a parameter that allows a custom additional pre-runtime digest to be inserted
 /// for blocks being built. This can encode authorship information, or just be a graffiti.
-pub fn start_mining_worker<Block, C, S, Algorithm, E, SO, CAW>(
+pub fn start_mining_worker<Block, C, S, Algorithm, E, SO, CAW, L>(
 	block_import: BoxBlockImport<Block, sp_api::TransactionFor<C, Block>>,
 	client: Arc<C>,
 	select_chain: S,
@@ -551,8 +551,9 @@ pub fn start_mining_worker<Block, C, S, Algorithm, E, SO, CAW>(
 	timeout: Duration,
 	build_time: Duration,
 	can_author_with: CAW,
+	link: L,
 ) -> (
-	Arc<Mutex<MiningWorker<Block, Algorithm, C, <E::Proposer as Proposer<Block>>::Proof>>>,
+	Arc<Mutex<MiningWorker<Block, Algorithm, C, L, <E::Proposer as Proposer<Block>>::Proof>>>,
 	impl Future<Output = ()>,
 ) where
 	Block: BlockT,
@@ -565,16 +566,18 @@ pub fn start_mining_worker<Block, C, S, Algorithm, E, SO, CAW>(
 	E::Proposer: Proposer<Block, Transaction = sp_api::TransactionFor<C, Block>>,
 	SO: SyncOracle + Clone + Send + Sync + 'static,
 	CAW: CanAuthorWith<Block> + Clone + Send + 'static,
+	L: sp_consensus::JustificationSyncLink<Block>,
 {
 	if let Err(_) = register_pow_inherent_data_provider(&inherent_data_providers) {
 		warn!("Registering inherent data provider for timestamp failed");
 	}
 
 	let timer = UntilImportedOrTimeout::new(client.import_notification_stream(), timeout);
-	let worker = Arc::new(Mutex::new(MiningWorker::<Block, Algorithm, C, _> {
+	let worker = Arc::new(Mutex::new(MiningWorker {
 		build: None,
 		algorithm: algorithm.clone(),
 		block_import,
+		link,
 	}));
 	let worker_ret = worker.clone();
 
