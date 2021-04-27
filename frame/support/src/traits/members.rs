@@ -31,6 +31,8 @@ impl<T: Ord> Contains<T> for All<T> {
 	fn contains(_: &T) -> bool { true }
 }
 
+/// Create a type which implements the `Contains` trait for a particular type with syntax similar
+/// to `matches!`.
 #[macro_export]
 macro_rules! match_type {
 	( pub type $n:ident: impl Contains<$t:ty> = { $phead:pat $( | $ptail:pat )* } ; ) => {
@@ -39,6 +41,22 @@ macro_rules! match_type {
 			fn contains(l: &$t) -> bool {
 				matches!(l, $phead $( | $ptail )* )
 			}
+		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	match_type! {
+		pub type OneOrTenToTwenty: impl Contains<u8> = { 1 | 10..=20 };
+	}
+
+	#[test]
+	fn match_type_works() {
+		for i in 0..=255 {
+			assert_eq!(OneOrTenToTwenty::contains(&i), i == 1 || i >= 10 && i <= 20);
 		}
 	}
 }
