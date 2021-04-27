@@ -22,14 +22,14 @@ use sp_std::vec::Vec;
 
 /// Type of data stored as a deferred offence
 type DeferredOffenceOf<T> = (
-    Vec<
-        OffenceDetails<
-            <T as frame_system::Config>::AccountId,
-            <T as Config>::IdentificationTuple,
-        >,
-    >,
-    Vec<Perbill>,
-    SessionIndex,
+	Vec<
+		OffenceDetails<
+			<T as frame_system::Config>::AccountId,
+			<T as Config>::IdentificationTuple,
+		>,
+	>,
+	Vec<Perbill>,
+	SessionIndex,
 );
 
 // Deferred reports that have been rejected by the offence handler and need to be submitted
@@ -40,60 +40,60 @@ generate_storage_alias!(
 );
 
 pub fn remove_deferred_storage<T: Config>() -> Weight {
-    let mut weight = T::DbWeight::get().reads_writes(1, 1);
-    let deferred = <DeferredOffences<T>>::take();
-    log::info!(target: "runtime::offences", "have {} deferred offences, applying.", deferred.len());
-    for (offences, perbill, session) in deferred.iter() {
-        let consumed = T::OnOffenceHandler::on_offence(&offences, &perbill, *session);
-        weight = weight.saturating_add(consumed);
-    }
+	let mut weight = T::DbWeight::get().reads_writes(1, 1);
+	let deferred = <DeferredOffences<T>>::take();
+	log::info!(target: "runtime::offences", "have {} deferred offences, applying.", deferred.len());
+	for (offences, perbill, session) in deferred.iter() {
+		let consumed = T::OnOffenceHandler::on_offence(&offences, &perbill, *session);
+		weight = weight.saturating_add(consumed);
+	}
 
-    weight
+	weight
 }
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::mock::{new_test_ext, with_on_offence_fractions, Offences, Runtime as T};
-    use frame_support::traits::OnRuntimeUpgrade;
-    use sp_runtime::Perbill;
-    use sp_staking::offence::OffenceDetails;
+	use super::*;
+	use crate::mock::{new_test_ext, with_on_offence_fractions, Offences, Runtime as T};
+	use frame_support::traits::OnRuntimeUpgrade;
+	use sp_runtime::Perbill;
+	use sp_staking::offence::OffenceDetails;
 
-    #[test]
-    fn should_resubmit_deferred_offences() {
-        new_test_ext().execute_with(|| {
-            // given
-            assert_eq!(<DeferredOffences<T>>::get().len(), 0);
-            with_on_offence_fractions(|f| {
-                assert_eq!(f.clone(), vec![]);
-            });
+	#[test]
+	fn should_resubmit_deferred_offences() {
+		new_test_ext().execute_with(|| {
+			// given
+			assert_eq!(<DeferredOffences<T>>::get().len(), 0);
+			with_on_offence_fractions(|f| {
+				assert_eq!(f.clone(), vec![]);
+			});
 
-            let offence_details = OffenceDetails::<
-                <T as frame_system::Config>::AccountId,
-                <T as Config>::IdentificationTuple,
-            > {
-                offender: 5,
-                reporters: vec![],
-            };
+			let offence_details = OffenceDetails::<
+				<T as frame_system::Config>::AccountId,
+				<T as Config>::IdentificationTuple,
+			> {
+				offender: 5,
+				reporters: vec![],
+			};
 
-            // push deferred offence
-            <DeferredOffences<T>>::append((
-                vec![offence_details],
-                vec![Perbill::from_percent(5 + 1 * 100 / 5)],
-                1,
-            ));
+			// push deferred offence
+			<DeferredOffences<T>>::append((
+				vec![offence_details],
+				vec![Perbill::from_percent(5 + 1 * 100 / 5)],
+				1,
+			));
 
-            // when
-            assert_eq!(
-                Offences::on_runtime_upgrade(),
-                <T as frame_system::Config>::DbWeight::get().reads_writes(1, 2),
-            );
+			// when
+			assert_eq!(
+				Offences::on_runtime_upgrade(),
+				<T as frame_system::Config>::DbWeight::get().reads_writes(1, 2),
+			);
 
-            // then
-            assert_eq!(<DeferredOffences<T>>::get().len(), 0);
-            with_on_offence_fractions(|f| {
-                assert_eq!(f.clone(), vec![Perbill::from_percent(5 + 1 * 100 / 5)]);
-            });
-        })
-    }
+			// then
+			assert_eq!(<DeferredOffences<T>>::get().len(), 0);
+			with_on_offence_fractions(|f| {
+				assert_eq!(f.clone(), vec![Perbill::from_percent(5 + 1 * 100 / 5)]);
+			});
+		})
+	}
 }
