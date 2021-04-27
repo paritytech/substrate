@@ -197,7 +197,7 @@ pub mod pallet {
 
 	#[pallet::storage]
 	/// Author of current block.
-	pub(super) type Author<T: Config> = StorageValue<_, Option<T::AccountId>, ValueQuery>;
+	pub(super) type Author<T: Config> = StorageValue<_, T::AccountId, OptionQuery>;
 
 	#[pallet::storage]
 	/// Whether uncles were already set in this block.
@@ -252,7 +252,7 @@ impl<T: Config> Pallet<T> {
 		let digest = <frame_system::Pallet<T>>::digest();
 		let pre_runtime_digests = digest.logs.iter().filter_map(|d| d.as_pre_runtime());
 		if let Some(author) = T::FindAuthor::find_author(pre_runtime_digests) {
-			<Author<T>>::put(Some(&author));
+			<Author<T>>::put(&author);
 			author
 		} else {
 			Default::default()
