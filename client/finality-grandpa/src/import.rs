@@ -631,7 +631,10 @@ where
 		);
 
 		let justification = match justification {
-			Err(e) => return Err(ConsensusError::ClientImport(e.to_string())),
+			Err(e) => {
+				log::info!(target: "afg", "Failed justification import: {:?}", e);
+				return Err(ConsensusError::ClientImport(e.to_string()))
+			},
 			Ok(justification) => justification,
 		};
 
