@@ -15,9 +15,10 @@ use sp_runtime::{
 	traits::{BlakeTwo256, Convert, Extrinsic as ExtrinsicT, IdentityLookup, Verify},
 	Perbill,
 };
+use sp_std::str::FromStr;
 use std::cell::RefCell;
 
-type AccountId = sp_core::sr25519::Public;
+pub type AccountId = sp_core::sr25519::Public;
 
 // -- Implement a contracts runtime for testing --
 
@@ -237,7 +238,15 @@ where
 	}
 }
 
+parameter_types! {
+	pub MetricsContractId: AccountId = {
+		AccountId::from_raw(METRICS_CONTRACT_ID)
+	};
+}
+
 impl Trait for Test {
+	type ContractId = MetricsContractId;
+
 	type CT = Self;
 	type CST = Self;
 	type AuthorityId = crypto::TestAuthId;

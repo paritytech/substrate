@@ -947,7 +947,15 @@ impl pallet_erc20::Trait for Runtime {
 	type Erc721Id = NFTTokenId;
 }
 
+parameter_types! {
+	pub MetricsContractId: AccountId = {
+		AccountId::from(pallet_example_offchain_worker::METRICS_CONTRACT_ID)
+	};
+}
+
 impl pallet_example_offchain_worker::Trait for Runtime {
+	type ContractId = MetricsContractId;
+
 	type CT = Self;
 	type CST = Self;
 	type AuthorityId = pallet_example_offchain_worker::crypto::TestAuthId;

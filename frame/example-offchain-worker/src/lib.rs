@@ -7,6 +7,7 @@
 #[cfg(test)]
 mod tests;
 
+use frame_support::traits::Get;
 use frame_system::{
 	offchain::{
 		AppCrypto, SendSignedTransaction,
@@ -22,12 +23,18 @@ use sp_runtime::{
 	traits::StaticLookup,
 };
 use codec::{Encode, Decode};
-use sp_std::vec;
 use sp_std::vec::Vec;
 use pallet_contracts;
 
 // use lite_json::json::JsonValue;
 use alt_serde::{Deserialize, Deserializer};
+
+
+// The address of the metrics contract, in SS58 and in bytes formats.
+// To change the address, see tests/mod.rs decode_contract_address().
+pub const METRICS_CONTRACT_ADDR: &str = "5Ch5xtvoFF3Muu91WkHCY4mhTDTCyYS2TmBL1zKiBXrYbiZv";
+pub const METRICS_CONTRACT_ID: [u8; 32] = [27, 191, 65, 45, 0, 189, 12, 234, 31, 196, 9, 143, 196, 27, 157, 170, 92, 57, 127, 122, 70, 152, 19, 223, 235, 21, 170, 26, 249, 130, 98, 114];
+
 
 // use serde_json::{Value};
 
@@ -144,7 +151,6 @@ decl_storage! {
 impl<T: Trait> Module<T> {
 
 	fn send_to_sc_mock() -> Result<(), &'static str> {
-		//T::API::call();
 
 		debug::info!("[OCW] Getting signer");
 		let signer = Signer::<T::CST, T::AuthorityId>::all_accounts();
@@ -163,12 +169,6 @@ impl<T: Trait> Module<T> {
 		// local keystore with expected `KEY_TYPE`.
 		let results = signer.send_signed_transaction(
 			|_account| {
-				// TODO: find actual contract address.
-				let contract_addr_str = b"5Fay3QQH2S4wXqCQdhZAS2bWrqvdbVmq77jb2M7seNDqjz1G";
-				let contract_addr = contract_addr_str.to_vec();
-				let mut contract_addr = &contract_addr[..];
-				let contract_addr = <<T::CT as frame_system::Trait>::Lookup as StaticLookup>::Source::decode(&mut contract_addr).unwrap();
-
 				let input = [
 					// the selector
 					0xCA,
@@ -182,7 +182,7 @@ impl<T: Trait> Module<T> {
 				];
 
 				pallet_contracts::Call::call(
-					contract_addr,
+					T::ContractId::get(),
 					0u32.into(),
 					10_000_000_000,
 					input.to_vec()
@@ -320,6 +320,7 @@ decl_event!(
 
 
 pub trait Trait: frame_system::Trait {
+	type ContractId: Get<<<Self::CT as frame_system::Trait>::Lookup as StaticLookup>::Source>;
 
 	type CT: pallet_contracts::Trait;
 	type CST: CreateSignedTransaction<pallet_contracts::Call<Self::CT>>;
