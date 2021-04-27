@@ -39,7 +39,9 @@ use futures_timer::Delay;
 use log::{debug, error, info, warn};
 use sp_api::{ProvideRuntimeApi, ApiRef};
 use sp_arithmetic::traits::BaseArithmetic;
-use sp_consensus::{BlockImport, Proposer, SyncOracle, SelectChain, CanAuthorWith, SlotData};
+use sp_consensus::{
+	BlockImport, CanAuthorWith, JustificationSyncLink, Proposer, SelectChain, SlotData, SyncOracle,
+};
 use sp_consensus_slots::Slot;
 use sp_inherents::{InherentData, InherentDataProviders};
 use sp_runtime::{
@@ -77,6 +79,7 @@ pub trait SlotWorker<B: BlockT, Proof> {
 		&mut self,
 		chain_head: B::Header,
 		slot_info: SlotInfo,
+		link: &mut dyn JustificationSyncLink<B>,
 	) -> Option<SlotResult<B, Proof>>;
 }
 
@@ -196,6 +199,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		&mut self,
 		chain_head: B::Header,
 		slot_info: SlotInfo,
+		link: &mut dyn JustificationSyncLink<B>,
 	) -> Option<SlotResult<B, <Self::Proposer as Proposer<B>>::Proof>> {
 		let (timestamp, slot) = (slot_info.timestamp, slot_info.slot);
 		let telemetry = self.telemetry();
@@ -394,27 +398,33 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		);
 
 		let header = block_import_params.post_header();
-		if let Err(err) = block_import
+		match block_import
 			.import_block(block_import_params, Default::default())
 			.await
 		{
-			warn!(
-				target: logging_target,
-				"Error with block built on {:?}: {:?}",
-				parent_hash,
-				err,
-			);
+			Ok(res) => {
+				res.handle_justification(&header.hash(), *header.number(), link);
+			}
+			Err(err) => {
+				warn!(
+					target: logging_target,
+					"Error with block built on {:?}: {:?}", parent_hash, err,
+				);
 
-			telemetry!(
-				telemetry;
-				CONSENSUS_WARN;
-				"slots.err_with_block_built_on";
-				"hash" => ?parent_hash,
-				"err" => ?err,
-			);
+				telemetry!(
+					telemetry;
+					CONSENSUS_WARN;
+					"slots.err_with_block_built_on";
+					"hash" => ?parent_hash,
+					"err" => ?err,
+				);
+			}
 		}
 
-		Some(SlotResult { block: B::new(header, body), storage_proof })
+		Some(SlotResult {
+			block: B::new(header, body),
+			storage_proof,
+		})
 	}
 }
 
@@ -424,8 +434,9 @@ impl<B: BlockT, T: SimpleSlotWorker<B> + Send> SlotWorker<B, <T::Proposer as Pro
 		&mut self,
 		chain_head: B::Header,
 		slot_info: SlotInfo,
+		link: &mut dyn JustificationSyncLink<B>,
 	) -> Option<SlotResult<B, <T::Proposer as Proposer<B>>::Proof>> {
-		SimpleSlotWorker::on_slot(self, chain_head, slot_info).await
+		SimpleSlotWorker::on_slot(self, chain_head, slot_info, link).await
 	}
 }
 
@@ -442,11 +453,12 @@ pub trait SlotCompatible {
 ///
 /// Every time a new slot is triggered, `worker.on_slot` is called and the future it returns is
 /// polled until completion, unless we are major syncing.
-pub fn start_slot_worker<B, C, W, T, SO, SC, CAW, Proof>(
+pub fn start_slot_worker<B, C, W, SO, L, T, SC, CAW, Proof>(
 	slot_duration: SlotDuration<T>,
 	client: C,
 	mut worker: W,
 	mut sync_oracle: SO,
+	mut link: L,
 	inherent_data_providers: InherentDataProviders,
 	timestamp_extractor: SC,
 	can_author_with: CAW,
@@ -456,8 +468,9 @@ where
 	C: SelectChain<B>,
 	W: SlotWorker<B, Proof>,
 	SO: SyncOracle + Send,
-	SC: SlotCompatible + Unpin,
+	L: JustificationSyncLink<B>,
 	T: SlotData + Clone,
+	SC: SlotCompatible + Unpin,
 	CAW: CanAuthorWith<B> + Send,
 {
 	let SlotDuration(slot_duration) = slot_duration;
@@ -508,7 +521,7 @@ where
 					err,
 				);
 			} else {
-				worker.on_slot(chain_head, slot_info).await;
+				worker.on_slot(chain_head, slot_info, &mut link).await;
 			}
 		}
 	}
