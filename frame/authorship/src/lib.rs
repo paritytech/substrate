@@ -490,10 +490,7 @@ mod tests {
 			let pre_runtime_digests = header.digest.logs.iter().filter_map(|d| d.as_pre_runtime());
 			let seals = header.digest.logs.iter().filter_map(|d| d.as_seal());
 
-			let author = match AuthorGiven::find_author(pre_runtime_digests) {
-				None => return Err("no author"),
-				Some(author) => author,
-			};
+			let author = AuthorGiven::find_author(pre_runtime_digests).ok_or_else(|| "no author")?;
 
 			for (id, seal) in seals {
 				if id == TEST_ID {
