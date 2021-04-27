@@ -944,7 +944,7 @@ where
 					last_completed_round.number,
 					last_completed_round.votes.clone(),
 					last_completed_round.base,
-					last_completed_round.base,
+					last_finalized,
 				);
 
 				// Repoint shared_voter_state so that the RPC endpoint can query the state
