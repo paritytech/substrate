@@ -610,6 +610,30 @@ pub trait RuntimeApiInfo {
 	const VERSION: u32;
 }
 
+/// Crude and simple way to serialize the `RuntimeApiInfo` into a bunch of bytes.
+///
+/// Used internally by macros.
+#[doc(hidden)]
+pub const fn serialize_runtime_api_info(id: [u8; 8], version: u32) -> [u8; 12] {
+	let version = version.to_le_bytes();
+
+	let mut r = [0; 12];
+	r[0] = id[0];
+	r[1] = id[1];
+	r[2] = id[2];
+	r[3] = id[3];
+	r[4] = id[4];
+	r[5] = id[5];
+	r[6] = id[6];
+	r[7] = id[7];
+
+	r[8] = version[0];
+	r[9] = version[1];
+	r[10] = version[2];
+	r[11] = version[3];
+	r
+}
+
 #[derive(codec::Encode, codec::Decode)]
 pub struct OldRuntimeVersion {
 	pub spec_name: RuntimeString,
