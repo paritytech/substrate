@@ -144,7 +144,7 @@ impl<'a> Node<'a> {
 
 	/// Returns the latest version information we know of.
 	pub fn client_version(&self) -> Option<&'a str> {
-		self.0.client_version.as_ref().map(|s| &s[..])
+		self.0.client_version.as_deref()
 	}
 
 	/// Returns the latest ping time we know of for this node. `None` if we never successfully
