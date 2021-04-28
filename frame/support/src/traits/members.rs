@@ -31,6 +31,16 @@ impl<T> Contains<T> for All<T> {
 	fn contains(_: &T) -> bool { true }
 }
 
+#[impl_trait_for_tuples::impl_for_tuples(30)]
+impl<T> Contains<T> for Tuple {
+	fn contains(t: &T) -> bool {
+		for_tuples!( #(
+			if Tuple::contains(t) { return true }
+		)* );
+		false
+	}
+}
+
 /// Create a type which implements the `Contains` trait for a particular type with syntax similar
 /// to `matches!`.
 #[macro_export]
