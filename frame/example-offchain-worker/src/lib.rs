@@ -47,7 +47,32 @@ struct NodeInfo {
 	#[serde(deserialize_with = "de_string_to_bytes")]
 	id: Vec<u8>,
 	#[serde(deserialize_with = "de_string_to_bytes")]
-	url: Vec<u8>,
+	httpAddr: Vec<u8>,
+	totalPartitions: u32,
+	reservedPartitions: u32,
+	availablePartitions: u32,
+	#[serde(deserialize_with = "de_string_to_bytes")]
+	status: Vec<u8>,
+	deleted: bool,
+}
+
+#[serde(crate = "alt_serde")]
+#[derive(Deserialize, Encode, Decode, Default)]
+#[derive(Debug)]
+struct PartitionInfo {
+	#[serde(deserialize_with = "de_string_to_bytes")]
+	id: Vec<u8>,
+	#[serde(deserialize_with = "de_string_to_bytes")]
+	appPubKey: Vec<u8>,
+	#[serde(deserialize_with = "de_string_to_bytes")]
+	nodeId: Vec<u8>,
+	#[serde(deserialize_with = "de_string_to_bytes")]
+	status: Vec<u8>,
+	isMaster: bool,
+	ringToken: u32,
+	backup: bool,
+	deleted: bool,
+	replicaIndex: u32,
 }
 
 pub fn de_string_to_bytes<'de, D>(de: D) -> Result<Vec<u8>, D::Error>
@@ -68,8 +93,13 @@ pub fn de_string_to_bytes<'de, D>(de: D) -> Result<Vec<u8>, D::Error>
 /// The keys can be inserted manually via RPC (see `author_insertKey`).
 pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"ddc1");
 
-pub const HTTP_NODES_REQUEST: &str = "http://localhost:8081/listNodes";
-pub const FETCH_TIMEOUT_PERIOD: u64 = 3000; // in milli-seconds
+pub const HTTP_NODES_REQUEST: &str = "https://node-0.ddc.stage.cere.network/api/rest/nodes";
+pub const HTTP_PARTITIONS_REQUEST: &str = "https://node-0.ddc.stage.cere.network/api/rest/partitions?isMaster=true&active=true";
+pub const METRICS_REQUEST_PREFIX: &str = "https://node-2.ddc.stage.cere.network/api/rest/metrics?appPubKey=";
+pub const METRICS_PARAM1: &str = "&partitionId="; // partition.id
+pub const METRICS_PARAM2: &str = "&from="; // lastTimestamp
+pub const METRICS_PARAM3: &str = "&to="; // now() - 2 minutes
+pub const FETCH_TIMEOUT_PERIOD: u64 = 5000; // in milli-seconds
 
 /// Based on the above `KeyTypeId` we need to generate a pallet-specific crypto type wrappers.
 /// We can use from supported crypto kinds (`sr25519`, `ed25519` and `ecdsa`) and augment
@@ -217,15 +247,13 @@ impl<T: Trait> Module<T> {
 //		debug::warn("Topology: {}", topology)
 //	}
 
-	/// This function uses the `offchain::http` API to query the remote github information,
-	///   and returns the JSON response as vector of bytes.
-	fn fetch_from_node(one_node: &NodeInfo) -> Result<Vec<u8>, http::Error> {
-		let node_url = sp_std::str::from_utf8(&one_node.url).unwrap();
-	
-		debug::info!("sending request to: {:?}", node_url);
+	/// This function uses the `offchain::http` API to query data
+	/// For get method, input url and returns the JSON response as vector of bytes.
+	fn http_get_request(http_url: &str) -> Result<Vec<u8>, http::Error> {	
+		debug::info!("Sending request to: {:?}", http_url);
 
 		// Initiate an external HTTP GET request. This is using high-level wrappers from `sp_runtime`.
-		let request = http::Request::get(node_url);
+		let request = http::Request::get(http_url);
 
 		let deadline = sp_io::offchain::timestamp().add(Duration::from_millis(FETCH_TIMEOUT_PERIOD));
 
@@ -238,7 +266,7 @@ impl<T: Trait> Module<T> {
 			.map_err(|_| http::Error::DeadlineReached)??;
 
 		if response.code != 200 {
-			debug::warn!("Unexpected status code: {}", response.code);
+			debug::warn!("http_get_request unexpected status code: {}", response.code);
 			return Err(http::Error::Unknown);
 		}
 
@@ -246,57 +274,94 @@ impl<T: Trait> Module<T> {
 		Ok(response.body().collect::<Vec<u8>>())
 	}
 
+	/// This function uses the `offchain::http` API to query the remote github information,
+	///   and returns the JSON response as vector of bytes.
+	fn fetch_from_node(one_node: &NodeInfo) -> Result<Vec<u8>, http::Error> {
+		let node_url = sp_std::str::from_utf8(&one_node.httpAddr).unwrap();
+	
+		let response_data = Self::http_get_request(node_url).map_err(|e| {
+			debug::error!("fetch_from_node error: {:?}", e);
+			http::Error::Unknown
+		})?;
+
+		// Next we fully read the response body and collect it to a vector of bytes.
+		Ok(response_data)
+	}
+
 	fn fetch_ddc_network_topology() -> Result<(), http::Error> {
-		let request = http::Request::get(HTTP_NODES_REQUEST);
 
-		let deadline = sp_io::offchain::timestamp().add(Duration::from_millis(5_000));
+		let fetch_node_list_bytes = Self::http_get_request(HTTP_NODES_REQUEST).map_err(|e| {
+			debug::error!("fetch_from_node error: {:?}", e);
+			http::Error::Unknown
+		})?;
 
-		let pending = request
-			.deadline(deadline)
-			.send()
-			.map_err(|_| http::Error::IoError)?;
-
-		let response = pending.try_wait(deadline)
-			.map_err(|_| http::Error::DeadlineReached)??;
-
-		if response.code != 200 {
-			debug::warn!("Unexpected status code: {}", response.code);
-			return Err(http::Error::Unknown);
-		}
-
-		let body = response.body().collect::<Vec<u8>>();
-
-		// Create a str slice from the body.
-		let body_str = sp_std::str::from_utf8(&body).map_err(|_| {
+		let fetch_node_list_str = sp_std::str::from_utf8(&fetch_node_list_bytes).map_err(|_| {
 			debug::warn!("No UTF8 body");
 			http::Error::Unknown
 		})?;
 
-		debug::info!("body_str: {}", body_str);
+		debug::info!("fetch_node_list_str: {}", fetch_node_list_str);
 		// Parse the string of data into serde_json::Value.
-		let node_info: Vec<NodeInfo> = serde_json::from_str(&body_str).map_err(|_| {
+		let node_info: Vec<NodeInfo> = serde_json::from_str(&fetch_node_list_str).map_err(|_| {
 			debug::warn!("No UTF8 body");
 			http::Error::Unknown
 		})?;
 
-		// debug::info!("Nodes info: {:#?}", node_info);
+		// Get list nodes id
+		let mut node_id_list = node_info.iter().map(|node| &node.id);
 
-		for one_node in node_info.iter() {
-			debug::info!("Nodes info: {:?}", one_node);
-			let resp_bytes = Self::fetch_from_node(one_node).map_err(|e| {
-				debug::error!("fetch_from_node error: {:?}", e);
-				http::Error::Unknown
-			})?;
+		debug::info!("node_id_list: {:?}", node_id_list);
 
-			let resp_str = sp_std::str::from_utf8(&resp_bytes).map_err(|_| {
-				debug::warn!("No UTF8 body");
-				http::Error::Unknown
-			})?;
+		let fetch_partition_list_bytes = Self::http_get_request(HTTP_PARTITIONS_REQUEST).map_err(|e| {
+			debug::error!("fetch_from_node error: {:?}", e);
+			http::Error::Unknown
+		})?;
 
-			// Print out our fetched JSON string
-			debug::info!("Node data: {}", resp_str);
+		let fetch_partition_list_str = sp_std::str::from_utf8(&fetch_partition_list_bytes).map_err(|_| {
+			debug::warn!("No UTF8 body");
+			http::Error::Unknown
+		})?;
 
-			// Send signed Tx, TODO: send to call SC method.
+		debug::info!("fetch_partition_list_str: {}", fetch_partition_list_str);
+		// Parse the string of data into serde_json::Value.
+		let partition_info: Vec<PartitionInfo> = serde_json::from_str(&fetch_partition_list_str).map_err(|_| {
+			debug::warn!("No UTF8 body");
+			http::Error::Unknown
+		})?;
+
+		// debug::info!("Partition_info: {:#?}", partition_info);
+		for one_partition in partition_info.iter() {
+			// debug::info!("One_partition: {:?}", one_partition);
+			let equal_id = node_id_list.position(|node| node.eq(&one_partition.nodeId));
+			if ( equal_id != None) {
+				// let base_url_str = METRICS_REQUEST_PREFIX.to_string();
+
+				// let app_pubkey_str = match std::str::from_utf8(&one_partition.appPubKey) {
+				// 	Ok(v) => v,
+				// 	Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
+				// };
+
+				// let get_metrics_url = format!("{}{}", base_url_str, app_pubkey_str);
+
+				// debug::info!("get_metrics_url: {}", get_metrics_url);
+
+				// let fetch_metric_bytes = Self::http_get_request(&get_metrics_url.to_string()).map_err(|e| {
+				// 	debug::error!("fetch_metric_bytes error: {:?}", e);
+				// 	http::Error::Unknown
+				// })?;
+		
+				// let fetch_metric_str = sp_std::str::from_utf8(&fetch_metric_bytes).map_err(|_| {
+				// 	debug::warn!("No UTF8 body");
+				// 	http::Error::Unknown
+				// })?;
+		
+				// debug::info!("fetch_metric_str: {}", fetch_metric_str);
+				// Parse the string of data into serde_json::Value.
+				// let partition_info: Vec<PartitionInfo> = serde_json::from_str(&fetch_partition_list_str).map_err(|_| {
+				// 	debug::warn!("No UTF8 body");
+				// 	http::Error::Unknown
+				// })?;
+			}
 		}
 	
 		Ok(())
