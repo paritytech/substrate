@@ -757,7 +757,7 @@ mod tests {
 				&inherent_data_providers, slot_duration.slot_duration()
 			).expect("Registers aura inherent data provider");
 
-			aura_futures.push(start_aura::<AuthorityPair, _, _, _, _, _, _, _, _, _>(StartAuraParams {
+			aura_futures.push(start_aura::<AuthorityPair, _, _, _, _, _, _, _, _, _, _>(StartAuraParams {
 				slot_duration,
 				block_import: client.clone(),
 				select_chain,
@@ -769,6 +769,7 @@ mod tests {
 				backoff_authoring_blocks: Some(BackoffAuthoringOnFinalizedHeadLagging::default()),
 				keystore,
 				can_author_with: sp_consensus::AlwaysCanAuthor,
+				link: (),
 				block_proposal_slot_portion: SlotProportion::new(0.5),
 				telemetry: None,
 			}).expect("Starts aura"));
@@ -896,6 +897,7 @@ mod tests {
 				duration: Duration::from_millis(1000),
 				block_size_limit: None,
 			},
+			&mut (),
 		)).unwrap();
 
 		// The returned block should be imported and we should be able to get its header by now.
