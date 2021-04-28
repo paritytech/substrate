@@ -152,7 +152,7 @@ pub trait StateApi<Hash> {
 	///
 	/// ## Node requirements
 	///
-	/// - Fully synced archive node.
+	/// - Fully synced archive node (i.e. a node that is not actively doing a "major" sync).
 	/// - [Tracing enabled WASM runtimes](#creating-tracing-enabled-wasm-runtimes) for all runtime versions
 	/// for which tracing is desired.
 	///
@@ -164,8 +164,7 @@ pub trait StateApi<Hash> {
 	/// ## Creating tracing enabled WASM runtimes
 	///
 	/// - Checkout commit of chain version to compile with WASM traces
-	/// - [diener](https://crates.io/crates/diener) can help to peg commit of substrate
-	///	to what the chain expects.
+	/// - [diener][1] can help to peg commit of substrate to what the chain expects.
 	/// - Navigate to the `runtime` folder/package of the chain
 	/// - Add feature `with-tracing = ["frame-executive/with-tracing", "sp-io/with-tracing"]`
 	/// under `[features]` to the `runtime` packages' `Cargo.toml`.
@@ -177,7 +176,13 @@ pub trait StateApi<Hash> {
 	/// and passing the path of this folder to your chain, e.g.:
 	/// 	- `./target/release/polkadot --wasm-runtime-overrides /home/user/my-custom-wasm-runtimes`
 	///
-	/// [Source.](github.com/paritytech/substrate-archive/wiki)
+	/// You can also find some pre-built tracing enabled wasm runtimes in [substrate-archive][2]
+	///
+	/// [Source.][3]
+	///
+	/// [1]: https://crates.io/crates/diener
+	/// [2]: https://github.com/paritytech/substrate-archive/tree/master/wasm-tracing
+	/// [3]: https://github.com/paritytech/substrate-archive/wiki
 	///
 	/// ## RPC Usage
 	///
