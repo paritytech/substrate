@@ -241,6 +241,8 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+	/// Fetch the author of the block.
+	///
 	/// This is safe to invoke in `on_initialize` implementations, as well
 	/// as afterwards.
 	pub fn author() -> T::AccountId {
