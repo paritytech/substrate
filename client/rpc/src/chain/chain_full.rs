@@ -19,13 +19,12 @@
 //! Blockchain API backend for full nodes.
 
 use std::sync::Arc;
-use rpc::futures::future::result;
 use jsonrpc_pubsub::manager::SubscriptionManager;
 
 use sc_client_api::{BlockchainEvents, BlockBackend};
 use sp_runtime::{generic::{BlockId, SignedBlock}, traits::{Block as BlockT}};
 
-use super::{ChainBackend, client_err, error::FutureResult};
+use super::{ChainBackend, client_err, StateError};
 use std::marker::PhantomData;
 use sp_blockchain::HeaderBackend;
 
@@ -50,6 +49,7 @@ impl<Block: BlockT, Client> FullChain<Block, Client> {
 	}
 }
 
+#[async_trait::async_trait]
 impl<Block, Client> ChainBackend<Client, Block> for FullChain<Block, Client> where
 	Block: BlockT + 'static,
 	Client: BlockBackend<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
@@ -62,19 +62,15 @@ impl<Block, Client> ChainBackend<Client, Block> for FullChain<Block, Client> whe
 		&self.subscriptions
 	}
 
-	fn header(&self, hash: Option<Block::Hash>) -> FutureResult<Option<Block::Header>> {
-		Box::new(result(self.client
+	async fn header(&self, hash: Option<Block::Hash>) -> Result<Option<Block::Header>, StateError> {
+		self.client
 			.header(BlockId::Hash(self.unwrap_or_best(hash)))
 			.map_err(client_err)
-		))
 	}
 
-	fn block(&self, hash: Option<Block::Hash>)
-		-> FutureResult<Option<SignedBlock<Block>>>
-	{
-		Box::new(result(self.client
+	async fn block(&self, hash: Option<Block::Hash>) -> Result<Option<SignedBlock<Block>>, StateError> {
+		self.client
 			.block(&BlockId::Hash(self.unwrap_or_best(hash)))
 			.map_err(client_err)
-		))
 	}
 }

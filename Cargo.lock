@@ -7820,6 +7820,7 @@ name = "sc-rpc"
 version = "3.0.0"
 dependencies = [
  "assert_matches",
+ "async-trait",
  "futures 0.1.31",
  "futures 0.3.13",
  "hash-db",

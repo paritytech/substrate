@@ -13,6 +13,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+async-trait = "0.1"
 sc-rpc-api = { version = "0.9.0", path = "../rpc-api" }
 sc-client-api = { version = "3.0.0", path = "../api" }
 sp-api = { version = "3.0.0", path = "../../primitives/api" }

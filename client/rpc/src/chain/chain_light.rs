@@ -19,8 +19,6 @@
 //! Blockchain API backend for light nodes.
 
 use std::sync::Arc;
-use futures::{future::ready, FutureExt, TryFutureExt};
-use rpc::futures::future::{result, Future, Either};
 use jsonrpc_pubsub::manager::SubscriptionManager;
 
 use sc_client_api::light::{Fetcher, RemoteBodyRequest, RemoteBlockchain};
@@ -29,7 +27,7 @@ use sp_runtime::{
 	traits::{Block as BlockT},
 };
 
-use super::{ChainBackend, client_err, error::FutureResult};
+use super::{ChainBackend, client_err, StateError};
 use sp_blockchain::HeaderBackend;
 use sc_client_api::BlockchainEvents;
 
@@ -63,6 +61,7 @@ impl<Block: BlockT, Client, F: Fetcher<Block>> LightChain<Block, Client, F> {
 	}
 }
 
+#[async_trait::async_trait]
 impl<Block, Client, F> ChainBackend<Client, Block> for LightChain<Block, Client, F> where
 	Block: BlockT + 'static,
 	Client: BlockchainEvents<Block> + HeaderBackend<Block> + Send + Sync + 'static,
@@ -76,7 +75,7 @@ impl<Block, Client, F> ChainBackend<Client, Block> for LightChain<Block, Client,
 		&self.subscriptions
 	}
 
-	fn header(&self, hash: Option<Block::Hash>) -> FutureResult<Option<Block::Header>> {
+	async fn header(&self, hash: Option<Block::Hash>) -> Result<Option<Block::Header>, StateError> {
 		let hash = self.unwrap_or_best(hash);
 
 		let fetcher = self.fetcher.clone();
@@ -86,33 +85,31 @@ impl<Block, Client, F> ChainBackend<Client, Block> for LightChain<Block, Client,
 			BlockId::Hash(hash),
 		);
 
-		Box::new(maybe_header.then(move |result|
-			ready(result.map_err(client_err)),
-		).boxed().compat())
+		maybe_header.await.map_err(client_err)
 	}
 
-	fn block(&self, hash: Option<Block::Hash>)
-		-> FutureResult<Option<SignedBlock<Block>>>
+	async fn block(
+		&self,
+		hash: Option<Block::Hash>
+	) -> Result<Option<SignedBlock<Block>>, StateError>
 	{
 		let fetcher = self.fetcher.clone();
-		let block = self.header(hash)
-			.and_then(move |header| match header {
-				Some(header) => Either::A(fetcher
-					.remote_body(RemoteBodyRequest {
-						header: header.clone(),
-						retry_count: Default::default(),
-					})
-					.boxed()
-					.compat()
-					.map(move |body| Some(SignedBlock {
-						block: Block::new(header, body),
-						justifications: None,
-					}))
-					.map_err(client_err)
-				),
-				None => Either::B(result(Ok(None))),
-			});
+		let header = self.header(hash).await?;
 
-		Box::new(block)
+		match header {
+			Some(header) => {
+				let req_body = RemoteBodyRequest {
+					header: header.clone(),
+					retry_count: Default::default()
+				};
+				let body = fetcher.remote_body(req_body).await.map_err(client_err)?;
+
+				Ok(Some(SignedBlock {
+					block: Block::new(header, body),
+					justifications: None,
+				}))
+			}
+			None => Ok(None),
+		}
 	}
 }

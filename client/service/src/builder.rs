@@ -881,7 +881,7 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 		(
 			state::StateApi::to_delegate(state),
 			state::ChildStateApi::to_delegate(child_state),
-			chain::ChainApi::to_delegate(chain),
+			// chain::ChainApi::to_delegate(chain),
 			maybe_offchain_rpc,
 			author::AuthorApi::to_delegate(author),
 			system::SystemApi::to_delegate(system),
