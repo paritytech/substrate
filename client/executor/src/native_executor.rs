@@ -35,12 +35,15 @@ use sp_core::{
 	NativeOrEncoded,
 	traits::{
 		CodeExecutor, Externalities, RuntimeCode, MissingHostFunctions,
-		RuntimeSpawnExt, RuntimeSpawn,
+		RuntimeSpawnExt, RuntimeSpawn, ReadRuntimeVersionExt,
 	},
 };
 use log::trace;
 use sp_wasm_interface::{HostFunctions, Function};
-use sc_executor_common::wasm_runtime::{WasmInstance, WasmModule, InvokeMethod};
+use sc_executor_common::{
+	wasm_runtime::{WasmInstance, WasmModule, InvokeMethod},
+	runtime_blob::RuntimeBlob,
+};
 use sp_externalities::ExternalitiesExt as _;
 use sp_tasks::new_async_externalities;
 
@@ -213,16 +216,22 @@ impl sp_core::traits::CallInWasm for WasmExecutor {
 				with_externalities_safe(
 					&mut **ext,
 					move || {
-						RuntimeInstanceSpawn::register_on_externalities(module.clone());
+						preregister_builtin_ext(module.clone());
 						instance.call_export(method, call_data)
 					}
 				)
 			}).map_err(|e| e.to_string())
 		} else {
+			use sp_maybe_compressed_blob::CODE_BLOB_BOMB_LIMIT;
+			let wasm_code = sp_maybe_compressed_blob::decompress(wasm_code, CODE_BLOB_BOMB_LIMIT)
+				.map_err(|e| format!("Decompression error: {:?}", e))?;
+			let runtime_blob = RuntimeBlob::new(&wasm_code)
+				.map_err(|e| format!("Failed to create runtime blob: {:?}", e))?;
+
 			let module = crate::wasm_runtime::create_wasm_runtime_with_code(
 				self.method,
 				self.default_heap_pages,
-				&wasm_code,
+				runtime_blob,
 				self.host_functions.to_vec(),
 				allow_missing_host_functions,
 				self.cache_path.as_deref(),
@@ -239,7 +248,7 @@ impl sp_core::traits::CallInWasm for WasmExecutor {
 			with_externalities_safe(
 				&mut **ext,
 				move || {
-					RuntimeInstanceSpawn::register_on_externalities(module.clone());
+					preregister_builtin_ext(module.clone());
 					instance.call_export(method, call_data)
 				}
 			)
@@ -436,29 +445,49 @@ impl RuntimeInstanceSpawn {
 		ext.extension::<sp_core::traits::TaskExecutorExt>()
 			.map(move |task_ext| Self::new(module, task_ext.clone()))
 	}
+}
 
-	/// Register new `RuntimeSpawnExt` on current externalities.
-	///
-	/// This extensions will spawn instances from provided `module`.
-	pub fn register_on_externalities(module: Arc<dyn WasmModule>) {
-		sp_externalities::with_externalities(
-			move |mut ext| {
-				if let Some(runtime_spawn) =
-					Self::with_externalities_and_module(module.clone(), ext)
-				{
-					if let Err(e) = ext.register_extension(
-						RuntimeSpawnExt(Box::new(runtime_spawn))
-					) {
-						trace!(
-							target: "executor",
-							"Failed to register `RuntimeSpawnExt` instance on externalities: {:?}",
-							e,
-						)
-					}
-				}
-			}
-		);
+struct ReadRuntimeVersion;
+
+impl sp_core::traits::ReadRuntimeVersion for ReadRuntimeVersion {
+	fn read_runtime_version(
+		&self,
+		wasm_code: &[u8],
+	) -> std::result::Result<Option<Vec<u8>>, String> {
+		let runtime_blob = RuntimeBlob::new(wasm_code)
+			.map_err(|e| format!("Failed to create runtime blob: {:?}", e))?;
+
+		crate::wasm_runtime::read_embedded_version(&runtime_blob)
+			.map_err(|e| format!("Failed to read the static section: {:?}", e))
+			.map(|v| v.map(|v| v.encode()))
 	}
+}
+
+/// Pre-registers the built-in extensions to the currently effective extenalities.
+///
+/// Meant to be called each time before calling into the runtime.
+fn preregister_builtin_ext(module: Arc<dyn WasmModule>) {
+	sp_externalities::with_externalities(move |mut ext| {
+		if let Some(runtime_spawn) =
+			RuntimeInstanceSpawn::with_externalities_and_module(module, ext)
+		{
+			if let Err(e) = ext.register_extension(RuntimeSpawnExt(Box::new(runtime_spawn))) {
+				trace!(
+					target: "executor",
+					"Failed to register `RuntimeSpawnExt` instance on externalities: {:?}",
+					e,
+				)
+			}
+		}
+
+		if let Err(e) = ext.register_extension(ReadRuntimeVersionExt::new(ReadRuntimeVersion)) {
+			trace!(
+				target: "executor",
+				"Failed to register `ReadRuntimeVersionExt` instance on externalities: {:?}",
+				e,
+			)
+		}
+	});
 }
 
 impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
@@ -506,7 +535,7 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 						with_externalities_safe(
 							&mut **ext,
 							move || {
-								RuntimeInstanceSpawn::register_on_externalities(module.clone());
+								preregister_builtin_ext(module.clone());
 								instance.call_export(method, data).map(NativeOrEncoded::Encoded)
 							}
 						)

@@ -174,6 +174,28 @@ impl CallInWasmExt {
 	}
 }
 
+/// A trait that allows reading version information from the binary.
+pub trait ReadRuntimeVersion: Send + Sync {
+	/// Reads the version information from the given wasm code and returns it, if present. If the
+	/// version information present, but is corrupted - returns an error.
+	///
+	/// Compressed wasm blobs are supported and will be decompressed if needed. If uncompression fails,
+	/// the error is returned.
+	fn read_runtime_version(&self, wasm_code: &[u8]) -> Result<Option<Vec<u8>>, String>;
+}
+
+sp_externalities::decl_extension! {
+	/// An extension that provides functionality to read version information from a given wasm blob.
+	pub struct ReadRuntimeVersionExt(Box<dyn ReadRuntimeVersion>);
+}
+
+impl ReadRuntimeVersionExt {
+	/// Creates a new instance of the extension given a version determinator instance.
+	pub fn new<T: ReadRuntimeVersion + 'static>(inner: T) -> Self {
+		Self(Box::new(inner))
+	}
+}
+
 sp_externalities::decl_extension! {
 	/// Task executor extension.
 	pub struct TaskExecutorExt(Box<dyn SpawnNamed>);

@@ -29,6 +29,7 @@ use sp_state_machine::TestExternalities as CoreTestExternalities;
 use sp_trie::{TrieConfiguration, trie_types::Layout};
 use sp_wasm_interface::HostFunctions as _;
 use sp_runtime::traits::BlakeTwo256;
+use sc_executor_common::runtime_blob::RuntimeBlob;
 use tracing_subscriber::layer::SubscriberExt;
 
 use crate::WasmExecutionMethod;
@@ -558,7 +559,7 @@ fn returns_mutable_static(wasm_method: WasmExecutionMethod) {
 	let runtime = crate::wasm_runtime::create_wasm_runtime_with_code(
 		wasm_method,
 		1024,
-		&wasm_binary_unwrap()[..],
+		RuntimeBlob::new(&wasm_binary_unwrap()[..]).unwrap(),
 		HostFunctions::host_functions(),
 		true,
 		None,
@@ -592,7 +593,7 @@ fn restoration_of_globals(wasm_method: WasmExecutionMethod) {
 	let runtime = crate::wasm_runtime::create_wasm_runtime_with_code(
 		wasm_method,
 		REQUIRED_MEMORY_PAGES,
-		&wasm_binary_unwrap()[..],
+		RuntimeBlob::new(&wasm_binary_unwrap()[..]).unwrap(),
 		HostFunctions::host_functions(),
 		true,
 		None,
@@ -613,7 +614,7 @@ fn heap_is_reset_between_calls(wasm_method: WasmExecutionMethod) {
 	let runtime = crate::wasm_runtime::create_wasm_runtime_with_code(
 		wasm_method,
 		1024,
-		&wasm_binary_unwrap()[..],
+		RuntimeBlob::new(&wasm_binary_unwrap()[..]).unwrap(),
 		HostFunctions::host_functions(),
 		true,
 		None,

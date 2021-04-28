@@ -456,11 +456,31 @@ pub trait Misc {
 	///
 	/// # Performance
 	///
-	/// Calling this function is very expensive and should only be done very occasionally.
-	/// For getting the runtime version, it requires instantiating the wasm blob and calling a
-	/// function in this blob.
+	/// This function may be very expensive to call depending on the wasm binary. It may be
+	/// relatively cheap if the wasm binary contains version information. In that case, uncompression
+	/// of the wasm blob is the dominating factor.
+	///
+	/// If the wasm binary does not have the version information attached, then a legacy mechanism
+	/// may be involved. This means that a runtime call will be performed to query the version.
+	///
+	/// Calling into the runtime may be incredible expensive and should be approached with care.
 	fn runtime_version(&mut self, wasm: &[u8]) -> Option<Vec<u8>> {
-		// Create some dummy externalities, `Core_version` should not write data anyway.
+		use sp_core::traits::ReadRuntimeVersionExt;
+
+		let uncompressed_wasm = sp_maybe_compressed_blob::decompress(
+			wasm,
+			sp_maybe_compressed_blob::CODE_BLOB_BOMB_LIMIT,
+		)
+		.ok()?;
+
+		if let Some(read_version_ext) = self.extension::<ReadRuntimeVersionExt>() {
+			if let Ok(Some(opaque_version)) =
+				read_version_ext.read_runtime_version(&uncompressed_wasm)
+			{
+				return Some(opaque_version);
+			}
+		}
+
 		let mut ext = sp_state_machine::BasicExternalities::default();
 
 		self.extension::<CallInWasmExt>()
