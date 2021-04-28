@@ -16,7 +16,7 @@
 
 //! Utilities for tracing block execution
 
-use std::{collections::HashMap, sync::{Arc, atomic::{AtomicU64, Ordering}}};
+use std::{result, collections::HashMap, sync::{Arc, atomic::{AtomicU64, Ordering}}};
 use std::time::Instant;
 
 use parking_lot::Mutex;
@@ -58,6 +58,22 @@ const TRACE_TARGET: &str = "block_trace";
 const DEFAULT_STORAGE_KEYS: &str = "";
 // The name of a field required for all events.
 const REQUIRED_EVENT_FIELD: &str  = "method";
+
+/// Tracing Block Result type alias
+pub type Result<T> = result::Result<T, Error>;
+
+/// Tracing Block error
+#[derive(Debug, thiserror::Error)]
+#[allow(missing_docs)]
+#[non_exhaustive]
+pub enum Error {
+	#[error("Invalid block Id: {0}")]
+	InvalidBlockId(#[from] sp_blockchain::Error),
+	#[error("Missing block component: {0}")]
+	MissingBlockComponent(String),
+	#[error("Dispatch error: {0}")]
+	Dispatch(String)
+}
 
 struct BlockSubscriber {
 	targets: Vec<(String, Level)>,
@@ -194,16 +210,16 @@ impl<Block, Client> BlockExecutor<Block, Client>
 	/// Execute block, record all spans and events belonging to `Self::targets`
 	/// and filter out events which do not have keys starting with one of the
 	/// prefixes in `Self::storage_keys`.
-	pub fn trace_block(&self) -> Result<TraceBlockResponse, String> {
+	pub fn trace_block(&self) -> Result<TraceBlockResponse> {
 		tracing::debug!(target: "state_tracing", "Tracing block: {}", self.block);
 		// Prepare the block
 		let id = BlockId::Hash(self.block);
 		let mut header = self.client.header(id)
-			.map_err(|e| format!("Invalid block Id: {:?}", e))?
-			.ok_or_else(|| "Header not found".to_string())?;
+			.map_err(|e| Error::InvalidBlockId(e))?
+			.ok_or_else(|| Error::MissingBlockComponent("Header not found".to_string()))?;
 		let extrinsics = self.client.block_body(&id)
-			.map_err(|e| format!("Invalid block Id: {:?}", e))?
-			.ok_or_else(|| "Extrinsics not found".to_string())?;
+			.map_err(|e| Error::InvalidBlockId(e))?
+			.ok_or_else(|| Error::MissingBlockComponent("Extrinsics not found".to_string()))?;
 		tracing::debug!(target: "state_tracing", "Found {} extrinsics", extrinsics.len());
 		let parent_hash = *header.parent_hash();
 		let parent_id = BlockId::Hash(parent_hash);
@@ -235,12 +251,14 @@ impl<Block, Client> BlockExecutor<Block, Client>
 				let _enter = span.enter();
 				self.client.runtime_api().execute_block(&parent_id, block)
 			}) {
-				return Err(format!("Error executing block: {:?}", e));
+				return Err(Error::Dispatch("Failed to dispatch traces and execute block".to_string()));
 			}
 		}
 
 		let block_subscriber = dispatch.downcast_ref::<BlockSubscriber>()
-			.ok_or("Cannot downcast Dispatch to BlockSubscriber after tracing block")?;
+			.ok_or(Error::Dispatch(
+				"Cannot downcast Dispatch to BlockSubscriber after tracing block".to_string()
+			))?;
 		let spans: Vec<_> = block_subscriber.spans
 			.lock()
 			.drain()

@@ -543,7 +543,7 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 		Box::new(result(
 			sc_tracing::block::BlockExecutor::new(self.client.clone(), block, targets, storage_keys)
 				.trace_block()
-				.map_err(|e| invalid_block::<Block>(block, None, e.to_owned()))
+				.map_err(|e| invalid_block::<Block>(block, None, e.to_string()))
 		))
 	}
 }
