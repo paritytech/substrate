@@ -190,7 +190,7 @@ pub trait StateApi<Hash> {
 	/// The filtering of spans and events takes place after they are all collected; so while filters
 	/// do not reduce time for actual block re-execution, they reduce the response payload size.
 	///
-	/// Note: storage events primarily come from _primitives/state-machine/src/ext.rs_).
+	/// Note: storage events primarily come from _primitives/state-machine/src/ext.rs_.
 	/// The default filters can be overridden, see the [params section](#params) for details.
 	///
 	/// ### `curl` example
@@ -216,7 +216,7 @@ pub trait StateApi<Hash> {
 	/// 	(no `0x` prefix) storage keys. If an empty string is specified no events will
 	/// 	be filtered out. If anything other than an empty string is specified, events
 	/// 	will be filtered by storage key (so non-storage events will **not** show up).
-	/// 	You can specify any degree of a storage key prefix (i.e. if a specified storage
+	/// 	You can specify any length of a storage key prefix (i.e. if a specified storage
 	/// 	key is in the beginning of an events storage key it is considered a match).
 	/// 	Example: for balance tracking on Polkadot & Kusama you would likely want
 	///		to track changes to account balances with the frame_system::Account storage item,
