@@ -297,6 +297,7 @@ pub fn new_full_base(
 			select_chain,
 			env: proposer,
 			block_import,
+			link: network.clone(),
 			sync_oracle: network.clone(),
 			inherent_data_providers: inherent_data_providers.clone(),
 			force_authoring,
