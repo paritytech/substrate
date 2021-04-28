@@ -57,6 +57,13 @@ fn should_submit_signed_transaction_on_chain() {
 			sent: true,
 			..Default::default()
 		});
+		state.expect_request(testing::PendingRequest {
+			method: "GET".into(),
+			uri: "https://node-0.ddc.stage.cere.network/api/rest/partitions".into(),
+			response: Some(include_bytes!("./test_data/ddc_partitions.json").to_vec()),
+			sent: true,
+			..Default::default()
+		});
 	}
 
 	t.execute_with(|| {
