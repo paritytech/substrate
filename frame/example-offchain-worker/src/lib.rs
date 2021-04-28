@@ -19,7 +19,11 @@ use frame_support::{
 };
 use sp_core::crypto::KeyTypeId;
 use sp_runtime::{
-	offchain::{http, Duration},
+	offchain::{
+		http,
+		Duration,
+		storage::StorageValueRef
+	},
 	traits::StaticLookup,
 };
 use codec::{Encode, Decode};
@@ -34,6 +38,7 @@ use alt_serde::{Deserialize, Deserializer};
 // To change the address, see tests/mod.rs decode_contract_address().
 pub const METRICS_CONTRACT_ADDR: &str = "5Ch5xtvoFF3Muu91WkHCY4mhTDTCyYS2TmBL1zKiBXrYbiZv";
 pub const METRICS_CONTRACT_ID: [u8; 32] = [27, 191, 65, 45, 0, 189, 12, 234, 31, 196, 9, 143, 196, 27, 157, 170, 92, 57, 127, 122, 70, 152, 19, 223, 235, 21, 170, 26, 249, 130, 98, 114];
+pub const BLOCK_INTERVAL: u32 = 10;
 
 
 // use serde_json::{Value};
@@ -124,6 +129,13 @@ decl_module! {
 		fn offchain_worker(block_number: T::BlockNumber) {
 			debug::info!("[OCW] Hello World from offchain workers!");
 
+			let check_result = Self::check_if_should_proceed(block_number);
+
+			if let Err(e) = check_result {
+				debug::info!("{:?}", e);
+				return; // Skip the execution at this block
+			}
+
 			let res = Self::fetch_ddc_data_and_send_to_sc(block_number);
 
 			// TODO: abort on error.
@@ -149,6 +161,22 @@ decl_storage! {
 }
 
 impl<T: Trait> Module<T> {
+	fn check_if_should_proceed(_block_number: T::BlockNumber) -> Result<(), &'static str> {
+		let s_next_at = StorageValueRef::persistent(b"example-offchain-worker::next-at"); // TODO: Rename after OCW renamed
+
+		if let Some(Some(next_at)) = s_next_at.get::<T::BlockNumber>() {
+			if next_at > _block_number {
+				return Err("[OCW] Too early to execute OCW. Skipping");
+			}
+		}
+
+		let current_block = <frame_system::Module<T>>::block_number();
+
+		s_next_at.set(&(current_block + T::BlockInterval::get()));
+
+		Ok(())
+	}
+
 
 	fn send_to_sc_mock() -> Result<(), &'static str> {
 
@@ -333,4 +361,6 @@ pub trait Trait: frame_system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 	/// The overarching dispatch call type.
 	type Call: From<Call<Self>>;
+
+	type BlockInterval: Get<Self::BlockNumber>;
 }

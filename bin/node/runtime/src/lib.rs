@@ -951,10 +951,13 @@ parameter_types! {
 	pub MetricsContractId: AccountId = {
 		AccountId::from(pallet_example_offchain_worker::METRICS_CONTRACT_ID)
 	};
+
+	pub const OcwBlockInterval: u32 = pallet_example_offchain_worker::BLOCK_INTERVAL;
 }
 
 impl pallet_example_offchain_worker::Trait for Runtime {
 	type ContractId = MetricsContractId;
+	type BlockInterval = OcwBlockInterval;
 
 	type CT = Self;
 	type CST = Self;
