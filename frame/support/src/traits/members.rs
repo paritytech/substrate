@@ -27,7 +27,7 @@ pub trait Contains<T> {
 
 /// A `Contains` implementation which always returns `true`.
 pub struct All<T>(PhantomData<T>);
-impl<T: Ord> Contains<T> for All<T> {
+impl Contains<T> for All<T> {
 	fn contains(_: &T) -> bool { true }
 }
 
