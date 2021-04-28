@@ -362,6 +362,7 @@ impl<Block, Client> StateApi<Block::Hash> for State<Block, Client>
 	/// and capture all state changes.
 	///
 	/// Note: requires the node to run with `--rpc-methods=Unsafe`.
+	/// Note: requires runtimes compiled with wasm tracing support, `--features with-tracing`.
 	fn trace_block(
 		&self, block: Block::Hash,
 		targets: Option<String>,
