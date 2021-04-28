@@ -4339,6 +4339,7 @@ dependencies = [
  "sp-std",
  "sp-transaction-pool",
  "sp-version",
+ "sp-version-proc-macro",
  "static_assertions",
  "substrate-wasm-builder",
 ]
@@ -4413,6 +4414,7 @@ dependencies = [
  "sp-std",
  "sp-transaction-pool",
  "sp-version",
+ "sp-version-proc-macro",
  "substrate-wasm-builder",
 ]
 
@@ -9249,6 +9251,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp-version-proc-macro"
+version = "3.0.0"
+dependencies = [
+ "parity-scale-codec",
+ "proc-macro-crate 1.0.0",
+ "proc-macro2",
+ "quote",
+ "sp-version",
+ "syn",
+]
+
+[[package]]
 name = "sp-wasm-interface"
 version = "3.0.0"
 dependencies = [
@@ -9541,6 +9555,7 @@ dependencies = [
  "sp-transaction-pool",
  "sp-trie",
  "sp-version",
+ "sp-version-proc-macro",
  "substrate-test-runtime-client",
  "substrate-wasm-builder",
  "trie-db",

@@ -35,6 +35,7 @@ sp-session = { version = "3.0.0", default-features = false, path = "../../../pri
 sp-std = { version = "3.0.0", default-features = false, path = "../../../primitives/std" }
 sp-transaction-pool = { version = "3.0.0", default-features = false, path = "../../../primitives/transaction-pool" }
 sp-version = { version = "3.0.0", default-features = false, path = "../../../primitives/version" }
+sp-version-proc-macro = { version = "3.0.0", path = "../../../primitives/version/proc-macro" }
 
 # Used for the node template's RPCs
 frame-system-rpc-runtime-api = { version = "3.0.0", default-features = false, path = "../../../frame/system/rpc/runtime-api/" }
