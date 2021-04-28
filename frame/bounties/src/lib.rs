@@ -208,6 +208,165 @@ decl_storage! {
 	}
 }
 
+#[cfg(any(test, feature = "runtime-benchmarks"))]
+mod benchmark_fill {
+	//! This module encapsulates all the support code we'd need to implement this for real.
+	//! However, a real implementation would likely move substantial portions into
+	//! `frame-benchmarking`.
+
+	use crate::{
+		BalanceOf, Bounties, Bounty, BountyApprovals, BountyCount, BountyDescriptions, BountyIndex,
+		BountyStatus, Config,
+	};
+	use rand::Rng;
+
+	/// The Randomize trait is implemented for types which can construct a well-formed instance
+	/// from nothing more than a random number generator.
+	///
+	/// It's very similar in principle to the `arbitrary::Arbitrary` trait, but there are some key
+	/// differences:
+	///
+	/// 1. Extensible items such as `BoundedVec` always fill themselves with the maximum count of
+	///    items.
+	/// 2. Extensible items such as `StorageMap` fill themselves with an implementation-defined
+	///    count of items.
+	/// 3. It is not necessary or desirable to support [case
+	///    shrinking](https://altsysrq.github.io/proptest-book/proptest/tutorial/shrinking-basics.html),
+	///    which simplifies the API considerably. It can be implemented by pulling values on demand
+	///    from the RNG, as opposed to from a fixed-length slice and failing when insufficient data
+	///    is provided.
+	/// 4. `random` returns `Option<Self>`, not `Self`. This makes it much easier to implement for
+	///    non-instantiable types such as `StorageMap`.
+	///
+	/// It's distinct from the `rand::Distribution` trait in a few key ways:
+	///
+	/// 1. Simpler to implement; no guarantees of a particular distribution are necessary.
+	/// 2. Intentionally not implemented for types such as primitive `Vec<_>`.
+	pub trait Randomize: Sized {
+		fn random<R: Rng>(rng: &mut R) -> Self;
+	}
+
+	// Implementations of primitives will be added by (a nicer) macro wherever the Randomize trait
+	// is actually defined. Implementations for types like `BoundedVec` and `StorageMap` will be
+	// added in the crates in which they are defined.
+
+	macro_rules! impl_randomize_for_primitive {
+		($t:ty) => {
+			impl Randomize for $t {
+																			fn random<R: Rng>(rng: &mut R) -> Self {
+																				rng.gen()
+																			}
+																		}
+		};
+	}
+
+	impl_randomize_for_primitive!(u8);
+	impl_randomize_for_primitive!(u16);
+	impl_randomize_for_primitive!(u32);
+	impl_randomize_for_primitive!(u64);
+	impl_randomize_for_primitive!(u128);
+	impl_randomize_for_primitive!(i8);
+	impl_randomize_for_primitive!(i16);
+	impl_randomize_for_primitive!(i32);
+	impl_randomize_for_primitive!(i64);
+	impl_randomize_for_primitive!(i128);
+
+	// We'll need to provide a derive macro for user-defined types like these.
+
+	impl<AccountId, BlockNumber> Randomize for BountyStatus<AccountId, BlockNumber>
+	where
+		AccountId: Randomize,
+		BlockNumber: Randomize,
+	{
+		fn random<R: Rng>(rng: &mut R) -> Self {
+			// Obviously a real implementation would pick a random variant, but this is just for
+			// demo purposes.
+			// https://xkcd.com/221/
+			Self::Active { curator: AccountId::random(rng), update_due: BlockNumber::random(rng) }
+		}
+	}
+
+	impl<AccountId, Balance, BlockNumber> Randomize for Bounty<AccountId, Balance, BlockNumber>
+	where
+		AccountId: Randomize,
+		Balance: Randomize,
+		BlockNumber: Randomize,
+	{
+		fn random<R: Rng>(rng: &mut R) -> Self {
+			Self {
+				proposer: AccountId::random(rng),
+				value: Balance::random(rng),
+				fee: Balance::random(rng),
+				curator_deposit: Balance::random(rng),
+				bond: Balance::random(rng),
+				status: BountyStatus::random(rng),
+			}
+		}
+	}
+
+	// We _won't_ implement this for a real vector, but it makes life simpler for this
+	// demonstration. LIMIT here stands in for `BoundedVec::LIMIT`.
+	const LIMIT: usize = 20;
+	impl<T> Randomize for Vec<T>
+	where
+		T: Randomize,
+	{
+		fn random<R: Rng>(rng: &mut R) -> Self {
+			let mut v = Vec::with_capacity(LIMIT);
+			for _ in 0..LIMIT {
+				v.push(T::random(rng));
+			}
+			v
+		}
+	}
+
+	// The StorageMap implementation always inserts 300,000 items, on the basis that this should be
+	// a reasonable quantity for miscellaneous "Items" which would get put in a storagemap in a real
+	// blockchain. This could use some more thought, and maybe a different api.
+	//
+	// Still, the critical element is that generating all this data happens _once_, not once per
+	// iteration of the benchmarker. I'll have to check to be sure, but I believe that the
+	// benchmarker already takes advantage of the layered nature of storage, and just clears out all
+	// edits made per iteration. As long as this data is committed before the bench run starts, it
+	// will be preserved.
+
+	// now we come to the heart of the implementation, the part most likely to be implemented by the
+	// benchmarks macro. This function just fills all storage items with random data. Once filled
+	// in this way, it should be easy to benchmark the PoV complexity for various transactions and
+	// get plausible results.
+	pub fn fill_storage<R, T>(rng: &mut R)
+	where
+		R: Rng,
+		T: Config,
+		T::AccountId: Randomize,
+		BalanceOf<T>: Randomize,
+		T::BlockNumber: Randomize,
+	{
+		use crate::sp_api_hidden_includes_decl_storage::hidden_include::{StorageMap, StorageValue};
+
+		let value = BountyIndex::random(rng);
+		<BountyCount as StorageValue<BountyIndex>>::put(value);
+		for _ in 0..300_000 {
+			let key = BountyIndex::random(rng);
+			let value = Bounty::random(rng);
+			<Bounties<T> as StorageMap<
+				BountyIndex,
+				Bounty<T::AccountId, BalanceOf<T>, T::BlockNumber>,
+			>>::insert(key, value);
+		}
+		for _ in 0..300_000 {
+			let key = BountyIndex::random(rng);
+			let value = Vec::<u8>::random(rng);
+			<BountyDescriptions as StorageMap<BountyIndex, Vec<u8>>>::insert(key, value);
+		}
+		let value = Vec::<BountyIndex>::random(rng);
+		<BountyApprovals as StorageValue<Vec<BountyIndex>>>::put(value);
+	}
+}
+
+#[cfg(any(test, feature = "runtime-benchmarks"))]
+pub use benchmark_fill::fill_storage;
+
 decl_event!(
 	pub enum Event<T>
 	where

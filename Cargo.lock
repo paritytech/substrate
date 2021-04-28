@@ -4751,6 +4751,7 @@ dependencies = [
  "pallet-balances",
  "pallet-treasury",
  "parity-scale-codec",
+ "rand 0.8.3",
  "sp-core",
  "sp-io",
  "sp-runtime",
