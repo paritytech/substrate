@@ -154,7 +154,7 @@ pub trait StateApi<Hash> {
 	///
 	/// - Fully synced archive node.
 	/// - [Tracing enabled WASM runtimes](#creating-tracing-enabled-wasm-runtimes) for all runtime versions
-	/// that tracing is desired.
+	/// for which tracing is desired.
 	///
 	/// ## Node recommendations
 	///
@@ -173,8 +173,8 @@ pub trait StateApi<Hash> {
 	/// - Tracing-enabled WASM runtime should be found in `./target/release/wbuild/{{chain}}-runtime`
 	/// and be called something like `{{your_chain}}_runtime.compact.wasm`. This can be
 	/// renamed/modified however you like, as long as it retains the `.wasm` extension.
-	/// - Run the node with overrides by placing this folder with all your other runtimes,
-	/// and passing the path of this folder to your chain.
+	/// - Run the node with the wasm blob overrides by placing them in a folder with all your runtimes,
+	/// and passing the path of this folder to your chain, e.g.:
 	/// 	- `./target/release/polkadot --wasm-runtime-overrides /home/user/my-custom-wasm-runtimes`
 	///
 	/// [Source.](github.com/paritytech/substrate-archive/wiki)
@@ -186,17 +186,17 @@ pub trait StateApi<Hash> {
 	/// do not reduce time for actual block re-execution, they reduce the response payload size.
 	///
 	/// Note: storage events primarily come from _primitives/state-machine/src/ext.rs_).
-	/// The default filters can be overridden, see details in the [params section](#params).
+	/// The default filters can be overridden, see the [params section](#params) for details.
 	///
 	/// ### Params
 	///
 	/// - `block_hash` (param index 0): Hash of the block to trace.
 	/// - `targets` (param index 1): String of comma separated (no spaces) targets. Specified
-	/// 	targets matched with trace targets by prefix (i.e if a target is in the beginning
+	/// 	targets match with trace targets by prefix (i.e if a target is in the beginning
 	/// 	of a trace target it is considered a match). If an empty string is specified no
-	/// 	targets will be filtered out. The majority of targets correspond to module names,
+	/// 	targets will be filtered out. The majority of targets correspond to Rust module names,
 	/// 	and the ones that do not are typically "hardcoded" into span or event location
-	/// 	somewhere in Substrate source. ("Non-hardcoded" targets typically come from frame
+	/// 	somewhere in the Substrate source code. ("Non-hardcoded" targets typically come from frame
 	/// 	support macros.)
 	/// - `storage_keys` (param index 2): String of comma separated (no spaces) hex encoded
 	/// 	(no `0x` prefix) storage keys. If an empty string is specified no events will

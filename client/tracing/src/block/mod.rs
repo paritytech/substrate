@@ -84,9 +84,7 @@ struct BlockSubscriber {
 }
 
 impl BlockSubscriber {
-	fn new(
-		targets: &str
-	) -> Self {
+	fn new(targets: &str) -> Self {
 		let next_id = AtomicU64::new(1);
 		let mut targets: Vec<_> = targets
 			.split(',')
@@ -273,8 +271,8 @@ impl<Block, Client> BlockExecutor<Block, Client>
 			.collect();
 		tracing::debug!(target: "state_tracing", "Captured {} spans and {} events", spans.len(), events.len());
 
-		let aprox_payload_size = BASE_PAYLOAD + events.len() * AVG_EVENT + spans.len() * AVG_SPAN;
-		let response = if aprox_payload_size > MAX_PAYLOAD {
+		let approx_payload_size = BASE_PAYLOAD + events.len() * AVG_EVENT + spans.len() * AVG_SPAN;
+		let response = if approx_payload_size > MAX_PAYLOAD {
 				TraceBlockResponse::TraceError(TraceError {
 					error:
 						"Payload likely exceeds max payload size of RPC server.".to_string()
@@ -300,15 +298,15 @@ fn event_key_filter(event: &TraceEvent, storage_keys: &str) -> bool {
 		.unwrap_or(false)
 }
 
-/// Filter out spans that do not meet our targets and if the span is from WASM
-/// update its `name` and `target` fields to the WASM values for those fields.
+/// Filter out spans that do not match our targets and if the span is from WASM update its `name`
+/// and `target` fields to the WASM values for those fields.
 //
-// Due the original `tracing` crate requiring trace metadata to be static,
-// the workaround for substrate's WASM tracing wrappers is to put the `name`
-// and `target` in the `values` map (normally they would be in the static metadata.)
-// Here, if a special WASM name or target key is found in the `values` we remove
-// it and put the key value pair in the span's metadata, making it consistent
-// with spans that come from native.
+// The `tracing` crate requires trace metadata to be static. This does not work for wasm code in
+// substrate, as it is regularly updated with new code from on-chain events. The workaround for this
+// is for substrate's WASM tracing wrappers to put the `name` and `target` data in the `values` map
+// (normally they would be in the static metadata assembled at compile time). Here, if a special
+// WASM `name` or `target` key is found in the `values` we remove it and put the key value pair in
+// the span's metadata, making it consistent with spans that come from native code.
 fn patch_and_filter(mut span: SpanDatum, targets: &str) -> Option<Span> {
 	if span.name == WASM_TRACE_IDENTIFIER {
 		span.values.bool_values.insert("wasm".to_owned(), true);
