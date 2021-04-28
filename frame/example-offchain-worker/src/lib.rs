@@ -23,7 +23,7 @@ use sp_runtime::{
 	traits::StaticLookup,
 };
 use codec::{Encode, Decode};
-use sp_std::vec::Vec;
+use sp_std::{vec::Vec, str::from_utf8};
 use pallet_contracts;
 
 // use lite_json::json::JsonValue;
@@ -45,12 +45,9 @@ pub const METRICS_CONTRACT_ID: [u8; 32] = [27, 191, 65, 45, 0, 189, 12, 234, 31,
 #[derive(Debug)]
 #[allow(non_snake_case)]
 struct NodeInfo {
-	httpAddr: String,
-}
-
-/* TODO: remove?
 	#[serde(deserialize_with = "de_string_to_bytes")]
-	id: Vec<u8>,
+	httpAddr: Vec<u8>,
+}
 
 pub fn de_string_to_bytes<'de, D>(de: D) -> Result<Vec<u8>, D::Error>
 	where
@@ -59,7 +56,6 @@ pub fn de_string_to_bytes<'de, D>(de: D) -> Result<Vec<u8>, D::Error>
 	let s: &str = Deserialize::deserialize(de)?;
 	Ok(s.as_bytes().to_vec())
 }
-*/
 
 
 /// Defines application identifier for crypto keys of this module.
@@ -214,7 +210,9 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn fetch_from_node(one_node: &NodeInfo) -> Result<Vec<u8>, http::Error> {
-		let node_url = one_node.httpAddr.clone() + HTTP_METRICS;
+		let mut node_url = one_node.httpAddr.clone();
+		node_url.extend_from_slice(HTTP_METRICS.as_bytes());
+		let node_url = from_utf8(&node_url).unwrap();
 	
 		debug::info!("sending request to: {:?}", node_url);
 
@@ -241,7 +239,10 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn fetch_ddc_network_topology() -> Result<(), http::Error> {
-		let url = T::DdcUrl::get() + HTTP_NODES;
+		let mut url = T::DdcUrl::get();
+		url.extend_from_slice(HTTP_NODES.as_bytes());
+		let url = from_utf8(&url).unwrap();
+
 		let request = http::Request::get(&url);
 
 		let deadline = sp_io::offchain::timestamp().add(Duration::from_millis(5_000));
@@ -316,7 +317,7 @@ decl_event!(
 
 pub trait Trait: frame_system::Trait {
 	type ContractId: Get<<<Self::CT as frame_system::Trait>::Lookup as StaticLookup>::Source>;
-	type DdcUrl: Get<String>;
+	type DdcUrl: Get<Vec<u8>>;
 
 	type CT: pallet_contracts::Trait;
 	type CST: CreateSignedTransaction<pallet_contracts::Call<Self::CT>>;

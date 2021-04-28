@@ -226,7 +226,7 @@ parameter_types! {
 	pub MetricsContractId: AccountId = {
 		CURRENT_METRICS_CONTRACT_ID.with(|v| *v.borrow())
 	};
-	pub DdcUrl: String = "https://TEST_DDC".to_string();
+	pub DdcUrl: Vec<u8> = "https://TEST_DDC".as_bytes().to_vec();
 }
 
 impl Trait for Test {
