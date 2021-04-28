@@ -23,8 +23,8 @@ use codec::{FullCodec, FullEncode, Encode, EncodeLike, Decode};
 use crate::{
 	hash::{Twox128, StorageHasher, ReversibleStorageHasher},
 	storage::types::{
-		HasKeyPrefix, HasReversibleKeyPrefix, KeyGenerator, ReversibleKeyGenerator,
-		TupleToEncodedIter,
+		EncodeLikeTuple, HasKeyPrefix, HasReversibleKeyPrefix, KeyGenerator,
+		ReversibleKeyGenerator, TupleToEncodedIter,
 	},
 	traits::Get,
 };
@@ -557,34 +557,34 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 	type Query;
 
 	/// Get the storage key used to fetch a value corresponding to a specific key.
-	fn hashed_key_for<KArg: EncodeLike<K::KArg> + TupleToEncodedIter>(key: KArg) -> Vec<u8>;
+	fn hashed_key_for<KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter>(key: KArg) -> Vec<u8>;
 
 	/// Does the value (explicitly) exist in storage?
-	fn contains_key<KArg: EncodeLike<K::KArg> + TupleToEncodedIter>(key: KArg) -> bool;
+	fn contains_key<KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter>(key: KArg) -> bool;
 
 	/// Load the value associated with the given key from the map.
-	fn get<KArg: EncodeLike<K::KArg> + TupleToEncodedIter>(key: KArg) -> Self::Query;
+	fn get<KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter>(key: KArg) -> Self::Query;
 
 	/// Try to get the value for the given key from the map.
 	///
 	/// Returns `Ok` if it exists, `Err` if not.
-	fn try_get<KArg: EncodeLike<K::KArg> + TupleToEncodedIter>(key: KArg) -> Result<V, ()>;
+	fn try_get<KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter>(key: KArg) -> Result<V, ()>;
 
 	/// Swap the values of two keys.
 	fn swap<KOther, KArg1, KArg2>(key1: KArg1, key2: KArg2)
 	where
 		KOther: KeyGenerator,
-		KArg1: EncodeLike<K::KArg> + TupleToEncodedIter,
-		KArg2: EncodeLike<KOther::KArg> + TupleToEncodedIter;
+		KArg1: EncodeLikeTuple<K::KArg> + TupleToEncodedIter,
+		KArg2: EncodeLikeTuple<KOther::KArg> + TupleToEncodedIter;
 
 	/// Store a value to be associated with the given key from the map.
 	fn insert<KArg, VArg>(key: KArg, val: VArg)
 	where
-		KArg: EncodeLike<K::KArg> + TupleToEncodedIter,
+		KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter,
 		VArg: EncodeLike<V>;
 
 	/// Remove the value under a key.
-	fn remove<KArg: EncodeLike<K::KArg> + TupleToEncodedIter>(key: KArg);
+	fn remove<KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter>(key: KArg);
 
 	/// Remove all values under the partial prefix key.
 	fn remove_prefix<KP>(partial_key: KP) where K: HasKeyPrefix<KP>;
@@ -595,13 +595,13 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 	/// Mutate the value under a key.
 	fn mutate<KArg, R, F>(key: KArg, f: F) -> R
 	where
-		KArg: EncodeLike<K::KArg> + TupleToEncodedIter,
+		KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter,
 		F: FnOnce(&mut Self::Query) -> R;
 
 	/// Mutate the item, only if an `Ok` value is returned.
 	fn try_mutate<KArg, R, E, F>(key: KArg, f: F) -> Result<R, E>
 	where
-		KArg: EncodeLike<K::KArg> + TupleToEncodedIter,
+		KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter,
 		F: FnOnce(&mut Self::Query) -> Result<R, E>;
 
 	/// Mutate the value under a key.
@@ -609,17 +609,17 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 	/// Deletes the item if mutated to a `None`.
 	fn mutate_exists<KArg, R, F>(key: KArg, f: F) -> R
 	where
-		KArg: EncodeLike<K::KArg> + TupleToEncodedIter,
+		KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter,
 		F: FnOnce(&mut Option<V>) -> R;
 
 	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
 	fn try_mutate_exists<KArg, R, E, F>(key: KArg, f: F) -> Result<R, E>
 	where
-		KArg: EncodeLike<K::KArg> + TupleToEncodedIter,
+		KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter,
 		F: FnOnce(&mut Option<V>) -> Result<R, E>;
 
 	/// Take the value under a key.
-	fn take<KArg: EncodeLike<K::KArg> + TupleToEncodedIter>(key: KArg) -> Self::Query;
+	fn take<KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter>(key: KArg) -> Self::Query;
 
 	/// Append the given items to the value in the storage.
 	///
@@ -632,7 +632,7 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 	/// on overwrite.
 	fn append<Item, EncodeLikeItem, KArg>(key: KArg, item: EncodeLikeItem)
 	where
-		KArg: EncodeLike<K::KArg> + TupleToEncodedIter,
+		KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
 		V: StorageAppend<Item>;
@@ -649,7 +649,7 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 	///
 	/// `None` does not mean that `get()` does not return a value. The default value is completly
 	/// ignored by this function.
-	fn decode_len<KArg: EncodeLike<K::KArg> + TupleToEncodedIter>(key: KArg) -> Option<usize>
+	fn decode_len<KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter>(key: KArg) -> Option<usize>
 	where
 		V: StorageDecodeLength,
 	{
@@ -661,7 +661,7 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 	/// If the key doesn't exist, then it's a no-op. If it does, then it returns its value.
 	fn migrate_keys<KArg>(key: KArg, hash_fns: K::HArg) -> Option<V>
 	where
-		KArg: EncodeLike<K::KArg> + TupleToEncodedIter;
+		KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter;
 }
 
 /// Iterate over a prefix and decode raw_key and raw_value into `T`.

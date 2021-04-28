@@ -77,7 +77,7 @@ pub fn impl_getters(def: &DeclStorageDefExt) -> TokenStream {
 				quote!{
 					pub fn #get_fn<KArg>(key: KArg) -> #value
 					where
-						KArg: #scrate::codec::EncodeLike<
+						KArg: #scrate::storage::types::EncodeLikeTuple<
 							<#keygen as #scrate::storage::types::KeyGenerator>::KArg
 						>
 							+ #scrate::storage::types::TupleToEncodedIter,

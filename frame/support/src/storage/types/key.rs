@@ -40,8 +40,8 @@ pub trait KeyGenerator {
 	type HashFn: FnOnce(&[u8]) -> Vec<u8>;
 	type HArg;
 
-	fn final_key<KArg: EncodeLike<Self::KArg> + TupleToEncodedIter>(key: KArg) -> Vec<u8>;
-	fn migrate_key<KArg: EncodeLike<Self::KArg> + TupleToEncodedIter>(
+	fn final_key<KArg: EncodeLikeTuple<Self::KArg> + TupleToEncodedIter>(key: KArg) -> Vec<u8>;
+	fn migrate_key<KArg: EncodeLikeTuple<Self::KArg> + TupleToEncodedIter>(
 		key: &KArg,
 		hash_fns: Self::HArg,
 	) -> Vec<u8>;
@@ -58,7 +58,7 @@ impl<H: StorageHasher, K: FullCodec> KeyGenerator for Key<H, K> {
 	type HashFn = Box<dyn FnOnce(&[u8]) -> Vec<u8>>;
 	type HArg = (Self::HashFn,);
 
-	fn final_key<KArg: EncodeLike<Self::KArg> + TupleToEncodedIter>(key: KArg) -> Vec<u8> {
+	fn final_key<KArg: EncodeLikeTuple<Self::KArg> + TupleToEncodedIter>(key: KArg) -> Vec<u8> {
 		H::hash(
 			&key.to_encoded_iter()
 				.next()
@@ -68,7 +68,7 @@ impl<H: StorageHasher, K: FullCodec> KeyGenerator for Key<H, K> {
 		.to_vec()
 	}
 
-	fn migrate_key<KArg: EncodeLike<Self::KArg> + TupleToEncodedIter>(
+	fn migrate_key<KArg: EncodeLikeTuple<Self::KArg> + TupleToEncodedIter>(
 		key: &KArg,
 		hash_fns: Self::HArg,
 	) -> Vec<u8> {
@@ -94,7 +94,7 @@ impl KeyGenerator for Tuple {
 	for_tuples!( type HArg = ( #(Tuple::HashFn),* ); );
 	type HashFn = Box<dyn FnOnce(&[u8]) -> Vec<u8>>;
 
-	fn final_key<KArg: EncodeLike<Self::KArg> + TupleToEncodedIter>(key: KArg) -> Vec<u8> {
+	fn final_key<KArg: EncodeLikeTuple<Self::KArg> + TupleToEncodedIter>(key: KArg) -> Vec<u8> {
 		let mut final_key = Vec::new();
 		let mut iter = key.to_encoded_iter();
 		for_tuples!(
@@ -106,7 +106,7 @@ impl KeyGenerator for Tuple {
 		final_key
 	}
 
-	fn migrate_key<KArg: EncodeLike<Self::KArg> + TupleToEncodedIter>(
+	fn migrate_key<KArg: EncodeLikeTuple<Self::KArg> + TupleToEncodedIter>(
 		key: &KArg,
 		hash_fns: Self::HArg,
 	) -> Vec<u8> {
@@ -121,6 +121,38 @@ impl KeyGenerator for Tuple {
 		migrated_key
 	}
 }
+
+/// Marker trait to indicate that each element in the tuple encodes like the
+/// corresponding element in another tuple.
+pub trait EncodeLikeTuple<T> {}
+
+macro_rules! impl_encode_like_tuples {
+	($($elem:ident),+) => {
+		paste! {
+			impl<$($elem: Encode,)+ $([<$elem $elem>]: Encode + EncodeLike<$elem>,)+>
+				EncodeLikeTuple<($($elem,)+)> for
+				($([<$elem $elem>],)+) {}
+		}
+	};
+}
+
+impl_encode_like_tuples!(A);
+impl_encode_like_tuples!(A, B);
+impl_encode_like_tuples!(A, B, C);
+impl_encode_like_tuples!(A, B, C, D);
+impl_encode_like_tuples!(A, B, C, D, E);
+impl_encode_like_tuples!(A, B, C, D, E, F);
+impl_encode_like_tuples!(A, B, C, D, E, F, G);
+impl_encode_like_tuples!(A, B, C, D, E, F, G, H);
+impl_encode_like_tuples!(A, B, C, D, E, F, G, H, I);
+impl_encode_like_tuples!(A, B, C, D, E, F, G, H, I, J);
+impl_encode_like_tuples!(A, B, C, D, E, F, G, H, I, J, K);
+impl_encode_like_tuples!(A, B, C, D, E, F, G, H, I, J, K, L);
+impl_encode_like_tuples!(A, B, C, D, E, F, G, H, I, J, K, L, M);
+impl_encode_like_tuples!(A, B, C, D, E, F, G, H, I, J, K, L, M, O);
+impl_encode_like_tuples!(A, B, C, D, E, F, G, H, I, J, K, L, M, O, P);
+impl_encode_like_tuples!(A, B, C, D, E, F, G, H, I, J, K, L, M, O, P, Q);
+impl_encode_like_tuples!(A, B, C, D, E, F, G, H, I, J, K, L, M, O, P, Q, R);
 
 /// Trait to indicate that a tuple can be converted into an iterator of a vector of encoded bytes.
 pub trait TupleToEncodedIter {

@@ -29,8 +29,8 @@ mod value;
 
 pub use double_map::{StorageDoubleMap, StorageDoubleMapMetadata};
 pub use key::{
-	HasKeyPrefix, HasReversibleKeyPrefix, Key, KeyGenerator, ReversibleKeyGenerator,
-	TupleToEncodedIter,
+	EncodeLikeTuple, HasKeyPrefix, HasReversibleKeyPrefix, Key, KeyGenerator,
+	ReversibleKeyGenerator, TupleToEncodedIter,
 };
 pub use map::{StorageMap, StorageMapMetadata};
 pub use nmap::{StorageNMap, StorageNMapMetadata};
