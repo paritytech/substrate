@@ -188,6 +188,15 @@ pub trait StateApi<Hash> {
 	/// Note: storage events primarily come from _primitives/state-machine/src/ext.rs_).
 	/// The default filters can be overridden, see details in the [params section](#params).
 	///
+	/// ### `curl` example
+	///
+	/// ```no_run
+	/// curl \
+	/// 	-H "Content-Type: application/json" \
+	/// 	-d '{"id":1, "jsonrpc":"2.0", "method": "state_traceBlock", "params": ["0xb246acf1adea1f801ce15c77a5fa7d8f2eb8fed466978bcee172cc02cf64e264"]}' \
+	/// 	http://localhost:9933/
+	/// ```
+	///
 	/// ### Params
 	///
 	/// - `block_hash` (param index 0): Hash of the block to trace.
