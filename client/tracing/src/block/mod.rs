@@ -249,7 +249,7 @@ impl<Block, Client> BlockExecutor<Block, Client>
 				let _enter = span.enter();
 				self.client.runtime_api().execute_block(&parent_id, block)
 			}) {
-				return Err(Error::Dispatch("Failed to dispatch traces and execute block".to_string()));
+				return Err(Error::Dispatch(format!("Failed to dispatch traces and execute block: {:?}", e).to_string()));
 			}
 		}
 
