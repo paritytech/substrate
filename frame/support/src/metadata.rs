@@ -17,9 +17,9 @@
 
 pub use frame_metadata::{
     v13::{
-        ErrorMetadata, EventMetadata, ExtrinsicMetadata, FunctionArgumentMetadata,
-        FunctionMetadata, ModuleConstantMetadata, ModuleEventMetadata, ModuleMetadata,
-        OuterEventMetadata, RuntimeMetadataLastVersion, SignedExtensionMetadata,
+        PalletErrorMetadata, PalletEventMetadata, ExtrinsicMetadata, FunctionArgumentMetadata,
+        FunctionMetadata, PalletCallMetadata, PalletMetadata, PalletConstantMetadata,
+        RuntimeMetadataLastVersion, SignedExtensionMetadata,
         StorageEntryMetadata, StorageEntryModifier, StorageEntryType, StorageHasher,
         StorageMetadata, TypeSpec,
     },

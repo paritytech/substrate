@@ -20,7 +20,7 @@
 #[doc(hidden)]
 pub use sp_runtime::traits::{LookupError, BadOrigin};
 
-use crate::metadata::ErrorMetadata;
+use crate::metadata::PalletErrorMetadata;
 use sp_std::prelude::Vec;
 
 /// Declare an error type for a runtime module.
@@ -212,13 +212,14 @@ macro_rules! decl_error {
 	}
 }
 
-/// All the metadata about errors in a module.
+/// All the metadata about errors in a pallet.
+/// todo: rename? PalletErrorMetadata would clash
 pub trait ModuleErrorMetadata {
-	fn metadata() -> Vec<ErrorMetadata>;
+	fn metadata() -> PalletErrorMetadata;
 }
 
 impl ModuleErrorMetadata for &'static str {
-	fn metadata() -> Vec<ErrorMetadata> {
-		Vec::new()
+	fn metadata() -> PalletErrorMetadata {
+		PalletErrorMetadata { ty: scale_info::meta_type::<&'static str>() }
 	}
 }

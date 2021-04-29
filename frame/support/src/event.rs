@@ -503,6 +503,7 @@ macro_rules! impl_outer_event {
 
 #[macro_export]
 #[doc(hidden)]
+// todo: [AJ] rename/refactor?
 macro_rules! __impl_outer_event_json_metadata {
 	(
 		$runtime:ident;
@@ -510,21 +511,6 @@ macro_rules! __impl_outer_event_json_metadata {
 		$( $module_name:ident::Event < $( $generic_params:path ),* > $( $instance:ident )?, )*;
 	) => {
 		impl $runtime {
-			#[allow(dead_code)]
-			pub fn outer_event_metadata() -> $crate::metadata::OuterEventMetadata {
-				$crate::metadata::OuterEventMetadata {
-					name: stringify!($event_name),
-					events: $crate::scale_info::prelude::vec![
-						$(
-							$crate::metadata::ModuleEventMetadata {
-								name: stringify!($module_name),
-								events: $module_name::Event ::< $( $generic_params ),* > ::metadata()
-							}
-						),*
-					]
-				}
-			}
-
 			$crate::__impl_outer_event_json_metadata! {
 				@DECL_MODULE_EVENT_FNS
 				$( $module_name < $( $generic_params ),* > $( $instance )? ; )*
@@ -541,9 +527,12 @@ macro_rules! __impl_outer_event_json_metadata {
 			$(
 				#[allow(dead_code)]
 				pub fn [< __module_events_ $module_name $( _ $instance )? >] () ->
-					Vec<$crate::metadata::EventMetadata>
+					$crate::metadata::PalletEventMetadata
 				{
-					$module_name::Event ::< $( $generic_params ),* > ::metadata()
+					let ty = $crate::scale_info::meta_type::<
+						$module_name::Event ::< $( $generic_params ),* >
+					>();
+					$crate::metadata::PalletEventMetadata { ty }
 				}
 			)*
 		}

@@ -42,26 +42,6 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 	let event_use_gen = &event.gen_kind.type_use_gen(event.attr_span);
 	let event_impl_gen= &event.gen_kind.type_impl_gen(event.attr_span);
 
-	let metadata = event.metadata.iter()
-		.map(|event| {
-			let name = format!("{}", event.name);
-			let args = event.args
-				.iter()
-				.map(|(ty, name)| {
-					quote::quote!(
-						#frame_support::metadata::TypeSpec::new::<#ty>(#name)
-					)
-				});
-			let docs = &event.docs;
-			quote::quote!(
-				#frame_support::metadata::EventMetadata {
-					name: #name,
-					arguments: #frame_support::scale_info::prelude::vec![ #( #args, )* ],
-					documentation: #frame_support::scale_info::prelude::vec![ #( #docs, )* ],
-				},
-			)
-		});
-
 	let event_item = {
 		let item = &mut def.item.content.as_mut().expect("Checked by def parser").1[event.index];
 		if let syn::Item::Enum(item) = item {
@@ -140,14 +120,6 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 
 		impl<#event_impl_gen> From<#event_ident<#event_use_gen>> for () #event_where_clause {
 			fn from(_: #event_ident<#event_use_gen>) -> () { () }
-		}
-
-		impl<#event_impl_gen> #event_ident<#event_use_gen> #event_where_clause {
-			#[allow(dead_code)]
-			#[doc(hidden)]
-			pub fn metadata() -> #frame_support::scale_info::prelude::vec::Vec<#frame_support::metadata::EventMetadata> {
-				#frame_support::scale_info::prelude::vec![ #( #metadata )* ]
-			}
 		}
 	)
 }

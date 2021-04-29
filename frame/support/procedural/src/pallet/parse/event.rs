@@ -18,7 +18,6 @@
 use super::helper;
 use syn::spanned::Spanned;
 use quote::ToTokens;
-use frame_support_procedural_tools::clean_type_string;
 
 /// List of additional token to be used for parsing.
 mod keyword {
@@ -35,8 +34,6 @@ pub struct EventDef {
 	pub index: usize,
 	/// The keyword Event used (contains span).
 	pub event: keyword::Event,
-	/// Event metadatas: `(name, args, docs)`.
-	pub metadata: Vec<EventDefMetadata>,
 	/// A set of usage of instance, must be check for consistency with trait.
 	pub instances: Vec<helper::InstanceUsage>,
 	/// The kind of generic the type `Event` has.
@@ -47,13 +44,6 @@ pub struct EventDef {
 	pub where_clause: Option<syn::WhereClause>,
 	/// The span of the pallet::event attribute.
 	pub attr_span: proc_macro2::Span,
-}
-
-/// Metadata for a pallet event variant.
-pub struct EventDefMetadata {
-	pub name: syn::Ident,
-	pub args: Vec<(syn::Type, String)>,
-	pub docs: Vec<syn::Lit>,
 }
 
 /// Attribute for Event: defines metadata name to use.
@@ -172,7 +162,6 @@ impl EventDef {
 
 		let event_attrs: Vec<PalletEventAttr> = helper::take_item_pallet_attrs(&mut item.attrs)?;
 		let attr_info = PalletEventAttrInfo::from_attrs(event_attrs)?;
-		let metadata = attr_info.metadata.unwrap_or_else(Vec::new);
 		let deposit_event = attr_info.deposit_event;
 
 		if !matches!(item.vis, syn::Visibility::Public(_)) {
@@ -202,28 +191,9 @@ impl EventDef {
 
 		let event = syn::parse2::<keyword::Event>(item.ident.to_token_stream())?;
 
-		let metadata = item.variants.iter()
-			.map(|variant| {
-				let name = variant.ident.clone();
-				let docs = helper::get_doc_literals(&variant.attrs);
-				let args = variant.fields.iter()
-					.map(|field| {
-						metadata.iter().find(|m| m.0 == field.ty)
-							.cloned()
-							.unwrap_or_else(|| {
-								(field.ty.clone(), clean_type_string(&field.ty.to_token_stream().to_string()))
-							})
-					})
-					.collect();
-
-				EventDefMetadata { name, args, docs }
-			})
-			.collect();
-
 		Ok(EventDef {
 			attr_span,
 			index,
-			metadata,
 			instances,
 			deposit_event,
 			event,

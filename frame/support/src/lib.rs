@@ -342,7 +342,7 @@ macro_rules! parameter_types {
 					.path($crate::scale_info::Path::new(stringify!($name), module_path!()))
 					.composite(
 					    scale_info::build::Fields::unnamed()
-							.field_of::<$type>(stringify!($type))
+							.field_of::<$type>(stringify!($type), &["todo: docs"])
 					)
 			}
 		}
