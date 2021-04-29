@@ -19,7 +19,11 @@ use frame_support::{
 };
 use sp_core::crypto::KeyTypeId;
 use sp_runtime::{
-	offchain::{http, Duration},
+	offchain::{
+		http,
+		Duration,
+		storage::StorageValueRef
+	},
 	traits::StaticLookup,
 };
 use codec::{Encode, Decode};
@@ -35,6 +39,7 @@ use hex_literal::hex;
 // To change the address, see tests/mod.rs decode_contract_address().
 pub const METRICS_CONTRACT_ADDR: &str = "5Ch5xtvoFF3Muu91WkHCY4mhTDTCyYS2TmBL1zKiBXrYbiZv";
 pub const METRICS_CONTRACT_ID: [u8; 32] = [27, 191, 65, 45, 0, 189, 12, 234, 31, 196, 9, 143, 196, 27, 157, 170, 92, 57, 127, 122, 70, 152, 19, 223, 235, 21, 170, 26, 249, 130, 98, 114];
+pub const BLOCK_INTERVAL: u32 = 10;
 
 pub const REPORT_METRICS_SELECTOR: [u8; 4] = hex!("35320bbe");
 
@@ -126,6 +131,13 @@ decl_module! {
 		fn offchain_worker(block_number: T::BlockNumber) {
 			debug::info!("[OCW] Hello World from offchain workers!");
 
+			let check_result = Self::check_if_should_proceed(block_number);
+
+			if check_result == false {
+				debug::info!("[OCW] Too early to execute OCW. Skipping");
+				return; // Skip the execution for this block
+			}
+
 			let res = Self::fetch_ddc_data_and_send_to_sc(block_number);
 
 			// TODO: abort on error.
@@ -151,6 +163,34 @@ decl_storage! {
 }
 
 impl<T: Trait> Module<T> {
+	fn check_if_should_proceed(_block_number: T::BlockNumber) -> bool {
+		let s_next_at = StorageValueRef::persistent(b"example-offchain-worker::next-at"); // TODO: Rename after OCW renamed
+
+		match s_next_at.mutate(
+			|current_next_at| {
+				let current_next_at = current_next_at.unwrap_or(Some(T::BlockNumber::default()));
+
+				if let Some(current_next_at) = current_next_at {
+					if current_next_at > _block_number {
+						debug::info!("[OCW] Too early to execute. Current: {:?}, next execution at: {:?}", _block_number, current_next_at);
+						Err("Skipping")
+					} else {
+						// set new value
+						Ok(T::BlockInterval::get() + _block_number)
+					}
+				} else {
+					debug::error!("[OCW] Something went wrong in `check_if_should_proceed`");
+					Err("Unexpected error")
+				}
+			}
+		) {
+			Ok(_val) => true,
+			Err(_e) => {
+				false
+			}
+		}
+	}
+
 
 	fn send_to_sc_mock() -> Result<(), &'static str> {
 
@@ -328,4 +368,6 @@ pub trait Trait: frame_system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 	/// The overarching dispatch call type.
 	type Call: From<Call<Self>>;
+
+	type BlockInterval: Get<Self::BlockNumber>;
 }
