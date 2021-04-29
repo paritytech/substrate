@@ -29,7 +29,9 @@ The fork choice rule is weight-based, where weight equals the number of
 primary blocks in the chain. We will pick the heaviest chain (more
 blocks) and will go with the longest one in case of a tie.
 
-An in-depth description and analysis of the protocol can be found here:
+This module is based on a fork of `sc_consensus_babe`.  An in-depth description and analysis of the BABE protocol, can be found here:
 <https://research.web3.foundation/en/latest/polkadot/block-production/Babe.html>
+
+For a more in-depth analysis of Subspace PoR consensus can be found in our [technical whitepaper](https://drive.google.com/file/d/1v847u_XeVf0SBz7Y7LEMXi72QfqirstL/view)
 
 License: GPL-3.0-or-later WITH Classpath-exception-2.0

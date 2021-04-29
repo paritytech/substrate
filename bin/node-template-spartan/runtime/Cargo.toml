@@ -1,11 +1,11 @@
 [package]
 name = "node-template-spartan-runtime"
 version = "3.0.0"
-authors = ["Substrate DevHub <https://github.com/substrate-developer-hub>"]
+authors = ["Substrate DevHub <https://github.com/substrate-developer-hub>", "Subspace Labs <https://subspace.network>"]
 edition = "2018"
 license = "Unlicense"
-homepage = "https://substrate.dev"
-repository = "https://github.com/substrate-developer-hub/substrate-node-template/"
+homepage = "https://subspace.network"
+repository = "https://github.com/subspace/substrate"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

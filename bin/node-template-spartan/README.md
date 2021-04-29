@@ -1,6 +1,8 @@
 # Substrate Node Template
 
-A fresh FRAME-based [Substrate](https://www.substrate.io/) node, ready for hacking :rocket:
+A fresh FRAME-based [Substrate](https://www.substrate.io/) node, modified for Spartan PoC consensus :rocket:
+
+Based on a fork Substrate Node Template.
 
 ## Getting Started
 

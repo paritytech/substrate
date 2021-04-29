@@ -4,8 +4,8 @@ edition = '2018'
 name = 'pallet-template-spartan'
 version = "3.0.0"
 license = "Unlicense"
-homepage = "https://substrate.dev"
-repository = "https://github.com/substrate-developer-hub/substrate-node-template/"
+homepage = "https://subspace.network"
+repository = "https://github.com/subspace/substrate"
 description = "FRAME pallet template for defining custom runtime logic."
 readme = "README.md"
 

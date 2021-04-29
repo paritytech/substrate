@@ -23,11 +23,6 @@
 // https://github.com/paritytech/substrate/issues/2532
 #![allow(deprecated)]
 use super::*;
-use sp_core::crypto::Pair;
-// use sp_keystore::{
-// 	SyncCryptoStore,
-// 	vrf::make_transcript as transcript_from_data,
-// };
 use futures::executor::block_on;
 use log::debug;
 use rand_chacha::rand_core::SeedableRng;
@@ -42,6 +37,7 @@ use sp_consensus::{
     AlwaysCanAuthor, DisableProofRecording, NoNetwork as DummyOracle, Proposal,
 };
 use sp_consensus_poc::Slot;
+use sp_core::crypto::Pair;
 use sp_runtime::{
     generic::DigestItem,
     traits::{Block as BlockT, DigestFor},

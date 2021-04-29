@@ -1,11 +1,11 @@
 [package]
 name = "sp-consensus-spartan"
 version = "0.1.0"
-authors = ["Parity Technologies <admin@parity.io>"]
+authors = ["Subspace Labs <admin@subspace.network>"]
 description = "Primitives for Spartan based consensus"
 edition = "2018"
 license = "Apache-2.0"
-repository = "https://github.com/subspace/spartan-node-template"
+repository = "https://github.com/subspace/substrate"
 homepage = "https://subspace.network"
 readme = "README.md"
 

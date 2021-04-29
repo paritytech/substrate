@@ -1,12 +1,12 @@
 [package]
 name = "sp-consensus-poc"
 version = "0.1.0"
-authors = ["Parity Technologies <admin@parity.io>"]
+authors = ["Parity Technologies <admin@parity.io>", "Subspace Labs <admin@subspace.network>"]
 description = "Primitives for PoC consensus"
 edition = "2018"
 license = "Apache-2.0"
 homepage = "https://subspace.network"
-repository = "https://github.com/subspace/spartan-node-template"
+repository = "https://github.com/subspace/substrate"
 readme = "README.md"
 
 [package.metadata.docs.rs]

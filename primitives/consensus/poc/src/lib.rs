@@ -26,10 +26,10 @@ pub use sp_consensus_spartan::{Randomness, RANDOMNESS_LENGTH};
 
 use codec::{Decode, Encode};
 #[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 #[cfg(feature = "std")]
 use sp_keystore::vrf::{VRFTranscriptData, VRFTranscriptValue};
-use sp_runtime::{/*traits::Header, */ConsensusEngineId, RuntimeDebug};
+use sp_runtime::{/*traits::Header, */ ConsensusEngineId, RuntimeDebug};
 
 use crate::digests::{NextConfigDescriptor, NextEpochDescriptor};
 
@@ -37,8 +37,8 @@ use crate::digests::{NextConfigDescriptor, NextEpochDescriptor};
 pub const KEY_TYPE: sp_core::crypto::KeyTypeId = sp_application_crypto::key_types::POC;
 
 mod app {
-	use sp_application_crypto::{app_crypto, key_types::POC, sr25519};
-	app_crypto!(sr25519, POC);
+    use sp_application_crypto::{app_crypto, key_types::POC, sr25519};
+    app_crypto!(sr25519, POC);
 }
 
 /// A PoC farmer signature.
@@ -65,81 +65,81 @@ pub use sp_consensus_slots::Slot;
 /// The weight of a PoC block.
 pub type PoCBlockWeight = u32;
 
+// TODO: Maybe remove after milestone 3
 /// Make a PoR transcript data container
 #[cfg(feature = "std")]
-pub fn make_transcript_data(
-	randomness: &Randomness,
-	slot: Slot,
-	epoch: u64,
-) -> VRFTranscriptData {
-	VRFTranscriptData {
-		label: &POC_ENGINE_ID,
-		items: vec![
-			("slot number", VRFTranscriptValue::U64(*slot)),
-			("current epoch", VRFTranscriptValue::U64(epoch)),
-			("chain randomness", VRFTranscriptValue::Bytes(randomness.to_vec())),
-		]
-	}
+pub fn make_transcript_data(randomness: &Randomness, slot: Slot, epoch: u64) -> VRFTranscriptData {
+    VRFTranscriptData {
+        label: &POC_ENGINE_ID,
+        items: vec![
+            ("slot number", VRFTranscriptValue::U64(*slot)),
+            ("current epoch", VRFTranscriptValue::U64(epoch)),
+            (
+                "chain randomness",
+                VRFTranscriptValue::Bytes(randomness.to_vec()),
+            ),
+        ],
+    }
 }
 
 /// An consensus log item for PoC.
 #[derive(Decode, Encode, Clone, PartialEq, Eq)]
 pub enum ConsensusLog {
-	/// The epoch has changed. This provides information about the _next_
-	/// epoch - information about the _current_ epoch (i.e. the one we've just
-	/// entered) should already be available earlier in the chain.
-	#[codec(index = 1)]
-	NextEpochData(NextEpochDescriptor),
-	/// The epoch has changed, and the epoch after the current one will
-	/// enact different epoch configurations.
-	#[codec(index = 2)]
-	NextConfigData(NextConfigDescriptor),
+    /// The epoch has changed. This provides information about the _next_
+    /// epoch - information about the _current_ epoch (i.e. the one we've just
+    /// entered) should already be available earlier in the chain.
+    #[codec(index = 1)]
+    NextEpochData(NextEpochDescriptor),
+    /// The epoch has changed, and the epoch after the current one will
+    /// enact different epoch configurations.
+    #[codec(index = 2)]
+    NextConfigData(NextConfigDescriptor),
 }
 
 /// Configuration data used by the PoC consensus engine.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
 pub struct PoCGenesisConfiguration {
-	/// The slot duration in milliseconds for PoC. Currently, only
-	/// the value provided by this type at genesis will be used.
-	///
-	/// Dynamic slot duration may be supported in the future.
-	pub slot_duration: u64,
+    /// The slot duration in milliseconds for PoC. Currently, only
+    /// the value provided by this type at genesis will be used.
+    ///
+    /// Dynamic slot duration may be supported in the future.
+    pub slot_duration: u64,
 
-	/// The duration of epochs in slots.
-	pub epoch_length: u64,
+    /// The duration of epochs in slots.
+    pub epoch_length: u64,
 
-	/// A constant value that is used in the threshold calculation formula.
-	/// Expressed as a rational where the first member of the tuple is the
-	/// numerator and the second is the denominator. The rational should
-	/// represent a value between 0 and 1.
-	/// In the threshold formula calculation, `1 - c` represents the probability
-	/// of a slot being empty.
-	pub c: (u64, u64),
+    /// A constant value that is used in the threshold calculation formula.
+    /// Expressed as a rational where the first member of the tuple is the
+    /// numerator and the second is the denominator. The rational should
+    /// represent a value between 0 and 1.
+    /// In the threshold formula calculation, `1 - c` represents the probability
+    /// of a slot being empty.
+    pub c: (u64, u64),
 
-	/// The randomness for the genesis epoch.
-	pub randomness: Randomness,
+    /// The randomness for the genesis epoch.
+    pub randomness: Randomness,
 }
 
 #[cfg(feature = "std")]
 impl sp_consensus::SlotData for PoCGenesisConfiguration {
-	fn slot_duration(&self) -> std::time::Duration {
-		std::time::Duration::from_millis(self.slot_duration)
-	}
+    fn slot_duration(&self) -> std::time::Duration {
+        std::time::Duration::from_millis(self.slot_duration)
+    }
 
-	const SLOT_KEY: &'static [u8] = b"poc_configuration";
+    const SLOT_KEY: &'static [u8] = b"poc_configuration";
 }
 
 /// Configuration data used by the PoC consensus engine.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct PoCEpochConfiguration {
-	/// A constant value that is used in the threshold calculation formula.
-	/// Expressed as a rational where the first member of the tuple is the
-	/// numerator and the second is the denominator. The rational should
-	/// represent a value between 0 and 1.
-	/// In the threshold formula calculation, `1 - c` represents the probability
-	/// of a slot being empty.
-	pub c: (u64, u64),
+    /// A constant value that is used in the threshold calculation formula.
+    /// Expressed as a rational where the first member of the tuple is the
+    /// numerator and the second is the denominator. The rational should
+    /// represent a value between 0 and 1.
+    /// In the threshold formula calculation, `1 - c` represents the probability
+    /// of a slot being empty.
+    pub c: (u64, u64),
 }
 
 // TODO: bring this back in for Milestone 3
@@ -234,47 +234,47 @@ pub struct PoCEpochConfiguration {
 /// PoC epoch information
 #[derive(Decode, Encode, PartialEq, Eq, Clone, Debug)]
 pub struct Epoch {
-	/// The epoch index.
-	pub epoch_index: u64,
-	/// The starting slot of the epoch.
-	pub start_slot: Slot,
-	/// The duration of this epoch.
-	pub duration: u64,
-	/// Randomness for this epoch.
-	pub randomness: Randomness,
-	/// Configuration of the epoch.
-	pub config: PoCEpochConfiguration,
+    /// The epoch index.
+    pub epoch_index: u64,
+    /// The starting slot of the epoch.
+    pub start_slot: Slot,
+    /// The duration of this epoch.
+    pub duration: u64,
+    /// Randomness for this epoch.
+    pub randomness: Randomness,
+    /// Configuration of the epoch.
+    pub config: PoCEpochConfiguration,
 }
 
 sp_api::decl_runtime_apis! {
-	/// API necessary for block authorship with PoC.
-	pub trait PoCApi {
-		/// Return the genesis configuration for PoC. The configuration is only read on genesis.
-		fn configuration() -> PoCGenesisConfiguration;
+    /// API necessary for block authorship with PoC.
+    pub trait PoCApi {
+        /// Return the genesis configuration for PoC. The configuration is only read on genesis.
+        fn configuration() -> PoCGenesisConfiguration;
 
-		/// Returns the slot that started the current epoch.
-		fn current_epoch_start() -> Slot;
+        /// Returns the slot that started the current epoch.
+        fn current_epoch_start() -> Slot;
 
-		/// Returns information regarding the current epoch.
-		fn current_epoch() -> Epoch;
+        /// Returns information regarding the current epoch.
+        fn current_epoch() -> Epoch;
 
-		/// Returns information regarding the next epoch (which was already
-		/// previously announced).
-		fn next_epoch() -> Epoch;
+        /// Returns information regarding the next epoch (which was already
+        /// previously announced).
+        fn next_epoch() -> Epoch;
 
-		// TODO: fix this in milestone 3
+        // TODO: fix this in milestone 3
 
-		// /// Submits an unsigned extrinsic to report an equivocation. The caller
-		// /// must provide the equivocation proof and a key ownership proof
-		// /// (should be obtained using `generate_key_ownership_proof`). The
-		// /// extrinsic will be unsigned and should only be accepted for local
-		// /// authorship (not to be broadcast to the network). This method returns
-		// /// `None` when creation of the extrinsic fails, e.g. if equivocation
-		// /// reporting is disabled for the given runtime (i.e. this method is
-		// /// hardcoded to return `None`). Only useful in an offchain context.
-		// fn submit_report_equivocation_unsigned_extrinsic(
-		// 	equivocation_proof: EquivocationProof<Block::Header>,
-		// 	key_owner_proof: OpaqueKeyOwnershipProof,
-		// ) -> Option<()>;
-	}
+        // /// Submits an unsigned extrinsic to report an equivocation. The caller
+        // /// must provide the equivocation proof and a key ownership proof
+        // /// (should be obtained using `generate_key_ownership_proof`). The
+        // /// extrinsic will be unsigned and should only be accepted for local
+        // /// authorship (not to be broadcast to the network). This method returns
+        // /// `None` when creation of the extrinsic fails, e.g. if equivocation
+        // /// reporting is disabled for the given runtime (i.e. this method is
+        // /// hardcoded to return `None`). Only useful in an offchain context.
+        // fn submit_report_equivocation_unsigned_extrinsic(
+        // 	equivocation_proof: EquivocationProof<Block::Header>,
+        // 	key_owner_proof: OpaqueKeyOwnershipProof,
+        // ) -> Option<()>;
+    }
 }
