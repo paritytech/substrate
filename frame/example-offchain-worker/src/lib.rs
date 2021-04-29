@@ -28,6 +28,7 @@ use pallet_contracts;
 
 // use lite_json::json::JsonValue;
 use alt_serde::{Deserialize, Deserializer};
+use hex_literal::hex;
 
 
 // The address of the metrics contract, in SS58 and in bytes formats.
@@ -35,6 +36,7 @@ use alt_serde::{Deserialize, Deserializer};
 pub const METRICS_CONTRACT_ADDR: &str = "5Ch5xtvoFF3Muu91WkHCY4mhTDTCyYS2TmBL1zKiBXrYbiZv";
 pub const METRICS_CONTRACT_ID: [u8; 32] = [27, 191, 65, 45, 0, 189, 12, 234, 31, 196, 9, 143, 196, 27, 157, 170, 92, 57, 127, 122, 70, 152, 19, 223, 235, 21, 170, 26, 249, 130, 98, 114];
 
+pub const REPORT_METRICS_SELECTOR: [u8; 4] = hex!("35320bbe");
 
 // use serde_json::{Value};
 
@@ -169,23 +171,19 @@ impl<T: Trait> Module<T> {
 		// local keystore with expected `KEY_TYPE`.
 		let results = signer.send_signed_transaction(
 			|_account| {
-				let input = [
-					// the selector
-					0x35,
-					0x32,
-					0x0B,
-					0xBE,
+				let mut call_data = REPORT_METRICS_SELECTOR.to_vec();
+				call_data.extend_from_slice(&[
 					1,
 					2,
 					3,
 					4,
-				];
+				]);
 
 				pallet_contracts::Call::call(
 					T::ContractId::get(),
 					0u32.into(),
 					10_000_000_000,
-					input.to_vec()
+					call_data
 				)
 			}
 		);
