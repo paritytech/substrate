@@ -1024,7 +1024,9 @@ pub mod pallet {
 			T::MaxSubAccounts::get().into(), // S
 			T::MaxAdditionalFields::get().into(), // X
 		))]
-		pub(super) fn kill_identity(origin: OriginFor<T>, target: <T::Lookup as StaticLookup>::Source) -> DispatchResultWithPostInfo {
+		pub(super) fn kill_identity(
+			origin: OriginFor<T>, target: <T::Lookup as StaticLookup>::Source
+		) -> DispatchResultWithPostInfo {
 			T::ForceOrigin::ensure_origin(origin)?;
 
 			// Figure out who we're meant to be clearing.
