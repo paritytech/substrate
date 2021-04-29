@@ -1357,7 +1357,7 @@ pub mod pallet_prelude {
 /// It implements on pallet:
 /// * [`traits::GetPalletVersion`]
 /// * [`traits::OnGenesis`]: contains some logic to write pallet version into storage.
-/// * `ModuleErrorMetadata`: using error declared or no metadata.
+/// * `PalletErrorTypeInfo`: provides the type information for the pallet error, if defined.
 ///
 /// It declare `type Module` type alias for `Pallet`, used by [`construct_runtime`].
 ///
@@ -1485,9 +1485,6 @@ pub mod pallet_prelude {
 ///
 /// The macro implements `From<Error<T>>` for `&'static str`.
 /// The macro implements `From<Error<T>>` for `DispatchError`.
-///
-/// The macro implements `ModuleErrorMetadata` on `Pallet` defining the `ErrorMetadata` of the
-/// pallet.
 ///
 /// # Event: `#[pallet::event]` optional
 ///

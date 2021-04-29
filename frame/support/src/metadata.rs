@@ -129,7 +129,7 @@ macro_rules! __runtime_modules_to_metadata {
 					$mod, $module $( <$instance> )?, $runtime, $(with $kw)*
 				),
 				constants: $mod::$module::<$runtime $(, $mod::$instance )?>::module_constants_metadata(),
-				errors: <$mod::$module::<$runtime $(, $mod::$instance )?> as $crate::error::ModuleErrorMetadata>::metadata(),
+				error: $mod::$module::<$runtime $(, $mod::$instance )?>::error_metadata(),
 			};
 			$( $rest )*
 		)

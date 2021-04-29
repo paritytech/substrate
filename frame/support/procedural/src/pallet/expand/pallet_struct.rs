@@ -20,7 +20,6 @@ use crate::pallet::{Def, parse::helper::get_doc_literals};
 /// * Add derive trait on Pallet
 /// * Implement GetPalletVersion on Pallet
 /// * Implement OnGenesis on Pallet
-/// * Implement ModuleErrorMetadata on Pallet
 /// * declare Module type alias for construct_runtime
 /// * replace the first field type of `struct Pallet` with `PhantomData` if it is `_`
 /// * implementation of `PalletInfoAccess` information
@@ -71,35 +70,29 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 		)]
 	));
 
-	let module_error_metadata = if let Some(error_def) = &def.error {
+	let pallet_error_metadata = if let Some(error_def) = &def.error {
 		let error_ident = &error_def.error;
 		quote::quote_spanned!(def.pallet_struct.attr_span =>
-			impl<#type_impl_gen> #frame_support::error::ModuleErrorMetadata
-				for #pallet_ident<#type_use_gen>
-				#config_where_clause
-			{
-				fn metadata() -> #frame_support::scale_info::prelude::vec::Vec<#frame_support::metadata::ErrorMetadata> {
-					<
-						#error_ident<#type_use_gen> as #frame_support::error::ModuleErrorMetadata
-					>::metadata()
+			impl<#type_impl_gen> #pallet_ident<#type_use_gen> #config_where_clause {
+				pub fn error_metadata() -> Option<#frame_support::metadata::PalletErrorMetadata> {
+					Some(#frame_support::metadata::PalletErrorMetadata {
+						ty: #frame_support::scale_info::meta_type::<#error_ident<#type_use_gen>>()
+					})
 				}
 			}
 		)
 	} else {
 		quote::quote_spanned!(def.pallet_struct.attr_span =>
-			impl<#type_impl_gen> #frame_support::error::ModuleErrorMetadata
-				for #pallet_ident<#type_use_gen>
-				#config_where_clause
-			{
-				fn metadata() -> #frame_support::scale_info::prelude::vec::Vec<#frame_support::metadata::ErrorMetadata> {
-					#frame_support::scale_info::prelude::vec::Vec::new()
+			impl<#type_impl_gen> #pallet_ident<#type_use_gen> #config_where_clause {
+				pub fn error_metadata() -> Option<#frame_support::metadata::PalletErrorMetadata> {
+					None
 				}
 			}
 		)
 	};
 
 	quote::quote_spanned!(def.pallet_struct.attr_span =>
-		#module_error_metadata
+		#pallet_error_metadata
 
 		/// Type alias to `Pallet`, to be used by `construct_runtime`.
 		///

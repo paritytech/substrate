@@ -20,7 +20,6 @@
 #[doc(hidden)]
 pub use sp_runtime::traits::{LookupError, BadOrigin};
 
-use crate::metadata::PalletErrorMetadata;
 use sp_std::prelude::Vec;
 
 /// Declare an error type for a runtime module.
@@ -88,6 +87,7 @@ macro_rules! decl_error {
 		}
 	) => {
 		$(#[$attr])*
+		#[derive($crate::scale_info::TypeInfo)]
 		pub enum $error<$generic: $trait $(, $inst_generic: $instance)?>
 		$( where $( $where_ty: $where_bound ),* )?
 		{
@@ -160,24 +160,6 @@ macro_rules! decl_error {
 				}
 			}
 		}
-
-		impl<$generic: $trait $(, $inst_generic: $instance)?> $crate::error::ModuleErrorMetadata
-			for $error<$generic $(, $inst_generic)?>
-		$( where $( $where_ty: $where_bound ),* )?
-		{
-			fn metadata() -> $crate::scale_info::prelude::vec::Vec<$crate::metadata::ErrorMetadata> {
-				$crate::scale_info::prelude::vec![
-					$(
-						$crate::metadata::ErrorMetadata {
-							name: stringify!($name),
-							documentation: $crate::scale_info::prelude::vec![
-								$( $doc_attr ),*
-							],
-						}
-					),*
-				]
-			}
-		}
 	};
 	(@GENERATE_AS_U8
 		$self:ident
@@ -209,17 +191,5 @@ macro_rules! decl_error {
 			$error::__Ignore(_, _) => unreachable!("`__Ignore` can never be constructed"),
 			$( $generated )*
 		}
-	}
-}
-
-/// All the metadata about errors in a pallet.
-/// todo: rename? PalletErrorMetadata would clash
-pub trait ModuleErrorMetadata {
-	fn metadata() -> PalletErrorMetadata;
-}
-
-impl ModuleErrorMetadata for &'static str {
-	fn metadata() -> PalletErrorMetadata {
-		PalletErrorMetadata { ty: scale_info::meta_type::<&'static str>() }
 	}
 }

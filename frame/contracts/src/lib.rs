@@ -144,7 +144,7 @@ pub mod pallet {
 	use super::*;
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config + scale_info::TypeInfo { // todo: we shouldn't need this TypeInfo bound
+	pub trait Config: frame_system::Config {
 		/// The time implementation used to supply timestamps to conntracts through `seal_now`.
 		type Time: Time;
 
