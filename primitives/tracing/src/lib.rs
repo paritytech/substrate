@@ -28,6 +28,12 @@
 //! Additionally, we have a const: `WASM_TRACE_IDENTIFIER`, which holds a span name used
 //! to signal that the 'actual' span name and target should be retrieved instead from
 //! the associated Fields mentioned above.
+//!
+//! Note: The `tracing` crate requires trace metadata to be static. This does not work
+//! for wasm code in substrate, as it is regularly updated with new code from on-chain
+//! events. The workaround for this is for the wasm tracing wrappers to put the
+//! `name` and `target` data in the `values` map (normally they would be in the static
+//! metadata assembled at compile time).
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -51,7 +57,7 @@ pub use crate::types::{
 ///
 /// This is modeled after the `tracing`/`tracing-core` interface and uses that more or
 /// less directly for the native side. Because of certain optimisations the these crates
-/// have done, the wasm implementation diverges slightly and is optimised for thtat use
+/// have done, the wasm implementation diverges slightly and is optimised for that use
 /// case (like being able to cross the wasm/native boundary via scale codecs).
 ///
 /// One of said optimisations is that all macros will yield to a `noop` in non-std unless
@@ -102,7 +108,6 @@ pub use crate::types::{
 /// and call `set_tracing_subscriber` at the very beginning of your execution –
 /// the default subscriber is doing nothing, so any spans or events happening before
 /// will not be recorded!
-///
 
 mod types;
 
