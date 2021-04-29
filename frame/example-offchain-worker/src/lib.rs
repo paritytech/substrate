@@ -21,14 +21,16 @@ use sp_core::crypto::KeyTypeId;
 use sp_runtime::{
 	offchain::{http, Duration},
 	traits::StaticLookup,
+	traits::Zero,
 };
 use codec::{Encode, Decode};
 use sp_std::vec::Vec;
 use pallet_contracts;
-
 // use lite_json::json::JsonValue;
 use alt_serde::{Deserialize, Deserializer};
 
+#[macro_use]
+extern crate alloc;
 
 // The address of the metrics contract, in SS58 and in bytes formats.
 // To change the address, see tests/mod.rs decode_contract_address().
@@ -95,10 +97,10 @@ pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"ddc1");
 
 pub const HTTP_NODES_REQUEST: &str = "https://node-0.ddc.stage.cere.network/api/rest/nodes";
 pub const HTTP_PARTITIONS_REQUEST: &str = "https://node-0.ddc.stage.cere.network/api/rest/partitions?isMaster=true&active=true";
-pub const METRICS_REQUEST_PREFIX: &str = "https://node-2.ddc.stage.cere.network/api/rest/metrics?appPubKey=";
-pub const METRICS_PARAM1: &str = "&partitionId="; // partition.id
-pub const METRICS_PARAM2: &str = "&from="; // lastTimestamp
-pub const METRICS_PARAM3: &str = "&to="; // now() - 2 minutes
+pub const METRICS_REQUEST_PREFIX: &str = "/api/rest/metrics?appPubKey=";
+pub const METRICS_PARAM_PARTITIONID: &str = "&partitionId="; // partition.id
+pub const METRICS_PARAM_FROM: &str = "&from="; // lastTimestamp
+pub const METRICS_PARAM_TO: &str = "&to="; // now() - 2 minutes
 pub const FETCH_TIMEOUT_PERIOD: u64 = 5000; // in milli-seconds
 
 /// Based on the above `KeyTypeId` we need to generate a pallet-specific crypto type wrappers.
@@ -154,20 +156,22 @@ decl_module! {
 		fn offchain_worker(block_number: T::BlockNumber) {
 			debug::info!("[OCW] Hello World from offchain workers!");
 
-			let res = Self::fetch_ddc_data_and_send_to_sc(block_number);
+			let transaction_type = block_number % 3u32.into();
+			if transaction_type == Zero::zero() {
+				let res = Self::fetch_ddc_data_and_send_to_sc(block_number);
 
-			// TODO: abort on error.
-			if let Err(e) = res {
-				debug::error!("Some error occurred: {:?}", e);
+				// TODO: abort on error.
+				if let Err(e) = res {
+					debug::error!("Some error occurred: {:?}", e);
+				}
+
+				debug::info!("[OCW] About to send mock transaction");
+				let sc_res = Self::send_to_sc_mock();
+
+				if let Err(e) = sc_res {
+					debug::error!("Some error occurred: {:?}", e);
+				}
 			}
-
-			debug::info!("[OCW] About to send mock transaction");
-			let sc_res = Self::send_to_sc_mock();
-
-			if let Err(e) = sc_res {
-				debug::error!("Some error occurred: {:?}", e);
-			}
-
             debug::info!("[OCW] Finishing!");
 		}
 	}
@@ -296,71 +300,88 @@ impl<T: Trait> Module<T> {
 		})?;
 
 		let fetch_node_list_str = sp_std::str::from_utf8(&fetch_node_list_bytes).map_err(|_| {
-			debug::warn!("No UTF8 body");
+			debug::warn!("fetch_node_list_str: No UTF8 body");
 			http::Error::Unknown
 		})?;
 
-		debug::info!("fetch_node_list_str: {}", fetch_node_list_str);
+		// debug::info!("fetch_node_list_str: {}", fetch_node_list_str);
 		// Parse the string of data into serde_json::Value.
 		let node_info: Vec<NodeInfo> = serde_json::from_str(&fetch_node_list_str).map_err(|_| {
-			debug::warn!("No UTF8 body");
+			debug::warn!("Parse body to Vec<NodeInfo> error");
 			http::Error::Unknown
 		})?;
-
-		// Get list nodes id
-		let mut node_id_list = node_info.iter().map(|node| &node.id);
-
-		debug::info!("node_id_list: {:?}", node_id_list);
+		debug::info!("node_info length: {:?}", node_info.len());
 
 		let fetch_partition_list_bytes = Self::http_get_request(HTTP_PARTITIONS_REQUEST).map_err(|e| {
-			debug::error!("fetch_from_node error: {:?}", e);
+			debug::error!("fetch_partition_list_bytes error: {:?}", e);
 			http::Error::Unknown
 		})?;
 
 		let fetch_partition_list_str = sp_std::str::from_utf8(&fetch_partition_list_bytes).map_err(|_| {
-			debug::warn!("No UTF8 body");
+			debug::warn!("fetch_partition_list_str: No UTF8 body");
 			http::Error::Unknown
 		})?;
+		// debug::info!("fetch_partition_list_str: {}", fetch_partition_list_str);
 
-		debug::info!("fetch_partition_list_str: {}", fetch_partition_list_str);
 		// Parse the string of data into serde_json::Value.
 		let partition_info: Vec<PartitionInfo> = serde_json::from_str(&fetch_partition_list_str).map_err(|_| {
-			debug::warn!("No UTF8 body");
+			debug::warn!("Parse body to Vec<PartitionInfo> error");
 			http::Error::Unknown
 		})?;
+		debug::info!("Partition_info length: {:#?}", partition_info.len());
 
-		// debug::info!("Partition_info: {:#?}", partition_info);
+		let mut node_info_iter = node_info.iter(); // id is Vec<u8>
+		// debug::info!("node_info_iter: {:?}", node_info_iter);
+
 		for one_partition in partition_info.iter() {
-			// debug::info!("One_partition: {:?}", one_partition);
-			let equal_id = node_id_list.position(|node| node.eq(&one_partition.nodeId));
-			if ( equal_id != None) {
-				// let base_url_str = METRICS_REQUEST_PREFIX.to_string();
+			let mut id_from_partition = sp_std::str::from_utf8(&one_partition.nodeId).unwrap();
 
-				// let app_pubkey_str = match std::str::from_utf8(&one_partition.appPubKey) {
-				// 	Ok(v) => v,
-				// 	Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
-				// };
+			let mut equal_index = node_info_iter.position(|node| id_from_partition.eq(sp_std::str::from_utf8(&node.id).unwrap()));
+			// debug::info!("id_from_partition: {}", id_from_partition);
+			debug::info!("equal_index: {:?}", &equal_index);
 
-				// let get_metrics_url = format!("{}{}", base_url_str, app_pubkey_str);
+			if equal_index.is_none() {
+				debug::info!("Can not found in nodeId {:?} in the topology", sp_std::str::from_utf8(&one_partition.nodeId).unwrap());
+			} else {
+				let metrics_url = sp_std::str::from_utf8(&node_info[equal_index.unwrap()].httpAddr).map_err(|_| {
+					debug::warn!("httpAddr");
+					http::Error::Unknown
+				})?;
+				
+				let app_pubkey_str = sp_std::str::from_utf8(&one_partition.appPubKey).map_err(|_| {
+					debug::warn!("appPubKey error");
+					http::Error::Unknown
+				})?;
+				let metrics_url_with_key = format!("{}{}{}", metrics_url, METRICS_REQUEST_PREFIX, app_pubkey_str);
+				// debug::info!("metrics_url_with_key: {}", metrics_url_with_key);
 
-				// debug::info!("get_metrics_url: {}", get_metrics_url);
+				let partition_id_str = sp_std::str::from_utf8(&one_partition.id).map_err(|_| {
+					debug::warn!("partition id error");
+					http::Error::Unknown
+				})?;
 
-				// let fetch_metric_bytes = Self::http_get_request(&get_metrics_url.to_string()).map_err(|e| {
-				// 	debug::error!("fetch_metric_bytes error: {:?}", e);
-				// 	http::Error::Unknown
-				// })?;
+				let metrics_url_with_partition = format!("{}{}{}", metrics_url_with_key, METRICS_PARAM_PARTITIONID, partition_id_str);
+				// debug::info!("metrics_url_with_partition: {}", metrics_url_with_partition);
+
+				let last_time_stamp: u64 = 1619690465923;
+				let metrics_url_with_last_time = format!("{}{}{}", metrics_url_with_partition, METRICS_PARAM_FROM, last_time_stamp);
+				// debug::info!("metrics_url_with_last_time: {}", metrics_url_with_last_time);
+
+				let to_time = sp_io::offchain::timestamp().sub(Duration::from_millis(120_000));
+				let metrics_url_final = format!("{}{}{}", metrics_url_with_last_time, METRICS_PARAM_TO, to_time.unix_millis());
+				// debug::info!("to_time: {:?}", to_time);
+
+				let fetch_metric_bytes = Self::http_get_request(&metrics_url_final).map_err(|e| {
+					debug::error!("fetch_metric_bytes error: {:?}", e);
+					http::Error::Unknown
+				})?;
 		
-				// let fetch_metric_str = sp_std::str::from_utf8(&fetch_metric_bytes).map_err(|_| {
-				// 	debug::warn!("No UTF8 body");
-				// 	http::Error::Unknown
-				// })?;
+				let fetch_metric_str = sp_std::str::from_utf8(&fetch_metric_bytes).map_err(|_| {
+					debug::warn!("fetch_metric_str: No UTF8 body");
+					http::Error::Unknown
+				})?;
 		
 				// debug::info!("fetch_metric_str: {}", fetch_metric_str);
-				// Parse the string of data into serde_json::Value.
-				// let partition_info: Vec<PartitionInfo> = serde_json::from_str(&fetch_partition_list_str).map_err(|_| {
-				// 	debug::warn!("No UTF8 body");
-				// 	http::Error::Unknown
-				// })?;
 			}
 		}
 	
