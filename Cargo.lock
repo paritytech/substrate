@@ -4595,6 +4595,7 @@ dependencies = [
  "alt_serde",
  "frame-support",
  "frame-system",
+ "hex-literal",
  "lite-json",
  "pallet-balances",
  "pallet-contracts",

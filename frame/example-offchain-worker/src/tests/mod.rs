@@ -20,7 +20,8 @@ use test_runtime::{
     AccountId, Balances, Contracts, CURRENT_METRICS_CONTRACT_ID, ExampleOffchainWorker, Extrinsic, Origin, System, Test,
 };
 
-use crate::{METRICS_CONTRACT_ADDR, METRICS_CONTRACT_ID};
+use crate::{METRICS_CONTRACT_ADDR, METRICS_CONTRACT_ID, REPORT_METRICS_SELECTOR};
+use sp_core::bytes::from_hex;
 
 mod test_runtime;
 
@@ -32,6 +33,23 @@ fn decode_contract_address() {
     let account_from_bytes = AccountId::from_raw(METRICS_CONTRACT_ID);
 
     assert_eq!(account_decoded.0, account_from_bytes.0);
+}
+
+#[test]
+fn test_contract_api() {
+    // Parse the contract spec.
+    let contract_meta = include_str!("./test_data/metadata.json");
+    let contract_meta: serde_json::Value = serde_json::from_str(contract_meta).unwrap();
+    let messages = contract_meta.pointer("/spec/messages").unwrap()
+        .as_array().unwrap();
+
+    // Find the report_metrics function.
+    let report_metrics = messages.iter().find(|msg|
+        msg.pointer("/name/0").unwrap().as_str().unwrap() == "report_metrics"
+    ).unwrap();
+    // Check the selector.
+    let selector = from_hex(report_metrics.get("selector").unwrap().as_str().unwrap()).unwrap();
+    assert_eq!(REPORT_METRICS_SELECTOR.to_vec(), selector);
 }
 
 fn build_ext() -> sp_io::TestExternalities {
@@ -136,7 +154,10 @@ fn should_submit_signed_transaction_on_chain() {
         eprintln!("Transactions: {:?}\n", transactions);
         assert_eq!(transactions.len(), 1);
 
-        // TODO: recognize smart contract call.
+        // TODO: update expected_call based on the content of the test_data files.
+        let mut expected_call = REPORT_METRICS_SELECTOR.to_vec();
+        expected_call.extend_from_slice(&[1, 2, 3, 4, ]);
+        assert!(transactions.last().unwrap().ends_with(&expected_call), "Expected a specific call to the report_metrics function");
     });
 }
 
