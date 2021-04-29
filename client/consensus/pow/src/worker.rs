@@ -67,7 +67,7 @@ pub struct MiningWorker<
 	pub(crate) build: Option<MiningBuild<Block, Algorithm, C, Proof>>,
 	pub(crate) algorithm: Algorithm,
 	pub(crate) block_import: BoxBlockImport<Block, sp_api::TransactionFor<C, Block>>,
-	pub(crate) link: L,
+	pub(crate) justification_sync_link: L,
 }
 
 impl<Block, Algorithm, C, L, Proof> MiningWorker<Block, Algorithm, C, L, Proof>
@@ -150,7 +150,7 @@ where
 			let header = import_block.post_header();
 			match self.block_import.import_block(import_block, HashMap::default()).await {
 				Ok(res) => {
-					res.handle_justification(&header.hash(), *header.number(), &mut self.link);
+					res.handle_justification(&header.hash(), *header.number(), &mut self.justification_sync_link);
 
 					info!(
 						target: "pow",

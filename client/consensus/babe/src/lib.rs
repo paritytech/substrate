@@ -397,7 +397,7 @@ pub struct BabeParams<B: BlockT, C, E, I, SO, SC, BS, CAW, L> {
 	pub can_author_with: CAW,
 
 	/// Hook into the sync module to control the justification sync process.
-	pub link: L,
+	pub justification_sync_link: L,
 
 	/// The proportion of the slot dedicated to proposing.
 	///
@@ -424,7 +424,7 @@ pub fn start_babe<B, C, SC, E, I, SO, BS, CAW, L, Error>(
 		backoff_authoring_blocks,
 		babe_link,
 		can_author_with,
-		link,
+		justification_sync_link,
 		block_proposal_slot_portion,
 		telemetry,
 	}: BabeParams<B, C, E, I, SO, SC, BS, CAW, L>,
@@ -487,7 +487,7 @@ where
 		select_chain,
 		worker,
 		sync_oracle,
-		link,
+		justification_sync_link,
 		inherent_data_providers,
 		babe_link.time_source,
 		can_author_with,

@@ -144,7 +144,7 @@ pub struct StartAuraParams<C, SC, I, PF, SO, BS, CAW, L> {
 	/// Can we author a block with this node?
 	pub can_author_with: CAW,
 	/// Hook into the sync module to control the justification sync process.
-	pub link: L,
+	pub justification_sync_link: L,
 	/// The proportion of the slot dedicated to proposing.
 	///
 	/// The block proposing will be limited to this proportion of the slot from the starting of the
@@ -169,7 +169,7 @@ pub fn start_aura<P, B, C, SC, PF, I, SO, BS, CAW, L, Error>(
 		backoff_authoring_blocks,
 		keystore,
 		can_author_with,
-		link,
+		justification_sync_link,
 		block_proposal_slot_portion,
 		telemetry,
 	}: StartAuraParams<C, SC, I, PF, SO, BS, CAW, L>,
@@ -213,7 +213,7 @@ where
 		select_chain,
 		worker,
 		sync_oracle,
-		link,
+		justification_sync_link,
 		inherent_data_providers,
 		AuraSlotCompatible,
 		can_author_with,
@@ -769,7 +769,7 @@ mod tests {
 				backoff_authoring_blocks: Some(BackoffAuthoringOnFinalizedHeadLagging::default()),
 				keystore,
 				can_author_with: sp_consensus::AlwaysCanAuthor,
-				link: (),
+				justification_sync_link: (),
 				block_proposal_slot_portion: SlotProportion::new(0.5),
 				telemetry: None,
 			}).expect("Starts aura"));

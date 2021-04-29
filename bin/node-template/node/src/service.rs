@@ -233,7 +233,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 				keystore: keystore_container.sync_keystore(),
 				can_author_with,
 				sync_oracle: network.clone(),
-				link: network.clone(),
+				justification_sync_link: network.clone(),
 				block_proposal_slot_portion: SlotProportion::new(2f32 / 3f32),
 				telemetry: telemetry.as_ref().map(|x| x.handle()),
 			},

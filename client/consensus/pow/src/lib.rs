@@ -551,7 +551,7 @@ pub fn start_mining_worker<Block, C, S, Algorithm, E, SO, CAW, L>(
 	timeout: Duration,
 	build_time: Duration,
 	can_author_with: CAW,
-	link: L,
+	justification_sync_link: L,
 ) -> (
 	Arc<Mutex<MiningWorker<Block, Algorithm, C, L, <E::Proposer as Proposer<Block>>::Proof>>>,
 	impl Future<Output = ()>,
@@ -577,7 +577,7 @@ pub fn start_mining_worker<Block, C, S, Algorithm, E, SO, CAW, L>(
 		build: None,
 		algorithm: algorithm.clone(),
 		block_import,
-		link,
+		justification_sync_link,
 	}));
 	let worker_ret = worker.clone();
 

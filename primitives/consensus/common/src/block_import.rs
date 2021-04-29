@@ -75,18 +75,18 @@ impl ImportResult {
 		&self,
 		hash: &B::Hash,
 		number: NumberFor<B>,
-		link: &mut dyn JustificationSyncLink<B>,
+		justification_sync_link: &mut dyn JustificationSyncLink<B>,
 	) where
 		B: BlockT,
 	{
 		match self {
 			ImportResult::Imported(aux) => {
 				if aux.clear_justification_requests {
-					link.clear_justification_requests();
+					justification_sync_link.clear_justification_requests();
 				}
 
 				if aux.needs_justification {
-					link.request_justification(hash, number);
+					justification_sync_link.request_justification(hash, number);
 				}
 			}
 			_ => {}

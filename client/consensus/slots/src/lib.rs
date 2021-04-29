@@ -79,7 +79,7 @@ pub trait SlotWorker<B: BlockT, Proof> {
 		&mut self,
 		chain_head: B::Header,
 		slot_info: SlotInfo,
-		link: &mut dyn JustificationSyncLink<B>,
+		justification_sync_link: &mut dyn JustificationSyncLink<B>,
 	) -> Option<SlotResult<B, Proof>>;
 }
 
@@ -199,7 +199,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		&mut self,
 		chain_head: B::Header,
 		slot_info: SlotInfo,
-		link: &mut dyn JustificationSyncLink<B>,
+		justification_sync_link: &mut dyn JustificationSyncLink<B>,
 	) -> Option<SlotResult<B, <Self::Proposer as Proposer<B>>::Proof>> {
 		let (timestamp, slot) = (slot_info.timestamp, slot_info.slot);
 		let telemetry = self.telemetry();
@@ -403,7 +403,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			.await
 		{
 			Ok(res) => {
-				res.handle_justification(&header.hash(), *header.number(), link);
+				res.handle_justification(&header.hash(), *header.number(), justification_sync_link);
 			}
 			Err(err) => {
 				warn!(
@@ -434,9 +434,9 @@ impl<B: BlockT, T: SimpleSlotWorker<B> + Send> SlotWorker<B, <T::Proposer as Pro
 		&mut self,
 		chain_head: B::Header,
 		slot_info: SlotInfo,
-		link: &mut dyn JustificationSyncLink<B>,
+		justification_sync_link: &mut dyn JustificationSyncLink<B>,
 	) -> Option<SlotResult<B, <T::Proposer as Proposer<B>>::Proof>> {
-		SimpleSlotWorker::on_slot(self, chain_head, slot_info, link).await
+		SimpleSlotWorker::on_slot(self, chain_head, slot_info, justification_sync_link).await
 	}
 }
 
@@ -458,7 +458,7 @@ pub fn start_slot_worker<B, C, W, SO, L, T, SC, CAW, Proof>(
 	client: C,
 	mut worker: W,
 	mut sync_oracle: SO,
-	mut link: L,
+	mut justification_sync_link: L,
 	inherent_data_providers: InherentDataProviders,
 	timestamp_extractor: SC,
 	can_author_with: CAW,
@@ -521,7 +521,7 @@ where
 					err,
 				);
 			} else {
-				worker.on_slot(chain_head, slot_info, &mut link).await;
+				worker.on_slot(chain_head, slot_info, &mut justification_sync_link).await;
 			}
 		}
 	}
