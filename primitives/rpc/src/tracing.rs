@@ -71,7 +71,7 @@ pub struct Span {
 	pub wasm: bool,
 }
 
-/// Holds associated values for a tracing span
+/// Holds associated values for a tracing span.
 #[derive(Serialize, Deserialize, Default, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Data {
@@ -79,7 +79,7 @@ pub struct Data {
 	pub string_values: FxHashMap<String, String>,
 }
 
-/// Error response for `state_traceBlock` RPC
+/// Error response for the `state_traceBlock` RPC.
 #[derive(Serialize, Deserialize, Default, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct TraceError {
@@ -87,7 +87,7 @@ pub struct TraceError {
     pub error: String,
 }
 
-/// `state_traceBlock` RPC response
+/// Response for the `state_traceBlock` RPC.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub enum TraceBlockResponse {

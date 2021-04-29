@@ -16,7 +16,7 @@
 
 //! Utilities for tracing block execution
 
-use std::{result, collections::HashMap, sync::{Arc, atomic::{AtomicU64, Ordering}}};
+use std::{collections::HashMap, sync::{Arc, atomic::{AtomicU64, Ordering}}};
 use std::time::Instant;
 
 use parking_lot::Mutex;
@@ -60,7 +60,7 @@ const DEFAULT_STORAGE_KEYS: &str = "";
 const REQUIRED_EVENT_FIELD: &str  = "method";
 
 /// Tracing Block Result type alias
-pub type Result<T> = result::Result<T, Error>;
+pub type TraceBlockResult<T> = Result<T, Error>;
 
 /// Tracing Block error
 #[derive(Debug, thiserror::Error)]
@@ -208,7 +208,7 @@ impl<Block, Client> BlockExecutor<Block, Client>
 	/// Execute block, record all spans and events belonging to `Self::targets`
 	/// and filter out events which do not have keys starting with one of the
 	/// prefixes in `Self::storage_keys`.
-	pub fn trace_block(&self) -> Result<TraceBlockResponse> {
+	pub fn trace_block(&self) -> TraceBlockResult<TraceBlockResponse> {
 		tracing::debug!(target: "state_tracing", "Tracing block: {}", self.block);
 		// Prepare the block
 		let id = BlockId::Hash(self.block);
