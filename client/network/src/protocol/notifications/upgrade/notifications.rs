@@ -114,11 +114,7 @@ impl NotificationsIn {
 		max_notification_size: u64
 	) -> Self {
 		let mut protocol_names = fallback_names;
-		if protocol_names.is_empty() {
-			protocol_names.push(main_protocol_name.into())
-		} else {
-			protocol_names.insert(0, main_protocol_name.into());
-		}
+		protocol_names.insert(0, main_protocol_name.into());
 
 		NotificationsIn {
 			protocol_names,
@@ -335,11 +331,7 @@ impl NotificationsOut {
 		}
 
 		let mut protocol_names = fallback_names;
-		if protocol_names.is_empty() {
-			protocol_names.push(main_protocol_name.into())
-		} else {
-			protocol_names.insert(0, main_protocol_name.into());
-		}
+		protocol_names.insert(0, main_protocol_name.into());
 
 		NotificationsOut {
 			protocol_names,
