@@ -550,7 +550,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				let known_addresses = NetworkBehaviour::addresses_of_peer(swarm.behaviour_mut(), peer_id)
 					.into_iter().collect();
 
-				let endpoint = if let Some(e) = swarm.behaviour_mut().node(peer_id).map(|i| i.endpoint()) {
+				let endpoint = if let Some(e) = swarm.behaviour_mut().node(peer_id).map(|i| i.endpoint()).flatten() {
 					e.clone().into()
 				} else {
 					error!(target: "sub-libp2p", "Found state inconsistency between custom protocol \
