@@ -195,7 +195,7 @@ pub trait StateApi<Hash> {
 	///
 	/// ### `curl` example
 	///
-	/// ```no_run
+	/// ```text
 	/// curl \
 	/// 	-H "Content-Type: application/json" \
 	/// 	-d '{"id":1, "jsonrpc":"2.0", "method": "state_traceBlock", \
