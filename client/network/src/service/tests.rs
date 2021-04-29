@@ -465,12 +465,15 @@ fn fallback_name_working() {
 	// Node 1 supports the protocols "new" and "old". Node 2 only supports "old". Checks whether
 	// they can connect.
 
+	const NEW_PROTOCOL_NAME: Cow<'static, str> =
+		Cow::Borrowed("/new-shiny-protocol-that-isnt-PROTOCOL_NAME");
+
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
 
 	let (node1, mut events_stream1) = build_test_full_node(config::NetworkConfiguration {
 		extra_sets: vec![
 			config::NonDefaultSetConfig {
-				notifications_protocol: "/new-shiny-protocol-that-isnt-PROTOCOL_NAME".into(),
+				notifications_protocol: NEW_PROTOCOL_NAME.clone(),
 				fallback_names: vec![PROTOCOL_NAME],
 				max_notification_size: 1024 * 1024,
 				set_config: Default::default()
@@ -481,7 +484,7 @@ fn fallback_name_working() {
 		.. config::NetworkConfiguration::new_local()
 	});
 
-	let (node2, mut events_stream2) = build_test_full_node(config::NetworkConfiguration {
+	let (_, mut events_stream2) = build_test_full_node(config::NetworkConfiguration {
 		extra_sets: vec![
 			config::NonDefaultSetConfig {
 				notifications_protocol: PROTOCOL_NAME,
@@ -505,7 +508,8 @@ fn fallback_name_working() {
 		// Wait for the `NotificationStreamOpened`.
 		loop {
 			match events_stream2.next().await.unwrap() {
-				Event::NotificationStreamOpened { negotiated_fallback, .. } => {
+				Event::NotificationStreamOpened { protocol, negotiated_fallback, .. } => {
+					assert_eq!(protocol, PROTOCOL_NAME);
 					assert_eq!(negotiated_fallback, None);
 					break
 				},
@@ -518,7 +522,8 @@ fn fallback_name_working() {
 		// Wait for the `NotificationStreamOpened`.
 		loop {
 			match events_stream1.next().await.unwrap() {
-				Event::NotificationStreamOpened { negotiated_fallback, .. } => {
+				Event::NotificationStreamOpened { protocol, negotiated_fallback, .. } => {
+					assert_eq!(protocol, NEW_PROTOCOL_NAME);
 					assert_eq!(negotiated_fallback, Some(PROTOCOL_NAME));
 					break
 				},
