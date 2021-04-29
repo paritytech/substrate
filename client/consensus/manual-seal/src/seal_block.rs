@@ -104,10 +104,7 @@ pub async fn seal_block<B, BI, SC, C, E, P>(
 		// or fetch the best_block.
 		let parent = match parent_hash {
 			Some(hash) => {
-				match client.header(BlockId::Hash(hash))? {
-					Some(header) => header,
-					None => return Err(Error::BlockNotFound(format!("{}", hash))),
-				}
+				client.header(BlockId::Hash(hash))?.ok_or_else(|| Error::BlockNotFound(format!("{}", hash)))?
 			}
 			None => select_chain.best_chain()?
 		};

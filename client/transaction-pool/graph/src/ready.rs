@@ -527,12 +527,9 @@ impl<Hash: hash::Hash + Member, Ex> Iterator for BestIterator<Hash, Ex> {
 					satisfied += 1;
 					Some((satisfied, tx_ref))
 				// then get from the pool
-				} else if let Some(next) = self.all.read().get(hash) {
-					Some((next.requires_offset + 1, next.transaction.clone()))
 				} else {
-					None
+					self.all.read().get(hash).map(|next| (next.requires_offset + 1, next.transaction.clone()))
 				};
-
 				if let Some((satisfied, tx_ref)) = res {
 					self.best_or_awaiting(satisfied, tx_ref)
 				}

@@ -61,7 +61,7 @@ pub use randomness::Randomness;
 mod metadata;
 pub use metadata::{
 	CallMetadata, GetCallMetadata, GetCallName, PalletInfo, PalletVersion, GetPalletVersion,
-	PALLET_VERSION_STORAGE_KEY_POSTFIX,
+	PALLET_VERSION_STORAGE_KEY_POSTFIX, PalletInfoAccess,
 };
 
 mod hooks;

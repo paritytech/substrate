@@ -30,6 +30,7 @@ use futures::{future, FutureExt, Stream, StreamExt, stream::Fuse};
 use addr_cache::AddrCache;
 use async_trait::async_trait;
 use codec::Decode;
+use ip_network::IpNetwork;
 use libp2p::{core::multiaddr, multihash::{Multihash, Hasher}};
 use log::{debug, error, log_enabled};
 use prometheus_endpoint::{Counter, CounterVec, Gauge, Opts, U64, register};
@@ -115,6 +116,8 @@ pub struct Worker<Client, Network, Block, DhtEventStream> {
 	/// List of keys onto which addresses have been published at the latest publication.
 	/// Used to check whether they have changed.
 	latest_published_keys: HashSet<CryptoTypePublicPair>,
+	/// Same value as in the configuration.
+	publish_non_global_ips: bool,
 
 	/// Interval at which to request addresses of authorities, refilling the pending lookups queue.
 	query_interval: ExpIncInterval,
@@ -197,6 +200,7 @@ where
 			publish_interval,
 			publish_if_changed_interval,
 			latest_published_keys: HashSet::new(),
+			publish_non_global_ips: config.publish_non_global_ips,
 			query_interval,
 			pending_lookups: Vec::new(),
 			in_flight_lookups: HashMap::new(),
@@ -267,10 +271,24 @@ where
 		}
 	}
 
-	fn addresses_to_publish(&self) -> impl ExactSizeIterator<Item = Multiaddr> {
+	fn addresses_to_publish(&self) -> impl Iterator<Item = Multiaddr> {
 		let peer_id: Multihash = self.network.local_peer_id().into();
+		let publish_non_global_ips = self.publish_non_global_ips;
 		self.network.external_addresses()
 			.into_iter()
+			.filter(move |a| {
+				if publish_non_global_ips {
+					return true;
+				}
+
+				a.iter().all(|p| match p {
+					// The `ip_network` library is used because its `is_global()` method is stable,
+					// while `is_global()` in the standard library currently isn't.
+					multiaddr::Protocol::Ip4(ip) if !IpNetwork::from(ip).is_global() => false,
+					multiaddr::Protocol::Ip6(ip) if !IpNetwork::from(ip).is_global() => false,
+					_ => true,
+				})
+			})
 			.map(move |a| {
 				if a.iter().any(|p| matches!(p, multiaddr::Protocol::P2p(_))) {
 					a
@@ -299,7 +317,7 @@ where
 			return Ok(())
 		}
 
-		let addresses = self.addresses_to_publish();
+		let addresses = self.addresses_to_publish().map(|a| a.to_vec()).collect::<Vec<_>>();
 
 		if let Some(metrics) = &self.metrics {
 			metrics.publish.inc();
@@ -309,7 +327,7 @@ where
 		}
 
 		let mut serialized_addresses = vec![];
-		schema::AuthorityAddresses { addresses: addresses.map(|a| a.to_vec()).collect() }
+		schema::AuthorityAddresses { addresses }
 			.encode(&mut serialized_addresses)
 			.map_err(Error::EncodingProto)?;
 
