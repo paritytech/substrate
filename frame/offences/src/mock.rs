@@ -110,16 +110,10 @@ impl frame_system::Config for Runtime {
 	type OnSetCode = ();
 }
 
-parameter_types! {
-	pub OffencesWeightSoftLimit: Weight =
-		Perbill::from_percent(60) * BlockWeights::get().max_block;
-}
-
 impl Config for Runtime {
 	type Event = Event;
 	type IdentificationTuple = u64;
 	type OnOffenceHandler = OnOffenceHandler;
-	type WeightSoftLimit = OffencesWeightSoftLimit;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {

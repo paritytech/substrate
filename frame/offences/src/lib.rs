@@ -28,7 +28,7 @@ mod migration;
 
 use sp_std::vec::Vec;
 use frame_support::{
-	decl_module, decl_event, decl_storage, Parameter, traits::Get, weights::Weight,
+	decl_module, decl_event, decl_storage, Parameter, weights::Weight,
 };
 use sp_runtime::{traits::Hash, Perbill};
 use sp_staking::{
@@ -65,10 +65,6 @@ pub trait Config: frame_system::Config {
 	type IdentificationTuple: Parameter + Ord;
 	/// A handler called for every offence report.
 	type OnOffenceHandler: OnOffenceHandler<Self::AccountId, Self::IdentificationTuple, Weight>;
-	/// The a soft limit on maximum weight that may be consumed while dispatching deferred offences in
-	/// `on_initialize`.
-	/// Note it's going to be exceeded before we stop adding to it, so it has to be set conservatively.
-	type WeightSoftLimit: Get<Weight>;
 }
 
 decl_storage! {
