@@ -126,6 +126,10 @@ impl syn::parse::Parse for ConfigBoundParse {
 		input.parse::<syn::Token![::]>()?;
 		input.parse::<keyword::Config>()?;
 
+		if input.peek(syn::token::Lt) {
+			input.parse::<syn::AngleBracketedGenericArguments>()?;
+		}
+
 		Ok(Self(ident))
 	}
 }

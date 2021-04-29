@@ -17,7 +17,6 @@ sp-authority-discovery = { version = "3.0.0", default-features = false, path = "
 sp-application-crypto = { version = "3.0.0", default-features = false, path = "../../primitives/application-crypto" }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
-serde = { version = "1.0.101", optional = true }
 pallet-session = { version = "3.0.0", features = ["historical" ], path = "../session", default-features = false }
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
 frame-support = { version = "3.0.0", default-features = false, path = "../support" }
@@ -35,7 +34,6 @@ std = [
 	"sp-authority-discovery/std",
 	"codec/std",
 	"sp-std/std",
-	"serde",
 	"pallet-session/std",
 	"sp-runtime/std",
 	"frame-support/std",

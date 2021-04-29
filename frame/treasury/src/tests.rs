@@ -24,12 +24,11 @@ use super::*;
 use std::cell::RefCell;
 use frame_support::{
 	assert_noop, assert_ok, parameter_types,
-	traits::OnInitialize,
+	traits::OnInitialize, PalletId
 };
 
 use sp_core::H256;
 use sp_runtime::{
-	ModuleId,
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
@@ -77,6 +76,7 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
@@ -98,13 +98,14 @@ parameter_types! {
 	pub const ProposalBondMinimum: u64 = 1;
 	pub const SpendPeriod: u64 = 2;
 	pub const Burn: Permill = Permill::from_percent(50);
-	pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
+	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
 	pub const BountyUpdatePeriod: u32 = 20;
 	pub const BountyCuratorDeposit: Permill = Permill::from_percent(50);
 	pub const BountyValueMinimum: u64 = 1;
+	pub const MaxApprovals: u32 = 100;
 }
 impl Config for Test {
-	type ModuleId = TreasuryModuleId;
+	type PalletId = TreasuryPalletId;
 	type Currency = pallet_balances::Pallet<Test>;
 	type ApproveOrigin = frame_system::EnsureRoot<u128>;
 	type RejectOrigin = frame_system::EnsureRoot<u128>;
@@ -117,6 +118,7 @@ impl Config for Test {
 	type BurnDestination = ();  // Just gets burned.
 	type WeightInfo = ();
 	type SpendFunds = ();
+	type MaxApprovals = MaxApprovals;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
@@ -357,5 +359,22 @@ fn genesis_funding_works() {
 	t.execute_with(|| {
 		assert_eq!(Balances::free_balance(Treasury::account_id()), initial_funding);
 		assert_eq!(Treasury::pot(), initial_funding - Balances::minimum_balance());
+	});
+}
+
+#[test]
+fn max_approvals_limited() {
+	new_test_ext().execute_with(|| {
+		Balances::make_free_balance_be(&Treasury::account_id(), u64::max_value());
+		Balances::make_free_balance_be(&0, u64::max_value());
+
+		for _ in 0 .. MaxApprovals::get() {
+			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
+			assert_ok!(Treasury::approve_proposal(Origin::root(), 0));
+		}
+
+		// One too many will fail
+		assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
+		assert_noop!(Treasury::approve_proposal(Origin::root(), 0), Error::<Test, _>::TooManyApprovals);
 	});
 }

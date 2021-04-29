@@ -534,11 +534,18 @@ pub mod pallet {
 		/// Maximum number of iteration of balancing that will be executed in the embedded miner of
 		/// the pallet.
 		type MinerMaxIterations: Get<u32>;
+
 		/// Maximum weight that the miner should consume.
 		///
 		/// The miner will ensure that the total weight of the unsigned solution will not exceed
-		/// this values, based on [`WeightInfo::submit_unsigned`].
+		/// this value, based on [`WeightInfo::submit_unsigned`].
 		type MinerMaxWeight: Get<Weight>;
+
+		/// Maximum length (bytes) that the mined solution should consume.
+		///
+		/// The miner will ensure that the total length of the unsigned solution will not exceed
+		/// this value.
+		type MinerMaxLength: Get<u32>;
 
 		/// Something that will provide the election data.
 		type DataProvider: ElectionDataProvider<Self::AccountId, Self::BlockNumber>;
@@ -1411,7 +1418,7 @@ mod tests {
 			roll_to(30);
 			assert!(MultiPhase::current_phase().is_signed());
 
-			let _ = MultiPhase::elect().unwrap();
+			assert_ok!(MultiPhase::elect());
 
 			assert!(MultiPhase::current_phase().is_off());
 			assert!(MultiPhase::snapshot().is_none());
@@ -1434,7 +1441,7 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_off());
 
 			// this module is now only capable of doing on-chain backup.
-			let _ = MultiPhase::elect().unwrap();
+			assert_ok!(MultiPhase::elect());
 
 			assert!(MultiPhase::current_phase().is_off());
 		});

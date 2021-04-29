@@ -479,7 +479,16 @@
 			"website": "https://crust.network"
 		},
 		{
-			"prefix": 73,
+			"prefix": 69,
+			"network": "sora",
+			"displayName": "SORA Network",
+			"symbols": ["XOR"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://sora.org"
+    },
+    {
+      "prefix": 73,
 			"network": "zeitgeist",
 			"displayName": "Zeitgeist",
 			"symbols": ["ZTG"],

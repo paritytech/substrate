@@ -21,17 +21,44 @@
 
 use bitflags::bitflags;
 use codec::{Decode, Encode};
+use sp_core::Bytes;
 use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::prelude::*;
 
-/// Result type of a `bare_call` call.
+#[cfg(feature = "std")]
+use serde::{Serialize, Deserialize};
+
+/// Result type of a `bare_call` or `bare_instantiate` call.
 ///
-/// The result of a contract execution along with a gas consumed.
+/// It contains the execution result together with some auxiliary information.
 #[derive(Eq, PartialEq, Encode, Decode, RuntimeDebug)]
-pub struct ContractExecResult {
-	pub exec_result: ExecResult,
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+pub struct ContractResult<T> {
+	/// How much gas was consumed during execution.
 	pub gas_consumed: u64,
+	/// An optional debug message. This message is only non-empty when explicitly requested
+	/// by the code that calls into the contract.
+	///
+	/// The contained bytes are valid UTF-8. This is not declared as `String` because
+	/// this type is not allowed within the runtime. A client should decode them in order
+	/// to present the message to its users.
+	///
+	/// # Note
+	///
+	/// The debug message is never generated during on-chain execution. It is reserved for
+	/// RPC calls.
+	pub debug_message: Bytes,
+	/// The execution result of the wasm code.
+	pub result: T,
 }
+
+/// Result type of a `bare_call` call.
+pub type ContractExecResult = ContractResult<Result<ExecReturnValue, DispatchError>>;
+
+/// Result type of a `bare_instantiate` call.
+pub type ContractInstantiateResult<AccountId, BlockNumber> =
+	ContractResult<Result<InstantiateReturnValue<AccountId, BlockNumber>, DispatchError>>;
 
 /// Result type of a `get_storage` call.
 pub type GetStorageResult = Result<Option<Vec<u8>>, ContractAccessError>;
@@ -50,6 +77,8 @@ pub enum ContractAccessError {
 }
 
 #[derive(Eq, PartialEq, Encode, Decode, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 pub enum RentProjection<BlockNumber> {
 	/// Eviction is projected to happen at the specified block number.
 	EvictionAt(BlockNumber),
@@ -62,6 +91,8 @@ pub enum RentProjection<BlockNumber> {
 bitflags! {
 	/// Flags used by a contract to customize exit behaviour.
 	#[derive(Encode, Decode)]
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+	#[cfg_attr(feature = "std", serde(rename_all = "camelCase", transparent))]
 	pub struct ReturnFlags: u32 {
 		/// If this bit is set all changes made by the contract execution are rolled back.
 		const REVERT = 0x0000_0001;
@@ -70,11 +101,13 @@ bitflags! {
 
 /// Output of a contract call or instantiation which ran to completion.
 #[derive(PartialEq, Eq, Encode, Decode, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 pub struct ExecReturnValue {
 	/// Flags passed along by `seal_return`. Empty when `seal_return` was never called.
 	pub flags: ReturnFlags,
 	/// Buffer passed along by `seal_return`. Empty when `seal_return` was never called.
-	pub data: Vec<u8>,
+	pub data: Bytes,
 }
 
 impl ExecReturnValue {
@@ -84,40 +117,32 @@ impl ExecReturnValue {
 	}
 }
 
-/// Origin of the error.
-///
-/// Call or instantiate both called into other contracts and pass through errors happening
-/// in those to the caller. This enum is for the caller to distinguish whether the error
-/// happened during the execution of the callee or in the current execution context.
+/// The result of a successful contract instantiation.
 #[derive(PartialEq, Eq, Encode, Decode, RuntimeDebug)]
-pub enum ErrorOrigin {
-	/// Caller error origin.
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+pub struct InstantiateReturnValue<AccountId, BlockNumber> {
+	/// The output of the called constructor.
+	pub result: ExecReturnValue,
+	/// The account id of the new contract.
+	pub account_id: AccountId,
+	/// Information about when and if the new project will be evicted.
 	///
-	/// The error happened in the current exeuction context rather than in the one
-	/// of the contract that is called into.
-	Caller,
-	/// The error happened during execution of the called contract.
-	Callee,
+	/// # Note
+	///
+	/// `None` if `bare_instantiate` was called with
+	/// `compute_projection` set to false. From the perspective of an RPC this means that
+	/// the runtime API did not request this value and this feature is therefore unsupported.
+	pub rent_projection: Option<RentProjection<BlockNumber>>,
 }
 
-/// Error returned by contract exection.
-#[derive(PartialEq, Eq, Encode, Decode, RuntimeDebug)]
-pub struct ExecError {
-	/// The reason why the execution failed.
-	pub error: DispatchError,
-	/// Origin of the error.
-	pub origin: ErrorOrigin,
+/// Reference to an existing code hash or a new wasm module.
+#[derive(Eq, PartialEq, Encode, Decode, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+pub enum Code<Hash> {
+	/// A wasm module as raw bytes.
+	Upload(Bytes),
+	/// The code hash of an on-chain wasm blob.
+	Existing(Hash),
 }
-
-impl<T: Into<DispatchError>> From<T> for ExecError {
-	fn from(error: T) -> Self {
-		Self {
-			error: error.into(),
-			origin: ErrorOrigin::Caller,
-		}
-	}
-}
-
-/// The result that is returned from contract execution. It either contains the output
-/// buffer or an error describing the reason for failure.
-pub type ExecResult = Result<ExecReturnValue, ExecError>;
