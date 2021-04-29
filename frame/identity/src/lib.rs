@@ -367,32 +367,33 @@ pub mod pallet {
 		/// The currency trait.
 		type Currency: ReservableCurrency<Self::AccountId>;
 
+		/// The amount held on deposit for a registered identity
 		#[pallet::constant]
-		/// The amount held on deposit for a registered identity.
 		type BasicDeposit: Get<BalanceOf<Self>>;
 
-		#[pallet::constant]
 		/// The amount held on deposit per additional field for a registered identity.
+		#[pallet::constant]
 		type FieldDeposit: Get<BalanceOf<Self>>;
 
-		#[pallet::constant]
 		/// The amount held on deposit for a registered subaccount. This should account for the fact
 		/// that one storage item's value will increase by the size of an account ID, and there will be
 		/// another trie item whose value is the size of an account ID plus 32 bytes.
+		#[pallet::constant]
 		type SubAccountDeposit: Get<BalanceOf<Self>>;
 
-		#[pallet::constant]
+
 		/// The maximum number of sub-accounts allowed per identified account.
+		#[pallet::constant]
 		type MaxSubAccounts: Get<u32>;
 
-		#[pallet::constant]
 		/// Maximum number of additional fields that may be stored in an ID. Needed to bound the I/O
 		/// required to access an identity, but can be pretty high.
+		#[pallet::constant]
 		type MaxAdditionalFields: Get<u32>;
 
-		#[pallet::constant]
 		/// Maxmimum number of registrars allowed in the system. Needed to bound the complexity
 		/// of, e.g., updating judgements.
+		#[pallet::constant]
 		type MaxRegistrars: Get<u32>;
 
 		/// What to do with slashed funds.
