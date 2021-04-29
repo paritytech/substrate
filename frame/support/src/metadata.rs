@@ -247,7 +247,7 @@ macro_rules! __runtime_modules_to_metadata_calls_storage {
 // 	use super::*;
 // 	use frame_metadata::{
 // 		EventMetadata, StorageEntryModifier, StorageEntryType, FunctionMetadata, StorageEntryMetadata,
-// 		ModuleMetadata, RuntimeMetadataPrefixed, DefaultByte, ModuleConstantMetadata, DefaultByteGetter,
+// 		ModuleMetadata, RuntimeMetadataPrefixed, DefaultByte, PalletConstantMetadata, DefaultByteGetter,
 // 		ErrorMetadata, ExtrinsicMetadata,
 // 	};
 // 	use codec::{Encode, Decode};
@@ -528,7 +528,7 @@ macro_rules! __runtime_modules_to_metadata_calls_storage {
 // 					)),
 // 					constants: DecodeDifferent::Encode(
 // 						FnEncode(|| &[
-// 							ModuleConstantMetadata {
+// 							PalletConstantMetadata {
 // 								name: DecodeDifferent::Encode("BlockNumber"),
 // 								ty: DecodeDifferent::Encode("T::BlockNumber"),
 // 								value: DecodeDifferent::Encode(
@@ -536,7 +536,7 @@ macro_rules! __runtime_modules_to_metadata_calls_storage {
 // 								),
 // 								documentation: DecodeDifferent::Encode(&[" Hi, I am a comment."]),
 // 							},
-// 							ModuleConstantMetadata {
+// 							PalletConstantMetadata {
 // 								name: DecodeDifferent::Encode("GetType"),
 // 								ty: DecodeDifferent::Encode("T::AccountId"),
 // 								value: DecodeDifferent::Encode(
@@ -544,7 +544,7 @@ macro_rules! __runtime_modules_to_metadata_calls_storage {
 // 								),
 // 								documentation: DecodeDifferent::Encode(&[]),
 // 							},
-// 							ModuleConstantMetadata {
+// 							PalletConstantMetadata {
 // 								name: DecodeDifferent::Encode("ASSOCIATED_CONST"),
 // 								ty: DecodeDifferent::Encode("u64"),
 // 								value: DecodeDifferent::Encode(

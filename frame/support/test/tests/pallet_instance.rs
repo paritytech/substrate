@@ -672,7 +672,7 @@ fn metadata() {
 			},
 		]),
 		constants: vec![
-			ModuleConstantMetadata {
+			PalletConstantMetadata {
 				name: "MyGetParam",
 				ty: scale_info::meta_type::<u32>(),
 				value: vec![10, 0, 0, 0],

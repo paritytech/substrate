@@ -2398,7 +2398,7 @@ macro_rules! __impl_module_constants_metadata {
 		{
 			#[doc(hidden)]
 			#[allow(dead_code)]
-			pub fn module_constants_metadata() -> ::sp_std::vec::Vec<$crate::metadata::ModuleConstantMetadata> {
+			pub fn module_constants_metadata() -> ::sp_std::vec::Vec<$crate::metadata::PalletConstantMetadata> {
 				// Create the `ByteGetter`s
 				$(
 					#[allow(non_upper_case_types)]
@@ -2422,7 +2422,7 @@ macro_rules! __impl_module_constants_metadata {
 				)*
 				$crate::scale_info::prelude::vec![
 					$(
-						$crate::metadata::ModuleConstantMetadata {
+						$crate::metadata::PalletConstantMetadata {
 							name: stringify!($name),
 							ty: $crate::scale_info::meta_type::<$type>(),
 							value: $default_byte_name::<$const_trait_instance $(, $const_instance)?>(

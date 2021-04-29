@@ -799,7 +799,7 @@ fn metadata() {
 			},
 		]),
 		constants: vec![
-			ModuleConstantMetadata {
+			PalletConstantMetadata {
 				name: "MyGetParam",
 				ty: scale_info::meta_type::<u32>(),
 				value: vec![10, 0, 0, 0],
@@ -808,7 +808,7 @@ fn metadata() {
 					" Some comment",
 				],
 			},
-			ModuleConstantMetadata {
+			PalletConstantMetadata {
 				name: "MyGetParam2",
 				ty: scale_info::meta_type::<u32>(),
 				value: vec![11, 0, 0, 0],
@@ -817,13 +817,13 @@ fn metadata() {
 					" Some comment",
 				],
 			},
-			ModuleConstantMetadata {
+			PalletConstantMetadata {
 				name: "MyGetParam3",
 				ty: scale_info::meta_type::<u64>(),
 				value: vec![12, 0, 0, 0, 0, 0, 0, 0],
 				documentation: vec![],
 			},
-			ModuleConstantMetadata {
+			PalletConstantMetadata {
 				name: "some_extra",
 				ty: scale_info::meta_type::<u32>(),
 				value: vec![100, 0, 0, 0, 0, 0, 0, 0],
@@ -832,7 +832,7 @@ fn metadata() {
 					" Some doc",
 				],
 			},
-			ModuleConstantMetadata {
+			PalletConstantMetadata {
 				name: "some_extra_extra",
 				ty: scale_info::meta_type::<u32>(),
 				value: vec![0, 0, 0, 0, 0, 0, 0, 0],

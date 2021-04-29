@@ -96,7 +96,7 @@ pub fn expand_constants(def: &mut Def) -> proc_macro2::TokenStream {
 					}
 				}
 
-				#frame_support::metadata::ModuleConstantMetadata {
+				#frame_support::metadata::PalletConstantMetadata {
 					name: #ident_str,
 					ty: #frame_support::scale_info::meta_type::<#const_type>(),
 					value: #default_byte_getter::<#type_use_gen>(Default::default()).default_byte(),
@@ -110,7 +110,7 @@ pub fn expand_constants(def: &mut Def) -> proc_macro2::TokenStream {
 
 			#[doc(hidden)]
 			pub fn module_constants_metadata()
-				-> #frame_support::sp_std::vec::Vec<#frame_support::metadata::ModuleConstantMetadata>
+				-> #frame_support::sp_std::vec::Vec<#frame_support::metadata::PalletConstantMetadata>
 			{
 				#frame_support::scale_info::prelude::vec![ #( #consts ),* ]
 			}
