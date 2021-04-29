@@ -18,27 +18,16 @@
 
 //! Test utilities
 
-use crate::{self as pallet_spartan, Config, CurrentSlot};
+use crate::{self as pallet_spartan, Config};
 use codec::Encode;
-use frame_support::{
-    parameter_types,
-    traits::{KeyOwnerProofSystem, OnInitialize},
-    weights::Weight,
-};
+use frame_support::{parameter_types, traits::OnInitialize};
 use frame_system::InitKind;
 use sp_consensus_poc::digests::{PreDigest, Solution};
-use sp_consensus_poc::{AuthorityPair, FarmerId, Slot};
-use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
-use sp_core::{
-    crypto::{IsWrappedBy, KeyTypeId, Pair},
-    H256, U256,
-};
+use sp_core::H256;
 use sp_io;
 use sp_runtime::{
-    curve::PiecewiseLinear,
-    impl_opaque_keys,
     testing::{Digest, DigestItem, Header, TestXt},
-    traits::{Header as _, OpaqueKeys},
+    traits::Header as _,
     Perbill,
 };
 
@@ -113,7 +102,7 @@ parameter_types! {
 
 impl pallet_timestamp::Config for Test {
     type Moment = u64;
-    type OnTimestampSet = PoC;
+    type OnTimestampSet = Spartan;
     type MinimumPeriod = MinimumPeriod;
     type WeightInfo = ();
 }
@@ -132,12 +121,6 @@ impl pallet_balances::Config for Test {
     type WeightInfo = ();
 }
 
-impl onchain::Config for Test {
-    type BlockNumber = <Self as frame_system::Config>::BlockNumber;
-    type BlockWeights = ();
-    type Accuracy = Perbill;
-}
-
 parameter_types! {
     pub const EpochDuration: u64 = 3;
     pub const ExpectedBlockTime: u64 = 1;
@@ -146,7 +129,7 @@ parameter_types! {
 impl Config for Test {
     type EpochDuration = EpochDuration;
     type ExpectedBlockTime = ExpectedBlockTime;
-    type EpochChangeTrigger = crate::ExternalTrigger;
+    type EpochChangeTrigger = crate::EpochChangeTrigger;
 
     // TODO: milestone 3
     // type HandleEquivocation =
@@ -167,7 +150,10 @@ pub fn go_to_block(n: u64, s: u64) {
         System::parent_hash()
     };
 
-    let pre_digest = PreDigest(0, s.into());
+    let pre_digest = PreDigest {
+        slot: 0.into(),
+        solution: s.into(),
+    };
 
     System::initialize(&n, &parent_hash, &pre_digest, InitKind::Full);
 
@@ -184,30 +170,9 @@ pub fn progress_to_block(n: u64) {
 }
 
 pub fn make_pre_digest(slot: sp_consensus_poc::Slot, solution: Solution) -> Digest {
-    let digest_data = sp_consensus_poc::digests::PreDigest(sp_consensus_poc::digests::PreDigest {
-        slot,
-        solution,
-    });
+    let digest_data = PreDigest { slot, solution };
     let log = DigestItem::PreRuntime(sp_consensus_poc::POC_ENGINE_ID, digest_data.encode());
     Digest { logs: vec![log] }
-}
-
-// TODO: we must have a mock farmer here that can solve the Proof-of-Space
-
-pub fn make_por_output(
-    slot: Slot,
-    pair: &sp_consensus_poc::AuthorityPair,
-) -> (VRFOutput, VRFProof, [u8; 32]) {
-    let pair = sp_core::sr25519::Pair::from_ref(pair).as_ref();
-    let transcript = sp_consensus_poc::make_transcript(&Babe::randomness(), slot, 0);
-    let vrf_inout = pair.vrf_sign(transcript);
-    let vrf_randomness: sp_consensus_vrf::schnorrkel::Randomness = vrf_inout
-        .0
-        .make_bytes::<[u8; 32]>(&sp_consensus_poc::BABE_VRF_INOUT_CONTEXT);
-    let vrf_output = VRFOutput(vrf_inout.0.to_output());
-    let vrf_proof = VRFProof(vrf_inout.1);
-
-    (vrf_output, vrf_proof, vrf_randomness)
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {

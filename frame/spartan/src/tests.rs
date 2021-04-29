@@ -18,16 +18,11 @@
 
 //! Consensus extension module tests for Spartan consensus.
 
-use super::{Call, *};
-use frame_support::{
-    assert_err, assert_noop, assert_ok,
-    traits::{Currency, EstimateNextSessionRotation, OnFinalize},
-    weights::{GetDispatchInfo, Pays},
-};
+use super::*;
+use frame_support::{assert_noop, traits::OnFinalize};
 use mock::*;
 use sp_consensus_poc::digests::Solution;
 use sp_consensus_poc::{PoCEpochConfiguration, Slot};
-use sp_core::crypto::Pair;
 
 const EMPTY_RANDOMNESS: [u8; 32] = [
     74, 25, 49, 128, 53, 97, 244, 49, 222, 202, 176, 2, 231, 66, 95, 10, 133, 49, 213, 228, 86,
@@ -46,17 +41,14 @@ fn first_block_epoch_zero_start() {
 
     ext.execute_with(|| {
         let genesis_slot = Slot::from(100);
-        let (vrf_output, vrf_proof, por_randomness) = make_por_output(genesis_slot, &pairs[0]);
-
-        let first_vrf = vrf_output;
-        let pre_digest = make_pre_digest(0.into(), Solution::Default());
+        let solution = Solution::get_for_genesis();
+        let por_randomness = sp_io::hashing::blake2_256(&solution.signature);
+        let pre_digest = make_pre_digest(0.into(), solution);
 
         assert_eq!(Spartan::genesis_slot(), Slot::from(0));
         System::initialize(&1, &Default::default(), &pre_digest, Default::default());
 
         // see implementation of the function for details why: we issue an
-        // epoch-change digest but don't do it via the normal session mechanism.
-        assert!(!Spartan::should_end_session(1));
         assert_eq!(Spartan::genesis_slot(), genesis_slot);
         assert_eq!(Spartan::current_slot(), genesis_slot);
         assert_eq!(Spartan::epoch_index(), 0);
@@ -88,13 +80,14 @@ fn first_block_epoch_zero_start() {
 }
 
 #[test]
-fn author_vrf_output_for_primary() {
-    let (pairs, mut ext) = new_test_ext_with_pairs(1);
+fn author_por_output() {
+    let mut ext = new_test_ext();
 
     ext.execute_with(|| {
         let genesis_slot = Slot::from(10);
-        let (vrf_output, vrf_proof, por_randomness) = make_por_output(genesis_slot, &pairs[0]);
-        let pre_digest = make_pre_digest(0.into(), Solution::default());
+        let solution = Solution::default();
+        let por_randomness = sp_io::hashing::blake2_256(&solution.signature);
+        let pre_digest = make_pre_digest(0.into(), solution);
 
         System::initialize(&1, &Default::default(), &pre_digest, Default::default());
         assert_eq!(Spartan::author_por_randomness(), None);
@@ -128,41 +121,6 @@ fn can_predict_next_epoch_change() {
         assert_eq!(
             Spartan::next_expected_epoch_change(System::block_number()),
             Some(5 + 2)
-        );
-    })
-}
-
-#[test]
-fn can_estimate_current_epoch_progress() {
-    new_test_ext().execute_with(|| {
-        assert_eq!(<Test as Config>::EpochDuration::get(), 3);
-
-        // with BABE the genesis block is not part of any epoch, the first epoch starts at block #1,
-        // therefore its last block should be #3
-        for i in 1u64..4 {
-            progress_to_block(i);
-
-            assert_eq!(Spartan::estimate_next_session_rotation(i).0.unwrap(), 4);
-
-            // the last block of the epoch must have 100% progress.
-            if Spartan::estimate_next_session_rotation(i).0.unwrap() - 1 == i {
-                assert_eq!(
-                    Spartan::estimate_current_session_progress(i).0.unwrap(),
-                    Percent::from_percent(100)
-                );
-            } else {
-                assert!(
-                    Spartan::estimate_current_session_progress(i).0.unwrap()
-                        < Percent::from_percent(100)
-                );
-            }
-        }
-
-        // the first block of the new epoch counts towards the epoch progress as well
-        progress_to_block(4);
-        assert_eq!(
-            Spartan::estimate_current_session_progress(4).0.unwrap(),
-            Percent::from_percent(33),
         );
     })
 }
@@ -242,12 +200,6 @@ fn only_root_can_enact_config_change() {
 fn can_fetch_current_and_next_epoch_data() {
     new_test_ext().execute_with(|| {
         EpochConfig::<Test>::put(PoCEpochConfiguration { c: (1, 4) });
-
-        // 1 era = 3 epochs
-        // 1 epoch = 3 slots
-        // Eras start from 0.
-        // Therefore at era 1 we should be starting epoch 3 with slot 10.
-        start_era(1);
 
         let current_epoch = Spartan::current_epoch();
         assert_eq!(current_epoch.epoch_index, 3);
@@ -781,7 +733,7 @@ fn tracks_block_numbers_when_current_and_previous_epoch_started() {
 fn add_epoch_configurations_migration_works() {
     use frame_support::storage::migration::{get_storage_value, put_storage_value};
 
-    impl crate::migrations::SpartnPalletPrefix for Test {
+    impl crate::migrations::PoCPalletPrefix for Test {
         fn pallet_prefix() -> &'static str {
             "Spartan"
         }
