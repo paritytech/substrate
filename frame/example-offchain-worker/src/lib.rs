@@ -131,9 +131,9 @@ decl_module! {
 
 			let check_result = Self::check_if_should_proceed(block_number);
 
-			if let Err(e) = check_result {
-				debug::info!("{:?}", e);
-				return; // Skip the execution at this block
+			if check_result == false {
+				debug::info!("[OCW] Too early to execute OCW. Skipping");
+				return; // Skip the execution for this block
 			}
 
 			let res = Self::fetch_ddc_data_and_send_to_sc(block_number);
@@ -161,20 +161,32 @@ decl_storage! {
 }
 
 impl<T: Trait> Module<T> {
-	fn check_if_should_proceed(_block_number: T::BlockNumber) -> Result<(), &'static str> {
+	fn check_if_should_proceed(_block_number: T::BlockNumber) -> bool {
 		let s_next_at = StorageValueRef::persistent(b"example-offchain-worker::next-at"); // TODO: Rename after OCW renamed
 
-		if let Some(Some(next_at)) = s_next_at.get::<T::BlockNumber>() {
-			if next_at > _block_number {
-				return Err("[OCW] Too early to execute OCW. Skipping");
+		match s_next_at.mutate(
+			|current_next_at| {
+				let current_next_at = current_next_at.unwrap_or(Some(T::BlockNumber::default()));
+
+				if let Some(current_next_at) = current_next_at {
+					if current_next_at > _block_number {
+						debug::info!("[OCW] Too early to execute. Current: {:?}, next execution at: {:?}", _block_number, current_next_at);
+						Err("Skipping")
+					} else {
+						// set new value
+						Ok(T::BlockInterval::get() + _block_number)
+					}
+				} else {
+					debug::error!("[OCW] Something went wrong in `check_if_should_proceed`");
+					Err("Unexpected error")
+				}
+			}
+		) {
+			Ok(_val) => true,
+			Err(_e) => {
+				false
 			}
 		}
-
-		let current_block = <frame_system::Module<T>>::block_number();
-
-		s_next_at.set(&(current_block + T::BlockInterval::get()));
-
-		Ok(())
 	}
 
 
