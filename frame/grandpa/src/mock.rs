@@ -25,7 +25,6 @@ use codec::Encode;
 use frame_support::{
 	parameter_types,
 	traits::{KeyOwnerProofSystem, OnFinalize, OnInitialize},
-	weights::Weight,
 };
 use pallet_staking::EraIndex;
 use sp_core::{crypto::KeyTypeId, H256};

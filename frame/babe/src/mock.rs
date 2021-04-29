@@ -29,7 +29,6 @@ use frame_system::InitKind;
 use frame_support::{
 	parameter_types,
 	traits::{KeyOwnerProofSystem, OnInitialize},
-	weights::Weight,
 };
 use sp_io;
 use sp_core::{H256, U256, crypto::{IsWrappedBy, KeyTypeId, Pair}};

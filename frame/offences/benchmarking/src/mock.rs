@@ -22,7 +22,7 @@
 use super::*;
 use frame_support::{
 	parameter_types,
-	weights::{Weight, constants::WEIGHT_PER_SECOND},
+	weights::constants::WEIGHT_PER_SECOND,
 };
 use frame_system as system;
 use sp_runtime::{
