@@ -478,7 +478,7 @@ impl<B: BlockT> Protocol<B> {
 
 	/// Inform sync about new best imported block.
 	pub fn new_best_block_imported(&mut self, hash: B::Hash, number: NumberFor<B>) {
-		trace!(target: "sync", "New best block imported {:?}/#{}", hash, number);
+		debug!(target: "sync", "New best block imported {:?}/#{}", hash, number);
 
 		self.sync.update_chain_info(&hash, number);
 
@@ -522,11 +522,13 @@ impl<B: BlockT> Protocol<B> {
 		if self.important_peers.contains(&peer) {
 			warn!(target: "sync", "Reserved peer {} disconnected", peer);
 		} else {
-			trace!(target: "sync", "{} disconnected", peer);
+			debug!(target: "sync", "{} disconnected", peer);
 		}
 
 		if let Some(_peer_data) = self.peers.remove(&peer) {
-			self.sync.peer_disconnected(&peer);
+			if let Some(sync::OnBlockData::Import(origin, blocks)) = self.sync.peer_disconnected(&peer) {
+				self.pending_messages.push_back(CustomMessageOutcome::BlockImport(origin, blocks));
+			}
 			Ok(())
 		} else {
 			Err(())
@@ -575,6 +577,11 @@ impl<B: BlockT> Protocol<B> {
 					Some(block_data.justification)
 				} else if block_data.is_empty_justification {
 					Some(Vec::new())
+				} else {
+					None
+				},
+				justifications: if !block_data.justifications.is_empty() {
+					Some(DecodeAll::decode_all(&mut block_data.justifications.as_ref())?)
 				} else {
 					None
 				},
@@ -906,6 +913,7 @@ impl<B: BlockT> Protocol<B> {
 						receipt: None,
 						message_queue: None,
 						justification: None,
+						justifications: None,
 					},
 				],
 			},
@@ -1121,6 +1129,7 @@ fn prepare_block_request<B: BlockT>(
 		to_block: request.to.map(|h| h.encode()).unwrap_or_default(),
 		direction: request.direction as i32,
 		max_blocks: request.max.unwrap_or(0),
+		support_multiple_justifications: true,
 	};
 
 	CustomMessageOutcome::BlockRequest {
@@ -1230,7 +1239,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 						let protobuf_response = match crate::schema::v1::BlockResponse::decode(&resp[..]) {
 							Ok(proto) => proto,
 							Err(e) => {
-								trace!(target: "sync", "Failed to decode block request to peer {:?}: {:?}.", id, e);
+								debug!(target: "sync", "Failed to decode block request to peer {:?}: {:?}.", id, e);
 								self.peerset_handle.report_peer(id.clone(), rep::BAD_MESSAGE);
 								self.behaviour.disconnect_peer(id, HARDCODED_PEERSETS_SYNC);
 								continue;
@@ -1241,7 +1250,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 					},
 					Poll::Ready(Ok(Err(e))) => {
 						peer.block_request.take();
-						trace!(target: "sync", "Block request to peer {:?} failed: {:?}.", id, e);
+						debug!(target: "sync", "Block request to peer {:?} failed: {:?}.", id, e);
 
 						match e {
 							RequestFailure::Network(OutboundFailure::Timeout) => {
@@ -1438,7 +1447,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 					if self.on_sync_peer_disconnected(peer_id.clone()).is_ok() {
 						CustomMessageOutcome::SyncDisconnected(peer_id)
 					} else {
-						log::debug!(
+						log::trace!(
 							target: "sync",
 							"Disconnected peer which had earlier been refused by on_sync_peer_connected {}",
 							peer_id
@@ -1476,7 +1485,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 						}
 					}
 					HARDCODED_PEERSETS_SYNC => {
-						debug!(
+						trace!(
 							target: "sync",
 							"Received sync for peer earlier refused by sync layer: {}",
 							peer_id
@@ -1521,16 +1530,24 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		self.behaviour.inject_dial_failure(peer_id)
 	}
 
-	fn inject_new_listen_addr(&mut self, addr: &Multiaddr) {
-		self.behaviour.inject_new_listen_addr(addr)
+	fn inject_new_listener(&mut self, id: ListenerId) {
+		self.behaviour.inject_new_listener(id)
 	}
 
-	fn inject_expired_listen_addr(&mut self, addr: &Multiaddr) {
-		self.behaviour.inject_expired_listen_addr(addr)
+	fn inject_new_listen_addr(&mut self, id: ListenerId, addr: &Multiaddr) {
+		self.behaviour.inject_new_listen_addr(id, addr)
+	}
+
+	fn inject_expired_listen_addr(&mut self, id: ListenerId, addr: &Multiaddr) {
+		self.behaviour.inject_expired_listen_addr(id, addr)
 	}
 
 	fn inject_new_external_addr(&mut self, addr: &Multiaddr) {
 		self.behaviour.inject_new_external_addr(addr)
+	}
+
+	fn inject_expired_external_addr(&mut self, addr: &Multiaddr) {
+		self.behaviour.inject_expired_external_addr(addr)
 	}
 
 	fn inject_listener_error(&mut self, id: ListenerId, err: &(dyn std::error::Error + 'static)) {

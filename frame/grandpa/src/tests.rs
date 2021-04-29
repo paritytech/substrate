@@ -24,7 +24,7 @@ use crate::mock::*;
 use codec::{Decode, Encode};
 use fg_primitives::ScheduledChange;
 use frame_support::{
-	assert_err, assert_ok,
+	assert_err, assert_ok, assert_noop,
 	traits::{Currency, OnFinalize, OneSessionHandler},
 	weights::{GetDispatchInfo, Pays},
 };
@@ -100,21 +100,27 @@ fn cannot_schedule_change_when_one_pending() {
 		initialize_block(1, Default::default());
 		Grandpa::schedule_change(to_authorities(vec![(4, 1), (5, 1), (6, 1)]), 1, None).unwrap();
 		assert!(<PendingChange<Test>>::exists());
-		assert!(Grandpa::schedule_change(to_authorities(vec![(5, 1)]), 1, None).is_err());
+		assert_noop!(
+			Grandpa::schedule_change(to_authorities(vec![(5, 1)]), 1, None),
+			Error::<Test>::ChangePending
+		);
 
 		Grandpa::on_finalize(1);
 		let header = System::finalize();
 
 		initialize_block(2, header.hash());
 		assert!(<PendingChange<Test>>::exists());
-		assert!(Grandpa::schedule_change(to_authorities(vec![(5, 1)]), 1, None).is_err());
+		assert_noop!(
+			Grandpa::schedule_change(to_authorities(vec![(5, 1)]), 1, None),
+			Error::<Test>::ChangePending
+		);
 
 		Grandpa::on_finalize(2);
 		let header = System::finalize();
 
 		initialize_block(3, header.hash());
 		assert!(!<PendingChange<Test>>::exists());
-		assert!(Grandpa::schedule_change(to_authorities(vec![(5, 1)]), 1, None).is_ok());
+		assert_ok!(Grandpa::schedule_change(to_authorities(vec![(5, 1)]), 1, None));
 
 		Grandpa::on_finalize(3);
 		let _header = System::finalize();
@@ -148,7 +154,10 @@ fn dispatch_forced_change() {
 		).unwrap();
 
 		assert!(<PendingChange<Test>>::exists());
-		assert!(Grandpa::schedule_change(to_authorities(vec![(5, 1)]), 1, Some(0)).is_err());
+		assert_noop!(
+			Grandpa::schedule_change(to_authorities(vec![(5, 1)]), 1, Some(0)),
+			Error::<Test>::ChangePending
+		);
 
 		Grandpa::on_finalize(1);
 		let mut header = System::finalize();
@@ -157,8 +166,14 @@ fn dispatch_forced_change() {
 			initialize_block(i, header.hash());
 			assert!(<PendingChange<Test>>::get().unwrap().forced.is_some());
 			assert_eq!(Grandpa::next_forced(), Some(11));
-			assert!(Grandpa::schedule_change(to_authorities(vec![(5, 1)]), 1, None).is_err());
-			assert!(Grandpa::schedule_change(to_authorities(vec![(5, 1)]), 1, Some(0)).is_err());
+			assert_noop!(
+				Grandpa::schedule_change(to_authorities(vec![(5, 1)]), 1, None),
+				Error::<Test>::ChangePending
+			);
+			assert_noop!(
+				Grandpa::schedule_change(to_authorities(vec![(5, 1)]), 1, Some(0)),
+				Error::<Test>::ChangePending
+			);
 
 			Grandpa::on_finalize(i);
 			header = System::finalize();
@@ -170,7 +185,7 @@ fn dispatch_forced_change() {
 			initialize_block(7, header.hash());
 			assert!(!<PendingChange<Test>>::exists());
 			assert_eq!(Grandpa::grandpa_authorities(), to_authorities(vec![(4, 1), (5, 1), (6, 1)]));
-			assert!(Grandpa::schedule_change(to_authorities(vec![(5, 1)]), 1, None).is_ok());
+			assert_ok!(Grandpa::schedule_change(to_authorities(vec![(5, 1)]), 1, None));
 			Grandpa::on_finalize(7);
 			header = System::finalize();
 		}
@@ -180,7 +195,10 @@ fn dispatch_forced_change() {
 			initialize_block(8, header.hash());
 			assert!(<PendingChange<Test>>::exists());
 			assert_eq!(Grandpa::grandpa_authorities(), to_authorities(vec![(4, 1), (5, 1), (6, 1)]));
-			assert!(Grandpa::schedule_change(to_authorities(vec![(5, 1)]), 1, None).is_err());
+			assert_noop!(
+				Grandpa::schedule_change(to_authorities(vec![(5, 1)]), 1, None),
+				Error::<Test>::ChangePending
+			);
 			Grandpa::on_finalize(8);
 			header = System::finalize();
 		}
@@ -192,7 +210,10 @@ fn dispatch_forced_change() {
 			assert!(!<PendingChange<Test>>::exists());
 			assert_eq!(Grandpa::grandpa_authorities(), to_authorities(vec![(5, 1)]));
 			assert_eq!(Grandpa::next_forced(), Some(11));
-			assert!(Grandpa::schedule_change(to_authorities(vec![(5, 1), (6, 1)]), 5, Some(0)).is_err());
+			assert_noop!(
+				Grandpa::schedule_change(to_authorities(vec![(5, 1), (6, 1)]), 5, Some(0)),
+				Error::<Test>::TooSoon
+			);
 			Grandpa::on_finalize(i);
 			header = System::finalize();
 		}
@@ -200,7 +221,7 @@ fn dispatch_forced_change() {
 		{
 			initialize_block(11, header.hash());
 			assert!(!<PendingChange<Test>>::exists());
-			assert!(Grandpa::schedule_change(to_authorities(vec![(5, 1), (6, 1), (7, 1)]), 5, Some(0)).is_ok());
+			assert_ok!(Grandpa::schedule_change(to_authorities(vec![(5, 1), (6, 1), (7, 1)]), 5, Some(0)));
 			assert_eq!(Grandpa::next_forced(), Some(21));
 			Grandpa::on_finalize(11);
 			header = System::finalize();
@@ -231,7 +252,7 @@ fn schedule_pause_only_when_live() {
 		initialize_block(2, Default::default());
 
 		// signaling a pause now should fail
-		assert!(Grandpa::schedule_pause(1).is_err());
+		assert_noop!(Grandpa::schedule_pause(1), Error::<Test>::PauseFailed);
 
 		Grandpa::on_finalize(2);
 		let _ = System::finalize();
@@ -250,7 +271,7 @@ fn schedule_resume_only_when_paused() {
 		initialize_block(1, Default::default());
 
 		// the set is currently live, resuming it is an error
-		assert!(Grandpa::schedule_resume(1).is_err());
+		assert_noop!(Grandpa::schedule_resume(1), Error::<Test>::ResumeFailed);
 
 		assert_eq!(
 			Grandpa::state(),
