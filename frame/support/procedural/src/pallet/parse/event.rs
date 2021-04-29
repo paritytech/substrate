@@ -124,6 +124,7 @@ impl syn::parse::Parse for PalletEventAttr {
 }
 
 struct PalletEventAttrInfo {
+	// todo: [AJ] this is unused now because of TypeInfo derive for Error, consider removing if compatible with downstream clients
 	metadata: Option<Vec<(syn::Type, String)>>,
 	deposit_event: Option<(syn::Visibility, proc_macro2::Span)>,
 }
