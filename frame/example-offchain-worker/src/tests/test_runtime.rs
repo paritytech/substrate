@@ -6,14 +6,14 @@ use crate::*;
 
 use codec::{Decode, Encode};
 use frame_support::{
-	impl_outer_dispatch, impl_outer_event, impl_outer_origin, parameter_types, traits::Get,
-	weights::Weight,
+    impl_outer_dispatch, impl_outer_event, impl_outer_origin, parameter_types, traits::Get,
+    weights::Weight,
 };
 use sp_core::{sr25519::Signature, H256};
 use sp_runtime::{
-	testing::{Header, TestXt},
-	traits::{BlakeTwo256, Convert, Extrinsic as ExtrinsicT, IdentityLookup, Verify},
-	Perbill,
+    testing::{Header, TestXt},
+    traits::{BlakeTwo256, Convert, Extrinsic as ExtrinsicT, IdentityLookup, Verify},
+    Perbill,
 };
 use sp_std::str::FromStr;
 use std::cell::RefCell;
@@ -28,19 +28,19 @@ use pallet_balances as balances;
 use pallet_contracts as contracts;
 
 mod example_offchain_worker {
-	// Re-export contents of the root. This basically
-	// needs to give a name for the current crate.
-	// This hack is required for `impl_outer_event!`.
-	pub use crate::*;
-	pub use frame_support::impl_outer_event;
+    // Re-export contents of the root. This basically
+    // needs to give a name for the current crate.
+    // This hack is required for `impl_outer_event!`.
+    pub use crate::*;
+    pub use frame_support::impl_outer_event;
 }
 
 // Macro hack: Give names to the modules.
-type Balances = balances::Module<Test>;
-type Timestamp = pallet_timestamp::Module<Test>;
-type Contracts = contracts::Module<Test>;
-type System = frame_system::Module<Test>;
-type Randomness = pallet_randomness_collective_flip::Module<Test>;
+pub type Balances = balances::Module<Test>;
+pub type Timestamp = pallet_timestamp::Module<Test>;
+pub type Contracts = contracts::Module<Test>;
+pub type System = frame_system::Module<Test>;
+pub type Randomness = pallet_randomness_collective_flip::Module<Test>;
 
 pub type ExampleOffchainWorker = Module<Test>;
 
@@ -78,40 +78,42 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl frame_system::Trait for Test {
-	type BaseCallFilter = ();
-	type Origin = Origin;
-	type Index = u64;
-	type BlockNumber = u64;
-	type Hash = H256;
-	type Call = MetaCall;
-	type Hashing = BlakeTwo256;
-	type AccountId = AccountId; // u64; // sp_core::sr25519::Public;
-	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
-	type Event = MetaEvent;
-	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
-	type DbWeight = ();
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
-	type MaximumExtrinsicWeight = MaximumBlockWeight;
-	type AvailableBlockRatio = AvailableBlockRatio;
-	type MaximumBlockLength = MaximumBlockLength;
-	type Version = ();
-	type PalletInfo = ();
-	type AccountData = pallet_balances::AccountData<u64>;
-	type OnNewAccount = ();
-	type OnKilledAccount = ();
-	type SystemWeightInfo = ();
+    type BaseCallFilter = ();
+    type Origin = Origin;
+    type Index = u64;
+    type BlockNumber = u64;
+    type Hash = H256;
+    type Call = MetaCall;
+    type Hashing = BlakeTwo256;
+    type AccountId = AccountId;
+    // u64; // sp_core::sr25519::Public;
+    type Lookup = IdentityLookup<Self::AccountId>;
+    type Header = Header;
+    type Event = MetaEvent;
+    type BlockHashCount = BlockHashCount;
+    type MaximumBlockWeight = MaximumBlockWeight;
+    type DbWeight = ();
+    type BlockExecutionWeight = ();
+    type ExtrinsicBaseWeight = ();
+    type MaximumExtrinsicWeight = MaximumBlockWeight;
+    type AvailableBlockRatio = AvailableBlockRatio;
+    type MaximumBlockLength = MaximumBlockLength;
+    type Version = ();
+    type PalletInfo = ();
+    type AccountData = pallet_balances::AccountData<u64>;
+    type OnNewAccount = ();
+    type OnKilledAccount = ();
+    type SystemWeightInfo = ();
 }
+
 impl pallet_balances::Trait for Test {
-	type MaxLocks = ();
-	type Balance = u64;
-	type Event = MetaEvent;
-	type DustRemoval = ();
-	type ExistentialDeposit = ExistentialDeposit;
-	type AccountStore = System;
-	type WeightInfo = ();
+    type MaxLocks = ();
+    type Balance = u64;
+    type Event = MetaEvent;
+    type DustRemoval = ();
+    type ExistentialDeposit = ExistentialDeposit;
+    type AccountStore = System;
+    type WeightInfo = ();
 }
 
 thread_local! {
@@ -119,20 +121,21 @@ thread_local! {
 }
 
 pub struct ExistentialDeposit;
+
 impl Get<u64> for ExistentialDeposit {
-	fn get() -> u64 {
-		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow())
-	}
+    fn get() -> u64 {
+        EXISTENTIAL_DEPOSIT.with(|v| *v.borrow())
+    }
 }
 
 parameter_types! {
 	pub const MinimumPeriod: u64 = 1;
 }
 impl pallet_timestamp::Trait for Test {
-	type Moment = u64;
-	type OnTimestampSet = ();
-	type MinimumPeriod = MinimumPeriod;
-	type WeightInfo = ();
+    type Moment = u64;
+    type OnTimestampSet = ();
+    type MinimumPeriod = MinimumPeriod;
+    type WeightInfo = ();
 }
 parameter_types! {
 	pub const SignedClaimHandicap: u64 = 2;
@@ -147,26 +150,26 @@ parameter_types! {
 
 // Contracts for Test Runtime.
 
-use contracts::{BalanceOf, ContractAddressFor, TrieId, TrieIdGenerator};
+use contracts::{BalanceOf, ContractAddressFor, SimpleAddressDeterminer, TrieId, TrieIdFromParentCounter, TrieIdGenerator};
 use frame_support::StorageValue;
 
 impl contracts::Trait for Test {
-	type Time = Timestamp;
-	type Randomness = Randomness;
-	type Currency = Balances;
-	type DetermineContractAddress = DummyContractAddressFor;
-	type Event = MetaEvent;
-	type TrieIdGenerator = DummyTrieIdGenerator;
-	type RentPayment = ();
-	type SignedClaimHandicap = SignedClaimHandicap;
-	type TombstoneDeposit = TombstoneDeposit;
-	type StorageSizeOffset = StorageSizeOffset;
-	type RentByteFee = RentByteFee;
-	type RentDepositOffset = RentDepositOffset;
-	type SurchargeReward = SurchargeReward;
-	type MaxDepth = MaxDepth;
-	type MaxValueSize = MaxValueSize;
-	type WeightPrice = Self;
+    type Time = Timestamp;
+    type Randomness = Randomness;
+    type Currency = Balances;
+    type DetermineContractAddress = SimpleAddressDeterminer<Self>;
+    type Event = MetaEvent;
+    type TrieIdGenerator = TrieIdFromParentCounter<Self>;
+    type RentPayment = ();
+    type SignedClaimHandicap = SignedClaimHandicap;
+    type TombstoneDeposit = TombstoneDeposit;
+    type StorageSizeOffset = StorageSizeOffset;
+    type RentByteFee = RentByteFee;
+    type RentDepositOffset = RentDepositOffset;
+    type SurchargeReward = SurchargeReward;
+    type MaxDepth = MaxDepth;
+    type MaxValueSize = MaxValueSize;
+    type WeightPrice = Self;
 }
 
 parameter_types! {
@@ -174,83 +177,66 @@ parameter_types! {
 }
 
 impl Convert<Weight, BalanceOf<Self>> for Test {
-	fn convert(w: Weight) -> BalanceOf<Self> {
-		w
-	}
-}
-
-pub struct DummyContractAddressFor;
-impl ContractAddressFor<H256, AccountId> for DummyContractAddressFor {
-	fn contract_address_for(_code_hash: &H256, _data: &[u8], origin: &AccountId) -> AccountId {
-		let mut contract_address = origin.clone();
-		contract_address.as_mut()[0] += 1;
-		contract_address
-	}
-}
-
-pub struct DummyTrieIdGenerator;
-impl TrieIdGenerator<AccountId> for DummyTrieIdGenerator {
-	fn trie_id(account_id: &AccountId) -> TrieId {
-		let new_seed = contracts::AccountCounter::mutate(|v| {
-			*v = v.wrapping_add(1);
-			*v
-		});
-
-		let mut res = vec![];
-		res.extend_from_slice(&new_seed.to_le_bytes());
-		res.extend_from_slice(&account_id);
-		res
-	}
+    fn convert(w: Weight) -> BalanceOf<Self> {
+        w
+    }
 }
 
 // -- End contracts runtime --
 
 use frame_system::offchain::{
-	AppCrypto, CreateSignedTransaction, SendTransactionTypes, SigningTypes,
+    AppCrypto, CreateSignedTransaction, SendTransactionTypes, SigningTypes,
 };
 
 pub type Extrinsic = TestXt<MetaCall, ()>;
 
 impl SigningTypes for Test {
-	type Public = <Signature as Verify>::Signer;
-	type Signature = Signature;
+    type Public = <Signature as Verify>::Signer;
+    type Signature = Signature;
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Test
-where
-	MetaCall: From<LocalCall>,
+    where
+        MetaCall: From<LocalCall>,
 {
-	type OverarchingCall = MetaCall;
-	type Extrinsic = Extrinsic;
+    type OverarchingCall = MetaCall;
+    type Extrinsic = Extrinsic;
 }
 
 impl<LocalCall> CreateSignedTransaction<LocalCall> for Test
-where
-	MetaCall: From<LocalCall>,
+    where
+        MetaCall: From<LocalCall>,
 {
-	fn create_transaction<C: AppCrypto<Self::Public, Self::Signature>>(
-		call: MetaCall,
-		_public: <Signature as Verify>::Signer,
-		_account: AccountId,
-		nonce: u64,
-	) -> Option<(MetaCall, <Extrinsic as ExtrinsicT>::SignaturePayload)> {
-		Some((call, (nonce, ())))
-	}
+    fn create_transaction<C: AppCrypto<Self::Public, Self::Signature>>(
+        call: MetaCall,
+        _public: <Signature as Verify>::Signer,
+        _account: AccountId,
+        nonce: u64,
+    ) -> Option<(MetaCall, <Extrinsic as ExtrinsicT>::SignaturePayload)> {
+        Some((call, (nonce, ())))
+    }
+}
+
+// Mutable contract address.
+thread_local! {
+	pub static CURRENT_METRICS_CONTRACT_ID: RefCell<AccountId> = RefCell::new(AccountId::from_raw(METRICS_CONTRACT_ID));
 }
 
 parameter_types! {
 	pub MetricsContractId: AccountId = {
-		AccountId::from_raw(METRICS_CONTRACT_ID)
+		CURRENT_METRICS_CONTRACT_ID.with(|v| *v.borrow())
 	};
+	pub DdcUrl: Vec<u8> = "https://TEST_DDC".as_bytes().to_vec();
 }
 
 impl Trait for Test {
-	type ContractId = MetricsContractId;
+    type ContractId = MetricsContractId;
+    type DdcUrl = DdcUrl;
 
-	type CT = Self;
-	type CST = Self;
-	type AuthorityId = crypto::TestAuthId;
+    type CT = Self;
+    type CST = Self;
+    type AuthorityId = crypto::TestAuthId;
 
-	type Event = MetaEvent;
-	type Call = MetaCall;
+    type Event = MetaEvent;
+    type Call = MetaCall;
 }
