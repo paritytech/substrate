@@ -19,15 +19,20 @@ use frame_support::{
 };
 use sp_core::crypto::KeyTypeId;
 use sp_runtime::{
-	offchain::{http, Duration},
+	offchain::{
+		http,
+		Duration,
+		storage::StorageValueRef
+	},
 	traits::StaticLookup,
 	traits::Zero,
 };
 use codec::{Encode, Decode};
-use sp_std::vec::Vec;
+use sp_std::{vec::Vec, str::from_utf8};
 use pallet_contracts;
 // use lite_json::json::JsonValue;
 use alt_serde::{Deserialize, Deserializer};
+use hex_literal::hex;
 
 #[macro_use]
 extern crate alloc;
@@ -36,7 +41,9 @@ extern crate alloc;
 // To change the address, see tests/mod.rs decode_contract_address().
 pub const METRICS_CONTRACT_ADDR: &str = "5Ch5xtvoFF3Muu91WkHCY4mhTDTCyYS2TmBL1zKiBXrYbiZv";
 pub const METRICS_CONTRACT_ID: [u8; 32] = [27, 191, 65, 45, 0, 189, 12, 234, 31, 196, 9, 143, 196, 27, 157, 170, 92, 57, 127, 122, 70, 152, 19, 223, 235, 21, 170, 26, 249, 130, 98, 114];
+pub const BLOCK_INTERVAL: u32 = 10;
 
+pub const REPORT_METRICS_SELECTOR: [u8; 4] = hex!("35320bbe");
 
 // use serde_json::{Value};
 
@@ -45,6 +52,7 @@ pub const METRICS_CONTRACT_ID: [u8; 32] = [27, 191, 65, 45, 0, 189, 12, 234, 31,
 #[serde(crate = "alt_serde")]
 #[derive(Deserialize, Encode, Decode, Default)]
 #[derive(Debug)]
+#[allow(non_snake_case)]
 struct NodeInfo {
 	#[serde(deserialize_with = "de_string_to_bytes")]
 	id: Vec<u8>,
@@ -95,13 +103,13 @@ pub fn de_string_to_bytes<'de, D>(de: D) -> Result<Vec<u8>, D::Error>
 /// The keys can be inserted manually via RPC (see `author_insertKey`).
 pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"ddc1");
 
-pub const HTTP_NODES_REQUEST: &str = "https://node-0.ddc.stage.cere.network/api/rest/nodes";
-pub const HTTP_PARTITIONS_REQUEST: &str = "https://node-0.ddc.stage.cere.network/api/rest/partitions?isMaster=true&active=true";
-pub const METRICS_REQUEST_PREFIX: &str = "/api/rest/metrics?appPubKey=";
+pub const HTTP_NODES: &str = "/api/rest/nodes";
+pub const HTTP_PARTITIONS: &str = "/api/rest/partitions?isMaster=true&active=true";
+pub const HTTP_METRICS: &str = "/api/rest/metrics?appPubKey=";
 pub const METRICS_PARAM_PARTITIONID: &str = "&partitionId="; // partition.id
 pub const METRICS_PARAM_FROM: &str = "&from="; // lastTimestamp
 pub const METRICS_PARAM_TO: &str = "&to="; // now() - 2 minutes
-pub const FETCH_TIMEOUT_PERIOD: u64 = 5000; // in milli-seconds
+pub const FETCH_TIMEOUT_PERIOD: u64 = 3000; // in milli-seconds
 
 /// Based on the above `KeyTypeId` we need to generate a pallet-specific crypto type wrappers.
 /// We can use from supported crypto kinds (`sr25519`, `ed25519` and `ecdsa`) and augment
@@ -156,22 +164,27 @@ decl_module! {
 		fn offchain_worker(block_number: T::BlockNumber) {
 			debug::info!("[OCW] Hello World from offchain workers!");
 
-			let transaction_type = block_number % 3u32.into();
-			if transaction_type == Zero::zero() {
-				let res = Self::fetch_ddc_data_and_send_to_sc(block_number);
+			let check_result = Self::check_if_should_proceed(block_number);
 
-				// TODO: abort on error.
-				if let Err(e) = res {
-					debug::error!("Some error occurred: {:?}", e);
-				}
-
-				debug::info!("[OCW] About to send mock transaction");
-				let sc_res = Self::send_to_sc_mock();
-
-				if let Err(e) = sc_res {
-					debug::error!("Some error occurred: {:?}", e);
-				}
+			if check_result == false {
+				debug::info!("[OCW] Too early to execute OCW. Skipping");
+				return; // Skip the execution for this block
 			}
+
+			let res = Self::fetch_ddc_data_and_send_to_sc(block_number);
+
+			// TODO: abort on error.
+			if let Err(e) = res {
+				debug::error!("Some error occurred: {:?}", e);
+			}
+
+			debug::info!("[OCW] About to send mock transaction");
+			let sc_res = Self::send_to_sc_mock();
+
+			if let Err(e) = sc_res {
+				debug::error!("Some error occurred: {:?}", e);
+			}
+
             debug::info!("[OCW] Finishing!");
 		}
 	}
@@ -183,11 +196,39 @@ decl_storage! {
 }
 
 impl<T: Trait> Module<T> {
+	fn check_if_should_proceed(_block_number: T::BlockNumber) -> bool {
+		let s_next_at = StorageValueRef::persistent(b"example-offchain-worker::next-at"); // TODO: Rename after OCW renamed
+
+		match s_next_at.mutate(
+			|current_next_at| {
+				let current_next_at = current_next_at.unwrap_or(Some(T::BlockNumber::default()));
+
+				if let Some(current_next_at) = current_next_at {
+					if current_next_at > _block_number {
+						debug::info!("[OCW] Too early to execute. Current: {:?}, next execution at: {:?}", _block_number, current_next_at);
+						Err("Skipping")
+					} else {
+						// set new value
+						Ok(T::BlockInterval::get() + _block_number)
+					}
+				} else {
+					debug::error!("[OCW] Something went wrong in `check_if_should_proceed`");
+					Err("Unexpected error")
+				}
+			}
+		) {
+			Ok(_val) => true,
+			Err(_e) => {
+				false
+			}
+		}
+	}
+
 
 	fn send_to_sc_mock() -> Result<(), &'static str> {
 
 		debug::info!("[OCW] Getting signer");
-		let signer = Signer::<T::CST, T::AuthorityId>::all_accounts();
+		let signer = Signer::<T::CST, T::AuthorityId>::any_account();
 		debug::info!("[OCW] Checking signer");
 		if !signer.can_sign() {
 			return Err(
@@ -203,23 +244,19 @@ impl<T: Trait> Module<T> {
 		// local keystore with expected `KEY_TYPE`.
 		let results = signer.send_signed_transaction(
 			|_account| {
-				let input = [
-					// the selector
-					0x35,
-					0x32,
-					0x0B,
-					0xBE,
+				let mut call_data = REPORT_METRICS_SELECTOR.to_vec();
+				call_data.extend_from_slice(&[
 					1,
 					2,
 					3,
 					4,
-				];
+				]);
 
 				pallet_contracts::Call::call(
 					T::ContractId::get(),
 					0u32.into(),
 					10_000_000_000,
-					input.to_vec()
+					call_data
 				)
 			}
 		);
@@ -240,10 +277,6 @@ impl<T: Trait> Module<T> {
 
 		debug::info!("Network topology: {:?}", topology);
 
-//		let data = Self::get_nodes_data(topology);
-
-		// send_to_sc(data);
-
 		Ok(())
 	}
 
@@ -253,7 +286,7 @@ impl<T: Trait> Module<T> {
 
 	/// This function uses the `offchain::http` API to query data
 	/// For get method, input url and returns the JSON response as vector of bytes.
-	fn http_get_request(http_url: &str) -> Result<Vec<u8>, http::Error> {	
+	fn http_get_request(http_url: &str) -> Result<Vec<u8>, http::Error> {
 		debug::info!("Sending request to: {:?}", http_url);
 
 		// Initiate an external HTTP GET request. This is using high-level wrappers from `sp_runtime`.
@@ -282,7 +315,7 @@ impl<T: Trait> Module<T> {
 	///   and returns the JSON response as vector of bytes.
 	fn fetch_from_node(one_node: &NodeInfo) -> Result<Vec<u8>, http::Error> {
 		let node_url = sp_std::str::from_utf8(&one_node.httpAddr).unwrap();
-	
+
 		let response_data = Self::http_get_request(node_url).map_err(|e| {
 			debug::error!("fetch_from_node error: {:?}", e);
 			http::Error::Unknown
@@ -293,8 +326,11 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn fetch_ddc_network_topology() -> Result<(), http::Error> {
+		let mut url = T::DdcUrl::get();
+		url.extend_from_slice(HTTP_NODES.as_bytes());
+		let url = from_utf8(&url).unwrap();
 
-		let fetch_node_list_bytes = Self::http_get_request(HTTP_NODES_REQUEST).map_err(|e| {
+		let fetch_node_list_bytes = Self::http_get_request(url).map_err(|e| {
 			debug::error!("fetch_from_node error: {:?}", e);
 			http::Error::Unknown
 		})?;
@@ -347,7 +383,7 @@ impl<T: Trait> Module<T> {
 					debug::warn!("httpAddr");
 					http::Error::Unknown
 				})?;
-				
+
 				let app_pubkey_str = sp_std::str::from_utf8(&one_partition.appPubKey).map_err(|_| {
 					debug::warn!("appPubKey error");
 					http::Error::Unknown
@@ -375,12 +411,12 @@ impl<T: Trait> Module<T> {
 					debug::error!("fetch_metric_bytes error: {:?}", e);
 					http::Error::Unknown
 				})?;
-		
+
 				let fetch_metric_str = sp_std::str::from_utf8(&fetch_metric_bytes).map_err(|_| {
 					debug::warn!("fetch_metric_str: No UTF8 body");
 					http::Error::Unknown
 				})?;
-		
+
 				// debug::info!("fetch_metric_str: {}", fetch_metric_str);
 			}
 		}
@@ -407,6 +443,7 @@ decl_event!(
 
 pub trait Trait: frame_system::Trait {
 	type ContractId: Get<<<Self::CT as frame_system::Trait>::Lookup as StaticLookup>::Source>;
+	type DdcUrl: Get<Vec<u8>>;
 
 	type CT: pallet_contracts::Trait;
 	type CST: CreateSignedTransaction<pallet_contracts::Call<Self::CT>>;
@@ -419,4 +456,6 @@ pub trait Trait: frame_system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 	/// The overarching dispatch call type.
 	type Call: From<Call<Self>>;
+
+	type BlockInterval: Get<Self::BlockNumber>;
 }
