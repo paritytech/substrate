@@ -18,7 +18,7 @@
 //! Parsing of decl_storage input.
 
 use frame_support_procedural_tools::{ToTokens, Parse, syn_ext as ext};
-use syn::{Ident, Token, punctuated::Punctuated, spanned::Spanned};
+use syn::{Ident, Token, spanned::Spanned};
 
 mod keyword {
 	syn::custom_keyword!(hiddencrate);
@@ -245,23 +245,12 @@ struct DeclStorageKey {
 	pub key: syn::Type,
 }
 
-#[derive(ToTokens, Debug)]
+#[derive(Parse, ToTokens, Debug)]
 struct DeclStorageNMap {
 	pub map_keyword: keyword::nmap,
-	pub storage_keys: Punctuated<DeclStorageKey, Token![,]>,
+	pub storage_keys: ext::PunctuatedTrailing<DeclStorageKey, Token![,]>,
 	pub ass_keyword: Token![=>],
 	pub value: syn::Type,
-}
-
-impl syn::parse::Parse for DeclStorageNMap {
-	fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-		Ok(DeclStorageNMap {
-			map_keyword: input.parse()?,
-			storage_keys: <Punctuated<DeclStorageKey, Token![,]>>::parse_separated_nonempty(input)?,
-			ass_keyword:  input.parse()?,
-			value: input.parse()?,
-		})
-	}
 }
 
 #[derive(Clone, ToTokens, Debug)]
@@ -528,10 +517,11 @@ fn parse_storage_line_defs(
 				super::NMapDef {
 					hashers: map
 						.storage_keys
+						.inner
 						.iter()
 						.map(|pair| Ok(pair.hasher.inner.clone().ok_or_else(no_hasher_error)?.into()))
 						.collect::<Result<Vec<_>, syn::Error>>()?,
-					keys: map.storage_keys.iter().map(|pair| pair.key.clone()).collect(),
+					keys: map.storage_keys.inner.iter().map(|pair| pair.key.clone()).collect(),
 					value: map.value,
 				}
 			),
