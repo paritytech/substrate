@@ -65,7 +65,7 @@ where
 	C: Client<B, BE, P>,
 {
 	client: Arc<C>,
-	key_store: SyncCryptoStorePtr,
+	key_store: Option<SyncCryptoStorePtr>,
 	signed_commitment_sender: notification::BeefySignedCommitmentSender<B, P::Signature>,
 	gossip_engine: Arc<Mutex<GossipEngine<B>>>,
 	gossip_validator: Arc<BeefyGossipValidator<B, P>>,
@@ -103,7 +103,7 @@ where
 	/// The BEEFY pallet is needed in order to keep track of the BEEFY authority set.
 	pub(crate) fn new(
 		client: Arc<C>,
-		key_store: SyncCryptoStorePtr,
+		key_store: Option<SyncCryptoStorePtr>,
 		signed_commitment_sender: notification::BeefySignedCommitmentSender<B, P::Signature>,
 		gossip_engine: GossipEngine<B>,
 		gossip_validator: Arc<BeefyGossipValidator<B, P>>,
@@ -158,7 +158,12 @@ where
 	}
 
 	fn sign_commitment(&self, id: &P::Public, commitment: &[u8]) -> Result<P::Signature, error::Crypto<P::Public>> {
-		let sig = SyncCryptoStore::sign_with(&*self.key_store, KEY_TYPE, &id.to_public_crypto_pair(), &commitment)
+		let key_store = self
+			.key_store
+			.clone()
+			.ok_or_else(|| error::Crypto::CannotSign((*id).clone(), "Missing KeyStore".into()))?;
+
+		let sig = SyncCryptoStore::sign_with(&*key_store, KEY_TYPE, &id.to_public_crypto_pair(), &commitment)
 			.map_err(|e| error::Crypto::CannotSign((*id).clone(), e.to_string()))?
 			.ok_or_else(|| error::Crypto::CannotSign((*id).clone(), "No key in KeyStore found".into()))?;
 
@@ -190,10 +195,12 @@ where
 	///
 	/// `None` is returned, if we are not permitted to vote
 	fn local_id(&self) -> Option<P::Public> {
+		let key_store = self.key_store.clone()?;
+
 		self.rounds
 			.validators()
 			.iter()
-			.find(|id| SyncCryptoStore::has_keys(&*self.key_store, &[(id.to_raw_vec(), KEY_TYPE)]))
+			.find(|id| SyncCryptoStore::has_keys(&*key_store, &[(id.to_raw_vec(), KEY_TYPE)]))
 			.cloned()
 	}
 

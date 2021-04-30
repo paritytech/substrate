@@ -90,7 +90,7 @@ where
 /// This is a thin shim around running and awaiting a BEEFY worker.
 pub async fn start_beefy_gadget<B, P, BE, C, N, SO>(
 	client: Arc<C>,
-	key_store: SyncCryptoStorePtr,
+	key_store: Option<SyncCryptoStorePtr>,
 	network: N,
 	signed_commitment_sender: notification::BeefySignedCommitmentSender<B, P::Signature>,
 	_sync_oracle: SO,
