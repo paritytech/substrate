@@ -69,6 +69,7 @@ struct NodeInfo {
 #[serde(crate = "alt_serde")]
 #[derive(Deserialize, Encode, Decode, Default)]
 #[derive(Debug)]
+#[allow(non_snake_case)]
 struct PartitionInfo {
 	#[serde(deserialize_with = "de_string_to_bytes")]
 	id: Vec<u8>,
@@ -83,6 +84,19 @@ struct PartitionInfo {
 	backup: bool,
 	deleted: bool,
 	replicaIndex: u32,
+}
+
+#[serde(crate = "alt_serde")]
+#[derive(Deserialize, Encode, Decode, Default)]
+#[derive(Debug)]
+#[allow(non_snake_case)]
+struct MetricInfo {
+	#[serde(deserialize_with = "de_string_to_bytes")]
+	appPubKey: Vec<u8>,
+	#[serde(deserialize_with = "de_string_to_bytes")]
+	partitionId: Vec<u8>,
+	bytes: u32,
+	requests: u32,
 }
 
 pub fn de_string_to_bytes<'de, D>(de: D) -> Result<Vec<u8>, D::Error>
@@ -348,7 +362,11 @@ impl<T: Trait> Module<T> {
 		})?;
 		debug::info!("node_info length: {:?}", node_info.len());
 
-		let fetch_partition_list_bytes = Self::http_get_request(HTTP_PARTITIONS).map_err(|e| {
+		let mut url_partitions = T::DdcUrl::get();
+		url_partitions.extend_from_slice(HTTP_PARTITIONS.as_bytes());
+		let url_partitions = from_utf8(&url_partitions).unwrap();
+
+		let fetch_partition_list_bytes = Self::http_get_request(url_partitions).map_err(|e| {
 			debug::error!("fetch_partition_list_bytes error: {:?}", e);
 			http::Error::Unknown
 		})?;
@@ -378,46 +396,55 @@ impl<T: Trait> Module<T> {
 
 			if equal_index.is_none() {
 				debug::info!("Can not found in nodeId {:?} in the topology", sp_std::str::from_utf8(&one_partition.nodeId).unwrap());
-			} else {
-				let metrics_url = sp_std::str::from_utf8(&node_info[equal_index.unwrap()].httpAddr).map_err(|_| {
-					debug::warn!("httpAddr");
-					http::Error::Unknown
-				})?;
+				continue;
+			}
 
-				let app_pubkey_str = sp_std::str::from_utf8(&one_partition.appPubKey).map_err(|_| {
-					debug::warn!("appPubKey error");
-					http::Error::Unknown
-				})?;
-				let metrics_url_with_key = format!("{}{}{}", metrics_url, HTTP_METRICS, app_pubkey_str);
-				// debug::info!("metrics_url_with_key: {}", metrics_url_with_key);
+			let metrics_url = sp_std::str::from_utf8(&node_info[equal_index.unwrap()].httpAddr).map_err(|_| {
+				debug::warn!("httpAddr");
+				http::Error::Unknown
+			})?;
 
-				let partition_id_str = sp_std::str::from_utf8(&one_partition.id).map_err(|_| {
-					debug::warn!("partition id error");
-					http::Error::Unknown
-				})?;
+			let app_pubkey_str = sp_std::str::from_utf8(&one_partition.appPubKey).map_err(|_| {
+				debug::warn!("appPubKey error");
+				http::Error::Unknown
+			})?;
+			let metrics_url_with_key = format!("{}{}{}", metrics_url, HTTP_METRICS, app_pubkey_str);
+			// debug::info!("metrics_url_with_key: {}", metrics_url_with_key);
 
-				let metrics_url_with_partition = format!("{}{}{}", metrics_url_with_key, METRICS_PARAM_PARTITIONID, partition_id_str);
-				// debug::info!("metrics_url_with_partition: {}", metrics_url_with_partition);
+			let partition_id_str = sp_std::str::from_utf8(&one_partition.id).map_err(|_| {
+				debug::warn!("partition id error");
+				http::Error::Unknown
+			})?;
 
-				let last_time_stamp: u64 = 1619690465923;
-				let metrics_url_with_last_time = format!("{}{}{}", metrics_url_with_partition, METRICS_PARAM_FROM, last_time_stamp);
-				// debug::info!("metrics_url_with_last_time: {}", metrics_url_with_last_time);
+			let metrics_url_with_partition = format!("{}{}{}", metrics_url_with_key, METRICS_PARAM_PARTITIONID, partition_id_str);
+			// debug::info!("metrics_url_with_partition: {}", metrics_url_with_partition);
 
-				let to_time = sp_io::offchain::timestamp().sub(Duration::from_millis(120_000));
-				let metrics_url_final = format!("{}{}{}", metrics_url_with_last_time, METRICS_PARAM_TO, to_time.unix_millis());
-				// debug::info!("to_time: {:?}", to_time);
+			let last_time_stamp: u64 = 1619690465923;
+			let metrics_url_with_last_time = format!("{}{}{}", metrics_url_with_partition, METRICS_PARAM_FROM, last_time_stamp);
+			// debug::info!("metrics_url_with_last_time: {}", metrics_url_with_last_time);
 
-				let fetch_metric_bytes = Self::http_get_request(&metrics_url_final).map_err(|e| {
-					debug::error!("fetch_metric_bytes error: {:?}", e);
-					http::Error::Unknown
-				})?;
+			let to_time = sp_io::offchain::timestamp().sub(Duration::from_millis(120_000));
+			let metrics_url_final = format!("{}{}{}", metrics_url_with_last_time, METRICS_PARAM_TO, to_time.unix_millis());
+			// debug::info!("to_time: {:?}", to_time);
 
-				let fetch_metric_str = sp_std::str::from_utf8(&fetch_metric_bytes).map_err(|_| {
-					debug::warn!("fetch_metric_str: No UTF8 body");
-					http::Error::Unknown
-				})?;
+			let fetch_metric_bytes = Self::http_get_request(&metrics_url_final).map_err(|e| {
+				debug::error!("fetch_metric_bytes error: {:?}", e);
+				http::Error::Unknown
+			})?;
 
-				// debug::info!("fetch_metric_str: {}", fetch_metric_str);
+			let fetch_metric_str = sp_std::str::from_utf8(&fetch_metric_bytes).map_err(|_| {
+				debug::warn!("fetch_metric_str: No UTF8 body");
+				http::Error::Unknown
+			})?;
+
+			let fetch_metric: Vec<MetricInfo> = serde_json::from_str(&fetch_metric_str).map_err(|_| {
+				debug::warn!("Parse body to Vec<NodeInfo> error");
+				http::Error::Unknown
+			})?;
+			debug::info!("fetch_metric length: {:?}", fetch_metric.len());
+
+			for one_metric in fetch_metric.iter() {
+				debug::info!("Metric item. App: {:?}, bytes: {:?}, requests: {:?}", sp_std::str::from_utf8(&one_metric.appPubKey).unwrap(), one_metric.bytes, one_metric.requests);
 			}
 		}
 	
