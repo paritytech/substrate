@@ -302,6 +302,9 @@ async fn build_network_future<
 							))),
 						};
 					}
+					sc_rpc::system::Request::NetworkReservedPeers(sender) => {
+						let _ = sender.send(vec![]); // TODO
+					}
 					sc_rpc::system::Request::NodeRoles(sender) => {
 						use sc_rpc::system::NodeRole;
 
