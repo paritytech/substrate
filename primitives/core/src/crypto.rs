@@ -588,6 +588,10 @@ ss58_address_format!(
 		(66, "crust", "Crust Network, standard account (*25519).")
 	SoraAccount =>
 		(69, "sora", "SORA Network, standard account (*25519).")
+	MantaAccount =>
+		(77, "manta", "Manta Network, standard account (*25519).")
+	CalamariAccount =>
+		(78, "calamari", "Manta canary network, standard account (*25519).")
 	SocialAccount =>
 		(252, "social-network", "Social Network, standard account (*25519).")
 	// Note: 16384 and above are reserved.
