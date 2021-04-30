@@ -218,6 +218,17 @@ benchmarks! {
 		ensure!(missed_any == false, "Missed some");
 		assert_last_event::<T>(RawEvent::BountyBecameActive(b - 1).into())
 	}
+
+	#[extra]
+	bench_fill_storage {
+		let s in 1..10;
+
+		use rand::{SeedableRng, rngs::SmallRng};
+
+		let mut rng = SmallRng::seed_from_u64(s.into());
+	}: {
+		fill_storage::<_, T>(&mut rng);
+	}
 }
 
 impl_benchmark_test_suite!(

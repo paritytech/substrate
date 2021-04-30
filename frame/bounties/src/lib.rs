@@ -253,10 +253,10 @@ mod benchmark_fill {
 	macro_rules! impl_randomize_for_primitive {
 		($t:ty) => {
 			impl Randomize for $t {
-																			fn random<R: Rng>(rng: &mut R) -> Self {
-																				rng.gen()
-																			}
-																		}
+				fn random<R: Rng>(rng: &mut R) -> Self {
+					rng.gen()
+				}
+			}
 		};
 	}
 
