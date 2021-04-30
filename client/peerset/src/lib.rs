@@ -147,6 +147,11 @@ impl PeersetHandle {
 		let _ = self.tx.unbounded_send(Action::SetReservedPeers(set_id, peer_ids));
 	}
 
+	/// Get the list of reserved peers for the given set.
+	pub fn get_reserved_peers(&self, _set_id: SetId) -> Vec<PeerId> {
+		vec![] // TODO
+	}
+
 	/// Reports an adjustment to the reputation of the given peer.
 	pub fn report_peer(&self, peer_id: PeerId, score_diff: ReputationChange) {
 		let _ = self.tx.unbounded_send(Action::ReportPeer(peer_id, score_diff));

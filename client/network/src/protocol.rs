@@ -1014,6 +1014,15 @@ impl<B: BlockT> Protocol<B> {
 		self.peerset_handle.remove_reserved_peer(HARDCODED_PEERSETS_SYNC, peer.clone());
 	}
 
+	/// Returns the list of reserved peers.
+	pub fn reserved_peers(&self) -> Vec<String> {
+		self.peerset_handle
+			.get_reserved_peers(HARDCODED_PEERSETS_SYNC)
+			.into_iter()
+			.map(|peer_id| peer_id.to_base58())
+			.collect()
+	}
+
 	/// Adds a `PeerId` to the list of reserved peers for syncing purposes.
 	pub fn add_reserved_peer(&self, peer: PeerId) {
 		self.peerset_handle.add_reserved_peer(HARDCODED_PEERSETS_SYNC, peer.clone());
