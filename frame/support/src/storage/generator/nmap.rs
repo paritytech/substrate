@@ -31,7 +31,7 @@ use codec::{Decode, Encode, EncodeLike, FullCodec};
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::*;
 
-/// Generator for `StorageNMap` used by `decl_storage`.
+/// Generator for `StorageNMap` used by `decl_storage` and storage types.
 ///
 /// By default each key value is stored at:
 /// ```nocompile

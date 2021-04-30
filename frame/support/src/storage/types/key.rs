@@ -40,7 +40,11 @@ pub trait KeyGenerator {
 	type HashFn: FnOnce(&[u8]) -> Vec<u8>;
 	type HArg;
 
+	/// Given a `key` tuple, calculate the final key by encoding each element individuallly and
+	/// hashing them using the corresponding hasher in the `KeyGenerator`.
 	fn final_key<KArg: EncodeLikeTuple<Self::KArg> + TupleToEncodedIter>(key: KArg) -> Vec<u8>;
+	/// Given a `key` tuple, migrate the keys from using the old hashers as given by `hash_fns`
+	/// to using the newer hashers as specified by this `KeyGenerator`.
 	fn migrate_key<KArg: EncodeLikeTuple<Self::KArg> + TupleToEncodedIter>(
 		key: &KArg,
 		hash_fns: Self::HArg,
