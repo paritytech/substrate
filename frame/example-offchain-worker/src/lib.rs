@@ -348,7 +348,7 @@ impl<T: Trait> Module<T> {
 		})?;
 		debug::info!("node_info length: {:?}", node_info.len());
 
-		let fetch_partition_list_bytes = Self::http_get_request(HTTP_PARTITIONS_REQUEST).map_err(|e| {
+		let fetch_partition_list_bytes = Self::http_get_request(HTTP_PARTITIONS).map_err(|e| {
 			debug::error!("fetch_partition_list_bytes error: {:?}", e);
 			http::Error::Unknown
 		})?;
@@ -388,7 +388,7 @@ impl<T: Trait> Module<T> {
 					debug::warn!("appPubKey error");
 					http::Error::Unknown
 				})?;
-				let metrics_url_with_key = format!("{}{}{}", metrics_url, METRICS_REQUEST_PREFIX, app_pubkey_str);
+				let metrics_url_with_key = format!("{}{}{}", metrics_url, HTTP_METRICS, app_pubkey_str);
 				// debug::info!("metrics_url_with_key: {}", metrics_url_with_key);
 
 				let partition_id_str = sp_std::str::from_utf8(&one_partition.id).map_err(|_| {
