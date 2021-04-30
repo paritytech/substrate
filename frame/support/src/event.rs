@@ -141,13 +141,6 @@ macro_rules! decl_event {
 		impl From<Event> for () {
 			fn from(_: Event) -> () { () }
 		}
-		impl Event {
-			#[allow(dead_code)]
-			#[doc(hidden)]
-			pub fn metadata() -> $crate::scale_info::prelude::vec::Vec<$crate::metadata::EventMetadata> {
-				$crate::__events_to_metadata!(; $( $events )* )
-			}
-		}
 	}
 }
 
@@ -289,17 +282,6 @@ macro_rules! __decl_generic_event {
 		}
 		impl<$( $generic_param ),* $(, $instance)? > From<RawEvent<$( $generic_param ),* $(, $instance)?>> for () {
 			fn from(_: RawEvent<$( $generic_param ),* $(, $instance)?>) -> () { () }
-		}
-		impl<$( $generic_param ),* $(, $instance)?> RawEvent<$( $generic_param ),* $(, $instance)?>
-		where
-			$( $generic_param: $crate::scale_info::TypeInfo + 'static ),*
-			$(, $instance: $crate::scale_info::TypeInfo + 'static)? // todo: [AJ] just adding this to make it compile, look at removing it.
-		{
-			#[allow(dead_code)]
-			#[doc(hidden)]
-			pub fn metadata() -> $crate::scale_info::prelude::vec::Vec<$crate::metadata::EventMetadata> {
-				$crate::__events_to_metadata!(; $( $events )* )
-			}
 		}
 	};
 	(@cannot_parse $ty:ty) => {
