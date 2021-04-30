@@ -422,7 +422,7 @@ decl_storage! {
 		DisabledValidators get(fn disabled_validators): Vec<u32>;
 
 		/// The next session keys for a validator.
-		NextKeys: map hasher(twox_64_concat) T::ValidatorId => Option<T::Keys>;
+		NextKeys get(fn next_keys): map hasher(twox_64_concat) T::ValidatorId => Option<T::Keys>;
 
 		/// The owner of a key. The key is the `KeyTypeId` + the encoded key.
 		KeyOwner: map hasher(twox_64_concat) (KeyTypeId, Vec<u8>) => Option<T::ValidatorId>;
