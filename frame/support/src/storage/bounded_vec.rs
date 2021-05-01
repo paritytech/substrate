@@ -21,6 +21,7 @@
 use sp_std::prelude::*;
 use sp_std::{convert::TryFrom, marker::PhantomData};
 use codec::{FullCodec, Encode, EncodeLike, Decode};
+use core::{ops::{Index, IndexMut}, slice::SliceIndex};
 use crate::{
 	traits::Get,
 	storage::{generator, StorageDecodeLength, StorageValue, StorageMap, StorageDoubleMap},
@@ -179,6 +180,18 @@ impl<T: BoundedVecValue, S: Get<u32>> AsRef<Vec<T>> for BoundedVec<T, S> {
 	}
 }
 
+impl<T: BoundedVecValue, S: Get<u32>> AsRef<[T]> for BoundedVec<T, S> {
+	fn as_ref(&self) -> &[T] {
+		&self.0
+	}
+}
+
+impl<T: BoundedVecValue, S: Get<u32>> AsMut<[T]> for BoundedVec<T, S> {
+	fn as_mut(&mut self) -> &mut [T] {
+		&mut self.0
+	}
+}
+
 // will allow for immutable all operations of `Vec<T>` on `BoundedVec<T>`.
 impl<T: BoundedVecValue, S: Get<u32>> sp_std::ops::Deref for BoundedVec<T, S> {
 	type Target = Vec<T>;
@@ -188,11 +201,26 @@ impl<T: BoundedVecValue, S: Get<u32>> sp_std::ops::Deref for BoundedVec<T, S> {
 	}
 }
 
+impl<T: BoundedVecValue, S: Get<u32>> sp_std::ops::DerefMut for BoundedVec<T, S> {
+    fn deref_mut(&mut self) -> &mut Vec<T> {
+        &mut self.0
+    }
+}
+
 // Allows for indexing similar to a normal `Vec`. Can panic if out of bound.
-impl<T: BoundedVecValue, S: Get<u32>> sp_std::ops::Index<usize> for BoundedVec<T, S> {
-	type Output = T;
-	fn index(&self, index: usize) -> &Self::Output {
-		self.get(index).expect("index out of bound")
+impl<T: BoundedVecValue, S: Get<u32>, I: SliceIndex<[T]>> Index<I> for BoundedVec<T, S> {
+	type Output = I::Output;
+
+	#[inline]
+	fn index(&self, index: I) -> &Self::Output {
+		Index::index(&**self, index)
+	}
+}
+
+impl<T: BoundedVecValue, S: Get<u32>, I: SliceIndex<[T]>> IndexMut<I> for BoundedVec<T, S> {
+	#[inline]
+	fn index_mut(&mut self, index: I) -> &mut Self::Output {
+		IndexMut::index_mut(&mut **self, index)
 	}
 }
 
@@ -209,6 +237,12 @@ impl<T: BoundedVecValue, S: Get<u32>> codec::DecodeLength for BoundedVec<T, S> {
 		// `BoundedVec<T, _>` stored just a `Vec<T>`, thus the length is at the beginning in
 		// `Compact` form, and same implementation as `Vec<T>` can be used.
 		<Vec<T> as codec::DecodeLength>::len(self_encoded)
+	}
+}
+
+impl<T: BoundedVecValue + PartialEq, S: Get<u32>> PartialEq<Vec<T>> for BoundedVec<T, S> {
+	fn eq(&self, other: &Vec<T>) -> bool {
+		&self.0 == other
 	}
 }
 
@@ -466,5 +500,17 @@ pub mod test {
 		let bounded = bounded.try_mutate(|v| v.push(7)).unwrap();
 		assert_eq!(bounded.len(), 7);
 		assert!(bounded.try_mutate(|v| v.push(8)).is_none());
+	}
+
+	#[test]
+	fn slice_indexing_works() {
+		let bounded: BoundedVec<u32, Seven> = vec![1, 2, 3, 4, 5, 6].try_into().unwrap();
+		assert_eq!(&bounded[0..=2], &[1, 2, 3]);
+	}
+
+	#[test]
+	fn vec_eq_works() {
+		let bounded: BoundedVec<u32, Seven> = vec![1, 2, 3, 4, 5, 6].try_into().unwrap();
+		assert_eq!(bounded, vec![1, 2, 3, 4, 5, 6]);
 	}
 }
