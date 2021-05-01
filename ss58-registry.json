@@ -495,6 +495,15 @@
 			"decimals": [18],
 			"standardAccount": "*25519",
 			"website": "https://social.network"
+		},
+		{
+			"prefix": 1337,
+			"network": "gamepower",
+			"displayName": "GamePower Network",
+			"symbols": ["GP"],
+			"decimals": [8],
+			"standardAccount": "*25519",
+			"website": "https://gamepower.network"
 		}
 	]
 }
