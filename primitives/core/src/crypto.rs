@@ -591,7 +591,7 @@ ss58_address_format!(
 	MantaAccount =>
 		(77, "manta", "Manta Network, standard account (*25519).")
 	CalamariAccount =>
-		(78, "calamari", "Manta canary network, standard account (*25519).")
+		(78, "calamari", "Manta Canary Network, standard account (*25519).")
 	SocialAccount =>
 		(252, "social-network", "Social Network, standard account (*25519).")
 	// Note: 16384 and above are reserved.
