@@ -590,6 +590,8 @@ ss58_address_format!(
 		(69, "sora", "SORA Network, standard account (*25519).")
 	SocialAccount =>
 		(252, "social-network", "Social Network, standard account (*25519).")
+	GamePowerAccount =>
+		(1337, "gamepower", "GamePower Network, standard account (*25519).")
 	// Note: 16384 and above are reserved.
 );
 
