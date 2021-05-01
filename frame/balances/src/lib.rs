@@ -159,7 +159,7 @@ use sp_std::prelude::*;
 use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr};
 use codec::{Codec, Encode, Decode};
 use frame_support::{
-	ensure,
+	ensure, BoundedVec,
 	traits::{
 		Currency, OnUnbalanced, TryDrop, StoredMap,
 		WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
@@ -441,7 +441,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		T::AccountId,
-		Vec<BalanceLock<T::Balance>>,
+		BoundedVec<BalanceLock<T::Balance>, T::MaxLocks>,
 		ValueQuery
 	>;
 
@@ -828,18 +828,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Update the account entry for `who`, given the locks.
 	fn update_locks(who: &T::AccountId, locks: &[BalanceLock<T::Balance>]) {
-		if locks.len() as u32 > T::MaxLocks::get() {
-			log::warn!(
-				target: "runtime::balances",
-				"Warning: A user has more currency locks than expected. \
-				A runtime configuration adjustment may be needed."
-			);
-		}
+		// Will emit a warning if the bounds are not respected.
+		let bounded_locks = BoundedVec::<BalanceLock<T::Balance>, T::MaxLocks>::force_from(
+			locks.to_vec(),
+			Some("Balances Update Locks"),
+		);
 		// No way this can fail since we do not alter the existential balances.
 		let res = Self::mutate_account(who, |b| {
 			b.misc_frozen = Zero::zero();
 			b.fee_frozen = Zero::zero();
-			for l in locks.iter() {
+			for l in bounded_locks.iter() {
 				if l.reasons == Reasons::All || l.reasons == Reasons::Misc {
 					b.misc_frozen = b.misc_frozen.max(l.amount);
 				}
@@ -851,7 +849,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		debug_assert!(res.is_ok());
 
 		let existed = Locks::<T, I>::contains_key(who);
-		if locks.is_empty() {
+		if bounded_locks.is_empty() {
 			Locks::<T, I>::remove(who);
 			if existed {
 				// TODO: use Locks::<T, I>::hashed_key
@@ -859,7 +857,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				system::Pallet::<T>::dec_consumers(who);
 			}
 		} else {
-			Locks::<T, I>::insert(who, locks);
+			Locks::<T, I>::insert(who, bounded_locks);
 			if !existed {
 				if system::Pallet::<T>::inc_consumers(who).is_err() {
 					// No providers for the locks. This is impossible under normal circumstances
