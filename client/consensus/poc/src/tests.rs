@@ -449,27 +449,48 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
                 .for_each(|_| future::ready(())),
         );
 
-        poc_futures.push(
-            start_poc(PoCParams {
-                block_import: data
-                    .block_import
-                    .lock()
-                    .take()
-                    .expect("import set up during init"),
-                select_chain,
-                client,
-                env: environ,
-                sync_oracle: DummyOracle,
-                inherent_data_providers: data.inherent_data_providers.clone(),
-                force_authoring: false,
-                backoff_authoring_blocks: Some(BackoffAuthoringOnFinalizedHeadLagging::default()),
-                poc_link: data.link.clone(),
-                can_author_with: sp_consensus::AlwaysCanAuthor,
-                block_proposal_slot_portion: SlotProportion::new(0.5),
-                telemetry: None,
-            })
-            .expect("Starts poc"),
-        );
+        let poc_worker = start_poc(PoCParams {
+            block_import: data
+                .block_import
+                .lock()
+                .take()
+                .expect("import set up during init"),
+            select_chain,
+            client,
+            env: environ,
+            sync_oracle: DummyOracle,
+            inherent_data_providers: data.inherent_data_providers.clone(),
+            force_authoring: false,
+            backoff_authoring_blocks: Some(BackoffAuthoringOnFinalizedHeadLagging::default()),
+            poc_link: data.link.clone(),
+            can_author_with: sp_consensus::AlwaysCanAuthor,
+            block_proposal_slot_portion: SlotProportion::new(0.5),
+            telemetry: None,
+        })
+        .expect("Starts poc");
+
+        // Just one solver
+        if *peer_id == 0 {
+            let notifier = poc_worker.get_new_slot_notifier()();
+            std::thread::spawn(move || {
+                let keypair = Keypair::generate();
+                let ctx = schnorrkel::context::signing_context(SIGNING_CONTEXT);
+                let encoding: Piece = [0u8; 4096];
+
+                while let Ok((new_slot_info, mut solution_sender)) = notifier.recv() {
+                    let tag: Tag = [(*new_slot_info.slot % 8) as u8; 8];
+
+                    let _ = solution_sender.send(Some(Solution {
+                        public_key: FarmerId::from_slice(&keypair.public.to_bytes()),
+                        nonce: 0,
+                        encoding: encoding.to_vec(),
+                        signature: keypair.sign(ctx.bytes(&tag)).to_bytes().to_vec(),
+                        tag,
+                    }));
+                }
+            });
+        }
+        poc_futures.push(poc_worker);
     }
     block_on(future::select(
         futures::future::poll_fn(move |cx| {
@@ -490,13 +511,13 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
     ));
 }
 
-// TODO: Fix test
+// TODO: Needs adjustable solution range, Milestone 2.
 // #[test]
 // fn authoring_blocks() {
 //     run_one_test(|_, _| ())
 // }
 
-// TODO: Fix test
+// TODO: Needs adjustable solution range, Milestone 2.
 // #[test]
 // #[should_panic]
 // fn rejects_missing_inherent_digest() {
@@ -509,7 +530,7 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
 //     })
 // }
 
-// TODO: Fix test
+// TODO: Needs adjustable solution range, Milestone 2.
 // #[test]
 // #[should_panic]
 // fn rejects_missing_seals() {
@@ -522,7 +543,7 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
 //     })
 // }
 
-// TODO: Fix test
+// TODO: Needs adjustable solution range, Milestone 2.
 // #[test]
 // #[should_panic]
 // fn rejects_missing_consensus_digests() {
