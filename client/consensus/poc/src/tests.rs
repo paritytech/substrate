@@ -25,7 +25,6 @@
 use super::*;
 use futures::executor::block_on;
 use log::debug;
-use rand_chacha::rand_core::SeedableRng;
 use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 use sc_client_api::{backend::TransactionFor, BlockchainEvents};
 use sc_consensus_slots::BackoffAuthoringOnFinalizedHeadLagging;
@@ -38,7 +37,6 @@ use sp_consensus::{
 };
 use sp_consensus_poc::Slot;
 use sp_consensus_spartan::spartan::{Piece, Tag};
-use sp_core::crypto::Pair;
 use sp_runtime::{
     generic::DigestItem,
     traits::{Block as BlockT, DigestFor},
@@ -395,13 +393,11 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
     MUTATOR.with(|m| *m.borrow_mut() = mutator.clone());
     let net = PoCTestNet::new(3);
 
-    let peers = &[(0, "//Alice"), (1, "//Bob"), (2, "//Charlie")];
-
     let net = Arc::new(Mutex::new(net));
     let mut import_notifications = Vec::new();
     let mut poc_futures = Vec::new();
 
-    for (peer_id, seed) in peers {
+    for peer_id in [0, 1, 2_usize].iter() {
         let mut net = net.lock();
         let peer = net.peer(*peer_id);
         let client = peer
@@ -477,7 +473,7 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
                 let ctx = schnorrkel::context::signing_context(SIGNING_CONTEXT);
                 let encoding: Piece = [0u8; 4096];
 
-                while let Ok((new_slot_info, mut solution_sender)) = notifier.recv() {
+                while let Ok((new_slot_info, solution_sender)) = notifier.recv() {
                     let tag: Tag = [(*new_slot_info.slot % 8) as u8; 8];
 
                     let _ = solution_sender.send(Some(Solution {

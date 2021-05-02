@@ -7374,7 +7374,6 @@ dependencies = [
  "parking_lot 0.11.1",
  "pdqselect",
  "rand 0.7.3",
- "rand_chacha 0.2.2",
  "ring",
  "sc-block-builder",
  "sc-client-api",
@@ -7399,7 +7398,6 @@ dependencies = [
  "sp-core",
  "sp-inherents",
  "sp-io",
- "sp-keyring",
  "sp-runtime",
  "sp-timestamp",
  "sp-tracing",
@@ -7408,7 +7406,6 @@ dependencies = [
  "spartan-codec",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
- "tempfile",
 ]
 
 [[package]]

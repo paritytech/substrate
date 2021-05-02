@@ -30,7 +30,7 @@ use sp_core::{Public, H256};
 use sp_io;
 use sp_runtime::{
     testing::{Digest, DigestItem, Header, TestXt},
-    traits::{Header as _, IdentityLookup},
+    traits::IdentityLookup,
     Perbill,
 };
 
