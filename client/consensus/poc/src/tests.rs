@@ -535,15 +535,15 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
 //     });
 // }
 
-// TODO: Fix test
-// #[test]
-// fn wrong_consensus_engine_id_rejected() {
-//     sp_tracing::try_init_simple();
-//     let sig = Keypair::generate().sign(b"");
-//     let bad_seal: Item = DigestItem::Seal([0; 4], sig.to_vec());
-//     assert!(bad_seal.as_poc_pre_digest().is_none());
-//     assert!(bad_seal.as_poc_seal().is_none())
-// }
+#[test]
+fn wrong_consensus_engine_id_rejected() {
+    sp_tracing::try_init_simple();
+    let keypair = Keypair::generate();
+    let ctx = schnorrkel::context::signing_context(SIGNING_CONTEXT);
+    let bad_seal: Item = DigestItem::Seal([0; 4], keypair.sign(ctx.bytes(b"")).to_bytes().to_vec());
+    assert!(bad_seal.as_poc_pre_digest().is_none());
+    assert!(bad_seal.as_poc_seal().is_none())
+}
 
 #[test]
 fn malformed_pre_digest_rejected() {
@@ -552,15 +552,18 @@ fn malformed_pre_digest_rejected() {
     assert!(bad_seal.as_poc_pre_digest().is_none());
 }
 
-// TODO: Fix test
-// #[test]
-// fn sig_is_not_pre_digest() {
-//     sp_tracing::try_init_simple();
-//     let sig = Keypair::generate().sign(b"");
-//     let bad_seal: Item = DigestItem::Seal(POC_ENGINE_ID, sig.to_vec());
-//     assert!(bad_seal.as_poc_pre_digest().is_none());
-//     assert!(bad_seal.as_poc_seal().is_some())
-// }
+#[test]
+fn sig_is_not_pre_digest() {
+    sp_tracing::try_init_simple();
+    let keypair = Keypair::generate();
+    let ctx = schnorrkel::context::signing_context(SIGNING_CONTEXT);
+    let bad_seal: Item = DigestItem::Seal(
+        POC_ENGINE_ID,
+        keypair.sign(ctx.bytes(b"")).to_bytes().to_vec(),
+    );
+    assert!(bad_seal.as_poc_pre_digest().is_none());
+    assert!(bad_seal.as_poc_seal().is_some())
+}
 
 /// Claims the given slot number. always returning a dummy block.
 pub fn dummy_claim_slot(slot: Slot, _epoch: &Epoch) -> Option<(PreDigest, FarmerId)> {
