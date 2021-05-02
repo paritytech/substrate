@@ -85,7 +85,13 @@ fn author_por_output() {
 
     ext.execute_with(|| {
         let genesis_slot = Slot::from(10);
-        let solution = Solution::default();
+        let solution = Solution {
+            public_key: Default::default(),
+            nonce: 0,
+            encoding: vec![],
+            signature: vec![],
+            tag: [0u8; 8],
+        };
         let por_randomness = sp_io::hashing::blake2_256(&solution.signature);
         let pre_digest = make_pre_digest(0.into(), solution);
 
