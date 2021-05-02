@@ -23,6 +23,7 @@ use codec::Encode;
 use frame_support::{parameter_types, traits::OnInitialize};
 use frame_system::InitKind;
 use sp_consensus_poc::digests::{PreDigest, Solution};
+use sp_consensus_poc::Slot;
 use sp_core::H256;
 use sp_io;
 use sp_runtime::{
@@ -152,15 +153,20 @@ pub fn go_to_block(n: u64, s: u64) {
         System::parent_hash()
     };
 
-    // TODO: Fix this
-    // let pre_digest = PreDigest {
-    //     slot: 0.into(),
-    //     solution: s.into(),
-    // };
-    //
-    // System::initialize(&n, &parent_hash, &pre_digest, InitKind::Full);
-    //
-    // Spartan::on_initialize(n);
+    let pre_digest = make_pre_digest(
+        s.into(),
+        Solution {
+            public_key: Default::default(),
+            nonce: 0,
+            encoding: vec![],
+            signature: vec![],
+            tag: [0u8; 8],
+        },
+    );
+
+    System::initialize(&n, &parent_hash, &pre_digest, InitKind::Full);
+
+    Spartan::on_initialize(n);
 }
 
 /// Slots will grow accordingly to blocks
@@ -172,7 +178,7 @@ pub fn progress_to_block(n: u64) {
     }
 }
 
-pub fn make_pre_digest(slot: sp_consensus_poc::Slot, solution: Solution) -> Digest {
+pub fn make_pre_digest(slot: Slot, solution: Solution) -> Digest {
     let digest_data = PreDigest { slot, solution };
     let log = DigestItem::PreRuntime(sp_consensus_poc::POC_ENGINE_ID, digest_data.encode());
     Digest { logs: vec![log] }

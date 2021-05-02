@@ -43,12 +43,12 @@ fn first_block_epoch_zero_start() {
         let genesis_slot = Slot::from(100);
         let solution = Solution::get_for_genesis();
         let por_randomness = sp_io::hashing::blake2_256(&solution.signature);
-        let pre_digest = make_pre_digest(0.into(), solution);
+        let pre_digest = make_pre_digest(genesis_slot, solution);
 
         assert_eq!(Spartan::genesis_slot(), Slot::from(0));
         System::initialize(&1, &Default::default(), &pre_digest, Default::default());
 
-        // see implementation of the function for details why: we issue an
+        Spartan::do_initialize(1);
         assert_eq!(Spartan::genesis_slot(), genesis_slot);
         assert_eq!(Spartan::current_slot(), genesis_slot);
         assert_eq!(Spartan::epoch_index(), 0);
