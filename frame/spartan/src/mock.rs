@@ -18,13 +18,15 @@
 
 //! Test utilities
 
-use crate::{self as pallet_spartan, Config, NormalEpochChange};
+use crate::{self as pallet_spartan, Config, FarmerId, NormalEpochChange};
 use codec::Encode;
 use frame_support::{parameter_types, traits::OnInitialize};
 use frame_system::InitKind;
+use schnorrkel::Keypair;
 use sp_consensus_poc::digests::{PreDigest, Solution};
 use sp_consensus_poc::Slot;
-use sp_core::H256;
+use sp_consensus_spartan::spartan::{Piece, Tag, SIGNING_CONTEXT};
+use sp_core::{Public, H256};
 use sp_io;
 use sp_runtime::{
     testing::{Digest, DigestItem, Header, TestXt},
@@ -153,14 +155,19 @@ pub fn go_to_block(n: u64, s: u64) {
         System::parent_hash()
     };
 
+    let keypair = Keypair::generate();
+    let ctx = schnorrkel::context::signing_context(SIGNING_CONTEXT);
+    let encoding: Piece = [0u8; 4096];
+    let tag: Tag = [(n % 8) as u8; 8];
+
     let pre_digest = make_pre_digest(
         s.into(),
         Solution {
-            public_key: Default::default(),
+            public_key: FarmerId::from_slice(&keypair.public.to_bytes()),
             nonce: 0,
-            encoding: vec![],
-            signature: vec![],
-            tag: [0u8; 8],
+            encoding: encoding.to_vec(),
+            signature: keypair.sign(ctx.bytes(&tag)).to_bytes().to_vec(),
+            tag,
         },
     );
 

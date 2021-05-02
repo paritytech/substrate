@@ -21,6 +21,7 @@ pallet-authorship = { version = "3.0.0", default-features = false, path = "../au
 pallet-timestamp = { version = "3.0.0", default-features = false, path = "../timestamp" }
 serde = { version = "1.0.101", optional = true }
 sp-consensus-poc = { version = "0.1.0", default-features = false, path = "../../primitives/consensus/poc" }
+sp-consensus-spartan = { version = "0.1.0", default-features = false, path = "../../primitives/consensus/spartan" }
 sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-staking = { version = "3.0.0", default-features = false, path = "../../primitives/staking" }
@@ -34,6 +35,7 @@ pallet-staking = { version = "3.0.0", path = "../staking" }
 pallet-staking-reward-curve = { version = "3.0.0", path = "../staking/reward-curve" }
 sp-core = { version = "3.0.0", path = "../../primitives/core" }
 frame-election-provider-support = { version = "3.0.0", path = "../election-provider-support" }
+schnorrkel = { version = "0.9.1" }
 
 [features]
 default = ["std"]
@@ -46,6 +48,7 @@ std = [
 	"pallet-timestamp/std",
 	"serde",
 	"sp-consensus-poc/std",
+	"sp-consensus-spartan/std",
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-staking/std",

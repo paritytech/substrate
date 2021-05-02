@@ -85,15 +85,9 @@ fn author_por_output() {
 
     ext.execute_with(|| {
         let genesis_slot = Slot::from(10);
-        let solution = Solution {
-            public_key: Default::default(),
-            nonce: 0,
-            encoding: vec![],
-            signature: vec![],
-            tag: [0u8; 8],
-        };
+        let solution = Solution::get_for_genesis();
         let por_randomness = sp_io::hashing::blake2_256(&solution.signature);
-        let pre_digest = make_pre_digest(0.into(), solution);
+        let pre_digest = make_pre_digest(genesis_slot, solution);
 
         System::initialize(&1, &Default::default(), &pre_digest, Default::default());
         assert_eq!(Spartan::author_por_randomness(), None);
@@ -207,14 +201,17 @@ fn can_fetch_current_and_next_epoch_data() {
     new_test_ext().execute_with(|| {
         EpochConfig::<Test>::put(PoCEpochConfiguration { c: (1, 4) });
 
+        progress_to_block(System::block_number() + 1);
+
         let current_epoch = Spartan::current_epoch();
-        assert_eq!(current_epoch.epoch_index, 3);
-        assert_eq!(*current_epoch.start_slot, 10);
+        assert_eq!(current_epoch.epoch_index, 0);
+        assert_eq!(*current_epoch.start_slot, 1);
 
         let next_epoch = Spartan::next_epoch();
-        assert_eq!(next_epoch.epoch_index, 4);
-        assert_eq!(*next_epoch.start_slot, 13);
+        assert_eq!(next_epoch.epoch_index, 1);
+        assert_eq!(*next_epoch.start_slot, 4);
 
+        // TODO: Fix this assertion
         // the on-chain randomness should always change across epochs
         assert!(current_epoch.randomness != next_epoch.randomness);
     });
