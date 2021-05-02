@@ -1238,6 +1238,7 @@ pub mod pallet_prelude {
 		dispatch::{DispatchResultWithPostInfo, Parameter, DispatchError, DispatchResult},
 		weights::{DispatchClass, Pays, Weight},
 		storage::types::{StorageValue, StorageMap, StorageDoubleMap, ValueQuery, OptionQuery},
+		storage::bounded_vec::{BoundedVec, BoundedVecValue},
 	};
 	pub use codec::{Encode, Decode};
 	pub use sp_inherents::{InherentData, InherentIdentifier, ProvideInherent};
