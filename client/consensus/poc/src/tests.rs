@@ -472,13 +472,15 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
                 let keypair = Keypair::generate();
                 let ctx = schnorrkel::context::signing_context(SIGNING_CONTEXT);
                 let encoding: Piece = [0u8; 4096];
+                let nonce = 0;
 
-                while let Ok((new_slot_info, solution_sender)) = notifier.recv() {
+                while let Ok((new_slot_info, mut solution_sender)) = notifier.recv() {
+                    // TODO: Generate real tag for verification to succeed
                     let tag: Tag = [(*new_slot_info.slot % 8) as u8; 8];
 
                     let _ = solution_sender.send(Some(Solution {
                         public_key: FarmerId::from_slice(&keypair.public.to_bytes()),
-                        nonce: 0,
+                        nonce,
                         encoding: encoding.to_vec(),
                         signature: keypair.sign(ctx.bytes(&tag)).to_bytes().to_vec(),
                         tag,
