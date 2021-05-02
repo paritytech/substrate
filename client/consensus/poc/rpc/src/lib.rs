@@ -112,6 +112,13 @@ pub struct PoCRpcHandler {
         Arc<Mutex<HashMap<Slot, futures::channel::mpsc::Sender<Option<RpcSolution>>>>>,
 }
 
+/// PoCRpcHandler is used for notifying subscribers about arrival of new slots and for submission of
+/// solutions (or lack thereof).
+///
+/// Internally every time slot notifier emits information about new slot, notification is sent to
+/// every subscriber, after which RPC server waits for the same number of `poc_proposeProofOfSpace`
+/// requests with `Option<RpcSolution>` in them or until timeout is exceeded. The first valid
+/// solution for a particular slot wins, others are ignored.
 impl PoCRpcHandler {
     /// Creates a new instance of the PoCRpc handler.
     pub fn new<E>(executor: E, new_slot_notifier: NewSlotNotifier) -> Self
@@ -133,6 +140,12 @@ impl PoCRpcHandler {
                 )> = new_slot_notifier();
 
                 move || {
+                    /// `new_slot_notifier` receives messages with a tuple containing slot info and
+                    /// sender for solution.
+                    ///
+                    /// We then send slot info to all subscribers and wait for their solutions. As
+                    /// soon as solution is found we send it back and ignore any other solutions for
+                    /// that slot.
                     while let Ok((new_slot_info, sync_solution_sender)) = new_slot_notifier.recv() {
                         futures::executor::block_on(async {
                             let (solution_sender, mut solution_receiver) =
