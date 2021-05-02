@@ -120,15 +120,15 @@ Solution {
 
 #### High Level Overview
 
-#####`spartan-node-template`
+##### `spartan-node-template`
 
 Based on a fork of `parity-tech/substrate`. Includes a new template in `../bin` based on `substrate-node-template`. `Grandpa` finality gadget has been removed. `Aura` consensus is replaced with `Spartan`. All notions of authorities and sessions have been removed. This is simply a bare-bones account-based blockchain node that supports balance transfers. The node cannot farm by itself, it can only validate received blocks and generate blocks from `Solutions` submitted by locally connected `Farmers`.
 
-#####`spartan-farmer`
+##### `spartan-farmer`
 
 Based on a previous work from `subspace/substrate-core-rust`, but implemented as a standalone `Farmer` which connects to `spartan-node-template` over an RPC, conceptually similar to the distinction between GETH and EthMiner. Able to generate a  `Plot` using local disks pace and continuously `Farm` when connected to a full node.
 
-#####`spartan-codec`
+##### `spartan-codec`
 
 A Rust implementation and adaptation of [SLOTH](https://eprint.iacr.org/2015/366) (slow-timed hash function) into a time-asymmetric permutation using a standard CBC block cipher. This code is largely based on the C implementation used in [PySloth](https://github.com/randomchain/pysloth/blob/master/sloth.c) which is the same as used in the paper. This serves as the permutation for the Proof-of-Replication (PoR) that underlies Spartan. When a farmer plots, it encodes the genesis piece using the encode half. When the client validates, it decodes the encoding using the decode half, and verifies that it matches the genesis piece. Decode time is roughly 100x faster than encode time. 
 
@@ -136,19 +136,19 @@ A Rust implementation and adaptation of [SLOTH](https://eprint.iacr.org/2015/366
 
 ![Imgur](https://i.imgur.com/22YBNZP.png)
 
-#####`sp_consnesus_poc`
+##### `sp_consnesus_poc`
 
 Defines primitives for some abstract PoC consensus using some abstract PoR. This assumes the PoC consensus is round-based and permmissionless. 
 
-#####`sc_consensus_poc`
+##### `sc_consensus_poc`
 
 Defines client functionality for some abstract PoC consensus using some PoR. This assumes the PoC consensus employed is both round-based and permmissionless. 
 
-#####`sp_consensus_spartan`
+##### `sp_consensus_spartan`
 
 Defines the shared primitives for a PoR based on the Spartan protocol (i.e. a sloth based permutation).
 
-#####`pallet_spartan`
+##### `pallet_spartan`
 
 Defines the runtime logic for Spartan, a permissionless, round-based consensus algorithm, implemented for abstract PoC consensus using a Sloth-based Por. 
 
