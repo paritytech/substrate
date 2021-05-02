@@ -488,16 +488,7 @@
 			"website": "https://sora.org"
 		},
 		{
-			"prefix": 252,
-			"network": "social-network",
-			"displayName": "Social Network",
-			"symbols": ["NET"],
-			"decimals": [18],
-			"standardAccount": "*25519",
-			"website": "https://social.network"
-		},
-		{
-			"prefix": 1337,
+			"prefix": 100,
 			"network": "gamepower",
 			"displayName": "GamePower Network",
 			"symbols": ["GP"],
@@ -506,13 +497,22 @@
 			"website": "https://gamepower.network"
 		},
 		{
-			"prefix": 1338,
+			"prefix": 101,
 			"network": "gamepowerx",
 			"displayName": "GamePowerX Network",
 			"symbols": ["GPX"],
 			"decimals": [8],
 			"standardAccount": "*25519",
 			"website": "https://gamepower.network"
+		}
+		{
+			"prefix": 252,
+			"network": "social-network",
+			"displayName": "Social Network",
+			"symbols": ["NET"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://social.network"
 		}
 	]
 }
