@@ -413,11 +413,11 @@ pub mod pallet {
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
-	#[pallet::storage]
-	#[pallet::getter(fn identity)]
 	/// Information that is pertinent to identify the entity behind an account.
 	///
 	/// TWOX-NOTE: OK ― `AccountId` is a secure hash.
+	#[pallet::storage]
+	#[pallet::getter(fn identity)]
 	pub(super) type IdentityOf<T: Config> = StorageMap<
 		_,
 		Twox64Concat,
@@ -426,10 +426,10 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	#[pallet::storage]
-	#[pallet::getter(fn super_of)]
 	/// The super-identity of an alternative "sub" identity together with its name, within that
 	/// context. If the account is not some other account's sub-identity, then just `None`.
+	#[pallet::storage]
+	#[pallet::getter(fn super_of)]
 	pub(super) type SuperOf<T: Config> = StorageMap<
 		_,
 		Blake2_128Concat,
@@ -438,13 +438,13 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	#[pallet::storage]
-	#[pallet::getter(fn subs_of)]
 	/// Alternative "sub" identities of this account.
 	///
 	/// The first item is the deposit, the second is a vector of the accounts.
 	///
 	/// TWOX-NOTE: OK ― `AccountId` is a secure hash.
+	#[pallet::storage]
+	#[pallet::getter(fn subs_of)]
 	pub(super) type SubsOf<T: Config> = StorageMap<
 		_,
 		Twox64Concat,
@@ -453,12 +453,12 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
-	#[pallet::storage]
-	#[pallet::getter(fn registrars)]
 	/// The set of registrars. Not expected to get very big as can only be added through a
 	/// special origin (likely a council motion).
 	///
 	/// The index into this can be cast to `RegistrarIndex` to get a valid value.
+	#[pallet::storage]
+	#[pallet::getter(fn registrars)]
 	pub(super) type Registrars<T: Config> = StorageValue<
 		_,
 		Vec<Option<RegistrarInfo<BalanceOf<T>, T::AccountId>>>,
