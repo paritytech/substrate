@@ -504,6 +504,15 @@
 			"decimals": [8],
 			"standardAccount": "*25519",
 			"website": "https://gamepower.network"
+		},
+		{
+			"prefix": 1338,
+			"network": "gamepowerx",
+			"displayName": "GamePowerX Network",
+			"symbols": ["GPX"],
+			"decimals": [8],
+			"standardAccount": "*25519",
+			"website": "https://gamepower.network"
 		}
 	]
 }
