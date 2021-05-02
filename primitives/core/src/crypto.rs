@@ -591,7 +591,9 @@ ss58_address_format!(
 	SocialAccount =>
 		(252, "social-network", "Social Network, standard account (*25519).")
 	GamePowerAccount =>
-		(1337, "gamepower", "GamePower Network, standard account (*25519).")
+		(1337, "gamepower", "GamePower Network mainnet, standard account (*25519).")
+	GamePowerXAccount =>
+		(1338, "gamepowerx", "GamePower Canary Network, standard account (*25519).")
 	// Note: 16384 and above are reserved.
 );
 
