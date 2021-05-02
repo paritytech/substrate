@@ -201,19 +201,18 @@ fn can_fetch_current_and_next_epoch_data() {
     new_test_ext().execute_with(|| {
         EpochConfig::<Test>::put(PoCEpochConfiguration { c: (1, 4) });
 
-        progress_to_block(System::block_number() + 1);
+        progress_to_block(System::block_number() + 4);
 
         let current_epoch = Spartan::current_epoch();
-        assert_eq!(current_epoch.epoch_index, 0);
-        assert_eq!(*current_epoch.start_slot, 1);
+        assert_eq!(current_epoch.epoch_index, 1);
+        assert_eq!(*current_epoch.start_slot, 4);
 
         let next_epoch = Spartan::next_epoch();
-        assert_eq!(next_epoch.epoch_index, 1);
-        assert_eq!(*next_epoch.start_slot, 4);
+        assert_eq!(next_epoch.epoch_index, 2);
+        assert_eq!(*next_epoch.start_slot, 7);
 
-        // TODO: Fix this assertion
         // the on-chain randomness should always change across epochs
-        assert!(current_epoch.randomness != next_epoch.randomness);
+        assert_ne!(current_epoch.randomness, next_epoch.randomness);
     });
 }
 
