@@ -474,6 +474,9 @@ impl frame_support::traits::PalletInfo for Runtime {
 		if type_id == sp_std::any::TypeId::of::<pallet_babe::Pallet<Runtime>>() {
 			return Some("Babe")
 		}
+		if type_id == sp_std::any::TypeId::of::<pallet_spartan::Pallet<Runtime>>() {
+			return Some("Spartan")
+		}
 
 		None
 	}
@@ -550,6 +553,14 @@ impl pallet_babe::Config for Runtime {
 	)>>::IdentificationTuple;
 
 	type HandleEquivocation = ();
+
+	type WeightInfo = ();
+}
+
+impl pallet_spartan::Config for Runtime {
+	type EpochDuration = EpochDuration;
+	type ExpectedBlockTime = ExpectedBlockTime;
+	type EpochChangeTrigger = pallet_spartan::NormalEpochChange;
 
 	type WeightInfo = ();
 }
@@ -817,6 +828,29 @@ cfg_if! {
 				}
 			}
 
+			impl sp_consensus_poc::PoCApi<Block> for Runtime {
+				fn configuration() -> sp_consensus_poc::PoCGenesisConfiguration {
+					sp_consensus_poc::PoCGenesisConfiguration {
+						slot_duration: 1000,
+						epoch_length: EpochDuration::get(),
+						c: (3, 10),
+						randomness: <pallet_spartan::Pallet<Runtime>>::randomness(),
+					}
+				}
+
+				fn current_epoch_start() -> Slot {
+					<pallet_spartan::Pallet<Runtime>>::current_epoch_start()
+				}
+
+				fn current_epoch() -> sp_consensus_poc::Epoch {
+					<pallet_spartan::Pallet<Runtime>>::current_epoch()
+				}
+
+				fn next_epoch() -> sp_consensus_poc::Epoch {
+					<pallet_spartan::Pallet<Runtime>>::next_epoch()
+				}
+			}
+
 			impl sp_offchain::OffchainWorkerApi<Block> for Runtime {
 				fn offchain_worker(header: &<Block as BlockT>::Header) {
 					let ex = Extrinsic::IncludeData(header.number.encode());
@@ -1075,6 +1109,29 @@ cfg_if! {
 					_authority_id: sp_consensus_babe::AuthorityId,
 				) -> Option<sp_consensus_babe::OpaqueKeyOwnershipProof> {
 					None
+				}
+			}
+
+			impl sp_consensus_poc::PoCApi<Block> for Runtime {
+				fn configuration() -> sp_consensus_poc::PoCGenesisConfiguration {
+					sp_consensus_poc::PoCGenesisConfiguration {
+						slot_duration: 1000,
+						epoch_length: EpochDuration::get(),
+						c: (3, 10),
+						randomness: <pallet_spartan::Pallet<Runtime>>::randomness(),
+					}
+				}
+
+				fn current_epoch_start() -> Slot {
+					<pallet_spartan::Pallet<Runtime>>::current_epoch_start()
+				}
+
+				fn current_epoch() -> sp_consensus_poc::Epoch {
+					<pallet_spartan::Pallet<Runtime>>::current_epoch()
+				}
+
+				fn next_epoch() -> sp_consensus_poc::Epoch {
+					<pallet_spartan::Pallet<Runtime>>::next_epoch()
 				}
 			}
 

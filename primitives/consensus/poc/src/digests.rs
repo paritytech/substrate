@@ -26,7 +26,7 @@ use sp_std::vec::Vec;
 
 // TODO: better documentation here
 /// Solution
-#[derive(Clone, RuntimeDebug, Encode, Decode, Default)]
+#[derive(Clone, RuntimeDebug, Encode, Decode)]
 pub struct Solution {
     /// Public key of the farmer that created solution
     pub public_key: FarmerId,
@@ -39,6 +39,7 @@ pub struct Solution {
     /// Tag (hmac of encoding and salt)
     pub tag: [u8; 8],
 }
+
 impl Solution {
     /// Dummy solution for the genesis block
     pub fn get_for_genesis() -> Self {
